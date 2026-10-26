@@ -1,12 +1,16 @@
-import { rawRows, rawExec } from '@/platform/persistence/queryHelpers'
+import {
+  createFrozenEpoch1Db,
+  openFrozenEpoch1Db,
+  freezeAt,
+  FROZEN_MIGRATIONS as MIGRATIONS,
+} from './migration-freeze'
+import { frozenRawRows as rawRows } from './migration-freeze'
+import { rawExec } from '@/platform/persistence/queryHelpers'
 import { afterEach, describe, expect, test } from 'bun:test'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { sql } from 'drizzle-orm'
-
-import { createInMemoryDb, openDb } from '@/db/client'
-import { freezeAt, MIGRATIONS } from './migration-freeze'
 
 const roots: string[] = []
 
@@ -16,7 +20,7 @@ afterEach(() => {
 
 describe('migration 0198 — public and compatibility event catalog separation', () => {
   test('persists catalog visibility and indexes public audit reads', () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createFrozenEpoch1Db(MIGRATIONS)
     const columns = rawRows<{ name: string }>(
       db,
       sql`SELECT name FROM pragma_table_info('event_type_catalog')`,
@@ -42,7 +46,7 @@ describe('migration 0198 — public and compatibility event catalog separation',
     const path = join(root, 'db.sqlite')
     const beforeMigrations = freezeAt(196)
     roots.push(beforeMigrations)
-    const before = openDb({ path, migrationsFolder: beforeMigrations })
+    const before = openFrozenEpoch1Db({ path, migrationsFolder: beforeMigrations })
     for (const eventTypeId of [
       'development.work-received',
       'development.review-updated',
@@ -90,7 +94,7 @@ describe('migration 0198 — public and compatibility event catalog separation',
     )
     ;(before as unknown as { $client: { close(): void } }).$client.close()
 
-    const after = openDb({ path, migrationsFolder: MIGRATIONS })
+    const after = openFrozenEpoch1Db({ path, migrationsFolder: MIGRATIONS })
     expect(
       rawRows<{ eventTypeId: string; visibility: string }>(
         after,

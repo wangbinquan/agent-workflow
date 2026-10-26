@@ -1,3 +1,5 @@
+import type { HistoryRestrictionPort } from '@/platform/contracts/historyRestriction'
+import type { DigitalEmployeeWriterInstallation as ImportedDigitalEmployeeWriterInstallation } from '@/modules/digital-employee/composition'
 // RFC-383: one digital-employee module and its satellites per provider session.
 import {
   composeDigitalEmployee,
@@ -96,10 +98,12 @@ import {
 type EmployeeOptions = Parameters<typeof composeDigitalEmployee>[0]
 type WorkItemsInput = Parameters<typeof composeDevelopmentEmployeePlatformWorkItems>[0]
 export interface DaemonDigitalEmployeeInput {
+  readonly historyRestrictions: HistoryRestrictionPort
   readonly graphAssist: Parameters<typeof composeDesignAssistGeneration>[0]
   readonly verificationCommands?: Parameters<typeof createGraphDevelopmentVerificationBinding>[0]
   readonly repositoryRevisionContent?: Parameters<typeof composeGraphDevelopment>[0]['content']
-  readonly reviewReader?: Parameters<typeof createCommittedHumanInputQueries>[0]['reviewReader']
+  readonly content: Parameters<typeof createCommittedHumanInputQueries>[0]['content']
+  readonly writerInstallation: ImportedDigitalEmployeeWriterInstallation
   readonly db: PersistenceDb
   readonly appHome: string
   readonly configuration: ApplicationConfigurationQueries
@@ -203,7 +207,7 @@ export function composeDaemonDigitalEmployeeModules(input: DaemonDigitalEmployee
       return legacyPlatformTools.resolveCompatibleRevisionJson?.(...args) ?? null
     },
   }
-  const writerCutover = composeDigitalEmployeeWriterCutoverFor(db)
+  const writerCutover = composeDigitalEmployeeWriterCutoverFor(db, input.writerInstallation)
   const employeeInputArtifacts =
     input.adapters?.employeeInputArtifacts ??
     createEmployeeInputArtifactStore(join(appHome, 'artifacts', 'employee-inputs'))
@@ -224,8 +228,7 @@ export function composeDaemonDigitalEmployeeModules(input: DaemonDigitalEmployee
   }
   const humanInputs = createCommittedHumanInputQueries({
     db,
-    appHome,
-    reviewReader: input.reviewReader,
+    content: input.content,
   })
   const graphArtifacts = createGraphDevelopmentArtifactBinding(appHome, input.evidenceArtifacts)
   const graphCases = createGraphCaseIntake({
@@ -245,7 +248,7 @@ export function composeDaemonDigitalEmployeeModules(input: DaemonDigitalEmployee
     artifacts: graphArtifacts,
     rounds: reactionRounds,
     humanInputs,
-    executions: createEmployeeExecutionArtifactQueries(db),
+    executions: createEmployeeExecutionArtifactQueries(db, input.content),
     workspace: {
       factory: input.workspaceEffects.automationWorkspaceEffects,
       sourceControl,
@@ -294,7 +297,7 @@ export function composeDaemonDigitalEmployeeModules(input: DaemonDigitalEmployee
     graphDelivery: graph.care,
   })
   const reactionExecution = composeReactionExecutionProvider({
-    ...composeDatabaseDigitalEmployeeExecutionPorts(db),
+    ...composeDatabaseDigitalEmployeeExecutionPorts(db, input.historyRestrictions),
     ...taskExecution.hostTasks,
     appHome,
     programs: programToolSource,

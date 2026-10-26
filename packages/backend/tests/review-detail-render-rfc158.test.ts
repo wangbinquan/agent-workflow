@@ -1,3 +1,8 @@
+import { seedNodeRunDisplayEvidence } from './helpers/rfc395Q1Evidence'
+import { eq } from 'drizzle-orm'
+import { contentRowColumns } from '@/platform/content/infrastructure/contentStore'
+import { legacyContentRef } from '@/platform/content/contentRef'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 // RFC-158 — getReviewDetail robustness the canvas nav oracle depends on:
 //   R2b: the summary is built DIRECTLY by nodeRunId, not by scanning
 //        listReviewSummaries(limit: 500) — so a review whose doc_versions aged
@@ -16,7 +21,7 @@ import {
   workflowFixture,
 } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+
 import { queryWrite } from '@/platform/persistence/queryHelpers'
 import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
@@ -25,7 +30,7 @@ import { dirname, join } from 'node:path'
 import { ulid } from 'ulid'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { insertInBatches } from '../src/platform/persistence/batchInsert'
-import { getReviewDetail } from '@/modules/collaboration/infrastructure/review'
+import { getReviewDetail, listReviewSummaries } from '@/modules/collaboration/infrastructure/review'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import { describeEachProvider } from './helpers/eachProvider'
 
@@ -92,7 +97,7 @@ function docVersionValues(
     sourcePortName: 'docpath',
     versionIndex: opts.versionIndex,
     reviewIteration: 0,
-    bodyPath,
+    ...contentRowColumns(legacyContentRef('review-body-path', 'local-file', bodyPath)),
     decision: opts.decision ?? 'pending',
     createdAt: opts.createdAt,
     decidedAt: null,
@@ -108,7 +113,7 @@ async function seedDocVersion(
   const row = docVersionValues(taskId, reviewNodeRunId, opts)
   const { docVersions } = tablesOf(db)
   await insertOne(db, docVersions, row)
-  return { bodyPath: row.bodyPath }
+  return { bodyPath: `reviews/rev/docpath/${reviewNodeRunId}-v${opts.versionIndex}.md` }
 }
 
 function writeBody(appHome: string, bodyPath: string, text: string): void {
@@ -173,6 +178,34 @@ describeEachProvider(
       expect(detail.summary.nodeRunId).toBe(targetRun)
       expect(detail.currentVersion.versionIndex).toBe(1)
       expect(detail.currentBody).toBe('# target body')
+    })
+
+    test('RFC-395 history-only review remains listed and its decided body opens', async () => {
+      const { taskId } = await seedTaskAndWorkflow(db)
+      const run = await seedReviewRun(db, taskId)
+      const { bodyPath } = await seedDocVersion(db, taskId, run, {
+        versionIndex: 1,
+        createdAt: 1,
+        decision: 'approved',
+      })
+      writeBody(appHome, bodyPath, '# historical decision')
+      const { nodeRuns } = tablesOf(db)
+      await db
+        .update(nodeRuns)
+        .set({
+          recordMode: 'history-only',
+          attemptIndex: null,
+          scopePath: null,
+          envelopeNonce: null,
+        })
+        .where(eq(nodeRuns.id, run))
+      await seedNodeRunDisplayEvidence(db, taskId, run, { retry_index: 0, scope_path: '' })
+      expect(
+        (await listReviewSummaries(db, { taskId, status: 'approved' })).map((row) => row.nodeRunId),
+      ).toContain(run)
+      const detail = await getReviewDetail(db, appHome, run)
+      expect(detail.summary.nodeRunId).toBe(run)
+      expect(detail.currentBody).toBe('# historical decision')
     })
 
     test('R6: single-doc review with a MISSING body file renders body="" (no doc-version-body-missing throw)', async () => {

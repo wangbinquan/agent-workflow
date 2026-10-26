@@ -1,3 +1,4 @@
+import { initializeTaskWorkspace } from './helpers/taskWorkspaceFixture'
 // RFC-354 — the FAILURE side of nesting, executed.
 //
 // Frames introduced a lexical visibility rule ("入边是参数、出边是返回值、穿墙边是
@@ -74,7 +75,6 @@ import { runGit } from '../src/util/git'
 import { canonicalizeWorkflowAgentIds } from './helpers/canonicalWorkflowFixture'
 import { validateWorkflowDef } from '../src/services/workflow.validator'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const SCENARIO_OPENCODE = resolve(import.meta.dir, 'fixtures', 'scenario-opencode.ts')
 
 interface Harness {
@@ -90,10 +90,10 @@ function buildHarness(): Harness {
   const appHome = mkdtempSync(join(tmpdir(), 'aw-rfc354-nested-fail-'))
   const worktreePath = join(appHome, 'wt')
   const stateDir = join(appHome, 'scenario-state')
-  mkdirSync(worktreePath, { recursive: true })
+  initializeTaskWorkspace(worktreePath)
   mkdirSync(stateDir, { recursive: true })
   return {
-    db: createInMemoryDb(MIGRATIONS),
+    db: createInMemoryDb(),
     appHome,
     worktreePath,
     stateDir,

@@ -1,9 +1,9 @@
 // RFC-339 — task-execution-owned loop/git/fanout wrapper mechanics.
 
-import { copyLegacyPortArchive } from '@/platform/content/legacyPortArchive'
+import { copyPortArchive } from '@/platform/content/locations/portArchive'
 import { prepareConsumedInputs } from '../infrastructure/consumedInputsParticipant'
 import { nodeRunAttemptIndex } from '../domain/nodeRunAttempt'
-import { deriveNodeRunRole } from '../domain/nodeRunRole'
+import { nodeRunMintIdentityForSlot } from '../application/nodeRunMintIdentity'
 import { taskCheckpointRefs, type TaskRepositoryCheckpoint } from '../domain/taskCheckpoint'
 import type { computeShardScope } from '@/modules/task-execution/domain/fanoutScope'
 import type {
@@ -23,9 +23,11 @@ import {
 // `getAgentById` 的 import 随之删除：scheduler 不再自己查 agent 行。
 import { fanoutInnerAgentRefKey } from '@/services/ref/runtimeRef'
 
-import { consumedMapsEqual, parseConsumedJson } from '@/services/freshness'
+import {
+  consumedMapsEqual,
+  parseConsumedJson,
+} from '@/modules/task-execution/application/runProvenance'
 import { encodeConsumedEdges } from '../infrastructure/runSelection/consumedCodec'
-import { createRunSelectionOracleSnapshot } from '../infrastructure/runSelection/oracle/snapshot'
 import type { NodeExecutionSnapshot } from '../application/ports/nodeExecutionPersistence'
 import type { ShardRequest } from '../application/ports/runSelection'
 import { toContainerRelative } from '@/modules/task-execution/public/queries'
@@ -196,6 +198,7 @@ export function createWrapperMechanicsPorts(
         nodeId,
         portName,
         resolved.frame,
+        state.definition.nodes.find((node) => node.id === nodeId)?.kind,
       )
     },
     resolveInputs: (nodeId, frame) =>
@@ -223,25 +226,22 @@ export function createWrapperMechanicsPorts(
       })
     },
     async priorFanoutConsumed(nodeId, iteration, excludeRunId) {
-      const rows = await state.opts.persistence.nodeExecution.list({
-        taskId: state.taskId,
-        nodeId,
-        iteration,
+      return state.opts.persistence.nodeExecution.snapshotRead(async (snapshot) => {
+        const rows = await snapshot.list({ taskId: state.taskId, nodeId, iteration })
+        const previous = (
+          await snapshot.selection.familyHistory(
+            state.taskId,
+            {
+              nodeId,
+              iteration,
+              runIds: rows.filter((row) => row.id !== excludeRunId).map((row) => row.id),
+            },
+            { topLevelOnly: true, consumedOnly: true },
+          )
+        ).at(-1)
+        if (previous === undefined) return null
+        return encodeConsumedEdges(await snapshot.selection.consumed(previous.id))
       })
-      const selection = createRunSelectionOracleSnapshot(rows, { scope: { kind: 'rows' } })
-      const previous = (
-        await selection.familyHistory(
-          state.taskId,
-          {
-            nodeId,
-            iteration,
-            runIds: rows.filter((row) => row.id !== excludeRunId).map((row) => row.id),
-          },
-          { topLevelOnly: true, consumedOnly: true },
-        )
-      ).at(-1)
-      if (previous === undefined) return null
-      return encodeConsumedEdges(await selection.consumed(previous.id))
     },
     async outputOf(runId, portName) {
       const row = (await state.opts.persistence.nodeExecution.listOutputs(runId)).find(
@@ -252,7 +252,7 @@ export function createWrapperMechanicsPorts(
         : {
             content: row.content,
             kind: row.kind,
-            archiveJson: copyLegacyPortArchive(row.archiveJson),
+            archiveJson: copyPortArchive(row.archiveJson),
             active: row.active,
           }
     },
@@ -264,7 +264,7 @@ export function createWrapperMechanicsPorts(
             portName: input.portName,
             content: input.content,
             kind: input.kind ?? null,
-            archiveJson: copyLegacyPortArchive(input.archiveJson ?? null),
+            archiveJson: copyPortArchive(input.archiveJson ?? null),
             active: input.active ?? true,
           },
         ],
@@ -592,16 +592,13 @@ async function dispatchFanoutShardAttempt(args: DispatchShardArgs): Promise<Disp
   const forcedProcessRetry = args.processRetryIndex !== undefined
   const selectShard = async () =>
     (
-      await createRunSelectionOracleSnapshot(candidates, { scope: { kind: 'rows' } }).shardSet(
-        taskId,
-        {
-          wrapperRunId,
-          iteration,
-          shards: [{ nodeId: innerNode.id, shardKey: rowShardKey, valueHash }],
-          reuseDisabled: args.reuseDisabled,
-          processRetryIndex: args.processRetryIndex,
-        },
-      )
+      await state.opts.persistence.selection.shardSet(taskId, {
+        wrapperRunId,
+        iteration,
+        shards: [{ nodeId: innerNode.id, shardKey: rowShardKey, valueHash }],
+        reuseDisabled: args.reuseDisabled,
+        processRetryIndex: args.processRetryIndex,
+      })
     ).shards[0]!
   let selected = await selectShard()
   // RFC-370 — a done shard is reusable only once its delta is in this scope's
@@ -686,10 +683,10 @@ async function dispatchFanoutShardAttempt(args: DispatchShardArgs): Promise<Disp
     // (priorShardUndo) was already derived above from the latest done+merged
     // candidate and is applied at merge-back.
     shardRunId = await state.opts.persistence.nodeRuns.mint({
-      ...deriveNodeRunRole({
-        nodeId: innerNode.id,
-        rerunCause: forcedProcessRetry ? 'process-retry' : 'fanout-shard',
-      }),
+      ...nodeRunMintIdentityForSlot(
+        { kind: 'shard', nodeId: innerNode.id, iteration, shardKey: rowShardKey },
+        { kind: 'current' },
+      ),
       taskId,
       nodeId: innerNode.id,
       status: 'pending',
@@ -1162,9 +1159,7 @@ async function dispatchFanoutAggregatorAttempt(
           valueHash: sha256Hex(s.value),
         }
         shardRequests.push(request)
-        const selected = await createRunSelectionOracleSnapshot(innerRows, {
-          scope: { kind: 'rows' },
-        }).shardSet(taskId, {
+        const selected = await state.opts.persistence.selection.shardSet(taskId, {
           wrapperRunId,
           iteration,
           shards: [request],
@@ -1189,9 +1184,7 @@ async function dispatchFanoutAggregatorAttempt(
       // shared upstream — single (NULL-shardKey) row, plain content.
       const request = { nodeId: edge.source.nodeId, shardKey: null, valueHash: null }
       shardRequests.push(request)
-      const selected = await createRunSelectionOracleSnapshot(innerRows, {
-        scope: { kind: 'rows' },
-      }).shardSet(taskId, {
+      const selected = await state.opts.persistence.selection.shardSet(taskId, {
         wrapperRunId,
         iteration,
         shards: [request],
@@ -1231,9 +1224,7 @@ async function dispatchFanoutAggregatorAttempt(
     ).filter((row) => row.shardKey === null)
   let aggCandidates = await readAggCandidates()
   const selectAggregator = () =>
-    createRunSelectionOracleSnapshot([...participatingRows, ...aggCandidates], {
-      scope: { kind: 'rows' },
-    }).shardSet(taskId, {
+    state.opts.persistence.selection.shardSet(taskId, {
       wrapperRunId,
       iteration,
       shards: shardRequests,
@@ -1265,6 +1256,14 @@ async function dispatchFanoutAggregatorAttempt(
     broadcastNodeStatus(taskId, freshestAgg.id, aggNode.id, 'done')
     return { kind: 'ok', summary: '', message: '', outputs, aggRunId: freshestAgg.id }
   }
+  const recordedInputs = [...new Map(participatingRows.map((row) => [row.id, row])).values()].map(
+    (row) => ({
+      inputKind: 'aggregator-shard' as const,
+      producerNodeId: row.nodeId,
+      producerRunId: row.id,
+      producerShardKey: row.shardKey,
+    }),
+  )
   let aggRunId: string
   let aggRetryIndex: number
   if (selectedAggregator.aggregatorRerunInPlace && freshestAgg !== undefined) {
@@ -1277,6 +1276,7 @@ async function dispatchFanoutAggregatorAttempt(
       allowedFrom: ['pending', 'running', 'interrupted', 'failed', 'canceled'],
       allowTerminal: true,
       reason: 'fanout-aggregator-resume',
+      extra: { inputs: { recordedInputs } },
       ...(state.opts.executionContext === undefined
         ? {}
         : { executionContext: state.opts.executionContext }),
@@ -1284,10 +1284,10 @@ async function dispatchFanoutAggregatorAttempt(
     aggRetryIndex = freshestAgg.retryIndex
   } else {
     aggRunId = await state.opts.persistence.nodeRuns.mint({
-      ...deriveNodeRunRole({
-        nodeId: aggNode.id,
-        rerunCause: forcedProcessRetry ? 'process-retry' : 'fanout-aggregator',
-      }),
+      ...nodeRunMintIdentityForSlot(
+        { kind: 'aggregator', nodeId: aggNode.id, iteration },
+        { kind: 'current' },
+      ),
       taskId,
       nodeId: aggNode.id,
       status: 'pending',
@@ -1296,6 +1296,7 @@ async function dispatchFanoutAggregatorAttempt(
       containerRunId: wrapperRunId,
       iteration,
       overrides: {
+        inputs: { recordedInputs },
         identity: {
           parentNodeRunId: wrapperRunId,
         },

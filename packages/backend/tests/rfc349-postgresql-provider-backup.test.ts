@@ -1,112 +1,36 @@
 // RFC-349 T6 — the normal Settings/CLI backup is a provider-neutral archive:
-// PostgreSQL contributes logical rows, carries the cutover's legacy archive,
+// PostgreSQL contributes logical rows and carries frozen evidence in epoch-2 metadata,
 // and never fabricates a db.sqlite or depends on pg_dump.
 
 import { afterEach, describe, expect, test } from 'bun:test'
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
-  advanceDatabaseMigration,
-  createDatabaseMigrationManifest,
-  serializeDatabaseMigrationManifest,
-  type DatabaseMigrationManifest,
-  type DatabaseMigrationPhase,
-} from '@/modules/system-operations/domain/databaseMigration'
-import { createPostgresqlProviderBackup } from '@/modules/system-operations/infrastructure/postgresqlProviderBackup'
-import type { PostgresqlProviderBackupError } from '@/modules/system-operations/infrastructure/postgresqlProviderBackup'
-import {
-  createLegacyArchiveManifest,
-  createLogicalArtifactManifest,
-  createLogicalTableChunk,
-  encodeLogicalRow,
-  summarizeLogicalTableChunks,
-  writeDurableLogicalArtifact,
-  writeLogicalArtifactManifest,
-  writeLogicalTableChunk,
-} from '@/platform/persistence/logicalDatabaseArtifact'
-import {
-  digestDatabaseArtifact,
-  writeDatabaseGenerationAtomic,
-} from '@/platform/persistence/generationStore'
+  createPostgresqlProviderBackup,
+  type PostgresqlProviderBackupError,
+} from '@/modules/system-operations/infrastructure/postgresqlProviderBackup'
+import { writeGenerationPointerV2 } from '@/platform/persistence/generationPointerV2'
+import { persistenceHead } from '@/bootstrap/persistenceHead'
+import { openDb } from '@/db/client'
+import { openSqliteLogicalSource } from '@/platform/persistence/sqliteLogicalSource'
 import { readLogicalDatabaseBackupEnvelope } from '@/platform/persistence/logicalDatabaseExport'
+import { verifyEpochMetadataSnapshot } from '@/platform/persistence/schema/history/metadataSnapshot'
 import type { PostgresqlLogicalSource } from '@/platform/persistence/postgresqlLogicalSource'
 import type {
   PostgresqlDatabaseRuntime,
   PostgresqlPool,
 } from '@/platform/persistence/postgresqlRuntime'
-import type {
-  LogicalColumnContract,
-  LogicalSchemaContract,
-  LogicalTableContract,
-} from '@/platform/persistence/schemaContract'
 import { readManifest } from '@/services/backupManifest'
 import type { PortableBackupApplicationAssets } from '@/services/portableBackupArchive'
 import { captureWorktreeRows } from '@/services/worktreeBackup'
 import { extractTarGz } from '@/util/archive'
-import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import { workflowFixture } from './helpers/model'
 
 const roots: string[] = []
-const OPERATION_ID = 'dbm_operation_0001'
-const GENERATION_ID = 'dbg_pg_operation_0001'
-const SCHEMA_DIGEST = `sha256:${'a'.repeat(64)}`
-const FILE_DIGEST = `sha256:${'b'.repeat(64)}`
-
-function column(name: string): LogicalColumnContract {
-  return {
-    name,
-    logicalCodec: 'text-identity',
-    nullable: false,
-    primary: name === 'id',
-    hasDefault: false,
-    defaultKind: 'none',
-    defaultValue: null,
-    providerDefault: { sqlite: null, postgresql: null },
-    identity: false,
-    uniqueName: null,
-    enumValues: [],
-    providerType: { sqlite: 'text', postgresql: 'text' },
-  }
-}
-
-function table(id: string, disposition: LogicalTableContract['disposition']): LogicalTableContract {
-  return {
-    id,
-    schemaSymbol: id,
-    ownerContext: 'system-operations',
-    disposition,
-    sourceTable: id,
-    providerTables:
-      disposition === 'ARCHIVE_THEN_OMIT' ? { sqlite: id } : { sqlite: id, postgresql: id },
-    migrationKey: ['id'],
-    columns: [column('id'), column('value')],
-    primaryKey: ['id'],
-    unique: [],
-    foreignKeys: [],
-    checks: [],
-    indexes: [],
-    retention: { class: 'owner-managed-business', owner: 'system-operations', rule: 'fixture' },
-    consumers: {
-      productionReader: 'owner-required',
-      productionWriter: 'owner-required-or-immutable',
-      backgroundRecoveryDiagnostic: 'owner-reviewed',
-      evidence: 'fixture',
-    },
-    rationale: 'fixture',
-  }
-}
-
-const ACTIVE = table('active_rows', 'KEEP')
-const ARCHIVE = table('code_artifacts', 'ARCHIVE_THEN_OMIT')
-const CONTRACT: LogicalSchemaContract = {
-  contractVersion: 2,
-  sourceProjection: 'sqlite',
-  sourceTableCount: 2,
-  activeTableCount: 1,
-  archiveOnlyTableCount: 1,
-  tables: [ACTIVE, ARCHIVE],
-  digest: SCHEMA_DIGEST,
-}
+const CONTRACT = logicalSchemaContract
+const archivedBytes = Buffer.from('{"id":"legacy-1","value":"preserved"}')
 
 afterEach(() => {
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true })
@@ -118,112 +42,42 @@ function tempRoot(): string {
   return value
 }
 
-function advanceToAcceptingWrites(input: {
-  readonly logicalDigest: string
-  readonly archiveDigest: string
-}): DatabaseMigrationManifest {
-  let current = createDatabaseMigrationManifest({
-    operationId: OPERATION_ID,
-    idempotencyKey: 'request-0001',
-    sourceGenerationId: 'dbg_legacy_sqlite',
-    sourceSchemaDigest: CONTRACT.digest,
-    sourceDatabaseFingerprint: 'sqlite:fixture',
-    target: {
-      provider: 'postgresql',
-      urlEnv: 'RFC349_TEST_DATABASE_URL',
-      poolMax: 8,
-      connectTimeoutMs: 5_000,
-      statementTimeoutMs: 30_000,
-      idleTimeoutMs: 30_000,
-    },
-    ownerId: 'dbo_owner_0001',
-    ownerLeaseExpiresAt: 60_000,
-    tableCounts: { source: 2, active: 1, archiveOnly: 1 },
-    now: 1,
-  })
-  const phases: readonly DatabaseMigrationPhase[] = [
-    'preflighted',
-    'source-frozen',
-    'backed-up',
-    'target-prepared',
-    'copying',
-    'verifying',
-    'cutover-prepared',
-    'switched',
-    'health-checked',
-    'accepting-writes',
-  ]
-  for (const nextPhase of phases) {
-    const expectedPhase = current.payload.phase
-    current = advanceDatabaseMigration(current, {
-      expectedRevision: current.payload.revision,
-      expectedPhase,
-      nextPhase,
-      ownerId: current.payload.owner.id,
-      ownerFence: current.payload.owner.fence,
-      idempotencyKey: `step-${nextPhase}`,
-      now: current.payload.updatedAt + 1,
-      ...(nextPhase === 'preflighted' ? { targetDatabaseFingerprint: 'pg:fixture' } : {}),
-      ...(nextPhase === 'backed-up' ? { sourceBackupDigest: FILE_DIGEST } : {}),
-      ...(nextPhase === 'verifying'
-        ? {
-            logicalBackupDigest: input.logicalDigest,
-            legacyArchiveDigest: input.archiveDigest,
-          }
-        : {}),
-      ...(nextPhase === 'cutover-prepared' ? { verificationDigest: FILE_DIGEST } : {}),
-    })
-  }
-  return current
-}
-
-function livePostgresqlFixture() {
+async function livePostgresqlFixture() {
   const appHome = tempRoot()
-  const operationsRoot = join(appHome, 'database-migrations')
-  const operationRoot = join(operationsRoot, OPERATION_ID)
-  const archiveChunk = createLogicalTableChunk({
-    operationId: OPERATION_ID,
-    contract: CONTRACT,
-    table: ARCHIVE,
-    chunkIndex: 0,
-    rows: [encodeLogicalRow(ARCHIVE, { id: 'legacy-1', value: 'preserved' })],
-  })
-  writeLogicalTableChunk(operationRoot, archiveChunk)
-  const activeEntry = summarizeLogicalTableChunks({ table: ACTIVE, chunks: [] })
-  const archiveEntry = summarizeLogicalTableChunks({ table: ARCHIVE, chunks: [archiveChunk] })
-  const logical = createLogicalArtifactManifest({
-    operationId: OPERATION_ID,
-    sourceProvider: 'sqlite',
-    sourceGenerationId: 'dbg_legacy_sqlite',
-    contract: CONTRACT,
-    createdAt: 1,
-    tables: [activeEntry, archiveEntry],
-  })
-  writeLogicalArtifactManifest(operationRoot, logical)
-  const archiveDigest = writeDurableLogicalArtifact(
-    join(operationRoot, 'legacy-archive', 'manifest.json'),
-    createLegacyArchiveManifest({
-      operationId: OPERATION_ID,
-      schemaDigest: CONTRACT.digest,
-      tables: [archiveEntry],
-    }),
-  )
-  const migration = advanceToAcceptingWrites({
-    logicalDigest: logical.digest,
-    archiveDigest,
-  })
-  const serializedMigration = serializeDatabaseMigrationManifest(migration)
-  writeFileSync(join(operationRoot, 'manifest.json'), serializedMigration)
-  writeDatabaseGenerationAtomic({
+  const dbPath = join(appHome, 'native-fixture.sqlite')
+  const db = openDb({ path: dbPath })
+  let generationId: string
+  try {
+    await workflowFixture(db, { id: 'active-1', name: 'live', definition: '{}' })
+    generationId = (
+      db.$client
+        .query("SELECT generation_id FROM aw_meta_generations WHERE state='active'")
+        .get() as { generation_id: string }
+    ).generation_id
+    db.$client
+      .query(
+        "INSERT INTO aw_meta_migration_archives (run_id,archive_ref,unit_id,kind,source_table,format,rows,byte_size,bytes) VALUES ('frozen-run','legacy-1','unit-1','retired-table','code_artifacts','raw-chunk@1',1,?,?)",
+      )
+      .run(archivedBytes.byteLength, archivedBytes)
+    db.$client.exec('PRAGMA wal_checkpoint(TRUNCATE)')
+  } finally {
+    db.$client.close()
+  }
+  writeGenerationPointerV2({
     pointerPath: join(appHome, 'database-generation.json'),
     payload: {
-      version: 1,
-      generationId: GENERATION_ID,
+      version: 2,
+      schemaEpoch: 2,
+      generationId,
       provider: 'postgresql',
-      operationId: OPERATION_ID,
-      schemaDigest: CONTRACT.digest,
-      manifestDigest: digestDatabaseArtifact(serializedMigration),
-      activatedAt: 11,
+      role: 'installed',
+      database: { kind: 'postgresql-target', profileRef: 'RFC349_TEST_DATABASE_URL' },
+      contractDigest: persistenceHead().contract.contract.digest,
+      planDigest: persistenceHead().postgresql.digest,
+      operationId: null,
+      manifestDigest: null,
+      activatedAt: 1,
+      previous: null,
     },
   })
   const worktreePath = join(appHome, 'active-worktree')
@@ -244,10 +98,10 @@ function livePostgresqlFixture() {
   }
   const runtime = {
     provider: 'postgresql',
-    generationId: GENERATION_ID,
+    generationId,
     providerPool: () => pool,
   } as PostgresqlDatabaseRuntime
-  return { appHome, operationsRoot, runtime, worktreePath, repoPath }
+  return { appHome, runtime, worktreePath, repoPath, generationId, dbPath }
 }
 
 /**
@@ -286,29 +140,36 @@ function fixtureApplication(fixture: {
   }
 }
 
-function logicalSource(onClose: () => void): PostgresqlLogicalSource {
-  const rows = [encodeLogicalRow(ACTIVE, { id: 'active-1', value: 'live' })]
+// Portable adapter unit: canonical rows and metadata come from a real native
+// SQLite fixture. The PostgreSQL snapshot mechanism is covered on the real
+// provider by rfc359-w8-logical-source-conformance.test.ts.
+async function logicalSource(
+  fixture: Awaited<ReturnType<typeof livePostgresqlFixture>>,
+  onClose: () => void,
+): Promise<PostgresqlLogicalSource> {
+  const source = openSqliteLogicalSource({ path: fixture.dbPath, contract: CONTRACT })
+  const sqliteSnapshot = await source.preflight()
   const snapshot = Object.freeze({
-    databaseFingerprint: 'pg:fixture',
-    generationId: GENERATION_ID,
+    databaseFingerprint: sqliteSnapshot.databaseFingerprint,
+    generationId: fixture.generationId,
     schemaDigest: CONTRACT.digest,
-    totalRows: 1,
-    tableRows: Object.freeze({ [ACTIVE.id]: 1 }),
+    totalRows: sqliteSnapshot.totalRows,
+    tableRows: sqliteSnapshot.tableRows,
   })
   return {
     provider: 'postgresql',
-    generationId: GENERATION_ID,
+    generationId: fixture.generationId,
     async preflight() {
       return snapshot
     },
     async assertUnchanged(expected) {
       expect(expected).toBe(snapshot)
+      await source.assertUnchanged(sqliteSnapshot)
     },
-    async readChunk(table, afterKey) {
-      expect(table.id).toBe(ACTIVE.id)
-      return afterKey === null ? rows : []
-    },
+    readChunk: (table, afterKey, limit) => source.readChunk(table, afterKey, limit),
+    readMetadata: () => source.readMetadata!(),
     async close() {
+      await source.close()
       onClose()
     },
   }
@@ -316,22 +177,21 @@ function logicalSource(onClose: () => void): PostgresqlLogicalSource {
 
 describe('RFC-349 PostgreSQL provider backup', () => {
   test('packages live PostgreSQL rows and preserved legacy rows without db.sqlite', async () => {
-    const fixture = livePostgresqlFixture()
+    const fixture = await livePostgresqlFixture()
     writeFileSync(join(fixture.appHome, 'config.json'), '{"database":{"provider":"postgresql"}}')
     mkdirSync(join(fixture.appHome, 'skills', 'demo'), { recursive: true })
     writeFileSync(join(fixture.appHome, 'skills', 'demo', 'SKILL.md'), 'demo')
     let closed = 0
 
     const backup = await createPostgresqlProviderBackup({
-      headContract: buildLogicalSchemaContract(),
+      headContract: logicalSchemaContract,
       appHome: fixture.appHome,
-      operationsRoot: fixture.operationsRoot,
       runtime: fixture.runtime,
       contract: CONTRACT,
       now: 5,
       includeWorktrees: true,
       application: fixtureApplication(fixture),
-      openLogicalSource: async () => logicalSource(() => (closed += 1)),
+      openLogicalSource: async () => logicalSource(fixture, () => (closed += 1)),
     })
 
     const extracted = tempRoot()
@@ -348,7 +208,7 @@ describe('RFC-349 PostgreSQL provider backup', () => {
       migration: { lastHash: null, lastCreatedAt: null },
       database: {
         provider: 'postgresql',
-        sourceGenerationId: GENERATION_ID,
+        sourceGenerationId: fixture.generationId,
         schemaDigest: CONTRACT.digest,
         rawSqlitePath: null,
       },
@@ -360,12 +220,31 @@ describe('RFC-349 PostgreSQL provider backup', () => {
     })
     expect(envelope.payload).toMatchObject({
       sourceProvider: 'postgresql',
-      sourceGenerationId: GENERATION_ID,
-      activeRows: 1,
-      archiveRows: 1,
-      activeTableCount: 1,
-      archiveOnlyTableCount: 1,
+      sourceGenerationId: fixture.generationId,
+      archiveRows: 0,
+      activeTableCount: 232,
+      archiveOnlyTableCount: 0,
     })
+    const nativeSource = openSqliteLogicalSource({ path: fixture.dbPath, contract: CONTRACT })
+    try {
+      const snapshot = await nativeSource.preflight()
+      expect(envelope.payload.activeRows).toBe(snapshot.totalRows)
+      expect(snapshot.tableRows.workflows).toBe(1)
+      const metadata = verifyEpochMetadataSnapshot(
+        JSON.parse(
+          readFileSync(
+            join(extracted, manifest.database.logicalPath, 'epoch2-metadata.json'),
+            'utf8',
+          ),
+        ),
+      )
+      expect(metadata).toEqual(await nativeSource.readMetadata!())
+      expect(
+        metadata.payload.tables.find((table) => table.name === 'migration_archives')!.rows,
+      ).toHaveLength(1)
+    } finally {
+      await nativeSource.close()
+    }
   })
 
   test('refuses a PostgreSQL adapter when the durable live pointer is SQLite', async () => {
@@ -373,11 +252,11 @@ describe('RFC-349 PostgreSQL provider backup', () => {
     let opened = false
     const runtime = {
       provider: 'postgresql',
-      generationId: GENERATION_ID,
+      generationId: 'dbg_wrong_provider',
     } as PostgresqlDatabaseRuntime
     await expect(
       createPostgresqlProviderBackup({
-        headContract: buildLogicalSchemaContract(),
+        headContract: logicalSchemaContract,
         appHome,
         runtime,
         contract: CONTRACT,
@@ -389,7 +268,7 @@ describe('RFC-349 PostgreSQL provider backup', () => {
         },
         openLogicalSource: async () => {
           opened = true
-          return logicalSource(() => undefined)
+          throw new Error('wrong provider must not open a source')
         },
       }),
     ).rejects.toMatchObject({

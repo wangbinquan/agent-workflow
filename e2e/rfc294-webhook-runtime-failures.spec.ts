@@ -1,3 +1,4 @@
+import { liveSqlitePath } from './storage'
 // RFC-294 pre-refactor compatibility oracle — a webhook launch must retain its
 // durable delivery -> fire -> task -> node lineage when the selected runtime
 // fails.  This spec intentionally enters through the public GitLab webhook
@@ -368,7 +369,7 @@ for (const protocol of ['opencode', 'claude-code'] as const) {
         url: `https://gitlab.invalid/${fixture.repoPath}/-/pipelines/294`,
       })
       const provenance = querySqlite<DurableTaskProvenance>(
-        join(daemon.home, 'db.sqlite'),
+        liveSqlitePath(daemon.home),
         readTaskFixturesSql(
           { id: fixtureSqlParameter },
           {

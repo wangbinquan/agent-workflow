@@ -16,21 +16,24 @@
 // If this reds, RFC-223 PR-2's id-canonicalization of the non-agent references
 // is broken.
 
+import {
+  migrateFrozenSqlite as migrate,
+  createFrozenEpoch1Db,
+  FROZEN_MIGRATIONS,
+} from './migration-freeze'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { Database } from 'bun:sqlite'
 import { drizzle } from 'drizzle-orm/bun-sqlite'
-import { migrate } from 'drizzle-orm/bun-sqlite/migrator'
 import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
-import { createInMemoryDb } from '../src/db/client'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+const MIGRATIONS = resolve(FROZEN_MIGRATIONS)
 
 describe('migration 0112 (RFC-223 PR-2) — fresh install is a no-op', () => {
   test('empty tables apply 0000..0112 without error; agent_id column exists', () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createFrozenEpoch1Db(MIGRATIONS)
     const wgm = db.$client.query('SELECT COUNT(*) AS n FROM workgroup_members').all() as {
       n: number
     }[]
@@ -59,7 +62,7 @@ describe('migration 0112 (RFC-223 PR-2) — name→id backfill (frozen at 0111)'
     writeFileSync(journalPath, JSON.stringify(journal))
 
     sqlite = new Database(':memory:')
-    sqlite.exec('PRAGMA foreign_keys = OFF') // match openDb: 12-step migrations
+    sqlite.exec('PRAGMA foreign_keys = OFF') // match openFrozenEpoch1Db: 12-step migrations
     migrate(drizzle(sqlite), { migrationsFolder: tmp })
     raw = sqlite
   })

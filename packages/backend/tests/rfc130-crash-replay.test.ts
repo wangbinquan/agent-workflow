@@ -20,7 +20,7 @@ import type { WorkflowDefinition } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import {
@@ -29,11 +29,9 @@ import {
   snapshotNodeIsoFinal,
   type CanonRepo,
 } from '../src/services/nodeIsolation'
-import { deriveFrontier } from '../src/modules/task-execution/composition/dagFrontier'
+import { deriveFrontier } from './helpers/frontierSelection'
 import { runTaskWithRealTestTopology as runTask } from './helpers/taskExecutionTestTopology'
 import { runGit } from '../src/util/git'
-
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 interface Harness {
   db: DbClient
@@ -52,7 +50,7 @@ async function buildHarness(): Promise<Harness> {
   await runGit(worktreePath, ['add', '.'])
   await runGit(worktreePath, ['commit', '-q', '-m', 'init'])
   return {
-    db: createInMemoryDb(MIGRATIONS),
+    db: createInMemoryDb(),
     appHome,
     worktreePath,
     cleanup: () => rmSync(appHome, { recursive: true, force: true }),

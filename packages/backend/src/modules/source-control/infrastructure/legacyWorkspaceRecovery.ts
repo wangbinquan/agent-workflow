@@ -1,11 +1,10 @@
 // Historical Tasks have no preparation journal. Keep their existing reclaim
 // algorithm at the physical owner; journaled Tasks must never enter this path.
-import { decodeRequestedSource } from '@/platform/persistence/taskRepositorySurface'
+import { resolveRepoGroupLayout } from '@/services/repoGroup'
+import { ConflictError, diagnosticTextOf as diagnosticText } from '@/util/errors'
+import { runGit, withWorktreeRegistryLock } from '@/util/git'
 import { readdir, rm } from 'node:fs/promises'
 import { join } from 'node:path'
-import { runGit, withWorktreeRegistryLock } from '@/util/git'
-import { ConflictError, diagnosticTextOf as diagnosticText } from '@/util/errors'
-import { resolveRepoGroupLayout } from '@/services/repoGroup'
 import type { RepositoryWorkspaceStore } from '../ports/repositoryWorkspaceStore'
 
 export interface LegacyWorkspaceRecoveryLog {
@@ -27,7 +26,7 @@ export async function reclaimLegacyWorkspaceArtifacts(
     )
   }
   const store = dependencies.store
-  const requestedSource = decodeRequestedSource(task)
+  const requestedSource = task
   const cachedRepoIds = new Set<string>()
   if (requestedSource.cachedRepoId !== null && requestedSource.cachedRepoId.length > 0) {
     cachedRepoIds.add(requestedSource.cachedRepoId)

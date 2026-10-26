@@ -1,3 +1,4 @@
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { o2Ports } from './helpers/o2Closure'
 // RFC-395 II-pre：GC 改接生产 workspaceMaintenance，断言其回执及实际目录 / 行状态。
 // LOCKS: RFC-359 W7 —— 终态维护的三条消费路径迁离 `dbTxSync` 之后的行为（两个引擎各跑一遍）。
@@ -29,29 +30,28 @@ import { o2Ports } from './helpers/o2Closure'
 //   T6  workspace-GC：终结事务的原子性。墓碑（`workspace_pruning_at`）被抹掉后 CAS 命中 0 行，
 //       整笔回滚——`workspace_pruned_at` 仍为空、认领仍停在 io-complete。
 
-import {
-  type TaskFixtureSpec,
-  patchTaskFixture,
-  taskFixture,
-  workflowFixture,
-} from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterAll, afterEach, beforeAll, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { ulid } from 'ulid'
+import {
+  type TaskFixtureSpec,
+  patchTaskFixture,
+  taskFixture,
+  workflowFixture,
+} from './helpers/model'
 
 import type { DbClient } from '@/db/client'
-import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { DrizzleTerminalMaintenancePersistence } from '@/modules/task-execution/infrastructure/terminalMaintenancePersistence'
-import { workspaceMaintenanceForTest } from './helpers/workspaceMaintenance'
 import { createDrizzleTaskArchiveMaintenanceCommand } from '@/modules/task-execution/composition/taskArchiveMaintenance'
+import { DrizzleTerminalMaintenancePersistence } from '@/modules/task-execution/infrastructure/terminalMaintenancePersistence'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { deleteTask } from '@/services/taskDelete'
 import { getTaskWriteSem } from '@/services/taskWriteLocks'
 import { describeEachProvider } from './helpers/eachProvider'
+import { workspaceMaintenanceForTest } from './helpers/workspaceMaintenance'
 
 const SNAPSHOT = '{"$schema_version":2,"inputs":[],"nodes":[],"edges":[]}'
 const NOW = 1_788_364_800_000
@@ -184,8 +184,9 @@ describeEachProvider('RFC-359 W7 —— 任务删除迁离 dbTxSync', (harness) 
       startedAt: NOW - 1_000,
       branchStartedAt: NOW - 1_000,
     })
-    const { taskFeedback, tasks, taskExecutionMaintenanceClaims, taskExecutionMaintenanceMembers } =
+    const { taskFeedback, taskExecutionMaintenanceClaims, taskExecutionMaintenanceMembers } =
       tablesOf(db)
+    const { tasks } = tablesOf(db)
     await insertOne(db, taskFeedback, {
       id: id('fb'),
       taskId: childId,
@@ -378,7 +379,8 @@ describeEachProvider('RFC-359 W7 —— workspace GC 终结事务迁离 dbTxSync
       await workspaceMaintenanceForTest(legacy(db)).finalizeClaimedWorkspace(taskId, NOW + 1),
     ).toBeUndefined()
     expect(existsSync(dir)).toBe(false)
-    const { tasks, taskExecutionMaintenanceClaims } = tablesOf(db)
+    const { taskExecutionMaintenanceClaims } = tablesOf(db)
+    const { tasks } = tablesOf(db)
     const row = (
       await db
         .select({ prunedAt: tasks.workspacePrunedAt })

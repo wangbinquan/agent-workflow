@@ -1,21 +1,25 @@
-// SQLite + Drizzle client + auto-migration on startup.
+// SQLite + Drizzle client with epoch-2 head installation and admission.
 // Used by the daemon's main entry; tests use createInMemoryDb().
 
 import { Database, type Changes } from 'bun:sqlite'
 import { drizzle } from 'drizzle-orm/bun-sqlite'
-import { chmodSync, mkdirSync, readFileSync, statSync } from 'node:fs'
-import { dirname, join, resolve } from 'node:path'
+import { chmodSync, mkdirSync, statSync } from 'node:fs'
+import { dirname, resolve } from 'node:path'
 import { createLogger } from '@/util/log'
-import { nativeTableSets } from '@/bootstrap/persistenceSchema'
+import { nativeTableSets, rowRuleCodes } from '@/bootstrap/persistenceSchema'
+import { createSqliteBaseline, installSqliteBaseline } from '@/bootstrap/persistenceBaseline'
+import { bindSchemaRowRuleErrors } from '@/platform/persistence/schema/rowRules'
 import { bindDatabaseHandle } from '@/platform/persistence/sessionTables'
 import { createSqliteCapabilities } from '@/platform/persistence/capabilities'
+import { admitSqliteHistorySync } from '@/platform/persistence/schema/history/admission'
+import { schemaHistoryRuntime } from '@/platform/persistence/schema/history/runtime'
+import { guardSqliteGenerationWrites } from '@/platform/persistence/sqliteGenerationFence'
 import {
-  assertMigrationHistory,
-  assertPhysicalSchema,
-  readExpectedMigrationChain,
-} from './schemaAdmission'
-import { migrateSqlite } from '@/platform/persistence/sqliteMigrator'
-import { CrossContextTransactionError, foreignExplicitTransactionOpen } from './transactionScope'
+  CrossContextTransactionError,
+  foreignExplicitTransactionOpen,
+  bindTransactionObserver,
+} from './transactionScope'
+export { observeDbTransaction } from './transactionScope'
 
 const schema = nativeTableSets.sqlite
 
@@ -42,8 +46,10 @@ export class DbCorruptionError extends Error {
 export interface OpenDbOptions {
   /** Absolute path to the sqlite file. */
   path: string
+  /** Authoritative pointer generation; new installs use this identity. */
+  generationId?: string
   /** Path to the migrations folder. */
-  migrationsFolder: string
+  migrationsFolder?: string
   /** Skip running migrations on open (mainly for tests that inject schema directly). */
   skipMigrations?: boolean
   /** RFC-213: skip the PRAGMA quick_check integrity gate (escape hatch). */
@@ -88,15 +94,8 @@ function developmentDatabaseIdentity(opts: OpenDbOptions): string {
     file.dev,
     file.ino,
     file.birthtimeMs,
-    readFileSync(join(opts.migrationsFolder, 'meta', '_journal.json'), 'utf8'),
+    schemaHistoryRuntime().head().contract.digest,
   ])
-}
-
-const transactionObservers = new WeakMap<object, (ms: number) => void>()
-
-/** Internal dbTxSync hook; absent on ordinary request-serving/test connections. */
-export function observeDbTransaction(db: DbClient, ms: number): void {
-  transactionObservers.get(db as object)?.(ms)
 }
 
 /** 进程累计 CPU 时间（微秒）。不可用时返回 null——诊断字段绝不能成为新的崩溃源。 */
@@ -345,64 +344,27 @@ export function openDb(opts: OpenDbOptions): DbClient {
 
   normalizeDirectStatementChanges(sqlite)
   const db = bindDatabaseHandle(drizzle(sqlite, { schema }), schema, createSqliteCapabilities())
+  bindSchemaRowRuleErrors(db, rowRuleCodes)
   guardForeignStatements(sqlite, db as object)
   try {
     if (!opts.skipMigrations) {
-      const migrationsFolder = resolve(opts.migrationsFolder)
-      const expected = readExpectedMigrationChain(migrationsFolder)
-      // RFC-275: Drizzle otherwise trusts only the latest timestamp. Verify the
-      // entire applied prefix before any migration is allowed to write.
-      assertMigrationHistory(sqlite, {
-        dbPath: opts.path,
-        expected,
-        stage: 'migration-history-preflight',
-        allowPrefix: true,
-      })
-
-      // RFC-115 (Codex audit F1): run migrations with foreign_keys OFF. drizzle
-      // wraps ALL migrations in ONE transaction, and `PRAGMA foreign_keys` is a
-      // no-op INSIDE a transaction — so a 12-step rebuild's own
-      // `PRAGMA foreign_keys=OFF` never takes effect and its `DROP TABLE <x>`
-      // cascade-deletes child rows on upgrade (0058 DROP doc_versions →
-      // review_comments wiped via ON DELETE cascade; 0035/0041 are the same shape
-      // for node_runs). Toggle OUTSIDE drizzle's tx, then re-enable + verify.
-      sqlite.exec('PRAGMA foreign_keys = OFF;')
-      const appliedMigrations = migrateSqlite(sqlite, { migrationsFolder })
-      // F1-followup (Codex gate): WARN, don't throw. foreign_key_check runs AFTER
-      // drizzle's migration tx has COMMITTED, so throwing can't roll back — it would
-      // only brick startup on a pre-existing orphan (a half-upgraded DB that fails
-      // every boot). Normal INSERT..SELECT rebuilds introduce no violations; a real
-      // one is a migration bug for migration tests to catch, not a reason to fail
-      // every boot. Surface it (scoped to the offending rows) and continue.
-      if (appliedMigrations > 0) {
-        const violations = sqlite.query('PRAGMA foreign_key_check;').all()
-        if (violations.length > 0) {
-          console.warn(
-            `[db] post-migration foreign_key_check found ${violations.length} violation(s); ` +
-              `continuing (a committed migration cannot be rolled back here): ${JSON.stringify(violations)}`,
-          )
-        }
-        assertMigrationHistory(sqlite, {
-          dbPath: opts.path,
-          expected,
-          stage: 'migration-history-postflight',
-          allowPrefix: false,
-        })
-      }
-      sqlite.exec('PRAGMA foreign_keys = ON;')
-      assertPhysicalSchema(sqlite, {
-        dbPath: opts.path,
-        migrationsFolder,
-        expectedMigrations: expected,
-      })
+      const objects = sqlite
+        .query("SELECT name FROM sqlite_schema WHERE type = 'table' AND name NOT LIKE 'sqlite_%'")
+        .all()
+      if (!objects.length)
+        installSqliteBaseline(sqlite, { bootstrap: 'required', generationId: opts.generationId })
+      const history = schemaHistoryRuntime()
+      admitSqliteHistorySync(sqlite, { binary: history.head(), metaTables: history.metaTables })
+      sqlite.exec('PRAGMA foreign_keys = ON')
     } else {
       sqlite.exec('PRAGMA foreign_keys = ON;')
     }
     if (opts.observeTransactionMs !== undefined) {
-      transactionObservers.set(db as object, opts.observeTransactionMs)
+      bindTransactionObserver(db, opts.observeTransactionMs)
     }
     // RFC-311 — armed after migrations so one-time upgrade work stays out of
     // the steady-state slow log.
+    guardSqliteGenerationWrites(sqlite, opts.generationId)
     instrumentSlowStatements(sqlite, opts.slowQueryMs ?? 50, undefined, opts.observeStatementMs)
     if (opts.developmentIntegrity !== undefined) {
       opts.developmentIntegrity.validatedDatabase =
@@ -420,18 +382,6 @@ export function openDb(opts: OpenDbOptions): DbClient {
   }
 }
 
-/**
- * Per-process cache of a fully-migrated in-memory SQLite image, keyed by the
- * resolved migrations folder. The migrations are replayed exactly ONCE per
- * folder per process; every subsequent createInMemoryDb() call hydrates a
- * fresh, independent database from the serialized image instead of re-running
- * all migrations (~18ms → ~0.1ms per call; the backend suite calls this ~260×).
- *
- * Safe because the migrated schema is deterministic and Bun's
- * Database.deserialize() copies the image — each test gets a private DB, so
- * writes never bleed across tests (locked by createindb-snapshot-parity.test.ts).
- */
-const migratedSnapshotCache = new Map<string, Uint8Array>()
 const legacyDaemonTestDbs = new WeakSet<object>()
 
 /**
@@ -449,32 +399,6 @@ export function registerLegacyDaemonTestFixture(db: object): void {
   legacyDaemonTestDbs.add(db)
 }
 
-function migratedSnapshot(migrationsFolder: string): Uint8Array {
-  const key = resolve(migrationsFolder)
-  let snapshot = migratedSnapshotCache.get(key)
-  if (!snapshot) {
-    const template = new Database(':memory:')
-    // RFC-115 (Codex audit F1): migrate with FK OFF (see openDb) so 12-step
-    // rebuilds don't cascade-delete child rows; the serialized image is FK-ON.
-    template.exec('PRAGMA foreign_keys = OFF;')
-    migrateSqlite(template, { migrationsFolder: key })
-    template.exec('PRAGMA foreign_keys = ON;')
-    snapshot = template.serialize()
-    template.close()
-    migratedSnapshotCache.set(key, snapshot)
-  }
-  return snapshot
-}
-
-/**
- * Open an in-memory database with all migrations applied.
- * Used by bun:test integration tests; no fs side-effects.
- *
- * The returned DB is a hydrated copy of a once-migrated template (see
- * migratedSnapshot). PRAGMA foreign_keys is a per-connection setting that is
- * NOT part of the serialized image, so it is re-applied here to preserve the
- * original (always-FK-on) contract.
- */
 export interface CreateInMemoryDbOptions {
   /**
    * RFC-221: historical tests model an already-administered installation and
@@ -484,25 +408,20 @@ export interface CreateInMemoryDbOptions {
   bootstrap?: 'ready' | 'required'
 }
 
-export function createInMemoryDb(
-  migrationsFolder: string,
-  opts: CreateInMemoryDbOptions = {},
-): DbClient {
-  const sqlite = Database.deserialize(migratedSnapshot(migrationsFolder))
-  sqlite.exec('PRAGMA foreign_keys = ON;')
-  if (opts.bootstrap !== 'required') {
-    const hasPolicy = sqlite
-      .query("SELECT 1 FROM sqlite_master WHERE type='table' AND name='auth_login_policy'")
-      .get()
-    if (hasPolicy !== null) {
-      sqlite.exec(
-        "UPDATE auth_login_policy SET bootstrap_completed_at = COALESCE(bootstrap_completed_at, 0) WHERE id = 'global';",
-      )
-    }
-  }
+/** Hydrate an independent epoch-2 baseline with install-only seeds and one active generation. */
+export function createInMemoryDb(opts: CreateInMemoryDbOptions = {}): DbClient {
+  const sqlite = createSqliteBaseline(opts)
+  guardSqliteGenerationWrites(sqlite)
+  const db = bindSqliteClient(sqlite)
+  if (opts.bootstrap !== 'required') registerLegacyDaemonTestFixture(db)
+  return db
+}
+
+/** Bind an already installed SQLite image with the same native semantics as openDb. */
+export function bindSqliteClient(sqlite: Database): DbClient {
   normalizeDirectStatementChanges(sqlite)
   const db = bindDatabaseHandle(drizzle(sqlite, { schema }), schema, createSqliteCapabilities())
+  bindSchemaRowRuleErrors(db, rowRuleCodes)
   guardForeignStatements(sqlite, db as object)
-  if (opts.bootstrap !== 'required') registerLegacyDaemonTestFixture(db)
   return db
 }

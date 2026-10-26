@@ -18,9 +18,13 @@
 // 评审门挑「哪一份待审文档」的 `item_index ASC`（NULL = RFC-079 单文档判别位）与澄清决定
 // 回落读模型时的 `dispatched_at DESC`（NULL = 尚未下发）。两条都在对拍里带变异验证。
 
-import type { TaskGateDefinitionContext } from '@/modules/task-execution/public/queries'
-import { createTaskGateQueries } from '@/modules/task-execution/public/queries'
-import { decodeLegacyClarifyArray, decodeLegacyClarifyAnswerColumns } from './clarifyAnswerCodec'
+import {
+  type TaskGateDefinitionContext,
+  createTaskGateQueries,
+} from '@/modules/task-execution/public/queries'
+
+import { decodeLegacyClarifyArray } from './clarifyAnswerCodec'
+import { readClarifyAnswerProjection } from './clarifyAnswerQueries'
 import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import type {
   ClarifyQuestion,
@@ -76,7 +80,10 @@ function selfSummary(
   }
 }
 
-function selfSession(round: PersistenceTables['clarifyRounds']['$inferSelect']): ClarifySession {
+function selfSession(
+  round: PersistenceTables['clarifyRounds']['$inferSelect'],
+  projection: Awaited<ReturnType<typeof readClarifyAnswerProjection>>,
+): ClarifySession {
   const session: ClarifySession = {
     id: round.id,
     taskId: round.taskId,
@@ -93,7 +100,7 @@ function selfSession(round: PersistenceTables['clarifyRounds']['$inferSelect']):
     answeredBy: round.answeredBy,
     directive: round.directive,
   }
-  const answers = decodeLegacyClarifyAnswerColumns(round).optionalAnswers
+  const answers = projection.optionalAnswers
   if (answers !== undefined) session.answers = answers
   const warnings = decodeLegacyClarifyArray<ClarifyTruncationWarning>(round.truncationWarningsJson)
   if (warnings !== undefined && warnings.length > 0) session.truncationWarnings = warnings
@@ -188,7 +195,8 @@ async function clarifyDecisionFrames(
     return []
   }
   const gate = event.payload.gate
-  const { clarifyRounds, taskQuestions, committedEvents } = tablesOf(db)
+  const { taskQuestions, committedEvents } = tablesOf(db)
+  const { clarifyRounds } = tablesOf(db)
   const round = (
     await db
       .select()
@@ -269,7 +277,7 @@ async function clarifyDecisionFrames(
         sourceShardKey: round.askingShardKey,
         iterationIndex: round.iteration,
         rerunNodeRunId,
-        session: selfSession(round),
+        session: selfSession(round, await readClarifyAnswerProjection(db, round)),
       },
     ]
   }

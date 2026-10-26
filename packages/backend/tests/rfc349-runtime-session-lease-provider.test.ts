@@ -3,22 +3,14 @@
 // proves the same claim is compiled against the real PostgreSQL projection.
 
 import { nodeRunFixture, patchNodeRunFixture, taskFixture, workflowFixture } from './helpers/model'
-import { withNativeTransactions } from './helpers/nativeTransactions'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { first as firstRow } from '@/platform/persistence/queryHelpers'
-import { describe, expect, test } from 'bun:test'
+import { expect, test } from 'bun:test'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 
 import { describeEachProvider } from './helpers/eachProvider'
 import { createRuntimeSessionLeaseOperations } from '@/modules/task-execution/infrastructure/runtimeSessionLeaseOperations'
-import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
-import type {
-  PostgresqlDatabaseRuntime,
-  PostgresqlPool,
-  PostgresqlReservedConnection,
-  SqlRows,
-} from '@/platform/persistence/postgresqlRuntime'
 import {
   claimNewRuntimeSession,
   confirmRuntimeSessionResume,
@@ -57,72 +49,17 @@ async function seedTaskRuns(db: PersistenceDb) {
   return db
 }
 
-function rows(
-  values: readonly (readonly unknown[])[] = [],
-  objects: readonly Record<string, unknown>[] = [],
-): SqlRows {
-  return Object.assign(Promise.resolve(objects), {
-    async values() {
-      return values
-    },
-  })
-}
-
-function postgresqlFixture() {
-  const executions: Array<{ readonly sql: string; readonly parameters?: readonly unknown[] }> = []
-  const run = (query: string, parameters?: readonly unknown[]) => {
-    executions.push({ sql: query, parameters })
-    const normalized = query.toLowerCase()
-    if (normalized.includes('database_generations')) {
-      return rows(
-        [['dbg_runtime_session_lease_pg']],
-        [{ generation_id: 'dbg_runtime_session_lease_pg' }],
-      )
-    }
-    if (normalized.includes('from "agent_workflow"."node_runs"')) return rows([['run-1']])
-    return rows()
-  }
-  const connection: PostgresqlReservedConnection = withNativeTransactions({
-    unsafe: run,
-    release() {},
-  })
-  const pool: PostgresqlPool = {
-    async reserve() {
-      return connection
-    },
-    unsafe: run,
-    async close() {},
-  }
-  const runtime: PostgresqlDatabaseRuntime = {
-    provider: 'postgresql',
-    generationId: 'dbg_runtime_session_lease_pg',
-    async health() {
-      throw new Error('not used')
-    },
-    async readiness() {
-      throw new Error('not used')
-    },
-    async acquireMigrationAdvisoryLock() {
-      throw new Error('not used')
-    },
-    providerPool: () => pool,
-    async close() {},
-  }
-  return {
-    operations: createRuntimeSessionLeaseOperations(createPostgresqlDatabaseClient(runtime)),
-    executions,
-  }
-}
-
-describe('RFC-349 runtime-session lease provider operations', () => {
-  test('PostgreSQL claim uses the selected schema and generation-fenced transaction', async () => {
-    const fake = postgresqlFixture()
+describeEachProvider('RFC-349 runtime-session lease native transaction', (harness) => {
+  test('claim uses the selected schema and generation-fenced transaction', async () => {
+    await seedTaskRuns(harness.db)
+    const recording = harness.recordStatements()
+    const operations = createRuntimeSessionLeaseOperations(harness.db)
     await expect(
-      claimNewRuntimeSession(fake.operations, {
+      claimNewRuntimeSession(operations, {
         protocol: 'opencode',
         sessionId: 'native-pg',
-        taskId: 'task-pg',
-        nodeId: 'node-pg',
+        taskId: 'task-lease',
+        nodeId: 'node-a',
         currentNodeRunId: 'run-1',
         leaseNonceDigest: 'nonce-pg',
         leasedAt: 30,
@@ -134,15 +71,18 @@ describe('RFC-349 runtime-session lease provider operations', () => {
       leaseNonceDigest: 'nonce-pg',
     })
 
-    const statements = fake.executions.map((execution) => execution.sql.toLowerCase())
-    expect(statements).toContain('set transaction isolation level serializable')
+    const statements = recording.statements.map((execution) => execution.sql.toLowerCase())
+    if (harness.capabilities.isolation === 'read-committed')
+      expect(statements).toContain('set transaction isolation level serializable')
+    else expect(statements).toContain('begin immediate')
     expect(statements.some((sql) => sql.includes('task_execution_owners'))).toBe(true)
     expect(
-      statements.some((sql) =>
-        sql.includes('insert into "agent_workflow"."runtime_session_leases"'),
+      statements.some(
+        (sql) => sql.includes('insert into') && sql.includes('"runtime_session_leases"'),
       ),
     ).toBe(true)
-    expect(statements.some((sql) => sql.includes('database_generations'))).toBe(true)
+    if (harness.capabilities.isolation === 'read-committed')
+      expect(statements.some((sql) => sql.includes('generations'))).toBe(true)
   })
 })
 

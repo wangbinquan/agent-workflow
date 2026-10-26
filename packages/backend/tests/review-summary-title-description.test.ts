@@ -1,3 +1,5 @@
+import { legacyContentRef } from '@/platform/content/contentRef'
+import { contentRowColumns } from '@/platform/content/infrastructure/contentStore'
 // Locks in that listReviewSummaries surfaces the review node's
 // human-readable title + description from the task's workflowSnapshot,
 // not just the bare reviewNodeId.
@@ -77,7 +79,13 @@ async function seed(
       sourcePortName: 'design',
       versionIndex: 1,
       reviewIteration: 0,
-      bodyPath: `runs/${taskId}/review/${rn.nodeId}/design/v1.md`,
+      ...contentRowColumns(
+        legacyContentRef(
+          'review-body-path',
+          'local-file',
+          `runs/${taskId}/review/${rn.nodeId}/design/v1.md`,
+        ),
+      ),
       commentsJson: '[]',
       decision: 'pending',
       decisionReason: null,

@@ -23,8 +23,9 @@ import {
   advancePhase,
   beginOperation,
   finishOperation,
+  type SkillOperationRow,
 } from '@/modules/resource-catalog/infrastructure/legacy/skillOperations'
-import type { SkillOperationRow } from '@/modules/resource-catalog/infrastructure/legacy/skillOperations'
+
 import type {
   OpRecoveryHandler,
   SkillOpFsOptions,
@@ -81,7 +82,7 @@ export async function deleteManagedSkillOp(
   expected?: SkillDeleteFence,
 ): Promise<void> {
   const session = databaseSessionFor(db)
-  const content = fsOpts.deletionContent ?? createFileSkillDeletionContentStore(fsOpts.appHome)
+  const content = fsOpts.deletionContent ?? createFileSkillDeletionContentStore(fsOpts.appHome, db)
 
   // ① intent (+lock) — durably record before any FS side effect.
   const opId = await session.transaction(async (tx) => {
@@ -182,9 +183,10 @@ async function assertDeleteFence(
 
 /** §6a recovery for a crashed `delete` op (registered into the boot driver). */
 export const deleteRecoveryHandler: OpRecoveryHandler = {
-  rollbackFs: async (fsOpts: SkillOpFsOptions, op: SkillOperationRow) => {
+  rollbackFs: async (fsOpts: SkillOpFsOptions, op: SkillOperationRow, db: PersistenceDb) => {
     const identity = decodeSkillOperationIdentity(op.preconditionJson, op.skillId)
-    const content = fsOpts.deletionContent ?? createFileSkillDeletionContentStore(fsOpts.appHome)
+    const content =
+      fsOpts.deletionContent ?? createFileSkillDeletionContentStore(fsOpts.appHome, db)
     const plan = content.plan({
       ...identity,
       operationId: op.opId,
@@ -192,8 +194,9 @@ export const deleteRecoveryHandler: OpRecoveryHandler = {
     })
     await content.rollback(plan, true)
   },
-  rollForwardFs: async (fsOpts: SkillOpFsOptions, op: SkillOperationRow) => {
-    const content = fsOpts.deletionContent ?? createFileSkillDeletionContentStore(fsOpts.appHome)
+  rollForwardFs: async (fsOpts: SkillOpFsOptions, op: SkillOperationRow, db: PersistenceDb) => {
+    const content =
+      fsOpts.deletionContent ?? createFileSkillDeletionContentStore(fsOpts.appHome, db)
     const plan = content.plan({
       skillId: op.skillId,
       operationId: op.opId,

@@ -15,14 +15,13 @@
 // The rolling-upgrade suite (upgrade-rolling.test.ts) separately locks that
 // 0085 applies cleanly on top of every frozen journal prefix.
 import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import { frozenTablesOf as tablesOf, createFrozenEpoch1Db } from './migration-freeze'
 import { rawExec } from '@/platform/persistence/queryHelpers'
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { eq } from 'drizzle-orm'
-import { sql } from 'drizzle-orm'
-import { createInMemoryDb } from '../src/db/client'
+import { eq, sql } from 'drizzle-orm'
+
 import { SKILL_FUSION_WORKFLOW_NAME } from '../src/services/systemResources'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -40,7 +39,7 @@ describe('RFC-165 T3 — migration 0085', () => {
   })
 
   test('M2 space_kind backfill: local / mixed-multi / internal / workgroup-host', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createFrozenEpoch1Db()
     const now = Date.now()
     const mkWf = async (id: string, name: string, builtin: boolean) => {
       const { workflows } = tablesOf(db)

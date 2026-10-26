@@ -1,3 +1,4 @@
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { o2Ports } from './helpers/o2Closure'
 // LOCKS: RFC-359 W6-T28 —— 事务内「读—改—写、中间不锁」丢更新的**用户可见后果**。
 //
@@ -40,24 +41,23 @@ import { o2Ports } from './helpers/o2Closure'
 // 「两个写手都已经读完了」这件事经语句录制器观测（`harness.recordStatements()`），不是等墙钟；
 // SQLite 上录不到（写手还没开始），等待自然走到上限后放行，两条路都不依赖时序。
 
-import {
-  type TaskFixtureSpec,
-  readTaskFixtures,
-  taskFixture,
-  workflowFixture,
-} from './helpers/model'
-import { tablesOf } from '@/platform/persistence/sessionTables'
 import { first as firstRow } from '@/platform/persistence/queryHelpers'
+
 import { afterAll, afterEach, beforeAll, expect, test } from 'bun:test'
-import { eq } from 'drizzle-orm'
+import { type Column, type Table, eq } from 'drizzle-orm'
+
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { ulid } from 'ulid'
-import type { Column, Table } from 'drizzle-orm'
+import {
+  readTaskFixtures,
+  taskFixture,
+  workflowFixture,
+  type TaskFixtureSpec,
+} from './helpers/model'
 
 import type { DbClient } from '@/db/client'
-import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { RuntimeCasePersistence } from '@/modules/digital-employee/application/ports/runtimeStore'
 import type { EmployeeCaseRecord } from '@/modules/digital-employee/domain/runtimeModel'
 import { createRuntimePersistence } from '@/modules/digital-employee/infrastructure/runtimeStore'
@@ -73,6 +73,7 @@ import {
   createTaskRecoveryOperations,
   type TaskRecoveryMutationOperations,
 } from '@/modules/task-execution/infrastructure/taskRecoveryOperations'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { deleteTask } from '@/services/taskDelete'
 import { getTaskWriteSem } from '@/services/taskWriteLocks'
 import type { Semaphore } from '@/util/semaphore'

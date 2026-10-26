@@ -1,3 +1,5 @@
+import { resourcePackageArtifactCodecs } from '@/modules/resource-catalog/infrastructure/resourcePackageArtifactCodec'
+import { intentApplyArtifactCodecs } from '@/modules/intent/infrastructure/intentApplyArtifactCodec'
 // RFC-395 II-pre：崩溃收敛改走生产维护装配，保留补偿与前滚断言。
 // RFC-294 P0-B/W6 pre-refactor characterization.
 //
@@ -187,7 +189,7 @@ async function seedPair(
     draftId: `draft-${suffix}`,
     draftHash: `sha256:${suffix}`,
     state,
-    preparedArtifactsJson: '[]',
+    preparedArtifactsJson: intentApplyArtifactCodecs.encode([]),
     receiptJson: receipts === undefined ? null : JSON.stringify(receipts.intent),
     error: state === 'failed' ? 'seeded failure' : null,
     createdAt: updatedAt,
@@ -199,7 +201,7 @@ async function seedPair(
     key: bundleKey,
     actorUserId: OWNER_ID,
     state,
-    preparedArtifactsJson: '[]',
+    preparedArtifactsJson: resourcePackageArtifactCodecs.encode([]),
     receiptJson: receipts === undefined ? null : JSON.stringify(receipts.bundle),
     error: state === 'failed' ? 'seeded failure' : null,
     createdAt: updatedAt,

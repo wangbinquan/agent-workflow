@@ -1,3 +1,4 @@
+import { initializeTaskWorkspace } from './helpers/taskWorkspaceFixture'
 // Locked regression — wrapper-fanout shard dispatch ignores the concurrency caps.
 //
 // DEFECT (HIGH): wrapper-fanout shards bypass ALL concurrency control.
@@ -30,7 +31,7 @@ import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
-import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
@@ -54,7 +55,7 @@ interface Harness {
 function buildHarness(provider: ProviderHarness): Harness {
   const appHome = mkdtempSync(join(tmpdir(), 'aw-red-fanoutcap-'))
   const worktreePath = join(appHome, 'wt')
-  mkdirSync(worktreePath, { recursive: true })
+  initializeTaskWorkspace(worktreePath)
   const db = provider.db
   return {
     db,

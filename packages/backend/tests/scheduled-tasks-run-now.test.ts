@@ -191,24 +191,26 @@ describeEachProvider('RFC-159 T7 — run-now service (pure-launch semantics)', (
   test('corrupt launch kind is rejected before a payload is dispatched through the wrong launcher', async () => {
     const id = await makeSchedule(true)
     const { scheduledTasks } = tablesOf(db)
-    await db
-      .update(scheduledTasks)
-      .set({
-        launchKind: 'corrupt-kind' as never,
-        // Before the guard, every unknown kind selected the workgroup schema,
-        // then buildScheduleLaunch fell through to the workflow launcher.
-        launchPayload: JSON.stringify({
-          workgroupName: 'squad',
-          name: 'nightly',
-          goal: 'g',
-          scratch: true,
-        }),
-      })
-      .where(eq(scheduledTasks.id, id))
-    const { build } = stubLaunch()
-    await expect(runScheduleNow(db, id, build, identityAccess)).rejects.toMatchObject({
-      code: 'schedule-kind-invalid',
-    })
+    await expect(
+      (async () => {
+        await db
+          .update(scheduledTasks)
+          .set({
+            launchKind: 'corrupt-kind' as never,
+            // Before the guard, every unknown kind selected the workgroup schema,
+            // then buildScheduleLaunch fell through to the workflow launcher.
+            launchPayload: JSON.stringify({
+              workgroupName: 'squad',
+              name: 'nightly',
+              goal: 'g',
+              scratch: true,
+            }),
+          })
+          .where(eq(scheduledTasks.id, id))
+      })(),
+    ).rejects.toThrow()
+    const [stored] = await db.select().from(scheduledTasks).where(eq(scheduledTasks.id, id))
+    expect(stored?.launchKind).toBe('workflow')
   })
 })
 

@@ -1,8 +1,7 @@
 import { withSourceControlTaskPorts } from './helpers/sourceControlTaskPorts'
-import { withNativeTransactions } from './helpers/nativeTransactions'
 import { describeEachProvider } from './helpers/eachProvider'
 import { composeRepositoryPreparation } from '@/modules/source-control/composition/repositoryPreparation'
-import { afterEach, describe, expect, test } from 'bun:test'
+import { afterEach, expect, test } from 'bun:test'
 import { existsSync, readFileSync } from 'node:fs'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -12,220 +11,69 @@ import type { TaskDriveSubmission } from '@/modules/task-execution/application/d
 import { createRepositoryPreparationRetryCommand } from '@/modules/task-execution/infrastructure/repositoryPreparationRetryCommand'
 import { createTaskWorkspaceMaterializer } from '@/modules/task-execution/infrastructure/taskRouteWorkspaceParticipant'
 import { registerAfterCommitEventPump } from '@/platform/events/committed/runtime'
-import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
-import type {
-  PostgresqlDatabaseRuntime,
-  PostgresqlPool,
-  PostgresqlReservedConnection,
-  SqlRows,
-} from '@/platform/persistence/postgresqlRuntime'
-
-interface SqlResponse {
-  readonly objects?: readonly Record<string, unknown>[]
-  readonly values?: readonly (readonly unknown[])[]
-  readonly count?: number
-}
-
-function sqlRows(response: SqlResponse = {}): SqlRows {
-  const objects = [...(response.objects ?? [])] as Array<Record<string, unknown>> & {
-    count?: number
-  }
-  objects.count = response.count ?? objects.length
-  return Object.assign(Promise.resolve(objects), {
-    async values() {
-      return response.values ?? []
-    },
-  })
-}
-
-function postgresqlFixture(trace: string[]) {
-  const executions: Array<{ readonly sql: string; readonly parameters: readonly unknown[] }> = []
-  let insertedEvent: readonly unknown[] | null = null
-  const run = (query: string, parameters: readonly unknown[] = []): SqlRows => {
-    executions.push({ sql: query, parameters })
-    const normalized = query.trim().toLowerCase()
-    if (normalized === 'commit') trace.push('db:commit')
-    // RFC-349: matches both the one-shot live-write marker and the
-    // per-transaction generation fence.
-    if (normalized.includes('agent_workflow_meta') && normalized.includes('database_generations')) {
-      return sqlRows({
-        objects: [{ generation_id: 'dbg_repo_prep_retry_pg' }],
-        values: [['dbg_repo_prep_retry_pg']],
-      })
-    }
-    if (
-      normalized.includes('from "agent_workflow"."tasks"') &&
-      normalized.includes('"workspace_pruning_at"')
-    ) {
-      return sqlRows({
-        values: [
-          [
-            'task-1',
-            'Retry repository',
-            'workflow-1',
-            'failed',
-            JSON.stringify({ prompt: 'repair it' }),
-            null,
-            null,
-            10,
-            'old failure',
-            'old detail',
-            '__repo_prep__',
-            'Owner',
-            'owner@example.test',
-            null,
-            false,
-            // RFC-395 II-a: requested-source columns now occupy the owner projection order.
-            null,
-            'cached-1',
-            'main',
-            null,
-            null,
-            'remote',
-            '',
-            1,
-            null,
-            null,
-            null,
-          ],
-        ],
-      })
-    }
-    if (
-      normalized.includes('from "agent_workflow"."node_runs"') &&
-      normalized.includes('"retry_index"')
-    ) {
-      return sqlRows({
-        // RFC-395 II-a: listFields selects id/status/retryIndex in that order.
-        values: [['prep-0', 'failed', 0]],
-      })
-    }
-    if (normalized.includes('from "agent_workflow"."cached_repos"')) return sqlRows()
-    if (normalized.includes('from "agent_workflow"."task_execution_owners"')) return sqlRows()
-    if (normalized.startsWith('update "agent_workflow"."tasks"')) {
-      trace.push('task:cas')
-      return sqlRows({ values: [[2]], count: 1 })
-    }
-    if (normalized.includes('from "agent_workflow"."node_runs"')) return sqlRows()
-    // RFC-374: the mint program allocates the run's seq from the identity table first.
-    if (normalized.startsWith('insert into "agent_workflow"."node_run_seq_allocations"')) {
-      return sqlRows({ objects: [{ seq: 1 }], values: [[1]], count: 1 })
-    }
-    if (normalized.startsWith('insert into "agent_workflow"."node_runs"')) {
-      trace.push('prep:insert')
-      return sqlRows({ count: 1 })
-    }
-    if (normalized.startsWith('insert into "agent_workflow"."task_repos"')) {
-      trace.push('repos:insert')
-      return sqlRows({ count: 1 })
-    }
-    if (
-      normalized.includes('from "agent_workflow"."tasks"') &&
-      normalized.includes('"execution_lineage_id"')
-    ) {
-      return sqlRows({
-        values: [
-          [
-            2,
-            'task-1',
-            JSON.stringify([
-              {
-                stableNodeKey: 'task-root',
-                frozenOccurrenceKey: 'task-1',
-                workflowRevision: null,
-              },
-            ]),
-          ],
-        ],
-      })
-    }
-    if (normalized.includes('from "agent_workflow"."task_execution_intents"')) return sqlRows()
-    if (normalized.includes('from "agent_workflow"."task_execution_lineage_operation_records"')) {
-      return sqlRows()
-    }
-    if (normalized.includes('from "agent_workflow"."task_execution_maintenance_members"')) {
-      return sqlRows()
-    }
-    if (normalized.includes('from "agent_workflow"."committed_event_family_cutovers"')) {
-      return sqlRows({
-        values: [['task-execution', 'task-lifecycle', 'dispatchable', 1, 0, 'test-cutover']],
-      })
-    }
-    if (normalized.includes('from "agent_workflow"."committed_event_aggregate_heads"')) {
-      return sqlRows()
-    }
-    if (normalized.startsWith('insert into "agent_workflow"."committed_events"')) {
-      insertedEvent = [...parameters]
-      return sqlRows({ count: 1 })
-    }
-    if (normalized.includes('from "agent_workflow"."committed_events"')) {
-      const eventId = insertedEvent?.[0]
-      return sqlRows({
-        values:
-          eventId !== undefined && insertedEvent !== null && parameters.includes(eventId)
-            ? [insertedEvent]
-            : [],
-      })
-    }
-    return sqlRows({
-      count:
-        normalized.startsWith('insert ') ||
-        normalized.startsWith('update ') ||
-        normalized.startsWith('delete ')
-          ? 1
-          : 0,
-    })
-  }
-  const connection: PostgresqlReservedConnection = withNativeTransactions({
-    unsafe: run,
-    release() {},
-  })
-  const pool: PostgresqlPool = {
-    async reserve() {
-      return connection
-    },
-    unsafe: run,
-    async close() {},
-  }
-  const runtime: PostgresqlDatabaseRuntime = {
-    provider: 'postgresql',
-    generationId: 'dbg_repo_prep_retry_pg',
-    async health() {
-      throw new Error('not used')
-    },
-    async readiness() {
-      throw new Error('not used')
-    },
-    async acquireMigrationAdvisoryLock() {
-      throw new Error('not used')
-    },
-    providerPool: () => pool,
-    async close() {},
-  }
-  return { db: createPostgresqlDatabaseClient(runtime), executions }
-}
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { workflowFixture, taskFixture, nodeRunFixture, readTaskFixtures } from './helpers/model'
+import { eq } from 'drizzle-orm'
 
 afterEach(() => {
   registerAfterCommitEventPump(null)
 })
 
-describe('RFC-349 PostgreSQL repository preparation', () => {
+describeEachProvider('RFC-349 repository preparation retry', (harness) => {
   test('commits pending status and continuation before background drive; preparation belongs to that drive', async () => {
     const trace: string[] = []
-    const fixture = postgresqlFixture(trace)
-    const appHome = await mkdtemp(join(tmpdir(), 'rfc349-repo-prep-pg-'))
+    const db = harness.db
+    await workflowFixture(db, { id: 'workflow-1', name: 'workflow-1', definition: '{}' })
+    await taskFixture(db, {
+      id: 'task-1',
+      name: 'Retry repository',
+      workflowId: 'workflow-1',
+      workflowSnapshot: '{}',
+      repoPath: '',
+      worktreePath: '',
+      baseBranch: 'main',
+      branch: 'main',
+      cachedRepoId: 'cached-1',
+      status: 'failed',
+      inputs: { prompt: 'repair it' },
+      startedAt: 1,
+      finishedAt: 10,
+      errorSummary: 'old failure',
+      errorMessage: 'old detail',
+      failedNodeId: '__repo_prep__',
+      gitUserName: 'Owner',
+      gitUserEmail: 'owner@example.test',
+      spaceKind: 'remote',
+      lifecycleEventRevision: 1,
+    })
+    await nodeRunFixture(db, {
+      id: 'prep-0',
+      taskId: 'task-1',
+      nodeId: '__repo_prep__',
+      status: 'failed',
+      retryIndex: 0,
+    })
+    const recording = harness.recordStatements()
     const submissions: TaskDriveSubmission[] = []
     registerAfterCommitEventPump({
       async publishNow() {
+        expect(recording.statements.some((entry) => /^commit\b/i.test(entry.sql.trim()))).toBe(true)
+        expect((await readTaskFixtures(db, { id: 'task-1' }))[0]?.status).toBe('pending')
         trace.push('event:publish')
       },
       nudge() {},
     })
     const ids = ['operation-1', 'intent-1', 'prep-1']
     const command = createRepositoryPreparationRetryCommand({
-      db: fixture.db,
+      db,
       coordinator: {
         async submit(input) {
+          expect(trace).toContain('event:publish')
+          const intents = await db
+            .select()
+            .from(tablesOf(db).taskExecutionIntents)
+            .where(eq(tablesOf(db).taskExecutionIntents.id, input.intentId!))
+          expect(intents).toHaveLength(1)
           trace.push('coordinator')
           submissions.push(input)
           return { kind: 'accepted', taskId: input.taskId }
@@ -244,16 +92,20 @@ describe('RFC-349 PostgreSQL repository preparation', () => {
     try {
       await command.retry('task-1')
     } finally {
-      await rm(appHome, { recursive: true, force: true })
+      recording.stop()
     }
 
     expect(submissions).toEqual([
       { taskId: 'task-1', intentId: 'intent-1', completionMode: 'background' },
     ])
-    expect(trace.indexOf('db:commit')).toBeLessThan(trace.indexOf('event:publish'))
     expect(trace.indexOf('event:publish')).toBeLessThan(trace.indexOf('coordinator'))
-    expect(trace).not.toContain('repos:insert')
-    expect(trace).not.toContain('prep:insert')
+    expect(
+      recording.statements.filter((entry) =>
+        /insert into [^;]*(?:node_runs|task_repository_mounts)/i.test(entry.sql),
+      ),
+    ).toEqual([])
+    expect((await db.select().from(tablesOf(db).nodeRuns)).map((row) => row.id)).toEqual(['prep-0'])
+    expect(await db.select().from(tablesOf(db).taskRepositoryMounts)).toEqual([])
   })
 
   test('composition exposes production workspace and retry factories without SQLite escape hatches', () => {

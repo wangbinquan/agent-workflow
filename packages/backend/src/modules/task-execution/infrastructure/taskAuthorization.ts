@@ -1,12 +1,12 @@
+import { tablesOf } from '@/platform/persistence/sessionTables'
 // RFC-359 W1-T2c —— 任务成员/可见性判定的**一份**实现，两个引擎共用。
 //
 // 此前 `sqliteTaskAuthorization.ts`（同步 DbTxSync 孪生）与 `postgresqlTaskAuthorization.ts`
 // 各一份，查询逐字相同。PostgreSQL 那份由本文件替代；SQLite 的同步孪生在其余 dbTxSync
 // 调用方迁完前保留（W4 pair-deletion）。
 
-import { tablesOf } from '@/platform/persistence/sessionTables'
-import { and, eq, inArray, or, type Placeholder, type SQL, type SQLWrapper } from 'drizzle-orm'
 import { chunkedAll } from '@/util/sqlChunk'
+import { and, eq, inArray, or, type Placeholder, type SQL, type SQLWrapper } from 'drizzle-orm'
 
 import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
 import type {
@@ -167,7 +167,8 @@ export async function visibleTaskIdsFor(
 }
 
 export async function readRealtimeTaskAudience(db: PersistenceDb, taskId: string, userId: string) {
-  const { tasks, taskCollaborators } = tablesOf(db)
+  const { taskCollaborators } = tablesOf(db)
+  const { tasks } = tablesOf(db)
   const taskRows = await db
     .select({ ownerUserId: tasks.ownerUserId })
     .from(tasks)

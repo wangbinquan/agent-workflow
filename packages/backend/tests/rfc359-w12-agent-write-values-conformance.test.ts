@@ -1,3 +1,4 @@
+import { agentFixtureReferences, type AgentFixtureRow } from './helpers/model/agent'
 // RFC-359 AC1: preserve the existing Agent content encodings while sharing the
 // repeated field projection. These database cases ran on the old neutral
 // builders before extraction. The synchronous legacy writer remains covered by
@@ -17,11 +18,29 @@ import {
   agentFromPersistenceRow,
   createAgentPersistenceValues,
   updateAgentPersistenceValues,
-  type AgentPersistenceRow,
 } from '@/modules/resource-catalog/infrastructure/agentPersistence'
 import type { PersistenceTx } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 
+function fixtureCreateValues(input: Parameters<typeof createAgentPersistenceValues>[0]) {
+  return {
+    ...createAgentPersistenceValues(input),
+    skills: input.agent.skills,
+    dependsOn: input.agent.dependsOn,
+    mcp: input.agent.mcp,
+    plugins: input.agent.plugins,
+  }
+}
+function fixtureUpdateValues(...args: Parameters<typeof updateAgentPersistenceValues>) {
+  const [current, patch] = args
+  return {
+    ...updateAgentPersistenceValues(...args),
+    skills: patch.skills ?? current.skills,
+    dependsOn: patch.dependsOn ?? current.dependsOn,
+    mcp: patch.mcp ?? current.mcp,
+    plugins: patch.plugins ?? current.plugins,
+  }
+}
 const OWNER = 'agent-values-owner'
 const T0 = 1_700_000_000_000
 
@@ -51,7 +70,7 @@ function input(): CreateAgent {
   }
 }
 
-const expectedRow: AgentPersistenceRow = {
+const expectedRow: AgentFixtureRow = {
   id: 'agent-values',
   name: 'agent-values',
   description: 'original description',
@@ -101,7 +120,7 @@ describeEachProvider('RFC-359 Agent write values on real databases', (harness) =
     return await harness.session.transaction(async (tx) => {
       await agentFixture(
         tx,
-        createAgentPersistenceValues({ id: expectedRow.id, agent, ownerUserId: OWNER, now: T0 }),
+        fixtureCreateValues({ id: expectedRow.id, agent, ownerUserId: OWNER, now: T0 }),
       )
       return await readRow(tx)
     })
@@ -149,11 +168,14 @@ describeEachProvider('RFC-359 Agent write values on real databases', (harness) =
     const original = await readRow(harness.db)
     expect(original.inputs).toBe(rawInputs)
     await harness.session.transaction(async (tx) => {
-      const current = agentFromPersistenceRow(await readRow(tx))
+      const current = agentFromPersistenceRow(
+        await readRow(tx),
+        agentFixtureReferences(await readRow(tx)),
+      )
       await patchAgentFixture(
         tx,
         { id: current.id },
-        updateAgentPersistenceValues(current, { description: 'changed' }, T0 + 7),
+        fixtureUpdateValues(current, { description: 'changed' }, T0 + 7),
       )
     })
     expect(await readRow(harness.db)).toEqual({
@@ -167,11 +189,14 @@ describeEachProvider('RFC-359 Agent write values on real databases', (harness) =
   test('explicit clearing keeps empty sidecar maps, clears runtime and preserves row metadata', async () => {
     await create()
     await harness.session.transaction(async (tx) => {
-      const current = agentFromPersistenceRow(await readRow(tx))
+      const current = agentFromPersistenceRow(
+        await readRow(tx),
+        agentFixtureReferences(await readRow(tx)),
+      )
       await patchAgentFixture(
         tx,
         { id: current.id },
-        updateAgentPersistenceValues(
+        fixtureUpdateValues(
           current,
           {
             description: 'cleared',
@@ -197,14 +222,14 @@ describeEachProvider('RFC-359 Agent write values on real databases', (harness) =
     expect(await readRow(harness.db)).toEqual({
       ...expectedRow,
       description: 'cleared',
-      outputs: '[]',
-      inputs: '[]',
-      syncOutputsOnIterate: false,
-      runtime: null,
       skills: '[]',
       dependsOn: '[]',
       mcp: '[]',
       plugins: '[]',
+      outputs: '[]',
+      inputs: '[]',
+      syncOutputsOnIterate: false,
+      runtime: null,
       frontmatterExtra: '{"replacement":true,"outputKinds":{},"outputWrapperPortNames":{}}',
       bodyMd: '',
       updatedAt: T0 + 11,
@@ -217,7 +242,7 @@ describeEachProvider('RFC-359 Agent write values on real databases', (harness) =
       harness.session.transaction(async (tx) => {
         await agentFixture(
           tx,
-          createAgentPersistenceValues({
+          fixtureCreateValues({
             id: expectedRow.id,
             agent: input(),
             ownerUserId: OWNER,
@@ -228,8 +253,8 @@ describeEachProvider('RFC-359 Agent write values on real databases', (harness) =
         await patchAgentFixture(
           tx,
           { id: expectedRow.id },
-          updateAgentPersistenceValues(
-            agentFromPersistenceRow(await readRow(tx)),
+          fixtureUpdateValues(
+            agentFromPersistenceRow(await readRow(tx), agentFixtureReferences(await readRow(tx))),
             { description: 'transaction only' },
             T0 + 3,
           ),
@@ -250,11 +275,14 @@ describeEachProvider('RFC-359 Agent write values on real databases', (harness) =
     const failure = new Error('abort existing Agent transaction')
     await expect(
       harness.session.transaction(async (tx) => {
-        const current = agentFromPersistenceRow(await readRow(tx))
+        const current = agentFromPersistenceRow(
+          await readRow(tx),
+          agentFixtureReferences(await readRow(tx)),
+        )
         await patchAgentFixture(
           tx,
           { id: current.id },
-          updateAgentPersistenceValues(current, { inputs: [], runtime: null }, T0 + 5),
+          fixtureUpdateValues(current, { inputs: [], runtime: null }, T0 + 5),
         )
         expect((await readRow(tx)).inputs).toBe('[]')
         expect((await readRow(tx)).runtime).toBe(null)
@@ -271,8 +299,11 @@ describeEachProvider('RFC-359 Agent write values on real databases', (harness) =
     await expect(
       harness.session.transaction(async (tx) => {
         await patchAgentFixture(tx, { id: expectedRow.id }, { description: 'not committed' })
-        const current = agentFromPersistenceRow(await readRow(tx))
-        updateAgentPersistenceValues(
+        const current = agentFromPersistenceRow(
+          await readRow(tx),
+          agentFixtureReferences(await readRow(tx)),
+        )
+        fixtureUpdateValues(
           current,
           {
             inputs: [
@@ -316,28 +347,13 @@ test('prepared legacy refs and empty branch sidecars encode without reading repl
       },
     })
   }
-  expect(
-    agentContentPersistenceValues(
-      agent,
-      { tag: 'prepared', branchPorts: [] },
-      {
-        skills: [{ kind: 'managed', skillId: 'resolved-skill' }],
-        dependsOn: ['resolved-agent'],
-        mcp: ['resolved-mcp'],
-        plugins: ['resolved-plugin'],
-      },
-    ),
-  ).toEqual({
+  expect(agentContentPersistenceValues(agent, { tag: 'prepared', branchPorts: [] })).toEqual({
     description: expectedRow.description,
     outputs: expectedRow.outputs,
     inputs: expectedRow.inputs,
     syncOutputsOnIterate: expectedRow.syncOutputsOnIterate,
     runtime: expectedRow.runtime,
     permission: expectedRow.permission,
-    skills: '[{"kind":"managed","skillId":"resolved-skill"}]',
-    dependsOn: '["resolved-agent"]',
-    mcp: '["resolved-mcp"]',
-    plugins: '["resolved-plugin"]',
     frontmatterExtra: '{"tag":"prepared","branchPorts":[]}',
     bodyMd: expectedRow.bodyMd,
   })
@@ -409,7 +425,15 @@ test('all three full content writers delegate while legacy sparse preparation st
         ts.isIdentifier(node.expression) &&
         node.expression.text === called
       ) {
-        result.push(node.arguments.map((arg) => arg.getText(source).replace(/\s/g, '')))
+        result.push(
+          node.arguments.map((arg) =>
+            ts
+              .createPrinter({ removeComments: true })
+              .printNode(ts.EmitHint.Expression, arg, source)
+              .replace(/\s/g, '')
+              .replace(/,}/g, '}'),
+          ),
+        )
       }
       ts.forEachChild(node, visit)
     }
@@ -418,8 +442,9 @@ test('all three full content writers delegate while legacy sparse preparation st
   }
   expect(callArguments(common, 'createAgentPersistenceValues')).toEqual([['candidate']])
   expect(callArguments(common, 'updateAgentPersistenceValues')).toEqual([['next']])
-  expect(callArguments(legacy, 'commitAgentCreate')).toEqual([
-    ['input', 'fmExtra', '{skills:skillRefs,dependsOn:dependsOnIds,mcp:mcpIds,plugins:pluginIds,}'],
+  expect(callArguments(legacy, 'commitAgentCreate')).toEqual([['input', 'fmExtra']])
+  expect(callArguments(legacy, 'commitAgentCreate', 'replaceAgentReferences')).toEqual([
+    ['tx', 'id', '{skills:skillRefs,dependsOn:dependsOnIds,mcp:mcpIds,plugins:pluginIds}'],
   ])
   expect(callArguments(legacy, 'commitAgentCreateInTx', 'commitAgentCreate')).toEqual([
     ['tx', 'p', '(actor,groups)=>assertRefsUsableInTx(tx,actor,groups)'],

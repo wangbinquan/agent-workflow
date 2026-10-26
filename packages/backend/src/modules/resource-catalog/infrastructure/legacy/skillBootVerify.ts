@@ -1,3 +1,4 @@
+import { skillRowPath } from '../databaseSkillTrees'
 // RFC-170 §invariant④ / §10 (T-BOOT) — managed-skill snapshot integrity
 // reverification + the SINGLE availability predicate.
 //
@@ -251,13 +252,15 @@ async function inspectManagedSnapshot(
     const versions = (await db
       .select({
         versionIndex: skillVersions.versionIndex,
-        filesPath: skillVersions.filesPath,
+        contentRefJson: skillVersions.contentRefJson,
+        contentInlineBytes: skillVersions.contentInlineBytes,
         contentHash: skillVersions.contentHash,
       })
       .from(skillVersions)
       .where(eq(skillVersions.skillId, skill.id))) as Array<{
       versionIndex: number
-      filesPath: string
+      contentRefJson: string
+      contentInlineBytes: Uint8Array | null
       contentHash: string | null
     }>
     const current = versions.find((version) => version.versionIndex === skill.contentVersion)
@@ -278,11 +281,11 @@ async function inspectManagedSnapshot(
       }
       selected.push({
         version: version.versionIndex,
-        reference: version.filesPath,
+        reference: skillRowPath(version, skill.id, `version:${version.versionIndex}`)!,
         contentHash: version.contentHash,
       })
     }
-    const inspector = opts.snapshotInspector ?? createFileSkillSnapshotInspector(opts.appHome)
+    const inspector = opts.snapshotInspector ?? createFileSkillSnapshotInspector(opts.appHome, db)
     return await inspector.inspect({
       skillId: skill.id,
       currentVersion: skill.contentVersion,

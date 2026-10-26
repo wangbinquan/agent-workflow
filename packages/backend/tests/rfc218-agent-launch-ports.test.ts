@@ -31,14 +31,14 @@ import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import type { Hono } from 'hono'
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import {
   StartAgentTaskSchema,
   WORKFLOW_SCHEMA_VERSION,
   WorkflowDefinitionSchema,
 } from '@agent-workflow/shared'
-import { buildActor } from '../src/auth/actor'
-import type { Actor } from '../src/auth/actor'
+import { buildActor, type Actor } from '../src/auth/actor'
+
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { createAgent } from '../src/modules/resource-catalog/infrastructure/legacy/agent'
 import {
@@ -66,7 +66,7 @@ import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopo
 const openTestApplication = registerProviderHttpApplicationLifetime()
 
 const TOKEN = 'a'.repeat(64)
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+
 const SPEC = { kind: 'daily', at: '09:00', timezone: 'UTC' } as const
 const VALID_OPENCODE_RUNTIME = 'rfc224-test-opencode'
 
@@ -154,7 +154,7 @@ async function seedValidOpencodeRuntime(db: DbClient): Promise<void> {
 describe('B1/B2 — host snapshot shapes', () => {
   let db: DbClient
   beforeEach(async () => {
-    db = createInMemoryDb(MIGRATIONS)
+    db = createInMemoryDb()
     await seedValidOpencodeRuntime(db)
   })
 
@@ -339,7 +339,7 @@ describe('B3 — validateAgentLaunchShape matrix', () => {
 
 describe('B4 — startAgentTask ported happy path (scratch)', () => {
   test('port values land verbatim in task.inputs; snapshot frozen ported', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createInMemoryDb()
     await seedValidOpencodeRuntime(db)
     const appHome = makeTempDir('aw-rfc218-b4-')
     const ported = await createAgent(db, {
@@ -380,7 +380,7 @@ describe('B4 — startAgentTask ported happy path (scratch)', () => {
   })
 
   test('zero-port agents still launch exactly as RFC-165 (description port)', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createInMemoryDb()
     await seedValidOpencodeRuntime(db)
     const appHome = makeTempDir('aw-rfc218-b4z-')
     const solo = await createAgent(db, { ...AGENT_FIELDS, name: 'solo' })
@@ -416,7 +416,7 @@ async function buildHarness(): Promise<Harness> {
   const tmp = makeTempDir('aw-rfc218-http-')
   const home = join(tmp, 'home')
   process.env.AGENT_WORKFLOW_HOME = home
-  const db = createInMemoryDb(MIGRATIONS)
+  const db = createInMemoryDb()
   await seedValidOpencodeRuntime(db)
   const agent = await createAgent(db, {
     ...AGENT_FIELDS,
@@ -541,7 +541,7 @@ describe('B7 — scheduled save gate (design P2-2)', () => {
   let db: DbClient
   let ownerId: string
   beforeEach(async () => {
-    db = createInMemoryDb(MIGRATIONS)
+    db = createInMemoryDb()
     await seedValidOpencodeRuntime(db)
     const owner = await createUser(db, {
       username: 'owner',

@@ -1,3 +1,6 @@
+import type { projectNodeRunReadFacts } from '@/modules/task-execution/infrastructure/nodeRunSnapshot'
+// Target fixture mint order; missing seq is covered only by conversion/rejection tests.
+let fixtureRunSequence = 0
 // RFC-076 PR-A — trim-B dispatch predicates (isDispatchable / wrapperHasFreshInnerWork).
 //
 // These lock the much-reviewed (3 adversarial rounds) corrections to the
@@ -11,7 +14,6 @@
 // review-supersede row (superseded_by_review column non-null, RFC-145)
 // stays parked — see design/RFC-095-scope-outcome-exhaustive/design.md §1.
 
-import { type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { describe, expect, test } from 'bun:test'
 import type { NodeKind, WorkflowDefinition } from '@agent-workflow/shared'
 import {
@@ -23,11 +25,11 @@ import {
 } from '../src/services/dispatchFrontier'
 import { encodeWrapperProgress } from '../src/modules/task-execution/domain/wrapperProgress'
 
-type Row = PersistenceTables['nodeRuns']['$inferSelect']
+type Row = ReturnType<typeof projectNodeRunReadFacts>
 
 function run(over: Partial<Row>): Row {
   return {
-    seq: null,
+    seq: ++fixtureRunSequence,
     parentNodeRunId: null,
     shardKey: null,
     supersededByReview: null,
@@ -49,7 +51,7 @@ function run(over: Partial<Row>): Row {
 }
 function doneRow(id: string): Row {
   return {
-    seq: null,
+    seq: ++fixtureRunSequence,
     parentNodeRunId: null,
     containerRunId: null,
     shardKey: null,

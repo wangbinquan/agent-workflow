@@ -2,16 +2,19 @@
 // baseline. Real PostgreSQL DDL and nonempty-row preservation have a separate
 // hosted suite; these controlled faults pin rollback and pointer repair order.
 import { withNativeTransactions } from './helpers/nativeTransactions'
-import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import { buildFrozenEpoch1LogicalSchemaContract as buildLogicalSchemaContract } from '@/platform/persistence/migration/epoch1/contract'
 import { beforeAll, describe, expect, test } from 'bun:test'
-import { loadPostgresqlMigrationHistory } from '@/platform/persistence/postgresqlMigrationHistory'
-import type { PostgresqlMigrationHistory } from '@/platform/persistence/postgresqlMigrationSequence'
-import { postgresqlUpgradeStatementSql } from '@/platform/persistence/postgresqlMigrationSequence'
-import { migratePostgresqlSchema } from '@/platform/persistence/postgresqlMigrator'
+import { loadPostgresqlMigrationHistory } from '@/platform/persistence/migration/legacy/postgresqlMigrationHistory'
+import {
+  type PostgresqlMigrationHistory,
+  postgresqlUpgradeStatementSql,
+} from '@/platform/persistence/migration/legacy/postgresqlMigrationSequence'
+
+import { migratePostgresqlSchema } from '@/platform/persistence/migration/legacy/postgresqlMigrator'
 import {
   POSTGRESQL_BASELINE_ID,
   type PostgresqlSchemaStatement,
-} from '@/platform/persistence/postgresqlSchema'
+} from '@/platform/persistence/migration/legacy/postgresqlSchema'
 import type {
   PostgresqlDatabaseRuntime,
   PostgresqlReservedConnection,

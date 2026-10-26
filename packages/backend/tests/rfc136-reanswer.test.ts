@@ -113,7 +113,7 @@ async function seedTask(db: PersistenceDb, def: WorkflowDefinition): Promise<{ t
     workflowId,
     workflowSnapshot: JSON.stringify(def),
     repoPath: '/tmp/aw-rfc136',
-    worktreePath: '',
+    worktreePath: '/tmp/fixture-bound-root',
     baseBranch: 'main',
     branch: `agent-workflow/${taskId}`,
     status: 'running',

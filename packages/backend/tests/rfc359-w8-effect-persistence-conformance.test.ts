@@ -1,3 +1,4 @@
+import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { o2Ports } from './helpers/o2Closure'
 // RFC-359 W8 —— `TaskExecutionEffectPersistence` 端口的双引擎对拍。
 //
@@ -97,7 +98,7 @@ interface Fixture {
   reset(): void
 }
 
-async function seed(db: PersistenceDb): Promise<Fixture> {
+async function seed(db: PersistenceDb, unprepared = false): Promise<Fixture> {
   const taskId = `w8_${ulid()}`
   await workflowFixture(db, {
     id: `wf_${taskId}`,
@@ -114,7 +115,8 @@ async function seed(db: PersistenceDb): Promise<Fixture> {
     workflowSnapshot: SNAPSHOT,
     workflowVersion: 1,
     repoPath: '/tmp/repo',
-    worktreePath: '/tmp/worktree',
+    worktreePath: unprepared ? '' : '/tmp/worktree',
+    ...(unprepared ? { repos: [] } : {}),
     baseBranch: 'main',
     branch: `agent-workflow/${taskId}`,
     status: 'running',
@@ -151,6 +153,7 @@ async function seed(db: PersistenceDb): Promise<Fixture> {
     },
   ])
   const persistence = createTaskExecutionPersistence(db, {
+    historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
     recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
   })
   const module = createProviderTaskExecutionModule({
@@ -648,7 +651,7 @@ describeEachProvider('RFC-359 W8 —— effect 账本端口双引擎对拍', (ha
 
   test('settleWorkspacePreparation：任务列 / 仓库行 / 空间目录 / prep node_run 同笔落库', async () => {
     const db = harness.db
-    const fixture = await seed(db)
+    const fixture = await seed(db, true)
     const prepared = await fixture.effects.prepareAndAcquire(preparation(fixture))
     const finishedAt = Date.now()
     await fixture.effects.settleWorkspacePreparation({
@@ -709,14 +712,23 @@ describeEachProvider('RFC-359 W8 —— effect 账本端口双引擎对拍', (ha
     expect(task.baseCommit).toBe('deadbeef')
     const repos = await readTaskRepoFixtures(db, { taskId: fixture.taskId })
     expect(repos).toHaveLength(1)
-    // RFC-395 II-a: the old assertion protects the stored alias, not the mount path.
+    // Epoch 2 persists one mount identity and its actual workspace location.
     expect(repos[0]!.mountPath).toBe('')
-    expect((await readStoredTaskRepoFixtures(db, fixture.taskId))[0]!.worktreeDirName).toBe('w8')
+    expect(repos[0]!.worktreePath).toBe('/tmp/wt/w8')
+    const storedMount = (await readStoredTaskRepoFixtures(db, fixture.taskId))[0]!
+    expect(storedMount).toMatchObject({
+      ordinal: 0,
+      mountPath: '',
+      baseCommit: 'deadbeef',
+    })
+    expect(storedMount.repoKey.length).toBeGreaterThan(0)
+    expect(Object.hasOwn(storedMount, 'worktreeDirName')).toBe(false)
+    expect(Object.hasOwn(storedMount, 'worktreePath')).toBe(false)
     const spaces = await db
       .select()
       .from(taskSpaceNodes)
       .where(eq(taskSpaceNodes.taskId, fixture.taskId))
-    expect(spaces.map((row) => row.nodePath)).toEqual(['w8-node'])
+    expect(spaces.map((row) => row.nodePath).sort()).toEqual(['', 'w8-node'])
     const prep = (await db.select().from(nodeRuns).where(eq(nodeRuns.id, fixture.prepRunId)))[0]!
     expect(prep.status).toBe('done')
     expect(prep.finishedAt).toBe(finishedAt)
@@ -725,8 +737,12 @@ describeEachProvider('RFC-359 W8 —— effect 账本端口双引擎对拍', (ha
 
   test('settleWorkspacePreparation：prep node_run 已终态时整笔回滚', async () => {
     const db = harness.db
-    const fixture = await seed(db)
+    const fixture = await seed(db, true)
     const { taskSpaceNodes } = tablesOf(db)
+    const beforeSpaces = await db
+      .select()
+      .from(taskSpaceNodes)
+      .where(eq(taskSpaceNodes.taskId, fixture.taskId))
     await patchNodeRunFixture(db, { id: fixture.prepRunId }, { status: 'failed' })
     const prepared = await fixture.effects.prepareAndAcquire(preparation(fixture))
     const refused = await errorOf(() =>
@@ -760,10 +776,10 @@ describeEachProvider('RFC-359 W8 —— effect 账本端口双引擎对拍', (ha
     )
     expect(codeOf(refused)).toBe('illegal-node-run-transition')
     const task = (await readTaskFixtures(db, { id: fixture.taskId }))[0]!
-    expect(task.worktreePath).toBe('/tmp/worktree')
+    expect(task.worktreePath).toBe('')
     expect(
       await db.select().from(taskSpaceNodes).where(eq(taskSpaceNodes.taskId, fixture.taskId)),
-    ).toHaveLength(0)
+    ).toEqual(beforeSpaces)
     fixture.reset()
   })
 

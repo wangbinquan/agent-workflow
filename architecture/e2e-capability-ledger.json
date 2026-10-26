@@ -11570,7 +11570,7 @@
       "evidence": [
         {
           "file": "e2e/rfc319-ops-doctor-and-migrate.spec.ts",
-          "test": "RFC-319 OPS-012: migrate 在发行二进制上真的把库建起来，应用条数与二进制自称嵌的条数逐一对上，且重跑不重复应用 @nightly"
+          "test": "RFC-319 OPS-012: migrate installs the embedded epoch-2 history in its published generation and replay keeps its receipts @nightly"
         }
       ]
     },
@@ -11609,18 +11609,18 @@
     {
       "id": "OPS-015",
       "domain": "运维面：CLI、守护进程、备份恢复、磁盘与健康",
-      "title": "agent-workflow downgrade-audit rfc-295：回滚前只读兼容性闸门",
+      "title": "agent-workflow db migration rollback：首次业务写入前回退到切换前的源库，之后拒绝（RFC-395 U-6 起替代已退役的 downgrade-audit）",
       "risk": "P3",
       "tier": "nightly",
       "status": "covered",
       "evidence": [
         {
           "file": "e2e/rfc319-ops-doctor-and-migrate.spec.ts",
-          "test": "RFC-319 OPS-015: downgrade-audit 全清时报 OK 并退出 0，且全程只读——连一个空库都不会建出来 @nightly"
+          "test": "RFC-319 OPS-015: epoch-2 switch rollback before the first business write restores the source @nightly"
         },
         {
           "file": "e2e/rfc319-ops-doctor-and-migrate.spec.ts",
-          "test": "RFC-319 OPS-015: downgrade-audit 逐条点名阻断项、只审在途任务，且没有任何绕过开关 @nightly"
+          "test": "RFC-319 OPS-015: epoch-2 switch rollback refuses after business writes and preserves the active generation @nightly"
         }
       ]
     },

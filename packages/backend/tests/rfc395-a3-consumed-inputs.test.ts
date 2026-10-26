@@ -38,6 +38,13 @@ describeEachProvider('RFC-395 II-a A3 consumed input bytes', (harness) => {
       producerNodeId,
       producerRunId,
     }))
+    for (const edge of edges)
+      await nodeRunFixture(db, {
+        id: edge.producerRunId,
+        nodeId: edge.producerNodeId,
+        taskId: 'task',
+        status: 'done',
+      })
     await nodeRunFixture(db, {
       id: 'fixture',
       taskId: 'task',
@@ -66,7 +73,7 @@ describeEachProvider('RFC-395 II-a A3 consumed input bytes', (harness) => {
     expect(encodeConsumedEdges(edges)).toBe(JSON.stringify(record))
   })
 
-  test('legacy bytes remain verbatim; malformed/null decode as empty; caller rollback keeps prior bytes', async () => {
+  test('legacy input is projected canonically; malformed/null decode as empty; caller rollback keeps prior bytes', async () => {
     const db = harness.db
     await workflowFixture(db, {
       id: 'wf',
@@ -86,6 +93,8 @@ describeEachProvider('RFC-395 II-a A3 consumed input bytes', (harness) => {
       startedAt: 0,
     })
     await nodeRunFixture(db, { id: 'run', taskId: 'task', status: 'done', nodeId: 'node' })
+    for (const id of ['original', 'replacement'])
+      await nodeRunFixture(db, { id, taskId: 'task', status: 'done', nodeId: 'source' })
     const participant = createConsumedInputsParticipantInTx()
     const reader = createRunSelectionReader(db)
     const raw = ' { "source" : "original", "ignored": 9 } '
@@ -99,18 +108,20 @@ describeEachProvider('RFC-395 II-a A3 consumed input bytes', (harness) => {
         throw new Error('caller-rollback')
       }),
     ).rejects.toThrow('caller-rollback')
-    expect((await readRunSelectionOracleFixtures(db, 'task'))[0]?.consumedUpstreamRunsJson).toBe(
-      raw,
-    )
+    expect(
+      (await readRunSelectionOracleFixtures(db, 'task')).find((row) => row.id === 'run')
+        ?.consumedUpstreamRunsJson,
+    ).toBe(JSON.stringify({ source: 'original' }))
     for (const legacyJson of [null, '', '[1]', '{broken', '{"source":1}']) {
       await withTaskExecutionWrite(db, (tx) => participant.record(tx, 'run', { legacyJson }))
       expect(await reader.consumed('run')).toEqual([])
     }
     await withTaskExecutionWrite(db, (tx) => participant.record(tx, 'run', { edges: [] }))
     expect((await readNodeRunFixtures(db, { id: 'run' }))[0]?.consumedEdges).toEqual([])
-    expect((await readRunSelectionOracleFixtures(db, 'task'))[0]?.consumedUpstreamRunsJson).toBe(
-      '{}',
-    )
+    expect(
+      (await readRunSelectionOracleFixtures(db, 'task')).find((row) => row.id === 'run')
+        ?.consumedUpstreamRunsJson,
+    ).toBe('{}')
   })
 })
 

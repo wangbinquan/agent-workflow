@@ -21,7 +21,6 @@ import type { Database } from 'bun:sqlite'
 import { ulid } from 'ulid'
 import { openDb, DbCorruptionError, type DbClient } from '../src/db/client'
 import { quickCheckDbFile } from '../src/db/integrity'
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 const tmps: string[] = []
 function tmp(): string {
@@ -39,7 +38,7 @@ function sqliteOf(db: DbClient): Database {
 
 /** A healthy, consolidated (no -wal) DB file with several content pages. */
 async function seedManyPages(dbPath: string): Promise<number> {
-  const db = openDb({ path: dbPath, migrationsFolder: MIGRATIONS })
+  const db = openDb({ path: dbPath })
   for (let i = 0; i < 120; i++) {
     await workflowFixture(db, {
       id: ulid(),
@@ -88,7 +87,7 @@ describe('RFC-213 boot integrity gate (fail-closed)', () => {
     await seedManyPages(dbPath)
     expect(quickCheckDbFile(dbPath).ok).toBe(true)
     // Re-open (the gate runs) — must not throw.
-    const db = openDb({ path: dbPath, migrationsFolder: MIGRATIONS })
+    const db = openDb({ path: dbPath })
     sqliteOf(db).close()
   })
 
@@ -100,13 +99,13 @@ describe('RFC-213 boot integrity gate (fail-closed)', () => {
     // Sanity: the fixture really is page-corrupt (reaches quick_check, not open).
     expect(quickCheckDbFile(dbPath).ok).toBe(false)
 
-    expect(() => openDb({ path: dbPath, migrationsFolder: MIGRATIONS })).toThrow(DbCorruptionError)
+    expect(() => openDb({ path: dbPath })).toThrow(DbCorruptionError)
   })
 
   test('a truncated / non-DB file throws DbCorruptionError (normalized at open)', () => {
     const dbPath = join(tmp(), 'db.sqlite')
     writeFileSync(dbPath, Buffer.from('SQLite format 3\x00 but truncated garbage'))
-    expect(() => openDb({ path: dbPath, migrationsFolder: MIGRATIONS })).toThrow(DbCorruptionError)
+    expect(() => openDb({ path: dbPath })).toThrow(DbCorruptionError)
   })
 
   test('skipIntegrityCheck bypasses the gate (last-resort escape hatch)', async () => {
@@ -118,7 +117,7 @@ describe('RFC-213 boot integrity gate (fail-closed)', () => {
     // pages), openDb returns without the gate throwing.
     const db = openDb({
       path: dbPath,
-      migrationsFolder: MIGRATIONS,
+
       skipIntegrityCheck: true,
       skipMigrations: true,
     })

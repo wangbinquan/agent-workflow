@@ -2,23 +2,55 @@ import type {
   ResourcePackageApplyArtifactRecoveryPort,
   ResourcePackageApplyJournalSnapshot,
 } from '../application/resourcePackageMaintenance'
-import { decodeResourcePackageRecoveryRow } from './resourcePackageArtifactCodec'
+import {
+  decodeResourcePackageRecoveryRow,
+  decodeResourcePackageReceipt,
+  resourcePackageArtifactCodecs,
+} from './resourcePackageArtifactCodec'
 
-/** 格式分派发生在任何 effect 之前；不以 effect 抛出的 ZodError 猜测历史格式。 */
+/** All records use the same envelope; operation instructions select their effect adapter. */
 export function createVersionedResourcePackageArtifactRecovery(
   current: ResourcePackageApplyArtifactRecoveryPort,
-  legacy: ResourcePackageApplyArtifactRecoveryPort,
+  operations: ResourcePackageApplyArtifactRecoveryPort,
 ): ResourcePackageApplyArtifactRecoveryPort {
   async function recover(
     operation: 'rollForward' | 'compensate',
     journal: ResourcePackageApplyJournalSnapshot,
   ) {
-    const selected = decodeResourcePackageRecoveryRow(journal, operation)
-    const recovery = selected.format === 'current' ? current : legacy
-    await recovery[operation]({
-      ...journal,
-      preparedArtifactsJson: JSON.stringify(selected.artifacts),
-    })
+    const { artifacts } = decodeResourcePackageRecoveryRow(journal, operation)
+    if (operation === 'rollForward') {
+      const receipt = decodeResourcePackageReceipt(journal)
+      for (const artifact of artifacts) {
+        const resourceId = artifact.kind === 'plugin-install' ? artifact.pluginId : artifact.skillId
+        if (
+          !receipt.applied.some(
+            (entry) =>
+              entry.operationId === artifact.operationId && entry.resourceId === resourceId,
+          )
+        )
+          throw new Error(`resource-package-artifact-receipt-missing:${artifact.operationId}`)
+      }
+    }
+    const batches =
+      operation === 'compensate'
+        ? [...artifacts].reverse().map((artifact) => [artifact])
+        : [
+            artifacts.filter((artifact) => artifact.recovery === undefined),
+            artifacts.filter((artifact) => artifact.recovery !== undefined),
+          ]
+    let failure: unknown
+    for (const batch of batches) {
+      if (batch.length === 0) continue
+      try {
+        await (batch[0]!.recovery === undefined ? current : operations)[operation]({
+          ...journal,
+          preparedArtifactsJson: resourcePackageArtifactCodecs.encode(batch),
+        })
+      } catch (error) {
+        failure ??= error
+      }
+    }
+    if (failure !== undefined) throw failure
   }
   return {
     rollForward: (journal) => recover('rollForward', journal),

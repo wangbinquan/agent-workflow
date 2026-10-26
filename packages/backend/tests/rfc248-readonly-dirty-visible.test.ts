@@ -27,18 +27,16 @@ import { sql } from 'drizzle-orm'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { describeEachProvider } from './helpers/eachProvider'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-
 describe('migration 0133 —— task_repos.readonly_dirty_count', () => {
   let db: DbClient
   beforeEach(() => {
-    db = createInMemoryDb(MIGRATIONS)
+    db = createInMemoryDb()
   })
 
   test('列存在且默认 NULL（存量行不被回填成 0）', () => {
     const cols = rawRows<{ name: string; notnull: number; dflt_value: string | null }>(
       db,
-      sql`PRAGMA table_info(task_repos)`,
+      sql`PRAGMA table_info(task_repository_mounts)`,
       { notnull: 'int' },
     )
     const col = cols.find((c) => c.name === 'readonly_dirty_count')

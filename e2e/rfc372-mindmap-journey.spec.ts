@@ -1,3 +1,4 @@
+import { liveSqlitePath } from './storage'
 // RFC-372 complete product journey: real daemon, persistence, browser and TaskEngine.
 // Only the model CLI is deterministic. No API response or application state is stubbed.
 import { expect, test, type Page } from '@playwright/test'
@@ -137,7 +138,7 @@ function runtimeEvents(): { kind: string; request?: { userRequest: string; branc
 test.beforeAll(async () => {
   if (retainedHome) {
     expect(
-      existsSync(join(retainedHome, 'db.sqlite')),
+      existsSync(liveSqlitePath(retainedHome)),
       'Use a fresh home for a retained acceptance task',
     ).toBe(false)
     mkdirSync(retainedHome, { recursive: true })

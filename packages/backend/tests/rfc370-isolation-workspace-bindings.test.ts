@@ -1,3 +1,4 @@
+import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { o2Ports } from './helpers/o2Closure'
 // RFC-370: selected scopes must reach real Task receipts, wrappers and replay.
 // The logical transport has no files; runtime execution is outside this A4 fixture.
@@ -103,6 +104,7 @@ async function fixture(db: PersistenceDb, mounts = ['']) {
     })),
   })
   const original = createTaskExecutionPersistence(db, {
+    historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
     recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
   })
   const module = createProviderTaskExecutionModule({
@@ -693,12 +695,11 @@ describeEachProvider('RFC-370 complete isolation scope in real Task mechanics', 
               mountPath: '',
               isolationBase: 'prior-base',
               nodeTree: 'pinned-node',
-              submodules:
-                JSON.stringify({
-                  subBases: { sub: 'sub-base' },
-                  poolDirs: { sub: 'opaque:pin' },
-                  pendingSubResolves: ['sub'],
-                }) ?? undefined,
+              submodules: {
+                subBases: { sub: 'sub-base' },
+                poolDirs: { sub: 'opaque:pin' },
+                pendingSubResolves: ['sub'],
+              },
             },
           ],
         })

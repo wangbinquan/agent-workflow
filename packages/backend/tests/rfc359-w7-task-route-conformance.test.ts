@@ -1,3 +1,7 @@
+import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
+import { legacyContentRef } from '@/platform/content/contentRef'
+import { contentRowColumns } from '@/platform/content/infrastructure/contentStore'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { withO2Closure, o2Ports } from './helpers/o2Closure'
 // RFC-359 —— `TaskRouteOperations` / `TaskRouteLaunchOperations` 两对适配器的双引擎对拍。
 //
@@ -28,7 +32,7 @@ import {
   type TaskRepoFixtureSpec,
 } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+
 import { afterAll, beforeAll, expect, test } from 'bun:test'
 import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import { composeOwnerIdentityQueries } from '@/modules/identity-access/composition/providerOperations'
@@ -176,6 +180,7 @@ function operations(harness: ProviderHarness): TaskRouteOperations {
   const db = harness.db
   return createTaskRouteOperations(
     withO2Closure({
+      historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
       clarifyNav: o2Ports(db).collaborationReads.clarifyNav,
       db,
       collaboration: {} as never,
@@ -191,6 +196,7 @@ function operations(harness: ProviderHarness): TaskRouteOperations {
       resourceAuthorityFor: resourceAuthorityFor(db),
       launches: { launch: async () => unusedDependency('launches.launch') } as never,
       persistence: createTaskExecutionPersistence(db, {
+        historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
         recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
       }),
       children: {
@@ -687,7 +693,9 @@ describeEachProvider('rfc359-w7 task route · A 段公共契约', (harness) => {
       sourcePortName: 'out',
       versionIndex: 1,
       reviewIteration: 0,
-      bodyPath: `reviews/${taskId}/v1.md`,
+      ...contentRowColumns(
+        legacyContentRef('review-body-path', 'local-file', `reviews/${taskId}/v1.md`),
+      ),
       commentsJson: '[]',
       decision: 'pending',
       createdAt: 4_000,
@@ -1001,17 +1009,16 @@ describeEachProvider('rfc359-w7 task route · B 段实测分叉', (harness) => {
   // **账已销**（RFC-359 AC-1，plan §5hn 之后的盘点第 3 刀）：`get` 两个引擎共用
   // `loadTaskProjection` 之后，行投影的严格度也只剩一档。原来的分叉是：PG 走
   // `TaskSchema.parse`，枚举外的 `space_kind` 让整条详情 500；SQLite 走 `rowToTask`
-  // 不解析，原样上线。取严格那一档——`space_kind` 没有库级 CHECK，枚举外的值只会由裸 SQL /
-  // 手工修复写进去，静默上线比响亮失败更糟：前端会落进默认分支，渲染成一个看不出错的错。
+  // 不解析，原样上线。epoch-2 将合法枚举纳入库级 CHECK；写入拒绝且原投影保持不变。
   // 这条从 B 段（实测分叉）变成了相等断言，留在这里作为「不许再分家」的锁。
   test('B6→A 任务行投影的严格度两侧同一档：枚举外的 space_kind 一律拒绝', async () => {
     const ops = operations(harness)
     const taskId = await seedTask(harness.db)
-    await patchTaskFixture(harness.db, { id: taskId }, { spaceKind: 'isolated' as 'local' })
-    expect(
-      await code(ops.get(taskId)),
-      '两个引擎都必须拒绝——合并前只有 PG 拒，SQLite 原样投出',
-    ).not.toBe('no-throw')
+    // Epoch-2 rejects this retired storage shape before it can reach either read projection.
+    await expect(
+      patchTaskFixture(harness.db, { id: taskId }, { spaceKind: 'isolated' as 'local' }),
+    ).rejects.toThrow()
+    expect(await ops.get(taskId)).toMatchObject({ spaceKind: 'local' })
   })
 })
 

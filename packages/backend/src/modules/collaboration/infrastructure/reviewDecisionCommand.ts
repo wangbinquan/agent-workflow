@@ -1,7 +1,10 @@
 import type { HumanGateTaskLockPort, ReviewUpstreamAgentPort } from '../composition/required-ports'
+import type { HistoryRestrictionPort } from '@/platform/contracts/historyRestriction'
+import type { ContentStore } from '@/platform/content/contentStore'
 import type { ReviewArtifactSelection } from '../application/ports/reviewArtifactSelection'
 import type { WorkspaceRollbackSnapshotInspector } from '../application/prepareWorkspaceRollbackPlan'
 import { DatabaseCommittedReviewArtifactReader } from './committedReviewArtifactReader'
+import { createFileReviewArtifactContent } from './local/fileReviewArtifactContent'
 // RFC-359 W1-T2c（F-H2-1 之三）—— collaboration 的评审决定命令端口：一份实现，两个引擎。
 //
 // 此前只有 `createSqliteReviewDecisionCommand`（`legacySqliteReviewDecisionComposition.ts`），
@@ -22,6 +25,8 @@ import { createCollaborationCommandContext } from '../composition/commandContext
 
 export function createReviewDecisionCommand(input: {
   readonly taskLock: HumanGateTaskLockPort
+  readonly historyRestrictions: HistoryRestrictionPort
+  readonly content?: ContentStore
   readonly upstreamAgents: ReviewUpstreamAgentPort
   readonly db: PersistenceDb
   readonly reviewArtifacts?: ReviewArtifactSelection
@@ -34,10 +39,16 @@ export function createReviewDecisionCommand(input: {
       const decided = await submitReviewDecision({
         db: input.db,
         taskLock: input.taskLock,
+        historyRestrictions: input.historyRestrictions,
         upstreamAgents: input.upstreamAgents,
         reviewReader:
-          input.reviewArtifacts &&
-          new DatabaseCommittedReviewArtifactReader(input.db, input.reviewArtifacts.content),
+          input.reviewArtifacts || input.content
+            ? new DatabaseCommittedReviewArtifactReader(
+                input.db,
+                input.reviewArtifacts?.content ?? createFileReviewArtifactContent(input.appHome),
+                input.content,
+              )
+            : undefined,
         rollbackSnapshots: input.rollbackSnapshots,
         appHome: input.appHome,
         nodeRunId: command.nodeRunId,
@@ -72,6 +83,9 @@ export function createReviewDecisionCommand(input: {
 /** Legacy test bridge; production routes use the bootstrap-owned context. */
 export function createReviewDecisionCommandContext(input: {
   readonly taskLock: HumanGateTaskLockPort
+  readonly historyRestrictions: HistoryRestrictionPort
+  readonly content?: ContentStore
+  readonly reviewArtifacts?: ReviewArtifactSelection
   readonly upstreamAgents: ReviewUpstreamAgentPort
   readonly db: DbClient
   readonly appHome: string
@@ -80,12 +94,18 @@ export function createReviewDecisionCommandContext(input: {
 }): CollaborationCommandContext<'reviewDecisions'> {
   return createCollaborationCommandContext({
     taskLock: input.taskLock,
+    historyRestrictions: input.historyRestrictions,
+    content: input.content,
+    reviewArtifacts: input.reviewArtifacts,
     db: input.db,
     appHome: input.appHome,
     reviewDecisions: createReviewDecisionCommand({
       db: input.db,
       appHome: input.appHome,
       taskLock: input.taskLock,
+      historyRestrictions: input.historyRestrictions,
+      content: input.content,
+      reviewArtifacts: input.reviewArtifacts,
       upstreamAgents: input.upstreamAgents,
     }),
   })

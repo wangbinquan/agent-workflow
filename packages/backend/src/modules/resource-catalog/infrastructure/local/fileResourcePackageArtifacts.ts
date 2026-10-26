@@ -1,3 +1,5 @@
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
+import { currentFileSkillReference, readFileSkillReference } from './fileSkillReferences'
 import {
   existsSync,
   lstatSync,
@@ -196,6 +198,7 @@ function finalizeSkillPlan(state: SkillPlanState): void {
  * then performs only idempotent rename/verification work after commit.
  */
 export function createFileResourcePackageSkillArtifactOwner(input: {
+  readonly db: PersistenceDb
   readonly appHome: string
 }): ResourcePackageSkillArtifactOwner {
   const plans = new WeakMap<ResourcePackageArtifactContext, Map<string, SkillPlanState>>()
@@ -246,8 +249,21 @@ export function createFileResourcePackageSkillArtifactOwner(input: {
         rmSync(stagingDirectory, { recursive: true, force: true })
         rmSync(candidateDirectory, { recursive: true, force: true })
         try {
-          if (copyCurrent) copyRegularTree(liveDirectory, stagingDirectory)
-          else mkdirSync(stagingDirectory, { recursive: true, mode: 0o700 })
+          mkdirSync(stagingDirectory, { recursive: true, mode: 0o700 })
+          if (copyCurrent) {
+            const ref = await currentFileSkillReference(input.appHome, input.db, {
+              id: skillId,
+              name: skillId,
+              contentVersion: version - 1,
+            })
+            const source = await readFileSkillReference(input.appHome, input.db, ref)
+            if (source === null) throw new Error('resource-package-skill-source-tree-missing')
+            for (const file of source.files) {
+              const target = safeJoin(stagingDirectory, file.path)
+              mkdirSync(dirname(target), { recursive: true, mode: 0o700 })
+              writeFileSync(target, file.bytes, { mode: 0o600 })
+            }
+          }
           writeSkillTree(stagingDirectory, mutation, readSkillFile)
           copyRegularTree(stagingDirectory, candidateDirectory)
           const contentHash = hashRegularFileTree(candidateDirectory)
@@ -255,6 +271,7 @@ export function createFileResourcePackageSkillArtifactOwner(input: {
             managedPath: skillFilesRel(skillId),
             filesPath: skillVersionRelPath(skillId, version),
             contentHash,
+            contentKind: 'local-file',
           })
           return state.publication
         } catch (error) {

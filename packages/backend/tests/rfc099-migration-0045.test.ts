@@ -18,7 +18,8 @@ import { join, resolve } from 'node:path'
 import { drizzle } from 'drizzle-orm/bun-sqlite'
 import { migrate } from 'drizzle-orm/bun-sqlite/migrator'
 import { ulid } from 'ulid'
-import * as schema from '../src/db/schema'
+import { frozenNativeTableSets } from '../src/platform/persistence/migration/epoch1/tables'
+const schema = frozenNativeTableSets.sqlite
 
 const ROOT_MIGRATIONS = resolve(import.meta.dirname, '..', 'db', 'migrations')
 const JOURNAL_RAW = JSON.parse(readFileSync(join(ROOT_MIGRATIONS, 'meta', '_journal.json'), 'utf8'))

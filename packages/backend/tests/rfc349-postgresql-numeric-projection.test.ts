@@ -75,13 +75,6 @@ const DECODED_BY_CALLER: Record<string, Record<string, string>> = {
     workflow_name:
       'Fast page queries share page.ts and projection.ts numeric() / numericOrZero() decoders.',
   },
-  // RFC-374：两处都不把聚合值交回 JS。
-  'modules/task-execution/infrastructure/legacyMigration/nodeRunSeqBackfillStore.ts': {
-    id:
-      '追平的 `ROW_NUMBER() - COUNT(*) OVER ()` 只在 UPDATE … FROM 里给 seq 赋值（tx.run，无投影）；' +
-      '分配表清理的 `MAX(seq)` 子查询只决定删哪些候选，调用点只数删除行数。' +
-      '数值读取走 drizzle 的 min()/max()（按列 mapper 解码为 number）。',
-  },
 }
 
 /**
@@ -92,6 +85,98 @@ const DECODED_BY_CALLER: Record<string, Record<string, string>> = {
  * 驱动交回字符串）。
  */
 const AGGREGATE = /\b(?:count|sum|avg|max|min)\s*\(/iu
+
+function hasNumberMapper(node: ts.TaggedTemplateExpression): boolean {
+  const parent = node.parent
+  return (
+    ts.isPropertyAccessExpression(parent) &&
+    parent.name.text === 'mapWith' &&
+    ts.isCallExpression(parent.parent)
+  )
+}
+
+/** A fragment has no independent driver result when every value use stays in
+ * a mapped SQL projection or the native DELETE-candidate mechanism. Any escape,
+ * shadowed binding or unmapped consumer keeps the original failure. */
+function decodedFragment(node: ts.TaggedTemplateExpression, template: string): boolean {
+  let owner: ts.Node = node
+  while (!ts.isVariableDeclaration(owner)) {
+    if (!owner.parent || ts.isBlock(owner) || ts.isFunctionLike(owner)) return false
+    owner = owner.parent
+  }
+  const declaration = owner
+  if (!ts.isIdentifier(declaration.name)) return false
+  const name = declaration.name.text
+  let scope: ts.Node = declaration
+  while (scope.parent && !ts.isFunctionLike(scope) && !ts.isSourceFile(scope)) scope = scope.parent
+  const references: ts.Identifier[] = []
+  let ambiguous = false
+  const visit = (current: ts.Node): void => {
+    if (
+      ts.isVariableDeclaration(current) &&
+      current !== declaration &&
+      ts.isIdentifier(current.name) &&
+      current.name.text === name
+    )
+      ambiguous = true
+    if (ts.isParameter(current) && ts.isIdentifier(current.name) && current.name.text === name)
+      ambiguous = true
+    if (ts.isIdentifier(current) && current.text === name && current !== declaration.name) {
+      const parent = current.parent
+      if (
+        !(ts.isPropertyAccessExpression(parent) && parent.name === current) &&
+        !(ts.isPropertyAssignment(parent) && parent.name === current)
+      )
+        references.push(current)
+    }
+    ts.forEachChild(current, visit)
+  }
+  visit(scope)
+  if (ambiguous || !references.length) return false
+  let consumed = false
+  const safe = references.every((reference) => {
+    const parent = reference.parent
+    if (
+      ts.isBinaryExpression(parent) &&
+      [ts.SyntaxKind.EqualsEqualsEqualsToken, ts.SyntaxKind.ExclamationEqualsEqualsToken].includes(
+        parent.operatorToken.kind,
+      ) &&
+      ((parent.left === reference &&
+        ts.isIdentifier(parent.right) &&
+        parent.right.text === 'undefined') ||
+        (parent.right === reference &&
+          ts.isIdentifier(parent.left) &&
+          parent.left.text === 'undefined'))
+    )
+      return true
+    if (
+      ts.isTemplateSpan(parent) &&
+      parent.expression === reference &&
+      ts.isTemplateExpression(parent.parent) &&
+      ts.isTaggedTemplateExpression(parent.parent.parent) &&
+      hasNumberMapper(parent.parent.parent)
+    ) {
+      consumed = true
+      return true
+    }
+    if (
+      ts.isCallExpression(parent) &&
+      parent.arguments[2] === reference &&
+      ts.isPropertyAccessExpression(parent.expression) &&
+      parent.expression.name.text === 'deleteByCandidates' &&
+      ts.isCallExpression(parent.expression.expression) &&
+      ts.isIdentifier(parent.expression.expression.expression) &&
+      parent.expression.expression.expression.text === 'engineOf' &&
+      /^\s*SELECT\b/iu.test(template) &&
+      !AGGREGATE.test(template.split(/\bWHERE\b/iu)[0]!)
+    ) {
+      consumed = true
+      return true
+    }
+    return false
+  })
+  return safe && consumed
+}
 
 function aggregateProjections(text: string) {
   const source = ts.createSourceFile('projection.ts', text, ts.ScriptTarget.Latest, true)
@@ -109,17 +194,13 @@ function aggregateProjections(text: string) {
             node.template.templateSpans.map((span) => ' ? ' + span.literal.text).join('')
         if (AGGREGATE.test(template)) {
           const start = tag.getStart(source)
-          const parent = node.parent
           result.push({
             line: source.getLineAndCharacterOfPosition(start).line + 1,
             key:
               /([A-Za-z_][A-Za-z0-9_]*)\s*:\s*$/u.exec(text.slice(0, start))?.[1] ??
               /\bAS\s+"?([A-Za-z_][A-Za-z0-9_]*)/iu.exec(template)?.[1] ??
               '?',
-            mapped:
-              ts.isPropertyAccessExpression(parent) &&
-              parent.name.text === 'mapWith' &&
-              ts.isCallExpression(parent.parent),
+            mapped: hasNumberMapper(node) || decodedFragment(node, template),
           })
         }
       }
@@ -174,6 +255,33 @@ describe('RFC-349 PostgreSQL aggregates come back as numbers', () => {
     expect(
       aggregateProjections('const count = sql`SELECT COUNT(*) AS "total" FROM t WHERE id = ${id}`'),
     ).toEqual([{ line: 1, key: 'total', mapped: false }])
+  })
+
+  test('SQL-only fragments inherit an actual outer mapper; an escaping copy still fails', () => {
+    const mapped =
+      'const history = absent ? undefined : sql`SELECT count(*) FROM archived`; const projection = history === undefined ? count() : sql`count(*) + ${history}`.mapWith(Number)'
+    expect(aggregateProjections(mapped).map((entry) => entry.mapped)).toEqual([true, true])
+    expect(
+      aggregateProjections(mapped + '; db.execute(history)').map((entry) => entry.mapped),
+    ).toEqual([false, true])
+    expect(
+      aggregateProjections(mapped.replace('.mapWith(Number)', '')).map((entry) => entry.mapped),
+    ).toEqual([false, false])
+  })
+
+  test('native DELETE candidate predicates return no aggregate to JavaScript', () => {
+    const candidate =
+      'const candidates = sql`SELECT seq AS id FROM allocations WHERE seq < (SELECT MAX(seq) FROM allocations)`; engineOf(tx).deleteByCandidates(table, table.seq, candidates)'
+    expect(aggregateProjections(candidate)).toMatchObject([{ key: 'id', mapped: true }])
+    expect(aggregateProjections(candidate + '; db.execute(candidates)')).toMatchObject([
+      { key: 'id', mapped: false },
+    ])
+    expect(
+      aggregateProjections(candidate.replace('SELECT seq AS id', 'SELECT MAX(seq) AS id')),
+    ).toMatchObject([{ key: 'id', mapped: false }])
+    expect(aggregateProjections(candidate.replace('engineOf(tx)', 'unrelated'))).toMatchObject([
+      { key: 'id', mapped: false },
+    ])
   })
 
   test("drizzle's count() carries the Number mapper that a raw template lacks", () => {

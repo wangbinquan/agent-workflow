@@ -1,8 +1,12 @@
-import type { FileNode } from '@agent-workflow/shared'
-import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
-import { join } from 'node:path'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
+import { normalizeSkillPath } from '../databaseSkillTrees'
+import {
+  currentFileSkillReference,
+  readFileSkillReference,
+  readFileSkillReferenceFile,
+} from './fileSkillReferences'
+import { existsSync } from 'node:fs'
 import { NotFoundError, ValidationError } from '@/util/errors'
-import { realpathInside, safeJoin } from '@/util/safePath'
 import type {
   SkillContentReader,
   SkillContentReference,
@@ -19,59 +23,44 @@ export function resolveFileSkillReadRoot(
   return existsSync(snapshot) ? snapshot : live
 }
 
-/** Existing filesystem behavior; no metadata or skill-version state machine here. */
-export function createFileSkillContentReader(appHome: string): SkillContentReader {
+/** Reads the explicit location for each live or immutable tree. */
+export function createFileSkillContentReader(
+  appHome: string,
+  db?: PersistenceDb,
+): SkillContentReader {
+  const tree = async (reference: SkillContentReference) =>
+    readFileSkillReference(appHome, db, await currentFileSkillReference(appHome, db, reference))
   return Object.freeze({
-    readMain(reference) {
-      const root = resolveFileSkillReadRoot(appHome, reference)
-      const skillMdPath = join(root, 'SKILL.md')
-      if (!existsSync(skillMdPath)) {
-        throw new NotFoundError('skill-md-missing', `SKILL.md not found at ${skillMdPath}`)
-      }
-      return readFileSync(realpathInside(root, skillMdPath))
+    async readMain(reference) {
+      const file = await readFileSkillReferenceFile(
+        appHome,
+        db,
+        await currentFileSkillReference(appHome, db, reference),
+        'SKILL.md',
+      )
+      if (!file)
+        throw new NotFoundError('skill-md-missing', `SKILL.md not found for skill ${reference.id}`)
+      return file
     },
-    listFiles(reference) {
-      const root = resolveFileSkillReadRoot(appHome, reference)
-      if (!existsSync(root)) return []
-      return walkDir(root, '')
+    async listFiles(reference) {
+      return (await tree(reference))?.nodes ?? []
     },
-    readFile(reference, relPath) {
-      const root = resolveFileSkillReadRoot(appHome, reference)
-      const abs = safeJoin(root, relPath)
-      if (!existsSync(abs)) {
-        throw new NotFoundError(
-          'skill-file-not-found',
-          `file '${relPath}' not found in skill '${reference.name}'`,
-        )
-      }
-      const real = realpathInside(root, abs)
-      if (statSync(real).isDirectory()) {
+    async readFile(reference, relPath) {
+      const path = normalizeSkillPath(relPath)
+      const bytes = await readFileSkillReferenceFile(
+        appHome,
+        db,
+        await currentFileSkillReference(appHome, db, reference),
+        path,
+      )
+      if (bytes !== null) return bytes
+      const content = await tree(reference)
+      if (content?.nodes.some((node) => node.path === path && node.type === 'dir'))
         throw new ValidationError('skill-file-is-dir', `'${relPath}' is a directory`)
-      }
-      return readFileSync(real)
+      throw new NotFoundError(
+        'skill-file-not-found',
+        `file '${relPath}' not found in skill '${reference.name}'`,
+      )
     },
   } satisfies SkillContentReader)
-}
-
-function walkDir(absRoot: string, relRoot: string): FileNode[] {
-  const out: FileNode[] = []
-  const entries = readdirSync(join(absRoot, relRoot), { withFileTypes: true })
-  for (const entry of entries) {
-    const childRel = relRoot ? `${relRoot}/${entry.name}` : entry.name
-    const abs = join(absRoot, childRel)
-    if (entry.isDirectory()) {
-      out.push({ path: childRel, type: 'dir' })
-      out.push(...walkDir(absRoot, childRel))
-    } else if (entry.isFile()) {
-      const st = statSync(abs)
-      out.push({
-        path: childRel,
-        type: 'file',
-        size: st.size,
-        modifiedAt: Math.floor(st.mtimeMs),
-      })
-    }
-    // Symlinks intentionally skipped in v1.
-  }
-  return out
 }

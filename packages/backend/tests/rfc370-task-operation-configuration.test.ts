@@ -1,7 +1,7 @@
+import { withTargetMintIdentity } from './helpers/rfc395Mint'
 // RFC-370: selected settings must be awaited at mint/commit time; frozen run
 // facts remain independent of later setting edits. Both providers use the
 // real node runtime persistence, without starting a runtime or local service.
-import { deriveNodeRunRole } from '@/modules/task-execution/public/types'
 import { taskFixture, workflowFixture, readNodeRunFixtures } from './helpers/model'
 import { afterEach, expect, test } from 'bun:test'
 import { existsSync, mkdtempSync, rmSync } from 'node:fs'
@@ -59,13 +59,17 @@ describeEachProvider('RFC-370 Task operation configuration', (harness) => {
           { stableNodeKey: 'task-root', frozenOccurrenceKey: 'task', workflowRevision: null },
         ]),
       })
-      const first = await mintNodeRun(harness.db, {
-        ...deriveNodeRunRole({ nodeId: 'first', rerunCause: 'initial' }),
-        taskId: 'task',
-        nodeId: 'first',
-        status: 'pending',
-        cause: 'initial',
-      })
+      const first = await mintNodeRun(
+        harness.db,
+        withTargetMintIdentity({
+          role: 'node-attempt',
+          syntheticKind: null,
+          taskId: 'task',
+          nodeId: 'first',
+          status: 'pending',
+          cause: 'initial',
+        }),
+      )
       const persistence = composeNodeRunRuntimePersistence(harness.db)
       let binary = '/selected/first',
         reads = 0,
@@ -122,13 +126,17 @@ describeEachProvider('RFC-370 Task operation configuration', (harness) => {
         expect(
           await resolveFrozenRuntimeWith(persistence, first, null, null, undefined, current),
         ).toMatchObject({ protocol, binary: '/selected/first' })
-        const second = await mintNodeRun(harness.db, {
-          ...deriveNodeRunRole({ nodeId: 'second', rerunCause: 'initial' }),
-          taskId: 'task',
-          nodeId: 'second',
-          status: 'pending',
-          cause: 'initial',
-        })
+        const second = await mintNodeRun(
+          harness.db,
+          withTargetMintIdentity({
+            role: 'node-attempt',
+            syntheticKind: null,
+            taskId: 'task',
+            nodeId: 'second',
+            status: 'pending',
+            cause: 'initial',
+          }),
+        )
         expect(
           await resolveFrozenRuntimeWith(persistence, second, null, null, inherited, current),
         ).toMatchObject({ protocol, binary: '/selected/second' })

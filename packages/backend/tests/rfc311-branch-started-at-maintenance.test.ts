@@ -23,19 +23,18 @@ import { tablesOf } from '@/platform/persistence/sessionTables'
 import { describe, expect, test } from 'bun:test'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { ulid } from 'ulid'
 import type { StartTask } from '@agent-workflow/shared'
 
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { launchTestTask } from './helpers/productionTaskLaunch'
 import { clearTaskDriverLifecycleForTesting } from '@/modules/task-execution/infrastructure/taskDriverLifecycle'
-import { type MaterializedSpace } from '@/modules/source-control/infrastructure/workspaceMaterializer'
+import type { MaterializedSpace } from '@/modules/source-control/infrastructure/workspaceMaterializer'
 
 import { deleteTask } from '../src/services/taskDelete'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const EMPTY_DEF = JSON.stringify({ $schema_version: 4, inputs: [], nodes: [], edges: [] })
 
 async function branchStartedAt(db: DbClient, id: string): Promise<number> {
@@ -92,7 +91,7 @@ function spaceFor(taskId: string, root: string): MaterializedSpace {
 
 describe('RFC-311 — branch_started_at is maintained by the real paths', () => {
   test('a child launched through launchTestTask lifts its ancestors, and deleting it converges them back', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createInMemoryDb()
     const now = Date.now()
     const { users } = tablesOf(db)
     await insertOne(db, users, {
@@ -189,7 +188,7 @@ describe('RFC-311 — branch_started_at is maintained by the real paths', () => 
   // 分组键:写错 = 该任务从此挂在错误的分支下(或自成一根),而 parent_task_id
   // 铸行后不可变,所以这一列此后没有任何路径会修正它。
   test('root_task_id is stamped through the real launch path and chains across depths', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createInMemoryDb()
     const now = Date.now()
     const { users } = tablesOf(db)
     await insertOne(db, users, {

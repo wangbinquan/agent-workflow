@@ -8,7 +8,7 @@ import { TASK_DEFINITION_HOSTS } from '@/modules/task-execution/public/queries'
 import { patchAgentFixture } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeEach, describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
+
 import {
   CreateWorkgroupSchema,
   type CreateAgent,
@@ -36,7 +36,6 @@ import { createIdentityAccessRuntime } from '../src/modules/identity-access/comp
 import { createUser } from './helpers/userFixture'
 import { admitTestDirectAuthority } from './helpers/identityAccessAuthority'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const VALID_RUNTIME = 'rfc228-opencode'
 
 function actor(id = 'viewer'): Actor {
@@ -73,7 +72,7 @@ describe('RFC-228 Agent resource integrity', () => {
   let db: DbClient
 
   beforeEach(() => {
-    db = createInMemoryDb(MIGRATIONS)
+    db = createInMemoryDb()
   })
 
   test('create rejects a missing managed Skill but keeps project Skills repo-local', async () => {

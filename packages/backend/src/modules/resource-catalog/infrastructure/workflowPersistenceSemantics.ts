@@ -108,7 +108,8 @@ async function loadReferenceRows(
 ): Promise<readonly ReferenceRow[]> {
   if (values.length === 0) return []
   const selected = [...new Set(values)]
-  const { agents, workflows, workgroups } = tablesOf(transaction)
+  const { agents } = tablesOf(transaction)
+  const { workflows, workgroups } = tablesOf(transaction)
   switch (type) {
     case 'agent':
       return transaction

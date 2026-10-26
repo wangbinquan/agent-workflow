@@ -1,3 +1,13 @@
+import { mkdirSync, mkdtempSync, writeFileSync, readFileSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { extractTarGz } from '@/util/archive'
+import {
+  captureEpochMetadata,
+  verifyEpochMetadataSnapshot,
+} from '@/platform/persistence/schema/history/metadataSnapshot'
+import { postgresqlHistoryConnection } from '@/platform/persistence/schema/history/connection'
+import { readContentObject, hostedObjectOf } from '@/platform/content/infrastructure/contentStore'
 // RFC-370 v3 V5 — real PostgreSQL path: born-hosted install -> one-object
 // standalone-format backup -> refused non-empty target -> empty target ->
 // interrupted verified copy -> resumed restore with owner normalization ->
@@ -31,6 +41,7 @@ import { restoreHostedDatabaseInstallation } from '@/modules/system-operations/i
 import {
   verifyHostedDatabaseRestore,
   verifyRestoredDatabaseDigests,
+  restoredDatabaseDigests,
 } from '@/modules/system-operations/infrastructure/crewstation/databaseRestoreVerification'
 import {
   createHostedObjectPublications,
@@ -39,9 +50,9 @@ import {
 import { createHostedRestoreTaskNormalization } from '@/modules/task-execution/public/participants'
 import { hostedDatabaseGeneration } from '@/platform/persistence/generationValidation'
 import { openPostgresqlLogicalTarget } from '@/platform/persistence/postgresqlLogicalTarget'
-import { loadPostgresqlMigrationHistory } from '@/platform/persistence/postgresqlMigrationHistory'
+import { buildPostgresqlSchemaPlan } from '@/platform/persistence/postgresqlSchema'
 import { createPostgresqlDatabaseRuntime } from '@/platform/persistence/postgresqlRuntime'
-import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { resolvePostgresqlTestUrlEnv, resolveTestProviders } from './helpers/eachProvider'
 import { objectFixture } from './helpers/rfc370Objects'
 
@@ -58,11 +69,17 @@ if (resolveTestProviders(process.env).includes('postgresql')) {
       CS_SERVICE: environment.service,
       CS_DATABASE_URL: process.env[urlEnv]!,
     }
-    const contract = buildLogicalSchemaContract(),
-      history = await loadPostgresqlMigrationHistory({ headContract: buildLogicalSchemaContract() })
+    const contract = logicalSchemaContract,
+      plan = buildPostgresqlSchemaPlan(logicalSchemaContract)
+    const restoreEnv = {
+      ...env,
+      CS_DATABASE_GENERATION_ID: '01a13e6d-3e00-7000-9e3c-000000000011',
+      CS_DATABASE_GENERATION_OPERATION: '01a13e6d-3e00-7000-9e3c-000000000012',
+    }
     const generation = hostedDatabaseGeneration({
       ...environment,
       schemaDigest: contract.digest,
+      env: restoreEnv,
     }).payload
     const runtime = createPostgresqlDatabaseRuntime({
       config: PostgresqlDatabaseConfigSchema.parse({ provider: 'postgresql', urlEnv, poolMax: 2 }),
@@ -85,7 +102,7 @@ if (resolveTestProviders(process.env).includes('postgresql')) {
       await emptyTarget()
       await migrateForDeployment(env)
       const serving = await prepareCrewStationDatabase({
-        contract: buildLogicalSchemaContract(),
+        contract: logicalSchemaContract,
         environment,
         schema: 'verify',
         env,
@@ -156,7 +173,7 @@ if (resolveTestProviders(process.env).includes('postgresql')) {
           instanceId: 'owner',
         })
         const backup = composeCrewStationDatabaseBackups({
-          contract: buildLogicalSchemaContract(),
+          contract: logicalSchemaContract,
           db,
           runtime: serving.runtime.runtime,
           fence,
@@ -171,6 +188,37 @@ if (resolveTestProviders(process.env).includes('postgresql')) {
           code: 'hosted-backup-worktrees-unsupported',
         })
         reference = (await backup.backup.request({ includeWorktrees: false })).path
+        const archiveRoot = mkdtempSync(join(tmpdir(), 'mc-hosted-metadata-'))
+        try {
+          const stored = fixture.stored.get(parseHostedBackupReference(reference).id)!
+          const path = join(archiveRoot, 'backup.tar.gz')
+          writeFileSync(path, stored.bytes)
+          const unpacked = join(archiveRoot, 'unpacked')
+          mkdirSync(unpacked)
+          await extractTarGz(path, unpacked)
+          const metadata = verifyEpochMetadataSnapshot(
+            JSON.parse(
+              readFileSync(join(unpacked, 'database', 'logical', 'epoch2-metadata.json'), 'utf8'),
+            ),
+          )
+          const generations = metadata.payload.tables.find(
+            (table) => table.name === 'generations',
+          )!.rows
+          expect(generations).toContainEqual(
+            expect.objectContaining({
+              generation_id: serving.runtime.runtime.generationId,
+              role: 'installed',
+              state: 'active',
+            }),
+          )
+          expect(metadata.payload.tables.map((table) => table.name)).toContain(
+            'migration_history_restrictions',
+          )
+          expect(metadata.payload.tables.map((table) => table.name)).not.toContain('first_write')
+        } finally {
+          rmSync(archiveRoot, { recursive: true, force: true })
+        }
+
         // One archive object is the whole backup: nothing else was pinned.
         expect(fixture.pins).toHaveLength(1)
         const catalog = await backup.backup.catalog!.list()
@@ -178,21 +226,26 @@ if (resolveTestProviders(process.env).includes('postgresql')) {
         expect((await backup.backup.catalog!.verify(catalog.backups[0]!.id)).reference).toBe(
           reference,
         )
+        let targetOpens = 0
         const attempt = (override: Partial<typeof identity> = {}) =>
           restoreHostedDatabaseInstallation({
-            headContract: buildLogicalSchemaContract(),
+            headContract: logicalSchemaContract,
             ...identity,
             ...override,
             runtime,
             reference,
             contract,
-            plan: history.head.plan,
+            plan,
             generation: {
               generationId: generation.generationId,
               operationId: generation.operationId!,
             },
             objects: fixture.objects,
             normalization: [createHostedRestoreTaskNormalization()],
+            async openTarget(options) {
+              targetOpens += 1
+              return await openPostgresqlLogicalTarget(options)
+            },
           })
         // The archive is verified before any target inspection or write.
         await expect(attempt({ keyFingerprint: 'e'.repeat(64) })).rejects.toThrow(
@@ -204,18 +257,27 @@ if (resolveTestProviders(process.env).includes('postgresql')) {
         fixture.tamper('body')
         await expect(attempt()).rejects.toThrow('download-content-mismatch')
         fixture.tamper(undefined)
-        await expect(attempt()).rejects.toThrow('target-not-empty')
+        const beforeMetadata = await captureEpochMetadata(
+          postgresqlHistoryConnection(runtime.providerPool()),
+        )
+        const beforeRows = await restoredDatabaseDigests(runtime.providerPool(), contract)
+        await expect(attempt()).rejects.toThrow('hosted-restore-target-not-empty')
+        expect(targetOpens).toBe(0)
+        expect(
+          await captureEpochMetadata(postgresqlHistoryConnection(runtime.providerPool())),
+        ).toEqual(beforeMetadata)
+        expect(await restoredDatabaseDigests(runtime.providerPool(), contract)).toEqual(beforeRows)
       } finally {
         await serving.runtime.close()
       }
       await emptyTarget()
       const input = {
-        headContract: buildLogicalSchemaContract(),
+        headContract: logicalSchemaContract,
         ...identity,
         runtime,
         reference: reference!,
         contract,
-        plan: history.head.plan,
+        plan,
         generation: { generationId: generation.generationId, operationId: generation.operationId! },
         objects: fixture.objects,
         normalization: [createHostedRestoreTaskNormalization()],
@@ -227,14 +289,52 @@ if (resolveTestProviders(process.env).includes('postgresql')) {
             const target = await openPostgresqlLogicalTarget(options)
             return {
               ...target,
-              async close() {
-                await target.close()
+              async finalizeSchema(now, tables) {
+                await target.finalizeSchema(now, tables)
                 throw new Error('process ended after schema verification')
               },
             }
           },
         }),
       ).rejects.toThrow('after schema verification')
+      await expect(
+        restoreHostedDatabaseInstallation({
+          ...input,
+          async openTarget(options) {
+            const target = await openPostgresqlLogicalTarget(options)
+            return {
+              ...target,
+              async activateGeneration(id, now) {
+                await target.activateGeneration(id, now)
+                throw new Error('process ended after generation activation')
+              },
+            }
+          },
+        }),
+      ).rejects.toThrow('after generation activation')
+      const activatedMetadata = await captureEpochMetadata(
+        postgresqlHistoryConnection(runtime.providerPool()),
+      )
+      for (const wrongGeneration of [
+        { ...input.generation, generationId: 'dbg_other_restore_generation' },
+        { ...input.generation, operationId: 'dbm_other_restore_operation' },
+      ]) {
+        let opened = false
+        await expect(
+          restoreHostedDatabaseInstallation({
+            ...input,
+            generation: wrongGeneration,
+            async openTarget(options) {
+              opened = true
+              return await openPostgresqlLogicalTarget(options)
+            },
+          }),
+        ).rejects.toThrow('hosted-restore-target-not-empty')
+        expect(opened).toBe(false)
+        expect(
+          await captureEpochMetadata(postgresqlHistoryConnection(runtime.providerPool())),
+        ).toEqual(activatedMetadata)
+      }
       expect(await restoreHostedDatabaseInstallation(input)).toMatchObject({
         restored: true,
         normalized: {
@@ -245,7 +345,7 @@ if (resolveTestProviders(process.env).includes('postgresql')) {
       })
       expect(await restoreHostedDatabaseInstallation(input)).toMatchObject({ restored: false })
       // The release Job continues with the ordinary migrate of the same generation.
-      await migrateForDeployment(env)
+      await migrateForDeployment(restoreEnv)
       expect(
         await verifyHostedDatabaseRestore({
           runtime,
@@ -277,19 +377,16 @@ if (resolveTestProviders(process.env).includes('postgresql')) {
         verifiedConnection.release()
       }
       const restored = await prepareCrewStationDatabase({
-        contract: buildLogicalSchemaContract(),
+        contract: logicalSchemaContract,
         environment,
         schema: 'verify',
-        env,
+        env: restoreEnv,
       })
       try {
         const db = restored.openBootstrapClient()
-        const {
-          hostedExecutionControl,
-          hostedExecutionBindings,
-          hostedDatabaseBackups,
-          hostedObjectPublications,
-        } = tablesOf(db)
+        const { hostedExecutionControl, hostedExecutionBindings, hostedDatabaseBackups } =
+          tablesOf(db)
+        const { contentPublications } = tablesOf(db)
         expect((await db.select().from(hostedExecutionControl))[0]!).toMatchObject({
           phase: 'frozen',
           expiresAt: 0,
@@ -331,16 +428,14 @@ if (resolveTestProviders(process.env).includes('postgresql')) {
           objectId: object.id,
           sha256: object.sha256,
         })
-        expect(
-          (
-            await db
-              .select()
-              .from(hostedObjectPublications)
-              .where(
-                eq(hostedObjectPublications.id, hostedPublicationId(HOSTED_BACKUP_OWNER, rootId!)),
-              )
-          )[0],
-        ).toMatchObject({ state: 'ready', attempt: rootId, objectId: object.id })
+        const [publication] = await db
+          .select()
+          .from(contentPublications)
+          .where(eq(contentPublications.id, hostedPublicationId(HOSTED_BACKUP_OWNER, rootId!)))
+        expect(publication).toMatchObject({ state: 'ready', attempt: rootId })
+        expect(hostedObjectOf((await readContentObject(db, publication!.contentId!))!)).toEqual(
+          object,
+        )
       } finally {
         await restored.runtime.close()
       }

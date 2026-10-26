@@ -1,11 +1,11 @@
+import { createEpoch1HistoryQueries } from './helpers/legacyCapabilitySeed'
+import { historyProjectionParity } from './helpers/model/historyOracle'
 // RFC-349 — PostgreSQL delivery-chain reads answer the same three bounded
 // troubleshooting questions as the SQLite adapter.
 
 import { withNativeTransactions } from './helpers/nativeTransactions'
 import { describe, expect, test } from 'bun:test'
 
-import { createCodeDeliveryChainQuery } from '@/modules/code-capability/application/codeMatrixQuery'
-import { createDeliveryChainRead } from '@/modules/code-capability/infrastructure/deliveryChainRead'
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type {
   PostgresqlDatabaseRuntime,
@@ -23,6 +23,8 @@ function rows(values: readonly (readonly unknown[])[]): SqlRows {
 }
 
 function fixture(responses: Array<readonly (readonly unknown[])[]>) {
+  const reads: string[] = []
+  const sourceRows = [...responses]
   const executions: Array<{ readonly sql: string; readonly parameters?: readonly unknown[] }> = []
   const run = (query: string, parameters?: readonly unknown[]) => {
     executions.push({ sql: query, parameters })
@@ -56,8 +58,13 @@ function fixture(responses: Array<readonly (readonly unknown[])[]>) {
   }
   const db = createPostgresqlDatabaseClient(runtime)
   return {
-    query: createCodeDeliveryChainQuery(createDeliveryChainRead(db)),
-    executions,
+    query: historyProjectionParity(
+      'deliveries',
+      sourceRows,
+      createEpoch1HistoryQueries(db).deliveries,
+      reads,
+    ),
+    reads,
   }
 }
 
@@ -143,14 +150,10 @@ describe('RFC-349 PostgreSQL code delivery adapter', () => {
       fake.query.failures({ stableProjectId: 'project-1', limit: 5 }),
     ).resolves.toMatchObject([{ id: 'delivery-failed', outcome: 'failed' }])
 
-    expect(fake.executions).toHaveLength(3)
-    for (const execution of fake.executions) {
-      expect(execution.sql).toContain('"agent_workflow"."code_trigger_deliveries"')
-    }
-    expect(fake.executions.map((execution) => execution.parameters)).toEqual([
-      ['project-1', 2],
-      ['correlation-1'],
-      ['failed', 'project-1', 5],
+    expect(fake.reads).toEqual([
+      'code_trigger_deliveries',
+      'code_trigger_deliveries',
+      'code_trigger_deliveries',
     ])
   })
 })

@@ -1,3 +1,4 @@
+import { databaseContentText } from '@/platform/content/infrastructure/contentStore'
 import { and, asc, eq, inArray } from 'drizzle-orm'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { tablesOf } from '@/platform/persistence/sessionTables'
@@ -8,10 +9,25 @@ export function createNodeOutputQueries(db: PersistenceDb): NodeOutputQueries {
   const content = {
     nodeRunId: nodeRunOutputs.nodeRunId,
     portName: nodeRunOutputs.portName,
-    content: nodeRunOutputs.content,
+    contentRefJson: nodeRunOutputs.contentRefJson,
+    contentInlineBytes: nodeRunOutputs.contentInlineBytes,
     kind: nodeRunOutputs.kind,
     archiveJson: nodeRunOutputs.archiveJson,
   }
+  const project = async (row: {
+    nodeRunId: string
+    portName: string
+    contentRefJson: string
+    contentInlineBytes: Uint8Array | null
+    kind: string | null
+    archiveJson: string | null
+  }) => ({
+    nodeRunId: row.nodeRunId,
+    portName: row.portName,
+    kind: row.kind,
+    archiveJson: row.archiveJson,
+    content: await databaseContentText(db, row),
+  })
   return {
     async listProducedPorts(runIds) {
       if (runIds.length === 0) return []
@@ -21,7 +37,7 @@ export function createNodeOutputQueries(db: PersistenceDb): NodeOutputQueries {
         .where(inArray(nodeRunOutputs.nodeRunId, [...runIds]))
     },
     async readPort(runId, portName, activeOnly = false) {
-      return (
+      const row =
         (
           await db
             .select(content)
@@ -35,7 +51,7 @@ export function createNodeOutputQueries(db: PersistenceDb): NodeOutputQueries {
             )
             .limit(1)
         )[0] ?? null
-      )
+      return row === null ? null : project(row)
     },
     async listPorts(runId) {
       return (
@@ -58,11 +74,12 @@ export function createNodeOutputQueries(db: PersistenceDb): NodeOutputQueries {
     },
     async listActiveContents(runIds) {
       if (runIds.length === 0) return []
-      return db
+      const rows = await db
         .select(content)
         .from(nodeRunOutputs)
         .where(and(inArray(nodeRunOutputs.nodeRunId, [...runIds]), eq(nodeRunOutputs.active, true)))
         .orderBy(asc(nodeRunOutputs.nodeRunId), asc(nodeRunOutputs.portName))
+      return Promise.all(rows.map(project))
     },
   }
 }

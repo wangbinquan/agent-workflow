@@ -16,7 +16,7 @@ import {
 type Row = Parameters<typeof isTargetNodeConsumed>[3][number]
 function run(over: Partial<Row>): Row {
   return {
-    seq: null,
+    seq: Number((over.id ?? 'r5').slice(1)),
     nodeId: 'n1',
     iteration: 0,
     parentNodeRunId: null,
@@ -44,8 +44,11 @@ describe('RFC-186 F4 — host clarify ages without node_run_outputs', () => {
     expect(await isTargetNodeConsumed('n1', 0, 'r1', runs, new Set(['r5']))).toBe(true)
   })
 
-  test('a host run BELOW the trigger id does not consume', async () => {
-    const runs = [run({ nodeId: WG_LEADER_NODE_ID, id: 'r0' })]
+  test('a host run before a present trigger seq does not consume', async () => {
+    const runs = [
+      run({ nodeId: WG_LEADER_NODE_ID, id: 'r0' }),
+      run({ nodeId: WG_LEADER_NODE_ID, id: 'r1', status: 'pending' }),
+    ]
     expect(await isTargetNodeConsumed(WG_LEADER_NODE_ID, 0, 'r1', runs, new Set())).toBe(false)
   })
 

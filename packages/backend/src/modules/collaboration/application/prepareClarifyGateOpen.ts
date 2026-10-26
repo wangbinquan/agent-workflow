@@ -261,7 +261,12 @@ export class ClarifyGateOpenPreparation {
       containerRunId: node.containerRunId,
       iteration: input.iteration,
       questionsJson: input.questionsJson,
-      answersJson: null,
+      questionsRevision: 1,
+      sealedQuestionSetKey: null,
+      answersRecorded: false,
+      draftsRecorded: false,
+      attributionsRecorded: false,
+      legacyAnswersJson: null,
       directive: null,
       status: 'awaiting_human',
       truncationWarningsJson: input.kind === 'self' ? input.truncationWarningsJson : null,
@@ -271,8 +276,6 @@ export class ClarifyGateOpenPreparation {
       answeredAt: null,
       answeredBy: null,
       submittedByRole: null,
-      answerAttributionsJson: null,
-      draftAnswersJson: null,
     }
     const sourceKind = input.kind
     const roleKind = input.kind === 'self' ? 'self' : 'questioner'
@@ -321,7 +324,7 @@ export class ClarifyGateOpenPreparation {
       questions,
     })
     const manifest: ClarifyGateOpenManifest = {
-      schemaVersion: 1,
+      schemaVersion: 2,
       kind: 'clarify-open',
       gateRef,
       sourceSnapshotDigest: input.sourceSnapshotDigest,

@@ -1,3 +1,4 @@
+import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 // Real-model acceptance found a designer result masking the later clarified result.
 // Exercise the production read model and execution core, including persisted generations.
 import { nodeRunFixture, nodeRunOutputFixture, taskFixture, workflowFixture } from './helpers/model'
@@ -87,7 +88,10 @@ describeEachProvider('RFC-396 workflow result belongs to the task output', (harn
       ])
       const validated: (string | null)[] = []
       const core = composeDigitalEmployeeExecutionCore({
-        ...composeDatabaseDigitalEmployeeExecutionPorts(harness.db),
+        ...composeDatabaseDigitalEmployeeExecutionPorts(
+          harness.db,
+          epoch2RuntimeTestPorts(harness.db).historyRestrictions,
+        ),
         workspace: {
           async validate(input) {
             validated.push(input.outputJson)

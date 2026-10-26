@@ -1,3 +1,4 @@
+// AF-D21: exercise the live epoch-2 provider-move protocol.
 // RFC-349 T10-C — real PostgreSQL target faults. Ordinary backend runs skip
 // this file; postgresql-evidence.yml supplies one disposable external server.
 
@@ -20,17 +21,17 @@ import {
   type PostgresqlReservedConnection,
 } from '@/platform/persistence/postgresqlRuntime'
 import { buildPostgresqlSchemaPlan } from '@/platform/persistence/postgresqlSchema'
-import {
-  type LogicalSchemaContract,
-  type LogicalTableContract,
+import type {
+  LogicalSchemaContract,
+  LogicalTableContract,
 } from '@/platform/persistence/schemaContract'
-import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'
 
 const realTest = process.env.RFC349_TARGET_FAULTS_DATABASE_URL === undefined ? test.skip : test
 const OPERATION_ID = 'dbm_real_target_faults_01'
 const SOURCE_GENERATION_ID = 'dbg_real_target_faults_source_01'
 const TARGET_TABLE = 'agent_workflow.agents'
-const RECEIPT_TABLE = 'agent_workflow_meta.logical_copy_chunks'
+const RECEIPT_TABLE = 'agent_workflow_meta.migration_units'
 
 function databaseConfig(statementTimeoutMs: number) {
   return {
@@ -105,10 +106,6 @@ function agentChunk(input: {
         sync_outputs_on_iterate: true,
         runtime: null,
         permission: '{}',
-        skills: '[]',
-        depends_on: '[]',
-        mcp: '[]',
-        plugins: '[]',
         frontmatter_extra: '{}',
         body_md: '',
         owner_user_id: null,
@@ -134,10 +131,10 @@ async function copyState(
     .unsafe(`SELECT count(*) AS count FROM ${TARGET_TABLE} WHERE id = $1`, [key.value])
   const receiptCount = await runtime
     .providerPool()
-    .unsafe(
-      `SELECT count(*) AS count FROM ${RECEIPT_TABLE} WHERE operation_id = $1 AND table_id = $2 AND chunk_index = $3`,
-      [OPERATION_ID, chunk.payload.table, chunk.payload.chunkIndex],
-    )
+    .unsafe(`SELECT count(*) AS count FROM ${RECEIPT_TABLE} WHERE run_id = $1 AND unit_id = $2`, [
+      OPERATION_ID,
+      `${chunk.payload.table}:${chunk.payload.chunkIndex}`,
+    ])
   return {
     rows: Number(rowCount[0]?.count ?? -1),
     receipts: Number(receiptCount[0]?.count ?? -1),
@@ -205,7 +202,7 @@ async function openTarget(input: {
   for (let attempt = 0; attempt < 40; attempt += 1) {
     try {
       return await openPostgresqlLogicalTarget({
-        headContract: buildLogicalSchemaContract(),
+        headContract: logicalSchemaContract,
         runtime: input.runtime,
         operationId: OPERATION_ID,
         sourceGenerationId: SOURCE_GENERATION_ID,
@@ -262,7 +259,7 @@ describe('RFC-349 real PostgreSQL target fault/resume matrix', () => {
   realTest(
     'disconnect, timeout, deadlock, constraint and storage faults roll back row plus receipt before exact resume',
     async () => {
-      const contract = buildLogicalSchemaContract()
+      const contract = logicalSchemaContract
       const table = contract.tables.find((candidate) => candidate.id === 'agents')
       if (table === undefined) throw new Error('RFC-349 contract has no agents table')
 

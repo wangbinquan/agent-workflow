@@ -31,14 +31,13 @@ import { getTableName } from 'drizzle-orm'
 
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
-import { migratePostgresqlSchema } from '@/platform/persistence/postgresqlMigrator'
+import { createPostgresqlTestDatabase } from './helpers/testDatabase'
 import { createPostgresqlDatabaseRuntime } from '@/platform/persistence/postgresqlRuntime'
-import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'
 
 const URL_ENV = 'RFC349_WRITE_MATRIX_DATABASE_URL'
 const realTest = process.env[URL_ENV] === undefined ? test.skip : test
 const GENERATION_ID = 'dbg_write_matrix_01'
-const OPERATION_ID = 'dbm_write_matrix_01'
 
 /** 合成值不满足业务约束 —— 与「这条 SQL 能不能在 PostgreSQL 上跑」无关。 */
 const EXPECTED_SQLSTATES = new Set(['23503', '23514', '22003', '22P02'])
@@ -115,7 +114,7 @@ function minimalValues(facade: object): Record<string, unknown> {
 
 /** Drizzle 属性名 -> contract 里那一列的 logical codec。 */
 function columnPropertyCodecs(facade: object): Map<string, string> {
-  const contract = buildLogicalSchemaContract()
+  const contract = logicalSchemaContract
   {
     const tableName = getTableName(facade as Parameters<typeof getTableName>[0])
     const columns = contract.tables.find(
@@ -163,24 +162,13 @@ describe('RFC-349 every logical table accepts a real INSERT on real PostgreSQL',
         const pool = runtime.providerPool()
         await pool.unsafe('DROP SCHEMA IF EXISTS agent_workflow CASCADE')
         await pool.unsafe('DROP SCHEMA IF EXISTS agent_workflow_meta CASCADE')
-        await migratePostgresqlSchema({ headContract: buildLogicalSchemaContract(), runtime })
-        // The business client fences every write against the active generation.
-        await pool.unsafe(
-          'INSERT INTO "agent_workflow_meta"."logical_copy_operations" ' +
-            '(operation_id, source_generation_id, contract_digest, plan_digest, stage, created_at, updated_at) ' +
-            `VALUES ('${OPERATION_ID}', 'dbg_write_matrix_source', 'digest', 'plan', 'prepared', 1, 1)`,
-        )
-        await pool.unsafe(
-          'INSERT INTO "agent_workflow_meta"."database_generations" ' +
-            '(generation_id, operation_id, source_generation_id, contract_digest, state, activated_at, first_live_write_at) ' +
-            `VALUES ('${GENERATION_ID}', '${OPERATION_ID}', 'dbg_write_matrix_source', 'digest', 'active', 1, 1)`,
-        )
+        await createPostgresqlTestDatabase(runtime)
 
         // 进程级选择必须还原：CI 的 oracle 步骤把好几个测试文件跑在**同一个 bun 进程**里，
         // 留着 postgresql 投影会渗进后面的文件（跨文件污染在本仓有前科）。
         const db = createPostgresqlDatabaseClient(runtime)
         const facades = nativeTables(db)
-        const contract = buildLogicalSchemaContract()
+        const contract = logicalSchemaContract
         const defects: string[] = []
         let inserted = 0
         let examined = 0

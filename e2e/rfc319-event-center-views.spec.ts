@@ -1,3 +1,4 @@
+import { liveSqlitePath } from './storage'
 // RFC-319 —— 事件中心的「界面与审计视图」用户面验收
 // （EVENT-24 / 25 / 26 / 29 / 32 / 33 / 34 / X6 / X7）。
 //
@@ -71,7 +72,6 @@
 //     本文件的 EVENT-X7 验的是它和向导控件的**接线**（按钮禁用态、打字合并、重做分支截断）。
 
 import { expect, test, type Locator, type Page } from '@playwright/test'
-import { join } from 'node:path'
 
 import { querySqlite, runSqlite } from './command'
 import { startDaemon, type DaemonHandle } from './harness'
@@ -160,7 +160,7 @@ interface MintedEndpoint {
 // ---------------------------------------------------------------------------
 
 function dbPath(): string {
-  return join(daemon.home, 'db.sqlite')
+  return liveSqlitePath(daemon.home)
 }
 
 async function req(path: string, init?: RequestInit, token?: string): Promise<Response> {

@@ -28,7 +28,9 @@ export function createDemoResourceCatalogSeedPersistence(
         let createdAgent = false
         const createdWorkflowIds: string[] = []
 
-        const { agents, workflows } = tablesOf(transaction)
+        const { agents } = tablesOf(transaction)
+
+        const { workflows } = tablesOf(transaction)
         const existingAgent = await first(
           transaction
             .select({ name: agents.name })

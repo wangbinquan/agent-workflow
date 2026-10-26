@@ -1,3 +1,4 @@
+import { initializeTaskWorkspace } from './helpers/taskWorkspaceFixture'
 // RFC-098 B3 (audit S-20 + adversarial-review revision #7) — the fanout
 // consumed GENERATION GATE and its PERSISTED reuseDisabled flag.
 //
@@ -40,7 +41,7 @@ import type { WorkflowDefinition } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { createHash } from 'node:crypto'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { monotonicFactory } from 'ulid'
@@ -54,7 +55,6 @@ import {
 // Same-ms ULID ordering guard (precedent: scheduler-clarify-dispatch.test.ts).
 const ulid = monotonicFactory()
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
 const WORKER_AGENT_ID = '00000000000000000000000001'
 
@@ -72,8 +72,8 @@ interface Harness {
 function buildHarness(): Harness {
   const appHome = mkdtempSync(join(tmpdir(), 'aw-rfc098-consumed-gate-'))
   const worktreePath = join(appHome, 'wt')
-  mkdirSync(worktreePath, { recursive: true })
-  const db = createInMemoryDb(MIGRATIONS)
+  initializeTaskWorkspace(worktreePath)
+  const db = createInMemoryDb()
   return {
     db,
     appHome,

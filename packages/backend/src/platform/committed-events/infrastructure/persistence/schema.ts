@@ -1,4 +1,4 @@
-// RFC-395 I-a: explicit epoch-1 schema contributions; no physical or runtime change.
+// RFC-395 activation: this context declares the live epoch-2 schema directly.
 import {
   column as c,
   defineContribution,
@@ -105,32 +105,6 @@ const committedEventDeliveriesDefinition = owner.table({
 
 export const committedEventDeliveries = materializeDrizzle(committedEventDeliveriesDefinition).table
 
-const committedEventFamilyCutoversDefinition = owner.table({
-  id: 'committed_event_family_cutovers',
-  schemaSymbol: 'committedEventFamilyCutovers',
-  columns: {
-    producer: c.enum('producer', ['task-execution', 'collaboration']),
-    family: c.enum('family', ['task-lifecycle', 'review', 'clarify', 'questions']),
-    mode: c.enum('mode', ['legacy', 'shadow', 'dispatchable']),
-    epoch: c.int('epoch'),
-    changedAt: c.epochMs('changed_at'),
-    changeRef: c.id('change_ref'),
-  },
-  primaryKey: ['producer', 'family'],
-  checks: [
-    {
-      name: 'committed_event_family_cutovers_epoch_positive',
-      expression: raw('"committed_event_family_cutovers"."epoch" > 0', '"epoch" > 0'),
-    },
-  ],
-  retention: retention.operational,
-  migrationPolicy: 'DEFER',
-})
-
-export const committedEventFamilyCutovers = materializeDrizzle(
-  committedEventFamilyCutoversDefinition,
-).table
-
 const committedEventsDefinition = owner.table({
   id: 'committed_events',
   schemaSymbol: 'committedEvents',
@@ -218,9 +192,87 @@ const committedEventsDefinition = owner.table({
 
 export const committedEvents = materializeDrizzle(committedEventsDefinition).table
 
-export const schemaContribution = owner.contribution([
-  committedEventAggregateHeadsDefinition,
-  committedEventDeliveriesDefinition,
+const committedEventFamilyCutoversDefinition = owner.table({
+  version: 2,
+  unique: [],
+  foreignKeys: [],
+  checks: [
+    {
+      name: 'committed_event_family_cutovers_epoch_positive',
+      expression: {
+        kind: 'raw',
+        reason: 'Preserve the epoch-1 expression spelling and provider semantics (RFC-395 I-a).',
+        sqlite: '"committed_event_family_cutovers"."epoch" > 0',
+        postgresql: '"epoch" > 0',
+      },
+    },
+  ],
+  indexes: [],
+  migrationPolicy: 'KEEP',
+  id: 'committed_event_family_cutovers',
+  schemaSymbol: 'committedEventFamilyCutovers',
+  columns: {
+    producer: c.enum('producer', ['task-execution', 'collaboration']),
+    family: c.enum('family', ['task-lifecycle', 'review', 'clarify', 'questions']),
+    epoch: c.int('epoch'),
+    changedAt: c.epochMs('changed_at'),
+    changeRef: c.id('change_ref'),
+  },
+  primaryKey: ['producer', 'family'],
+  retention: {
+    class: 'owner-managed-operational',
+    rule: 'The owning bounded context defines retention and archive jobs through its application port.',
+  },
+  migrationKey: ['producer', 'family'],
+})
+
+export const committedEventFamilyCutovers = materializeDrizzle(
   committedEventFamilyCutoversDefinition,
-  committedEventsDefinition,
-])
+).table
+
+export const schemaContribution = {
+  owner: 'platform/committed-events',
+  version: 2,
+  seeds: [
+    {
+      mode: 'install-only',
+      table: 'committed_event_family_cutovers',
+      rows: [
+        {
+          producer: 'task-execution',
+          family: 'task-lifecycle',
+          epoch: 2,
+          changed_at: 1789574412066,
+          change_ref: 'rfc341:task-lifecycle-cutover',
+        },
+        {
+          producer: 'collaboration',
+          family: 'review',
+          epoch: 2,
+          changed_at: 1789833612066,
+          change_ref: 'rfc341:collaboration-cutover',
+        },
+        {
+          producer: 'collaboration',
+          family: 'clarify',
+          epoch: 2,
+          changed_at: 1789833612066,
+          change_ref: 'rfc341:collaboration-cutover',
+        },
+        {
+          producer: 'collaboration',
+          family: 'questions',
+          epoch: 2,
+          changed_at: 1789833612066,
+          change_ref: 'rfc341:collaboration-cutover',
+        },
+      ],
+    },
+  ],
+  tables: [
+    committedEventAggregateHeadsDefinition,
+    committedEventDeliveriesDefinition,
+    committedEventsDefinition,
+    committedEventFamilyCutoversDefinition,
+  ],
+} as const

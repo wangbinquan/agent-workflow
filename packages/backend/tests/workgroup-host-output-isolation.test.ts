@@ -260,7 +260,10 @@ function runLeader(
 ): Promise<Awaited<ReturnType<typeof runNode>>> {
   return withEnv(
     {
-      MOCK_OPENCODE_RAW_AGENT_TEXT: LEADER_ENVELOPE,
+      MOCK_OPENCODE_RAW_AGENT_TEXT: LEADER_ENVELOPE.replace(
+        '<workflow-output>',
+        `<workflow-output nonce="fixture:${nodeRunId}">`,
+      ),
       MOCK_OPENCODE_EVENTS: '[]',
       MOCK_OPENCODE_EMIT_SESSION_ID: '1',
       OPENCODE_TEST_HOME: join(h.appHome, 'no-home'),

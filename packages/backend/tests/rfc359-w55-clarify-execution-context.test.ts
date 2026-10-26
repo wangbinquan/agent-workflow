@@ -115,6 +115,7 @@ function fixture(ambient: object | undefined, parkFailure?: Error) {
           nodeRunId: 'gate-run',
         }
       },
+      readClarifyAnswerProjection: async () => [],
       rowToRound: (row: unknown) => row,
       log: { warn() {} },
     },

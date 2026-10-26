@@ -1,5 +1,5 @@
 import type { NodeRunStatus } from '@agent-workflow/shared'
-import type { RunSelectionReader } from './runSelection'
+import type { RunHistoryReader } from '../runHistory'
 
 export interface BranchTraceRunSnapshot {
   readonly seq: number | null
@@ -28,8 +28,5 @@ export interface BranchTraceTaskSnapshot {
 export interface BranchTraceSnapshotReader {
   read(taskId: string): Promise<BranchTraceTaskSnapshot | null>
   /** RFC-395 II-a：在已读出的行上取选择历史（选择端口 familyHistory 口径），不另查库。 */
-  history(
-    taskId: string,
-    runs: readonly BranchTraceRunSnapshot[],
-  ): Pick<RunSelectionReader, 'familyHistory'>
+  history(taskId: string, runs: readonly BranchTraceRunSnapshot[]): RunHistoryReader
 }

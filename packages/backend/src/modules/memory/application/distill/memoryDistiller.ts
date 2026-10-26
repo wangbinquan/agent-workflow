@@ -224,7 +224,7 @@ export interface LoadedSourceEvents {
     errorMessage: string | null
     failedNodeId: string | null
     inputsMd: string
-    nodeOutcomes: Array<{ nodeId: string; status: string; retryIndex: number }>
+    nodeOutcomes: Array<{ nodeId: string; status: string; retryIndex: number | null }>
     finalOutputs: Array<{ nodeId: string; portName: string; content: string }>
   }>
 }

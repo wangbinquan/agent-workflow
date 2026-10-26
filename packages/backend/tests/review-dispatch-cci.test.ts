@@ -1,3 +1,7 @@
+import type { OracleRunRow } from '@/modules/task-execution/infrastructure/migration/oracle/rows'
+import type { TaskReadRow } from '@/modules/task-execution/infrastructure/taskRepositorySql'
+import { nodeRunFixtureColumns } from './helpers/model/nodeRun'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { withO2Closure } from './helpers/o2Closure'
 // RFC-056 patch 2026-05-26 — review dispatch must respect clarifyIteration.
 //
@@ -37,7 +41,7 @@ import {
   consumedProducerIds,
   readNodeRunFixtures,
 } from './helpers/model'
-import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+
 import { describeEachProvider } from './helpers/eachProvider'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { afterAll, afterEach, beforeEach, describe, expect, test } from 'bun:test'
@@ -78,15 +82,18 @@ const PATCH_MD_PATH = resolve(
 // ---------------------------------------------------------------------------
 
 function row(
-  partial: Partial<PersistenceTables['nodeRuns']['$inferSelect']> & { id: string; status: string },
-): PersistenceTables['nodeRuns']['$inferSelect'] {
+  partial: Partial<OracleRunRow> & {
+    id: string
+    status: string
+  },
+): OracleRunRow {
   return {
     parentNodeRunId: null,
     containerRunId: null,
     consumedUpstreamRunsJson: null,
     supersededByReview: null,
     mergeState: null,
-    seq: null,
+    seq: (partial.retryIndex ?? 0) + 1,
     iteration: 0,
     shardKey: null,
     retryIndex: 0,
@@ -111,7 +118,7 @@ function row(
     taskId: 't',
     nodeId: 'review',
     ...partial,
-  } as unknown as PersistenceTables['nodeRuns']['$inferSelect']
+  } as unknown as OracleRunRow
 }
 
 beforeEach(() => {
@@ -138,7 +145,7 @@ describe('RFC-056 patch-2026-05-26 — pickFreshestReviewRun', () => {
     expect(latestDone).toBeUndefined()
   })
 
-  test('reuse = freshest by isFresherNodeRun (pure ULID id-order)', async () => {
+  test('reuse = freshest by isFresherNodeRun (persisted run sequence)', async () => {
     // Causal ids: the pending rerun was minted after the old done row.
     const oldDone = row({ id: '01-old', status: 'done', retryIndex: 0 })
     const newPending = row({ id: '02-new', status: 'pending', retryIndex: 1 })
@@ -198,7 +205,7 @@ describeEachProvider(
 
     async function seed(): Promise<{
       taskId: string
-      task: PersistenceTables['tasks']['$inferSelect']
+      task: TaskReadRow
       definition: WorkflowDefinition
       reviewNode: WorkflowNode
     }> {
@@ -303,7 +310,7 @@ describeEachProvider(
       )
       expect(result.kind).toBe('ok')
       const reviewRows = await db
-        .select()
+        .select(nodeRunFixtureColumns(db))
         .from(nodeRuns)
         .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, 'rev')))
       expect(reviewRows.length).toBe(1)
@@ -448,7 +455,13 @@ describeEachProvider(
         }),
       )
       expect(result.kind).toBe('ok')
-      const stuck = (await db.select().from(nodeRuns).where(eq(nodeRuns.id, stuckId)).limit(1))[0]
+      const stuck = (
+        await db
+          .select(nodeRunFixtureColumns(db))
+          .from(nodeRuns)
+          .where(eq(nodeRuns.id, stuckId))
+          .limit(1)
+      )[0]
       expect(stuck?.status).toBe('pending')
     })
 
@@ -486,7 +499,7 @@ describeEachProvider(
       )
       expect(result.kind).toBe('awaiting_review')
       const reviewRows = await db
-        .select()
+        .select(nodeRunFixtureColumns(db))
         .from(nodeRuns)
         .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, 'rev')))
       expect(reviewRows.length).toBe(1)

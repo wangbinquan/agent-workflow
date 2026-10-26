@@ -18,15 +18,14 @@
 //      reader treats NULL as "every question is 'designer'", and any
 //      regression that fails to set NULL would break that compat path.
 
-import { rawRows } from '@/platform/persistence/queryHelpers'
+import { createFrozenEpoch1Db, FROZEN_MIGRATIONS } from './migration-freeze'
+import { frozenRawRows as rawRows } from './migration-freeze'
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { sql } from 'drizzle-orm'
 
-import { createInMemoryDb } from '../src/db/client'
-
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+const MIGRATIONS = resolve(FROZEN_MIGRATIONS)
 
 const MIGRATION_FILE = resolve(MIGRATIONS, '0032_rfc059_clarify_rounds_question_scopes.sql')
 
@@ -39,7 +38,7 @@ describe('RFC-059 migration 0032 — table schema changes', () => {
   })
 
   test('RFC-217 T8 终态：question_scopes_json 与两张遗留表在 HEAD 已不存在（0107 收尾）', () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createFrozenEpoch1Db(MIGRATIONS)
     const cols = rawRows<{ name: string }>(
       db,
       sql`SELECT name FROM pragma_table_info('clarify_rounds')`,

@@ -1,3 +1,8 @@
+import { epoch2ReviewReader } from './helpers/epoch2RuntimePorts'
+import type { TaskReadRow } from '@/modules/task-execution/infrastructure/taskRepositorySql'
+import { inlineContentColumns } from '@/platform/content/infrastructure/contentStore'
+import { nodeRunFixtureColumns } from './helpers/model/nodeRun'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { withO2Closure, o2Ports } from './helpers/o2Closure'
 // RFC-079 PR-A — review multi-document mode (dispatch + selection + the three
 // decisions) integration locks.
@@ -29,7 +34,7 @@ import {
   readNodeRunFixtures,
 } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+
 import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -179,7 +184,7 @@ describeEachProvider('RFC-079 — review multi-document mode', (harness) => {
 
   async function seed(): Promise<{
     taskId: string
-    task: PersistenceTables['tasks']['$inferSelect']
+    task: TaskReadRow
     definition: WorkflowDefinition
     reviewNode: WorkflowNode
   }> {
@@ -286,7 +291,7 @@ describeEachProvider('RFC-079 — review multi-document mode', (harness) => {
   /** Dispatch the review and return its node_run id + ordered doc_versions. */
   async function dispatchRound(): Promise<{
     taskId: string
-    task: PersistenceTables['tasks']['$inferSelect']
+    task: TaskReadRow
     definition: WorkflowDefinition
     reviewNode: WorkflowNode
     reviewNodeRunId: string
@@ -403,7 +408,12 @@ describeEachProvider('RFC-079 — review multi-document mode', (harness) => {
     expect(meta.acceptedCount).toBe(2)
     expect(meta.acceptedItemIndices).toEqual([0, 2])
 
-    const run = (await db.select().from(nodeRuns).where(eq(nodeRuns.id, reviewNodeRunId)))[0]!
+    const run = (
+      await db
+        .select(nodeRunFixtureColumns(db))
+        .from(nodeRuns)
+        .where(eq(nodeRuns.id, reviewNodeRunId))
+    )[0]!
     expect(run.status).toBe('done')
   })
 
@@ -536,7 +546,7 @@ describeEachProvider('RFC-079 — review multi-document mode', (harness) => {
         contextBefore: '',
         contextAfter: '',
         occurrenceIndex: 1,
-        commentText: text,
+        ...inlineContentColumns(Buffer.from(text, 'utf8'), 'text/plain'),
         createdAt: Date.now(),
       })
     }
@@ -622,7 +632,12 @@ describeEachProvider('RFC-079 — review multi-document mode', (harness) => {
       selection: 'accepted',
     })
 
-    const detail = await getReviewDetail(db, appHome, reviewNodeRunId)
+    const detail = await getReviewDetail(
+      db,
+      appHome,
+      reviewNodeRunId,
+      epoch2ReviewReader(db, appHome),
+    )
     expect(detail.documents).toBeDefined()
     expect(detail.documents!.length).toBe(3)
     // ordered by item_index, titles extracted from each file's first heading

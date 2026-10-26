@@ -1,3 +1,4 @@
+import { skillTreeColumns, skillRowPath } from '../databaseSkillTrees'
 // Skill service.
 //
 // Storage model (design.md §2):
@@ -13,14 +14,15 @@
 import { skillTextBytes, skillTextView } from '../../application/skills/textView'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
-import type {
-  CreateManagedSkill,
-  FileNode,
-  Skill,
-  SkillContent,
-  UpdateSkillContent,
+import {
+  type CreateManagedSkill,
+  type FileNode,
+  type Skill,
+  type SkillContent,
+  type UpdateSkillContent,
+  isProtectedSkillMainFile,
 } from '@agent-workflow/shared'
-import { isProtectedSkillMainFile } from '@agent-workflow/shared'
+
 import { and, eq } from 'drizzle-orm'
 import { existsSync, realpathSync, statSync } from 'node:fs'
 import { join } from 'node:path'
@@ -86,9 +88,12 @@ export interface SkillContentReadOptions {
   readonly content: SkillContentReader
 }
 
-function contentReaderFor(opts: SkillFsOptions | SkillContentReadOptions): SkillContentReader {
+function contentReaderFor(
+  db: PersistenceDb,
+  opts: SkillFsOptions | SkillContentReadOptions,
+): SkillContentReader {
   return 'appHome' in opts
-    ? (opts.content ?? createFileSkillContentReader(opts.appHome))
+    ? (opts.content ?? createFileSkillContentReader(opts.appHome, db))
     : opts.content
 }
 
@@ -263,7 +268,7 @@ export async function createManagedSkillWithFiles(
         id,
         name: meta.name,
         description: meta.description,
-        managedPath: skillFilesRel(id),
+        ...skillTreeColumns(id, 'live', 'local-file', skillFilesRel(id)),
         // RFC-231: every user-created resource starts private with ACL rev 0.
         ...initialAcl,
         reservationState: 'reserving',
@@ -404,7 +409,7 @@ export async function stageManagedSkill(
         id,
         name: meta.name,
         description: meta.description,
-        managedPath: skillFilesRel(id),
+        ...skillTreeColumns(id, 'live', 'local-file', skillFilesRel(id)),
         ...initialAcl,
         reservationState: 'reserving',
         createdAt: now,
@@ -600,7 +605,7 @@ export async function readSkillContent(
   // RFC-170 (G1-1): read the SKILL.md body + sign the token from the AUTHORITATIVE
   // version snapshot, not live — so the returned content always matches the token's
   // contentVersion and a torn live dir can't corrupt the read.
-  const reader = contentReaderFor(opts)
+  const reader = contentReaderFor(db, opts)
   const raw = skillTextView(await reader.readMain(contentReferenceOf(skill)), reader)
   const parsed = parseFrontmatter(raw)
   const { name: _ignoredName, description: descRaw, ...rest } = parsed.data
@@ -830,7 +835,7 @@ export async function listSkillFiles(
   if (skill === null) throw new NotFoundError('skill-not-found', `skill '${skillId}' not found`)
   // RFC-170 (G1-1): the file tree reflects the AUTHORITATIVE snapshot, not live —
   // consistent with readSkillContent/readSkillFile.
-  return await contentReaderFor(opts).listFiles(contentReferenceOf(skill))
+  return await contentReaderFor(db, opts).listFiles(contentReferenceOf(skill))
 }
 
 export async function readSkillFile(
@@ -842,7 +847,7 @@ export async function readSkillFile(
   const skill = await getSkillById(db, skillId)
   if (skill === null) throw new NotFoundError('skill-not-found', `skill '${skillId}' not found`)
   // RFC-170 (G1-1): read from the AUTHORITATIVE snapshot, not live.
-  const reader = contentReaderFor(opts)
+  const reader = contentReaderFor(db, opts)
   return skillTextView(await reader.readFile(contentReferenceOf(skill), relPath), reader)
 }
 
@@ -937,7 +942,7 @@ export async function deleteSkillFile(
 // --- helpers ---
 
 function rowToSkill(row: SkillRow): Skill {
-  return skillFromPersistenceRow(row, 'tail')
+  return skillFromPersistenceRow({ ...row, managedPath: skillRowPath(row, row.id, 'live') }, 'tail')
 }
 
 /**

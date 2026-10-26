@@ -11,7 +11,7 @@ export interface NodeActivationRunSnapshot {
 }
 
 export interface NodeActivationSnapshotReader {
-  selectionFromRows(taskId: string, rows: readonly NodeActivationRunSnapshot[]): RunSelectionReader
+  readonly selection: RunSelectionReader
   findRuns(taskId: string, nodeId: string): Promise<readonly NodeActivationRunSnapshot[]>
   /** RFC-354 — one generation row by id, for the frame-chain walk. */
   findRun(nodeRunId: string): Promise<NodeActivationRunSnapshot | null>

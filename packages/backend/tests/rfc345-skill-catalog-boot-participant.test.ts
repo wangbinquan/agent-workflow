@@ -7,28 +7,18 @@ const sourceRoot = resolve(import.meta.dir, '../src/modules/resource-catalog')
 const source = (path: string): string => readFileSync(resolve(sourceRoot, path), 'utf8')
 
 describe('RFC-345 provider-owned Skill Catalog boot participant', () => {
-  test('exposes the five ordered boot stages through one frozen nominal capability', async () => {
+  test('exposes the four ordered normal boot stages through one frozen nominal capability', async () => {
     const calls: string[] = []
     const participant = createSkillCatalogBootParticipant({
-      async runIdentityMigrationBarrier() {
+      async recoverOperations() {
         calls.push('identity')
-        return {
-          recoveredOperations: 1,
-          removedHusks: 2,
-          migratedSkills: 3,
-          verifiedSkills: 4,
-          verifiedVersions: 5,
-        }
+        return { total: 1, rolledBack: 1, rolledForward: 0, quarantined: 0 }
       },
       activateAvailabilityGate() {
         calls.push('gate')
       },
       async reconcileLiveFiles() {
         calls.push('reconcile')
-      },
-      async backfillLegacyVersions() {
-        calls.push('backfill')
-        return { backfilled: 6, husksRemoved: 7 }
       },
       async reverifySnapshots() {
         calls.push('reverify')
@@ -37,27 +27,31 @@ describe('RFC-345 provider-owned Skill Catalog boot participant', () => {
     })
 
     expect(Object.isFrozen(participant)).toBe(true)
-    expect(await participant.runIdentityMigrationBarrier()).toMatchObject({ migratedSkills: 3 })
+    expect(await participant.recoverOperations()).toEqual({
+      total: 1,
+      rolledBack: 1,
+      rolledForward: 0,
+      quarantined: 0,
+    })
     participant.activateAvailabilityGate()
     await participant.reconcileLiveFiles()
-    expect(await participant.backfillLegacyVersions()).toEqual({ backfilled: 6, husksRemoved: 7 })
     expect(await participant.reverifySnapshots()).toEqual({ verified: 8, quarantined: 9 })
-    expect(calls).toEqual(['identity', 'gate', 'reconcile', 'backfill', 'reverify'])
+    expect(calls).toEqual(['identity', 'gate', 'reconcile', 'reverify'])
   })
 
   test('keeps provider clients and transactions outside the closed public surface', () => {
     const participants = source('public/participants.ts')
     const contract = participants.slice(
-      participants.indexOf('export interface SkillIdentityMigrationReceipt'),
+      participants.indexOf('export interface SkillCatalogBootParticipant'),
       participants.indexOf('export interface DemoResourceCatalogSeedMarkerContext'),
     )
     const application = source('application/skills/skillCatalogBootParticipant.ts')
     const brands = source('domain/participantBrands.ts')
 
-    expect(contract).toContain('runIdentityMigrationBarrier()')
+    expect(contract).toContain('recoverOperations()')
     expect(contract).toContain('activateAvailabilityGate()')
     expect(contract).toContain('reconcileLiveFiles()')
-    expect(contract).toContain('backfillLegacyVersions()')
+    expect(contract).not.toContain('backfillLegacyVersions()')
     expect(contract).toContain('reverifySnapshots()')
     expect(contract).not.toMatch(/DbClient|DbTx|Postgresql|drizzle|Actor|unknown/)
     expect(brands).toContain('export const skillCatalogBootParticipantBrand: unique symbol')
@@ -77,9 +71,12 @@ describe('RFC-345 provider-owned Skill Catalog boot participant', () => {
       /composeSqliteSkillCatalogBoot|composePostgresqlSkillCatalogBoot/,
     )
     // RFC-370 selects storage effects once; both engines still use this machine.
-    expect(adapter).toContain('runSkillIdentityMigrationBarrier(input.db, selected)')
+    expect(adapter).toContain(
+      'recoverSkillOperations(input.db, selected, SKILL_OP_RECOVERY_REGISTRY)',
+    )
+    expect(adapter).not.toContain('runSkillIdentityMigrationBarrier(')
     expect(adapter).toContain('reconcileSkillLiveFiles(input.db, selected)')
-    expect(adapter).toContain('backfillLegacySkillVersions(input.db, selected)')
+    expect(adapter).not.toContain('backfillLegacySkillVersions(')
     expect(adapter).toContain('runBootSnapshotReverify(input.db, selected)')
     for (const port of [
       'lifecycleContent',

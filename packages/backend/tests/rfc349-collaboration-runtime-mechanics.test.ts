@@ -1,3 +1,10 @@
+// RFC-395 BF-D27: AF-D1 leaves reads unfenced, fences every mutation and caches the
+// first-write marker per runtime. SQL keyword case follows the capability renderer.
+import { createEpoch2PostgresqlMetadata } from './helpers/epoch2PostgresqlMetadata'
+import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
+import { legacyContentRef } from '@/platform/content/contentRef'
+import { contentRowColumns } from '@/platform/content/infrastructure/contentStore'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { o2Ports } from './helpers/o2Closure'
 import {
   nodeRunFixture,
@@ -9,7 +16,7 @@ import {
 } from './helpers/model'
 import { withNativeTransactions } from './helpers/nativeTransactions'
 import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+
 import { first } from '@/platform/persistence/queryHelpers'
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
@@ -22,9 +29,6 @@ import { dbTxSync } from '@/db/txSync'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   composeWorkgroupTaskRoomClarifyParticipantFactory,
-  // RFC-359 W7：RFC-057 修复的两个协作侧端口各只剩一份中立实现，两个 provider 共用。
-  // 行为对拍在 rfc359-w7-*-repair-conformance.test.ts（真双引擎）；这里留的是 PG 客户端上的
-  // 语句形态（写围栏 marker / 生成代 fence 的相对位置），那是假 fixture 才看得见的面。
   createClarifyRepairParticipant,
   createReviewRepairParticipant,
 } from '@/modules/collaboration/composition'
@@ -40,7 +44,6 @@ import type {
 import { insertClarifyRoundRaw } from './clarify-fixtures'
 import { describeEachProvider } from './helpers/eachProvider'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const SRC = (path: string): string =>
   readFileSync(resolve(import.meta.dir, '..', 'src', path), 'utf8')
 
@@ -57,12 +60,15 @@ function rows(values: readonly (readonly unknown[])[]): SqlRows {
 
 function postgresqlFixture(responses: Array<readonly (readonly unknown[])[]>) {
   const executions: Array<{ readonly sql: string; readonly parameters?: readonly unknown[] }> = []
+  const epoch2Metadata = createEpoch2PostgresqlMetadata()
   const run = (query: string, parameters?: readonly unknown[]) => {
     executions.push({ sql: query, parameters })
+    const metadata = epoch2Metadata(query)
+    if (metadata) return metadata
     // RFC-349: the one-shot live-write marker and the per-transaction
     // generation fence are infrastructure, not part of the adapter contract
     // each case queues responses for. Answer them without consuming the queue.
-    if (query.includes('database_generations')) return rows([['rfc349_collaboration_runtime']])
+    if (query.includes('generations')) return rows([['rfc349_collaboration_runtime']])
     return rows(responses.shift() ?? [])
   }
   const connection: PostgresqlReservedConnection = withNativeTransactions({
@@ -136,6 +142,7 @@ describe('RFC-349 collaboration runtime mechanics', () => {
     test('SQLite composition owns live suppression and closes orphaned clarify rounds', async () => {
       const taskId = await seedTask(db, { members: [{ memberType: 'agent' }] })
       const runtime = createCollaborationRuntimeMechanics(db, {
+        ...epoch2RuntimeTestPorts(db),
         taskLock: o2Ports(db).taskLock,
         ...{ upstreamAgents: o2Ports(db).upstreamAgents },
       })
@@ -240,10 +247,11 @@ describe('RFC-349 collaboration runtime mechanics', () => {
       const postgresql = postgresqlFixture([
         [['round-open']],
         [['round-pg', 'answered']],
-        [],
-        [['rfc349_collaboration_runtime']],
+        [], // BEGIN
+        [], // round lock
         [['round-pg']],
-        [],
+        [], // answer rows cleared after the CAS
+        [], // COMMIT
       ])
       const repair = createClarifyRepairParticipant(postgresql.db)
       await expect(
@@ -260,18 +268,66 @@ describe('RFC-349 collaboration runtime mechanics', () => {
           occurredAt: 4,
         }),
       ).resolves.toBe(true)
-      // RFC-359 W7：`reopen` 是单语句 CAS，合一后不再显式包事务——PG 客户端仍把这条裸写
-      // 包进自己的隐式事务（大写 BEGIN/COMMIT），写围栏 marker 与生成代 fence 的位置不变。
+      // Epoch 2 keeps the round lock, CAS and answer-row reset in one transaction.
+      // AF-D1 fences each mutation after the lock and records the first write only once.
       expect(postgresql.executions.map((entry) => entry.sql)).toEqual([
         expect.stringContaining('select'),
         expect.stringContaining('select'),
         'BEGIN',
-        expect.stringContaining('WITH marked AS (UPDATE "agent_workflow_meta"'),
-        expect.stringContaining('SELECT generation_id FROM "agent_workflow_meta"'),
+        expect.stringMatching(/^select .*"clarify_rounds".*for update$/),
+        expect.stringMatching(/^SELECT generation_id .*"generations".*for share$/i),
+        expect.stringContaining('SELECT first_live_write_at'),
+        expect.stringContaining('UPDATE "agent_workflow_meta"."first_write"'),
+        expect.stringContaining('update "agent_workflow"."clarify_rounds"'),
+        expect.stringMatching(/^SELECT generation_id .*"generations".*for share$/i),
+        expect.stringContaining('delete from "agent_workflow"."clarify_answers"'),
+        'COMMIT',
+      ])
+      const reopened = postgresql.executions.find((entry) =>
+        entry.sql.startsWith('update "agent_workflow"."clarify_rounds"'),
+      )
+      expect(reopened?.sql).toContain('returning')
+      for (const value of ['round-pg', 'task-pg', 'self', 'answered', 'awaiting_human']) {
+        expect(reopened?.parameters).toContain(value)
+      }
+
+      // The same runtime keeps fencing later mutations, but its committed marker
+      // is cached. A missed CAS also leaves the answer rows untouched.
+      const afterCommit = postgresql.executions.length
+      await expect(
+        repair.reopen({
+          taskId: 'task-pg',
+          roundId: 'round-pg',
+          expectedStatus: 'answered',
+          occurredAt: 5,
+        }),
+      ).resolves.toBe(false)
+      expect(postgresql.executions.slice(afterCommit).map(({ sql }) => sql)).toEqual([
+        'BEGIN',
+        expect.stringMatching(/^select .*"clarify_rounds".*for update$/),
+        expect.stringMatching(/^SELECT generation_id .*"generations".*for share$/i),
         expect.stringContaining('update "agent_workflow"."clarify_rounds"'),
         'COMMIT',
       ])
-      expect(postgresql.executions[5]?.sql).toContain('returning')
+
+      const postgresqlMiss = postgresqlFixture([[], [], [], []])
+      await expect(
+        createClarifyRepairParticipant(postgresqlMiss.db).reopen({
+          taskId: 'task-pg',
+          roundId: 'round-pg',
+          expectedStatus: 'canceled',
+          occurredAt: 4,
+        }),
+      ).resolves.toBe(false)
+      expect(postgresqlMiss.executions.map(({ sql }) => sql)).toEqual([
+        'BEGIN',
+        expect.stringMatching(/^select .*"clarify_rounds".*for update$/),
+        expect.stringMatching(/^SELECT generation_id .*"generations".*for share$/i),
+        expect.stringContaining('SELECT first_live_write_at'),
+        expect.stringContaining('UPDATE "agent_workflow_meta"."first_write"'),
+        expect.stringContaining('update "agent_workflow"."clarify_rounds"'),
+        'COMMIT',
+      ])
     })
 
     test('owns review repair inspection, approval outputs, and document unapproval', async () => {
@@ -294,7 +350,13 @@ describe('RFC-349 collaboration runtime mechanics', () => {
         sourcePortName: 'document',
         versionIndex: 3,
         reviewIteration: 2,
-        bodyPath: `runs/${taskId}/review/review/document/v3.md`,
+        ...contentRowColumns(
+          legacyContentRef(
+            'review-body-path',
+            'local-file',
+            `runs/${taskId}/review/review/document/v3.md`,
+          ),
+        ),
         sourceFilePath: 'docs/result.md',
         decision: 'approved',
       })
@@ -361,14 +423,16 @@ describe('RFC-349 collaboration runtime mechanics', () => {
       expect(postgresql.executions).toHaveLength(2)
 
       const postgresqlComplete = postgresqlFixture([
-        [],
+        [], // BEGIN
         [['approved', 3, 2, 'docs/result.md']],
-        [],
-        [['rfc349_collaboration_runtime']],
-        [],
-        [['rfc349_collaboration_runtime']],
-        [],
-        [],
+        [], // existing ports
+        [['task-pg']], // approved_doc owner
+        [], // previous approved_doc reference
+        [], // approved_doc write
+        [['task-pg']], // approval_meta owner
+        [], // previous approval_meta reference
+        [], // approval_meta write
+        [], // COMMIT
       ])
       await expect(
         createReviewRepairParticipant(postgresqlComplete.db).completeApproved({
@@ -380,23 +444,44 @@ describe('RFC-349 collaboration runtime mechanics', () => {
       ).resolves.toBe(true)
       expect(postgresqlComplete.executions.map(({ sql }) => sql)).toEqual([
         'BEGIN',
-        expect.stringContaining('select'),
-        expect.stringContaining('select'),
-        // One process-wide live-write marker, then a generation fence per write.
-        expect.stringContaining('WITH marked AS (UPDATE "agent_workflow_meta"'),
-        expect.stringContaining('SELECT generation_id FROM "agent_workflow_meta"'),
+        expect.stringContaining('from "agent_workflow"."doc_versions"'),
+        expect.stringContaining('from "agent_workflow"."node_run_outputs"'),
+        expect.stringContaining('from "agent_workflow"."node_runs"'),
+        expect.stringContaining('from "agent_workflow"."node_run_outputs"'),
+        expect.stringMatching(/^SELECT generation_id .*"generations".*for share$/i),
+        expect.stringContaining('SELECT first_live_write_at'),
+        expect.stringContaining('UPDATE "agent_workflow_meta"."first_write"'),
         expect.stringContaining('insert into "agent_workflow"."node_run_outputs"'),
-        expect.stringContaining('SELECT generation_id FROM "agent_workflow_meta"'),
+        expect.stringContaining('from "agent_workflow"."node_runs"'),
+        expect.stringContaining('from "agent_workflow"."node_run_outputs"'),
+        expect.stringMatching(/^SELECT generation_id .*"generations".*for share$/i),
         expect.stringContaining('insert into "agent_workflow"."node_run_outputs"'),
         'COMMIT',
       ])
-
-      const postgresqlUnapprove = postgresqlFixture([
-        [],
-        [['rfc349_collaboration_runtime']],
-        [['doc-pg']],
-        [],
+      const outputWrites = postgresqlComplete.executions.filter(({ sql }) =>
+        sql.startsWith('insert into "agent_workflow"."node_run_outputs"'),
+      )
+      expect(outputWrites).toHaveLength(2)
+      expect(
+        outputWrites.map(({ parameters }) => {
+          const bytes = parameters?.find(
+            (value): value is Uint8Array => value instanceof Uint8Array,
+          )
+          expect(bytes).toBeInstanceOf(Uint8Array)
+          return new TextDecoder().decode(bytes)
+        }),
+      ).toEqual([
+        'docs/result.md',
+        JSON.stringify({
+          decision: 'approved',
+          decidedAt: 9,
+          decidedBy: 'rfc057-repair',
+          reviewIteration: 2,
+          versionIndex: 3,
+        }),
       ])
+
+      const postgresqlUnapprove = postgresqlFixture([[], [['doc-pg']], []])
       await expect(
         createReviewRepairParticipant(postgresqlUnapprove.db).unapprove({
           taskId: 'task-pg',
@@ -406,8 +491,9 @@ describe('RFC-349 collaboration runtime mechanics', () => {
       ).resolves.toBe(true)
       expect(postgresqlUnapprove.executions.map(({ sql }) => sql)).toEqual([
         'BEGIN',
-        expect.stringContaining('WITH marked AS (UPDATE "agent_workflow_meta"'),
-        expect.stringContaining('SELECT generation_id FROM "agent_workflow_meta"'),
+        expect.stringMatching(/^SELECT generation_id .*"generations".*for share$/i),
+        expect.stringContaining('SELECT first_live_write_at'),
+        expect.stringContaining('UPDATE "agent_workflow_meta"."first_write"'),
         expect.stringContaining('update "agent_workflow"."doc_versions"'),
         'COMMIT',
       ])
@@ -460,7 +546,7 @@ describe('RFC-349 collaboration runtime mechanics', () => {
     let db: DbClient
 
     beforeEach(() => {
-      db = createInMemoryDb(MIGRATIONS)
+      db = createInMemoryDb()
     })
 
     test('reserved transaction participant projects per-asker stops and CAS-cancels open self clarifies', async () => {

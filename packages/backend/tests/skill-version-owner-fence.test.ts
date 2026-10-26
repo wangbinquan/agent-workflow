@@ -13,6 +13,20 @@
 // `expectedOwnerUserId` — tracked in IMPLEMENTATION §7. Below: the funnel guard is
 // exercised directly, then the combined-save wiring at the service boundary.
 
+// RFC-170 (Codex 4th-review [high]) — the version-write funnel re-checks the
+// skill owner INSIDE the version-bump tx. The route authorizes the actor
+// (requireResourceOwner) BEFORE the service runs; between that check and the final
+// write there is an `await` gap in which the owner can be transferred, demoting the
+// actor to a view-only grantee. Without an in-tx recheck the demoted ex-owner's
+// resumed write still passes (id/contentVersion/metaRevision unchanged) and commits
+// a post-revocation version. `commitSkillVersion` now honors an `expectedOwnerUserId`
+// (the owner the caller authorized against) and 409s on owner drift.
+//
+// SCOPE: the funnel-side machinery + the COMBINED-SAVE primary path are wired (the
+// POST /save route → saveSkillWithToken → writeSkillContent forward the authorized
+// owner). The remaining writers (file / restore / ZIP / fusion) still pass no
+// `expectedOwnerUserId` — tracked in IMPLEMENTATION §7. Below: the funnel guard is
+// exercised directly, then the combined-save wiring at the service boundary.
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { TEST_SKILL_RESTORE_MEMBERSHIP } from './helpers/skillRestoreMembership'
 import { expect, test, beforeEach, afterEach } from 'bun:test'

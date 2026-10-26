@@ -108,7 +108,7 @@ export interface MemoryDistillTaskNodeStatusRecord {
   /** 那一行的 id —— 任务结束源据此去取 output 节点的端口值。 */
   readonly nodeRunId: string
   readonly status: string
-  readonly retryIndex: number
+  readonly retryIndex: number | null
   readonly finishedAt: number | null
 }
 

@@ -1,3 +1,13 @@
+import { initializeClarifyHistory } from '@/modules/collaboration/composition/clarifyHistory'
+import { createLocalRuntimeContent } from './contentRuntime'
+import { createHistoryRestrictionBindings } from './historyRestrictions'
+import { createFileSkillContentBinding } from '@/modules/resource-catalog/composition/skillContentBinding'
+import {
+  readActiveEpochInstallation,
+  createActiveHistoryRestrictionProvider,
+} from '@/modules/system-operations/composition/epochInstallation'
+import { createCodeHistoryPackageReader } from '@/modules/code-capability/composition/historyQueries'
+import { createLocalReviewArtifacts } from '@/modules/collaboration/composition/contentArtifacts'
 import { composeSourceControlTaskPorts } from '@/modules/task-execution/composition'
 // RFC-391 — one passive application graph for daemon and unstarted phases.
 import type { DeploymentSelections } from './deploymentProfile'
@@ -9,15 +19,11 @@ import {
 } from './daemonSessionAdapters'
 import { composeProviderAppComposition, type ProviderAppOwnerInput } from './daemonHttpComposition'
 import type { DatabaseProvider } from '@/platform/persistence/databaseProviders'
-import { ensureCredentialsSealed } from '@/services/repoCredentials'
 import { DEFAULT_DISTILL_POLICY, resolveDistillPolicy } from '@agent-workflow/shared'
 import { setMemoryDistillPolicyProvider } from '@/modules/memory/composition'
 import { getRuntimeDriver, RUNTIME_KINDS } from '@/services/runtime'
 import { assertRuntimeDeclarations } from '@/services/runtime/selfCheck'
-import {
-  initializeRuntimeRegistryBoot,
-  type RuntimeLegacyConfigurationPort,
-} from '@/modules/runtime-management/composition/runtimeRegistry'
+import { initializeRuntimeRegistryBoot } from '@/modules/runtime-management/composition/runtimeRegistry'
 import {
   composeDaemonIntentModules,
   type DaemonIntentModules,
@@ -194,6 +200,9 @@ export interface DaemonApplicationInput<
 }
 
 export interface DaemonApplicationTestSeams<P extends DatabaseProvider = DatabaseProvider> {
+  readonly schedulerDriver?: NonNullable<
+    Parameters<typeof composeDaemonTaskExecutionModules>[0]['testSeams']
+  >['schedulerDriver']
   readonly buildScheduleLaunch?: BuildScheduleLaunch
   readonly runtimeDiagnosticTestDependencies?: Partial<RuntimeDiagnosticDependencies>
   readonly webhookDispatcher?: WebhookDispatcher
@@ -282,6 +291,25 @@ export async function composeDaemonApplication<P extends DatabaseProvider>(
   if (input.requiredProvider !== null && input.requiredProvider !== input.provider.provider)
     throw new Error('hosted-deployment-requires-postgresql')
   const log = input.log
+  const content = input.contentStore ?? createLocalRuntimeContent(input.db, input.appHome)
+  const historyRestrictions = input.historyRestrictions ?? createActiveHistoryRestrictionProvider()
+  const { nodeRunHistoryRestrictions, gateHistoryRestrictions } =
+    createHistoryRestrictionBindings(historyRestrictions)
+  const installation = await readActiveEpochInstallation(input.db)
+  await initializeClarifyHistory(input.db).catch((error: unknown) => {
+    log.warn('clarify history initialization failed; reads will retry', {
+      error: error instanceof Error ? error.message : String(error),
+    })
+  })
+  const skillContent = input.skillContent ?? createFileSkillContentBinding(input.db, input.appHome)
+  const reviewArtifacts =
+    input.reviewArtifacts ??
+    createLocalReviewArtifacts({ db: input.db, content, appHome: input.appHome })
+  const codeHistory = createCodeHistoryPackageReader({
+    db: input.db,
+    content,
+    installation: installation.history,
+  })
   const developmentPurposeRoot = composeDevelopmentPurposeRoot({
     appHome: input.appHome,
     selection: input.developmentPurposes,
@@ -398,7 +426,7 @@ export async function composeDaemonApplication<P extends DatabaseProvider>(
   const resourceCatalogModules = composeDaemonResourceCatalogModules({
     db: input.db,
     skillContentRoot: input.appHome,
-    skillContent: input.skillContent,
+    skillContent,
     pluginInstaller: input.pluginInstaller,
     runtimeProfiles: { get: (name) => core.runtimeRegistry.getRuntime(name) },
     mcpRuntime: {
@@ -441,6 +469,8 @@ export async function composeDaemonApplication<P extends DatabaseProvider>(
   const { memoryOperations, memoryCatalog } = memoryModules
   const taskExecutionModules: DaemonTaskExecutionModules<P> = composeDaemonTaskExecutionModules({
     db: input.db,
+    content,
+    historyRestrictions: nodeRunHistoryRestrictions,
     appHome: input.appHome,
     configPath: input.configPath,
     secretBox: input.secretBox,
@@ -465,7 +495,7 @@ export async function composeDaemonApplication<P extends DatabaseProvider>(
       workspaceReads,
       effects: input.taskDeletionEffects,
       archivedEvents: input.archivedNodeEvents,
-      reviewArtifacts: input.reviewArtifacts,
+      reviewArtifacts,
       reviewRollbackSnapshots: input.reviewRollbackSnapshots,
       workspaceUploads,
       inputFiles: input.taskInputFiles,
@@ -494,6 +524,10 @@ export async function composeDaemonApplication<P extends DatabaseProvider>(
       },
     },
     finalizeWorkspace: (taskId) => workspaceMaintenance.finalizeClaimedWorkspace(taskId),
+    testSeams:
+      phase.kind === 'unstarted'
+        ? { schedulerDriver: input.testSeams?.schedulerDriver }
+        : undefined,
   })
   const taskExecutionProvider = taskExecutionModules
   const taskExecutionResources = taskExecutionModules.resources
@@ -511,13 +545,11 @@ export async function composeDaemonApplication<P extends DatabaseProvider>(
   const fusionModules: DaemonFusionModules = composeDaemonFusionModules({
     db: input.db,
     appHome: input.appHome,
-    skillContent: input.skillContent,
+    skillContent,
     memories: memoryCatalog,
     tasks: taskExecutionProvider.fusion,
   })
   const { fusionOperations } = fusionModules
-  // RFC-223 PR-4 / RFC-359 W3-T15：融合 provenance 修复必须在任何融合恢复 / 播种 / HTTP 观察到历史
-  // name-only 行之前完成。fail-closed：不包 try，修复失败即 daemon 不起（两种 provider 共用）。
   const scheduledTaskModules = composeDaemonScheduledTaskModules({
     db: input.db,
     assertAgentIntegrity: (agentIds) =>
@@ -555,6 +587,7 @@ export async function composeDaemonApplication<P extends DatabaseProvider>(
   })
   const { webhookTerminalControl, eventCenter } = integrationModules
   const digitalEmployeeModules = composeDaemonDigitalEmployeeModules({
+    historyRestrictions: nodeRunHistoryRestrictions,
     graphAssist: {
       registry: core.runtimeRegistry,
       getDefaultRuntime: async () => (await configuration.read()).defaultRuntime,
@@ -562,9 +595,8 @@ export async function composeDaemonApplication<P extends DatabaseProvider>(
     },
     verificationCommands: input.verificationCommands,
     repositoryRevisionContent: input.repositoryRevisionContent,
-    reviewReader: {
-      read: (finalPath) => readCommittedReviewArtifactBody(boundCollaborationContext, finalPath),
-    },
+    content,
+    writerInstallation: installation.writer,
     db: input.db,
     appHome: input.appHome,
     configuration,
@@ -614,7 +646,6 @@ export async function composeDaemonApplication<P extends DatabaseProvider>(
   })
   const digitalEmployee = digitalEmployeeModules.module
   const digitalEmployeePlatformTools = digitalEmployeeModules.platformTools
-  const employeeWriterCutover = digitalEmployeeModules.writerCutover
   const developmentAutomation = developmentAutomationModules.automation
   // RFC-368 实现门 P2-1：资源上限与空闲收割都带真实原因取消（`resource-reaped`），状态与原因
   // 同一次写入落下——此前按 `user` 取消、事后改写原因，中间几秒像是用户取消的。
@@ -649,6 +680,8 @@ export async function composeDaemonApplication<P extends DatabaseProvider>(
     },
   })
   const http = composeProviderAppComposition({
+    historyRestrictions: gateHistoryRestrictions,
+    codeHistory,
     db: input.db,
     token: input.token,
     appHome: input.appHome,
@@ -681,7 +714,7 @@ export async function composeDaemonApplication<P extends DatabaseProvider>(
     selections: {
       resourcePackageSkillArtifacts: input.resourcePackageSkillArtifacts,
       resourcePackagePluginArtifacts: input.resourcePackagePluginArtifacts,
-      resourcePackageSkillContent: input.resourcePackageSkillContent,
+      resourcePackageSkillContent: input.resourcePackageSkillContent ?? skillContent.packageContent,
       workspaceContent: input.workspaceContent,
       runtimeInventoryContent: input.runtimeInventoryContent,
       repositoryRevisionContent: input.repositoryRevisionContent,
@@ -707,10 +740,9 @@ export async function composeDaemonApplication<P extends DatabaseProvider>(
     'runtime-registry': async () => {
       await initializeRuntimeRegistryBoot({
         operations: core.runtimeRegistry,
-        config: input.config,
-        legacyConfiguration: requireRuntimeLegacyConfiguration(input.runtimeLegacyConfiguration),
+        configuration: await configuration.read(),
         onRecoverableFailure(error) {
-          log.warn('builtin runtime seed/migration on boot failed', {
+          log.warn('builtin runtime seed on boot failed', {
             error: error instanceof Error ? error.message : String(error),
           })
         },
@@ -731,13 +763,6 @@ export async function composeDaemonApplication<P extends DatabaseProvider>(
         }
       })
     },
-    'repository-url-sealing': providerBootStep(
-      input.provider.provider,
-      'repository-url-sealing',
-      async () => {
-        await ensureCredentialsSealed(core.repositoryWorkspaceStore, input.secretBox)
-      },
-    ),
     'transport-projections': async () => {
       await reconcileRepositoryTransportConnectionProjections(
         repositoryTransportRepository,
@@ -753,19 +778,8 @@ export async function composeDaemonApplication<P extends DatabaseProvider>(
     'daemon-identity': providerBootStep(input.provider.provider, 'daemon-identity', async () => {
       await core.daemonActor('postgresql-daemon-system-identity-not-admitted')
     }),
-    'skill-identity-barrier': async () => {
-      const report = await skillCatalogBoot.runIdentityMigrationBarrier()
-      if (report.recoveredOperations > 0 || report.removedHusks > 0 || report.migratedSkills > 0) {
-        log.info('skill identity migration barrier complete', { ...report })
-      }
-    },
-    'fusion-provenance': async () => {
-      const { repairFusionProvenance } =
-        await import('@/modules/knowledge-evolution/public/operations')
-      const report = await repairFusionProvenance(fusionOperations.persistence)
-      if (Object.values(report).some((count) => count > 0)) {
-        log.info('fusion provenance repair complete', { ...report })
-      }
+    'skill-operation-recovery': async () => {
+      await skillCatalogBoot.recoverOperations()
     },
     'skill-availability-gate': async () => {
       skillCatalogBoot.activateAvailabilityGate()
@@ -810,13 +824,6 @@ export async function composeDaemonApplication<P extends DatabaseProvider>(
         log.info('terminal workspace maintenance recovery', { ...workspaceRecovery })
       }
     },
-    'scheduled-payload-heal': async () => {
-      const { healScheduledLaunchPayloads } = await import('@/services/scheduledTasks')
-      const healed = await healScheduledLaunchPayloads(scheduledTaskRuntime.operations)
-      if (healed.converted > 0 || healed.disabled > 0) {
-        log.info('scheduled launch payloads healed', healed)
-      }
-    },
     'fusion-decision-recovery': async () => {
       const { recoverFusionDecisions } =
         await import('@/modules/knowledge-evolution/public/operations')
@@ -850,10 +857,6 @@ export async function composeDaemonApplication<P extends DatabaseProvider>(
     'employee-authoring-ready': async () => {
       await digitalEmployee.maintenance.ready()
       await digitalEmployeeModules.initializeGraph()
-    },
-    'employee-writer-state': async () => {
-      const writer = await employeeWriterCutover.activate()
-      log.info('digital employee writer activated', { ...writer })
     },
     'task-execution-recovery': async () => {
       await runTaskExecutionBootRecovery({
@@ -890,7 +893,6 @@ export async function composeDaemonApplication<P extends DatabaseProvider>(
         log.info('webhook deliveries marked interrupted', { count: recoveredDeliveries })
       }
     },
-    'legacy-mission-recovery': () => developmentAutomationModules.recoverWhileDraining(),
     'employee-upgrade-settlement': async () => {
       await digitalEmployee.maintenance.settleAutomaticUpgrades()
     },
@@ -908,12 +910,9 @@ export async function composeDaemonApplication<P extends DatabaseProvider>(
     },
     'resource-reverify': async () => {
       try {
-        const bf = await skillCatalogBoot.backfillLegacyVersions()
         const r = await skillCatalogBoot.reverifySnapshots()
         log.info('boot snapshot reverify', {
           ...r,
-          legacyBackfilled: bf.backfilled,
-          husksRemoved: bf.husksRemoved,
         })
       } catch (error) {
         log.warn('boot snapshot reverify failed', {
@@ -1014,11 +1013,4 @@ function providerBootStep(
 function requireStartupLease(lease: DaemonStartupLease | undefined): DaemonStartupLease {
   if (lease === undefined) throw new Error('daemon-startup-lease-required')
   return lease
-}
-
-function requireRuntimeLegacyConfiguration(
-  configuration: RuntimeLegacyConfigurationPort | undefined,
-): RuntimeLegacyConfigurationPort {
-  if (configuration === undefined) throw new Error('daemon-runtime-legacy-configuration-required')
-  return configuration
 }

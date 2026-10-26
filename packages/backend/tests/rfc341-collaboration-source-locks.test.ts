@@ -144,9 +144,12 @@ describe('RFC-341 collaboration owner source locks', () => {
     const writer = source('modules/collaboration/infrastructure/clarifyAnswerWrite.ts')
     expect(answers).toContain('freezeAnswerAttributions({')
     expect(writer).toContain('projectClarifyAnswers(transition.state)')
-    expect(writer).toContain(
-      'answerAttributionsJson: JSON.stringify(projection.answerAttributions)',
-    )
+    // RFC-395 keeps attribution freeze in the same seal transaction, now as
+    // independent rows. Answer/draft revisions retain the lost-update guard.
+    expect(writer).toContain('tx.insert(clarifyAnswerAttributions)')
+    expect(writer).toContain('eq(clarifyAnswers.revision, previous.revision)')
+    expect(writer).toContain('eq(clarifyAnswerDrafts.revision, draft.revision)')
+    expect(writer).not.toContain('answerAttributionsJson:')
     expect(seal).toContain(
       'await createClarifyAnswerWritePort(args.db).seal(tx, round.id, transition)',
     )

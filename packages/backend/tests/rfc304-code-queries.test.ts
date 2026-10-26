@@ -1,3 +1,9 @@
+import {
+  seedCodeHistoryRows,
+  historyFixtureReader,
+  seedEmptyCodeHistory,
+  type HistoryFixtureInsert,
+} from './helpers/legacyCapabilitySeed'
 import { createAgentExecutionQueries } from '@/modules/resource-catalog/public/queries'
 // RFC-304 T31b — the read side of `/code`, and the command that flips a cell.
 //
@@ -13,7 +19,7 @@ import { createAgentExecutionQueries } from '@/modules/resource-catalog/public/q
 
 import { agentFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeEach, describe, expect, test } from 'bun:test'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
@@ -38,11 +44,14 @@ const ENDPOINT = 'ep-1'
 const createCodeMatrixQuery = (db: PersistenceDb) =>
   createCodeMatrixQueryFromPort(createCapabilityMatrixRead(db, createAgentExecutionQueries(db)))
 const createCodeWorkItemProjectionQuery = (db: PersistenceDb) =>
-  createCodeWorkItemProjectionQueryFromPort(createWorkItemProjectionRead(db))
+  createCodeWorkItemProjectionQueryFromPort(createWorkItemProjectionRead(historyFixtureReader(db)))
 const createCodeRoundAttemptsQuery = (db: PersistenceDb) =>
-  createCodeRoundAttemptsQueryFromPort(createRoundAttemptsRead(db))
+  createCodeRoundAttemptsQueryFromPort(createRoundAttemptsRead(historyFixtureReader(db)))
 
 describeEachProvider('RFC-304 — the capability matrix a page renders', (harness) => {
+  beforeEach(async () => {
+    await seedEmptyCodeHistory(harness.db)
+  })
   let db: PersistenceDb
   beforeEach(() => {
     db = harness.db
@@ -169,6 +178,9 @@ test('every readiness code has a repair route', async () => {
 })
 
 describeEachProvider('RFC-304 — the work-item projection', (harness) => {
+  beforeEach(async () => {
+    await seedEmptyCodeHistory(harness.db)
+  })
   let db: PersistenceDb
   beforeEach(() => {
     db = harness.db
@@ -179,8 +191,7 @@ describeEachProvider('RFC-304 — the work-item projection', (harness) => {
   // per capability — so seeding two for the same MR is a fixture that could not
   // exist in production.
   const seedItem = async (id: string, createdAt: number, capability = 'mr-review') => {
-    const { codeWorkItems } = tablesOf(db)
-    await insertOne(db, codeWorkItems, {
+    await seedCodeHistoryRows(db, 'code_work_items', {
       id,
       codeHostEndpointId: ENDPOINT,
       stableProjectId: '41823',
@@ -252,8 +263,9 @@ describeEachProvider('RFC-304 — the work-item projection', (harness) => {
     // Naming the number rather than saying "recent rounds": a count cannot be
     // misread as completeness, and a phrase can.
     await seedItem('busy', NOW)
-    const { codeWorkRounds } = tablesOf(db)
-    await db.insert(codeWorkRounds).values(
+    await seedCodeHistoryRows(
+      db,
+      'code_work_rounds',
       Array.from({ length: 12 }, (_, i) => ({
         id: `h${String(i)}`,
         workItemId: 'busy',
@@ -274,8 +286,7 @@ describeEachProvider('RFC-304 — the work-item projection', (harness) => {
     // unconditionally cannot accidentally suppress the truncation notice by
     // treating "no key" as "nothing hidden".
     await seedItem('quiet', NOW)
-    const { codeWorkRounds } = tablesOf(db)
-    await insertOne(db, codeWorkRounds, {
+    await seedCodeHistoryRows(db, 'code_work_rounds', {
       id: 'only',
       workItemId: 'quiet',
       roundSeq: 1,
@@ -294,8 +305,9 @@ describeEachProvider('RFC-304 — the work-item projection', (harness) => {
     // is the response size T66 exists to bound. Asking about ONE item is the
     // different question, and the design answers it with "current + last 20".
     await seedItem('busy', NOW)
-    const { codeWorkRounds } = tablesOf(db)
-    await db.insert(codeWorkRounds).values(
+    await seedCodeHistoryRows(
+      db,
+      'code_work_rounds',
       Array.from({ length: 30 }, (_, i) => ({
         id: `w${String(i)}`,
         workItemId: 'busy',
@@ -318,8 +330,9 @@ describeEachProvider('RFC-304 — the work-item projection', (harness) => {
     // carries a merge request's entire history, which is the shape §11.4's
     // arithmetic says will exist by the third month.
     await seedItem('busy', NOW)
-    const { codeWorkRounds } = tablesOf(db)
-    await db.insert(codeWorkRounds).values(
+    await seedCodeHistoryRows(
+      db,
+      'code_work_rounds',
       Array.from({ length: 30 }, (_, i) => ({
         id: `c${String(i)}`,
         workItemId: 'busy',
@@ -347,8 +360,9 @@ describeEachProvider('RFC-304 — the work-item projection', (harness) => {
     // raising it — or losing the limit in a refactor — would have been silent
     // until somebody opened `/code` on a long-lived merge request.
     await seedItem('busy', NOW)
-    const { codeWorkRounds } = tablesOf(db)
-    await db.insert(codeWorkRounds).values(
+    await seedCodeHistoryRows(
+      db,
+      'code_work_rounds',
       Array.from({ length: 12 }, (_, i) => ({
         id: `r${String(i)}`,
         workItemId: 'busy',
@@ -371,8 +385,7 @@ describeEachProvider('RFC-304 — the work-item projection', (harness) => {
 
   test('rounds and their stages are projected in reading order', async () => {
     await seedItem('item-1', NOW)
-    const { codeWorkRounds, codeRoundStages } = tablesOf(db)
-    await insertOne(db, codeWorkRounds, {
+    await seedCodeHistoryRows(db, 'code_work_rounds', {
       id: 'round-1',
       workItemId: 'item-1',
       roundSeq: 1,
@@ -381,7 +394,7 @@ describeEachProvider('RFC-304 — the work-item projection', (harness) => {
       startedAt: NOW,
       endedAt: NOW + 10,
     })
-    await db.insert(codeRoundStages).values([
+    await seedCodeHistoryRows(db, 'code_round_stages', [
       {
         id: 's2',
         roundId: 'round-1',
@@ -428,17 +441,17 @@ describe('RFC-304 — a round’s status is derived, not stored', () => {
   })
 })
 describeEachProvider('RFC-304 T55 — a round’s AI attempts', (harness) => {
+  beforeEach(async () => {
+    await seedEmptyCodeHistory(harness.db)
+  })
   let db: PersistenceDb
 
   beforeEach(() => {
     db = harness.db
   })
 
-  const attempt = async (
-    over: Partial<PersistenceTables['codeAiAttempts']['$inferInsert']> = {},
-  ) => {
-    const { codeAiAttempts } = tablesOf(db)
-    await insertOne(db, codeAiAttempts, {
+  const attempt = async (over: HistoryFixtureInsert<'code_ai_attempts'> = {}) => {
+    await seedCodeHistoryRows(db, 'code_ai_attempts', {
       id: over.id ?? `att-${String(Math.random()).slice(2, 8)}`,
       roundId: 'round-1',
       stageName: 'review-shard',

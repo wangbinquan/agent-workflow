@@ -1,3 +1,5 @@
+import type { HistoryRestrictionPort as ImportedHistoryRestrictionPort } from '@/platform/contracts/historyRestriction'
+import type { ContentStore as ImportedContentStore } from '@/platform/content/contentStore'
 // RFC-394: deployment contracts are declared once, independently of the startup sequence.
 import type { RepositoryPublicationTransport } from '@/modules/source-control/public/types'
 import type { TaskInputFiles } from '@/modules/task-execution/composition/crewstationTaskInputFiles'
@@ -75,7 +77,6 @@ import type {
   ResourcePackagePluginArtifactOwner,
   SkillPackageContentReader,
 } from '@/modules/resource-catalog/composition/postgresqlResourcePackageCatalog'
-import type { RuntimeLegacyConfigurationPort } from '@/modules/runtime-management/composition/runtimeRegistry'
 import type { MissionInputBlobPersistence } from '@/modules/development-automation/composition/missionInputUploads'
 import type { TaskArchiveContentBinding } from '@/modules/task-execution/composition/taskArchiveMaintenance'
 import type { IntentArtifactSelection } from '@/modules/intent/composition/apply'
@@ -108,8 +109,10 @@ export interface DeploymentProfile {
 }
 
 export interface DeploymentSelections {
+  readonly historyRestrictions?: ImportedHistoryRestrictionPort
+  readonly contentStore?: ImportedContentStore
+
   applicationConfiguration?: ApplicationConfigurationBinding
-  runtimeLegacyConfiguration?: RuntimeLegacyConfigurationPort
   databasePreOpenRecovery?: DaemonDatabasePreOpenRecoveryPort
   databaseInstallation?: DaemonDatabaseInstallationPort
   taskArchive?: TaskArchiveContentBinding

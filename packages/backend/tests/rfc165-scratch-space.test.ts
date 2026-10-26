@@ -1,6 +1,6 @@
-import { readTaskFixtures, workflowFixture, readTaskRepoFixtures } from './helpers/model'
-import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { readTaskFixtures, readTaskRepoFixtures, workflowFixture } from './helpers/model'
 import { launchTestTask } from './helpers/productionTaskLaunch'
 // RFC-395 II-pre：GC 改接生产 workspaceMaintenance，断言其回执及实际目录 / 行状态。
 import { workspaceMaintenanceForTest } from './helpers/workspaceMaintenance'
@@ -35,18 +35,16 @@ import {
   writeFileSync,
 } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 
 import { materializeSpace } from './helpers/legacyTaskWorkspace'
 
-import { materializingSpaces } from '@/platform/workspace/materializingSpaces'
 import { WORKSPACE_ORPHAN_MIN_AGE_MS } from '@/modules/source-control/application/workspaceMaintenance'
+import { materializingSpaces } from '@/platform/workspace/materializingSpaces'
 import { runGit } from '../src/util/git'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
-
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 interface Harness {
   db: DbClient
@@ -57,7 +55,7 @@ interface Harness {
 // RFC-395 II-a: finish async workflow seeding before opening the launch transaction.
 async function buildHarness(): Promise<Harness> {
   const appHome = mkdtempSync(join(tmpdir(), 'aw-rfc165-scratch-'))
-  const db = createInMemoryDb(MIGRATIONS)
+  const db = createInMemoryDb()
   await workflowFixture(db, {
     id: 'wf-scratch',
     name: 'wf',
@@ -323,7 +321,7 @@ describe('RFC-165 T2a — scratch-space materialization', () => {
       get(target, prop, receiver) {
         if (prop === 'insert') {
           return (table: unknown) => {
-            const { taskRepos } = tablesOf(h.db)
+            const { taskRepositoryMounts: taskRepos } = tablesOf(h.db)
             if (table === taskRepos) throw new Error('boom-task-repos-insert')
             return (target as unknown as { insert: (t: unknown) => unknown }).insert(table)
           }

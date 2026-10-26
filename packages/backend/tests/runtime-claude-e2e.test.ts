@@ -1,3 +1,4 @@
+import type { NodeRunFixtureRow } from './helpers/model/nodeRun'
 // RFC-111 PR-B — end-to-end runNode against the claude-code runtime via the
 // mock-claude harness (no real API). Locks the claude headless contract:
 // argv (-p / --output-format stream-json / --append-system-prompt-file / --model
@@ -8,7 +9,7 @@
 // process; the next root frame's native id becomes the resumable identity.
 
 import { nodeRunFixture, readNodeRunFixtures, taskFixture, workflowFixture } from './helpers/model'
-import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { rawExec } from '@/platform/persistence/queryHelpers'
 import type { Agent, RuntimeInventoryObservation } from '@agent-workflow/shared'
 import { afterEach, beforeEach, expect, test } from 'bun:test'
@@ -229,14 +230,11 @@ describeEachProvider('runNode — claude-code runtime (RFC-111 PR-B)', (harness)
       () => runClaude({ agent, nodeRunId, h }),
     )
 
-    let inFlightRow: PersistenceTables['nodeRuns']['$inferSelect'] | undefined
+    let inFlightRow: NodeRunFixtureRow | undefined
     let observationError: unknown
     try {
       await waitForFirstRuntimeEvent(h.db, nodeRunId)
-      const { nodeRuns } = tablesOf(h.db)
-      inFlightRow = (
-        await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, nodeRunId)).limit(1)
-      )[0]
+      inFlightRow = (await readNodeRunFixtures(h.db, { id: nodeRunId }))[0]
     } catch (err) {
       observationError = err
     } finally {

@@ -12,8 +12,12 @@ import {
   skillFilesRel,
   skillVersionRelPath,
   assertPathSegment,
-} from '@/platform/content/legacySkill'
-export { skillRootRel, skillFilesRel, skillVersionRelPath } from '@/platform/content/legacySkill'
+} from '@/platform/content/locations/skill'
+export {
+  skillRootRel,
+  skillFilesRel,
+  skillVersionRelPath,
+} from '@/platform/content/locations/skill'
 
 export interface SkillOperationIdentity {
   skillId: string
@@ -143,4 +147,4 @@ export function realDirectoryChainState(root: string, target: string): RealDirec
  * prefix. Rebase the suffix rooted at `skills/` into the current appHome and
  * reject any value that cannot be proven to stay inside the current skills root.
  */
-export { rebaseSkillOperationPath } from '@/platform/content/legacySkill'
+export { rebaseSkillOperationPath } from '@/platform/content/locations/skill'

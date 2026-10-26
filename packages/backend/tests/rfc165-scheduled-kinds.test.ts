@@ -27,7 +27,7 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { buildActor, type Actor } from '../src/auth/actor'
@@ -45,12 +45,14 @@ import { composeDeferredRepositoryPreparation } from '../src/modules/task-execut
 import { createTestTaskDriveCoordinator } from './helpers/legacyTaskDrive'
 
 import { composeRuntimeRegistryOperations } from './helpers/runtimeRegistryComposition'
-import { fireSchedule, getScheduledTaskRow } from './helpers/integrationTriggerResourceBinding'
 import {
+  fireSchedule,
+  getScheduledTaskRow,
   createScheduledTaskWithIntegrationTriggerResources as createScheduledTask,
   updateScheduledTaskWithIntegrationTriggerResources as updateScheduledTask,
   withIntegrationTriggerResources,
 } from './helpers/integrationTriggerResourceBinding'
+
 import { createUser } from './helpers/userFixture'
 import { registerProviderHttpApplicationLifetime } from './helpers/providerHttpApplication'
 import type { Hono } from 'hono'
@@ -72,8 +74,6 @@ const T6_ACTOR = buildActor({
   user: { id: 'u-t6-test', username: 'u-t6', displayName: 'T6', role: 'admin', status: 'active' },
   source: 'session',
 })
-
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 const SPEC = { kind: 'daily', at: '09:00', timezone: 'UTC' } as const
 const VALID_OPENCODE_RUNTIME = 'rfc224-test-opencode'
@@ -177,7 +177,7 @@ describe('RFC-165 §9b — create/update by kind (K1/K2/K3/K7)', () => {
   let db: DbClient
   let ownerId: string
   beforeEach(async () => {
-    db = createInMemoryDb(MIGRATIONS)
+    db = createInMemoryDb()
     await seedValidOpencodeRuntime(db)
     ownerId = await seedOwner(db)
   })
@@ -470,7 +470,7 @@ describe('RFC-165 §9b — fire dispatch by kind (K4/K5)', () => {
   let appHome: string
   let ownerId: string
   beforeEach(async () => {
-    db = createInMemoryDb(MIGRATIONS)
+    db = createInMemoryDb()
     await seedValidOpencodeRuntime(db)
     appHome = mkdtempSync(join(tmpdir(), 'aw-rfc165-kinds-'))
     process.env.AGENT_WORKFLOW_HOME = appHome
@@ -641,7 +641,7 @@ describe('RFC-165 §9b — N1-r3 permission matrix over HTTP (K6)', () => {
   let wfId: string
 
   beforeEach(async () => {
-    db = createInMemoryDb(MIGRATIONS)
+    db = createInMemoryDb()
     appHome = mkdtempSync(join(tmpdir(), 'aw-rfc165-kinds-http-'))
     process.env.AGENT_WORKFLOW_HOME = appHome
     app = (

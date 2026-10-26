@@ -1,3 +1,4 @@
+import { decodeTaskRollbackCheckpoints } from '@/modules/task-execution/infrastructure/migration/run/legacyCheckpointCodec'
 // RFC-395 II-pre：改接生产启动 / 读取路径，保留原断言意图。
 // LOCKS: RFC-066 PR-B T13 — resume per-repo rollback. The single-repo path
 // RFC-165: multi-repo/pre-created PATH bodies are the framework-internal face
@@ -17,15 +18,19 @@
 //      the stash) — proves the helper followed the right code path.
 
 import { legacyStashSnapshotFixture } from './helpers/legacyStashSnapshot'
-import { nodeRunFixture, patchTaskFixture, workflowFixture } from './helpers/model'
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import {
+  nodeRunFixture,
+  patchTaskFixture,
+  workflowFixture,
+  readNodeRunFixtures,
+  checkpointValues,
+} from './helpers/model'
+
 import { afterEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import type { StartTask } from '@agent-workflow/shared'
 import { mkdtempSync, writeFileSync, readFileSync } from 'node:fs'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { eq } from 'drizzle-orm'
 
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { removeTempDirSync } from './fixtures/tempDir'
@@ -35,8 +40,6 @@ import { runGit } from '../src/util/git'
 import { seedRepoGroup } from './helpers/repoGroupFixture'
 import { createResumeEngine } from './helpers/resumeEngine'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
-
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 interface Harness {
   db: DbClient
@@ -59,7 +62,7 @@ async function buildHarness(repoCount: number): Promise<Harness> {
     await runGit(repoPath, ['commit', '-q', '-m', 'init'])
     repos.push(repoPath)
   }
-  const db = createInMemoryDb(MIGRATIONS)
+  const db = createInMemoryDb()
   await workflowFixture(db, {
     id: 'wf-rb',
     name: 'wf',
@@ -86,7 +89,7 @@ describe('RFC-066 PR-B T13 — resume per-repo rollback', () => {
   let h: Harness
   afterEach(() => h?.cleanup())
 
-  test('B19 single-repo: rollback uses pre_snapshot single sha; pre_snapshot_repos_json stays NULL', async () => {
+  test('B19 single-repo: rollback uses the root checkpoint only', async () => {
     h = await buildHarness(1)
     const task = await launchTestTaskWithLocalRepo(
       {
@@ -114,7 +117,6 @@ describe('RFC-066 PR-B T13 — resume per-repo rollback', () => {
     // body and restore the snapshot-time body.
     writeFileSync(join(task.worktreePath, 'data.txt'), 'POST-MUTATION\n')
 
-    const { nodeRuns } = tablesOf(h.db)
     await nodeRunFixture(h.db, {
       id: 'nr-single',
       taskId: task.id,
@@ -131,14 +133,12 @@ describe('RFC-066 PR-B T13 — resume per-repo rollback', () => {
     }).resume(task.id)
 
     expect(readFileSync(join(task.worktreePath, 'data.txt'), 'utf-8')).toBe('SNAPSHOT-TIME\n')
-    const rerow = (
-      await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, 'nr-single')).limit(1)
-    )[0]!
-    expect(rerow.preSnapshotReposJson).toBeNull()
-    expect(rerow.preSnapshot).toBe(snapSha)
+    const rerow = (await readNodeRunFixtures(h.db, { id: 'nr-single' }))[0]!
+    expect(rerow.checkpoints.map((checkpoint) => checkpoint.mountPath)).toEqual([''])
+    expect(checkpointValues(rerow.checkpoints, 'preSnapshot')).toEqual({ '': snapSha })
   })
 
-  test('B20 multi-repo: rollback honors pre_snapshot_repos_json map; each sub-worktree restored independently', async () => {
+  test('B20 multi-repo: rollback honors mount checkpoints; each sub-worktree restored independently', async () => {
     h = await buildHarness(2)
     const task = await launchTestTask(
       {
@@ -191,7 +191,7 @@ describe('RFC-066 PR-B T13 — resume per-repo rollback', () => {
     expect(readFileSync(join(r1.worktreePath, 'data.txt'), 'utf-8')).toBe('SNAP-B\n')
   })
 
-  test('B21 multi-repo: malformed pre_snapshot_repos_json → defensive fallback to legacy pre_snapshot single sha path', async () => {
+  test('B21 multi-repo: malformed historical checkpoints decode to no rollback and resume succeeds', async () => {
     h = await buildHarness(2)
     const task = await launchTestTask(
       {
@@ -209,21 +209,24 @@ describe('RFC-066 PR-B T13 — resume per-repo rollback', () => {
         launchProvenance: { kind: 'direct-json', initiator: 'manual' },
       },
     )
-    const { nodeRuns } = tablesOf(h.db)
-    // Garbage in repos_json AND provide a legacy single-stash fallback. The
-    // helper logs a warn and falls through to the single-stash branch,
-    // which rolls `task.worktreePath` (the parent dir — not a git repo
-    // in multi-repo mode). The rollback call itself fails on the parent,
-    // BUT the helper swallows that failure with a warn so resumeTask
-    // proceeds to flip task → pending. This test simply asserts that
-    // resumeTask does NOT throw on malformed JSON — defense-in-depth.
-    await insertOne(h.db, nodeRuns, {
-      id: 'nr-malformed',
+    // Epoch 1's malformed map cannot be stored in epoch 2. Keep its decode assertion,
+    // then exercise resume with the resulting absence of usable checkpoint data.
+    const decoded = decodeTaskRollbackCheckpoints(
+      {
+        id: 'nr-malformed',
+        preSnapshotReposJson: '{not valid json',
+        preSnapshot: '',
+      },
+      task.repos.map((repo) => repo.worktreeDirName),
+    )
+    expect(decoded.checkpointParseError).not.toBeNull()
+    expect(decoded.checkpoints).toEqual([])
+    await nodeRunFixture(h.db, {
+      id: decoded.id,
       taskId: task.id,
       nodeId: 'fake-node',
       status: 'failed',
-      preSnapshotReposJson: '{not valid json',
-      preSnapshot: '', // empty sha → helper short-circuits on legacy path
+      checkpoints: decoded.checkpoints,
     })
     await patchTaskFixture(h.db, { id: task.id }, { status: 'failed' })
 

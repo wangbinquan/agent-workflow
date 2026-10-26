@@ -1,3 +1,4 @@
+import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 // RFC-368 T7 —— `ReactionExecutionPortV1` 的 TaskExecution 适配器与它背后的 typed 核心。
 //
 // 三组锁：
@@ -333,7 +334,10 @@ describe('RFC-368 T7 —— 核心的 stopped 判据与人审六态（真库）'
 
     function core() {
       return composeDigitalEmployeeExecutionCore({
-        ...composeDatabaseDigitalEmployeeExecutionPorts(harness.db),
+        ...composeDatabaseDigitalEmployeeExecutionPorts(
+          harness.db,
+          epoch2RuntimeTestPorts(harness.db).historyRestrictions,
+        ),
       } as unknown as DigitalEmployeeExecutionDependencies)
     }
 

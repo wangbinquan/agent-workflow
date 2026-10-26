@@ -1,3 +1,5 @@
+import { initializeTaskWorkspace } from './helpers/taskWorkspaceFixture'
+import { withTargetMintIdentity } from './helpers/rfc395Mint'
 // RFC-313 T8 — 会话升级的 scheduler 集成：接续链触顶后必须整体换一个干净会话重来。
 //
 // 为什么这条测试存在：RFC-042 之后，「agent 每次正常退出、每次说话、每次不吐信封」
@@ -10,7 +12,6 @@
 //   ③ 链中途崩溃只归零链长、**不**消耗升级预算（崩溃是别无选择，不是主动放弃）。
 // 形状判定本身的真值表在 packages/shared/tests/rfc313-retry-shape.test.ts。
 
-import { deriveNodeRunRole } from '@/modules/task-execution/public/types'
 import {
   agentFixture,
   readTaskFixtures,
@@ -24,7 +25,7 @@ import type { WorkflowDefinition } from '@agent-workflow/shared'
 import { RETRY_ATTEMPT_CAP_CEILING } from '../src/platform/contracts/retryAttemptCap'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
@@ -36,7 +37,6 @@ import { mintNodeRun } from '../src/services/nodeRunMint'
 import { ASSEMBLY_MAX_ATTEMPTS } from '../src/services/schedulerAssembly'
 import { readNodeRunPrompt } from '@/modules/task-execution/public/queries'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
 const RESTART_NOTICE_MARK = 'Note on an earlier attempt'
 const PROMPT_TEMPLATE = 'RFC313-TEMPLATE-MARKER: do the work'
@@ -55,11 +55,11 @@ interface Harness {
 function buildHarness(): Harness {
   const appHome = mkdtempSync(join(tmpdir(), 'aw-rfc313-'))
   const worktreePath = join(appHome, 'wt')
-  mkdirSync(worktreePath, { recursive: true })
+  initializeTaskWorkspace(worktreePath)
   const argvLog = join(appHome, 'argv.log')
   writeFileSync(argvLog, '')
   return {
-    db: createInMemoryDb(MIGRATIONS),
+    db: createInMemoryDb(),
     appHome,
     worktreePath,
     argvLog,
@@ -345,15 +345,19 @@ describe('RFC-313 会话升级', () => {
     const taskId = await seedTask(h, singleAgentDef(await seedAgent(h.db, 'a1')))
     // 用仓内既有的铸行原语而不是手写 INSERT：手写行既缺必填列（nodePath 等），
     // 也会与真实铸行逐渐漂移。
-    const runId = await mintNodeRun(h.db, {
-      ...deriveNodeRunRole({ nodeId: 'n1', rerunCause: 'process-retry' }),
-      taskId,
-      nodeId: 'n1',
-      status: 'failed',
-      cause: 'process-retry',
-      retryIndex: 0,
-      iteration: 0,
-    })
+    const runId = await mintNodeRun(
+      h.db,
+      withTargetMintIdentity({
+        role: 'node-attempt',
+        syntheticKind: null,
+        taskId,
+        nodeId: 'n1',
+        status: 'failed',
+        cause: 'process-retry',
+        retryIndex: 0,
+        iteration: 0,
+      }),
+    )
     const ev = (payload: string) => ({
       nodeRunId: runId,
       ts: Date.now(),

@@ -112,3 +112,5 @@ export function composeLegacyIntentSkillArtifactCompat() {
       first(skillOperationStateQuery(db, opId)),
   })
 }
+
+export { createSkillContentLocationQuery } from '../infrastructure/databaseSkillTrees'

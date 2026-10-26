@@ -41,7 +41,9 @@ test('the real startup root selects one lazy lease and encloses boot in its fail
   expect(boot).toContain('await initial.session.resume(lifecycle)')
   expect(boot).toContain('await serveDaemon({')
   const releases = calls(start, 'lock.release')
-  expect(releases).toHaveLength(4)
+  // Installation classification now throws through runDaemonStartupWithLease; the three
+  // explicit process-exit paths must still await release.
+  expect(releases).toHaveLength(3)
   for (const call of releases) expect(ts.isAwaitExpression(call.parent)).toBe(true)
   for (const native of [
     'acquireLock',

@@ -1,3 +1,6 @@
+import { nodeRunFixtureColumns } from './helpers/model/nodeRun'
+import { taskReadColumns } from '@/modules/task-execution/infrastructure/taskRepositorySql'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 // RFC-359 AC-1（第 11 刀第 1 步）—— **`cancel` 的准入与级联，两个引擎给同一个答案吗**。
 //
 // 为什么这条测试存在
@@ -32,7 +35,7 @@ import {
   workflowFixture,
 } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+
 import { afterEach, expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -264,9 +267,19 @@ async function cancelOutcome(
     code = codeOf(error)
   }
   const { tasks, nodeRuns } = tablesOf(harness.db)
-  const after = (await harness.db.select().from(tasks).where(eq(tasks.id, target)).limit(1))[0]
+  const after = (
+    await harness.db
+      .select(taskReadColumns(harness.db))
+      .from(tasks)
+      .where(eq(tasks.id, target))
+      .limit(1)
+  )[0]
   const run = (
-    await harness.db.select().from(nodeRuns).where(eq(nodeRuns.id, fixture.nodeRunId)).limit(1)
+    await harness.db
+      .select(nodeRunFixtureColumns(harness.db))
+      .from(nodeRuns)
+      .where(eq(nodeRuns.id, fixture.nodeRunId))
+      .limit(1)
   )[0]
   return { code, status: after?.status ?? 'absent', run: run?.status ?? 'absent' }
 }
@@ -325,7 +338,11 @@ describeEachProvider('RFC-359 W11 —— cancel 的准入与级联对拍', (harn
     expect(outcome.status).toBe('canceled')
     const { tasks } = tablesOf(harness.db)
     const child = (
-      await harness.db.select().from(tasks).where(eq(tasks.id, seeded.childTaskId!)).limit(1)
+      await harness.db
+        .select(taskReadColumns(harness.db))
+        .from(tasks)
+        .where(eq(tasks.id, seeded.childTaskId!))
+        .limit(1)
     )[0]
     expect(child?.status).toBe('canceled')
     expect(child?.errorMessage).toBe('canceled-by-parent-cascade')
@@ -363,14 +380,22 @@ describeEachProvider('RFC-359 W11 —— cancel 的准入与级联对拍', (harn
     await Bun.sleep(250)
     const { tasks } = tablesOf(harness.db)
     const midway = (
-      await harness.db.select().from(tasks).where(eq(tasks.id, seeded.taskId)).limit(1)
+      await harness.db
+        .select(taskReadColumns(harness.db))
+        .from(tasks)
+        .where(eq(tasks.id, seeded.taskId))
+        .limit(1)
     )[0]
     expect(midway?.status, '取消必须排在评审变更槽之后，而不是插进去').toBe('running')
     release()
     await holder
     await canceling
     const after = (
-      await harness.db.select().from(tasks).where(eq(tasks.id, seeded.taskId)).limit(1)
+      await harness.db
+        .select(taskReadColumns(harness.db))
+        .from(tasks)
+        .where(eq(tasks.id, seeded.taskId))
+        .limit(1)
     )[0]
     expect(after?.status, '槽释放之后取消照常落地').toBe('canceled')
   }, 30_000)
@@ -383,7 +408,11 @@ describeEachProvider('RFC-359 W11 —— cancel 的准入与级联对拍', (harn
     expect(outcome.code).toBe('no-throw')
     const { tasks } = tablesOf(harness.db)
     const after = (
-      await harness.db.select().from(tasks).where(eq(tasks.id, seeded.taskId)).limit(1)
+      await harness.db
+        .select(taskReadColumns(harness.db))
+        .from(tasks)
+        .where(eq(tasks.id, seeded.taskId))
+        .limit(1)
     )[0]
     expect({ summary: after?.errorSummary, message: after?.errorMessage }).toEqual({
       summary: 'canceled by user',
@@ -397,7 +426,10 @@ describeEachProvider('RFC-359 W11 —— cancel 的准入与级联对拍', (harn
     const outcome = await cancelOutcome(harness, seeded)
     expect(outcome.code).toBe('no-throw')
     const { nodeRuns } = tablesOf(harness.db)
-    const rows = await harness.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, seeded.taskId))
+    const rows = await harness.db
+      .select(nodeRunFixtureColumns(harness.db))
+      .from(nodeRuns)
+      .where(eq(nodeRuns.taskId, seeded.taskId))
     expect(rows).toHaveLength(3)
     expect(
       rows.map((row) => row.status).sort(),
@@ -432,7 +464,11 @@ describeEachProvider('RFC-359 W11 —— cancel 的准入与级联对拍', (harn
     expect(outcome.status).toBe('canceled')
     const { tasks } = tablesOf(harness.db)
     const child = (
-      await harness.db.select().from(tasks).where(eq(tasks.id, seeded.childTaskId!)).limit(1)
+      await harness.db
+        .select(taskReadColumns(harness.db))
+        .from(tasks)
+        .where(eq(tasks.id, seeded.childTaskId!))
+        .limit(1)
     )[0]
     // 已收场的子任务不被改写——它的 done 是真实结果，不是「被父取消」。
     expect(child?.status).toBe('done')

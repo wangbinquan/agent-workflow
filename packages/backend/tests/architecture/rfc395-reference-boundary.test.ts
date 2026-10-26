@@ -1,5 +1,5 @@
-// RFC-395 II-a A5: production writers and reverse scans must cross the target
-// ports; negative controls prove old column writes and scans cannot return.
+// RFC-395 F: ordered relations and parser-owned indexes replace JSON reference storage.
+// Keep all former writer/delete boundaries and negative controls.
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
@@ -51,7 +51,7 @@ function read(path: string): string {
   return readFileSync(resolve(root, path), 'utf8')
 }
 
-describe('RFC-395 II-a A5 reference boundaries', () => {
+describe('RFC-395 F target reference boundaries', () => {
   test('all six agent writers and workflow writers delegate their original transaction', () => {
     expect(new Set([...agentWriters, ...workflowWriters, ...lookups]).size).toBeGreaterThanOrEqual(
       12,
@@ -67,6 +67,7 @@ describe('RFC-395 II-a A5 reference boundaries', () => {
       expect(bypasses(source, 'workflow'), file).toBe(false)
     }
     expect(preparesUpdateBeforeTransaction(read(catalog + 'agentRepository.ts'))).toBe(true)
+    expect(read(catalog + 'fusionResourceSeed.ts')).toContain('runResourceCatalogTransaction(')
     const fusion = read('modules/knowledge-evolution/infrastructure/fusionRepository.ts')
     expect(fusion).toContain(
       'input.resourceSeed.seed(seed, { repair: repairFusionWorkflowDefinition })',
@@ -94,6 +95,43 @@ describe('RFC-395 II-a A5 reference boundaries', () => {
     expect(
       read('modules/resource-catalog/application/agents/agentDependencyValidation.ts'),
     ).not.toContain('JSON.parse')
+  })
+  test('runtime readers and writers use target relations and the shared parser index', () => {
+    const reader = read(catalog + 'agentPersistence.ts')
+    const writer = read(catalog + 'agentReferenceWrite.ts')
+    for (const table of [
+      'agentSkillRefs',
+      'agentMcpRefs',
+      'agentPluginRefs',
+      'agentDependencies',
+    ]) {
+      expect(reader).toContain(table)
+      expect(writer).toContain(`transaction.insert(${table})`)
+      expect(writer).toContain(`transaction.delete(${table})`)
+    }
+    expect(reader).toContain('orderBy(asc(agentSkillRefs.ordinal))')
+    expect(reader).not.toMatch(/decodeAgentSkillReferences|row\.(?:skills|dependsOn|mcp|plugins)\b/)
+    const lookup = read(catalog + 'referenceLookup.ts')
+    expect(lookup).not.toMatch(
+      /\blike\s*\(|\bLIKE\b|JSON\.parse|decodeWorkflowReferenceDocument|matchesStoredAgentReference/,
+    )
+    expect(lookup).toContain('exists(')
+    expect(lookup).toContain('eq(index.revision, workflows.version)')
+    expect(lookup).toContain("kind === 'agent' ? 'id' : 'name'")
+    const workflow = read(catalog + 'workflowDefinitionWrite.ts')
+    expect(workflow).toContain('workflowDependencyIndexEntries(')
+    expect(workflow).toMatch(/transaction\s*\.delete\(workflowDependencyIndex\)/)
+    expect(workflow).toMatch(/transaction\s*\.insert\(workflowDependencyIndex\)/)
+    expect(read(catalog + 'migration/workflowDocument.ts')).toContain(
+      'workflowDependencyIndexEntries(',
+    )
+    const publicSource = read('modules/resource-catalog/public/participants.ts')
+    const boot = publicSource.slice(
+      publicSource.indexOf('export interface SkillCatalogBootParticipant'),
+      publicSource.indexOf('export interface DemoResourceCatalogSeedMarkerContext'),
+    )
+    expect(boot).toContain('recoverOperations()')
+    expect(boot).not.toMatch(/runIdentityMigrationBarrier|backfillLegacyVersions/)
   })
   test('negative controls catch each retired boundary and accept participant calls', () => {
     expect(

@@ -1,5 +1,6 @@
+import { registerProviderFixtureCleanup } from './providerFixtureCleanup'
 // RFC-392: every HTTP fixture enters the same application graph and owns its finite lifetime.
-import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { afterEach } from 'bun:test'
 import { existsSync, readFileSync, rmSync, writeFileSync, mkdtempSync } from 'node:fs'
 import { join } from 'node:path'
@@ -33,6 +34,10 @@ import type { ProviderDatabaseHarness, ProviderApplicationBinding } from './each
 export type ProviderHttpApplicationInput = Pick<
   DaemonApplicationInput,
   | 'token'
+  | 'reviewArtifacts'
+  | 'contentStore'
+  | 'historyRestrictions'
+  | 'recoveredExecutionTaskIds'
   | 'taskArchive'
   | 'skillContent'
   | 'employeePrograms'
@@ -83,7 +88,7 @@ export type ProviderHttpApplicationInput = Pick<
 
 export interface ProviderHttpApplication extends Pick<
   DaemonApplication,
-  'app' | 'core' | 'modules' | 'runtime' | 'operations'
+  'app' | 'core' | 'modules' | 'runtime' | 'operations' | 'lifecycleSteps'
 > {
   readonly appHome: string
   readonly secretBox: SecretBox
@@ -227,7 +232,7 @@ export async function createProviderHttpApplicationFromBinding(
     const databaseMigration =
       input.databaseMigration ??
       composeDatabaseMigrationModule({
-        contract: buildLogicalSchemaContract(),
+        contract: logicalSchemaContract,
         admission: {
           freezeAndDrain: unexpectedAdmission,
           reopenSqlite: unexpectedAdmission,
@@ -269,6 +274,7 @@ export async function createProviderHttpApplicationFromBinding(
           }
     const {
       buildScheduleLaunch,
+      schedulerDriver,
       runtimeDiagnosticTestDependencies,
       webhookDispatcher,
       mcpRuntimeTestDependencies,
@@ -299,6 +305,7 @@ export async function createProviderHttpApplicationFromBinding(
       sourceWriteWindow: ALWAYS_WRITABLE_DATABASE_SOURCE,
       testSeams: {
         buildScheduleLaunch,
+        schedulerDriver,
         runtimeDiagnosticTestDependencies,
         webhookDispatcher,
         mcpRuntimeTestDependencies,
@@ -310,6 +317,7 @@ export async function createProviderHttpApplicationFromBinding(
         workflowRuntime: { workflowExactOperationHook },
       },
     })
+    registerProviderFixtureCleanup(binding.db, dispose)
     const { core, runtime } = application
     return Object.freeze({
       app: application.app,
@@ -319,6 +327,7 @@ export async function createProviderHttpApplicationFromBinding(
       runtime,
       modules: application.modules,
       operations: application.operations,
+      lifecycleSteps: application.lifecycleSteps,
       processConcurrencyScope: runtime.taskExecutionModules.processConcurrencyScope,
       repositoryWorkspaceStore: core.repositoryWorkspaceStore,
       taskExecutionReadModels: runtime.taskExecution.readModels,

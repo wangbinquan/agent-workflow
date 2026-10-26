@@ -8,7 +8,7 @@
 // chunk through that path, so a hand-written migration that packs two
 // statements into one chunk silently applies half of itself: the backfill
 // UPDATE, the second ALTER, the index creation just never happen. `migrate`
-// stays green, `drizzle-kit check` stays green, CI stays green — and the
+// stays green, the legacy journal check stays green, CI stays green — and the
 // migration is already recorded in `__drizzle_migrations`, so it can never be
 // replayed. That is exactly the RFC-108 0052/0053 incident.
 //
@@ -195,7 +195,7 @@ describe('migration statement policy', () => {
   test('journal entries and .sql files are 1:1 with breakpoints enabled', () => {
     // A journal that lists a tag with no file (bad rebase) or a file with no
     // entry (forgot to commit the journal) corrupts every user's DB on the next
-    // `start`. `drizzle-kit check` covers part of this in CI; asserting it here
+    // `start`. The frozen journal check covers part of this; asserting it here
     // keeps the local gate honest too, and adds the `breakpoints` flag — with
     // it false, drizzle stops splitting and hands the whole file to the
     // single-statement path.

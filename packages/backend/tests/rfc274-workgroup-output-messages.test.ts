@@ -1,6 +1,6 @@
 import { rawRows } from '@/platform/persistence/queryHelpers'
 import { describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
+
 import { sql } from 'drizzle-orm'
 import {
   WORKGROUP_SYSTEM_TEMPLATE_KEYS,
@@ -14,8 +14,6 @@ import {
   parseStoredSystemTemplate,
 } from '../src/modules/resource-catalog/application/workgroups/workgroupSystemMessages'
 import { messageDraft as draftSystemMessage } from '@/modules/resource-catalog/application/workgroups/workgroupTurnsDriver'
-
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 const EXAMPLES: WorkgroupSystemTemplate[] = [
   { key: 'assignmentAgentUnresolvable', params: { title: 't', member: 'm' } },
@@ -54,7 +52,7 @@ describe('RFC-274 workgroup output contract', () => {
   // （PostgreSQL 上对应的是 `information_schema`，形状与列名都不同）。判据本身问的就是
   // 「SQLite 迁移链有没有把这两列建成期望的样子」，换成双引擎等于换了一个问题。
   test('migration adds the resource contract and nullable message metadata', () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createInMemoryDb()
     const workgroupColumns = rawRows<{ name: string; dflt_value: string | null; notnull: number }>(
       db,
       sql`SELECT name, dflt_value, "notnull" FROM pragma_table_info('workgroups')`,

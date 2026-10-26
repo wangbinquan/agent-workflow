@@ -1,3 +1,14 @@
+import {
+  createRunSelectionReader,
+  createNodeOutputQueries,
+  createTaskGateQueries,
+  createNodeRunQueries,
+  createRunHistorySnapshot,
+  type NodeRunDispatchFacts,
+  isTurnEngineTaskSubject,
+  taskSubjectFromDefinition,
+} from '@/modules/task-execution/public/queries'
+import type { HistoryRestrictionPort } from '@/platform/contracts/historyRestriction'
 import type { HumanGateTaskLockPort } from '../composition/required-ports'
 // RFC-120 / RFC-349 SQLite §18 — one-click batch-dispatch of deferred designer
 // questions via UPSTREAM-FRONTIER mint + per-node queue (NOT the old mint-all-upfront).
@@ -31,19 +42,15 @@ import type { HumanGateTaskLockPort } from '../composition/required-ports'
 // exclusion / dispatch-time trigger_run_id binding are GONE — the per-node queue model
 // (buildExternalFeedbackContext / markClarifyRoundsConsumedBy) replaces them.
 
-import { createNodeOutputQueries } from '@/modules/task-execution/public/queries'
-import { createHumanGatePersistenceParticipantInTx } from '@/modules/task-execution/public/participants'
-import { createTaskGateQueries } from '@/modules/task-execution/public/queries'
-import { isClarifyQuestionSealed } from '../domain/clarifyAnswers'
 import {
-  createNodeRunQueries,
-  createRunSelectionOracleSnapshot,
-  createRunHistorySnapshot,
-  type NodeRunDispatchFacts,
-} from '@/modules/task-execution/public/queries'
-import { deriveNodeRunRole } from '@/modules/task-execution/public/types'
+  createHumanGatePersistenceParticipantInTx,
+  humanGateNodeProjectionFence,
+} from '@/modules/task-execution/public/participants'
 
-import { decodeTaskSubject, isTurnEngineTaskSubject } from '@/modules/task-execution/public/queries'
+import { isClarifyQuestionSealed } from '../domain/clarifyAnswers'
+
+import { nodeRunMintIdentityForSlot } from '@/modules/task-execution/public/types'
+
 import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { first } from '@/platform/persistence/queryHelpers'
 import { and, desc, eq, inArray, isNotNull, isNull, ne } from 'drizzle-orm'
@@ -81,7 +88,7 @@ import { createLogger } from '@/util/log'
 import { TASK_QUESTION_CONFLICT } from '@/services/taskQuestionConflicts'
 import type { CanonicalHumanGateRequest } from '@/modules/collaboration/domain/canonicalGateRequest'
 import type { GateDecisionReceipt } from '@/modules/collaboration/public/types'
-import { humanGateNodeProjectionFence } from '@/modules/task-execution/public/participants'
+
 import {
   humanGateComposition,
   type QuestionDispatchManifestBridge as QuestionDispatchManifest,
@@ -169,6 +176,7 @@ export interface DispatchTaskQuestionsDecisionResult extends DispatchTaskQuestio
 
 interface PreparedQuestionDispatchDecision {
   readonly taskLock: HumanGateTaskLockPort
+  readonly historyRestrictions: HistoryRestrictionPort
   readonly operationId: string
   readonly request: CanonicalHumanGateRequest
   readonly idempotencyKey: string
@@ -563,6 +571,7 @@ export async function dispatchTaskQuestionsWithDecision(
   actor: DispatchTaskQuestionsActor,
   decision: DispatchTaskQuestionsDecisionArgs,
   taskLock: HumanGateTaskLockPort,
+  options: { readonly historyRestrictions: HistoryRestrictionPort },
 ): Promise<DispatchTaskQuestionsDecisionResult> {
   if (entryIds.length === 0) {
     throw new ValidationError(
@@ -575,7 +584,12 @@ export async function dispatchTaskQuestionsWithDecision(
 
   const capture: PreparedQuestionDispatchDecision['capture'] = {}
   await getTaskQuestionWriteSem(taskId).run(() =>
-    dispatchTaskQuestionsLocked(db, taskId, entryIds, actor, { args: decision, capture, taskLock }),
+    dispatchTaskQuestionsLocked(db, taskId, entryIds, actor, {
+      args: decision,
+      capture,
+      taskLock,
+      historyRestrictions: options?.historyRestrictions,
+    }),
   )
   if (capture.envelope === undefined) {
     throw new ConflictError(
@@ -844,6 +858,7 @@ async function dispatchTaskQuestionsLocked(
   actor: DispatchTaskQuestionsActor,
   decision?: {
     readonly taskLock: HumanGateTaskLockPort
+    readonly historyRestrictions: HistoryRestrictionPort
     readonly args: DispatchTaskQuestionsDecisionArgs
     readonly capture: PreparedQuestionDispatchDecision['capture']
   },
@@ -863,10 +878,9 @@ async function dispatchTaskQuestionsLocked(
           snapshot: row.workflowSnapshot,
           status: row.status,
           lifecycleEventRevision: row.lifecycleEventRevision,
-          workgroupId: row.workgroupId,
-          workflowId: row.workflowId,
-          codeRoundId: row.codeRoundId,
-          sourceAgentName: row.sourceAgentName,
+          subjectKind: row.subjectKind,
+          sourceId: row.sourceId,
+          sourceName: row.sourceName,
           workgroupConfig: row.workgroupConfig,
         })),
       )
@@ -910,6 +924,7 @@ async function dispatchTaskQuestionsLocked(
       args: decision.args,
       capture: decision.capture,
       taskLock: decision.taskLock,
+      historyRestrictions: decision.historyRestrictions,
     })
     return commitDispatchPlan(
       db,
@@ -949,7 +964,12 @@ async function dispatchTaskQuestionsLocked(
   //     (e.g. a leader-round question borrow-reassigned onto the member node). Gated on the task
   //     actually being a turn-engine workgroup so an ordinary workflow with a coincidentally-named
   //     node is unaffected (P2). Fail-fast (reject the batch) rather than silently hijack.
-  if (isTurnEngineTaskSubject(decodeTaskSubject(taskRow), taskRow.workgroupConfig?.launch.mode)) {
+  if (
+    isTurnEngineTaskSubject(
+      taskSubjectFromDefinition(taskRow),
+      taskRow.workgroupConfig?.launch.mode,
+    )
+  ) {
     const toSharedMember = requested.filter((e) => effectiveTarget(e) === '__wg_member__')
     if (toSharedMember.length > 0) {
       const shardByEntry = await resolveEntryShardKeys(db, toSharedMember)
@@ -1024,6 +1044,7 @@ async function dispatchTaskQuestionsLocked(
       args: decision.args,
       capture: decision.capture,
       taskLock: decision.taskLock,
+      historyRestrictions: decision.historyRestrictions,
     })
     return commitDispatchPlan(
       db,
@@ -1059,6 +1080,7 @@ async function dispatchTaskQuestionsLocked(
           args: decision.args,
           capture: decision.capture,
           taskLock: decision.taskLock,
+          historyRestrictions: decision.historyRestrictions,
         })
   return commitDispatchPlan(
     db,
@@ -1080,6 +1102,7 @@ async function dispatchTaskQuestionsLocked(
 
 async function prepareQuestionDispatchDecision(input: {
   taskLock: HumanGateTaskLockPort
+  historyRestrictions: HistoryRestrictionPort
   db: PersistenceDb
   taskId: string
   entryIds: readonly string[]
@@ -1136,6 +1159,7 @@ async function prepareQuestionDispatchDecision(input: {
     capturedGateRevision,
     capture: input.capture,
     taskLock: input.taskLock,
+    historyRestrictions: input.historyRestrictions,
   }
 }
 
@@ -1258,7 +1282,7 @@ async function commitDispatchPlan(
         const operations =
           decision === undefined
             ? undefined
-            : new DatabaseHumanGateOperationJournal(decision.taskLock)
+            : new DatabaseHumanGateOperationJournal(decision.taskLock, decision.historyRestrictions)
         if (decision !== undefined && operations !== undefined) {
           const currentGateRevision = await ensureLegacyQuestionGateRevisionTx({
             tx,
@@ -1429,7 +1453,16 @@ async function commitDispatchPlan(
         }
         const nodeRunMint = createNodeRunMintParticipantInTx(tx)
         for (const p of mintPlans) {
-          await nodeRunMint.mint(p.input)
+          await nodeRunMint.mint({
+            ...p.input,
+            executionGeneration: {
+              kind: 'operation',
+              cause: 'clarify-rerun',
+              operationRef:
+                decision?.operationId ??
+                `clarify-dispatch:${taskId}:${[...dispatchIds].sort().join(',')}`,
+            },
+          })
         }
         // RFC-134 §3.1 (retained) — seal 行戳归一化：本批 stamp 的 clarify 行若 sealed_at NULL
         // （能过 assertRequestedEntriesSealed 只因源轮已 answered——契约「已下发 ≠ 可渲染」），
@@ -2049,7 +2082,8 @@ async function resolveDeferredSelfQuestionerBorrowForNode(
   iteration: number,
   workflowDef: WorkflowDefinition,
 ): Promise<LedgerResolution> {
-  const { taskQuestions, clarifyRounds } = tablesOf(db)
+  const { taskQuestions } = tablesOf(db)
+  const { clarifyRounds } = tablesOf(db)
   // Control-channel DISPATCHED self/questioner entries (dispatched_at set). Include no-override
   // rows so a "borrow X + run self" mix on one home is DETECTED (P2-1), not first-picked, AND so
   // an OPEN RUN-SELF dispatch is counted as an open ledger (Codex impl-gate run-self fix).
@@ -2356,14 +2390,15 @@ export async function buildFrontierMintPlan(
     taskId,
     nodeId: targetNodeId,
   })
-  const history = await createRunSelectionOracleSnapshot(targetRuns, {
-    scope: { kind: 'rows' },
-  }).familyHistory(taskId, {
+  const history = await createRunSelectionReader(db).familyHistory(taskId, {
     nodeId: targetNodeId,
     ...(shardKey === undefined ? {} : { shardKey }),
   })
   const byId = new Map(targetRuns.map((row) => [row.id, row]))
-  const scoped = history.map((ref) => byId.get(ref.id)!)
+  const scoped = history.flatMap((ref) => {
+    const run = byId.get(ref.id)
+    return run ? [run] : []
+  })
   const last = scoped.at(-1)
   if (last === undefined) {
     throw new ConflictError(
@@ -2382,7 +2417,12 @@ export async function buildFrontierMintPlan(
   const agentOverrideId =
     borrowOverrideNodeId === null ? null : resolveNodeAgentId(definition, borrowOverrideNodeId)
   const input: NodeRunMintInput = {
-    ...deriveNodeRunRole({ nodeId: targetNodeId, rerunCause: cause }),
+    ...nodeRunMintIdentityForSlot(
+      last.slot.kind === 'shard' || last.slot.kind === 'workgroup-host'
+        ? { ...last.slot, shardKey: shardKey === undefined ? last.shardKey : shardKey }
+        : last.slot,
+      { kind: 'operation', cause: 'clarify-rerun', operationRef: `clarify-rerun:${preId}` },
+    ),
     id: preId,
     taskId,
     nodeId: targetNodeId,

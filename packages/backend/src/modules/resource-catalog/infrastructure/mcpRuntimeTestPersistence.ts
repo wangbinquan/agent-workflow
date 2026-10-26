@@ -491,8 +491,12 @@ export function createMcpRuntimeTestPersistence(
       // 换一笔事务重来即可：新快照读得到对方刚提交的活会话，走回上面那条 409（还带着会话 id）。
       // 幂等键相同的两笔并发同理——重跑时读得到对方的 receipt，按重放返回同一个会话。
       return retryUnique(async (tx) => {
-        const { mcpRuntimeTestCreateReceipts, mcpRuntimeTestSessions, mcpRuntimeTestTurns } =
-          tablesOf(tx)
+        const {
+          mcpRuntimeTestCreateReceipts,
+          mcpRuntimeTestSessions,
+          mcpRuntimeTestTurns,
+          mcpRuntimeTestSessionLeases,
+        } = tablesOf(tx)
         const replay = await first(
           tx
             .select()
@@ -568,6 +572,11 @@ export function createMcpRuntimeTestPersistence(
             ),
           )
         for (const previous of replaceable) {
+          // The lease restricts deletion of its turns. Remove the completed session's
+          // lease first, before deleting the parent cascades to those turns.
+          await tx
+            .delete(mcpRuntimeTestSessionLeases)
+            .where(eq(mcpRuntimeTestSessionLeases.testSessionId, previous.id))
           await tx.delete(mcpRuntimeTestSessions).where(eq(mcpRuntimeTestSessions.id, previous.id))
         }
         await insertOne(tx, mcpRuntimeTestSessions, {

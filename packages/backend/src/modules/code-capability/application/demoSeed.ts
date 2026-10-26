@@ -8,9 +8,6 @@ import type {
 } from './ports/demoSeedPersistence'
 
 const DEMO_TEMPLATE_ID = `${DEMO_RESOURCE_ID_PREFIX}template-mr-review`
-const DEMO_ENDPOINT_ID = `${DEMO_RESOURCE_ID_PREFIX}endpoint`
-const DEMO_WORK_ITEM_ID = `${DEMO_RESOURCE_ID_PREFIX}work-item`
-const DEMO_ROUND_ID = `${DEMO_RESOURCE_ID_PREFIX}round`
 const DEMO_NOTE = '示例数据，可以安全删除；删除后不会再次生成。 / Sample data — safe to delete.'
 const DEMO_AT = 1_700_000_000_000
 
@@ -23,7 +20,7 @@ export interface CodeCapabilityDemoSeedReceipt {
 
 export interface CodeCapabilityDemoSeedParticipant {
   /**
-   * Ensure the complete Code Capability sample aggregate.
+   * Ensure the Code Capability sample template.
    *
    * Stable ids plus provider-side conflict-ignore semantics make retries safe;
    * rows occupying those ids are never overwritten.
@@ -90,47 +87,7 @@ function aggregateFor(agentId: string): CodeCapabilityDemoSeedAggregate {
     createdAt: DEMO_AT,
     updatedAt: DEMO_AT,
   }
-  if (contract === undefined) return { template, history: null }
-
-  return {
-    template,
-    history: {
-      workItem: {
-        id: DEMO_WORK_ITEM_ID,
-        codeHostEndpointId: DEMO_ENDPOINT_ID,
-        stableProjectId: 'demo/sample-project',
-        capability: 'mr-review',
-        anchorKind: 'mr',
-        anchorId: '42',
-        status: 'settled',
-        epoch: 1,
-        currentRoundId: DEMO_ROUND_ID,
-        createdAt: DEMO_AT,
-        updatedAt: DEMO_AT,
-      },
-      round: {
-        id: DEMO_ROUND_ID,
-        workItemId: DEMO_WORK_ITEM_ID,
-        roundSeq: 1,
-        epoch: 1,
-        baselineSha: '0000000000000000000000000000000000000000',
-        stageContractVer: contract.version,
-        outcome: 'published',
-        startedAt: DEMO_AT,
-        endedAt: DEMO_AT + 214_000,
-      },
-      stages: contract.stages.map((stage, index) => ({
-        id: `${DEMO_ROUND_ID}-${String(index)}`,
-        roundId: DEMO_ROUND_ID,
-        stageSeq: index,
-        stageName: stage.name,
-        stageKind: stage.kind,
-        status: 'done',
-        startedAt: DEMO_AT + index * 15_000,
-        endedAt: DEMO_AT + (index + 1) * 15_000,
-      })),
-    },
-  }
+  return { template }
 }
 
 export function createCodeCapabilityDemoSeedParticipant(
@@ -142,9 +99,9 @@ export function createCodeCapabilityDemoSeedParticipant(
       await persistence.ensure(aggregate)
       return Object.freeze({
         capabilityTemplateId: aggregate.template.id,
-        workItemId: aggregate.history?.workItem.id ?? null,
-        roundId: aggregate.history?.round.id ?? null,
-        stageIds: Object.freeze(aggregate.history?.stages.map((stage) => stage.id) ?? []),
+        workItemId: null,
+        roundId: null,
+        stageIds: Object.freeze([]),
       })
     },
   })

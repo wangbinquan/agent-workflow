@@ -437,13 +437,13 @@ describe('RFC-338 maintenance Worker', () => {
     await drained
   })
 
-  test('claims and settles a real SQLite job through its own Worker entrypoint', async () => {
+  test('claims and settles a real epoch-2 SQLite job without a legacy migrations folder', async () => {
     const appHome = mkdtempSync(join(tmpdir(), 'rfc338-worker-'))
     roots.push(appHome)
     const dbPath = join(appHome, 'db.sqlite')
     const db = openDb({
       path: dbPath,
-      migrationsFolder: MIGRATIONS,
+
       skipIntegrityCheck: true,
       slowQueryMs: 0,
     })
@@ -467,7 +467,7 @@ describe('RFC-338 maintenance Worker', () => {
       appHome,
       databaseInit: {
         dbPath,
-        migrationsFolder: MIGRATIONS,
+        migrationsFolder: '',
         sqlite: { synchronous: 'NORMAL', pageCacheMib: 8, mmapMib: 0, busyTimeoutMs: 50 },
       },
       onEvent: (event) => {
@@ -514,7 +514,7 @@ describe('RFC-338 maintenance Worker', () => {
     const dbPath = join(appHome, 'db.sqlite')
     const db = openDb({
       path: dbPath,
-      migrationsFolder: MIGRATIONS,
+
       skipIntegrityCheck: true,
       slowQueryMs: 0,
     })

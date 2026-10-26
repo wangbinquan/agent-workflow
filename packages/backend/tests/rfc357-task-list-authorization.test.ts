@@ -1,3 +1,4 @@
+import { tablesOf } from '@/platform/persistence/sessionTables'
 // RFC-357 T3 —— 列表页授权谓词的三态语义。
 //
 // 为什么这条测试存在：把 `services/taskOperations.ts` 平移进
@@ -12,20 +13,19 @@
 // PostgreSQL 侧 `/api/tasks` 用的是等价的 `IS DISTINCT FROM`。三态各来一行，
 // 任何一侧改写成裸 `ne(...)` 都会在这里红。
 
-import { taskFixture, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { and, type SQL } from 'drizzle-orm'
+import { taskFixture, workflowFixture } from './helpers/model'
 
 import { buildActor, type Actor } from '@/auth/actor'
-import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   defaultTaskListRowRef,
   taskListOwnershipScopeCondition,
   taskListViewerOf,
   taskListVisibilityCondition,
 } from '@/modules/task-execution/infrastructure/taskListPage/authorization'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from '../tests/helpers/eachProvider'
 
 type Db = PersistenceDb

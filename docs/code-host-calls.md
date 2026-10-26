@@ -99,16 +99,10 @@ input 节点或搬运边；agent prompt、call-workgroup goal、review comment t
 会集中显示为「当前不执行」，不参与当前保存校验或运行期预检；可以切回原操作继续编辑，也可经
 二次确认显式清理，清理是一条可撤销的画布历史操作。
 
-若要回退到 RFC-295 之前的版本，必须先在停止回退部署前运行只读兼容性门：
-
-```bash
-agent-workflow downgrade-audit rfc-295
-```
-
-它会扫描当前 workflow revision，以及仍在运行或可恢复任务的根快照和冻结调用闭包；报告
-workflow / revision / task / node / pointer / ref。结果为 `BLOCKED` 时必须在当前版本中显式
-清理这些 inactive 值、切回对应 action 修复，或放弃回退继续 roll-forward；命令没有忽略清单或
-强制放行参数，也不会修改数据库。
+epoch-2 发布已退役 RFC-295 专用的 `downgrade-audit rfc-295` / `rfc295-downgrade-audit`
+（U-6），不再以旧审计命令判断能否回退。返回 epoch 1 只能在目标首写前按 activation receipt
+执行 switch rollback，或使用切换前备份与对应旧 build；首写后不能直接退回旧库。
+具体命令及回退窗口见 [发布 / 升级 / 回滚手册](./release-upgrade-rollback.md#3-回滚)。
 
 **项目字段留空 = 用当前任务的仓库**。仓库不属于所配置的平台实例时会明确拒绝（不会拿去改一个
 同名的、不相干的项目）；多仓任务必须显式填写。

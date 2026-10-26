@@ -211,6 +211,7 @@ async function seedRunningTask(
     name: 'running task',
     workflowId: overrides.workflowId ?? ulid(),
     workflowSnapshot: '{}',
+    ...(overrides.sourceAgentId ? { sourceAgentName: 'task source agent' } : {}),
     repoPath: '/tmp/repo',
     worktreePath: '/tmp/worktree',
     baseBranch: 'main',

@@ -1,3 +1,4 @@
+import { tablesOf } from '@/platform/persistence/sessionTables'
 // RFC-359 W1-T2c —— node_run 状态 CAS 的**一份**事务内实现，两个引擎共用。
 //
 // 此前 SQLite 侧是 `modules/task-execution/infrastructure/taskLifecycle.ts` 的同步
@@ -6,14 +7,13 @@
 // 判定、同一个终态覆写闸——这里只写一次：PG participant 的 `set` 委托到这里，SQLite 的同步
 // 版本在其余 dbTxSync 调用方迁完前保留（W4 pair-deletion）。不广播：调用方提交后再发。
 
-import { tablesOf } from '@/platform/persistence/sessionTables'
 import {
   isTerminalNodeRunStatus,
   nextNodeRunStatus,
   type NodeRunStatus,
   type NodeRunTransitionEvent,
 } from '@agent-workflow/shared'
-import { and, eq } from 'drizzle-orm'
+import { eq } from 'drizzle-orm'
 
 import type { PersistenceTx } from '@/platform/persistence/persistenceDb'
 // RFC-359 W8 —— 判据 / 错误类型 / 字段白名单取自叶子 `platform/persistence/nodeRunLifecycleCore.ts`，
@@ -24,10 +24,9 @@ import {
   ConcurrentNodeRunTransition,
   assertNodeRunSourceTerminationAdmission,
 } from '@/platform/persistence/nodeRunLifecycleCore'
-import type { NodeRunLifecycleWrite as NodeRunStatusUpdateExtra } from '../application/ports/nodeRunWrites'
-import { nodeRunLifecycleWriteColumns } from './nodeRunWriteProtocol'
-export { nodeRunLifecycleWriteColumns } from './nodeRunWriteProtocol'
 import { ConflictError, NotFoundError } from '@/util/errors'
+import type { NodeRunLifecycleWrite as NodeRunStatusUpdateExtra } from '../application/ports/nodeRunWrites'
+import { compareAndWriteNodeRunInTx, nodeRunTableWrite } from './nodeRunWriteProtocol'
 
 export interface SetNodeRunStatusTxInput {
   readonly tx: PersistenceTx
@@ -99,20 +98,14 @@ export async function setNodeRunStatusTx(
       `node_run ${args.nodeRunId} status='${from}' not in allowedFrom=[${args.allowedFrom.join(',')}]${args.reason ? ` (${args.reason})` : ''}`,
     )
   }
-  const { nodeRuns } = tablesOf(args.tx)
-  // rfc053-allow-direct-status-write -- RFC-359：两引擎共用的事务内 CAS（setNodeRunStatusTx）
-  const updated = await args.tx
-    .update(nodeRuns)
-    .set({ status: args.to, ...nodeRunLifecycleWriteColumns(args.extra) })
-    .where(and(eq(nodeRuns.id, args.nodeRunId), eq(nodeRuns.status, from)))
-    .returning({ id: nodeRuns.id })
-  if (updated.length === 0) {
-    throw new ConcurrentNodeRunTransition(
-      args.nodeRunId,
-      from,
-      args.reason ?? `setNodeRunStatusTx to=${args.to}`,
-    )
-  }
+  await writeStatus(
+    args.tx,
+    args.nodeRunId,
+    from,
+    args.to,
+    args.extra,
+    args.reason ?? `setNodeRunStatusTx to=${args.to}`,
+  )
   return { from, to: args.to }
 }
 
@@ -124,15 +117,31 @@ export async function transitionNodeRunStatusTx(
   const from = row.status
   const to = nextNodeRunStatus(from, args.event)
   assertNodeRunSourceTerminationAdmission(row.taskId, row.sourceTerminationFence, to)
-  const { nodeRuns } = tablesOf(args.tx)
-  // rfc053-allow-direct-status-write -- RFC-359：两引擎共用的事务内 CAS（transitionNodeRunStatusTx）
-  const updated = await args.tx
-    .update(nodeRuns)
-    .set({ status: to, ...nodeRunLifecycleWriteColumns(args.extra) })
-    .where(and(eq(nodeRuns.id, args.nodeRunId), eq(nodeRuns.status, from)))
-    .returning({ id: nodeRuns.id })
-  if (updated.length === 0) {
-    throw new ConcurrentNodeRunTransition(args.nodeRunId, from, args.event.kind)
-  }
+  await writeStatus(args.tx, args.nodeRunId, from, to, args.extra, args.event.kind)
   return { from, to }
+}
+
+/** Caller holds owner fence then Task root; root CAS and companions commit together. */
+async function writeStatus(
+  tx: PersistenceTx,
+  id: string,
+  from: NodeRunStatus,
+  to: NodeRunStatus,
+  extra: NodeRunStatusUpdateExtra | undefined,
+  reason: string,
+): Promise<void> {
+  const { nodeRuns } = tablesOf(tx)
+  try {
+    await compareAndWriteNodeRunInTx(
+      tx,
+      id,
+      eq(nodeRuns.status, from),
+      { ...extra?.identity, status: to },
+      nodeRunTableWrite(extra ?? {}),
+    )
+  } catch (error) {
+    if (error instanceof ConflictError && error.code === 'concurrent-node-run-transition')
+      throw new ConcurrentNodeRunTransition(id, from, reason)
+    throw error
+  }
 }

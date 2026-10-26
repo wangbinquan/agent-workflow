@@ -1,3 +1,4 @@
+import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { readTaskFixtures, taskFixture, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
@@ -275,7 +276,10 @@ describe('RFC-368 实现门 findings', () => {
 
     test('状态与原因同一次写入落下；数字员工据此判 failed（按失败重试），不是 stopped', async () => {
       await seedRunningTask('task-reaped')
-      await composeTaskCancellation(harness.db).cancel('task-reaped', {
+      await composeTaskCancellation(
+        harness.db,
+        epoch2RuntimeTestPorts(harness.db).historyRestrictions,
+      ).cancel('task-reaped', {
         kind: 'resource-reaped',
         summary: 'task-time-limit-exceeded',
         message: 'task ran 61000ms, exceeding configured limit 60000ms',
@@ -293,7 +297,10 @@ describe('RFC-368 实现门 findings', () => {
         errorMessage: 'task ran 61000ms, exceeding configured limit 60000ms',
       })
       const core = composeDigitalEmployeeExecutionCore({
-        ...composeDatabaseDigitalEmployeeExecutionPorts(harness.db),
+        ...composeDatabaseDigitalEmployeeExecutionPorts(
+          harness.db,
+          epoch2RuntimeTestPorts(harness.db).historyRestrictions,
+        ),
       } as unknown as DigitalEmployeeExecutionDependencies)
       expect((await core.inspect('task-reaped')).kind).toBe('failed')
     })

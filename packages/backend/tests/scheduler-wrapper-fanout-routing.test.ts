@@ -191,9 +191,7 @@ describe('D.T3 — aggregator dispatch helper exists + collects per-shard raw li
     // frontier-invisible because parent is still non-null.
     expect(wrapperMechanicsSrc).toContain('iteration,')
     expect(wrapperMechanicsSrc).toContain('childOnly: true')
-    expect(wrapperMechanicsSrc).toMatch(
-      /createRunSelectionOracleSnapshot\(innerRows,\s*\{\s*scope: \{ kind: 'rows' \},?\s*\}\)\.shardSet\(/,
-    )
+    expect(wrapperMechanicsSrc).toMatch(/state\.opts\.persistence\.selection\.shardSet\(/)
   })
 
   test('aggregator iterates shards in shardKey dictionary order', () => {

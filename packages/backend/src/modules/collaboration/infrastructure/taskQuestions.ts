@@ -1,3 +1,4 @@
+import type { HistoryRestrictionPort } from '@/platform/contracts/historyRestriction'
 import type { HumanGateTaskLockPort } from '../composition/required-ports'
 // RFC-120 / RFC-349 — SQLite task-question persistence implementation.
 //
@@ -18,16 +19,17 @@ import type { HumanGateTaskLockPort } from '../composition/required-ports'
 //
 // See design/RFC-120-task-question-list §2.3 / §4 / §11.
 
-import { createTaskGateQueries } from '@/modules/task-execution/public/queries'
-import { decodeLegacyClarifyAnswerColumns } from './clarifyAnswerCodec'
-import { isClarifyQuestionSealed } from '../domain/clarifyAnswers'
-import { resolveHandlerRun } from '@/modules/task-execution/public/queries'
 import {
+  createTaskGateQueries,
+  resolveHandlerRun,
   createNodeRunQueries,
   type NodeRunFactSnapshot,
+  isTurnEngineTaskSubject,
+  taskSubjectFromDefinition,
 } from '@/modules/task-execution/public/queries'
+import { readClarifyAnswerProjection } from './clarifyAnswerQueries'
+import { isClarifyQuestionSealed } from '../domain/clarifyAnswers'
 
-import { decodeTaskSubject, isTurnEngineTaskSubject } from '@/modules/task-execution/public/queries'
 import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { queryWrite, affectedRows } from '@/platform/persistence/queryHelpers'
 import { and, eq, inArray, isNotNull, isNull, ne, sql } from 'drizzle-orm'
@@ -310,7 +312,8 @@ export async function listTaskQuestions(
   taskId: string,
   opts: { sourceNodeId?: string; phase?: TaskQuestionPhase } = {},
 ): Promise<TaskQuestionDTO[]> {
-  const { clarifyRounds, taskQuestions } = tablesOf(db)
+  const { taskQuestions } = tablesOf(db)
+  const { clarifyRounds } = tablesOf(db)
   // Reconcile before the terminal read-model filter so a task whose first board
   // read happens after completion still retains its historical audit ledger.
   const rounds = await db.select().from(clarifyRounds).where(eq(clarifyRounds.taskId, taskId))
@@ -335,7 +338,11 @@ export async function listTaskQuestions(
     runs.map((r) => r.id),
   )
   const roundByOrigin = new Map(rounds.map((r) => [r.intermediaryNodeRunId, r]))
-  const answersByRound = new Map(rounds.map((r) => [r.id, decodeLegacyClarifyAnswerColumns(r)]))
+  const answersByRound = new Map(
+    await Promise.all(
+      rounds.map(async (r) => [r.id, await readClarifyAnswerProjection(db, r)] as const),
+    ),
+  )
 
   const out: TaskQuestionDTO[] = []
   for (const e of entries) {
@@ -444,7 +451,7 @@ export async function listTaskQuestions(
  *  answer). For a pre-RFC-128 answered round every question is sealed, so this is
  *  byte-for-byte the old `round.status !== 'answered' → null` behavior (golden-lock). */
 function summarizeAnswer(
-  answers: ReturnType<typeof decodeLegacyClarifyAnswerColumns>,
+  answers: Awaited<ReturnType<typeof readClarifyAnswerProjection>>,
   questionId: string,
   sealed: boolean,
 ): string | null {
@@ -513,7 +520,8 @@ async function fetchDesignerParkEntries(
   db: PersistenceDb,
   taskId: string,
 ): Promise<ParkTargetEntry[]> {
-  const { taskQuestions, clarifyRounds } = tablesOf(db)
+  const { taskQuestions } = tablesOf(db)
+  const { clarifyRounds } = tablesOf(db)
   const clarifyDesigner = await db
     .select({
       dispatchedAt: taskQuestions.dispatchedAt,
@@ -880,22 +888,13 @@ async function agentNodeIdsForTask(db: PersistenceDb, taskId: string): Promise<S
 // turn-engine workgroup task (leader_worker / free_collab) — there ALL member assignments share the
 // one node, separated by node_runs.shard_key. On an ORDINARY workflow (workgroupId null) or a
 // dynamic_workflow task, an agent node coincidentally named '__wg_member__' is a plain single node
-// with no shard ambiguity, so the manual-target ban below must NOT apply. `isTurnEngineWorkgroupTask`
-// is the exact predicate (workgroupId set AND mode != dynamic_workflow).
+// with no shard ambiguity, so the manual-target ban below must NOT apply. The frozen task subject
+// and workgroup mode are the discriminator, independent of the legacy workgroupId projection.
 async function taskIsTurnEngineWorkgroup(db: PersistenceDb, taskId: string): Promise<boolean> {
-  const [t] = await createTaskGateQueries(db)
-    .listDispatchContexts([taskId])
-    .then((rows) =>
-      rows.map((row) => ({
-        workgroupId: row.workgroupId,
-        workflowId: row.workflowId,
-        codeRoundId: row.codeRoundId,
-        sourceAgentName: row.sourceAgentName,
-        workgroupConfig: row.workgroupConfig,
-      })),
-    )
+  const [t] = await createTaskGateQueries(db).listDispatchContexts([taskId])
   return (
-    t !== undefined && isTurnEngineTaskSubject(decodeTaskSubject(t), t.workgroupConfig?.launch.mode)
+    t !== undefined &&
+    isTurnEngineTaskSubject(taskSubjectFromDefinition(t), t.workgroupConfig?.launch.mode)
   )
 }
 
@@ -1333,6 +1332,7 @@ export async function createManualTaskQuestion(
   input: CreateManualTaskQuestionInput,
   actor: TaskQuestionActor,
   taskLock: HumanGateTaskLockPort,
+  historyRestrictions: HistoryRestrictionPort,
 ): Promise<{ id: string }> {
   // RFC-120 §15 — task status (re-gate). RFC-132 PR-D' 步骤1 (T8 flag 停读): 统一模型下所有
   // 任务都是 deferred-dispatch，manual 恒可创建（旧 deferred-only 门移除）。
@@ -1405,7 +1405,7 @@ export async function createManualTaskQuestion(
     )
   }
   const created = await createManualQuestionOpen(
-    humanGateComposition.createCollaborationCommandContext({ db, taskLock }),
+    humanGateComposition.createCollaborationCommandContext({ db, taskLock, historyRestrictions }),
     {
       taskId,
       title,

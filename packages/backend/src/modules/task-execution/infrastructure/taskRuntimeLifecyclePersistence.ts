@@ -1,19 +1,21 @@
+import { resolveTaskExecutionGenerationInTx } from './taskExecutionGeneration'
+import { taskAggregateWrite } from './taskDefinitionWriteParticipant'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+import { taskReadColumns, taskWorkspaceRootMatchesSql } from './taskRepositorySql'
 // RFC-359 W4-B1 批 2g —— 任务运行时状态迁移（tasks.status 的 CAS + lifecycle committed event）：一份实现，两个 provider 共用。
 // 此前 SQLite 侧只是 `modules/task-execution/infrastructure/taskLifecycle.ts` 同步内核的薄壳，PG 侧是整份实现；现在端口两侧都走
 // 统一写事务 + owner 围栏（PG READ COMMITTED：CAS 与围栏都是行级条件 UPDATE）。同步内核暂留给尚未迁移的 legacy 直接调用方。
 
-import { taskWorkspaceRootMatchesSql } from './taskRepositorySql'
-import { isTaskWorkspaceUnbound } from '@agent-workflow/shared'
-import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { first } from '@/platform/persistence/queryHelpers'
-import type { TaskStatus } from '@agent-workflow/shared'
+
+import { type TaskStatus, isTaskWorkspaceUnbound } from '@agent-workflow/shared'
+
 import { and, eq, isNull } from 'drizzle-orm'
 
-import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { WorkspacePresenceQueries } from '@/modules/source-control/public/queries'
 import { publishCommittedEventsAfterCommit } from '@/platform/events/committed/runtime'
-import { ConcurrentTaskTransition, isTerminalTaskStatus } from './taskLifecycle'
-import { resolveTerminalWorkspacePruneDecision } from './terminalWorkspacePrune'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
+import { driveAsyncProgram } from '@/platform/persistence/transactionProgram'
 import { ConflictError, DomainError, NotFoundError } from '@/util/errors'
 import type {
   TaskRuntimeLifecycleMutation,
@@ -21,15 +23,16 @@ import type {
 } from '../application/ports/taskRuntimeLifecyclePersistence'
 import {
   fenceTaskWrite,
-  type TaskExecutionTransaction,
   withTaskExecutionWrite,
+  type TaskExecutionTransaction,
 } from './ownedTaskExecution'
+import { ConcurrentTaskTransition, isTerminalTaskStatus } from './taskLifecycle'
 import { appendTaskLifecycleTransitionCommittedEvent } from './taskLifecycleCommittedEvents'
-import { driveAsyncProgram } from '@/platform/persistence/transactionProgram'
 import {
   taskLifecycleWriteSequence,
   type TaskLifecycleWriteInput,
 } from './taskLifecycleWriteSequence'
+import { resolveTerminalWorkspacePruneDecision } from './terminalWorkspacePrune'
 
 type LifecycleRow = Readonly<{
   status: TaskStatus
@@ -163,7 +166,7 @@ export class DrizzleTaskRuntimeLifecyclePersistence implements TaskRuntimeLifecy
               and(
                 eq(tasks.id, input.taskId),
                 eq(tasks.status, snapshot.status),
-                taskWorkspaceRootMatchesSql(tasks.worktreePath, snapshot.worktreePath),
+                taskWorkspaceRootMatchesSql(tasks.workspaceRootRef, snapshot.worktreePath),
                 eq(tasks.lifecycleEventRevision, snapshot.lifecycleEventRevision),
                 isNull(tasks.deletedAt),
                 isNull(tasks.sourceTerminationFence),
@@ -196,7 +199,10 @@ export class DrizzleTaskRuntimeLifecyclePersistence implements TaskRuntimeLifecy
     )
     const result = await withTaskExecutionWrite(this.db, async (tx) => {
       await this.fence(tx, input)
+      await taskAggregateWrite.lockTaskAggregateRoot(tx, input.taskId)
       await guard?.(tx)
+      if (input.executionGeneration)
+        await resolveTaskExecutionGenerationInTx(tx, input.taskId, input.executionGeneration)
       const changed = await writeTaskRuntimeLifecycleInTx(tx, {
         ...input,
         from,
@@ -224,8 +230,8 @@ export class DrizzleTaskRuntimeLifecyclePersistence implements TaskRuntimeLifecy
       this.db
         .select({
           status: tasks.status,
-          worktreePath: tasks.worktreePath,
-          spaceKind: tasks.spaceKind,
+          worktreePath: taskReadColumns(this.db).worktreePath,
+          spaceKind: taskReadColumns(this.db).spaceKind,
           workspacePruningAt: tasks.workspacePruningAt,
           workspacePruneCause: tasks.workspacePruneCause,
           workspacePrunedAt: tasks.workspacePrunedAt,

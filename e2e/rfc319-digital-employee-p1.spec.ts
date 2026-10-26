@@ -1,3 +1,4 @@
+import { liveSqlitePath } from './storage'
 // RFC-319 —— 数字员工域 5 条 P1 用户面能力的浏览器兜底。
 //
 // 这 5 条在 `architecture/e2e-capability-ledger.json` 里是 `tier: pr` 的 gap：
@@ -238,7 +239,7 @@ async function getEmployee(employeeId: string): Promise<EmployeeRow> {
  * 什么。服务端「谁有资格把案例判成 blocked」不在本条覆盖范围内。
  */
 async function forceBlockedCase(caseId: string, blockReason: string): Promise<void> {
-  const dbPath = join(daemon.home, 'db.sqlite')
+  const dbPath = liveSqlitePath(daemon.home)
   const escapedReason = blockReason.replaceAll("'", "''")
   for (let attempt = 0; attempt < 6; attempt += 1) {
     const now = Date.now()

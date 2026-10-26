@@ -1,4 +1,4 @@
-import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { expect, test } from 'bun:test'
 import { createHash } from 'node:crypto'
 import { hostedDatabaseGeneration } from '@/platform/persistence/generationValidation'
@@ -78,7 +78,7 @@ test('only the platform restore reference starts a restore, and only with its pl
   const environment = { project: 'test', service: 'app' }
   await expect(
     restoreCrewStationDatabaseFromEnvironment({
-      contract: buildLogicalSchemaContract(),
+      contract: logicalSchemaContract,
       environment,
       env: { AW_RESTORE_OBJECT: 'aw-object:v1:database-backup:legacy' },
       normalization: [],
@@ -86,7 +86,7 @@ test('only the platform restore reference starts a restore, and only with its pl
   ).resolves.toBeUndefined()
   await expect(
     restoreCrewStationDatabaseFromEnvironment({
-      contract: buildLogicalSchemaContract(),
+      contract: logicalSchemaContract,
       environment,
       env: { CS_DATABASE_RESTORE_REFERENCE: 'platform' },
       normalization: [],
@@ -94,7 +94,7 @@ test('only the platform restore reference starts a restore, and only with its pl
   ).rejects.toThrow('platform-identity-missing')
   await expect(
     restoreCrewStationDatabaseFromEnvironment({
-      contract: buildLogicalSchemaContract(),
+      contract: logicalSchemaContract,
       environment,
       env: {
         CS_DATABASE_RESTORE_REFERENCE: 'not-a-reference',

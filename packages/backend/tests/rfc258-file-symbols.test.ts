@@ -1,3 +1,4 @@
+import { cpSync } from 'node:fs'
 // RFC-258 T3 — file-symbols endpoint service: symbol tables for the full-file
 // anchor bar / baseline lookups / graph→source resolution. Locks the gate
 // findings baked into the contract:
@@ -203,6 +204,8 @@ describeEachProvider('getTaskFileSymbols — multi-repo wire keys (F-04)', (harn
     const d = harness.db
     const root = await makeRepo({ 'root.go': 'package main\nfunc RootFn() {}\n' })
     const sub = await makeRepo({ 'lib.rs': 'pub fn sub_fn() {}\n' })
+    mkdirSync(join(root.dir, 'vendor'), { recursive: true })
+    cpSync(sub.dir, join(root.dir, 'vendor', 'lib'), { recursive: true })
     const taskId = await seedTask(d, { worktreePath: root.dir, baseCommit: root.commit })
     await taskRepoFixture(d, [
       {

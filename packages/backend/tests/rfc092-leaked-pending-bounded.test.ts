@@ -1,3 +1,4 @@
+import type { projectNodeRunReadFacts } from '@/modules/task-execution/infrastructure/nodeRunSnapshot'
 // RFC-092 §1.2 / §1.3 — 泄漏 pending 行的有界终结（对抗检视反例回归）。
 // 设计依据：design/RFC-092-scheduler-p0-stopgap/design.md §1.2（行 id 一次性豁免）、
 // §1.3（busy-loop 安全论证）、§5-10；调研：design/scheduler-audit-2026-06-10.md S-1。
@@ -27,16 +28,16 @@ import {
   workflowFixture,
   readNodeRunFixtures,
 } from './helpers/model'
-import { type PersistenceTables } from '@/platform/persistence/sessionTables'
-import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
+
+import type { WorkflowDefinition, WorkflowNode, NodeKind } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { monotonicFactory } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import type { NodeKind } from '@agent-workflow/shared'
-import { deriveFrontier } from '../src/modules/task-execution/composition/dagFrontier'
+
+import { deriveFrontier } from './helpers/frontierSelection'
 import { runTaskWithRealTestTopology as runTask } from './helpers/taskExecutionTestTopology'
 import { runGit } from '../src/util/git'
 
@@ -47,7 +48,7 @@ const ulid = monotonicFactory()
 // 纯函数层
 // ---------------------------------------------------------------------------
 
-type Row = PersistenceTables['nodeRuns']['$inferSelect']
+type Row = ReturnType<typeof projectNodeRunReadFacts>
 type ScopeNode = WorkflowDefinition['nodes'][number]
 const NONE: ReadonlySet<string> = new Set()
 
@@ -148,7 +149,6 @@ describe('RFC-092 纯函数层 — 行 id 一次性豁免的有界退化', () =>
 // 集成层（轻量）
 // ---------------------------------------------------------------------------
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
 
 interface Harness {
@@ -177,7 +177,7 @@ async function buildHarness(): Promise<Harness> {
   writeFileSync(join(worktreePath, 'r.md'), '# r\n')
   await runGit(worktreePath, ['add', '.'])
   await runGit(worktreePath, ['commit', '-m', 'init'])
-  const db = createInMemoryDb(MIGRATIONS)
+  const db = createInMemoryDb()
   return {
     db,
     appHome,

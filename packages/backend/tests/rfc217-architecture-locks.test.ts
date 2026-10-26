@@ -155,7 +155,9 @@ describe('rfc217 G2/G3 — retired runtime-state slots stay retired', () => {
     const puts =
       read(
         'packages/backend/src/modules/task-execution/infrastructure/taskDefinitionWriteParticipant.ts',
-      ).split('.set({ workgroupConfigJson').length - 1
+      ).match(
+        /\.update\(workgroupTaskState\)\s*\.set\(\{\s*runtimeConfigJson: workgroupConfigJson,/g,
+      )?.length ?? 0
     expect(puts).toBe(1)
     const room = read(
       'packages/backend/src/modules/task-execution/infrastructure/workgroupTaskRoomTaskParticipant.ts',

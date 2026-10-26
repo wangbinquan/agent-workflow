@@ -14,7 +14,7 @@ self.onmessage = async (
   if (event.data.type === 'init') {
     db = openDb({
       path: event.data.dbPath,
-      migrationsFolder: event.data.migrationsFolder,
+
       skipMigrations: true,
       skipIntegrityCheck: true,
       journalMode: 'preserve',

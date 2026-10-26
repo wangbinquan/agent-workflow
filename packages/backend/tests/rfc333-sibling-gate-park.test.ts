@@ -1,5 +1,11 @@
+import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
+import { nodeRunFixtureColumns } from './helpers/model/nodeRun'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { withO2Closure } from './helpers/o2Closure'
-import { composeHumanGateTaskLockPort } from '@/modules/task-execution/composition'
+import {
+  composeHumanGateTaskLockPort,
+  createTaskExecutionTestModule,
+} from '@/modules/task-execution/composition'
 // RFC-333 TaskParkTx — sibling human gates of one scheduler wave all park.
 //
 // WHY THIS FILE EXISTS (regression intent):
@@ -31,7 +37,7 @@ import {
   workflowFixture,
   readTaskFixtures,
 } from './helpers/model'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+
 import { afterAll, beforeEach, expect, test } from 'bun:test'
 import { and, eq } from 'drizzle-orm'
 import type { ClarifyQuestion, WorkflowDefinition } from '@agent-workflow/shared'
@@ -40,7 +46,7 @@ import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { ClarifyGateOpenPreparation } from '@/modules/collaboration/application/prepareClarifyGateOpen'
 import { DatabaseClarifyQuestionSnapshotReader } from '@/modules/collaboration/infrastructure/clarifyQuestionSnapshotReader'
 import { DatabaseHumanGateOperationPersistence } from '@/modules/collaboration/infrastructure/humanGateOperationPersistence'
-import { createTaskExecutionTestModule } from '@/modules/task-execution/composition'
+
 import { createTaskExecutionContext } from '@/modules/task-execution/composition/sqliteTaskExecutionContext'
 import { createTaskRuntimeLifecyclePersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import {
@@ -176,6 +182,7 @@ async function seedOwnedSiblingAskers(db: PersistenceDb, taskId: string) {
     token: claimed.token,
     // The scheduler hands gate opens the driver's registered execution context.
     executionContext: createTaskExecutionContext({
+      historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
       intentId: intent.intentId,
       token: claimed.token,
       db,
@@ -191,7 +198,11 @@ async function prepareSiblingGate(
   revision: number,
 ) {
   const result = await new ClarifyGateOpenPreparation(
-    new DatabaseHumanGateOperationPersistence(databaseSessionFor(db), composeHumanGateTaskLockPort),
+    new DatabaseHumanGateOperationPersistence(
+      databaseSessionFor(db),
+      composeHumanGateTaskLockPort,
+      { historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions },
+    ),
     new DatabaseClarifyQuestionSnapshotReader(db),
   ).prepare({
     taskId,
@@ -220,6 +231,7 @@ function parker(db: PersistenceDb): DatabaseHumanGateTaskLifecyclePersistence {
   return new DatabaseHumanGateTaskLifecyclePersistence(
     db,
     createTaskRuntimeLifecyclePersistence(db),
+    { historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions },
   )
 }
 
@@ -275,7 +287,11 @@ describeEachProvider('RFC-333 sibling human gates of one wave', (harness) => {
     expect(rounds.every((round) => round.status === 'awaiting_human')).toBe(true)
     for (const { intermediaryNodeRunId } of opened) {
       const gate = (
-        await db.select().from(nodeRuns).where(eq(nodeRuns.id, intermediaryNodeRunId)).limit(1)
+        await db
+          .select(nodeRunFixtureColumns(db))
+          .from(nodeRuns)
+          .where(eq(nodeRuns.id, intermediaryNodeRunId))
+          .limit(1)
       )[0]
       expect(gate?.status).toBe('awaiting_human')
     }

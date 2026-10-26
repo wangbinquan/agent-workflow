@@ -31,21 +31,6 @@ export interface DatabaseProviderTraits {
    * PostgreSQL reports serialization/deadlock failures instead.
    */
   readonly classifyRetryable: (error: unknown) => string | undefined
-  /**
-   * This provider's side of the RFC-349 logical migration.
-   *
-   * `source` is the store a generation starts in — it still physically holds the
-   * ARCHIVE_THEN_OMIT tables and its generation carries no migration operation.
-   * `target` is a store a generation was migrated INTO — its active schema omits
-   * the archived tables and its generation must reference the verified manifest
-   * that produced it.
-   *
-   * Seven sites used to spell this axis as `provider === 'sqlite'` /
-   * `=== 'postgresql'` independently. Declaring it once means a new provider has
-   * to state which side it is on, instead of silently inheriting whichever branch
-   * happened to be the `else`.
-   */
-  readonly migrationRole: 'source' | 'target'
 
   /**
    * `db info` 在拿不到服务端版本号时显示什么。
@@ -91,7 +76,6 @@ export const DATABASE_PROVIDER_TRAITS = {
   sqlite: {
     booleanLiteral: (value) => (value ? '1' : '0'),
     classifyRetryable: retryableSqliteWriteErrorCode,
-    migrationRole: 'source',
     serverVersionFallback: 'embedded SQLite',
     failureRecoveryHint: ' — recover: agent-workflow restore <backup>',
     offlineCompaction: { supported: true },
@@ -100,7 +84,6 @@ export const DATABASE_PROVIDER_TRAITS = {
   postgresql: {
     booleanLiteral: (value) => (value ? 'TRUE' : 'FALSE'),
     classifyRetryable: postgresqlSerializationFailureCode,
-    migrationRole: 'target',
     serverVersionFallback: 'unavailable',
     failureRecoveryHint: null,
     offlineCompaction: {

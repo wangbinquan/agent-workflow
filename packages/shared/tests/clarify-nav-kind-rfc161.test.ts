@@ -48,6 +48,7 @@ describe('RFC-161 clarifyNavKindForRoundStatus', () => {
 
 describe('RFC-161 NodeRunSchema.clarifyNavKind shape', () => {
   const base = {
+    seq: 1,
     id: 'r1',
     taskId: 't1',
     nodeId: 'n1',

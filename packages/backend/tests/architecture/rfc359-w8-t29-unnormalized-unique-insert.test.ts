@@ -94,6 +94,8 @@ import { readdirSync, readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 
 import ts from 'typescript'
+import proofs from '../fixtures/rfc395-serialized-insert-source-locks.json'
+import { reviewedSerializedInsertSites } from './serializedInsertRoles'
 
 const SRC = resolve(import.meta.dir, '..', '..', 'src')
 
@@ -208,10 +210,17 @@ function chainCalls(root: ts.Node): ChainCall[] {
   return out.reverse()
 }
 
-/** `from(表)` / `insert(表)` 的表名——只认光秃秃一个标识符。 */
+/** `from(表)` / `insert(表)` / `insertOne` include target tables qualified by tablesOf. */
 function tableArgument(call: ts.CallExpression | undefined): string | null {
   const argument = call?.arguments[call && calleeName(call) === 'insertOne' ? 1 : 0]
   if (argument !== undefined && ts.isIdentifier(argument)) return argument.text
+  if (argument !== undefined && ts.isPropertyAccessExpression(argument)) return argument.name.text
+  if (
+    argument !== undefined &&
+    ts.isElementAccessExpression(argument) &&
+    ts.isStringLiteralLike(argument.argumentExpression)
+  )
+    return argument.argumentExpression.text
   return null
 }
 
@@ -419,11 +428,11 @@ const UNIQUE_TABLES = uniqueConstrainedTables(persistenceSchema.tables)
  *   modules/collaboration/infrastructure/humanGateOpenParticipant.ts: 1
  *     :406 taskQuestions（`uniq_task_questions_identity`）。
  *     why —— 假阳性：作用域是接过句柄的助手，事务在 `humanGateTaskLifecyclePersistence.parkPrepared`
- *       由 `withTaskExecutionSerializable` 打开（= SERIALIZABLE + 40001 整笔重放），而且同一身份的
- *       第二笔 open 在 `humanGateOperationJournal.beginTx` 就被挡下（该处先
- *       `lockAggregateRoot(tasks)` 再查活跃操作 → `human-gate-operation-conflict`）。
- *     removeWhen —— 该文件迁到 `.transaction()`（READ COMMITTED）时必须在读之前补串行化；
- *       在那之前这条只是形状登记。
+ *       由 `withTaskExecutionAggregateWrite` 打开（READ COMMITTED + 整笔冲突重放），
+ *       fence 在任何门读取之前已按 L-1 锁住 task root。同一身份的第二笔 open 在
+ *       `humanGateOperationJournal.beginTx` 查活跃操作时返回 `human-gate-operation-conflict`。
+ *     removeWhen —— 扫描器能沿参与者调用证明调用方在读之前持有 task root 时退役；
+ *       SERIALIZABLE 不是这条单任务唯一性不变量的保护条件。
  *   modules/collaboration/infrastructure/taskCollab.ts: 1
  *     :435 taskCollaborators（复合主键）。why —— 同步事务面（`dbTxSync`），PG 上不可达。
  *     removeWhen —— 随 `rfc359-sync-transaction-highwater` 归零一起消失。
@@ -574,7 +583,11 @@ function scan(): ScannedFile[] {
     const text = readFileSync(join(SRC, rel), 'utf8')
     // 便宜的前置过滤：没有 `.insert(` 的文件不必解析（全树 AST 解析是这条守卫的主要成本）。
     if (!text.includes('.insert(') && !text.includes('insertOne(')) continue
-    const sites = uniqueInsertDebtSites(rel, text, UNIQUE_TABLES)
+    const raw = uniqueInsertDebtSites(rel, text, UNIQUE_TABLES)
+    const proved = reviewedSerializedInsertSites(rel, text, raw, (path) =>
+      readFileSync(join(SRC, path), 'utf8'),
+    )
+    const sites = raw.filter((site) => !proved.includes(site))
     if (sites.length > 0) out.push({ path: rel, sites })
   }
   return out
@@ -607,6 +620,34 @@ function detail(scanned: readonly ScannedFile[]): string {
 const SCAN_TIMEOUT_MS = 60_000
 
 describe('RFC-359 W8-T29 —— 「先查存在、再插入唯一键表、且不归一」只降不升', () => {
+  test('four T18 sites retain the exact reviewed READ COMMITTED serialization and caller proofs', () => {
+    let count = 0
+    const read = (path: string) => readFileSync(join(SRC, path), 'utf8')
+    for (const proof of proofs.entries) {
+      const text = read(proof.path)
+      const raw = uniqueInsertDebtSites(proof.path, text, UNIQUE_TABLES)
+      const classified = reviewedSerializedInsertSites(proof.path, text, raw, read)
+      expect(classified.map(({ table, line }) => ({ table, line }))).toEqual(proof.sites)
+      count += classified.length
+      for (const mutation of [
+        text.replace('advisoryLock', 'removedLock'),
+        text.replace('lockAggregateRoot', 'removedLock'),
+        text.replace('withTaskExecutionWrite', 'withTaskExecutionSerializable'),
+        text + '\nawait tx.insert(unreviewed).values(input)',
+      ].filter((mutation) => mutation !== text))
+        expect(reviewedSerializedInsertSites(proof.path, mutation, raw, read)).toEqual([])
+      expect(
+        reviewedSerializedInsertSites(
+          proof.path,
+          text,
+          raw,
+          (path) => read(path) + '\nchangedCaller()',
+        ),
+      ).toEqual([])
+      expect(reviewedSerializedInsertSites('copied/' + proof.path, text, raw, read)).toEqual([])
+    }
+    expect(count).toBe(4)
+  })
   test(
     '语料非空：确实扫到了整棵 backend 源码树（扫成 0 说明扫描根失效，此刻零预言力）',
     () => {
@@ -800,6 +841,25 @@ describe('RFC-359 W8-T29 —— 判据自证（负 fixture）', () => {
         uniqueConstrainedTables(FIXTURE_SCHEMA),
       ).map((site) => site.table),
     ).toEqual(['widgets'])
+    for (const table of ['tables.widgets', 'tables["widgets"]']) {
+      expect(
+        unnormalizedUniqueInsertSites(
+          'qualified.ts',
+          native.replaceAll('widgets', table),
+          FIXTURE_TABLES,
+        ).map((site) => site.table),
+      ).toEqual(['widgets'])
+    }
+    expect(
+      unnormalizedUniqueInsertSites(
+        'generator.ts',
+        GENERATOR_DEBT_FIXTURE.replaceAll('widgets', 'tables.widgets').replaceAll(
+          'gadgets',
+          'tables["gadgets"]',
+        ),
+        FIXTURE_TABLES,
+      ).map((site) => site.table),
+    ).toEqual(['widgets', 'gadgets'])
   })
   test('writer calls retain the original same-table, same-scope read-before-insert debt', () => {
     const tables = new Set(['agents', 'workflows'])

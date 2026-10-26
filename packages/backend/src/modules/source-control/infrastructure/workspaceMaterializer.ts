@@ -1,62 +1,65 @@
+import type { ContentfulStatusCode } from 'hono/utils/http-status'
+import { z } from 'zod'
 // RFC-363: existing Git/FS materialization and compensation, owned by Source Control.
 // Task admission/row writes remain at the caller; this mechanism receives no DB client.
-import type {
-  PlannedDirectoryNode,
-  PlannedRepo,
-  GitCommitIdentity,
-  StartTask,
-} from '@agent-workflow/shared'
-import {
-  assignBranchNames,
-  directChildren,
-  exclusionPlanFor,
-  PLATFORM_WORKSPACE_DIR,
-  mountDepth,
-  orderForMaterialize,
-} from '@agent-workflow/shared'
-import { existsSync, lstatSync, mkdirSync, readdirSync, realpathSync } from 'node:fs'
-import { rm } from 'node:fs/promises'
-import { isAbsolute, join, relative } from 'node:path'
-import { ulid } from 'ulid'
 import type { SecretBox } from '@/auth/secretBox'
-import { unsealRepoUrl } from '@/services/repoCredentials'
 import { materializingSpaces } from '@/platform/workspace/materializingSpaces'
 import {
   listAvailableRefs,
   resolveCachedRepo,
   resolveSubmoduleParams,
 } from '@/services/gitRepoCache'
+import { unsealRepoUrl } from '@/services/repoCredentials'
+import { resolveRepoGroupLayout } from '@/services/repoGroup'
+import { ConflictError, DomainError, NotFoundError, ValidationError } from '@/util/errors'
 import {
-  findTrackedPathUnderMounts,
   cleanupCreatedWorktree,
   createWorktree,
+  findTrackedPathUnderMounts,
   initScratchRepo,
   type WorktreeCleanupProvenance,
   type WorktreeLifecycleHookEvent,
 } from '@/util/git'
-import { bindWorkspaceExcludeParticipant } from './workspaceExcludeBinding'
-import { isFileSchemeUrl, redactGitUrl } from '@agent-workflow/shared'
-import { ConflictError, DomainError, NotFoundError, ValidationError } from '@/util/errors'
 import { createLogger } from '@/util/log'
-import { resolveRepoGroupLayout } from '@/services/repoGroup'
-import type { RepositoryWorkspaceStore } from '../ports/repositoryWorkspaceStore'
 import type {
-  ResolvedRepoSource,
+  GitCommitIdentity,
+  PlannedDirectoryNode,
+  PlannedRepo,
+  StartTask,
+} from '@agent-workflow/shared'
+import {
+  assignBranchNames,
+  directChildren,
+  exclusionPlanFor,
+  isFileSchemeUrl,
+  mountDepth,
+  orderForMaterialize,
+  PLATFORM_WORKSPACE_DIR,
+  redactGitUrl,
+} from '@agent-workflow/shared'
+import { existsSync, lstatSync, mkdirSync, readdirSync, realpathSync } from 'node:fs'
+import { rm } from 'node:fs/promises'
+import { isAbsolute, join, relative } from 'node:path'
+import { ulid } from 'ulid'
+import type {
   MaterializedRepo,
   MaterializedSpace,
-  WorkspaceCleanupHookEvent,
-  WorkspaceCleanupFailure,
-  WorkspaceCleanupReport,
   MaterializedSpaceCleanup,
+  ResolvedRepoSource,
+  WorkspaceCleanupFailure,
+  WorkspaceCleanupHookEvent,
+  WorkspaceCleanupReport,
 } from '../application/workspaceMaterialization'
+import type { RepositoryWorkspaceStore } from '../ports/repositoryWorkspaceStore'
+import { bindWorkspaceExcludeParticipant } from './workspaceExcludeBinding'
 export type {
-  ResolvedRepoSource,
   MaterializedRepo,
   MaterializedSpace,
-  WorkspaceCleanupHookEvent,
-  WorkspaceCleanupFailure,
-  WorkspaceCleanupReport,
   MaterializedSpaceCleanup,
+  ResolvedRepoSource,
+  WorkspaceCleanupFailure,
+  WorkspaceCleanupHookEvent,
+  WorkspaceCleanupReport,
 } from '../application/workspaceMaterialization'
 const log = createLogger('task')
 
@@ -1164,4 +1167,114 @@ export async function materializeSpaceWithProvider(
     'start-task-source-required',
     'multi-repo launches must use repoGroupId (RFC-248); the legacy repos[] path is retired',
   )
+}
+
+const cleanupFailureSchema = z.object({
+  stage: z.enum(['worktree-remove', 'branch-restore', 'owned-root-remove']),
+  taskId: z.string(),
+  path: z.string(),
+  repoPath: z.string().optional(),
+  branch: z.string().optional(),
+  message: z.string(),
+})
+const cleanupReportSchema = z.object({
+  taskId: z.string(),
+  complete: z.boolean(),
+  failures: z.array(cleanupFailureSchema),
+})
+const materializedSpaceSchema: z.ZodType<MaterializedSpace> = z.object({
+  kind: z.enum(['scratch', 'single', 'multi', 'group']),
+  spaceKind: z.enum(['local', 'remote', 'scratch', 'internal', 'inherited']),
+  taskId: z.string(),
+  worktreePath: z.string(),
+  branch: z.string(),
+  baseCommit: z.string().nullable(),
+  earlyError: z.string().nullable(),
+  resolvedSources: z.array(
+    z
+      .object({
+        repoPath: z.string(),
+        baseBranch: z.string().optional(),
+        resolvedCommit: z.string().optional(),
+        repoUrl: z.string().nullable(),
+        cachedRepoId: z.string().nullable(),
+        pathFetchError: z.string().nullable(),
+        ffWarnings: z.array(z.object({ branch: z.string(), warning: z.string() })),
+      })
+      .transform((source) => ({ ...source, baseBranch: source.baseBranch })),
+  ),
+  repos: z.array(
+    z.object({
+      repoIndex: z.number().int().nonnegative(),
+      repoPath: z.string(),
+      repoUrl: z.string().nullable(),
+      cachedRepoId: z.string().nullable(),
+      baseBranch: z.string(),
+      branch: z.string(),
+      baseCommit: z.string().nullable(),
+      worktreePath: z.string(),
+      worktreeDirName: z.string(),
+      mountPath: z.string(),
+      subdir: z.string(),
+      readonly: z.boolean(),
+      workspaceProfileVersion: z.literal(1).nullable().optional(),
+      workspaceProfileDigest: z.string().nullable().optional(),
+      submoduleInitOk: z.boolean(),
+      submoduleInitError: z.string().nullable(),
+      hasSubmodules: z.boolean(),
+    }),
+  ),
+  nodePaths: z.array(z.string()),
+  cleanup: z.object({
+    taskId: z.string(),
+    ownedRoot: z.string().nullable(),
+    worktrees: z.array(
+      z.object({
+        repoPath: z.string(),
+        worktreePath: z.string(),
+        branch: z.string(),
+        branchRef: z.string(),
+        branchBefore: z.string().nullable(),
+        branchAfter: z.string(),
+      }),
+    ),
+    state: z.enum(['owned', 'committed', 'cleaned']),
+    report: cleanupReportSchema.nullable(),
+  }),
+})
+const workspaceReceiptSchema = z.looseObject({
+  version: z.literal(2),
+  space: materializedSpaceSchema.optional(),
+  error: z
+    .object({
+      code: z.string(),
+      message: z.string(),
+      status: z
+        .number()
+        .int()
+        .min(100)
+        .max(599)
+        .transform((status) => status as ContentfulStatusCode),
+      details: z.record(z.string(), z.unknown()).optional(),
+    })
+    .optional(),
+})
+
+/** New physical effects enter the journal through this v2 writer, before any replay. */
+export function encodeWorkspacePreparationReceipt(raw: string): string {
+  const data: unknown = JSON.parse(raw)
+  const envelope = z.record(z.string(), z.unknown()).parse(data)
+  return JSON.stringify(workspaceReceiptSchema.parse({ ...envelope, version: 2 }))
+}
+
+export function decodeWorkspacePreparationReceipt(taskId: string, raw: string) {
+  const receipt = workspaceReceiptSchema.parse(JSON.parse(raw) as unknown)
+  if (receipt.space && (receipt.space.taskId !== taskId || receipt.space.cleanup.taskId !== taskId))
+    throw new Error('workspace-preparation-artifact-mismatch')
+  return receipt
+}
+
+/** Validate a newly transported materialization value before compensation consumes it. */
+export function decodeMaterializedSpace(value: unknown): MaterializedSpace {
+  return materializedSpaceSchema.parse(value)
 }

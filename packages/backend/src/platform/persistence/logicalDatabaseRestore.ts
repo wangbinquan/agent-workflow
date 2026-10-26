@@ -1,3 +1,7 @@
+import {
+  verifyEpochMetadataSnapshot,
+  type EpochMetadataSnapshot,
+} from './schema/history/metadataSnapshot'
 // RFC-349 — bounded verification and replay of a provider-neutral logical
 // database artifact. The verifier makes a complete pass before target prepare,
 // so corrupt active or archive-only data cannot create a partially restored
@@ -34,12 +38,11 @@ import {
   type LogicalSchemaContract,
   type LogicalTableContract,
 } from './schemaContract'
-import { loadPostgresqlMigrationHistory } from './postgresqlMigrationHistory'
-import { resolvePostgresqlAdditiveRowBridge } from './postgresqlMigrationSequence'
 
 export interface LogicalDatabaseRestoreTarget {
   readonly provider: DatabaseProvider
   readonly operationId: string
+  restoreMetadata?(snapshot: EpochMetadataSnapshot): Promise<void>
   prepare(now: number): Promise<void>
   copyChunk(table: LogicalTableContract, chunk: LogicalTableChunk, now: number): Promise<void>
   finalizeSchema(
@@ -128,27 +131,9 @@ export async function resolveLogicalDatabaseRestoreSourceContract(input: {
   readonly targetContract: LogicalSchemaContract
 }): Promise<LogicalSchemaContract> {
   if (input.sourceSchemaDigest === input.targetContract.digest) return input.targetContract
-  try {
-    const history = await loadPostgresqlMigrationHistory({ headContract: input.headContract })
-    assertExact(
-      history.head.contract,
-      input.targetContract,
-      'restore target differs from the complete current schema head',
-    )
-    const bridge = resolvePostgresqlAdditiveRowBridge(history, {
-      fromContractDigest: input.sourceSchemaDigest,
-      toContractDigest: input.targetContract.digest,
-    })
-    assertExact(
-      bridge.target,
-      input.targetContract,
-      'restore target differs from its whole history contract',
-    )
-    return bridge.source
-  } catch (error) {
-    if (error instanceof LogicalDatabaseRestoreError) throw error
-    return corrupt('restore source and target have no verified additive schema bridge')
-  }
+  return corrupt(
+    'restore contract differs from the live epoch-2 contract; epoch-1 artifacts require db migration restore-backup',
+  )
 }
 
 function readCanonicalJson(path: string, detail: string): unknown {
@@ -522,6 +507,17 @@ export async function restoreLogicalDatabaseArtifact(input: {
       'restore source differs from its whole history contract',
     )
   }
+  const metadataDigest = input.envelope?.payload.epoch2MetadataFileDigest
+  let metadata: EpochMetadataSnapshot | undefined
+  if (metadataDigest) {
+    const path = join(input.artifactRoot, 'epoch2-metadata.json')
+    if (logicalArtifactFileDigest(path) !== metadataDigest)
+      corrupt('epoch-2 metadata file digest differs')
+    metadata = verifyEpochMetadataSnapshot(readCanonicalJson(path, 'epoch-2 metadata'))
+    if (!input.target.restoreMetadata) corrupt('target cannot retain epoch-2 metadata')
+  }
+  if ('schemaEpoch' in input.contract && input.contract.schemaEpoch === 2 && !metadata)
+    corrupt('epoch-2 metadata absent')
   const now = input.now ?? Date.now
   const targetIds = new Set(targetContract.tables.map((table) => table.id))
   const chunksTotal = verified.manifest.payload.tables.reduce(
@@ -584,6 +580,7 @@ export async function restoreLogicalDatabaseArtifact(input: {
       })
     }
   }
+  if (metadata) await input.target.restoreMetadata!(metadata)
   await input.target.finalizeSchema(
     now(),
     targetContract.tables.map((table) => {

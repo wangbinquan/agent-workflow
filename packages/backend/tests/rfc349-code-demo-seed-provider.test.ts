@@ -1,3 +1,4 @@
+import { createEpoch2PostgresqlMetadata } from './helpers/epoch2PostgresqlMetadata'
 import { withNativeTransactions } from './helpers/nativeTransactions'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { describe, expect, test } from 'bun:test'
@@ -30,11 +31,14 @@ function rows(input: {
 
 function postgresqlFixture() {
   const statements: string[] = []
+  const epoch2Metadata = createEpoch2PostgresqlMetadata()
   const execute = (sql: string): SqlRows => {
     statements.push(sql)
+    const metadata = epoch2Metadata(sql)
+    if (metadata) return metadata
     const normalized = sql.trim().toLowerCase()
     if (/^(begin|commit|rollback)$/.test(normalized)) return rows({})
-    if (sql.includes('database_generations')) {
+    if (sql.includes('generations')) {
       return rows({ objects: [{ generation_id: 'dbg_code_demo_seed_pg' }] })
     }
     if (normalized.startsWith('insert')) return rows({ count: 1 })
@@ -81,34 +85,34 @@ describe('RFC-349 Code Capability demo-seed participant', () => {
       const second = await seed.ensure({ agentId: 'demo-agent' })
 
       expect(second).toEqual(first)
-      const { capabilityTemplates, codeWorkItems, codeWorkRounds, codeRoundStages } = tablesOf(db)
+      const { capabilityTemplates } = tablesOf(db)
+      const { codeHistoryArchives, codeHistoryIdIndex } = tablesOf(db)
       expect(await db.select().from(capabilityTemplates)).toHaveLength(1)
-      expect(await db.select().from(codeWorkItems)).toHaveLength(1)
-      expect(await db.select().from(codeWorkRounds)).toHaveLength(1)
-      expect(await db.select().from(codeRoundStages)).toHaveLength(first.stageIds.length)
-      expect(first.stageIds.length).toBeGreaterThan(0)
+      expect(await db.select().from(codeHistoryArchives)).toHaveLength(0)
+      expect(await db.select().from(codeHistoryIdIndex)).toHaveLength(0)
+      expect(first).toMatchObject({ workItemId: null, roundId: null, stageIds: [] })
     })
   })
 
-  test('PostgreSQL commits template, work item, round and stages in one fenced transaction', async () => {
+  test('PostgreSQL commits only the template in one fenced transaction', async () => {
     const fake = postgresqlFixture()
     const receipt = await composeCodeCapabilityDemoSeedParticipant(fake.db).ensure({
       agentId: 'demo-agent',
     })
 
-    expect(receipt.stageIds.length).toBeGreaterThan(0)
+    expect(receipt.stageIds).toEqual([])
     const normalized = fake.statements.map((statement) => statement.trim().toLowerCase())
     expect(normalized[0]).toBe('begin')
     expect(normalized.at(-1)).toBe('commit')
-    for (const table of [
-      'capability_templates',
-      'code_work_items',
-      'code_work_rounds',
-      'code_round_stages',
-    ]) {
+    for (const table of ['capability_templates']) {
       const statement = normalized.find((candidate) => candidate.includes(`"${table}"`))
       expect(statement).toContain('on conflict do nothing')
     }
-    expect(normalized.some((statement) => statement.includes('database_generations'))).toBe(true)
+    expect(normalized.some((statement) => statement.includes('generations'))).toBe(true)
+    expect(
+      normalized.filter(
+        (statement) => statement.startsWith('insert') && /code_work|code_round/.test(statement),
+      ),
+    ).toEqual([])
   })
 })

@@ -16,7 +16,7 @@ import { rawExec, queryWrite } from '@/platform/persistence/queryHelpers'
 import { afterEach, describe, expect, test } from 'bun:test'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 
 import { sql } from 'drizzle-orm'
 import { ulid } from 'ulid'
@@ -24,11 +24,10 @@ import { ulid } from 'ulid'
 import type { TaskCatalogVisibility, TaskLaunchOrigin } from '@agent-workflow/shared'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { launchTestTask } from './helpers/productionTaskLaunch'
-import { type MaterializedSpace } from '@/modules/source-control/infrastructure/workspaceMaterializer'
+import type { MaterializedSpace } from '@/modules/source-control/infrastructure/workspaceMaterializer'
 
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const EMPTY_DEF = JSON.stringify({ $schema_version: 4, inputs: [], nodes: [], edges: [] })
 
 interface Harness {
@@ -38,8 +37,8 @@ interface Harness {
 }
 
 function buildHarness(): Harness {
-  const db = createInMemoryDb(MIGRATIONS)
-  rawExec(db, sql`DROP TRIGGER trg_tasks_launch_origin_inherit_child`)
+  const db = createInMemoryDb()
+  rawExec(db, sql`DROP TRIGGER IF EXISTS trg_tasks_launch_origin_inherit_child`)
   const workflowId = ulid()
   workflowFixture(db, { id: workflowId, name: `wf-${workflowId}`, definition: EMPTY_DEF })
   return { db, workflowId, roots: [] }

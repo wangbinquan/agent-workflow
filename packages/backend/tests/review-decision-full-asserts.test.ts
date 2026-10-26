@@ -1,3 +1,10 @@
+import { nodeRunFixtureColumns } from './helpers/model/nodeRun'
+import { legacyContentRef } from '@/platform/content/contentRef'
+import {
+  contentRowColumns,
+  inlineContentColumns,
+} from '@/platform/content/infrastructure/contentStore'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { withO2Closure } from './helpers/o2Closure'
 // RFC-053 PR-A T1g — full-field assertions for review decision paths.
 //
@@ -18,7 +25,7 @@ import {
   readNodeRunFixtures,
 } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+
 import { afterEach, describe, expect, spyOn, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -323,7 +330,7 @@ describeEachProvider('RFC-359 W25 review decision providers', (harness) => {
       sourcePortName: 'docpath',
       versionIndex: 1,
       reviewIteration: 0,
-      bodyPath,
+      ...contentRowColumns(legacyContentRef('review-body-path', 'local-file', bodyPath)),
       sourceFilePath: opts?.sourceFilePath ?? null,
       decision: 'pending',
     })
@@ -340,7 +347,7 @@ describeEachProvider('RFC-359 W25 review decision providers', (harness) => {
         contextBefore: '',
         contextAfter: '',
         occurrenceIndex: 1,
-        commentText: 'change this',
+        ...inlineContentColumns(Buffer.from('change this', 'utf8'), 'text/plain'),
         author: 'reviewer',
       })
     }
@@ -381,9 +388,15 @@ describeEachProvider('RFC-359 W25 review decision providers', (harness) => {
       )
       await h.committedEvents.drain()
 
-      const { nodeRuns, docVersions, memoryDistillJobs } = tablesOf(h.db)
+      const { memoryDistillJobs } = tablesOf(h.db)
+      const { nodeRuns, docVersions } = tablesOf(h.db)
       // node_run: status=done, finishedAt set ≥ before
-      const nr = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, h.reviewRunId)))[0]!
+      const nr = (
+        await h.db
+          .select(nodeRunFixtureColumns(h.db))
+          .from(nodeRuns)
+          .where(eq(nodeRuns.id, h.reviewRunId))
+      )[0]!
       expect(nr.status).toBe('done')
       expect(nr.finishedAt).not.toBeNull()
       expect(nr.finishedAt!).toBeGreaterThanOrEqual(before - 1)
@@ -472,7 +485,12 @@ describeEachProvider('RFC-359 W25 review decision providers', (harness) => {
       )
 
       const { nodeRuns, docVersions, reviewComments } = tablesOf(h.db)
-      const nr = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, h.reviewRunId)))[0]!
+      const nr = (
+        await h.db
+          .select(nodeRunFixtureColumns(h.db))
+          .from(nodeRuns)
+          .where(eq(nodeRuns.id, h.reviewRunId))
+      )[0]!
       expect(nr.status).toBe('pending')
       expect(nr.reviewIteration).toBe(1)
 
@@ -531,7 +549,7 @@ describeEachProvider('RFC-359 W25 review decision providers', (harness) => {
 
       // Upstream re-mint as in iterate.
       const agentRows = await h.db
-        .select()
+        .select(nodeRunFixtureColumns(h.db))
         .from(nodeRuns)
         .where(and(eq(nodeRuns.taskId, h.taskId), eq(nodeRuns.nodeId, 'doc')))
       expect(agentRows.length).toBe(2)
@@ -700,7 +718,10 @@ describeEachProvider('RFC-359 W25 review decision providers', (harness) => {
 
       const { nodeRuns, docVersions, reviewComments } = tablesOf(h.db)
       const reviewRun = (
-        await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, h.reviewRunId))
+        await h.db
+          .select(nodeRunFixtureColumns(h.db))
+          .from(nodeRuns)
+          .where(eq(nodeRuns.id, h.reviewRunId))
       )[0]!
       expect(reviewRun.status).toBe('done')
       expect(reviewRun.reviewIteration).toBe(0)
@@ -712,7 +733,7 @@ describeEachProvider('RFC-359 W25 review decision providers', (harness) => {
       expect(await h.db.select().from(reviewComments)).toHaveLength(0)
 
       const upstream = await h.db
-        .select()
+        .select(nodeRunFixtureColumns(h.db))
         .from(nodeRuns)
         .where(and(eq(nodeRuns.taskId, h.taskId), eq(nodeRuns.nodeId, 'doc')))
       expect(upstream).toHaveLength(1)
@@ -757,7 +778,10 @@ describeEachProvider('RFC-359 W25 review decision providers', (harness) => {
 
       const { nodeRuns, docVersions } = tablesOf(h.db)
       const reviewRun = (
-        await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, h.reviewRunId))
+        await h.db
+          .select(nodeRunFixtureColumns(h.db))
+          .from(nodeRuns)
+          .where(eq(nodeRuns.id, h.reviewRunId))
       )[0]!
       expect(reviewRun.status).toBe('pending')
       expect(reviewRun.reviewIteration).toBe(1)
@@ -767,7 +791,7 @@ describeEachProvider('RFC-359 W25 review decision providers', (harness) => {
       expect(doc.decisionReason).toBe('redo the document')
 
       const upstream = await h.db
-        .select()
+        .select(nodeRunFixtureColumns(h.db))
         .from(nodeRuns)
         .where(and(eq(nodeRuns.taskId, h.taskId), eq(nodeRuns.nodeId, 'doc')))
       expect(upstream).toHaveLength(2)
@@ -818,7 +842,7 @@ describeEachProvider('RFC-359 W25 review decision providers', (harness) => {
       expect(doc.decisionReason).not.toContain('reject must lose')
 
       const upstream = await h.db
-        .select()
+        .select(nodeRunFixtureColumns(h.db))
         .from(nodeRuns)
         .where(and(eq(nodeRuns.taskId, h.taskId), eq(nodeRuns.nodeId, 'doc')))
       expect(upstream).toHaveLength(2)
@@ -1045,7 +1069,7 @@ describeEachProvider('RFC-359 W25 review decision providers', (harness) => {
         sourcePortName: 'docpath',
         versionIndex: 1,
         reviewIteration: 0,
-        bodyPath: siblingBodyPath,
+        ...contentRowColumns(legacyContentRef('review-body-path', 'local-file', siblingBodyPath)),
         decision: 'pending',
       })
 
@@ -1079,7 +1103,10 @@ describeEachProvider('RFC-359 W25 review decision providers', (harness) => {
       expect(results[0]!.status).toBe('fulfilled')
       expectRejectedWithCode(results[1]!, 'review-not-awaiting')
       const siblingRun = (
-        await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, siblingRunId))
+        await h.db
+          .select(nodeRunFixtureColumns(h.db))
+          .from(nodeRuns)
+          .where(eq(nodeRuns.id, siblingRunId))
       )[0]!
       expect(siblingRun.status).toBe('pending')
       expect(siblingRun.reviewIteration).toBe(1)

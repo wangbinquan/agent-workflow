@@ -8,12 +8,13 @@
 // submodule 拓扑是 per-repo 的，塞进一个扁平 map 会让两个都含 `vendor` 的仓
 // 互相覆盖。这与既有的 iso_base_snapshot / iso_base_snapshot_repos_json 同制。
 
+import { FROZEN_MIGRATIONS } from './migration-freeze'
+import { openFrozenEpoch1Db } from './migration-freeze'
 import { describe, expect, test } from 'bun:test'
 import { Database } from 'bun:sqlite'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { openDb } from '@/db/client'
 import { removeTempDirSync } from './fixtures/tempDir'
 
 interface ColumnInfo {
@@ -27,13 +28,13 @@ function columns(db: Database, table: string): ColumnInfo[] {
   return db.query(`PRAGMA table_info(${table})`).all() as unknown as ColumnInfo[]
 }
 
-const MIGRATIONS_FOLDER = join(import.meta.dir, '..', 'db', 'migrations')
+const MIGRATIONS_FOLDER = FROZEN_MIGRATIONS
 
 function withMigratedDb<T>(fn: (raw: Database) => T): T {
   const dir = mkdtempSync(join(tmpdir(), 'aw-mig-0102-'))
   const dbPath = join(dir, 'test.db')
   try {
-    const client = openDb({ path: dbPath, migrationsFolder: MIGRATIONS_FOLDER })
+    const client = openFrozenEpoch1Db({ path: dbPath, migrationsFolder: MIGRATIONS_FOLDER })
     try {
       // Reopen raw for PRAGMA introspection; drizzle's handle wraps the same file.
       const raw = new Database(dbPath, { readwrite: true })

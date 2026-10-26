@@ -1,4 +1,3 @@
-export { createFileRuntimeLegacyConfiguration as composeFileRuntimeLegacyConfiguration } from '../infrastructure/local/fileRuntimeLegacyConfiguration'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createRuntimeRegistryApplication } from '../application/runtimeRegistry'
 import { createRuntimeRegistryEffects } from '../infrastructure/runtimeRegistryEffects'
@@ -16,4 +15,3 @@ export function composeRuntimeRegistryOperations(
 }
 
 export type { RuntimeRegistryOperations } from '../application/ports/runtimeRegistry'
-export type { RuntimeLegacyConfigurationPort } from '../application/ports/runtimeRegistryEffects'

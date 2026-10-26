@@ -1,41 +1,63 @@
-import { createHumanGatePersistenceParticipantInTx } from '@/modules/task-execution/public/participants'
+import type { ContentStore } from '@/platform/content/contentStore'
 import {
+  nodeOutputSlot,
+  createRunSelectionReader,
   taskGateOpenCondition,
   taskGateVisibleCondition,
-} from '@/modules/task-execution/public/queries'
-
-import { createNodeOutputQueries } from '@/modules/task-execution/public/queries'
-
-import type {
-  TaskGateContext,
-  TaskGateDefinitionContext,
-} from '@/modules/task-execution/public/queries'
-import { createTaskGateQueries } from '@/modules/task-execution/public/queries'
-import { legacyReviewBodyPath } from '@/platform/content/legacyReview'
-import { writeLegacyReviewBody } from './local/fileReviewArtifactContent'
-import {
-  createConsumedInputsParticipantInTx,
-  prepareConsumedInputs,
-} from '@/modules/task-execution/public/participants'
-import {
+  createNodeOutputQueries,
+  type TaskGateContext,
+  type TaskGateDefinitionContext,
+  createTaskGateQueries,
   nodeRunStatusCondition,
   createNodeRunQueries,
-  createRunSelectionOracleSnapshot,
   createRunHistorySnapshot,
   type NodeRunFactSnapshot,
   type NodeRunCheckpointSnapshot,
   type RunHistoryFacts,
+  hasTaskRollbackCheckpoint,
+  createTaskSubjectQueries,
+  isPathishKindString,
+  subsetArchiveJson,
+  type PortArtifactReader,
+  loadFrameChain,
+  resolveSourceFrame,
+  parseConsumedJson,
 } from '@/modules/task-execution/public/queries'
-import { deriveNodeRunRole } from '@/modules/task-execution/public/types'
-import { hasTaskRollbackCheckpoint } from '@/modules/task-execution/public/queries'
-import { createTaskSubjectQueries } from '@/modules/task-execution/public/queries'
-import type { TaskSubjectProjection } from '@/modules/task-execution/public/types'
+
+import type { HistoryRestrictionPort } from '@/platform/contracts/historyRestriction'
+import { contentRefColumns } from '@/platform/content/contentStore'
+import { legacyContentRef } from '@/platform/content/contentRef'
+import {
+  contentRowColumns,
+  databaseContentColumnsInTx,
+  databaseContentText,
+  releaseContentRowsInTx,
+} from '@/platform/content/infrastructure/contentStore'
+import {
+  createHumanGatePersistenceParticipantInTx,
+  createConsumedInputsParticipantInTx,
+  prepareConsumedInputs,
+  selectPortArtifactReader,
+  reselectRunInTx,
+} from '@/modules/task-execution/public/participants'
+
+import { reviewBodyPath } from '@/platform/content/locations/review'
+import {
+  writeLegacyReviewBody,
+  createFileReviewArtifactContent,
+} from './local/fileReviewArtifactContent'
+
+import {
+  nodeRunMintIdentityForSlot,
+  type TaskSubjectProjection,
+} from '@/modules/task-execution/public/types'
+
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import type { ReviewArtifactSelection } from '../application/ports/reviewArtifactSelection'
 import type { CommittedReviewArtifactReader } from '../application/ports/committedReviewArtifactReader'
 import type { WorkspaceRollbackSnapshotInspector } from '../application/prepareWorkspaceRollbackPlan'
-import { createFileReviewArtifactContent } from './local/fileReviewArtifactContent'
+
 // SQLite review persistence and decision mechanics (RFC-005 / RFC-349).
 //
 // This module owns the review feature's state transitions outside the
@@ -79,23 +101,21 @@ import {
 } from 'drizzle-orm'
 import { alias } from '@/platform/persistence/tableAlias'
 import { ulid } from 'ulid'
-import type {
-  AgentOutputKind,
-  DocVersion,
-  DocVersionDecision,
-  NodeRunStatus,
-  ReviewBatchSelection,
-  ReviewAuthorRole,
-  ReviewComment,
-  ReviewCommentAnchor,
-  ReviewDecisionKind,
-  ReviewDetail,
-  ReviewSummary,
-  ReviewPromptContext,
-  WorkflowDefinition,
-  WorkflowNode,
-} from '@agent-workflow/shared'
 import {
+  type AgentOutputKind,
+  type DocVersion,
+  type DocVersionDecision,
+  type NodeRunStatus,
+  type ReviewBatchSelection,
+  type ReviewAuthorRole,
+  type ReviewComment,
+  type ReviewCommentAnchor,
+  type ReviewDecisionKind,
+  type ReviewDetail,
+  type ReviewSummary,
+  type ReviewPromptContext,
+  type WorkflowDefinition,
+  type WorkflowNode,
   type ReviewAnchorRequest,
   type ReviewAnchorWarning,
   type TaskActorRole,
@@ -109,8 +129,6 @@ import {
   TERMINAL_TASK_STATUSES,
   WorkflowDefinitionSchema,
   reviewInputSource,
-} from '@agent-workflow/shared'
-import {
   acceptedSubsetPaths,
   allDocumentsDecided,
   buildPriorSelectionLookup,
@@ -128,13 +146,12 @@ import {
   REVIEW_APPROVED_PORT_MULTI,
   REVIEW_APPROVED_PORT_SINGLE,
   SYSTEM_DECIDER,
+  type PriorRoundMember,
+  type ReviewDocumentSummary,
+  type ReviewRoundMember,
+  type ReviewRoundSummary,
 } from '@agent-workflow/shared'
-import type {
-  PriorRoundMember,
-  ReviewDocumentSummary,
-  ReviewRoundMember,
-  ReviewRoundSummary,
-} from '@agent-workflow/shared'
+
 import type { Actor } from '@/auth/actor'
 
 import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
@@ -154,21 +171,16 @@ import {
   buildReviewAnchorDocument,
   createReviewAnchorBudget,
   resolveReviewAnchor,
+  type ReviewAnchorFailure,
 } from '@/modules/collaboration/domain/reviewAnchor'
 import { readCommittedReviewArtifactBody } from '@/modules/collaboration/public/queries'
 import type { CanonicalHumanGateRequest } from '@/modules/collaboration/domain/canonicalGateRequest'
-import type { ReviewAnchorFailure } from '@/modules/collaboration/domain/reviewAnchor'
+
 import type { ReviewGateOpenDocumentDraft } from '@/modules/collaboration/application/prepareReviewGateOpen'
-import {
-  isPathishKindString,
-  subsetArchiveJson,
-  type PortArtifactReader,
-} from '@/modules/task-execution/public/queries'
-import { selectPortArtifactReader } from '@/modules/task-execution/public/participants'
+
 import type { TaskExecutionContextRef } from '@/modules/task-execution/public/commands'
 import { chunkedAll } from '@/util/sqlChunk'
-import { loadFrameChain, resolveSourceFrame } from '@/modules/task-execution/public/queries'
-import { parseConsumedJson } from '@/services/freshness'
+
 import { assertNodeRunSourceTerminationAdmission } from '@/services/lifecycle'
 // RFC-359 W1-T2c 起决定事务里的 node_run 状态 CAS 走两引擎共用的中立内核；W4-D28b 起评审门开启
 // （dispatchReviewNodeUnlocked）也走它——同步的 `withTaskExecutionTransaction` 网关已整体退役。
@@ -219,7 +231,6 @@ import {
 } from './humanGateOperationJournal'
 import { publishCommittedEventsAfterCommit } from '@/platform/events/committed/runtime'
 import { waitAtHumanGateDecisionCommitBarrier } from '@/services/humanGateDecisionE2eBarrier'
-import { reselectRunInTx } from '@/modules/task-execution/public/participants'
 
 const {
   canonicalHumanGateRequestHash,
@@ -494,7 +505,7 @@ export function docVersionRelativePath(
   // Undefined (single-document) keeps the legacy path byte-for-byte.
   itemIndex?: number,
 ): string {
-  return legacyReviewBodyPath({
+  return reviewBodyPath({
     taskId,
     reviewNodeId,
     sourcePortName: portName,
@@ -570,6 +581,8 @@ async function upstreamPortArchiveJson(
 
 export interface DispatchReviewArgs {
   taskLock: HumanGateTaskLockPort
+  historyRestrictions: HistoryRestrictionPort
+  content?: ContentStore
   upstreamAgents: ReviewUpstreamAgentPort
   reviewArtifacts?: ReviewArtifactSelection
   /** Selected by the collaboration factory, outside the public dispatch business input. */
@@ -719,7 +732,6 @@ async function dispatchReviewNodeUnlocked(args: DispatchReviewArgs): Promise<Dis
   // (clarifyIteration=0, retryIndex=M>0) that finished BEFORE the clarify
   // session opened, causing review to read a node_run that never emitted the
   // expected port.
-  const sourceRuns = await createNodeRunQueries(db).list({ taskId: taskId, nodeId: sourceNodeId })
   // RFC-354: the source is read in the frame the environment chain resolves it
   // to from the review node's own frame (a sibling in this generation and
   // round, or a value captured from an enclosing scope).
@@ -736,17 +748,21 @@ async function dispatchReviewNodeUnlocked(args: DispatchReviewArgs): Promise<Dis
     frame: reviewFrame,
     containerRowById: frameChain.lookup,
   })
-  const selectedSource = sourceFrame.ok
-    ? await createRunSelectionOracleSnapshot(sourceRuns, { scope: { kind: 'rows' } }).current(
-        taskId,
-        {
-          kind: 'node',
-          nodeId: sourceNodeId,
-          frame: sourceFrame.frame,
-        },
-      )
-    : null
-  const sourceRun = sourceRuns.find((run) => run.id === selectedSource?.id)
+  const sourceRun = await databaseSessionFor(db).snapshotRead(async (tx) => {
+    const selectedSource = sourceFrame.ok
+      ? await createRunSelectionReader(tx).current(
+          taskId,
+          nodeOutputSlot(
+            sourceNodeId,
+            definition.nodes.find((source) => source.id === sourceNodeId)?.kind,
+            sourceFrame.frame,
+          ),
+        )
+      : null
+    return selectedSource === null
+      ? undefined
+      : ((await createNodeRunQueries(tx).read(selectedSource.id)) ?? undefined)
+  })
   if (sourceRun === undefined || sourceRun.status !== 'done') {
     return {
       kind: 'failed',
@@ -857,9 +873,10 @@ async function dispatchReviewNodeUnlocked(args: DispatchReviewArgs): Promise<Dis
   const coversSource = async (row: NodeRunFactSnapshot): Promise<boolean> => {
     // HEAD looked up a plain object: inherited names also participate in this comparison.
     const consumed = Object.fromEntries(
-      (
-        await createRunSelectionOracleSnapshot([row], { scope: { kind: 'rows' } }).consumed(row.id)
-      ).map((edge) => [edge.producerNodeId, edge.producerRunId]),
+      (await createRunSelectionReader(db).consumed(row.id)).map((edge) => [
+        edge.producerNodeId,
+        edge.producerRunId,
+      ]),
     )
     const c = consumed[sourceNodeId]
     return c === undefined || c === sourceRun.id
@@ -910,6 +927,8 @@ async function dispatchReviewNodeUnlocked(args: DispatchReviewArgs): Promise<Dis
     if (isMultiDoc) {
       const prior = await loadPriorRound(db, appHome, {
         taskLock: args.taskLock,
+        historyRestrictions: args.historyRestrictions,
+        content: args.content,
         reviewArtifacts: args.reviewArtifacts,
         taskId,
         reviewNodeId: node.id,
@@ -984,6 +1003,7 @@ async function dispatchReviewNodeUnlocked(args: DispatchReviewArgs): Promise<Dis
       })
       await withTaskExecutionWrite(db, async (tx) => {
         await fenceTaskWrite(tx, { taskId, context: executionContext, now: decidedAt })
+        await createHumanGatePersistenceParticipantInTx(tx).lockTask(taskId)
         if (refreshAwaitingReview) {
           const { docVersions, reviewComments } = tablesOf(tx)
           const current = await createNodeRunQueries(tx).read(reuse.id)
@@ -1014,6 +1034,11 @@ async function dispatchReviewNodeUnlocked(args: DispatchReviewArgs): Promise<Dis
             )
           }
           if (currentPendingIds.length > 0) {
+            const retired = await tx
+              .select()
+              .from(reviewComments)
+              .where(inArray(reviewComments.docVersionId, currentPendingIds))
+            await releaseContentRowsInTx(tx, 'review-comment', retired, decidedAt)
             await tx
               .delete(reviewComments)
               .where(inArray(reviewComments.docVersionId, currentPendingIds))
@@ -1046,7 +1071,14 @@ async function dispatchReviewNodeUnlocked(args: DispatchReviewArgs): Promise<Dis
           })
         } else {
           reviewNodeRunId = await createNodeRunMintParticipantInTx(tx).mint({
-            ...deriveNodeRunRole({ nodeId: node.id, rerunCause: 'review-park' }),
+            ...nodeRunMintIdentityForSlot(
+              {
+                kind: 'node',
+                nodeId: node.id,
+                frame: { containerRunId: containerRunId, iteration: iteration },
+              },
+              { kind: 'current' },
+            ),
             taskId,
             nodeId: node.id,
             status: 'awaiting_review',
@@ -1132,6 +1164,8 @@ async function dispatchReviewNodeUnlocked(args: DispatchReviewArgs): Promise<Dis
     const collaboration = humanGateComposition.createCollaborationCommandContext({
       db,
       taskLock: args.taskLock,
+      historyRestrictions: args.historyRestrictions,
+      content: args.content,
       appHome,
       reviewArtifacts: args.reviewArtifacts,
     })
@@ -1161,6 +1195,8 @@ async function dispatchReviewNodeUnlocked(args: DispatchReviewArgs): Promise<Dis
       await humanGateComposition.parkPreparedHumanGate({
         db,
         prepared: prepared.prepared,
+        historyRestrictions: args.historyRestrictions,
+        content: args.content,
         ...(executionContext === undefined ? {} : { executionContext }),
       })
     }
@@ -1215,6 +1251,7 @@ async function dispatchReviewNodeUnlocked(args: DispatchReviewArgs): Promise<Dis
     // 事务内 CAS，只是跑在两引擎共用的写事务上；顺带与紧随其后的 consumed 写并成一笔。
     await withTaskExecutionWrite(db, async (tx) => {
       await fenceTaskWrite(tx, { taskId, context: executionContext })
+      await createHumanGatePersistenceParticipantInTx(tx).lockTask(taskId)
       await transitionNodeRunStatusTx({
         tx,
         nodeRunId: reviewNodeRunId,
@@ -1236,7 +1273,14 @@ async function dispatchReviewNodeUnlocked(args: DispatchReviewArgs): Promise<Dis
     // reviewIteration — same review round, re-evaluated on the new content.
     reviewIteration = reuse?.reviewIteration ?? 0
     reviewNodeRunId = await new DrizzleNodeRunLifecyclePersistence(db).mint({
-      ...deriveNodeRunRole({ nodeId: node.id, rerunCause: 'review-park' }),
+      ...nodeRunMintIdentityForSlot(
+        {
+          kind: 'node',
+          nodeId: node.id,
+          frame: { containerRunId: containerRunId, iteration: iteration },
+        },
+        { kind: 'current' },
+      ),
       taskId,
       nodeId: node.id,
       status: 'awaiting_review',
@@ -1286,6 +1330,8 @@ async function dispatchReviewNodeUnlocked(args: DispatchReviewArgs): Promise<Dis
       // re-mint here (design §5). Empty on the first round → all unselected.
       const prior = await loadPriorRound(db, appHome, {
         taskLock: args.taskLock,
+        historyRestrictions: args.historyRestrictions,
+        content: args.content,
         reviewArtifacts: args.reviewArtifacts,
         taskId,
         reviewNodeId: node.id,
@@ -1382,6 +1428,7 @@ async function dispatchReviewNodeUnlocked(args: DispatchReviewArgs): Promise<Dis
       await withTaskExecutionWrite(db, async (tx) => {
         await fenceTaskWrite(tx, { taskId, context: executionContext })
         const taskHumanGate = createHumanGatePersistenceParticipantInTx(tx)
+        await taskHumanGate.lockTask(taskId)
         await taskHumanGate.writeReviewOutput({
           nodeRunId: reviewNodeRunId,
           portName: REVIEW_APPROVED_PORT_MULTI,
@@ -1559,7 +1606,13 @@ async function createDocVersion(args: CreateDocVersionArgs): Promise<DocVersion>
     sourcePortName: args.sourcePortName,
     versionIndex: nextVersion,
     reviewIteration: args.reviewIteration,
-    bodyPath,
+    ...contentRowColumns(
+      legacyContentRef('review-body-path', 'local-file', bodyPath, {
+        sha256: sha256Hex(Buffer.from(args.body)),
+        size: Buffer.byteLength(args.body),
+        mediaType: 'text/markdown',
+      }),
+    ),
     commentsJson: '[]',
     decision: 'pending',
     decisionReason: null,
@@ -1624,6 +1677,8 @@ async function loadPriorRound(
   appHome: string,
   args: {
     taskLock: HumanGateTaskLockPort
+    historyRestrictions: HistoryRestrictionPort
+    content?: ContentStore
     taskId: string
     reviewNodeId: string
     iteration: number
@@ -1672,13 +1727,15 @@ async function loadPriorRound(
   const collaboration = humanGateComposition.createCollaborationCommandContext({
     db,
     taskLock: args.taskLock,
+    historyRestrictions: args.historyRestrictions,
+    content: args.content,
     appHome,
     reviewArtifacts: args.reviewArtifacts,
   })
   for (const r of byIndex.values()) {
     let body = ''
     try {
-      body = await readCommittedReviewArtifactBody(collaboration, r.bodyPath)
+      body = await readCommittedReviewArtifactBody(collaboration, rowToDocVersion(r).bodyPath)
     } catch {
       // Missing prior body → treat as "" so any real new content compares as
       // changed (conservative: prefer an extra stale flag over a silent carry).
@@ -1861,7 +1918,7 @@ export async function listReviewSummaries(
   // badge poll that materialized three whole tables per open tab (audit L1-1).
   const nodeRunIds = Array.from(new Set(dvRows.map((r) => r.reviewNodeRunId)))
   const nodeRunRows = await chunkedAll(nodeRunIds, async (ids) => [
-    ...(await createNodeRunQueries(db).listDispatchFacts({ runIds: ids })),
+    ...(await createNodeRunQueries(db).listHistoryDispatchFacts({ runIds: ids })),
   ])
   const runById = new Map(nodeRunRows.map((r) => [r.id, r]))
   const taskIds = Array.from(new Set(dvRows.map((r) => r.taskId)))
@@ -1955,7 +2012,8 @@ export async function listReviewSummaries(
  * locks this count to the list+filter pipeline's length.
  */
 export async function countPendingReviews(db: PersistenceDb, actor?: Actor): Promise<number> {
-  const { docVersions, reviewNodeReviewers } = tablesOf(db)
+  const { reviewNodeReviewers } = tablesOf(db)
+  const { docVersions } = tablesOf(db)
   // RFC-359 AC-11 —— 这条端点原本打**三次串行往返**：①主 join 捞出全部待审行，
   // ②`visibleTaskIds(...)` 按 taskId 列表查可见性，③`chunkedAll` 查指派表；再在 JS 里
   // 归并去重计数。三段在 SQLite 上几乎免费（进程内、每条 ~0μs），在 PostgreSQL 上每段
@@ -2046,7 +2104,10 @@ export async function getReviewDetail(
   // newest-500 window silently 404'd any review whose doc_versions aged out of
   // it. Latest-per-port row (max versionIndex) drives the summary, matching the
   // list's `latestPerRun` selection.
-  const summaryRunRows = await createNodeRunQueries(db).list({ runIds: [nodeRunId], limit: 1 })
+  const summaryRunRows = await createNodeRunQueries(db).listHistory({
+    runIds: [nodeRunId],
+    limit: 1,
+  })
   const summaryRun = summaryRunRows[0]
   if (summaryRun === undefined) {
     throw new NotFoundError('review-not-found', `node run ${nodeRunId} not found`)
@@ -2222,7 +2283,7 @@ async function commentsForDocVersion(
       .from(reviewComments)
       .where(eq(reviewComments.docVersionId, dv.id))
       .orderBy(asc(reviewComments.anchorParagraphIdx), asc(reviewComments.anchorOffsetStart))
-    return rows.map(rowToReviewComment)
+    return Promise.all(rows.map((row) => rowToReviewComment(db, row)))
   }
   const comments = parseArchivedComments(dv.commentsJson)
   comments.sort((a, b) => {
@@ -2641,7 +2702,13 @@ async function addReviewCommentUnlocked(
       contextBefore: canonical.contextBefore,
       contextAfter: canonical.contextAfter,
       occurrenceIndex: canonical.occurrenceIndex,
-      commentText: args.commentText,
+      ...(await databaseContentColumnsInTx(
+        tx,
+        'review-comment',
+        id,
+        Buffer.from(args.commentText),
+        dv.taskId,
+      )),
       author: args.author ?? LOCAL_DECIDER,
       authorRole: args.authorRole ?? null,
       createdAt: now,
@@ -2780,7 +2847,28 @@ async function updateReviewCommentTextUnlocked(
   const operationRef = `review-comment:update:${commentId}:${ulid(now)}`
   const eventRefs = await databaseSessionFor(db).transaction(async (tx) => {
     const { reviewComments } = tablesOf(tx)
-    await tx.update(reviewComments).set({ commentText }).where(eq(reviewComments.id, commentId))
+    await createHumanGatePersistenceParticipantInTx(tx).lockTask(dv.taskId)
+    await engineOf(tx).lockAggregateRoot(tx, reviewComments, reviewComments.id, commentId)
+    const [current] = await tx
+      .select()
+      .from(reviewComments)
+      .where(eq(reviewComments.id, commentId))
+      .limit(1)
+    if (!current)
+      throw new NotFoundError('review-comment-not-found', `review_comment ${commentId} not found`)
+    await releaseContentRowsInTx(tx, 'review-comment', [current], now)
+    await tx
+      .update(reviewComments)
+      .set(
+        await databaseContentColumnsInTx(
+          tx,
+          'review-comment',
+          operationRef,
+          Buffer.from(commentText),
+          dv.taskId,
+        ),
+      )
+      .where(eq(reviewComments.id, commentId))
     const eventRef = await appendReviewCommentsChangedCommittedEvent(tx, {
       gate: {
         taskId: dv.taskId,
@@ -2867,6 +2955,16 @@ async function deleteReviewCommentUnlocked(
   const now = Date.now()
   const eventRefs = await databaseSessionFor(db).transaction(async (tx) => {
     const { reviewComments } = tablesOf(tx)
+    await createHumanGatePersistenceParticipantInTx(tx).lockTask(dv.taskId)
+    await engineOf(tx).lockAggregateRoot(tx, reviewComments, reviewComments.id, commentId)
+    const [current] = await tx
+      .select()
+      .from(reviewComments)
+      .where(eq(reviewComments.id, commentId))
+      .limit(1)
+    if (!current)
+      throw new NotFoundError('review-comment-not-found', `review_comment ${commentId} not found`)
+    await releaseContentRowsInTx(tx, 'review-comment', [current], now)
     await tx.delete(reviewComments).where(eq(reviewComments.id, commentId))
     const eventRef = await appendReviewCommentsChangedCommittedEvent(tx, {
       gate: {
@@ -2983,6 +3081,8 @@ export const REVIEW_DECISION_POLICY = {
 export interface SubmitReviewDecisionArgs {
   upstreamAgents: ReviewUpstreamAgentPort
   taskLock: HumanGateTaskLockPort
+  historyRestrictions: HistoryRestrictionPort
+  content?: ContentStore
   reviewReader?: CommittedReviewArtifactReader
   rollbackSnapshots?: WorkspaceRollbackSnapshotInspector
   db: PersistenceDb
@@ -3047,7 +3147,18 @@ export async function submitReviewDecision(
   args: SubmitReviewDecisionArgs,
 ): Promise<SubmitReviewDecisionResult> {
   return withReviewNodeMutationLock(args.db, args.nodeRunId, () =>
-    submitReviewDecisionUnlocked(args),
+    submitReviewDecisionUnlocked({
+      ...args,
+      reviewReader:
+        args.reviewReader ??
+        (args.content === undefined
+          ? undefined
+          : new DatabaseCommittedReviewArtifactReader(
+              args.db,
+              createFileReviewArtifactContent(args.appHome),
+              args.content,
+            )),
+    }),
   )
 }
 
@@ -3355,7 +3466,8 @@ async function submitReviewDecisionUnlocked(
 ): Promise<SubmitReviewDecisionResult> {
   const { db } = args
 
-  const { docVersions, collaborationGateOperations } = tablesOf(db)
+  const { collaborationGateOperations } = tablesOf(db)
+  const { docVersions } = tablesOf(db)
   // ── prepare A: rows + admission ────────────────────────────────────────────
   const run = (await createNodeRunQueries(db).list({ runIds: [args.nodeRunId], limit: 1 }))[0]
   if (run === undefined) {
@@ -3610,7 +3722,7 @@ async function submitReviewDecisionUnlocked(
     workspaceRollbackPlan,
   }
   const decisionManifestJson = encodeReviewDecisionManifest(decisionManifest)
-  const operations = new DatabaseHumanGateOperationJournal(args.taskLock)
+  const operations = new DatabaseHumanGateOperationJournal(args.taskLock, args.historyRestrictions)
 
   // ── commit: one transaction ───────────────────────────────────────────────
   const nextIter =
@@ -3723,22 +3835,21 @@ async function submitReviewDecisionUnlocked(
     const inserted: Array<{ docVersion: DocVersion; comment: ReviewComment }> = []
     let skipped = 0
     for (const c of comments) {
-      const dup = (
-        await tx
-          .select({ id: reviewComments.id })
-          .from(reviewComments)
-          .where(
-            and(
-              eq(reviewComments.docVersionId, c.docVersion.id),
-              eq(reviewComments.anchorOffsetStart, c.anchor.offsetStart),
-              eq(reviewComments.anchorOffsetEnd, c.anchor.offsetEnd),
-              eq(reviewComments.selectedText, c.anchor.selectedText),
-              eq(reviewComments.commentText, c.commentText),
-            ),
-          )
-          .limit(1)
-      )[0]
-      if (dup !== undefined) {
+      const candidates = await tx
+        .select()
+        .from(reviewComments)
+        .where(
+          and(
+            eq(reviewComments.docVersionId, c.docVersion.id),
+            eq(reviewComments.anchorOffsetStart, c.anchor.offsetStart),
+            eq(reviewComments.anchorOffsetEnd, c.anchor.offsetEnd),
+            eq(reviewComments.selectedText, c.anchor.selectedText),
+          ),
+        )
+      const matches = await Promise.all(
+        candidates.map(async (row) => (await databaseContentText(tx, row)) === c.commentText),
+      )
+      if (matches.some(Boolean)) {
         skipped += 1
         continue
       }
@@ -3757,7 +3868,13 @@ async function submitReviewDecisionUnlocked(
         contextBefore: c.anchor.contextBefore,
         contextAfter: c.anchor.contextAfter,
         occurrenceIndex: c.anchor.occurrenceIndex,
-        commentText: c.commentText,
+        ...(await databaseContentColumnsInTx(
+          tx,
+          'review-comment',
+          id,
+          Buffer.from(c.commentText),
+          c.docVersion.taskId,
+        )),
         author,
         authorRole,
         createdAt,
@@ -3786,7 +3903,7 @@ async function submitReviewDecisionUnlocked(
         .from(reviewComments)
         .where(eq(reviewComments.docVersionId, d.id))
         .orderBy(asc(reviewComments.anchorParagraphIdx), asc(reviewComments.anchorOffsetStart))
-      const commentsArr = commentRows.map(rowToReviewComment)
+      const commentsArr = await Promise.all(commentRows.map((row) => rowToReviewComment(tx, row)))
       const claimed = await tx
         .update(docVersions)
         .set({
@@ -3812,6 +3929,7 @@ async function submitReviewDecisionUnlocked(
           `doc_version ${d.id} was decided concurrently; review ${args.nodeRunId} decision claim lost`,
         )
       }
+      await releaseContentRowsInTx(tx, 'review-comment', commentRows, decidedAt)
       await tx.delete(reviewComments).where(eq(reviewComments.docVersionId, d.id))
     }
 
@@ -3911,7 +4029,11 @@ async function submitReviewDecisionUnlocked(
         // (RFC-074 PR-C: no clarifyIteration inherit, see
         // review-iterate-inherits-clarify-iteration.test.ts).
         await createNodeRunMintParticipantInTx(tx).mint({
-          ...deriveNodeRunRole({ nodeId: up.nodeId, rerunCause: rerun.rerunPolicy.mintCause }),
+          ...nodeRunMintIdentityForSlot(up.latest.slot, {
+            kind: 'operation',
+            cause: 'review-rerun',
+            operationRef: begun.operation.id,
+          }),
           id: up.rerunNodeRunId,
           taskId: dv.taskId,
           nodeId: up.nodeId,
@@ -4295,20 +4417,19 @@ async function planRerun(
 
   const upstreams: PreparedRerunUpstream[] = []
   for (const nodeId of rerunSet) {
-    const upRuns = await createNodeRunQueries(db).listWithCheckpoints({
-      taskId: dv.taskId,
-      nodeId: nodeId,
-      iteration: run.iteration,
+    const latest = await databaseSessionFor(db).snapshotRead(async (tx) => {
+      const upRuns = await createNodeRunQueries(tx).listWithCheckpoints({
+        taskId: dv.taskId,
+        nodeId,
+        iteration: run.iteration,
+      })
+      const history = await createRunSelectionReader(tx).familyHistory(
+        dv.taskId,
+        { nodeId, iteration: run.iteration, runIds: upRuns.map((row) => row.id) },
+        { topLevelOnly: true },
+      )
+      return upRuns.find((row) => row.id === history.at(-1)?.id)
     })
-    // Pick the freshest top-level upstream row with the same comparator the
-    // scheduler / dispatchReviewNode use (clarifyIteration → retryIndex → ulid);
-    // a plain desc(retryIndex) sort shadows the clarify-rerun row (locked by
-    // review-iterate-inherits-clarify-iteration.test.ts). RFC-096: intentionally
-    // no status filter — supersede must cancel live rows AND the typical done row.
-    const history = await createRunSelectionOracleSnapshot(upRuns, {
-      scope: { kind: 'rows' },
-    }).familyHistory(dv.taskId, { nodeId, iteration: run.iteration }, { topLevelOnly: true })
-    const latest = upRuns.find((row) => row.id === history.at(-1)?.id)
     if (latest === undefined) continue
     // RFC-284 T21：latest 单行口径 = 单元素集特例，收编 nextRetryIndex。
     upstreams.push({
@@ -4833,7 +4954,7 @@ export function rowToDocVersion(row: PersistenceTables['docVersions']['$inferSel
     sourcePortName: row.sourcePortName,
     versionIndex: row.versionIndex,
     reviewIteration: row.reviewIteration,
-    bodyPath: row.bodyPath,
+    bodyPath: reviewBodyKey(row),
     commentsJson: row.commentsJson,
     decision: row.decision as DocVersionDecision,
     decisionReason: row.decisionReason,
@@ -4852,9 +4973,10 @@ export function rowToDocVersion(row: PersistenceTables['docVersions']['$inferSel
   }
 }
 
-function rowToReviewComment(
+async function rowToReviewComment(
+  db: PersistenceDb,
   row: PersistenceTables['reviewComments']['$inferSelect'],
-): ReviewComment {
+): Promise<ReviewComment> {
   return {
     id: row.id,
     docVersionId: row.docVersionId,
@@ -4868,7 +4990,7 @@ function rowToReviewComment(
       contextAfter: row.contextAfter,
       occurrenceIndex: row.occurrenceIndex,
     },
-    commentText: row.commentText,
+    commentText: await databaseContentText(db, row),
     author: row.author,
     authorRole: (row.authorRole ?? null) as ReviewComment['authorRole'],
     createdAt: row.createdAt,
@@ -4927,4 +5049,15 @@ export async function loadUpstreamPortKind(
     /* fall through */
   }
   return undefined
+}
+
+function reviewBodyKey(row: PersistenceTables['docVersions']['$inferSelect']): string {
+  const ref = contentRefColumns.decode(row.contentRefJson, row.contentInlineBytes)
+  if (
+    ref?.kind === 'local-file' &&
+    ['review-body', 'review-body-path'].includes(ref.location.codec) &&
+    typeof ref.location.value === 'string'
+  )
+    return ref.location.value
+  return `doc-content:${row.id}`
 }

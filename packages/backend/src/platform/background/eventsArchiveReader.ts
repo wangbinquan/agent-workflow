@@ -1,4 +1,4 @@
-import { legacyEventArchivePath } from '@/platform/content/legacyEventArchive'
+import { eventArchivePath } from '@/platform/content/locations/eventArchive'
 import { existsSync } from 'node:fs'
 
 export interface ArchivedNodeRunEvent {
@@ -52,7 +52,7 @@ export async function readArchivedEvents(
   since: number,
   limit: number,
 ): Promise<readonly ArchivedNodeRunEvent[]> {
-  const file = legacyEventArchivePath(logsDir, taskId, nodeRunId)
+  const file = eventArchivePath(logsDir, taskId, nodeRunId)
   if (!existsSync(file)) return []
   const out: ArchivedNodeRunEvent[] = []
   const decoder = new TextDecoder()

@@ -1,3 +1,4 @@
+import { initializeTaskWorkspace } from './helpers/taskWorkspaceFixture'
 // Locked regression: an exhausted wrapper-loop silently flips failed->done on resume.
 //
 // DEFECT (HIGH): a wrapper-loop that reaches maxIterations without satisfying
@@ -24,7 +25,7 @@ import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
-import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
@@ -49,7 +50,7 @@ interface Harness {
 function buildHarness(provider: ProviderHarness): Harness {
   const appHome = mkdtempSync(join(tmpdir(), 'aw-red-loopexhaust-'))
   const worktreePath = join(appHome, 'wt')
-  mkdirSync(worktreePath, { recursive: true })
+  initializeTaskWorkspace(worktreePath)
   const db = provider.db
   return {
     db,

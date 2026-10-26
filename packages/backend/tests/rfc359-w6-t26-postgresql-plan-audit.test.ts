@@ -56,12 +56,11 @@ import { withNativeTransactions } from './helpers/nativeTransactions'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { rawRows } from '@/platform/persistence/queryHelpers'
-import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { sql } from 'drizzle-orm'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 
 import { buildActor, type Actor } from '@/auth/actor'
 import { createInMemoryDb } from '@/db/client'
@@ -72,9 +71,8 @@ import {
 } from '@/modules/development-automation/infrastructure/missionReadModels'
 import type { WorkgroupOperationContext } from '@/modules/resource-catalog/public/participants'
 import { composeSqliteRepositoryWorkspaceStore } from '@/modules/source-control/composition'
-import { RFC349_ARCHIVE_THEN_OMIT_TABLES } from '@/platform/persistence/schemaContract'
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
-import { migratePostgresqlSchema } from '@/platform/persistence/postgresqlMigrator'
+import { createPostgresqlTestDatabase } from './helpers/testDatabase'
 import {
   createPostgresqlDatabaseRuntime,
   type PostgresqlDatabaseRuntime,
@@ -86,10 +84,8 @@ import { runProductionOverview } from './helpers/productionOverview'
 import { listTaskOperationsPage } from './helpers/taskListPage'
 import { composeTestWorkgroupTaskRoom } from './helpers/workgroupTaskRoom'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const T0 = 1_700_000_000_000
 const GENERATION_ID = 'dbg_rfc359_w6_t26'
-const OPERATION_ID = 'lcop_rfc359_w6_t26'
 
 /**
  * 语料行数。取值权衡：太小 PostgreSQL 会（正确地）偏好顺序扫描，量到的是「表小」不是
@@ -743,17 +739,7 @@ if (!postgresqlSelected) {
           : await pool.unsafe(query, [...params])) as Record<string, unknown>[]
       await raw('drop schema if exists agent_workflow cascade')
       await raw('drop schema if exists agent_workflow_meta cascade')
-      await migratePostgresqlSchema({ headContract: buildLogicalSchemaContract(), runtime })
-      await raw(
-        'insert into "agent_workflow_meta"."logical_copy_operations" ' +
-          '(operation_id, source_generation_id, contract_digest, plan_digest, stage, created_at, updated_at) ' +
-          `values ('${OPERATION_ID}', 'dbg_rfc359_w6_t26_source', 'digest', 'plan', 'prepared', 1, 1)`,
-      )
-      await raw(
-        'insert into "agent_workflow_meta"."database_generations" ' +
-          '(generation_id, operation_id, source_generation_id, contract_digest, state, activated_at, first_live_write_at) ' +
-          `values ('${GENERATION_ID}', '${OPERATION_ID}', 'dbg_rfc359_w6_t26_source', 'digest', 'active', 1, 1)`,
-      )
+      await createPostgresqlTestDatabase(runtime)
       // 语句录制：包住连接池的 `unsafe`，drizzle 与裸 SQL 两条路都抓得到。池对象是冻结的，
       // 所以走对象字面量而不是 Proxy（Proxy 无法为不可写属性返回别的值）。
       const wrap =
@@ -801,10 +787,12 @@ if (!postgresqlSelected) {
     test('SQLite 上的具名索引在 PostgreSQL 上一条都不少', async () => {
       const sqliteIndexes = new Map<string, string[]>()
       {
-        const sqliteDb = createInMemoryDb(MIGRATIONS)
+        const sqliteDb = createInMemoryDb()
         for (const { name } of rawRows<{ name: string }>(
           sqliteDb,
-          sql.raw("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"),
+          sql.raw(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT GLOB 'aw_meta_*'",
+          ),
         )) {
           sqliteIndexes.set(
             name,
@@ -822,12 +810,10 @@ if (!postgresqlSelected) {
         "select tablename, indexname from pg_indexes where schemaname = 'agent_workflow'",
       )
       const postgresqlIndexes = new Set(rows.map((row) => String(row['indexname'])))
-      const omitted = new Set<string>(RFC349_ARCHIVE_THEN_OMIT_TABLES)
 
       const missing: string[] = []
       let scanned = 0
       for (const [table, names] of [...sqliteIndexes].sort()) {
-        if (omitted.has(table)) continue
         for (const name of names) {
           scanned += 1
           if (!postgresqlIndexes.has(name)) missing.push(`${table}.${name}`)
@@ -838,8 +824,7 @@ if (!postgresqlSelected) {
       expect(
         missing,
         'SQLite 上建了、PostgreSQL 上没有的索引。这类缺口不报错、只变慢——\n' +
-          '要么把索引补进 drizzle 声明（PG 的 DDL 从那里投影），要么把该表列进\n' +
-          '`RFC349_ARCHIVE_THEN_OMIT_TABLES`（按契约不投影到 PG）：\n' +
+          '两个 provider 必须来自同一 live registry，缺少的具名索引需要补回。\n' +
           missing.join('\n'),
       ).toEqual([])
     }, 120_000)
@@ -942,10 +927,10 @@ if (!postgresqlSelected) {
             expect(statement.params.length).toBeLessThanOrEqual(500)
             expect(statement.sql).not.toContain('cached_repos')
             expect(plan).toMatch(
-              /(?:Index Only Scan|Index Scan|Bitmap Index Scan).*idx_tasks_cached_repo/,
+              /(?:Index Only Scan|Index Scan|Bitmap Index Scan).*task_workspaces_requested_cached_repo/,
             )
             expect(
-              [...(relationScans(plan).get('tasks') ?? [])].some((kind) =>
+              [...(relationScans(plan).get('task_workspaces') ?? [])].some((kind) =>
                 kind.endsWith('Seq Scan'),
               ),
             ).toBe(false)

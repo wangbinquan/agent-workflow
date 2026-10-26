@@ -1,3 +1,9 @@
+import { selectedDatabaseConfiguration } from '@/platform/persistence/databaseProviderRuntime'
+import { prepareEpoch2DatabaseProviderRuntime } from '@/platform/persistence/databaseProviderRuntime'
+import { recoverEpoch2ProviderMove } from './infrastructure/local/epoch2ProviderMoveRecovery'
+import { admitEpochBoot } from './composition/epochBootAdmission'
+import { acquireLock } from '@/util/lock'
+import { dirname } from 'node:path'
 import type {
   DaemonStartupLease,
   DaemonStartupLeasePort,
@@ -77,17 +83,16 @@ import { join } from 'node:path'
 import type { DatabaseConfigurationPort } from './application/ports/databaseConfiguration'
 import type { DatabaseInstallationPort } from './application/ports/databaseInstallation'
 import { prepareDatabaseInstallation } from './application/prepareDatabaseInstallation'
-import { createFileDatabaseInstallation } from './infrastructure/local/fileDatabaseInstallation'
-import { loadPostgresqlMigrationHistory } from '@/platform/persistence/postgresqlMigrationHistory'
+
 import { createFileDatabaseConfiguration } from './infrastructure/local/fileDatabaseConfiguration'
 import { type SecretBox } from '@/auth/secretBox'
 import type { DbClient } from '@/db/client'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { composeSqliteFusionPersistence } from '@/modules/knowledge-evolution/composition/fusion'
+
 import type { RepositoryBackupPreparationParticipant } from '@/modules/source-control/public/participants'
 import type { PostgresqlDatabaseRuntime } from '@/platform/persistence/postgresqlRuntime'
 import {
-  resolveDatabaseProviderRuntime,
+  resolveDatabaseProviderRuntimeForRestore,
   type ResolvedDatabaseProviderRuntime,
   requireDatabaseConfig,
   requireDatabaseProviderRuntime,
@@ -104,9 +109,7 @@ import {
   buildPostgresqlSchemaPlan,
   type PostgresqlSchemaPlan,
 } from '@/platform/persistence/postgresqlSchema'
-import { resolveMigrationsFolder } from '@/util/migrationsFolder'
 import { Paths } from '@/util/paths'
-import { repairFusionProvenance } from '@/modules/knowledge-evolution/public/operations'
 import {
   createSystemOperationsApplication,
   type SystemOperationsApplication,
@@ -114,7 +117,7 @@ import {
 import type { AdminBackupCoordinatorPort } from './application/ports/adminBackupCoordinator'
 import type { AdminRestoreCoordinatorPort } from './application/ports/adminRestoreCoordinator'
 import { createLegacyPlatformRecoveryAdapter } from './infrastructure/legacyPlatformRecoveryAdapter'
-import type { SqlitePostRestoreRecovery } from '@/platform/persistence/sqlite/systemProviderRestore'
+
 import { createPostgresqlAdminBackupCoordinator } from './infrastructure/postgresqlAdminBackupCoordinator'
 import {
   createPostgresqlAdminRestoreCoordinator,
@@ -146,8 +149,6 @@ export {
   type DatabaseMigrationDaemonAdmission,
   type DatabaseMigrationDaemonAdmissionLiveState,
 } from './infrastructure/databaseMigrationDaemonAdmission'
-import { composeSkillMemoryFusionParticipantFactory } from '@/modules/memory/composition'
-import { composeSkillVersionCommitParticipantFactory } from '@/modules/resource-catalog/composition/skillVersionCommit'
 
 /** Pre-open effects are selected before either history or generation is read. */
 export function prepareDatabasePreOpenRecovery<THistory>(input: {
@@ -180,7 +181,6 @@ export async function prepareDatabasePreOpenRecovery<THistory>(input: {
     effects: createFileDatabasePreOpenRecovery({
       contract: input.contract,
       migrationsFolder: input.migrationsFolder,
-      postOpenRecovery: composeSqlitePostRestoreRecovery,
     }),
   })
 }
@@ -221,22 +221,20 @@ export async function prepareDatabaseProviderForBoot<TPrepared>(
       effects: input.installation,
     })
   }
-  const { configuration, configPath, ...options } = input
-  const configurationPort =
-    configuration ?? createFileDatabaseConfiguration(configPath ?? Paths.config)
-  const effects: DatabaseInstallationPort<PreparedFileDatabase> = createFileDatabaseInstallation({
-    ...options,
-    history:
-      options.history ?? (await loadPostgresqlMigrationHistory({ headContract: options.contract })),
-    readConfig: () => configurationPort.read(),
-    writeConfig: (database) => configurationPort.write(database),
-  })
-  return await prepareDatabaseInstallation({
-    config: options.config,
-    contract: options.contract,
-    configuration: configurationPort,
-    effects,
-  })
+  let held: ReturnType<typeof acquireLock> | undefined
+  const requireUpgradeLock = () => {
+    if (input.lock === undefined && held === undefined) held = acquireLock(input.lockPath)
+  }
+  try {
+    admitEpochBoot({
+      appHome: dirname(input.generationPointerPath),
+      provider: input.config.provider,
+    })
+    await recoverEpoch2ProviderMove({ ...input, requireUpgradeLock })
+    return await prepareEpoch2DatabaseProviderRuntime({ ...input, requireUpgradeLock })
+  } finally {
+    held?.release()
+  }
 }
 
 export interface SystemOperationsModule {
@@ -255,22 +253,6 @@ export interface SystemOperationsRecoveryAdapter {
 export interface PostgresqlSystemOperationsModule extends SystemOperationsModule {
   /** Boot-only cold-restore hook. Bootstrap calls it before opening business admission. */
   applyPendingRestore(): Promise<boolean>
-}
-
-export function composeSqlitePostRestoreRecovery(): SqlitePostRestoreRecovery {
-  return Object.freeze({
-    async recover({ db, appHome }: { readonly db: DbClient; readonly appHome: string }) {
-      await repairFusionProvenance(
-        composeSqliteFusionPersistence({
-          db,
-          appHome,
-          // RFC-353 T6/T7：provider 装配在 system-operation 根上完成（同 bootstrap）。
-          memoryMembership: composeSkillMemoryFusionParticipantFactory(),
-          skillVersionCommit: composeSkillVersionCommitParticipantFactory(),
-        }),
-      )
-    },
-  })
 }
 
 function bindRepositoryBackupPreparation(
@@ -304,9 +286,7 @@ export function composeSystemOperations(deps: {
     lockPath: deps.lockPath ?? join(appHome, '.daemon.lock'),
     backupResources: () => ({ db: deps.db }),
     prepareBackup: bindRepositoryBackupPreparation(deps.repositoryBackupPreparation),
-    postOpenRecovery: composeSqlitePostRestoreRecovery(),
-    resolveRestoreMigrations:
-      deps.resolveRestoreMigrations ?? (() => resolveMigrationsFolder({ force: true })),
+    resolveRestoreMigrations: deps.resolveRestoreMigrations ?? (async () => ''),
   })
   return composeSystemOperationsWithArtifacts({
     artifacts,
@@ -361,6 +341,7 @@ export function composePostgresqlSystemOperations(deps: {
     artifacts,
     runtime: deps.runtime,
     targetGenerationId: deps.runtime.generationId,
+    targetProfileRef: `env:${deps.databaseConfig.urlEnv}`,
     appHome,
     lockPath: deps.lockPath ?? join(appHome, '.daemon.lock'),
     contract,
@@ -444,7 +425,10 @@ function composePostgresqlLocalSystemOperations({
   // RFC-359 AC-10：「运行时选了这一支、配置也必须是这一支」的收窄，与紧挨着的
   // `requireDatabaseProviderRuntime` 同一层、同一个名字家族（§5fd 把它从 `cli/start.ts`
   // 的手写版搬进 `platform/persistence/`）。这里是它的第二个消费者。
-  const postgresqlConfig = requireDatabaseConfig(databaseConfig, 'postgresql')
+  const postgresqlConfig = requireDatabaseConfig(
+    selectedDatabaseConfiguration(databaseConfig, provider.generation),
+    'postgresql',
+  )
   const runtime = requireDatabaseProviderRuntime(provider, 'postgresql')
   const database = runtime.openClient()
   const repositoryBackupPreparation =
@@ -473,17 +457,13 @@ function composeSqliteLocalSystemOperations({
   const artifacts = createRestoreArtifactIngress({
     uploadRoot: join(appHome, '.restore-upload'),
   })
-  let restoreMigrations: Promise<string> | undefined
-  const resolveRestoreMigrations = (): Promise<string> => {
-    restoreMigrations ??= resolveMigrationsFolder({ force: true })
-    return restoreMigrations
-  }
+  const resolveRestoreMigrations = async (): Promise<string> => ''
   let database: DbClient | null = null
   let composedBackupPreparation: RepositoryBackupPreparationParticipant | null = null
   const sqliteRuntime = requireDatabaseProviderRuntime(provider, 'sqlite')
   const resolveDatabase = async (): Promise<DbClient> =>
     (database ??= sqliteRuntime.openClient({
-      migrationsFolder: await resolveMigrationsFolder(),
+      migrationsFolder: '',
     }))
   const resolveBackupPreparation = async (): Promise<RepositoryBackupPreparationParticipant> => {
     if (composedBackupPreparation !== null) return composedBackupPreparation
@@ -501,13 +481,12 @@ function composeSqliteLocalSystemOperations({
     contract,
     artifacts,
     appHome,
-    dbPath: Paths.db,
+    dbPath: sqliteRuntime.sqlitePath,
     lockPath: Paths.lock,
     async backupResources() {
       return { db: await resolveDatabase() }
     },
     prepareBackup: bindRepositoryBackupPreparation(repositoryBackupPreparation),
-    postOpenRecovery: composeSqlitePostRestoreRecovery(),
     resolveRestoreMigrations,
   })
   const module = composeSystemOperationsWithArtifacts({ artifacts, adapter })
@@ -541,7 +520,7 @@ export function composeLocalSystemOperations(deps: {
   const contract = deps.contract
   const provider =
     deps.providerRuntime ??
-    resolveDatabaseProviderRuntime({
+    resolveDatabaseProviderRuntimeForRestore({
       config: databaseConfig,
       sqlitePath: Paths.db,
       generationPointerPath: Paths.databaseGenerationPointer,
@@ -638,3 +617,9 @@ export function composeFileApplicationConfigurationQueries(
 export { schemaContribution } from './composition/schema'
 
 export { createResourceLimitAudit } from './infrastructure/resourceLimitAudit'
+
+export async function applyLocalEpoch2PendingRestore(
+  contract: LogicalSchemaContract,
+): Promise<boolean> {
+  return createFileDatabasePreOpenRecovery({ contract, migrationsFolder: '' }).applyStagedRestore()
+}

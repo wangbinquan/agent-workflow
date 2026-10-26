@@ -231,6 +231,8 @@ export interface WorkgroupHostLedgerMintReceipt {
  * ledger writes without receiving TaskExecution tables or mint mechanics.
  */
 export interface WorkgroupHostLedgerParticipantInTx {
+  /** Before any ledger write: fence an ambient owner, then acquire the L-1 task root. */
+  lockTask(taskId: string): Promise<void>
   load(taskId: string): Promise<WorkgroupHostLedgerSnapshot | null>
   apply(input: {
     readonly taskId: string

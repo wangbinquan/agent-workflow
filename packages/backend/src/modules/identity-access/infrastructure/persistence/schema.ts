@@ -1,4 +1,4 @@
-// RFC-395 I-a: explicit epoch-1 schema contributions; no physical or runtime change.
+// RFC-395 activation: this context declares the live epoch-2 schema directly.
 import {
   column as c,
   defineContribution,
@@ -196,33 +196,6 @@ const tokenDeleteSnapshotDefinition = owner.table({
 
 export const tokenDeleteSnapshot = materializeDrizzle(tokenDeleteSnapshotDefinition).table
 
-const userAccessAuditDefinition = owner.table({
-  id: 'user_access_audit',
-  schemaSymbol: 'userAccessAudit',
-  columns: {
-    id: c.id('id', { primary: true }),
-    targetUserId: c.id('target_user_id'),
-    actorUserId: c.id('actor_user_id', { nullable: true }),
-    actorKind: c.enum('actor_kind', ['session', 'cli', 'system']),
-    operationId: c.id('operation_id'),
-    correlationId: c.id('correlation_id', { nullable: true }),
-    beforeRole: c.enum('before_role', ['admin', 'user', 'manager', 'guest']),
-    afterRole: c.enum('after_role', ['admin', 'user', 'manager', 'guest']),
-    addedPermissionsJson: c.jsonText('added_permissions_json'),
-    removedPermissionsJson: c.jsonText('removed_permissions_json'),
-    accessRevision: c.int('access_revision'),
-    createdAt: c.epochMs('created_at'),
-  },
-  indexes: [
-    index('idx_user_access_audit_target_revision', ['target_user_id', 'access_revision']),
-    index('idx_user_access_audit_created', ['created_at']),
-    index('idx_user_access_audit_operation', ['operation_id']),
-  ],
-  retention: retention.operational,
-})
-
-export const userAccessAudit = materializeDrizzle(userAccessAuditDefinition).table
-
 const userIdentitiesDefinition = owner.table({
   id: 'user_identities',
   schemaSymbol: 'userIdentities',
@@ -411,12 +384,40 @@ const userSessionsDefinition = owner.table({
 export const userSessions = materializeDrizzle(userSessionsDefinition).table
 
 const usersDefinition = owner.table({
+  version: 2,
+  unique: [],
+  foreignKeys: [
+    {
+      name: 'users_created_by_fk',
+      columns: ['created_by'],
+      foreignTable: 'users',
+      foreignColumns: ['id'],
+      onDelete: 'set null',
+      onUpdate: 'no action',
+      lifecycle: 'Deleting the creator retains the user and clears creator attribution.',
+    },
+  ],
+  checks: [],
+  indexes: [
+    {
+      name: 'idx_users_status',
+      unique: false,
+      nulls: 'distinct',
+      columns: [{ kind: 'column', name: 'status' }],
+      where: null,
+    },
+  ],
+  migrationPolicy: 'KEEP',
   id: 'users',
   schemaSymbol: 'users',
   columns: {
     id: c.id('id', { primary: true }),
     username: c.text('username', { unique: 'users_username_unique' }),
-    email: c.text('email', { nullable: true, unique: 'users_email_unique' }),
+    email: c.text('email', {
+      unique: 'users_email_unique',
+      uniqueNulls: 'distinct',
+      nullable: true,
+    }),
     displayName: c.text('display_name'),
     gitName: c.text('git_name', { default: '' }),
     passwordHash: c.text('password_hash', { nullable: true }),
@@ -430,24 +431,124 @@ const usersDefinition = owner.table({
     schemaVersion: c.int('schema_version', { default: 1 }),
     accessRevision: c.int('access_revision', { default: 0 }),
   },
-  indexes: [index('idx_users_status', ['status'])],
-  retention: retention.business,
+  retention: {
+    class: 'owner-managed-business',
+    rule: 'Retain as live business or recovery state until the owning bounded context approves a replacement contract.',
+  },
+  primaryKey: ['id'],
+  migrationKey: ['id'],
 })
 
 export const users = materializeDrizzle(usersDefinition).table
 
-export const schemaContribution = owner.contribution([
-  authLoginPolicyDefinition,
-  externalIdentitiesDefinition,
-  oidcProvidersDefinition,
-  resourceGrantsDefinition,
-  tokenAuditDefinition,
-  tokenDeleteSnapshotDefinition,
-  userAccessAuditDefinition,
-  userIdentitiesDefinition,
-  userPatsDefinition,
-  userPermissionGrantsDefinition,
-  userRepositoryTransportCredentialsDefinition,
-  userSessionsDefinition,
-  usersDefinition,
-])
+const userAccessAuditDefinition = owner.table({
+  version: 2,
+  unique: [],
+  foreignKeys: [],
+  checks: [],
+  indexes: [
+    {
+      name: 'idx_user_access_audit_target_revision',
+      unique: false,
+      nulls: 'distinct',
+      columns: [
+        { kind: 'column', name: 'target_user_id' },
+        { kind: 'column', name: 'access_revision' },
+      ],
+      where: null,
+    },
+    {
+      name: 'idx_user_access_audit_created',
+      unique: false,
+      nulls: 'distinct',
+      columns: [{ kind: 'column', name: 'created_at' }],
+      where: null,
+    },
+    {
+      name: 'idx_user_access_audit_operation',
+      unique: false,
+      nulls: 'distinct',
+      columns: [{ kind: 'column', name: 'operation_id' }],
+      where: null,
+    },
+  ],
+  migrationPolicy: 'KEEP',
+  id: 'user_access_audit',
+  schemaSymbol: 'userAccessAudit',
+  columns: {
+    id: c.id('id', { primary: true }),
+    targetUserId: c.id('target_user_id'),
+    actorUserId: c.id('actor_user_id', { nullable: true }),
+    actorKind: c.enum('actor_kind', ['session', 'cli', 'system']),
+    operationId: c.id('operation_id'),
+    correlationId: c.id('correlation_id', { nullable: true }),
+    beforeRole: c.enum('before_role', ['admin', 'user', 'manager', 'guest']),
+    afterRole: c.enum('after_role', ['admin', 'user', 'manager', 'guest']),
+    addedPermissionsJson: c.jsonText('added_permissions_json'),
+    removedPermissionsJson: c.jsonText('removed_permissions_json'),
+    accessRevision: c.int('access_revision'),
+    createdAt: c.epochMs('created_at'),
+  },
+  retention: {
+    class: 'owner-managed-operational',
+    rule: 'The owning bounded context defines retention and archive jobs through its application port.',
+  },
+  primaryKey: ['id'],
+  migrationKey: ['id'],
+  rowRules: [
+    { kind: 'appendOnly', table: 'user_access_audit', errorCode: 'user_access_audit_append_only' },
+  ],
+})
+
+export const userAccessAudit = materializeDrizzle(userAccessAuditDefinition).table
+
+export const schemaContribution = {
+  owner: 'identity-access',
+  version: 2,
+  seeds: [
+    {
+      mode: 'install-only',
+      table: 'users',
+      rows: [
+        {
+          id: '__system__',
+          username: '__system__',
+          display_name: 'System',
+          git_name: 'System',
+          role: 'admin',
+          status: 'active',
+          created_at: { kind: 'install-time', codec: 'epochMs' },
+          updated_at: { kind: 'install-time', codec: 'epochMs' },
+        },
+      ],
+    },
+    {
+      mode: 'install-only',
+      table: 'auth_login_policy',
+      rows: [
+        {
+          id: 'global',
+          password_login_enabled: true,
+          oidc_default_role: 'guest',
+          bootstrap_completed_at: null,
+          updated_at: { kind: 'install-time', codec: 'epochMs' },
+        },
+      ],
+    },
+  ],
+  tables: [
+    authLoginPolicyDefinition,
+    externalIdentitiesDefinition,
+    oidcProvidersDefinition,
+    resourceGrantsDefinition,
+    tokenAuditDefinition,
+    tokenDeleteSnapshotDefinition,
+    userIdentitiesDefinition,
+    userPatsDefinition,
+    userPermissionGrantsDefinition,
+    userRepositoryTransportCredentialsDefinition,
+    userSessionsDefinition,
+    usersDefinition,
+    userAccessAuditDefinition,
+  ],
+} as const

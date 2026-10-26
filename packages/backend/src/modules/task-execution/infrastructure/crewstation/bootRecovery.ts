@@ -9,6 +9,8 @@ import {
   prepareTaskExecutionRecovery,
   finalizeTaskExecutionRecovery,
 } from '../../application/recoverTaskExecutions'
+import { taskAggregateWrite } from '../taskDefinitionWriteParticipant'
+import { compareAndWriteNodeRunInTx } from '../nodeRunWriteProtocol'
 import { repairRuntimeSessionLeasesAfterOrphanReap } from '@/services/runtimeSessionLease'
 import type { HostedExecutionStore } from './executionStore'
 
@@ -181,6 +183,8 @@ export function createHostedBootRecovery(input: {
             await databaseSessionFor(input.db).transaction(async (tx) => {
               await input.fence.assertHeld(tx, lease)
               if (adoptableRuns.size === 0 || finalized.releasedTaskIds.length === 0) return
+              for (const taskId of [...finalized.releasedTaskIds].sort())
+                await taskAggregateWrite.lockTaskAggregateRoot(tx, taskId)
               const { nodeRuns } = tablesOf(tx)
               const adoptable = and(
                 inArray(nodeRuns.id, [...adoptableRuns]),
@@ -188,19 +192,18 @@ export function createHostedBootRecovery(input: {
                 inArray(nodeRuns.taskId, [...finalized.releasedTaskIds]),
               )
               const reset = await tx
-                .select({ taskId: nodeRuns.taskId })
+                .select({ id: nodeRuns.id, taskId: nodeRuns.taskId })
                 .from(nodeRuns)
                 .where(adoptable)
-              await tx
-                .update(nodeRuns)
-                .set({
-                  status: 'pending',
-                  finishedAt: null,
-                  pid: null,
-                  spawnBinaryPath: null,
-                  spawnLaunchNonce: null,
-                })
-                .where(adoptable)
+              for (const row of reset) {
+                await compareAndWriteNodeRunInTx(
+                  tx,
+                  row.id,
+                  adoptable!,
+                  { status: 'pending', finishedAt: null },
+                  { runtime: { pid: null, spawnBinaryPath: null, spawnLaunchNonce: null } },
+                )
+              }
               // Only tasks that really kept remote work are resumed at boot.
               for (const row of reset) recovered.add(row.taskId)
             })

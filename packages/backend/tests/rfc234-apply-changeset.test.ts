@@ -1,3 +1,4 @@
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 // RFC-395 II-pre：崩溃收敛改走生产维护装配，保留补偿与前滚断言。
 // RFC-234 §9 (T6) — apply pipeline behavior locks:
 //  happy multi-type bundle (skill+mcp+agent+workflow+workgroup+plugin) lands
@@ -14,7 +15,7 @@ import {
   type WorkflowFixtureSpec,
 } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+
 import { first as firstRow } from '@/platform/persistence/queryHelpers'
 import { composeIntentApplyRecoveryScene } from '@/modules/intent/composition/applyMaintenance'
 import { createAtomicApplyRecovery } from '@/platform/atomic-apply/convergence'
@@ -324,16 +325,9 @@ describeEachProvider('RFC-234 intent apply 端到端（双引擎）', (harness) 
       expect(receipt.commitSeq).toBe(1)
 
       const byOp = new Map(receipt.applied.map((a) => [a.opId, a]))
-      const {
-        skills,
-        mcps,
-        plugins,
-        workflows,
-        workgroups,
-        intentProvenance,
-        intentSessions,
-        intentApplyJournal,
-      } = tablesOf(db)
+      const { mcps, plugins, workflows, workgroups, intentProvenance, intentSessions } =
+        tablesOf(db)
+      const { skills, intentApplyJournal } = tablesOf(db)
       const skillRow = await firstRow(
         db
           .select()
@@ -618,16 +612,8 @@ describeEachProvider('RFC-234 intent apply 端到端（双引擎）', (harness) 
           { sessionId: session.id, clientMutationId: ulid(), ...draft, decisions: happyDecisions },
         ),
       ).rejects.toThrow(/boom-in-tx/)
-      const {
-        skills,
-        mcps,
-        plugins,
-        workflows,
-        workgroups,
-        agents,
-        intentApplyJournal,
-        intentProvenance,
-      } = tablesOf(db)
+      const { mcps, plugins, workflows, workgroups, intentProvenance } = tablesOf(db)
+      const { skills, agents, intentApplyJournal } = tablesOf(db)
       expect((await db.select().from(skills)).length).toBe(0)
       expect((await db.select().from(mcps)).length).toBe(0)
       expect((await db.select().from(plugins)).length).toBe(0)
@@ -742,7 +728,8 @@ describeEachProvider('RFC-234 intent apply 端到端（双引擎）', (harness) 
         fullBundle(existing.id, filePluginFixture()),
         manifestWithAgent(existing.id, existing.updatedAt),
       )
-      const { intentSessions, intentApplyJournal } = tablesOf(db)
+      const { intentSessions } = tablesOf(db)
+      const { intentApplyJournal } = tablesOf(db)
       await db
         .update(intentSessions)
         .set({ contextRevision: 5 })
@@ -863,7 +850,8 @@ describeEachProvider('RFC-234 intent apply 端到端（双引擎）', (harness) 
         fullBundle(existing.id, filePluginFixture()),
         manifestWithAgent(existing.id, existing.updatedAt),
       )
-      const { intentSessions, intentApplyJournal } = tablesOf(db)
+      const { intentSessions } = tablesOf(db)
+      const { intentApplyJournal } = tablesOf(db)
       // A newer draft becomes current (same epoch — no rebase).
       await db
         .update(intentSessions)
@@ -945,7 +933,8 @@ describeEachProvider('RFC-234 intent apply 端到端（双引擎）', (harness) 
           decisions: [],
         }),
       ).rejects.toMatchObject({ code: 'intent-op-canonical-invalid' })
-      const { workflows, intentApplyJournal } = tablesOf(db)
+      const { workflows } = tablesOf(db)
+      const { intentApplyJournal } = tablesOf(db)
       expect((await db.select().from(workflows)).length).toBe(0)
       expect((await firstRow(db.select().from(intentApplyJournal)))?.state).toBe('failed')
     })
@@ -985,8 +974,8 @@ describeEachProvider('RFC-234 intent apply 端到端（双引擎）', (harness) 
             ),
           ).rejects.toThrow(new RegExp(`boom-${point}`))
           diagnostic?.mark('zero-visible-resources')
-          const { skills, mcps, plugins, workflows, workgroups, agents, intentApplyJournal } =
-            tablesOf(db)
+          const { mcps, plugins, workflows, workgroups } = tablesOf(db)
+          const { skills, agents, intentApplyJournal } = tablesOf(db)
           expect((await db.select().from(skills)).length).toBe(0)
           expect((await db.select().from(mcps)).length).toBe(0)
           expect((await db.select().from(plugins)).length).toBe(0)

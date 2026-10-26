@@ -1,3 +1,6 @@
+import { intentApplyArtifactCodecs } from '@/modules/intent/infrastructure/intentApplyArtifactCodec'
+import { reencodeIntentApplyArtifacts } from '@/modules/intent/infrastructure/migration/applyJournalRule'
+import { createEpoch2PostgresqlMetadata } from './helpers/epoch2PostgresqlMetadata'
 import { createAtomicApplyRecovery } from '@/platform/atomic-apply/convergence'
 import { createIntentApplyRecoveryScene } from '@/modules/intent/infrastructure/intentApplyRecovery'
 import { withNativeTransactions } from './helpers/nativeTransactions'
@@ -32,11 +35,14 @@ function rows(
 
 function fixture(updatedAt: number) {
   const statements: string[] = []
+  const epoch2Metadata = createEpoch2PostgresqlMetadata()
   const execute = (sql: string): SqlRows => {
     statements.push(sql)
+    const metadata = epoch2Metadata(sql)
+    if (metadata) return metadata
     const normalized = sql.trim().toLowerCase()
     if (/^(begin|commit|rollback)$/.test(normalized)) return rows()
-    if (sql.includes('database_generations')) {
+    if (sql.includes('generations')) {
       return rows({
         objects: [{ generation_id: 'dbg_intent_maintenance_pg' }],
         values: [['dbg_intent_maintenance_pg']],
@@ -53,7 +59,7 @@ function fixture(updatedAt: number) {
             'draft-1',
             'hash-1',
             'prepared',
-            '[]',
+            intentApplyArtifactCodecs.encode([]),
             null,
             null,
             100,
@@ -102,7 +108,7 @@ describe('RFC-349 PostgreSQL Intent apply maintenance', () => {
   test('recovery decoder accepts native PostgreSQL and versioned migrated artifacts', () => {
     expect(
       decodeIntentApplyRecoveryArtifacts(
-        JSON.stringify([
+        intentApplyArtifactCodecs.encode([
           {
             kind: 'skill-version-stage',
             skillId: 'skill-1',
@@ -124,7 +130,9 @@ describe('RFC-349 PostgreSQL Intent apply maintenance', () => {
       },
     ])
     expect(
-      decodeIntentApplyRecoveryArtifacts(JSON.stringify({ version: 1, artifacts: [] })),
+      decodeIntentApplyRecoveryArtifacts(
+        reencodeIntentApplyArtifacts(JSON.stringify({ version: 1, artifacts: [] })),
+      ),
     ).toEqual([])
   })
 

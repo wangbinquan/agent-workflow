@@ -1,3 +1,4 @@
+import type { HistoryRestrictionPort } from '@/platform/contracts/historyRestriction'
 import type { WorkspaceExcludeProfileFactory } from '@/modules/source-control/public/participants'
 import type {
   IsolationWorkspaceFactory,
@@ -68,6 +69,7 @@ import {
 import { taskRunBindingPending, type TaskRunDriveBinding } from '../composition/taskRunSelection'
 
 export interface TaskExecutionRuntimeParticipantsInput {
+  readonly historyRestrictions: HistoryRestrictionPort
   readonly workspacePresence: WorkspacePresenceQueries
   readonly observationInvocations: CallObservations
   readonly db: PersistenceDb
@@ -183,6 +185,7 @@ export function createTaskExecutionRuntimeParticipants(
     drive,
     children: createChildTaskLifecycleParticipant({
       db: input.db,
+      historyRestrictions: input.historyRestrictions,
       persistence: input.persistence,
       runtimeSessionLeases: input.runtimeSessionLeases,
       workspacePresence: input.workspacePresence,

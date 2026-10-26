@@ -76,6 +76,9 @@ describeEachProvider('RFC-395 II-a A7 owner queries', (harness) => {
       ownerUserId: 'owner',
       lifecycleEventRevision: 7,
       sourceTerminationFence: 'merged',
+      subjectKind: 'workflow',
+      sourceId: 'workflow',
+      sourceName: null,
       workflowId: 'workflow',
       worktreePath: '/work',
     })
@@ -264,6 +267,7 @@ describeEachProvider('RFC-395 II-a A7 owner queries', (harness) => {
       createdAt: 1,
     })
     await task('knowledge', {
+      spaceKind: 'remote',
       cachedRepoId: 'repo',
       repos: [
         {

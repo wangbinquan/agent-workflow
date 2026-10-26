@@ -1,7 +1,11 @@
+import { decodeConsumedEdges } from '../domain/consumedInputs'
 import { randomBytes } from 'node:crypto'
 import { ulid } from 'ulid'
 
-import { deriveNodeRunRole } from '../domain/nodeRunRole'
+import {
+  nodeRunSlotKeyForMint,
+  type NodeRunMintSlotFacts,
+} from '../domain/runSelection/mintIdentity'
 import { nodeRunAttemptIndex } from '../domain/nodeRunAttempt'
 import { inheritTaskPreSnapshots } from '../domain/taskCheckpoint'
 import { sha256Hex } from '../domain/digest'
@@ -74,18 +78,30 @@ export function buildNodeRunMintRecord(input: NodeRunMintInput): NodeRunMintReco
     input.containerRunId !== undefined ? input.containerRunId : (inherited?.containerRunId ?? null)
   const scopePath = containerRunId === null ? '' : (input.scopePath ?? null)
 
-  const derived = deriveNodeRunRole({ nodeId: input.nodeId, rerunCause: input.cause })
-  if (input.role !== derived.role || input.syntheticKind !== derived.syntheticKind) {
-    throw new Error(`mintNodeRun: role mismatch for node '${input.nodeId}' (task ${input.taskId})`)
-  }
-  if (input.status === 'running' && parentNodeRunId === null) {
-    throw new Error(
-      `mintNodeRun: refusing to mint a top-level 'running' row for node '${input.nodeId}' ` +
-        `(task ${input.taskId}) — born-running rows must carry parentNodeRunId ` +
-        `(frontier invisibility, RFC-098 revision #10)`,
-    )
-  }
-
+  const slotKey = nodeRunSlotKeyForMint(input as NodeRunMintSlotFacts)
+  if (!input.envelopeNonce) throw new Error('node-run-envelope-nonce-required')
+  if (
+    input.overrides?.identity?.envelopeNonce !== undefined &&
+    input.overrides.identity.envelopeNonce !== input.envelopeNonce
+  )
+    throw new Error('node-run-envelope-nonce-mismatch')
+  const slot = input.slot
+  if (
+    (slot.kind === 'node' || slot.kind === 'container') &&
+    (slot.nodeId !== input.nodeId ||
+      slot.frame.containerRunId !== containerRunId ||
+      slot.frame.iteration !== (input.iteration ?? 0))
+  )
+    throw new Error('node-run-mint-frame-mismatch')
+  if (
+    (slot.kind === 'shard' || slot.kind === 'aggregator') &&
+    (slot.nodeId !== input.nodeId || slot.iteration !== (input.iteration ?? 0))
+  )
+    throw new Error('node-run-mint-slot-mismatch')
+  if ((slot.kind === 'shard' || slot.kind === 'workgroup-host') && slot.shardKey !== shardKey)
+    throw new Error('node-run-mint-shard-mismatch')
+  if (slot.kind === 'synthetic' && slot.owner.kind === 'task' && slot.owner.id !== input.taskId)
+    throw new Error('node-run-mint-owner-mismatch')
   if (input.role === 'node-attempt' && input.status === 'running' && containerRunId === null) {
     throw new Error(
       `mintNodeRun: refusing to mint a top-level 'running' row for node '${input.nodeId}' ` +
@@ -95,6 +111,9 @@ export function buildNodeRunMintRecord(input: NodeRunMintInput): NodeRunMintReco
   }
 
   return Object.freeze({
+    slot: input.slot,
+    slotKey,
+    executionGeneration: input.executionGeneration,
     role: input.role,
     syntheticKind: input.syntheticKind,
     id,
@@ -112,6 +131,15 @@ export function buildNodeRunMintRecord(input: NodeRunMintInput): NodeRunMintReco
     checkpoints,
     shardValueHash: config.shardValueHash ?? null,
     consumedUpstreamRunsJson: inputs.consumedUpstreamRunsJson ?? null,
+    recordedInputs:
+      inputs.recordedInputs !== undefined
+        ? inputs.recordedInputs
+        : inputs.consumedUpstreamRunsJson == null
+          ? null
+          : decodeConsumedEdges(inputs.consumedUpstreamRunsJson).map((edge) => ({
+              ...edge,
+              inputKind: 'frame-input' as const,
+            })),
     errorMessage: overrides.errorMessage ?? null,
     forceActivated: overrides.forceActivated ?? false,
     startedAt: overrides.startedAt !== undefined ? overrides.startedAt : now,
@@ -124,7 +152,7 @@ export function buildNodeRunMintRecord(input: NodeRunMintInput): NodeRunMintReco
     agentOverrideName: config.agentOverrideName ?? null,
     agentOverrideId: config.agentOverrideId ?? null,
     wgRound: overrides.wgRound ?? null,
-    envelopeNonce: overrides.envelopeNonce ?? generateNodeRunEnvelopeNonce(),
+    envelopeNonce: input.envelopeNonce,
     continuationSlotKey,
     lineageSlotPathJson:
       overrides.lineageSlotPathJson !== undefined

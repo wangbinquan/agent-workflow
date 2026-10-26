@@ -1,5 +1,5 @@
 // P-5-05 build pipeline — produces a single executable that contains the
-// daemon, the compiled frontend, and the drizzle migrations.
+// daemon, the compiled frontend, the frozen epoch-1 migrations, and the epoch-2 schema history.
 //
 // Steps:
 //   1. `bun --filter @agent-workflow/frontend build` → packages/frontend/dist/
@@ -31,6 +31,7 @@ const repoRoot = resolve(import.meta.dirname, '..')
 const frontendDist = join(repoRoot, 'packages', 'frontend', 'dist')
 const migrationsDir = join(repoRoot, 'packages', 'backend', 'db', 'migrations')
 const postgresqlMigrationsDir = join(repoRoot, 'packages', 'backend', 'db', 'postgresql-migrations')
+const schemaHistoryDir = join(repoRoot, 'packages', 'backend', 'db', 'schema-history', 'epoch2')
 const backendSrc = join(repoRoot, 'packages', 'backend', 'src')
 // RFC-029: opencode plugin .mjs files that need to ride along inside the
 // binary so the runner can copy them into per-run dirs at task time.
@@ -159,7 +160,7 @@ async function buildFrontend(): Promise<void> {
   }
 }
 
-function renderGenerated(
+export function renderGenerated(
   managedProcessLauncherSource: string,
   gitCredentialHelperSource: string,
 ): {
@@ -168,6 +169,7 @@ function renderGenerated(
     readonly frontendCount: number
     readonly migrationCount: number
     readonly postgresqlMigrationCount: number
+    readonly schemaHistoryCount: number
     readonly pluginCount: number
     readonly grammarCount: number
   }
@@ -175,6 +177,7 @@ function renderGenerated(
   const frontFiles = walkFiles(frontendDist)
   const migFiles = walkFiles(migrationsDir)
   const postgresqlMigFiles = walkFiles(postgresqlMigrationsDir)
+  const historyFiles = walkFiles(schemaHistoryDir)
   // RFC-029: only `.mjs` plugin assets get embedded (the .ts source is
   // dev-time only; the runner copies the .mjs into the per-run dir).
   const pluginFiles = walkFiles(pluginsDir).filter((p) => p.endsWith('.mjs'))
@@ -210,6 +213,15 @@ function renderGenerated(
     const id = safeIdent('mig', rel)
     lines.push(`import ${id} from '${relImport(abs)}' with { type: 'file' }`)
     migEntries.push([rel, id])
+  }
+  lines.push('')
+
+  const historyEntries: Array<[string, string]> = []
+  for (const abs of historyFiles) {
+    const rel = relative(schemaHistoryDir, abs).split(/[\\/]/).join(posix.sep)
+    const id = safeIdent('history', rel)
+    lines.push(`import ${id} from '${relImport(abs)}' with { type: 'file' }`)
+    historyEntries.push([rel, id])
   }
   lines.push('')
 
@@ -252,6 +264,11 @@ function renderGenerated(
   )
   lines.push('')
 
+  lines.push('export const SCHEMA_HISTORY_FILES: Record<string, string> = {')
+  for (const [rel, id] of historyEntries) lines.push(`  ${JSON.stringify(rel)}: ${id},`)
+  lines.push('}')
+  lines.push('')
+
   lines.push('export const PLUGIN_FILES: Record<string, string> = {')
   for (const [rel, id] of pluginEntries) lines.push(`  ${JSON.stringify(rel)}: ${id},`)
   lines.push('}')
@@ -279,6 +296,7 @@ function renderGenerated(
       frontendCount: frontEntries.length,
       migrationCount: migEntries.length,
       postgresqlMigrationCount: postgresqlMigEntries.length,
+      schemaHistoryCount: historyEntries.length,
       pluginCount: pluginEntries.length,
       grammarCount: grammarEntries.length,
     },
@@ -394,7 +412,7 @@ async function main(): Promise<void> {
   const generated = renderGenerated(managedProcessLauncherSource, gitCredentialHelperSource)
   const counts = generated.counts
   process.stdout.write(
-    `\nprepared virtual ${generatedPath}: ${counts.frontendCount} frontend files + ${counts.migrationCount} SQLite migration files + ${counts.postgresqlMigrationCount} PostgreSQL migration files + ${counts.pluginCount} opencode-plugin files + ${counts.grammarCount} grammar wasms\n`,
+    `\nprepared virtual ${generatedPath}: ${counts.frontendCount} frontend files + ${counts.migrationCount} SQLite migration files + ${counts.postgresqlMigrationCount} PostgreSQL migration files + ${counts.schemaHistoryCount} epoch-2 history files + ${counts.pluginCount} opencode-plugin files + ${counts.grammarCount} grammar wasms\n`,
   )
 
   // 3. bun build --compile.
@@ -497,18 +515,19 @@ async function main(): Promise<void> {
   }
 }
 
-main().catch(async (err: unknown) => {
-  process.stderr.write(
-    '\nbuild failed: ' + (err instanceof Error ? err.message : String(err)) + '\n',
-  )
-  // Clean up partial outDir if it's empty.
-  const entries = existsSync(outDir) ? readdirSync(outDir) : []
-  if (entries.length === 0) {
-    try {
-      await rm(outDir, { recursive: true, force: true })
-    } catch {
-      /* ignore */
+if (import.meta.main)
+  main().catch(async (err: unknown) => {
+    process.stderr.write(
+      '\nbuild failed: ' + (err instanceof Error ? err.message : String(err)) + '\n',
+    )
+    // Clean up partial outDir if it's empty.
+    const entries = existsSync(outDir) ? readdirSync(outDir) : []
+    if (entries.length === 0) {
+      try {
+        await rm(outDir, { recursive: true, force: true })
+      } catch {
+        /* ignore */
+      }
     }
-  }
-  process.exit(1)
-})
+    process.exit(1)
+  })

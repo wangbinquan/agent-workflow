@@ -50,8 +50,6 @@ import {
 } from './helpers/providerTaskExecutionTestTopology'
 import { runGit } from '../src/util/git'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-
 // Self-contained mini-mock opencode (written into the per-test temp dir).
 // Behavior:
 //   attempt 1 (counter file says n === 1):
@@ -135,7 +133,7 @@ async function buildHarness(provider?: ProviderHarness): Promise<Harness> {
   }
   const miniMockPath = join(appHome, 's2-mini-opencode.ts')
   writeFileSync(miniMockPath, MINI_MOCK_SOURCE)
-  const db = provider === undefined ? createInMemoryDb(MIGRATIONS) : provider.db
+  const db = provider === undefined ? createInMemoryDb() : provider.db
   return {
     db,
     postgresql: provider?.applicationBinding.provider === 'postgresql',

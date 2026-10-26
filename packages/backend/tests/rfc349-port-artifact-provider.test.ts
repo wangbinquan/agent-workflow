@@ -1,75 +1,68 @@
-// RFC-349 — port-artifact transport owns filesystem rendering only. Task
-// visibility and persisted output/repository rows come from the selected
-// TaskExecution read model, including the external PostgreSQL implementation.
-
-import { withNativeTransactions } from './helpers/nativeTransactions'
-import { describe, expect, test } from 'bun:test'
+import { expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-
 import { createTaskExecutionReadModels } from '@/modules/task-execution/infrastructure/taskExecutionReadModels'
-import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
-import type {
-  PostgresqlDatabaseRuntime,
-  PostgresqlPool,
-  PostgresqlReservedConnection,
-  SqlRows,
-} from '@/platform/persistence/postgresqlRuntime'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { describeEachProvider } from './helpers/eachProvider'
+import {
+  workflowFixture,
+  taskFixture,
+  taskRepoFixture,
+  nodeRunFixture,
+  nodeRunOutputFixture,
+} from './helpers/model'
 
-function rows(values: readonly (readonly unknown[])[]): SqlRows {
-  return Object.assign(Promise.resolve([] as readonly Record<string, unknown>[]), {
-    async values() {
-      return values
-    },
-  })
-}
-
-function fixture(responses: Array<readonly (readonly unknown[])[]>) {
-  const executions: Array<{ readonly sql: string; readonly parameters?: readonly unknown[] }> = []
-  const run = (query: string, parameters?: readonly unknown[]) => {
-    executions.push({ sql: query, parameters })
-    return rows(responses.shift() ?? [])
+describeEachProvider('RFC-349 port-artifact provider cutover', (h) => {
+  const parent = async (id: string, owner: string, snapshot = '{}') => {
+    await insertOne(h.db, tablesOf(h.db).users, {
+      id: owner,
+      username: owner,
+      displayName: owner,
+      role: 'user',
+      status: 'active',
+      forcePasswordChange: false,
+      createdAt: 1,
+      updatedAt: 1,
+    })
+    await workflowFixture(h.db, { id: 'workflow', name: 'workflow', definition: '{}' })
+    await taskFixture(h.db, {
+      id,
+      ownerUserId: owner,
+      workflowId: 'workflow',
+      workflowSnapshot: snapshot,
+      repoPath: '/repo',
+      worktreePath: '/worktrees/' + id,
+      baseBranch: 'main',
+      branch: 'main',
+      status: 'running',
+      inputs: {},
+      startedAt: 1,
+    })
   }
-  const connection: PostgresqlReservedConnection = withNativeTransactions({
-    unsafe: run,
-    release() {},
-  })
-  const pool: PostgresqlPool = {
-    async reserve() {
-      return connection
-    },
-    unsafe: run,
-    async close() {},
+  const fixture = () => {
+    const recording = h.recordStatements()
+    return { reads: createTaskExecutionReadModels(h.db), executions: recording.statements }
   }
-  const runtime: PostgresqlDatabaseRuntime = {
-    provider: 'postgresql',
-    generationId: 'dbg_port_artifact_provider',
-    async health() {
-      throw new Error('not used')
-    },
-    async readiness() {
-      throw new Error('not used')
-    },
-    async acquireMigrationAdvisoryLock() {
-      throw new Error('not used')
-    },
-    providerPool: () => pool,
-    async close() {},
-  }
-  return {
-    reads: createTaskExecutionReadModels(createPostgresqlDatabaseClient(runtime)),
-    executions,
-  }
-}
-
-describe('RFC-349 port-artifact provider cutover', () => {
-  test('PostgreSQL freezes visibility, run ownership, output and repo prefix in one closed result', async () => {
-    const fake = fixture([
-      [['task-1', 'owner-1', '/worktrees/task-1']],
-      [['run-1']],
-      [['{"v":1,"items":[]}', 'docs/result.md', 'path<md>']],
-      [['api', 'api']],
-    ])
+  test('Selected provider freezes visibility, run ownership, output and repo prefix in one closed result', async () => {
+    await parent('task-1', 'owner-1')
+    await nodeRunFixture(h.db, { id: 'run-1', taskId: 'task-1', nodeId: 'node', status: 'done' })
+    await nodeRunOutputFixture(h.db, {
+      nodeRunId: 'run-1',
+      portName: 'result',
+      content: 'docs/result.md',
+      kind: 'path<md>',
+      archiveJson: '{"v":1,"items":[]}',
+    })
+    await taskRepoFixture(h.db, {
+      taskId: 'task-1',
+      repoIndex: 0,
+      mountPath: 'api',
+      repoPath: '/repo/api',
+      branch: 'main',
+      worktreePath: '/worktrees/task-1/api',
+    })
+    const fake = fixture()
 
     await expect(
       fake.reads.portArtifacts.find({
@@ -90,11 +83,12 @@ describe('RFC-349 port-artifact provider cutover', () => {
       },
     })
     expect(fake.executions).toHaveLength(4)
-    expect(fake.executions[3]?.sql).toContain('order by "agent_workflow"."task_repos"."repo_index"')
+    expect(fake.executions[3]?.sql).toContain('"task_repository_mounts"."ordinal"')
   })
 
-  test('PostgreSQL collapses missing membership into task-not-found before reading the run', async () => {
-    const fake = fixture([[['task-2', 'owner-2', '/worktrees/task-2']], []])
+  test('Selected provider collapses missing membership into task-not-found before reading the run', async () => {
+    await parent('task-2', 'owner-2')
+    const fake = fixture()
 
     await expect(
       fake.reads.portArtifacts.find({
@@ -107,20 +101,40 @@ describe('RFC-349 port-artifact provider cutover', () => {
     expect(fake.executions).toHaveLength(2)
   })
 
-  test('PostgreSQL reads prefix and tail per sibling and returns one ordered session source', async () => {
+  test('Selected provider reads prefix and tail per sibling and returns one ordered session source', async () => {
     const snapshot = JSON.stringify({ nodes: [{ id: 'agent-1', kind: 'agent-single' }] })
-    const fake = fixture([
-      [[snapshot]],
-      [['run-a', 'task-3', 'agent-1', 'first', null, 10, 'session-3', 0]],
-      [
-        ['run-a', 'task-3', 'agent-1', 'first', null, 10, 'session-3', 0],
-        ['run-b', 'task-3', 'agent-1', 'second', null, 20, 'session-3', 1],
-      ],
-      [[1, 10, 'text', 'session-3', null, 'a-prefix']],
-      [[3, 30, 'text', 'session-3', null, 'a-tail']],
-      [[4, 40, 'text', 'session-3', null, 'b-prefix']],
-      [[5, 50, 'text', 'session-3', null, 'b-tail']],
-    ])
+    await parent('task-3', 'owner-3', snapshot)
+    for (const [id, promptText, startedAt, retryIndex] of [
+      ['run-a', 'first', 10, 0],
+      ['run-b', 'second', 20, 1],
+    ] as const)
+      await nodeRunFixture(h.db, {
+        id,
+        taskId: 'task-3',
+        nodeId: 'agent-1',
+        status: 'done',
+        promptText,
+        startedAt,
+        retryIndex,
+        opencodeSessionId: 'session-3',
+      })
+    for (const [id, nodeRunId, ts, payload] of [
+      [1, 'run-a', 10, 'a-prefix'],
+      [2, 'run-a', 20, 'discard-middle'],
+      [3, 'run-a', 30, 'a-tail'],
+      [4, 'run-b', 40, 'b-prefix'],
+      [5, 'run-b', 50, 'b-tail'],
+    ] as const)
+      await insertOne(h.db, tablesOf(h.db).nodeRunEvents, {
+        id,
+        nodeRunId,
+        ts,
+        kind: 'text',
+        sessionId: 'session-3',
+        parentSessionId: null,
+        payload,
+      })
+    const fake = fixture()
 
     await expect(
       fake.reads.sessions.find({
@@ -199,8 +213,9 @@ describe('RFC-349 port-artifact provider cutover', () => {
         },
       ],
     })
-    expect(fake.executions).toHaveLength(7)
-    const eventQueries = fake.executions.slice(3)
+    const eventQueries = fake.executions.filter(
+      (query) => query.sql.includes('from') && query.sql.includes('"node_run_events"'),
+    )
     expect(eventQueries).toHaveLength(4)
     for (const query of eventQueries) expect(query.sql).toContain('"node_run_events"')
   })

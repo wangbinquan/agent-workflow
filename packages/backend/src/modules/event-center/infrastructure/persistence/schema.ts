@@ -1,4 +1,4 @@
-// RFC-395 I-a: explicit epoch-1 schema contributions; no physical or runtime change.
+// RFC-395 activation: this context declares the live epoch-2 schema directly.
 import {
   column as c,
   defineContribution,
@@ -381,16 +381,20 @@ const observerActivationsDefinition = owner.table({
 
 export const observerActivations = materializeDrizzle(observerActivationsDefinition).table
 
-export const schemaContribution = owner.contribution([
-  customEventSourceDefinitionsDefinition,
-  customEventSourceRevisionsDefinition,
-  eventAutomationWorkIntentsDefinition,
-  eventDeliveriesDefinition,
-  eventObserverRunsDefinition,
-  eventRecordsDefinition,
-  eventResponseRulesDefinition,
-  eventSourcesDefinition,
-  eventSubscriptionsDefinition,
-  eventTypeCatalogDefinition,
-  observerActivationsDefinition,
-])
+export const schemaContribution = {
+  owner: 'event-center',
+  version: 1,
+  tables: [
+    customEventSourceDefinitionsDefinition,
+    customEventSourceRevisionsDefinition,
+    eventAutomationWorkIntentsDefinition,
+    eventDeliveriesDefinition,
+    eventObserverRunsDefinition,
+    eventRecordsDefinition,
+    eventResponseRulesDefinition,
+    eventSourcesDefinition,
+    eventSubscriptionsDefinition,
+    eventTypeCatalogDefinition,
+    observerActivationsDefinition,
+  ],
+} as const

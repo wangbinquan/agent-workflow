@@ -1,13 +1,16 @@
-// RFC-395 I-a: schema-only composition entry, also exported by the module composition root.
+// Schema-only composition exit for the live registry.
 export {
   schemaContribution,
-  clarifyRounds,
-  collaborationGateArtifacts,
-  collaborationGateOperations,
-  docVersions,
-  reviewComments,
   reviewNodeReviewers,
-  taskCollaborators,
   taskFeedback,
   taskQuestions,
+  clarifyRounds,
+  clarifyAnswers,
+  clarifyAnswerDrafts,
+  clarifyAnswerAttributions,
+  collaborationGateOperations,
+  taskCollaborators,
+  docVersions,
+  reviewComments,
+  collaborationGateArtifacts,
 } from '../infrastructure/persistence/schema'

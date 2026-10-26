@@ -1,7 +1,7 @@
 import { createTaskClarifyDirectivePersistence } from '@/modules/task-execution/public/participants'
 import { createClarifyAnswerWritePort } from './clarifyAnswerWrite'
 import { tablesOf } from '@/platform/persistence/sessionTables'
-import { and, eq } from 'drizzle-orm'
+import { and, eq, exists, isNotNull, isNull, or } from 'drizzle-orm'
 
 import type { WorkgroupTaskRoomClarifyParticipantInTx } from '@/modules/task-execution/public/commands'
 import type { PersistenceTx } from '@/platform/persistence/persistenceDb'
@@ -16,7 +16,7 @@ export function createWorkgroupTaskRoomClarifyParticipantInTx(
   const clarifyDirectives = createTaskClarifyDirectivePersistence(transaction)
   return Object.freeze({
     async loadProjection(taskId) {
-      const { clarifyRounds } = tablesOf(transaction)
+      const { clarifyRounds, taskQuestions } = tablesOf(transaction)
       const [open, directives] = await Promise.all([
         transaction
           .select({ askingNodeRunId: clarifyRounds.askingNodeRunId })
@@ -25,7 +25,32 @@ export function createWorkgroupTaskRoomClarifyParticipantInTx(
             and(
               eq(clarifyRounds.kind, 'self'),
               eq(clarifyRounds.taskId, taskId),
-              eq(clarifyRounds.status, 'awaiting_human'),
+              // Seal and dispatch commit separately. The asking host can still
+              // be unwinding after the task parks; its next snapshot must not
+              // wake a new leader between the answer seal and the rerun mint.
+              // Dispatch stamps the entries and mints the continuation in one
+              // transaction, so that continuation takes over the park atomically.
+              or(
+                eq(clarifyRounds.status, 'awaiting_human'),
+                and(
+                  eq(clarifyRounds.status, 'answered'),
+                  exists(
+                    transaction
+                      .select({ id: taskQuestions.id })
+                      .from(taskQuestions)
+                      .where(
+                        and(
+                          eq(taskQuestions.taskId, clarifyRounds.taskId),
+                          eq(taskQuestions.originNodeRunId, clarifyRounds.intermediaryNodeRunId),
+                          eq(taskQuestions.roleKind, 'self'),
+                          eq(taskQuestions.confirmation, 'open'),
+                          isNotNull(taskQuestions.sealedAt),
+                          isNull(taskQuestions.dispatchedAt),
+                        ),
+                      ),
+                  ),
+                ),
+              ),
             ),
           ),
         clarifyDirectives.listWorkgroupStops(taskId),

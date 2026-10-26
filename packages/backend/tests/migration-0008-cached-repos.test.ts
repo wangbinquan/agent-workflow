@@ -3,24 +3,28 @@
 // and tasks gains a nullable repo_url column. Legacy task rows (without
 // repo_url at insert time) come back with repo_url == NULL.
 
+import {
+  frozenTablesOf,
+  createFrozenEpoch1Db,
+  type FrozenDbClient,
+  FROZEN_MIGRATIONS,
+} from './migration-freeze'
 import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
 import { queryRows } from '@/platform/persistence/queryHelpers'
 import { describe, expect, test, beforeEach } from 'bun:test'
 import { resolve } from 'node:path'
 import { ulid } from 'ulid'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+const MIGRATIONS = resolve(FROZEN_MIGRATIONS)
 
 describe('migration 0008 (RFC-024 cached_repos + tasks.repoUrl)', () => {
-  let db: DbClient
+  let db: FrozenDbClient
   beforeEach(() => {
-    db = createInMemoryDb(MIGRATIONS)
+    db = createFrozenEpoch1Db(MIGRATIONS)
   })
 
   test('cached_repos table accepts inserts and exposes unique url_hash', () => {
     const now = Date.now()
-    const { cachedRepos } = tablesOf(db)
+    const { cachedRepos } = frozenTablesOf(db)
     insertOne(db, cachedRepos, {
       id: ulid(),
       urlHash: 'abcd1234',
@@ -52,7 +56,7 @@ describe('migration 0008 (RFC-024 cached_repos + tasks.repoUrl)', () => {
 
   test('default_branch is nullable and persists null round-trip', () => {
     const now = Date.now()
-    const { cachedRepos } = tablesOf(db)
+    const { cachedRepos } = frozenTablesOf(db)
     insertOne(db, cachedRepos, {
       id: ulid(),
       urlHash: 'deadbeef',
@@ -69,7 +73,7 @@ describe('migration 0008 (RFC-024 cached_repos + tasks.repoUrl)', () => {
   test('tasks.repoUrl persists when set and is null when omitted', () => {
     // Need a workflow row first for the FK.
     const wfId = ulid()
-    const { workflows, tasks } = tablesOf(db)
+    const { workflows, tasks } = frozenTablesOf(db)
     insertOne(db, workflows, {
       id: wfId,
       name: 'wf',

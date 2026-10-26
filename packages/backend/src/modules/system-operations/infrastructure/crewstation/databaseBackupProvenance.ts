@@ -1,32 +1,38 @@
-// RFC-370 — prove born-hosted provenance from the active generation and its
-// installed operation. A migrated SQLite database cannot pass by lacking archive
-// files. A database restored from a hosted backup names that backup, which is
-// then retained (never pruned) for the lifetime of the restored generation.
-//
-// The installing operation keeps the contract digest of the schema it installed;
-// later expand-only migrations advance only the generation's digest. Provenance
-// is the source both rows name, not that install-time digest (requiring the two
-// digests to match failed every installation upgraded after it was installed).
 import type { PostgresqlDatabaseRuntime } from '@/platform/persistence/postgresqlRuntime'
-import { POSTGRESQL_METADATA_SCHEMA } from '@/platform/persistence/postgresqlSchema'
 import type { LogicalSchemaContract } from '@/platform/persistence/schemaContract'
+import { readRestoreReceipt } from './epoch2RestoreReceipt'
 import { parseHostedBackupMarker } from './databaseBackupFormat'
-
+/** Current backup archives include conversion metadata; preserved generation
+ * lineage names every retained hosted source, including copies of restored DBs. */
 export async function readHostedDatabaseBackupProvenance(
   runtime: PostgresqlDatabaseRuntime,
-  contract: Pick<LogicalSchemaContract, 'digest'>,
+  _contract: Pick<LogicalSchemaContract, 'digest'>,
 ): Promise<readonly string[]> {
-  const rows = await runtime
-    .providerPool()
-    .unsafe(
-      `SELECT g.source_generation_id AS generation_source, o.source_generation_id AS operation_source FROM "${POSTGRESQL_METADATA_SCHEMA}".database_generations g JOIN "${POSTGRESQL_METADATA_SCHEMA}".logical_copy_operations o ON o.operation_id = g.operation_id WHERE g.generation_id = $1 AND g.state = 'active' AND g.contract_digest = $2 AND o.stage IN ('activated', 'finalized')`,
-      [runtime.generationId, contract.digest],
+  const connection = runtime.providerPool(),
+    references = new Set<string>(),
+    seen = new Set<string>()
+  let id: string | null = runtime.generationId
+  while (id !== null) {
+    if (seen.has(id)) throw new Error('hosted-backup-installation-lineage-cycle')
+    seen.add(id)
+    const rows = await connection.unsafe(
+      'SELECT generation_id,source_generation_id,operation_id,role,state FROM agent_workflow_meta.generations WHERE generation_id=$1',
+      [id],
     )
-  if (rows.length !== 1 || rows[0]!.generation_source !== rows[0]!.operation_source)
-    throw new Error('hosted-backup-installation-provenance-missing')
-  const source = rows[0]!.generation_source
-  if (source === 'hosted-installation') return []
-  const restored = parseHostedBackupMarker(source)
-  if (restored === null) throw new Error('hosted-backup-legacy-archive-required')
-  return [restored]
+    const row = rows[0]
+    if (!row || (id === runtime.generationId && row.state !== 'active'))
+      throw new Error('hosted-backup-installation-provenance-missing')
+    if (row.operation_id !== null) {
+      const copy = await readRestoreReceipt<{ sourceGenerationId: string }>(
+        connection,
+        String(row.operation_id),
+        'epoch2-copy',
+      )
+      const marker = copy && parseHostedBackupMarker(copy.sourceGenerationId)
+      if (marker) references.add(marker)
+    }
+    if (row.role === 'converted' || row.source_generation_id === null) break
+    id = String(row.source_generation_id)
+  }
+  return [...references].sort()
 }

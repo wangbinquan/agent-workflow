@@ -1,3 +1,5 @@
+import { nodeRunFixtureColumns } from './helpers/model/nodeRun'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { withO2Closure } from './helpers/o2Closure'
 // RFC-056 PR-B T6 — scheduler / runner integration for the cross-clarify path.
 //
@@ -26,7 +28,7 @@ import {
   workflowFixture,
   readNodeRunFixtures,
 } from './helpers/model'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+
 import { createSqliteMemoryDistillEnqueuer } from './helpers/memoryDistill'
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
@@ -381,7 +383,10 @@ function registerProviderCases1(provider: ProviderHarness) {
     expect(sessions[0]?.targetConsumerNodeId).toBe('designer')
     expect(sessions[0]?.iteration).toBe(0)
 
-    const runs = await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, t2.taskId))
+    const runs = await h.db
+      .select(nodeRunFixtureColumns(h.db))
+      .from(nodeRuns)
+      .where(eq(nodeRuns.taskId, t2.taskId))
     const qRun = runs.find((r) => r.nodeId === 'questioner')
     const crossRun = runs.find((r) => r.nodeId === 'cross1' && r.status === 'awaiting_human')
     expect(qRun?.status).toBe('done')
@@ -572,7 +577,9 @@ function registerProviderCases1(provider: ProviderHarness) {
       definition: def,
     })
     expect(out.kind).toBe('short-circuit-stop')
-    const fresh = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, nrId)))[0]
+    const fresh = (
+      await h.db.select(nodeRunFixtureColumns(h.db)).from(nodeRuns).where(eq(nodeRuns.id, nrId))
+    )[0]
     expect(fresh?.status).toBe('done')
   })
 

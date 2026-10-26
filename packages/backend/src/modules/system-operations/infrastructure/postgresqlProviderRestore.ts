@@ -8,6 +8,7 @@ import {
   type PostgresqlLogicalTarget,
 } from '@/platform/persistence/postgresqlLogicalTarget'
 import type { PostgresqlDatabaseRuntime } from '@/platform/persistence/postgresqlRuntime'
+import { migrationPostgresqlRuntime } from '@/platform/persistence/migration/freeze/postgresqlDatabases'
 import type { LogicalSchemaContract } from '@/platform/persistence/schemaContract'
 import type { PostgresqlSchemaPlan } from '@/platform/persistence/postgresqlSchema'
 import {
@@ -58,9 +59,11 @@ export async function restorePostgresqlProviderBackup(
   const targetGenerationId = options.targetGenerationId
   const openTarget: OpenPostgresqlProviderRestoreTarget =
     options.openTarget ??
-    (openPostgresqlLogicalTarget as (
-      input: OpenPostgresqlProviderRestoreTargetInput,
-    ) => Promise<PostgresqlLogicalTarget>)
+    ((input) =>
+      openPostgresqlLogicalTarget({
+        ...input,
+        runtime: migrationPostgresqlRuntime(input.runtime),
+      }))
 
   return await restorePortableDatabaseBackup({
     headContract: options.headContract,

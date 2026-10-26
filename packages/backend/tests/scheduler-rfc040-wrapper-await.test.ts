@@ -1,3 +1,5 @@
+import { nodeRunFixtureColumns } from './helpers/model/nodeRun'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 // RFC-374 AC-7 also exercises this real continuation after legacy sequence catch-up.
 import {
   agentFixture,
@@ -7,7 +9,7 @@ import {
   workflowFixture,
   readNodeRunFixtures,
 } from './helpers/model'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+
 import { catchUpLegacySequenceTask } from './helpers/rfc374Fixtures'
 // RFC-040 — wrapper-loop / wrapper-git bubble awaiting_human / awaiting_review.
 //
@@ -278,7 +280,7 @@ function registerLoopCases(provider: ProviderHarness) {
 
     // Agent ran exactly once at iter 0 — not 3 times.
     const agentRuns = await h.db
-      .select()
+      .select(nodeRunFixtureColumns(h.db))
       .from(nodeRuns)
       .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, 'd')))
     expect(agentRuns.length).toBe(1)
@@ -341,7 +343,7 @@ function registerLoopCases(provider: ProviderHarness) {
 
     const { nodeRuns, clarifyRounds } = tablesOf(h.db)
     const loopRunsBefore = await h.db
-      .select()
+      .select(nodeRunFixtureColumns(h.db))
       .from(nodeRuns)
       .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, 'loop')))
     expect(loopRunsBefore.length).toBe(1)
@@ -387,7 +389,7 @@ function registerLoopCases(provider: ProviderHarness) {
 
     // Wrapper row REUSED (same id), now terminal=done.
     const loopRunsAfter = await h.db
-      .select()
+      .select(nodeRunFixtureColumns(h.db))
       .from(nodeRuns)
       .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, 'loop')))
     expect(loopRunsAfter.length).toBe(1) // no second wrapper row
@@ -406,7 +408,7 @@ function registerLoopCases(provider: ProviderHarness) {
     // total count depends on how many times runScope re-enters the agent
     // during rescan / done-iteration completion polling; we don't pin it.
     const agentRuns = await h.db
-      .select()
+      .select(nodeRunFixtureColumns(h.db))
       .from(nodeRuns)
       .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, 'd')))
     expect(agentRuns.length).toBeGreaterThanOrEqual(2)
@@ -433,7 +435,7 @@ function registerLoopCases(provider: ProviderHarness) {
     // idle: a second, `skipped` row that turned the answered gate grey on the
     // task canvas. Exactly one row, in the wrapper frame, done.
     const gateRuns = await h.db
-      .select()
+      .select(nodeRunFixtureColumns(h.db))
       .from(nodeRuns)
       .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, 'c')))
     expect(gateRuns.map((r) => r.status)).toEqual(['done'])
@@ -635,7 +637,7 @@ function registerGitCases(provider: ProviderHarness) {
 
     // Wrapper-git row REUSED + now done.
     const gwRunsAfter = await h.db
-      .select()
+      .select(nodeRunFixtureColumns(h.db))
       .from(nodeRuns)
       .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, 'gw')))
     expect(gwRunsAfter.length).toBe(1)
@@ -650,7 +652,7 @@ function registerGitCases(provider: ProviderHarness) {
     // RFC-354 PR-3 (gate P1): the gate's park row is in the git wrapper's
     // frame and is the gate's ONLY row — see the loop twin above.
     const gateRuns = await h.db
-      .select()
+      .select(nodeRunFixtureColumns(h.db))
       .from(nodeRuns)
       .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, 'c')))
     expect(gateRuns.map((r) => r.status)).toEqual(['done'])
@@ -748,7 +750,7 @@ function registerNestedCases(provider: ProviderHarness) {
     const { nodeRuns, clarifyRounds } = tablesOf(h.db)
     // Inner loop wrapper parked.
     const loopRuns = await h.db
-      .select()
+      .select(nodeRunFixtureColumns(h.db))
       .from(nodeRuns)
       .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, 'loop')))
     expect(loopRuns.length).toBe(1)
@@ -756,7 +758,7 @@ function registerNestedCases(provider: ProviderHarness) {
 
     // Outer git wrapper also parked; NO diff computed.
     const gwRuns = await h.db
-      .select()
+      .select(nodeRunFixtureColumns(h.db))
       .from(nodeRuns)
       .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, 'gw')))
     expect(gwRuns.length).toBe(1)

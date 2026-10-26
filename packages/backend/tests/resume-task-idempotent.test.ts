@@ -27,19 +27,17 @@ import { first } from '@/platform/persistence/queryHelpers'
 import { afterEach, describe, expect, test } from 'bun:test'
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
-import type { DbClient } from '../src/db/client'
-import { createInMemoryDb } from '../src/db/client'
+import { type DbClient, createInMemoryDb } from '../src/db/client'
+
 import { claimNewRuntimeSession } from '../src/services/runtimeSessionLease'
 import { runGit } from '../src/util/git'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 import { createResumeEngine } from './helpers/resumeEngine'
 import { createRuntimeSessionLeaseOperations } from '../src/modules/task-execution/infrastructure/runtimeSessionLeaseOperations'
-
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 interface Harness {
   db: DbClient
@@ -73,7 +71,7 @@ async function buildHarness(
   await runGit(repoPath, ['add', '.'])
   await runGit(repoPath, ['commit', '-q', '-m', 'i'])
 
-  const db = createInMemoryDb(MIGRATIONS)
+  const db = createInMemoryDb()
   const definition: WorkflowDefinition = {
     $schema_version: 2,
     inputs: [],

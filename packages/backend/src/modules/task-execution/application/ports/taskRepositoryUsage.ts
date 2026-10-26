@@ -34,6 +34,7 @@ export interface TaskRepositorySourceSealingParticipant {
       repoUrl?: string | null
       cachedRepoId?: string | null
       submoduleInitError?: string | null
+      readonlyDirtyCount?: number | null
     },
   ): Promise<void>
 }

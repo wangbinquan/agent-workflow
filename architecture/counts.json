@@ -3,8 +3,8 @@
   "note": "RFC-294 design §13.1 减速带，不是门。measured <= max 即通过；下降不需要改；抬高 max 必须在同一提交，且 reason 含 max=<N>。无 provenance、无过期、无历史比较。",
   "counts": {
     "application-direct-effect-files": {
-      "max": 3,
-      "reason": "max=3: RFC-376 阶段 B 已提交 HEAD 初值；新增例外由对应后继 RFC 明列并经用户确认"
+      "max": 2,
+      "reason": "max=2: RFC-395 II-b T18 Q-2b live census decreases 3 -> 2; no growth authorized."
     },
     "backend-value-scc": {
       "max": 0,
@@ -15,16 +15,16 @@
       "reason": "max=21: RFC-376 阶段 B 已提交 HEAD 初值；新增例外由对应后继 RFC 明列并经用户确认"
     },
     "context-value-pairs-off-dag": {
-      "max": 15,
-      "reason": "max=15: RFC-376 阶段 B 已提交 HEAD 初值；新增例外由对应后继 RFC 明列并经用户确认"
+      "max": 9,
+      "reason": "max=9: RFC-395 II-b T18 source census decreases 15 -> 9; no growth authorized."
     },
     "context-value-sccs": {
       "max": 2,
       "reason": "max=2: RFC-376 阶段 B 已提交 HEAD 初值；新增例外由对应后继 RFC 明列并经用户确认"
     },
     "cross-context-internal-file-pairs": {
-      "max": 99,
-      "reason": "max=99: RFC-376 阶段 B 已提交 HEAD 初值；新增例外由对应后继 RFC 明列并经用户确认"
+      "max": 88,
+      "reason": "max=88: RFC-395 II-b T18 source census decreases 99 -> 88; no growth authorized."
     },
     "depcheck-known-violations": {
       "max": 0,
@@ -35,40 +35,40 @@
       "reason": "max=5: RFC-394 宿主探测归部署 profile，删除启动序列的部署比较（RFC-376 阶段 B 初值 8）；新增例外由对应后继 RFC 明列并经用户确认"
     },
     "direct-setinterval-sites": {
-      "max": 15,
-      "reason": "max=15: RFC-376 阶段 B 已提交 HEAD 初值；新增例外由对应后继 RFC 明列并经用户确认"
+      "max": 14,
+      "reason": "max=14: RFC-395 II-b T18 source census decreases 15 -> 14; no growth authorized."
     },
     "export-star-barrels": {
-      "max": 25,
-      "reason": "max=25: RFC-376 阶段 B 已提交 HEAD 初值；新增例外由对应后继 RFC 明列并经用户确认"
+      "max": 23,
+      "reason": "max=23: RFC-395 II-b T18 source census decreases 25 -> 23; no growth authorized."
     },
     "legacy-horizontal-files": {
-      "max": 395,
-      "reason": "max=395: RFC-395 II-pre 删除 services/gc.ts 与 services/users.ts 兼容门面；其余存量不增加"
+      "max": 391,
+      "reason": "max=391: RFC-395 II-b T18 source census decreases 395 -> 391; no growth authorized."
     },
     "legacy-service-implementations": {
-      "max": 224,
-      "reason": "max=224: RFC-376 阶段 B 已提交 HEAD 初值；新增例外由对应后继 RFC 明列并经用户确认"
+      "max": 220,
+      "reason": "max=220: RFC-395 II-b T18 source census decreases 224 -> 220; no growth authorized."
     },
     "legacy-thin-facades": {
-      "max": 47,
-      "reason": "max=47: RFC-395 II-pre 删除 services/gc.ts 兼容门面；其余存量不增加"
+      "max": 45,
+      "reason": "max=45: RFC-395 II-b T18 source census decreases 47 -> 45; no growth authorized."
     },
     "module-layer-violations": {
-      "max": 2,
-      "reason": "max=2: RFC-376 阶段 B 已提交 HEAD 初值；新增例外由对应后继 RFC 明列并经用户确认"
+      "max": 1,
+      "reason": "max=1: RFC-395 II-b T18 source census decreases 2 -> 1; no growth authorized."
     },
     "node-runs-insert-sites": {
       "max": 1,
       "reason": "max=1: RFC-376 阶段 B 已提交 HEAD 初值；新增例外由对应后继 RFC 明列并经用户确认"
     },
     "off-dag-offered-file-context-pairs": {
-      "max": 63,
-      "reason": "max=63: RFC-376 阶段 B 已提交 HEAD 初值；新增例外由对应后继 RFC 明列并经用户确认"
+      "max": 61,
+      "reason": "max=61: RFC-395 II-b T18 Q-2b live census decreases 63 -> 61; no growth authorized."
     },
     "platform-to-modules-file-pairs": {
-      "max": 30,
-      "reason": "max=30: RFC-389 维护 Worker 根与线程图迁入 bootstrap，platform 删除 19 对模块依赖（49 -> 30）"
+      "max": 19,
+      "reason": "max=19: RFC-395 II-b T18 source census decreases 30 -> 19; no growth authorized."
     },
     "repo-value-scc": {
       "max": 0,

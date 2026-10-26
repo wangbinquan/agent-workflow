@@ -1,3 +1,6 @@
+import type { projectNodeRunReadFacts } from '@/modules/task-execution/infrastructure/nodeRunSnapshot'
+// Target fixture mint order; missing seq is covered only by conversion/rejection tests.
+let fixtureRunSequence = 0
 // S-3 已修（RFC-098 B3 / WP-6c，案二「扩展谓词」）——本文件从 CURRENT-BEHAVIOR
 // LOCK 翻转为修复后语义的回归防护。原始报告：design/scheduler-audit-2026-06-10.md
 // S-3 (WP-6c)；修法裁决见 design/RFC-098-scheduler-closeout/design.md §B3 +
@@ -23,7 +26,6 @@
 //
 // 纯函数直测，仿 dispatch-frontier.test.ts 的 run()/def() 形态。
 
-import { type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { describe, expect, test } from 'bun:test'
 import type { NodeKind, WorkflowDefinition } from '@agent-workflow/shared'
 import {
@@ -33,7 +35,7 @@ import {
 } from '../src/services/dispatchFrontier'
 import { encodeWrapperProgress } from '../src/modules/task-execution/domain/wrapperProgress'
 
-type Row = PersistenceTables['nodeRuns']['$inferSelect']
+type Row = ReturnType<typeof projectNodeRunReadFacts>
 
 // RFC-354: every inner row hangs off its wrapper GENERATION row (`containerRunId`);
 // membership — not iteration arithmetic — is what makes a row "inside" the wrapper.
@@ -43,7 +45,7 @@ function run(over: Partial<Row>): Row {
     supersededByReview: null,
     mergeState: null,
 
-    seq: null,
+    seq: ++fixtureRunSequence,
     id: '01R',
     nodeId: 'n',
     iteration: 0,

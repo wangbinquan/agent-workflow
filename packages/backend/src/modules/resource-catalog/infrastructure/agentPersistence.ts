@@ -2,10 +2,19 @@ import {
   AgentInputPortSchema,
   AgentInputPortsSchema,
   type Agent,
+  type AgentReferences,
   type CreateAgent,
   type UpdateAgent,
 } from '@agent-workflow/shared'
-import { decodeAgentReferenceIds, decodeAgentSkillReferences } from './agentReferenceCodec'
+import { decodeAgentReferenceIds } from './agentReferenceCodec'
+import { asc, inArray } from 'drizzle-orm'
+import type { DbClient } from '@/db/client'
+import type { DbTxSync } from '@/db/txSync'
+import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
+import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { queryRows } from '@/platform/persistence/queryHelpers'
+import { continueResourceCommit } from './resourceCommitSequence'
 
 export interface AgentPersistenceRow {
   readonly id: string
@@ -16,10 +25,6 @@ export interface AgentPersistenceRow {
   readonly syncOutputsOnIterate: boolean
   readonly runtime: string | null
   readonly permission: string
-  readonly skills: string
-  readonly dependsOn: string
-  readonly mcp: string
-  readonly plugins: string
   readonly frontmatterExtra: string
   readonly bodyMd: string
   readonly ownerUserId: string | null
@@ -118,7 +123,11 @@ export function exposedFrontmatterExtra(storedJson: string): Record<string, unkn
   return frontmatterSidecars(JSON.parse(storedJson), 'stored-json').exposed
 }
 
-function decodeAgentPersistenceRow(row: AgentPersistenceRow, decoding: AgentRowDecoding): Agent {
+function decodeAgentPersistenceRow(
+  row: AgentPersistenceRow,
+  references: AgentReferences,
+  decoding: AgentRowDecoding,
+): Agent {
   const sidecars = frontmatterSidecars(
     decoding === 'normalized' ? jsonRecord(row.frontmatterExtra) : JSON.parse(row.frontmatterExtra),
     decoding,
@@ -132,10 +141,10 @@ function decodeAgentPersistenceRow(row: AgentPersistenceRow, decoding: AgentRowD
     inputs: inputPorts(row.inputs),
     syncOutputsOnIterate: row.syncOutputsOnIterate,
     permission: decoding === 'normalized' ? jsonRecord(row.permission) : JSON.parse(row.permission),
-    skills: decodeAgentSkillReferences(row.skills),
-    dependsOn: decodeAgentReferenceIds(row.dependsOn),
-    mcp: decodeAgentReferenceIds(row.mcp),
-    plugins: decodeAgentReferenceIds(row.plugins),
+    skills: [...references.skills],
+    dependsOn: [...references.dependsOn],
+    mcp: [...references.mcp],
+    plugins: [...references.plugins],
     frontmatterExtra: sidecars.exposed,
     bodyMd: row.bodyMd,
     ownerUserId: row.ownerUserId,
@@ -161,13 +170,19 @@ function decodeAgentPersistenceRow(row: AgentPersistenceRow, decoding: AgentRowD
   }
 }
 
-export function agentFromPersistenceRow(row: AgentPersistenceRow): Agent {
-  return decodeAgentPersistenceRow(row, 'normalized')
+export function agentFromPersistenceRow(
+  row: AgentPersistenceRow,
+  references: AgentReferences,
+): Agent {
+  return decodeAgentPersistenceRow(row, references, 'normalized')
 }
 
 /** Keep the established JSON parsing contract of the legacy row loader. */
-export function agentFromStoredJsonRow(row: AgentPersistenceRow): Agent {
-  return decodeAgentPersistenceRow(row, 'stored-json')
+export function agentFromStoredJsonRow(
+  row: AgentPersistenceRow,
+  references: AgentReferences,
+): Agent {
+  return decodeAgentPersistenceRow(row, references, 'stored-json')
 }
 
 function persistedFrontmatter(
@@ -202,9 +217,7 @@ export function serializeAgentInputs(inputs: CreateAgent['inputs']): string {
 export function agentContentPersistenceValues(
   agent: CreateAgent,
   preparedFrontmatter?: Record<string, unknown>,
-  resolvedRefs?: Pick<Agent, 'skills' | 'dependsOn' | 'mcp' | 'plugins'>,
 ) {
-  const refs = resolvedRefs ?? agent
   return {
     description: agent.description,
     outputs: JSON.stringify(agent.outputs),
@@ -212,10 +225,6 @@ export function agentContentPersistenceValues(
     syncOutputsOnIterate: agent.syncOutputsOnIterate,
     runtime: agent.runtime ?? null,
     permission: JSON.stringify(agent.permission),
-    skills: JSON.stringify(refs.skills),
-    dependsOn: JSON.stringify(refs.dependsOn),
-    mcp: JSON.stringify(refs.mcp),
-    plugins: JSON.stringify(refs.plugins),
     frontmatterExtra:
       preparedFrontmatter === undefined
         ? persistedFrontmatter(agent)
@@ -284,4 +293,147 @@ export function updateAgentPersistenceValues(
     ...agentContentPersistenceValues(next),
     updatedAt,
   }
+}
+
+/** Batch projection never joins mutable targets: dangling IDs and duplicates are data. */
+export function readAgentReferences(
+  db: DbClient | DbTxSync,
+  ids: readonly string[],
+): Map<string, AgentReferences>
+export function readAgentReferences(
+  db: PersistenceDb | PersistenceTx,
+  ids: readonly string[],
+): Map<string, AgentReferences> | Promise<Map<string, AgentReferences>>
+export function readAgentReferences(
+  db: PersistenceDb | PersistenceTx,
+  ids: readonly string[],
+): Map<string, AgentReferences> | Promise<Map<string, AgentReferences>> {
+  const references = new Map<
+    string,
+    { skills: Agent['skills']; dependsOn: string[]; mcp: string[]; plugins: string[] }
+  >(ids.map((id) => [id, { skills: [], dependsOn: [], mcp: [], plugins: [] }]))
+  if (ids.length === 0) return references
+  const { agentSkillRefs, agentMcpRefs, agentPluginRefs, agentDependencies } = tablesOf(db)
+  const skills = queryRows(
+    db
+      .select()
+      .from(agentSkillRefs)
+      .where(inArray(agentSkillRefs.agentId, [...ids]))
+      .orderBy(asc(agentSkillRefs.ordinal)),
+  )
+  const mcp = queryRows(
+    db
+      .select()
+      .from(agentMcpRefs)
+      .where(inArray(agentMcpRefs.agentId, [...ids]))
+      .orderBy(asc(agentMcpRefs.ordinal)),
+  )
+  const plugins = queryRows(
+    db
+      .select()
+      .from(agentPluginRefs)
+      .where(inArray(agentPluginRefs.agentId, [...ids]))
+      .orderBy(asc(agentPluginRefs.ordinal)),
+  )
+  const dependencies = queryRows(
+    db
+      .select()
+      .from(agentDependencies)
+      .where(inArray(agentDependencies.agentId, [...ids]))
+      .orderBy(asc(agentDependencies.ordinal)),
+  )
+  const project = ([skillRows, mcpRows, pluginRows, dependencyRows]: [
+    Awaited<typeof skills>,
+    Awaited<typeof mcp>,
+    Awaited<typeof plugins>,
+    Awaited<typeof dependencies>,
+  ]) => {
+    for (const row of skillRows) {
+      if (row.kind === 'managed') {
+        if (row.skillId === null) throw new Error('agent-skill-reference-shape')
+        references.get(row.agentId)!.skills.push({ kind: 'managed', skillId: row.skillId })
+      } else {
+        if (row.projectName === null) throw new Error('agent-skill-reference-shape')
+        references.get(row.agentId)!.skills.push({ kind: 'project', name: row.projectName })
+      }
+    }
+    for (const row of mcpRows) references.get(row.agentId)!.mcp.push(row.mcpId)
+    for (const row of pluginRows) references.get(row.agentId)!.plugins.push(row.pluginId)
+    for (const row of dependencyRows)
+      references.get(row.agentId)!.dependsOn.push(row.dependencyAgentId)
+    return references
+  }
+  return Array.isArray(skills) &&
+    Array.isArray(mcp) &&
+    Array.isArray(plugins) &&
+    Array.isArray(dependencies)
+    ? project([skills, mcp, plugins, dependencies])
+    : Promise.all([skills, mcp, plugins, dependencies]).then(project)
+}
+
+type AgentRowsReader = (
+  tx: PersistenceTx,
+) => readonly AgentPersistenceRow[] | Promise<readonly AgentPersistenceRow[]>
+type AgentRowReader = (
+  tx: PersistenceTx,
+) => AgentPersistenceRow | undefined | Promise<AgentPersistenceRow | undefined>
+
+/** Pass a query callback on a client; preloaded rows must come from the supplied transaction. */
+export function loadAgentPersistenceRows(
+  db: PersistenceDb,
+  readRows: AgentRowsReader,
+  decoding?: AgentRowDecoding,
+): Promise<Agent[]>
+export function loadAgentPersistenceRows(
+  db: DbTxSync,
+  rows: readonly AgentPersistenceRow[],
+  decoding?: AgentRowDecoding,
+): Agent[]
+export function loadAgentPersistenceRows(
+  db: PersistenceTx,
+  rows: readonly AgentPersistenceRow[],
+  decoding?: AgentRowDecoding,
+): Agent[] | Promise<Agent[]>
+export function loadAgentPersistenceRows(
+  db: PersistenceDb | PersistenceTx,
+  rows: readonly AgentPersistenceRow[] | AgentRowsReader,
+  decoding: AgentRowDecoding = 'normalized',
+): Agent[] | Promise<Agent[]> {
+  if (typeof rows === 'function') {
+    return databaseSessionFor(db).snapshotRead(async (tx) =>
+      loadAgentPersistenceRows(tx, await rows(tx), decoding),
+    )
+  }
+  return continueResourceCommit(
+    readAgentReferences(
+      db,
+      rows.map((row) => row.id),
+    ),
+    (references) =>
+      rows.map((row) => decodeAgentPersistenceRow(row, references.get(row.id)!, decoding)),
+  )
+}
+
+export function loadAgentPersistenceRow(
+  db: PersistenceDb,
+  readRow: AgentRowReader,
+  decoding?: AgentRowDecoding,
+): Promise<Agent | null>
+export function loadAgentPersistenceRow(
+  db: PersistenceTx,
+  row: AgentPersistenceRow,
+  decoding?: AgentRowDecoding,
+): Promise<Agent>
+export async function loadAgentPersistenceRow(
+  db: PersistenceDb | PersistenceTx,
+  row: AgentPersistenceRow | AgentRowReader,
+  decoding: AgentRowDecoding = 'normalized',
+): Promise<Agent | null> {
+  if (typeof row === 'function') {
+    return databaseSessionFor(db).snapshotRead(async (tx) => {
+      const selected = await row(tx)
+      return selected === undefined ? null : loadAgentPersistenceRow(tx, selected, decoding)
+    })
+  }
+  return (await loadAgentPersistenceRows(db, [row], decoding))[0]!
 }

@@ -73,10 +73,10 @@ function stageOf(consumerId: string): 'producer-publication' | 'consumer-deliver
 
 /** 可派发（家族在当前 epoch 上 dispatchable）且已到期（pending，或 claimed 但租约过期）。 */
 function duePredicate(db: object, at: number): SQL<unknown> {
-  const { committedEvents, committedEventFamilyCutovers, committedEventDeliveries } = tablesOf(db)
+  const { committedEvents, committedEventDeliveries } = tablesOf(db)
+  const { committedEventFamilyCutovers } = tablesOf(db)
   return and(
     eq(committedEvents.deliveryMode, 'dispatchable'),
-    eq(committedEventFamilyCutovers.mode, 'dispatchable'),
     eq(committedEvents.producerEpoch, committedEventFamilyCutovers.epoch),
     lte(committedEventDeliveries.nextAttemptAt, at),
     or(
@@ -91,7 +91,8 @@ function duePredicate(db: object, at: number): SQL<unknown> {
 
 /** 只读预检（不占写者）：这一刻有没有值得认领的投递。判据与事务体完全相同。 */
 async function hasDueDelivery(db: PersistenceDb, at: number): Promise<boolean> {
-  const { committedEventDeliveries, committedEvents, committedEventFamilyCutovers } = tablesOf(db)
+  const { committedEventDeliveries, committedEvents } = tablesOf(db)
+  const { committedEventFamilyCutovers } = tablesOf(db)
   const rows = await db
     .select({ eventId: committedEventDeliveries.eventId })
     .from(committedEventDeliveries)
@@ -208,8 +209,8 @@ export function createCommittedEventDeliveryPersistence(
       if (!(await hasDueDelivery(db, at))) return null
 
       return await session.transaction(async (tx) => {
-        const { committedEvents, committedEventDeliveries, committedEventFamilyCutovers } =
-          tablesOf(tx)
+        const { committedEvents, committedEventDeliveries } = tablesOf(tx)
+        const { committedEventFamilyCutovers } = tablesOf(tx)
         const candidates = await tx
           .select({
             event: committedEvents,

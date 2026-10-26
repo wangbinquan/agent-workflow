@@ -1,3 +1,5 @@
+import { legacyContentRef } from '@/platform/content/contentRef'
+import { contentRowColumns } from '@/platform/content/infrastructure/contentStore'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { first } from '@/platform/persistence/queryHelpers'
@@ -9,16 +11,21 @@ import { bootDeclaration } from './helpers/daemonProgramSource'
 
 import { describeEachProvider } from './helpers/eachProvider'
 import { afterEach, beforeEach, expect, test } from 'bun:test'
-import { cpSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import {
+  cpSync,
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+  readFileSync,
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import {
-  commitSkillVersion,
-  ensureInitialSkillVersion,
-} from '../src/modules/resource-catalog/infrastructure/legacy/skillVersion'
+import { commitSkillVersion } from '../src/modules/resource-catalog/infrastructure/legacy/skillVersion'
 import {
   createManagedSkill,
   listSkills,
@@ -36,7 +43,7 @@ import {
   runBootSnapshotReverify,
   verifyManagedSnapshot,
 } from '../src/modules/resource-catalog/infrastructure/legacy/skillBootVerify'
-import { readFileSync } from 'node:fs'
+
 import { hashDir } from '../src/modules/resource-catalog/infrastructure/legacy/skillHash'
 import {
   skillFilesAbs,
@@ -296,7 +303,9 @@ describeEachProvider('RFC-170 T-BOOT — skillBootVerify', (harness) => {
           id: ulid(),
           skillId: skill!.id,
           versionIndex: 2,
-          filesPath: skillVersionRelPath(skill!.id, 2),
+          ...contentRowColumns(
+            legacyContentRef('skill-path', 'local-file', skillVersionRelPath(skill!.id, 2)),
+          ),
           source: 'editor',
           authorUserId: '__system__',
           contentHash: hashDir(v2),
@@ -321,38 +330,8 @@ describeEachProvider('RFC-170 T-BOOT — skillBootVerify', (harness) => {
     expect(isSkillInjectableThisBoot({ id: 'p', sourceKind: 'project' })).toBe(true)
   })
 
-  // RFC-170 T4a — a legacy managed skill (pre-version-tracking, no snapshot,
-  // version_state='legacy-unbackfilled') would be hidden by the gate after an
-  // upgrade; the boot pass backfills its v1 snapshot → authoritative + verified →
-  // available. Here we exercise the backfill the boot pass runs.
-  test('legacy-unbackfilled managed skill becomes available after v1 backfill', async () => {
-    const id = ulid()
-    // A pre-RFC-101 skill: managed, live files, NO version row, legacy state.
-    mkdirSync(join(appHome, 'skills', id, 'files'), { recursive: true })
-    writeFileSync(
-      join(appHome, 'skills', id, 'files', 'SKILL.md'),
-      '---\nname: legacy\ndescription: d\n---\nold body',
-      'utf-8',
-    )
-    const { skills } = tablesOf(db)
-    await insertOne(db, skills, {
-      id,
-      name: 'legacy',
-      description: 'd',
-      managedPath: `skills/${id}/files`,
-      versionState: 'legacy-unbackfilled',
-      contentVersion: 0,
-    })
-    resetSkillBootVerifyForTest()
-    activateBootReverifyForTest()
-    // Before backfill (gate active): legacy state is not authoritative → hidden.
-    expect(await getSkill(db, 'legacy')).toBeNull()
-    // The boot pass backfills v1 (ensureInitialSkillVersion → commitSkillVersion).
-    await ensureInitialSkillVersion(db, fsOpts, id)
-    // Now authoritative + boot-verified → visible + injectable.
-    expect(await getSkill(db, 'legacy')).not.toBeNull()
-    expect(isSkillBootVerified(id)).toBe(true)
-  })
+  // Initial-version adoption and post-conversion availability are exercised with
+  // B's converter and the runtime reader in rfc395-skill-target-recovery.test.ts.
 })
 
 test('resolveInjection fails closed on a non-injectable managed skill (source lock)', async () => {
@@ -380,16 +359,15 @@ test('resolveInjection fails closed on a non-injectable managed skill (source lo
   expect(src).toMatch(/SkillQuarantinedError\(row\.name\)/)
 })
 
-test('post-ready boot pass backfills legacy skills BEFORE reverify on both providers', () => {
+test('post-ready boot reverify does not repeat the epoch-1 backfill', () => {
   expect(bootDeclaration('resource-reverify')).toMatchObject({
     phase: 'post-ready',
     failure: 'tracked-detached',
   })
-  for (const file of ['daemonApplication.ts']) {
-    const src = readFileSync(resolve(import.meta.dir, '..', 'src', 'bootstrap', file), 'utf8')
-    const backfillIdx = src.indexOf('skillCatalogBoot.backfillLegacyVersions()')
-    const reverifyIdx = src.indexOf('skillCatalogBoot.reverifySnapshots()')
-    expect(backfillIdx).toBeGreaterThan(0)
-    expect(backfillIdx).toBeLessThan(reverifyIdx)
-  }
+  const src = readFileSync(
+    resolve(import.meta.dir, '..', 'src', 'bootstrap', 'daemonApplication.ts'),
+    'utf8',
+  )
+  expect(src).toContain('skillCatalogBoot.reverifySnapshots()')
+  expect(src).not.toContain('skillCatalogBoot.backfillLegacyVersions()')
 })

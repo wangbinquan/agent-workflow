@@ -1,4 +1,4 @@
-import { decodeLegacySkillPath } from '@/platform/content/legacySkill'
+import { decodeSkillPath } from '@/platform/content/locations/skill'
 import { existsSync, mkdirSync, renameSync, rmSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { safeJoin } from '@/util/safePath'
@@ -46,7 +46,7 @@ export function createFileResourcePackageRecoveryEffectsFactory(
       return dirname(reference)
     },
     storedReference(reference: string) {
-      return safeJoin(appHome, decodeLegacySkillPath(reference).location.value)
+      return safeJoin(appHome, decodeSkillPath(reference).location.value)
     },
     assertManaged(rootReference: string, reference: string) {
       assertManagedPath(rootReference, reference)

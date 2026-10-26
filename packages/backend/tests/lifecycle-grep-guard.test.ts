@@ -26,8 +26,8 @@ const BACKEND_SRC = resolve(import.meta.dir, '..', 'src')
  * style markers (the test scans for an inline allow marker on the line
  * above the match).
  */
-const PATTERN_HAS_UPDATE_NODE_RUNS = /\.update\s*\(\s*nodeRuns\s*\)/
-const PATTERN_HAS_SET_STATUS = /\.set\s*\(\s*\{[^}]*\bstatus\s*:/
+const PATTERN_HAS_UPDATE_NODE_RUNS = /\.update\s*\(\s*(?:\w+\.)?nodeRuns\s*\)/
+const PATTERN_HAS_SET_STATUS = /\.set\s*\(\s*(?:identity\s*\)|\{[^}]*\bstatus\s*:)/
 
 /** Skip lines that look like comments (// or * leading). False positives in
  *  doc comments mentioning `db.update(nodeRuns).set({ status: ... })` are
@@ -84,7 +84,7 @@ function findDirectStatusWrites(): Match[] {
         continue
       }
       if (lookahead > 0) {
-        if (PATTERN_HAS_SET_STATUS.test(line)) {
+        if (PATTERN_HAS_SET_STATUS.test(lines.slice(upstreamLine, i + 1).join('\n'))) {
           // Skip if opt-out marker present in the 5 preceding source lines
           // (covers multi-line drizzle chains where the marker sits above
           // the await/const but the actual .update(nodeRuns) is a few lines
@@ -143,7 +143,7 @@ function findDirectStatusWrites(): Match[] {
  * 外加 CAS 争用时的重试写。单独提出来是因为下面两条断言都要用到同一个数字——
  * 写死两遍的话，改内核时只改一处会得到一个说谎的绿。
  */
-const KERNEL_DIRECT_WRITES = 3
+const KERNEL_DIRECT_WRITES = 1
 
 /**
  * RFC-317 T48（findings LC-02）—— **逐文件精确计数**的硬 allowlist。
@@ -164,7 +164,7 @@ const KERNEL_DIRECT_WRITES = 3
  */
 const DIRECT_STATUS_WRITE_ALLOWLIST: Readonly<Record<string, number>> = {
   // 内核：`transitionNodeRunStatus` 与 `setNodeRunStatus` 各一处，外加 CAS 的重试写。
-  'modules/task-execution/infrastructure/taskLifecycle.ts': KERNEL_DIRECT_WRITES,
+  'modules/task-execution/infrastructure/nodeRunWriteProtocol.ts': KERNEL_DIRECT_WRITES,
   // RFC-395 II-a A7：原 terminal sweep 的 2 处 + clarify seal 的 1 处迁入 owner。
   // 写点、CAS 与调用方事务不变，精确总数仍为 3。
   'modules/task-execution/infrastructure/humanGatePersistenceParticipant.ts': 3,
@@ -172,9 +172,7 @@ const DIRECT_STATUS_WRITE_ALLOWLIST: Readonly<Record<string, number>> = {
   // in its provider transaction; exact counts prevent this from becoming a
   // general-purpose write escape hatch.
   // RFC-359 W1-T2c：事务内 CAS 已委托给两引擎共用的 nodeRunLifecycleTransition.ts（2 → 1，剩 transition 自己的 CAS）。
-  'modules/task-execution/infrastructure/nodeRunLifecyclePersistence.ts': 1,
   // RFC-359 W1-T2c：node_run 状态 CAS 的一份中立事务内内核（setNodeRunStatusTx / transitionNodeRunStatusTx）。
-  'modules/task-execution/infrastructure/nodeRunLifecycleTransition.ts': 2,
   // RFC-359 W8：code-host 恢复的 node_run 投影随成对适配器合一收进两引擎共用的清算模块
   // （此前 PG 侧在 postgresqlTaskExecutionRecovery.ts、SQLite 侧在 onAppliedTx 回调里各写一份）。
   'modules/task-execution/infrastructure/effectQuiescence.ts': 1,
@@ -182,7 +180,7 @@ const DIRECT_STATUS_WRITE_ALLOWLIST: Readonly<Record<string, number>> = {
 }
 
 const LIFECYCLE_KERNEL_FILES: ReadonlySet<string> = new Set([
-  'modules/task-execution/infrastructure/taskLifecycle.ts',
+  'modules/task-execution/infrastructure/nodeRunWriteProtocol.ts',
   'modules/task-execution/infrastructure/nodeRunLifecyclePersistence.ts',
   'modules/task-execution/infrastructure/nodeRunLifecycleTransition.ts',
   'modules/task-execution/infrastructure/effectQuiescence.ts',
@@ -224,7 +222,7 @@ describe('RFC-053 PR-B / RFC-317 T48 —— node_runs.status 直写的逐文件�
 
   test('内核自己的直写都带标记（回归守卫）', () => {
     const kernel = matches.filter(
-      (match) => match.file === 'modules/task-execution/infrastructure/taskLifecycle.ts',
+      (match) => match.file === 'modules/task-execution/infrastructure/nodeRunWriteProtocol.ts',
     )
     expect(kernel.length).toBe(KERNEL_DIRECT_WRITES)
     expect(kernel.every((match) => match.marked)).toBe(true)
@@ -251,6 +249,8 @@ describe('RFC-317 T13 —— 语料非空', () => {
 describe('RFC-317 T14 —— matcher 自证：伪造的违规必须被抓到', () => {
   test('直写 nodeRuns.status 的三种常见写法都命中', () => {
     for (const fabricated of [
+      'tx.update(tables.nodeRuns).set(identity).where(predicate)',
+      'tx.update(tables.nodeRuns).set({ status: next })',
       'await db.update(nodeRuns).set({ status: "done" }).where(eq(nodeRuns.id, id))',
       'await db.update( nodeRuns ).set({\n  status: nextStatus,\n})',
       'tx.update(nodeRuns).set({ startedAt: now, status: "running" })',

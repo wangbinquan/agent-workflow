@@ -1,3 +1,4 @@
+import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { o2Ports } from './helpers/o2Closure'
 // RFC-370 hosted acceptance (2026-10-18) — a review gate opens under the
 // driving owner's execution context on both providers.
@@ -135,6 +136,7 @@ async function seedClaimedReviewTask(db: PersistenceDb) {
     kind: 'markdown',
   })
   const persistence = createTaskExecutionPersistence(db, {
+    historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
     recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
   })
   const module = createProviderTaskExecutionModule({
@@ -166,6 +168,7 @@ describeEachProvider(
     test('the owner context passed by the scheduler parks the gate without an ambient context', async () => {
       const seeded = await seedClaimedReviewTask(harness.db)
       const mechanics = createCollaborationRuntimeMechanics(harness.db, {
+        ...epoch2RuntimeTestPorts(harness.db),
         taskLock: o2Ports(harness.db).taskLock,
         ...{ upstreamAgents: o2Ports(harness.db).upstreamAgents },
       })
@@ -197,6 +200,7 @@ describeEachProvider(
       const seeded = await seedClaimedReviewTask(harness.db)
       expect(seeded.context.legacyConnection).toBeUndefined()
       const mechanics = createCollaborationRuntimeMechanics(harness.db, {
+        ...epoch2RuntimeTestPorts(harness.db),
         taskLock: o2Ports(harness.db).taskLock,
         ...{ upstreamAgents: o2Ports(harness.db).upstreamAgents },
       })
@@ -224,6 +228,7 @@ describeEachProvider(
     test('without any context the claimed owner still refuses the ownerless write', async () => {
       const seeded = await seedClaimedReviewTask(harness.db)
       const mechanics = createCollaborationRuntimeMechanics(harness.db, {
+        ...epoch2RuntimeTestPorts(harness.db),
         taskLock: o2Ports(harness.db).taskLock,
         ...{ upstreamAgents: o2Ports(harness.db).upstreamAgents },
       })

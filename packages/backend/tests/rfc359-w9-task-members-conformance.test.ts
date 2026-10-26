@@ -1,3 +1,4 @@
+import { tablesOf } from '@/platform/persistence/sessionTables'
 // RFC-359 W9 —— 任务成员面（`GET/PUT /api/tasks/:id/members`）的双引擎对拍。
 //
 // **为什么存在**：`modules/collaboration/infrastructure/taskCollab.ts` 是本刀 12 个
@@ -20,20 +21,19 @@
 // 一条**反向对照**必须有：只断言「都被拒绝」的用例，被一个「永远拒绝」的实现也能满足。
 // 所以每条拒绝旁边都配一条同形的放行。
 
-import { readTaskFixtures, taskFixture, workflowFixture } from './helpers/model'
-import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { monotonicFactory } from 'ulid'
+import { readTaskFixtures, taskFixture, workflowFixture } from './helpers/model'
 
-import type { Actor } from '@/auth/actor'
-import { buildActor, SYSTEM_USER_ID } from '@/auth/actor'
-import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { encodeLineageSlotPath } from '@/modules/task-execution/domain/executionIntent'
+import { type Actor, buildActor, SYSTEM_USER_ID } from '@/auth/actor'
+
 import {
   getTaskMembers,
   updateTaskMembers,
 } from '@/modules/collaboration/infrastructure/taskCollab'
+import { encodeLineageSlotPath } from '@/modules/task-execution/domain/executionIntent'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { eq } from 'drizzle-orm'
 import { describeEachProvider } from './helpers/eachProvider'
 
@@ -412,7 +412,8 @@ describeEachProvider('RFC-359 W9 —— 任务成员面（成员制的用户可�
     const db = harness.db
     await seedUsers(db)
     const task = await seedTask(db, { ownerUserId: OWNER })
-    const { taskCollaborators, tasks } = tablesOf(db)
+    const { taskCollaborators } = tablesOf(db)
+    const { tasks } = tablesOf(db)
     await db.delete(taskCollaborators).where(eq(taskCollaborators.taskId, task.id))
     await db.delete(tasks).where(eq(tasks.id, task.id))
     await expect(

@@ -1,3 +1,5 @@
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
+import { fileSkillTreeReference, readFileSkillReference } from './fileSkillReferences'
 import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { ulid } from 'ulid'
@@ -8,7 +10,7 @@ import {
   type SkillTreeContentStore,
 } from '../../application/skills/treeContentStore'
 import { normalizeSkillPath } from '../databaseSkillTrees'
-import { skillRootAbs, skillVersionAbs } from '../legacy/skillIdentityPaths'
+import { skillRootAbs } from '../legacy/skillIdentityPaths'
 import { assertRegularDirectory, collectSkillFiles } from './fileSkillPackageContentReader'
 
 /** `skills/<id>/candidates/<candidate>/files`: beside the skill's live and version trees. */
@@ -31,11 +33,18 @@ function readTree(root: string): SkillPackageContentEntry[] {
 }
 
 /** RFC-370 §10 V20 — the local skill storage's strict version trees and fusion candidates. */
-export function createFileSkillTreeContentStore(appHome: string): SkillTreeContentStore {
+export function createFileSkillTreeContentStore(
+  appHome: string,
+  db?: PersistenceDb,
+): SkillTreeContentStore {
   return Object.freeze({
     async readVersion(input: { readonly skillId: string; readonly version: number }) {
-      const root = skillVersionAbs(appHome, input.skillId, input.version)
-      return existsSync(root) ? readTree(root) : null
+      const tree = await readFileSkillReference(
+        appHome,
+        db,
+        await fileSkillTreeReference(appHome, db, input.skillId, input.version),
+      )
+      return tree?.files ?? null
     },
     async writeCandidate(input: {
       readonly skillId: string

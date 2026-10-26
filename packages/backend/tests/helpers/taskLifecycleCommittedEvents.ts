@@ -18,9 +18,21 @@ import { registerAfterCommitEventPump } from '@/platform/events/committed/runtim
 import { createCommittedEventDeliveryPersistence } from '@/platform/events/committed/deliveryPersistence'
 
 export interface TaskLifecycleAfterCommitTestCallbacks {
-  readonly onTerminalTask?: (db: PersistenceDb, taskId: string, to: TaskStatus) => void
-  readonly onExecutionWatch?: (db: PersistenceDb, taskId: string, to: TaskStatus) => void
-  readonly onWorkspacePrune?: (db: PersistenceDb, taskId: string, to: 'done' | 'canceled') => void
+  readonly onTerminalTask?: (
+    db: PersistenceDb,
+    taskId: string,
+    to: TaskStatus,
+  ) => void | Promise<unknown>
+  readonly onExecutionWatch?: (
+    db: PersistenceDb,
+    taskId: string,
+    to: TaskStatus,
+  ) => void | Promise<unknown>
+  readonly onWorkspacePrune?: (
+    db: PersistenceDb,
+    taskId: string,
+    to: 'done' | 'canceled',
+  ) => void | Promise<unknown>
 }
 
 /**
@@ -33,6 +45,14 @@ export function installTaskLifecycleAfterCommitTestPump(
   db: PersistenceDb,
   callbacks: TaskLifecycleAfterCommitTestCallbacks,
 ): () => void {
+  const effects: Promise<unknown>[] = []
+  const track = (effect: void | Promise<unknown>) => {
+    if (effect) {
+      effects.push(effect)
+      // Observe rejection immediately; the harness drain still reports it.
+      void effect.catch(() => undefined)
+    }
+  }
   const pump = createAfterCommitEventPump({
     persistence: createCommittedEventDeliveryPersistence(db),
     codecs: combineCommittedEventCodecRegistries(
@@ -56,22 +76,36 @@ export function installTaskLifecycleAfterCommitTestPump(
           // 被拿去跑 PG 的事件时给出与生产相反的结论。
           if (event.payload.continuationHandoff) return
           if (isTerminalTaskStatus(event.payload.status)) {
-            callbacks.onExecutionWatch?.(db, event.payload.taskId, event.payload.status)
+            track(callbacks.onExecutionWatch?.(db, event.payload.taskId, event.payload.status))
           }
           if (event.payload.status === 'done' || event.payload.status === 'canceled') {
-            callbacks.onTerminalTask?.(db, event.payload.taskId, event.payload.status)
+            track(callbacks.onTerminalTask?.(db, event.payload.taskId, event.payload.status))
           }
           if (
             event.payload.workspacePruneClaim !== null &&
             (event.payload.status === 'done' || event.payload.status === 'canceled')
           ) {
-            callbacks.onWorkspacePrune?.(db, event.payload.taskId, event.payload.status)
+            track(callbacks.onWorkspacePrune?.(db, event.payload.taskId, event.payload.status))
           }
         },
       },
     ],
     nudgeDispatcher() {},
   })
+  drains.set(db, async () => {
+    await pump.awaitDrained()
+    while (effects.length > 0) {
+      await Promise.all(effects.splice(0))
+      await pump.awaitDrained()
+    }
+  })
   registerAfterCommitEventPump(pump)
   return () => registerAfterCommitEventPump(null)
+}
+
+const drains = new WeakMap<PersistenceDb, () => Promise<void>>()
+/** Drain outside the serialized projector: a terminal sweep publishes a new receipt itself. */
+export async function drainTaskLifecycleTestEffects(db: PersistenceDb): Promise<void> {
+  await drains.get(db)?.()
+  drains.delete(db)
 }

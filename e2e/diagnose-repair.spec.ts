@@ -1,3 +1,5 @@
+import { liveSqlitePath } from './storage'
+import { docVersionFixtureSql } from './fixtures/model'
 // RFC-057 PR-D — Playwright e2e for diagnose-repair flow.
 //
 // Coverage:
@@ -171,7 +173,7 @@ function sleep(ms: number): Promise<void> {
 }
 
 function dbPath(): string {
-  return join(daemon.home, 'db.sqlite')
+  return liveSqlitePath(daemon.home)
 }
 
 function runSql(sql: string): void {
@@ -211,13 +213,7 @@ function plantR1Violation(taskId: string): { nodeRunId: string; docVersionId: st
   const now = Date.now()
   runSql(`${patchTaskFixtureSql({ id: taskId }, { status: 'running' })};
     ${nodeRunFixtureSql({ id: nodeRunId, taskId, nodeId: 'rev_r1', parentNodeRunId: null, iteration: 0, shardKey: null, retryIndex: 0, reviewIteration: 0, status: 'awaiting_review', startedAt: now - 1000, finishedAt: null })}
-    INSERT INTO doc_versions (id, task_id, review_node_id, review_node_run_id,
-      source_node_id, source_port_name, version_index, review_iteration,
-      body_path, comments_json, decision, decision_reason, prompt_snapshot,
-      source_file_path, created_at, decided_at, decided_by)
-    VALUES ('${docVersionId}', '${taskId}', 'rev_r1', '${nodeRunId}',
-      'agent_1', 'answer', 1, 0, 'dv/v1.md', '[]', 'approved', NULL, NULL,
-      NULL, ${now}, ${now}, 'e2e-fixture');
+    ${docVersionFixtureSql({ id: docVersionId, taskId, reviewNodeId: 'rev_r1', reviewNodeRunId: nodeRunId, sourceNodeId: 'agent_1', sourcePortName: 'answer', bodyPath: 'dv/v1.md', decision: 'approved', createdAt: now, decidedAt: now, decidedBy: 'e2e-fixture' })}
   `)
   return { nodeRunId, docVersionId }
 }

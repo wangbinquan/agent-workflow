@@ -1,3 +1,4 @@
+import { initializeTaskWorkspace } from './helpers/taskWorkspaceFixture'
 // RFC-042 §A4 / §5.4 — default retries fallback = 3.
 //
 // Locks in: when no per-task retry budget is supplied, the scheduler treats it
@@ -14,7 +15,7 @@
 import { agentFixture, readTaskFixtures, taskFixture, workflowFixture } from './helpers/model'
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
@@ -26,16 +27,15 @@ import {
   type ProviderTaskExecutionTestTopology,
 } from './helpers/providerTaskExecutionTestTopology'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
 
 function makeHarness(provider?: ProviderHarness) {
   const appHome = mkdtempSync(join(tmpdir(), 'aw-rfc042-default-retries-'))
   const worktreePath = join(appHome, 'wt')
-  mkdirSync(worktreePath, { recursive: true })
+  initializeTaskWorkspace(worktreePath)
   const argvLog = join(appHome, 'argv.log')
   writeFileSync(argvLog, '')
-  const db: PersistenceDb = provider?.db ?? createInMemoryDb(MIGRATIONS)
+  const db: PersistenceDb = provider?.db ?? createInMemoryDb()
   return {
     db,
     appHome,

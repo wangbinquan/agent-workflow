@@ -1,3 +1,5 @@
+import { convertedAgentFixture } from './helpers/model/frozenAgent'
+import { agentFixtureReferences } from './helpers/model/agent'
 // RFC-395 II-a A5: both providers preserve reference bytes, exact reverse results,
 // caller transactions and existing validation diagnostics before any schema switch.
 import { beforeEach, expect, test } from 'bun:test'
@@ -23,7 +25,6 @@ import { createFusionPersistence } from '@/modules/knowledge-evolution/infrastru
 import { describeEachProvider } from './helpers/eachProvider'
 import referenceSemantics from './fixtures/rfc395-a5-reference-semantics.json'
 import {
-  agentFixture,
   patchAgentFixture,
   readAgentFixtures,
   workflowFixture,
@@ -131,8 +132,8 @@ describeEachProvider('RFC-395 II-a A5 reference ports', (harness) => {
     ).rejects.toBe(aborted)
     expect(await readWorkflowFixtures(harness.db, { id: 'w' })).toEqual([])
   })
-  test('reverse adapters keep LIKE false positives, escaped-text false negatives and corrupt-row fallbacks', async () => {
-    await agentFixture(harness.db, [
+  test('converted references reject malformed source records and index decoded Unicode identities', async () => {
+    await convertedAgentFixture(harness.db, [
       {
         id: 'hit',
         name: 'hit',
@@ -168,23 +169,24 @@ describeEachProvider('RFC-395 II-a A5 reference ports', (harness) => {
       },
     ])
     expect(
-      (await createAgentMcpReferenceLookup(harness.db).find('M')).map((row) => row.id),
-    ).toEqual(['hit'])
+      (await createAgentMcpReferenceLookup(harness.db).find('M')).map((row) => row.id).sort(),
+    ).toEqual(['escaped', 'hit'])
     expect(
-      (await createAgentPluginReferenceLookup(harness.db).find('P')).map((row) => row.id),
-    ).toEqual(['hit'])
+      (await createAgentPluginReferenceLookup(harness.db).find('P')).map((row) => row.id).sort(),
+    ).toEqual(['escaped', 'hit'])
     expect(
-      (await createAgentSkillReferenceLookup(harness.db).find('S')).map((row) => row.id),
-    ).toEqual(['hit'])
+      (await createAgentSkillReferenceLookup(harness.db).find('S')).map((row) => row.id).sort(),
+    ).toEqual(['escaped', 'hit'])
     expect(
-      (await createAgentDependencyReferenceLookup(harness.db).find('A')).map((row) => row.id),
-    ).toEqual(['hit', 'escaped'])
+      (await createAgentDependencyReferenceLookup(harness.db).find('A'))
+        .map((row) => row.id)
+        .sort(),
+    ).toEqual(['escaped', 'hit'])
     await harness.session.transaction(async (tx) => {
       await patchAgentFixture(tx, { id: 'trap' }, { mcp: '["M"]' })
-      expect((await createAgentMcpReferenceLookup(tx).find('M')).map((row) => row.id)).toEqual([
-        'hit',
-        'trap',
-      ])
+      expect(
+        (await createAgentMcpReferenceLookup(tx).find('M')).map((row) => row.id).sort(),
+      ).toEqual(['escaped', 'hit', 'trap'])
     })
   })
   test('workflow reverse relations preserve agent-single filtering and cross-owner name matching', async () => {
@@ -209,17 +211,20 @@ describeEachProvider('RFC-395 II-a A5 reference ports', (harness) => {
       { id: 'bad', name: 'bad', definition: 'invalid' },
     ])
     expect(
-      (await createWorkflowAgentReferenceLookup(harness.db).find('A')).map((row) => row.id),
+      (await createWorkflowAgentReferenceLookup(harness.db).find('A')).map((row) => row.id).sort(),
     ).toEqual(['one'])
+    // The only caller checks for any referencing workflow; neither epoch orders the rows.
     expect(
-      await createWorkflowCallReferenceLookup(harness.db).find({ id: 'self', name: 'same' }),
-    ).toEqual([{ id: 'one' }, { id: 'two' }])
+      (await createWorkflowCallReferenceLookup(harness.db).find({ id: 'self', name: 'same' }))
+        .map((row) => row.id)
+        .sort(),
+    ).toEqual(['one', 'two'])
     expect(
       await createWorkflowCallReferenceLookup(harness.db).find({ id: 'one', name: 'same' }),
     ).toEqual([{ id: 'two' }])
   })
   test('all validation policies retain exact self, missing and cycle messages', async () => {
-    await agentFixture(harness.db, [{ id: 'a', name: 'a', dependsOn: '["root"]' }])
+    await convertedAgentFixture(harness.db, [{ id: 'a', name: 'a', dependsOn: '["root"]' }])
     const load = createAgentDependencyReadPort(harness.db).load
     for (const semantics of ['catalog', 'intent', 'application'] as const) {
       await expect(
@@ -284,7 +289,7 @@ describeEachProvider('RFC-395 II-a A5 reference ports', (harness) => {
     })
   })
   test('the frozen semantics ledger drives every declared validation policy', async () => {
-    await agentFixture(harness.db, [{ id: 'a', name: 'a', dependsOn: '["root"]' }])
+    await convertedAgentFixture(harness.db, [{ id: 'a', name: 'a', dependsOn: '["root"]' }])
     const load = createAgentDependencyReadPort(harness.db).load
     const policies = ['package', 'intent', 'application', 'ordinary', 'template'] as const
     expect(Object.keys(referenceSemantics.validation).sort()).toEqual([...policies].sort())
@@ -312,14 +317,14 @@ describeEachProvider('RFC-395 II-a A5 reference ports', (harness) => {
   })
 
   test('public dependency-validation entry retains self, direct/nested missing and cycle diagnostics', async () => {
-    await agentFixture(harness.db, [
+    await convertedAgentFixture(harness.db, [
       { id: 'a', name: 'a', dependsOn: '["root"]' },
       { id: 'nested', name: 'nested', dependsOn: '["gone"]' },
     ])
     const reader = {
       async get(id: string) {
         const row = (await readAgentFixtures(harness.db, { id }))[0]
-        return row === undefined ? null : agentFromPersistenceRow(row)
+        return row === undefined ? null : agentFromPersistenceRow(row, agentFixtureReferences(row))
       },
     }
     for (const [dependencies, expected] of [

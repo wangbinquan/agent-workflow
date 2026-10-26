@@ -15,7 +15,6 @@ import { trustedContextMetadata } from '../src/modules/identity-access/applicati
 import type { DirectRequestAuthority } from '../src/modules/identity-access/public/participants'
 import { admitTestDirectAuthority } from './helpers/identityAccessAuthority'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const BACKEND_ROOT = resolve(import.meta.dir, '..')
 const SRC_ROOT = resolve(BACKEND_ROOT, 'src')
 
@@ -73,7 +72,7 @@ function source(path: string): string {
 
 describe('RFC-347 direct authority runtime', () => {
   test('one admission resolves once, reuses the opaque handle and rejects foreign/plain handles', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createInMemoryDb()
     seedUser(db, 'direct-user')
     let sequence = 0
     const runtime = createIdentityAccessRuntime({
@@ -131,7 +130,7 @@ describe('RFC-347 direct authority runtime', () => {
   })
 
   test('session, PAT and daemon admissions preserve their distinct resolved projections', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createInMemoryDb()
     seedUser(db, 'transport-user')
     const runtime = createIdentityAccessRuntime({ db })
     const session = await admitTestDirectAuthority(runtime.directAuthority, {
@@ -160,7 +159,7 @@ describe('RFC-347 direct authority runtime', () => {
 
 describe('RFC-347 delegated and presence participants', () => {
   test('closed schedule/webhook/call variants bind their real source and attempt identities', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createInMemoryDb()
     seedUser(db, 'owner')
     seedUser(db, 'inactive', 'disabled')
     let sequence = 0
@@ -227,7 +226,7 @@ describe('RFC-347 delegated and presence participants', () => {
   })
 
   test('presence leases are session-only and release is idempotent', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createInMemoryDb()
     seedUser(db, 'viewer')
     const runtime = createIdentityAccessRuntime({ db })
     const session = await admitTestDirectAuthority(runtime.directAuthority, {

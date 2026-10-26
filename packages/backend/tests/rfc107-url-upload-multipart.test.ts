@@ -48,12 +48,12 @@ import {
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { DEFAULT_PROTOCOL_RETRY_BUDGET } from '@agent-workflow/shared'
+import { DEFAULT_PROTOCOL_RETRY_BUDGET, UPLOAD_INPUTS_DIR } from '@agent-workflow/shared'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { attachWorkspaceCleanupToMultipartError } from '../src/routes/tasks'
 import { seedRepoGroup } from './helpers/repoGroupFixture'
-import { UPLOAD_INPUTS_DIR } from '@agent-workflow/shared'
+
 import { createAgent } from '../src/modules/resource-catalog/infrastructure/legacy/agent'
 import { createRuntime } from './helpers/runtimeRegistryApplication'
 import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
@@ -76,7 +76,7 @@ import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopo
 const openTestApplication = registerProviderHttpApplicationLifetime()
 
 const TOKEN = 'a'.repeat(64)
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+
 const VALID_OPENCODE_RUNTIME = 'rfc224-test-opencode'
 const SYSTEM: WorkflowWritePrincipal = { kind: 'system', reason: 'rfc199-multipart-cleanup-test' }
 const GIT_TIMEOUT_MS = 10_000
@@ -213,7 +213,7 @@ async function buildHarness(): Promise<Harness> {
   git('clone', bare, localRepo)
 
   const stubOpencode = makeStubOpencode(tmp)
-  const db = createInMemoryDb(MIGRATIONS)
+  const db = createInMemoryDb()
   await createRuntime(runtimeRegistryPersistence(db), {
     name: VALID_OPENCODE_RUNTIME,
     protocol: 'opencode',
@@ -643,7 +643,7 @@ describe('RFC-107 — security: a cloned repo cannot make uploads escape the wor
   // differs. Returns the live Hono app + the upload workflow id.
   async function buildUploadApp(tmp: string): Promise<{ db: DbClient; app: Hono; wfId: string }> {
     const stubOpencode = makeStubOpencode(tmp)
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createInMemoryDb()
     await createRuntime(runtimeRegistryPersistence(db), {
       name: VALID_OPENCODE_RUNTIME,
       protocol: 'opencode',
@@ -805,7 +805,7 @@ describe('RFC-107 — launchTestTask preResolvedSource (resolve-once + redaction
     const appHome = join(tmp, 'home')
     mkdirSync(appHome, { recursive: true })
     process.env.AGENT_WORKFLOW_HOME = appHome
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createInMemoryDb()
 
     const realRepo = join(tmp, 'real')
     mkdirSync(realRepo, { recursive: true })

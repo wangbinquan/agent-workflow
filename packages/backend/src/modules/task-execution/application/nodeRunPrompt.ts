@@ -1,8 +1,4 @@
-import {
-  decodeLegacyPrompt,
-  encodeLegacyPrompt,
-  legacyPromptNeedsFile,
-} from '@/platform/content/legacyPrompt'
+import { decodePrompt, encodePrompt, promptNeedsFile } from '@/platform/content/locations/prompt'
 import { createLogger } from '@/util/log'
 import type {
   NodeRunPromptContentEffects,
@@ -59,8 +55,8 @@ export function storeNodeRunPromptContent(
   nodeRunId: string,
   prompt: string,
 ): EffectResult<PromptStorage> {
-  if (!legacyPromptNeedsFile(prompt)) {
-    return encodeLegacyPrompt(decodeLegacyPrompt({ promptText: prompt, promptPath: null }))
+  if (!promptNeedsFile(prompt)) {
+    return encodePrompt(decodePrompt({ promptText: prompt, promptPath: null }))
   }
   const rel = content.reference(taskId, nodeRunId)
   const failed = (error: unknown): PromptStorage => {
@@ -68,12 +64,12 @@ export function storeNodeRunPromptContent(
       nodeRunId,
       error: messageOf(error),
     })
-    return encodeLegacyPrompt(decodeLegacyPrompt({ promptText: prompt, promptPath: null }))
+    return encodePrompt(decodePrompt({ promptText: prompt, promptPath: null }))
   }
   try {
     return finishEffect(
       content.write(rel, prompt),
-      () => encodeLegacyPrompt(decodeLegacyPrompt({ promptText: null, promptPath: rel })),
+      () => encodePrompt(decodePrompt({ promptText: null, promptPath: rel })),
       failed,
     )
   } catch (error) {
@@ -94,7 +90,7 @@ export function readNodeRunPromptContent(
   row: NodeRunPromptRow | null | undefined,
 ): EffectResult<string | null> {
   if (row === null || row === undefined) return null
-  const ref = decodeLegacyPrompt(row)
+  const ref = decodePrompt(row)
   if (ref === null) return null
   if (ref.kind === 'inline') return ref.location.value.promptText
   const reference = ref.location.value.promptPath!

@@ -1,3 +1,4 @@
+import { initializeTaskWorkspace } from './helpers/taskWorkspaceFixture'
 // REGRESSION LOCK — design/scheduler-audit-2026-06-10.md S-18 + S-19 (WP-6a / WP-6b)
 // （S-18 = RFC-094 方案 A 定版的 fail-all 语义锁；S-19 = RFC-098 B3 修复后的
 //  done-shard 跨代复用语义锁——两段都不再是缺陷现状锁定。）
@@ -53,7 +54,7 @@ import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
-import { mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { monotonicFactory } from 'ulid'
@@ -81,7 +82,7 @@ interface Harness {
 function buildHarness(provider: ProviderHarness): Harness {
   const appHome = mkdtempSync(join(tmpdir(), 'aw-audit-s18-s19-'))
   const worktreePath = join(appHome, 'wt')
-  mkdirSync(worktreePath, { recursive: true })
+  initializeTaskWorkspace(worktreePath)
   const db = provider.db
   return {
     db,

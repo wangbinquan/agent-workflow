@@ -1,446 +1,312 @@
-// RFC-223 PR-5 / R4-4 — upgrade recovery for every historical `{name}` op phase.
-//
-// Durable path columns may contain absolute paths from the machine/appHome where
-// a backup was created. Recovery must decode the legacy identity, rebase only
-// into the current restored appHome, settle the op, and then let the single
-// barrier migrate the surviving root to skills/{id}. Sentinels in oldHome prove
-// no historical absolute path is ever touched.
-
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
-import { first } from '@/platform/persistence/queryHelpers'
-import { afterEach, beforeEach, expect, test } from 'bun:test'
-import { describeEachProvider } from './helpers/eachProvider'
-import { databaseSessionFor } from '../src/platform/persistence/databaseTransaction'
+// RFC-395 U-4: epoch-1 identity/backfill proofs run at B's frozen converter boundary.
+import { expect, test } from 'bun:test'
 import {
-  cpSync,
-  existsSync,
   mkdirSync,
   mkdtempSync,
-  readFileSync,
-  renameSync,
-  rmSync,
   writeFileSync,
+  readFileSync,
+  existsSync,
+  rmSync,
+  symlinkSync,
 } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { dirname, join } from 'node:path'
-import { eq } from 'drizzle-orm'
-import { ulid } from 'ulid'
-import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { deleteManagedSkillOp } from '../src/modules/resource-catalog/infrastructure/legacy/skillDeleteOp'
-import { runSkillIdentityMigrationBarrier } from '../src/services/skillIdentityMigration'
+import { join } from 'node:path'
 import {
-  skillFilesAbs,
-  skillFilesRel,
-  skillRootAbs,
-  skillVersionAbs,
-  skillVersionRelPath,
-} from '../src/services/skillIdentityPaths'
-import { hashDir } from '../src/modules/resource-catalog/infrastructure/legacy/skillHash'
+  createSkillBootConversion,
+  type SkillBootContentConverter,
+} from '@/modules/resource-catalog/infrastructure/migration/skillBootRules'
 import {
-  advancePhase,
-  beginOperation,
-  getActiveOp,
-} from '../src/modules/resource-catalog/infrastructure/legacy/skillOperations'
-import {
-  opBackupDir,
-  opStagedDir,
-} from '../src/modules/resource-catalog/infrastructure/legacy/skillFsPublish'
+  skillBootEnvironment,
+  SkillBootFactSchema,
+} from '@/modules/resource-catalog/infrastructure/migration/skillBootFacts'
+import { convertFrozenSkillContent } from '@/platform/content/migration/skillContent'
+import { conversion as contentConversion } from '@/platform/content/migration'
+import { createBootUpgradeFacts } from '@/platform/persistence/migration/conversion/bootUpgradeFacts'
+import { valueDigest } from '@/platform/persistence/migration/conversion/digest'
+import { runConversion } from '@/platform/persistence/migration/conversion/engine'
+import { describeV2Providers, emptyV2Content } from './helpers/rfc395V2Harness'
+import { frozenValues } from './helpers/rfc395V2/contentFixtures'
+import { V2MemorySink } from './helpers/rfc395V2MemorySink'
+import type { BootUpgradeCaptureInput } from '@/platform/persistence/migration/freeze/bootUpgradeEnvironment'
+import { digestSortedTree } from '@/modules/resource-catalog/infrastructure/legacy/skillHash'
 
-describeEachProvider('RFC-223 legacy reserve op upgrade matrix', (harness) => {
-  let db: PersistenceDb
-  let oldHome: string
-  let appHome: string
+const modes: readonly string[] = [
+  'absolute-restore',
+  ...['reserve', 'delete', 'version-write', 'migrate'].flatMap((kind) =>
+    ['intent', 'fs-staged', 'db-committed', 'fs-published', 'done'].map(
+      (phase) => `active-${kind}/${phase}`,
+    ),
+  ),
+]
+// Assigning the real implementation to B's type locks the published structural contract.
+const convert: SkillBootContentConverter = convertFrozenSkillContent
 
-  beforeEach(() => {
-    db = harness.db
-    oldHome = mkdtempSync(join(tmpdir(), 'aw-old-reserve-'))
-    appHome = mkdtempSync(join(tmpdir(), 'aw-new-reserve-'))
-  })
-  afterEach(() => {
-    rmSync(oldHome, { recursive: true, force: true })
-    rmSync(appHome, { recursive: true, force: true })
-  })
-
-  for (const phase of ['intent', 'fs-staged', 'fs-published', 'db-committed'] as const) {
-    test(`${phase}: legacy payload recovers under restored appHome only`, async () => {
-      const id = `reserve-${phase}`
-      const name = `legacy-reserve-${phase}`
-      await seedLegacyRow(db, appHome, id, name, {
-        reservationState: phase === 'db-committed' ? 'ready' : 'reserving',
-        withVersion: phase === 'fs-published' || phase === 'db-committed',
-      })
-      const opId = await databaseSessionFor(db).transaction(
-        async (tx) =>
-          await beginOperation(tx, {
-            skillId: id,
-            kind: 'reserve',
-            preconditionJson: JSON.stringify({ name }),
-          }),
-      )
-      if (phase !== 'intent')
-        await databaseSessionFor(db).transaction(
-          async (tx) => await advancePhase(tx, opId, 'fs-staged'),
-        )
-      if (phase === 'fs-published' || phase === 'db-committed') {
-        await databaseSessionFor(db).transaction(
-          async (tx) => await advancePhase(tx, opId, 'fs-published'),
-        )
-      }
-      if (phase === 'db-committed') {
-        await databaseSessionFor(db).transaction(async (tx) => {
-          const { skills } = tablesOf(tx)
-          await tx.update(skills).set({ reservationState: 'ready' }).where(eq(skills.id, id))
-          await advancePhase(tx, opId, 'db-committed')
-        })
-      }
-
-      const oldSentinel = join(oldHome, 'skills', name, 'sentinel.txt')
-      mkdirSync(dirname(oldSentinel), { recursive: true })
-      writeFileSync(oldSentinel, 'old-home')
-
-      const report = await runSkillIdentityMigrationBarrier(db, { appHome })
-      expect(report.recoveredOperations).toBe(1)
-      expect(readFileSync(oldSentinel, 'utf-8')).toBe('old-home')
-      expect(await getActiveOp(db, id)).toBeNull()
-      expect(await lockCount(db)).toBe(0)
-      if (phase === 'db-committed') {
-        const { skills } = tablesOf(db)
-        expect(await first(db.select().from(skills).where(eq(skills.id, id)))).toBeDefined()
-        expect(existsSync(skillRootAbs(appHome, id))).toBe(true)
-      } else {
-        const { skills } = tablesOf(db)
-        expect(await first(db.select().from(skills).where(eq(skills.id, id)))).toBeUndefined()
-        expect(existsSync(join(appHome, 'skills', name))).toBe(false)
-      }
-    })
-  }
-})
-
-describeEachProvider('RFC-223 legacy delete op upgrade matrix', (harness) => {
-  let db: PersistenceDb
-  let oldHome: string
-  let appHome: string
-
-  beforeEach(() => {
-    db = harness.db
-    oldHome = mkdtempSync(join(tmpdir(), 'aw-old-delete-'))
-    appHome = mkdtempSync(join(tmpdir(), 'aw-new-delete-'))
-  })
-  afterEach(() => {
-    rmSync(oldHome, { recursive: true, force: true })
-    rmSync(appHome, { recursive: true, force: true })
-  })
-
-  for (const phase of ['intent', 'fs-staged', 'db-committed'] as const) {
-    test(`${phase}: absolute backup path rebases safely and preserves oldHome`, async () => {
-      const id = `delete-${phase}`
-      const name = `legacy-delete-${phase}`
-      await seedLegacyRow(db, appHome, id, name, { withVersion: true })
-      const opId = await databaseSessionFor(db).transaction(
-        async (tx) =>
-          await beginOperation(tx, {
-            skillId: id,
-            kind: 'delete',
-            preconditionJson: JSON.stringify({ name }),
-          }),
-      )
-      const currentRoot = join(appHome, 'skills', name)
-      const currentTrash = join(appHome, 'skills', '.trash', `${id}-${opId}`)
-      const storedOldTrash = join(oldHome, 'skills', '.trash', `${id}-${opId}`)
-      if (phase !== 'intent') {
-        mkdirSync(dirname(currentTrash), { recursive: true })
-        renameSync(currentRoot, currentTrash)
-        await databaseSessionFor(db).transaction(
-          async (tx) => await advancePhase(tx, opId, 'fs-staged', { backupPath: storedOldTrash }),
-        )
-      }
-      if (phase === 'db-committed') {
-        await databaseSessionFor(db).transaction(async (tx) => {
-          const { skills } = tablesOf(tx)
-          await tx.delete(skills).where(eq(skills.id, id))
-          await advancePhase(tx, opId, 'db-committed')
-        })
-      }
-
-      mkdirSync(storedOldTrash, { recursive: true })
-      writeFileSync(join(storedOldTrash, 'sentinel.txt'), 'old-home-trash')
-      const report = await runSkillIdentityMigrationBarrier(db, { appHome })
-      expect(report.recoveredOperations).toBe(1)
-      expect(readFileSync(join(storedOldTrash, 'sentinel.txt'), 'utf-8')).toBe('old-home-trash')
-      expect(await getActiveOp(db, id)).toBeNull()
-      expect(await lockCount(db)).toBe(0)
-      if (phase === 'db-committed') {
-        const { skills } = tablesOf(db)
-        expect(await first(db.select().from(skills).where(eq(skills.id, id)))).toBeUndefined()
-        expect(existsSync(currentTrash)).toBe(false)
-      } else {
-        expect(existsSync(skillRootAbs(appHome, id))).toBe(true)
-        expect(existsSync(currentTrash)).toBe(false)
-      }
-    })
-  }
-
-  test('in-process throw after db-committed preserves op/lock for barrier rollforward', async () => {
-    const id = 'delete-committed-fault'
-    const name = 'delete-committed-fault-name'
-    await seedCanonicalRow(db, appHome, id, name)
-
-    await expect(
-      deleteManagedSkillOp(
-        db,
-        { appHome },
-        { id },
+describeV2Providers('RFC-395 legacy operations must settle before frozen conversion', (h) => {
+  test.each(modes)(
+    '%s keeps source evidence and produces only proved target identities',
+    async (mode) => {
+      await h.install()
+      const root = mkdtempSync(join(tmpdir(), 'aw-x2-skill-'))
+      const id = mode === 'same-name-id' ? 'legacy' : 'skill'
+      const reference =
+        mode === 'absolute-restore' ? '/old-home/skills/legacy/files' : 'skills/legacy/files'
+      const files = [
         {
-          afterPhase: (phase) => {
-            if (phase === 'db-committed') throw new Error('fault-after-delete-commit')
-          },
+          path: 'SKILL.md',
+          bytes: Buffer.from('\ufeff---\nname: legacy\ndescription: d\n---\nlegacy body\r\n'),
         },
-      ),
-    ).rejects.toThrow('fault-after-delete-commit')
-    const { skills } = tablesOf(db)
-    expect(await first(db.select().from(skills).where(eq(skills.id, id)))).toBeUndefined()
-    expect((await getActiveOp(db, id))?.phase).toBe('db-committed')
-    expect(await lockCount(db)).toBe(1)
-
-    const report = await runSkillIdentityMigrationBarrier(db, { appHome })
-    expect(report.recoveredOperations).toBe(1)
-    expect(await getActiveOp(db, id)).toBeNull()
-    expect(await lockCount(db)).toBe(0)
-  })
-
-  test('db-committed legacy delete rejects a canonical orphan and preserves all evidence', async () => {
-    const id = 'delete-canonical-orphan'
-    const name = 'delete-canonical-orphan-name'
-    await seedLegacyRow(db, appHome, id, name, { withVersion: true })
-    const opId = await databaseSessionFor(db).transaction(
-      async (tx) =>
-        await beginOperation(tx, {
-          skillId: id,
-          kind: 'delete',
-          preconditionJson: JSON.stringify({ name }),
-        }),
-    )
-    const legacyRoot = join(appHome, 'skills', name)
-    const trash = join(appHome, 'skills', '.trash', `${id}-${opId}`)
-    mkdirSync(dirname(trash), { recursive: true })
-    renameSync(legacyRoot, trash)
-    await databaseSessionFor(db).transaction(
-      async (tx) => await advancePhase(tx, opId, 'fs-staged', { backupPath: trash }),
-    )
-    await databaseSessionFor(db).transaction(async (tx) => {
-      const { skills } = tablesOf(tx)
-      await tx.delete(skills).where(eq(skills.id, id))
-      await advancePhase(tx, opId, 'db-committed')
-    })
-    const canonicalRoot = skillRootAbs(appHome, id)
-    writeTree(canonicalRoot, 'canonical-orphan')
-    const trashHash = hashDir(trash)
-    const canonicalHash = hashDir(canonicalRoot)
-
-    await expect(runSkillIdentityMigrationBarrier(db, { appHome })).rejects.toThrow(
-      /committed row deletion but canonical root remains/,
-    )
-    expect(hashDir(trash)).toBe(trashHash)
-    expect(hashDir(canonicalRoot)).toBe(canonicalHash)
-    expect((await getActiveOp(db, id))?.phase).toBe('db-committed')
-    expect(await lockCount(db)).toBe(1)
-  })
-})
-
-describeEachProvider('RFC-223 legacy version-write op upgrade matrix', (harness) => {
-  let db: PersistenceDb
-  let oldHome: string
-  let appHome: string
-
-  beforeEach(() => {
-    db = harness.db
-    oldHome = mkdtempSync(join(tmpdir(), 'aw-old-version-'))
-    appHome = mkdtempSync(join(tmpdir(), 'aw-new-version-'))
-  })
-  afterEach(() => {
-    rmSync(oldHome, { recursive: true, force: true })
-    rmSync(appHome, { recursive: true, force: true })
-  })
-
-  for (const phase of [
-    'intent',
-    'fs-staged',
-    'fs-versioned',
-    'db-committed',
-    'fs-published',
-  ] as const) {
-    test(`${phase}: legacy absolute staged/candidate paths recover only in newHome`, async () => {
-      const id = `version-${phase}`
-      const name = `legacy-version-${phase}`
-      await seedLegacyRow(db, appHome, id, name, { withVersion: true })
-      const publishId = ulid()
-      const currentFiles = join(appHome, 'skills', name, 'files')
-      const currentStaging = opStagedDir(currentFiles, publishId)
-      const currentVersion = join(appHome, 'skills', name, 'versions', 'v2', 'files')
-      const storedStaging = opStagedDir(join(oldHome, 'skills', name, 'files'), publishId)
-      const storedVersion = join(oldHome, 'skills', name, 'versions', 'v2', 'files')
-
-      const opId = await databaseSessionFor(db).transaction(
-        async (tx) =>
-          await beginOperation(tx, {
-            skillId: id,
-            kind: 'version-write',
-            targetVersion: 2,
-            stagingPath: storedStaging,
-            candidatePath: storedVersion,
-            preconditionJson: JSON.stringify({ name }),
+        { path: 'empty.bin', bytes: Buffer.alloc(0) },
+        { path: 'raw.bin', bytes: Buffer.from([255, 0, 192, 128]) },
+      ]
+      const missing = ['husk', 'husk-reference', 'missing-root', 'reserving'].includes(mode)
+      const database = mode.startsWith('database')
+      const existing =
+        mode === 'existing' ||
+        mode === 'missing-snapshot' ||
+        mode === 'hash-conflict' ||
+        mode === 'authority-conflict' ||
+        mode === 'database-existing'
+      const treeHash = digestSortedTree(
+        files.map((file) => file.path).sort(),
+        (path) => files.find((file) => file.path === path)!.bytes,
+      )
+      const writeTree = (tree: string, supportOnly = false) => {
+        const dir = join(root, 'skills', 'legacy', tree)
+        mkdirSync(dir, { recursive: true })
+        for (const file of files)
+          if (!supportOnly || file.path !== 'SKILL.md')
+            writeFileSync(join(dir, file.path), file.bytes)
+      }
+      try {
+        if (!database && !missing) writeTree('files', mode === 'support-only')
+        if (mode === 'root-conflict') {
+          mkdirSync(join(root, 'skills', id, 'files'), { recursive: true })
+          writeFileSync(join(root, 'skills', id, 'files', 'SKILL.md'), 'different')
+        }
+        if (mode === 'symlink-root') {
+          rmSync(join(root, 'skills', 'legacy'), { recursive: true })
+          mkdirSync(join(root, 'evidence'), { recursive: true })
+          symlinkSync(join(root, 'evidence'), join(root, 'skills', 'legacy'), 'dir')
+        }
+        if (existing && mode !== 'missing-snapshot' && !database) writeTree('versions/v1/files')
+        await h.write('skills', [
+          frozenValues('skills', {
+            id,
+            name: 'legacy',
+            managed_path: database ? 'database:skill_content_entries' : reference,
+            reservation_state: mode === 'reserving' ? 'reserving' : 'ready',
+            version_state:
+              existing || mode === 'missing-root'
+                ? 'snapshot-authoritative'
+                : 'legacy-unbackfilled',
+            content_version: mode === 'authority-conflict' ? 2 : existing ? 1 : 0,
           }),
-      )
-      if (phase !== 'intent') {
-        writeTree(currentStaging, `new-${phase}`)
-        await databaseSessionFor(db).transaction(
-          async (tx) => await advancePhase(tx, opId, 'fs-staged'),
-        )
-      }
-      if (phase === 'fs-versioned' || phase === 'db-committed' || phase === 'fs-published') {
-        cpSync(currentStaging, currentVersion, { recursive: true })
-        await databaseSessionFor(db).transaction(
-          async (tx) => await advancePhase(tx, opId, 'fs-versioned'),
-        )
-      }
-      if (phase === 'db-committed' || phase === 'fs-published') {
-        const contentHash = hashDir(currentVersion)
-        await databaseSessionFor(db).transaction(async (tx) => {
-          const { skills, skillVersions } = tablesOf(tx)
-          await tx.update(skills).set({ contentVersion: 2 }).where(eq(skills.id, id))
-          await insertOne(tx, skillVersions, {
-            id: ulid(),
-            skillId: id,
-            versionIndex: 2,
-            filesPath: `skills/${name}/versions/v2/files`,
-            source: 'editor',
-            authorUserId: '__system__',
-            contentHash,
-          })
-          await advancePhase(tx, opId, 'db-committed')
-        })
-      }
-      if (phase === 'fs-published') {
-        const backup = opBackupDir(currentFiles, publishId)
-        renameSync(currentFiles, backup)
-        renameSync(currentStaging, currentFiles)
-        await databaseSessionFor(db).transaction(
-          async (tx) => await advancePhase(tx, opId, 'fs-published'),
-        )
-      }
-
-      writeTree(storedStaging, 'old-home-staging-sentinel')
-      writeTree(storedVersion, 'old-home-version-sentinel')
-      const report = await runSkillIdentityMigrationBarrier(db, { appHome })
-      expect(report.recoveredOperations).toBe(1)
-      expect(readFileSync(join(storedStaging, 'payload.txt'), 'utf-8')).toBe(
-        'old-home-staging-sentinel',
-      )
-      expect(readFileSync(join(storedVersion, 'payload.txt'), 'utf-8')).toBe(
-        'old-home-version-sentinel',
-      )
-      expect(await getActiveOp(db, id)).toBeNull()
-      expect(await lockCount(db)).toBe(0)
-      expect(existsSync(skillRootAbs(appHome, id))).toBe(true)
-      if (phase === 'db-committed' || phase === 'fs-published') {
-        expect(readFileSync(join(skillFilesAbs(appHome, id), 'payload.txt'), 'utf-8')).toBe(
-          `new-${phase}`,
-        )
-        const { skillVersions } = tablesOf(db)
-        expect(
-          (
-            await db
-              .select({ path: skillVersions.filesPath })
-              .from(skillVersions)
-              .where(eq(skillVersions.skillId, id))
+        ])
+        if (existing)
+          await h.write('skill_versions', [
+            frozenValues('skill_versions', {
+              id: 'v1',
+              skill_id: id,
+              version_index: 1,
+              source: 'initial',
+              content_hash: mode === 'hash-conflict' ? '0'.repeat(64) : treeHash,
+              files_path: database
+                ? 'database:skill_content_entries'
+                : 'skills/legacy/versions/v1/files',
+            }),
+          ])
+        if (database)
+          for (const tree of existing ? ['live', 'version:1'] : ['live'])
+            await h.write(
+              'skill_content_entries',
+              files.map((file) =>
+                frozenValues('skill_content_entries', {
+                  skill_id: id,
+                  tree,
+                  path: file.path,
+                  encoding: 'base64',
+                  content: file.bytes.toString('base64'),
+                  size: file.bytes.length,
+                }),
+              ),
+            )
+        if (mode === 'husk-reference')
+          await h.write('memories', [
+            frozenValues('memories', { id: 'memory', fused_into_skill_id: id }),
+          ])
+        if (mode.startsWith('active-')) {
+          const [kind, phase] = mode.slice(7).split('/')
+          await h.write('skill_operations', [
+            frozenValues('skill_operations', {
+              op_id: 'unsettled',
+              skill_id: id,
+              kind: kind!,
+              phase: phase!,
+              active: 1,
+              precondition_json: JSON.stringify({ originalReference: reference }),
+            }),
+          ])
+        }
+        if (mode === 'orphan-version')
+          await h.write('skill_versions', [
+            frozenValues('skill_versions', {
+              id: 'orphan',
+              skill_id: 'missing',
+              version_index: 1,
+              files_path: 'skills/missing/versions/v1/files',
+            }),
+          ])
+        const input = await h.input([createSkillBootConversion(convert)])
+        try {
+          const capture: BootUpgradeCaptureInput = {
+            stage: 'plan',
+            source: {
+              reader: input.source,
+              preflight: input.preflight,
+              preUpgrade: null,
+              watermark: input.preflight.watermark,
+              evidenceRoot: null,
+              close: async () => {},
+            },
+            content: emptyV2Content,
+            root: { kind: 'app-home', root, runsSupplied: false, objects: 'none' },
+            manifest: {
+              version: 1,
+              roots: [],
+              files: [],
+              objects: [],
+              databaseTrees: [],
+              digest: valueDigest([]),
+            },
+            readArtifact: async () => null,
+            writeArtifact: async () => {},
+          }
+          const facts = createBootUpgradeFacts(await skillBootEnvironment().capture(capture))
+          const fact = SkillBootFactSchema.parse(facts.facts[0]!.evidence)
+          const before = await input.source.readChunk('skills', null, 100)
+          const operationsBefore = await input.source.readChunk('skill_operations', null, 100)
+          const sink = new V2MemorySink()
+          if (mode === 'restart') {
+            sink.loseAcknowledgementOnce = true
+            await expect(
+              runConversion({ ...input, bootUpgradeFacts: facts }, sink),
+            ).rejects.toThrow('v2-sink-lost-acknowledgement')
+          }
+          const summary = await runConversion({ ...input, bootUpgradeFacts: facts }, sink)
+          const blocked =
+            [
+              'root-conflict',
+              'support-only',
+              'missing-root',
+              'missing-snapshot',
+              'hash-conflict',
+              'authority-conflict',
+              'husk-reference',
+              'reserving',
+              'symlink-root',
+              'orphan-version',
+            ].includes(mode) || mode.startsWith('active-')
+          if (blocked) {
+            expect(summary.status).toBe('blocked')
+            expect(summary.blocks.length).toBeGreaterThan(0)
+            if (mode !== 'orphan-version') {
+              expect(fact.state).toBe('blocked')
+              expect(sink.rows('skills')).toEqual([])
+              expect(sink.rows('skill_versions')).toEqual([])
+              expect(sink.rows('content_bytes')).toEqual([])
+            }
+          } else if (mode === 'husk') {
+            expect(fact.state).toBe('husk')
+            expect(sink.rows('skills')).toEqual([])
+            expect(sink.rows('skill_versions')).toEqual([])
+            expect([...sink.units.values()].flatMap((unit) => unit.dispositions)).toEqual(
+              expect.arrayContaining([expect.objectContaining({ class: 'archived' })]),
+            )
+          } else {
+            expect(summary.blocks).toEqual([])
+            expect(sink.rows('skills')).toHaveLength(1)
+            expect(sink.rows('skill_versions')).toHaveLength(1)
+            const live = JSON.parse(String(sink.rows('skills')[0]!.content_ref_json))
+            const snapshot = JSON.parse(String(sink.rows('skill_versions')[0]!.content_ref_json))
+            expect(live.kind).toBe(database ? 'database-bytes' : 'local-file')
+            expect(live.location).toEqual(
+              database
+                ? { codec: 'skill-tree', value: { skillId: id, tree: 'live' } }
+                : { codec: 'skill-path', value: join(root, 'skills', 'legacy', 'files') },
+            )
+            expect(snapshot.kind).toBe(existing && !database ? 'local-file' : 'database-bytes')
+            expect(snapshot.location).toEqual(
+              existing && !database
+                ? {
+                    codec: 'skill-path',
+                    value: join(root, 'skills', 'legacy', 'versions/v1/files'),
+                  }
+                : { codec: 'skill-tree', value: { skillId: id, tree: 'version:1' } },
+            )
+            // This isolated boot rule materializes only a synthetic initial snapshot.
+            // Existing database entry rows belong to the separate content conversion rule.
+            const entries = sink.rows('skill_content_entries')
+            expect(entries).toHaveLength(existing ? 0 : files.length)
+            expect(sink.rows('content_objects')).toHaveLength(entries.length)
+            expect(sink.rows('content_bytes')).toHaveLength(entries.length)
+            for (const entry of entries) {
+              expect(entry.tree).toBe('version:1')
+              const ref = JSON.parse(String(entry.content_ref_json))
+              const stored = sink
+                .rows('content_bytes')
+                .find((row) => row.content_id === ref.contentId)!
+              expect(Buffer.from(stored.bytes as Uint8Array)).toEqual(
+                files.find((file) => file.path === entry.path)!.bytes,
+              )
+            }
+            const committed = structuredClone(sink.rows('skill_versions'))
+            await runConversion({ ...input, bootUpgradeFacts: facts }, sink)
+            expect(sink.rows('skill_versions')).toEqual(committed)
+            if (!database)
+              expect(readFileSync(join(root, 'skills', 'legacy', 'files', 'SKILL.md'))).toEqual(
+                files[0]!.bytes,
+              )
+            if (id !== 'legacy' && !database)
+              expect(existsSync(join(root, 'skills', id))).toBe(false)
+            if (mode === 'drift') {
+              writeFileSync(
+                join(root, 'skills', 'legacy', 'files', 'raw.bin'),
+                'changed after plan',
+              )
+              const recaptured = createBootUpgradeFacts(
+                await skillBootEnvironment().capture({ ...capture, stage: 'freeze' }),
+              )
+              expect(recaptured.environmentDigest).not.toBe(facts.environmentDigest)
+              // A frozen conversion never reopens or silently replaces its accepted bytes.
+              const replay = new V2MemorySink()
+              await runConversion({ ...input, bootUpgradeFacts: facts }, replay)
+              expect(replay.rows('content_bytes')).toEqual(sink.rows('content_bytes'))
+            }
+          }
+          expect((await input.source.readChunk('skills', null, 100)).decodedRows).toEqual(
+            before.decodedRows,
           )
-            .map((row) => row.path)
-            .sort(),
-        ).toEqual([skillVersionRelPath(id, 1), skillVersionRelPath(id, 2)])
-      } else {
-        const { skillVersions } = tablesOf(db)
-        expect(
-          await db.select().from(skillVersions).where(eq(skillVersions.skillId, id)),
-        ).toHaveLength(1)
+          expect((await input.source.readChunk('skill_operations', null, 100)).decodedRows).toEqual(
+            operationsBefore.decodedRows,
+          )
+        } finally {
+          await input.source.close()
+        }
+      } finally {
+        rmSync(root, { recursive: true, force: true })
       }
-    })
-  }
+    },
+    180_000,
+  )
 })
 
-async function seedLegacyRow(
-  db: PersistenceDb,
-  appHome: string,
-  id: string,
-  name: string,
-  opts: {
-    reservationState?: 'ready' | 'reserving'
-    withVersion: boolean
-  },
-): Promise<void> {
-  const filesDir = join(appHome, 'skills', name, 'files')
-  writeTree(filesDir, 'legacy-live-v1')
-  const { skills, skillVersions } = tablesOf(db)
-  await insertOne(db, skills, {
-    id,
-    name,
-    managedPath: `skills/${name}/files`,
-    contentVersion: opts.withVersion ? 1 : 0,
-    reservationState: opts.reservationState ?? 'ready',
-    versionState: opts.withVersion ? 'snapshot-authoritative' : 'legacy-unbackfilled',
-  })
-  if (opts.withVersion) {
-    const versionDir = join(appHome, 'skills', name, 'versions', 'v1', 'files')
-    cpSync(filesDir, versionDir, { recursive: true })
-    await insertOne(db, skillVersions, {
-      id: ulid(),
-      skillId: id,
-      versionIndex: 1,
-      filesPath: `skills/${name}/versions/v1/files`,
-      source: 'initial',
-      authorUserId: '__system__',
-      contentHash: hashDir(versionDir),
-    })
-  }
-}
-
-async function seedCanonicalRow(
-  db: PersistenceDb,
-  appHome: string,
-  id: string,
-  name: string,
-): Promise<void> {
-  const filesDir = skillFilesAbs(appHome, id)
-  const versionDir = skillVersionAbs(appHome, id, 1)
-  writeTree(filesDir, 'canonical-live')
-  cpSync(filesDir, versionDir, { recursive: true })
-  const { skills, skillVersions } = tablesOf(db)
-  await insertOne(db, skills, {
-    id,
-    name,
-    managedPath: skillFilesRel(id),
-    contentVersion: 1,
-    reservationState: 'ready',
-    versionState: 'snapshot-authoritative',
-  })
-  await insertOne(db, skillVersions, {
-    id: ulid(),
-    skillId: id,
-    versionIndex: 1,
-    filesPath: skillVersionRelPath(id, 1),
-    source: 'initial',
-    authorUserId: '__system__',
-    contentHash: hashDir(versionDir),
-  })
-}
-
-function writeTree(root: string, marker: string): void {
-  mkdirSync(root, { recursive: true })
-  writeFileSync(join(root, 'SKILL.md'), `# ${marker}\n`)
-  writeFileSync(join(root, 'payload.txt'), marker)
-}
-
-async function lockCount(db: PersistenceDb): Promise<number> {
-  const { skillOperationLocks } = tablesOf(db)
-  return (await db.select().from(skillOperationLocks)).length
-}
+test('B owns skills/versions exclusively; X retains the entry conversion claim', () => {
+  const claims = contentConversion.rules.flatMap((rule) => rule.claims)
+  expect(claims).not.toContain('skills')
+  expect(claims).not.toContain('skill_versions')
+  expect(claims).toContain('skill_content_entries')
+  expect(createSkillBootConversion(convert).rules.flatMap((rule) => rule.claims)).toEqual([
+    'skills',
+    'skill_versions',
+  ])
+})

@@ -8,6 +8,26 @@ export const fixtureTableSymbols = [
   'agents',
   'workflows',
   'clarifyRounds',
+  'clarifyAnswers',
+  'clarifyAnswerDrafts',
+  'clarifyAnswerAttributions',
+  'agentDependencies',
+  'agentSkillRefs',
+  'agentMcpRefs',
+  'agentPluginRefs',
+  'workflowDependencyIndex',
+  'taskDefinitions',
+  'taskLaunchContexts',
+  'taskWorkspaces',
+  'taskRepositoryMounts',
+  'taskExecutionGenerations',
+  'nodeRunSelections',
+  'nodeRunInputs',
+  'nodeRunConfigs',
+  'nodeRunRuntimeStates',
+  'nodeRunResults',
+  'nodeRunRepoCheckpoints',
+  'workgroupTaskState',
 ] as const
 const physicalTables: Readonly<Record<string, string>> = {
   tasks: 'tasks',
@@ -17,6 +37,26 @@ const physicalTables: Readonly<Record<string, string>> = {
   agents: 'agents',
   workflows: 'workflows',
   clarify_rounds: 'clarifyRounds',
+  clarify_answers: 'clarifyAnswers',
+  clarify_answer_drafts: 'clarifyAnswerDrafts',
+  clarify_answer_attributions: 'clarifyAnswerAttributions',
+  agent_dependencies: 'agentDependencies',
+  agent_skill_refs: 'agentSkillRefs',
+  agent_mcp_refs: 'agentMcpRefs',
+  agent_plugin_refs: 'agentPluginRefs',
+  workflow_dependency_index: 'workflowDependencyIndex',
+  task_definitions: 'taskDefinitions',
+  task_launch_contexts: 'taskLaunchContexts',
+  task_workspaces: 'taskWorkspaces',
+  task_repository_mounts: 'taskRepositoryMounts',
+  task_execution_generations: 'taskExecutionGenerations',
+  node_run_selections: 'nodeRunSelections',
+  node_run_inputs: 'nodeRunInputs',
+  node_run_configs: 'nodeRunConfigs',
+  node_run_runtime_states: 'nodeRunRuntimeStates',
+  node_run_results: 'nodeRunResults',
+  node_run_repo_checkpoints: 'nodeRunRepoCheckpoints',
+  workgroup_task_state: 'workgroupTaskState',
 }
 export interface FixtureWriteFinding {
   table: string
@@ -26,13 +66,13 @@ export interface FixtureWriteFinding {
 export function directFixtureWrites(path: string, text: string): FixtureWriteFinding[] {
   const source = ts.createSourceFile(path, text, ts.ScriptTarget.Latest, true)
   const aliases = new Map<string, string>(fixtureTableSymbols.map((table) => [table, table]))
-  const inserts = new Set(['insertOne'])
+  const inserts = new Set(['insertOne', 'insertBatches'])
   const variables = new Map<string, ts.Expression>()
   function collect(node: ts.Node): void {
     if (ts.isImportSpecifier(node)) {
       const name = (node.propertyName ?? node.name).text
       if (aliases.has(name)) aliases.set(node.name.text, aliases.get(name)!)
-      if (name === 'insertOne') inserts.add(node.name.text)
+      if (name === 'insertOne' || name === 'insertBatches') inserts.add(node.name.text)
     }
     if (ts.isBindingElement(node) && ts.isIdentifier(node.name) && node.propertyName) {
       const table = aliases.get(node.propertyName.getText(source))

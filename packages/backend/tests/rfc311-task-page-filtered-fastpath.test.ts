@@ -1,3 +1,4 @@
+import { tablesOf } from '@/platform/persistence/sessionTables'
 // RFC-311 G1 —— 过滤视图快路径 === 旧穷举管线。**RFC-359 W6-T27 起两个引擎各跑一遍。**
 //
 // 背景:旧管线为了回答「哪些 root 进这一页」，要先物化全部授权任务再走两条递归
@@ -21,23 +22,22 @@
 // （`helpers/taskForestBackfill.ts`），SQLite 那侧另有一条「迁移 SQL == 复算」的对拍
 // （见 `rfc311-task-page-fastpath.test.ts`），所以「oracle 顺带验收回填算法」没有丢。
 
-import { taskFixture, taskRepoFixture, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
-import { expect, test } from 'bun:test'
 import type { TaskOperationsListItem } from '@agent-workflow/shared'
+import { expect, test } from 'bun:test'
+import { taskFixture, taskRepoFixture, workflowFixture } from './helpers/model'
 
-import { buildActor, type Actor } from '../src/auth/actor'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
+import { buildActor, type Actor } from '../src/auth/actor'
 import {
   canUseFilteredFastPath,
   hasUnrootedTasks,
   isDefaultView,
+  taskListViewerOf,
 } from '../src/modules/task-execution/infrastructure/taskListPage'
 import { describeEachProvider } from './helpers/eachProvider'
 import { computeForestBackfill } from './helpers/taskForestBackfill'
 import { listTaskOperationsPage } from './helpers/taskListPage'
-import { taskListViewerOf } from '../src/modules/task-execution/infrastructure/taskListPage'
 
 type Db = PersistenceDb
 

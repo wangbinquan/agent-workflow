@@ -18,12 +18,10 @@ import { deferred, lifecycleFixture, runtimeSession, lifecycle } from './helpers
 const expectedSteps = [
   'runtime-declarations',
   'process-registrations',
-  'repository-url-sealing',
   'transport-projections',
   'git-credential-lease-cleanup',
   'daemon-identity',
-  'skill-identity-barrier',
-  'fusion-provenance',
+  'skill-operation-recovery',
   'skill-availability-gate',
   'skill-live-files',
   'runtime-registry',
@@ -31,8 +29,6 @@ const expectedSteps = [
   'employee-agent-templates',
   'employee-tool-catalog',
   'employee-authoring-ready',
-  'employee-writer-state',
-  'scheduled-payload-heal',
   'fusion-resource-seed',
   'demo-seed',
   'task-execution-recovery',
@@ -43,7 +39,6 @@ const expectedSteps = [
   'fusion-decision-recovery',
   'mr-terminal-reconcile',
   'webhook-delivery-recovery',
-  'legacy-mission-recovery',
   'employee-upgrade-settlement',
   'maintenance-boot-snapshot',
   'hosted-targeted-resume',
@@ -65,7 +60,6 @@ test('the canonical program declares every step, phase, failure policy and profi
     'human-gate-continuation',
     'committed-event-dispatcher',
     'memory-distill',
-    'development-wake',
     'digital-employee-os',
     'event-center',
     'fusion-reconcile',
@@ -146,14 +140,14 @@ for (const provider of ['sqlite', 'postgresql'] as const)
   })
 
 test('NotApplicable, missing records, id mismatches and invalid profile jobs fail construction', () => {
-  for (const id of ['runtime-declarations', 'repository-url-sealing'] as const) {
+  for (const id of ['runtime-declarations', 'skill-operation-recovery'] as const) {
     const fixture = lifecycleFixture()
     fixture.input.steps[id] = NotApplicable
     expect(fixture.compose).toThrow(id)
   }
-  const wrongProvider = lifecycleFixture('postgresql')
-  wrongProvider.input.steps['repository-url-sealing'] = () => {}
-  expect(wrongProvider.compose).toThrow('repository-url-sealing')
+  const wrongProvider = lifecycleFixture('sqlite')
+  wrongProvider.input.steps['daemon-identity'] = () => {}
+  expect(wrongProvider.compose).toThrow('daemon-identity')
   const dependency = lifecycleFixture()
   dependency.input.runtimeJobs['intent-queued-resumption'] = {
     ...dependency.input.runtimeJobs['intent-queued-resumption'],
@@ -179,7 +173,7 @@ test('NotApplicable, missing records, id mismatches and invalid profile jobs fai
 
 test('fail-closed aborts its phase; best-effort records error and continues', async () => {
   const fatal = lifecycleFixture()
-  fatal.input.steps['skill-identity-barrier'] = () => {
+  fatal.input.steps['skill-operation-recovery'] = () => {
     throw new Error('identity failed')
   }
   const program = fatal.compose()
@@ -189,7 +183,7 @@ test('fail-closed aborts its phase; best-effort records error and continues', as
     program
       .sessionOptions()
       .bootSteps()
-      .find(({ id }) => id === 'skill-identity-barrier'),
+      .find(({ id }) => id === 'skill-operation-recovery'),
   ).toMatchObject({ outcome: 'failed', error: 'Error: identity failed' })
   const best = lifecycleFixture()
   best.input.steps['skill-live-files'] = () => {

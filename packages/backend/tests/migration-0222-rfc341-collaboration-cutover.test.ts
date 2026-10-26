@@ -1,18 +1,14 @@
+import { FROZEN_MIGRATIONS } from './migration-freeze'
+import { migrateFrozenSqlite as migrate, freezeAt } from './migration-freeze'
 import { describe, expect, test } from 'bun:test'
 import { Database } from 'bun:sqlite'
 import { readFileSync, rmSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { drizzle } from 'drizzle-orm/bun-sqlite'
-import { migrate } from 'drizzle-orm/bun-sqlite/migrator'
-
-import { freezeAt } from './migration-freeze'
 
 function migrationStatements(): string[] {
   return readFileSync(
-    resolve(
-      import.meta.dir,
-      '../db/migrations/0222_rfc341_collaboration_committed_event_cutover.sql',
-    ),
+    resolve(FROZEN_MIGRATIONS, '0222_rfc341_collaboration_committed_event_cutover.sql'),
     'utf8',
   )
     .split('--> statement-breakpoint')

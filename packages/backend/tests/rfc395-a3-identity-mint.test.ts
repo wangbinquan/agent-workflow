@@ -1,3 +1,6 @@
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { createRunSelectionReader } from '@/modules/task-execution/infrastructure/runSelection/table/reader'
+import { withTargetMintIdentity } from './helpers/rfc395Mint'
 // RFC-395 II-a A3: explicit mint roles must match stored facts without conflating historical parent and container.
 import { createHash } from 'node:crypto'
 import { expect, test } from 'bun:test'
@@ -78,12 +81,24 @@ describeEachProvider('RFC-395 II-a A3 identity mint', (harness) => {
   test('every role retains stored bytes, a mint nonce and the single shared role derivation', async () => {
     const { taskId, mint, nodes } = await seed()
     for (const shape of roles) {
-      const id = await mint.mint({
-        ...shape,
-        taskId,
-        status: 'pending',
-        overrides: { identity: { startedAt: 17 } },
-      })
+      const id = await mint.mint(
+        withTargetMintIdentity({
+          ...shape,
+          ...(shape.syntheticKind === 'commit-session'
+            ? {
+                slot: {
+                  kind: 'synthetic' as const,
+                  owner: { kind: 'attempt' as const, id: 'origin' },
+                  syntheticKind: 'commit-session' as const,
+                  discriminator: shape.nodeId,
+                },
+              }
+            : {}),
+          taskId,
+          status: 'pending',
+          overrides: { identity: { startedAt: 17 } },
+        }),
+      )
       const row = (await readNodeRunFixtures(harness.db, { id }))[0]!
       const snapshot = (await nodes.read(id))!
       expect({ role: snapshot.role, syntheticKind: snapshot.syntheticKind }).toEqual({
@@ -106,14 +121,16 @@ describeEachProvider('RFC-395 II-a A3 identity mint', (harness) => {
 
   test('born-running node attempt requires a container even when historical parent exists', async () => {
     const { taskId, mint, nodes } = await seed()
-    const parent = await mint.mint({
-      taskId,
-      nodeId: 'loop',
-      cause: 'wrapper-init',
-      role: 'container',
-      syntheticKind: null,
-      status: 'pending',
-    })
+    const parent = await mint.mint(
+      withTargetMintIdentity({
+        taskId,
+        nodeId: 'loop',
+        cause: 'wrapper-init',
+        role: 'container',
+        syntheticKind: null,
+        status: 'pending',
+      }),
+    )
     const base = {
       taskId,
       nodeId: 'body',
@@ -123,17 +140,21 @@ describeEachProvider('RFC-395 II-a A3 identity mint', (harness) => {
       status: 'running',
     } as const
     const before = await readNodeRunFixtures(harness.db, { taskId })
-    await expect(mint.mint(base)).rejects.toThrow('parentNodeRunId')
+    await expect(mint.mint(withTargetMintIdentity(base))).rejects.toThrow('containerRunId')
     await expect(
-      mint.mint({ ...base, overrides: { identity: { parentNodeRunId: parent } } }),
+      mint.mint(
+        withTargetMintIdentity({ ...base, overrides: { identity: { parentNodeRunId: parent } } }),
+      ),
     ).rejects.toThrow('containerRunId')
     expect(await readNodeRunFixtures(harness.db, { taskId })).toEqual(before)
-    const body = await mint.mint({
-      ...base,
-      containerRunId: parent,
-      iteration: 2,
-      overrides: { identity: { parentNodeRunId: parent } },
-    })
+    const body = await mint.mint(
+      withTargetMintIdentity({
+        ...base,
+        containerRunId: parent,
+        iteration: 2,
+        overrides: { identity: { parentNodeRunId: parent } },
+      }),
+    )
     expect(await nodes.read(body)).toMatchObject({
       role: 'node-attempt',
       parentNodeRunId: parent,
@@ -144,23 +165,28 @@ describeEachProvider('RFC-395 II-a A3 identity mint', (harness) => {
 
   test('mismatched role or synthetic kind is rejected before allocation and insert', async () => {
     const { taskId, mint } = await seed()
-    const input: NodeRunMintInput = {
+    const input: NodeRunMintInput = withTargetMintIdentity({
       taskId,
       nodeId: 'plain',
+      slot: { kind: 'node', nodeId: 'plain', frame: { containerRunId: null, iteration: 0 } },
       cause: 'initial',
       role: 'container',
       syntheticKind: null,
       status: 'pending',
-    }
-    await expect(mint.mint(input)).rejects.toThrow('role mismatch')
+    })
+    await expect(mint.mint(withTargetMintIdentity(input))).rejects.toThrow(
+      'node-run-role-slot-mismatch',
+    )
     await expect(
-      mint.mint({
-        ...input,
-        nodeId: '__repo_prep__',
-        role: 'synthetic',
-        syntheticKind: 'commit-push',
-      }),
-    ).rejects.toThrow('role mismatch')
+      mint.mint(
+        withTargetMintIdentity({
+          ...input,
+          nodeId: '__repo_prep__',
+          role: 'synthetic',
+          syntheticKind: 'commit-push',
+        }),
+      ),
+    ).rejects.toThrow('node-run-role-slot-mismatch')
     expect(await readNodeRunFixtures(harness.db, { taskId })).toEqual([])
   })
 
@@ -168,33 +194,40 @@ describeEachProvider('RFC-395 II-a A3 identity mint', (harness) => {
     const { taskId, mint, nodes } = await seed()
     const nonce = '0123456789abcdef'
     const consumed = '{ "z" : "prior", "a": "earlier" }'
-    const id = await mint.mint({
-      taskId,
-      nodeId: 'body',
-      cause: 'process-retry',
-      role: 'node-attempt',
-      syntheticKind: null,
-      status: 'pending',
-      retryIndex: 7,
-      iteration: 3,
-      inheritFrom: {
-        reviewIteration: 2,
-        shardKey: 's',
-        parentNodeRunId: 'historical',
-        containerRunId: null,
-        checkpointInheritance: [{ mountPath: '', preSnapshot: '' }],
-        operationGeneration: 4,
-      },
-      overrides: {
-        identity: { envelopeNonce: nonce, startedAt: null, wgRound: 8 },
-        config: {
-          agentOverrideName: 'borrowed',
-          agentOverrideId: 'agent-id',
-          shardValueHash: 'hash',
+    await nodeRunFixture(harness.db, [
+      { id: 'prior', taskId, nodeId: 'z', status: 'done' },
+      { id: 'earlier', taskId, nodeId: 'a', status: 'done' },
+      { id: 'historical', taskId, nodeId: 'parent', status: 'done' },
+    ])
+    const id = await mint.mint(
+      withTargetMintIdentity({
+        taskId,
+        nodeId: 'body',
+        cause: 'process-retry',
+        role: 'node-attempt',
+        syntheticKind: null,
+        status: 'pending',
+        retryIndex: 7,
+        iteration: 3,
+        inheritFrom: {
+          reviewIteration: 2,
+          shardKey: 's',
+          parentNodeRunId: 'historical',
+          containerRunId: null,
+          checkpointInheritance: [{ mountPath: '', preSnapshot: '' }],
+          operationGeneration: 4,
         },
-        inputs: { consumedUpstreamRunsJson: consumed },
-      },
-    })
+        overrides: {
+          identity: { envelopeNonce: nonce, startedAt: null, wgRound: 8 },
+          config: {
+            agentOverrideName: 'borrowed',
+            agentOverrideId: 'agent-id',
+            shardValueHash: 'hash',
+          },
+          inputs: { consumedUpstreamRunsJson: consumed },
+        },
+      }),
+    )
     const row = (await readNodeRunFixtures(harness.db, { id }))[0]!
     expect(row).toMatchObject({
       reviewIteration: 2,
@@ -216,24 +249,37 @@ describeEachProvider('RFC-395 II-a A3 identity mint', (harness) => {
         .digest('hex'),
     )
     expect(row.checkpoints).toEqual([{ mountPath: '', preSnapshot: '' }])
-    expect((await nodes.read(id))!.consumedUpstreamRunsJson).toBe(consumed)
+    expect(JSON.parse((await nodes.read(id))!.consumedUpstreamRunsJson!)).toEqual(
+      JSON.parse(consumed),
+    )
     expect(await mint.loadEnvelopeNonce(id)).toBe(nonce)
   })
 
-  test('legacy null nonce remains the bare-envelope variant and historical container evidence is readable', async () => {
+  test('history without a nonce is readable only as history and cannot supply an execution envelope', async () => {
     const { taskId, mint, nodes } = await seed()
-    const parent = ulid()
-    await nodeRunFixture(harness.db, [
-      { id: parent, taskId, nodeId: 'historical-wrapper', status: 'done', envelopeNonce: null },
-      { id: ulid(), taskId, nodeId: 'body', status: 'done', containerRunId: parent },
-    ])
-    expect(await mint.loadEnvelopeNonce(parent)).toBe('')
-    expect(await nodes.read(parent)).toMatchObject({
-      role: 'container',
-      syntheticKind: null,
+    const { nodeRuns } = tablesOf(harness.db)
+    await harness.db.insert(nodeRuns).values({
+      id: 'historical-wrapper',
+      taskId,
+      nodeId: 'historical-wrapper',
+      seq: 0,
+      generationSeq: 0,
+      status: 'done',
+      role: null,
+      slotKey: null,
+      attemptIndex: null,
+      scopePath: null,
       envelopeNonce: null,
+      recordMode: 'history-only',
+      provenanceQuality: 'unknown',
     })
-    expect((await nodes.list({ taskId, nodeId: 'historical-wrapper' }))[0]!.role).toBe('container')
+    await expect(mint.loadEnvelopeNonce('historical-wrapper')).rejects.toThrow(
+      'no executable envelope',
+    )
+    expect(await nodes.read('historical-wrapper')).toBeNull()
+    expect(await createRunSelectionReader(harness.db).familyHistory(taskId, {})).toMatchObject([
+      { id: 'historical-wrapper', identity: 'unknown' },
+    ])
   })
 
   test('an initial-output failure still rolls mint and allocation back in the original transaction', async () => {
@@ -246,15 +292,17 @@ describeEachProvider('RFC-395 II-a A3 identity mint', (harness) => {
     await installAbortTrigger(harness, trigger)
     try {
       const error = await mint
-        .mint({
-          taskId,
-          nodeId: 'input',
-          role: 'node-attempt',
-          syntheticKind: null,
-          cause: 'io-virtual',
-          status: 'done',
-          outputs: [{ portName: 'value', content: 'body' }],
-        })
+        .mint(
+          withTargetMintIdentity({
+            taskId,
+            nodeId: 'input',
+            role: 'node-attempt',
+            syntheticKind: null,
+            cause: 'io-virtual',
+            status: 'done',
+            outputs: [{ portName: 'value', content: 'body' }],
+          }),
+        )
         .then(
           () => undefined,
           (cause: unknown) => cause,
@@ -269,7 +317,7 @@ describeEachProvider('RFC-395 II-a A3 identity mint', (harness) => {
 })
 
 test('RFC-395 II-a A3 explicit null and undefined keep mint default precedence', () => {
-  const input: NodeRunMintInput = {
+  const input: NodeRunMintInput = withTargetMintIdentity({
     taskId: 't',
     nodeId: 'n',
     role: 'node-attempt',
@@ -284,8 +332,8 @@ test('RFC-395 II-a A3 explicit null and undefined keep mint default precedence',
         operationGeneration: 0,
       },
     },
-  }
-  const row = buildNodeRunMintRecord(input)
+  })
+  const row = buildNodeRunMintRecord(withTargetMintIdentity(input))
   expect(row.startedAt).toBeNull()
   expect(row.finishedAt).toBe(0)
   expect(row.operationGeneration).toBe(0)

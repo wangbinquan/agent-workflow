@@ -42,7 +42,6 @@ import { runTaskWithRealTestTopology as runTask } from './helpers/taskExecutionT
 import { runLifecycleInvariants } from '../src/services/lifecycleInvariants'
 import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
 
 setDefaultTimeout(60_000)
@@ -65,7 +64,7 @@ async function buildHarness(): Promise<Harness> {
   await runGit(worktreePath, ['add', '.'])
   await runGit(worktreePath, ['commit', '-q', '-m', 'init'])
   return {
-    db: createInMemoryDb(MIGRATIONS),
+    db: createInMemoryDb(),
     appHome,
     worktreePath,
     cleanup: () => rmSync(appHome, { recursive: true, force: true }),

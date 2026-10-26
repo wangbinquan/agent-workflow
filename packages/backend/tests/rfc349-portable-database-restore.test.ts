@@ -5,8 +5,11 @@ import { afterEach, describe, expect, test } from 'bun:test'
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { restorePortableDatabaseBackup } from '@/modules/system-operations/infrastructure/portableDatabaseRestore'
-import type { PortableDatabaseRestoreError } from '@/modules/system-operations/infrastructure/portableDatabaseRestore'
+import {
+  restorePortableDatabaseBackup,
+  type PortableDatabaseRestoreError,
+} from '@/modules/system-operations/infrastructure/portableDatabaseRestore'
+
 import { restorePostgresqlProviderBackup } from '@/modules/system-operations/infrastructure/postgresqlProviderRestore'
 import {
   createLegacyArchiveManifest,
@@ -35,7 +38,10 @@ import type {
 import { writeManifest } from '@/services/backupManifest'
 import { createPortableBackupArchive } from '@/services/portableBackupArchive'
 import { extractTarGz, tarGz } from '@/util/archive'
-import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import { createSqliteBaseline } from '@/bootstrap/persistenceBaseline'
+import { captureEpochMetadata } from '@/platform/persistence/schema/history/metadataSnapshot'
+import { sqliteHistoryConnection } from '@/platform/persistence/schema/history/connection'
 
 const roots: string[] = []
 const SCHEMA_DIGEST = `sha256:${'c'.repeat(64)}`
@@ -86,7 +92,8 @@ function table(id: string, disposition: LogicalTableContract['disposition']): Lo
 
 const ACTIVE = table('active_rows', 'KEEP')
 const ARCHIVE = table('code_artifacts', 'ARCHIVE_THEN_OMIT')
-const CONTRACT: LogicalSchemaContract = {
+const CONTRACT: LogicalSchemaContract & { schemaEpoch: 2 } = {
+  schemaEpoch: 2,
   contractVersion: 2,
   sourceProjection: 'sqlite',
   sourceTableCount: 2,
@@ -148,6 +155,18 @@ async function postgresqlBackup(): Promise<{ readonly appHome: string; readonly 
   const appHome = tempRoot('rfc349-restore-backup-')
   writeFileSync(join(appHome, 'config.json'), '{"from":"backup"}')
   const activeRows = [encodeLogicalRow(ACTIVE, { id: 'active-1', value: 'portable' })]
+  const metadataDb = createSqliteBaseline()
+  let metadata
+  try {
+    metadataDb
+      .query(
+        "INSERT INTO aw_meta_migration_archives (run_id,archive_ref,unit_id,kind,source_table,format,rows,byte_size,bytes) VALUES ('old-run','history','unit','retired-table','code_artifacts','raw-chunk@1',1,3,?)",
+      )
+      .run(Buffer.from('old'))
+    metadata = await captureEpochMetadata(sqliteHistoryConnection(metadataDb))
+  } finally {
+    metadataDb.close()
+  }
   const result = await createPortableBackupArchive({
     appHome,
     now: 7,
@@ -166,6 +185,9 @@ async function postgresqlBackup(): Promise<{ readonly appHome: string; readonly 
         source: {
           provider: 'postgresql',
           async assertUnchanged() {},
+          async readMetadata() {
+            return metadata
+          },
           async readChunk(table, afterKey) {
             expect(table.id).toBe(ACTIVE.id)
             return afterKey === null ? activeRows : []
@@ -210,6 +232,13 @@ function target(
       calls.push(`copy:${table.id}:${chunk.payload.chunkIndex}`)
       rows.push(...chunk.payload.rows)
     },
+    async restoreMetadata(snapshot) {
+      calls.push('metadata')
+      expect(
+        snapshot.payload.tables.find((table) => table.name === 'migration_archives')!.rows[0]!
+          .bytes,
+      ).toEqual({ type: 'bytes', base64: Buffer.from('old').toString('base64') })
+    },
     async finalizeSchema() {
       calls.push('finalize')
     },
@@ -247,7 +276,7 @@ describe('RFC-349 portable database restore', () => {
     const rows: CanonicalLogicalRow[] = []
     const operationId = 'dbm_restore_sqlite_01'
     const result = await restorePortableDatabaseBackup({
-      headContract: buildLogicalSchemaContract(),
+      headContract: logicalSchemaContract,
       tarballPath: backup.path,
       appHome: backup.appHome,
       restoreOperationId: operationId,
@@ -264,7 +293,7 @@ describe('RFC-349 portable database restore', () => {
       now: () => 9,
     })
 
-    expect(calls).toEqual(['prepare', 'copy:active_rows:0', 'finalize', 'assets'])
+    expect(calls).toEqual(['prepare', 'copy:active_rows:0', 'metadata', 'finalize', 'assets'])
     expect(rows).toEqual([encodeLogicalRow(ACTIVE, { id: 'active-1', value: 'portable' })])
     expect(result.receipt).toMatchObject({
       sourceProvider: 'postgresql',
@@ -307,7 +336,7 @@ describe('RFC-349 portable database restore', () => {
 
     await expect(
       restorePortableDatabaseBackup({
-        headContract: buildLogicalSchemaContract(),
+        headContract: logicalSchemaContract,
         tarballPath: forged,
         appHome: backup.appHome,
         restoreOperationId: operationId,
@@ -341,7 +370,7 @@ describe('RFC-349 portable database restore', () => {
     const plan = { contractDigest: CONTRACT.digest } as PostgresqlSchemaPlan
 
     const result = await restorePostgresqlProviderBackup({
-      headContract: buildLogicalSchemaContract(),
+      headContract: logicalSchemaContract,
       tarballPath: backup.path,
       appHome: backup.appHome,
       restoreOperationId: operationId,
@@ -357,7 +386,7 @@ describe('RFC-349 portable database restore', () => {
       async openTarget(input) {
         calls.push('open')
         expect(input).toEqual({
-          headContract: buildLogicalSchemaContract(),
+          headContract: logicalSchemaContract,
           runtime,
           operationId,
           sourceGenerationId: 'dbg_postgresql_source_01',
@@ -374,7 +403,15 @@ describe('RFC-349 portable database restore', () => {
       rowsRestored: 1,
     })
     expect(restoredRows).toEqual([encodeLogicalRow(ACTIVE, { id: 'active-1', value: 'portable' })])
-    expect(calls).toEqual(['open', 'prepare', 'copy:active_rows:0', 'finalize', 'assets', 'close'])
+    expect(calls).toEqual([
+      'open',
+      'prepare',
+      'copy:active_rows:0',
+      'metadata',
+      'finalize',
+      'assets',
+      'close',
+    ])
   })
 
   test('releases the PostgreSQL target when filesystem application fails', async () => {
@@ -384,7 +421,7 @@ describe('RFC-349 portable database restore', () => {
 
     await expect(
       restorePostgresqlProviderBackup({
-        headContract: buildLogicalSchemaContract(),
+        headContract: logicalSchemaContract,
         tarballPath: backup.path,
         appHome: backup.appHome,
         restoreOperationId: operationId,
@@ -406,6 +443,13 @@ describe('RFC-349 portable database restore', () => {
       }),
     ).rejects.toThrow('filesystem application failed')
 
-    expect(calls).toEqual(['prepare', 'copy:active_rows:0', 'finalize', 'assets', 'close'])
+    expect(calls).toEqual([
+      'prepare',
+      'copy:active_rows:0',
+      'metadata',
+      'finalize',
+      'assets',
+      'close',
+    ])
   })
 })

@@ -7,18 +7,22 @@
 // id by reading node_runs.opencode_session_id" assumption (proposal §2.1 #2,
 // design §3) is broken.
 
+import {
+  frozenTablesOf,
+  createFrozenEpoch1Db,
+  type FrozenDbClient,
+  FROZEN_MIGRATIONS,
+} from './migration-freeze'
 import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
 import { queryRows } from '@/platform/persistence/queryHelpers'
 import { describe, expect, test, beforeEach } from 'bun:test'
 import { resolve } from 'node:path'
 import { ulid } from 'ulid'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+const MIGRATIONS = resolve(FROZEN_MIGRATIONS)
 
-function seedTaskAndWorkflow(db: DbClient): { taskId: string } {
+function seedTaskAndWorkflow(db: FrozenDbClient): { taskId: string } {
   const wfId = ulid()
-  const { workflows, tasks } = tablesOf(db)
+  const { workflows, tasks } = frozenTablesOf(db)
   insertOne(db, workflows, {
     id: wfId,
     name: 'wf',
@@ -47,9 +51,9 @@ function seedTaskAndWorkflow(db: DbClient): { taskId: string } {
 }
 
 describe('migration 0010 (RFC-026 node_runs.opencode_session_id)', () => {
-  let db: DbClient
+  let db: FrozenDbClient
   beforeEach(() => {
-    db = createInMemoryDb(MIGRATIONS)
+    db = createFrozenEpoch1Db(MIGRATIONS)
   })
 
   test('opencode_session_id stores values and is null when omitted', () => {
@@ -58,7 +62,7 @@ describe('migration 0010 (RFC-026 node_runs.opencode_session_id)', () => {
     const idWithSession = ulid()
     const idWithout = ulid()
 
-    const { nodeRuns } = tablesOf(db)
+    const { nodeRuns } = frozenTablesOf(db)
     insertOne(db, nodeRuns, {
       id: idWithSession,
       taskId,

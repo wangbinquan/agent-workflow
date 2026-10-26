@@ -8,14 +8,14 @@
 //   - NO foreign keys to tasks or lifecycle_alerts (audit outlives both)
 //   - INSERT + SELECT round-trip on a complete row
 
-import { rawRows, rawExec } from '@/platform/persistence/queryHelpers'
+import { createFrozenEpoch1Db, FROZEN_MIGRATIONS } from './migration-freeze'
+import { frozenRawRows as rawRows } from './migration-freeze'
+import { rawExec } from '@/platform/persistence/queryHelpers'
 import { describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
 import { sql } from 'drizzle-orm'
 
-import { createInMemoryDb } from '../src/db/client'
-
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+const MIGRATIONS = resolve(FROZEN_MIGRATIONS)
 
 interface SqlMaster {
   type: string
@@ -26,7 +26,7 @@ interface SqlMaster {
 
 describe('RFC-057 — migration 0030 lifecycle_repair_audit', () => {
   test('table exists with the expected columns', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createFrozenEpoch1Db(MIGRATIONS)
     const rows = (await rawRows(
       db,
       sql`SELECT type, name, tbl_name, sql FROM sqlite_master WHERE name='lifecycle_repair_audit'`,
@@ -52,7 +52,7 @@ describe('RFC-057 — migration 0030 lifecycle_repair_audit', () => {
   })
 
   test('no foreign keys (audit must outlive task + alert)', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createFrozenEpoch1Db(MIGRATIONS)
     const rows = (await rawRows(
       db,
       sql`SELECT sql FROM sqlite_master WHERE name='lifecycle_repair_audit'`,
@@ -64,7 +64,7 @@ describe('RFC-057 — migration 0030 lifecycle_repair_audit', () => {
   })
 
   test('both indexes exist', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createFrozenEpoch1Db(MIGRATIONS)
     const rows = (await rawRows(
       db,
       sql`SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='lifecycle_repair_audit'`,
@@ -75,7 +75,7 @@ describe('RFC-057 — migration 0030 lifecycle_repair_audit', () => {
   })
 
   test('insert + select round-trip', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createFrozenEpoch1Db(MIGRATIONS)
     await rawExec(
       db,
       sql`
@@ -116,7 +116,7 @@ describe('RFC-057 — migration 0030 lifecycle_repair_audit', () => {
   })
 
   test('alert_id and actor_user_id may be null (audit survives even when caller is unknown)', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createFrozenEpoch1Db(MIGRATIONS)
     await rawExec(
       db,
       sql`

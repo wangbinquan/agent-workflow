@@ -164,3 +164,140 @@ export const recoveryStatusViewSchema = z
   .strict()
 export type RecoveryStatusView = z.infer<typeof recoveryStatusViewSchema>
 export type { DaemonRuntimeInfo } from '../domain/daemonRuntime'
+
+import type {
+  ValidationReportSchema,
+  HistoryRestrictionSchema,
+  MigrationRowDispositionSchema,
+  ConversionBlockSchema,
+} from '../domain/epochSwitch/documents'
+
+type EpochDatabaseProvider = z.infer<typeof EpochProviderSchema>
+export type EpochValidationView = z.infer<typeof ValidationReportSchema>
+export interface EpochHistoryRestrictionView {
+  readonly runId: string
+  readonly unitId: string
+  readonly ordinal: number
+  readonly sourceTable: string
+  readonly sourcePhase: 'current' | 'pre-upgrade'
+  readonly sourceKey: `mk1:${string}`
+  readonly decisionCode: string
+  readonly history: z.infer<typeof HistoryRestrictionSchema>
+}
+import type { MigrationPlanBlock, MigrationPlanDocument } from '../domain/epochSwitch/documents'
+import type {
+  EpochProviderSchema,
+  EpochSwitchFailure,
+  EpochSwitchJournal,
+  EpochSwitchKind,
+  EpochSwitchPhase,
+  EpochSwitchStatus,
+} from '../domain/epochSwitch/model'
+
+export type { TraceInput } from '@/platform/persistence/migration/run/types'
+export interface EpochArtifactReceiptView {
+  readonly sourceTable: string
+  readonly sourceKey: `mk1:${string}`
+  readonly sourceColumn: string
+  readonly originalReference: string | null
+  readonly target: {
+    readonly table: string
+    readonly key: `mk1:${string}`
+    readonly contentId: string | null
+    readonly backend: 'inline' | 'local-file' | 'database-bytes' | 'object'
+  }
+  readonly bytes: { readonly sha256: string; readonly size: number } | null
+  readonly publication: 'not-required' | 'existing-ready' | 'requires-publication'
+  readonly missing: {
+    readonly state: 'originally-absent' | 'missing-at-freeze'
+    readonly evidence: string
+  } | null
+}
+export interface MigrationTraceResult {
+  readonly runId: string
+  readonly sourceTable: string
+  readonly sourcePhase: 'current' | 'pre-upgrade'
+  readonly sourceKey: `mk1:${string}`
+  readonly proof: 'row-disposition' | 'unit-range' | 'group-unit' | 'replay' | 'not-found'
+  readonly class: 'converted' | 'preserved' | 'archived' | 'blocked' | null
+  readonly dispositions: readonly z.infer<typeof MigrationRowDispositionSchema>[]
+  readonly unit: {
+    readonly unitId: string
+    readonly rule: { readonly id: string; readonly version: number }
+    readonly receiptDigest: string
+    readonly range: { readonly firstKey: `mk1:${string}`; readonly lastKey: `mk1:${string}` } | null
+    readonly groups: { readonly first: string | null; readonly last: string | null } | null
+  } | null
+  readonly targets: readonly {
+    readonly table: string
+    readonly key: `mk1:${string}`
+    readonly probed: boolean
+    readonly present: boolean
+  }[]
+  readonly artifacts: readonly EpochArtifactReceiptView[]
+  readonly restrictions: readonly z.infer<typeof HistoryRestrictionSchema>[]
+  readonly blocks: readonly z.infer<typeof ConversionBlockSchema>[]
+  readonly archive: `archive:sha256:${string}` | null
+}
+export type {
+  MigrationApproval,
+  MigrationApprovalPayload,
+  EpochSwitchArtifactPort,
+  EpochSwitchArtifactReference,
+  SourceArchiveInput,
+} from '@/platform/persistence/migration/run/types'
+/** Hosted run Jobs print CS_DATABASE_MIGRATION_PLAN=<JSON of this value> when approval is needed. */
+export interface EpochSwitchApprovalRequest {
+  readonly operationId: string
+  readonly runId: string
+  readonly planDigest: string
+  readonly approvalDigest: string
+  readonly planPath: string | null
+}
+export interface EpochSwitchPlanView {
+  readonly operationId: string
+  readonly plan: MigrationPlanDocument
+  readonly jsonPath: string | null
+  readonly markdownPath: string | null
+  readonly acknowledgeable: readonly MigrationPlanBlock[]
+  readonly requiresApproval: boolean
+  readonly guidance: readonly string[]
+}
+export interface EpochSwitchSummaryView {
+  readonly operationId: string
+  readonly kind: EpochSwitchKind
+  readonly phase: EpochSwitchPhase
+  readonly status: EpochSwitchStatus
+  readonly sourceProvider: EpochDatabaseProvider
+  readonly targetProvider: EpochDatabaseProvider
+  readonly targetGenerationId: string | null
+  readonly runId: string | null
+  readonly updatedAt: number
+  readonly failure: EpochSwitchFailure | null
+}
+export interface EpochSwitchStatusView extends EpochSwitchSummaryView {
+  readonly journal: EpochSwitchJournal
+  readonly validation: EpochValidationView | null
+  readonly firstLiveWriteAt: number | null
+  readonly rollback: { readonly allowed: boolean; readonly reason: string | null }
+  readonly guidance: readonly string[]
+  /** Present at awaiting-approval, including validated re-approval on a fresh hosted Job. */
+  readonly approval?: EpochSwitchApprovalRequest
+}
+export interface TaskRestrictionView {
+  readonly operationId: string
+  readonly taskId: string
+  readonly restrictions: readonly EpochHistoryRestrictionView[]
+}
+export interface EpochSwitchTargetInput {
+  readonly provider: EpochDatabaseProvider
+  readonly urlEnv?: string
+}
+export interface EpochSwitchPlanInput {
+  readonly operationId?: string
+  readonly target?: EpochSwitchTargetInput
+  readonly scratchUrlEnv?: string
+  readonly emptyTables?: readonly { readonly table: string; readonly reason: string }[]
+  readonly rehearse?: boolean
+  readonly chunkLimit?: number
+}

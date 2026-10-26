@@ -1,3 +1,6 @@
+import type { projectNodeRunReadFacts } from '@/modules/task-execution/infrastructure/nodeRunSnapshot'
+// Target fixture mint order; missing seq is covered only by conversion/rejection tests.
+let fixtureRunSequence = 0
 // RFC-306 — two things that are easy to get subtly wrong and impossible to
 // notice afterwards:
 //
@@ -14,7 +17,6 @@
 //      If this regresses, a skip silently becomes a dead end that only a brand
 //      new task can escape.
 
-import { type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { describe, expect, test } from 'bun:test'
 import {
   evaluateExitCondition,
@@ -23,7 +25,7 @@ import {
 import { isDispatchable } from '../src/services/dispatchFrontier'
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 
-type Row = PersistenceTables['nodeRuns']['$inferSelect']
+type Row = ReturnType<typeof projectNodeRunReadFacts>
 
 const ACTIVE = { content: 'x', active: true }
 const INACTIVE = { content: 'reason text', active: false }
@@ -77,7 +79,7 @@ describe('RFC-306 D10 — a skip is reversible, not terminal', () => {
       shardKey: null,
       wrapperProgressJson: null,
 
-      seq: null,
+      seq: ++fixtureRunSequence,
       id: '01A',
       status: 'skipped',
       consumedUpstreamRunsJson: null,

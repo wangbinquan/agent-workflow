@@ -1,39 +1,54 @@
+import { compareAndWriteNodeRunInTx } from './nodeRunWriteProtocol'
+import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
+import { taskAggregateWrite } from './taskDefinitionWriteParticipant'
+import { resolveTaskExecutionGenerationInTx } from './taskExecutionGeneration'
+import type { HistoryRestrictionPort } from '@/platform/contracts/historyRestriction'
+import type { NodeRunCheckpointSnapshot } from '../application/ports/nodeRunQueries'
+import { assertTaskHistoryExecutableInTx } from './taskRecoveryOperations'
+import { createRunSelectionReader } from './runSelection/table/reader'
+import { createNodeRunQueries } from './nodeRunQueries'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+import { taskReadColumns } from './taskRepositorySql'
 // RFC-349 — PostgreSQL task continuation/cascade control.  Admission, intent
 // minting and lifecycle events commit atomically; native-session fencing and
 // git rollback complete before the replacement driver can touch a workspace.
 
-import { createRunSelectionOracleSnapshot } from './runSelection/oracle/snapshot'
-import { isTaskWorkspaceUnbound } from '@agent-workflow/shared'
-import { decodeTaskRollbackCheckpoints } from './taskCheckpointCodec'
-import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+import type { WorkspacePresenceQueries } from '@/modules/source-control/public/queries'
+
 import {
-  isSingleRootRepository,
   CANCELABLE_TASK_STATUSES,
   REPO_PREP_NODE_ID,
   RESUMABLE_TASK_STATUSES,
   WorkflowDefinitionSchema,
   allowedFromStatusesForEvent,
+  isSingleRootRepository,
+  isTaskWorkspaceUnbound,
   migrateWorkflowDefinitionToLatest,
   parseTriggerContextJson,
   taskWorkspacePhase,
-  type NodeRunStatus,
   type TaskStatus,
 } from '@agent-workflow/shared'
 import { and, eq, inArray, isNotNull, isNull, sql } from 'drizzle-orm'
-import { shouldRebuildWorkspaceProfiles } from '../domain/executionIntent'
 import { ulid } from 'ulid'
-import type { WorkspacePresenceQueries } from '@/modules/source-control/public/queries'
+import { shouldRebuildWorkspaceProfiles } from '../domain/executionIntent'
 
+import { resolveTerminalWorkspacePruneDecision } from '@/modules/task-execution/infrastructure/terminalWorkspacePrune'
 import { publishCommittedEventsAfterCommit } from '@/platform/events/committed/runtime'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { assertTriggerPreflight } from '@/services/execution/triggerPreflight'
 import {
   loadRollbackTargetFrom,
   rollbackNodeRunWorktrees,
   snapshotMissingDetail,
 } from '@/services/nodeRollback'
+import { reserveTaskReviewMutationSlot } from '@/services/reviewMutationCoordinator'
 import { ConflictError, DomainError, NotFoundError, ValidationError } from '@/util/errors'
 import { createLogger } from '@/util/log'
 import { killStaleRunProcessTree, type StaleRunKillOutcome } from '@/util/process'
+import type {
+  RepositoryPreparationStepOutcome,
+  TaskDriveContext,
+} from '../application/drive/taskDriveCoordinator'
 import {
   TASK_RESUME_FAILURE,
   type TaskDriveCoordinatorFactory,
@@ -43,45 +58,27 @@ import {
   type TaskDriveCompletionMode,
 } from '../application/drive/taskDriveTypes'
 import type { RuntimeSessionLeaseOperations } from '../application/ports/runtimeSessionLeaseOperations'
-import type { ChildTaskLifecycleParticipant } from '../application/ports/taskExecutionRuntimeParticipants'
 import type { TaskExecutionPersistence } from '../application/ports/taskExecutionPersistence'
+import type {
+  ActiveTaskExecutionParticipant,
+  ChildTaskLifecycleParticipant,
+} from '../application/ports/taskExecutionRuntimeParticipants'
 import type { TaskExecutionTopologyLogger } from '../application/ports/taskExecutionTopology'
+import { selectResumeRollbackTargets } from '../application/resumeRollbackTargets'
 import type { ProviderTaskExecutionModule } from '../composition'
 import { taskStopProjection, type ResourceReapStopCause } from '../domain/sourceTermination'
-import { DrizzleTaskRollbackQueries } from './taskRollbackQueries'
+import { assertTaskOwnerlessTx } from './ownedTaskExecution'
 import { submitTaskContinuation } from './taskContinuationAdmission'
 import { terminalizeTaskExecutionIntentsInTx } from './taskExecutionIntentTerminalPersistence'
-import { withSerializableTaskExecution } from './taskLifecycleTransaction'
-import { assertTaskOwnerlessTx } from './ownedTaskExecution'
 import { appendTaskLifecycleTransitionCommittedEvent } from './taskLifecycleCommittedEvents'
-import { selectResumeRollbackTargets } from '../application/resumeRollbackTargets'
-import { resolveTerminalWorkspacePruneDecision } from '@/modules/task-execution/infrastructure/terminalWorkspacePrune'
-import { reserveTaskReviewMutationSlot } from '@/services/reviewMutationCoordinator'
-import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import type { ActiveTaskExecutionParticipant } from '../application/ports/taskExecutionRuntimeParticipants'
-import type {
-  TaskDriveContext,
-  RepositoryPreparationStepOutcome,
-} from '../application/drive/taskDriveCoordinator'
+import { withSerializableTaskExecution } from './taskLifecycleTransaction'
+import { DrizzleTaskRollbackQueries } from './taskRollbackQueries'
 
 const NODE_CANCELABLE_STATUSES = allowedFromStatusesForEvent({ kind: 'mark-canceled' })
 
 const log = createLogger('task-execution.postgresql-child-lifecycle')
 
-type ResumeRun = Readonly<{
-  id: string
-  seq: number | null
-  nodeId: string
-  status: NodeRunStatus
-  parentNodeRunId: string | null
-  childTaskId: string | null
-  preSnapshot: string | null
-  preSnapshotReposJson: string | null
-  pid: number | null
-  startedAt: number | null
-  spawnBinaryPath: string | null
-  spawnLaunchNonce: string | null
-}>
+type ResumeRun = NodeRunCheckpointSnapshot
 
 type ResumeTask = Readonly<{
   id: string
@@ -123,6 +120,7 @@ export interface ChildTaskLifecycleRuntimePorts {
 }
 
 export interface ChildTaskLifecycleDependencies extends ChildTaskLifecycleRuntimePorts {
+  readonly historyRestrictions: HistoryRestrictionPort
   readonly workspacePresence: WorkspacePresenceQueries
   readonly db: PersistenceDb
   readonly persistence: TaskExecutionPersistence
@@ -176,6 +174,7 @@ export interface TaskCancelOptions {
 }
 
 export interface TaskResumeDependencies {
+  readonly historyRestrictions: HistoryRestrictionPort
   readonly workspacePresence: WorkspacePresenceQueries
   readonly db: PersistenceDb
   readonly persistence: TaskExecutionPersistence
@@ -256,11 +255,11 @@ async function loadResumeTask(db: PersistenceDb, taskId: string): Promise<Resume
         status: tasks.status,
         lifecycleEventRevision: tasks.lifecycleEventRevision,
         parentTaskId: tasks.parentTaskId,
-        parentNodeRunId: tasks.parentNodeRunId,
-        workflowSnapshot: tasks.workflowSnapshot,
-        refClosureJson: tasks.refClosureJson,
-        triggerContextJson: tasks.triggerContextJson,
-        worktreePath: tasks.worktreePath,
+        parentNodeRunId: taskReadColumns(db).parentNodeRunId,
+        workflowSnapshot: taskReadColumns(db).workflowSnapshot,
+        refClosureJson: taskReadColumns(db).refClosureJson,
+        triggerContextJson: taskReadColumns(db).triggerContextJson,
+        worktreePath: taskReadColumns(db).worktreePath,
         workspacePruningAt: tasks.workspacePruningAt,
         workspacePrunedAt: tasks.workspacePrunedAt,
         sourceTerminationFence: tasks.sourceTerminationFence,
@@ -291,6 +290,7 @@ async function assertResumeBusinessAdmission(
   }
   if (task.parentTaskId !== null && task.parentNodeRunId !== null) {
     const { nodeRuns } = tablesOf(dependencies.db)
+
     const parent = (
       await dependencies.db
         .select({ status: nodeRuns.status })
@@ -328,6 +328,7 @@ async function assertResumeAdmission(
   await assertResumeBusinessAdmission(dependencies, task)
 
   const { nodeRuns } = tablesOf(dependencies.db)
+
   const hasRepoPrepRow =
     (
       await dependencies.db
@@ -405,12 +406,19 @@ async function admitResume(
   const intentId = command?.intentId ?? ulid()
   const now = Date.now()
   const result = await withSerializableTaskExecution(dependencies.db, async (tx) => {
+    await assertTaskHistoryExecutableInTx(tx, dependencies.historyRestrictions, 'resume', task.id)
     if (command) {
       await command.assertCurrent(tx)
       const previous = await readResumeIntent(tx, task.id, intentId)
       if (previous) return { prepared: previous, eventRefs: [] }
     }
     await assertTaskOwnerlessTx(tx, task.id)
+    await taskAggregateWrite.lockTaskAggregateRoot(tx, task.id)
+    await resolveTaskExecutionGenerationInTx(tx, task.id, {
+      kind: 'operation',
+      cause: 'resume',
+      operationRef: intentId,
+    })
     const { tasks } = tablesOf(tx)
     const changed = await tx
       .update(tasks)
@@ -575,35 +583,17 @@ async function rollbackForResume(
   if (rollbackTarget === null) {
     throw new NotFoundError('task-not-found', `task '${input.taskId}' not found`)
   }
-  const { nodeRuns, runtimeSessionLeases } = tablesOf(dependencies.db)
-  const rows = await dependencies.db
-    .select({
-      id: nodeRuns.id,
-      seq: nodeRuns.seq,
-      nodeId: nodeRuns.nodeId,
-      status: nodeRuns.status,
-      parentNodeRunId: nodeRuns.parentNodeRunId,
-      childTaskId: nodeRuns.childTaskId,
-      preSnapshot: nodeRuns.preSnapshot,
-      preSnapshotReposJson: nodeRuns.preSnapshotReposJson,
-      pid: nodeRuns.pid,
-      startedAt: nodeRuns.startedAt,
-      spawnBinaryPath: nodeRuns.spawnBinaryPath,
-      spawnLaunchNonce: nodeRuns.spawnLaunchNonce,
-    })
-    .from(nodeRuns)
-    .where(eq(nodeRuns.taskId, input.taskId))
-  const runs: readonly ResumeRun[] = rows.map((row) => ({
-    ...row,
-    status: row.status as NodeRunStatus,
-  }))
-  const rollbackRuns = await selectResumeRollbackTargets(
-    runs,
-    createRunSelectionOracleSnapshot(
-      runs.map((run) => ({ ...run, taskId: input.taskId })),
-      { scope: { kind: 'rows' } },
-    ),
-    input.taskId,
+  const { runtimeSessionLeases } = tablesOf(dependencies.db)
+  const { runs, rollbackRuns } = await databaseSessionFor(dependencies.db).snapshotRead(
+    async (tx) => {
+      const runs = await createNodeRunQueries(tx).listWithCheckpoints({ taskId: input.taskId })
+      const rollbackRuns = await selectResumeRollbackTargets(
+        runs,
+        createRunSelectionReader(tx),
+        input.taskId,
+      )
+      return { runs, rollbackRuns }
+    },
   )
 
   // Held native sessions are fenced even when their run is not one of the
@@ -641,10 +631,7 @@ async function rollbackForResume(
   for (const run of rollbackRuns) {
     const outcome = await rollbackNodeRunWorktrees(
       rollbackTarget,
-      decodeTaskRollbackCheckpoints(
-        run,
-        rollbackTarget.repos.map((repo) => repo.mountPath),
-      ),
+      run.rollback,
       { checkOnly: true },
       log,
     )
@@ -671,15 +658,7 @@ async function rollbackForResume(
     }
   }
   for (const run of rollbackRuns) {
-    const outcome = await rollbackNodeRunWorktrees(
-      rollbackTarget,
-      decodeTaskRollbackCheckpoints(
-        run,
-        rollbackTarget.repos.map((repo) => repo.mountPath),
-      ),
-      {},
-      log,
-    )
+    const outcome = await rollbackNodeRunWorktrees(rollbackTarget, run.rollback, {}, log)
     const missing = snapshotMissingDetail(outcome)
     if (missing !== null) {
       await markUnsafeResume(dependencies, {
@@ -741,7 +720,7 @@ export async function cancelTaskProjection(
   const pruneSource = (
     await dependencies.db
       .select({
-        spaceKind: tasks.spaceKind,
+        spaceKind: taskReadColumns(dependencies.db).spaceKind,
         workspacePruningAt: tasks.workspacePruningAt,
         workspacePruneCause: tasks.workspacePruneCause,
         workspacePrunedAt: tasks.workspacePrunedAt,
@@ -789,7 +768,10 @@ export async function cancelTaskProjection(
 
   async function runCancelTransaction() {
     return await withSerializableTaskExecution(dependencies.db, async (tx) => {
-      const { tasks, taskExecutionOwners, nodeRuns } = tablesOf(tx)
+      const { taskExecutionOwners } = tablesOf(tx)
+      const { nodeRuns } = tablesOf(tx)
+
+      const { tasks } = tablesOf(tx)
       const task = (
         await tx
           .select({
@@ -892,15 +874,18 @@ export async function cancelTaskProjection(
       if (changed[0] === undefined) {
         throw new ConflictError('task-cancel-raced', `task '${taskId}' changed`)
       }
+      // The owner fence and task root above serialize cancellation with mint/selection writes.
       const canceledRuns = await tx
-        .update(nodeRuns)
-        .set({
+        .select({ id: nodeRuns.id, nodeId: nodeRuns.nodeId, status: nodeRuns.status })
+        .from(nodeRuns)
+        .where(and(eq(nodeRuns.taskId, taskId), inArray(nodeRuns.status, NODE_CANCELABLE_STATUSES)))
+      for (const run of canceledRuns) {
+        await compareAndWriteNodeRunInTx(tx, run.id, eq(nodeRuns.status, run.status), {
           status: 'canceled',
           finishedAt: now,
           errorMessage: projection.code,
         })
-        .where(and(eq(nodeRuns.taskId, taskId), inArray(nodeRuns.status, NODE_CANCELABLE_STATUSES)))
-        .returning({ id: nodeRuns.id, nodeId: nodeRuns.nodeId })
+      }
       await terminalizeTaskExecutionIntentsInTx(tx, {
         taskId,
         state: 'canceled',
@@ -1011,6 +996,7 @@ export function createChildTaskLifecycleParticipant(
       await resumeTaskProjection(
         {
           db: dependencies.db,
+          historyRestrictions: dependencies.historyRestrictions,
           persistence: dependencies.persistence,
           runtimeSessionLeases: dependencies.runtimeSessionLeases,
           workspacePresence: dependencies.workspacePresence,
@@ -1065,6 +1051,12 @@ export async function prepareResumeTaskProjection(
     if (command.intentId.length === 0 || command.intentId.length > 256)
       throw new ConflictError('resume-command-conflict', 'resume command identity is invalid')
     const previous = await withSerializableTaskExecution(dependencies.db, async (tx) => {
+      await assertTaskHistoryExecutableInTx(
+        tx,
+        dependencies.historyRestrictions,
+        'resume',
+        input.taskId,
+      )
       await command.assertCurrent(tx)
       return readResumeIntent(tx, input.taskId, command.intentId)
     })

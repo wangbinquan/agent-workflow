@@ -1,3 +1,4 @@
+import { initializeTaskWorkspace } from './helpers/taskWorkspaceFixture'
 // RFC-145 T3 — 写侧正向声明：runner 在 stamp 点落 failure_code。
 //
 // 为什么这条测试存在：failure_code 的产出从「scheduler 反解 errorMessage 前缀」
@@ -11,14 +12,12 @@ import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { runTaskWithRealTestTopology as runTask } from './helpers/taskExecutionTestTopology'
-
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 interface Harness {
   db: DbClient
@@ -31,7 +30,7 @@ interface Harness {
 function buildHarness(): Harness {
   const appHome = mkdtempSync(join(tmpdir(), 'aw-rfc145-write-'))
   const worktreePath = join(appHome, 'wt')
-  mkdirSync(worktreePath, { recursive: true }) // 非 git → passthrough iso，聚焦 runner
+  initializeTaskWorkspace(worktreePath)
   const mockPath = join(appHome, 'mock-opencode.ts')
   // agent 只输出普通文本、无任何信封 → runner 判 envelope-missing。
   writeFileSync(
@@ -43,7 +42,7 @@ process.exit(0)
 `,
   )
   return {
-    db: createInMemoryDb(MIGRATIONS),
+    db: createInMemoryDb(),
     appHome,
     worktreePath,
     mockPath,

@@ -126,9 +126,13 @@ describe('RFC-287 T8 — 取行前奏单一实现 + 四线×五项差异矩阵',
     // 正向：收编函数里各有且仅有一处（RFC-369 起 pending 候选还要排除已被同帧更新一代取代的行）。
     expect(
       RUN_ROW_RESOLVER.match(
-        /const pending = \(await input\.selection\.slotHistory\(input\.taskId, slot, \{ statusIn: \['pending'\] \}\)\)\s*\.filter\(\(row\) => !superseded\.has\(row\.id\)\)/g,
+        /await reader\.selection\.slotHistory\(input\.taskId, slot, \{\s*statusIn: \['pending'\],\s*executableOnly: true,?\s*\}\)/g,
       ),
     ).toHaveLength(1)
+    expect(RUN_ROW_RESOLVER).toContain('input.projections.snapshotRead(')
+    expect(RUN_ROW_RESOLVER).toContain(
+      'snapshot.pending.filter((row) => row.structurallySuperseded)',
+    )
     expect(`${SCHEDULER}\n${NODE_MECHANICS}`).not.toContain('!superseded.has(row.id)')
     expect(RUN_ROW_RESOLVER.split('cause: schedulerMintCause(').length - 1).toBe(1)
   })

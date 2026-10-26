@@ -7,7 +7,7 @@ import { registerProviderHttpApplicationLifetime } from './helpers/providerHttpA
 import { afterEach, expect, test } from 'bun:test'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { createInMemoryDb } from '@/db/client'
 import { createSecretBoxFromKey } from '@/auth/secretBox'
 import { composeSystemOperationsWithRecoveryAdapter } from '@/modules/system-operations/composition'
@@ -25,7 +25,7 @@ afterEach(() => {
 async function setup(standby = false) {
   const appHome = mkdtempSync(join(tmpdir(), 'rfc370-backup-http-'))
   cleanup.push(() => rmSync(appHome, { recursive: true, force: true }))
-  const db = createInMemoryDb(resolve(import.meta.dirname, '../db/migrations'))
+  const db = createInMemoryDb()
   const backupId = crypto.randomUUID()
   const calls: unknown[] = []
   const unused = (): never => {

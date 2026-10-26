@@ -27,7 +27,7 @@ async function enableCollaborationCutover(db: PersistenceDb): Promise<void> {
   const { committedEventFamilyCutovers } = tablesOf(db)
   await db
     .update(committedEventFamilyCutovers)
-    .set({ mode: 'dispatchable', epoch: 2, changedAt: Date.now(), changeRef: 'test-harness' })
+    .set({ epoch: 2, changedAt: Date.now(), changeRef: 'test-harness' })
     .where(
       and(
         eq(committedEventFamilyCutovers.producer, 'collaboration'),

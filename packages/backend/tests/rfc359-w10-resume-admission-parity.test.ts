@@ -1,3 +1,5 @@
+import { taskReadColumns } from '@/modules/task-execution/infrastructure/taskRepositorySql'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 // RFC-359 AC-1（第 9 刀第 2 步）—— **`resume` 的准入面，两个引擎给同一个答案吗**。
 //
 // 为什么这条测试存在
@@ -35,19 +37,19 @@
 //     ——顺带证明 SQLite 侧独立地有这道门、而且报同一个码。
 //   · 把 SQLite 的 `resumeKick` 里那句 `await assertChildTaskDrivable(...)` 拿掉
 //     ⇒ **只有 sqlite lane 的 C 红**，postgresql lane 全绿。
-import { nodeRunFixture, taskFixture, workflowFixture } from './helpers/model'
+
 import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, expect, test } from 'bun:test'
+import { eq } from 'drizzle-orm'
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
+import { nodeRunFixture, taskFixture, workflowFixture } from './helpers/model'
 
-import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { runGit } from '@/util/git'
+import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 import { describeEachProvider } from './helpers/eachProvider'
 import { createEachProviderTaskExecution } from './helpers/eachProviderTaskExecution'
 
@@ -254,7 +256,13 @@ async function resumeOutcome(
     code = codeOf(error)
   }
   const { tasks } = tablesOf(harness.db)
-  const after = (await harness.db.select().from(tasks).where(eq(tasks.id, target)).limit(1))[0]
+  const after = (
+    await harness.db
+      .select(taskReadColumns(harness.db))
+      .from(tasks)
+      .where(eq(tasks.id, target))
+      .limit(1)
+  )[0]
   return { code, status: after?.status ?? 'absent' }
 }
 

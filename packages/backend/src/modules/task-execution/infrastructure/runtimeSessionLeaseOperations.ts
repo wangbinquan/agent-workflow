@@ -6,16 +6,21 @@ import { and, eq, inArray, isNotNull, isNull } from 'drizzle-orm'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import type { EngineCapabilities } from '@/platform/persistence/capabilities'
-import type {
-  RuntimeSessionLeaseOperations,
-  RuntimeSessionLeaseToken,
+import {
+  type RuntimeSessionLeaseOperations,
+  type RuntimeSessionLeaseToken,
+  RuntimeSessionLeaseError,
 } from '../application/ports/runtimeSessionLeaseOperations'
-import { RuntimeSessionLeaseError } from '../application/ports/runtimeSessionLeaseOperations'
+
 import {
   fenceTaskWrite,
   withTaskExecutionSerializable,
   type TaskExecutionTransaction,
 } from './ownedTaskExecution'
+
+import { compareAndWriteRunSessionInTx } from './nodeRunWriteProtocol'
+
+import { taskAggregateWrite } from './taskDefinitionWriteParticipant'
 
 const TERMINAL = new Set<string>(TERMINAL_NODE_RUN_STATUSES)
 
@@ -39,6 +44,7 @@ function constraintViolation(engine: EngineCapabilities, error: unknown): boolea
 /** 按「当前执行上下文 > 无主」为一次租约写入选围栏（与其余 owned 写手同一份 `fenceTaskWrite`）。 */
 async function fence(tx: TaskExecutionTransaction, taskId: string, now: number): Promise<void> {
   await fenceTaskWrite(tx, { taskId, now })
+  await taskAggregateWrite.lockTaskAggregateRoot(tx, taskId)
 }
 
 export function createRuntimeSessionLeaseOperations(
@@ -65,17 +71,19 @@ export function createRuntimeSessionLeaseOperations(
       try {
         return await withTaskExecutionSerializable(db, async (tx) => {
           await fence(tx, input.taskId, input.leasedAt)
-          const { nodeRuns, runtimeSessionLeases } = tablesOf(tx)
+          const { runtimeSessionLeases } = tablesOf(tx)
+          const { nodeRuns, nodeRunRuntimeStates } = tablesOf(tx)
           const runs = await tx
             .select({ id: nodeRuns.id })
             .from(nodeRuns)
+            .leftJoin(nodeRunRuntimeStates, eq(nodeRunRuntimeStates.nodeRunId, nodeRuns.id))
             .where(
               and(
                 eq(nodeRuns.id, input.currentNodeRunId),
                 eq(nodeRuns.taskId, input.taskId),
                 eq(nodeRuns.nodeId, input.nodeId),
                 eq(nodeRuns.status, 'running'),
-                isNull(nodeRuns.opencodeSessionId),
+                isNull(nodeRunRuntimeStates.sessionId),
               ),
             )
             .limit(1)
@@ -92,10 +100,16 @@ export function createRuntimeSessionLeaseOperations(
             leasedAt: input.leasedAt,
             resetPending: false,
           })
-          await tx
-            .update(nodeRuns)
-            .set({ opencodeSessionId: input.sessionId })
-            .where(eq(nodeRuns.id, input.currentNodeRunId))
+          if (
+            !(await compareAndWriteRunSessionInTx(
+              tx,
+              input.currentNodeRunId,
+              null,
+              input.sessionId,
+              { taskId: input.taskId, nodeId: input.nodeId, status: 'running' },
+            ))
+          )
+            fail('run-not-claimable')
           const token: RuntimeSessionLeaseToken = {
             protocol: input.protocol,
             sessionId: input.sessionId,
@@ -114,7 +128,8 @@ export function createRuntimeSessionLeaseOperations(
     async preclaimResume(input) {
       return await withTaskExecutionSerializable(db, async (tx) => {
         await fence(tx, input.taskId, input.leasedAt)
-        const { runtimeSessionLeases, nodeRuns } = tablesOf(tx)
+        const { runtimeSessionLeases } = tablesOf(tx)
+        const { nodeRuns, nodeRunRuntimeStates } = tablesOf(tx)
         const owners = await tx
           .select()
           .from(runtimeSessionLeases)
@@ -133,13 +148,14 @@ export function createRuntimeSessionLeaseOperations(
         const runs = await tx
           .select({ id: nodeRuns.id })
           .from(nodeRuns)
+          .leftJoin(nodeRunRuntimeStates, eq(nodeRunRuntimeStates.nodeRunId, nodeRuns.id))
           .where(
             and(
               eq(nodeRuns.id, input.currentNodeRunId),
               eq(nodeRuns.taskId, input.taskId),
               eq(nodeRuns.nodeId, input.nodeId),
               eq(nodeRuns.status, 'running'),
-              isNull(nodeRuns.opencodeSessionId),
+              isNull(nodeRunRuntimeStates.sessionId),
             ),
           )
           .limit(1)
@@ -175,7 +191,7 @@ export function createRuntimeSessionLeaseOperations(
 
     async confirmResume(token) {
       return await withTaskExecutionSerializable(db, async (tx) => {
-        const { runtimeSessionLeases, nodeRuns } = tablesOf(tx)
+        const { runtimeSessionLeases } = tablesOf(tx)
         const owners = await tx
           .select({ taskId: runtimeSessionLeases.taskId, nodeId: runtimeSessionLeases.nodeId })
           .from(runtimeSessionLeases)
@@ -191,27 +207,19 @@ export function createRuntimeSessionLeaseOperations(
         const owner = owners[0]
         if (owner === undefined) fail('lease-mismatch')
         await fence(tx, owner.taskId, Date.now())
-        const linked = await tx
-          .update(nodeRuns)
-          .set({ opencodeSessionId: token.sessionId })
-          .where(
-            and(
-              eq(nodeRuns.id, token.nodeRunId),
-              eq(nodeRuns.taskId, owner.taskId),
-              eq(nodeRuns.nodeId, owner.nodeId),
-              eq(nodeRuns.status, 'running'),
-              isNull(nodeRuns.opencodeSessionId),
-            ),
-          )
-          .returning({ id: nodeRuns.id })
-        return linked.length === 1
+        return compareAndWriteRunSessionInTx(tx, token.nodeRunId, null, token.sessionId, {
+          taskId: owner.taskId,
+          nodeId: owner.nodeId,
+          status: 'running',
+        })
       })
     },
 
     async rotate(token, nextSessionId) {
       try {
         return await withTaskExecutionSerializable(db, async (tx) => {
-          const { runtimeSessionLeases, nodeRuns, nodeRunEvents } = tablesOf(tx)
+          const { runtimeSessionLeases, nodeRunEvents } = tablesOf(tx)
+          const { nodeRuns, nodeRunRuntimeStates } = tablesOf(tx)
           const outgoingRows = await tx
             .select()
             .from(runtimeSessionLeases)
@@ -233,13 +241,14 @@ export function createRuntimeSessionLeaseOperations(
           const runs = await tx
             .select({ id: nodeRuns.id })
             .from(nodeRuns)
+            .leftJoin(nodeRunRuntimeStates, eq(nodeRunRuntimeStates.nodeRunId, nodeRuns.id))
             .where(
               and(
                 eq(nodeRuns.id, token.nodeRunId),
                 eq(nodeRuns.taskId, outgoing.taskId),
                 eq(nodeRuns.nodeId, outgoing.nodeId),
                 eq(nodeRuns.status, 'running'),
-                isNull(nodeRuns.opencodeSessionId),
+                isNull(nodeRunRuntimeStates.sessionId),
               ),
             )
             .limit(1)
@@ -278,29 +287,30 @@ export function createRuntimeSessionLeaseOperations(
             leasedAt: outgoing.leasedAt,
             resetPending: false,
           })
-          const linked = await tx
-            .update(nodeRuns)
-            .set({ opencodeSessionId: nextSessionId })
-            .where(and(eq(nodeRuns.id, token.nodeRunId), isNull(nodeRuns.opencodeSessionId)))
-            .returning({ id: nodeRuns.id })
-          if (linked.length !== 1) fail('run-not-claimable')
+          if (
+            !(await compareAndWriteRunSessionInTx(tx, token.nodeRunId, null, nextSessionId, {
+              taskId: outgoing.taskId,
+              nodeId: outgoing.nodeId,
+              status: 'running',
+            }))
+          )
+            fail('run-not-claimable')
 
           const lineageRows = await tx
             .select({ id: nodeRuns.id })
             .from(nodeRuns)
+            .leftJoin(nodeRunRuntimeStates, eq(nodeRunRuntimeStates.nodeRunId, nodeRuns.id))
             .where(
               and(
                 eq(nodeRuns.taskId, outgoing.taskId),
                 eq(nodeRuns.nodeId, outgoing.nodeId),
-                eq(nodeRuns.opencodeSessionId, token.sessionId),
+                eq(nodeRunRuntimeStates.sessionId, token.sessionId),
               ),
             )
           const lineageRunIds = lineageRows.map((row) => row.id)
-          if (lineageRunIds.length > 0) {
-            await tx
-              .update(nodeRuns)
-              .set({ opencodeSessionId: nextSessionId })
-              .where(inArray(nodeRuns.id, lineageRunIds))
+          for (const id of [...lineageRunIds].sort()) {
+            if (!(await compareAndWriteRunSessionInTx(tx, id, token.sessionId, nextSessionId)))
+              fail('run-not-claimable')
           }
 
           const eventRunIds = [...new Set([token.nodeRunId, ...lineageRunIds])]
@@ -335,7 +345,7 @@ export function createRuntimeSessionLeaseOperations(
 
     async markResetPending(token) {
       return await withTaskExecutionSerializable(db, async (tx) => {
-        const { runtimeSessionLeases, nodeRuns } = tablesOf(tx)
+        const { runtimeSessionLeases } = tablesOf(tx)
         const heldRows = await tx
           .select({
             taskId: runtimeSessionLeases.taskId,
@@ -369,20 +379,13 @@ export function createRuntimeSessionLeaseOperations(
           )
           .returning({ sessionId: runtimeSessionLeases.sessionId })
         if (fenced.length !== 1) fail('lease-mismatch')
-        const cleared = await tx
-          .update(nodeRuns)
-          .set({ opencodeSessionId: null })
-          .where(
-            and(eq(nodeRuns.id, token.nodeRunId), eq(nodeRuns.opencodeSessionId, token.sessionId)),
-          )
-          .returning({ id: nodeRuns.id })
-        return cleared.length === 1
+        return compareAndWriteRunSessionInTx(tx, token.nodeRunId, token.sessionId, null)
       })
     },
 
     async discard(token) {
       return await withTaskExecutionSerializable(db, async (tx) => {
-        const { runtimeSessionLeases, nodeRuns } = tablesOf(tx)
+        const { runtimeSessionLeases } = tablesOf(tx)
         const heldRows = await tx
           .select({ taskId: runtimeSessionLeases.taskId })
           .from(runtimeSessionLeases)
@@ -398,12 +401,6 @@ export function createRuntimeSessionLeaseOperations(
         const held = heldRows[0]
         if (held === undefined) return false
         await fence(tx, held.taskId, Date.now())
-        await tx
-          .update(nodeRuns)
-          .set({ opencodeSessionId: null })
-          .where(
-            and(eq(nodeRuns.id, token.nodeRunId), eq(nodeRuns.opencodeSessionId, token.sessionId)),
-          )
         const discarded = await tx
           .delete(runtimeSessionLeases)
           .where(
@@ -415,6 +412,7 @@ export function createRuntimeSessionLeaseOperations(
             ),
           )
           .returning({ sessionId: runtimeSessionLeases.sessionId })
+        await compareAndWriteRunSessionInTx(tx, token.nodeRunId, token.sessionId, null)
         return discarded.length === 1
       })
     },
@@ -456,7 +454,8 @@ export function createRuntimeSessionLeaseOperations(
 
     async repairAfterOrphanReap(nodeRunId) {
       let repaired = 0
-      const { runtimeSessionLeases, nodeRuns } = tablesOf(db)
+      const { runtimeSessionLeases } = tablesOf(db)
+      const { nodeRuns, nodeRunRuntimeStates } = tablesOf(db)
       const held = await db
         .select()
         .from(runtimeSessionLeases)
@@ -470,10 +469,11 @@ export function createRuntimeSessionLeaseOperations(
         const runRows = await db
           .select({
             status: nodeRuns.status,
-            sessionId: nodeRuns.opencodeSessionId,
+            sessionId: nodeRunRuntimeStates.sessionId,
             failureCode: nodeRuns.failureCode,
           })
           .from(nodeRuns)
+          .leftJoin(nodeRunRuntimeStates, eq(nodeRunRuntimeStates.nodeRunId, nodeRuns.id))
           .where(eq(nodeRuns.id, lease.leaseNodeRunId))
           .limit(1)
         const run = runRows[0]

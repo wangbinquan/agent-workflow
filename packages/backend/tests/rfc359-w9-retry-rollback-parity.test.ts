@@ -1,3 +1,5 @@
+import { taskReadColumns } from '@/modules/task-execution/infrastructure/taskRepositorySql'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 // RFC-359 AC-1（第 9 刀第 1 步）—— **retry 的回滚基线判据，两个引擎给同一个答案吗**。
 //
 // 为什么这条测试存在
@@ -25,6 +27,14 @@
 //   · 把 SQLite 的 `escalateSnapshotLost` 的 `errorSummary` 改成别的字符串 ⇒ SQLite lane 红；
 //   · 把 PG 的 `escalateUnsafeContinuation` 的 `errorSummary` 改成别的字符串 ⇒ PostgreSQL lane 红。
 //     后两条证明本条确实有预言力，不是「因为都没跑到所以都绿」。
+
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { afterEach, expect, test } from 'bun:test'
+import { eq } from 'drizzle-orm'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { ulid } from 'ulid'
 import {
   nodeRunFixture,
   patchNodeRunFixture,
@@ -33,15 +43,9 @@ import {
   taskFixture,
   workflowFixture,
 } from './helpers/model'
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
-import { afterEach, expect, test } from 'bun:test'
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
-import { eq } from 'drizzle-orm'
-import { ulid } from 'ulid'
 
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
+import { runGit } from '@/util/git'
 import {
   NODE_KIND_BEHAVIORS,
   nodeKindParticipatesInRetryCascade,
@@ -49,11 +53,9 @@ import {
   type WorkflowDefinition,
   type WorkflowNode,
 } from '@agent-workflow/shared'
-import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { runGit } from '@/util/git'
 import { describeEachProvider } from './helpers/eachProvider'
-import { minimalNodeOfKind } from './helpers/nodeKindFixtures'
 import { createEachProviderTaskExecution } from './helpers/eachProviderTaskExecution'
+import { minimalNodeOfKind } from './helpers/nodeKindFixtures'
 
 /** 良构但**任何对象库里都不存在**的 sha——被 gc 剪掉的快照的确定性替身。 */
 const PRUNED_SNAPSHOT = 'deadbeef'.repeat(5)
@@ -253,7 +255,11 @@ describeEachProvider('RFC-359 W9 —— retry 撞上已丢的 pre_snapshot', (ha
     }
     const { tasks } = tablesOf(harness.db)
     const after = (
-      await harness.db.select().from(tasks).where(eq(tasks.id, fixture.taskId)).limit(1)
+      await harness.db
+        .select(taskReadColumns(harness.db))
+        .from(tasks)
+        .where(eq(tasks.id, fixture.taskId))
+        .limit(1)
     )[0]
 
     expect({ code, status: after?.status, errorSummary: after?.errorSummary }).toEqual({
@@ -400,7 +406,11 @@ describeEachProvider('RFC-359 W9 —— retry 的不级联 / 帧继承 / 任务�
       cascade: true,
     })
     const after = (
-      await harness.db.select().from(tasks).where(eq(tasks.id, fixture.taskId)).limit(1)
+      await harness.db
+        .select(taskReadColumns(harness.db))
+        .from(tasks)
+        .where(eq(tasks.id, fixture.taskId))
+        .limit(1)
     )[0]
     expect({
       status: after?.status,
@@ -441,7 +451,11 @@ describeEachProvider('RFC-359 W9 —— retry 的 nodeRunId 归属门早于 CAS'
     })
     const { tasks } = tablesOf(harness.db)
     const before = (
-      await harness.db.select().from(tasks).where(eq(tasks.id, fixture.taskId)).limit(1)
+      await harness.db
+        .select(taskReadColumns(harness.db))
+        .from(tasks)
+        .where(eq(tasks.id, fixture.taskId))
+        .limit(1)
     )[0]
     const execution = await executionFor(harness, fixture)
     let code = 'no-throw'
@@ -460,7 +474,11 @@ describeEachProvider('RFC-359 W9 —— retry 的 nodeRunId 归属门早于 CAS'
       code = typeof value === 'string' ? value : `no-code:${String(error)}`
     }
     const after = (
-      await harness.db.select().from(tasks).where(eq(tasks.id, fixture.taskId)).limit(1)
+      await harness.db
+        .select(taskReadColumns(harness.db))
+        .from(tasks)
+        .where(eq(tasks.id, fixture.taskId))
+        .limit(1)
     )[0]
 
     expect(code).toBe('node-run-not-found')
@@ -506,10 +524,18 @@ describeEachProvider('RFC-359 W9 —— retry 的 nodeRunId 归属门早于 CAS'
     }
     const { tasks } = tablesOf(harness.db)
     const mine = (
-      await harness.db.select().from(tasks).where(eq(tasks.id, fixture.taskId)).limit(1)
+      await harness.db
+        .select(taskReadColumns(harness.db))
+        .from(tasks)
+        .where(eq(tasks.id, fixture.taskId))
+        .limit(1)
     )[0]
     const theirs = (
-      await harness.db.select().from(tasks).where(eq(tasks.id, other.taskId)).limit(1)
+      await harness.db
+        .select(taskReadColumns(harness.db))
+        .from(tasks)
+        .where(eq(tasks.id, other.taskId))
+        .limit(1)
     )[0]
     other.cleanup()
 
@@ -701,7 +727,11 @@ describeEachProvider('RFC-359 W9 —— 级联取消撞上已终态的子任务'
       code = typeof value === 'string' ? value : `no-code:${String(error)}`
     }
     const after = (
-      await harness.db.select().from(tasks).where(eq(tasks.id, parent.taskId)).limit(1)
+      await harness.db
+        .select(taskReadColumns(harness.db))
+        .from(tasks)
+        .where(eq(tasks.id, parent.taskId))
+        .limit(1)
     )[0]
     expect({ code, status: after?.status, summary: after?.errorSummary }).toEqual({
       code: 'no-throw',

@@ -1082,6 +1082,19 @@ describeEachProvider('RFC-238 MCP runtime test service', (harness) => {
       expect((await service.get(actor, mcp.id, replacement.sessionId)).inFlightTurnId).toBeNull()
       expect(runs).toBe(2)
       expect((await service.get(actor, mcp.id, replacement.sessionId)).status).toBe('active')
+      const { mcpRuntimeTestSessionLeases } = tablesOf(db)
+      expect(
+        await db
+          .select()
+          .from(mcpRuntimeTestSessionLeases)
+          .where(eq(mcpRuntimeTestSessionLeases.testSessionId, created.sessionId)),
+      ).toEqual([])
+      expect(
+        await db
+          .select()
+          .from(mcpRuntimeTestTurns)
+          .where(eq(mcpRuntimeTestTurns.sessionId, created.sessionId)),
+      ).toEqual([])
     } finally {
       await service.dispose(2000)
     }

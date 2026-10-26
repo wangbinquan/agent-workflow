@@ -1,3 +1,5 @@
+import { nodeRunReadColumns } from './nodeRunQueries'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 // RFC-350 —— 不活跃超时收割的持久化实现。
 //
 // **一份实现，两个 provider 共用**（RFC-359 W4-B1 起两个 provider 具名工厂只是
@@ -18,9 +20,9 @@
 //     `idx_events_node(node_run_id, id)` 一行就停，后者要扫完该 run 的全部事件行
 //     （单个 run 有几万行事件是常态）。id 单调递增，两者取到的是同一行。
 
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
 import { first } from '@/platform/persistence/queryHelpers'
+
+import { insertOne } from '@/platform/persistence/singleInsert'
 import { and, desc, eq, inArray, isNotNull, isNull } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
@@ -34,16 +36,16 @@ import {
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 
 import { bumpRecoveryCounter } from '@/services/recovery'
-import { chunkedAll } from '@/util/sqlChunk'
 import { createLogger } from '@/util/log'
+import { chunkedAll } from '@/util/sqlChunk'
 
-import type { TaskActivityRecord } from '../domain/idleTimeoutPolicy'
 import type {
   IdleTimeoutAuditRecord,
   IdleTimeoutRunSnapshot,
   IdleTimeoutTreeSnapshot,
   TaskIdleTimeoutPersistence,
 } from '../application/ports/taskIdleTimeoutPersistence'
+import type { TaskActivityRecord } from '../domain/idleTimeoutPolicy'
 
 const log = createLogger('task-idle-timeout-persistence')
 
@@ -135,15 +137,16 @@ export function createTaskIdleTimeoutPersistence(
           ? []
           : await chunkedAll(liveTaskIds, (chunk) => {
               const { nodeRuns } = tablesOf(db)
+              const nodeRunColumns = nodeRunReadColumns(db)
               return db
                 .select({
                   id: nodeRuns.id,
                   taskId: nodeRuns.taskId,
                   status: nodeRuns.status,
                   startedAt: nodeRuns.startedAt,
-                  pid: nodeRuns.pid,
-                  spawnBinaryPath: nodeRuns.spawnBinaryPath,
-                  spawnLaunchNonce: nodeRuns.spawnLaunchNonce,
+                  pid: nodeRunColumns.pid,
+                  spawnBinaryPath: nodeRunColumns.spawnBinaryPath,
+                  spawnLaunchNonce: nodeRunColumns.spawnLaunchNonce,
                 })
                 .from(nodeRuns)
                 .where(inArray(nodeRuns.taskId, chunk))

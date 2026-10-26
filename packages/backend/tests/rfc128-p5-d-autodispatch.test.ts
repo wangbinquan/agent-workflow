@@ -1,3 +1,6 @@
+import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
+import { nodeRunFixtureColumns } from './helpers/model/nodeRun'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { withO2Closure } from './helpers/o2Closure'
 // RFC-128 P5-D — quick-channel seal + AUTODISPATCH (the FINAL P5 phase).
 //
@@ -25,7 +28,7 @@ import {
   workflowFixture,
 } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+
 import { createSqliteMemoryDistillEnqueuer } from './helpers/memoryDistill'
 import { createClarifyRound } from '../src/services/clarify/service'
 import { afterAll, beforeEach, describe, expect, test } from 'bun:test'
@@ -201,7 +204,8 @@ describeEachProvider('RFC-333 clarify decision transaction', (harness) => {
       gate: { kind: 'clarify', ref: `clarify:${intermediaryNodeRunId}` },
       replayed: false,
     })
-    const { taskExecutionIntents, nodeRuns } = tablesOf(db)
+    const { taskExecutionIntents } = tablesOf(db)
+    const { nodeRuns } = tablesOf(db)
     expect((await readTaskFixtures(db, { id: taskId }))[0]).toMatchObject({
       status: 'pending',
       lifecycleEventRevision: decided.receipt.taskRevision,
@@ -219,15 +223,18 @@ describeEachProvider('RFC-333 clarify decision transaction', (harness) => {
       kind: 'gate-continuation',
       state: 'pending',
     })
-    const runCount = (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))).length
+    const runCount = (
+      await db.select(nodeRunFixtureColumns(db)).from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
+    ).length
 
     const replay = await autoDispatchClarifyRoundWithDecision(withO2Closure(command))
     expect(replay.receipt).toEqual({ ...decided.receipt, replayed: true })
     expect(replay.dispatch).toEqual(decided.dispatch)
     expect(await db.select().from(taskExecutionIntents)).toHaveLength(1)
-    expect((await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))).length).toBe(
-      runCount,
-    )
+    expect(
+      (await db.select(nodeRunFixtureColumns(db)).from(nodeRuns).where(eq(nodeRuns.taskId, taskId)))
+        .length,
+    ).toBe(runCount)
 
     await expect(
       autoDispatchClarifyRoundWithDecision(
@@ -264,8 +271,8 @@ describeEachProvider('RFC-333 clarify decision transaction', (harness) => {
         idempotencyKey: command.decision.idempotencyKey,
       }),
     ).rejects.toThrow('rfc341-commit-edge-fault')
-    const { collaborationGateOperations, taskExecutionIntents, taskQuestions, nodeRuns } =
-      tablesOf(db)
+    const { collaborationGateOperations, taskExecutionIntents, taskQuestions } = tablesOf(db)
+    const { nodeRuns } = tablesOf(db)
     const operation = (
       await db
         .select()
@@ -296,21 +303,29 @@ describeEachProvider('RFC-333 clarify decision transaction', (harness) => {
     const context = {
       taskId,
       intentKind: claimed.intentKind,
-      execution: createTaskExecutionContext({ intentId: intent.id, token: claimed.token, db }),
+      execution: createTaskExecutionContext({
+        historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
+        intentId: intent.id,
+        token: claimed.token,
+        db,
+      }),
       signal: new AbortController().signal,
       runtime: resolveTaskDriveConfig({ appHome: '/tmp/rfc341-clarify-convergence' }),
     }
     const step = createGateContinuationPreDriveStep({
+      historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
       db,
       memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
     })
     await expect(step.run(context)).resolves.toEqual({ kind: 'ready' })
-    const firstRunCount = (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId)))
-      .length
+    const firstRunCount = (
+      await db.select(nodeRunFixtureColumns(db)).from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
+    ).length
     await expect(step.run(context)).resolves.toEqual({ kind: 'ready' })
-    expect((await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))).length).toBe(
-      firstRunCount,
-    )
+    expect(
+      (await db.select(nodeRunFixtureColumns(db)).from(nodeRuns).where(eq(nodeRuns.taskId, taskId)))
+        .length,
+    ).toBe(firstRunCount)
 
     const finished = await finishCommittedClarifyAutoDispatch({
       db,
@@ -361,6 +376,7 @@ describeEachProvider('RFC-333 clarify decision transaction', (harness) => {
     const claimed = await module.claim({ db, intentId: intent.id })
     module.claimGate.leave(claimed.permit)
     const step = createGateContinuationPreDriveStep({
+      historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
       db,
       memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
     })
@@ -368,7 +384,12 @@ describeEachProvider('RFC-333 clarify decision transaction', (harness) => {
       step.run({
         taskId,
         intentKind: claimed.intentKind,
-        execution: createTaskExecutionContext({ intentId: intent.id, token: claimed.token, db }),
+        execution: createTaskExecutionContext({
+          historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
+          intentId: intent.id,
+          token: claimed.token,
+          db,
+        }),
         signal: new AbortController().signal,
         runtime: resolveTaskDriveConfig({ appHome: '/tmp/rfc341-clarify-convergence-fault' }),
       }),
@@ -388,9 +409,12 @@ describeEachProvider('RFC-333 clarify decision transaction', (harness) => {
     const taskId = `t_${ulid()}`
     await seedTask(db, taskId)
     const { intermediaryNodeRunId } = await seedSealableSelfRound(db, taskId, [mkQ('q1', 't')])
-    const { collaborationGateOperations, nodeRuns, taskExecutionIntents } = tablesOf(db)
+    const { collaborationGateOperations, taskExecutionIntents } = tablesOf(db)
+    const { nodeRuns } = tablesOf(db)
     const beforeOperations = (await db.select().from(collaborationGateOperations)).length
-    const beforeRuns = (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))).length
+    const beforeRuns = (
+      await db.select(nodeRunFixtureColumns(db)).from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
+    ).length
     // 注入「intent 写入必失败」的故障：两个引擎的 DDL 不同（SQLite 直接 RAISE(ABORT)，
     // PostgreSQL 要 plpgsql 触发器函数），抛出的错误文案一致，助手收了这份差异。
     // **必须在 finally 里删掉**：PostgreSQL 的库是本文件共用的真库，用例之间只清表不回滚 DDL。
@@ -427,9 +451,14 @@ describeEachProvider('RFC-333 clarify decision transaction', (harness) => {
       })
       expect(await db.select().from(taskExecutionIntents)).toHaveLength(0)
       expect((await db.select().from(collaborationGateOperations)).length).toBe(beforeOperations)
-      expect((await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))).length).toBe(
-        beforeRuns,
-      )
+      expect(
+        (
+          await db
+            .select(nodeRunFixtureColumns(db))
+            .from(nodeRuns)
+            .where(eq(nodeRuns.taskId, taskId))
+        ).length,
+      ).toBe(beforeRuns)
     } finally {
       await dropAbortTrigger(harness, trigger)
     }
@@ -542,7 +571,7 @@ async function seedSealableCrossRound(
 
 function runRow(db: PersistenceDb, id: string) {
   const { nodeRuns } = tablesOf(db)
-  return db.select().from(nodeRuns).where(eq(nodeRuns.id, id))
+  return db.select(nodeRunFixtureColumns(db)).from(nodeRuns).where(eq(nodeRuns.id, id))
 }
 function entryRow(db: PersistenceDb, id: string) {
   const { taskQuestions } = tablesOf(db)
@@ -1005,9 +1034,12 @@ describeEachProvider(
       expect((await entryRow(db, selfEntryBefore.id))[0]?.dispatchedAt).toBeNull()
       const { nodeRuns } = tablesOf(db)
       expect(
-        (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))).filter(
-          (r) => r.rerunCause === 'clarify-answer',
-        ),
+        (
+          await db
+            .select(nodeRunFixtureColumns(db))
+            .from(nodeRuns)
+            .where(eq(nodeRuns.taskId, taskId))
+        ).filter((r) => r.rerunCause === 'clarify-answer'),
       ).toHaveLength(0)
     })
   },
@@ -1039,7 +1071,7 @@ describeEachProvider(
       expect(selfEntry.dispatchedAt).not.toBeNull()
       const { nodeRuns } = tablesOf(db)
       const rerunsBefore = (
-        await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
+        await db.select(nodeRunFixtureColumns(db)).from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
       ).filter((r) => r.rerunCause === 'clarify-answer').length
       expect(rerunsBefore).toBe(1)
 
@@ -1048,7 +1080,7 @@ describeEachProvider(
       const manual = await dispatchTaskQuestions(db, taskId, [selfEntry.id], actor)
       expect(manual.reruns).toHaveLength(0)
       const rerunsAfter = (
-        await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
+        await db.select(nodeRunFixtureColumns(db)).from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
       ).filter((r) => r.rerunCause === 'clarify-answer').length
       expect(rerunsAfter).toBe(1) // still exactly one
       void res
@@ -1107,7 +1139,7 @@ describeEachProvider(
       expect(res.dispatch.reruns).toHaveLength(1)
       const { nodeRuns } = tablesOf(db)
       const clarifyReruns = (
-        await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
+        await db.select(nodeRunFixtureColumns(db)).from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
       ).filter((r) => r.rerunCause === 'clarify-answer')
       expect(clarifyReruns).toHaveLength(1) // no double-mint
     })

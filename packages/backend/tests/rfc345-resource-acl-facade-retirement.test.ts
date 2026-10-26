@@ -237,9 +237,7 @@ const FACADE_DEFINITIONS: readonly FacadeDefinition[] = [
   facade('services/skillDeleteOp.ts'),
   facade('services/skillFsPublish.ts'),
   facade('services/skillHash.ts'),
-  facade('services/skillIdentityMigration.ts'),
   facade('services/skillIdentityPaths.ts'),
-  facade('services/skillMigrateOp.ts'),
   facade('services/skillOpRecovery.ts'),
   facade('services/skillOpRecoveryDriver.ts'),
   facade('services/skillOpRegistry.ts'),
@@ -428,13 +426,6 @@ const EXACT_COMPATIBILITY_DEBT: readonly ObservedCompatibilityDebt[] = [
     ['isSkillInjectableThisBoot'],
     'task Skill boot availability',
     REMOVE_OWNERS.skillBoot,
-  ),
-  edge(
-    'services/skillIdentityMigration.ts',
-    'platform/persistence/sqlite/systemProviderRestore.ts',
-    ['runSkillIdentityMigrationBarrier'],
-    'restored-provider Skill identity migration barrier',
-    REMOVE_OWNERS.skillBootRestore,
   ),
   edge(
     'services/skillIdentityPaths.ts',

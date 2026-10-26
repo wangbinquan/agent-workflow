@@ -1,3 +1,4 @@
+import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { o2Ports } from './helpers/o2Closure'
 // RFC-108 T19 (AR-04) — closed detect→classify→auto-repair loop (default OFF).
 //
@@ -80,6 +81,7 @@ describeEachProvider('RFC-108 T19 — auto-repair loop', (harness) => {
     const db = harness.db
     const taskId = await seedTaskWithAlert(db)
     const operations = createTaskExecutionPersistence(db, {
+      historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
       recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
     }).recoveryAdministration
     const applied: string[] = []
@@ -108,6 +110,7 @@ describeEachProvider('RFC-108 T19 — auto-repair loop', (harness) => {
     const db = harness.db
     await seedTaskWithAlert(db)
     const operations = createTaskExecutionPersistence(db, {
+      historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
       recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
     }).recoveryAdministration
     let applyCalled = false
@@ -130,6 +133,7 @@ describeEachProvider('RFC-108 T19 — auto-repair loop', (harness) => {
     const db = harness.db
     await seedTaskWithAlert(db)
     const operations = createTaskExecutionPersistence(db, {
+      historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
       recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
     }).recoveryAdministration
     const res = await runAutoRepairOnce({
@@ -147,6 +151,7 @@ describeEachProvider('RFC-108 T19 — auto-repair loop', (harness) => {
     const db = harness.db
     const taskId = await seedTaskWithAlert(db)
     const operations = createTaskExecutionPersistence(db, {
+      historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
       recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
     }).recoveryAdministration
     for (let i = 0; i < 4; i++) {
@@ -167,6 +172,7 @@ describeEachProvider('RFC-108 T19 — auto-repair loop', (harness) => {
     const db = harness.db
     await seedTaskWithAlert(db)
     const operations = createTaskExecutionPersistence(db, {
+      historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
       recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
     }).recoveryAdministration
     const res = await runAutoRepairOnce({

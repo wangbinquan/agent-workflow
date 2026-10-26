@@ -1,3 +1,4 @@
+import { epoch2RuntimeTestPorts } from './epoch2RuntimePorts'
 import { o2Ports } from './o2Closure'
 import { composeRunObservationCalls } from '@/modules/run-observability/composition/runObservation'
 import {
@@ -46,6 +47,7 @@ export async function runNode(options: RunNodeOptions) {
     persistence:
       options.persistence ??
       createTaskExecutionPersistence(db, {
+        historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
         recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
       }),
     runtimeRegistry: options.runtimeRegistry ?? composeRuntimeRegistryOperations(db),

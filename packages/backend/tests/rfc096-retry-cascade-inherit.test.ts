@@ -63,12 +63,11 @@ import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopo
 import { createRetryEngine } from './helpers/retryEngine'
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { monotonicFactory } from 'ulid'
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 const ulid = monotonicFactory()
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 interface Harness {
   db: DbClient
@@ -82,7 +81,7 @@ function buildHarness(): Harness {
   const worktreePath = join(appHome, 'wt')
   mkdirSync(worktreePath, { recursive: true })
   return {
-    db: createInMemoryDb(MIGRATIONS),
+    db: createInMemoryDb(),
     appHome,
     worktreePath,
     cleanup: () => rmSync(appHome, { recursive: true, force: true }),

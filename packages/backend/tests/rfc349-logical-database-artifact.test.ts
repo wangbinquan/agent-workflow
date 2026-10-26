@@ -1,3 +1,4 @@
+// Frozen epoch-1 artifact/operation protocol; native provider moves are covered by rfc349-database-migration-coordinator.integration.
 import { afterEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -17,7 +18,7 @@ import {
   writeDurableLogicalArtifact,
   writeLogicalArtifactManifest,
   writeLogicalTableChunk,
-} from '@/platform/persistence/logicalDatabaseArtifact'
+} from '@/platform/persistence/migration/legacy/logicalDatabaseArtifact'
 import type {
   LogicalColumnContract,
   LogicalSchemaContract,

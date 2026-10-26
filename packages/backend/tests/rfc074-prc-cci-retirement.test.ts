@@ -1,3 +1,4 @@
+import { readStoredConsumedInputsFixture } from './helpers/model/checkpoint'
 // RFC-074 PR-C — cci retirement C-group (design §11.3 C1-C12).
 //
 // This suite locks the structural invariants of the clarifyIteration retirement:
@@ -29,9 +30,8 @@ import { sql } from 'drizzle-orm'
 import { createInMemoryDb } from '../src/db/client'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import { isFresherNodeRun } from '../src/services/scheduler'
+import { isFresherNodeRun } from '@/modules/task-execution/infrastructure/migration/oracle/legacyPickers'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const SRC_ROOTS = [
   resolve(import.meta.dir, '..', 'src'),
   resolve(import.meta.dir, '..', '..', 'shared', 'src'),
@@ -108,13 +108,16 @@ describe('RFC-074 PR-C — isFresherNodeRun pure-id ordering (C1-C4)', () => {
 // C10 判的是**行为**（插入 / 取回不带那一列），与引擎无关，按 RFC-359 AC-6 迁进双引擎块。
 describe('RFC-074 PR-C — migration 0041 drops node_runs.clarify_iteration (C9)', () => {
   test('C9: the dropped column is absent from the live schema', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createInMemoryDb()
     const cols = (await rawRows(db, sql`PRAGMA table_info(node_runs)`)) as Array<{ name: string }>
     const names = cols.map((c) => c.name)
     expect(names).not.toContain('clarify_iteration')
     // Provenance + other columns survive the rebuild.
-    expect(names).toContain('consumed_upstream_runs_json')
-    expect(names).toContain('commit_push_json')
+    expect(names).toContain('inputs_recorded')
+    const inputCols = await rawRows<{ name: string }>(db, sql`PRAGMA table_info(node_run_inputs)`)
+    expect(inputCols.map((column) => column.name)).toContain('producer_run_ref')
+    const resultCols = await rawRows<{ name: string }>(db, sql`PRAGMA table_info(node_run_results)`)
+    expect(resultCols.map((column) => column.name)).toContain('commit_push_json')
     expect(names).toContain('review_iteration')
   })
 })
@@ -162,7 +165,9 @@ describeEachProvider(
       })
       const got = (await db.select().from(nodeRuns).limit(1))[0]
       expect(got?.id).toBe('01ROW')
-      expect(got?.consumedUpstreamRunsJson).toBe(JSON.stringify({ up: '01UP' }))
+      expect(await readStoredConsumedInputsFixture(db, '01ROW')).toBe(
+        JSON.stringify({ up: '01UP' }),
+      )
       expect('clarifyIteration' in (got as object)).toBe(false)
     })
   },

@@ -6,7 +6,6 @@
 // a compile-time error here and a fail-closed runtime error in the driver.
 
 import { deleteRecoveryHandler } from '@/modules/resource-catalog/infrastructure/legacy/skillDeleteOp'
-import { migrateRecoveryHandler } from '@/modules/resource-catalog/infrastructure/legacy/skillMigrateOp'
 import { reserveRecoveryHandler } from '@/modules/resource-catalog/infrastructure/legacy/skillReserveOp'
 import { versionWriteRecoveryHandler } from '@/modules/resource-catalog/infrastructure/legacy/skillVersionOp'
 import type { SkillOpKind } from '@/modules/resource-catalog/infrastructure/legacy/skillOperations'
@@ -14,7 +13,11 @@ import type { OpRecoveryHandler } from '@/modules/resource-catalog/infrastructur
 
 export const SKILL_OP_RECOVERY_REGISTRY = {
   delete: deleteRecoveryHandler,
-  migrate: migrateRecoveryHandler,
+  migrate: {
+    recoverDb: async () => {
+      throw new Error('skill-legacy-upgrade-requires-conversion')
+    },
+  },
   reserve: reserveRecoveryHandler,
   'version-write': versionWriteRecoveryHandler,
 } satisfies Record<SkillOpKind, OpRecoveryHandler>

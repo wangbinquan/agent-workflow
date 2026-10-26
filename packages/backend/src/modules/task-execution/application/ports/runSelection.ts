@@ -31,8 +31,18 @@ export interface RunRef {
   readonly structurallySuperseded: boolean
 }
 
+/** Converted unresolved identity is available to history readers only. */
+export interface UnresolvedRunHistoryRef extends Omit<RunRef, 'slot' | 'role' | 'retryIndex'> {
+  readonly identity: 'unknown'
+  readonly recordMode: 'history-only'
+  readonly slot: RunSlot | null
+  readonly role: RunRef['role'] | null
+  readonly retryIndex: number | null
+}
+export type RunHistoryRef = RunRef | UnresolvedRunHistoryRef
+
 export interface SelectedRun extends RunRef {
-  /** II-a 没有选择表，也没有可读的持久 revision。 */
+  /** Epoch-2 selections carry a durable revision; only frozen epoch-1 evidence can be null. */
   readonly revision: number | null
   readonly resumable: boolean
 }
@@ -58,6 +68,7 @@ export interface FamilyRef {
 }
 
 export interface HistoryFilter {
+  readonly executableOnly?: boolean
   readonly attemptIndexGreaterThan?: number
   readonly statusIn?: readonly NodeRunStatus[]
   readonly topLevelOnly?: boolean
@@ -112,23 +123,36 @@ export interface ShardSetView {
   readonly participating: readonly RunRef[]
   readonly aggregatorInputs: readonly ConsumedEdge[]
   /** 旧聚合器不写 shard 输入集合；不能把参与候选冒充已记录的消费事实。 */
-  readonly aggregatorInputEvidence: 'source-node' | 'unrecorded'
+  readonly aggregatorInputEvidence: 'source-node' | 'aggregator-shard' | 'unrecorded'
   readonly aggregatorNewerThanInputs: boolean
   readonly aggregatorReplayable: boolean
   readonly aggregatorRerunInPlace: boolean
 }
 
 export interface RunSelectionReader {
+  /** Zero means no slot row; a clear retains the tombstone revision. */
+  revision(taskId: string, slot: RunSlot): Promise<number>
   current(taskId: string, slot: RunSlot): Promise<SelectedRun | null>
   currentInFrame(taskId: string, frame: Frame): Promise<ReadonlyMap<string, SelectedRun>>
   shardSet(taskId: string, wrapper: WrapperSlotRef): Promise<ShardSetView>
-  slotHistory(taskId: string, slot: RunSlot, filter?: HistoryFilter): Promise<readonly RunRef[]>
+  slotHistory(
+    taskId: string,
+    slot: RunSlot,
+    filter?: HistoryFilter,
+  ): Promise<readonly RunHistoryRef[]>
   familyHistory(
     taskId: string,
     family: FamilyRef,
     filter?: HistoryFilter,
-  ): Promise<readonly RunRef[]>
+  ): Promise<readonly RunHistoryRef[]>
   consumed(runId: string): Promise<readonly ConsumedEdge[]>
+}
+
+export interface TableShardSetView extends ShardSetView {
+  readonly history: readonly RunHistoryRef[]
+}
+export interface TableRunSelectionReader extends RunSelectionReader {
+  shardSet(taskId: string, wrapper: WrapperSlotRef): Promise<TableShardSetView>
 }
 
 export interface RunSelectionParticipantInTx<Tx> {

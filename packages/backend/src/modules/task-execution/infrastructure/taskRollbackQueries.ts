@@ -1,8 +1,10 @@
+import { projectTaskMountReadRow } from './taskRepositorySql'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { taskMountReadColumns, taskReadColumns } from './taskRepositorySql'
 // RFC-359 W4-B1 —— 回滚目标投影：一份实现，两个 provider 共用（此前 sqlite / postgresql 两份逐字相同）。
 
-import { projectStoredTaskRepositorySurface } from './taskRepositorySurface'
-import { tablesOf } from '@/platform/persistence/sessionTables'
 import { asc, eq } from 'drizzle-orm'
+import { projectStoredTaskRepositorySurface } from './taskRepositorySurface'
 
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type {
@@ -14,11 +16,11 @@ export class DrizzleTaskRollbackQueries implements TaskRollbackQueries {
   constructor(private readonly db: PersistenceDb) {}
 
   async load(taskId: string): Promise<TaskRollbackTargetSnapshot | null> {
-    const { tasks, taskRepos } = tablesOf(this.db)
+    const { tasks, taskRepositoryMounts: taskRepos } = tablesOf(this.db)
     const taskRows = await this.db
       .select({
         taskId: tasks.id,
-        worktreePath: tasks.worktreePath,
+        worktreePath: taskReadColumns(this.db).worktreePath,
       })
       .from(tasks)
       .where(eq(tasks.id, taskId))
@@ -28,12 +30,13 @@ export class DrizzleTaskRollbackQueries implements TaskRollbackQueries {
 
     const repositoryRows = await this.db
       .select({
-        worktreePath: taskRepos.worktreePath,
+        workspaceRootRef: taskMountReadColumns(this.db).workspaceRootRef,
         mountPath: taskRepos.mountPath,
       })
       .from(taskRepos)
       .where(eq(taskRepos.taskId, taskId))
-      .orderBy(asc(taskRepos.repoIndex))
+      .orderBy(asc(taskRepos.ordinal))
+      .then((rows) => rows.map(projectTaskMountReadRow))
 
     return Object.freeze({
       taskId: task.taskId,

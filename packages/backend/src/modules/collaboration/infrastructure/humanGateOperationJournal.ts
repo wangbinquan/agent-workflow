@@ -1,3 +1,20 @@
+import { canonicalSchemaJson } from '@/platform/persistence/schema/canonical'
+import { createContentPublicationLedger } from '@/platform/content/infrastructure/contentStore'
+import type {
+  HistoryRestrictionPort,
+  HistoryRestrictionGate,
+} from '@/platform/contracts/historyRestriction'
+import {
+  canonicalHumanGateValueJson,
+  type CanonicalHumanGateRequest,
+  canonicalHumanGateJson,
+  canonicalHumanGateRequestHash,
+} from '../domain/canonicalGateRequest'
+import { contentRefColumns, type ContentStore } from '@/platform/content/contentStore'
+import type { ContentRef } from '@/platform/content/contentRef'
+import type { HumanGateArtifactStore } from '../application/ports/humanGateArtifactStore'
+import { sha256Hex } from '@/util/hash'
+import { createLogger } from '@/util/log'
 import type { HumanGateTaskLockPort } from '../composition/required-ports'
 // RFC-359 —— human-gate 操作日志（collaboration_gate_operations / _artifacts）的**唯一**事务内实现。
 //
@@ -16,16 +33,16 @@ import type { HumanGateTaskLockPort } from '../composition/required-ports'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { first, queryWrite } from '@/platform/persistence/queryHelpers'
-import { and, asc, desc, eq, inArray, isNotNull, isNull, lte, ne, or } from 'drizzle-orm'
+import { and, asc, desc, eq, gt, inArray, isNotNull, isNull, lte, ne, or } from 'drizzle-orm'
 
 import { insertInBatches } from '@/platform/persistence/batchInsert'
-import { affectedRows, engineOf } from '@/platform/persistence/databaseTransaction'
-import type { PersistenceTx } from '@/platform/persistence/persistenceDb'
-import type { CanonicalHumanGateRequest } from '../domain/canonicalGateRequest'
 import {
-  canonicalHumanGateJson,
-  canonicalHumanGateRequestHash,
-} from '../domain/canonicalGateRequest'
+  affectedRows,
+  engineOf,
+  databaseSessionFor,
+} from '@/platform/persistence/databaseTransaction'
+import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
+
 import {
   assertHumanGateIdempotencyMatch,
   assertHumanGateManifestJson,
@@ -45,6 +62,7 @@ type OperationRow = PersistenceTables['collaborationGateOperations']['$inferSele
 type ArtifactRow = PersistenceTables['collaborationGateArtifacts']['$inferSelect']
 
 const ACTIVE_OPERATION_STATES = ['preparing', 'prepared', 'committed', 'cleanup_pending'] as const
+const log = createLogger('human-gate-operations')
 
 const ARTIFACT_TRANSITIONS = {
   declared: ['staged', 'cleanup_pending'],
@@ -331,8 +349,8 @@ function artifactSnapshot(row: ArtifactRow): HumanGateArtifactSnapshot {
     operationId: row.operationId,
     artifactKey: row.artifactKey,
     artifactKind: row.artifactKind,
-    stagedPath: row.stagedPath,
-    finalPath: row.finalPath,
+    stagedPath: `gate-stage:${row.operationId}:${row.artifactKey}`,
+    finalPath: row.finalContentKey,
     sha256: row.sha256,
     byteSize: row.byteSize,
     state: row.state,
@@ -363,7 +381,10 @@ async function firstArtifactNotIn(
 
 export class DatabaseHumanGateOperationJournal implements HumanGateOperationJournal {
   // RFC-294 S5 后改用 task-execution offered participant createHumanGatePersistenceParticipantInTx(tx).lockTask。
-  constructor(private readonly taskLock: HumanGateTaskLockPort) {}
+  constructor(
+    private readonly taskLock: HumanGateTaskLockPort,
+    private readonly historyRestrictions: HistoryRestrictionPort,
+  ) {}
 
   async beginTx(input: BeginHumanGateOperationJournalInput): Promise<BegunHumanGateOperation> {
     assertRequest(input)
@@ -371,7 +392,10 @@ export class DatabaseHumanGateOperationJournal implements HumanGateOperationJour
     await this.taskLock(tx).lockTask(input.request.taskId)
     const requestHash = canonicalHumanGateRequestHash(input.request)
     const replay = await existingIdempotency(tx, input, requestHash)
-    if (replay !== null) return replay
+    if (replay !== null) {
+      await assertGateReplayAllowed(tx, this.historyRestrictions, replay.operation)
+      return replay
+    }
 
     const winner = await activeOperation(tx, input)
     if (winner !== undefined) {
@@ -399,7 +423,8 @@ export class DatabaseHumanGateOperationJournal implements HumanGateOperationJour
         state: 'preparing',
         claimEpoch: 1,
         claimExpiresAt: input.now + DEFAULT_HUMAN_GATE_CLAIM_LEASE_MS,
-        schemaVersion: 1,
+        schemaVersion:
+          input.request.operationKind === 'open' && input.request.gateKind !== 'questions' ? 2 : 1,
         manifestJson: canonicalHumanGateJson(input.request),
         receiptJson: null,
         failureJson: null,
@@ -410,7 +435,10 @@ export class DatabaseHumanGateOperationJournal implements HumanGateOperationJour
       })
     } catch (error) {
       const racedReplay = await existingIdempotency(tx, input, requestHash)
-      if (racedReplay !== null) return racedReplay
+      if (racedReplay !== null) {
+        await assertGateReplayAllowed(tx, this.historyRestrictions, racedReplay.operation)
+        return racedReplay
+      }
       const racedWinner = await activeOperation(tx, input)
       if (racedWinner !== undefined) {
         throw new HumanGateOperationError(
@@ -441,6 +469,7 @@ export class DatabaseHumanGateOperationJournal implements HumanGateOperationJour
           ),
         ),
     )
+    if (row) await assertGateReplayAllowed(input.tx, this.historyRestrictions, snapshot(row))
     return row === undefined ? null : snapshot(row)
   }
 
@@ -508,52 +537,103 @@ export class DatabaseHumanGateOperationJournal implements HumanGateOperationJour
     }
     const { tx } = input
     const { collaborationGateOperations } = tablesOf(tx)
-    const due = await tx
-      .select()
-      .from(collaborationGateOperations)
-      .where(
-        and(
-          inArray(collaborationGateOperations.state, ACTIVE_OPERATION_STATES),
-          // A prepared manual-question operation is an intentional durable wait for the
-          // active task owner, not abandoned preparation. Its owner-settle participant, not
-          // artifact recovery, consumes it.
-          or(
-            ne(collaborationGateOperations.operationKind, 'manual-question-open'),
-            ne(collaborationGateOperations.state, 'prepared'),
-          ),
-          or(
-            isNull(collaborationGateOperations.claimExpiresAt),
-            lte(collaborationGateOperations.claimExpiresAt, input.now),
-          ),
-        ),
-      )
-      .orderBy(
-        engineOf(tx).ascNullsFirst(collaborationGateOperations.claimExpiresAt),
-        asc(collaborationGateOperations.updatedAt),
-        asc(collaborationGateOperations.id),
-      )
-      .limit(input.limit)
     const claimed: HumanGateOperationSnapshot[] = []
-    for (const row of due) {
-      const result = await tx
-        .update(collaborationGateOperations)
-        .set({
-          claimEpoch: row.claimEpoch + 1,
-          claimExpiresAt: input.now + input.leaseMs,
-          updatedAt: input.now,
-        })
+    let after: OperationRow | undefined
+    while (claimed.length < input.limit) {
+      // Advance past restricted rows without changing their lease or letting a full
+      // restricted page starve admitted operations. The cursor uses the pre-claim facts.
+      const afterTime =
+        after &&
+        or(
+          gt(collaborationGateOperations.updatedAt, after.updatedAt),
+          and(
+            eq(collaborationGateOperations.updatedAt, after.updatedAt),
+            gt(collaborationGateOperations.id, after.id),
+          ),
+        )
+      const cursor =
+        after === undefined
+          ? undefined
+          : after.claimExpiresAt === null
+            ? or(
+                isNotNull(collaborationGateOperations.claimExpiresAt),
+                and(isNull(collaborationGateOperations.claimExpiresAt), afterTime),
+              )
+            : or(
+                gt(collaborationGateOperations.claimExpiresAt, after.claimExpiresAt),
+                and(
+                  eq(collaborationGateOperations.claimExpiresAt, after.claimExpiresAt),
+                  afterTime,
+                ),
+              )
+      const due: OperationRow[] = await tx
+        .select()
+        .from(collaborationGateOperations)
         .where(
           and(
-            eq(collaborationGateOperations.id, row.id),
-            eq(collaborationGateOperations.state, row.state),
-            eq(collaborationGateOperations.claimEpoch, row.claimEpoch),
+            cursor,
+            inArray(collaborationGateOperations.state, ACTIVE_OPERATION_STATES),
+            or(
+              ne(collaborationGateOperations.operationKind, 'open'),
+              eq(collaborationGateOperations.gateKind, 'questions'),
+              eq(collaborationGateOperations.schemaVersion, 2),
+              inArray(collaborationGateOperations.state, ['committed', 'cleanup_pending']),
+            ),
+            // A prepared manual-question operation is an intentional durable wait for the
+            // active task owner, not abandoned preparation. Its owner-settle participant, not
+            // artifact recovery, consumes it.
+            or(
+              ne(collaborationGateOperations.operationKind, 'manual-question-open'),
+              ne(collaborationGateOperations.state, 'prepared'),
+            ),
             or(
               isNull(collaborationGateOperations.claimExpiresAt),
               lte(collaborationGateOperations.claimExpiresAt, input.now),
             ),
           ),
         )
-      if (affectedRows(result) === 1) claimed.push(snapshot(await operationById(tx, row.id)))
+        .orderBy(
+          engineOf(tx).ascNullsFirst(collaborationGateOperations.claimExpiresAt),
+          asc(collaborationGateOperations.updatedAt),
+          asc(collaborationGateOperations.id),
+        )
+        .limit(input.limit)
+      if (due.length === 0) break
+      after = due[due.length - 1]!
+      for (const row of due) {
+        try {
+          await assertGateReplayAllowed(tx, this.historyRestrictions, snapshot(row))
+        } catch (error) {
+          if (!(error instanceof HumanGateOperationError) || error.code !== 'history-only')
+            throw error
+          log.info('history-only gate skipped during recovery', {
+            operationId: row.id,
+            taskId: row.taskId,
+            code: error.code,
+          })
+          continue
+        }
+        const result = await tx
+          .update(collaborationGateOperations)
+          .set({
+            claimEpoch: row.claimEpoch + 1,
+            claimExpiresAt: input.now + input.leaseMs,
+            updatedAt: input.now,
+          })
+          .where(
+            and(
+              eq(collaborationGateOperations.id, row.id),
+              eq(collaborationGateOperations.state, row.state),
+              eq(collaborationGateOperations.claimEpoch, row.claimEpoch),
+              or(
+                isNull(collaborationGateOperations.claimExpiresAt),
+                lte(collaborationGateOperations.claimExpiresAt, input.now),
+              ),
+            ),
+          )
+        if (affectedRows(result) === 1) claimed.push(snapshot(await operationById(tx, row.id)))
+        if (claimed.length === input.limit) break
+      }
     }
     return claimed
   }
@@ -605,6 +685,7 @@ export class DatabaseHumanGateOperationJournal implements HumanGateOperationJour
       .update(collaborationGateOperations)
       .set({
         state: 'prepared',
+        schemaVersion: JSON.parse(input.manifestJson).schemaVersion as number,
         manifestJson: input.manifestJson,
         claimExpiresAt: input.now + DEFAULT_HUMAN_GATE_CLAIM_LEASE_MS,
         updatedAt: input.now,
@@ -646,7 +727,8 @@ export class DatabaseHumanGateOperationJournal implements HumanGateOperationJour
         { operationId: input.operationId, artifactKey: unready },
       )
     }
-    const { collaborationGateOperations, collaborationGateArtifacts } = tablesOf(input.tx)
+    const { collaborationGateOperations } = tablesOf(input.tx)
+    const { collaborationGateArtifacts } = tablesOf(input.tx)
     const result = await input.tx
       .update(collaborationGateOperations)
       .set({
@@ -742,7 +824,8 @@ export class DatabaseHumanGateOperationJournal implements HumanGateOperationJour
       )
     }
     assertHumanGateOperationTransition(row.state, 'cleanup_pending')
-    const { collaborationGateOperations, collaborationGateArtifacts } = tablesOf(input.tx)
+    const { collaborationGateOperations } = tablesOf(input.tx)
+    const { collaborationGateArtifacts } = tablesOf(input.tx)
     const result = await input.tx
       .update(collaborationGateOperations)
       .set({ state: 'cleanup_pending', updatedAt: input.now })
@@ -810,7 +893,8 @@ export class DatabaseHumanGateOperationJournal implements HumanGateOperationJour
         { operationId: input.operationId, currentState: row.state },
       )
     }
-    const { collaborationGateArtifacts, collaborationGateOperations } = tablesOf(input.tx)
+    const { collaborationGateOperations } = tablesOf(input.tx)
+    const { collaborationGateArtifacts } = tablesOf(input.tx)
     const remaining = await first(
       input.tx
         .select({ artifactKey: collaborationGateArtifacts.artifactKey })
@@ -882,8 +966,11 @@ export class DatabaseHumanGateOperationJournal implements HumanGateOperationJour
         operationId: input.operationId,
         artifactKey: artifact.artifactKey,
         artifactKind: 'review-doc' as const,
-        stagedPath: artifact.stagedPath,
-        finalPath: artifact.finalPath,
+        stagedContentRefJson: null,
+        stagedInlineBytes: null,
+        finalContentKey: artifact.finalPath,
+        contentRefJson: null,
+        contentInlineBytes: null,
         sha256: artifact.sha256,
         byteSize: artifact.byteSize,
         state: 'declared' as const,
@@ -925,6 +1012,8 @@ export class DatabaseHumanGateOperationJournal implements HumanGateOperationJour
       )
     }
     assertArtifactTransition(row.state, input.to)
+    if (input.to === 'staged' || input.to === 'consumed' || input.to === 'finalized')
+      artifactContent(row)
     if (
       (input.to === 'staged' || input.to === 'finalized') &&
       (input.receiptJson === undefined || input.receiptJson === null)
@@ -957,5 +1046,318 @@ export class DatabaseHumanGateOperationJournal implements HumanGateOperationJour
         { operationId: input.operationId, artifactKey: input.artifactKey },
       )
     }
+  }
+}
+
+/** Restriction keys use the frozen mk1 wire form; no source reader is loaded by the daemon. */
+export async function assertGateReplayAllowed(
+  tx: PersistenceTx,
+  restrictions: HistoryRestrictionPort,
+  operation: HumanGateOperationSnapshot,
+): Promise<void> {
+  if (!restrictions) throw new Error('gate-history-restriction-provider-required')
+  const manifest = JSON.parse(operation.manifestJson) as {
+    node?: { id?: string; consumedUpstreamRunsJson?: string }
+    sourceNodeRunIds?: readonly string[]
+    rerunNodeRunIds?: readonly string[]
+    payload?: { roundId?: string }
+    request?: { payload?: { roundId?: string } }
+    round?: { id?: string; askingNodeRunId?: string; intermediaryNodeRunId?: string }
+  }
+  const gate = (
+    sourceTable: HistoryRestrictionGate['sourceTable'],
+    id: string,
+  ): HistoryRestrictionGate => ({
+    sourceTable,
+    sourceKey: `mk1:${canonicalSchemaJson([sourceTable, [{ type: 'text', value: id }]])}`,
+  })
+  const roundId =
+    manifest.round?.id ?? manifest.payload?.roundId ?? manifest.request?.payload?.roundId
+  const nodeRunIds = new Set<string>()
+  for (const id of [
+    manifest.node?.id,
+    manifest.round?.askingNodeRunId,
+    manifest.round?.intermediaryNodeRunId,
+    ...(manifest.sourceNodeRunIds ?? []),
+    ...(manifest.rerunNodeRunIds ?? []),
+  ])
+    if (id) nodeRunIds.add(id)
+  if (manifest.node?.consumedUpstreamRunsJson) {
+    const consumed = JSON.parse(manifest.node.consumedUpstreamRunsJson) as Record<
+      string,
+      string | string[]
+    >
+    for (const ids of Object.values(consumed))
+      for (const id of typeof ids === 'string' ? [ids] : ids) nodeRunIds.add(id)
+  }
+  const decision = await restrictions.check(tx, {
+    taskId: operation.taskId,
+    action: 'replay',
+    nodeRunIds: [...nodeRunIds],
+    gates: [
+      gate('collaboration_gate_operations', operation.id),
+      ...(roundId ? [gate('clarify_rounds', roundId)] : []),
+    ],
+  })
+  if (!decision.allowed)
+    throw new HumanGateOperationError(
+      'history-only',
+      'This gate is retained for history and cannot be replayed.',
+      { operationId: operation.id },
+    )
+}
+
+function artifactContent(row: ArtifactRow): ContentRef {
+  const ref = contentRefColumns.decode(row.contentRefJson, row.contentInlineBytes)
+  if (!ref)
+    throw new HumanGateOperationError(
+      'human-gate-artifact-missing',
+      'Gate artifact has no published content.',
+    )
+  if (ref.sha256 !== row.sha256 || ref.size !== row.byteSize)
+    throw new HumanGateOperationError(
+      'human-gate-artifact-digest-mismatch',
+      'Gate content metadata changed.',
+    )
+  return ref
+}
+
+function missingContent(error: unknown): boolean {
+  return (
+    (error instanceof HumanGateOperationError && error.code === 'human-gate-artifact-missing') ||
+    (error instanceof Error &&
+      (('code' in error && error.code === 'ENOENT') ||
+        ['content-object-missing', 'content-bytes-missing'].includes(error.message)))
+  )
+}
+
+/** Converted committed v1 opens may still have bytes only at the staged reference. */
+export async function readHumanGateArtifactContent(
+  content: Pick<ContentStore, 'read'>,
+  row: ArtifactRow,
+): Promise<Uint8Array> {
+  let bytes: Uint8Array
+  try {
+    bytes = await content.read(artifactContent(row))
+  } catch (error) {
+    if (!missingContent(error) || row.stagedContentRefJson === null) throw error
+    bytes = await content.read(
+      artifactContent({
+        ...row,
+        contentRefJson: row.stagedContentRefJson,
+        contentInlineBytes: row.stagedInlineBytes,
+      }),
+    )
+  }
+  if (sha256Hex(bytes) !== row.sha256 || bytes.byteLength !== row.byteSize)
+    throw new HumanGateOperationError(
+      'human-gate-artifact-digest-mismatch',
+      'Published review bytes changed.',
+    )
+  return bytes
+}
+
+/** History reads use the same staged fallback as recovery, without changing stored refs. */
+export async function readCommittedReviewDocumentContent(
+  db: PersistenceDb,
+  content: Pick<ContentStore, 'read'>,
+  row: { contentRefJson: string; contentInlineBytes: Uint8Array | null },
+): Promise<Uint8Array> {
+  const ref = contentRefColumns.decode(row.contentRefJson, row.contentInlineBytes)
+  if (ref === null)
+    throw new HumanGateOperationError('human-gate-artifact-missing', 'Review content is missing.')
+  try {
+    return await content.read(ref)
+  } catch (error) {
+    if (!missingContent(error)) throw error
+    const legacyKey =
+      ref.kind !== 'inline' &&
+      ['review-body', 'review-body-path'].includes(ref.location.codec) &&
+      typeof ref.location.value === 'string'
+        ? ref.location.value
+        : undefined
+    const { collaborationGateArtifacts } = tablesOf(db)
+    const { collaborationGateOperations } = tablesOf(db)
+    const artifact = await first(
+      db
+        .select({ artifact: collaborationGateArtifacts })
+        .from(collaborationGateArtifacts)
+        .innerJoin(
+          collaborationGateOperations,
+          eq(collaborationGateOperations.id, collaborationGateArtifacts.operationId),
+        )
+        .where(
+          and(
+            or(
+              eq(collaborationGateArtifacts.contentRefJson, row.contentRefJson),
+              legacyKey === undefined
+                ? undefined
+                : eq(collaborationGateArtifacts.finalContentKey, legacyKey),
+            ),
+            inArray(collaborationGateArtifacts.state, ['consumed', 'finalized']),
+            inArray(collaborationGateOperations.state, ['committed', 'completed']),
+          ),
+        ),
+    )
+    if (!artifact) throw error
+    return readHumanGateArtifactContent(content, artifact.artifact)
+  }
+}
+
+/** A injects X's profile-selected store into the existing preparation/recovery port. */
+export function createContentHumanGateArtifactStore(input: {
+  readonly content: ContentStore
+  readonly db: PersistenceDb
+}): HumanGateArtifactStore {
+  const load = async (artifact: HumanGateArtifactSnapshot) => {
+    const row = await artifactByKey(input.db, artifact.operationId, artifact.artifactKey)
+    if (
+      row.finalContentKey !== artifact.finalPath ||
+      row.sha256 !== artifact.sha256 ||
+      row.byteSize !== artifact.byteSize
+    )
+      throw new HumanGateOperationError(
+        'human-gate-artifact-digest-mismatch',
+        'Gate artifact identity changed.',
+      )
+    return row
+  }
+  return {
+    planReviewArtifact(plan) {
+      const bytes = new TextEncoder().encode(plan.body)
+      return {
+        operationId: plan.operationId,
+        artifactKey: plan.artifactKey,
+        stagedPath: `gate-stage:${plan.operationId}:${plan.artifactKey}`,
+        finalPath: plan.finalPath,
+        sha256: sha256Hex(bytes),
+        byteSize: bytes.byteLength,
+      }
+    },
+    async stageReviewArtifact(plan, body) {
+      const bytes = new TextEncoder().encode(body)
+      if (sha256Hex(bytes) !== plan.sha256 || bytes.byteLength !== plan.byteSize)
+        throw new HumanGateOperationError(
+          'human-gate-artifact-digest-mismatch',
+          'Review body changed after planning.',
+        )
+      const now = Date.now()
+      const operation = await operationById(input.db, plan.operationId)
+      await input.content.put(
+        {
+          publication: {
+            owner: 'collaboration-review',
+            logicalKey: plan.finalPath,
+            attempt: plan.operationId,
+            epoch: 1,
+            scope: operation.taskId,
+            sha256: plan.sha256,
+            size: plan.byteSize,
+          },
+          source: { kind: 'bytes', bytes },
+          contentVersion: 1,
+          mediaType: 'text/markdown',
+          references: 'shared',
+        },
+        async (tx, ref) => {
+          const { collaborationGateArtifacts } = tablesOf(tx)
+          const row = await artifactByKey(tx, plan.operationId, plan.artifactKey)
+          if (
+            row.finalContentKey !== plan.finalPath ||
+            row.sha256 !== plan.sha256 ||
+            row.byteSize !== plan.byteSize ||
+            (row.state !== 'declared' && row.state !== 'staged')
+          )
+            throw new HumanGateOperationError(
+              'human-gate-operation-stale',
+              'Review artifact changed before publication.',
+            )
+          const columns = contentRefColumns.encode(ref)
+          const inlineBytes = columns.inlineBytes === null ? null : Buffer.from(columns.inlineBytes)
+          await tx
+            .update(collaborationGateArtifacts)
+            .set({
+              stagedContentRefJson: columns.json,
+              stagedInlineBytes: inlineBytes,
+              contentRefJson: columns.json,
+              contentInlineBytes: inlineBytes,
+              updatedAt: now,
+            })
+            .where(
+              and(
+                eq(collaborationGateArtifacts.operationId, plan.operationId),
+                eq(collaborationGateArtifacts.artifactKey, plan.artifactKey),
+              ),
+            )
+        },
+      )
+      return canonicalHumanGateValueJson({
+        kind: 'review-content-v2',
+        operationId: plan.operationId,
+        artifactKey: plan.artifactKey,
+        finalContentKey: plan.finalPath,
+        sha256: plan.sha256,
+        byteSize: plan.byteSize,
+      })
+    },
+    async finalizeReviewArtifact(artifact) {
+      const row = await load(artifact)
+      await readHumanGateArtifactContent(input.content, row)
+      return canonicalHumanGateValueJson({
+        kind: 'review-content-v2',
+        operationId: artifact.operationId,
+        artifactKey: artifact.artifactKey,
+        finalContentKey: artifact.finalPath,
+        sha256: artifact.sha256,
+        byteSize: artifact.byteSize,
+      })
+    },
+    async cleanupReviewArtifact(artifact) {
+      await databaseSessionFor(input.db).transaction(async (tx) => {
+        const row = await artifactByKey(tx, artifact.operationId, artifact.artifactKey)
+        if (row.state === 'consumed' || row.state === 'finalized')
+          throw new HumanGateOperationError(
+            'human-gate-operation-stale',
+            'Committed review content cannot be cleaned.',
+          )
+        const operation = await operationById(tx, row.operationId)
+        const receipt = row.receiptJson === null ? null : JSON.parse(row.receiptJson)
+        if (operation.schemaVersion === 1 || receipt?.kind === 'cs-review-object-v2') {
+          // Epoch-1 hosted publications keep their original key and stored fence.
+          // Declared rows have no receipt yet, but the key is already deterministic.
+          await input.content.publications.release(
+            tx,
+            {
+              owner: 'collaboration-review',
+              keys: [`${row.operationId}/${sha256Hex(row.artifactKey)}`],
+            },
+            Date.now(),
+          )
+        } else if (row.contentRefJson !== null) {
+          const publication = await createContentPublicationLedger(tx).find({
+            owner: 'collaboration-review',
+            logicalKey: row.finalContentKey,
+          })
+          if (publication !== null) {
+            if (publication.attempt !== row.operationId)
+              throw new Error('human-gate-content-publication-attempt-mismatch')
+            await input.content.release(tx, {
+              publication: {
+                owner: publication.owner,
+                logicalKey: publication.logicalKey,
+                attempt: publication.attempt,
+                epoch: publication.epoch,
+              },
+              ref: artifactContent(row),
+            })
+          }
+        } else
+          await input.content.publications.release(
+            tx,
+            { owner: 'collaboration-review', keys: [row.finalContentKey] },
+            Date.now(),
+          )
+      })
+    },
   }
 }

@@ -22,7 +22,6 @@ import {
   deleteRuntime,
   getRuntime,
   listRuntimes,
-  migrateConfigIntoBuiltins,
   resolveAgentRuntime,
   resolveRuntimeByName,
   seedBuiltinRuntimes,
@@ -476,42 +475,7 @@ describeEachProvider('setRuntimeEnabled (RFC-118)', (harness) => {
   })
 })
 
-describeEachProvider(
-  'migrateConfigIntoBuiltins (RFC-153 F2 — protocol-guarded backfill)',
-  (harness) => {
-    let db: PersistenceDb
-    beforeEach(() => {
-      db = harness.db
-    })
-
-    test('backfills binary onto the canonical rows (protocol matches)', async () => {
-      await seedBuiltinRuntimes(registryFor(db))
-      await migrateConfigIntoBuiltins(registryFor(db), {
-        opencodePath: canonicalBinaryPath('oc'),
-        claudeCodePath: canonicalBinaryPath('cc'),
-      })
-      expect((await getRuntime(registryFor(db), 'opencode'))!.binaryPath).toBe(
-        canonicalBinaryPath('oc'),
-      )
-      expect((await getRuntime(registryFor(db), 'claude-code'))!.binaryPath).toBe(
-        canonicalBinaryPath('cc'),
-      )
-    })
-
-    test('does NOT write the opencode binary into a user row reusing the name under claude-code protocol', async () => {
-      const { runtimes } = tablesOf(db)
-      await insertOne(db, runtimes, {
-        id: ulid(),
-        name: 'opencode',
-        protocol: 'claude-code',
-        binaryPath: null,
-      })
-      await migrateConfigIntoBuiltins(registryFor(db), { opencodePath: canonicalBinaryPath('oc') })
-      // protocol mismatch (claude-code !== opencode) → binary stays NULL.
-      expect((await getRuntime(registryFor(db), 'opencode'))!.binaryPath).toBeNull()
-    })
-  },
-)
+// RFC-153 protocol/null-only backfill cases moved to rfc395-boot-runtime-config.test.ts.
 
 // Save-time binaryPath validation accepts one absolute canonical path or one
 // bare PATH token. Relative fragments and argument strings fail near the admin

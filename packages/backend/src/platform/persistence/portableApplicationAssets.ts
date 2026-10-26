@@ -27,15 +27,15 @@
 // `resource-catalog` 的 `rowToWorkflow` 逐字同形——那是「读一行 workflow」在全仓的既有
 // 契约，备份路径没有理由自己发明一个。
 
-import { workflowCatalogPredicate } from '@/platform/persistence/workflowCatalogPredicate'
-import { tablesOf } from '@/platform/persistence/sessionTables'
 import { first } from '@/platform/persistence/queryHelpers'
+import { engineForHandle, tablesOf } from '@/platform/persistence/sessionTables'
+import { workflowCatalogPredicate } from '@/platform/persistence/workflowCatalogPredicate'
 import {
   LIVE_WORKTREE_TASK_STATUSES,
   migrateWorkflowDefinitionToLatest,
   WorkflowDefinitionSchema,
 } from '@agent-workflow/shared'
-import { eq, inArray } from 'drizzle-orm'
+import { eq, inArray, sql } from 'drizzle-orm'
 import { writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
@@ -92,10 +92,10 @@ export async function captureWorktrees(
   const rows = await db
     .select({
       id: tasks.id,
-      worktreePath: tasks.worktreePath,
-      branch: tasks.branch,
-      repoPath: tasks.repoPath,
-      baseCommit: tasks.baseCommit,
+      worktreePath: sql<string>`coalesce(${tasks.workspaceRootRef}, '')`,
+      branch: worktreeAssetColumns(db).branch,
+      repoPath: worktreeAssetColumns(db).repoPath,
+      baseCommit: worktreeAssetColumns(db).baseCommit,
     })
     .from(tasks)
     .where(inArray(tasks.status, [...LIVE_WORKTREE_TASK_STATUSES]))
@@ -119,9 +119,9 @@ export async function reconstructWorktrees(
             .select({
               id: tasks.id,
               status: tasks.status,
-              worktreePath: tasks.worktreePath,
-              branch: tasks.branch,
-              repoPath: tasks.repoPath,
+              worktreePath: sql<string>`coalesce(${tasks.workspaceRootRef}, '')`,
+              branch: worktreeAssetColumns(db).branch,
+              repoPath: worktreeAssetColumns(db).repoPath,
             })
             .from(tasks)
             .where(eq(tasks.id, taskId)),
@@ -182,4 +182,18 @@ export function createPortableBackupApplicationAssets(input: {
       })
     },
   })
+}
+
+function worktreeAssetColumns(db: PersistenceDb) {
+  const { tasks, taskRepositoryMounts: mounts, taskWorkspaces: workspace } = tablesOf(db)
+  const source = sql`(select ${workspace.requestedSource} from ${workspace} where ${workspace.taskId} = ${tasks.id})`
+  return {
+    branch: sql<string>`coalesce((select ${mounts.branch} from ${mounts} where ${mounts.taskId} = ${tasks.id} and ${mounts.ordinal} = 0), (select ${workspace.taskBranch} from ${workspace} where ${workspace.taskId} = ${tasks.id}))`,
+    repoPath: sql<string>`coalesce((select ${mounts.repoPath} from ${mounts} where ${mounts.taskId} = ${tasks.id} and ${mounts.ordinal} = 0), ${engineForHandle(db).jsonMemberText(source, 'repoPath')})`,
+    baseCommit: sql<
+      string | null
+    >`case when exists (select 1 from ${mounts} where ${mounts.taskId} = ${tasks.id} and ${mounts.ordinal} = 0)
+      then (select ${mounts.baseCommit} from ${mounts} where ${mounts.taskId} = ${tasks.id} and ${mounts.ordinal} = 0)
+      else ${engineForHandle(db).jsonMemberText(source, 'legacyBaseCommit')} end`,
+  }
 }

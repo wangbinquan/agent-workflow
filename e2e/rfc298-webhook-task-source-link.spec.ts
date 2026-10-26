@@ -1,3 +1,4 @@
+import { liveSqlitePath } from './storage'
 // RFC-298 — real daemon/API/browser seam for webhook task source navigation.
 // The fixture plants the same frozen context produced at webhook launch, then
 // proves getTask derives the minimal wire value and the task header renders
@@ -6,7 +7,6 @@
 
 import { patchTaskFixtureSql } from './fixtures/model'
 import { expect, test, type Page } from '@playwright/test'
-import { join } from 'node:path'
 
 import { runSqlite } from './command'
 import { startDaemon, type DaemonHandle } from './harness'
@@ -277,7 +277,10 @@ test.beforeAll(async () => {
       { triggerContextJson: context },
     )
   })
-  runSqlite(join(daemon.home, 'db.sqlite'), `BEGIN;\n${updates.join('\n')}\nCOMMIT;`)
+  // Aggregate patches first capture task ids. Reserve the writer before that
+  // read: a deferred WAL snapshot cannot upgrade after a daemon write commits,
+  // even with busy_timeout configured by sqlite-exec.
+  runSqlite(liveSqlitePath(daemon.home), `BEGIN IMMEDIATE;\n${updates.join('\n')}\nCOMMIT;`)
 })
 
 test.afterAll(async () => {

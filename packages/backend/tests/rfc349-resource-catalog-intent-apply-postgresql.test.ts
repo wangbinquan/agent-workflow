@@ -29,8 +29,8 @@ describe('RFC-349 PostgreSQL Intent resource apply binding', () => {
     for (const kind of ['agent', 'skill', 'mcp', 'plugin', 'workflow', 'workgroup']) {
       expect(source).toContain(`case '${kind}':`)
       expect(source).toContain(`ports.${kind}.commitInTransaction({`)
-      expect(ports).toContain(
-        `${kind}: create${kind[0]!.toUpperCase()}${kind.slice(1)}Port(options`,
+      expect(ports).toMatch(
+        new RegExp(`${kind}: create${kind[0]!.toUpperCase()}${kind.slice(1)}Port\\(\\s*options`),
       )
     }
     expect(source).toContain('readonly transaction: PostgresqlResourceCatalogTransaction')

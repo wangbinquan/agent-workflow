@@ -41,11 +41,10 @@ describe('historical snapshots and rollbackToSnapshot', () => {
     expect(snapshot).toBe('')
     writeFileSync(join(r.path, 'a.txt'), 'later\n')
     const outcome = await rollbackNodeRunWorktrees(
-      { worktreePath: r.path, repos: [] },
+      { worktreePath: r.path, repos: [{ worktreePath: r.path, mountPath: '' }] },
       {
         id: 'historical-clean',
         checkpoints: [{ mountPath: '', preSnapshot: snapshot }],
-        checkpointScope: 'workspace' as const,
       },
       {},
       createLogger('snapshot-fixture'),
@@ -74,11 +73,10 @@ describe('historical snapshots and rollbackToSnapshot', () => {
     const sha = await legacyStashSnapshotFixture(r.path)
     expect(sha).toBe('')
     const outcome = await rollbackNodeRunWorktrees(
-      { worktreePath: r.path, repos: [] },
+      { worktreePath: r.path, repos: [{ worktreePath: r.path, mountPath: '' }] },
       {
         id: 'historical-untracked',
         checkpoints: [{ mountPath: '', preSnapshot: sha }],
-        checkpointScope: 'workspace' as const,
       },
       {},
       createLogger('snapshot-fixture'),

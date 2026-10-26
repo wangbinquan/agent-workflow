@@ -1,9 +1,12 @@
+import { skillRowPath } from '@/modules/resource-catalog/infrastructure/databaseSkillTrees'
+import { contentRowColumns } from '@/platform/content/infrastructure/contentStore'
+import { legacyContentRef } from '@/platform/content/contentRef'
 // RFC-359 AC1 / AC8: preserve the two existing Skill row projections while
 // sharing their scalar mapping. The cb0403 originals below intentionally keep
 // their different managedPath placement; JSON bytes and property reads matter.
 
 import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { first } from '@/platform/persistence/queryHelpers'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { mkdtempSync, rmSync } from 'node:fs'
@@ -154,11 +157,17 @@ describeEachProvider('RFC-359 Skill codec real consumers', (harness) => {
   async function insertRow(index: number, managedPath: string | null) {
     const values = skillRow(index, managedPath)
     const { skills } = tablesOf(harness.db)
-    await insertOne(harness.db, skills, values)
+    const { managedPath: path, ...metadata } = values
+    await insertOne(harness.db, skills, {
+      ...metadata,
+      ...(path === null
+        ? { contentRefJson: null, contentInlineBytes: null }
+        : contentRowColumns(legacyContentRef('skill-path', 'local-file', path))),
+    })
     const stored = await first(harness.db.select().from(skills).where(eq(skills.id, values.id)))
-    expect(stored).toEqual(values)
+    expect(stored && project(stored)).toEqual(values)
     if (stored === undefined) throw new Error('skill codec fixture row missing')
-    return stored
+    return project(stored)
   }
 
   for (const { label, managedPath } of PATHS) {
@@ -182,7 +191,7 @@ describeEachProvider('RFC-359 Skill codec real consumers', (harness) => {
       assertProjection(listedSkill, originalCatalogProjection(row))
       expect(await repository.get('missing-skill')).toBeNull()
       const { skills } = tablesOf(harness.db)
-      expect(await harness.db.select().from(skills)).toEqual([row])
+      expect((await harness.db.select().from(skills)).map(project)).toEqual([row])
     })
   }
 
@@ -219,7 +228,7 @@ describeEachProvider('RFC-359 Skill codec real consumers', (harness) => {
       })
     }
     const { skills } = tablesOf(harness.db)
-    expect(await harness.db.select().from(skills).orderBy(skills.id)).toEqual(rows)
+    expect((await harness.db.select().from(skills).orderBy(skills.id)).map(project)).toEqual(rows)
   })
 
   test('the real workflow loader preserves the projected Skill and validation context', async () => {
@@ -260,6 +269,11 @@ describeEachProvider('RFC-359 Skill codec real consumers', (harness) => {
     expect(result.validationContextHash).toBe(workflowValidationContextHashOf(context))
     expect(result.result).toEqual(validateWorkflowDefinition(candidate.definition, context))
     const { skills } = tablesOf(harness.db)
-    expect(await harness.db.select().from(skills).orderBy(skills.id)).toEqual(rows)
+    expect((await harness.db.select().from(skills).orderBy(skills.id)).map(project)).toEqual(rows)
   })
 })
+
+function project(row: PersistenceTables['skills']['$inferSelect']): SkillPersistenceRow {
+  const { contentRefJson: _json, contentInlineBytes: _bytes, ...metadata } = row
+  return { ...metadata, managedPath: skillRowPath(row, row.id, 'live') }
+}

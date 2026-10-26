@@ -1,9 +1,12 @@
+import {
+  type EpochMetadataSnapshot,
+  verifyEpochMetadataSnapshot,
+} from './schema/history/metadataSnapshot'
 // RFC-349 — one bounded exporter for SQLite and PostgreSQL logical backups.
 // PostgreSQL has no active copies of the six archive-only tables, so their
 // already-verified chunks are re-bound from the preserved legacy artifact while
 // all active tables are read from one provider snapshot.
 
-import { databaseProviderTraits } from './providerTraits'
 import type { DatabaseProvider } from '@/platform/persistence/databaseProviders'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -34,6 +37,7 @@ import {
 
 export interface LogicalDatabaseExportSource {
   readonly provider: DatabaseProvider
+  readMetadata?(): Promise<EpochMetadataSnapshot>
   assertUnchanged(): Promise<void>
   readChunk(
     table: LogicalTableContract,
@@ -82,6 +86,7 @@ const LogicalDatabaseBackupEnvelopePayloadSchema = z
     chunks: z.number().int().nonnegative(),
     bytes: z.number().int().nonnegative(),
     completedAt: z.number().int().nonnegative(),
+    epoch2MetadataFileDigest: DigestSchema.optional(),
   })
   .strict()
 
@@ -165,11 +170,7 @@ function expectedRoster(input: {
   return (
     input.contract.tables
       // Only the migration SOURCE still physically holds the archived tables.
-      .filter(
-        (table) =>
-          databaseProviderTraits(input.provider).migrationRole === 'source' ||
-          table.disposition !== 'ARCHIVE_THEN_OMIT',
-      )
+      .filter((table) => table.providerTables[input.provider] !== undefined)
       .map((table) => table.id)
       .sort()
   )
@@ -425,6 +426,16 @@ export async function exportLogicalDatabaseArtifact(input: {
       tables: entries.filter((entry) => entry.disposition === 'ARCHIVE_THEN_OMIT'),
     }),
   )
+  const metadata = await input.source.readMetadata?.()
+  if ('schemaEpoch' in input.contract && input.contract.schemaEpoch === 2 && !metadata)
+    throw new Error('epoch2-metadata-source-required')
+  const epoch2MetadataFileDigest = metadata
+    ? writeDurableLogicalArtifact(
+        join(input.artifactRoot, 'epoch2-metadata.json'),
+        verifyEpochMetadataSnapshot(metadata),
+      )
+    : undefined
+  await input.source.assertUnchanged()
   const envelopePayload = LogicalDatabaseBackupEnvelopePayloadSchema.parse({
     version: 1,
     operationId: input.operationId,
@@ -440,6 +451,7 @@ export async function exportLogicalDatabaseArtifact(input: {
     chunks: chunksWritten,
     bytes: bytesWritten,
     completedAt: now(),
+    ...(epoch2MetadataFileDigest ? { epoch2MetadataFileDigest } : {}),
   })
   const envelope = LogicalDatabaseBackupEnvelopeSchema.parse({
     payload: envelopePayload,

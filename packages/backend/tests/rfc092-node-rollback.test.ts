@@ -27,7 +27,7 @@
 // RFC-395 II-a A2: preserve historical pre-snapshot rollback; unrecorded and clean checkpoints skip.
 // Real Git fixtures cover scalar fallback, partial maps, malformed maps and repeated resume.
 
-import { decodeTaskRollbackCheckpoints } from '@/modules/task-execution/infrastructure/taskCheckpointCodec'
+import { decodeTaskRollbackCheckpoints } from '@/modules/task-execution/infrastructure/migration/run/legacyCheckpointCodec'
 import { legacyStashSnapshotFixture } from './helpers/legacyStashSnapshot'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
@@ -65,7 +65,7 @@ function expectDirty(repo: string): void {
 }
 
 function singleTarget(repo: string): RollbackTarget {
-  return { worktreePath: repo, repos: [] }
+  return { worktreePath: repo, repos: [{ worktreePath: repo, mountPath: '' }] }
 }
 
 function multiTarget(container: string, repoA: string, repoB: string): RollbackTarget {
@@ -103,7 +103,6 @@ describe('RFC-092 rollbackNodeRunWorktrees (shared rollback authority)', () => {
         {
           id: ulid(),
           checkpoints: [{ mountPath: '', preSnapshot: sha }],
-          checkpointScope: 'workspace' as const,
         },
         {},
         log,
@@ -124,7 +123,6 @@ describe('RFC-092 rollbackNodeRunWorktrees (shared rollback authority)', () => {
       {
         id: ulid(),
         checkpoints: [{ mountPath: '', preSnapshot: '' }],
-        checkpointScope: 'workspace' as const,
       },
       {},
       log,
@@ -217,7 +215,7 @@ describe('RFC-092 rollbackNodeRunWorktrees (shared rollback authority)', () => {
     expectDirty(repoB)
   })
 
-  test('multi-repo, reposJson=NULL × resume: legacy pre-PR-B fallback rolls target.worktreePath via the single-string path; sub-repos untouched', async () => {
+  test('converted legacy scalar checkpoint rolls its materialized root mount; other mounts are untouched', async () => {
     // A legacy multi-repo row predating RFC-066 PR-B carries only the
     // single-string preSnapshot, and target.worktreePath points at a real
     // legacy worktree. Resume must keep that last-ditch fallback.
@@ -236,11 +234,16 @@ describe('RFC-092 rollbackNodeRunWorktrees (shared rollback authority)', () => {
     dirtyRepo(repoB)
 
     await rollbackNodeRunWorktrees(
-      multiTarget(legacyWorktree, repoA, repoB),
+      {
+        ...multiTarget(legacyWorktree, repoA, repoB),
+        repos: [
+          { mountPath: '', worktreePath: legacyWorktree },
+          ...multiTarget(legacyWorktree, repoA, repoB).repos,
+        ],
+      },
       {
         id: ulid(),
         checkpoints: [{ mountPath: '', preSnapshot: legacySha }],
-        checkpointScope: 'workspace' as const,
       },
       {},
       log,

@@ -37,8 +37,8 @@ import {
   createLogicalTableChunk,
   persistLogicalTableChunk,
   readLogicalTableChunk,
-} from '@/platform/persistence/logicalDatabaseArtifact'
-import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
+} from '@/platform/persistence/migration/legacy/logicalDatabaseArtifact'
+import { buildFrozenEpoch1LogicalSchemaContract as buildLogicalSchemaContract } from '@/platform/persistence/migration/epoch1/contract'
 
 const contract = buildLogicalSchemaContract()
 const table = contract.tables.find((candidate) => candidate.sourceTable === 'node_run_events')!

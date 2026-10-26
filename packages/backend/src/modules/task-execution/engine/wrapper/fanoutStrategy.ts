@@ -1,4 +1,4 @@
-import { copyLegacyPortArchive } from '@/platform/content/legacyPortArchive'
+import { copyPortArchive } from '@/platform/content/locations/portArchive'
 import {
   deriveWrapperFanoutOutputsInScope,
   FANOUT_DONE_PORT_NAME,
@@ -446,7 +446,7 @@ export class FanoutStrategy implements WrapperStrategy<'wrapper-fanout'> {
           content,
           kind: row?.kind ?? null,
           archiveJson:
-            row !== null && row.content === content ? copyLegacyPortArchive(row.archiveJson) : null,
+            row !== null && row.content === content ? copyPortArchive(row.archiveJson) : null,
           active: row?.active !== false,
         })
       }

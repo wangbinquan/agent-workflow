@@ -3,6 +3,10 @@
 // a crash pre-db-committed restores the root from trash (delete never committed);
 // post-db-committed drops the trash (row already gone).
 
+// RFC-170 §6a — the `delete` op (crash-safe managed-skill deletion) + its boot
+// recovery. Forward: root → trash → DELETE row → drop trash, lock freed. Recovery:
+// a crash pre-db-committed restores the root from trash (delete never committed);
+// post-db-committed drops the trash (row already gone).
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { buildActor } from '../src/auth/actor'
 import { databaseSessionFor } from '../src/platform/persistence/databaseTransaction'

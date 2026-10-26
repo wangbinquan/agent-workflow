@@ -1,3 +1,4 @@
+import { liveSqlitePath } from './storage'
 // RFC-319 —— 运维热旋钮 / 事件自动化 / 仓库后台清扫的用户面验收
 // （OPS-X4 / OPS-X10 / EVENT-08 / EVENT-16 / EVENT-23 / EVENT-36 / EVENT-48 /
 //   EVENT-X2 / REPO-39 / REPO-40）。
@@ -176,7 +177,7 @@ async function jsonOf<T>(res: Response, what: string): Promise<T> {
 }
 
 function databasePath(daemon: DaemonHandle): string {
-  return join(daemon.home, 'db.sqlite')
+  return liveSqlitePath(daemon.home)
 }
 
 async function uptimeSeconds(daemon: DaemonHandle): Promise<number> {

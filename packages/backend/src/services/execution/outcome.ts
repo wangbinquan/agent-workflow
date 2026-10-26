@@ -1,3 +1,4 @@
+import { createRunHistorySnapshot } from '@/modules/task-execution/public/queries'
 // RFC-243 T4 — the unified outcome projection (design §1.3). One answer to
 // "the task finished — what did it produce?" for all four execution kinds:
 //
@@ -20,20 +21,20 @@
 //
 // `projectExecutionOutcome` is a pure function over pre-fetched rows (unit
 // tested directly); `getExecutionOutcome` is the thin DB assembler.
-import { copyLegacyPortArchive } from '@/platform/content/legacyPortArchive'
+import { copyPortArchive } from '@/platform/content/locations/portArchive'
 import { workgroupLaunchMode } from '@/modules/task-execution/public/queries'
 import type { TaskWorkgroupConfig } from '@/modules/task-execution/public/types'
-import { decodeTaskSubject } from '@/modules/task-execution/public/queries'
+import type { TaskReadSubject } from '@/modules/task-execution/public/types'
 import type { TaskExecutionOutcomeReadModel } from '@/modules/task-execution/public/types'
 import { createTaskExecutionReadModels } from '@/modules/task-execution/infrastructure/taskExecutionReadModels'
 import { NotFoundError } from '@/util/errors'
-import { createRunSelectionOracleSnapshot } from '@/modules/task-execution/public/queries'
 import { AGENT_HOST_AGENT_NODE_ID } from '@/services/agentLaunch'
 import { CODE_ROUND_NODE_ID } from '@/services/codeRoundContract'
 import { isTerminalTaskStatus, type TaskStatus } from '@agent-workflow/shared'
 import type { ExecutionOutcome } from './types'
 
 export type OutcomeTaskRow = {
+  subjectKind?: TaskReadSubject['kind']
   id: string
   status: string
   errorSummary: string | null
@@ -146,9 +147,9 @@ async function projectOutputNodePorts(
     // RFC-354: a task-boundary projection sits outside every frame of the task —
     // the answer is the node's latest settled row, whatever frame produced it.
     const picked = (
-      await createRunSelectionOracleSnapshot(
+      await createRunHistorySnapshot(
+        '',
         runs.map((row) => ({ ...row, taskId: '' })),
-        { scope: { kind: 'rows' } },
       ).familyHistory('', { nodeId }, { topLevelOnly: true, statusIn: ['done', 'skipped'] })
     ).at(-1)
     if (picked === undefined) {
@@ -181,7 +182,7 @@ async function projectOutputNodePorts(
       result[o.portName] = {
         content: o.content,
         kind: o.kind,
-        ...(o.archiveJson != null ? { archiveJson: copyLegacyPortArchive(o.archiveJson) } : {}),
+        ...(o.archiveJson != null ? { archiveJson: copyPortArchive(o.archiveJson) } : {}),
         // RFC-306: an ACTIVE output node can still project an inactive port when
         // only one of its bindings sat on a closed branch (joinMode 'any').
         ...(o.active === false ? { active: false } : {}),
@@ -206,7 +207,7 @@ export async function projectExecutionOutcome(args: {
 
   let outputs: ExecutionOutcome['outputs'] = {}
   if (status === 'done') {
-    const kind = decodeTaskSubject(task).kind
+    const kind = task.subjectKind ?? 'unknown'
     if (kind === 'workflow' || kind === 'digital-employee') {
       outputs = await projectOutputNodePorts(
         outputNodesOfSnapshot(task.workflowSnapshot, warnings),
@@ -266,6 +267,8 @@ export async function projectExecutionOutcome(args: {
         warnings.push('workgroup-result-anchor-missing')
         outputs = { result: { content: '', kind: 'text' } }
       }
+    } else if (kind === 'unknown') {
+      warnings.push('task-subject-history-only')
     } else {
       // Compile-time exhaustiveness. RFC-304 learned this the expensive way:
       // when the workgroup arm was the bare `else`, a newly added kind reported

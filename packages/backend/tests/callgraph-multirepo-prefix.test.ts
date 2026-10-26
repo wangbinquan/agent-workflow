@@ -26,7 +26,7 @@ import { workflowFixture } from './helpers/model'
 import { afterEach, describe, expect, test } from 'bun:test'
 import type { StartTask } from '@agent-workflow/shared'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import {
@@ -67,7 +67,6 @@ describe('splitRepoRef — longest-prefix tie-break with nested dir names', () =
 // GAP 1: getCallTargets re-prefixes an EXTERNAL target's ownerClass (`::`).
 // Reuses the multi-repo git+DB harness from structural-diff-callchain-multi-repo.
 // ---------------------------------------------------------------------------
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 interface Harness {
   db: DbClient
@@ -90,7 +89,7 @@ async function buildHarness(): Promise<Harness> {
     await runGit(repoPath, ['commit', '-q', '-m', 'init'])
     repos.push(repoPath)
   }
-  const db = createInMemoryDb(MIGRATIONS)
+  const db = createInMemoryDb()
   await workflowFixture(db, {
     id: 'wf-ccx',
     name: 'wf',

@@ -238,6 +238,7 @@ describe('RFC-005 status enums', () => {
   test('NodeRun.reviewIteration defaults to 0 when omitted', () => {
     const nr = NodeRunSchema.parse({
       id: 'nr_1',
+      seq: 1,
       taskId: 't_1',
       nodeId: 'designer',
       parentNodeRunId: null,
@@ -263,6 +264,7 @@ describe('RFC-005 status enums', () => {
   test('NodeRun accepts reviewIteration > 0', () => {
     const nr = NodeRunSchema.parse({
       id: 'nr_1',
+      seq: 1,
       taskId: 't_1',
       nodeId: 'rev_1',
       parentNodeRunId: null,

@@ -1,3 +1,4 @@
+import { tablesOf } from '@/platform/persistence/sessionTables'
 // RFC-271 R0 —— **真 DB / 真 FS 的往返**：建资源 → 导出 → 解析 → 预检 → 提交 → 比对。
 //
 // 这条测试存在的理由很具体。RFC-271 的实现门（2026-08-08）一次抓出四个 P1，其中
@@ -23,7 +24,7 @@
 
 import { agentFixture, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+
 import { first } from '@/platform/persistence/queryHelpers'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { randomBytes } from 'node:crypto'
@@ -522,7 +523,8 @@ describeEachProvider(
         const src = await makeInstance()
         const { skillId, wg } = await seedSource(src.db, src.appHome)
         try {
-          const { agents, workflows, skills, mcps, workgroups } = tablesOf(src.db)
+          const { workflows, mcps, workgroups } = tablesOf(src.db)
+          const { agents, skills } = tablesOf(src.db)
           const agentRow = await first(
             src.db.select().from(agents).where(eq(agents.name, 'auditor')),
           )
@@ -731,7 +733,8 @@ describeEachProvider(
             createdAt: 1,
             updatedAt: 1,
           } as never)
-          const { agents, workflows } = tablesOf(dst.db)
+          const { workflows } = tablesOf(dst.db)
+          const { agents } = tablesOf(dst.db)
           try {
             const parsed = await parseResourcePackage(pkg.zip)
             const preview = await buildPackagePreview(dst.db, actorOf('u1'), parsed, {

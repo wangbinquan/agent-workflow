@@ -22,6 +22,7 @@ const RETIRED = [
   'createApp',
 ]
 const SEAMS = [
+  'schedulerDriver',
   'buildScheduleLaunch',
   'runtimeDiagnosticTestDependencies',
   'webhookDispatcher',

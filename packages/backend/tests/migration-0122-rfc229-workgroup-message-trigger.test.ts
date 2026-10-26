@@ -1,14 +1,14 @@
 // RFC-229 — rolling upgrade and self-FK semantics for message reply provenance.
 
+import { migrateFrozenSqlite as migrate, FROZEN_MIGRATIONS } from './migration-freeze'
 import { afterEach, describe, expect, test } from 'bun:test'
 import { Database } from 'bun:sqlite'
 import { drizzle } from 'drizzle-orm/bun-sqlite'
-import { migrate } from 'drizzle-orm/bun-sqlite/migrator'
 import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+const MIGRATIONS = resolve(FROZEN_MIGRATIONS)
 const tempDirs: string[] = []
 
 function freezeThrough(maxIdx: number): string {
@@ -54,7 +54,7 @@ describe('migration 0122 RFC-229 workgroup message trigger', () => {
   test('upgrades legacy rows and enforces SET NULL plus task cascade', () => {
     const raw = new Database(':memory:')
     raw.exec('PRAGMA foreign_keys = ON')
-    migrate(drizzle(raw), { migrationsFolder: freezeThrough0121() })
+    migrate(drizzle(raw), { migrationsFolder: freezeThrough0121(), preserveForeignKeys: true })
     seedTaskAndLegacyMessage(raw)
 
     // RFC-285 T5 改锚：第二段重放封顶在 0122 自己（idx 121），不再 replay 到
@@ -62,7 +62,8 @@ describe('migration 0122 RFC-229 workgroup message trigger', () => {
     // 只支持 FK-OFF 重放（drizzle 单事务内 pragma 无效），本测试 FK-ON 连接
     // 继续全链会让 seeded tasks 的 DROP 级联清掉子表行。意图（0122 自身升级
     // 语义 + SET NULL/cascade 行为）不受封顶影响。
-    migrate(drizzle(raw), { migrationsFolder: freezeThrough(121) })
+    migrate(drizzle(raw), { migrationsFolder: freezeThrough(121), preserveForeignKeys: true })
+    expect(raw.query('PRAGMA foreign_keys').get()).toEqual({ foreign_keys: 1 })
 
     const columns = raw.query("PRAGMA table_info('workgroup_messages')").all() as Array<{
       name: string

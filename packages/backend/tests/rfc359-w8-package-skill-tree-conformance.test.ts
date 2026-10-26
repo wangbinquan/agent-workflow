@@ -1,3 +1,5 @@
+import { legacyContentRef } from '@/platform/content/contentRef'
+import { contentRowColumns } from '@/platform/content/infrastructure/contentStore'
 // RFC-359 W8 —— 「资源包导出时怎么读一个托管技能的文件树」：合一后那一份实现的**双引擎对拍**。
 //
 // # 这一对是什么，为什么账本里看不见它
@@ -111,8 +113,15 @@ describeEachProvider('RFC-359 W8 —— 资源包技能树读出的双引擎对�
       id: SKILL_ID,
       name: 'w8-tree',
       description: '',
-      managedPath:
-        options.managedPath === undefined ? `skills/${SKILL_ID}/files` : options.managedPath,
+      ...(options.managedPath === null
+        ? { contentRefJson: null, contentInlineBytes: null }
+        : contentRowColumns(
+            legacyContentRef(
+              'skill-path',
+              'local-file',
+              options.managedPath ?? `skills/${SKILL_ID}/files`,
+            ),
+          )),
       ownerUserId: null,
       visibility: 'public',
       schemaVersion: 1,

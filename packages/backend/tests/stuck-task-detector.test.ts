@@ -1,3 +1,6 @@
+import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
+import { legacyContentRef } from '@/platform/content/contentRef'
+import { contentRowColumns } from '@/platform/content/infrastructure/contentStore'
 import { o2Ports } from './helpers/o2Closure'
 // RFC-053 PR-E — stuck-task detector (S1/S2/S3/S4), extended by RFC-098 WP-8
 // with S5 (running task, active node_run(s), events stalled — the wedged
@@ -126,6 +129,7 @@ describeEachProvider('RFC-053 PR-E — S4 (pending too long)', (harness) => {
     h = await buildHarness(harness.db, 'pending', T0 - 10 * MIN_MS)
     const r = await runStuckTaskDetector({
       operations: createTaskExecutionPersistence(h.db, {
+        historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
         recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
       }).recoveryAdministration,
       now: () => T0,
@@ -142,6 +146,7 @@ describeEachProvider('RFC-053 PR-E — S4 (pending too long)', (harness) => {
     h = await buildHarness(harness.db, 'pending', T0 - 2 * MIN_MS)
     const r = await runStuckTaskDetector({
       operations: createTaskExecutionPersistence(h.db, {
+        historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
         recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
       }).recoveryAdministration,
       now: () => T0,
@@ -178,6 +183,7 @@ describeEachProvider('RFC-053 PR-E — S4 (pending too long)', (harness) => {
     await markAsChild(h)
     const r = await runStuckTaskDetector({
       operations: createTaskExecutionPersistence(h.db, {
+        historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
         recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
       }).recoveryAdministration,
       now: () => T0,
@@ -190,6 +196,7 @@ describeEachProvider('RFC-053 PR-E — S4 (pending too long)', (harness) => {
     await markAsChild(h)
     const r = await runStuckTaskDetector({
       operations: createTaskExecutionPersistence(h.db, {
+        historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
         recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
       }).recoveryAdministration,
       now: () => T0,
@@ -213,6 +220,7 @@ describeEachProvider('RFC-053 PR-E — S1 (awaiting_review without pending dv)',
     // No pending doc_version, no events.
     const r = await runStuckTaskDetector({
       operations: createTaskExecutionPersistence(h.db, {
+        historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
         recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
       }).recoveryAdministration,
       now: () => T0,
@@ -233,11 +241,12 @@ describeEachProvider('RFC-053 PR-E — S1 (awaiting_review without pending dv)',
       sourcePortName: 'docpath',
       versionIndex: 1,
       reviewIteration: 0,
-      bodyPath: 'dv/v1.md',
+      ...contentRowColumns(legacyContentRef('review-body-path', 'local-file', 'dv/v1.md')),
       decision: 'pending',
     })
     const r = await runStuckTaskDetector({
       operations: createTaskExecutionPersistence(h.db, {
+        historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
         recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
       }).recoveryAdministration,
       now: () => T0,
@@ -251,6 +260,7 @@ describeEachProvider('RFC-053 PR-E — S1 (awaiting_review without pending dv)',
     await insertEvent(h.db, run, T0 - 5 * MIN_MS)
     const r = await runStuckTaskDetector({
       operations: createTaskExecutionPersistence(h.db, {
+        historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
         recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
       }).recoveryAdministration,
       now: () => T0,
@@ -269,6 +279,7 @@ describeEachProvider(
       h = await buildHarness(harness.db, 'awaiting_human', T0 - 45 * MIN_MS)
       const r = await runStuckTaskDetector({
         operations: createTaskExecutionPersistence(h.db, {
+          historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
           recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
         }).recoveryAdministration,
         now: () => T0,
@@ -307,6 +318,7 @@ describeEachProvider(
       })
       const r = await runStuckTaskDetector({
         operations: createTaskExecutionPersistence(h.db, {
+          historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
           recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
         }).recoveryAdministration,
         now: () => T0,
@@ -346,6 +358,7 @@ describeEachProvider(
       })
       const r = await runStuckTaskDetector({
         operations: createTaskExecutionPersistence(h.db, {
+          historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
           recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
         }).recoveryAdministration,
         now: () => T0,
@@ -388,6 +401,7 @@ describeEachProvider(
       })
       const r = await runStuckTaskDetector({
         operations: createTaskExecutionPersistence(h.db, {
+          historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
           recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
         }).recoveryAdministration,
         now: () => T0,
@@ -407,6 +421,7 @@ describeEachProvider('RFC-053 PR-E — S3 (running but all node_runs terminal)',
     await insertRun(h.db, h.taskId, { nodeId: 'b', status: 'done', finishedAt: T0 - 32 * MIN_MS })
     const r = await runStuckTaskDetector({
       operations: createTaskExecutionPersistence(h.db, {
+        historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
         recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
       }).recoveryAdministration,
       now: () => T0,
@@ -422,6 +437,7 @@ describeEachProvider('RFC-053 PR-E — S3 (running but all node_runs terminal)',
     await insertRun(h.db, h.taskId, { nodeId: 'b', status: 'running' })
     const r = await runStuckTaskDetector({
       operations: createTaskExecutionPersistence(h.db, {
+        historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
         recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
       }).recoveryAdministration,
       now: () => T0,
@@ -438,6 +454,7 @@ describeEachProvider('RFC-053 PR-E — S3 (running but all node_runs terminal)',
     // Deliberately no node_runs → bootstrap state; S3 conservatively skips.
     const r = await runStuckTaskDetector({
       operations: createTaskExecutionPersistence(h.db, {
+        historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
         recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
       }).recoveryAdministration,
       now: () => T0,
@@ -458,6 +475,7 @@ describeEachProvider('RFC-098 WP-8 — S5 (running, active runs, events stalled)
     await patchNodeRunFixture(h.db, { id: runId }, { pid: 4242 })
     const r = await runStuckTaskDetector({
       operations: createTaskExecutionPersistence(h.db, {
+        historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
         recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
       }).recoveryAdministration,
       now: () => T0,
@@ -478,6 +496,7 @@ describeEachProvider('RFC-098 WP-8 — S5 (running, active runs, events stalled)
     await insertEvent(h.db, runId, T0 - 40 * MIN_MS)
     const r = await runStuckTaskDetector({
       operations: createTaskExecutionPersistence(h.db, {
+        historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
         recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
       }).recoveryAdministration,
       now: () => T0,
@@ -497,6 +516,7 @@ describeEachProvider('RFC-098 WP-8 — S5 (running, active runs, events stalled)
     await insertEvent(h.db, runId, T0 - 10 * MIN_MS)
     const r = await runStuckTaskDetector({
       operations: createTaskExecutionPersistence(h.db, {
+        historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
         recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
       }).recoveryAdministration,
       now: () => T0,
@@ -512,6 +532,7 @@ describeEachProvider('RFC-098 WP-8 — S5 (running, active runs, events stalled)
     await insertRun(h.db, h.taskId, { nodeId: 'b', status: 'awaiting_review' })
     const r = await runStuckTaskDetector({
       operations: createTaskExecutionPersistence(h.db, {
+        historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
         recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
       }).recoveryAdministration,
       now: () => T0,
@@ -535,6 +556,7 @@ describeEachProvider('RFC-053 PR-E — reconcile + WS onAlert', (harness) => {
     h = await buildHarness(harness.db, 'pending', T0 - 10 * MIN_MS)
     const r1 = await runStuckTaskDetector({
       operations: createTaskExecutionPersistence(h.db, {
+        historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
         recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
       }).recoveryAdministration,
       now: () => T0,
@@ -542,6 +564,7 @@ describeEachProvider('RFC-053 PR-E — reconcile + WS onAlert', (harness) => {
     expect(r1.newAlerts).toBe(1)
     const r2 = await runStuckTaskDetector({
       operations: createTaskExecutionPersistence(h.db, {
+        historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
         recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
       }).recoveryAdministration,
       now: () => T0 + MIN_MS,
@@ -559,6 +582,7 @@ describeEachProvider('RFC-053 PR-E — reconcile + WS onAlert', (harness) => {
     h = await buildHarness(harness.db, 'pending', T0 - 10 * MIN_MS)
     await runStuckTaskDetector({
       operations: createTaskExecutionPersistence(h.db, {
+        historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
         recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
       }).recoveryAdministration,
       now: () => T0,
@@ -569,6 +593,7 @@ describeEachProvider('RFC-053 PR-E — reconcile + WS onAlert', (harness) => {
     await insertRun(h.db, h.taskId, { nodeId: 'a', status: 'running' })
     const r2 = await runStuckTaskDetector({
       operations: createTaskExecutionPersistence(h.db, {
+        historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
         recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
       }).recoveryAdministration,
       now: () => T0 + MIN_MS,
@@ -582,6 +607,7 @@ describeEachProvider('RFC-053 PR-E — reconcile + WS onAlert', (harness) => {
     const calls: Array<{ rule: string; transition: 'new' | 'promoted' }> = []
     await runStuckTaskDetector({
       operations: createTaskExecutionPersistence(h.db, {
+        historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
         recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
       }).recoveryAdministration,
       now: () => T0,
@@ -606,6 +632,7 @@ describeEachProvider('RFC-053 PR-E — reconcile + WS onAlert', (harness) => {
     // Stuck detector runs — should add S4, NOT touch the R1 row.
     await runStuckTaskDetector({
       operations: createTaskExecutionPersistence(h.db, {
+        historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
         recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
       }).recoveryAdministration,
       now: () => T0,

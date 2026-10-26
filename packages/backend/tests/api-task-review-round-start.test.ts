@@ -1,3 +1,5 @@
+import { legacyContentRef } from '@/platform/content/contentRef'
+import { contentRowColumns } from '@/platform/content/infrastructure/contentStore'
 import { withO2Closure } from './helpers/o2Closure'
 // RFC-395 II-pre：改接生产启动 / 读取路径，保留原断言意图。
 // RFC-078 — locks the taskNodeRunsProjection serialization of a review node's
@@ -95,7 +97,13 @@ async function seedDocVersion(
     sourcePortName: 'docpath',
     versionIndex: opts.versionIndex,
     reviewIteration: 0,
-    bodyPath: `reviews/rev/docpath/v${opts.versionIndex}.md`,
+    ...contentRowColumns(
+      legacyContentRef(
+        'review-body-path',
+        'local-file',
+        `reviews/rev/docpath/v${opts.versionIndex}.md`,
+      ),
+    ),
     decision: opts.decision,
     createdAt: opts.createdAt,
     decidedAt: opts.decidedAt ?? null,

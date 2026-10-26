@@ -7,6 +7,11 @@
 // applies 0021 against the same file — the backfill UPDATE runs once and
 // the seeded rows pick up their backfilled name.
 
+import {
+  migrateFrozenSqlite as migrate,
+  frozenTableSets,
+  FROZEN_MIGRATIONS,
+} from './migration-freeze'
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
 import { Database } from 'bun:sqlite'
 import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
@@ -14,11 +19,10 @@ import { removeTempDirSync } from './fixtures/tempDir'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { drizzle } from 'drizzle-orm/bun-sqlite'
-import { migrate } from 'drizzle-orm/bun-sqlite/migrator'
 import { ulid } from 'ulid'
-import * as schema from '../src/db/schema'
+const schema = frozenTableSets.sqlite
 
-const ROOT_MIGRATIONS = resolve(import.meta.dirname, '..', 'db', 'migrations')
+const ROOT_MIGRATIONS = resolve(FROZEN_MIGRATIONS)
 const JOURNAL_RAW = JSON.parse(readFileSync(join(ROOT_MIGRATIONS, 'meta', '_journal.json'), 'utf8'))
 
 function makeMigrationsFolder(maxIdx: number): string {

@@ -11,10 +11,51 @@ const physical: Readonly<Record<string, string>> = {
   agents: 'agents',
   workflows: 'workflows',
   clarify_rounds: 'clarifyRounds',
+  clarify_answers: 'clarifyAnswers',
+  clarify_answer_drafts: 'clarifyAnswerDrafts',
+  clarify_answer_attributions: 'clarifyAnswerAttributions',
+  agent_dependencies: 'agentDependencies',
+  agent_skill_refs: 'agentSkillRefs',
+  agent_mcp_refs: 'agentMcpRefs',
+  agent_plugin_refs: 'agentPluginRefs',
+  workflow_dependency_index: 'workflowDependencyIndex',
+  task_definitions: 'taskDefinitions',
+  task_launch_contexts: 'taskLaunchContexts',
+  task_workspaces: 'taskWorkspaces',
+  task_repository_mounts: 'taskRepositoryMounts',
+  task_execution_generations: 'taskExecutionGenerations',
+  node_run_selections: 'nodeRunSelections',
+  node_run_inputs: 'nodeRunInputs',
+  node_run_configs: 'nodeRunConfigs',
+  node_run_runtime_states: 'nodeRunRuntimeStates',
+  node_run_results: 'nodeRunResults',
+  node_run_repo_checkpoints: 'nodeRunRepoCheckpoints',
+  workgroup_task_state: 'workgroupTaskState',
 }
-export const movedFixtureColumns = inventory.columns.filter(
-  (column) => column.target !== `${column.table}.${column.physical}`,
-)
+export const movedFixtureColumns = [
+  ...inventory.columns.filter((column) => column.target !== `${column.table}.${column.physical}`),
+  ...Object.entries(inventory.targetColumns)
+    .filter(
+      ([table]) =>
+        ![
+          'tasks',
+          'node_runs',
+          'agents',
+          'workflows',
+          'clarify_rounds',
+          'node_run_outputs',
+        ].includes(table),
+    )
+    .flatMap(([table, columns]) =>
+      Object.entries(columns).map(([property, name]) => ({
+        table,
+        property,
+        physical: name,
+        target: `${table}.${name}`,
+        spec: property,
+      })),
+    ),
+]
 export interface FixtureReadFinding {
   table: string
   shape: 'column' | 'task-repos' | 'raw-sql' | 'whole-row'

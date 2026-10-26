@@ -1,41 +1,48 @@
-import { asc, eq } from 'drizzle-orm'
-import type { Task, WebhookTaskSourceLink } from '@agent-workflow/shared'
-import { parseTriggerContextJson, webhookTaskSourceLinkOf } from '@agent-workflow/shared'
+import { projectTaskMountReadRow } from './taskRepositorySql'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { projectStoredTaskRepositorySurface } from '@/platform/persistence/taskRepositorySurface'
-import { decodeTaskRepositoryMount } from './taskRepositoryCodec'
 import {
-  decodeTaskSubject,
+  type Task,
+  type WebhookTaskSourceLink,
+  parseTriggerContextJson,
+  webhookTaskSourceLinkOf,
+} from '@agent-workflow/shared'
+
+import { asc, eq } from 'drizzle-orm'
+import type { TaskDetailQueries } from '../application/ports/taskDetailQueries'
+import {
   projectTaskSubject,
+  taskReadSubjectFromDefinition,
   taskSubjectWorkflowVersion,
 } from '../domain/taskSubject'
-import { taskWorkgroupConfigFromRow } from './taskWorkgroupConfig'
+import { decodeTaskRepositoryMount } from './taskRepositoryCodec'
+import { type TaskReadRow, taskMountReadColumns, taskReadColumns } from './taskRepositorySql'
+
 import { DatabaseTaskSubjectQueries } from './taskSubjectQueries'
-import type { TaskDetailQueries } from '../application/ports/taskDetailQueries'
+import { taskWorkgroupConfigFromRow } from './taskWorkgroupConfig'
 
 export function createTaskDetailQueries(db: PersistenceDb): TaskDetailQueries {
   return {
     async read(id) {
-      const { tasks, taskRepos, taskSpaceNodes } = tablesOf(db)
+      const { taskSpaceNodes } = tablesOf(db)
+      const { tasks, taskRepositoryMounts: taskRepos } = tablesOf(db)
       const rows = await db
         .select({
-          task: tasks,
+          task: taskReadColumns(db),
         })
         .from(tasks)
         .where(eq(tasks.id, id))
         .limit(1)
       const row = rows[0]
       if (!row) return null
-      // RFC-066: hydrate per-repo metadata. Defensive fallback when task_repos is
-      // empty (legacy rows that landed before migration 0034 backfill, or the
-      // ultra-rare mid-migration crash): synthesize a single repo entry from the
-      // legacy `tasks.*` mirror columns so callers always see at least one entry.
+      // Zero physical mounts retain the public placeholder, projected from the frozen request.
       const repoRows = await db
-        .select()
+        .select(taskMountReadColumns(db))
         .from(taskRepos)
         .where(eq(taskRepos.taskId, id))
-        .orderBy(asc(taskRepos.repoIndex))
+        .orderBy(asc(taskRepos.ordinal))
+        .then((rows) => rows.map(projectTaskMountReadRow))
       const frozenNodeRows = await db
         .select({ path: taskSpaceNodes.nodePath })
         .from(taskSpaceNodes)
@@ -62,7 +69,7 @@ export function createTaskDetailQueries(db: PersistenceDb): TaskDetailQueries {
 }
 
 function rowToTask(
-  row: PersistenceTables['tasks']['$inferSelect'],
+  row: TaskReadRow,
   workflowName: string | null,
   repository: ReturnType<typeof projectStoredTaskRepositorySurface>,
   webhookSourceLink: WebhookTaskSourceLink | null,
@@ -82,10 +89,10 @@ function rowToTask(
   return {
     id: row.id,
     name: row.name, // RFC-037
-    ...projectTaskSubject(decodeTaskSubject(row), workflowName),
+    ...projectTaskSubject(taskReadSubjectFromDefinition(row), workflowName),
     workflowSnapshot: snapshot,
     workflowVersion: taskSubjectWorkflowVersion(
-      decodeTaskSubject(row),
+      taskReadSubjectFromDefinition(row),
       row.workflowVersion ?? null,
     ), // RFC-109
 

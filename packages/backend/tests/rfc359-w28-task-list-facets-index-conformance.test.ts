@@ -5,7 +5,8 @@ import { patchTaskFixture, taskFixture, workflowFixture, readTaskFixtures } from
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { rawRows } from '@/platform/persistence/queryHelpers'
-import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import { persistenceHead } from '@/bootstrap/persistenceHead'
+import { frozenEpoch1Contract } from '@/platform/persistence/migration/epoch1/contract'
 import { expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
@@ -19,18 +20,16 @@ import {
 import { parseTaskOperationsQuery } from '@/modules/task-execution/infrastructure/taskListPage/filters'
 import type { OperationsSqlRow } from '@/modules/task-execution/infrastructure/taskListPage/projection'
 import { fastFilteredRootQuery } from '@/modules/task-execution/infrastructure/taskListPage/query'
-import { loadPostgresqlMigrationHistory } from '@/platform/persistence/postgresqlMigrationHistory'
-import { renderPostgresqlUpgradeSql } from '@/platform/persistence/postgresqlMigrationSequence'
+import { loadPostgresqlMigrationHistory } from '@/platform/persistence/migration/legacy/postgresqlMigrationHistory'
+import { renderPostgresqlUpgradeSql } from '@/platform/persistence/migration/legacy/postgresqlMigrationSequence'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 import type { RecordedStatement } from './helpers/statementRecorder'
 
 const INDEX = 'idx_tasks_list_facets_cover'
-const COLUMNS = ['catalog_visibility', 'source_agent_name', 'workgroup_id', 'status', 'id']
+const FROZEN_INDEX = 'idx_tasks_list_facets_cover'
+// Epoch 2 keeps only task-state access columns; the frozen receipt below stays epoch 1.
+const COLUMNS = ['catalog_visibility', 'status', 'id']
 const UPGRADE = '0002_rfc359_task_list_facets_index'
-const SQLITE_MIGRATION = resolve(
-  import.meta.dir,
-  '../db/migrations/0226_rfc359_task_list_facets_index.sql',
-)
 const VIEWER = { userId: 'w28-facet-user', canReadAllTasks: true }
 const OPTIONS = { catalogVisibility: 'public' } as const
 const VIEWS = ['all', 'active', 'attention', 'finished'] as const
@@ -207,17 +206,11 @@ async function indexExists(harness: ProviderHarness): Promise<boolean> {
 }
 
 async function createIndexStatement(harness: ProviderHarness): Promise<string> {
-  if (harness.capabilities.provider === 'sqlite') {
-    return readFileSync(SQLITE_MIGRATION, 'utf8')
-  }
-  const history = await loadPostgresqlMigrationHistory({
-    headContract: buildLogicalSchemaContract(),
-  })
-  const step = history.steps.find((candidate) => candidate.id === UPGRADE)
-  if (step === undefined || step.indexAdditions.length !== 1) {
-    throw new Error('missing exact task facet index upgrade')
-  }
-  return step.indexAdditions[0]!.statement.sql
+  const statement = persistenceHead()[harness.capabilities.provider].head.find(
+    (entry) => entry.logicalId === `tasks:index:${INDEX}`,
+  )
+  if (!statement) throw new Error(`missing target facet index ${INDEX}`)
+  return statement.sql
 }
 
 async function dropIndex(harness: ProviderHarness): Promise<void> {
@@ -250,7 +243,7 @@ async function compareIndexStates<T>(
 
 test('the appended history adds exactly the facet index and retains its preceding receipt', async () => {
   const history = await loadPostgresqlMigrationHistory({
-    headContract: buildLogicalSchemaContract(),
+    headContract: frozenEpoch1Contract,
   })
   const step = history.steps.find((candidate) => candidate.id === UPGRADE)
   expect(step).toBeDefined()
@@ -258,7 +251,7 @@ test('the appended history adds exactly the facet index and retains its precedin
   expect(step.sequence).toBe(2)
   expect(step.previousEntryDigest).toBe(history.steps[0]!.digest)
   expect(step.indexAdditions).toHaveLength(1)
-  expect(step.indexAdditions[0]!.statement.logicalId).toBe(`tasks:index:${INDEX}`)
+  expect(step.indexAdditions[0]!.statement.logicalId).toBe(`tasks:index:${FROZEN_INDEX}`)
   expect(step.sqliteMigration.from.count).toBe(225)
   expect(step.sqliteMigration.to.count).toBe(226)
   expect(step.sqliteMigration.appended.map((migration) => migration.tag)).toEqual([
@@ -270,7 +263,7 @@ test('the appended history adds exactly the facet index and retains its precedin
 })
 
 describeEachProvider('RFC-359 W28 task list facet covering index', (harness) => {
-  test('actual catalogs expose the exact five-column non-unique non-partial index', async () => {
+  test('actual catalogs expose the exact target task-state non-unique non-partial index', async () => {
     if (harness.capabilities.provider === 'sqlite') {
       const columns = await rawRows<{ name: string }>(
         harness.db,

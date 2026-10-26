@@ -50,6 +50,7 @@ export const HUMAN_GATE_MANIFEST_KINDS = [
 export type HumanGateManifestKind = (typeof HUMAN_GATE_MANIFEST_KINDS)[number]
 
 export type HumanGateOperationErrorCode =
+  | 'history-only'
   | 'human-gate-artifact-digest-mismatch'
   | 'human-gate-artifact-missing'
   | 'human-gate-idempotency-conflict'
@@ -202,7 +203,9 @@ export function assertHumanGateManifestJson(value: string): void {
   }
   const envelope = decoded as { schemaVersion?: unknown; kind?: unknown }
   if (
-    envelope.schemaVersion !== 1 ||
+    (envelope.kind === 'clarify-open' || envelope.kind === 'review-open'
+      ? envelope.schemaVersion !== 2
+      : envelope.schemaVersion !== 1) ||
     typeof envelope.kind !== 'string' ||
     !(HUMAN_GATE_MANIFEST_KINDS as readonly string[]).includes(envelope.kind)
   ) {

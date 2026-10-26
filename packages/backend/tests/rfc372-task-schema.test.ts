@@ -1,24 +1,27 @@
+import { createFrozenEpoch1Db, freezeAt, MIGRATIONS } from './migration-freeze'
 // RFC-372 lightweight revision: obsolete tables retire through official forward migrations.
 import { describe, expect, test } from 'bun:test'
 import type { Database } from 'bun:sqlite'
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { tmpdir } from 'node:os'
-import { createInMemoryDb } from '@/db/client'
-import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
-import { loadPostgresqlMigrationHistory } from '@/platform/persistence/postgresqlMigrationHistory'
+
+import { buildFrozenEpoch1LogicalSchemaContract as buildLogicalSchemaContract } from '@/platform/persistence/migration/epoch1/contract'
+import { loadPostgresqlMigrationHistory } from '@/platform/persistence/migration/legacy/postgresqlMigrationHistory'
 import {
   postgresqlMigrationDigest,
   postgresqlUpgradeStatementSql,
   replayPostgresqlMigrationHistory,
   resolvePostgresqlAdditiveRowBridge,
   resolvePostgresqlIndexOnlyRowBridge,
-} from '@/platform/persistence/postgresqlMigrationSequence'
-import { freezeAt, MIGRATIONS } from './migration-freeze'
+} from '@/platform/persistence/migration/legacy/postgresqlMigrationSequence'
+
 import { openSqliteLogicalSource } from '@/platform/persistence/sqliteLogicalSource'
-import { exportLogicalDatabaseArtifact } from '@/platform/persistence/logicalDatabaseExport'
-import { restoreLogicalDatabaseBackup } from '@/platform/persistence/logicalDatabaseRestore'
+import { exportLogicalDatabaseArtifact } from '@/platform/persistence/migration/legacy/logicalDatabaseExport'
+import { restoreLogicalDatabaseBackup } from '@/platform/persistence/migration/legacy/logicalDatabaseRestore'
 import { openPostgresqlLogicalSource } from '@/platform/persistence/postgresqlLogicalSource'
+import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import { workflowFixture, taskFixture, nodeRunFixture, clarifyRoundFixture } from './helpers/model'
 import { describeEachProvider } from './helpers/eachProvider'
 
 const retired = [
@@ -36,26 +39,42 @@ const retired = [
 
 describeEachProvider('RFC-372 retained clarify backup sources', (h) => {
   test('both active providers export original round rows after companion retirement', async () => {
-    await h.executeFixtureDdl(
-      "INSERT INTO tasks (id,name,workflow_id,workflow_snapshot,repo_path,worktree_path,base_branch,branch,status,inputs,started_at) VALUES ('keep','keep','wf','{}','/r','','main','main','awaiting_human','{}',1)",
-    )
-    await h.executeFixtureDdl(
-      "INSERT INTO node_runs (id,task_id,node_id,status,iteration) VALUES ('ask','keep','ask','done',0),('gate','keep','gate','awaiting_human',0)",
-    )
-    await h.executeFixtureDdl(
-      "INSERT INTO clarify_rounds (id,task_id,kind,asking_node_id,asking_node_run_id,intermediary_node_id,intermediary_node_run_id,iteration,status,questions_json,created_at) VALUES ('round','keep','self','ask','ask','gate','gate',0,'awaiting_human','[{\"id\":\"original\"}]',1)",
-    )
-    const contract = buildLogicalSchemaContract()
+    await workflowFixture(h.db, { id: 'wf', name: 'wf', definition: '{}' })
+    await taskFixture(h.db, {
+      id: 'keep',
+      name: 'keep',
+      workflowId: 'wf',
+      workflowSnapshot: '{}',
+      repoPath: '/r',
+      worktreePath: '',
+      baseBranch: 'main',
+      branch: 'main',
+      status: 'awaiting_human',
+      inputs: '{}',
+      startedAt: 1,
+    })
+    await nodeRunFixture(h.db, [
+      { id: 'ask', taskId: 'keep', nodeId: 'ask', status: 'done' },
+      { id: 'gate', taskId: 'keep', nodeId: 'gate', status: 'awaiting_human' },
+    ])
+    await clarifyRoundFixture(h.db, {
+      id: 'round',
+      taskId: 'keep',
+      kind: 'self',
+      askingNodeId: 'ask',
+      askingNodeRunId: 'ask',
+      intermediaryNodeId: 'gate',
+      intermediaryNodeRunId: 'gate',
+      iteration: 0,
+      status: 'awaiting_human',
+      questions: '[{"id":"original"}]',
+      createdAt: 1,
+    })
+    const contract = logicalSchemaContract
     const binding = h.applicationBinding
     const root = mkdtempSync(join(tmpdir(), 'rfc372-source-parity-'))
     const { source, snapshot, assertUnchanged } = await (async () => {
       if (binding.provider === 'postgresql') {
-        await binding.runtime
-          .providerPool()
-          .unsafe(
-            'UPDATE "agent_workflow_meta"."database_generations" SET contract_digest = $1 WHERE generation_id = $2',
-            [contract.digest, binding.runtime.generationId],
-          )
         const source = await openPostgresqlLogicalSource({
           runtime: binding.runtime,
           generationId: binding.runtime.generationId,
@@ -91,7 +110,7 @@ describeEachProvider('RFC-372 retained clarify backup sources', (h) => {
 describe('RFC-372 companion retirement', () => {
   test('SQLite forward migration preserves original tasks, rounds and answer JSON', () => {
     const prefix = freezeAt(246)
-    const db = createInMemoryDb(prefix)
+    const db = createFrozenEpoch1Db(prefix)
     const native = Reflect.get(db, '$client') as Database
     try {
       native.exec(
@@ -181,7 +200,7 @@ describe('RFC-372 companion retirement', () => {
       history.versions[history.steps.findIndex((step) => step.id === '0024_rfc372_light_clarify')]!
     const prefix = freezeAt(previous.sqliteMigration.last.index)
     const root = mkdtempSync(join(tmpdir(), 'rfc372-retired-backup-'))
-    const db = createInMemoryDb(prefix)
+    const db = createFrozenEpoch1Db(prefix)
     const native = Reflect.get(db, '$client') as Database
     try {
       native.exec(

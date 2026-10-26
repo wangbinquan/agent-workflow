@@ -1,4 +1,4 @@
-import { legacyTaskContentDirectory } from '@/platform/content/legacyDirectories'
+import { taskContentDirectory } from '@/platform/content/locations/directories'
 import { existsSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { Paths } from '@/util/paths'
@@ -8,12 +8,12 @@ export function createFileTaskDeletionContentEffects(): TaskDeletionContentEffec
   return Object.freeze({
     directories(taskId: string): readonly string[] {
       return [
-        legacyTaskContentDirectory(Paths.runsDir, taskId),
-        legacyTaskContentDirectory(Paths.logsDir, taskId),
-        legacyTaskContentDirectory(join(Paths.root, 'scratch'), taskId),
+        taskContentDirectory(Paths.runsDir, taskId),
+        taskContentDirectory(Paths.logsDir, taskId),
+        taskContentDirectory(join(Paths.root, 'scratch'), taskId),
         // RFC-370 §10 V16: the task's code-review artifacts (structural diffs,
         // change narrative) were never removed with the task.
-        legacyTaskContentDirectory(join(Paths.root, 'structural-diffs'), taskId),
+        taskContentDirectory(join(Paths.root, 'structural-diffs'), taskId),
       ]
     },
     removeIfPresent(reference: string): void {

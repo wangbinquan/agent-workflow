@@ -1,15 +1,15 @@
+import { tablesOf } from '@/platform/persistence/sessionTables'
 // RFC-359 W4-B1 批 2h —— 优雅停机的幸存者处置：一份实现，两个 provider 共用。
 //
 // 此前 SQLite 走 legacy `setTaskStatus`（同步内核 + onTransitionTx 钩子），PG 内联 CAS + intent 终态化 +
 // lifecycle committed event。两边都**不过 owner 围栏**：幸存者正是预算用尽后驱动仍活着的任务，owner 行还是
 // `claimed`，这里是控制面的越权收场（下一次启动的孤儿收割也做同样的事），围栏在这条路上没有意义。
 
-import { tablesOf } from '@/platform/persistence/sessionTables'
-import { and, eq, inArray } from 'drizzle-orm'
 import { DAEMON_RESTART_ERROR_SUMMARY } from '@agent-workflow/shared'
+import { and, eq, inArray } from 'drizzle-orm'
 
-import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { publishCommittedEventsAfterCommit } from '@/platform/events/committed/runtime'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { TaskExecutionShutdownOperations } from '../application/ports/taskExecutionShutdownOperations'
 import { withTaskExecutionWrite } from './ownedTaskExecution'
 import { terminalizeTaskExecutionIntentsInTx } from './taskExecutionIntentTerminalPersistence'

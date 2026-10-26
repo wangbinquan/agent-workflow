@@ -32,6 +32,7 @@ function deferred() {
 function fixture(snapshot: HostSnapshot = null) {
   const queries: string[] = []
   const participants: unknown[] = []
+  const lockedTasks: string[] = []
   let transactions = 0
   let transactionError: unknown
   let loadError: unknown
@@ -96,6 +97,9 @@ function fixture(snapshot: HostSnapshot = null) {
         transactionHandle = transaction
         participants.push(transaction)
         return {
+          async lockTask(taskId) {
+            lockedTasks.push(taskId)
+          },
           async load() {
             if (loadError !== undefined) throw loadError
             return snapshot
@@ -116,6 +120,7 @@ function fixture(snapshot: HostSnapshot = null) {
     persistence,
     queries,
     participants,
+    lockedTasks,
     entered,
     transactions: () => transactions,
     rejectTransaction: (error: unknown) => {
@@ -211,7 +216,7 @@ describe('RFC-370 workgroup read snapshot CI repair', () => {
     expect(f.participants).toEqual([f.tx])
   })
 
-  test('commit keeps the original serializable transaction', async () => {
+  test('commit locks its task in one READ COMMITTED transaction', async () => {
     const f = fixture()
     expect(await f.persistence.commit({ taskId: 'task', operations: [] })).toEqual({
       committed: true,
@@ -220,7 +225,8 @@ describe('RFC-370 workgroup read snapshot CI repair', () => {
       failedRunIds: [],
     })
     expect(f.transactions()).toBe(1)
-    expect(f.queries).toEqual(['SET TRANSACTION ISOLATION LEVEL SERIALIZABLE'])
+    expect(f.queries).toEqual([])
+    expect(f.lockedTasks).toEqual(['task'])
     expect(f.participants).toEqual([f.tx])
   })
 

@@ -1,3 +1,8 @@
+import { epoch2ReviewReader } from './helpers/epoch2RuntimePorts'
+import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
+import { readReviewFixture } from './helpers/model/content'
+import { nodeRunFixtureColumns } from './helpers/model/nodeRun'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { o2Ports, withO2Closure } from './helpers/o2Closure'
 // RFC-092 §5-8 — S-1 端到端验收（review iterate 形态，修复后正确语义锁定）。
 //
@@ -29,13 +34,13 @@ import {
   workflowFixture,
   readNodeRunFixtures,
 } from './helpers/model'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { monotonicFactory } from 'ulid'
 const ulid = monotonicFactory() // 同毫秒插入仍保 id 单调（pure-id freshness）
 import { createInMemoryDb, type DbClient } from '../src/db/client'
@@ -48,8 +53,6 @@ import { submitTaskContinuation } from '../src/modules/task-execution/applicatio
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 import { createTaskExecutionPersistence } from '../src/modules/task-execution/composition/taskExecutionPersistence'
 import { runGit } from '../src/util/git' // 同毫秒插入仍保 id 单调（pure-id freshness）
-
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 // gate 慢 mock —— 同 rfc092-midrun-clarify-dispatch.test.ts（路径烘焙、零 env）。
 function gateMockSource(paths: {
@@ -143,7 +146,7 @@ async function buildHarness(): Promise<Harness> {
   await runGit(worktreePath, ['add', '.'])
   await runGit(worktreePath, ['commit', '-m', 'init'])
   writeFileSync(mockPath, gateMockSource({ planFile, stateDir, gates: { slow: gateFile } }))
-  const db = createInMemoryDb(MIGRATIONS)
+  const db = createInMemoryDb()
   return {
     db,
     appHome,
@@ -309,6 +312,7 @@ describe('RFC-092 S-1 端到端 — mid-run review iterate 由活调度循环自
     const launchIntentId = ulid()
     await submitTaskContinuation(
       createTaskExecutionPersistence(h.db, {
+        historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
         recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
       }).intents,
       {
@@ -327,6 +331,7 @@ describe('RFC-092 S-1 端到端 — mid-run review iterate 由活调度循环自
       driver: 'real',
     }).schedulerDriver
     const runPromise = wakeHumanGateContinuation(taskId, launchIntentId, {
+      historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
       db: h.db,
       appHome: h.appHome,
       binaryOverride: ['bun', 'run', h.mockPath],
@@ -357,6 +362,8 @@ describe('RFC-092 S-1 端到端 — mid-run review iterate 由活调度循环自
 
       // 真实入口：先落一条行内评论，再 iterate 打回。
       await addReviewComment({
+        reviewReader: epoch2ReviewReader(h.db, h.appHome),
+
         db: h.db,
         appHome: h.appHome,
         nodeRunId: revRunId,
@@ -385,6 +392,7 @@ describe('RFC-092 S-1 端到端 — mid-run review iterate 由活调度循环自
         iterateDecision.taskId,
         iterateDecision.continuationRef,
         {
+          historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
           db: h.db,
           appHome: h.appHome,
           binaryOverride: ['bun', 'run', h.mockPath],
@@ -398,7 +406,10 @@ describe('RFC-092 S-1 端到端 — mid-run review iterate 由活调度循环自
       const authorRuns = await topLevelRuns(h.db, taskId, 'author')
       expect(authorRuns.some((r) => r.status === 'pending' && r.retryIndex === 1)).toBe(true)
       const revAfterIterate = (
-        await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, revRunId))
+        await h.db
+          .select(nodeRunFixtureColumns(h.db))
+          .from(nodeRuns)
+          .where(eq(nodeRuns.id, revRunId))
       )[0]!
       expect(revAfterIterate.status).toBe('pending')
       expect(revAfterIterate.reviewIteration).toBe(1)
@@ -448,7 +459,9 @@ describe('RFC-092 S-1 端到端 — mid-run review iterate 由活调度循环自
 
     // 新一轮 review：同一 node_run 行再次停泊 awaiting_review（reviewIteration=1），
     // 且铸出了 v2 doc_version（pending、内容为 AUTHOR_V2）；v1 已 iterated。
-    const revFinal = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, revRunId)))[0]!
+    const revFinal = (
+      await h.db.select(nodeRunFixtureColumns(h.db)).from(nodeRuns).where(eq(nodeRuns.id, revRunId))
+    )[0]!
     expect(revFinal.status).toBe('awaiting_review')
     expect(revFinal.reviewIteration).toBe(1)
     const dvs = await h.db
@@ -460,7 +473,9 @@ describe('RFC-092 S-1 端到端 — mid-run review iterate 由活调度循环自
     const v2 = dvs.find((d) => d.versionIndex === 2)!
     expect(v1.decision).toBe('iterated')
     expect(v2.decision).toBe('pending')
-    expect(readFileSync(join(h.appHome, v2.bodyPath), 'utf-8')).toContain('AUTHOR_V2')
+    expect(
+      await readReviewFixture(h.db, h.appHome, v2, epoch2RuntimeTestPorts(h.db).content),
+    ).toContain('AUTHOR_V2')
 
     // 全链路推进收尾：approve v2 + 精确 continuation 唤醒 → 任务 done。
     const approval = await submitReviewDecision(
@@ -473,6 +488,7 @@ describe('RFC-092 S-1 端到端 — mid-run review iterate 由活调度循环自
       }),
     )
     await wakeHumanGateContinuation(approval.taskId, approval.continuationRef, {
+      historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
       db: h.db,
       appHome: h.appHome,
       binaryOverride: ['bun', 'run', h.mockPath],
@@ -481,7 +497,9 @@ describe('RFC-092 S-1 端到端 — mid-run review iterate 由活调度循环自
     })
     const finalTask = (await readTaskFixtures(h.db, { id: taskId }))[0]!
     expect(finalTask.status).toBe('done')
-    const revDone = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, revRunId)))[0]!
+    const revDone = (
+      await h.db.select(nodeRunFixtureColumns(h.db)).from(nodeRuns).where(eq(nodeRuns.id, revRunId))
+    )[0]!
     expect(revDone.status).toBe('done')
     // approve 后没有任何 agent 被再次调起（author 仍 2 次、slow 仍 1 次）。
     const spawnsAfter = readSpawns(h.stateDir)

@@ -1,447 +1,260 @@
-// Released epoch-1 defect: users:presence grants were rejected as invalid JSON during backups.
-// User decision (2026-10-24): fix epoch 1 now, including boot upgrades and historical restores.
-import { afterEach, beforeAll, describe, expect, setDefaultTimeout, test } from 'bun:test'
-import { Database } from 'bun:sqlite'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { loadFrozenEpoch1History } from '@/platform/persistence/migration/epoch1/bundle'
+import { frozenEpoch1Contract } from '@/platform/persistence/migration/epoch1/contract'
+import { migratePostgresqlSchema } from '@/platform/persistence/migration/legacy/postgresqlMigrator'
+import { installFrozenSqlite } from './helpers/rfc395V1Harness'
+// AF-D21: live epoch-2 backup/restore, plus a released epoch-1 artifact as converter input.
+import { expect, test } from 'bun:test'
+import { mkdtempSync, rmSync, mkdirSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { DatabaseConfig } from '@agent-workflow/shared'
-import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
-import { createInMemoryDb } from '@/db/client'
-import {
-  advanceDatabaseMigration,
-  createDatabaseMigrationManifest,
-  serializeDatabaseMigrationManifest,
-  type DatabaseMigrationPhase,
-} from '@/modules/system-operations/domain/databaseMigration'
-import { prepareDatabaseSchemaUpgrade } from '@/modules/system-operations/infrastructure/databaseSchemaUpgradeCoordinator'
+import { describeEachProvider } from './helpers/eachProvider'
+import { describeV3Providers } from './helpers/rfc395V3Harness'
+import { seedFrozenPostgresqlSource } from './helpers/rfc395V3/sourceSeeds'
+import { integrationInput } from './helpers/rfc395V2/integration'
+import { V2MemorySink } from './helpers/rfc395V2MemorySink'
+import { runConversion } from '@/platform/persistence/migration/conversion/engine'
+import { openFrozenSource } from '@/platform/persistence/migration/freeze/sourceAccess'
+import { unpackOldEpochBackup } from '@/platform/persistence/migration/freeze/oldEpochBackup'
+import { createBackup } from '@/services/backup'
+import { restoreBackup } from '@/platform/persistence/sqlite/systemProviderRestore'
 import { createPostgresqlProviderBackup } from '@/modules/system-operations/infrastructure/postgresqlProviderBackup'
 import { restorePostgresqlProviderBackup } from '@/modules/system-operations/infrastructure/postgresqlProviderRestore'
-import {
-  digestDatabaseArtifact,
-  readDatabaseGeneration,
-  readDatabaseGenerationForBootstrap,
-  writeDatabaseGenerationAtomic,
-} from '@/platform/persistence/generationStore'
-import { decodeLogicalRow } from '@/platform/persistence/logicalDatabaseArtifact'
-import {
-  exportLogicalDatabaseArtifact,
-  readLogicalDatabaseBackupEnvelope,
-} from '@/platform/persistence/logicalDatabaseExport'
-import {
-  openVerifiedLogicalDatabaseArtifactSource,
-  restoreLogicalDatabaseBackup,
-} from '@/platform/persistence/logicalDatabaseRestore'
-import { loadPostgresqlMigrationHistory } from '@/platform/persistence/postgresqlMigrationHistory'
-import type { PostgresqlMigrationHistory } from '@/platform/persistence/postgresqlMigrationSequence'
-import {
-  activateHostedPostgresqlGeneration,
-  migratePostgresqlSchema,
-} from '@/platform/persistence/postgresqlMigrator'
-import { createPostgresqlDatabaseRuntime } from '@/platform/persistence/postgresqlRuntime'
-import type { LogicalSchemaContract } from '@/platform/persistence/schemaContract'
-import { createBackup } from '@/platform/persistence/sqlite/systemProviderBackup'
-import { restoreBackup } from '@/platform/persistence/sqlite/systemProviderRestore'
-import { openSqliteLogicalSource } from '@/platform/persistence/sqliteLogicalSource'
-import { readManifest } from '@/services/backupManifest'
-import { extractTarGz } from '@/util/archive'
-import { describeEachProvider, resolveTestProviders } from './helpers/eachProvider'
-import { freezeAt, MIGRATIONS } from './migration-freeze'
+import { createPortableBackupApplicationAssets } from '@/platform/persistence/portableApplicationAssets'
+import { createPostgresqlProviderRestoreApplicationAssets } from '@/modules/system-operations/infrastructure/postgresqlProviderRestoreApplicationAssets'
+import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
+import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import { persistenceHead } from '@/bootstrap/persistenceHead'
+import { writeGenerationPointerV2 } from '@/platform/persistence/generationPointerV2'
+import { buildPostgresqlSchemaPlan } from '@/platform/persistence/postgresqlSchema'
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { openDb } from '@/db/client'
 
-setDefaultTimeout(180_000)
-const roots: string[] = []
-const operationId = 'dbm_epoch1_permission_text'
-const generationId = 'dbg_pg_epoch1_permission_text'
-const userId = 'epoch1-permission-user'
 const permission = 'users:presence'
-const contract = buildLogicalSchemaContract()
-let history: PostgresqlMigrationHistory
-beforeAll(async () => {
-  history = await loadPostgresqlMigrationHistory({ headContract: contract })
-})
-afterEach(() => {
-  for (const root of roots.splice(0).reverse()) rmSync(root, { recursive: true, force: true })
-})
-function tempRoot(): string {
-  const root = mkdtempSync(join(tmpdir(), 'epoch1-permission-text-'))
-  roots.push(root)
-  return root
-}
-function seedStatements(prefix = ''): string[] {
-  return [
-    `INSERT INTO ${prefix}users (id, username, display_name, role, created_at, updated_at) VALUES ('${userId}', 'permission-user', 'Permission user', 'user', 1, 1)`,
-    `INSERT INTO ${prefix}user_permission_grants (user_id, permission, granted_at) VALUES ('${userId}', '${permission}', 1)`,
-  ]
-}
-
-async function preservedMigration(
-  appHome: string,
-  previous: LogicalSchemaContract,
-  config: Extract<DatabaseConfig, { provider: 'postgresql' }>,
-) {
-  const artifactRoot = join(appHome, 'database-migrations', operationId)
-  const artifact = await exportLogicalDatabaseArtifact({
-    operationId,
-    sourceProvider: 'sqlite',
-    sourceGenerationId: 'dbg_epoch1_permission_source',
-    contract: previous,
-    artifactRoot,
-    expectedTableRows: Object.fromEntries(previous.tables.map((table) => [table.id, 0])),
-    source: {
-      provider: 'sqlite',
-      async assertUnchanged() {},
-      async readChunk() {
-        return []
-      },
-    },
-    now: () => 1,
-  })
-  let manifest = createDatabaseMigrationManifest({
-    operationId,
-    idempotencyKey: 'epoch1-permission-migration',
-    sourceGenerationId: 'dbg_epoch1_permission_source',
-    sourceSchemaDigest: previous.digest,
-    sourceDatabaseFingerprint: 'sqlite:permission-fixture',
-    target: config,
-    ownerId: 'dbo_epoch1_permission_owner',
-    ownerLeaseExpiresAt: 60_000,
-    tableCounts: {
-      source: previous.sourceTableCount,
-      active: previous.activeTableCount,
-      archiveOnly: previous.archiveOnlyTableCount,
-    },
-    now: 1,
-  })
-  const phases: readonly DatabaseMigrationPhase[] = [
-    'preflighted',
-    'source-frozen',
-    'backed-up',
-    'target-prepared',
-    'copying',
-    'verifying',
-    'cutover-prepared',
-    'switched',
-    'health-checked',
-    'accepting-writes',
-  ]
-  for (const nextPhase of phases)
-    manifest = advanceDatabaseMigration(manifest, {
-      expectedRevision: manifest.payload.revision,
-      expectedPhase: manifest.payload.phase,
-      nextPhase,
-      ownerId: manifest.payload.owner.id,
-      ownerFence: manifest.payload.owner.fence,
-      idempotencyKey: `permission-${nextPhase}`,
-      now: manifest.payload.updatedAt + 1,
-      ...(nextPhase === 'preflighted'
-        ? { targetDatabaseFingerprint: 'pg:permission-fixture' }
-        : {}),
-      ...(nextPhase === 'backed-up' ? { sourceBackupDigest: artifact.envelopeFileDigest } : {}),
-      ...(nextPhase === 'verifying'
-        ? {
-            logicalBackupDigest: artifact.envelope.payload.logicalManifestDigest,
-            legacyArchiveDigest: artifact.envelope.payload.legacyArchiveFileDigest,
-          }
-        : {}),
-      ...(nextPhase === 'cutover-prepared'
-        ? { verificationDigest: artifact.envelopeFileDigest }
-        : {}),
-    })
-  const bytes = serializeDatabaseMigrationManifest(manifest)
-  writeFileSync(join(artifactRoot, 'manifest.json'), bytes)
-  return digestDatabaseArtifact(bytes)
-}
-
-describeEachProvider('epoch-1 permission text boot and provider backup', (harness) => {
-  test('upgrades the previous head, backs up users:presence and restores its exact text', async () => {
-    const appHome = tempRoot()
-    const pointerPath = join(appHome, 'database-generation.json')
-    const operationsRoot = join(appHome, 'database-migrations')
-    const sqlitePath = join(appHome, 'db.sqlite')
-    const previous = history.versions.at(-2)!
-    const binding = harness.applicationBinding
-    const config: DatabaseConfig =
-      binding.provider === 'sqlite' ? { provider: 'sqlite' } : binding.databaseConfig
-    let manifestDigest: string | null = null
-    if (binding.provider === 'sqlite') {
-      const prefix = freezeAt(previous.sqliteMigration.last.index)
-      roots.push(prefix)
-      const db = createInMemoryDb(prefix)
+describeEachProvider(
+  'AF-D21 native permission-text backup and restore',
+  (h) => {
+    test('roundtrips a non-JSON permission through the live provider archive', async () => {
+      const home = mkdtempSync(join(tmpdir(), 'native-permission-'))
       try {
-        for (const statement of seedStatements()) db.$client.exec(statement)
-        writeFileSync(sqlitePath, db.$client.serialize())
-      } finally {
-        db.$client.close()
-      }
-    } else {
-      const runtime = createPostgresqlDatabaseRuntime({
-        config: binding.databaseConfig,
-        generationId,
-      })
-      try {
-        await harness.executeFixtureDdl('DROP SCHEMA agent_workflow CASCADE')
-        await harness.executeFixtureDdl('DROP SCHEMA agent_workflow_meta CASCADE')
-        await migratePostgresqlSchema({ runtime, headContract: contract, plan: previous.plan })
-        for (const statement of seedStatements('agent_workflow.'))
-          await runtime.providerPool().unsafe(statement)
-        await activateHostedPostgresqlGeneration({
-          runtime,
-          generation: { generationId, operationId },
-          contractDigest: previous.contract.digest,
-          planDigest: previous.plan.digest,
-          now: 1,
+        const { users, userPermissionGrants } = tablesOf(h.db)
+        await insertOne(h.db, users, {
+          id: 'permission-user',
+          username: 'permission-user',
+          displayName: 'Permission user',
+          role: 'user',
+          createdAt: 1,
+          updatedAt: 1,
         })
-        manifestDigest = await preservedMigration(
-          appHome,
-          previous.contract,
-          binding.databaseConfig,
-        )
-      } finally {
-        await runtime.close()
-      }
-    }
-    writeDatabaseGenerationAtomic({
-      pointerPath,
-      payload: {
-        version: 1,
-        provider: binding.provider,
-        generationId,
-        schemaDigest: previous.contract.digest,
-        operationId: binding.provider === 'sqlite' ? null : operationId,
-        manifestDigest,
-        activatedAt: 1,
-      },
-    })
-    expect(
-      readDatabaseGenerationForBootstrap({
-        pointerPath,
-        migrationsDir: operationsRoot,
-        expectedSchemaDigest: contract.digest,
-        supportedSchemaDigests: history.versions.map((version) => version.contract.digest),
-      }).kind,
-    ).toBe('schema-upgrade')
-    const prepare = () =>
-      prepareDatabaseSchemaUpgrade({
-        config,
-        sqlitePath,
-        generationPointerPath: pointerPath,
-        operationsRoot,
-        contract,
-        history,
-        sqliteOptions: { migrationsFolder: MIGRATIONS },
-        lockPath: join(appHome, 'schema-upgrade.lock'),
-        readConfig: () => config,
-        writeConfig: () => {
-          throw new Error('codec correction must retain provider config')
-        },
-      })
-    let backupPath: string
-    const prepared = await prepare()
-    try {
-      expect(
-        readDatabaseGeneration({
-          pointerPath,
-          migrationsDir: operationsRoot,
-          expectedSchemaDigest: contract.digest,
-        }).payload,
-      ).toMatchObject({ generationId, schemaDigest: contract.digest, activatedAt: 1 })
-      if (prepared.provider === 'sqlite') {
-        const db = prepared.runtime.openClient({ migrationsFolder: MIGRATIONS })
-        expect(db.$client.query('SELECT permission FROM user_permission_grants').all()).toEqual([
-          { permission },
-        ])
-        expect(
-          db.$client.query('SELECT count(*) AS count FROM __drizzle_migrations').get(),
-        ).toEqual({ count: 262 })
-        backupPath = (await createBackup({ db, contract, appHome, now: 2 })).path
-      } else {
-        expect(prepared.receipt.applied).toBe(true)
-        const runtime = prepared.runtime.runtime
-        expect(
-          await runtime
-            .providerPool()
-            .unsafe(
-              "SELECT contract_digest FROM agent_workflow_meta.database_generations WHERE state='active'",
-            ),
-        ).toEqual([expect.objectContaining({ contract_digest: contract.digest })])
-        expect(
-          await runtime
-            .providerPool()
-            .unsafe(
-              "SELECT baseline_id FROM agent_workflow_meta.schema_migrations WHERE baseline_id LIKE 'upgrade:%'",
-            ),
-        ).toEqual([
-          expect.objectContaining({
-            baseline_id: `upgrade:0038_epoch1_permission_text:${history.steps.at(-1)!.digest}`,
-          }),
-        ])
-        backupPath = (
-          await createPostgresqlProviderBackup({
-            headContract: contract,
-            contract,
+        await insertOne(h.db, userPermissionGrants, {
+          userId: 'permission-user',
+          permission,
+          grantedAt: 1,
+        })
+        const source = h.applicationBinding
+        if (source.provider === 'sqlite') {
+          const backup = await createBackup({
+            contract: logicalSchemaContract,
+            db: source.db,
+            appHome: home,
+          })
+          const appHome = join(home, 'restored'),
+            dbPath = join(appHome, 'db.sqlite')
+          await restoreBackup(backup.path, {
+            contract: logicalSchemaContract,
             appHome,
+            dbPath,
+            noSafetyBackup: true,
+          })
+          const restored = openDb({ path: dbPath })
+          try {
+            expect(
+              restored.$client.query('SELECT permission FROM user_permission_grants').all(),
+            ).toEqual([{ permission }])
+          } finally {
+            restored.$client.close()
+          }
+        } else {
+          const head = persistenceHead()
+          writeGenerationPointerV2({
+            pointerPath: join(home, 'database-generation.json'),
+            payload: {
+              version: 2,
+              schemaEpoch: 2,
+              generationId: source.runtime.generationId,
+              provider: 'postgresql',
+              role: 'installed',
+              database: {
+                kind: 'postgresql-target',
+                profileRef: `env:${source.databaseConfig.urlEnv}`,
+              },
+              contractDigest: head.contract.contract.digest,
+              planDigest: head.postgresql.digest,
+              operationId: null,
+              manifestDigest: null,
+              activatedAt: 1,
+              previous: null,
+            },
+          })
+          const backup = await createPostgresqlProviderBackup({
+            headContract: logicalSchemaContract,
+            contract: logicalSchemaContract,
+            runtime: source.runtime,
+            application: createPortableBackupApplicationAssets({ db: h.db }),
+            appHome: home,
+          })
+          const target = h.database(1).applicationBinding
+          if (target.provider !== 'postgresql') throw new Error('target provider mismatch')
+          await h.database(1).executeFixtureDdl('DROP SCHEMA agent_workflow CASCADE')
+          await h.database(1).executeFixtureDdl('DROP SCHEMA agent_workflow_meta CASCADE')
+          const generationId = 'dbg_permission_restored'
+          const runtime = { ...target.runtime, generationId }
+          const db = createPostgresqlDatabaseClient(runtime)
+          const appHome = join(home, 'restored')
+          mkdirSync(appHome)
+          await restorePostgresqlProviderBackup({
+            headContract: logicalSchemaContract,
+            contract: logicalSchemaContract,
+            plan: buildPostgresqlSchemaPlan(logicalSchemaContract),
             runtime,
-            now: 2,
-            application: {
-              async exportWorkflows() {
-                return 0
-              },
-              async captureWorktrees() {},
-            },
+            targetGenerationId: generationId,
+            tarballPath: backup.path,
+            appHome,
+            restoreOperationId: 'dbm_permission_restored',
+            filesystem: createPostgresqlProviderRestoreApplicationAssets({
+              db,
+              appHome,
+              databaseConfig: target.databaseConfig,
+            }),
           })
-        ).path
-      }
-    } finally {
-      await prepared.runtime.close()
-    }
-    const restarted = await prepare()
-    try {
-      if (restarted.provider === 'postgresql') expect(restarted.receipt.applied).toBe(false)
-    } finally {
-      await restarted.runtime.close()
-    }
-
-    const extracted = tempRoot()
-    await extractTarGz(backupPath, extracted)
-    const manifest = readManifest(extracted)
-    if (manifest?.manifestVersion !== 2) throw new Error('expected logical backup manifest')
-    const artifactRoot = join(extracted, manifest.database.logicalPath)
-    const envelope = readLogicalDatabaseBackupEnvelope({
-      artifactRoot,
-      expectedFileDigest: manifest.database.envelopeFileDigest,
-    })
-    const source = openVerifiedLogicalDatabaseArtifactSource({
-      artifactRoot,
-      expectedManifestDigest: envelope.payload.logicalManifestDigest,
-      expectedLegacyArchiveFileDigest: envelope.payload.legacyArchiveFileDigest,
-      contract,
-    })
-    const grants = contract.tables.find((table) => table.id === 'user_permission_grants')!
-    expect(
-      source.readChunk(grants, 0).payload.rows.map((row) => decodeLogicalRow(grants, row)),
-    ).toEqual([{ user_id: userId, permission, granted_by_user_id: null, granted_at: 1 }])
-
-    if (binding.provider === 'sqlite') {
-      const restoredHome = tempRoot()
-      await restoreBackup(backupPath, {
-        contract,
-        appHome: restoredHome,
-        migrationsFolder: MIGRATIONS,
-        noSafetyBackup: true,
-        postOpenRecovery: { async recover() {} },
-      })
-      const restored = new Database(join(restoredHome, 'db.sqlite'))
-      try {
-        expect(restored.query('SELECT permission FROM user_permission_grants').all()).toEqual([
-          { permission },
-        ])
-      } finally {
-        restored.close()
-      }
-    } else {
-      await harness.executeFixtureDdl('DROP SCHEMA agent_workflow CASCADE')
-      await harness.executeFixtureDdl('DROP SCHEMA agent_workflow_meta CASCADE')
-      const runtime = createPostgresqlDatabaseRuntime({
-        config: binding.databaseConfig,
-        generationId,
-      })
-      try {
-        await restorePostgresqlProviderBackup({
-          headContract: contract,
-          contract,
-          plan: history.head.plan,
-          tarballPath: backupPath,
-          appHome: tempRoot(),
-          restoreOperationId: 'dbm_epoch1_permission_restore',
-          runtime,
-          filesystem: { async apply() {} },
-        })
-        expect(
-          await runtime
-            .providerPool()
-            .unsafe('SELECT permission FROM agent_workflow.user_permission_grants'),
-        ).toEqual([expect.objectContaining({ permission })])
-      } finally {
-        await runtime.close()
-      }
-    }
-  })
-})
-
-describe('epoch-1 historical logical backup', () => {
-  if (resolveTestProviders(process.env).includes('sqlite'))
-    test('restores the previous contract using its original JSON codec and preserves stored text', async () => {
-      const previous = history.versions.at(-2)!
-      const prefix = freezeAt(previous.sqliteMigration.last.index)
-      roots.push(prefix)
-      const db = createInMemoryDb(prefix)
-      const appHome = tempRoot()
-      const sourcePath = join(appHome, 'old.sqlite')
-      try {
-        db.$client.exec(seedStatements()[0]!)
-        // A backup accepted by the old codec can contain JSON text; its bytes must stay intact.
-        db.$client
-          .query(
-            'INSERT INTO user_permission_grants (user_id, permission, granted_at) VALUES (?, ?, 1)',
-          )
-          .run(userId, JSON.stringify(permission))
-        writeFileSync(sourcePath, db.$client.serialize())
-      } finally {
-        db.$client.close()
-      }
-      const source = openSqliteLogicalSource({ path: sourcePath, contract: previous.contract })
-      const artifactRoot = join(appHome, 'logical')
-      try {
-        const snapshot = await source.preflight()
-        const exported = await exportLogicalDatabaseArtifact({
-          operationId,
-          sourceProvider: 'sqlite',
-          sourceGenerationId: generationId,
-          contract: previous.contract,
-          artifactRoot,
-          expectedTableRows: snapshot.tableRows,
-          source: {
-            provider: 'sqlite',
-            assertUnchanged: () => source.assertUnchanged(snapshot),
-            readChunk: (table, key, limit) => source.readChunk(table, key, limit),
-          },
-        })
-        const restored = new Database(':memory:')
-        restored.exec(
-          'CREATE TABLE user_permission_grants (user_id text, permission text, granted_by_user_id text, granted_at integer)',
-        )
-        try {
-          await restoreLogicalDatabaseBackup({
-            headContract: contract,
-            contract: previous.contract,
-            targetContract: contract,
-            artifactRoot,
-            expectedEnvelopeFileDigest: exported.envelopeFileDigest,
-            restoreOperationId: 'dbm_epoch1_historical_restore',
-            target: {
-              provider: 'sqlite',
-              operationId: 'dbm_epoch1_historical_restore',
-              async prepare() {},
-              async copyChunk(table, chunk) {
-                if (table.id !== 'user_permission_grants') return
-                for (const row of chunk.payload.rows) {
-                  const decoded = decodeLogicalRow(table, row)
-                  restored
-                    .query('INSERT INTO user_permission_grants (user_id, permission) VALUES (?, ?)')
-                    .run(String(decoded.user_id), String(decoded.permission))
-                }
-              },
-              async finalizeSchema() {},
-            },
-          })
-          expect(restored.query('SELECT permission FROM user_permission_grants').all()).toEqual([
-            { permission: JSON.stringify(permission) },
-          ])
-        } finally {
-          restored.close()
+          expect(
+            await runtime
+              .providerPool()
+              .unsafe('SELECT permission FROM agent_workflow.user_permission_grants'),
+          ).toEqual([{ permission }])
         }
       } finally {
-        await source.close()
+        rmSync(home, { recursive: true, force: true })
       }
     })
+  },
+  { databaseCount: 2 },
+)
+
+describeV3Providers('AF-D21 permission-text epoch-1 artifact conversion', (v3) => {
+  const h = v3.source
+  async function timed<T>(format: string, stage: string, body: () => Promise<T>): Promise<T> {
+    const started = performance.now()
+    try {
+      return await body()
+    } finally {
+      console.info(
+        'permission-backup-timing',
+        JSON.stringify({
+          provider: h.sourceHarness.provider,
+          format,
+          stage,
+          milliseconds: Math.round(performance.now() - started),
+        }),
+      )
+    }
+  }
+  for (const format of ['text', 'v8-json'] as const)
+    test(`BF-D20 converts a real released ${format} permission backup with its stored text unchanged`, async () => {
+      const history = await loadFrozenEpoch1History()
+      const version =
+        format === 'text'
+          ? await timed(format, 'install', () => h.install())
+          : history.postgresql.versions.at(-2)!
+      if (format === 'v8-json') {
+        if (h.sourceHarness.provider === 'sqlite')
+          await installFrozenSqlite(h.sourceHarness.sqlite, version.sqliteMigrations.length)
+        else
+          await migratePostgresqlSchema({
+            runtime: h.sourceHarness.runtime,
+            headContract: frozenEpoch1Contract,
+            plan: version.plan,
+          })
+        if (h.sourceHarness.provider === 'postgresql') await seedFrozenPostgresqlSource(h, version)
+        expect(
+          version.contract.tables
+            .find((table) => table.id === 'user_permission_grants')!
+            .columns.find((column) => column.name === 'permission')!.logicalCodec,
+        ).toBe('json-text')
+      }
+      const storedPermission = format === 'v8-json' ? JSON.stringify(permission) : permission
+      await h.write('users', [
+        {
+          id: 'permission-user',
+          username: 'permission-user',
+          display_name: 'Permission user',
+          role: 'user',
+          created_at: 1,
+          updated_at: 1,
+        },
+      ])
+      await h.write('user_permission_grants', [
+        { user_id: 'permission-user', permission: storedPermission, granted_at: 1 },
+      ])
+      const backup = await timed(format, 'export', () => h.sourceHarness.backup(version))
+      try {
+        // The shared reader fixture also supplies a hosted header; this case is a portable SQLite archive.
+        if (h.sourceHarness.provider === 'sqlite') rmSync(join(backup.root, 'hosted-backup.json'))
+        const unpacked = await unpackOldEpochBackup({
+          artifact: backup.root,
+          destination: join(h.sourceHarness.operationRoot, 'permission-unpacked'),
+        })
+        const scratch = async () => ({ runtime: v3.runtime, async close() {} })
+        const request = {
+          location: { kind: 'backup' as const, ...unpacked, artifact: backup.root },
+          manifest: await h.sourceHarness.manifest(),
+          emptyTables: [],
+          operationRoot: join(h.sourceHarness.operationRoot, 'permission-convert'),
+          ...(h.sourceHarness.provider === 'postgresql'
+            ? {
+                createScratchPostgresql: scratch,
+                reopenScratchPostgresql: scratch,
+              }
+            : {}),
+        }
+        let source = await timed(format, 'preflight', () => openFrozenSource(request))
+        if (source.preUpgrade) {
+          const expected = {
+            watermark: source.watermark,
+            preUpgradeWatermark: source.preUpgrade.preflight.watermark,
+            sourceGenerationId: source.preflight.sourceGenerationId,
+          }
+          await source.close()
+          source = await timed(format, 'reopen', () => openFrozenSource({ ...request, expected }))
+          expect(source.preUpgrade).not.toBeNull()
+        }
+        try {
+          const input = await timed(format, 'conversion-input', () =>
+            integrationInput(h, {
+              source: source.reader,
+              ...(source.preUpgrade
+                ? {
+                    preUpgradeSource: source.preUpgrade.reader,
+                    preUpgradePreflight: source.preUpgrade.preflight,
+                  }
+                : {}),
+            }),
+          )
+          const sink = new V2MemorySink()
+          const result = await timed(format, 'conversion', () => runConversion(input, sink))
+          expect(result.plan.blocks).toEqual([])
+          expect(sink.rows('user_permission_grants')).toContainEqual(
+            expect.objectContaining({ user_id: 'permission-user', permission: storedPermission }),
+          )
+        } finally {
+          await source.close()
+        }
+      } finally {
+        backup.close()
+        if (h.sourceHarness.provider === 'postgresql')
+          await v3.runtime
+            .providerPool()
+            .unsafe('DROP TABLE IF EXISTS public.aw_epoch1_upgrade_scratch')
+      }
+    }, 120_000)
 })

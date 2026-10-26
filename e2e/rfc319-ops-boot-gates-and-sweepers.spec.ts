@@ -1,3 +1,4 @@
+import { liveSqlitePath } from './storage'
 // RFC-319 —— 启动闸门与小时级后台任务
 // (OPS-026/027/028/029/030/039/040/041/042/043)。
 //
@@ -115,7 +116,7 @@ function bestEffortRemove(dir: string): void {
 }
 
 function databasePath(home: string): string {
-  return join(home, 'db.sqlite')
+  return liveSqlitePath(home)
 }
 
 function backupsDir(home: string): string {
@@ -188,39 +189,17 @@ function corruptDatabasePages(home: string): void {
   writeFileSync(path, bytes)
 }
 
-/**
- * 把一个已迁移的库改造成「落后于当前二进制」的形态：删掉全部 schema 对象、清空迁移
- * 收据，只留下 `__drizzle_migrations` 这张空表。
- *
- * 为什么这样造而不是「删掉最后一条收据」：删尾会让 `migrate()` 重放最后那条迁移，
- * 而它是不是幂等取决于当天最新那个文件写了什么——用例会随下一次有人加迁移而随机红。
- * 清空收据 + 清空对象则与迁移链的具体内容无关：`assertMigrationHistory` 的
- * preflight 允许「收据是期望链的前缀」（空集是合法前缀），`migrate()` 于是从零重放
- * 全链，与全新安装走同一条路。产品判「要不要做 pre-migration 备份」的条件
- * （`backupScheduler.ts:318-320`：库里最新收据的 created_at < 二进制 journal 的
- * maxWhen）在这个现场上成立，而它成立的**原因**与真实升级完全一致。
- */
-function rewindDatabaseBehindBinary(home: string): void {
-  const path = databasePath(home)
-  for (const sidecar of ['-wal', '-shm']) rmSync(`${path}${sidecar}`, { force: true })
-  const objects = querySqlite<{ type: string; name: string }>(
-    path,
-    `SELECT type, name FROM sqlite_master
-      WHERE type IN ('table','view')
-        AND name NOT LIKE 'sqlite_%'
-        AND name <> '__drizzle_migrations';`,
-  )
-  expect(
-    objects.length,
-    '前提不成立：这个 home 的库里一张表都没有 —— 说明它根本没被真实启动过',
-  ).toBeGreaterThan(50)
-  const statements = ['PRAGMA foreign_keys = OFF;']
-  for (const object of objects) {
-    statements.push(`DROP ${object.type === 'view' ? 'VIEW' : 'TABLE'} IF EXISTS "${object.name}";`)
-  }
-  statements.push('DELETE FROM __drizzle_migrations;')
-  runSqlite(path, statements.join('\n'))
-}
+// The first epoch-2 release has one history version. A source-process fixture
+// declares the next additive version and runs the real boot on the retained home.
+const upgradeBinary = [
+  runCommandResult(process.env.AGENT_WORKFLOW_E2E_BUN ?? 'bun', [
+    '-e',
+    'process.stdout.write(process.execPath)',
+  ]).output,
+  '--tsconfig-override',
+  join(process.cwd(), 'packages/backend/tsconfig.json'),
+  join(process.cwd(), 'e2e/fixtures/epoch2-upgrade-start.ts'),
+]
 
 function tarballsIn(dir: string): string[] {
   if (!existsSync(dir)) return []
@@ -444,27 +423,26 @@ test('RFC-319 OPS-028: 被改写的历史迁移与凭空多出的表都让启动
   test.setTimeout(OPS_TEST_TIMEOUT_MS)
   const home = await readyHome('drift')
   try {
-    // 先记下这个库当前认下的第一条迁移收据。改写它 = 「有人回头改了一个已经应用过的
-    // 迁移文件」——drizzle 自己只看最新那条时间戳，完全看不见这种改动，RFC-275 的
-    // preflight 正是为它而建。
-    const firstReceipt = querySqlite<{ hash: string }>(
+    // 修改已应用的 epoch-2 history receipt，完整历史准入必须点名拒绝。
+    const firstReceipt = querySqlite<{ contract_digest: string }>(
       databasePath(home),
-      'SELECT hash FROM __drizzle_migrations ORDER BY created_at ASC LIMIT 1;',
+      'SELECT contract_digest FROM aw_meta_schema_history ORDER BY version ASC LIMIT 1;',
     )[0]
-    expect(firstReceipt?.hash, '前提不成立：库里没有任何迁移收据').toMatch(/^[0-9a-f]{64}$/)
-    const originalHash = firstReceipt!.hash
+    expect(firstReceipt?.contract_digest, '前提不成立：库里没有任何迁移收据').toMatch(
+      /^sha256:[0-9a-f]{64}$/,
+    )
+    const originalHash = firstReceipt!.contract_digest
 
-    // 注意 `__drizzle_migrations.id` 在 SQLite 上**全是 NULL**（drizzle 建表时写的是
-    // `SERIAL PRIMARY KEY`，不是 INTEGER PRIMARY KEY，因而不是 rowid 别名），所以按 id
-    // 定位会静默匹配不到任何行、篡改变成空操作、用例假绿。按 created_at 定位。
+    // Change the native receipt by its schema history version.
     runSqlite(
       databasePath(home),
-      `UPDATE __drizzle_migrations
-         SET hash = '${'0'.repeat(64)}'
-       WHERE created_at = (SELECT MIN(created_at) FROM __drizzle_migrations);`,
+      `UPDATE aw_meta_schema_history
+         SET contract_digest = 'sha256:${'0'.repeat(64)}'
+       WHERE version = (SELECT MIN(version) FROM aw_meta_schema_history);`,
     )
 
     const rewritten = attemptStart(home)
+    expect(rewritten.out).toContain(`db:    ${databasePath(home)}`)
     expect(
       rewritten.code,
       '历史迁移被改写过，daemon 却照常启动 ⇒ 「库里的表结构」与「二进制以为的表结构」' +
@@ -477,27 +455,30 @@ test('RFC-319 OPS-028: 被改写的历史迁移与凭空多出的表都让启动
     expect(
       rewritten.out,
       '没有说清是在哪一档发现的 ⇒ 「收据链对不上」和「物理表结构对不上」需要的处置不同',
-    ).toContain('stage: migration-history-preflight')
+    ).toContain('stage: schema-history-receipt-preflight')
     expect(
       rewritten.out,
       '没有点名是哪一条迁移被改写 ⇒ 用户面对两百多个迁移文件，无从下手',
-    ).toMatch(/migration 0000_\S+ hash differs \(0{12} != [0-9a-f]{12}\)/)
+    ).toContain('aw_meta_schema_history receipt differs: schema-history receipt-mismatch:')
     expect(
       rewritten.out,
       '拒绝之后不给下一步 ⇒ 用户知道「有漂移」却不知道该恢复备份、重建库还是补一条正向迁移',
-    ).toContain('Do not edit __drizzle_migrations or rewrite an already-applied migration.')
+    ).toContain(
+      'Do not edit aw_meta_schema_history or rewrite an already-applied schema history version.',
+    )
 
     // 复原收据，改造成另一种漂移：库里凭空多出一张二进制根本不知道的表。
-    // 这一档由 `assertPhysicalSchema` 的**全链重放比对**兜住，收据链此时完全正确。
+    // 这一档由 native catalog admission 比对兜住，收据链此时完全正确。
     runSqlite(
       databasePath(home),
-      `UPDATE __drizzle_migrations
-         SET hash = '${originalHash}'
-       WHERE created_at = (SELECT MIN(created_at) FROM __drizzle_migrations);`,
+      `UPDATE aw_meta_schema_history
+         SET contract_digest = '${originalHash}'
+       WHERE version = (SELECT MIN(version) FROM aw_meta_schema_history);`,
     )
     runSqlite(databasePath(home), 'CREATE TABLE rfc319_ops_drift_probe (x TEXT);')
 
     const extraTable = attemptStart(home)
+    expect(extraTable.out).toContain(`db:    ${databasePath(home)}`)
     expect(
       extraTable.code,
       '物理表结构与迁移链重放出来的结果不一致，daemon 却照常启动 ⇒ 那正是「有人手工动过库」' +
@@ -506,11 +487,10 @@ test('RFC-319 OPS-028: 被改写的历史迁移与凭空多出的表都让启动
     expect(
       extraTable.out,
       '物理 schema 漂移没有被单独标出 stage ⇒ 与收据链漂移混为一谈，处置方向会走偏',
-    ).toContain('stage: physical-schema')
-    expect(
-      extraTable.out,
-      '没有点名多出来的是哪个对象 ⇒ 用户拿不到可以直接去 DROP 的名字',
-    ).toContain('unexpected table rfc319_ops_drift_probe')
+    ).toContain('stage: schema-history-catalog-admission')
+    expect(extraTable.out, '没有点名多出来的是哪个对象 ⇒ 用户拿不到可以直接去 DROP 的名字').toMatch(
+      /(?:column|table) rfc319_ops_drift_probe\./,
+    )
 
     // 把手工痕迹擦掉之后必须能重新起来：闸门是一道可通过的门，不是一次性的砖墙。
     runSqlite(databasePath(home), 'DROP TABLE rfc319_ops_drift_probe;')
@@ -616,8 +596,11 @@ test('RFC-319 OPS-030: 库落后于二进制时先做一份 pre-migration 原始
   const optedOut = await readyHome('premig-off', { backupOnMigration: false })
   const extractDir = freshHome('premig-extract')
   try {
-    rewindDatabaseBehindBinary(enabled)
-    rewindDatabaseBehindBinary(optedOut)
+    const beforeReceipts = querySqlite<{ version: number }>(
+      databasePath(enabled),
+      'SELECT version FROM aw_meta_schema_history ORDER BY version',
+    )
+    expect(beforeReceipts.length).toBeGreaterThan(0)
     expect(
       tarballsIn(backupsDir(enabled)).length,
       '前提不成立：这个 home 在启动前就已经有备份了',
@@ -628,13 +611,19 @@ test('RFC-319 OPS-030: 库落后于二进制时先做一份 pre-migration 原始
     //     不带就会退回 schema 默认值（true），于是「opt-out」那一半会静默地测了个寂寞。
     const upgraded = await startDaemon({
       home: enabled,
+      binary: upgradeBinary,
       configOverrides: { backupOnMigration: true },
     })
     try {
+      const health = await fetch(`${upgraded.baseUrl}/health`)
       expect(
-        await apiStatus(upgraded, '/health'),
+        health.status,
         '落后的库没能被迁上来 ⇒ 这条用例的前置（一次真实的「升级启动」）就不成立',
       ).toBe(200)
+      expect(
+        (await health.json()).dbVersion,
+        '/health must report the newly applied history version, not the initial epoch-2 head',
+      ).toBe(beforeReceipts.at(-1)!.version + 1)
     } finally {
       await upgraded.stop()
     }
@@ -655,16 +644,27 @@ test('RFC-319 OPS-030: 库落后于二进制时先做一份 pre-migration 原始
       existsSync(backedUpDb),
       '备份包里没有 db.sqlite ⇒ 它备份的不是库，回滚时什么都拿不回来',
     ).toBe(true)
-    const backedUpTables = countTables(backedUpDb)
-    const liveTables = countTables(databasePath(enabled))
-    expect(liveTables, '前提不成立：这次启动之后库里仍然没有表，说明迁移根本没跑').toBeGreaterThan(
-      50,
-    )
     expect(
-      backedUpTables,
-      `备份里的库有 ${backedUpTables} 张表、迁移后的库有 ${liveTables} 张 ⇒ ` +
-        '两者一样新，说明这份「pre-migration」备份是在迁移之后才拷的，回滚回来仍然是坏的那一版',
-    ).toBeLessThan(liveTables)
+      querySqlite(backedUpDb, 'SELECT version FROM aw_meta_schema_history ORDER BY version'),
+    ).toEqual(beforeReceipts)
+    const liveReceipts = querySqlite<{ version: number }>(
+      databasePath(enabled),
+      'SELECT version FROM aw_meta_schema_history ORDER BY version',
+    )
+    expect(liveReceipts).toEqual([
+      ...beforeReceipts,
+      { version: beforeReceipts.at(-1)!.version + 1 },
+    ])
+    expect(
+      querySqlite<{ name: string }>(backedUpDb, "PRAGMA table_info('tasks')").map(
+        (row) => row.name,
+      ),
+    ).not.toContain('ops030_upgrade_probe')
+    expect(
+      querySqlite<{ name: string }>(databasePath(enabled), "PRAGMA table_info('tasks')").map(
+        (row) => row.name,
+      ),
+    ).toContain('ops030_upgrade_probe')
     const manifest = JSON.parse(readFileSync(join(extractDir, 'manifest.json'), 'utf8')) as {
       kind?: string
     }
@@ -677,6 +677,7 @@ test('RFC-319 OPS-030: 库落后于二进制时先做一份 pre-migration 原始
     // ── ② 显式 opt-out：同样的现场，一份备份都不许留。
     const withoutBackup = await startDaemon({
       home: optedOut,
+      binary: upgradeBinary,
       configOverrides: { backupOnMigration: false },
     })
     try {
@@ -691,6 +692,12 @@ test('RFC-319 OPS-030: 库落后于二进制时先做一份 pre-migration 原始
       countTables(databasePath(optedOut)),
       'opt-out 的那一次没有把库迁上来 ⇒ 开关只该管备份，不该管迁移',
     ).toBeGreaterThan(50)
+    expect(
+      querySqlite(
+        databasePath(optedOut),
+        'SELECT version FROM aw_meta_schema_history ORDER BY version',
+      ),
+    ).toEqual(liveReceipts)
     expect(
       tarballsIn(backupsDir(optedOut)),
       'backupOnMigration=false 却仍然写了备份 ⇒ 这个开关是摆设；' +

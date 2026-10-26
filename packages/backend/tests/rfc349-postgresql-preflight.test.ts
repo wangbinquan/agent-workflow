@@ -47,7 +47,14 @@ function fakeRuntime(input: {
         ])
       }
       if (sql.includes('information_schema.tables')) return rows(input.tables ?? [])
-      if (sql.includes('logical_copy_operations')) return rows(input.operations ?? [])
+      if (sql.includes('migration_records')) {
+        expect(sql).toContain("unit_id = 'epoch2-copy'")
+        return rows(
+          (input.operations ?? []).filter(
+            (row) => row.run_id === parameters?.[0] && row.unit_id === 'epoch2-copy',
+          ),
+        )
+      }
       if (sql.includes('pg_try_advisory_lock')) {
         return rows([{ acquired: input.lockAcquired ?? true }])
       }
@@ -119,13 +126,19 @@ describe('RFC-349 PostgreSQL target preflight', () => {
   })
 
   test('accepts only the same resumable RFC-349 operation', async () => {
-    const tables = [{ table_schema: 'agent_workflow_meta', table_name: 'logical_copy_operations' }]
-    const accepted = fakeRuntime({ tables, operations: [{ operation_id: 'dbm_resume_12345678' }] })
+    const tables = [{ table_schema: 'agent_workflow_meta', table_name: 'migration_records' }]
+    const accepted = fakeRuntime({
+      tables,
+      operations: [{ run_id: 'dbm_resume_12345678', unit_id: 'epoch2-copy' }],
+    })
     await expect(
       preflightPostgresqlTarget({ runtime: accepted.runtime, operationId: 'dbm_resume_12345678' }),
     ).resolves.toMatchObject({ targetState: 'resumable', metadataTableCount: 1 })
 
-    const rejected = fakeRuntime({ tables, operations: [] })
+    const rejected = fakeRuntime({
+      tables,
+      operations: [{ run_id: 'dbm_resume_12345678', unit_id: 'other-unit' }],
+    })
     await expect(
       preflightPostgresqlTarget({ runtime: rejected.runtime, operationId: 'dbm_resume_12345678' }),
     ).rejects.toMatchObject({ code: 'postgresql-target-not-empty' })

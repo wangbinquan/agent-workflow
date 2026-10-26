@@ -2,12 +2,11 @@ import { agentFixture, readAgentFixtures } from './helpers/model'
 import { afterAll, describe, expect, test } from 'bun:test'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { ulid } from 'ulid'
 import { openDb, type DbClient } from '../src/db/client'
 import { removeTempDirSync } from './fixtures/tempDir'
 import type { Database } from 'bun:sqlite'
-const migrationsFolder = resolve(import.meta.dirname, '..', 'db', 'migrations')
 
 describe('db client', () => {
   const tmp = mkdtempSync(join(tmpdir(), 'aw-db-'))
@@ -35,8 +34,8 @@ describe('db client', () => {
     removeTempDirSync(tmp)
   })
 
-  test('openDb applies migrations and round-trips an agent insert', async () => {
-    const db = track(openDb({ path: dbPath, migrationsFolder }))
+  test('openDb installs the native head and round-trips an agent insert', async () => {
+    const db = track(openDb({ path: dbPath }))
 
     const id = ulid()
     await agentFixture(db, {
@@ -54,7 +53,7 @@ describe('db client', () => {
     expect(rows[0]?.bodyMd).toContain('hello')
   })
 
-  test('openDb is idempotent — second open does not re-run migrations destructively', () => {
-    expect(() => track(openDb({ path: dbPath, migrationsFolder }))).not.toThrow()
+  test('openDb admission is idempotent and preserves native rows on reopen', () => {
+    expect(() => track(openDb({ path: dbPath }))).not.toThrow()
   })
 })

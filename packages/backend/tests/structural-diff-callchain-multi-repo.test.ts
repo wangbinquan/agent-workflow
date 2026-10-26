@@ -13,7 +13,7 @@ import { workflowFixture } from './helpers/model'
 import { afterEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import type { StartTask } from '@agent-workflow/shared'
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { removeTempDirSync } from './fixtures/tempDir'
@@ -53,8 +53,6 @@ describe('splitRepoRef', () => {
   })
 })
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-
 interface Harness {
   db: DbClient
   appHome: string
@@ -76,7 +74,7 @@ async function buildHarness(): Promise<Harness> {
     await runGit(repoPath, ['commit', '-q', '-m', 'init'])
     repos.push(repoPath)
   }
-  const db = createInMemoryDb(MIGRATIONS)
+  const db = createInMemoryDb()
   await workflowFixture(db, {
     id: 'wf-cc',
     name: 'wf',

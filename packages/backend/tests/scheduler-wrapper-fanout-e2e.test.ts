@@ -1,3 +1,7 @@
+import { initializeTaskWorkspace } from './helpers/taskWorkspaceFixture'
+import { nodeRunFixtureColumns } from './helpers/model/nodeRun'
+import { taskReadColumns } from '@/modules/task-execution/infrastructure/taskRepositorySql'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 // RFC-060 PR-D end-to-end — wrapper-fanout scheduler dispatch.
 //
 // Covers the three dispatch paths exposed in PR-D:
@@ -24,11 +28,11 @@ import {
   workflowFixture,
   readNodeRunFixtures,
 } from './helpers/model'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
-import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
@@ -52,7 +56,7 @@ interface Harness {
 function buildHarness(provider: ProviderHarness): Harness {
   const appHome = mkdtempSync(join(tmpdir(), 'aw-fanout-'))
   const worktreePath = join(appHome, 'wt')
-  mkdirSync(worktreePath, { recursive: true })
+  initializeTaskWorkspace(worktreePath)
   const db = provider.db
   return {
     db,
@@ -204,16 +208,23 @@ function registerProviderCases1(provider: ProviderHarness) {
       binaryOverride: ['bun', 'run', MOCK_OPENCODE],
     })
     const { tasks, nodeRuns } = tablesOf(h.db)
-    const t = await h.db.select().from(tasks).where(eq(tasks.id, taskId)).limit(1)
+    const t = await h.db
+      .select(taskReadColumns(h.db))
+      .from(tasks)
+      .where(eq(tasks.id, taskId))
+      .limit(1)
     expect(t[0]?.status).toBe('done')
     // wrapper-fanout row done + __done__ signal port empty
-    const wrapperRow = await h.db.select().from(nodeRuns).where(eq(nodeRuns.nodeId, 'fan'))
+    const wrapperRow = await h.db
+      .select(nodeRunFixtureColumns(h.db))
+      .from(nodeRuns)
+      .where(eq(nodeRuns.nodeId, 'fan'))
     expect(wrapperRow.length).toBe(1)
     expect(wrapperRow[0]?.status).toBe('done')
     const wrapperOuts = await readNodeRunOutputFixtures(h.db, { nodeRunId: wrapperRow[0]!.id })
     expect(wrapperOuts.find((o) => o.portName === '__done__')?.content).toBe('')
     // No shard children minted
-    const allRuns = await h.db.select().from(nodeRuns)
+    const allRuns = await h.db.select(nodeRunFixtureColumns(h.db)).from(nodeRuns)
     const innerRows = allRuns.filter((r) => r.nodeId === 'inner')
     expect(innerRows.length).toBe(0)
   })
@@ -272,10 +283,14 @@ function registerProviderCases1(provider: ProviderHarness) {
         binaryOverride: ['bun', 'run', MOCK_OPENCODE],
       })
       const { tasks, nodeRuns } = tablesOf(h.db)
-      const taskRows = await h.db.select().from(tasks).where(eq(tasks.id, taskId)).limit(1)
+      const taskRows = await h.db
+        .select(taskReadColumns(h.db))
+        .from(tasks)
+        .where(eq(tasks.id, taskId))
+        .limit(1)
       expect(taskRows[0]?.status, innerKind).toBe('failed')
       const wrapperRows = await h.db
-        .select()
+        .select(nodeRunFixtureColumns(h.db))
         .from(nodeRuns)
         .where(eq(nodeRuns.nodeId, `fan-${innerKind}`))
       expect(wrapperRows[0]?.status, innerKind).toBe('failed')
@@ -330,9 +345,16 @@ function registerProviderCases1(provider: ProviderHarness) {
       }),
     )
     const { tasks, nodeRuns } = tablesOf(h.db)
-    const t = await h.db.select().from(tasks).where(eq(tasks.id, taskId)).limit(1)
+    const t = await h.db
+      .select(taskReadColumns(h.db))
+      .from(tasks)
+      .where(eq(tasks.id, taskId))
+      .limit(1)
     expect(t[0]?.status).toBe('done')
-    const wrapperRow = await h.db.select().from(nodeRuns).where(eq(nodeRuns.nodeId, 'fan'))
+    const wrapperRow = await h.db
+      .select(nodeRunFixtureColumns(h.db))
+      .from(nodeRuns)
+      .where(eq(nodeRuns.nodeId, 'fan'))
     expect(wrapperRow[0]?.status).toBe('done')
     // 2 shard children with shardKey set to the path itself (path<md> family)
     const innerRows = (await readNodeRunFixtures(h.db, { nodeId: 'inner' })).filter(
@@ -414,9 +436,16 @@ function registerProviderCases1(provider: ProviderHarness) {
       }),
     )
     const { tasks, nodeRuns } = tablesOf(h.db)
-    const t = await h.db.select().from(tasks).where(eq(tasks.id, taskId)).limit(1)
+    const t = await h.db
+      .select(taskReadColumns(h.db))
+      .from(tasks)
+      .where(eq(tasks.id, taskId))
+      .limit(1)
     expect(t[0]?.status).toBe('done')
-    const wrapperRow = await h.db.select().from(nodeRuns).where(eq(nodeRuns.nodeId, 'fan'))
+    const wrapperRow = await h.db
+      .select(nodeRunFixtureColumns(h.db))
+      .from(nodeRuns)
+      .where(eq(nodeRuns.nodeId, 'fan'))
     expect(wrapperRow[0]?.status).toBe('done')
     const wrapperOuts = await readNodeRunOutputFixtures(h.db, { nodeRunId: wrapperRow[0]!.id })
     // Wrapper outlet renamed via outputWrapperPortNames: result → final
@@ -497,7 +526,11 @@ function registerProviderCases1(provider: ProviderHarness) {
     )
 
     const { tasks } = tablesOf(h.db)
-    const taskRows = await h.db.select().from(tasks).where(eq(tasks.id, taskId)).limit(1)
+    const taskRows = await h.db
+      .select(taskReadColumns(h.db))
+      .from(tasks)
+      .where(eq(tasks.id, taskId))
+      .limit(1)
     expect(taskRows[0]?.status).toBe('done')
     const innerRows = await readNodeRunFixtures(h.db, { nodeId: 'inner' })
     expect(innerRows).toHaveLength(2)
@@ -540,9 +573,16 @@ function registerProviderCases1(provider: ProviderHarness) {
       fanoutMaxShardTotal: 3,
     })
     const { tasks, nodeRuns } = tablesOf(h.db)
-    const t = await h.db.select().from(tasks).where(eq(tasks.id, taskId)).limit(1)
+    const t = await h.db
+      .select(taskReadColumns(h.db))
+      .from(tasks)
+      .where(eq(tasks.id, taskId))
+      .limit(1)
     expect(t[0]?.status).toBe('failed')
-    const wrapperRow = await h.db.select().from(nodeRuns).where(eq(nodeRuns.nodeId, 'fan'))
+    const wrapperRow = await h.db
+      .select(nodeRunFixtureColumns(h.db))
+      .from(nodeRuns)
+      .where(eq(nodeRuns.nodeId, 'fan'))
     expect(wrapperRow[0]?.errorMessage ?? '').toContain('cartesian-exceeds-max')
     // No shard children minted (guard fired before dispatch).
     const innerRows = (await readNodeRunFixtures(h.db, { nodeId: 'inner' })).filter(

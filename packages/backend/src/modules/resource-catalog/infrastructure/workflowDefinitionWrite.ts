@@ -1,19 +1,38 @@
+import { workflowDependencyIndexEntries } from '@agent-workflow/shared'
 import { and, eq } from 'drizzle-orm'
 import type { WorkflowDefinitionWriteParticipant } from '../application/ports/workflowDefinitionWrite'
 import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 
-/** RFC-395 II-a A5：唯一 definition 写点；不重编码、不改变调用者的 revision 或谓词。 */
+/** Canonical bytes and their revision index commit in the same transaction. */
 export function createWorkflowDefinitionWriteParticipant(
   transaction: PersistenceDb | PersistenceTx,
 ): WorkflowDefinitionWriteParticipant {
   const { workflows } = tablesOf(transaction)
+  const { workflowDependencyIndex } = tablesOf(transaction)
+  async function rebuild(
+    workflowId: string,
+    revision: number,
+    entries: ReturnType<typeof workflowDependencyIndexEntries>,
+  ) {
+    await transaction
+      .delete(workflowDependencyIndex)
+      .where(eq(workflowDependencyIndex.workflowId, workflowId))
+    if (entries.length > 0)
+      await transaction
+        .insert(workflowDependencyIndex)
+        .values(entries.map((entry) => ({ workflowId, revision, ...entry })))
+  }
   return {
     async insert(record) {
-      return transaction.insert(workflows).values(record).returning()
+      const entries = workflowDependencyIndexEntries(record.definition)
+      const rows = await transaction.insert(workflows).values(record).returning()
+      for (const row of rows) await rebuild(row.id, row.version, entries)
+      return rows
     },
     async update(input) {
-      return transaction
+      const entries = workflowDependencyIndexEntries(input.set.definition)
+      const rows = await transaction
         .update(workflows)
         .set(input.set)
         .where(
@@ -32,6 +51,8 @@ export function createWorkflowDefinitionWriteParticipant(
           ),
         )
         .returning()
+      for (const row of rows) await rebuild(row.id, row.version, entries)
+      return rows
     },
   }
 }

@@ -1,4 +1,9 @@
 import {
+  databaseContentText,
+  inlineContentColumns,
+} from '@/platform/content/infrastructure/contentStore'
+
+import {
   nodeRunFixture,
   nodeRunOutputFixture,
   readNodeRunOutputFixtures,
@@ -241,19 +246,17 @@ describeEachProvider('RFC-359 W6-T25 —— batchInsertMax 与批量写', (h) =>
 
     const read = async (nodeRunId: string) => {
       const { nodeRunEvents } = tablesOf(h.db)
-      return (
-        await h.db
-          .select({
-            ts: nodeRunEvents.ts,
-            kind: nodeRunEvents.kind,
-            payload: nodeRunEvents.payload,
-            sessionId: nodeRunEvents.sessionId,
-            parentSessionId: nodeRunEvents.parentSessionId,
-          })
-          .from(nodeRunEvents)
-          .where(eq(nodeRunEvents.nodeRunId, nodeRunId))
-          .orderBy(asc(nodeRunEvents.id))
-      ).map((row) => ({ ...row }))
+      return await h.db
+        .select({
+          ts: nodeRunEvents.ts,
+          kind: nodeRunEvents.kind,
+          payload: nodeRunEvents.payload,
+          sessionId: nodeRunEvents.sessionId,
+          parentSessionId: nodeRunEvents.parentSessionId,
+        })
+        .from(nodeRunEvents)
+        .where(eq(nodeRunEvents.nodeRunId, nodeRunId))
+        .orderBy(asc(nodeRunEvents.id))
     }
 
     const batched = await read(batchedRun)
@@ -312,11 +315,18 @@ describeEachProvider('RFC-359 W6-T25 —— batchInsertMax 与批量写', (h) =>
           const { nodeRunOutputs } = tablesOf(tx)
           await tx
             .insert(nodeRunOutputs)
-            .values({ nodeRunId, ...output })
+            .values({
+              nodeRunId,
+              portName: output.portName,
+              kind: output.kind,
+              archiveJson: output.archiveJson,
+              active: output.active,
+              ...inlineContentColumns(Buffer.from(output.content)),
+            })
             .onConflictDoUpdate({
               target: [nodeRunOutputs.nodeRunId, nodeRunOutputs.portName],
               set: {
-                content: output.content,
+                ...inlineContentColumns(Buffer.from(output.content)),
                 kind: output.kind,
                 archiveJson: output.archiveJson,
                 active: output.active,
@@ -330,19 +340,24 @@ describeEachProvider('RFC-359 W6-T25 —— batchInsertMax 与批量写', (h) =>
 
     const read = async (nodeRunId: string) => {
       const { nodeRunOutputs } = tablesOf(h.db)
-      return (
-        await h.db
-          .select({
-            portName: nodeRunOutputs.portName,
-            content: nodeRunOutputs.content,
-            kind: nodeRunOutputs.kind,
-            archiveJson: nodeRunOutputs.archiveJson,
-            active: nodeRunOutputs.active,
-          })
-          .from(nodeRunOutputs)
-          .where(eq(nodeRunOutputs.nodeRunId, nodeRunId))
-          .orderBy(asc(nodeRunOutputs.portName))
-      ).map((row) => ({ ...row }))
+      const rows = await h.db
+        .select({
+          portName: nodeRunOutputs.portName,
+          contentRefJson: nodeRunOutputs.contentRefJson,
+          contentInlineBytes: nodeRunOutputs.contentInlineBytes,
+          kind: nodeRunOutputs.kind,
+          archiveJson: nodeRunOutputs.archiveJson,
+          active: nodeRunOutputs.active,
+        })
+        .from(nodeRunOutputs)
+        .where(eq(nodeRunOutputs.nodeRunId, nodeRunId))
+        .orderBy(asc(nodeRunOutputs.portName))
+      return Promise.all(
+        rows.map(async ({ contentRefJson, contentInlineBytes, ...row }) => ({
+          ...row,
+          content: await databaseContentText(h.db, { contentRefJson, contentInlineBytes }),
+        })),
+      )
     }
 
     const batched = await read(batchedRun)

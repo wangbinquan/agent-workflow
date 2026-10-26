@@ -67,386 +67,299 @@ const CORPUS_FILES: readonly string[] = enumerateTestSources()
 // 所以此前靠 `sqlite-execution-engine` 那条机械理由挂账（它们确实 import `services/task`）。
 // 两份合一之后那条理由消失了，判据当场把它们推到「既无理由、也不在 open 名单」这一格——
 // 这正是本守卫该做的事：**实现合一了，测试面不跟上就立刻现形**。
+// RFC-395 II-b T18: generated with callSiteRows and the unchanged sanctionOf classifier.
+// Sanction definitions and their evidence remain below; unapproved additions are not admitted.
 export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
-  'architecture/rfc329-mcp-surface-guard.test.ts: 1',
-  'architecture/rfc359-w5-t19g-schema-contract-reconciliation.test.ts: 2',
-  'backup.test.ts: 2',
-  'callgraph-multirepo-prefix.test.ts: 1',
-  'clarify-inline-isolated-parity.test.ts: 1',
-  'clarify-review-combination-scenarios.test.ts: 1',
-  // RFC-395 II-a A1: the offline row fixture delegates to the shared model builder.
-  'cli.test.ts: 1',
-  'contracts/harness.ts: 1',
-  'createindb-snapshot-parity.test.ts: 6',
-  // RFC-367 **销账**：`distill-session-capture.test.ts` 随被测对象（事后 opencode SQLite
-  // 走查）一并删除；蒸馏会话记录改由实时事件 sink 落库，新套件是
-  // `rfc367-distill-session-event-sink.test.ts`，走 describeEachProvider、不写死引擎。
-  'e2e-sqlite-fixture-lock-contention.test.ts: 3',
-  'epoch1-permission-text-backup.test.ts: 4',
-  'fixtures/rfc322-cpu-probe.ts: 1',
-  'fixtures/rfc338-blocking-maintenance-worker.ts: 1',
-  'fixtures/rfc338-foreground-contention-worker.ts: 1',
-  'fixtures/rfc349-postgresql-crash-worker.ts: 1',
-  'fixtures/rfc351-write-contention-worker.ts: 1',
-  'flag-audit-kind-canonicalization.test.ts: 1',
-  'fusion-engine.test.ts: 1',
-  'gettask-multi-repo.test.ts: 1',
-  'git-repo-cache.test.ts: 1',
-  // RFC-359 AC-6（收尾）**销账**：夹具的 `options.db ?? createInMemoryDb(...)` 回退整条删除
-  //（`db` 改必填）。它是「这套夹具的消费者可以只跑 SQLite」的唯一出口；五个消费者
-  //（t109 全旅程 / pr5 java 端到端 / pr4 工作区旅程 / pr7b 冲突收敛 / pr3 外部适配器）
-  // 全部迁到 `describeEachProvider`，回退随之消失。
-  // RFC-395 I-b: native compiler fixtures and schema reflection need the provider's own table metadata.
-  'helpers/nativeQueryFixture.ts: 1',
-  'helpers/rfc349PostgresqlHostedEvidence.ts: 2',
-  // RFC-370: exercise Bun SQLite's native Statement.run()/changes() contract,
-  // trigger/cascade counts and both DB factories; the existing $client classifier applies.
-  'helpers/rfc370SqliteAffectedRowsCases.ts: 1',
-  'helpers/schemaFixture.ts: 1',
-  // RFC-371: one physical OpenCode SQLite/WAL source; derived pages and original Workers
-  // are independently exercised against both real AW application providers.
-  'input-port-contract.test.ts: 1',
-  'integration-chaos/chaos-scenarios.integration.test.ts: 2',
-  'memory-distiller-source-context.test.ts: 1',
-  'migration-0002.test.ts: 1',
-  'migration-0008-cached-repos.test.ts: 1',
-  'migration-0010-opencode-session-id.test.ts: 1',
-  'migration-0011-mcps.test.ts: 1',
-  'migration-0012-node-run-events-session.test.ts: 1',
-  'migration-0014-plugins.test.ts: 1',
-  'migration-0015-inventory.test.ts: 1',
-  'migration-0016-mcp-probes.test.ts: 1',
-  'migration-0017-cached-repos-submodules.test.ts: 1',
-  'migration-0021-task-name.test.ts: 1',
-  'migration-0022-wrapper-progress.test.ts: 1',
-  'migration-0023-rfc041.test.ts: 1',
-  'migration-0024-distill-capture.test.ts: 1',
-  'migration-0025-injected-memories.test.ts: 1',
-  'migration-0026-port-validation-failures.test.ts: 1',
-  'migration-0027-distill-output-lang.test.ts: 1',
-  'migration-0028.test.ts: 3',
-  'migration-0029-rfc056-cross-clarify.test.ts: 7',
-  'migration-0030.test.ts: 5',
-  'migration-0031-clarify-rounds.test.ts: 8',
-  'migration-0032-rfc059-question-scopes.test.ts: 1',
-  'migration-0033-task-git-identity.test.ts: 4',
-  'migration-0034-task-repos.test.ts: 5',
-  'migration-0037-output-kind.test.ts: 2',
-  'migration-0038-backfill-review-kind.test.ts: 1',
-  'migration-0039-rfc075.test.ts: 5',
-  'migration-0040-rfc074-consumed-runs.test.ts: 4',
-  'migration-0041-rfc074-drop-cci.test.ts: 3',
-  'migration-0042-rfc079-doc-versions.test.ts: 1',
-  'migration-0043-shard-value-hash.test.ts: 3',
-  'migration-0044-rerun-cause.test.ts: 4',
-  'migration-0057-rfc115-drop-agent-params.test.ts: 5',
-  'migration-0058-rfc115-drop-agent-snapshot.test.ts: 5',
-  'migration-0090-rfc170.test.ts: 2',
-  'migration-0092-rfc178.test.ts: 2',
-  'migration-0098-rfc204-repo-cred.test.ts: 1',
-  'migration-0102-rfc210-submodule-isolation.test.ts: 1',
-  'migration-0104-rfc211-drop-onboarding.test.ts: 1',
-  'migration-0111-rfc223.test.ts: 5',
-  'migration-0112-rfc223-pr2.test.ts: 2',
-  'migration-0113-rfc223-pr3.test.ts: 2',
-  'migration-0114-rfc225-workgroup-version.test.ts: 2',
-  'migration-0115-rfc223-pr3a-terminal.test.ts: 2',
-  'migration-0116-rfc223-skill-identity.test.ts: 2',
-  'migration-0117-rfc223-fusion-provenance.test.ts: 3',
-  'migration-0118-rfc223-owner-scoped-names.test.ts: 2',
-  'migration-0119-rfc224-opencode-session-owners.test.ts: 2',
-  'migration-0120-rfc224-runtime-probe-fence.test.ts: 1',
-  'migration-0121-rfc227-opencode-provenance.test.ts: 1',
-  'migration-0122-rfc229-workgroup-message-trigger.test.ts: 1',
-  'migration-0124-rfc235-intent-turn-session.test.ts: 1',
-  'migration-0125-rfc238-mcp-runtime-playground.test.ts: 1',
-  'migration-0128-rfc244-task-list-indexes.test.ts: 3',
-  'migration-0138-rfc257-webhook-triggers.test.ts: 1',
-  'migration-0144-rfc276-runtime-hardening-deprecation.test.ts: 2',
-  'migration-0150-rfc292-trigger-namespace.test.ts: 1',
-  'migration-0151-rfc285-workflow-soft-link.test.ts: 1',
-  'migration-0152-rfc293-intent-workbench.test.ts: 1',
-  'migration-0155-rfc301-task-launch-origin.test.ts: 1',
-  'migration-0156-rfc300-workspace-prune-cause.test.ts: 1',
-  'migration-0157-rfc303-mr-terminal-control.test.ts: 1',
-  'migration-0162-rfc305-user-permissions.test.ts: 1',
-  'migration-0173-rfc308-workspace-profile.test.ts: 1',
-  'migration-0188-rfc312-presence-grant.test.ts: 1',
-  'migration-0193-rfc310-custom-event-sources.test.ts: 1',
-  'migration-0194-rfc310-unified-event-delivery.test.ts: 2',
-  'migration-0195-rfc310-work-start-lifecycle-events.test.ts: 1',
-  'migration-0196-rfc310-task-event-delivery-link.test.ts: 1',
-  'migration-0197-rfc310-event-response-rules.test.ts: 1',
-  'migration-0198-rfc310-event-catalog-visibility.test.ts: 1',
-  'migration-0202-rfc315-event-automation-permissions.test.ts: 1',
-  'migration-0203-task-catalog-visibility.test.ts: 1',
-  'migration-0205-rfc310-task-employee-case-link.test.ts: 1',
-  'migration-0206-rfc310-employee-case-name.test.ts: 1',
-  'migration-0208-rfc321-repository-transport-credentials.test.ts: 1',
-  'migration-0218-rfc341-committed-events.test.ts: 1',
-  'migration-0219-rfc341-task-cutover.test.ts: 1',
-  'migration-0220-rfc341-committed-delivery-fk-repair.test.ts: 1',
-  'migration-0221-rfc342-memory-scope-move-events.test.ts: 1',
-  'migration-0222-rfc341-collaboration-cutover.test.ts: 2',
-  'migration-0228-distill-source-kinds.test.ts: 2',
-  'migration-0256-rfc371-observation-v2.test.ts: 2',
-  'migration-0257-rfc370-v2-retire-host-execution.test.ts: 2',
-  'opencode-session-walk.test.ts: 1',
-  'rerun-prior-output-e2e.test.ts: 1',
-  'resume-multi-repo-rollback.test.ts: 1',
-  'resume-task-idempotent.test.ts: 1',
-  'review-cancel-concurrency.test.ts: 1',
-  'review-clarify-question-phase-stranded.test.ts: 1',
-  'review-iterate-comments-in-prompt.test.ts: 1',
-  'review-iterate-drops-prior-clarify-history.test.ts: 1',
-  'review-iterate-file-path-in-prompt.test.ts: 1',
-  'review-iterate-sibling-cascade.test.ts: 1',
-  'review-state-machine.test.ts: 1',
-  'reviews-iterate-mints-new-run.test.ts: 1',
-  'rfc074-prc-cci-retirement.test.ts: 1',
-  'rfc092-followup-chain-rollback.test.ts: 1',
-  'rfc092-leaked-pending-bounded.test.ts: 1',
-  'rfc092-midrun-clarify-dispatch.test.ts: 1',
-  'rfc092-midrun-review-iterate.test.ts: 1',
-  'rfc093-db-tx-sync.test.ts: 1',
-  'rfc095-wrapper-canceled-revival.test.ts: 1',
-  'rfc096-retry-cascade-inherit.test.ts: 1',
-  'rfc097-cancel-wins.test.ts: 1',
-  'rfc097-pending-orphan-reap.test.ts: 1',
-  // RFC-359 AC-1（第 8 刀）：`1 → 2`，同一刀里另有 `lifecycle-repair-harness.ts: 1` **清零**。
-  // harness 那一条是真收敛：它托着的 12 个行为套件从「自己 `createInMemoryDb`」改成由
-  // `describeEachProvider` 的 lane 交库，于是同一批断言落到两个真引擎上。
-  // 这一条 +1 是那次改动的**代价面**：本文件的反面对照用例（「没有活调度器的 running 任务
-  // 不该被门拦」）借的正是那个 harness，harness 不再自己建库之后，它得自己建一个——
-  // 而这条用例本来就只跑 SQLite（真 `resumeTask` + 桩 opencode 二进制 + 进程内活跃度注册表），
-  // 不是新的单引擎判据。
-  'rfc097-repair-liveness.test.ts: 2',
-  'rfc097-resume-mutex.test.ts: 1',
-  // RFC-359 AC-6 销账：`rfc097-task-status-cas.test.ts` 迁到 `describeEachProvider`，
-  // 唯一那处 `createInMemoryDb` 随之消失（36 例 → 两引擎各 36 例）。
-  'rfc098-commitpush-nonblocking.test.ts: 1',
-  'rfc098-fanout-consumed-gate.test.ts: 1',
-  'rfc098-fanout-shard-hash-rerun.test.ts: 1',
-  'rfc098-git-predirty-diff.test.ts: 1',
-  'rfc098-git-wrapper-diff-fail.test.ts: 1',
-  'rfc098-process-governance.test.ts: 1',
-  'rfc098-wrapper-revival-e2e.test.ts: 1',
-  'rfc098-wrapper-stale-redispatch.test.ts: 1',
-  'rfc099-migration-0045.test.ts: 1',
-  'rfc107-url-upload-multipart.test.ts: 3',
-  'rfc108-resume-safety.test.ts: 1',
-  // RFC-359 AC-1（第 13 刀下）**销账**：`syncWorkflow` 两个引擎合一之后，这套 RFC-109 的
-  // 回归判据整套迁到 `describeEachProvider` + 生产装配，单引擎那一格随之消失。
-  'rfc122-clarify-directive-dispatch.test.ts: 2',
-  'rfc130-crash-replay.test.ts: 1',
-  'rfc130-merge-agent-scheduler.test.ts: 1',
-  'rfc130-shard-rerun-undo.test.ts: 4',
-  'rfc130-wrapper-private-canonical.test.ts: 1',
-  'rfc131-review-reject-aging-prior-output.test.ts: 1',
-  'rfc142-review-rounds.test.ts: 2',
-  'rfc144-migration-0076.test.ts: 1',
-  'rfc144-stale-replay-regression.test.ts: 2',
-  'rfc145-migration-0077.test.ts: 2',
-  'rfc145-write-side.test.ts: 1',
-  'rfc152-ws-channel-registry.test.ts: 2',
-  'rfc162-migration-0081.test.ts: 1',
-  'rfc165-agent-launch.test.ts: 5',
-  'rfc165-migration-0085.test.ts: 1',
-  'rfc165-scheduled-kinds.test.ts: 3',
-  'rfc165-scratch-space.test.ts: 1',
-  'rfc167-dw-e2e.test.ts: 2',
-  'rfc167-dynamic-workflow-engine.test.ts: 3',
-  'rfc186-workgroup-e2e.test.ts: 1',
-  'rfc187-fanout-salvage-e2e.test.ts: 1',
-  'rfc187-workgroup-e2e.test.ts: 1',
-  'rfc189-wg-round.test.ts: 1',
-  'rfc193-force-include.test.ts: 1',
-  'rfc193-port-artifacts.test.ts: 1',
-  'rfc193-wrapper-review.test.ts: 1',
-  'rfc199-start-task-workflow-race.test.ts: 1',
-  'rfc204-cached-repo-wire-and-reuse.test.ts: 3',
-  'rfc204-cold-clone-seal.test.ts: 2',
-  'rfc212-revalidation-behavior.test.ts: 13',
-  'rfc213-pending-restore.test.ts: 1',
-  // RFC-213：真实 DB/WAL/SHM 字节快照和 busy checkpoint 是 SQLite 物理原语；
-  // PostgreSQL 备份不经过该适配器，沿用原 sqlite-only-primitive 机械分类。
-  'rfc213-raw-snapshot.test.ts: 4',
-  'rfc213-restore.test.ts: 3',
-  'rfc217-migration-0107.test.ts: 1',
-  'rfc217-workgroup-task-state.test.ts: 1',
-  'rfc218-agent-launch-ports.test.ts: 5',
-  'rfc220-oauth2-provider-schema-service.test.ts: 1',
-  'rfc220-presented-name-sync.test.ts: 3',
-  'rfc221-auth-policy.test.ts: 10',
-  'rfc223-pr2-refs.test.ts: 2',
-  'rfc223-pr3b-dynamic-token.test.ts: 2',
-  'rfc223-pr5-boot-restore-wiring.test.ts: 3',
-  'rfc223-pr9-cross-tenant-adversarial.test.ts: 5',
-  'rfc228-agent-resource-integrity.test.ts: 1',
-  'rfc230-wrapper-finalize-superseded.test.ts: 1',
-  'rfc238-mcp-runtime-test-transitions.test.ts: 6',
-  'rfc243-call-workflow.test.ts: 3',
-  'rfc243-call-workgroup.test.ts: 1',
-  'rfc243-list-child-count.test.ts: 2',
-  'rfc243-parent-child-lifecycle.test.ts: 12',
-  'rfc248-materialize-group.test.ts: 1',
-  'rfc248-migration-repo-groups.test.ts: 3',
-  'rfc248-readonly-dirty-visible.test.ts: 1',
-  'rfc249-migration-repo-group-nodes.test.ts: 1',
-  'rfc257-webhook-error-codes.test.ts: 1',
-  'rfc261-webhook-delivery-pagination.test.ts: 2',
-  'rfc266-script-pool-independence.test.ts: 1',
-  'rfc268-webhook-scratch-launch.test.ts: 1',
-  'rfc269-code-host-connections.test.ts: 4',
-  'rfc269-webhook-code-host-context-e2e.test.ts: 2',
-  'rfc269-webhook-trigger-context-atomicity.test.ts: 1',
-  'rfc274-workgroup-output-messages.test.ts: 1',
-  'rfc275-schema-admission.test.ts: 4',
-  'rfc276-readonly-script-stall-regression.test.ts: 1',
-  'rfc278-legacy-schema-reconciliation.test.ts: 2',
-  'rfc279-database-redundancy-cleanup.test.ts: 1',
-  'rfc282-d2-granted-ids-single-source.test.ts: 1',
-  'rfc284-batchc-resource-dedup.test.ts: 5',
-  'rfc287-t13-deferred-prep.test.ts: 27',
-  // RFC-359 AC-6 销账：`rfc291-closure-call-edges.test.ts` 的最后一处 `createInMemoryDb` 随
-  // `registerNativeCases` 一起删除——freeze/dump 同解两条上了双引擎（被
-  // `freezeCallClosure(db: DbClient)` 那个残留品牌标注钉住，形参放宽即解），
-  // 剩下的「复杂度与收口」是纯源码文本断言、一行库都不读。9 例 → 17 例（8×2 + 1）。
-  'rfc291-unavailable-mount.test.ts: 1',
-  'rfc294-task-execution-compat-oracles.test.ts: 1',
-  'rfc295-downgrade-audit.test.ts: 2',
-  'rfc300-webhook-workspace-cleanup-e2e.test.ts: 2',
-  'rfc300-workspace-prune.test.ts: 1',
-  'rfc301-task-launch-origin-inheritance.test.ts: 1',
-  'rfc303-node-revival-fence.test.ts: 1',
-  'rfc303-verified-ingress.test.ts: 1',
-  'rfc305-architecture-lock.test.ts: 1',
-  'rfc305-user-access-integration.test.ts: 1',
-  'rfc306-scheduler-branch.test.ts: 1',
-  'rfc309-template-merge-migration.test.ts: 1',
-  'rfc310-digital-employee-human-review-system-mock-e2e.test.ts: 1',
-  'rfc310-pr4-execution-host.test.ts: 1',
-  'rfc310-pr4-profile-identity.test.ts: 1',
-  'rfc311-backup-concurrency.test.ts: 1',
-  'rfc311-backup-worker-fallback.test.ts: 5',
-  'rfc311-branch-started-at-maintenance.test.ts: 2',
-  'rfc311-perf-foundation.test.ts: 10',
-  'rfc311-repos-page.test.ts: 1',
-  'rfc311-retention-sweep.test.ts: 1',
-  'rfc311-task-page-fastpath.test.ts: 1',
-  'rfc312-default-grant.test.ts: 1',
-  'rfc312-impl-gate-fixes.test.ts: 5',
-  'rfc312-presence-channel.test.ts: 3',
-  'rfc312-t0-upgrade-dedup.test.ts: 4',
-  'rfc313-session-escalation.test.ts: 1',
-  'rfc314-autokill-stall-window.test.ts: 1',
-  'rfc314-session-view-window.test.ts: 1',
-  'rfc317-cross-context-ports.test.ts: 3',
-  'rfc319-fusion-manifest-merge-back.test.ts: 1',
-  'rfc321-repository-transport-http.test.ts: 1',
-  'rfc326-review-decision-transaction.test.ts: 1',
-  'rfc326-tx-primitives-equivalence.test.ts: 2',
-  'rfc330-migration-backfill.test.ts: 1',
-  'rfc333-migration-human-gate-operations.test.ts: 4',
-  'rfc335-oidc-git-name-migration.test.ts: 1',
-  'rfc336-employee-case-advanced-migration.test.ts: 1',
-  'rfc338-maintenance-slices.test.ts: 4',
-  'rfc341-committed-event-store.test.ts: 1',
-  'rfc347-identity-access-runtime.test.ts: 4',
-  'rfc349-boolean-expression-parity.test.ts: 1',
-  'rfc349-collaboration-runtime-mechanics.test.ts: 1',
-  'rfc349-daemon-provider-core.test.ts: 1',
-  'rfc349-database-migration-coordinator.integration.test.ts: 3',
-  'rfc349-database-operational-adapter.test.ts: 1',
-  'rfc349-dual-provider-behavior-oracle.test.ts: 3',
-  'rfc349-identity-access-promise-contract.test.ts: 2',
-  'rfc349-maintenance-disk-provider.test.ts: 1',
-  'rfc349-maintenance-execution-fence.test.ts: 1',
-  'rfc349-null-ordering-parity.test.ts: 1',
-  'rfc349-postgresql-logical-migration.integration.test.ts: 1',
-  'rfc349-provider-search-case-parity.test.ts: 1',
-  'rfc349-safety-backup-off-thread-verify.test.ts: 1',
-  'rfc349-source-control-provider-adapters.test.ts: 2',
-  'rfc349-sqlite-logical-source.test.ts: 3',
-  'rfc349-sqlite-migration-compatibility.test.ts: 2',
-  'rfc349-task-execution-provider-adapters.test.ts: 3',
-  // RFC-359 AC-6 销账：`rfc349-websocket-provider.test.ts` —— 那对「真 SQLite + 假池 PG」的
-  // 手搓孪生合成一条双引擎。`DrizzleRealtimeStore` 的形参本来就是 `PersistenceDb`
-  // （一份实现），两条用例只是喂了两种库；合并后同一份真数据、同一组断言跑两个引擎，
-  // `sqlRows` / `postgresqlFixture` 假池随之删除。5 例 → 7 例。
-  'rfc351-sqlite-write-transaction-immediate.test.ts: 1',
-  'rfc354-clarify-idle-skip.test.ts: 1',
-  'rfc354-nested-depth3-frames.test.ts: 1',
-  'rfc354-nested-failure-modes.test.ts: 1',
-  'rfc354-nested-frames-closure.test.ts: 1',
-  'rfc354-nested-loop-frames.test.ts: 1',
-  'rfc357-provider-portability.test.ts: 1',
-  'rfc359-database-transaction.test.ts: 1',
-  'rfc359-engine-capabilities.test.ts: 1',
-  // RFC-395 I-b: concurrent native clients and SQLite sync transaction inheritance.
-  'rfc359-provider-schema-column-facade.test.ts: 1',
-  'rfc359-t19h-generation-upgrade.test.ts: 4',
-  'rfc359-t19h-logical-backup-restore.test.ts: 1',
-  'rfc359-t19h-postgresql-upgrade.integration.test.ts: 1',
-  'rfc359-w14-agent-commit-sequence.test.ts: 1',
-  'rfc359-w16-task-lifecycle-write-sequence.test.ts: 1',
-  'rfc359-w25-task-page-bounded-prefix.test.ts: 1',
-  'rfc359-w36-skill-operation-state-query.test.ts: 1',
-  'rfc359-w6-t26-postgresql-plan-audit.test.ts: 1',
-  'rfc359-w7-catalog-composition-roots.test.ts: 1',
-  'rfc359-w8-logical-source-conformance.test.ts: 1',
-  'rfc359-w8-migrator-conformance.test.ts: 1',
-  // RFC-370 v3 V5: HTTP-boundary locks of `POST /api/backup` (hosted decode and
-  // C10 refusal; the unchanged standalone contract). The backup adapter is a
-  // stub and the database only backs the HTTP root's session/auth, so neither
-  // asserts provider behaviour.
-  'rfc370-m3-backup-http.test.ts: 1',
-  'rfc370-v3-standalone-backup-request.test.ts: 1',
-  // RFC-371：嵌套子会话数字采集的原生只读 SQLite 夹具，AW 账本另做双 provider 回归。
-  // RFC-370: one native SQLite client records real writer-lease/transaction ACKs.
-  // Its PG protocol fixture is synthetic; real-PG parity is retained as explicit debt below.
-  'rfc370-workgroup-commit-queue.test.ts: 1',
-  // RFC-371 v2: one external OpenCode SQLite store fixture (the native file format the
-  // usage meter reads read-only); call persistence itself is covered on both providers.
-  'rfc371-v2-usage-meters.test.ts: 1',
-  // RFC-372: the native CLI scheduler harness uses the existing SQLite runtime;
-  // original round persistence and submission are separately driven on both providers.
-  'rfc372-task-engine.test.ts: 1',
-  // Immutable historical SQLite artifacts require native serialization; current
-  // retained-row reads now also drive the real PostgreSQL source in this suite.
-  'rfc372-task-schema.test.ts: 2',
-  // RFC-395 I-a proof 3 compares the SQLite compiler with SQLite migration replay;
-  // the companion PostgreSQL catalog test builds both PostgreSQL databases in its lane.
-  'rfc395-provider-catalog-equivalence.test.ts: 2',
-  // RFC-395 I-b: native sync transaction timing and cast-free compiler conformance.
-  'rfc395-query-helpers.test.ts: 1',
-  'rfc395-query-surface.test.ts: 1',
-  'runner-subagent-live-capture.test.ts: 6',
-  'scheduler-audit-gap1-limits-resume-startedat.test.ts: 1',
-  'scheduler-audit-gap4-loop-exit-out-of-scope-port.test.ts: 1',
-  'scheduler-audit-s02-multirepo-retry-rollback-noop.test.ts: 1',
-  'scheduler-audit-s07-s28-wrapper-consumed-status.test.ts: 1',
-  'scheduler-audit-s08-runtask-no-cas-revival.test.ts: 1',
-  'scheduler-audit-s10-async-transaction-decorative.test.ts: 1',
-  'scheduler-audit-s21-fanout-aggregator-idempotency.test.ts: 1',
-  'scheduler-audit-s22-canceled-retry-stall.test.ts: 2',
-  'scheduler-boundary-canceled-fanout-status.test.ts: 1',
-  'scheduler-boundary-resume-retryindex-vs-id.test.ts: 1',
-  'scheduler-commit-push.test.ts: 1',
-  'scheduler-default-retries.test.ts: 1',
-  'scheduler.test.ts: 1',
-  'session-capture-sqlite.test.ts: 4',
-  'start-task-multi-repo-gates.test.ts: 1',
-  'start-task-url.test.ts: 1',
-  'structural-diff-callchain-multi-repo.test.ts: 1',
-  'structural-diff-node-multi-repo.test.ts: 1',
-  'subagent-live-capture.test.ts: 4',
-  'task-diff-multi-repo-truncation.test.ts: 1',
-  'task-diff-multi-repo.test.ts: 1',
-  'task-start-git-identity.test.ts: 1',
-  'task-start-pre-worktree.test.ts: 1',
-  'task-start-working-branch.test.ts: 1',
-  'upgrade-rolling.test.ts: 7',
+  'architecture/rfc329-mcp-surface-guard.test.ts: 1', // provider-independent-route-registry
+  'architecture/rfc359-w5-t19g-schema-contract-reconciliation.test.ts: 2', // real-file-database
+  'backup.test.ts: 2', // real-file-database
+  'callgraph-multirepo-prefix.test.ts: 1', // sqlite-execution-engine
+  'clarify-inline-isolated-parity.test.ts: 1', // sqlite-execution-engine
+  'clarify-review-combination-scenarios.test.ts: 1', // sqlite-execution-engine
+  'cli.test.ts: 1', // real-file-database
+  'contracts/harness.ts: 1', // sqlite-only-primitive
+  'createindb-snapshot-parity.test.ts: 3', // real-file-database
+  'e2e-sqlite-fixture-lock-contention.test.ts: 5', // real-file-database
+  'fixtures/rfc322-cpu-probe.ts: 1', // real-file-database
+  'fixtures/rfc338-blocking-maintenance-worker.ts: 1', // real-file-database
+  'fixtures/rfc338-foreground-contention-worker.ts: 1', // real-file-database
+  'fixtures/rfc349-postgresql-crash-worker.ts: 1', // sqlite-only-primitive
+  'fixtures/rfc351-write-contention-worker.ts: 1', // real-file-database
+  'flag-audit-kind-canonicalization.test.ts: 1', // real-file-database
+  'fusion-engine.test.ts: 1', // sqlite-execution-engine
+  'gettask-multi-repo.test.ts: 1', // sqlite-execution-engine
+  'git-repo-cache.test.ts: 1', // sqlite-execution-engine
+  'helpers/epoch1Protocol/sqliteClient.ts: 2', // frozen-migration-revision
+  'helpers/nativeQueryFixture.ts: 1', // real-file-database
+  'helpers/rfc349PostgresqlHostedEvidence.ts: 2', // real-file-database
+  'helpers/rfc370SqliteAffectedRowsCases.ts: 1', // sqlite-only-primitive
+  'helpers/rfc395Q1Parity/fixture.ts: 1', // real-file-database
+  'helpers/rfc395R2Harness.ts: 1', // real-file-database
+  'helpers/rfc395V3/sourceSeeds.ts: 1', // real-file-database; PGX-B frozen SQLite seed oracle for real PostgreSQL installs
+  'helpers/rfc395V3Harness.ts: 1', // real-file-database
+  'helpers/schemaFixture.ts: 1', // real-file-database
+  'input-port-contract.test.ts: 1', // sqlite-execution-engine
+  'integration-chaos/chaos-scenarios.integration.test.ts: 2', // real-file-database
+  'memory-distiller-source-context.test.ts: 1', // sqlite-only-primitive
+  'migration-0002.test.ts: 1', // migration-chain
+  'migration-0021-task-name.test.ts: 1', // migration-chain
+  'migration-0034-task-repos.test.ts: 1', // migration-chain
+  'migration-0041-rfc074-drop-cci.test.ts: 3', // migration-chain
+  'migration-0042-rfc079-doc-versions.test.ts: 1', // migration-chain
+  'migration-0057-rfc115-drop-agent-params.test.ts: 5', // migration-chain
+  'migration-0058-rfc115-drop-agent-snapshot.test.ts: 5', // migration-chain
+  'migration-0090-rfc170.test.ts: 1', // migration-chain
+  'migration-0092-rfc178.test.ts: 1', // migration-chain
+  'migration-0102-rfc210-submodule-isolation.test.ts: 1', // migration-chain
+  'migration-0104-rfc211-drop-onboarding.test.ts: 1', // migration-chain
+  'migration-0111-rfc223.test.ts: 3', // migration-chain
+  'migration-0112-rfc223-pr2.test.ts: 1', // migration-chain
+  'migration-0113-rfc223-pr3.test.ts: 1', // migration-chain
+  'migration-0114-rfc225-workgroup-version.test.ts: 1', // migration-chain
+  'migration-0115-rfc223-pr3a-terminal.test.ts: 1', // migration-chain
+  'migration-0116-rfc223-skill-identity.test.ts: 1', // migration-chain
+  'migration-0117-rfc223-fusion-provenance.test.ts: 3', // migration-chain
+  'migration-0118-rfc223-owner-scoped-names.test.ts: 2', // migration-chain
+  'migration-0119-rfc224-opencode-session-owners.test.ts: 2', // migration-chain
+  'migration-0120-rfc224-runtime-probe-fence.test.ts: 1', // migration-chain
+  'migration-0121-rfc227-opencode-provenance.test.ts: 1', // migration-chain
+  'migration-0122-rfc229-workgroup-message-trigger.test.ts: 1', // migration-chain
+  'migration-0124-rfc235-intent-turn-session.test.ts: 1', // migration-chain
+  'migration-0125-rfc238-mcp-runtime-playground.test.ts: 1', // migration-chain
+  'migration-0138-rfc257-webhook-triggers.test.ts: 1', // migration-chain
+  'migration-0144-rfc276-runtime-hardening-deprecation.test.ts: 2', // migration-chain
+  'migration-0150-rfc292-trigger-namespace.test.ts: 1', // migration-chain
+  'migration-0151-rfc285-workflow-soft-link.test.ts: 1', // migration-chain
+  'migration-0152-rfc293-intent-workbench.test.ts: 1', // migration-chain
+  'migration-0155-rfc301-task-launch-origin.test.ts: 1', // migration-chain
+  'migration-0156-rfc300-workspace-prune-cause.test.ts: 1', // migration-chain
+  'migration-0157-rfc303-mr-terminal-control.test.ts: 1', // migration-chain
+  'migration-0162-rfc305-user-permissions.test.ts: 1', // migration-chain
+  'migration-0188-rfc312-presence-grant.test.ts: 1', // migration-chain
+  'migration-0202-rfc315-event-automation-permissions.test.ts: 1', // migration-chain
+  'migration-0203-task-catalog-visibility.test.ts: 1', // migration-chain
+  'migration-0205-rfc310-task-employee-case-link.test.ts: 1', // migration-chain
+  'migration-0206-rfc310-employee-case-name.test.ts: 1', // migration-chain
+  'migration-0208-rfc321-repository-transport-credentials.test.ts: 1', // migration-chain
+  'migration-0219-rfc341-task-cutover.test.ts: 1', // migration-chain
+  'migration-0220-rfc341-committed-delivery-fk-repair.test.ts: 1', // migration-chain
+  'migration-0222-rfc341-collaboration-cutover.test.ts: 2', // migration-chain
+  'migration-0228-distill-source-kinds.test.ts: 2', // migration-chain
+  'migration-0256-rfc371-observation-v2.test.ts: 2', // migration-chain
+  'migration-0257-rfc370-v2-retire-host-execution.test.ts: 2', // migration-chain
+  'migration-freeze.ts: 1', // frozen-migration-revision
+  'opencode-session-walk.test.ts: 1', // real-file-database
+  'rerun-prior-output-e2e.test.ts: 1', // sqlite-execution-engine
+  'resume-multi-repo-rollback.test.ts: 1', // sqlite-execution-engine
+  'resume-task-idempotent.test.ts: 1', // sqlite-execution-engine
+  'review-cancel-concurrency.test.ts: 1', // sync-client-fault-injection
+  'review-clarify-question-phase-stranded.test.ts: 1', // sqlite-execution-engine
+  'review-iterate-comments-in-prompt.test.ts: 1', // sqlite-execution-engine
+  'review-iterate-drops-prior-clarify-history.test.ts: 1', // sqlite-execution-engine
+  'review-iterate-file-path-in-prompt.test.ts: 1', // sqlite-execution-engine
+  'review-iterate-sibling-cascade.test.ts: 1', // sqlite-execution-engine
+  'review-state-machine.test.ts: 1', // sqlite-execution-engine
+  'reviews-iterate-mints-new-run.test.ts: 1', // sqlite-execution-engine
+  'rfc074-prc-cci-retirement.test.ts: 1', // sqlite-only-primitive
+  'rfc092-followup-chain-rollback.test.ts: 1', // sqlite-execution-engine
+  'rfc092-leaked-pending-bounded.test.ts: 1', // sqlite-execution-engine
+  'rfc092-midrun-clarify-dispatch.test.ts: 1', // sqlite-execution-engine
+  'rfc092-midrun-review-iterate.test.ts: 1', // sqlite-execution-engine
+  'rfc093-db-tx-sync.test.ts: 3', // real-file-database
+  'rfc095-wrapper-canceled-revival.test.ts: 1', // sqlite-execution-engine
+  'rfc096-retry-cascade-inherit.test.ts: 1', // sqlite-execution-engine
+  'rfc097-cancel-wins.test.ts: 1', // sqlite-execution-engine
+  'rfc097-pending-orphan-reap.test.ts: 1', // sqlite-execution-engine
+  'rfc097-repair-liveness.test.ts: 2', // sqlite-execution-engine
+  'rfc097-resume-mutex.test.ts: 1', // sqlite-execution-engine
+  'rfc098-commitpush-nonblocking.test.ts: 1', // sqlite-execution-engine
+  'rfc098-fanout-consumed-gate.test.ts: 1', // sqlite-execution-engine
+  'rfc098-fanout-shard-hash-rerun.test.ts: 1', // sqlite-execution-engine
+  'rfc098-git-predirty-diff.test.ts: 1', // sqlite-execution-engine
+  'rfc098-git-wrapper-diff-fail.test.ts: 1', // sqlite-execution-engine
+  'rfc098-process-governance.test.ts: 1', // sqlite-execution-engine
+  'rfc098-wrapper-revival-e2e.test.ts: 1', // sqlite-execution-engine
+  'rfc098-wrapper-stale-redispatch.test.ts: 1', // sqlite-execution-engine
+  'rfc099-migration-0045.test.ts: 1', // migration-chain
+  'rfc107-url-upload-multipart.test.ts: 3', // sqlite-execution-engine
+  'rfc108-resume-safety.test.ts: 1', // sqlite-execution-engine
+  'rfc122-clarify-directive-dispatch.test.ts: 2', // sqlite-execution-engine
+  'rfc130-crash-replay.test.ts: 1', // sqlite-execution-engine
+  'rfc130-merge-agent-scheduler.test.ts: 1', // sqlite-execution-engine
+  'rfc130-shard-rerun-undo.test.ts: 4', // sqlite-execution-engine
+  'rfc130-wrapper-private-canonical.test.ts: 1', // sqlite-execution-engine
+  'rfc131-review-reject-aging-prior-output.test.ts: 1', // sqlite-execution-engine
+  'rfc142-review-rounds.test.ts: 2', // sqlite-execution-engine
+  'rfc144-migration-0076.test.ts: 1', // migration-chain
+  'rfc144-stale-replay-regression.test.ts: 2', // sqlite-execution-engine
+  'rfc145-migration-0077.test.ts: 1', // migration-chain
+  'rfc145-write-side.test.ts: 1', // sqlite-execution-engine
+  'rfc152-ws-channel-registry.test.ts: 2', // sync-engine-capability
+  'rfc162-migration-0081.test.ts: 1', // migration-chain
+  'rfc165-agent-launch.test.ts: 5', // sqlite-execution-engine
+  'rfc165-scheduled-kinds.test.ts: 3', // sqlite-execution-engine
+  'rfc165-scratch-space.test.ts: 1', // sqlite-execution-engine
+  'rfc167-dw-e2e.test.ts: 2', // sqlite-execution-engine
+  'rfc167-dynamic-workflow-engine.test.ts: 3', // sqlite-execution-engine
+  'rfc186-workgroup-e2e.test.ts: 1', // sqlite-execution-engine
+  'rfc187-fanout-salvage-e2e.test.ts: 1', // sqlite-execution-engine
+  'rfc187-workgroup-e2e.test.ts: 1', // sqlite-execution-engine
+  'rfc193-force-include.test.ts: 1', // sqlite-execution-engine
+  'rfc193-port-artifacts.test.ts: 1', // sqlite-execution-engine
+  'rfc193-wrapper-review.test.ts: 1', // sqlite-execution-engine
+  'rfc199-start-task-workflow-race.test.ts: 1', // sqlite-execution-engine
+  'rfc204-cached-repo-wire-and-reuse.test.ts: 3', // provider-composition-root
+  'rfc204-cold-clone-seal.test.ts: 2', // provider-composition-root
+  'rfc212-revalidation-behavior.test.ts: 13', // sqlite-only-primitive
+  'rfc213-pending-restore.test.ts: 1', // real-file-database
+  'rfc213-pre-migration-backup.test.ts: 2', // real-file-database
+  'rfc213-raw-snapshot.test.ts: 5', // real-file-database
+  'rfc213-restore.test.ts: 6', // real-file-database
+  'rfc217-migration-0107.test.ts: 1', // migration-chain
+  'rfc217-workgroup-task-state.test.ts: 1', // frozen-migration-revision
+  'rfc218-agent-launch-ports.test.ts: 5', // sqlite-execution-engine
+  'rfc220-oauth2-provider-schema-service.test.ts: 1', // sqlite-only-primitive
+  'rfc220-presented-name-sync.test.ts: 3', // sqlite-only-primitive
+  'rfc221-auth-policy.test.ts: 10', // frozen-migration-revision
+  'rfc223-pr2-refs.test.ts: 2', // sqlite-execution-engine
+  'rfc223-pr3b-dynamic-token.test.ts: 2', // sqlite-execution-engine
+  'rfc223-pr9-cross-tenant-adversarial.test.ts: 5', // sqlite-execution-engine
+  'rfc228-agent-resource-integrity.test.ts: 1', // sqlite-execution-engine
+  'rfc230-wrapper-finalize-superseded.test.ts: 1', // sqlite-execution-engine
+  'rfc238-mcp-runtime-test-transitions.test.ts: 6', // sqlite-only-primitive
+  'rfc243-call-workflow.test.ts: 3', // sqlite-execution-engine
+  'rfc243-call-workgroup.test.ts: 1', // sqlite-execution-engine
+  'rfc243-list-child-count.test.ts: 2', // sqlite-only-primitive
+  'rfc243-parent-child-lifecycle.test.ts: 12', // sqlite-execution-engine
+  'rfc248-materialize-group.test.ts: 1', // sqlite-execution-engine
+  'rfc248-readonly-dirty-visible.test.ts: 1', // sqlite-only-primitive
+  'rfc249-migration-repo-group-nodes.test.ts: 1', // frozen-migration-revision
+  'rfc257-webhook-error-codes.test.ts: 1', // existing open migration debt
+  'rfc261-webhook-delivery-pagination.test.ts: 2', // sqlite-only-primitive
+  'rfc266-script-pool-independence.test.ts: 1', // sqlite-execution-engine
+  'rfc268-webhook-scratch-launch.test.ts: 1', // sqlite-execution-engine
+  'rfc269-code-host-connections.test.ts: 4', // real-file-database
+  'rfc269-webhook-code-host-context-e2e.test.ts: 2', // sqlite-execution-engine
+  'rfc269-webhook-trigger-context-atomicity.test.ts: 1', // sqlite-execution-engine
+  'rfc274-workgroup-output-messages.test.ts: 1', // sqlite-only-primitive
+  'rfc275-schema-admission.test.ts: 6', // real-file-database
+  'rfc276-readonly-script-stall-regression.test.ts: 1', // sqlite-execution-engine
+  'rfc279-database-redundancy-cleanup.test.ts: 1', // frozen-migration-revision
+  'rfc282-d2-granted-ids-single-source.test.ts: 1', // sqlite-only-primitive
+  'rfc284-batchc-resource-dedup.test.ts: 5', // sqlite-only-primitive
+  'rfc287-t13-deferred-prep.test.ts: 27', // sqlite-execution-engine
+  'rfc291-unavailable-mount.test.ts: 1', // sync-client-fault-injection
+  'rfc294-task-execution-compat-oracles.test.ts: 1', // sqlite-execution-engine
+  'rfc300-webhook-workspace-cleanup-e2e.test.ts: 2', // sqlite-execution-engine
+  'rfc300-workspace-prune.test.ts: 1', // sqlite-execution-engine
+  'rfc301-task-launch-origin-inheritance.test.ts: 1', // sqlite-execution-engine
+  'rfc303-verified-ingress.test.ts: 1', // real-file-database
+  'rfc305-architecture-lock.test.ts: 1', // provider-independent-route-registry
+  'rfc305-user-access-integration.test.ts: 1', // sqlite-only-primitive
+  'rfc306-scheduler-branch.test.ts: 1', // sqlite-execution-engine
+  'rfc309-template-merge-migration.test.ts: 1', // frozen-migration-revision
+  'rfc310-digital-employee-human-review-system-mock-e2e.test.ts: 1', // sqlite-execution-engine
+  'rfc310-pr4-execution-host.test.ts: 1', // sqlite-execution-engine
+  'rfc310-pr4-profile-identity.test.ts: 1', // sqlite-execution-engine
+  'rfc311-backup-concurrency.test.ts: 1', // real-file-database
+  'rfc311-backup-worker-fallback.test.ts: 5', // real-file-database
+  'rfc311-branch-started-at-maintenance.test.ts: 2', // sqlite-execution-engine
+  'rfc311-perf-foundation.test.ts: 5', // real-file-database
+  'rfc311-repos-page.test.ts: 1', // sqlite-plan-vocabulary
+  'rfc311-retention-sweep.test.ts: 1', // sqlite-only-primitive
+  'rfc311-task-page-fastpath.test.ts: 1', // sqlite-plan-vocabulary
+  'rfc312-default-grant.test.ts: 1', // sqlite-only-primitive
+  'rfc312-impl-gate-fixes.test.ts: 5', // sqlite-only-primitive
+  'rfc312-presence-channel.test.ts: 3', // sqlite-only-primitive
+  'rfc312-t0-upgrade-dedup.test.ts: 4', // sqlite-only-primitive
+  'rfc313-session-escalation.test.ts: 1', // sqlite-execution-engine
+  'rfc314-autokill-stall-window.test.ts: 1', // sqlite-plan-vocabulary
+  'rfc314-session-view-window.test.ts: 1', // sqlite-plan-vocabulary
+  'rfc317-cross-context-ports.test.ts: 3', // sync-engine-capability
+  'rfc319-fusion-manifest-merge-back.test.ts: 1', // sqlite-execution-engine
+  'rfc321-repository-transport-http.test.ts: 1', // sqlite-only-primitive
+  'rfc326-review-decision-transaction.test.ts: 1', // sqlite-execution-engine
+  'rfc326-tx-primitives-equivalence.test.ts: 2', // sqlite-only-primitive
+  'rfc330-migration-backfill.test.ts: 1', // real-file-database
+  'rfc335-oidc-git-name-migration.test.ts: 1', // real-file-database
+  'rfc336-employee-case-advanced-migration.test.ts: 1', // real-file-database
+  'rfc338-maintenance-slices.test.ts: 4', // sqlite-only-primitive
+  'rfc347-identity-access-runtime.test.ts: 4', // sqlite-only-primitive
+  'rfc349-boolean-expression-parity.test.ts: 1', // real-file-database
+  'rfc349-collaboration-runtime-mechanics.test.ts: 1', // sqlite-only-primitive
+  'rfc349-daemon-provider-core.test.ts: 1', // existing open migration debt
+  'rfc349-database-migration-coordinator.integration.test.ts: 3', // sqlite-only-primitive
+  'rfc349-database-operational-adapter.test.ts: 1', // real-file-database
+  'rfc349-identity-access-promise-contract.test.ts: 2', // sqlite-only-primitive
+  'rfc349-maintenance-disk-provider.test.ts: 1', // provider-composition-root
+  'rfc349-maintenance-execution-fence.test.ts: 1', // sqlite-plan-vocabulary
+  'rfc349-null-ordering-parity.test.ts: 1', // real-file-database
+  'rfc349-provider-search-case-parity.test.ts: 1', // real-file-database
+  'rfc349-safety-backup-off-thread-verify.test.ts: 1', // real-file-database
+  'rfc349-source-control-provider-adapters.test.ts: 2', // sqlite-only-primitive
+  'rfc349-sqlite-logical-source.test.ts: 2', // real-file-database
+  'rfc349-sqlite-migration-compatibility.test.ts: 2', // real-file-database
+  'rfc349-task-execution-provider-adapters.test.ts: 3', // existing open migration debt
+  'rfc351-sqlite-write-transaction-immediate.test.ts: 1', // sqlite-only-primitive
+  'rfc354-clarify-idle-skip.test.ts: 1', // sqlite-execution-engine
+  'rfc354-nested-depth3-frames.test.ts: 1', // sqlite-execution-engine
+  'rfc354-nested-failure-modes.test.ts: 1', // sqlite-execution-engine
+  'rfc354-nested-frames-closure.test.ts: 1', // sqlite-execution-engine
+  'rfc354-nested-loop-frames.test.ts: 1', // sqlite-execution-engine
+  'rfc357-provider-portability.test.ts: 1', // real-file-database
+  'rfc359-database-transaction.test.ts: 1', // sync-client-fault-injection
+  'rfc359-engine-capabilities.test.ts: 1', // cross-provider-oracle
+  'rfc359-provider-schema-column-facade.test.ts: 1', // sqlite-only-primitive
+  'rfc359-w14-agent-commit-sequence.test.ts: 1', // sqlite-only-primitive
+  'rfc359-w16-task-lifecycle-write-sequence.test.ts: 1', // sqlite-only-primitive
+  'rfc359-w25-task-page-bounded-prefix.test.ts: 1', // cross-provider-oracle
+  'rfc359-w36-skill-operation-state-query.test.ts: 1', // sqlite-only-primitive
+  'rfc359-w6-t26-postgresql-plan-audit.test.ts: 1', // provider-composition-root
+  'rfc359-w7-catalog-composition-roots.test.ts: 1', // provider-composition-root
+  'rfc359-w8-logical-source-conformance.test.ts: 1', // real-file-database
+  'rfc359-w8-migrator-conformance.test.ts: 1', // real-file-database
+  'rfc370-m3-backup-http.test.ts: 1', // existing open migration debt
+  'rfc370-v3-standalone-backup-request.test.ts: 1', // existing open migration debt
+  'rfc370-workgroup-commit-queue.test.ts: 1', // existing open migration debt
+  'rfc371-v2-usage-meters.test.ts: 1', // real-file-database
+  'rfc372-task-engine.test.ts: 1', // sqlite-execution-engine
+  'rfc395-af2-parity-baseline.test.ts: 1', // frozen-migration-revision
+  'rfc395-boot-drift-guidance.test.ts: 1', // real-file-database
+  'rfc395-epoch2-activation-wiring.test.ts: 4', // real-file-database
+  'rfc395-provider-catalog-equivalence.test.ts: 2', // real-file-database
+  'rfc395-query-helpers.test.ts: 1', // sqlite-only-primitive
+  'rfc395-query-surface.test.ts: 1', // real-file-database
+  'rfc395-r2-pointer.test.ts: 2', // real-file-database
+  'rfc395-target-test-database.test.ts: 1', // frozen-migration-revision
+  'rfc395-v1-offline-upgrade.test.ts: 1', // real-file-database
+  'rfc395-v1-source-readers.test.ts: 1', // real-file-database
+  'rfc395-v3-source-access.test.ts: 1', // real-file-database
+  'runner-subagent-live-capture.test.ts: 6', // real-file-database
+  'scheduler-audit-gap1-limits-resume-startedat.test.ts: 1', // sqlite-execution-engine
+  'scheduler-audit-gap4-loop-exit-out-of-scope-port.test.ts: 1', // sqlite-execution-engine
+  'scheduler-audit-s02-multirepo-retry-rollback-noop.test.ts: 1', // sqlite-execution-engine
+  'scheduler-audit-s07-s28-wrapper-consumed-status.test.ts: 1', // sqlite-execution-engine
+  'scheduler-audit-s08-runtask-no-cas-revival.test.ts: 1', // sqlite-execution-engine
+  'scheduler-audit-s10-async-transaction-decorative.test.ts: 1', // real-file-database
+  'scheduler-audit-s21-fanout-aggregator-idempotency.test.ts: 1', // sqlite-execution-engine
+  'scheduler-audit-s22-canceled-retry-stall.test.ts: 2', // sqlite-execution-engine
+  'scheduler-boundary-canceled-fanout-status.test.ts: 1', // sqlite-execution-engine
+  'scheduler-boundary-resume-retryindex-vs-id.test.ts: 1', // sqlite-execution-engine
+  'scheduler-commit-push.test.ts: 1', // sqlite-execution-engine
+  'scheduler-default-retries.test.ts: 1', // sqlite-execution-engine
+  'scheduler.test.ts: 1', // sqlite-execution-engine
+  'session-capture-sqlite.test.ts: 4', // real-file-database
+  'start-task-multi-repo-gates.test.ts: 1', // sqlite-execution-engine
+  'start-task-url.test.ts: 1', // sqlite-execution-engine
+  'structural-diff-callchain-multi-repo.test.ts: 1', // sqlite-execution-engine
+  'structural-diff-node-multi-repo.test.ts: 1', // sqlite-execution-engine
+  'subagent-live-capture.test.ts: 4', // real-file-database
+  'task-diff-multi-repo-truncation.test.ts: 1', // sqlite-execution-engine
+  'task-diff-multi-repo.test.ts: 1', // sqlite-execution-engine
+  'task-start-git-identity.test.ts: 1', // sqlite-execution-engine
+  'task-start-pre-worktree.test.ts: 1', // sqlite-execution-engine
+  'task-start-working-branch.test.ts: 1', // sqlite-execution-engine
+  'upgrade-rolling.test.ts: 7', // sqlite-execution-engine
 ]
 
 /**
@@ -870,7 +783,7 @@ export const OPEN_MIGRATION_DEBT: readonly string[] = [
   //     机械理由**：被测物就是某一侧的**组合根 / 装配面**（`composeSqliteAppDeps` /
   //     `composeSqliteDynamicWorkflowValidationContext` / `composeSqlitePostRestoreRecovery`），
   //     那个面按定义只在一侧存在，另一侧的同名能力有它自己那批组合根用例。
-  //   · `rfc359-t19h-logical-backup-restore` / `rfc359-t19h-postgresql-upgrade.integration`
+  //   · `rfc359-t19h-logical-backup-restore` / `rfc395-v3-source-access`
   //     —— 落进 `frozen-migration-revision`：它们建库喂的是 `freezeAt(idx)` 截出来的
   //     **冻结迁移前缀**（验的就是「那条迁移之前的行，恢复/升级之后该长什么样」）。
   //     判据此前只认内联拼法，抽成共享 helper 之后咬不到，已补。
@@ -906,7 +819,6 @@ export const OPEN_MIGRATION_DEBT: readonly string[] = [
   // RFC-395 I-b: native transaction fixtures make the pre-existing scripted PG lanes explicit.
   // They are protocol oracles, not live two-provider coverage; keep that debt visible.
   'rfc349-daemon-provider-core.test.ts',
-  'rfc349-dual-provider-behavior-oracle.test.ts',
   'rfc349-task-execution-provider-adapters.test.ts',
   'rfc370-m3-backup-http.test.ts',
   'rfc370-v3-standalone-backup-request.test.ts',

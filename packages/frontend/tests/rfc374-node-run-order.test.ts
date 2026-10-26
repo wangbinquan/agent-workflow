@@ -13,7 +13,7 @@ import {
 import { findFirstAttemptSibling } from '../src/lib/injected-memories-card'
 import { buildRoomTimeline } from '../src/lib/workgroup-room'
 
-function run(id: string, seq: number | null, extra: Partial<NodeRun> = {}): NodeRun {
+function run(id: string, seq: number, extra: Partial<NodeRun> = {}): NodeRun {
   return NodeRunSchema.parse({
     id,
     seq,
@@ -83,7 +83,7 @@ describe('RFC-374 inverted ID consumers', () => {
       current = run('a', 3, { nodeId: '__wg_leader__', status: 'running' })
     expect(displayRetryForRun(current, [current, done, failed])).toBe(1)
     expect(findFirstAttemptSibling(current, [current, done, failed])?.id).toBe(failed.id)
-    expect(findFirstAttemptSibling(run('new', null), [])).toBeUndefined()
+    expect(findFirstAttemptSibling(run('new', 4), [])).toBeUndefined()
   })
   test('room keeps the backend mint sequence while interleaving legacy messages', () => {
     const turn = (nodeRunId: string): WorkgroupRunEntry => ({
@@ -111,9 +111,10 @@ describe('RFC-374 inverted ID consumers', () => {
         .map((entry) => entry.entry.nodeRunId),
     ).toEqual(['z', 'a'])
   })
-  test('wire payloads with an absent seq remain NULL-compatible', () => {
-    const { seq: _seq, ...legacy } = run('legacy', null)
-    expect(NodeRunSchema.parse(legacy).seq).toBeNull()
+  test('wire payloads require the activated non-null integer seq', () => {
+    const { seq: _seq, ...legacy } = run('legacy', 1)
+    expect(NodeRunSchema.safeParse(legacy).success).toBe(false)
+    expect(NodeRunSchema.safeParse({ ...legacy, seq: null }).success).toBe(false)
     expect(NodeRunSchema.parse({ ...legacy, seq: 2 }).seq).toBeGreaterThan(
       NodeRunSchema.parse({ ...legacy, seq: 1 }).seq!,
     )

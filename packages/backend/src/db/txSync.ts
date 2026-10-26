@@ -21,14 +21,38 @@
 // `tx.delete(…).run()`. Never `await`.
 
 import { inheritDatabaseHandle } from '@/platform/persistence/sessionTables'
-import { observeDbTransaction, type DbClient } from './client'
-import { CrossContextTransactionError, foreignExplicitTransactionOpen } from './transactionScope'
+import type { Database } from 'bun:sqlite'
+import type { DbClient } from './client'
+import {
+  CrossContextTransactionError,
+  foreignExplicitTransactionOpen,
+  observeDbTransaction,
+} from './transactionScope'
 
 /** The drizzle bun-sqlite transaction handle (sync execution surface). */
 export type DbTxSync = Parameters<Parameters<DbClient['transaction']>[0]>[0]
 
 /** Collapses Promise-returning callbacks to `never` at the type level. */
 export type NotPromise<T> = T extends PromiseLike<unknown> ? never : T
+
+/** Native installation runs before an ORM handle exists; it has the same synchronous contract. */
+export function nativeTransactionSync<T>(database: Database, body: () => NotPromise<T>): T {
+  return database
+    .transaction(() => {
+      const result = body()
+      if (
+        result !== null &&
+        (typeof result === 'object' || typeof result === 'function') &&
+        'then' in result &&
+        typeof result.then === 'function'
+      ) {
+        void Promise.resolve(result).catch(() => {})
+        throw new Error('nativeTransactionSync callback returned a Promise')
+      }
+      return result
+    })
+    .immediate()
+}
 
 export function dbTxSync<T>(db: DbClient, fn: (tx: DbTxSync) => NotPromise<T>): T {
   // RFC-359 —— 过渡期共存守卫。统一事务原语（platform/persistence/databaseTransaction.ts）在

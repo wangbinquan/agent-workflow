@@ -53,7 +53,7 @@ import { afterEach, beforeEach, describe, expect, test, beforeAll } from 'bun:te
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
@@ -73,12 +73,12 @@ import {
   isAgentLaunching,
   releaseAgentLaunch,
 } from '../src/services/agentLaunchReservation'
-import { getAgentById } from '../src/modules/resource-catalog/infrastructure/legacy/agent'
-
 import {
+  getAgentById,
   createAgent,
   renameAgent,
 } from '../src/modules/resource-catalog/infrastructure/legacy/agent'
+
 import {
   AGENT_HOST_AGENT_NODE_ID,
   AGENT_HOST_CLARIFY_NODE_ID,
@@ -113,8 +113,6 @@ const T6_ACTOR = buildActor({
   user: { id: 'u-t6-test', username: 'u-t6', displayName: 'T6', role: 'admin', status: 'active' },
   source: 'session',
 })
-
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 const AGENT_FIELDS = {
   description: '',
@@ -166,7 +164,7 @@ beforeAll(async () => {
 describe('RFC-165 §4 — agent host snapshot (A1/A2)', () => {
   let db: DbClient
   beforeEach(() => {
-    db = createInMemoryDb(MIGRATIONS)
+    db = createInMemoryDb()
   })
 
   test('A1 shape: clarify ON → optional channel wired; OFF → absent; both validate', async () => {
@@ -266,7 +264,7 @@ describe('RFC-165 §4 — startAgentTask (A3/A4/A5/A8)', () => {
   let db: DbClient
   let appHome: string
   beforeEach(async () => {
-    db = createInMemoryDb(MIGRATIONS)
+    db = createInMemoryDb()
     await seedTestDefaultOpencodeRuntime(db)
     await seedLaunchUser(db)
     appHome = mkdtempSync(join(tmpdir(), 'aw-rfc165-agent-'))
@@ -544,7 +542,7 @@ describe('RFC-165 — HTTP surface: launch + lifecycle guards (A6/A9)', () => {
   let soloId: string
 
   beforeEach(async () => {
-    db = createInMemoryDb(MIGRATIONS)
+    db = createInMemoryDb()
     await seedTestDefaultOpencodeRuntime(db)
     appHome = mkdtempSync(join(tmpdir(), 'aw-rfc165-agent-http-'))
     process.env.AGENT_WORKFLOW_HOME = appHome
@@ -744,7 +742,7 @@ describe('RFC-165 — HTTP surface: launch + lifecycle guards (A6/A9)', () => {
 describe('RFC-165 — workgroup exclusions (A7)', () => {
   let db: DbClient
   beforeEach(() => {
-    db = createInMemoryDb(MIGRATIONS)
+    db = createInMemoryDb()
   })
 
   test('A7a boot auto-resume NOW resumes workgroup tasks too (RFC-186 PR-2 lifted the limitation)', async () => {
@@ -909,7 +907,7 @@ describe('RFC-175 §2e — agent relaunch identity guard + launch reservation', 
   let db: DbClient
   let appHome: string
   beforeEach(async () => {
-    db = createInMemoryDb(MIGRATIONS)
+    db = createInMemoryDb()
     await seedTestDefaultOpencodeRuntime(db)
     await seedLaunchUser(db)
     appHome = mkdtempSync(join(tmpdir(), 'aw-rfc175-agent-'))

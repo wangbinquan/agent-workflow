@@ -1,7 +1,11 @@
-import { composeSourceControlTaskPorts } from '@/modules/task-execution/composition'
-import { inheritDatabaseHandle } from '@/platform/persistence/sessionTables'
-import { schemaFixtureDb } from './helpers/schemaFixture'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import { persistenceSchema } from '@/bootstrap/persistenceSchema'
+import {
+  frozenTablesOf as tablesOf,
+  bindFrozenSqliteHandle,
+  FROZEN_MIGRATIONS,
+  type FrozenDbClient as DbClient,
+} from './migration-freeze'
+
 import { first } from '@/platform/persistence/queryHelpers'
 import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 // RFC-279 — locks the seven-column physical cleanup, fail-closed polarity,
@@ -9,18 +13,18 @@ import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { Database } from 'bun:sqlite'
-import { drizzle } from 'drizzle-orm/bun-sqlite'
-import { migrate } from 'drizzle-orm/bun-sqlite/migrator'
+import { migrateFrozenSqlite as migrate } from './migration-freeze'
 import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
-import type { DbClient } from '../src/db/client'
-import { ensureCredentialsSealed, unsealRepoUrl } from '../src/services/repoCredentials'
-import { composeSqliteRepositoryWorkspaceStore } from '../src/modules/source-control/composition'
+import { unsealRepoUrl } from '../src/services/repoCredentials'
+import { repositoryUrlEnvironment } from '@/modules/source-control/composition/conversion'
+import type { BootUpgradeCaptureInput } from '@/platform/persistence/migration/freeze/bootUpgradeEnvironment'
+import type { SecretBox } from '@/auth/secretBox'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+const MIGRATIONS = FROZEN_MIGRATIONS
 const MIGRATION = join(MIGRATIONS, '0147_rfc279_database_redundancy_cleanup.sql')
 const LEGACY_URL = 'https://x-access-token:OLDTOKEN@github.com/acme/legacy.git'
 const box = createSecretBoxFromKey(Buffer.alloc(32, 27))
@@ -37,6 +41,7 @@ describe('RFC-279 migration 0147', () => {
   let db: DbClient
 
   beforeEach(() => {
+    artifacts.clear()
     tempMigrations = mkdtempSync(join(tmpdir(), 'aw-rfc279-migrations-'))
     cpSync(MIGRATIONS, tempMigrations, { recursive: true })
     const journalPath = join(tempMigrations, 'meta', '_journal.json')
@@ -48,7 +53,7 @@ describe('RFC-279 migration 0147', () => {
 
     sqlite = new Database(':memory:')
     sqlite.exec('PRAGMA foreign_keys = OFF')
-    db = inheritDatabaseHandle(drizzle(sqlite), schemaFixtureDb()) as unknown as DbClient
+    db = bindFrozenSqliteHandle(sqlite)
     migrate(db, { migrationsFolder: tempMigrations })
   })
 
@@ -56,6 +61,42 @@ describe('RFC-279 migration 0147', () => {
     sqlite?.close()
     rmSync(tempMigrations, { recursive: true, force: true })
   })
+
+  const artifacts = new Map<string, Uint8Array>()
+  async function converterUrls(key: SecretBox | null = box) {
+    const rows = sqlite.query('SELECT * FROM cached_repos ORDER BY id').all()
+    const input = {
+      stage: 'plan',
+      root: { kind: 'app-home', root: tempMigrations, runsSupplied: false, objects: 'none' },
+      source: {
+        preflight: { tables: [{ table: 'cached_repos' }], expectedAbsent: [] },
+        reader: {
+          async assertUnchanged() {},
+          async readChunk() {
+            return { decodedRows: rows, rows, lastKey: null }
+          },
+        },
+      },
+      readArtifact: async (name: string) => artifacts.get(name) ?? null,
+      writeArtifact: async (name: string, bytes: Uint8Array) => {
+        artifacts.set(name, bytes)
+      },
+    } as unknown as BootUpgradeCaptureInput
+    const facts = await repositoryUrlEnvironment({
+      async open() {
+        return key ? { identity: 'original-input', fingerprint: 'key-27', box: key } : null
+      },
+    }).capture(input)
+    return facts.map(
+      (fact) =>
+        fact.evidence as {
+          id: string
+          urlEnc: string | null
+          urlRedacted: string | null
+          reason: string | null
+        },
+    )
+  }
 
   function apply0147(): void {
     const source = readFileSync(MIGRATION, 'utf8')
@@ -164,14 +205,13 @@ describe('RFC-279 migration 0147', () => {
     expect(escrow.urlEnc?.startsWith('aw-legacy-url-hex-v1:')).toBe(true)
     expect(unsealRepoUrl(escrow, box)).toBeNull()
 
-    const store = composeSqliteRepositoryWorkspaceStore(db, composeSourceControlTaskPorts(db))
-    const sealed = await ensureCredentialsSealed(store, box)
-    expect(sealed.sealed).toBe(1)
-    const current = first(db.select().from(cachedRepos))!
-    expect(current.urlEnc?.startsWith('aw-legacy-url-hex-v1:')).toBe(false)
-    expect(current.urlRedacted).toBe('https://***@github.com/acme/legacy.git')
-    expect(unsealRepoUrl(current, box)).toBe(LEGACY_URL)
-    expect((await ensureCredentialsSealed(store, box)).sealed).toBe(0)
+    const before = sqlite.query('SELECT url_enc FROM cached_repos').get()
+    const converted = (await converterUrls())[0]!
+    expect(converted.reason).toBeNull()
+    expect(box.unseal(converted.urlEnc!)).toBe(LEGACY_URL)
+    expect(converted.urlRedacted).not.toContain('OLDTOKEN')
+    expect((await converterUrls())[0]).toEqual(converted)
+    expect(sqlite.query('SELECT url_enc FROM cached_repos').get()).toEqual(before)
   })
 
   const guardCases: Array<{ name: string; seed: (sqlite: Database) => void }> = [
@@ -239,15 +279,12 @@ describe('RFC-279 migration 0147', () => {
         ) VALUES ('bad-escrow', 'bad00000', 'aw-legacy-url-hex-v1:XYZ', NULL, '/tmp/bad', 1, 1)`,
       )
       .run()
-    await expect(
-      ensureCredentialsSealed(
-        composeSqliteRepositoryWorkspaceStore(db, composeSourceControlTaskPorts(db)),
-        box,
-      ),
-    ).rejects.toThrow(/cached repo legacy URL escrow is malformed/)
+    const facts = await converterUrls()
+    expect(facts[0]!.reason).toBe('v2-boot-url-escrow-invalid')
+    expect(JSON.stringify(facts[0]!.reason)).not.toContain('XYZ')
   })
 
-  test('migration escrow cannot pass the boot gate without a SecretBox', async () => {
+  test('migration escrow cannot pass the converter without a SecretBox', async () => {
     sqlite
       .query(
         `INSERT INTO cached_repos (
@@ -257,12 +294,7 @@ describe('RFC-279 migration 0147', () => {
       .run(LEGACY_URL)
     apply0147()
 
-    await expect(
-      ensureCredentialsSealed(
-        composeSqliteRepositoryWorkspaceStore(db, composeSourceControlTaskPorts(db)),
-        undefined,
-      ),
-    ).rejects.toThrow(/legacy URL escrow requires SecretBox sealing/)
+    expect((await converterUrls(null))[0]!.reason).toBe('v2-boot-url-key-missing')
     const { cachedRepos } = tablesOf(db)
     expect(first(db.select().from(cachedRepos))?.urlEnc).toStartWith('aw-legacy-url-hex-v1:')
   })
@@ -286,26 +318,21 @@ describe('RFC-279 migration 0147', () => {
     const row = first(db.select().from(cachedRepos))!
     expect(row.urlEnc).toBe(sealed)
     expect(unsealRepoUrl(row, box)).toBe(LEGACY_URL)
-    expect(
-      (
-        await ensureCredentialsSealed(
-          composeSqliteRepositoryWorkspaceStore(db, composeSourceControlTaskPorts(db)),
-          box,
-        )
-      ).sealed,
-    ).toBe(0)
+    expect((await converterUrls())[0]!.urlEnc).toBe(sealed)
   })
 })
 
 describe('RFC-279 source ratchet', () => {
   test('current schema and production readers no longer name removed physical fields', () => {
-    const schema = readFileSync(resolve(import.meta.dir, '..', 'src', 'db', 'schema.ts'), 'utf8')
+    const schema = persistenceSchema.tables.flatMap((table) =>
+      Object.values(table.columns).map((column) => column.name),
+    )
     for (const identifier of [
-      'migrationMarker:',
-      'priorAnswerSnapshotJson:',
-      "reopenCount: integer('reopen_count')",
-      "manualTitle: text('manual_title')",
-      'nextSkillId:',
+      'migration_marker',
+      'prior_answer_snapshot_json',
+      'reopen_count',
+      'manual_title',
+      'next_skill_id',
     ]) {
       expect(schema).not.toContain(identifier)
     }
@@ -321,7 +348,7 @@ describe('RFC-279 source ratchet', () => {
       'services/repoCredentials.ts',
       'services/repoGroup.ts',
       'modules/resource-catalog/infrastructure/legacy/skillOperations.ts',
-      'modules/resource-catalog/infrastructure/legacy/skillIdentityMigration.ts',
+      'modules/resource-catalog/infrastructure/migration/skillBootRules.ts',
       'services/webhook/webhookDispatch.ts',
       'bootstrap/daemonApplication.ts',
     ]

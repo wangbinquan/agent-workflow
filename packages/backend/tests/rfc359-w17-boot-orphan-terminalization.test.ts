@@ -1,3 +1,4 @@
+import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { o2Ports } from './helpers/o2Closure'
 // RFC-359 W17 / AC-10: boot-orphan 的真实装配，两个引擎逐字同一条。
 //
@@ -34,11 +35,8 @@ const WALL_NOW = INPUT_NOW + 500
 const FAILURE = 'boot-fixture-interrupted'
 
 async function seed(db: PersistenceDb, state: 'pending' | 'claimed' = 'pending') {
-  const {
-    taskExecutionIntents,
-    taskExecutionLineageOperationRecords,
-    committedEventFamilyCutovers,
-  } = tablesOf(db)
+  const { taskExecutionIntents, taskExecutionLineageOperationRecords } = tablesOf(db)
+  const { committedEventFamilyCutovers } = tablesOf(db)
   await workflowFixture(db, { id: 'workflow-boot', name: 'workflow-boot', definition: '{}' })
   await taskFixture(db, {
     id: ID,
@@ -99,7 +97,7 @@ async function seed(db: PersistenceDb, state: 'pending' | 'claimed' = 'pending')
   })
   await db
     .update(committedEventFamilyCutovers)
-    .set({ mode: 'dispatchable', epoch: 7, changedAt: INPUT_NOW, changeRef: 'boot-companion-test' })
+    .set({ epoch: 7, changedAt: INPUT_NOW, changeRef: 'boot-companion-test' })
     .where(eq(committedEventFamilyCutovers.family, 'task-lifecycle'))
 }
 
@@ -235,6 +233,7 @@ describeEachProvider(
         const clock = spyOn(Date, 'now').mockReturnValue(WALL_NOW)
         try {
           const won = await createTaskExecutionPersistence(harness.db, {
+            historyRestrictions: epoch2RuntimeTestPorts(harness.db).historyRestrictions,
             recoveryHumanGates: o2Ports(harness.db).collaborationReads.recovery,
           }).recoveryAdministration.interruptBootOrphanTask(bootInput)
           expect(won).toBe(true)
@@ -288,6 +287,7 @@ describeEachProvider(
       })
       expect(
         await createTaskExecutionPersistence(harness.db, {
+          historyRestrictions: epoch2RuntimeTestPorts(harness.db).historyRestrictions,
           recoveryHumanGates: o2Ports(harness.db).collaborationReads.recovery,
         }).recoveryAdministration.interruptBootOrphanTask({ ...bootInput, from: 'pending' }),
       ).toBe(false)
@@ -305,6 +305,7 @@ describeEachProvider(
         await withWriteTrigger(harness, mode, async () => {
           await expect(
             createTaskExecutionPersistence(harness.db, {
+              historyRestrictions: epoch2RuntimeTestPorts(harness.db).historyRestrictions,
               recoveryHumanGates: o2Ports(harness.db).collaborationReads.recovery,
             }).recoveryAdministration.interruptBootOrphanTask(bootInput),
           ).rejects.toMatchObject({

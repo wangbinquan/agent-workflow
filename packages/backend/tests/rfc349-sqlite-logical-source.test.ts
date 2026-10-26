@@ -3,19 +3,18 @@ import { Database } from 'bun:sqlite'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { createInMemoryDb } from '@/db/client'
-import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import { createFrozenEpoch1Db } from './migration-freeze'
+import { buildFrozenEpoch1LogicalSchemaContract as buildLogicalSchemaContract } from '@/platform/persistence/migration/epoch1/contract'
 import { openSqliteLogicalSource } from '@/platform/persistence/sqliteLogicalSource'
 import { openSqliteLogicalSourceWorker } from '@/platform/persistence/sqliteLogicalSourceWorkerSupervisor'
 
-const MIGRATIONS = join(import.meta.dir, '..', 'db', 'migrations')
 const roots: string[] = []
 
 function fixturePath(): string {
   const root = mkdtempSync(join(tmpdir(), 'rfc349-source-'))
   roots.push(root)
   const path = join(root, 'db.sqlite')
-  const drizzle = createInMemoryDb(MIGRATIONS)
+  const drizzle = createFrozenEpoch1Db()
   const sqlite = (drizzle as unknown as { $client: Database }).$client
   sqlite.exec(
     "INSERT INTO users (id, username, display_name, role, status, force_password_change, created_at, updated_at, schema_version, access_revision, git_name) VALUES ('usr-2', 'bravo', 'Bravo', 'user', 'active', 0, 9007199254740993, 2, 1, 0, ''), ('usr-1', 'alpha', 'Alpha', 'user', 'active', 1, 1, 2, 1, 0, '')",

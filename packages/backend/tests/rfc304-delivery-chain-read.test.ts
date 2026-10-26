@@ -1,3 +1,4 @@
+import { historyFixtureReader } from './helpers/legacyCapabilitySeed'
 // RFC-304 T61 — the delivery chain, readable.
 //
 // The table has been WRITTEN since T61 (`openDelivery` and `advanceDelivery` are
@@ -27,7 +28,7 @@ import { createDeliveryChainRead } from '../src/modules/code-capability/infrastr
 import { seedDelivery } from './helpers/legacyCapabilitySeed'
 
 const createCodeDeliveryChainQuery = (db: PersistenceDb) =>
-  createCodeDeliveryChainQueryFromPort(createDeliveryChainRead(db))
+  createCodeDeliveryChainQueryFromPort(createDeliveryChainRead(historyFixtureReader(db)))
 
 describeEachProvider('RFC-304 T61 — reading the delivery chain', (harness) => {
   let db: PersistenceDb

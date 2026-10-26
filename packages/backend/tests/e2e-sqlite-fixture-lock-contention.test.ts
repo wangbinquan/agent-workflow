@@ -1,3 +1,7 @@
+import {
+  executeSqliteFixtureSql,
+  sqliteFixtureStatements,
+} from '../../../e2e/fixtures/sqlite-statements'
 // Guard: the Playwright fixture SQLite boundary must wait out a concurrent
 // writer instead of failing the shard.
 //
@@ -43,7 +47,7 @@ import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 
-import { runSqlite } from '../../../e2e/command'
+import { querySqlite, runSqlite } from '../../../e2e/command'
 
 const REPO_ROOT = resolve(import.meta.dir, '..', '..', '..')
 
@@ -117,7 +121,10 @@ describe('e2e sqlite fixture boundary under lock contention', () => {
       // The lock is held right now. Pre-fix this throws
       // "stepping, database is locked (5)" without waiting at all.
       const startedAt = Date.now()
-      runSqlite(dbPath, "INSERT INTO fixture_rows (id) VALUES ('fixture');")
+      runSqlite(
+        dbPath,
+        "BEGIN IMMEDIATE; SELECT id FROM fixture_rows; INSERT INTO fixture_rows (id) VALUES ('fixture'); COMMIT;",
+      )
       const waitedMs = Date.now() - startedAt
 
       // Vacuity guard: proves the lock really was still held, so a green run
@@ -142,4 +149,71 @@ describe('e2e sqlite fixture boundary under lock contention', () => {
     verify.close()
     expect(ids).toEqual(['fixture', 'holder'])
   }, 30_000)
+})
+
+test('fixture statements preserve quoted separators, comments and trigger bodies', () => {
+  const raw = new Database(':memory:')
+  const source = `
+    CREATE TABLE "semi;colon" (value TEXT NOT NULL);
+    CREATE TABLE seen(value TEXT);
+    -- ; must not split a comment
+    CREATE TRIGGER capture AFTER INSERT ON "semi;colon" BEGIN
+      INSERT INTO seen VALUES (CASE WHEN NEW.value = 'a;''b' THEN 'yes;' ELSE 'no' END);
+      INSERT INTO seen VALUES ('second');
+    END;
+    /* ignored ; */ INSERT INTO "semi;colon" VALUES ('a;''b');
+  `
+  try {
+    expect(sqliteFixtureStatements(source)).toHaveLength(4)
+    executeSqliteFixtureSql(raw, source)
+    expect(raw.query('SELECT value FROM seen').all()).toEqual([
+      { value: 'yes;' },
+      { value: 'second' },
+    ])
+    expect(() =>
+      raw.transaction(() =>
+        executeSqliteFixtureSql(
+          raw,
+          `INSERT INTO "semi;colon" VALUES ('rolled back'); INSERT INTO "semi;colon" VALUES (NULL); INSERT INTO "semi;colon" VALUES ('unreachable');`,
+        ),
+      )(),
+    ).toThrow('NOT NULL')
+    expect(raw.query('SELECT value FROM "semi;colon"').all()).toEqual([{ value: "a;'b" }])
+  } finally {
+    raw.close()
+  }
+})
+
+test('fixture child propagates the first constraint error and rolls back its caller transaction', () => {
+  const root = tmpWorkspace(),
+    path = join(root, 'constraint.sqlite')
+  const raw = new Database(path)
+  try {
+    raw.exec('CREATE TABLE fixture_rows(id TEXT NOT NULL)')
+    expect(() =>
+      runSqlite(
+        path,
+        "BEGIN IMMEDIATE; INSERT INTO fixture_rows VALUES ('before'); INSERT INTO fixture_rows VALUES (NULL); INSERT INTO fixture_rows VALUES ('after'); COMMIT;",
+      ),
+    ).toThrow()
+    expect(raw.query('SELECT id FROM fixture_rows').all()).toEqual([])
+  } finally {
+    raw.close()
+  }
+})
+
+// T18 OPS-012: the real epoch-2 artifact is larger than Node's default 1 MiB buffer.
+test('fixture queries preserve complete schema-history-sized JSON output', () => {
+  const path = join(tmpWorkspace(), 'large-receipt.sqlite')
+  const artifact = JSON.stringify({ contract: 'x'.repeat(2 * 1024 * 1024) })
+  // The fixture child opens an existing database and deliberately never creates one.
+  writeFileSync(path, '')
+  // Use the same child-process fixture boundary for setup and reading the receipt.
+  runSqlite(
+    path,
+    `CREATE TABLE receipt (artifact_json TEXT NOT NULL); INSERT INTO receipt VALUES ('${artifact}');`,
+  )
+  expect(querySqlite(path, 'SELECT artifact_json FROM receipt')).toEqual([
+    { artifact_json: artifact },
+  ])
 })

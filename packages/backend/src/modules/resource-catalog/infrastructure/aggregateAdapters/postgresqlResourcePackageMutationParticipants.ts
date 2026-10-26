@@ -361,7 +361,8 @@ async function findBuiltinResource(
   name: string,
 ): Promise<PostgresqlResourcePackageResource | null> {
   let id: string | undefined
-  const { agents, workflows, capabilityTemplates } = tablesOf(transaction)
+  const { agents } = tablesOf(transaction)
+  const { workflows, capabilityTemplates } = tablesOf(transaction)
   switch (type) {
     case 'agent':
       id = (

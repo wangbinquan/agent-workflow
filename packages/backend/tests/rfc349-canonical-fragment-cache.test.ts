@@ -1,3 +1,4 @@
+// Frozen epoch-1 artifact/operation protocol; native provider moves are covered by rfc349-database-migration-coordinator.integration.
 // RFC-349 canonical JSON fragment cache (platform/persistence/schemaContract.ts).
 //
 // WHY THIS EXISTS: every digest in the PostgreSQL migration history is the SHA-256 of
@@ -8,7 +9,7 @@
 // produce byte-identical text to the plain `JSON.stringify(canonicalize(v), null, 2)`
 // path for every value — the real history and arbitrary JSON-like data alike.
 import { describe, expect, test } from 'bun:test'
-import { readPostgresqlMigrationHistoryPrefix } from '@/platform/persistence/postgresqlMigrationHistory'
+import { readPostgresqlMigrationHistoryPrefix } from '@/platform/persistence/migration/legacy/postgresqlMigrationHistory'
 import {
   canonicalSchemaJson,
   createCanonicalFragmentCache,

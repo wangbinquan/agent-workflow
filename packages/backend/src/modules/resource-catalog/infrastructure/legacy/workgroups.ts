@@ -8,24 +8,23 @@
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { first } from '@/platform/persistence/queryHelpers'
-import type {
-  CopyWorkgroupRequest,
-  CreateWorkgroup,
-  SaveWorkgroupReceipt,
-  UpdateWorkgroup,
-  Workgroup,
-  ResourceAccess,
-  WorkgroupDetail,
-  WorkgroupDraftMember,
-  WorkgroupDraftSnapshot,
-} from '@agent-workflow/shared'
 import {
+  type CopyWorkgroupRequest,
+  type CreateWorkgroup,
+  type SaveWorkgroupReceipt,
+  type UpdateWorkgroup,
+  type Workgroup,
+  type ResourceAccess,
+  type WorkgroupDetail,
+  type WorkgroupDraftMember,
+  type WorkgroupDraftSnapshot,
   CopyWorkgroupRequestSchema,
   resolveWorkgroupOutputContract,
   serializeWorkgroupEditableSnapshotV1,
   UpdateWorkgroupSchema,
   WorkgroupNameSchema,
 } from '@agent-workflow/shared'
+
 import { and, eq, inArray } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type { Actor } from '@/auth/actor'

@@ -1,3 +1,4 @@
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 // RFC-291 面 C —— 失效挂载「跳过 + 明示」，不再炸整轮（AC-9 / AC-9b / AC-10 / AC-11）。
 //
 // 此前：挂载的资源被删或失去可见性后，buildIntentDump 对该根直接 throw，整轮生成
@@ -17,7 +18,7 @@
 
 import { agentFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+
 import { queryWrite } from '@/platform/persistence/queryHelpers'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
@@ -32,7 +33,6 @@ import { buildIntentDumpForTest as buildIntentDump } from './helpers/intentResou
 import { buildIntentDoc } from '@/modules/intent/domain/intentDoc'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 
-const MIGRATIONS = join(import.meta.dir, '..', 'db', 'migrations')
 const OWNER = 'user_owner_rfc291un_000000'
 const OTHER = 'user_other_rfc291un_000000'
 
@@ -202,7 +202,7 @@ describeEachProvider('RFC-291 失效挂载跳过而非抛错（双引擎）', (h
 describe('materialize 期竞态与真错不吞（客户端代理注入，单引擎）', () => {
   let sqliteDb: DbClient
   beforeEach(async () => {
-    sqliteDb = createInMemoryDb(MIGRATIONS)
+    sqliteDb = createInMemoryDb()
     db = sqliteDb
     makeAppHome()
     await seedUsers()

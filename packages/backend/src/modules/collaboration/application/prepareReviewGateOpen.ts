@@ -1,6 +1,5 @@
 // RFC-333 T6 — prepare the complete review round before TaskParkTx.
 
-import { legacyReviewBodyPath } from '@/platform/content/legacyReview'
 import { ulid } from 'ulid'
 import { sha256Hex } from '@/util/hash'
 import type { HumanGateArtifactStore, PlannedReviewArtifact } from './ports/humanGateArtifactStore'
@@ -74,17 +73,6 @@ export type CommittedReviewGateOpen = Readonly<{
 }>
 
 export type PrepareReviewGateOpenResult = PreparedReviewGateOpen | CommittedReviewGateOpen
-
-function reviewBodyPath(input: {
-  taskId: string
-  reviewNodeId: string
-  sourcePortName: string
-  operationId: string
-  versionIndex: number
-  itemIndex: number | null
-}): string {
-  return legacyReviewBodyPath(input)
-}
 
 function assertInput(input: PrepareReviewGateOpenInput): void {
   const supersedePendingDocumentIds = input.supersedePendingDocumentIds ?? []
@@ -177,6 +165,13 @@ export class ReviewGateOpenPreparation {
       operationKind: 'open',
       idempotencyKey: input.idempotencyKey,
     })
+    if (existing !== null && existing.schemaVersion !== 2) {
+      throw new HumanGateOperationError(
+        'human-gate-operation-manifest-invalid',
+        'Legacy review-open identity is retained for history and cannot prepare a v2 projection.',
+        { operationId: existing.id },
+      )
+    }
     const operationId = existing?.id ?? ulid(requestedAt)
     const createdAt = existing?.createdAt ?? requestedAt
     const reviewNodeRunId =
@@ -220,18 +215,11 @@ export class ReviewGateOpenPreparation {
     const planned = input.documents.map((draft, index) => {
       const artifactKey = `review-doc:${String(index).padStart(6, '0')}`
       const itemIndex = draft.itemIndex ?? null
-      const bodyPath = reviewBodyPath({
-        taskId: input.taskId,
-        reviewNodeId: input.reviewNodeId,
-        sourcePortName: draft.sourcePortName,
-        operationId,
-        versionIndex: draft.versionIndex,
-        itemIndex,
-      })
+      const finalContentKey = `review:${input.taskId}:${operationId}:${artifactKey}`
       const plan = this.artifacts.planReviewArtifact({
         operationId,
         artifactKey,
-        finalPath: bodyPath,
+        finalPath: finalContentKey,
         body: draft.body,
       })
       const document: ReviewGateDocumentProjection = {
@@ -243,7 +231,7 @@ export class ReviewGateOpenPreparation {
         sourcePortName: draft.sourcePortName,
         versionIndex: draft.versionIndex,
         reviewIteration: draft.reviewIteration,
-        bodyPath,
+        finalContentKey,
         commentsJson: '[]',
         decision: 'pending',
         decisionReason: null,
@@ -272,7 +260,7 @@ export class ReviewGateOpenPreparation {
       documents,
     })
     const manifest: ReviewGateOpenManifest = {
-      schemaVersion: 1,
+      schemaVersion: 2,
       kind: 'review-open',
       gateRef,
       sourceSnapshotDigest: input.sourceSnapshotDigest,

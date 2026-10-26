@@ -26,7 +26,6 @@ import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { runNode } from './helpers/runner'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
 
 interface Harness {
@@ -107,7 +106,7 @@ function buildHarness(): Harness {
   )
   ocDb.close()
 
-  const db = createInMemoryDb(MIGRATIONS)
+  const db = createInMemoryDb()
   const { taskId } = seedTaskAndNodeRun(db)
   return {
     db,

@@ -10,7 +10,7 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 import { DAEMON_BOOT_STEPS } from '../src/bootstrap/daemonLifecycleProgram'
-import { bootImplementation, bootDeclaration, expectBootOrder } from './helpers/daemonProgramSource'
+import { bootImplementation, expectBootOrder } from './helpers/daemonProgramSource'
 
 const APPLICATION = readFileSync(
   resolve(import.meta.dir, '../src/bootstrap/daemonApplication.ts'),
@@ -21,13 +21,11 @@ test('both providers bind the common boot program to the original operations', (
   const bindings = {
     'process-registrations': 'registerTerminalWorkspacePrunePolicy(',
     'git-credential-lease-cleanup': 'cleanupOrphanedGitCredentialLeases(',
-    'skill-identity-barrier': 'skillCatalogBoot.runIdentityMigrationBarrier()',
-    'fusion-provenance': 'repairFusionProvenance(',
+    'skill-operation-recovery': 'skillCatalogBoot.recoverOperations()',
     'task-execution-recovery': 'runTaskExecutionBootRecovery({',
     'task-delete-recovery': 'recoverInterruptedTaskDeletes(',
     'archive-recovery': 'archive.recover({',
     'workspace-maintenance-recovery': 'Maintenance.recover({',
-    'scheduled-payload-heal': 'healScheduledLaunchPayloads(',
     'fusion-decision-recovery': 'recoverFusionDecisions(',
     'fusion-resource-seed': 'seedFusionResources(',
     'employee-agent-templates': 'ensureDigitalEmployeeAgentTemplates(',
@@ -38,10 +36,8 @@ test('both providers bind the common boot program to the original operations', (
   expectBootOrder([
     'process-registrations',
     'git-credential-lease-cleanup',
-    'skill-identity-barrier',
-    'fusion-provenance',
+    'skill-operation-recovery',
     'employee-agent-templates',
-    'scheduled-payload-heal',
     'fusion-resource-seed',
     'demo-seed',
     'task-execution-recovery',
@@ -68,12 +64,22 @@ test('delivery recovery directly follows MR terminal reconciliation inside execu
   }
 })
 
-test('fusion provenance stays fail-closed and precedes recovery and seeding', () => {
-  expect(bootDeclaration('fusion-provenance').failure).toBe('fail-closed')
-  const body = bootImplementation(APPLICATION, 'fusion-provenance')
-  expect(body).not.toContain('try {')
-  expect(body).not.toContain('catch')
-  expectBootOrder(['fusion-provenance', 'fusion-resource-seed', 'fusion-decision-recovery'])
+test('fusion upgrade is converter-only, with explicit rule coverage', () => {
+  expect(APPLICATION).not.toContain('repairFusionProvenance')
+  const assembly = readFileSync(
+    resolve(import.meta.dir, '../src/bootstrap/conversionRules.ts'),
+    'utf8',
+  )
+  expect(assembly).toContain('fusionBoot,')
+  expect(assembly).toContain('memoryBoot,')
+  const cases = readFileSync(
+    resolve(import.meta.dir, 'rfc395-boot-fusion-conversion.test.ts'),
+    'utf8',
+  )
+  expect(cases).toContain('bootUpgradeEffectsFromRecords')
+  expect(cases).toContain('v2-boot-fusion-source-unproven')
+  expect(cases).toContain('wouldPreviouslyQuarantine: null')
+  expect(cases).toContain('wouldPreviouslyTerminalize: null')
 })
 
 test('one application graph initializes the runtime registry once for both adapters', () => {

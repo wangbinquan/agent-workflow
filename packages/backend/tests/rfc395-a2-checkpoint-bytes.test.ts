@@ -16,9 +16,9 @@ import { sha256Hex } from '@/util/hash'
 import {
   decodeTaskCheckpoints,
   decodeTaskCheckpointInheritance,
-} from '@/modules/task-execution/infrastructure/taskCheckpointCodec'
-import { decodeTaskRollbackPlan } from '@/modules/task-execution/infrastructure/taskRollbackCodec'
-import { wrapperRunSnapshot } from '@/modules/task-execution/infrastructure/wrapperRunPersistenceShared'
+} from '@/modules/task-execution/infrastructure/migration/run/legacyCheckpointCodec'
+import { decodeTaskRollbackPlan } from '@/modules/task-execution/infrastructure/migration/run/legacyRollback'
+import { wrapperRunSnapshot } from '@/modules/task-execution/infrastructure/migration/run/legacyWrapperSnapshot'
 import { GitStrategy } from '@/modules/task-execution/engine/wrapper/gitStrategy'
 import type { WrapperExecutionRequest } from '@/modules/task-execution/domain/wrapperExecution'
 import { hostedAgentNodeContext } from '@/modules/task-execution/infrastructure/crewstation/agentContext'

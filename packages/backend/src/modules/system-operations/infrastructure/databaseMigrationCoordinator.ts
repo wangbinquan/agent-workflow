@@ -1,8 +1,12 @@
+import { migrationPostgresqlRuntime } from '@/platform/persistence/migration/freeze/postgresqlDatabases'
+import { retainedSqlitePath } from '@/platform/persistence/databaseProviderRuntime'
+import { settleEpochSwitchBeforePointerReplacement } from './epochSwitch/pointerReplacement'
+import { dirname } from 'node:path'
+import { supportsProviderMove } from '@/platform/persistence/migrationSupport'
 // RFC-349 — production coordinator for the durable one-click operation. It is
 // the only place that assembles source, target, control-plane and admission
 // mechanisms; public commands never receive provider clients or transactions.
 
-import { databaseProviderTraits } from '@/platform/persistence/providerTraits'
 import { randomUUID } from 'node:crypto'
 import { existsSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
@@ -38,7 +42,7 @@ import {
   type DatabaseGenerationPayload,
 } from '@/platform/persistence/generationStore'
 import { verifyDatabaseMigrationManifest } from '../domain/databaseMigration'
-import { loadPostgresqlMigrationHistory } from '@/platform/persistence/postgresqlMigrationHistory'
+import { loadPostgresqlMigrationHistory } from '@/platform/persistence/schema/history/logicalHistory'
 import {
   resolvePostgresqlAdditiveRowBridge,
   type PostgresqlMigrationHistory,
@@ -87,6 +91,7 @@ export class DatabaseMigrationCoordinatorError extends Error {
     public readonly code:
       | 'database-migration-source-not-sqlite'
       | 'database-migration-target-config-mismatch'
+      | 'database-migration-resume-required'
       | 'database-migration-auto-resume-blocked',
     message: string,
   ) {
@@ -198,7 +203,7 @@ export function readDatabaseSchemaUpgradeGeneration(options: {
     }
     if (
       (selectedOperationId !== undefined && selectedOperationId !== operation.operationId) ||
-      databaseProviderTraits(payload.provider).migrationRole !== 'target' ||
+      !supportsProviderMove(operation.source.provider, payload.provider) ||
       payload.operationId !== operation.operationId ||
       payload.generationId !== `dbg_pg_${operation.operationId.slice(4)}` ||
       operation.rolledBackAt !== null ||
@@ -236,7 +241,7 @@ export function readDatabaseSchemaUpgradeGeneration(options: {
   const payload = candidate.kind === 'current' ? candidate.generation.payload : candidate.payload
   if (
     selectedOperationId !== undefined &&
-    databaseProviderTraits(payload.provider).migrationRole === 'target' &&
+    payload.operationId === selectedOperationId &&
     candidate.kind !== 'operation-recovery'
   ) {
     // A pending operation can have a fully refreshed pointer. Apply the same
@@ -255,6 +260,7 @@ export function readDatabaseSchemaUpgradeGeneration(options: {
 export function createDatabaseMigrationCoordinator(
   options: DatabaseMigrationCoordinatorOptions,
 ): DatabaseMigrationCoordinatorPort {
+  const sourceSqlitePath = retainedSqlitePath(options.generationPointerPath, options.sqlitePath)
   const contract = options.contract
   const plan = buildPostgresqlSchemaPlan(contract)
   const store = createFileDatabaseMigrationStore({ root: options.operationsRoot })
@@ -311,8 +317,8 @@ export function createDatabaseMigrationCoordinator(
 
   const assertSqliteSource = (generation = liveGeneration().payload): string => {
     // RFC-359 AC-10：问能力（这一代能不能当迁移的**源**端），不问品牌名。同文件 :719 / :729
-    // 早已用 `migrationRole === 'target'` 抛同一个错误码，这里是最后一处手写的孪生。
-    if (databaseProviderTraits(generation.provider).migrationRole !== 'source') {
+    // 这里检查已选中的 source provider，安装与升级统一由 epoch-2 history 负责。
+    if (!supportsProviderMove(generation.provider, 'postgresql')) {
       throw new DatabaseMigrationCoordinatorError(
         'database-migration-source-not-sqlite',
         'one-click migration requires the live database generation to be SQLite',
@@ -322,7 +328,7 @@ export function createDatabaseMigrationCoordinator(
   }
 
   const inspectSqliteSource = async () => {
-    const source = await openSqliteLogicalSourceWorker({ path: options.sqlitePath, contract })
+    const source = await openSqliteLogicalSourceWorker({ path: sourceSqlitePath, contract })
     try {
       return await source.preflight()
     } finally {
@@ -333,8 +339,8 @@ export function createDatabaseMigrationCoordinator(
   /** Lightweight polling projection. Full integrity/FK/184-table counts are
    * reserved for explicit preflight so Settings cannot recreate an hourly scan. */
   const inspectRetainedSqlite = (sourceGenerationId: string): DatabaseRuntimeOverview['source'] => {
-    if (!existsSync(options.sqlitePath)) return null
-    const stat = statSync(options.sqlitePath)
+    if (!existsSync(sourceSqlitePath)) return null
+    const stat = statSync(sourceSqlitePath)
     const latest = controlPlane
       .list()
       .filter((status) => status.sourceGenerationId === sourceGenerationId)
@@ -371,7 +377,7 @@ export function createDatabaseMigrationCoordinator(
       })
       const live = pointer.kind === 'current' ? pointer.generation.payload : pointer.payload
       if (
-        databaseProviderTraits(live.provider).migrationRole !== 'target' ||
+        !supportsProviderMove(manifest.payload.source.provider, live.provider) ||
         live.operationId !== operationId ||
         live.generationId !== `dbg_pg_${operationId.slice(4)}`
       )
@@ -383,21 +389,23 @@ export function createDatabaseMigrationCoordinator(
       return live.schemaDigest
     })()
     const target = manifest.payload.target
-    const runtime = createPostgresqlDatabaseRuntime({
-      config: targetConfig(target),
-      generationId: `dbg_pg_${operationId.slice(4)}`,
-      env: options.env,
-    })
+    const runtime = migrationPostgresqlRuntime(
+      createPostgresqlDatabaseRuntime({
+        config: targetConfig(target),
+        generationId: `dbg_pg_${operationId.slice(4)}`,
+        env: options.env,
+      }),
+    )
     let source: SqliteLogicalSource
     try {
       source = requireSourcePreflight
         ? await openSqliteLogicalSourceWorker({
-            path: options.sqlitePath,
+            path: sourceSqlitePath,
             contract: version.contract,
           })
         : {
             provider: 'sqlite',
-            path: options.sqlitePath,
+            path: sourceSqlitePath,
             preflight() {
               throw new Error('SQLite source preflight is unavailable in status-only mode')
             },
@@ -451,6 +459,11 @@ export function createDatabaseMigrationCoordinator(
       return openingTarget
     }
     const logicalTarget: PostgresqlLogicalTarget = {
+      async restoreMetadata(snapshot) {
+        await (
+          await openTarget()
+        ).restoreMetadata!(snapshot)
+      },
       provider: 'postgresql' as const,
       operationId,
       async prepare(now) {
@@ -662,13 +675,23 @@ export function createDatabaseMigrationCoordinator(
     },
 
     async start(input: StartDatabaseMigrationInput) {
+      await settleEpochSwitchBeforePointerReplacement({
+        appHome: dirname(options.generationPointerPath),
+        env: options.env,
+      })
       const generation = liveGeneration().payload
       // A successful cutover changes the live provider. Replay the operation
       // bound to that verified generation before requiring a SQLite source;
       // never re-open the retained source or start another migration here.
       if (
-        databaseProviderTraits(generation.provider).migrationRole === 'target' &&
-        generation.operationId !== null
+        generation.operationId !== null &&
+        controlPlane
+          .list()
+          .some(
+            (status) =>
+              status.operationId === generation.operationId &&
+              generation.generationId === `dbg_pg_${status.operationId.slice(4)}`,
+          )
       ) {
         const operation = controlPlane.readManifest(generation.operationId).payload
         if (!sameTarget(operation.target, input.target)) {
@@ -750,7 +773,7 @@ export function createDatabaseMigrationCoordinator(
         generation.kind === 'current' ? generation.generation.payload : generation.payload
       const operation = controlPlane.readManifest(input.operationId).payload
       if (
-        databaseProviderTraits(payload.provider).migrationRole === 'target' &&
+        payload.generationId === `dbg_pg_${operation.operationId.slice(4)}` &&
         (operation.phase === 'finalized' ||
           (operation.phase === 'accepting-writes' && operation.failure === null))
       ) {
@@ -760,7 +783,7 @@ export function createDatabaseMigrationCoordinator(
         )
       }
       if (
-        databaseProviderTraits(payload.provider).migrationRole === 'target' &&
+        payload.generationId === `dbg_pg_${operation.operationId.slice(4)}` &&
         generation.kind !== 'operation-recovery'
       ) {
         await readExplicitTarget()
@@ -810,7 +833,17 @@ export function createDatabaseMigrationCoordinator(
       const generation = liveGeneration().payload
       // One named question — "is the live generation a migration target?" — instead
       // of four independent provider-literal comparisons in this one function.
-      const liveRole = databaseProviderTraits(generation.provider).migrationRole
+      const liveRole =
+        generation.operationId !== null &&
+        controlPlane
+          .list()
+          .some(
+            (status) =>
+              status.operationId === generation.operationId &&
+              generation.generationId === `dbg_pg_${status.operationId.slice(4)}`,
+          )
+          ? 'target'
+          : 'source'
       const postgresqlOperationId = liveRole === 'target' ? generation.operationId : null
       let sourceGenerationId = generation.generationId
       if (liveRole === 'target') {
@@ -890,15 +923,18 @@ export function createDatabaseMigrationCoordinator(
           'interrupted migration target differs from the requested boot target',
         )
       }
-      if (candidate.failure !== null && !candidate.resumeEligible) {
+      const manifest = controlPlane.readManifest(candidate.operationId)
+      if (
+        manifest.payload.failure !== null ||
+        manifest.payload.cancelledAt !== null ||
+        manifest.payload.cancellationRequestedAt !== null
+      ) {
         throw new DatabaseMigrationCoordinatorError(
-          'database-migration-auto-resume-blocked',
-          `database migration ${candidate.operationId} requires operator intervention`,
+          'database-migration-resume-required',
+          `database migration ${candidate.operationId} is failed or cancelled; explicitly resume it before starting on its target`,
         )
       }
-      return await runOperation(candidate.operationId, {
-        resumeFailed: candidate.failure !== null,
-      })
+      return await runOperation(candidate.operationId)
     },
   }
   return Object.freeze(coordinator)

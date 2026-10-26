@@ -61,7 +61,6 @@ const STATUS_WRITE_ALLOWLIST: Record<string, number> = {
  */
 const NON_STATUS_UPDATE_TASKS_SNAPSHOT: Record<string, number> = {
   // RFC-395 O1: the source-sealing Task write moved to its owner; still one write.
-  'modules/task-execution/infrastructure/taskRepositoryUsage.ts': 1,
   // RFC-359 W7：两份 provider 资源上限实现合成一份（`writeLimitReason` 的那一处覆写）。
   'modules/task-execution/infrastructure/taskResourceLimitFacts.ts': 1,
   'modules/task-execution/infrastructure/childExecutionLaunchOperations.ts': 1,
@@ -72,14 +71,12 @@ const NON_STATUS_UPDATE_TASKS_SNAPSHOT: Record<string, number> = {
   //（RFC-311 P1-6）随之并入共用的 `services/taskDelete.ts`——那一份本来就有逐字同形的同一段。
   // 这个文件现在一处非状态 `update(tasks)` 都没有了。
   'modules/task-execution/infrastructure/taskRuntimeLifecyclePersistence.ts': 1,
-  'modules/task-execution/infrastructure/taskDefinitionWriteParticipant.ts': 1,
   // RFC-359 W12：来源终止的伴随列写从两个宿主收敛到同一任务执行 atom（SQLite 4 + PG 2 → 1）。
   // writeFence 只写 sourceTerminationFence / sourceTerminationEffectRev，并按任务 id 与
   // lifecycleEventRevision 做 CAS；翻状态仍委托已有的 writeTaskRuntimeLifecycleInTx。
   'modules/task-execution/infrastructure/sourceTerminationTarget.ts': 1,
   // RFC-359 W8：effect 账本端口合一（sqlite/postgresqlTaskExecutionEffectPersistence.ts 各 1 →
   // 中立的 taskExecutionEffectPersistence.ts 1）。工作区准备结算的任务列投影，不翻状态。
-  'modules/task-execution/infrastructure/taskExecutionEffectPersistence.ts': 1,
   // RFC-359 T7c：删除恢复的 branch_started_at 沿父链重算搬进中立实现（services/taskDelete.ts 2 → 1）。
   'modules/task-execution/infrastructure/taskDeleteRecovery.ts': 1,
   // RFC-359 W4-B1 批 2e：两份 provider 恢复实现合成一份。

@@ -12,10 +12,8 @@ import { ulid } from 'ulid'
 
 import { INTENT_APPLY_COMMITTED_ROLL_FORWARD_RETRYABLE } from '@/modules/intent/application/journalConvergence'
 import { composeIntentApplyRecoveryScene } from '@/modules/intent/composition/applyMaintenance'
-import {
-  encodeIntentJournalArtifacts,
-  type IntentJournalArtifactV1,
-} from '@/modules/intent/infrastructure/intentApplyLegacyCodec'
+import { intentApplyArtifactCodecs } from '@/modules/intent/infrastructure/intentApplyArtifactCodec'
+import type { IntentApplyArtifact as IntentJournalArtifactV1 } from '@/modules/resource-catalog/public/types'
 import { createLogger } from '@/util/log'
 import { describeEachProvider } from './helpers/eachProvider'
 
@@ -80,9 +78,7 @@ describeEachProvider('RFC-359 W12 Intent recovery complete composition', (harnes
     })
     const preparedArtifactsJson = input.corrupt
       ? 'not-json'
-      : harness.capabilities.isolation === 'exclusive'
-        ? encodeIntentJournalArtifacts(input.artifacts)
-        : JSON.stringify(input.artifacts)
+      : intentApplyArtifactCodecs.encode(input.artifacts)
     const receiptJson =
       input.state === 'committed'
         ? JSON.stringify({ journalId: id, commitSeq: 1, applied: [] })

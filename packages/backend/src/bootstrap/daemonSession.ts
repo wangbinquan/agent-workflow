@@ -1,5 +1,6 @@
+import { selectedSqlitePath } from '@/platform/persistence/databaseProviderRuntime'
 // RFC-391 — the sole daemon session graph and lifecycle composition.
-import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { deploymentSelectionsOf } from './deploymentSelections'
 import { composeDaemonApplication } from './daemonApplication'
 import { DAEMON_SESSION_ADAPTERS, type DaemonSessionAdapter } from './daemonSessionAdapters'
@@ -215,15 +216,16 @@ export async function composeDaemonSession(
   if (input.requiredProvider !== null && input.requiredProvider !== input.provider.provider)
     throw new Error('hosted-deployment-requires-postgresql')
   const db = adapter.open(input.provider, input.migrationsFolder)
+  const activeDbPath = selectedSqlitePath(input.provider, Paths.db)
   input.log.info('db ready', {
     provider: input.provider.provider,
-    path: Paths.db,
+    path: activeDbPath,
     dbVersion: input.dbVersion,
   })
   const databaseMigration = composeDatabaseMigrationModule({
-    contract: buildLogicalSchemaContract(),
+    contract: logicalSchemaContract,
     admission: input.migrationAdmission,
-    sqlitePath: Paths.db,
+    sqlitePath: activeDbPath,
     operationsRoot: Paths.databaseMigrationsDir,
     generationPointerPath: Paths.databaseGenerationPointer,
     configPath: Paths.config,
@@ -244,7 +246,7 @@ export async function composeDaemonSession(
       db,
       config: input.config,
       log: input.log,
-      dbPath: Paths.db,
+      dbPath: activeDbPath,
       taskLaunchConfiguration: input.taskLaunchConfiguration,
       daemonRuntime: input.daemonRuntime,
       daemonStartupLease: input.lock,
@@ -269,7 +271,7 @@ export async function composeDaemonSession(
   const maintenanceAdapter = adapter.maintenance({
     config: input.config,
     db,
-    dbPath: Paths.db,
+    dbPath: activeDbPath,
     migrationsFolder: input.migrationsFolder,
     generationId: input.provider.generation.payload.generationId,
   })
@@ -520,16 +522,6 @@ export async function composeDaemonSession(
       })
     },
   })
-  const developmentWakeRuntimeFactory = createPollingDaemonRuntimeHandleFactory({
-    id: 'development-wake',
-    intervalMs: DAEMON_CADENCE.developmentWakeSweep,
-    run: () => runtime.developmentAutomationModules.sweepWakesWhileDraining(),
-    onError(error) {
-      input.log.warn('development wake sweep failed', {
-        err: error instanceof Error ? error.message : String(error),
-      })
-    },
-  })
   const employeeRuntime = runtime.digitalEmployee.runtime
   const digitalEmployeeRuntimeFactory = createPollingDaemonRuntimeHandleFactory({
     id: 'digital-employee-os',
@@ -760,7 +752,6 @@ export async function composeDaemonSession(
       'human-gate-continuation': humanGateRuntimeFactory,
       'committed-event-dispatcher': committedEventRuntimeFactory,
       'memory-distill': memoryDistillRuntimeFactory,
-      'development-wake': developmentWakeRuntimeFactory,
       'digital-employee-os': digitalEmployeeRuntimeFactory,
       'event-center': eventCenterRuntimeFactory,
       'fusion-reconcile': fusionRuntimeFactory,

@@ -1,3 +1,4 @@
+import { liveSqlitePath } from './storage'
 // RFC-319 —— `/tasks/new` 任务启动向导的用户面 e2e
 // （账本 TASK-04 / TASK-05 / TASK-06 / TASK-08 / TASK-11 / TASK-13 / TASK-14 / TASK-15）。
 //
@@ -128,7 +129,7 @@ interface NodeRunRow {
 }
 
 function dbPath(): string {
-  return join(daemon.home, 'db.sqlite')
+  return liveSqlitePath(daemon.home)
 }
 
 async function api<T>(

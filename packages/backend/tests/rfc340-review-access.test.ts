@@ -1,6 +1,14 @@
+import {
+  databaseContentText,
+  contentRowColumns,
+  inlineContentColumns,
+} from '@/platform/content/infrastructure/contentStore'
+import { legacyContentRef } from '@/platform/content/contentRef'
+
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { nodeRunFixture, taskFixture, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+
 import { expect, test } from 'bun:test'
 import { rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -29,7 +37,8 @@ function actor(id: string) {
 async function fixture(scope: ProviderHttpApplicationScope) {
   const db = scope.harness.db
   const now = 1_789_000_000_000
-  const { users, docVersions } = tablesOf(db)
+  const { users } = tablesOf(db)
+  const { docVersions } = tablesOf(db)
   await db.insert(users).values(
     ['owner', 'reviewer', 'other'].map((id) => ({
       id,
@@ -101,7 +110,7 @@ async function fixture(scope: ProviderHttpApplicationScope) {
       sourcePortName: 'document',
       versionIndex: 1,
       reviewIteration: 0,
-      bodyPath: 'not-read.md',
+      ...contentRowColumns(legacyContentRef('review-body-path', 'local-file', 'not-read.md')),
       decision: 'pending' as const,
       createdAt: now,
     })),
@@ -114,7 +123,7 @@ async function fixture(scope: ProviderHttpApplicationScope) {
       sourcePortName: 'document',
       versionIndex: 1,
       reviewIteration: 1,
-      bodyPath: 'not-read.md',
+      ...contentRowColumns(legacyContentRef('review-body-path', 'local-file', 'not-read.md')),
       decision: 'approved' as const,
       createdAt: now - 1,
       decidedAt: now,
@@ -273,7 +282,8 @@ describeEachProviderHttpApplication(
         taskId: 'task',
         body: { nodes: [{ reviewNodeId: 'review-a', reviewerUserIds: ['reviewer'] }] },
       })
-      const { reviewComments, taskCollaborators } = tablesOf(db)
+      const { taskCollaborators } = tablesOf(db)
+      const { reviewComments } = tablesOf(db)
       await db.insert(reviewComments).values([
         {
           id: 'comment',
@@ -286,7 +296,7 @@ describeEachProviderHttpApplication(
           contextBefore: '',
           contextAfter: '',
           occurrenceIndex: 0,
-          commentText: 'original',
+          ...inlineContentColumns(Buffer.from('original', 'utf8'), 'text/plain'),
           author: 'reviewer',
           authorRole: 'reviewer',
           createdAt: 1,
@@ -302,7 +312,7 @@ describeEachProviderHttpApplication(
           contextBefore: '',
           contextAfter: '',
           occurrenceIndex: 0,
-          commentText: 'another opinion',
+          ...inlineContentColumns(Buffer.from('another opinion', 'utf8'), 'text/plain'),
           author: 'other',
           authorRole: 'user',
           createdAt: 2,
@@ -374,16 +384,22 @@ describeEachProviderHttpApplication(
       })
       expect(editOther.status).toBe(403)
       expect(
-        (await db.select().from(reviewComments).where(eq(reviewComments.id, 'other-comment')))[0]
-          ?.commentText,
+        await databaseContentText(
+          db,
+          (
+            await db.select().from(reviewComments).where(eq(reviewComments.id, 'other-comment'))
+          )[0]!,
+        ),
       ).toBe('another opinion')
 
       const remove = await request('/api/reviews/run/comments/comment', { method: 'DELETE' })
       expect(remove.status).toBe(403)
       expect(await remove.json()).toMatchObject({ code: 'review-comment-delete-not-allowed' })
       expect(
-        (await db.select().from(reviewComments).where(eq(reviewComments.id, 'comment')))[0]
-          ?.commentText,
+        await databaseContentText(
+          db,
+          (await db.select().from(reviewComments).where(eq(reviewComments.id, 'comment')))[0]!,
+        ),
       ).toBe('reviewer edit')
 
       const decision = await request('/api/reviews/run/decision', {
@@ -470,7 +486,8 @@ describeEachProviderHttpApplication(
       expect(replacedBody.nodes.find((node) => node.reviewNodeId === 'review-b')).toMatchObject({
         reviewers: [],
       })
-      const { taskCollaborators, tasks, reviewNodeReviewers } = tablesOf(db)
+      const { taskCollaborators, reviewNodeReviewers } = tablesOf(db)
+      const { tasks } = tablesOf(db)
       expect(await db.select().from(taskCollaborators)).toEqual([])
 
       const forbidden = await request(reviewerToken)

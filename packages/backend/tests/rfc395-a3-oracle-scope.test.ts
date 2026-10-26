@@ -4,9 +4,9 @@ import { expect, test } from 'bun:test'
 import {
   createRunSelectionOracleSnapshot,
   type OracleSnapshotRow,
-} from '@/modules/task-execution/infrastructure/runSelection/oracle/snapshot'
-import { createRunHistorySnapshot } from '@/modules/task-execution/infrastructure/runSelection/oracle/historySnapshot'
-import type { OracleRunRow } from '@/modules/task-execution/infrastructure/runSelection/oracle/rows'
+} from '@/modules/task-execution/infrastructure/migration/oracle/snapshot'
+import { createRunHistorySnapshot } from '@/modules/task-execution/infrastructure/migration/oracle/historySnapshot'
+import type { OracleRunRow } from '@/modules/task-execution/infrastructure/migration/oracle/rows'
 
 const row = (id: string, changes: Partial<OracleRunRow> = {}): OracleRunRow => ({
   id,

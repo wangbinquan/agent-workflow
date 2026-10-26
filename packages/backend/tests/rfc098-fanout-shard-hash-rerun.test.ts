@@ -1,3 +1,4 @@
+import { initializeTaskWorkspace } from './helpers/taskWorkspaceFixture'
 // RFC-098 B3 (audit S-20) — shard value-hash gate: after a daemon restart, a
 // shard whose UPSTREAM CONTENT changed must re-run; siblings whose content is
 // unchanged are replayed from their done rows without a spawn.
@@ -30,7 +31,7 @@ import type { WorkflowDefinition } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { createHash } from 'node:crypto'
-import { mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { monotonicFactory } from 'ulid'
@@ -44,7 +45,6 @@ import { canonicalizeWorkflowAgentIds } from './helpers/canonicalWorkflowFixture
 // deterministic.
 const ulid = monotonicFactory()
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
 
 function sha256Hex(s: string): string {
@@ -61,8 +61,8 @@ interface Harness {
 function buildHarness(): Harness {
   const appHome = mkdtempSync(join(tmpdir(), 'aw-rfc098-hash-rerun-'))
   const worktreePath = join(appHome, 'wt')
-  mkdirSync(worktreePath, { recursive: true })
-  const db = createInMemoryDb(MIGRATIONS)
+  initializeTaskWorkspace(worktreePath)
+  const db = createInMemoryDb()
   return {
     db,
     appHome,

@@ -1,7 +1,7 @@
 // RFC-349 — the existing System Operations backup command must project to the
 // live PostgreSQL provider adapter without exposing provider details publicly.
 
-import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { describe, expect, test } from 'bun:test'
 import { createPostgresqlAdminBackupCoordinator } from '@/modules/system-operations/infrastructure/postgresqlAdminBackupCoordinator'
 import type { CreatePostgresqlProviderBackupOptions } from '@/modules/system-operations/infrastructure/postgresqlProviderBackup'
@@ -20,8 +20,8 @@ describe('RFC-349 PostgreSQL admin backup coordinator', () => {
     } as PostgresqlDatabaseRuntime
     let received: CreatePostgresqlProviderBackupOptions | undefined
     const coordinator = createPostgresqlAdminBackupCoordinator({
-      headContract: buildLogicalSchemaContract(),
-      contract: buildLogicalSchemaContract(),
+      headContract: logicalSchemaContract,
+      contract: logicalSchemaContract,
       runtime,
       db: NEUTRAL_DATABASE,
       appHome: '/provider-owned/application-home',
@@ -46,7 +46,7 @@ describe('RFC-349 PostgreSQL admin backup coordinator', () => {
     })
     expect(calls).toEqual(['prepare', 'backup'])
     expect(received).toMatchObject({
-      headContract: buildLogicalSchemaContract(),
+      headContract: logicalSchemaContract,
       runtime,
       appHome: '/provider-owned/application-home',
       includeWorktrees: true,
@@ -59,8 +59,8 @@ describe('RFC-349 PostgreSQL admin backup coordinator', () => {
   test('does not start a provider backup when preparation fails', async () => {
     let backups = 0
     const coordinator = createPostgresqlAdminBackupCoordinator({
-      headContract: buildLogicalSchemaContract(),
-      contract: buildLogicalSchemaContract(),
+      headContract: logicalSchemaContract,
+      contract: logicalSchemaContract,
       runtime: {
         provider: 'postgresql',
         generationId: 'dbg_pg_admin_backup_02',

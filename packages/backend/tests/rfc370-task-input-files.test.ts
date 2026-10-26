@@ -3,6 +3,11 @@
 // hosted_task_artifacts rows commit in each ready transaction. A retried
 // request reuses its objects; a changed request is refused. Coverage moved here
 // from the deleted recovery-input test (its recovery machinery was removed).
+// RFC-370 v3 V6 — original task input uploads are `task-artifact`
+// publications (files and their manifest, scope = task id) whose
+// hosted_task_artifacts rows commit in each ready transaction. A retried
+// request reuses its objects; a changed request is refused. Coverage moved here
+// from the deleted recovery-input test (its recovery machinery was removed).
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { createHostedObjectPublications } from '@/modules/system-operations/infrastructure/crewstation/objectPublications'
@@ -59,7 +64,8 @@ describeEachProvider('RFC-370 hosted task input files', (harness) => {
       Buffer.from('# spec').toString('hex'),
       '000102',
     ])
-    const { hostedTaskArtifacts, hostedObjectPublications } = tablesOf(harness.db)
+    const { contentPublications } = tablesOf(harness.db),
+      { hostedTaskArtifacts } = tablesOf(harness.db)
     expect(
       (await harness.db.select().from(hostedTaskArtifacts)).map((row) => row.reference).sort(),
     ).toEqual([
@@ -67,7 +73,7 @@ describeEachProvider('RFC-370 hosted task input files', (harness) => {
       'runs/task-1/inputs/files/1',
       'runs/task-1/inputs/manifest.json',
     ])
-    const publications = await harness.db.select().from(hostedObjectPublications)
+    const publications = await harness.db.select().from(contentPublications)
     expect(publications).toHaveLength(3)
     expect(publications.every((row) => row.state === 'ready' && row.scope === 'task-1')).toBe(true)
     expect(f.pins).toHaveLength(3)

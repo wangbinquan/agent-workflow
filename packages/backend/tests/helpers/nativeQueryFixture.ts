@@ -1,9 +1,10 @@
+import { bindSchemaRowRuleErrors } from '@/platform/persistence/schema/rowRules'
 // RFC-395 I-b: compile-only provider fixtures use native Drizzle objects and their own session tables.
 import { afterAll } from 'bun:test'
 import { Database } from 'bun:sqlite'
 import { drizzle as sqliteDrizzle } from 'drizzle-orm/bun-sqlite'
 import { drizzle as pgDrizzle } from 'drizzle-orm/bun-sql'
-import { nativeTableSets } from '@/bootstrap/persistenceSchema'
+import { nativeTableSets, rowRuleCodes } from '@/bootstrap/persistenceSchema'
 import {
   createPostgresqlCapabilities,
   createSqliteCapabilities,
@@ -39,6 +40,7 @@ export function nativeQueryFixture(provider: DatabaseProvider): {
       createPostgresqlCapabilities(),
     )
   }
+  bindSchemaRowRuleErrors(db, rowRuleCodes)
   const fixture = { db, tables: tablesOf(db) }
   fixtures.set(provider, fixture)
   return fixture

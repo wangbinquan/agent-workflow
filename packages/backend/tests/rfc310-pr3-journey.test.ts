@@ -29,6 +29,8 @@
 // 原来放在 beforeAll 里的整套 fixture 因此改成 `seedFixture` 按用例重铺；只有
 // requirement provider mock 与只读的 baseline git 仓仍是整文件一份。
 
+import { admitTestDirectAuthority } from './helpers/identityAccessAuthority'
+import { composeDevelopmentMissionOperations } from '@/modules/development-automation/composition/missionOperations'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { createLocalVerificationCommandEffectsFactory } from '@/modules/development-automation/composition/localVerificationCommands'
@@ -88,6 +90,8 @@ let db: PersistenceDb
 let fx: ProviderPr3Fixture
 let app: Hono
 let token: string
+let historicalMissionOperations: ReturnType<typeof composeDevelopmentMissionOperations>
+let historicalActor: Parameters<ReturnType<typeof composeDevelopmentMissionOperations>['launch']>[0]
 let automation: DevelopmentAutomationModule
 let nativeBlobPath: (sha256: string) => string
 /** answers 用例专用 policy：规则只读 requirement facts（见该用例注释）。 */
@@ -131,6 +135,12 @@ async function reqAs(path: string, init: RequestInit = {}): Promise<Response> {
     headers.set('content-type', 'application/json')
   }
   return app.request(path, { ...init, headers })
+}
+
+// Seed a mission admitted before epoch-2 cutover through the real legacy command/staging
+// implementation. All subsequent requests use the live application; live admission stays closed.
+async function seedHistoricalMission(input: { method: string; body: string }) {
+  return historicalMissionOperations.launch(historicalActor, JSON.parse(input.body))
 }
 
 function launchBody(
@@ -289,6 +299,19 @@ async function seedFixture(scope: ProviderHttpApplicationScope): Promise<void> {
     evidenceDocumentCommands: purposeRoot.requirement.documentCommands,
     requirementStaging: purposeRoot.requirement.staging,
   })
+  const admitted = await admitTestDirectAuthority(
+    opened.modules.core.identityAccess.directAuthority,
+    { userId: admin.id, source: 'session' },
+  )
+  if (admitted === null) throw new Error('historical mission fixture authority unavailable')
+  historicalActor = admitted.actor
+  historicalMissionOperations = composeDevelopmentMissionOperations({
+    db,
+    automation,
+    admissionLookup: fx.lookup,
+    deliveryProvider: opened.modules.repository.developmentDeliveryProvider,
+    legacyAdmissionsEnabled: async () => true,
+  })
 }
 
 describeEachProviderHttpApplication(
@@ -304,11 +327,27 @@ describeEachProviderHttpApplication(
       await seedFixture(scope)
     })
 
+    test('epoch-2 live HTTP rejects new legacy missions without creating a row', async () => {
+      const before = await db.select().from(tablesOf(db).developmentMissions)
+      const response = await reqAs('/api/code/missions', {
+        method: 'POST',
+        body: launchBody('retired-live-admission', {
+          kind: 'direct',
+          title: 'retired',
+          body: 'body',
+          uploads: [],
+        }),
+      })
+      expect(response.status).toBe(409)
+      expect(await response.json()).toMatchObject({ code: 'legacy-mission-admission-retired' })
+      expect(await db.select().from(tablesOf(db).developmentMissions)).toEqual(before)
+    })
+
     describe('rfc310 pr3 journey — direct body-only', () => {
       // bun test --randomize 会打乱同 describe 内的用例顺序：一条 journey 的先后
       // 步骤必须收在同一个 test 里，不得跨 test 共享 missionId。
-      test('HTTP launch → stash → manifest → file streaming faces → honest facts-collector block', async () => {
-        const res = await reqAs('/api/code/missions', {
+      test('historical admission → stash → live HTTP manifest and streaming → honest facts-collector block', async () => {
+        const res = await seedHistoricalMission({
           method: 'POST',
           body: launchBody('journey-direct-1', {
             kind: 'direct',
@@ -317,8 +356,8 @@ describeEachProviderHttpApplication(
             uploads: [],
           }),
         })
-        expect(res.status).toBe(201)
-        const launched = (await res.json()) as {
+        expect(res.created).toBe(true)
+        const launched = res.body as {
           missionId: string
           status: string
           created: boolean
@@ -396,7 +435,7 @@ describeEachProviderHttpApplication(
       test('manifest 404 while nothing has materialized (admission-blocked mission)', async () => {
         // 无 assignment、无 requestedEmployee ⇒ launch 即 blocked；reconcile 走
         // policy-content-missing 早退，materialize 永不运行——404 是确定性的。
-        const res = await reqAs('/api/code/missions', {
+        const res = await seedHistoricalMission({
           method: 'POST',
           body: launchBody(
             'journey-direct-unadmitted-1',
@@ -404,8 +443,8 @@ describeEachProviderHttpApplication(
             { requestedEmployee: null, repositoryId: 'repo-without-assignment' },
           ),
         })
-        expect(res.status).toBe(201)
-        const launched = (await res.json()) as { missionId: string; status: string }
+        expect(res.created).toBe(true)
+        const launched = res.body as { missionId: string; status: string }
         expect(launched.status).toBe('blocked')
         const manifestRes = await reqAs(
           `/api/code/missions/${launched.missionId}/requirement-manifest`,
@@ -439,9 +478,9 @@ describeEachProviderHttpApplication(
           body: null,
           uploads: [{ uploadRef: upload.uploadRef, repositoryTargetPath: 'docs/spec.md' }],
         })
-        const res = await reqAs('/api/code/missions', { method: 'POST', body })
-        expect(res.status).toBe(201)
-        const launched = (await res.json()) as { missionId: string; created: boolean }
+        const res = await seedHistoricalMission({ method: 'POST', body })
+        expect(res.created).toBe(true)
+        const launched = res.body as { missionId: string; created: boolean }
 
         const mission = (await fx.store.getMission(launched.missionId))!
         expect(mission.sourceContentDigest).toMatch(/^[0-9a-f]{64}$/)
@@ -451,16 +490,16 @@ describeEachProviderHttpApplication(
         )
 
         // 同 idempotencyKey 重放：200 + created:false + 同 mission，不重复 claim。
-        const replay = await reqAs('/api/code/missions', { method: 'POST', body })
-        expect(replay.status).toBe(200)
-        const replayed = (await replay.json()) as { missionId: string; created: boolean }
+        const replay = await seedHistoricalMission({ method: 'POST', body })
+        expect(replay.created).toBe(false)
+        const replayed = replay.body as { missionId: string; created: boolean }
         expect(replayed.created).toBe(false)
         expect(replayed.missionId).toBe(launched.missionId)
       })
 
       test('body+file launch materializes the body manifest (uploads ride the seed chain)', async () => {
         const upload = await uploadBytes('notes.md', 'NOTES-CONTENT-1')
-        const res = await reqAs('/api/code/missions', {
+        const res = await seedHistoricalMission({
           method: 'POST',
           body: launchBody('journey-body-file-1', {
             kind: 'direct',
@@ -469,8 +508,8 @@ describeEachProviderHttpApplication(
             uploads: [{ uploadRef: upload.uploadRef, repositoryTargetPath: 'docs/notes.md' }],
           }),
         })
-        expect(res.status).toBe(201)
-        const launched = (await res.json()) as { missionId: string }
+        expect(res.created).toBe(true)
+        const launched = res.body as { missionId: string }
         await pumpUntil(launched.missionId, (m) => m.status === 'blocked')
         const manifestRes = await reqAs(
           `/api/code/missions/${launched.missionId}/requirement-manifest`,
@@ -490,15 +529,15 @@ describeEachProviderHttpApplication(
     describe('rfc310 pr3 journey — external reference + source refresh', () => {
       // 同一条 journey 的先后步骤收在一个 test 里（--randomize 会打乱 test 顺序）。
       test('external three-file bundle → facts block → refresh preview/apply; non-external 422', async () => {
-        const res = await reqAs('/api/code/missions', {
+        const res = await seedHistoricalMission({
           method: 'POST',
           body: launchBody('journey-external-1', {
             kind: 'external-reference',
             externalId: 'REQ-7',
           }),
         })
-        expect(res.status).toBe(201)
-        const missionId = ((await res.json()) as { missionId: string }).missionId
+        expect(res.created).toBe(true)
+        const missionId = (res.body as { missionId: string }).missionId
 
         // PR-5 起 repositoryFacts collector 已接线：真 collector 对测试仓收集出
         // 空 Java 集 → implement 规则（set-contains-any java）诚实失配 block。
@@ -560,7 +599,7 @@ describeEachProviderHttpApplication(
         })
 
         // 非 external mission：invalid-user-input → 422 not-external-source。
-        const directRes = await reqAs('/api/code/missions', {
+        const directRes = await seedHistoricalMission({
           method: 'POST',
           body: launchBody('journey-direct-for-refresh-1', {
             kind: 'direct',
@@ -569,7 +608,7 @@ describeEachProviderHttpApplication(
             uploads: [],
           }),
         })
-        const directId = ((await directRes.json()) as { missionId: string }).missionId
+        const directId = (directRes.body as { missionId: string }).missionId
         const refused = await reqAs(`/api/code/missions/${directId}/source-refresh/preview`, {
           method: 'POST',
         })
@@ -593,7 +632,7 @@ describeEachProviderHttpApplication(
         // 不该起动作，但事实采集不必等澄清）。fixture 默认规则第二谓词读
         // repository.languages，会先落 collector-not-wired——本用例换成只读
         // requirement facts 的 policy，让规则直达 run-agent-action 被澄清拦下。
-        const res = await reqAs('/api/code/missions', {
+        const res = await seedHistoricalMission({
           method: 'POST',
           body: launchBody(
             'journey-answers-1',
@@ -601,8 +640,8 @@ describeEachProviderHttpApplication(
             { requestedPolicy: { id: requirementOnlyPolicyId, revision: 1 } },
           ),
         })
-        expect(res.status).toBe(201)
-        const missionId = ((await res.json()) as { missionId: string }).missionId
+        expect(res.created).toBe(true)
+        const missionId = (res.body as { missionId: string }).missionId
 
         // 被动等 launch 的那一轮后台 reconcile 物化 bundle（它只跑一个 arm，之后
         // mission 停在 working）——绝不能自己泵：多泵一轮就推进到 facts-collect

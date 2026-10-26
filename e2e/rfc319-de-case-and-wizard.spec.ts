@@ -1,3 +1,4 @@
+import { liveSqlitePath } from './storage'
 // RFC-319 —— 数字员工「任务向导 + 案例页」8 条能力的浏览器兜底。
 //
 // 覆盖 `architecture/e2e-capability-ledger.json` 里这几条 `tier: nightly` 的 gap：
@@ -97,7 +98,7 @@ let panelEmployeeId = ''
 let pollingEmployeeId = ''
 
 function dbPath(handle: DaemonHandle): string {
-  return join(handle.home, 'db.sqlite')
+  return liveSqlitePath(handle.home)
 }
 
 async function api<T>(

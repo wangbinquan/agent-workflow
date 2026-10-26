@@ -17,14 +17,14 @@
 // restoreFromBackup. Pure FS (no hashing / DB) so it stays a leaf module and
 // callers fingerprint via the existing hashDir.
 
-import { legacySkillOperationDirectory } from '@/platform/content/legacySkill'
+import { skillOperationDirectory } from '@/platform/content/locations/skill'
 import { existsSync, renameSync, rmSync } from 'node:fs'
 
 export type OpDirKind = 'staged' | 'backup' | 'candidate'
 
 /** The op-scoped sibling path for a given kind (does not touch the FS). */
 export function opScopedDir(filesDir: string, opId: string, kind: OpDirKind): string {
-  return legacySkillOperationDirectory(filesDir, opId, kind)
+  return skillOperationDirectory(filesDir, opId, kind)
 }
 
 export const opStagedDir = (filesDir: string, opId: string): string =>

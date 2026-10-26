@@ -2,7 +2,7 @@
 
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
-import { first, queryWrite, queryRows, affectedRows } from '@/platform/persistence/queryHelpers'
+import { first, queryWrite, queryRows } from '@/platform/persistence/queryHelpers'
 import { and, eq } from 'drizzle-orm'
 import { canonicalJson } from '@agent-workflow/shared'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
@@ -57,56 +57,6 @@ export function* readCommittedEventCutoverProgram(
     throw new Error(`committed event cutover is missing: ${producer}/${family}`)
   }
   return cutoverFromRow(row)
-}
-
-export function* changeCommittedEventCutoverProgram(
-  tx: AppendProgramDatabase,
-  input: Readonly<{
-    producer: CommittedEventProducer
-    family: CommittedEventFamily
-    expectedMode: CommittedEventCutover['mode']
-    expectedEpoch: number
-    mode: CommittedEventCutover['mode']
-    changedAt: number
-    changeRef: string
-  }>,
-): Generator<TransactionProgramStep, CommittedEventCutover, void> {
-  assertProducerFamily(input.producer, input.family)
-  assertPositiveInteger(input.expectedEpoch, 'expectedEpoch')
-  if (
-    !Number.isSafeInteger(input.changedAt) ||
-    input.changedAt < 0 ||
-    input.changeRef.length === 0
-  ) {
-    throw new Error('committed event cutover change requires time and durable ref')
-  }
-  const result = yield* transactionStep(() => {
-    const { committedEventFamilyCutovers } = tablesOf(tx)
-    return queryWrite(
-      tx
-        .update(committedEventFamilyCutovers)
-        .set({
-          mode: input.mode,
-          epoch: input.expectedEpoch + 1,
-          changedAt: input.changedAt,
-          changeRef: input.changeRef,
-        })
-        .where(
-          and(
-            eq(committedEventFamilyCutovers.producer, input.producer),
-            eq(committedEventFamilyCutovers.family, input.family),
-            eq(committedEventFamilyCutovers.mode, input.expectedMode),
-            eq(committedEventFamilyCutovers.epoch, input.expectedEpoch),
-          ),
-        ),
-    )
-  })
-  if (affectedRows(result) !== 1) {
-    throw new Error(
-      `committed event cutover changed concurrently: ${input.producer}/${input.family}`,
-    )
-  }
-  return yield* readCommittedEventCutoverProgram(tx, input.producer, input.family)
 }
 
 function* sameConsumerManifestProgram(
@@ -197,8 +147,7 @@ function* reserveAggregateSequenceProgram(
 
 /**
  * 在调用方已持有的事务里追加一条 committed event。同一 `(eventGroupId, eventGroupOrdinal)` 的
- * 重放必须逐字节等于已存在的事件（含消费者清单），否则抛错；cutover 处于 legacy 时不落行、
- * 返回空 eventRef。
+ * 重放必须逐字节等于已存在的事件（含消费者清单），否则抛错；新事件始终可派发。
  */
 export function* appendCommittedEventProgram<TType extends string, TPayload>(
   tx: AppendProgramDatabase,
@@ -258,7 +207,6 @@ export function* appendCommittedEventProgram<TType extends string, TPayload>(
     }
     return { cutover, eventRef: eventRefFromRow(existing) }
   }
-  if (cutover.mode === 'legacy') return { cutover, eventRef: null }
   const aggregateSeq = yield* reserveAggregateSequenceProgram(
     tx,
     {
@@ -299,7 +247,7 @@ export function* appendCommittedEventProgram<TType extends string, TPayload>(
   }
   const payloadJson = canonicalJson(envelope)
   const payloadDigest = sha256Hex(payloadJson)
-  const deliveryMode = cutover.mode
+  const deliveryMode = 'dispatchable' as const
   yield* transactionStep(() => {
     const { committedEvents } = tablesOf(tx)
     return insertOne(tx, committedEvents, {

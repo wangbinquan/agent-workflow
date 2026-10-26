@@ -20,7 +20,6 @@ import {
   transactionStep,
 } from '@/platform/persistence/transactionProgram'
 import { describeEachProvider } from './helpers/eachProvider'
-import { MIGRATIONS } from './migration-freeze'
 
 const row = (id: string) => ({ id, username: id, displayName: id, createdAt: 1, updatedAt: 1 })
 
@@ -52,7 +51,7 @@ describe('RFC-395 I-b raw contract codecs', () => {
   })
 
   test('the synchronous transaction-program driver still observes writes immediately', () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createInMemoryDb()
     try {
       function* program() {
         const result = yield* transactionStep(() => {

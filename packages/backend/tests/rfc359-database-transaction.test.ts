@@ -18,10 +18,9 @@ import { dbTxSync } from '@/db/txSync'
 import { createSqliteDatabaseSession } from '@/platform/persistence/databaseTransaction'
 import { acquireWriterLease, WriterLeaseTimeoutError } from '@/platform/persistence/writerLease'
 import { resetLoggerForTest, setLoggerStdoutWriterForTest } from '@/util/log'
-import { MIGRATIONS } from './migration-freeze'
 
 function scratchDb(): DbClient {
-  const db = createInMemoryDb(MIGRATIONS)
+  const db = createInMemoryDb()
   rawExec(db, sql.raw('create table rfc359_scratch(id integer primary key, v text)'))
   return db
 }

@@ -2,7 +2,7 @@
 // Preserve their caller-owned root normalization and SQL while sharing the
 // traversal. Pure scheduling cases and real transactional readers are separate.
 import { createAgentDependencyReadPort } from '@/modules/resource-catalog/infrastructure/agentDependencyRead'
-import { agentFixture, patchAgentFixture, readAgentFixtures } from './helpers/model'
+import { readAgentFixtures } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeEach, describe, expect, test } from 'bun:test'
@@ -13,7 +13,10 @@ import ts from 'typescript'
 import { CreateAgentSchema } from '@agent-workflow/shared'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { assertAgentDependencyGraph } from '@/modules/resource-catalog/domain/agentDependencies'
-import { createAgentPersistenceValues } from '@/modules/resource-catalog/infrastructure/agentPersistence'
+import {
+  createAgentReferenceWriteParticipant,
+  replaceAgentReferences,
+} from '@/modules/resource-catalog/infrastructure/agentReferenceWrite'
 import { describeEachProvider } from './helpers/eachProvider'
 
 // RFC-395 II-a：生产直接调用领域函数 assertAgentDependencyGraph；本套件的历史输入经这层薄适配
@@ -47,16 +50,13 @@ function rowReader(db: PersistenceDb, shape: QueryShape, observed: string[]) {
   }
 }
 
-async function insertGraph(db: PersistenceDb, rows: Readonly<Record<string, string>>) {
+async function insertGraph(db: PersistenceDb, rows: Readonly<Record<string, readonly string[]>>) {
   for (const [id, dependsOn] of Object.entries(rows)) {
-    await agentFixture(db, {
-      ...createAgentPersistenceValues({
-        id,
-        agent: CreateAgentSchema.parse({ name: id }),
-        ownerUserId: OWNER,
-        now: 1,
-      }),
-      dependsOn,
+    await createAgentReferenceWriteParticipant(db).insert({
+      id,
+      agent: CreateAgentSchema.parse({ name: id, dependsOn }),
+      ownerUserId: OWNER,
+      now: 1,
     })
   }
 }
@@ -196,8 +196,10 @@ describe('ordered Agent dependency traversal', () => {
       domain.indexOf('async function visit'),
     )
     const reader = functionBody('agentDependencyRead.ts', 'createAgentDependencyReadPort')
-    expect(reader).toContain('{ dependsOn: agents.dependsOn }')
-    expect(reader).toContain('{ id: agents.id, dependsOn: agents.dependsOn }')
+    expect(reader).toContain('dependencyAgentId')
+    expect(reader).toContain('asc(agentDependencies.ordinal)')
+    expect(reader).not.toContain('agents.dependsOn')
+    expect(reader).not.toContain('JSON.parse')
     expect(reader).toContain('.limit(1))[0]')
     expect(functionBody('agentPersistenceSemantics.ts', 'unique')).toContain(
       'new Set(values.filter((value) => value.length > 0))',
@@ -226,9 +228,9 @@ describeEachProvider('Agent dependency traversal uses the caller transaction', (
       await expect(
         harness.session.transaction(async (tx) => {
           await insertGraph(tx, {
-            'traversal-a': '["traversal-leaf"]',
-            'traversal-b': '["traversal-leaf"]',
-            'traversal-leaf': '[]',
+            'traversal-a': ['traversal-leaf'],
+            'traversal-b': ['traversal-leaf'],
+            'traversal-leaf': [],
           })
           const observed: string[] = []
           const recording = harness.recordStatements()
@@ -250,13 +252,20 @@ describeEachProvider('Agent dependency traversal uses the caller transaction', (
             observed.map((id) => [id, 1]),
           )
           for (const read of reads) {
-            if (shape === 'limited-array') {
-              expect(read.sql).toMatch(/select\s+"depends_on"\s+from/i)
-              expect(read.sql).toMatch(/\blimit\b/i)
-            } else {
-              expect(read.sql).toMatch(/select\s+"id",\s*"depends_on"\s+from/i)
-              expect(read.sql).toMatch(/\blimit\b/i)
-            }
+            expect(read.sql).toMatch(/select\s+"id"\s+from/i)
+            expect(read.sql).toMatch(/\blimit\b/i)
+            expect(read.sql).not.toContain('depends_on')
+          }
+          const relationReads = recording
+            .selects()
+            .filter((statement) => statement.sql.includes('"agent_dependencies"'))
+          expect(relationReads.map((statement) => statement.rows)).toEqual([1, 0, 1])
+          expect(relationReads.map((statement) => [...statement.values])).toEqual(
+            observed.map((id) => [id]),
+          )
+          for (const read of relationReads) {
+            expect(read.sql).toContain('"dependency_agent_id"')
+            expect(read.sql).toMatch(/order by.*"ordinal"/i)
           }
           const { agents } = tablesOf(tx)
           expect(
@@ -272,22 +281,23 @@ describeEachProvider('Agent dependency traversal uses the caller transaction', (
       expect(await readAgentFixtures(harness.db, { id: IDS })).toEqual([])
     })
 
-    test(`${shape}: a nested missing row aborts the transaction after the original JSON fallback`, async () => {
+    test(`${shape}: a nested missing row aborts the transaction after an empty relation list`, async () => {
       const observed: string[] = []
       await expect(
         harness.session.transaction(async (tx) => {
           await insertGraph(tx, {
-            'traversal-a': '[null,1,false,"traversal-leaf"]',
-            'traversal-leaf': '{',
+            'traversal-a': ['traversal-leaf'],
+            'traversal-leaf': [],
           })
           const reader = rowReader(tx, shape, observed)
           await assertAgentDependencyTraversal('candidate', ['traversal-a'], reader)
           expect(observed).toEqual(['traversal-a', 'traversal-leaf'])
-          await patchAgentFixture(
-            tx,
-            { id: 'traversal-leaf' },
-            { dependsOn: '["missing-z","missing-a"]' },
-          )
+          await replaceAgentReferences(tx, 'traversal-leaf', {
+            skills: [],
+            mcp: [],
+            plugins: [],
+            dependsOn: ['missing-z', 'missing-a'],
+          })
           observed.length = 0
           await assertAgentDependencyTraversal('candidate', ['traversal-a'], reader)
         }),

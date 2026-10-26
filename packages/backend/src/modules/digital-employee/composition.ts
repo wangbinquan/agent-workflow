@@ -45,6 +45,7 @@ import {
   type DigitalEmployeeMigrationStatus,
   type DigitalEmployeeWriterCutoverOperations,
 } from './composition/writerCutover'
+import type { DigitalEmployeeWriterInstallation } from './application/ports/writerCutoverPersistence'
 import { createDigitalEmployeeWriterCutoverPersistence } from './infrastructure/writerCutoverPersistence'
 import { z } from 'zod'
 import { utf16MaxLength } from '@agent-workflow/shared'
@@ -109,6 +110,7 @@ export type {
   DigitalEmployeeMigrationStatus,
   DigitalEmployeeWriterCutoverOperations,
   DigitalEmployeeWriterState,
+  DigitalEmployeeWriterInstallation,
 } from './composition/writerCutover'
 export { createEmployeeInputArtifactStore } from './infrastructure/inputArtifactStore'
 /** Bootstrap selects the existing program port through the context composition entry. */
@@ -126,10 +128,11 @@ export function composeDigitalEmployeeMaintenanceCommands(
 
 /** 两个 provider 同一份（RFC-359 W4-D7a）。 */
 export function composeDigitalEmployeeWriterCutoverFor(
-  db: PersistenceDb,
+  _db: PersistenceDb,
+  installation?: DigitalEmployeeWriterInstallation,
 ): DigitalEmployeeWriterCutoverOperations {
   return createDigitalEmployeeWriterCutoverOperations(
-    createDigitalEmployeeWriterCutoverPersistence(db),
+    createDigitalEmployeeWriterCutoverPersistence(installation),
   )
 }
 
@@ -467,6 +470,7 @@ type DigitalEmployeeRuntimeBinding = {
 export interface ComposeDigitalEmployeeOptions extends DigitalEmployeeCompositionOptions {
   /** 两个 provider 同一份持久化（RFC-359 W4-D6c/D7a/D7b），装配入口收中立句柄。 */
   readonly db: PersistenceDb
+  readonly writerInstallation?: DigitalEmployeeWriterInstallation
   readonly writerCutover?: ReturnType<typeof composeDigitalEmployeeWriterCutoverFor>
   /** Explicit Bun-dev escape hatch; normal start and embedded builds stay immutable. */
   readonly typePackageDriftPolicy?: 'reject' | 'draft-overlay'
@@ -1137,7 +1141,9 @@ export function composeDigitalEmployee(
   options: ComposeDigitalEmployeeOptions,
 ): DigitalEmployeeModule {
   const persisted = createDigitalEmployeeAuthoringPersistence(options.db)
-  const writerCutover = options.writerCutover ?? composeDigitalEmployeeWriterCutoverFor(options.db)
+  const writerCutover =
+    options.writerCutover ??
+    composeDigitalEmployeeWriterCutoverFor(options.db, options.writerInstallation)
   return composeDigitalEmployeeFromPersistence(options, {
     authoring:
       options.typePackageDriftPolicy === 'draft-overlay'

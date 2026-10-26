@@ -1,3 +1,8 @@
+import {
+  hostedContentColumnsInTx,
+  hostedObjectOf,
+  contentRefOf,
+} from '@/platform/content/infrastructure/contentStore'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { eq } from 'drizzle-orm'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
@@ -21,7 +26,7 @@ export async function retainDevelopmentObjectInTx(
     .insert(developmentObjectArtifacts)
     .values({
       reference,
-      objectId: object.id,
+      ...(await hostedContentColumnsInTx(tx, object)),
       digest: object.sha256,
       size: object.size,
       createdAt: Date.now(),
@@ -32,7 +37,11 @@ export async function retainDevelopmentObjectInTx(
     .from(developmentObjectArtifacts)
     .where(eq(developmentObjectArtifacts.reference, reference))
     .limit(1)
-  if (saved?.digest !== object.sha256 || saved.size !== object.size || saved.objectId !== object.id)
+  if (
+    saved?.digest !== object.sha256 ||
+    saved.size !== object.size ||
+    hostedObjectOf(contentRefOf(saved)).id !== object.id
+  )
     throw new Error('hosted-development-artifact-content-changed')
 }
 
@@ -50,7 +59,7 @@ export function createDevelopmentObjectIndex(input: {
           .where(eq(developmentObjectArtifacts.reference, reference))
           .limit(1)
       )[0]
-      return row === undefined ? null : { id: row.objectId, sha256: row.digest, size: row.size }
+      return row === undefined ? null : hostedObjectOf(contentRefOf(row))
     },
   }
 }

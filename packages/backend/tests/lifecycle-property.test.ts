@@ -1,3 +1,7 @@
+import { nodeRunFixtureColumns } from './helpers/model/nodeRun'
+import { legacyContentRef } from '@/platform/content/contentRef'
+import { contentRowColumns } from '@/platform/content/infrastructure/contentStore'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { withO2Closure } from './helpers/o2Closure'
 // RFC-053 PR-A T1h — property-based: random event sequences preserve
 // cross-table invariants.
@@ -21,7 +25,7 @@ import {
   readNodeRunFixtures,
 } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+
 import { test } from 'bun:test'
 
 import { createRetryEngine } from './helpers/retryEngine'
@@ -253,7 +257,7 @@ async function buildHarness(db: PersistenceDb): Promise<Harness> {
     sourcePortName: 'docpath',
     versionIndex: 1,
     reviewIteration: 0,
-    bodyPath: 'doc_versions/v1.md',
+    ...contentRowColumns(legacyContentRef('review-body-path', 'local-file', 'doc_versions/v1.md')),
     decision: 'pending',
   })
   await patchTaskFixture(db, { id: taskId }, { status: 'awaiting_review' })
@@ -276,7 +280,7 @@ async function applyEvent(h: Harness, ev: Event): Promise<boolean> {
     if (ev.kind === 'approve' || ev.kind === 'iterate' || ev.kind === 'reject') {
       const { nodeRuns, docVersions } = tablesOf(h.db)
       const rows = await h.db
-        .select()
+        .select(nodeRunFixtureColumns(h.db))
         .from(nodeRuns)
         .where(
           and(
@@ -333,7 +337,7 @@ async function applyEvent(h: Harness, ev: Event): Promise<boolean> {
       if (task.status === 'running' || task.status === 'pending') return false
       // Pick the latest agent row that's not canceled.
       const rows = await h.db
-        .select()
+        .select(nodeRunFixtureColumns(h.db))
         .from(nodeRuns)
         .where(
           and(
@@ -342,7 +346,7 @@ async function applyEvent(h: Harness, ev: Event): Promise<boolean> {
             ne(nodeRuns.status, 'canceled'),
           ),
         )
-      const target = rows.sort((a, b) => b.retryIndex - a.retryIndex)[0]
+      const target = rows.sort((a, b) => (b.retryIndex ?? 0) - (a.retryIndex ?? 0))[0]
       if (target === undefined) return false
       await createRetryEngine(h.db, { appHome: h.appHome }).retry({
         taskId: h.taskId,

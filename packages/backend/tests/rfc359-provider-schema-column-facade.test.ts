@@ -9,7 +9,6 @@ import { dbTxSync } from '@/db/txSync'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { first } from '@/platform/persistence/queryHelpers'
 import { describeEachProvider } from './helpers/eachProvider'
-import { MIGRATIONS } from './migration-freeze'
 
 const NOW = 1_700_000_000_000
 
@@ -67,7 +66,7 @@ describeEachProvider('RFC-395 I-b session-native column identity', (harness) => 
   test('SQLite and the harness provider coexist and each transaction inherits its own table set', async () => {
     const originalTables = tablesOf(harness.db)
     const originalColumn = originalTables.users.createdAt
-    const sqlite = createInMemoryDb(MIGRATIONS)
+    const sqlite = createInMemoryDb()
     try {
       const sqliteTables = tablesOf(sqlite)
       const fixture = (id: string) => ({

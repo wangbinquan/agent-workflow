@@ -1,3 +1,4 @@
+import { liveSqlitePath } from './storage'
 // RFC-319 —— 意图会话 / 守护进程配置两簇的用户面 e2e。
 //
 // 覆盖能力账本行：INTENT-02 / INTENT-10 / INTENT-46 / INTENT-X6 /
@@ -152,7 +153,7 @@ function readConfigFile(d: DaemonHandle): Json {
 }
 
 function dbPath(d: DaemonHandle): string {
-  return join(d.home, 'db.sqlite')
+  return liveSqlitePath(d.home)
 }
 
 /** 一次保存到底改动了哪些顶层键——分区白名单的唯一可核对形态。 */

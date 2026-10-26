@@ -1,90 +1,78 @@
-import { withNativeTransactions } from './helpers/nativeTransactions'
-import { describe, expect, test } from 'bun:test'
+import { expect, test } from 'bun:test'
 import type { Agent } from '@agent-workflow/shared'
-
 import { DrizzleMemoryInjectionReadStore } from '@/modules/memory/infrastructure/memoryInjectionReadStore'
-import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
-import type {
-  PostgresqlDatabaseRuntime,
-  PostgresqlPool,
-  PostgresqlReservedConnection,
-  SqlRows,
-} from '@/platform/persistence/postgresqlRuntime'
 import {
   injectMemoryForRun,
   loadInjectedSnapshotFromFirstAttempt,
 } from '@/modules/memory/application/injection/injectMemory'
-
-function rows(values: readonly (readonly unknown[])[]): SqlRows {
-  return Object.assign(Promise.resolve([] as readonly Record<string, unknown>[]), {
-    async values() {
-      return values
-    },
-  })
-}
-
-function fixture(responses: Array<readonly (readonly unknown[])[]>) {
-  const executions: Array<{ readonly sql: string; readonly parameters?: readonly unknown[] }> = []
-  const run = (sql: string, parameters?: readonly unknown[]) => {
-    executions.push({ sql, parameters })
-    return rows(responses.shift() ?? [])
-  }
-  const connection: PostgresqlReservedConnection = withNativeTransactions({
-    unsafe: run,
-    release() {},
-  })
-  const pool: PostgresqlPool = {
-    async reserve() {
-      return connection
-    },
-    unsafe: run,
-    async close() {},
-  }
-  const runtime: PostgresqlDatabaseRuntime = {
-    provider: 'postgresql',
-    generationId: 'dbg_memory_injection_pg',
-    async health() {
-      throw new Error('not used')
-    },
-    async readiness() {
-      throw new Error('not used')
-    },
-    async acquireMigrationAdvisoryLock() {
-      throw new Error('not used')
-    },
-    providerPool: () => pool,
-    async close() {},
-  }
-  return {
-    store: new DrizzleMemoryInjectionReadStore(createPostgresqlDatabaseClient(runtime)),
-    executions,
-  }
-}
-
-function memoryRow(
-  id: string,
-  scopeType: 'agent' | 'workflow' | 'repo' | 'repo_group' | 'global',
-  scopeId: string | null,
-  title: string,
-) {
-  return [id, scopeType, scopeId, title, `${title} body`, 10, 2, '["provider"]', 'manual', 9]
-}
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { describeEachProvider } from './helpers/eachProvider'
+import { workflowFixture, taskFixture, taskRepoFixture, nodeRunFixture } from './helpers/model'
 
 const primaryAgent = { id: 'agent-1' } as Agent
 
-describe('RFC-349 PostgreSQL runtime memory injection', () => {
+describeEachProvider('RFC-349 runtime memory injection', (h) => {
+  const parent = async () => {
+    await workflowFixture(h.db, { id: 'workflow-1', name: 'workflow-1', definition: '{}' })
+    await taskFixture(h.db, {
+      id: 'task-1',
+      workflowId: 'workflow-1',
+      workflowSnapshot: '{}',
+      repoPath: '/repo',
+      worktreePath: '/worktree',
+      baseBranch: 'main',
+      branch: 'main',
+      cachedRepoId: 'repo-legacy',
+      repoGroupId: 'group-1',
+      status: 'running',
+      inputs: {},
+      startedAt: 1,
+    })
+  }
   test('resolves every active scope and renders the same closed snapshot contract', async () => {
-    const fake = fixture([
-      // RFC-395 II-a: injectionContext now decodes the five subject columns first.
-      [['workflow-1', null, null, null, null, 'repo-legacy', 'group-1']],
-      [['repo-1']],
-      [['repo-1']],
-      [memoryRow('m-agent', 'agent', 'agent-1', 'Agent rule')],
-      [memoryRow('m-workflow', 'workflow', 'workflow-1', 'Workflow rule')],
-      [memoryRow('m-repo', 'repo', 'repo-1', 'Repository rule')],
-      [memoryRow('m-group', 'repo_group', 'group-1', 'Group rule')],
-      [memoryRow('m-global', 'global', null, 'Global rule')],
-    ])
+    await parent()
+    await insertOne(h.db, tablesOf(h.db).cachedRepos, {
+      id: 'repo-1',
+      urlHash: 'repo-1',
+      localPath: '/cache/repo-1',
+      defaultBranch: 'main',
+      lastFetchedAt: 1,
+      createdAt: 1,
+    })
+    await taskRepoFixture(h.db, {
+      taskId: 'task-1',
+      repoIndex: 0,
+      repoPath: '/repo',
+      branch: 'main',
+      cachedRepoId: 'repo-1',
+      worktreePath: '/worktree',
+    })
+    for (const [id, scopeType, scopeId, title] of [
+      ['m-agent', 'agent', 'agent-1', 'Agent rule'],
+      ['m-workflow', 'workflow', 'workflow-1', 'Workflow rule'],
+      ['m-repo', 'repo', 'repo-1', 'Repository rule'],
+      ['m-group', 'repo_group', 'group-1', 'Group rule'],
+      ['m-global', 'global', null, 'Global rule'],
+    ] as const)
+      await insertOne(h.db, tablesOf(h.db).memories, {
+        id,
+        scopeType,
+        scopeId,
+        title,
+        bodyMd: `${title} body`,
+        status: 'approved',
+        createdAt: 10,
+        version: 2,
+        tags: '["provider"]',
+        sourceKind: 'manual',
+        approvedAt: 9,
+      })
+    const recording = h.recordStatements()
+    const fake = {
+      store: new DrizzleMemoryInjectionReadStore(h.db),
+      executions: recording.statements,
+    }
 
     const result = await injectMemoryForRun({
       store: fake.store,
@@ -102,9 +90,7 @@ describe('RFC-349 PostgreSQL runtime memory injection', () => {
       'm-global',
     ])
     expect(result.block).toContain('<aw-input name="memory:m-global" id="N349">')
-    expect(fake.executions.map((entry) => entry.sql).join('\n')).toContain(
-      '"agent_workflow"."memories"',
-    )
+    expect(fake.executions.map((entry) => entry.sql).join('\n')).toContain('"memories"')
   })
 
   test('anchors retry snapshots through PostgreSQL without leaking query mechanics', async () => {
@@ -121,12 +107,22 @@ describe('RFC-349 PostgreSQL runtime memory injection', () => {
         approvedAt: 1,
       },
     ])
-    const fake = fixture([
-      [
-        ['run-1', null, 'failed', snapshot],
-        ['run-2', null, 'running', null],
-      ],
-    ])
+    await parent()
+    await nodeRunFixture(h.db, {
+      id: 'run-1',
+      taskId: 'task-1',
+      nodeId: 'node-1',
+      status: 'failed',
+      injectedMemories: snapshot,
+    })
+    await nodeRunFixture(h.db, {
+      id: 'run-2',
+      taskId: 'task-1',
+      nodeId: 'node-1',
+      status: 'running',
+      retryIndex: 1,
+    })
+    const fake = { store: new DrizzleMemoryInjectionReadStore(h.db) }
 
     await expect(
       loadInjectedSnapshotFromFirstAttempt(fake.store, {

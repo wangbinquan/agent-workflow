@@ -211,15 +211,15 @@ describeEachProvider('RFC-203 T6 引用披露 ACL', (harness) => {
       { name: 'same-ref', ...AGENT_BASE },
       { ownerUserId: 'u-other' },
     )
-    // LIKE prefilter intentionally sees this row, while the authoritative
-    // JSON-array exact matcher rejects it. The two rows share a display name,
+    // A substring prefilter would include this valid dangling reference, while
+    // the relation's exact identity must reject it. The two rows share a display name,
     // so a name-based second filter would incorrectly re-introduce this
     // private row and disclose its existence through hiddenCount.
     await patchAgentFixture(
       db,
       { id: coarseOnly.id },
       {
-        dependsOn: JSON.stringify({ coarseMatchOnly: target.id }),
+        dependsOn: [`coarse-${target.id}-suffix`],
         visibility: 'private',
       },
     )

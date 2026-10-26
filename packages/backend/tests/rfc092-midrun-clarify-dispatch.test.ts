@@ -1,3 +1,5 @@
+import { nodeRunFixtureColumns } from './helpers/model/nodeRun'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 // RFC-092 §5-7 — S-1 端到端验收（修复后正确语义锁定）。
 //
 // 锁定 design/RFC-092-scheduler-p0-stopgap/design.md §1.2 的 pending 锚点行
@@ -28,14 +30,14 @@ import {
   readNodeRunFixtures,
   readClarifyRoundFixtures,
 } from './helpers/model'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+
 import { createSqliteMemoryDistillEnqueuer } from './helpers/memoryDistill'
 import type { ClarifyAnswer, WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { monotonicFactory } from 'ulid'
 const ulid = monotonicFactory() // 同毫秒插入仍保 id 单调（pure-id freshness）
 import { createInMemoryDb, type DbClient } from '../src/db/client'
@@ -48,8 +50,6 @@ import { runGit } from '../src/util/git'
 import { canonicalizeWorkflowAgentIds } from './helpers/canonicalWorkflowFixture'
 
 const actor = { userId: 'u1', role: 'owner' as const }
-
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 // ---------------------------------------------------------------------------
 // gate 慢 mock：plan/state/gate 路径全部在生成时烘焙进脚本（零 process.env
@@ -152,7 +152,7 @@ async function buildHarness(): Promise<Harness> {
   await runGit(worktreePath, ['add', '.'])
   await runGit(worktreePath, ['commit', '-m', 'init'])
   writeFileSync(mockPath, gateMockSource({ planFile, stateDir, gates: { slow: gateFile } }))
-  const db = createInMemoryDb(MIGRATIONS)
+  const db = createInMemoryDb()
   return {
     db,
     appHome,
@@ -366,7 +366,10 @@ describe('RFC-092 S-1 端到端 — mid-run clarify 答题由活调度循环自�
 
       // 提交瞬间 rerun 行是 pending、slow 仍在跑——确认答案确实落在窗口内。
       const rerunRow = (
-        await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, rerunNodeRunId))
+        await h.db
+          .select(nodeRunFixtureColumns(h.db))
+          .from(nodeRuns)
+          .where(eq(nodeRuns.id, rerunNodeRunId))
       )[0]!
       expect(rerunRow.status).toBe('pending')
       const slowAtSubmit = (await topLevelRuns(h.db, taskId, 'slow'))[0]!

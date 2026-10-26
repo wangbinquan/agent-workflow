@@ -1,3 +1,10 @@
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
+import {
+  fileSkillTreeReference,
+  readFileSkillReference,
+  fileSkillReferencePath,
+} from './fileSkillReferences'
+import { hashSkillTree } from '../databaseSkillTrees'
 import {
   cpSync,
   existsSync,
@@ -40,6 +47,7 @@ export function abortFileSkillVersionPublication(publication: SkillVersionPublic
 export function createFileSkillVersionContentStore(
   appHome: string,
   legacyProducer?: (stagingDirectory: string) => void,
+  db?: PersistenceDb,
 ): SkillVersionContentStore {
   return Object.freeze({
     plan(input) {
@@ -55,17 +63,41 @@ export function createFileSkillVersionContentStore(
         versionJournalRef: relative(appHome, versionRef),
       }
     },
-    stage(publication, change, compareLive) {
-      const { stagingRef, liveRef } = publication
+    async stage(publication, change, compareLive) {
+      const { stagingRef } = publication
       rmSync(stagingRef, { recursive: true, force: true })
       mkdirSync(stagingRef, { recursive: true })
-      if (existsSync(liveRef)) cpSync(liveRef, stagingRef, { recursive: true })
+      const liveReference = await fileSkillTreeReference(appHome, db, publication.skillId)
+      const live = await readFileSkillReference(appHome, db, liveReference)
+      if (liveReference?.kind === 'local-file' && live !== null) {
+        // Preserve the original tree while staging; individual changes and the final
+        // regular-tree check must see every entry, including symbolic links.
+        cpSync(fileSkillReferencePath(appHome, liveReference), stagingRef, { recursive: true })
+      } else if (live)
+        for (const file of live.files) {
+          const path = join(stagingRef, file.path)
+          mkdirSync(dirname(path), { recursive: true })
+          writeFileSync(path, file.bytes)
+        }
       if (legacyProducer) legacyProducer(stagingRef)
-      else applyChange(appHome, publication, change)
+      else if (change.kind === 'restore-version' && db) {
+        const snapshot = await readFileSkillReference(
+          appHome,
+          db,
+          await fileSkillTreeReference(appHome, db, publication.skillId, change.version),
+        )
+        for (const entry of readdirSync(stagingRef))
+          rmSync(join(stagingRef, entry), { recursive: true, force: true })
+        for (const file of snapshot?.files ?? []) {
+          const path = join(stagingRef, file.path)
+          mkdirSync(dirname(path), { recursive: true })
+          writeFileSync(path, file.bytes)
+        }
+      } else applyChange(appHome, publication, change)
       const contentHash = hashRegularFileTree(stagingRef)
       return {
         contentHash,
-        matchesLive: compareLive && contentHash === hashRegularFileTree(liveRef),
+        matchesLive: compareLive && live !== null && contentHash === hashSkillTree(live.files),
       }
     },
     discardStage(publication) {

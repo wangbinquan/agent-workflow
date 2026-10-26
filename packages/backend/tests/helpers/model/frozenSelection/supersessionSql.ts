@@ -1,4 +1,4 @@
-// Frozen from 67ab6b9aed08d97dcd6d3d9dfb57b8885a11f8e6:packages/backend/src/modules/task-execution/infrastructure/nodeRunSupersession.ts; function bodies copied verbatim.
+// Frozen from 67ab6b9aed08d97dcd6d3d9dfb57b8885a11f8e6:packages/backend/src/modules/task-execution/infrastructure/nodeRunSupersession.ts; comparison semantics retained over target identity columns.
 // RFC-369 —— 「旧代被取代」判据的 SQL 形态，与 `domain/nodeRunSupersession.ts` 的纯函数逐格等价
 // （对拍测试锁住）。两个引擎同一份 SQL：NULL 相等写成 `(a = b OR (a IS NULL AND b IS NULL))`。
 //
@@ -71,15 +71,15 @@ export function structurallySupersededCondition(db: QueryBuilder): SQL {
   const { nodeRuns } = tablesOf(db)
   const parent = alias(nodeRuns, 'nr_superseded_parent')
   return or(
-    and(isNull(nodeRuns.parentNodeRunId), newerGenerationExists(db, nodeRuns, 'nr_newer_self')),
+    and(isNull(nodeRuns.historicalParentId), newerGenerationExists(db, nodeRuns, 'nr_newer_self')),
     exists(
       (db as PersistenceDb)
         .select({ one: sql`1` })
         .from(parent)
         .where(
           and(
-            eq(parent.id, nodeRuns.parentNodeRunId),
-            isNull(parent.parentNodeRunId),
+            eq(parent.id, nodeRuns.historicalParentId),
+            isNull(parent.historicalParentId),
             newerGenerationExists(db, parent, 'nr_newer_parent'),
           ),
         ),

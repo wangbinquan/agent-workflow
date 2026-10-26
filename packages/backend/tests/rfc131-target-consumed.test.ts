@@ -1,3 +1,6 @@
+import type { projectNodeRunReadFacts } from '@/modules/task-execution/infrastructure/nodeRunSnapshot'
+// Target fixture mint order; missing seq is covered only by conversion/rejection tests.
+let fixtureRunSequence = 0
 // RFC-131 T1 — isTargetNodeConsumed 派生式老化判据（design §2）。
 //
 // 核心正确性：一个 target 队列里、承接 rerun 为 sinceRunId（问题 trigger_run_id）的问题「已被产出老化」
@@ -10,12 +13,11 @@
 //     老化——只有「id >= 问题承接 rerun」的产出才老化它。
 //   - sinceRunId===null（问题尚未被任何 rerun 承接注入）→ NOT consumed（首次注入）。
 
-import { type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { describe, expect, test } from 'bun:test'
 
 import { isTargetNodeConsumed } from '../src/services/clarifyRerunLedger'
 
-type NodeRunRow = PersistenceTables['nodeRuns']['$inferSelect']
+type NodeRunRow = ReturnType<typeof projectNodeRunReadFacts>
 const T = 'agent_T'
 
 function mkRun(over: Partial<NodeRunRow>): NodeRunRow {
@@ -27,7 +29,7 @@ function mkRun(over: Partial<NodeRunRow>): NodeRunRow {
     wrapperProgressJson: null,
     mergeState: null,
 
-    seq: null,
+    seq: ++fixtureRunSequence,
     id: 'run',
     nodeId: T,
     iteration: 0,
@@ -178,8 +180,12 @@ describe('isTargetNodeConsumed — RFC-131 派生式老化', () => {
     expect(await isTargetNodeConsumed(T, 0, 'r0', runs, new Set(['r2']))).toBe(true)
   })
 
-  test('id 序：产出 run id < 承接 rerun id → NOT consumed（round N+1 新问题不被旧产出老化）', async () => {
-    const runs = [mkRun({ id: 'r1', status: 'done' })] // 旧产出 run r1（round N）
+  test('seq 序：产出 run seq < 承接 rerun seq → NOT consumed（round N+1 新问题不被旧产出老化）', async () => {
+    const runs = [
+      mkRun({ id: 'r0', seq: 1, status: 'pending' }),
+      mkRun({ id: 'r1', seq: 2, status: 'done' }),
+      mkRun({ id: 'r2', seq: 3, status: 'pending' }),
+    ]
     // round N+1 新问题的承接 rerun = r2（id > r1）→ 旧产出 r1 不老化它。
     expect(await isTargetNodeConsumed(T, 0, 'r2', runs, new Set(['r1']))).toBe(false)
     // 老问题承接 rerun = r0（id < r1）→ 被 r1 产出老化。

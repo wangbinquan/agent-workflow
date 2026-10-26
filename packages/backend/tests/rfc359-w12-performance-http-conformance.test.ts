@@ -1,3 +1,5 @@
+import { legacyContentRef } from '@/platform/content/contentRef'
+import { contentRowColumns } from '@/platform/content/infrastructure/contentStore'
 // RFC-359 AC11: functional evidence for the actual HTTP benchmark graph.
 // These small fixtures establish live query/response behavior, not full-corpus P95.
 import {
@@ -258,7 +260,8 @@ describeEachProvider('RFC-359 production HTTP performance graph', (harness) => {
         }),
       ),
     })
-    const { docVersions, workgroupTaskState } = tablesOf(db)
+    const { workgroupTaskState } = tablesOf(db),
+      { docVersions } = tablesOf(db)
     await nodeRunFixture(db, [
       { id: 'http-review-run', taskId: 'http-review', nodeId: 'review', status: 'awaiting_review' },
       { id: 'http-asker-run', taskId: 'http-clarify', nodeId: 'writer', status: 'done' },
@@ -279,7 +282,7 @@ describeEachProvider('RFC-359 production HTTP performance graph', (harness) => {
       sourcePortName: 'out',
       versionIndex: 1,
       reviewIteration: 0,
-      bodyPath: 'http-review.md',
+      ...contentRowColumns(legacyContentRef('review-body-path', 'local-file', 'http-review.md')),
       decision: 'pending',
     })
     await clarifyRoundFixture(db, {
@@ -293,11 +296,10 @@ describeEachProvider('RFC-359 production HTTP performance graph', (harness) => {
       questions: '[]',
       status: 'awaiting_human',
     })
-    await insertOne(db, workgroupTaskState, {
-      taskId: 'http-workgroup',
-      gateStatus: 'awaiting_confirmation',
-      updatedAt: Date.now(),
-    })
+    await db
+      .update(workgroupTaskState)
+      .set({ gateStatus: 'awaiting_confirmation', updatedAt: Date.now() })
+      .where(eq(workgroupTaskState.taskId, 'http-workgroup'))
     expect(await json(app, '/api/reviews/pending-count')).toEqual({ count: 1 })
     expect(await json(app, '/api/clarify/pending-count')).toEqual({ count: 1 })
     expect(await json(app, '/api/workgroup-tasks/pending-count')).toEqual({

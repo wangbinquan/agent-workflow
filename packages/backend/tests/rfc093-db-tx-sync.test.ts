@@ -27,7 +27,7 @@ import { Database } from 'bun:sqlite'
 import { drizzle } from 'drizzle-orm/bun-sqlite'
 import { eq, sql } from 'drizzle-orm'
 import { integer, sqliteTable, text } from 'drizzle-orm/sqlite-core'
-import { dbTxSync } from '../src/db/txSync'
+import { dbTxSync, nativeTransactionSync } from '../src/db/txSync'
 import type { DbClient } from '../src/db/client'
 
 const docs = sqliteTable('docs', {
@@ -131,5 +131,50 @@ describe('RFC-093 dbTxSync — the sanctioned synchronous transaction primitive'
     // Atomicity: the anchored comment survives and the decision is untouched.
     expect(queryRows(db.select().from(comments))).toHaveLength(1)
     expect(queryRows(db.select().from(docs))[0]!.decision).toBe('pending')
+  })
+})
+
+describe('native installation transaction primitive', () => {
+  test('commits values, rolls back DDL and rejects a smuggled thenable before commit', () => {
+    const raw = new Database(':memory:')
+    try {
+      expect(
+        nativeTransactionSync(raw, () => {
+          raw.exec('CREATE TABLE baseline_test(value INTEGER NOT NULL)')
+          raw.exec('INSERT INTO baseline_test VALUES (7)')
+          return 7
+        }),
+      ).toBe(7)
+      expect(() =>
+        nativeTransactionSync(raw, () => {
+          raw.exec('UPDATE baseline_test SET value = 9')
+          raw.exec('CREATE TABLE rolled_back(value TEXT)')
+          throw new Error('installation failed')
+        }),
+      ).toThrow('installation failed')
+      expect(raw.query('SELECT value FROM baseline_test').all()).toEqual([{ value: 7 }])
+      expect(raw.query("SELECT name FROM sqlite_master WHERE name='rolled_back'").all()).toEqual([])
+      const smuggled = (() => {
+        raw.exec('UPDATE baseline_test SET value = 11')
+        return Promise.resolve('too late')
+      }) as unknown as () => never
+      expect(() => nativeTransactionSync(raw, smuggled)).toThrow('callback returned a Promise')
+      expect(raw.query('SELECT value FROM baseline_test').all()).toEqual([{ value: 7 }])
+      expect(raw.inTransaction).toBe(false)
+    } finally {
+      raw.close()
+    }
+  })
+
+  test('native callback type rejects asynchronous installation work', () => {
+    const raw = new Database(':memory:')
+    try {
+      void (() => {
+        // @ts-expect-error native installation requires a synchronous body.
+        nativeTransactionSync(raw, async () => 1)
+      })
+    } finally {
+      raw.close()
+    }
   })
 })

@@ -2,6 +2,7 @@
 // Corrupt rows stay untouched so runtime can diagnose them as invalid instead
 // of laundering them into a seemingly canonical snapshot.
 
+import { FROZEN_MIGRATIONS } from './migration-freeze'
 import { afterEach, describe, expect, test } from 'bun:test'
 import { Database } from 'bun:sqlite'
 import { mkdtempSync, readFileSync } from 'node:fs'
@@ -11,7 +12,7 @@ import { removeTempDirSync } from './fixtures/tempDir'
 
 const tempDirs: string[] = []
 const migrationSql = readFileSync(
-  resolve(import.meta.dir, '..', 'db', 'migrations', '0150_rfc292_trigger_namespace.sql'),
+  resolve(FROZEN_MIGRATIONS, '0150_rfc292_trigger_namespace.sql'),
   'utf8',
 )
 

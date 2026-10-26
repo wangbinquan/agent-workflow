@@ -10,8 +10,3 @@ export interface RuntimeRegistryEffects {
     evictBinaryCaches?(binaryPath: string): void
   }
 }
-
-/** Original configuration text, before current schema parsing removes legacy keys. */
-export interface RuntimeLegacyConfigurationPort {
-  readText(): string | Promise<string>
-}

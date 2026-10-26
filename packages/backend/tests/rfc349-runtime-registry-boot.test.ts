@@ -1,81 +1,33 @@
-import type { RuntimeLegacyConfigurationPort } from '../src/modules/runtime-management/application/ports/runtimeRegistryEffects'
-// RFC-349 hosted compiled PostgreSQL evidence exposed that daemon boot seeded
-// built-in runtimes only after the SQLite branch had already been selected.
-// This locks one provider-neutral ordered boot contract for every provider.
-
-import { describe, expect, test } from 'bun:test'
-
-import { initializeRuntimeRegistryBoot } from '../src/modules/runtime-management/composition/runtimeRegistry'
-
-function operations(events: string[]) {
-  return {
-    async seedBuiltinRuntimes() {
-      events.push('seed')
-    },
-    async migrateConfigIntoBuiltins(config: {
-      readonly opencodePath?: string | null
-      readonly claudeCodePath?: string | null
-    }) {
-      events.push(`migrate:${config.opencodePath ?? 'default'}`)
-    },
-    async assertConfigDefaultsMigrated(configuration: RuntimeLegacyConfigurationPort) {
-      events.push(`assert:${await configuration.readText()}`)
-    },
-  }
-}
-
-describe('RFC-349 provider-neutral runtime registry boot', () => {
-  test('seeds, backfills and then runs the fail-loud migration guard', async () => {
-    const events: string[] = []
-
-    await initializeRuntimeRegistryBoot({
-      operations: operations(events),
-      config: { opencodePath: '/runtime/opencode' },
-      legacyConfiguration: {
-        async readText() {
-          return 'raw-legacy-config'
-        },
+// Epoch-2 keeps provider-neutral seeding; config upgrades are B conversion rules.
+import { expect, test } from 'bun:test'
+import { initializeRuntimeRegistryBoot } from '@/modules/runtime-management/composition/runtimeRegistry'
+test('seeding runs once and finishes before ordinary boot continues', async () => {
+  const events: string[] = []
+  await initializeRuntimeRegistryBoot({
+    operations: {
+      async seedBuiltinRuntimes() {
+        events.push('seed')
       },
-      onRecoverableFailure() {
-        events.push('recoverable')
+    },
+    onRecoverableFailure(error) {
+      throw error
+    },
+  })
+  events.push('continue')
+  expect(events).toEqual(['seed', 'continue'])
+})
+test('the original recoverable seed failure is reported once', async () => {
+  const failure = new Error('seed-failed'),
+    errors: unknown[] = []
+  await initializeRuntimeRegistryBoot({
+    operations: {
+      async seedBuiltinRuntimes() {
+        throw failure
       },
-    })
-
-    expect(events).toEqual(['seed', 'migrate:/runtime/opencode', 'assert:raw-legacy-config'])
+    },
+    onRecoverableFailure: (error) => {
+      errors.push(error)
+    },
   })
-
-  test('reports seed/backfill failures but never swallows the data-loss guard', async () => {
-    const events: string[] = []
-    const seedFailure = new Error('seed-failed')
-    const guardFailure = new Error('guard-failed')
-    const bootOperations = operations(events)
-    bootOperations.seedBuiltinRuntimes = async () => {
-      events.push('seed')
-      throw seedFailure
-    }
-    bootOperations.assertConfigDefaultsMigrated = async (
-      configuration: RuntimeLegacyConfigurationPort,
-    ) => {
-      events.push(`assert:${await configuration.readText()}`)
-      throw guardFailure
-    }
-
-    await expect(
-      initializeRuntimeRegistryBoot({
-        operations: bootOperations,
-        config: {},
-        legacyConfiguration: {
-          async readText() {
-            return 'raw-legacy-config'
-          },
-        },
-        onRecoverableFailure(error) {
-          expect(error).toBe(seedFailure)
-          events.push('recoverable')
-        },
-      }),
-    ).rejects.toBe(guardFailure)
-
-    expect(events).toEqual(['seed', 'recoverable', 'assert:raw-legacy-config'])
-  })
+  expect(errors).toEqual([failure])
 })

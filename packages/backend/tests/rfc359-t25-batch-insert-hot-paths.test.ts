@@ -1,3 +1,8 @@
+import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
+import {
+  inlineContentColumns,
+  databaseContentText,
+} from '@/platform/content/infrastructure/contentStore'
 import { composeHumanGateTaskLockPort } from '@/modules/task-execution/composition'
 // RFC-359 W6-T25 收尾 —— 剩下的逐行 INSERT 热路径改按批，判据是**语句数**。
 //
@@ -40,13 +45,11 @@ import {
   patchClarifyRoundFixture,
   taskFixture,
   workflowFixture,
-  readClarifyRoundFixtures,
-  clarifyRoundFixtureRuntimeInput,
 } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
-import { asc, eq, getTableColumns } from 'drizzle-orm'
+import { and, asc, eq, getTableColumns } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
 import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
@@ -138,7 +141,11 @@ async function seedTask(db: PersistenceDb, taskId: string): Promise<void> {
 // A1 / A2 —— review-open 的 doc_versions 与 collaboration_gate_artifacts
 // ─────────────────────────────────────────────────────────────────────────────
 
-const journal = new DatabaseHumanGateOperationJournal(composeHumanGateTaskLockPort)
+const journal = (db: PersistenceTx) =>
+  new DatabaseHumanGateOperationJournal(
+    composeHumanGateTaskLockPort,
+    epoch2RuntimeTestPorts(db).historyRestrictions,
+  )
 
 function reviewDocuments(
   taskId: string,
@@ -154,7 +161,7 @@ function reviewDocuments(
     sourcePortName: 'docs',
     versionIndex: 1,
     reviewIteration: 0,
-    bodyPath: `.agent-workflow/reviews/${taskId}/doc-${i}.md`,
+    finalContentKey: `.agent-workflow/reviews/${taskId}/doc-${i}.md`,
     commentsJson: '[]' as const,
     decision: 'pending' as const,
     decisionReason: null,
@@ -171,7 +178,7 @@ function reviewDocuments(
     decidedByRole: null,
     artifactKey: `doc:${String(i).padStart(4, '0')}`,
     bodySha256: sha256Hex(`body-${i}`),
-    byteSize: 10 + i,
+    byteSize: Buffer.byteLength(`body-${i}`),
   }))
 }
 
@@ -192,7 +199,7 @@ function reviewManifest(taskId: string, n: number): ReviewGateOpenManifest {
   const documents = reviewDocuments(taskId, reviewNodeRunId, n)
   const sourceSnapshotDigest = 'a'.repeat(64)
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     kind: 'review-open',
     gateRef: `review:reviewer:${taskId}`,
     sourceSnapshotDigest,
@@ -230,27 +237,42 @@ async function prepareReviewOperation(
   taskId: string,
   manifest: ReviewGateOpenManifest,
 ) {
-  await journal.beginTx({
+  await journal(tx).beginTx({
     tx,
     operationId,
     request: openRequest(taskId, manifest),
     idempotencyKey: `open:${operationId}`,
     now: NOW,
   })
-  await journal.declareArtifactsTx({
+  await journal(tx).declareArtifactsTx({
     tx,
     operationId,
     artifacts: manifest.documents.map((document) => ({
       artifactKey: document.artifactKey,
       stagedPath: `.agent-workflow/staging/${operationId}/${document.artifactKey}.md`,
-      finalPath: document.bodyPath,
+      finalPath: document.finalContentKey,
       sha256: document.bodySha256,
       byteSize: document.byteSize,
     })),
     now: NOW + 1,
   })
-  for (const document of manifest.documents) {
-    await journal.transitionArtifactTx({
+  for (const [index, document] of manifest.documents.entries()) {
+    const { collaborationGateArtifacts } = tablesOf(tx)
+    const columns = inlineContentColumns(Buffer.from(`body-${index}`))
+    await tx
+      .update(collaborationGateArtifacts)
+      .set({
+        ...columns,
+        stagedContentRefJson: columns.contentRefJson,
+        stagedInlineBytes: columns.contentInlineBytes,
+      })
+      .where(
+        and(
+          eq(collaborationGateArtifacts.operationId, operationId),
+          eq(collaborationGateArtifacts.artifactKey, document.artifactKey),
+        ),
+      )
+    await journal(tx).transitionArtifactTx({
       tx,
       operationId,
       artifactKey: document.artifactKey,
@@ -260,7 +282,7 @@ async function prepareReviewOperation(
       now: NOW + 2,
     })
   }
-  return await journal.markPreparedTx({
+  return await journal(tx).markPreparedTx({
     tx,
     operationId,
     expectedClaimEpoch: 1,
@@ -386,20 +408,20 @@ describeEachProvider('RFC-359 W6-T25 收尾 —— 逐行 INSERT 热路径的语
 
     const rec = h.recordStatements()
     await h.session.transaction(async (tx) => {
-      await journal.beginTx({
+      await journal(tx).beginTx({
         tx,
         operationId,
         request: openRequest(taskId, manifest),
         idempotencyKey: `open:${operationId}`,
         now: NOW,
       })
-      await journal.declareArtifactsTx({
+      await journal(tx).declareArtifactsTx({
         tx,
         operationId,
         artifacts: manifest.documents.map((document) => ({
           artifactKey: document.artifactKey,
           stagedPath: `.agent-workflow/staging/${operationId}/${document.artifactKey}.md`,
-          finalPath: document.bodyPath,
+          finalPath: document.finalContentKey,
           sha256: document.bodySha256,
           byteSize: document.byteSize,
         })),
@@ -415,7 +437,7 @@ describeEachProvider('RFC-359 W6-T25 收尾 —— 逐行 INSERT 热路径的语
       .select({
         artifactKey: collaborationGateArtifacts.artifactKey,
         artifactKind: collaborationGateArtifacts.artifactKind,
-        finalPath: collaborationGateArtifacts.finalPath,
+        finalPath: collaborationGateArtifacts.finalContentKey,
         sha256: collaborationGateArtifacts.sha256,
         byteSize: collaborationGateArtifacts.byteSize,
         state: collaborationGateArtifacts.state,
@@ -429,7 +451,7 @@ describeEachProvider('RFC-359 W6-T25 收尾 —— 逐行 INSERT 热路径的语
       manifest.documents.map((document) => ({
         artifactKey: document.artifactKey,
         artifactKind: 'review-doc',
-        finalPath: document.bodyPath,
+        finalPath: document.finalContentKey,
         sha256: document.bodySha256,
         byteSize: document.byteSize,
         state: 'declared',
@@ -446,20 +468,20 @@ describeEachProvider('RFC-359 W6-T25 收尾 —— 逐行 INSERT 热路径的语
     const operationId = `op_${taskId}`
     await expect(
       h.session.transaction(async (tx) => {
-        await journal.beginTx({
+        await journal(tx).beginTx({
           tx,
           operationId,
           request: openRequest(taskId, manifest),
           idempotencyKey: `open:${operationId}`,
           now: NOW,
         })
-        await journal.declareArtifactsTx({
+        await journal(tx).declareArtifactsTx({
           tx,
           operationId,
           artifacts: [0, 0].map((index) => ({
             artifactKey: manifest.documents[index]!.artifactKey,
             stagedPath: `.agent-workflow/staging/${operationId}/dup.md`,
-            finalPath: `${manifest.documents[index]!.bodyPath}.${String(Math.random())}`,
+            finalPath: `${manifest.documents[index]!.finalContentKey}.${String(Math.random())}`,
             sha256: manifest.documents[index]!.bodySha256,
             byteSize: 1,
           })),
@@ -490,10 +512,11 @@ describeEachProvider('RFC-359 W6-T25 收尾 —— 逐行 INSERT 热路径的语
     await h.session.transaction(async (tx) => {
       await new DatabaseHumanGateOpenParticipantInTx(
         tx,
-        journal,
+        journal(tx),
         mintParticipant(tx),
         lifecycleParticipant,
         createConsumedInputsParticipantInTx(),
+        epoch2RuntimeTestPorts(tx).historyRestrictions,
       ).consumePreparedGateTx({
         prepared: preparedHumanGateRef(prepared),
         taskRevision: 1,
@@ -510,19 +533,27 @@ describeEachProvider('RFC-359 W6-T25 收尾 —— 逐行 INSERT 热路径的语
         id: docVersions.id,
         sourceFilePath: docVersions.sourceFilePath,
         itemIndex: docVersions.itemIndex,
-        bodyPath: docVersions.bodyPath,
+        contentRefJson: docVersions.contentRefJson,
+        contentInlineBytes: docVersions.contentInlineBytes,
         decision: docVersions.decision,
         createdAt: docVersions.createdAt,
       })
       .from(docVersions)
       .where(eq(docVersions.taskId, taskId))
       .orderBy(asc(docVersions.itemIndex))
-    expect(stored.map((row) => ({ ...row }))).toEqual(
-      manifest.documents.map((document) => ({
+    expect(
+      await Promise.all(
+        stored.map(async ({ contentRefJson, contentInlineBytes, ...row }) => ({
+          ...row,
+          body: await databaseContentText(h.db, { contentRefJson, contentInlineBytes }),
+        })),
+      ),
+    ).toEqual(
+      manifest.documents.map((document, index) => ({
         id: document.id,
         sourceFilePath: document.sourceFilePath,
         itemIndex: document.itemIndex,
-        bodyPath: document.bodyPath,
+        body: `body-${index}`,
         decision: 'pending',
         createdAt: document.createdAt,
       })),
@@ -563,10 +594,10 @@ describeEachProvider('RFC-359 W6-T25 收尾 —— 逐行 INSERT 热路径的语
       status: 'awaiting_human',
       createdAt: NOW,
     })
-    const round = (await readClarifyRoundFixtures(h.db, { id: roundId }, { limit: 1 }))[0]!
+    const round = await readRoundForReconcile(h.db, roundId)
 
     const rec = h.recordStatements()
-    await reconcileTaskQuestionsForRound(h.db, clarifyRoundFixtureRuntimeInput(round))
+    await reconcileTaskQuestionsForRound(h.db, round)
     const inserts = insertsInto(rec.statements, 'task_questions')
     rec.stop()
     expect(inserts.length).toBe(batchesFor(h, taskQuestions, n))
@@ -620,8 +651,8 @@ describeEachProvider('RFC-359 W6-T25 收尾 —— 逐行 INSERT 热路径的语
       status: 'awaiting_human',
       createdAt: NOW,
     })
-    const first = (await readClarifyRoundFixtures(h.db, { id: roundId }, { limit: 1 }))[0]!
-    await reconcileTaskQuestionsForRound(h.db, clarifyRoundFixtureRuntimeInput(first))
+    const first = await readRoundForReconcile(h.db, roundId)
+    await reconcileTaskQuestionsForRound(h.db, first)
     const ids = new Map(
       (
         await h.db
@@ -641,10 +672,10 @@ describeEachProvider('RFC-359 W6-T25 收尾 —— 逐行 INSERT 热路径的语
         ),
       },
     )
-    const second = (await readClarifyRoundFixtures(h.db, { id: roundId }, { limit: 1 }))[0]!
+    const second = await readRoundForReconcile(h.db, roundId)
 
     const rec = h.recordStatements()
-    await reconcileTaskQuestionsForRound(h.db, clarifyRoundFixtureRuntimeInput(second))
+    await reconcileTaskQuestionsForRound(h.db, second)
     const inserts = insertsInto(rec.statements, 'task_questions')
     rec.stop()
     expect(inserts.length).toBe(batchesFor(h, taskQuestions, n))
@@ -700,8 +731,8 @@ describeEachProvider('RFC-359 W6-T25 收尾 —— 逐行 INSERT 热路径的语
       status: 'awaiting_human',
       createdAt: NOW,
     })
-    const round = (await readClarifyRoundFixtures(h.db, { id: roundId }, { limit: 1 }))[0]!
-    await reconcileTaskQuestionsForRound(h.db, clarifyRoundFixtureRuntimeInput(round))
+    const round = await readRoundForReconcile(h.db, roundId)
+    await reconcileTaskQuestionsForRound(h.db, round)
 
     const stored = await h.db
       .select({ questionId: taskQuestions.questionId, questionTitle: taskQuestions.questionTitle })
@@ -1003,3 +1034,10 @@ describeEachProvider('RFC-359 W6-T25 收尾 —— 逐行 INSERT 热路径的语
     )
   }, 180_000)
 })
+
+async function readRoundForReconcile(db: PersistenceDb, id: string) {
+  const { clarifyRounds } = tablesOf(db)
+  const [row] = await db.select().from(clarifyRounds).where(eq(clarifyRounds.id, id)).limit(1)
+  if (!row) throw new Error('fixture round missing')
+  return row
+}

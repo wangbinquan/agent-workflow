@@ -1,3 +1,5 @@
+import { legacyContentRef } from '@/platform/content/contentRef'
+import { contentRowColumns } from '@/platform/content/infrastructure/contentStore'
 // RFC-170 §9 — the `reserve` (creation) op: a mid-create skill is invisible
 // (reservation_state='reserving') until published+ready, and a crash mid-create
 // is recovered — pre-db-committed drops the reserving row+files, post-db-committed
@@ -26,7 +28,6 @@ import {
 } from '../src/modules/resource-catalog/infrastructure/legacy/skillOperations'
 import { recoverSkillOperations } from '../src/modules/resource-catalog/infrastructure/legacy/skillOpRecoveryDriver'
 import { SKILL_OP_RECOVERY_REGISTRY } from '../src/modules/resource-catalog/infrastructure/legacy/skillOpRegistry'
-import { runSkillIdentityMigrationBarrier } from '../src/modules/resource-catalog/infrastructure/legacy/skillIdentityMigration'
 import { describeEachProvider } from './helpers/eachProvider'
 
 describeEachProvider('RFC-170 reserve op', (harness) => {
@@ -80,7 +81,7 @@ describeEachProvider('RFC-170 reserve op', (harness) => {
     await insertOne(db, skills, {
       id,
       name: 'pending',
-      managedPath: 'skills/pending/files',
+      ...contentRowColumns(legacyContentRef('skill-path', 'local-file', 'skills/pending/files')),
       reservationState: 'reserving',
     })
     expect(await getSkill('pending')).toBeNull()
@@ -96,7 +97,7 @@ describeEachProvider('RFC-170 reserve op', (harness) => {
       await insertOne(tx, skills, {
         id,
         name: 'half',
-        managedPath: 'skills/half/files',
+        ...contentRowColumns(legacyContentRef('skill-path', 'local-file', 'skills/half/files')),
         reservationState: 'reserving',
       })
       return await beginOperation(tx, {
@@ -127,7 +128,7 @@ describeEachProvider('RFC-170 reserve op', (harness) => {
       await insertOne(tx, skills, {
         id,
         name: 'done1',
-        managedPath: 'skills/done1/files',
+        ...contentRowColumns(legacyContentRef('skill-path', 'local-file', 'skills/done1/files')),
         reservationState: 'reserving',
       })
       return await beginOperation(tx, {
@@ -175,14 +176,15 @@ describeEachProvider('RFC-170 reserve op', (harness) => {
         },
       ),
     ).rejects.toThrow('finish-fault')
-    const { skills, skillOperationLocks } = tablesOf(db)
+    const { skillOperationLocks } = tablesOf(db),
+      { skills } = tablesOf(db)
     const row = (await first(db.select().from(skills).where(eq(skills.name, 'committed-create'))))!
     expect(row.reservationState).toBe('ready')
     expect(existsSync(join(appHome, 'skills', row.id, 'files', 'SKILL.md'))).toBe(true)
     expect((await getActiveOp(db, row.id))?.phase).toBe('db-committed')
     expect(await db.select().from(skillOperationLocks)).toHaveLength(1)
 
-    await runSkillIdentityMigrationBarrier(db, { appHome })
+    await recoverSkillOperations(db, { appHome }, SKILL_OP_RECOVERY_REGISTRY)
     expect(await getActiveOp(db, row.id)).toBeNull()
     expect(await db.select().from(skillOperationLocks)).toHaveLength(0)
     expect(await getSkill('committed-create')).not.toBeNull()

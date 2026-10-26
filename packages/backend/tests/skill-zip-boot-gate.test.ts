@@ -9,7 +9,7 @@
 // until runBootSnapshotReverify/activateBootReverifyForTest runs, so EVERY
 // test here activates the gate first. Also locks the fallout fixes:
 //   - the failure path used to leave a husk row (no files) squatting the name
-//     forever → backfillLegacySkillVersions sweeps such husks at boot;
+//     forever → B's frozen conversion archives proved empty husks before activation;
 //   - the failure path used to rm the target files dir, which could delete a
 //     concurrent winner's just-published live files → creates now roll back
 //     inside the funnel only, and a gate-hidden occupier is reported as an
@@ -17,16 +17,14 @@
 //   - 'quarantined' was a one-way state (boot rescan skipped it) → a restored
 //     snapshot that re-matches content_hash now exits quarantine at boot.
 
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { describeEachProvider } from './helpers/eachProvider'
 import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { zipSync, type Zippable } from 'fflate'
-import { existsSync, mkdirSync, readFileSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, readFileSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
-import { ulid } from 'ulid'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   commitSkillZipBuffer,
@@ -38,7 +36,7 @@ import {
   listSkills,
 } from '../src/modules/resource-catalog/infrastructure/legacy/skill'
 import { getSkill } from './helpers/resourceLookup'
-import { backfillLegacySkillVersions } from '../src/modules/resource-catalog/infrastructure/legacy/skillVersion'
+
 import {
   activateBootReverifyForTest,
   isSkillBootVerified,
@@ -93,28 +91,6 @@ async function mustRow(db: PersistenceDb, name: string) {
   const row = await rawRow(db, name)
   if (row === undefined) throw new Error(`expected a skills row for '${name}'`)
   return row
-}
-
-/** Insert a bare skills row the way the pre-fix zip importer did. */
-async function insertBareRow(
-  db: PersistenceDb,
-  name: string,
-  over: Partial<PersistenceTables['skills']['$inferInsert']> = {},
-): Promise<string> {
-  const id = ulid()
-  const now = Date.now()
-  const { skills } = tablesOf(db)
-  await insertOne(db, skills, {
-    id,
-    name,
-    description: 'bare',
-    managedPath: `skills/${id}/files`,
-    visibility: 'public',
-    createdAt: now,
-    updatedAt: now,
-    ...over,
-  })
-  return id
 }
 
 describeEachProvider('zip import create under the ACTIVE boot availability gate', (harness) => {
@@ -223,80 +199,7 @@ describeEachProvider('zip import create under the ACTIVE boot availability gate'
   })
 })
 
-describeEachProvider('backfillLegacySkillVersions — legacy promote + husk sweep', (harness) => {
-  let h: H
-  beforeEach(() => {
-    h = build(harness.db)
-    resetSkillBootVerifyForTest()
-  })
-  afterEach(() => {
-    h.cleanup()
-    resetSkillBootVerifyForTest()
-  })
-
-  test('husk (no files, no versions) is deleted; healthy legacy is promoted; reserving is untouched', async () => {
-    // ① husk: what the pre-fix zip failure path left behind — row without files.
-    await insertBareRow(h.db, 'husk')
-    // ② healthy legacy: pre-RFC-101 skill — row + live files, no version rows.
-    const legacyId = await insertBareRow(h.db, 'legacy-ok')
-    const legacyFiles = join(h.fsOpts.appHome, 'skills', legacyId, 'files')
-    mkdirSync(legacyFiles, { recursive: true })
-    writeFileSync(join(legacyFiles, 'SKILL.md'), skillMd('legacy-ok'), 'utf-8')
-    // ③ reserving: an in-flight create's row — the sweep must never touch it.
-    await insertBareRow(h.db, 'mid-create', { reservationState: 'reserving' })
-
-    const r = await backfillLegacySkillVersions(h.db, { appHome: h.fsOpts.appHome })
-    expect(r.husksRemoved).toBe(1)
-    expect(r.backfilled).toBe(1)
-
-    expect(await rawRow(h.db, 'husk')).toBeUndefined() // name freed
-    const legacy = await mustRow(h.db, 'legacy-ok')
-    expect(legacy.versionState).toBe('snapshot-authoritative')
-    expect(isSkillBootVerified(legacy.id)).toBe(true)
-    expect(
-      existsSync(
-        join(h.fsOpts.appHome, 'skills', legacy.id, 'versions', 'v1', 'files', 'SKILL.md'),
-      ),
-    ).toBe(true)
-    const reserving = await mustRow(h.db, 'mid-create')
-    expect(reserving.versionState).toBe('legacy-unbackfilled')
-  })
-
-  test('a legacy row with support files but no SKILL.md is NOT deleted (Codex P1)', async () => {
-    // Same DB shape as a husk, but the dir still has recoverable content —
-    // e.g. a pre-RFC-101 skill whose main file was lost. Deleting it would
-    // destroy the support files + the resource identity; the sweep must leave
-    // it for a human to repair.
-    const woundedId = await insertBareRow(h.db, 'wounded')
-    const woundedFiles = join(h.fsOpts.appHome, 'skills', woundedId, 'files')
-    mkdirSync(woundedFiles, { recursive: true })
-    writeFileSync(join(woundedFiles, 'reference.md'), '# still valuable', 'utf-8')
-
-    const r = await backfillLegacySkillVersions(h.db, { appHome: h.fsOpts.appHome })
-    expect(r.husksRemoved).toBe(0)
-    expect(r.backfilled).toBe(0)
-    expect((await mustRow(h.db, 'wounded')).versionState).toBe('legacy-unbackfilled')
-    expect(readFileSync(join(woundedFiles, 'reference.md'), 'utf-8')).toBe('# still valuable')
-  })
-
-  test('after the sweep the freed name can be re-imported via zip (end-to-end heal)', async () => {
-    await insertBareRow(h.db, 'reclaim')
-    await backfillLegacySkillVersions(h.db, { appHome: h.fsOpts.appHome })
-    activateBootReverifyForTest()
-
-    const buf = buildZip({ 'reclaim/SKILL.md': skillMd('reclaim', 'fresh') })
-    const r = await commitSkillZipBuffer(
-      h.db,
-      h.fsOpts,
-      buf,
-      { reclaim: { action: 'import' } },
-      { actor: ALICE },
-    )
-    expect(r.failed).toEqual([])
-    expect(r.created.map((s) => s.name)).toEqual(['reclaim'])
-    expect(await getSkill(h.db, 'reclaim')).not.toBeNull()
-  })
-})
+// Legacy promote/husk/support-only cases moved to skill-identity-migration.test.ts.
 
 describeEachProvider('quarantine recovery via boot rescan', (harness) => {
   let h: H

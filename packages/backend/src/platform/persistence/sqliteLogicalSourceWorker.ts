@@ -1,3 +1,4 @@
+import { registerSchemaHistoryRuntime } from './schema/history/runtime'
 // RFC-349 — dedicated SQLite logical-source Worker. Integrity scans, the
 // 184-table count pass and every bounded chunk query run on this connection,
 // never on the daemon's request-serving event loop.
@@ -63,6 +64,11 @@ self.onmessage = async (event: MessageEvent<unknown>) => {
           if (digest !== request.expectedSchemaDigest || digestSchemaContract(payload) !== digest) {
             throw new Error('SQLite logical-source Worker schema digest does not match the daemon')
           }
+          if (request.history)
+            registerSchemaHistoryRuntime({
+              head: () => request.history!.head,
+              metaTables: request.history.metaTables,
+            })
           contract = workerContract
           source = openSqliteLogicalSource({ path: request.path, contract: workerContract })
         } finally {
@@ -75,6 +81,14 @@ self.onmessage = async (event: MessageEvent<unknown>) => {
         })
         return
       }
+      case 'metadata':
+        emit({
+          version: SQLITE_LOGICAL_SOURCE_PROTOCOL_VERSION,
+          requestId: request.requestId,
+          type: 'metadata',
+          snapshot: await requireSource().readMetadata!(),
+        })
+        break
       case 'preflight':
         emit({
           type: 'snapshot',

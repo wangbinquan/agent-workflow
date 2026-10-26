@@ -1,0 +1,19 @@
+{
+  "authoring": "SQLite original 0000 SQL; logical PostgreSQL frozen root contract; independently encoded without V1 readers or runtime exporters",
+  "logical": {
+    "chunkDigest": "sha256:060b25e03744d263582a72247da2d5fee9c01dbe2ec01f45b4a39e09b395b9bf",
+    "envelopeFileDigest": "sha256:44a17034b03ed64a2165782c4dda7d1ce98e66327aff958936067e424b269a18",
+    "fingerprintDigest": "sha256:e5c11d8d069cde469f17cad6e62846d926fa4353966951f731c4b528f0583dff",
+    "legacyArchiveFileDigest": "sha256:1b68c013a62c4aa49c245052b4021ac5f4ff9ad4c8386e6d2a1f8a0077ab5ba2",
+    "manifestDigest": "sha256:22143f930b6ee45f7e43e9e79795a30a99b6f7da316270be340e7656cfab76c5",
+    "sourceVersion": "logical:sha256:9aabfa484e39f2fa45bfbd7e67a0cffe0b92ead58ebdfa69e14855ec80036b4e",
+    "watermark": "sha256:44a7becbc13e2ca86794ff958d1de8429af07e0a392aed00bfcd25367b268adf"
+  },
+  "sqlite": {
+    "fingerprintDigest": "sha256:64f8cdbaa7bf5ad3f7ec1880355161fc7c65910abe6301964b3cff60e4ca586e",
+    "rawChunkDigest": "sha256:7cc7c3b37c0127a2f8978478bec845f9f122c4d599237ee0a2c5a8957beadd57",
+    "sourceGenerationId": "dbg_epoch1_3ee228b110341e49a9eb032f",
+    "sourceVersion": "sqlite:0000_mature_the_liberteens",
+    "watermark": "sha256:c0d1bbb7c9b255b0b9f8a845d10507818cf6eebe55a97a92855d3562acb7a6bb"
+  }
+}

@@ -8,18 +8,6 @@ export function taskRepositoryMountIdentity(mountPath: string) {
 
 export type StoredTaskRepositoryMount = TaskRepositoryMount & { readonly worktreeDirName?: string }
 
-export function taskRepositoryMountColumns(mount: StoredTaskRepositoryMount) {
-  if (mount.worktreeDirName !== undefined && mount.worktreeDirName !== mount.mountPath)
-    throw new Error(`task-repository-mount-mismatch:${mount.worktreeDirName}:${mount.mountPath}`)
-  const { ordinal, worktreeDirName: _storedDirectory, ...values } = mount
-  return {
-    ...values,
-    repoUrl: values.repoUrl === null ? null : redactGitUrl(values.repoUrl),
-    repoIndex: ordinal,
-    ...taskRepositoryMountIdentity(mount.mountPath),
-  }
-}
-
 export function decodeTaskRepositoryMount(
   row: Omit<TaskRepositoryMount, 'ordinal'> & { repoIndex: number; worktreeDirName: string },
 ): StoredTaskRepositoryMount {

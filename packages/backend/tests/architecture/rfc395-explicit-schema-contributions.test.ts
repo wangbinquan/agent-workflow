@@ -8,6 +8,8 @@ import { packageSrcUnits, sourceUnit, importEdges, type SourceUnit } from './cen
 
 const ROOT = resolve(import.meta.dir, '../../../..')
 const BOOTSTRAP = 'packages/backend/src/bootstrap/persistenceSchema.ts'
+const FROZEN_CONVERTER = 'packages/backend/src/platform/persistence/migration/epoch1/definitions.ts'
+const ASSEMBLY_ROOTS = new Set([BOOTSTRAP, FROZEN_CONVERTER])
 const MECHANISM = 'packages/backend/src/platform/persistence/schema/'
 function violations(unit: SourceUnit): string[] {
   const out: string[] = []
@@ -33,7 +35,7 @@ function violations(unit: SourceUnit): string[] {
           : ''
       if (factories.has(name) && unit.path !== MECHANISM + 'drizzle.ts')
         out.push('table declaration outside materializer')
-      if (registries.has(name) && unit.path !== BOOTSTRAP)
+      if (registries.has(name) && !ASSEMBLY_ROOTS.has(unit.path))
         out.push('registry assembled outside bootstrap')
     }
     ts.forEachChild(node, visit)
@@ -42,13 +44,13 @@ function violations(unit: SourceUnit): string[] {
   for (const edge of importEdges(unit)) {
     if (
       unit.path.includes('/src/modules/') &&
-      edge.specifier.endsWith('/bootstrap/persistenceSchema')
+      /\/bootstrap\/persistenceSchema$/.test(edge.specifier)
     )
       out.push('business module imports registry')
     if (
       (unit.path.startsWith(MECHANISM) || unit.path.includes('/persistence/migration/legacy/')) &&
       (edge.specifier.startsWith('@/modules/') ||
-        edge.specifier.endsWith('/bootstrap/persistenceSchema'))
+        /\/bootstrap\/persistenceSchema$/.test(edge.specifier))
     )
       out.push('platform imports application composition')
   }
@@ -56,15 +58,14 @@ function violations(unit: SourceUnit): string[] {
 }
 describe('RFC-395 I-a explicit schema structural lock', () => {
   const units = packageSrcUnits(ROOT, 'backend')
-  test('the complete source corpus has one assembly point and no direct declarations', () => {
+  test('one live assembly and one frozen source own all direct declarations', () => {
     expect(units.length).toBeGreaterThan(1000)
     expect(units.filter((unit) => unit.path === BOOTSTRAP)).toHaveLength(1)
+    expect(units.filter((unit) => unit.path === FROZEN_CONVERTER)).toHaveLength(1)
     expect(
       units.flatMap((unit) => violations(unit).map((reason) => `${unit.path}: ${reason}`)),
     ).toEqual([])
-    expect(
-      units.find((unit) => unit.path === 'packages/backend/src/db/schema.ts')!.text,
-    ).not.toContain('sqliteTable(')
+    expect(units.find((unit) => unit.path === 'packages/backend/src/db/schema.ts')).toBeUndefined()
   })
   test('every table has one explicit owner, ordered codecs, and an exported owner contribution', async () => {
     for (const contribution of persistenceSchema.contributions) {
@@ -105,11 +106,23 @@ describe('RFC-395 I-a explicit schema structural lock', () => {
         )
       )) as Record<string, unknown>
       expect(
-        Object.values(declarations).filter((value) => value === contribution),
+        Object.values(declarations).filter(
+          (value) =>
+            value !== null &&
+            typeof value === 'object' &&
+            'tables' in value &&
+            value.tables === contribution.tables,
+        ),
         contribution.owner,
       ).toHaveLength(1)
       expect(
-        Object.values(entry).filter((value) => value === contribution),
+        Object.values(entry).filter(
+          (value) =>
+            value !== null &&
+            typeof value === 'object' &&
+            'tables' in value &&
+            value.tables === contribution.tables,
+        ),
         contribution.owner,
       ).toHaveLength(1)
     }
@@ -147,6 +160,32 @@ describe('RFC-395 I-a explicit schema structural lock', () => {
         ),
       ),
     ).toEqual(['business module imports registry'])
+  })
+  test('negative fixture: another bootstrap file is still not an assembly root', () => {
+    expect(
+      violations(
+        sourceUnit(
+          'packages/backend/src/bootstrap/rogue.ts',
+          "import { createSchemaRegistry as collect } from '@/platform/persistence/schema/registry'; collect([])",
+        ),
+      ),
+    ).toEqual(['registry assembled outside bootstrap'])
+    expect(
+      violations(
+        sourceUnit(
+          'packages/backend/src/modules/example/store.ts',
+          "import { persistenceSchema } from '@/bootstrap/persistenceSchema'",
+        ),
+      ),
+    ).toEqual(['business module imports registry'])
+  })
+  test('only the frozen converter registry is an additional assembly root', () => {
+    const code =
+      "import { createSchemaRegistry } from '@/platform/persistence/schema/registry'; createSchemaRegistry([])"
+    expect(violations(sourceUnit(FROZEN_CONVERTER, code))).toEqual([])
+    expect(
+      violations(sourceUnit(FROZEN_CONVERTER.replace('definitions.ts', 'reader.ts'), code)),
+    ).toEqual(['registry assembled outside bootstrap'])
   })
   test('declaration roles exclude schema wiring while retaining runtime consumers', () => {
     for (const path of [

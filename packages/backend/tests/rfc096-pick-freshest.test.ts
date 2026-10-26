@@ -1,3 +1,10 @@
+// Released picker oracle; executable runtime selection is covered through RunSelectionReader.
+import {
+  isFresherNodeRun,
+  pickFreshestRun,
+  isFresherNodeRun as isFresherNodeRunFromScheduler,
+} from './helpers/model/frozenSelection/pickers'
+import type { projectNodeRunReadFacts } from '@/modules/task-execution/infrastructure/nodeRunSnapshot'
 // LOCKS: RFC-096 (audit S-13 / WP-3) — freshness.ts picker primitives.
 //
 // `pickFreshestRun` is THE one sanctioned way to pick "the freshest run" out
@@ -24,17 +31,11 @@
 // If any case here goes red, a freshness-ordering fork is being reintroduced —
 // see design/RFC-096-freshest-picker-convergence/design.md before relaxing.
 
-import { type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { describe, expect, test } from 'bun:test'
 
-import {
-  buildFreshestSettledPerNode,
-  isFresherNodeRun,
-  pickFreshestRun,
-} from '../src/services/freshness'
-import { isFresherNodeRun as isFresherNodeRunFromScheduler } from '../src/services/scheduler'
+import { buildFreshestSettledPerNode } from '../src/modules/task-execution/application/runProvenance'
 
-type FullRow = PersistenceTables['nodeRuns']['$inferSelect']
+type FullRow = ReturnType<typeof projectNodeRunReadFacts>
 
 // Minimal projection pickFreshestRun's generic bound requires — using it as
 // the test row type IS part of the lock (see header point 3).
@@ -50,7 +51,7 @@ let seq = 0
 function row(over: Partial<PickRow> = {}): PickRow {
   seq += 1
   return {
-    seq: null,
+    seq,
     id: `01PF${String(seq).padStart(4, '0')}`,
     parentNodeRunId: null,
     status: 'done',
@@ -68,7 +69,7 @@ function fullRow(nodeId: string, over: Partial<FullRow> = {}): FullRow {
     mergeState: null,
 
     containerRunId: null,
-    seq: null,
+    seq,
     id: `01PF${String(seq).padStart(4, '0')}`,
     nodeId,
     iteration: 0,
@@ -180,15 +181,15 @@ describe('RFC-096 generic widening', () => {
     // Type-level part of the lock: these literals are EXACTLY { id: string; seq: number | null } —
     // before RFC-096 the parameter required the full nodeRuns row type and
     // this would not compile.
-    const a: { id: string; seq: number | null } = { seq: null, id: 'nr_a' }
-    const b: { id: string; seq: number | null } = { seq: null, id: 'nr_b' }
+    const a: { id: string; seq: number | null } = { seq: 1, id: 'nr_a' }
+    const b: { id: string; seq: number | null } = { seq: 2, id: 'nr_b' }
     expect(isFresherNodeRun(b, a)).toBe(true)
     expect(isFresherNodeRun(a, b)).toBe(false)
     // undefined incumbent → candidate always wins.
     expect(isFresherNodeRun(a, undefined)).toBe(true)
     // Tie on id (impossible for real ULIDs, defensive): strict '>' keeps the
     // incumbent — no reduce churn on equal rows.
-    expect(isFresherNodeRun(a, { seq: null, id: 'nr_a' })).toBe(false)
+    expect(isFresherNodeRun(a, { seq: 1, id: 'nr_a' })).toBe(false)
   })
 
   test('pickFreshestRun accepts the minimal { id, seq, parentNodeRunId, status } projection', () => {
@@ -200,8 +201,8 @@ describe('RFC-096 generic widening', () => {
       parentNodeRunId: string | null
       status: string
     }> = [
-      { seq: null, id: '01ZZ0001', parentNodeRunId: null, status: 'done' },
-      { seq: null, id: '01ZZ0002', parentNodeRunId: null, status: 'failed' },
+      { seq: 1, id: '01ZZ0001', parentNodeRunId: null, status: 'done' },
+      { seq: 2, id: '01ZZ0002', parentNodeRunId: null, status: 'failed' },
     ]
     expect(pickFreshestRun(rows)?.id).toBe('01ZZ0002')
     expect(pickFreshestRun(rows, { statusIn: ['done'] })?.id).toBe('01ZZ0001')

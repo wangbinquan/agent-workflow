@@ -1,29 +1,30 @@
-import { isTaskWorkspaceUnbound } from '@agent-workflow/shared'
-import { legacyHostedPrompt, readLegacyHostedPrompt } from '@/platform/content/legacyPrompt'
-import { tablesOf } from '@/platform/persistence/sessionTables'
-import { eq } from 'drizzle-orm'
-import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import type { CrewStationMutationFence } from '@/platform/crewstation/mutationFence'
-import type { CrewStationBusinessExecution } from '@/platform/crewstation/businessExecution'
-import type { CrewStationObjectStorage } from '@/platform/crewstation/objectStorage'
-import type { WorkspaceHelper } from '@/platform/crewstation/workspaceProtocol'
 import type { HostedRuntimeCapabilities } from '@/modules/runtime-management/public/types'
 import type { HostedWorkspaceCommands } from '@/modules/source-control/public/participants'
+import { hostedPrompt, readHostedPrompt } from '@/platform/content/locations/prompt'
+import type { CrewStationBusinessExecution } from '@/platform/crewstation/businessExecution'
+import type { CrewStationMutationFence } from '@/platform/crewstation/mutationFence'
+import type { CrewStationObjectStorage } from '@/platform/crewstation/objectStorage'
+import type { WorkspaceHelper } from '@/platform/crewstation/workspaceProtocol'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { sha256Hex } from '@/util/hash'
 import type { Logger } from '@/util/log'
-import { createHostedExecutionStore } from '../infrastructure/crewstation/executionStore'
+import { isTaskWorkspaceUnbound } from '@agent-workflow/shared'
+import { eq } from 'drizzle-orm'
+import type { TaskDeletionEffects } from '../application/ports/taskDeletionContentEffects'
+import { createHostedBootRecovery } from '../infrastructure/crewstation/bootRecovery'
 import { createHostedExecution } from '../infrastructure/crewstation/execution'
 import { createHostedExecutionSettler } from '../infrastructure/crewstation/executionSettler'
-import { createHostedVolumeActivity } from '../infrastructure/crewstation/volumeActivity'
+import { createHostedExecutionStore } from '../infrastructure/crewstation/executionStore'
 import { createHostedPortArtifactContent } from '../infrastructure/crewstation/portArtifactContent'
-import { createHostedBootRecovery } from '../infrastructure/crewstation/bootRecovery'
 import { createHostedTaskDeletionContent } from '../infrastructure/crewstation/taskDeletionContent'
-import type { TaskDeletionEffects } from '../application/ports/taskDeletionContentEffects'
+import { createHostedVolumeActivity } from '../infrastructure/crewstation/volumeActivity'
+import { taskReadColumns } from '../infrastructure/taskRepositorySql'
 import { createDaemonRecoveryAuthorityProof } from './bootRecovery'
+import { createCrewStationRuntimeManagement } from './crewstationRuntimeManagement'
+import { createCrewStationSystemAgentRunFamily } from './crewstationSystemAgentRunFamily'
 import { composeCrewStationTaskRunSelection } from './crewstationTaskRunSelection'
 import { composePortArtifactOperations } from './portArtifacts'
-import { createCrewStationSystemAgentRunFamily } from './crewstationSystemAgentRunFamily'
-import { createCrewStationRuntimeManagement } from './crewstationRuntimeManagement'
-import { sha256Hex } from '@/util/hash'
 
 const CAPABILITY_CACHE_MS = 30_000
 const SETTLEMENT_INTERVAL_MS = 60_000
@@ -44,7 +45,7 @@ export function createCrewStationExecutionWorkspaces(input: {
     const { tasks } = tablesOf(input.db)
     const task = (
       await input.db
-        .select({ workspaceRef: tasks.worktreePath })
+        .select({ workspaceRef: taskReadColumns(input.db).worktreePath })
         .from(tasks)
         .where(eq(tasks.id, taskId))
         .limit(1)
@@ -257,8 +258,8 @@ export function composeCrewStationExecutionOwner(
         materialObjectsAvailable: capability('materialObjectsVersion'),
         // Small prompts are durable DB content, never service-local files.
         nodeRunPrompts: {
-          store: async (_taskId, _nodeRunId, prompt) => legacyHostedPrompt(prompt),
-          read: async (row) => readLegacyHostedPrompt(row),
+          store: async (_taskId, _nodeRunId, prompt) => hostedPrompt(prompt),
+          read: async (row) => readHostedPrompt(row),
         },
         portArtifacts: composePortArtifactOperations(portArtifactContentEffects),
       }),

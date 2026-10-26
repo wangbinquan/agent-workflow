@@ -1,3 +1,6 @@
+import type { OracleRunRow } from '@/modules/task-execution/infrastructure/migration/oracle/rows'
+import { nodeRunFixtureColumns } from './helpers/model/nodeRun'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 // RFC-109 —— `syncWorkflow`：把工作流的最新定义换进任务的冻结快照并从断点继续。
 //
 // **RFC-359 AC-1（第 13 刀下）迁移记**：本套件此前钉的是 `services/task.ts` 的
@@ -26,7 +29,7 @@ import {
   workflowFixture,
 } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+
 import { afterEach, describe, expect, test } from 'bun:test'
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -38,6 +41,7 @@ import { selectSyncRollbackTargets, buildSyncRunSummary } from '../src/services/
 import { runGit } from '../src/util/git'
 import { describeEachProvider } from './helpers/eachProvider'
 import { createEachProviderTaskExecution } from './helpers/eachProviderTaskExecution'
+import { registerProviderFixtureCleanup } from './helpers/providerFixtureCleanup'
 import {
   migrateWorkflowDefinitionToLatest,
   type WorkflowDefinition,
@@ -93,7 +97,7 @@ async function seedFixture(
 ): Promise<Fixture> {
   const tmp = mkdtempSync(join(tmpdir(), 'aw-rfc109-'))
   const appHome = join(tmp, 'appHome')
-  const repoPath = join(tmp, 'repo')
+  const repoPath = join(appHome, 'worktrees', 'repo')
   mkdirSync(appHome, { recursive: true })
   mkdirSync(repoPath, { recursive: true })
   await runGit(repoPath, ['init', '-q', '-b', 'main'])
@@ -179,6 +183,20 @@ async function syncVia(
     { appHome: fixture.appHome, defaultNodeRetries: 0, binaryOverride: ['/usr/bin/env', 'true'] },
     USER_ID,
   )
+  registerProviderFixtureCleanup(harness.db, async () => {
+    const id = taskId ?? fixture.taskId
+    if (execution.isActive(id)) {
+      // The revived task can finish between the activity check and the cancel; a terminal
+      // task has nothing left to cancel (the same 409 a user would get).
+      await execution.provider.cancellation
+        .cancel({ taskId: id, cause: { kind: 'user' } })
+        .catch((error: unknown) => {
+          if ((error as { code?: string }).code !== 'task-not-cancelable') throw error
+        })
+    }
+    await execution.provider.participants.activity.awaitReleasedSettled(id)
+    await execution.shutdown()
+  })
   return await execution.provider.routes.tasks.syncWorkflow({
     actor: execution.actor,
     taskId: taskId ?? fixture.taskId,
@@ -208,6 +226,7 @@ async function codeOf(fn: () => Promise<unknown>): Promise<string | undefined> {
     await fn()
     return undefined
   } catch (err) {
+    if (!(err && typeof err === 'object' && 'code' in err)) throw err
     return (err as { code?: string }).code
   }
 }
@@ -368,6 +387,11 @@ describeEachProvider('RFC-109 syncWorkflow —— 换定义 + 从断点继续', 
 
   test('AC-2: a node added to a done task is dispatched after sync', async () => {
     f = await seedFixture(harness.db, 'done')
+    await patchTaskFixture(
+      harness.db,
+      { id: f.taskId },
+      { inputs: JSON.stringify({ a: 'existing', b: 'new' }) },
+    )
     const { nodeRuns } = tablesOf(harness.db)
     // seed the original node as a completed run
     await nodeRunFixture(harness.db, {
@@ -387,17 +411,24 @@ describeEachProvider('RFC-109 syncWorkflow —— 换定义 + 从断点继续', 
     // 而复活在生产上是 fire-and-forget（路由立刻把任务行还给调用方）。所以这里有界地等它——
     // 等不到就是真的没派发，不是抖动。
     const dispatched = await waitFor(async () => {
-      const runs = await harness.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, f!.taskId))
+      const runs = await harness.db
+        .select(nodeRunFixtureColumns(harness.db))
+        .from(nodeRuns)
+        .where(eq(nodeRuns.taskId, f!.taskId))
       return runs.some((r) => r.nodeId === 'b')
     })
-    expect(dispatched, '新图里的节点 b 必须被派发').toBe(true)
+    expect(
+      dispatched,
+      `新图里的节点 b 必须被派发: ${JSON.stringify((await readTaskFixtures(harness.db, { id: f!.taskId }))[0])}`,
+    ).toBe(true)
   })
 })
 
 describe('RFC-109 selectSyncRollbackTargets (Codex F4)', () => {
+  let seq = 0
   const row = (id: string, nodeId: string, status: string, parent: string | null = null) => ({
     id,
-    seq: null,
+    seq: ++seq,
     nodeId,
     parentNodeRunId: parent,
     status,
@@ -427,7 +458,7 @@ describe('RFC-109 selectSyncRollbackTargets (Codex F4)', () => {
   test('child rows (parentNodeRunId set) never selected; freshest top-level per node wins', async () => {
     const runs = [
       row('01A', 'n', 'failed'),
-      row('01C', 'n', 'failed'), // newer id → wins
+      row('01C', 'n', 'failed'), // newer sequence → wins
       row('01D', 'n', 'failed', '01A'), // child → ignored
     ]
     const picked = await selectSyncRollbackTargets(runs, ['failed'], () => false)
@@ -437,7 +468,7 @@ describe('RFC-109 selectSyncRollbackTargets (Codex F4)', () => {
 })
 
 describe('RFC-109 buildSyncRunSummary — live wrapper state (Codex re-review P2)', () => {
-  type Row = PersistenceTables['nodeRuns']['$inferSelect']
+  type Row = OracleRunRow
   const wrun = (over: Partial<Row>): Row =>
     ({
       id: ulid(),

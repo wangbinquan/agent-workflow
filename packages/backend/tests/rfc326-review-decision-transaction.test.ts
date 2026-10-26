@@ -1,3 +1,8 @@
+import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
+import { nodeRunFixtureColumns } from './helpers/model/nodeRun'
+import { legacyContentRef } from '@/platform/content/contentRef'
+import { contentRowColumns } from '@/platform/content/infrastructure/contentStore'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { withO2Closure } from './helpers/o2Closure'
 // RFC-326 — the decision path commits in ONE transaction, effects follow the
 // commit, and membership is linearised with the decision
@@ -7,7 +12,8 @@ import { withO2Closure } from './helpers/o2Closure'
 //   - AC-17: every persisted review write of a decision — archive, batch
 //     comments / selections, outputs, status CAS, re-run mints, upstream
 //     cancels — lands inside exactly one `dbTxSync` (the statement recorder
-//     sees ONE `BEGIN` / ONE `COMMIT`). The distill row is a separate write
+//     sees ONE write `BEGIN` / `COMMIT`; split-table reads may use read-only
+//     snapshot transactions). The distill row is a separate write
 //     AFTER the commit and its failure never touches the decision (N10 / P14).
 //   - AC-17: a failure injected after the archive step (a SQLite trigger inside
 //     the transaction, on approve and on iterate; a prepare-time refusal on a
@@ -37,7 +43,7 @@ import {
   readNodeRunOutputFixtures,
 } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+
 import { afterEach, describe, expect, test } from 'bun:test'
 import {
   existsSync,
@@ -49,7 +55,7 @@ import {
   writeFileSync,
 } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { asc, eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
@@ -72,7 +78,6 @@ import {
   type CommittedEventDeliveryTestHarness,
 } from './helpers/committedEventHarness'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const NOW = 1_700_000_000_000
 const BODY =
   '# Design v1\n\nThe `order_status` enum should include partially_refunded.\n\n## Notes\n\nexport job\n'
@@ -82,7 +87,8 @@ const BODY =
 // ---------------------------------------------------------------------------
 
 async function snapshot(db: DbClient): Promise<Record<string, unknown[]>> {
-  const { docVersions, reviewComments, memoryDistillJobs } = tablesOf(db)
+  const { memoryDistillJobs } = tablesOf(db)
+  const { docVersions, reviewComments } = tablesOf(db)
   const runs = await readNodeRunFixtures(db, undefined, {
     orderBy: [{ field: 'id', direction: 'asc' }],
   })
@@ -99,6 +105,34 @@ async function snapshot(db: DbClient): Promise<Record<string, unknown[]>> {
     mergeStates: runs.map((r) => ({ id: r.id, mergeState: r.mergeState })),
     memoryDistillJobs: await db.select().from(memoryDistillJobs).orderBy(asc(memoryDistillJobs.id)),
   }
+}
+
+/** Epoch-2 companion reads need snapshots; all decision writes still share one commit. */
+function assertSingleDecisionWriteTransaction(sqls: readonly string[]) {
+  const intervals: Array<{ beginAt: number; commitAt: number; writes: number }> = []
+  let current: { beginAt: number; writes: number } | undefined
+  for (const [index, statement] of sqls.entries()) {
+    if (/^\s*begin\b/i.test(statement)) {
+      expect(current).toBeUndefined()
+      current = { beginAt: index, writes: 0 }
+    } else if (/^\s*commit\b/i.test(statement)) {
+      expect(current).toBeDefined()
+      intervals.push({ ...current!, commitAt: index })
+      current = undefined
+    } else if (/^\s*rollback\b/i.test(statement)) {
+      throw new Error('a successful decision must not roll back')
+    } else if (/^\s*(insert|update|delete|replace)\b/i.test(statement)) {
+      expect(current, statement).toBeDefined()
+      current!.writes += 1
+    } else {
+      // The additional snapshot transactions cannot hide mutations or DDL.
+      expect(statement).toMatch(/^\s*(select|with|pragma)\b/i)
+    }
+  }
+  expect(current).toBeUndefined()
+  const writers = intervals.filter((interval) => interval.writes > 0)
+  expect(writers).toHaveLength(1)
+  return writers[0]!
 }
 
 function taskEvents(taskId: string): { types: string[]; stop: () => void } {
@@ -131,6 +165,7 @@ async function settleDecisionContinuation(
   result: Awaited<ReturnType<typeof submitReviewDecision>>,
 ): Promise<void> {
   await wakeHumanGateContinuation(result.taskId, result.continuationRef, {
+    historyRestrictions: epoch2RuntimeTestPorts(f.db).historyRestrictions,
     db: f.db,
     appHome: f.appHome,
     schedulerDriver: { async drive() {} },
@@ -193,10 +228,11 @@ async function buildFixture(opts: FixtureOpts = {}): Promise<Fixture> {
   writeFileSync(join(repo, 'data.txt'), DIRTY.data)
   writeFileSync(join(repo, 'stray.txt'), 'stray\n')
 
-  const db = createInMemoryDb(MIGRATIONS)
+  const db = createInMemoryDb()
   const committedEvents = await installCommittedEventDeliveryHarness(db)
   const [owner, member, stranger, extraUser] = [ulid(), ulid(), ulid(), ulid()]
-  const { users, taskCollaborators, docVersions } = tablesOf(db)
+  const { users, taskCollaborators } = tablesOf(db)
+  const { docVersions } = tablesOf(db)
   await db.insert(users).values(
     [owner, member, stranger, extraUser].map((id, i) => ({
       id,
@@ -294,7 +330,7 @@ async function buildFixture(opts: FixtureOpts = {}): Promise<Fixture> {
     sourcePortName: 'docpath',
     versionIndex: 1,
     reviewIteration: 0,
-    bodyPath,
+    ...contentRowColumns(legacyContentRef('review-body-path', 'local-file', bodyPath)),
     decision: 'pending',
   })
   return {
@@ -350,7 +386,7 @@ async function addMultiInlineRound(f: Fixture): Promise<{ runId: string; ids: [s
       sourcePortName: 'docpath',
       versionIndex: 1,
       reviewIteration: 0,
-      bodyPath,
+      ...contentRowColumns(legacyContentRef('review-body-path', 'local-file', bodyPath)),
       decision: 'pending',
       itemIndex: i,
       itemPath: null,
@@ -385,7 +421,7 @@ describe('RFC-326 AC-17 — one decision transaction; distill is a later durable
   afterEach(() => f?.cleanup())
 
   test.each<['approved' | 'iterated' | 'rejected']>([['approved'], ['iterated'], ['rejected']])(
-    '%s (with a batch comment): exactly one BEGIN / COMMIT, no inline distill write',
+    '%s (with a batch comment): exactly one write BEGIN / COMMIT, no inline distill write',
     async (decision) => {
       f = await buildFixture()
       const recording = recordStatements(f.db.$client)
@@ -403,17 +439,10 @@ describe('RFC-326 AC-17 — one decision transaction; distill is a later durable
         recording.stop()
       }
       const sqls = recording.statements.map((s) => s.sql)
-      const begins = sqls.filter((s) => /^\s*begin/i.test(s))
-      const commits = sqls.filter((s) => /^\s*commit/i.test(s))
-      const rollbacks = sqls.filter((s) => /^\s*rollback/i.test(s))
-      expect(begins.length).toBe(1)
-      expect(commits.length).toBe(1)
-      expect(rollbacks.length).toBe(0)
-      const commitAt = sqls.findIndex((s) => /^\s*commit/i.test(s))
+      const { beginAt, commitAt } = assertSingleDecisionWriteTransaction(sqls)
       const distillAt = sqls.findIndex((s) => /insert into "memory_distill_jobs"/i.test(s))
       expect(distillAt).toBe(-1)
       // Every review-state write sits between BEGIN and COMMIT.
-      const beginAt = sqls.findIndex((s) => /^\s*begin/i.test(s))
       for (const [i, s] of sqls.entries()) {
         if (
           /^(insert into|update|delete from) "(doc_versions|review_comments|node_runs|node_run_outputs)"/i.test(
@@ -445,8 +474,14 @@ describe('RFC-326 AC-17 — one decision transaction; distill is a later durable
     } finally {
       ev.stop()
     }
-    const { nodeRuns, docVersions, memoryDistillJobs } = tablesOf(f.db)
-    const run = (await f.db.select().from(nodeRuns).where(eq(nodeRuns.id, f.reviewRunId)))[0]!
+    const { memoryDistillJobs } = tablesOf(f.db)
+    const { nodeRuns, docVersions } = tablesOf(f.db)
+    const run = (
+      await f.db
+        .select(nodeRunFixtureColumns(f.db))
+        .from(nodeRuns)
+        .where(eq(nodeRuns.id, f.reviewRunId))
+    )[0]!
     expect(run.status).toBe('done')
     const dv = (await f.db.select().from(docVersions).where(eq(docVersions.id, f.dvId)))[0]!
     expect(dv.decision).toBe('approved')
@@ -475,7 +510,12 @@ describe('RFC-326 AC-17 / AC-18 — injected failures leave no trace', () => {
     const err = await failureOf(run)
     expect(await snapshot(f.db)).toEqual(before)
     const { nodeRuns } = tablesOf(f.db)
-    const row = (await f.db.select().from(nodeRuns).where(eq(nodeRuns.id, f.reviewRunId)))[0]!
+    const row = (
+      await f.db
+        .select(nodeRunFixtureColumns(f.db))
+        .from(nodeRuns)
+        .where(eq(nodeRuns.id, f.reviewRunId))
+    )[0]!
     expect(row.status).toBe('awaiting_review')
     expect(row.reviewIteration).toBe(0)
     expect(ev.types).toEqual([])
@@ -521,7 +561,12 @@ describe('RFC-326 AC-17 / AC-18 — injected failures leave no trace', () => {
     )
     expect(err.message).toContain('injected after rollback')
     const { nodeRuns } = tablesOf(f.db)
-    const upstream = (await f.db.select().from(nodeRuns).where(eq(nodeRuns.id, f.docRunId)))[0]!
+    const upstream = (
+      await f.db
+        .select(nodeRunFixtureColumns(f.db))
+        .from(nodeRuns)
+        .where(eq(nodeRuns.id, f.docRunId))
+    )[0]!
     expect(upstream.status).toBe('done')
     // RFC-333: prepare produced only a validated plan. The canonical worktree
     // cannot move unless the decision transaction commits an exact linked
@@ -584,7 +629,7 @@ describe('RFC-326 AC-17 / AC-18 — injected failures leave no trace', () => {
         sourcePortName: 'docpath',
         versionIndex: 1,
         reviewIteration: 0,
-        bodyPath,
+        ...contentRowColumns(legacyContentRef('review-body-path', 'local-file', bodyPath)),
         decision: 'pending',
         itemIndex: i,
         itemPath: null,
@@ -607,7 +652,9 @@ describe('RFC-326 AC-17 / AC-18 — injected failures leave no trace', () => {
     expect((err as DomainError).code).toBe('doc-version-body-missing')
     expect(await snapshot(f.db)).toEqual(before)
     expect(ev.types).toEqual([])
-    const run = (await f.db.select().from(nodeRuns).where(eq(nodeRuns.id, runId)))[0]!
+    const run = (
+      await f.db.select(nodeRunFixtureColumns(f.db)).from(nodeRuns).where(eq(nodeRuns.id, runId))
+    )[0]!
     expect(run.status).toBe('awaiting_review')
   })
 })
@@ -796,10 +843,7 @@ describe('RFC-326 AC-17 (multi-document) — one transaction, and the second arc
         recording.stop()
       }
       const sqls = recording.statements.map((st) => st.sql)
-      expect(sqls.filter((st) => /^\s*begin/i.test(st)).length).toBe(1)
-      expect(sqls.filter((st) => /^\s*commit/i.test(st)).length).toBe(1)
-      const beginAt = sqls.findIndex((st) => /^\s*begin/i.test(st))
-      const commitAt = sqls.findIndex((st) => /^\s*commit/i.test(st))
+      const { beginAt, commitAt } = assertSingleDecisionWriteTransaction(sqls)
       const archives = sqls
         .map((st, i) => [st, i] as const)
         .filter(([st]) => /^update "doc_versions" set/i.test(st) && /"decision"/i.test(st))
@@ -854,7 +898,12 @@ describe('RFC-326 AC-17 (multi-document) — one transaction, and the second arc
       .from(docVersions)
       .where(eq(docVersions.reviewNodeRunId, round.runId))
     expect(rows.map((r) => r.decision)).toEqual(['pending', 'pending'])
-    const run = (await f.db.select().from(nodeRuns).where(eq(nodeRuns.id, round.runId)))[0]!
+    const run = (
+      await f.db
+        .select(nodeRunFixtureColumns(f.db))
+        .from(nodeRuns)
+        .where(eq(nodeRuns.id, round.runId))
+    )[0]!
     expect(run.status).toBe('awaiting_review')
     f.db.$client.exec('DROP TRIGGER inject_second_archive')
     const ok = await submitReviewDecision(

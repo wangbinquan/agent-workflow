@@ -1,16 +1,6 @@
-import { createNodeRunQueries } from './nodeRunQueries'
-import { createRunHistorySnapshot } from './runSelection/oracle/historySnapshot'
-import { createRunSelectionOracleSnapshot } from './runSelection/oracle/snapshot'
-import type { TaskWorkgroupConfig } from '../domain/taskWorkgroupConfig'
-import { taskWorkgroupConfigSelection } from './taskWorkgroupConfig'
-import {
-  decodeTaskSubject,
-  isTurnEngineTaskSubject,
-  type StoredTaskSubject,
-} from '../domain/taskSubject'
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
 import { first } from '@/platform/persistence/queryHelpers'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { insertOne } from '@/platform/persistence/singleInsert'
 import {
   CANCELABLE_TASK_STATUSES,
   REPAIR_OPTION_IDS,
@@ -30,6 +20,16 @@ import {
   type WorkflowDefinition,
   type WorkflowNode,
 } from '@agent-workflow/shared'
+import {
+  isTurnEngineTaskSubject,
+  taskSubjectFromDefinition,
+  type TaskDefinitionSubject,
+} from '../domain/taskSubject'
+import type { TaskWorkgroupConfig } from '../domain/taskWorkgroupConfig'
+import { createNodeRunQueries } from './nodeRunQueries'
+import { createRunHistorySnapshot } from '../application/runHistory'
+import { taskReadColumns } from './taskRepositorySql'
+import { taskWorkgroupConfigSelection } from './taskWorkgroupConfig'
 
 import { and, asc, eq, inArray, isNull } from 'drizzle-orm'
 import { ulid } from 'ulid'
@@ -40,14 +40,14 @@ import type {
   CollaborationRuntimeMechanics,
   ReviewRepairParticipant,
 } from '@/modules/collaboration/public/participants'
-import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { runLifecycleInvariants, type LifecycleAlertRow } from '@/services/lifecycleInvariants'
-import { buildContainerMap } from '@/services/scheduler'
-import { runStuckTaskDetector } from '@/services/stuckTaskDetector'
 import {
   selectRepositoryWorkspaceReadQueries,
   type RepositoryWorkspaceReadQueries,
 } from '@/modules/source-control/public/queries'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
+import { runLifecycleInvariants, type LifecycleAlertRow } from '@/services/lifecycleInvariants'
+import { buildContainerMap } from '@/services/scheduler'
+import { runStuckTaskDetector } from '@/services/stuckTaskDetector'
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
 import type { TaskExecutionPersistence } from '../application/ports/taskExecutionPersistence'
 import type { ActiveTaskExecutionParticipant } from '../application/ports/taskExecutionRuntimeParticipants'
@@ -94,7 +94,11 @@ interface ParsedAlert {
   readonly resolvedAt: number | null
 }
 
-interface RepairTask extends StoredTaskSubject {
+interface RepairTask extends TaskDefinitionSubject {
+  readonly workflowId: string
+  readonly sourceAgentName?: string | null
+  readonly sourceAgentId?: string | null
+  readonly codeRoundId?: string | null
   readonly id: string
   readonly status: TaskStatus
   readonly workflowSnapshot: string
@@ -447,7 +451,7 @@ async function latestCandidate(
     group.push(run)
     groups.set(key, group)
   }
-  const selection = createRunSelectionOracleSnapshot(runs, { scope: { kind: 'rows' } })
+  const selection = createRunHistorySnapshot(runs[0]?.taskId ?? '', runs)
   const taskId = runs[0]?.taskId ?? ''
   const candidates: RepairNodeRun[] = []
   for (const group of groups.values()) {
@@ -512,12 +516,15 @@ async function loadTask(db: PersistenceDb, taskId: string): Promise<RepairTask> 
       .select({
         id: tasks.id,
         status: tasks.status,
-        workflowSnapshot: tasks.workflowSnapshot,
-        worktreePath: tasks.worktreePath,
-        workflowId: tasks.workflowId,
-        codeRoundId: tasks.codeRoundId,
-        sourceAgentName: tasks.sourceAgentName,
-        workgroupId: tasks.workgroupId,
+        workflowSnapshot: taskReadColumns(db).workflowSnapshot,
+        worktreePath: taskReadColumns(db).worktreePath,
+        workflowId: taskReadColumns(db).workflowId,
+        subjectKind: taskReadColumns(db).subjectKind,
+        sourceId: taskReadColumns(db).sourceId,
+        sourceName: taskReadColumns(db).sourceName,
+        codeRoundId: taskReadColumns(db).codeRoundId,
+        sourceAgentName: taskReadColumns(db).sourceAgentName,
+        workgroupId: taskReadColumns(db).workgroupId,
         workgroupConfig: taskWorkgroupConfigSelection(db),
       })
       .from(tasks)
@@ -1169,6 +1176,7 @@ async function setTask(
   input: Readonly<{
     taskId: string
     optionId: RepairOptionId
+    operationRef: string
     from: readonly TaskStatus[]
     to: TaskStatus
     allowTerminal?: boolean
@@ -1178,6 +1186,7 @@ async function setTask(
 ): Promise<void> {
   const won = await dependencies.persistence.runtimeLifecycle.trySet({
     taskId: input.taskId,
+    executionGeneration: { kind: 'operation', cause: 'repair', operationRef: input.operationRef },
     to: input.to,
     allowedFrom: input.from,
     ...(input.allowTerminal === true ? { allowTerminal: true } : {}),
@@ -1217,6 +1226,7 @@ async function applyAction(
       await setTask(dependencies, {
         taskId: ctx.task.id,
         optionId,
+        operationRef: `repair:${ctx.alert.id}:${optionId}`,
         from: action.from,
         to: action.to,
         ...(action.allowTerminal === true ? { allowTerminal: true } : {}),
@@ -1231,6 +1241,11 @@ async function applyAction(
     case 'node-transition': {
       const result = await dependencies.persistence.nodeRuns.set({
         nodeRunId: action.nodeRunId,
+        executionGeneration: {
+          kind: 'operation',
+          cause: 'repair',
+          operationRef: `repair:${ctx.alert.id}:${optionId}`,
+        },
         to: action.to,
         allowedFrom: action.from,
         ...(action.allowTerminal === true ? { allowTerminal: true } : {}),
@@ -1251,6 +1266,11 @@ async function applyAction(
     case 'node-and-task-resume': {
       const result = await dependencies.persistence.nodeRuns.set({
         nodeRunId: action.nodeRunId,
+        executionGeneration: {
+          kind: 'operation',
+          cause: 'repair',
+          operationRef: `repair:${ctx.alert.id}:${optionId}`,
+        },
         to: action.nodeTo,
         allowedFrom: action.nodeFrom,
         allowTerminal: true,
@@ -1265,6 +1285,7 @@ async function applyAction(
       await setTask(dependencies, {
         taskId: ctx.task.id,
         optionId,
+        operationRef: `repair:${ctx.alert.id}:${optionId}`,
         from: action.taskFrom,
         to: 'interrupted',
         finishedAt: now(),
@@ -1297,6 +1318,11 @@ async function applyAction(
       }
       const result = await dependencies.persistence.nodeRuns.set({
         nodeRunId: action.nodeRunId,
+        executionGeneration: {
+          kind: 'operation',
+          cause: 'repair',
+          operationRef: `repair:${ctx.alert.id}:${optionId}`,
+        },
         to: 'done',
         allowedFrom: action.nodeFrom,
         allowTerminal: true,
@@ -1519,7 +1545,7 @@ export function createTaskRouteRepairOperations(
       const definition = OPTION_DEFINITIONS[optionId]
       if (
         isTurnEngineTaskSubject(
-          decodeTaskSubject(ctx.task),
+          taskSubjectFromDefinition(ctx.task),
           ctx.task.workgroupConfig?.launch.mode,
         ) &&
         definition.revivesExecution === true
@@ -1565,7 +1591,10 @@ export function createTaskRouteRepairOperations(
     }
     const definition = OPTION_DEFINITIONS[optionId]
     if (
-      isTurnEngineTaskSubject(decodeTaskSubject(ctx.task), ctx.task.workgroupConfig?.launch.mode) &&
+      isTurnEngineTaskSubject(
+        taskSubjectFromDefinition(ctx.task),
+        ctx.task.workgroupConfig?.launch.mode,
+      ) &&
       definition.revivesExecution === true
     ) {
       throw new ValidationError(

@@ -10,18 +10,15 @@ import {
   type PortableBackupResult,
 } from '@/services/portableBackupArchive'
 import { readDatabaseGeneration } from '@/platform/persistence/generationStore'
-import { databaseProviderTraits } from '@/platform/persistence/providerTraits'
+
 import { exportLogicalDatabaseArtifact } from '@/platform/persistence/logicalDatabaseExport'
 import {
   openPostgresqlLogicalSource,
   type PostgresqlLogicalSource,
 } from '@/platform/persistence/postgresqlLogicalSource'
 import type { PostgresqlDatabaseRuntime } from '@/platform/persistence/postgresqlRuntime'
-import { loadPostgresqlMigrationHistory } from '@/platform/persistence/postgresqlMigrationHistory'
-import { resolvePostgresqlAdditiveRowBridge } from '@/platform/persistence/postgresqlMigrationSequence'
+
 import { type LogicalSchemaContract } from '@/platform/persistence/schemaContract'
-import { openVerifiedLogicalDatabaseArtifactSource } from '@/platform/persistence/logicalDatabaseRestore'
-import { createFileDatabaseMigrationStore } from './fileDatabaseMigrationStore'
 
 export class PostgresqlProviderBackupError extends Error {
   constructor(
@@ -61,10 +58,6 @@ export interface CreatePostgresqlProviderBackupOptions {
   readonly openLogicalSource?: PostgresqlLogicalSourceFactory
 }
 
-function targetGenerationId(operationId: string): string {
-  return `dbg_pg_${operationId.slice(4)}`
-}
-
 export async function createPostgresqlProviderBackup(
   options: CreatePostgresqlProviderBackupOptions,
 ): Promise<PortableBackupResult> {
@@ -76,70 +69,13 @@ export async function createPostgresqlProviderBackup(
     expectedSchemaDigest: contract.digest,
   }).payload
   if (
-    // RFC-359 AC-10：问能力（这一代是不是迁移的**目标**端），不问品牌名。
-    databaseProviderTraits(generation.provider).migrationRole !== 'target' ||
-    generation.operationId === null ||
-    generation.manifestDigest === null ||
-    generation.generationId !== targetGenerationId(generation.operationId) ||
-    // `options.runtime` 是 `PostgresqlDatabaseRuntime`，它的 `provider` 是**字面量类型**
-    // `'postgresql'`（`platform/persistence/postgresqlRuntime.ts:41`），所以原来这里那条
-    // `options.runtime.provider !== 'postgresql'` 恒为假、一行都跑不到——删掉，不是改写。
+    generation.provider !== options.runtime.provider ||
     options.runtime.generationId !== generation.generationId
-  ) {
+  )
     throw new PostgresqlProviderBackupError(
       'postgresql-backup-generation',
-      'PostgreSQL backup requires the verified live PostgreSQL generation',
+      'backup requires the active PostgreSQL generation',
     )
-  }
-
-  const migration = createFileDatabaseMigrationStore({ root: operationsRoot }).read(
-    generation.operationId,
-  )
-  if (
-    migration === null ||
-    !['accepting-writes', 'finalized'].includes(migration.payload.phase) ||
-    migration.payload.failure !== null ||
-    migration.payload.rolledBackAt !== null ||
-    migration.payload.logicalBackupDigest === null ||
-    migration.payload.legacyArchiveDigest === null
-  ) {
-    throw new PostgresqlProviderBackupError(
-      'postgresql-backup-operation',
-      'PostgreSQL backup source migration is not a complete live operation',
-    )
-  }
-
-  let archiveContract = contract
-  if (migration.payload.source.schemaDigest !== contract.digest) {
-    try {
-      const history = await loadPostgresqlMigrationHistory({ headContract: options.headContract })
-      archiveContract = resolvePostgresqlAdditiveRowBridge(history, {
-        fromContractDigest: migration.payload.source.schemaDigest,
-        toContractDigest: contract.digest,
-      }).source
-    } catch {
-      throw new PostgresqlProviderBackupError(
-        'postgresql-backup-operation',
-        'PostgreSQL backup source migration is not a complete live operation',
-      )
-    }
-  }
-
-  let preservedArchive: ReturnType<typeof openVerifiedLogicalDatabaseArtifactSource>
-  try {
-    preservedArchive = openVerifiedLogicalDatabaseArtifactSource({
-      artifactRoot: join(operationsRoot, generation.operationId),
-      expectedManifestDigest: migration.payload.logicalBackupDigest,
-      expectedLegacyArchiveFileDigest: migration.payload.legacyArchiveDigest,
-      contract: archiveContract,
-    })
-  } catch {
-    throw new PostgresqlProviderBackupError(
-      'postgresql-backup-archive',
-      'PostgreSQL backup cannot verify the preserved SQLite legacy archive',
-    )
-  }
-
   const sourceFactory = options.openLogicalSource ?? openPostgresqlLogicalSource
   return await createPortableBackupArchive({
     appHome: options.appHome,
@@ -162,13 +98,16 @@ export async function createPostgresqlProviderBackup(
           sourceGenerationId: generation.generationId,
           source: {
             provider: 'postgresql',
+            readMetadata: () => {
+              if (!source.readMetadata) throw new Error('epoch2-metadata-source-required')
+              return source.readMetadata()
+            },
             assertUnchanged: () => source.assertUnchanged(snapshot),
             readChunk: (table, afterKey, limit) => source.readChunk(table, afterKey, limit),
           },
           expectedTableRows: snapshot.tableRows,
           contract,
           artifactRoot: logicalArtifactRoot,
-          preservedArchive,
           now: () => options.now ?? Date.now(),
         })
       } finally {

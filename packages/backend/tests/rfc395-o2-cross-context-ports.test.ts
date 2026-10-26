@@ -137,7 +137,7 @@ describeEachProvider('RFC-395 II-b O2 owner adapters', (harness) => {
     expect(await composeRealtimeResourceAcl(harness.db).find('workgroup', 'missing')).toBeNull()
   })
 
-  test('subject guards preserve all three independent legacy column predicates across every status', async () => {
+  test('subject guards preserve each explicit subject across every status', async () => {
     const db = harness.db
     const sourceId = ulid()
     const statuses: TaskStatus[] = [
@@ -150,22 +150,30 @@ describeEachProvider('RFC-395 II-b O2 owner adapters', (harness) => {
       'awaiting_review',
       'awaiting_human',
     ]
-    const expected: string[] = []
-    for (const status of statuses) {
-      const id = await seedTask(db, {
-        status,
-        workflowId: sourceId,
-        sourceAgentId: sourceId,
-        workgroupId: sourceId,
-      })
-      if (!new Set<TaskStatus>(TERMINAL_TASK_STATUSES).has(status)) expected.push(id)
+    const expected: Record<'agent' | 'workflow' | 'workgroup', string[]> = {
+      agent: [],
+      workflow: [],
+      workgroup: [],
+    }
+    for (const kind of ['agent', 'workflow', 'workgroup'] as const) {
+      for (const status of statuses) {
+        const id = await seedTask(db, {
+          status,
+          ...(kind === 'agent'
+            ? { sourceAgentId: sourceId, sourceAgentName: 'source' }
+            : kind === 'workgroup'
+              ? { workgroupId: sourceId }
+              : { workflowId: sourceId }),
+        })
+        if (!new Set<TaskStatus>(TERMINAL_TASK_STATUSES).has(status)) expected[kind].push(id)
+      }
     }
     await seedTask(db, { sourceAgentId: null, workflowId: 'other', workgroupId: null })
     await harness.session.transaction(async (tx) => {
       const port = composeSubjectTaskReferencePort(tx)
       for (const kind of ['agent', 'workflow', 'workgroup'] as const) {
         expect([...(await port.nonTerminalTaskIds({ kind, sourceId }))].sort()).toEqual(
-          [...expected].sort(),
+          [...expected[kind]].sort(),
         )
         expect(await port.nonTerminalTaskIds({ kind, sourceId: 'missing' })).toEqual([])
       }
@@ -175,7 +183,10 @@ describeEachProvider('RFC-395 II-b O2 owner adapters', (harness) => {
   test('subject reads and human-gate lock use the caller transaction and roll back with it', async () => {
     const db = harness.db
     const sourceId = ulid()
-    const taskId = await seedTask(db, { sourceAgentId: sourceId })
+    const taskId = await seedTask(db, {
+      sourceAgentId: sourceId,
+      sourceAgentName: 'source',
+    })
     await expect(
       harness.session.transaction(async (tx) => {
         await composeHumanGateTaskLockPort(tx).lockTask(taskId)
@@ -218,11 +229,10 @@ describeEachProvider('RFC-395 II-b O2 owner adapters', (harness) => {
     await nodeRunFixture(db, { id: runId, taskId, nodeId: 'clarify', status: 'awaiting_human' })
     await seedRound(db, taskId, runId)
     const archive = composeTaskCollaborationReads(db).archive
-    expect(archive.sections).toEqual(['clarify_rounds'])
-    expect(JSON.stringify(await archive.load([taskId]))).toBe(
-      JSON.stringify({ clarify_rounds: await readStoredClarifyRoundRows(db, taskId) }),
-    )
-    expect(await archive.load([])).toEqual({ clarify_rounds: [] })
+    const section = await archive.load(db, [taskId])
+    expect(section.owner).toBe('C')
+    expect(section.rows.clarify_rounds).toEqual(await readStoredClarifyRoundRows(db, taskId))
+    expect((await archive.load(db, [])).rows.clarify_rounds).toEqual([])
   })
 
   test('designer park reads keep the clarify join multiplicity and append manual entries without deduplication', async () => {

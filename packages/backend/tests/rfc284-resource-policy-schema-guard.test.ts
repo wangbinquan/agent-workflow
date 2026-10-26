@@ -1,3 +1,4 @@
+import { tablesOf } from '@/platform/persistence/sessionTables'
 // RFC-284 T3（2026-08-12 系统归一审计 N1 / 决策 D2）——resourcePolicy 表与
 // drizzle schema 的一致性守卫。
 //
@@ -11,11 +12,10 @@
 //   2. agents/skills 表确实没有 enabled 列——哪天有人真加了列，这条断言红，
 //      提醒把「加列、加消费语义、加政策条目」放进同一个 RFC 一起评审。
 
-import { tablesOf } from '@/platform/persistence/sessionTables'
 import { schemaFixtureDb } from './helpers/schemaFixture'
 import { describe, expect, test } from 'bun:test'
-import { getTableColumns } from 'drizzle-orm'
-import type { Table } from 'drizzle-orm'
+import { getTableColumns, type Table } from 'drizzle-orm'
+
 import {
   DISABLED_RESOURCE_POLICY,
   type DisableableResourceKind,

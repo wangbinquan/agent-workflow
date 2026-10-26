@@ -1,3 +1,4 @@
+import type { projectNodeRunReadFacts } from '@/modules/task-execution/infrastructure/nodeRunSnapshot'
 // RFC-076 PR-B — deriveFrontier 'exhausted' (loop-max terminal) bucketing locks.
 //
 // Locks the regression guarded by the comment at scheduler.ts:1083-1089: an
@@ -17,12 +18,11 @@
 // def()/row() are replicated minimally from derive-frontier.test.ts (those are
 // file-local there) — this file does NOT edit the shared test.
 
-import { type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { describe, expect, test } from 'bun:test'
 import type { NodeKind, WorkflowDefinition } from '@agent-workflow/shared'
-import { deriveFrontier } from '../src/modules/task-execution/composition/dagFrontier'
+import { deriveFrontier } from './helpers/frontierSelection'
 
-type Row = PersistenceTables['nodeRuns']['$inferSelect']
+type Row = ReturnType<typeof projectNodeRunReadFacts>
 type WorkflowNode = WorkflowDefinition['nodes'][number]
 const NONE: ReadonlySet<string> = new Set()
 

@@ -1,3 +1,4 @@
+import { tablesOf } from '@/platform/persistence/sessionTables'
 // RFC-359 W1-T3（F-H2-2）—— 数字员工 action 执行器（agent / script）的**一份**实现，两个引擎共用。
 //
 // 此前 `composeAgentActionExecution` / `composeScriptActionExecution` 只有 SQLite 形态（`startTask` +
@@ -9,23 +10,22 @@
 // 「怎么启动一个借用工作区的宿主任务」与「怎么取消它」——由 `ActionExecutionEnvironment` 注入。
 
 import { createWorkflowExecutionQueries } from '@/modules/resource-catalog/public/queries'
-import { tablesOf } from '@/platform/persistence/sessionTables'
 import { eq } from 'drizzle-orm'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { ulid } from 'ulid'
 
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
+import { watchTaskTerminal } from '@/services/execution/executionWatch'
+import { getExecutionOutcome } from '@/services/execution/outcome'
+import { normalizeTaskPlatformInputPaths } from '@/services/taskPlatformInputPaths'
+import { sha256Hex } from '@/util/hash'
 import {
   isTerminalTaskStatus,
   ScriptNodeSchema,
   type TaskStatus,
   type WorkflowDefinition,
 } from '@agent-workflow/shared'
-import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { getExecutionOutcome } from '@/services/execution/outcome'
-import { watchTaskTerminal } from '@/services/execution/executionWatch'
-import { normalizeTaskPlatformInputPaths } from '@/services/taskPlatformInputPaths'
-import { sha256Hex } from '@/util/hash'
 import {
   DIGITAL_EMPLOYEE_PROMPT_KEY,
   DIGITAL_EMPLOYEE_RESULT_PORT,

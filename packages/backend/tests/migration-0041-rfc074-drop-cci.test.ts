@@ -14,10 +14,10 @@
 //   INSERT..SELECT (e.g. started_at/finished_at swapped) or a dropped column
 //   goes RED here instead of corrupting production data.
 
+import { migrateFrozenSqlite as migrate, FROZEN_MIGRATIONS } from './migration-freeze'
 import { describe, expect, test } from 'bun:test'
 import { Database } from 'bun:sqlite'
 import { drizzle } from 'drizzle-orm/bun-sqlite'
-import { migrate } from 'drizzle-orm/bun-sqlite/migrator'
 import {
   copyFileSync,
   existsSync,
@@ -31,7 +31,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { removeTempDirSync } from './fixtures/tempDir'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+const MIGRATIONS = resolve(FROZEN_MIGRATIONS)
 
 interface JournalEntry {
   idx: number

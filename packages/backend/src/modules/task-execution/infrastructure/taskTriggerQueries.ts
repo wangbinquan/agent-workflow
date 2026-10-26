@@ -1,17 +1,18 @@
-import type { TaskTriggerQueries } from '../application/ports/taskTriggerQueries'
-import { eq, inArray } from 'drizzle-orm'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { tablesOf } from '@/platform/persistence/sessionTables'
+import { eq, inArray } from 'drizzle-orm'
+import type { TaskTriggerQueries } from '../application/ports/taskTriggerQueries'
+import { taskReadColumns } from './taskRepositorySql'
 
 /** Webhook 消费的启动归属、状态与工作区投影。 */
 export function createTaskTriggerQueries(db: PersistenceDb): TaskTriggerQueries {
-  const { tasks } = tablesOf(db)
+  const { tasks, taskLaunchContexts: launch } = tablesOf(db)
   return {
     async frozenContext(taskId) {
       const { tasks } = tablesOf(db)
       return (
         await db
-          .select({ triggerContextJson: tasks.triggerContextJson })
+          .select({ triggerContextJson: taskReadColumns(db).triggerContextJson })
           .from(tasks)
           .where(eq(tasks.id, taskId))
           .limit(1)
@@ -22,8 +23,8 @@ export function createTaskTriggerQueries(db: PersistenceDb): TaskTriggerQueries 
         (
           await db
             .select({
-              webhookTriggerId: tasks.webhookTriggerId,
-              eventSubscriptionId: tasks.eventSubscriptionId,
+              webhookTriggerId: taskReadColumns(db).webhookTriggerId,
+              eventSubscriptionId: taskReadColumns(db).eventSubscriptionId,
             })
             .from(tasks)
             .where(eq(tasks.id, taskId))
@@ -39,8 +40,20 @@ export function createTaskTriggerQueries(db: PersistenceDb): TaskTriggerQueries 
             .from(tasks)
             .where(
               input.eventDeliveryId === undefined
-                ? eq(tasks.webhookFireId, input.fireId)
-                : eq(tasks.eventDeliveryId, input.eventDeliveryId),
+                ? inArray(
+                    tasks.id,
+                    db
+                      .select({ taskId: launch.taskId })
+                      .from(launch)
+                      .where(eq(launch.webhookFireId, input.fireId)),
+                  )
+                : inArray(
+                    tasks.id,
+                    db
+                      .select({ taskId: launch.taskId })
+                      .from(launch)
+                      .where(eq(launch.eventDeliveryId, input.eventDeliveryId)),
+                  ),
             )
             .limit(1)
         )[0]?.id ?? null
@@ -64,7 +77,7 @@ export function createTaskTriggerQueries(db: PersistenceDb): TaskTriggerQueries 
           id: tasks.id,
           ownerUserId: tasks.ownerUserId,
           status: tasks.status,
-          spaceKind: tasks.spaceKind,
+          spaceKind: taskReadColumns(db).spaceKind,
           workspacePruningAt: tasks.workspacePruningAt,
           workspacePrunedAt: tasks.workspacePrunedAt,
         })

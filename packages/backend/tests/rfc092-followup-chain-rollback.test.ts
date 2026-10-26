@@ -47,14 +47,13 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { monotonicFactory } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { runTaskWithRealTestTopology as runTask } from './helpers/taskExecutionTestTopology'
 import { runGit } from '../src/util/git'
 
 const ulid = monotonicFactory()
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 // Self-contained mini-mock opencode (written into the per-test temp dir).
 // Counter-keyed behavior — see the chain construction in the file header.
@@ -150,7 +149,7 @@ async function buildHarness(): Promise<Harness> {
   await runGit(worktree, ['commit', '-q', '-m', 'init'])
   const miniMockPath = join(appHome, 's2b-mini-opencode.ts')
   writeFileSync(miniMockPath, MINI_MOCK_SOURCE)
-  const db = createInMemoryDb(MIGRATIONS)
+  const db = createInMemoryDb()
   return {
     db,
     appHome,

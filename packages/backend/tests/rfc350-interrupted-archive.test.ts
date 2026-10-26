@@ -1,8 +1,8 @@
-import { o2Ports } from './helpers/o2Closure'
-import { taskFixture, taskRepoFixture, workflowFixture } from './helpers/model'
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
 import { createDrizzleTaskArchiveMaintenanceCommand } from '@/modules/task-execution/composition/taskArchiveMaintenance'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { taskFixture, taskRepoFixture, workflowFixture } from './helpers/model'
+import { o2Ports } from './helpers/o2Closure'
 // RFC-350 —— `interrupted` 任务树必须能被归档出库（回归防护）。
 //
 // 为什么这条测试存在：`shared/lifecycle.ts` 的 `TERMINAL_TASK_STATUSES` 含

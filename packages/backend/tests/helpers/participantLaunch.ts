@@ -1,3 +1,4 @@
+import { epoch2RuntimeTestPorts } from './epoch2RuntimePorts'
 import { o2Ports } from './o2Closure'
 import { withSourceControlTaskPorts } from './sourceControlTaskPorts'
 // RFC-395 II-pre：生产启动 / 延续依赖及工作区租约改接线，保留既有断言。
@@ -88,6 +89,7 @@ export function createTestTaskExecutionLaunchParticipant(
     authorization: resourceCatalog.authorization,
   }).launch
   const persistence = createTaskExecutionPersistence(input.db, {
+    historyRestrictions: epoch2RuntimeTestPorts(input.db).historyRestrictions,
     recoveryHumanGates: o2Ports(input.db).collaborationReads.recovery,
   })
   const completionMode = input.completionMode ?? 'await-settle'

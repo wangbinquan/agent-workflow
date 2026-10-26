@@ -16,8 +16,8 @@ import { assertClarifyFollowupIdle } from '../clarifyFollowupActivity'
 // call it:
 //
 //   1. seals the passed answers server-side (sealAnswersServerSide — option-label
-//      forgery defense, unknown-question drop) and MERGES them into the round's
-//      `answers_json` (per-question merge-write; answers stay the content SoT);
+//      forgery defense, unknown-question drop) and writes the changed
+//      `clarify_answers` rows; answers stay the content SoT;
 //   2. merges any per-question scope choice into the round's `question_scopes_json`
 //      (scope is chosen when a cross question is answered — RFC-128 §4 / P2-3);
 //   3. reconciles the round's task_questions entries (questioner/self always; a designer
@@ -45,7 +45,6 @@ import { and, eq, inArray, isNull } from 'drizzle-orm'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { sealAnswersServerSide } from '@/services/clarify/service'
-import { getTaskQuestionWriteSem } from '@/services/taskWriteLocks'
 import { reconcileRoundEntriesTx } from '@/services/taskQuestions'
 import { wgClarifyAskerKeyForRound } from '@/services/workgroup/askerKey'
 import { setNodeClarifyDirectiveTx } from '@/services/taskClarifyDirective'
@@ -54,8 +53,8 @@ import {
   sealedClarifyQuestionIds,
   sealClarifyAnswers,
 } from '../../domain/clarifyAnswers'
-import { decodeLegacyClarifyAnswerColumns } from '../clarifyAnswerCodec'
-import { createClarifyAnswerWritePort } from '../clarifyAnswerWrite'
+import { readClarifyAnswerProjection } from '../clarifyAnswerQueries'
+import { createClarifyAnswerWritePort, lockClarifyRound } from '../clarifyAnswerWrite'
 import type { ClarifySealDecisionParticipantInTx } from '../../application/ports/clarifySealDecisionParticipant'
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
 import {
@@ -160,36 +159,29 @@ function parseQuestions(json: string): ClarifyQuestion[] {
  *  rerun mint). The whole sequence runs in ONE transaction (P2-1): the round + entries are
  *  re-read inside the transaction (no TOCTOU) and all writes commit atomically. RFC-359: the
  *  transaction is a `DatabaseSession` transaction — one body, both engines; PostgreSQL
- *  serializes same-task seals / dispatches on the task aggregate-root row lock. Rejects
+ *  serializes seals on the clarify round while drafts hold it against transitions. Rejects
  *  cleanly when a guard throws. See the file header for the full contract. */
 export async function sealRoundQuestions(
   args: SealRoundQuestionsArgs,
 ): Promise<SealRoundQuestionsResult> {
   const ts = (args.now ?? Date.now)()
   const { clarifyRounds } = tablesOf(args.db)
-  // RFC-128 §5.2.14 final-gate finding 2: sealRoundQuestions writes the round's answers/task_questions
-  // and so MUST serialize on the SAME per-task QUESTION-WRITE lock B as the quick submit paths — else
-  // a control-channel seal can commit a locked answer in the window where a concurrent quick submit
-  // already read lockedIds (empty) and is about to write a stale whole-round answersJson over it
-  // (data loss, breaks P2-2). The taskId is read first (for the lock); the tx re-reads the round
-  // (TOCTOU-free). Lock order: sealRoundQuestions is HTTP-route-only (never under the scheduler's A),
-  // takes B alone → no A→B/B→A cycle. The directive participant writes in the same short tx.
-  const taskIdRow = (
-    await args.db
-      .select({ taskId: clarifyRounds.taskId })
-      .from(clarifyRounds)
-      .where(eq(clarifyRounds.intermediaryNodeRunId, args.originNodeRunId))
-      .limit(1)
-  )[0]
+  const [roundIdentity] = await args.db
+    .select({ id: clarifyRounds.id, taskId: clarifyRounds.taskId })
+    .from(clarifyRounds)
+    .where(eq(clarifyRounds.intermediaryNodeRunId, args.originNodeRunId))
+    .limit(1)
   const runSealTx = async () => {
     const committed = await databaseSessionFor(args.db).transaction(async (tx) => {
       const taskHumanGate = createHumanGatePersistenceParticipantInTx(tx)
-      // RFC-359：PostgreSQL READ COMMITTED 下同任务的并发 seal / dispatch 靠任务聚合根行锁串行
-      // （SQLite 的 BEGIN IMMEDIATE 本就全库独占，no-op）。round 缺失时不加锁，让下面抛 NotFound。
-      if (taskIdRow !== undefined) {
-        await taskHumanGate.lockTask(taskIdRow.taskId)
-      }
-      const { clarifyRounds, taskQuestions } = tablesOf(tx)
+      // Quick decisions have no execution-owner context. L-1 therefore starts
+      // at the task root, before the round and any node-run writes. The control
+      // channel keeps only the round lock for independent question editing.
+      if (args.decisionParticipant && roundIdentity)
+        await taskHumanGate.lockTask(roundIdentity.taskId)
+      if (roundIdentity) await lockClarifyRound(tx, roundIdentity.id)
+      const { taskQuestions } = tablesOf(tx)
+      const { clarifyRounds } = tablesOf(tx)
       // Re-read the round INSIDE the tx so a concurrent seal's committed answers/status are
       // observed (TOCTOU-free).
       const round = (
@@ -309,7 +301,7 @@ export async function sealRoundQuestions(
       const resealSet = classification.resealed
       const freshSet = classification.fresh
       const transition = sealClarifyAnswers({
-        state: decodeLegacyClarifyAnswerColumns(round).state,
+        state: (await readClarifyAnswerProjection(tx, round)).state,
         questions,
         status: round.status,
         alreadySealed,
@@ -505,12 +497,7 @@ export async function sealRoundQuestions(
     await args.afterCommit?.()
     return committed
   }
-  // Run the seal tx UNDER the per-task question-write lock B (finding 2). If the round is missing the
-  // taskId lookup is empty — run unlocked so the tx throws the canonical NotFoundError.
-  const txResult =
-    taskIdRow !== undefined
-      ? await getTaskQuestionWriteSem(taskIdRow.taskId).run(runSealTx)
-      : await runSealTx()
+  const txResult = await runSealTx()
 
   await publishCommittedEventsAfterCommit(txResult.eventRefs)
   return {

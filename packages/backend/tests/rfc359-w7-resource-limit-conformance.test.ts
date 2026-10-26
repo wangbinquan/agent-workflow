@@ -1,3 +1,4 @@
+import { tablesOf } from '@/platform/persistence/sessionTables'
 // RFC-359 W7 —— 资源上限持久化端口的双引擎对拍。
 //
 // 为什么存在：合一之前 `sqliteResourceLimitPersistence.ts` / `postgresqlResourceLimitPersistence.ts`
@@ -14,18 +15,17 @@
 //     两个引擎必须同样「不翻状态、不误伤 running 行」。
 //   · `recordLimitCancellation` 的降级：审计写失败只告警，**不能**把取消动作本身拖红。
 
-import { nodeRunFixture, taskFixture } from './helpers/model'
-import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeEach, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
+import { nodeRunFixture, taskFixture } from './helpers/model'
 
-import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { createTaskResourceLimitFacts } from '@/modules/task-execution/composition'
 import { createResourceLimitAudit } from '@/modules/system-operations/composition'
-import { readStoredNodeRunRows } from './helpers/model/storedRows'
+import { createTaskResourceLimitFacts } from '@/modules/task-execution/composition'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { __resetRecoveryCountersForTest, recoveryCountersSnapshot } from '@/services/recovery'
 import { describeEachProvider } from './helpers/eachProvider'
+import { readStoredNodeRunRows } from './helpers/model/storedRows'
 
 type TaskStatus = 'pending' | 'running' | 'done' | 'canceled'
 
@@ -167,10 +167,17 @@ describeEachProvider('RFC-359 W7 —— 资源上限持久化端口在两个引�
     expect(await persistence.callHumanWaits(taskId)).toEqual([
       { childTaskId: childId, accumulatedMs: 1000, openSince: null },
     ])
+    const callRun = (await readStoredNodeRunRows(harness.db)).find(
+      (row) => row.taskId === taskId && row.childTaskId === childId,
+    )!
+    const { nodeRunRuntimeStates } = tablesOf(harness.db)
     expect(
-      (await readStoredNodeRunRows(harness.db)).find(
-        (row) => row.taskId === taskId && row.childTaskId === childId,
-      )?.wrapperProgressJson,
+      (
+        await harness.db
+          .select({ value: nodeRunRuntimeStates.wrapperProgressJson })
+          .from(nodeRunRuntimeStates)
+          .where(eq(nodeRunRuntimeStates.nodeRunId, callRun.id))
+      )[0]?.value,
     ).toBe('{"callHumanWaitMs":1000}')
     // wrapper_progress_json 允许为空：调用方自己兜 NULL，不是这里过滤。
     const bare = await seedTask(harness.db)

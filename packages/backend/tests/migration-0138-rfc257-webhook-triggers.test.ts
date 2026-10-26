@@ -4,16 +4,16 @@
 //   占位挡重复分发——设计门 F-4）；②event_uuid NULL 不参与去重（F-18 降级
 //   模式：重放行与无 UUID 投递逐条处理）；③fires/streams 对 trigger 的
 //   ON DELETE CASCADE（运行时 foreign_keys=ON，db/client.ts:121）。
+import { migrateFrozenSqlite as migrate, FROZEN_MIGRATIONS } from './migration-freeze'
 import { afterEach, describe, expect, test } from 'bun:test'
 import { Database } from 'bun:sqlite'
 import { drizzle } from 'drizzle-orm/bun-sqlite'
-import { migrate } from 'drizzle-orm/bun-sqlite/migrator'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { removeTempDirSync } from './fixtures/tempDir'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+const MIGRATIONS = resolve(FROZEN_MIGRATIONS)
 const tempDirs: string[] = []
 
 afterEach(() => {

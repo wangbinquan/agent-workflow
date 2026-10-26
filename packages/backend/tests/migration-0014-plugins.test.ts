@@ -9,25 +9,29 @@
 // If this test fails, RFC-031's "DB stores agent plugin names" + "plugins table
 // exists" assumptions (proposal §5, design §2) are broken.
 
+import {
+  frozenTablesOf,
+  createFrozenEpoch1Db,
+  type FrozenDbClient,
+  FROZEN_MIGRATIONS,
+} from './migration-freeze'
 import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
 import { queryRows, rawExec } from '@/platform/persistence/queryHelpers'
 import { describe, expect, test, beforeEach } from 'bun:test'
 import { resolve } from 'node:path'
 import { sql } from 'drizzle-orm'
 import { ulid } from 'ulid'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+const MIGRATIONS = resolve(FROZEN_MIGRATIONS)
 
 describe('migration 0014 (RFC-031 plugins + agents.plugins)', () => {
-  let db: DbClient
+  let db: FrozenDbClient
   beforeEach(() => {
-    db = createInMemoryDb(MIGRATIONS)
+    db = createFrozenEpoch1Db(MIGRATIONS)
   })
 
   test('plugins table exists with unique name + sensible defaults', () => {
     const id = ulid()
-    const { plugins } = tablesOf(db)
+    const { plugins } = frozenTablesOf(db)
     insertOne(db, plugins, {
       id,
       name: 'dd-trace',
@@ -55,7 +59,7 @@ describe('migration 0014 (RFC-031 plugins + agents.plugins)', () => {
   })
 
   test('plugins.name UNIQUE constraint rejects duplicates', () => {
-    const { plugins } = tablesOf(db)
+    const { plugins } = frozenTablesOf(db)
     insertOne(db, plugins, {
       id: ulid(),
       name: 'shared',
@@ -78,7 +82,7 @@ describe('migration 0014 (RFC-031 plugins + agents.plugins)', () => {
 
   test('plugins.sourceKind accepts npm / file / git only', () => {
     for (const sk of ['npm', 'file', 'git'] as const) {
-      const { plugins } = tablesOf(db)
+      const { plugins } = frozenTablesOf(db)
       insertOne(db, plugins, {
         id: ulid(),
         name: `p-${sk}`,
@@ -88,12 +92,12 @@ describe('migration 0014 (RFC-031 plugins + agents.plugins)', () => {
         installedAt: Date.now(),
       })
     }
-    const { plugins } = tablesOf(db)
+    const { plugins } = frozenTablesOf(db)
     expect(queryRows(db.select().from(plugins))).toHaveLength(3)
   })
 
   test('plugins.resolvedVersion may be NULL', () => {
-    const { plugins } = tablesOf(db)
+    const { plugins } = frozenTablesOf(db)
     insertOne(db, plugins, {
       id: ulid(),
       name: 'partial',
@@ -112,7 +116,7 @@ describe('migration 0014 (RFC-031 plugins + agents.plugins)', () => {
     // column default kicks in for migrations on top of pre-RFC-031 data.
     rawExec(db, sql`INSERT INTO agents (id, name) VALUES ('a1', 'legacy')`)
 
-    const { agents } = tablesOf(db)
+    const { agents } = frozenTablesOf(db)
     const rows = queryRows(db.select().from(agents))
     expect(rows).toHaveLength(1)
     expect(rows[0]!.plugins).toBe('[]')
@@ -120,7 +124,7 @@ describe('migration 0014 (RFC-031 plugins + agents.plugins)', () => {
   })
 
   test('agents.plugins stores JSON string[]', () => {
-    const { agents } = tablesOf(db)
+    const { agents } = frozenTablesOf(db)
     insertOne(db, agents, {
       id: ulid(),
       name: 'auditor',

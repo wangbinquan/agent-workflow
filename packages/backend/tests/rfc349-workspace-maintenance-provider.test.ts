@@ -1,3 +1,5 @@
+// RFC-395 BF-D27: AF-D1 fences the claim mutation once and preserves its CAS result.
+import { createEpoch2PostgresqlMetadata } from './helpers/epoch2PostgresqlMetadata'
 import { withWorkspaceMaintenancePorts } from './helpers/sourceControlTaskPorts'
 import { composeSourceControlTaskPorts } from '@/modules/task-execution/composition'
 import { readTaskFixtures, taskFixture, workflowFixture } from './helpers/model'
@@ -75,10 +77,13 @@ describe('RFC-349 Source Control workspace maintenance provider', () => {
 
   test('PostgreSQL store uses the provider client and fenced native writes', async () => {
     const statements: string[] = []
+    const epoch2Metadata = createEpoch2PostgresqlMetadata()
     const execute = (query: string): SqlRows => {
       statements.push(query)
+      const metadata = epoch2Metadata(query)
+      if (metadata) return metadata
       if (/^(BEGIN|COMMIT|ROLLBACK)$/i.test(query.trim())) return rows()
-      if (query.includes('database_generations')) {
+      if (query.includes('generations')) {
         return rows([{ generation_id: 'dbg_workspace_maintenance' }])
       }
       if (/^\s*select[\s\S]+from\s+"agent_workflow"\."tasks"/i.test(query)) {
@@ -144,8 +149,9 @@ describe('RFC-349 Source Control workspace maintenance provider', () => {
     expect(statements.map((statement) => statement.trim().toLowerCase())).toEqual([
       expect.stringMatching(/^select/),
       'begin',
-      expect.stringContaining('with marked as (update "agent_workflow_meta"'),
-      expect.stringContaining('select generation_id from "agent_workflow_meta"'),
+      expect.stringMatching(/^select generation_id .*"generations".*for share$/),
+      expect.stringContaining('select first_live_write_at'),
+      expect.stringContaining('update "agent_workflow_meta"."first_write"'),
       expect.stringContaining('update "agent_workflow"."tasks"'),
       'commit',
     ])

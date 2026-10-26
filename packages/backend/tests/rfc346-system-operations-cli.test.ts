@@ -32,7 +32,7 @@ describe('RFC-346 CLI typed cutover', () => {
     const restore = source.split("case 'restore': {")[1]!.split("case '")[0]!
     expect(backup).toContain('const provider = await resolveCommandProvider()')
     expect(backup.replace(/\s+/g, '')).toContain(
-      'composeLocalSystemOperations({repositoryBackupPreparationFactory:composeRepositoryBackupPreparation,contract:buildLogicalSchemaContract(),providerRuntime:provider.runtime,})',
+      'composeLocalSystemOperations({repositoryBackupPreparationFactory:composeRepositoryBackupPreparation,contract:logicalSchemaContract,providerRuntime:provider.runtime,})',
     )
     expect(backup).toContain('backupCommand(Bun.argv.slice(3), operations)')
     expect(restore.replace(/\s+/g, '')).toContain(
@@ -43,9 +43,9 @@ describe('RFC-346 CLI typed cutover', () => {
       expect(command).toContain('await operations.shutdown()')
   })
 
-  test('RFC-295 downgrade audit remains an explicit direct compatibility command', () => {
-    const source = readFileSync(join(CLI_ROOT, 'rfc295-downgrade-audit.ts'), 'utf8')
-    expect(source).not.toContain('modules/system-operations')
-    expect(source).toContain('readonly: true')
+  test('RFC-295 downgrade audit is retired from the command dispatch', () => {
+    expect(readFileSync(join(CLI_ROOT, '../main.ts'), 'utf8')).not.toContain(
+      'rfc295-downgrade-audit',
+    )
   })
 })

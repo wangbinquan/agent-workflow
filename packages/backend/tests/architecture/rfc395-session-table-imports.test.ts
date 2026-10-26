@@ -17,8 +17,8 @@ function wiring(path: string): boolean {
     ) ||
     [
       'bootstrap/persistenceSchema.ts',
+      'bootstrap/persistenceSchema.ts',
       'db/client.ts',
-      'db/schema.ts',
       'db/observation.ts',
       'db/graphDevelopment.ts',
     ].includes(path)

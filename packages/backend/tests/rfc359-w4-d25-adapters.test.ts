@@ -1,3 +1,7 @@
+import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
+import { nodeRunFixtureColumns } from './helpers/model/nodeRun'
+import { taskReadColumns } from '@/modules/task-execution/infrastructure/taskRepositorySql'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { composeHumanGateTaskLockPort } from '@/modules/task-execution/composition'
 // RFC-359 W4-D25 —— human-gate 停靠原子合一：此前 `sqliteHumanGateOpenParticipant.ts` /
 // `postgresqlHumanGateOpenParticipant.ts`（695 / 820 行）与 `sqlite|postgresqlHumanGateTaskLifecyclePersistence.ts`
@@ -12,7 +16,7 @@ import { composeHumanGateTaskLockPort } from '@/modules/task-execution/compositi
 // question 行一次落定，操作行走到 completed。
 
 import { nodeRunFixture, patchTaskFixture, taskFixture, workflowFixture } from './helpers/model'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+
 import { createTaskRuntimeLifecyclePersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
@@ -60,7 +64,11 @@ async function seedRunningTask(db: PersistenceDb): Promise<string> {
 /** 走生产那条准备路（`ClarifyGateOpenPreparation`），拿到一个可停靠的 prepared 门。 */
 async function prepareClarifyGate(db: PersistenceDb, taskId: string) {
   const result = await new ClarifyGateOpenPreparation(
-    new DatabaseHumanGateOperationPersistence(databaseSessionFor(db), composeHumanGateTaskLockPort),
+    new DatabaseHumanGateOperationPersistence(
+      databaseSessionFor(db),
+      composeHumanGateTaskLockPort,
+      { historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions },
+    ),
     new DatabaseClarifyQuestionSnapshotReader(db),
   ).prepare({
     taskId,
@@ -94,6 +102,7 @@ describeEachProvider('RFC-359 W4-D25 —— human-gate 停靠原子', (harness) 
     const parked = await new DatabaseHumanGateTaskLifecyclePersistence(
       db,
       createTaskRuntimeLifecyclePersistence(db),
+      { historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions },
     ).parkPrepared({
       prepared: opening.prepared,
       now: NOW + 2,
@@ -108,15 +117,11 @@ describeEachProvider('RFC-359 W4-D25 —— human-gate 停靠原子', (harness) 
     // 任务生命周期一条 + collaboration 开门一条。
     expect(parked.eventRefs).toHaveLength(2)
 
-    const {
-      tasks,
-      collaborationGateOperations,
-      clarifyRounds,
-      taskQuestions,
-      nodeRuns,
-      committedEvents,
-    } = tablesOf(db)
-    const task = (await db.select().from(tasks).where(eq(tasks.id, taskId)).limit(1))[0]
+    const { collaborationGateOperations, taskQuestions, committedEvents } = tablesOf(db)
+    const { tasks, clarifyRounds, nodeRuns } = tablesOf(db)
+    const task = (
+      await db.select(taskReadColumns(db)).from(tasks).where(eq(tasks.id, taskId)).limit(1)
+    )[0]
     expect(task?.status).toBe('awaiting_human')
     expect(task?.lifecycleEventRevision).toBe(2)
 
@@ -138,7 +143,11 @@ describeEachProvider('RFC-359 W4-D25 —— human-gate 停靠原子', (harness) 
     ).toHaveLength(1)
     // 停靠新铸的 clarify node run 停在 awaiting_human。
     const parkedRun = (
-      await db.select().from(nodeRuns).where(eq(nodeRuns.id, opening.manifest.node.id)).limit(1)
+      await db
+        .select(nodeRunFixtureColumns(db))
+        .from(nodeRuns)
+        .where(eq(nodeRuns.id, opening.manifest.node.id))
+        .limit(1)
     )[0]
     expect(parkedRun?.status).toBe('awaiting_human')
 
@@ -160,7 +169,8 @@ describeEachProvider('RFC-359 W4-D25 —— human-gate 停靠原子', (harness) 
     const db = harness.db as unknown as PersistenceDb
     const taskId = await seedRunningTask(db)
     const opening = await prepareClarifyGate(db, taskId)
-    const { tasks, collaborationGateOperations, clarifyRounds } = tablesOf(db)
+    const { collaborationGateOperations } = tablesOf(db)
+    const { tasks, clarifyRounds } = tablesOf(db)
     // 别人先把任务推进了一格，prepared 门上记的 expectedTaskRevision 随之陈旧。
     await patchTaskFixture(db, { id: taskId }, { lifecycleEventRevision: 7 })
 
@@ -169,6 +179,7 @@ describeEachProvider('RFC-359 W4-D25 —— human-gate 停靠原子', (harness) 
       await new DatabaseHumanGateTaskLifecyclePersistence(
         db,
         createTaskRuntimeLifecyclePersistence(db),
+        { historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions },
       ).parkPrepared({
         prepared: opening.prepared,
         now: NOW + 3,
@@ -178,7 +189,9 @@ describeEachProvider('RFC-359 W4-D25 —— human-gate 停靠原子', (harness) 
     }
     expect(failed).toBe(true)
 
-    const task = (await db.select().from(tasks).where(eq(tasks.id, taskId)).limit(1))[0]
+    const task = (
+      await db.select(taskReadColumns(db)).from(tasks).where(eq(tasks.id, taskId)).limit(1)
+    )[0]
     expect(task?.status).toBe('running')
     const operation = (
       await db
@@ -201,11 +214,14 @@ describeEachProvider('RFC-359 W4-D25 —— human-gate 停靠原子', (harness) 
     const settled = await new DatabaseHumanGateTaskLifecyclePersistence(
       db,
       createTaskRuntimeLifecyclePersistence(db),
+      { historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions },
     ).settleManualQuestionParks({ taskId, now: NOW + 4 })
 
     expect(settled).toEqual({ parked: false, taskRevision: 1, operationIds: [], eventRefs: [] })
     const { tasks } = tablesOf(db)
-    const task = (await db.select().from(tasks).where(eq(tasks.id, taskId)).limit(1))[0]
+    const task = (
+      await db.select(taskReadColumns(db)).from(tasks).where(eq(tasks.id, taskId)).limit(1)
+    )[0]
     expect(task?.status).toBe('running')
     expect(task?.lifecycleEventRevision).toBe(1)
   })
@@ -217,6 +233,7 @@ describeEachProvider('RFC-359 W4-D25 —— human-gate 停靠原子', (harness) 
     const outcome = await new DatabaseHumanGateTaskLifecyclePersistence(
       db,
       createTaskRuntimeLifecyclePersistence(db),
+      { historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions },
     ).trySetWhenNoManualQuestionParks({
       taskId,
       to: 'done',
@@ -227,9 +244,10 @@ describeEachProvider('RFC-359 W4-D25 —— human-gate 停靠原子', (harness) 
 
     expect(outcome).toEqual({ kind: 'settled', won: true })
     const { tasks } = tablesOf(db)
-    expect((await db.select().from(tasks).where(eq(tasks.id, taskId)).limit(1))[0]?.status).toBe(
-      'done',
-    )
+    expect(
+      (await db.select(taskReadColumns(db)).from(tasks).where(eq(tasks.id, taskId)).limit(1))[0]
+        ?.status,
+    ).toBe('done')
   })
 })
 
@@ -242,7 +260,8 @@ test('源码锁：停靠只剩一份实现，legacy 同步停靠路与 provider 
   const lifecycle = read(
     'modules/task-execution/infrastructure/humanGateTaskLifecyclePersistence.ts',
   )
-  expect(lifecycle).toContain('withTaskExecutionSerializable(this.db, async (tx)')
+  expect(lifecycle).toContain('withTaskExecutionAggregateWrite(this.db, async (tx)')
+  expect(lifecycle).toContain('await taskAggregateWrite.lockTaskAggregateRoot(tx, taskId)')
   expect(lifecycle).toContain('transitionHumanGateTask(tx, {')
   // 围栏挪进了同一笔事务：不再有「库外预读 owner，再另开事务写」的窗口。
   expect(lifecycle).toContain('assertTaskOwnerlessTx(tx, taskId)')
@@ -273,7 +292,10 @@ test('源码锁：停靠只剩一份实现，legacy 同步停靠路与 provider 
 
   // 两个 bootstrap 装的是同一份停靠原子。
   expect(read('modules/task-execution/composition/taskExecutionPersistence.ts')).toContain(
-    'new DatabaseHumanGateTaskLifecyclePersistence(db, runtimeLifecycle)',
+    'new DatabaseHumanGateTaskLifecyclePersistence(db, runtimeLifecycle, {',
+  )
+  expect(read('modules/task-execution/composition/taskExecutionPersistence.ts')).toContain(
+    'historyRestrictions: dependencies.historyRestrictions,',
   )
   // legacy 服务的停靠入口也落到同一份，不再有第二条同步路。
   expect(read('modules/task-execution/composition/humanGate.ts')).toMatch(

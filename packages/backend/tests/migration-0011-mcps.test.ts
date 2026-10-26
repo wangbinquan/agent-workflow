@@ -8,25 +8,29 @@
 // If this test fails, RFC-028's "DB stores agent MCP names" + "mcps table
 // exists" assumptions (proposal §5, design §2) are broken.
 
+import {
+  frozenTablesOf,
+  createFrozenEpoch1Db,
+  type FrozenDbClient,
+  FROZEN_MIGRATIONS,
+} from './migration-freeze'
 import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
 import { queryRows, rawExec } from '@/platform/persistence/queryHelpers'
 import { describe, expect, test, beforeEach } from 'bun:test'
 import { resolve } from 'node:path'
 import { sql } from 'drizzle-orm'
 import { ulid } from 'ulid'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+const MIGRATIONS = resolve(FROZEN_MIGRATIONS)
 
 describe('migration 0011 (RFC-028 mcps + agents.mcp)', () => {
-  let db: DbClient
+  let db: FrozenDbClient
   beforeEach(() => {
-    db = createInMemoryDb(MIGRATIONS)
+    db = createFrozenEpoch1Db(MIGRATIONS)
   })
 
   test('mcps table exists with unique name + sensible defaults', () => {
     const id = ulid()
-    const { mcps } = tablesOf(db)
+    const { mcps } = frozenTablesOf(db)
     insertOne(db, mcps, {
       id,
       name: 'postgres-prod',
@@ -49,7 +53,7 @@ describe('migration 0011 (RFC-028 mcps + agents.mcp)', () => {
   })
 
   test('mcps.name UNIQUE constraint rejects duplicates', () => {
-    const { mcps } = tablesOf(db)
+    const { mcps } = frozenTablesOf(db)
     insertOne(db, mcps, { id: ulid(), name: 'shared', type: 'local', config: '{}' })
     expect(() => {
       return insertOne(db, mcps, { id: ulid(), name: 'shared', type: 'remote', config: '{}' })
@@ -57,7 +61,7 @@ describe('migration 0011 (RFC-028 mcps + agents.mcp)', () => {
   })
 
   test('mcps accepts type=remote', () => {
-    const { mcps } = tablesOf(db)
+    const { mcps } = frozenTablesOf(db)
     insertOne(db, mcps, {
       id: ulid(),
       name: 'sentry',
@@ -73,7 +77,7 @@ describe('migration 0011 (RFC-028 mcps + agents.mcp)', () => {
     // default kicks in for migrations on top of pre-RFC-028 data.
     rawExec(db, sql`INSERT INTO agents (id, name) VALUES ('a1', 'legacy')`)
 
-    const { agents } = tablesOf(db)
+    const { agents } = frozenTablesOf(db)
     const rows = queryRows(db.select().from(agents))
     expect(rows).toHaveLength(1)
     expect(rows[0]!.mcp).toBe('[]')
@@ -81,7 +85,7 @@ describe('migration 0011 (RFC-028 mcps + agents.mcp)', () => {
   })
 
   test('agents.mcp stores JSON string[]', () => {
-    const { agents } = tablesOf(db)
+    const { agents } = frozenTablesOf(db)
     insertOne(db, agents, {
       id: ulid(),
       name: 'auditor',

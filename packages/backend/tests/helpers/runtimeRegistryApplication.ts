@@ -21,8 +21,6 @@ export const {
   setRuntimeEnabled,
   deleteRuntime,
   seedBuiltinRuntimes,
-  migrateConfigIntoBuiltins,
-  assertConfigDefaultsMigrated,
   composeRuntimeRegistryOperations,
 } = createRuntimeRegistryApplication(createRuntimeRegistryEffects())
 export * from '@/modules/runtime-management/domain/runtimeProfile'

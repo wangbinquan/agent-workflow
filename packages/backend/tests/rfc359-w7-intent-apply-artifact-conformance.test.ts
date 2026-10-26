@@ -1,3 +1,7 @@
+import { reencodeIntentApplyArtifacts } from '@/modules/intent/infrastructure/migration/applyJournalRule'
+import { createSkillContentLocationQuery } from '@/modules/resource-catalog/composition/intentApply'
+import { legacyContentRef } from '@/platform/content/contentRef'
+import { contentRowColumns } from '@/platform/content/infrastructure/contentStore'
 // RFC-359 —— Intent apply **工件生命周期**：一台机制 + 一层旧词汇兼容面。
 //
 // # 这份文件此前锁的是「不能合」，现在锁的是「合成了什么」
@@ -36,7 +40,7 @@ import {
   decodeIntentJournalArtifacts,
   encodeIntentJournalArtifacts,
   type IntentJournalArtifact,
-} from '@/modules/intent/infrastructure/intentApplyLegacyCodec'
+} from '@/modules/intent/infrastructure/migration/intentApplyLegacyCodec'
 import {
   createIntentApplyArtifactLifecycle,
   decodeIntentApplyRecoveryArtifacts,
@@ -132,10 +136,6 @@ function postgresqlSkillArtifacts(): PostgresqlSkillArtifactCompensation & {
 }
 
 /** 两个 provider 共用的端口形状：`{compensate, rollForward}`。 */
-interface ArtifactLifecyclePort {
-  compensate(artifact: never): Promise<void>
-  rollForward(artifacts: readonly never[], log: Logger): Promise<boolean>
-}
 
 let appHome: string
 let pluginsDir: string
@@ -171,17 +171,15 @@ function pluginInstallArtifact(pluginId: string, dir: string) {
  * （生产装配见 `modules/intent/composition/apply.ts` 的 `composeIntentApplyArtifactLifecycle`；
  * 这里注替身只为数调用，机制本身由 RC 自己的用例覆盖。）
  */
-function lifecycleFor(
-  harness: ProviderHarness,
-  legacy?: LegacyIntentSkillArtifactCompat,
-): ArtifactLifecyclePort {
+function lifecycleFor(harness: ProviderHarness, legacy?: LegacyIntentSkillArtifactCompat) {
   return createIntentApplyArtifactLifecycle({
+    skillContentLocations: createSkillContentLocationQuery(harness.db),
     db: harness.db,
     appHome,
     pluginsDir,
     skillArtifacts: postgresqlSkillArtifacts(),
     ...(legacy === undefined ? {} : { legacySkillArtifacts: legacy }),
-  }) as unknown as ArtifactLifecyclePort
+  })
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -196,13 +194,15 @@ describeEachProvider('RFC-359 W7 Intent apply 工件生命周期 · 共同子集
     expect(recorder.warnings()).toEqual([])
   })
 
-  test('legacy-plugin-install-untracked 的补偿是静默 no-op（老行没有精确的生成代目录）', async () => {
+  test('legacy-plugin-install-untracked 仅允许离线转换；live 补偿拒绝且保留原目录', async () => {
     const lifecycle = lifecycleFor(harness)
     const survivor = generationDir('untracked-plugin')
-    await lifecycle.compensate({
-      kind: 'legacy-plugin-install-untracked',
-      pluginId: 'untracked-plugin',
-    } as never)
+    await expect(
+      lifecycle.compensate({
+        kind: 'legacy-plugin-install-untracked',
+        pluginId: 'untracked-plugin',
+      } as never),
+    ).rejects.toThrow('intent-apply-current-artifact-required')
     expect(existsSync(survivor), '无据可依的老行不该猜着删目录').toBe(true)
   })
 
@@ -272,12 +272,12 @@ describeEachProvider('RFC-359 W7 Intent apply 工件生命周期 · 共同子集
 
 describeEachProvider('RFC-359 Intent apply 工件生命周期 · 旧词汇兼容面', (harness) => {
   beforeEach(async () => {
-    const { skills } = tablesOf(harness.db)
+    const { skills, skillVersions } = tablesOf(harness.db)
     await insertOne(harness.db, skills, {
       id: 'skill-1',
       name: 'skill-one',
       description: '',
-      managedPath: '/tmp/skill-1/files',
+      ...contentRowColumns(legacyContentRef('skill-path', 'local-file', '/tmp/skill-1/files')),
       contentVersion: 2,
       reservationState: 'ready',
       versionState: 'snapshot-authoritative',
@@ -286,6 +286,18 @@ describeEachProvider('RFC-359 Intent apply 工件生命周期 · 旧词汇兼容
       createdAt: 1,
       updatedAt: 1,
     })
+    for (const version of [1, 2])
+      await insertOne(harness.db, skillVersions, {
+        id: `skill-1-version-${version}`,
+        skillId: 'skill-1',
+        versionIndex: version,
+        source: 'initial',
+        contentHash: 'sha256:fixture',
+        ...contentRowColumns(
+          legacyContentRef('skill-path', 'local-file', `/tmp/skill-1/versions/v${version}`),
+        ),
+        createdAt: 1,
+      })
   })
   // 合一之前这一条是「实测分叉①：托管根之外的 generationDir —— PG 拒绝，SQLite 照删」。
   // 取并集的结果是**两个 provider 都拒绝**：那道包含性检查是强侧独有的能力，不是 provider 差异。
@@ -308,9 +320,7 @@ describeEachProvider('RFC-359 Intent apply 工件生命周期 · 旧词汇兼容
     const lifecycle = lifecycleFor(harness, recovery)
     const recorder = recordingLog()
 
-    await expect(
-      lifecycle.rollForward([legacySkillVersionStageArtifact()] as never[], recorder.log),
-    ).resolves.toBe(true)
+    await expect(lifecycle.rollForward(convertedVersion(), recorder.log)).resolves.toBe(true)
     expect(recorder.warnings(), '走得完就不该记 retryable').toEqual([])
     expect(recovery.calls()).toEqual([
       'loadSkillOperationState',
@@ -324,23 +334,27 @@ describeEachProvider('RFC-359 Intent apply 工件生命周期 · 旧词汇兼容
     const lifecycle = lifecycleFor(harness, recovery)
     const recorder = recordingLog()
 
-    await expect(
-      lifecycle.rollForward([legacySkillVersionStageArtifact()] as never[], recorder.log),
-    ).resolves.toBe(false)
+    await expect(lifecycle.rollForward(convertedVersion(), recorder.log)).resolves.toBe(false)
     expect(recorder.warnings()).toEqual(['intent-skill-publish-op-not-replayable'])
     expect(recovery.calls()).toEqual(['loadSkillOperationState'])
   })
 
-  test('旧词汇的 skill-stage —— 前滚把 db-committed 的 operation 行收尾', async () => {
+  test('旧词汇的 skill-stage —— 转换后前滚把 db-committed 的 operation 行收尾', async () => {
+    const { skills } = tablesOf(harness.db)
+    await harness.db.update(skills).set({ contentVersion: 1 })
     const recovery = legacySkillRecovery({ active: 1, phase: 'db-committed' })
     const lifecycle = lifecycleFor(harness, recovery)
     const recorder = recordingLog()
 
     await expect(
       lifecycle.rollForward(
-        [
-          { kind: 'skill-stage', skillId: 'skill-1', opId: 'op-1', skillDir: '/tmp/skill-1' },
-        ] as never[],
+        decodeIntentApplyRecoveryArtifacts(
+          reencodeIntentApplyArtifacts(
+            JSON.stringify([
+              { kind: 'skill-stage', skillId: 'skill-1', opId: 'op-1', skillDir: '/tmp/skill-1' },
+            ]),
+          ),
+        ),
         recorder.log,
       ),
     ).resolves.toBe(true)
@@ -354,9 +368,7 @@ describeEachProvider('RFC-359 Intent apply 工件生命周期 · 旧词汇兼容
     const lifecycle = lifecycleFor(harness)
     const recorder = recordingLog()
 
-    await expect(
-      lifecycle.rollForward([legacySkillVersionStageArtifact()] as never[], recorder.log),
-    ).resolves.toBe(false)
+    await expect(lifecycle.rollForward(convertedVersion(), recorder.log)).resolves.toBe(false)
     expect(recorder.warnings()).toEqual(['intent-apply-artifact-roll-forward-retryable'])
   })
 })
@@ -381,6 +393,19 @@ function legacySkillVersionStageArtifact(): IntentJournalArtifact {
       noop: null,
     },
   }
+}
+
+function convertedVersion() {
+  return decodeIntentApplyRecoveryArtifacts(
+    reencodeIntentApplyArtifacts(
+      encodeIntentJournalArtifacts([
+        legacySkillVersionStageArtifact() as Exclude<
+          IntentJournalArtifact,
+          { kind: 'legacy-plugin-install-untracked' }
+        >,
+      ]),
+    ),
+  )
 }
 
 const POSTGRESQL_SKILL_STAGE = Object.freeze({
@@ -417,11 +442,11 @@ test('工件词汇 ②：现行词汇的 skill-version-stage 被旧解码器判�
   ).toThrow(/legacy skill-version-stage artifact is incomplete/)
 })
 
-test('工件词汇 ③：兼容是单向的 —— 现行解码器认旧信封，反之不成立', () => {
+test('工件词汇 ③：旧信封经 converter 升级后可恢复，旧解码器仍拒绝新形状', () => {
   const sqliteEnvelope = encodeIntentJournalArtifacts([
     { kind: 'plugin-install', pluginId: 'p', generationId: 'g', generationDir: '/tmp/g' },
   ])
-  expect(decodeIntentApplyRecoveryArtifacts(sqliteEnvelope)).toEqual([
+  expect(decodeIntentApplyRecoveryArtifacts(reencodeIntentApplyArtifacts(sqliteEnvelope))).toEqual([
     { kind: 'plugin-install', pluginId: 'p', generationId: 'g', generationDir: '/tmp/g' },
   ])
   // 反向：现行引擎写的是**裸数组**，旧解码器把裸数组当 pre-v1 处理，
@@ -435,6 +460,6 @@ test('工件词汇 ④：**裸数组**里的 skill-version-stage 是 pre-v1 残�
   // （pre-v1 只存了三个字段，不足以发布一个已提交的版本）。带 v1 信封的那条路走得通，
   // 见上面「旧词汇的 skill-version-stage —— 前滚走兼容面」。
   expect(() =>
-    decodeIntentApplyRecoveryArtifacts(JSON.stringify([legacySkillVersionStageArtifact()])),
+    reencodeIntentApplyArtifacts(JSON.stringify([legacySkillVersionStageArtifact()])),
   ).toThrow(/legacy skill-version-stage artifact is incomplete/)
 })

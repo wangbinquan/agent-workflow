@@ -28,17 +28,33 @@ export interface RestoreCommandDeps {
   releaseRestoreArtifact(ref: RestoreArtifactRef): void
 }
 
-const USAGE =
+export const RESTORE_USAGE =
   'usage: agent-workflow restore <tarball> [--yes] [--stage] [--dry-run] ' +
   '[--no-safety-backup] [--no-migrate] [--skip-integrity-check]\n'
+
+export function parseRestoreArguments(argv: readonly string[]) {
+  const flags = new Set<string>()
+  let artifact: string | undefined
+  let contentRoot: string | undefined
+  for (let index = 0; index < argv.length; index++) {
+    const value = argv[index]!
+    if (value === '--content-root') {
+      contentRoot = argv[++index]
+      if (!contentRoot || contentRoot.startsWith('--'))
+        throw new Error('--content-root requires a value')
+    } else if (value.startsWith('--')) flags.add(value)
+    else if (artifact === undefined) artifact = value
+    else throw new Error(`unexpected restore argument: ${value}`)
+  }
+  return { artifact, contentRoot, flags }
+}
 
 export async function restoreCommand(
   argv: string[],
   deps: RestoreCommandDeps,
 ): Promise<RestoreCommandResult> {
-  const flags = new Set(argv.filter((a) => a.startsWith('--')))
-  const tarball = argv.find((a) => !a.startsWith('--'))
-  if (tarball === undefined) return { output: USAGE, status: 'error' }
+  const { flags, artifact: tarball } = parseRestoreArguments(argv)
+  if (tarball === undefined) return { output: RESTORE_USAGE, status: 'error' }
   if (!existsSync(tarball)) {
     return { output: `restore failed: no such file: ${tarball}\n`, status: 'error' }
   }

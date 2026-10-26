@@ -1,5 +1,5 @@
 // RFC-359 W4-D13 —— development-automation 最后三个 provider 对合一后的双引擎锁：数字员工平台工作项持久化
-// （审批 saga / change candidate / case workspace）、交付面的仓库 / MR 事实目录、旧 Mission 排空视图。
+// （审批 saga / change candidate / case workspace）、交付面的仓库 / MR 事实目录、Mission claims / links / approval 状态。
 // 同一段断言在两个引擎上各跑一遍；源码锁钉住「不再有 provider 命名的孪生」。
 
 import { insertOne } from '@/platform/persistence/singleInsert'
@@ -13,7 +13,6 @@ import { createSecretBoxFromKey } from '@/auth/secretBox'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { SelectedPipelineEvidenceExecution } from '@/modules/integration/infrastructure/developmentPipelineAdapter'
 import type { MissionRow } from '@/modules/development-automation/application/ports/missionStore'
-import { createDigitalEmployeeWriterCutoverPersistence } from '@/modules/digital-employee/infrastructure/writerCutoverPersistence'
 import { createDevelopmentDeliveryProvider } from '@/modules/development-automation/infrastructure/developmentDeliveryProvider'
 import { createEmployeePlatformWorkItemPersistence } from '@/modules/development-automation/infrastructure/employeePlatformWorkItemPersistence'
 import { createMissionPersistence } from '@/modules/development-automation/infrastructure/missionStore'
@@ -368,15 +367,12 @@ describeEachProvider('RFC-359 W4-D13 —— 交付目录 / 旧 Mission 排空视
     ).toBeNull()
   })
 
-  test('旧 Mission 排空：只数未终态；报告按 (createdAt, id) 采样、如实标 truncated，计数只算 active claim / 未了结审批', async () => {
-    const drain = createDigitalEmployeeWriterCutoverPersistence(harness.db)
+  test('Mission claims、links 与 approval 的真实写入和状态变化保持独立', async () => {
     const store = createMissionPersistence(harness.db)
     const saga = createPlaybookSagaPersistence(harness.db)
-    const before = (await drain.refresh(Date.now())).legacyOpenMissionCount
     const first = await newMission(harness.db, { createdAt: T0 })
     const second = await newMission(harness.db, { createdAt: T0 + 1 })
     await newMission(harness.db, { createdAt: T0 + 2, status: 'merged', terminalAt: T0 + 3 })
-    expect((await drain.refresh(Date.now())).legacyOpenMissionCount).toBe(before + 2)
 
     await store.claimMr({
       id: `claim-a-${first}`,
@@ -438,6 +434,14 @@ describeEachProvider('RFC-359 W4-D13 —— 交付目录 / 旧 Mission 排空视
       id: `ap-pending-${first}`,
       idempotencyKey: `ap-1-${first}`,
     })
+    expect((await saga.getApprovalSaga(`ap-pending-${first}`))?.latestStatus).toBe('submitting')
+    await saga.recordApprovalSubmitted({
+      id: `ap-pending-${first}`,
+      correlationRef: 'correlation-1',
+      externalRequestRef: 'external-1',
+      submittedRevision: 'r1',
+      now: T0 + 1,
+    })
     await saga.claimApprovalSaga({
       ...approval,
       id: `ap-settled-${first}`,
@@ -452,26 +456,29 @@ describeEachProvider('RFC-359 W4-D13 —— 交付目录 / 旧 Mission 排空视
       now: T0 + 1,
     })
 
-    const full = (await drain.migrationSnapshot(100)).drain
-    expect(full.truncated).toBe(false)
-    const entry = full.entries.find((row) => row.missionId === first)
-    expect(entry).toEqual({
-      missionId: first,
-      status: 'working',
-      activeMrClaimCount: 1,
-      childLinkCount: 1,
-      pendingApprovalCount: 1,
-    })
-    expect(full.entries.find((row) => row.missionId === second)).toMatchObject({
-      activeMrClaimCount: 0,
-      childLinkCount: 0,
-      pendingApprovalCount: 0,
-    })
-    const ids = full.entries.map((row) => row.missionId)
-    expect(ids.indexOf(first)).toBeLessThan(ids.indexOf(second))
-    const truncated = (await drain.migrationSnapshot(1)).drain
-    expect(truncated.truncated).toBe(true)
-    expect(truncated.entries).toHaveLength(1)
+    const {
+      developmentMissions,
+      developmentMrClaims,
+      developmentMissionLinks,
+      developmentApprovalSagas,
+    } = tablesOf(harness.db)
+    const retained = {
+      missions: await harness.db.select().from(developmentMissions),
+      claims: await harness.db.select().from(developmentMrClaims),
+      links: await harness.db.select().from(developmentMissionLinks),
+      approvals: await harness.db.select().from(developmentApprovalSagas),
+    }
+    expect(retained.missions.map((row) => row.id)).toEqual(expect.arrayContaining([first, second]))
+    expect(
+      retained.claims.filter((row) => row.missionId === first && row.state === 'active'),
+    ).toHaveLength(1)
+    expect(retained.links.filter((row) => row.parentMissionId === first)).toHaveLength(1)
+    expect(
+      retained.approvals
+        .filter((row) => row.missionId === first)
+        .map((row) => row.latestStatus)
+        .sort(),
+    ).toEqual(['approved', 'pending'])
   })
 })
 

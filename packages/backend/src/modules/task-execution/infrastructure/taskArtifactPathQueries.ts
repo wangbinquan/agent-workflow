@@ -1,6 +1,7 @@
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { taskReadColumns } from './taskRepositorySql'
 // RFC-359 W4-B1 —— 任务工件路径查询：一份实现，两个 provider 共用（此前 sqlite / postgresql 两份只差客户端类型与同步 / 异步形态）。
 
-import { tablesOf } from '@/platform/persistence/sessionTables'
 import { and, eq, isNotNull } from 'drizzle-orm'
 
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
@@ -12,9 +13,13 @@ export class DrizzleTaskArtifactPathQueries implements TaskArtifactPathQueries {
   constructor(private readonly db: PersistenceDb) {}
 
   async forcedPaths(taskId: string): Promise<readonly string[]> {
-    const { tasks, nodeRunOutputs, nodeRuns } = tablesOf(this.db)
+    const { nodeRunOutputs, nodeRuns } = tablesOf(this.db)
+    const { tasks } = tablesOf(this.db)
     const taskRows = await this.db
-      .select({ spaceKind: tasks.spaceKind, platformInputPathsJson: tasks.platformInputPathsJson })
+      .select({
+        spaceKind: taskReadColumns(this.db).spaceKind,
+        platformInputPathsJson: taskReadColumns(this.db).platformInputPathsJson,
+      })
       .from(tasks)
       .where(eq(tasks.id, taskId))
       .limit(1)

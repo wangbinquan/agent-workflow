@@ -11,17 +11,8 @@ export function createCodeCapabilityDemoSeedPersistence(
   return {
     async ensure(aggregate) {
       await databaseSessionFor(db).transaction(async (tx) => {
-        const { capabilityTemplates, codeWorkItems, codeWorkRounds, codeRoundStages } = tablesOf(tx)
+        const { capabilityTemplates } = tablesOf(tx)
         await tx.insert(capabilityTemplates).values(aggregate.template).onConflictDoNothing()
-        if (aggregate.history === null) return
-        await tx.insert(codeWorkItems).values(aggregate.history.workItem).onConflictDoNothing()
-        await tx.insert(codeWorkRounds).values(aggregate.history.round).onConflictDoNothing()
-        if (aggregate.history.stages.length > 0) {
-          await tx
-            .insert(codeRoundStages)
-            .values([...aggregate.history.stages])
-            .onConflictDoNothing()
-        }
       })
     },
   }

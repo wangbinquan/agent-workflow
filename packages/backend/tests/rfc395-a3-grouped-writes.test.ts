@@ -6,6 +6,7 @@ import {
   workflowFixture,
   taskFixture,
   nodeRunFixture,
+  patchNodeRunFixture,
   readNodeRunFixtures,
   type NodeRunFixtureRow,
 } from './helpers/model'
@@ -27,7 +28,7 @@ const inventory = '{"z": [], "a": [1,2]}'
 const memories = '[ {"id":"memory", "text":"原样"} ]'
 const startup = '{ "ok":true }'
 const failures = '[ {"port":"out", "message":"bad"} ]'
-const consumed = '{ "upstream" : "producer" }'
+const consumed = JSON.stringify({ upstream: 'producer' })
 
 const projections: readonly {
   name: string
@@ -232,6 +233,7 @@ describeEachProvider('RFC-395 II-a A3 grouped writes', (harness) => {
       inputs: '{}',
       startedAt: 1,
     })
+    await nodeRunFixture(harness.db, { id: 'producer', taskId, nodeId: 'upstream', status: 'done' })
     await nodeRunFixture(harness.db, {
       id,
       taskId,
@@ -317,19 +319,20 @@ describeEachProvider('RFC-395 II-a A3 grouped writes', (harness) => {
     }
   })
   test('merge CAS miss does not leak runtime or checkpoint companions', async () => {
-    const s = await seed(),
-      before = await s.read()
+    const s = await seed()
+    await patchNodeRunFixture(harness.db, { id: s.id }, { pid: 42, mergeState: null })
+    const before = await s.read()
     const name = 'rfc395_a3_ignore_merge'
     if (harness.capabilities.provider === 'sqlite') {
       await harness.executeFixtureDdl(
-        `CREATE TRIGGER ${name} BEFORE UPDATE OF merge_state ON node_runs BEGIN SELECT RAISE(IGNORE); END`,
+        `CREATE TRIGGER ${name} BEFORE UPDATE OF merge_state ON node_run_runtime_states BEGIN SELECT RAISE(IGNORE); END`,
       )
     } else {
       await harness.executeFixtureDdl(
         `CREATE FUNCTION ${name}() RETURNS trigger AS $$ BEGIN RETURN NULL; END; $$ LANGUAGE plpgsql`,
       )
       await harness.executeFixtureDdl(
-        `CREATE TRIGGER ${name} BEFORE UPDATE OF merge_state ON node_runs FOR EACH ROW EXECUTE FUNCTION ${name}()`,
+        `CREATE TRIGGER ${name} BEFORE UPDATE OF merge_state ON node_run_runtime_states FOR EACH ROW EXECUTE FUNCTION ${name}()`,
       )
     }
     try {
@@ -345,7 +348,7 @@ describeEachProvider('RFC-395 II-a A3 grouped writes', (harness) => {
       ).rejects.toMatchObject({ code: 'concurrent-merge-state-transition' })
       expect(await s.read()).toEqual(before)
     } finally {
-      await dropAbortTrigger(harness, { name, table: 'node_runs', error: 'unused' })
+      await dropAbortTrigger(harness, { name, table: 'node_run_runtime_states', error: 'unused' })
     }
   })
   test('caller-owned transaction rollback undoes identity and result writes together', async () => {
@@ -376,9 +379,8 @@ describeEachProvider('RFC-395 II-a A3 grouped writes', (harness) => {
     const settled = await s.read()
     const trigger = {
       name: 'rfc395_a3_followup_abort',
-      table: 'node_runs',
-      event: 'update' as const,
-      columns: ['runtime_inventory_json'],
+      table: 'node_run_configs',
+      event: 'insert' as const,
       error: 'followup-abort',
     }
     await installAbortTrigger(harness, trigger)
@@ -418,10 +420,17 @@ describeEachProvider('RFC-395 II-a A3 grouped writes', (harness) => {
     })
     expect(await readStoredCheckpointFixture(harness.db, s.id)).toMatchObject({
       mergeState: 'isolating',
-      isoBaseSnapshot: 'base',
-      isoBaseSnapshotReposJson: null,
-      isoSubmodulesJson: JSON.stringify(topology),
-      isoSubmodulesReposJson: null,
+      checkpoints: [
+        {
+          nodeRunId: s.id,
+          taskId: s.taskId,
+          repoKey: `${s.taskId}:mount:`,
+          isolationBase: 'base',
+          submodules: JSON.stringify(topology),
+          preSnapshot: null,
+          nodeTree: null,
+        },
+      ],
     })
     const before = await s.read()
     await nodeRunFixture(harness.db, {

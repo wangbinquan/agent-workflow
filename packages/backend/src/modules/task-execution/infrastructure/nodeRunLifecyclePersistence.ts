@@ -1,14 +1,17 @@
+import { resolveTaskExecutionGenerationInTx } from './taskExecutionGeneration'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 // RFC-359 W4-B1 批 2g —— node run 生命周期（mint / transition / set + 事务内参与者）：一份实现，两个 provider 共用。
 // 此前 SQLite 侧薄壳套 `modules/task-execution/infrastructure/taskLifecycle.ts` 的同步内核；现在端口两侧都走统一写事务 + owner 围栏。
 
-import { createRunSelectionParticipantInTx } from './runSelection/oracle/participant'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import { engineOf } from '@/platform/persistence/databaseTransaction'
+import { databaseContentColumnsInTx } from '@/platform/content/infrastructure/contentStore'
 import {
   allowedFromStatusesForEvent,
   nextNodeRunStatus,
   type NodeRunStatus,
 } from '@agent-workflow/shared'
-import { and, eq } from 'drizzle-orm'
+import { eq } from 'drizzle-orm'
+import { createRunSelectionParticipantInTx } from './runSelection/table/selectionWrite'
 
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { ConflictError, NotFoundError } from '@/util/errors'
@@ -17,15 +20,16 @@ import type {
   NodeRunLifecyclePersistence,
   NodeRunMintInput,
 } from '../application/ports/nodeRunLifecyclePersistence'
+import { setNodeRunStatusTx } from './nodeRunLifecycleTransition'
+import { createNodeRunMintParticipantInTx } from './nodeRunMintParticipant'
+import { compareAndWriteNodeRunInTx, nodeRunTableWrite } from './nodeRunWriteProtocol'
 import {
   fenceTaskWrite,
   type TaskExecutionTransaction,
+  withTaskExecutionAggregateWrite,
   withTaskExecutionWrite,
 } from './ownedTaskExecution'
 import { appendTaskNodeStatusesCommittedEvent } from './taskLifecycleCommittedEvents'
-import { createNodeRunMintParticipantInTx } from './nodeRunMintParticipant'
-import { nodeRunLifecycleWriteColumns } from './nodeRunWriteProtocol'
-import { setNodeRunStatusTx } from './nodeRunLifecycleTransition'
 
 const SOURCE_TERMINATION_BLOCKED_NODE_STATUSES = new Set(
   allowedFromStatusesForEvent({ kind: 'mark-canceled' }),
@@ -39,6 +43,8 @@ async function fence(
 ): Promise<void> {
   // 围栏规则两引擎同一（ownedTaskExecution）：显式上下文 > 环境上下文 > 无主围栏。
   await fenceTaskWrite(tx, { taskId, context: explicitContext, now })
+  const { tasks } = tablesOf(tx)
+  await engineOf(tx).lockAggregateRoot(tx, tasks, tasks.id, taskId)
 }
 
 async function rowForUpdate(
@@ -154,22 +160,28 @@ export class DrizzleNodeRunLifecyclePersistence implements NodeRunLifecyclePersi
 
   async mint(input: NodeRunMintInput): Promise<string> {
     const { executionContext, outputs, ...request } = input
-    return await withTaskExecutionWrite(this.db, async (tx) => {
+    return await withTaskExecutionAggregateWrite(this.db, async (tx) => {
       await fence(tx, input.taskId, executionContext, Date.now())
       const nodeRunId = await createNodeRunMintParticipantInTx(tx).mint(request)
       // 初始输出与行同一事务：见端口注释（io-virtual 行不得在没有输出的状态下被看见）。
       if (outputs !== undefined && outputs.length > 0) {
         const { nodeRunOutputs } = tablesOf(tx)
-        await tx.insert(nodeRunOutputs).values(
-          outputs.map((output) => ({
+        for (const output of outputs) {
+          await tx.insert(nodeRunOutputs).values({
             nodeRunId,
             portName: output.portName,
-            content: output.content,
+            ...(await databaseContentColumnsInTx(
+              tx,
+              'node-run-output',
+              JSON.stringify([nodeRunId, output.portName]),
+              new TextEncoder().encode(output.content),
+              input.taskId,
+            )),
             kind: output.kind ?? null,
             archiveJson: output.archiveJson ?? null,
             active: output.active ?? true,
-          })),
-        )
+          })
+        }
       }
       return nodeRunId
     })
@@ -181,6 +193,8 @@ export class DrizzleNodeRunLifecyclePersistence implements NodeRunLifecyclePersi
     return await withTaskExecutionWrite(this.db, async (tx) => {
       const row = await rowForUpdate(tx, input.nodeRunId)
       await fence(tx, row.taskId, input.executionContext, Date.now())
+      if (input.executionGeneration)
+        await resolveTaskExecutionGenerationInTx(tx, row.taskId, input.executionGeneration)
       const to = nextNodeRunStatus(row.status, input.event)
       assertSourceTerminationAdmission({
         taskId: row.taskId,
@@ -188,17 +202,13 @@ export class DrizzleNodeRunLifecyclePersistence implements NodeRunLifecyclePersi
         to,
       })
       const { nodeRuns } = tablesOf(tx)
-      const updated = await tx
-        .update(nodeRuns)
-        .set({ status: to, ...nodeRunLifecycleWriteColumns(input.extra) })
-        .where(and(eq(nodeRuns.id, input.nodeRunId), eq(nodeRuns.status, row.status)))
-        .returning({ id: nodeRuns.id })
-      if (updated[0] === undefined) {
-        throw new ConflictError(
-          'concurrent-node-run-transition',
-          `node_run ${input.nodeRunId} status changed concurrently`,
-        )
-      }
+      await compareAndWriteNodeRunInTx(
+        tx,
+        input.nodeRunId,
+        eq(nodeRuns.status, row.status),
+        { ...input.extra?.identity, status: to },
+        nodeRunTableWrite(input.extra ?? {}),
+      )
       if (input.selection !== undefined)
         await createRunSelectionParticipantInTx().apply(tx, [input.selection])
       return { from: row.status, to }
@@ -211,6 +221,8 @@ export class DrizzleNodeRunLifecyclePersistence implements NodeRunLifecyclePersi
     return await withTaskExecutionWrite(this.db, async (tx) => {
       const row = await rowForUpdate(tx, input.nodeRunId)
       await fence(tx, row.taskId, input.executionContext, Date.now())
+      if (input.executionGeneration)
+        await resolveTaskExecutionGenerationInTx(tx, row.taskId, input.executionGeneration)
       return await createNodeRunLifecycleParticipantInTx(tx).set(input)
     })
   }
@@ -222,6 +234,12 @@ export class DrizzleNodeRunLifecyclePersistence implements NodeRunLifecyclePersi
       .from(nodeRuns)
       .where(eq(nodeRuns.id, nodeRunId))
       .limit(1)
-    return rows[0]?.envelopeNonce ?? ''
+    const nonce = rows[0]?.envelopeNonce
+    if (!nonce)
+      throw new ConflictError(
+        'node-run-envelope-unavailable',
+        `node_run ${nodeRunId} has no executable envelope`,
+      )
+    return nonce
   }
 }

@@ -1,9 +1,10 @@
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { taskReadColumns } from './taskRepositorySql'
 // RFC-359 W4-B1 —— 动态工作流状态持久化：一份实现，两个 provider 共用（此前 sqlite / postgresql 两份只差客户端类型与同步 / 异步形态）。
 
 import { createAgentExecutionQueries } from '@/modules/resource-catalog/public/queries'
-import { taskWorkgroupConfigSelection } from './taskWorkgroupConfig'
-import { tablesOf } from '@/platform/persistence/sessionTables'
 import { and, count, eq } from 'drizzle-orm'
+import { taskWorkgroupConfigSelection } from './taskWorkgroupConfig'
 
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 
@@ -18,7 +19,7 @@ export class DrizzleDynamicWorkflowPersistence implements DynamicWorkflowPersist
     const rows = await this.db
       .select({
         workgroupConfig: taskWorkgroupConfigSelection(this.db),
-        triggerContextJson: tasks.triggerContextJson,
+        triggerContextJson: taskReadColumns(this.db).triggerContextJson,
         dwStateJson: workgroupTaskState.dwStateJson,
       })
       .from(tasks)

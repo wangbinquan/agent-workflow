@@ -20,12 +20,10 @@ import { taskListItemsProjection } from '../src/modules/task-execution/infrastru
 import { composeOwnerIdentityQueries } from '@/modules/identity-access/composition/providerOperations'
 import type { Database } from 'bun:sqlite'
 import { sql } from 'drizzle-orm'
-import { resolve } from 'node:path'
 
 import { createInMemoryDb } from '../src/db/client'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 type Db = ReturnType<typeof createInMemoryDb>
 
@@ -165,7 +163,7 @@ describe('RFC-243 — list childCount', () => {
   })
 
   test('counts only children VISIBLE to the actor (same predicate as the list)', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createInMemoryDb()
     const now = Date.now()
     const { users } = tablesOf(db)
     await db.insert(users).values([
@@ -225,7 +223,7 @@ describe('RFC-243 — list childCount', () => {
   })
 
   test('one grouped query for the whole page — never a per-row probe', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createInMemoryDb()
     const parents = Array.from({ length: 25 }, (_, i) => ({
       id: `p${String(i).padStart(2, '0')}`,
       owner: null,
@@ -245,7 +243,8 @@ describe('RFC-243 — list childCount', () => {
     let childCountPrepares = 0
     raw.prepare = ((text: string, ...rest: unknown[]) => {
       prepared += 1
-      if (/parent_task_id/i.test(text) && /count\(/i.test(text)) childCountPrepares += 1
+      if (/group by[^;]*parent_task_id/i.test(text) && /count\(/i.test(text))
+        childCountPrepares += 1
       return realPrepare(text, ...(rest as []))
     }) as typeof raw.prepare
 

@@ -1,3 +1,4 @@
+import { tablesOf } from '@/platform/persistence/sessionTables'
 // RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-239 §3.2 — the change-narrative service. Locks:
 //  - member gate: owner / collaborator / non-member ADMIN may trigger; a plain
@@ -11,14 +12,24 @@
 //  - prompt is pure: carries node intents, never user ids (rfc099 isolation)
 //  - extractJsonObject / parseNumstatZ / computeContentDigest unit matrices
 
-import { taskFixture, workflowFixture } from './helpers/model'
+import type { AgentMaterialContentReference } from '@/modules/runtime-management/public/participants'
+import { composeLocalSystemAgentRunFamily } from '@/modules/task-execution/composition/localSystemAgentRunFamily'
+import type {
+  SystemAgentRunFamily,
+  SystemAgentRunRequest,
+} from '@/modules/task-execution/public/participants'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
+
 import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import { triggerChangeNarrative as triggerSelectedNarrative } from '@/services/changeNarrative'
+import { createLogger } from '@/util/log'
+import { computeSummary, type StructuralDiff, type Task } from '@agent-workflow/shared'
 import { afterAll, afterEach, beforeAll, describe, expect, test } from 'bun:test'
+import { eq } from 'drizzle-orm'
 import {
   existsSync,
-  mkdtempSync,
   mkdirSync,
+  mkdtempSync,
   readFileSync,
   rmSync,
   statSync,
@@ -26,42 +37,32 @@ import {
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { eq } from 'drizzle-orm'
-import { computeSummary, type StructuralDiff, type Task } from '@agent-workflow/shared'
 import { buildActor, type Actor } from '../src/auth/actor'
-import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { describeEachProvider } from './helpers/eachProvider'
-import { createUser } from './helpers/userFixture'
-import { composeLocalSystemAgentRunFamily } from '@/modules/task-execution/composition/localSystemAgentRunFamily'
-import { createLogger } from '@/util/log'
-import { triggerChangeNarrative as triggerSelectedNarrative } from '@/services/changeNarrative'
-import type {
-  SystemAgentRunFamily,
-  SystemAgentRunRequest,
-} from '@/modules/task-execution/public/participants'
-import type { AgentMaterialContentReference } from '@/modules/runtime-management/public/participants'
+import { createTaskCodeWorkspaceQueries } from '../src/modules/task-execution/infrastructure/taskCodeWorkspaceQueries'
 import {
-  triggerChangeNarrative,
-  type NativeChangeNarrativeDeps as ChangeNarrativeDeps,
-} from './helpers/changeNarrativeSystemAgents'
-import { getTask } from '../src/services/task'
-import { parseNumstatZ, runGit } from '../src/util/git'
-import { computeContentDigest } from '../src/services/structuralDiff/digest'
-import {
-  buildNarrativePrompt,
   buildNarrativeInput as buildNarrativeInputWithPort,
+  buildNarrativePrompt,
   extractJsonObject,
   getChangeNarrativeStatus,
   resetChangeNarrativeStateForTests,
 } from '../src/services/changeNarrative'
-import { createTaskCodeWorkspaceQueries } from '../src/modules/task-execution/infrastructure/taskCodeWorkspaceQueries'
-import { requireTaskMember } from '../src/services/taskCollab'
-import { resolveInternalAgentRuntime } from './helpers/runtimeRegistryApplication'
+import { computeContentDigest } from '../src/services/structuralDiff/digest'
 import {
   emptySystemAgentOutputEvidence,
   type SystemAgentRunResult,
 } from '../src/services/systemAgentRun'
+import { getTask } from '../src/services/task'
+import { requireTaskMember } from '../src/services/taskCollab'
+import { parseNumstatZ, runGit } from '../src/util/git'
+import {
+  triggerChangeNarrative,
+  type NativeChangeNarrativeDeps as ChangeNarrativeDeps,
+} from './helpers/changeNarrativeSystemAgents'
+import { describeEachProvider } from './helpers/eachProvider'
+import { taskFixture, workflowFixture } from './helpers/model'
+import { resolveInternalAgentRuntime } from './helpers/runtimeRegistryApplication'
 import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
+import { createUser } from './helpers/userFixture'
 
 const buildNarrativeInput = (db: PersistenceDb, task: Task) =>
   buildNarrativeInputWithPort(createTaskCodeWorkspaceQueries(db), task)
@@ -544,7 +545,8 @@ describeEachProvider('triggerChangeNarrative', (harness) => {
     const db = harness.db
     const w = await seedWorld(db)
     const runFn: ChangeNarrativeDeps['runFn'] = async () => {
-      const { taskCollaborators, tasks } = tablesOf(db)
+      const { taskCollaborators } = tablesOf(db)
+      const { tasks } = tablesOf(db)
       await db.delete(taskCollaborators).where(eq(taskCollaborators.taskId, w.task.id))
       await db.delete(tasks).where(eq(tasks.id, w.task.id))
       return okRun(GOOD_OUTPUT)

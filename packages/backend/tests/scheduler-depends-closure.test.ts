@@ -1,3 +1,5 @@
+import { legacyContentRef } from '@/platform/content/contentRef'
+import { contentRowColumns } from '@/platform/content/infrastructure/contentStore'
 // Locks RFC-022 §design 4.2 — scheduler.prepareNodeRunInjection.
 //
 // This is the path that gets executed RIGHT BEFORE every spawn of a child
@@ -60,7 +62,7 @@ async function seedManagedSkill(db: PersistenceDb, name: string): Promise<void> 
     id: ulid(),
     name,
     description: '',
-    managedPath: `skills/${name}/files`,
+    ...contentRowColumns(legacyContentRef('skill-path', 'local-file', `skills/${name}/files`)),
     createdAt: Date.now(),
     updatedAt: Date.now(),
   })

@@ -1,3 +1,5 @@
+import { legacyContentRef } from '@/platform/content/contentRef'
+import { contentRowColumns } from '@/platform/content/infrastructure/contentStore'
 // RFC-359 W4-D5 —— knowledge-evolution 融合仓库与 resource-catalog 技能版本提交 participant 合一之后，
 // 同一段断言在两个引擎上各跑一遍：apply 把技能版本推进、记忆标记为已融合、提案目录发布收在一个事务序列里；
 // 技能操作锁撞库经能力矩阵归类成同一个 ConflictError；CAS / 决策认领 / 取消认领的前置条件；
@@ -17,9 +19,9 @@ import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { composeFusionPersistenceFor } from '@/modules/knowledge-evolution/composition/fusion'
 import type { FusionPersistenceRecord } from '@/modules/knowledge-evolution/public/types'
 import { composeSkillMemoryFusionParticipantFactory } from '@/modules/memory/composition'
-import { encodeSkillToken } from '@/modules/resource-catalog/application/skills/skillToken'
+
 import { composeSkillVersionCommitParticipantFactory } from '@/modules/resource-catalog/composition/skillVersionCommit'
-import { QUARANTINED_FUSION_SKILL_ID } from '@/services/systemResources'
+
 import { describeEachProvider } from './helpers/eachProvider'
 
 const roots: string[] = []
@@ -81,14 +83,28 @@ async function seedSkill(
   contentVersion = 1,
 ): Promise<string> {
   const id = `skill_d5_${ulid()}`
-  const { skills } = tablesOf(db)
+  const { skills, skillVersions } = tablesOf(db)
   await insertOne(db, skills, {
     id,
     name: `managed-${id}`,
-    managedPath: `skills/${id}/files`,
+    ...contentRowColumns(legacyContentRef('skill-path', 'local-file', `skills/${id}/files`)),
     contentVersion,
     versionState: 'snapshot-authoritative',
     ownerUserId,
+  })
+  await insertOne(db, skillVersions, {
+    id: `${id}-v${contentVersion}`,
+    skillId: id,
+    versionIndex: contentVersion,
+    source: 'initial',
+    authorUserId: ownerUserId,
+    ...contentRowColumns(
+      legacyContentRef(
+        'skill-path',
+        'local-file',
+        `skills/${id}/versions/v${contentVersion}/files`,
+      ),
+    ),
   })
   return id
 }
@@ -179,7 +195,8 @@ describeEachProvider('RFC-359 W4-D5 —— 融合仓库与技能版本提交 par
     expect(
       readFileSync(join(appHome, `skills/${skillId}/versions/v2/files/SKILL.md`), 'utf8'),
     ).toBe('new\n')
-    const { skills, memories, skillVersions, skillOperations, skillOperationLocks } = tablesOf(db)
+    const { memories, skillOperations, skillOperationLocks } = tablesOf(db),
+      { skills, skillVersions } = tablesOf(db)
     expect((await db.select().from(skills).where(eq(skills.id, skillId)))[0]?.contentVersion).toBe(
       2,
     )
@@ -342,81 +359,15 @@ describeEachProvider('RFC-359 W4-D5 —— 融合仓库与技能版本提交 par
     ).rejects.toMatchObject({ code: 'fusion-precondition-stale' })
   })
 
-  test('provenance 修复与决策恢复', async () => {
+  test('转换后的原生 fusion 决策恢复', async () => {
     const db = harness.db
     const appHome = tempRoot()
     const persistence = persistenceOf(appHome)
     const ledgerSkill = await seedSkill(db, 'owner-3', 10)
-    const orphanSkill = await seedSkill(db, 'owner-3', 10)
-
-    // 账本单一且一致：修复回真实技能；无法证明的行隔离并终态化。
-    const proven = `fusion_${ulid()}`
-    await persistence.create(
-      fusionRecord(
-        { id: proven, skillId: QUARANTINED_FUSION_SKILL_ID, preconditionToken: null },
-        { status: 'failed', appliedSkillVersion: 2 },
-      ),
-    )
-    const { skillVersions, memories, fusions } = tablesOf(db)
-    await insertOne(db, skillVersions, {
-      id: `version_${ulid()}`,
-      skillId: ledgerSkill,
-      versionIndex: 2,
-      filesPath: `skills/${ledgerSkill}/versions/v2/files`,
-      source: 'fusion',
-      fusionId: proven,
-      createdAt: 2,
-    })
-    const unprovable = `fusion_${ulid()}`
-    await persistence.create(
-      fusionRecord(
-        {
-          id: unprovable,
-          skillId: orphanSkill,
-          preconditionToken: encodeSkillToken({
-            skillId: orphanSkill,
-            contentVersion: 1,
-            metaRevision: 0,
-          }),
-        },
-        { status: 'awaiting_approval', appliedSkillVersion: 3 },
-      ),
-    )
-    const fusedMemory = await seedApprovedMemory(db)
-    await db
-      .update(memories)
-      .set({
-        status: 'fused',
-        fusedIntoSkillId: orphanSkill,
-        fusedIntoSkill: 'x',
-        fusedIntoSkillVersion: 3,
-        fusedAt: 3,
-        fusedFusionId: unprovable,
-      })
-      .where(eq(memories.id, fusedMemory))
-    const receipt = await persistence.repairProvenance()
-    expect(receipt).toMatchObject({
-      repairedFusions: 1,
-      quarantinedFusions: 1,
-      terminalizedFusions: 1,
-      quarantinedMemories: 1,
-    })
-    expect((await persistence.load(proven))?.skillId).toBe(ledgerSkill)
-    expect(await persistence.load(unprovable)).toMatchObject({
-      skillId: QUARANTINED_FUSION_SKILL_ID,
-      status: 'failed',
-    })
-    expect(
-      (await db.select().from(memories).where(eq(memories.id, fusedMemory)))[0]?.fusedIntoSkillId,
-    ).toBe(QUARANTINED_FUSION_SKILL_ID)
-    // 幂等：再跑一次没有新的修复。
-    expect(await persistence.repairProvenance()).toMatchObject({
-      repairedFusions: 0,
-      quarantinedFusions: 0,
-      repairedMemories: 0,
-      quarantinedMemories: 0,
-    })
-
+    const { fusions } = tablesOf(db)
+    const { skillVersions } = tablesOf(db)
+    // Epoch-1 token/ledger proof and unprovable-source blocking live in
+    // fusion-provenance-repair.test.ts; ordinary decision recovery remains here.
     // 决策恢复：applying 且账本可信 → done；applying 且不可信 → failed；running 无任务 → failed。
     const forward = `fusion_${ulid()}`
     await persistence.create(
@@ -429,7 +380,9 @@ describeEachProvider('RFC-359 W4-D5 —— 融合仓库与技能版本提交 par
       id: `version_${ulid()}`,
       skillId: ledgerSkill,
       versionIndex: 11,
-      filesPath: `skills/${ledgerSkill}/versions/v11/files`,
+      ...contentRowColumns(
+        legacyContentRef('skill-path', 'local-file', `skills/${ledgerSkill}/versions/v11/files`),
+      ),
       source: 'fusion',
       fusionId: forward,
       createdAt: 11,

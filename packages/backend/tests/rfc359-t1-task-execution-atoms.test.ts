@@ -1,3 +1,5 @@
+import { taskAggregateWrite } from '@/modules/task-execution/infrastructure/taskDefinitionWriteParticipant'
+import { withTargetMintIdentity } from './helpers/rfc395Mint'
 // RFC-359 W1-T1（前置）—— task-execution 的三个中立原子在两个引擎上各跑一遍：
 //   ① committed-event append（唯一实现：`platform/events/committed/append.ts`）
 //   ② node_runs 铸造参与者（`nodeRunMintParticipant.ts`，替代 PostgreSQL 副本）
@@ -7,7 +9,6 @@
 // 这些以前是「SQLite 同步一份、PostgreSQL 异步一份」的成对适配器，PostgreSQL 那份从未在真库上
 // 跑过（dual-provider-parity-audit-2026-09-04）。同一段断言现在在两个引擎上都必须绿。
 
-import { deriveNodeRunRole } from '@/modules/task-execution/public/types'
 import {
   patchNodeRunFixture,
   readTaskFixtures,
@@ -98,7 +99,9 @@ describeEachProvider('RFC-359 T1 —— committed-event 的唯一 append 实现'
     const first = await harness.session.transaction(
       async (tx) => await appendCommittedEvent(tx, lifecycleEvent(1, 'running')),
     )
-    expect(first.cutover.mode).toBe('dispatchable')
+    expect(first.cutover).toMatchObject({ producer: 'task-execution', family: 'task-lifecycle' })
+    expect(first.cutover.epoch).toBeGreaterThan(0)
+    expect(first.cutover).not.toHaveProperty('mode')
     expect(first.eventRef).toMatchObject({
       producer: 'task-execution',
       family: 'task-lifecycle',
@@ -154,28 +157,36 @@ describeEachProvider('RFC-359 T1 —— node_runs 铸造参与者', (harness) =>
   test('替换铸造只 insert；旧代 merge 状态不被写、由读侧推导为已取代（RFC-369）', async () => {
     await seedTask(harness.db, 'running')
     await harness.session.transaction(async (tx) => {
+      await taskAggregateWrite.lockTaskAggregateRoot(tx, TASK_ID)
+
       const mint = createNodeRunMintParticipantInTx(tx)
-      await mint.mint({
-        ...deriveNodeRunRole({ nodeId: 'review-node', rerunCause: 'initial' }),
-        id: '01RFC359000000000000000001',
-        taskId: TASK_ID,
-        nodeId: 'review-node',
-        status: 'awaiting_review',
-        cause: 'initial',
-      })
+      await mint.mint(
+        withTargetMintIdentity({
+          role: 'node-attempt',
+          syntheticKind: null,
+          id: '01RFC359000000000000000001',
+          taskId: TASK_ID,
+          nodeId: 'review-node',
+          status: 'awaiting_review',
+          cause: 'initial',
+        }),
+      )
       await patchNodeRunFixture(
         tx,
         { id: '01RFC359000000000000000001' },
         { mergeState: 'pending-merge' },
       )
-      await mint.mint({
-        ...deriveNodeRunRole({ nodeId: 'review-node', rerunCause: 'review-iterate' }),
-        id: '01RFC359000000000000000002',
-        taskId: TASK_ID,
-        nodeId: 'review-node',
-        status: 'awaiting_review',
-        cause: 'review-iterate',
-      })
+      await mint.mint(
+        withTargetMintIdentity({
+          role: 'node-attempt',
+          syntheticKind: null,
+          id: '01RFC359000000000000000002',
+          taskId: TASK_ID,
+          nodeId: 'review-node',
+          status: 'awaiting_review',
+          cause: 'review-iterate',
+        }),
+      )
     })
     expect(
       await readNodeRunFixtures(

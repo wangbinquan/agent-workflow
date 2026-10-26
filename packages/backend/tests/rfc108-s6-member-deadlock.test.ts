@@ -1,3 +1,4 @@
+import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { o2Ports } from './helpers/o2Closure'
 // RFC-108 T14 (AR-06) — S6 member-deadlock detection (detect-only, decision D4).
 //
@@ -71,6 +72,7 @@ describeEachProvider('RFC-108 T14 — S6 member-deadlock', (harness) => {
     const taskId = await seedAwaitingTask(db, owner)
     const r = await runStuckTaskDetector({
       operations: createTaskExecutionPersistence(db, {
+        historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
         recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
       }).recoveryAdministration,
       now: () => Date.now(),
@@ -84,6 +86,7 @@ describeEachProvider('RFC-108 T14 — S6 member-deadlock', (harness) => {
     const taskId = await seedAwaitingTask(db, owner)
     const r = await runStuckTaskDetector({
       operations: createTaskExecutionPersistence(db, {
+        historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
         recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
       }).recoveryAdministration,
       now: () => Date.now(),
@@ -96,6 +99,7 @@ describeEachProvider('RFC-108 T14 — S6 member-deadlock', (harness) => {
     const taskId = await seedAwaitingTask(db, '__system__')
     const r = await runStuckTaskDetector({
       operations: createTaskExecutionPersistence(db, {
+        historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
         recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
       }).recoveryAdministration,
       now: () => Date.now(),
@@ -118,6 +122,7 @@ describeEachProvider('RFC-108 T14 — S6 member-deadlock', (harness) => {
     })
     const r = await runStuckTaskDetector({
       operations: createTaskExecutionPersistence(db, {
+        historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
         recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
       }).recoveryAdministration,
       now: () => Date.now(),

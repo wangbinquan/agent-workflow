@@ -1,5 +1,8 @@
-import { withO2Closure } from './helpers/o2Closure'
-import { o2Ports } from './helpers/o2Closure'
+import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
+import { nodeRunFixtureColumns } from './helpers/model/nodeRun'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { withO2Closure, o2Ports } from './helpers/o2Closure'
+
 // RFC-056 PR-B T5 — lock the cross-clarify service contract (RFC-132: answers
 // drive the unified quick channel, autoDispatchClarifyRound).
 //
@@ -35,7 +38,7 @@ import {
   workflowFixture,
 } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+
 import { createSqliteMemoryDistillEnqueuer } from './helpers/memoryDistill'
 import { createTaskExecutionPersistence } from '../src/modules/task-execution/composition/taskExecutionPersistence'
 import { describeEachProvider } from './helpers/eachProvider'
@@ -171,7 +174,7 @@ async function seedTask(db: PersistenceDb, opts: SeedOptions = {}): Promise<{ ta
     workflowId,
     workflowSnapshot: JSON.stringify(def),
     repoPath: '/tmp/aw-cross-clarify-test',
-    worktreePath: opts.worktreePath ?? '',
+    worktreePath: opts.worktreePath ?? '/tmp/fixture-bound-root',
     baseBranch: 'main',
     branch: `agent-workflow/${taskId}`,
     status: opts.status ?? 'running',
@@ -263,12 +266,18 @@ describeEachProvider('RFC-056 createClarifyRound', (harness) => {
     expect(session.intermediaryNodeRunId).toBe(crossClarifyNodeRunId)
     expect(session.questions).toHaveLength(2)
 
-    const { clarifyRounds, nodeRuns, taskQuestions } = tablesOf(db)
+    const { taskQuestions } = tablesOf(db)
+    const { clarifyRounds, nodeRuns } = tablesOf(db)
     const row = (await db.select().from(clarifyRounds).where(eq(clarifyRounds.id, session.id)))[0]
     expect(row?.status).toBe('awaiting_human')
     expect(row?.iteration).toBe(0)
 
-    const nr = (await db.select().from(nodeRuns).where(eq(nodeRuns.id, crossClarifyNodeRunId)))[0]
+    const nr = (
+      await db
+        .select(nodeRunFixtureColumns(db))
+        .from(nodeRuns)
+        .where(eq(nodeRuns.id, crossClarifyNodeRunId))
+    )[0]
     expect(nr?.status).toBe('awaiting_human')
     expect((await readTaskFixtures(db, { id: taskId }))[0]?.status).toBe('awaiting_human')
     expect(
@@ -636,7 +645,9 @@ describeEachProvider(
         definition: def,
       })
       expect(out.kind).toBe('awaiting')
-      const fresh = (await db.select().from(nodeRuns).where(eq(nodeRuns.id, nrId)))[0]
+      const fresh = (
+        await db.select(nodeRunFixtureColumns(db)).from(nodeRuns).where(eq(nodeRuns.id, nrId))
+      )[0]
       expect(fresh?.status).toBe('pending')
     })
   },
@@ -697,6 +708,7 @@ describeEachProvider(
       await patchTaskFixture(db, { id: taskId }, { status: 'failed' })
       await runLifecycleInvariants({
         operations: createTaskExecutionPersistence(db, {
+          historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
           recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
         }).recoveryAdministration,
       })
@@ -756,7 +768,8 @@ describeEachProvider('RFC-128 P5-BC §5.2.14 questioner mixed-path write-flow', 
       answers: [makeAns('q1'), makeAns('q2')],
       actor,
     })
-    const { taskQuestions, nodeRuns } = tablesOf(db)
+    const { taskQuestions } = tablesOf(db)
+    const { nodeRuns } = tablesOf(db)
     // The round's questioner entries were materialized, sealed and DISPATCHED (consumed).
     const qEntries = (
       await db
@@ -778,9 +791,9 @@ describeEachProvider('RFC-128 P5-BC §5.2.14 questioner mixed-path write-flow', 
     )
     expect(redispatch.dispatchedEntryIds.length).toBe(0)
     // Exactly ONE questioner cascade rerun (no double mint).
-    const reruns = (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))).filter(
-      (r) => r.nodeId === 'questioner' && r.rerunCause === 'cross-clarify-questioner-rerun',
-    )
+    const reruns = (
+      await db.select(nodeRunFixtureColumns(db)).from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
+    ).filter((r) => r.nodeId === 'questioner' && r.rerunCause === 'cross-clarify-questioner-rerun')
     expect(reruns.length).toBe(1)
   })
 
@@ -823,9 +836,9 @@ describeEachProvider('RFC-128 P5-BC §5.2.14 questioner mixed-path write-flow', 
     expect(results.filter((r) => r.status === 'fulfilled').length).toBe(1)
     expect(results.filter((r) => r.status === 'rejected').length).toBe(1)
     const { nodeRuns } = tablesOf(db)
-    const reruns = (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))).filter(
-      (r) => r.nodeId === 'questioner' && r.rerunCause === 'cross-clarify-questioner-rerun',
-    )
+    const reruns = (
+      await db.select(nodeRunFixtureColumns(db)).from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
+    ).filter((r) => r.nodeId === 'questioner' && r.rerunCause === 'cross-clarify-questioner-rerun')
     expect(reruns.length).toBe(1)
   })
 
@@ -862,7 +875,8 @@ describeEachProvider('RFC-128 P5-BC §5.2.14 questioner mixed-path write-flow', 
     // home + a DISPATCHED questioner task_question whose home (default) is 'questioner', bound to it
     // (in-flight / unconsumed).
     const dispatchedRerunId = `nr_qrr_${Math.random().toString(36).slice(2, 8)}`
-    const { nodeRuns, taskQuestions, clarifyRounds } = tablesOf(db)
+    const { taskQuestions } = tablesOf(db)
+    const { nodeRuns, clarifyRounds } = tablesOf(db)
     await nodeRunFixture(db, {
       id: dispatchedRerunId,
       taskId,
@@ -890,7 +904,9 @@ describeEachProvider('RFC-128 P5-BC §5.2.14 questioner mixed-path write-flow', 
       createdAt: Date.now(),
       updatedAt: Date.now(),
     })
-    const runsBefore = (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))).length
+    const runsBefore = (
+      await db.select(nodeRunFixtureColumns(db)).from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
+    ).length
     const res = await autoDispatchClarifyRound({
       db,
       memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
@@ -909,8 +925,9 @@ describeEachProvider('RFC-128 P5-BC §5.2.14 questioner mixed-path write-flow', 
     )[0]
     expect(sess?.status).toBe('answered')
     // No SECOND questioner rerun minted (the existing in-flight rerun stands).
-    expect((await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))).length).toBe(
-      runsBefore,
-    )
+    expect(
+      (await db.select(nodeRunFixtureColumns(db)).from(nodeRuns).where(eq(nodeRuns.taskId, taskId)))
+        .length,
+    ).toBe(runsBefore)
   })
 })

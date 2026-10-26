@@ -8,15 +8,15 @@
 //   RED before dispatch/submit code starts writing NULLs into a missing column.
 //   Pure ADD COLUMN: this also documents that no table rebuild happened.
 
+import { openFrozenEpoch1Db, FROZEN_MIGRATIONS } from './migration-freeze'
 import { afterAll, describe, expect, test } from 'bun:test'
 import { Database } from 'bun:sqlite'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { openDb } from '../src/db/client'
 import { removeTempDirSync } from './fixtures/tempDir'
 
-const migrationsFolder = resolve(import.meta.dir, '..', 'db', 'migrations')
+const migrationsFolder = resolve(FROZEN_MIGRATIONS)
 
 describe('migration 0042 — RFC-079 doc_versions multi-doc columns', () => {
   const tmp = mkdtempSync(join(tmpdir(), 'aw-mig0042-'))
@@ -26,7 +26,7 @@ describe('migration 0042 — RFC-079 doc_versions multi-doc columns', () => {
   afterAll(() => removeTempDirSync(tmp))
 
   test('adds item_index / selection / item_path columns + review-item index', () => {
-    openDb({ path: dbPath, migrationsFolder }) // applies through 0042
+    openFrozenEpoch1Db({ path: dbPath, migrationsFolder }) // applies through 0042
     const raw = new Database(dbPath)
     try {
       const cols = (raw.query('PRAGMA table_info(doc_versions)').all() as { name: string }[]).map(

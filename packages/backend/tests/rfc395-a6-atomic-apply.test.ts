@@ -13,7 +13,7 @@ import type { PersistenceTx } from '@/platform/persistence/persistenceDb'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { first } from '@/platform/persistence/queryHelpers'
 import { insertOne } from '@/platform/persistence/singleInsert'
-import type { IntentApplyRecoveryArtifact } from '@/modules/intent/infrastructure/intentApplyEngine'
+import type { IntentApplyArtifact } from '@/modules/resource-catalog/public/types'
 import { createIntentApplyJournal } from '@/modules/intent/infrastructure/intentApplyJournal'
 import { intentApplyArtifactCodecs } from '@/modules/intent/infrastructure/intentApplyArtifactCodec'
 import { createResourcePackageAtomicJournal } from '@/modules/resource-catalog/infrastructure/resourcePackageAtomicJournal'
@@ -38,7 +38,7 @@ const errors: AtomicApplyErrors<AtomicApplyRow> = {
   compensationIncomplete: () => 'retryable: compensation incomplete',
   committedIncomplete: 'retryable: committed tail incomplete',
 }
-type Artifact = IntentApplyRecoveryArtifact | ResourcePackageRecoveryArtifact
+type Artifact = IntentApplyArtifact | ResourcePackageRecoveryArtifact
 type Receipt = { journalId: string; applied: readonly unknown[] }
 
 for (const scene of ['intent', 'resource-package'] as const) {
@@ -104,9 +104,7 @@ for (const scene of ['intent', 'resource-package'] as const) {
         codecs: {
           encode: (artifacts: readonly Artifact[]) =>
             scene === 'intent'
-              ? intentApplyArtifactCodecs.encode(
-                  artifacts as readonly IntentApplyRecoveryArtifact[],
-                )
+              ? intentApplyArtifactCodecs.encode(artifacts as readonly IntentApplyArtifact[])
               : resourcePackageArtifactCodecs.encode(
                   artifacts as readonly ResourcePackageRecoveryArtifact[],
                 ),
@@ -308,14 +306,19 @@ for (const scene of ['intent', 'resource-package'] as const) {
         }),
       ).rejects.toThrow('crash after record')
       expect(apply.activeJournalIds()).toEqual([])
-      expect((await row('artifact'))?.preparedArtifactsJson).toBe(JSON.stringify([artifact]))
+      expect(JSON.parse((await row('artifact'))!.preparedArtifactsJson)).toEqual({
+        scene,
+        version: scene === 'intent' ? 3 : 2,
+        artifacts: [artifact],
+      })
       expect(await row('artifact')).toMatchObject({
         state: 'prepared',
         error: 'retryable: compensation incomplete',
       })
       now = 600_002
       await recovery(async (entry) => {
-        expect(codecs.decode(entry.preparedArtifactsJson)).toEqual([artifact])
+        const decoded: readonly unknown[] = codecs.decode(entry.preparedArtifactsJson)
+        expect(decoded).toEqual([artifact])
       }).converge({ [scene]: [] })
       expect((await row('artifact'))?.state).toBe('failed')
     })
@@ -543,7 +546,7 @@ for (const scene of ['intent', 'resource-package'] as const) {
         ).toBe('before')
         expect(await row('transition-lost')).toMatchObject({
           state: 'failed',
-          preparedArtifactsJson: '[]',
+          preparedArtifactsJson: codecs.encode([]),
           receiptJson: null,
         })
       },

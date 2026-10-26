@@ -1,3 +1,6 @@
+import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
+import { nodeRunFixtureColumns } from './helpers/model/nodeRun'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { o2Ports } from './helpers/o2Closure'
 import {
   nodeRunFixture,
@@ -5,7 +8,7 @@ import {
   taskFixture,
   workflowFixture,
 } from './helpers/model'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+
 import type { Agent } from '@agent-workflow/shared'
 import { expect, test } from 'bun:test'
 import { ulid } from 'ulid'
@@ -90,6 +93,7 @@ describeEachProvider('RFC-370 selected complete Task core', (harness) => {
         id: nodeRunId,
         taskId,
         nodeId: 'n1',
+        envelopeNonce: 'selected-nonce',
         iteration: 0,
         retryIndex: 0,
         status: 'pending',
@@ -153,6 +157,7 @@ describeEachProvider('RFC-370 selected complete Task core', (harness) => {
         templateMeta: { taskId, repoPath: 'repo:declaration', baseBranch: 'main' },
         runtime: 'opencode',
         persistence: createTaskExecutionPersistence(db, {
+          historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
           recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
         }),
         observationInvocations: composeRunObservationCalls(db),
@@ -172,7 +177,10 @@ describeEachProvider('RFC-370 selected complete Task core', (harness) => {
         expect(result.outputs).toEqual({})
         expect(calls).toEqual(['mount', 'compile'])
       }
-      const [row] = await db.select().from(nodeRuns).where(eq(nodeRuns.id, nodeRunId))
+      const [row] = await db
+        .select(nodeRunFixtureColumns(db))
+        .from(nodeRuns)
+        .where(eq(nodeRuns.id, nodeRunId))
       expect(row?.status).toBe(rejection === 'mount' ? 'running' : 'failed')
       expect(row?.errorMessage).toBe(
         rejection === 'mount' ? null : 'spawn opencode failed: selected compile rejection',
@@ -209,6 +217,7 @@ describeEachProvider('RFC-370 selected complete Task core', (harness) => {
         id: nodeRunId,
         taskId,
         nodeId: 'n1',
+        envelopeNonce: 'selected-nonce',
         iteration: 0,
         retryIndex: 0,
         status: 'pending',
@@ -267,7 +276,7 @@ describeEachProvider('RFC-370 selected complete Task core', (harness) => {
           await request.beforeStart?.()
           calls.push('activated')
           const envelope =
-            '<workflow-output>\n<port name="summary">report.md</port>\n<port name="closed" active="false">skip reason</port>\n</workflow-output>'
+            '<workflow-output nonce="selected-nonce">\n<port name="summary">report.md</port>\n<port name="closed" active="false">skip reason</port>\n</workflow-output>'
           await sink.record({ raw: envelope, event: binding.protocol.parseEvent(envelope) })
           await sink.checkpoint('records')
           await request.cleanup?.()
@@ -411,6 +420,7 @@ describeEachProvider('RFC-370 selected complete Task core', (harness) => {
         templateMeta: { taskId, repoPath: 'repo:declaration', baseBranch: 'main' },
         runtime,
         persistence: createTaskExecutionPersistence(db, {
+          historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
           recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
         }),
         observationInvocations: composeRunObservationCalls(db),

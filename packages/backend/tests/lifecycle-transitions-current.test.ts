@@ -1,3 +1,7 @@
+import { legacyContentRef } from '@/platform/content/contentRef'
+import { contentRowColumns } from '@/platform/content/infrastructure/contentStore'
+import { nodeRunFixtureColumns } from './helpers/model/nodeRun'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { withO2Closure } from './helpers/o2Closure'
 // RFC-053 PR-A T1a — node_run.status transition matrix, *current* behavior.
 //
@@ -31,7 +35,7 @@ import {
   readNodeRunFixtures,
 } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+
 import { createSqliteMemoryDistillEnqueuer } from './helpers/memoryDistill'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 
@@ -238,7 +242,7 @@ describeEachProvider(
         expect(res.kind).toBe('awaiting_review')
 
         const rows = await h.db
-          .select()
+          .select(nodeRunFixtureColumns(h.db))
           .from(nodeRuns)
           .where(and(eq(nodeRuns.taskId, h.taskId), eq(nodeRuns.nodeId, 'rev_1')))
         expect(rows.length).toBe(1)
@@ -266,7 +270,12 @@ describeEachProvider(
         )
         expect(res.kind).toBe('awaiting_review')
 
-        const after = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, reviewRunId)))[0]!
+        const after = (
+          await h.db
+            .select(nodeRunFixtureColumns(h.db))
+            .from(nodeRuns)
+            .where(eq(nodeRuns.id, reviewRunId))
+        )[0]!
         expect(after.status).toBe('awaiting_review')
         expect(after.reviewIteration).toBe(3) // preserved
       })
@@ -289,7 +298,9 @@ describeEachProvider(
           sourcePortName: 'docpath',
           versionIndex: 1,
           reviewIteration: 0,
-          bodyPath: 'doc_versions/v1.md',
+          ...contentRowColumns(
+            legacyContentRef('review-body-path', 'local-file', 'doc_versions/v1.md'),
+          ),
           decision: 'pending',
         })
         const reviewNode = h.definition.nodes.find((n) => n.id === 'rev_1')!
@@ -327,7 +338,9 @@ describeEachProvider(
           sourcePortName: 'docpath',
           versionIndex: 3,
           reviewIteration: 2,
-          bodyPath: 'doc_versions/v3.md',
+          ...contentRowColumns(
+            legacyContentRef('review-body-path', 'local-file', 'doc_versions/v3.md'),
+          ),
           decision: 'pending',
         })
 
@@ -343,7 +356,12 @@ describeEachProvider(
         )
         expect(res.resumeRequired).toBe(true)
 
-        const after = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, reviewRunId)))[0]!
+        const after = (
+          await h.db
+            .select(nodeRunFixtureColumns(h.db))
+            .from(nodeRuns)
+            .where(eq(nodeRuns.id, reviewRunId))
+        )[0]!
         expect(after.status).toBe('done')
         expect(after.finishedAt).not.toBeNull()
         const outs = await readNodeRunOutputFixtures(h.db, { nodeRunId: reviewRunId })
@@ -368,7 +386,9 @@ describeEachProvider(
           sourcePortName: 'docpath',
           versionIndex: 1,
           reviewIteration: 0,
-          bodyPath: 'doc_versions/v1.md',
+          ...contentRowColumns(
+            legacyContentRef('review-body-path', 'local-file', 'doc_versions/v1.md'),
+          ),
           decision: 'pending',
         })
 
@@ -386,14 +406,20 @@ describeEachProvider(
         expect(res.reviewIteration).toBe(1)
 
         const reviewAfter = (
-          await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, reviewRunId))
+          await h.db
+            .select(nodeRunFixtureColumns(h.db))
+            .from(nodeRuns)
+            .where(eq(nodeRuns.id, reviewRunId))
         )[0]!
         expect(reviewAfter.status).toBe('pending')
         expect(reviewAfter.reviewIteration).toBe(1)
 
         // Old upstream agent row is canceled (supersede).
         const agentAfter = (
-          await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, agentRunId))
+          await h.db
+            .select(nodeRunFixtureColumns(h.db))
+            .from(nodeRuns)
+            .where(eq(nodeRuns.id, agentRunId))
         )[0]!
         expect(agentAfter.status).toBe('canceled')
         expect(agentAfter.errorMessage ?? '').toContain('superseded-by-review-iterated')
@@ -424,7 +450,9 @@ describeEachProvider(
           sourcePortName: 'docpath',
           versionIndex: 1,
           reviewIteration: 0,
-          bodyPath: 'doc_versions/v1.md',
+          ...contentRowColumns(
+            legacyContentRef('review-body-path', 'local-file', 'doc_versions/v1.md'),
+          ),
           decision: 'pending',
         })
 
@@ -442,7 +470,10 @@ describeEachProvider(
         expect(res.resumeRequired).toBe(true)
 
         const reviewAfter = (
-          await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, reviewRunId))
+          await h.db
+            .select(nodeRunFixtureColumns(h.db))
+            .from(nodeRuns)
+            .where(eq(nodeRuns.id, reviewRunId))
         )[0]!
         expect(reviewAfter.status).toBe('pending')
 
@@ -451,7 +482,10 @@ describeEachProvider(
         expect(dvAfter.decisionReason).toBe('try again')
 
         const agentAfter = (
-          await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, agentRunId))
+          await h.db
+            .select(nodeRunFixtureColumns(h.db))
+            .from(nodeRuns)
+            .where(eq(nodeRuns.id, agentRunId))
         )[0]!
         expect(agentAfter.status).toBe('canceled')
         expect(agentAfter.errorMessage ?? '').toContain('superseded-by-review-rejected')
@@ -481,7 +515,9 @@ describeEachProvider(
           sourcePortName: 'docpath',
           versionIndex: 1,
           reviewIteration: 0,
-          bodyPath: 'doc_versions/v1.md',
+          ...contentRowColumns(
+            legacyContentRef('review-body-path', 'local-file', 'doc_versions/v1.md'),
+          ),
           decision: 'pending',
         })
         await insertOne(h.db, docVersions, {
@@ -493,7 +529,9 @@ describeEachProvider(
           sourcePortName: 'sidecar',
           versionIndex: 1,
           reviewIteration: 0,
-          bodyPath: 'doc_versions/v1s.md',
+          ...contentRowColumns(
+            legacyContentRef('review-body-path', 'local-file', 'doc_versions/v1s.md'),
+          ),
           decision: 'pending',
         })
 
@@ -512,7 +550,12 @@ describeEachProvider(
         // rev_2 is cascaded — its row's reviewIteration bumped, status remains
         // awaiting_review (the sibling still waits for the user to re-review
         // the regenerated doc_version once upstream regenerates).
-        const rev2After = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, rev2RunId)))[0]!
+        const rev2After = (
+          await h.db
+            .select(nodeRunFixtureColumns(h.db))
+            .from(nodeRuns)
+            .where(eq(nodeRuns.id, rev2RunId))
+        )[0]!
         expect(rev2After.reviewIteration).toBeGreaterThan(0)
         // Status post-cascade: stays awaiting_review (waiting for re-review).
         expect(['awaiting_review', 'pending']).toContain(rev2After.status)
@@ -623,7 +666,10 @@ describeEachProvider(
           cascade: true,
         })
 
-        const reviewRows = await h.db.select().from(nodeRuns).where(eq(nodeRuns.nodeId, 'rev_1'))
+        const reviewRows = await h.db
+          .select(nodeRunFixtureColumns(h.db))
+          .from(nodeRuns)
+          .where(eq(nodeRuns.nodeId, 'rev_1'))
         // Only the awaiting_review row exists — no placeholder.
         expect(reviewRows.length).toBe(1)
         expect(reviewRows[0]!.status).toBe('awaiting_review')
@@ -663,11 +709,19 @@ describeEachProvider(
         expect(taskAfter.status).toBe('interrupted')
         expect(taskAfter.errorSummary).toBe('daemon-restart')
 
-        const runAfter = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, runRunId)))[0]!
+        const runAfter = (
+          await h.db
+            .select(nodeRunFixtureColumns(h.db))
+            .from(nodeRuns)
+            .where(eq(nodeRuns.id, runRunId))
+        )[0]!
         expect(runAfter.status).toBe('interrupted')
 
         const pendingAfter = (
-          await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, pendingRunId))
+          await h.db
+            .select(nodeRunFixtureColumns(h.db))
+            .from(nodeRuns)
+            .where(eq(nodeRuns.id, pendingRunId))
         )[0]!
         expect(pendingAfter.status).toBe('interrupted')
       })
@@ -694,10 +748,18 @@ describeEachProvider(
         // awaiting_review tasks are NOT reaped (only `running` is).
         expect(taskAfter.status).toBe('awaiting_review')
         const awaitingAfter = (
-          await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, awaitingId))
+          await h.db
+            .select(nodeRunFixtureColumns(h.db))
+            .from(nodeRuns)
+            .where(eq(nodeRuns.id, awaitingId))
         )[0]!
         expect(awaitingAfter.status).toBe('awaiting_review')
-        const doneAfter = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, doneId)))[0]!
+        const doneAfter = (
+          await h.db
+            .select(nodeRunFixtureColumns(h.db))
+            .from(nodeRuns)
+            .where(eq(nodeRuns.id, doneId))
+        )[0]!
         expect(doneAfter.status).toBe('done')
       })
     })
@@ -776,7 +838,10 @@ describeEachProvider(
 
         // Clarify node_run → done.
         const clarifyAfter = (
-          await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, clarifyRunId))
+          await h.db
+            .select(nodeRunFixtureColumns(h.db))
+            .from(nodeRuns)
+            .where(eq(nodeRuns.id, clarifyRunId))
         )[0]!
         expect(clarifyAfter.status).toBe('done')
         expect(clarifyAfter.finishedAt).not.toBeNull()

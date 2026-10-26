@@ -1,3 +1,7 @@
+import { epoch2ReviewReader } from './helpers/epoch2RuntimePorts'
+import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
+import { legacyContentRef } from '@/platform/content/contentRef'
+import { contentRowColumns } from '@/platform/content/infrastructure/contentStore'
 // RFC-319 TASK-27 / DE-28 —— 两条被 RFC-359 AC-1 合一顺手丢掉的装配步骤。
 //
 // 两条都只有 `@nightly` 的 e2e 覆盖，推送档看不见，所以红了几天没人认领；这里把它们锁进推送档。
@@ -117,7 +121,10 @@ describeEachProvider('RFC-319 DE-28 / RFC-395 II-a A2 — hostless employee revi
     const host = TASK_DEFINITION_HOSTS['digital-employee']
     const taskId = 'employee-review',
       runId = 'employee-review-run'
-    const ports = composeDatabaseDigitalEmployeeExecutionPorts(db)
+    const ports = composeDatabaseDigitalEmployeeExecutionPorts(
+      db,
+      epoch2RuntimeTestPorts(db).historyRestrictions,
+    )
     expect(ports).not.toHaveProperty('hostWorkflow')
     await taskFixture(db, {
       id: taskId,
@@ -143,14 +150,21 @@ describeEachProvider('RFC-319 DE-28 / RFC-395 II-a A2 — hostless employee revi
       sourcePortName: 'doc',
       versionIndex: 1,
       reviewIteration: 0,
-      bodyPath: 'missing.md',
+      ...contentRowColumns(legacyContentRef('review-body-path', 'local-file', 'missing.md')),
       decision: 'pending',
     })
     expect(await listReviewSummaries(db, { status: 'pending' })).toMatchObject([
       { workflowId: host.id, workflowName: host.name },
     ])
     expect(await countPendingReviews(db)).toBe(1)
-    expect(await getReviewDetail(db, '/tmp/aw-no-artifacts', runId)).toMatchObject({
+    expect(
+      await getReviewDetail(
+        db,
+        '/tmp/aw-no-artifacts',
+        runId,
+        epoch2ReviewReader(db, '/tmp/aw-no-artifacts'),
+      ),
+    ).toMatchObject({
       summary: { workflowId: host.id, workflowName: host.name },
     })
     expect(await readWorkflowFixtures(db, { id: host.id })).toEqual([])

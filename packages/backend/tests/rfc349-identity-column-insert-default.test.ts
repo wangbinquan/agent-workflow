@@ -29,7 +29,7 @@ import { getTableName, isTable, type Table } from 'drizzle-orm'
 import type { PersistenceDb } from '@/platform/persistence/querySurface'
 
 import { nativeQueryFixture } from './helpers/nativeQueryFixture'
-import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import { buildFrozenEpoch1LogicalSchemaContract as buildLogicalSchemaContract } from '@/platform/persistence/migration/epoch1/contract'
 import type { DatabaseProvider } from '@/platform/persistence/schemaContract'
 
 /** Column list + first VALUES tuple of a rendered single-table insert. */

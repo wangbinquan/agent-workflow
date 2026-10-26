@@ -1,3 +1,6 @@
+import { readContentObject } from '@/platform/content/infrastructure/contentStore'
+import { nodeRunFixtureColumns } from './helpers/model/nodeRun'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 // RFC-370 v3 V5 — owner restore normalization after a hosted database restore
 // (standalone RFC-213 semantics). Locks: Task Execution suspends every live
 // task, interrupts running runs/tasks through the lifecycle kernels and turns
@@ -6,14 +9,14 @@
 // other building backups and re-adopts the restore source's archive pin. Every
 // participant is idempotent because a resumed restore runs it again.
 import { patchTaskFixture, readTaskFixtures } from './helpers/model'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+
 import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { HOSTED_BACKUP_OWNER } from '@/modules/system-operations/infrastructure/crewstation/databaseBackupFormat'
 import { createHostedSystemRestoreNormalization } from '@/modules/system-operations/infrastructure/crewstation/hostedRestoreNormalization'
 import { hostedPublicationId } from '@/modules/system-operations/infrastructure/crewstation/objectPublications'
 import { createHostedRestoreTaskNormalization } from '@/modules/task-execution/public/participants'
-import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { describeEachProvider } from './helpers/eachProvider'
 import { seedRun, seedTask } from './helpers/questionDispatchFixture'
 
@@ -38,7 +41,8 @@ describeEachProvider('RFC-370 hosted restore normalization', (harness) => {
 
   test('Task Execution suspends live tasks, interrupts running work and cancels unsettled executions', async () => {
     for (const id of ['t-running', 't-gate', 't-done']) await seedTask(harness.db, id)
-    const { hostedExecutionBindings, hostedRecoveryRequests, nodeRuns } = tablesOf(harness.db)
+    const { hostedExecutionBindings, hostedRecoveryRequests } = tablesOf(harness.db)
+    const { nodeRuns } = tablesOf(harness.db)
     await patchTaskFixture(harness.db, { id: 't-running' }, { status: 'running' })
     await patchTaskFixture(harness.db, { id: 't-done' }, { status: 'done' })
     const running = await seedRun(harness.db, 't-running', 'n-running', { status: 'running' })
@@ -88,7 +92,9 @@ describeEachProvider('RFC-370 hosted restore normalization', (harness) => {
     })
     expect(taskRows.get('t-done')).toMatchObject({ status: 'done', autoRecoverySuspended: false })
     const runs = new Map(
-      (await harness.db.select().from(nodeRuns)).map((row) => [row.id, row.status] as const),
+      (await harness.db.select(nodeRunFixtureColumns(harness.db)).from(nodeRuns)).map(
+        (row) => [row.id, row.status] as const,
+      ),
     )
     expect(runs.get(running)).toBe('interrupted')
     expect(runs.get(done)).toBe('done')
@@ -130,9 +136,8 @@ describeEachProvider('RFC-370 hosted restore normalization', (harness) => {
     const source = '01a13e6d-3e00-7000-9e3c-0000000000a1'
     const other = '01a13e6d-3e00-7000-9e3c-0000000000a2'
     const object = { id: '01a13e6d-3e00-7000-9e3c-0000000000f1', sha256: 'c'.repeat(64), size: 42 }
-    const { hostedExecutionControl, hostedDatabaseBackups, hostedObjectPublications } = tablesOf(
-      harness.db,
-    )
+    const { hostedExecutionControl, hostedDatabaseBackups } = tablesOf(harness.db)
+    const { contentPublications } = tablesOf(harness.db)
     await harness.db
       .insert(hostedExecutionControl)
       .values({
@@ -186,7 +191,7 @@ describeEachProvider('RFC-370 hosted restore normalization', (harness) => {
         keyFingerprint: 'f'.repeat(64),
         createdAt: 100,
         snapshotAt: 120,
-        schemaDigest: buildLogicalSchemaContract().digest,
+        schemaDigest: logicalSchemaContract.digest,
         sourceGenerationId: 'dbg_hosted_restore_test',
         contents: { workflows: 4, skills: 1 },
       },
@@ -216,14 +221,20 @@ describeEachProvider('RFC-370 hosted restore normalization', (harness) => {
       snapshotAt: 120,
     })
     expect(rows.get(other)).toMatchObject({ state: 'failed' })
-    expect(
-      (
-        await harness.db
-          .select()
-          .from(hostedObjectPublications)
-          .where(eq(hostedObjectPublications.id, hostedPublicationId(HOSTED_BACKUP_OWNER, source)))
-      )[0],
-    ).toMatchObject({ state: 'ready', attempt: source, objectId: object.id, createdAt: 120 })
+    const publication = (
+      await harness.db
+        .select()
+        .from(contentPublications)
+        .where(eq(contentPublications.id, hostedPublicationId(HOSTED_BACKUP_OWNER, source)))
+    )[0]!
+    expect(publication).toMatchObject({ state: 'ready', attempt: source, createdAt: 120 })
+    const content = await readContentObject(harness.db, publication.contentId!)
+    expect(content).toMatchObject({
+      kind: 'object',
+      sha256: object.sha256,
+      size: object.size,
+      location: { codec: 'hosted-object-id', value: object.id },
+    })
     expect(await run()).toEqual({ frozenControl: 1, failedBackups: 0, adoptedBackups: 1 })
   })
 })

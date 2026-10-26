@@ -223,6 +223,10 @@ export async function createBackup(opts: BackupOptions): Promise<BackupResult> {
           sourceGenerationId: generation.payload.generationId,
           source: {
             provider: 'sqlite',
+            readMetadata: () => {
+              if (!logicalSource.readMetadata) throw new Error('epoch2-metadata-source-required')
+              return logicalSource.readMetadata()
+            },
             assertUnchanged: () => logicalSource.assertUnchanged(sourceSnapshot),
             readChunk: (table, afterKey, limit) => logicalSource.readChunk(table, afterKey, limit),
           },

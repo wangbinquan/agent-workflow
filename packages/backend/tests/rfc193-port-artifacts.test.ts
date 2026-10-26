@@ -35,8 +35,12 @@ import {
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { monotonicFactory } from 'ulid'
-import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
-import { WORKTREE_FILE_MAX_BYTES } from '@agent-workflow/shared'
+import {
+  type WorkflowDefinition,
+  type WorkflowNode,
+  WORKTREE_FILE_MAX_BYTES,
+} from '@agent-workflow/shared'
+
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { archivePortArtifacts } from '@/modules/task-execution/public/commands'
 import {
@@ -52,7 +56,6 @@ import { runGit } from '../src/util/git'
 import { canonicalizeWorkflowAgentIds } from './helpers/canonicalWorkflowFixture'
 
 const ulid = monotonicFactory()
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 // ---------------------------------------------------------------------------
 // 模块层
@@ -446,7 +449,7 @@ async function buildHarness(): Promise<Harness> {
     await runGit(p, ['commit', '-m', 'init'])
   }
   writeFileSync(mockPath, mockSource(planFile))
-  const db = createInMemoryDb(MIGRATIONS)
+  const db = createInMemoryDb()
   return {
     db,
     appHome,

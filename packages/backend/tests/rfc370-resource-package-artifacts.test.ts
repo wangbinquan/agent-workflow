@@ -1,15 +1,18 @@
+import { contentRefColumns } from '@/platform/content/contentStore'
+import { sql, eq } from 'drizzle-orm'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 // RFC-370: selected storage owners must drive the real package apply and recovery,
 // while AW retains durable journal, database publication and replay semantics.
 import { createAtomicApplyRecovery } from '@/platform/atomic-apply/convergence'
 import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+
 import { first } from '@/platform/persistence/queryHelpers'
 import { afterEach, expect, test } from 'bun:test'
 import { randomBytes } from 'node:crypto'
 import { existsSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { eq } from 'drizzle-orm'
+
 import { PackagePreviewSchema } from '@agent-workflow/shared'
 import { buildActor } from '@/auth/actor'
 import { createSecretBoxFromKey } from '@/auth/secretBox'
@@ -126,7 +129,8 @@ describeEachProvider('RFC-370 selected resource package artifacts', (harness) =>
       },
       source: 'daemon',
     })
-    const { users, resourceBundleApplies } = tablesOf(harness.db)
+    const { users } = tablesOf(harness.db)
+    const { resourceBundleApplies } = tablesOf(harness.db)
     await insertOne(harness.db, users, { ...actor.user, createdAt: 1, updatedAt: 1 })
     const authority = new AuthorityClaimRegistry().mintLocalAuthority({
       userId: ownerId,
@@ -259,7 +263,11 @@ describeEachProvider('RFC-370 selected resource package artifacts', (harness) =>
         async stage(artifact) {
           const row = await f.journal()
           expect(row.state).toBe('prepared')
-          expect(JSON.parse(row.preparedArtifactsJson)).toEqual([artifact])
+          expect(JSON.parse(row.preparedArtifactsJson)).toEqual({
+            scene: 'resource-package',
+            version: 2,
+            artifacts: [artifact],
+          })
           calls.push('stage')
           entered.release()
           await stage.pending
@@ -270,7 +278,11 @@ describeEachProvider('RFC-370 selected resource package artifacts', (harness) =>
         async rollForward(artifact) {
           const row = await f.journal()
           expect(row.state).toBe('committed')
-          expect(JSON.parse(row.preparedArtifactsJson)).toEqual([artifact])
+          expect(JSON.parse(row.preparedArtifactsJson)).toEqual({
+            scene: 'resource-package',
+            version: 2,
+            artifacts: [artifact],
+          })
           calls.push('publish')
           published.release()
           await finish.pending
@@ -292,7 +304,8 @@ describeEachProvider('RFC-370 selected resource package artifacts', (harness) =>
             throw new Error('stage not reached')
           }),
         ])
-        const { skills, plugins, skillVersions } = tablesOf(harness.db)
+        const { plugins } = tablesOf(harness.db)
+        const { skills, skillVersions } = tablesOf(harness.db)
         expect(await harness.db.select().from(kind === 'skill' ? skills : plugins)).toHaveLength(0)
         expect(settled).toBe(false)
         stage.release()
@@ -306,13 +319,21 @@ describeEachProvider('RFC-370 selected resource package artifacts', (harness) =>
         const rows = await harness.db.select().from(kind === 'skill' ? skills : plugins)
         expect(rows).toHaveLength(1)
         if (kind === 'skill') {
-          expect(await harness.db.select({ managedPath: skills.managedPath }).from(skills)).toEqual(
-            [{ managedPath: 'object-ref:skill-live' }],
-          )
           expect(
             await harness.db
               .select({
-                filesPath: skillVersions.filesPath,
+                managedPath: sql<string>`${skills.contentRefJson}`.mapWith(
+                  (raw: string) => contentRefColumns.decode(raw, null)?.location.value as string,
+                ),
+              })
+              .from(skills),
+          ).toEqual([{ managedPath: 'object-ref:skill-live' }])
+          expect(
+            await harness.db
+              .select({
+                filesPath: sql<string>`${skillVersions.contentRefJson}`.mapWith(
+                  (raw: string) => contentRefColumns.decode(raw, null)?.location.value as string,
+                ),
                 contentHash: skillVersions.contentHash,
               })
               .from(skillVersions),
@@ -357,7 +378,11 @@ describeEachProvider('RFC-370 selected resource package artifacts', (harness) =>
       },
       async compensate(artifact, committed) {
         expect(committed).toBe(false)
-        expect(JSON.parse((await f.journal()).preparedArtifactsJson)).toEqual([artifact])
+        expect(JSON.parse((await f.journal()).preparedArtifactsJson)).toEqual({
+          scene: 'resource-package',
+          version: 2,
+          artifacts: [artifact],
+        })
         cleaning.release()
         await release.pending
       },

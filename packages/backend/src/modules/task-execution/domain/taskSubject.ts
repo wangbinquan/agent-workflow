@@ -8,48 +8,15 @@ export type TaskSubject =
   | { readonly kind: 'digital-employee'; readonly sourceId: null }
   | { readonly kind: 'code-round'; readonly sourceId: string }
 
+/** Unknown is a historical read variant, never a creation input. sourceId retains the old anchor. */
+export type TaskReadSubject = TaskSubject | { readonly kind: 'unknown'; readonly sourceId: string }
+
 export { TASK_DEFINITION_HOSTS } from '@agent-workflow/shared'
 
-export const TASK_SUBJECT_DISCRIMINATORS = [
-  { kind: 'code-round', field: 'codeRoundId' },
-  { kind: 'workgroup', field: 'workgroupId' },
-  { kind: 'agent', field: 'sourceAgentName' },
-  {
-    kind: 'digital-employee',
-    field: 'workflowId',
-    equals: TASK_DEFINITION_HOSTS['digital-employee'].id,
-  },
-] as const
-
-export interface StoredTaskSubject {
-  readonly workflowId: string
-  readonly codeRoundId?: string | null
-  readonly workgroupId?: string | null
-  readonly sourceAgentId?: string | null
-  readonly sourceAgentName?: string | null
-}
-
-/** Epoch-1 reader; migration rule 4.1-5 fixes this precedence, including inconsistent rows. */
-export function decodeTaskSubject(row: StoredTaskSubject): TaskSubject {
-  for (const rule of TASK_SUBJECT_DISCRIMINATORS) {
-    const value = row[rule.field]
-    if ('equals' in rule ? value !== rule.equals : value == null || value === '') continue
-    switch (rule.kind) {
-      case 'code-round':
-        return { kind: 'code-round', sourceId: value! }
-      case 'workgroup':
-        return { kind: 'workgroup', sourceId: value! }
-      case 'agent':
-        return { kind: 'agent', sourceId: row.sourceAgentId ?? null, sourceName: value! }
-      case 'digital-employee':
-        return { kind: 'digital-employee', sourceId: null }
-    }
-  }
-  return { kind: 'workflow', sourceId: row.workflowId }
-}
-
-export function definitionAnchorId(subject: TaskSubject): string {
-  return subject.kind === 'workflow' ? subject.sourceId : TASK_DEFINITION_HOSTS[subject.kind].id
+export function definitionAnchorId(subject: TaskReadSubject): string {
+  return subject.kind === 'workflow' || subject.kind === 'unknown'
+    ? subject.sourceId
+    : TASK_DEFINITION_HOSTS[subject.kind].id
 }
 
 export function definitionHost(
@@ -58,17 +25,9 @@ export function definitionHost(
   return Object.values(TASK_DEFINITION_HOSTS).find((host) => host.id === anchorId) ?? null
 }
 
-export function taskSubjectStorageMismatch(row: StoredTaskSubject): boolean {
-  return (
-    definitionHost(row.workflowId) !== null &&
-    (decodeTaskSubject(row).kind === 'workflow' ||
-      definitionAnchorId(decodeTaskSubject(row)) !== row.workflowId)
-  )
-}
-
 export type TaskDefinitionOrigin = 'authored' | 'platform'
 
-/** II-a reads today's layout decision; II-b freezes this value at launch. */
+/** Compute the creation-time origin once; readers use the persisted column. */
 export function taskDefinitionOrigin(
   subject: TaskSubject,
   workflowBuiltin: boolean,
@@ -82,18 +41,22 @@ export interface TaskSubjectProjection {
 }
 
 export function projectTaskSubject(
-  subject: TaskSubject,
+  subject: TaskReadSubject,
   liveWorkflowName: string | null,
 ): TaskSubjectProjection {
   return {
     workflowId: definitionAnchorId(subject),
     workflowName:
-      subject.kind === 'workflow' ? liveWorkflowName : TASK_DEFINITION_HOSTS[subject.kind].name,
+      subject.kind === 'unknown'
+        ? null
+        : subject.kind === 'workflow'
+          ? liveWorkflowName
+          : TASK_DEFINITION_HOSTS[subject.kind].name,
   }
 }
 
 export function taskSubjectWorkflowVersion(
-  _subject: TaskSubject,
+  _subject: TaskReadSubject,
   frozenVersion: number | null,
 ): number | null {
   return frozenVersion
@@ -105,4 +68,34 @@ export function isTurnEngineTaskSubject(
   mode: string | null | undefined,
 ): boolean {
   return subject.kind === 'workgroup' && mode !== 'dynamic_workflow'
+}
+
+export interface TaskDefinitionSubject {
+  readonly subjectKind: TaskReadSubject['kind']
+  readonly sourceId: string | null
+  readonly sourceName: string | null
+}
+
+export function taskReadSubjectFromDefinition(row: TaskDefinitionSubject): TaskReadSubject {
+  if (row.subjectKind === 'unknown') return { kind: 'unknown', sourceId: row.sourceId ?? '' }
+  return taskSubjectFromDefinition(row)
+}
+
+/** Execution requires a known frozen discriminator; history uses taskReadSubjectFromDefinition. */
+export function taskSubjectFromDefinition(row: TaskDefinitionSubject): TaskSubject {
+  switch (row.subjectKind) {
+    case 'unknown':
+      throw new Error('task-subject-history-only')
+    case 'digital-employee':
+      if (row.sourceId !== null) throw new Error('task-subject-digital-employee-source')
+      return { kind: 'digital-employee', sourceId: null }
+    case 'agent':
+      if (row.sourceName === null) throw new Error('task-subject-agent-name-missing')
+      return { kind: 'agent', sourceId: row.sourceId, sourceName: row.sourceName }
+    case 'workflow':
+    case 'workgroup':
+    case 'code-round':
+      if (row.sourceId === null) throw new Error('task-subject-source-missing')
+      return { kind: row.subjectKind, sourceId: row.sourceId }
+  }
 }

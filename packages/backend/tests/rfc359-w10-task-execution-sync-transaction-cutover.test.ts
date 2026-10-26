@@ -1,3 +1,4 @@
+import { tablesOf } from '@/platform/persistence/sessionTables'
 // RFC-395 II-pre：扫描生产根 / 子启动事务；旧入口终止调用归零后以真实事务与反例保持扫描预言力。
 // RFC-359 W10 —— task-execution 剩余同步事务面（`dbTxSync` / `withOwnedTaskTx`）中立化之后的行为锁。
 //
@@ -48,7 +49,7 @@ import {
   readTaskRepoFixtures,
 } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, test } from 'bun:test'
@@ -230,8 +231,8 @@ describeEachProvider('RFC-359 W10 —— task-execution 同步事务面中立化
 
     await applySourceTermination(h, effect('fence-closed', 5))
 
-    const { tasks, taskExecutionOwners, taskExecutionIntents, nodeRuns, committedEvents } =
-      tablesOf(h.db)
+    const { taskExecutionOwners, taskExecutionIntents, committedEvents } = tablesOf(h.db)
+    const { tasks, nodeRuns } = tablesOf(h.db)
     const task = (
       await h.db
         .select({
@@ -373,7 +374,8 @@ describeEachProvider('RFC-359 W10 —— task-execution 同步事务面中立化
       }),
     ).rejects.toThrow('rfc359-w10-rollback-probe')
 
-    const { tasks, taskExecutionOwners, taskExecutionIntents, nodeRuns } = tablesOf(h.db)
+    const { taskExecutionOwners, taskExecutionIntents } = tablesOf(h.db)
+    const { tasks, nodeRuns } = tablesOf(h.db)
     const task = (
       await h.db
         .select({
@@ -430,7 +432,8 @@ describeEachProvider('RFC-359 W10 —— task-execution 同步事务面中立化
       }),
     ).rejects.toMatchObject({ code: 'task-execution-stale-owner' })
 
-    const { tasks, taskExecutionOwners } = tablesOf(h.db)
+    const { taskExecutionOwners } = tablesOf(h.db)
+    const { tasks } = tablesOf(h.db)
     const task = (
       await h.db
         .select({ fence: tasks.sourceTerminationFence })
@@ -509,7 +512,8 @@ describeEachProvider('RFC-359 W10 —— task-execution 同步事务面中立化
       })
     })
 
-    const { taskSpaceNodes, nodeRuns } = tablesOf(h.db)
+    const { taskSpaceNodes } = tablesOf(h.db)
+    const { nodeRuns } = tablesOf(h.db)
     expect(
       (
         await readTaskFixtures(h.db, { id: seeded.taskId }, { limit: 1 }).then((rows) =>
@@ -517,11 +521,14 @@ describeEachProvider('RFC-359 W10 —— task-execution 同步事务面中立化
         )
       )[0]?.worktreePath,
     ).toBe('/tmp/prepared')
-    expect((await readTaskRepoFixtures(h.db, { taskId: seeded.taskId })).length).toBe(1)
+    expect(await readTaskRepoFixtures(h.db, { taskId: seeded.taskId })).toMatchObject([
+      { repoIndex: 0, repoPath: '/tmp/prepared/repo', branch: 'prepared' },
+    ])
     expect(
       (await h.db.select().from(taskSpaceNodes).where(eq(taskSpaceNodes.taskId, seeded.taskId)))
-        .length,
-    ).toBe(1)
+        .map((row) => row.nodePath)
+        .sort(),
+    ).toEqual(['', 'docs'])
     expect(
       (
         await h.db
@@ -538,6 +545,11 @@ describeEachProvider('RFC-359 W10 —— task-execution 同步事务面中立化
     // 崩溃重跑 / 并发写把 prep 行推到别的状态时它抛 ConflictError。合一前这一笔在
     // `dbTxSync` 里，抛出即整笔回滚；中立原语必须保住同一条语义。
     const seeded = await seedTask(h.db, { status: 'running', openRunStatus: 'pending' })
+    const beforeMounts = await readTaskRepoFixtures(h.db, { taskId: seeded.taskId })
+    const beforeNodes = await h.db
+      .select()
+      .from(tablesOf(h.db).taskSpaceNodes)
+      .where(eq(tablesOf(h.db).taskSpaceNodes.taskId, seeded.taskId))
 
     await expect(
       databaseSessionFor(h.db).transaction(async (tx) => {
@@ -585,14 +597,13 @@ describeEachProvider('RFC-359 W10 —— task-execution 同步事务面中立化
       'tasks 的路径回写必须回滚——否则「有工作树但没有成员仓」这种不存在的状态会落库',
     ).toBe(`/tmp/worktree/${seeded.taskId}`)
     expect(
-      (await readTaskRepoFixtures(h.db, { taskId: seeded.taskId })).length,
-      'task_repos 必须回滚',
-    ).toBe(0)
+      await readTaskRepoFixtures(h.db, { taskId: seeded.taskId }),
+      'task_repository_mounts 必须恢复原挂载事实',
+    ).toEqual(beforeMounts)
     expect(
-      (await h.db.select().from(taskSpaceNodes).where(eq(taskSpaceNodes.taskId, seeded.taskId)))
-        .length,
-      'task_space_nodes 必须回滚',
-    ).toBe(0)
+      await h.db.select().from(taskSpaceNodes).where(eq(taskSpaceNodes.taskId, seeded.taskId)),
+      'task_space_nodes 必须恢复原目录',
+    ).toEqual(beforeNodes)
   })
 
   test('⑧ 任务铸行事务：tasks 行 + launch intent + created 事件同生共死', async () => {

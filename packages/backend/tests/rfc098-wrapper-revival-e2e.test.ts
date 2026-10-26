@@ -38,7 +38,7 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { monotonicFactory } from 'ulid'
 const ulid = monotonicFactory()
 import { createInMemoryDb, type DbClient } from '../src/db/client'
@@ -49,7 +49,6 @@ import { runGit } from '../src/util/git'
 import { reenterScheduler } from './reenter-scheduler'
 import { canonicalizeWorkflowAgentIds } from './helpers/canonicalWorkflowFixture'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const actor = { userId: 'u1', role: 'owner' as const }
 
 // gate 慢 mock（生成式，plan/state/gate 路径烘焙进脚本——同
@@ -145,7 +144,7 @@ async function buildHarness(): Promise<Harness> {
   await runGit(worktreePath, ['add', '.'])
   await runGit(worktreePath, ['commit', '-m', 'init'])
   writeFileSync(mockPath, gateMockSource({ planFile, stateDir, gates: { slow: gateFile } }))
-  const db = createInMemoryDb(MIGRATIONS)
+  const db = createInMemoryDb()
   return {
     db,
     appHome,

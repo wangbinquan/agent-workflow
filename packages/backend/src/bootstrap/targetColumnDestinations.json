@@ -1,0 +1,4229 @@
+{
+  "tasks": {
+    "id": {
+      "table": "tasks",
+      "column": "id",
+      "mutability": "immutable"
+    },
+    "name": {
+      "table": "tasks",
+      "column": "name",
+      "mutability": "CAS-mutable"
+    },
+    "status": {
+      "table": "tasks",
+      "column": "status",
+      "mutability": "CAS-mutable"
+    },
+    "started_at": {
+      "table": "tasks",
+      "column": "started_at",
+      "mutability": "immutable"
+    },
+    "running_ms": {
+      "table": "tasks",
+      "column": "running_ms",
+      "mutability": "CAS-mutable"
+    },
+    "running_since": {
+      "table": "tasks",
+      "column": "running_since",
+      "mutability": "CAS-mutable"
+    },
+    "finished_at": {
+      "table": "tasks",
+      "column": "finished_at",
+      "mutability": "CAS-mutable"
+    },
+    "error_summary": {
+      "table": "tasks",
+      "column": "error_summary",
+      "mutability": "CAS-mutable"
+    },
+    "error_message": {
+      "table": "tasks",
+      "column": "error_message",
+      "mutability": "CAS-mutable"
+    },
+    "failed_node_id": {
+      "table": "tasks",
+      "column": "failed_node_id",
+      "mutability": "CAS-mutable"
+    },
+    "auto_recovery_attempts": {
+      "table": "tasks",
+      "column": "auto_recovery_attempts",
+      "mutability": "CAS-mutable"
+    },
+    "auto_recovery_suspended": {
+      "table": "tasks",
+      "column": "auto_recovery_suspended",
+      "mutability": "CAS-mutable"
+    },
+    "auto_recovery_window_started_at": {
+      "table": "tasks",
+      "column": "auto_recovery_window_started_at",
+      "mutability": "CAS-mutable"
+    },
+    "expires_at": {
+      "table": "tasks",
+      "column": "expires_at",
+      "mutability": "CAS-mutable"
+    },
+    "deleted_at": {
+      "table": "tasks",
+      "column": "deleted_at",
+      "mutability": "CAS-mutable"
+    },
+    "owner_user_id": {
+      "table": "tasks",
+      "column": "owner_user_id",
+      "mutability": "CAS-mutable"
+    },
+    "catalog_visibility": {
+      "table": "tasks",
+      "column": "catalog_visibility",
+      "mutability": "CAS-mutable"
+    },
+    "lifecycle_event_revision": {
+      "table": "tasks",
+      "column": "lifecycle_event_revision",
+      "mutability": "CAS-mutable"
+    },
+    "worktree_path": {
+      "table": "tasks",
+      "column": "workspace_root_ref",
+      "mutability": "CAS-mutable"
+    },
+    "workspace_pruning_at": {
+      "table": "tasks",
+      "column": "workspace_pruning_at",
+      "mutability": "CAS-mutable"
+    },
+    "workspace_prune_cause": {
+      "table": "tasks",
+      "column": "workspace_prune_cause",
+      "mutability": "CAS-mutable"
+    },
+    "workspace_pruned_at": {
+      "table": "tasks",
+      "column": "workspace_pruned_at",
+      "mutability": "CAS-mutable"
+    },
+    "source_termination_fence": {
+      "table": "tasks",
+      "column": "source_termination_fence",
+      "mutability": "CAS-mutable"
+    },
+    "source_termination_effect_rev": {
+      "table": "tasks",
+      "column": "source_termination_effect_rev",
+      "mutability": "CAS-mutable"
+    },
+    "parent_task_id": {
+      "table": "tasks",
+      "column": "parent_task_id",
+      "mutability": "immutable"
+    },
+    "root_task_id": {
+      "table": "tasks",
+      "column": "root_task_id",
+      "mutability": "immutable"
+    },
+    "invocation_depth": {
+      "table": "tasks",
+      "column": "invocation_depth",
+      "mutability": "immutable"
+    },
+    "branch_started_at": {
+      "table": "tasks",
+      "column": "branch_started_at",
+      "mutability": "derived"
+    },
+    "workflow_id": {
+      "table": "task_definitions",
+      "column": "source_id",
+      "mutability": "immutable",
+      "conversion": "Historical unknown subjects still receive task_definitions with subject_kind=unknown; conversion never fabricates a definition."
+    },
+    "workgroup_id": {
+      "table": "task_definitions",
+      "column": "source_id",
+      "mutability": "immutable"
+    },
+    "source_agent_id": {
+      "table": "task_definitions",
+      "column": "source_id",
+      "mutability": "immutable"
+    },
+    "code_round_id": {
+      "table": "task_definitions",
+      "column": "source_id",
+      "mutability": "immutable"
+    },
+    "source_agent_name": {
+      "table": "task_definitions",
+      "column": "source_name",
+      "mutability": "immutable"
+    },
+    "workflow_snapshot": {
+      "table": "task_definitions",
+      "column": "workflow_snapshot",
+      "mutability": "CAS-mutable"
+    },
+    "workflow_version": {
+      "table": "task_definitions",
+      "column": "source_revision",
+      "mutability": "CAS-mutable"
+    },
+    "inputs": {
+      "table": "task_definitions",
+      "column": "inputs",
+      "mutability": "immutable"
+    },
+    "max_duration_ms": {
+      "table": "task_definitions",
+      "column": "max_duration_ms",
+      "mutability": "immutable"
+    },
+    "max_total_tokens": {
+      "table": "task_definitions",
+      "column": "max_total_tokens",
+      "mutability": "immutable"
+    },
+    "schema_version": {
+      "table": "task_definitions",
+      "column": "schema_version",
+      "mutability": "immutable"
+    },
+    "ref_closure_json": {
+      "table": "task_definitions",
+      "column": "ref_closure_json",
+      "mutability": "CAS-mutable"
+    },
+    "workgroup_config_json": {
+      "table": "task_definitions",
+      "column": "workgroup_config_json",
+      "mutability": "immutable",
+      "companion": "workgroup_task_state.runtime_config_json",
+      "conversion": "Split frozen launch config into task_definitions.workgroup_config_json and runtime config into workgroup_task_state.runtime_config_json using migration §4.1 item 8; preserve decision evidence."
+    },
+    "launch_origin": {
+      "table": "task_launch_contexts",
+      "column": "launch_origin",
+      "mutability": "immutable"
+    },
+    "scheduled_task_id": {
+      "table": "task_launch_contexts",
+      "column": "scheduled_task_id",
+      "mutability": "immutable"
+    },
+    "webhook_trigger_id": {
+      "table": "task_launch_contexts",
+      "column": "webhook_trigger_id",
+      "mutability": "immutable"
+    },
+    "webhook_fire_id": {
+      "table": "task_launch_contexts",
+      "column": "webhook_fire_id",
+      "mutability": "immutable",
+      "conversion": "The task_launch_contexts destination is served by idx_task_launch_contexts_webhook_fire."
+    },
+    "event_subscription_id": {
+      "table": "task_launch_contexts",
+      "column": "event_subscription_id",
+      "mutability": "immutable"
+    },
+    "event_delivery_id": {
+      "table": "task_launch_contexts",
+      "column": "event_delivery_id",
+      "mutability": "immutable"
+    },
+    "digital_employee_round_id": {
+      "table": "task_launch_contexts",
+      "column": "digital_employee_round_id",
+      "mutability": "immutable"
+    },
+    "digital_employee_case_id": {
+      "table": "task_launch_contexts",
+      "column": "digital_employee_case_id",
+      "mutability": "immutable"
+    },
+    "parent_node_run_id": {
+      "table": "task_launch_contexts",
+      "column": "parent_node_run_id",
+      "mutability": "immutable"
+    },
+    "execution_lineage_id": {
+      "table": "task_launch_contexts",
+      "column": "execution_lineage_id",
+      "mutability": "immutable",
+      "conversion": "Unknown historical lineage remains NULL in task_launch_contexts; task conversion emits the companion row even for history-only tasks."
+    },
+    "lineage_slot_path_json": {
+      "table": "task_launch_contexts",
+      "column": "lineage_slot_path_json",
+      "mutability": "immutable",
+      "conversion": "Unknown historical lineage remains NULL; no empty-path substitute."
+    },
+    "trigger_context_json": {
+      "table": "task_launch_contexts",
+      "column": "trigger_context_json",
+      "mutability": "immutable"
+    },
+    "platform_input_paths_json": {
+      "table": "task_launch_contexts",
+      "column": "platform_input_paths_json",
+      "mutability": "immutable"
+    },
+    "source_termination_binding": {
+      "table": "task_launch_contexts",
+      "column": "source_termination_binding",
+      "mutability": "immutable"
+    },
+    "source_termination_launch_rev": {
+      "table": "task_launch_contexts",
+      "column": "source_termination_launch_rev",
+      "mutability": "immutable"
+    },
+    "repo_group_id": {
+      "table": "task_workspaces",
+      "column": "repo_group_id",
+      "mutability": "immutable"
+    },
+    "repo_group_name": {
+      "table": "task_workspaces",
+      "column": "repo_group_name",
+      "mutability": "immutable"
+    },
+    "git_user_name": {
+      "table": "task_workspaces",
+      "column": "git_user_name",
+      "mutability": "immutable"
+    },
+    "git_user_email": {
+      "table": "task_workspaces",
+      "column": "git_user_email",
+      "mutability": "immutable"
+    },
+    "auto_commit_push": {
+      "table": "task_workspaces",
+      "column": "auto_commit_push",
+      "mutability": "immutable"
+    },
+    "space_kind": {
+      "table": "task_workspaces",
+      "column": "space_kind",
+      "mutability": "CAS-mutable"
+    },
+    "working_branch": {
+      "table": "task_workspaces",
+      "column": "working_branch",
+      "mutability": "immutable"
+    },
+    "repo_path": {
+      "table": "task_repository_mounts",
+      "column": "repo_path",
+      "mutability": "immutable",
+      "conversion": "Merge with task_repos using the recorded source decision; zero-mount requests stay in task_workspaces.requested_source/task_branch."
+    },
+    "repo_url": {
+      "table": "task_repository_mounts",
+      "column": "repo_url",
+      "mutability": "immutable",
+      "conversion": "Merge with task_repos using the recorded source decision; zero-mount requests stay in task_workspaces.requested_source/task_branch."
+    },
+    "cached_repo_id": {
+      "table": "task_repository_mounts",
+      "column": "cached_repo_id",
+      "mutability": "immutable",
+      "conversion": "Merge with task_repos using the recorded source decision; zero-mount requests stay in task_workspaces.requested_source/task_branch."
+    },
+    "base_branch": {
+      "table": "task_repository_mounts",
+      "column": "base_branch",
+      "mutability": "immutable",
+      "conversion": "Merge with task_repos using the recorded source decision; zero-mount requests stay in task_workspaces.requested_source/task_branch."
+    },
+    "branch": {
+      "table": "task_workspaces",
+      "column": "task_branch",
+      "mutability": "immutable",
+      "conversion": "Preserve tasks.branch; validate against mount ordinal 0 and record both source values and the migration §4.2 decision."
+    },
+    "base_commit": {
+      "table": "task_repository_mounts",
+      "column": "base_commit",
+      "mutability": "immutable",
+      "conversion": "Merge with task_repos using the recorded source decision; zero-mount requests stay in task_workspaces.requested_source/task_branch."
+    },
+    "repo_count": {
+      "table": null,
+      "column": "repoCount",
+      "mutability": "derived",
+      "conversion": "max(1, mount count)"
+    }
+  },
+  "node_runs": {
+    "id": {
+      "table": "node_runs",
+      "column": "id",
+      "mutability": "immutable",
+      "conversion": "Selection tombstones may have selected_run_id=NULL with the composite MATCH SIMPLE FK retained. New runs default inputs_recorded=false; conversion distinguishes absent inputs from recorded-empty inputs."
+    },
+    "task_id": {
+      "table": "node_runs",
+      "column": "task_id",
+      "mutability": "immutable"
+    },
+    "node_id": {
+      "table": "node_runs",
+      "column": "node_id",
+      "mutability": "immutable"
+    },
+    "parent_node_run_id": {
+      "table": "node_runs",
+      "column": "historical_parent_id",
+      "mutability": "immutable"
+    },
+    "container_run_id": {
+      "table": "node_runs",
+      "column": "container_run_id",
+      "mutability": "immutable"
+    },
+    "scope_path": {
+      "table": "node_runs",
+      "column": "scope_path",
+      "mutability": "immutable"
+    },
+    "iteration": {
+      "table": "node_runs",
+      "column": "iteration",
+      "mutability": "immutable"
+    },
+    "shard_key": {
+      "table": "node_runs",
+      "column": "shard_key",
+      "mutability": "immutable"
+    },
+    "retry_index": {
+      "table": "node_runs",
+      "column": "attempt_index",
+      "mutability": "immutable"
+    },
+    "wg_round": {
+      "table": "node_runs",
+      "column": "wg_round",
+      "mutability": "immutable"
+    },
+    "review_iteration": {
+      "table": "node_runs",
+      "column": "review_iteration",
+      "mutability": "CAS-mutable"
+    },
+    "status": {
+      "table": "node_runs",
+      "column": "status",
+      "mutability": "CAS-mutable"
+    },
+    "started_at": {
+      "table": "node_runs",
+      "column": "started_at",
+      "mutability": "CAS-mutable"
+    },
+    "finished_at": {
+      "table": "node_runs",
+      "column": "finished_at",
+      "mutability": "CAS-mutable"
+    },
+    "exit_code": {
+      "table": "node_runs",
+      "column": "exit_code",
+      "mutability": "CAS-mutable"
+    },
+    "error_message": {
+      "table": "node_runs",
+      "column": "error_message",
+      "mutability": "CAS-mutable"
+    },
+    "failure_code": {
+      "table": "node_runs",
+      "column": "failure_code",
+      "mutability": "CAS-mutable"
+    },
+    "force_activated": {
+      "table": "node_runs",
+      "column": "force_activated",
+      "mutability": "CAS-mutable"
+    },
+    "rerun_cause": {
+      "table": "node_runs",
+      "column": "rerun_cause",
+      "mutability": "immutable"
+    },
+    "child_task_id": {
+      "table": "node_runs",
+      "column": "child_task_id",
+      "mutability": "CAS-mutable"
+    },
+    "continuation_slot_key": {
+      "table": "node_runs",
+      "column": "continuation_slot_key",
+      "mutability": "immutable"
+    },
+    "lineage_slot_path_json": {
+      "table": "node_runs",
+      "column": "lineage_slot_path_json",
+      "mutability": "immutable"
+    },
+    "operation_generation": {
+      "table": "node_runs",
+      "column": "operation_generation",
+      "mutability": "CAS-mutable"
+    },
+    "seq": {
+      "table": "node_runs",
+      "column": "seq",
+      "mutability": "immutable"
+    },
+    "envelope_nonce": {
+      "table": "node_runs",
+      "column": "envelope_nonce",
+      "mutability": "immutable"
+    },
+    "prompt_text": {
+      "table": "node_run_configs",
+      "column": "prompt_ref_json",
+      "companion": "node_run_configs.prompt_inline_bytes",
+      "mutability": "immutable"
+    },
+    "prompt_path": {
+      "table": "node_run_configs",
+      "column": "prompt_ref_json",
+      "mutability": "immutable"
+    },
+    "runtime": {
+      "table": "node_run_configs",
+      "column": "runtime",
+      "mutability": "immutable"
+    },
+    "runtime_binary": {
+      "table": "node_run_configs",
+      "column": "runtime_binary",
+      "mutability": "immutable"
+    },
+    "runtime_params_json": {
+      "table": "node_run_configs",
+      "column": "runtime_params_json",
+      "mutability": "immutable"
+    },
+    "inventory_snapshot_json": {
+      "table": "node_run_configs",
+      "column": "inventory_snapshot_json",
+      "mutability": "immutable"
+    },
+    "runtime_inventory_json": {
+      "table": "node_run_configs",
+      "column": "runtime_inventory_json",
+      "mutability": "immutable"
+    },
+    "injected_memories_json": {
+      "table": "node_run_configs",
+      "column": "injected_memories_json",
+      "mutability": "immutable"
+    },
+    "agent_override_name": {
+      "table": "node_run_configs",
+      "column": "agent_override_name",
+      "mutability": "immutable"
+    },
+    "agent_override_id": {
+      "table": "node_run_configs",
+      "column": "agent_override_id",
+      "mutability": "immutable"
+    },
+    "shard_value_hash": {
+      "table": "node_run_configs",
+      "column": "shard_value_hash",
+      "mutability": "immutable"
+    },
+    "pid": {
+      "table": "node_run_runtime_states",
+      "column": "pid",
+      "mutability": "CAS-mutable"
+    },
+    "spawn_binary_path": {
+      "table": "node_run_runtime_states",
+      "column": "spawn_binary_path",
+      "mutability": "CAS-mutable"
+    },
+    "spawn_launch_nonce": {
+      "table": "node_run_runtime_states",
+      "column": "spawn_launch_nonce",
+      "mutability": "CAS-mutable"
+    },
+    "opencode_session_id": {
+      "table": "node_run_runtime_states",
+      "column": "session_id",
+      "mutability": "CAS-mutable"
+    },
+    "startup_verification_json": {
+      "table": "node_run_runtime_states",
+      "column": "startup_verification_json",
+      "mutability": "CAS-mutable"
+    },
+    "wrapper_progress_json": {
+      "table": "node_run_runtime_states",
+      "column": "wrapper_progress_json",
+      "mutability": "CAS-mutable"
+    },
+    "iso_worktree_path": {
+      "table": "node_run_runtime_states",
+      "column": "isolation_root_ref",
+      "mutability": "immutable"
+    },
+    "merge_state": {
+      "table": "node_run_runtime_states",
+      "column": "merge_state",
+      "mutability": "CAS-mutable"
+    },
+    "tok_input": {
+      "table": "node_run_results",
+      "column": "tok_input",
+      "mutability": "CAS-mutable"
+    },
+    "tok_output": {
+      "table": "node_run_results",
+      "column": "tok_output",
+      "mutability": "CAS-mutable"
+    },
+    "tok_cache_create": {
+      "table": "node_run_results",
+      "column": "tok_cache_create",
+      "mutability": "CAS-mutable"
+    },
+    "tok_cache_read": {
+      "table": "node_run_results",
+      "column": "tok_cache_read",
+      "mutability": "CAS-mutable"
+    },
+    "tok_total": {
+      "table": "node_run_results",
+      "column": "tok_total",
+      "mutability": "CAS-mutable"
+    },
+    "port_validation_failures_json": {
+      "table": "node_run_results",
+      "column": "port_validation_failures_json",
+      "mutability": "CAS-mutable"
+    },
+    "commit_push_json": {
+      "table": "node_run_results",
+      "column": "commit_push_json",
+      "mutability": "CAS-mutable"
+    },
+    "superseded_by_review": {
+      "table": "node_run_results",
+      "column": "superseded_by_review",
+      "mutability": "CAS-mutable"
+    },
+    "rolled_back": {
+      "table": "node_run_results",
+      "column": "rolled_back",
+      "mutability": "CAS-mutable"
+    },
+    "pre_snapshot": {
+      "table": "node_run_repo_checkpoints",
+      "column": "pre_snapshot",
+      "mutability": "immutable"
+    },
+    "pre_snapshot_repos_json": {
+      "table": "node_run_repo_checkpoints",
+      "column": "pre_snapshot",
+      "mutability": "immutable"
+    },
+    "iso_base_snapshot": {
+      "table": "node_run_repo_checkpoints",
+      "column": "isolation_base",
+      "mutability": "immutable"
+    },
+    "iso_base_snapshot_repos_json": {
+      "table": "node_run_repo_checkpoints",
+      "column": "isolation_base",
+      "mutability": "immutable"
+    },
+    "iso_node_tree": {
+      "table": "node_run_repo_checkpoints",
+      "column": "node_tree",
+      "mutability": "immutable"
+    },
+    "iso_node_tree_repos_json": {
+      "table": "node_run_repo_checkpoints",
+      "column": "node_tree",
+      "mutability": "immutable"
+    },
+    "iso_submodules_json": {
+      "table": "node_run_repo_checkpoints",
+      "column": "submodules",
+      "mutability": "immutable"
+    },
+    "iso_submodules_repos_json": {
+      "table": "node_run_repo_checkpoints",
+      "column": "submodules",
+      "mutability": "immutable"
+    },
+    "consumed_upstream_runs_json": {
+      "table": "node_run_inputs",
+      "column": "producer_run_id",
+      "mutability": "immutable",
+      "conversion": "Preserve original producer_run_id. Set producer_run_ref only when that recorded producer exists in the same task; otherwise require legacy-derived plus evidence_ref_json. Encode null shard with NO_PRODUCER_SHARD_SLOT (shard-v1:none), real keys with producerShardSlot. NULL source means inputs_recorded=false; never infer from the current graph."
+    }
+  },
+  "agents": {
+    "id": {
+      "table": "agents",
+      "column": "id",
+      "mutability": "CAS-mutable"
+    },
+    "name": {
+      "table": "agents",
+      "column": "name",
+      "mutability": "CAS-mutable"
+    },
+    "description": {
+      "table": "agents",
+      "column": "description",
+      "mutability": "CAS-mutable"
+    },
+    "outputs": {
+      "table": "agents",
+      "column": "outputs",
+      "mutability": "CAS-mutable"
+    },
+    "inputs": {
+      "table": "agents",
+      "column": "inputs",
+      "mutability": "CAS-mutable"
+    },
+    "sync_outputs_on_iterate": {
+      "table": "agents",
+      "column": "sync_outputs_on_iterate",
+      "mutability": "CAS-mutable"
+    },
+    "runtime": {
+      "table": "agents",
+      "column": "runtime",
+      "mutability": "CAS-mutable"
+    },
+    "permission": {
+      "table": "agents",
+      "column": "permission",
+      "mutability": "CAS-mutable"
+    },
+    "skills": {
+      "table": "agent_skill_refs",
+      "column": "reference_key",
+      "mutability": "derived",
+      "conversion": "Explode recorded references in order with occurrence and ordinal; preserve duplicates, dangling identities and project-name references, never resolve from mutable catalog."
+    },
+    "depends_on": {
+      "table": "agent_dependencies",
+      "column": "dependency_agent_id",
+      "mutability": "derived",
+      "conversion": "Explode recorded references in order with occurrence and ordinal; preserve duplicates, dangling identities and project-name references, never resolve from mutable catalog."
+    },
+    "mcp": {
+      "table": "agent_mcp_refs",
+      "column": "mcp_id",
+      "mutability": "derived",
+      "conversion": "Explode recorded references in order with occurrence and ordinal; preserve duplicates, dangling identities and project-name references, never resolve from mutable catalog."
+    },
+    "plugins": {
+      "table": "agent_plugin_refs",
+      "column": "plugin_id",
+      "mutability": "derived",
+      "conversion": "Explode recorded references in order with occurrence and ordinal; preserve duplicates, dangling identities and project-name references, never resolve from mutable catalog."
+    },
+    "frontmatter_extra": {
+      "table": "agents",
+      "column": "frontmatter_extra",
+      "mutability": "CAS-mutable"
+    },
+    "body_md": {
+      "table": "agents",
+      "column": "body_md",
+      "mutability": "CAS-mutable"
+    },
+    "owner_user_id": {
+      "table": "agents",
+      "column": "owner_user_id",
+      "mutability": "CAS-mutable"
+    },
+    "visibility": {
+      "table": "agents",
+      "column": "visibility",
+      "mutability": "CAS-mutable"
+    },
+    "acl_revision": {
+      "table": "agents",
+      "column": "acl_revision",
+      "mutability": "CAS-mutable"
+    },
+    "builtin": {
+      "table": "agents",
+      "column": "builtin",
+      "mutability": "CAS-mutable"
+    },
+    "schema_version": {
+      "table": "agents",
+      "column": "schema_version",
+      "mutability": "CAS-mutable"
+    },
+    "created_at": {
+      "table": "agents",
+      "column": "created_at",
+      "mutability": "CAS-mutable"
+    },
+    "updated_at": {
+      "table": "agents",
+      "column": "updated_at",
+      "mutability": "CAS-mutable"
+    }
+  },
+  "clarify_rounds": {
+    "id": {
+      "table": "clarify_rounds",
+      "column": "id",
+      "mutability": "CAS-mutable"
+    },
+    "task_id": {
+      "table": "clarify_rounds",
+      "column": "task_id",
+      "mutability": "CAS-mutable"
+    },
+    "kind": {
+      "table": "clarify_rounds",
+      "column": "kind",
+      "mutability": "CAS-mutable"
+    },
+    "asking_node_id": {
+      "table": "clarify_rounds",
+      "column": "asking_node_id",
+      "mutability": "CAS-mutable"
+    },
+    "asking_node_run_id": {
+      "table": "clarify_rounds",
+      "column": "asking_node_run_id",
+      "mutability": "CAS-mutable"
+    },
+    "asking_shard_key": {
+      "table": "clarify_rounds",
+      "column": "asking_shard_key",
+      "mutability": "CAS-mutable"
+    },
+    "intermediary_node_id": {
+      "table": "clarify_rounds",
+      "column": "intermediary_node_id",
+      "mutability": "CAS-mutable"
+    },
+    "intermediary_node_run_id": {
+      "table": "clarify_rounds",
+      "column": "intermediary_node_run_id",
+      "mutability": "CAS-mutable"
+    },
+    "target_consumer_node_id": {
+      "table": "clarify_rounds",
+      "column": "target_consumer_node_id",
+      "mutability": "CAS-mutable"
+    },
+    "loop_iter": {
+      "table": "clarify_rounds",
+      "column": "loop_iter",
+      "mutability": "CAS-mutable"
+    },
+    "container_run_id": {
+      "table": "clarify_rounds",
+      "column": "container_run_id",
+      "mutability": "CAS-mutable"
+    },
+    "iteration": {
+      "table": "clarify_rounds",
+      "column": "iteration",
+      "mutability": "CAS-mutable"
+    },
+    "questions_json": {
+      "table": "clarify_rounds",
+      "column": "questions_json",
+      "mutability": "CAS-mutable"
+    },
+    "answers_json": {
+      "table": "clarify_answers",
+      "column": "value_json",
+      "mutability": "derived",
+      "conversion": "Preserve arrays as per-question rows in source ordinal/occurrence order; answers_recorded distinguishes NULL from []. Non-array source text goes verbatim to clarify_rounds.legacy_answers_json with answers_recorded=false; SQL NULL and arrays leave that column NULL."
+    },
+    "directive": {
+      "table": "clarify_rounds",
+      "column": "directive",
+      "mutability": "CAS-mutable"
+    },
+    "status": {
+      "table": "clarify_rounds",
+      "column": "status",
+      "mutability": "CAS-mutable"
+    },
+    "truncation_warnings_json": {
+      "table": "clarify_rounds",
+      "column": "truncation_warnings_json",
+      "mutability": "CAS-mutable"
+    },
+    "designer_run_triggered_at": {
+      "table": "clarify_rounds",
+      "column": "designer_run_triggered_at",
+      "mutability": "CAS-mutable"
+    },
+    "abandoned_at": {
+      "table": "clarify_rounds",
+      "column": "abandoned_at",
+      "mutability": "CAS-mutable"
+    },
+    "created_at": {
+      "table": "clarify_rounds",
+      "column": "created_at",
+      "mutability": "CAS-mutable"
+    },
+    "answered_at": {
+      "table": "clarify_rounds",
+      "column": "answered_at",
+      "mutability": "CAS-mutable"
+    },
+    "answered_by": {
+      "table": "clarify_rounds",
+      "column": "answered_by",
+      "mutability": "CAS-mutable"
+    },
+    "submitted_by_role": {
+      "table": "clarify_rounds",
+      "column": "submitted_by_role",
+      "mutability": "CAS-mutable"
+    },
+    "answer_attributions_json": {
+      "table": "clarify_answer_attributions",
+      "column": "value_json",
+      "mutability": "derived",
+      "conversion": "Explode every attribution entry independently of answers/drafts, preserving raw value JSON, source text ordinal and per-question occurrence. clarify_rounds.attributions_recorded distinguishes SQL NULL/JSON null from {}, without inferring from submitted role or child presence."
+    },
+    "draft_answers_json": {
+      "table": "clarify_answer_drafts",
+      "column": "value_json",
+      "mutability": "derived",
+      "conversion": "Explode per question in source text ordinal/occurrence order; drafts_recorded distinguishes NULL from {}. Editor attribution is the independent clarify_answer_attributions map, not a duplicated draft fact."
+    }
+  },
+  "code_ai_attempts": {
+    "id": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    },
+    "round_id": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    },
+    "stage_name": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    },
+    "shard_key": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    },
+    "rerun_seq": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    },
+    "attempt_seq": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    },
+    "status": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    },
+    "validation_outcome": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    },
+    "session_ref": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    },
+    "node_run_id": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    },
+    "started_at": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    },
+    "ended_at": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    }
+  },
+  "code_artifacts": {
+    "id": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    },
+    "repo_path": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    },
+    "commit_sha": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    },
+    "base_sha": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    },
+    "digest": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    },
+    "keep_ref": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    },
+    "round_id": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    },
+    "work_item_id": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    },
+    "generation": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    },
+    "ref_count": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    },
+    "state": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    },
+    "created_at": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    },
+    "released_at": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    }
+  },
+  "code_findings": {
+    "id": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    },
+    "code_host_endpoint_id": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    },
+    "stable_project_id": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    },
+    "anchor_kind": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    },
+    "anchor_id": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    },
+    "capability": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    },
+    "fingerprint": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    },
+    "generation": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    },
+    "lifecycle": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    },
+    "severity": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    },
+    "title": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    },
+    "file_path": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    },
+    "anchor_line": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    },
+    "external_id": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    },
+    "published_round_id": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    },
+    "disappeared_round_id": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    },
+    "resolved_at": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    },
+    "resolved_round_id": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    },
+    "code_changed_at": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    },
+    "code_changed_round_id": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    },
+    "created_at": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    },
+    "last_seen_at": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    },
+    "closed_at": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    }
+  },
+  "code_fix_attempts": {
+    "id": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    },
+    "work_item_id": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    },
+    "fingerprint": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    },
+    "attempt_seq": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    },
+    "round_id": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    },
+    "summary": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    },
+    "outcome": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    },
+    "detail": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    },
+    "created_at": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    }
+  },
+  "code_mr_leases": {
+    "lease_key": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    },
+    "holder_round_id": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    },
+    "token": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    },
+    "acquired_at": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    },
+    "expires_at": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    }
+  },
+  "code_produced_mrs": {
+    "mr_key": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    },
+    "code_host_endpoint_id": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    },
+    "stable_project_id": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    },
+    "mr_iid": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    },
+    "work_item_id": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    },
+    "round_id": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    },
+    "created_at": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    },
+    "closed_at": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    }
+  },
+  "code_publish_intents": {
+    "batch_id": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    },
+    "round_id": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    },
+    "epoch": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    },
+    "state": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    },
+    "fingerprints_json": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    },
+    "external_ids_json": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    },
+    "anchor_ref": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    },
+    "created_at": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    },
+    "settled_at": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    }
+  },
+  "code_round_stages": {
+    "id": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    },
+    "round_id": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    },
+    "stage_seq": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    },
+    "stage_name": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    },
+    "stage_kind": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    },
+    "status": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    },
+    "counts_json": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    },
+    "error": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    },
+    "started_at": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    },
+    "ended_at": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    }
+  },
+  "code_trigger_deliveries": {
+    "id": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    },
+    "correlation_id": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    },
+    "code_host_endpoint_id": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    },
+    "stable_project_id": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    },
+    "anchor_kind": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    },
+    "anchor_id": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    },
+    "capability": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    },
+    "step": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    },
+    "outcome": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    },
+    "reason": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    },
+    "queued_at": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    },
+    "queue_position": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    },
+    "waiting_on": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    },
+    "round_id": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    },
+    "is_probe": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    },
+    "created_at": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    },
+    "updated_at": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    }
+  },
+  "code_work_items": {
+    "id": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    },
+    "code_host_endpoint_id": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    },
+    "stable_project_id": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    },
+    "capability": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    },
+    "anchor_kind": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    },
+    "anchor_id": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    },
+    "status": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    },
+    "epoch": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    },
+    "current_round_id": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    },
+    "pending_generation": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    },
+    "handed_off_fingerprint": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    },
+    "publishing_epoch": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    },
+    "pending_revision": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    },
+    "anchor_meta": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    },
+    "initiator_user_id": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    },
+    "created_at": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    },
+    "updated_at": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    },
+    "closed_at": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    }
+  },
+  "code_work_observations": {
+    "id": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    },
+    "work_item_id": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    },
+    "kind": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    },
+    "reason": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    },
+    "observed_revision": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    },
+    "causation_id": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    },
+    "event_id": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    },
+    "created_at": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    }
+  },
+  "code_work_rounds": {
+    "id": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    },
+    "work_item_id": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    },
+    "round_seq": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    },
+    "epoch": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    },
+    "task_id": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    },
+    "baseline_sha": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    },
+    "work_package": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    },
+    "template_snapshot": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    },
+    "stage_contract_ver": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    },
+    "outcome": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    },
+    "started_at": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    },
+    "ended_at": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    }
+  },
+  "collaboration_gate_artifacts": {
+    "operation_id": {
+      "table": "collaboration_gate_artifacts",
+      "column": "operation_id",
+      "mutability": "CAS-mutable"
+    },
+    "artifact_key": {
+      "table": "collaboration_gate_artifacts",
+      "column": "artifact_key",
+      "mutability": "CAS-mutable"
+    },
+    "artifact_kind": {
+      "table": "collaboration_gate_artifacts",
+      "column": "artifact_kind",
+      "mutability": "CAS-mutable"
+    },
+    "staged_path": {
+      "table": "collaboration_gate_artifacts",
+      "column": "staged_content_ref_json",
+      "mutability": "derived",
+      "conversion": "Convert staged address and preserve bytes/recovery role. Artifact definition v3 permits the reference to be NULL while declared before publication. Staged/consumed/finalized recovery requires the corresponding actual reference; converted final reads may fall back to the staged content.",
+      "companion": "collaboration_gate_artifacts.staged_inline_bytes"
+    },
+    "final_path": {
+      "table": "collaboration_gate_artifacts",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Convert final address; retain the original publication identity as final_content_key. Artifact definition v3 permits the reference to be NULL while declared before publication. Staged/consumed/finalized recovery requires the corresponding actual reference; converted final reads may fall back to the staged content.",
+      "companion": "collaboration_gate_artifacts.content_inline_bytes"
+    },
+    "sha256": {
+      "table": "collaboration_gate_artifacts",
+      "column": "sha256",
+      "mutability": "CAS-mutable"
+    },
+    "byte_size": {
+      "table": "collaboration_gate_artifacts",
+      "column": "byte_size",
+      "mutability": "CAS-mutable"
+    },
+    "state": {
+      "table": "collaboration_gate_artifacts",
+      "column": "state",
+      "mutability": "CAS-mutable"
+    },
+    "receipt_json": {
+      "table": "collaboration_gate_artifacts",
+      "column": "receipt_json",
+      "mutability": "CAS-mutable"
+    },
+    "updated_at": {
+      "table": "collaboration_gate_artifacts",
+      "column": "updated_at",
+      "mutability": "CAS-mutable"
+    }
+  },
+  "collaboration_gate_operations": {
+    "id": {
+      "table": "collaboration_gate_operations",
+      "column": "id",
+      "mutability": "CAS-mutable"
+    },
+    "task_id": {
+      "table": "collaboration_gate_operations",
+      "column": "task_id",
+      "mutability": "CAS-mutable"
+    },
+    "gate_kind": {
+      "table": "collaboration_gate_operations",
+      "column": "gate_kind",
+      "mutability": "CAS-mutable"
+    },
+    "operation_kind": {
+      "table": "collaboration_gate_operations",
+      "column": "operation_kind",
+      "mutability": "CAS-mutable"
+    },
+    "gate_ref": {
+      "table": "collaboration_gate_operations",
+      "column": "gate_ref",
+      "mutability": "CAS-mutable"
+    },
+    "idempotency_key": {
+      "table": "collaboration_gate_operations",
+      "column": "idempotency_key",
+      "mutability": "CAS-mutable"
+    },
+    "request_hash": {
+      "table": "collaboration_gate_operations",
+      "column": "request_hash",
+      "mutability": "CAS-mutable"
+    },
+    "actor_user_id": {
+      "table": "collaboration_gate_operations",
+      "column": "actor_user_id",
+      "mutability": "CAS-mutable"
+    },
+    "expected_task_revision": {
+      "table": "collaboration_gate_operations",
+      "column": "expected_task_revision",
+      "mutability": "CAS-mutable"
+    },
+    "expected_gate_revision": {
+      "table": "collaboration_gate_operations",
+      "column": "expected_gate_revision",
+      "mutability": "CAS-mutable"
+    },
+    "result_gate_revision": {
+      "table": "collaboration_gate_operations",
+      "column": "result_gate_revision",
+      "mutability": "CAS-mutable"
+    },
+    "state": {
+      "table": "collaboration_gate_operations",
+      "column": "state",
+      "mutability": "CAS-mutable"
+    },
+    "claim_epoch": {
+      "table": "collaboration_gate_operations",
+      "column": "claim_epoch",
+      "mutability": "CAS-mutable"
+    },
+    "claim_expires_at": {
+      "table": "collaboration_gate_operations",
+      "column": "claim_expires_at",
+      "mutability": "CAS-mutable"
+    },
+    "schema_version": {
+      "table": "collaboration_gate_operations",
+      "column": "schema_version",
+      "mutability": "CAS-mutable"
+    },
+    "manifest_json": {
+      "table": "collaboration_gate_operations",
+      "column": "manifest_json",
+      "mutability": "CAS-mutable"
+    },
+    "receipt_json": {
+      "table": "collaboration_gate_operations",
+      "column": "receipt_json",
+      "mutability": "CAS-mutable"
+    },
+    "failure_json": {
+      "table": "collaboration_gate_operations",
+      "column": "failure_json",
+      "mutability": "CAS-mutable"
+    },
+    "created_at": {
+      "table": "collaboration_gate_operations",
+      "column": "created_at",
+      "mutability": "CAS-mutable"
+    },
+    "updated_at": {
+      "table": "collaboration_gate_operations",
+      "column": "updated_at",
+      "mutability": "CAS-mutable"
+    },
+    "committed_at": {
+      "table": "collaboration_gate_operations",
+      "column": "committed_at",
+      "mutability": "CAS-mutable"
+    },
+    "completed_at": {
+      "table": "collaboration_gate_operations",
+      "column": "completed_at",
+      "mutability": "CAS-mutable"
+    }
+  },
+  "committed_event_family_cutovers": {
+    "producer": {
+      "table": "committed_event_family_cutovers",
+      "column": "producer",
+      "mutability": "CAS-mutable"
+    },
+    "family": {
+      "table": "committed_event_family_cutovers",
+      "column": "family",
+      "mutability": "CAS-mutable"
+    },
+    "mode": {
+      "table": null,
+      "column": "activation_receipts",
+      "mutability": "derived",
+      "conversion": "V3 meta receipt retains epoch-1 cutover evidence; business routing uses epoch alone."
+    },
+    "epoch": {
+      "table": "committed_event_family_cutovers",
+      "column": "epoch",
+      "mutability": "CAS-mutable"
+    },
+    "changed_at": {
+      "table": "committed_event_family_cutovers",
+      "column": "changed_at",
+      "mutability": "CAS-mutable"
+    },
+    "change_ref": {
+      "table": "committed_event_family_cutovers",
+      "column": "change_ref",
+      "mutability": "CAS-mutable"
+    }
+  },
+  "development_missions": {
+    "id": {
+      "table": "development_missions",
+      "column": "id",
+      "mutability": "CAS-mutable"
+    },
+    "revision": {
+      "table": "development_missions",
+      "column": "revision",
+      "mutability": "CAS-mutable"
+    },
+    "epoch": {
+      "table": "development_missions",
+      "column": "epoch",
+      "mutability": "CAS-mutable"
+    },
+    "status": {
+      "table": "development_missions",
+      "column": "status",
+      "mutability": "CAS-mutable"
+    },
+    "automation_mode": {
+      "table": "development_missions",
+      "column": "automation_mode",
+      "mutability": "CAS-mutable"
+    },
+    "transition_fence": {
+      "table": "development_missions",
+      "column": "transition_fence",
+      "mutability": "CAS-mutable"
+    },
+    "repository_id": {
+      "table": "development_missions",
+      "column": "repository_id",
+      "mutability": "CAS-mutable"
+    },
+    "source_kind": {
+      "table": "development_missions",
+      "column": "source_kind",
+      "mutability": "CAS-mutable"
+    },
+    "source_content_digest": {
+      "table": "development_missions",
+      "column": "source_content_digest",
+      "mutability": "CAS-mutable"
+    },
+    "requested_source_key": {
+      "table": "development_missions",
+      "column": "requested_source_key",
+      "mutability": "CAS-mutable"
+    },
+    "external_id": {
+      "table": "development_missions",
+      "column": "external_id",
+      "mutability": "CAS-mutable"
+    },
+    "resolved_source_key": {
+      "table": "development_missions",
+      "column": "resolved_source_key",
+      "mutability": "CAS-mutable"
+    },
+    "resolved_adapter_id": {
+      "table": "development_missions",
+      "column": "resolved_adapter_id",
+      "mutability": "CAS-mutable"
+    },
+    "resolved_adapter_revision": {
+      "table": "development_missions",
+      "column": "resolved_adapter_revision",
+      "mutability": "CAS-mutable"
+    },
+    "delivery_kind": {
+      "table": "development_missions",
+      "column": "delivery_kind",
+      "mutability": "CAS-mutable"
+    },
+    "delivery_target_ref": {
+      "table": "development_missions",
+      "column": "delivery_target_ref",
+      "mutability": "CAS-mutable"
+    },
+    "delivery_source_branch": {
+      "table": "development_missions",
+      "column": "delivery_source_branch",
+      "mutability": "CAS-mutable"
+    },
+    "adopted_mr_ref": {
+      "table": "development_missions",
+      "column": "adopted_mr_ref",
+      "mutability": "CAS-mutable"
+    },
+    "assignment_id": {
+      "table": "development_missions",
+      "column": "assignment_id",
+      "mutability": "CAS-mutable"
+    },
+    "employee_id": {
+      "table": "development_missions",
+      "column": "employee_id",
+      "mutability": "CAS-mutable"
+    },
+    "employee_revision": {
+      "table": "development_missions",
+      "column": "employee_revision",
+      "mutability": "CAS-mutable"
+    },
+    "policy_id": {
+      "table": "development_missions",
+      "column": "policy_id",
+      "mutability": "CAS-mutable"
+    },
+    "policy_revision": {
+      "table": "development_missions",
+      "column": "policy_revision",
+      "mutability": "CAS-mutable"
+    },
+    "requirement_bundle_ref": {
+      "table": "development_missions",
+      "column": "requirement_bundle_ref",
+      "mutability": "CAS-mutable"
+    },
+    "repository_facts_ref": {
+      "table": "development_missions",
+      "column": "repository_facts_ref",
+      "mutability": "CAS-mutable"
+    },
+    "upload_plan_ref": {
+      "table": "development_missions",
+      "column": "upload_plan_ref",
+      "mutability": "CAS-mutable"
+    },
+    "upload_placement_ref": {
+      "table": "development_missions",
+      "column": "upload_placement_ref",
+      "mutability": "CAS-mutable"
+    },
+    "upload_publication_ref": {
+      "table": "development_missions",
+      "column": "upload_publication_ref",
+      "mutability": "CAS-mutable"
+    },
+    "mr_claim_id": {
+      "table": "development_missions",
+      "column": "mr_claim_id",
+      "mutability": "CAS-mutable"
+    },
+    "current_action_run_id": {
+      "table": "development_missions",
+      "column": "current_action_run_id",
+      "mutability": "CAS-mutable"
+    },
+    "readiness_json": {
+      "table": "development_missions",
+      "column": "readiness_json",
+      "mutability": "CAS-mutable"
+    },
+    "block_code": {
+      "table": "development_missions",
+      "column": "block_code",
+      "mutability": "CAS-mutable"
+    },
+    "block_detail": {
+      "table": "development_missions",
+      "column": "block_detail",
+      "mutability": "CAS-mutable"
+    },
+    "terminal_kind": {
+      "table": "development_missions",
+      "column": "terminal_kind",
+      "mutability": "CAS-mutable"
+    },
+    "terminal_upload_fulfillment": {
+      "table": "development_missions",
+      "column": "terminal_upload_fulfillment",
+      "mutability": "CAS-mutable"
+    },
+    "terminal_at": {
+      "table": "development_missions",
+      "column": "terminal_at",
+      "mutability": "CAS-mutable"
+    },
+    "reopened_from_mission_id": {
+      "table": "development_missions",
+      "column": "reopened_from_mission_id",
+      "mutability": "CAS-mutable"
+    },
+    "launch_idempotency_key": {
+      "table": "development_missions",
+      "column": "launch_idempotency_key",
+      "mutability": "CAS-mutable"
+    },
+    "created_by": {
+      "table": "development_missions",
+      "column": "created_by",
+      "mutability": "CAS-mutable"
+    },
+    "created_at": {
+      "table": "development_missions",
+      "column": "created_at",
+      "mutability": "CAS-mutable"
+    },
+    "updated_at": {
+      "table": "development_missions",
+      "column": "updated_at",
+      "mutability": "CAS-mutable"
+    }
+  },
+  "development_object_artifacts": {
+    "reference": {
+      "table": "development_object_artifacts",
+      "column": "reference",
+      "mutability": "CAS-mutable"
+    },
+    "object_id": {
+      "table": "development_object_artifacts",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Convert the recorded address or original bytes to ContentRef v1; preserve NULL, ordering, metadata and original byte digest; never invent media types.",
+      "companion": "development_object_artifacts.content_inline_bytes"
+    },
+    "digest": {
+      "table": "development_object_artifacts",
+      "column": "digest",
+      "mutability": "CAS-mutable"
+    },
+    "size": {
+      "table": "development_object_artifacts",
+      "column": "size",
+      "mutability": "CAS-mutable"
+    },
+    "created_at": {
+      "table": "development_object_artifacts",
+      "column": "created_at",
+      "mutability": "CAS-mutable"
+    }
+  },
+  "doc_versions": {
+    "id": {
+      "table": "doc_versions",
+      "column": "id",
+      "mutability": "CAS-mutable"
+    },
+    "task_id": {
+      "table": "doc_versions",
+      "column": "task_id",
+      "mutability": "CAS-mutable"
+    },
+    "review_node_id": {
+      "table": "doc_versions",
+      "column": "review_node_id",
+      "mutability": "CAS-mutable"
+    },
+    "review_node_run_id": {
+      "table": "doc_versions",
+      "column": "review_node_run_id",
+      "mutability": "CAS-mutable"
+    },
+    "source_node_id": {
+      "table": "doc_versions",
+      "column": "source_node_id",
+      "mutability": "CAS-mutable"
+    },
+    "source_port_name": {
+      "table": "doc_versions",
+      "column": "source_port_name",
+      "mutability": "CAS-mutable"
+    },
+    "version_index": {
+      "table": "doc_versions",
+      "column": "version_index",
+      "mutability": "CAS-mutable"
+    },
+    "review_iteration": {
+      "table": "doc_versions",
+      "column": "review_iteration",
+      "mutability": "CAS-mutable"
+    },
+    "body_path": {
+      "table": "doc_versions",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Convert the recorded address or original bytes to ContentRef v1; preserve NULL, ordering, metadata and original byte digest; never invent media types.",
+      "companion": "doc_versions.content_inline_bytes"
+    },
+    "comments_json": {
+      "table": "doc_versions",
+      "column": "comments_json",
+      "mutability": "CAS-mutable"
+    },
+    "decision": {
+      "table": "doc_versions",
+      "column": "decision",
+      "mutability": "CAS-mutable"
+    },
+    "decision_reason": {
+      "table": "doc_versions",
+      "column": "decision_reason",
+      "mutability": "CAS-mutable"
+    },
+    "prompt_snapshot": {
+      "table": "doc_versions",
+      "column": "prompt_snapshot",
+      "mutability": "CAS-mutable"
+    },
+    "source_file_path": {
+      "table": "doc_versions",
+      "column": "source_file_path",
+      "mutability": "CAS-mutable"
+    },
+    "item_index": {
+      "table": "doc_versions",
+      "column": "item_index",
+      "mutability": "CAS-mutable"
+    },
+    "selection": {
+      "table": "doc_versions",
+      "column": "selection",
+      "mutability": "CAS-mutable"
+    },
+    "item_path": {
+      "table": "doc_versions",
+      "column": "item_path",
+      "mutability": "CAS-mutable"
+    },
+    "selection_stale": {
+      "table": "doc_versions",
+      "column": "selection_stale",
+      "mutability": "CAS-mutable"
+    },
+    "round_generation": {
+      "table": "doc_versions",
+      "column": "round_generation",
+      "mutability": "CAS-mutable"
+    },
+    "created_at": {
+      "table": "doc_versions",
+      "column": "created_at",
+      "mutability": "CAS-mutable"
+    },
+    "decided_at": {
+      "table": "doc_versions",
+      "column": "decided_at",
+      "mutability": "CAS-mutable"
+    },
+    "decided_by": {
+      "table": "doc_versions",
+      "column": "decided_by",
+      "mutability": "CAS-mutable"
+    },
+    "decided_by_role": {
+      "table": "doc_versions",
+      "column": "decided_by_role",
+      "mutability": "CAS-mutable"
+    }
+  },
+  "employee_reaction_artifacts": {
+    "digest": {
+      "table": "employee_reaction_artifacts",
+      "column": "digest",
+      "mutability": "CAS-mutable"
+    },
+    "kind": {
+      "table": "employee_reaction_artifacts",
+      "column": "kind",
+      "mutability": "CAS-mutable"
+    },
+    "body": {
+      "table": "employee_reaction_artifacts",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Convert the recorded address or original bytes to ContentRef v1; preserve NULL, ordering, metadata and original byte digest; never invent media types.",
+      "companion": "employee_reaction_artifacts.content_inline_bytes"
+    },
+    "bytes": {
+      "table": "employee_reaction_artifacts",
+      "column": "bytes",
+      "mutability": "CAS-mutable"
+    },
+    "created_at": {
+      "table": "employee_reaction_artifacts",
+      "column": "created_at",
+      "mutability": "CAS-mutable"
+    }
+  },
+  "hosted_node_event_archives": {
+    "id": {
+      "table": "hosted_node_event_archives",
+      "column": "id",
+      "mutability": "CAS-mutable"
+    },
+    "task_id": {
+      "table": "hosted_node_event_archives",
+      "column": "task_id",
+      "mutability": "CAS-mutable"
+    },
+    "node_run_id": {
+      "table": "hosted_node_event_archives",
+      "column": "node_run_id",
+      "mutability": "CAS-mutable"
+    },
+    "first_id": {
+      "table": "hosted_node_event_archives",
+      "column": "first_id",
+      "mutability": "CAS-mutable"
+    },
+    "last_id": {
+      "table": "hosted_node_event_archives",
+      "column": "last_id",
+      "mutability": "CAS-mutable"
+    },
+    "row_count": {
+      "table": "hosted_node_event_archives",
+      "column": "row_count",
+      "mutability": "CAS-mutable"
+    },
+    "digest": {
+      "table": "hosted_node_event_archives",
+      "column": "digest",
+      "mutability": "CAS-mutable"
+    },
+    "size": {
+      "table": "hosted_node_event_archives",
+      "column": "size",
+      "mutability": "CAS-mutable"
+    },
+    "state": {
+      "table": "hosted_node_event_archives",
+      "column": "state",
+      "mutability": "CAS-mutable"
+    },
+    "object_id": {
+      "table": "hosted_node_event_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Convert the recorded address or original bytes to ContentRef v1; preserve NULL, ordering, metadata and original byte digest; never invent media types.",
+      "companion": "hosted_node_event_archives.content_inline_bytes"
+    },
+    "created_at": {
+      "table": "hosted_node_event_archives",
+      "column": "created_at",
+      "mutability": "CAS-mutable"
+    }
+  },
+  "hosted_object_publications": {
+    "id": {
+      "table": "content_publications",
+      "column": "id",
+      "mutability": "CAS-mutable"
+    },
+    "owner": {
+      "table": "content_publications",
+      "column": "owner",
+      "mutability": "CAS-mutable"
+    },
+    "logical_key": {
+      "table": "content_publications",
+      "column": "logical_key",
+      "mutability": "CAS-mutable"
+    },
+    "scope": {
+      "table": "content_publications",
+      "column": "scope",
+      "mutability": "CAS-mutable"
+    },
+    "attempt": {
+      "table": "content_publications",
+      "column": "attempt",
+      "mutability": "CAS-mutable"
+    },
+    "state": {
+      "table": "content_publications",
+      "column": "state",
+      "mutability": "CAS-mutable"
+    },
+    "sha256": {
+      "table": "content_publications",
+      "column": "sha256",
+      "mutability": "CAS-mutable"
+    },
+    "size": {
+      "table": "content_publications",
+      "column": "size",
+      "mutability": "CAS-mutable"
+    },
+    "object_id": {
+      "table": "content_publications",
+      "column": "content_id",
+      "mutability": "derived",
+      "conversion": "Resolve the original object to the neutral content catalog while preserving owner/logical_key/epoch/attempt/state and recovery receipts."
+    },
+    "epoch": {
+      "table": "content_publications",
+      "column": "epoch",
+      "mutability": "CAS-mutable"
+    },
+    "source_sealed": {
+      "table": "content_publications",
+      "column": "source_sealed",
+      "mutability": "CAS-mutable"
+    },
+    "attempts": {
+      "table": "content_publications",
+      "column": "attempts",
+      "mutability": "CAS-mutable"
+    },
+    "next_attempt_at": {
+      "table": "content_publications",
+      "column": "next_attempt_at",
+      "mutability": "CAS-mutable"
+    },
+    "created_at": {
+      "table": "content_publications",
+      "column": "created_at",
+      "mutability": "CAS-mutable"
+    },
+    "released_at": {
+      "table": "content_publications",
+      "column": "released_at",
+      "mutability": "CAS-mutable"
+    },
+    "updated_at": {
+      "table": "content_publications",
+      "column": "updated_at",
+      "mutability": "CAS-mutable"
+    }
+  },
+  "hosted_task_archive_entries": {
+    "path": {
+      "table": "hosted_task_archive_entries",
+      "column": "path",
+      "mutability": "CAS-mutable"
+    },
+    "kind": {
+      "table": "hosted_task_archive_entries",
+      "column": "kind",
+      "mutability": "CAS-mutable"
+    },
+    "parts_json": {
+      "table": "hosted_task_archive_entry_parts",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Explode in array order into path + ordinal + part_key + ContentRef; preserve each publication key. A directory and an empty file have zero parts. Appends add a later ordinal.",
+      "companion": "hosted_task_archive_entry_parts.content_inline_bytes"
+    },
+    "created_at": {
+      "table": "hosted_task_archive_entries",
+      "column": "created_at",
+      "mutability": "CAS-mutable"
+    },
+    "updated_at": {
+      "table": "hosted_task_archive_entries",
+      "column": "updated_at",
+      "mutability": "CAS-mutable"
+    }
+  },
+  "hosted_task_artifacts": {
+    "reference": {
+      "table": "hosted_task_artifacts",
+      "column": "reference",
+      "mutability": "CAS-mutable"
+    },
+    "task_id": {
+      "table": "hosted_task_artifacts",
+      "column": "task_id",
+      "mutability": "CAS-mutable"
+    },
+    "object_id": {
+      "table": "hosted_task_artifacts",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Convert the recorded address or original bytes to ContentRef v1; preserve NULL, ordering, metadata and original byte digest; never invent media types.",
+      "companion": "hosted_task_artifacts.content_inline_bytes"
+    },
+    "digest": {
+      "table": "hosted_task_artifacts",
+      "column": "digest",
+      "mutability": "CAS-mutable"
+    },
+    "size": {
+      "table": "hosted_task_artifacts",
+      "column": "size",
+      "mutability": "CAS-mutable"
+    },
+    "created_at": {
+      "table": "hosted_task_artifacts",
+      "column": "created_at",
+      "mutability": "CAS-mutable"
+    }
+  },
+  "intent_turn_events": {
+    "id": {
+      "table": "intent_turn_events",
+      "column": "id",
+      "mutability": "CAS-mutable"
+    },
+    "turn_id": {
+      "table": "intent_turn_events",
+      "column": "turn_id",
+      "mutability": "CAS-mutable"
+    },
+    "event_seq": {
+      "table": "intent_turn_events",
+      "column": "event_seq",
+      "mutability": "CAS-mutable"
+    },
+    "ts": {
+      "table": "intent_turn_events",
+      "column": "ts",
+      "mutability": "CAS-mutable"
+    },
+    "kind": {
+      "table": "intent_turn_events",
+      "column": "kind",
+      "mutability": "CAS-mutable"
+    },
+    "payload": {
+      "table": "intent_turn_events",
+      "column": "payload",
+      "mutability": "CAS-mutable"
+    },
+    "session_id": {
+      "table": "intent_turn_events",
+      "column": "session_id",
+      "mutability": "CAS-mutable"
+    },
+    "parent_session_id": {
+      "table": "intent_turn_events",
+      "column": "parent_session_id",
+      "mutability": "CAS-mutable"
+    },
+    "source": {
+      "table": "intent_turn_events",
+      "column": "source",
+      "mutability": "CAS-mutable"
+    },
+    "external_event_id": {
+      "table": "intent_turn_events",
+      "column": "external_event_id",
+      "mutability": "CAS-mutable"
+    }
+  },
+  "legacy_code_work_item_links": {
+    "id": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    },
+    "mission_id": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    },
+    "legacy_work_item_id": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    },
+    "legacy_round_id": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    },
+    "cutover_receipt_json": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    },
+    "created_at": {
+      "table": "code_history_archives",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Preserve the original typed cell in the versioned archive row; original keys also feed code_history_id_index.",
+      "companion": "code_history_archives.content_inline_bytes"
+    }
+  },
+  "memories": {
+    "id": {
+      "table": "memories",
+      "column": "id",
+      "mutability": "CAS-mutable"
+    },
+    "scope_type": {
+      "table": "memories",
+      "column": "scope_type",
+      "mutability": "CAS-mutable"
+    },
+    "scope_id": {
+      "table": "memories",
+      "column": "scope_id",
+      "mutability": "CAS-mutable"
+    },
+    "title": {
+      "table": "memories",
+      "column": "title",
+      "mutability": "CAS-mutable"
+    },
+    "body_md": {
+      "table": "memories",
+      "column": "body_md",
+      "mutability": "CAS-mutable"
+    },
+    "tags": {
+      "table": "memories",
+      "column": "tags",
+      "mutability": "CAS-mutable"
+    },
+    "status": {
+      "table": "memories",
+      "column": "status",
+      "mutability": "CAS-mutable"
+    },
+    "source_kind": {
+      "table": "memories",
+      "column": "source_kind",
+      "mutability": "CAS-mutable"
+    },
+    "source_event_id": {
+      "table": "memories",
+      "column": "source_event_id",
+      "mutability": "CAS-mutable"
+    },
+    "source_task_id": {
+      "table": "memories",
+      "column": "source_task_id",
+      "mutability": "CAS-mutable"
+    },
+    "distill_job_id": {
+      "table": "memories",
+      "column": "distill_job_id",
+      "mutability": "CAS-mutable"
+    },
+    "distill_action": {
+      "table": "memories",
+      "column": "distill_action",
+      "mutability": "CAS-mutable"
+    },
+    "supersedes_id": {
+      "table": "memories",
+      "column": "supersedes_id",
+      "mutability": "CAS-mutable"
+    },
+    "superseded_by_id": {
+      "table": "memories",
+      "column": "superseded_by_id",
+      "mutability": "CAS-mutable"
+    },
+    "approved_by_user_id": {
+      "table": "memories",
+      "column": "approved_by_user_id",
+      "mutability": "CAS-mutable"
+    },
+    "approved_at": {
+      "table": "memories",
+      "column": "approved_at",
+      "mutability": "CAS-mutable"
+    },
+    "created_at": {
+      "table": "memories",
+      "column": "created_at",
+      "mutability": "CAS-mutable"
+    },
+    "version": {
+      "table": "memories",
+      "column": "version",
+      "mutability": "CAS-mutable"
+    },
+    "fused_into_skill": {
+      "table": "memories",
+      "column": "fused_into_skill",
+      "mutability": "CAS-mutable"
+    },
+    "fused_into_skill_id": {
+      "table": "memories",
+      "column": "fused_into_skill_id",
+      "mutability": "CAS-mutable",
+      "conversion": "Boot conversion follows the proven fusion skill identity/version; unknown deciding facts block, unchanged rows remain unchanged."
+    },
+    "fused_into_skill_version": {
+      "table": "memories",
+      "column": "fused_into_skill_version",
+      "mutability": "CAS-mutable",
+      "conversion": "Boot conversion follows the proven fusion skill identity/version; unknown deciding facts block, unchanged rows remain unchanged."
+    },
+    "fused_at": {
+      "table": "memories",
+      "column": "fused_at",
+      "mutability": "CAS-mutable"
+    },
+    "fused_by_user_id": {
+      "table": "memories",
+      "column": "fused_by_user_id",
+      "mutability": "CAS-mutable"
+    },
+    "fused_fusion_id": {
+      "table": "memories",
+      "column": "fused_fusion_id",
+      "mutability": "CAS-mutable"
+    }
+  },
+  "node_run_outputs": {
+    "node_run_id": {
+      "table": "node_run_outputs",
+      "column": "node_run_id",
+      "mutability": "CAS-mutable"
+    },
+    "port_name": {
+      "table": "node_run_outputs",
+      "column": "port_name",
+      "mutability": "CAS-mutable"
+    },
+    "content": {
+      "table": "node_run_outputs",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Convert the recorded address or original bytes to ContentRef v1; preserve NULL, ordering, metadata and original byte digest; never invent media types.",
+      "companion": "node_run_outputs.content_inline_bytes"
+    },
+    "kind": {
+      "table": "node_run_outputs",
+      "column": "kind",
+      "mutability": "CAS-mutable"
+    },
+    "archive_json": {
+      "table": "node_run_outputs",
+      "column": "archive_json",
+      "mutability": "CAS-mutable"
+    },
+    "active": {
+      "table": "node_run_outputs",
+      "column": "active",
+      "mutability": "CAS-mutable"
+    }
+  },
+  "repo_group_nodes": {
+    "group_id": {
+      "table": "repo_group_nodes",
+      "column": "group_id",
+      "mutability": "CAS-mutable"
+    },
+    "path": {
+      "table": "repo_group_nodes",
+      "column": "path",
+      "mutability": "CAS-mutable"
+    },
+    "attachment_kind": {
+      "table": "repo_group_nodes",
+      "column": "attachment_kind",
+      "mutability": "CAS-mutable"
+    },
+    "cached_repo_id": {
+      "table": "repo_group_nodes",
+      "column": "cached_repo_id",
+      "mutability": "CAS-mutable"
+    },
+    "ref": {
+      "table": "repo_group_nodes",
+      "column": "ref",
+      "mutability": "CAS-mutable"
+    },
+    "subdir": {
+      "table": "repo_group_nodes",
+      "column": "subdir",
+      "mutability": "CAS-mutable"
+    },
+    "child_group_id": {
+      "table": "repo_group_nodes",
+      "column": "child_group_id",
+      "mutability": "CAS-mutable"
+    },
+    "readonly": {
+      "table": "repo_group_nodes",
+      "column": "readonly",
+      "mutability": "CAS-mutable"
+    }
+  },
+  "review_comments": {
+    "id": {
+      "table": "review_comments",
+      "column": "id",
+      "mutability": "CAS-mutable"
+    },
+    "doc_version_id": {
+      "table": "review_comments",
+      "column": "doc_version_id",
+      "mutability": "CAS-mutable"
+    },
+    "anchor_section_path": {
+      "table": "review_comments",
+      "column": "anchor_section_path",
+      "mutability": "CAS-mutable"
+    },
+    "anchor_paragraph_idx": {
+      "table": "review_comments",
+      "column": "anchor_paragraph_idx",
+      "mutability": "CAS-mutable"
+    },
+    "anchor_offset_start": {
+      "table": "review_comments",
+      "column": "anchor_offset_start",
+      "mutability": "CAS-mutable"
+    },
+    "anchor_offset_end": {
+      "table": "review_comments",
+      "column": "anchor_offset_end",
+      "mutability": "CAS-mutable"
+    },
+    "selected_text": {
+      "table": "review_comments",
+      "column": "selected_text",
+      "mutability": "CAS-mutable"
+    },
+    "context_before": {
+      "table": "review_comments",
+      "column": "context_before",
+      "mutability": "CAS-mutable"
+    },
+    "context_after": {
+      "table": "review_comments",
+      "column": "context_after",
+      "mutability": "CAS-mutable"
+    },
+    "occurrence_index": {
+      "table": "review_comments",
+      "column": "occurrence_index",
+      "mutability": "CAS-mutable"
+    },
+    "comment_text": {
+      "table": "review_comments",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Convert the recorded address or original bytes to ContentRef v1; preserve NULL, ordering, metadata and original byte digest; never invent media types.",
+      "companion": "review_comments.content_inline_bytes"
+    },
+    "author": {
+      "table": "review_comments",
+      "column": "author",
+      "mutability": "CAS-mutable"
+    },
+    "author_role": {
+      "table": "review_comments",
+      "column": "author_role",
+      "mutability": "CAS-mutable"
+    },
+    "created_at": {
+      "table": "review_comments",
+      "column": "created_at",
+      "mutability": "CAS-mutable"
+    }
+  },
+  "runtime_session_leases": {
+    "protocol": {
+      "table": "runtime_session_leases",
+      "column": "protocol",
+      "mutability": "CAS-mutable"
+    },
+    "session_id": {
+      "table": "runtime_session_leases",
+      "column": "session_id",
+      "mutability": "CAS-mutable"
+    },
+    "task_id": {
+      "table": "runtime_session_leases",
+      "column": "task_id",
+      "mutability": "CAS-mutable"
+    },
+    "node_id": {
+      "table": "runtime_session_leases",
+      "column": "node_id",
+      "mutability": "CAS-mutable"
+    },
+    "created_node_run_id": {
+      "table": "runtime_session_leases",
+      "column": "created_node_run_id",
+      "mutability": "CAS-mutable"
+    },
+    "lease_node_run_id": {
+      "table": "runtime_session_leases",
+      "column": "lease_node_run_id",
+      "mutability": "CAS-mutable"
+    },
+    "lease_nonce_digest": {
+      "table": "runtime_session_leases",
+      "column": "lease_nonce_digest",
+      "mutability": "CAS-mutable"
+    },
+    "leased_at": {
+      "table": "runtime_session_leases",
+      "column": "leased_at",
+      "mutability": "CAS-mutable"
+    },
+    "reset_pending": {
+      "table": "runtime_session_leases",
+      "column": "reset_pending",
+      "mutability": "CAS-mutable"
+    }
+  },
+  "skill_content_entries": {
+    "skill_id": {
+      "table": "skill_content_entries",
+      "column": "skill_id",
+      "mutability": "CAS-mutable"
+    },
+    "tree": {
+      "table": "skill_content_entries",
+      "column": "tree",
+      "mutability": "CAS-mutable"
+    },
+    "path": {
+      "table": "skill_content_entries",
+      "column": "path",
+      "mutability": "CAS-mutable"
+    },
+    "encoding": {
+      "table": "skill_content_entries",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Convert the recorded address or original bytes to ContentRef v1; preserve NULL, ordering, metadata and original byte digest; never invent media types.",
+      "companion": "skill_content_entries.content_inline_bytes"
+    },
+    "content": {
+      "table": "skill_content_entries",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Convert the recorded address or original bytes to ContentRef v1; preserve NULL, ordering, metadata and original byte digest; never invent media types.",
+      "companion": "skill_content_entries.content_inline_bytes"
+    },
+    "size": {
+      "table": "skill_content_entries",
+      "column": "size",
+      "mutability": "CAS-mutable"
+    },
+    "updated_at": {
+      "table": "skill_content_entries",
+      "column": "updated_at",
+      "mutability": "CAS-mutable"
+    }
+  },
+  "skill_versions": {
+    "id": {
+      "table": "skill_versions",
+      "column": "id",
+      "mutability": "CAS-mutable"
+    },
+    "skill_id": {
+      "table": "skill_versions",
+      "column": "skill_id",
+      "mutability": "CAS-mutable"
+    },
+    "version_index": {
+      "table": "skill_versions",
+      "column": "version_index",
+      "mutability": "CAS-mutable"
+    },
+    "files_path": {
+      "table": "skill_versions",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Convert the recorded address or original bytes to ContentRef v1; preserve NULL, ordering, metadata and original byte digest; never invent media types. Existing snapshots retain their actual local-file path; synthesized initial versions use per-path skill_content_entries and database bytes, never a tree bundle.",
+      "companion": "skill_versions.content_inline_bytes"
+    },
+    "source": {
+      "table": "skill_versions",
+      "column": "source",
+      "mutability": "CAS-mutable"
+    },
+    "summary": {
+      "table": "skill_versions",
+      "column": "summary",
+      "mutability": "CAS-mutable"
+    },
+    "fusion_id": {
+      "table": "skill_versions",
+      "column": "fusion_id",
+      "mutability": "CAS-mutable"
+    },
+    "restored_from_version": {
+      "table": "skill_versions",
+      "column": "restored_from_version",
+      "mutability": "CAS-mutable"
+    },
+    "author_user_id": {
+      "table": "skill_versions",
+      "column": "author_user_id",
+      "mutability": "CAS-mutable"
+    },
+    "content_hash": {
+      "table": "skill_versions",
+      "column": "content_hash",
+      "mutability": "CAS-mutable"
+    },
+    "created_at": {
+      "table": "skill_versions",
+      "column": "created_at",
+      "mutability": "CAS-mutable"
+    }
+  },
+  "skills": {
+    "id": {
+      "table": "skills",
+      "column": "id",
+      "mutability": "CAS-mutable"
+    },
+    "name": {
+      "table": "skills",
+      "column": "name",
+      "mutability": "CAS-mutable"
+    },
+    "description": {
+      "table": "skills",
+      "column": "description",
+      "mutability": "CAS-mutable"
+    },
+    "managed_path": {
+      "table": "skills",
+      "column": "content_ref_json",
+      "mutability": "derived",
+      "conversion": "Convert the recorded address or original bytes to ContentRef v1; preserve NULL, ordering, metadata and original byte digest; never invent media types. Boot conversion preserves the proven live directory as a local-file reference; trees without a directory use database-bytes entries. A legacy-unbackfilled skill gets one deterministic initial version; empty husks are archived without taking another canonical root. No directory is moved.",
+      "companion": "skills.content_inline_bytes"
+    },
+    "owner_user_id": {
+      "table": "skills",
+      "column": "owner_user_id",
+      "mutability": "CAS-mutable"
+    },
+    "visibility": {
+      "table": "skills",
+      "column": "visibility",
+      "mutability": "CAS-mutable"
+    },
+    "schema_version": {
+      "table": "skills",
+      "column": "schema_version",
+      "mutability": "CAS-mutable"
+    },
+    "content_version": {
+      "table": "skills",
+      "column": "content_version",
+      "mutability": "CAS-mutable",
+      "conversion": "The deterministic initial version is also emitted to skill_versions from the skills source row; husk removal and identity changes are explicit approval effects."
+    },
+    "acl_revision": {
+      "table": "skills",
+      "column": "acl_revision",
+      "mutability": "CAS-mutable"
+    },
+    "meta_revision": {
+      "table": "skills",
+      "column": "meta_revision",
+      "mutability": "CAS-mutable"
+    },
+    "reservation_state": {
+      "table": "skills",
+      "column": "reservation_state",
+      "mutability": "CAS-mutable"
+    },
+    "version_state": {
+      "table": "skills",
+      "column": "version_state",
+      "mutability": "CAS-mutable"
+    },
+    "created_at": {
+      "table": "skills",
+      "column": "created_at",
+      "mutability": "CAS-mutable"
+    },
+    "updated_at": {
+      "table": "skills",
+      "column": "updated_at",
+      "mutability": "CAS-mutable"
+    }
+  },
+  "task_collaborators": {
+    "task_id": {
+      "table": "task_collaborators",
+      "column": "task_id",
+      "mutability": "CAS-mutable"
+    },
+    "user_id": {
+      "table": "task_collaborators",
+      "column": "user_id",
+      "mutability": "CAS-mutable"
+    },
+    "role": {
+      "table": "task_collaborators",
+      "column": "role",
+      "mutability": "CAS-mutable"
+    },
+    "added_by": {
+      "table": "task_collaborators",
+      "column": "added_by",
+      "mutability": "CAS-mutable"
+    },
+    "added_at": {
+      "table": "task_collaborators",
+      "column": "added_at",
+      "mutability": "CAS-mutable"
+    }
+  },
+  "task_repos": {
+    "task_id": {
+      "table": "task_repository_mounts",
+      "column": "task_id",
+      "mutability": "CAS-mutable"
+    },
+    "repo_index": {
+      "table": "task_repository_mounts",
+      "column": "ordinal",
+      "mutability": "CAS-mutable"
+    },
+    "repo_path": {
+      "table": "task_repository_mounts",
+      "column": "repo_path",
+      "mutability": "CAS-mutable"
+    },
+    "repo_url": {
+      "table": "task_repository_mounts",
+      "column": "repo_url",
+      "mutability": "CAS-mutable"
+    },
+    "cached_repo_id": {
+      "table": "task_repository_mounts",
+      "column": "cached_repo_id",
+      "mutability": "CAS-mutable"
+    },
+    "base_branch": {
+      "table": "task_repository_mounts",
+      "column": "base_branch",
+      "mutability": "CAS-mutable",
+      "conversion": "Preserve non-empty recorded base branch only where applicable; absent/inapplicable becomes NULL with branch-state evidence."
+    },
+    "branch": {
+      "table": "task_repository_mounts",
+      "column": "branch",
+      "mutability": "CAS-mutable",
+      "conversion": "Non-empty source branch => branch_state=branch. Otherwise decide detached/unborn/none from the frozen workspace kind and repository evidence, record that evidence and use NULL for inapplicable fields; never manufacture ''. Detached requires recorded base_commit; unborn/none have no base_commit/base_branch.",
+      "companion": "task_repository_mounts.branch_state"
+    },
+    "working_branch": {
+      "table": "task_repository_mounts",
+      "column": "working_branch",
+      "mutability": "CAS-mutable"
+    },
+    "base_commit": {
+      "table": "task_repository_mounts",
+      "column": "base_commit",
+      "mutability": "CAS-mutable"
+    },
+    "worktree_path": {
+      "table": "tasks",
+      "column": "workspace_root_ref",
+      "mutability": "derived",
+      "conversion": "Validate source worktree_path equals frozen root plus mount_path; preserve both values and decision evidence, then store the root once."
+    },
+    "worktree_dir_name": {
+      "table": "tasks",
+      "column": "workspace_root_ref",
+      "mutability": "derived",
+      "conversion": "Validate original directory name and worktree_path against the frozen workspace root plus mount_path; retain the source value in conversion evidence, never persist a second path authority."
+    },
+    "mount_path": {
+      "table": "task_repository_mounts",
+      "column": "mount_path",
+      "mutability": "CAS-mutable"
+    },
+    "subdir": {
+      "table": "task_repository_mounts",
+      "column": "subdir",
+      "mutability": "CAS-mutable"
+    },
+    "readonly": {
+      "table": "task_repository_mounts",
+      "column": "readonly",
+      "mutability": "CAS-mutable"
+    },
+    "readonly_dirty_count": {
+      "table": "task_repository_mounts",
+      "column": "readonly_dirty_count",
+      "mutability": "CAS-mutable"
+    },
+    "workspace_profile_version": {
+      "table": "task_repository_mounts",
+      "column": "workspace_profile_version",
+      "mutability": "CAS-mutable"
+    },
+    "workspace_profile_digest": {
+      "table": "task_repository_mounts",
+      "column": "workspace_profile_digest",
+      "mutability": "CAS-mutable"
+    },
+    "has_submodules": {
+      "table": "task_repository_mounts",
+      "column": "has_submodules",
+      "mutability": "CAS-mutable"
+    },
+    "submodule_init_ok": {
+      "table": "task_repository_mounts",
+      "column": "submodule_init_ok",
+      "mutability": "CAS-mutable"
+    },
+    "submodule_init_error": {
+      "table": "task_repository_mounts",
+      "column": "submodule_init_error",
+      "mutability": "CAS-mutable"
+    },
+    "schema_version": {
+      "table": "task_repository_mounts",
+      "column": "schema_version",
+      "mutability": "CAS-mutable"
+    }
+  },
+  "user_access_audit": {
+    "id": {
+      "table": "user_access_audit",
+      "column": "id",
+      "mutability": "CAS-mutable"
+    },
+    "target_user_id": {
+      "table": "user_access_audit",
+      "column": "target_user_id",
+      "mutability": "CAS-mutable"
+    },
+    "actor_user_id": {
+      "table": "user_access_audit",
+      "column": "actor_user_id",
+      "mutability": "CAS-mutable"
+    },
+    "actor_kind": {
+      "table": "user_access_audit",
+      "column": "actor_kind",
+      "mutability": "CAS-mutable"
+    },
+    "operation_id": {
+      "table": "user_access_audit",
+      "column": "operation_id",
+      "mutability": "CAS-mutable"
+    },
+    "correlation_id": {
+      "table": "user_access_audit",
+      "column": "correlation_id",
+      "mutability": "CAS-mutable"
+    },
+    "before_role": {
+      "table": "user_access_audit",
+      "column": "before_role",
+      "mutability": "CAS-mutable"
+    },
+    "after_role": {
+      "table": "user_access_audit",
+      "column": "after_role",
+      "mutability": "CAS-mutable"
+    },
+    "added_permissions_json": {
+      "table": "user_access_audit",
+      "column": "added_permissions_json",
+      "mutability": "CAS-mutable"
+    },
+    "removed_permissions_json": {
+      "table": "user_access_audit",
+      "column": "removed_permissions_json",
+      "mutability": "CAS-mutable"
+    },
+    "access_revision": {
+      "table": "user_access_audit",
+      "column": "access_revision",
+      "mutability": "CAS-mutable"
+    },
+    "created_at": {
+      "table": "user_access_audit",
+      "column": "created_at",
+      "mutability": "CAS-mutable"
+    }
+  },
+  "users": {
+    "id": {
+      "table": "users",
+      "column": "id",
+      "mutability": "CAS-mutable"
+    },
+    "username": {
+      "table": "users",
+      "column": "username",
+      "mutability": "CAS-mutable"
+    },
+    "email": {
+      "table": "users",
+      "column": "email",
+      "mutability": "CAS-mutable"
+    },
+    "display_name": {
+      "table": "users",
+      "column": "display_name",
+      "mutability": "CAS-mutable"
+    },
+    "git_name": {
+      "table": "users",
+      "column": "git_name",
+      "mutability": "CAS-mutable"
+    },
+    "password_hash": {
+      "table": "users",
+      "column": "password_hash",
+      "mutability": "CAS-mutable"
+    },
+    "role": {
+      "table": "users",
+      "column": "role",
+      "mutability": "CAS-mutable"
+    },
+    "status": {
+      "table": "users",
+      "column": "status",
+      "mutability": "CAS-mutable"
+    },
+    "force_password_change": {
+      "table": "users",
+      "column": "force_password_change",
+      "mutability": "CAS-mutable"
+    },
+    "created_by": {
+      "table": "users",
+      "column": "created_by",
+      "mutability": "CAS-mutable"
+    },
+    "created_at": {
+      "table": "users",
+      "column": "created_at",
+      "mutability": "CAS-mutable"
+    },
+    "updated_at": {
+      "table": "users",
+      "column": "updated_at",
+      "mutability": "CAS-mutable"
+    },
+    "last_login_at": {
+      "table": "users",
+      "column": "last_login_at",
+      "mutability": "CAS-mutable"
+    },
+    "schema_version": {
+      "table": "users",
+      "column": "schema_version",
+      "mutability": "CAS-mutable"
+    },
+    "access_revision": {
+      "table": "users",
+      "column": "access_revision",
+      "mutability": "CAS-mutable"
+    }
+  },
+  "workflows": {
+    "id": {
+      "table": "workflows",
+      "column": "id",
+      "mutability": "CAS-mutable"
+    },
+    "name": {
+      "table": "workflows",
+      "column": "name",
+      "mutability": "CAS-mutable"
+    },
+    "description": {
+      "table": "workflows",
+      "column": "description",
+      "mutability": "CAS-mutable"
+    },
+    "definition": {
+      "table": "workflows",
+      "column": "definition",
+      "mutability": "CAS-mutable",
+      "conversion": "Keep canonical JSON bytes; derive workflow_dependency_index with the frozen parser, revision, reference_path, selector_kind/value and namespace.",
+      "companion": "workflow_dependency_index.reference_path"
+    },
+    "version": {
+      "table": "workflows",
+      "column": "version",
+      "mutability": "CAS-mutable"
+    },
+    "owner_user_id": {
+      "table": "workflows",
+      "column": "owner_user_id",
+      "mutability": "CAS-mutable"
+    },
+    "visibility": {
+      "table": "workflows",
+      "column": "visibility",
+      "mutability": "CAS-mutable"
+    },
+    "acl_revision": {
+      "table": "workflows",
+      "column": "acl_revision",
+      "mutability": "CAS-mutable"
+    },
+    "builtin": {
+      "table": "workflows",
+      "column": "builtin",
+      "mutability": "CAS-mutable"
+    },
+    "schema_version": {
+      "table": "workflows",
+      "column": "schema_version",
+      "mutability": "CAS-mutable"
+    },
+    "created_at": {
+      "table": "workflows",
+      "column": "created_at",
+      "mutability": "CAS-mutable"
+    },
+    "updated_at": {
+      "table": "workflows",
+      "column": "updated_at",
+      "mutability": "CAS-mutable"
+    }
+  },
+  "workgroup_task_state": {
+    "task_id": {
+      "table": "workgroup_task_state",
+      "column": "task_id",
+      "mutability": "CAS-mutable"
+    },
+    "gate_status": {
+      "table": "workgroup_task_state",
+      "column": "gate_status",
+      "mutability": "CAS-mutable"
+    },
+    "gate_summary": {
+      "table": "workgroup_task_state",
+      "column": "gate_summary",
+      "mutability": "CAS-mutable"
+    },
+    "gate_rejected_comment": {
+      "table": "workgroup_task_state",
+      "column": "gate_rejected_comment",
+      "mutability": "CAS-mutable"
+    },
+    "pause_reason": {
+      "table": "workgroup_task_state",
+      "column": "pause_reason",
+      "mutability": "CAS-mutable"
+    },
+    "dw_state_json": {
+      "table": "workgroup_task_state",
+      "column": "dw_state_json",
+      "mutability": "CAS-mutable"
+    },
+    "result_message_id": {
+      "table": "workgroup_task_state",
+      "column": "result_message_id",
+      "mutability": "CAS-mutable"
+    },
+    "updated_at": {
+      "table": "workgroup_task_state",
+      "column": "updated_at",
+      "mutability": "CAS-mutable"
+    }
+  },
+  "employee_os_writer_state": {
+    "id": {
+      "table": null,
+      "column": "activation_receipts",
+      "mutability": "derived",
+      "conversion": "Preserve original writer-state evidence in system-operations V3 meta (aw_meta_* / agent_workflow_meta), never a business table."
+    },
+    "active_generation": {
+      "table": null,
+      "column": "activation_receipts",
+      "mutability": "derived",
+      "conversion": "Preserve original writer-state evidence in system-operations V3 meta (aw_meta_* / agent_workflow_meta), never a business table."
+    },
+    "mode": {
+      "table": null,
+      "column": "activation_receipts",
+      "mutability": "derived",
+      "conversion": "Preserve original writer-state evidence in system-operations V3 meta (aw_meta_* / agent_workflow_meta), never a business table."
+    },
+    "legacy_admissions_enabled": {
+      "table": null,
+      "column": "activation_receipts",
+      "mutability": "derived",
+      "conversion": "Preserve original writer-state evidence in system-operations V3 meta (aw_meta_* / agent_workflow_meta), never a business table."
+    },
+    "legacy_open_mission_count": {
+      "table": null,
+      "column": "activation_receipts",
+      "mutability": "derived",
+      "conversion": "Preserve original writer-state evidence in system-operations V3 meta (aw_meta_* / agent_workflow_meta), never a business table."
+    },
+    "updated_at": {
+      "table": null,
+      "column": "activation_receipts",
+      "mutability": "derived",
+      "conversion": "Preserve original writer-state evidence in system-operations V3 meta (aw_meta_* / agent_workflow_meta), never a business table."
+    }
+  },
+  "intent_apply_journal": {
+    "id": {
+      "table": "intent_apply_journal",
+      "column": "id",
+      "mutability": "CAS-mutable"
+    },
+    "session_id": {
+      "table": "intent_apply_journal",
+      "column": "session_id",
+      "mutability": "CAS-mutable"
+    },
+    "client_mutation_id": {
+      "table": "intent_apply_journal",
+      "column": "client_mutation_id",
+      "mutability": "CAS-mutable"
+    },
+    "draft_id": {
+      "table": "intent_apply_journal",
+      "column": "draft_id",
+      "mutability": "CAS-mutable"
+    },
+    "draft_hash": {
+      "table": "intent_apply_journal",
+      "column": "draft_hash",
+      "mutability": "CAS-mutable"
+    },
+    "state": {
+      "table": "intent_apply_journal",
+      "column": "state",
+      "mutability": "CAS-mutable"
+    },
+    "prepared_artifacts_json": {
+      "table": "intent_apply_journal",
+      "column": "prepared_artifacts_json",
+      "mutability": "CAS-mutable"
+    },
+    "receipt_json": {
+      "table": "intent_apply_journal",
+      "column": "receipt_json",
+      "mutability": "CAS-mutable"
+    },
+    "error": {
+      "table": "intent_apply_journal",
+      "column": "error",
+      "mutability": "CAS-mutable"
+    },
+    "created_at": {
+      "table": "intent_apply_journal",
+      "column": "created_at",
+      "mutability": "CAS-mutable"
+    },
+    "updated_at": {
+      "table": "intent_apply_journal",
+      "column": "updated_at",
+      "mutability": "CAS-mutable"
+    }
+  },
+  "resource_bundle_applies": {
+    "id": {
+      "table": "resource_bundle_applies",
+      "column": "id",
+      "mutability": "CAS-mutable"
+    },
+    "scope": {
+      "table": "resource_bundle_applies",
+      "column": "scope",
+      "mutability": "CAS-mutable"
+    },
+    "key": {
+      "table": "resource_bundle_applies",
+      "column": "key",
+      "mutability": "CAS-mutable"
+    },
+    "actor_user_id": {
+      "table": "resource_bundle_applies",
+      "column": "actor_user_id",
+      "mutability": "CAS-mutable"
+    },
+    "state": {
+      "table": "resource_bundle_applies",
+      "column": "state",
+      "mutability": "CAS-mutable"
+    },
+    "prepared_artifacts_json": {
+      "table": "resource_bundle_applies",
+      "column": "prepared_artifacts_json",
+      "mutability": "CAS-mutable"
+    },
+    "receipt_json": {
+      "table": "resource_bundle_applies",
+      "column": "receipt_json",
+      "mutability": "CAS-mutable"
+    },
+    "error": {
+      "table": "resource_bundle_applies",
+      "column": "error",
+      "mutability": "CAS-mutable"
+    },
+    "created_at": {
+      "table": "resource_bundle_applies",
+      "column": "created_at",
+      "mutability": "CAS-mutable"
+    },
+    "updated_at": {
+      "table": "resource_bundle_applies",
+      "column": "updated_at",
+      "mutability": "CAS-mutable"
+    }
+  },
+  "fusions": {
+    "id": {
+      "table": "fusions",
+      "column": "id",
+      "mutability": "CAS-mutable"
+    },
+    "skill_id": {
+      "table": "fusions",
+      "column": "skill_id",
+      "mutability": "CAS-mutable",
+      "conversion": "Boot conversion re-points proven skill identity/version and preserves the old quarantine/terminalization outcome, including already quarantined and non-applied missing-skill rows. Effects are approval material."
+    },
+    "skill_name": {
+      "table": "fusions",
+      "column": "skill_name",
+      "mutability": "CAS-mutable"
+    },
+    "base_skill_version": {
+      "table": "fusions",
+      "column": "base_skill_version",
+      "mutability": "CAS-mutable"
+    },
+    "precondition_token": {
+      "table": "fusions",
+      "column": "precondition_token",
+      "mutability": "CAS-mutable"
+    },
+    "memory_ids_json": {
+      "table": "fusions",
+      "column": "memory_ids_json",
+      "mutability": "CAS-mutable"
+    },
+    "intent": {
+      "table": "fusions",
+      "column": "intent",
+      "mutability": "CAS-mutable"
+    },
+    "status": {
+      "table": "fusions",
+      "column": "status",
+      "mutability": "CAS-mutable"
+    },
+    "iteration": {
+      "table": "fusions",
+      "column": "iteration",
+      "mutability": "CAS-mutable"
+    },
+    "current_task_id": {
+      "table": "fusions",
+      "column": "current_task_id",
+      "mutability": "CAS-mutable"
+    },
+    "proposed_worktree_path": {
+      "table": "fusions",
+      "column": "proposed_worktree_path",
+      "mutability": "CAS-mutable"
+    },
+    "proposed_diff": {
+      "table": "fusions",
+      "column": "proposed_diff",
+      "mutability": "CAS-mutable"
+    },
+    "incorporated_memory_ids_json": {
+      "table": "fusions",
+      "column": "incorporated_memory_ids_json",
+      "mutability": "CAS-mutable"
+    },
+    "skipped_json": {
+      "table": "fusions",
+      "column": "skipped_json",
+      "mutability": "CAS-mutable"
+    },
+    "changelog": {
+      "table": "fusions",
+      "column": "changelog",
+      "mutability": "CAS-mutable"
+    },
+    "applied_skill_version": {
+      "table": "fusions",
+      "column": "applied_skill_version",
+      "mutability": "CAS-mutable"
+    },
+    "owner_user_id": {
+      "table": "fusions",
+      "column": "owner_user_id",
+      "mutability": "CAS-mutable"
+    },
+    "created_at": {
+      "table": "fusions",
+      "column": "created_at",
+      "mutability": "CAS-mutable"
+    },
+    "decided_by_user_id": {
+      "table": "fusions",
+      "column": "decided_by_user_id",
+      "mutability": "CAS-mutable"
+    },
+    "decided_at": {
+      "table": "fusions",
+      "column": "decided_at",
+      "mutability": "CAS-mutable"
+    },
+    "decision_reason": {
+      "table": "fusions",
+      "column": "decision_reason",
+      "mutability": "CAS-mutable"
+    },
+    "error": {
+      "table": "fusions",
+      "column": "error",
+      "mutability": "CAS-mutable"
+    }
+  },
+  "scheduled_tasks": {
+    "id": {
+      "table": "scheduled_tasks",
+      "column": "id",
+      "mutability": "CAS-mutable"
+    },
+    "name": {
+      "table": "scheduled_tasks",
+      "column": "name",
+      "mutability": "CAS-mutable"
+    },
+    "owner_user_id": {
+      "table": "scheduled_tasks",
+      "column": "owner_user_id",
+      "mutability": "CAS-mutable"
+    },
+    "launch_kind": {
+      "table": "scheduled_tasks",
+      "column": "launch_kind",
+      "mutability": "CAS-mutable"
+    },
+    "launch_payload": {
+      "table": "scheduled_tasks",
+      "column": "launch_payload",
+      "mutability": "CAS-mutable"
+    },
+    "schedule_spec": {
+      "table": "scheduled_tasks",
+      "column": "schedule_spec",
+      "mutability": "CAS-mutable"
+    },
+    "enabled": {
+      "table": "scheduled_tasks",
+      "column": "enabled",
+      "mutability": "CAS-mutable",
+      "conversion": "One-time boot heal retains epoch-1 scheduling behaviour, disables only a previously enabled schedule with a missing local repository, clears next_run_at, removes the consumed top-level baseBranch, and records the per-row approval effect."
+    },
+    "next_run_at": {
+      "table": "scheduled_tasks",
+      "column": "next_run_at",
+      "mutability": "CAS-mutable",
+      "conversion": "One-time boot heal retains epoch-1 scheduling behaviour, disables only a previously enabled schedule with a missing local repository, clears next_run_at, removes the consumed top-level baseBranch, and records the per-row approval effect."
+    },
+    "last_run_at": {
+      "table": "scheduled_tasks",
+      "column": "last_run_at",
+      "mutability": "CAS-mutable"
+    },
+    "last_status": {
+      "table": "scheduled_tasks",
+      "column": "last_status",
+      "mutability": "CAS-mutable"
+    },
+    "last_error": {
+      "table": "scheduled_tasks",
+      "column": "last_error",
+      "mutability": "CAS-mutable"
+    },
+    "last_task_id": {
+      "table": "scheduled_tasks",
+      "column": "last_task_id",
+      "mutability": "CAS-mutable"
+    },
+    "consecutive_failures": {
+      "table": "scheduled_tasks",
+      "column": "consecutive_failures",
+      "mutability": "CAS-mutable"
+    },
+    "acl_revision": {
+      "table": "scheduled_tasks",
+      "column": "acl_revision",
+      "mutability": "CAS-mutable"
+    },
+    "created_at": {
+      "table": "scheduled_tasks",
+      "column": "created_at",
+      "mutability": "CAS-mutable"
+    },
+    "updated_at": {
+      "table": "scheduled_tasks",
+      "column": "updated_at",
+      "mutability": "CAS-mutable"
+    }
+  },
+  "runtimes": {
+    "id": {
+      "table": "runtimes",
+      "column": "id",
+      "mutability": "CAS-mutable"
+    },
+    "name": {
+      "table": "runtimes",
+      "column": "name",
+      "mutability": "CAS-mutable"
+    },
+    "protocol": {
+      "table": "runtimes",
+      "column": "protocol",
+      "mutability": "CAS-mutable"
+    },
+    "binary_path": {
+      "table": "runtimes",
+      "column": "binary_path",
+      "mutability": "CAS-mutable"
+    },
+    "enabled": {
+      "table": "runtimes",
+      "column": "enabled",
+      "mutability": "CAS-mutable"
+    },
+    "model": {
+      "table": "runtimes",
+      "column": "model",
+      "mutability": "CAS-mutable"
+    },
+    "variant": {
+      "table": "runtimes",
+      "column": "variant",
+      "mutability": "CAS-mutable"
+    },
+    "temperature": {
+      "table": "runtimes",
+      "column": "temperature",
+      "mutability": "CAS-mutable"
+    },
+    "steps": {
+      "table": "runtimes",
+      "column": "steps",
+      "mutability": "CAS-mutable"
+    },
+    "max_steps": {
+      "table": "runtimes",
+      "column": "max_steps",
+      "mutability": "CAS-mutable"
+    },
+    "is_sandbox": {
+      "table": "runtimes",
+      "column": "is_sandbox",
+      "mutability": "CAS-mutable"
+    },
+    "config_dir_env": {
+      "table": "runtimes",
+      "column": "config_dir_env",
+      "mutability": "CAS-mutable",
+      "conversion": "One-time runtime binary backfill uses the captured legacy configuration and records deciding bindings and semantic before/after values in approval material."
+    },
+    "config_dir_name": {
+      "table": "runtimes",
+      "column": "config_dir_name",
+      "mutability": "CAS-mutable",
+      "conversion": "One-time runtime binary backfill uses the captured legacy configuration and records deciding bindings and semantic before/after values in approval material."
+    },
+    "extra_args_json": {
+      "table": "runtimes",
+      "column": "extra_args_json",
+      "mutability": "CAS-mutable"
+    },
+    "last_probe_json": {
+      "table": "runtimes",
+      "column": "last_probe_json",
+      "mutability": "CAS-mutable"
+    },
+    "probe_fence": {
+      "table": "runtimes",
+      "column": "probe_fence",
+      "mutability": "CAS-mutable"
+    },
+    "created_by": {
+      "table": "runtimes",
+      "column": "created_by",
+      "mutability": "CAS-mutable"
+    },
+    "created_at": {
+      "table": "runtimes",
+      "column": "created_at",
+      "mutability": "CAS-mutable"
+    },
+    "updated_at": {
+      "table": "runtimes",
+      "column": "updated_at",
+      "mutability": "CAS-mutable"
+    }
+  },
+  "cached_repos": {
+    "id": {
+      "table": "cached_repos",
+      "column": "id",
+      "mutability": "CAS-mutable"
+    },
+    "url_hash": {
+      "table": "cached_repos",
+      "column": "url_hash",
+      "mutability": "CAS-mutable",
+      "conversion": "Boot URL conversion preserves display/redaction and ciphertext effects. Existing cache links remain proven even if their row is gone; a missing link is resolved by the old URL algorithm, including unparseable/unmatched URLs as no cache."
+    },
+    "url_enc": {
+      "table": "cached_repos",
+      "column": "url_enc",
+      "mutability": "CAS-mutable",
+      "conversion": "Boot URL conversion preserves display/redaction and ciphertext effects. Existing cache links remain proven even if their row is gone; a missing link is resolved by the old URL algorithm, including unparseable/unmatched URLs as no cache."
+    },
+    "url_redacted": {
+      "table": "cached_repos",
+      "column": "url_redacted",
+      "mutability": "CAS-mutable",
+      "conversion": "Boot URL conversion preserves display/redaction and ciphertext effects. Existing cache links remain proven even if their row is gone; a missing link is resolved by the old URL algorithm, including unparseable/unmatched URLs as no cache."
+    },
+    "local_path": {
+      "table": "cached_repos",
+      "column": "local_path",
+      "mutability": "CAS-mutable"
+    },
+    "default_branch": {
+      "table": "cached_repos",
+      "column": "default_branch",
+      "mutability": "CAS-mutable"
+    },
+    "last_fetched_at": {
+      "table": "cached_repos",
+      "column": "last_fetched_at",
+      "mutability": "CAS-mutable"
+    },
+    "created_at": {
+      "table": "cached_repos",
+      "column": "created_at",
+      "mutability": "CAS-mutable"
+    },
+    "has_submodules": {
+      "table": "cached_repos",
+      "column": "has_submodules",
+      "mutability": "CAS-mutable"
+    },
+    "last_submodule_sync_ok": {
+      "table": "cached_repos",
+      "column": "last_submodule_sync_ok",
+      "mutability": "CAS-mutable"
+    },
+    "last_submodule_sync_error": {
+      "table": "cached_repos",
+      "column": "last_submodule_sync_error",
+      "mutability": "CAS-mutable"
+    },
+    "last_auto_refresh_at": {
+      "table": "cached_repos",
+      "column": "last_auto_refresh_at",
+      "mutability": "CAS-mutable"
+    }
+  }
+}

@@ -27,22 +27,25 @@
 // name silently re-binding a DIFFERENT tenant's agent on a terminal-task
 // resume/retry, or a legacy workgroup DAG re-binding by the mutable name.
 
+import {
+  migrateFrozenSqlite as migrate,
+  createFrozenEpoch1Db,
+  FROZEN_MIGRATIONS,
+} from './migration-freeze'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { Database } from 'bun:sqlite'
 import { drizzle } from 'drizzle-orm/bun-sqlite'
-import { migrate } from 'drizzle-orm/bun-sqlite/migrator'
 import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { QUARANTINED_SNAPSHOT_AGENT_ID } from '@agent-workflow/shared'
-import { createInMemoryDb } from '../src/db/client'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+const MIGRATIONS = resolve(FROZEN_MIGRATIONS)
 
 describe('migration 0115 (RFC-223 PR-3a terminal) — fresh install is a no-op', () => {
   test('empty tables apply 0000..0115 with zero tasks', () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createFrozenEpoch1Db(MIGRATIONS)
     const n = db.$client.query('SELECT COUNT(*) AS n FROM tasks').all() as { n: number }[]
     expect(n[0]!.n).toBe(0)
   })
@@ -63,7 +66,7 @@ describe('migration 0115 (RFC-223 PR-3a terminal) — C1 + C2 backfill (frozen a
     writeFileSync(journalPath, JSON.stringify(journal))
 
     raw = new Database(':memory:')
-    raw.exec('PRAGMA foreign_keys = OFF') // match openDb: 12-step migrations
+    raw.exec('PRAGMA foreign_keys = OFF') // match openFrozenEpoch1Db: 12-step migrations
     migrate(drizzle(raw), { migrationsFolder: tmp })
   })
   afterEach(() => {

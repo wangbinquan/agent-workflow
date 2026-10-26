@@ -11,10 +11,6 @@ import { databaseProviderTraits } from '../../providerTraits'
 import { digestSchemaContract } from '../../schema/canonical'
 import { assertExactSchemaRoster } from '../../schema/roster'
 import {
-  RFC349_SOURCE_TABLES,
-  RFC349_ARCHIVE_TABLE_SET,
-  RFC349_DEFER_TABLES,
-  RFC349_SCHEMA_CONTRACT_VERSION,
   type DatabaseProvider,
   type TableDisposition,
   type OwnerContext,
@@ -27,6 +23,12 @@ import {
   type LogicalTableContract,
   type LogicalSchemaContract,
 } from '../../schema/contractTypes'
+import {
+  RFC349_SOURCE_TABLES,
+  RFC349_ARCHIVE_TABLE_SET,
+  RFC349_DEFER_TABLES,
+  RFC349_SCHEMA_CONTRACT_VERSION,
+} from '../epoch1/roster'
 import type { SchemaRegistry } from '../../schema/registry'
 import { materializeDrizzle } from '../../schema/drizzle'
 

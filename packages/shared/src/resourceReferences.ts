@@ -228,3 +228,43 @@ export function decodeAgentReferenceDocumentForExport(
     plugins: strings(decoded.plugins),
   }
 }
+
+/** The canonical document and the converter use the same authored-selector index. */
+export function workflowDependencyIndexEntries(definitionBytes: string) {
+  const value: unknown = JSON.parse(definitionBytes)
+  if (
+    !value ||
+    typeof value !== 'object' ||
+    Array.isArray(value) ||
+    ('nodes' in value && !Array.isArray(value.nodes))
+  ) {
+    throw new Error('v2-workflow-definition-shape')
+  }
+  const definition = value as { readonly nodes?: readonly unknown[] }
+  const kinds = new Map(
+    (definition.nodes ?? []).map((node, index) => [
+      `nodes[${index}]`,
+      node !== null && typeof node === 'object' && 'kind' in node && typeof node.kind === 'string'
+        ? node.kind
+        : null,
+    ]),
+  )
+  const refs = collectWorkflowDependencyRefs(definition, {
+    agentOnAnyNode: true,
+    allStringSelectors: true,
+  })
+  if (refs.some((ref) => ref.selectorDefined === false))
+    throw new Error('v2-workflow-selector-unproven')
+  return refs.map((ref) => ({
+    referencePath: ref.referencePath,
+    resourceKind: ref.resourceType,
+    selectorKind: ref.selectorKind,
+    selectorValue: ref.value,
+    namespaceJson: JSON.stringify({
+      version: 2,
+      resourceType: ref.namespace,
+      referenceKind: ref.referencePath.slice(ref.nodePath.length + 1),
+      nodeKind: kinds.get(ref.nodePath) ?? null,
+    }),
+  }))
+}

@@ -30,7 +30,6 @@ import { composeRuntimeRegistryOperations } from './helpers/runtimeRegistryCompo
 import { gcDeliveries } from '../src/services/webhook/deliveryStore'
 import type { WebhookDeliveryStatus } from '@agent-workflow/shared'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const DAY = 24 * 60 * 60 * 1000
 
 type Envelope = {
@@ -276,7 +275,7 @@ describeEachProviderHttpApplication(
 
 describe('RFC-261 · AC-9 迁移 0139（规模化收口）', () => {
   test('索引组齐备：过滤维度组合索引 + body-retention 部分索引；单列 status 索引已退役', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createInMemoryDb()
     const rows = rawRows<{ name: string }>(
       db,
       sql`SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='webhook_deliveries' AND name NOT LIKE 'sqlite_%' ORDER BY name`,
@@ -294,7 +293,7 @@ describe('RFC-261 · AC-9 迁移 0139（规模化收口）', () => {
   })
 
   test('body_json 是末列（列表投影不得穿越大 body 的 overflow 链）', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createInMemoryDb()
     const cols = rawRows<{ name: string }>(db, sql`PRAGMA table_info(webhook_deliveries)`)
     expect(cols[cols.length - 1]!.name).toBe('body_json')
   })

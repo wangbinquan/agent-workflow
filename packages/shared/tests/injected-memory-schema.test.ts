@@ -20,6 +20,7 @@ const VALID_SNAPSHOT = {
 }
 
 const BASE_RUN = {
+  seq: 1,
   id: 'run_01JABCDEF',
   taskId: 't_001',
   nodeId: 'agent-1',

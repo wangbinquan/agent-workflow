@@ -80,8 +80,9 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, mkdirSync, writeFileSync
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ZodError } from 'zod'
+import { reencodeBundleApplyArtifacts } from '@/modules/resource-catalog/infrastructure/migration/bundleAppliesRule'
 import { createPostgresqlResourcePackageApplyArtifactRecovery } from '../../src/modules/resource-catalog/infrastructure/postgresqlResourcePackageMaintenance'
-import { createLegacyResourcePackageApplyArtifactRecovery } from '../../src/modules/resource-catalog/infrastructure/resourcePackageLegacyRecovery'
+import { createResourcePackageOperationArtifactRecovery } from '../../src/modules/resource-catalog/infrastructure/resourcePackageOperationRecovery'
 import { composeResourcePackageApplyMaintenance } from '../../src/modules/resource-catalog/composition/resourcePackageMaintenance'
 import { opStagedDir } from '../../src/modules/resource-catalog/infrastructure/legacy/skillFsPublish'
 import {
@@ -142,7 +143,7 @@ const WRITERS: Readonly<Partial<Record<Engine, string>>> = {
 
 /** 落盘工件读回点：`.strict()` 解码器所在文件，按引擎。 */
 const DECODERS: Readonly<Record<Engine, string>> = {
-  sqlite: 'modules/resource-catalog/infrastructure/resourcePackageLegacyCodec.ts',
+  sqlite: 'modules/resource-catalog/infrastructure/migration/resourcePackageLegacyCodec.ts',
   postgresql: 'modules/resource-catalog/infrastructure/resourcePackageCurrentCodec.ts',
 }
 
@@ -260,7 +261,7 @@ async function withScratch<T>(
 
 describe('RFC-359 W5 format corpus anchors', () => {
   test('both recovery factories and the live writer remain reachable', () => {
-    expect(typeof createLegacyResourcePackageApplyArtifactRecovery).toBe('function')
+    expect(typeof createResourcePackageOperationArtifactRecovery).toBe('function')
     expect(typeof createPostgresqlResourcePackageApplyArtifactRecovery).toBe('function')
     const entries = Object.entries(WRITERS)
     expect(entries.length).toBeGreaterThanOrEqual(1)
@@ -286,7 +287,7 @@ describe('RFC-359 W5 format corpus anchors', () => {
 describeEachProvider(
   'RFC-395 II-a A6 format portability through production recovery',
   (harness) => {
-    test('both complete formats compensate on this provider and match all six reader cells', async () => {
+    test('both source formats convert then recover on this provider and match all six reader cells', async () => {
       await withScratch(async (appHome, pluginsDir) => {
         const reader = harness.capabilities.isolation === 'exclusive' ? 'sqlite' : 'postgresql'
         const { users, resourceBundleApplies } = tablesOf(harness.db)
@@ -322,7 +323,7 @@ describeEachProvider(
         for (const format of ENGINES) {
           for (const artifact of samplesOf(format, appHome, pluginsDir)) {
             const id = `${format}-${artifact.kind}`
-            // 每格都有实体残留，确保收敛执行了补偿，不能仅通过解码后吞掉 effect 错误。
+            // Every cell has actual bytes: converted create roots stay with content maintenance; staged versions/plugins are compensated.
             const raw = artifact as unknown as Record<string, unknown>
             const staged = raw.staged as { stagingDir: string } | undefined
             const directory = String(
@@ -340,7 +341,7 @@ describeEachProvider(
               key: id,
               actorUserId: 'format-owner',
               state: 'prepared',
-              preparedArtifactsJson: JSON.stringify([artifact]),
+              preparedArtifactsJson: reencodeBundleApplyArtifacts(JSON.stringify([artifact]), null),
               createdAt: 1,
               updatedAt: 1,
             })
@@ -350,7 +351,9 @@ describeEachProvider(
             })
             const persisted = (await selected.scene.list()).find((row) => row.id === id)
             expect(persisted?.state).toBe('failed')
-            expect(existsSync(directory)).toBe(false)
+            expect(existsSync(directory)).toBe(
+              format === 'sqlite' && artifact.kind === 'skill-stage',
+            )
             actual.push(`${format}/${artifact.kind} -> ${reader}: accepts`)
           }
         }
@@ -372,7 +375,11 @@ describeEachProvider(
             {
               id: 'invalid',
               state: 'prepared',
-              preparedArtifactsJson: '[{"kind":"rfc359-w5-nonexistent-kind"}]',
+              preparedArtifactsJson: JSON.stringify({
+                scene: 'resource-package',
+                version: 2,
+                artifacts: [{ kind: 'rfc359-w5-nonexistent-kind' }],
+              }),
               receiptJson: null,
               updatedAt: 0,
               error: null,

@@ -1,3 +1,6 @@
+import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
+import { nodeRunFixtureColumns } from './helpers/model/nodeRun'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 // RFC-359 W12: exercise both production Digital Employee execution composers
 // through the complete selected TaskEngine and a real mock-opencode child.
 // Task, node, output, owner and usage rows are produced by the runtime itself.
@@ -11,7 +14,7 @@ import {
   workflowFixture,
 } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+
 import { createExecutionContractProgramFixtureAdapter } from '@/modules/task-execution/composition/executionContractFixture'
 import {
   WORKFLOW_SCHEMA_VERSION,
@@ -133,7 +136,8 @@ describeEachProvider('RFC-359 W12 Digital Employee real execution', (harness) =>
         const workflowId = ulid()
         const agentName = `employee-execution-${kind}`
         const now = Date.now()
-        const { users, agents, workflows, nodeRuns, taskExecutionIntents } = tablesOf(harness.db)
+        const { users, workflows, taskExecutionIntents } = tablesOf(harness.db)
+        const { agents, nodeRuns } = tablesOf(harness.db)
         await insertOne(harness.db, users, {
           id: userId,
           username: `employee-${userId}`,
@@ -230,7 +234,10 @@ describeEachProvider('RFC-359 W12 Digital Employee real execution', (harness) =>
                     persistence: provider.persistence,
                     completionMode: 'await-settle',
                   }),
-            ...composeDatabaseDigitalEmployeeExecutionPorts(harness.db),
+            ...composeDatabaseDigitalEmployeeExecutionPorts(
+              harness.db,
+              epoch2RuntimeTestPorts(harness.db).historyRestrictions,
+            ),
             tasks: provider.routes.tasks,
             readModels: provider.readModels,
             agents: {
@@ -337,7 +344,7 @@ describeEachProvider('RFC-359 W12 Digital Employee real execution', (harness) =>
         })
         expect(task?.finishedAt).toBeGreaterThanOrEqual(now)
         const runs = await harness.db
-          .select()
+          .select(nodeRunFixtureColumns(harness.db))
           .from(nodeRuns)
           .where(eq(nodeRuns.taskId, launched.executionRef))
         expect(runs).toHaveLength(3)

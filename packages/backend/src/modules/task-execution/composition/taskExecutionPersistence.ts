@@ -1,5 +1,7 @@
+import type { ContentStore } from '@/platform/content/contentStore'
+import type { HistoryRestrictionPort } from '@/platform/contracts/historyRestriction'
 import type { TaskRecoveryHumanGateFactsPort } from './required-ports'
-import { createNodeRunSeqBackfillStore } from '../infrastructure/legacyMigration/nodeRunSeqBackfillStore'
+import { createRunSelectionReader } from '../infrastructure/runSelection/table/reader'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
 import type { WorkspacePresenceQueries } from '@/modules/source-control/public/queries'
@@ -131,13 +133,15 @@ function createRecoveryAdministration(
  * 第三个 provider 在这里什么都不用加。
  */
 export interface TaskExecutionPersistenceDependencies {
+  readonly historyRestrictions: HistoryRestrictionPort
+  readonly content?: Pick<ContentStore, 'read'>
   readonly recoveryHumanGates?: TaskRecoveryHumanGateFactsPort
   readonly workspacePresence?: WorkspacePresenceQueries
 }
 
 export function createTaskRuntimeLifecyclePersistence(
   db: PersistenceDb,
-  dependencies: TaskExecutionPersistenceDependencies = {},
+  dependencies: Pick<TaskExecutionPersistenceDependencies, 'workspacePresence'> = {},
 ): DrizzleTaskRuntimeLifecyclePersistence {
   return new DrizzleTaskRuntimeLifecyclePersistence(
     db,
@@ -147,13 +151,15 @@ export function createTaskRuntimeLifecyclePersistence(
 
 export function createTaskExecutionPersistence(
   db: PersistenceDb,
-  dependencies: TaskExecutionPersistenceDependencies = {},
+  dependencies: TaskExecutionPersistenceDependencies,
 ): TaskExecutionPersistence {
   const effects = new DrizzleTaskExecutionEffectPersistence(db)
   const runtimeLifecycle = createTaskRuntimeLifecyclePersistence(db, dependencies)
-  const humanGateLifecycle = new DatabaseHumanGateTaskLifecyclePersistence(db, runtimeLifecycle)
+  const humanGateLifecycle = new DatabaseHumanGateTaskLifecyclePersistence(db, runtimeLifecycle, {
+    historyRestrictions: dependencies.historyRestrictions,
+  })
   return Object.freeze({
-    nodeRunSeqBackfill: createNodeRunSeqBackfillStore(db),
+    selection: createRunSelectionReader(db),
     drive: new DrizzleTaskEngineApplicationPersistence(db),
     ownership: new DrizzleTaskOwnershipPersistence(db),
     intents: new DrizzleTaskExecutionIntentPersistence(db),
@@ -164,7 +170,7 @@ export function createTaskExecutionPersistence(
     scheduler: new DrizzleSchedulerCompletionPersistence(db),
     childBudget: new DrizzleChildTaskBudgetQueries(db),
     nodeRuns: new DrizzleNodeRunLifecyclePersistence(db),
-    nodeExecution: new DrizzleNodeExecutionPersistence(db),
+    nodeExecution: new DrizzleNodeExecutionPersistence(db, dependencies.content),
     nodeActivation: new DrizzleNodeActivationSnapshotReader(db),
     mergeStates: new DrizzleMergeStateLifecyclePersistence(db),
     artifactPaths: new DrizzleTaskArtifactPathQueries(db),
@@ -174,7 +180,7 @@ export function createTaskExecutionPersistence(
     recovery: new DrizzleTaskExecutionRecoveryPersistence(db),
     humanGateDecisions: new DatabaseTaskDecisionPersistence(databaseSessionFor(db)),
     humanGateLifecycle,
-    reads: createTaskExecutionReadModels(db),
+    reads: createTaskExecutionReadModels(db, dependencies.content),
     recoveryAdministration: createRecoveryAdministration(
       db,
       runtimeLifecycle,

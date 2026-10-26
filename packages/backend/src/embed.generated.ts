@@ -30,6 +30,9 @@ export const FRONTEND_FILES: Record<string, string> = {}
 /** migrations-rel-path -> embedded file path. */
 export const MIGRATION_FILES: Record<string, string> = {}
 
+/** Epoch-2 schema-history artifact name -> embedded file path. */
+export const SCHEMA_HISTORY_FILES: Record<string, string> = {}
+
 /** PostgreSQL migrations-rel-path -> embedded file path. */
 export const POSTGRESQL_MIGRATION_FILES: Record<string, string> = {}
 

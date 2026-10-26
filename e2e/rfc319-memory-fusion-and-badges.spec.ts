@@ -1,3 +1,4 @@
+import { liveSqlitePath } from './storage'
 // RFC-319 —— 记忆域剩下的四块用户面：**批量融合入口**、**待办徽标**、
 // **多标签页实时同步**、以及 `/ws/*` 两条通道的**服务端**过滤 / 门禁。
 // 覆盖 MEM-13 / MEM-14 / MEM-22 / MEM-41 / MEM-42 / MEM-45 / MEM-46 / MEM-X5。
@@ -88,8 +89,6 @@
 //     所以本文件不覆盖「应用自己那条 socket 的具体收帧」；应用侧的证据是界面在
 //     20 秒内自更新（远小于 60 秒的 refetchInterval，且窗口焦点重取是关的）。
 
-import { join } from 'node:path'
-
 import { expect, test, type Browser, type BrowserContext, type Page } from '@playwright/test'
 
 import { runSqlite } from './command'
@@ -168,7 +167,7 @@ async function api<T>(path: string, init?: RequestInit, token?: string): Promise
 }
 
 function dbPath(): string {
-  return join(daemon.home, 'db.sqlite')
+  return liveSqlitePath(daemon.home)
 }
 
 /**

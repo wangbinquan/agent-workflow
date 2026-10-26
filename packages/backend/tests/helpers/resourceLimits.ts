@@ -1,3 +1,4 @@
+import { epoch2RuntimeTestPorts } from './epoch2RuntimePorts'
 // RFC-395 II-b package O3: the legacy enforcer tests receive production facts/audit/cancellation ports.
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { composeResourceLimitOperations } from '@/bootstrap/resourceLimits'
@@ -9,7 +10,10 @@ export function enforceLimits(db: PersistenceDb, now?: number) {
     composeResourceLimitOperations({
       db,
       cancelTask: (taskId, reason) =>
-        composeTaskCancellation(db).cancel(taskId, { kind: 'resource-reaped', ...reason }),
+        composeTaskCancellation(db, epoch2RuntimeTestPorts(db).historyRestrictions).cancel(taskId, {
+          kind: 'resource-reaped',
+          ...reason,
+        }),
     }),
     now,
   )

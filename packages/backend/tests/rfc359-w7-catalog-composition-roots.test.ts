@@ -21,8 +21,11 @@ import { ulid } from 'ulid'
 import type { Actor } from '@/auth/actor'
 import { createAuthRuntimeFor } from '@/auth/composition'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { createIdentityAccessRuntime } from '@/modules/identity-access/composition'
-import { composeIdentityAccess } from '@/modules/identity-access/composition'
+import {
+  createIdentityAccessRuntime,
+  composeIdentityAccess,
+} from '@/modules/identity-access/composition'
+
 import { createIntegrationTriggerResources } from '@/modules/integration/infrastructure/integrationTriggerResources'
 import { composeMemoryCatalogOperations } from '@/modules/memory/composition'
 import { composeDemoResourceCatalogSeedParticipant } from '@/modules/resource-catalog/composition/demoResourceCatalogSeed'
@@ -36,7 +39,6 @@ import { composeResourceCatalogOverviewQuery } from '@/modules/resource-catalog/
 import { composeResourceScopeAccessParticipant } from '@/modules/resource-catalog/composition/resourceScopeAuthorization'
 import { composeDynamicWorkflowValidationContext } from '@/modules/resource-catalog/composition/workflowOperations'
 import type { ResourceRequestContext } from '@/modules/resource-catalog/public/participants'
-import { composeSqlitePostRestoreRecovery } from '@/modules/system-operations/composition'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import { assertNotBuiltin } from '@/services/systemResources'
 import { NotFoundError } from '@/util/errors'
@@ -381,9 +383,8 @@ test('技能工件原语：现行机制交出真路径与真哈希，旧词汇�
 // 所以这一条不进 describeEachProvider，而是自己开一棵刚迁移完的内存库。
 test('动态工作流校验上下文 + restore 后置恢复：都在一棵真 SQLite 库上驱动', async () => {
   const { createInMemoryDb } = await import('@/db/client')
-  const { MIGRATIONS } = await import('./migration-freeze')
   {
-    const db = createInMemoryDb(MIGRATIONS, {})
+    const db = createInMemoryDb({})
     const context = composeDynamicWorkflowValidationContext(db)
     expect((await context.load()).agents).toEqual([])
     // 装载的是当下的库存，不是快照：写一行 agent 之后再 load 必须看得见它。
@@ -407,12 +408,6 @@ test('动态工作流校验上下文 + restore 后置恢复：都在一棵真 SQ
     expect(Array.isArray(loaded.mcps)).toBe(true)
     expect(Array.isArray(loaded.plugins)).toBe(true)
 
-    // 同一个装配面上再驱动一次 restore 后置恢复：它对一棵刚迁移完的库是幂等空操作。
-    const appHome = mkdtempSync(join(tmpdir(), 'aw-rfc359-w7-restore-'))
-    try {
-      await composeSqlitePostRestoreRecovery().recover({ db, appHome })
-    } finally {
-      rmSync(appHome, { recursive: true, force: true })
-    }
+    // Epoch-1 fusion repair is covered by rfc395-boot-fusion-conversion.test.ts.
   }
 })

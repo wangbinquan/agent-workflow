@@ -4,14 +4,14 @@
 // tasks. Cascade delete is intentional: when a task is hard-deleted the
 // open / resolved alert history goes with it.
 
-import { rawRows, rawExec } from '@/platform/persistence/queryHelpers'
+import { createFrozenEpoch1Db, FROZEN_MIGRATIONS } from './migration-freeze'
+import { frozenRawRows as rawRows } from './migration-freeze'
+import { rawExec } from '@/platform/persistence/queryHelpers'
 import { describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
 import { sql } from 'drizzle-orm'
 
-import { createInMemoryDb } from '../src/db/client'
-
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+const MIGRATIONS = resolve(FROZEN_MIGRATIONS)
 
 interface SqlMaster {
   type: string
@@ -22,7 +22,7 @@ interface SqlMaster {
 
 describe('RFC-053 PR-D — migration 0028 lifecycle_alerts', () => {
   test('table exists with the expected columns', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createFrozenEpoch1Db(MIGRATIONS)
     const rows = (await rawRows(
       db,
       sql`SELECT type, name, tbl_name, sql FROM sqlite_master WHERE name='lifecycle_alerts'`,
@@ -45,7 +45,7 @@ describe('RFC-053 PR-D — migration 0028 lifecycle_alerts', () => {
   })
 
   test('both indexes exist', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createFrozenEpoch1Db(MIGRATIONS)
     const rows = (await rawRows(
       db,
       sql`SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='lifecycle_alerts'`,
@@ -58,7 +58,7 @@ describe('RFC-053 PR-D — migration 0028 lifecycle_alerts', () => {
 
 describe('RFC-053 PR-D — migration 0028 cascade delete', () => {
   test('deleting a task removes its lifecycle_alerts rows', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createFrozenEpoch1Db(MIGRATIONS)
     await rawExec(db, sql`PRAGMA foreign_keys = ON`)
     await rawExec(
       db,

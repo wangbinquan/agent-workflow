@@ -23,7 +23,7 @@ import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
@@ -37,8 +37,6 @@ import {
   createTaskExecutionTestTopology,
   runTaskWithRealTestTopology,
 } from './helpers/taskExecutionTestTopology'
-
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 interface Harness {
   tmp: string
@@ -93,7 +91,7 @@ async function setup(): Promise<Harness> {
   const remote = mkdtempSync(join(tmp, 'remote-'))
   mkdirSync(appHome, { recursive: true })
   mkdirSync(repoPath, { recursive: true })
-  const db = createInMemoryDb(MIGRATIONS)
+  const db = createInMemoryDb()
   await seedTestDefaultOpencodeRuntime(db)
 
   await runGit(remote, ['init', '-q', '--bare', '-b', 'main'])

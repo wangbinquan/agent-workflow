@@ -18,6 +18,10 @@ import { tablesOf } from '@/platform/persistence/sessionTables'
 import { describeEachProvider } from './helpers/eachProvider'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { expect, test } from 'bun:test'
+import { eq } from 'drizzle-orm'
+import { contentRefColumns } from '@/platform/content/contentStore'
+import { legacyContentRef } from '@/platform/content/contentRef'
+import { seedNodeRunDisplayEvidence } from './helpers/rfc395Q1Evidence'
 
 import { createTaskExecutionReadModels } from '../src/modules/task-execution/infrastructure/taskExecutionReadModels'
 import { getSessionTree } from '../src/services/sessionView'
@@ -107,6 +111,80 @@ async function seed(db: PersistenceDb, childEventCount: number): Promise<void> {
 }
 
 describeEachProvider('RFC-311 T13 — 会话树 DB 读有界且根不退化', (harness) => {
+  test('BF-D24 only same-session runs load prompts, including NULL sessions restored from evidence', async () => {
+    const db = harness.db
+    await seed(db, 0)
+    const { nodeRuns, nodeRunConfigs } = tablesOf(db)
+    for (const [id, session] of [
+      ['sibling', PARENT],
+      ...Array.from({ length: 12 }, (_, i) => [`other-${i}`, 'other-session'] as const),
+    ] as const) {
+      await nodeRunFixture(db, {
+        id,
+        taskId: 't1',
+        nodeId: id,
+        status: 'done',
+        startedAt: 2,
+        opencodeSessionId: session,
+        promptText: 'placeholder',
+      })
+      const ref = contentRefColumns.encode(legacyContentRef('prompt-test', 'database-bytes', id))
+      await db
+        .update(nodeRunConfigs)
+        .set({ promptRefJson: ref.json, promptInlineBytes: null })
+        .where(eq(nodeRunConfigs.nodeRunId, id))
+    }
+    await db.insert(nodeRuns).values({
+      id: 'history-sibling',
+      taskId: 't1',
+      nodeId: 'removed',
+      seq: 15,
+      generationSeq: 0,
+      status: 'done',
+      role: null,
+      slotKey: null,
+      attemptIndex: null,
+      scopePath: null,
+      recordMode: 'history-only',
+      provenanceQuality: 'unknown',
+      envelopeNonce: null,
+    })
+    await seedNodeRunDisplayEvidence(db, 't1', 'history-sibling', {
+      retry_index: 7,
+      scope_path: 'legacy:2',
+      opencode_session_id: PARENT,
+      prompt_text: 'Original history prompt',
+      started_at: 3,
+    })
+    const contentReads: unknown[] = []
+    const recording = harness.recordStatements()
+    try {
+      const found = await createTaskExecutionReadModels(db, {
+        async read(ref) {
+          contentReads.push(ref.location.value)
+          return new TextEncoder().encode(`database prompt for ${String(ref.location.value)}`)
+        },
+      }).sessions.find({ taskId: 't1', nodeRunId: 'nr1', rootPrefixCap: 5, tailCap: 10 })
+      expect(found.status).toBe('found')
+      if (found.status !== 'found') throw new Error('session fixture not found')
+      expect(found.siblings.map((row) => row.id)).toEqual(['nr1', 'sibling', 'history-sibling'])
+      expect(found.siblings[1]?.promptText).toBe('database prompt for sibling')
+      expect(found.siblings[2]).toMatchObject({
+        opencodeSessionId: PARENT,
+        retryIndex: 7,
+        promptText: 'Original history prompt',
+      })
+      expect(contentReads).toEqual(['sibling'])
+    } finally {
+      recording.stop()
+    }
+    const promptQueries = recording.statements.filter((row) =>
+      row.sql.includes('prompt_inline_bytes'),
+    )
+    expect(promptQueries.map((row) => row.rows)).toEqual([1, 3])
+    expect(promptQueries.every((row) => /where.*"node_runs"\."id"/i.test(row.sql))).toBe(true)
+  })
+
   test('事件远超上限时，根仍是父会话，且最近内容还在', async () => {
     const db = harness.db
     await seed(db, 120)

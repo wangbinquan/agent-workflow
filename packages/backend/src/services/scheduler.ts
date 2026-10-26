@@ -6,7 +6,7 @@
 // until their separately authorized waves cut over.
 
 import { createRunHistorySnapshot } from '@/modules/task-execution/public/queries'
-import { deriveNodeRunRole } from '@/modules/task-execution/public/types'
+import { nodeRunMintIdentityForSlot } from '@/modules/task-execution/public/types'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 import { buildWorkflowScopeParentMap } from '@agent-workflow/shared'
 // RFC-253 — script node execution.
@@ -73,7 +73,6 @@ export function readCommitExcludePatterns(opts: RunTaskOptions): Promise<readonl
 // authority lives with the freshness primitives now; audit S-13 / WP-3).
 // Re-exported here so the six existing test files importing it from the
 // scheduler keep working unchanged.
-export { isFresherNodeRun } from '@/services/freshness'
 
 // RFC-332 W2-B: DAG scope ownership moved to
 // modules/task-execution/composition/taskDagScope.ts. Wrapper/replay ownership
@@ -204,7 +203,15 @@ export async function maybeRunCommitPush(
       // the detail page groups the captured session(s) under the commit row.
       try {
         const sessionRunId = await state.opts.persistence.nodeRuns.mint({
-          ...deriveNodeRunRole({ nodeId: nodeId, rerunCause: 'commit-push-session' }),
+          ...nodeRunMintIdentityForSlot(
+            {
+              kind: 'synthetic',
+              syntheticKind: 'commit-session',
+              owner: { kind: 'attempt', id: ctx.nodeRunId },
+              discriminator: nodeId,
+            },
+            { kind: 'current' },
+          ),
           taskId: task.id,
           nodeId,
           status: 'pending',

@@ -1,8 +1,12 @@
 // RFC-359 W4-B3 —— 协作侧的任务可见性 / 角色解析：一份实现，两个 provider 共用。
 
-import type { TaskGateDefinitionContext } from '@/modules/task-execution/public/queries'
-import { createTaskGateQueries } from '@/modules/task-execution/public/queries'
-import { createNodeRunQueries } from '@/modules/task-execution/public/queries'
+import {
+  type TaskGateDefinitionContext,
+  createTaskGateQueries,
+  createNodeRunQueries,
+} from '@/modules/task-execution/public/queries'
+
+import { readClarifyHistory } from './clarifyHistoryProjection'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { first } from '@/platform/persistence/queryHelpers'
 import { and, desc, eq } from 'drizzle-orm'
@@ -68,7 +72,7 @@ export function createCollaborationTaskAccessPort(db: PersistenceDb): Collaborat
     },
     async resolveClarifyRoundTask(actor, intermediaryNodeRunId) {
       const { clarifyRounds } = tablesOf(db)
-      const round = await first(
+      const liveRound = await first(
         db
           .select({ taskId: clarifyRounds.taskId })
           .from(clarifyRounds)
@@ -76,6 +80,10 @@ export function createCollaborationTaskAccessPort(db: PersistenceDb): Collaborat
           .orderBy(desc(clarifyRounds.createdAt))
           .limit(1),
       )
+      const history = (await readClarifyHistory(db, { intermediaryNodeRunId }))
+        .filter((row) => row.intermediaryNodeRunId === intermediaryNodeRunId)
+        .sort((a, b) => b.createdAt - a.createdAt)
+      const round = liveRound ?? history[0]
       if (round === undefined) {
         const run =
           (await createNodeRunQueries(db).readFields(intermediaryNodeRunId, ['id'])) ?? undefined

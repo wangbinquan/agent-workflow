@@ -143,16 +143,10 @@ describe('RFC-311 T21 — 生产代码只能通过双读拿 prompt', () => {
           if (trimmed.startsWith('//') || trimmed.startsWith('*')) continue
           // 允许:`promptText: nodeRuns.promptText`(把列取回来交给双读)。
           if (/promptText:\s*nodeRuns\.promptText/.test(line)) continue
-          // RFC-395 II-a A3: the owner snapshot carries both stored columns to the existing dual reader.
-          // Only this exact projection is allowed; another use in this file still fails.
-          if (
-            relative(srcDir, full).replaceAll('\\', '/') ===
-              'modules/task-execution/infrastructure/nodeRunSnapshot.ts' &&
-            trimmed === 'promptText: row.promptText,' &&
-            text.includes('promptText: row.promptText,\n    promptPath: row.promptPath,')
-          )
-            continue
-          if (/\.promptText\b/.test(line)) {
+          // Epoch 2 has no promptText storage column. promptText on a command is
+          // incoming bytes; on a read DTO it is the ContentStore-decoded body.
+          // Keep rejecting physical table reads, including qualified table access.
+          if (/(?:nodeRuns|nodeRunConfigs|configs)\.promptText\b/.test(line)) {
             offenders.push(`${relative(srcDir, full)}:${i + 1}  ${trimmed}`)
           }
         }
@@ -168,4 +162,17 @@ describe('RFC-311 T21 — 生产代码只能通过双读拿 prompt', () => {
         `的 promptBody),让两者在类型层就分得开:\n${offenders.join('\n')}`,
     ).toEqual([])
   })
+})
+
+test('target prompt bodies pass through ContentStore and physical promptText reads remain forbidden', () => {
+  const query = readFileSync(
+    resolve(import.meta.dir, '../src/modules/task-execution/infrastructure/nodeRunQueries.ts'),
+    'utf8',
+  )
+  expect(query).toContain('contentRefColumns.decode(')
+  expect(query).toContain('await content.read(ref)')
+  const rawColumn = /(?:nodeRuns|nodeRunConfigs|configs)\.promptText\b/
+  for (const source of ['nodeRuns.promptText', 'tables.nodeRuns.promptText', 'configs.promptText'])
+    expect(rawColumn.test(source)).toBe(true)
+  expect(rawColumn.test('config.promptText')).toBe(false)
 })

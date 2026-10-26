@@ -1,3 +1,4 @@
+// BF-D8: the same D11 predicates are called by the live epoch-2 target.
 // RFC-349 AC-8 / D11 — the PostgreSQL migration target must reject torn
 // cross-table state and identity sequences whose next value can collide. These
 // oracles run through the already-reserved migration connection; there is no
@@ -15,12 +16,12 @@ import type {
   PostgresqlReservedConnection,
   SqlRows,
 } from '@/platform/persistence/postgresqlRuntime'
-import {
-  type LogicalColumnContract,
-  type LogicalSchemaContract,
-  type LogicalTableContract,
+import type {
+  LogicalColumnContract,
+  LogicalSchemaContract,
+  LogicalTableContract,
 } from '@/platform/persistence/schemaContract'
-import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'
 
 function rows(values: readonly Record<string, unknown>[]): SqlRows {
   return Object.assign(Promise.resolve(values), {
@@ -91,7 +92,7 @@ function contract(tables: readonly LogicalTableContract[]): LogicalSchemaContrac
 }
 
 describe('RFC-349 PostgreSQL logical-target business invariants', () => {
-  test('the canonical 182-table contract binds every closed D11 invariant', async () => {
+  test('the live epoch-2 contract binds every closed D11 invariant', async () => {
     const statements: string[] = []
     const connection: PostgresqlReservedConnection = withNativeTransactions({
       unsafe(sql) {
@@ -103,7 +104,7 @@ describe('RFC-349 PostgreSQL logical-target business invariants', () => {
 
     await verifyPostgresqlLogicalTargetBusinessInvariants({
       connection,
-      contract: buildLogicalSchemaContract(),
+      contract: logicalSchemaContract,
     })
 
     expect(statements).toHaveLength(POSTGRESQL_LOGICAL_TARGET_INVARIANT_IDS.length)

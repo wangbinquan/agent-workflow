@@ -2,7 +2,7 @@
 // between N's pre_snapshot and the next write node's pre_snapshot (or worktree
 // for the last writer); readonly nodes (no snapshot) contribute nothing.
 
-import { decodeTaskCheckpoints } from '@/modules/task-execution/infrastructure/taskCheckpointCodec'
+import { decodeTaskCheckpoints } from '@/modules/task-execution/infrastructure/migration/run/legacyCheckpointCodec'
 import { describe, expect, test } from 'bun:test'
 import {
   resolveNodeScope,

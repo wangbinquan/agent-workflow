@@ -1,5 +1,8 @@
+import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
+import { withTargetMintIdentity } from './helpers/rfc395Mint'
+import { nodeRunFixtureColumns } from './helpers/model/nodeRun'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { o2Ports } from './helpers/o2Closure'
-import { deriveNodeRunRole } from '@/modules/task-execution/public/types'
 import {
   agentFixture,
   patchClarifyRoundFixture,
@@ -7,7 +10,7 @@ import {
   workflowFixture,
 } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+
 import { readTaskAgentSources } from './helpers/taskAgentSource'
 // RFC-181 —— 工作组「全自动」硬化回归锁
 // (design/RFC-181-workgroup-autonomous-hardening/{proposal,design}.md)
@@ -38,13 +41,15 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { eq } from 'drizzle-orm'
-import type { TaskWsMessage } from '@agent-workflow/shared'
-import { buildBatchShardKey } from '@agent-workflow/shared'
 import {
+  type TaskWsMessage,
+  buildBatchShardKey,
   CreateWorkgroupSchema,
   WG_CLARIFY_BUDGET_DEFAULT,
   WorkgroupDraftSnapshotSchema,
+  type WorkgroupAssignmentStatus,
 } from '@agent-workflow/shared'
+
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 import { mintNodeRun } from '../src/services/nodeRunMint'
@@ -55,7 +60,7 @@ import {
   saveWorkgroup,
   workgroupDraftSnapshotOf,
 } from '../src/services/workgroups'
-import type { WorkgroupAssignmentStatus } from '@agent-workflow/shared'
+
 import { WORKGROUP_TURN_ASSIGNMENT_TRANSITIONS } from '@/modules/resource-catalog/application/workgroups/workgroupTurnsDriver'
 
 // RFC-359 W4-D19c-tail：转移表改指生产那份（与合一前逐字相同）。
@@ -78,6 +83,7 @@ const isTaskClarifySuppressed = (
   shardKey?: string | null,
 ): Promise<boolean> =>
   createCollaborationRuntimeMechanics(db, {
+    ...epoch2RuntimeTestPorts(db),
     taskLock: o2Ports(db).taskLock,
     ...{ upstreamAgents: o2Ports(db).upstreamAgents },
   }).isTaskClarifySuppressed({
@@ -94,6 +100,7 @@ const dismissOpenClarifyParksForAutonomous = (
   ReturnType<typeof createCollaborationRuntimeMechanics>['dismissOpenClarifyParksForAutonomous']
 > =>
   createCollaborationRuntimeMechanics(db, {
+    ...epoch2RuntimeTestPorts(db),
     taskLock: o2Ports(db).taskLock,
     ...{ upstreamAgents: o2Ports(db).upstreamAgents },
   }).dismissOpenClarifyParksForAutonomous({
@@ -286,19 +293,23 @@ describeEachProvider(
           createdAt: Date.now(),
         })
       }
-      const clarifyRunId = await mintNodeRun(db, {
-        ...deriveNodeRunRole({ nodeId: '__wg_clarify__', rerunCause: 'clarify-park' }),
-        taskId,
-        nodeId: '__wg_clarify__',
-        status: 'awaiting_human',
-        cause: 'clarify-park',
-        overrides: {
-          identity: {
-            shardKey: opts.shard,
-            startedAt: Date.now(),
+      const clarifyRunId = await mintNodeRun(
+        db,
+        withTargetMintIdentity({
+          role: 'synthetic',
+          syntheticKind: 'workgroup-host',
+          taskId,
+          nodeId: '__wg_clarify__',
+          status: 'awaiting_human',
+          cause: 'clarify-park',
+          overrides: {
+            identity: {
+              shardKey: opts.shard,
+              startedAt: Date.now(),
+            },
           },
-        },
-      })
+        }),
+      )
       const sessionId = ulid()
       // RFC-058 双写的权威轮行（实现门 P1-②：/api/clarify、草稿、seal 都读它——
       // 只取消 legacy session 行会让问题仍可答、陈旧答案仍可 seal+mint 续跑）。
@@ -458,12 +469,18 @@ describeEachProvider(
       expect(res.canceledParkRuns.map((r) => r.nodeRunId)).toEqual([park.clarifyRunId])
       expect(res.requeuedAssignments).toEqual([{ id: park.assignmentId ?? '', to: 'dispatched' }])
 
-      const { clarifyRounds, nodeRuns, workgroupAssignments } = tablesOf(db)
+      const { workgroupAssignments } = tablesOf(db)
+      const { clarifyRounds, nodeRuns } = tablesOf(db)
       const session = (
         await db.select().from(clarifyRounds).where(eq(clarifyRounds.id, park.sessionId))
       )[0]
       expect(session?.status).toBe('canceled')
-      const run = (await db.select().from(nodeRuns).where(eq(nodeRuns.id, park.clarifyRunId)))[0]
+      const run = (
+        await db
+          .select(nodeRunFixtureColumns(db))
+          .from(nodeRuns)
+          .where(eq(nodeRuns.id, park.clarifyRunId))
+      )[0]
       expect(run?.status).toBe('canceled')
       expect(run?.errorMessage).toBe('wg-clarify-disabled')
       // 实现门 P1-②：权威轮行同事务 canceled（seal/答案路径读的是 rounds）。

@@ -1,3 +1,5 @@
+import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
+import { withTargetMintIdentity } from './helpers/rfc395Mint'
 import { o2Ports } from './helpers/o2Closure'
 // RFC-144 T4 — stale replay 回归（先红后绿）+ merge-failed 行为缺口补齐。
 //
@@ -27,7 +29,6 @@ import { o2Ports } from './helpers/o2Closure'
 // 拦成非法迁移并收成 abandoned。场景 A 的端到端断言一字未改；B/C / D19 的判据集合不变，改断言
 // 「铸造不写旧代 + 推导集合 + 迁移被拦落 abandoned」；源码锁改为锁铸造里**没有**旧代读写（AC-1）。
 
-import { deriveNodeRunRole } from '@/modules/task-execution/public/types'
 import {
   agentFixture,
   nodeRunFixture,
@@ -39,7 +40,7 @@ import {
   workflowFixture,
   readNodeRunFixtures,
 } from './helpers/model'
-import { type PersistenceTables } from '@/platform/persistence/sessionTables'
+import type { PersistenceTables } from '@/platform/persistence/sessionTables'
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 
@@ -60,7 +61,7 @@ import {
 import { mintNodeRun } from '../src/services/nodeRunMint'
 import { createOrRebuildWrapperIso } from '../src/modules/task-execution/composition/wrapperMechanics'
 import { selectIsolationWorkspaceFactory } from '../src/modules/source-control/public/participants'
-import { deriveFrontier } from '../src/modules/task-execution/composition/dagFrontier'
+import { deriveFrontier } from './helpers/frontierSelection'
 import { createTaskExecutionPersistence } from '../src/modules/task-execution/composition/taskExecutionPersistence'
 import { createLogger } from '../src/util/log'
 import { runGit } from '../src/util/git'
@@ -70,7 +71,6 @@ import {
   runTaskWithRealTestTopology as runTask,
 } from './helpers/taskExecutionTestTopology'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const BACKEND_SRC = resolve(import.meta.dir, '..', 'src')
 
 /** 定长补零 id：字典序 = 数值序（早于任何真 ulid），控制「谁是前代」。 */
@@ -94,7 +94,7 @@ async function buildGitHarness(): Promise<Harness> {
   await runGit(worktreePath, ['add', '.'])
   await runGit(worktreePath, ['commit', '-q', '-m', 'init'])
   return {
-    db: createInMemoryDb(MIGRATIONS),
+    db: createInMemoryDb(),
     appHome,
     worktreePath,
     cleanup: () => rmSync(appHome, { recursive: true, force: true }),
@@ -328,7 +328,7 @@ describe('RFC-144 mint 收口 — mintNodeRun 铸出后代，前代行及其子�
   let db: DbClient
   let taskId: string
   beforeEach(async () => {
-    db = createInMemoryDb(MIGRATIONS)
+    db = createInMemoryDb()
     const workflowId = ulid()
     await workflowFixture(db, {
       id: workflowId,
@@ -375,13 +375,17 @@ describe('RFC-144 mint 收口 — mintNodeRun 铸出后代，前代行及其子�
     await seedRow({ id: mkId(2), mergeState: 'pending-merge', parentNodeRunId: mkId(1) }) // 其 shard 子行
     await seedRow({ id: mkId(3), nodeId: 'other', mergeState: 'pending-merge' }) // 他节点合法崩溃窗口行
 
-    await mintNodeRun(db, {
-      ...deriveNodeRunRole({ nodeId: 'W', rerunCause: 'retry-node' }),
-      taskId,
-      nodeId: 'W',
-      status: 'pending',
-      cause: 'retry-node',
-    })
+    await mintNodeRun(
+      db,
+      withTargetMintIdentity({
+        role: 'node-attempt',
+        syntheticKind: null,
+        taskId,
+        nodeId: 'W',
+        status: 'pending',
+        cause: 'retry-node',
+      }),
+    )
 
     const stateOf = async (id: string): Promise<string | null> => {
       return (await readNodeRunFixtures(db, { id }))[0]!.mergeState
@@ -409,13 +413,17 @@ describe('RFC-144 mint 收口 — mintNodeRun 铸出后代，前代行及其子�
         parentNodeRunId: null,
         startedAt: Date.now() - 10,
       })
-      await mintNodeRun(db, {
-        ...deriveNodeRunRole({ nodeId: 'W', rerunCause: 'clarify-answer' }),
-        taskId,
-        nodeId: 'W',
-        status: 'pending',
-        cause: 'clarify-answer',
-      })
+      await mintNodeRun(
+        db,
+        withTargetMintIdentity({
+          role: 'node-attempt',
+          syntheticKind: null,
+          taskId,
+          nodeId: 'W',
+          status: 'pending',
+          cause: 'clarify-answer',
+        }),
+      )
       const row = (await readNodeRunFixtures(db, { id: mkId(1) }))[0]!
       expect(row.mergeState).toBe('isolating') // 铸造不写旧代（RFC-369）
       expect(await derivedSupersededIds(db, taskId)).toEqual([mkId(1)])
@@ -451,6 +459,7 @@ describe('RFC-144 wrapper 同行复活的 iso 基（实现门 P2 第二半）', 
         appHome: h.appHome,
         isolationWorkspaces: selectIsolationWorkspaceFactory(),
         persistence: createTaskExecutionPersistence(h.db, {
+          historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
           recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
         }),
       },
@@ -501,6 +510,7 @@ describe('RFC-144 wrapper 同行复活的 iso 基（实现门 P2 第二半）', 
     const gen1Base = (gen1.checkpoints.find((checkpoint) => checkpoint.mountPath === '')
       ?.isolationBase ?? null)!
     const mergeStates = createTaskExecutionPersistence(h.db, {
+      historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
       recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
     }).mergeStates
     await mergeStates.transition({ nodeRunId: runId, event: { kind: 'mark-pending-merge' } })
@@ -598,6 +608,7 @@ describe('RFC-144 wrapper 同行复活的 iso 基（实现门 P2 第二半）', 
     const gen1Base = (gen1.checkpoints.find((checkpoint) => checkpoint.mountPath === '')
       ?.isolationBase ?? null)!
     const mergeStates = createTaskExecutionPersistence(h.db, {
+      historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
       recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
     }).mergeStates
     await mergeStates.transition({ nodeRunId: runId, event: { kind: 'mark-pending-merge' } })
@@ -843,13 +854,13 @@ describe('RFC-144 源码锁 — mint 收口点的原子接线形态', () => {
     expect(program).not.toContain('mergeState')
     expect(program).not.toContain("'abandoned'")
     expect(program).not.toMatch(/\blt\(nodeRuns\.id/)
-    expect(program.match(/\.from\(nodeRuns\)/g) ?? []).toHaveLength(1)
-    expect(program).toContain('.where(eq(nodeRuns.id, record.containerRunId!))')
-    expect(program.match(/insertOne\(tx, nodeRuns,/g) ?? []).toHaveLength(1)
-    expect(program.match(/\.insert\(nodeRunSeqAllocations\)/g) ?? []).toHaveLength(1)
+    expect(program.match(/\.from\((?:tables\.)?nodeRuns\)/g) ?? []).toHaveLength(1)
+    expect(program).toContain('.where(eq(tables.nodeRuns.id, record.containerRunId!))')
+    expect(program.match(/insertOne\(tx, tables\.nodeRuns,/g) ?? []).toHaveLength(1)
+    expect(program.match(/\.insert\(tables\.nodeRunSeqAllocations\)/g) ?? []).toHaveLength(1)
     // RFC-374: the allocation is the immediately preceding database statement.
-    const allocationAt = program.indexOf('.insert(nodeRunSeqAllocations)')
-    const runAt = program.indexOf('insertOne(tx, nodeRuns,')
+    const allocationAt = program.indexOf('.insert(tables.nodeRunSeqAllocations)')
+    const runAt = program.indexOf('insertOne(tx, tables.nodeRuns,')
     expect(allocationAt).toBeLessThan(runAt)
     expect(
       program.slice(allocationAt, runAt).match(/\.(?:insert|update|delete|select)\(/g),
@@ -869,7 +880,7 @@ describe('RFC-144 源码锁 — mint 收口点的原子接线形态', () => {
     // RFC-359：派发事务跑在 DatabaseSession 上（两引擎一份），铸造参与者是中立的 createNodeRunMintParticipantInTx。
     const txAt = src.indexOf('databaseSessionFor(db).transaction(async (tx) => {')
     const participantAt = src.indexOf('createNodeRunMintParticipantInTx(tx)', txAt)
-    const mintAt = src.indexOf('nodeRunMint.mint(p.input)', participantAt)
+    const mintAt = src.indexOf('nodeRunMint.mint({', participantAt)
     expect(txAt).toBeGreaterThan(-1)
     expect(participantAt).toBeGreaterThan(txAt)
     expect(mintAt).toBeGreaterThan(participantAt)

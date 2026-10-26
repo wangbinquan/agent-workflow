@@ -16,7 +16,7 @@
 // PR-1 lands it UNWIRED (no caller): the two legacy injectors are untouched. PR-2 (T3) drops it in
 // and deletes the fork.
 
-import { decodeLegacyClarifyAnswerColumns } from '../clarifyAnswerCodec'
+import { readClarifyAnswerProjection } from '../clarifyAnswerQueries'
 import { createNodeRunQueries } from '@/modules/task-execution/public/queries'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { and, eq, inArray, isNotNull, isNull, ne, or } from 'drizzle-orm'
@@ -112,7 +112,8 @@ export interface AgentQueueEntry {
 export async function selectAgentQueue(args: SelectAgentQueueArgs): Promise<AgentQueueEntry[]> {
   const { db, taskId, consumerNodeId, dispatchedRunId, shardKey, currentRunOnly = false } = args
 
-  const { taskQuestions, clarifyRounds } = tablesOf(db)
+  const { taskQuestions } = tablesOf(db)
+  const { clarifyRounds } = tablesOf(db)
   // 1. All DISPATCHED entries whose EFFECTIVE TARGET (override ?? default) is this node — every role
   //    in one query. RFC-131 T4 去借壳: select by the target the rerun is minted on (a reassign
   //    moves the run to the target node), not the origin home — reading the origin would miss a
@@ -205,15 +206,15 @@ export async function selectAgentQueue(args: SelectAgentQueueArgs): Promise<Agen
       round === undefined ||
       round.status === 'canceled' ||
       round.status === 'abandoned' ||
-      round.answersJson === null
+      (!round.answersRecorded && round.legacyAnswersJson === null)
     )
       continue
     let questions: ClarifyQuestion[]
-    let projection: ReturnType<typeof decodeLegacyClarifyAnswerColumns>
+    let projection: Awaited<ReturnType<typeof readClarifyAnswerProjection>>
     let submitted: ClarifyAnswer[]
     try {
       questions = JSON.parse(round.questionsJson) as ClarifyQuestion[]
-      projection = decodeLegacyClarifyAnswerColumns(round)
+      projection = await readClarifyAnswerProjection(db, round)
       submitted = projection.requireAnswers()
     } catch (err) {
       log.warn('clarify queue round JSON parse failed; skipping round', {

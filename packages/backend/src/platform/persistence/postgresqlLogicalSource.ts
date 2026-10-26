@@ -1,3 +1,9 @@
+import { registryFromContract } from './schema/contract'
+import { schemaHistoryRuntime, runtimeHistoryAdmission } from './schema/history/runtime'
+import { admitPostgresqlHistoryConnection } from './schema/history/admission'
+import { projectLogicalSchemaContract } from './schema/logicalContract'
+import { postgresqlHistoryConnection } from './schema/history/connection'
+import { captureEpochMetadata, type EpochMetadataSnapshot } from './schema/history/metadataSnapshot'
 // RFC-349 — bounded, provider-neutral logical reads from a live PostgreSQL
 // generation. One reserved REPEATABLE READ / READ ONLY transaction provides a
 // cross-table snapshot; a separate pool probe keeps the live generation fence
@@ -32,6 +38,7 @@ export interface PostgresqlLogicalSource {
     afterKey: readonly CanonicalLogicalValue[] | null,
     limit: number,
   ): Promise<readonly CanonicalLogicalRow[]>
+  readMetadata?(): Promise<EpochMetadataSnapshot>
   close(): Promise<void>
 }
 
@@ -138,13 +145,13 @@ export async function openPostgresqlLogicalSource(input: {
     ) => PromiseLike<readonly Record<string, unknown>[]>,
   ): Promise<void> => {
     const rows = await query(
-      `SELECT state, contract_digest FROM ${metadataTable('database_generations')} WHERE generation_id = $1`,
+      `SELECT state, contract_digest FROM ${metadataTable('generations')} WHERE generation_id = $1`,
       [input.generationId],
     )
     if (
       rows.length !== 1 ||
       rows[0]?.state !== 'active' ||
-      rows[0]?.contract_digest !== input.contract.digest
+      rows[0]?.contract_digest !== schemaHistoryRuntime().head().contract.contract.digest
     ) {
       throw new PostgresqlLogicalSourceError(
         'postgresql-source-generation',
@@ -156,6 +163,7 @@ export async function openPostgresqlLogicalSource(input: {
   const source: PostgresqlLogicalSource = {
     provider: 'postgresql',
     generationId: input.generationId,
+    readMetadata: () => captureEpochMetadata(postgresqlHistoryConnection(connection)),
     async preflight() {
       if (closed) {
         throw new PostgresqlLogicalSourceError(
@@ -179,12 +187,14 @@ export async function openPostgresqlLogicalSource(input: {
           'PostgreSQL logical source table roster does not match the active contract',
         )
       }
-      const migrations = await connection.unsafe(
-        // Receipts retain every schema version and can share a timestamp. The
-        // current singleton identifies the committed receipt, not clock order.
-        `SELECT migration.contract_digest FROM ${metadataTable('schema_migrations')} migration INNER JOIN ${metadataTable('schema_contract')} current_contract ON current_contract.contract_digest = migration.contract_digest WHERE current_contract.singleton = TRUE`,
+      await connection.unsafe('SET LOCAL search_path TO agent_workflow, public')
+      const admitted = await admitPostgresqlHistoryConnection(
+        postgresqlHistoryConnection(connection),
+        runtimeHistoryAdmission(),
       )
-      if (migrations.length !== 1 || migrations[0]?.contract_digest !== input.contract.digest) {
+      const schema = admitted.contract.contract
+      const recorded = projectLogicalSchemaContract(registryFromContract(schema))
+      if (recorded.digest !== input.contract.digest) {
         throw new PostgresqlLogicalSourceError(
           'postgresql-source-schema',
           'PostgreSQL logical source migration history does not match the contract',

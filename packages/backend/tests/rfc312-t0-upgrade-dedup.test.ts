@@ -15,7 +15,7 @@
 
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
+
 import { randomBytes } from 'node:crypto'
 
 import { createInMemoryDb, type DbClient } from '../src/db/client'
@@ -23,8 +23,6 @@ import { createSession } from './helpers/auth/sessionStore'
 import { resolveActorWithWsCredential } from '../src/auth/session'
 import { createIdentityAccessRuntime } from '../src/modules/identity-access/composition'
 import { createAuthRuntimeFor } from '../src/auth/composition'
-
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 function seedUser(db: DbClient, id: string): void {
   db.$client
@@ -57,7 +55,7 @@ function countSessionUpdates(db: DbClient): { writes: () => number; restore: () 
 
 describe('rfc312 T0 · WS 升级路径去重', () => {
   test('一次成功的 session 升级只写一次 last_used_at（修复前是两次）', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createInMemoryDb()
     seedUser(db, 'u-1')
     const { token } = await createSession({ db, userId: 'u-1', now: 1_000 })
 
@@ -92,7 +90,7 @@ describe('rfc312 T0 · WS 升级路径去重', () => {
   })
 
   test('rolling renewal 仍然生效：升级确实推进了 last_used_at', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createInMemoryDb()
     seedUser(db, 'u-2')
     const { token, session } = await createSession({ db, userId: 'u-2', now: 1_000 })
 
@@ -111,7 +109,7 @@ describe('rfc312 T0 · WS 升级路径去重', () => {
   })
 
   test('无效 token：actor 为 null，凭据仍带指纹（调用方据 actor 判 401）', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createInMemoryDb()
     const bogus = `aws_s_${randomBytes(32).toString('hex')}`
     const resolved = await resolveActorWithWsCredential(
       db,
@@ -125,7 +123,7 @@ describe('rfc312 T0 · WS 升级路径去重', () => {
   })
 
   test('daemon token：不查库，凭据为 daemon 形态', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createInMemoryDb()
     const counter = countSessionUpdates(db)
     const resolved = await resolveActorWithWsCredential(
       db,

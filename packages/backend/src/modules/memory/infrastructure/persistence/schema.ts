@@ -1,4 +1,4 @@
-// RFC-395 I-a: explicit epoch-1 schema contributions; no physical or runtime change.
+// RFC-395 activation: this context declares the live epoch-2 schema directly.
 import {
   column as c,
   defineContribution,
@@ -10,115 +10,6 @@ import {
 import { materializeDrizzle } from '@/platform/persistence/schema/drizzle'
 
 const owner = defineContribution('memory')
-
-const memoriesDefinition = owner.table({
-  id: 'memories',
-  schemaSymbol: 'memories',
-  columns: {
-    id: c.id('id', { primary: true }),
-    scopeType: c.enum('scope_type', ['agent', 'workflow', 'repo', 'repo_group', 'global']),
-    scopeId: c.id('scope_id', { nullable: true }),
-    title: c.text('title'),
-    bodyMd: c.text('body_md'),
-    tags: c.text('tags', { default: '[]' }),
-    status: c.enum('status', [
-      'candidate',
-      'approved',
-      'archived',
-      'superseded',
-      'rejected',
-      'fused',
-    ]),
-    sourceKind: c.enum('source_kind', [
-      'clarify',
-      'review',
-      'feedback',
-      'agent-run',
-      'task-run',
-      'manual',
-    ]),
-    sourceEventId: c.id('source_event_id', { nullable: true }),
-    sourceTaskId: c.id('source_task_id', { nullable: true }),
-    distillJobId: c.id('distill_job_id', { nullable: true }),
-    distillAction: c.enum('distill_action', ['new', 'update_of', 'duplicate_of', 'conflict_with'], {
-      nullable: true,
-    }),
-    supersedesId: c.id('supersedes_id', { nullable: true }),
-    supersededById: c.id('superseded_by_id', { nullable: true }),
-    approvedByUserId: c.id('approved_by_user_id', { nullable: true }),
-    approvedAt: c.epochMs('approved_at', { nullable: true }),
-    createdAt: c.epochMs('created_at'),
-    version: c.int('version', { default: 1 }),
-    fusedIntoSkill: c.text('fused_into_skill', { nullable: true }),
-    fusedIntoSkillId: c.id('fused_into_skill_id', { nullable: true }),
-    fusedIntoSkillVersion: c.int('fused_into_skill_version', { nullable: true }),
-    fusedAt: c.epochMs('fused_at', { nullable: true }),
-    fusedByUserId: c.id('fused_by_user_id', { nullable: true }),
-    fusedFusionId: c.id('fused_fusion_id', { nullable: true }),
-  },
-  checks: [
-    {
-      name: 'memories_scope_type_enum',
-      expression: raw(
-        "\"memories\".\"scope_type\" IN ('agent','workflow','repo','repo_group','global')",
-        "\"scope_type\" IN ('agent','workflow','repo','repo_group','global')",
-      ),
-    },
-    {
-      name: 'memories_status_enum',
-      expression: raw(
-        "\"memories\".\"status\" IN ('candidate','approved','archived','superseded','rejected','fused')",
-        "\"status\" IN ('candidate','approved','archived','superseded','rejected','fused')",
-      ),
-    },
-    {
-      name: 'memories_source_kind_enum',
-      expression: raw(
-        "\"memories\".\"source_kind\" IN ('clarify','review','feedback','agent-run','task-run','manual')",
-        "\"source_kind\" IN ('clarify','review','feedback','agent-run','task-run','manual')",
-      ),
-    },
-    {
-      name: 'memories_distill_action_enum',
-      expression: raw(
-        '"memories"."distill_action" IS NULL OR "memories"."distill_action" IN (\'new\',\'update_of\',\'duplicate_of\',\'conflict_with\')',
-        "\"distill_action\" IS NULL OR \"distill_action\" IN ('new','update_of','duplicate_of','conflict_with')",
-      ),
-    },
-    {
-      name: 'memories_scope_type_shape',
-      expression: raw(
-        '("memories"."scope_type" = \'global\' AND "memories"."scope_id" IS NULL) OR ("memories"."scope_type" != \'global\' AND "memories"."scope_id" IS NOT NULL)',
-        '("scope_type" = \'global\' AND "scope_id" IS NULL) OR ("scope_type" != \'global\' AND "scope_id" IS NOT NULL)',
-      ),
-    },
-    {
-      name: 'memories_fused_into_skill_shape',
-      expression: raw(
-        '("memories"."status" = \'fused\') = ("memories"."fused_into_skill" IS NOT NULL)',
-        '("status" = \'fused\') = ("fused_into_skill" IS NOT NULL)',
-      ),
-    },
-    {
-      name: 'memories_fused_into_skill_id_shape',
-      expression: raw(
-        '("memories"."status" = \'fused\') = ("memories"."fused_into_skill_id" IS NOT NULL)',
-        '("status" = \'fused\') = ("fused_into_skill_id" IS NOT NULL)',
-      ),
-    },
-  ],
-  indexes: [
-    index('idx_memories_scope_status', ['scope_type', 'scope_id', 'status']),
-    index('idx_memories_status_created', ['status', 'created_at']),
-    index('idx_memories_supersedes', ['supersedes_id']),
-    index('idx_memories_created', ['created_at']),
-    index('idx_memories_source', ['source_kind', 'source_event_id']),
-    index('idx_memories_fused_skill_id', ['fused_into_skill_id', 'fused_into_skill_version']),
-  ],
-  retention: retention.business,
-})
-
-export const memories = materializeDrizzle(memoriesDefinition).table
 
 const memoryDistillEventsDefinition = owner.table({
   id: 'memory_distill_events',
@@ -271,9 +162,224 @@ const memoryScopeMoveEventsDefinition = owner.table({
 
 export const memoryScopeMoveEvents = materializeDrizzle(memoryScopeMoveEventsDefinition).table
 
-export const schemaContribution = owner.contribution([
-  memoriesDefinition,
-  memoryDistillEventsDefinition,
-  memoryDistillJobsDefinition,
-  memoryScopeMoveEventsDefinition,
-])
+const memoriesDefinition = owner.table({
+  version: 2,
+  unique: [],
+  foreignKeys: [
+    {
+      name: 'memories_supersedes_fk',
+      columns: ['supersedes_id'],
+      foreignTable: 'memories',
+      foreignColumns: ['id'],
+      onDelete: 'set null',
+      onUpdate: 'no action',
+      lifecycle:
+        'Deleting a memory clears historical supersession pointers, retaining the referring memory.',
+    },
+    {
+      name: 'memories_superseded_by_fk',
+      columns: ['superseded_by_id'],
+      foreignTable: 'memories',
+      foreignColumns: ['id'],
+      onDelete: 'set null',
+      onUpdate: 'no action',
+      lifecycle:
+        'Deleting a memory clears historical supersession pointers, retaining the referring memory.',
+    },
+  ],
+  checks: [
+    {
+      name: 'memories_scope_type_enum',
+      expression: {
+        kind: 'raw',
+        reason: 'Preserve the epoch-1 expression spelling and provider semantics (RFC-395 I-a).',
+        sqlite: "\"memories\".\"scope_type\" IN ('agent','workflow','repo','repo_group','global')",
+        postgresql: "\"scope_type\" IN ('agent','workflow','repo','repo_group','global')",
+      },
+    },
+    {
+      name: 'memories_status_enum',
+      expression: {
+        kind: 'raw',
+        reason: 'Preserve the epoch-1 expression spelling and provider semantics (RFC-395 I-a).',
+        sqlite:
+          "\"memories\".\"status\" IN ('candidate','approved','archived','superseded','rejected','fused')",
+        postgresql:
+          "\"status\" IN ('candidate','approved','archived','superseded','rejected','fused')",
+      },
+    },
+    {
+      name: 'memories_source_kind_enum',
+      expression: {
+        kind: 'raw',
+        reason: 'Preserve the epoch-1 expression spelling and provider semantics (RFC-395 I-a).',
+        sqlite:
+          "\"memories\".\"source_kind\" IN ('clarify','review','feedback','agent-run','task-run','manual')",
+        postgresql:
+          "\"source_kind\" IN ('clarify','review','feedback','agent-run','task-run','manual')",
+      },
+    },
+    {
+      name: 'memories_distill_action_enum',
+      expression: {
+        kind: 'raw',
+        reason: 'Preserve the epoch-1 expression spelling and provider semantics (RFC-395 I-a).',
+        sqlite:
+          '"memories"."distill_action" IS NULL OR "memories"."distill_action" IN (\'new\',\'update_of\',\'duplicate_of\',\'conflict_with\')',
+        postgresql:
+          "\"distill_action\" IS NULL OR \"distill_action\" IN ('new','update_of','duplicate_of','conflict_with')",
+      },
+    },
+    {
+      name: 'memories_scope_type_shape',
+      expression: {
+        kind: 'raw',
+        reason: 'Preserve the epoch-1 expression spelling and provider semantics (RFC-395 I-a).',
+        sqlite:
+          '("memories"."scope_type" = \'global\' AND "memories"."scope_id" IS NULL) OR ("memories"."scope_type" != \'global\' AND "memories"."scope_id" IS NOT NULL)',
+        postgresql:
+          '("scope_type" = \'global\' AND "scope_id" IS NULL) OR ("scope_type" != \'global\' AND "scope_id" IS NOT NULL)',
+      },
+    },
+    {
+      name: 'memories_fused_into_skill_shape',
+      expression: {
+        kind: 'raw',
+        reason: 'Preserve the epoch-1 expression spelling and provider semantics (RFC-395 I-a).',
+        sqlite: '("memories"."status" = \'fused\') = ("memories"."fused_into_skill" IS NOT NULL)',
+        postgresql: '("status" = \'fused\') = ("fused_into_skill" IS NOT NULL)',
+      },
+    },
+    {
+      name: 'memories_fused_into_skill_id_shape',
+      expression: {
+        kind: 'raw',
+        reason: 'Preserve the epoch-1 expression spelling and provider semantics (RFC-395 I-a).',
+        sqlite:
+          '("memories"."status" = \'fused\') = ("memories"."fused_into_skill_id" IS NOT NULL)',
+        postgresql: '("status" = \'fused\') = ("fused_into_skill_id" IS NOT NULL)',
+      },
+    },
+  ],
+  indexes: [
+    {
+      name: 'idx_memories_scope_status',
+      unique: false,
+      nulls: 'distinct',
+      columns: [
+        { kind: 'column', name: 'scope_type' },
+        { kind: 'column', name: 'scope_id' },
+        { kind: 'column', name: 'status' },
+      ],
+      where: null,
+    },
+    {
+      name: 'idx_memories_status_created',
+      unique: false,
+      nulls: 'distinct',
+      columns: [
+        { kind: 'column', name: 'status' },
+        { kind: 'column', name: 'created_at' },
+      ],
+      where: null,
+    },
+    {
+      name: 'idx_memories_supersedes',
+      unique: false,
+      nulls: 'distinct',
+      columns: [{ kind: 'column', name: 'supersedes_id' }],
+      where: null,
+    },
+    {
+      name: 'idx_memories_created',
+      unique: false,
+      nulls: 'distinct',
+      columns: [{ kind: 'column', name: 'created_at' }],
+      where: null,
+    },
+    {
+      name: 'idx_memories_source',
+      unique: false,
+      nulls: 'distinct',
+      columns: [
+        { kind: 'column', name: 'source_kind' },
+        { kind: 'column', name: 'source_event_id' },
+      ],
+      where: null,
+    },
+    {
+      name: 'idx_memories_fused_skill_id',
+      unique: false,
+      nulls: 'distinct',
+      columns: [
+        { kind: 'column', name: 'fused_into_skill_id' },
+        { kind: 'column', name: 'fused_into_skill_version' },
+      ],
+      where: null,
+    },
+  ],
+  migrationPolicy: 'KEEP',
+  id: 'memories',
+  schemaSymbol: 'memories',
+  columns: {
+    id: c.id('id', { primary: true }),
+    scopeType: c.enum('scope_type', ['agent', 'workflow', 'repo', 'repo_group', 'global']),
+    scopeId: c.id('scope_id', { nullable: true }),
+    title: c.text('title'),
+    bodyMd: c.text('body_md'),
+    tags: c.text('tags', { default: '[]' }),
+    status: c.enum('status', [
+      'candidate',
+      'approved',
+      'archived',
+      'superseded',
+      'rejected',
+      'fused',
+    ]),
+    sourceKind: c.enum('source_kind', [
+      'clarify',
+      'review',
+      'feedback',
+      'agent-run',
+      'task-run',
+      'manual',
+    ]),
+    sourceEventId: c.id('source_event_id', { nullable: true }),
+    sourceTaskId: c.id('source_task_id', { nullable: true }),
+    distillJobId: c.id('distill_job_id', { nullable: true }),
+    distillAction: c.enum('distill_action', ['new', 'update_of', 'duplicate_of', 'conflict_with'], {
+      nullable: true,
+    }),
+    supersedesId: c.id('supersedes_id', { nullable: true }),
+    supersededById: c.id('superseded_by_id', { nullable: true }),
+    approvedByUserId: c.id('approved_by_user_id', { nullable: true }),
+    approvedAt: c.epochMs('approved_at', { nullable: true }),
+    createdAt: c.epochMs('created_at'),
+    version: c.int('version', { default: 1 }),
+    fusedIntoSkill: c.text('fused_into_skill', { nullable: true }),
+    fusedIntoSkillId: c.id('fused_into_skill_id', { nullable: true }),
+    fusedIntoSkillVersion: c.int('fused_into_skill_version', { nullable: true }),
+    fusedAt: c.epochMs('fused_at', { nullable: true }),
+    fusedByUserId: c.id('fused_by_user_id', { nullable: true }),
+    fusedFusionId: c.id('fused_fusion_id', { nullable: true }),
+  },
+  retention: {
+    class: 'owner-managed-business',
+    rule: 'Retain as live business or recovery state until the owning bounded context approves a replacement contract.',
+  },
+  primaryKey: ['id'],
+  migrationKey: ['id'],
+})
+
+export const memories = materializeDrizzle(memoriesDefinition).table
+
+export const schemaContribution = {
+  owner: 'memory',
+  version: 2,
+  tables: [
+    memoryDistillEventsDefinition,
+    memoryDistillJobsDefinition,
+    memoryScopeMoveEventsDefinition,
+    memoriesDefinition,
+  ],
+} as const

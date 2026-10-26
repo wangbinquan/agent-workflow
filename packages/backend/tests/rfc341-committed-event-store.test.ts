@@ -4,42 +4,19 @@ import { and, eq } from 'drizzle-orm'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
-import { createInMemoryDb } from '@/db/client'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import {
-  appendCommittedEvent,
-  changeCommittedEventCutover,
-} from '@/platform/events/committed/append'
+import { appendCommittedEvent } from '@/platform/events/committed/append'
 import { createCommittedEventDispatcher } from '@/platform/events/committed/dispatcherWorker'
 import { createCommittedEventDeliveryPersistence } from '@/platform/events/committed/deliveryPersistence'
-import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import {
   committedEventGroupId,
   type AppendCommittedEventInput,
   type CommittedEventEnvelopeV1,
 } from '@/platform/events/committed/types'
-import { recordStatements } from './helpers/statementRecorder'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
-import { MIGRATIONS } from './migration-freeze'
 
 const NOW = 1_789_488_100_000
 const CONSUMER = { id: 'event-center.fixture', deliveryClass: 'critical' as const }
-
-async function createLegacyStoreDb(): Promise<ReturnType<typeof createInMemoryDb>> {
-  const db = createInMemoryDb(MIGRATIONS)
-  const { committedEventFamilyCutovers } = tablesOf(db)
-  await db
-    .update(committedEventFamilyCutovers)
-    .set({ mode: 'legacy', epoch: 1, changedAt: NOW, changeRef: 'test:legacy-baseline' })
-    .where(
-      and(
-        eq(committedEventFamilyCutovers.producer, 'collaboration'),
-        eq(committedEventFamilyCutovers.family, 'review'),
-      ),
-    )
-
-  return db
-}
 
 function eventInput(input: {
   operation: string
@@ -61,34 +38,12 @@ function eventInput(input: {
   }
 }
 
-/** The preflight case instruments bun:sqlite statements, so it stays on one engine;
- *  the writes themselves still go through the neutral append/cutover port. */
-async function sqliteCutover(
-  session: ReturnType<typeof databaseSessionFor>,
-  expectedMode: 'legacy' | 'shadow',
-  expectedEpoch: number,
-  mode: 'shadow' | 'dispatchable',
-): Promise<void> {
-  await session.transaction(
-    async (tx) =>
-      await changeCommittedEventCutover(tx, {
-        producer: 'collaboration',
-        family: 'review',
-        expectedMode,
-        expectedEpoch,
-        mode,
-        changedAt: NOW + expectedEpoch,
-        changeRef: `test:${mode}`,
-      }),
-  )
-}
-
-async function createProviderLegacyStoreDb(harness: ProviderHarness): Promise<PersistenceDb> {
+async function createProviderStoreDb(harness: ProviderHarness): Promise<PersistenceDb> {
   const db = harness.db
   const { committedEventFamilyCutovers } = tablesOf(db)
   await db
     .update(committedEventFamilyCutovers)
-    .set({ mode: 'legacy', epoch: 1, changedAt: NOW, changeRef: 'test:legacy-baseline' })
+    .set({ epoch: 1, changedAt: NOW, changeRef: 'test:routing-baseline' })
     .where(
       and(
         eq(committedEventFamilyCutovers.producer, 'collaboration'),
@@ -99,24 +54,17 @@ async function createProviderLegacyStoreDb(harness: ProviderHarness): Promise<Pe
   return db
 }
 
-async function cutoverForProvider(
-  harness: ProviderHarness,
-  expectedMode: 'legacy' | 'shadow',
-  expectedEpoch: number,
-  mode: 'shadow' | 'dispatchable',
-): Promise<void> {
-  await harness.session.transaction(
-    async (tx) =>
-      await changeCommittedEventCutover(tx, {
-        producer: 'collaboration',
-        family: 'review',
-        expectedMode,
-        expectedEpoch,
-        mode,
-        changedAt: NOW + expectedEpoch,
-        changeRef: `test:${mode}`,
-      }),
-  )
+async function setRoutingEpoch(harness: ProviderHarness, epoch: number): Promise<void> {
+  const { committedEventFamilyCutovers } = tablesOf(harness.db)
+  await harness.db
+    .update(committedEventFamilyCutovers)
+    .set({ epoch, changedAt: NOW + epoch, changeRef: `fixture:${epoch}` })
+    .where(
+      and(
+        eq(committedEventFamilyCutovers.producer, 'collaboration'),
+        eq(committedEventFamilyCutovers.family, 'review'),
+      ),
+    )
 }
 
 describe('RFC-341 committed-event store', () => {
@@ -125,15 +73,15 @@ describe('RFC-341 committed-event store', () => {
     expect(route).toContain("'committed-event-retry-conflict'")
     expect(route).toContain('/api/event-center/committed-deliveries/:eventId/:consumerId/retry')
   })
+})
 
+describeEachProvider('RFC-341 committed-event store', (harness) => {
   test('preflights an idle queue without reserving the writer and rechecks due work in the claim transaction', async () => {
-    const db = await createLegacyStoreDb()
-    const session = databaseSessionFor(db)
-    await sqliteCutover(session, 'legacy', 1, 'shadow')
-    await sqliteCutover(session, 'shadow', 2, 'dispatchable')
+    const db = await createProviderStoreDb(harness)
+    const session = harness.session
 
     const persistence = createCommittedEventDeliveryPersistence(db)
-    const idleRecording = recordStatements(db.$client)
+    const idleRecording = harness.recordStatements()
     const idleClaim = await (async () => {
       try {
         return await persistence.claimNext({ workerId: 'idle-worker', now: NOW + 100 })
@@ -142,7 +90,9 @@ describe('RFC-341 committed-event store', () => {
       }
     })()
     expect(idleClaim).toBeNull()
-    expect(idleRecording.statements.filter((row) => row.sql === 'BEGIN IMMEDIATE')).toEqual([])
+    expect(
+      idleRecording.statements.filter((row) => /^(BEGIN IMMEDIATE|begin)$/i.test(row.sql)),
+    ).toEqual([])
     expect(
       idleRecording.selects().filter((row) => row.sql.includes('committed_event_deliveries')),
     ).toHaveLength(1)
@@ -151,7 +101,7 @@ describe('RFC-341 committed-event store', () => {
       async (tx) =>
         await appendCommittedEvent(tx, eventInput({ operation: 'preflight-then-claim' })),
     )
-    const dueRecording = recordStatements(db.$client)
+    const dueRecording = harness.recordStatements()
     const dueClaim = await (async () => {
       try {
         return await persistence.claimNext({ workerId: 'due-worker', now: NOW + 200 })
@@ -160,27 +110,21 @@ describe('RFC-341 committed-event store', () => {
       }
     })()
     expect(dueClaim?.event.envelope.eventId).toBe(appended.eventRef?.eventId)
-    expect(dueRecording.statements.filter((row) => row.sql === 'BEGIN IMMEDIATE')).toHaveLength(1)
+    expect(
+      dueRecording.statements.filter((row) => /^(BEGIN IMMEDIATE|begin)$/i.test(row.sql)),
+    ).toHaveLength(1)
     expect(
       dueRecording.selects().filter((row) => row.sql.includes('committed_event_deliveries')),
     ).toHaveLength(2)
   })
-})
 
-describeEachProvider('RFC-341 committed-event store', (harness) => {
   // RFC-359：这条判据此前钉在 SQLite 上（`dbTxSync` + `appendCommittedEventTx`）。它锁的是
-  // **产品行为**——legacy 期不落行、shadow 期原子追加、同一 operationRef 重放幂等、改了 payload
-  // 的重放必须被拒——与引擎无关，改走中立追加口后两个引擎各跑一遍。
-  test('keeps legacy inert, appends shadow atomically and rejects conflicting replay', async () => {
-    const db = await createProviderLegacyStoreDb(harness)
-    const legacy = await harness.session.transaction(
-      async (tx) => await appendCommittedEvent(tx, eventInput({ operation: 'legacy' })),
-    )
-    expect(legacy.eventRef).toBeNull()
+  // **产品行为**——原子追加、同一 operationRef 重放幂等、改了 payload 的重放必须被拒；
+  // 历史 shadow 事件仍不派发。两个引擎通过相同中立追加口验证。
+  test('appends dispatchable events atomically and rejects conflicting replay', async () => {
+    const db = await createProviderStoreDb(harness)
     const { committedEvents } = tablesOf(db)
-    expect(await db.select().from(committedEvents)).toEqual([])
-
-    await cutoverForProvider(harness, 'legacy', 1, 'shadow')
+    await setRoutingEpoch(harness, 2)
     const input = eventInput({ operation: 'shadow' })
     const first = await harness.session.transaction(
       async (tx) => await appendCommittedEvent(tx, input),
@@ -188,7 +132,7 @@ describeEachProvider('RFC-341 committed-event store', (harness) => {
     expect(first.eventRef).toMatchObject({
       family: 'review',
       aggregate: { id: 'review-1', seq: 1 },
-      deliveryMode: 'shadow',
+      deliveryMode: 'dispatchable',
       producerEpoch: 2,
     })
     const replay = await harness.session.transaction(
@@ -196,6 +140,14 @@ describeEachProvider('RFC-341 committed-event store', (harness) => {
     )
     expect(replay.eventRef).toEqual(first.eventRef)
     expect(await db.select().from(committedEvents)).toHaveLength(1)
+    await db
+      .update(committedEvents)
+      .set({ deliveryMode: 'shadow' })
+      .where(eq(committedEvents.id, first.eventRef!.eventId))
+    expect(
+      (await harness.session.transaction((tx) => appendCommittedEvent(tx, input))).eventRef
+        ?.deliveryMode,
+    ).toBe('shadow')
     expect(
       await createCommittedEventDeliveryPersistence(db).claimNext({
         workerId: 'worker',
@@ -211,12 +163,12 @@ describeEachProvider('RFC-341 committed-event store', (harness) => {
   })
 
   test('claims only current dispatchable epoch and preserves per-consumer aggregate FIFO', async () => {
-    const db = await createProviderLegacyStoreDb(harness)
-    await cutoverForProvider(harness, 'legacy', 1, 'shadow')
+    const db = await createProviderStoreDb(harness)
+    await setRoutingEpoch(harness, 2)
     await harness.session.transaction(
       async (tx) => await appendCommittedEvent(tx, eventInput({ operation: 'shadow' })),
     )
-    await cutoverForProvider(harness, 'shadow', 2, 'dispatchable')
+    await setRoutingEpoch(harness, 3)
     const second = await harness.session.transaction(
       async (tx) =>
         await appendCommittedEvent(tx, eventInput({ operation: 'second', occurredAt: NOW + 10 })),
@@ -245,9 +197,9 @@ describeEachProvider('RFC-341 committed-event store', (harness) => {
   })
 
   test('dead-letters bounded consumer failure and manual retry is a single-winner CAS', async () => {
-    const db = await createProviderLegacyStoreDb(harness)
-    await cutoverForProvider(harness, 'legacy', 1, 'shadow')
-    await cutoverForProvider(harness, 'shadow', 2, 'dispatchable')
+    const db = await createProviderStoreDb(harness)
+    await setRoutingEpoch(harness, 2)
+    await setRoutingEpoch(harness, 3)
     const appended = await harness.session.transaction(
       async (tx) => await appendCommittedEvent(tx, eventInput({ operation: 'poison' })),
     )

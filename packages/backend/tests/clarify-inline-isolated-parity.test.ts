@@ -24,7 +24,6 @@ import { runTaskWithRealTestTopology as runTask } from './helpers/taskExecutionT
 import { runGit } from '../src/util/git'
 import { reenterScheduler } from './reenter-scheduler'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
 
 // RFC-254 T32: the single case here drives several real clarify rounds through
@@ -64,7 +63,7 @@ async function buildHarness() {
   writeFileSync(join(worktreePath, 'r.md'), '# r\n')
   await runGit(worktreePath, ['add', '.'])
   await runGit(worktreePath, ['commit', '-m', 'init'])
-  const db = createInMemoryDb(MIGRATIONS)
+  const db = createInMemoryDb()
   return {
     db,
     appHome,

@@ -1,3 +1,4 @@
+import { epoch2RuntimeTestPorts } from './epoch2RuntimePorts'
 import { withO2Closure, o2Ports } from './o2Closure'
 import { composeSourceControlTaskPorts } from '@/modules/task-execution/composition'
 import { memorySystemAgentBindingForTest } from './memoryDistill'
@@ -148,11 +149,14 @@ export async function createProductionPerformanceApplication(
       appHome,
       taskExecutionReadModels: createTaskExecutionReadModels(db),
       reviewDecisions: createReviewDecisionCommand(withO2Closure({ db, appHome })),
-      questionDispatches: createQuestionDispatchCommand(db, o2Ports(db).taskLock),
+      questionDispatches: createQuestionDispatchCommand(db, o2Ports(db).taskLock, {
+        historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
+      }),
       clarifyDecisions: createClarifyDecisionCommand(
         db,
         memoryOperations.distillCommands,
         o2Ports(db).taskLock,
+        { historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions },
       ),
     }),
   )

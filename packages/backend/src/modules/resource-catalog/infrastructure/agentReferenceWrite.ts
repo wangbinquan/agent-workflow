@@ -8,7 +8,12 @@ import {
   updateAgentPersistenceValues,
 } from './agentPersistence'
 
-/** II-b 在这里把四类引用换为关系写入；调用者仍持有原来的事务。 */
+import type { AgentReferences } from '@agent-workflow/shared'
+import { agentReferenceRows } from '../domain/agentReferenceKey'
+import { queryWrite } from '@/platform/persistence/queryHelpers'
+import { continueResourceCommit, forEachResourceCommit } from './resourceCommitSequence'
+
+/** Parent writes and their ordered relations share the caller's transaction. */
 export function createAgentReferenceWriteParticipant(
   transaction: PersistenceDb | PersistenceTx,
 ): AgentReferenceWriteParticipant {
@@ -23,7 +28,11 @@ export function createAgentReferenceWriteParticipant(
           ...(input.builtin === undefined ? {} : { builtin: input.builtin }),
         })
         .returning()
-      return rows.map((row) => ({ ...agentFromPersistenceRow(row), aclRevision: row.aclRevision }))
+      for (const row of rows) await replaceAgentReferences(transaction, row.id, input.agent)
+      return rows.map((row) => ({
+        ...agentFromPersistenceRow(row, input.agent),
+        aclRevision: row.aclRevision,
+      }))
     },
     async update(input) {
       return prepareAgentReferenceUpdate(input)(transaction)
@@ -51,6 +60,56 @@ export function prepareAgentReferenceUpdate(
         ),
       )
       .returning()
-    return rows.map((row) => ({ ...agentFromPersistenceRow(row), aclRevision: row.aclRevision }))
+    const references: AgentReferences = {
+      skills: input.patch.skills ?? input.current.skills,
+      dependsOn: input.patch.dependsOn ?? input.current.dependsOn,
+      mcp: input.patch.mcp ?? input.current.mcp,
+      plugins: input.patch.plugins ?? input.current.plugins,
+    }
+    for (const row of rows) await replaceAgentReferences(transaction, row.id, references)
+    return rows.map((row) => ({
+      ...agentFromPersistenceRow(row, references),
+      aclRevision: row.aclRevision,
+    }))
   }
+}
+
+/** The synchronous legacy participant uses the same ordered write program. */
+export function replaceAgentReferences(
+  transaction: PersistenceDb | PersistenceTx,
+  agentId: string,
+  references: AgentReferences,
+): void | Promise<void> {
+  const { agentSkillRefs, agentMcpRefs, agentPluginRefs, agentDependencies } = tablesOf(transaction)
+  const rows = agentReferenceRows(agentId, references)
+  return forEachResourceCommit(
+    [
+      () =>
+        queryWrite(transaction.delete(agentSkillRefs).where(eq(agentSkillRefs.agentId, agentId))),
+      () => queryWrite(transaction.delete(agentMcpRefs).where(eq(agentMcpRefs.agentId, agentId))),
+      () =>
+        queryWrite(transaction.delete(agentPluginRefs).where(eq(agentPluginRefs.agentId, agentId))),
+      () =>
+        queryWrite(
+          transaction.delete(agentDependencies).where(eq(agentDependencies.agentId, agentId)),
+        ),
+      () =>
+        rows.skills.length === 0
+          ? undefined
+          : queryWrite(transaction.insert(agentSkillRefs).values(rows.skills)),
+      () =>
+        rows.mcp.length === 0
+          ? undefined
+          : queryWrite(transaction.insert(agentMcpRefs).values(rows.mcp)),
+      () =>
+        rows.plugins.length === 0
+          ? undefined
+          : queryWrite(transaction.insert(agentPluginRefs).values(rows.plugins)),
+      () =>
+        rows.dependencies.length === 0
+          ? undefined
+          : queryWrite(transaction.insert(agentDependencies).values(rows.dependencies)),
+    ],
+    (write) => continueResourceCommit(write(), () => {}),
+  )
 }

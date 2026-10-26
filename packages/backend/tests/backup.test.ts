@@ -1,3 +1,5 @@
+import { persistenceHead } from '@/bootstrap/persistenceHead'
+import { writeGenerationPointerV2 } from '@/platform/persistence/generationPointerV2'
 // P-5-02: backup service + CLI.
 
 import { registerProviderHttpApplicationLifetime } from './helpers/providerHttpApplication'
@@ -15,12 +17,8 @@ import {
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import {
-  digestDatabaseArtifact,
-  writeDatabaseGenerationAtomic,
-} from '../src/platform/persistence/generationStore'
 import { readLogicalDatabaseBackupEnvelope } from '../src/platform/persistence/logicalDatabaseExport'
-import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { createBackup } from '../src/services/backup'
 import { readManifest } from '../src/services/backupManifest'
 import { createWorkflow } from '../src/services/workflow'
@@ -28,8 +26,6 @@ import { tarBin } from '../src/util/archive'
 import { removeTempDirSync } from './fixtures/tempDir'
 
 const openTestApplication = registerProviderHttpApplicationLifetime()
-
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 interface Harness {
   db: DbClient
@@ -39,7 +35,27 @@ interface Harness {
 
 function buildHarness(): Harness {
   const appHome = mkdtempSync(join(tmpdir(), 'aw-backup-'))
-  const db = createInMemoryDb(MIGRATIONS)
+  const db = createInMemoryDb()
+  const { generation_id: generationId } = db.$client
+    .query("SELECT generation_id FROM aw_meta_generations WHERE state='active'")
+    .get() as { generation_id: string }
+  writeGenerationPointerV2({
+    pointerPath: join(appHome, 'database-generation.json'),
+    payload: {
+      version: 2,
+      schemaEpoch: 2,
+      generationId,
+      provider: 'sqlite',
+      role: 'installed',
+      database: { kind: 'sqlite-file', relativePath: 'db.sqlite' },
+      contractDigest: persistenceHead().contract.contract.digest,
+      planDigest: persistenceHead().sqlite.digest,
+      operationId: null,
+      manifestDigest: null,
+      activatedAt: 1,
+      previous: null,
+    },
+  })
   return {
     db,
     appHome,
@@ -99,7 +115,7 @@ describe('createBackup', () => {
     )
 
     const r = await createBackup({
-      contract: buildLogicalSchemaContract(),
+      contract: logicalSchemaContract,
       db: h.db,
       appHome: h.appHome,
     })
@@ -118,6 +134,7 @@ describe('createBackup', () => {
     expect(members.some((m) => m.includes('skills/demo/SKILL.md'))).toBe(true)
     expect(members.filter((m) => m.endsWith('.yaml')).length).toBe(2)
     expect(members.some((m) => m.endsWith('database/logical/logical-backup.json'))).toBe(true)
+    expect(members.some((m) => m.endsWith('database/logical/epoch2-metadata.json'))).toBe(true)
 
     const unpacked = join(h.appHome, 'unpacked-layout')
     await extractTar(r.path, unpacked)
@@ -127,7 +144,11 @@ describe('createBackup', () => {
       database: {
         format: 'agent-workflow-logical-database-v1',
         provider: 'sqlite',
-        sourceGenerationId: 'dbg_legacy_sqlite',
+        sourceGenerationId: (
+          h.db.$client
+            .query("SELECT generation_id FROM aw_meta_generations WHERE state='active'")
+            .get() as { generation_id: string }
+        ).generation_id,
         logicalPath: 'database/logical',
         rawSqlitePath: 'db.sqlite',
       },
@@ -140,41 +161,39 @@ describe('createBackup', () => {
       }).payload,
     ).toMatchObject({
       sourceProvider: 'sqlite',
-      sourceGenerationId: 'dbg_legacy_sqlite',
+      sourceGenerationId: (
+        h.db.$client
+          .query("SELECT generation_id FROM aw_meta_generations WHERE state='active'")
+          .get() as { generation_id: string }
+      ).generation_id,
       schemaDigest: manifest.database.schemaDigest,
-      // RFC-371 v2 retired 81 v1 observation tables and added three; RFC-370 v2
-      // retired the host write-context and memory distill receipt tables; RFC-370 M0
-      // added the hosted configuration document, external identity and skill content tables;
-      // RFC-370 v3 V11's single hosted-deployment migration adds the remote execution,
-      // workspace command, object publication, backup, recovery and event inbox tables.
-      // RFC-374 adds the NodeRun identity allocation table.
-      activeTableCount: 216,
-      archiveOnlyTableCount: 6,
+      // The activated registry has 232 business tables; migration metadata is a separate artifact.
+      activeTableCount: 232,
+      archiveOnlyTableCount: 0,
     })
   })
 
   test('legacy SQLite backup adapter refuses a live PostgreSQL pointer instead of snapshotting stale db.sqlite', async () => {
-    const contract = buildLogicalSchemaContract()
-    const operationId = 'dbm_backup_source_01'
-    const operationRoot = join(h.appHome, 'database-migrations', operationId)
-    mkdirSync(operationRoot, { recursive: true })
-    const manifestBody = '{}\n'
-    writeFileSync(join(operationRoot, 'manifest.json'), manifestBody)
-    writeDatabaseGenerationAtomic({
+    writeGenerationPointerV2({
       pointerPath: join(h.appHome, 'database-generation.json'),
       payload: {
-        version: 1,
+        version: 2,
+        schemaEpoch: 2,
         generationId: 'dbg_postgresql_live_01',
         provider: 'postgresql',
-        operationId,
-        schemaDigest: contract.digest,
-        manifestDigest: digestDatabaseArtifact(manifestBody),
+        role: 'installed',
+        database: { kind: 'postgresql-target', profileRef: 'POSTGRESQL_URL' },
+        contractDigest: persistenceHead().contract.contract.digest,
+        planDigest: persistenceHead().postgresql.digest,
+        operationId: null,
+        manifestDigest: null,
         activatedAt: 1,
+        previous: null,
       },
     })
 
     await expect(
-      createBackup({ contract: buildLogicalSchemaContract(), db: h.db, appHome: h.appHome }),
+      createBackup({ contract: logicalSchemaContract, db: h.db, appHome: h.appHome }),
     ).rejects.toThrow('cannot snapshot a live PostgreSQL generation')
   })
 
@@ -188,7 +207,7 @@ describe('createBackup', () => {
     writeFileSync(join(h.appHome, 'token'), 'secret', 'utf-8')
 
     const r = await createBackup({
-      contract: buildLogicalSchemaContract(),
+      contract: logicalSchemaContract,
       db: h.db,
       appHome: h.appHome,
     })
@@ -219,7 +238,7 @@ describe('createBackup', () => {
     writeFileSync(join(h.appHome, 'credentials', 'repo.json'), plaintextToken, 'utf-8')
 
     const r = await createBackup({
-      contract: buildLogicalSchemaContract(),
+      contract: logicalSchemaContract,
       db: h.db,
       appHome: h.appHome,
     })
@@ -257,7 +276,7 @@ describe('createBackup', () => {
       definition: { $schema_version: 1, inputs: [], nodes: [], edges: [] },
     })
     const r = await createBackup({
-      contract: buildLogicalSchemaContract(),
+      contract: logicalSchemaContract,
       db: h.db,
       appHome: h.appHome,
     })
@@ -277,7 +296,7 @@ describe('createBackup', () => {
 
   test('first-run state without config.json or skills still produces a tarball', async () => {
     const r = await createBackup({
-      contract: buildLogicalSchemaContract(),
+      contract: logicalSchemaContract,
       db: h.db,
       appHome: h.appHome,
     })
@@ -290,7 +309,7 @@ describe('createBackup', () => {
   })
 
   test('staging directory is removed after backup completes', async () => {
-    await createBackup({ contract: buildLogicalSchemaContract(), db: h.db, appHome: h.appHome })
+    await createBackup({ contract: logicalSchemaContract, db: h.db, appHome: h.appHome })
     const entries = readdirSync(join(h.appHome, 'backups'))
     const stale = entries.filter((e) => e.startsWith('.staging-'))
     expect(stale.length).toBe(0)

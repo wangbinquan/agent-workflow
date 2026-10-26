@@ -29,7 +29,6 @@ import {
 } from './helpers/participantLaunch'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const SCENARIO_STUB = resolve(import.meta.dir, 'fixtures', 'scenario-opencode.ts')
 
 function harness() {
@@ -40,7 +39,7 @@ function harness() {
   mkdirSync(appHome, { recursive: true })
   mkdirSync(stateDir, { recursive: true })
   return {
-    db: createInMemoryDb(MIGRATIONS),
+    db: createInMemoryDb(),
     appHome,
     stateDir,
     planFile,

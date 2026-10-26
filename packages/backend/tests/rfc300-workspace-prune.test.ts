@@ -22,7 +22,7 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { monotonicFactory } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { WORKSPACE_PRUNING_LEASE_MS } from '@/modules/source-control/application/workspaceMaintenance'
@@ -31,14 +31,13 @@ import { getTask } from '../src/services/task'
 import { runGit, snapshotRefName, snapshotRefPrefix } from '../src/util/git'
 
 const ulid = monotonicFactory()
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 let db: DbClient
 let root: string
 let workflowId: string
 
 beforeEach(async () => {
-  db = createInMemoryDb(MIGRATIONS)
+  db = createInMemoryDb()
   root = mkdtempSync(join(tmpdir(), 'aw-rfc300-prune-'))
   workflowId = ulid()
   await workflowFixture(db, { id: workflowId, name: 'rfc300', definition: '{}' })

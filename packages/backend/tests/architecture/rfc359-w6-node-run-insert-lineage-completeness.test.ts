@@ -36,6 +36,8 @@ const SRC = resolve(import.meta.dir, '..', '..', 'src')
 /** 这两列缺一列，两个引擎就会对同一份代码给出不同结果。 */
 const REQUIRED_COLUMNS = ['continuationSlotKey', 'lineageSlotPathJson'] as const
 
+import { enclosingFunction, importedCallResult, returnedKeys, tableMember } from './insertLineage'
+
 /**
  * 实测存量：一个共享站点（同步与异步入口共用），两列齐全。
  * **这份账本的正确状态是「每一行都两列齐全」**——出现 `-` 就是那条静默分叉，
@@ -44,7 +46,7 @@ const REQUIRED_COLUMNS = ['continuationSlotKey', 'lineageSlotPathJson'] as const
  * 键是文件和插入表达式；RFC-395 II-a A3 不再让无关的上方行数变化破坏 lineage 判据。
  */
 const NODE_RUN_INSERT_SITES: readonly string[] = [
-  'modules/task-execution/infrastructure/nodeRunMintParticipant.ts:insertOne(tx, nodeRuns, values) continuationSlotKey+ lineageSlotPathJson+',
+  'modules/task-execution/infrastructure/nodeRunMintParticipant.ts:insertOne(tx, tables.nodeRuns, values) continuationSlotKey+ lineageSlotPathJson+',
 ]
 
 function sourceFiles(dir: string): string[] {
@@ -96,7 +98,7 @@ function localConstKeys(name: string, source: ts.SourceFile): Set<string> {
  * `<arg>` 是对象字面量就直接取键；是标识符就解一层同文件的 `const`。展开
  * （`...record`）不算「显式写了这一列」——铸行记录里那两列可以是 null，正是这条守卫要防的。
  */
-export function nodeRunInsertSites(text: string, rel: string): string[] {
+export function nodeRunInsertSites(text: string, rel: string, lineageBuilder = ''): string[] {
   if (!text.includes('nodeRuns')) return []
   const source = ts.createSourceFile('probe.ts', text, ts.ScriptTarget.Latest, true)
   const out: string[] = []
@@ -107,7 +109,7 @@ export function nodeRunInsertSites(text: string, rel: string): string[] {
       if (
         ts.isIdentifier(node.expression) &&
         node.expression.text === 'insertOne' &&
-        node.arguments[1]?.getText(source) === 'nodeRuns'
+        tableMember(node.arguments[1], 'nodeRuns')
       ) {
         found = true
         argument = node.arguments[2]
@@ -120,7 +122,7 @@ export function nodeRunInsertSites(text: string, rel: string): string[] {
           ts.isCallExpression(receiver) &&
           ts.isPropertyAccessExpression(receiver.expression) &&
           receiver.expression.name.text === 'insert' &&
-          receiver.arguments[0]?.getText(source) === 'nodeRuns'
+          tableMember(receiver.arguments[0], 'nodeRuns')
         ) {
           found = true
           argument = node.arguments[0]
@@ -135,6 +137,20 @@ export function nodeRunInsertSites(text: string, rel: string): string[] {
               : ts.isIdentifier(argument)
                 ? localConstKeys(argument.text, source)
                 : new Set<string>()
+        for (const key of [...keys]) {
+          if (
+            key.startsWith('...') &&
+            importedCallResult(
+              source,
+              key.slice(3),
+              'nodeRunLineageColumns',
+              '../application/buildNodeRunMintRecord',
+              enclosingFunction(node),
+            )
+          )
+            for (const column of returnedKeys(lineageBuilder, 'nodeRunLineageColumns'))
+              keys.add(column)
+        }
         const columns = REQUIRED_COLUMNS.map(
           (column) => `${column}${keys.has(column) ? '+' : '-'}`,
         ).join(' ')
@@ -153,7 +169,16 @@ function observedSites(): readonly string[] {
   if (cached !== undefined) return cached
   const rows: string[] = []
   for (const file of sourceFiles(SRC)) {
-    rows.push(...nodeRunInsertSites(readFileSync(file, 'utf8'), portable(relative(SRC, file))))
+    rows.push(
+      ...nodeRunInsertSites(
+        readFileSync(file, 'utf8'),
+        portable(relative(SRC, file)),
+        readFileSync(
+          join(SRC, 'modules/task-execution/application/buildNodeRunMintRecord.ts'),
+          'utf8',
+        ),
+      ),
+    )
   }
   cached = rows.sort()
   return cached
@@ -219,5 +244,42 @@ describe('RFC-359 W6 —— insert(nodeRuns) 的 lineage 两列完整性', () =>
 
     // 别的表不进这本账。
     expect(nodeRunInsertSites(`x.insert(tasks).values({ id }).run()`, 'p.ts')).toEqual([])
+  })
+  test('qualified target tables follow the real lineage builder and reject missing fields or opaque spreads', () => {
+    const source = `import { nodeRunLineageColumns } from '../application/buildNodeRunMintRecord'
+const lineage = nodeRunLineageColumns(record, task)
+const values = { ...lineage }
+insertOne(tx, tables.nodeRuns, values)`
+    const builder =
+      'export function nodeRunLineageColumns() { return { continuationSlotKey: key, lineageSlotPathJson: path } }'
+    expect(nodeRunInsertSites(source, 'p.ts', builder)[0]).toEndWith(
+      'continuationSlotKey+ lineageSlotPathJson+',
+    )
+    const program = source
+      .replace('const lineage', 'function* mint() { const lineage')
+      .replace(
+        'insertOne(tx, tables.nodeRuns, values)',
+        'yield* transactionStep(() => insertOne(tx, tables.nodeRuns, values)) }',
+      )
+    expect(nodeRunInsertSites(program, 'p.ts', builder)[0]).toEndWith(
+      'continuationSlotKey+ lineageSlotPathJson+',
+    )
+    expect(
+      nodeRunInsertSites(
+        source,
+        'p.ts',
+        builder.replace('lineageSlotPathJson: path', 'other: path'),
+      )[0],
+    ).toEndWith('continuationSlotKey+ lineageSlotPathJson-')
+    expect(
+      nodeRunInsertSites(
+        source.replace('../application/buildNodeRunMintRecord', './fake'),
+        'p.ts',
+        builder,
+      )[0],
+    ).toEndWith('continuationSlotKey- lineageSlotPathJson-')
+    expect(nodeRunInsertSites('tx.insert(tables["nodeRuns"]).values({ id })', 'p.ts')[0]).toEndWith(
+      'continuationSlotKey- lineageSlotPathJson-',
+    )
   })
 })

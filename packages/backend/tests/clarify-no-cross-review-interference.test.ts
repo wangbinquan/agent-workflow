@@ -1,3 +1,7 @@
+import { nodeRunFixtureColumns } from './helpers/model/nodeRun'
+import { legacyContentRef } from '@/platform/content/contentRef'
+import { contentRowColumns } from '@/platform/content/infrastructure/contentStore'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { withO2Closure } from './helpers/o2Closure'
 // RFC-023 PR-B C4 — when clarify session activity happens on a task that
 // also has an in-flight review (awaiting_review on a different node), the
@@ -17,7 +21,7 @@ import { withO2Closure } from './helpers/o2Closure'
 
 import { nodeRunFixture, readTaskFixtures, taskFixture, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+
 import { describeEachProvider } from './helpers/eachProvider'
 import { createSqliteMemoryDistillEnqueuer } from './helpers/memoryDistill'
 import { afterAll, beforeEach, expect, test } from 'bun:test'
@@ -131,7 +135,9 @@ async function seed(
     sourcePortName: 'design',
     versionIndex: 1,
     reviewIteration: 2,
-    bodyPath: 'runs/x/review/r/design/v1.md',
+    ...contentRowColumns(
+      legacyContentRef('review-body-path', 'local-file', 'runs/x/review/r/design/v1.md'),
+    ),
     commentsJson: '[]',
     decision: 'pending',
   })
@@ -152,7 +158,9 @@ describeEachProvider('clarify activity does not perturb in-flight reviews', (har
     const { taskId, reviewRunId, docVersionId, sourceRunId } = await seed(db)
 
     const { nodeRuns, docVersions } = tablesOf(db)
-    const reviewBefore = (await db.select().from(nodeRuns).where(eq(nodeRuns.id, reviewRunId)))[0]
+    const reviewBefore = (
+      await db.select(nodeRunFixtureColumns(db)).from(nodeRuns).where(eq(nodeRuns.id, reviewRunId))
+    )[0]
     const dvBefore = (
       await db.select().from(docVersions).where(eq(docVersions.id, docVersionId))
     )[0]
@@ -174,7 +182,9 @@ describeEachProvider('clarify activity does not perturb in-flight reviews', (har
     )
 
     // After createClarifyRound: review row + doc_version unchanged.
-    const reviewMid = (await db.select().from(nodeRuns).where(eq(nodeRuns.id, reviewRunId)))[0]
+    const reviewMid = (
+      await db.select(nodeRunFixtureColumns(db)).from(nodeRuns).where(eq(nodeRuns.id, reviewRunId))
+    )[0]
     const dvMid = (await db.select().from(docVersions).where(eq(docVersions.id, docVersionId)))[0]
     expect(reviewMid?.status).toBe('awaiting_review')
     expect(reviewMid?.reviewIteration).toBe(2)
@@ -199,13 +209,20 @@ describeEachProvider('clarify activity does not perturb in-flight reviews', (har
 
     // After submit: review row + doc_version still unchanged. New rerun
     // node_run carries reviewIteration = 2 forward (no reset).
-    const reviewAfter = (await db.select().from(nodeRuns).where(eq(nodeRuns.id, reviewRunId)))[0]
+    const reviewAfter = (
+      await db.select(nodeRunFixtureColumns(db)).from(nodeRuns).where(eq(nodeRuns.id, reviewRunId))
+    )[0]
     const dvAfter = (await db.select().from(docVersions).where(eq(docVersions.id, docVersionId)))[0]
     expect(reviewAfter?.status).toBe('awaiting_review')
     expect(reviewAfter?.reviewIteration).toBe(2)
     expect(dvAfter?.decision).toBe('pending')
 
-    const rerun = (await db.select().from(nodeRuns).where(eq(nodeRuns.id, rerunNodeRunId)))[0]
+    const rerun = (
+      await db
+        .select(nodeRunFixtureColumns(db))
+        .from(nodeRuns)
+        .where(eq(nodeRuns.id, rerunNodeRunId))
+    )[0]
     expect(rerun?.reviewIteration).toBe(2) // passthrough
   })
 })

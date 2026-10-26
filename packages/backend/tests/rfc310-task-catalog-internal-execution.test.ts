@@ -1,23 +1,24 @@
+import { tablesOf } from '@/platform/persistence/sessionTables'
 // Public task catalogs use TaskEngine's generic visibility boundary. Internal
 // executions remain durable and directly addressable without entering public
 // pagination, hierarchy or facets.
 
-import { taskFixture, workflowFixture } from './helpers/model'
+import { composeOwnerIdentityQueries } from '@/modules/identity-access/composition/providerOperations'
+
 import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import type { TaskCatalogVisibility } from '@agent-workflow/shared'
 import { describe, expect, test } from 'bun:test'
+import { readFileSync, readdirSync } from 'node:fs'
+import { resolve } from 'node:path'
 import {
   taskListItemsProjection,
   taskListSummariesProjection,
 } from '../src/modules/task-execution/infrastructure/taskRouteOperations'
-import { composeOwnerIdentityQueries } from '@/modules/identity-access/composition/providerOperations'
-import { readFileSync, readdirSync } from 'node:fs'
-import { resolve } from 'node:path'
-import type { TaskCatalogVisibility } from '@agent-workflow/shared'
+import { taskFixture, workflowFixture } from './helpers/model'
 
 import { buildActor } from '../src/auth/actor'
-import { describeEachProvider } from './helpers/eachProvider'
 import { composeTaskExecutionCatalogSources } from '../src/modules/task-execution/composition/taskCatalogSources'
+import { describeEachProvider } from './helpers/eachProvider'
 
 function task(
   id: string,
@@ -74,7 +75,8 @@ describeEachProvider('task catalog internal execution boundary', (harness) => {
   test('public workflow pages, cursors and facets exclude generic internal trees', async () => {
     const db = harness.db
     const now = 1_788_278_400_000
-    const { users, tasks } = tablesOf(db)
+    const { users } = tablesOf(db)
+    const { tasks } = tablesOf(db)
     await insertOne(db, users, {
       id: 'catalog-owner',
       username: 'catalog-owner',

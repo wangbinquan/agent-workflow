@@ -1,3 +1,4 @@
+import { fixtureContentStore } from './helpers/model/content'
 // The graph imports committed Task outputs while the native clarify gate is still waiting.
 import { nodeRunFixture, nodeRunOutputFixture, taskFixture } from './helpers/model'
 import { expect, test } from 'bun:test'
@@ -68,7 +69,10 @@ describeEachProvider('RFC-396 committed execution consumption', (harness) => {
       { nodeRunId: 'designer', portName: 'inactive', content: 'old', active: false },
       { nodeRunId: 'unfinished', portName: 'design-model', content: 'partial', active: true },
     ])
-    const value = await createEmployeeExecutionArtifactQueries(harness.db).read({
+    const value = await createEmployeeExecutionArtifactQueries(
+      harness.db,
+      fixtureContentStore(harness.db),
+    ).read({
       caseId: 'case-a',
       executionRef: 'waiting-task',
     })

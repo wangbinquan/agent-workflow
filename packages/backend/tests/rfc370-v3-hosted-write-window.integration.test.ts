@@ -1,3 +1,4 @@
+import { appendHostedSuccessor } from './helpers/epoch2HostedSuccessor'
 // RFC-370 v3 V7 (design/RFC-370-crewstation-hosted-deployment/redesign-v2-20261014.md §9)
 // on a real PostgreSQL. Regression intent — each case is one review finding:
 //
@@ -25,7 +26,7 @@ import { createDatabaseHostedExecutionControl } from '@/modules/system-operation
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import { createPostgresqlDatabaseRuntime } from '@/platform/persistence/postgresqlRuntime'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
-import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { errorHandler } from '@/util/errors'
 import { resolvePostgresqlTestUrlEnv, resolveTestProviders } from './helpers/eachProvider'
 
@@ -75,7 +76,7 @@ if (resolveTestProviders(process.env).includes('postgresql')) {
     await raw('DROP SCHEMA IF EXISTS agent_workflow_meta CASCADE')
     await migrateForDeployment(env())
     const prepared = await prepareCrewStationDatabase({
-      contract: buildLogicalSchemaContract(),
+      contract: logicalSchemaContract,
       environment,
       schema: 'verify',
       env: env(),
@@ -262,9 +263,10 @@ if (resolveTestProviders(process.env).includes('postgresql')) {
       beforeWrite: createHostedDatabaseWriteBarrier().beforeWrite,
     })
     try {
-      await raw('UPDATE agent_workflow_meta.schema_contract SET contract_digest = $1', [
-        'sha256:' + 'a'.repeat(64),
-      ])
+      await raw(
+        "UPDATE agent_workflow_meta.generations SET contract_digest = $1 WHERE state = 'active'",
+        ['sha256:' + 'a'.repeat(64)],
+      )
       await workflowFixture(guarded, { id: 'after-upgrade', name: 'ok', definition: '{}' })
       expect((await readWorkflowFixtures(guarded, { id: 'after-upgrade' })).length).toBe(1)
     } finally {
@@ -275,39 +277,32 @@ if (resolveTestProviders(process.env).includes('postgresql')) {
   test('a serving instance verifies an expand-only successor schema and still refuses real drift', async () => {
     const first = await install()
     await first.prepared.runtime.close()
-    const successor = 'sha256:' + 'b'.repeat(64)
-    const receipt = `upgrade:9999_rfc370_successor:sha256:${'c'.repeat(64)}`
+    const runtime = createPostgresqlDatabaseRuntime({
+      config: PostgresqlDatabaseConfigSchema.parse({ provider: 'postgresql', urlEnv }),
+      generationId: 'dbg_successor_fixture',
+    })
+    let successor
+    try {
+      successor = await appendHostedSuccessor(runtime, process.env[urlEnv!]!)
+    } finally {
+      await runtime.close()
+    }
     const serve = () =>
       prepareCrewStationDatabase({
-        contract: buildLogicalSchemaContract(),
+        contract: logicalSchemaContract,
         environment,
         schema: 'verify',
         env: env(),
       })
-    // What the next release's migration Job leaves behind: one more recorded
-    // upgrade, its contract installed and followed by the active generation,
-    // and an additional table this release does not know.
-    await raw('CREATE TABLE agent_workflow.rfc370_successor_probe (id TEXT PRIMARY KEY)')
-    await raw(
-      'INSERT INTO agent_workflow_meta.schema_migrations (baseline_id, contract_digest, plan_digest, applied_at) VALUES ($1, $2, $3, $4)',
-      [receipt, successor, 'sha256:' + 'd'.repeat(64), Date.now()],
-    )
-    await raw(
-      'UPDATE agent_workflow_meta.schema_contract SET contract_digest = $1, active_table_count = active_table_count + 1',
-      [successor],
-    )
-    await raw(
-      "UPDATE agent_workflow_meta.database_generations SET contract_digest = $1 WHERE state = 'active'",
-      [successor],
-    )
     const serving = await serve()
     try {
+      expect(serving.describeSchemaOutcome()).toContain('PostgreSQL schema verified')
       expect(serving.describeSchemaOutcome()).toContain(
-        `the database already carries the newer expand-only schema ${successor}`,
+        `the database already carries the newer expand-only schema ${successor.contract.contract.digest}`,
       )
       expect(serving.receipt).toMatchObject({
-        contractDigest: buildLogicalSchemaContract().digest,
-        successorContractDigest: successor,
+        contractDigest: successor.contract.contract.digest,
+        planDigest: successor.postgresql.digest,
       })
       await workflowFixture(serving.openBootstrapClient(), {
         id: 'serving-on-successor',
@@ -318,14 +313,17 @@ if (resolveTestProviders(process.env).includes('postgresql')) {
       await serving.runtime.close()
     }
 
-    // A table this release uses is gone: not expand-only, refused.
+    // A table this release uses is gone: not expand-only, refused. RFC-395 schema-history admission
+    // reports it as physical drift (start / migrate print the RFC-275 guidance for it).
     await raw('ALTER TABLE agent_workflow.hosted_execution_control RENAME TO rfc370_moved_away')
-    await expect(serve()).rejects.toMatchObject({ code: 'postgresql-schema-drift' })
+    await expect(serve()).rejects.toMatchObject({ code: 'physical-drift' })
     await raw('ALTER TABLE agent_workflow.rfc370_moved_away RENAME TO hosted_execution_control')
     await expect(serve().then((value) => value.runtime.close())).resolves.toBeUndefined()
 
     // An unknown contract no recorded upgrade explains is drift, not a successor.
-    await raw('DELETE FROM agent_workflow_meta.schema_migrations WHERE baseline_id = $1', [receipt])
-    await expect(serve()).rejects.toMatchObject({ code: 'postgresql-schema-drift' })
+    await raw('DELETE FROM agent_workflow_meta.schema_history WHERE version = $1', [
+      successor.contract.version,
+    ])
+    await expect(serve()).rejects.toMatchObject({ code: 'physical-drift' })
   }, 300_000)
 }

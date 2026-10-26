@@ -1,11 +1,33 @@
 import {
+  compareClarifyRoundRecency,
+  compareClarifyRoundInboxOrder,
+} from '../domain/clarifyRoundOrder'
+import {
+  readClarifyHistory,
+  readClarifyHistoryCandidates,
+  mergeClarifyHistory,
+} from './clarifyHistoryProjection'
+import {
   taskGateOpenCondition,
   taskGateVisibleCondition,
+  createTaskGateQueries,
+  createNodeRunQueries,
 } from '@/modules/task-execution/public/queries'
-import { createTaskGateQueries } from '@/modules/task-execution/public/queries'
-import { createNodeRunQueries } from '@/modules/task-execution/public/queries'
+
 import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
-import { isMindmapRound } from '@agent-workflow/shared'
+import {
+  isMindmapRound,
+  TERMINAL_TASK_STATUSES,
+  type ClarifyDirective,
+  type ClarifyDraftValue,
+  type ClarifyQuestion,
+  type ClarifyRound,
+  type ClarifyRoundSummary,
+  type TaskActorRole,
+  type WorkflowDefinition,
+  terminatedAsForStatus,
+  type ClarifyRoundStatus,
+} from '@agent-workflow/shared'
 // RFC-349 SQLite compatibility adapter for the RFC-058 clarify-round helpers.
 // Provider-neutral callers enter through services/clarify/rounds.ts or the
 // collaboration public query/command surface; database mechanisms stay here.
@@ -24,27 +46,16 @@ import { isMindmapRound } from '@agent-workflow/shared'
 //   - `saveClarifyDraft`（RFC-099）—— 服务端逐题协作草稿（last-write-wins +
 //     逐题归属 + 提交冻结）。
 
-import { and, count, desc, eq, type SQL } from 'drizzle-orm'
+import { and, count, desc, eq, sql, type SQL } from 'drizzle-orm'
 
 import type { Actor } from '@/auth/actor'
 
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { chunkedAll } from '@/util/sqlChunk'
-import {
-  TERMINAL_TASK_STATUSES,
-  type ClarifyDirective,
-  type ClarifyDraftValue,
-  type ClarifyQuestion,
-  type ClarifyRound,
-  type ClarifyRoundSummary,
-  type TaskActorRole,
-  type WorkflowDefinition,
-  terminatedAsForStatus,
-  type ClarifyRoundStatus,
-} from '@agent-workflow/shared'
+
 import { NotFoundError } from '@/util/errors'
 import { TASK_CHANNEL, taskBroadcaster } from '@/ws/broadcaster'
-import { decodeLegacyClarifyAnswerColumns } from './clarifyAnswerCodec'
+import { readClarifyAnswerProjection } from './clarifyAnswerQueries'
 import { createClarifyAnswerWritePort } from './clarifyAnswerWrite'
 
 /**
@@ -176,7 +187,16 @@ export async function listClarifyRounds(
     .from(clarifyRounds)
     .where(clarifyRoundsCondition(db, filter))
     .orderBy(desc(clarifyRounds.createdAt), desc(clarifyRounds.id))
-  return filter.limit !== undefined ? await base.limit(filter.limit) : await base
+  const rows = mergeClarifyHistory(
+    await (filter.limit === undefined ? base : base.limit(filter.limit)),
+    await readClarifyHistory(db, {
+      taskId: filter.taskId,
+      kind: filter.kind === 'all' ? undefined : filter.kind,
+      status: filter.status === 'all' ? undefined : (filter.status ?? 'awaiting_human'),
+    }),
+  )
+  rows.sort(compareClarifyRoundInboxOrder)
+  return filter.limit === undefined ? rows : rows.slice(0, filter.limit)
 }
 
 // ---------------------------------------------------------------------------
@@ -206,20 +226,12 @@ export async function listClarifyRoundSummaries(
   filter: ListClarifyRoundSummariesFilter = {},
 ): Promise<ClarifyRoundSummary[]> {
   const desiredStatus = filter.status ?? 'awaiting_human'
-  const { clarifyRounds } = tablesOf(db)
-  // RFC-311: predicates + order pushed into SQL. The awaiting_human branch
-  // must NOT push the limit down — the RFC-202 T6 terminal-task filter below
-  // runs before the window (a page of terminal-task zombies must not displace
-  // actionable rounds); explicit-status queries take the SQL limit directly.
-  const baseQuery = db
-    .select()
-    .from(clarifyRounds)
-    .where(clarifyRoundsCondition(db, filter))
-    .orderBy(desc(clarifyRounds.createdAt), desc(clarifyRounds.id))
-  let filtered =
-    desiredStatus === 'awaiting_human'
-      ? await baseQuery
-      : await baseQuery.limit(filter.limit ?? 100)
+  // Awaiting-human filtering must precede the window; explicit statuses can
+  // bound the live page before the sorted merge with immutable history.
+  let filtered = await listClarifyRounds(db, {
+    ...filter,
+    limit: desiredStatus === 'awaiting_human' ? undefined : (filter.limit ?? 100),
+  })
   // RFC-202 T6: the awaiting_human TODO view must not surface rounds whose
   // task is already terminal — dead tasks' rounds cluttered the inbox forever
   // (audit R8; done/canceled rounds are hard-sealed by the terminal sweep,
@@ -285,8 +297,35 @@ export async function countAwaitingClarifyRounds(db: PersistenceDb, actor: Actor
       }),
     )
   }
+  const history = await readClarifyHistoryCandidates(db, { status: 'awaiting_human' })
+  // One relation avoids expression-depth and bind-count growth with archived rounds.
+  const historyCount =
+    history.length === 0
+      ? undefined
+      : sql`(
+    WITH archived_clarify(round_id, task_id) AS (VALUES ${sql.join(
+      history.map((row) => sql`(${row.id}, ${row.taskId})`.inlineParams()),
+      sql`, `,
+    )})
+    SELECT count(*) FROM archived_clarify
+    WHERE NOT EXISTS (SELECT 1 FROM ${clarifyRounds} WHERE ${clarifyRounds.id} = archived_clarify.round_id)
+    AND ${taskGateOpenCondition(db, sql`archived_clarify.task_id`, false)}
+    ${
+      canReadAllTasks
+        ? sql``
+        : sql`AND ${taskGateVisibleCondition(db, sql`archived_clarify.task_id`, {
+            userId: actor.user.id,
+            canReadAllTasks: false,
+          })}`
+    }
+  )`
   const rows = await db
-    .select({ n: count() })
+    .select({
+      n:
+        historyCount === undefined
+          ? count()
+          : sql<number>`count(*) + ${historyCount}`.mapWith(Number),
+    })
     .from(clarifyRounds)
     .where(and(...conditions))
   return rows[0]?.n ?? 0
@@ -308,7 +347,10 @@ export async function getClarifyRoundDetail(
     .where(eq(clarifyRounds.intermediaryNodeRunId, intermediaryNodeRunId))
     .orderBy(desc(clarifyRounds.createdAt))
     .limit(1)
-  const row = rows[0]
+  const history = (await readClarifyHistory(db, { intermediaryNodeRunId })).filter(
+    (row) => row.intermediaryNodeRunId === intermediaryNodeRunId,
+  )
+  const row = mergeClarifyHistory(rows, history).sort(compareClarifyRoundRecency)[0]
   if (row === undefined) {
     throw new NotFoundError(
       'clarify-round-not-found',
@@ -316,7 +358,7 @@ export async function getClarifyRoundDetail(
     )
   }
   const titlesByTaskAndNode = await loadNodeTitlesByTask(db, [row.taskId])
-  const detail = rowToDetail(row, titlesByTaskAndNode)
+  const detail = rowToDetail(row, titlesByTaskAndNode, await readClarifyAnswerProjection(db, row))
   // RFC-202 T6 (Codex impl-gate P2): the UI must explain WHY a round was
   // sealed — inferring it from the task's MUTABLE current status misattributes
   // history (e.g. a canceled-then-retried task's abandoned round would read as
@@ -325,7 +367,10 @@ export async function getClarifyRoundDetail(
   // sweep, 'wg-clarify-disabled' from the workgroup flip); expose it
   // verbatim as an optional field.
   if (row.status === 'canceled' || row.status === 'abandoned') {
-    const run = await createNodeRunQueries(db).readFields(intermediaryNodeRunId, ['errorMessage'])
+    const [run] = await createNodeRunQueries(db).listHistoryFields(
+      { runIds: [intermediaryNodeRunId], limit: 1 },
+      ['errorMessage'],
+    )
     if (run?.errorMessage != null && run.errorMessage !== '') {
       detail.sealedCause = run.errorMessage
     }
@@ -377,11 +422,11 @@ function rowToSummary(
 function rowToDetail(
   row: PersistenceTables['clarifyRounds']['$inferSelect'],
   titlesByTaskAndNode: Map<string, Map<string, string>>,
+  projection: Awaited<ReturnType<typeof readClarifyAnswerProjection>>,
 ): ClarifyRound {
   const titles = titlesByTaskAndNode.get(row.taskId)
   const intermediaryTitle = titles?.get(row.intermediaryNodeId)
   let questions: ClarifyQuestion[] = []
-  const projection = decodeLegacyClarifyAnswerColumns(row)
   const answers = projection.detailAnswers
   let truncationWarnings: ClarifyRound['truncationWarnings']
   try {
@@ -546,10 +591,9 @@ export interface SaveClarifyDraftResult {
 }
 
 /**
- * Per-question last-write-wins draft save. The read-modify-write of the two
- * JSON columns runs inside a synchronous transaction, so concurrent saves on
- * DIFFERENT questions merge instead of clobbering each other; same-question
- * races resolve to the later writer (D14).
+ * Per-question last-write-wins draft save. The target adapter updates only that
+ * question's draft and attribution, under a shared round hold. Same-question
+ * races resolve to the later writer; sealing and follow-ups take the round fence.
  */
 export async function saveClarifyDraft(
   args: SaveClarifyDraftArgs,

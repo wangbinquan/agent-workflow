@@ -1,18 +1,19 @@
+import { tablesOf } from '@/platform/persistence/sessionTables'
 // RFC-359 W21: reuse only immutable client query builders. Every observation
 // still executes four real statements and remains visible to a late recorder.
 // The original owner below is a frozen data/SQL oracle (70258c078f12ee35...),
 // with its opaque input branch copied verbatim and no new branch semantics.
-import { patchTaskFixture, taskFixture, workflowFixture, readTaskFixtures } from './helpers/model'
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
-import { expect, spyOn, test } from 'bun:test'
-import { and, count, eq, gte, inArray, isNull, or, type SQL } from 'drizzle-orm'
-import type { OverviewTasks } from '@agent-workflow/shared'
 import { buildActor } from '@/auth/actor'
-import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createTaskOverviewQuery } from '@/modules/task-execution/infrastructure/taskOverviewQuery'
 import type { TaskOverviewQuery } from '@/modules/task-execution/public/queries'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
+
+import { insertOne } from '@/platform/persistence/singleInsert'
+import type { OverviewTasks } from '@agent-workflow/shared'
+import { expect, spyOn, test } from 'bun:test'
+import { and, count, eq, gte, inArray, isNull, or, type SQL } from 'drizzle-orm'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
+import { patchTaskFixture, readTaskFixtures, taskFixture, workflowFixture } from './helpers/model'
 import type { RecordedStatement, StatementRecording } from './helpers/statementRecorder'
 
 async function originalLoadOverview(
@@ -24,7 +25,8 @@ async function originalLoadOverview(
     return { running: 0, awaiting: 0, done7d: 0, failed7d: 0 }
   }
 
-  const { taskCollaborators, tasks } = tablesOf(db)
+  const { taskCollaborators } = tablesOf(db)
+  const { tasks } = tablesOf(db)
   const collaboratorTaskIds = db
     .select({ taskId: taskCollaborators.taskId })
     .from(taskCollaborators)

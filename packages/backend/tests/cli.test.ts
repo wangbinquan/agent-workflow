@@ -1,8 +1,10 @@
+import { currentSqlitePath } from '@/platform/persistence/databaseProviderRuntime'
 // Coverage for the CLI subcommands wired in P-1-05.
 //
 // Strategy: call the command functions in-process where possible. For stop +
 // status which need a real daemon, spawn one subprocess per scenario.
 
+import { readGenerationPointerV2 } from '@/platform/persistence/generationPointerV2'
 import { openDb } from '@/db/client'
 import { taskFixture } from './helpers/model'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
@@ -11,7 +13,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSy
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { configGetCommand, configSetCommand } from '../src/cli/config-cli'
-import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { formatDoctor } from '../src/cli/doctor'
 import { doctorCommand } from '../src/bootstrap/doctorDiagnostics'
 import { migrateCommand } from '../src/bootstrap/migrate'
@@ -96,10 +98,16 @@ describe('CLI subcommands (P-1-05)', () => {
 
   // --- migrate ---
 
-  test('migrate creates db.sqlite + applies migrations', async () => {
-    const dbPath = join(tmp, 'db.sqlite')
-    expect(existsSync(dbPath)).toBe(false)
+  test('migrate creates the published generation database + applies migrations', async () => {
+    expect(existsSync(join(tmp, 'database-generation.json'))).toBe(false)
     const { output } = await migrateCommand()
+    const pointer = readGenerationPointerV2(join(tmp, 'database-generation.json'))
+    expect(pointer.payload.database).toEqual({
+      kind: 'sqlite-file',
+      relativePath: `databases/${pointer.payload.generationId}/db.sqlite`,
+    })
+    const dbPath = join(tmp, `databases/${pointer.payload.generationId}/db.sqlite`)
+    expect(existsSync(join(tmp, 'db.sqlite'))).toBe(false)
     expect(output).toContain(dbPath)
     expect(existsSync(dbPath)).toBe(true)
     // RFC-359 AC-10：这句话现在由 `prepareDatabaseProviderForBoot` 定稿、CLI 只负责输出，
@@ -141,7 +149,7 @@ describe('CLI subcommands (P-1-05)', () => {
   // --- doctor ---
 
   test('doctor returns ok when opencode + git present', async () => {
-    const result = await doctorCommand(buildLogicalSchemaContract())
+    const result = await doctorCommand(logicalSchemaContract)
     // We trust the dev box has executable OpenCode and Git installations.
     // If a particular check fails, surface its message for easier debugging.
     if (!result.ok) {
@@ -159,7 +167,7 @@ describe('CLI subcommands (P-1-05)', () => {
     // a child process with a custom PATH for `node:fs.readdirSync` — too
     // invasive. Instead, just verify token-file mode check works:
     writeFileSync(join(tmp, 'token'), 'a'.repeat(64), { mode: 0o644 })
-    const result = await doctorCommand(buildLogicalSchemaContract())
+    const result = await doctorCommand(logicalSchemaContract)
     // RFC-254 T7/D19: the check now covers every at-rest secret and reports the
     // protection the PLATFORM actually offers. On POSIX that is still mode 600
     // and a 644 token still fails; on Windows the same file is not insecure and
@@ -295,8 +303,7 @@ describe('CLI subcommands (P-1-05)', () => {
       mkdirSync(scratch)
       writeFileSync(join(scratch, 'ephemeral.txt'), 'delete me')
       const seeded = openDb({
-        path: join(tmp, 'db.sqlite'),
-        migrationsFolder: resolve(import.meta.dir, '..', 'db/migrations'),
+        path: currentSqlitePath(join(tmp, 'database-generation.json'), join(tmp, 'db.sqlite')),
       })
       await taskFixture(seeded, {
         id: 'rfc300-boot-task',
@@ -330,7 +337,10 @@ describe('CLI subcommands (P-1-05)', () => {
       try {
         await waitForReady(child.stdout, 10_000, child.stderr, child)
         expect(existsSync(scratch)).toBe(false)
-        const verified = new Database(join(tmp, 'db.sqlite'), { readonly: true })
+        const verified = new Database(
+          currentSqlitePath(join(tmp, 'database-generation.json'), join(tmp, 'db.sqlite')),
+          { readonly: true },
+        )
         expect(
           verified
             .query(

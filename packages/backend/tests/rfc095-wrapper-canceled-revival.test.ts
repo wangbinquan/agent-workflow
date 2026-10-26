@@ -1,3 +1,7 @@
+import { initializeTaskWorkspace } from './helpers/taskWorkspaceFixture'
+import type { TaskReadRow } from '@/modules/task-execution/infrastructure/taskRepositorySql'
+import { nodeRunFixtureColumns } from './helpers/model/nodeRun'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 // RFC-095 — wrapper canceled 复活：续跑而非重启（audit S-22 连带决策）。
 // design/RFC-095-scope-outcome-exhaustive/design.md §1（爆炸半径核查第 3 条）/ §5-6。
 //
@@ -26,7 +30,7 @@ import {
   workflowFixture,
   readNodeRunFixtures,
 } from './helpers/model'
-import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 
@@ -35,7 +39,7 @@ import { createResumeEngine } from './helpers/resumeEngine'
 import { eq } from 'drizzle-orm'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { decodeWrapperProgress } from '../src/modules/task-execution/domain/wrapperProgress'
@@ -44,8 +48,6 @@ import {
   createTaskExecutionTestTopology,
   runTaskWithRealTestTopology as runTask,
 } from './helpers/taskExecutionTestTopology'
-
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 // 自写 mock opencode：行为只由 ctrl 目录里的调用计数决定（env 全局态零依赖，
 // 跨 runTask 两阶段也确定）。输出事件形状复刻 fixtures/mock-opencode.ts 的
@@ -104,11 +106,11 @@ function buildHarness(): Harness {
   const appHome = mkdtempSync(join(tmpdir(), 'aw-rfc095-wrapres-'))
   const worktreePath = join(appHome, 'wt')
   const ctrlDir = join(appHome, 'ctrl')
-  mkdirSync(worktreePath, { recursive: true }) // readonly agent ⇒ 纯目录即可（非 git）
+  initializeTaskWorkspace(worktreePath)
   mkdirSync(ctrlDir, { recursive: true })
   const mockPath = join(ctrlDir, 'mock-opencode-counter.ts')
   writeFileSync(mockPath, buildMockScript(ctrlDir))
-  const db = createInMemoryDb(MIGRATIONS)
+  const db = createInMemoryDb()
   return {
     db,
     appHome,
@@ -162,10 +164,7 @@ async function waitFor(cond: () => boolean, what: string): Promise<void> {
   throw new Error(`timeout waiting for ${what}`)
 }
 
-async function waitForTerminalTask(
-  db: DbClient,
-  taskId: string,
-): Promise<PersistenceTables['tasks']['$inferSelect']> {
+async function waitForTerminalTask(db: DbClient, taskId: string): Promise<TaskReadRow> {
   for (let i = 0; i < 400; i++) {
     const t = (await readTaskFixtures(db, { id: taskId }))[0]
     if (t !== undefined && t.status !== 'pending' && t.status !== 'running') return t
@@ -337,7 +336,10 @@ describe('RFC-095 — canceled wrapper-loop 经 retryNode 复活后续跑（同�
     await running
 
     const { nodeRuns } = tablesOf(h.db)
-    const midRows = await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
+    const midRows = await h.db
+      .select(nodeRunFixtureColumns(h.db))
+      .from(nodeRuns)
+      .where(eq(nodeRuns.taskId, taskId))
     const lwCanceled = midRows.filter((r) => r.nodeId === 'lw')
     expect(lwCanceled).toHaveLength(1)
     expect(lwCanceled[0]!.status).toBe('canceled')

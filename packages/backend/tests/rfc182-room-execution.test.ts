@@ -1,3 +1,4 @@
+import { withTargetMintIdentity } from './helpers/rfc395Mint'
 import { withO2Closure } from './helpers/o2Closure'
 // RFC-395 II-pre：改接生产启动 / 读取路径，保留原断言意图。
 // RFC-182 T1 —— 房间执行体验后端锁（runHistory 派生锁在
@@ -11,7 +12,6 @@ import { withO2Closure } from './helpers/o2Closure'
 //   - taskNodeRunsProjection 响应 mapper 带出 rerunCause（P1-3 勘误缝位：routes 是薄
 //     委托、无 select 可加——wire 缝在 services/task.ts 的手写 mapper）。
 
-import { deriveNodeRunRole } from '@/modules/task-execution/public/types'
 import { taskFixture, workflowFixture } from './helpers/model'
 import { taskNodeRunsProjection } from '@/modules/task-execution/infrastructure/taskRouteOperations'
 import { describe, expect, test } from 'bun:test'
@@ -75,18 +75,22 @@ describeEachProvider('RFC-182 P1-3 — taskNodeRunsProjection 响应带 rerunCau
         { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
       ]),
     })
-    const runId = await mintNodeRun(db, {
-      ...deriveNodeRunRole({ nodeId: '__wg_member__', rerunCause: 'wg-message-turn' }),
-      taskId,
-      nodeId: '__wg_member__',
-      status: 'pending',
-      cause: 'wg-message-turn',
-      overrides: {
-        identity: {
-          shardKey: 'msg:m-x:0',
+    const runId = await mintNodeRun(
+      db,
+      withTargetMintIdentity({
+        role: 'synthetic',
+        syntheticKind: 'workgroup-host',
+        taskId,
+        nodeId: '__wg_member__',
+        status: 'pending',
+        cause: 'wg-message-turn',
+        overrides: {
+          identity: {
+            shardKey: 'msg:m-x:0',
+          },
         },
-      },
-    })
+      }),
+    )
     const { runs } = await taskNodeRunsProjection(withO2Closure({ db }), taskId)
     const run = runs.find((r) => r.id === runId)
     expect(run?.rerunCause).toBe('wg-message-turn')

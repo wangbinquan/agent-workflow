@@ -1,25 +1,27 @@
 import { composeSourceControlTaskPorts } from '@/modules/task-execution/composition'
+import { taskReadColumns } from '@/modules/task-execution/infrastructure/taskRepositorySql'
 import { createTaskRepositoryUsageQueries } from '@/modules/task-execution/infrastructure/taskRepositoryUsage'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 // RFC-359 W20: the page's legacy reference count changes only its exclusion
 // expression. Real catalogs prove the non-null premise; the old SQL remains
 // the data oracle. These tiny cases make no PostgreSQL performance claim.
+import { RepositoryWorkspaceSqlStore } from '@/modules/source-control/infrastructure/repositoryWorkspaceSqlStore'
+import { engineOf } from '@/platform/persistence/databaseTransaction'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
+import { rawRows } from '@/platform/persistence/queryHelpers'
+
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { expect, test } from 'bun:test'
+import { eq, sql, type SQLWrapper } from 'drizzle-orm'
+import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 import {
   patchTaskFixture,
+  readTaskFixtures,
+  readTaskRepoFixtures,
   taskFixture,
   taskRepoFixture,
   workflowFixture,
-  readTaskFixtures,
-  readTaskRepoFixtures,
 } from './helpers/model'
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
-import { rawRows } from '@/platform/persistence/queryHelpers'
-import { expect, test } from 'bun:test'
-import { eq, sql, type SQLWrapper } from 'drizzle-orm'
-import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { RepositoryWorkspaceSqlStore } from '@/modules/source-control/infrastructure/repositoryWorkspaceSqlStore'
-import { engineOf } from '@/platform/persistence/databaseTransaction'
-import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 import type { RecordedStatement } from './helpers/statementRecorder'
 
 const since = 1_700_000_000_000
@@ -82,6 +84,7 @@ async function seed(harness: ProviderHarness) {
     ].map(([taskId, repoIndex, cachedRepoId]) => ({
       taskId: String(taskId),
       repoIndex: Number(repoIndex),
+      mountPath: `repo-${repoIndex}`,
       cachedRepoId: cachedRepoId === null ? null : String(cachedRepoId),
       repoPath: '/fixture/repo',
       branch: `task/${taskId}`,
@@ -135,7 +138,8 @@ function originalCountQueries(db: object, ids: readonly string[]): readonly SQLW
     ids.map((id) => sql`${id}`),
     sql`, `,
   )
-  const { taskRepos, tasks, scheduledTasks } = tablesOf(db)
+  const { scheduledTasks } = tablesOf(db)
+  const { taskRepositoryMounts: taskRepos, tasks } = tablesOf(db)
   return [
     sql`
       SELECT ${taskRepos.cachedRepoId} AS cached_repo_id, count(distinct ${taskRepos.taskId}) AS count
@@ -144,13 +148,13 @@ function originalCountQueries(db: object, ids: readonly string[]): readonly SQLW
       GROUP BY ${taskRepos.cachedRepoId}
     `,
     sql`
-      SELECT ${tasks.cachedRepoId} AS cached_repo_id, count(*) AS count
+      SELECT ${taskReadColumns(db).cachedRepoId} AS cached_repo_id, count(*) AS count
       FROM ${tasks}
-      WHERE ${tasks.cachedRepoId} IN (${idSet})
+      WHERE ${taskReadColumns(db).cachedRepoId} IN (${idSet})
         AND NOT EXISTS (
           SELECT 1 FROM ${taskRepos} WHERE ${taskRepos.taskId} = ${tasks.id}
         )
-      GROUP BY ${tasks.cachedRepoId}
+      GROUP BY ${taskReadColumns(db).cachedRepoId}
     `,
     sql`
       SELECT ${scheduledTasks.launchPayload} AS launch_payload FROM ${scheduledTasks}
@@ -178,7 +182,7 @@ describeEachProvider('RFC-359 W20 repository reference count exclusion', (harnes
     const columns: { table: string; column: string; notNull: boolean }[] = []
     if (harness.capabilities.provider === 'sqlite') {
       for (const [table, column] of [
-        ['task_repos', 'task_id'],
+        ['task_repository_mounts', 'task_id'],
         ['tasks', 'id'],
       ] as const) {
         const rows = await rawRows<{ name: string; notnull: number }>(
@@ -201,7 +205,7 @@ describeEachProvider('RFC-359 W20 repository reference count exclusion', (harnes
         SELECT table_name, column_name, is_nullable
         FROM information_schema.columns
         WHERE table_schema = 'agent_workflow'
-          AND ((table_name = 'task_repos' AND column_name = 'task_id')
+          AND ((table_name = 'task_repository_mounts' AND column_name = 'task_id')
             OR (table_name = 'tasks' AND column_name = 'id'))
         ORDER BY table_name, column_name
       `,
@@ -215,7 +219,7 @@ describeEachProvider('RFC-359 W20 repository reference count exclusion', (harnes
       )
     }
     expect(columns).toEqual([
-      { table: 'task_repos', column: 'task_id', notNull: true },
+      { table: 'task_repository_mounts', column: 'task_id', notNull: true },
       { table: 'tasks', column: 'id', notNull: true },
     ])
   })
@@ -299,7 +303,7 @@ describeEachProvider('RFC-359 W20 repository reference count exclusion', (harnes
       [repoIds[0], 6],
       [repoIds[1], 5],
     ])
-    const { taskRepos } = tablesOf(harness.db)
+    const { taskRepositoryMounts: taskRepos } = tablesOf(harness.db)
     await harness.db.delete(taskRepos)
     await compare([
       [repoIds[0], 6],
@@ -310,6 +314,7 @@ describeEachProvider('RFC-359 W20 repository reference count exclusion', (harnes
       {
         taskId: 'b',
         repoIndex: 0,
+        mountPath: 'repo-0',
         cachedRepoId: null,
         repoPath: '/fixture/one',
         branch: 'main',
@@ -318,6 +323,7 @@ describeEachProvider('RFC-359 W20 repository reference count exclusion', (harnes
       {
         taskId: 'b',
         repoIndex: 1,
+        mountPath: 'repo-1',
         cachedRepoId: 'outside-selected-ids',
         repoPath: '/fixture/two',
         branch: 'main',
@@ -337,6 +343,7 @@ describeEachProvider('RFC-359 W20 repository reference count exclusion', (harnes
       await taskRepoFixture(harness.db, {
         taskId: row.id,
         repoIndex: 0,
+        mountPath: 'repo-0',
         cachedRepoId: row.cachedRepoId,
         repoPath: '/fixture/all',
         branch: 'main',
@@ -360,7 +367,7 @@ describeEachProvider('RFC-359 W20 repository reference count exclusion', (harnes
     const interruption = new Error('reference count rollback')
     await expect(
       harness.session.transaction(async (tx) => {
-        const { taskRepos } = tablesOf(tx)
+        const { taskRepositoryMounts: taskRepos } = tablesOf(tx)
         await patchTaskFixture(tx, { id: 'a' }, { cachedRepoId: repoIds[2] })
         await tx.delete(taskRepos).where(eq(taskRepos.taskId, 'a'))
         await compare(

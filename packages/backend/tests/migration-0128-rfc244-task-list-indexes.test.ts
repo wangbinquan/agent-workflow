@@ -1,11 +1,10 @@
-import { rawRows } from '@/platform/persistence/queryHelpers'
+import { createFrozenEpoch1Db, FROZEN_MIGRATIONS } from './migration-freeze'
+import { frozenRawRows as rawRows } from './migration-freeze'
 import { describe, expect, test } from 'bun:test'
 import { sql } from 'drizzle-orm'
 import { resolve } from 'node:path'
 
-import { createInMemoryDb } from '../src/db/client'
-
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+const MIGRATIONS = resolve(FROZEN_MIGRATIONS)
 
 interface IndexListRow {
   name: string
@@ -22,7 +21,7 @@ interface QueryPlanRow {
 
 describe('migration 0128 — task operations indexes', () => {
   test('composite indexes replace their redundant single-column predecessors', () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createFrozenEpoch1Db(MIGRATIONS)
     const indexes = rawRows<IndexListRow>(db, sql`PRAGMA index_list(tasks)`).map((row) => row.name)
 
     expect(indexes).toEqual(
@@ -44,7 +43,7 @@ describe('migration 0128 — task operations indexes', () => {
     ['idx_tasks_list_parent_started_id', ['parent_task_id', 'started_at', 'id']],
     ['idx_tasks_list_owner_started_id', ['owner_user_id', 'started_at', 'id']],
   ] as const)('%s has the intended keyset prefix', (indexName, columns) => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createFrozenEpoch1Db(MIGRATIONS)
     const info = rawRows<IndexInfoRow>(db, sql.raw(`PRAGMA index_info('${indexName}')`), {
       seqno: 'int',
     }).sort((a, b) => a.seqno - b.seqno)
@@ -52,7 +51,7 @@ describe('migration 0128 — task operations indexes', () => {
   })
 
   test('representative status/parent/owner keyset plans use the composite indexes', () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createFrozenEpoch1Db(MIGRATIONS)
     const plans = [
       rawRows<QueryPlanRow>(
         db,

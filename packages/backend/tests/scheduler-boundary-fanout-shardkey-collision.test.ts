@@ -1,3 +1,7 @@
+import { initializeTaskWorkspace } from './helpers/taskWorkspaceFixture'
+import { nodeRunFixtureColumns } from './helpers/model/nodeRun'
+import { taskReadColumns } from '@/modules/task-execution/infrastructure/taskRepositorySql'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 // Regression: duplicate items in a wrapper-fanout shardSource collide to the
 // same shardKey.
 //
@@ -21,11 +25,11 @@
 // DISTINCT shardKey count is 1 instead of 2 → the headline assertion fails.
 
 import { agentFixture, taskFixture, workflowFixture, readNodeRunFixtures } from './helpers/model'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
-import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
@@ -50,7 +54,7 @@ interface Harness {
 function buildHarness(provider: ProviderHarness): Harness {
   const appHome = mkdtempSync(join(tmpdir(), 'aw-red-shardkey-collision-'))
   const worktreePath = join(appHome, 'wt')
-  mkdirSync(worktreePath, { recursive: true })
+  initializeTaskWorkspace(worktreePath)
   const db = provider.db
   return {
     db,
@@ -204,10 +208,17 @@ function registerCases(provider: ProviderHarness) {
     )
 
     const { tasks, nodeRuns } = tablesOf(h.db)
-    const t = await h.db.select().from(tasks).where(eq(tasks.id, taskId)).limit(1)
+    const t = await h.db
+      .select(taskReadColumns(h.db))
+      .from(tasks)
+      .where(eq(tasks.id, taskId))
+      .limit(1)
     expect(t[0]?.status).toBe('done')
 
-    const wrapperRow = await h.db.select().from(nodeRuns).where(eq(nodeRuns.nodeId, 'fan'))
+    const wrapperRow = await h.db
+      .select(nodeRunFixtureColumns(h.db))
+      .from(nodeRuns)
+      .where(eq(nodeRuns.nodeId, 'fan'))
     expect(wrapperRow.length).toBe(1)
 
     // Two items → two shard children, but each must own a DISTINCT shardKey.

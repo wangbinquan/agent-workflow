@@ -1,3 +1,4 @@
+// Frozen epoch-1 artifact/operation protocol; native provider moves are covered by rfc349-database-migration-coordinator.integration.
 // RFC-349 T6 — both providers produce one logical backup format. PostgreSQL
 // reads active tables from its snapshot and carries the independently verified
 // legacy archive forward instead of recreating six active tables.
@@ -17,17 +18,17 @@ import {
   writeDurableLogicalArtifact,
   writeLogicalArtifactManifest,
   writeLogicalTableChunk,
-} from '@/platform/persistence/logicalDatabaseArtifact'
+} from '@/platform/persistence/migration/legacy/logicalDatabaseArtifact'
 import {
   exportLogicalDatabaseArtifact,
   readLogicalDatabaseBackupEnvelope,
   LogicalDatabaseExportError,
   type LogicalDatabaseExportSource,
-} from '@/platform/persistence/logicalDatabaseExport'
+} from '@/platform/persistence/migration/legacy/logicalDatabaseExport'
 import {
   openVerifiedLogicalDatabaseArtifactSource,
   verifyLogicalDatabaseArtifactTree,
-} from '@/platform/persistence/logicalDatabaseRestore'
+} from '@/platform/persistence/migration/legacy/logicalDatabaseRestore'
 import type {
   LogicalColumnContract,
   LogicalSchemaContract,

@@ -1,3 +1,6 @@
+import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
+import { nodeRunFixtureColumns } from './helpers/model/nodeRun'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { withO2Closure, o2Ports } from './helpers/o2Closure'
 // RFC-395 II-pre：改接生产启动 / 读取路径，保留原断言意图。
 import {
@@ -7,7 +10,7 @@ import {
   readNodeRunFixtures,
 } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+
 import { first as firstRow } from '@/platform/persistence/queryHelpers'
 import { expectDeploymentSelection } from './helpers/deploymentSelectionSource'
 import { readDaemonGraphSource } from './helpers/daemonGraphSource'
@@ -402,6 +405,7 @@ describeEachProvider('RFC-370 selected prompt consumer bindings', (harness) => {
       reviewIteration: 0,
     })
     const original = createTaskExecutionPersistence(db, {
+      historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
       recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
     })
     const prompts: NodeRunPromptOperations = Object.freeze({
@@ -507,7 +511,11 @@ describeEachProvider('RFC-370 selected prompt consumer bindings', (harness) => {
       ])
       expect(trace).toEqual(['store'])
       expect(
-        (await firstRow(db.select().from(nodeRuns).where(eq(nodeRuns.id, nodeRunId))))?.status,
+        (
+          await firstRow(
+            db.select(nodeRunFixtureColumns(db)).from(nodeRuns).where(eq(nodeRuns.id, nodeRunId)),
+          )
+        )?.status,
       ).toBe('pending')
       writeAck.resolve(undefined)
       await Promise.race([
@@ -518,7 +526,11 @@ describeEachProvider('RFC-370 selected prompt consumer bindings', (harness) => {
       ])
       expect(trace).toEqual(['store', 'store-ack', 'patch'])
       expect(
-        (await firstRow(db.select().from(nodeRuns).where(eq(nodeRuns.id, nodeRunId))))?.status,
+        (
+          await firstRow(
+            db.select(nodeRunFixtureColumns(db)).from(nodeRuns).where(eq(nodeRuns.id, nodeRunId)),
+          )
+        )?.status,
       ).toBe('pending')
       patchAck.resolve(undefined)
       expect(await pending).toBe(stop)

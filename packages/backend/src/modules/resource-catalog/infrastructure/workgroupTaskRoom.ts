@@ -10,10 +10,10 @@ import {
   type WorkflowDefinition,
   type WorkgroupRuntimeConfig,
   type TaskWorkgroupRuntimeConfig,
+  utf16MaxLength,
 } from '@agent-workflow/shared'
 import { and, eq, inArray } from 'drizzle-orm'
 import { z } from 'zod'
-import { utf16MaxLength } from '@agent-workflow/shared'
 
 import type {
   WorkgroupTaskRoomEventIdentity,
@@ -333,7 +333,8 @@ export async function visibleAgentRows(
   ids: readonly string[],
 ): Promise<ReadonlyMap<string, Readonly<{ id: string; name: string }>>> {
   if (ids.length === 0) return new Map()
-  const { agents, resourceGrants } = tablesOf(transaction)
+  const { agents } = tablesOf(transaction)
+  const { resourceGrants } = tablesOf(transaction)
   const rows = await transaction
     .select({
       id: agents.id,

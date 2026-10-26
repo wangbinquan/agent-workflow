@@ -50,7 +50,7 @@ async function enable(harness: ProviderHarness): Promise<void> {
   const { committedEventFamilyCutovers } = tablesOf(harness.db)
   await harness.db
     .update(committedEventFamilyCutovers)
-    .set({ mode: 'shadow', epoch: 7, changedAt: NOW - 1, changeRef: 'fixture:shadow' })
+    .set({ epoch: 7, changedAt: NOW - 1, changeRef: 'fixture:shadow' })
     .where(family(harness.db))
 }
 
@@ -144,7 +144,7 @@ describeEachProvider(
           occurredAt: NOW,
           payloadJson,
           payloadDigest: sha256Hex(payloadJson),
-          deliveryMode: 'shadow',
+          deliveryMode: 'dispatchable',
           producerEpoch: 7,
           createdAt: NOW,
         },
@@ -182,7 +182,6 @@ describeEachProvider(
       expect(receipt.cutover).toEqual({
         producer: 'collaboration',
         family: 'review',
-        mode: 'shadow',
         epoch: 7,
         changedAt: NOW - 1,
         changeRef: 'fixture:shadow',
@@ -259,7 +258,7 @@ describeEachProvider(
       expect(await rows(harness)).toEqual(before)
     })
 
-    test('legacy cutover still checks prior replay and leaves a fresh invalid sequence inert', async () => {
+    test('routing epoch changes preserve immutable replay and reject fresh invalid sequences', async () => {
       await enable(harness)
       const input = event('before-legacy')
       const first = await harness.session.transaction(
@@ -269,26 +268,27 @@ describeEachProvider(
       const { committedEventFamilyCutovers } = tablesOf(harness.db)
       await harness.db
         .update(committedEventFamilyCutovers)
-        .set({ mode: 'legacy' })
+        .set({ epoch: 8 })
         .where(family(harness.db))
       const replay = await harness.session.transaction(
         async (tx) => await appendCommittedEvent(tx, input),
       )
-      expect(replay.cutover.mode).toBe('legacy')
+      expect(replay.cutover.epoch).toBe(8)
       expect(replay.eventRef).toEqual(first.eventRef)
       const recording = harness.recordStatements()
-      const fresh = await harness.session
-        .transaction(
-          async (tx) =>
-            await appendCommittedEvent(
-              tx,
-              event('legacy-fresh', {
-                aggregate: { kind: 'review-round', id: 'new-aggregate', seq: 0 },
-              }),
-            ),
-        )
-        .finally(() => recording.stop())
-      expect(fresh.eventRef).toBeNull()
+      await expect(
+        harness.session
+          .transaction(
+            async (tx) =>
+              await appendCommittedEvent(
+                tx,
+                event('legacy-fresh', {
+                  aggregate: { kind: 'review-round', id: 'new-aggregate', seq: 0 },
+                }),
+              ),
+          )
+          .finally(() => recording.stop()),
+      ).rejects.toThrow('aggregate.seq must be a positive safe integer')
       expect(eventSql(recording.statements)).toEqual([
         'select:committed_event_family_cutovers',
         'select:committed_events',

@@ -1,3 +1,4 @@
+import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 // RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-223 (PR-3b) — dynamic-workflow OPAQUE TOKEN indirection. This file locks
 // the token-isolation invariants of design §4.2 (R4-2/R5-2) end to end over the
@@ -27,7 +28,6 @@ import {
   taskFixture,
   workflowFixture,
 } from './helpers/model'
-import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { registerProviderHttpApplicationLifetime } from './helpers/providerHttpApplication'
 import { beforeEach, describe, expect, test } from 'bun:test'
@@ -70,11 +70,12 @@ import {
 import { abortAllActiveTasks, resumeDynamicWorkflowExecution } from '../src/services/task'
 import { loadWorkgroupTaskState } from '../src/services/workgroup/state'
 import { createUser } from './helpers/userFixture'
-import type { WorkgroupTurnHostResult as WorkgroupHostRunResult } from '../src/modules/task-execution/public/commands'
 import type {
+  WorkgroupTurnHostResult as WorkgroupHostRunResult,
   WorkgroupTurnHostOperations,
   WorkgroupTurnHostRequest,
 } from '../src/modules/task-execution/public/commands'
+
 import { createLogger } from '../src/util/log'
 import { runTestGit } from './helpers/testCommand'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
@@ -82,7 +83,6 @@ import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
 
 const openTestApplication = registerProviderHttpApplicationLifetime()
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
 const log = createLogger('rfc223-pr3b-test')
 
@@ -348,12 +348,10 @@ async function seedTask(
     workgroupConfigJson: JSON.stringify(config),
     ...(ownerUserId !== undefined ? { ownerUserId } : {}),
   })
-  await insertOne(db, workgroupTaskState, {
-    taskId,
-    gateStatus: 'idle',
-    dwStateJson: JSON.stringify(dw),
-    updatedAt: Date.now(),
-  })
+  await db
+    .update(workgroupTaskState)
+    .set({ gateStatus: 'idle', dwStateJson: JSON.stringify(dw), updatedAt: Date.now() })
+    .where(eq(workgroupTaskState.taskId, taskId))
   return taskId
 }
 
@@ -363,7 +361,7 @@ describe('RFC-223 PR-3b — live generate + save-as consume id form', () => {
   let auditorId: string
 
   beforeEach(async () => {
-    db = createInMemoryDb(MIGRATIONS)
+    db = createInMemoryDb()
     const ids = await seedTwoAgents(db)
     writerId = ids.writerId
     auditorId = ids.auditorId
@@ -476,13 +474,13 @@ describe('RFC-223 AC16 — two-owner same-name dynamic members stay id-canonical
   test('generate maps tokens to both frozen ids and execute selects each exact runtime profile', async () => {
     const root = mkdtempSync(join(tmpdir(), 'aw-rfc223-ac16-'))
     const appHome = join(root, 'home')
-    const repoPath = join(root, 'repo')
+    const repoPath = join(appHome, 'repo')
     const configCapturePath = join(root, 'runtime-config.jsonl')
     const argvCapturePath = join(root, 'runtime-argv.jsonl')
     mkdirSync(appHome, { recursive: true })
     mkdirSync(repoPath, { recursive: true })
 
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createInMemoryDb()
     try {
       await runTestGit(['-C', repoPath, 'init', '-q', '-b', 'main'], 10_000)
       await runTestGit(['-C', repoPath, 'config', 'user.email', 'rfc223@test.invalid'], 10_000)
@@ -645,6 +643,7 @@ describe('RFC-223 AC16 — two-owner same-name dynamic members stay id-canonical
             db,
             taskId,
             {
+              historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
               db,
               taskRecoveryOperations: taskRecoveryOperations(db),
               schedulerDriver: createTaskExecutionTestTopology({ db, driver: 'real' })

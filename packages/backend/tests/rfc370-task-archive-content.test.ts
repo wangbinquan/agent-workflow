@@ -1,3 +1,6 @@
+import { readTaskArchive } from '@/modules/task-execution/infrastructure/taskArchiveWire'
+import { createTaskArchiveTextSource } from './helpers/taskArchiveTextSource'
+import { databaseTransactionIsActive } from '@/platform/persistence/databaseTransaction'
 import { o2Ports } from './helpers/o2Closure'
 // RFC-370 A2: content ACKs must precede archive finalization; recovery uses the same claim.
 import {
@@ -201,6 +204,42 @@ function runSweep(db: PersistenceDb, content: TaskArchiveContentPort) {
 }
 
 describeEachProvider('RFC-370 selected archive content', (harness) => {
+  test('v3 reads every owner section in the same snapshot and exports all three rosters', async () => {
+    await seedTask(harness.db)
+    const store = memoryContent()
+    const reader = o2Ports(harness.db).collaborationReads.archive
+    let snapshots = 0
+    const command = createDrizzleTaskArchiveMaintenanceCommand(
+      harness.db,
+      {
+        async load(tx, taskIds) {
+          expect(databaseTransactionIsActive(tx)).toBe(true)
+          snapshots++
+          return reader.load(tx, taskIds)
+        },
+      },
+      { content: store.content },
+    )
+    await command.runSweep({ enabled: true, retentionDays: 1, maxTreesPerSweep: 10 }, OPTIONS)
+    expect(snapshots).toBe(1)
+    const view = await readTaskArchive(
+      createTaskArchiveTextSource({
+        directory: FINAL,
+        resolve: (a, b) => `${a}/${b}`,
+        exists: async (p) => store.files.has(p),
+        readText: async (p) => store.files.get(p)!,
+      }),
+    )
+    expect(view.manifest.schemaVersion).toBe(3)
+    if (view.manifest.schemaVersion === 3) {
+      expect(view.manifest.sections.task.owner).toBe('T')
+      expect(view.manifest.sections.nodeRuns.owner).toBe('N')
+      expect(view.manifest.sections.collaboration.owner).toBe('C')
+      expect(view.manifest.rows.task_definitions).toBe(1)
+      expect(view.manifest.rows.clarify_disposition_evidence).toBe(0)
+    }
+  })
+
   for (const [operation, reference] of [
     ['append', `${TEMPORARY}/db/tasks.jsonl`],
     ['write', `${TEMPORARY}/manifest.json`],
@@ -246,7 +285,7 @@ describeEachProvider('RFC-370 selected archive content', (harness) => {
         expect(store.files.get(`${FINAL}/runs/${ROOT}/prompt.md`)).toBe('prompt bytes')
         expect(store.files.get(`${FINAL}/logs/${ROOT}/events.ndjson`)).toBe('event bytes\n')
         const manifest = JSON.parse(store.files.get(`${FINAL}/manifest.json`)!)
-        expect(manifest.schemaVersion).toBe(2)
+        expect(manifest.schemaVersion).toBe(3)
         expect(manifest.taskIds).toEqual([ROOT])
         expect(manifest.rows.tasks).toBe(1)
         expect(manifest.rows.runs_dirs).toBe(1)

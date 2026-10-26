@@ -7,12 +7,13 @@
 // operations is identical in both deployments. Each step is one transaction:
 // publishing swaps the live tree atomically, so recovery never meets a
 // half-swapped tree, and a legacy name-keyed layout never exists here.
-import { LEGACY_DATABASE_SKILL_ROOT } from '@/platform/content/legacySkill'
 import {
-  legacySkillStagingPath,
-  legacySkillTrashPath,
-  decodeLegacySkillStagingPath,
-} from '@/platform/content/legacySkill'
+  DATABASE_SKILL_ROOT,
+  skillStagingPath,
+  skillTrashPath,
+  decodeSkillStagingPath,
+} from '@/platform/content/locations/skill'
+
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
@@ -58,6 +59,7 @@ import {
   normalizeSkillPath,
   readTree,
   readTreeRows,
+  createSkillContentLocationQuery,
   renameTree,
   stagingTree,
   trashTreeNames,
@@ -71,8 +73,8 @@ import {
 import { createDatabaseSkillTreeContent } from './databaseSkillTreeContent'
 
 const MAIN = 'SKILL.md'
-const stagingRef = legacySkillStagingPath
-const trashRef = legacySkillTrashPath
+const stagingRef = skillStagingPath
+const trashRef = skillTrashPath
 
 /** `writeFileSkillTree`: files except SKILL.md, then SKILL.md from the main content. */
 function treeOfFiles(content: SkillTreeFiles): SkillTreeFile[] {
@@ -109,11 +111,17 @@ export function createDatabaseSkillContent(input: {
   const now = input.now ?? Date.now
   const tx = <T>(run: (handle: PersistenceDb) => Promise<T>): Promise<T> => session.transaction(run)
 
-  /** RFC-170 snapshot preference: the selected version when stored, else live. */
-  const readRoot = async (reference: SkillContentReference): Promise<string> =>
-    (await treeExists(db, reference.id, versionTree(reference.contentVersion)))
-      ? versionTree(reference.contentVersion)
-      : LIVE_TREE
+  /** Match epoch-1 live reads during the commit-to-publication window. */
+  const readRoot = async (reference: SkillContentReference): Promise<string> => {
+    if (reference.contentVersion === 0) return LIVE_TREE
+    const snapshot = await createSkillContentLocationQuery(db).locate(reference.id, {
+      kind: 'version',
+      version: reference.contentVersion,
+    })
+    if (!snapshot || !(await treeExists(db, reference.id, versionTree(reference.contentVersion))))
+      return LIVE_TREE
+    return versionTree(reference.contentVersion)
+  }
 
   const content = Object.freeze({
     textBom: 'strip' as const,
@@ -203,6 +211,7 @@ export function createDatabaseSkillContent(input: {
   }
 
   const versionContent = Object.freeze({
+    ...{ contentKind: 'database-bytes' as const },
     plan(planInput) {
       const liveRef = skillFilesRel(planInput.skillId)
       const staging = stagingRef(planInput.skillId, planInput.publicationId)
@@ -232,7 +241,9 @@ export function createDatabaseSkillContent(input: {
       })
     },
     async discardStage(publication) {
-      await deleteTree(db, publication.skillId, stagingTree(publication.publicationId))
+      await tx((handle) =>
+        deleteTree(handle, publication.skillId, stagingTree(publication.publicationId)),
+      )
     },
     async captureVersion(publication) {
       await tx((handle) =>
@@ -254,7 +265,7 @@ export function createDatabaseSkillContent(input: {
             `skill version ${publication.version} live publish does not match committed content hash`,
           )
         }
-        await writeTree(handle, publication.skillId, LIVE_TREE, staged, now())
+        await copyTree(handle, publication.skillId, staging, LIVE_TREE, now())
         await deleteTree(handle, publication.skillId, staging)
       })
     },
@@ -374,7 +385,7 @@ export function createDatabaseSkillContent(input: {
 
   const versionRecovery = Object.freeze({
     plan(planInput) {
-      const staging = decodeLegacySkillStagingPath(planInput.stagingReference)
+      const staging = decodeSkillStagingPath(planInput.stagingReference)
       if (staging === null || staging.skillId !== planInput.skillId) {
         throw new Error(
           `version-write ${planInput.operationId} staging path does not match its identity/phase payload`,
@@ -540,7 +551,7 @@ export function createDatabaseSkillContent(input: {
   } satisfies SkillPackageContentReader)
 
   return Object.freeze({
-    rootReference: LEGACY_DATABASE_SKILL_ROOT,
+    rootReference: DATABASE_SKILL_ROOT,
     content,
     versionReader,
     lifecycleContent,

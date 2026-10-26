@@ -1,3 +1,4 @@
+import { createEpoch2PostgresqlMetadata } from './helpers/epoch2PostgresqlMetadata'
 // RFC-349 regression — provider-neutral Intent persistence must render INSERT
 // column lists and UPDATE assignments as unqualified identifiers. Drizzle
 // table-column fragments are valid in expressions, but produce
@@ -81,9 +82,12 @@ function rows(
 function postgresqlFixture() {
   const statements: string[] = []
   let releases = 0
+  const epoch2Metadata = createEpoch2PostgresqlMetadata()
   const execute = (statement: string): SqlRows => {
     statements.push(statement)
-    if (statement.includes('database_generations')) {
+    const metadata = epoch2Metadata(statement)
+    if (metadata) return metadata
+    if (statement.includes('generations')) {
       return rows({ objects: [{ generation_id: 'dbg_intent_sql' }], count: 1 })
     }
     if (statement.toLowerCase().includes('select') && statement.includes('"intent_sessions"')) {

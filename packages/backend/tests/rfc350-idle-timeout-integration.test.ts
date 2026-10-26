@@ -1,4 +1,6 @@
-import { o2Ports } from './helpers/o2Closure'
+import { createDrizzleTaskArchiveMaintenanceCommand } from '@/modules/task-execution/composition/taskArchiveMaintenance'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { insertOne } from '@/platform/persistence/singleInsert'
 import {
   nodeRunFixture,
   readTaskFixtures,
@@ -6,9 +8,7 @@ import {
   taskRepoFixture,
   workflowFixture,
 } from './helpers/model'
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
-import { createDrizzleTaskArchiveMaintenanceCommand } from '@/modules/task-execution/composition/taskArchiveMaintenance'
+import { o2Ports } from './helpers/o2Closure'
 // RFC-350 —— 端到端：真库 + 真 cancelTask + 真归档器，把「超时 → 终结 → 出库」
 // 这条链整条跑一遍。
 //
@@ -29,14 +29,14 @@ import { mkdirSync, mkdtempSync, readdirSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { cancelViaEngine } from './helpers/cancelEngine'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { describeEachProvider } from './helpers/eachProvider'
 import {
   composeTaskIdleTimeoutOperations,
   createTaskIdleTimeoutPersistence,
   runTaskIdleTimeoutSweep,
 } from '../src/modules/task-execution/composition/taskIdleTimeout'
+import { cancelViaEngine } from './helpers/cancelEngine'
+import { describeEachProvider } from './helpers/eachProvider'
 import { installTaskLifecycleAfterCommitTestPump } from './helpers/taskLifecycleCommittedEvents'
 
 const HOUR = 3_600_000

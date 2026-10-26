@@ -1,7 +1,15 @@
+import {
+  reencodeBundleApplyArtifacts,
+  reencodeBundleApplyReceipt,
+} from '@/modules/resource-catalog/infrastructure/migration/bundleAppliesRule'
+import { resourcePackageArtifactCodecs } from '@/modules/resource-catalog/infrastructure/resourcePackageArtifactCodec'
+import { legacyContentRef } from '@/platform/content/contentRef'
+import { contentRowColumns } from '@/platform/content/infrastructure/contentStore'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 // RFC-370: real AW recovery rules consume logical content references and await close.
 import { createAtomicApplyRecovery } from '@/platform/atomic-apply/convergence'
 import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+
 import { first } from '@/platform/persistence/queryHelpers'
 import { expect, test } from 'bun:test'
 import { createHash, randomUUID } from 'node:crypto'
@@ -359,7 +367,9 @@ describeEachProvider('RFC-370 logical resource package recovery', (harness) => {
               id,
               name: 'logical-recovery',
               description: '',
-              managedPath: `skills/${id}/files`,
+              ...contentRowColumns(
+                legacyContentRef('skill-path', 'local-file', `skills/${id}/files`),
+              ),
               ownerUserId: null,
               visibility: 'public',
               schemaVersion: 1,
@@ -375,7 +385,9 @@ describeEachProvider('RFC-370 logical resource package recovery', (harness) => {
               id: randomUUID(),
               skillId: id,
               versionIndex: 2,
-              filesPath: `skills/${id}/versions/v2/files`,
+              ...contentRowColumns(
+                legacyContentRef('skill-path', 'local-file', `skills/${id}/versions/v2/files`),
+              ),
               source: 'import',
               summary: null,
               fusionId: null,
@@ -424,8 +436,13 @@ describeEachProvider('RFC-370 logical resource package recovery', (harness) => {
             key: journalId,
             actorUserId: 'logical-actor',
             state: 'committed',
-            preparedArtifactsJson: JSON.stringify([artifact]),
-            receiptJson: JSON.stringify({ journalId, applied: [applied] }),
+            preparedArtifactsJson: reencodeBundleApplyArtifacts(
+              JSON.stringify([artifact]),
+              reencodeBundleApplyReceipt(JSON.stringify({ journalId, applied: [applied] })),
+            ),
+            receiptJson: reencodeBundleApplyReceipt(
+              JSON.stringify({ journalId, applied: [applied] }),
+            ),
             error: null,
             createdAt: 0,
             updatedAt: 0,
@@ -485,7 +502,7 @@ describeEachProvider('RFC-370 logical resource package recovery', (harness) => {
         key: id,
         actorUserId: 'logical-actor',
         state: 'prepared',
-        preparedArtifactsJson: JSON.stringify([
+        preparedArtifactsJson: resourcePackageArtifactCodecs.encode([
           {
             kind: 'plugin-install',
             operationId: randomUUID(),

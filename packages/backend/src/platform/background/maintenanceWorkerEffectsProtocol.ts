@@ -22,6 +22,7 @@ const MaintenanceWorkerEffectsDescriptorSchema = z
           'eventsArchive',
           'databaseBackups',
           'objectPublications',
+          'contentStore',
         ]),
       )
       .min(1)

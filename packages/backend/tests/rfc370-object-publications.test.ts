@@ -1,3 +1,5 @@
+import { contentRefColumns } from '@/platform/content/contentStore'
+import { readContentObject } from '@/platform/content/infrastructure/contentStore'
 // RFC-370 v3 V6 — the one platform-neutral hosted object publication journal
 // (system-operations `hosted_object_publications`). Locks: owner references
 // commit in the ready transaction; abandoned uploads are resolved without
@@ -70,13 +72,17 @@ describeEachProvider('RFC-370 hosted object publication journal', (harness) => {
       maintenance: (sweeps: readonly HostedObjectOwnerSweep[] = []) =>
         journal.maintenance({ horizon, sweeps }),
       row: async (owner: string, key: string) => {
-        const { hostedObjectPublications } = tablesOf(harness.db)
-        return (
+        const { contentPublications: hostedObjectPublications } = tablesOf(harness.db)
+        const row = (
           await harness.db
             .select()
             .from(hostedObjectPublications)
             .where(eq(hostedObjectPublications.id, hostedPublicationId(owner, key)))
         )[0]
+        if (row === undefined) return undefined
+        const content =
+          row.contentId === null ? null : await readContentObject(harness.db, row.contentId)
+        return { ...row, objectId: content?.location.value ?? null }
       },
       advance: (ms: number) => {
         timestamp += ms
@@ -100,9 +106,26 @@ describeEachProvider('RFC-370 hosted object publication journal', (harness) => {
       {
         commit: async (tx, [receipt]) => {
           const { developmentObjectArtifacts } = tablesOf(tx)
+          const { contentPublications } = tablesOf(tx)
+          const publication = (
+            await tx
+              .select()
+              .from(contentPublications)
+              .where(
+                eq(
+                  contentPublications.id,
+                  hostedPublicationId('development-evidence', `blob:${bytes.sha256}`),
+                ),
+              )
+          )[0]!
+          const columns = contentRefColumns.encode(
+            await readContentObject(tx, publication.contentId!),
+          )
           await insertOne(tx, developmentObjectArtifacts, {
             reference: `blob:${bytes.sha256}`,
-            objectId: receipt!.id,
+            contentRefJson: columns.json,
+            contentInlineBytes:
+              columns.inlineBytes === null ? null : Buffer.from(columns.inlineBytes),
             digest: receipt!.sha256,
             size: receipt!.size,
             createdAt: 1,
@@ -173,7 +196,7 @@ describeEachProvider('RFC-370 hosted object publication journal', (harness) => {
   test('an abandoned upload whose bytes never arrived settles without a platform release', async () => {
     const f = fixture()
     const bytes = content('never uploaded')
-    const { hostedObjectPublications } = tablesOf(harness.db)
+    const { contentPublications: hostedObjectPublications } = tablesOf(harness.db)
     await insertOne(harness.db, hostedObjectPublications, {
       id: hostedPublicationId('task-artifact', 'runs/t2/inputs/manifest.json'),
       owner: 'task-artifact',

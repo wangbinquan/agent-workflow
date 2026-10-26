@@ -1,3 +1,4 @@
+import { createEpoch2PostgresqlMetadata } from './helpers/epoch2PostgresqlMetadata'
 // RFC-349 — Integration provider adapters keep verified-ingress dedupe and
 // MR launch admission atomic while exposing one Promise application contract.
 
@@ -51,12 +52,15 @@ function rows(response: Response): SqlRows {
 function fixture(responses: Array<Response | Error>) {
   const executions: Array<{ readonly sql: string; readonly parameters?: readonly unknown[] }> = []
   let releases = 0
+  const epoch2Metadata = createEpoch2PostgresqlMetadata()
   const run = (query: string, parameters?: readonly unknown[]) => {
     executions.push({ sql: query, parameters })
+    const metadata = epoch2Metadata(query)
+    if (metadata) return metadata
     // RFC-349: the one-shot live-write marker and the per-transaction
     // generation fence are infrastructure, not part of the adapter contract
     // each case queues responses for. Answer them without consuming the queue.
-    if (query.includes('database_generations'))
+    if (query.includes('generations'))
       return rows({ objects: [{ generation_id: 'dbg_integration_pg' }] })
     const response = responses.shift() ?? {}
     if (response instanceof Error) throw response
@@ -242,7 +246,14 @@ describeEachProvider('RFC-349 Integration provider adapters', (harness) => {
     expect(resourceTransaction).toBeDefined()
     expect(postgresqlResourceLoads).toBe(1)
     expect(postgresql.executions[0]?.sql.trim().toLowerCase()).toBe('begin')
-    expect(postgresql.executions[4]?.sql.trim().toLowerCase()).toBe('commit')
+    const commit = postgresql.executions.findIndex(
+      (query) => query.sql.trim().toLowerCase() === 'commit',
+    )
+    const count = postgresql.executions.findIndex((query) =>
+      query.sql.toLowerCase().includes('count('),
+    )
+    expect(commit).toBeGreaterThan(0)
+    expect(count).toBeGreaterThan(commit)
     expect(postgresql.releases).toBe(1)
   })
 

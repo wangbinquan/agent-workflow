@@ -11,10 +11,10 @@
 //   values, applies 0058, and asserts agent_snapshot is gone, every other column
 //   round-trips, the row count is unchanged, and the 3 indexes + 2 FKs survive.
 
+import { migrateFrozenSqlite as migrate, FROZEN_MIGRATIONS } from './migration-freeze'
 import { describe, expect, test } from 'bun:test'
 import { Database } from 'bun:sqlite'
 import { drizzle } from 'drizzle-orm/bun-sqlite'
-import { migrate } from 'drizzle-orm/bun-sqlite/migrator'
 import {
   copyFileSync,
   existsSync,
@@ -28,7 +28,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { removeTempDirSync } from './fixtures/tempDir'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+const MIGRATIONS = resolve(FROZEN_MIGRATIONS)
 
 interface JournalEntry {
   idx: number
@@ -150,13 +150,13 @@ describe('RFC-115 migration 0058 — DROP doc_versions.agent_snapshot', () => {
 
 // Codex audit F1 regression: 0058's 12-step rebuild DROPs doc_versions, which —
 // if migrations run with foreign_keys ON — cascade-deletes EVERY review_comments
-// row (FK doc_version_id ON DELETE cascade). The fix (db/client.ts openDb /
-// migratedSnapshot) runs migrations with FK OFF so the rebuild is FK-inert and
+// row (FK doc_version_id ON DELETE cascade). The frozen epoch-1 sqliteChain
+// runs migrations with FK OFF so the rebuild is FK-inert and
 // child rows survive the upgrade. New installs never hit it (empty child table
 // on replay), which is why CI was green — only "DB with review comments → RFC-115"
 // loses data.
 describe('RFC-115 migration 0058 — Codex F1: review_comments survive the upgrade', () => {
-  test('FK-safe migrate (FK OFF, as openDb does) keeps review_comments through the rebuild', () => {
+  test('default frozen replay keeps review_comments and restores the caller FK mode', () => {
     const tmp = mkdtempSync(join(tmpdir(), 'aw-mig0058-fk-'))
     const dbPath = join(tmp, 'pre.sqlite')
     try {
@@ -177,13 +177,12 @@ describe('RFC-115 migration 0058 — Codex F1: review_comments survive the upgra
       )
       pre.close()
 
-      // Apply 0058 the way production openDb does: FK OFF OUTSIDE drizzle's tx →
-      // migrate → FK ON. Under the OLD FK-ON path the DROP TABLE doc_versions
-      // would cascade-delete the review_comment.
+      // The default helper must use sqliteChain's FK-OFF replay even on an FK-ON
+      // connection, then restore ON. An FK-ON DROP would delete the child row.
       const up = new Database(dbPath)
-      up.exec('PRAGMA foreign_keys = OFF;')
-      migrate(drizzle(up, {}), { migrationsFolder: MIGRATIONS })
       up.exec('PRAGMA foreign_keys = ON;')
+      migrate(drizzle(up, {}), { migrationsFolder: MIGRATIONS })
+      expect(up.query('PRAGMA foreign_keys').get()).toEqual({ foreign_keys: 1 })
       expect(docVersionCols(up)).not.toContain('agent_snapshot')
       expect((up.query('SELECT COUNT(*) AS n FROM review_comments').get() as { n: number }).n).toBe(
         1,
@@ -195,10 +194,15 @@ describe('RFC-115 migration 0058 — Codex F1: review_comments survive the upgra
     }
   })
 
-  test('openDb source runs migrations with foreign_keys OFF (防回退到 FK-ON 级联)', () => {
-    const src = readFileSync(resolve(import.meta.dir, '..', 'src', 'db', 'client.ts'), 'utf8')
-    // The FK-OFF toggle must precede migrateSqlite() so a 12-step rebuild's DROP TABLE
-    // can't cascade-delete child rows.
-    expect(src).toMatch(/foreign_keys = OFF[\s\S]{0,400}migrateSqlite\(/)
+  test('frozen epoch-1 sqliteChain disables foreign keys before BEGIN and migration replay', () => {
+    const src = readFileSync(
+      resolve(import.meta.dir, '../src/platform/persistence/migration/epoch1/sqliteChain.ts'),
+      'utf8',
+    )
+    // SQLite ignores the toggle inside a transaction. Check the frozen chain
+    // used by offlineSourceUpgrade, independently of epoch-2 db/client.ts.
+    expect(src).toMatch(
+      /database\.exec\('PRAGMA foreign_keys = OFF'\)[\s\S]*?database\.exec\('BEGIN'\)[\s\S]*?for \(const migration of migrations\)/,
+    )
   })
 })

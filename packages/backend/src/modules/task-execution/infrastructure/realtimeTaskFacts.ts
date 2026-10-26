@@ -8,7 +8,8 @@ export function createRealtimeTaskFacts(db: PersistenceDb): RealtimeTaskFacts {
   return {
     taskAudience: (taskId, userId) => readRealtimeTaskAudience(db, taskId, userId),
     async taskEventsSince(taskId, since) {
-      const { nodeRunEvents, nodeRuns } = tablesOf(db)
+      const { nodeRunEvents } = tablesOf(db)
+      const { nodeRuns } = tablesOf(db)
       return await db
         .select({
           id: nodeRunEvents.id,

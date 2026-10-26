@@ -1,4 +1,5 @@
-// Frozen query bodies from 67ab6b9aed08d97dcd6d3d9dfb57b8885a11f8e6; only class names and the surrounding imports differ.
+import { nodeRunFixtureColumns } from '../nodeRun'
+// Frozen predicates/order from 67ab6b9aed08d97dcd6d3d9dfb57b8885a11f8e6; target columns supply the same scalar facts.
 // Sources: packages/backend/src/modules/memory/infrastructure/memoryInjectionReadStore.ts, packages/backend/src/modules/memory/infrastructure/memoryDistillWorkStore.ts.
 import { and, desc, eq, inArray, isNull } from 'drizzle-orm'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
@@ -9,12 +10,13 @@ export class FrozenMemoryInjectionQueries {
   constructor(private readonly db: PersistenceDb) {}
   async listRunRecords(input: Parameters<MemoryInjectionReadStore['listRunRecords']>[0]) {
     const { nodeRuns } = tablesOf(this.db)
+    const facts = nodeRunFixtureColumns(this.db)
     return await this.db
       .select({
         id: nodeRuns.id,
         seq: nodeRuns.seq,
         status: nodeRuns.status,
-        injectedMemoriesJson: nodeRuns.injectedMemoriesJson,
+        injectedMemoriesJson: facts.injectedMemoriesJson,
       })
       .from(nodeRuns)
       .where(
@@ -26,7 +28,7 @@ export class FrozenMemoryInjectionQueries {
             ? isNull(nodeRuns.shardKey)
             : eq(nodeRuns.shardKey, input.shardKey),
           eq(nodeRuns.reviewIteration, input.reviewIteration),
-          isNull(nodeRuns.parentNodeRunId),
+          isNull(nodeRuns.historicalParentId),
         ),
       )
   }
@@ -36,6 +38,7 @@ export class FrozenMemoryDistillQueries {
   async listAgentRunSources(ids: readonly string[]) {
     if (ids.length === 0) return []
     const { nodeRuns } = tablesOf(this.db)
+    const facts = nodeRunFixtureColumns(this.db)
     return await this.db
       .select({
         id: nodeRuns.id,
@@ -46,10 +49,10 @@ export class FrozenMemoryDistillQueries {
         finishedAt: nodeRuns.finishedAt,
         errorMessage: nodeRuns.errorMessage,
         failureCode: nodeRuns.failureCode,
-        promptText: nodeRuns.promptText,
-        promptPath: nodeRuns.promptPath,
-        opencodeSessionId: nodeRuns.opencodeSessionId,
-        injectedMemoriesJson: nodeRuns.injectedMemoriesJson,
+        promptText: facts.promptText,
+        promptPath: facts.promptPath,
+        opencodeSessionId: facts.opencodeSessionId,
+        injectedMemoriesJson: facts.injectedMemoriesJson,
       })
       .from(nodeRuns)
       .where(inArray(nodeRuns.id, [...ids]))
@@ -57,12 +60,13 @@ export class FrozenMemoryDistillQueries {
   async listTaskNodeStatuses(taskIds: readonly string[]) {
     if (taskIds.length === 0) return []
     const { nodeRuns } = tablesOf(this.db)
+    const facts = nodeRunFixtureColumns(this.db)
     const rows = await this.db
       .select({
         taskId: nodeRuns.taskId,
         nodeId: nodeRuns.nodeId,
         status: nodeRuns.status,
-        retryIndex: nodeRuns.retryIndex,
+        retryIndex: facts.retryIndex,
         finishedAt: nodeRuns.finishedAt,
         id: nodeRuns.id,
       })
@@ -87,7 +91,7 @@ export class FrozenMemoryDistillQueries {
         nodeId: row.nodeId,
         nodeRunId: row.id,
         status: row.status,
-        retryIndex: row.retryIndex,
+        retryIndex: row.retryIndex ?? 0,
         finishedAt: row.finishedAt,
       })
     }
@@ -96,13 +100,14 @@ export class FrozenMemoryDistillQueries {
   async listNodeRuns(ids: readonly string[]) {
     if (ids.length === 0) return []
     const { nodeRuns } = tablesOf(this.db)
+    const facts = nodeRunFixtureColumns(this.db)
     return await this.db
       .select({
         id: nodeRuns.id,
-        promptText: nodeRuns.promptText,
-        promptPath: nodeRuns.promptPath,
+        promptText: facts.promptText,
+        promptPath: facts.promptPath,
         startedAt: nodeRuns.startedAt,
-        opencodeSessionId: nodeRuns.opencodeSessionId,
+        opencodeSessionId: facts.opencodeSessionId,
       })
       .from(nodeRuns)
       .where(inArray(nodeRuns.id, [...ids]))

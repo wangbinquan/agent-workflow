@@ -7,10 +7,9 @@ import { tablesOf } from '@/platform/persistence/sessionTables'
 import { first, queryRows } from '@/platform/persistence/queryHelpers'
 import { registerProviderHttpApplicationLifetime } from './helpers/providerHttpApplication'
 import { describe, expect, test } from 'bun:test'
-import { Hono } from 'hono'
-import type { MiddlewareHandler } from 'hono'
+import { Hono, type MiddlewareHandler } from 'hono'
+
 import { eq } from 'drizzle-orm'
-import { resolve } from 'node:path'
 
 import { buildActor } from '../src/auth/actor'
 import { createPat } from './helpers/auth/patStore'
@@ -25,7 +24,6 @@ import { errorHandler } from '../src/util/errors'
 
 const openTestApplication = registerProviderHttpApplicationLifetime()
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const box = createSecretBoxFromKey(Buffer.alloc(32, 21))
 const DAEMON_TOKEN = 'd'.repeat(64)
 const GLOBAL_TOKEN = 'aw-fixture-global-credential-9001' // gitleaks:allow
@@ -40,7 +38,7 @@ interface CredentialSummary {
 }
 
 async function fixture() {
-  const db = createInMemoryDb(MIGRATIONS)
+  const db = createInMemoryDb()
   const probedTokens: string[] = []
   const [admin, alice, bob] = await Promise.all([
     createUser(db, {

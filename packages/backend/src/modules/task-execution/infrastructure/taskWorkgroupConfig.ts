@@ -1,40 +1,60 @@
-import { eq, sql, type SQL } from 'drizzle-orm'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { tablesOf } from '@/platform/persistence/sessionTables'
-import { engineOf } from '@/platform/persistence/databaseTransaction'
+import { eq, sql, type SQL } from 'drizzle-orm'
 import {
   decodeTaskWorkgroupConfig,
   decodeTaskWorkgroupLaunchConfig,
   type TaskWorkgroupConfig,
   type TaskWorkgroupLaunchConfig,
 } from '../domain/taskWorkgroupConfig'
-export { taskWorkgroupConfigFromRow } from '@agent-workflow/shared'
-
-/**
- * SQL NULL bypasses mapWith and projects null. Whole-row decoding instead returns the empty
- * view (null launch fields/config/raw/revision); consumers intentionally accept both at this
- * adapter boundary so missing-row and historical NULL behavior stay unchanged in II-a.
- */
-export function taskWorkgroupConfigSelection(db: object): SQL<TaskWorkgroupConfig | null> {
-  const { tasks } = tablesOf(db)
-  return sql<string | null>`${tasks.workgroupConfigJson}`.mapWith(decodeTaskWorkgroupConfig)
+import { taskReadColumns } from './taskRepositorySql'
+export function taskWorkgroupConfigFromRow(row: {
+  readonly workgroupConfigJson?: string | null
+  readonly workgroupLaunchConfigJson: string | null
+}): TaskWorkgroupConfig {
+  return {
+    launch: decodeTaskWorkgroupLaunchConfig(row.workgroupLaunchConfigJson),
+    runtime: decodeTaskWorkgroupConfig(row.workgroupConfigJson).runtime,
+  }
 }
 
-/** The runtime revision is still an exact text comparison in epoch 1. */
+/** Read immutable launch fields and editable runtime configuration independently. */
+export function taskWorkgroupConfigSelection(db: object): SQL<TaskWorkgroupConfig | null> {
+  const columns = taskReadColumns(db)
+  // Frame the two raw documents by character count; preserve invalid runtime JSON
+  // for the existing decoder, and keep an absent config SQL NULL on both engines.
+  const launch = columns.workgroupLaunchConfigJson
+  const runtime = columns.workgroupConfigJson
+  return sql<string | null>`case when ${launch} is null and ${runtime} is null then null
+    else cast(length(coalesce(${launch}, '')) as text) || ':' || coalesce(${launch}, '') || coalesce(${runtime}, '') end`.mapWith(
+    (raw: string): TaskWorkgroupConfig => {
+      const separator = raw.indexOf(':')
+      const length = Number(raw.slice(0, separator))
+      const characters = [...raw.slice(separator + 1)]
+      return taskWorkgroupConfigFromRow({
+        workgroupLaunchConfigJson: characters.slice(0, length).join('') || null,
+        workgroupConfigJson: characters.slice(length).join('') || null,
+      })
+    },
+  )
+}
+
+/** Preserve the runtime document revision used by the public CAS contract. */
 export function taskWorkgroupRuntimeRevisionMatches(db: object, expectedRevision: string): SQL {
-  const { tasks } = tablesOf(db)
-  return eq(tasks.workgroupConfigJson, expectedRevision)
+  return eq(taskReadColumns(db).workgroupConfigJson, expectedRevision)
 }
 
 export function taskWorkgroupLaunchSelection(db: object): SQL<TaskWorkgroupLaunchConfig | null> {
   const { tasks } = tablesOf(db)
-  return sql<string | null>`${tasks.workgroupConfigJson}`.mapWith(decodeTaskWorkgroupLaunchConfig)
+  const { taskDefinitions } = tablesOf(db)
+  return sql<
+    string | null
+  >`(select ${taskDefinitions.workgroupConfigJson} from ${taskDefinitions} where ${taskDefinitions.taskId} = ${tasks.id})`.mapWith(
+    decodeTaskWorkgroupLaunchConfig,
+  )
 }
 
 /** Keep the catalog's native JSON expression and its empty-name behavior exactly. */
-export function taskWorkgroupNameExpression(db: PersistenceDb, alias: string): SQL {
-  return sql`NULLIF(${engineOf(db).jsonMemberText(
-    sql.raw(`${alias}.workgroup_config_json`),
-    'workgroupName',
-  )}, '')`
+export function taskWorkgroupNameExpression(_db: PersistenceDb, alias: string): SQL {
+  return sql.raw(`${alias}.workgroup_name`)
 }

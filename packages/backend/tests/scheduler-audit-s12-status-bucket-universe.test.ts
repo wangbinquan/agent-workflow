@@ -1,3 +1,4 @@
+import type { projectNodeRunReadFacts } from '@/modules/task-execution/infrastructure/nodeRunSnapshot'
 // RFC-095 SEMANTICS LOCK — deriveFrontier 状态分桶全集穷举（audit S-12 / S-22，WP-2 落地）
 //
 // 来历：design/scheduler-audit-2026-06-10.md S-12 曾以 CURRENT-BEHAVIOR LOCK 锁定
@@ -42,14 +43,18 @@
 // "全 blocked ⇒ stalled 诊断点名各节点"这条 deriveFrontier → decideScopeOutcome 接缝。
 // 纯函数直测；row()/def() 帮手复刻自 derive-frontier.test.ts（file-local，不改既有文件）。
 
-import { type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { describe, expect, test } from 'bun:test'
-import { NODE_RUN_STATUS, type NodeRunStatus } from '@agent-workflow/shared'
-import type { NodeKind, WorkflowDefinition } from '@agent-workflow/shared'
-import { decideScopeOutcome, isDispatchable } from '../src/services/dispatchFrontier'
-import { deriveFrontier } from '../src/modules/task-execution/composition/dagFrontier'
+import {
+  NODE_RUN_STATUS,
+  type NodeRunStatus,
+  type NodeKind,
+  type WorkflowDefinition,
+} from '@agent-workflow/shared'
 
-type Row = PersistenceTables['nodeRuns']['$inferSelect']
+import { decideScopeOutcome, isDispatchable } from '../src/services/dispatchFrontier'
+import { deriveFrontier } from './helpers/frontierSelection'
+
+type Row = ReturnType<typeof projectNodeRunReadFacts>
 type WorkflowNode = WorkflowDefinition['nodes'][number]
 const NONE: ReadonlySet<string> = new Set()
 

@@ -1,3 +1,4 @@
+import { capturedSkillTreeColumns } from '../databaseSkillTrees'
 import { assertAgentDependencyGraph as validateDependencyGraph } from '../../domain/agentDependencies'
 import { createAgentDependencyReadPort } from '../agentDependencyRead'
 import { createAgentReferenceWriteParticipant } from '../agentReferenceWrite'
@@ -58,38 +59,41 @@ import {
 import { ConflictError, NotFoundError, ValidationError, staleConflictError } from '@/util/errors'
 import { monotonicNow } from '@/util/time'
 import type { McpTransactionLifecycle } from '../mcpRepository'
-import { agentFromPersistenceRow } from '../agentPersistence'
-import { assertBranchPortsDeclared } from '../agentBranchPorts'
+import { loadAgentPersistenceRow } from '../agentPersistence'
+import { assertBranchPortsDeclared, assertRuntimeReference } from '../agentBranchPorts'
 import { insertMcpRowInTx, mcpFromPersistenceRow, updateMcpRowInTx } from '../mcpPersistence'
 import {
   insertPluginRowInTx,
   pluginFromPersistenceRow,
   publishPluginRowInTx,
 } from '../pluginPersistence'
-import type { PostgresqlResourceCatalogTransaction } from '../postgresql/repositorySupport'
-import { isPostgresqlUniqueViolation } from '../postgresql/repositorySupport'
+import {
+  type PostgresqlResourceCatalogTransaction,
+  isPostgresqlUniqueViolation,
+} from '../postgresql/repositorySupport'
+
 import {
   createWorkflowPersistenceValues,
   workflowDraftSnapshotOf,
   workflowFromPersistenceRow,
 } from '../workflowPersistence'
 import { workgroupFromRows } from '../workgroupRepository'
-import type {
-  AgentPackageMutation,
-  CapabilityTemplatePackageMutation,
-  McpPackageMutation,
-  PluginPackageMutation,
-  ResourcePackageMutationReceipt,
-  SkillPackageMutation,
-  WorkflowPackageMutation,
-  WorkgroupPackageMutation,
+import {
+  type AgentPackageMutation,
+  type CapabilityTemplatePackageMutation,
+  type McpPackageMutation,
+  type PluginPackageMutation,
+  type ResourcePackageMutationReceipt,
+  type SkillPackageMutation,
+  type WorkflowPackageMutation,
+  type WorkgroupPackageMutation,
+  PLUGIN_DISABLED_ERROR_CODE,
 } from '../../public/types'
-import { PLUGIN_DISABLED_ERROR_CODE } from '../../public/types'
+
 import type {
   PostgresqlResourcePackageMutationRequestContext,
   PostgresqlResourcePackageTransactionReader,
 } from './postgresqlResourcePackageMutationParticipants'
-import { assertRuntimeReference } from '../agentBranchPorts'
 
 export interface PostgresqlResourcePackagePendingName {
   readonly type: BundleResourceType
@@ -110,7 +114,10 @@ interface MutationArmInput<TMutation> {
 }
 
 interface SkillMutationArmInput extends MutationArmInput<SkillPackageMutation> {
-  readonly publication: PostgresqlResourcePackageSkillPublication
+  readonly contentKind?: 'local-file' | 'database-bytes'
+  readonly publication: PostgresqlResourcePackageSkillPublication & {
+    readonly contentKind?: 'local-file' | 'database-bytes'
+  }
 }
 
 interface PluginMutationArmInput extends MutationArmInput<PluginPackageMutation> {
@@ -546,7 +553,7 @@ export async function commitPostgresqlAgentPackageMutation(
     input.transaction.select().from(agents).where(eq(agents.id, input.resourceId)),
   )
   if (row === undefined) throw new NotFoundError('agent-not-found', 'agent not found')
-  const current = agentFromPersistenceRow(row)
+  const current = await loadAgentPersistenceRow(input.transaction, row)
   const resolved = await resolvedAgentInput({
     reader: input.reader,
     context: input.context,
@@ -617,7 +624,12 @@ export async function commitPostgresqlSkillPackageMutation(
         id: input.resourceId,
         name: parsed.name,
         description: parsed.description,
-        managedPath: input.publication.managedPath,
+        ...(await capturedSkillTreeColumns(
+          input.contentKind ?? input.publication.contentKind ?? 'local-file',
+          input.resourceId,
+          'live',
+          input.publication.managedPath,
+        )),
         ownerUserId: input.context.actor.user.id,
         visibility: 'private',
         aclRevision: 0,
@@ -633,7 +645,12 @@ export async function commitPostgresqlSkillPackageMutation(
         id: input.id(),
         skillId: input.resourceId,
         versionIndex: 1,
-        filesPath: input.publication.filesPath,
+        ...(await capturedSkillTreeColumns(
+          input.contentKind ?? input.publication.contentKind ?? 'local-file',
+          input.resourceId,
+          'version:1',
+          input.publication.filesPath,
+        )),
         source: 'initial',
         summary: 'Initial version',
         fusionId: null,
@@ -673,6 +690,12 @@ export async function commitPostgresqlSkillPackageMutation(
       .set({
         description: parsed.description,
         contentVersion: nextVersion,
+        ...(await capturedSkillTreeColumns(
+          input.contentKind ?? input.publication.contentKind ?? 'local-file',
+          input.resourceId,
+          'live',
+          input.publication.managedPath,
+        )),
         metaRevision:
           parsed.description === row.description ? row.metaRevision : row.metaRevision + 1,
         versionState: 'snapshot-authoritative',
@@ -697,7 +720,12 @@ export async function commitPostgresqlSkillPackageMutation(
     id: input.id(),
     skillId: input.resourceId,
     versionIndex: nextVersion,
-    filesPath: input.publication.filesPath,
+    ...(await capturedSkillTreeColumns(
+      input.contentKind ?? input.publication.contentKind ?? 'local-file',
+      input.resourceId,
+      `version:${nextVersion}`,
+      input.publication.filesPath,
+    )),
     source: 'import',
     summary: null,
     fusionId: null,

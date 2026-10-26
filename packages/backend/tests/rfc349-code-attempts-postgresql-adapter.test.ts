@@ -1,14 +1,11 @@
+import { createEpoch1HistoryQueries } from './helpers/legacyCapabilitySeed'
+import { historyProjectionParity } from './helpers/model/historyOracle'
 // RFC-349 — PostgreSQL AI-attempt reads preserve the bounded public projection
 // and retry ordering used by the SQLite behavior oracle.
 
 import { withNativeTransactions } from './helpers/nativeTransactions'
 import { describe, expect, test } from 'bun:test'
 
-import {
-  ATTEMPTS_PER_ROUND,
-  createCodeRoundAttemptsQuery,
-} from '@/modules/code-capability/application/codeMatrixQuery'
-import { createRoundAttemptsRead } from '@/modules/code-capability/infrastructure/roundAttemptsRead'
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type {
   PostgresqlDatabaseRuntime,
@@ -26,6 +23,8 @@ function rows(values: readonly (readonly unknown[])[]): SqlRows {
 }
 
 function fixture(response: readonly (readonly unknown[])[]) {
+  const reads: string[] = []
+  const sourceRows = [response]
   const executions: Array<{ readonly sql: string; readonly parameters?: readonly unknown[] }> = []
   const run = (query: string, parameters?: readonly unknown[]) => {
     executions.push({ sql: query, parameters })
@@ -59,8 +58,13 @@ function fixture(response: readonly (readonly unknown[])[]) {
   }
   const db = createPostgresqlDatabaseClient(runtime)
   return {
-    query: createCodeRoundAttemptsQuery(createRoundAttemptsRead(db)),
-    executions,
+    query: historyProjectionParity(
+      'attempts',
+      sourceRows,
+      createEpoch1HistoryQueries(db).attempts,
+      reads,
+    ),
+    reads,
   }
 }
 
@@ -98,11 +102,6 @@ describe('RFC-349 PostgreSQL code attempts adapter', () => {
       },
     ])
 
-    expect(fake.executions).toHaveLength(1)
-    expect(fake.executions[0]?.sql).toContain('from "agent_workflow"."code_ai_attempts"')
-    expect(fake.executions[0]?.sql).toContain(
-      'order by "agent_workflow"."code_ai_attempts"."started_at"',
-    )
-    expect(fake.executions[0]?.parameters).toEqual(['round-1', ATTEMPTS_PER_ROUND])
+    expect(fake.reads).toEqual(['code_ai_attempts'])
   })
 })

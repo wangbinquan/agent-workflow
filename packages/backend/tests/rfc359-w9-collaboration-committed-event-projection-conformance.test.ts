@@ -1,3 +1,5 @@
+import { legacyContentRef } from '@/platform/content/contentRef'
+import { contentRowColumns } from '@/platform/content/infrastructure/contentStore'
 // RFC-359 W9 —— `CollaborationCommittedEventProjection` 的双引擎对拍。
 //
 // **为什么存在**：这一对适配器是「同一件事两份实现」的教科书形态——
@@ -178,7 +180,7 @@ async function seedDocVersion(
     sourcePortName: 'out',
     versionIndex: input.versionIndex,
     reviewIteration: 0,
-    bodyPath,
+    ...contentRowColumns(legacyContentRef('review-body-path', 'local-file', bodyPath)),
     commentsJson: '[]',
     decision: input.decision ?? 'pending',
     itemIndex: input.itemIndex,

@@ -10,12 +10,12 @@
 // all statuses → the terminal task gets captured → "terminal not captured" reds.
 
 import { taskFixture, workflowFixture } from './helpers/model'
-import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { afterEach, describe, expect, test } from 'bun:test'
 import type { Database } from 'bun:sqlite'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { ulid } from 'ulid'
 import { openDb, type DbClient } from '../src/db/client'
 import { DEFAULT_MAX_WORKTREE_BYTES } from '../src/services/worktreeBackup'
@@ -24,8 +24,6 @@ import {
   reconstructWorktrees,
 } from '../src/platform/persistence/portableApplicationAssets'
 import { removeTempDirSync } from './fixtures/tempDir'
-
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 const tmps: string[] = []
 function tmp(): string {
@@ -118,7 +116,7 @@ describe('RFC-213 G4a worktree capture + reconstruct', () => {
     writeFileSync(join(worktreePath, 'file.txt'), 'MODIFIED\n')
     writeFileSync(join(worktreePath, 'untracked.txt'), 'NEW\n')
 
-    const db = openDb({ path: join(appHome, 'db.sqlite'), migrationsFolder: MIGRATIONS })
+    const db = openDb({ path: join(appHome, 'db.sqlite') })
     const wfId = ulid()
     await workflowFixture(db, {
       id: wfId,
@@ -147,7 +145,7 @@ describe('RFC-213 G4a worktree capture + reconstruct', () => {
     const appHome = tmp()
     const branch = `agent-workflow/${ulid()}`
     const { repoPath, worktreePath } = await setup(appHome, branch)
-    const db = openDb({ path: join(appHome, 'db.sqlite'), migrationsFolder: MIGRATIONS })
+    const db = openDb({ path: join(appHome, 'db.sqlite') })
     const wfId = ulid()
     await workflowFixture(db, {
       id: wfId,
@@ -168,7 +166,7 @@ describe('RFC-213 G4a worktree capture + reconstruct', () => {
     const branch = `agent-workflow/${ulid()}`
     const { repoPath, worktreePath } = await setup(appHome, branch)
     writeFileSync(join(worktreePath, 'file.txt'), 'CAPTURED\n')
-    const db = openDb({ path: join(appHome, 'db.sqlite'), migrationsFolder: MIGRATIONS })
+    const db = openDb({ path: join(appHome, 'db.sqlite') })
     const wfId = ulid()
     await workflowFixture(db, {
       id: wfId,
@@ -195,7 +193,7 @@ describe('RFC-213 G4a worktree capture + reconstruct', () => {
     const appHome = tmp()
     const branch = `agent-workflow/${ulid()}`
     const { repoPath, worktreePath } = await setup(appHome, branch)
-    const db = openDb({ path: join(appHome, 'db.sqlite'), migrationsFolder: MIGRATIONS })
+    const db = openDb({ path: join(appHome, 'db.sqlite') })
     const wfId = ulid()
     await workflowFixture(db, {
       id: wfId,
@@ -220,7 +218,7 @@ describe('RFC-213 G4a worktree capture + reconstruct', () => {
     const branch = `agent-workflow/${ulid()}`
     const { repoPath, worktreePath } = await setup(appHome, branch)
     writeFileSync(join(worktreePath, 'untracked.txt'), 'x\n')
-    const db = openDb({ path: join(appHome, 'db.sqlite'), migrationsFolder: MIGRATIONS })
+    const db = openDb({ path: join(appHome, 'db.sqlite') })
     const wfId = ulid()
     await workflowFixture(db, {
       id: wfId,
@@ -233,7 +231,7 @@ describe('RFC-213 G4a worktree capture + reconstruct', () => {
     const { extractTarGz } = await import('../src/util/archive')
     const { readManifest } = await import('../src/services/backupManifest')
     const res = await createBackup({
-      contract: buildLogicalSchemaContract(),
+      contract: logicalSchemaContract,
       db,
       appHome,
       includeWorktrees: true,
@@ -259,7 +257,7 @@ describe('impl-gate P0-2 — reconstruct trusts the DB row path, not the archive
     const branch = `agent-workflow/${ulid()}`
     const { repoPath, worktreePath } = await setup(appHome, branch)
     writeFileSync(join(worktreePath, 'file.txt'), 'REAL\n')
-    const db = openDb({ path: join(appHome, 'db.sqlite'), migrationsFolder: MIGRATIONS })
+    const db = openDb({ path: join(appHome, 'db.sqlite') })
     const wfId = ulid()
     await workflowFixture(db, {
       id: wfId,
@@ -312,7 +310,7 @@ describe('impl-gate P2-7 — one un-tarrable worktree skips, not aborts', () => 
   // its meta json dropped, while the other task still captures.
   test('un-tarrable worktree → that task lands in skipped (no meta orphan), backup continues', async () => {
     const appHome = tmp()
-    const db = openDb({ path: join(appHome, 'db.sqlite'), migrationsFolder: MIGRATIONS })
+    const db = openDb({ path: join(appHome, 'db.sqlite') })
     const wfId = ulid()
     await workflowFixture(db, {
       id: wfId,

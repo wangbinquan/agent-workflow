@@ -1,10 +1,27 @@
 // RFC-395 II-a A7：执行域持有 clarify directive 存储；外域沿 public 端口消费。
 import { tablesOf } from '@/platform/persistence/sessionTables'
-import { and, eq, ne } from 'drizzle-orm'
+import { and, eq, inArray, ne } from 'drizzle-orm'
 import type { ClarifyDirective } from '@agent-workflow/shared'
 import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
-import type { TaskClarifyDirectivePersistence } from '../application/ports/taskClarifyDirectivePersistence'
+import type {
+  TaskClarifyDirectiveArchiveRow,
+  TaskClarifyDirectivePersistence,
+} from '../application/ports/taskClarifyDirectivePersistence'
+
+/** Preserve every directive row and its storage order in the archive caller's transaction. */
+async function readTaskClarifyDirectiveArchiveRows(
+  tx: PersistenceTx,
+  taskIds: readonly string[],
+): Promise<TaskClarifyDirectiveArchiveRow[]> {
+  if (taskIds.length === 0) return []
+  const { taskNodeClarifyDirectives } = tablesOf(tx)
+  return tx
+    .select()
+    .from(taskNodeClarifyDirectives)
+    .where(inArray(taskNodeClarifyDirectives.taskId, [...taskIds]))
+}
+
 /**
  * Resolve the override for one (task, node). Returns the stored directive, or
  * `undefined` when no row exists (⇒ caller treats as 'continue').
@@ -173,6 +190,9 @@ export function createTaskClarifyDirectivePersistence(
   db: PersistenceDb,
 ): TaskClarifyDirectivePersistence {
   return {
+    archiveRows(taskIds) {
+      return readTaskClarifyDirectiveArchiveRows(db, taskIds)
+    },
     get(taskId, nodeId, shardKey) {
       return getNodeClarifyDirective(db, taskId, nodeId, shardKey)
     },

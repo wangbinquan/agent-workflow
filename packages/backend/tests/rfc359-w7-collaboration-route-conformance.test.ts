@@ -1,3 +1,5 @@
+import { legacyContentRef } from '@/platform/content/contentRef'
+import { contentRowColumns } from '@/platform/content/infrastructure/contentStore'
 import { withO2Closure } from './helpers/o2Closure'
 // RFC-359 W7 —— `CollaborationRouteOperations` 持久化面的双引擎对拍。
 //
@@ -191,7 +193,9 @@ async function seedSingleDocReview(db: PersistenceDb): Promise<ReviewFixture> {
       sourcePortName: 'out',
       versionIndex: 1,
       reviewIteration: 0,
-      bodyPath: `reviews/${taskId}/v1.md`,
+      ...contentRowColumns(
+        legacyContentRef('review-body-path', 'local-file', `reviews/${taskId}/v1.md`),
+      ),
       commentsJson: '[]',
       decision: 'iterated',
       createdAt: 1_000,
@@ -206,7 +210,9 @@ async function seedSingleDocReview(db: PersistenceDb): Promise<ReviewFixture> {
       sourcePortName: 'out',
       versionIndex: 2,
       reviewIteration: 1,
-      bodyPath: `reviews/${taskId}/v2.md`,
+      ...contentRowColumns(
+        legacyContentRef('review-body-path', 'local-file', `reviews/${taskId}/v2.md`),
+      ),
       commentsJson: '[]',
       decision: 'pending',
       createdAt: 2_000,
@@ -242,7 +248,7 @@ async function seedMultiDocReview(db: PersistenceDb): Promise<ReviewFixture> {
       sourcePortName: 'out',
       versionIndex: 1,
       reviewIteration: 0,
-      bodyPath,
+      ...contentRowColumns(legacyContentRef('review-body-path', 'local-file', bodyPath)),
       commentsJson: '[]',
       decision: 'pending' as const,
       itemIndex: index,

@@ -1,9 +1,9 @@
+import { supportsProviderMove } from '@/platform/persistence/migrationSupport'
 // RFC-349 — daemon-local request/writer admission used by the one-click
 // migration composition root. It does not know either database client. The
 // bootstrap supplies provider-composition and background-writer callbacks,
 // while this state machine owns the no-new-work + bounded-drain invariant.
 
-import { databaseProviderTraits } from '@/platform/persistence/providerTraits'
 import type { DatabaseProvider } from '@/platform/persistence/databaseProviders'
 import type { DatabaseMigrationAdmissionPort } from '../application/databaseMigrationRunner'
 
@@ -231,7 +231,7 @@ export function createDatabaseMigrationDaemonAdmission(
     async reopenSqlite(input) {
       assertLive()
       // Already open on the migration source ⇒ nothing to reopen.
-      if (phase === 'open' && databaseProviderTraits(provider).migrationRole === 'source') return
+      if (phase === 'open' && supportsProviderMove(provider, 'postgresql')) return
       assertOperation(input.operationId)
       if (phase !== 'frozen' && phase !== 'switching' && phase !== 'recovering') {
         throw new DatabaseMigrationDaemonAdmissionError(
@@ -240,9 +240,9 @@ export function createDatabaseMigrationDaemonAdmission(
         )
       }
       phase = 'switching'
-      // RFC-359 AC-10：问能力不问品牌。同方法 :237 已经这么问了，这两条是剩下的。
+      // The migration support matrix owns the same-epoch source/target roles.
       if (
-        databaseProviderTraits(provider).migrationRole !== 'source' ||
+        !supportsProviderMove(provider, 'postgresql') ||
         generationId !== input.sourceGenerationId
       ) {
         await options.switchProviderComposition({
@@ -285,10 +285,7 @@ export function createDatabaseMigrationDaemonAdmission(
     async openPostgresqlAdmission(input) {
       assertLive()
       assertOperation(input.operationId)
-      if (
-        databaseProviderTraits(provider).migrationRole !== 'target' ||
-        generationId !== input.generationId
-      ) {
+      if (!supportsProviderMove('sqlite', provider) || generationId !== input.generationId) {
         throw new DatabaseMigrationDaemonAdmissionError(
           'database-admission-state',
           'database admission PostgreSQL generation does not match the activated composition',

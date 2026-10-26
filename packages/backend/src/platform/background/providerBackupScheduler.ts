@@ -11,6 +11,8 @@
 //   can't be SELECTed by the NEW binary).
 
 import type { LogicalSchemaContract } from '@/platform/persistence/schemaContract'
+import { Database } from 'bun:sqlite'
+import { schemaHistoryRuntime } from '@/platform/persistence/schema/history/runtime'
 import { existsSync, readdirSync, statSync, unlinkSync } from 'node:fs'
 import { join } from 'node:path'
 import { createBackup } from '@/platform/persistence/sqlite/systemProviderBackup'
@@ -21,10 +23,6 @@ import {
 } from '@/platform/persistence/sqlite/systemMaintenanceOperations'
 import { createLogger } from '@/util/log'
 import { Paths } from '@/util/paths'
-import {
-  readDbMigrationIdentity,
-  readMigrationAxisFromJournal,
-} from '@/platform/persistence/sqlite/systemBackupManifest'
 import { HOUR_MS, MAINTENANCE_PHASE } from '@/services/daemonCadence'
 import { startMaintenanceTicker } from '@/services/maintenanceTicker'
 import { rawCopyDb } from '@/services/rawDbSnapshot'
@@ -312,14 +310,15 @@ export const runWalCheckpointTick = runSqliteWalCheckpointTick
 export interface PreMigrationBackupOptions {
   appHome: string
   dbPath: string
-  migrationsFolder: string
+  migrationsFolder?: string
   enabled: boolean
   now?: number
+  /** null means the integrity gate could not read a version; retain raw bytes. */
+  recordedVersion?: number | null
 }
 
 /**
- * If there are pending migrations (the DB's newest applied `created_at` is older
- * than the binary's newest `_journal.json` `when`), raw-copy the DB first so a
+ * If the recorded epoch-2 history is behind this binary, raw-copy the DB first so a
  * botched upgrade is recoverable. Returns the backup path, or null when skipped
  * (disabled / fresh install / already up to date).
  */
@@ -328,14 +327,28 @@ export async function maybePreMigrationBackup(
 ): Promise<string | null> {
   if (!opts.enabled) return null
   if (!existsSync(opts.dbPath)) return null // fresh install — nothing to lose
-  const dbMax = readDbMigrationIdentity(opts.dbPath)?.lastCreatedAt ?? -1
-  const binaryMax = readMigrationAxisFromJournal(opts.migrationsFolder).maxWhen
-  if (dbMax >= binaryMax) return null // up to date — no pending migration
+  let dbMax = opts.recordedVersion
+  if (dbMax === undefined) {
+    let db: Database | undefined
+    try {
+      db = new Database(opts.dbPath, { readonly: true })
+      const row = db.query('SELECT max(version) AS version FROM aw_meta_schema_history').get() as {
+        version: number | null
+      }
+      dbMax = row.version
+    } catch {
+      dbMax = null
+    } finally {
+      db?.close()
+    }
+  }
+  const binaryMax = schemaHistoryRuntime().head().contract.version
+  if (dbMax !== null && dbMax >= binaryMax) return null // up to date — no pending migration
   const r = await rawCopyDb({
     kind: 'pre-migration',
     appHome: opts.appHome,
     dbPath: opts.dbPath,
-    filenameStem: `pre-migration-${dbMax}-${binaryMax}`,
+    filenameStem: `pre-migration-${dbMax ?? 'unknown'}-${binaryMax}`,
     now: opts.now,
   })
   log.info('pre-migration backup written', { path: r.path, from: dbMax, to: binaryMax })

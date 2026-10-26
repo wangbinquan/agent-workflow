@@ -5,22 +5,27 @@
 // If this test fails, the distill job detail page can no longer persist
 // per-attempt artefacts; admin loses the ability to audit a distill run.
 
+import {
+  frozenTablesOf,
+  type FrozenPersistenceTables,
+  createFrozenEpoch1Db,
+  type FrozenDbClient,
+  FROZEN_MIGRATIONS,
+} from './migration-freeze'
 import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { queryWrite, first, queryRows } from '@/platform/persistence/queryHelpers'
 import { describe, expect, test, beforeEach } from 'bun:test'
 import { resolve } from 'node:path'
 import { eq, sql } from 'drizzle-orm'
 import { ulid } from 'ulid'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+const MIGRATIONS = resolve(FROZEN_MIGRATIONS)
 
 function seedDistillJob(
-  db: DbClient,
-  overrides: Partial<PersistenceTables['memoryDistillJobs']['$inferInsert']> = {},
+  db: FrozenDbClient,
+  overrides: Partial<FrozenPersistenceTables['memoryDistillJobs']['$inferInsert']> = {},
 ) {
   const jobId = ulid()
-  const { memoryDistillJobs } = tablesOf(db)
+  const { memoryDistillJobs } = frozenTablesOf(db)
   insertOne(db, memoryDistillJobs, {
     id: jobId,
     debounceKey: 'task-x:clarify',
@@ -38,14 +43,14 @@ function seedDistillJob(
 }
 
 describe('migration 0024 (RFC-043 distill capture columns + events table)', () => {
-  let db: DbClient
+  let db: FrozenDbClient
   beforeEach(() => {
-    db = createInMemoryDb(MIGRATIONS)
+    db = createFrozenEpoch1Db(MIGRATIONS)
   })
 
   test('memory_distill_jobs accepts and reads back the 5 new RFC-043 columns', () => {
     const jobId = seedDistillJob(db)
-    const { memoryDistillJobs } = tablesOf(db)
+    const { memoryDistillJobs } = frozenTablesOf(db)
     queryWrite(
       db
         .update(memoryDistillJobs)
@@ -79,7 +84,7 @@ describe('migration 0024 (RFC-043 distill capture columns + events table)', () =
 
   test('memory_distill_events stores rows and CASCADE-deletes with the parent job', () => {
     const jobId = seedDistillJob(db)
-    const { memoryDistillEvents, memoryDistillJobs } = tablesOf(db)
+    const { memoryDistillEvents, memoryDistillJobs } = frozenTablesOf(db)
     insertOne(db, memoryDistillEvents, {
       distillJobId: jobId,
       attemptIndex: 0,

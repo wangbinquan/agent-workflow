@@ -2,7 +2,7 @@
 // backfilled from NAMES to IDS, and skills → typed AgentSkillRef).
 //
 // Two concerns:
-//   1. FRESH install: createInMemoryDb applies 0000..0111 against an empty
+//   1. FRESH install: createFrozenEpoch1Db applies 0000..0111 against an empty
 //      agents table — the backfill is a no-op and the daemon boots clean.
 //   2. DEV upgrade: replay 0000..0110 (agents still hold name arrays), seed
 //      legacy rows referencing mcps / plugins / agents / skills by name, then
@@ -15,24 +15,30 @@
 //
 // If this reds, RFC-223 PR-1's id-canonicalization of agents.* is broken.
 
+import {
+  migrateFrozenSqlite as migrate,
+  createFrozenEpoch1Db,
+  FROZEN_MIGRATIONS,
+} from './migration-freeze'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
 import { Database } from 'bun:sqlite'
 import { drizzle } from 'drizzle-orm/bun-sqlite'
-import { migrate } from 'drizzle-orm/bun-sqlite/migrator'
 import { createHash } from 'node:crypto'
 import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
-import { createInMemoryDb } from '../src/db/client'
+import { LEGACY_MIGRATION_HASHES } from '@/platform/persistence/migration/epoch1/journalAliases'
+import { loadFrozenEpoch1History } from '@/platform/persistence/migration/epoch1/bundle'
+import { frozenEpoch1Contract } from '@/platform/persistence/migration/epoch1/contract'
+import { collectSourceFingerprint } from '@/platform/persistence/migration/sourceCatalog'
 import {
-  assertMigrationHistory,
-  DbSchemaDriftError,
-  LEGACY_MIGRATION_HASHES,
-  readExpectedMigrationChain,
-} from '../src/db/schemaAdmission'
+  identifySource,
+  loadSupportedSourceManifest,
+} from '@/platform/persistence/migration/supportedSources'
+import { SourceBlockedError } from '@/platform/persistence/migration/sourceTypes'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+const MIGRATIONS = resolve(FROZEN_MIGRATIONS)
 const TAG = '0111_rfc223_agent_refs_to_id'
 const CANONICAL_SQL = join(MIGRATIONS, `${TAG}.sql`)
 const SHIPPED_SQL = resolve(import.meta.dir, 'fixtures', 'shipped-migrations', `${TAG}.sql`)
@@ -41,7 +47,7 @@ const sha256 = (path: string) => createHash('sha256').update(readFileSync(path))
 
 describe('migration 0111 (RFC-223) — fresh install is a no-op', () => {
   test('empty agents table applies 0000..0111 without error', () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createFrozenEpoch1Db(MIGRATIONS)
     const rows = db.$client.query('SELECT COUNT(*) AS n FROM agents').all() as { n: number }[]
     expect(rows[0]!.n).toBe(0)
   })
@@ -69,7 +75,7 @@ describe('migration 0111 (RFC-223) — name→id backfill (frozen at 0110)', () 
     writeFileSync(journalPath, JSON.stringify(journal))
 
     sqlite = new Database(':memory:')
-    sqlite.exec('PRAGMA foreign_keys = OFF') // match openDb: 12-step migrations
+    sqlite.exec('PRAGMA foreign_keys = OFF') // match openFrozenEpoch1Db: 12-step migrations
     migrate(drizzle(sqlite), { migrationsFolder: tmp })
     raw = sqlite
   })
@@ -253,26 +259,6 @@ describe('migration 0111 (RFC-223) — databases that ran the shipped bytes stil
     }
   }
 
-  /** A receipt table holding one row per migration, in chain order. */
-  function receiptsFor(
-    chain: readonly { hash: string; folderMillis: number; tag: string }[],
-    hash0111: string,
-  ) {
-    const raw = new Database(':memory:')
-    raw.exec(`
-      CREATE TABLE __drizzle_migrations (
-        id integer PRIMARY KEY AUTOINCREMENT NOT NULL,
-        hash text NOT NULL,
-        created_at numeric
-      );
-    `)
-    const insert = raw.query('INSERT INTO __drizzle_migrations (hash, created_at) VALUES (?, ?)')
-    for (const migration of chain) {
-      insert.run(migration.tag === TAG ? hash0111 : migration.hash, migration.folderMillis)
-    }
-    return raw
-  }
-
   test('the alias is the sha256 of the shipped bytes, and the file has since moved on', () => {
     const shipped = sha256(SHIPPED_SQL)
     expect(LEGACY_MIGRATION_HASHES[TAG]).toEqual([shipped])
@@ -289,26 +275,27 @@ describe('migration 0111 (RFC-223) — databases that ran the shipped bytes stil
     expect(backfill(SHIPPED_SQL)).toEqual(backfill(CANONICAL_SQL))
   })
 
-  test('the full receipt chain still passes preflight with the shipped 0111 hash', () => {
-    const chain = readExpectedMigrationChain(MIGRATIONS)
+  test('the frozen source reader accepts only the canonical and shipped 0111 receipts', async () => {
+    const history = await loadFrozenEpoch1History()
+    const manifest = await loadSupportedSourceManifest()
+    const stamp = history.sqlite[history.sqliteTags.indexOf(TAG)]!.folderMillis
     const admit = (hash0111: string) => {
-      const raw = receiptsFor(chain, hash0111)
+      const db = createFrozenEpoch1Db(MIGRATIONS)
       try {
-        assertMigrationHistory(raw, {
-          dbPath: ':memory:',
-          expected: chain,
-          stage: 'migration-history-preflight',
-          allowPrefix: false,
+        db.$client
+          .query('UPDATE __drizzle_migrations SET hash = ? WHERE created_at = ?')
+          .run(hash0111, stamp)
+        const identified = identifySource({
+          fingerprint: collectSourceFingerprint(db.$client),
+          manifest,
         })
+        expect(identified.source.contract!.digest).toBe(frozenEpoch1Contract.digest)
       } finally {
-        raw.close()
+        db.$client.close()
       }
     }
-
     admit(sha256(SHIPPED_SQL))
     admit(sha256(CANONICAL_SQL))
-    // …and only those two: any other receipt for the tag is still drift, which is
-    // the shape that kept every existing daemon from starting.
-    expect(() => admit(`${'0'.repeat(63)}1`)).toThrow(DbSchemaDriftError)
-  })
+    expect(() => admit(`${'0'.repeat(63)}1`)).toThrow(SourceBlockedError)
+  }, 180_000)
 })

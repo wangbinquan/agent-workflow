@@ -1,3 +1,4 @@
+import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 // RFC-359 —— 数字员工「计划人审」闸门：同一个 executionRef，两个引擎给出同一个状态。
 //
 // 为什么这条测试存在：`inspectHumanReview` 此前是**同步**端口，只有 SQLite 那侧的 composition
@@ -119,7 +120,10 @@ describeEachProvider('RFC-359 —— 计划人审闸门状态两个引擎一致'
     const taskId = await seedExecution(db, { planPrompt: true })
     // 种成 `waiting` 那一格——正是 PG 侧此前报不出来的那一格。桩会答不出它。
     await seedReviewRun(db, taskId, 'awaiting_review')
-    const ports = composeDatabaseDigitalEmployeeExecutionPorts(db)
+    const ports = composeDatabaseDigitalEmployeeExecutionPorts(
+      db,
+      epoch2RuntimeTestPorts(db).historyRestrictions,
+    )
     const execution = composeDigitalEmployeeExecutionCore({
       // 只看端口在不在 / 通不通——别的依赖一个都不碰，所以全给 never。
       appHome: '/tmp/rfc359-human-review',

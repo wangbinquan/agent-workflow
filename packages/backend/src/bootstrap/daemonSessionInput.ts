@@ -19,7 +19,6 @@ import type { ResolvedDatabaseProviderRuntime } from '@/platform/persistence/dat
 import type { composeDatabaseMigrationModule } from '@/modules/system-operations/composition/databaseMigration'
 import type { DaemonProviderListenerRuntimeSession } from './daemonProviderRuntimeRouter'
 import type { DaemonProviderSessionLifecycleInput } from './daemonProviderSession'
-import type { RuntimeLegacyConfigurationPort } from '@/modules/runtime-management/composition/runtimeRegistry'
 import type { DaemonRuntimeQueries } from '@/modules/system-operations/public/queries'
 import type { RepositoryWorkspaceReadQueries } from '@/modules/source-control/public/queries'
 
@@ -34,7 +33,6 @@ export interface DaemonProviderSessionComposeInput extends DeploymentSelections 
   readonly configuration: ApplicationConfigurationQueries
   readonly applicationConfiguration: ApplicationConfigurationBinding
   readonly taskLaunchConfiguration: ReturnType<typeof composeTaskLaunchConfiguration>
-  readonly runtimeLegacyConfiguration: RuntimeLegacyConfigurationPort
   readonly workspaceUploads: WorkspaceUploadContentFactory
   readonly isolationWorkspaces: IsolationWorkspaceFactory
   readonly repositoryGitWorkspaces: RepositoryGitWorkspaceFactory

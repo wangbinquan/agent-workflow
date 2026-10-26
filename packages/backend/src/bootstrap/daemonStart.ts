@@ -1,3 +1,10 @@
+import { selectedDatabaseConfiguration } from '@/platform/persistence/databaseProviderRuntime'
+import {
+  classifyEpochInstallation,
+  epochInstallationGuidance,
+  readEpochBootFacts,
+} from '@/modules/system-operations/composition/epochBootAdmission'
+import { schemaHistoryRuntime } from '@/platform/persistence/schema/history/runtime'
 // `agent-workflow start` — daemon foreground entry.
 import type { DeploymentProfile } from './deploymentProfile'
 import type { DevelopmentOverlay } from './developmentReload'
@@ -10,36 +17,33 @@ import {
   selectRepositoryGitWorkspaceFactory,
 } from '@/modules/source-control/public/participants'
 import { composeApplicationConfigurationBinding } from '@/modules/system-operations/composition/applicationConfiguration'
-import { databaseProviderTraits } from '@/platform/persistence/providerTraits'
+
 import type { DatabaseProvider } from '@/platform/persistence/databaseProviders'
 import { createSecretBox } from '@/auth/secretBox'
 import { createExecutionExitRequests } from './executionActivation'
 import { ensureTokenFile } from '@/auth/token'
-import { DbSchemaDriftError, formatSchemaDifference } from '@/db/schemaAdmission'
+import { schemaDriftGuidance } from '@/modules/system-operations/composition/schemaDriftGuidance'
 import { IS_EMBEDDED } from '@/embed'
-import { resolveMigrationsFolder } from '@/util/migrationsFolder'
-import { maybePreMigrationBackup } from '@/services/backupScheduler'
 import {
+  applyLocalEpoch2PendingRestore,
   composeDaemonHostApplication,
   composeDaemonStartupLease,
   runDaemonStartupWithLease,
   type DaemonStartupLease,
-  prepareDatabasePreOpenRecovery,
 } from '@/modules/system-operations/composition'
 import { prepareDaemonDatabaseProviderForBoot } from '@/modules/system-operations/composition/daemonDatabase'
 import { configureLogger, createLogger, type LogLevel } from '@/util/log'
 import { Paths } from '@/util/paths'
-import { existsSync, readdirSync, statSync } from 'node:fs'
+import { readdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { resolveDatabaseProviderRuntime } from '@/platform/persistence/databaseProviderRuntime'
-import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { createDatabaseMigrationDaemonAdmission } from '@/modules/system-operations/composition'
 import {
   composeDaemonProviderBootstrap,
   type DaemonProviderBootstrap,
 } from './daemonProviderBootstrap'
 import { describeDaemonProviderSessionFailure } from './daemonProviderSession'
-import { composeFileRuntimeLegacyConfiguration } from '@/modules/runtime-management/composition/runtimeRegistry'
 import {
   selectDaemonHostLifecycle,
   type DaemonHostLifecyclePort,
@@ -189,34 +193,6 @@ function formatDbCorruptionGuidance(err: DbCorruptionFailure): string {
   return lines.join('\n')
 }
 
-/** RFC-275 — actionable boot refusal before any route or scheduler starts. */
-function formatDbSchemaDriftGuidance(err: DbSchemaDriftError): string {
-  const lines = [
-    '',
-    '✖ agent-workflow: database schema drift detected — refusing to start.',
-    `  db:    ${err.dbPath}`,
-    `  stage: ${err.stage}`,
-    '  differences:',
-  ]
-  for (const difference of err.differences.slice(0, 10)) {
-    lines.push(`    - ${formatSchemaDifference(difference)}`)
-  }
-  if (err.totalDifferences > 10) {
-    lines.push(`    - … and ${err.totalDifferences - 10} more`)
-  }
-  lines.push(
-    '',
-    '  Safe recovery options:',
-    '    1. Restore a verified backup.',
-    '    2. If this is a disposable development database, recreate it.',
-    '    3. If the schema change is intentional, add a new forward migration.',
-    '',
-    '  Do not edit __drizzle_migrations or rewrite an already-applied migration.',
-    '',
-  )
-  return lines.join('\n')
-}
-
 export async function startCommand(
   profile: DeploymentProfile,
   launch: { host?: string; port?: number },
@@ -254,61 +230,6 @@ export async function startCommand(
       devWatch: devLockHandoffMs() > 0,
     })
 
-    // 2.5 — RFC-213: resolve the migrations folder and apply a staged ("hot")
-    // restore BEFORE anything reads state. We hold the lock (acquired above), so
-    // exactly one process consumes it; the DB is not open yet. Impl-gate P2-12
-    // (2026-07-22): this used to run AFTER loadConfig, so the config.json the
-    // restore just brought back only took effect one restart later — moved ahead
-    // of loadConfig so the applying boot already runs on the restored config.
-    //
-    // P-5-05: in the compiled single-binary, the .sql files + meta/_journal.json
-    // live inside the executable. drizzle's migrator needs a filesystem path,
-    // so we extract them once per start into ~/.agent-workflow/runtime/migrations
-    // and point the migrator there.
-    // `ms` is deliberate: this step is O(number of migrations) filesystem
-    // writes and grows with every migration added. It once reached ~23.5s on a
-    // Windows CI runner and blew the e2e harness's 30s daemon-ready budget
-    // while being completely invisible in the logs — the duration is what makes
-    // that trend observable before it breaks something again.
-    const extractStartedAt = Date.now()
-    const migrationsFolder = await resolveMigrationsFolder({
-      // `force`: boot has always re-extracted unconditionally; keeping that keeps
-      // an interrupted previous extraction from surviving into this boot.
-      force: true,
-      onExtracted: (count, dir) => {
-        log.info('extracted embedded migrations', {
-          count,
-          ms: Date.now() - extractStartedAt,
-          dir,
-        })
-      },
-    })
-    const logicalSchemaContract = buildLogicalSchemaContract()
-    const preOpenRecovery = await prepareDatabasePreOpenRecovery({
-      contract: logicalSchemaContract,
-      migrationsFolder,
-      recovery: profile.selections.databasePreOpenRecovery,
-    })
-    const schemaHistory = preOpenRecovery.history
-    // A failure inside applyPendingRestoreIfAny self-heals (impl-gate P1-1): the
-    // staged dir is quarantined and the boot continues on the untouched DB. The
-    // catch below only guards truly unexpected filesystem-level throws.
-    {
-      try {
-        const applied = await preOpenRecovery.applyStagedRestore()
-        if (applied) log.warn('staged restore applied on boot', { db: Paths.db })
-      } catch (err) {
-        await lock.release()
-        console.error(
-          `agent-workflow: staged restore failed unexpectedly — refusing to boot with an unknown DB state.\n` +
-            `  ${err instanceof Error ? err.message : String(err)}\n` +
-            `  The pre-restore safety backup (if taken) is under ${join(Paths.root, 'backups')}/.\n` +
-            `  To abandon the staged restore and boot normally: rm -rf ${join(Paths.root, '.restore-pending')}`,
-        )
-        process.exit(1)
-      }
-    }
-
     // 3. Load config; honor logLevel if user set non-default in config.
     const applicationConfiguration =
       profile.selections.applicationConfiguration ??
@@ -323,9 +244,6 @@ export async function startCommand(
         ? { kind: 'selected', queries: configuration }
         : { kind: 'local-sync', queries: applicationConfiguration.synchronousQueries },
     )
-    const runtimeLegacyConfiguration =
-      profile.selections.runtimeLegacyConfiguration ??
-      composeFileRuntimeLegacyConfiguration(Paths.config)
     let config = await configuration.read()
     if (config.logLevel !== 'info') {
       configureLogger({ level: config.logLevel })
@@ -342,6 +260,21 @@ export async function startCommand(
       await lock.release()
       process.exit(1)
     }
+
+    if (profile.selections.databaseInstallation === undefined) {
+      const installation = classifyEpochInstallation(
+        readEpochBootFacts({ appHome: Paths.root, provider: config.database.provider }),
+      )
+      const guidance = epochInstallationGuidance(installation)
+      if (guidance !== null) throw new Error(guidance)
+    }
+    // Classify legacy and unreconciled installations before resolving a pending restore.
+    if (profile.selections.databasePreOpenRecovery) {
+      await profile.selections.databasePreOpenRecovery.applyStagedRestore()
+    } else if (!profile.selections.databaseInstallation) {
+      await applyLocalEpoch2PendingRestore(logicalSchemaContract)
+    }
+    config = await configuration.read()
 
     // Provider-independent bootstrap secrets are needed by either selected
     // composition. They are created before opening a client, but no owner module
@@ -361,9 +294,7 @@ export async function startCommand(
       log.warn('execution authority lost', { state: state.kind })
       executionExit.request(`execution-authority-${state.kind}`)
     })
-    const dbVersion = existsSync(migrationsFolder)
-      ? readdirSync(migrationsFolder).filter((file) => file.endsWith('.sql')).length
-      : 0
+    const dbVersion = schemaHistoryRuntime().head().contract.version
     // 5. DB — resolve the verified live generation before opening any provider
     // client. The pointer is authoritative; config may supply mechanism settings
     // but cannot silently select a different database.
@@ -376,11 +307,10 @@ export async function startCommand(
         generationPointerPath: Paths.databaseGenerationPointer,
         operationsRoot: Paths.databaseMigrationsDir,
         contract: logicalSchemaContract,
-        history: schemaHistory,
         lockPath: Paths.lock,
         lock,
+        backupOnMigration: config.backupOnMigration,
         sqliteOptions: {
-          migrationsFolder,
           synchronous: config.sqliteSynchronous,
           pageCacheMib: config.sqlitePageCacheMib,
           mmapMib: config.sqliteMmapMib,
@@ -388,13 +318,6 @@ export async function startCommand(
           skipIntegrityCheck: process.env.AGENT_WORKFLOW_SKIP_INTEGRITY_CHECK === '1',
           developmentIntegrity: development?.developmentIntegrity,
         },
-        beforeSqliteOpen: () =>
-          maybePreMigrationBackup({
-            appHome: Paths.root,
-            dbPath: Paths.db,
-            migrationsFolder,
-            enabled: config.backupOnMigration,
-          }).then(() => undefined),
       },
     }).catch(async (err: unknown) => {
       if (isDbCorruptionFailure(err)) {
@@ -405,9 +328,10 @@ export async function startCommand(
         process.stderr.write(formatDbCorruptionGuidance(err))
         process.exit(1)
       }
-      if (err instanceof DbSchemaDriftError) {
+      const guidance = schemaDriftGuidance(err)
+      if (guidance) {
         await lock.release()
-        process.stderr.write(formatDbSchemaDriftGuidance(err))
+        process.stderr.write(guidance)
         process.exit(1)
       }
       throw err
@@ -415,10 +339,8 @@ export async function startCommand(
     config = { ...config, database: preparedDatabase.databaseConfig }
     const databaseProvider = preparedDatabase.runtime
 
-    // DB — open + apply migrations. dbVersion = number of SQL files in the
-    // bundled migrations folder (== the highest version we've applied, since
-    // openDb() applies all pending migrations on startup). The migrations folder
-    // itself (and any staged restore) was already resolved/applied at step 2.5.
+    // dbVersion is the installed epoch-2 history version (starting at zero),
+    // comparable with aw_meta_schema_history after boot applies pending history.
 
     // RFC-213/RFC-223: raw pre-migration safety backup BEFORE openDb applies
     // migrations. A pending migration without its rollback generation is fatal;
@@ -439,7 +361,6 @@ export async function startCommand(
       configuration,
       applicationConfiguration,
       taskLaunchConfiguration,
-      runtimeLegacyConfiguration,
       workspaceUploads: selectWorkspaceUploadContentFactory(profile.selections.workspaceUploads),
       isolationWorkspaces: selectIsolationWorkspaceFactory(profile.selections.isolationWorkspaces),
       repositoryGitWorkspaces: selectRepositoryGitWorkspaceFactory(
@@ -458,7 +379,7 @@ export async function startCommand(
       dbVersion,
       log,
       lock,
-      migrationsFolder,
+      migrationsFolder: '',
       digitalEmployeeTypePackageDriftPolicy,
     })
     const { initial, bootstrap: daemonProviderBootstrap } = await composeDaemonProviderBootstrap({
@@ -474,7 +395,7 @@ export async function startCommand(
         async create(lifecycleInput, bindings) {
           // 只有迁移目标才会被重新装配；源 provider（SQLite）在割接后退役，不能再被当作
           // 新会话的来源——判据取自 provider 特征表，不在这里写 provider 字面量。
-          if (databaseProviderTraits(lifecycleInput.provider).migrationRole !== 'target') {
+          if (!supportsProviderMove(databaseProvider.provider, lifecycleInput.provider)) {
             throw new Error('provider-session-source-retired')
           }
           const nextConfig = await configuration.read()
@@ -496,7 +417,13 @@ export async function startCommand(
             await composeDaemonSession({
               ...sessionInput,
               ...bindings,
-              config: nextConfig,
+              config: {
+                ...nextConfig,
+                database: selectedDatabaseConfiguration(
+                  nextConfig.database,
+                  nextProvider.generation,
+                ),
+              },
               provider: nextProvider,
               lifecycle: lifecycleInput,
             })
@@ -529,3 +456,4 @@ export function readyBrowserUrl(
 ): string {
   return bootstrapRequired ? `${baseUrl}?token=${token}` : baseUrl
 }
+import { supportsProviderMove } from '@/platform/persistence/migrationSupport'

@@ -1,4 +1,4 @@
-import { createRunSelectionOracleSnapshot } from '@/modules/task-execution/public/queries'
+import { createRunSelectionReader } from '@/modules/task-execution/public/queries'
 import type { TaskRepositoryCheckpoint } from '@/modules/task-execution/public/types'
 // RFC-098 WP-10 T-a (audit S-16) — the single node_runs INSERT factory.
 //
@@ -98,7 +98,10 @@ export interface MintInheritSource {
  */
 export type MintNodeRunOverrides = NodeRunMintOverrides
 
-export interface MintNodeRunArgs {
+export interface MintNodeRunArgs extends Pick<
+  NodeRunMintInput,
+  'slot' | 'envelopeNonce' | 'executionGeneration'
+> {
   role: NodeRunMintInput['role']
   syntheticKind: NodeRunMintInput['syntheticKind']
   /** Preallocated identity for a transaction manifest (RFC-333 review-open). */
@@ -574,22 +577,7 @@ export async function resolveSchedulerRunRow<R extends SchedulerRunRowCandidate>
     iteration: args.iteration,
     consumedUpstreamJson: args.consumedUpstreamJson,
     rows: args.rows,
-    selection: createRunSelectionOracleSnapshot(
-      args.rows.map((row) => ({
-        ...row,
-        taskId: args.taskId,
-        nodeId: args.nodeId,
-        iteration: args.iteration,
-      })),
-      {
-        scope: {
-          kind: 'node',
-          taskId: args.taskId,
-          nodeId: args.nodeId,
-          iteration: args.iteration,
-        },
-      },
-    ),
+    selection: createRunSelectionReader(args.db),
     inheritReviewIteration: args.inheritReviewIteration,
     clearAgentOverride: args.clearAgentOverride,
     trackRetryIndex: args.trackRetryIndex,

@@ -19,9 +19,7 @@ import {
 } from '@/platform/persistence/databaseProviderRuntime'
 import { hostedDatabaseGeneration } from '@/platform/persistence/generationValidation'
 import { seedHostedInstallation } from '@/platform/persistence/hostedInstallationSeed'
-import { loadPostgresqlMigrationHistory } from '@/platform/persistence/postgresqlMigrationHistory'
 import type { LogicalSchemaContract } from '@/platform/persistence/schemaContract'
-import { resolveMigrationsFolder } from '@/util/migrationsFolder'
 import type { DatabaseInstallationPort } from '../application/ports/databaseInstallation'
 import { createDatabaseApplicationConfiguration } from '../infrastructure/databaseApplicationConfiguration'
 import { createHostedDatabaseInstallation } from '../infrastructure/crewstation/hostedDatabaseInstallation'
@@ -205,7 +203,7 @@ export function crewStationDatabaseConfig(
 
 /**
  * The migration Job applies the schema history (`apply`); a serving instance
- * only verifies it (`verify`). Both name the same derived generation.
+ * only verifies it (`verify`). The target's active row supplies its generation.
  */
 export async function prepareCrewStationDatabase(input: {
   readonly contract: LogicalSchemaContract
@@ -223,7 +221,6 @@ export async function prepareCrewStationDatabase(input: {
       schemaDigest: contract.digest,
       env: input.env ?? process.env,
     }),
-    history: await loadPostgresqlMigrationHistory({ headContract: input.contract }),
     schema: input.schema,
     ...(input.env === undefined ? {} : { env: input.env }),
   })
@@ -261,8 +258,9 @@ export function composeCrewStationMigrationInstallation(
         const seed = await seedHostedInstallation({
           contract,
           target: prepared.openBootstrapClient(),
-          migrationsFolder: await resolveMigrationsFolder(),
+          migrationsFolder: '',
           now: Date.now(),
+          installed: prepared.receipt.installedSeeds,
         })
         const schemaOutcome = prepared.describeSchemaOutcome()
         return {

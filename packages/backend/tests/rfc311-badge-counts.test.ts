@@ -1,3 +1,5 @@
+import { legacyContentRef } from '@/platform/content/contentRef'
+import { contentRowColumns } from '@/platform/content/infrastructure/contentStore'
 // RFC-311 PR-1 — inbox badge count(*) rewrites, locked to the list pipelines.
 //
 // The shell polls three pending-count endpoints every 15s per open tab. Their
@@ -116,7 +118,9 @@ async function addDocVersion(
     sourcePortName: port,
     versionIndex,
     reviewIteration: 0,
-    bodyPath: 'doc_versions/never-read.md',
+    ...contentRowColumns(
+      legacyContentRef('review-body-path', 'local-file', 'doc_versions/never-read.md'),
+    ),
     decision,
   })
 }

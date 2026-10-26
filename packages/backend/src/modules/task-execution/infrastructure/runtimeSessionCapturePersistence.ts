@@ -9,6 +9,7 @@ import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { insertInBatches } from '@/platform/persistence/batchInsert'
 import type { RuntimeSessionCapturePersistence } from '../application/ports/runtimeSessionCapturePersistence'
 import { fenceTaskWrite, withTaskExecutionWrite } from './ownedTaskExecution'
+import { taskAggregateWrite } from './taskDefinitionWriteParticipant'
 
 export function createRuntimeSessionCapturePersistence(
   db: PersistenceDb,
@@ -28,7 +29,8 @@ export function createRuntimeSessionCapturePersistence(
     async listSiblingCapturedSessionIds(
       input: Parameters<RuntimeSessionCapturePersistence['listSiblingCapturedSessionIds']>[0],
     ) {
-      const { nodeRuns, nodeRunEvents } = tablesOf(db)
+      const { nodeRunEvents } = tablesOf(db)
+      const { nodeRuns } = tablesOf(db)
       const siblings = await db
         .select({ id: nodeRuns.id })
         .from(nodeRuns)
@@ -53,6 +55,7 @@ export function createRuntimeSessionCapturePersistence(
       if (input.events.length === 0) return
       await withTaskExecutionWrite(db, async (tx) => {
         await fenceTaskWrite(tx, { taskId: input.taskId })
+        await taskAggregateWrite.lockTaskAggregateRoot(tx, input.taskId)
         const { nodeRunEvents } = tablesOf(tx)
         // RFC-359 W6-T25 —— 会话回捕的事件按批落库：一次 capture 的行数由子会话 transcript 决定，
         // 无界。切批在同一笔事务里，原子性不变；行数上限由能力矩阵给。

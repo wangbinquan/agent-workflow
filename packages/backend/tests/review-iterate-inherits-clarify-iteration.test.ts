@@ -1,3 +1,5 @@
+import { legacyContentRef } from '@/platform/content/contentRef'
+import { contentRowColumns } from '@/platform/content/infrastructure/contentStore'
 import { withO2Closure } from './helpers/o2Closure'
 // Regression: when a review's upstream agent has a clarify-rerun row
 // (clarifyIteration=N>0, retryIndex=0, done) as its freshest node_run,
@@ -207,7 +209,7 @@ describeEachProvider('RFC-359 W25 review lineage providers', (harness) => {
       sourcePortName: 'design',
       versionIndex: 1,
       reviewIteration: 0,
-      bodyPath: bodyRel,
+      ...contentRowColumns(legacyContentRef('review-body-path', 'local-file', bodyRel)),
       commentsJson: '[]',
       decision: 'pending',
       createdAt: Date.now() - 100,

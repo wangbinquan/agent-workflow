@@ -48,7 +48,7 @@ function RoomHost(props: { taskId: string; taskStatus: TaskStatus }) {
 
 function makeRun(over: Partial<NodeRun>): NodeRun {
   return {
-    seq: null,
+    seq: 0,
     id: 'nr1',
     taskId: 't1',
     nodeId: '__wg_member__',

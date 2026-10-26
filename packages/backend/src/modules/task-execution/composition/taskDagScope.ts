@@ -1,4 +1,3 @@
-import { createRunSelectionOracleSnapshot } from '../infrastructure/runSelection/oracle/snapshot'
 import { decideScopeOutcome } from '@/services/dispatchFrontier'
 import { maybeRunCommitPush } from '@/services/scheduler'
 import { deriveFrontier } from './dagFrontier'
@@ -172,9 +171,11 @@ export async function runScope(
   ): Promise<void> => {
     commitPushResumePending = false
     // RFC-395 II-a: HEAD selects by the persisted cause across the task, without role labels.
-    const history = await createRunSelectionOracleSnapshot(rows, {
-      scope: { kind: 'rows' },
-    }).familyHistory(state.task.id, {}, { rerunCause: 'commit-push' })
+    const history = await opts.persistence.selection.familyHistory(
+      state.task.id,
+      {},
+      { rerunCause: 'commit-push' },
+    )
     const latest = history.at(-1)
     if (latest?.status !== 'interrupted' || latest.parentNodeRunId === null) return
     const trigger = rows.find((row) => row.id === latest.parentNodeRunId)
@@ -261,6 +262,8 @@ export async function runScope(
       const deferredHandlerNodeIds =
         await opts.taskDagCollaboration.loadUndispatchedParkTargets(taskId)
       f = await deriveFrontier(
+        opts.persistence.selection,
+        state.taskId,
         rows,
         definition,
         scopeNodes,

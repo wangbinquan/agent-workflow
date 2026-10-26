@@ -1,3 +1,4 @@
+import type { HistoryRestrictionPort } from '@/platform/contracts/historyRestriction'
 import type {
   TaskArchiveCollaborationSectionsPort,
   TaskNodeRunClarifyNavPort,
@@ -157,6 +158,7 @@ export interface TaskExecutionProviderRouteContext {
  * appHome 之类）。合并之前这份清单两支各写一份、还不一样长。
  */
 type ProviderRouteOperationsAssembled =
+  | 'historyRestrictions'
   | 'clarifyNav'
   | 'workspaceReads'
   | 'db'
@@ -186,6 +188,7 @@ export interface TaskExecutionProviderRuntimeDependencies<
   C extends RouteCollaborationContext = RouteCollaborationContext,
 > {
   readonly db: PersistenceDb
+  readonly historyRestrictions: HistoryRestrictionPort
   readonly persistence: TaskExecutionPersistence
   readonly execution: TaskExecutionBinding
   readonly finalizeWorkspace: (taskId: string) => Promise<void>
@@ -200,6 +203,7 @@ export interface TaskExecutionProviderRuntimeDependencies<
   readonly runtime: Omit<
     TaskExecutionRuntimeParticipantsInput,
     | 'db'
+    | 'historyRestrictions'
     | 'persistence'
     | 'childLaunchWorkgroup'
     | 'taskRunBinding'
@@ -258,6 +262,7 @@ export function composeTaskExecutionProviderRuntime<C extends RouteCollaboration
             ? composeTaskWorkspaceExcludeProfilesFor()
             : dependencies.runtime.workspaceExcludeProfilesFor,
         db,
+        historyRestrictions: dependencies.historyRestrictions,
         persistence,
         log,
         childLaunchWorkgroup: dependencies.routeLaunch.workgroup,
@@ -335,6 +340,7 @@ export function composeTaskExecutionProviderRuntime<C extends RouteCollaboration
       review: createReviewRepairParticipant(db),
     },
     ...routeDependencies,
+    historyRestrictions: dependencies.historyRestrictions,
     workspaceReads,
   })
   const cancellation = cancellationCommand(participants)

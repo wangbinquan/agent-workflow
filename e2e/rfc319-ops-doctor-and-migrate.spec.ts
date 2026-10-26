@@ -1,3 +1,4 @@
+import { liveSqlitePath, liveSqliteGeneration } from './storage'
 // RFC-319 —— 运维 CLI：诊断 / DB 维护 / 回滚闸门 / 隐藏的 git 凭据助手
 // （OPS-010 / OPS-011 / OPS-014 / OPS-015 / OPS-X8）。
 //
@@ -18,8 +19,7 @@
 //     密封凭据 `doctor.ts:98-149`、lifecycle `doctor.ts:214-262`。
 //   * `db compact` 的三态与停机闸门 → `packages/backend/src/cli/dbCompact.ts:28-69`；
 //     `db` 子命令用法 / 退出码 → `main.ts:105-114`。
-//   * `downgrade-audit rfc-295` 的只读开库与三种 status → `cli/rfc295-downgrade-audit.ts:38-76`；
-//     被审任务状态白名单 → `services/rfc295DowngradeAudit.ts:23-30`。
+//   * Epoch-2 rollback window → modules/system-operations/application/epochSwitch/rollback.ts.
 //   * 隐藏子命令 `__git-credential` 的协议 → `main.ts:55-66` 与
 //     `util/gitCredentialLease.ts:128-151`（协议 + 规范化 authority + 仓库路径
 //     三者全中才回答，其余一律空响应）。
@@ -28,7 +28,7 @@
 // 点名那一项并给非零退出码）。只断言「doctor 跑完了」对任何一次运行都成立，那种
 // 断言在这里一条都没有。
 
-import { taskFixtureSql, workflowFixtureSql } from './fixtures/model'
+import { taskFixtureSql } from './fixtures/model'
 import { createHash } from 'node:crypto'
 import {
   chmodSync,
@@ -113,7 +113,7 @@ function freshDir(tag: string): string {
 }
 
 function dbPathOf(home: string): string {
-  return join(home, 'db.sqlite')
+  return liveSqlitePath(home)
 }
 
 function sha256Of(path: string): string {
@@ -282,7 +282,7 @@ test('RFC-319 OPS-010: doctor 在编译二进制上跑完整套诊断——十�
       doctorCheck(result.out, 'database provider').message,
       '完好的库没有得到 `quick_check ok` ⇒ 「库到底有没有坏」这个问题没有肯定答案，' +
         '恢复备份的决定就只能靠猜',
-    ).toBe('sqlite generation dbg_legacy_sqlite: sqlite-quick-check=ok')
+    ).toBe(`sqlite generation ${liveSqliteGeneration(home).generationId}: sqlite-quick-check=ok`)
     expect(
       doctorCheck(result.out, 'git version').message,
       'git 那一项没有报出实测版本与要求的地板 ⇒ 升级 git 之后用户无从确认自己是不是升够了',
@@ -545,7 +545,7 @@ test('RFC-319 OPS-010/OPS-011: 数据库损坏时 doctor 报 CORRUPT 并给出�
       integrity.message,
       '报损坏却不说是哪个 provider / generation、也不给恢复入口 ⇒ 用户无法确认现场或执行恢复',
     ).toBe(
-      'sqlite generation dbg_legacy_sqlite: ' +
+      `sqlite generation ${liveSqliteGeneration(home).generationId}: ` +
         'sqlite-open=SQLite database is unavailable or unreadable — ' +
         'recover: agent-workflow restore <backup>',
     )
@@ -832,7 +832,7 @@ test('RFC-319 OPS-014: 停机后 db compact 真把空洞还给文件系统；无
         '而真正那个库还堆着一样多的空洞',
     ).toBe(1)
     expect(noDb.out, '没有库时不明说 ⇒ 用户读不出「是路径错了」这个结论').toBe(
-      `no database at ${dbPathOf(empty)}\n`,
+      `no database at ${join(empty, 'db.sqlite')}\n`,
     )
     expect(
       readdirSync(empty),
@@ -865,172 +865,127 @@ test('RFC-319 OPS-014: 停机后 db compact 真把空洞还给文件系统；无
 })
 
 // ---------------------------------------------------------------------------
-// OPS-015 —— downgrade-audit rfc-295
+// OPS-015 — U-6 retires downgrade-audit. Its successor is the epoch-switch
+// rollback window, exercised through the compiled binary on real databases.
 // ---------------------------------------------------------------------------
 
-test('RFC-319 OPS-015: downgrade-audit 全清时报 OK 并退出 0，且全程只读——连一个空库都不会建出来 @nightly', async () => {
+interface SwitchView {
+  operationId: string
+  phase: string
+  status: string
+  firstLiveWriteAt: number | null
+  rollback: { allowed: boolean; reason: string | null }
+  plan?: { approvalDigest: string; payload: { blocks: unknown[] } }
+}
+
+function switchCommand(home: string, args: string[]): { out: string; code: number } {
+  const result = runCommandResult(defaultBinaryPath(), ['db', 'migration', ...args, '--json'], {
+    env: { AGENT_WORKFLOW_HOME: home },
+    // `run` converts and verifies the whole epoch-1 database in one call.
+    timeoutMs: RELEASE_CLI_TIMEOUT_MS * 4,
+  })
+  return { out: result.output, code: result.status }
+}
+
+function switchView(home: string, args: string[]): SwitchView {
+  const result = switchCommand(home, args)
+  expect(result.code, result.out).toBe(0)
+  // Conversion emits operational log lines before the final JSON receipt.
+  // Nested receipt objects are indented; the final top-level object starts at
+  // column zero. Keep the exit-code assertion over the complete output above.
+  return JSON.parse(result.out.slice(result.out.lastIndexOf('\n{') + 1)) as SwitchView
+}
+
+function activateEpoch2(home: string): { operationId: string; sourceHash: string } {
+  const seeded = runCommandResult(
+    process.env.AGENT_WORKFLOW_E2E_BUN ?? 'bun',
+    [
+      '--tsconfig-override',
+      join(process.cwd(), 'packages/backend/tsconfig.json'),
+      join(process.cwd(), 'e2e/fixtures/epoch1-switch-home.ts'),
+      home,
+    ],
+    { timeoutMs: 60_000 },
+  )
+  expect(seeded.status, seeded.output).toBe(0)
+  const sourceHash = sha256Of(join(home, 'db.sqlite'))
+  const plan = switchView(home, ['plan'])
+  expect(plan.plan!.payload.blocks).toEqual([])
+  const activated = switchView(home, [
+    'run',
+    plan.operationId,
+    '--approve',
+    plan.plan!.approvalDigest,
+  ])
+  expect(activated.phase).toBe('activated')
+  expect(activated.firstLiveWriteAt).toBeNull()
+  expect(activated.rollback.allowed).toBe(true)
+  expect(liveSqliteGeneration(home).generationId).toBeTruthy()
+  return { operationId: plan.operationId, sourceHash }
+}
+
+test('RFC-319 OPS-015: epoch-2 switch rollback before the first business write restores the source @nightly', () => {
   test.setTimeout(OPS_TEST_TIMEOUT_MS)
-  const home = cloneHome('audit-ok')
-  const empty = freshDir('audit-nodb')
+  const home = freshDir('epoch-rollback')
   try {
-    const workflowCount = querySqlite<{ n: number }>(
-      dbPathOf(home),
-      'SELECT count(*) AS n FROM workflows;',
-    )[0]?.n
-    expect(workflowCount, '前提不成立：读不到 workflows 行数').toBeGreaterThan(0)
-    const before = sha256Of(dbPathOf(home))
-
-    const clean = runCli(home, ['downgrade-audit', 'rfc-295'])
-    expect(
-      clean.code,
-      '没有任何阻断项时闸门仍以非 0 退出 ⇒ 回滚前的这道检查永远说「不行」，' +
-        '用完一次之后就没人再看它',
-    ).toBe(0)
-    expect(
-      clean.out,
-      '闸门放行时没有报出**扫了多少东西** ⇒ 「它到底看没看」和「它看完说没事」在输出上长得一样；' +
-        '一次因为查询写错而扫到 0 行的放行，与一次真正的放行无法区分',
-    ).toBe(
-      `RFC-295 downgrade audit: OK; scanned ${workflowCount} workflow(s), 0 live/resumable task(s), 0 frozen closure workflow(s)\n`,
+    const { operationId, sourceHash } = activateEpoch2(home)
+    const target = liveSqliteGeneration(home)
+    const beforeStatus = sha256Of(target.path)
+    expect(switchView(home, ['status', operationId]).rollback.allowed).toBe(true)
+    expect(sha256Of(target.path), 'status must remain read-only').toBe(beforeStatus)
+    const rollback = switchView(home, ['rollback', operationId])
+    expect(rollback.status).toBe('rolled-back')
+    expect(rollback.rollback.allowed).toBe(false)
+    expect(existsSync(join(home, 'database-generation.json'))).toBe(false)
+    expect(sha256Of(join(home, 'db.sqlite')), 'rollback retains the exact epoch-1 source').toBe(
+      sourceHash,
     )
-    expect(
-      sha256Of(dbPathOf(home)),
-      '回滚前的只读闸门改写了数据库 ⇒ 它跑在「准备降级回旧版本」这个最脆弱的时刻，' +
-        '任何写入都可能是旧版本读不懂的',
-    ).toBe(before)
-
-    // 最硬的只读证据：对着一个还没有库的 home，它必须直接说「没有库」，
-    // 而不是像 `migrate` 那样顺手建一个出来。降级前的机器上凭空多出一个空库，
-    // 会让后面每一道「库在哪一版」的判断都得到错误答案。
-    const noDb = runCli(empty, ['downgrade-audit', 'rfc-295'])
-    expect(noDb.code, '没有库时闸门以非 0 退出 ⇒ 全新机器上的回滚演练第一步就断了').toBe(0)
-    expect(noDb.out, '没有库时不明说 ⇒ 用户读不出「这台机器上没有要审的东西」').toContain(
-      '(no database)',
+    expect(existsSync(target.path), 'the retired target remains available for inspection').toBe(
+      true,
     )
-    expect(
-      readdirSync(empty),
-      '只读闸门在一个空目录里建出了文件 ⇒ 它不是只读的；降级前的现场被这条命令自己改了',
-    ).toEqual([])
-
-    for (const args of [
-      ['downgrade-audit'],
-      ['downgrade-audit', 'rfc-296'],
-      ['downgrade-audit', 'RFC-295'],
-    ]) {
-      const misuse = runCli(home, args)
-      expect(
-        misuse.code,
-        `\`agent-workflow ${args.join(' ')}\` 没有以退出码 2 拒绝 ⇒ 拼错的闸门名会静默地什么都不审，` +
-          '而回滚脚本把它记成「审过了」',
-      ).toBe(2)
-      expect(
-        misuse.out,
-        `\`agent-workflow ${args.join(' ')}\` 被拒时不给正确写法 ⇒ 用户只能去翻文档`,
-      ).toContain('usage: agent-workflow downgrade-audit rfc-295')
-    }
+    expect(switchView(home, ['rollback', operationId]).status).toBe('rolled-back')
   } finally {
     rmSync(home, { recursive: true, force: true })
-    rmSync(empty, { recursive: true, force: true })
   }
 })
 
-test('RFC-319 OPS-015: downgrade-audit 逐条点名阻断项、只审在途任务，且没有任何绕过开关 @nightly', async () => {
+test('RFC-319 OPS-015: epoch-2 switch rollback refuses after business writes and preserves the active generation @nightly', async () => {
   test.setTimeout(OPS_TEST_TIMEOUT_MS)
-  const home = cloneHome('audit-blocked')
+  const home = freshDir('epoch-rollback-written')
+  let daemon: DaemonHandle | undefined
   try {
-    const workflowsBefore = querySqlite<{ n: number }>(
-      dbPathOf(home),
-      'SELECT count(*) AS n FROM workflows;',
-    )[0]?.n as number
-
-    // 三个现场：一个存量工作流、一个**在途**任务的冻结快照、一个**已完成**任务的
-    // 冻结快照。最后一个必须被跳过——已完成的任务不会再被旧版本执行，把它算成
-    // 阻断项等于让每一台跑过一阵子的机器永远降不了级。
-    runSqlite(
-      dbPathOf(home),
-      `${workflowFixtureSql({ id: '01RFC319AUDITWF0000000000', name: 'rfc319-audit-wf', definition: '{ not json at all', version: 7 })}
-       ${taskFixtureSql([
-         {
-           id: '01RFC319AUDITLIVE00000000',
-           name: 'rfc319-live',
-           workflowId: '01RFC319AUDITWFLIVE000000',
-           workflowSnapshot: '{ neither is this',
-           workflowVersion: 3,
-           repoPath: '/tmp/rfc319-repo',
-           worktreePath: '/tmp/rfc319-worktree',
-           baseBranch: 'main',
-           branch: 'agent-workflow/rfc319-live',
-           status: 'interrupted',
-           inputs: '{}',
-           startedAt: 1,
-         },
-         {
-           id: '01RFC319AUDITDONE00000000',
-           name: 'rfc319-done',
-           workflowId: '01RFC319AUDITWFDONE000000',
-           workflowSnapshot: '{ nor this one',
-           workflowVersion: 3,
-           repoPath: '/tmp/rfc319-repo',
-           worktreePath: '/tmp/rfc319-worktree',
-           baseBranch: 'main',
-           branch: 'agent-workflow/rfc319-done',
-           status: 'done',
-           inputs: '{}',
-           startedAt: 1,
-         },
-       ])}`,
-    )
-    const before = sha256Of(dbPathOf(home))
-
-    const blocked = runCli(home, ['downgrade-audit', 'rfc-295'])
+    const { operationId } = activateEpoch2(home)
+    daemon = await startDaemon({ home })
+    const created = await fetch(`${daemon.baseUrl}/api/workflows`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${daemon.token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: 'ops015-after-switch',
+        description: 'business write closes rollback',
+        definition: { $schema_version: 3, inputs: [], nodes: [], edges: [] },
+      }),
+    })
+    expect(created.status, await created.text()).toBe(201)
+    await daemon.stop()
+    daemon = undefined
+    const generation = liveSqliteGeneration(home)
+    const pointer = readFileSync(join(home, 'database-generation.json'))
+    const status = switchView(home, ['status', operationId])
+    expect(status.firstLiveWriteAt).toBeGreaterThan(0)
+    expect(status.rollback).toEqual({ allowed: false, reason: 'reverse-migration-required' })
+    const refused = switchCommand(home, ['rollback', operationId])
+    expect(refused.code, refused.out).not.toBe(0)
+    expect(refused.out).toContain('reverse-migration-required')
+    expect(readFileSync(join(home, 'database-generation.json'))).toEqual(pointer)
+    expect(liveSqliteGeneration(home)).toEqual(generation)
     expect(
-      blocked.code,
-      '存在旧版本读不懂的数据，闸门却以 0 退出 ⇒ 回滚脚本一路跑到底，' +
-        '降级完成之后才在保存 / 启动 / 恢复时逐个炸开，而那时已经没有回头路',
-    ).toBe(1)
-    expect(
-      blocked.out,
-      '闸门拦下来时没有说「拦住了」 ⇒ 输出与放行长得像，人读脚本日志时会看漏',
-    ).toContain('RFC-295 downgrade audit: BLOCKED;')
-    expect(
-      blocked.out,
-      '扫描计数没有把新加的工作流算进去 / 把已完成任务也算成在途 ⇒ 闸门读的不是真实库存',
-    ).toContain(
-      `scanned ${workflowsBefore + 1} workflow(s), 1 live/resumable task(s), 0 frozen closure workflow(s)`,
-    )
-    expect(
-      blocked.out,
-      '拦下来却不点名是哪个工作流的哪一版 ⇒ 用户拿到一句「不能降级」，无从下手去修',
-    ).toContain('- definition-invalid workflow=01RFC319AUDITWF0000000000 revision=7 pointer=/:')
-    expect(
-      blocked.out,
-      '在途任务冻结的那份快照没有被审 ⇒ 降级之后正是这些任务要被旧版本恢复执行，' +
-        '它们才是回滚的真正风险面',
-    ).toContain('task=01RFC319AUDITLIVE00000000')
-    expect(
-      blocked.out,
-      '已完成任务的冻结快照也被算成阻断项 ⇒ 一台跑过一阵子的机器会因为历史任务永远降不了级，' +
-        '而那些任务根本不会再被执行',
-    ).not.toContain('01RFC319AUDITDONE00000000')
-
-    // 这条命令**故意**没有 force / ignore 开关（`services/rfc295DowngradeAudit.ts:243-246`）。
-    // 多给几个参数不该被解释成「我知道我在做什么」。
-    const forced = runCli(home, ['downgrade-audit', 'rfc-295', '--force', '--yes'])
-    expect(
-      forced.code,
-      '多带一个 `--force` 就让闸门放行 ⇒ 这道闸门形同虚设：遇到拦截时最自然的下一步' +
-        '就是加一个看起来像开关的参数再试一次',
-    ).toBe(1)
-    expect(forced.out, '同上：带上绕过参数之后结论变了').toContain(
-      'RFC-295 downgrade audit: BLOCKED;',
-    )
-
-    expect(
-      sha256Of(dbPathOf(home)),
-      '闸门在**有阻断项**的那条路径上改写了数据库 ⇒ 只读承诺只在没事时成立，' +
-        '恰恰在出事时不成立',
-    ).toBe(before)
+      querySqlite(generation.path, "SELECT name FROM workflows WHERE name='ops015-after-switch'"),
+    ).toEqual([{ name: 'ops015-after-switch' }])
+    const bypass = switchCommand(home, ['rollback', operationId, '--force'])
+    expect(bypass.code).toBe(2)
+    expect(bypass.out).toContain('unknown option: --force')
   } finally {
+    await daemon?.stop()
     rmSync(home, { recursive: true, force: true })
   }
 })
@@ -1047,76 +1002,68 @@ test('RFC-319 OPS-015: downgrade-audit 逐条点名阻断项、只审在途任�
 // 源码侧另有 `packages/backend/tests/cli-embedded-migrations.test.ts` 守着不复辟。
 // ---------------------------------------------------------------------------
 
-test('RFC-319 OPS-012: migrate 在发行二进制上真的把库建起来，应用条数与二进制自称嵌的条数逐一对上，且重跑不重复应用 @nightly', () => {
+test('RFC-319 OPS-012: migrate installs the embedded epoch-2 history in its published generation and replay keeps its receipts @nightly', () => {
   test.setTimeout(OPS_TEST_TIMEOUT_MS)
   const home = freshDir('migrate')
   try {
-    // doctor 与 migrate 是两条互不相干的读法：一条数二进制里嵌了多少 .sql，
-    // 一条把它们真的应用到库里。把两个数字对起来，才是「这个包能建出完整的库」
-    // 这句话的证据；单看任何一个都可能是「嵌了但没应用」或「应用了半截」。
-    const embedded = Number(
-      /^(\d+)/.exec(doctorCheck(runCli(home, ['doctor']).out, 'migrations folder').message)?.[1] ??
-        '0',
-    )
-    expect(embedded, '前提不成立：二进制自称嵌了 0 条迁移').toBeGreaterThan(0)
-    expect(
-      existsSync(dbPathOf(home)),
-      '前提不成立：还没 migrate 就已经有库了，下面的「建起来了」就无从判定',
-    ).toBe(false)
-
+    const pointerPath = join(home, 'database-generation.json')
+    expect(doctorCheck(runCli(home, ['doctor']).out, 'database provider')).toMatchObject({
+      ok: true,
+      message: 'SQLite (no database yet)',
+    })
+    expect(existsSync(pointerPath)).toBe(false)
     const applied = runCli(home, ['migrate'])
+    expect(applied.code, applied.out).toBe(0)
+    const generation = liveSqliteGeneration(home)
+    const pointer = JSON.parse(readFileSync(pointerPath, 'utf8')).payload
+    expect(pointer.database).toEqual({
+      kind: 'sqlite-file',
+      relativePath: `databases/${generation.generationId}/db.sqlite`,
+    })
+    expect(applied.out).toBe(`migrations applied (database: ${generation.path})\n`)
+    const receipts = querySqlite<{
+      version: number
+      contract_digest: string
+      sqlite_plan_digest: string
+      artifact_json: string
+    }>(
+      generation.path,
+      'SELECT version,contract_digest,sqlite_plan_digest,artifact_json FROM aw_meta_schema_history ORDER BY version',
+    )
+    expect(receipts.length).toBeGreaterThan(0)
+    for (const row of receipts) {
+      const artifact = JSON.parse(row.artifact_json)
+      expect(row.version).toBe(artifact.contract.version)
+      expect(row.contract_digest).toBe(artifact.contract.contract.digest)
+      expect(row.sqlite_plan_digest).toBe(artifact.sqlite.digest)
+    }
+    expect(receipts.at(-1)!.contract_digest).toBe(pointer.contractDigest)
+    expect(receipts.at(-1)!.sqlite_plan_digest).toBe(pointer.planDigest)
     expect(
-      applied.code,
-      '`migrate` 在发行二进制上以非 0 退出 ⇒ 一台 daemon 起不来的机器上，' +
-        '唯一那条「手工把迁移补上再看看」的退路是断的，运维只剩重装或恢复备份',
-    ).toBe(0)
+      querySqlite(generation.path, 'SELECT hash,created_at FROM __drizzle_migrations'),
+    ).toEqual([{ hash: 'RFC395_SCHEMA_EPOCH_2_REQUIRES_TARGET_BINARY', created_at: -395 }])
     expect(
-      applied.out,
-      '`migrate` 不报出它动的是哪个库 ⇒ 一台有多个 $AGENT_WORKFLOW_HOME 的机器上无法确认动对了没有',
-    ).toBe(`migrations applied (database: ${dbPathOf(home)})\n`)
-
-    const appliedRows = querySqlite<{ n: number }>(
-      dbPathOf(home),
-      'SELECT count(*) AS n FROM __drizzle_migrations;',
-    )[0]?.n
-    expect(
-      appliedRows,
-      `\`migrate\` 说自己应用完了，库里却只记了 ${String(appliedRows)} 条迁移（二进制嵌了 ${embedded} 条）⇒ ` +
-        '这个库是半截的：缺的那些表 / 列要等 daemon 真的去读它们时才炸，' +
-        '而那时错误信息只会说某张表不存在',
-    ).toBe(embedded)
-
-    // 记账表对上还不够——真正要用的是业务表。只建了 `__drizzle_migrations`
-    // 的库同样能让上面那条通过。
-    const tables = querySqlite<{ name: string }>(
-      dbPathOf(home),
-      "SELECT name FROM sqlite_master WHERE type='table' AND name IN ('tasks','workflows','cached_repos','users') ORDER BY name;",
-    ).map((row) => row.name)
-    expect(
-      tables,
-      '迁移记账表对上了，业务表却没建出来 ⇒ 这个库看起来是新的、实际不可用，' +
-        'daemon 起来之后第一条查询就会失败',
+      querySqlite<{ name: string }>(
+        generation.path,
+        "SELECT name FROM sqlite_schema WHERE type='table' AND name IN ('tasks','workflows','cached_repos','users') ORDER BY name",
+      ).map((row) => row.name),
     ).toEqual(['cached_repos', 'tasks', 'users', 'workflows'])
-    expect(
-      doctorCheck(runCli(home, ['doctor']).out, 'database provider').message,
-      '`migrate` 造出来的库过不了完整性检查 ⇒ 这条恢复退路交付的是一个一出生就坏的库',
-    ).toBe('sqlite generation dbg_legacy_sqlite: sqlite-quick-check=ok')
-
-    // 重跑必须是无害的：运维在不确定「刚才那条到底跑没跑」时的第一反应就是再敲一次。
+    expect(doctorCheck(runCli(home, ['doctor']).out, 'database provider')).toMatchObject({
+      ok: true,
+      message: `sqlite generation ${generation.generationId}: sqlite-quick-check=ok`,
+    })
     const again = runCli(home, ['migrate'])
+    expect(again.code, again.out).toBe(0)
+    expect(liveSqliteGeneration(home)).toEqual(generation)
     expect(
-      again.code,
-      '第二次 `migrate` 以非 0 退出 ⇒ 「不确定跑没跑就再跑一次」这个最自然的动作会把人吓一跳，' +
-        '而它本该是安全的',
-    ).toBe(0)
+      querySqlite(
+        generation.path,
+        'SELECT version,contract_digest,sqlite_plan_digest,artifact_json FROM aw_meta_schema_history ORDER BY version',
+      ),
+    ).toEqual(receipts)
     expect(
-      querySqlite<{ n: number }>(
-        dbPathOf(home),
-        'SELECT count(*) AS n FROM __drizzle_migrations;',
-      )[0]?.n,
-      '重跑 `migrate` 把迁移又应用了一遍 ⇒ 记账表被灌了重复行，' +
-        '下一次升级判断「哪些还没应用」时就会读到一个说不通的历史',
-    ).toBe(embedded)
+      querySqlite(generation.path, 'SELECT hash,created_at FROM __drizzle_migrations'),
+    ).toEqual([{ hash: 'RFC395_SCHEMA_EPOCH_2_REQUIRES_TARGET_BINARY', created_at: -395 }])
   } finally {
     rmSync(home, { recursive: true, force: true })
   }

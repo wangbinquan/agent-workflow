@@ -1,3 +1,4 @@
+// AF-D21: exercise the live epoch-2 provider-move protocol.
 // 2026-09-04 单笔修复（非 RFC）—— SQLite → PostgreSQL 迁移在 `verifying` 阶段
 // 必败的一条链，三堵墙一次钉住：
 //
@@ -38,12 +39,13 @@ import type {
   LogicalSchemaContract,
   LogicalTableContract,
 } from '@/platform/persistence/schemaContract'
-import type { PostgresqlSchemaPlan } from '@/platform/persistence/postgresqlSchema'
+import { buildPostgresqlSchemaPlan } from '@/platform/persistence/postgresqlSchema'
+import { persistenceHead, persistencePostgresqlCatalogs } from '@/bootstrap/persistenceHead'
+import { digestSchemaContract } from '@/platform/persistence/schemaContract'
 import { classifyDatabaseMigrationFailure } from '@/modules/system-operations/application/databaseMigrationRunner'
-import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'
 
 const CONTRACT_DIGEST = `sha256:${'c'.repeat(64)}`
-const PLAN_DIGEST = `sha256:${'d'.repeat(64)}`
 
 function rows(values: readonly Record<string, unknown>[]): SqlRows {
   return Object.assign(Promise.resolve(values), {
@@ -120,61 +122,66 @@ const CONTRACT = contract([
   table('intent_provenance', [column({ identity: false })]),
 ])
 
-const PLAN: PostgresqlSchemaPlan = {
-  version: 1,
-  baselineId: '0000_rfc349_baseline_v1',
-  contractDigest: CONTRACT_DIGEST,
-  activeTableCount: 2,
-  archiveOnlyTableCount: 0,
-  statements: [
-    {
-      kind: 'index',
-      logicalId: 'intent_apply_journal:index:journal_idx',
-      sql: 'CREATE INDEX "journal_idx" ON "agent_workflow"."intent_apply_journal_pg" ("id")',
-    },
-  ],
-  digest: PLAN_DIGEST,
-}
+const PLAN = buildPostgresqlSchemaPlan(logicalSchemaContract)
+const EXPECTED = logicalSchemaContract.tables.map((table) => ({
+  table: table.id,
+  disposition: table.disposition,
+  rowCount: 0,
+  chunkCount: 0,
+}))
 
-const EXPECTED = [
-  { table: 'intent_apply_journal', disposition: 'KEEP' as const, rowCount: 2, chunkCount: 1 },
-  { table: 'intent_provenance', disposition: 'KEEP' as const, rowCount: 2, chunkCount: 1 },
-]
-
-function fixture(input: { readonly onInvariantQuery?: () => SqlRows } = {}) {
+function fixture(
+  input: {
+    readonly onInvariantQuery?: () => SqlRows
+    readonly onCountQuery?: () => SqlRows
+    readonly identityNext?: number
+  } = {},
+) {
   const statements: string[] = []
-  let stage = 'copying'
+  const head = persistenceHead()
+  const artifact = persistencePostgresqlCatalogs()[0]!
+  let state = {
+    sourceGenerationId: 'dbg_source_0001',
+    contractDigest: logicalSchemaContract.digest,
+    planDigest: PLAN.digest,
+    stage: 'prepared',
+  }
   const connection: PostgresqlReservedConnection = withNativeTransactions({
-    unsafe(sql) {
+    unsafe(sql, values = []) {
       statements.push(sql)
       if (sql.includes('pg_try_advisory_lock')) return rows([{ acquired: true }])
       if (sql.includes('pg_advisory_unlock')) return rows([{ released: true }])
-      if (sql.includes('rfc349-invariant:')) {
-        return input.onInvariantQuery === undefined ? rows([]) : input.onInvariantQuery()
-      }
-      if (sql.startsWith('SELECT table_name FROM information_schema.tables')) {
+      if (sql.includes('SELECT COUNT(*)')) return input.onCountQuery?.() ?? rows([{ count: 0 }])
+      if (sql.includes('rfc349-invariant:')) return input.onInvariantQuery?.() ?? rows([])
+      if (sql.includes('pg_get_serial_sequence') && !sql.includes('setval'))
+        return rows([{ sequence_name: 'agent_workflow.fixture_identity_seq' }])
+      if (sql.includes('SELECT last_value')) return rows([{ last_value: 1, is_called: false }])
+      if (sql.includes('AS max_value')) return rows([{ max_value: null }])
+      if (sql.includes('SELECT nextval')) return rows([{ next_value: input.identityNext ?? 1 }])
+      if (sql.includes('FROM "agent_workflow_meta"."migration_records"'))
         return rows([
-          { table_name: 'intent_apply_journal_pg' },
-          { table_name: 'intent_provenance_pg' },
+          { record_json: JSON.stringify(state), record_digest: digestSchemaContract(state) },
         ])
+      if (sql.startsWith('INSERT INTO "agent_workflow_meta"."migration_records"')) {
+        state = JSON.parse(String(values[1]))
+        return rows([])
       }
-      if (sql.includes('FROM "agent_workflow_meta"."schema_migrations"')) return rows([])
-      if (sql.startsWith('SELECT count(*) AS count FROM "agent_workflow"."')) {
-        return rows([{ count: 2 }])
-      }
-      if (sql.includes('FROM "agent_workflow_meta"."logical_copy_chunks"')) {
+      if (sql.includes('SELECT 1 FROM information_schema.tables')) return rows([{ present: 1 }])
+      if (sql.includes('FROM "agent_workflow_meta"."schema_history"'))
         return rows([
-          { table_id: 'intent_apply_journal', chunk_index: 0, row_count: 2 },
-          { table_id: 'intent_provenance', chunk_index: 0, row_count: 2 },
+          {
+            version: head.contract.version,
+            contract_digest: head.contract.contract.digest,
+            sqlite_plan_digest: head.sqlite.digest,
+            postgresql_plan_digest: head.postgresql.digest,
+            applied_at: 1,
+            artifact_json: JSON.stringify(head),
+          },
         ])
-      }
-      if (sql.startsWith('UPDATE "agent_workflow_meta"."logical_copy_operations"')) {
-        stage = 'verified'
-        return rows([{ operation_id: 'dbm_target_0001' }])
-      }
-      if (sql.includes('SELECT stage FROM "agent_workflow_meta"."logical_copy_operations"')) {
-        return rows([{ stage }])
-      }
+      if (sql.includes("current_setting('server_version_num')"))
+        return rows([{ version: artifact.postgresqlMajor * 10000 }])
+      if (sql.includes("SELECT 'relation' AS kind"))
+        return rows(artifact.catalog.map((entry) => ({ ...entry })))
       return rows([])
     },
     release() {},
@@ -206,11 +213,11 @@ function fixture(input: { readonly onInvariantQuery?: () => SqlRows } = {}) {
 
 async function openTarget(fake: ReturnType<typeof fixture>) {
   return openPostgresqlLogicalTarget({
-    headContract: buildLogicalSchemaContract(),
+    headContract: logicalSchemaContract,
     runtime: fake.runtime,
     operationId: 'dbm_target_0001',
     sourceGenerationId: 'dbg_source_0001',
-    contract: CONTRACT,
+    contract: logicalSchemaContract,
     plan: PLAN,
     verifyMigrationHistory: async () => undefined,
   })
@@ -236,11 +243,10 @@ describe('RFC-349 migration session outlives the daemon online timeouts', () => 
     await target.finalizeSchema(10, EXPECTED)
     await target.close()
 
-    // Both bound oracles ran, the DDL followed them, and the baseline committed.
-    expect(fake.statements.filter((sql) => sql.includes('rfc349-invariant:'))).toHaveLength(2)
-    expect(fake.statements).toContain(
-      'CREATE INDEX "journal_idx" ON "agent_workflow"."intent_apply_journal_pg" ("id")',
+    expect(fake.statements.filter((sql) => sql.includes('SELECT COUNT(*)'))).toHaveLength(
+      logicalSchemaContract.tables.length,
     )
+    expect(fake.statements.some((sql) => sql.includes('FOREIGN KEY'))).toBeTrue()
     expect(fake.statements).toContain('COMMIT')
     // `lock_timeout` measures someone ELSE blocking us, so it stays at the
     // configured budget rather than being disabled with the other two.
@@ -321,10 +327,42 @@ describe('RFC-349 a failed verification query is not a verification verdict', ()
     expect(fake.statements).toContain('ROLLBACK')
   })
 
-  test('a real invariant violation still fails closed, and names the invariant in its code', async () => {
+  test('BF-D8 a real D11 violation fails closed through the live target and names its invariant', async () => {
     const fake = fixture({
       onInvariantQuery: () =>
-        rows([{ invariant_table: 'intent_apply_journal', invariant_key: 'apply-7' }]),
+        rows([
+          { invariant_table: 'task_execution_intents', invariant_key: 'intent-without-owner' },
+        ]),
+    })
+    const target = await openTarget(fake)
+    try {
+      await expect(target.finalizeSchema(10, EXPECTED)).rejects.toMatchObject({
+        code: 'postgresql-target-verification.task-ownership-epoch',
+        message: expect.stringContaining('intent-without-owner'),
+      })
+      expect(fake.statements).toContain('ROLLBACK')
+      expect(fake.statements.some((sql) => sql.includes('FOREIGN KEY'))).toBeFalse()
+    } finally {
+      await target.close()
+    }
+  })
+
+  test('BF-D8 the live target also refuses an invalid identity sequence', async () => {
+    const fake = fixture({ identityNext: 0 })
+    const target = await openTarget(fake)
+    try {
+      await expect(target.finalizeSchema(10, EXPECTED)).rejects.toMatchObject({
+        code: 'postgresql-target-verification.identity-sequence-next-value',
+      })
+      expect(fake.statements).toContain('ROLLBACK')
+    } finally {
+      await target.close()
+    }
+  })
+
+  test('a native row-count mismatch fails before foreign-key finalization', async () => {
+    const fake = fixture({
+      onCountQuery: () => rows([{ count: 1 }]),
     })
     const target = await openTarget(fake)
 
@@ -338,12 +376,10 @@ describe('RFC-349 a failed verification query is not a verification verdict', ()
     }
 
     expect(failure).toBeInstanceOf(PostgresqlLogicalTargetError)
-    expect((failure as PostgresqlLogicalTargetError).code).toBe(
-      'postgresql-target-verification.intent-apply-convergence',
-    )
-    expect(String(failure)).toContain('intent_apply_journal:apply-7')
+    expect((failure as PostgresqlLogicalTargetError).code).toBe('postgresql-target-verification')
+    expect(String(failure)).toContain(logicalSchemaContract.tables[0]!.id)
     // No DDL is attempted once the closed oracle has spoken.
-    expect(fake.statements.some((sql) => sql.startsWith('CREATE INDEX'))).toBeFalse()
+    expect(fake.statements.some((sql) => sql.includes('FOREIGN KEY'))).toBeFalse()
   })
 })
 

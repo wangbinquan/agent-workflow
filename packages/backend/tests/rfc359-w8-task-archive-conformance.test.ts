@@ -1,3 +1,4 @@
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { o2Ports } from './helpers/o2Closure'
 // RFC-359 W8-A —— `TaskArchiveMaintenanceCommand` 的**双引擎对拍**。
 //
@@ -13,7 +14,7 @@ import { o2Ports } from './helpers/o2Closure'
 
 import { nodeRunFixture, taskFixture, taskRepoFixture, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+
 import { expect, test } from 'bun:test'
 import {
   existsSync,
@@ -199,7 +200,8 @@ describeEachProvider(
       expect(
         (await command().runSweep({ enabled: true, retentionDays: 0 }, options(dirs))).archived,
       ).toHaveLength(0)
-      const { tasks, taskArchiveAudit } = tablesOf(harness.db)
+      const { taskArchiveAudit } = tablesOf(harness.db)
+      const { tasks } = tablesOf(harness.db)
       expect(await rowCount(harness.db, tasks)).toBe(1)
       expect(await rowCount(harness.db, taskArchiveAudit)).toBe(0)
       expect(readdirSync(dirs.archiveDir)).toEqual([])
@@ -265,12 +267,11 @@ describeEachProvider(
       await addRunWithEvents(harness.db, 'child', 'run-child', 2)
       const {
         reviewNodeReviewers,
-        tasks,
-        nodeRuns,
         nodeRunEvents,
         taskExecutionMaintenanceClaims,
         taskArchiveAudit,
       } = tablesOf(harness.db)
+      const { tasks, nodeRuns } = tablesOf(harness.db)
       await insertOne(harness.db, reviewNodeReviewers, {
         taskId: 'root',
         reviewNodeId: 'review-node',
@@ -292,13 +293,13 @@ describeEachProvider(
       const dir = join(dirs.archiveDir, 'root')
       expect(receipt.archived[0]?.dir).toBe(dir)
       const manifest = readManifest(dir)
-      expect(manifest.schemaVersion).toBe(2)
+      expect(manifest.schemaVersion).toBe(3)
       expect(manifest.rootTaskId).toBe('root')
       expect([...manifest.taskIds].sort()).toEqual(['child', 'root'])
       expect(manifest.rows.tasks).toBe(2)
       expect(manifest.rows.node_runs).toBe(2)
       expect(manifest.rows.node_run_events).toBe(5)
-      expect(manifest.rows.task_repos).toBe(2)
+      expect(manifest.rows.task_repository_mounts).toBe(2)
       expect(manifest.rows.review_node_reviewers).toBe(1)
       expect(manifest.rows.task_execution_owners).toBe(0)
       expect(manifest.rows.task_execution_lineage_operation_records).toBe(0)
@@ -317,7 +318,10 @@ describeEachProvider(
         taskId: 'root',
         reviewNodeId: 'review-node',
       })
-      expect(JSON.parse(jsonlLines(dir, 'tasks')[0] ?? '{}')).toMatchObject({ workflowId: 'wf1' })
+      expect(jsonlLines(dir, 'task_definitions').map((line) => JSON.parse(line).sourceId)).toEqual([
+        'wf1',
+        'wf1',
+      ])
 
       // runs / logs 是**挪移**：归档目录里有、原地没有。
       expect(readFileSync(join(dir, 'runs', 'root', 'prompt.md'), 'utf8')).toBe('prompt of root')
@@ -381,7 +385,8 @@ describeEachProvider(
         { ...dirs },
       )
       expect(receipt.archived.map((tree) => tree.rootTaskId)).toEqual(['root'])
-      const { tasks, taskArchiveAudit } = tablesOf(harness.db)
+      const { taskArchiveAudit } = tablesOf(harness.db)
+      const { tasks } = tablesOf(harness.db)
       expect(await rowCount(harness.db, tasks)).toBe(0)
       const audits = await harness.db.select().from(taskArchiveAudit)
       expect(audits[0]).toMatchObject({ source: 'manual', createdAt: NOW, treeCount: 1 })
@@ -472,7 +477,8 @@ describeEachProvider(
       const finalDir = join(original.archiveDir, 'root')
       const { renameSync } = await import('node:fs')
       renameSync(finalDir, join(original.archiveDir, '.tmp-root'))
-      const { taskExecutionMaintenanceClaims, tasks } = tablesOf(harness.db)
+      const { taskExecutionMaintenanceClaims } = tablesOf(harness.db)
+      const { tasks } = tablesOf(harness.db)
       // 认领退回「盘上完成、库未删」的现场（崩在 rename 与删库之间）。
       await harness.db
         .update(taskExecutionMaintenanceClaims)

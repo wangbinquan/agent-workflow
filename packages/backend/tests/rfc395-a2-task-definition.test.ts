@@ -1,52 +1,53 @@
+import { tablesOf } from '@/platform/persistence/sessionTables'
 // RFC-395 II-a A2: preserve all three definition CAS operations, config projections and exact room bytes on both providers.
-import { expect, test } from 'bun:test'
-import { eq } from 'drizzle-orm'
-import { ulid } from 'ulid'
+import { buildActor } from '@/auth/actor'
+import { createClarifyAnswerQueries } from '@/modules/collaboration/composition'
+import { isTaskClarifySuppressed } from '@/modules/collaboration/infrastructure/collaborationWorkgroupClarify'
+import { extractAgentIdsFromWorkgroupConfig } from '@/modules/memory/application/distill/schedule'
+import { DrizzleMemoryDistillWorkStore } from '@/modules/memory/infrastructure/memoryDistillWorkStore'
+import { parseConfig } from '@/modules/resource-catalog/infrastructure/workgroupTaskRoom'
+import {
+  decodeTaskWorkgroupConfig,
+  decodeTaskWorkgroupLaunchConfig,
+  workgroupLaunchMode,
+} from '@/modules/task-execution/domain/taskWorkgroupConfig'
+import { resolveTaskEngineSelection } from '@/modules/task-execution/engine/task/taskEngineRegistry'
+import { DrizzleDynamicWorkflowPersistence } from '@/modules/task-execution/infrastructure/dynamicWorkflowPersistence'
+import { createTaskDefinitionWriteParticipantInTx } from '@/modules/task-execution/infrastructure/taskDefinitionWriteParticipant'
+import { DrizzleTaskEngineApplicationPersistence } from '@/modules/task-execution/infrastructure/taskEngineApplicationPersistence'
+import { createTaskExecutionReadModels } from '@/modules/task-execution/infrastructure/taskExecutionReadModels'
+import {
+  syncWorkflow,
+  type TaskWorkflowSyncDependencies,
+} from '@/modules/task-execution/infrastructure/taskRouteOperations'
+import {
+  taskWorkgroupConfigSelection,
+  taskWorkgroupLaunchSelection,
+} from '@/modules/task-execution/infrastructure/taskWorkgroupConfig'
+import { createWorkgroupHostLedgerParticipantInTx } from '@/modules/task-execution/infrastructure/workgroupHostLedgerParticipant'
+import { createWorkgroupTaskRoomTaskParticipantInTx } from '@/modules/task-execution/infrastructure/workgroupTaskRoomTaskParticipant'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
+
+import { insertOne } from '@/platform/persistence/singleInsert'
 import {
   WorkgroupLaunchConfigSchema,
   WorkgroupRuntimeConfigSchema,
   type WorkflowDefinition,
   type WorkgroupRuntimeConfig,
 } from '@agent-workflow/shared'
-import { buildActor } from '@/auth/actor'
-import { tablesOf } from '@/platform/persistence/sessionTables'
-import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import {
-  taskWorkgroupConfigSelection,
-  taskWorkgroupLaunchSelection,
-} from '@/modules/task-execution/infrastructure/taskWorkgroupConfig'
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { createTaskDefinitionWriteParticipantInTx } from '@/modules/task-execution/infrastructure/taskDefinitionWriteParticipant'
-import { createWorkgroupTaskRoomTaskParticipantInTx } from '@/modules/task-execution/infrastructure/workgroupTaskRoomTaskParticipant'
-import { createWorkgroupHostLedgerParticipantInTx } from '@/modules/task-execution/infrastructure/workgroupHostLedgerParticipant'
-import {
-  decodeTaskWorkgroupConfig,
-  decodeTaskWorkgroupLaunchConfig,
-  workgroupLaunchMode,
-} from '@/modules/task-execution/domain/taskWorkgroupConfig'
-import { DrizzleDynamicWorkflowPersistence } from '@/modules/task-execution/infrastructure/dynamicWorkflowPersistence'
-import { DrizzleTaskEngineApplicationPersistence } from '@/modules/task-execution/infrastructure/taskEngineApplicationPersistence'
-import { DrizzleMemoryDistillWorkStore } from '@/modules/memory/infrastructure/memoryDistillWorkStore'
-import { extractAgentIdsFromWorkgroupConfig } from '@/modules/memory/application/distill/schedule'
-import { createTaskExecutionReadModels } from '@/modules/task-execution/infrastructure/taskExecutionReadModels'
-import {
-  syncWorkflow,
-  type TaskWorkflowSyncDependencies,
-} from '@/modules/task-execution/infrastructure/taskRouteOperations'
-import { isTaskClarifySuppressed } from '@/modules/collaboration/infrastructure/collaborationWorkgroupClarify'
-import { parseConfig } from '@/modules/resource-catalog/infrastructure/workgroupTaskRoom'
-import { resolveTaskEngineSelection } from '@/modules/task-execution/engine/task/taskEngineRegistry'
+import { expect, test } from 'bun:test'
+import { eq } from 'drizzle-orm'
+import { ulid } from 'ulid'
 import { describeEachProvider } from './helpers/eachProvider'
 import {
-  taskFixture,
-  patchTaskFixture,
-  readTaskFixtures,
-  workflowFixture,
   nodeRunFixture,
+  patchTaskFixture,
   readNodeRunFixtures,
+  readTaskFixtures,
+  taskFixture,
+  workflowFixture,
   type TaskFixtureSpec,
 } from './helpers/model'
-import { createClarifyAnswerQueries } from '@/modules/collaboration/composition'
 
 async function readConfig(db: PersistenceDb, taskId: string) {
   const { tasks } = tablesOf(db)

@@ -1,6 +1,6 @@
+import { tablesOf } from '@/platform/persistence/sessionTables'
 // RFC-359 W4-B1 —— 子任务预算查询：一份实现，两个 provider 共用。
 
-import { tablesOf } from '@/platform/persistence/sessionTables'
 import { and, eq, inArray, isNotNull } from 'drizzle-orm'
 
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'

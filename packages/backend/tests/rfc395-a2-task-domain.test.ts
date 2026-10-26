@@ -1,3 +1,9 @@
+import { taskMountAtCreation } from '@/modules/task-execution/domain/taskCreation'
+import {
+  decodeTaskSubject,
+  taskSubjectStorageMismatch,
+  type StoredTaskSubject,
+} from '@/modules/task-execution/infrastructure/migration/task/subject'
 // RFC-395 II-a A2: pure subject, mount, checkpoint and rollback contracts shared by live adapters and conversion.
 import { describe, expect, test } from 'bun:test'
 import {
@@ -6,14 +12,11 @@ import {
   workgroupLaunchMode,
 } from '@agent-workflow/shared'
 import {
-  decodeTaskSubject,
   isTurnEngineTaskSubject,
   definitionAnchorId,
   projectTaskSubject,
   taskDefinitionOrigin,
-  taskSubjectStorageMismatch,
   TASK_DEFINITION_HOSTS,
-  type StoredTaskSubject,
   type TaskSubject,
 } from '@/modules/task-execution/domain/taskSubject'
 import { deriveTaskCreationLineage } from '@/modules/task-execution/domain/taskCreation'
@@ -25,17 +28,14 @@ import {
   type TaskRepositoryMount,
   type RequestedSource,
 } from '@/modules/task-execution/domain/taskRepository'
-import {
-  decodeTaskRepositoryMount,
-  taskRepositoryMountColumns,
-} from '@/modules/task-execution/infrastructure/taskRepositoryCodec'
+import { decodeTaskRepositoryMount } from '@/modules/task-execution/infrastructure/taskRepositoryCodec'
 import {
   decodeTaskCheckpoints,
   encodeTaskCheckpoints,
   encodeTaskCheckpointPatch,
-} from '@/modules/task-execution/infrastructure/taskCheckpointCodec'
+} from '@/modules/task-execution/infrastructure/migration/run/legacyCheckpointCodec'
 import { planTaskCheckpointRollback } from '@/modules/task-execution/domain/taskCheckpointRollback'
-import { decodeTaskRollbackPlan } from '@/modules/task-execution/infrastructure/taskRollbackCodec'
+import { decodeTaskRollbackPlan } from '@/modules/task-execution/infrastructure/migration/run/legacyRollback'
 import type { TaskRepositoryCheckpoint } from '@/modules/task-execution/domain/taskCheckpoint'
 
 const hosts = TASK_DEFINITION_HOSTS
@@ -173,23 +173,36 @@ describe('A2 repository surface', () => {
       expect(surface.repos.map((repo) => repo.mountPath)).toEqual(paths)
       expect(surface.repos.every((repo) => repo.worktreeDirName === repo.mountPath)).toBe(true)
       expect(surface.spaceNodes.map((node) => node.path)).toEqual(nodePaths)
-      for (const entry of mounts)
-        expect(decodeTaskRepositoryMount(taskRepositoryMountColumns(entry))).toMatchObject(entry)
+      for (const entry of mounts) {
+        const { worktreePath: _path, ...facts } = entry
+        expect(taskMountAtCreation('task', entry)).toEqual({
+          ...facts,
+          taskId: 'task',
+          repoKey: `task:mount:${entry.mountPath}`,
+          branchState: 'branch',
+          schemaVersion: 1,
+        })
+      }
     })
-  test('writes assert directory identity, reads preserve imported names, and ancestry reaches a fixed point', () => {
-    expect(() =>
-      taskRepositoryMountColumns(
-        decodeTaskRepositoryMount({
-          ...taskRepositoryMountColumns(mount('nested/svc')),
-          worktreeDirName: 'svc',
-        }),
-      ),
-    ).toThrow('task-repository-mount-mismatch')
+  test('target writes use one path while the frozen decoder retains historical directory evidence', () => {
+    const entry = mount('nested/svc')
+    for (const baseCommit of ['sha', null]) {
+      const { worktreePath: _path, ...facts } = entry
+      expect(
+        taskMountAtCreation('task', { ...entry, baseBranch: '', branch: '', baseCommit }),
+      ).toEqual({
+        ...facts,
+        taskId: 'task',
+        repoKey: 'task:mount:nested/svc',
+        baseBranch: null,
+        branch: null,
+        baseCommit,
+        branchState: baseCommit === null ? 'none' : 'detached',
+        schemaVersion: 1,
+      })
+    }
     expect(
-      decodeTaskRepositoryMount({
-        ...taskRepositoryMountColumns(mount('nested/svc')),
-        worktreeDirName: 'svc',
-      }),
+      decodeTaskRepositoryMount({ ...entry, repoIndex: entry.ordinal, worktreeDirName: 'svc' }),
     ).toMatchObject({ mountPath: 'nested/svc', worktreeDirName: 'svc' })
     const paths = taskRepositoryNodePaths(['nested/svc'], ['empty/leaf'])
     expect(paths).toEqual(['', 'empty', 'nested', 'empty/leaf', 'nested/svc'])

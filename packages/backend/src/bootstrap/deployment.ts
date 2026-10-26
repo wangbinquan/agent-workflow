@@ -4,7 +4,7 @@
 // whichever platform variables happen to be present); standalone is the
 // default. A CrewStation-hosted instance runs the same start and migrate
 // sequences with the hosted adapters selected here.
-import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { composeCrewStationRestoreNormalization, composeCrewStationProfile } from './crewstation'
 import {
   composeCrewStationMigrationInstallation,
@@ -55,8 +55,19 @@ export async function migrateForDeployment(
     const { migrateCommand } = await import('./migrate')
     return await migrateCommand()
   }
+  if (env.CS_DATABASE_MIGRATION_OPERATION_ID) {
+    const { composeHostedEpochJobEntry } = await import('./epochMigrationHostedEntry')
+    const { runHostedEpochSwitchJob, restoreHostedEpoch1Backup } =
+      await import('./epochMigrationHosted')
+    const deps = composeHostedEpochJobEntry(env)
+    return {
+      output: env.CS_DATABASE_RESTORE_REFERENCE
+        ? await restoreHostedEpoch1Backup(env, deps)
+        : await runHostedEpochSwitchJob(env, deps),
+    }
+  }
   const environment = readCrewStationDatabaseEnvironment(env)
-  const prepared = await prepareManualDatabaseMigration(buildLogicalSchemaContract(), {
+  const prepared = await prepareManualDatabaseMigration(logicalSchemaContract, {
     kind: 'selected',
     configuration: {
       read: () => crewStationDatabaseConfig(env),
@@ -65,7 +76,7 @@ export async function migrateForDeployment(
       },
     },
     installation: composeCrewStationMigrationInstallation(
-      buildLogicalSchemaContract(),
+      logicalSchemaContract,
       environment,
       env,
       composeCrewStationRestoreNormalization(),
@@ -85,16 +96,26 @@ export async function verifyDatabaseRestoreForDeployment(
     throw new Error('database restore verification requires CrewStation deployment')
   const environment = readCrewStationDatabaseEnvironment(env)
   const prepared = await prepareCrewStationDatabase({
-    contract: buildLogicalSchemaContract(),
+    contract: logicalSchemaContract,
     environment,
     env,
     schema: 'verify',
   })
   await prepared.runtime.close()
   const receipt = await verifyCrewStationDatabaseRestore({
-    contract: buildLogicalSchemaContract(),
+    contract: logicalSchemaContract,
     environment,
     env,
   })
   return `CS_DATABASE_RESTORE_RECEIPT=${JSON.stringify(receipt)}\n`
+}
+
+export async function verifyDatabaseMigrationForDeployment(
+  env: Readonly<Record<string, string | undefined>>,
+): Promise<string> {
+  if (readDeploymentMode(env) !== 'crewstation')
+    throw new Error('database migration verification requires CrewStation deployment')
+  const { verifyHostedEpochSwitch } = await import('./epochMigrationHosted')
+  const { composeHostedEpochJobEntry } = await import('./epochMigrationHostedEntry')
+  return verifyHostedEpochSwitch(env, composeHostedEpochJobEntry(env))
 }

@@ -1,9 +1,11 @@
-// RFC-395 II-a A7：保留人工门原有的同事务写入与 CAS，存储归执行域。
-import { and, eq } from 'drizzle-orm'
-import type { PersistenceTx } from '@/platform/persistence/persistenceDb'
-import { engineOf } from '@/platform/persistence/databaseTransaction'
-import { insertOne } from '@/platform/persistence/singleInsert'
+import { writeNodeRunOutputInTx } from './nodeExecutionPersistence'
 import { tablesOf } from '@/platform/persistence/sessionTables'
+// RFC-395 II-a A7：保留人工门原有的同事务写入与 CAS，存储归执行域。
+import { engineOf } from '@/platform/persistence/databaseTransaction'
+import type { PersistenceTx } from '@/platform/persistence/persistenceDb'
+
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { and, eq } from 'drizzle-orm'
 import type { HumanGatePersistenceParticipantInTx } from '../application/ports/humanGatePersistenceParticipant'
 
 /** 只迁移既有调用点的聚合锁，不增加检查或另开事务。 */
@@ -81,15 +83,8 @@ async function writeReviewOutputInTx(
     readonly archiveJson?: string | null
   },
 ): Promise<void> {
-  const { nodeRunOutputs } = tablesOf(tx)
-  const { nodeRunId, portName, ...content } = input
-  await tx
-    .insert(nodeRunOutputs)
-    .values({ nodeRunId, portName, ...content })
-    .onConflictDoUpdate({
-      target: [nodeRunOutputs.nodeRunId, nodeRunOutputs.portName],
-      set: content,
-    })
+  const { nodeRunId, ...output } = input
+  await writeNodeRunOutputInTx(tx, nodeRunId, output)
 }
 
 async function transferTaskOwnerInTx(

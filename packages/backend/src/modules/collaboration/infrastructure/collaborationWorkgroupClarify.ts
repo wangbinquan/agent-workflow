@@ -1,16 +1,19 @@
-import { createTaskGateQueries } from '@/modules/task-execution/public/queries'
+import {
+  createTaskGateQueries,
+  createNodeRunQueries,
+} from '@/modules/task-execution/public/queries'
 import { createClarifyAnswerWritePort } from './clarifyAnswerWrite'
-import { createNodeRunQueries } from '@/modules/task-execution/public/queries'
 
 import { tablesOf } from '@/platform/persistence/sessionTables'
-import type { WorkgroupAssignmentStatus } from '@agent-workflow/shared'
 import {
+  type WorkgroupAssignmentStatus,
   parseBatchShardKey,
   parseMsgShardKey,
   resolveClarifyBudget,
   wgClarifyAskerKey,
   workgroupHasHumanMember,
 } from '@agent-workflow/shared'
+
 import { and, eq, inArray } from 'drizzle-orm'
 
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
@@ -107,7 +110,8 @@ export async function dismissOpenClarifyParksForAutonomous(
     let dismissedSessionCount = 0
     const dismissedSessions: Array<{ nodeRunId: string; nodeId: string }> = []
     const requeuedAssignments: Array<{ id: string; to: WorkgroupAssignmentStatus }> = []
-    const { clarifyRounds, workgroupAssignments } = tablesOf(tx)
+    const { workgroupAssignments } = tablesOf(tx)
+    const { clarifyRounds } = tablesOf(tx)
     const open = await tx
       .select({
         id: clarifyRounds.id,

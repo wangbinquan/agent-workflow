@@ -1,3 +1,5 @@
+import { nodeRunFixtureColumns } from './helpers/model/nodeRun'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { withO2Closure } from './helpers/o2Closure'
 // RFC-056 PR-B T7 — integration tests for the cross-clarify side of /api/clarify.
 //
@@ -20,7 +22,7 @@ import { withO2Closure } from './helpers/o2Closure'
 //   6. POST fails for cross-clarify with non-admin / non-target actor (auth gate).
 
 import { nodeRunFixture, taskFixture, workflowFixture } from './helpers/model'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+
 import { createClarifyRound } from '../src/services/clarify/service'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import type { Hono } from 'hono'
@@ -325,7 +327,10 @@ describe('POST /api/clarify/:nodeRunId/answers — cross-clarify directive branc
       expect(body.kind).toBe('autodispatch')
       expect(body.roundKind).toBe('cross')
       const { nodeRuns } = tablesOf(db)
-      const runs = await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
+      const runs = await db
+        .select(nodeRunFixtureColumns(db))
+        .from(nodeRuns)
+        .where(eq(nodeRuns.taskId, taskId))
       // The asker (questioner) re-runs; RFC-162 creates no designer entry → no designer rerun.
       expect(
         runs.some(
@@ -363,7 +368,10 @@ describe('POST /api/clarify/:nodeRunId/answers — cross-clarify directive branc
       expect(body.kind).toBe('autodispatch')
       expect(body.roundKind).toBe('cross')
       const { nodeRuns, clarifyRounds } = tablesOf(db)
-      const runs = await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
+      const runs = await db
+        .select(nodeRunFixtureColumns(db))
+        .from(nodeRuns)
+        .where(eq(nodeRuns.taskId, taskId))
       // stop → the questioner re-runs (with the STOP anchor); NO designer rerun.
       expect(
         runs.some(

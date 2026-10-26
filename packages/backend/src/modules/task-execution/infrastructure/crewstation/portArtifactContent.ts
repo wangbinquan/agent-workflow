@@ -1,8 +1,15 @@
 import {
-  legacyHostedPortArchivePath,
-  legacyPortArchiveTask,
-  decodeLegacyPortArchiveFile,
-} from '@/platform/content/legacyPortArchive'
+  createContentStore,
+  databaseContentPolicy,
+  contentReadTransport,
+  contentRefOf,
+  hostedObjectOf,
+} from '@/platform/content/infrastructure/contentStore'
+import {
+  hostedPortArchivePath,
+  portArchiveTask,
+  decodePortArchiveFile,
+} from '@/platform/content/locations/portArchive'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { eq } from 'drizzle-orm'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
@@ -34,6 +41,13 @@ export function createHostedPortArtifactContent(input: {
   /** `open` resumes a paused parent: platform file reads need it running. */
   readonly workspace: { open(taskId: string): Promise<{ readonly businessTaskId: string } | null> }
 }): PortArtifactContentEffects {
+  const content = createContentStore({
+    db: input.db,
+    policy: databaseContentPolicy,
+    transports: {
+      object: contentReadTransport(async (ref) => input.objects.read(hostedObjectOf(ref).id)),
+    },
+  })
   const find = async (reference: string) => {
     const { hostedTaskArtifacts } = tablesOf(input.db)
     return (
@@ -43,7 +57,7 @@ export function createHostedPortArtifactContent(input: {
         .where(
           eq(
             hostedTaskArtifacts.reference,
-            decodeLegacyPortArchiveFile(reference, 'object').location.value,
+            decodePortArchiveFile(reference, 'object').location.value,
           ),
         )
         .limit(1)
@@ -81,7 +95,7 @@ export function createHostedPortArtifactContent(input: {
     return Buffer.concat(chunks)
   }
   const write = async (reference: string, bytes: Uint8Array): Promise<void> => {
-    const taskId = legacyPortArchiveTask(reference)
+    const taskId = portArchiveTask(reference)
     if (taskId === null) throw new Error('hosted-port-artifact-reference-invalid')
     const digest = sha256Hex(bytes)
     const existing = await find(reference)
@@ -112,7 +126,7 @@ export function createHostedPortArtifactContent(input: {
   return {
     prepareArchive: async () => undefined,
     reference: (namespace, index, extension) =>
-      legacyHostedPortArchivePath(
+      hostedPortArchivePath(
         namespace.taskId,
         namespace.nodeRunId,
         namespace.portName,
@@ -127,7 +141,7 @@ export function createHostedPortArtifactContent(input: {
     async readArchive(taskId, reference) {
       const row = await find(reference)
       if (row === undefined || row.taskId !== taskId) return null
-      const bytes = await input.objects.read(row.objectId)
+      const bytes = await content.read(contentRefOf(row))
       if (bytes.byteLength !== row.size || sha256Hex(bytes) !== row.digest)
         throw new Error('hosted-port-artifact-digest-mismatch')
       return bytes

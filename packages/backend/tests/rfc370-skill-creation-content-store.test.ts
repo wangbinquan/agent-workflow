@@ -260,7 +260,8 @@ describeEachProvider('RFC-370 skill creation content store', (harness) => {
       ),
     ).rejects.toThrow('legacy skill producer requires the local file creation store')
     expect(producerCalled).toBe(false)
-    const { skills, skillOperations } = tablesOf(harness.db)
+    const { skillOperations } = tablesOf(harness.db),
+      { skills } = tablesOf(harness.db)
     expect(await harness.db.select().from(skills)).toEqual([])
     expect(await harness.db.select().from(skillOperations)).toEqual([])
     expect(await locks()).toEqual([])
@@ -336,7 +337,8 @@ describeEachProvider('RFC-370 skill creation content store', (harness) => {
   })
 
   test('production catalog threads async file creation through editor and ZIP including binary files', async () => {
-    const { users, skillVersions } = tablesOf(harness.db)
+    const { users } = tablesOf(harness.db),
+      { skillVersions } = tablesOf(harness.db)
     await insertOne(harness.db, users, {
       id: 'creation-owner',
       username: 'creation-owner',

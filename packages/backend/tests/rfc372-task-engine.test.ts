@@ -24,7 +24,6 @@ import { reenterScheduler } from './reenter-scheduler'
 import ts from 'typescript'
 import { inverseRfc372ClarifyRootBinding } from './helpers/rfc372ClarifyRootInverse'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const MOCK_RUNTIME = resolve(import.meta.dir, 'fixtures', 'rfc372-native-runtime.ts')
 
 // Each self/cross × runtime × session-mode case drives actual scheduler rounds
@@ -38,7 +37,7 @@ test('both daemon bootstraps bind follow-up generation into the original clarify
   for (const path of ['../src/bootstrap/daemonHttpComposition.ts']) {
     const source = await Bun.file(new URL(path, import.meta.url)).text()
     expect(source).toMatch(
-      /const collaborationRouteOperations = composeCollaborationRouteOperations\(\{\s*taskLock: composeHumanGateTaskLockPort,\s*followupGenerator: composeClarifyFollowupGenerator\(\{[\s\S]*?registry: (?:deps|core)\.runtimeRegistry,[\s\S]*?binding: narrativeSystemAgentBinding,/,
+      /const collaborationRouteOperations = composeCollaborationRouteOperations\(\{[\s\S]*?taskLock: composeHumanGateTaskLockPort,[\s\S]*?followupGenerator: composeClarifyFollowupGenerator\(\{[\s\S]*?registry: (?:deps|core)\.runtimeRegistry,[\s\S]*?binding: narrativeSystemAgentBinding,/,
     )
     const fileName = fileURLToPath(new URL(path, import.meta.url))
     const parse = (text: string) =>
@@ -80,7 +79,7 @@ async function buildHarness() {
   writeFileSync(join(worktreePath, 'r.md'), '# r\n')
   await runGit(worktreePath, ['add', '.'])
   await runGit(worktreePath, ['commit', '-m', 'init'])
-  const db = createInMemoryDb(MIGRATIONS)
+  const db = createInMemoryDb()
   return {
     db,
     appHome,

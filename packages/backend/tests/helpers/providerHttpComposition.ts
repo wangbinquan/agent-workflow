@@ -1,5 +1,8 @@
+import { epoch2RuntimeTestPorts } from './epoch2RuntimePorts'
+import { createCodeHistoryPackageReader } from '@/modules/code-capability/composition/historyQueries'
+import { readActiveEpochInstallation } from '@/modules/system-operations/composition/epochInstallation'
 // RFC-392: exercise the passive HTTP injection boundary with complete session modules on both engines.
-import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import {
   composeProviderAppComposition,
   type ProviderAppOwnerInput,
@@ -27,7 +30,7 @@ export async function createProviderHttpCompositionFixture(
     throw new Error('HTTP composition fixture does not migrate')
   }
   const databaseMigration = composeDatabaseMigrationModule({
-    contract: buildLogicalSchemaContract(),
+    contract: logicalSchemaContract,
     configPath,
     sqlitePath: join(application.appHome, 'db.sqlite'),
     operationsRoot: join(application.appHome, 'database-migrations'),
@@ -40,11 +43,19 @@ export async function createProviderHttpCompositionFixture(
     },
     executionMode: 'inline',
   })
+  const installation = await readActiveEpochInstallation(harness.db)
+  const codeHistory = createCodeHistoryPackageReader({
+    db: harness.db,
+    content: epoch2RuntimeTestPorts(harness.db).content,
+    installation: installation.history,
+  })
   return {
     ...application,
     compose(overrides: Partial<ProviderAppOwnerInput<DatabaseProvider>['modules']>) {
       const modules = { ...application.modules, ...overrides }
       const http = composeProviderAppComposition({
+        historyRestrictions: epoch2RuntimeTestPorts(harness.db).historyRestrictions,
+        codeHistory,
         db: harness.db,
         token: input.token,
         appHome: application.appHome,

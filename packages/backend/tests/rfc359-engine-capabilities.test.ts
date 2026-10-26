@@ -1,3 +1,4 @@
+import { tablesOf } from '@/platform/persistence/sessionTables'
 // RFC-359 W2-T11b —— 能力矩阵的闭集纪律：**每一项在两个引擎上各有一次真实执行**。
 //
 // 这是矩阵存在的意义：一份实现按能力提需求，边界按引擎渲染。渲染对不对不能靠读代码，
@@ -7,12 +8,12 @@
 // SQLite 侧用内存库；PostgreSQL 侧按环境门控（无 URL 时 skip，与 rfc357-postgresql-page 同一约定；
 // RFC-359 W5-T21 落地后由全量 PG lane 保证「有库时必跑」）。
 
+import { decodeRawValue, rawExec, rawRows } from '@/platform/persistence/queryHelpers'
+
 import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
-import { rawExec, rawRows, decodeRawValue } from '@/platform/persistence/queryHelpers'
-import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { describe, expect, test } from 'bun:test'
 import { eq, sql } from 'drizzle-orm'
+import { PgDialect } from 'drizzle-orm/pg-core'
 import { SQLiteSyncDialect } from 'drizzle-orm/sqlite-core'
 
 import { createInMemoryDb, type DbClient } from '@/db/client'
@@ -26,9 +27,8 @@ import {
   createSqliteDatabaseSession,
 } from '@/platform/persistence/databaseTransaction'
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
-import { migratePostgresqlSchema } from '@/platform/persistence/postgresqlMigrator'
+import { createPostgresqlTestDatabase } from './helpers/testDatabase'
 import { createPostgresqlDatabaseRuntime } from '@/platform/persistence/postgresqlRuntime'
-import { MIGRATIONS } from './migration-freeze'
 
 const render = (q: ReturnType<typeof sql>): string => new SQLiteSyncDialect().sqlToQuery(q).sql
 
@@ -39,6 +39,15 @@ describe('RFC-359 能力矩阵 —— 引擎无关项在两侧逐字一致', () 
     createSqliteCapabilities(),
     createPostgresqlCapabilities(),
   ]
+
+  test('stable read lock renders inside the dialect boundary', () => {
+    expect(
+      new SQLiteSyncDialect().sqlToQuery(createSqliteCapabilities().stableReadLockClause()).sql,
+    ).toBe('')
+    expect(
+      new PgDialect().sqlToQuery(createPostgresqlCapabilities().stableReadLockClause()).sql,
+    ).toBe('for share')
+  })
 
   test('likeEscape：转义符、% 与 _ 都被转义，且顺序正确（先转义转义符本身）', () => {
     for (const cap of both) {
@@ -60,13 +69,27 @@ describe('RFC-359 能力矩阵 —— 引擎无关项在两侧逐字一致', () 
 describe('RFC-359 能力矩阵 —— SQLite 真实执行', () => {
   const cap = createSqliteCapabilities()
   function scratch(): DbClient {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createInMemoryDb()
     rawExec(
       db,
       sql.raw('create table cap_scratch(id integer primary key, name text unique, v integer)'),
     )
     return db
   }
+
+  test('stable read uses the transaction writer reservation on SQLite', async () => {
+    const db = scratch()
+    await rawExec(db, sql`insert into cap_scratch(name, v) values ('stable', 7)`)
+    await createSqliteDatabaseSession(db).transaction(async (tx) => {
+      expect(
+        await rawRows(
+          tx,
+          sql`select v from cap_scratch where name = 'stable' ${cap.stableReadLockClause()}`,
+          { v: 'int' },
+        ),
+      ).toEqual([{ v: 7 }])
+    })
+  })
 
   test('isolation 与参数上限', () => {
     expect(cap.provider).toBe('sqlite')
@@ -217,7 +240,6 @@ const PG_URL = process.env['RFC359_DATABASE_URL'] ?? process.env['RFC357_DATABAS
 const PG_URL_ENV =
   process.env['RFC359_DATABASE_URL'] !== undefined ? 'RFC359_DATABASE_URL' : 'RFC357_DATABASE_URL'
 const GENERATION_ID = 'dbg_rfc359_capabilities_01'
-const OPERATION_ID = 'dbm_rfc359_capabilities_01'
 const realTest = PG_URL === undefined ? test.skip : test
 
 describe('RFC-359 能力矩阵 —— PostgreSQL 真实执行', () => {
@@ -244,17 +266,7 @@ describe('RFC-359 能力矩阵 —— PostgreSQL 真实执行', () => {
         // 客户端的业务写围栏按 runtime.generationId 核对 database_generations，迁移器不替测试登记它。
         await raw('DROP SCHEMA IF EXISTS agent_workflow CASCADE')
         await raw('DROP SCHEMA IF EXISTS agent_workflow_meta CASCADE')
-        await migratePostgresqlSchema({ headContract: buildLogicalSchemaContract(), runtime })
-        await raw(
-          'INSERT INTO "agent_workflow_meta"."logical_copy_operations" ' +
-            '(operation_id, source_generation_id, contract_digest, plan_digest, stage, created_at, updated_at) ' +
-            `VALUES ('${OPERATION_ID}', 'dbg_rfc359_source', 'digest', 'plan', 'prepared', 1, 1)`,
-        )
-        await raw(
-          'INSERT INTO "agent_workflow_meta"."database_generations" ' +
-            '(generation_id, operation_id, source_generation_id, contract_digest, state, activated_at, first_live_write_at) ' +
-            `VALUES ('${GENERATION_ID}', '${OPERATION_ID}', 'dbg_rfc359_source', 'digest', 'active', 1, 1)`,
-        )
+        await createPostgresqlTestDatabase(runtime)
         // 进程级 provider 投影必须还原：一个 bun 进程跑多个文件，留着会渗进后面的文件（本仓有前科）。
         await raw('drop table if exists public.cap_scratch')
         await raw(
@@ -262,6 +274,18 @@ describe('RFC-359 能力矩阵 —— PostgreSQL 真实执行', () => {
         )
         const db = createPostgresqlDatabaseClient(runtime)
         const session = createPostgresqlDatabaseSession(db)
+
+        await rawExec(db, sql`insert into cap_scratch(name, v) values ('stable', 7)`)
+        await session.transaction(async (tx) => {
+          expect(
+            await rawRows(
+              tx,
+              sql`select v from cap_scratch where name = 'stable' ${cap.stableReadLockClause()}`,
+              { v: 'int' },
+            ),
+          ).toEqual([{ v: 7 }])
+        })
+        await rawExec(db, sql`delete from cap_scratch`)
 
         // ① 静态形态
         expect(cap.provider).toBe('postgresql')
@@ -442,6 +466,32 @@ describe('RFC-359 能力矩阵 —— PostgreSQL 真实执行', () => {
         } finally {
           releaseKeyHolder()
           await keyHolder
+        }
+        let releaseStable!: () => void
+        let stableReady!: () => void
+        const stableReleased = new Promise<void>((resolve) => {
+          releaseStable = resolve
+        })
+        const stableHolding = new Promise<void>((resolve) => {
+          stableReady = resolve
+        })
+        const stable = session.transaction(async (tx) => {
+          await rawRows(tx, sql`select v from cap_scratch ${cap.stableReadLockClause()}`, {
+            v: 'int',
+          })
+          stableReady()
+          await stableReleased
+        })
+        await stableHolding
+        const update = session.transaction(async (tx) => {
+          await rawExec(tx, sql`update cap_scratch set v = 9`)
+        })
+        try {
+          expect(await waitingAfter(update)).toBe('waiting')
+        } finally {
+          releaseStable()
+          await stable
+          await update
         }
       } finally {
         try {

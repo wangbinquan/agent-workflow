@@ -102,6 +102,17 @@ async function seedSelfRound(
     schemaVersion: 3,
   })
   await taskFixture(db, {
+    // Historical checkpoints keep their real root mount after workspace removal.
+    repos: [
+      {
+        repoIndex: 0,
+        mountPath: '',
+        repoPath: '/tmp/aw-rfc161',
+        baseBranch: 'main',
+        branch: `agent-workflow/${taskId}`,
+        worktreePath: '',
+      },
+    ],
     id: taskId,
     name: 'fixture',
     ownerUserId,

@@ -13,7 +13,7 @@
 // 判据用「目标环境变量根本不存在」当探针：真去开 runtime 就会以
 // `postgresql-url-env-missing` 失败，不去开就安静返回 manifest。
 
-import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { afterEach, describe, expect, test } from 'bun:test'
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -27,14 +27,14 @@ import {
 import { PostgresqlLogicalTargetError } from '@/platform/persistence/postgresqlLogicalTarget'
 import { createFileDatabaseMigrationStore } from '@/modules/system-operations/infrastructure/fileDatabaseMigrationStore'
 import { DATABASE_MIGRATION_PHASES } from '@/modules/system-operations/domain/databaseMigration'
-import { loadPostgresqlMigrationHistory } from '@/platform/persistence/postgresqlMigrationHistory'
+import { loadPostgresqlMigrationHistory } from '@/platform/persistence/schema/history/logicalHistory'
 
 const roots: string[] = []
 // A status probe validates its copy's schema before opening the target runtime.
-// Keep this accepting-writes fixture on the real frozen historical contract so
+// Keep this accepting-writes fixture on the native epoch-2 history contract so
 // the missing-URL sentinel below continues to observe that runtime boundary.
-const HISTORICAL_CONTRACT = (
-  await loadPostgresqlMigrationHistory({ headContract: buildLogicalSchemaContract() })
+const COPY_CONTRACT = (
+  await loadPostgresqlMigrationHistory({ headContract: logicalSchemaContract })
 ).root.contract
 const ARTIFACT_DIGEST = `sha256:${'b'.repeat(64)}`
 const OPERATION_ID = 'dbm_operation_0001'
@@ -68,13 +68,13 @@ function acceptingWrites(): {
   control.start({
     idempotencyKey: 'settings-click-0001',
     sourceGenerationId: 'dbg_legacy_sqlite',
-    sourceSchemaDigest: HISTORICAL_CONTRACT.digest,
+    sourceSchemaDigest: COPY_CONTRACT.digest,
     sourceDatabaseFingerprint: 'sqlite:fixture',
     target: TARGET,
     tableCounts: {
-      source: HISTORICAL_CONTRACT.sourceTableCount,
-      active: HISTORICAL_CONTRACT.activeTableCount,
-      archiveOnly: HISTORICAL_CONTRACT.archiveOnlyTableCount,
+      source: COPY_CONTRACT.sourceTableCount,
+      active: COPY_CONTRACT.activeTableCount,
+      archiveOnly: COPY_CONTRACT.archiveOnlyTableCount,
     },
     ownerLeaseMs: 30_000,
     now: 1_000,
@@ -103,8 +103,8 @@ function acceptingWrites(): {
 
 function coordinatorOn(root: string, operationsRoot: string) {
   return createDatabaseMigrationCoordinator({
-    headContract: buildLogicalSchemaContract(),
-    contract: buildLogicalSchemaContract(),
+    headContract: logicalSchemaContract,
+    contract: logicalSchemaContract,
     sqlitePath: join(root, 'db.sqlite'),
     operationsRoot,
     generationPointerPath: join(root, 'database-generation.json'),

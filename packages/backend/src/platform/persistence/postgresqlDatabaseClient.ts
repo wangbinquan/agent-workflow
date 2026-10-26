@@ -2,7 +2,9 @@
 import type { SQL as BunSQL } from 'bun'
 import { getTableColumns, is, Placeholder, SQL, sql, type Table } from 'drizzle-orm'
 import { drizzle, type BunSQLDatabase } from 'drizzle-orm/bun-sql'
-import { nativeTableSets } from '@/db/schema'
+import { PgDialect } from 'drizzle-orm/pg-core'
+import { persistenceSchemaBinding, type NativeTableSets } from './schema/tables'
+import { bindSchemaRowRuleErrors } from './schema/rowRules'
 import { createPostgresqlCapabilities } from './capabilities'
 import { bindDatabaseHandle } from './sessionTables'
 import { bindSingleInsert } from './singleInsert'
@@ -23,7 +25,7 @@ export class PostgresqlGenerationFenceError extends Error {
     this.name = 'PostgresqlGenerationFenceError'
   }
 }
-export type PostgresqlDatabaseClient = BunSQLDatabase<typeof nativeTableSets.postgresql> & {
+export type PostgresqlDatabaseClient = BunSQLDatabase<NativeTableSets['postgresql']> & {
   readonly $provider: 'postgresql'
   readonly $generationId: string
 }
@@ -38,8 +40,13 @@ interface NativeClient extends SqlClient {
 }
 interface WriteState {
   beforeWrite?: Promise<void>
+  marked?: boolean
 }
 const markedGenerations = new WeakSet<PostgresqlDatabaseRuntime>()
+/** Test fixture reinstall keeps the runtime but replaces its generation metadata. */
+export function resetPostgresqlGenerationWriteCache(runtime: PostgresqlDatabaseRuntime): void {
+  markedGenerations.delete(runtime)
+}
 
 // Bun.SQL 的 begin / savepoint 把回调返回的数组过一遍 Promise.all，写结果上的 `count` / `command`
 // 随之丢失（事务外的单条写经下面的围栏事务回来，影响行数就成了 0）。值装箱跨过事务边界。
@@ -54,33 +61,35 @@ async function assertActiveGeneration(
   runtime: PostgresqlDatabaseRuntime,
 ): Promise<void> {
   const rows = await connection.unsafe(
-    'SELECT generation_id FROM "agent_workflow_meta"."database_generations" ' +
-      "WHERE generation_id = $1 AND state = 'active'",
+    'SELECT generation_id FROM "agent_workflow_meta"."generations" ' +
+      "WHERE generation_id = $1 AND state = 'active' " +
+      new PgDialect().sqlToQuery(createPostgresqlCapabilities().stableReadLockClause()).sql,
     [runtime.generationId],
   )
   if (rows.length !== 1) throw new PostgresqlGenerationFenceError()
 }
 
-/** 只设置首次写标记；稳态不再 UPDATE 同一个元数据行，保持既有 SERIALIZABLE 行为。 */
 async function markFirstGenerationWrite(
   connection: SqlClient,
   runtime: PostgresqlDatabaseRuntime,
+  state: WriteState,
 ): Promise<void> {
-  if (markedGenerations.has(runtime)) return
+  if (markedGenerations.has(runtime) || state.marked) return
   const rows = await connection.unsafe(
-    'WITH marked AS (' +
-      'UPDATE "agent_workflow_meta"."database_generations" ' +
-      'SET first_live_write_at = floor(extract(epoch from clock_timestamp()) * 1000)::bigint ' +
-      "WHERE generation_id = $1 AND state = 'active' AND first_live_write_at IS NULL RETURNING generation_id) " +
-      'SELECT generation_id FROM marked UNION ALL ' +
-      'SELECT generation_id FROM "agent_workflow_meta"."database_generations" ' +
-      "WHERE generation_id = $1 AND state = 'active' AND first_live_write_at IS NOT NULL",
+    'SELECT first_live_write_at FROM "agent_workflow_meta"."first_write" WHERE generation_id = $1',
     [runtime.generationId],
   )
-  if (rows.length === 1) markedGenerations.add(runtime)
+  if (rows.length !== 1) throw new PostgresqlGenerationFenceError()
+  if (rows[0]!.first_live_write_at === null)
+    await connection.unsafe(
+      'UPDATE "agent_workflow_meta"."first_write" SET first_live_write_at = floor(extract(epoch from clock_timestamp()) * 1000)::bigint WHERE generation_id = $1 AND first_live_write_at IS NULL',
+      [runtime.generationId],
+    )
+  // Publish to the runtime cache only after the enclosing transaction commits.
+  state.marked = true
 }
 
-/** 构造原生 SQL AST；省略的列由数据库 DEFAULT 求值，不解析/拼修 Drizzle 输出。 */
+/** Construct an INSERT AST with the same retirement lock as ordinary writes. */
 function fencedInsert(
   table: Table,
   value: Record<string, unknown>,
@@ -89,13 +98,13 @@ function fencedInsert(
   const columns = getTableColumns(table)
   const entries = Object.entries(value).filter(([, item]) => item !== undefined)
   if (
-    entries.length === 0 ||
+    !entries.length ||
     entries.some(([name, item]) => !columns[name] || is(item, SQL) || is(item, Placeholder))
   )
     return undefined
   const names = entries.map(([name]) => sql.identifier(columns[name]!.name))
   const values = entries.map(([name, item]) => sql.param(item, columns[name]!))
-  return sql`insert into ${table} (${sql.join(names, sql`, `)}) select ${sql.join(values, sql`, `)} where exists (select 1 from "agent_workflow_meta"."database_generations" where generation_id = ${generationId} and state = 'active')`
+  return sql`insert into ${table} (${sql.join(names, sql`, `)}) select ${sql.join(values, sql`, `)} where exists (select 1 from "agent_workflow_meta"."generations" where generation_id = ${generationId} and state = 'active' ${createPostgresqlCapabilities().stableReadLockClause()})`
 }
 
 export function createPostgresqlDatabaseClient(
@@ -104,26 +113,37 @@ export function createPostgresqlDatabaseClient(
 ): PostgresqlDatabaseClient {
   const pool = runtime.providerPool()
   const engine = createPostgresqlCapabilities()
-  const schema = nativeTableSets.postgresql
+  const { nativeTables, rowRuleCodes } = persistenceSchemaBinding()
+  const schema = nativeTables.postgresql
+  const bind = <T extends object>(handle: T): T => {
+    bindDatabaseHandle(handle, schema, engine)
+    bindSchemaRowRuleErrors(handle, rowRuleCodes)
+    return handle
+  }
   // BunSQL's public factory type requires the complete callable SQL class. Drizzle actually uses
   // unsafe/begin/savepoint; this is the single adapter boundary for that closed driver surface.
   const nativeDatabase = (client: SqlClient) =>
-    bindDatabaseHandle(drizzle(client as unknown as BunSQL, { schema }), schema, engine)
+    bind(drizzle(client as unknown as BunSQL, { schema }))
   const beforeMutation = async (connection: SqlClient, state: WriteState): Promise<void> => {
+    await assertActiveGeneration(connection, runtime)
+    await markFirstGenerationWrite(connection, runtime, state)
     if (options.beforeWrite !== undefined) {
       state.beforeWrite ??= options.beforeWrite(nativeDatabase(connection))
       await state.beforeWrite
     }
-    await markFirstGenerationWrite(connection, runtime)
-    await assertActiveGeneration(connection, runtime)
   }
   const reservedTransaction = async <T>(
-    body: (connection: PostgresqlTransactionConnection) => Promise<T>,
+    body: (connection: PostgresqlTransactionConnection, state: WriteState) => Promise<T>,
   ): Promise<T> => {
     // 先 reserve，再在这条连接上 begin；包含 begin 的池等待也进入 runtime 的 reserve 遥测。
     const connection: PostgresqlReservedConnection = await pool.reserve()
+    const state: WriteState = {}
     try {
-      return unbox(await connection.begin(async (transaction) => box(await body(transaction))))
+      const result = unbox(
+        await connection.begin(async (transaction) => box(await body(transaction, state))),
+      )
+      if (state.marked) markedGenerations.add(runtime)
+      return result
     } finally {
       connection.release()
     }
@@ -141,8 +161,8 @@ export function createPostgresqlDatabaseClient(
             await beforeMutation(connection, transaction.state)
             return await read(connection)
           }
-          return await reservedTransaction(async (reserved) => {
-            await beforeMutation(reserved, {})
+          return await reservedTransaction(async (reserved, state) => {
+            await beforeMutation(reserved, state)
             return await read(reserved)
           })
         }
@@ -161,26 +181,28 @@ export function createPostgresqlDatabaseClient(
       },
       async begin(body) {
         return await reservedTransaction(
-          async (reserved) => await body(clientFor(reserved, { connection: reserved, state: {} })),
+          async (reserved, state) =>
+            await body(clientFor(reserved, { connection: reserved, state })),
         )
       },
       async savepoint(body) {
         if (!transaction) throw new Error('PostgreSQL savepoint requires a transaction')
-        return unbox(
+        const state = { ...transaction.state }
+        const result = unbox(
           await transaction.connection.savepoint(async (nested) =>
-            box(await body(clientFor(nested, { connection: nested, state: transaction.state }))),
+            box(await body(clientFor(nested, { connection: nested, state }))),
           ),
         )
+        Object.assign(transaction.state, state)
+        return result
       },
     }
-    return bindDatabaseHandle(client, schema, engine)
+    return bind(client)
   }
   const db = Object.assign(nativeDatabase(clientFor(pool)), {
     $provider: 'postgresql' as const,
     $generationId: runtime.generationId,
   })
-  // 仅普通单行写走这一条原生构造路径；conflict / returning / 多行仍是原来的 builder。
-  // 首写标记或部署写闸需要事务时，同样回到 native builder + 分类连接。
   const unfenced = nativeDatabase(pool)
   bindSingleInsert(db, async (table, value, fallback) => {
     if (!markedGenerations.has(runtime) || options.beforeWrite !== undefined)

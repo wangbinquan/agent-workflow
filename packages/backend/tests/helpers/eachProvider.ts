@@ -1,3 +1,5 @@
+import { closeProviderFixtureApplications } from './providerFixtureCleanup'
+import { drainTaskLifecycleTestEffects } from './taskLifecycleCommittedEvents'
 // RFC-359 W5-T19e —— 双引擎测试 harness：**双引擎是缺省**（design.md §11.1）。
 //
 // `describeEachProvider(name, body)` 把 body 各跑一遍：SQLite 用内存库；PostgreSQL 用
@@ -10,20 +12,19 @@
 // body 拿到的是 `DatabaseSession` + `EngineCapabilities` + provider-中立客户端，**拿不到
 // provider 名**。测试要按引擎分叉时只能走 capabilities（例如 `isolation === 'exclusive'`）。
 //
-// 每个用例开始时库是「刚迁移完」的状态：SQLite 每次新建内存库；PostgreSQL 每个文件迁移一次，
-// 每个用例前 TRUNCATE 全部业务表并把迁移种下的行原样种回（与 `createInMemoryDb` 的快照语义
-// 对齐，含 auth_login_policy 的 bootstrap 标记）。
+// 默认安装 epoch-2 head、install-only seeds 与完整 meta；只有显式历史 prefix 使用 V1。
+// SQLite 每例新建；PostgreSQL 每文件安装一次，每例恢复业务与 meta 的完整初始快照。
 
 import { queryRows } from '@/platform/persistence/queryHelpers'
-import { buildLogicalSchemaContract, persistenceSchema } from '@/bootstrap/persistenceSchema'
+import { frozenEpoch1Registry } from '@/platform/persistence/migration/epoch1/definitions'
+import { frozenEpoch1Contract } from '@/platform/persistence/migration/epoch1/contract'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, test } from 'bun:test'
 import { SQL } from 'bun'
 import { randomUUID } from 'node:crypto'
 import { getTableName, type Table } from 'drizzle-orm'
 
-import { createInMemoryDb, type DbClient, registerLegacyDaemonTestFixture } from '@/db/client'
+import { type DbClient, registerLegacyDaemonTestFixture } from '@/db/client'
 import type { DatabaseConfig } from '@agent-workflow/shared'
-import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { isPostgresqlSerializationFailure } from '@/platform/persistence/postgresqlSerializationRetry'
 import type { EngineCapabilities } from '@/platform/persistence/capabilities'
@@ -32,10 +33,10 @@ import {
   type DatabaseSession,
 } from '@/platform/persistence/databaseTransaction'
 import {
-  createPostgresqlDatabaseClient,
+  resetPostgresqlGenerationWriteCache,
   type PostgresqlDatabaseClient,
 } from '@/platform/persistence/postgresqlDatabaseClient'
-import { migratePostgresqlSchema } from '@/platform/persistence/postgresqlMigrator'
+import { migratePostgresqlSchema } from '@/platform/persistence/migration/legacy/postgresqlMigrator'
 import {
   createPostgresqlDatabaseRuntime,
   type InstrumentedPostgresqlDatabaseRuntime,
@@ -43,7 +44,13 @@ import {
   type PostgresqlReservedConnection,
   type PostgresqlTransactionConnection,
 } from '@/platform/persistence/postgresqlRuntime'
-import { MIGRATIONS } from '../migration-freeze'
+import {
+  createFrozenEpoch1Db,
+  createFrozenPostgresqlClient,
+  frozenTableSets,
+  FROZEN_MIGRATIONS,
+} from '../migration-freeze'
+import { createTestDb, createPostgresqlTestDatabase } from './testDatabase'
 import {
   recordStatements as recordSqliteStatements,
   type RecordedStatement,
@@ -161,7 +168,7 @@ export interface ProviderHarness extends ProviderDatabaseHarness {
 export interface DescribeEachProviderOptions {
   /** Explicit fixture-source engines (for cross-provider copy tests); targets retain the environment defaults. */
   readonly providers?: readonly TestProvider[]
-  /** Frozen SQLite migration prefix for historical-upgrade fixtures; PostgreSQL uses its own history. */
+  /** Frozen SQLite migration prefix for historical-upgrade fixtures; PostgreSQL also opts into V1's frozen epoch-1 history. */
   readonly sqliteMigrationsFolder?: string
   /** 同 `createInMemoryDb` 的 `bootstrap`：'required' 时不把 auth_login_policy 标成已 bootstrap。 */
   readonly bootstrap?: 'required'
@@ -368,6 +375,7 @@ export function bindDescribeEachProviderLifecycle(
 }
 
 interface HarnessState {
+  close?: () => Promise<void>
   db?: PersistenceDb
   applicationBinding?: ProviderApplicationBinding
   session?: DatabaseSession
@@ -435,6 +443,7 @@ function harnessView(states: readonly HarnessState[]): ProviderHarness {
 }
 
 function clearState(state: HarnessState): void {
+  state.close = undefined
   state.db = undefined
   state.applicationBinding = undefined
   state.session = undefined
@@ -495,43 +504,54 @@ function registerSqlite(
   databaseCount: number,
 ): void {
   const states: HarnessState[] = Array.from({ length: databaseCount }, () => ({}))
-  const restoreDatabase = (state: HarnessState) => {
-    const db = createInMemoryDb(
-      options.sqliteMigrationsFolder ?? MIGRATIONS,
-      options.bootstrap === undefined ? {} : { bootstrap: options.bootstrap },
-    )
+  const restoreDatabase = async (state: HarnessState) => {
+    const fixture =
+      options.sqliteMigrationsFolder === undefined
+        ? await createTestDb({ provider: 'sqlite', ...options })
+        : undefined
+    const db = (fixture?.db ??
+      createFrozenEpoch1Db(options.sqliteMigrationsFolder, options)) as DbClient
+    state.close = async () => {
+      await closeProviderFixtureApplications(db)
+      await drainTaskLifecycleTestEffects(db)
+      if (fixture) await fixture.close()
+      else db.$client.close()
+    }
     state.db = db
     state.applicationBinding = Object.freeze({ provider: 'sqlite', db })
-    state.session = databaseSessionFor(db)
-    state.record = () => recordSqliteStatements((db as unknown as { $client: never }).$client)
+    state.session = fixture?.session ?? databaseSessionFor(db)
+    state.record = () => recordSqliteStatements(db.$client)
     state.explain = async (statement) => sqliteExplain(db, statement)
     state.fixtureDdl = async (statement) => {
-      ;(db as unknown as { $client: { exec(statement: string): void } }).$client.exec(statement)
+      db.$client.exec(statement)
     }
     state.restoreFixture = async () => {
-      ;(db as unknown as { $client: { close(): void } }).$client.close()
-      restoreDatabase(state)
+      await state.close?.()
+      await restoreDatabase(state)
     }
   }
-  beforeEach(() => {
+  beforeEach(async () => {
     try {
-      for (const state of states) {
-        restoreDatabase(state)
-      }
+      for (const state of states) await restoreDatabase(state)
     } catch (error) {
+      for (const state of states) await state.close?.()
       states.forEach(clearState)
       throw error
     }
   }, databaseCount * SQLITE_DATABASE_RESET_TIMEOUT_MS)
-  // 纯同步清理，不建库、不连库——与 PG 泳道的 `afterEach` 同口径，不给预算。
-  afterEach(() => {
-    states.forEach(clearState)
+  afterEach(async () => {
+    try {
+      for (const state of states) await state.close?.()
+    } finally {
+      states.forEach(clearState)
+    }
   })
   body(harnessView(states))
 }
 
 interface PostgresqlSeed {
   readonly table: string
+  readonly schema: string
   /** 迁移刚种下的行，json 数组文本；每个用例前原样种回。 */
   readonly rowsJson: string
 }
@@ -552,22 +572,57 @@ async function snapshotSchema(raw: RawQuery): Promise<PostgresqlSchemaSnapshot> 
   const tables = (
     await rows(
       raw,
-      "select tablename from pg_tables where schemaname = 'agent_workflow' order by tablename",
+      "select schemaname, tablename from pg_tables where schemaname in ('agent_workflow', 'agent_workflow_meta') order by schemaname, tablename",
     )
-  ).map((row) => String(row['tablename']))
+  ).map((row) => ({ schema: String(row['schemaname']), table: String(row['tablename']) }))
   const seeds: PostgresqlSeed[] = []
-  for (const table of tables) {
+  for (const { schema, table } of tables) {
     const [row] = await rows(
       raw,
-      `select coalesce(json_agg(t), '[]'::json)::text as rows_json from "agent_workflow"."${table}" t`,
+      `select coalesce(json_agg(t), '[]'::json)::text as rows_json from "${schema}"."${table}" t`,
     )
     const rowsJson = String(row?.['rows_json'] ?? '[]')
-    if (rowsJson !== '[]') seeds.push({ table, rowsJson })
+    if (rowsJson !== '[]') seeds.push({ schema, table, rowsJson })
+  }
+  const foreignKeys = await rows(
+    raw,
+    `select child_ns.nspname as child_schema, child.relname as child_table,
+            parent_ns.nspname as parent_schema, parent.relname as parent_table
+       from pg_constraint fk
+       join pg_class child on child.oid = fk.conrelid
+       join pg_namespace child_ns on child_ns.oid = child.relnamespace
+       join pg_class parent on parent.oid = fk.confrelid
+       join pg_namespace parent_ns on parent_ns.oid = parent.relnamespace
+      where fk.contype = 'f'
+        and child_ns.nspname in ('agent_workflow', 'agent_workflow_meta')`,
+  )
+  const keyOf = (schema: string, table: string) => `${schema}.${table}`
+  const pending = new Map(seeds.map((seed) => [keyOf(seed.schema, seed.table), seed]))
+  const orderedSeeds: PostgresqlSeed[] = []
+  // Includes the frozen source's logical_copy_operations -> database_generations FK.
+  while (pending.size > 0) {
+    const ready = [...pending].filter(([key]) =>
+      foreignKeys.every((foreignKey) => {
+        const child = keyOf(String(foreignKey.child_schema), String(foreignKey.child_table))
+        const parent = keyOf(String(foreignKey.parent_schema), String(foreignKey.parent_table))
+        return child !== key || child === parent || !pending.has(parent)
+      }),
+    )
+    if (ready.length === 0)
+      throw new Error(
+        `snapshot seed tables form a foreign-key cycle: ${[...pending.keys()].join(', ')}`,
+      )
+    for (const [key, seed] of ready) {
+      orderedSeeds.push(seed)
+      pending.delete(key)
+    }
   }
   return {
-    tables,
-    seeds,
-    hasLoginPolicy: tables.includes('auth_login_policy'),
+    tables: tables.map(({ schema, table }) => `"${schema}"."${table}"`),
+    seeds: orderedSeeds,
+    hasLoginPolicy: tables.some(
+      ({ schema, table }) => schema === 'agent_workflow' && table === 'auth_login_policy',
+    ),
   }
 }
 
@@ -608,9 +663,7 @@ export async function retryOnPostgresqlSerializationFailure<T>(
 const HARNESS_TRUNCATE_ATTEMPTS = 4
 
 async function truncateAll(raw: RawQuery, tables: readonly string[]): Promise<void> {
-  const statement =
-    `truncate table ${tables.map((table) => `"agent_workflow"."${table}"`).join(', ')} ` +
-    `restart identity cascade`
+  const statement = `truncate table ${tables.join(', ')} ` + `restart identity cascade`
   await retryOnPostgresqlSerializationFailure(async () => await raw(statement), {
     maxAttempts: HARNESS_TRUNCATE_ATTEMPTS,
     sleep: async (ms) => await new Promise((resolve) => setTimeout(resolve, ms)),
@@ -631,8 +684,8 @@ async function resetToSnapshot(
       throw new Error(`seed rows for ${seed.table} contain the dollar-quote tag`)
     }
     await raw(
-      `insert into "agent_workflow"."${seed.table}" ` +
-        `select * from json_populate_recordset(null::"agent_workflow"."${seed.table}", ` +
+      `insert into "${seed.schema}"."${seed.table}" ` +
+        `select * from json_populate_recordset(null::"${seed.schema}"."${seed.table}", ` +
         `$aw_seed$${seed.rowsJson}$aw_seed$::json)`,
     )
   }
@@ -648,7 +701,7 @@ type SchemaTable = Table
 
 /** 迁移刚种下的行：按外键拓扑顺序从 SQLite 内存库整表复制到 PostgreSQL。 */
 async function seedFromSqliteSnapshot(target: PersistenceDb): Promise<void> {
-  const source = createInMemoryDb(MIGRATIONS, { bootstrap: 'required' })
+  const source = createFrozenEpoch1Db(FROZEN_MIGRATIONS, { bootstrap: 'required' })
   const pending: Array<{
     name: string
     table: SchemaTable
@@ -656,9 +709,9 @@ async function seedFromSqliteSnapshot(target: PersistenceDb): Promise<void> {
     refs: string[]
   }> = []
   try {
-    const sourceTables = tablesOf(source)
-    const targetTables = tablesOf(target)
-    for (const definition of persistenceSchema.tables) {
+    const sourceTables = frozenTableSets.sqlite
+    const targetTables = frozenTableSets.postgresql
+    for (const definition of frozenEpoch1Registry.tables) {
       const table = sourceTables[definition.schemaSymbol]
       const rows = queryRows(source.select().from(table)) as Record<string, unknown>[]
       if (rows.length === 0) continue
@@ -800,14 +853,6 @@ function recordingRuntime(
   return { ...runtime, providerPool: () => recordingPool } as InstrumentedPostgresqlDatabaseRuntime
 }
 
-async function closeQuietly(connection: PostgresqlHarnessDropConnection): Promise<void> {
-  try {
-    await connection.close({ timeout: 5 })
-  } catch {
-    // 关闭失败不改变调用方的结果；连接终会被服务端回收。
-  }
-}
-
 /**
  * RFC-359 W8 —— **每个测试文件一个 PostgreSQL 数据库**。
  *
@@ -830,28 +875,28 @@ async function closeQuietly(connection: PostgresqlHarnessDropConnection): Promis
  * SQLite-only 0.54–0.55s，差出来的 ~1.05s 就是那份已经在付的开销）。改成每文件一库只是把它
  * 跑在自己的库上。选型过程见 `docs/audit-backlog.md`。
  *
- * 泄漏：进程被 kill 时库会留下。名字带 pid，建库前先 `drop if exists` 同名库（pid 复用即自愈）；
- * CI 的 PG 服务每分片一个容器、每 job 全新，不会累积。本地清理见 audit-backlog 的一行命令。
+ * 每次注册使用独立随机名字：Bun --isolate 仍复用 pid，超时的异步 cleanup 也可能继续执行。
+ * 不重用或预先删除同 pid 的库，避免迟到的清理与下一文件互相影响。
  */
-async function createPostgresqlFileDatabase(
+export async function createPostgresqlFileDatabase(
   sourceUrl: string | undefined,
-  ordinal: number,
+  ordinal = 1,
+  connect: typeof createPostgresqlHarnessDropConnection = createPostgresqlHarnessDropConnection,
 ): Promise<{ readonly url: string | undefined; readonly drop: () => Promise<void> }> {
   if (sourceUrl === undefined) return { url: undefined, drop: async () => undefined }
-  const name = `aw_t_${String(process.pid)}_${String(ordinal)}`
-  const admin = createPostgresqlHarnessDropConnection(sourceUrl)
+  const name = `aw_t_${String(process.pid)}_${String(ordinal)}_${randomUUID().replaceAll('-', '')}`
+  const admin = connect(sourceUrl)
   try {
-    await admin.unsafe(`drop database if exists "${name}"`)
     await admin.unsafe(`create database "${name}"`)
   } finally {
-    await closeQuietly(admin)
+    await admin.close({ timeout: 5 })
   }
   const url = new URL(sourceUrl)
   url.pathname = `/${name}`
   return {
     url: url.toString(),
     drop: async () => {
-      const connection = createPostgresqlHarnessDropConnection(sourceUrl)
+      const connection = connect(sourceUrl)
       try {
         // 本文件的连接此刻已经全关（本函数只在 closeAll 之后被调用），但别人的诊断连接
         // 可能还挂着；先踢掉再删，否则 `drop database` 会因「正在被访问」失败。
@@ -861,10 +906,30 @@ async function createPostgresqlFileDatabase(
         )
         await connection.unsafe(`drop database if exists "${name}"`)
       } finally {
-        await closeQuietly(connection)
+        await connection.close({ timeout: 5 })
       }
     },
   }
+}
+
+/** Close every owned pool before dropping its databases, even when an earlier close/drop fails. */
+export async function closePostgresqlFixtureDatabases(
+  runtimes: readonly { close(): Promise<void> }[],
+  databases: readonly { drop(): Promise<void> }[],
+): Promise<void> {
+  const errors: unknown[] = []
+  for (const operation of [
+    ...runtimes.map((runtime) => () => runtime.close()),
+    ...databases.map((database) => () => database.drop()),
+  ]) {
+    try {
+      await operation()
+    } catch (error) {
+      errors.push(error)
+    }
+  }
+  if (errors.length === 1) throw errors[0]
+  if (errors.length > 1) throw new AggregateError(errors, 'PostgreSQL fixture cleanup failed')
 }
 
 interface PostgresqlHarnessDatabase {
@@ -883,6 +948,7 @@ async function createPostgresqlHarnessDatabase(
   urlEnv: (typeof POSTGRESQL_URL_ENVS)[number],
   env?: Readonly<Record<string, string | undefined>>,
   phase?: ProviderHarnessLifecyclePhase,
+  options: DescribeEachProviderOptions = {},
 ): Promise<PostgresqlHarnessDatabase> {
   const sinks = new Set<RecordedStatement[]>()
   const sourceUrl = (env ?? process.env)[urlEnv]
@@ -921,29 +987,37 @@ async function createPostgresqlHarnessDatabase(
     await runProviderHarnessLifecycleStep(phase, 'schema.drop-metadata', () =>
       query('drop schema if exists agent_workflow_meta cascade'),
     )
-    await runProviderHarnessLifecycleStep(phase, 'schema.migrate', () =>
-      migratePostgresqlSchema({ headContract: buildLogicalSchemaContract(), runtime }),
-    )
-    await query(
-      'insert into "agent_workflow_meta"."logical_copy_operations" ' +
-        '(operation_id, source_generation_id, contract_digest, plan_digest, stage, created_at, updated_at) ' +
-        `values ('${OPERATION_ID}', 'dbg_each_provider_source', 'digest', 'plan', 'prepared', 1, 1)`,
-    )
-    await query(
-      'insert into "agent_workflow_meta"."database_generations" ' +
-        '(generation_id, operation_id, source_generation_id, contract_digest, state, activated_at, first_live_write_at) ' +
-        `values ('${GENERATION_ID}', '${OPERATION_ID}', 'dbg_each_provider_source', 'digest', 'active', 1, 1)`,
-    )
-    // 客户端拿到的是**带录制的**连接池：连接池对象是冻结的（Proxy 无法为不可写属性返回
-    // 别的值），所以走对象字面量重建，而不是 Proxy。
     const applicationRuntime = recordingRuntime(runtime, sinks)
-    const client = createPostgresqlDatabaseClient(applicationRuntime)
-    // PostgreSQL 的迁移器只投影 DDL；迁移脚本里 INSERT 的种子行（committed_event_family_cutovers、
-    // auth_login_policy、框架内置资源……）在生产上是随 RFC-349 逻辑复制从 SQLite 带过来的。
-    // 这里做同一件事：把一个刚迁移完的 SQLite 内存库整表复制进来，两个引擎的「起点」才是同一个。
-    await runProviderHarnessLifecycleStep(phase, 'fixture.seed', () =>
-      seedFromSqliteSnapshot(client),
-    )
+    let client: PostgresqlDatabaseClient
+    if (options.sqliteMigrationsFolder !== undefined) {
+      // An explicit historical prefix selects V1 on both engines.
+      await runProviderHarnessLifecycleStep(phase, 'schema.migrate', () =>
+        migratePostgresqlSchema({ headContract: frozenEpoch1Contract, runtime }),
+      )
+      await query(
+        'insert into "agent_workflow_meta"."logical_copy_operations" ' +
+          '(operation_id, source_generation_id, contract_digest, plan_digest, stage, created_at, updated_at) ' +
+          `values ('${OPERATION_ID}', 'dbg_each_provider_source', 'digest', 'plan', 'prepared', 1, 1)`,
+      )
+      await query(
+        'insert into "agent_workflow_meta"."database_generations" ' +
+          '(generation_id, operation_id, source_generation_id, contract_digest, state, activated_at, first_live_write_at) ' +
+          `values ('${GENERATION_ID}', '${OPERATION_ID}', 'dbg_each_provider_source', 'digest', 'active', 1, 1)`,
+      )
+      client = createFrozenPostgresqlClient(
+        applicationRuntime,
+      ) as unknown as PostgresqlDatabaseClient
+      await runProviderHarnessLifecycleStep(phase, 'fixture.seed', () =>
+        seedFromSqliteSnapshot(client),
+      )
+    } else {
+      const fixture = await runProviderHarnessLifecycleStep(
+        phase,
+        'schema.install-target-head',
+        () => createPostgresqlTestDatabase(applicationRuntime, { bootstrap: 'required' }),
+      )
+      client = fixture.db
+    }
     const snapshot = await runProviderHarnessLifecycleStep(phase, 'fixture.snapshot', () =>
       snapshotSchema(query),
     )
@@ -1287,7 +1361,7 @@ function registerPostgresql(
           }
         }
         const primary = await runProviderHarnessLifecycleStep(phase, 'factory.prepare', () =>
-          createPostgresqlHarnessDatabase(urlEnv, undefined, phase),
+          createPostgresqlHarnessDatabase(urlEnv, undefined, phase, options),
         )
         databases.push(primary)
         for (let index = 1; index < databaseCount; index += 1) {
@@ -1297,7 +1371,12 @@ function registerPostgresql(
           const url = new URL(sourceUrl!)
           url.pathname = `/${name}`
           databases.push(
-            await createPostgresqlHarnessDatabase(urlEnv, { [urlEnv]: url.toString() }),
+            await createPostgresqlHarnessDatabase(
+              urlEnv,
+              { [urlEnv]: url.toString() },
+              undefined,
+              options,
+            ),
           )
         }
       } catch (error) {
@@ -1334,6 +1413,7 @@ function registerPostgresql(
             await runProviderHarnessLifecycleStep(phase, 'fixture.reset', () =>
               resetToSnapshot(raw, snapshot, options),
             )
+            resetPostgresqlGenerationWriteCache(database.applicationBinding.runtime)
             if (options.bootstrap !== 'required') registerLegacyDaemonTestFixture(client)
             const state = states[index]!
             const query = raw
@@ -1357,6 +1437,7 @@ function registerPostgresql(
             }
             state.restoreFixture = async () => {
               await resetToSnapshot(query, snapshot, options)
+              resetPostgresqlGenerationWriteCache(database.applicationBinding.runtime)
               if (options.bootstrap !== 'required') registerLegacyDaemonTestFixture(client)
             }
           }
@@ -1369,7 +1450,13 @@ function registerPostgresql(
     databaseCount * POSTGRESQL_DATABASE_RESET_TIMEOUT_MS,
   )
 
-  afterEach(() => {
+  afterEach(async () => {
+    for (const state of states) {
+      if (state.db) {
+        await closeProviderFixtureApplications(state.db)
+        await drainTaskLifecycleTestEffects(state.db)
+      }
+    }
     databases.forEach(({ sinks }) => sinks.clear())
     states.forEach(clearState)
   })

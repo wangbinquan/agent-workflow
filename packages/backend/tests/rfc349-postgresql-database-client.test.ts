@@ -17,7 +17,7 @@ import {
 import { describe, expect, test } from 'bun:test'
 import { sql } from 'drizzle-orm'
 import {
-  createPostgresqlDatabaseClient,
+  createPostgresqlDatabaseClient as createNativePostgresqlDatabaseClient,
   PostgresqlGenerationFenceError,
 } from '@/platform/persistence/postgresqlDatabaseClient'
 import type {
@@ -26,6 +26,13 @@ import type {
   PostgresqlReservedConnection,
   SqlRows,
 } from '@/platform/persistence/postgresqlRuntime'
+
+function createPostgresqlDatabaseClient(
+  ...args: Parameters<typeof createNativePostgresqlDatabaseClient>
+) {
+  const db = createNativePostgresqlDatabaseClient(...args)
+  return db
+}
 
 interface Execution {
   readonly owner: 'pool' | 'reserved'
@@ -56,8 +63,26 @@ function fixture() {
   }> = []
   let releases = 0
 
+  let active = true
+  let firstWriteAt: number | null = null
+  let pendingFirstWrite = false
   const run = (owner: Execution['owner'], query: string, parameters?: readonly unknown[]) => {
     executions.push({ owner, sql: query, parameters })
+    if (query.includes('"agent_workflow_meta"."generations"'))
+      return result(active ? [{ generation_id: 'dbg_pg_client_01' }] : [], [])
+    if (query.startsWith('SELECT first_live_write_at'))
+      return result([{ first_live_write_at: pendingFirstWrite ? 1 : firstWriteAt }], [])
+    if (query.startsWith('UPDATE "agent_workflow_meta"."first_write"')) {
+      pendingFirstWrite = true
+      return result([], [], 1)
+    }
+    if (query === 'COMMIT') {
+      if (pendingFirstWrite) firstWriteAt = 1
+      pendingFirstWrite = false
+    }
+    if (query === 'ROLLBACK') pendingFirstWrite = false
+    if (/^(BEGIN|COMMIT|ROLLBACK|SAVEPOINT|RELEASE|SET TRANSACTION)/i.test(query))
+      return result([], [])
     const response = queued.shift() ?? {}
     return result(response.objects ?? [], response.values ?? [], response.count)
   }
@@ -93,6 +118,9 @@ function fixture() {
     runtime,
     executions,
     queued,
+    deactivate() {
+      active = false
+    },
     get releases() {
       return releases
     },
@@ -129,14 +157,7 @@ describe('RFC-349 PostgreSQL database client', () => {
 
   test('normalizes mutation count and supports object-mode raw queries', async () => {
     const fake = fixture()
-    fake.queued.push(
-      { count: 0 },
-      { objects: [{ generation_id: 'dbg_pg_client_01' }] },
-      { objects: [{ generation_id: 'dbg_pg_client_01' }] },
-      { count: 1 },
-      { count: 0 },
-      { objects: [{ one: 1 }] },
-    )
+    fake.queued.push({ count: 1 }, { objects: [{ one: 1 }] })
     const db = createPostgresqlDatabaseClient(fake.runtime)
 
     const { agents } = tablesOf(db)
@@ -151,20 +172,16 @@ describe('RFC-349 PostgreSQL database client', () => {
     expect(businessWrite.sql).toContain('default')
     expect(businessWrite.parameters).toEqual(['agent-1', 'Agent'])
     expect(
-      fake.executions.some((execution) => execution.sql.includes('database_generations')),
+      fake.executions.some((execution) =>
+        execution.sql.includes('"agent_workflow_meta"."generations"'),
+      ),
     ).toBe(true)
     expect(fake.releases).toBe(1)
   })
 
   test('pins begin, business statements and commit to one reserved connection', async () => {
     const fake = fixture()
-    fake.queued.push(
-      { count: 0 },
-      { objects: [{ generation_id: 'dbg_pg_client_01' }] },
-      { objects: [{ generation_id: 'dbg_pg_client_01' }] },
-      { count: 1 },
-      { count: 0 },
-    )
+    fake.queued.push({ count: 1 })
     const db = createPostgresqlDatabaseClient(fake.runtime)
 
     const receipt = await db.transaction(async (transaction) => {
@@ -178,8 +195,11 @@ describe('RFC-349 PostgreSQL database client', () => {
     // nested connection here is a measured Bun.SQL pooling hazard.
     expect(fake.executions.map((execution) => execution.sql.trim().toLowerCase())).toEqual([
       'begin',
-      expect.stringContaining('with marked as (update "agent_workflow_meta"'),
-      expect.stringContaining('select generation_id from "agent_workflow_meta"'),
+      expect.stringContaining('select generation_id from "agent_workflow_meta"."generations"'),
+      expect.stringContaining(
+        'select first_live_write_at from "agent_workflow_meta"."first_write"',
+      ),
+      expect.stringContaining('update "agent_workflow_meta"."first_write"'),
       expect.stringContaining('insert into "agent_workflow"."agents"'),
       'commit',
     ])
@@ -188,7 +208,6 @@ describe('RFC-349 PostgreSQL database client', () => {
 
   test('rolls back and releases the reserved connection on failure', async () => {
     const fake = fixture()
-    fake.queued.push({ count: 0 }, { count: 0 })
     const db = createPostgresqlDatabaseClient(fake.runtime)
 
     await expect(
@@ -196,7 +215,7 @@ describe('RFC-349 PostgreSQL database client', () => {
         throw new Error('business-failure')
       }),
     ).rejects.toThrow('business-failure')
-    // No business statement ran, so neither the marker nor the fence is reached.
+    // Read-only or aborted bodies do not acquire a generation lock before SET TRANSACTION.
     expect(fake.executions.map((execution) => execution.sql.trim().toLowerCase())).toEqual([
       'begin',
       'rollback',
@@ -218,7 +237,7 @@ describe('RFC-349 PostgreSQL database client', () => {
 
   test('fails closed and rolls back when the generation is no longer active', async () => {
     const fake = fixture()
-    fake.queued.push({ count: 0 }, { objects: [] }, { objects: [] }, { count: 0 })
+    fake.deactivate()
     const db = createPostgresqlDatabaseClient(fake.runtime)
 
     let failure: unknown
@@ -231,8 +250,7 @@ describe('RFC-349 PostgreSQL database client', () => {
     expect((failure as { cause?: unknown }).cause).toBeInstanceOf(PostgresqlGenerationFenceError)
     expect(fake.executions.map((execution) => execution.sql.trim().toLowerCase())).toEqual([
       'begin',
-      expect.stringContaining('with marked as (update "agent_workflow_meta"'),
-      expect.stringContaining('select generation_id from "agent_workflow_meta"'),
+      expect.stringContaining('select generation_id from "agent_workflow_meta"."generations"'),
       'rollback',
     ])
     expect(fake.releases).toBe(1)
@@ -246,30 +264,22 @@ describe('RFC-349 PostgreSQL database client', () => {
   // 两个性质：写一次就不再写、并且只写一次。
   test('the live-write marker never rewrites a generation it already marked', async () => {
     const fake = fixture()
-    fake.queued.push(
-      { count: 0 }, // begin
-      { objects: [{ generation_id: 'dbg_pg_client_01' }] }, // one-shot marker
-      { objects: [{ generation_id: 'dbg_pg_client_01' }] }, // fence
-      { count: 1 }, // insert
-      { count: 0 }, // commit
-      { count: 0 }, // begin
-      { objects: [{ generation_id: 'dbg_pg_client_01' }] }, // fence
-      { count: 1 }, // insert
-      { count: 0 }, // commit
-    )
+    fake.queued.push({ count: 1 }, { count: 1 })
     const db = createPostgresqlDatabaseClient(fake.runtime)
 
     const { agents } = tablesOf(db)
     await insertOne(db, agents, { id: 'agent-1', name: 'Agent' })
     await db.insert(agents).values({ id: 'agent-2', name: 'Agent' })
 
-    const markers = fake.executions.filter((execution) => execution.sql.startsWith('WITH marked'))
+    const markers = fake.executions.filter((execution) =>
+      execution.sql.startsWith('UPDATE "agent_workflow_meta"."first_write"'),
+    )
     expect(markers).toHaveLength(1)
     // The caller's own reserved session — never a nested reservation.
     expect(markers[0]?.owner).toBe('reserved')
     expect(markers[0]?.sql).toContain('first_live_write_at IS NULL')
     expect(markers[0]?.sql).not.toContain('COALESCE')
-    // Both writes still fence, and both fence reads stay on the reserved session.
+    // Every mutation fences; the marker is cached only after a successful commit.
     const fences = fake.executions.filter((execution) =>
       execution.sql.startsWith('SELECT generation_id FROM "agent_workflow_meta"'),
     )
@@ -334,7 +344,14 @@ test('deployment write guard shares the reserved transaction, rejects before mut
     expect(attempted[0]?.sql).toBe('BEGIN')
     expect(attempted.at(-1)?.sql).toBe('ROLLBACK')
     expect(attempted.every((entry) => entry.owner === 'reserved')).toBe(true)
-    expect(attempted.some((entry) => /^(insert|update|delete)/i.test(entry.sql))).toBe(false)
+    expect(
+      attempted
+        .filter((entry) => /^(insert|update|delete)/i.test(entry.sql))
+        .every((entry) => entry.sql.startsWith('UPDATE "agent_workflow_meta"."first_write"')),
+    ).toBe(true)
+    expect(attempted.findIndex((entry) => entry.sql.includes('FOR SHARE'))).toBeLessThan(
+      attempted.findIndex((entry) => entry.sql.includes('hosted_execution_control')),
+    )
   }
   expect(calls).toBe(statements.length)
   expect(fake.releases).toBe(statements.length)
@@ -365,20 +382,7 @@ test('deployment write guard runs once per transaction and again for the next on
       calls += 1
     },
   })
-  const generation = { objects: [{ generation_id: 'dbg_pg_client_01' }] }
-  fake.queued.push(
-    { count: 0 }, // begin
-    generation, // one-shot marker
-    generation, // fence
-    { count: 1 }, // insert
-    generation, // fence
-    { count: 1 }, // insert
-    { count: 0 }, // commit
-    { count: 0 }, // begin
-    generation, // fence
-    { count: 1 }, // insert
-    { count: 0 }, // commit
-  )
+  fake.queued.push({ count: 1 }, { count: 1 }, { count: 1 })
   await db.transaction(async (tx) => {
     const { agents } = tablesOf(tx)
     await insertOne(tx, agents, { id: 'agent-1', name: 'Agent' })
@@ -390,15 +394,17 @@ test('deployment write guard runs once per transaction and again for the next on
     await insertOne(tx, agents, { id: 'agent-3', name: 'Agent' })
   })
   expect(calls).toBe(2)
-  expect(fake.executions.filter((execution) => /^insert/i.test(execution.sql.trim()))).toHaveLength(
-    3,
-  )
+  expect(
+    fake.executions.filter((execution) =>
+      /^insert into "agent_workflow"/i.test(execution.sql.trim()),
+    ),
+  ).toHaveLength(3)
 })
 
 // RFC-395 I-b: native transaction configuration and savepoints stay on the reserved connection.
 test('snapshot isolation is set by native PgTransactionConfig before its first read', async () => {
   const fake = fixture()
-  fake.queued.push({}, {}, { objects: [{ one: 1 }] }, {})
+  fake.queued.push({ objects: [{ one: 1 }] })
   const db = createPostgresqlDatabaseClient(fake.runtime)
   const session = createPostgresqlDatabaseSession(db)
   expect(
@@ -441,4 +447,25 @@ test('native savepoints inherit the session tables and roll back independently',
     'COMMIT',
   ])
   expect(fake.releases).toBe(1)
+})
+
+test('a rolled-back first write retries the marker before the next business write', async () => {
+  const fake = fixture()
+  const db = createPostgresqlDatabaseClient(fake.runtime)
+  const failure = new Error('abort first write')
+  fake.queued.push({ count: 1 }, { count: 1 })
+  await expect(
+    db.transaction(async (tx) => {
+      await insertOne(tx, tablesOf(tx).agents, { id: 'aborted', name: 'Aborted' })
+      throw failure
+    }),
+  ).rejects.toBe(failure)
+  await insertOne(db, tablesOf(db).agents, { id: 'committed', name: 'Committed' })
+  const markers = fake.executions.filter((entry) =>
+    entry.sql.startsWith('UPDATE "agent_workflow_meta"."first_write"'),
+  )
+  expect(markers).toHaveLength(2)
+  expect(markers.every((entry) => entry.owner === 'reserved')).toBe(true)
+  expect(fake.executions.filter((entry) => entry.sql === 'ROLLBACK')).toHaveLength(1)
+  expect(fake.executions.filter((entry) => entry.sql === 'COMMIT')).toHaveLength(1)
 })

@@ -1,5 +1,9 @@
-import { withO2Closure } from './helpers/o2Closure'
-import { o2Ports } from './helpers/o2Closure'
+import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
+import type { OracleRunRow } from '@/modules/task-execution/infrastructure/migration/oracle/rows'
+import { nodeRunFixtureColumns } from './helpers/model/nodeRun'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { withO2Closure, o2Ports } from './helpers/o2Closure'
+
 // RFC-120 T9 (model A) — deferred question dispatch backend foundation.
 //
 // Locks the four foundation behaviors (design §14 / §16 C1-H4 / §17):
@@ -33,7 +37,7 @@ import {
   workflowFixture,
   readNodeRunFixtures,
 } from './helpers/model'
-import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
 import { createSqliteMemoryDistillEnqueuer } from './helpers/memoryDistill'
@@ -66,7 +70,7 @@ import {
   dispatchTaskQuestionsWithDecision,
 } from '../src/services/taskQuestionDispatch'
 import { autoDispatchClarifyRound } from '@/modules/collaboration/infrastructure/clarify/autoDispatch'
-import { deriveFrontier } from '../src/modules/task-execution/composition/dagFrontier'
+import { deriveFrontier } from './helpers/frontierSelection'
 import { runLifecycleInvariants } from '../src/services/lifecycleInvariants'
 import { runStuckTaskDetector } from '../src/services/stuckTaskDetector'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
@@ -356,10 +360,11 @@ describeEachProvider(
       // RFC-162: reconcile no longer derives a designer entry from scope — add one via reassign
       // (targets the graph designer node, reproducing the old designer-by-default shape).
       await seedDesignerEntries(db, taskId, DESIGNER, { userId: 'u1', role: 'owner' })
-      const { nodeRuns, taskQuestions } = tablesOf(db)
+      const { taskQuestions } = tablesOf(db)
+      const { nodeRuns } = tablesOf(db)
       // the answer IS recorded (round answered) but NO designer rerun minted
       const designerRuns = await db
-        .select()
+        .select(nodeRunFixtureColumns(db))
         .from(nodeRuns)
         .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, DESIGNER)))
       expect(designerRuns.length).toBe(1) // draft only — parked
@@ -398,7 +403,7 @@ describeEachProvider(
 // B — PARK gate (pure deriveFrontier).
 // ---------------------------------------------------------------------------
 describe('RFC-120 T9 — frontier park gate', () => {
-  type Row = PersistenceTables['nodeRuns']['$inferSelect']
+  type Row = OracleRunRow
   let seq = 0
   function row(nodeId: string, status: string): Row {
     seq += 1
@@ -606,10 +611,11 @@ describeEachProvider('RFC-120 T9 — dispatchTaskQuestions', (harness) => {
     expect(result.reruns[0]?.targetNodeId).toBe(DESIGNER)
     expect(result.dispatchedEntryIds).toEqual([entryId])
 
-    const { nodeRuns, taskQuestions } = tablesOf(db)
+    const { taskQuestions } = tablesOf(db)
+    const { nodeRuns } = tablesOf(db)
     // a fresh pending designer rerun was minted (the upstream frontier — the only node)
     const designerRuns = await db
-      .select()
+      .select(nodeRunFixtureColumns(db))
       .from(nodeRuns)
       .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, DESIGNER)))
     expect(designerRuns.length).toBe(2) // draft + frontier rerun
@@ -639,7 +645,7 @@ describeEachProvider('RFC-120 T9 — dispatchTaskQuestions', (harness) => {
 
     const { nodeRuns } = tablesOf(db)
     const designerRuns = await db
-      .select()
+      .select(nodeRunFixtureColumns(db))
       .from(nodeRuns)
       .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, DESIGNER)))
     expect(designerRuns.filter((r) => r.status === 'pending').length).toBe(1) // exactly one rerun
@@ -663,12 +669,14 @@ describeEachProvider('RFC-120 T9 — dispatchTaskQuestions', (harness) => {
       command.actor,
       command.decision,
       o2Ports(command.db).taskLock,
+      { historyRestrictions: epoch2RuntimeTestPorts(command.db).historyRestrictions },
     )
     expect(decided.receipt).toMatchObject({
       gate: { kind: 'questions', ref: `questions:${taskId}` },
       replayed: false,
     })
-    const { taskQuestions, taskExecutionIntents, nodeRuns } = tablesOf(db)
+    const { taskQuestions, taskExecutionIntents } = tablesOf(db)
+    const { nodeRuns } = tablesOf(db)
     expect(
       (await db.select().from(taskQuestions).where(eq(taskQuestions.id, entryId)))[0],
     ).toMatchObject({ dispatchedBy: actor.userId })
@@ -683,7 +691,9 @@ describeEachProvider('RFC-120 T9 — dispatchTaskQuestions', (harness) => {
         state: 'pending',
       }),
     ])
-    const runCount = (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))).length
+    const runCount = (
+      await db.select(nodeRunFixtureColumns(db)).from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
+    ).length
 
     const replay = await dispatchTaskQuestionsWithDecision(
       command.db,
@@ -692,12 +702,14 @@ describeEachProvider('RFC-120 T9 — dispatchTaskQuestions', (harness) => {
       command.actor,
       command.decision,
       o2Ports(command.db).taskLock,
+      { historyRestrictions: epoch2RuntimeTestPorts(command.db).historyRestrictions },
     )
     expect(replay.receipt).toEqual({ ...decided.receipt, replayed: true })
     expect(await db.select().from(taskExecutionIntents)).toHaveLength(1)
-    expect((await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))).length).toBe(
-      runCount,
-    )
+    expect(
+      (await db.select(nodeRunFixtureColumns(db)).from(nodeRuns).where(eq(nodeRuns.taskId, taskId)))
+        .length,
+    ).toBe(runCount)
     await expect(
       dispatchTaskQuestionsWithDecision(
         db,
@@ -709,6 +721,7 @@ describeEachProvider('RFC-120 T9 — dispatchTaskQuestions', (harness) => {
           expectedTaskRevision: 999,
         },
         o2Ports(db).taskLock,
+        { historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions },
       ),
     ).rejects.toMatchObject({ code: 'human-gate-idempotency-conflict' })
   })
@@ -716,9 +729,11 @@ describeEachProvider('RFC-120 T9 — dispatchTaskQuestions', (harness) => {
   test('RFC-333 intent fault rolls question stamp, rerun, task release and operation back', async () => {
     const db = harness.db
     const { taskId, entryId } = await seedDeferredAnswered(db)
-    const { nodeRuns, collaborationGateOperations, taskQuestions, taskExecutionIntents } =
-      tablesOf(db)
-    const beforeRuns = (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))).length
+    const { collaborationGateOperations, taskQuestions, taskExecutionIntents } = tablesOf(db)
+    const { nodeRuns } = tablesOf(db)
+    const beforeRuns = (
+      await db.select(nodeRunFixtureColumns(db)).from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
+    ).length
     const beforeOperations = (await db.select().from(collaborationGateOperations)).length
     // 注入「intent 写入必失败」的故障：两个引擎的写法不同——SQLite 直接 RAISE(ABORT)，
     // PostgreSQL 需要一个 plpgsql 触发器函数——但抛出的错误文案与判据完全一致。
@@ -758,6 +773,7 @@ describeEachProvider('RFC-120 T9 — dispatchTaskQuestions', (harness) => {
               idempotencyKey: 'question-dispatch-fault',
             },
             o2Ports(db).taskLock,
+            { historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions },
           ),
         'rfc333-question-intent-fault',
       )
@@ -769,9 +785,14 @@ describeEachProvider('RFC-120 T9 — dispatchTaskQuestions', (harness) => {
         status: 'awaiting_human',
       })
       expect(await db.select().from(taskExecutionIntents)).toHaveLength(0)
-      expect((await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))).length).toBe(
-        beforeRuns,
-      )
+      expect(
+        (
+          await db
+            .select(nodeRunFixtureColumns(db))
+            .from(nodeRuns)
+            .where(eq(nodeRuns.taskId, taskId))
+        ).length,
+      ).toBe(beforeRuns)
       expect((await db.select().from(collaborationGateOperations)).length).toBe(beforeOperations)
     } finally {
       // DROP TRIGGER 的语法两边不同：SQLite 的触发器名是库级的（不带表名），
@@ -833,7 +854,7 @@ describeEachProvider('RFC-120 T9 — dispatch correctness (Codex impl-gate H1/H2
     expect((await loadUndispatchedDesignerTargets(db, taskId)).size).toBe(0) // gate released
     const { nodeRuns } = tablesOf(db)
     const designerRuns = await db
-      .select()
+      .select(nodeRunFixtureColumns(db))
       .from(nodeRuns)
       .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, DESIGNER)))
     expect(designerRuns.filter((r) => r.status === 'pending').length).toBe(1)
@@ -939,7 +960,7 @@ describeEachProvider('RFC-120 T9 — dispatch correctness (Codex impl-gate H1/H2
     expect(result.reruns[0]?.entryIds.length).toBe(2)
     const { nodeRuns } = tablesOf(db)
     const pending = await db
-      .select()
+      .select(nodeRunFixtureColumns(db))
       .from(nodeRuns)
       .where(
         and(
@@ -984,7 +1005,7 @@ describeEachProvider('RFC-120 T9 — dispatch correctness (Codex impl-gate H1/H2
     expect((await designerEntries(db, taskId)).find((e) => e.id === q2.id)?.dispatchedAt).toBeNull()
     const { nodeRuns } = tablesOf(db)
     const pending = await db
-      .select()
+      .select(nodeRunFixtureColumns(db))
       .from(nodeRuns)
       .where(
         and(
@@ -1027,7 +1048,9 @@ describeEachProvider('RFC-120 T9 — dispatch correctness (Codex impl-gate H1/H2
     const P2 = d2.reruns[0]!.nodeRunId
     await bindTriggerRun(db, [q2.id], P2)
     expect(P2).not.toBe(P)
-    const p2row = (await db.select().from(nodeRuns).where(eq(nodeRuns.id, P2)))[0]
+    const p2row = (
+      await db.select(nodeRunFixtureColumns(db)).from(nodeRuns).where(eq(nodeRuns.id, P2))
+    )[0]
     expect(p2row?.status).toBe('pending')
     expect(p2row?.rerunCause).toBe('cross-clarify-answer')
     expect((await designerEntries(db, taskId)).find((e) => e.id === q2.id)?.triggerRunId).toBe(P2)
@@ -1072,7 +1095,7 @@ describeEachProvider('RFC-120 T9 — dispatch correctness (Codex impl-gate H1/H2
     // q2 stays uncommitted; P stays the ONLY designer cross-clarify-answer rerun (revivable).
     expect((await designerEntries(db, taskId)).find((e) => e.id === q2.id)?.dispatchedAt).toBeNull()
     const designerReruns = await db
-      .select()
+      .select(nodeRunFixtureColumns(db))
       .from(nodeRuns)
       .where(
         and(
@@ -1164,7 +1187,7 @@ describeEachProvider('RFC-120 T9 — dispatch correctness (Codex impl-gate H1/H2
     expect(after.dispatchedAt).toBeNull()
     expect(after.defaultTargetNodeId).toBe(OTHER)
     const pending = await db
-      .select()
+      .select(nodeRunFixtureColumns(db))
       .from(nodeRuns)
       .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.status, 'pending')))
     expect(pending.length).toBe(0)
@@ -1198,7 +1221,9 @@ describeEachProvider('RFC-120 T9 — dispatch correctness (Codex impl-gate H1/H2
     const { nodeRuns } = tablesOf(db)
     // the minted run is a REAL row (stamp+mint committed together, no orphan); the entry
     // is committed (dispatched_at) but NOT yet bound (trigger_run_id NULL).
-    const run = (await db.select().from(nodeRuns).where(eq(nodeRuns.id, rerunId)))[0]
+    const run = (
+      await db.select(nodeRunFixtureColumns(db)).from(nodeRuns).where(eq(nodeRuns.id, rerunId))
+    )[0]
     expect(run).toBeDefined()
     expect(run?.nodeId).toBe(DESIGNER)
     expect(run?.status).toBe('pending')
@@ -1252,7 +1277,7 @@ describeEachProvider('RFC-120 T9 — dispatch correctness (Codex impl-gate H1/H2
     expect(otherPending).toBeDefined()
     expect(otherPending?.agentOverrideName).toBeNull() // 去借壳: OTHER runs its own agent
     const designerRuns = await db
-      .select()
+      .select(nodeRunFixtureColumns(db))
       .from(nodeRuns)
       .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, DESIGNER)))
     expect(designerRuns.some((r) => r.status === 'pending')).toBe(false) // no mint on the origin
@@ -1292,7 +1317,7 @@ describeEachProvider('RFC-120 T9 — dispatch correctness (Codex impl-gate H1/H2
     expect((await designerEntries(db, taskId))[0]?.dispatchedAt).toBeNull() // nothing stamped
     const { nodeRuns } = tablesOf(db)
     const pending = await db
-      .select()
+      .select(nodeRunFixtureColumns(db))
       .from(nodeRuns)
       .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.status, 'pending')))
     expect(pending.length).toBe(0) // nothing minted
@@ -1372,7 +1397,8 @@ describeEachProviderHttpApplication(
         deferred: true,
         questions: [mkQ('q1', 'first?'), mkQ('q2', 'second?')],
       })
-      const { nodeRuns, taskQuestions } = tablesOf(db)
+      const { taskQuestions } = tablesOf(db)
+      const { nodeRuns } = tablesOf(db)
       await nodeRunFixture(db, {
         id: ulid(),
         taskId,
@@ -1422,7 +1448,7 @@ describeEachProviderHttpApplication(
       const after = await designerEntries(db, taskId)
       expect(after.every((e) => e.triggerRunId === null)).toBe(true)
       const minted = await db
-        .select()
+        .select(nodeRunFixtureColumns(db))
         .from(nodeRuns)
         .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.status, 'pending')))
       expect(minted.length).toBe(0)
@@ -1523,7 +1549,7 @@ describeEachProviderHttpApplication(
       expect(dispatchedEntry?.dispatchedAt).not.toBeNull()
       expect(dispatchedEntry?.triggerRunId).toBeNull()
       const pending = await db
-        .select()
+        .select(nodeRunFixtureColumns(db))
         .from(nodeRuns)
         .where(
           and(
@@ -1574,7 +1600,7 @@ describeEachProviderHttpApplication(
       expect((await designerEntries(db, taskId))[0]?.dispatchedAt).not.toBeNull()
       const { nodeRuns } = tablesOf(db)
       const designerReruns = await db
-        .select()
+        .select(nodeRunFixtureColumns(db))
         .from(nodeRuns)
         .where(
           and(
@@ -1586,9 +1612,13 @@ describeEachProviderHttpApplication(
       expect(designerReruns.length).toBe(1)
       // a naive re-dispatch of the already-dispatched entry is a no-op (no double-mint) — the single
       // path's own in-flight/dispatched gate, not a deferred-flag rejection.
-      const before = (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))).length
+      const before = (
+        await db.select(nodeRunFixtureColumns(db)).from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
+      ).length
       await dispatchTaskQuestions(db, taskId, [entry.id], actor)
-      const after = (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))).length
+      const after = (
+        await db.select(nodeRunFixtureColumns(db)).from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
+      ).length
       expect(after).toBe(before)
     })
 
@@ -1682,7 +1712,12 @@ describeEachProviderHttpApplication(
       const result = await dispatchTaskQuestions(db, taskId, [entry.id], actor)
       const anchorRunId = result.reruns[0]!.nodeRunId
       const { nodeRuns } = tablesOf(db)
-      const anchorRow = (await db.select().from(nodeRuns).where(eq(nodeRuns.id, anchorRunId)))[0]!
+      const anchorRow = (
+        await db
+          .select(nodeRunFixtureColumns(db))
+          .from(nodeRuns)
+          .where(eq(nodeRuns.id, anchorRunId))
+      )[0]!
 
       await bindTriggerRun(db, [entry.id], anchorRunId)
       expect((await designerEntries(db, taskId))[0]?.triggerRunId).toBe(anchorRunId)
@@ -1732,7 +1767,9 @@ describeEachProviderHttpApplication(
       const result = await dispatchTaskQuestions(db, taskId, [entry.id], actor)
       const attempt1 = result.reruns[0]!.nodeRunId
       const { nodeRuns } = tablesOf(db)
-      const a1Row = (await db.select().from(nodeRuns).where(eq(nodeRuns.id, attempt1)))[0]!
+      const a1Row = (
+        await db.select(nodeRunFixtureColumns(db)).from(nodeRuns).where(eq(nodeRuns.id, attempt1))
+      )[0]!
 
       await bindTriggerRun(db, [entry.id], attempt1)
       expect((await designerEntries(db, taskId))[0]?.triggerRunId).toBe(attempt1)
@@ -1896,7 +1933,7 @@ describeEachProviderHttpApplication(
       // Nothing minted, nothing stamped (no partial dispatch).
       expect((await designerEntries(db, taskId)).every((e) => e.dispatchedAt === null)).toBe(true)
       const pending = await db
-        .select()
+        .select(nodeRunFixtureColumns(db))
         .from(nodeRuns)
         .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.status, 'pending')))
       expect(pending.length).toBe(0)
@@ -2048,7 +2085,7 @@ describeEachProviderHttpApplication(
       expect((threw as { code?: string }).code).toBe('task-question-designer-not-ready')
       expect((await designerEntries(db, taskId)).every((e) => e.dispatchedAt === null)).toBe(true)
       const pendingRuns = await db
-        .select()
+        .select(nodeRunFixtureColumns(db))
         .from(nodeRuns)
         .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.status, 'pending')))
       expect(pendingRuns.length).toBe(0)
@@ -2491,7 +2528,7 @@ describeEachProvider('RFC-120 §18 — frontier mint + per-node queue + consumpt
     const { nodeRuns } = tablesOf(db)
     // ZERO pending runs minted on DOWN by dispatch (it is NOT the frontier).
     const downRuns = await db
-      .select()
+      .select(nodeRunFixtureColumns(db))
       .from(nodeRuns)
       .where(
         and(
@@ -2503,7 +2540,7 @@ describeEachProvider('RFC-120 §18 — frontier mint + per-node queue + consumpt
     expect(downRuns.length).toBe(0)
     // Exactly ONE pending rerun on DESIGNER.
     const designerPending = await db
-      .select()
+      .select(nodeRunFixtureColumns(db))
       .from(nodeRuns)
       .where(
         and(
@@ -2592,10 +2629,11 @@ describeEachProvider('RFC-120 §18 — frontier mint + per-node queue + consumpt
   test("CONSUMPTION: A done+output → only A's bound question leaves the queue; B's (downstream) question is untouched", async () => {
     const db = harness.db
     const { seed, entryA, entryB } = await answerAndDispatch(db)
-    const { nodeRuns, taskQuestions } = tablesOf(db)
+    const { taskQuestions } = tablesOf(db)
+    const { nodeRuns } = tablesOf(db)
     const designerRerunId = (
       await db
-        .select()
+        .select(nodeRunFixtureColumns(db))
         .from(nodeRuns)
         .where(
           and(

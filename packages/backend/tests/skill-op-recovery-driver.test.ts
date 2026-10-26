@@ -1,3 +1,5 @@
+import { legacyContentRef } from '@/platform/content/contentRef'
+import { contentRowColumns } from '@/platform/content/infrastructure/contentStore'
 // RFC-170 §6a / T-BOOT — boot recovery driver orchestration.
 //
 // Uses the real op primitives (beginOperation/advancePhase) to plant crashed
@@ -37,7 +39,11 @@ describeEachProvider('recoverSkillOperations — boot driver', (harness) => {
   async function seedSkill(name: string): Promise<string> {
     const id = ulid()
     const { skills } = tablesOf(db)
-    await insertOne(db, skills, { id, name, managedPath: `skills/${name}/files` })
+    await insertOne(db, skills, {
+      id,
+      name,
+      ...contentRowColumns(legacyContentRef('skill-path', 'local-file', `skills/${name}/files`)),
+    })
     return id
   }
   async function locksFor(skillId: string): Promise<number> {

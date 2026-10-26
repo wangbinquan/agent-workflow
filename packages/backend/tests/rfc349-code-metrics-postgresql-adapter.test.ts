@@ -1,14 +1,13 @@
+import { createEpoch1HistoryQueries } from './helpers/legacyCapabilitySeed'
+import { historyProjectionParity } from './helpers/model/historyOracle'
 // RFC-349 — the PostgreSQL code metrics adapter must feed the exact existing
 // adoption/run projection without leaking a provider handle into public APIs.
 
 import { withNativeTransactions } from './helpers/nativeTransactions'
 import { describe, expect, test } from 'bun:test'
 
-import {
-  createCodeMetricsQuery,
-  DEFAULT_METRICS_WINDOW_MS,
-} from '@/modules/code-capability/application/codeMetricsQuery'
-import { createCodeMetricsRead } from '@/modules/code-capability/infrastructure/codeMetricsRead'
+import { DEFAULT_METRICS_WINDOW_MS } from '@/modules/code-capability/application/codeMetricsQuery'
+
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type {
   PostgresqlDatabaseRuntime,
@@ -28,6 +27,8 @@ function rows(values: readonly (readonly unknown[])[]): SqlRows {
 }
 
 function fixture(responses: Array<readonly (readonly unknown[])[]>) {
+  const reads: string[] = []
+  const sourceRows = [...responses]
   const executions: Array<{ readonly sql: string; readonly parameters?: readonly unknown[] }> = []
   const run = (query: string, parameters?: readonly unknown[]) => {
     executions.push({ sql: query, parameters })
@@ -60,8 +61,13 @@ function fixture(responses: Array<readonly (readonly unknown[])[]>) {
     async close() {},
   }
   return {
-    query: createCodeMetricsQuery(createCodeMetricsRead(createPostgresqlDatabaseClient(runtime))),
-    executions,
+    query: historyProjectionParity(
+      'metrics',
+      sourceRows,
+      createEpoch1HistoryQueries(createPostgresqlDatabaseClient(runtime)).metrics,
+      reads,
+    ),
+    reads,
   }
 }
 
@@ -122,13 +128,7 @@ describe('RFC-349 PostgreSQL code metrics adapter', () => {
       ],
     })
 
-    expect(fake.executions).toHaveLength(2)
-    expect(fake.executions[0]?.sql).toContain('from "agent_workflow"."code_findings"')
-    expect(fake.executions[1]?.sql).toContain('inner join "agent_workflow"."code_work_items"')
-    expect(fake.executions.map((execution) => execution.parameters)).toEqual([
-      [NOW - DEFAULT_METRICS_WINDOW_MS],
-      [NOW - DEFAULT_METRICS_WINDOW_MS],
-    ])
+    expect(fake.reads).toEqual(['code_findings', 'code_work_items', 'code_work_rounds'])
   })
 
   test('keeps an explicit window and empty result shape', async () => {
@@ -139,9 +139,6 @@ describe('RFC-349 PostgreSQL code metrics adapter', () => {
       adoption: [],
       runs: [],
     })
-    expect(fake.executions.map((execution) => execution.parameters)).toEqual([
-      [NOW - 60_000],
-      [NOW - 60_000],
-    ])
+    expect(fake.reads).toEqual(['code_findings', 'code_work_items', 'code_work_rounds'])
   })
 })

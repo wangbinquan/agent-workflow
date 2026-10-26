@@ -8,7 +8,7 @@ import { composePostgresqlSystemOperations } from '@/modules/system-operations/c
 import type { PostgresqlDatabaseRuntime } from '@/platform/persistence/postgresqlRuntime'
 import type { LogicalSchemaContract } from '@/platform/persistence/schemaContract'
 import type { PostgresqlSchemaPlan } from '@/platform/persistence/postgresqlSchema'
-import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'
 
 const roots: string[] = []
 
@@ -37,7 +37,7 @@ describe('RFC-349 PostgreSQL System Operations composition', () => {
     const plan = { contractDigest: digest } as PostgresqlSchemaPlan
 
     const systemOperations = composePostgresqlSystemOperations({
-      headContract: buildLogicalSchemaContract(),
+      headContract: logicalSchemaContract,
       runtime,
       db: {} as PersistenceDb,
       databaseConfig,
@@ -65,7 +65,7 @@ describe('RFC-349 PostgreSQL System Operations composition', () => {
     roots.push(appHome)
     expect(() =>
       composePostgresqlSystemOperations({
-        headContract: buildLogicalSchemaContract(),
+        headContract: logicalSchemaContract,
         runtime: {
           provider: 'postgresql',
           generationId: 'dbg_postgresql_composition_01',

@@ -10,7 +10,7 @@
 //
 // Budgets below are wall-clock allowances for a ~2 s replay on a loaded runner,
 // not a tolerance for the replay getting slower.
-import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import { buildFrozenEpoch1LogicalSchemaContract as buildLogicalSchemaContract } from '@/platform/persistence/migration/epoch1/contract'
 import { expect, test } from 'bun:test'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { cp } from 'node:fs/promises'
@@ -20,12 +20,12 @@ import {
   loadPostgresqlMigrationHistory,
   readPostgresqlMigrationHistoryPrefix,
   verifyPostgresqlMigrationHistory,
-} from '@/platform/persistence/postgresqlMigrationHistory'
+} from '@/platform/persistence/migration/legacy/postgresqlMigrationHistory'
 import {
   replayPostgresqlMigrationHistory,
   replayPostgresqlMigrationHistoryYielding,
-} from '@/platform/persistence/postgresqlMigrationSequence'
-import { buildPostgresqlSchemaPlan } from '@/platform/persistence/postgresqlSchema'
+} from '@/platform/persistence/migration/legacy/postgresqlMigrationSequence'
+import { buildPostgresqlSchemaPlan } from '@/platform/persistence/migration/legacy/postgresqlSchema'
 import { canonicalSchemaJson } from '@/platform/persistence/schemaContract'
 import { resolvePostgresqlMigrationsFolder } from '@/util/migrationsFolder'
 

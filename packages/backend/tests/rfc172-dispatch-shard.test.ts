@@ -1,3 +1,9 @@
+import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
+import type { projectNodeRunReadFacts } from '@/modules/task-execution/infrastructure/nodeRunSnapshot'
+import { taskAggregateWrite } from '@/modules/task-execution/infrastructure/taskDefinitionWriteParticipant'
+// Target fixture mint order; missing seq is covered only by conversion/rejection tests.
+let fixtureRunSequence = 0
+import { withTargetMintIdentity } from './helpers/rfc395Mint'
 import { o2Ports } from './helpers/o2Closure'
 // RFC-172 route 2 — the (home, shardKey) dispatch/mint re-keying that lets a workgroup MEMBER's
 // human clarify answer round-trip to the correct member assignment (all members share the one
@@ -6,7 +12,6 @@ import { o2Ports } from './helpers/o2Closure'
 // Locks the golden-lock invariant throughout: every non-workgroup path derives shardKey === null,
 // so a `(home, null)` composite key collapses byte-for-byte to today's home-only behavior.
 
-import { deriveNodeRunRole } from '@/modules/task-execution/public/queries'
 import {
   clarifyRoundFixture,
   nodeRunFixture,
@@ -15,7 +20,7 @@ import {
   readNodeRunFixtures,
 } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { resolve } from 'node:path'
@@ -431,6 +436,7 @@ describeEachProvider(
           { title: 't', body: 'b', targetNodeId: WG_MEMBER_NODE_ID },
           actor,
           o2Ports(db).taskLock,
+          epoch2RuntimeTestPorts(db).historyRestrictions,
         )
       } catch (e) {
         threw = e
@@ -453,6 +459,7 @@ describeEachProvider(
         { title: 't', body: 'b', targetNodeId: WG_MEMBER_NODE_ID },
         actor,
         o2Ports(db).taskLock,
+        epoch2RuntimeTestPorts(db).historyRestrictions,
       )
       const { taskQuestions } = tablesOf(db)
       const row = (await db.select().from(taskQuestions).where(eq(taskQuestions.id, id)))[0]
@@ -473,6 +480,7 @@ describeEachProvider(
         { title: 't', body: 'b', targetNodeId: '__wg_leader__' },
         actor,
         o2Ports(db).taskLock,
+        epoch2RuntimeTestPorts(db).historyRestrictions,
       )
       // …then MOVED onto the shared member node → the R2-T5 reassign guard rejects.
       let threw: unknown = null
@@ -533,8 +541,8 @@ describeEachProvider(
         'utf8',
       )
       expect(SVC).toContain("if (target !== '__wg_member__') return")
-      expect(SVC).toContain(
-        'isTurnEngineTaskSubject(decodeTaskSubject(t), t.workgroupConfig?.launch.mode)',
+      expect(SVC.replace(/\s+/g, ' ')).toContain(
+        'isTurnEngineTaskSubject(taskSubjectFromDefinition(t), t.workgroupConfig?.launch.mode)',
       ) // P2 gating
       expect(SVC).toContain('manual-question-workgroup-member-target')
       const DISP = readFileSync(
@@ -552,8 +560,8 @@ describeEachProvider(
       // dispatch backstop: any shard-less entry at __wg_member__ on a turn-engine workgroup → reject.
       expect(DISP).toContain("effectiveTarget(e) === '__wg_member__'")
       expect(DISP).toContain('workgroup-member-shardless-dispatch')
-      expect(DISP).toContain(
-        'isTurnEngineTaskSubject(decodeTaskSubject(taskRow), taskRow.workgroupConfig?.launch.mode)',
+      expect(DISP.replace(/\s+/g, ' ')).toContain(
+        'isTurnEngineTaskSubject( taskSubjectFromDefinition(taskRow), taskRow.workgroupConfig?.launch.mode, )',
       )
     })
   },
@@ -638,7 +646,7 @@ describeEachProvider(
 // must NOT block this member's rollback. Golden-lock: shard-blind (undefined) blocks on any open
 // ledger on the home, exactly as pre-172b.
 describe('RFC-172b T6 — hasOpenDispatchedEntryOnHome shard scoping (S4)', () => {
-  type Run = PersistenceTables['nodeRuns']['$inferSelect']
+  type Run = ReturnType<typeof projectNodeRunReadFacts>
   const mkRun = (over: Partial<Run>): Run =>
     ({
       containerRunId: null,
@@ -647,7 +655,7 @@ describe('RFC-172b T6 — hasOpenDispatchedEntryOnHome shard scoping (S4)', () =
       wrapperProgressJson: null,
       mergeState: null,
 
-      seq: null,
+      seq: ++fixtureRunSequence,
       id: 'r',
       taskId: 't',
       nodeId: WG_MEMBER_NODE_ID,
@@ -745,18 +753,22 @@ describeEachProvider('RFC-172b Codex P1 —— 铸行的 supersede 闭包按 sha
     taskId: string,
     shardKey: string | null,
   ): Promise<string> {
-    return await withTaskExecutionWrite(db, async (tx) =>
-      createNodeRunMintParticipantInTx(tx).mint({
-        ...deriveNodeRunRole({ nodeId: WG_MEMBER_NODE_ID, rerunCause: 'wg-assignment' }),
-        id: ulid(),
-        taskId,
-        nodeId: WG_MEMBER_NODE_ID,
-        iteration: 0,
-        status: 'pending',
-        cause: 'wg-assignment',
-        overrides: { identity: { shardKey } },
-      }),
-    )
+    return await withTaskExecutionWrite(db, async (tx) => {
+      await taskAggregateWrite.lockTaskAggregateRoot(tx, taskId)
+      return await createNodeRunMintParticipantInTx(tx).mint(
+        withTargetMintIdentity({
+          role: 'synthetic',
+          syntheticKind: 'workgroup-host',
+          id: ulid(),
+          taskId,
+          nodeId: WG_MEMBER_NODE_ID,
+          iteration: 0,
+          status: 'pending',
+          cause: 'wg-assignment',
+          overrides: { identity: { shardKey } },
+        }),
+      )
+    })
   }
 
   test('shard=B 只废 shard-B 的前代；还在跑的兄弟成员（shard A）不受波及', async () => {

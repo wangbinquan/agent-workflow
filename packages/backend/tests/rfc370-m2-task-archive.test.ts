@@ -1,3 +1,4 @@
+import { readContentObject, hostedObjectOf } from '@/platform/content/infrastructure/contentStore'
 import { o2Ports } from './helpers/o2Closure'
 // RFC-370 v3 V6: the hosted task archive index (`hosted_task_archive_entries`)
 // lists object parts that are `task-archive` publications of the neutral
@@ -11,7 +12,7 @@ import { createHash } from 'node:crypto'
 import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { eq } from 'drizzle-orm'
+
 import { createHostedObjectPublications } from '@/modules/system-operations/infrastructure/crewstation/objectPublications'
 import type { HostedStoredObject } from '@/platform/crewstation/objectStorage'
 import {
@@ -228,14 +229,17 @@ describeEachProvider('RFC-370 durable task archive', (harness) => {
     )
     expect(await binding.content.list('cs-archive:tasks/.tmp-parent/runs')).toEqual(['parent'])
     await binding.content.remove('cs-archive:tasks/.tmp-parent', true)
-    const { hostedObjectPublications } = tablesOf(f.db)
+    const { contentPublications } = tablesOf(f.db)
+    const rows = await f.db.select().from(contentPublications)
     const states = (
-      await f.db
-        .select()
-        .from(hostedObjectPublications)
-        .where(eq(hostedObjectPublications.objectId, object.id))
+      await Promise.all(
+        rows.map(async (row) => {
+          const ref = row.contentId && (await readContentObject(f.db, row.contentId))
+          return ref && hostedObjectOf(ref).id === object.id ? `${row.owner}:${row.state}` : null
+        }),
+      )
     )
-      .map((row) => `${row.owner}:${row.state}`)
+      .filter((value) => value !== null)
       .sort()
     expect(states).toEqual(['task-archive:releasing', 'task-artifact:ready'])
     expect(await binding.content.exists('cs-archive:tasks/.tmp-parent')).toBe(false)

@@ -229,7 +229,7 @@ const ALLOWANCES: readonly Allowance[] = [
   },
   {
     rule: 'posix-path-prefix',
-    file: 'platform/content/legacySkill.ts',
+    file: 'platform/content/locations/skill.ts',
     match: '`${expectedPrefix}/`',
     count: 1,
     why: 'operand is a skill-archive-relative operation path (`skills/<key>/...`), a wire identifier rather than a filesystem path',

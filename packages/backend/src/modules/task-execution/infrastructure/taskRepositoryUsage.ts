@@ -1,11 +1,14 @@
-import { and, eq, sql, type SQLWrapper } from 'drizzle-orm'
+import { requestedSourceCachedRepoSql } from '@/platform/persistence/taskRepositorySurface'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { tablesOf } from '@/platform/persistence/sessionTables'
 import { rawRows, type RawRowCodecs } from '@/platform/persistence/queryHelpers'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { and, eq, sql, type SQLWrapper } from 'drizzle-orm'
 import type {
-  TaskRepositoryUsageQueries,
   TaskRepositorySourceStore,
+  TaskRepositoryUsageQueries,
 } from '../application/ports/taskRepositoryUsage'
+import { decodeRequestedSourceJson, encodeRequestedSource } from '../domain/requestedSourceCodec'
+import { TaskAggregateCasMiss, taskAggregateWrite } from './taskDefinitionWriteParticipant'
 import { taskRequestedSourceColumns, taskRequestedSourceReferenceSql } from './taskRepositorySql'
 
 export type TaskRepositoryUsageRead = <T extends Record<string, unknown>>(
@@ -21,7 +24,7 @@ function chunks(ids: readonly string[]): string[][] {
   return result
 }
 
-/** Epoch 1: cached-repo prefixes probe both covering indexes; the anti-probe uses the mount PK. */
+/** Requested sources and mounts each use their own cached-repository index. */
 export function createTaskRepositoryUsageQueries(
   db: PersistenceDb,
   read: TaskRepositoryUsageRead = async (query, codecs) => await rawRows(db, query, codecs),
@@ -30,7 +33,7 @@ export function createTaskRepositoryUsageQueries(
     async referencedAmong(ids) {
       const mounted = new Set<string>()
       const requestedOnly = new Set<string>()
-      const { taskRepos } = tablesOf(db)
+      const { taskRepositoryMounts: taskRepos } = tablesOf(db)
       for (const chunk of chunks(ids)) {
         const candidates = sql.join(
           chunk.map((id) => sql`(${id})`),
@@ -59,8 +62,7 @@ export function createTaskRepositoryUsageQueries(
     },
     async countTaskReferences(ids) {
       const counts = new Map<string, number>()
-      const { tasks, taskRepos } = tablesOf(db)
-      const source = taskRequestedSourceColumns(db)
+      const { taskWorkspaces: workspace, taskRepositoryMounts: taskRepos } = tablesOf(db)
       for (const chunk of chunks(ids)) {
         const candidates = sql.join(
           chunk.map((id) => sql`(${id})`),
@@ -72,9 +74,9 @@ export function createTaskRepositoryUsageQueries(
           SELECT candidates.id AS cached_repo_id,
             (SELECT count(distinct ${taskRepos.taskId}) FROM ${taskRepos}
               WHERE ${taskRepos.cachedRepoId} = candidates.id)
-            + (SELECT count(*) FROM ${tasks}
-              WHERE ${source.cachedRepoId} = candidates.id
-                AND NOT EXISTS (SELECT 1 FROM ${taskRepos} WHERE ${taskRepos.taskId} = ${tasks.id})) AS count
+            + (SELECT count(*) FROM ${workspace}
+              WHERE ${requestedSourceCachedRepoSql(db)} = candidates.id
+                AND NOT EXISTS (SELECT 1 FROM ${taskRepos} WHERE ${taskRepos.taskId} = ${workspace.taskId})) AS count
           FROM candidates
         `,
           { count: 'int' },
@@ -90,34 +92,55 @@ export function createTaskRepositoryUsageQueries(
 export function createTaskRepositorySourceStore(db: PersistenceDb): TaskRepositorySourceStore {
   return {
     async listSources() {
-      const { tasks, taskRepos } = tablesOf(db)
+      const { tasks, taskRepositoryMounts: taskRepos } = tablesOf(db)
       const [mounts, requested] = await Promise.all([
         db
           .select({
             taskId: taskRepos.taskId,
-            ordinal: taskRepos.repoIndex,
+            ordinal: taskRepos.ordinal,
             repoUrl: taskRepos.repoUrl,
             cachedRepoId: taskRepos.cachedRepoId,
             submoduleInitError: taskRepos.submoduleInitError,
           })
           .from(taskRepos),
         db
-          .select({ taskId: tasks.id, repoUrl: tasks.repoUrl, cachedRepoId: tasks.cachedRepoId })
+          .select({
+            taskId: tasks.id,
+            repoUrl: taskRequestedSourceColumns(db).repoUrl,
+            cachedRepoId: taskRequestedSourceColumns(db).cachedRepoId,
+          })
           .from(tasks),
       ])
       return { mounts, requested }
     },
     participant(tx) {
-      const { tasks, taskRepos } = tablesOf(tx)
+      const { tasks, taskWorkspaces, taskRepositoryMounts: taskRepos } = tablesOf(tx)
       return {
         async updateRequestedSource(taskId, patch) {
-          await tx.update(tasks).set(patch).where(eq(tasks.id, taskId))
+          await taskAggregateWrite.lockTaskAggregateRoot(tx, taskId)
+          const row = (
+            await tx
+              .select({
+                requestedSource: taskWorkspaces.requestedSource,
+              })
+              .from(tasks)
+              .innerJoin(taskWorkspaces, eq(taskWorkspaces.taskId, tasks.id))
+              .where(eq(tasks.id, taskId))
+          )[0]
+          if (!row) throw new TaskAggregateCasMiss(taskId)
+          const source = decodeRequestedSourceJson(row.requestedSource)
+          await tx
+            .update(taskWorkspaces)
+            .set({ requestedSource: encodeRequestedSource({ ...source, ...patch }) })
+            .where(eq(taskWorkspaces.taskId, taskId))
+          // Source normalization is serialized by the root lock, not a lifecycle CAS.
         },
         async updateMount(taskId, ordinal, patch) {
+          await taskAggregateWrite.lockTaskAggregateRoot(tx, taskId)
           await tx
             .update(taskRepos)
             .set(patch)
-            .where(and(eq(taskRepos.taskId, taskId), eq(taskRepos.repoIndex, ordinal)))
+            .where(and(eq(taskRepos.taskId, taskId), eq(taskRepos.ordinal, ordinal)))
         },
       }
     },

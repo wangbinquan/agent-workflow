@@ -77,12 +77,7 @@ const CONVERGED_TWINS: readonly ConvergedTwin[] = [
     what: '人工门节点投影的 18 字段裁剪：决定 / 评审 / 反问三条链路取同一份节点行投影',
     fn: 'humanGateNodeProjectionMember',
     definedIn: `${B}modules/task-execution/infrastructure/humanGateProjection.ts`,
-    consumers: [
-      `${B}modules/task-execution/public/participants.ts`,
-      `${B}modules/task-execution/infrastructure/taskDecisionParticipant.ts`,
-      // RFC-395 II-a A7: read projections now come through the owner query.
-      `${B}modules/task-execution/infrastructure/nodeRunQueries.ts`,
-    ],
+    consumers: [`${B}modules/task-execution/public/participants.ts`],
     forkedFrom: [
       `${B}modules/task-execution/infrastructure/taskDecisionParticipant.ts`,
       `${B}modules/collaboration/infrastructure/review.ts`,
@@ -408,4 +403,4 @@ describe('RFC-359 —— 孪生体守卫自证有牙', () => {
   })
 })
 
-// 2026-10-22 RFC-395 II-a A6：forkedFrom 保留原始来源；当前恢复在 resourcePackageLegacyRecovery.ts，apply 在 resourcePackageAtomicApply.ts。
+// 2026-10-22 RFC-395 II-a A6：forkedFrom 保留原始来源；当前恢复在 resourcePackageOperationRecovery.ts，apply 在 resourcePackageAtomicApply.ts。

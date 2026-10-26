@@ -20,7 +20,6 @@ import {
 } from '@/modules/resource-catalog/infrastructure/workgroupTurnsOperations'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { POSTGRESQL_SERIALIZATION_ATTEMPTS } from '@/platform/persistence/postgresqlSerializationRetry'
-import { MIGRATIONS } from './migration-freeze'
 
 type HostLedger = ReturnType<WorkgroupHostLedgerParticipantFactory['inTransaction']>
 type Apply = HostLedger['apply']
@@ -53,7 +52,7 @@ function persistenceOn(db: PersistenceDb, apply: Apply = async () => committed()
     hostLedgerFactory: {
       inTransaction(transaction) {
         participants.push(transaction)
-        return { load: async () => null, apply }
+        return { lockTask: async () => {}, load: async () => null, apply }
       },
     },
     clarifyAskGate: { allowed: async () => false },
@@ -115,7 +114,7 @@ function postgresqlFixture() {
 }
 
 function sqliteFixture() {
-  const db = createInMemoryDb(MIGRATIONS)
+  const db = createInMemoryDb()
   const queries: string[] = []
   const dialect = new SQLiteSyncDialect()
   const run = db.run.bind(db)
@@ -173,11 +172,7 @@ describe('RFC-370 short workgroup commit queue', () => {
       ).toEqual(committed())
       expect(await b.load('task')).toBeNull()
       expect(f.attempts()).toBe(3)
-      expect(f.queries).toEqual([
-        'SET TRANSACTION ISOLATION LEVEL SERIALIZABLE',
-        'SET TRANSACTION ISOLATION LEVEL SERIALIZABLE',
-        'SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY',
-      ])
+      expect(f.queries).toEqual(['SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY'])
       expect(order).toEqual(['one'])
     } finally {
       release.resolve()
@@ -348,7 +343,7 @@ describe('RFC-370 short workgroup commit queue', () => {
     }
     expect(await Promise.all([first, second])).toEqual([committed(), committed()])
     expect(f.attempts()).toBe(3)
-    expect(f.queries).toEqual(Array(3).fill('SET TRANSACTION ISOLATION LEVEL SERIALIZABLE'))
+    expect(f.queries).toEqual([])
   })
 
   test('PG original retry exhaustion preserves the raw error and releases its successor', async () => {
@@ -371,10 +366,6 @@ describe('RFC-370 short workgroup commit queue', () => {
     expect<unknown>(await first).toBe(raw)
     expect(await second).toEqual(committed())
     expect(f.attempts()).toBe(POSTGRESQL_SERIALIZATION_ATTEMPTS + 1)
-    expect(f.queries).toEqual(
-      Array(POSTGRESQL_SERIALIZATION_ATTEMPTS + 1).fill(
-        'SET TRANSACTION ISOLATION LEVEL SERIALIZABLE',
-      ),
-    )
+    expect(f.queries).toEqual([])
   })
 })

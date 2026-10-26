@@ -18,24 +18,28 @@
 // If this reds, RFC-178 batch B is broken — the skills schema + agent-ref
 // integrity depend on 0092 applying + stripping correctly.
 
+import {
+  migrateFrozenSqlite as migrate,
+  createFrozenEpoch1Db,
+  type FrozenDbClient,
+  FROZEN_MIGRATIONS,
+} from './migration-freeze'
 import { describe, expect, test, beforeEach, afterEach } from 'bun:test'
 import { Database } from 'bun:sqlite'
 import { drizzle } from 'drizzle-orm/bun-sqlite'
-import { migrate } from 'drizzle-orm/bun-sqlite/migrator'
 import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+const MIGRATIONS = resolve(FROZEN_MIGRATIONS)
 
-function cols(db: DbClient, table: string): string[] {
+function cols(db: FrozenDbClient, table: string): string[] {
   return (db.$client.query(`PRAGMA table_info('${table}')`).all() as { name: string }[]).map(
     (c) => c.name,
   )
 }
-function tables(db: DbClient): string[] {
+function tables(db: FrozenDbClient): string[] {
   return (
     db.$client.query("SELECT name FROM sqlite_master WHERE type='table'").all() as {
       name: string
@@ -44,9 +48,9 @@ function tables(db: DbClient): string[] {
 }
 
 describe('migration 0092 (RFC-178) — schema at HEAD', () => {
-  let db: DbClient
+  let db: FrozenDbClient
   beforeEach(() => {
-    db = createInMemoryDb(MIGRATIONS)
+    db = createFrozenEpoch1Db(MIGRATIONS)
   })
 
   test('skills dropped the external/source columns; kept the managed columns', () => {
@@ -106,7 +110,7 @@ describe('migration 0092 (RFC-178) — reference cleanup + row deletion (frozen 
     writeFileSync(journalPath, JSON.stringify(journal))
 
     sqlite = new Database(':memory:')
-    sqlite.exec('PRAGMA foreign_keys = OFF') // match openDb: 12-step migrations
+    sqlite.exec('PRAGMA foreign_keys = OFF') // match openFrozenEpoch1Db: 12-step migrations
     migrate(drizzle(sqlite), { migrationsFolder: tmp })
     raw = sqlite
   })

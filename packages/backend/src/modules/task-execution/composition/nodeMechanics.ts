@@ -1,14 +1,15 @@
+import { nodeOutputSlot } from '../domain/runSelection/nodeOutputSlot'
 // RFC-334 W2-C — production node and workgroup-host mechanics.
 // Per-kind selection lives in the closed registry; wrapper bodies are owned by
 // the RFC-339 WrapperRuntime and consume this file only through typed ports.
 
-import { copyLegacyPortArchive } from '@/platform/content/legacyPortArchive'
+import { copyPortArchive } from '@/platform/content/locations/portArchive'
 import { prepareConsumedInputs } from '../infrastructure/consumedInputsParticipant'
 import { nodeRunAttemptIndex } from '../domain/nodeRunAttempt'
-import { deriveNodeRunRole } from '../domain/nodeRunRole'
+import { nodeRunMintIdentityForSlot } from '../application/nodeRunMintIdentity'
 import { definitionAnchorId } from '../domain/taskSubject'
 import { taskCheckpointRefs, type TaskRepositoryCheckpoint } from '../domain/taskCheckpoint'
-import { legacyPortFallbackMount } from '@/platform/content/legacyPortArchive'
+import { portFallbackMount } from '@/platform/content/locations/portArchive'
 import type { Actor } from '@/auth/actor'
 import type { CollaborationRuntimeMechanics } from '@/modules/collaboration/public/participants'
 import type { NodeRunLifecyclePersistence } from '@/modules/task-execution/application/ports/nodeRunLifecyclePersistence'
@@ -56,7 +57,6 @@ import type {
   NodeMechanicsResult,
   TaskMechanicsState,
 } from '@/services/execution/taskMechanicsState'
-import { createRunSelectionOracleSnapshot } from '../infrastructure/runSelection/oracle/snapshot'
 import { loadFrameChain } from '../application/frameChain'
 import { resolveSourceFrame, type FrameCoordinate } from '../domain/environmentChain'
 import {
@@ -1089,7 +1089,15 @@ export async function resolveMergeConflicts(
     manifest: MergeConflictManifest,
   ): Promise<void> => {
     const sessionRunId = await mintRun(state, {
-      ...deriveNodeRunRole({ nodeId: mergeNodeId, rerunCause: 'merge-resolve' }),
+      ...nodeRunMintIdentityForSlot(
+        {
+          kind: 'synthetic',
+          syntheticKind: 'merge-resolve',
+          owner: { kind: 'attempt', id: opts.conflictNodeRunId },
+          discriminator: mergeNodeId,
+        },
+        { kind: 'current' },
+      ),
       taskId: task.id,
       nodeId: mergeNodeId,
       status: 'pending',
@@ -1297,18 +1305,11 @@ export async function runCallWorkflowNode(
   // ---- locate the row: adopt an in-flight/interrupted call row, else reuse
   // pending, else mint (agent-path idiom; fanout shard rows never reach here —
   // the validator rejects call nodes inside wrapper-fanout in v1).
-  const callRows = await state.opts.persistence.nodeExecution.list({
+  const sameNodeIterRuns = await state.opts.persistence.nodeExecution.list({
     taskId,
     nodeId: node.id,
     iteration,
   })
-  const callHistory = await createRunSelectionOracleSnapshot(callRows, {
-    scope: { kind: 'rows' },
-  }).familyHistory(taskId, {
-    nodeId: node.id,
-    iteration,
-  })
-  const sameNodeIterRuns = callHistory.map((ref) => callRows.find((row) => row.id === ref.id)!)
   let adoptedChildTaskId: string | null = null
   let launchedChildId: string | null = null
   let liveIso: IsoHandle | null = null
@@ -1328,9 +1329,7 @@ export async function runCallWorkflowNode(
     iteration,
     consumedUpstreamJson,
     rows: sameNodeIterRuns,
-    selection: createRunSelectionOracleSnapshot(sameNodeIterRuns, {
-      scope: { kind: 'node', taskId, nodeId: node.id, iteration },
-    }),
+    selection: state.opts.persistence.selection,
     inheritReviewIteration: true,
     clearAgentOverride: true,
     trackRetryIndex: true,
@@ -1799,7 +1798,7 @@ export async function runCallWorkflowNode(
       portName,
       content: value.content,
       kind: value.kind,
-      archiveJson: copyLegacyPortArchive(value.archiveJson ?? null),
+      archiveJson: copyPortArchive(value.archiveJson ?? null),
       active: value.active !== false,
     })),
   })
@@ -2336,17 +2335,11 @@ export async function runCodeHostCallNode(
   // forever and make `isFresherNodeRun` pick between two rows for the same
   // attempt.
   const consumedUpstreamJson = prepareConsumedInputs({ record: consumed }).consumedUpstreamRunsJson!
-  const dispatchRows = await opts.persistence.nodeExecution.list({
+  const sameNodeIterRuns = await opts.persistence.nodeExecution.list({
     taskId,
     nodeId: node.id,
     iteration,
   })
-  const dispatchHistory = await createRunSelectionOracleSnapshot(dispatchRows, {
-    scope: { kind: 'rows' },
-  }).familyHistory(taskId, { nodeId: node.id, iteration })
-  const sameNodeIterRuns = dispatchHistory.map(
-    (run) => dispatchRows.find((row) => row.id === run.id)!,
-  )
   // RFC-287 T8：取行前奏收编。本线两处与其余三线不同，**都不能统一掉**：
   //   · 不追 retryIndex —— 代码平台调用没有节点级重试（只有 HTTP 幂等重试）；
   //   · 不广播 pending —— 它铸完立刻转 running（下方），多播一条 WS 事件会让
@@ -2361,9 +2354,7 @@ export async function runCodeHostCallNode(
     iteration,
     consumedUpstreamJson,
     rows: sameNodeIterRuns,
-    selection: createRunSelectionOracleSnapshot(sameNodeIterRuns, {
-      scope: { kind: 'node', taskId, nodeId: node.id, iteration },
-    }),
+    selection: state.opts.persistence.selection,
     inheritReviewIteration: false,
     clearAgentOverride: false,
     trackRetryIndex: false,
@@ -2657,17 +2648,11 @@ export async function runScriptNode(
 
   // Row selection mirrors the agent branch: adopt a pending row if one exists,
   // otherwise mint the next retry index.
-  const dispatchRows = await opts.persistence.nodeExecution.list({
+  const sameNodeIterRuns = await opts.persistence.nodeExecution.list({
     taskId,
     nodeId: node.id,
     iteration,
   })
-  const dispatchHistory = await createRunSelectionOracleSnapshot(dispatchRows, {
-    scope: { kind: 'rows' },
-  }).familyHistory(taskId, { nodeId: node.id, iteration })
-  const sameNodeIterRuns = dispatchHistory.map(
-    (run) => dispatchRows.find((row) => row.id === run.id)!,
-  )
   // RFC-287 T8：取行前奏收编（脚本线不继承 reviewIteration、不写 agentOverrideName
   // ——它没有评审轮次也没有代理借用；其余四维与 agent 线同）。
   const resolvedRow = await resolveSchedulerRunRow({
@@ -2680,9 +2665,7 @@ export async function runScriptNode(
     iteration,
     consumedUpstreamJson,
     rows: sameNodeIterRuns,
-    selection: createRunSelectionOracleSnapshot(sameNodeIterRuns, {
-      scope: { kind: 'node', taskId, nodeId: node.id, iteration },
-    }),
+    selection: state.opts.persistence.selection,
     inheritReviewIteration: false,
     clearAgentOverride: false,
     trackRetryIndex: true,
@@ -2842,7 +2825,14 @@ export async function runScriptNode(
         },
         onNextAttempt: async (attempt) => {
           nodeRunId = await mintRun(state, {
-            ...deriveNodeRunRole({ nodeId: node.id, rerunCause: 'process-retry' }),
+            ...nodeRunMintIdentityForSlot(
+              {
+                kind: 'node',
+                nodeId: node.id,
+                frame: { containerRunId: args.containerRunId, iteration: iteration },
+              },
+              { kind: 'current' },
+            ),
             taskId,
             nodeId: node.id,
             status: 'pending',
@@ -3338,20 +3328,14 @@ export async function judgeBranchActivation(
   // dependencies are ordinary edges now, so edges are the whole test.
   const hasInbound = collectDataflowInboundEdges(definition.edges, node.id).length > 0
   if (!hasInbound) return null
-  const existing = await state.opts.persistence.nodeExecution.list({
-    taskId,
-    nodeId: node.id,
-    containerRunId,
-    iteration,
+  const latest = await state.opts.persistence.nodeExecution.snapshotRead(async (snapshot) => {
+    const existing = await snapshot.list({ taskId, nodeId: node.id, containerRunId, iteration })
+    const selected = await snapshot.selection.current(
+      taskId,
+      nodeOutputSlot(node.id, node.kind, { containerRunId, iteration }),
+    )
+    return existing.find((row) => row.id === selected?.id)
   })
-  const selected = await createRunSelectionOracleSnapshot(existing, {
-    scope: { kind: 'rows' },
-  }).current(taskId, {
-    kind: 'node',
-    nodeId: node.id,
-    frame: { containerRunId, iteration },
-  })
-  const latest = existing.find((row) => row.id === selected?.id)
   const forceActivated = latest?.forceActivated === true
 
   const decision = await resolveNodeActivationForDispatch({
@@ -3456,7 +3440,14 @@ async function recordSkippedRun(
       broadcastNodeStatus(taskId, latest.id, node.id, 'canceled')
     }
     nodeRunId = await mintRun(state, {
-      ...deriveNodeRunRole({ nodeId: node.id, rerunCause: 'branch-skip' }),
+      ...nodeRunMintIdentityForSlot(
+        {
+          kind: 'node',
+          nodeId: node.id,
+          frame: { containerRunId: containerRunId, iteration: iteration },
+        },
+        { kind: 'current' },
+      ),
       taskId,
       nodeId: node.id,
       status: 'pending',
@@ -3502,9 +3493,7 @@ export async function runIdleClarifyNode(
     containerRunId: args.containerRunId,
     iteration,
   })
-  const selected = await createRunSelectionOracleSnapshot(existing, {
-    scope: { kind: 'rows' },
-  }).current(taskId, {
+  const selected = await state.opts.persistence.selection.current(taskId, {
     kind: 'node',
     nodeId: node.id,
     frame: { containerRunId: args.containerRunId, iteration },
@@ -3589,13 +3578,21 @@ export async function runOutputNode(
       resolved.source.nodeId,
       resolved.source.portName,
       sourceFrame.frame,
+      definition.nodes.find((source) => source.id === resolved.source.nodeId)?.kind,
     )
     if (row.runId !== null) consumed[resolved.source.nodeId] = row.runId
     projected.push({ binding: b, row })
   }
   // RFC-359：born-done 的行与它的输出同一事务落库（端口 `outputs` 的注释说明了缝在哪）。
   const nrId = await mintRun(state, {
-    ...deriveNodeRunRole({ nodeId: node.id, rerunCause: 'io-virtual' }),
+    ...nodeRunMintIdentityForSlot(
+      {
+        kind: 'node',
+        nodeId: node.id,
+        frame: { containerRunId: args.containerRunId, iteration: iteration },
+      },
+      { kind: 'current' },
+    ),
     taskId,
     nodeId: node.id,
     status: 'done',
@@ -3612,7 +3609,7 @@ export async function runOutputNode(
       portName: binding.name,
       content: row.content,
       kind: row.kind,
-      archiveJson: copyLegacyPortArchive(row.archiveJson),
+      archiveJson: copyPortArchive(row.archiveJson),
       // RFC-306: the virtual projection preserves branch activation.
       active: row.active,
     })),
@@ -3640,7 +3637,14 @@ export async function runInputNode(
   // so edges authored on the canvas resolve to the visible handle label.
   // RFC-359：born-done 的行与它的输出同一事务落库（端口 `outputs` 的注释说明了缝在哪）。
   const nrId = await mintRun(state, {
-    ...deriveNodeRunRole({ nodeId: node.id, rerunCause: 'io-virtual' }),
+    ...nodeRunMintIdentityForSlot(
+      {
+        kind: 'node',
+        nodeId: node.id,
+        frame: { containerRunId: args.containerRunId, iteration: iteration },
+      },
+      { kind: 'current' },
+    ),
     taskId,
     nodeId: node.id,
     status: 'done',
@@ -3669,7 +3673,7 @@ export async function runReviewNode(
     iteration,
     // RFC-193 D9: the review's fallback read root is THIS scope's canonical.
     scopeRoot: state.scopeRoot,
-    repoDirName: legacyPortFallbackMount(state.repos.map((repo) => repo.mountPath)),
+    repoDirName: portFallbackMount(state.repos.map((repo) => repo.mountPath)),
     ...(opts.executionContext === undefined ? {} : { executionContext: opts.executionContext }),
   })
 }
@@ -3716,7 +3720,14 @@ export async function runCrossClarifyNode(
   // workflow is malformed — fail and let the user see it in the UI.
   if (findQuestionerNodeForCrossClarify(definition, node.id) === undefined) {
     const failId = await mintRun(state, {
-      ...deriveNodeRunRole({ nodeId: node.id, rerunCause: 'cross-clarify-guard' }),
+      ...nodeRunMintIdentityForSlot(
+        {
+          kind: 'node',
+          nodeId: node.id,
+          frame: { containerRunId: args.containerRunId, iteration: iteration },
+        },
+        { kind: 'current' },
+      ),
       taskId,
       nodeId: node.id,
       status: 'pending',
@@ -3758,7 +3769,14 @@ export async function runCrossClarifyNode(
     : false
   if (stopped) {
     const stopRunId = await mintRun(state, {
-      ...deriveNodeRunRole({ nodeId: node.id, rerunCause: 'cross-clarify-guard' }),
+      ...nodeRunMintIdentityForSlot(
+        {
+          kind: 'node',
+          nodeId: node.id,
+          frame: { containerRunId: args.containerRunId, iteration: iteration },
+        },
+        { kind: 'current' },
+      ),
       taskId,
       nodeId: node.id,
       status: 'pending',
@@ -3947,9 +3965,7 @@ export async function runAgentSingleNode(
     iteration,
     consumedUpstreamJson,
     rows: sameNodeIterRuns,
-    selection: createRunSelectionOracleSnapshot(sameNodeIterRuns, {
-      scope: { kind: 'node', taskId, nodeId: node.id, iteration },
-    }),
+    selection: state.opts.persistence.selection,
     inheritReviewIteration: true,
     clearAgentOverride: true,
     trackRetryIndex: true,
@@ -4117,7 +4133,11 @@ export async function runAgentSingleNode(
         // consumed-by stamps, not a carried clarifyIteration. shardKey /
         // parentNodeRunId still belong to this run-of-the-node and persist.
         nodeRunId = await mintRun(state, {
-          ...deriveNodeRunRole({ nodeId: node.id, rerunCause: 'process-retry' }),
+          ...nodeRunMintIdentityForSlot(
+            (await opts.persistence.nodeExecution.read(nodeRunId))!.slot,
+            { kind: 'current' },
+            followupDecision.followup && envelopeNonce.length > 0 ? envelopeNonce : undefined,
+          ),
           taskId,
           nodeId: node.id,
           status: 'pending',
@@ -4130,7 +4150,6 @@ export async function runAgentSingleNode(
               reviewIteration: inheritedReviewIteration,
               shardKey: inheritedShardKey,
               parentNodeRunId: inheritedParentNodeRunId,
-              ...(followupDecision.followup && envelopeNonce.length > 0 ? { envelopeNonce } : {}),
             },
             inputs: {
               consumedUpstreamRunsJson: consumedUpstreamJson,
@@ -4541,7 +4560,6 @@ export async function runAgentSingleNode(
             priorRun.id,
             agent.outputs ?? [],
             onlyPorts,
-            envelopeNonce,
           )
           if (block.length > 0) priorOutputUpdate = { block }
         }
@@ -4955,10 +4973,7 @@ export async function runAgentSingleNode(
             // RFC-193 K1: this run's own just-emitted port files (not yet in the
             // handle's DB-aggregated roster) join the final-snapshot force list.
             extraForcedContainerPaths: (r?.portFilePaths ?? []).map((p) =>
-              toContainerRelative(
-                legacyPortFallbackMount(state.repos.map((repo) => repo.mountPath)),
-                p,
-              ),
+              toContainerRelative(portFallbackMount(state.repos.map((repo) => repo.mountPath)), p),
             ),
             conflictResolver: (conflicts, containerPath) =>
               resolveMergeConflicts(state, {
@@ -5252,22 +5267,24 @@ export async function resolveUpstreamInputs(
       )
     }
     const readFrame = 'containerRunId' in sourceFrame ? sourceFrame : sourceFrame.frame
-    const rows = await persistence.list({ taskId, nodeId: source.nodeId })
-    // RFC-074 (decision D10 / design §5.1): the source picker is the freshness
-    // picker — settled (done ∪ skipped, RFC-306) top-level rows only, freshest
-    // by pure id order — restricted by RFC-354 to exactly one frame.
-    const selected = (
-      await createRunSelectionOracleSnapshot(rows, { scope: { kind: 'rows' } }).slotHistory(
-        taskId,
-        {
-          kind: 'node',
-          nodeId: source.nodeId,
-          frame: readFrame,
-        },
-        { statusIn: ['done', 'skipped'] },
+    const run = await persistence.snapshotRead(async (snapshot) => {
+      const rows = await snapshot.list({ taskId, nodeId: source.nodeId })
+      const ids = new Set(rows.map((row) => row.id))
+      const selected = (
+        await snapshot.selection.slotHistory(
+          taskId,
+          nodeOutputSlot(
+            source.nodeId,
+            definition?.nodes.find((node) => node.id === source.nodeId)?.kind,
+            readFrame,
+          ),
+          { statusIn: ['done', 'skipped'] },
+        )
       )
-    ).at(-1)
-    const run = rows.find((row) => row.id === selected?.id)
+        .filter((row) => ids.has(row.id))
+        .at(-1)
+      return rows.find((row) => row.id === selected?.id)
+    })
     if (!run) {
       log.warn('upstream node_run not found', { taskId, sourceNodeId: source.nodeId })
       continue
@@ -5319,6 +5336,7 @@ export async function readPortRowAtFrame(
   // it through the environment chain when the source sits in an enclosing
   // scope); rows of any other frame are invisible here.
   frame: FrameCoordinate,
+  nodeKind?: string,
 ): Promise<{
   runId: string | null
   content: string
@@ -5333,30 +5351,18 @@ export async function readPortRowAtFrame(
    */
   active: boolean
 }> {
-  const rows = await persistence.list({ taskId, nodeId })
-  // Pick the freshest SETTLED top-level run of exactly this frame.
-  // RFC-096 (audit 附录 C #5): the settled-only filter aligns this read with
-  // buildFreshestSettledPerNode / the RFC-074 freshness口径 — without it, a
-  // freshly minted non-done row (e.g. a concurrent designer-rerun pending
-  // row) was picked as freshest, had no outputs, and the port read returned
-  // '': a loop `port-empty` exit condition false-fired and the wrapper
-  // persisted '' outputs. Non-done rows never have outputs (the runner only
-  // persists ports on done), so skipping them can only surface the newest
-  // REAL content. RFC-354 retired the "iteration ≤ window" carry: a value
-  // from an enclosing scope is reached by resolving its frame first, not by
-  // letting an older round leak through.
-  const selected = (
-    await createRunSelectionOracleSnapshot(rows, { scope: { kind: 'rows' } }).slotHistory(
-      taskId,
-      {
-        kind: 'node',
-        nodeId,
-        frame,
-      },
-      { statusIn: ['done', 'skipped'] },
+  const chosen = await persistence.snapshotRead(async (snapshot) => {
+    const rows = await snapshot.list({ taskId, nodeId })
+    const ids = new Set(rows.map((row) => row.id))
+    const selected = (
+      await snapshot.selection.slotHistory(taskId, nodeOutputSlot(nodeId, nodeKind, frame), {
+        statusIn: ['done', 'skipped'],
+      })
     )
-  ).at(-1)
-  const chosen = rows.find((row) => row.id === selected?.id)
+      .filter((row) => ids.has(row.id))
+      .at(-1)
+    return rows.find((row) => row.id === selected?.id)
+  })
   if (chosen === undefined) {
     // No settled run at all. `active: true` (not false) on purpose: "nothing has
     // run yet" is not a branch decision, and reporting it as inactive would let
@@ -5470,28 +5476,33 @@ export async function freshestPriorRunWithOutput(
     seq: number | null
   },
 ): Promise<NodeExecutionSnapshot | undefined> {
-  const rows = await persistence.list({
-    taskId: run.taskId,
-    nodeId: run.nodeId,
-    iteration: run.iteration,
+  return persistence.snapshotRead(async (snapshot) => {
+    const rows = await snapshot.list({
+      taskId: run.taskId,
+      nodeId: run.nodeId,
+      iteration: run.iteration,
+    })
+    // shardKey filtered in memory (drizzle IS NULL handling varies; see
+    // readPriorAgentSessionId). Walk freshest-first (largest seq) and return the
+    // first prior run (any parent — see doc) that captured output.
+    const history = await snapshot.selection.familyHistory(
+      run.taskId,
+      {
+        nodeId: run.nodeId,
+        iteration: run.iteration,
+        shardKey: run.shardKey ?? null,
+        runIds: rows.map((row) => row.id),
+      },
+      { before: run, direction: 'desc' },
+    )
+    const byId = new Map(rows.map((row) => [row.id, row]))
+    const candidates = history.map((ref) => byId.get(ref.id)!)
+    for (const c of candidates) {
+      const has = await snapshot.listOutputs(c.id)
+      if (has.length > 0) return c
+    }
+    return undefined
   })
-  // shardKey filtered in memory (drizzle IS NULL handling varies; see
-  // readPriorAgentSessionId). Walk freshest-first (largest seq) and return the
-  // first prior run (any parent — see doc) that captured output.
-  const history = await createRunSelectionOracleSnapshot(rows, {
-    scope: { kind: 'rows' },
-  }).familyHistory(
-    run.taskId,
-    { nodeId: run.nodeId, iteration: run.iteration, shardKey: run.shardKey ?? null },
-    { before: run, direction: 'desc' },
-  )
-  const byId = new Map(rows.map((row) => [row.id, row]))
-  const candidates = history.map((ref) => byId.get(ref.id)!)
-  for (const c of candidates) {
-    const has = await persistence.listOutputs(c.id)
-    if (has.length > 0) return c
-  }
-  return undefined
 }
 
 /**
@@ -5515,18 +5526,25 @@ async function lineageCausesNewestFirst(
     seq: number | null
   },
 ): Promise<Array<string | null>> {
-  const rows = await persistence.list({
-    taskId: run.taskId,
-    nodeId: run.nodeId,
-    iteration: run.iteration,
+  return persistence.snapshotRead(async (snapshot) => {
+    const rows = await snapshot.list({
+      taskId: run.taskId,
+      nodeId: run.nodeId,
+      iteration: run.iteration,
+    })
+    return (
+      await snapshot.selection.familyHistory(
+        run.taskId,
+        {
+          nodeId: run.nodeId,
+          iteration: run.iteration,
+          shardKey: run.shardKey ?? null,
+          runIds: rows.map((row) => row.id),
+        },
+        { topLevelOnly: true, through: run, direction: 'desc' },
+      )
+    ).map((ref) => ref.rerunCause)
   })
-  return (
-    await createRunSelectionOracleSnapshot(rows, { scope: { kind: 'rows' } }).familyHistory(
-      run.taskId,
-      { nodeId: run.nodeId, iteration: run.iteration, shardKey: run.shardKey ?? null },
-      { topLevelOnly: true, through: run, direction: 'desc' },
-    )
-  ).map((ref) => ref.rerunCause)
 }
 
 /**
@@ -5551,21 +5569,26 @@ async function priorDoneGenerationsForRun(
     seq: number | null
   },
 ): Promise<readonly NodeExecutionSnapshot[]> {
-  const rows = await persistence.list({
-    taskId: run.taskId,
-    nodeId: run.nodeId,
-    iteration: run.iteration,
-    status: 'done',
+  return persistence.snapshotRead(async (snapshot) => {
+    const rows = await snapshot.list({
+      taskId: run.taskId,
+      nodeId: run.nodeId,
+      iteration: run.iteration,
+      status: 'done',
+    })
+    const history = await snapshot.selection.familyHistory(
+      run.taskId,
+      {
+        nodeId: run.nodeId,
+        iteration: run.iteration,
+        shardKey: run.shardKey ?? null,
+        runIds: rows.map((row) => row.id),
+      },
+      { topLevelOnly: true, statusIn: ['done'], before: run },
+    )
+    const byId = new Map(rows.map((row) => [row.id, row]))
+    return history.map((ref) => byId.get(ref.id)!)
   })
-  const history = await createRunSelectionOracleSnapshot(rows, {
-    scope: { kind: 'rows' },
-  }).familyHistory(
-    run.taskId,
-    { nodeId: run.nodeId, iteration: run.iteration, shardKey: run.shardKey ?? null },
-    { topLevelOnly: true, statusIn: ['done'], before: run },
-  )
-  const byId = new Map(rows.map((row) => [row.id, row]))
-  return history.map((ref) => byId.get(ref.id)!)
 }
 
 /**
@@ -5587,27 +5610,32 @@ async function readPriorAgentSessionId(
     before: NodeRunOrderKey
   },
 ): Promise<string | null> {
-  const rows = await persistence.list({
-    taskId: args.taskId,
-    nodeId: args.agentNodeId,
-    iteration: args.iteration,
-    status: 'done',
-  })
-  const history = await createRunSelectionOracleSnapshot(rows, {
-    scope: { kind: 'rows' },
-  }).familyHistory(
-    args.taskId,
-    { nodeId: args.agentNodeId, iteration: args.iteration, shardKey: args.shardKey },
-    { topLevelOnly: true, statusIn: ['done'], before: args.before, direction: 'desc' },
-  )
-  const byId = new Map(rows.map((row) => [row.id, row]))
-  const filtered = history.map((ref) => byId.get(ref.id)!)
-  for (const r of filtered) {
-    if (r.opencodeSessionId !== null && r.opencodeSessionId !== '') {
-      return r.opencodeSessionId
+  return persistence.snapshotRead(async (snapshot) => {
+    const rows = await snapshot.list({
+      taskId: args.taskId,
+      nodeId: args.agentNodeId,
+      iteration: args.iteration,
+      status: 'done',
+    })
+    const history = await snapshot.selection.familyHistory(
+      args.taskId,
+      {
+        nodeId: args.agentNodeId,
+        iteration: args.iteration,
+        shardKey: args.shardKey,
+        runIds: rows.map((row) => row.id),
+      },
+      { topLevelOnly: true, statusIn: ['done'], before: args.before, direction: 'desc' },
+    )
+    const byId = new Map(rows.map((row) => [row.id, row]))
+    const filtered = history.map((ref) => byId.get(ref.id)!)
+    for (const r of filtered) {
+      if (r.opencodeSessionId !== null && r.opencodeSessionId !== '') {
+        return r.opencodeSessionId
+      }
     }
-  }
-  return null
+    return null
+  })
 }
 
 /**

@@ -235,6 +235,7 @@ export async function deleteTask(
       })
       const participant = createTaskDeletionParticipantInTx(tx)
       const collaboration = createTaskDeletionCollaborationParticipantInTx(tx)
+      const cascadeRows = await participant.cascade(taskId)
       const fresh = await participant.status(taskId)
       if (fresh === undefined) {
         throw new NotFoundError('task-not-found', `task '${taskId}' not found`)
@@ -251,7 +252,6 @@ export async function deleteTask(
       // RFC-244: freeze the complete FK-cascade audience inside the deletion
       // transaction. Once the root delete commits neither rows nor memberships
       // remain available to the tasks-list frame gate.
-      const cascadeRows = await participant.cascade(taskId)
       const cascadeIds = cascadeRows.map((item) => item.id)
       const claimedIds = maintenanceMembers.map((member) => member.taskId).sort()
       if (JSON.stringify([...cascadeIds].sort()) !== JSON.stringify(claimedIds)) {

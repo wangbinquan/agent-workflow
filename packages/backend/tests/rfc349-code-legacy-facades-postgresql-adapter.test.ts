@@ -1,6 +1,10 @@
 // RFC-349 — provider-neutral legacy code facades are backed by live
 // PostgreSQL queries/writes, not a SQLite shadow or a cast client.
+// RFC-395 BF-D27: AF-D1 marks once across writes and folds a later single-row insert.
 
+import { createEpoch2PostgresqlMetadata } from './helpers/epoch2PostgresqlMetadata'
+import { getTableColumns, type Table } from 'drizzle-orm'
+import { nativeTableSets } from '@/bootstrap/persistenceSchema'
 import { withNativeTransactions } from './helpers/nativeTransactions'
 import { describe, expect, test } from 'bun:test'
 
@@ -30,12 +34,12 @@ function rows(values: readonly (readonly unknown[])[]): SqlRows {
 
 function fixture(responses: Array<readonly (readonly unknown[])[]>) {
   const executions: Array<{ readonly sql: string; readonly parameters?: readonly unknown[] }> = []
+  const epoch2Metadata = createEpoch2PostgresqlMetadata()
   const run = (sql: string, parameters?: readonly unknown[]) => {
     executions.push({ sql, parameters })
-    // RFC-349: the one-shot live-write marker and the per-transaction
-    // generation fence are infrastructure, not part of the adapter contract
-    // each case queues responses for. Answer them without consuming the queue.
-    if (sql.includes('database_generations')) return rows([['dbg_code_legacy_pg']])
+    const metadata = epoch2Metadata(sql, parameters)
+    if (metadata) return metadata
+    if (/^(BEGIN|COMMIT|ROLLBACK|SET TRANSACTION)/i.test(sql)) return rows([])
     return rows(responses.shift() ?? [])
   }
   const connection: PostgresqlReservedConnection = withNativeTransactions({
@@ -64,7 +68,40 @@ function fixture(responses: Array<readonly (readonly unknown[])[]>) {
     providerPool: () => pool,
     async close() {},
   }
-  return { db: createPostgresqlDatabaseClient(runtime), executions }
+  return {
+    db: createPostgresqlDatabaseClient(runtime),
+    executions,
+    remaining: () => responses.length,
+  }
+}
+
+function joinedRun(wrapperProgressJson: string | null): readonly unknown[] {
+  const t = nativeTableSets.postgresql
+  const values = (table: Table, fields: Record<string, unknown>) =>
+    Object.keys(getTableColumns(table)).map((key) => fields[key] ?? null)
+  return [
+    ...values(t.nodeRuns, {
+      id: 'run-1',
+      taskId: 'task-1',
+      nodeId: 'node',
+      seq: 1,
+      startedAt: 100,
+      recordMode: 'executable',
+      role: 'node-attempt',
+      slotKey: '["rs1","node","node",null,0]',
+      attemptIndex: 0,
+      generationSeq: 1,
+      iteration: 0,
+      reviewIteration: 0,
+      inputsRecorded: false,
+      status: 'done',
+    }),
+    ...values(t.nodeRunConfigs, {}),
+    ...values(t.nodeRunRuntimeStates, { nodeRunId: 'run-1', wrapperProgressJson }),
+    ...values(t.nodeRunResults, {}),
+    null,
+    null, // optional frozen evidence content projection
+  ]
 }
 
 describe('RFC-349 PostgreSQL code legacy-facade adapters', () => {
@@ -74,13 +111,43 @@ describe('RFC-349 PostgreSQL code legacy-facade adapters', () => {
       [['task-1', 'running', 'local', '/workspace', 'base-sha', null]],
       [
         ['', '/workspace', 'base-sha'],
-        ['packages/api', '/workspace/packages/api', 'api-sha'],
+        ['packages/api', '/workspace', 'api-sha'],
       ],
-      // Storage reads carry taskId to load the run's mount layout.
-      [['run-1', 'task-1', null, 'pre-sha', null, 100, null]],
-      [[''], ['packages/api']],
-      [['run-1', 'task-1', null, 'pre-sha', null, 100, '{"baselineCommit":"wrapper-sha"}']],
-      [[''], ['packages/api']],
+      // familyHistory projects run identity before the snapshot/checkpoint reads.
+      [
+        [
+          'run-1',
+          'task-1',
+          'node',
+          1,
+          'done',
+          '["rs1","node","node",null,0]',
+          'node-attempt',
+          'executable',
+          0,
+          0,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          100,
+          null,
+          null,
+          false,
+          false,
+          1,
+        ],
+      ],
+      [joinedRun(null)],
+      [['run-1', '', 'pre-sha', null, null, null]],
+      [],
+      [joinedRun('{"baselineCommit":"wrapper-sha"}')],
+      [['run-1', '', 'pre-sha', null, null, null]],
+      [],
     ])
     const params = createCapabilityParamRead(fake.db)
     const workspace = createTaskCodeWorkspaceQueries(fake.db)
@@ -97,26 +164,29 @@ describe('RFC-349 PostgreSQL code legacy-facade adapters', () => {
         { mountPath: 'packages/api', worktreePath: '/workspace/packages/api' },
       ],
     })
-    await expect(workspace.listNodeRuns('task-1')).resolves.toEqual([
+    expect(await workspace.listNodeRuns('task-1')).toEqual([
       {
-        seq: null,
+        seq: 1,
         id: 'run-1',
-        checkpoints: [],
+        checkpoints: [{ mountPath: '', preSnapshot: 'pre-sha' }],
         startedAt: 100,
         wrapperProgressJson: null,
       },
     ])
     await expect(workspace.findNodeRun('run-1')).resolves.toMatchObject({
       id: 'run-1',
-      checkpoints: [],
+      checkpoints: [{ mountPath: '', preSnapshot: 'pre-sha' }],
     })
 
+    expect(fake.remaining()).toBe(0)
     const sql = fake.executions.map((execution) => execution.sql).join('\n')
     for (const table of [
       'repo_capability_config',
       'capability_templates',
       'tasks',
-      'task_repos',
+      'task_repository_mounts',
+      'node_run_runtime_states',
+      'node_run_repo_checkpoints',
       'node_runs',
     ]) {
       expect(sql).toContain(`"agent_workflow"."${table}"`)
@@ -124,8 +194,7 @@ describe('RFC-349 PostgreSQL code legacy-facade adapters', () => {
   })
 
   test('capability-template writes execute against PostgreSQL', async () => {
-    const fencedWrite = [[], [['dbg_code_legacy_facades_pg']], [], []] as const
-    const fake = fixture([...fencedWrite, ...fencedWrite, ...fencedWrite])
+    const fake = fixture([[], [], [], []])
     const persistence = createCapabilityTemplatePersistence(fake.db)
     const row: CapabilityTemplateRecord = {
       id: 'template-1',
@@ -156,15 +225,39 @@ describe('RFC-349 PostgreSQL code legacy-facade adapters', () => {
     await persistence.replace({ ...row, description: 'updated', updatedAt: 101 })
     await persistence.delete(row.id)
 
-    // begin/marker/fence/write/commit for the first write, begin/fence/write/
-    // commit for the two that follow — the marker is one-shot per process.
-    expect(fake.executions).toHaveLength(13)
-    expect(fake.executions[1]?.sql).toContain('WITH marked AS (UPDATE "agent_workflow_meta"')
-    expect(fake.executions[2]?.sql).toContain('SELECT generation_id FROM "agent_workflow_meta"')
-    expect(fake.executions[3]?.sql).toContain('insert into "agent_workflow"."capability_templates"')
-    expect(fake.executions[7]?.sql).toContain('update "agent_workflow"."capability_templates"')
-    expect(fake.executions[11]?.sql).toContain(
+    const sql = fake.executions.map((entry) => entry.sql)
+    const mutations = [
+      'insert into "agent_workflow"."capability_templates"',
+      'update "agent_workflow"."capability_templates"',
       'delete from "agent_workflow"."capability_templates"',
+    ]
+    expect(sql).toEqual(
+      mutations.flatMap((mutation, index) => [
+        'BEGIN',
+        expect.stringMatching(/^SELECT generation_id .*"generations".*FOR SHARE$/i),
+        ...(index === 0
+          ? [
+              expect.stringContaining('SELECT first_live_write_at'),
+              expect.stringContaining('UPDATE "agent_workflow_meta"."first_write"'),
+            ]
+          : []),
+        expect.stringContaining(mutation),
+        'COMMIT',
+      ]),
     )
+
+    const foldedStart = fake.executions.length
+    await persistence.insert({ ...row, id: 'template-2', name: 'Template 2' })
+    const folded = fake.executions.slice(foldedStart)
+    expect(folded.map((entry) => entry.sql)).toEqual([
+      expect.stringMatching(/^insert into "agent_workflow"\."capability_templates" .* select /),
+    ])
+    expect(folded[0]?.sql).toContain(
+      'where exists (select 1 from "agent_workflow_meta"."generations"',
+    )
+    expect(folded[0]?.sql).toContain("and state = 'active' for share)")
+    expect(folded[0]?.parameters).toContain('template-2')
+    expect(folded[0]?.parameters).toContain('dbg_code_legacy_facades_pg')
+    expect(fake.remaining()).toBe(0)
   })
 })

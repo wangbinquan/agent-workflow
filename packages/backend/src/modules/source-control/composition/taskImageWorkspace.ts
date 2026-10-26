@@ -1,47 +1,50 @@
-import { existsSync, mkdirSync, writeFileSync, readFileSync, mkdtempSync, rmSync } from 'node:fs'
-import { dirname, join, resolve, sep } from 'node:path'
-import { gitUrlCacheKeyWith, parseGitUrl, type GitCommitIdentity } from '@agent-workflow/shared'
-import { sha1Hex } from '@/util/hash'
 import { requireWorkPath } from '@/platform/crewstation/workVolumePath'
-import { runGit, isGitWorkTree, gitDiffSnapshot, worktreeDiff, initScratchRepo } from '@/util/git'
-import { detectSubmodules, listEffectiveSubmodules } from '@/services/gitSubmodule'
-import { listAvailableRefs } from '@/services/gitRepoCache'
-import { DomainError } from '@/util/errors'
-import {
-  materializeWorktree,
-  materializeGroupSpace,
-  cleanupMaterializedSpace,
-  resolveRepoSourceSingleWithProvider,
-} from '../infrastructure/workspaceMaterializer'
-import type { MaterializedSpace, ResolvedRepoSource } from '../application/workspaceMaterialization'
-import { bindFileAgentWorkspaceGitControlObservation } from '../infrastructure/local/fileAgentWorkspaceGitControl'
-import { createNodeWorkspaceMaintenanceFilesystem } from '../infrastructure/nodeWorkspaceMaintenanceFilesystem'
-import {
-  createLocalIsolationWorkspaceFactory,
-  prepareLocalIsolationConflict,
-} from '../infrastructure/local/localIsolationWorkspace'
-import type { IsolationWorkspaceBinding } from '../application/ports/isolationWorkspace'
-import type { IsolationConflict } from '../application/ports/isolationWorkspace'
 import {
   finishConflictResolution,
   type PreparedConflictResolution,
 } from '@/platform/workspace/local/isolation'
-import {
-  executeTaskImageRepositoryOperation,
-  TASK_IMAGE_REPOSITORY_OPERATIONS,
-} from './taskImageRepositoryEffects'
-import { executeTaskImageUploadOperation, TASK_IMAGE_UPLOAD_OPERATIONS } from './taskImageUploads'
-import { assertHostedRepositoryUrl } from '../infrastructure/crewstation/repositoryUrl'
-import { createVolumeRepositoryMirrorStore } from '../infrastructure/crewstation/volumeRepositoryMirrors'
-import { REPOSITORY_COMMIT_OPERATION } from '../infrastructure/crewstation/workspaceEffects'
-import { createFileRepositoryPreviewIndexPort } from '../infrastructure/local/fileRepositoryPreviewIndex'
+import { listAvailableRefs } from '@/services/gitRepoCache'
+import { detectSubmodules, listEffectiveSubmodules } from '@/services/gitSubmodule'
+import { DomainError } from '@/util/errors'
+import { gitDiffSnapshot, initScratchRepo, isGitWorkTree, runGit, worktreeDiff } from '@/util/git'
+import { sha1Hex } from '@/util/hash'
+import { gitUrlCacheKeyWith, parseGitUrl, type GitCommitIdentity } from '@agent-workflow/shared'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { dirname, join, resolve, sep } from 'node:path'
+import type {
+  IsolationConflict,
+  IsolationWorkspaceBinding,
+} from '../application/ports/isolationWorkspace'
+import type { RepositoryCommitWorkspaceOperations } from '../application/ports/repositoryGitWorkspace'
 import {
   commitPreparedRepository,
   prepareRepositoryCommit,
   readRepositoryCommitPreview,
 } from '../application/repositoryCommit'
-import type { RepositoryCommitWorkspaceOperations } from '../application/ports/repositoryGitWorkspace'
+import type { MaterializedSpace, ResolvedRepoSource } from '../application/workspaceMaterialization'
+import { assertHostedRepositoryUrl } from '../infrastructure/crewstation/repositoryUrl'
+import { createVolumeRepositoryMirrorStore } from '../infrastructure/crewstation/volumeRepositoryMirrors'
+import { REPOSITORY_COMMIT_OPERATION } from '../infrastructure/crewstation/workspaceEffects'
+import { bindFileAgentWorkspaceGitControlObservation } from '../infrastructure/local/fileAgentWorkspaceGitControl'
+import { createFileRepositoryPreviewIndexPort } from '../infrastructure/local/fileRepositoryPreviewIndex'
+import {
+  createLocalIsolationWorkspaceFactory,
+  prepareLocalIsolationConflict,
+} from '../infrastructure/local/localIsolationWorkspace'
+import { createNodeWorkspaceMaintenanceFilesystem } from '../infrastructure/nodeWorkspaceMaintenanceFilesystem'
+import {
+  cleanupMaterializedSpace,
+  decodeMaterializedSpace,
+  materializeGroupSpace,
+  materializeWorktree,
+  resolveRepoSourceSingleWithProvider,
+} from '../infrastructure/workspaceMaterializer'
 import { executeTaskImageIsolationMergeStep } from './taskImageIsolation'
+import {
+  executeTaskImageRepositoryOperation,
+  TASK_IMAGE_REPOSITORY_OPERATIONS,
+} from './taskImageRepositoryEffects'
+import { executeTaskImageUploadOperation, TASK_IMAGE_UPLOAD_OPERATIONS } from './taskImageUploads'
 
 interface ResolveRepositoryInput {
   readonly id: string
@@ -463,7 +466,7 @@ export async function executeTaskImageWorkspaceOperation(
       return materializeGroupSpace({ ...input, appHome: root, signal })
     }
     case 'cleanup-space':
-      return cleanupMaterializedSpace(value as MaterializedSpace)
+      return cleanupMaterializedSpace(decodeMaterializedSpace(value))
     case 'scratch': {
       const input = value as { taskId: string; gitCommitIdentity: GitCommitIdentity | null }
       const path = workPath(join(root, 'scratch', input.taskId))

@@ -22,7 +22,7 @@ import {
   replayPostgresqlMigrationHistory,
   type PostgresqlMigrationHistory,
 } from '@/platform/persistence/postgresqlMigrationSequence'
-import { readPostgresqlMigrationHistoryPrefix } from '@/platform/persistence/postgresqlMigrationHistory'
+import { readPostgresqlMigrationHistoryPrefix } from '@/platform/persistence/migration/legacy/postgresqlMigrationHistory'
 
 const FOLDER = resolve(import.meta.dir, '..', 'db', 'postgresql-migrations')
 const STEP_ID = '0004_rfc366_distill_source_kinds'

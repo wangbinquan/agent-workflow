@@ -1,4 +1,3 @@
-import { encodeTaskCheckpoints } from '../taskCheckpointCodec'
 import { z } from 'zod'
 import { DeclaredInjectionManifestSchema } from '@agent-workflow/shared'
 import type { NodeExecutionSnapshot } from '../../application/ports/nodeExecutionPersistence'
@@ -33,7 +32,9 @@ export function hostedAgentNodeContext(
       parentNodeRunId: node.parentNodeRunId,
       shardKey: node.shardKey,
       envelopeNonce: node.envelopeNonce,
-      preSnapshot: encodeTaskCheckpoints(node.checkpointInheritance, ['']).preSnapshot,
+      preSnapshot:
+        node.checkpointInheritance.find((checkpoint) => checkpoint.mountPath === '')?.preSnapshot ??
+        null,
     }),
   )
 }

@@ -1,11 +1,20 @@
+import { contentRefColumns } from '@/platform/content/contentStore'
+import {
+  createContentStore,
+  databaseContentPolicy,
+  contentReadTransport,
+  contentRefOf,
+  hostedObjectOf,
+  hostedContentColumnsInTx,
+} from '@/platform/content/infrastructure/contentStore'
 // RFC-370 v3 V6 — hosted review documents. Each staged document is one
 // `collaboration-review` publication (key = operation/artifact, scope = task
 // id); the gate journal keeps the receipt and stays the only publication and
 // recovery authority. Cleanup of an unconsumed document is an owner release;
 // whether its upload ever completed is settled by object maintenance.
-import { legacyReviewTask } from '@/platform/content/legacyReview'
+import { reviewTask } from '@/platform/content/locations/review'
 import { tablesOf } from '@/platform/persistence/sessionTables'
-import { and, eq, inArray, or } from 'drizzle-orm'
+import { and, eq, inArray, or, sql } from 'drizzle-orm'
 import { z } from 'zod'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { HostedObjectPublications } from '@/modules/system-operations/public/participants'
@@ -43,14 +52,13 @@ export const hostedReviewPublicationKey = (artifact: {
   artifactKey: string
 }) => `${artifact.operationId}/${sha256Hex(artifact.artifactKey)}`
 const keyFor = hostedReviewPublicationKey
-const taskOf = legacyReviewTask
+const taskOf = reviewTask
 
 function receiptFor(artifact: HumanGateArtifactSnapshot) {
   const receipt = Receipt.parse(JSON.parse(artifact.receiptJson ?? 'null'))
   if (
     receipt.operationId !== artifact.operationId ||
     receipt.artifactKey !== artifact.artifactKey ||
-    receipt.stagedPath !== artifact.stagedPath ||
     receipt.finalPath !== artifact.finalPath ||
     receipt.key !== keyFor(artifact) ||
     receipt.object.sha256 !== artifact.sha256 ||
@@ -72,6 +80,18 @@ export function createHostedReviewArtifacts(input: {
     taskId: string,
   ): Promise<readonly { reference: string; object: HostedStoredObject }[]>
 } {
+  const content = createContentStore({
+    db: input.db,
+    policy: databaseContentPolicy,
+    transports: {
+      object: contentReadTransport(
+        async (ref) =>
+          new Uint8Array(
+            await new Response(await input.objects.open(hostedObjectOf(ref))).arrayBuffer(),
+          ),
+      ),
+    },
+  })
   const read = async (artifact: HumanGateArtifactSnapshot) => {
     const receipt = receiptFor(artifact)
     const stream = await input.objects.open(receipt.object)
@@ -82,7 +102,8 @@ export function createHostedReviewArtifacts(input: {
   }
   return {
     async archiveFiles(taskId) {
-      const { collaborationGateArtifacts, collaborationGateOperations } = tablesOf(input.db)
+      const { collaborationGateOperations } = tablesOf(input.db)
+      const { collaborationGateArtifacts } = tablesOf(input.db)
       const rows = await input.db
         .select({ artifact: collaborationGateArtifacts })
         .from(collaborationGateArtifacts)
@@ -98,14 +119,19 @@ export function createHostedReviewArtifacts(input: {
           ),
         )
       return rows.map(({ artifact }) => {
-        const receipt = receiptFor(artifact as HumanGateArtifactSnapshot)
-        if (!receipt.finalPath.startsWith(`runs/${taskId}/`))
+        const object = hostedObjectOf(contentRefOf(artifact))
+        if (!artifact.finalContentKey.startsWith(`runs/${taskId}/`))
           throw new Error('hosted-review-archive-owner-mismatch')
-        return { reference: receipt.finalPath, object: receipt.object }
+        return { reference: artifact.finalContentKey, object }
       })
     },
     store: {
-      planReviewArtifact,
+      planReviewArtifact(plan) {
+        return {
+          ...planReviewArtifact(plan),
+          stagedPath: `gate-stage:${plan.operationId}:${plan.artifactKey}`,
+        }
+      },
       async stageReviewArtifact(plan, body) {
         const bytes = Buffer.from(body, 'utf8')
         if (sha256Hex(bytes) !== plan.sha256 || bytes.byteLength !== plan.byteSize)
@@ -114,9 +140,28 @@ export function createHostedReviewArtifacts(input: {
             'review body changed after planning',
           )
         const key = keyFor(plan)
-        const [object] = await input.publications.publish([
-          { owner: HOSTED_REVIEW_OWNER, key, scope: taskOf(plan.finalPath), bytes },
-        ])
+        const [object] = await input.publications.publish(
+          [{ owner: HOSTED_REVIEW_OWNER, key, scope: taskOf(plan.finalPath), bytes }],
+          {
+            async commit(tx, [object]) {
+              const { collaborationGateArtifacts } = tablesOf(tx)
+              const columns = await hostedContentColumnsInTx(tx, object!)
+              await tx
+                .update(collaborationGateArtifacts)
+                .set({
+                  ...columns,
+                  stagedContentRefJson: columns.contentRefJson,
+                  stagedInlineBytes: columns.contentInlineBytes,
+                })
+                .where(
+                  and(
+                    eq(collaborationGateArtifacts.operationId, plan.operationId),
+                    eq(collaborationGateArtifacts.artifactKey, plan.artifactKey),
+                  ),
+                )
+            },
+          },
+        )
         return JSON.stringify({
           kind: 'cs-review-object-v2',
           operationId: plan.operationId,
@@ -142,7 +187,17 @@ export function createHostedReviewArtifacts(input: {
     },
     content: {
       async read(reference) {
-        const { collaborationGateArtifacts, collaborationGateOperations } = tablesOf(input.db)
+        if (reference.startsWith('doc-content:')) {
+          const { docVersions } = tablesOf(input.db)
+          const [row] = await input.db
+            .select()
+            .from(docVersions)
+            .where(eq(docVersions.id, reference.slice(12)))
+            .limit(1)
+          return row ? { body: await content.read(contentRefOf(row)), label: reference } : null
+        }
+        const { collaborationGateOperations } = tablesOf(input.db)
+        const { collaborationGateArtifacts } = tablesOf(input.db)
         const rows = await input.db
           .select({ artifact: collaborationGateArtifacts })
           .from(collaborationGateArtifacts)
@@ -153,8 +208,11 @@ export function createHostedReviewArtifacts(input: {
           .where(
             and(
               or(
-                eq(collaborationGateArtifacts.finalPath, reference),
-                eq(collaborationGateArtifacts.stagedPath, reference),
+                eq(collaborationGateArtifacts.finalContentKey, reference),
+                eq(
+                  sql<string>`'gate-stage:' || ${collaborationGateArtifacts.operationId} || ':' || ${collaborationGateArtifacts.artifactKey}`,
+                  reference,
+                ),
               ),
               inArray(collaborationGateArtifacts.state, ['consumed', 'finalized']),
               inArray(collaborationGateOperations.state, ['committed', 'completed']),
@@ -163,7 +221,12 @@ export function createHostedReviewArtifacts(input: {
           .limit(2)
         if (rows.length > 1) throw new Error('hosted-review-artifact-reference-ambiguous')
         const artifact = rows[0]?.artifact
-        return artifact ? read(artifact as HumanGateArtifactSnapshot) : null
+        if (!artifact) return null
+        const ref =
+          reference === artifact.finalContentKey
+            ? contentRefOf(artifact)
+            : contentRefColumns.decode(artifact.stagedContentRefJson, artifact.stagedInlineBytes)
+        return ref ? { body: await content.read(ref), label: reference } : null
       },
     },
   }

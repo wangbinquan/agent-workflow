@@ -24,12 +24,11 @@ import {
   type PostgresqlLogicalTarget,
 } from '@/platform/persistence/postgresqlLogicalTarget'
 import { createPostgresqlDatabaseRuntime } from '@/platform/persistence/postgresqlRuntime'
-import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { openSqliteLogicalSource } from '@/platform/persistence/sqliteLogicalSource'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', '..', 'db', 'migrations')
 const OPERATION_ID = 'dbm_hosted_crash_matrix'
-const SOURCE_GENERATION_ID = 'dbg_hosted_crash_source'
+const ARCHIVE_BYTES = Buffer.from('frozen code_artifacts evidence\n')
 
 interface WorkerInput {
   readonly root: string
@@ -76,15 +75,17 @@ function maybeHold(input: WorkerInput, point: string): void {
 function ensureSource(path: string): void {
   if (existsSync(path)) return
   mkdirSync(resolve(path, '..'), { recursive: true })
-  const drizzle = createInMemoryDb(MIGRATIONS)
+  const drizzle = createInMemoryDb()
   const sqlite = (drizzle as unknown as { $client: Database }).$client
   try {
     sqlite.exec(
       "INSERT INTO users (id, username, display_name, role, status, force_password_change, created_at, updated_at, schema_version, access_revision, git_name) VALUES ('usr-hosted-crash', 'hosted-crash', 'Hosted Crash', 'admin', 'active', 0, 9007199254740993, 9007199254740993, 1, 0, '')",
     )
-    sqlite.exec(
-      "INSERT INTO code_artifacts (id, repo_path, commit_sha, base_sha, digest, keep_ref, generation, ref_count, state, created_at) VALUES ('legacy-hosted-crash', '/tmp/hosted', 'abc', 'def', 'sha256:hosted', 'refs/keep/hosted', 1, 0, 'live', 123)",
-    )
+    sqlite
+      .query(
+        "INSERT INTO aw_meta_migration_archives (run_id,archive_ref,unit_id,kind,source_table,format,rows,byte_size,bytes) VALUES ('frozen-crash','archive-1','unit-1','retired-table','code_artifacts','raw-chunk@1',1,?,?)",
+      )
+      .run(ARCHIVE_BYTES.byteLength, ARCHIVE_BYTES)
     writeFileSync(path, sqlite.serialize())
   } finally {
     sqlite.close()
@@ -126,6 +127,7 @@ function crashAwareTarget(
     provider: 'postgresql' as const,
     operationId: delegate.operationId,
     prepare: delegate.prepare,
+    restoreMetadata: delegate.restoreMetadata,
     async copyChunk(
       table: Parameters<PostgresqlLogicalTarget['copyChunk']>[0],
       chunk: Parameters<PostgresqlLogicalTarget['copyChunk']>[1],
@@ -156,9 +158,16 @@ async function main(): Promise<void> {
   const pointerPath = join(input.root, 'database-generation.json')
   ensureSource(sourcePath)
 
-  const contract = buildLogicalSchemaContract()
+  const contract = logicalSchemaContract
   const source = openSqliteLogicalSource({ path: sourcePath, contract })
   const sourceSnapshot = await source.preflight()
+  const metadata = await source.readMetadata!()
+  const activeGeneration = metadata.payload.tables
+    .find((table) => table.name === 'generations')
+    ?.rows.find((row) => row.state === 'active')
+  if (typeof activeGeneration?.generation_id !== 'string')
+    throw new Error('native source generation missing')
+  const sourceGenerationId = activeGeneration.generation_id
   const store = createFileDatabaseMigrationStore({
     root: operationsRoot,
     beforeReplaceForTest(operationId, revision) {
@@ -176,7 +185,7 @@ async function main(): Promise<void> {
   if (baseControlPlane.list().length === 0) {
     baseControlPlane.start({
       idempotencyKey: 'hosted-crash-matrix',
-      sourceGenerationId: SOURCE_GENERATION_ID,
+      sourceGenerationId: sourceGenerationId,
       sourceSchemaDigest: contract.digest,
       sourceDatabaseFingerprint: sourceSnapshot.databaseFingerprint,
       target: {
@@ -213,10 +222,10 @@ async function main(): Promise<void> {
   const target = crashAwareTarget(
     input,
     await openPostgresqlLogicalTarget({
-      headContract: buildLogicalSchemaContract(),
+      headContract: logicalSchemaContract,
       runtime,
       operationId: OPERATION_ID,
-      sourceGenerationId: SOURCE_GENERATION_ID,
+      sourceGenerationId: sourceGenerationId,
       contract,
       plan: buildPostgresqlSchemaPlan(contract),
     }),
@@ -256,12 +265,24 @@ async function main(): Promise<void> {
       .unsafe(
         "SELECT count(*) AS count FROM information_schema.tables WHERE table_schema = 'agent_workflow' AND table_name = 'code_artifacts'",
       )
+    const historyRows = await runtime
+      .providerPool()
+      .unsafe(
+        "SELECT bytes,byte_size,rows FROM agent_workflow_meta.migration_archives WHERE run_id='frozen-crash' AND archive_ref='archive-1'",
+      )
+    const history = historyRows[0]
+    const archivePreserved =
+      history !== undefined &&
+      Number(history.rows) === 1 &&
+      Number(history.byte_size) === ARCHIVE_BYTES.byteLength &&
+      Buffer.from(history.bytes as Uint8Array).equals(ARCHIVE_BYTES)
     const result = {
       operationId: OPERATION_ID,
       phase: finalized.phase as DatabaseMigrationPhase,
       tablesCompleted: finalized.progress.tablesCompleted,
       rowsCopied: finalized.progress.rowsCopied,
       userPresent: userRows.length === 1,
+      archivePreserved,
       archiveTableAbsent: String(archiveRows[0]?.count ?? '') === '0',
       manifestRevision: finalized.revision,
     }

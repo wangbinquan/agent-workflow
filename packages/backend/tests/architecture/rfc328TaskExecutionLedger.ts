@@ -367,7 +367,7 @@ export function classifyTaskExecutionAuthority(input: {
   if (
     // RFC-395 II-a A3: review dispatch's consumed-edge write moved into this exact method.
     (input.file === `${MODULE_PREFIX}task-execution/infrastructure/consumedInputsParticipant.ts` &&
-      input.callable === 'record') ||
+      ['record', 'recordNodeRunInputsInTx'].includes(input.callable)) ||
     (input.file === `${MODULE_PREFIX}task-execution/infrastructure/taskPreparationParticipant.ts` &&
       input.callable === 'writeWorkspace') ||
     /services\/(?:runner|scheduler|isolatedAgentRun|commitPushRunner|nodeRunMint|runtimeSessionLease)\.ts|modules\/task-execution\/composition\/(?:nodeMechanics|wrapperMechanics|wrapperRunLifecycle)\.ts|services\/runtime\/(?:opencode|claudeCode)\/(?:sessionCapture|subagentLiveCapture)\.ts|services\/review\.ts#dispatchReviewNodeUnlocked|modules\/collaboration\/infrastructure\/humanGateOpenParticipant\.ts#project(?:Review|Clarify)GateOpen|services\/workgroup\/rounds\.ts|services\/task\.ts#persistPreparedProjection/.test(
@@ -621,6 +621,50 @@ export function buildTaskExecutionAuthorityEntries(backend: readonly SourceUnit[
 } {
   const entries: TaskExecutionAuthorityEntry[] = []
   const unknown: Array<{ file: string; line: number; table: string; callable: string }> = []
+  const sharedProtocol = `${MODULE_PREFIX}task-execution/infrastructure/nodeRunWriteProtocol.ts`
+  // The shared physical writer is not an authority factory: workers, canonical
+  // controls and boot recovery all call it. Attribute each write to the actual
+  // caller instead of incorrectly labelling every call as worker-epoch.
+  const protocolCallers = (method: string) => {
+    const accepted = new Set([
+      'compareAndWriteNodeRunInTx',
+      'writeNodeRunProjectionInTx',
+      ...(method === 'replaceInputs' ? ['writeNodeRunTablesInTx'] : []),
+    ])
+    const callers: Array<{ file: string; line: number; callable: string }> = []
+    for (const unit of backend) {
+      if (unit.path === sharedProtocol) continue
+      const names = new Set<string>()
+      for (const statement of unit.source.statements) {
+        if (
+          !ts.isImportDeclaration(statement) ||
+          !ts.isStringLiteral(statement.moduleSpecifier) ||
+          !/(?:^|\/)nodeRunWriteProtocol$/.test(statement.moduleSpecifier.text)
+        )
+          continue
+        const bindings = statement.importClause?.namedBindings
+        if (bindings && ts.isNamedImports(bindings))
+          for (const binding of bindings.elements)
+            if (accepted.has((binding.propertyName ?? binding.name).text))
+              names.add(binding.name.text)
+      }
+      const visit = (node: ts.Node): void => {
+        if (
+          ts.isCallExpression(node) &&
+          ts.isIdentifier(node.expression) &&
+          names.has(node.expression.text)
+        )
+          callers.push({
+            file: unit.path,
+            line: unit.source.getLineAndCharacterOfPosition(node.getStart()).line + 1,
+            callable: nearestCallableName(unit, node),
+          })
+        ts.forEachChild(node, visit)
+      }
+      visit(unit.source)
+    }
+    return callers
+  }
   for (const unit of backend) {
     const ordinals = new Map<string, number>()
     const siteId = (symbol: string, callee: string): string => {
@@ -636,17 +680,28 @@ export function buildTaskExecutionAuthorityEntries(backend: readonly SourceUnit[
         const owner = enclosingTopLevelSymbol(unit, node)
         const symbol = owner?.name ?? '$file'
         const callable = nearestCallableName(unit, node)
-        const classification = classifyTaskExecutionAuthority({ file: unit.path, callable })
-        if (classification === null) {
-          unknown.push({ file: unit.path, line, table, callable })
-        } else {
+        const callers =
+          unit.path === sharedProtocol &&
+          ['replaceInputs', 'compareAndWriteNodeRunInTx'].includes(callable)
+            ? protocolCallers(callable)
+            : [{ file: unit.path, line, callable }]
+        if (callers.length === 0) unknown.push({ file: unit.path, line, table, callable })
+        for (const caller of callers) {
+          const classification = classifyTaskExecutionAuthority(caller)
+          if (classification === null) {
+            unknown.push({ ...caller, table })
+            continue
+          }
           entries.push({
             id: siteId(callable, table),
             file: unit.path,
             line,
             ownerEntryId: ownerEntryId(unit.path, symbol),
             symbol,
-            consumer: callable,
+            consumer:
+              unit.path === sharedProtocol
+                ? `${caller.file}:${caller.line}#${caller.callable}`
+                : callable,
             dataClass: table,
             ...classification,
             allowedTables: [table],

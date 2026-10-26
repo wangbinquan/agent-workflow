@@ -1,3 +1,5 @@
+import { nodeRunFixtureColumns } from './helpers/model/nodeRun'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 // RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-164 PR-3 — launch path + round engine (leader_worker backend closure).
 //
@@ -27,17 +29,15 @@ import {
   readNodeRunFixtures,
 } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+
 import { describeEachProvider } from './helpers/eachProvider'
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
-import type { TaskWsMessage } from '@agent-workflow/shared'
-import { buildActor, type Actor } from '../src/auth/actor'
-import { TASK_CHANNEL, taskBroadcaster } from '../src/ws/broadcaster'
 import {
+  type TaskWsMessage,
   agentHasClarifyChannel,
   DEFAULT_PROTOCOL_RETRY_BUDGET,
   renderUserPrompt,
@@ -46,6 +46,9 @@ import {
   WorkgroupSchema,
   type WorkgroupRuntimeConfig,
 } from '@agent-workflow/shared'
+import { buildActor, type Actor } from '../src/auth/actor'
+import { TASK_CHANNEL, taskBroadcaster } from '../src/ws/broadcaster'
+
 import { createSession } from './helpers/auth/sessionStore'
 import type { Hono } from 'hono'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
@@ -663,7 +666,8 @@ describeEachProviderHttpApplication(
       })
       const { taskId } = await seedEngineTask(db, config)
       const parentId = ulid()
-      const { workgroupMessages, nodeRuns } = tablesOf(db)
+      const { workgroupMessages } = tablesOf(db)
+      const { nodeRuns } = tablesOf(db)
       await insertOne(db, workgroupMessages, {
         id: parentId,
         taskId,
@@ -703,7 +707,7 @@ describeEachProviderHttpApplication(
       expect(replies.every((message) => message.triggerMessageId === parentId)).toBe(true)
 
       const messageRuns = (
-        await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
+        await db.select(nodeRunFixtureColumns(db)).from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
       ).filter((run) => run.rerunCause === 'wg-message-turn')
       expect(messageRuns).toHaveLength(1)
       expect(messageRuns[0]?.shardKey).toBe(`msg:m-coder:${parentId}`)
@@ -877,7 +881,10 @@ describeEachProviderHttpApplication(
       const result = await runWorkgroupEngine({ db, taskId, log, hooks })
       expect(result.kind).toBe('ok')
       const { nodeRuns } = tablesOf(db)
-      const runs = await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
+      const runs = await db
+        .select(nodeRunFixtureColumns(db))
+        .from(nodeRuns)
+        .where(eq(nodeRuns.taskId, taskId))
       // the in-place retry row is tagged wg-protocol-retry (excluded from the count)...
       expect(runs.filter((r) => r.rerunCause === 'wg-protocol-retry')).toHaveLength(1)
       // ...and the two LOGICAL leader rounds keep the wg-leader-round cause.
@@ -895,9 +902,9 @@ describeEachProviderHttpApplication(
       expect(result.kind).toBe('awaiting_review')
       const { nodeRuns } = tablesOf(db)
       // gate holder run satisfies "task awaiting_review ⟹ ∃ awaiting_review node_run"
-      const gateRuns = (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))).filter(
-        (r) => r.rerunCause === 'wg-gate',
-      )
+      const gateRuns = (
+        await db.select(nodeRunFixtureColumns(db)).from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
+      ).filter((r) => r.rerunCause === 'wg-gate')
       expect(gateRuns).toHaveLength(1)
       expect(gateRuns[0]?.status).toBe('awaiting_review')
       // RFC-217 T2 — gate state persisted in workgroup_task_state (the config
@@ -1303,9 +1310,9 @@ describeEachProviderHttpApplication(
       const result = await runWorkgroupEngine({ db, taskId, log, hooks })
       expect(result.kind).toBe('awaiting_review')
       const { nodeRuns } = tablesOf(db)
-      const holders = (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))).filter(
-        (r) => r.rerunCause === 'wg-gate',
-      )
+      const holders = (
+        await db.select(nodeRunFixtureColumns(db)).from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
+      ).filter((r) => r.rerunCause === 'wg-gate')
       expect(holders).toHaveLength(1)
       expect(holders[0]?.status).toBe('awaiting_review')
       const gate = gateViewOf(await loadWorkgroupTaskState(db, taskId))

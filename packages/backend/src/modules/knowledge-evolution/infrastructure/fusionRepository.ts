@@ -179,7 +179,7 @@ export function createFusionPersistence(input: {
   readonly skillVersionCommit: FusionSkillTrees
   readonly resourceSeed?: FusionResourceSeedParticipant
 }): FusionPersistence {
-  const { db, memoryMembership, fusedSkillReassignment, skillVersionCommit } = input
+  const { db, memoryMembership, skillVersionCommit } = input
   const session = databaseSessionFor(db)
 
   async function seedResources(seed: FusionResourceSeed): Promise<void> {
@@ -357,123 +357,15 @@ export function createFusionPersistence(input: {
   }
 
   async function repairProvenance(): Promise<FusionProvenanceRepairReceipt> {
-    let repairedFusions = 0
-    let quarantinedFusions = 0
-    let terminalizedFusions = 0
-    let repairedMemories = 0
-    let quarantinedMemories = 0
-    const nonterminal = new Set<FusionStatus>(['running', 'awaiting_approval', 'applying'])
-    const { fusions, skillVersions, memories } = tablesOf(db)
-    const fusionRows = await db.select().from(fusions)
-    for (const row of fusionRows) {
-      const versions = (
-        await db
-          .select({
-            skillId: skillVersions.skillId,
-            versionIndex: skillVersions.versionIndex,
-            source: skillVersions.source,
-          })
-          .from(skillVersions)
-          .where(eq(skillVersions.fusionId, row.id))
-      ).filter((version) => version.source === 'fusion')
-      const token =
-        row.preconditionToken === null ? null : decodeFusionSkillToken(row.preconditionToken)
-      const tokenValid =
-        token !== null &&
-        token.skillId !== QUARANTINED_FUSION_SKILL_ID &&
-        token.contentVersion === row.baseSkillVersion
-      const soleVersion = versions.length === 1 ? versions[0] : undefined
-      const ledgerValid =
-        soleVersion !== undefined &&
-        soleVersion.skillId !== QUARANTINED_FUSION_SKILL_ID &&
-        (row.appliedSkillVersion === null || row.appliedSkillVersion === soleVersion.versionIndex)
-      let resolved = QUARANTINED_FUSION_SKILL_ID
-      if (row.preconditionToken === null || token === null) {
-        if (ledgerValid) resolved = soleVersion!.skillId
-      } else if (tokenValid) {
-        if (versions.length === 0 && row.appliedSkillVersion === null) resolved = token.skillId
-        else if (ledgerValid && soleVersion!.skillId === token.skillId) resolved = token.skillId
-      }
-      const terminalize =
-        resolved === QUARANTINED_FUSION_SKILL_ID && nonterminal.has(row.status as FusionStatus)
-      if (row.skillId !== resolved || terminalize) {
-        await db
-          .update(fusions)
-          .set({
-            skillId: resolved,
-            ...(terminalize
-              ? {
-                  status: 'failed' as const,
-                  error:
-                    'fusion provenance could not be proven during upgrade; re-initiate the fusion',
-                  decidedAt: Date.now(),
-                }
-              : {}),
-          })
-          .where(eq(fusions.id, row.id))
-        if (resolved === QUARANTINED_FUSION_SKILL_ID) quarantinedFusions++
-        else repairedFusions++
-        if (terminalize) terminalizedFusions++
-      }
-    }
-
-    const resolvedFusions = new Map(
-      (await db.select({ id: fusions.id, skillId: fusions.skillId }).from(fusions)).map(
-        (row) => [row.id, row.skillId] as const,
-      ),
-    )
-    const fusedRows = await db
-      .select({
-        id: memories.id,
-        fusionId: memories.fusedFusionId,
-        skillId: memories.fusedIntoSkillId,
-        version: memories.fusedIntoSkillVersion,
-      })
-      .from(memories)
-      .where(eq(memories.status, 'fused'))
-    for (const memory of fusedRows) {
-      const fusionSkillId =
-        memory.fusionId === null ? undefined : resolvedFusions.get(memory.fusionId)
-      const exactVersions =
-        memory.fusionId === null || memory.version === null
-          ? []
-          : (
-              await db
-                .select({
-                  skillId: skillVersions.skillId,
-                  source: skillVersions.source,
-                  version: skillVersions.versionIndex,
-                })
-                .from(skillVersions)
-                .where(eq(skillVersions.fusionId, memory.fusionId))
-            ).filter((version) => version.source === 'fusion' && version.version === memory.version)
-      const exactId = exactVersions.length === 1 ? exactVersions[0]!.skillId : undefined
-      const resolved =
-        fusionSkillId !== undefined &&
-        fusionSkillId !== QUARANTINED_FUSION_SKILL_ID &&
-        exactId === fusionSkillId
-          ? fusionSkillId
-          : QUARANTINED_FUSION_SKILL_ID
-      if (memory.skillId !== resolved) {
-        await fusedSkillReassignment.reassign({ memoryId: memory.id, skillId: resolved })
-        if (resolved === QUARANTINED_FUSION_SKILL_ID) quarantinedMemories++
-        else repairedMemories++
-      }
-    }
-    return {
-      repairedFusions,
-      quarantinedFusions,
-      terminalizedFusions,
-      repairedMemories,
-      quarantinedMemories,
-    }
+    throw new Error('fusion-provenance-upgrade-requires-conversion')
   }
 
   async function recoverDecisions(now = Date.now()): Promise<FusionDecisionRecoveryReceipt> {
     let rolledForward = 0
     let rolledBack = 0
     let rejectFailed = 0
-    const { fusions, skillVersions } = tablesOf(db)
+    const { fusions } = tablesOf(db)
+    const { skillVersions } = tablesOf(db)
     const applying = await db
       .select({
         id: fusions.id,

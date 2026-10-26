@@ -1,7 +1,8 @@
 import { composeSourceControlTaskPorts } from '@/modules/task-execution/composition'
 // RFC-395 II-a A2: repository DTO bytes, RequestedSource and unbound SQL retain epoch-1 behavior on both providers.
 import { describe, expect, test } from 'bun:test'
-import { sql } from 'drizzle-orm'
+import { and, eq, inArray, sql } from 'drizzle-orm'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import {
   WORKFLOW_SCHEMA_VERSION,
   WorkflowDefinitionSchema,
@@ -78,6 +79,18 @@ function fixture(id: string, extra: Partial<TaskFixtureSpec> = {}): TaskFixtureS
     rootTaskId: id,
     spaceKind: 'remote',
     ...extra,
+    ...(extra.repos?.length
+      ? (() => {
+          const primary = [...extra.repos].sort((a, b) => a.repoIndex - b.repoIndex)[0]!
+          // A bound target task's repository mirror comes from ordinal zero.
+          return {
+            repoPath: primary.repoPath,
+            repoUrl: primary.repoUrl,
+            cachedRepoId: primary.cachedRepoId,
+            branch: primary.branch || `agent-workflow/${id}`,
+          }
+        })()
+      : {}),
   }
 }
 
@@ -103,13 +116,21 @@ const cases = [
   }),
   fixture('internal', {
     spaceKind: 'internal',
+    baseBranch: '',
+    baseCommit: null,
     repoUrl: null,
     cachedRepoId: null,
-    repos: [{ ...mount(0, '', ''), repoUrl: null, cachedRepoId: null }],
+    repos: [
+      { ...mount(0, '', ''), baseBranch: '', baseCommit: null, repoUrl: null, cachedRepoId: null },
+    ],
   }),
   fixture('inherited', { spaceKind: 'inherited', repos: [mount(0, '', 'parent-branch')] }),
   fixture('detached', { baseBranch: '', repos: [{ ...mount(0, '', ''), baseBranch: '' }] }),
-  fixture('unborn', { baseCommit: null, repos: [{ ...mount(0, '', ''), baseCommit: null }] }),
+  fixture('unborn', {
+    baseBranch: '',
+    baseCommit: null,
+    repos: [{ ...mount(0, '', ''), baseBranch: '', baseCommit: null }],
+  }),
   fixture('deferred', {
     repoPath: '',
     worktreePath: '',
@@ -186,7 +207,7 @@ function oldSurface(
     spaceNodes: (spec.id === 'group'
       ? ['', 'a', 'nested', 'nested/b']
       : spec.id === 'mismatched'
-        ? ['', 'nested', 'nested/svc']
+        ? ['', 'svc']
         : ['']
     ).map((path) => ({
       path,
@@ -206,8 +227,19 @@ describeEachProvider('RFC-395 II-a A2 repository surface', (harness) => {
         definition,
       })
       await taskFixture(harness.db, spec)
-      if (spec.id === 'mismatched')
+      if (spec.id === 'mismatched') {
+        // Replace the fixture's derived mount ancestors along with the mount path.
+        const { taskSpaceNodes } = tablesOf(harness.db)
+        await harness.db
+          .delete(taskSpaceNodes)
+          .where(
+            and(
+              eq(taskSpaceNodes.taskId, spec.id),
+              inArray(taskSpaceNodes.nodePath, ['nested', 'nested/svc']),
+            ),
+          )
         await patchStoredTaskRepoDirectory(harness.db, spec.id, 0, 'svc')
+      }
       const storedRepos = await readStoredTaskRepoFixtures(harness.db, spec.id)
       const stored = (await readTaskFixtures(harness.db, { id: spec.id }))[0]!
       expect(stored.repos).toHaveLength(spec.repos!.length)
@@ -217,7 +249,20 @@ describeEachProvider('RFC-395 II-a A2 repository surface', (harness) => {
       ]) {
         expect(actual).not.toBeNull()
         expect(JSON.stringify(repositoryFields(actual!))).toBe(
-          JSON.stringify(oldSurface(spec, storedRepos)),
+          JSON.stringify(
+            oldSurface(
+              spec,
+              storedRepos.map((repo) => ({
+                ...repo,
+                repoIndex: repo.ordinal,
+                worktreeDirName: repo.mountPath,
+                branch: repo.branch ?? '',
+                baseBranch: repo.baseBranch ?? '',
+                worktreePath: stored.repos.find((member) => member.mountPath === repo.mountPath)!
+                  .worktreePath,
+              })),
+            ),
+          ),
         )
       }
     })
@@ -328,7 +373,7 @@ describeEachProvider('RFC-395 II-a A2 repository surface', (harness) => {
     for (const spec of cases) {
       const item = listed.items.find((entry) => entry.id === spec.id)!
       expect(item.repositoryCount).toBe(Math.max(1, spec.repos!.length))
-      expect(item.targetLabel).toBe('repo')
+      expect(item.targetLabel).toBe(spec.repoPath.split('/').at(-1) || 'repo')
       expect(Object.keys(item).sort()).toEqual(
         [
           'id',
@@ -432,17 +477,19 @@ describeEachProvider('RFC-395 II-a A2 repository surface', (harness) => {
     )
   })
 
-  test('unbound and root CAS SQL preserve empty, bound and SQL NULL semantics', async () => {
+  test('unbound and root CAS SQL use the target NULL sentinel and retain bound roots', async () => {
     for (const root of ['', '/workspace/task', null]) {
+      // A typed stand-in for the root column: PostgreSQL cannot infer a bare parameter's type.
+      const column = sql`cast(${root} as text)`
       const [row] = await rawRows<{ unbound: number; matches_empty: number }>(
         harness.db,
         sql`
-        select case when ${taskWorkspaceUnboundSql(sql`${root}`)} then 1 else 0 end as unbound,
-          case when ${taskWorkspaceRootMatchesSql(sql`${root}`, '')} then 1 else 0 end as matches_empty
+        select case when ${taskWorkspaceUnboundSql(column)} then 1 else 0 end as unbound,
+          case when ${taskWorkspaceRootMatchesSql(column, '')} then 1 else 0 end as matches_empty
       `,
       )
-      expect(Number(row!.unbound)).toBe(root === '' ? 1 : 0)
-      expect(Number(row!.matches_empty)).toBe(root === '' ? 1 : 0)
+      expect(Number(row!.unbound)).toBe(root === null ? 1 : 0)
+      expect(Number(row!.matches_empty)).toBe(root === null ? 1 : 0)
     }
   })
 })

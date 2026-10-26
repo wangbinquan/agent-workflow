@@ -11,7 +11,7 @@ import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
-import { resolve } from 'node:path'
+
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import {
   bindInvitedUserWithIdentity as bindInvitedUserWithIdentityService,
@@ -25,8 +25,6 @@ import { DomainError } from '../src/util/errors'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import { createOidcProvidersService } from '../src/services/oidcProviders'
 import { randomBytes } from 'node:crypto'
-
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 function identityAccessFixture(db: DbClient) {
   return createIdentityAccessRuntime({ db })
@@ -136,7 +134,7 @@ describe('RFC-335 — syncPreferredSnapshot refreshes both names every login', (
   let db: DbClient
   let providerId: string
   beforeEach(async () => {
-    db = createInMemoryDb(MIGRATIONS)
+    db = createInMemoryDb()
     providerId = (await makeProvider(db)).id
   })
 
@@ -252,7 +250,7 @@ describe('RFC-320 — OIDC email snapshot merge', () => {
   let db: DbClient
   let providerId: string
   beforeEach(async () => {
-    db = createInMemoryDb(MIGRATIONS)
+    db = createInMemoryDb()
     providerId = (await makeProvider(db)).id
   })
 
@@ -430,7 +428,7 @@ describe('RFC-220 S7 — applyEmailTrust', () => {
 describe('RFC-220 S13 — write-time subjectClaim revalidation + atomic provisioning', () => {
   let db: DbClient
   beforeEach(() => {
-    db = createInMemoryDb(MIGRATIONS)
+    db = createInMemoryDb()
   })
 
   test('createIdentity refuses when provider.subjectClaim moved after the claims snapshot', async () => {

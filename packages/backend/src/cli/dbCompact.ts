@@ -15,7 +15,10 @@ import { Database } from 'bun:sqlite'
 import { existsSync, statSync } from 'node:fs'
 
 import { readConfig } from '@/config'
-import { resolveDatabaseProviderSelection } from '@/platform/persistence/databaseProviderRuntime'
+import {
+  resolveDatabaseProviderSelection,
+  currentSqlitePath,
+} from '@/platform/persistence/databaseProviderRuntime'
 import type { LogicalSchemaContract } from '@/platform/persistence/schemaContract'
 import { isProcessAlive } from '@/util/process'
 import { readPidFromLock } from '@/util/lock'
@@ -41,6 +44,8 @@ export function dbCompactCommand(contract: LogicalSchemaContract): DbCompactResu
         `Stop it first:  agent-workflow stop\n`,
     }
   }
+  if (!existsSync(Paths.databaseGenerationPointer) && !existsSync(Paths.db))
+    return { status: 'no-db', output: `no database at ${Paths.db}\n` }
   const generation = resolveDatabaseProviderSelection({
     // `db compact` is an offline inspection/maintenance command. A mistyped
     // AGENT_WORKFLOW_HOME must not materialize config.json or emit config
@@ -57,7 +62,7 @@ export function dbCompactCommand(contract: LogicalSchemaContract): DbCompactResu
   if (!compaction.supported) {
     return { status: 'ok', output: compaction.explain(generation.payload.generationId) }
   }
-  const dbPath = Paths.db
+  const dbPath = currentSqlitePath(Paths.databaseGenerationPointer, Paths.db)
   if (!existsSync(dbPath)) {
     return { status: 'no-db', output: `no database at ${dbPath}\n` }
   }

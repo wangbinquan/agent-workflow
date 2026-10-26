@@ -49,7 +49,7 @@ afterEach(() => {
 // These cases intentionally launch 3–4 real Bun subprocesses. On the macOS
 // full-suite runner each spawn can take about a second; the default 5s timeout
 // can abort a healthy run and leave its async engine overlapping the next case.
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+
 const SCENARIO_STUB = resolve(import.meta.dir, 'fixtures', 'scenario-opencode.ts')
 const GIT_TIMEOUT_MS = 10_000
 const FIXTURE_TIMEOUT_MS = 10_000
@@ -94,7 +94,7 @@ function harness(): Harness {
   const previousScenarioStateDir = process.env.SCENARIO_STATE_DIR
   mkdirSync(appHome, { recursive: true })
   mkdirSync(stateDir, { recursive: true })
-  const db = createInMemoryDb(MIGRATIONS)
+  const db = createInMemoryDb()
   return {
     db,
     appHome,
@@ -236,7 +236,11 @@ describe('RFC-186 — leader_worker real end-to-end (scenario-opencode)', () => 
 
       const { nodeRuns, workgroupAssignments } = tablesOf(h.db)
       const final = (await readTaskFixtures(h.db, { id: task.id }))[0]
-      expect(final?.status).toBe('done')
+      expect({
+        status: final?.status,
+        errorSummary: final?.errorSummary,
+        errorMessage: final?.errorMessage,
+      }).toEqual({ status: 'done', errorSummary: null, errorMessage: null })
 
       // a real __wg_member__ (worker) host run reached done — the thing that had
       // NEVER happened in production (0 workers ever ran).
@@ -268,7 +272,11 @@ describe('RFC-186 — leader_worker real end-to-end (scenario-opencode)', () => 
 
       const { nodeRuns } = tablesOf(h.db)
       const final = (await readTaskFixtures(h.db, { id: task.id }))[0]
-      expect(final?.status).toBe('done')
+      expect({
+        status: final?.status,
+        errorSummary: final?.errorSummary,
+        errorMessage: final?.errorMessage,
+      }).toEqual({ status: 'done', errorSummary: null, errorMessage: null })
 
       // the first leader host run failed on envelope-missing but the turn recovered.
       const runs = await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, task.id))
@@ -289,7 +297,7 @@ describe('RFC-186 — leader_worker real end-to-end (scenario-opencode)', () => 
 describe('RFC-186 PR-2 — interrupted leader_worker task auto-resumes to done', () => {
   test('daemon-restart recovery: interrupted → autoResume → engine re-enters → done', async () => {
     const h = harness()
-    const repo = mkdtempSync(join(tmpdir(), 'aw-wg-e2e-repo-'))
+    const repo = mkdtempSync(join(h.appHome, 'aw-wg-e2e-repo-'))
     try {
       await git('-C', repo, 'init', '-b', 'main', '-q')
       await git(
@@ -391,7 +399,11 @@ describe('RFC-186 PR-2 — interrupted leader_worker task auto-resumes to done',
       // the task stayed `interrupted` forever.
       expect(res.resumed).toEqual([taskId])
       const final = (await readTaskFixtures(h.db, { id: taskId }))[0]
-      expect(final?.status).toBe('done')
+      expect({
+        status: final?.status,
+        errorSummary: final?.errorSummary,
+        errorMessage: final?.errorMessage,
+      }).toEqual({ status: 'done', errorSummary: null, errorMessage: null })
       const memberDone = (
         await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
       ).filter((r) => r.nodeId === '__wg_member__' && r.status === 'done')

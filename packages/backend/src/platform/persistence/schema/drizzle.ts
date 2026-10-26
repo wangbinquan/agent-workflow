@@ -32,11 +32,20 @@ import {
   type PgColumn,
   type PgTableWithColumns,
   type PgColumnBuilderBase,
+  index as pgIndex,
+  uniqueIndex as pgUniqueIndex,
+  unique as pgUnique,
+  primaryKey as pgPrimaryKey,
+  foreignKey as pgForeignKey,
+  check as pgCheck,
+  type AnyPgColumn,
+  type PgTableExtraConfigValue,
 } from 'drizzle-orm/pg-core'
 import type { DatabaseProvider } from '../databaseProviders'
 import { CODECS, type CodecData } from './codecs'
 import type { ColumnDefinition, TableDefinition } from './contribution'
 import { renderSchemaExpression, type SchemaExpression } from './expressions'
+import { targetCodecChecks, sqliteNullsNotDistinct } from './nativeConstraints'
 import type { NeutralColumnConfig } from './neutral'
 
 type ColumnData<C extends ColumnDefinition> = C extends {
@@ -151,7 +160,8 @@ function configureColumn(column: ColumnDefinition, provider: DatabaseProvider): 
   let builder = rules.build(column)
   if (!column.nullable) builder = builder.notNull()
   if (column.primary) builder = rules.primary(builder, column)
-  if (column.unique) builder = builder.unique(column.unique)
+  if (column.unique && column.uniqueNulls !== 'not-distinct')
+    builder = builder.unique(column.unique)
   if (
     rules.implicitDefault &&
     column.default.kind === 'implicit-primary' &&
@@ -169,14 +179,17 @@ interface Materialization {
   readonly table: object
 }
 const cache = new WeakMap<TableDefinition, Materialization>()
+const targetCache = new WeakMap<TableDefinition, Materialization>()
 export function materializeDrizzle<const D extends TableDefinition>(
   definition: D,
+  options: { readonly schemaEpoch?: number } = {},
 ): {
   readonly sqlite: MaterializedTable<D>
   readonly postgresql: MaterializedPostgresqlTable<D>
   readonly table: MaterializedTable<D>
 } {
-  const cached = cache.get(definition)
+  const selectedCache = (options.schemaEpoch ?? 1) > 1 ? targetCache : cache
+  const cached = selectedCache.get(definition)
   if (cached) return cached as ReturnType<typeof materializeDrizzle<D>>
   const columns = Object.fromEntries(
     Object.entries(definition.columns).map(([property, column]) => [
@@ -212,9 +225,13 @@ export function materializeDrizzle<const D extends TableDefinition>(
       }) as [AnySQLiteColumn | SQL, ...(AnySQLiteColumn | SQL)[]]
     const extras: SQLiteTableExtraConfigValue[] = []
     for (const entry of definition.indexes) {
-      let builder = (entry.unique ? uniqueIndex(entry.name) : index(entry.name)).on(
-        ...expressions(entry.columns),
-      )
+      const items =
+        entry.unique && entry.nulls === 'not-distinct'
+          ? (sqliteNullsNotDistinct(
+              entry.columns.map((column) => renderSchemaExpression(column, 'sqlite')),
+            ).map((text) => sql.raw(text)) as [SQL, ...SQL[]])
+          : expressions(entry.columns)
+      let builder = (entry.unique ? uniqueIndex(entry.name) : index(entry.name)).on(...items)
       if (entry.where) builder = builder.where(expressionSql(entry.where))
       extras.push(builder)
     }
@@ -224,12 +241,28 @@ export function materializeDrizzle<const D extends TableDefinition>(
           columns: definition.primaryKey.map(ownColumn) as [AnySQLiteColumn, ...AnySQLiteColumn[]],
         }),
       )
-    for (const entry of definition.unique)
+    for (const entry of definition.unique.filter((entry) => entry.nulls !== 'not-distinct'))
       extras.push(
         unique(entry.name).on(
           ...(entry.columns.map(ownColumn) as [AnySQLiteColumn, ...AnySQLiteColumn[]]),
         ),
       )
+    for (const key of [
+      ...definition.unique.filter((entry) => entry.nulls === 'not-distinct'),
+      ...Object.values(definition.columns)
+        .filter((column) => column.unique && column.uniqueNulls === 'not-distinct')
+        .map((column) => ({ name: column.unique!, columns: [column.name] })),
+    ])
+      extras.push(
+        uniqueIndex(key.name).on(
+          ...(sqliteNullsNotDistinct(key.columns.map((name) => `"${name}"`)).map((text) =>
+            sql.raw(text),
+          ) as [SQL, ...SQL[]]),
+        ),
+      )
+    if ((options.schemaEpoch ?? 1) > 1)
+      for (const entry of targetCodecChecks(definition, 'sqlite'))
+        extras.push(check(entry.name, sql.raw(entry.sql)))
     for (const entry of definition.checks)
       extras.push(check(entry.name, expressionSql(entry.expression)))
     for (const entry of definition.foreignKeys) {
@@ -266,8 +299,78 @@ export function materializeDrizzle<const D extends TableDefinition>(
         configureColumn(column, 'postgresql'),
       ]),
     ) as unknown as Record<string, PgColumnBuilderBase>,
+    (self) => {
+      if ((options.schemaEpoch ?? 1) === 1) return []
+      const byName = new Map(Object.values(self).map((column) => [column.name, column]))
+      const own = (name: string): AnyPgColumn => {
+        const column = byName.get(name)
+        if (!column) throw new Error(`RFC-395 missing column ${definition.id}.${name}`)
+        return column
+      }
+      const extras: PgTableExtraConfigValue[] = []
+      if (!Object.values(definition.columns).some((column) => column.primary))
+        extras.push(
+          pgPrimaryKey({
+            columns: definition.primaryKey.map(own) as [AnyPgColumn, ...AnyPgColumn[]],
+          }),
+        )
+      for (const key of [
+        ...definition.unique,
+        ...Object.values(definition.columns)
+          .filter((column) => column.uniqueNulls === 'not-distinct')
+          .map((column) => ({
+            name: column.unique!,
+            columns: [column.name],
+            nulls: column.uniqueNulls,
+          })),
+      ]) {
+        const unique = pgUnique(key.name).on(
+          ...(key.columns.map(own) as [AnyPgColumn, ...AnyPgColumn[]]),
+        )
+        extras.push(key.nulls === 'not-distinct' ? unique.nullsNotDistinct() : unique)
+      }
+      for (const entry of definition.indexes) {
+        // Drizzle's index API has no NULLS NOT DISTINCT flag; the plan emits the native flag.
+        const columns = entry.columns.map((column) =>
+          column.kind === 'column'
+            ? own(column.name)
+            : sql.raw(renderSchemaExpression(column, 'postgresql')),
+        )
+        let index = (entry.unique ? pgUniqueIndex(entry.name) : pgIndex(entry.name)).on(
+          ...(columns as [AnyPgColumn | SQL, ...(AnyPgColumn | SQL)[]]),
+        )
+        if (entry.where)
+          index = index.where(sql.raw(renderSchemaExpression(entry.where, 'postgresql')))
+        extras.push(index)
+      }
+      for (const entry of definition.checks)
+        extras.push(
+          pgCheck(entry.name, sql.raw(renderSchemaExpression(entry.expression, 'postgresql'))),
+        )
+      for (const entry of targetCodecChecks(definition, 'postgresql'))
+        extras.push(pgCheck(entry.name, sql.raw(entry.sql)))
+      for (const entry of definition.foreignKeys) {
+        const target = applicationSchema.table(
+          entry.foreignTable,
+          Object.fromEntries(entry.foreignColumns.map((name) => [name, pgText(name)])),
+        )
+        extras.push(
+          pgForeignKey({
+            name: entry.name,
+            columns: entry.columns.map(own) as [AnyPgColumn, ...AnyPgColumn[]],
+            foreignColumns: [
+              target[entry.foreignColumns[0]!]!,
+              ...entry.foreignColumns.slice(1).map((name) => target[name]!),
+            ],
+          })
+            .onDelete(entry.onDelete)
+            .onUpdate(entry.onUpdate),
+        )
+      }
+      return extras
+    },
   )
   const result = { sqlite, postgresql, table: sqlite }
-  cache.set(definition, result)
+  selectedCache.set(definition, result)
   return result as unknown as ReturnType<typeof materializeDrizzle<D>>
 }

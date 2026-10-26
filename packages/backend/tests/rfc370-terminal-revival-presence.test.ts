@@ -1,3 +1,4 @@
+import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { o2Ports } from './helpers/o2Closure'
 // RFC-370 A3: remote existence is awaited before terminal revival. A response
 // for an older workspace/lifecycle must not mark a new workspace as reclaimed.
@@ -144,6 +145,7 @@ describeEachProvider('RFC-370 terminal revival selected presence', (harness) => 
   for (const mode of ['runtime', 'human-gate'] as const) {
     const resume = async (presence: WorkspacePresenceQueries) => {
       const persistence = createTaskExecutionPersistence(harness.db, {
+        historyRestrictions: epoch2RuntimeTestPorts(harness.db).historyRestrictions,
         recoveryHumanGates: o2Ports(harness.db).collaborationReads.recovery,
         ...{
           workspacePresence: presence,

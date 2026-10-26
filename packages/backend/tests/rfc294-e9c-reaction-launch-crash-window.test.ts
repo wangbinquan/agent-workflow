@@ -1,3 +1,4 @@
+import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 // RFC-294 W4-E9 / E9-C 的回归锁 —— **一次 Reaction 不得启动出两个任务**。
 //
 // 缺陷（2026-09-22 复现）：旧合同下数字员工的调用序列是「`launch()` 建任务 →
@@ -138,7 +139,10 @@ describe('RFC-294 E9-C —— 一次 Reaction 只起一个任务', () => {
      */
     function tePort(crash: 'none' | 'before-task' | 'after-task') {
       const db = harness.db
-      const tasksPort = composeDatabaseDigitalEmployeeExecutionPorts(db).tasks
+      const tasksPort = composeDatabaseDigitalEmployeeExecutionPorts(
+        db,
+        epoch2RuntimeTestPorts(db).historyRestrictions,
+      ).tasks
       const kernelLaunches: string[] = []
       let reachedCrash!: () => void
       const crashBoundary = new Promise<void>((resolve) => {

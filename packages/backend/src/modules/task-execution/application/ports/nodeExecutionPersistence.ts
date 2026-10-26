@@ -8,7 +8,7 @@ import type {
   NodeRunCheckpointView,
   NodeRunInputView,
 } from '../../domain/nodeRunSnapshot'
-import type { SelectionChange } from './runSelection'
+import type { SelectionChange, RunSelectionReader } from './runSelection'
 import type { NodeRunProjectionWrite } from './nodeRunWrites'
 import type { TaskExecutionContextRef } from './taskExecutionTopology'
 
@@ -100,6 +100,8 @@ export interface NodeExecutionOutputWrite {
  * outputs and the append-only runtime event stream.
  */
 export interface NodeExecutionPersistence {
+  snapshotRead<T>(read: (snapshot: NodeExecutionReadSnapshot) => Promise<T>): Promise<T>
+  readonly selection: RunSelectionReader
   read(nodeRunId: string): Promise<NodeExecutionSnapshot | null>
   list(input: NodeExecutionQuery): Promise<readonly NodeExecutionSnapshot[]>
   listOutputs(nodeRunId: string): Promise<readonly NodeExecutionOutputSnapshot[]>
@@ -108,7 +110,11 @@ export interface NodeExecutionPersistence {
   patch(input: {
     readonly nodeRunId: string
     readonly values: NodeExecutionProjectionPatch
-    readonly selection?: SelectionChange
+    readonly selection?:
+      | SelectionChange
+      | (Omit<Extract<SelectionChange, { kind: 'select' }>, 'expectedRevision'> & {
+          readonly expectedRevision: 'current'
+        })
     readonly executionContext?: TaskExecutionContextRef
     readonly now?: number
   }): Promise<boolean>
@@ -150,3 +156,9 @@ export interface NodeExecutionPersistence {
     readonly now?: number
   }): Promise<void>
 }
+
+/** Reads share a database snapshot; writers remain outside this callback. */
+export type NodeExecutionReadSnapshot = Pick<
+  NodeExecutionPersistence,
+  'selection' | 'read' | 'list' | 'listOutputs'
+>

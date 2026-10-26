@@ -1,3 +1,4 @@
+import type { NodeRunMintGeneration } from '../nodeRunMintIdentity'
 import type { TaskStatus } from '@agent-workflow/shared'
 
 import type { TaskExecutionContextRef } from './taskExecutionTopology'
@@ -18,6 +19,7 @@ export interface TaskRuntimeLifecyclePersistence {
     readonly allowedFrom: readonly TaskStatus[]
     readonly allowTerminal?: boolean
     readonly extra?: TaskRuntimeLifecycleMutation
+    readonly executionGeneration?: NodeRunMintGeneration
     readonly executionContext?: TaskExecutionContextRef
     readonly now: number
     readonly reason: string

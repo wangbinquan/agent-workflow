@@ -1,3 +1,6 @@
+import { withTargetMintIdentity } from './helpers/rfc395Mint'
+import { nodeRunFixtureColumns } from './helpers/model/nodeRun'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 // RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-164 PR-4 — workgroup room endpoints + human @-dispatch semantics.
 //
@@ -15,7 +18,6 @@
 //     may carry authorUserId/createdByUserId audit columns (design §11 keeps
 //     them out of prompts, not out of the member-gated UI).
 
-import { deriveNodeRunRole } from '@/modules/task-execution/public/types'
 import {
   nodeRunFixture,
   patchAgentFixture,
@@ -25,7 +27,7 @@ import {
   workflowFixture,
 } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { insertLegacySelfClarify } from './clarify-fixtures'
 import { eq } from 'drizzle-orm'
@@ -692,9 +694,9 @@ describeEachProviderHttpApplication(
       const gate = gateViewOf(await loadWorkgroupTaskState(db, taskId))
       expect(gate.approved).toBe(true)
       expect(gate.awaitingConfirmation).toBe(false)
-      const holders = (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))).filter(
-        (r) => r.rerunCause === 'wg-gate',
-      )
+      const holders = (
+        await db.select(nodeRunFixtureColumns(db)).from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
+      ).filter((r) => r.rerunCause === 'wg-gate')
       expect(holders[0]?.status).toBe('done')
     })
 
@@ -719,7 +721,8 @@ describeEachProviderHttpApplication(
 
     test('上线前加固：confirm 恢复失败时 gate、holder 与消息全部保持可重试', async () => {
       await openGate()
-      const { workgroupMessages, nodeRuns } = tablesOf(db)
+      const { workgroupMessages } = tablesOf(db)
+      const { nodeRuns } = tablesOf(db)
       const beforeMessages = await db
         .select()
         .from(workgroupMessages)
@@ -745,9 +748,9 @@ describeEachProviderHttpApplication(
       expect(task?.status).toBe('awaiting_review')
       expect(gate.approved).toBe(false)
       expect(gate.awaitingConfirmation).toBe(true)
-      const holders = (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))).filter(
-        (r) => r.rerunCause === 'wg-gate',
-      )
+      const holders = (
+        await db.select(nodeRunFixtureColumns(db)).from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
+      ).filter((r) => r.rerunCause === 'wg-gate')
       expect(holders).toHaveLength(1)
       expect(holders[0]?.status).toBe('awaiting_review')
       const afterMessages = await db
@@ -1019,7 +1022,8 @@ describeEachProviderHttpApplication(
     // RFC-181 A/A2 — autonomous 进 per-task PATCH（对称 on/off + system 消息），
     // false→true 单事务遣散在途 clarify park 并 requeue 卡（design §2.1/§2.1a）。
     test('RFC-207：移除最后一个人工成员 → 遣散在途 clarify park', async () => {
-      const { clarifyRounds, workgroupAssignments } = tablesOf(db)
+      const { workgroupAssignments } = tablesOf(db)
+      const { clarifyRounds } = tablesOf(db)
       const { mintNodeRun } = await import('../src/services/nodeRunMint')
 
       // RFC-207 — the autonomous switch this test used to drive is gone. Losing the
@@ -1047,19 +1051,23 @@ describeEachProviderHttpApplication(
         createdAt: Date.now(),
         updatedAt: Date.now(),
       })
-      const clarifyRunId = await mintNodeRun(db, {
-        ...deriveNodeRunRole({ nodeId: '__wg_clarify__', rerunCause: 'clarify-park' }),
-        taskId,
-        nodeId: '__wg_clarify__',
-        status: 'awaiting_human',
-        cause: 'clarify-park',
-        overrides: {
-          identity: {
-            shardKey: cardId,
-            startedAt: Date.now(),
+      const clarifyRunId = await mintNodeRun(
+        db,
+        withTargetMintIdentity({
+          role: 'synthetic',
+          syntheticKind: 'workgroup-host',
+          taskId,
+          nodeId: '__wg_clarify__',
+          status: 'awaiting_human',
+          cause: 'clarify-park',
+          overrides: {
+            identity: {
+              shardKey: cardId,
+              startedAt: Date.now(),
+            },
           },
-        },
-      })
+        }),
+      )
       const sessionId = ulid()
       await insertLegacySelfClarify(db, {
         id: sessionId,

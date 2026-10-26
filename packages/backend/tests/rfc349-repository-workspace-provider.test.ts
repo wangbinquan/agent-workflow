@@ -1,3 +1,4 @@
+import { createEpoch2PostgresqlMetadata } from './helpers/epoch2PostgresqlMetadata'
 import { composeSourceControlTaskPorts } from '@/modules/task-execution/composition'
 import { withNativeTransactions } from './helpers/nativeTransactions'
 import { insertOne } from '@/platform/persistence/singleInsert'
@@ -31,10 +32,13 @@ function postgresqlFixture(): {
   readonly executions: string[]
 } {
   const executions: string[] = []
+  const epoch2Metadata = createEpoch2PostgresqlMetadata()
   const execute = (query: string): SqlRows => {
     executions.push(query)
+    const metadata = epoch2Metadata(query)
+    if (metadata) return metadata
     if (/^(BEGIN|COMMIT|ROLLBACK)$/i.test(query)) return rows()
-    if (query.includes('database_generations')) {
+    if (query.includes('generations')) {
       return rows([{ generation_id: 'dbg_repository_workspace' }])
     }
     if (/^\s*select count\(\*\)/i.test(query)) return rows([{ count: 1 }])
@@ -132,7 +136,7 @@ describe('RFC-349 repository workspace provider boundary', () => {
     const insert = fixture.executions.find((query) => /^\s*insert into/i.test(query))
     expect(insert).toMatch(/insert into "agent_workflow"\."cached_repos" \(\s*"id", "url_hash"/i)
     expect(insert).not.toContain('("cached_repos"."id"')
-    expect(fixture.executions.some((query) => query.includes('database_generations'))).toBeTrue()
+    expect(fixture.executions.some((query) => query.includes('generations'))).toBeTrue()
   })
 
   // RFC-349 —— 这条守卫来自托管取证跑（真外置 PostgreSQL）：`/api/cached-repos`

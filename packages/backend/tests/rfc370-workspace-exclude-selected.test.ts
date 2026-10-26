@@ -100,7 +100,7 @@ async function fixture(
         repoIndex,
         mountPath,
         repoPath: 'object:repo:' + repoIndex,
-        worktreePath: 'object:workspace:' + repoIndex,
+        worktreePath: 'object:workspace:0' + (mountPath ? '/' + mountPath : ''),
         branch: 'agent-workflow/' + taskId,
       })
     }
@@ -405,18 +405,18 @@ describeEachProvider('RFC-370 selected workspace profiles in real Task drives', 
       expect(events).toEqual([
         'bind:object:workspace:0',
         'ensure:object:workspace:0',
-        'bind:object:workspace:1',
-        'ensure:object:workspace:1',
-        'bind:object:workspace:2',
-        'ensure:object:workspace:2',
+        'bind:object:workspace:0/nested',
+        'ensure:object:workspace:0/nested',
+        'bind:object:workspace:0/nested/deeper',
+        'ensure:object:workspace:0/nested/deeper',
       ])
       expect(mounts).toEqual([['nested'], ['deeper'], []])
       expect(
         (await h.rows()).map((row) => [row.workspaceProfileVersion, row.workspaceProfileDigest]),
       ).toEqual([
         [1, 'chosen:object:workspace:0'],
-        [1, 'chosen:object:workspace:1'],
-        [1, 'chosen:object:workspace:2'],
+        [1, 'chosen:object:workspace:0/nested'],
+        [1, 'chosen:object:workspace:0/nested/deeper'],
       ])
       expect((await h.task()).status).toBe('failed')
     } finally {

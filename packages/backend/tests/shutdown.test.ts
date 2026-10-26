@@ -1,3 +1,4 @@
+import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { o2Ports } from './helpers/o2Closure'
 import { readTaskFixtures, taskFixture, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
@@ -91,6 +92,7 @@ describeEachProvider('gracefulShutdown', (harness) => {
   test('returns immediately when no tasks are running', async () => {
     const t0 = Date.now()
     const persistence = createTaskExecutionPersistence(h.db, {
+      historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
       recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
     })
     await gracefulShutdown(
@@ -114,6 +116,7 @@ describeEachProvider('gracefulShutdown', (harness) => {
     // the row stays running. After the short budget, the survivor path
     // marks it interrupted.
     const persistence = createTaskExecutionPersistence(h.db, {
+      historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
       recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
     })
     await gracefulShutdown(
@@ -139,6 +142,7 @@ describeEachProvider('gracefulShutdown', (harness) => {
   test('session shutdown bounds a stuck provider driver then persists its survivor', async () => {
     const taskId = await seedRunning(h.db)
     const persistence = createTaskExecutionPersistence(h.db, {
+      historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
       recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
     })
     const module =

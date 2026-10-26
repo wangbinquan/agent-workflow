@@ -1,3 +1,4 @@
+import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'
 // RFC-359 W8 —— 迁移器成对适配器的**双引擎行为对拍**（AC-1 的最后一份见证）。
 //
 // 这一对为什么不合一
@@ -35,15 +36,14 @@ import { sqliteTable, text } from 'drizzle-orm/sqlite-core'
 
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { migrateSqlite } from '../src/platform/persistence/sqliteMigrator'
-import { migratePostgresqlSchema } from '../src/platform/persistence/postgresqlMigrator'
+import { migratePostgresqlSchema } from '../src/platform/persistence/migration/legacy/postgresqlMigrator'
 import {
   createPostgresqlDatabaseRuntime,
   type PostgresqlDatabaseRuntime,
 } from '../src/platform/persistence/postgresqlRuntime'
 import { MIGRATIONS } from './migration-freeze'
-import { resolvePostgresqlTestUrlEnv } from './helpers/eachProvider'
-import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
-import { describeEachProvider } from './helpers/eachProvider'
+import { resolvePostgresqlTestUrlEnv, describeEachProvider } from './helpers/eachProvider'
+import { buildFrozenEpoch1LogicalSchemaContract as buildLogicalSchemaContract } from '@/platform/persistence/migration/epoch1/contract'
 
 const CONTRACT = buildLogicalSchemaContract()
 
@@ -61,7 +61,7 @@ function tableObject(db: object, schemaSymbol: string): object | undefined {
 
 describeEachProvider('RFC-359 W8 —— 迁移器对拍：活库实现了声明的 schema', (harness) => {
   test('花名册非空且与声明一致（语料自证：判据不是在空集合上恒真）', () => {
-    const tables = expectedTables(harness.capabilities.provider)
+    const tables = logicalSchemaContract.tables
     expect(tables.length).toBeGreaterThanOrEqual(150)
     expect(CONTRACT.sourceProjection).toBe('sqlite')
   })
@@ -69,7 +69,7 @@ describeEachProvider('RFC-359 W8 —— 迁移器对拍：活库实现了声明�
   test('每张声明的表都在活库里，且**每一列**都取得回来', async () => {
     const missingSymbols: string[] = []
     const failures: string[] = []
-    const tables = expectedTables(harness.capabilities.provider)
+    const tables = logicalSchemaContract.tables
     // 录语句：判据必须**真的一表一查**。只看 `failures` 为空的话，循环若被某个 continue
     // 悄悄跳过大半张花名册，测试照样绿——那正是这条对拍最怕的失效方式。
     const recording = harness.recordStatements()

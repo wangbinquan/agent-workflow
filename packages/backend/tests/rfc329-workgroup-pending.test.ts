@@ -1,3 +1,5 @@
+import { patchTaskFixture } from './helpers/model'
+import { eq } from 'drizzle-orm'
 import { taskFixture, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
@@ -146,11 +148,10 @@ async function seed(
       workgroupConfigJson: JSON.stringify(config()),
     })
     if (spec.gateStatus !== null) {
-      await insertOne(db, workgroupTaskState, {
-        taskId: spec.id,
-        gateStatus: spec.gateStatus,
-        updatedAt: NOW,
-      })
+      await db
+        .update(workgroupTaskState)
+        .set({ gateStatus: spec.gateStatus, updatedAt: NOW })
+        .where(eq(workgroupTaskState.taskId, spec.id))
     }
     for (let i = 0; i < spec.cardsForAlice; i++) {
       await insertOne(db, workgroupAssignments, {
@@ -326,8 +327,8 @@ describeEachProvider(
           ownerUserId: 'alice',
           launchOrigin: 'manual',
           workgroupId: 'wg1',
-          workgroupConfigJson: '{not json',
         })
+        await patchTaskFixture(db, { id: 'broken' }, { workgroupConfigJson: '{not json' })
         const { pendingRows, pendingCount } = reads(db)
 
         const rows = await pendingRows(actor('alice'))

@@ -1,3 +1,6 @@
+import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
+import { nodeRunFixtureColumns } from './helpers/model/nodeRun'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { withO2Closure, o2Ports } from './helpers/o2Closure'
 // RFC-395 II-pre：改接生产启动 / 读取路径，保留原断言意图。
 // RFC-014 §2.1 #1 + #3 + C1 — multi-markdown upstream + iterate path locks.
@@ -26,16 +29,16 @@ import { withO2Closure, o2Ports } from './helpers/o2Closure'
 //   - check buildSiblingOutputsBlock for the `__sibling_outputs__` payload
 
 import { readNodeRunFixtures } from './helpers/model'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+
 import { launchTestTaskWithLocalRepo as launchTestTaskWithLocalRepoBase } from './helpers/productionTaskLaunch'
 import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { and, eq, desc } from 'drizzle-orm'
 import { DEFAULT_PROTOCOL_RETRY_BUDGET } from '@agent-workflow/shared'
-import type { DbClient } from '../src/db/client'
-import { createInMemoryDb } from '../src/db/client'
+import { type DbClient, createInMemoryDb } from '../src/db/client'
+
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 import { createAgent } from '../src/modules/resource-catalog/infrastructure/legacy/agent'
 import { createWorkflow } from '../src/services/workflow'
@@ -48,7 +51,6 @@ import { abortAllActiveTasks, wakeHumanGateContinuation } from '@/services/task'
 import { runTestGit } from './helpers/testCommand'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const GIT_TIMEOUT_MS = 10_000
 const NODE_TIMEOUT_MS = 10_000
 const FLOW_TIMEOUT_MS = 20_000
@@ -129,7 +131,7 @@ async function buildHarness(opts: HarnessOpts): Promise<Harness> {
   const tmp = mkdtempSync(join(tmpdir(), `aw-rfc014-${runIdx}-`))
   const appHome = join(tmp, 'appHome')
   const repoPath = join(tmp, 'repo')
-  const db = createInMemoryDb(MIGRATIONS)
+  const db = createInMemoryDb()
   await seedTestDefaultOpencodeRuntime(db)
   const previousAppHome = process.env.AGENT_WORKFLOW_HOME
 
@@ -274,7 +276,10 @@ describe('RFC-014 — iterate sibling cascade (multi-markdown upstream)', () => 
     const { nodeRuns, docVersions } = tablesOf(h.db)
     // All three review node_runs land in awaiting_review after the upstream
     // agent runs (handled by the scheduler harness).
-    const before = await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, h.taskId))
+    const before = await h.db
+      .select(nodeRunFixtureColumns(h.db))
+      .from(nodeRuns)
+      .where(eq(nodeRuns.taskId, h.taskId))
     const beforeReviews = before.filter((r) => r.nodeId.startsWith('rev_'))
     expect(beforeReviews.length).toBe(3)
     for (const r of beforeReviews) {
@@ -295,13 +300,13 @@ describe('RFC-014 — iterate sibling cascade (multi-markdown upstream)', () => 
     // Siblings (proposal + plan) should be reset to pending with reviewIteration++.
     const proposalAfter = (
       await h.db
-        .select()
+        .select(nodeRunFixtureColumns(h.db))
         .from(nodeRuns)
         .where(and(eq(nodeRuns.taskId, h.taskId), eq(nodeRuns.nodeId, 'rev_proposal')))
     )[0]!
     const planAfter = (
       await h.db
-        .select()
+        .select(nodeRunFixtureColumns(h.db))
         .from(nodeRuns)
         .where(and(eq(nodeRuns.taskId, h.taskId), eq(nodeRuns.nodeId, 'rev_plan')))
     )[0]!
@@ -336,6 +341,7 @@ describe('RFC-014 — iterate sibling cascade (multi-markdown upstream)', () => 
       }),
     )
     await wakeHumanGateContinuation(approval.taskId, approval.continuationRef, {
+      historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
       db: h.db,
       appHome: h.appHome,
       schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
@@ -345,7 +351,7 @@ describe('RFC-014 — iterate sibling cascade (multi-markdown upstream)', () => 
     const { nodeRuns } = tablesOf(h.db)
     const proposalDone = (
       await h.db
-        .select()
+        .select(nodeRunFixtureColumns(h.db))
         .from(nodeRuns)
         .where(and(eq(nodeRuns.taskId, h.taskId), eq(nodeRuns.nodeId, 'rev_proposal')))
     )[0]!
@@ -364,7 +370,7 @@ describe('RFC-014 — iterate sibling cascade (multi-markdown upstream)', () => 
 
     const proposalAfter = (
       await h.db
-        .select()
+        .select(nodeRunFixtureColumns(h.db))
         .from(nodeRuns)
         .where(and(eq(nodeRuns.taskId, h.taskId), eq(nodeRuns.nodeId, 'rev_proposal')))
     )[0]!
@@ -390,13 +396,13 @@ describe('RFC-014 — iterate sibling cascade (multi-markdown upstream)', () => 
     // Siblings remain awaiting_review (no cascade).
     const proposalAfter = (
       await h.db
-        .select()
+        .select(nodeRunFixtureColumns(h.db))
         .from(nodeRuns)
         .where(and(eq(nodeRuns.taskId, h.taskId), eq(nodeRuns.nodeId, 'rev_proposal')))
     )[0]!
     const planAfter = (
       await h.db
-        .select()
+        .select(nodeRunFixtureColumns(h.db))
         .from(nodeRuns)
         .where(and(eq(nodeRuns.taskId, h.taskId), eq(nodeRuns.nodeId, 'rev_plan')))
     )[0]!

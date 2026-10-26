@@ -1,6 +1,7 @@
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { agentFixture, readAgentFixtures, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+
 import { first } from '@/platform/persistence/queryHelpers'
 import { beforeEach, expect, test } from 'bun:test'
 import type { AclResourceType } from '@agent-workflow/shared'
@@ -58,7 +59,8 @@ async function seedResource(
   ownerUserId: string,
 ): Promise<AclRow> {
   const acl = { ownerUserId, visibility: 'public' as const, aclRevision: 0 }
-  const { skills, mcps, plugins, workgroups, capabilityTemplates } = tablesOf(db)
+  const { mcps, plugins, workgroups, capabilityTemplates } = tablesOf(db)
+  const { skills } = tablesOf(db)
   switch (type) {
     case 'agent':
       await agentFixture(db, { id, name, ...acl })
@@ -130,8 +132,8 @@ describeEachProvider('RFC-223 owner transfer and fresh-ACL fences', (harness) =>
         status: 409,
       })
 
-      const { agents, skills, mcps, plugins, capabilityTemplates, workgroups, resourceGrants } =
-        tablesOf(db)
+      const { mcps, plugins, capabilityTemplates, workgroups, resourceGrants } = tablesOf(db)
+      const { agents, skills } = tablesOf(db)
       const table = {
         agent: agents,
         skill: skills,

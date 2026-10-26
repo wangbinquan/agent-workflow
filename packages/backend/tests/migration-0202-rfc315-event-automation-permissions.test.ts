@@ -3,19 +3,14 @@
 // rewrite (including inactive tokens), malformed-data fail-closed behavior,
 // append-only audit preservation, and migration idempotence.
 
+import { FROZEN_MIGRATIONS } from './migration-freeze'
 import { afterEach, describe, expect, test } from 'bun:test'
 import { Database } from 'bun:sqlite'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 const SQL = readFileSync(
-  resolve(
-    import.meta.dir,
-    '..',
-    'db',
-    'migrations',
-    '0202_rfc315_event_automation_permissions.sql',
-  ),
+  resolve(FROZEN_MIGRATIONS, '0202_rfc315_event_automation_permissions.sql'),
   'utf8',
 )
 

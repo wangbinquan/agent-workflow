@@ -79,6 +79,17 @@ async function insertTask(db: PersistenceDb, def: WorkflowDefinition): Promise<s
     schemaVersion: 4,
   })
   await taskFixture(db, {
+    // Historical checkpoints keep their real root mount after workspace removal.
+    repos: [
+      {
+        repoIndex: 0,
+        mountPath: '',
+        repoPath: '/tmp/aw-rfc123/repo',
+        baseBranch: 'main',
+        branch: `agent-workflow/${taskId}`,
+        worktreePath: '',
+      },
+    ],
     id: taskId,
     executionLineageId: taskId,
     lineageSlotPathJson: encodeLineageSlotPath([

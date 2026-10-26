@@ -1,3 +1,5 @@
+import { legacyContentRef } from '@/platform/content/contentRef'
+import { contentRowColumns } from '@/platform/content/infrastructure/contentStore'
 // RFC-370 H6: durable version metadata decides direction; the selected storage
 // performs rollback/publish and must finish before the recovery driver retires it.
 import { insertOne } from '@/platform/persistence/singleInsert'
@@ -93,7 +95,7 @@ describeEachProvider('RFC-370 skill version recovery content', (harness) => {
           id: ulid(),
           skillId,
           versionIndex: 2,
-          filesPath: 'object:version-2',
+          ...contentRowColumns(legacyContentRef('skill-path', 'local-file', 'object:version-2')),
           source: 'editor',
           authorUserId: null,
           contentHash: 'b'.repeat(64),

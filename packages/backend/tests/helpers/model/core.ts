@@ -1,6 +1,7 @@
-// RFC-395 II-a A1: shared fixture transport; only these adapters know the epoch-1 tables.
+// RFC-395 II-a A1: shared fixture transport; aggregate adapters keep target writes in the caller transaction.
 import {
   and,
+  getTableColumns,
   eq,
   isNull,
   inArray,
@@ -107,9 +108,9 @@ export function fixturePredicate<T extends Table>(
   const entries = inventory.columns.filter((entry) => entry.table === physicalTable)
   const column = (key: string) => {
     const entry = entries.find((entry) => entry.spec === key)
-    if (!entry || !(entry.property in columns))
+    if (!((entry?.property ?? key) in columns))
       throw new Error('Unsupported fixture predicate: ' + key)
-    return columns[entry.property]!
+    return columns[entry?.property ?? key]!
   }
   return and(
     ...Object.entries(where).map(([key, value]) => {
@@ -158,7 +159,7 @@ export async function insertFixtureRow<T extends Table>(
   row: Record<string, unknown>,
   options: FixtureOptions,
 ): Promise<boolean> {
-  const values = row as PersistenceInsertValues<T>
+  const values = physicalFixtureValues(table, row) as PersistenceInsertValues<T>
   const result =
     options.onConflict === 'ignore'
       ? await db.insert(table).values(values).onConflictDoNothing()
@@ -180,24 +181,46 @@ export async function patchFixtureRows<T extends Table>(
   )
 }
 
+export function physicalFixtureValues<T extends Table>(
+  table: T,
+  values: object,
+): Record<string, unknown> {
+  const columns = getTableColumns(table)
+  return Object.fromEntries(
+    Object.entries(values).filter(([key, value]) => key in columns && value !== undefined),
+  )
+}
+
 interface FixtureAdapter<S extends object, T extends Table, R> {
   table(db: FixtureHandle): T
   physicalTable: string
+  columns?(db: FixtureHandle): object
   keys: readonly string[]
-  prepare?(db: FixtureHandle, row: Record<string, unknown>, spec: S): Promise<void>
+  prepare?(
+    db: FixtureHandle,
+    row: Record<string, unknown>,
+    spec: S,
+    batch: readonly S[],
+  ): Promise<void>
   afterWrite?(db: FixtureHandle, row: T['$inferSelect'], spec: S): Promise<void>
+  rootPatch?(
+    row: T['$inferSelect'],
+    values: FixturePatch<S>,
+    encoded: Record<string, unknown>,
+  ): Record<string, unknown>
+  afterPatch?(db: FixtureHandle, row: T['$inferSelect'], spec: FixturePatch<S>): Promise<void>
   project(db: FixtureHandle, row: T['$inferSelect']): Promise<R>
 }
 export function createFixtureAdapter<S extends object, T extends Table, R>(
   adapter: FixtureAdapter<S, T, R>,
 ) {
-  const read = async (
+  const readRows = async (
     db: FixtureHandle,
     where?: object,
     options: FixtureReadOptions<R> = {},
   ): Promise<R[]> => {
     const table = adapter.table(db)
-    const columns = table as unknown as Record<string, PersistenceColumn>
+    const columns = (adapter.columns?.(db) ?? table) as Record<string, PersistenceColumn>
     const order = (options.orderBy ?? []).map(({ field, direction = 'asc', nulls }) => {
       const entry = inventory.columns.find(
         (entry) => entry.table === adapter.physicalTable && entry.spec === field,
@@ -215,12 +238,20 @@ export function createFixtureAdapter<S extends object, T extends Table, R>(
     const query = db
       .select()
       .from(table)
-      .where(fixturePredicate(table, adapter.physicalTable, where))
+      .where(fixturePredicate(columns as unknown as T, adapter.physicalTable, where))
       .orderBy(...order)
     const limited = options.limit === undefined ? query : query.limit(options.limit)
     const rows = await (options.offset === undefined ? limited : limited.offset(options.offset))
     return Promise.all(rows.map((row) => adapter.project(db, row)))
   }
+  const read = (
+    db: FixtureHandle,
+    where?: object,
+    options: FixtureReadOptions<R> = {},
+  ): Promise<R[]> =>
+    databaseTransactionIsActive(db)
+      ? readRows(db, where, options)
+      : databaseSessionFor(db).snapshotRead((tx) => readRows(tx, where, options))
   const insert = async (
     db: FixtureHandle,
     input: S | readonly S[],
@@ -232,7 +263,7 @@ export function createFixtureAdapter<S extends object, T extends Table, R>(
       for (const spec of fixtureRows(input)) {
         const row = encodeFixture(adapter.physicalTable, spec)
         if (adapter.keys.includes('id')) row.id ??= fixtureId()
-        await adapter.prepare?.(tx, row, spec)
+        await adapter.prepare?.(tx, row, spec, fixtureRows(input))
         if (!(await insertFixtureRow(tx, table, row, options))) continue
         const where = Object.fromEntries(adapter.keys.map((key) => [key, row[key]]))
         const stored = await tx
@@ -250,13 +281,28 @@ export function createFixtureAdapter<S extends object, T extends Table, R>(
     where: object | undefined,
     values: FixturePatch<S>,
   ): Promise<number> => {
-    return patchFixtureRows(
-      db,
-      adapter.table(db),
-      adapter.physicalTable,
-      where,
-      encodeFixture(adapter.physicalTable, values),
-    )
+    return fixtureTransaction(db, async (tx) => {
+      const table = adapter.table(tx)
+      const columns = adapter.columns?.(tx) ?? table
+      const rows = await tx
+        .select()
+        .from(table)
+        .where(fixturePredicate(columns as T, adapter.physicalTable, where))
+      const encoded = encodeFixture(adapter.physicalTable, values)
+      for (const row of rows) {
+        const patch = physicalFixtureValues(
+          table,
+          adapter.rootPatch?.(row, values, encoded) ?? encoded,
+        )
+        const key = Object.fromEntries(
+          adapter.keys.map((name) => [name, (row as Record<string, unknown>)[name]]),
+        )
+        if (Object.keys(patch).length)
+          await patchFixtureRows(tx, table, adapter.physicalTable, key, patch)
+        await adapter.afterPatch?.(tx, row, values)
+      }
+      return rows.length
+    })
   }
   return { insert, read, patch }
 }

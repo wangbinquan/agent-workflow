@@ -1,3 +1,6 @@
+import type { projectNodeRunReadFacts } from '@/modules/task-execution/infrastructure/nodeRunSnapshot'
+// Target fixture mint order; missing seq is covered only by conversion/rejection tests.
+let fixtureRunSequence = 0
 // RFC-076 PR-A — wrapper-fanout iteration-window lock (supplementary coverage).
 //
 // Regression locked here: wrapperHasFreshInnerWork / isDispatchable for the THIRD
@@ -18,18 +21,17 @@
 // (a) drops wrapper-fanout from WRAPPER_KINDS, or (b) starts decoding progress for
 // fanout, these tests go red. Mirror the harness in dispatch-frontier.test.ts.
 
-import { type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { describe, expect, test } from 'bun:test'
 import type { NodeKind, WorkflowDefinition } from '@agent-workflow/shared'
 import { isDispatchable, wrapperHasFreshInnerWork } from '../src/services/dispatchFrontier'
 import { encodeWrapperProgress } from '../src/modules/task-execution/domain/wrapperProgress'
 
-type Row = PersistenceTables['nodeRuns']['$inferSelect']
+type Row = ReturnType<typeof projectNodeRunReadFacts>
 
 // Minimal node-run row factory (identical shape to dispatch-frontier.test.ts).
 function run(over: Partial<Row>): Row {
   return {
-    seq: null,
+    seq: ++fixtureRunSequence,
     parentNodeRunId: null,
     containerRunId: null,
     shardKey: null,

@@ -140,7 +140,21 @@ async function openInspector(page: Page, workflowId: string): Promise<void> {
   await page.waitForSelector('.react-flow__node', { state: 'visible' })
   await expect(page.getByTestId('workflow-draft-phase')).toHaveText('Saved')
   await clickCanvasControl(page, 'workflow-camera-overview')
-  await page.locator('.react-flow__node[data-id="call"] .canvas-node').click()
+  // Overview animates the viewport independently of the node. Wait for its
+  // transform to settle before choosing a physical click point.
+  let previous: string | null = null
+  await expect
+    .poll(
+      async () => {
+        const current = await page.locator('.react-flow__viewport').getAttribute('style')
+        const stable = current !== null && current === previous
+        previous = current
+        return stable
+      },
+      { intervals: [120] },
+    )
+    .toBe(true)
+  await page.locator('.react-flow__node[data-id="call"] .canvas-node__header').click()
   await expect(page.getByTestId('code-host-action')).toBeVisible()
 }
 

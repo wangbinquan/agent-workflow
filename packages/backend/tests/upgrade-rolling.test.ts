@@ -1,8 +1,8 @@
 // RFC-054 W1-6 — rolling upgrade test.
 //
 // LOCKS: a daemon home stopped at an old migration must (a) accept the
-// current migrations folder on startup and apply the missing migrations
-// idempotently, (b) end up with the HEAD schema (all 237 entries in
+// frozen migrations folder offline and apply the missing migrations
+// idempotently, (b) reach the frozen epoch-1 head, convert and admit epoch 2 (all entries in
 // `__drizzle_migrations` + all current tables present), and (c) remain
 // operationally functional — a fresh task driven by the scheduler runs
 // through to `done`. A regression in any of these three means existing
@@ -22,12 +22,9 @@
 //   - journal idx 13 (0014_rfc031_plugins)      — mid-period plugins
 //   - journal idx 19 (0020_rfc036_task_collab)  — late, just pre RFC-037
 
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { Database } from 'bun:sqlite'
-import { drizzle } from 'drizzle-orm/bun-sqlite'
-import { migrate } from 'drizzle-orm/bun-sqlite/migrator'
+
 import { eq } from 'drizzle-orm'
 import {
   copyFileSync,
@@ -41,7 +38,20 @@ import {
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
-import { openDb, type DbClient } from '../src/db/client'
+import { runGit } from '@/util/git'
+import { openFrozenEpoch1Db, migrateFrozenSqlite } from './migration-freeze'
+import { openDb } from '@/db/client'
+import { composeLocalEpochSwitch } from '@/bootstrap/epochMigration'
+import { persistenceHead, persistencePostgresqlCatalogs } from '@/bootstrap/persistenceHead'
+import { resolveConfigurationValue } from '@/platform/configuration/configurationValues'
+import { readGenerationPointerV2 } from '@/platform/persistence/generationPointerV2'
+import {
+  classifyEpochInstallation,
+  readEpochBootFacts,
+} from '@/modules/system-operations/composition/epochBootAdmission'
+import type { PersistenceDb as DbClient } from '@/platform/persistence/persistenceDb'
+import { agentFixture, taskFixture, workflowFixture } from './helpers/model'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { runTaskWithRealTestTopology as runTask } from './helpers/taskExecutionTestTopology'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -108,8 +118,7 @@ function freezeAt(idx: number, outDbPath: string): void {
     }
     const sqlite = new Database(outDbPath, { create: true })
     sqlite.exec('PRAGMA foreign_keys = ON;')
-    const db = drizzle(sqlite, {})
-    migrate(db, { migrationsFolder: partialMigDir })
+    migrateFrozenSqlite(sqlite, { migrationsFolder: partialMigDir })
     sqlite.close()
   } finally {
     rmSync(partialMigDir, { recursive: true, force: true })
@@ -165,8 +174,7 @@ function buildHarness(label: string): Harness {
 
 async function seedToyAgent(db: DbClient, name = 'rolling-agent'): Promise<string> {
   const id = ulid()
-  const { agents } = tablesOf(db)
-  await insertOne(db, agents, {
+  await agentFixture(db, {
     id,
     name,
     description: 'rolling-upgrade test stub',
@@ -192,18 +200,17 @@ async function seedToyTask(
     nodes: [{ id: 'a1', kind: 'agent-single', agentId, agentName: 'rolling-agent' }],
     edges: [],
   }
-  const { workflows, tasks } = tablesOf(db)
-  await insertOne(db, workflows, {
+  await workflowFixture(db, {
     id: workflowId,
     name: 'rolling-wf',
     definition: JSON.stringify(def),
   })
-  await insertOne(db, tasks, {
+  await taskFixture(db, {
     id: taskId,
     name: 'rolling-task',
     workflowId,
     workflowSnapshot: JSON.stringify(def),
-    repoPath: '/tmp/aw-rolling-repo-never-read',
+    repoPath: worktreePath,
     worktreePath,
     baseBranch: 'main',
     branch: `agent-workflow/${taskId}`,
@@ -635,9 +642,10 @@ describe('RFC-054 W1-6 — rolling upgrade from old home reaches HEAD + runs toy
       expect(countAppliedMigrations(dbPath)).toBe(target.idx + 1)
 
       // 3. Open with full migrations folder → drizzle applies the rest.
-      const db = openDb({ path: dbPath, migrationsFolder: MIGRATIONS })
+      const source = openFrozenEpoch1Db({ path: dbPath, migrationsFolder: MIGRATIONS })
+      let db: ReturnType<typeof openDb> | undefined
 
-      {
+      try {
         // 4. Post-upgrade verification: full journal applied.
         expect(countAppliedMigrations(dbPath)).toBe(HEAD_TOTAL_MIGRATIONS)
 
@@ -650,11 +658,74 @@ describe('RFC-054 W1-6 — rolling upgrade from old home reaches HEAD + runs toy
         expect(tableNames.has('memories')).toBe(true) // 0023
         expect(tableNames.has('lifecycle_alerts')).toBe(true) // 0028
 
+        // Freeze/replay remains historical evidence. Continue this SAME installation
+        // through the admitted conversion protocol before using any live builder.
+        source.$client.close()
+        const migration = composeLocalEpochSwitch({
+          appHome: h.home,
+          config: resolveConfigurationValue({}),
+          env: process.env,
+          head: persistenceHead(),
+          catalogArtifacts: persistencePostgresqlCatalogs(),
+        })
+        const plan = await migration.plan({})
+        expect(plan.plan.payload.blocks).toEqual([])
+        const switched = await migration.run({
+          operationId: plan.operationId,
+          approve: plan.plan.approvalDigest,
+        })
+        expect(switched.phase).toBe('activated')
+        expect((await migration.verify({ operationId: plan.operationId })).phase).toBe('verified')
+        expect((await migration.complete({ operationId: plan.operationId })).phase).toBe(
+          'completed',
+        )
+        const pointer = readGenerationPointerV2(join(h.home, 'database-generation.json')).payload
+        expect(pointer).toMatchObject({
+          schemaEpoch: 2,
+          role: 'converted',
+          operationId: plan.operationId,
+        })
+        expect(
+          classifyEpochInstallation(readEpochBootFacts({ appHome: h.home, provider: 'sqlite' }))
+            .kind,
+        ).toBe('epoch2')
+        if (pointer.database.kind !== 'sqlite-file')
+          throw new Error('rolling target must be SQLite')
+        db = openDb({
+          path: join(h.home, pointer.database.relativePath),
+          generationId: pointer.generationId,
+        })
+        expect(
+          db.$client
+            .query("SELECT schema_epoch FROM aw_meta_generations WHERE state='active'")
+            .all(),
+        ).toEqual([{ schema_epoch: 2 }])
         // 5. Toy task — proves the upgraded DB is operationally usable end-to-
         // end (writes accepted by current schema, scheduler can dispatch a
         // single-node DAG, runner integration with mock-opencode lands done).
         const worktreePath = join(h.home, 'wt')
         mkdirSync(worktreePath, { recursive: true })
+        // The real scheduler installs the workspace profile and records native
+        // checkpoints. Its fixture therefore needs an actual Git HEAD.
+        for (const args of [
+          ['init', '-q', '-b', 'main'],
+          [
+            '-c',
+            'user.name=rolling-test',
+            '-c',
+            'user.email=rolling@test.local',
+            '-c',
+            'commit.gpgsign=false',
+            'commit',
+            '--allow-empty',
+            '--no-verify',
+            '-qm',
+            'fixture',
+          ],
+        ]) {
+          const result = await runGit(worktreePath, args)
+          expect(result.exitCode, result.stderr).toBe(0)
+        }
         const agentId = await seedToyAgent(db)
         const { taskId } = await seedToyTask(db, worktreePath, agentId)
 
@@ -663,7 +734,7 @@ describe('RFC-054 W1-6 — rolling upgrade from old home reaches HEAD + runs toy
           () =>
             runTask({
               taskId,
-              db,
+              db: db as unknown as Parameters<typeof runTask>[0]['db'],
               appHome: h.home,
               binaryOverride: ['bun', 'run', MOCK_OPENCODE],
             }),
@@ -671,11 +742,13 @@ describe('RFC-054 W1-6 — rolling upgrade from old home reaches HEAD + runs toy
 
         const { tasks, nodeRuns } = tablesOf(db)
         const finalTask = (await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]
-        expect(finalTask?.status).toBe('done')
-
         const runs = await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
+        expect(finalTask?.status, JSON.stringify({ finalTask, runs })).toBe('done')
         const a1 = runs.find((r) => r.nodeId === 'a1')
         expect(a1?.status).toBe('done')
+      } finally {
+        db?.$client.close()
+        source.$client.close()
       }
     })
   }
@@ -740,7 +813,7 @@ describe('RFC-120 §18 — migration 0063 dispatched_at backfill', () => {
     {
       const sqlite = new Database(dbPath)
       sqlite.exec('PRAGMA foreign_keys = OFF;')
-      migrate(drizzle(sqlite, {}), { migrationsFolder: MIGRATIONS })
+      migrateFrozenSqlite(sqlite, { migrationsFolder: MIGRATIONS })
       sqlite.exec('PRAGMA foreign_keys = ON;')
       sqlite.close()
     }
@@ -809,7 +882,7 @@ describe('RFC-320 — migration 0207 profile selector and durable launch cleanup
             legacyPayload,
           ],
         )
-        migrate(drizzle(sqlite, {}), { migrationsFolder: MIGRATIONS })
+        migrateFrozenSqlite(sqlite, { migrationsFolder: MIGRATIONS })
 
         const columns = sqlite.query('PRAGMA table_info(oidc_providers)').all() as {
           name: string

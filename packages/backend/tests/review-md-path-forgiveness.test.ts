@@ -1,3 +1,7 @@
+import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
+import { rowToDocVersion, dispatchReviewNode } from '@/modules/collaboration/infrastructure/review'
+import { DatabaseCommittedReviewArtifactReader } from '@/modules/collaboration/infrastructure/committedReviewArtifactReader'
+import { createFileReviewArtifactContent } from '@/modules/collaboration/infrastructure/local/fileReviewArtifactContent'
 import { withO2Closure } from './helpers/o2Closure'
 // RFC-049 PR-B: integration test locking the post-forgiveness review-flow
 // contract. The original incident (linked in commit history) was: upstream
@@ -25,12 +29,12 @@ import {
 } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, beforeEach, expect, test } from 'bun:test'
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { ulid } from 'ulid'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { dispatchReviewNode } from '@/modules/collaboration/infrastructure/review'
+
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 
 import { describeEachProvider } from './helpers/eachProvider'
@@ -163,7 +167,11 @@ describeEachProvider(
       const { docVersions } = tablesOf(db)
       const dvs = await db.select().from(docVersions)
       expect(dvs.length).toBe(1)
-      const onDisk = readFileSync(join(appHome, dvs[0]!.bodyPath), 'utf8')
+      const onDisk = await new DatabaseCommittedReviewArtifactReader(
+        db,
+        createFileReviewArtifactContent(appHome),
+        epoch2RuntimeTestPorts(db).content,
+      ).read(rowToDocVersion(dvs[0]!).bodyPath)
       expect(onDisk).toBe(fileBody)
       expect(onDisk).not.toContain(absPath)
     })
@@ -189,7 +197,11 @@ describeEachProvider(
       const { docVersions } = tablesOf(db)
       const dvs = await db.select().from(docVersions)
       expect(dvs.length).toBe(1)
-      const onDisk = readFileSync(join(appHome, dvs[0]!.bodyPath), 'utf8')
+      const onDisk = await new DatabaseCommittedReviewArtifactReader(
+        db,
+        createFileReviewArtifactContent(appHome),
+        epoch2RuntimeTestPorts(db).content,
+      ).read(rowToDocVersion(dvs[0]!).bodyPath)
       // After PR-B the body is whatever the upstream port emitted — the path
       // string here, NOT the file contents at that path.
       expect(onDisk).toBe(absPath)

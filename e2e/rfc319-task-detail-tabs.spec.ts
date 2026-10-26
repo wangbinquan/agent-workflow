@@ -1,3 +1,4 @@
+import { liveSqlitePath } from './storage'
 // RFC-319 —— 任务详情页的各个页签与运维动作。
 //
 // 这一域的共同点是「任务已经跑完（或卡住）之后，人在详情页上还能做什么」：
@@ -861,60 +862,81 @@ test('RFC-319 TASK-X2: 尚未生成变更叙述时给的是「生成」按钮而
   page,
 }) => {
   const { taskId } = await runKindsTask('rfc319-taskx2-idle')
-  await primePage(page, matrixDaemon)
-
-  // 夹具自证：磁盘上没有叙述、接口给 404 ⇒ 界面现在必须是「按钮态」。
-  const before = await req(matrixDaemon, `/api/tasks/${taskId}/change-narrative`)
-  expect(before.status, '任务刚跑完就已经有变更叙述了 ⇒ 空态判据无从谈起').toBe(404)
-
-  await page.goto(`${matrixDaemon.baseUrl}/tasks/${taskId}?tab=changes`)
-  await expect(page.getByTestId('change-review'), '变更页签没有渲染出来').toBeVisible({
-    timeout: 60_000,
+  // A real model credential on the host must not turn the failure journey into
+  // a successful generation. Select an explicitly unavailable registered runtime.
+  const runtimeName = 'rfc319-taskx2-unavailable'
+  await api(matrixDaemon, '/api/runtimes', {
+    method: 'POST',
+    body: JSON.stringify({
+      name: runtimeName,
+      protocol: 'opencode',
+      binaryPath: join(matrixDaemon.home, 'no-narrative-runtime'),
+      probe: false,
+    }),
   })
-  // 判据钉在叙述卡片自己的容器里：`changesNarrativeRetry` 的英文就是裸的
-  // "Retry"，页面上另有 ErrorBanner 的同名按钮，不限定作用域会认错人。
-  const idle = page.locator('.changes__narrative--idle')
-  const generate = idle.getByRole('button', { name: 'Generate AI walkthrough' })
-  await expect(
-    generate,
-    '还没生成过变更叙述时既没有卡片也没有生成按钮 ⇒ 这条能力在界面上根本没有入口',
-  ).toBeVisible({ timeout: 60_000 })
-  await expect(
-    page.getByTestId('change-narrative'),
-    '什么都还没生成，却已经渲染出了叙述卡片',
-  ).toHaveCount(0)
+  await api(matrixDaemon, '/api/config', {
+    method: 'PUT',
+    body: JSON.stringify({ changeNarrativeRuntime: runtimeName }),
+  })
+  try {
+    await primePage(page, matrixDaemon)
 
-  // 按需生成：按钮必须真的打到服务端，而不是只在本地翻个 state。
-  const [triggered] = await Promise.all([
-    page.waitForResponse(
-      (res) =>
-        res.request().method() === 'POST' &&
-        new URL(res.url()).pathname === `/api/tasks/${taskId}/change-narrative`,
-    ),
-    generate.click(),
-  ])
-  expect(
-    triggered.ok(),
-    `生成请求被服务端拒了：${triggered.status()} ⇒ 按钮点得动但生成起不来`,
-  ).toBe(true)
+    // 夹具自证：磁盘上没有叙述、接口给 404 ⇒ 界面现在必须是「按钮态」。
+    const before = await req(matrixDaemon, `/api/tasks/${taskId}/change-narrative`)
+    expect(before.status, '任务刚跑完就已经有变更叙述了 ⇒ 空态判据无从谈起').toBe(404)
 
-  // 生成真的在守护进程里跑了一趟：e2e 的 runtime 是 stub，系统代理提示词不带
-  // RFC-200 信封 nonce，stub 必然 exit 3（skeleton.ts:137-143），于是这次生成
-  // 以 failed 收场。锁的是**接线**：界面轮询回结果并据此改写了自己——按钮文案
-  // 从「生成」变成「重试」，并且给出了失败原因。生成永远停在「按钮态」
-  // （请求没发出去 / 结果没轮询回来）时这条会红。
-  await expect(
-    idle.locator('.changes__narrative-error').first(),
-    '一次生成跑完了，卡片上却没有任何结果 ⇒ 结果没有被轮询回来，用户点了等于没点',
-  ).toHaveText('AI walkthrough generation failed.', { timeout: 60_000 })
-  await expect(
-    idle.getByRole('button', { name: 'Retry', exact: true }),
-    '失败之后按钮文案没有从「生成」改成「重试」⇒ 界面没有按结果改写自己',
-  ).toBeVisible()
-  await expect(
-    idle.getByRole('button', { name: 'Generate AI walkthrough' }),
-    '生成已经跑完并失败了，卡片却还停在最初的「生成」按钮上',
-  ).toHaveCount(0)
+    await page.goto(`${matrixDaemon.baseUrl}/tasks/${taskId}?tab=changes`)
+    await expect(page.getByTestId('change-review'), '变更页签没有渲染出来').toBeVisible({
+      timeout: 60_000,
+    })
+    // 判据钉在叙述卡片自己的容器里：`changesNarrativeRetry` 的英文就是裸的
+    // "Retry"，页面上另有 ErrorBanner 的同名按钮，不限定作用域会认错人。
+    const idle = page.locator('.changes__narrative--idle')
+    const generate = idle.getByRole('button', { name: 'Generate AI walkthrough' })
+    await expect(
+      generate,
+      '还没生成过变更叙述时既没有卡片也没有生成按钮 ⇒ 这条能力在界面上根本没有入口',
+    ).toBeVisible({ timeout: 60_000 })
+    await expect(
+      page.getByTestId('change-narrative'),
+      '什么都还没生成，却已经渲染出了叙述卡片',
+    ).toHaveCount(0)
+
+    // 按需生成：按钮必须真的打到服务端，而不是只在本地翻个 state。
+    const [triggered] = await Promise.all([
+      page.waitForResponse(
+        (res) =>
+          res.request().method() === 'POST' &&
+          new URL(res.url()).pathname === `/api/tasks/${taskId}/change-narrative`,
+      ),
+      generate.click(),
+    ])
+    expect(
+      triggered.ok(),
+      `生成请求被服务端拒了：${triggered.status()} ⇒ 按钮点得动但生成起不来`,
+    ).toBe(true)
+
+    // The daemon attempts generation with the selected unavailable runtime.
+    // The UI must poll the failure and replace Generate with Retry.
+    await expect(
+      idle.locator('.changes__narrative-error').first(),
+      '一次生成跑完了，卡片上却没有任何结果 ⇒ 结果没有被轮询回来，用户点了等于没点',
+    ).toHaveText('AI walkthrough generation failed.', { timeout: 60_000 })
+    await expect(
+      idle.getByRole('button', { name: 'Retry', exact: true }),
+      '失败之后按钮文案没有从「生成」改成「重试」⇒ 界面没有按结果改写自己',
+    ).toBeVisible()
+    await expect(
+      idle.getByRole('button', { name: 'Generate AI walkthrough' }),
+      '生成已经跑完并失败了，卡片却还停在最初的「生成」按钮上',
+    ).toHaveCount(0)
+  } finally {
+    await api(matrixDaemon, '/api/config', {
+      method: 'PUT',
+      body: JSON.stringify({ changeNarrativeRuntime: null }),
+    })
+    await api(matrixDaemon, `/api/runtimes/${runtimeName}`, { method: 'DELETE' })
+  }
 })
 
 test('RFC-319 TASK-X2: 已生成的变更叙述从磁盘缓存读回并完整渲染——总述、阅读顺序与每一步的理由都在，折叠开关真的把正文收走 @nightly', async ({
@@ -1271,7 +1293,7 @@ test('RFC-319 TASK-30: 被熔断隔离的任务在恢复事件区里如实标注
 
     // 熔断器把这个任务判成 crash-loop 之后的**真实持久形态**
     // （recoveryBreaker.ts:66-82：置 auto_recovery_suspended + 落一行 quarantine 审计）。
-    const dbFile = join(home, 'db.sqlite')
+    const dbFile = liveSqlitePath(home)
     runSqlite(
       dbFile,
       `${patchTaskFixtureSql({ id: taskId }, { autoRecoverySuspended: true, autoRecoveryAttempts: 9 })};

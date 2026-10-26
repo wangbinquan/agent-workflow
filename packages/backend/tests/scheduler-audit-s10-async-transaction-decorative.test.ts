@@ -29,6 +29,7 @@ import { drizzle } from 'drizzle-orm/bun-sqlite'
 import { integer, sqliteTable, text } from 'drizzle-orm/sqlite-core'
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { join, relative, resolve, sep } from 'node:path'
+import ts from 'typescript'
 
 // ---------------------------------------------------------------------------
 // 行为证明层
@@ -146,6 +147,106 @@ function withoutNeutralSessionTransactions(content: string): string {
   )
 }
 
+const backendConfig = ts.readConfigFile(resolve(BACKEND_SRC, '../tsconfig.json'), ts.sys.readFile)
+if (backendConfig.error)
+  throw new Error(ts.flattenDiagnosticMessageText(backendConfig.error.messageText, '\n'))
+const compilerOptions = ts.parseJsonConfigFileContent(
+  backendConfig.config,
+  ts.sys,
+  resolve(BACKEND_SRC, '..'),
+).options
+let sourceProgram: ts.Program | undefined
+
+/** T18 P3-B: the offline conversion connection awaits the complete body under
+ * BEGIN IMMEDIATE / COMMIT / ROLLBACK. Resolve that actual contract, including
+ * aliases and nested properties; a receiver name or local lookalike is no proof.
+ * Only erase the method token, so a raw transaction inside its body stays visible.
+ */
+function withoutConversionTargetTransactions(
+  source: ts.SourceFile,
+  checker: ts.TypeChecker,
+  content = source.text,
+): string {
+  const ranges: Array<{ start: number; end: number }> = []
+  const visit = (node: ts.Node): void => {
+    if (
+      ts.isCallExpression(node) &&
+      ts.isPropertyAccessExpression(node.expression) &&
+      node.expression.name.text === 'transaction'
+    ) {
+      const callee = node.expression
+      const type = checker.getTypeAtLocation(callee.expression)
+      const declarations = checker.getPropertyOfType(type, 'transaction')?.declarations ?? []
+      if (
+        !(type.flags & (ts.TypeFlags.Any | ts.TypeFlags.Unknown)) &&
+        declarations.length > 0 &&
+        declarations.every(
+          (declaration) =>
+            resolve(declaration.getSourceFile().fileName) ===
+              resolve(BACKEND_SRC, 'platform/persistence/migration/run/types.ts') &&
+            ts.isInterfaceDeclaration(declaration.parent) &&
+            declaration.parent.name.text === 'ConversionTargetConnection',
+        )
+      )
+        ranges.push({ start: callee.name.getStart(source), end: callee.name.getEnd() })
+    }
+    ts.forEachChild(node, visit)
+  }
+  visit(source)
+  for (const { start, end } of ranges.sort((a, b) => b.start - a.start))
+    if (end <= content.length)
+      content = content.slice(0, start) + ' '.repeat(end - start) + content.slice(end)
+  return content
+}
+
+function transactionSource(file: string, content: string): string {
+  if (!/\.transaction\s*\(/.test(content)) return content
+  sourceProgram ??= ts.createProgram(walkTsFiles(BACKEND_SRC), compilerOptions)
+  const source = sourceProgram.getSourceFile(file)
+  if (!source) throw new Error(`S-10 transaction source missing: ${file}`)
+  return withoutNeutralSessionTransactions(
+    withoutConversionTargetTransactions(source, sourceProgram.getTypeChecker(), content),
+  )
+}
+
+test('S-10 resolves the real async target contract while retaining raw and unknown receivers', () => {
+  const file = resolve(BACKEND_SRC, '__s10_transaction_fixture.ts')
+  const content = `
+    import type { ConversionTargetConnection as Target } from '@/platform/persistence/migration/run/types'
+    import type { Database } from 'bun:sqlite'
+    declare const target: Target
+    declare const nested: { target: Target }
+    declare const raw: Database
+    declare const unresolved: any
+    interface ConversionTargetConnection { transaction(body: () => Promise<void>): void }
+    declare const lookalike: ConversionTargetConnection
+    declare const mixed: Target | Database
+    const alias = target
+    target.transaction(async () => { raw.transaction(async () => {}) })
+    nested.target.transaction(async () => {})
+    alias.transaction(async () => {})
+    unresolved.transaction(async () => {})
+    lookalike.transaction(async () => {})
+    mixed.transaction(async () => {})
+    function shadow(target: Database) { target.transaction(async () => {}) }
+  `
+  const source = ts.createSourceFile(file, content, ts.ScriptTarget.Latest, true)
+  const host = ts.createCompilerHost(compilerOptions)
+  const readSource = host.getSourceFile.bind(host)
+  host.getSourceFile = (name, language, onError, createNew) =>
+    name === file ? source : readSource(name, language, onError, createNew)
+  const program = ts.createProgram([file], compilerOptions, host)
+  const filtered = withoutConversionTargetTransactions(source, program.getTypeChecker())
+  expect(countNonCommentMatches(filtered, /\.transaction\s*\(\s*async\b/g)).toBe(5)
+  expect(filtered).toContain('raw.transaction(async')
+  expect(filtered).toContain('unresolved.transaction(async')
+  expect(filtered).toContain('lookalike.transaction(async')
+  expect(filtered).toContain('mixed.transaction(async')
+  expect(filtered).toContain('function shadow(target: Database) { target.transaction(async')
+  expect(filtered).not.toContain('nested.target.transaction(')
+  expect(filtered).not.toContain('alias.transaction(')
+})
+
 /**
  * This guard is intentionally about Bun's synchronous SQLite transaction
  * wrapper. PostgreSQL transactions are asynchronous by contract, so counting
@@ -187,7 +288,7 @@ describe('S-10 guard: `.transaction(async` inventory in packages/backend/src', (
       const sqliteSource = sqliteTransactionSource(rel, content)
       if (sqliteSource === null) continue
       const count = countNonCommentMatches(
-        withoutNeutralSessionTransactions(sqliteSource),
+        transactionSource(file, sqliteSource),
         /\.transaction\s*\(\s*async\b/g,
       )
       if (count > 0) {
@@ -247,7 +348,7 @@ describe('RFC-317 T37（CC-04）—— 绕过 dbTxSync 的原始事务站点必�
       const sqliteSource = sqliteTransactionSource(rel, content)
       if (sqliteSource === null) continue
       const count = countNonCommentMatches(
-        withoutNeutralSessionTransactions(sqliteSource),
+        transactionSource(file, sqliteSource),
         /\.transaction\s*\(/g,
       )
       if (count > 0) actual[rel] = count

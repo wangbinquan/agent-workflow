@@ -1,3 +1,4 @@
+import { databaseContentText } from '@/platform/content/infrastructure/contentStore'
 import { withO2Closure } from './helpers/o2Closure'
 // RFC-359 W1-T2c（F-H2-1 之三）—— 评审决定命令在两个引擎上各跑一遍。
 //
@@ -48,7 +49,15 @@ const outputsOf = (db: PersistenceDb, runId: string) => {
 }
 const commentsOf = (db: PersistenceDb, docVersionId: string) => {
   const { reviewComments } = tablesOf(db)
-  return db.select().from(reviewComments).where(eq(reviewComments.docVersionId, docVersionId))
+  return db
+    .select()
+    .from(reviewComments)
+    .where(eq(reviewComments.docVersionId, docVersionId))
+    .then((rows) =>
+      Promise.all(
+        rows.map(async (row) => ({ ...row, commentText: await databaseContentText(db, row) })),
+      ),
+    )
 }
 const decisionOps = (db: PersistenceDb, taskId: string) => {
   const { collaborationGateOperations } = tablesOf(db)
@@ -140,6 +149,36 @@ describeEachProvider('RFC-359 T2c —— 评审决定命令（reviewDecisions）
     )
     expect(events).toHaveLength(1)
     expect(JSON.parse(events[0]!.payloadJson).payload.gateStatus).toBe('committed')
+  })
+
+  test('a large existing comment is recognized as a duplicate in decision submission', async () => {
+    const db = harness.db
+    round = await seedReviewRound(db)
+    const text = 'same large comment '.repeat(5000)
+    const added = await addReviewComment({
+      db,
+      appHome: round.appHome,
+      nodeRunId: round.reviewRunId,
+      anchorRequest: { quote: 'body' },
+      commentText: text,
+      author: REVIEW_OWNER,
+      authorRole: 'owner',
+    })
+    const command = createReviewDecisionCommand(withO2Closure({ db, appHome: round.appHome }))
+    const result = await command.submit({
+      actor,
+      authorRole: 'owner',
+      nodeRunId: round.reviewRunId,
+      decision: 'approved',
+      expectedReviewIteration: 0,
+      comments: [{ commentText: text, docVersionId: added.docVersionId, anchor: added.anchor }],
+    })
+    expect(result.commentsAdded).toBe(0)
+    expect(result.commentsSkippedAsDuplicate).toBe(1)
+    expect(await commentsOf(db, added.docVersionId)).toHaveLength(0)
+    const archived = JSON.parse((await docById(db, added.docVersionId)).commentsJson!)
+    expect(archived).toHaveLength(1)
+    expect(archived[0].commentText).toBe(text)
   })
 
   test('reject + 批量评论：上游 run 作废并铸 review-reject 重跑，评审 run 回 pending 且 iteration+1，评论归档进 doc_version', async () => {

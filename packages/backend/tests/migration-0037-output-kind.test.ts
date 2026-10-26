@@ -5,14 +5,13 @@
 // declared kind stay NULL → the Outputs tab renders them as plain text with no
 // download button). The primary key (node_run_id, port_name) is unchanged.
 
-import { rawRows } from '@/platform/persistence/queryHelpers'
+import { createFrozenEpoch1Db, FROZEN_MIGRATIONS } from './migration-freeze'
+import { frozenRawRows as rawRows } from './migration-freeze'
 import { describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
 import { sql } from 'drizzle-orm'
 
-import { createInMemoryDb } from '../src/db/client'
-
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+const MIGRATIONS = resolve(FROZEN_MIGRATIONS)
 
 interface ColumnInfo {
   cid: number
@@ -25,7 +24,7 @@ interface ColumnInfo {
 
 describe('RFC-072 — migration 0037 node_run_outputs.kind', () => {
   test('kind column exists and is a nullable TEXT column', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createFrozenEpoch1Db(MIGRATIONS)
     const cols = (await rawRows(db, sql`PRAGMA table_info(node_run_outputs)`)) as ColumnInfo[]
     const kindCol = cols.find((c) => c.name === 'kind')
     expect(kindCol).toBeDefined()
@@ -35,7 +34,7 @@ describe('RFC-072 — migration 0037 node_run_outputs.kind', () => {
   })
 
   test('primary key remains (node_run_id, port_name); content stays NOT NULL', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createFrozenEpoch1Db(MIGRATIONS)
     const cols = (await rawRows(db, sql`PRAGMA table_info(node_run_outputs)`)) as ColumnInfo[]
     const pkCols = cols.filter((c) => c.pk > 0).map((c) => c.name)
     expect(new Set(pkCols)).toEqual(new Set(['node_run_id', 'port_name']))

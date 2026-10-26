@@ -44,7 +44,6 @@ import { isProcessAlive, STALE_RUN_PID_MAX_AGE_MS } from '../src/util/process'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const STUBBORN = resolve(import.meta.dir, 'fixtures', 'stubborn-opencode.ts')
 
 // RFC-280 T4 (2026-08-11): TIMEOUT_MS 500 → 1500. The node timeout doubles as
@@ -145,7 +144,7 @@ async function buildHarness(taskStatus: 'running' | 'failed' = 'running'): Promi
   const appHome = mkdtempSync(join(tmpdir(), 'aw-rfc098-wp8-'))
   const worktreePath = join(appHome, 'worktree-fake')
   mkdirSync(worktreePath, { recursive: true })
-  const db = createInMemoryDb(MIGRATIONS)
+  const db = createInMemoryDb()
   const workflowId = ulid()
   const taskId = ulid()
   await workflowFixture(db, {

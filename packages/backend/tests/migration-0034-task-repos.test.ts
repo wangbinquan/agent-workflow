@@ -11,19 +11,20 @@
 //      gets a single task_repos row with repo_index=0 + worktree_dir_name=''
 //      mirroring tasks.* columns.
 
-import { rawRows, rawExec } from '@/platform/persistence/queryHelpers'
+import { createFrozenEpoch1Db, openFrozenEpoch1Db, FROZEN_MIGRATIONS } from './migration-freeze'
+import { frozenRawRows as rawRows } from './migration-freeze'
+import { rawExec } from '@/platform/persistence/queryHelpers'
 import { describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
 import { sql } from 'drizzle-orm'
 
-import { createInMemoryDb, openDb } from '../src/db/client'
 import { join } from 'node:path'
 import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { Database } from 'bun:sqlite'
 import { readFileSync, readdirSync } from 'node:fs'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+const MIGRATIONS = resolve(FROZEN_MIGRATIONS)
 
 interface SqlMaster {
   type: string
@@ -34,7 +35,7 @@ interface SqlMaster {
 
 describe('RFC-066 — migration 0034 task_repos', () => {
   test('task_repos table + two indexes exist with expected DDL shape', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createFrozenEpoch1Db(MIGRATIONS)
     const tbl = (await rawRows(
       db,
       sql`SELECT type, name, tbl_name, sql FROM sqlite_master WHERE name='task_repos'`,
@@ -72,7 +73,7 @@ describe('RFC-066 — migration 0034 task_repos', () => {
   })
 
   test('tasks.repo_count column exists (NOT NULL DEFAULT 1)', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createFrozenEpoch1Db(MIGRATIONS)
     const cols = (await rawRows(db, sql`PRAGMA table_info(tasks)`)) as Array<{
       name: string
       notnull: number
@@ -86,7 +87,7 @@ describe('RFC-066 — migration 0034 task_repos', () => {
   })
 
   test('node_runs.pre_snapshot_repos_json column exists (nullable TEXT)', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createFrozenEpoch1Db(MIGRATIONS)
     const cols = (await rawRows(db, sql`PRAGMA table_info(node_runs)`)) as Array<{
       name: string
       notnull: number
@@ -121,7 +122,7 @@ describe('RFC-066 — migration 0034 task_repos', () => {
 
     // Apply up to 0033 (idx=32, RFC-067 head pre-RFC-066).
     const dbPath = join(home, 'db.sqlite')
-    const intermediate = openDb({ path: dbPath, migrationsFolder: partialMigDir })
+    const intermediate = openFrozenEpoch1Db({ path: dbPath, migrationsFolder: partialMigDir })
     intermediate.$client.close()
 
     // Seed a legacy task row using raw SQLite (no schema awareness).
@@ -140,7 +141,7 @@ describe('RFC-066 — migration 0034 task_repos', () => {
     raw.close()
 
     // Apply the rest (just 0034) using the full migrations folder.
-    const final = openDb({ path: dbPath, migrationsFolder: MIGRATIONS })
+    const final = openFrozenEpoch1Db({ path: dbPath, migrationsFolder: MIGRATIONS })
     const rows = (await rawRows(
       final,
       sql`SELECT * FROM task_repos WHERE task_id = 't-legacy'`,
@@ -179,7 +180,7 @@ describe('RFC-066 — migration 0034 task_repos', () => {
   })
 
   test('cascade delete: deleting a task removes its task_repos rows', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createFrozenEpoch1Db(MIGRATIONS)
     await rawExec(db, sql`INSERT INTO workflows (id, name, definition) VALUES ('wf-1', 'f', '{}')`)
     await rawExec(
       db,

@@ -1,4 +1,4 @@
-// RFC-395 II-a: physical-row oracles retain epoch-1 bytes and defaults without target projections.
+// Native target roots are returned without a compatibility projection.
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { fixturePredicate, type FixtureHandle } from './core'
 

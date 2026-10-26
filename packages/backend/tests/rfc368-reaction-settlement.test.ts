@@ -9,6 +9,16 @@
 //        停不掉也不把终止本身报成失败。
 // 另锁 D 侧的产物存档：同一段正文只存一行（AC-9），sink 按工作区根改写路径（R2）。
 
+// RFC-368 T10 / T12 / T14 —— Reaction 在新合同下的结算、round 级重试与取消语义。
+//
+//   T10：执行失败后的 round 级重试——纠错反馈裁剪后按内容地址存档、派发时只带 ref；预算收敛后
+//        的 plan **写回 round**（请求 hash 只对 round 上冻结的 plan 算，写回后同一 ordinal 的
+//        重放才稳定，设计门 P1-4）；派发行重置成「下一个 ordinal 待派发」。反馈写失败降级成
+//        不带反馈，不阻塞重试（偏离 D8）。
+//   T12：按 `{operation, executionRef}` 查快照；诊断 ref 解回正文、不重复 errorCode 前缀。
+//   T14（G7）：取消 ⇒ `stopped` ⇒ 结算但**不消耗重试预算**；用户终止案例时顺手停掉在跑的 agent，
+//        停不掉也不把终止本身报成失败。
+// 另锁 D 侧的产物存档：同一段正文只存一行（AC-9），sink 按工作区根改写路径（R2）。
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'

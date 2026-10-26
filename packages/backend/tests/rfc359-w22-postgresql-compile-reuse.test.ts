@@ -1,3 +1,4 @@
+import '@/bootstrap/persistenceSchema'
 // RFC-359 W22 — SQL text reuse must preserve the original token projection,
 // fresh Drizzle bindings and every actual client dispatch. These are pure
 // compilation checks; the client probe stops at the driver without executing SQL.

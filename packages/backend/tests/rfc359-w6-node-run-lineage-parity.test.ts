@@ -1,3 +1,5 @@
+import { taskAggregateWrite } from '@/modules/task-execution/infrastructure/taskDefinitionWriteParticipant'
+import { withTargetMintIdentity } from './helpers/rfc395Mint'
 // RFC-359 W6 —— node_run 的 lineage 槽路径：两个引擎必须落出同一行。
 //
 // # 这条测试锁的是什么回归
@@ -34,7 +36,6 @@
 //    「触发器补了」在 SQLite 上同形，①就证明不了任何事）。
 //  ④【继承优先】显式传进来的路径不被覆写。
 
-import { deriveNodeRunRole } from '@/modules/task-execution/public/types'
 import { readNodeRunFixtures, taskFixture, workflowFixture } from './helpers/model'
 import { rawRows } from '@/platform/persistence/queryHelpers'
 import { afterAll, expect, test } from 'bun:test'
@@ -82,8 +83,10 @@ describeEachProvider('RFC-359 W6 —— node_run lineage 的双引擎一致', (h
 
   const mint = async (inputs: readonly NodeRunMintInput[]): Promise<void> => {
     await databaseSessionFor(harness.db).transaction(async (tx) => {
+      await taskAggregateWrite.lockTaskAggregateRoot(tx, 'tk-lin')
+
       const participant = createNodeRunMintParticipantInTx(tx)
-      for (const input of inputs) await participant.mint(input)
+      for (const input of inputs) await participant.mint(withTargetMintIdentity(input))
     })
   }
 
@@ -91,14 +94,16 @@ describeEachProvider('RFC-359 W6 —— node_run lineage 的双引擎一致', (h
     await seedTask()
     await mint([
       {
-        ...deriveNodeRunRole({ nodeId: 'n1', rerunCause: 'initial' }),
+        role: 'node-attempt',
+        syntheticKind: null,
         taskId: 'tk-lin',
         nodeId: 'n1',
         status: 'pending',
         cause: 'initial',
       },
       {
-        ...deriveNodeRunRole({ nodeId: 'n2', rerunCause: 'initial' }),
+        role: 'node-attempt',
+        syntheticKind: null,
         taskId: 'tk-lin',
         nodeId: 'n2',
         status: 'pending',
@@ -106,7 +111,8 @@ describeEachProvider('RFC-359 W6 —— node_run lineage 的双引擎一致', (h
         iteration: 2,
       },
       {
-        ...deriveNodeRunRole({ nodeId: 'n3', rerunCause: 'initial' }),
+        role: 'node-attempt',
+        syntheticKind: null,
         taskId: 'tk-lin',
         nodeId: 'n3',
         status: 'pending',
@@ -152,7 +158,8 @@ describeEachProvider('RFC-359 W6 —— node_run lineage 的双引擎一致', (h
     ])
     await mint([
       {
-        ...deriveNodeRunRole({ nodeId: 'n9', rerunCause: 'initial' }),
+        role: 'node-attempt',
+        syntheticKind: null,
         taskId: 'tk-lin',
         nodeId: 'n9',
         status: 'pending',
@@ -173,12 +180,13 @@ describeEachProvider('RFC-359 W6 —— node_run lineage 的双引擎一致', (h
   test('③ SQLite 上那个补齐触发器确实已经删掉了（否则①证明不了任何事）', async () => {
     if (harness.capabilities.provider !== 'sqlite') {
       // RFC-371 v2 retired every observation capture trigger and function (PostgreSQL 0032);
-      // no user trigger remains in the schema, so none can supply the retired lineage default.
+      // no user trigger remains on node_runs, so none can supply the retired lineage default.
+      // (RFC-395 row-rule triggers exist only on their own append-only / immutable tables.)
       const rows = await rawRows<{ n: number }>(
         harness.db,
         sql`select count(*) as n from pg_trigger t join pg_class c on c.oid = t.tgrelid
             join pg_namespace ns on ns.oid = c.relnamespace
-            where ns.nspname = 'agent_workflow' and not t.tgisinternal`,
+            where ns.nspname = 'agent_workflow' and c.relname = 'node_runs' and not t.tgisinternal`,
         { n: 'int' },
       )
       expect(rows[0]?.n).toBe(0)

@@ -1,8 +1,8 @@
+export { selectNodeRunPromptOperations } from '../composition/nodeRunPrompts'
 export {
   selectPortArtifactOperations,
   selectPortArtifactReader,
 } from '../composition/portArtifacts'
-export { selectNodeRunPromptOperations } from '../composition/nodeRunPrompts'
 // RFC-370: provider drive bindings belong to composition; bootstrap imports them there.
 // RFC-303 — the only cross-context task-control surface.
 // It deliberately accepts a source binding, never caller-selected task ids.
@@ -10,18 +10,18 @@ import type {
   CodeHostEffectObserverHandle,
   DurableCodeHostEffectObserver,
 } from '../application/codeHostEffectObserver'
+import { createCodeHostEffectAttemptObserver as createCodeHostEffectAttemptObserverInternal } from '../application/codeHostEffectObserver'
+import { createLocalEffectAttemptObserver as createLocalEffectAttemptObserverInternal } from '../application/localEffectObserver'
 import {
   DEFAULT_OWNERSHIP_HEARTBEAT_MS,
   DEFAULT_OWNERSHIP_LEASE_MS,
   taskExecutionModule as taskExecutionModuleInternal,
 } from '../composition'
-import { createCodeHostEffectAttemptObserver as createCodeHostEffectAttemptObserverInternal } from '../application/codeHostEffectObserver'
-import { createLocalEffectAttemptObserver as createLocalEffectAttemptObserverInternal } from '../application/localEffectObserver'
-import { createProcessEffectAttemptObserver as createProcessEffectAttemptObserverInternal } from '../composition/processEffectObserver'
 import {
   fenceTaskWrite as fenceTaskWriteInternal,
   withTaskExecutionWrite as withTaskExecutionWriteInternal,
 } from '../composition/ownedTaskMutation'
+import { createProcessEffectAttemptObserver as createProcessEffectAttemptObserverInternal } from '../composition/processEffectObserver'
 import {
   assertTaskExecutionContext as assertTaskExecutionContextInternal,
   createTaskExecutionContext as createTaskExecutionContextInternal,
@@ -32,13 +32,23 @@ import {
 // connection — that is every PostgreSQL daemon context — so a gate opened from
 // the ambient context fenced as an ownerless write and the task's own claimed
 // owner refused it.
-import { currentTaskExecutionContext as currentTaskExecutionContextInternal } from '../application/taskExecutionContext'
-import { TaskExecutionError as TaskExecutionErrorInternal } from '../application/taskExecutionError'
-import { GateContinuationEffectStep as GateContinuationEffectStepInternal } from '../application/drive/gateContinuationEffectStep'
 import type {
   AcceptHumanGateDecisionInput,
   AcceptedHumanGateDecision,
 } from '../application/acceptHumanGateDecision'
+import { createGateContinuationDriver as createGateContinuationDriverInternal } from '../application/drive/gateContinuationDriver'
+import { GateContinuationEffectStep as GateContinuationEffectStepInternal } from '../application/drive/gateContinuationEffectStep'
+import type { SchedulerDriverPort } from '../application/ports/taskExecutionTopology'
+import type {
+  RecoverableTerminalMaintenanceClaim,
+  TerminalMaintenanceStore as TerminalMaintenanceStoreInternal,
+} from '../application/ports/terminalMaintenanceStore'
+import { currentTaskExecutionContext as currentTaskExecutionContextInternal } from '../application/taskExecutionContext'
+import { TaskExecutionError as TaskExecutionErrorInternal } from '../application/taskExecutionError'
+import {
+  assertWorktreePresentForResume as assertWorktreePresentForResumeInternal,
+  composeWorktreeResumePreflight as composeWorktreeResumePreflightInternal,
+} from '../application/worktreeResumePreflight'
 import {
   buildCodeHostRecoveryDescriptor as buildCodeHostRecoveryDescriptorInternal,
   classifyCodeHostProbeResponse as classifyCodeHostProbeResponseInternal,
@@ -51,15 +61,6 @@ import {
   requestHash as taskExecutionRequestHashInternal,
 } from '../domain/executionEffect'
 import {
-  builtinWorkflowSyncPreview as builtinWorkflowSyncPreviewInternal,
-  workflowSyncGateReason as workflowSyncGateReasonInternal,
-} from '../domain/workflowSyncPreview'
-import {
-  assertWorktreePresentForResume as assertWorktreePresentForResumeInternal,
-  composeWorktreeResumePreflight as composeWorktreeResumePreflightInternal,
-} from '../application/worktreeResumePreflight'
-import { createGateContinuationDriver as createGateContinuationDriverInternal } from '../application/drive/gateContinuationDriver'
-import {
   canonicalJson as canonicalTaskExecutionJsonInternal,
   decodeLineageSlotPath as decodeLineageSlotPathInternal,
   encodeLineageSlotPath as encodeLineageSlotPathInternal,
@@ -68,47 +69,48 @@ import {
   type TaskExecutionIntentSource,
 } from '../domain/executionIntent'
 import {
-  createExclusiveDaemonLockProof as createExclusiveDaemonLockProofInternal,
-  createVerifiedOutcomeUnknownClosure as createVerifiedOutcomeUnknownClosureInternal,
-  createVerifiedStopProof as createVerifiedStopProofInternal,
-  exactOwnerMatches as exactOwnerMatchesInternal,
-  ownershipTokenKey as ownershipTokenKeyInternal,
-} from '../domain/ownership'
-import {
   humanGateNodeProjectionFence as humanGateNodeProjectionFenceInternal,
   isLegacyTaskGateContinuationPayload as isLegacyTaskGateContinuationPayloadInternal,
   type HumanGateContinuationLineage,
   type HumanGateNodeProjectionFence,
   type HumanGateWorkspaceRollbackRef,
 } from '../domain/humanGateContinuation'
-import { humanGateNodeProjectionMember as humanGateNodeProjectionMemberInternal } from '../infrastructure/humanGateProjection'
+import {
+  createExclusiveDaemonLockProof as createExclusiveDaemonLockProofInternal,
+  createVerifiedOutcomeUnknownClosure as createVerifiedOutcomeUnknownClosureInternal,
+  createVerifiedStopProof as createVerifiedStopProofInternal,
+  exactOwnerMatches as exactOwnerMatchesInternal,
+  ownershipTokenKey as ownershipTokenKeyInternal,
+} from '../domain/ownership'
+import type { TaskNodeChangeV1 } from '../domain/taskLifecycleCommittedEvent'
 import type {
   MaintenanceMemberSnapshot,
   TerminalMaintenanceState,
 } from '../domain/terminalMaintenance'
-import type { TaskNodeChangeV1 } from '../domain/taskLifecycleCommittedEvent'
-import type { RecoverableTerminalMaintenanceClaim } from '../application/ports/terminalMaintenanceStore'
-import type { TerminalMaintenanceStore as TerminalMaintenanceStoreInternal } from '../application/ports/terminalMaintenanceStore'
-import { DrizzleTerminalMaintenancePersistence } from '../infrastructure/terminalMaintenancePersistence'
+import {
+  builtinWorkflowSyncPreview as builtinWorkflowSyncPreviewInternal,
+  workflowSyncGateReason as workflowSyncGateReasonInternal,
+} from '../domain/workflowSyncPreview'
+import { humanGateNodeProjectionMember as humanGateNodeProjectionMemberInternal } from '../infrastructure/humanGateProjection'
 import {
   assertTerminalMaintenanceClaimTx as assertTerminalMaintenanceClaimTxInternal,
   transitionTerminalMaintenanceClaimTx as transitionTerminalMaintenanceClaimTxInternal,
 } from '../infrastructure/terminalMaintenanceClaim'
-import type { SchedulerDriverPort } from '../application/ports/taskExecutionTopology'
+import { DrizzleTerminalMaintenancePersistence } from '../infrastructure/terminalMaintenancePersistence'
 // RFC-359：bun:sqlite 专属的三个**同步**参与者（`appendTask{Created,LifecycleTransition,
 // NodeStatuses}CommittedEventTx`）随最后一个同步调用方退役，`taskLifecycleEventParticipant.ts`
 // 整文件删除。事件形状本来就只有一份，在 `taskLifecycleCommittedEvents.ts`；两个引擎共用的中立
 // 异步形态从这里出去。
+import { setNodeRunStatusTx as setNodeRunStatusInTransactionInternal } from '../infrastructure/nodeRunLifecycleTransition'
 import {
   appendTaskCreatedCommittedEvent as appendTaskCreatedCommittedEventInternal,
   type TaskCommittedEventIdentity,
 } from '../infrastructure/taskLifecycleCommittedEvents'
-import { setNodeRunStatusTx as setNodeRunStatusInTransactionInternal } from '../infrastructure/nodeRunLifecycleTransition'
 // RFC-359 —— 下面三个是上面那批同步原子的**中立异步孪生**（`PersistenceTx` 上的形态）。
 // 生命周期写事务从 bun:sqlite 专属同步面搬走之后，`onTransitionTx` 回调里的参与者都要用这一侧。
-import { revokeExactOwnerInTx as revokeExactOwnerInTransactionInternal } from '../infrastructure/taskOwnershipPersistence'
-import { terminalizeTaskExecutionIntentsUncheckedInTx as terminalizeTaskExecutionIntentsInTransactionInternal } from '../infrastructure/taskExecutionIntentTerminalPersistence'
 import { submitTaskContinuation as submitTaskContinuationInTransactionInternal } from '../infrastructure/taskContinuationAdmission'
+import { terminalizeTaskExecutionIntentsUncheckedInTx as terminalizeTaskExecutionIntentsInTransactionInternal } from '../infrastructure/taskExecutionIntentTerminalPersistence'
+import { revokeExactOwnerInTx as revokeExactOwnerInTransactionInternal } from '../infrastructure/taskOwnershipPersistence'
 
 declare const workerIdentityBrand: unique symbol
 declare const ownershipTokenBrand: unique symbol
@@ -174,17 +176,17 @@ export type {
   AcceptedHumanGateDecision,
   CodeHostProbeOutcome,
   CodeHostRecoveryDescriptor,
-  LineageSlot,
-  MaintenanceMemberSnapshot,
-  RecoverableTerminalMaintenanceClaim,
-  TaskExecutionIntentKind,
-  TaskExecutionIntentSource,
-  TerminalMaintenanceState,
   HumanGateContinuationLineage,
   HumanGateNodeProjectionFence,
   HumanGateWorkspaceRollbackRef,
+  LineageSlot,
+  MaintenanceMemberSnapshot,
+  RecoverableTerminalMaintenanceClaim,
   TaskCommittedEventIdentity,
+  TaskExecutionIntentKind,
+  TaskExecutionIntentSource,
   TaskNodeChangeV1,
+  TerminalMaintenanceState,
 }
 
 export type {
@@ -197,12 +199,12 @@ export type {
   VisibleTaskIdsInput,
 } from '../application/ports/taskAuthorization'
 
+export type { TaskRuntimeSessionLeaseRepairOperations } from '../application/ports/runtimeSessionLeaseOperations'
 export type {
   TaskBootOrphanOperations,
   TaskPeriodicRecoveryOperations,
   TaskRecoveryOperations,
 } from '../application/ports/taskRecoveryOperations'
-export type { TaskRuntimeSessionLeaseRepairOperations } from '../application/ports/runtimeSessionLeaseOperations'
 
 export interface TaskDecisionParticipantInTx {
   acceptGateDecisionTx(input: AcceptHumanGateDecisionInput): AcceptedHumanGateDecision
@@ -372,60 +374,57 @@ export { discardNodeIso } from '../infrastructure/isolationCleanup'
 // Exact existing isolated-run assembly; factory and workspace views stay private.
 export {
   createIsoUnderLock,
+  markMergeFailed,
+  mergeBackAndSettle,
   persistIsoBase,
   persistIsoNodeTree,
-  mergeBackAndSettle,
-  markMergeFailed,
 } from '../infrastructure/isolatedAgentRun'
 export type {
   IsolatedAgentRunBinding,
-  WriteSemLike,
   MergeSettleOutcome,
+  WriteSemLike,
 } from '../infrastructure/isolatedAgentRun'
 
 /** The execution demand owns the joint invocation consumed by system runs. */
 export type { AgentInvocationBinding } from '../application/ports/agentInvocation'
 export type {
-  SystemAgentRunFamily,
-  SystemAgentRunRequest,
-} from '../application/ports/systemAgentRunFamily'
-export type { PreparedSystemAgentRunResult } from '../application/ports/systemAgentRun'
-export type { SystemAgentObservationRun } from '../application/ports/systemAgentObservation'
-export { classifyMissingEnvelope } from '../application/systemAgentRun'
-export type {
   RuntimeSmokeInvocationFamily,
   RuntimeSmokeRunFamily,
   RuntimeSmokeRunRequest,
 } from '../application/ports/runtimeSmoke'
+export type { SystemAgentObservationRun } from '../application/ports/systemAgentObservation'
+export type { PreparedSystemAgentRunResult } from '../application/ports/systemAgentRun'
+export type {
+  SystemAgentRunFamily,
+  SystemAgentRunRequest,
+} from '../application/ports/systemAgentRunFamily'
+export { classifyMissingEnvelope } from '../application/systemAgentRun'
 
 /** RFC-370 v3 V5: Task Execution's hosted restore normalization participant. */
+export type { SelectionChange, SelectionRevision } from '../application/ports/runSelection'
 export { createHostedRestoreTaskNormalization } from '../infrastructure/hostedRestoreNormalization'
-export type {
-  RunSelectionParticipantInTx,
-  SelectionChange,
-  SelectionRevision,
-} from '../application/ports/runSelection'
-export { createRunSelectionParticipantInTx } from '../infrastructure/runSelection/oracle/participant'
 
 export type {
-  ConsumedInputsWrite,
   ConsumedInputsParticipantInTx,
+  ConsumedInputsWrite,
 } from '../application/ports/consumedInputs'
 export {
-  prepareConsumedInputs,
   createConsumedInputsParticipantInTx,
+  prepareConsumedInputs,
 } from '../infrastructure/consumedInputsParticipant'
 
 export { reselectRunInTx } from '../infrastructure/runSelection/selectionWrite'
 
-export { createHumanGatePersistenceParticipantInTx } from '../infrastructure/humanGatePersistenceParticipant'
 export type { HumanGatePersistenceParticipantInTx } from '../application/ports/humanGatePersistenceParticipant'
+export { createHumanGatePersistenceParticipantInTx } from '../infrastructure/humanGatePersistenceParticipant'
 
-export { createTaskClarifyDirectivePersistence } from '../infrastructure/taskClarifyDirectivePersistence'
 export type { TaskClarifyDirectivePersistence } from '../application/ports/taskClarifyDirectivePersistence'
+export { createTaskClarifyDirectivePersistence } from '../infrastructure/taskClarifyDirectivePersistence'
 
-export { createTaskDeletionParticipantInTx } from '../infrastructure/taskDeletionParticipant'
 export type { TaskDeletionParticipant } from '../application/ports/taskDeletion'
+export { createTaskDeletionParticipantInTx } from '../infrastructure/taskDeletionParticipant'
 
-export { createTaskPreparationParticipantInTx } from '../infrastructure/taskPreparationParticipant'
 export type { TaskPreparationParticipant } from '../application/ports/taskPreparation'
+export { createTaskPreparationParticipantInTx } from '../infrastructure/taskPreparationParticipant'
+
+export { TaskAggregateCasMiss } from '../infrastructure/taskDefinitionWriteParticipant'

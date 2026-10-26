@@ -234,39 +234,4 @@ export class DrizzleRuntimeRegistryPersistence implements RuntimeRegistryPersist
       for (const builtin of builtins) await insertOne(transaction, runtimes, builtin)
     })
   }
-
-  async backfillBuiltinBinary(
-    input: Parameters<RuntimeRegistryPersistence['backfillBuiltinBinary']>[0],
-  ): Promise<void> {
-    const { runtimes } = tablesOf(this.db)
-    await this.db
-      .update(runtimes)
-      .set({ binaryPath: input.binaryPath, updatedAt: input.updatedAt })
-      .where(
-        and(
-          eq(runtimes.name, input.name),
-          eq(runtimes.protocol, input.protocol),
-          isNull(runtimes.binaryPath),
-        ),
-      )
-  }
-
-  async listBuiltinProfiles(
-    names: Parameters<RuntimeRegistryPersistence['listBuiltinProfiles']>[0],
-  ): ReturnType<RuntimeRegistryPersistence['listBuiltinProfiles']> {
-    if (names.length === 0) return []
-    const { runtimes } = tablesOf(this.db)
-    return await this.db
-      .select({
-        name: runtimes.name,
-        protocol: runtimes.protocol,
-        model: runtimes.model,
-        variant: runtimes.variant,
-        temperature: runtimes.temperature,
-        steps: runtimes.steps,
-        maxSteps: runtimes.maxSteps,
-      })
-      .from(runtimes)
-      .where(inArray(runtimes.name, [...names]))
-  }
 }

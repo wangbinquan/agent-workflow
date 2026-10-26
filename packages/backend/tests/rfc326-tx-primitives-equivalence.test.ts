@@ -1,3 +1,5 @@
+import { taskAggregateWrite } from '@/modules/task-execution/infrastructure/taskDefinitionWriteParticipant'
+import { withTargetMintIdentity } from './helpers/rfc395Mint'
 // RFC-326 T7 — the synchronous transaction companions are EQUIVALENT to the
 // async originals (proposal AC-19; design §6.2).
 //
@@ -15,7 +17,6 @@
 //     bodies — the lifecycle-grep-guard count `KERNEL_DIRECT_WRITES = 3` and the
 //     s10 `RAW_TRANSACTION_SITES` ledger stay untouched by construction).
 
-import { deriveNodeRunRole } from '@/modules/task-execution/public/types'
 import {
   nodeRunFixture,
   taskFixture,
@@ -29,10 +30,14 @@ import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
-import { allowedFromForMergeEvent, MERGE_STATES } from '@agent-workflow/shared'
-import type { MergeState, NodeRunTransitionEvent } from '@agent-workflow/shared'
+import {
+  allowedFromForMergeEvent,
+  MERGE_STATES,
+  type MergeState,
+  type NodeRunTransitionEvent,
+} from '@agent-workflow/shared'
+
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { dbTxSync } from '../src/db/txSync'
 import { transitionNodeRunStatus, transitionNodeRunStatusTx } from '../src/services/lifecycle'
 import { mintNodeRun, type MintNodeRunArgs } from '../src/services/nodeRunMint'
 import { createNodeRunMintParticipantInTx } from '@/modules/task-execution/infrastructure/nodeRunMintParticipant'
@@ -41,7 +46,6 @@ import { hasActingMembership } from '../src/services/taskCollab'
 import { derivedSupersededIds } from './helpers/nodeRunSupersession'
 import { DomainError } from '../src/util/errors'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const TASK = 'task-rfc326-eq'
 // Fixed ids sort BELOW every freshly generated ULID ('01…'), so a minted row is
 // the newest generation in both databases alike.
@@ -136,8 +140,8 @@ async function seed(db: DbClient, fence: 'closed' | 'merged' | null = null): Pro
 }
 
 async function pair(fence: 'closed' | 'merged' | null = null): Promise<[DbClient, DbClient]> {
-  const a = createInMemoryDb(MIGRATIONS)
-  const b = createInMemoryDb(MIGRATIONS)
+  const a = createInMemoryDb()
+  const b = createInMemoryDb()
   await seed(a, fence)
   await seed(b, fence)
   return [a, b]
@@ -175,17 +179,19 @@ async function refusalOf(fn: () => unknown): Promise<Refusal> {
 }
 
 describe('RFC-326 AC-19 — transitionNodeRunStatus ≡ transitionNodeRunStatusTx', () => {
-  test.each<[NodeRunTransitionEvent, Record<string, unknown>]>([
-    [{ kind: 'approve-review' }, { finishedAt: NOW + 5 }],
-    [{ kind: 'iterate-review' }, { reviewIteration: 1 }],
-    [{ kind: 'reject-review' }, { reviewIteration: 1 }],
+  test.each<
+    [NodeRunTransitionEvent, NonNullable<Parameters<typeof transitionNodeRunStatus>[0]['extra']>]
+  >([
+    [{ kind: 'approve-review' }, { identity: { finishedAt: NOW + 5 } }],
+    [{ kind: 'iterate-review' }, { identity: { reviewIteration: 1 } }],
+    [{ kind: 'reject-review' }, { identity: { reviewIteration: 1 } }],
   ])('%p — same return value, same rows', async (event, extra) => {
     const [a, b] = await pair()
     const before = await dump(a)
     expect(await dump(b)).toEqual(before)
 
     const viaAsync = await transitionNodeRunStatus({ db: a, nodeRunId: REVIEW, event, extra })
-    const viaTx = dbTxSync(b, (tx) =>
+    const viaTx = await databaseSessionFor(b).transaction((tx) =>
       transitionNodeRunStatusTx({ tx, nodeRunId: REVIEW, event, extra }),
     )
 
@@ -204,7 +210,9 @@ describe('RFC-326 AC-19 — transitionNodeRunStatus ≡ transitionNodeRunStatusT
       const event: NodeRunTransitionEvent = { kind: 'approve-review' }
       const ra = await refusalOf(() => transitionNodeRunStatus({ db: a, nodeRunId: 'nope', event }))
       const rb = await refusalOf(() =>
-        dbTxSync(b, (tx) => transitionNodeRunStatusTx({ tx, nodeRunId: 'nope', event })),
+        databaseSessionFor(b).transaction((tx) =>
+          transitionNodeRunStatusTx({ tx, nodeRunId: 'nope', event }),
+        ),
       )
       expect(rb).toEqual(ra)
       expect(ra.code).toBe('node-run-not-found')
@@ -217,7 +225,9 @@ describe('RFC-326 AC-19 — transitionNodeRunStatus ≡ transitionNodeRunStatusT
         transitionNodeRunStatus({ db: a, nodeRunId: DOC_PRIOR, event }),
       )
       const rb = await refusalOf(() =>
-        dbTxSync(b, (tx) => transitionNodeRunStatusTx({ tx, nodeRunId: DOC_PRIOR, event })),
+        databaseSessionFor(b).transaction((tx) =>
+          transitionNodeRunStatusTx({ tx, nodeRunId: DOC_PRIOR, event }),
+        ),
       )
       expect(rb).toEqual(ra)
       expect(ra.code).toBe('illegal-node-run-transition')
@@ -230,7 +240,9 @@ describe('RFC-326 AC-19 — transitionNodeRunStatus ≡ transitionNodeRunStatusT
       const before = await dump(a)
       const ra = await refusalOf(() => transitionNodeRunStatus({ db: a, nodeRunId: REVIEW, event }))
       const rb = await refusalOf(() =>
-        dbTxSync(b, (tx) => transitionNodeRunStatusTx({ tx, nodeRunId: REVIEW, event })),
+        databaseSessionFor(b).transaction((tx) =>
+          transitionNodeRunStatusTx({ tx, nodeRunId: REVIEW, event }),
+        ),
       )
       expect(rb).toEqual(ra)
       expect(ra.code).toBe('task-source-terminal-closed')
@@ -245,8 +257,9 @@ describe('RFC-326 AC-19 — transitionNodeRunStatus ≡ transitionNodeRunStatusT
 // 依然承重——只是后者现在由中立的 `createNodeRunMintParticipantInTx(tx)` 承担（同一个
 // `nodeRunMintProgram`，异步解释）。判据一条没少：新行、被退役的同代旧行、以及同样的拒绝。
 describe('RFC-326 AC-19 — mintNodeRun ≡ in-transaction mint (including retired merge states)', () => {
-  const args: MintNodeRunArgs = {
-    ...deriveNodeRunRole({ nodeId: 'doc', rerunCause: 'review-iterate' }),
+  const args: MintNodeRunArgs = withTargetMintIdentity({
+    role: 'node-attempt',
+    syntheticKind: null,
     taskId: TASK,
     nodeId: 'doc',
     status: 'pending',
@@ -263,7 +276,7 @@ describe('RFC-326 AC-19 — mintNodeRun ≡ in-transaction mint (including retir
         checkpoints: [{ mountPath: '', preSnapshot: 'deadbeef' }],
       },
     },
-  }
+  })
 
   async function normalised(db: DbClient, mintedId: string): Promise<NodeRunFixtureRow[]> {
     return (await dump(db)).map((r) => ({ ...r, id: r.id === mintedId ? '<minted>' : r.id }))
@@ -274,10 +287,11 @@ describe('RFC-326 AC-19 — mintNodeRun ≡ in-transaction mint (including retir
     expect(NOT_ABANDONABLE.length).toBeGreaterThan(0)
     const [a, b] = await pair()
 
-    const idA = await mintNodeRun(a, args)
-    const idB = await databaseSessionFor(b).transaction(
-      async (tx) => await createNodeRunMintParticipantInTx(tx).mint(args),
-    )
+    const idA = await mintNodeRun(a, withTargetMintIdentity(args))
+    const idB = await databaseSessionFor(b).transaction(async (tx) => {
+      await taskAggregateWrite.lockTaskAggregateRoot(tx, TASK)
+      return await createNodeRunMintParticipantInTx(tx).mint(withTargetMintIdentity(args))
+    })
     expect(idA).not.toBe(idB) // fresh ULIDs — everything else must match
 
     const rowsA = await normalised(a, idA)
@@ -309,14 +323,15 @@ describe('RFC-326 AC-19 — mintNodeRun ≡ in-transaction mint (including retir
     let ea: unknown
     let eb: unknown
     try {
-      await mintNodeRun(a, bad)
+      await mintNodeRun(a, withTargetMintIdentity(bad))
     } catch (err) {
       ea = err
     }
     try {
-      await databaseSessionFor(b).transaction(
-        async (tx) => await createNodeRunMintParticipantInTx(tx).mint(bad),
-      )
+      await databaseSessionFor(b).transaction(async (tx) => {
+        await taskAggregateWrite.lockTaskAggregateRoot(tx, TASK)
+        return await createNodeRunMintParticipantInTx(tx).mint(withTargetMintIdentity(bad))
+      })
     } catch (err) {
       eb = err
     }
@@ -372,15 +387,11 @@ describe('RFC-326 T7 — the async originals are pure wrappers (guard ledgers un
   test('transitionNodeRunStatus delegates to transitionNodeRunStatusTx and writes nothing itself', () => {
     const src = readFileSync(SQLITE_TASK_LIFECYCLE, 'utf8')
     const body = bodyOf(src, 'export async function transitionNodeRunStatus(')
-    // RFC-359 W8：委托目标从同步孪生 `transitionNodeRunStatusTx` 换成了**中立异步孪生**
-    // `transitionNodeRunStatusInTransaction`（同步事务面 4 → 2 的那一步）。本条的**意图没变**——
-    // 「这个 async 原件只是壳，自己不写」——变的只是它委托给谁；下面三条 `not.toContain`
-    // 才是「自己不写」的判据，一字未动。
-    //
-    // 计数写成 2 是有意的：函数分「无执行上下文（独立 CAS）」与「有上下文（围栏 + CAS）」两条
-    // 分支，**两条都必须委托**。谁把其中一条改成就地写，计数掉到 1，本条当场红——
-    // 只断言 `toContain` 抓不住这件事。
-    expect(body.match(/transitionNodeRunStatusInTransaction\(\{/g)?.length ?? 0).toBe(2)
+    // Epoch 2 funnels both context forms through the same task-root transaction.
+    expect(body.match(/transitionNodeRunStatusInTransaction\(\{/g)?.length ?? 0).toBe(1)
+    expect(body).toContain('return withTaskExecutionWrite(args.db, async (tx) => {')
+    expect(body).toContain('await fenceTaskWrite(tx, { taskId: row.taskId, context })')
+    expect(body).toContain('await lockNodeRunTaskRootInTx(tx, args.nodeRunId)')
     expect(body).not.toContain('.update(nodeRuns)')
     // A standalone CAS is one statement: the wrapper must NOT open a transaction
     // of its own (an extra BEGIN/COMMIT per transition changed the session-lease
@@ -388,9 +399,31 @@ describe('RFC-326 T7 — the async originals are pure wrappers (guard ledgers un
     expect(body).not.toContain('dbTxSync(')
     expect(body).not.toContain('.transaction(')
     // The single allow-listed writer for this event family sits in the Tx twin.
-    const twin = bodyOf(src, 'export function transitionNodeRunStatusTx(')
-    expect(twin).toContain('rfc053-allow-direct-status-write')
-    expect(twin.match(/\.update\(nodeRuns\)/g)?.length ?? 0).toBe(1)
+    expect(src).toContain(
+      'export const transitionNodeRunStatusTx = transitionNodeRunStatusInTransaction',
+    )
+    const twin = readFileSync(
+      new URL(
+        '../src/modules/task-execution/infrastructure/nodeRunLifecycleTransition.ts',
+        import.meta.url,
+      ),
+      'utf8',
+    )
+    expect(twin.match(/compareAndWriteNodeRunInTx\(/g)?.length ?? 0).toBe(1)
+    expect(twin).toContain('eq(nodeRuns.status, from)')
+    expect(twin).toContain('{ ...extra?.identity, status: to }')
+    expect(twin).not.toContain('.update(nodeRuns)')
+    const protocol = readFileSync(
+      new URL(
+        '../src/modules/task-execution/infrastructure/nodeRunWriteProtocol.ts',
+        import.meta.url,
+      ),
+      'utf8',
+    )
+    const cas = bodyOf(protocol, 'export async function compareAndWriteNodeRunInTx(')
+    expect(cas).toContain('rfc053-allow-direct-status-write')
+    expect(cas.match(/\.update\(nodeRuns\)/g)?.length ?? 0).toBe(1)
+    expect(cas).toContain('.where(and(eq(nodeRuns.id, nodeRunId), predicate))')
   })
 
   // RFC-359：同步孪生 `mintNodeRunTx` 已退役（生产零调用方），所以这里只剩「入口本身不写行」

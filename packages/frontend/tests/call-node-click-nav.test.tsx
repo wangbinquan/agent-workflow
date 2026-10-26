@@ -48,7 +48,7 @@ afterEach(() => {
 
 function run(over: Partial<NodeRun> & Pick<NodeRun, 'id'>): NodeRun {
   return {
-    seq: null,
+    seq: 0,
     nodeId: 'call1',
     parentNodeRunId: null,
     childTaskId: null,
@@ -136,7 +136,7 @@ describe('deriveCallNodeNav (strict freshest generation)', () => {
   })
 
   test('absent childTaskId field (older daemon) → not clickable', () => {
-    const runs = [{ seq: null, id: '01A', nodeId: 'call1', parentNodeRunId: null } as NodeRun]
+    const runs = [{ seq: 0, id: '01A', nodeId: 'call1', parentNodeRunId: null } as NodeRun]
     expect(deriveCallNodeNav(runs, 'call1')).toBeNull()
   })
 

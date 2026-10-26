@@ -73,8 +73,8 @@ import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import type { LineageSlot } from '@/modules/task-execution/domain/executionIntent'
-import { canonicalJson } from '@/modules/task-execution/domain/executionIntent'
+import { type LineageSlot, canonicalJson } from '@/modules/task-execution/domain/executionIntent'
+
 import { DrizzleTaskExecutionIntentPersistence } from '@/modules/task-execution/infrastructure/taskExecutionIntentPersistence'
 import type { SkillOperationContext } from '@/modules/resource-catalog/public/participants'
 import { DrizzleRepositoryWorkspaceStore } from '@/modules/source-control/infrastructure/repositoryWorkspaceStore'
@@ -347,7 +347,7 @@ describeEachProvider('RFC-359 W8-T29 —— 同一聚合上两条并发的 commi
     // cutover 处于 legacy 时 append 不落行、直接返回空 eventRef——那样这条用例测不到任何东西。
     await db
       .update(committedEventFamilyCutovers)
-      .set({ mode: 'dispatchable', epoch: 2, changedAt: 1, changeRef: 'rfc359-w8-t29' })
+      .set({ epoch: 2, changedAt: 1, changeRef: 'rfc359-w8-t29' })
     for (const opener of ['transaction', 'serializable'] as const) {
       for (let round = 0; round < 12; round += 1) {
         // 每轮一个**全新**聚合：heads 表里还没有这一行，两笔并发因此都会走 INSERT 分支

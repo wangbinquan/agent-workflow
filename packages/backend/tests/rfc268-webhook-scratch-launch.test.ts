@@ -1,17 +1,19 @@
+import { taskReadColumns } from '@/modules/task-execution/infrastructure/taskRepositorySql'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 // RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-268 T5 — 走 webhook dispatcher 的真实 startExecution 收口，证明三种目标
 // 都落成 RFC-165 scratch task：main 空根提交、空 tree、无 remote。这里不注入
 // launch fake；若 dispatcher 只“长得像” scratch 而未接进物化层，本测试会红。
-import { readTaskFixtures } from './helpers/model'
+
 import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
+import { eq } from 'drizzle-orm'
 import { execFileSync } from 'node:child_process'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
-import { eq } from 'drizzle-orm'
+import { join } from 'node:path'
 import { ulid } from 'ulid'
+import { readTaskFixtures } from './helpers/model'
 
 import {
   isTerminalTaskStatus,
@@ -21,24 +23,23 @@ import {
 import { buildActor } from '../src/auth/actor'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import { createInMemoryDb } from '../src/db/client'
-import { createAgent } from '../src/modules/resource-catalog/infrastructure/legacy/agent'
-import { cancelViaEngine } from './helpers/cancelEngine'
-import { composeRuntimeRegistryOperations } from './helpers/runtimeRegistryComposition'
 import { createIdentityAccessRuntime } from '../src/modules/identity-access/composition'
 import { composeWebhookDispatchCore } from '../src/modules/integration/composition/webhookDispatch'
 import { createWebhookDispatchOrchestrationRuntime } from '../src/modules/integration/infrastructure/webhookDispatchRuntime'
+import { createAgent } from '../src/modules/resource-catalog/infrastructure/legacy/agent'
+import { createWebhookDispatcher } from '../src/services/webhook/webhookDispatch'
+import { createWorkflow } from '../src/services/workflow'
+import { createWorkgroup } from '../src/services/workgroups'
+import { cancelViaEngine } from './helpers/cancelEngine'
 import {
   integrationTriggerWebhookAuthorityDependencies,
   scheduledTaskRuntime,
 } from './helpers/integrationTriggerResourceBinding'
+import { composeRuntimeRegistryOperations } from './helpers/runtimeRegistryComposition'
 import { composeTaskExecutionTestRuntime } from './helpers/taskExecutionTestTopology'
-import { createSqliteWebhookTaskExecutionParticipant } from './helpers/webhookTaskExecution'
 import { createUser } from './helpers/userFixture'
-import { createWebhookDispatcher } from '../src/services/webhook/webhookDispatch'
-import { createWorkflow } from '../src/services/workflow'
-import { createWorkgroup } from '../src/services/workgroups'
+import { createSqliteWebhookTaskExecutionParticipant } from './helpers/webhookTaskExecution'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const RUNTIME = 'rfc268-opencode'
 
 const AGENT_FIELDS = {
@@ -62,7 +63,7 @@ test('RFC-268 · workflow / agent / workgroup webhook fires create real empty sc
   try {
     const configPath = join(appHome, 'config.json')
     writeFileSync(configPath, JSON.stringify({ $schema_version: 1 }))
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createInMemoryDb()
     await composeRuntimeRegistryOperations(db).createRuntime({
       name: RUNTIME,
       protocol: 'opencode',
@@ -119,7 +120,8 @@ test('RFC-268 · workflow / agent / workgroup webhook fires create real empty sc
     )
 
     const box = createSecretBoxFromKey(Buffer.alloc(32, 8))
-    const { webhookEndpoints, webhookTriggers, users, webhookDeliveries, tasks } = tablesOf(db)
+    const { webhookEndpoints, webhookTriggers, users, webhookDeliveries } = tablesOf(db)
+    const { tasks } = tablesOf(db)
     await insertOne(db, webhookEndpoints, {
       id: 'ep-rfc268',
       name: 'RFC 268 endpoint',
@@ -266,7 +268,9 @@ test('RFC-268 · workflow / agent / workgroup webhook fires create real empty sc
         await cancelViaEngine(db, task.id)
       } catch (error) {
         // runner 可在 select 与 cancel 之间自行失败；只吞已经确认的终态竞态。
-        const current = (await db.select().from(tasks).where(eq(tasks.id, task.id)).limit(1))[0]
+        const current = (
+          await db.select(taskReadColumns(db)).from(tasks).where(eq(tasks.id, task.id)).limit(1)
+        )[0]
         if (current === undefined || !isTerminalTaskStatus(current.status)) throw error
       }
     }

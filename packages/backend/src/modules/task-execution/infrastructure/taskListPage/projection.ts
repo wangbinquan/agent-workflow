@@ -1,3 +1,4 @@
+import { tablesOf } from '@/platform/persistence/sessionTables'
 // RFC-357 —— SQL 行 → `TaskOperationsListItem` 的投影，以及页内富化的三次批量查询。
 //
 // 平移自 `services/taskOperations.ts`，唯一的**新增**是数值归一：`db.all(sql)` 这条路上
@@ -6,9 +7,6 @@
 // number，于是同一段代码在两侧行为不同。这里统一 `Number()` 归一，并把「不是有限数」
 // 当缺陷抛——让它红在这一行，而不是流进 zod 报一个看不懂的形状错。
 
-import { projectStoredTaskRepositorySummary } from '../taskRepositorySurface'
-import { decodeTaskSubject, projectTaskSubject } from '../../domain/taskSubject'
-import { tablesOf } from '@/platform/persistence/sessionTables'
 import type {
   FailureCode,
   TaskCatalogVisibility,
@@ -16,6 +14,7 @@ import type {
   TaskStatus,
 } from '@agent-workflow/shared'
 import { and, eq, inArray } from 'drizzle-orm'
+import { projectStoredTaskRepositorySummary } from '../taskRepositorySurface'
 
 import type { OwnerIdentityQueries } from '@/modules/identity-access/public/operations'
 import {
@@ -211,16 +210,8 @@ export async function mapRows(
     return {
       id: row.id,
       name: row.name,
-      ...projectTaskSubject(
-        decodeTaskSubject({
-          workflowId: row.workflow_id,
-          codeRoundId: row.code_round_id,
-          workgroupId: row.workgroup_id,
-          sourceAgentId: row.source_agent_id,
-          sourceAgentName: row.source_agent_name,
-        }),
-        row.workflow_name,
-      ),
+      workflowId: row.workflow_id,
+      workflowName: row.workflow_name,
       repoPath: repository.repoPath,
       repoUrl: repository.repoUrl,
       cachedRepoId: repository.cachedRepoId,

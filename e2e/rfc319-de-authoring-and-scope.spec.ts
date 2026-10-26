@@ -1,3 +1,4 @@
+import { liveSqlitePath } from './storage'
 // RFC-319 —— 数字员工域「编排/发布 + 作用域 + 兼容入口」8 条能力的用户面 e2e。
 //
 // 覆盖 `architecture/e2e-capability-ledger.json` 里这几行 `status: 'gap'`：
@@ -186,7 +187,7 @@ let employeeOnTaskName = ''
 // --------------------------------------------------------------------- helpers
 
 function dbPath(): string {
-  return join(daemon.home, 'db.sqlite')
+  return liveSqlitePath(daemon.home)
 }
 
 function bearer(token: string, hasBody: boolean): Record<string, string> {

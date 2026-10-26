@@ -1,3 +1,5 @@
+import { appendSqliteSuccessor } from './helpers/epoch2SqliteSuccessor'
+import { persistenceHead } from '@/bootstrap/persistenceHead'
 import { composeRepositoryBackupPreparation } from '@/bootstrap/repositoryBackupPreparation'
 // RFC-213 PR-1b — staged ("hot") restore applied on boot.
 //
@@ -14,7 +16,7 @@ import { composeRepositoryBackupPreparation } from '@/bootstrap/repositoryBackup
 //     restoreBackup) → the "already consumed" test throws → reds.
 
 import { workflowFixture } from './helpers/model'
-import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { afterEach, describe, expect, test } from 'bun:test'
 import { removeTempDirSync } from './fixtures/tempDir'
 import { Database } from 'bun:sqlite'
@@ -38,8 +40,10 @@ import {
   RestorePostSwapError,
   validateBackupForStage,
 } from '../src/services/restore'
-import { readMigrationAxisFromJournal, writeManifest } from '../src/services/backupManifest'
+import { writeManifest } from '../src/services/backupManifest'
 import { tarGz } from '../src/util/archive'
+import { quickCheckDbFile } from '../src/db/integrity'
+import { readFileSync } from 'node:fs'
 import { restoreCommand } from '../src/cli/restore'
 import { composeLocalSystemOperations } from '../src/modules/system-operations/composition'
 
@@ -83,17 +87,17 @@ describe('RFC-213 staged restore', () => {
     const appHome = tmp()
     const dbPath = join(appHome, 'db.sqlite')
     // State A: 2 workflows. Back it up.
-    let db = openDb({ path: dbPath, migrationsFolder: MIGRATIONS })
+    let db = openDb({ path: dbPath })
     await addWorkflows(db, 2)
     const backup = await createBackup({
-      contract: buildLogicalSchemaContract(),
+      contract: logicalSchemaContract,
       db,
       appHome,
       now: 1,
     })
     sqliteOf(db).close()
     // State B: mutate to 3 workflows.
-    db = openDb({ path: dbPath, migrationsFolder: MIGRATIONS })
+    db = openDb({ path: dbPath })
     await addWorkflows(db, 1)
     sqliteOf(db).close()
     expect(countWorkflows(dbPath)).toBe(3)
@@ -117,10 +121,10 @@ describe('RFC-213 staged restore', () => {
   test('is idempotent: a second boot does not re-apply', async () => {
     const appHome = tmp()
     const dbPath = join(appHome, 'db.sqlite')
-    const db = openDb({ path: dbPath, migrationsFolder: MIGRATIONS })
+    const db = openDb({ path: dbPath })
     await addWorkflows(db, 1)
     const backup = await createBackup({
-      contract: buildLogicalSchemaContract(),
+      contract: logicalSchemaContract,
       db,
       appHome,
       now: 1,
@@ -145,16 +149,16 @@ describe('RFC-213 staged restore', () => {
     const appHome = tmp()
     const dbPath = join(appHome, 'db.sqlite')
     // State A (1 wf) backed up; State B (2 wf) live.
-    let db = openDb({ path: dbPath, migrationsFolder: MIGRATIONS })
+    let db = openDb({ path: dbPath })
     await addWorkflows(db, 1)
     const backup = await createBackup({
-      contract: buildLogicalSchemaContract(),
+      contract: logicalSchemaContract,
       db,
       appHome,
       now: 1,
     })
     sqliteOf(db).close()
-    db = openDb({ path: dbPath, migrationsFolder: MIGRATIONS })
+    db = openDb({ path: dbPath })
     await addWorkflows(db, 1)
     sqliteOf(db).close()
     expect(countWorkflows(dbPath)).toBe(2)
@@ -189,10 +193,10 @@ describe('RFC-213 staged restore', () => {
   test('staging over an existing pending restore is refused (atomic lock)', async () => {
     const appHome = tmp()
     const dbPath = join(appHome, 'db.sqlite')
-    const db = openDb({ path: dbPath, migrationsFolder: MIGRATIONS })
+    const db = openDb({ path: dbPath })
     await addWorkflows(db, 1)
     const backup = await createBackup({
-      contract: buildLogicalSchemaContract(),
+      contract: logicalSchemaContract,
       db,
       appHome,
       now: 1,
@@ -218,10 +222,10 @@ describe('RFC-213 staged restore', () => {
   test('a marker whose staged tarball is gone is treated as already-consumed', async () => {
     const appHome = tmp()
     const dbPath = join(appHome, 'db.sqlite')
-    const db = openDb({ path: dbPath, migrationsFolder: MIGRATIONS })
+    const db = openDb({ path: dbPath })
     await addWorkflows(db, 1)
     const backup = await createBackup({
-      contract: buildLogicalSchemaContract(),
+      contract: logicalSchemaContract,
       db,
       appHome,
       now: 1,
@@ -265,10 +269,10 @@ describe('restore --stage CLI', () => {
     const appHome = tmp()
     process.env.AGENT_WORKFLOW_HOME = appHome
     const dbPath = join(appHome, 'db.sqlite')
-    const db = openDb({ path: dbPath, migrationsFolder: MIGRATIONS })
+    const db = openDb({ path: dbPath })
     await addWorkflows(db, 1)
     const backup = await createBackup({
-      contract: buildLogicalSchemaContract(),
+      contract: logicalSchemaContract,
       db,
       appHome,
       now: 1,
@@ -279,7 +283,7 @@ describe('restore --stage CLI', () => {
       [backup.path, '--stage'],
       composeLocalSystemOperations({
         repositoryBackupPreparationFactory: composeRepositoryBackupPreparation,
-        contract: buildLogicalSchemaContract(),
+        contract: logicalSchemaContract,
       }),
     )
     expect(r.status).toBe('ok')
@@ -295,7 +299,7 @@ describe('restore --stage CLI', () => {
 /** Hand-roll a tarball with the given pieces (staging dir → tar.gz). */
 async function makeTarball(
   home: string,
-  pieces: { db?: 'valid' | 'garbage' | 'none'; manifestLastCreatedAt?: number },
+  pieces: { db?: 'valid' | 'check-failure' | 'garbage' | 'none'; manifestLastCreatedAt?: number },
 ): Promise<string> {
   const staging = join(home, `mk-${ulid()}`)
   mkdirSync(staging, { recursive: true })
@@ -303,9 +307,34 @@ async function makeTarball(
   // required for the explicit corrupt-DB salvage path: validation must be able
   // to prove the filesystem payload without querying the damaged database.
   mkdirSync(join(staging, 'skills'))
-  if (pieces.db === 'valid' || pieces.db === undefined) {
-    const db = openDb({ path: join(staging, 'db.sqlite'), migrationsFolder: MIGRATIONS })
+  if (pieces.db === 'valid' || pieces.db === 'check-failure' || pieces.db === undefined) {
+    const db = openDb({ path: join(staging, 'db.sqlite') })
+    if (
+      pieces.manifestLastCreatedAt !== undefined &&
+      pieces.manifestLastCreatedAt > persistenceHead().contract.version
+    )
+      await appendSqliteSuccessor(sqliteOf(db))
+    const rootpage =
+      pieces.db === 'check-failure'
+        ? (
+            sqliteOf(db)
+              .query("SELECT rootpage FROM sqlite_schema WHERE name='maintenance_runs'")
+              .get() as { rootpage: number }
+          ).rootpage
+        : 0
     sqliteOf(db).close()
+    if (pieces.db === 'check-failure') {
+      // Keep the header and schema readable, but make an unused business-table
+      // b-tree invalid. Reopening a CHECK-invalid row is not a structural-corruption oracle.
+      const path = join(staging, 'db.sqlite')
+      const bytes = readFileSync(path)
+      const encoded = bytes.readUInt16BE(16)
+      const offset = (rootpage - 1) * (encoded === 1 ? 65_536 : encoded)
+      if (rootpage <= 1 || offset >= bytes.length) throw new Error('fixture-table-page-missing')
+      bytes[offset] = 0xff
+      writeFileSync(path, bytes)
+      expect(quickCheckDbFile(path).ok).toBe(false)
+    }
   } else if (pieces.db === 'garbage') {
     writeFileSync(join(staging, 'db.sqlite'), 'definitely not sqlite')
   }
@@ -330,27 +359,27 @@ async function makeTarball(
 describe('impl-gate P1-1 — validateBackupForStage refuses at the door', () => {
   test('valid backup passes; no-db / garbage-db / downgrade refuse; escape hatch works', async () => {
     const home = tmp()
-    const maxWhenNow = readMigrationAxisFromJournal(MIGRATIONS).maxWhen
+    const maxWhenNow = persistenceHead().contract.version
     const ok = await makeTarball(home, { db: 'valid', manifestLastCreatedAt: maxWhenNow })
     const plan = await validateBackupForStage(ok, {
-      contract: buildLogicalSchemaContract(),
+      contract: logicalSchemaContract,
       appHome: home,
       migrationsFolder: MIGRATIONS,
     })
     expect(plan.direction).toBe('same')
-    // no manifest = legacy backup → treated as older (forward), still valid
+    // A native DB keeps its recorded version even without the optional outer manifest.
     const legacy = await makeTarball(home, { db: 'valid' })
     const legacyPlan = await validateBackupForStage(legacy, {
-      contract: buildLogicalSchemaContract(),
+      contract: logicalSchemaContract,
       appHome: home,
       migrationsFolder: MIGRATIONS,
     })
-    expect(legacyPlan.direction).toBe('forward')
+    expect(legacyPlan.direction).toBe('same')
 
     const noDb = await makeTarball(home, { db: 'none' })
     await expect(
       validateBackupForStage(noDb, {
-        contract: buildLogicalSchemaContract(),
+        contract: logicalSchemaContract,
         appHome: home,
         migrationsFolder: MIGRATIONS,
       }),
@@ -359,26 +388,39 @@ describe('impl-gate P1-1 — validateBackupForStage refuses at the door', () => 
     const garbage = await makeTarball(home, { db: 'garbage' })
     await expect(
       validateBackupForStage(garbage, {
-        contract: buildLogicalSchemaContract(),
+        contract: logicalSchemaContract,
         appHome: home,
         migrationsFolder: MIGRATIONS,
       }),
     ).rejects.toThrow(RestoreIntegrityError)
+    const unreadable = validateBackupForStage(garbage, {
+      contract: logicalSchemaContract,
+      appHome: home,
+      skipIntegrityCheck: true,
+    })
+    await expect(unreadable).rejects.toBeInstanceOf(RestoreIntegrityError)
+    await expect(unreadable).rejects.toThrow(
+      '--skip-integrity-check cannot restore an unreadable SQLite database',
+    )
     // …but the explicit escape hatch lets a quick_check-failing package through
     // (staged with the SAME flag, so the boot apply honours it too).
-    const escaped = await validateBackupForStage(garbage, {
-      contract: buildLogicalSchemaContract(),
+    const salvageable = await makeTarball(home, { db: 'check-failure' })
+    await expect(
+      validateBackupForStage(salvageable, { contract: logicalSchemaContract, appHome: home }),
+    ).rejects.toThrow(RestoreIntegrityError)
+    const escaped = await validateBackupForStage(salvageable, {
+      contract: logicalSchemaContract,
       appHome: home,
       migrationsFolder: MIGRATIONS,
       skipIntegrityCheck: true,
     })
-    expect(escaped.direction).toBe('forward') // no manifest → legacy → forward
+    expect(escaped.direction).toBe('same') // readable native history still determines the version
 
-    const maxWhen = readMigrationAxisFromJournal(MIGRATIONS).maxWhen
+    const maxWhen = persistenceHead().contract.version
     const newer = await makeTarball(home, { db: 'valid', manifestLastCreatedAt: maxWhen + 1 })
     await expect(
       validateBackupForStage(newer, {
-        contract: buildLogicalSchemaContract(),
+        contract: logicalSchemaContract,
         appHome: home,
         migrationsFolder: MIGRATIONS,
       }),

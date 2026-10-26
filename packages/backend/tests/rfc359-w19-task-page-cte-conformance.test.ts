@@ -14,7 +14,6 @@ import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { rawRows } from '@/platform/persistence/queryHelpers'
 import { expect, test } from 'bun:test'
-import { createHash } from 'node:crypto'
 
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { composeOwnerIdentityQueries } from '@/modules/identity-access/composition/providerOperations'
@@ -213,10 +212,41 @@ async function seed(db: PersistenceDb): Promise<void> {
   }
 }
 
-async function fixtureRowsDigest(db: PersistenceDb): Promise<string> {
-  // RFC-395 II-a: the frozen hash is over stored columns, not the fixture DTO with repos.
-  const rows = await readStoredTaskRows(db)
-  return createHash('sha256').update(JSON.stringify(rows)).digest('hex')
+// Complete native task roots, derived from the fixture facts and the target defaults.
+// Companion projections remain covered by the full-row query/page equality below.
+function expectedStoredRows(repeatedParent = false) {
+  return fixtureTasks()
+    .map((row) => ({
+      id: row.id,
+      name: row.name!,
+      status: row.status,
+      startedAt: row.startedAt,
+      runningMs: row.runningMs ?? 0,
+      runningSince: row.runningSince ?? null,
+      finishedAt: row.finishedAt ?? null,
+      errorSummary: row.errorSummary ?? null,
+      errorMessage: row.errorMessage ?? null,
+      failedNodeId: row.failedNodeId ?? null,
+      autoRecoveryAttempts: row.autoRecoveryAttempts ?? 0,
+      autoRecoverySuspended: row.autoRecoverySuspended ?? false,
+      autoRecoveryWindowStartedAt: row.autoRecoveryWindowStartedAt ?? null,
+      expiresAt: row.expiresAt ?? null,
+      deletedAt: row.deletedAt ?? null,
+      ownerUserId: row.ownerUserId ?? null,
+      catalogVisibility: row.catalogVisibility ?? 'public',
+      lifecycleEventRevision: row.lifecycleEventRevision ?? 1,
+      workspacePruningAt: row.workspacePruningAt ?? null,
+      workspacePruneCause: row.workspacePruneCause ?? null,
+      workspacePrunedAt: row.workspacePrunedAt ?? null,
+      sourceTerminationFence: row.sourceTerminationFence ?? null,
+      sourceTerminationEffectRev: row.sourceTerminationEffectRev ?? null,
+      parentTaskId: repeatedParent && row.id === 'c09' ? row.id : (row.parentTaskId ?? null),
+      rootTaskId: row.rootTaskId ?? null,
+      invocationDepth: row.invocationDepth ?? 0,
+      branchStartedAt: row.branchStartedAt ?? row.startedAt,
+      workspaceRootRef: row.worktreePath === '' ? null : row.worktreePath,
+    }))
+    .sort((a, b) => a.id.localeCompare(b.id))
 }
 
 function scenarios(): TaskOperationsRawQuery[] {
@@ -264,10 +294,7 @@ describeEachProvider('RFC-359 W19 — filtered task page CTE range', (harness) =
     '63 product filters keep full rows, pages, cursors and counts equal to the exhaustive query',
     async () => {
       await seed(harness.db)
-      // Full rows captured from the original SQLite fixture and its 0210 trigger.
-      expect(await fixtureRowsDigest(harness.db)).toBe(
-        '1a1adb9d2976c02170e8c54828832c739329ad27dc046e36071440ee81406cc6',
-      )
+      expect(await readStoredTaskRows(harness.db)).toEqual(expectedStoredRows())
       const rawJsonBefore = await storedJson(harness.db)
       const page = createDatabaseTaskListPage(harness.db, composeOwnerIdentityQueries(harness.db))
       const matrix = scenarios()
@@ -390,9 +417,7 @@ describeEachProvider('RFC-359 W19 — filtered task page CTE range', (harness) =
   test('the retained recursive UNION terminates a repeated parent and counts each matched row once', async () => {
     await seed(harness.db)
     await patchTaskFixture(harness.db, { id: 'c09' }, { parentTaskId: 'c09' })
-    expect(await fixtureRowsDigest(harness.db)).toBe(
-      'd7ace4653b9b868b0ba5e78b9d30a7031be13115a4f858925e75b13736e57498',
-    )
+    expect(await readStoredTaskRows(harness.db)).toEqual(expectedStoredRows(true))
     const page = createDatabaseTaskListPage(harness.db, composeOwnerIdentityQueries(harness.db))
     const actual = await page.list(VIEWER, { statuses: 'running', limit: '50' }, OPTIONS)
     expect(actual.items.map((item) => item.id)).toEqual(['r03', 'r01', 'r07'])

@@ -14,7 +14,11 @@ import {
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { DbCorruptionError, openDb, type OpenDbOptions } from '../src/db/client'
-import { migrateSqlite } from '../src/platform/persistence/sqliteMigrator'
+import { persistenceHead } from '@/bootstrap/persistenceHead'
+import {
+  registerSchemaHistoryRuntime,
+  schemaHistoryRuntime,
+} from '@/platform/persistence/schema/history/runtime'
 
 const roots: string[] = []
 afterEach(() => {
@@ -24,58 +28,42 @@ afterEach(() => {
 function fixture() {
   const root = mkdtempSync(join(tmpdir(), 'aw-dev-database-'))
   roots.push(root)
-  const migrationsFolder = join(root, 'migrations')
-  mkdirSync(join(migrationsFolder, 'meta'), { recursive: true })
-  let count = 0
-  const entries: Array<{
-    idx: number
-    version: string
-    when: number
-    tag: string
-    breakpoints: boolean
-  }> = []
-  const append = (sql: string) => {
-    const tag = `${String(count).padStart(4, '0')}_dev_reload`
-    writeFileSync(join(migrationsFolder, `${tag}.sql`), sql)
-    entries.push({ idx: count, version: '6', when: ++count, tag, breakpoints: true })
-    writeFileSync(
-      join(migrationsFolder, 'meta', '_journal.json'),
-      JSON.stringify({ version: '6', dialect: 'sqlite', entries }),
-    )
-  }
-  append('CREATE TABLE parent (id TEXT PRIMARY KEY);')
-  const options: OpenDbOptions = {
-    path: join(root, 'db.sqlite'),
-    migrationsFolder,
-    slowQueryMs: 0,
-  }
-  return { options, append }
+  const migrationsFolder = join(root, 'retired-migrations')
+  mkdirSync(migrationsFolder, { recursive: true })
+  writeFileSync(
+    join(migrationsFolder, 'do-not-replay.sql'),
+    'CREATE TABLE retired_chain_must_not_run(id TEXT);',
+  )
+  const options: OpenDbOptions = { path: join(root, 'db.sqlite'), migrationsFolder, slowQueryMs: 0 }
+  return { options }
 }
 
-test('already-applied migrations do not repeat the post-migration full foreign-key scan', () => {
+test('reload admits the installed epoch-2 head without replaying the old migration folder or reinstalling receipts', () => {
   const f = fixture()
   const queries = spyOn(Database.prototype, 'query')
   try {
     const first = openDb(f.options)
-    first.$client.close()
-    const fkChecks = () =>
-      queries.mock.calls.filter(([sql]) => sql === 'PRAGMA foreign_key_check;').length
-    const integrityChecks = () =>
-      queries.mock.calls.filter(([sql]) => sql === 'PRAGMA quick_check;').length
-    expect(fkChecks()).toBe(1)
-    const second = openDb(f.options)
-    expect(fkChecks()).toBe(1)
-    expect(integrityChecks()).toBe(2)
-    expect(migrateSqlite(second.$client, { migrationsFolder: f.options.migrationsFolder })).toBe(0)
-    second.$client.close()
-    f.append('CREATE TABLE child (parent_id TEXT REFERENCES parent(id));')
-    const upgraded = openDb(f.options)
-    expect(fkChecks()).toBe(2)
-    expect(upgraded.$client.query('SELECT count(*) AS n FROM __drizzle_migrations').get()).toEqual({
-      n: 2,
+    const receipts = first.$client.query('SELECT * FROM aw_meta_schema_history').all()
+    expect(receipts).toHaveLength(1)
+    expect(receipts[0]).toMatchObject({
+      contract_digest: persistenceHead().contract.contract.digest,
     })
-    expect(upgraded.$client.query('PRAGMA foreign_keys;').get()).toEqual({ foreign_keys: 1 })
-    upgraded.$client.close()
+    first.$client.close()
+    const second = openDb(f.options)
+    expect(second.$client.query('SELECT * FROM aw_meta_schema_history').all()).toEqual(receipts)
+    expect(
+      second.$client
+        .query(
+          "SELECT name FROM sqlite_schema WHERE name IN ('__drizzle_migrations', 'retired_chain_must_not_run')",
+        )
+        .all(),
+    ).toEqual([{ name: '__drizzle_migrations' }])
+    expect(second.$client.query('SELECT hash, created_at FROM __drizzle_migrations').all()).toEqual(
+      [{ hash: 'RFC395_SCHEMA_EPOCH_2_REQUIRES_TARGET_BINARY', created_at: -395 }],
+    )
+    expect(second.$client.query('PRAGMA foreign_keys;').get()).toEqual({ foreign_keys: 1 })
+    expect(queries.mock.calls.filter(([sql]) => sql === 'PRAGMA quick_check;')).toHaveLength(2)
+    second.$client.close()
   } finally {
     queries.mockRestore()
   }
@@ -87,11 +75,15 @@ test('source reload reuses this process preparation; a new process state checks 
   const queries = spyOn(Database.prototype, 'query')
   try {
     const first = openDb({ ...f.options, developmentIntegrity: preparation })
-    first.$client.exec("INSERT INTO parent VALUES ('retained')")
+    first.$client.exec(
+      "INSERT INTO maintenance_state (key,value,updated_at) VALUES ('retained','kept',1)",
+    )
     first.$client.close()
     expect(preparation.validatedDatabase).toBeDefined()
     const second = openDb({ ...f.options, developmentIntegrity: preparation })
-    expect(second.$client.query('SELECT id FROM parent').get()).toEqual({ id: 'retained' })
+    expect(
+      second.$client.query("SELECT value FROM maintenance_state WHERE key='retained'").get(),
+    ).toEqual({ value: 'kept' })
     second.$client.close()
     expect(queries.mock.calls.filter(([sql]) => sql === 'PRAGMA quick_check;')).toHaveLength(1)
     const cold = openDb({ ...f.options, developmentIntegrity: {} })
@@ -102,22 +94,36 @@ test('source reload reuses this process preparation; a new process state checks 
   }
 })
 
-test('changed migration journals and replaced database files invalidate development preparation', () => {
+test('changed native head and replaced database files invalidate development preparation', () => {
   const f = fixture()
   const preparation: NonNullable<OpenDbOptions['developmentIntegrity']> = {}
   const queries = spyOn(Database.prototype, 'query')
+  const runtime = schemaHistoryRuntime()
   try {
     openDb({ ...f.options, developmentIntegrity: preparation }).$client.close()
-    f.append('CREATE TABLE child (parent_id TEXT REFERENCES parent(id));')
+    const head = runtime.head()
+    registerSchemaHistoryRuntime({
+      ...runtime,
+      head: () => ({
+        ...head,
+        contract: {
+          ...head.contract,
+          digest: `sha256:${'1'.repeat(64)}`,
+          contract: { ...head.contract.contract, digest: `sha256:${'0'.repeat(64)}` },
+        },
+      }),
+    })
+    expect(() => openDb({ ...f.options, developmentIntegrity: preparation })).toThrow()
+    expect(preparation.validatedDatabase).toBeUndefined()
+    expect(queries.mock.calls.filter(([sql]) => sql === 'PRAGMA quick_check;')).toHaveLength(2)
+    registerSchemaHistoryRuntime(runtime)
     openDb({ ...f.options, developmentIntegrity: preparation }).$client.close()
     renameSync(f.options.path, `${f.options.path}.old`)
     copyFileSync(`${f.options.path}.old`, f.options.path)
     openDb({ ...f.options, developmentIntegrity: preparation }).$client.close()
-    expect(queries.mock.calls.filter(([sql]) => sql === 'PRAGMA quick_check;')).toHaveLength(3)
-    expect(queries.mock.calls.filter(([sql]) => sql === 'PRAGMA foreign_key_check;')).toHaveLength(
-      2,
-    )
+    expect(queries.mock.calls.filter(([sql]) => sql === 'PRAGMA quick_check;')).toHaveLength(4)
   } finally {
+    registerSchemaHistoryRuntime(runtime)
     queries.mockRestore()
   }
 })
@@ -126,7 +132,7 @@ test('a genuine new start still refuses header-intact page corruption after prev
   const f = fixture()
   const db = openDb({ ...f.options, developmentIntegrity: {} })
   const { rootpage } = db.$client
-    .query("SELECT rootpage FROM sqlite_schema WHERE name='parent'")
+    .query("SELECT rootpage FROM sqlite_schema WHERE name='maintenance_state'")
     .get() as { rootpage: number }
   db.$client.exec('PRAGMA wal_checkpoint(TRUNCATE)')
   db.$client.close()

@@ -1,3 +1,7 @@
+import { epoch2ReviewReader } from './helpers/epoch2RuntimePorts'
+import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
+import { nodeRunFixtureColumns } from './helpers/model/nodeRun'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { o2Ports, withO2Closure } from './helpers/o2Closure'
 // RFC-395 II-pre：生产启动 / 延续依赖及工作区租约改接线，保留既有断言。
 // RFC-310 design §22.5 requires this branch as independent executable evidence:
@@ -7,7 +11,7 @@ import { o2Ports, withO2Closure } from './helpers/o2Closure'
 // only their model output is deterministic system-mock data.
 
 import { readNodeRunOutputFixtures, readTaskFixtures, readNodeRunFixtures } from './helpers/model'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+
 import { first, queryRows } from '@/platform/persistence/queryHelpers'
 import { DEFAULT_PROTOCOL_RETRY_BUDGET } from '@agent-workflow/shared'
 import { taskListItemsProjection } from '../src/modules/task-execution/infrastructure/taskRouteOperations'
@@ -16,7 +20,7 @@ import { afterEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import { and, eq } from 'drizzle-orm'
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 
 import { actorOfDirectAuthority, admitDaemonIdentity } from '@/auth/session'
 import { createInMemoryDb } from '@/db/client'
@@ -56,7 +60,6 @@ import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixtur
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 import { createTestHostTaskLaunchKernel } from './helpers/hostTaskLaunchKernel'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const roots: string[] = []
 const taskIds: string[] = []
 
@@ -167,7 +170,7 @@ describe('RFC-310 human-reviewed digital employee TaskEngine system mock E2E', (
     const appHome = join(root, 'home')
     const previousAppHome = process.env.AGENT_WORKFLOW_HOME
     process.env.AGENT_WORKFLOW_HOME = appHome
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createInMemoryDb()
 
     try {
       await seedTestDefaultOpencodeRuntime(db)
@@ -274,6 +277,7 @@ describe('RFC-310 human-reviewed digital employee TaskEngine system mock E2E', (
       // `wakeHumanGateContinuation`（人审放行的继续驱动）仍是 legacy 启动面的 API，
       // 还吃 `TaskContinuationDependencies`——退役它是 plan §5hn 的活，不在本刀范围内。
       const startDeps = {
+        historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
         db,
         schedulerDriver: createTaskExecutionTestTopology({ db, driver: 'real' }).schedulerDriver,
         appHome,
@@ -306,6 +310,7 @@ describe('RFC-310 human-reviewed digital employee TaskEngine system mock E2E', (
           gitCommitIdentity: identityAccess.getUserGitCommitIdentity,
           coordinatorDeps: startDeps,
           persistence: createTaskExecutionPersistence(db, {
+            historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
             recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
           }),
           completionMode: 'await-settle',
@@ -316,7 +321,10 @@ describe('RFC-310 human-reviewed digital employee TaskEngine system mock E2E', (
             throw new Error('human-review e2e does not launch a selected workflow')
           },
         },
-        ...composeDatabaseDigitalEmployeeExecutionPorts(db),
+        ...composeDatabaseDigitalEmployeeExecutionPorts(
+          db,
+          epoch2RuntimeTestPorts(db).historyRestrictions,
+        ),
         executionContracts,
       })
       const plan = {
@@ -369,7 +377,7 @@ describe('RFC-310 human-reviewed digital employee TaskEngine system mock E2E', (
       expect(
         queryRows(
           db
-            .select()
+            .select(nodeRunFixtureColumns(db))
             .from(nodeRuns)
             .where(
               and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, DIGITAL_EMPLOYEE_AGENT_NODE_ID)),
@@ -379,7 +387,7 @@ describe('RFC-310 human-reviewed digital employee TaskEngine system mock E2E', (
 
       const reviewRun = first(
         db
-          .select()
+          .select(nodeRunFixtureColumns(db))
           .from(nodeRuns)
           .where(
             and(
@@ -390,6 +398,8 @@ describe('RFC-310 human-reviewed digital employee TaskEngine system mock E2E', (
       )
       if (reviewRun === undefined) throw new Error('review node did not enter durable waiting')
       await addReviewComment({
+        reviewReader: epoch2ReviewReader(db, appHome),
+
         db,
         appHome,
         nodeRunId: reviewRun.id,
@@ -423,7 +433,7 @@ describe('RFC-310 human-reviewed digital employee TaskEngine system mock E2E', (
       expect(
         queryRows(
           db
-            .select()
+            .select(nodeRunFixtureColumns(db))
             .from(nodeRuns)
             .where(
               and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, DIGITAL_EMPLOYEE_AGENT_NODE_ID)),
@@ -433,7 +443,7 @@ describe('RFC-310 human-reviewed digital employee TaskEngine system mock E2E', (
       expect(
         queryRows(
           db
-            .select()
+            .select(nodeRunFixtureColumns(db))
             .from(nodeRuns)
             .where(
               and(
@@ -447,6 +457,8 @@ describe('RFC-310 human-reviewed digital employee TaskEngine system mock E2E', (
       const waitingReview = (await readNodeRunFixtures(db, { id: reviewRun.id }))[0]
       expect(waitingReview).toMatchObject({ status: 'awaiting_review', reviewIteration: 1 })
       await addReviewComment({
+        reviewReader: epoch2ReviewReader(db, appHome),
+
         db,
         appHome,
         nodeRunId: reviewRun.id,
@@ -479,7 +491,7 @@ describe('RFC-310 human-reviewed digital employee TaskEngine system mock E2E', (
       expect(
         queryRows(
           db
-            .select()
+            .select(nodeRunFixtureColumns(db))
             .from(nodeRuns)
             .where(
               and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, DIGITAL_EMPLOYEE_AGENT_NODE_ID)),
@@ -489,7 +501,7 @@ describe('RFC-310 human-reviewed digital employee TaskEngine system mock E2E', (
       expect(
         queryRows(
           db
-            .select()
+            .select(nodeRunFixtureColumns(db))
             .from(nodeRuns)
             .where(
               and(

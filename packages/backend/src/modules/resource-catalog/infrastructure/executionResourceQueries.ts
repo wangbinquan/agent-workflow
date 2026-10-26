@@ -1,7 +1,7 @@
 import { asc, eq, inArray, sql, type SQL, type SQLWrapper } from 'drizzle-orm'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { tablesOf } from '@/platform/persistence/sessionTables'
-import { agentFromStoredJsonRow } from './agentPersistence'
+import { loadAgentPersistenceRow } from './agentPersistence'
 import { workflowCatalogPredicate } from './workflowCatalogPredicate'
 import type {
   AgentExecutionQueries,
@@ -31,8 +31,11 @@ export function createAgentExecutionQueries(db: PersistenceDb): AgentExecutionQu
   const { agents } = tablesOf(db)
   return {
     async read(agentId) {
-      const row = (await db.select().from(agents).where(eq(agents.id, agentId)).limit(1))[0]
-      return row === undefined ? null : agentFromStoredJsonRow(row)
+      return loadAgentPersistenceRow(
+        db,
+        async (tx) => (await tx.select().from(agents).where(eq(agents.id, agentId)).limit(1))[0],
+        'stored-json',
+      )
     },
     async existingIds(agentIds) {
       if (agentIds.length === 0) return []

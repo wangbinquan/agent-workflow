@@ -1,3 +1,8 @@
+import type { TaskReadRow } from '@/modules/task-execution/infrastructure/taskRepositorySql'
+import { legacyContentRef } from '@/platform/content/contentRef'
+import { contentRowColumns } from '@/platform/content/infrastructure/contentStore'
+import { nodeRunFixtureColumns } from './helpers/model/nodeRun'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { withO2Closure } from './helpers/o2Closure'
 // RFC-129 — multi-document review cross-round selection inheritance (integration).
 //
@@ -22,7 +27,7 @@ import {
   workflowFixture,
 } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+
 import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -61,7 +66,7 @@ describeEachProvider('RFC-129 — cross-round selection inheritance', (harness) 
 
   async function seed(upstreamKind: string): Promise<{
     taskId: string
-    task: PersistenceTables['tasks']['$inferSelect']
+    task: TaskReadRow
     definition: WorkflowDefinition
     reviewNode: WorkflowNode
   }> {
@@ -134,7 +139,9 @@ describeEachProvider('RFC-129 — cross-round selection inheritance', (harness) 
     iteration = 0,
   ): Promise<void> {
     const { nodeRuns } = tablesOf(db)
-    const existing = (await db.select().from(nodeRuns).where(eq(nodeRuns.id, runId)))[0]
+    const existing = (
+      await db.select(nodeRunFixtureColumns(db)).from(nodeRuns).where(eq(nodeRuns.id, runId))
+    )[0]
     if (existing === undefined) {
       await nodeRunFixture(db, {
         id: runId,
@@ -165,7 +172,7 @@ describeEachProvider('RFC-129 — cross-round selection inheritance', (harness) 
   async function freshPendingSrc(taskId: string): Promise<string> {
     const { nodeRuns } = tablesOf(db)
     const runs = await db
-      .select()
+      .select(nodeRunFixtureColumns(db))
       .from(nodeRuns)
       .where(
         and(
@@ -192,7 +199,7 @@ describeEachProvider('RFC-129 — cross-round selection inheritance', (harness) 
   async function dispatch(
     ctx: {
       taskId: string
-      task: PersistenceTables['tasks']['$inferSelect']
+      task: TaskReadRow
       definition: WorkflowDefinition
       reviewNode: WorkflowNode
     },
@@ -448,7 +455,7 @@ describeEachProvider('RFC-129 — cross-round selection inheritance', (harness) 
         sourcePortName: 'cases',
         versionIndex: gen,
         reviewIteration: 0,
-        bodyPath,
+        ...contentRowColumns(legacyContentRef('review-body-path', 'local-file', bodyPath)),
         commentsJson: '[]',
         decision,
         itemIndex,

@@ -1,18 +1,13 @@
 // User regression 2026-08-23: digital employee Cases need their own durable
 // task name instead of deriving the list/detail title from Context fields.
 
+import { FROZEN_MIGRATIONS } from './migration-freeze'
 import { describe, expect, test } from 'bun:test'
 import { Database } from 'bun:sqlite'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
-const MIGRATION = resolve(
-  import.meta.dir,
-  '..',
-  'db',
-  'migrations',
-  '0206_rfc310_employee_case_name.sql',
-)
+const MIGRATION = resolve(FROZEN_MIGRATIONS, '0206_rfc310_employee_case_name.sql')
 
 describe('migration 0206 — durable digital employee Case task name', () => {
   test('backfills the previously displayed Context subject and keeps older writers migration-compatible', () => {

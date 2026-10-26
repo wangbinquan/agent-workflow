@@ -3,19 +3,23 @@
 // without the field) come back with portValidationFailuresJson == NULL. New
 // rows can write and read the JSON payload round-trip.
 
+import {
+  frozenTablesOf,
+  createFrozenEpoch1Db,
+  type FrozenDbClient,
+  FROZEN_MIGRATIONS,
+} from './migration-freeze'
 import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
 import { queryRows, first } from '@/platform/persistence/queryHelpers'
 import { describe, expect, test, beforeEach } from 'bun:test'
 import { resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { eq } from 'drizzle-orm'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+const MIGRATIONS = resolve(FROZEN_MIGRATIONS)
 
-function seedTaskAndWorkflow(db: DbClient): { taskId: string } {
+function seedTaskAndWorkflow(db: FrozenDbClient): { taskId: string } {
   const wfId = ulid()
-  const { workflows, tasks } = tablesOf(db)
+  const { workflows, tasks } = frozenTablesOf(db)
   insertOne(db, workflows, {
     id: wfId,
     name: 'wf',
@@ -43,9 +47,9 @@ function seedTaskAndWorkflow(db: DbClient): { taskId: string } {
 }
 
 describe('migration 0026 (RFC-049 node_runs.port_validation_failures_json)', () => {
-  let db: DbClient
+  let db: FrozenDbClient
   beforeEach(() => {
-    db = createInMemoryDb(MIGRATIONS)
+    db = createFrozenEpoch1Db(MIGRATIONS)
   })
 
   test('M1: column stores JSON and is null when omitted', () => {
@@ -61,7 +65,7 @@ describe('migration 0026 (RFC-049 node_runs.port_validation_failures_json)', () 
       },
     ])
 
-    const { nodeRuns } = tablesOf(db)
+    const { nodeRuns } = frozenTablesOf(db)
     insertOne(db, nodeRuns, {
       id: withJson,
       taskId,
@@ -93,7 +97,7 @@ describe('migration 0026 (RFC-049 node_runs.port_validation_failures_json)', () 
   test('M2: empty-array payload round-trips (distinct from NULL)', () => {
     const { taskId } = seedTaskAndWorkflow(db)
     const id = ulid()
-    const { nodeRuns } = tablesOf(db)
+    const { nodeRuns } = frozenTablesOf(db)
     insertOne(db, nodeRuns, {
       id,
       taskId,
@@ -120,7 +124,7 @@ describe('migration 0026 (RFC-049 node_runs.port_validation_failures_json)', () 
         detail: "markdown_file port content '../etc/passwd' resolves outside the task worktree",
       },
     ])
-    const { nodeRuns } = tablesOf(db)
+    const { nodeRuns } = frozenTablesOf(db)
     insertOne(db, nodeRuns, {
       id,
       taskId,

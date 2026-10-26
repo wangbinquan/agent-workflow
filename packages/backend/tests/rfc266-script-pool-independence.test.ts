@@ -1,3 +1,4 @@
+import { initializeTaskWorkspace } from './helpers/taskWorkspaceFixture'
 // RFC-266 —— 脚本节点跑在**独立**的 daemon 池里，不与 agent 互相排队。
 //
 // 为什么这些测试存在：RFC-253 让脚本节点复用了 agent 分支的同一批原语，其中包括
@@ -15,7 +16,7 @@ import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
-import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
@@ -24,7 +25,6 @@ import { runTaskWithRealTestTopology as runTask } from './helpers/taskExecutionT
 import { getNodePoolSemaphore } from '../src/services/processNodeConcurrency'
 import { canonicalizeWorkflowAgentIds } from './helpers/canonicalWorkflowFixture'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
 
 interface Harness {
@@ -36,8 +36,8 @@ interface Harness {
 function buildHarness(): Harness {
   const appHome = mkdtempSync(join(tmpdir(), 'aw-rfc266-'))
   const worktreePath = join(appHome, 'wt')
-  mkdirSync(worktreePath, { recursive: true })
-  const db = createInMemoryDb(MIGRATIONS)
+  initializeTaskWorkspace(worktreePath)
+  const db = createInMemoryDb()
   return {
     db,
     appHome,

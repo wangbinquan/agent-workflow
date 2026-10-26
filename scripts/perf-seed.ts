@@ -5,18 +5,22 @@
 //   bun run scripts/perf-seed.ts --db /tmp/aw-perf/agent-workflow.db
 //   bun run scripts/perf-seed.ts --db /tmp/aw-perf/agent-workflow.db --small   # 1% 快速档
 //
-// 写入姿势:openDb 先把迁移与 PRAGMA 铺好,随后用第二条 bun:sqlite 原生连接
-// (WAL 允许并存)以 prepared statement + 大事务批量写——比走 ORM 快一个量级。
+// 按目标聚合分表批量写入；每张表遵守 provider bind budget，保留原事务分块。
 // 生成的数据满足 RFC-311 PR-4 的物化列不变量(branch_started_at = 子树
 // max(started_at)),否则 /api/tasks/page 快路径的基准数字不可信。
 
 import { tablesOf } from '../packages/backend/src/platform/persistence/sessionTables'
-import { Database } from 'bun:sqlite'
+import { workflowFixture } from '../packages/backend/tests/helpers/model'
+import { nodeRunFixtureIdentity } from '../packages/backend/tests/helpers/model/identity'
+import { nodeRunFixtureColumns } from '../packages/backend/tests/helpers/model/nodeRun'
+import { splitTaskCreation } from '../packages/backend/src/modules/task-execution/domain/taskCreation'
+import { taskReadColumns } from '../packages/backend/src/modules/task-execution/infrastructure/taskRepositorySql'
+import type { PersistenceInsertValues } from '../packages/backend/src/platform/persistence/singleInsert'
 import { mkdirSync, existsSync, rmSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { openDb } from '../packages/backend/src/db/client'
 import { createHash } from 'node:crypto'
-import { eq, getTableColumns, gt } from 'drizzle-orm'
+import { eq, getTableColumns, gt, type Table } from 'drizzle-orm'
 import type {
   PersistenceDb,
   PersistenceTx,
@@ -108,14 +112,15 @@ export async function seedPerformanceCorpusEntry({ session }: PerfCorpusDatabase
         updatedAt: PERF_CORPUS_ENTRY.now,
       })
       .onConflictDoNothing()
-    await tx
-      .insert(tablesOf(tx).workflows)
-      .values({
+    await workflowFixture(
+      tx,
+      {
         id: PERF_CORPUS_ENTRY.workflowId,
         name: PERF_CORPUS_ENTRY.workflowName,
         definition: PERF_CORPUS_ENTRY.workflowDefinition,
-      })
-      .onConflictDoNothing()
+      },
+      { onConflict: 'ignore' },
+    )
     await tx
       .update(tablesOf(tx).authLoginPolicy)
       .set({ bootstrapCompletedAt: PERF_CORPUS_ENTRY.now })
@@ -166,6 +171,169 @@ async function writeCorpusRows<Row>(
   }
 }
 
+async function insertBatches<T extends Table>(
+  tx: PersistenceTx,
+  session: DatabaseSession,
+  table: T,
+  values: PersistenceInsertValues<T>[],
+): Promise<void> {
+  const size = session.engine.batchInsertMax(Object.keys(getTableColumns(table)).length)
+  for (let offset = 0; offset < values.length; offset += size)
+    await tx
+      .insert(table)
+      .values(values.slice(offset, offset + size))
+      .onConflictDoNothing()
+}
+
+async function writeTaskCorpus(
+  session: DatabaseSession,
+  dimensions: PerfCorpusDimensions,
+  onProgress: ((progress: PerfCorpusSeedProgress) => void | Promise<void>) | undefined,
+): Promise<void> {
+  for (const { base, hi } of perfCorpusRanges(dimensions.tasks, PERF_CORPUS_CHUNKS.tasks)) {
+    await session.transaction(async (tx) => {
+      const tables = tablesOf(tx)
+      const splits = Array.from({ length: hi - base }, (_, offset) => {
+        const row = perfTaskRow(base + offset, dimensions)
+        const split = splitTaskCreation({
+          subject: { kind: 'workflow', sourceId: row.workflowId },
+          core: { ...row, catalogVisibility: 'public' },
+          definition: {
+            definitionOrigin: 'authored',
+            workflowSnapshot: row.workflowSnapshot,
+            workflowVersion: null,
+            inputs: row.inputs,
+          },
+          launch: { kind: 'root', launchOrigin: row.launchOrigin },
+          launchContext: {},
+          workspace: { ...row, baseCommit: null, spaceKind: 'local' },
+          repos: [],
+          nodePaths: [],
+        })
+        return {
+          ...split,
+          task: { ...split.task, rootTaskId: row.rootTaskId },
+          launchContext: {
+            ...split.launchContext,
+            executionLineageId: row.executionLineageId,
+            lineageSlotPathJson: row.lineageSlotPathJson,
+          },
+        }
+      })
+      await insertBatches(
+        tx,
+        session,
+        tables.tasks,
+        splits.map((split) => split.task),
+      )
+      await insertBatches(
+        tx,
+        session,
+        tables.taskDefinitions,
+        splits.map((split) => split.definition),
+      )
+      await insertBatches(
+        tx,
+        session,
+        tables.taskLaunchContexts,
+        splits.map((split) => split.launchContext),
+      )
+      await insertBatches(
+        tx,
+        session,
+        tables.taskWorkspaces,
+        splits.map((split) => split.workspace),
+      )
+      await insertBatches(
+        tx,
+        session,
+        tables.taskExecutionGenerations,
+        splits.map((split) => split.generation),
+      )
+      await insertBatches(
+        tx,
+        session,
+        tables.taskRepositoryMounts,
+        splits.flatMap((split) => split.mounts),
+      )
+      await insertBatches(
+        tx,
+        session,
+        tables.taskSpaceNodes,
+        splits.map((split) => ({
+          taskId: split.task.id,
+          nodePath: '',
+          schemaVersion: 1,
+        })),
+      )
+    })
+    await onProgress?.({ table: 'tasks', inserted: hi, total: dimensions.tasks })
+  }
+}
+
+async function writeRunCorpus(
+  session: DatabaseSession,
+  dimensions: PerfCorpusDimensions,
+  onProgress: ((progress: PerfCorpusSeedProgress) => void | Promise<void>) | undefined,
+): Promise<void> {
+  const total = dimensions.tasks * dimensions.runsPerTask
+  for (const { base, hi } of perfCorpusRanges(total, PERF_CORPUS_CHUNKS.nodeRuns)) {
+    await session.transaction(async (tx) => {
+      const tables = tablesOf(tx)
+      const { nodeRunSeqAllocations } = tablesOf(tx)
+      const rows = Array.from({ length: hi - base }, (_, offset) =>
+        perfNodeRunRow(base + offset, dimensions),
+      )
+      const sequences = new Map<string, number>()
+      const size = session.engine.batchInsertMax(
+        Object.keys(getTableColumns(nodeRunSeqAllocations)).length,
+      )
+      for (let offset = 0; offset < rows.length; offset += size) {
+        const allocated = await tx
+          .insert(nodeRunSeqAllocations)
+          .values(
+            rows.slice(offset, offset + size).map((row) => ({
+              taskId: row.taskId,
+              nodeRunId: row.id,
+              allocatedAt: row.startedAt,
+            })),
+          )
+          .returning({ nodeRunId: nodeRunSeqAllocations.nodeRunId, seq: nodeRunSeqAllocations.seq })
+        for (const row of allocated) sequences.set(row.nodeRunId, row.seq)
+      }
+      const roots = rows.map(({ retryIndex, ...row }) => ({
+        ...row,
+        ...nodeRunFixtureIdentity(row),
+        seq: sequences.get(row.id)!,
+        historicalParentId: null,
+        attemptIndex: retryIndex,
+        generationSeq: 0,
+        inputsRecorded: false,
+        recordMode: 'executable' as const,
+        provenanceQuality: 'recorded' as const,
+        envelopeNonce: 'fixture:' + row.id,
+      }))
+      await insertBatches(tx, session, tables.nodeRuns, roots)
+      // The corpus has no config/process/result facts; row-presence therefore creates no such companions.
+      await insertBatches(
+        tx,
+        session,
+        tables.nodeRunSelections,
+        roots.map((row) => ({
+          taskId: row.taskId,
+          slotKey: row.slotKey,
+          selectedRunId: row.id,
+          revision: 1,
+          generationSeq: 0,
+          cause: 'fixture',
+          selectedAt: row.startedAt,
+        })),
+      )
+    })
+    await onProgress?.({ table: 'nodeRuns', inserted: hi, total })
+  }
+}
+
 /**
  * The async sink consumes the same rows as the native SQLite CLI. The caller supplies
  * a real initialized database; schema migration, generation activation and ANALYZE
@@ -199,32 +367,8 @@ export async function seedPerformanceCorpus(
     },
     onProgress,
   )
-  await writeCorpusRows(
-    session,
-    {
-      table: 'tasks',
-      total: dimensions.tasks,
-      chunk: PERF_CORPUS_CHUNKS.tasks,
-      columnCount: Object.keys(getTableColumns(tablesOf(options.db).tasks)).length,
-      rowAt: (i) => perfTaskRow(i, dimensions),
-      insert: async (tx, rows) =>
-        await tx.insert(tablesOf(tx).tasks).values(rows).onConflictDoNothing(),
-    },
-    onProgress,
-  )
-  await writeCorpusRows(
-    session,
-    {
-      table: 'nodeRuns',
-      total: dimensions.tasks * dimensions.runsPerTask,
-      chunk: PERF_CORPUS_CHUNKS.nodeRuns,
-      columnCount: Object.keys(getTableColumns(tablesOf(options.db).nodeRuns)).length,
-      rowAt: (i) => perfNodeRunRow(i, dimensions),
-      insert: async (tx, rows) =>
-        await tx.insert(tablesOf(tx).nodeRuns).values(rows).onConflictDoNothing(),
-    },
-    onProgress,
-  )
+  await writeTaskCorpus(session, dimensions, onProgress)
+  await writeRunCorpus(session, dimensions, onProgress)
   await writeCorpusRows(
     session,
     {
@@ -332,26 +476,26 @@ export async function readPerformanceCorpusReceipt(
           .select({
             id: tablesOf(tx).tasks.id,
             name: tablesOf(tx).tasks.name,
-            workflowId: tablesOf(tx).tasks.workflowId,
-            workflowSnapshot: tablesOf(tx).tasks.workflowSnapshot,
-            repoPath: tablesOf(tx).tasks.repoPath,
-            worktreePath: tablesOf(tx).tasks.worktreePath,
-            baseBranch: tablesOf(tx).tasks.baseBranch,
-            branch: tablesOf(tx).tasks.branch,
+            workflowId: taskReadColumns(tx).workflowId,
+            workflowSnapshot: taskReadColumns(tx).workflowSnapshot,
+            repoPath: taskReadColumns(tx).repoPath,
+            worktreePath: taskReadColumns(tx).worktreePath,
+            baseBranch: taskReadColumns(tx).baseBranch,
+            branch: taskReadColumns(tx).branch,
             status: tablesOf(tx).tasks.status,
-            inputs: tablesOf(tx).tasks.inputs,
+            inputs: taskReadColumns(tx).inputs,
             startedAt: tablesOf(tx).tasks.startedAt,
             finishedAt: tablesOf(tx).tasks.finishedAt,
             runningMs: tablesOf(tx).tasks.runningMs,
             ownerUserId: tablesOf(tx).tasks.ownerUserId,
-            launchOrigin: tablesOf(tx).tasks.launchOrigin,
+            launchOrigin: taskReadColumns(tx).launchOrigin,
             parentTaskId: tablesOf(tx).tasks.parentTaskId,
             invocationDepth: tablesOf(tx).tasks.invocationDepth,
-            cachedRepoId: tablesOf(tx).tasks.cachedRepoId,
+            cachedRepoId: taskReadColumns(tx).cachedRepoId,
             branchStartedAt: tablesOf(tx).tasks.branchStartedAt,
             rootTaskId: tablesOf(tx).tasks.rootTaskId,
-            executionLineageId: tablesOf(tx).tasks.executionLineageId,
-            lineageSlotPathJson: tablesOf(tx).tasks.lineageSlotPathJson,
+            executionLineageId: taskReadColumns(tx).executionLineageId,
+            lineageSlotPathJson: taskReadColumns(tx).lineageSlotPathJson,
           })
           .from(tablesOf(tx).tasks)
           .where(after === undefined ? undefined : gt(tablesOf(tx).tasks.id, after))
@@ -367,7 +511,7 @@ export async function readPerformanceCorpusReceipt(
             nodeId: tablesOf(tx).nodeRuns.nodeId,
             status: tablesOf(tx).nodeRuns.status,
             iteration: tablesOf(tx).nodeRuns.iteration,
-            retryIndex: tablesOf(tx).nodeRuns.retryIndex,
+            retryIndex: nodeRunFixtureColumns(tx).retryIndex,
             startedAt: tablesOf(tx).nodeRuns.startedAt,
             finishedAt: tablesOf(tx).nodeRuns.finishedAt,
             continuationSlotKey: tablesOf(tx).nodeRuns.continuationSlotKey,
@@ -447,204 +591,28 @@ export async function readPerformanceCorpusReceipt(
   }
 }
 
-function runSqliteSeed(): void {
+async function runSqliteSeed(): Promise<void> {
   const args = parseArgs()
-  const MIGRATIONS = resolve(import.meta.dir, '..', 'packages', 'backend', 'db', 'migrations')
-  const T0 = PERF_CORPUS_ENTRY.now
-
-  if (args.reset && existsSync(args.db)) {
-    rmSync(args.db)
-    for (const suffix of ['-wal', '-shm']) {
+  const migrationsFolder = resolve(import.meta.dir, '../packages/backend/db/migrations')
+  if (args.reset)
+    for (const suffix of ['', '-wal', '-shm'])
       if (existsSync(args.db + suffix)) rmSync(args.db + suffix)
-    }
-  }
   mkdirSync(dirname(args.db), { recursive: true })
-
-  console.log(`[perf-seed] migrating ${args.db}`)
-  openDb({ path: args.db, migrationsFolder: MIGRATIONS })
-
-  const raw = new Database(args.db)
-  raw.exec('PRAGMA journal_mode = WAL;')
-  raw.exec('PRAGMA synchronous = OFF;') // 基准库可重建,写入期换速度
-  raw.exec('PRAGMA busy_timeout = 10000;')
-
-  function tx(fn: () => void): void {
-    raw.exec('BEGIN')
-    try {
-      fn()
-      raw.exec('COMMIT')
-    } catch (e) {
-      raw.exec('ROLLBACK')
-      throw e
-    }
-  }
-
-  const started = Date.now()
-
-  // --- users / workflow --------------------------------------------------------
-  tx(() => {
-    raw
-      .prepare(
-        `INSERT OR IGNORE INTO users (id, username, display_name, role, created_at, updated_at)
-       VALUES (?, ?, ?, 'admin', ?, ?)`,
-      )
-      .run(
-        PERF_CORPUS_ENTRY.userId,
-        PERF_CORPUS_ENTRY.username,
-        PERF_CORPUS_ENTRY.displayName,
-        T0,
-        T0,
-      )
-    raw
-      .prepare(`INSERT OR IGNORE INTO workflows (id, name, definition) VALUES (?, ?, ?)`)
-      .run(
-        PERF_CORPUS_ENTRY.workflowId,
-        PERF_CORPUS_ENTRY.workflowName,
-        PERF_CORPUS_ENTRY.workflowDefinition,
-      )
-    // bootstrap 闸门:auth_login_policy.bootstrap_completed_at 为 NULL 时全 API
-    // 403(bootstrap-admin-required),bench 一格都跑不了。
-    raw
-      .prepare(`UPDATE auth_login_policy SET bootstrap_completed_at = ? WHERE id = 'global'`)
-      .run(T0)
-    // bench 的凭据:bootstrap 完成后 daemon token 失效,读端点走一枚确定性
-    // PAT(空 scope = 只读,bench 全 GET 正好)。raw token 见 perf-bench.ts。
-    const patRaw = PERF_CORPUS_ENTRY.bearerToken
-    const patHash = new Bun.CryptoHasher('sha256').update(patRaw).digest('hex')
-    raw
-      .prepare(
-        `INSERT OR IGNORE INTO user_pats (id, user_id, name, token_hash, scopes_json, created_at)
-       VALUES ('perf-pat', 'perf-admin', 'perf-bench', ?, '[]', ?)`,
-      )
-      .run(patHash, T0)
-  })
-
-  // --- repos -------------------------------------------------------------------
-  console.log(`[perf-seed] repos: ${args.repos}`)
-  tx(() => {
-    const ins = raw.prepare(
-      `INSERT OR IGNORE INTO cached_repos
-       (id, url_hash, url_redacted, local_path, default_branch, last_fetched_at, created_at,
-        last_auto_refresh_at, has_submodules, last_submodule_sync_ok)
-     VALUES (?, ?, ?, ?, 'main', ?, ?, ?, ?, ?)`,
-    )
-    for (let i = 0; i < args.repos; i += 1) {
-      const row = perfRepoRow(i)
-      ins.run(
-        row.id,
-        row.urlHash,
-        row.urlRedacted,
-        row.localPath,
-        row.lastFetchedAt,
-        row.createdAt,
-        row.lastAutoRefreshAt,
-        row.hasSubmodules,
-        row.lastSubmoduleSyncOk,
-      )
-    }
-  })
-
-  // --- tasks -------------------------------------------------------------------
-  // 90% 根任务,10% 挂一个子任务(锁 branch_started_at = 子树 max 的不变量:
-  // 子任务 startedAt 晚于父,父行的 branch_started_at 取子值)。
-  console.log(`[perf-seed] tasks: ${args.tasks}`)
-  const CHUNK = PERF_CORPUS_CHUNKS.tasks
-  for (let base = 0; base < args.tasks; base += CHUNK) {
-    const hi = Math.min(base + CHUNK, args.tasks)
-    tx(() => {
-      const ins = raw.prepare(
-        `INSERT OR IGNORE INTO tasks
-         (id, name, workflow_id, workflow_snapshot, repo_path, worktree_path, base_branch, branch,
-          status, inputs, started_at, finished_at, running_ms, owner_user_id, launch_origin,
-          parent_task_id, invocation_depth, cached_repo_id, branch_started_at, root_task_id)
-       VALUES (?, ?, 'perf-wf', '{}', ?, ?, 'main', ?, ?, '{}', ?, ?, 0, 'perf-admin', 'manual', ?, ?, ?, ?, ?)`,
-      )
-      for (let i = base; i < hi; i += 1) {
-        const row = perfTaskRow(i, args)
-        ins.run(
-          row.id,
-          row.name,
-          row.repoPath,
-          row.worktreePath,
-          row.branch,
-          row.status,
-          row.startedAt,
-          row.finishedAt,
-          row.parentTaskId,
-          row.invocationDepth,
-          row.cachedRepoId,
-          row.branchStartedAt,
-          row.rootTaskId,
-        )
-      }
+  const db = openDb({ path: args.db, migrationsFolder })
+  try {
+    const receipt = await seedPerformanceCorpus({
+      db,
+      session: databaseSessionFor(db),
+      dimensions: args,
+      onProgress: ({ table, inserted, total }) => {
+        console.log(`[perf-seed] ${table}: ${inserted}/${total}`)
+      },
     })
-    console.log(`[perf-seed]   tasks ${hi}/${args.tasks}`)
+    if (!receipt.matchesExpected) throw new Error('performance-corpus-receipt-mismatch')
+    db.$client.exec('ANALYZE; PRAGMA wal_checkpoint(TRUNCATE);')
+    console.log(`[perf-seed] done: ${args.db}`)
+  } finally {
+    db.$client.close()
   }
-
-  // --- node_runs ---------------------------------------------------------------
-  const totalRuns = args.tasks * args.runsPerTask
-  console.log(`[perf-seed] node_runs: ${totalRuns}`)
-  const RUN_CHUNK = PERF_CORPUS_CHUNKS.nodeRuns
-  for (let base = 0; base < totalRuns; base += RUN_CHUNK) {
-    const hi = Math.min(base + RUN_CHUNK, totalRuns)
-    tx(() => {
-      const ins = raw.prepare(
-        `INSERT OR IGNORE INTO node_runs
-         (id, task_id, node_id, status, iteration, retry_index, started_at, finished_at)
-       VALUES (?, ?, ?, ?, 0, 0, ?, ?)`,
-      )
-      for (let i = base; i < hi; i += 1) {
-        const row = perfNodeRunRow(i, args)
-        ins.run(row.id, row.taskId, row.nodeId, row.status, row.startedAt, row.finishedAt)
-      }
-    })
-    console.log(`[perf-seed]   node_runs ${hi}/${totalRuns}`)
-  }
-
-  // --- node_run_events ---------------------------------------------------------
-  console.log(`[perf-seed] events: ${args.events}`)
-  const EV_CHUNK = PERF_CORPUS_CHUNKS.nodeRunEvents
-  for (let base = 0; base < args.events; base += EV_CHUNK) {
-    const hi = Math.min(base + EV_CHUNK, args.events)
-    tx(() => {
-      const ins = raw.prepare(
-        `INSERT INTO node_run_events (node_run_id, ts, kind, payload) VALUES (?, ?, 'text', ?)`,
-      )
-      for (let i = base; i < hi; i += 1) {
-        const row = perfEventRow(i, args)
-        ins.run(row.nodeRunId, row.ts, row.payload)
-      }
-    })
-    console.log(`[perf-seed]   events ${hi}/${args.events}`)
-  }
-
-  // --- webhook deliveries ------------------------------------------------------
-  console.log(`[perf-seed] webhook deliveries: ${args.deliveries}`)
-  for (let base = 0; base < args.deliveries; base += RUN_CHUNK) {
-    const hi = Math.min(base + RUN_CHUNK, args.deliveries)
-    tx(() => {
-      const ins = raw.prepare(
-        `INSERT OR IGNORE INTO webhook_deliveries
-         (id, endpoint_id, event_uuid, object_kind, event_type, status, received_at, body_json)
-       VALUES (?, 'perf-endpoint', ?, 'merge_request', 'merge_request', 'matched', ?, ?)`,
-      )
-      for (let i = base; i < hi; i += 1) {
-        const row = perfDeliveryRow(i)
-        ins.run(row.id, row.eventUuid, row.receivedAt, row.bodyJson)
-      }
-    })
-    console.log(`[perf-seed]   deliveries ${hi}/${args.deliveries}`)
-  }
-
-  raw.exec('PRAGMA synchronous = NORMAL;')
-  raw.exec('PRAGMA wal_checkpoint(TRUNCATE);')
-  raw.exec('ANALYZE;')
-  raw.close()
-
-  const sizeMb = (Bun.file(args.db).size / 1024 / 1024).toFixed(0)
-  console.log(
-    `[perf-seed] done in ${((Date.now() - started) / 1000).toFixed(1)}s — ${sizeMb}MB at ${args.db}`,
-  )
 }
-
-if (import.meta.main) runSqliteSeed()
+if (import.meta.main) await runSqliteSeed()

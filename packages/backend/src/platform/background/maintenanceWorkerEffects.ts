@@ -1,3 +1,4 @@
+import type { ContentStore as ImportedContentStore } from '@/platform/content/contentStore'
 import type { TaskArchiveContentBinding } from '@/modules/task-execution/public/types'
 import type { IntentArtifactContentPort, IntentScratchStore } from '@/modules/intent/public/types'
 import type { WorkspaceMaintenanceEffects } from '@/modules/source-control/public/types'
@@ -14,6 +15,7 @@ import type {
 } from '@/modules/resource-catalog/public/types'
 
 export interface MaintenanceWorkerEffectsSelections {
+  readonly contentStore?: ImportedContentStore
   /** RFC-370 v3 V6: the single hosted object recovery/GC job body. */
   readonly objectPublications?: HostedObjectPublicationMaintenance
   readonly databaseBackups?: DatabaseBackupMaintenance
@@ -108,6 +110,7 @@ function selectEffects(
   )
     throw new Error('maintenance-worker-effects-invalid-selection')
   const selection: {
+    contentStore?: MaintenanceWorkerEffectsSelections['contentStore']
     objectPublications?: HostedObjectPublicationMaintenance
     databaseBackups?: DatabaseBackupMaintenance
     eventsArchive?: EventsArchiveContent
@@ -122,6 +125,11 @@ function selectEffects(
   } = {}
   for (const family of capabilities) {
     switch (family) {
+      case 'contentStore': {
+        completeMethods(environment.contentStore, ['put', 'read', 'release'], family)
+        selection.contentStore = environment.contentStore
+        break
+      }
       case 'objectPublications': {
         completeMethods(environment.objectPublications, ['run'], family)
         selection.objectPublications = environment.objectPublications

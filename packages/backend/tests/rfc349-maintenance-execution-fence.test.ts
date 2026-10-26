@@ -3,7 +3,6 @@
 // 迁移目录**建库，钉住「SQLite 侧仍然走覆盖索引」这一条；行为面（clear / busy、两个引擎上
 // 语句都合法）由 `rfc359-w11-dialect-ledger-conformance.test.ts` 在两个引擎上各跑一遍。
 import { describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
 
 import { createInMemoryDb } from '@/db/client'
 import { createMaintenanceExecutionFence } from '@/modules/task-execution/infrastructure/maintenanceExecutionFence'
@@ -11,7 +10,7 @@ import { recordStatements } from './helpers/statementRecorder'
 
 describe('RFC-349 maintenance execution fence', () => {
   test('uses the covering node-run status index for the full-scale absence case', async () => {
-    const db = createInMemoryDb(resolve(import.meta.dir, '..', 'db', 'migrations'))
+    const db = createInMemoryDb()
     const sqlite = db.$client
     const recording = recordStatements(sqlite)
     try {

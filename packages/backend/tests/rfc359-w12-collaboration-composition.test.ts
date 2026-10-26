@@ -1,3 +1,6 @@
+import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
+import { legacyContentRef } from '@/platform/content/contentRef'
+import { contentRowColumns } from '@/platform/content/infrastructure/contentStore'
 import { withO2Closure, o2Ports } from './helpers/o2Closure'
 import {
   clarifyRoundFixture,
@@ -82,6 +85,7 @@ function operations(harness: ProviderHarness): CollaborationRouteOperations {
     reviewedArtifacts: new DatabaseCommittedReviewArtifactReader(
       db,
       createFileReviewArtifactContent(APP_HOME),
+      epoch2RuntimeTestPorts(db).content,
     ),
   })
   const context = createCollaborationCommandContext(
@@ -90,11 +94,14 @@ function operations(harness: ProviderHarness): CollaborationRouteOperations {
       appHome: APP_HOME,
       taskExecutionReadModels: createTaskExecutionReadModels(db),
       reviewDecisions: createReviewDecisionCommand(withO2Closure({ db, appHome: APP_HOME })),
-      questionDispatches: createQuestionDispatchCommand(db, o2Ports(db).taskLock),
+      questionDispatches: createQuestionDispatchCommand(db, o2Ports(db).taskLock, {
+        historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
+      }),
       clarifyDecisions: createClarifyDecisionCommand(
         db,
         memoryOperations.distillCommands,
         o2Ports(db).taskLock,
+        { historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions },
       ),
     }),
   )
@@ -213,7 +220,9 @@ async function seedSingleDocReview(db: PersistenceDb): Promise<ReviewFixture> {
       sourcePortName: 'out',
       versionIndex: 1,
       reviewIteration: 0,
-      bodyPath: `reviews/${taskId}/v1.md`,
+      ...contentRowColumns(
+        legacyContentRef('review-body-path', 'local-file', `reviews/${taskId}/v1.md`),
+      ),
       commentsJson: '[]',
       decision: 'iterated',
       createdAt: 1_000,
@@ -228,7 +237,9 @@ async function seedSingleDocReview(db: PersistenceDb): Promise<ReviewFixture> {
       sourcePortName: 'out',
       versionIndex: 2,
       reviewIteration: 1,
-      bodyPath: `reviews/${taskId}/v2.md`,
+      ...contentRowColumns(
+        legacyContentRef('review-body-path', 'local-file', `reviews/${taskId}/v2.md`),
+      ),
       commentsJson: '[]',
       decision: 'pending',
       createdAt: 2_000,
@@ -263,7 +274,7 @@ async function seedMultiDocReview(db: PersistenceDb): Promise<ReviewFixture> {
       sourcePortName: 'out',
       versionIndex: 1,
       reviewIteration: 0,
-      bodyPath,
+      ...contentRowColumns(legacyContentRef('review-body-path', 'local-file', bodyPath)),
       commentsJson: '[]',
       decision: 'pending' as const,
       itemIndex: index,

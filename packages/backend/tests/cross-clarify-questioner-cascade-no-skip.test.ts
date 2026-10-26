@@ -226,6 +226,17 @@ async function seedTask(db: PersistenceDb, def: WorkflowDefinition): Promise<str
     { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
   ])
   await taskFixture(db, {
+    // Historical checkpoints keep their real root mount after workspace removal.
+    repos: [
+      {
+        repoIndex: 0,
+        mountPath: '',
+        repoPath: '/tmp/aw-cascade-noskip',
+        baseBranch: 'main',
+        branch: `agent-workflow/${taskId}`,
+        worktreePath: '',
+      },
+    ],
     id: taskId,
     executionLineageId: taskId,
     lineageSlotPathJson,

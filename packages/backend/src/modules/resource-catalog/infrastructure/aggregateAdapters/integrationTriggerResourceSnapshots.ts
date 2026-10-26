@@ -25,7 +25,7 @@ import type {
   FrozenIntegrationTriggerResourceSnapshot,
   IntegrationTriggerResourceRequest,
 } from '../../public/types'
-import { agentFromPersistenceRow } from '../agentPersistence'
+import { loadAgentPersistenceRow } from '../agentPersistence'
 import { workflowDetailOf, workflowFromPersistenceRow } from '../workflowPersistence'
 import { workgroupFromRows } from '../workgroupRepository'
 import { agentSnapshot, workflowSnapshot, workgroupSnapshot } from './resourceSnapshotProjection'
@@ -119,7 +119,7 @@ export function createIntegrationTriggerResourceSnapshotReader(
       dependencies.assertNotBuiltin('agent', row)
       return Object.freeze({
         kind: request.kind,
-        agent: agentSnapshot(agentFromPersistenceRow(row)),
+        agent: agentSnapshot(await loadAgentPersistenceRow(input.transaction, row)),
       })
     }
     if (request.kind === 'scheduled-workgroup') {

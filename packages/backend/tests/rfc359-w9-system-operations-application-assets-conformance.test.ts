@@ -1,5 +1,6 @@
-import { patchTaskFixture, taskFixture, workflowFixture } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
+import { patchTaskFixture, taskFixture, workflowFixture } from './helpers/model'
+
 import { WORKFLOW_SCHEMA_VERSION } from '@agent-workflow/shared'
 // RFC-359 W9 —— System Operations「应用侧资产」读面的双引擎对拍。
 //

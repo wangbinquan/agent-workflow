@@ -1,12 +1,12 @@
+import { migrateFrozenSqlite as migrate, FROZEN_MIGRATIONS } from './migration-freeze'
 import { afterEach, describe, expect, test } from 'bun:test'
 import { Database } from 'bun:sqlite'
 import { drizzle } from 'drizzle-orm/bun-sqlite'
-import { migrate } from 'drizzle-orm/bun-sqlite/migrator'
 import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+const MIGRATIONS = resolve(FROZEN_MIGRATIONS)
 const tempDirs: string[] = []
 
 function freezeThrough0123(): string {
@@ -30,7 +30,7 @@ describe('migration 0124 RFC-235 intent turn Session capture', () => {
   test('upgrades legacy turns and cascades their independent event rows', () => {
     const raw = new Database(':memory:')
     raw.exec('PRAGMA foreign_keys = ON')
-    migrate(drizzle(raw), { migrationsFolder: freezeThrough0123() })
+    migrate(drizzle(raw), { migrationsFolder: freezeThrough0123(), preserveForeignKeys: true })
     raw.exec(`
       INSERT INTO intent_sessions (
         id, owner_user_id, title, status, context_revision,
@@ -43,7 +43,8 @@ describe('migration 0124 RFC-235 intent turn Session capture', () => {
       ) VALUES ('turn-1', 'session-1', 1, 'agent', 'changeset', '{}', 0, 0, 1);
     `)
 
-    migrate(drizzle(raw), { migrationsFolder: MIGRATIONS })
+    migrate(drizzle(raw), { migrationsFolder: MIGRATIONS, preserveForeignKeys: true })
+    expect(raw.query('PRAGMA foreign_keys').get()).toEqual({ foreign_keys: 1 })
 
     expect(
       raw

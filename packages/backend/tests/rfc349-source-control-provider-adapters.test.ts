@@ -1,6 +1,8 @@
+import { createEpoch2PostgresqlMetadata } from './helpers/epoch2PostgresqlMetadata'
 // RFC-349 — source-control credential persistence runs through the same closed
 // Promise repository on SQLite and PostgreSQL; provider clients never escape
 // infrastructure and PostgreSQL writes retain the live-generation fence.
+// RFC-395 BF-D27: AF-D1 keeps the projection read before its two mutation fences and marks once.
 
 import { withNativeTransactions } from './helpers/nativeTransactions'
 import { insertOne } from '@/platform/persistence/singleInsert'
@@ -8,7 +10,6 @@ import { tablesOf } from '@/platform/persistence/sessionTables'
 import { queryRows, first } from '@/platform/persistence/queryHelpers'
 import { describe, expect, test } from 'bun:test'
 import { Buffer } from 'node:buffer'
-import { resolve } from 'node:path'
 
 import { createSecretBoxFromKey } from '@/auth/secretBox'
 import { createInMemoryDb } from '@/db/client'
@@ -23,7 +24,6 @@ import type {
 } from '@/platform/persistence/postgresqlRuntime'
 import { createCodeHostConnectionsService } from '@/services/codeHost/connections'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const DIGEST = 'a'.repeat(64)
 
 function rows(
@@ -39,10 +39,13 @@ function rows(
 
 function postgresqlFixture(responses: Array<readonly (readonly unknown[])[]>) {
   const executions: Array<{ readonly sql: string; readonly parameters?: readonly unknown[] }> = []
+  const epoch2Metadata = createEpoch2PostgresqlMetadata()
   const execute = (query: string, parameters?: readonly unknown[]): SqlRows => {
     executions.push({ sql: query, parameters })
+    const metadata = epoch2Metadata(query)
+    if (metadata) return metadata
     if (/^(BEGIN|COMMIT|ROLLBACK)$/i.test(query)) return rows([])
-    if (query.includes('database_generations')) {
+    if (query.includes('generations')) {
       return rows([], [{ generation_id: 'dbg_source_control_pg' }])
     }
     const response = responses.shift() ?? []
@@ -85,7 +88,7 @@ function postgresqlFixture(responses: Array<readonly (readonly unknown[])[]>) {
 
 describe('RFC-349 source-control provider adapters', () => {
   test('SQLite adapter preserves the sealed credential behavior behind Promise methods', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createInMemoryDb()
     const secretBox = createSecretBoxFromKey(Buffer.alloc(32, 49))
     const repository = new DrizzleRepositoryTransportCredentialRepository(db)
     const credentials = new RepositoryTransportCredentials(repository, secretBox)
@@ -132,7 +135,7 @@ describe('RFC-349 source-control provider adapters', () => {
   })
 
   test('administrator connection and publication projection commit atomically behind the participant', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createInMemoryDb()
     const secretBox = createSecretBoxFromKey(Buffer.alloc(32, 50))
     const repository = new DrizzleRepositoryTransportCredentialRepository(db)
     const credentials = new RepositoryTransportCredentials(repository, secretBox)
@@ -284,11 +287,20 @@ describe('RFC-349 source-control provider adapters', () => {
     })
 
     const sql = fake.executions.map((execution) => execution.sql)
-    expect(sql[0]?.toUpperCase()).toBe('BEGIN')
-    expect(sql.some((statement) => statement.startsWith('delete from'))).toBe(true)
+    expect(sql).toEqual([
+      'BEGIN',
+      expect.stringContaining('from "agent_workflow"."repository_transport_connections"'),
+      expect.stringMatching(/^SELECT generation_id .*"generations".*FOR SHARE$/i),
+      expect.stringContaining('SELECT first_live_write_at'),
+      expect.stringContaining('UPDATE "agent_workflow_meta"."first_write"'),
+      expect.stringContaining(
+        'delete from "agent_workflow"."user_repository_transport_credentials"',
+      ),
+      expect.stringMatching(/^SELECT generation_id .*"generations".*FOR SHARE$/i),
+      expect.stringContaining('insert into "agent_workflow"."repository_transport_connections"'),
+      'COMMIT',
+    ])
     expect(sql.some((statement) => statement.includes('on conflict'))).toBe(true)
-    expect(sql.filter((statement) => statement.includes('database_generations'))).toHaveLength(3)
-    expect(sql.at(-1)?.toUpperCase()).toBe('COMMIT')
   })
 
   test('PostgreSQL administrator write and publication projection share one fenced transaction', async () => {

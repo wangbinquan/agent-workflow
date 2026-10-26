@@ -13,7 +13,7 @@ import { NodeDetailDrawer } from '../src/components/NodeDetailDrawer'
 
 function run(partial: Partial<NodeRun> & { id: string }): NodeRun {
   return {
-    seq: null,
+    seq: 0,
     id: partial.id,
     taskId: 't1',
     nodeId: partial.nodeId ?? 'agent_1',

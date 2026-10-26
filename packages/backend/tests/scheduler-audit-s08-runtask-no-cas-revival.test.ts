@@ -50,7 +50,6 @@ import { runGit } from '../src/util/git'
 // （先例与理由见 scheduler-clarify-dispatch.test.ts:33-40）。
 const ulid = monotonicFactory()
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
 
 interface Harness<TDatabase extends PersistenceDb = PersistenceDb> {
@@ -82,7 +81,7 @@ async function buildHarness(provider?: ProviderHarness): Promise<Harness> {
   writeFileSync(join(worktreePath, 'r.md'), '# r\n')
   await runGit(worktreePath, ['add', '.'])
   await runGit(worktreePath, ['commit', '-m', 'init'])
-  const db = provider === undefined ? createInMemoryDb(MIGRATIONS) : provider.db
+  const db = provider === undefined ? createInMemoryDb() : provider.db
   return {
     db,
     postgresql: provider?.applicationBinding.provider === 'postgresql',

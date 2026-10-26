@@ -1,12 +1,11 @@
-import { rawExec, rawRows } from '@/platform/persistence/queryHelpers'
+import { openFrozenEpoch1Db, freezeAt, FROZEN_MIGRATIONS as MIGRATIONS } from './migration-freeze'
+import { frozenRawRows as rawRows } from './migration-freeze'
+import { rawExec } from '@/platform/persistence/queryHelpers'
 import { afterEach, describe, expect, test } from 'bun:test'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { sql } from 'drizzle-orm'
-
-import { openDb } from '@/db/client'
-import { freezeAt, MIGRATIONS } from './migration-freeze'
 
 const roots: string[] = []
 
@@ -21,7 +20,7 @@ describe('migration 0199 — retire the duplicate legacy Webhook directory', () 
     const path = join(root, 'db.sqlite')
     const beforeMigrations = freezeAt(197)
     roots.push(beforeMigrations)
-    const before = openDb({ path, migrationsFolder: beforeMigrations })
+    const before = openFrozenEpoch1Db({ path, migrationsFolder: beforeMigrations })
     rawExec(
       before,
       sql`
@@ -45,7 +44,7 @@ describe('migration 0199 — retire the duplicate legacy Webhook directory', () 
     )
     ;(before as unknown as { $client: { close(): void } }).$client.close()
 
-    const after = openDb({ path, migrationsFolder: MIGRATIONS })
+    const after = openFrozenEpoch1Db({ path, migrationsFolder: MIGRATIONS })
     expect(
       rawRows<{ eventTypeId: string; visibility: string }>(
         after,

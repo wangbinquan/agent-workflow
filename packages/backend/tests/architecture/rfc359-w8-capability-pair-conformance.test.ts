@@ -405,7 +405,12 @@ describe('RFC-359 W8 —— 能力级成对适配器账本', () => {
   })
 
   test('灾难恢复那一对确实是被两本既有账本同时漏掉的那一对', () => {
-    const recovery = pairs.filter((pair) => pair.declaredIn.includes('system-operations'))
+    // Epoch-switch activation is a separate pair, still governed by the unchanged W5 intersection ceiling.
+    const recovery = pairs.filter(
+      (pair) =>
+        pair.declaredIn.includes('system-operations') &&
+        /^Admin(?:Backup|Restore)CoordinatorPort$/.test(pair.port),
+    )
     expect(recovery.map((pair) => pair.port).sort()).toEqual([
       'AdminBackupCoordinatorPort',
       'AdminRestoreCoordinatorPort',

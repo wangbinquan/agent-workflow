@@ -1,3 +1,5 @@
+import { legacyContentRef } from '@/platform/content/contentRef'
+import { contentRowColumns } from '@/platform/content/infrastructure/contentStore'
 // RFC-223 PR-6 — regression locks for the runtime-independent managed
 // injection identity guard.
 //
@@ -80,7 +82,7 @@ async function seedManagedSkill(
     id,
     name,
     description: '',
-    managedPath: skillFilesRel(id),
+    ...contentRowColumns(legacyContentRef('skill-path', 'local-file', skillFilesRel(id))),
     ownerUserId,
   })
 }

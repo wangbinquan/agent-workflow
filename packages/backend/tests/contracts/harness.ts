@@ -1,3 +1,5 @@
+import { legacyContentRef } from '@/platform/content/contentRef'
+import { contentRowColumns } from '@/platform/content/infrastructure/contentStore'
 // RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-054 W1-2 — shared harness for the API contract suite.
 //
@@ -14,13 +16,13 @@
 import { agentFixture, nodeRunFixture, taskFixture, workflowFixture } from '../helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
-import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { registerProviderHttpApplicationLifetime } from '../helpers/providerHttpApplication'
-import { resolve } from 'node:path'
+import { join } from 'node:path'
 import { randomBytes } from 'node:crypto'
 import { mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+
 import type { Hono } from 'hono'
 import { ulid } from 'ulid'
 import { createSecretBoxFromKey } from '../../src/auth/secretBox'
@@ -31,7 +33,6 @@ import { createUser } from '../helpers/userFixture'
 const openTestApplication = registerProviderHttpApplicationLifetime()
 
 export const DAEMON_TOKEN = 'a'.repeat(64)
-const MIGRATIONS = resolve(import.meta.dir, '..', '..', 'db', 'migrations')
 
 export interface ContractHarness {
   app: Hono
@@ -65,7 +66,7 @@ export interface SeededFixtures {
 
 /** Build a harness with all baseline seeds in place. */
 export async function buildContractHarness(): Promise<ContractHarness> {
-  const db = createInMemoryDb(MIGRATIONS)
+  const db = createInMemoryDb()
   const secretBox = createSecretBoxFromKey(randomBytes(32))
   const homePath = mkdtempSync(join(tmpdir(), 'aw-contract-'))
   // Pre-seed a minimal config.json so /api/config has something to GET. The
@@ -77,7 +78,7 @@ export async function buildContractHarness(): Promise<ContractHarness> {
   const sqlite = (db as unknown as { readonly $client: { serialize(): Uint8Array } }).$client
   writeFileSync(sqlitePath, sqlite.serialize())
   const databaseMigration = composeDatabaseMigrationModule({
-    contract: buildLogicalSchemaContract(),
+    contract: logicalSchemaContract,
     sqlitePath,
     operationsRoot: join(homePath, 'database-migrations'),
     generationPointerPath: join(homePath, 'database-generation.json'),
@@ -119,7 +120,8 @@ export async function buildContractHarness(): Promise<ContractHarness> {
     role: 'admin',
     password: 'correctPassword123',
   })
-  const { users, skills, mcps, plugins, workgroups, scheduledTasks, memories } = tablesOf(db)
+  const { users, mcps, plugins, workgroups, scheduledTasks, memories } = tablesOf(db),
+    { skills } = tablesOf(db)
   const aliceRows = await db.select().from(users)
   const alice = aliceRows.find((u) => u.username === 'alice')
   if (!alice) throw new Error('contract harness: failed to seed alice')
@@ -150,7 +152,9 @@ export async function buildContractHarness(): Promise<ContractHarness> {
     id: skillId,
     name: skillName,
     description: 'contract-suite seed',
-    managedPath: 'skills/contract-skill/files/',
+    ...contentRowColumns(
+      legacyContentRef('skill-path', 'local-file', 'skills/contract-skill/files/'),
+    ),
   })
   await insertOne(db, mcps, {
     id: mcpId,

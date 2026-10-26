@@ -1,3 +1,5 @@
+import { legacyContentRef } from '@/platform/content/contentRef'
+import { contentRowColumns } from '@/platform/content/infrastructure/contentStore'
 // RFC-037 T4 — locks `listReviewSummaries` returning `taskName: tasks.name`
 // per row. Mirrors the clarify list test; the inbox merges both source types
 // and needs taskName on both schemas.
@@ -62,7 +64,9 @@ async function seedReview(db: PersistenceDb, taskName: string): Promise<void> {
     sourcePortName: 'port',
     versionIndex: 1,
     reviewIteration: 0,
-    bodyPath: 'runs/x/review/rev-1/port/v1.md',
+    ...contentRowColumns(
+      legacyContentRef('review-body-path', 'local-file', 'runs/x/review/rev-1/port/v1.md'),
+    ),
     commentsJson: '[]',
     decision: 'pending',
     createdAt: now,

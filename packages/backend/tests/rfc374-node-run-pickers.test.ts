@@ -1,24 +1,25 @@
-import { withO2Closure, o2Ports } from './helpers/o2Closure'
-// RFC-374 T7/T10: inverted IDs exercise freshness, rollback, frame/branch projections, memory and real persistence readers.
-import {
-  createRunHistorySnapshot,
-  createRunSelectionOracleSnapshot,
-} from '@/modules/task-execution/public/queries'
-import { nodeRunOutputFixture, patchTaskFixture, readNodeRunFixtures } from './helpers/model'
-import { tablesOf } from '@/platform/persistence/sessionTables'
-import { describe, expect, test } from 'bun:test'
-import { eq } from 'drizzle-orm'
+// Released picker oracle; executable runtime selection is covered through RunSelectionReader.
 import {
   pickLatestSettledRun,
   pickLatestRunInFrame,
   pickFrameSourceRun,
   pickReusableShardRun,
   pickFreshestRun,
+} from './helpers/model/frozenSelection/pickers'
+import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
+import { withO2Closure, o2Ports } from './helpers/o2Closure'
+// RFC-374 T7/T10: inverted IDs exercise freshness, rollback, frame/branch projections, memory and real persistence readers.
+import { createRunHistorySnapshot } from '@/modules/task-execution/public/queries'
+import { nodeRunOutputFixture, patchTaskFixture, readNodeRunFixtures } from './helpers/model'
+
+import { describe, expect, test } from 'bun:test'
+
+import {
   buildFreshestSettledPerNode,
   type NodeRunRow,
-} from '@/services/freshness'
-import { selectResumeRollbackTargets } from '@/services/task'
-import { selectSyncRollbackTargets } from '@/services/task'
+} from '@/modules/task-execution/application/runProvenance'
+import { selectResumeRollbackTargets, selectSyncRollbackTargets } from '@/services/task'
+
 import { compareNodeRunsForTimeline } from '@/services/reviewRoundStart'
 import { resolveNodeScope } from '@/services/structuralDiff/refSelect'
 import { getTaskBranchTrace } from '@/modules/task-execution/application/branchTrace'
@@ -47,7 +48,7 @@ import {
   DIGITAL_EMPLOYEE_RESULT_PORT,
 } from '@/modules/task-execution/domain/digitalEmployeeHost'
 import { describeEachProvider } from './helpers/eachProvider'
-import { deriveFrontier } from '@/modules/task-execution/composition/dagFrontier'
+import { deriveFrontier } from './helpers/frontierSelection'
 import { isTargetNodeConsumed } from '@/modules/collaboration/infrastructure/clarify/rerunLedger'
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 import { buildHarness, insertAlert, readNodeRunStatus } from './lifecycle-repair-harness'
@@ -147,8 +148,11 @@ describe('RFC-374 pure selection', () => {
   test('all sanctioned freshness pickers prefer mint order, preserving scope and status boundaries', async () => {
     const old = row('z', 1),
       fresh = row('a', 2),
-      legacy = row('zz', null),
-      rows = [fresh, old, legacy]
+      rows = [fresh, old]
+    // Epoch-2 execution never orders an unresolved history row by its ID.
+    await expect(
+      createRunHistorySnapshot('', [old, row('zz', null)]).familyHistory('', {}),
+    ).rejects.toThrow('run-sequence-required:zz')
     for (const pick of [pickFreshestRun, pickLatestSettledRun])
       expect(pick(rows)?.id).toBe(fresh.id)
     expect(pickLatestRunInFrame(rows, frame)?.id).toBe(fresh.id)
@@ -397,7 +401,10 @@ describeEachProvider('RFC-374 selected persistence consumers', (harness) => {
     ])
     const core = composeDigitalEmployeeExecutionCore({
       appHome: '/tmp/rfc374',
-      ...composeDatabaseDigitalEmployeeExecutionPorts(db),
+      ...composeDatabaseDigitalEmployeeExecutionPorts(
+        db,
+        epoch2RuntimeTestPorts(db).historyRestrictions,
+      ),
       resolveActor: null as never,
       resourceAuthorityFor: null as never,
       launch: null as never,
@@ -442,6 +449,7 @@ describeEachProvider('RFC-374 selected persistence consumers', (harness) => {
     await mintSequenceRun(db, taskId, {
       id: 'z',
       status: 'pending',
+      slot: { kind: 'node', nodeId: 'n', frame },
       overrides: {
         identity: {
           shardKey: 'one',
@@ -451,26 +459,27 @@ describeEachProvider('RFC-374 selected persistence consumers', (harness) => {
     await mintSequenceRun(db, taskId, {
       id: 'a',
       status: 'pending',
+      slot: { kind: 'node', nodeId: 'n', frame },
       overrides: {
         identity: {
           shardKey: 'two',
         },
       },
     })
-    const { nodeRuns } = tablesOf(db)
-    const rows = await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId)),
+    const rows = await readNodeRunFixtures(db, { taskId }),
       persistence = createTaskExecutionPersistence(db, {
+        historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
         recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
       })
     const result = await resolveSchedulerRunRow({
       lifecycle: persistence.nodeRuns,
       projections: persistence.nodeExecution,
-      selection: createRunSelectionOracleSnapshot(rows),
+      selection: persistence.selection,
       taskId,
       nodeId: 'n',
       ...frame,
       consumedUpstreamJson: '{}',
-      rows,
+      rows: rows.map((row) => ({ ...row, generationSeq: 0 })),
       inheritReviewIteration: false,
       clearAgentOverride: false,
       trackRetryIndex: false,
@@ -498,6 +507,7 @@ describeEachProvider('RFC-374 selected persistence consumers', (harness) => {
     await mintSequenceRun(db, taskId, { id: 'a', nodeId: 'out', status: 'failed' })
     const result = await runLifecycleInvariants({
       operations: createTaskExecutionPersistence(db, {
+        historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
         recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
       }).recoveryAdministration,
       scope: { taskId },

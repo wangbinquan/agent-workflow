@@ -1,10 +1,4 @@
-import { like } from 'drizzle-orm'
-import {
-  decodeWorkflowReferenceDocument,
-  collectWorkflowDependencyRefs,
-  collectWorkflowCallRefs,
-  type WorkflowDefinition,
-} from '@agent-workflow/shared'
+import { and, eq, exists, ne, sql, type SQL } from 'drizzle-orm'
 import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import type {
@@ -15,125 +9,139 @@ import type {
   WorkflowAgentReferenceLookup,
   WorkflowCallReferenceLookup,
 } from '../application/ports/referenceLookup'
-import { matchesStoredAgentReference } from './agentReferenceCodec'
 import { workflowCatalogPredicate } from './workflowCatalogPredicate'
 
 type ReferenceSession = PersistenceDb | PersistenceTx
 
-/** II-a 保留 LIKE 粗筛的转义/通配符行为，再做原来的 JSON 精确匹配。 */
-function agentJsonLookup(db: ReferenceSession, kind: 'mcp' | 'plugins' | 'skills') {
+function agentRelationLookup(
+  db: ReferenceSession,
+  kind: 'mcp' | 'plugins' | 'skills' | 'dependencies',
+) {
   return {
     async find(id: string) {
-      const { agents } = tablesOf(db)
-      const rows = await db
+      const { agents, agentMcpRefs, agentPluginRefs, agentSkillRefs, agentDependencies } =
+        tablesOf(db)
+      const relation =
+        kind === 'mcp'
+          ? agentMcpRefs
+          : kind === 'plugins'
+            ? agentPluginRefs
+            : kind === 'skills'
+              ? agentSkillRefs
+              : agentDependencies
+      const target =
+        kind === 'mcp'
+          ? agentMcpRefs.mcpId
+          : kind === 'plugins'
+            ? agentPluginRefs.pluginId
+            : kind === 'skills'
+              ? agentSkillRefs.skillId
+              : agentDependencies.dependencyAgentId
+      return db
         .select({
           id: agents.id,
           name: agents.name,
-          raw: agents[kind],
           ownerUserId: agents.ownerUserId,
           visibility: agents.visibility,
         })
         .from(agents)
-        .where(like(agents[kind], `%"${id}"%`))
-      return rows
-        .filter((row) =>
-          matchesStoredAgentReference(row.raw, id, kind === 'skills' ? 'skill' : 'id'),
+        .where(
+          and(
+            kind === 'dependencies' ? ne(agents.id, id) : undefined,
+            exists(
+              db
+                .select({ present: sql`1` })
+                .from(relation)
+                .where(and(eq(relation.agentId, agents.id), eq(target, id))),
+            ),
+          ),
         )
-        .map(({ raw: _raw, ...row }) => row)
     },
   }
 }
-
 export function createAgentMcpReferenceLookup(db: ReferenceSession): AgentMcpReferenceLookup {
-  return agentJsonLookup(db, 'mcp')
+  return agentRelationLookup(db, 'mcp')
 }
 export function createAgentPluginReferenceLookup(db: ReferenceSession): AgentPluginReferenceLookup {
-  return agentJsonLookup(db, 'plugins')
+  return agentRelationLookup(db, 'plugins')
 }
 export function createAgentSkillReferenceLookup(db: ReferenceSession): AgentSkillReferenceLookup {
-  return agentJsonLookup(db, 'skills')
+  return agentRelationLookup(db, 'skills')
 }
-
 export function createAgentDependencyReferenceLookup(
   db: ReferenceSession,
 ): AgentDependencyReferenceLookup {
-  return {
-    async find(id) {
-      const { agents } = tablesOf(db)
-      const rows = await db
-        .select({
-          id: agents.id,
-          name: agents.name,
-          raw: agents.dependsOn,
-          ownerUserId: agents.ownerUserId,
-          visibility: agents.visibility,
-        })
-        .from(agents)
-      return rows
-        .filter((row) => row.id !== id && matchesStoredAgentReference(row.raw, id, 'id'))
-        .map(({ raw: _raw, ...row }) => row)
-    },
-  }
+  return agentRelationLookup(db, 'dependencies')
 }
 
+function indexedWorkflowSelector(
+  db: ReferenceSession,
+  kind: 'agent' | 'workflow',
+  value: string,
+): SQL {
+  if (value.length === 0) return sql`false`
+  const { workflows } = tablesOf(db)
+  const { workflowDependencyIndex: index } = tablesOf(db)
+  return exists(
+    db
+      .select({ present: sql`1` })
+      .from(index)
+      .where(
+        and(
+          eq(index.workflowId, workflows.id),
+          eq(index.revision, workflows.version),
+          eq(index.resourceKind, kind),
+          eq(index.selectorKind, kind === 'agent' ? 'id' : 'name'),
+          eq(index.selectorValue, value),
+          // V2 preserves all authored agentId fields; this lookup historically reads agent-single only.
+          kind === 'agent'
+            ? eq(
+                index.namespaceJson,
+                JSON.stringify({
+                  version: 2,
+                  resourceType: 'agent',
+                  referenceKind: 'agentId',
+                  nodeKind: 'agent-single',
+                }),
+              )
+            : undefined,
+        ),
+      ),
+  )
+}
 export function createWorkflowAgentReferenceLookup(
   db: ReferenceSession,
 ): WorkflowAgentReferenceLookup {
   return {
     async find(id) {
       const { workflows } = tablesOf(db)
-      const rows = await db
+      return db
         .select({
           id: workflows.id,
           name: workflows.name,
-          definition: workflows.definition,
           ownerUserId: workflows.ownerUserId,
           visibility: workflows.visibility,
         })
         .from(workflows)
-        .where(workflowCatalogPredicate(workflows.id))
-      return rows
-        .filter((row) => {
-          try {
-            const decoded = decodeWorkflowReferenceDocument(row.definition)
-            return collectWorkflowDependencyRefs(decoded ?? {}).some(
-              (ref) => ref.resourceType === 'agent' && ref.value === id,
-            )
-          } catch {
-            return false
-          }
-        })
-        .map(({ definition: _definition, ...row }) => row)
+        .where(workflowCatalogPredicate(workflows.id, indexedWorkflowSelector(db, 'agent', id)))
     },
   }
 }
-
 export function createWorkflowCallReferenceLookup(
   db: ReferenceSession,
 ): WorkflowCallReferenceLookup {
   return {
     async find(input) {
       const { workflows } = tablesOf(db)
-      const rows = await db
-        .select({ id: workflows.id, definition: workflows.definition })
+      return db
+        .select({ id: workflows.id })
         .from(workflows)
-        .where(workflowCatalogPredicate(workflows.id))
-      return rows
-        .filter((row) => {
-          if (row.id === input.id) return false
-          try {
-            const parsed = decodeWorkflowReferenceDocument(row.definition)
-            return (
-              parsed !== undefined &&
-              collectWorkflowCallRefs(parsed as WorkflowDefinition).some(
-                (ref) => ref.workflowName === input.name,
-              )
-            )
-          } catch {
-            return false
-          }
-        })
-        .map(({ id }) => ({ id }))
+        .where(
+          workflowCatalogPredicate(
+            workflows.id,
+            and(ne(workflows.id, input.id), indexedWorkflowSelector(db, 'workflow', input.name)),
+          ),
+        )
     },
   }
 }

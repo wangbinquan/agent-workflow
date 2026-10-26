@@ -17,10 +17,10 @@
 //       asserts the migration THROWS (CHECK(n=0) violated → ABORT) and the
 //       agents table is left intact (params NOT dropped).
 
+import { migrateFrozenSqlite as migrate, FROZEN_MIGRATIONS } from './migration-freeze'
 import { describe, expect, test } from 'bun:test'
 import { Database } from 'bun:sqlite'
 import { drizzle } from 'drizzle-orm/bun-sqlite'
-import { migrate } from 'drizzle-orm/bun-sqlite/migrator'
 import {
   copyFileSync,
   existsSync,
@@ -34,7 +34,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { removeTempDirSync } from './fixtures/tempDir'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+const MIGRATIONS = resolve(FROZEN_MIGRATIONS)
 const PARAM_COLS = ['model', 'variant', 'temperature', 'steps', 'max_steps']
 
 interface JournalEntry {

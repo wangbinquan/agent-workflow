@@ -1,3 +1,4 @@
+import { memoryTaskWorkspaceProfiles } from './helpers/taskWorkspaceFixture'
 // RFC-370: a replacement complete family must be consumed by the actual
 // SQLite and PostgreSQL Task drive, including the original persisted failure.
 import {
@@ -111,6 +112,7 @@ describeEachProvider('RFC-370 complete Task family in real provider drives', (ha
           userId,
           {
             workspacePresence: { exists: () => true },
+            workspaceExcludeProfiles: memoryTaskWorkspaceProfiles,
             isolationWorkspaces: new MemoryIsolationFactory(isolation),
             taskAgentRunsFor(binding) {
               selections++

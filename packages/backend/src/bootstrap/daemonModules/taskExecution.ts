@@ -1,3 +1,5 @@
+import type { ContentStore } from '@/platform/content/contentStore'
+import type { HistoryRestrictionPort } from '@/platform/contracts/historyRestriction'
 import { composeCrossContextClosure } from '../crossContextClosure'
 import { composeSourceControlTaskPorts } from '@/modules/task-execution/composition'
 import { directOperationAuthority } from '@/routes/operationAuthority'
@@ -74,6 +76,8 @@ export interface DaemonTaskExecutionAdapters<P extends DatabaseProvider = Databa
   readonly processConcurrencyScope: object
 }
 export interface DaemonTaskExecutionInput<P extends DatabaseProvider = DatabaseProvider> {
+  readonly content: ContentStore
+  readonly historyRestrictions: HistoryRestrictionPort
   readonly db: PersistenceDb
   readonly appHome: string
   readonly configPath: string
@@ -149,16 +153,22 @@ export function composeDaemonTaskExecutionModules<P extends DatabaseProvider>(
   const resourceSnapshots = composeTaskExecutionResourceBinding(taskExecutionResourceDependencies)
   const resources = createTaskExecutionResourceBinding(db, resourceSnapshots)
   const persistence = createTaskExecutionPersistence(db, {
+    content: input.content,
+    historyRestrictions: input.historyRestrictions,
     recoveryHumanGates: closure.collaborationReads.recovery,
     workspacePresence: observation.workspacePresence,
   })
   const collaboration: CollaborationRouteContext = createCollaborationCommandContext({
+    content: input.content,
+    historyRestrictions: input.historyRestrictions,
     db,
     taskLock: closure.taskLock,
     appHome,
     taskExecutionReadModels: persistence.reads,
     reviewArtifacts: selection.reviewArtifacts,
     reviewDecisions: createReviewDecisionCommand({
+      content: input.content,
+      historyRestrictions: input.historyRestrictions,
       taskLock: closure.taskLock,
       upstreamAgents: closure.upstreamAgents,
       db,
@@ -166,11 +176,14 @@ export function composeDaemonTaskExecutionModules<P extends DatabaseProvider>(
       reviewArtifacts: selection.reviewArtifacts,
       rollbackSnapshots: selection.reviewRollbackSnapshots,
     }),
-    questionDispatches: createQuestionDispatchCommand(db, closure.taskLock),
+    questionDispatches: createQuestionDispatchCommand(db, closure.taskLock, {
+      historyRestrictions: input.historyRestrictions,
+    }),
     clarifyDecisions: createClarifyDecisionCommand(
       db,
       memory.memoryOperations.distillCommands,
       closure.taskLock,
+      { historyRestrictions: input.historyRestrictions },
     ),
   })
   const validationContext = composeDynamicWorkflowValidationContext(db)
@@ -225,6 +238,7 @@ export function composeDaemonTaskExecutionModules<P extends DatabaseProvider>(
       releaseAndFinalize: (request) => provider.driverLifecycle.releaseAndFinalize(request),
     },
     gateContinuationPreDrive: composeGateContinuationPreDrive({
+      historyRestrictions: input.historyRestrictions,
       db,
       memoryDistillEnqueuer: memory.memoryOperations.distillCommands,
       persistence,
@@ -249,6 +263,7 @@ export function composeDaemonTaskExecutionModules<P extends DatabaseProvider>(
   const coordinator = coordinatorFactory.session
   const provider = composeTaskExecutionProviderRuntime({
     db,
+    historyRestrictions: input.historyRestrictions,
     archiveCollaboration: closure.collaborationReads.archive,
     clarifyNav: closure.collaborationReads.clarifyNav,
     persistence,
@@ -273,6 +288,8 @@ export function composeDaemonTaskExecutionModules<P extends DatabaseProvider>(
       nodeRunRuntime: composeNodeRunRuntimePersistence(db, composeRuntimeSelectionParticipantInTx),
       taskDagCollaboration: createTaskDagCollaborationOperations(db),
       collaborationRuntime: createCollaborationRuntimeMechanics(db, {
+        content: input.content,
+        historyRestrictions: input.historyRestrictions,
         taskLock: closure.taskLock,
         upstreamAgents: closure.upstreamAgents,
         reviewArtifacts: selection.reviewArtifacts,

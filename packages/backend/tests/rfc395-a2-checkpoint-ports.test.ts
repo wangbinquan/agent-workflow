@@ -1,12 +1,13 @@
+import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { eq } from 'drizzle-orm'
+import { taskAggregateWrite } from '@/modules/task-execution/infrastructure/taskDefinitionWriteParticipant'
+import { withTargetMintIdentity } from './helpers/rfc395Mint'
 import { o2Ports } from './helpers/o2Closure'
 // RFC-395 II-a A2: list ports must round-trip every mount shape on both physical providers.
-import { deriveNodeRunRole } from '@/modules/task-execution/public/types'
 import { expect, test } from 'bun:test'
 import { ulid } from 'ulid'
-import {
-  readStoredCheckpointFixture,
-  patchStoredCheckpointFixture,
-} from './helpers/model/checkpoint'
+import { readStoredCheckpointFixture } from './helpers/model/checkpoint'
 import { describeEachProvider } from './helpers/eachProvider'
 import {
   workflowFixture,
@@ -25,7 +26,6 @@ import { persistIsoNodeTree } from '@/modules/task-execution/infrastructure/isol
 import type { TaskRepositoryCheckpoint } from '@/modules/task-execution/domain/taskCheckpoint'
 
 const layouts = [
-  { name: 'legacy root without task_repos', mounts: [] },
   { name: 'single root', mounts: [''] },
   { name: 'single non-root member', mounts: ['svc'] },
   { name: 'multiple mounts', mounts: ['', 'nested/svc'] },
@@ -37,11 +37,17 @@ describeEachProvider('RFC-395 II-a A2 checkpoint list ports', (harness) => {
       const taskId = ulid(),
         runId = ulid(),
         workflowId = ulid()
-      await workflowFixture(harness.db, { id: workflowId, name: 'checkpoints', definition: '{}' })
+      const definition = JSON.stringify({
+        $schema_version: 6,
+        inputs: [],
+        nodes: [{ id: 'wrapper', kind: 'wrapper-git', nodeIds: [] }],
+        edges: [],
+      })
+      await workflowFixture(harness.db, { id: workflowId, name: 'checkpoints', definition })
       await taskFixture(harness.db, {
         id: taskId,
         workflowId,
-        workflowSnapshot: '{}',
+        workflowSnapshot: definition,
         repoPath: '/repo',
         worktreePath: '/workspace',
         baseBranch: 'main',
@@ -107,41 +113,24 @@ describeEachProvider('RFC-395 II-a A2 checkpoint list ports', (harness) => {
       expect(row.isoWorktreePath).toBe('/iso/run')
       expect(row.mergeState).toBe('pending-merge')
       const stored = await readStoredCheckpointFixture(harness.db, runId)
-      const single =
-        layout.mounts.length === 0 || (layout.mounts.length === 1 && layout.mounts[0] === '')
-      // Independent raw-column oracle: do not pass the expectation through the codec.
-      expect({
-        preSnapshot: stored.preSnapshot,
-        preSnapshotReposJson: stored.preSnapshotReposJson,
-        isoBaseSnapshot: stored.isoBaseSnapshot,
-        isoBaseSnapshotReposJson: stored.isoBaseSnapshotReposJson,
-        isoNodeTree: stored.isoNodeTree,
-        isoNodeTreeReposJson: stored.isoNodeTreeReposJson,
-        isoSubmodulesJson: stored.isoSubmodulesJson,
-        isoSubmodulesReposJson: stored.isoSubmodulesReposJson,
-      }).toEqual(
-        single
-          ? {
-              preSnapshot: '',
-              preSnapshotReposJson: null,
-              isoBaseSnapshot: 'base',
-              isoBaseSnapshotReposJson: null,
-              isoNodeTree: '',
-              isoNodeTreeReposJson: null,
-              isoSubmodulesJson: JSON.stringify(topology),
-              isoSubmodulesReposJson: null,
-            }
-          : {
-              preSnapshot: null,
-              preSnapshotReposJson: JSON.stringify({ [mountPath]: '' }),
-              isoBaseSnapshot: null,
-              isoBaseSnapshotReposJson: JSON.stringify({ [mountPath]: 'base' }),
-              isoNodeTree: null,
-              isoNodeTreeReposJson: JSON.stringify({ [mountPath]: '' }),
-              isoSubmodulesJson: null,
-              isoSubmodulesReposJson: JSON.stringify({ [mountPath]: topology }),
-            },
-      )
+      const { taskRepositoryMounts } = tablesOf(harness.db)
+      const mount = (
+        await harness.db
+          .select()
+          .from(taskRepositoryMounts)
+          .where(eq(taskRepositoryMounts.taskId, taskId))
+      ).find((repo) => repo.mountPath === mountPath)!
+      expect(stored.checkpoints).toEqual([
+        {
+          nodeRunId: runId,
+          taskId,
+          repoKey: mount.repoKey,
+          preSnapshot: '',
+          isolationBase: 'base',
+          nodeTree: '',
+          submodules: JSON.stringify(topology),
+        },
+      ])
       const emptyTreeRun = ulid()
       await nodeRunFixture(harness.db, {
         id: emptyTreeRun,
@@ -155,6 +144,7 @@ describeEachProvider('RFC-395 II-a A2 checkpoint list ports', (harness) => {
       await persistIsoNodeTree(
         {
           persistence: createTaskExecutionPersistence(harness.db, {
+            historyRestrictions: epoch2RuntimeTestPorts(harness.db).historyRestrictions,
             recoveryHumanGates: o2Ports(harness.db).collaborationReads.recovery,
           }),
         },
@@ -165,8 +155,7 @@ describeEachProvider('RFC-395 II-a A2 checkpoint list ports', (harness) => {
       expect(afterEmpty).toEqual({
         ...beforeEmpty,
         mergeState: 'pending-merge',
-        isoNodeTree: null,
-        isoNodeTreeReposJson: '{}',
+        checkpoints: beforeEmpty.checkpoints,
       })
 
       for (const column of [
@@ -198,22 +187,23 @@ describeEachProvider('RFC-395 II-a A2 checkpoint list ports', (harness) => {
         expect(repo.workspaceProfileDigest).toBe('profile')
         expect('worktreeDirName' in repo).toBe(false)
       }
-      // Preserve epoch-1 asymmetry: a new attempt copies only the scalar workspace history.
-      const inherited =
-        layout.mounts.length === 0 || (layout.mounts.length === 1 && layout.mounts[0] === '')
-          ? pre
-          : []
+      // Target attempts inherit every real mount's preSnapshot, including empty strings.
+      const inherited = pre
       expect(row.checkpointInheritance).toEqual(inherited)
-      const retryId = await harness.session.transaction((tx) =>
-        createNodeRunMintParticipantInTx(tx).mint({
-          ...deriveNodeRunRole({ nodeId: 'retry-copy', rerunCause: 'revival' }),
-          taskId,
-          nodeId: 'retry-copy',
-          status: 'pending',
-          cause: 'revival',
-          inheritFrom: row,
-        }),
-      )
+      const retryId = await harness.session.transaction(async (tx) => {
+        await taskAggregateWrite.lockTaskAggregateRoot(tx, taskId)
+        return createNodeRunMintParticipantInTx(tx).mint(
+          withTargetMintIdentity({
+            role: 'node-attempt',
+            syntheticKind: null,
+            taskId,
+            nodeId: 'retry-copy',
+            status: 'pending',
+            cause: 'revival',
+            inheritFrom: row,
+          }),
+        )
+      })
       expect((await nodes.read(retryId))!.checkpoints).toEqual(inherited)
       // The base clear is one merge-state CAS. Other components remain recorded.
       await patchNodeRunFixture(harness.db, { id: runId }, { mergeState: 'merged' })
@@ -242,7 +232,7 @@ describeEachProvider('RFC-395 II-a A2 checkpoint list ports', (harness) => {
           },
         },
       })
-      expect((await nodes.read(runId))!.checkpoints).toEqual([])
+      expect((await nodes.read(runId))!.checkpoints).toEqual([{ mountPath }])
     })
   }
 })
@@ -250,7 +240,7 @@ describeEachProvider('RFC-395 II-a A2 checkpoint list ports', (harness) => {
 describeEachProvider(
   'RFC-395 II-a conflict park preserves persisted component order',
   (harness) => {
-    test('pending resolutions retain existing map keys before newly encountered mounts', async () => {
+    test('pending resolutions retain each actual repo key and read in mount ordinal order', async () => {
       const taskId = ulid(),
         runId = ulid()
       await taskFixture(harness.db, {
@@ -272,22 +262,24 @@ describeEachProvider(
           branch: 'task',
         })),
       })
-      const old = {
-        b: { poolDirs: {}, subBases: {} },
-        a: { poolDirs: {}, subBases: {} },
-        retired: null,
-      }
       await nodeRunFixture(harness.db, {
         id: runId,
         taskId,
         nodeId: 'node',
         status: 'running',
       })
-      await patchStoredCheckpointFixture(harness.db, runId, {
-        preSnapshotReposJson: '{"a":"pre-a","b":"pre-b"}',
-        isoSubmodulesReposJson: JSON.stringify(old),
-      })
       const nodes = new DrizzleNodeExecutionPersistence(harness.db)
+      await nodes.patch({
+        nodeRunId: runId,
+        values: {
+          checkpoint: {
+            checkpoints: [
+              { mountPath: 'b', preSnapshot: 'pre-b', submodules: { poolDirs: {}, subBases: {} } },
+              { mountPath: 'a', preSnapshot: 'pre-a', submodules: { poolDirs: {}, subBases: {} } },
+            ],
+          },
+        },
+      })
       await nodes.patch({
         nodeRunId: runId,
         values: {
@@ -302,10 +294,22 @@ describeEachProvider(
         },
       })
       const raw = await readStoredCheckpointFixture(harness.db, runId)
-      expect(raw.isoSubmodulesReposJson).toBe(
-        '{"b":{"poolDirs":{},"subBases":{},"pendingSubResolves":["vendor"]},"a":{"poolDirs":{},"subBases":{},"pendingSubResolves":["vendor"]},"retired":null,"c":{"poolDirs":{},"subBases":{},"pendingSubResolves":["vendor"]}}',
-      )
-      expect(raw.preSnapshotReposJson).toBe('{"a":"pre-a","b":"pre-b"}')
+      expect(raw.checkpoints).toHaveLength(3)
+      const projected = (await nodes.read(runId))!.checkpoints
+      expect(projected.map((row) => row.mountPath)).toEqual(['a', 'b', 'c'])
+      for (const row of projected)
+        expect(row.submodules).toEqual({
+          poolDirs: {},
+          subBases: {},
+          pendingSubResolves: ['vendor'],
+        })
+      expect(projected.map((row) => row.preSnapshot)).toEqual(['pre-a', 'pre-b', undefined])
+      await expect(
+        nodes.patch({
+          nodeRunId: runId,
+          values: { checkpoint: { checkpoints: [{ mountPath: 'retired', preSnapshot: 'lost' }] } },
+        }),
+      ).rejects.toThrow('node-run-checkpoint-mount-missing:retired')
     })
   },
 )

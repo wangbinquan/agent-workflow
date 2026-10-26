@@ -11,6 +11,7 @@
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
+import ts from 'typescript'
 import {
   assertExactSchemaRoster,
   canonicalSchemaJson,
@@ -18,7 +19,8 @@ import {
   RFC349_ARCHIVE_THEN_OMIT_TABLES,
   RFC349_SOURCE_TABLES,
 } from '@/platform/persistence/schemaContract'
-import { buildLogicalSchemaContract, persistenceSchema } from '@/bootstrap/persistenceSchema'
+import { buildFrozenEpoch1LogicalSchemaContract as buildLogicalSchemaContract } from '@/platform/persistence/migration/epoch1/contract'
+import { persistenceSchema } from '@/bootstrap/persistenceSchema'
 import { packageSrcUnits } from './census'
 import { isSchemaDeclarationFile } from './schemaRoles'
 
@@ -26,10 +28,30 @@ const REPO_ROOT = resolve(import.meta.dir, '..', '..', '..', '..')
 const contract = buildLogicalSchemaContract()
 
 function sourceMentionsArchiveTable(text: string, schemaSymbol: string, tableId: string): boolean {
+  // U-5 names archive sections in one pure decoder; a SQL/import/use elsewhere remains a consumer.
+  const source = ts.createSourceFile('archive.ts', text, ts.ScriptTarget.Latest, true)
+  for (const statement of source.statements) {
+    if (!ts.isVariableStatement(statement)) continue
+    for (const declaration of statement.declarationList.declarations) {
+      const init = declaration.initializer
+      const value = init && ts.isAsExpression(init) ? init.expression : init
+      if (
+        declaration.name.getText(source) === 'CODE_HISTORY_TABLES' &&
+        value &&
+        ts.isArrayLiteralExpression(value) &&
+        value.elements.every(ts.isStringLiteral)
+      )
+        text = text.replace(declaration.getText(source), '')
+    }
+  }
   const symbolPattern = new RegExp(`\\b${schemaSymbol}\\b`)
   const physicalPattern = new RegExp(`(?:['"\`])${tableId}(?:['"\`])`)
-  return symbolPattern.test(text) || physicalPattern.test(text)
+  const sqlPattern = new RegExp(`\\b(?:FROM|JOIN|INTO|UPDATE)\\s+["\\x60]?${tableId}\\b`, 'i')
+  return symbolPattern.test(text) || physicalPattern.test(text) || sqlPattern.test(text)
 }
+
+// RFC-395 V2 archives these rows into the code-history packages: that one-time conversion is not a runtime consumer.
+const ARCHIVAL_CONVERTER = /(?:^|\/)platform\/persistence\/migration\/archives\//
 
 describe('RFC-349 canonical schema contract', () => {
   test('epoch-1 permission grants use plain primary-key text while agent permissions remain JSON', () => {
@@ -160,7 +182,10 @@ describe('RFC-349 canonical schema contract', () => {
 
   test('the six archive-only tables still have zero production consumer', () => {
     const units = packageSrcUnits(REPO_ROOT, 'backend').filter(
-      (unit) => !isSchemaDeclarationFile(unit.path, unit.text),
+      (unit) =>
+        !isSchemaDeclarationFile(unit.path, unit.text) &&
+        !ARCHIVAL_CONVERTER.test(unit.path) &&
+        unit.path !== 'packages/backend/src/platform/persistence/migration/epoch1/tables.ts',
     )
     expect(units.length).toBeGreaterThanOrEqual(1000)
     const byId = new Map(contract.tables.map((table) => [table.id, table]))
@@ -175,6 +200,47 @@ describe('RFC-349 canonical schema contract', () => {
     // 语料扫描在 macOS runner 上量到 5.3s（CI run 33888112525，macos shard 3/4 超时红）：这是一条扫源码的
     // 守卫，不是被测行为；给它扫描量级的预算，别让 5s 缺省把它判成 flaky。
   }, 60_000)
+
+  test('frozen declarations are exempt but an adjacent converter consumer is rejected', () => {
+    const code = "readTable('code_artifacts')"
+    for (const name of ['definitions', 'roster'])
+      expect(
+        isSchemaDeclarationFile(`platform/persistence/migration/epoch1/${name}.ts`, code),
+      ).toBe(true)
+    expect(isSchemaDeclarationFile('platform/persistence/migration/epoch1/reader.ts', code)).toBe(
+      false,
+    )
+    expect(sourceMentionsArchiveTable(code, 'codeArtifacts', 'code_artifacts')).toBe(true)
+    expect(
+      ARCHIVAL_CONVERTER.test(
+        'packages/backend/src/platform/persistence/migration/archives/codeHistory.ts',
+      ),
+    ).toBe(true)
+    for (const path of [
+      'packages/backend/src/platform/persistence/migration/conversion/rule.ts',
+      'packages/backend/src/platform/persistence/migration/epoch1/reader.ts',
+      'packages/backend/src/modules/code-capability/infrastructure/archives/codeHistory.ts',
+    ])
+      expect(ARCHIVAL_CONVERTER.test(path)).toBe(false)
+  })
+  test('archive section vocabulary does not permit table reads beside it', () => {
+    const names = "export const CODE_HISTORY_TABLES = ['code_artifacts'] as const"
+    expect(sourceMentionsArchiveTable(names, 'codeArtifacts', 'code_artifacts')).toBe(false)
+    expect(
+      sourceMentionsArchiveTable(
+        names + '; db.select().from(codeArtifacts)',
+        'codeArtifacts',
+        'code_artifacts',
+      ),
+    ).toBe(true)
+    expect(
+      sourceMentionsArchiveTable(
+        names + '; db.query("SELECT * FROM code_artifacts")',
+        'codeArtifacts',
+        'code_artifacts',
+      ),
+    ).toBe(true)
+  })
 
   test('archive-only production-consumer matcher rejects symbol and physical table references', () => {
     expect(sourceMentionsArchiveTable('const rows = legacyRows', 'legacyRows', 'legacy_rows')).toBe(

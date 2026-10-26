@@ -1,3 +1,4 @@
+import { capturedSkillTreeColumns } from './databaseSkillTrees'
 // RFC-370 §10 V20 —— 融合（以及任何「整树替换成下一版」的写入）经 resource-catalog 推进技能版本。
 //
 // 一份实现，两种内容绑定：暂存 / 发布 / 回退全走 legacy 版本漏斗（`stageSkillVersion` 开带锁的
@@ -144,7 +145,7 @@ export function createSkillTreeVersionParticipant(input: {
           files: files
             .filter((file) => file.path !== MAIN)
             .map((file) => ({ path: file.path, content: file.content })),
-          mainContent: Buffer.from(mainContent, 'utf8'),
+          mainContent: files.find((file) => file.path === MAIN)!.content,
         },
         {
           source: request.versionSource,
@@ -198,8 +199,28 @@ export function createSkillTreeVersionParticipant(input: {
             setDescription: description,
           })
           const { skills, skillVersions } = tablesOf(transaction)
-          await transaction.update(skills).set(plan.skillPatch).where(eq(skills.id, staged.skillId))
-          await insertOne(transaction, skillVersions, plan.versionRow)
+          await transaction
+            .update(skills)
+            .set({
+              ...plan.skillPatch,
+              ...capturedSkillTreeColumns(
+                staged.contentKind ?? 'local-file',
+                staged.skillId,
+                'live',
+                `skills/${staged.skillId}/files`,
+              ),
+            })
+            .where(eq(skills.id, staged.skillId))
+          const { filesPath, ...versionRow } = plan.versionRow
+          await insertOne(transaction, skillVersions, {
+            ...versionRow,
+            ...(await capturedSkillTreeColumns(
+              staged.contentKind ?? 'local-file',
+              staged.skillId,
+              `version:${staged.newVersion}`,
+              filesPath,
+            )),
+          })
           await hooks?.after?.(staged.newVersion)
           if (staged.opId !== null) await advancePhase(transaction, staged.opId, 'db-committed')
           return staged.newVersion

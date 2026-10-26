@@ -7,14 +7,14 @@
 // A regression that drops the DEFAULT 0 on auto_commit_push would flip every
 // legacy task into auto-commit mode on read; this test pins it.
 
-import { rawRows, rawExec } from '@/platform/persistence/queryHelpers'
+import { createFrozenEpoch1Db, FROZEN_MIGRATIONS } from './migration-freeze'
+import { frozenRawRows as rawRows } from './migration-freeze'
+import { rawExec } from '@/platform/persistence/queryHelpers'
 import { describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
 import { sql } from 'drizzle-orm'
 
-import { createInMemoryDb } from '../src/db/client'
-
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+const MIGRATIONS = resolve(FROZEN_MIGRATIONS)
 
 interface ColInfo {
   name: string
@@ -25,7 +25,7 @@ interface ColInfo {
 
 describe('RFC-075 — migration 0039 columns', () => {
   test('tasks.working_branch exists (nullable TEXT)', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createFrozenEpoch1Db(MIGRATIONS)
     const cols = (await rawRows(db, sql`PRAGMA table_info(tasks)`)) as ColInfo[]
     const col = cols.find((c) => c.name === 'working_branch')
     expect(col).toBeDefined()
@@ -34,7 +34,7 @@ describe('RFC-075 — migration 0039 columns', () => {
   })
 
   test('tasks.auto_commit_push exists (NOT NULL DEFAULT 0)', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createFrozenEpoch1Db(MIGRATIONS)
     const cols = (await rawRows(db, sql`PRAGMA table_info(tasks)`)) as ColInfo[]
     const col = cols.find((c) => c.name === 'auto_commit_push')
     expect(col).toBeDefined()
@@ -43,7 +43,7 @@ describe('RFC-075 — migration 0039 columns', () => {
   })
 
   test('task_repos.working_branch exists (nullable TEXT)', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createFrozenEpoch1Db(MIGRATIONS)
     const cols = (await rawRows(db, sql`PRAGMA table_info(task_repos)`)) as ColInfo[]
     const col = cols.find((c) => c.name === 'working_branch')
     expect(col).toBeDefined()
@@ -52,7 +52,7 @@ describe('RFC-075 — migration 0039 columns', () => {
   })
 
   test('node_runs.commit_push_json exists (nullable TEXT)', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createFrozenEpoch1Db(MIGRATIONS)
     const cols = (await rawRows(db, sql`PRAGMA table_info(node_runs)`)) as ColInfo[]
     const col = cols.find((c) => c.name === 'commit_push_json')
     expect(col).toBeDefined()
@@ -61,7 +61,7 @@ describe('RFC-075 — migration 0039 columns', () => {
   })
 
   test('a task inserted without the new columns reads back working_branch=NULL, auto_commit_push=0', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createFrozenEpoch1Db(MIGRATIONS)
     await rawExec(db, sql`INSERT INTO workflows (id, name, definition) VALUES ('wf-1', 'f', '{}')`)
     await rawExec(
       db,

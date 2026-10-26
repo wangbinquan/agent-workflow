@@ -86,7 +86,7 @@ describe('RFC-221 migration 0110', () => {
 
 describe('RFC-221 auth policy service', () => {
   test('login discovery returns one internally consistent policy/provider snapshot', async () => {
-    const fresh = createInMemoryDb(MIGRATIONS, { bootstrap: 'required' })
+    const fresh = createInMemoryDb({ bootstrap: 'required' })
     expect(await getAuthMethodDiscovery(fresh, true)).toEqual({
       mode: 'bootstrap',
       providers: [],
@@ -94,7 +94,7 @@ describe('RFC-221 auth policy service', () => {
       daemonTokenEnabled: true,
     })
 
-    const ready = createInMemoryDb(MIGRATIONS)
+    const ready = createInMemoryDb()
     expect(await getAuthMethodDiscovery(ready, true)).toEqual({
       mode: 'ready',
       providers: [],
@@ -136,7 +136,7 @@ describe('RFC-221 auth policy service', () => {
   })
 
   test('first admin + completion marker commit as one irreversible handoff', async () => {
-    const db = createInMemoryDb(MIGRATIONS, { bootstrap: 'required' })
+    const db = createInMemoryDb({ bootstrap: 'required' })
     // RFC-359 W4-D8：bootstrap 首管理员只剩 auth.completeBootstrap 这一条生产路径（旧的
     // completeBootstrapWithAdmin + identity-access TransactionScope 认领桥随 provider 适配器退役）。
     const auth = createAuthRuntimeFor({ db, onCredentialRevoked: () => undefined })
@@ -184,7 +184,7 @@ describe('RFC-221 auth policy service', () => {
   })
 
   test('password login cannot be disabled without an enabled provider', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createInMemoryDb()
     await expectCode(
       async () => await setPasswordLoginEnabled(db, false),
       'password-login-requires-enabled-oidc',
@@ -213,7 +213,7 @@ describe('RFC-221 auth policy service', () => {
   })
 
   test('OAuth/OIDC new-account preset is guest by default and configurable to user', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createInMemoryDb()
     expect(getAuthLoginPolicy(db).oidcDefaultRole).toBe('guest')
     expect((await setOidcDefaultRole(db, 'user', 200)).oidcDefaultRole).toBe('user')
     expect(getAuthLoginPolicy(db)).toMatchObject({ oidcDefaultRole: 'user', updatedAt: 200 })
@@ -221,7 +221,7 @@ describe('RFC-221 auth policy service', () => {
   })
 
   test('password-session commit rechecks policy and leaves zero side effects', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createInMemoryDb()
     const user = await createUser(db, {
       username: 'alice',
       displayName: 'Alice',
@@ -261,8 +261,8 @@ describe('RFC-221 auth policy service', () => {
   })
 
   test('historical in-memory fixtures are ready unless bootstrap is explicit', async () => {
-    const ready = createInMemoryDb(MIGRATIONS)
-    const required = createInMemoryDb(MIGRATIONS, { bootstrap: 'required' })
+    const ready = createInMemoryDb()
+    const required = createInMemoryDb({ bootstrap: 'required' })
     expect(first(ready.select().from(tablesOf(ready).authLoginPolicy))?.bootstrapCompletedAt).toBe(
       0,
     )

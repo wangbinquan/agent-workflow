@@ -194,6 +194,7 @@ export function sealClarifyAnswers(input: {
       })
     : input.state.attributions
   return {
+    incoming: input.incoming,
     state: clarifyAnswerState(merged, freeze ? null : input.state.drafts, attributions),
     fullySealed,
     flipNow,

@@ -1,3 +1,4 @@
+import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import {
   nodeRunFixture,
   patchAgentFixture,
@@ -1086,7 +1087,10 @@ describeEachProvider('platform execution contracts — 数字员工执行端口'
       launch: null as never,
       agents: null as never,
       workflows: null as never,
-      ...composeDatabaseDigitalEmployeeExecutionPorts(db),
+      ...composeDatabaseDigitalEmployeeExecutionPorts(
+        db,
+        epoch2RuntimeTestPorts(db).historyRestrictions,
+      ),
       executionContracts: null as never,
     })
 
@@ -1135,7 +1139,10 @@ describeEachProvider('platform execution contracts — 数字员工执行端口'
       launch: null as never,
       agents: null as never,
       workflows: null as never,
-      ...composeDatabaseDigitalEmployeeExecutionPorts(db),
+      ...composeDatabaseDigitalEmployeeExecutionPorts(
+        db,
+        epoch2RuntimeTestPorts(db).historyRestrictions,
+      ),
       executionContracts: null as never,
     })
 

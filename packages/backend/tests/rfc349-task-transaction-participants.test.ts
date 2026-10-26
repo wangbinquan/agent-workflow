@@ -1,3 +1,5 @@
+import { taskAggregateWrite } from '@/modules/task-execution/infrastructure/taskDefinitionWriteParticipant'
+import { withTargetMintIdentity } from './helpers/rfc395Mint'
 // RFC-349 task-core cutover — transaction-bound authorization and node-run
 // minting must preserve the SQLite semantics that PostgreSQL implements with
 // the same closed application inputs. In particular, observers may read a
@@ -8,14 +10,12 @@
 // concurrent mints of one task abort each other under PostgreSQL SERIALIZABLE.
 // Supersession is derived on read; the mint's transaction holds only the insert.
 
-import { deriveNodeRunRole } from '@/modules/task-execution/public/types'
 import {
   patchNodeRunFixture,
   readNodeRunFixtures,
   taskFixture,
   workflowFixture,
 } from './helpers/model'
-import { withNativeTransactions } from './helpers/nativeTransactions'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 
@@ -25,13 +25,6 @@ import { derivedSupersededIds } from './helpers/nodeRunSupersession'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { createNodeRunMintParticipantInTx } from '@/modules/task-execution/infrastructure/nodeRunMintParticipant'
 import { createTaskAuthorizationParticipantInTx } from '@/modules/task-execution/infrastructure/taskAuthorization'
-import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
-import type {
-  PostgresqlDatabaseRuntime,
-  PostgresqlPool,
-  PostgresqlReservedConnection,
-  SqlRows,
-} from '@/platform/persistence/postgresqlRuntime'
 
 const TASK_ID = 'rfc349-task-auth'
 
@@ -85,78 +78,6 @@ async function seedTask(db: PersistenceDb) {
   return db
 }
 
-function postgresqlFixture() {
-  const statements: Array<{ readonly sql: string; readonly parameters?: readonly unknown[] }> = []
-  const run = (query: string, parameters?: readonly unknown[]): SqlRows => {
-    statements.push({ sql: query, parameters })
-    const normalized = query.toLowerCase()
-    let values: readonly (readonly unknown[])[] = []
-    let objects: readonly Record<string, unknown>[] = []
-    if (normalized.includes('database_generations')) {
-      objects = [{ generation_id: 'rfc349-task-transaction' }]
-    } else if (
-      normalized.includes('from "agent_workflow"."tasks"') &&
-      normalized.includes('lineage_slot_path_json')
-    ) {
-      // RFC-359 W6 —— 铸行前会读任务的**血缘锚**（`lineage_slot_path_json` + `workflow_version`）。
-      // 这一支必须排在下面那个泛化的 `from "tasks"` 之前：这个假 pool 是**按位置**返回的，
-      // 泛化支给的 `[[TASK_ID]]` 会被当成第一列 `lineage_slot_path_json`，于是推导那边
-      // `JSON Parse error: Unexpected identifier "rfc349"`——**假 pool 不知道查询选了哪些列**，
-      // 每新增一处读新列的生产代码，它就会静默喂错值。两个 null 表示「任务尚无血缘前缀」，
-      // 正是根任务的真实形状；本用例断言的是**语句落在同一条预留连接上**，不是血缘取值。
-      values = [[null, null]]
-    } else if (normalized.includes('insert into "agent_workflow"."node_run_seq_allocations"')) {
-      values = [[1]] // The allocator's RETURNING projection, before inserting the run.
-    } else if (normalized.includes('from "agent_workflow"."tasks"')) {
-      values = [[TASK_ID]]
-    } else if (
-      normalized.includes('from "agent_workflow"."task_collaborators"') &&
-      normalized.includes('"role"')
-    ) {
-      values = [['observer']]
-    } else if (
-      normalized.includes('from "agent_workflow"."node_runs"') &&
-      normalized.includes('select')
-    ) {
-      values = [['01RFC349000000000000000001']]
-    }
-    const result = [...objects] as Array<Record<string, unknown>> & { count?: number }
-    result.count = objects.length
-    return Object.assign(Promise.resolve(result), {
-      async values() {
-        return values
-      },
-    })
-  }
-  const connection: PostgresqlReservedConnection = withNativeTransactions({
-    unsafe: run,
-    release() {},
-  })
-  const pool: PostgresqlPool = {
-    async reserve() {
-      return connection
-    },
-    unsafe: run,
-    async close() {},
-  }
-  const runtime: PostgresqlDatabaseRuntime = {
-    provider: 'postgresql',
-    generationId: 'rfc349-task-transaction',
-    providerPool: () => pool,
-    async health() {
-      throw new Error('not used')
-    },
-    async readiness() {
-      throw new Error('not used')
-    },
-    async acquireMigrationAdvisoryLock() {
-      throw new Error('not used')
-    },
-    async close() {},
-  }
-  return { db: createPostgresqlDatabaseClient(runtime), statements }
-}
-
 describeEachProvider('RFC-349 task transaction participants', (harness) => {
   // RFC-359 W10：这条用例此前驱动的是 `infrastructure/sqliteTaskAuthorization.ts`——一份自
   // W1-T2c 起零生产调用方的同步孪生，本批随文件一并退役。同一判据（可见性含 viewer、
@@ -170,29 +91,37 @@ describeEachProvider('RFC-349 task transaction participants', (harness) => {
   test('replacement mint commits alone; the superseded prior attempt is derived, not written (RFC-369)', async () => {
     const db = await seedTask(harness.db)
     await databaseSessionFor(db).transaction(async (tx) => {
+      await taskAggregateWrite.lockTaskAggregateRoot(tx, TASK_ID)
+
       const mint = createNodeRunMintParticipantInTx(tx)
-      await mint.mint({
-        ...deriveNodeRunRole({ nodeId: 'review-node', rerunCause: 'initial' }),
-        id: '01RFC349000000000000000001',
-        taskId: TASK_ID,
-        nodeId: 'review-node',
-        status: 'awaiting_review',
-        cause: 'initial',
-      })
+      await mint.mint(
+        withTargetMintIdentity({
+          role: 'node-attempt',
+          syntheticKind: null,
+          id: '01RFC349000000000000000001',
+          taskId: TASK_ID,
+          nodeId: 'review-node',
+          status: 'awaiting_review',
+          cause: 'initial',
+        }),
+      )
       await patchNodeRunFixture(
         tx,
         { id: '01RFC349000000000000000001' },
         { mergeState: 'pending-merge' },
       )
 
-      await mint.mint({
-        ...deriveNodeRunRole({ nodeId: 'review-node', rerunCause: 'review-iterate' }),
-        id: '01RFC349000000000000000002',
-        taskId: TASK_ID,
-        nodeId: 'review-node',
-        status: 'awaiting_review',
-        cause: 'review-iterate',
-      })
+      await mint.mint(
+        withTargetMintIdentity({
+          role: 'node-attempt',
+          syntheticKind: null,
+          id: '01RFC349000000000000000002',
+          taskId: TASK_ID,
+          nodeId: 'review-node',
+          status: 'awaiting_review',
+          cause: 'review-iterate',
+        }),
+      )
     })
 
     expect(
@@ -206,46 +135,50 @@ describeEachProvider('RFC-349 task transaction participants', (harness) => {
     expect(await derivedSupersededIds(db, TASK_ID)).toEqual(['01RFC349000000000000000001'])
   })
 
-  test('PostgreSQL binds authorization and minting to one reserved transaction', async () => {
-    const fixture = postgresqlFixture()
-    await fixture.db.transaction(async (tx) => {
-      const authorization = createTaskAuthorizationParticipantInTx(tx)
-      await expect(
-        authorization.canViewTask({
-          subject: { userId: 'observer', canReadAllTasks: false },
-          taskId: TASK_ID,
-        }),
-      ).resolves.toBe(true)
-      await expect(
-        authorization.canActOnTask({ userId: 'observer', taskId: TASK_ID }),
-      ).resolves.toBe(false)
-
-      await expect(
-        createNodeRunMintParticipantInTx(tx).mint({
-          ...deriveNodeRunRole({ nodeId: 'review-node', rerunCause: 'review-iterate' }),
-          id: '01RFC349000000000000000002',
-          taskId: TASK_ID,
-          nodeId: 'review-node',
-          status: 'awaiting_review',
-          cause: 'review-iterate',
-        }),
-      ).resolves.toBe('01RFC349000000000000000002')
-    })
-
-    const sqlText = fixture.statements.map((statement) => statement.sql.toLowerCase()).join('\n')
-    // RFC-369 AC-1: the mint neither reads prior generations nor writes them.
-    expect(sqlText).not.toContain('update "agent_workflow"."node_runs"')
-    expect(sqlText).not.toContain('from "agent_workflow"."node_runs"')
-    expect(sqlText).toContain('insert into "agent_workflow"."node_runs"')
-    const inserts = fixture.statements.filter(({ sql }) => /insert into/i.test(sql))
+  test('authorization and target mint companions share one real owner transaction', async () => {
+    const db = await seedTask(harness.db)
+    const recording = harness.recordStatements()
+    try {
+      await databaseSessionFor(db).transaction(async (tx) => {
+        await taskAggregateWrite.lockTaskAggregateRoot(tx, TASK_ID)
+        const authorization = createTaskAuthorizationParticipantInTx(tx)
+        await expect(
+          authorization.canViewTask({
+            subject: { userId: 'observer', canReadAllTasks: false },
+            taskId: TASK_ID,
+          }),
+        ).resolves.toBe(true)
+        await expect(
+          authorization.canActOnTask({ userId: 'observer', taskId: TASK_ID }),
+        ).resolves.toBe(false)
+        await expect(
+          createNodeRunMintParticipantInTx(tx).mint(
+            withTargetMintIdentity({
+              role: 'node-attempt',
+              syntheticKind: null,
+              id: '01RFC349000000000000000002',
+              taskId: TASK_ID,
+              nodeId: 'review-node',
+              status: 'awaiting_review',
+              cause: 'review-iterate',
+              overrides: {
+                config: { agentOverrideName: 'fixture' },
+                inputs: { consumedUpstreamRunsJson: '{}' },
+              },
+            }),
+          ),
+        ).resolves.toBe('01RFC349000000000000000002')
+      })
+    } finally {
+      recording.stop()
+    }
+    const inserts = recording.statements.filter(({ sql }) => /insert into/i.test(sql))
     expect(
-      inserts.map(({ sql }) => sql.match(/insert into "agent_workflow"\."([^"]+)/i)?.[1]),
-    ).toEqual(['node_run_seq_allocations', 'node_runs'])
-    expect(
-      fixture.statements.filter((statement) => /^begin\b/i.test(statement.sql.trim())),
-    ).toHaveLength(1)
-    expect(
-      fixture.statements.filter((statement) => /^commit\b/i.test(statement.sql.trim())),
-    ).toHaveLength(1)
+      inserts.map(({ sql }) => sql.match(/insert into (?:"[^"]+"\.)?"([^"]+)"/i)?.[1]),
+    ).toEqual(['node_run_seq_allocations', 'node_runs', 'node_run_configs', 'node_run_selections'])
+    expect(recording.statements.filter(({ sql }) => /^begin\b/i.test(sql.trim()))).toHaveLength(1)
+    expect(recording.statements.filter(({ sql }) => /^commit\b/i.test(sql.trim()))).toHaveLength(1)
+    const [run] = await readNodeRunFixtures(db, { id: '01RFC349000000000000000002' })
+    expect(run?.agentOverrideName).toBe('fixture')
   })
 })

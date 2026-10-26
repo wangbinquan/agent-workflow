@@ -1,3 +1,6 @@
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { type TaskReadRow, taskReadColumns } from './taskRepositorySql'
+
 // RFC-053 PR-B P-1 — backend-side CAS wrapper for node_runs.status writes.
 //
 // Every site that needs to change `node_runs.status` should go through one of:
@@ -39,58 +42,51 @@
 // snaps back on refresh. Callers of these helpers place their
 // broadcastNodeStatus AFTER the helper returns; never the other way around.
 
-import { isTaskWorkspaceUnbound } from '@agent-workflow/shared'
-import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
-import { first, queryRows } from '@/platform/persistence/queryHelpers'
+import { publishCommittedEventsAfterCommit } from '@/platform/events/committed/runtime'
+import type { CommittedEventRef } from '@/platform/events/committed/types'
+import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
+import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
+import { driveAsyncProgram } from '@/platform/persistence/transactionProgram'
+import { ConflictError, DomainError, NotFoundError } from '@/util/errors'
+import {
+  allowedFromStatusesForEvent,
+  isTaskWorkspaceUnbound,
+  type NodeRunStatus,
+  type NodeRunTransitionEvent,
+  TERMINAL_TASK_STATUSES,
+  allowedFromForTaskEvent,
+  targetForTaskEvent,
+  type TaskStatus,
+  type TaskTransitionEvent,
+} from '@agent-workflow/shared'
 import { and, eq, inArray, isNull } from 'drizzle-orm'
 import { existsSync } from 'node:fs'
-import {
-  type NodeRunTransitionEvent,
-  type NodeRunStatus,
-  allowedFromStatusesForEvent,
-  nextNodeRunStatus,
-  isTerminalNodeRunStatus,
-} from '@agent-workflow/shared'
-import { resolveTerminalWorkspacePruneDecision } from './terminalWorkspacePrune'
-import type { DbClient } from '@/db/client'
-import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
-import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
-import { type DbTxSync } from '@/db/txSync'
-import { ConflictError, DomainError, NotFoundError } from '@/util/errors'
 import type { NodeRunLifecycleWrite as NodeRunStatusUpdateExtra } from '../application/ports/nodeRunWrites'
 import type { TaskExecutionContextRef } from '../application/ports/taskExecutionTopology'
-export type { NodeRunLifecycleWrite as NodeRunStatusUpdateExtra } from '../application/ports/nodeRunWrites'
 import {
   assertTaskExecutionContext,
   currentTaskExecutionContext,
 } from '../application/taskExecutionContext'
+import type { TaskNodeChangeV1 } from '../domain/taskLifecycleCommittedEvent'
+import { lockNodeRunTaskRootInTx } from './nodeRunWriteProtocol'
+import {
+  transitionNodeRunStatusTx as transitionNodeRunStatusInTx,
+  setNodeRunStatusTx as setNodeRunStatusInTransaction,
+  transitionNodeRunStatusTx as transitionNodeRunStatusInTransaction,
+} from './nodeRunLifecycleTransition'
+import { fenceTaskWrite, withTaskExecutionWrite } from './ownedTaskExecution'
 import {
   appendTaskLifecycleTransitionCommittedEvent,
   type TaskCommittedEventIdentity,
 } from './taskLifecycleCommittedEvents'
-import { fenceTaskWrite, withTaskExecutionWrite } from './ownedTaskExecution'
-import { transitionNodeRunStatusTx as transitionNodeRunStatusInTx } from './nodeRunLifecycleTransition'
-import { withOwnedTaskWrite } from './taskOwnershipPersistence'
-import type { TaskNodeChangeV1 } from '../domain/taskLifecycleCommittedEvent'
 import {
   taskLifecycleWriteSequence,
   type TaskLifecycleWriteExtra,
   type TaskLifecycleWriteInput,
 } from './taskLifecycleWriteSequence'
-import { driveAsyncProgram } from '@/platform/persistence/transactionProgram'
-import { publishCommittedEventsAfterCommit } from '@/platform/events/committed/runtime'
-import type { CommittedEventRef } from '@/platform/events/committed/types'
-import {
-  ConcurrentNodeRunTransition,
-  assertNodeRunSourceTerminationAdmission,
-} from '@/platform/persistence/nodeRunLifecycleCore'
-// RFC-359 W8 —— 中立异步孪生（两个引擎共用）。别名区分：本文件同名的 `*Tx` 是 bun:sqlite 专属的
-// **同步**版仍由 RFC-303 / RFC-326 直接验证事务语义与孪生等价性，本波保留。
-import {
-  nodeRunLifecycleWriteColumns,
-  setNodeRunStatusTx as setNodeRunStatusInTransaction,
-  transitionNodeRunStatusTx as transitionNodeRunStatusInTransaction,
-} from './nodeRunLifecycleTransition'
+import { withOwnedTaskWrite } from './taskOwnershipPersistence'
+import { resolveTerminalWorkspacePruneDecision } from './terminalWorkspacePrune'
+export type { NodeRunLifecycleWrite as NodeRunStatusUpdateExtra } from '../application/ports/nodeRunWrites'
 
 // RFC-359 W8 —— 转移判据 / 错误类型 / 字段白名单下沉到叶子
 // `platform/persistence/nodeRunLifecycleCore.ts`，同步版与中立异步孪生都向下取用同一份。
@@ -122,106 +118,22 @@ export async function transitionNodeRunStatus(args: {
   executionContext?: TaskExecutionContextRef
 }): Promise<{ from: NodeRunStatus; to: NodeRunStatus }> {
   const { nodeRuns } = tablesOf(args.db)
-  // RFC-326: a pure wrapper around the transactional companion — the ONLY
-  // status write for this event kind now lives in transitionNodeRunStatusTx, so
-  // the kernel's direct-write count (lifecycle-grep-guard) stays at three.
-  // Deliberately NOT wrapped in its own transaction: the CAS is a single
-  // statement (atomic on its own), callers may already be inside one, and an
-  // extra BEGIN/COMMIT per transition changed the retry behaviour of the
-  // session-lease claim (runner.test.ts caught it on CI).
-  // RFC-359 W8 —— 这条预读原本是 `.get()`（bun:sqlite 独有的同步游标），它一个人就把整个
-  // `transitionNodeRunStatus` 钉在 SQLite 上，PG 上第一句就炸。改成 `setNodeRunStatus` 早就在用的
-  // 中立形态（`.limit(1)` + `[0]`），本函数至此两个引擎都跑得动——下面那条中立写事务才有对拍面。
-  const taskId = (
-    await args.db
-      .select({ taskId: nodeRuns.taskId })
-      .from(nodeRuns)
-      .where(eq(nodeRuns.id, args.nodeRunId))
-      .limit(1)
-  )[0]?.taskId
-  const executionContext =
-    args.executionContext ??
-    (taskId === undefined ? undefined : currentTaskExecutionContext(taskId))
-  // 无执行上下文：不开事务的独立 CAS（单条 UPDATE 本身就是原子的）。同样改走中立孪生——
-  // 旧的同步版在 PG 上不可用，留着等于把这条分支继续锁死在一个引擎上。
-  if (executionContext === undefined) {
-    return await transitionNodeRunStatusInTransaction({
-      tx: args.db,
-      nodeRunId: args.nodeRunId,
-      event: args.event,
-      ...(args.extra === undefined ? {} : { extra: args.extra }),
-    })
-  }
-  assertTaskExecutionContext(executionContext, taskId)
-  // RFC-359 W8 —— 有执行上下文的分支改走中立事务原语（`withTaskExecutionWrite` + `fenceTaskWrite`
-  // + 中立异步 CAS），与合一前的 `withOwnedTaskTx`（`dbTxSync` + inline owner CAS）逐字同义：
-  // 同一笔写事务里先对 owner 行做 token CAS（命中 `claimed` 的精确 owner 才放行并推进 revision），
-  // 再做 node_run 的状态 CAS；围栏不过抛同一个 `task-execution-stale-owner`。
-  const now = Date.now()
-  return await withTaskExecutionWrite(args.db, async (tx) => {
-    await fenceTaskWrite(tx, {
-      taskId: executionContext.token.taskId,
-      context: executionContext,
-      now,
-    })
-    return await transitionNodeRunStatusInTransaction({
-      tx,
-      nodeRunId: args.nodeRunId,
-      event: args.event,
-      ...(args.extra === undefined ? {} : { extra: args.extra }),
-    })
+  const [row] = await args.db
+    .select({ taskId: nodeRuns.taskId })
+    .from(nodeRuns)
+    .where(eq(nodeRuns.id, args.nodeRunId))
+    .limit(1)
+  if (!row) throw new NotFoundError('node-run-not-found', `node_run ${args.nodeRunId} not found`)
+  const context = args.executionContext ?? currentTaskExecutionContext(row.taskId)
+  return withTaskExecutionWrite(args.db, async (tx) => {
+    await fenceTaskWrite(tx, { taskId: row.taskId, context })
+    await lockNodeRunTaskRootInTx(tx, args.nodeRunId)
+    return transitionNodeRunStatusInTransaction({ ...args, tx })
   })
 }
 
-/**
- * Synchronous transaction companion of `transitionNodeRunStatus` (RFC-326): the
- * same event table, the same fence admission, the same CAS — inside a caller's
- * `dbTxSync` so a review decision can move the review row together with the
- * rows it archives, mints and retires. Does not broadcast; the caller emits after
- * commit (see the ordering rule at the top of this file).
- */
-export function transitionNodeRunStatusTx(args: {
-  /** A transaction handle, or the connection itself for a standalone CAS (same sync surface). */
-  tx: DbTxSync | DbClient
-  nodeRunId: string
-  event: NodeRunTransitionEvent
-  extra?: NodeRunStatusUpdateExtra
-}): { from: NodeRunStatus; to: NodeRunStatus } {
-  const { nodeRuns, tasks } = tablesOf(args.tx)
-  const row = first(
-    args.tx
-      .select({
-        status: nodeRuns.status,
-        taskId: nodeRuns.taskId,
-        sourceTerminationFence: tasks.sourceTerminationFence,
-      })
-      .from(nodeRuns)
-      .innerJoin(tasks, eq(tasks.id, nodeRuns.taskId))
-      .where(eq(nodeRuns.id, args.nodeRunId))
-      .limit(1),
-  )
-  if (row === undefined) {
-    throw new NotFoundError('node-run-not-found', `node_run ${args.nodeRunId} not found`)
-  }
-  const from = row.status as NodeRunStatus
-  const to = nextNodeRunStatus(from, args.event)
-  assertNodeRunSourceTerminationAdmission(row.taskId, row.sourceTerminationFence, to)
-  // CAS: WHERE id = ? AND status = expectedFrom. Drizzle's bun-sqlite
-  // returns the affected row(s) via .returning(); affectedRows.length === 0
-  // means another writer changed status between our SELECT and UPDATE.
-  // rfc053-allow-direct-status-write -- single allowlisted writer (RFC-326: Tx form)
-  const updated = queryRows(
-    args.tx
-      .update(nodeRuns)
-      .set({ status: to, ...nodeRunLifecycleWriteColumns(args.extra) })
-      .where(and(eq(nodeRuns.id, args.nodeRunId), eq(nodeRuns.status, from)))
-      .returning({ id: nodeRuns.id }),
-  )
-  if (updated.length === 0) {
-    throw new ConcurrentNodeRunTransition(args.nodeRunId, from, args.event.kind)
-  }
-  return { from, to }
-}
+/** Async companion; caller owns the transaction, owner fence and Task root lock. */
+export const transitionNodeRunStatusTx = transitionNodeRunStatusInTransaction
 
 /**
  * Lower-level CAS update for sites whose business decision about `to`
@@ -264,133 +176,23 @@ export async function setNodeRunStatus(args: {
   reason?: string
   executionContext?: TaskExecutionContextRef
 }): Promise<{ from: NodeRunStatus; to: NodeRunStatus }> {
-  const { nodeRuns, tasks } = tablesOf(args.db)
-  const row = (
-    await args.db
-      .select({
-        status: nodeRuns.status,
-        taskId: nodeRuns.taskId,
-        sourceTerminationFence: tasks.sourceTerminationFence,
-      })
-      .from(nodeRuns)
-      .innerJoin(tasks, eq(tasks.id, nodeRuns.taskId))
-      .where(eq(nodeRuns.id, args.nodeRunId))
-      .limit(1)
-  )[0]
-  if (row === undefined) {
-    throw new NotFoundError('node-run-not-found', `node_run ${args.nodeRunId} not found`)
-  }
-  const from = row.status as NodeRunStatus
-  const executionContext = args.executionContext ?? currentTaskExecutionContext(row.taskId)
-  if (executionContext !== undefined) {
-    assertTaskExecutionContext(executionContext, row.taskId)
-    // RFC-359 W8 —— 同 `transitionNodeRunStatus`：中立事务原语替下 `withOwnedTaskTx`，
-    // 围栏与 CAS 的顺序、语义、错误码都不变。
-    const now = Date.now()
-    return await withTaskExecutionWrite(args.db, async (tx) => {
-      await fenceTaskWrite(tx, { taskId: row.taskId, context: executionContext, now })
-      return await setNodeRunStatusInTransaction({
-        tx,
-        nodeRunId: args.nodeRunId,
-        to: args.to,
-        allowedFrom: args.allowedFrom,
-        ...(args.extra === undefined ? {} : { extra: args.extra }),
-        ...(args.allowTerminal === undefined ? {} : { allowTerminal: args.allowTerminal }),
-        ...(args.reason === undefined ? {} : { reason: args.reason }),
-      })
-    })
-  }
-  assertNodeRunSourceTerminationAdmission(row.taskId, row.sourceTerminationFence, args.to)
-  if (isTerminalNodeRunStatus(from) && args.allowTerminal !== true) {
-    throw new ConflictError(
-      'illegal-node-run-transition',
-      `node_run ${args.nodeRunId} is terminal ('${from}'); refuse to overwrite${args.reason ? ` (${args.reason})` : ''}`,
-    )
-  }
-  if (!args.allowedFrom.includes(from)) {
-    throw new ConflictError(
-      'illegal-node-run-transition',
-      `node_run ${args.nodeRunId} status='${from}' not in allowedFrom=[${args.allowedFrom.join(',')}]${args.reason ? ` (${args.reason})` : ''}`,
-    )
-  }
-  // rfc053-allow-direct-status-write -- single allowlisted writer
-  const updated = await args.db
-    .update(nodeRuns)
-    .set({ status: args.to, ...nodeRunLifecycleWriteColumns(args.extra) })
-    .where(and(eq(nodeRuns.id, args.nodeRunId), eq(nodeRuns.status, from)))
-    .returning({ id: nodeRuns.id })
-  if (updated.length === 0) {
-    throw new ConcurrentNodeRunTransition(
-      args.nodeRunId,
-      from,
-      args.reason ?? `setNodeRunStatus to=${args.to}`,
-    )
-  }
-  return { from, to: args.to }
+  const { nodeRuns } = tablesOf(args.db)
+  const [row] = await args.db
+    .select({ taskId: nodeRuns.taskId })
+    .from(nodeRuns)
+    .where(eq(nodeRuns.id, args.nodeRunId))
+    .limit(1)
+  if (!row) throw new NotFoundError('node-run-not-found', `node_run ${args.nodeRunId} not found`)
+  const context = args.executionContext ?? currentTaskExecutionContext(row.taskId)
+  return withTaskExecutionWrite(args.db, async (tx) => {
+    await fenceTaskWrite(tx, { taskId: row.taskId, context })
+    await lockNodeRunTaskRootInTx(tx, args.nodeRunId)
+    return setNodeRunStatusInTransaction({ ...args, tx })
+  })
 }
 
-/**
- * Synchronous transaction companion for business operations that must move a
- * node_run together with other durable rows. It intentionally does not
- * broadcast: the caller emits frames only after the enclosing transaction
- * commits, preserving the lifecycle broadcast ordering rule above.
- */
-export function setNodeRunStatusTx(args: {
-  tx: DbTxSync
-  nodeRunId: string
-  to: NodeRunStatus
-  allowedFrom: readonly NodeRunStatus[]
-  extra?: NodeRunStatusUpdateExtra
-  allowTerminal?: boolean
-  reason?: string
-}): { from: NodeRunStatus; to: NodeRunStatus } {
-  const { nodeRuns, tasks } = tablesOf(args.tx)
-  const row = first(
-    args.tx
-      .select({
-        status: nodeRuns.status,
-        taskId: nodeRuns.taskId,
-        sourceTerminationFence: tasks.sourceTerminationFence,
-      })
-      .from(nodeRuns)
-      .innerJoin(tasks, eq(tasks.id, nodeRuns.taskId))
-      .where(eq(nodeRuns.id, args.nodeRunId))
-      .limit(1),
-  )
-  if (row === undefined) {
-    throw new NotFoundError('node-run-not-found', `node_run ${args.nodeRunId} not found`)
-  }
-  const from = row.status as NodeRunStatus
-  assertNodeRunSourceTerminationAdmission(row.taskId, row.sourceTerminationFence, args.to)
-  if (isTerminalNodeRunStatus(from) && args.allowTerminal !== true) {
-    throw new ConflictError(
-      'illegal-node-run-transition',
-      `node_run ${args.nodeRunId} is terminal ('${from}'); refuse to overwrite${args.reason ? ` (${args.reason})` : ''}`,
-    )
-  }
-  if (!args.allowedFrom.includes(from)) {
-    throw new ConflictError(
-      'illegal-node-run-transition',
-      `node_run ${args.nodeRunId} status='${from}' not in allowedFrom=[${args.allowedFrom.join(',')}]${args.reason ? ` (${args.reason})` : ''}`,
-    )
-  }
-  // rfc053-allow-direct-status-write -- transactional companion of setNodeRunStatus
-  const updated = queryRows(
-    args.tx
-      .update(nodeRuns)
-      .set({ status: args.to, ...nodeRunLifecycleWriteColumns(args.extra) })
-      .where(and(eq(nodeRuns.id, args.nodeRunId), eq(nodeRuns.status, from)))
-      .returning({ id: nodeRuns.id }),
-  )
-  if (updated.length === 0) {
-    throw new ConcurrentNodeRunTransition(
-      args.nodeRunId,
-      from,
-      args.reason ?? `setNodeRunStatusTx to=${args.to}`,
-    )
-  }
-  return { from, to: args.to }
-}
+/** Async companion; caller owns the transaction, owner fence and Task root lock. */
+export const setNodeRunStatusTx = setNodeRunStatusInTransaction
 
 // -----------------------------------------------------------------------------
 // RFC-097 — tasks.status CAS (audit S-8 / S-14 / WP-4): the RFC-053 triple
@@ -400,13 +202,6 @@ export function setNodeRunStatusTx(args: {
 // `update(tasks).set({ status: … })` out of every other module.
 // -----------------------------------------------------------------------------
 
-import {
-  TERMINAL_TASK_STATUSES,
-  allowedFromForTaskEvent,
-  targetForTaskEvent,
-  type TaskStatus,
-  type TaskTransitionEvent,
-} from '@agent-workflow/shared'
 // RFC-108 T2 (AR-19 / 01-LIFE-08): the terminal-task-status set now lives in
 // @agent-workflow/shared (symmetric with node_run) so the frontend imports the
 // same source instead of hand-enumerating it. Re-exported here for the many
@@ -451,9 +246,7 @@ export class ConcurrentTaskTransition extends ConflictError {
  * 手抄一份联合类型等于把同一个词汇表写两遍：schema 加一个取值时，这里不会红，
  * 而是安静地把新原因判成不合法。派生则让「取值域」只有一个事实源。
  */
-export type WorkspacePruneCause = NonNullable<
-  PersistenceTables['tasks']['$inferSelect']['workspacePruneCause']
->
+export type WorkspacePruneCause = NonNullable<TaskReadRow['workspacePruneCause']>
 
 /**
  * RFC-359 —— 同一个写序列的**异步解释**。
@@ -591,8 +384,8 @@ export async function setTaskStatus(args: {
   const rows = await args.db
     .select({
       status: tasks.status,
-      worktreePath: tasks.worktreePath,
-      spaceKind: tasks.spaceKind,
+      worktreePath: taskReadColumns(args.db).worktreePath,
+      spaceKind: taskReadColumns(args.db).spaceKind,
       workspacePruningAt: tasks.workspacePruningAt,
       workspacePruneCause: tasks.workspacePruneCause,
       workspacePrunedAt: tasks.workspacePrunedAt,

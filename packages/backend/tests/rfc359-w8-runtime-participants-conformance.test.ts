@@ -1,3 +1,7 @@
+import { runGit } from '@/util/git'
+import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
+import { nodeRunFixtureColumns } from './helpers/model/nodeRun'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { o2Ports } from './helpers/o2Closure'
 import {
   agentFixture,
@@ -9,7 +13,7 @@ import {
   readNodeRunFixtures,
 } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+
 import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 import { testDriveFactory } from './helpers/taskDriveCoordinatorFactory'
 import { composeLocalTaskAgentRunFamilyFor } from '@/modules/task-execution/composition/localTaskAgentRunFamily'
@@ -81,6 +85,7 @@ import {
 import {
   composeTestChildLaunchWorkgroup,
   singleProcessDeploymentPorts,
+  createTestRepositoryPublicationTransport,
 } from './helpers/taskExecutionTestTopology'
 import { createProviderTaskExecutionModule } from '@/modules/task-execution/composition'
 import { createTaskDriverLifecyclePort } from '@/modules/task-execution/infrastructure/taskDriverLifecycle'
@@ -93,7 +98,7 @@ import { createTaskDagCollaborationOperations } from '@/modules/collaboration/in
 import { composeRuntimeRegistryOperations } from './helpers/runtimeRegistryComposition'
 import { describeEachProvider } from './helpers/eachProvider'
 import { sqliteMemoryInjectionQueries } from './helpers/memoryInjection'
-import { createTestRepositoryPublicationTransport } from './helpers/taskExecutionTestTopology'
+
 import {
   createEachProviderTaskExecution,
   createTestDynamicWorkflowOperations,
@@ -153,6 +158,7 @@ function sharedInput(
   'taskDagCollaboration' | 'processConcurrencyScope' | 'log'
 > {
   return {
+    historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
     db,
     taskRunBinding: composeLegacyTaskRunDriveBinding({
       taskAgentRunsFor: composeLocalTaskAgentRunFamilyFor,
@@ -164,6 +170,7 @@ function sharedInput(
     workspaceExcludeProfilesFor: composeTaskWorkspaceExcludeProfilesFor(),
     workspacePresence: createFileWorkspacePresenceQueries(),
     persistence: createTaskExecutionPersistence(db, {
+      historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
       recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
     }),
     runtimeSessionLeases: createRuntimeSessionLeaseOperations(db),
@@ -172,6 +179,7 @@ function sharedInput(
     runtimeRegistry: composeRuntimeRegistryOperations(db),
     nodeRunRuntime: composeNodeRunRuntimePersistence(db),
     collaborationRuntime: createCollaborationRuntimeMechanics(db, {
+      ...epoch2RuntimeTestPorts(db),
       taskLock: o2Ports(db).taskLock,
       ...{ upstreamAgents: o2Ports(db).upstreamAgents },
     }),
@@ -271,7 +279,8 @@ describeEachProvider('RFC-359 W8 —— runtime 参与者双引擎对拍', (harn
     const skillId = ulid()
     const mcpId = ulid()
     const pluginId = ulid()
-    const { skills, mcps, plugins } = tablesOf(db)
+    const { mcps, plugins } = tablesOf(db)
+    const { skills } = tablesOf(db)
     await agentFixture(db, {
       id: agentId,
       name: `dynamic-${agentId}`,
@@ -326,7 +335,9 @@ describeEachProvider('RFC-359 W8 —— runtime 参与者双引擎对拍', (harn
     const workgroupId = ulid()
     let execution: Awaited<ReturnType<typeof createEachProviderTaskExecution>> | undefined
     try {
-      const { users, workgroupTaskState, nodeRuns } = tablesOf(db)
+      await runGit(appHome, ['init', '-q', '-b', 'main'])
+      const { users, workgroupTaskState } = tablesOf(db)
+      const { nodeRuns } = tablesOf(db)
       await insertOne(db, users, {
         id: userId,
         username: `dynamic-${userId}`,
@@ -403,11 +414,10 @@ describeEachProvider('RFC-359 W8 —— runtime 参与者双引擎对拍', (harn
         workgroupId,
         workgroupConfigJson: JSON.stringify(config),
       })
-      await insertOne(db, workgroupTaskState, {
-        taskId,
-        dwStateJson: JSON.stringify(dw),
-        updatedAt: 1,
-      })
+      await db
+        .update(workgroupTaskState)
+        .set({ dwStateJson: JSON.stringify(dw), updatedAt: 1 })
+        .where(eq(workgroupTaskState.taskId, taskId))
       execution = await createEachProviderTaskExecution(harness, { appHome }, userId)
       const intentId = ulid()
       const now = Date.now()
@@ -468,7 +478,10 @@ describeEachProvider('RFC-359 W8 —— runtime 参与者双引擎对拍', (harn
         executionContext,
         signal,
       })
-      const resumedRuns = await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
+      const resumedRuns = await db
+        .select(nodeRunFixtureColumns(db))
+        .from(nodeRuns)
+        .where(eq(nodeRuns.taskId, taskId))
       expect(resumedRuns.map((run) => run.id)).toEqual(firstRuns.map((run) => run.id))
       expect((await readTaskFixtures(db, { id: taskId }))[0]?.status).toBe('awaiting_review')
       expect(

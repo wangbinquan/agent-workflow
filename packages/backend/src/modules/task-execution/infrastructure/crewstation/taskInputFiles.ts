@@ -1,3 +1,10 @@
+import {
+  createContentStore,
+  databaseContentPolicy,
+  contentReadTransport,
+  contentRefOf,
+  hostedObjectOf,
+} from '@/platform/content/infrastructure/contentStore'
 // RFC-370 v3 V6 — original uploaded task inputs as task artifacts. Every file
 // and the manifest naming them are `task-artifact` publications (key = artifact
 // reference, scope = task id); each publication commits its hosted_task_artifacts
@@ -59,6 +66,17 @@ export function createHostedTaskInputFiles(input: {
   readonly objects: Pick<CrewStationStreamObjectStorage, 'open'>
   readonly publications: HostedObjectPublications
 }): TaskInputFiles {
+  const content = createContentStore({
+    db: input.db,
+    policy: databaseContentPolicy,
+    transports: {
+      object: contentReadTransport(async (ref) =>
+        new Response(await input.objects.open(hostedObjectOf(ref)))
+          .arrayBuffer()
+          .then((bytes) => new Uint8Array(bytes)),
+      ),
+    },
+  })
   const find = async (reference: string) => {
     const { hostedTaskArtifacts } = tablesOf(input.db)
     return (
@@ -154,11 +172,7 @@ export function createHostedTaskInputFiles(input: {
       const row = await find(`${prefixOf(taskId)}manifest.json`)
       if (!row) return null
       const manifest = Manifest.parse(
-        JSON.parse(
-          Buffer.from(
-            await readBytes({ id: row.objectId, sha256: row.digest, size: row.size }),
-          ).toString('utf8'),
-        ),
+        JSON.parse(Buffer.from(await content.read(contentRefOf(row))).toString('utf8')),
       )
       if (
         manifest.taskId !== taskId ||

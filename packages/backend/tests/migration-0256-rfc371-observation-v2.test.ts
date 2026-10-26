@@ -5,13 +5,17 @@
 // observation side effects, and create exactly the three v2 tables. The
 // PostgreSQL step 0032 must drop the capture triggers and their functions
 // before it drops the tables.
+import {
+  migrateFrozenSqlite as migrate,
+  freezeAt,
+  FROZEN_MIGRATIONS,
+  FROZEN_POSTGRESQL_MIGRATIONS,
+} from './migration-freeze'
 import { describe, expect, test } from 'bun:test'
 import { Database } from 'bun:sqlite'
 import { readFileSync, rmSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { drizzle } from 'drizzle-orm/bun-sqlite'
-import { migrate } from 'drizzle-orm/bun-sqlite/migrator'
-import { freezeAt } from './migration-freeze'
 
 const V2_TABLES = ['observation_call_models', 'observation_calls', 'observation_prices']
 /** Every v1 observation table name shape (v2 reuses only the `observation_` prefix). */
@@ -19,7 +23,7 @@ const RETIRED = /^observation_|native_usage|_observation_/
 const THROUGH_0255 = 254
 
 function statements(file: string): string[] {
-  return readFileSync(resolve(import.meta.dir, '../db/migrations', file), 'utf8')
+  return readFileSync(resolve(FROZEN_MIGRATIONS, file), 'utf8')
     .split('--> statement-breakpoint')
     .map((statement) => statement.trim())
     .filter((statement) => statement !== '')
@@ -153,7 +157,7 @@ describe('migration 0256 — RFC-371 observation v2', () => {
 
   test('PostgreSQL 0032 drops capture triggers and functions before the tables', () => {
     const sql = readFileSync(
-      resolve(import.meta.dir, '../db/postgresql-migrations/0032_rfc371_observation_v2.sql'),
+      resolve(FROZEN_POSTGRESQL_MIGRATIONS, '0032_rfc371_observation_v2.sql'),
       'utf8',
     )
     const position = (pattern: RegExp) => {

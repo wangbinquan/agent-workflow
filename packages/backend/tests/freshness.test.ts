@@ -1,3 +1,8 @@
+// Released picker oracle; executable runtime selection is covered through RunSelectionReader.
+import { pickReusableShardRun } from './helpers/model/frozenSelection/pickers'
+import type { projectNodeRunReadFacts } from '@/modules/task-execution/infrastructure/nodeRunSnapshot'
+// Target fixture mint order; missing seq is covered only by conversion/rejection tests.
+let fixtureRunSequence = 0
 // RFC-074 PR-B — isNodeRunFresh + parseConsumedJson pure-function locks (B1-B4).
 //
 // The freshness predicate is the heart of the provenance rewrite: it decides
@@ -8,7 +13,6 @@
 // current done row is NOT a staleness signal" and the "null/garbage consumed =
 // fresh" hard-cut rule (design §9.1 / D4).
 
-import { type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
@@ -16,13 +20,12 @@ import {
   consumedMapsEqual,
   isNodeRunFresh,
   parseConsumedJson,
-  pickReusableShardRun,
-} from '../src/services/freshness'
-type Row = PersistenceTables['nodeRuns']['$inferSelect']
+} from '../src/modules/task-execution/application/runProvenance'
+type Row = ReturnType<typeof projectNodeRunReadFacts>
 
 function run(id: string, consumed: Record<string, string> | null): Row {
   return {
-    seq: null,
+    seq: ++fixtureRunSequence,
     parentNodeRunId: null,
     containerRunId: null,
     shardKey: null,
@@ -36,7 +39,7 @@ function run(id: string, consumed: Record<string, string> | null): Row {
 }
 function doneRow(id: string): Row {
   return {
-    seq: null,
+    seq: ++fixtureRunSequence,
     parentNodeRunId: null,
     containerRunId: null,
     shardKey: null,
@@ -174,7 +177,13 @@ describe('RFC-098 B3 — pickReusableShardRun (done-only + freshest + hash null=
     shardValueHash: string | null
   }
   function row(over: Partial<ShardRow> & { id: string }): ShardRow {
-    return { seq: null, status: 'done', shardKey: 'a.md', shardValueHash: null, ...over }
+    return {
+      seq: ++fixtureRunSequence,
+      status: 'done',
+      shardKey: 'a.md',
+      shardValueHash: null,
+      ...over,
+    }
   }
 
   test('shardKey match is exact ((shardKey ?? null) === wanted); null = shared row', () => {
@@ -210,7 +219,7 @@ describe('RFC-098 B3 — pickReusableShardRun (done-only + freshest + hash null=
     ).toBe('01A')
     // …and a NULL wanted hash (shared dispatch) matches any stored hash.
     expect(
-      pickReusableShardRun([row({ id: '01A', shardValueHash: 'h1' })], {
+      pickReusableShardRun([row({ id: '01A', seq: 10, shardValueHash: 'h1' })], {
         shardKey: 'a.md',
         valueHash: null,
       })?.id,
@@ -223,11 +232,11 @@ describe('RFC-098 B3 — pickReusableShardRun (done-only + freshest + hash null=
     expect(pickReusableShardRun(rows, { shardKey: 'a.md', valueHash: 'h-old' })?.id).toBe('01A')
   })
 
-  test('freshest wins among surviving rows (pure ULID order)', () => {
+  test('freshest wins among surviving rows (persisted sequence, inverted IDs)', () => {
     const rows = [
-      row({ id: '01A', shardValueHash: 'h1' }),
-      row({ id: '01C', shardValueHash: 'h1' }),
-      row({ id: '01B', shardValueHash: 'h1' }),
+      row({ id: '01A', seq: 10, shardValueHash: 'h1' }),
+      row({ id: '01C', seq: 30, shardValueHash: 'h1' }),
+      row({ id: '01B', seq: 20, shardValueHash: 'h1' }),
       row({ id: '01D', shardValueHash: 'h-other' }), // freshest overall but hash-excluded
     ]
     expect(pickReusableShardRun(rows, { shardKey: 'a.md', valueHash: 'h1' })?.id).toBe('01C')

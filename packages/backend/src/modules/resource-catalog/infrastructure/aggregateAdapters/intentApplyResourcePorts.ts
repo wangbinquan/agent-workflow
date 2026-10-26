@@ -1,27 +1,9 @@
+import { capturedSkillTreeColumns, skillRowPath } from '../databaseSkillTrees'
 import { assertAgentDependencyGraph as validateDependencyGraph } from '../../domain/agentDependencies'
 import { createAgentDependencyReadPort } from '../agentDependencyRead'
-import { collectWorkflowDependencyRefs, collectAgentDependencyRefs } from '@agent-workflow/shared'
-import { createAgentReferenceWriteParticipant } from '../agentReferenceWrite'
-import { createWorkflowDefinitionWriteParticipant } from '../workflowDefinitionWrite'
-import { workflowCatalogPredicate } from '../workflowCatalogPredicate'
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
-import { first } from '@/platform/persistence/queryHelpers'
-import type {
-  IntentArtifactStage as StagedArtifactCapability,
-  IntentPluginPublication as PostgresqlIntentPluginInstallResult,
-  IntentPluginArtifactOwner as PostgresqlIntentPluginArtifactLifecycle,
-  IntentSkillPublication as PostgresqlIntentSkillStageResult,
-  IntentSkillArtifactOwner as PostgresqlIntentSkillArtifactLifecycle,
-} from '../../application/intent/artifactOwners'
-export type {
-  IntentPluginPublication as PostgresqlIntentPluginInstallResult,
-  IntentPluginArtifactOwner as PostgresqlIntentPluginArtifactLifecycle,
-  IntentSkillPublication as PostgresqlIntentSkillStageResult,
-  IntentSkillArtifactOwner as PostgresqlIntentSkillArtifactLifecycle,
-} from '../../application/intent/artifactOwners'
-import { withAgentSidecarsFrom } from '../../domain/agentSidecarBackfill'
 import {
+  collectWorkflowDependencyRefs,
+  collectAgentDependencyRefs,
   privilegedNodeLensFor,
   CreateAgentSchema,
   CreateMcpSchema,
@@ -48,6 +30,27 @@ import {
   type WorkgroupDraftMember,
   type WorkgroupDraftSnapshot,
 } from '@agent-workflow/shared'
+import { createAgentReferenceWriteParticipant } from '../agentReferenceWrite'
+import { createWorkflowDefinitionWriteParticipant } from '../workflowDefinitionWrite'
+import { workflowCatalogPredicate } from '../workflowCatalogPredicate'
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+import { first } from '@/platform/persistence/queryHelpers'
+import type {
+  IntentArtifactStage as StagedArtifactCapability,
+  IntentPluginPublication as PostgresqlIntentPluginInstallResult,
+  IntentPluginArtifactOwner as PostgresqlIntentPluginArtifactLifecycle,
+  IntentSkillPublication as PostgresqlIntentSkillStageResult,
+  IntentSkillArtifactOwner as PostgresqlIntentSkillArtifactLifecycle,
+} from '../../application/intent/artifactOwners'
+export type {
+  IntentPluginPublication as PostgresqlIntentPluginInstallResult,
+  IntentPluginArtifactOwner as PostgresqlIntentPluginArtifactLifecycle,
+  IntentSkillPublication as PostgresqlIntentSkillStageResult,
+  IntentSkillArtifactOwner as PostgresqlIntentSkillArtifactLifecycle,
+} from '../../application/intent/artifactOwners'
+import { withAgentSidecarsFrom } from '../../domain/agentSidecarBackfill'
+
 import { and, eq, inArray } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type { DirectAuthenticatedAuthority } from '@/modules/identity-access/public/participants'
@@ -64,7 +67,7 @@ import { encodeSkillToken } from '../../application/skills/skillToken'
 import { hasResourceAclBypass } from '../../domain/resourceAccess'
 import type { CatalogSelectorKind } from '../../domain/resourceKinds'
 import type { VersionedIntentResourceChangesetPlan } from '../../public/types'
-import { agentFromPersistenceRow } from '../agentPersistence'
+import { loadAgentPersistenceRow } from '../agentPersistence'
 import { createMcpInsertValues, mcpConfigHash, mcpFromPersistenceRow } from '../mcpPersistence'
 import { assertHostedPluginPublicationInTx } from '../crewstation/pluginPublication'
 import {
@@ -109,6 +112,7 @@ export interface IntentApplyResourcePortFactoryDependencies {
   readonly db: PersistenceDb
   readonly mcpLifecycle: McpTransactionLifecycle
   readonly pluginArtifacts: PostgresqlIntentPluginArtifactLifecycle
+  readonly skillContentKind?: 'local-file' | 'database-bytes'
   readonly skillArtifacts: PostgresqlIntentSkillArtifactLifecycle
   readonly id?: () => string
   readonly now?: () => number
@@ -136,7 +140,11 @@ interface PreparedPlugin {
 
 interface PreparedSkill {
   readonly stage: StagedArtifactCapability<PostgresqlIntentSkillStageResult>
-  staged: PostgresqlIntentSkillStageResult | null
+  staged:
+    | (PostgresqlIntentSkillStageResult & {
+        readonly contentKind?: 'local-file' | 'database-bytes'
+      })
+    | null
 }
 
 type PreparedWorkflow = Readonly<{ definition: WorkflowDefinition }>
@@ -275,7 +283,8 @@ async function visibleIdentity(
   id: string,
 ): Promise<boolean> {
   const row = await (async () => {
-    const { agents, skills, mcps, plugins, workflows, workgroups } = tablesOf(transaction)
+    const { agents, skills } = tablesOf(transaction)
+    const { mcps, plugins, workflows, workgroups } = tablesOf(transaction)
     switch (type) {
       case 'agent':
         return first(
@@ -470,7 +479,10 @@ function createAgentPort(
           )
           if (sourceRow !== undefined) {
             input = CreateAgentSchema.parse(
-              withAgentSidecarsFrom(plan.payload, agentFromPersistenceRow(sourceRow)),
+              withAgentSidecarsFrom(
+                plan.payload,
+                await loadAgentPersistenceRow(transaction, sourceRow),
+              ),
             )
           }
         }
@@ -515,7 +527,7 @@ function createAgentPort(
         transaction.select().from(agents).where(eq(agents.id, plan.resourceId)),
       )
       if (row === undefined) throw notFound('agent', plan.resourceId)
-      const current = agentFromPersistenceRow(row)
+      const current = await loadAgentPersistenceRow(transaction, row)
       requireOwner(actor, 'agent', current)
       if (
         current.updatedAt !== plan.expectedRevision.updatedAt ||
@@ -816,6 +828,7 @@ function createSkillPort(
   artifacts: PostgresqlIntentSkillArtifactLifecycle,
   nextId: () => string,
   now: () => number,
+  contentKind?: 'local-file' | 'database-bytes',
 ): IntentApplyMutationPort<'skill', PreparedSkill> {
   const actor = exactActor(options)
   return Object.freeze({
@@ -879,7 +892,12 @@ function createSkillPort(
           id: plan.resourceId,
           name: plan.payload.name,
           description: plan.payload.description,
-          managedPath: prepared.staged.managedPath,
+          ...(await capturedSkillTreeColumns(
+            contentKind ?? prepared.staged.contentKind ?? 'local-file',
+            plan.resourceId,
+            'live',
+            prepared.staged.managedPath,
+          )),
           ownerUserId: actor.user.id,
           visibility: 'private',
           aclRevision: 0,
@@ -894,7 +912,12 @@ function createSkillPort(
           id: nextId(),
           skillId: plan.resourceId,
           versionIndex: 1,
-          filesPath: prepared.staged.filesPath,
+          ...(await capturedSkillTreeColumns(
+            contentKind ?? prepared.staged.contentKind ?? 'local-file',
+            plan.resourceId,
+            'version:1',
+            prepared.staged.filesPath,
+          )),
           source: 'initial',
           summary: 'Initial version',
           fusionId: null,
@@ -927,6 +950,12 @@ function createSkillPort(
           .set({
             description: plan.payload.description,
             contentVersion: versionIndex,
+            ...(await capturedSkillTreeColumns(
+              contentKind ?? prepared.staged.contentKind ?? 'local-file',
+              current.id,
+              'live',
+              prepared.staged.managedPath,
+            )),
             metaRevision,
             versionState: 'snapshot-authoritative',
             updatedAt,
@@ -946,7 +975,12 @@ function createSkillPort(
         id: nextId(),
         skillId: current.id,
         versionIndex,
-        filesPath: prepared.staged.filesPath,
+        ...(await capturedSkillTreeColumns(
+          contentKind ?? prepared.staged.contentKind ?? 'local-file',
+          current.id,
+          `version:${versionIndex}`,
+          prepared.staged.filesPath,
+        )),
         source: 'editor',
         summary: null,
         fusionId: null,
@@ -979,7 +1013,7 @@ function skillFromRow(row: PersistenceTables['skills']['$inferSelect']): Skill {
     name: row.name,
     description: row.description,
     sourceKind: 'managed',
-    managedPath: row.managedPath ?? undefined,
+    managedPath: skillRowPath(row, row.id, 'live') ?? undefined,
     ownerUserId: row.ownerUserId,
     visibility: row.visibility,
     schemaVersion: row.schemaVersion,
@@ -1310,7 +1344,8 @@ async function workgroupMemberValues(
     member.memberType === 'agent' && member.agentId !== undefined ? [member.agentId] : [],
   )
   await assertVisibleReferences(transaction, actor, [{ type: 'agent', ids: agentIds }])
-  const { agents, users } = tablesOf(transaction)
+  const { agents } = tablesOf(transaction)
+  const { users } = tablesOf(transaction)
   const agentRows =
     agentIds.length === 0
       ? []
@@ -1529,7 +1564,14 @@ export function createIntentApplyResourcePortFactory(
     create(options) {
       return Object.freeze({
         agent: createAgentPort(options, now),
-        skill: createSkillPort(options, input.db, input.skillArtifacts, nextId, now),
+        skill: createSkillPort(
+          options,
+          input.db,
+          input.skillArtifacts,
+          nextId,
+          now,
+          input.skillContentKind,
+        ),
         mcp: createMcpPort(options, input.mcpLifecycle, now),
         plugin: createPluginPort(options, input.db, input.pluginArtifacts, now),
         workflow: createWorkflowPort(options, input.committed, now),

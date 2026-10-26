@@ -1,53 +1,57 @@
+import { taskReadColumns } from '@/modules/task-execution/infrastructure/taskRepositorySql'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 // RFC359 W26: preserve the original ordered listActive result and its single
 // transaction snapshot while an empty workgroup index can avoid the task scan.
 // The earlier W23 predicate/index probes changed nonempty order and were rejected.
 
-import { taskWorkgroupConfigSelection } from '@/modules/task-execution/public/operations'
-import {
-  type TaskFixtureSpec,
-  patchTaskFixture,
-  readTaskFixtures,
-  taskFixture,
-  workflowFixture,
-} from './helpers/model'
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
-import { expect, test } from 'bun:test'
-import { Database } from 'bun:sqlite'
-import { createHash } from 'node:crypto'
-import { readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
-import { and, eq, inArray, isNotNull } from 'drizzle-orm'
-import { CANCELABLE_TASK_STATUSES, type TaskStatus } from '@agent-workflow/shared'
-import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { composeWorkgroupTaskRoomClarifyParticipantFactory } from '@/modules/collaboration/composition/workgroupTaskRoomClarify'
 import { composeWorkgroupTaskRoomTaskParticipantFactory } from '@/modules/task-execution/composition/workgroupTaskRoomTask'
 import type { TaskExecutionTransaction } from '@/modules/task-execution/infrastructure/ownedTaskExecution'
 import type { WorkgroupTaskRoomTaskSnapshot } from '@/modules/task-execution/public/commands'
-import { decodeTaskSubject } from '@/modules/task-execution/public/queries'
-import type { StoredTaskSubject } from '@/modules/task-execution/public/types'
-import { taskSubjectFixtureColumns } from './helpers/model/taskSubject'
+import { taskWorkgroupConfigSelection } from '@/modules/task-execution/public/operations'
+import {
+  taskSubjectFromDefinition,
+  TASK_DEFINITION_HOSTS,
+} from '@/modules/task-execution/public/queries'
+import type { TaskDefinitionSubject } from '@/modules/task-execution/public/types'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import {
   createPostgresqlDatabaseRuntime,
   type PostgresqlPool,
 } from '@/platform/persistence/postgresqlRuntime'
+
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { CANCELABLE_TASK_STATUSES, type TaskStatus } from '@agent-workflow/shared'
+import { Database } from 'bun:sqlite'
+import { expect, test } from 'bun:test'
+import { and, eq, inArray, isNotNull } from 'drizzle-orm'
+import { createHash } from 'node:crypto'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
+import {
+  readTaskFixtures,
+  taskFixture,
+  workflowFixture,
+  type TaskFixtureSpec,
+} from './helpers/model'
 import type { RecordedStatement } from './helpers/statementRecorder'
 
 // RFC-374: the participant's two node-run projections also carry `seq` (outside the probe).
 // RFC-395 I-b: one session table destructuring now serves the whole write transaction.
 // RFC-395 II-a A2: subject inputs and decoding are mirrored in the former-wiring oracle.
-// RFC-395 II-a rebaseline: verified the prior A2 source against d5aa2262; only A3 run-selection
-// projection, grouped identity writes and moving imports below the header differ.
-const ORIGINAL_SOURCE_HASH = '05b89c9683170ec48cc2b0e6fa2f12e419d4bb7837281b06d2e8953cfa37ef7d'
+// RFC-395 II-b: the captured pre-T source reproduces 05b89c96. Rebaseline only the
+// target task projection, frozen discriminator, and covering-index probe; preserve the inverse and row/byte assertions.
+// M-c: include activated nodeRunReadColumns/table-selection and task definition projection; inverse remains exact.
+const ORIGINAL_SOURCE_HASH = '94cb2ca3af10e30b2f453c9c7256f147195044c07c6c33b3ff592da1da30bbfe'
 const SOURCE_PATH = resolve(
   import.meta.dir,
   '../src/modules/task-execution/infrastructure/workgroupTaskRoomTaskParticipant.ts',
 )
 const PROBE_FROM = [
   '      .from(',
-  '        sql`(SELECT 1 AS workgroup_present FROM ${tasks} WHERE ${tasks.workgroupId} IS NOT NULL LIMIT 1) AS nonempty_workgroup_scan`,',
+  "        sql`(SELECT 1 AS workgroup_present FROM ${taskDefinitions} WHERE ${taskDefinitions.subjectKind} = 'workgroup' LIMIT 1) AS nonempty_workgroup_scan`,",
   '      )',
   '      .crossJoin(tasks)',
 ].join('\n')
@@ -60,32 +64,31 @@ const PROBE_FROM = [
 const PROBE_DOC_START = '  /**\n   * 空工作组的短路探针'
 const PROBE_DOC_END = '   */\n'
 
+function normalizedQualification(value: string): string {
+  return value.replace(
+    /(?:"agent_workflow"\.)?"(?:tasks|task_definitions|task_launch_contexts|task_workspaces|task_repository_mounts|workgroup_task_state)"\./g,
+    '',
+  )
+}
 function originalCompiledSql(value: string): string {
-  if (!value.includes('nonempty_workgroup_scan')) return value
-  const from = value.indexOf(' from ')
-  if (from < 0) throw new Error('missing actual outer FROM')
+  if (!value.includes('nonempty_workgroup_scan')) return normalizedQualification(value)
   const probe =
-    / from \(SELECT 1 AS workgroup_present FROM ((?:"[^"]+"\.)?"tasks") WHERE \1\."workgroup_id" IS NOT NULL LIMIT 1\) AS nonempty_workgroup_scan cross join \1/.exec(
-      value.slice(from),
+    / from \(SELECT 1 AS workgroup_present FROM ((?:"[^" ]+"\.)?"task_definitions") WHERE \1\."subject_kind" = 'workgroup' LIMIT 1\) AS nonempty_workgroup_scan cross join ((?:"[^" ]+"\.)?"tasks")/.exec(
+      value,
     )
-  const table = probe?.[1]
-  if (!probe || !table) throw new Error('unrecognized actual probe SQL')
-  const projection = value.slice(0, from).replaceAll(`${table}.`, '').replaceAll('"tasks".', '')
-  const tail = value.slice(from).replace(probe[0], () => ` from ${table}`)
-  if (tail.includes('nonempty_workgroup_scan')) throw new Error('unrecognized actual probe SQL')
-  // RFC-359 AC-11 —— 探针改成常量谓词之后**一个占位符都不占**，所以这里不再需要把后面的
-  // 序号整体前移一位。（旧写法 `>= ${''}` 会吃掉 `$1`，剥掉它就必须给 `$2..$n` 重新编号；
-  // 那个 `- 1` 现在留着反而会把 `$1` 写成 `$0`。）
-  return projection + tail
+  if (!probe) throw new Error('unrecognized actual target probe SQL')
+  const original = value.replace(probe[0], ` from ${probe[2]}`)
+  if (original.includes('nonempty_workgroup_scan')) throw new Error('unrecognized actual probe SQL')
+  return normalizedQualification(original)
 }
 
 function taskSnapshot(
   row: Omit<WorkgroupTaskRoomTaskSnapshot, 'status' | 'subject'> &
-    StoredTaskSubject & { readonly status: string },
+    TaskDefinitionSubject & { readonly status: string },
 ): WorkgroupTaskRoomTaskSnapshot {
   return Object.freeze({
     ...row,
-    subject: decodeTaskSubject(row),
+    subject: taskSubjectFromDefinition(row),
     status: row.status as TaskStatus,
   })
 }
@@ -97,11 +100,17 @@ const taskProjection = (db: object) => {
     name: tasks.name,
     ownerUserId: tasks.ownerUserId,
     status: tasks.status,
-    workgroupId: tasks.workgroupId,
-    ...taskSubjectFixtureColumns(db),
+    workgroupId: taskReadColumns(db).workgroupId,
+    workflowId: taskReadColumns(db).workflowId,
+    subjectKind: taskReadColumns(db).subjectKind,
+    sourceId: taskReadColumns(db).sourceId,
+    sourceName: taskReadColumns(db).sourceName,
+    codeRoundId: taskReadColumns(db).codeRoundId,
+    sourceAgentId: taskReadColumns(db).sourceAgentId,
+    sourceAgentName: taskReadColumns(db).sourceAgentName,
     workgroupConfig: taskWorkgroupConfigSelection(db),
-    workflowSnapshot: tasks.workflowSnapshot,
-    triggerContextJson: tasks.triggerContextJson,
+    workflowSnapshot: taskReadColumns(db).workflowSnapshot,
+    triggerContextJson: taskReadColumns(db).triggerContextJson,
   }
 }
 
@@ -113,7 +122,12 @@ async function originalListActive(
   const rows = await tx
     .select(taskProjection(tx))
     .from(tasks)
-    .where(and(isNotNull(tasks.workgroupId), inArray(tasks.status, [...CANCELABLE_TASK_STATUSES])))
+    .where(
+      and(
+        isNotNull(taskReadColumns(tx).workgroupId),
+        inArray(tasks.status, [...CANCELABLE_TASK_STATUSES]),
+      ),
+    )
   return Object.freeze(rows.map(taskSnapshot))
 }
 
@@ -190,6 +204,23 @@ async function seed(db: PersistenceDb, values: readonly FixtureRow[]): Promise<v
     ]),
   }))
   await taskFixture(db, rows)
+  for (const row of values) {
+    if (row.workgroupId !== null) await setWorkgroupSubject(db, row.id, row.workgroupId)
+  }
+}
+
+async function setWorkgroupSubject(
+  db: PersistenceDb | TaskExecutionTransaction,
+  id: string,
+  sourceId: string,
+) {
+  const { taskDefinitions } = tablesOf(db)
+  // This oracle deliberately exercises a non-NULL empty source id. The legacy
+  // fixture decoder treats empty ids as absent, so seed the target discriminator explicitly.
+  await db
+    .update(taskDefinitions)
+    .set({ subjectKind: 'workgroup', sourceId, definitionOrigin: 'platform' })
+    .where(eq(taskDefinitions.taskId, id))
 }
 
 const factory = composeWorkgroupTaskRoomTaskParticipantFactory({
@@ -228,7 +259,9 @@ async function compareInTransaction(harness: ProviderHarness, tx: TaskExecutionT
   const after = await readTaskFixtures(tx)
   expect(after).toEqual(before)
   expect(JSON.stringify(after)).toBe(JSON.stringify(before))
-  expect(originalCompiledSql(actual.statement.sql)).toBe(original.statement.sql)
+  expect(originalCompiledSql(actual.statement.sql)).toBe(
+    normalizedQualification(original.statement.sql),
+  )
   // RFC-359 AC-11 —— 探针是常量谓词，**一个绑定值都不占**（旧写法 `>= ${''}` 会占掉第一个）。
   // 于是不论探针在不在，绑定值都必须与原始查询**逐字相同**；这比原先「切掉第一个再比」更强。
   expect(actual.statement.values).toEqual(original.statement.values)
@@ -252,12 +285,13 @@ function sqliteValues(statement: RecordedStatement): string[] {
 // Depend on the real right-hand task row, so prepare cannot evaluate or fold
 // this error. A zero-row left input must prevent that task expression executing.
 function poisonTaskScan(statement: RecordedStatement): string {
-  const needle = '"tasks"."workgroup_id" is not null'
-  expect(statement.sql.split(needle)).toHaveLength(2)
+  // The status predicate occurs only in the outer WHERE, after the correlated projections.
+  const status = /(?:"agent_workflow"\.)?"tasks"\."status" in \([^)]*\)/i.exec(statement.sql)
+  if (!status) throw new Error('missing outer target status predicate')
   return statement.sql.replace(
-    needle,
+    status[0],
     () =>
-      `CASE WHEN json_extract('W26 task row visited ' || "tasks"."id", '$') IS NULL THEN (${needle}) ELSE 0 END`,
+      `CASE WHEN json_extract('W26 task row visited ' || "tasks"."id", '$') IS NULL THEN (${status[0]}) ELSE 0 END`,
   )
 }
 
@@ -299,7 +333,9 @@ describeEachProvider('RFC359 W26 workgroup empty scan', (harness) => {
           }),
         )
         expect(originalPlan).toContain('SCAN tasks')
-        expect(candidatePlan).toContain('USING COVERING INDEX idx_tasks_workgroup (workgroup_id>?)')
+        expect(candidatePlan).toMatch(
+          /SEARCH task_definitions USING COVERING INDEX task_definitions_(?:subject_task|source_name) \(subject_kind=\?\)/,
+        )
         expect(candidatePlan).toContain('SCAN nonempty_workgroup_scan')
         expect(candidatePlan.lastIndexOf('SCAN tasks')).toBeGreaterThan(
           candidatePlan.indexOf('SCAN nonempty_workgroup_scan'),
@@ -311,9 +347,9 @@ describeEachProvider('RFC359 W26 workgroup empty scan', (harness) => {
   test('the original 140 rows retain unsorted duplicate empty and Unicode workgroups', async () => {
     await seed(harness.db, [...ordinaryRows(), ...observedValues])
     await harness.executeFixtureDdl('ANALYZE')
-    const { tasks } = tablesOf(harness.db)
-    expect(tasks.workgroupId.getSQLType()).toBe('text')
-    expect(tasks.workgroupId.notNull).toBe(false)
+    const { taskDefinitions } = tablesOf(harness.db)
+    expect(taskDefinitions.sourceId.getSQLType()).toBe('text')
+    expect(taskDefinitions.sourceId.notNull).toBe(false)
     await harness.session.transaction(async (tx) => {
       const { original, actual } = await compareInTransaction(harness, tx)
       expect(actual.rows).toHaveLength(12)
@@ -326,7 +362,7 @@ describeEachProvider('RFC359 W26 workgroup empty scan', (harness) => {
           .query<
             { storage_type: string; workgroup_id: string | null },
             []
-          >('SELECT typeof(workgroup_id) AS storage_type, workgroup_id FROM tasks')
+          >("SELECT typeof(CASE WHEN subject_kind = 'workgroup' THEN source_id END) AS storage_type, CASE WHEN subject_kind = 'workgroup' THEN source_id END AS workgroup_id FROM task_definitions")
           .all()
         expect(stored).toHaveLength(140)
         for (const row of stored) {
@@ -361,7 +397,7 @@ describeEachProvider('RFC359 W26 workgroup empty scan', (harness) => {
     const rollback = new Error('rollback first workgroup')
     await expect(
       harness.session.transaction(async (tx) => {
-        await patchTaskFixture(tx, { id: 'ordinary-37' }, { workgroupId: '' })
+        await setWorkgroupSubject(tx, 'ordinary-37', '')
         const { actual } = await compareInTransaction(harness, tx)
         expect(actual.rows).toHaveLength(1)
         expect(actual.rows[0]?.id).toBe('ordinary-37')
@@ -457,10 +493,16 @@ test('the actual PostgreSQL client preserves original SQL and every original bin
     const actual = statements[1]
     if (!original || !actual) throw new Error('missing actual compiler statements')
     expect(actual.sql).toContain('nonempty_workgroup_scan')
-    expect(originalCompiledSql(actual.sql)).toBe(original.sql)
-    expect(original.values).toEqual([...CANCELABLE_TASK_STATUSES])
+    expect(originalCompiledSql(actual.sql)).toBe(normalizedQualification(original.sql))
+    expect(original.values).toEqual([
+      TASK_DEFINITION_HOSTS.agent.id,
+      TASK_DEFINITION_HOSTS.workgroup.id,
+      TASK_DEFINITION_HOSTS['digital-employee'].id,
+      TASK_DEFINITION_HOSTS['code-round'].id,
+      ...CANCELABLE_TASK_STATUSES,
+    ])
     // 探针不再绑定任何值，所以 actual 与 original 的绑定逐字相同。
-    expect(actual.values).toEqual([...CANCELABLE_TASK_STATUSES])
+    expect(actual.values).toEqual(original.values)
   } finally {
     await runtime.close()
   }

@@ -98,15 +98,16 @@ describe('RFC-349 TaskExecution selected-provider runtime', () => {
     expect(adapter).toContain('withSerializableTaskExecution')
     const creation = read('modules/task-execution/infrastructure/taskCreationParticipant.ts')
     expect(adapter).toContain('createTaskCreationParticipantInTx(')
-    expect(creation).toContain('insertOne(tx, tasks,')
-    expect(creation).toContain('tx.insert(taskRepos)')
+    expect(creation).toContain('insertOne(tx, tables.tasks,')
+    expect(creation).toContain('tx.insert(tables.taskRepositoryMounts)')
     for (const write of [
       'insertOne(tx, taskExecutionIntents,',
-      'insertOne(tx, workgroupTaskState,',
       'appendTaskCreatedCommittedEvent',
     ]) {
       expect(adapter).toContain(write)
     }
+    expect(creation).toContain('insertOne(tx, tables.workgroupTaskState,')
+    expect(adapter).toContain('.update(workgroupTaskState)')
     expect(adapter).toContain('await publishCommittedEventsAfterCommit')
     expect(adapter).toContain("completionMode: 'background'")
     expect(adapter).toContain('dependencies.workgroup.loadExistingAgentIds')

@@ -1,3 +1,5 @@
+import type { HistoryRestrictionPort } from '@/platform/contracts/historyRestriction'
+import type { CodeHistoryReader as ImportedCodeHistoryReader } from '@/modules/code-capability/composition/historyQueries'
 import { composeHumanGateTaskLockPort } from '@/modules/task-execution/composition'
 import { createTaskWorktreeLocator } from '@/modules/task-execution/composition'
 // RFC-392: passive HTTP composition from the application graph's session bundles.
@@ -94,6 +96,8 @@ import type {
 
 /** Named production entry points keep provider selection explicit at bootstrap. */
 export interface ProviderAppOwnerInput<P extends DatabaseProvider> {
+  readonly historyRestrictions: HistoryRestrictionPort
+  readonly codeHistory: ImportedCodeHistoryReader
   readonly db: PersistenceDb
   readonly token: string
   readonly appHome: string
@@ -216,6 +220,7 @@ export function composeProviderAppComposition<P extends DatabaseProvider>(
   const codeHistoryQueries = composeCodeHistoryQueries(
     input.db,
     createAgentExecutionQueries(input.db),
+    input.codeHistory,
   )
   const codeReads = {
     ...composeLegacyCodeReadProviders(input.db),
@@ -284,6 +289,7 @@ export function composeProviderAppComposition<P extends DatabaseProvider>(
       createFileWorkspaceContentEffects(workspaceRef),
   })
   const collaborationRouteOperations = composeCollaborationRouteOperations({
+    historyRestrictions: input.historyRestrictions,
     taskLock: composeHumanGateTaskLockPort,
     followupGenerator: composeClarifyFollowupGenerator({
       db: input.db,

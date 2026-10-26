@@ -5,6 +5,7 @@
 // cannot be substituted for the scheduled hosted workflow.
 
 import { SQL } from 'bun'
+import { liveSqlitePath } from '../../../../e2e/storage'
 import { Database } from 'bun:sqlite'
 import { randomUUID } from 'node:crypto'
 import {
@@ -39,7 +40,7 @@ import {
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import { createMaintenanceRunStore } from '@/platform/persistence/maintenanceRunStore'
 import { createPostgresqlDatabaseRuntime } from '@/platform/persistence/postgresqlRuntime'
-import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { timeoutSignal } from '@/util/timeoutSignal'
 
 import {
@@ -56,7 +57,7 @@ const CRASH_WORKER = resolve(import.meta.dir, '..', 'fixtures', 'rfc349-postgres
  * 续跑后逐表完成的期望数——取自逻辑合同，而不是写死的数字。原先写死 `184`，schema 长到 192 张表后
  * 续跑明明成功（finalized、用户行在、归档表已删），判据仍稳定红（2026-09-23 postgresql-evidence）。
  */
-const EXPECTED_TABLE_COUNT = buildLogicalSchemaContract().tables.length
+const EXPECTED_TABLE_COUNT = logicalSchemaContract.tables.length
 
 /**
  * 取证的三个尺度档。
@@ -885,13 +886,15 @@ async function runCrashMatrix(
         rowsCopied: number
         userPresent: boolean
         archiveTableAbsent: boolean
+        archivePreserved: boolean
         manifestRevision: number
       }
       if (
         result.phase !== 'finalized' ||
         result.tablesCompleted !== EXPECTED_TABLE_COUNT ||
         !result.userPresent ||
-        !result.archiveTableAbsent
+        !result.archiveTableAbsent ||
+        !result.archivePreserved
       ) {
         throw new Error(`crash resume invariant failed at ${point}: ${JSON.stringify(result)}`)
       }
@@ -1150,15 +1153,17 @@ function datasetCounts(dbPath: string): DatasetCounts {
   }
 }
 
-function prepareSoakDataset(dbPath: string): void {
+export function prepareSoakDataset(dbPath: string): void {
   const raw = new Database(dbPath)
   try {
     raw.exec('PRAGMA journal_mode = WAL; PRAGMA synchronous = OFF; BEGIN IMMEDIATE;')
+    raw.exec(
+      `UPDATE node_run_runtime_states SET pid = NULL WHERE node_run_id IN (SELECT id FROM node_runs WHERE status IN ('running','pending'))`,
+    )
     raw
       .query(
         `UPDATE node_runs
-            SET status = 'done', finished_at = coalesce(finished_at, started_at, ?),
-                exit_code = coalesce(exit_code, 0), pid = NULL
+            SET status = 'done', exit_code = coalesce(exit_code, 0), finished_at = coalesce(finished_at, started_at, ?)
           WHERE status IN ('running', 'pending')`,
       )
       .run(Date.now())
@@ -1872,7 +1877,6 @@ async function runLargeSoak(
   await resetPostgresqlSchemas(url)
   const root = mkdtempSync(join(tmpdir(), 'aw-rfc349-large-'))
   const home = join(root, 'home')
-  const dbPath = join(home, 'db.sqlite')
   const hiddenPath = createPostgresqlToolsHiddenPath(root)
   const configOverrides = {
     maintenanceSchedule: futureDailySchedule(),
@@ -1906,6 +1910,7 @@ async function runLargeSoak(
     })
     await daemon.stop()
     daemon = null
+    const dbPath = liveSqlitePath(home)
     await runSeed(dbPath, args.scale)
     prepareSoakDataset(dbPath)
     const dataset = datasetCounts(dbPath)

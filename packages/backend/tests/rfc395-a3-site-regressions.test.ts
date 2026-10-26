@@ -4,12 +4,14 @@ import { describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { REPO_PREP_NODE_ID, isTaskWorkspaceUnbound } from '@agent-workflow/shared'
 import { tablesOf } from '@/platform/persistence/sessionTables'
-import { taskRequestedSourceColumns } from '@/modules/task-execution/infrastructure/taskRepositorySql'
+import {
+  taskReadColumns,
+  taskRequestedSourceColumns,
+} from '@/modules/task-execution/infrastructure/taskRepositorySql'
 import { decodeRequestedSource } from '@/platform/persistence/taskRepositorySurface'
 import {
   createNodeRunQueries,
   createRunSelectionReader,
-  createRunSelectionOracleSnapshot,
   createRunHistorySnapshot,
   createTaskPreparationQueries,
 } from '@/modules/task-execution/public/queries'
@@ -31,6 +33,7 @@ const siteBindings = {
   eq,
   REPO_PREP_NODE_ID,
   isTaskWorkspaceUnbound,
+  taskReadColumns,
   taskRequestedSourceColumns,
   decodeRequestedSource,
   createNodeRunQueries,
@@ -171,12 +174,12 @@ describeEachProvider('RFC-395 A3 migrated synthetic sites', (harness) => {
       'modules/task-execution/composition/taskDagScope.ts',
       'resumeInterruptedCommitPush',
       {
-        createRunSelectionOracleSnapshot,
         commitPushResumePending: true,
         state: { task: { id: 'site-task' }, topLevelIds: new Set(['agent']) },
         scopeNodeById: new Map([['agent', { id: 'agent' }]]),
         opts: {
           persistence: {
+            selection: createRunSelectionReader(harness.db),
             nodeRuns: {
               transition: async () => {
                 throw new Error('unexpected cancellation')
@@ -193,6 +196,9 @@ describeEachProvider('RFC-395 A3 migrated synthetic sites', (harness) => {
     const facts = await createNodeRunQueries(harness.db).list({ taskId: 'site-task' })
     await resume(facts)
     expect(started).toEqual([])
+    await harness.db
+      .delete(tablesOf(harness.db).nodeRuns)
+      .where(eq(tablesOf(harness.db).nodeRuns.id, 'late-commit'))
     await resume(facts.filter((row) => row.id !== 'late-commit'))
     expect(started).toEqual(['agent'])
   })
@@ -225,7 +231,8 @@ describe('RFC-395 A3 source lookup and designer anchors', () => {
           {
             sourceNodeId,
             sourceRun: { id: 'source-run' },
-            createRunSelectionOracleSnapshot: () => ({
+            db: {},
+            createRunSelectionReader: () => ({
               consumed: async () =>
                 Object.entries(headParseConsumedJson(json)).map(
                   ([producerNodeId, producerRunId]) => ({ producerNodeId, producerRunId }),

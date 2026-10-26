@@ -1,7 +1,7 @@
 // RFC-363 T2: existing installations, historical backups and both fresh schemas.
-import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import { buildFrozenEpoch1LogicalSchemaContract as buildLogicalSchemaContract } from '@/platform/persistence/migration/epoch1/contract'
 import { expect, test } from 'bun:test'
-import { loadPostgresqlMigrationHistory } from '@/platform/persistence/postgresqlMigrationHistory'
+import { loadPostgresqlMigrationHistory } from '@/platform/persistence/migration/legacy/postgresqlMigrationHistory'
 import {
   createPostgresqlAdditiveUpgrade,
   createPostgresqlIndexUpgrade,
@@ -9,8 +9,8 @@ import {
   replayPostgresqlMigrationHistory,
   resolvePostgresqlAdditiveRowBridge,
   type PostgresqlIndexUpgrade,
-} from '@/platform/persistence/postgresqlMigrationSequence'
-import { buildPostgresqlSchemaPlan } from '@/platform/persistence/postgresqlSchema'
+} from '@/platform/persistence/migration/legacy/postgresqlMigrationSequence'
+import { buildPostgresqlSchemaPlan } from '@/platform/persistence/migration/legacy/postgresqlSchema'
 import { digestSchemaContract } from '@/platform/persistence/schemaContract'
 
 const addedTables = [

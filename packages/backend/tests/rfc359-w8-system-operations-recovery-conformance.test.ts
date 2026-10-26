@@ -62,7 +62,7 @@
 //     要求目标 schema 为空（非空直接 409 `postgresql-restore-target-not-empty`），
 //     没有东西会被覆盖，因而没有安全备份可拍。两侧都满足「不会在无声中吃掉现有数据」。
 
-import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { afterAll, describe, expect, test } from 'bun:test'
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -81,7 +81,6 @@ import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { PostgresqlDatabaseRuntime } from '@/platform/persistence/postgresqlRuntime'
 import type { PostgresqlSchemaPlan } from '@/platform/persistence/postgresqlSchema'
 import type { LogicalSchemaContract } from '@/platform/persistence/schemaContract'
-import { SQLITE_POST_RESTORE_RECOVERY } from './helpers/sqlitePostRestoreRecovery'
 
 const CONTEXT = Object.freeze({}) as CommandContext & QueryContext
 
@@ -126,14 +125,13 @@ function sqliteHarness(appHome: string): RecoveryHarness {
     direction: 'same' as const,
   })
   const adapter = createLegacyPlatformRecoveryAdapter({
-    contract: buildLogicalSchemaContract(),
+    contract: logicalSchemaContract,
     artifacts,
     appHome,
     dbPath: join(appHome, 'db.sqlite'),
     lockPath: join(appHome, '.daemon.lock'),
     backupResources: () => ({ db: null as never }),
     prepareBackup: async () => {},
-    postOpenRecovery: SQLITE_POST_RESTORE_RECOVERY,
     resolveRestoreMigrations: async () => join(appHome, 'migrations'),
     mechanisms: {
       // provider 固有的物理机制——建归档 / 验归档 / 真正落盘还原。暂存状态机不在其中。
@@ -163,7 +161,7 @@ function postgresqlHarness(appHome: string): RecoveryHarness {
     verification: {},
   } as unknown as PortableDatabaseBackupInspection
   const restore = createPostgresqlAdminRestoreCoordinator({
-    headContract: buildLogicalSchemaContract(),
+    headContract: logicalSchemaContract,
     artifacts,
     runtime: { provider: 'postgresql' } as PostgresqlDatabaseRuntime,
     targetGenerationId: 'dbg_pg_conformance_0001',
@@ -179,8 +177,8 @@ function postgresqlHarness(appHome: string): RecoveryHarness {
   })
   const adapter: SystemOperationsRecoveryAdapter = {
     backup: createPostgresqlAdminBackupCoordinator({
-      headContract: buildLogicalSchemaContract(),
-      contract: buildLogicalSchemaContract(),
+      headContract: logicalSchemaContract,
+      contract: logicalSchemaContract,
       runtime: { provider: 'postgresql' } as PostgresqlDatabaseRuntime,
       // RFC-359 W9：应用侧资产（workflow / worktree 行）已合成中立实现由组合根注入；
       // 本文件把整条 createBackup 都 stub 掉，客户端一次也不用。

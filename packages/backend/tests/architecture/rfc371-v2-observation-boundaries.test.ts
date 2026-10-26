@@ -20,6 +20,10 @@ const FROZEN_GENERATORS = [
   'packages/backend/src/platform/persistence/observationProjectionRoutes.ts',
   'packages/backend/src/platform/persistence/observationSourceRevisionSchema.ts',
   'packages/backend/src/platform/persistence/retainedOutputRevisionSchema.ts',
+  'packages/backend/src/platform/persistence/migration/legacy/observationProjectionChangeSchema.ts',
+  'packages/backend/src/platform/persistence/migration/legacy/observationProjectionRoutes.ts',
+  'packages/backend/src/platform/persistence/migration/legacy/observationSourceRevisionSchema.ts',
+  'packages/backend/src/platform/persistence/migration/legacy/retainedOutputRevisionSchema.ts',
 ]
 
 function importers(units: readonly SourceUnit[], target: string): string[] {
@@ -63,6 +67,10 @@ describe('RFC-371 v2 observation boundaries', () => {
       'packages/backend/src/platform/persistence/postgresqlMigrationSequence.ts',
       'packages/backend/src/platform/persistence/schema/postgresqlPlan.ts',
       'packages/backend/src/platform/persistence/schema/contractTypes.ts',
+      'packages/backend/src/platform/persistence/migration/legacy/postgresqlMigrationHistory.ts',
+      'packages/backend/src/platform/persistence/migration/legacy/postgresqlMigrationSequence.ts',
+      'packages/backend/src/platform/persistence/migration/legacy/postgresqlSchema.ts',
+      'packages/backend/src/platform/persistence/migration/legacy/contractTypes.ts',
     ])
     for (const generator of FROZEN_GENERATORS)
       for (const importer of importers(backend, generator))

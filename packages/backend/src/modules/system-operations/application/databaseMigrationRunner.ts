@@ -1,3 +1,9 @@
+import {
+  writeGenerationPointerV2,
+  retainGenerationPointer,
+  restoreRetainedGenerationPointer,
+} from '@/platform/persistence/generationPointerV2'
+import { schemaHistoryRuntime } from '@/platform/persistence/schema/history/runtime'
 // RFC-349 — the single durable one-click migration application used by CLI,
 // Settings and recovery. Transport adapters start/query this runner; they do
 // not assemble phases, provider operations or cutover rules themselves.
@@ -21,7 +27,7 @@ import {
   type LogicalDatabaseArtifactManifest,
   type LogicalTableArtifactEntry,
 } from '@/platform/persistence/logicalDatabaseArtifact'
-import { writeDatabaseGenerationAtomic } from '@/platform/persistence/generationStore'
+
 import type { PostgresqlLogicalTarget } from '@/platform/persistence/postgresqlLogicalTarget'
 import { preflightPostgresqlTarget } from '@/platform/persistence/postgresqlPreflight'
 import type { PostgresqlDatabaseRuntime } from '@/platform/persistence/postgresqlRuntime'
@@ -333,19 +339,32 @@ export function createDatabaseMigrationRunner(deps: {
     })
   }
 
+  const retainPreviousPointer = (operationId: string): void => {
+    retainGenerationPointer(deps.generationPointerPath, operationId)
+  }
+
   const refreshPointer = (operationId: string): void => {
     const manifest = deps.controlPlane.readManifest(operationId)
     const switched = manifest.payload.checkpoints.find(
       (checkpoint) => checkpoint.phase === 'switched',
     )
-    writeDatabaseGenerationAtomic({
+    const head = schemaHistoryRuntime().head()
+    writeGenerationPointerV2({
       pointerPath: deps.generationPointerPath,
       payload: {
-        version: 1,
+        version: 2,
+        schemaEpoch: 2,
+        role: 'installed',
+        previous: null,
+        database: {
+          kind: 'postgresql-target',
+          profileRef: `env:${manifest.payload.target.urlEnv}`,
+        },
+        contractDigest: head.contract.contract.digest,
+        planDigest: head.postgresql.digest,
         generationId: targetGenerationId(operationId),
         provider: 'postgresql',
         operationId,
-        schemaDigest: deps.targetSchemaDigest?.() ?? deps.contract.digest,
         manifestDigest: deps.artifacts.manifestFileDigest(operationId),
         activatedAt: switched?.committedAt ?? now(),
       },
@@ -371,18 +390,7 @@ export function createDatabaseMigrationRunner(deps: {
       firstLiveWriteAt: null,
       rolledBackAt,
     })
-    writeDatabaseGenerationAtomic({
-      pointerPath: deps.generationPointerPath,
-      payload: {
-        version: 1,
-        generationId: manifest.payload.source.generationId,
-        provider: 'sqlite',
-        operationId: null,
-        schemaDigest: deps.contract.digest,
-        manifestDigest: null,
-        activatedAt: rolledBackAt,
-      },
-    })
+    restoreRetainedGenerationPointer(deps.generationPointerPath, operationId)
     const status = deps.controlPlane.markRolledBack(operationId, receiptDigest, rolledBackAt)
     await deps.admission.reopenSqlite({
       operationId,
@@ -615,6 +623,9 @@ export function createDatabaseMigrationRunner(deps: {
             }
             case 'verifying': {
               await deps.source.assertUnchanged(sourceSnapshot)
+              if (!deps.source.readMetadata || !deps.target.restoreMetadata)
+                throw new Error('epoch2-metadata-transfer-required')
+              await deps.target.restoreMetadata(await deps.source.readMetadata())
               await deps.target.finalizeSchema(now(), targetVerification())
               const generationId = targetGenerationId(operationId)
               await deps.target.prepareGeneration({
@@ -642,8 +653,9 @@ export function createDatabaseMigrationRunner(deps: {
               break
             case 'switched': {
               const generationId = targetGenerationId(operationId)
-              refreshPointer(operationId)
+              retainPreviousPointer(operationId)
               await deps.target.activateGeneration(generationId, now())
+              refreshPointer(operationId)
               // The logical target owns the operation-scoped advisory-lock
               // session through cutover. Probe the active generation and one
               // representative read on that same session so poolMax=1 cannot

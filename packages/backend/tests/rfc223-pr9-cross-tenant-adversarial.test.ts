@@ -1,3 +1,5 @@
+import { legacyContentRef } from '@/platform/content/contentRef'
+import { contentRowColumns } from '@/platform/content/infrastructure/contentStore'
 import { withO2Closure } from './helpers/o2Closure'
 // RFC-223 PR-9 (T16) — cross-tenant same-name adversarial coverage.
 //
@@ -83,7 +85,6 @@ import { TEST_SQLITE_FUSION_PARTICIPANTS } from './helpers/fusionParticipants'
 
 const openTestApplication = registerProviderHttpApplicationLifetime()
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
 const TOKEN = 'rfc223-pr9-token'
 const TEST_TIMEOUT_MS = 30_000
@@ -258,7 +259,7 @@ describe('RFC-223 PR-9 cross-tenant same-name adversarial suite', () => {
   test('rename + same-name recreate + resume executes the frozen agent id, never the replacement', async () => {
     const root = mkdtempSync(join(tmpdir(), 'aw-rfc223-pr9-resume-'))
     const appHome = join(root, 'home')
-    const repoPath = join(root, 'repo')
+    const repoPath = join(appHome, 'repo')
     const capturePath = join(root, 'captured-inline-config.json')
     mkdirSync(appHome, { recursive: true })
     mkdirSync(repoPath, { recursive: true })
@@ -273,7 +274,7 @@ describe('RFC-223 PR-9 cross-tenant same-name adversarial suite', () => {
       await checkedGit(repoPath, ['add', '.'])
       await checkedGit(repoPath, ['commit', '-q', '-m', 'init'])
 
-      const db = createInMemoryDb(MIGRATIONS)
+      const db = createInMemoryDb()
       await seedUser(db, 'owner-a')
       await seedUser(db, 'owner-b')
 
@@ -364,7 +365,7 @@ describe('RFC-223 PR-9 cross-tenant same-name adversarial suite', () => {
   test('fusion apply and restore stay on the selected id when two owners share the skill name', async () => {
     const root = mkdtempSync(join(tmpdir(), 'aw-rfc223-pr9-fusion-'))
     const appHome = join(root, 'home')
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createInMemoryDb()
     await seedTestDefaultOpencodeRuntime(db)
     const schedulerDriver = createTaskExecutionTestTopology({ db, driver: 'real' }).schedulerDriver
     const deps: TestFusionDeps = {
@@ -504,7 +505,7 @@ describe('RFC-223 PR-9 cross-tenant same-name adversarial suite', () => {
   })
 
   test('admin probe opens and persists the selected same-name MCP id only', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createInMemoryDb()
     await seedUser(db, 'owner-a')
     await seedUser(db, 'owner-b')
     const mcpA = ulid()
@@ -575,7 +576,7 @@ describe('RFC-223 PR-9 cross-tenant same-name adversarial suite', () => {
   })
 
   test('review sibling lookup follows the frozen id, not the first same-name agent row', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createInMemoryDb()
     await seedUser(db, 'owner-a')
     await seedUser(db, 'owner-b')
     // Insert B first so any accidental name+limit(1) lookup deterministically
@@ -652,7 +653,9 @@ describe('RFC-223 PR-9 cross-tenant same-name adversarial suite', () => {
       sourcePortName: 'proposal',
       versionIndex: 1,
       reviewIteration: 0,
-      bodyPath: 'reviews/proposal.md',
+      ...contentRowColumns(
+        legacyContentRef('review-body-path', 'local-file', 'reviews/proposal.md'),
+      ),
       sourceFilePath: 'docs/proposal.md',
       createdAt: 1,
     })
@@ -670,7 +673,7 @@ describe('RFC-223 PR-9 cross-tenant same-name adversarial suite', () => {
   })
 
   test('borrow/deferred-dispatch mint stamps the selected same-name target agent id', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createInMemoryDb()
     await seedUser(db, 'owner-a')
     await seedUser(db, 'owner-b')
     const agentA = await createAgent(db, agentInput('shared-member', 'A'), {

@@ -1,12 +1,16 @@
-import { eq } from 'drizzle-orm'
-import { mountDepth } from '@agent-workflow/shared'
+import { projectTaskMountReadRow } from './taskRepositorySql'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { tablesOf } from '@/platform/persistence/sessionTables'
-import { taskRequestedSourceColumns } from './taskRepositorySql'
-import { decodeRequestedSource } from '@/platform/persistence/taskRepositorySurface'
-import { taskRepositoryNodePaths } from '../domain/taskRepository'
 import { ValidationError } from '@/util/errors'
+import { mountDepth } from '@agent-workflow/shared'
+import { eq } from 'drizzle-orm'
 import type { TaskPreparationQueries } from '../application/ports/taskPreparation'
+import { decodeRequestedSourceJson, requestedSourceView } from '../domain/requestedSourceCodec'
+import {
+  taskMountReadColumns,
+  taskReadColumns,
+  taskRequestedSourceColumns,
+} from './taskRepositorySql'
 
 export function createTaskPreparationQueries(db: PersistenceDb): TaskPreparationQueries {
   return {
@@ -17,13 +21,16 @@ export function createTaskPreparationQueries(db: PersistenceDb): TaskPreparation
           .select({
             id: tasks.id,
             status: tasks.status,
-            workflowId: tasks.workflowId,
+            workflowId: taskReadColumns(db).workflowId,
+            subjectKind: taskReadColumns(db).subjectKind,
+            sourceId: taskReadColumns(db).sourceId,
+            sourceName: taskReadColumns(db).sourceName,
             name: tasks.name,
             ...taskRequestedSourceColumns(db),
-            workingBranch: tasks.workingBranch,
-            gitUserName: tasks.gitUserName,
-            gitUserEmail: tasks.gitUserEmail,
-            worktreePath: tasks.worktreePath,
+            workingBranch: taskReadColumns(db).workingBranch,
+            gitUserName: taskReadColumns(db).gitUserName,
+            gitUserEmail: taskReadColumns(db).gitUserEmail,
+            worktreePath: taskReadColumns(db).worktreePath,
             workspacePruningAt: tasks.workspacePruningAt,
             workspacePrunedAt: tasks.workspacePrunedAt,
           })
@@ -45,7 +52,7 @@ export function createTaskPreparationQueries(db: PersistenceDb): TaskPreparation
         worktreePath: row.worktreePath,
         workspacePruningAt: row.workspacePruningAt,
         workspacePrunedAt: row.workspacePrunedAt,
-        requestedSource: decodeRequestedSource(row),
+        requestedSource: requestedSourceView(decodeRequestedSourceJson(row.requestedSource)),
       }
     },
     async status(taskId) {
@@ -53,12 +60,14 @@ export function createTaskPreparationQueries(db: PersistenceDb): TaskPreparation
       return (await db.select({ status: tasks.status }).from(tasks).where(eq(tasks.id, taskId)))[0]
     },
     async frozenLayout(sourceTaskId) {
-      const { taskRepos, taskSpaceNodes } = tablesOf(db)
+      const { taskSpaceNodes } = tablesOf(db)
+      const { taskRepositoryMounts: taskRepos } = tablesOf(db)
       const rows = await db
-        .select()
+        .select(taskMountReadColumns(db))
         .from(taskRepos)
         .where(eq(taskRepos.taskId, sourceTaskId))
-        .orderBy(taskRepos.repoIndex)
+        .orderBy(taskRepos.ordinal)
+        .then((rows) => rows.map(projectTaskMountReadRow))
 
       if (rows.length === 0) {
         throw new ValidationError(
@@ -93,7 +102,7 @@ export function createTaskPreparationQueries(db: PersistenceDb): TaskPreparation
           ? frozenNodes
               .map((row) => row.path)
               .sort((a, b) => mountDepth(a) - mountDepth(b) || a.localeCompare(b))
-          : taskRepositoryNodePaths(repos.map((repo) => repo.mountPath))
+          : []
       return {
         repos,
         nodes: nodePaths.map((path) => ({ path, origins: [] })),

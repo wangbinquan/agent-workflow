@@ -143,7 +143,7 @@ describeEachProvider('runner malformed-port guard', (harness) => {
     const nodeRunId = await insertNodeRun(h.db, h.taskId)
     // The agent emitted a valid <workflow-output> wrapper, but the port's close
     // tag is corrupted — exactly the user's `</|DSML|port>` report.
-    const rawText = `<workflow-output>\n<port name="doc">report.md</|DSML|port>\n</workflow-output>`
+    const rawText = `<workflow-output nonce="fixture:${nodeRunId}">\n<port name="doc">report.md</|DSML|port>\n</workflow-output>`
     const result = await withEnv(
       {
         MOCK_OPENCODE_RAW_AGENT_TEXT: rawText,
@@ -186,7 +186,7 @@ describeEachProvider('runner malformed-port guard', (harness) => {
 
   test('contrast: a well-formed envelope on the same no-kind port → done + persisted', async () => {
     const nodeRunId = await insertNodeRun(h.db, h.taskId)
-    const rawText = `<workflow-output>\n<port name="doc">report.md</port>\n</workflow-output>`
+    const rawText = `<workflow-output nonce="fixture:${nodeRunId}">\n<port name="doc">report.md</port>\n</workflow-output>`
     const result = await withEnv(
       {
         MOCK_OPENCODE_RAW_AGENT_TEXT: rawText,

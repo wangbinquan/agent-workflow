@@ -1,7 +1,9 @@
+import { createEpoch2PostgresqlMetadata } from './helpers/epoch2PostgresqlMetadata'
 import { composeRetentionSweepPhases } from '@/bootstrap/retentionSweepPhases'
 import { createTaskNodeEventArchiveStore } from '@/modules/task-execution/composition'
 // RFC-349 T5/T6 — maintenance admission/lease transitions are Promise ports
 // and PostgreSQL writes share the live-generation transaction fence.
+// RFC-395 BF-D27: AF-D1 fences mutations and caches the first-write marker after commit.
 
 import { withNativeTransactions } from './helpers/nativeTransactions'
 import { MAINTENANCE_WORKER_ENTRY } from '@/bootstrap/maintenanceWorkerEntries'
@@ -34,10 +36,13 @@ function rows(input: {
 function fixture(fenceAccepted = true) {
   const statements: string[] = []
   let releases = 0
+  const epoch2Metadata = createEpoch2PostgresqlMetadata({ generationActive: () => fenceAccepted })
   const execute = (query: string): SqlRows => {
     statements.push(query)
+    const metadata = epoch2Metadata(query)
+    if (metadata) return metadata
     if (/^(BEGIN|COMMIT|ROLLBACK)$/i.test(query.trim())) return rows({})
-    if (query.includes('database_generations')) {
+    if (query.includes('generations')) {
       return rows({
         objects: fenceAccepted ? [{ generation_id: 'dbg_maintenance_pg' }] : [],
       })
@@ -159,12 +164,35 @@ describe('RFC-349 PostgreSQL maintenance persistence', () => {
 
     expect(fake.statements.map((statement) => statement.trim().toLowerCase())).toEqual([
       'begin',
-      expect.stringContaining('with marked as (update "agent_workflow_meta"'),
-      expect.stringContaining('select generation_id from "agent_workflow_meta"'),
+      expect.stringMatching(/^select generation_id .*"generations".*for share$/),
+      expect.stringContaining('select first_live_write_at'),
+      expect.stringContaining('update "agent_workflow_meta"."first_write"'),
       expect.stringContaining('update "agent_workflow"."maintenance_runs"'),
       'commit',
     ])
     expect(fake.releases).toBe(1)
+  })
+
+  test('subsequent heartbeats keep the fence and reuse the committed first-write marker', async () => {
+    const fake = fixture()
+    const heartbeat = { runId: 'run-1', leaseToken: 'lease-1', now: 100, leaseMs: 60_000 }
+    await expect(fake.store.heartbeat(heartbeat)).resolves.toBe(true)
+    const secondWriteStart = fake.statements.length
+
+    await expect(fake.store.heartbeat({ ...heartbeat, now: 101 })).resolves.toBe(true)
+
+    const normalized = fake.statements.map((statement) => statement.trim().toLowerCase())
+    expect(normalized.slice(secondWriteStart)).toEqual([
+      'begin',
+      expect.stringMatching(/^select generation_id .*"generations".*for share$/),
+      expect.stringContaining('update "agent_workflow"."maintenance_runs"'),
+      'commit',
+    ])
+    expect(normalized.filter((statement) => statement.includes('"first_write"'))).toEqual([
+      expect.stringContaining('select first_live_write_at'),
+      expect.stringContaining('update "agent_workflow_meta"."first_write"'),
+    ])
+    expect(fake.releases).toBe(2)
   })
 
   test('rejects a stale generation before the lease row mutates', async () => {
@@ -194,10 +222,13 @@ describe('RFC-349 PostgreSQL maintenance persistence', () => {
 
   test('retention deletes one bounded PostgreSQL slice behind the generation fence', async () => {
     const statements: string[] = []
+    const epoch2Metadata = createEpoch2PostgresqlMetadata()
     const execute = (query: string): SqlRows => {
       statements.push(query)
+      const metadata = epoch2Metadata(query)
+      if (metadata) return metadata
       if (/^(BEGIN|COMMIT|ROLLBACK)$/i.test(query.trim())) return rows({})
-      if (query.includes('database_generations')) {
+      if (query.includes('generations')) {
         return rows({ objects: [{ generation_id: 'dbg_maintenance_pg' }] })
       }
       if (/delete\s+from\s+"agent_workflow"\."memory_distill_events"/is.test(query)) {
@@ -264,8 +295,9 @@ describe('RFC-349 PostgreSQL maintenance persistence', () => {
     expect(deleteStatement).not.toContain('rowid')
     expect(statements.map((statement) => statement.trim().toLowerCase())).toEqual([
       'begin',
-      expect.stringContaining('with marked as (update "agent_workflow_meta"'),
-      expect.stringContaining('select generation_id from "agent_workflow_meta"'),
+      expect.stringMatching(/^select generation_id .*"generations".*for share$/),
+      expect.stringContaining('select first_live_write_at'),
+      expect.stringContaining('update "agent_workflow_meta"."first_write"'),
       expect.stringContaining('with candidates'),
       'commit',
     ])
@@ -273,10 +305,13 @@ describe('RFC-349 PostgreSQL maintenance persistence', () => {
 
   test('event archive counts by bounded PostgreSQL windows and fences deletion', async () => {
     const statements: string[] = []
+    const epoch2Metadata = createEpoch2PostgresqlMetadata()
     const execute = (query: string): SqlRows => {
       statements.push(query)
+      const metadata = epoch2Metadata(query)
+      if (metadata) return metadata
       if (/^(BEGIN|COMMIT|ROLLBACK)$/i.test(query.trim())) return rows({})
-      if (query.includes('database_generations')) {
+      if (query.includes('generations')) {
         return rows({ objects: [{ generation_id: 'dbg_maintenance_pg' }] })
       }
       if (/select\s+max\(/is.test(query)) return rows({ values: [[300_001]] })
@@ -341,21 +376,18 @@ describe('RFC-349 PostgreSQL maintenance persistence', () => {
       },
     })
 
+    const deletionStart = statements.length
     await store.deleteNodeRunEventsThrough('run-1', 50)
-    const deleteIndex = statements.findIndex((statement) => /delete\s+from/i.test(statement))
-    expect(deleteIndex).toBeGreaterThan(0)
-    // BEGIN, the one-shot live-write marker, the generation fence, the delete,
-    // COMMIT — all on the one reserved session.
-    const fencedDelete = statements
-      .slice(deleteIndex - 3, deleteIndex + 2)
-      .map((statement) => statement.trim())
-    expect(fencedDelete[0]).toBe('BEGIN')
-    expect(fencedDelete[1]).toContain('WITH marked AS (UPDATE "agent_workflow_meta"')
-    expect(fencedDelete[2]).toContain('SELECT generation_id FROM "agent_workflow_meta"')
-    expect(fencedDelete[3]?.toLowerCase()).toContain(
-      'delete from "agent_workflow"."node_run_events"',
-    )
-    expect(fencedDelete[4]).toBe('COMMIT')
-    expect(statements[deleteIndex]).not.toContain('rowid')
+    const fencedDelete = statements.slice(deletionStart).map((statement) => statement.trim())
+    expect(fencedDelete).toEqual([
+      'BEGIN',
+      expect.stringMatching(/^SELECT generation_id .*"generations".*FOR SHARE$/i),
+      expect.stringContaining('SELECT first_live_write_at'),
+      expect.stringContaining('UPDATE "agent_workflow_meta"."first_write"'),
+      expect.stringContaining('delete from "agent_workflow"."node_run_events"'),
+      'COMMIT',
+    ])
+    const deletion = fencedDelete.find((statement) => /delete\s+from/i.test(statement))
+    expect(deletion).not.toContain('rowid')
   })
 })

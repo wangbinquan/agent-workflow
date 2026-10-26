@@ -1,5 +1,8 @@
-import { patchTaskFixture, readNodeRunOutputFixtures, readTaskFixtures } from './helpers/model'
+import { fixtureContentStore } from './helpers/model/content'
+import { nodeRunFixtureColumns } from './helpers/model/nodeRun'
 import { tablesOf } from '@/platform/persistence/sessionTables'
+import { patchTaskFixture, readNodeRunOutputFixtures, readTaskFixtures } from './helpers/model'
+
 import { afterEach, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { createReviewDecisionCommand } from '@/modules/collaboration/infrastructure/reviewDecisionCommand'
@@ -42,8 +45,17 @@ describeEachProvider('RFC-396 independent review decisions', (harness) => {
         { id: round.taskId },
         { workflowSnapshot: JSON.stringify(definition) },
       )
-      const beforeRuns = await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, round.taskId))
-      const command = createReviewDecisionCommand(withO2Closure({ db, appHome: round.appHome }))
+      const beforeRuns = await db
+        .select(nodeRunFixtureColumns(db))
+        .from(nodeRuns)
+        .where(eq(nodeRuns.taskId, round.taskId))
+      const command = createReviewDecisionCommand(
+        withO2Closure({
+          db,
+          appHome: round.appHome,
+          content: fixtureContentStore(db, round.appHome),
+        }),
+      )
       const request = {
         actor,
         authorRole: 'owner' as const,
@@ -61,7 +73,10 @@ describeEachProvider('RFC-396 independent review decisions', (harness) => {
       expect(replay.receipt.operationId).toBe(result.receipt.operationId)
       expect(replay.receipt.replayed).toBe(true)
       expect(result.reviewIteration).toBe(0)
-      const runs = await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, round.taskId))
+      const runs = await db
+        .select(nodeRunFixtureColumns(db))
+        .from(nodeRuns)
+        .where(eq(nodeRuns.taskId, round.taskId))
       expect(runs).toHaveLength(beforeRuns.length)
       expect(runs.find((run) => run.id === round!.agentRunId)?.status).toBe('done')
       expect(runs.find((run) => run.id === round!.reviewRunId)?.status).toBe('done')
@@ -76,10 +91,10 @@ describeEachProvider('RFC-396 independent review decisions', (harness) => {
       expect(meta.decision).toBe(decision)
       expect(meta.receiptId).toBe(result.receipt.operationId)
       expect(
-        await createCommittedHumanInputQueries({ db, appHome: round.appHome }).reviewDecision(
-          round.taskId,
-          round.reviewRunId,
-        ),
+        await createCommittedHumanInputQueries({
+          db,
+          content: fixtureContentStore(db, round.appHome),
+        }).reviewDecision(round.taskId, round.reviewRunId),
       ).toMatchObject({
         receiptId: meta.receiptId,
         decision,
@@ -106,7 +121,10 @@ describeEachProvider('RFC-396 independent review decisions', (harness) => {
       rejectReason: 'Revise',
     })
     const { nodeRuns } = tablesOf(harness.db)
-    const runs = await harness.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, round.taskId))
+    const runs = await harness.db
+      .select(nodeRunFixtureColumns(harness.db))
+      .from(nodeRuns)
+      .where(eq(nodeRuns.taskId, round.taskId))
     expect(runs.find((run) => run.id === round!.reviewRunId)?.status).toBe('pending')
     expect(runs.some((run) => run.rerunCause === 'review-reject')).toBe(true)
   })

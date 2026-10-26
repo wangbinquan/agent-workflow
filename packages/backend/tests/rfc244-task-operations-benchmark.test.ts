@@ -15,14 +15,20 @@
 // 重扫全表」这两类回归的直接签名。墙钟仍然打印出来作诊断基线（RFC-359 AC-11 要的「两个
 // 引擎各取各的 P95」），但不再是判据。
 
-import { type TaskFixtureSpec, taskFixture, workflowFixture } from './helpers/model'
-import { insertOne } from '@/platform/persistence/singleInsert'
+import { type TaskFixtureSpec, workflowFixture } from './helpers/model'
+import { insertOne, type PersistenceInsertValues } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
+import type { PersistenceTx } from '@/platform/persistence/persistenceDb'
+import type { DatabaseSession } from '@/platform/persistence/databaseTransaction'
+import { splitTaskCreation } from '@/modules/task-execution/domain/taskCreation'
+import { taskRepositoryNodePaths } from '@/platform/taskRepository'
+import { count, getTableColumns, type Table } from 'drizzle-orm'
 import { describe, expect, test } from 'bun:test'
 
 import { buildActor } from '../src/auth/actor'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { describeEachProvider } from './helpers/eachProvider'
+import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
+import type { RecordedStatement } from './helpers/statementRecorder'
 import { listTaskOperationsPage } from './helpers/taskListPage'
 
 const ROOT_COUNT = 20
@@ -86,9 +92,34 @@ describeEachProvider('RFC-244 task operations capacity smoke', (harness) => {
         )
       }
     }
-    // 分批插：PostgreSQL 的绑定参数上限是 65535，逐行插会把整条 lane 拖成分钟级。
-    for (let offset = 0; offset < rows.length; offset += 200) {
-      await taskFixture(db, rows.slice(offset, offset + 200))
+    // The general fixture expands every task with individual writes and reads.
+    // Keep the same domain split and 200-task transactions, but batch each table
+    // within the provider bind budget (the production perf-seed pattern).
+    const seedStarted = performance.now()
+    const seedRecording = harness.recordStatements()
+    try {
+      await seedCapacityTasks(harness.session, rows)
+    } finally {
+      seedRecording.stop()
+      console.info(
+        `[rfc244-capacity ${harness.capabilities.provider}] seed ${rows.length} tasks ` +
+          `${(performance.now() - seedStarted).toFixed(1)}ms / ${seedRecording.statements.length} statements`,
+      )
+    }
+    expect(
+      Math.max(...seedRecording.statements.map((statement) => statement.params)),
+    ).toBeLessThanOrEqual(harness.capabilities.maxBindParameters)
+    const tables = tablesOf(db)
+    for (const table of [
+      tables.tasks,
+      tables.taskDefinitions,
+      tables.taskLaunchContexts,
+      tables.taskWorkspaces,
+      tables.taskExecutionGenerations,
+      tables.taskRepositoryMounts,
+      tables.taskSpaceNodes,
+    ]) {
+      expect(await db.select({ value: count() }).from(table)).toEqual([{ value: rows.length }])
     }
 
     const actor = buildActor({
@@ -143,6 +174,7 @@ describeEachProvider('RFC-244 task operations capacity smoke', (harness) => {
           )
           .join('\n'),
     ).toBeLessThanOrEqual(ROWS_FETCHED_RATCHET)
+    await assertPageFacetReads(harness, recording.statements)
   }, 180_000)
 })
 
@@ -156,6 +188,156 @@ describe('RFC-244 capacity smoke —— 判据本身的形状', () => {
     expect(ROWS_FETCHED_RATCHET).toBeGreaterThanOrEqual(STRUCTURAL_TARGET_ROWS)
   })
 })
+
+// Returned-row counts alone cannot detect materializing all 20k tasks' epoch-2
+// display facets inside the server. Measure the actual root/child SQL with its
+// real bindings: each correlated display read must execute only for page rows.
+async function assertPageFacetReads(
+  harness: ProviderHarness,
+  statements: readonly RecordedStatement[],
+) {
+  if (harness.applicationBinding.provider !== 'postgresql') return
+  const pages = statements
+    .filter((statement) => /^\s*WITH RECURSIVE/i.test(statement.sql))
+    .slice(0, 2)
+  expect(pages).toHaveLength(2)
+  const companions = new Set([
+    'task_definitions',
+    'task_launch_contexts',
+    'task_workspaces',
+    'task_repository_mounts',
+  ])
+  interface PlanNode {
+    'Relation Name'?: string
+    'Actual Loops': number
+    Plans?: PlanNode[]
+  }
+  for (const [index, statement] of pages.entries()) {
+    const result = await harness.applicationBinding.runtime
+      .providerPool()
+      .unsafe('EXPLAIN (ANALYZE, FORMAT JSON) ' + statement.sql, statement.values)
+    const plans = result[0]?.['QUERY PLAN'] as { Plan: PlanNode; 'Execution Time': number }[]
+    expect(plans).toHaveLength(1)
+    const facetLoops: number[] = []
+    const visit = (node: PlanNode) => {
+      if (companions.has(node['Relation Name'] ?? '')) facetLoops.push(node['Actual Loops'])
+      node.Plans?.forEach(visit)
+    }
+    visit(plans[0]!.Plan)
+    expect(facetLoops.length).toBeGreaterThan(0)
+    expect(Math.max(...facetLoops)).toBeLessThanOrEqual(PAGE_LIMIT + 1)
+    console.info(
+      `[rfc244-capacity postgresql] ${index === 0 ? 'root' : 'child'} plan ` +
+        `${plans[0]!['Execution Time'].toFixed(1)}ms / max facet loops ${Math.max(...facetLoops)}`,
+    )
+  }
+}
+
+async function seedCapacityTasks(session: DatabaseSession, rows: readonly TaskFixtureSpec[]) {
+  const parents = new Map<string, ReturnType<typeof splitTaskCreation>>()
+  const insertBatches = async <T extends Table>(
+    tx: PersistenceTx,
+    table: T,
+    values: PersistenceInsertValues<T>[],
+  ) => {
+    const size = session.engine.batchInsertMax(Object.keys(getTableColumns(table)).length)
+    for (let offset = 0; offset < values.length; offset += size)
+      await tx.insert(table).values(values.slice(offset, offset + size))
+  }
+  for (let offset = 0; offset < rows.length; offset += 200) {
+    const splits = rows.slice(offset, offset + 200).map((row) => {
+      const parent = row.parentTaskId ? parents.get(row.parentTaskId) : undefined
+      if (row.parentTaskId && !parent) throw new Error('capacity parent must precede its children')
+      const split = splitTaskCreation({
+        subject: { kind: 'workflow', sourceId: row.workflowId },
+        core: {
+          id: row.id,
+          name: row.name!,
+          status: row.status,
+          startedAt: row.startedAt,
+          finishedAt: row.finishedAt,
+          ownerUserId: row.ownerUserId ?? null,
+          parentTaskId: row.parentTaskId,
+          invocationDepth: row.invocationDepth,
+          branchStartedAt: row.startedAt,
+          catalogVisibility: 'public',
+        },
+        definition: {
+          definitionOrigin: 'authored',
+          workflowSnapshot: '{}',
+          workflowVersion: null,
+          inputs: '{}',
+        },
+        launch: parent
+          ? {
+              kind: 'child',
+              parent: {
+                id: parent.task.id,
+                ...parent.lineage,
+                launchOrigin: parent.launchContext.launchOrigin ?? 'manual',
+              },
+              parentNodeRunId: row.id,
+              continuationSlotKey: row.id,
+              parentRunLineageSlotPathJson: null,
+            }
+          : { kind: 'root', launchOrigin: 'manual' },
+        launchContext: {},
+        workspace: { ...row, baseCommit: null, spaceKind: 'remote' },
+        repos: [],
+        nodePaths: [],
+      })
+      if (!parent) parents.set(row.id, split)
+      return split
+    })
+    await session.transaction(async (tx) => {
+      const tables = tablesOf(tx)
+      await insertBatches(
+        tx,
+        tables.tasks,
+        splits.map((split) => split.task),
+      )
+      await insertBatches(
+        tx,
+        tables.taskDefinitions,
+        splits.map((split) => split.definition),
+      )
+      await insertBatches(
+        tx,
+        tables.taskLaunchContexts,
+        splits.map((split) => ({ ...split.launchContext, parentNodeRunId: null })),
+      )
+      await insertBatches(
+        tx,
+        tables.taskWorkspaces,
+        splits.map((split) => split.workspace),
+      )
+      await insertBatches(
+        tx,
+        tables.taskExecutionGenerations,
+        splits.map((split) => split.generation),
+      )
+      await insertBatches(
+        tx,
+        tables.taskRepositoryMounts,
+        splits.flatMap((split) => split.mounts),
+      )
+      await insertBatches(
+        tx,
+        tables.taskSpaceNodes,
+        splits.flatMap((split) =>
+          taskRepositoryNodePaths(
+            split.mounts.map((mount) => mount.mountPath ?? ''),
+            [],
+          ).map((nodePath) => ({
+            taskId: split.task.id,
+            nodePath,
+            schemaVersion: 1,
+          })),
+        ),
+      )
+    })
+  }
+}
 
 function taskRow(id: string, parentTaskId: string | null, startedAt: number): TaskFixtureSpec {
   return {

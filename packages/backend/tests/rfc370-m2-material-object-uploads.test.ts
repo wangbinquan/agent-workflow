@@ -50,11 +50,11 @@ describeEachProvider('RFC-370 hosted skill material objects', (harness) => {
         parent = state
       },
       rows: () => {
-        const { hostedObjectPublications } = tablesOf(harness.db)
+        const { contentPublications } = tablesOf(harness.db)
         return harness.db
           .select()
-          .from(hostedObjectPublications)
-          .where(eq(hostedObjectPublications.owner, HOSTED_MATERIAL_OWNER))
+          .from(contentPublications)
+          .where(eq(contentPublications.owner, HOSTED_MATERIAL_OWNER))
       },
     }
   }

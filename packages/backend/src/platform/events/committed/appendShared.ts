@@ -3,7 +3,7 @@
 // 这些以前在 `sqliteStore.ts` 与 `postgresqlPersistence.ts` 各抄一份。RFC-359 把 append 路径
 // 合成一份实现（`append.ts`），纯函数随之只剩这一份，两个引擎的存储层都从这里取。
 
-import { type PersistenceTables } from '@/platform/persistence/sessionTables'
+import type { PersistenceTables } from '@/platform/persistence/sessionTables'
 import { canonicalJson } from '@agent-workflow/shared'
 
 import { sha256Hex } from '@/util/hash'
@@ -80,7 +80,6 @@ export function cutoverFromRow(
   return {
     producer: row.producer,
     family: row.family,
-    mode: row.mode,
     epoch: row.epoch,
     changedAt: row.changedAt,
     changeRef: row.changeRef,

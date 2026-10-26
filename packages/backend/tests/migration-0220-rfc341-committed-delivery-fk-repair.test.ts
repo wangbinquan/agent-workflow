@@ -1,10 +1,8 @@
+import { migrateFrozenSqlite as migrate, freezeAt } from './migration-freeze'
 import { describe, expect, test } from 'bun:test'
 import { Database } from 'bun:sqlite'
 import { rmSync } from 'node:fs'
 import { drizzle } from 'drizzle-orm/bun-sqlite'
-import { migrate } from 'drizzle-orm/bun-sqlite/migrator'
-
-import { freezeAt } from './migration-freeze'
 
 describe('migration 0220 — RFC-341 committed delivery FK repair', () => {
   test('normalizes a legacy-rename upgrade and preserves its delivery receipts', () => {

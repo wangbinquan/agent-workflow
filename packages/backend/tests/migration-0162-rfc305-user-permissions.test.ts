@@ -2,13 +2,14 @@
 // users at revision zero, enforce one grant row per permission, cascade only
 // live grants, and retain append-only audit evidence after account deletion.
 
+import { FROZEN_MIGRATIONS } from './migration-freeze'
 import { afterEach, describe, expect, test } from 'bun:test'
 import { Database } from 'bun:sqlite'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 const SQL = readFileSync(
-  resolve(import.meta.dir, '..', 'db', 'migrations', '0162_rfc305_user_permission_grants.sql'),
+  resolve(FROZEN_MIGRATIONS, '0162_rfc305_user_permission_grants.sql'),
   'utf8',
 )
 

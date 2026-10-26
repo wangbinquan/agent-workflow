@@ -1,3 +1,4 @@
+import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { createTaskCodeWorkspaceQueries } from '@/modules/task-execution/composition'
 import { o2Ports } from './helpers/o2Closure'
 import { withWorkspaceMaintenancePorts } from './helpers/sourceControlTaskPorts'
@@ -130,7 +131,7 @@ describeEachProvider('RFC-359 W7 —— code-capability 组合根', (harness) =>
       status: 'running',
       retryIndex: 0,
       startedAt: T0,
-      checkpoints: [{ mountPath: '', preSnapshot: 'stash-hash' }],
+      checkpoints: [{ mountPath: 'main', preSnapshot: 'stash-hash' }],
     })
 
     const sqlite = {
@@ -153,7 +154,7 @@ describeEachProvider('RFC-359 W7 —— code-capability 组合根', (harness) =>
     expect(await sqlite.workspace.findNodeRun(nodeRunId)).toMatchObject({
       id: nodeRunId,
       // RFC-395 II-a: the read port exposes per-mount checkpoints.
-      checkpoints: [{ mountPath: '', preSnapshot: 'stash-hash' }],
+      checkpoints: [{ mountPath: 'main', preSnapshot: 'stash-hash' }],
     })
     expect(await sqlite.workspace.findNodeRun(`nr_${ulid()}`)).toBeNull()
     // 能力参数：没有 repo_capability_config 行时是 null（一跳 join 真的跑过）。
@@ -321,6 +322,7 @@ describeEachProvider('RFC-359 W7 —— development-automation / source-control 
           db: harness.db,
           appHome,
           terminalMaintenance: createTaskExecutionPersistence(asSqlite(harness.db), {
+            historyRestrictions: epoch2RuntimeTestPorts(asSqlite(harness.db)).historyRestrictions,
             recoveryHumanGates: o2Ports(asSqlite(harness.db)).collaborationReads.recovery,
           }).terminalMaintenance,
           isMaterializingTask: () => false,

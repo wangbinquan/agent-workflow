@@ -1,3 +1,4 @@
+import { pruneNodeRunSequenceAllocations } from './nodeRunSequenceMaintenance'
 // RFC-359 W8 —— 后继 daemon 的 effect / owner 恢复：**一份**实现，两个引擎共用。
 //
 // 合一前是 W5 账本里那对：SQLite 侧 `sqliteTaskExecutionRecovery.ts`（393 行同步流程，经
@@ -104,6 +105,7 @@ export class DrizzleTaskExecutionRecoveryPersistence implements TaskExecutionRec
       })
       revokedTaskIds.push(owner.taskId)
     }
+    await pruneNodeRunSequenceAllocations(this.db)
     return { revokedTaskIds }
   }
 

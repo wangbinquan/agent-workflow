@@ -1,8 +1,7 @@
 // RFC-359 W4-B1 —— 调度器收尾读写：一份实现，两个 provider 共用。
 
+import { createTaskRepositorySourceStore } from './taskRepositoryUsage'
 import { createNodeRunQueries } from './nodeRunQueries'
-import { tablesOf } from '@/platform/persistence/sessionTables'
-import { and, eq } from 'drizzle-orm'
 
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { SchedulerCompletionPersistence } from '../application/ports/schedulerCompletionPersistence'
@@ -16,11 +15,9 @@ export class DrizzleSchedulerCompletionPersistence implements SchedulerCompletio
   ): Promise<void> {
     await withTaskExecutionWrite(this.db, async (tx) => {
       await fenceTaskWrite(tx, { taskId: input.taskId, context: input.execution, now: input.now })
-      const { taskRepos } = tablesOf(tx)
-      await tx
-        .update(taskRepos)
-        .set({ readonlyDirtyCount: input.changedCount })
-        .where(and(eq(taskRepos.taskId, input.taskId), eq(taskRepos.repoIndex, input.repoIndex)))
+      await createTaskRepositorySourceStore(tx)
+        .participant(tx)
+        .updateMount(input.taskId, input.repoIndex, { readonlyDirtyCount: input.changedCount })
     })
   }
 

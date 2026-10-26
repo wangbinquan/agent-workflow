@@ -1,3 +1,4 @@
+import { initializeTaskWorkspace } from './helpers/taskWorkspaceFixture'
 // RFC-354 — loop-in-loop re-executes the inner scope on EVERY outer round.
 //
 // This file was the audit S-6 current-behavior lock
@@ -40,7 +41,6 @@ import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { runTaskWithRealTestTopology as runTask } from './helpers/taskExecutionTestTopology'
 import { canonicalizeWorkflowAgentIds } from './helpers/canonicalWorkflowFixture'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const SCENARIO_OPENCODE = resolve(import.meta.dir, 'fixtures', 'scenario-opencode.ts')
 
 interface Harness {
@@ -56,10 +56,10 @@ function buildHarness(): Harness {
   const appHome = mkdtempSync(join(tmpdir(), 'aw-rfc354-nested-'))
   const worktreePath = join(appHome, 'wt')
   const stateDir = join(appHome, 'scenario-state')
-  mkdirSync(worktreePath, { recursive: true })
+  initializeTaskWorkspace(worktreePath)
   mkdirSync(stateDir, { recursive: true })
   const planFile = join(appHome, 'plan.json')
-  const db = createInMemoryDb(MIGRATIONS)
+  const db = createInMemoryDb()
   return {
     db,
     appHome,

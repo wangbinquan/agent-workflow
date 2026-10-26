@@ -3,11 +3,7 @@
 import { engineOf } from '@/platform/persistence/databaseTransaction'
 import type { PersistenceTx } from '@/platform/persistence/persistenceDb'
 import { driveAsyncProgram } from '@/platform/persistence/transactionProgram'
-import {
-  appendCommittedEventProgram,
-  changeCommittedEventCutoverProgram,
-  readCommittedEventCutoverProgram,
-} from './appendProgram'
+import { appendCommittedEventProgram, readCommittedEventCutoverProgram } from './appendProgram'
 import type {
   AppendCommittedEventInput,
   AppendCommittedEventReceipt,
@@ -34,11 +30,4 @@ export async function appendCommittedEvent<TType extends string, TPayload>(
     appendCommittedEventProgram(tx, input, (key) => engineOf(tx).advisoryLock(tx, key)),
     (step) => step(),
   )
-}
-
-export async function changeCommittedEventCutover(
-  tx: PersistenceTx,
-  input: Parameters<typeof changeCommittedEventCutoverProgram>[1],
-): Promise<CommittedEventCutover> {
-  return await driveAsyncProgram(changeCommittedEventCutoverProgram(tx, input), (step) => step())
 }

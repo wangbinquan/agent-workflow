@@ -1,95 +1,151 @@
-// RFC-395 II-a A1: repository fixtures own the temporary repo-count mirror and directory-name encoding.
-import { and, eq } from 'drizzle-orm'
-import { taskRepositoryMountIdentity } from '@/modules/task-execution/infrastructure/taskRepositoryCodec'
-import { taskRepositoryCount } from '@/modules/task-execution/domain/taskRepository'
+// Mount keys stay stable while ordinal and workspace paths remain projections.
+import { and, asc, eq } from 'drizzle-orm'
+import { taskMountAtCreation } from '@/modules/task-execution/domain/taskCreation'
+import {
+  taskMountReadColumns,
+  projectTaskMountReadRow,
+  type TaskMountReadRow,
+} from '@/modules/task-execution/infrastructure/taskRepositorySql'
+import { writeTaskWorkspaceDirectoriesInTx } from '@/modules/task-execution/infrastructure/taskWorkspaceDirectoryParticipant'
 import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import {
   createFixtureAdapter,
-  decodeFixture,
+  fixtureRows,
   fixtureTransaction,
+  encodeFixture,
+  physicalFixtureValues,
   type FixtureHandle,
-  type FixturePatch,
+  type FixtureOptions,
 } from './core'
 import type { TaskRepoFixtureSpec } from './taskRepo.spec'
 export type { TaskRepoFixtureSpec } from './taskRepo.spec'
-export type TaskRepoFixtureRow = Omit<
-  PersistenceTables['taskRepos']['$inferSelect'],
-  'worktreeDirName'
->
+export type TaskRepoFixtureRow = Omit<TaskMountReadRow, 'worktreeDirName'>
+export function taskRepoFixtureMount(spec: TaskRepoFixtureSpec) {
+  return {
+    ordinal: spec.repoIndex,
+    mountPath: spec.mountPath ?? '',
+    repoPath: spec.repoPath,
+    repoUrl: spec.repoUrl ?? null,
+    cachedRepoId: spec.cachedRepoId ?? null,
+    baseBranch: spec.baseBranch ?? '',
+    branch: spec.branch,
+    workingBranch: spec.workingBranch ?? null,
+    baseCommit: spec.baseCommit ?? null,
+    worktreePath: spec.worktreePath,
+    subdir: spec.subdir ?? '',
+    readonly: spec.readonly ?? false,
+    readonlyDirtyCount: spec.readonlyDirtyCount ?? null,
+    workspaceProfileVersion: spec.workspaceProfileVersion ?? null,
+    workspaceProfileDigest: spec.workspaceProfileDigest ?? null,
+    hasSubmodules: spec.hasSubmodules ?? null,
+    submoduleInitOk: spec.submoduleInitOk ?? null,
+    submoduleInitError: spec.submoduleInitError ?? null,
+  }
+}
 export async function refreshFixtureRepoCount(db: FixtureHandle, taskId: string): Promise<void> {
-  const { tasks, taskRepos } = tablesOf(db)
-  const repos = await db
-    .select({ repoIndex: taskRepos.repoIndex })
-    .from(taskRepos)
-    .where(eq(taskRepos.taskId, taskId))
-  await db
-    .update(tasks)
-    .set({ repoCount: taskRepositoryCount(repos) })
-    .where(eq(tasks.id, taskId))
+  const { taskRepositoryMounts: mounts } = tablesOf(db)
+  const rows = await db
+    .select({ mountPath: mounts.mountPath })
+    .from(mounts)
+    .where(eq(mounts.taskId, taskId))
+  await writeTaskWorkspaceDirectoriesInTx(
+    db,
+    taskId,
+    rows.map((row) => row.mountPath),
+    [],
+  )
 }
 const adapter = createFixtureAdapter<
   TaskRepoFixtureSpec,
-  PersistenceTables['taskRepos'],
+  PersistenceTables['taskRepositoryMounts'],
   TaskRepoFixtureRow
 >({
-  table: (db) => tablesOf(db).taskRepos,
+  table: (db) => tablesOf(db).taskRepositoryMounts,
   physicalTable: 'task_repos',
-  keys: ['taskId', 'repoIndex'],
-  prepare: async (_db, row, spec) => {
-    Object.assign(row, taskRepositoryMountIdentity(spec.mountPath ?? ''))
+  keys: ['taskId', 'repoKey'],
+  columns: taskMountReadColumns,
+  async prepare(_db, row, spec) {
+    Object.assign(row, taskMountAtCreation(spec.taskId, taskRepoFixtureMount(spec)))
   },
-  afterWrite: async (db, row) => {
+  async afterWrite(db, row) {
     await refreshFixtureRepoCount(db, row.taskId)
   },
-  project: async (_db, row) => decodeFixture('task_repos', row) as TaskRepoFixtureRow,
+  rootPatch() {
+    return {}
+  },
+  async afterPatch(db, row, spec) {
+    const table = tablesOf(db).taskRepositoryMounts
+    const patch = physicalFixtureValues(table, encodeFixture('task_repos', spec))
+    if (spec.repoIndex !== undefined) patch.ordinal = spec.repoIndex
+    if (
+      typeof spec.branch === 'string' ||
+      spec.baseCommit !== undefined ||
+      typeof spec.baseBranch === 'string'
+    ) {
+      const branch = typeof spec.branch === 'string' ? spec.branch : (row.branch ?? '')
+      const baseCommit = spec.baseCommit === undefined ? row.baseCommit : spec.baseCommit
+      Object.assign(patch, {
+        branch: branch || null,
+        branchState: branch ? 'branch' : baseCommit ? 'detached' : 'none',
+        baseBranch: (spec.baseBranch ?? row.baseBranch) || null,
+      })
+    }
+    if (Object.keys(patch).length)
+      await db
+        .update(table)
+        .set(patch)
+        .where(and(eq(table.taskId, row.taskId), eq(table.repoKey, row.repoKey)))
+    await refreshFixtureRepoCount(db, row.taskId)
+  },
+  async project(db, row) {
+    const table = tablesOf(db).taskRepositoryMounts
+    const [value] = await db
+      .select(taskMountReadColumns(db))
+      .from(table)
+      .where(and(eq(table.taskId, row.taskId), eq(table.repoKey, row.repoKey)))
+    const { worktreeDirName: _directory, ...result } = projectTaskMountReadRow(value!)
+    return result
+  },
 })
-export const taskRepoFixture = adapter.insert
-export const readTaskRepoFixtures = adapter.read
-export async function patchTaskRepoFixture(
+export async function taskRepoFixture(
   db: FixtureHandle,
-  where: Partial<TaskRepoFixtureSpec> | undefined,
-  values: FixturePatch<TaskRepoFixtureSpec>,
-): Promise<number> {
+  input: TaskRepoFixtureSpec | readonly TaskRepoFixtureSpec[],
+  options: FixtureOptions = {},
+) {
   return fixtureTransaction(db, async (tx) => {
-    const before = await adapter.read(tx, where)
-    const count = await adapter.patch(tx, where, values)
-    if (values.mountPath !== undefined) {
-      const { taskRepos } = tablesOf(tx)
-      for (const row of before) {
+    const table = tablesOf(tx).taskRepositoryMounts
+    const result: TaskRepoFixtureRow[] = []
+    for (const spec of fixtureRows(input)) {
+      const [existing] = await tx
+        .select()
+        .from(table)
+        .where(and(eq(table.taskId, spec.taskId), eq(table.ordinal, spec.repoIndex)))
+      if (!existing) result.push(...(await adapter.insert(tx, spec, options)))
+      else if (options.onConflict !== 'ignore') {
+        const values = taskMountAtCreation(spec.taskId, taskRepoFixtureMount(spec))
         await tx
-          .update(taskRepos)
-          .set(
-            typeof values.mountPath === 'string'
-              ? taskRepositoryMountIdentity(values.mountPath)
-              : { worktreeDirName: values.mountPath },
-          )
-          .where(and(eq(taskRepos.taskId, row.taskId), eq(taskRepos.repoIndex, row.repoIndex)))
+          .update(table)
+          .set(physicalFixtureValues(table, { ...values, repoKey: existing.repoKey }))
+          .where(and(eq(table.taskId, spec.taskId), eq(table.repoKey, existing.repoKey)))
+        await refreshFixtureRepoCount(tx, spec.taskId)
+        result.push(...(await adapter.read(tx, { taskId: spec.taskId, repoIndex: spec.repoIndex })))
       }
     }
-    // RFC-395 II-a: patching workspace columns must not rewrite an unrelated stored count.
-    if (typeof values.taskId === 'string') {
-      for (const row of before) await refreshFixtureRepoCount(tx, row.taskId)
-      await refreshFixtureRepoCount(tx, values.taskId)
-    }
-    return count
+    return result
   })
 }
-
-/** Epoch-1 import fixture: expose the stored directory independently of the mount path. */
+export const readTaskRepoFixtures = adapter.read
+export const patchTaskRepoFixture = adapter.patch
 export async function readStoredTaskRepoFixtures(db: FixtureHandle, taskId: string) {
-  const { taskRepos } = tablesOf(db)
-  return await db.select().from(taskRepos).where(eq(taskRepos.taskId, taskId))
+  const { taskRepositoryMounts: mounts } = tablesOf(db)
+  return db.select().from(mounts).where(eq(mounts.taskId, taskId)).orderBy(asc(mounts.ordinal))
 }
-
+/** There is one persisted mount path; directory names are derived by the public projection. */
 export async function patchStoredTaskRepoDirectory(
   db: FixtureHandle,
   taskId: string,
   repoIndex: number,
-  worktreeDirName: string,
+  mountPath: string,
 ): Promise<void> {
-  const { taskRepos } = tablesOf(db)
-  await db
-    .update(taskRepos)
-    .set({ worktreeDirName })
-    .where(and(eq(taskRepos.taskId, taskId), eq(taskRepos.repoIndex, repoIndex)))
+  await patchTaskRepoFixture(db, { taskId, repoIndex }, { mountPath })
 }

@@ -1,3 +1,5 @@
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { taskReadColumns } from './taskRepositorySql'
 // RFC-359 —— 任务 continuation 的准入（intent 提交）：一份实现，两个引擎。
 //
 // 以前 `sqliteTaskExecutionIntent.ts` + `sqliteTaskExecutionIntentAdmission.ts`（同步）与
@@ -6,21 +8,20 @@
 // `DatabaseSession.transaction` 体内传 `tx`；同任务的并发准入由 CAS（active intent 检查 +
 // lineage 复核）与调用方的聚合根行锁共同保证。
 
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
 import { first } from '@/platform/persistence/queryHelpers'
+
+import { insertOne } from '@/platform/persistence/singleInsert'
 import { and, desc, eq, inArray } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
 import { engineOf } from '@/platform/persistence/databaseTransaction'
 import type { PersistenceTx } from '@/platform/persistence/persistenceDb'
 import type {
-  SubmittedTaskExecutionIntent,
   SubmitTaskContinuationInput,
   SubmitTaskExecutionIntentInput,
+  SubmittedTaskExecutionIntent,
 } from '../application/ports/taskExecutionIntentPersistence'
 import { TaskExecutionError } from '../application/taskExecutionError'
-import { assertTaskOutsideTerminalMaintenance } from './terminalMaintenanceClaim'
 import { sha256Hex } from '../domain/digest'
 import {
   canonicalJson,
@@ -32,6 +33,7 @@ import {
   mayAuthorizeReplay,
   type CanonicalContinuationRequest,
 } from '../domain/executionIntent'
+import { assertTaskOutsideTerminalMaintenance } from './terminalMaintenanceClaim'
 
 const MAX_INTENT_PAYLOAD_BYTES = 64 * 1024
 
@@ -84,13 +86,14 @@ export async function submitCanonicalTaskExecutionIntent(
   now: number,
 ): Promise<SubmittedTaskExecutionIntent> {
   const { request } = input
-  const { tasks, taskExecutionIntents } = tablesOf(tx)
+  const { taskExecutionIntents } = tablesOf(tx)
+  const { tasks } = tablesOf(tx)
   const task = await first(
     tx
       .select({
         lifecycleEventRevision: tasks.lifecycleEventRevision,
-        executionLineageId: tasks.executionLineageId,
-        lineageSlotPathJson: tasks.lineageSlotPathJson,
+        executionLineageId: taskReadColumns(tx).executionLineageId,
+        lineageSlotPathJson: taskReadColumns(tx).lineageSlotPathJson,
       })
       .from(tasks)
       .where(eq(tasks.id, request.taskId)),
@@ -192,13 +195,14 @@ export async function submitTaskContinuation(
   tx: PersistenceTx,
   input: SubmitTaskContinuationInput,
 ): Promise<SubmittedTaskExecutionIntent> {
-  const { tasks, taskExecutionIntents, taskExecutionLineageOperationRecords } = tablesOf(tx)
+  const { taskExecutionIntents, taskExecutionLineageOperationRecords } = tablesOf(tx)
+  const { tasks } = tablesOf(tx)
   const task = await first(
     tx
       .select({
         lifecycleEventRevision: tasks.lifecycleEventRevision,
-        executionLineageId: tasks.executionLineageId,
-        lineageSlotPathJson: tasks.lineageSlotPathJson,
+        executionLineageId: taskReadColumns(tx).executionLineageId,
+        lineageSlotPathJson: taskReadColumns(tx).lineageSlotPathJson,
       })
       .from(tasks)
       .where(eq(tasks.id, input.taskId)),

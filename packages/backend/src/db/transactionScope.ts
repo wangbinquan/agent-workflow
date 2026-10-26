@@ -22,6 +22,14 @@ const frames = new AsyncLocalStorage<readonly object[]>()
 /** 每个客户端上打开着的显式事务层数（顶层只会是 0 或 1，重入不再叠加）。 */
 const openDepth = new WeakMap<object, number>()
 
+const transactionObservers = new WeakMap<object, (ms: number) => void>()
+export function bindTransactionObserver(client: object, observe: (ms: number) => void): void {
+  transactionObservers.set(client, observe)
+}
+export function observeDbTransaction(client: object, ms: number): void {
+  transactionObservers.get(client)?.(ms)
+}
+
 export class CrossContextTransactionError extends Error {
   constructor(operation: 'dbTxSync' | 'statement' = 'dbTxSync') {
     super(

@@ -1,3 +1,4 @@
+import { withTargetMintIdentity } from './helpers/rfc395Mint'
 // RFC-098 WP-10 T-a — mintNodeRun factory contract.
 //
 // Pins:
@@ -15,7 +16,6 @@
 //   5. schedulerMintCause merge rule (对抗检视修订 #11) branch-by-branch —
 //      see also rfc098-rerun-cause-gates.test.ts for the gate truth table.
 
-import { deriveNodeRunRole } from '@/modules/task-execution/public/types'
 import { taskFixture, workflowFixture, readNodeRunFixtures } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeEach, describe, expect, test } from 'bun:test'
@@ -61,13 +61,17 @@ describeEachProvider('node run persistence', (harness) => {
   describe('mintNodeRun — defaults', () => {
     test('minimal pending mint: column defaults match the old half-factory', async () => {
       const before = Date.now()
-      const id = await mintNodeRun(db, {
-        ...deriveNodeRunRole({ nodeId: 'n1', rerunCause: 'initial' }),
-        taskId: TASK_ID,
-        nodeId: 'n1',
-        status: 'pending',
-        cause: 'initial',
-      })
+      const id = await mintNodeRun(
+        db,
+        withTargetMintIdentity({
+          role: 'node-attempt',
+          syntheticKind: null,
+          taskId: TASK_ID,
+          nodeId: 'n1',
+          status: 'pending',
+          cause: 'initial',
+        }),
+      )
       const row = await readRow(id)
       expect(row.status).toBe('pending')
       expect(row.retryIndex).toBe(0)
@@ -88,57 +92,73 @@ describeEachProvider('node run persistence', (harness) => {
     })
 
     test('every mint persists its cause to node_runs.rerun_cause (T-b)', async () => {
-      const id = await mintNodeRun(db, {
-        ...deriveNodeRunRole({ nodeId: 'n1', rerunCause: 'cross-clarify-questioner-rerun' }),
-        taskId: TASK_ID,
-        nodeId: 'n1',
-        status: 'pending',
-        cause: 'cross-clarify-questioner-rerun',
-      })
+      const id = await mintNodeRun(
+        db,
+        withTargetMintIdentity({
+          role: 'node-attempt',
+          syntheticKind: null,
+          taskId: TASK_ID,
+          nodeId: 'n1',
+          status: 'pending',
+          cause: 'cross-clarify-questioner-rerun',
+        }),
+      )
       expect((await readRow(id)).rerunCause).toBe('cross-clarify-questioner-rerun')
     })
 
     test("status 'done' defaults finishedAt to now; explicit override wins", async () => {
-      const doneId = await mintNodeRun(db, {
-        ...deriveNodeRunRole({ nodeId: 'n1', rerunCause: 'io-virtual' }),
-        taskId: TASK_ID,
-        nodeId: 'n1',
-        status: 'done',
-        cause: 'io-virtual',
-      })
+      const doneId = await mintNodeRun(
+        db,
+        withTargetMintIdentity({
+          role: 'node-attempt',
+          syntheticKind: null,
+          taskId: TASK_ID,
+          nodeId: 'n1',
+          status: 'done',
+          cause: 'io-virtual',
+        }),
+      )
       expect((await readRow(doneId)).finishedAt).not.toBeNull()
 
-      const pinned = await mintNodeRun(db, {
-        ...deriveNodeRunRole({ nodeId: 'n1', rerunCause: 'retry-node' }),
-        taskId: TASK_ID,
-        nodeId: 'n1',
-        status: 'failed',
-        cause: 'retry-node',
-        overrides: {
-          identity: {
-            finishedAt: 1234,
-            errorMessage: 'queued for retry',
+      const pinned = await mintNodeRun(
+        db,
+        withTargetMintIdentity({
+          role: 'node-attempt',
+          syntheticKind: null,
+          taskId: TASK_ID,
+          nodeId: 'n1',
+          status: 'failed',
+          cause: 'retry-node',
+          overrides: {
+            identity: {
+              finishedAt: 1234,
+              errorMessage: 'queued for retry',
+            },
           },
-        },
-      })
+        }),
+      )
       const row = await readRow(pinned)
       expect(row.finishedAt).toBe(1234)
       expect(row.errorMessage).toBe('queued for retry')
     })
 
     test('startedAt: explicit null is preserved (legacy rerun-mint shape)', async () => {
-      const id = await mintNodeRun(db, {
-        ...deriveNodeRunRole({ nodeId: 'n1', rerunCause: 'clarify-answer' }),
-        taskId: TASK_ID,
-        nodeId: 'n1',
-        status: 'pending',
-        cause: 'clarify-answer',
-        overrides: {
-          identity: {
-            startedAt: null,
+      const id = await mintNodeRun(
+        db,
+        withTargetMintIdentity({
+          role: 'node-attempt',
+          syntheticKind: null,
+          taskId: TASK_ID,
+          nodeId: 'n1',
+          status: 'pending',
+          cause: 'clarify-answer',
+          overrides: {
+            identity: {
+              startedAt: null,
+            },
           },
-        },
-      })
+        }),
+      )
       expect((await readRow(id)).startedAt).toBeNull()
     })
   })
@@ -152,16 +172,20 @@ describeEachProvider('node run persistence', (harness) => {
     }
 
     test('inheritFrom carries exactly reviewIteration/shardKey/parentNodeRunId/preSnapshot', async () => {
-      const id = await mintNodeRun(db, {
-        ...deriveNodeRunRole({ nodeId: 'n1', rerunCause: 'cross-clarify-answer' }),
-        taskId: TASK_ID,
-        nodeId: 'n1',
-        status: 'pending',
-        cause: 'cross-clarify-answer',
-        retryIndex: 5,
-        iteration: 2,
-        inheritFrom,
-      })
+      const id = await mintNodeRun(
+        db,
+        withTargetMintIdentity({
+          role: 'node-attempt',
+          syntheticKind: null,
+          taskId: TASK_ID,
+          nodeId: 'n1',
+          status: 'pending',
+          cause: 'cross-clarify-answer',
+          retryIndex: 5,
+          iteration: 2,
+          inheritFrom,
+        }),
+      )
       const row = await readRow(id)
       expect(row.reviewIteration).toBe(3)
       expect(row.shardKey).toBe('src/a.ts')
@@ -174,21 +198,25 @@ describeEachProvider('node run persistence', (harness) => {
     })
 
     test('overrides beat inheritFrom, including explicit null (review-rerun shape)', async () => {
-      const id = await mintNodeRun(db, {
-        ...deriveNodeRunRole({ nodeId: 'n1', rerunCause: 'review-iterate' }),
-        taskId: TASK_ID,
-        nodeId: 'n1',
-        status: 'pending',
-        cause: 'review-iterate',
-        inheritFrom,
-        overrides: {
-          identity: {
-            parentNodeRunId: null,
-            shardKey: null,
-            reviewIteration: 0,
+      const id = await mintNodeRun(
+        db,
+        withTargetMintIdentity({
+          role: 'node-attempt',
+          syntheticKind: null,
+          taskId: TASK_ID,
+          nodeId: 'n1',
+          status: 'pending',
+          cause: 'review-iterate',
+          inheritFrom,
+          overrides: {
+            identity: {
+              parentNodeRunId: null,
+              shardKey: null,
+              reviewIteration: 0,
+            },
           },
-        },
-      })
+        }),
+      )
       const row = await readRow(id)
       expect(row.parentNodeRunId).toBeNull()
       expect(row.shardKey).toBeNull()
@@ -200,23 +228,27 @@ describeEachProvider('node run persistence', (harness) => {
     })
 
     test('overrides work without inheritFrom (shard-child shape)', async () => {
-      const id = await mintNodeRun(db, {
-        ...deriveNodeRunRole({ nodeId: 'inner', rerunCause: 'fanout-shard' }),
-        taskId: TASK_ID,
-        nodeId: 'inner',
-        status: 'pending',
-        cause: 'fanout-shard',
-        iteration: 1,
-        overrides: {
-          identity: {
-            parentNodeRunId: 'wrapper-run',
-            shardKey: 'k0',
+      const id = await mintNodeRun(
+        db,
+        withTargetMintIdentity({
+          role: 'node-attempt',
+          syntheticKind: null,
+          taskId: TASK_ID,
+          nodeId: 'inner',
+          status: 'pending',
+          cause: 'fanout-shard',
+          iteration: 1,
+          overrides: {
+            identity: {
+              parentNodeRunId: 'wrapper-run',
+              shardKey: 'k0',
+            },
+            config: {
+              shardValueHash: 'h1',
+            },
           },
-          config: {
-            shardValueHash: 'h1',
-          },
-        },
-      })
+        }),
+      )
       const row = await readRow(id)
       expect(row.parentNodeRunId).toBe('wrapper-run')
       expect(row.shardKey).toBe('k0')
@@ -226,18 +258,22 @@ describeEachProvider('node run persistence', (harness) => {
 
   describe('mintNodeRun — born-running invariant (RFC-098 对抗检视修订 #10)', () => {
     test("status 'running' with a parent (commit&push container shape) mints fine", async () => {
-      const id = await mintNodeRun(db, {
-        ...deriveNodeRunRole({ nodeId: '__commit_push__:agent-1', rerunCause: 'commit-push' }),
-        taskId: TASK_ID,
-        nodeId: '__commit_push__:agent-1',
-        status: 'running',
-        cause: 'commit-push',
-        overrides: {
-          identity: {
-            parentNodeRunId: 'trigger-run',
+      const id = await mintNodeRun(
+        db,
+        withTargetMintIdentity({
+          role: 'synthetic',
+          syntheticKind: 'commit-push',
+          taskId: TASK_ID,
+          nodeId: '__commit_push__:agent-1',
+          status: 'running',
+          cause: 'commit-push',
+          overrides: {
+            identity: {
+              parentNodeRunId: 'trigger-run',
+            },
           },
-        },
-      })
+        }),
+      )
       const row = await readRow(id)
       expect(row.status).toBe('running')
       expect(row.parentNodeRunId).toBe('trigger-run')
@@ -245,13 +281,17 @@ describeEachProvider('node run persistence', (harness) => {
 
     test("status 'running' node attempt WITHOUT a container throws and writes nothing", async () => {
       await expect(
-        mintNodeRun(db, {
-          ...deriveNodeRunRole({ nodeId: 'n1', rerunCause: 'initial' }),
-          taskId: TASK_ID,
-          nodeId: 'n1',
-          status: 'running',
-          cause: 'initial',
-        }),
+        mintNodeRun(
+          db,
+          withTargetMintIdentity({
+            role: 'node-attempt',
+            syntheticKind: null,
+            taskId: TASK_ID,
+            nodeId: 'n1',
+            status: 'running',
+            cause: 'initial',
+          }),
+        ),
       ).rejects.toThrow(/frontier invisibility/)
       const { nodeRuns } = tablesOf(db)
       const rows = await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, TASK_ID))
@@ -260,24 +300,28 @@ describeEachProvider('node run persistence', (harness) => {
 
     test("status 'running' with overrides.identity.parentNodeRunId explicitly null throws (resolution-order aware)", async () => {
       await expect(
-        mintNodeRun(db, {
-          ...deriveNodeRunRole({ nodeId: 'n1', rerunCause: 'initial' }),
-          taskId: TASK_ID,
-          nodeId: 'n1',
-          status: 'running',
-          cause: 'initial',
-          inheritFrom: {
-            reviewIteration: 0,
-            shardKey: null,
-            parentNodeRunId: 'would-be-parent',
-            checkpointInheritance: [],
-          },
-          overrides: {
-            identity: {
-              parentNodeRunId: null,
+        mintNodeRun(
+          db,
+          withTargetMintIdentity({
+            role: 'node-attempt',
+            syntheticKind: null,
+            taskId: TASK_ID,
+            nodeId: 'n1',
+            status: 'running',
+            cause: 'initial',
+            inheritFrom: {
+              reviewIteration: 0,
+              shardKey: null,
+              parentNodeRunId: 'would-be-parent',
+              checkpointInheritance: [],
             },
-          },
-        }),
+            overrides: {
+              identity: {
+                parentNodeRunId: null,
+              },
+            },
+          }),
+        ),
       ).rejects.toThrow(/frontier invisibility/)
     })
   })

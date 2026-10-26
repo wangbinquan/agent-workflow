@@ -18,7 +18,8 @@ function builtinCondition(
   exclude: boolean,
 ): SQL<unknown> | undefined {
   if (!exclude) return undefined
-  const { agents, workflows } = tablesOf(db)
+  const { agents } = tablesOf(db)
+  const { workflows } = tablesOf(db)
   if (kind === 'agent') return eq(agents.builtin, false)
   if (kind === 'workflow') return eq(workflows.builtin, false)
   return undefined

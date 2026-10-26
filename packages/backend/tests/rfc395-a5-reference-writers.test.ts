@@ -1,3 +1,5 @@
+import { legacyContentRef } from '@/platform/content/contentRef'
+import { contentRowColumns } from '@/platform/content/infrastructure/contentStore'
 import { composeSubjectTaskReferencePort } from '@/modules/task-execution/composition'
 // RFC-395 II-a A5: exercise each real writer with the same ordered/duplicate
 // references; package alone deduplicates ID lists. Fixtures use A1 builders.
@@ -89,7 +91,8 @@ const wirePayload = (value: CreateAgent) => ({
 
 describeEachProvider('RFC-395 II-a A5 writer bytes', (harness) => {
   beforeEach(async () => {
-    const { users, mcps, plugins, skills } = tablesOf(harness.db)
+    const { users, mcps, plugins } = tablesOf(harness.db),
+      { skills } = tablesOf(harness.db)
     for (const id of [OWNER, SYSTEM_USER_ID]) {
       await harness.db
         .insert(users)
@@ -123,7 +126,7 @@ describeEachProvider('RFC-395 II-a A5 writer bytes', (harness) => {
     await insertOne(harness.db, skills, {
       id: 's',
       name: 's',
-      managedPath: '/tmp/a5-skill',
+      ...contentRowColumns(legacyContentRef('skill-path', 'local-file', '/tmp/a5-skill')),
       createdAt: 1,
       updatedAt: 1,
     })

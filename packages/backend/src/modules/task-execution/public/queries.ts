@@ -1,63 +1,69 @@
-export { createNodeRunQueries } from '../infrastructure/nodeRunQueries'
-export type {
-  NodeRunQueries,
-  NodeRunFactsQuery,
-  NodeRunFactSnapshot,
-  NodeRunCheckpointSnapshot,
-  NodeRunDispatchFacts,
-} from '../application/ports/nodeRunQueries'
-export type { NodeExecutionSnapshot } from '../application/ports/nodeExecutionPersistence'
-export type { RunHistoryFacts } from '../infrastructure/runSelection/oracle/historySnapshot'
-export { createRunHistorySnapshot } from '../infrastructure/runSelection/oracle/historySnapshot'
-export { resolveHandlerRun } from '../infrastructure/runSelection/oracle/handlerHistory'
-export { readPortArtifact } from '../composition/portArtifacts'
-export type {
-  RunSelectionReader,
-  RunRef,
-  SelectedRun,
-  RunSlot,
-  Frame,
-  FamilyRef,
-  HistoryFilter,
-  WrapperSlotRef,
-  ShardSetView,
-  ShardSelectionView,
-  ShardRequest,
-  ConsumedEdge,
-} from '../application/ports/runSelection'
-export { createRunSelectionReader } from '../infrastructure/runSelection/oracle/reader'
-export { createRunSelectionOracleSnapshot } from '../infrastructure/runSelection/oracle/snapshot'
-export { encodeRunSlot, decodeRunSlot, runSlotsEqual } from '../domain/runSelection/slots'
-export { compareRunSequence, aggregatorInputsMatch } from '../domain/runSelection/ordering'
-export { deriveNodeRunRole } from '../domain/nodeRunRole'
-export { nodeRunAttemptIndex } from '../domain/nodeRunAttempt'
-export type { PortArtifactReader } from '../application/ports/portArtifactContent'
+export { nodeOutputSlot } from '../domain/runSelection/nodeOutputSlot'
 export {
-  encodePortSegment,
-  repoRelForcedPaths,
-  parseArchiveJson,
-  truncationNotice,
-  isPathishKindString,
-  missingArtifactPlaceholder,
-  subsetArchiveJson,
-} from '../domain/portArtifacts'
+  freezeRuntimeBinaryConfiguration,
+  readTaskCommitExcludePatterns,
+} from '../application/operationConfiguration'
 export {
   forcedPortPathsForTask,
   portArchiveRootRel,
   toContainerRelative,
 } from '../application/portArtifacts'
-export { readNodeRunPrompt } from '../composition/nodeRunPrompts'
+export type { NodeExecutionSnapshot } from '../application/ports/nodeExecutionPersistence'
 export type { NodeRunPromptReader } from '../application/ports/nodeRunPromptContent'
-import { decodeWrapperProgress } from '../domain/wrapperProgress'
-export { ORCHESTRATOR_AGENT_ID, ORCHESTRATOR_AGENT_NAME } from '../domain/orchestratorAgentIdentity'
+export type {
+  NodeRunCheckpointSnapshot,
+  NodeRunDispatchFacts,
+  NodeRunFactSnapshot,
+  NodeRunFactsQuery,
+  NodeRunQueries,
+} from '../application/ports/nodeRunQueries'
+export type { PortArtifactReader } from '../application/ports/portArtifactContent'
+export type {
+  ConsumedEdge,
+  FamilyRef,
+  Frame,
+  HistoryFilter,
+  RunRef,
+  RunSelectionReader,
+  RunSlot,
+  SelectedRun,
+  ShardRequest,
+  ShardSelectionView,
+  ShardSetView,
+  WrapperSlotRef,
+} from '../application/ports/runSelection'
 export type { TaskOperationConfigurationQueries } from '../application/ports/taskOperationConfiguration'
+export { readNodeRunPrompt } from '../composition/nodeRunPrompts'
+export { readPortArtifact } from '../composition/portArtifacts'
+export { nodeRunAttemptIndex } from '../domain/nodeRunAttempt'
+export { deriveNodeRunRole } from '../domain/nodeRunRole'
+export { ORCHESTRATOR_AGENT_ID, ORCHESTRATOR_AGENT_NAME } from '../domain/orchestratorAgentIdentity'
 export {
-  freezeRuntimeBinaryConfiguration,
-  readTaskCommitExcludePatterns,
-} from '../application/operationConfiguration'
+  encodePortSegment,
+  isPathishKindString,
+  missingArtifactPlaceholder,
+  parseArchiveJson,
+  repoRelForcedPaths,
+  subsetArchiveJson,
+  truncationNotice,
+} from '../domain/portArtifacts'
+export { aggregatorInputsMatch, compareRunSequence } from '../domain/runSelection/ordering'
+export { decodeRunSlot, encodeRunSlot, runSlotsEqual } from '../domain/runSelection/slots'
+import { createNodeRunQueries as createNodeRunQueriesInternal } from '../infrastructure/nodeRunQueries'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
+import type { NodeRunQueries } from '../application/ports/nodeRunQueries'
+/** The offered query factory uses the owner's database content reader. Selected stores are composition-only. */
+export function createNodeRunQueries(db: PersistenceDb): NodeRunQueries {
+  return createNodeRunQueriesInternal(db)
+}
+export { resolveHandlerRun } from '../application/resolveHandlerRun'
+export { createRunHistorySnapshot, createRunHistoryBatchSnapshot } from '../application/runHistory'
+export type { RunHistoryFacts } from '../application/runHistory'
+export { createRunSelectionReader } from '../infrastructure/runSelection/table/reader'
 import type { Actor } from '@/auth/actor'
-import { parseLoopExitCondition, type OverviewTasks } from '@agent-workflow/shared'
 import type { WorktreeTreeEntry } from '@agent-workflow/shared'
+import { parseLoopExitCondition, type OverviewTasks } from '@agent-workflow/shared'
+import { decodeWrapperProgress } from '../domain/wrapperProgress'
 
 /** The existing Task visibility gate runs before these bound workspace queries. */
 export interface TaskWorkspaceQueries {
@@ -77,8 +83,8 @@ export { parseLoopExitCondition } from '@agent-workflow/shared'
 // predicates (dispatchFrontier / freshness / runLiveness) until they move in.
 // Only the symbols a legacy consumer actually reads are public; the rest of
 // the environment-chain vocabulary stays inside the context.
-export { containerMemberRuns, containerMemberRunsInRound } from '../domain/containerMembership'
 export { loadFrameChain, type FrameChain } from '../application/frameChain'
+export { containerMemberRuns, containerMemberRunsInRound } from '../domain/containerMembership'
 export {
   resolveSourceFrame,
   type ContainerRunRow,
@@ -126,82 +132,69 @@ export function isValidLoopExitCondition(value: LoopExitConditionCandidate): boo
   return parseLoopExitCondition(value) !== null
 }
 
-export type { TaskLaunchConfigurationQueries } from '../application/ports/taskLaunchConfiguration'
 export {
   resolveTaskCommitPushFromReader,
-  resolveTaskLaunchRuntimeFromReader,
   resolveTaskLaunchRuntimeConfiguration,
+  resolveTaskLaunchRuntimeFromReader,
   resolveTaskStartLaunchConfiguration,
   resolveTaskSubagentLiveCapture,
   resolveTaskSubagentLiveCaptureFromReader,
   resolveTaskUploadLimitsFromReader,
 } from '../application/launchConfiguration'
+export type { TaskLaunchConfigurationQueries } from '../application/ports/taskLaunchConfiguration'
 
+export { resolveUniqueUploadNameSync } from '../application/workspaceUploads'
 export {
+  acceptMatches,
   DEFAULT_UPLOAD_LIMITS,
   sniffMime,
-  acceptMatches,
   validateUploadPlan,
 } from '../domain/uploads'
-export { resolveUniqueUploadNameSync } from '../application/workspaceUploads'
 
+export { createTaskSubjectQueries } from '../composition/taskSubjectQueries'
 export {
-  decodeTaskSubject,
-  isTurnEngineTaskSubject,
   definitionAnchorId,
   definitionHost,
+  isTurnEngineTaskSubject,
   projectTaskSubject,
-  taskDefinitionOrigin,
-  taskSubjectWorkflowVersion,
   TASK_DEFINITION_HOSTS,
+  taskDefinitionOrigin,
+  taskSubjectFromDefinition,
+  taskSubjectWorkflowVersion,
 } from '../domain/taskSubject'
-export { createTaskSubjectQueries } from '../composition/taskSubjectQueries'
 
-export {
-  decodeTaskRollbackCheckpoints,
-  projectTaskCheckpoints,
-} from '../infrastructure/taskCheckpointCodec'
-export { inheritTaskPreSnapshots } from '../domain/taskCheckpoint'
 export { repositoryPublicationOrdinal } from '../domain/repositoryExecutionIdentity'
+export { inheritTaskPreSnapshots } from '../domain/taskCheckpoint'
 
 export { hasTaskRollbackCheckpoint } from '../domain/taskCheckpointRollback'
 /** RFC-395 II-a：节点回滚计划（逐仓目标 + 持久化请求），legacy `services/nodeRollback.ts` 经此取用。 */
 export { taskRollbackPlan } from '../infrastructure/taskRollbackCodec'
 
-export { projectStoredTaskRepositorySummary } from '../infrastructure/taskRepositorySurface'
 export { taskRepositoryNodePaths } from '../domain/taskRepository'
+export { projectStoredTaskRepositorySummary } from '../infrastructure/taskRepositorySurface'
 
 export { decodeTaskWorkgroupConfig, workgroupLaunchMode } from '../domain/taskWorkgroupConfig'
 export { decodeTaskRepositoryMount } from '../infrastructure/taskRepositoryCodec'
 export { taskWorkgroupConfigFromRow } from '../infrastructure/taskWorkgroupConfig'
 
 export {
-  isFresherNodeRun,
-  pickLatestSettledRun,
-  pickLatestRunInFrame,
-  pickFrameSourceRun,
-  isSettledRunStatus,
-  pickReusableShardRun,
-  pickFreshestRun,
-} from '../infrastructure/runSelection/oracle/legacyPickers'
-export {
-  parseConsumedJson,
+  consumedEdgesFromRecord,
   decodeConsumedEdges,
   encodeConsumedEdges,
-  consumedEdgesFromRecord,
+  parseConsumedJson,
 } from '../infrastructure/runSelection/consumedCodec'
 
 export { nodeRunStatusCondition } from '../infrastructure/nodeRunQueries'
 
-export { createTaskGateQueries } from '../infrastructure/taskGateQueries'
+export type { NodeOutputContent, NodeOutputQueries } from '../application/ports/nodeOutputQueries'
 export type {
-  TaskGateQueries,
+  TaskDispatchContext,
   TaskGateContext,
   TaskGateDefinitionContext,
-  TaskDispatchContext,
+  TaskGateQueries,
 } from '../application/ports/taskGateQueries'
 export { createNodeOutputQueries } from '../infrastructure/nodeOutputQueries'
-export type { NodeOutputQueries, NodeOutputContent } from '../application/ports/nodeOutputQueries'
+export { createTaskGateQueries } from '../infrastructure/taskGateQueries'
 
 export { taskGateOpenCondition, taskGateVisibleCondition } from '../infrastructure/taskGateQueries'
 
@@ -211,29 +204,39 @@ export { createTaskTriggerQueries } from '../infrastructure/taskTriggerQueries'
 export { listNodeEventContents, type NodeEventContent } from '../infrastructure/nodeEventQueries'
 
 export type {
-  TaskKnowledgeQueries,
-  TaskKnowledgeContext,
   TaskDistillationScope,
   TaskDistillationSource,
+  TaskKnowledgeContext,
+  TaskKnowledgeQueries,
 } from '../application/ports/taskKnowledgeQueries'
 export type {
-  TaskTriggerQueries,
   TaskTerminalWorkspace,
+  TaskTriggerQueries,
 } from '../application/ports/taskTriggerQueries'
 
-export { createTaskDeletionQueries } from '../infrastructure/taskDeletionQueries'
 export type { TaskDeletionQueries } from '../application/ports/taskDeletion'
+export { createTaskDeletionQueries } from '../infrastructure/taskDeletionQueries'
 
-export { createTaskDetailQueries } from '../infrastructure/taskDetailQueries'
 export type { TaskDetailQueries } from '../application/ports/taskDetailQueries'
-export { createTaskPreparationQueries } from '../infrastructure/taskPreparationQueries'
 export type { TaskPreparationQueries } from '../application/ports/taskPreparation'
+export { createTaskDetailQueries } from '../infrastructure/taskDetailQueries'
+export { createTaskPreparationQueries } from '../infrastructure/taskPreparationQueries'
 
 export type {
-  TaskWorktreeLocator,
   TaskWorktreeLocation,
+  TaskWorktreeLocator,
 } from '../application/ports/taskWorktreeLocator'
 
-export { nonTerminalTaskExists } from '../infrastructure/nonTerminalTaskExists'
 export { callRowHumanWait, readTaskResourceUsage } from '../application/taskResourceUsage'
 export { parseCallHumanWait } from '../domain/resourceLimitUsage'
+export { nonTerminalTaskExists } from '../infrastructure/nonTerminalTaskExists'
+
+export { requireRunSequence } from '../application/runHistory'
+
+export {
+  buildFreshestSettledPerNode,
+  isNodeRunFresh,
+  consumedMapsEqual,
+} from '../application/runProvenance'
+
+export type { NodeRunRow } from '../application/runProvenance'

@@ -1,4 +1,6 @@
+import { contentRefColumns } from '@/platform/content/contentStore'
 import { tablesOf } from '@/platform/persistence/sessionTables'
+
 import { expect, test } from 'bun:test'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
@@ -229,7 +231,11 @@ describeEachProviderHttpApplication(
             const rows = await scope.harness.db.select().from(resourceBundleApplies)
             expect(rows).toHaveLength(1)
             expect(rows[0]!.state).toBe('prepared')
-            expect(JSON.parse(rows[0]!.preparedArtifactsJson!)).toEqual([artifact])
+            expect(JSON.parse(rows[0]!.preparedArtifactsJson!)).toEqual({
+              scene: 'resource-package',
+              version: 2,
+              artifacts: [artifact],
+            })
           })
           expect(Object.hasOwn(selected, 'planInstall')).toBe(false)
           const { app, appHome } = await scope.open({
@@ -237,7 +243,8 @@ describeEachProviderHttpApplication(
             resourcePackagePluginArtifacts: selected,
             resourcePackageSkillContent: selected,
           })
-          const { skills, plugins, skillVersions } = tablesOf(scope.harness.db)
+          const { plugins } = tablesOf(scope.harness.db)
+          const { skills, skillVersions } = tablesOf(scope.harness.db)
           const beforeSkills = await scope.harness.db.select().from(skills)
           const beforePlugins = await scope.harness.db.select().from(plugins)
           const zip = packageBytes(kind)
@@ -295,12 +302,22 @@ describeEachProviderHttpApplication(
               const row = (await scope.harness.db.select().from(skills)).find(
                 (item) => item.id === receipt.root!.resourceId,
               )
-              expect(row).toMatchObject({ managedPath: 'logical:skill-live' })
               expect(
-                (await scope.harness.db.select().from(skillVersions)).find(
-                  (item) => item.skillId === row!.id,
-                ),
-              ).toMatchObject({ filesPath: 'logical:skill-version', contentHash })
+                contentRefColumns.decode(row!.contentRefJson, row!.contentInlineBytes),
+              ).toMatchObject({
+                kind: 'local-file',
+                location: { codec: 'skill-path', value: 'logical:skill-live' },
+              })
+              const version = (await scope.harness.db.select().from(skillVersions)).find(
+                (item) => item.skillId === row!.id,
+              )!
+              expect(version.contentHash).toBe(contentHash)
+              expect(
+                contentRefColumns.decode(version.contentRefJson, version.contentInlineBytes),
+              ).toMatchObject({
+                kind: 'local-file',
+                location: { codec: 'skill-path', value: 'logical:skill-version' },
+              })
               let exported = false
               const exporting = Promise.resolve(
                 app.request(`/api/skills/${row!.id}/export-package`, {

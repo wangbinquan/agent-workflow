@@ -17,7 +17,7 @@ function sources(directory: string): string[] {
 describe('RFC-395 II-a A3 selection semantics ledger', () => {
   test('every familyHistory call is recorded and every recorded site still exists', () => {
     const files = sources(join(backend, 'src')).filter(
-      (file) => !file.replaceAll('\\', '/').includes('/runSelection/oracle/'),
+      (file) => !file.replaceAll('\\', '/').includes('/migration/oracle/'),
     )
     expect(files.length).toBeGreaterThan(1000)
     const actual = files.flatMap((file) =>

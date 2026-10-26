@@ -218,7 +218,8 @@ describeEachProvider('RFC-223 reverse-reference delete transaction races', (harn
 
     assertHiddenReference(caught, 'skill-in-use', 'private-skill-user')
     expect(await getSkillById(db, skill.id)).not.toBeNull()
-    const { skills, skillOperationLocks } = tablesOf(db)
+    const { skillOperationLocks } = tablesOf(db),
+      { skills } = tablesOf(db)
     expect(
       (await db.select({ id: skills.id }).from(skills).where(eq(skills.id, skill.id))).length,
     ).toBe(1)

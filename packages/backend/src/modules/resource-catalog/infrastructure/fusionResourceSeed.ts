@@ -1,5 +1,6 @@
+import { runResourceCatalogTransaction } from './resourceCatalogTransaction'
 import { eq } from 'drizzle-orm'
-import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
+import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { first } from '@/platform/persistence/queryHelpers'
 import { ConflictError } from '@/util/errors'
@@ -12,11 +13,13 @@ export function createFusionResourceSeedParticipant(
   db: PersistenceDb,
 ): FusionResourceSeedParticipant {
   async function seedResources(
+    db: PersistenceTx,
     seed: Parameters<FusionResourceSeedParticipant['seed']>[0],
     repairDefinition: Parameters<FusionResourceSeedParticipant['seed']>[1],
   ): Promise<void> {
     const now = Date.now()
-    const { agents, workflows } = tablesOf(db)
+    const { agents } = tablesOf(db)
+    const { workflows } = tablesOf(db)
     const merger = await first(db.select().from(agents).where(eq(agents.id, seed.agent.id)))
     if (merger !== undefined) {
       if (merger.name !== seed.agent.name) {
@@ -115,5 +118,10 @@ export function createFusionResourceSeedParticipant(
     }
   }
 
-  return { seed: seedResources }
+  return {
+    seed: (seed, repairDefinition) =>
+      runResourceCatalogTransaction(db, (transaction) =>
+        seedResources(transaction, seed, repairDefinition),
+      ),
+  }
 }

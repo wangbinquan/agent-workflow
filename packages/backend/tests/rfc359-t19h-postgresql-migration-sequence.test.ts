@@ -2,7 +2,7 @@
 // describe one exact history. These are pure artifact/sequence tests; actual
 // PostgreSQL DDL, transaction rollback and boot resumption have separate coverage.
 
-import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import { buildFrozenEpoch1LogicalSchemaContract as buildLogicalSchemaContract } from '@/platform/persistence/migration/epoch1/contract'
 import { afterEach, beforeAll, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import { createHash } from 'node:crypto'
 import {
@@ -19,13 +19,13 @@ import { tmpdir } from 'node:os'
 import { join, posix, relative, resolve } from 'node:path'
 import { runInNewContext } from 'node:vm'
 import ts from 'typescript'
-import { generatePostgresqlMigrationHistory } from '../scripts/rfc349-postgresql-schema'
+import { generatePostgresqlMigrationHistory } from '../src/platform/persistence/migration/legacy/scripts/rfc349-postgresql-schema'
 import { extractFilesTo } from '@/embed'
 import {
   loadPostgresqlMigrationHistory,
   POSTGRESQL_MIGRATION_ROOT_FILE,
   readPostgresqlMigrationHistoryPrefix,
-} from '@/platform/persistence/postgresqlMigrationHistory'
+} from '@/platform/persistence/migration/legacy/postgresqlMigrationHistory'
 import {
   assertPostgresqlMigrationHead,
   createPostgresqlIndexUpgrade,
@@ -47,8 +47,8 @@ import {
   type PostgresqlIndexUpgrade,
   type PostgresqlMigrationHistory,
   type PostgresqlMigrationVersion,
-} from '@/platform/persistence/postgresqlMigrationSequence'
-import { buildPostgresqlSchemaPlan } from '@/platform/persistence/postgresqlSchema'
+} from '@/platform/persistence/migration/legacy/postgresqlMigrationSequence'
+import { buildPostgresqlSchemaPlan } from '@/platform/persistence/migration/legacy/postgresqlSchema'
 import {
   digestSchemaContract,
   type LogicalIndexContract,

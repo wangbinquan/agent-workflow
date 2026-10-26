@@ -4,6 +4,7 @@ import { taskFixture, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
+import { eq } from 'drizzle-orm'
 import { taskListItemsProjection } from '../src/modules/task-execution/infrastructure/taskRouteOperations'
 import { composeOwnerIdentityQueries } from '@/modules/identity-access/composition/providerOperations'
 
@@ -142,7 +143,7 @@ describeEachProvider('RFC-232 — scheduled-task owner list projection', (harnes
 })
 
 describeEachProvider('RFC-232 — task owner list projection', (harness) => {
-  test('keeps null and dangling owner ids stable while degrading identity to null', async () => {
+  test('keeps a null owner and clears a removed owner while degrading identity to null', async () => {
     const db = harness.db
     const now = Date.now()
     await workflowFixture(db, {
@@ -173,14 +174,14 @@ describeEachProvider('RFC-232 — task owner list projection', (harness) => {
       deletedAt: null,
       schemaVersion: 1,
     }
-    // RFC-359 AC-6：悬空 owner 这条夹具要绕开外键，而**两个引擎的外键不是一回事**。
-    // SQLite 的迁移链给 `tasks.owner_user_id` 加了 `REFERENCES users(id)`
-    // （`db/migrations/0020_rfc036_task_collab.sql:1`），drizzle 的表声明里没有这条——
-    // PostgreSQL 的 schema 由 drizzle 声明生成，所以那边压根不存在这个约束，不用关也不能关
-    // （`PRAGMA` 是 SQLite 专属语句，走到 PG 上会被 SQL 编译器直接拒掉）。
-    // provider 判别只出现在**夹具**里，被测判据本身两个引擎逐字相同。
-    const enforcesOwnerForeignKey = harness.capabilities.provider === 'sqlite'
-    if (enforcesOwnerForeignKey) await harness.executeFixtureDdl('PRAGMA foreign_keys = OFF')
+    const { users } = tablesOf(db)
+    await insertOne(db, users, {
+      id: 'departing-owner',
+      username: 'departing',
+      displayName: 'Departing',
+      createdAt: now,
+      updatedAt: now,
+    })
     await taskFixture(db, [
       {
         ...baseTask,
@@ -190,21 +191,36 @@ describeEachProvider('RFC-232 — task owner list projection', (harness) => {
       },
       {
         ...baseTask,
-        id: 'task-owner-missing',
-        branch: 'agent-workflow/task-owner-missing',
-        ownerUserId: 'deleted-owner',
+        id: 'task-owner-removed',
+        branch: 'agent-workflow/task-owner-removed',
+        ownerUserId: 'departing-owner',
       },
     ])
-    if (enforcesOwnerForeignKey) await harness.executeFixtureDdl('PRAGMA foreign_keys = ON')
+    // RFC-395: both engines declare tasks_owner_user_fk (ON DELETE SET NULL, as SQLite's
+    // migration 0020 always did), so a dangling owner id cannot be stored, and the converter
+    // blocks one from an epoch-1 PostgreSQL source (v2-task-owner-dangling). Removing the
+    // user keeps the task and clears its attribution.
+    await expect(
+      taskFixture(db, [
+        {
+          ...baseTask,
+          id: 'task-owner-dangling',
+          branch: 'agent-workflow/task-owner-dangling',
+          ownerUserId: 'deleted-owner',
+        },
+      ]),
+    ).rejects.toThrow()
+    await db.delete(users).where(eq(users.id, 'departing-owner'))
 
     const rows = await taskListItemsProjection({ db, owners: composeOwnerIdentityQueries(db) }, {})
     expect(rows.find((row) => row.id === 'task-owner-null')).toMatchObject({
       ownerUserId: null,
       owner: null,
     })
-    expect(rows.find((row) => row.id === 'task-owner-missing')).toMatchObject({
-      ownerUserId: 'deleted-owner',
+    expect(rows.find((row) => row.id === 'task-owner-removed')).toMatchObject({
+      ownerUserId: null,
       owner: null,
     })
+    expect(rows.some((row) => row.id === 'task-owner-dangling')).toBe(false)
   })
 })

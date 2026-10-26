@@ -1,3 +1,4 @@
+import type { HistoryRestrictionPort } from '@/platform/contracts/historyRestriction'
 import { createHumanGatePersistenceParticipantInTx } from '../infrastructure/humanGatePersistenceParticipant'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { DatabaseHumanGateOperationPersistence } from '@/modules/collaboration/infrastructure/humanGateOperationPersistence'
@@ -10,14 +11,16 @@ import { createTaskExecutionPersistence } from './taskExecutionPersistence'
 /** Both providers bind the same continuation, operation and convergence participants. */
 export function composeGateContinuationPreDrive(input: {
   readonly persistence?: ReturnType<typeof createTaskExecutionPersistence>
+  readonly historyRestrictions: HistoryRestrictionPort
   readonly db: PersistenceDb
   readonly memoryDistillEnqueuer: MemoryDistillEnqueuer
 }) {
   return createGateContinuationPreDriveStep({
-    persistence: input.persistence ?? createTaskExecutionPersistence(input.db),
+    persistence: input.persistence ?? createTaskExecutionPersistence(input.db, input),
     humanGateOperations: new DatabaseHumanGateOperationPersistence(
       databaseSessionFor(input.db),
       createHumanGatePersistenceParticipantInTx,
+      { historyRestrictions: input.historyRestrictions },
     ),
     clarifyConvergence: createClarifyContinuationConvergence(input),
   })

@@ -1,3 +1,5 @@
+import { legacyContentRef } from '@/platform/content/contentRef'
+import { contentRowColumns } from '@/platform/content/infrastructure/contentStore'
 // RFC-359 AC-11 —— 徽标计数的**往返数预算**（双引擎，只降不升）。
 //
 // 为什么需要这条判据
@@ -41,7 +43,8 @@ function actorOf(id: string, role: 'admin' | 'user' = 'user'): Actor {
 
 async function seedOnePendingReview(db: PersistenceDb): Promise<void> {
   const now = 1_788_278_400_000
-  const { users, docVersions } = tablesOf(db)
+  const { users } = tablesOf(db),
+    { docVersions } = tablesOf(db)
   await db.insert(users).values(
     ['alice', 'carol', 'root'].map((id) => ({
       id,
@@ -91,7 +94,9 @@ async function seedOnePendingReview(db: PersistenceDb): Promise<void> {
     sourcePortName: 'doc',
     versionIndex: 1,
     reviewIteration: 0,
-    bodyPath: 'doc_versions/never-read.md',
+    ...contentRowColumns(
+      legacyContentRef('review-body-path', 'local-file', 'doc_versions/never-read.md'),
+    ),
     decision: 'pending',
   })
 }

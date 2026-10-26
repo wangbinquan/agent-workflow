@@ -1,33 +1,31 @@
-// RFC-359 W4-B5 —— 轮次 AI 尝试历史的有界投影：一份实现，两个 provider 共用。
-
-import { tablesOf } from '@/platform/persistence/sessionTables'
-import { eq } from 'drizzle-orm'
-
-import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
+import type { CodeHistoryReader } from '../application/ports/historyReader'
 import type { RoundAttemptsReadPort } from '../application/ports/roundAttemptsRead'
 
-export function createRoundAttemptsRead(db: PersistenceDb): RoundAttemptsReadPort {
+export function createRoundAttemptsRead(history: CodeHistoryReader): RoundAttemptsReadPort {
   return {
     async load(roundId, limit) {
-      const { codeAiAttempts } = tablesOf(db)
-      return await db
-        .select({
-          attemptId: codeAiAttempts.id,
-          stageName: codeAiAttempts.stageName,
-          shardKey: codeAiAttempts.shardKey,
-          rerunSeq: codeAiAttempts.rerunSeq,
-          attemptSeq: codeAiAttempts.attemptSeq,
-          status: codeAiAttempts.status,
-          validationOutcome: codeAiAttempts.validationOutcome,
-          sessionRef: codeAiAttempts.sessionRef,
-          nodeRunId: codeAiAttempts.nodeRunId,
-          startedAt: codeAiAttempts.startedAt,
-          endedAt: codeAiAttempts.endedAt,
-        })
-        .from(codeAiAttempts)
-        .where(eq(codeAiAttempts.roundId, roundId))
-        .orderBy(codeAiAttempts.startedAt, codeAiAttempts.rerunSeq, codeAiAttempts.attemptSeq)
-        .limit(limit)
+      return (await history.rows('code_ai_attempts'))
+        .filter((row) => row.round_id === roundId)
+        .sort(
+          (a, b) =>
+            a.started_at - b.started_at ||
+            a.rerun_seq - b.rerun_seq ||
+            a.attempt_seq - b.attempt_seq,
+        )
+        .slice(0, Math.min(limit, 200))
+        .map((row) => ({
+          attemptId: row.id,
+          stageName: row.stage_name,
+          shardKey: row.shard_key,
+          rerunSeq: row.rerun_seq,
+          attemptSeq: row.attempt_seq,
+          status: row.status,
+          validationOutcome: row.validation_outcome,
+          sessionRef: row.session_ref,
+          nodeRunId: row.node_run_id,
+          startedAt: row.started_at,
+          endedAt: row.ended_at,
+        }))
     },
   }
 }

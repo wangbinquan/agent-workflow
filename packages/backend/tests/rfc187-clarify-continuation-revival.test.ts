@@ -1,3 +1,4 @@
+import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { o2Ports } from './helpers/o2Closure'
 // RFC-187 T13 (Codex design-gate P1-7① + impl-gate P1) — the answer-handoff crash wedge.
 //
@@ -124,6 +125,7 @@ describeEachProvider('RFC-187 T13 — auto-resume sweeps the answer-handoff wedg
     const resumed: string[] = []
     const res = await autoResumeInterruptedTasks({
       operations: createTaskExecutionPersistence(db, {
+        historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
         recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
       }).recoveryAdministration,
       breaker: { maxPerWindow: 3, windowMs: 3_600_000 },

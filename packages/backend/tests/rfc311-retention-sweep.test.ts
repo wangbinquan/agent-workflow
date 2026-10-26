@@ -23,7 +23,6 @@ import {
   type RetentionConfig,
 } from '@/platform/persistence/sqlite/systemMaintenanceRetention'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const DAY = 86_400_000
 const NOW = 1_788_278_400_000
 
@@ -77,7 +76,7 @@ describe('RFC-311 — retention sweep', () => {
     // 落地时发现该表带 user_access_audit_append_only 触发器（RFC-305 防篡改
     // 审计）：任何 DELETE 直接被拒。裁决=尊重安全设计,sweeper 不碰它;此用例
     // 锁双向——触发器仍在,且 sweep 结果恒 0。
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createInMemoryDb()
     await seedAudit(db, NOW - 100 * DAY)
     const swept = await runRetentionSweep(
       composeRetentionSweepPhases(db),

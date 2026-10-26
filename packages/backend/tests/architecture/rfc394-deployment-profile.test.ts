@@ -26,7 +26,6 @@ const RETIRED = [
 const REQUIRED_OVERRIDES = {
   DaemonProviderSessionComposeInput: [
     'applicationConfiguration',
-    'runtimeLegacyConfiguration',
     'workspaceUploads',
     'isolationWorkspaces',
     'repositoryGitWorkspaces',

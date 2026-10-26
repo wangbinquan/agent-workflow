@@ -1,3 +1,4 @@
+import { createEpoch2PostgresqlMetadata } from './helpers/epoch2PostgresqlMetadata'
 // RFC-349 — Event Center notification delivery and committed-event retry keep
 // one lease/CAS behavior across the synchronous SQLite mechanism and the
 // Promise-shaped PostgreSQL adapters.
@@ -80,12 +81,15 @@ function rows(response: Response): SqlRows {
 
 function postgresqlFixture(responses: Response[]) {
   const executions: Array<{ readonly sql: string; readonly parameters?: readonly unknown[] }> = []
+  const epoch2Metadata = createEpoch2PostgresqlMetadata()
   const run = (query: string, parameters?: readonly unknown[]) => {
     executions.push({ sql: query, parameters })
+    const metadata = epoch2Metadata(query)
+    if (metadata) return metadata
     // RFC-349: the one-shot live-write marker and the per-transaction
     // generation fence are infrastructure, not part of the adapter contract
     // each case queues responses for. Answer them without consuming the queue.
-    if (query.includes('database_generations'))
+    if (query.includes('generations'))
       return rows({ objects: [{ generation_id: 'dbg_event_delivery_pg' }] })
     return rows(responses.shift() ?? {})
   }
@@ -167,7 +171,7 @@ describe('RFC-349 Event Center provider behavior', () => {
   test('PostgreSQL producer atom allocates aggregate sequence and deliveries in its caller transaction', async () => {
     const fake = postgresqlFixture([
       {},
-      { values: [['task-execution', 'task-lifecycle', 'dispatchable', 2, 90, 'cutover-2']] },
+      { values: [['task-execution', 'task-lifecycle', 2, 90, 'cutover-2']] },
       { values: [] },
       {},
       { values: [] },
@@ -220,7 +224,7 @@ describe('RFC-349 Event Center provider behavior', () => {
           }),
       ),
     ).resolves.toMatchObject({
-      cutover: { mode: 'dispatchable', epoch: 2 },
+      cutover: { producer: 'task-execution', family: 'task-lifecycle', epoch: 2 },
       eventRef: {
         eventId: 'committed-event-1',
         aggregate: { kind: 'task', id: 'task-1', seq: 1 },

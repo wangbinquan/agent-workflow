@@ -1,3 +1,11 @@
+import { decomposeClarifyRound } from '@/modules/collaboration/infrastructure/migration/clarifyRule'
+import type { SourceRow } from '@/platform/persistence/migration/conversion/types'
+import {
+  canonicalValue,
+  encodeMigrationKey,
+} from '@/platform/persistence/migration/conversion/migrationKey'
+import { roundRow } from './helpers/rfc395V2/collabFixtures'
+import { fixtureContentStore } from './helpers/model/content'
 // RFC-395 II-a A4: both providers must preserve draft/seal/follow-up journeys and distillation bytes through the new ports.
 import { expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
@@ -143,20 +151,36 @@ async function seed(
 }
 
 describeEachProvider('RFC-395 II-a A4 clarify write port', (h) => {
-  for (const draftAnswers of [null, '[]', '{broken']) {
-    for (const answerAttributions of [null, '[]', '{broken']) {
-      test(`draft save resets invalid maps: ${String(draftAnswers)} / ${String(answerAttributions)}`, async () => {
+  for (const draftKind of ['absent', 'empty', 'populated'] as const) {
+    for (const attributionKind of ['absent', 'empty', 'populated'] as const) {
+      test(`draft save preserves target state: ${draftKind} / ${attributionKind}`, async () => {
         const f = await seed(h.db)
+        const priorDrafts =
+          draftKind === 'populated' ? { b: answer(f.questions[1]!, 'retained') } : {}
+        const priorAttributions =
+          attributionKind === 'populated'
+            ? { b: { userId: editorB.userId, role: editorB.role, updatedAt: 10 } }
+            : {}
+        const draftAnswers = draftKind === 'absent' ? null : JSON.stringify(priorDrafts)
+        const answerAttributions =
+          attributionKind === 'absent' ? null : JSON.stringify(priorAttributions)
         await patchClarifyRoundFixture(h.db, { id: f.id }, { draftAnswers, answerAttributions })
+        expect(await f.read()).toMatchObject({
+          draftAnswers,
+          answerAttributions,
+          draftsRecorded: draftKind !== 'absent',
+          attributionsRecorded: attributionKind !== 'absent',
+        })
         const saved = await f.save(f.questions[0]!)
         const row = await f.read()
-        // HEAD parseJsonRecord(...) ?? {} resets each column independently.
-        expect(row.draftAnswers).toBe(JSON.stringify({ a: answer(f.questions[0]!) }))
-        expect(row.answerAttributions).toBe(
-          JSON.stringify({
-            a: { userId: editorA.userId, role: editorA.role, updatedAt: saved.updatedAt },
-          }),
-        )
+        expect(JSON.parse(row.draftAnswers!)).toEqual({
+          ...priorDrafts,
+          a: answer(f.questions[0]!),
+        })
+        expect(JSON.parse(row.answerAttributions!)).toEqual({
+          ...priorAttributions,
+          a: { userId: editorA.userId, role: editorA.role, updatedAt: saved.updatedAt },
+        })
         expect(row.answers).toBeNull()
       })
     }
@@ -164,7 +188,10 @@ describeEachProvider('RFC-395 II-a A4 clarify write port', (h) => {
 
   test('committed human inputs retain HEAD strict JSON and Zod parsing for every status', async () => {
     const f = await seed(h.db)
-    const queries = createCommittedHumanInputQueries({ db: h.db, appHome: '/unused-a4' })
+    const queries = createCommittedHumanInputQueries({
+      db: h.db,
+      content: fixtureContentStore(h.db, '/unused-a4'),
+    })
     const headAnswers = new Function(
       'row',
       'z',
@@ -196,8 +223,6 @@ describeEachProvider('RFC-395 II-a A4 clarify write port', (h) => {
         '0',
         '"legacy"',
         '[]',
-        '[{}]',
-        '[null]',
         JSON.stringify([valid, { ...valid, customText: 'last' }]),
       ]) {
         await patchClarifyRoundFixture(
@@ -498,4 +523,58 @@ describeEachProvider('RFC-395 II-a A4 clarify write port', (h) => {
       })
     expect(prompt(loaded)).toBe(prompt(expected))
   })
+})
+
+// Unrepresentable source arrays and invalid map bytes are converter inputs, never target fixtures.
+test('source clarify arrays without keys block; invalid maps retain explicit conversion decisions', () => {
+  const convert = (overrides: Record<string, string | null>) => {
+    const values = {
+      ...roundRow('legacy', 'task'),
+      container_run_id: null,
+      status: 'awaiting_human',
+      ...overrides,
+    }
+    const key = [canonicalValue('legacy')]
+    const row: SourceRow = {
+      table: 'clarify_rounds',
+      phase: 'current',
+      key,
+      encodedKey: encodeMigrationKey('clarify_rounds', key),
+      canonical: { key, values: Object.values(values).map(canonicalValue) },
+      values,
+    }
+    return decomposeClarifyRound(
+      row,
+      {
+        runId: 'task-run',
+        taskId: 'task',
+        containerRunId: null,
+        scopePath: '',
+        iteration: 0,
+        quality: 'recorded',
+      },
+      'executable',
+    )
+  }
+  for (const answers_json of ['[{}]', '[null]']) {
+    const result = convert({ answers_json })
+    expect(result.representable).toBe(false)
+    expect(result.blocks.map((block) => block.code)).toEqual(['v2-clarify-answer-key'])
+    expect(result.answers).toEqual([])
+  }
+  for (const column of ['draft_answers_json', 'answer_attributions_json']) {
+    for (const raw of ['[]', '{broken']) {
+      const result = convert({ [column]: raw })
+      expect(result.blocks).toEqual([])
+      expect(result.decisions).toContainEqual({
+        code: 'v2-clarify-legacy-shape',
+        detail: { column, evidence: 'source-journal', projection: 'legacy-decoder' },
+      })
+      expect(
+        result.round[column === 'draft_answers_json' ? 'drafts_recorded' : 'attributions_recorded'],
+      ).toBe(false)
+      expect(result.drafts).toEqual([])
+      expect(result.attributions).toEqual([])
+    }
+  }
 })

@@ -1,19 +1,19 @@
 import {
   NEW_CLARIFY_TRIGGER_CAUSES,
-  nodeRunOrderAnchor,
   type ResolveHandlerInput,
   type HandlerRunView,
 } from '@agent-workflow/shared'
-import type { RunSelectionReader } from './ports/runSelection'
+import { createRunHistorySnapshot, type RunHistoryReader } from './runHistory'
 
-/** 澄清窗口跨帧，保留缺失 anchor 的旧 NULL-seq 回退和下次 clarify cause 上界。 */
+/** Clarify windows require a persisted sequence anchor and stop at the next trigger. */
 export async function resolveHandlerRunHistory(
-  selection: RunSelectionReader,
+  selection: RunHistoryReader,
   taskId: string,
   input: ResolveHandlerInput,
 ): Promise<HandlerRunView | null> {
   if (input.effectiveTargetNodeId === null || input.triggerRunId === null) return null
-  const anchor = nodeRunOrderAnchor(input.runs, input.triggerRunId)
+  const anchor = input.runs.find((row) => row.id === input.triggerRunId)
+  if (anchor === undefined || anchor.seq === null) return null
   const family = {
     nodeId: input.effectiveTargetNodeId,
     iteration: input.iteration,
@@ -22,9 +22,7 @@ export async function resolveHandlerRunHistory(
   }
   const triggerCauses = new Set<string>(NEW_CLARIFY_TRIGGER_CAUSES)
   const following = await selection.familyHistory(taskId, family, { after: anchor })
-  const upper = following.find(
-    (row) => row.rerunCause !== null && triggerCauses.has(row.rerunCause),
-  )
+  const upper = following.find((row) => row.rerunCause != null && triggerCauses.has(row.rerunCause))
   const history = await selection.familyHistory(taskId, family, {
     from: anchor,
     topLevelOnly: true,
@@ -34,4 +32,8 @@ export async function resolveHandlerRunHistory(
   return freshest === undefined
     ? null
     : { status: freshest.status, startedAt: freshest.startedAt, hasOutput: freshest.hasOutput }
+}
+
+export function resolveHandlerRun(input: ResolveHandlerInput) {
+  return resolveHandlerRunHistory(createRunHistorySnapshot('', input.runs), '', input)
 }

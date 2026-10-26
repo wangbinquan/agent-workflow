@@ -1,4 +1,4 @@
-// RFC-395 I-a: explicit epoch-1 schema contributions; no physical or runtime change.
+// RFC-395 activation: this context declares the live epoch-2 schema directly.
 import {
   column as c,
   defineContribution,
@@ -320,13 +320,20 @@ const recoveryEventsDefinition = owner.table({
 
 export const recoveryEvents = materializeDrizzle(recoveryEventsDefinition).table
 
-export const schemaContribution = owner.contribution([
-  applicationConfigurationDefinition,
-  hostedDatabaseBackupsDefinition,
-  hostedExecutionControlDefinition,
-  lifecycleAlertsDefinition,
-  lifecycleRepairAuditDefinition,
-  maintenanceRunsDefinition,
-  maintenanceStateDefinition,
-  recoveryEventsDefinition,
-])
+export const schemaContribution = {
+  owner: 'system-operations',
+  version: 1,
+  columnUniqueNulls: [
+    { table: 'hosted_database_backups', column: 'active_slot', nulls: 'distinct' },
+  ],
+  tables: [
+    applicationConfigurationDefinition,
+    hostedDatabaseBackupsDefinition,
+    hostedExecutionControlDefinition,
+    lifecycleAlertsDefinition,
+    lifecycleRepairAuditDefinition,
+    maintenanceRunsDefinition,
+    maintenanceStateDefinition,
+    recoveryEventsDefinition,
+  ],
+} as const

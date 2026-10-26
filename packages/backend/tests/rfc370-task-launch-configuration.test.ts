@@ -1,3 +1,4 @@
+import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 // RFC-370: async launch settings retain the three independent live-read and
 // fallback boundaries. The coordinator must wait after attach and release its
 // lifecycle if runtime resolution fails. Standalone sync entry points remain.
@@ -408,6 +409,7 @@ describeEachProvider('RFC-370 launch configuration adapters', (harness) => {
               attachment: {
                 intentKind: 'launch',
                 execution: createTaskExecutionContext({
+                  historyRestrictions: epoch2RuntimeTestPorts(harness.db).historyRestrictions,
                   db: harness.db,
                   intentId: request.intentId,
                   token: createOwnershipToken({
@@ -511,6 +513,7 @@ describeEachProvider('RFC-370 launch configuration adapters', (harness) => {
             attachment: {
               intentKind: 'launch',
               execution: createTaskExecutionContext({
+                historyRestrictions: epoch2RuntimeTestPorts(harness.db).historyRestrictions,
                 db: harness.db,
                 intentId: request.intentId,
                 token: createOwnershipToken({

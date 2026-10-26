@@ -1,3 +1,4 @@
+import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { o2Ports } from './helpers/o2Closure'
 // RFC-370 A4: actual Task diff and S1 repair must await the selected workspace readers.
 import {
@@ -270,11 +271,13 @@ describeEachProvider('RFC-370 Task diff reader policies with real provider rows'
     const repoA = await repository(),
       repoB = await repository()
     const parent = 'cs-workspace:parent',
-      a = 'cs-workspace:a',
-      b = 'cs-workspace:b'
+      a = 'cs-workspace:parent/nested/a',
+      b = 'cs-workspace:parent/b',
+      readonly = 'cs-workspace:parent/readonly'
     const f = mapped(parent, temp())
     f.store.paths.set(a, repoA.root)
     f.store.paths.set(b, repoB.root)
+    f.store.paths.set(readonly, repoB.root)
     const id = await seedTask(provider.db, parent, null)
     await taskRepoFixture(provider.db, [
       {
@@ -298,6 +301,7 @@ describeEachProvider('RFC-370 Task diff reader policies with real provider rows'
         taskId: id,
         repoIndex: 1,
         repoPath: 'empty-base',
+        mountPath: 'empty-base',
         worktreePath: 'empty-base',
         branch: 'task',
         baseCommit: '',
@@ -326,7 +330,7 @@ describeEachProvider('RFC-370 Task diff reader policies with real provider rows'
       release = held<void>()
     let heldFirst = false
     f.store.before = async (call) => {
-      if (!heldFirst && call.method === 'exists' && call.reference === b) {
+      if (!heldFirst && call.method === 'exists' && call.reference === readonly) {
         heldFirst = true
         entered.resolve()
         await release.promise
@@ -337,7 +341,7 @@ describeEachProvider('RFC-370 Task diff reader policies with real provider rows'
       await entered.promise
       expect(f.store.calls.map((call) => [call.method, call.reference])).toEqual([
         ['exists', parent],
-        ['exists', b],
+        ['exists', readonly],
       ])
     } finally {
       release.resolve()
@@ -351,10 +355,10 @@ describeEachProvider('RFC-370 Task diff reader policies with real provider rows'
     expect(result.diff).not.toContain('# === Repo: readonly ===')
     expect(f.store.calls.map((call) => [call.method, call.reference])).toEqual([
       ['exists', parent],
-      ['exists', b],
+      ['exists', readonly],
       ['exists', a],
       ['exists', b],
-      ['isGitWorkTree', b],
+      ['isGitWorkTree', readonly],
       ['isGitWorkTree', a],
       ['isGitWorkTree', b],
       ['gitDiffSnapshot', a],
@@ -366,7 +370,7 @@ describeEachProvider('RFC-370 Task diff reader policies with real provider rows'
   test('multi-repo snapshot ACK, empty diff and original string-length truncation remain intact', async () => {
     const repo = await repository(),
       parent = 'cs-workspace:parent',
-      ref = 'cs-workspace:large'
+      ref = 'cs-workspace:parent/large'
     const f = mapped(parent, temp())
     f.store.paths.set(ref, repo.root)
     const id = await seedTask(provider.db, parent, null)
@@ -523,6 +527,7 @@ describeEachProvider('RFC-370 S1 repair selected isolation reader handoff', (pro
     const appHome = temp(),
       dispatched: string[] = []
     const native = createCollaborationRuntimeMechanics(provider.db, {
+      ...epoch2RuntimeTestPorts(provider.db),
       taskLock: o2Ports(provider.db).taskLock,
       ...{ upstreamAgents: o2Ports(provider.db).upstreamAgents },
     })
@@ -597,7 +602,8 @@ describeEachProvider('RFC-370 S1 repair selected isolation reader handoff', (pro
         'exists',
         'isGitWorkTree',
       ])
-      const { docVersions, lifecycleRepairAudit } = tablesOf(provider.db)
+      const { lifecycleRepairAudit } = tablesOf(provider.db),
+        { docVersions } = tablesOf(provider.db)
       const documents = await provider.db
         .select()
         .from(docVersions)
@@ -649,7 +655,8 @@ describeEachProvider('RFC-370 S1 repair selected isolation reader handoff', (pro
         }),
       ).rejects.toBe(failure)
       expect(f.dispatched).toEqual([])
-      const { lifecycleRepairAudit, docVersions } = tablesOf(provider.db)
+      const { lifecycleRepairAudit } = tablesOf(provider.db),
+        { docVersions } = tablesOf(provider.db)
       expect(
         await provider.db
           .select()

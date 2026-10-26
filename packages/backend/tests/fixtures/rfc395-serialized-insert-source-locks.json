@@ -1,0 +1,52 @@
+{
+  "version": 1,
+  "policy": "Reviewed serializations are separated from unresolved debt. Exact full-source and caller locks fail closed on any edit. Raw AST shape counts remain visible; no new unresolved debt is permitted.",
+  "entries": [
+    {
+      "path": "modules/collaboration/infrastructure/clarifyAnswerWrite.ts",
+      "sha256": "af045cd0e66b5266d1816d7c17a791479d9b4fe4164098ff70b70129f9af6c83",
+      "dependencies": [
+        {
+          "path": "modules/collaboration/infrastructure/clarify/seal.ts",
+          "sha256": "93e3773e7b9698964be0b76a6cdff7be346f4270b606c204ca4f9697c31865d3"
+        }
+      ],
+      "sites": [
+        {
+          "table": "clarifyAnswerDrafts",
+          "line": 95
+        },
+        {
+          "table": "clarifyAnswerAttributions",
+          "line": 120
+        },
+        {
+          "table": "clarifyAnswers",
+          "line": 192
+        }
+      ],
+      "why": "READ COMMITTED saveDraft takes a question-key advisory lock before checking draft/attribution, plus a round ordinal lock before MAX+1. seal takes the exclusive round lock before reading answers; clarify/seal.ts opens the caller transaction. Regressions: rfc395-clarify-target-concurrency.test.ts."
+    },
+    {
+      "path": "modules/task-execution/infrastructure/nodeExecutionPersistence.ts",
+      "sha256": "1898d32d40a7bc13b702586f52c022ffd8ef9718f35fe4272359a8ad40ec4673",
+      "dependencies": [
+        {
+          "path": "modules/task-execution/infrastructure/ownedTaskExecution.ts",
+          "sha256": "ace2f99c8326aa4e2e3b642c0cc5b9664c08e8451df0ddb932c5b97e20d92685"
+        },
+        {
+          "path": "modules/task-execution/infrastructure/nodeRunWriteProtocol.ts",
+          "sha256": "29fb5217fa68405a2ed107f65e188e884bc27450aae593e1bd09d82f9e7a05f0"
+        }
+      ],
+      "sites": [
+        {
+          "table": "nodeRunOutputs",
+          "line": 352
+        }
+      ],
+      "why": "replaceOutputs uses withTaskExecutionWrite (READ COMMITTED), then fencedTaskId: owner fence -> task root -> node-run lock, before reading/deleting/inserting outputs for that nodeRunId. Regressions: rfc395-run-write-atomicity.test.ts."
+    }
+  ]
+}

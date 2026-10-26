@@ -6,79 +6,75 @@ import { resolve } from 'node:path'
 const sites = [
   [
     'modules/task-execution/application/nodeRunPrompt.ts',
-    'legacyPromptNeedsFile',
+    'promptNeedsFile',
     /PROMPT_SPILL_MIN_BYTES/,
   ],
   [
     'modules/task-execution/infrastructure/local/fileNodeRunPromptContent.ts',
-    'legacyPromptPath',
+    'promptPath',
     /join\(taskId, 'prompts'/,
   ],
-  [
-    'modules/task-execution/domain/portArtifacts.ts',
-    'decodeLegacyPortArchive',
-    /JSON\.parse\(raw\)/,
-  ],
+  ['modules/task-execution/domain/portArtifacts.ts', 'decodePortArchive', /JSON\.parse\(raw\)/],
   [
     'modules/task-execution/application/portArtifacts.ts',
-    'legacyContainerPath',
+    'containerPath',
     /join\(mountPath, repoRelPath\)/,
   ],
   [
     'modules/task-execution/infrastructure/taskExecutionReadModels.ts',
-    'legacyPortFallbackMount',
+    'portFallbackMount',
     /const legacyRepoDirName = isSingleRootRepository/,
   ],
   [
     'modules/collaboration/application/prepareReviewGateOpen.ts',
-    'legacyReviewBodyPath',
+    'finalContentKey',
     /`runs\/\$\{input\.taskId\}/,
   ],
   [
     'modules/collaboration/application/reviewArtifactPlan.ts',
-    'legacyReviewStagedPath',
+    'reviewStagedPath',
     /`runs\/\.human-gate-staging\//,
   ],
-  ['modules/collaboration/infrastructure/review.ts', 'legacyReviewBodyPath', /writeFileSync\(/],
-  ['platform/background/eventsArchiveReader.ts', 'legacyEventArchivePath', /join\(logsDir, taskId/],
+  ['modules/collaboration/infrastructure/review.ts', 'reviewBodyPath', /writeFileSync\(/],
+  ['platform/background/eventsArchiveReader.ts', 'eventArchivePath', /join\(logsDir, taskId/],
   [
     'platform/persistence/sqlite/systemEventsArchive.ts',
-    'legacyEventArchivePath',
+    'eventArchivePath',
     /join\(logsDir, taskId/,
   ],
   [
     'modules/task-execution/infrastructure/crewstation/nodeEventArchive.ts',
-    'legacyEventArchiveChunkPath',
+    'eventArchiveChunkPath',
     /`aw-event-archive:/,
   ],
   [
     'modules/resource-catalog/infrastructure/databaseSkillContent.ts',
-    'decodeLegacySkillStagingPath',
+    'decodeSkillStagingPath',
     /STAGING_REFERENCE/,
   ],
   [
     'modules/task-execution/composition/nodeMechanics.ts',
-    'legacyPortFallbackMount',
+    'portFallbackMount',
     /state\.repos\[0\]\?\.mountPath \?\? ''/,
   ],
   [
     'modules/task-execution/infrastructure/local/filePortArtifactContent.ts',
-    'legacyPortArchiveTaskRoot',
+    'portArchiveTaskRoot',
     /resolve\(appHome, 'runs', taskId, 'ports'\)/,
   ],
   [
     'modules/task-execution/infrastructure/crewstation/taskArchiveContent.ts',
-    'isLegacyHostedArchiveTemporary',
+    'isHostedArchiveTemporary',
     /cs-archive:/,
   ],
   [
     'modules/resource-catalog/infrastructure/crewstation/pluginGenerations.ts',
-    'isLegacyHostedPluginReference',
+    'isHostedPluginReference',
     /startsWith\('cs-plugin:'/,
   ],
   [
     'modules/resource-catalog/infrastructure/crewstation/pluginPublication.ts',
-    'isLegacyHostedPluginReference',
+    'isHostedPluginReference',
     /startsWith\('cs-plugin:'/,
   ],
 ] as const
@@ -106,7 +102,7 @@ test('negative controls detect a lost codec call and restored prompt location fo
     'codec missing',
     'legacy formula outside codec',
   ])
-  expect(violations(sites[1][0], "legacyPromptPath; join(taskId, 'prompts', run)")).toEqual([
+  expect(violations(sites[1][0], "promptPath; join(taskId, 'prompts', run)")).toEqual([
     'legacy formula outside codec',
   ])
   const inline = [
@@ -143,4 +139,44 @@ test('skill port bytes and explicit text projection cannot silently become strin
   )
   expect(source).toContain("policy.textBom === 'strip'")
   expect('readonly content: string').toMatch(/readonly (?:mainContent|content|main): string/)
+})
+
+test('target content adapters never reintroduce text-encoded skill bytes or the old publication table', () => {
+  const trees = readFileSync(
+    resolve(
+      import.meta.dir,
+      '../../src/modules/resource-catalog/infrastructure/databaseSkillTrees.ts',
+    ),
+    'utf8',
+  )
+  expect(trees).toContain('contentRefColumns')
+  expect(trees).toContain('readDatabaseContent')
+  expect(trees).not.toMatch(/row\.encoding|row\.content\b|toString\('base64'\)/)
+  const publications = readFileSync(
+    resolve(
+      import.meta.dir,
+      '../../src/modules/system-operations/infrastructure/crewstation/objectPublications.ts',
+    ),
+    'utf8',
+  )
+  expect(publications).toContain('contentPublications: hostedObjectPublications')
+  expect(publications).not.toMatch(/\{ hostedObjectPublications \} = tablesOf/)
+  const boot = readFileSync(
+    resolve(
+      import.meta.dir,
+      '../../src/modules/resource-catalog/infrastructure/skillCatalogBootAdapter.ts',
+    ),
+    'utf8',
+  )
+  expect(boot).toContain('recoverSkillOperations(input.db, selected, SKILL_OP_RECOVERY_REGISTRY)')
+  expect(boot).not.toContain('runSkillIdentityMigrationBarrier')
+  expect(boot).not.toContain('backfillLegacySkillVersions')
+  const versions = readFileSync(
+    resolve(
+      import.meta.dir,
+      '../../src/modules/resource-catalog/infrastructure/legacy/skillVersion.ts',
+    ),
+    'utf8',
+  )
+  expect(versions).not.toMatch(/\bawait\s+ensureInitialSkillVersion\(/)
 })

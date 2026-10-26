@@ -271,7 +271,11 @@ test('HTTP callers forward selected workspace and package owners into the neutra
       'resourcePackageSkillContent',
       'workspaceContent',
     ])
-      expect(compact(property(selection, source, key), source)).toBe(`${receiver}.${key}`)
+      expect(compact(property(selection, source, key), source)).toBe(
+        key === 'resourcePackageSkillContent'
+          ? `${receiver}.${key}??skillContent.packageContent`
+          : `${receiver}.${key}`,
+      )
   }
 })
 

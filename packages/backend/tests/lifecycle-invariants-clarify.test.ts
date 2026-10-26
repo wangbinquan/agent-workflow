@@ -1,3 +1,4 @@
+import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { o2Ports } from './helpers/o2Closure'
 // RFC-053 PR-D — invariant C1 (clarify_session ↔ clarify node_run).
 //
@@ -120,6 +121,7 @@ describeEachProvider(
       await insertClarifySession(h.db, h.taskId, { clarifyNodeRunId: run, status: 'answered' })
       const result = await runLifecycleInvariants({
         operations: createTaskExecutionPersistence(h.db, {
+          historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
           recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
         }).recoveryAdministration,
         scope: { taskId: h.taskId },
@@ -133,6 +135,7 @@ describeEachProvider(
       await insertClarifySession(h.db, h.taskId, { clarifyNodeRunId: run, status: 'answered' })
       const result = await runLifecycleInvariants({
         operations: createTaskExecutionPersistence(h.db, {
+          historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
           recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
         }).recoveryAdministration,
         scope: { taskId: h.taskId },
@@ -149,6 +152,7 @@ describeEachProvider(
       })
       const result = await runLifecycleInvariants({
         operations: createTaskExecutionPersistence(h.db, {
+          historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
           recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
         }).recoveryAdministration,
         scope: { taskId: h.taskId },
@@ -166,6 +170,7 @@ describeEachProvider(
       })
       const result = await runLifecycleInvariants({
         operations: createTaskExecutionPersistence(h.db, {
+          historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
           recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
         }).recoveryAdministration,
         scope: { taskId: h.taskId },
@@ -189,6 +194,7 @@ describeEachProvider(
       })
       const result = await runLifecycleInvariants({
         operations: createTaskExecutionPersistence(h.db, {
+          historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
           recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
         }).recoveryAdministration,
         scope: { taskId: h.taskId },
@@ -202,6 +208,7 @@ describeEachProvider(
       await insertClarifySession(h.db, h.taskId, { clarifyNodeRunId: run, status: 'answered' })
       const r1 = await runLifecycleInvariants({
         operations: createTaskExecutionPersistence(h.db, {
+          historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
           recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
         }).recoveryAdministration,
         scope: { taskId: h.taskId },
@@ -210,6 +217,7 @@ describeEachProvider(
       await patchNodeRunFixture(h.db, { id: run }, { status: 'done', finishedAt: Date.now() })
       const r2 = await runLifecycleInvariants({
         operations: createTaskExecutionPersistence(h.db, {
+          historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
           recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
         }).recoveryAdministration,
         scope: { taskId: h.taskId },

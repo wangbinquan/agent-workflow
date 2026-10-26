@@ -1,5 +1,5 @@
 import { createNodeOutputQueries } from '@/modules/task-execution/public/queries'
-import { decodeLegacyClarifyAnswerColumns } from './clarifyAnswerCodec'
+import { readClarifyAnswerProjection } from './clarifyAnswerQueries'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { and, asc, desc, eq, inArray, isNotNull } from 'drizzle-orm'
 import { ClarifyAnswerSchema, ClarifyQuestionSchema } from '@agent-workflow/shared'
@@ -8,15 +8,22 @@ import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { engineOf } from '@/platform/persistence/databaseTransaction'
 import { sha256Hex } from '@/util/hash'
 import type { CollaborationHumanInputQueries } from '../public/types'
-import type { CommittedReviewArtifactReader } from '../application/ports/committedReviewArtifactReader'
-import { readDocVersionBody, rowToDocVersion } from './review'
+import type { ContentStore } from '@/platform/content/contentStore'
+import { readCommittedReviewDocumentContent } from './humanGateOperationJournal'
 
 export function createCommittedHumanInputQueries(input: {
   readonly db: PersistenceDb
-  readonly appHome: string
-  readonly reviewReader?: CommittedReviewArtifactReader
+  readonly content: Pick<ContentStore, 'read'>
 }): CollaborationHumanInputQueries {
   const { db } = input
+  const readBody = async (row: {
+    contentRefJson: string
+    contentInlineBytes: Uint8Array | null
+  }) => {
+    return Buffer.from(await readCommittedReviewDocumentContent(db, input.content, row)).toString(
+      'utf8',
+    )
+  }
   return {
     async clarificationRounds(taskId) {
       const { clarifyRounds } = tablesOf(db)
@@ -25,23 +32,26 @@ export function createCommittedHumanInputQueries(input: {
         .from(clarifyRounds)
         .where(eq(clarifyRounds.taskId, taskId))
         .orderBy(asc(clarifyRounds.createdAt), asc(clarifyRounds.id))
-      return rows.map((row) => ({
-        id: row.id,
-        taskId: row.taskId,
-        askingNodeRunId: row.askingNodeRunId,
-        intermediaryNodeRunId: row.intermediaryNodeRunId,
-        status: row.status,
-        questions: z.array(ClarifyQuestionSchema).parse(JSON.parse(row.questionsJson)),
-        answers:
-          row.status === 'answered' && row.answersJson !== null
-            ? z
-                .array(ClarifyAnswerSchema)
-                .parse(decodeLegacyClarifyAnswerColumns(row).requireAnswers())
-            : [],
-      }))
+      return Promise.all(
+        rows.map(async (row) => ({
+          id: row.id,
+          taskId: row.taskId,
+          askingNodeRunId: row.askingNodeRunId,
+          intermediaryNodeRunId: row.intermediaryNodeRunId,
+          status: row.status,
+          questions: z.array(ClarifyQuestionSchema).parse(JSON.parse(row.questionsJson)),
+          answers:
+            row.status === 'answered' && (row.answersRecorded || row.legacyAnswersJson !== null)
+              ? z
+                  .array(ClarifyAnswerSchema)
+                  .parse((await readClarifyAnswerProjection(db, row)).requireAnswers())
+              : [],
+        })),
+      )
     },
     async reviewDecision(taskId, nodeRunId) {
-      const { collaborationGateOperations, docVersions } = tablesOf(db)
+      const { collaborationGateOperations } = tablesOf(db)
+      const { docVersions } = tablesOf(db)
       const operations = await db
         .select()
         .from(collaborationGateOperations)
@@ -93,9 +103,7 @@ export function createCommittedHumanInputQueries(input: {
         for (const entry of metadata.documents) {
           const row = rows.find((row) => row.id === entry.docVersionId)
           if (!row || row.decision !== metadata.decision) return null
-          const digest = sha256Hex(
-            await readDocVersionBody(db, input.appHome, rowToDocVersion(row), input.reviewReader),
-          )
+          const digest = sha256Hex(await readBody(row))
           if (digest !== entry.contentDigest) return null
           digests.push(digest)
         }
@@ -130,11 +138,7 @@ export function createCommittedHumanInputQueries(input: {
           .filter(Boolean)
           .join('\n\n'),
         documentDigests: await Promise.all(
-          round.map(async (row) =>
-            sha256Hex(
-              await readDocVersionBody(db, input.appHome, rowToDocVersion(row), input.reviewReader),
-            ),
-          ),
+          round.map(async (row) => sha256Hex(await readBody(row))),
         ),
       }
     },

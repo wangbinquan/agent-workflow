@@ -45,22 +45,19 @@ describe('单二进制上的迁移目录解析', () => {
     ).toEqual([])
   })
 
-  test('cli/ 下每个开库的模块都经由 resolveMigrationsFolder 拿路径', () => {
-    // 判据从源码派生，不维护名单：凡是调用 openDb 的 CLI 模块都得走解析器。
-    const openers = FILES.filter((f) => rel(f.path).startsWith('cli/') && /\bopenDb\(/.test(f.text))
-    expect(
-      openers.length,
-      'cli/ 下一个 openDb 调用都扫不到 ⇒ 这条判据在空转（改名了？换 import 了？）',
-    ).toBeGreaterThan(0)
-    const missing = openers
-      .filter((f) => !f.text.includes('resolveMigrationsFolder'))
-      .map((f) => rel(f.path))
-      .sort()
-    expect(
-      missing,
-      '这些 CLI 命令自己拼迁移目录 ⇒ 只要有人漏抄那段 IS_EMBEDDED 前置，' +
-        '该命令在发行版上就是死的，而在源码树上跑的单测全绿',
-    ).toEqual([])
+  test('CLI database entry points use the installed epoch-2 runtime and never a numbered migration folder', () => {
+    const cli = FILES.filter((f) => rel(f.path).startsWith('cli/'))
+    expect(cli.length).toBeGreaterThan(0)
+    expect(cli.filter((f) => /\bopenDb\(/.test(f.text)).map((f) => rel(f.path))).toEqual([])
+    expect(cli.filter((f) => /migrationsFolder:/.test(f.text)).map((f) => rel(f.path))).toEqual([])
+    const report = cli.find((f) => rel(f.path) === 'cli/migrationReport.ts')!
+    expect(report.text).toContain('resolveDatabaseProviderRuntime')
+    const entry = FILES.find((f) => rel(f.path) === 'bootstrap/migrate.ts')!
+    expect(entry.text).toContain('prepareManualDatabaseMigration')
+    const preparation = FILES.find(
+      (f) => rel(f.path) === 'modules/system-operations/composition/manualDatabaseMigration.ts',
+    )!
+    expect(preparation.text).toContain('prepareDatabaseProviderForBoot')
   })
 
   test('那段 IS_EMBEDDED 解包前置只剩解析器一份实现', () => {

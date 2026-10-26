@@ -1,3 +1,4 @@
+import { registerContentObjectInTx } from '@/platform/content/infrastructure/contentStore'
 // RFC-370 v3 V5 — hosted database backups and their catalog. Locks: a backup
 // is one archive published through the neutral journal in the transaction that
 // makes the catalog row ready; workspaces are refused (C10); prune and failure
@@ -26,7 +27,7 @@ import {
   hostedPublicationId,
 } from '@/modules/system-operations/infrastructure/crewstation/objectPublications'
 import type { PostgresqlLogicalSource } from '@/platform/persistence/postgresqlLogicalSource'
-import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { describeEachProvider } from './helpers/eachProvider'
 import { objectFixture } from './helpers/rfc370Objects'
 
@@ -51,7 +52,7 @@ describeEachProvider('RFC-370 hosted database backups', (harness) => {
       now: () => timestamp,
     })
     const directories: string[] = []
-    const contract = buildLogicalSchemaContract()
+    const contract = logicalSchemaContract
     const backups = createHostedDatabaseBackups({
       db: harness.db,
       fence,
@@ -112,12 +113,12 @@ describeEachProvider('RFC-370 hosted database backups', (harness) => {
         return harness.db.select().from(hostedDatabaseBackups)
       },
       publication: async (id: string) => {
-        const { hostedObjectPublications } = tablesOf(harness.db)
+        const { contentPublications } = tablesOf(harness.db)
         return (
           await harness.db
             .select()
-            .from(hostedObjectPublications)
-            .where(eq(hostedObjectPublications.id, hostedPublicationId(HOSTED_BACKUP_OWNER, id)))
+            .from(contentPublications)
+            .where(eq(contentPublications.id, hostedPublicationId(HOSTED_BACKUP_OWNER, id)))
         )[0]
       },
     }
@@ -145,7 +146,7 @@ describeEachProvider('RFC-370 hosted database backups', (harness) => {
       objectId: object.id,
       sha256: object.sha256,
       sizeBytes: object.size,
-      schemaDigest: buildLogicalSchemaContract().digest,
+      schemaDigest: logicalSchemaContract.digest,
       sourceGenerationId: 'dbg_hosted_backup_test',
     })
     expect(JSON.parse(row!.contentsJson!)).toEqual({ workflows: 3, skills: 2 })
@@ -186,7 +187,8 @@ describeEachProvider('RFC-370 hosted database backups', (harness) => {
     const restoreSource = '01a13e6d-3e00-7000-9e3c-0000000000d1'
     const f = fixture({ protectedIds: [restoreSource] })
     const ready = async (id: string, kind: 'manual' | 'scheduled', createdAt: number) => {
-      const { hostedDatabaseBackups, hostedObjectPublications } = tablesOf(harness.db)
+      const { hostedDatabaseBackups } = tablesOf(harness.db)
+      const { contentPublications } = tablesOf(harness.db)
       await insertOne(harness.db, hostedDatabaseBackups, {
         id,
         epoch: 1,
@@ -202,7 +204,21 @@ describeEachProvider('RFC-370 hosted database backups', (harness) => {
         createdAt,
         updatedAt: createdAt,
       })
-      await insertOne(harness.db, hostedObjectPublications, {
+      await registerContentObjectInTx(
+        harness.db,
+        {
+          version: 1,
+          kind: 'object',
+          location: { codec: 'hosted-object-id', value: '01a13e6d-3e00-7000-9e3c-0000000000ff' },
+          contentId: `backup-content:${id}`,
+          contentVersion: 1,
+          sha256: 'a'.repeat(64),
+          size: 10,
+          mediaType: null,
+        },
+        createdAt,
+      )
+      await insertOne(harness.db, contentPublications, {
         id: hostedPublicationId(HOSTED_BACKUP_OWNER, id),
         owner: HOSTED_BACKUP_OWNER,
         logicalKey: id,
@@ -210,7 +226,7 @@ describeEachProvider('RFC-370 hosted database backups', (harness) => {
         state: 'ready',
         sha256: 'a'.repeat(64),
         size: 10,
-        objectId: '01a13e6d-3e00-7000-9e3c-0000000000ff',
+        contentId: `backup-content:${id}`,
         epoch: 1,
         createdAt,
         updatedAt: createdAt,

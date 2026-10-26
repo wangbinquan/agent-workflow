@@ -18,8 +18,8 @@ export function createHostedSystemRestoreNormalization(input: {
   return {
     name: 'system-operations',
     async normalize(tx: PersistenceDb, { now }) {
-      const { hostedExecutionControl, hostedDatabaseBackups, hostedObjectPublications } =
-        tablesOf(tx)
+      const { hostedExecutionControl, hostedDatabaseBackups } = tablesOf(tx)
+      const { contentPublications: hostedObjectPublications } = tablesOf(tx)
       // The restored database starts without execution authority.
       const control = await tx
         .update(hostedExecutionControl)

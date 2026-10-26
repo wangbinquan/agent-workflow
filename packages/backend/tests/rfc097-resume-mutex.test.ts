@@ -27,14 +27,14 @@ import {
   workflowFixture,
   readNodeRunFixtures,
 } from './helpers/model'
-import { type PersistenceTables } from '@/platform/persistence/sessionTables'
-import type { WorkflowDefinition } from '@agent-workflow/shared'
+import type { PersistenceTables } from '@/platform/persistence/sessionTables'
+import type { WorkflowDefinition, Task } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 
 import { createRetryEngine } from './helpers/retryEngine'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { cancelViaEngine } from './helpers/cancelEngine'
@@ -42,9 +42,6 @@ import { runGit } from '../src/util/git'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
 import { createResumeEngine } from './helpers/resumeEngine'
-import type { Task } from '@agent-workflow/shared'
-
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 // ---- 自写 mock opencode（复刻 rfc095-wrapper-canceled-revival 的 text-event +
 // <workflow-output> 封皮；零 env 依赖，行为只由脚本本体决定）。每次调用向
@@ -129,7 +126,7 @@ async function buildHarness(): Promise<Harness> {
   writeFileSync(failMock, buildFailMock(ctrlDir))
   writeFileSync(slowMock, buildSlowMock(ctrlDir))
 
-  const db = createInMemoryDb(MIGRATIONS)
+  const db = createInMemoryDb()
   const workerId = ulid()
   await agentFixture(db, {
     id: workerId,

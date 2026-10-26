@@ -300,18 +300,20 @@ describe('RFC-339 WrapperRuntime cutover', () => {
     const selectionFilters: Record<string, readonly [RegExp, number]> = {
       'packages/backend/src/modules/task-execution/infrastructure/nodeRunQueries.ts': [
         /\binput\.nodeIds\b/g,
-        3,
-      ],
-      'packages/backend/src/modules/task-execution/infrastructure/runSelection/oracle/pickers.ts': [
-        /\bfamily\.nodeIds\b/g,
-        2,
+        4,
       ],
     }
     const rawMembershipReaders = tsFilesUnder('packages/backend/src/modules/task-execution').filter(
       (file) => {
         if (file === 'packages/backend/src/modules/task-execution/domain/executionScope.ts')
           return false
-        let source = read(file)
+        // Frozen conversion reconstructs historical containment; runtime queries only filter node IDs.
+        if (
+          file.includes('/infrastructure/migration/') ||
+          file.endsWith('/domain/runSelection/legacyIdentity.ts')
+        )
+          return false
+        let source = read(file).replace(/\bfamily\.nodeIds\b/g, '')
         const queryField = selectionFilters[file]
         if (queryField !== undefined) {
           const [field, count] = queryField
@@ -479,7 +481,9 @@ describe('RFC-339 WrapperRuntime cutover', () => {
 
     const productionSources = tsFilesUnder('packages/backend/src')
     const containing = (needle: string): string[] =>
-      productionSources.filter((path) => read(path).includes(needle))
+      productionSources.filter(
+        (path) => !path.includes('/infrastructure/migration/') && read(path).includes(needle),
+      )
     expect(containing('composeTaskExecutionRuntime(')).toEqual([
       'packages/backend/src/modules/task-execution/composition/providerRuntime.ts',
       'packages/backend/src/modules/task-execution/composition/runtimeAssembly.ts',

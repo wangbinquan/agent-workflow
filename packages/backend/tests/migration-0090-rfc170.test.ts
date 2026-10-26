@@ -1,7 +1,7 @@
 // RFC-170 T1 — locks migration 0090 (skills storage/ACL hardening schema).
 //
 // Two concerns:
-//   1. The migration APPLIES cleanly (createInMemoryDb runs 0000..0090) and the
+//   1. The migration APPLIES cleanly (createFrozenEpoch1Db runs 0000..0090) and the
 //      new columns/tables/defaults/constraints are present — schema shape +
 //      CHECK (kind/active), partial-unique (one active op per skill), and the
 //      skill_operation_locks PK exclusion.
@@ -14,25 +14,29 @@
 // If this reds, RFC-170 §10 migration is broken — everything in batch B builds
 // on these columns being present + correctly backfilled.
 
+import {
+  frozenTablesOf,
+  migrateFrozenSqlite as migrate,
+  createFrozenEpoch1Db,
+  type FrozenDbClient,
+  FROZEN_MIGRATIONS,
+} from './migration-freeze'
 import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
 import { describe, expect, test, beforeEach, afterEach } from 'bun:test'
 import { Database } from 'bun:sqlite'
 import { drizzle } from 'drizzle-orm/bun-sqlite'
-import { migrate } from 'drizzle-orm/bun-sqlite/migrator'
 import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+const MIGRATIONS = resolve(FROZEN_MIGRATIONS)
 
-function cols(db: DbClient, table: string): string[] {
+function cols(db: FrozenDbClient, table: string): string[] {
   return (db.$client.query(`PRAGMA table_info('${table}')`).all() as { name: string }[]).map(
     (c) => c.name,
   )
 }
-function tables(db: DbClient): string[] {
+function tables(db: FrozenDbClient): string[] {
   return (
     db.$client.query("SELECT name FROM sqlite_master WHERE type='table'").all() as {
       name: string
@@ -41,9 +45,9 @@ function tables(db: DbClient): string[] {
 }
 
 describe('migration 0090 (RFC-170 skills storage/ACL) — schema + constraints', () => {
-  let db: DbClient
+  let db: FrozenDbClient
   beforeEach(() => {
-    db = createInMemoryDb(MIGRATIONS)
+    db = createFrozenEpoch1Db(MIGRATIONS)
   })
 
   test('six ACL tables gained acl_revision (default 0)', () => {
@@ -89,7 +93,7 @@ describe('migration 0090 (RFC-170 skills storage/ACL) — schema + constraints',
 
   test('skill_operations partial-unique: two ACTIVE ops for one skill rejected, but active+inactive OK', () => {
     const skillId = ulid()
-    const { skillOperations } = tablesOf(db)
+    const { skillOperations } = frozenTablesOf(db)
     insertOne(db, skillOperations, { opId: ulid(), skillId, kind: 'delete', phase: 'intent' })
     // Second active op on the same skill → violates uq_skill_operations_active.
     expect(() => {
@@ -147,7 +151,7 @@ describe('migration 0090 (RFC-170) — backfill derivation', () => {
     writeFileSync(journalPath, JSON.stringify(journal))
 
     sqlite = new Database(':memory:')
-    sqlite.exec('PRAGMA foreign_keys = OFF') // match openDb: 12-step migrations
+    sqlite.exec('PRAGMA foreign_keys = OFF') // match openFrozenEpoch1Db: 12-step migrations
     migrate(drizzle(sqlite), { migrationsFolder: tmp })
     raw = sqlite
   })

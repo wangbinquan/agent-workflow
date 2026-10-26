@@ -1,11 +1,15 @@
+import { projectTaskMountReadRow } from './taskRepositorySql'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { taskAggregateWrite } from './taskDefinitionWriteParticipant'
+import { taskMountReadColumns, taskReadColumns } from './taskRepositorySql'
 // RFC-359 W4-B1 —— TaskEngine drive 快照读取 + 工作区 profile 更新：一份实现，两个 provider 共用。
 
+import { first } from '@/platform/persistence/queryHelpers'
+
+import { and, asc, eq } from 'drizzle-orm'
+import { taskSubjectFromDefinition } from '../domain/taskSubject'
 import { projectStoredTaskRepositorySurface } from './taskRepositorySurface'
 import { taskWorkgroupConfigFromRow } from './taskWorkgroupConfig'
-import { decodeTaskSubject } from '../domain/taskSubject'
-import { tablesOf } from '@/platform/persistence/sessionTables'
-import { first } from '@/platform/persistence/queryHelpers'
-import { and, asc, eq } from 'drizzle-orm'
 
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 
@@ -13,21 +17,25 @@ import type {
   TaskEngineApplicationPersistence,
   TaskEngineDriveSnapshot,
 } from '../application/ports/taskEngineApplicationPersistence'
-import { decodeTaskRepositoryMount } from './taskRepositoryCodec'
 import { fenceTaskWrite, withTaskExecutionWrite } from './ownedTaskExecution'
+import { decodeTaskRepositoryMount } from './taskRepositoryCodec'
 
 export class DrizzleTaskEngineApplicationPersistence implements TaskEngineApplicationPersistence {
   constructor(private readonly db: PersistenceDb) {}
 
   async load(taskId: string): Promise<TaskEngineDriveSnapshot | null> {
-    const { tasks, taskRepos, taskCollaborators } = tablesOf(this.db)
-    const task = await first(this.db.select().from(tasks).where(eq(tasks.id, taskId)).limit(1))
+    const { taskCollaborators } = tablesOf(this.db)
+    const { tasks, taskRepositoryMounts: taskRepos } = tablesOf(this.db)
+    const task = await first(
+      this.db.select(taskReadColumns(this.db)).from(tasks).where(eq(tasks.id, taskId)).limit(1),
+    )
     if (task === undefined) return null
     const repositories = await this.db
-      .select()
+      .select(taskMountReadColumns(this.db))
       .from(taskRepos)
       .where(eq(taskRepos.taskId, taskId))
-      .orderBy(asc(taskRepos.repoIndex))
+      .orderBy(asc(taskRepos.ordinal))
+      .then((rows) => rows.map(projectTaskMountReadRow))
     const collaborators = await this.db
       .select({ userId: taskCollaborators.userId, role: taskCollaborators.role })
       .from(taskCollaborators)
@@ -42,7 +50,7 @@ export class DrizzleTaskEngineApplicationPersistence implements TaskEngineApplic
       task: {
         ...task,
         ...repository,
-        subject: decodeTaskSubject(task),
+        subject: taskSubjectFromDefinition(task),
         workgroupConfig: taskWorkgroupConfigFromRow(task),
       },
       repositories: mounts,
@@ -70,15 +78,16 @@ export class DrizzleTaskEngineApplicationPersistence implements TaskEngineApplic
         context: input.executionContext,
         now: input.now,
       })
-      const { taskRepos } = tablesOf(transaction)
+      await taskAggregateWrite.lockTaskAggregateRoot(transaction, input.taskId)
+      const { taskRepositoryMounts: taskRepos } = tablesOf(transaction)
       const rows = await transaction
         .update(taskRepos)
         .set({
           workspaceProfileVersion: input.version,
           workspaceProfileDigest: input.digest,
         })
-        .where(and(eq(taskRepos.taskId, input.taskId), eq(taskRepos.repoIndex, input.repoIndex)))
-        .returning({ repoIndex: taskRepos.repoIndex })
+        .where(and(eq(taskRepos.taskId, input.taskId), eq(taskRepos.ordinal, input.repoIndex)))
+        .returning({ repoIndex: taskRepos.ordinal })
       return rows.length === 1
     })
   }

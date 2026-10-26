@@ -1,3 +1,4 @@
+import { tablesOf } from '@/platform/persistence/sessionTables'
 // RFC-243 PR-1 — 启动调用面 / 引擎分派 / 终态守望的源码锁。
 //
 // **RFC-359 AC-1（plan §5hn 批次二 ⑦）：`services/execution/executor.ts` 整份删除。**
@@ -21,16 +22,14 @@
 //      deleted after registration; abort resolves 'aborted'.
 
 import { decodeTaskWorkgroupConfig } from '@/modules/task-execution/public/queries'
-import { taskFixture, workflowFixture } from './helpers/model'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
+import type { TaskStatus } from '@agent-workflow/shared'
 import { afterEach, describe, expect, test } from 'bun:test'
+import { eq } from 'drizzle-orm'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { ulid } from 'ulid'
-import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { describeEachProvider } from './helpers/eachProvider'
-import { eq } from 'drizzle-orm'
-import { setTaskStatus, trySetTaskStatus } from '../src/services/lifecycle'
+import type { Actor } from '../src/auth/actor'
 import { resolveTaskEngineSelection as resolveTaskEngine } from '../src/modules/task-execution/engine/task/taskEngineRegistry'
 import { createTaskExecutionLaunchParticipant } from '../src/modules/task-execution/infrastructure/taskRouteLaunchOperations'
 import {
@@ -38,8 +37,9 @@ import {
   resetTaskTerminalWatchersForTests,
   watchTaskTerminal,
 } from '../src/services/execution/executionWatch'
-import type { Actor } from '../src/auth/actor'
-import type { TaskStatus } from '@agent-workflow/shared'
+import { setTaskStatus, trySetTaskStatus } from '../src/services/lifecycle'
+import { describeEachProvider } from './helpers/eachProvider'
+import { taskFixture, workflowFixture } from './helpers/model'
 import { installTaskLifecycleAfterCommitTestPump } from './helpers/taskLifecycleCommittedEvents'
 
 const SRC = resolve(import.meta.dir, '..', 'src')

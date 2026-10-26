@@ -1,12 +1,11 @@
-import { rawRows } from '@/platform/persistence/queryHelpers'
+import { createFrozenEpoch1Db, FROZEN_MIGRATIONS as MIGRATIONS } from './migration-freeze'
+import { frozenRawRows as rawRows } from './migration-freeze'
 import { describe, expect, test } from 'bun:test'
 import { sql } from 'drizzle-orm'
-import { createInMemoryDb } from '../src/db/client'
-import { MIGRATIONS } from './migration-freeze'
 
 describe('migration 0173 — RFC-308 workspace profile hard cut', () => {
   test('drops gitignore preset receipt and adds platform profile receipt', () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createFrozenEpoch1Db(MIGRATIONS)
     const columns = rawRows<{ name: string; notnull: number }>(
       db,
       sql`SELECT name, "notnull" FROM pragma_table_info('task_repos')`,

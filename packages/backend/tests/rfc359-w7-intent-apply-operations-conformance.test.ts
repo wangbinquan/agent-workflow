@@ -59,7 +59,9 @@ import type {
   IntentApplyInput,
   IntentApplyReceipt,
 } from '@/modules/intent/application/ports/intentApplyOperations'
-import type { IntentJournalArtifactV1 } from '@/modules/intent/infrastructure/intentApplyLegacyCodec'
+import type { IntentApplyArtifact as IntentJournalArtifactV1 } from '@/modules/resource-catalog/public/types'
+import { intentApplyArtifactCodecs } from '@/modules/intent/infrastructure/intentApplyArtifactCodec'
+import { reencodeIntentApplyArtifacts } from '@/modules/intent/infrastructure/migration/applyJournalRule'
 import {
   createIntentApplyEngine,
   type ApplyIntentFaults,
@@ -573,7 +575,7 @@ describeEachProvider('RFC-359 W7 Intent apply 编排 · 共同子集', (harness)
     })
     const prepared = await seedJournal(harness, fixture, {
       state: 'prepared',
-      preparedArtifactsJson: JSON.stringify([AGENT_ARTIFACT]),
+      preparedArtifactsJson: intentApplyArtifactCodecs.encode([AGENT_ARTIFACT]),
     })
 
     const recorder = recordingLog()
@@ -592,11 +594,11 @@ describeEachProvider('RFC-359 W7 Intent apply 编排 · 共同子集', (harness)
     const port = applyPortFor(harness)
     const stale = await seedJournal(harness, fixture, {
       state: 'applying',
-      preparedArtifactsJson: '[]',
+      preparedArtifactsJson: intentApplyArtifactCodecs.encode([]),
     })
     const fresh = await seedJournal(harness, fixture, {
       state: 'prepared',
-      preparedArtifactsJson: '[]',
+      preparedArtifactsJson: intentApplyArtifactCodecs.encode([]),
       fresh: true,
     })
 
@@ -614,7 +616,7 @@ describeEachProvider('RFC-359 W7 Intent apply 编排 · 共同子集', (harness)
     const port = applyPortFor(harness, { rollForward: async () => true })
     const committed = await seedJournal(harness, fixture, {
       state: 'committed',
-      preparedArtifactsJson: JSON.stringify([AGENT_ARTIFACT]),
+      preparedArtifactsJson: intentApplyArtifactCodecs.encode([AGENT_ARTIFACT]),
       error: 'retryable: committed roll-forward incomplete; inspect intent apply logs',
     })
 
@@ -629,7 +631,7 @@ describeEachProvider('RFC-359 W7 Intent apply 编排 · 共同子集', (harness)
     const port = applyPortFor(harness, { rollForward: async () => false })
     const committed = await seedJournal(harness, fixture, {
       state: 'committed',
-      preparedArtifactsJson: JSON.stringify([AGENT_ARTIFACT]),
+      preparedArtifactsJson: intentApplyArtifactCodecs.encode([AGENT_ARTIFACT]),
     })
 
     expect(await port.converge(recordingLog().log)).toEqual({ failed: 0, rolledForward: 0 })
@@ -708,10 +710,10 @@ describeEachProvider(
       const stored: unknown = JSON.parse(
         (await journalRow(harness, receipt.journalId))?.preparedArtifactsJson ?? 'null',
       )
-      expect(stored).toEqual([AGENT_ARTIFACT])
+      expect(stored).toEqual({ scene: 'intent', version: 3, artifacts: [AGENT_ARTIFACT] })
     })
 
-    test('①b 合一**之前**写下的带版本号信封仍然读得回来（否则那些行永不终态化）', async () => {
+    test('①b 旧信封先经转换器重编码，再由目标恢复器收敛', async () => {
       // 这是合一必须带的兼容面：一台在合一之前起过的 daemon 留下的未结 journal 行，
       // 其 `prepared_artifacts_json` 是 `{ version: 1, artifacts: [...] }`。收敛器只认裸数组的话，
       // 那些行每小时被判一次 `intent-journal-artifact-corrupt`、**永不终态化**，
@@ -725,7 +727,9 @@ describeEachProvider(
       })
       const journalId = await seedJournal(harness, fixture, {
         state: 'prepared',
-        preparedArtifactsJson: JSON.stringify({ version: 1, artifacts: [AGENT_ARTIFACT] }),
+        preparedArtifactsJson: reencodeIntentApplyArtifacts(
+          JSON.stringify({ version: 1, artifacts: [AGENT_ARTIFACT] }),
+        ),
       })
 
       const recorder = recordingLog()

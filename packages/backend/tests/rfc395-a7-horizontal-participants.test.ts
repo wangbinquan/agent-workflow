@@ -201,7 +201,7 @@ describeEachProvider('RFC-395 II-a A7 horizontal participants', (h) => {
       repoPath: '/mirror',
       repoUrl: 'https://host/repo',
       branch: 'working',
-      baseCommit: 'root-base',
+      baseCommit: 'member-base',
       baseBranch: 'feature',
       cachedRepoId: 'mirror',
     })
@@ -224,8 +224,8 @@ describeEachProvider('RFC-395 II-a A7 horizontal participants', (h) => {
       )
         .map((r) => r.path)
         .sort(),
-      // 与 HEAD 的延迟准备相同：只写 prepared.nodePaths，不推导根与祖先。
-    ).toEqual(['empty'])
+      // T-F6: roots and mount ancestors are stored together with explicit directories.
+    ).toEqual(['', 'empty', 'nested'])
     expect((await readNodeRunFixtures(h.db, { id: 'prep-run' }))[0]?.status).toBe('done')
   })
 
@@ -242,10 +242,10 @@ describeEachProvider('RFC-395 II-a A7 horizontal participants', (h) => {
     expect(await readTaskRepoFixtures(h.db, { taskId: 'prep' })).toEqual([])
     expect((await readNodeRunFixtures(h.db, { id: 'prep-run' }))[0]?.status).toBe('running')
     const { taskSpaceNodes } = tablesOf(h.db)
-    expect(await h.db.select().from(taskSpaceNodes)).toEqual([])
+    expect((await h.db.select().from(taskSpaceNodes)).map((row) => row.nodePath)).toEqual([''])
   })
 
-  test('zero mounts retain the legacy empty primary projection and explicit directories', async () => {
+  test('a newly bound workspace without repositories materializes an ordinal-zero root mount', async () => {
     await pendingPreparation()
     await h.session.transaction(async (tx) => {
       await createTaskPreparationParticipantInTx(tx).writeWorkspace({
@@ -260,6 +260,8 @@ describeEachProvider('RFC-395 II-a A7 horizontal participants', (h) => {
       baseBranch: '',
       repoCount: 1,
     })
-    expect(await readTaskRepoFixtures(h.db, { taskId: 'prep' })).toEqual([])
+    expect(await readTaskRepoFixtures(h.db, { taskId: 'prep' })).toMatchObject([
+      { repoIndex: 0, mountPath: '', worktreePath: '/new-root' },
+    ])
   })
 })

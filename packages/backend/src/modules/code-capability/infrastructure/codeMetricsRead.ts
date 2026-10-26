@@ -1,44 +1,37 @@
-// RFC-359 W12 — one row reader behind the shared code metrics projection.
-
-import { tablesOf } from '@/platform/persistence/sessionTables'
-import { and, count, eq, gte, isNotNull } from 'drizzle-orm'
-import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
+import type { CodeHistoryReader } from '../application/ports/historyReader'
 import type { CodeMetricsReadPort } from '../application/ports/codeMetricsRead'
 
-export function createCodeMetricsRead(db: PersistenceDb): CodeMetricsReadPort {
+export function createCodeMetricsRead(history: CodeHistoryReader): CodeMetricsReadPort {
   return {
     async loadSince(since) {
-      const { codeFindings, codeWorkItems, codeWorkRounds } = tablesOf(db)
-      // Only findings that were actually published count. An unpublished one
-      // was never shown to anyone and cannot be outstanding adoption work.
-      const findings = await db
-        .select({
-          capability: codeFindings.capability,
-          resolvedAt: codeFindings.resolvedAt,
-          codeChangedAt: codeFindings.codeChangedAt,
-        })
-        .from(codeFindings)
-        .where(and(isNotNull(codeFindings.externalId), gte(codeFindings.createdAt, since)))
-
-      const rounds = await db
-        .select({
-          capability: codeWorkItems.capability,
-          outcome: codeWorkRounds.outcome,
-          endedAt: codeWorkRounds.endedAt,
-          // RFC-359 W8 — drizzle's `count()` carries `.mapWith(Number)`; the
-          // bare ``sql<number>`count(*)` `` this replaces carried only the TYPE.
-          // SQLite's driver happens to hand back a JS number so the lie was
-          // invisible here, but PostgreSQL returns `count(*)` as bigint, i.e. a
-          // STRING — and the projection adds these (`counts.rounds += row.n`),
-          // so the /code metrics panel rendered `rounds: "021"` instead of 3.
-          n: count(),
-        })
-        .from(codeWorkRounds)
-        .innerJoin(codeWorkItems, eq(codeWorkRounds.workItemId, codeWorkItems.id))
-        .where(gte(codeWorkRounds.startedAt, since))
-        .groupBy(codeWorkItems.capability, codeWorkRounds.outcome, codeWorkRounds.endedAt)
-
-      return { findings, rounds }
+      const [findings, items, rounds] = await Promise.all([
+        history.rows('code_findings'),
+        history.rows('code_work_items'),
+        history.rows('code_work_rounds'),
+      ])
+      const capabilities = new Map(items.map((item) => [item.id, item.capability]))
+      return {
+        findings: findings
+          .filter((row) => row.external_id !== null && row.created_at >= since)
+          .map((row) => ({
+            capability: row.capability,
+            resolvedAt: row.resolved_at,
+            codeChangedAt: row.code_changed_at,
+          })),
+        rounds: rounds.flatMap((row) => {
+          const capability = capabilities.get(row.work_item_id)
+          return row.started_at < since || capability === undefined
+            ? []
+            : [
+                {
+                  capability,
+                  outcome: row.outcome,
+                  endedAt: row.ended_at,
+                  n: 1,
+                },
+              ]
+        }),
+      }
     },
   }
 }

@@ -185,7 +185,7 @@ describe('S-15 guard: nodeRuns.pid is consumed by process governance', () => {
       const source = readFileSync(adapter, 'utf8')
       expect(source).toContain('latestEventTsForRun')
       expect(source).toContain('lastEventTs')
-      expect(source).toContain('pid: nodeRuns.pid')
+      expect(source).toContain('pid: nodeRunColumns.pid')
     }
   })
 })

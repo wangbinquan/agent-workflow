@@ -1,3 +1,4 @@
+import { TASK_AGGREGATE_LOCK_ORDER } from '@/modules/task-execution/application/ports/taskAggregateWrite'
 // RFC-395 II-a A2: definition mutations and workgroup config reads stay behind their ports.
 import { expect, test } from 'bun:test'
 import { readFileSync, readdirSync } from 'node:fs'
@@ -28,7 +29,13 @@ const physical =
   /\b(?:workflow_snapshot|workflow_version|workgroup_config_json|ref_closure_json|workflow_id|workgroup_id|source_agent_id|source_agent_name|code_round_id|inputs|max_duration_ms|max_total_tokens|schema_version)\b/i
 
 export function definitionBoundaryViolations(path: string, text: string): readonly string[] {
-  if (path === writer || path === creator || path.endsWith('/persistence/schema.ts')) return []
+  if (
+    path === writer ||
+    path === creator ||
+    path === 'modules/task-execution/domain/taskCreation.ts' ||
+    path.endsWith('/persistence/schema.ts')
+  )
+    return []
   const file = ts.createSourceFile(path, text, ts.ScriptTarget.Latest, true)
   const violations: string[] = []
   const values = new Map<string, ts.Expression>()
@@ -78,7 +85,8 @@ export function definitionBoundaryViolations(path: string, text: string): readon
     return updatesTask(node.expression.expression, seen)
   }
   function configReadAdapter(node: ts.Node): boolean {
-    if (path === reader) return true
+    if (path === reader || path === 'modules/task-execution/infrastructure/taskRepositorySql.ts')
+      return true
     if (path !== sharedReader) return false
     // Only this shared epoch-1 row adapter may read the physical key. Other shared helpers
     // stay in the corpus, including helpers handed a whole tasks row by a backend query.
@@ -425,7 +433,9 @@ test('both workgroup contexts import the shared decoder and types without adding
   expect(adapter).toMatch(
     /import\s*\{[^}]*decodeTaskWorkgroupConfig[^}]*\}\s*from '\.\.\/domain\/taskWorkgroupConfig'/,
   )
-  expect(adapter).toContain('.mapWith(decodeTaskWorkgroupConfig)')
+  expect(adapter).toContain('taskWorkgroupConfigFromRow({')
+  expect(adapter).toContain('columns.workgroupLaunchConfigJson')
+  expect(adapter).toContain('columns.workgroupConfigJson')
   expect(state).not.toContain('loadDbState')
   expect(state).not.toContain('EngineDbState')
   expect(room).toMatch(
@@ -433,4 +443,169 @@ test('both workgroup contexts import the shared decoder and types without adding
   )
   expect(state).not.toContain("from '@/modules/task-execution/public/queries'")
   expect(room).not.toContain("from '@/modules/task-execution/public/types'")
+})
+
+const subordinateWriters: Readonly<Record<string, readonly string[]>> = {
+  taskDefinitions: [writer],
+  taskLaunchContexts: [],
+  taskWorkspaces: [
+    'modules/task-execution/infrastructure/taskPreparationParticipant.ts',
+    'modules/task-execution/infrastructure/taskRepositoryUsage.ts',
+  ],
+  taskRepositoryMounts: [
+    'modules/task-execution/infrastructure/taskRepositoryUsage.ts',
+    'modules/task-execution/infrastructure/taskEngineApplicationPersistence.ts',
+  ],
+}
+function subordinateUpdateViolations(path: string, text: string): string[] {
+  const file = ts.createSourceFile(path, text, ts.ScriptTarget.Latest, true)
+  const aliases = new Map<string, string>(Object.keys(subordinateWriters).map((key) => [key, key]))
+  const visit = (node: ts.Node, fn: (node: ts.Node) => void) => {
+    fn(node)
+    ts.forEachChild(node, (child) => visit(child, fn))
+  }
+  visit(file, (node) => {
+    if (ts.isBindingElement(node) && ts.isIdentifier(node.name)) {
+      const original = (node.propertyName ?? node.name).getText(file)
+      if (original in subordinateWriters) aliases.set(node.name.text, original)
+    }
+  })
+  const violations: string[] = []
+  visit(file, (node) => {
+    if (
+      !ts.isCallExpression(node) ||
+      !ts.isPropertyAccessExpression(node.expression) ||
+      node.expression.name.text !== 'update'
+    )
+      return
+    const receiver = node.arguments[0]
+    const name =
+      receiver &&
+      (ts.isPropertyAccessExpression(receiver) ? receiver.name.text : receiver.getText(file))
+    const table = name === undefined ? undefined : aliases.get(name)
+    if (table && !subordinateWriters[table]!.includes(path)) violations.push(table)
+  })
+  return violations
+}
+test('Task subordinate UPDATEs have explicit owner writers', () => {
+  expect(
+    sources(root).flatMap((file) =>
+      subordinateUpdateViolations(
+        relative(root, file).replaceAll('\\', '/'),
+        readFileSync(file, 'utf8'),
+      ),
+    ),
+  ).toEqual([])
+  expect(
+    subordinateUpdateViolations(
+      'unknown.ts',
+      'const { taskDefinitions: d } = tablesOf(tx); tx.update(d).set({ inputs: value })',
+    ),
+  ).toEqual(['taskDefinitions'])
+  expect(
+    subordinateUpdateViolations('unknown.ts', 'tx.update(tablesOf(tx).taskWorkspaces).set(patch)'),
+  ).toEqual(['taskWorkspaces'])
+})
+test('aggregate lock adapter follows the exported W0 lock order and preserves final-CAS rollback', () => {
+  expect(TASK_AGGREGATE_LOCK_ORDER).toEqual([
+    'task_execution_owners',
+    'tasks',
+    'task-subordinate-rows',
+    'node_runs',
+    'node_run_selections',
+  ])
+  const text = readFileSync(resolve(root, writer), 'utf8')
+  expect(text).toContain('engineOf(tx).lockAggregateRoot(tx, tasks, tasks.id, taskId)')
+  const file = ts.createSourceFile(writer, text, ts.ScriptTarget.Latest, true)
+  const rootStage = TASK_AGGREGATE_LOCK_ORDER[1]
+  const roots: string[] = []
+  const visit = (node: ts.Node): void => {
+    if (
+      ts.isCallExpression(node) &&
+      ts.isPropertyAccessExpression(node.expression) &&
+      node.expression.name.text === 'lockAggregateRoot'
+    )
+      roots.push(node.arguments[1]!.getText(file))
+    ts.forEachChild(node, visit)
+  }
+  visit(file)
+  expect(roots).toEqual([rootStage])
+  expect(text).toContain('throw new TaskAggregateCasMiss(input.taskId)')
+  expect(text).toContain('[...new Set(taskIds)].sort()')
+})
+
+// W1 fix: fence/root ordering and delegation must remain visible in the actual writers.
+test('owned Task writers fence before roots and child launch locks every ancestor before writes', () => {
+  for (const [path, fence, rootLock] of [
+    [
+      'taskEngineApplicationPersistence.ts',
+      'await fenceTaskWrite(transaction,',
+      'await taskAggregateWrite.lockTaskAggregateRoot(transaction,',
+    ],
+    [
+      'taskRuntimeLifecyclePersistence.ts',
+      'await this.fence(tx, input)\n      await taskAggregateWrite',
+      'await guard?.(tx)',
+    ],
+  ]) {
+    const source = readFileSync(
+      resolve(root, 'modules/task-execution/infrastructure', path!),
+      'utf8',
+    )
+    expect(source.indexOf(fence!)).toBeGreaterThanOrEqual(0)
+    expect(source.indexOf(rootLock!)).toBeGreaterThan(source.indexOf(fence!))
+  }
+  const child = readFileSync(
+    resolve(root, 'modules/task-execution/infrastructure/childExecutionLaunchOperations.ts'),
+    'utf8',
+  )
+  const locks = child.indexOf('await lockTaskAggregateRoots(tx, ancestorIds)')
+  expect(locks).toBeGreaterThanOrEqual(0)
+  expect(locks).toBeLessThan(child.indexOf('await admitTransferredWorkspace(tx,'))
+  expect(child).toContain('[...ancestorIds].sort()')
+  expect(child).not.toContain('insertOne(tx, workgroupTaskState')
+  const scheduler = readFileSync(
+    resolve(root, 'modules/task-execution/infrastructure/schedulerCompletionPersistence.ts'),
+    'utf8',
+  )
+  expect(scheduler).toContain('await fenceTaskWrite(tx,')
+  expect(scheduler).toContain('createTaskRepositorySourceStore(tx)')
+  expect(scheduler).toContain('.updateMount(')
+  expect(scheduler).not.toContain('.update(taskRepos)')
+})
+
+test('human gate lifecycle owns an injected journal and forwards the same restriction port', () => {
+  const source = readFileSync(
+    resolve(root, 'modules/task-execution/infrastructure/humanGateTaskLifecyclePersistence.ts'),
+    'utf8',
+  )
+  expect(source).not.toMatch(/^const journal =/m)
+  expect(source).toContain('this.journal = new DatabaseHumanGateOperationJournal(')
+  expect(source).toContain(
+    'private readonly options: { readonly historyRestrictions: HistoryRestrictionPort }',
+  )
+  expect(source).toMatch(
+    /createHumanGatePersistenceParticipantInTx,\s*options\??\.historyRestrictions,/,
+  )
+  expect(source).toMatch(
+    /createConsumedInputsParticipantInTx\(\),\s*this\.options\??\.historyRestrictions,/,
+  )
+  const fenceStart = source.indexOf('async function fence(')
+  const fenceEnd = source.indexOf('async function parkRevision(')
+  const fence = source.slice(fenceStart, fenceEnd)
+  expect(fence.indexOf('await assertTaskOwnerTx(')).toBeGreaterThanOrEqual(0)
+  expect(fence.indexOf('await taskAggregateWrite.lockTaskAggregateRoot(')).toBeGreaterThan(
+    fence.indexOf('await assertTaskOwnerTx('),
+  )
+})
+
+test('node mint explicitly distinguishes unrecorded from recorded-empty inputs', () => {
+  const source = readFileSync(
+    new URL(
+      '../../src/modules/task-execution/infrastructure/nodeRunMintParticipant.ts',
+      import.meta.url,
+    ),
+    'utf8',
+  )
+  expect(source).toContain('inputsRecorded: record.recordedInputs !== null')
 })

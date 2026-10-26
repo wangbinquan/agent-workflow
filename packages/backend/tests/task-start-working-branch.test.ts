@@ -15,7 +15,7 @@ import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from
 import { execFileSync } from 'node:child_process'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { DEFAULT_PROTOCOL_RETRY_BUDGET } from '@agent-workflow/shared'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { createAgent } from '../src/modules/resource-catalog/infrastructure/legacy/agent'
@@ -26,7 +26,6 @@ import { abortAllActiveTasks, getTask, isTaskActive } from '@/services/task'
 import { nonInteractiveGitEnv } from '../src/util/git'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const GIT_TIMEOUT_MS = 10_000
 const NODE_TIMEOUT_MS = 10_000
 const FLOW_TIMEOUT_MS = 20_000
@@ -100,7 +99,7 @@ async function setup(): Promise<Harness> {
   const appHome = join(tmp, 'appHome')
   const repoPath = join(tmp, 'repo')
   mkdirSync(appHome, { recursive: true })
-  const db = createInMemoryDb(MIGRATIONS)
+  const db = createInMemoryDb()
   await seedTestDefaultOpencodeRuntime(db)
 
   git('init', '-b', 'main', repoPath)

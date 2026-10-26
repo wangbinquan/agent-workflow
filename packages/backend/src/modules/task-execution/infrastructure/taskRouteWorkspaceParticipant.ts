@@ -1,27 +1,28 @@
-import { tablesOf } from '@/platform/persistence/sessionTables'
-import { prepareScratchWorkspace } from './scratchWorkspacePreparation'
-import type { SealedPublicRepositorySourceRef } from '@/modules/source-control/public/types'
-import { loadFrozenSpaceLayout } from './frozenWorkspaceLayout'
-export { loadFrozenSpaceLayout } from './frozenWorkspaceLayout'
-import { preparePreMaterializedRepository } from './preMaterializedRepositoryWorkspace'
 import type {
   IdempotentCommandContext,
   RequestAuthority,
 } from '@/modules/identity-access/public/participants'
-import type { TaskRepositoryPreparationBinding } from './repositoryPreparationBinding'
-import {
-  admitDeferredRepositoryPreparation,
-  prepareDurableRepositoryWorkspace,
-  cleanupDurableRepositoryWorkspace,
-} from './durableRepositoryPreparation'
+import type { SealedPublicRepositorySourceRef } from '@/modules/source-control/public/types'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import {
   redactGitUrl,
   type GitCommitIdentity,
   type SpaceKind,
   type TaskStartOptions,
 } from '@agent-workflow/shared'
-import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { eq } from 'drizzle-orm'
+import {
+  admitDeferredRepositoryPreparation,
+  cleanupDurableRepositoryWorkspace,
+  prepareDurableRepositoryWorkspace,
+} from './durableRepositoryPreparation'
+import { loadFrozenSpaceLayout } from './frozenWorkspaceLayout'
+import { preparePreMaterializedRepository } from './preMaterializedRepositoryWorkspace'
+import type { TaskRepositoryPreparationBinding } from './repositoryPreparationBinding'
+import { prepareScratchWorkspace } from './scratchWorkspacePreparation'
+import { taskReadColumns } from './taskRepositorySql'
+export { loadFrozenSpaceLayout } from './frozenWorkspaceLayout'
 
 import type { SecretBox } from '@/auth/secretBox'
 import type {
@@ -302,7 +303,7 @@ export function createTaskWorkspaceMaterializer(
               ? await dependencies.repositoryPreparation.groupName(repoGroupId)
               : ((
                   await dependencies.db
-                    .select({ name: tasks.repoGroupName })
+                    .select({ name: taskReadColumns(dependencies.db).repoGroupName })
                     .from(tasks)
                     .where(eq(tasks.id, input.taskId))
                 )[0]?.name ?? null)

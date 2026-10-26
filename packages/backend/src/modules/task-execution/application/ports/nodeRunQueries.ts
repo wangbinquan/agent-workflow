@@ -16,6 +16,13 @@ export interface NodeRunFactSnapshot extends Omit<
   readonly mergeState: string | null
 }
 
+/** History retains internal identity metadata; display fields are restored from epoch-1 evidence. */
+export interface NodeRunHistoryFactSnapshot extends Omit<NodeRunFactSnapshot, 'slot'> {
+  readonly slot: NodeRunFactSnapshot['slot'] | null
+  readonly identity: 'known' | 'unknown'
+  readonly recordMode: 'executable' | 'history-only'
+}
+
 export interface NodeRunCheckpointSnapshot extends NodeRunFactSnapshot {
   readonly checkpoints: NodeExecutionSnapshot['checkpoints']
   readonly checkpointInheritance: NodeExecutionSnapshot['checkpointInheritance']
@@ -35,7 +42,7 @@ export interface NodeRunFactsQuery {
   readonly reviewIteration?: number
   readonly status?: NodeRunFactSnapshot['status']
   readonly limit?: number
-  readonly order?: 'seq-desc' | 'retry-desc'
+  readonly order?: 'seq-desc' | 'seq-asc' | 'retry-desc'
 }
 
 export type NodeRunDispatchFacts = Omit<
@@ -70,6 +77,12 @@ export type NodeRunDispatchFacts = Omit<
 > & { readonly rerunCause: string | null; readonly mergeState: string | null }
 
 export interface NodeRunQueries {
+  listHistory(input: NodeRunFactsQuery): Promise<readonly NodeRunHistoryFactSnapshot[]>
+  listHistoryFields<K extends keyof NodeRunFactSnapshot>(
+    input: NodeRunFactsQuery,
+    fields: readonly K[],
+  ): Promise<readonly Pick<NodeRunHistoryFactSnapshot, K>[]>
+
   heldSession(runId: string): Promise<{ readonly sessionId: string } | undefined>
   heldSessionRunIds(taskId: string): Promise<readonly string[]>
   listResumeRuns(
@@ -78,6 +91,15 @@ export interface NodeRunQueries {
   ): Promise<readonly NodeRunCheckpointSnapshot[]>
   humanGateProjection(runIds: readonly string[]): Promise<readonly HumanGateNodeProjectionMember[]>
   listDispatchFacts(input: NodeRunFactsQuery): Promise<readonly NodeRunDispatchFacts[]>
+  listHistoryDispatchFacts(input: NodeRunFactsQuery): Promise<readonly NodeRunDispatchFacts[]>
+  latestHistoryPerNode(
+    taskIds: readonly string[],
+  ): Promise<
+    readonly Pick<
+      NodeRunHistoryFactSnapshot,
+      'id' | 'taskId' | 'nodeId' | 'status' | 'retryIndex' | 'finishedAt'
+    >[]
+  >
   latestPerNode(
     taskIds: readonly string[],
   ): Promise<

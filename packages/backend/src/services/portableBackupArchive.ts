@@ -2,7 +2,7 @@
 // versioned logical payload; this mechanism owns the existing config/skills/
 // workflow/worktree envelope and never guesses a provider from file presence.
 
-import { legacyArchiveEntry } from '@/platform/content/legacyDirectories'
+import { archiveEntry } from '@/platform/content/locations/directories'
 import { cpSync, existsSync, mkdirSync, readdirSync, rmSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { tarGz } from '@/util/archive'
@@ -106,20 +106,20 @@ export async function createPortableBackupArchive(
     })
     contents.db = true
 
-    const configSource = legacyArchiveEntry(join, options.appHome, 'config.json')
+    const configSource = archiveEntry(join, options.appHome, 'config.json')
     if (existsSync(configSource)) {
-      cpSync(configSource, legacyArchiveEntry(join, stagingDirectory, 'config.json'))
+      cpSync(configSource, archiveEntry(join, stagingDirectory, 'config.json'))
       contents.config = true
     }
 
-    const skillsSource = legacyArchiveEntry(join, options.appHome, 'skills')
+    const skillsSource = archiveEntry(join, options.appHome, 'skills')
     if (existsSync(skillsSource)) {
-      const skillsDestination = legacyArchiveEntry(join, stagingDirectory, 'skills')
+      const skillsDestination = archiveEntry(join, stagingDirectory, 'skills')
       cpSync(skillsSource, skillsDestination, { recursive: true })
       contents.skills = countDirEntries(skillsDestination)
     }
 
-    const workflowsDestination = legacyArchiveEntry(join, stagingDirectory, 'workflows')
+    const workflowsDestination = archiveEntry(join, stagingDirectory, 'workflows')
     mkdirSync(workflowsDestination, { recursive: true })
     contents.workflows = await options.application.exportWorkflows(workflowsDestination)
     if (includeWorktrees) {

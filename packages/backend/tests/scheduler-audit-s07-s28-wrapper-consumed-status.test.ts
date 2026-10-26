@@ -1,3 +1,6 @@
+import type { projectNodeRunReadFacts } from '@/modules/task-execution/infrastructure/nodeRunSnapshot'
+// Target fixture mint order; missing seq is covered only by conversion/rejection tests.
+let fixtureRunSequence = 0
 // S-7 已修（RFC-098 B3 / WP-6c）→ [S-7 LOCK] 断言已按头注指引翻转为回归防护；
 // S-28 已修（RFC-098 B3 / WP-6d，Stage2）→ [S-28 LOCK] 三断言已翻转为回归防护。
 // 原始报告：design/scheduler-audit-2026-06-10.md S-7 (WP-6c) + S-28 (WP-6d)
@@ -35,7 +38,7 @@ import {
   readNodeRunFixtures,
   consumedProducerIds,
 } from './helpers/model'
-import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { queryRows } from '@/platform/persistence/queryHelpers'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
@@ -46,7 +49,7 @@ import { join, resolve } from 'node:path'
 import { monotonicFactory } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { isDispatchable } from '../src/services/dispatchFrontier'
-import { isNodeRunFresh } from '../src/services/freshness'
+import { isNodeRunFresh } from '../src/modules/task-execution/application/runProvenance'
 import { runTaskWithRealTestTopology as runTask } from './helpers/taskExecutionTestTopology'
 import { runGit } from '../src/util/git'
 import { resetBroadcastersForTests, TASK_CHANNEL, taskBroadcaster } from '../src/ws/broadcaster'
@@ -55,10 +58,9 @@ import { canonicalizeWorkflowAgentIds } from './helpers/canonicalWorkflowFixture
 // 同毫秒多行 id 排序确定化（先例：scheduler-clarify-dispatch.test.ts:33-40）。
 const ulid = monotonicFactory()
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
 
-type Row = PersistenceTables['nodeRuns']['$inferSelect']
+type Row = ReturnType<typeof projectNodeRunReadFacts>
 
 // ---------------------------------------------------------------------------
 // 纯函数层 — 谓词侧对照组（S-7 修复后两个用例都是"机制前提"锁）。
@@ -70,7 +72,7 @@ type Row = PersistenceTables['nodeRuns']['$inferSelect']
 describe('S-7 纯函数层 — 谓词对照组：consumed=NULL（legacy 形态）恒 fresh；落 consumed 即可判 stale', () => {
   function row(over: Partial<Row>): Row {
     return {
-      seq: null,
+      seq: ++fixtureRunSequence,
       parentNodeRunId: null,
       containerRunId: null,
       shardKey: null,
@@ -148,7 +150,7 @@ async function buildHarness(): Promise<Harness> {
   writeFileSync(join(worktreePath, 'r.md'), '# r\n')
   await runGit(worktreePath, ['add', '.'])
   await runGit(worktreePath, ['commit', '-q', '-m', 'init'])
-  const db = createInMemoryDb(MIGRATIONS)
+  const db = createInMemoryDb()
   return {
     db,
     appHome,

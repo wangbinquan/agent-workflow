@@ -27,8 +27,6 @@ import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { Logger } from '@/util/log'
 import type { SelectedDevelopmentPurposeRoot } from '@/modules/development-automation/composition'
 import {
-  sweepWakesWhileDraining,
-  recoverWhileDraining,
   type DevelopmentWriterCutover,
   type selectDevelopmentWorkspaceEffectBinding,
 } from '@/modules/development-automation/composition'
@@ -173,8 +171,6 @@ export function composeDaemonDevelopmentAutomationModules(input: DaemonDevelopme
     automation,
     missionOperations,
     missionInputUploads,
-    sweepWakesWhileDraining: () => sweepWakesWhileDraining({ writerCutover, automation, log }),
-    recoverWhileDraining: () => recoverWhileDraining({ writerCutover, automation, log }),
   })
 }
 export type DaemonDevelopmentAutomationModules = ReturnType<

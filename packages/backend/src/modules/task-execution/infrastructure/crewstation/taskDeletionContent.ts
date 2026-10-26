@@ -1,8 +1,8 @@
 import {
-  LEGACY_TASK_RETENTION_PREFIX as PREFIX,
-  legacyTaskRetentionReference,
-  parseLegacyTaskRetention,
-} from '@/platform/content/legacyTaskRetention'
+  TASK_RETENTION_PREFIX as PREFIX,
+  taskRetentionReference,
+  parseTaskRetention,
+} from '@/platform/content/locations/taskRetention'
 import type { WorkspaceHelper } from '@/platform/crewstation/workspaceProtocol'
 import type { TaskDeletionContentEffects } from '../../application/ports/taskDeletionContentEffects'
 
@@ -24,7 +24,7 @@ export function createHostedTaskDeletionContent(input: {
   return {
     directories(taskId, workspaceReference) {
       const owner = workspaceReference ? input.locate(workspaceReference).taskId : taskId
-      const ref = (kind: string) => legacyTaskRetentionReference(owner, taskId, kind)
+      const ref = (kind: string) => taskRetentionReference(owner, taskId, kind)
       return [ref('runs'), ref('logs'), ref('scratch')]
     },
     async removeIfPresent(reference) {
@@ -34,7 +34,7 @@ export function createHostedTaskDeletionContent(input: {
         await input.helper.call(location.taskId, 'delete-task-content', { path: location.path })
         return
       }
-      const { owner, taskId, kind } = parseLegacyTaskRetention(reference)
+      const { owner, taskId, kind } = parseTaskRetention(reference)
       if (kind === 'scratch' && taskId === owner) {
         // Close acknowledgement alone is insufficient: leave the original
         // deletion claim pending until the platform reports physical release.

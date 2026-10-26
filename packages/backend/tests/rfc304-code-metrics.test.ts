@@ -1,3 +1,9 @@
+import {
+  seedCodeHistoryRows,
+  historyFixtureReader,
+  seedEmptyCodeHistory,
+  type HistoryFixtureInsert,
+} from './helpers/legacyCapabilitySeed'
 import { createAgentExecutionQueries } from '@/modules/resource-catalog/public/queries'
 // RFC-304 T58 — the metrics a team decides with, and the number they don't get.
 //
@@ -15,8 +21,6 @@ import { createAgentExecutionQueries } from '@/modules/resource-catalog/public/q
 // So the tests below pin the four buckets as four, and pin the two cases where
 // the signals DISAGREE, since those are the ones a single rate destroys.
 
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { Hono, type MiddlewareHandler } from 'hono'
 import { buildActor } from '../src/auth/actor'
@@ -35,9 +39,12 @@ import { errorHandler } from '../src/util/errors'
 const NOW = 1_700_000_000_000
 
 const createCodeMetricsQuery = (db: PersistenceDb) =>
-  createCodeMetricsQueryFromPort(createCodeMetricsRead(db))
+  createCodeMetricsQueryFromPort(createCodeMetricsRead(historyFixtureReader(db)))
 
 describeEachProvider('RFC-304 T58 — adoption buckets', (harness) => {
+  beforeEach(async () => {
+    await seedEmptyCodeHistory(harness.db)
+  })
   let db: PersistenceDb
 
   beforeEach(() => {
@@ -45,10 +52,9 @@ describeEachProvider('RFC-304 T58 — adoption buckets', (harness) => {
   })
 
   let seq = 0
-  const finding = async (over: Partial<PersistenceTables['codeFindings']['$inferInsert']> = {}) => {
+  const finding = async (over: HistoryFixtureInsert<'code_findings'> = {}) => {
     seq += 1
-    const { codeFindings } = tablesOf(db)
-    await insertOne(db, codeFindings, {
+    await seedCodeHistoryRows(db, 'code_findings', {
       id: `f-${String(seq)}`,
       codeHostEndpointId: 'ep-1',
       stableProjectId: '41823',
@@ -133,12 +139,14 @@ describeEachProvider('RFC-304 T58 — adoption buckets', (harness) => {
 })
 
 describeEachProvider('RFC-304 T58 — run counts', (harness) => {
+  beforeEach(async () => {
+    await seedEmptyCodeHistory(harness.db)
+  })
   let db: PersistenceDb
 
   beforeEach(async () => {
     db = harness.db
-    const { codeWorkItems } = tablesOf(db)
-    await insertOne(db, codeWorkItems, {
+    await seedCodeHistoryRows(db, 'code_work_items', {
       id: 'item-1',
       codeHostEndpointId: 'ep-1',
       stableProjectId: '41823',
@@ -153,10 +161,9 @@ describeEachProvider('RFC-304 T58 — run counts', (harness) => {
   })
 
   let rseq = 0
-  const round = async (over: Partial<PersistenceTables['codeWorkRounds']['$inferInsert']> = {}) => {
+  const round = async (over: HistoryFixtureInsert<'code_work_rounds'> = {}) => {
     rseq += 1
-    const { codeWorkRounds } = tablesOf(db)
-    await insertOne(db, codeWorkRounds, {
+    await seedCodeHistoryRows(db, 'code_work_rounds', {
       id: `r-${String(rseq)}`,
       workItemId: 'item-1',
       roundSeq: rseq,
@@ -230,6 +237,9 @@ describeEachProvider('RFC-304 T58 — run counts', (harness) => {
 // every code to be NAMED by some test; naming it in a tautology would satisfy
 // that guard while proving nothing, which is worse than the gap it closes.
 describeEachProvider('RFC-304 T58 — the metrics route', (harness) => {
+  beforeEach(async () => {
+    await seedEmptyCodeHistory(harness.db)
+  })
   const appWith = (db: PersistenceDb) => {
     const app = new Hono()
     const actor = buildActor({
@@ -248,7 +258,10 @@ describeEachProvider('RFC-304 T58 — the metrics route', (harness) => {
     }
     app.use('*', injectActor)
     app.onError(errorHandler)
-    mountCodeRoutes(app, composeCodeHistoryQueries(db, createAgentExecutionQueries(db)))
+    mountCodeRoutes(
+      app,
+      composeCodeHistoryQueries(db, createAgentExecutionQueries(db), historyFixtureReader(db)),
+    )
     return app
   }
 

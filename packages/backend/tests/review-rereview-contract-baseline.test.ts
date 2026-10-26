@@ -1,3 +1,5 @@
+// Target fixture mint order; missing seq is covered only by conversion/rejection tests.
+let fixtureRunSequence = 0
 // RFC-074 PR-A baseline — review re-review contract, locked at the helpers
 // PR-B rewrites/deletes (A13-A17).
 //
@@ -43,7 +45,7 @@ function row(opts: {
     mergeState: null,
 
     id: opts.id ?? '01X',
-    seq: null,
+    seq: ++fixtureRunSequence,
     nodeId: 'review',
     retryIndex: opts.retryIndex ?? 0,
     status: opts.status ?? 'done',

@@ -1,3 +1,4 @@
+import { tablesOf } from '@/platform/persistence/sessionTables'
 // RFC-359 W8 —— `SourceTerminationParticipant` 的**双引擎对拍**。
 //
 // W12 已将扫描、固定点重扫与收据投影合到 `sourceTerminationExecution` / `sourceTerminationTargets`，
@@ -56,7 +57,7 @@
 
 import { nodeRunFixture, patchTaskFixture, taskFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+
 import { afterEach, expect, test } from 'bun:test'
 import { and, desc, eq, sql as sqlExpr } from 'drizzle-orm'
 import { ulid } from 'ulid'

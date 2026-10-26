@@ -1,3 +1,4 @@
+import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { o2Ports } from './helpers/o2Closure'
 // RFC-319 B29 —— 融合的结果清单必须能穿过逐节点隔离边界。
 //
@@ -28,7 +29,7 @@ import { first } from '@/platform/persistence/queryHelpers'
 import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join as pjoin, resolve } from 'node:path'
+import { join as pjoin } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
@@ -62,7 +63,6 @@ import {
 } from './helpers/resourceScopeAuthority'
 import { TEST_SQLITE_FUSION_PARTICIPANTS } from './helpers/fusionParticipants'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const VALID_OPENCODE_RUNTIME = 'rfc319-test-opencode'
 
 type TestFusionDeps = FusionDeps & { readonly db: DbClient }
@@ -125,7 +125,7 @@ interface Harness {
 async function build(): Promise<Harness> {
   const tmp = mkdtempSync(pjoin(tmpdir(), 'aw-rfc319-fusion-manifest-'))
   const appHome = pjoin(tmp, 'home')
-  const db = createInMemoryDb(MIGRATIONS)
+  const db = createInMemoryDb()
   await createRuntime(runtimeRegistryPersistence(db), {
     name: VALID_OPENCODE_RUNTIME,
     protocol: 'opencode',
@@ -192,7 +192,8 @@ describe('RFC-319 —— 融合结果清单穿越隔离边界', () => {
       bodyMd: 'v1',
       frontmatterExtra: {},
     })
-    const { skills, fusions } = tablesOf(h.db)
+    const { fusions } = tablesOf(h.db),
+      { skills } = tablesOf(h.db)
     const skillId = first(
       h.db.select({ id: skills.id }).from(skills).where(eq(skills.name, 'lint')),
     )!.id
@@ -228,6 +229,7 @@ describe('RFC-319 —— 融合结果清单穿越隔离边界', () => {
     expect(
       await forcedPortPathsForTask(
         createTaskExecutionPersistence(h.db, {
+          historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
           recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
         }).artifactPaths,
         taskId!,

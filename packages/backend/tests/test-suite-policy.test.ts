@@ -8,7 +8,8 @@
 
 import { describe, expect, test } from 'bun:test'
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
-import { dirname, isAbsolute, relative, resolve, sep } from 'node:path'
+import { relative, resolve, sep } from 'node:path'
+import { sourcePathReads } from './architecture/sourcePathReads'
 import ts from 'typescript'
 import { toPortableRelativePath } from '@/util/platformExec'
 
@@ -42,6 +43,9 @@ const FORBIDDEN_ALIASES = new Set(['fit', 'fdescribe', 'ftest', 'xit', 'xdescrib
 // or opt-in visual/chaos environment. Any addition/removal changes this exact
 // inventory and therefore requires an intentional review of this policy.
 const ALLOWED_SKIP_COUNTS: Record<string, number> = {
+  // Q-1 binary/artifact parity is the explicit T18 rehearsal lane. Enabling it
+  // requires all four external artifacts and fails if any is absent.
+  'packages/backend/tests/rfc395-q1-dto-parity.test.ts#skipIf': 1,
   // RFC-319 R1/R2 —— 覆盖账本的**逐条对账**只在跑过全量 e2e、且拿得到 route journal
   // 时才有意义（`AW_E2E_ROUTE_JOURNAL` 由 e2e-full-nightly 提供）。PR 腿只跑 PR 档，
   // 它的命中集合天然小于全量，拿它比账本会把账本「修」成一个更宽松的值。
@@ -449,72 +453,10 @@ describe('repository test-suite policy', () => {
     for (const file of TEST_ROOTS.filter((root) => existsSync(root)).flatMap(listTestFiles)) {
       const text = readFileSync(file, 'utf8')
       if (!text.includes('readFileSync(')) continue
-      const source = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true)
-      const bindings = new Map<string, string>()
-
-      const literalPath = (node: ts.Node): string | null => {
-        if (ts.isStringLiteralLike(node)) return node.text
-        if (ts.isIdentifier(node)) return bindings.get(node.text) ?? null
-        if (
-          ts.isPropertyAccessExpression(node) &&
-          node.name.text === 'dir' &&
-          ts.isMetaProperty(node.expression)
-        ) {
-          return dirname(file)
-        }
-        if (
-          ts.isCallExpression(node) &&
-          ts.isIdentifier(node.expression) &&
-          (node.expression.text === 'resolve' || node.expression.text === 'join')
-        ) {
-          const parts: string[] = []
-          for (const argument of node.arguments) {
-            const part = literalPath(argument)
-            if (part === null) return null
-            parts.push(part)
-          }
-          // `resolve('a','b')` 会落到 **cwd**——那是测试自己在临时目录里造的文件，不是源码路径。
-          // 只认第一段就是绝对路径的拼接（`import.meta.dir` 或绝对字面量起头）。
-          if (parts.length === 0 || !isAbsolute(parts[0]!)) return null
-          return resolve(...parts)
-        }
-        return null
+      for (const target of sourcePathReads(file, text)) {
+        if (target.startsWith(REPO_ROOT) && /\.[a-z0-9]{1,5}$/i.test(target) && !existsSync(target))
+          missing.push(`${relative(REPO_ROOT, file)} reads ${relative(REPO_ROOT, target)}`)
       }
-
-      const visit = (node: ts.Node, insideExpect = false): void => {
-        if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.initializer) {
-          const value = literalPath(node.initializer)
-          if (value !== null) bindings.set(node.name.text, value)
-        }
-        // `expect(() => readFileSync(old)).toThrow()` 是**故意读一个不该存在的路径**（迁位判据的
-        // 标准写法：旧位置必须真的没了）。那不是过期路径，不能报。
-        const expectScope =
-          insideExpect ||
-          (ts.isCallExpression(node) &&
-            ts.isIdentifier(node.expression) &&
-            node.expression.text === 'expect')
-        if (
-          !insideExpect &&
-          ts.isCallExpression(node) &&
-          ts.isIdentifier(node.expression) &&
-          node.expression.text === 'readFileSync' &&
-          node.arguments[0] !== undefined
-        ) {
-          const target = literalPath(node.arguments[0])
-          if (
-            target !== null &&
-            target.startsWith(REPO_ROOT) &&
-            /\.[a-z0-9]{1,5}$/i.test(target) &&
-            !existsSync(target)
-          ) {
-            missing.push(`${relative(REPO_ROOT, file)} reads ${relative(REPO_ROOT, target)}`)
-          }
-        }
-        ts.forEachChild(node, (child) => {
-          visit(child, expectScope)
-        })
-      }
-      visit(source)
     }
     expect(missing.sort()).toEqual([])
   }, 60_000)

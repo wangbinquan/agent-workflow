@@ -28,7 +28,12 @@ const pruneCauseParity: [
     : false
   : false = true
 
-async function task(db: PersistenceDb, id: string, cachedRepoId: string | null = null) {
+async function task(
+  db: PersistenceDb,
+  id: string,
+  cachedRepoId: string | null = null,
+  bound = false,
+) {
   await taskFixture(db, {
     id,
     name: id,
@@ -39,7 +44,7 @@ async function task(db: PersistenceDb, id: string, cachedRepoId: string | null =
     repoPath: '/repo',
     repoUrl: 'https://example.test/old.git',
     cachedRepoId,
-    worktreePath: '/workspace/' + id,
+    worktreePath: bound ? '/workspace/' + id : '',
     baseBranch: 'main',
     branch: 'task/' + id,
     baseCommit: 'base',
@@ -88,7 +93,7 @@ describeEachProvider('RFC-395 II-b O1 source-control × task-execution', (harnes
   test('mounts deduplicate tasks, any mount suppresses requested-only references, absent IDs stay absent', async () => {
     const { db } = harness
     await workflowFixture(db, { id: 'o1-workflow', name: 'o1-workflow', definition: '{}' })
-    await task(db, 'mounted', 'requested-shadowed')
+    await task(db, 'mounted', 'requested-shadowed', true)
     await mount(db, 'mounted', 2, 'mounted-repo')
     await mount(db, 'mounted', 0, 'mounted-repo')
     await task(db, 'requested', 'mounted-repo')
@@ -109,7 +114,7 @@ describeEachProvider('RFC-395 II-b O1 source-control × task-execution', (harnes
     expect(located).toEqual({
       taskId: 'mounted',
       worktreePath: '/workspace/mounted',
-      baseCommit: 'base',
+      baseCommit: 'base/0',
       repos: [0, 2].map((ordinal) => ({
         ordinal,
         mountPath: 'member' + ordinal,
@@ -244,7 +249,7 @@ describeEachProvider('RFC-395 II-b O1 source-control × task-execution', (harnes
     const { db } = harness
     expect(pruneCauseParity).toBe(true)
     await workflowFixture(db, { id: 'o1-workflow', name: 'o1-workflow', definition: '{}' })
-    await task(db, 'prune')
+    await task(db, 'prune', null, true)
     const { workspaceGc, workspacePrune } = composeSourceControlTaskPorts(db)
     expect(await workspacePrune.claim('prune', 100, 50)).toBe(true)
     expect(await workspacePrune.claim('prune', 200, 100)).toBe(false)
@@ -255,7 +260,7 @@ describeEachProvider('RFC-395 II-b O1 source-control × task-execution', (harnes
     expect(await workspacePrune.finalize('prune', 400)).toBe(true)
     expect(await workspacePrune.finalize('prune', 500)).toBe(true)
     expect((await workspaceGc.listTasks(['prune']))[0]!.prune.prunedAt).toBe(400)
-    await task(db, 'heal')
+    await task(db, 'heal', null, true)
     // `tasks.lifecycle_event_revision` defaults to 1, so the fixture's current revision is 1.
     expect(
       await workspacePrune.healMissing('heal', 600, {
@@ -275,7 +280,7 @@ describeEachProvider('RFC-395 II-b O1 source-control × task-execution', (harnes
         lifecycleRevision: 1,
       }),
     ).toBe(true)
-    await task(db, 'webhook')
+    await task(db, 'webhook', null, true)
     await patchTaskFixture(
       db,
       { id: 'webhook' },

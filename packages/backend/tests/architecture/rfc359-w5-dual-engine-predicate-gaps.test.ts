@@ -766,7 +766,7 @@ const RETIRED_13A_PRESENT: Site = {
 }
 
 const RETIRED_13A_ABSENT_FILE =
-  'modules/resource-catalog/infrastructure/resourcePackageLegacyRecovery.ts'
+  'modules/resource-catalog/infrastructure/resourcePackageOperationRecovery.ts'
 
 /**
  * ⚠️ 这个作用域**不能写成整文件**（`fn: null`）。`identifier` 锚点数的是所有 `ts.Identifier`
@@ -776,7 +776,7 @@ const RETIRED_13A_ABSENT_FILE =
  * 锚点因此落到门真正该在的那个方法体上。
  */
 const RETIRED_13A_ABSENT_FN: readonly string[] = [
-  'createLegacyResourcePackageApplyArtifactRecovery',
+  'createResourcePackageOperationArtifactRecovery',
   'rollForward',
 ]
 
@@ -868,7 +868,8 @@ describe('RFC-359 W10 — 判据缺口扫描面自证（账本清零，语料不
   test('扫描机仍认得出「缺口已补」（同时钉住 13a 的销账不被回退）', () => {
     const measurement = measure(
       selfTestProbe({
-        absentAnchors: [{ kind: 'identifier', text: 'assertCommittedApplyReceipt' }],
+        // II-b keeps the same gate through the codec; the present probe pins the inner assertion.
+        absentAnchors: [{ kind: 'identifier', text: 'decodeResourcePackageReceipt' }],
       }),
     )
     expect(

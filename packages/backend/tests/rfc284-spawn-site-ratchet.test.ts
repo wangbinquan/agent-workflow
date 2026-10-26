@@ -17,6 +17,7 @@
 // 从名单删一行而站点仍在亦红。
 
 import { describe, expect, test } from 'bun:test'
+import ts from 'typescript'
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { join, relative } from 'node:path'
 
@@ -185,7 +186,117 @@ function walkTsFiles(dir: string, acc: string[] = []): string[] {
  * 任何东西、再清空 ALLOWLIST，整个 suite 照绿——因为「实际命中表为空」与「全部
  * 合规」在断言层面同形。下面的 fixture 就是为了让那次证伪当场变红。
  */
+// Exclude declaration-only methods and lexically unambiguous aliases of a typed
+// SQLite Database.exec. Bare process calls (including shadowed aliases) still count.
+function withoutDatabaseExec(source: string): string {
+  if (!/\bexec\s*\(/.test(source)) return source
+  const file = ts.createSourceFile('spawn-census.ts', source, ts.ScriptTarget.Latest, true)
+  const nodes: ts.Node[] = []
+  const visit = (node: ts.Node) => {
+    nodes.push(node)
+    ts.forEachChild(node, visit)
+  }
+  visit(file)
+  const databaseTypes = new Set(
+    nodes
+      .filter(ts.isImportDeclaration)
+      .flatMap((node) =>
+        ts.isStringLiteral(node.moduleSpecifier) &&
+        node.moduleSpecifier.text === 'bun:sqlite' &&
+        node.importClause?.namedBindings &&
+        ts.isNamedImports(node.importClause.namedBindings)
+          ? node.importClause.namedBindings.elements
+              .filter((entry) => (entry.propertyName ?? entry.name).text === 'Database')
+              .map((entry) => entry.name.text)
+          : [],
+      ),
+  )
+  const declarations = nodes.filter(
+    (node) =>
+      ts.isVariableDeclaration(node) ||
+      ts.isParameter(node) ||
+      ts.isImportSpecifier(node) ||
+      ts.isFunctionDeclaration(node),
+  )
+  const uniqueName = (name: string) =>
+    declarations.filter(
+      (node) =>
+        'name' in node &&
+        node.name &&
+        ts.isIdentifier(node.name as ts.Node) &&
+        (node.name as ts.Identifier).text === name,
+    ).length === 1
+  const reassigned = (name: string) =>
+    nodes.some(
+      (node) =>
+        ts.isBinaryExpression(node) &&
+        ts.isIdentifier(node.left) &&
+        node.left.text === name &&
+        node.operatorToken.kind >= ts.SyntaxKind.FirstAssignment &&
+        node.operatorToken.kind <= ts.SyntaxKind.LastAssignment,
+    )
+  const aliases = new Set<string>()
+  for (const node of nodes.filter(ts.isVariableDeclaration)) {
+    if (!ts.isIdentifier(node.name) || !uniqueName(node.name.text) || reassigned(node.name.text))
+      continue
+    const init = node.initializer
+    if (
+      !init ||
+      !ts.isCallExpression(init) ||
+      !ts.isPropertyAccessExpression(init.expression) ||
+      init.expression.name.text !== 'bind'
+    )
+      continue
+    const method = init.expression.expression
+    if (
+      !ts.isPropertyAccessExpression(method) ||
+      method.name.text !== 'exec' ||
+      !ts.isIdentifier(method.expression)
+    )
+      continue
+    const receiver = method.expression.text
+    if (
+      !uniqueName(receiver) ||
+      reassigned(receiver) ||
+      init.arguments.length !== 1 ||
+      init.arguments[0]!.getText(file) !== receiver
+    )
+      continue
+    if (
+      nodes
+        .filter(ts.isParameter)
+        .some(
+          (parameter) =>
+            ts.isIdentifier(parameter.name) &&
+            parameter.name.text === receiver &&
+            parameter.type &&
+            ts.isTypeReferenceNode(parameter.type) &&
+            ts.isIdentifier(parameter.type.typeName) &&
+            databaseTypes.has(parameter.type.typeName.text),
+        )
+    )
+      aliases.add(node.name.text)
+  }
+  const spans = nodes
+    .filter(
+      (node) =>
+        (ts.isMethodSignature(node) && node.name.getText(file) === 'exec') ||
+        (ts.isCallExpression(node) &&
+          ts.isIdentifier(node.expression) &&
+          aliases.has(node.expression.text)),
+    )
+    .map((node) => {
+      const name = ts.isCallExpression(node) ? node.expression : (node as ts.MethodSignature).name
+      return [name.getStart(file), name.end] as const
+    })
+  const chars = source.split('')
+  for (const [start, end] of spans)
+    for (let i = start; i < end; i++) if (chars[i] !== '\n' && chars[i] !== '\r') chars[i] = ' '
+  return chars.join('')
+}
+
 function spawnHitsIn(source: string): number {
+  source = withoutDatabaseExec(source)
   let hits = 0
   for (const rawLine of source.split('\n')) {
     const trimmed = rawLine.trim()
@@ -293,6 +404,29 @@ describe('RFC-317 T14 —— matcher 自证：每条 spawn pattern 都必须抓�
   test('负回顾里刻意排除的方法名不误报（sqlite / RegExp 的 .exec）', () => {
     expect(spawnHitsIn('db.exec("PRAGMA journal_mode = WAL")\n')).toBe(0)
     expect(spawnHitsIn('const m = RE.exec(line)\n')).toBe(0)
+  })
+
+  test('typed database aliases and method declarations are not process sites; unknown and shadowed exec remain counted', () => {
+    const typed = `import type { Database as Sqlite } from 'bun:sqlite'
+      function write(database: Sqlite) {
+        const exec = database.exec.bind(database)
+        exec('BEGIN IMMEDIATE')
+        exec('COMMIT')
+      }`
+    expect(spawnHitsIn(typed)).toBe(0)
+    expect(spawnHitsIn(typed.replace("exec('COMMIT')", 'exec(String(Bun.spawn({cmd})))'))).toBe(1)
+    expect(
+      spawnHitsIn(
+        'function write(database: { exec(sql: string): unknown }) { database.exec("SELECT 1") }',
+      ),
+    ).toBe(0)
+    expect(spawnHitsIn(typed + '\nfunction spawnUnknown(exec: Function) { exec("command") }')).toBe(
+      3,
+    )
+    expect(spawnHitsIn('const exec = childProcess.exec.bind(childProcess)\nexec("command")')).toBe(
+      1,
+    )
+    expect(spawnHitsIn('exec("command")')).toBe(1)
   })
 
   test('完全不起进程的源码计为 0（判据不能宽到把普通代码也算成能力触点）', () => {

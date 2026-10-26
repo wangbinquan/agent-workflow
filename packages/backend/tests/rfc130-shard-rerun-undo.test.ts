@@ -29,7 +29,7 @@ import { afterAll, describe, expect, test } from 'bun:test'
 import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { monotonicFactory } from 'ulid'
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
@@ -39,7 +39,7 @@ import { undoPriorShardDeltaInIso } from '../src/services/nodeIsolation'
 import { canonicalizeWorkflowAgentIds } from './helpers/canonicalWorkflowFixture'
 
 const ulidMono = monotonicFactory()
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+
 function sha256Hex(s: string): string {
   return createHash('sha256').update(s).digest('hex')
 }
@@ -163,7 +163,7 @@ describe('RFC-130 T14 — undoPriorShardDeltaInIso (iso pre-agent undo, §8.3 D9
     const oracle = readFileSync(
       join(
         import.meta.dir,
-        '../src/modules/task-execution/infrastructure/runSelection/oracle/shards.ts',
+        '../src/modules/task-execution/infrastructure/migration/oracle/shards.ts',
       ),
       'utf8',
     )
@@ -355,7 +355,7 @@ describe('RFC-130 T14 — end-to-end shard replacement through the scheduler', (
     const appHome = mkdtempSync(join(tmpdir(), 'aw-rfc130-t14-e2e-'))
     cleanups.push(appHome)
     const canon = await initCanon(appHome)
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createInMemoryDb()
     const { taskId } = await seedGen1(db, canon)
     await patchTaskFixture(db, { id: taskId }, { inputs: JSON.stringify({ docs: 'alpha-NEW' }) })
 
@@ -382,7 +382,7 @@ describe('RFC-130 T14 — end-to-end shard replacement through the scheduler', (
     const appHome = mkdtempSync(join(tmpdir(), 'aw-rfc130-t14-failsafe-'))
     cleanups.push(appHome)
     const canon = await initCanon(appHome)
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createInMemoryDb()
     const { taskId } = await seedGen1(db, canon)
     await patchTaskFixture(db, { id: taskId }, { inputs: JSON.stringify({ docs: 'alpha-FAIL' }) })
 
@@ -406,7 +406,7 @@ describe('RFC-130 T14 — end-to-end shard replacement through the scheduler', (
     const appHome = mkdtempSync(join(tmpdir(), 'aw-rfc130-t14-branch2-'))
     cleanups.push(appHome)
     const canon = await initCanon(appHome)
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createInMemoryDb()
     const { taskId, wrapperRunId } = await seedGen1(db, canon)
     // A prior replacement attempt that FAILED before merge → non-done freshest row.
     await nodeRunFixture(db, {
@@ -443,7 +443,7 @@ describe('RFC-130 T14 — end-to-end shard replacement through the scheduler', (
     const appHome = mkdtempSync(join(tmpdir(), 'aw-rfc130-t14-3gen-'))
     cleanups.push(appHome)
     const canon = await initCanon(appHome)
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createInMemoryDb()
     const { taskId, wrapperRunId } = await seedGen1(db, canon)
     // A SECOND already-merged generation (beta) → two done+merged candidates. Its delta
     // (f_beta.txt) is also in canon.

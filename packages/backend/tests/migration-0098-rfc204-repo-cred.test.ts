@@ -13,25 +13,30 @@
 // All columns are nullable so a pre-0098 row keeps loading during a rolling
 // upgrade — the sealing gate (ensureCredentialsSealed) fills them in.
 
+import {
+  frozenTablesOf,
+  createFrozenEpoch1Db,
+  type FrozenDbClient,
+  FROZEN_MIGRATIONS,
+} from './migration-freeze'
 import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
-import { queryRows, rawRows } from '@/platform/persistence/queryHelpers'
+import { frozenRawRows as rawRows } from './migration-freeze'
+import { queryRows } from '@/platform/persistence/queryHelpers'
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
 import { sql } from 'drizzle-orm'
 import { ulid } from 'ulid'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+const MIGRATIONS = resolve(FROZEN_MIGRATIONS)
 
 describe('migration 0098 (RFC-204 repo credential sealing columns)', () => {
-  let db: DbClient
+  let db: FrozenDbClient
   beforeEach(() => {
-    db = createInMemoryDb(MIGRATIONS)
+    db = createFrozenEpoch1Db(MIGRATIONS)
   })
 
   test('cached_repos still permits migration-era null credential columns', () => {
     const now = Date.now()
-    const { cachedRepos } = tablesOf(db)
+    const { cachedRepos } = frozenTablesOf(db)
     insertOne(db, cachedRepos, {
       id: ulid(),
       urlHash: 'a1b2c3d4',
@@ -47,7 +52,7 @@ describe('migration 0098 (RFC-204 repo credential sealing columns)', () => {
 
   test('url_enc / url_redacted round-trip without a plaintext column', () => {
     const now = Date.now()
-    const { cachedRepos } = tablesOf(db)
+    const { cachedRepos } = frozenTablesOf(db)
     insertOne(db, cachedRepos, {
       id: ulid(),
       urlHash: 'beefcafe',
@@ -68,7 +73,7 @@ describe('migration 0098 (RFC-204 repo credential sealing columns)', () => {
     const now = Date.now()
     // FK chain: task_repos -> tasks -> workflows. Seed both parents.
     const wfId = ulid()
-    const { workflows, tasks, taskRepos } = tablesOf(db)
+    const { workflows, tasks, taskRepos } = frozenTablesOf(db)
     insertOne(db, workflows, {
       id: wfId,
       name: 'wf',

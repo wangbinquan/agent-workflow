@@ -6,6 +6,7 @@ import { createHash } from 'node:crypto'
 import { spawnSync } from 'node:child_process'
 import { posix } from 'node:path'
 import ts from 'typescript'
+import { tableMember } from './insertLineage'
 import {
   importEdges,
   BOOTSTRAP_FILES,
@@ -241,7 +242,6 @@ const LEGACY_BACKEND_FILE_OWNERS: Readonly<Record<string, TargetOwner>> = {
   'packages/backend/src/bootstrap/daemonSessionInput.ts': 'bootstrap',
   'packages/backend/src/bootstrap/daemonSessionAdapters.ts': 'bootstrap',
   'packages/backend/src/cli/restore.ts': 'system-operations',
-  'packages/backend/src/cli/rfc295-downgrade-audit.ts': 'bootstrap',
   'packages/backend/src/bootstrap/daemonStart.ts': 'bootstrap',
   'packages/backend/src/bootstrap/deploymentProfile.ts': 'bootstrap',
   'packages/backend/src/bootstrap/deploymentSelections.ts': 'bootstrap',
@@ -532,7 +532,6 @@ const LEGACY_BACKEND_FILE_OWNERS: Readonly<Record<string, TargetOwner>> = {
   'packages/backend/src/services/sessionView.ts': 'task-execution',
   'packages/backend/src/services/shutdown.ts': 'bootstrap',
   'packages/backend/src/services/skillBootVerify.ts': 'resource-catalog',
-  'packages/backend/src/services/skillIdentityMigration.ts': 'resource-catalog',
   'packages/backend/src/services/skillIdentityPaths.ts': 'resource-catalog',
   'packages/backend/src/services/structuralDiff/assemble.ts': 'workspace-insight',
   'packages/backend/src/services/structuralDiff/baseline.ts': 'workspace-insight',
@@ -658,7 +657,6 @@ export const LEGACY_BACKEND_FILE_OWNER_PATHS: readonly string[] = Object.keys(
 )
 
 const RFC346_W9_E_COMPATIBILITY_FILES = new Set([
-  'packages/backend/src/cli/rfc295-downgrade-audit.ts',
   'packages/backend/src/modules/system-operations/infrastructure/legacyPlatformRecoveryAdapter.ts',
   'packages/backend/src/services/backup.ts',
   'packages/backend/src/services/pendingRestore.ts',
@@ -2649,10 +2647,10 @@ export function buildNodeRunInsertSites(backend: readonly SourceUnit[]): NodeRun
         ts.isCallExpression(node) &&
         ((ts.isPropertyAccessExpression(node.expression) &&
           node.expression.name.text === 'insert' &&
-          node.arguments[0]?.getText(unit.source) === 'nodeRuns') ||
+          tableMember(node.arguments[0], 'nodeRuns')) ||
           (ts.isIdentifier(node.expression) &&
             node.expression.text === 'insertOne' &&
-            node.arguments[1]?.getText(unit.source) === 'nodeRuns'))
+            tableMember(node.arguments[1], 'nodeRuns')))
       ) {
         const line = unit.source.getLineAndCharacterOfPosition(node.getStart()).line + 1
         const owner = enclosingTopLevelSymbol(unit, node)

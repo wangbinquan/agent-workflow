@@ -1,3 +1,4 @@
+import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { o2Ports } from './helpers/o2Closure'
 // P-4-07: daemon-restart orphan reaper.
 
@@ -92,6 +93,7 @@ describeEachProvider('reapOrphanRuns', (harness) => {
   test('no-op when no running rows exist', async () => {
     const r = await reapOrphanRuns(
       createTaskExecutionPersistence(h.db, {
+        historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
         recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
       }).recoveryAdministration,
     )
@@ -102,6 +104,7 @@ describeEachProvider('reapOrphanRuns', (harness) => {
     const { taskId, runId } = await seedRunning(h.db)
     const r = await reapOrphanRuns(
       createTaskExecutionPersistence(h.db, {
+        historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
         recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
       }).recoveryAdministration,
     )
@@ -119,6 +122,7 @@ describeEachProvider('reapOrphanRuns', (harness) => {
     await expect(
       reapOrphanRuns(
         createTaskExecutionPersistence(h.db, {
+          historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
           recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
         }).recoveryAdministration,
         {
@@ -151,6 +155,7 @@ describeEachProvider('reapOrphanRuns', (harness) => {
 
     await reapOrphanRuns(
       createTaskExecutionPersistence(h.db, {
+        historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
         recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
       }).recoveryAdministration,
       {
@@ -193,6 +198,7 @@ describeEachProvider('reapOrphanRuns', (harness) => {
     await expect(
       reapOrphanRuns(
         createTaskExecutionPersistence(h.db, {
+          historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
           recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
         }).recoveryAdministration,
         {
@@ -224,6 +230,7 @@ describeEachProvider('reapOrphanRuns', (harness) => {
     await expect(
       reapOrphanRuns(
         createTaskExecutionPersistence(h.db, {
+          historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
           recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
         }).recoveryAdministration,
         {

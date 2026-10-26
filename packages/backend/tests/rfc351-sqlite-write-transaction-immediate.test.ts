@@ -32,7 +32,6 @@ import { join } from 'node:path'
 import { createInMemoryDb, openDb } from '@/db/client'
 import { dbTxSync } from '@/db/txSync'
 import { createDigitalEmployeeAuthoringPersistence } from '@/modules/digital-employee/infrastructure/authoringStore'
-import { MIGRATIONS } from './migration-freeze'
 
 const TOOL_ID = 'rfc351-contended'
 
@@ -74,7 +73,7 @@ describe('RFC-351 —— 竞争提交下的 store 写事务', () => {
     const dbPath = join(root, 'db.sqlite')
     const db = openDb({
       path: dbPath,
-      migrationsFolder: MIGRATIONS,
+
       skipIntegrityCheck: true,
       slowQueryMs: 0,
       // 竞争者只持锁 100ms；1s 足够 BEGIN IMMEDIATE 等到它释放，
@@ -136,7 +135,7 @@ describe('RFC-351 —— 竞争提交下的 store 写事务', () => {
   // `BEGIN IMMEDIATE` 只对最外层生效，内层由 bun:sqlite 走 SAVEPOINT——这条测试把该语义钉死：
   // 嵌套照常提交，内层抛错整体回滚。没有它，这次改动在一条**零测试覆盖**的路径上就是盲改。
   test('嵌套 dbTxSync 仍是一个原子单位：一起提交，内层抛错一起回滚', () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createInMemoryDb()
     const seed = (id: string, revision: number | null): void => {
       const { employeeToolRegistrations } = tablesOf(db)
       insertOne(db, employeeToolRegistrations, {

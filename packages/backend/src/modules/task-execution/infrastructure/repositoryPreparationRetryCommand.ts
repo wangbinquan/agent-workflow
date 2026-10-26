@@ -1,10 +1,22 @@
-// RFC-387: validate the persisted preparation attempt, atomically admit, then drive in the background.
-import { createNodeRunQueries } from './nodeRunQueries'
-import { isTaskWorkspaceUnbound } from '@agent-workflow/shared'
-import { decodeRequestedSource } from './taskRepositorySurface'
-import { taskRequestedSourceColumns, taskWorkspaceUnboundSql } from './taskRepositorySql'
-import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+import type { NodeExecutionSnapshot } from '../application/ports/nodeExecutionPersistence'
+import { resolveTaskExecutionGenerationInTx } from './taskExecutionGeneration'
+import { taskAggregateWrite } from './taskDefinitionWriteParticipant'
+import { decodeRequestedSourceJson, requestedSourceView } from '../domain/requestedSourceCodec'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import {
+  type TaskReadRow,
+  taskReadColumns,
+  taskRequestedSourceColumns,
+  taskWorkspaceUnboundSql,
+} from './taskRepositorySql'
+
+// RFC-387: validate the persisted preparation attempt, atomically admit, then drive in the background.
+import { publishCommittedEventsAfterCommit } from '@/platform/events/committed/runtime'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
+
+import { ConflictError, DomainError, NotFoundError } from '@/util/errors'
+import {
+  isTaskWorkspaceUnbound,
   REPO_PREP_NODE_ID,
   StartTaskSchema,
   type StartTask,
@@ -12,24 +24,22 @@ import {
 } from '@agent-workflow/shared'
 import { and, eq, isNull, sql } from 'drizzle-orm'
 import { ulid } from 'ulid'
-import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { publishCommittedEventsAfterCommit } from '@/platform/events/committed/runtime'
-import { ConflictError, DomainError, NotFoundError } from '@/util/errors'
 import type { TaskDriveCoordinator } from '../application/drive/taskDriveTypes'
 import type {
   RepositoryPreparationRetryAuthorization,
   RepositoryPreparationRetryCommand,
 } from '../application/ports/taskAutoResumeCommand'
-import { submitTaskContinuation } from './taskContinuationAdmission'
-import { withSerializableTaskExecution } from './taskLifecycleTransaction'
+import { createNodeRunQueries } from './nodeRunQueries'
 import { assertTaskOwnerlessTx } from './ownedTaskExecution'
+import { submitTaskContinuation } from './taskContinuationAdmission'
 import { appendTaskLifecycleTransitionCommittedEvent } from './taskLifecycleCommittedEvents'
+import { withSerializableTaskExecution } from './taskLifecycleTransaction'
 
 const RETRYABLE_TASK_STATUSES = ['failed', 'canceled', 'interrupted'] as const
 const RETRYABLE_PREP_STATUSES = ['failed', 'interrupted'] as const
 
 type TaskRow = Pick<
-  PersistenceTables['tasks']['$inferSelect'],
+  TaskReadRow,
   | 'id'
   | 'name'
   | 'workflowId'
@@ -45,6 +55,7 @@ type TaskRow = Pick<
   | 'gitUserEmail'
   | 'workingBranch'
   | 'autoCommitPush'
+  | 'requestedSource'
   | 'cachedRepoId'
   | 'repoGroupId'
   | 'worktreePath'
@@ -54,7 +65,7 @@ type TaskRow = Pick<
   | 'workspacePrunedAt'
   | 'sourceTerminationFence'
 >
-type PrepRow = Pick<PersistenceTables['nodeRuns']['$inferSelect'], 'id' | 'retryIndex' | 'status'>
+type PrepRow = Pick<NodeExecutionSnapshot, 'id' | 'retryIndex' | 'status'>
 
 export interface RepositoryPreparationRetryDependencies {
   readonly db: PersistenceDb
@@ -80,7 +91,7 @@ function parseInputs(raw: string): Record<string, string> {
 }
 
 function retryPreparationInput(task: TaskRow): StartTask {
-  const requestedSource = decodeRequestedSource(task)
+  const requestedSource = requestedSourceView(decodeRequestedSourceJson(task.requestedSource))
   const source =
     requestedSource.repoGroupId !== null && requestedSource.repoGroupId.length > 0
       ? { repoGroupId: requestedSource.repoGroupId }
@@ -128,21 +139,24 @@ async function loadRetrySnapshot(
     .select({
       id: tasks.id,
       name: tasks.name,
-      workflowId: tasks.workflowId,
+      workflowId: taskReadColumns(dependencies.db).workflowId,
+      subjectKind: taskReadColumns(dependencies.db).subjectKind,
+      sourceId: taskReadColumns(dependencies.db).sourceId,
+      sourceName: taskReadColumns(dependencies.db).sourceName,
       status: tasks.status,
-      inputs: tasks.inputs,
-      maxDurationMs: tasks.maxDurationMs,
-      maxTotalTokens: tasks.maxTotalTokens,
+      inputs: taskReadColumns(dependencies.db).inputs,
+      maxDurationMs: taskReadColumns(dependencies.db).maxDurationMs,
+      maxTotalTokens: taskReadColumns(dependencies.db).maxTotalTokens,
       finishedAt: tasks.finishedAt,
       errorSummary: tasks.errorSummary,
       errorMessage: tasks.errorMessage,
       failedNodeId: tasks.failedNodeId,
-      gitUserName: tasks.gitUserName,
-      gitUserEmail: tasks.gitUserEmail,
-      workingBranch: tasks.workingBranch,
-      autoCommitPush: tasks.autoCommitPush,
+      gitUserName: taskReadColumns(dependencies.db).gitUserName,
+      gitUserEmail: taskReadColumns(dependencies.db).gitUserEmail,
+      workingBranch: taskReadColumns(dependencies.db).workingBranch,
+      autoCommitPush: taskReadColumns(dependencies.db).autoCommitPush,
       ...taskRequestedSourceColumns(dependencies.db),
-      worktreePath: tasks.worktreePath,
+      worktreePath: taskReadColumns(dependencies.db).worktreePath,
       lifecycleEventRevision: tasks.lifecycleEventRevision,
       workspacePruningAt: tasks.workspacePruningAt,
       workspacePrunedAt: tasks.workspacePrunedAt,
@@ -226,6 +240,12 @@ async function admitRetry(
   const intentId = nextId()
   const committed = await withSerializableTaskExecution(dependencies.db, async (tx) => {
     await assertTaskOwnerlessTx(tx, snapshot.task.id)
+    await taskAggregateWrite.lockTaskAggregateRoot(tx, snapshot.task.id)
+    await resolveTaskExecutionGenerationInTx(tx, snapshot.task.id, {
+      kind: 'operation',
+      cause: 'retry',
+      operationRef,
+    })
     const { tasks } = tablesOf(tx)
     const admittedRows = await tx
       .update(tasks)
@@ -242,7 +262,7 @@ async function admitRetry(
           eq(tasks.id, snapshot.task.id),
           eq(tasks.status, snapshot.task.status),
           eq(tasks.lifecycleEventRevision, snapshot.task.lifecycleEventRevision),
-          taskWorkspaceUnboundSql(tasks.worktreePath),
+          taskWorkspaceUnboundSql(tasks.workspaceRootRef),
           isNull(tasks.workspacePruningAt),
           isNull(tasks.workspacePrunedAt),
           isNull(tasks.sourceTerminationFence),

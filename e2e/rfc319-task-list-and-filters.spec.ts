@@ -1,3 +1,4 @@
+import { liveSqlitePath } from './storage'
 // RFC-319 —— `/tasks` 任务列表与「工作区回收」详情降级的用户面 e2e
 // （账本 TASK-16 / TASK-17 / TASK-19 / TASK-21 / TASK-24 / TASK-45 / TASK-X5）。
 //
@@ -203,7 +204,7 @@ async function jsonOf<T>(res: Response, what: string): Promise<T> {
 }
 
 function dbPath(): string {
-  return join(daemon.home, 'db.sqlite')
+  return liveSqlitePath(daemon.home)
 }
 
 function sqlText(value: string | null): string {

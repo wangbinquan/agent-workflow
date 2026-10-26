@@ -1,3 +1,9 @@
+import { epoch2ReviewReader } from './helpers/epoch2RuntimePorts'
+import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
+import { readReviewFixture } from './helpers/model/content'
+import { taskReadColumns } from '@/modules/task-execution/infrastructure/taskRepositorySql'
+import { nodeRunFixtureColumns } from './helpers/model/nodeRun'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { withO2Closure } from './helpers/o2Closure'
 // RFC-395 II-pre：改接生产启动 / 读取路径，保留原断言意图。
 // Locks in RFC-005 PR-B T6 + T7 + T11 review state machine.
@@ -11,18 +17,18 @@ import { withO2Closure } from './helpers/o2Closure'
 // kind=markdown 'design' port) → reviewDesign (review node) → output.
 
 import { readNodeRunOutputFixtures, readNodeRunFixtures } from './helpers/model'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+
 import { launchTestTaskWithLocalRepo as launchTestTaskWithLocalRepoBase } from './helpers/productionTaskLaunch'
 import { registerProviderHttpApplicationLifetime } from './helpers/providerHttpApplication'
 import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { and, eq } from 'drizzle-orm'
 import { DEFAULT_PROTOCOL_RETRY_BUDGET } from '@agent-workflow/shared'
-import type { DbClient } from '../src/db/client'
-import { createInMemoryDb } from '../src/db/client'
+import { type DbClient, createInMemoryDb } from '../src/db/client'
+
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 import { createAgent } from '../src/modules/resource-catalog/infrastructure/legacy/agent'
 import { createWorkflow } from '../src/services/workflow'
@@ -43,7 +49,6 @@ import {
 
 const openTestApplication = registerProviderHttpApplicationLifetime()
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const GIT_TIMEOUT_MS = 10_000
 const NODE_TIMEOUT_MS = 10_000
 const FLOW_TIMEOUT_MS = 20_000
@@ -133,7 +138,7 @@ async function buildHarness(): Promise<Harness> {
   const tmp = mkdtempSync(join(tmpdir(), `aw-review-state-${runIdx}-`))
   const appHome = join(tmp, 'appHome')
   const repoPath = join(tmp, 'repo')
-  const db = createInMemoryDb(MIGRATIONS)
+  const db = createInMemoryDb()
   await seedTestDefaultOpencodeRuntime(db)
   const previousAppHome = process.env.AGENT_WORKFLOW_HOME
 
@@ -223,7 +228,7 @@ async function buildHarness(): Promise<Harness> {
   const { nodeRuns } = tablesOf(db)
   // Locate the review node_run row.
   const reviewRuns = await db
-    .select()
+    .select(nodeRunFixtureColumns(db))
     .from(nodeRuns)
     .where(and(eq(nodeRuns.taskId, task.id), eq(nodeRuns.nodeId, 'rev_1')))
   if (reviewRuns.length === 0) {
@@ -272,11 +277,17 @@ describe('RFC-005 review state machine — dispatch + decisions', () => {
   test('scheduler parks review at awaiting_review + creates doc_version v1', async () => {
     const { tasks, nodeRuns, docVersions } = tablesOf(h.db)
     // After launchTestTask runs synchronously, task should be awaiting_review.
-    const t = (await h.db.select().from(tasks).where(eq(tasks.id, h.taskId)).limit(1))[0]
+    const t = (
+      await h.db.select(taskReadColumns(h.db)).from(tasks).where(eq(tasks.id, h.taskId)).limit(1)
+    )[0]
     expect(t?.status).toBe('awaiting_review')
 
     const run = (
-      await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, h.reviewNodeRunId)).limit(1)
+      await h.db
+        .select(nodeRunFixtureColumns(h.db))
+        .from(nodeRuns)
+        .where(eq(nodeRuns.id, h.reviewNodeRunId))
+        .limit(1)
     )[0]
     expect(run?.status).toBe('awaiting_review')
     expect(run?.reviewIteration).toBe(0)
@@ -290,9 +301,9 @@ describe('RFC-005 review state machine — dispatch + decisions', () => {
     expect(dv[0]?.decision).toBe('pending')
 
     // Body file exists on disk + contains v1.
-    const bodyAbs = join(h.appHome, dv[0]!.bodyPath)
-    expect(existsSync(bodyAbs)).toBe(true)
-    expect(readFileSync(bodyAbs, 'utf8')).toContain('Design v1')
+    expect(
+      await readReviewFixture(h.db, h.appHome, dv[0]!, epoch2RuntimeTestPorts(h.db).content),
+    ).toContain('Design v1')
   })
 
   test('countPendingReviews / listReviewSummaries / getReviewDetail surface the pending review', async () => {
@@ -302,7 +313,12 @@ describe('RFC-005 review state machine — dispatch + decisions', () => {
     expect(list[0]?.nodeRunId).toBe(h.reviewNodeRunId)
     expect(list[0]?.awaitingReview).toBe(true)
 
-    const detail = await getReviewDetail(h.db, h.appHome, h.reviewNodeRunId)
+    const detail = await getReviewDetail(
+      h.db,
+      h.appHome,
+      h.reviewNodeRunId,
+      epoch2ReviewReader(h.db, h.appHome),
+    )
     expect(detail.summary.nodeRunId).toBe(h.reviewNodeRunId)
     expect(detail.currentVersion.versionIndex).toBe(1)
     expect(detail.currentBody).toContain('Design v1')
@@ -324,7 +340,11 @@ describe('RFC-005 review state machine — dispatch + decisions', () => {
 
     const { nodeRuns, docVersions } = tablesOf(h.db)
     const run = (
-      await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, h.reviewNodeRunId)).limit(1)
+      await h.db
+        .select(nodeRunFixtureColumns(h.db))
+        .from(nodeRuns)
+        .where(eq(nodeRuns.id, h.reviewNodeRunId))
+        .limit(1)
     )[0]
     expect(run?.status).toBe('done')
 
@@ -417,6 +437,8 @@ describe('RFC-005 review state machine — dispatch + decisions', () => {
   test('reject archives v1 comments, bumps reviewIteration, mints a new pending upstream run (RFC-011)', async () => {
     // Drop a comment on v1 so we can verify it gets archived.
     await addReviewComment({
+      reviewReader: epoch2ReviewReader(h.db, h.appHome),
+
       db: h.db,
       appHome: h.appHome,
       nodeRunId: h.reviewNodeRunId,
@@ -448,7 +470,11 @@ describe('RFC-005 review state machine — dispatch + decisions', () => {
 
     const { nodeRuns, docVersions, reviewComments } = tablesOf(h.db)
     const run = (
-      await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, h.reviewNodeRunId)).limit(1)
+      await h.db
+        .select(nodeRunFixtureColumns(h.db))
+        .from(nodeRuns)
+        .where(eq(nodeRuns.id, h.reviewNodeRunId))
+        .limit(1)
     )[0]
     expect(run?.status).toBe('pending')
     expect(run?.reviewIteration).toBe(1)
@@ -523,16 +549,25 @@ describe('RFC-005 review state machine — dispatch + decisions', () => {
     expect(v2).toBeDefined()
     expect(v2?.decision).toBe('pending')
     expect(v2?.reviewIteration).toBe(1)
-    const v2body = readFileSync(join(h.appHome, v2!.bodyPath), 'utf8')
+    const v2body = await readReviewFixture(
+      h.db,
+      h.appHome,
+      v2!,
+      epoch2RuntimeTestPorts(h.db).content,
+    )
     expect(v2body).toContain('Design v2')
 
     // After re-run task is back to awaiting_review.
-    const t = (await h.db.select().from(tasks).where(eq(tasks.id, h.taskId)).limit(1))[0]
+    const t = (
+      await h.db.select(taskReadColumns(h.db)).from(tasks).where(eq(tasks.id, h.taskId)).limit(1)
+    )[0]
     expect(t?.status).toBe('awaiting_review')
   })
 
   test('iterate path: comments → decisionReason; upstream regenerates with iterate context', async () => {
     await addReviewComment({
+      reviewReader: epoch2ReviewReader(h.db, h.appHome),
+
       db: h.db,
       appHome: h.appHome,
       nodeRunId: h.reviewNodeRunId,
@@ -583,6 +618,7 @@ describe('RFC-005 review state machine — dispatch + decisions', () => {
         withO2Closure({
           db: h.db,
           appHome: h.appHome,
+          contentStore: epoch2RuntimeTestPorts(h.db).content,
           nodeRunId: h.reviewNodeRunId,
           decision: 'approved',
           expectedReviewIteration: 999,
@@ -607,6 +643,7 @@ describe('RFC-005 review state machine — dispatch + decisions', () => {
       }),
     )
     await wakeHumanGateContinuation(first.taskId, first.continuationRef, {
+      historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
       db: h.db,
       appHome: h.appHome,
       schedulerDriver: { async drive() {} },
@@ -650,6 +687,7 @@ describe('RFC-005 review REST endpoints', () => {
         { provider: 'sqlite', db: h.db },
         {
           appHome: h.appHome,
+          contentStore: epoch2RuntimeTestPorts(h.db).content,
           secretBox: createSecretBoxFromKey(Buffer.alloc(32, 7)),
           token: 'tok',
           opencodeVersion: '1.14.99',
@@ -681,6 +719,7 @@ describe('RFC-005 review REST endpoints', () => {
         { provider: 'sqlite', db: h.db },
         {
           appHome: h.appHome,
+          contentStore: epoch2RuntimeTestPorts(h.db).content,
           secretBox: createSecretBoxFromKey(Buffer.alloc(32, 7)),
           token: 'tok',
           opencodeVersion: '1.14.99',
@@ -702,6 +741,7 @@ describe('RFC-005 review REST endpoints', () => {
         { provider: 'sqlite', db: h.db },
         {
           appHome: h.appHome,
+          contentStore: epoch2RuntimeTestPorts(h.db).content,
           secretBox: createSecretBoxFromKey(Buffer.alloc(32, 7)),
           token: 'tok',
           opencodeVersion: '1.14.99',
@@ -753,6 +793,7 @@ describe('RFC-005 review REST endpoints', () => {
         { provider: 'sqlite', db: h.db },
         {
           appHome: h.appHome,
+          contentStore: epoch2RuntimeTestPorts(h.db).content,
           secretBox: createSecretBoxFromKey(Buffer.alloc(32, 7)),
           token: 'tok',
           opencodeVersion: '1.14.99',
@@ -782,7 +823,11 @@ describe('RFC-005 review REST endpoints', () => {
 
     const { nodeRuns } = tablesOf(h.db)
     const run = (
-      await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, h.reviewNodeRunId)).limit(1)
+      await h.db
+        .select(nodeRunFixtureColumns(h.db))
+        .from(nodeRuns)
+        .where(eq(nodeRuns.id, h.reviewNodeRunId))
+        .limit(1)
     )[0]
     expect(run?.status).toBe('done')
   })
@@ -793,6 +838,7 @@ describe('RFC-005 review REST endpoints', () => {
         { provider: 'sqlite', db: h.db },
         {
           appHome: h.appHome,
+          contentStore: epoch2RuntimeTestPorts(h.db).content,
           secretBox: createSecretBoxFromKey(Buffer.alloc(32, 7)),
           token: 'tok',
           opencodeVersion: '1.14.99',

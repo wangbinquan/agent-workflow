@@ -1,3 +1,4 @@
+import { epoch2RuntimeTestPorts } from './epoch2RuntimePorts'
 import { o2Ports, withO2Closure } from './o2Closure'
 import { withSourceControlTaskPorts } from './sourceControlTaskPorts'
 // RFC-395 II-pre：GC 改接生产 workspaceMaintenance，断言其回执及实际目录 / 行状态。
@@ -49,7 +50,7 @@ import { createWorkgroupClarifyAskGate } from '@/modules/collaboration/public/pa
 import { composeWorkgroupTaskRoomClarifyParticipantFactory } from '@/modules/collaboration/composition/workgroupTaskRoomClarify'
 import { composeTaskExecutionResourceBinding } from '@/modules/resource-catalog/composition/taskExecution'
 import { composeWorkgroupTurnsOperations } from '@/modules/resource-catalog/composition/workgroupTurns'
-import { agentFromPersistenceRow } from '@/modules/resource-catalog/infrastructure/agentPersistence'
+import { loadAgentPersistenceRows } from '@/modules/resource-catalog/infrastructure/agentPersistence'
 import { mcpFromPersistenceRow } from '@/modules/resource-catalog/infrastructure/mcpPersistence'
 import { createPluginRepository } from '@/modules/resource-catalog/infrastructure/pluginRepository'
 import { listSkills } from '@/modules/resource-catalog/infrastructure/legacy/skill'
@@ -100,13 +101,13 @@ export function createTestDynamicWorkflowOperations(
       async load() {
         const { mcps } = tablesOf(db)
         const [agentRows, skills, mcpRows, pluginRows] = await Promise.all([
-          readAgentFixtures(db),
+          loadAgentPersistenceRows(db, (tx) => readAgentFixtures(tx)),
           listSkills(db),
           db.select().from(mcps),
           plugins.list(),
         ])
         return {
-          agents: agentRows.map(agentFromPersistenceRow),
+          agents: agentRows,
           skills,
           mcps: mcpRows.map(mcpFromPersistenceRow),
           plugins: [...pluginRows],
@@ -189,6 +190,7 @@ export async function createEachProviderTaskExecution(
     resources,
   })
   const persistence = createTaskExecutionPersistence(db, {
+    historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
     recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
     ...{ workspacePresence },
   })
@@ -196,6 +198,7 @@ export async function createEachProviderTaskExecution(
   const appHome = runConfig.appHome
   const configPath = join(appHome, 'config.json')
   const collaborationRuntime = createCollaborationRuntimeMechanics(db, {
+    ...epoch2RuntimeTestPorts(db),
     taskLock: o2Ports(db).taskLock,
     ...{ upstreamAgents: o2Ports(db).upstreamAgents },
   })
@@ -276,6 +279,7 @@ export async function createEachProviderTaskExecution(
         archiveCollaboration: o2Ports(sqlite).collaborationReads.archive,
         clarifyNav: o2Ports(sqlite).collaborationReads.clarifyNav,
         db: sqlite,
+        historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
         persistence,
         execution: composeProcessTaskExecutionBinding(sqlite),
         log: createLogger('task'),
@@ -437,6 +441,7 @@ export async function createEachProviderTaskExecution(
       archiveCollaboration: o2Ports(postgresql).collaborationReads.archive,
       clarifyNav: o2Ports(postgresql).collaborationReads.clarifyNav,
       db: postgresql,
+      historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
       persistence,
       execution: composeSessionTaskExecutionBinding({
         daemonGeneration: `rfc359-execution-chain-${ulid()}`,

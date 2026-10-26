@@ -1,3 +1,11 @@
+import { appendSqliteSuccessor } from './helpers/epoch2SqliteSuccessor'
+import {
+  registerSchemaHistoryRuntime,
+  schemaHistoryRuntime,
+} from '@/platform/persistence/schema/history/runtime'
+import { createInMemoryDb } from '@/db/client'
+import { persistenceHead } from '@/bootstrap/persistenceHead'
+import { parseGenerationPointerV2 } from '@/platform/persistence/generationPointerV2'
 import { composeRepositoryBackupPreparation } from '@/bootstrap/repositoryBackupPreparation'
 // RFC-213 PR-1a — cold restore. Tests are the design-gate corrections
 // (design/RFC-213-disaster-recovery/design.md §7):
@@ -17,7 +25,7 @@ import { composeRepositoryBackupPreparation } from '@/bootstrap/repositoryBackup
 //   - invert computeRestoreDirection → downgrade test accepts a newer backup → red.
 
 import { taskFixture, workflowFixture } from './helpers/model'
-import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { afterEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import { removeTempDirSync } from './fixtures/tempDir'
 import { Database } from 'bun:sqlite'
@@ -67,7 +75,7 @@ function sqliteOf(db: DbClient): Database {
 }
 
 async function seedWorkflows(dbPath: string, n: number): Promise<void> {
-  const db = openDb({ path: dbPath, migrationsFolder: MIGRATIONS })
+  const db = openDb({ path: dbPath })
   for (let i = 0; i < n; i++) {
     await workflowFixture(db, {
       id: ulid(),
@@ -84,12 +92,13 @@ async function seedWorkflows(dbPath: string, n: number): Promise<void> {
 function allTableCounts(dbPath: string): Record<string, number> {
   const db = new Database(dbPath, { readonly: true })
   try {
-    // Exclude __drizzle_migrations (schema bookkeeping) and recovery_events
+    // Native generation lineage changes on restore and is asserted separately below.
+    // Exclude schema bookkeeping and recovery_events
     // (restore legitimately writes its OWN audit row — asserting it reverts would
     // be wrong; the workflows/other-table reversion is the real oracle).
     const tables = db
       .query(
-        "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT IN ('__drizzle_migrations','recovery_events')",
+        "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT GLOB 'aw_meta_*' AND name NOT IN ('__drizzle_migrations','recovery_events')",
       )
       .all() as { name: string }[]
     const out: Record<string, number> = {}
@@ -120,8 +129,11 @@ describe('RFC-213 restore roundtrip (AC-1)', () => {
     expect(backupCounts.workflows).toBe(2)
 
     // Backup the seeded state.
-    const db = openDb({ path: dbPath, migrationsFolder: MIGRATIONS })
-    const res = await createBackup({ contract: buildLogicalSchemaContract(), db, appHome, now: 1 })
+    const db = openDb({ path: dbPath })
+    const res = await createBackup({ contract: logicalSchemaContract, db, appHome, now: 1 })
+    const originalGeneration = sqliteOf(db)
+      .query("SELECT generation_id FROM aw_meta_generations WHERE state='active'")
+      .get() as { generation_id: string }
     // Mutate the LIVE db AFTER the backup: add a 3rd workflow.
     await workflowFixture(db, {
       id: ulid(),
@@ -136,6 +148,37 @@ describe('RFC-213 restore roundtrip (AC-1)', () => {
     // Restore → everything reverts to the backup state.
     await restoreBackup(res.path, { appHome, dbPath, migrationsFolder: MIGRATIONS, now: 2 })
     expect(allTableCounts(dbPath)).toEqual(backupCounts)
+    const restoredDb = new Database(dbPath, { readonly: true })
+    try {
+      const active = restoredDb
+        .query(
+          "SELECT generation_id, source_generation_id, schema_epoch, contract_digest FROM aw_meta_generations WHERE state='active'",
+        )
+        .all() as {
+        generation_id: string
+        source_generation_id: string
+        schema_epoch: number
+        contract_digest: string
+      }[]
+      expect(active).toHaveLength(1)
+      expect(active[0]).toMatchObject({
+        source_generation_id: originalGeneration.generation_id,
+        schema_epoch: 2,
+        contract_digest: persistenceHead().contract.contract.digest,
+      })
+      expect(active[0]!.generation_id).not.toBe(originalGeneration.generation_id)
+      expect(
+        restoredDb
+          .query('SELECT state FROM aw_meta_generations WHERE generation_id=?')
+          .get(originalGeneration.generation_id),
+      ).toEqual({ state: 'retired' })
+      expect(
+        parseGenerationPointerV2(readFileSync(join(appHome, 'database-generation.json'), 'utf8'))
+          .payload.generationId,
+      ).toBe(active[0]!.generation_id)
+    } finally {
+      restoredDb.close()
+    }
     expect(allTableCounts(dbPath).workflows).toBe(2)
   })
 })
@@ -169,9 +212,9 @@ describe('RFC-213 restore — crash-safe swap over a live WAL', () => {
 
     // 1) A clean 2-workflow backup (VACUUM'd — no WAL).
     await seedWorkflows(dbPath, 2)
-    const db = openDb({ path: dbPath, migrationsFolder: MIGRATIONS })
+    const db = openDb({ path: dbPath })
     const backup = await createBackup({
-      contract: buildLogicalSchemaContract(),
+      contract: logicalSchemaContract,
       db,
       appHome,
       now: 1,
@@ -219,9 +262,9 @@ describe('RFC-213 restore refusals leave the live DB untouched', () => {
     const dbPath = join(appHome, 'db.sqlite')
     await seedWorkflows(dbPath, 2)
 
-    const db = openDb({ path: dbPath, migrationsFolder: MIGRATIONS })
+    const db = openDb({ path: dbPath })
     const backup = await createBackup({
-      contract: buildLogicalSchemaContract(),
+      contract: logicalSchemaContract,
       db,
       appHome,
       now: 1,
@@ -284,19 +327,25 @@ describe('RFC-213 restore refusals leave the live DB untouched', () => {
     await seedWorkflows(dbPath, 1)
     const liveBytes = readFileSync(dbPath)
 
-    // A real backup, but forge its manifest to a created_at far in the future.
-    const db = openDb({ path: dbPath, migrationsFolder: MIGRATIONS })
+    // A real backup carrying a fully admitted successor contract, ahead of this binary.
+    const db = openDb({ path: dbPath })
     const backup = await createBackup({
-      contract: buildLogicalSchemaContract(),
+      contract: logicalSchemaContract,
       db,
       appHome,
       now: 1,
     })
     sqliteOf(db).close()
-    // Repack with a forged newer identity.
+    // Repack after applying the real native successor; a manifest timestamp is not the gate.
     const staging = tmp('rfc213-down-stage-')
     const { extractTarGz } = await import('../src/util/archive')
     await extractTarGz(backup.path, staging)
+    const incoming = new Database(join(staging, 'db.sqlite'))
+    try {
+      await appendSqliteSuccessor(incoming)
+    } finally {
+      incoming.close()
+    }
     const forged: BackupManifest = {
       manifestVersion: 1,
       kind: 'manual',
@@ -321,9 +370,9 @@ describe('RFC-213 restore refusals leave the live DB untouched', () => {
     await seedWorkflows(dbPath, 2)
     const liveBytes = readFileSync(dbPath)
 
-    const db = openDb({ path: dbPath, migrationsFolder: MIGRATIONS })
+    const db = openDb({ path: dbPath })
     const backup = await createBackup({
-      contract: buildLogicalSchemaContract(),
+      contract: logicalSchemaContract,
       db,
       appHome,
       now: 1,
@@ -347,9 +396,9 @@ describe('RFC-213 restore refusals leave the live DB untouched', () => {
     const appHome = tmp('rfc213-nosafety-')
     const dbPath = join(appHome, 'db.sqlite')
     await seedWorkflows(dbPath, 2)
-    const db = openDb({ path: dbPath, migrationsFolder: MIGRATIONS })
+    const db = openDb({ path: dbPath })
     const backup = await createBackup({
-      contract: buildLogicalSchemaContract(),
+      contract: logicalSchemaContract,
       db,
       appHome,
       now: 1,
@@ -377,7 +426,7 @@ describe('RFC-213 G4a mismatch-protect: restore suspends auto-recovery for non-t
   test('non-terminal tasks are suspended; terminal tasks are not', async () => {
     const appHome = tmp('rfc213-suspend-')
     const dbPath = join(appHome, 'db.sqlite')
-    const db = openDb({ path: dbPath, migrationsFolder: MIGRATIONS })
+    const db = openDb({ path: dbPath })
     const wfId = ulid()
     // RFC-395 II-a: builders finish before the backup snapshots SQLite.
     await workflowFixture(db, {
@@ -405,7 +454,7 @@ describe('RFC-213 G4a mismatch-protect: restore suspends auto-recovery for non-t
     const runningId = await mkTask('running')
     const doneId = await mkTask('done')
     const backup = await createBackup({
-      contract: buildLogicalSchemaContract(),
+      contract: logicalSchemaContract,
       db,
       appHome,
       now: 1,
@@ -436,7 +485,7 @@ describe('restore CLI wrapper guard rails', () => {
       [],
       composeLocalSystemOperations({
         repositoryBackupPreparationFactory: composeRepositoryBackupPreparation,
-        contract: buildLogicalSchemaContract(),
+        contract: logicalSchemaContract,
       }),
     )
     expect(noArg.status).toBe('error')
@@ -446,7 +495,7 @@ describe('restore CLI wrapper guard rails', () => {
       [join(tmp('rfc213-cli-'), 'nope.tar.gz')],
       composeLocalSystemOperations({
         repositoryBackupPreparationFactory: composeRepositoryBackupPreparation,
-        contract: buildLogicalSchemaContract(),
+        contract: logicalSchemaContract,
       }),
     )
     expect(missing.status).toBe('error')
@@ -462,9 +511,9 @@ describe('impl-gate P1-4 — restore takes a FILESYSTEM safety copy (config.json
   test('pre-restore-fs tarball contains the pre-restore config + skills; skipped with --no-safety-backup', async () => {
     const appHome = tmp('rfc213-fs-safety-')
     const dbPath = join(appHome, 'db.sqlite')
-    const db = openDb({ path: dbPath, migrationsFolder: MIGRATIONS })
+    const db = openDb({ path: dbPath })
     const backup = await createBackup({
-      contract: buildLogicalSchemaContract(),
+      contract: logicalSchemaContract,
       db,
       appHome,
       now: 1,
@@ -490,9 +539,9 @@ describe('impl-gate P1-4 — restore takes a FILESYSTEM safety copy (config.json
     // and the flag really skips it
     const appHome2 = tmp('rfc213-fs-safety2-')
     const dbPath2 = join(appHome2, 'db.sqlite')
-    const db2 = openDb({ path: dbPath2, migrationsFolder: MIGRATIONS })
+    const db2 = openDb({ path: dbPath2 })
     const backup2 = await createBackup({
-      contract: buildLogicalSchemaContract(),
+      contract: logicalSchemaContract,
       db: db2,
       appHome: appHome2,
       now: 1,
@@ -514,11 +563,11 @@ describe('impl-gate P1-3 — the pre-migration binary gate actually fires', () =
   test('forward-rolling a pre-migration backup on a DIFFERENT binary refuses; same binary passes', async () => {
     const appHome = tmp('rfc213-vergate-')
     const dbPath = join(appHome, 'db.sqlite')
-    // crafted pre-migration backup: valid empty DB + manifest pinned to binary
-    // 'vA' with an OLD migration axis (forces direction=forward → willMigrate).
+    // The backup records the current native head. The test binary below admits a real
+    // expand-only successor, so forward migration is decided by schema_history.
     const staging = join(appHome, 'mk')
     mkdirSync(staging, { recursive: true })
-    const sdb = openDb({ path: join(staging, 'db.sqlite'), migrationsFolder: MIGRATIONS })
+    const sdb = openDb({ path: join(staging, 'db.sqlite') })
     ;(sdb as unknown as { $client: Database }).$client.close()
     writeManifest(staging, {
       manifestVersion: 1,
@@ -532,6 +581,19 @@ describe('impl-gate P1-3 — the pre-migration binary gate actually fires', () =
     await tarGz(staging, tarPath)
 
     const saved = process.env.AGENT_WORKFLOW_VERSION
+    const runtime = schemaHistoryRuntime()
+    const probe = createInMemoryDb()
+    let successor
+    try {
+      successor = await appendSqliteSuccessor(probe.$client)
+    } finally {
+      probe.$client.close()
+    }
+    registerSchemaHistoryRuntime({
+      ...runtime,
+      head: () => successor,
+      history: () => [...(runtime.history?.() ?? [runtime.head()]), successor],
+    })
     try {
       process.env.AGENT_WORKFLOW_VERSION = 'vB'
       expect(appVersion()).toBe('vB') // env is the identity override
@@ -544,6 +606,7 @@ describe('impl-gate P1-3 — the pre-migration binary gate actually fires', () =
       const res = await restoreBackup(tarPath, { appHome, dbPath, migrationsFolder: MIGRATIONS })
       expect(res.migrated).toBe(true)
     } finally {
+      registerSchemaHistoryRuntime(runtime)
       if (saved === undefined) delete process.env.AGENT_WORKFLOW_VERSION
       else process.env.AGENT_WORKFLOW_VERSION = saved
     }
@@ -590,9 +653,9 @@ describe('impl-gate P2-15 / P1-1 — restore CLI ordering', () => {
     const saved = process.env.AGENT_WORKFLOW_HOME
     process.env.AGENT_WORKFLOW_HOME = appHome
     try {
-      const db = openDb({ path: join(appHome, 'db.sqlite'), migrationsFolder: MIGRATIONS })
+      const db = openDb({ path: join(appHome, 'db.sqlite') })
       const backup = await createBackup({
-        contract: buildLogicalSchemaContract(),
+        contract: logicalSchemaContract,
         db,
         appHome,
         now: 1,
@@ -604,7 +667,7 @@ describe('impl-gate P2-15 / P1-1 — restore CLI ordering', () => {
         [backup.path, '--dry-run'],
         composeLocalSystemOperations({
           repositoryBackupPreparationFactory: composeRepositoryBackupPreparation,
-          contract: buildLogicalSchemaContract(),
+          contract: logicalSchemaContract,
         }),
       )
       expect(res.status).toBe('ok')
@@ -614,7 +677,7 @@ describe('impl-gate P2-15 / P1-1 — restore CLI ordering', () => {
         [backup.path, '--yes'],
         composeLocalSystemOperations({
           repositoryBackupPreparationFactory: composeRepositoryBackupPreparation,
-          contract: buildLogicalSchemaContract(),
+          contract: logicalSchemaContract,
         }),
       )
       expect(apply.status).toBe('error')
@@ -636,7 +699,7 @@ describe('impl-gate P2-15 / P1-1 — restore CLI ordering', () => {
         [junk, '--stage'],
         composeLocalSystemOperations({
           repositoryBackupPreparationFactory: composeRepositoryBackupPreparation,
-          contract: buildLogicalSchemaContract(),
+          contract: logicalSchemaContract,
         }),
       )
       expect(res.status).toBe('error')

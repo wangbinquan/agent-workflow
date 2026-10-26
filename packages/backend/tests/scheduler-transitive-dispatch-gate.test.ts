@@ -27,7 +27,10 @@
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { areTransitiveUpstreamsCompleted, computeReadyNodes } from '../src/services/freshness'
+import {
+  areTransitiveUpstreamsCompleted,
+  computeReadyNodes,
+} from '../src/modules/task-execution/application/runProvenance'
 
 // Structural upstreams for the incident graph, exactly as buildScopeUpstreams
 // would yield them: the cross-clarify back-edges (to_designer / to_questioner →

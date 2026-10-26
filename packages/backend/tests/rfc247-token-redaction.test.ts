@@ -208,11 +208,15 @@ describe('RFC-247 — every redactor has an outlet', () => {
     }
     expect(routes).toContain('projectStoredTaskRepositorySummary(row)')
     const stored = read('platform/persistence/taskRepositorySurface.ts')
-    expect(stored).toContain('repoUrl: row.repoUrl == null ? null : redactGitUrl(row.repoUrl)')
-    expect(stored).toContain("urlProjection: 'redacted' | 'stored' = 'redacted'")
-    expect(stored).toContain('const requestedSource = decodeRequestedSource(row)')
     expect(stored).toContain(
-      "repoUrl: urlProjection === 'stored' ? (row.repoUrl ?? null) : requestedSource.repoUrl",
+      'const primaryUrl = row.repoUrl === undefined ? requestedSource.repoUrl : row.repoUrl',
+    )
+    expect(stored).toContain("urlProjection: 'redacted' | 'stored' = 'redacted'")
+    expect(stored).toContain(
+      'frozenSource === null ? decodeRequestedSource(row) : requestedSourceView(frozenSource)',
+    )
+    expect(stored).toContain(
+      "urlProjection === 'stored' || primaryUrl === null ? primaryUrl : redactGitUrl(primaryUrl)",
     )
     expect(read('modules/task-execution/infrastructure/taskRepositoryCodec.ts')).toContain(
       'repoUrl: row.repoUrl === null ? null : redactGitUrl(row.repoUrl)',

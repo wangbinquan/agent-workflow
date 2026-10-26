@@ -1,3 +1,4 @@
+import type { HistoryRestrictionPort } from '@/platform/contracts/historyRestriction'
 import type { HumanGateTaskLockPort } from './required-ports'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { CrewStationMutationFence } from '@/platform/crewstation/mutationFence'
@@ -10,6 +11,7 @@ import { DatabaseHumanGateOperationPersistence } from '../infrastructure/humanGa
  * artifact store is created; every journal mutation checks the current lease. */
 export function composeCrewStationHumanGateRecovery(input: {
   readonly taskLock: HumanGateTaskLockPort
+  readonly historyRestrictions: HistoryRestrictionPort
   readonly db: PersistenceDb
   readonly fence: CrewStationMutationFence
   readonly artifacts: HumanGateArtifactStore
@@ -28,6 +30,7 @@ export function composeCrewStationHumanGateRecovery(input: {
       },
     },
     input.taskLock,
+    { historyRestrictions: input.historyRestrictions },
   )
   return new HumanGateOperationRecovery({
     operations,

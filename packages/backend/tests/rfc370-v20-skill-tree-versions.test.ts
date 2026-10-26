@@ -69,7 +69,8 @@ describeEachProvider('RFC-370 §10 V20 skill tree versions', (harness) => {
       return { appHome, opts, skill, trees }
     }
     async function state(skillId: string) {
-      const { skills, skillOperations, skillOperationLocks } = tablesOf(harness.db)
+      const { skills } = tablesOf(harness.db)
+      const { skillOperations, skillOperationLocks } = tablesOf(harness.db)
       const skill = (await harness.db.select().from(skills).where(eq(skills.id, skillId)))[0]!
       const operations = await harness.db
         .select()

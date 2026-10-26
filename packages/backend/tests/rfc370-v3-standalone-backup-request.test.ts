@@ -9,7 +9,7 @@ import { registerProviderHttpApplicationLifetime } from './helpers/providerHttpA
 import { afterEach, expect, test } from 'bun:test'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { createSecretBoxFromKey } from '@/auth/secretBox'
 import { createInMemoryDb } from '@/db/client'
 import { composeSystemOperationsWithRecoveryAdapter } from '@/modules/system-operations/composition'
@@ -32,7 +32,7 @@ test('a standalone HTTP backup never reads its body and never captures worktrees
     await openTestApplication(
       {
         provider: 'sqlite',
-        db: createInMemoryDb(resolve(import.meta.dirname, '../db/migrations')),
+        db: createInMemoryDb(),
       },
       {
         token: 'daemon-backup',

@@ -19,7 +19,13 @@ import type { ServerWebSocket } from 'bun'
 
 import { buildActor, type Actor } from '../src/auth/actor'
 import { createInMemoryDb } from '../src/db/client'
-import { WS_CHANNELS, installPresence, type WsConnectionData } from '../src/ws/registry'
+import {
+  WS_CHANNELS,
+  installPresence,
+  type WsConnectionData,
+  type WsCredential,
+  type IdentityAccessWsBinding,
+} from '../src/ws/registry'
 import { buildWebSocketAdapter } from '../src/ws/server'
 import {
   WS_CLOSE_NOT_VISIBLE,
@@ -30,7 +36,7 @@ import {
 import { createUser } from './helpers/userFixture'
 import { createSession } from './helpers/auth/sessionStore'
 import { describeCredential } from '../src/auth/session'
-import type { WsCredential } from '../src/ws/registry'
+
 import { createLogger } from '../src/util/log'
 import { composeIdentityAccess } from '../src/modules/identity-access/composition'
 import { PerformanceMonotonicClock } from '../src/modules/identity-access/infrastructure/inMemoryPresence'
@@ -39,11 +45,9 @@ import {
   stubIdentityAccessWsBinding,
   TEST_DIRECT_AUTHORITY,
 } from './helpers/identityAccessWs'
-import type { IdentityAccessWsBinding } from '../src/ws/registry'
+
 import type { DirectRequestAuthority } from '../src/modules/identity-access/public/participants'
 import { composeTestSqliteRealtimeRuntime, STUB_REALTIME_RUNTIME } from './helpers/realtimeRuntime'
-
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 function seedUser(db: ReturnType<typeof createInMemoryDb>, id: string, role = 'admin'): void {
   db.$client
@@ -106,7 +110,7 @@ describe('RFC-312 实现门 —— presence 计数不得因关闭时序泄漏', 
   // 这一条才锁得住修复本身——若只自己把 `closing` 置真再调 installPresence，锁的是那个
   // 早已存在的守卫，而不是"标志有没有被置上"，删掉修复照样绿（我第一版就写错成那样）。
   test('handleClose 置 closing ⇒ 随后迟到的 installPresence 不再登记', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createInMemoryDb()
     seedUser(db, 'ghost')
     const identityAccess = composeIdentityAccess(db)
     const { getUserPresence } = identityAccess
@@ -126,7 +130,7 @@ describe('RFC-312 实现门 —— presence 计数不得因关闭时序泄漏', 
   })
 
   test('未关闭时正常登记，仍是在线（守卫没有误杀正向路径）', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createInMemoryDb()
     seedUser(db, 'alive')
     const identityAccess = composeIdentityAccess(db)
     const { getUserPresence } = identityAccess
@@ -140,7 +144,7 @@ describe('RFC-312 实现门 —— presence 计数不得因关闭时序泄漏', 
 describe('RFC-312 实现门 —— presence 通道声明了重同步（累积流不得靠丢帧收场）', () => {
   // P1-2 / P1-3 的共同修法：通道把"如何重同步"声明成数据，复核解冻与 send 被丢两处都用它。
   test('presence spec 提供 resync，且它发的是一份全量快照', () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createInMemoryDb()
     seedUser(db, 'viewer')
     const { ws, sent } = fakeWs(actorWith('admin', 'viewer'))
     const resync = WS_CHANNELS.presence.resync
@@ -165,7 +169,7 @@ describe('RFC-312 实现门 —— 系统默认授权的归因', () => {
   // 与迁移 0188 给存量行写的 NULL 一致；操作者显式勾选的点才记操作者。
   // 修复前两者被合并成同一个数组、统一归因操作者 ⇒ 审计谎报"管理员显式授予了 users:presence"。
   test('默认 grant 记 NULL、显式勾选记操作者，两条来路归因不再打架', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createInMemoryDb()
     seedUser(db, 'admin-1', 'admin')
     const module = composeIdentityAccess(db)
     const context = module.contexts.fromAuthenticatedPrincipal(
@@ -247,7 +251,7 @@ describe('RFC-312 实现门 —— 撤权拒绝链必须有行为锁', () => {
   // 若有人给 presence 加一条"跳过复核"的捷径，那条断言照样绿。这里真的跑一遍
   // 「已有订阅 → 删除 grant → 复核 → 4403」，并带正向对照（有权限时不关）。
   test('删除 users:presence 后，既有 presence 连接被 4403 关掉（含正向对照）', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createInMemoryDb()
     const log = createLogger('test')
     const user = await createUser(db, {
       username: 'watcher',

@@ -1,3 +1,4 @@
+import { cpSync } from 'node:fs'
 // RFC-239 §3.5 — file-content endpoint for the markdown rendered-diff view.
 // Locks the design-gate requirements:
 //  - P0-2: base side reads `basePath ?? path` (rename-aware), BOTH sides answer
@@ -230,6 +231,8 @@ describeEachProvider('getTaskFileContent（双引擎）', (harness) => {
     const secondaryHead = (await runGit(secondary.dir, ['rev-parse', 'HEAD'])).stdout.trim()
 
     const container = tempDir('aw-fc-multi-')
+    cpSync(primary.dir, join(container, 'primary'), { recursive: true })
+    cpSync(secondary.dir, join(container, 'secondary'), { recursive: true })
     const taskId = await seedTask(db, { worktreePath: container, baseCommit: primary.commit })
     const repoRow = {
       taskId,

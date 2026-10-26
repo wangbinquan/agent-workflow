@@ -1,21 +1,35 @@
-import { readFileSync, lstatSync, readdirSync } from 'node:fs'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
+import {
+  currentFileSkillReference,
+  readFileSkillReference,
+  fileSkillReferencePath,
+} from './fileSkillReferences'
+import { lstatSync, readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { SkillPackageContentReader } from '../../application/skills/packageContentReader'
-import { resolveFileSkillReadRoot } from './fileSkillContentReader'
 import { ValidationError } from '@/util/errors'
 
 /** Original snapshot preference, full-tree checks and byte reads. */
-export function createFileSkillPackageContentReader(appHome: string): SkillPackageContentReader {
+export function createFileSkillPackageContentReader(
+  appHome: string,
+  db?: PersistenceDb,
+): SkillPackageContentReader {
   return {
-    readTree(reference) {
-      const root = resolveFileSkillReadRoot(appHome, reference)
-      assertRegularDirectory(root, 'resource-package-skill-tree-invalid')
-      const paths: string[] = []
-      collectSkillFiles(root, '', paths)
-      paths.sort((left, right) => left.localeCompare(right))
-      return paths.map((path) =>
-        Object.freeze({ path, bytes: new Uint8Array(readFileSync(join(root, path))) }),
-      )
+    async readTree(reference) {
+      const ref = await currentFileSkillReference(appHome, db, reference)
+      if (ref?.kind === 'local-file') {
+        const root = fileSkillReferencePath(appHome, ref)
+        assertRegularDirectory(root, 'resource-package-skill-tree-invalid')
+        const paths: string[] = []
+        collectSkillFiles(root, '', paths)
+        return paths
+          .sort()
+          .map((path) => ({ path, bytes: new Uint8Array(readFileSync(join(root, path))) }))
+      }
+      const tree = await readFileSkillReference(appHome, db, ref)
+      if (!tree)
+        throw new ValidationError('resource-package-skill-tree-invalid', 'skill tree is missing')
+      return tree.files
     },
   }
 }

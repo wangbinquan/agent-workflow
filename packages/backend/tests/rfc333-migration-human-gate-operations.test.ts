@@ -2,10 +2,9 @@ import { rawExec, rawRows } from '@/platform/persistence/queryHelpers'
 import { describe, expect, test } from 'bun:test'
 import { sql } from 'drizzle-orm'
 
-import { createInMemoryDb } from '@/db/client'
-import { MIGRATIONS } from './migration-freeze'
+import { createFrozenEpoch1Db } from './migration-freeze'
 
-function seedTasks(db: ReturnType<typeof createInMemoryDb>): void {
+function seedTasks(db: ReturnType<typeof createFrozenEpoch1Db>): void {
   for (const taskId of ['task-a', 'task-b', 'task-c', 'task-d']) {
     rawExec(
       db,
@@ -33,7 +32,7 @@ function thrownCauseMessage(run: () => unknown): string {
 }
 
 function insertOperation(
-  db: ReturnType<typeof createInMemoryDb>,
+  db: ReturnType<typeof createFrozenEpoch1Db>,
   input: {
     id: string
     taskId: string
@@ -73,7 +72,7 @@ function insertOperation(
 
 describe('RFC-333 migrations 0212/0213 — human-gate transaction and handoff storage', () => {
   test('adds the operation journal and splits active intent uniqueness for one exact successor', () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createFrozenEpoch1Db()
     const tables = rawRows<{ name: string }>(
       db,
       sql`SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name`,
@@ -124,7 +123,7 @@ describe('RFC-333 migrations 0212/0213 — human-gate transaction and handoff st
   })
 
   test('enforces JSON/revision shapes and immutable committed receipts', () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createFrozenEpoch1Db()
     seedTasks(db)
     expect(() =>
       rawExec(
@@ -215,7 +214,7 @@ describe('RFC-333 migrations 0212/0213 — human-gate transaction and handoff st
   })
 
   test('fences duplicate keys, active exact-gate operations, and gate revisions', () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createFrozenEpoch1Db()
     seedTasks(db)
     insertOperation(db, {
       id: 'active-a',
@@ -263,7 +262,7 @@ describe('RFC-333 migrations 0212/0213 — human-gate transaction and handoff st
   })
 
   test('owns artifact integrity and cascades operation deletion', () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createFrozenEpoch1Db()
     seedTasks(db)
     insertOperation(db, {
       id: 'artifact-operation',

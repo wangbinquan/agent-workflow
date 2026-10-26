@@ -2,7 +2,7 @@
 // not a source-tree ornament. These checks cover the same verifier used by
 // logical target preparation and by the standalone schema migrator.
 
-import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import { buildFrozenEpoch1LogicalSchemaContract as buildLogicalSchemaContract } from '@/platform/persistence/migration/epoch1/contract'
 import { afterEach, describe, expect, test } from 'bun:test'
 import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -10,12 +10,12 @@ import { join, resolve } from 'node:path'
 import {
   loadPostgresqlMigrationHistory,
   verifyPostgresqlMigrationHistory,
-} from '@/platform/persistence/postgresqlMigrationHistory'
-import { postgresqlMigrationJournal } from '@/platform/persistence/postgresqlMigrationSequence'
+} from '@/platform/persistence/migration/legacy/postgresqlMigrationHistory'
+import { postgresqlMigrationJournal } from '@/platform/persistence/migration/legacy/postgresqlMigrationSequence'
 import {
   buildPostgresqlSchemaPlan,
   renderPostgresqlBaselineSql,
-} from '@/platform/persistence/postgresqlSchema'
+} from '@/platform/persistence/migration/legacy/postgresqlSchema'
 import { canonicalSchemaJson } from '@/platform/persistence/schemaContract'
 
 const committedHistory = resolve(import.meta.dir, '..', 'db', 'postgresql-migrations')

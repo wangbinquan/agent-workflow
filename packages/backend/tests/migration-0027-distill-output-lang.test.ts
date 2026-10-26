@@ -3,15 +3,19 @@
 // field) come back with outputLang == NULL; the distiller layer treats
 // NULL as 'en-US' so RFC-041 byte-level baseline is preserved.
 
+import {
+  frozenTablesOf,
+  createFrozenEpoch1Db,
+  type FrozenDbClient,
+  FROZEN_MIGRATIONS,
+} from './migration-freeze'
 import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
 import { queryWrite, queryRows, first } from '@/platform/persistence/queryHelpers'
 import { describe, expect, test, beforeEach } from 'bun:test'
 import { resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { eq } from 'drizzle-orm'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+const MIGRATIONS = resolve(FROZEN_MIGRATIONS)
 
 function baseJobRow(overrides: { id: string; outputLang?: string | null }) {
   return {
@@ -33,15 +37,15 @@ function baseJobRow(overrides: { id: string; outputLang?: string | null }) {
 }
 
 describe('migration 0027 (RFC-050 memory_distill_jobs.output_lang)', () => {
-  let db: DbClient
+  let db: FrozenDbClient
   beforeEach(() => {
-    db = createInMemoryDb(MIGRATIONS)
+    db = createFrozenEpoch1Db(MIGRATIONS)
   })
 
   test('M1: column stores zh-CN / en-US and round-trips', () => {
     const zhId = ulid()
     const enId = ulid()
-    const { memoryDistillJobs } = tablesOf(db)
+    const { memoryDistillJobs } = frozenTablesOf(db)
     insertOne(db, memoryDistillJobs, baseJobRow({ id: zhId, outputLang: 'zh-CN' }))
     insertOne(db, memoryDistillJobs, baseJobRow({ id: enId, outputLang: 'en-US' }))
     const rows = queryRows(db.select().from(memoryDistillJobs))
@@ -52,7 +56,7 @@ describe('migration 0027 (RFC-050 memory_distill_jobs.output_lang)', () => {
 
   test('M2: row inserted without output_lang comes back NULL (legacy / default)', () => {
     const id = ulid()
-    const { memoryDistillJobs } = tablesOf(db)
+    const { memoryDistillJobs } = frozenTablesOf(db)
     insertOne(db, memoryDistillJobs, baseJobRow({ id }))
     const row = first(db.select().from(memoryDistillJobs).where(eq(memoryDistillJobs.id, id)))
     expect(row?.outputLang).toBeNull()
@@ -60,7 +64,7 @@ describe('migration 0027 (RFC-050 memory_distill_jobs.output_lang)', () => {
 
   test('M3: explicit NULL is preserved (admin can revert from explicit to default)', () => {
     const id = ulid()
-    const { memoryDistillJobs } = tablesOf(db)
+    const { memoryDistillJobs } = frozenTablesOf(db)
     insertOne(db, memoryDistillJobs, baseJobRow({ id, outputLang: 'zh-CN' }))
     queryWrite(
       db.update(memoryDistillJobs).set({ outputLang: null }).where(eq(memoryDistillJobs.id, id)),

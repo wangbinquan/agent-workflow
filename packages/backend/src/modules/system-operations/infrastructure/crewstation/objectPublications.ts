@@ -1,3 +1,12 @@
+import {
+  readContentObject,
+  registerContentObjectInTx,
+} from '@/platform/content/infrastructure/contentStore'
+import { canonicalSchemaJson } from '@/platform/persistence/schema/canonical'
+import {
+  hostedObjectReferenceOwner,
+  parseHostedObject,
+} from '@/platform/content/locations/hostedObject'
 // RFC-370 v3 V6 — the one platform-neutral hosted object publication journal.
 //
 // State machine of one (owner, key):
@@ -41,7 +50,8 @@ import type {
   HostedObjectReleaseSelection,
 } from './objectPublicationContract'
 
-type Row = PersistenceTables['hostedObjectPublications']['$inferSelect']
+type StoredRow = PersistenceTables['contentPublications']['$inferSelect']
+type Row = StoredRow & { readonly objectId: string | null }
 type Lease = ReturnType<CrewStationMutationFence['current']>
 
 const OWNER = /^[a-z][a-z0-9-]{0,63}$/
@@ -112,6 +122,75 @@ interface Bound {
   readonly row: Row
 }
 
+async function publicationWithObject(db: PersistenceDb, row: StoredRow): Promise<Row> {
+  if (row.contentId === null) return { ...row, objectId: null }
+  const ref = await readContentObject(db, row.contentId)
+  if (ref.kind !== 'object' || ref.sha256 !== row.sha256 || ref.size !== row.size)
+    throw new HostedObjectPublicationError('hosted-object-publication-receipt-mismatch')
+  const location = ref.location
+  let objectId: string | null = null
+  if (location.codec === 'hosted-object-id' && typeof location.value === 'string')
+    objectId = location.value
+  else if (
+    location.codec === 'review-object' &&
+    typeof location.value === 'object' &&
+    location.value !== null &&
+    'objectId' in location.value &&
+    typeof location.value.objectId === 'string'
+  )
+    objectId = location.value.objectId
+  else if (location.codec === 'aw-object:v2' && typeof location.value === 'string') {
+    const owner = hostedObjectReferenceOwner(location.value)
+    if (owner !== null) objectId = parseHostedObject(owner, location.value).id
+  }
+  if (objectId === null)
+    throw new HostedObjectPublicationError('hosted-object-publication-location-invalid')
+  return { ...row, objectId }
+}
+
+async function catalogHostedObject(
+  tx: PersistenceDb,
+  object: HostedObjectReceipt,
+  now: number,
+): Promise<string> {
+  const { contentObjects } = tablesOf(tx)
+  const location = { codec: 'hosted-object-id', value: object.id }
+  const locationJson = canonicalSchemaJson(location)
+  const existing = (
+    await tx
+      .select({ id: contentObjects.contentId })
+      .from(contentObjects)
+      .where(
+        and(
+          eq(contentObjects.kind, 'object'),
+          eq(contentObjects.locationJson, locationJson),
+          eq(contentObjects.sha256, object.sha256),
+          eq(contentObjects.size, object.size),
+        ),
+      )
+      .limit(1)
+  )[0]
+  if (existing !== undefined) return existing.id
+  const contentId = sha256Hex(
+    JSON.stringify(['hosted-object', object.id, object.sha256, object.size]),
+  )
+  await registerContentObjectInTx(
+    tx,
+    {
+      version: 1,
+      kind: 'object',
+      location,
+      contentId,
+      contentVersion: 1,
+      sha256: object.sha256,
+      size: object.size,
+      mediaType: null,
+    },
+    now,
+  )
+  return contentId
+}
+
 export function createHostedObjectPublications(input: {
   readonly db: PersistenceDb
   readonly fence: CrewStationMutationFence
@@ -139,18 +218,15 @@ export function createHostedObjectPublications(input: {
       return run(tx)
     })
   }
-  const read = async (tx: PersistenceDb, id: string) => {
-    const { hostedObjectPublications } = tablesOf(tx)
-    return (
-      await tx
-        .select()
-        .from(hostedObjectPublications)
-        .where(eq(hostedObjectPublications.id, id))
-        .limit(1)
+  const read = async (tx: PersistenceDb, id: string): Promise<Row | undefined> => {
+    const { contentPublications } = tablesOf(tx)
+    const row = (
+      await tx.select().from(contentPublications).where(eq(contentPublications.id, id)).limit(1)
     )[0]
+    return row === undefined ? undefined : publicationWithObject(tx, row)
   }
   const lock = async (tx: PersistenceDb, id: string) => {
-    const { hostedObjectPublications } = tablesOf(tx)
+    const { contentPublications: hostedObjectPublications } = tablesOf(tx)
     await session.engine.lockAggregateRoot(
       tx,
       hostedObjectPublications,
@@ -221,7 +297,8 @@ export function createHostedObjectPublications(input: {
       state: 'pending' as const,
       sha256: facts.sha256,
       size: facts.size,
-      objectId: request.object?.id ?? null,
+      contentId:
+        request.object === undefined ? null : await catalogHostedObject(tx, request.object, at),
       epoch: lease.epoch,
       sourceSealed: sealedOf(request),
       attempts: 0,
@@ -230,7 +307,7 @@ export function createHostedObjectPublications(input: {
       releasedAt: null,
       updatedAt: at,
     }
-    const { hostedObjectPublications } = tablesOf(tx)
+    const { contentPublications: hostedObjectPublications } = tablesOf(tx)
     await tx.insert(hostedObjectPublications).values(fresh).onConflictDoNothing()
     const row = await lock(tx, id)
     if (row === undefined)
@@ -251,7 +328,7 @@ export function createHostedObjectPublications(input: {
           nextAttemptAt: 0,
           updatedAt: at,
           ...(row.objectId === null && request.object !== undefined
-            ? { objectId: request.object.id }
+            ? { contentId: await catalogHostedObject(tx, request.object, at) }
             : {}),
           ...(row.sourceSealed === null && fresh.sourceSealed !== null
             ? { sourceSealed: fresh.sourceSealed }
@@ -261,7 +338,7 @@ export function createHostedObjectPublications(input: {
           .update(hostedObjectPublications)
           .set(updated)
           .where(eq(hostedObjectPublications.id, id))
-        return { ...row, ...updated }
+        return publicationWithObject(tx, { ...row, ...updated })
       }
       case 'releasing':
         throw new HostedObjectPublicationError('hosted-object-publication-releasing')
@@ -275,7 +352,7 @@ export function createHostedObjectPublications(input: {
           .update(hostedObjectPublications)
           .set(revived)
           .where(eq(hostedObjectPublications.id, id))
-        return revived
+        return publicationWithObject(tx, revived)
       }
     }
   }
@@ -302,7 +379,11 @@ export function createHostedObjectPublications(input: {
   }
   const markReady = async (tx: PersistenceDb, bound: Bound, receipt: HostedObjectReceipt) => {
     const current = await lock(tx, bound.row.id)
-    if (current === undefined || current.attempt !== bound.row.attempt)
+    if (
+      current === undefined ||
+      current.attempt !== bound.row.attempt ||
+      current.epoch !== bound.row.epoch
+    )
       throw new HostedObjectPublicationError('hosted-object-publication-superseded')
     if (current.state === 'ready') {
       if (current.objectId !== receipt.id)
@@ -311,10 +392,15 @@ export function createHostedObjectPublications(input: {
     }
     if (current.state !== 'pending')
       throw new HostedObjectPublicationError('hosted-object-publication-retired')
-    const { hostedObjectPublications } = tablesOf(tx)
+    const { contentPublications: hostedObjectPublications } = tablesOf(tx)
     await tx
       .update(hostedObjectPublications)
-      .set({ state: 'ready', objectId: receipt.id, sourceSealed: null, updatedAt: now() })
+      .set({
+        state: 'ready',
+        contentId: await catalogHostedObject(tx, receipt, now()),
+        sourceSealed: null,
+        updatedAt: now(),
+      })
       .where(eq(hostedObjectPublications.id, bound.row.id))
   }
 
@@ -366,7 +452,7 @@ export function createHostedObjectPublications(input: {
         throw new HostedObjectPublicationError('hosted-object-publication-selection-empty')
       const run = async (handle: PersistenceDb) => {
         const at = now()
-        const { hostedObjectPublications } = tablesOf(handle)
+        const { contentPublications: hostedObjectPublications } = tablesOf(handle)
         const live = and(
           eq(hostedObjectPublications.owner, selection.owner),
           inArray(hostedObjectPublications.state, ['pending', 'ready']),
@@ -412,7 +498,7 @@ export function createHostedObjectPublications(input: {
       return run(tx)
     },
     async scopes(owner, page) {
-      const { hostedObjectPublications } = tablesOf(input.db)
+      const { contentPublications: hostedObjectPublications } = tablesOf(input.db)
       const rows = await input.db
         .select({ scope: hostedObjectPublications.scope })
         .from(hostedObjectPublications)
@@ -439,7 +525,7 @@ export function createHostedObjectPublications(input: {
       error: error instanceof Error ? error.message : String(error),
     })
     await write(async (tx) => {
-      const { hostedObjectPublications } = tablesOf(tx)
+      const { contentPublications: hostedObjectPublications } = tablesOf(tx)
       await tx
         .update(hostedObjectPublications)
         .set({
@@ -451,6 +537,7 @@ export function createHostedObjectPublications(input: {
           and(
             eq(hostedObjectPublications.id, row.id),
             eq(hostedObjectPublications.attempt, row.attempt),
+            eq(hostedObjectPublications.epoch, row.epoch),
             eq(hostedObjectPublications.state, row.state),
           ),
         )
@@ -459,12 +546,29 @@ export function createHostedObjectPublications(input: {
   /** Moves `row` from `from` to the next state only if nothing changed meanwhile. */
   const advance = (row: Row, from: Row['state'], values: Partial<Row>) =>
     write(async (tx) => {
+      const { objectId, ...storedValues } = values
       const current = await lock(tx, row.id)
-      if (current?.attempt !== row.attempt || current.state !== from) return false
-      const { hostedObjectPublications } = tablesOf(tx)
+      if (current?.attempt !== row.attempt || current.epoch !== row.epoch || current.state !== from)
+        return false
+      const { contentPublications: hostedObjectPublications } = tablesOf(tx)
       await tx
         .update(hostedObjectPublications)
-        .set({ ...values, updatedAt: now() })
+        .set({
+          ...storedValues,
+          ...(objectId === undefined
+            ? {}
+            : {
+                contentId:
+                  objectId === null
+                    ? null
+                    : await catalogHostedObject(
+                        tx,
+                        { id: objectId, sha256: row.sha256, size: row.size },
+                        now(),
+                      ),
+              }),
+          updatedAt: now(),
+        })
         .where(eq(hostedObjectPublications.id, row.id))
       return true
     })
@@ -581,13 +685,17 @@ export function createHostedObjectPublications(input: {
             }
           }
           const lease = input.fence.current()
-          const { hostedObjectPublications } = tablesOf(input.db)
+          const { contentPublications: hostedObjectPublications, contentObjects } = tablesOf(
+            input.db,
+          )
+          const objectPublication = sql`(${hostedObjectPublications.contentId} IS NULL OR ${hostedObjectPublications.contentId} IN (SELECT ${contentObjects.contentId} FROM ${contentObjects} WHERE ${contentObjects.kind} = 'object'))`
           const abandoned = await input.db
             .select()
             .from(hostedObjectPublications)
             .where(
               and(
                 eq(hostedObjectPublications.state, 'pending'),
+                objectPublication,
                 lte(hostedObjectPublications.nextAttemptAt, now()),
                 or(
                   sql`${hostedObjectPublications.epoch} < ${lease.epoch}`,
@@ -597,7 +705,8 @@ export function createHostedObjectPublications(input: {
             )
             .orderBy(asc(hostedObjectPublications.updatedAt), asc(hostedObjectPublications.id))
             .limit(batch)
-          for (const row of abandoned) {
+          for (const stored of abandoned) {
+            const row = await publicationWithObject(input.db, stored)
             try {
               const outcome = await settleAbandoned(row)
               if (outcome === 'completed') counters.completed++
@@ -613,12 +722,14 @@ export function createHostedObjectPublications(input: {
             .where(
               and(
                 eq(hostedObjectPublications.state, 'releasing'),
+                objectPublication,
                 lte(hostedObjectPublications.nextAttemptAt, now()),
               ),
             )
             .orderBy(asc(hostedObjectPublications.releasedAt), asc(hostedObjectPublications.id))
             .limit(batch)
-          for (const row of releasing) {
+          for (const stored of releasing) {
+            const row = await publicationWithObject(input.db, stored)
             try {
               counters[await settleReleasing(row, options.horizon)]++
             } catch (error) {
@@ -638,7 +749,7 @@ export function createHostedObjectPublications(input: {
             .limit(SQL_CHUNK)
           if (settled.length > 0)
             counters.purged = await write(async (tx) => {
-              const { hostedObjectPublications } = tablesOf(tx)
+              const { contentPublications: hostedObjectPublications } = tablesOf(tx)
               const rows = await tx
                 .delete(hostedObjectPublications)
                 .where(
@@ -684,7 +795,7 @@ export async function adoptHostedPublicationInTx(
     state: 'ready' as const,
     sha256: input.object.sha256,
     size: input.object.size,
-    objectId: input.object.id,
+    contentId: await catalogHostedObject(tx, input.object, input.now),
     epoch: 0,
     sourceSealed: null,
     attempts: 0,
@@ -693,7 +804,7 @@ export async function adoptHostedPublicationInTx(
     releasedAt: null,
     updatedAt: input.now,
   }
-  const { hostedObjectPublications } = tablesOf(tx)
+  const { contentPublications: hostedObjectPublications } = tablesOf(tx)
   await tx
     .insert(hostedObjectPublications)
     .values({ id, ...values })

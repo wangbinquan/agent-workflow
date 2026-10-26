@@ -1,3 +1,6 @@
+import { legacyContentRef } from '@/platform/content/contentRef'
+import { contentRowColumns } from '@/platform/content/infrastructure/contentStore'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 // RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-223 PR-7 — the canonical resource surface is id-only.
 //
@@ -9,7 +12,7 @@
 
 import { agentFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+
 import { beforeEach, expect, test } from 'bun:test'
 import type { Hono } from 'hono'
 import { ulid } from 'ulid'
@@ -73,7 +76,8 @@ describeEachProviderHttpApplication(
         { base: 'workgroups', id: ulid(), name: 'route-workgroup' },
       ]
       const [agent, skill, mcp, group] = resources
-      const { skills, mcps, workgroups } = tablesOf(db)
+      const { mcps, workgroups } = tablesOf(db)
+      const { skills } = tablesOf(db)
       await agentFixture(db, {
         id: agent!.id,
         name: agent!.name,
@@ -82,7 +86,9 @@ describeEachProviderHttpApplication(
       await insertOne(db, skills, {
         id: skill!.id,
         name: skill!.name,
-        managedPath: `skills/${skill!.id}/files/`,
+        ...contentRowColumns(
+          legacyContentRef('skill-path', 'local-file', `skills/${skill!.id}/files/`),
+        ),
         ownerUserId: alice.id,
       })
       await insertOne(db, mcps, {

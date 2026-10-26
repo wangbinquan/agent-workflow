@@ -1,9 +1,12 @@
+import { nodeRunFixtureColumns } from './helpers/model/nodeRun'
+import { taskReadColumns } from '@/modules/task-execution/infrastructure/taskRepositorySql'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 // RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-370: exercise both real provider roots, not a stand-in coordinator. Capture
 // the real Task run binding request after live settings ACK and keep original files.
 import { patchTaskFixture, readTaskFixtures } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+
 import { expect, test } from 'bun:test'
 import { DEFAULT_CONFIG, type Config, REPO_PREP_NODE_ID } from '@agent-workflow/shared'
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
@@ -124,7 +127,11 @@ describeEachProviderHttpApplication(
         for (;;) {
           const { tasks } = tablesOf(scope.harness.db)
           const row = (
-            await scope.harness.db.select().from(tasks).where(eq(tasks.id, id)).limit(1)
+            await scope.harness.db
+              .select(taskReadColumns(scope.harness.db))
+              .from(tasks)
+              .where(eq(tasks.id, id))
+              .limit(1)
           )[0]
           if (row?.status === status) {
             if (opened.taskExecution.provider === 'postgresql') {
@@ -452,7 +459,7 @@ describeEachProviderHttpApplication(
       const { nodeRuns } = tablesOf(scope.harness.db)
       const prep = (
         await scope.harness.db
-          .select()
+          .select(nodeRunFixtureColumns(scope.harness.db))
           .from(nodeRuns)
           .where(and(eq(nodeRuns.taskId, task.id), eq(nodeRuns.nodeId, REPO_PREP_NODE_ID)))
       )[0]
@@ -466,7 +473,7 @@ describeEachProviderHttpApplication(
       const refailed = await f.waitTask(task.id, 'failed')
       expect(refailed.errorMessage).not.toBeNull()
       const attempts = await scope.harness.db
-        .select()
+        .select(nodeRunFixtureColumns(scope.harness.db))
         .from(nodeRuns)
         .where(and(eq(nodeRuns.taskId, task.id), eq(nodeRuns.nodeId, REPO_PREP_NODE_ID)))
       expect(attempts.length).toBeGreaterThanOrEqual(2)

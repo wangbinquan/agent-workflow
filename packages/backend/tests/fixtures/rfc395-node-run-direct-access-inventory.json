@@ -1,7 +1,6 @@
 {
-  "stage": "RFC-395 II-a A3",
-  "nextPackage": "A7",
-  "scope": "Remaining task-execution-external direct access; raw SQL included. This inventory is not a selection exception allow-list.",
+  "stage": "RFC-395 II-b T18 Q-2",
+  "scope": "Reviewed owner exits and closed external direct-access sites after activation; target companions are read through Task adapters. This inventory never authorizes selection or table-ownership exceptions.",
   "sites": [
     {
       "path": "packages/backend/src/modules/task-execution/infrastructure/taskCodeWorkspaceQueries.ts",
@@ -15,8 +14,8 @@
     },
     {
       "path": "packages/backend/src/modules/collaboration/infrastructure/clarify/seal.ts",
-      "symbol": "sealClarifyRound",
-      "purpose": "existing lifecycle UPDATE only",
+      "symbol": "sealRoundQuestions",
+      "purpose": "complete the clarify run through its Task participant",
       "a7": {
         "status": "closed",
         "via": "task-execution/public/participants.ts#completeClarifyRunInTx"
@@ -24,8 +23,8 @@
     },
     {
       "path": "packages/backend/src/modules/collaboration/infrastructure/humanGateTerminalSweep.ts",
-      "symbol": "terminal sweep",
-      "purpose": "three existing terminal UPDATE statements only",
+      "symbol": "createHumanGateTerminalSweepCommand",
+      "purpose": "cancel clarify and task-gate runs through Task participants",
       "a7": {
         "status": "closed",
         "via": "task-execution/public/participants.ts#cancelClarifyRunInTx+cancelTaskGateRunsInTx"
@@ -63,8 +62,8 @@
     },
     {
       "path": "packages/backend/src/modules/task-execution/infrastructure/taskLifecycle.ts",
-      "symbol": "legacy lifecycle",
-      "purpose": "existing run facts and writes",
+      "symbol": "task lifecycle",
+      "purpose": "owner runtime projection and aggregate writes",
       "a7": {
         "status": "closed",
         "via": "task-execution/public/operations.ts",
@@ -84,7 +83,7 @@
     {
       "path": "packages/backend/src/modules/task-execution/infrastructure/taskWorkspaceMaintenanceStore.ts",
       "symbol": "hasLiveOrRevivableChild",
-      "purpose": "raw SELECT child_task_id FROM node_runs; child task status existence, no run selection",
+      "purpose": "owner projection joins task roots/workspaces and child-run facts for workspace GC; no run selection",
       "a7": {
         "status": "closed",
         "via": "source-control/composition/required-ports.ts#WorkspaceGcTaskPort",
@@ -92,17 +91,16 @@
       }
     },
     {
-      "path": "packages/backend/src/platform/persistence/maintenanceExecutionFence.ts",
+      "path": "packages/backend/src/modules/task-execution/infrastructure/maintenanceExecutionFence.ts",
       "symbol": "createMaintenanceExecutionFence",
-      "purpose": "raw SELECT 1 FROM node_runs WHERE status IN (...) LIMIT 1; active-run existence, no run selection",
+      "purpose": "owner raw active-run existence query using target nodeRuns and provider index hint; no run selection",
       "a7": {
         "status": "closed",
-        "movedTo": "packages/backend/src/modules/task-execution/infrastructure/maintenanceExecutionFence.ts",
         "via": "task-execution/composition/maintenanceExecutionFence.ts#createMaintenanceExecutionFence",
         "why": "Only bootstrap imports the production factory; owner move preserves the indexed query without a platform-to-modules edge."
       }
     }
   ],
-  "a7Part1": "2 closed; 4 module sites in exact T11 debt ledger; 4 horizontal sites handed to A7 part 2",
-  "a7Part2": "2 horizontal sites closed (services query and owner move); 2 exact horizontal ledger entries; no part-2 site unclassified"
+  "a7Part1": "All ten reviewed sites closed via owner implementations or injected ports; original direct-access exceptions have retired.",
+  "a7Part2": "Task owner reads use epoch-2 root/companion projections; archived history is read via the history package exit."
 }

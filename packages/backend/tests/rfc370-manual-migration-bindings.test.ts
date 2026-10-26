@@ -248,7 +248,7 @@ describe.each(['sqlite', 'postgresql'] as const)(
           'read-config',
           'read-generation',
           'list-migrations',
-          ...(provider === 'postgresql' ? ['read-migration', 'resolve-source'] : []),
+          ...(provider === 'postgresql' ? ['list-migrations'] : []),
           'prepare-start',
         ])
         f.prepare.release.resolve()
@@ -261,7 +261,7 @@ describe.each(['sqlite', 'postgresql'] as const)(
           'read-config',
           'read-generation',
           'list-migrations',
-          ...(provider === 'postgresql' ? ['read-migration', 'resolve-source'] : []),
+          ...(provider === 'postgresql' ? ['list-migrations'] : []),
           'prepare-start',
           'prepared',
           'release-start',

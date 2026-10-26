@@ -1,3 +1,4 @@
+import { initializeTaskWorkspace } from './helpers/taskWorkspaceFixture'
 // RFC-230 PR-2 — wrapper 收尾撞上外部合法终态时必须收敛，而不是把整条任务炸成
 // `scheduler error`。
 //
@@ -19,8 +20,8 @@ import {
   workflowFixture,
 } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
-import { readFileSync } from 'node:fs'
-import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
+import { readFileSync, mkdtempSync, rmSync } from 'node:fs'
+
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
@@ -32,7 +33,6 @@ import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { transitionNodeRunStatus } from '../src/services/lifecycle'
 import { runTaskWithRealTestTopology as runTask } from './helpers/taskExecutionTestTopology'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
 const WRAPPER_LIFECYCLE_SRC = resolve(
   import.meta.dir,
@@ -54,9 +54,9 @@ interface Harness {
 function buildHarness(): Harness {
   const appHome = mkdtempSync(join(tmpdir(), 'aw-rfc230-'))
   const worktreePath = join(appHome, 'wt')
-  mkdirSync(worktreePath, { recursive: true })
+  initializeTaskWorkspace(worktreePath)
   return {
-    db: createInMemoryDb(MIGRATIONS),
+    db: createInMemoryDb(),
     appHome,
     worktreePath,
     cleanup: () => rmSync(appHome, { recursive: true, force: true }),

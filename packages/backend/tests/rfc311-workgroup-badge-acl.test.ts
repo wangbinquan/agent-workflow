@@ -1,3 +1,4 @@
+import { eq } from 'drizzle-orm'
 // RFC-311 实现门(测试有效性第 3 路,变异 #18)——workgroup 徽章的 ACL 过滤零防护。
 //
 // 变异实验把 `pendingCount` 里的 `visibleTaskIdsOf(...)` 换成「全部可见」(即彻底
@@ -8,7 +9,6 @@
 // 这条锁的是最直接的用户后果:非成员的收件箱徽章不得因为别人的工作组任务而 +1。
 
 import { taskFixture, workflowFixture } from './helpers/model'
-import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 
@@ -83,11 +83,10 @@ async function seed(db: Db): Promise<void> {
     workgroupId: 'wg1',
     workgroupConfigJson: JSON.stringify(CONFIG),
   })
-  await insertOne(db, workgroupTaskState, {
-    taskId: 'wgtask',
-    gateStatus: 'awaiting_confirmation',
-    updatedAt: NOW,
-  })
+  await db
+    .update(workgroupTaskState)
+    .set({ gateStatus: 'awaiting_confirmation', updatedAt: NOW })
+    .where(eq(workgroupTaskState.taskId, 'wgtask'))
 }
 
 function reads(db: Db) {

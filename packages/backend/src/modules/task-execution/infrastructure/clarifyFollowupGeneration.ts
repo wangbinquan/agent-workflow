@@ -1,20 +1,22 @@
+import { nodeRunReadColumns } from './nodeRunQueries'
+import type { RuntimeExecutionQueries } from '@/modules/runtime-management/public/queries'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { tablesOf } from '@/platform/persistence/sessionTables'
-import { eq } from 'drizzle-orm'
-import { z } from 'zod'
-import { utf16MaxLength } from '@agent-workflow/shared'
+import { createLogger } from '@/util/log'
 import {
   DEFAULT_CONFIG_DIR_PROFILE,
   RuntimeStatusEntrySchema,
+  utf16MaxLength,
   type WorkflowDefinition,
 } from '@agent-workflow/shared'
-import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import type { RuntimeExecutionQueries } from '@/modules/runtime-management/public/queries'
-import { createLogger } from '@/util/log'
-import { DEFAULT_TIMEOUT_MS } from '../application/systemAgentRun'
+import { eq } from 'drizzle-orm'
+import { z } from 'zod'
 import type {
   SystemAgentRunFamily,
   SystemAgentRunRequest,
 } from '../application/ports/systemAgentRunFamily'
+import { DEFAULT_TIMEOUT_MS } from '../application/systemAgentRun'
+import { taskReadColumns } from './taskRepositorySql'
 
 /**
  * RFC-372 follow-up generation for clarify rounds. Reads only Task Execution's
@@ -41,10 +43,15 @@ export function createClarifyFollowupGeneration(input: {
         inputLimit = 8000,
         instructionLimit = 4000
       try {
-        const { tasks, nodeRuns } = tablesOf(input.db)
+        const { nodeRuns } = tablesOf(input.db)
+
+        const { tasks } = tablesOf(input.db)
         const task = (
           await input.db
-            .select({ inputs: tasks.inputs, workflowSnapshot: tasks.workflowSnapshot })
+            .select({
+              inputs: taskReadColumns(input.db).inputs,
+              workflowSnapshot: taskReadColumns(input.db).workflowSnapshot,
+            })
             .from(tasks)
             .where(eq(tasks.id, request.taskId))
             .limit(1)
@@ -115,12 +122,13 @@ export function createClarifyFollowupGeneration(input: {
       signal: AbortSignal
     }) {
       const { nodeRuns } = tablesOf(input.db)
+      const nodeRunColumns = nodeRunReadColumns(input.db)
       const row = (
         await input.db
           .select({
-            protocol: nodeRuns.runtime,
-            binaryPath: nodeRuns.runtimeBinary,
-            params: nodeRuns.runtimeParamsJson,
+            protocol: nodeRunColumns.runtime,
+            binaryPath: nodeRunColumns.runtimeBinary,
+            params: nodeRunColumns.runtimeParamsJson,
           })
           .from(nodeRuns)
           .where(eq(nodeRuns.id, request.askingNodeRunId))

@@ -1,3 +1,4 @@
+import { tablesOf } from '@/platform/persistence/sessionTables'
 // RFC-359 —— 终态维护认领（RFC-328 terminal maintenance claim）：一份实现，两个 provider 共用。
 //
 // 此前是一对逐行同构的适配器：`sqliteTerminalMaintenancePersistence.ts`（33 行薄壳，逐方法转发给
@@ -24,13 +25,12 @@
 // （删除恢复 / 归档都挂在它上面），`transition` / `complete` 直接复用它，同一张状态转移表只此一份。
 
 import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
 import { isTerminalTaskStatus, type TaskStatus } from '@agent-workflow/shared'
 import { and, asc, eq, inArray, isNull, or } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
-import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
+import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
 import type {
   RecoverableTerminalMaintenanceClaim,
   TerminalMaintenanceStore,
@@ -168,13 +168,13 @@ async function assertMemberQuiescentTx(
   member: MaintenanceMemberSnapshot,
 ): Promise<void> {
   const {
-    tasks,
     taskExecutionOwners,
     taskExecutionIntents,
     taskExecutionEffectAttempts,
     taskExecutionEffects,
     taskExecutionEffectFences,
   } = tablesOf(tx)
+  const { tasks } = tablesOf(tx)
   const taskRows = await tx
     .select({
       status: tasks.status,
@@ -285,7 +285,8 @@ async function snapshotMembersTx(
   }
   const snapshots: MaintenanceMemberSnapshot[] = []
   for (const id of uniqueIds) {
-    const { tasks, taskExecutionOwners } = tablesOf(tx)
+    const { taskExecutionOwners } = tablesOf(tx)
+    const { tasks } = tablesOf(tx)
     const rows = await tx
       .select({
         revision: tasks.lifecycleEventRevision,

@@ -179,6 +179,9 @@ function sqliteExec(args: string[], sql: string): string {
     encoding: 'utf8',
     input: sql,
     stdio: ['pipe', 'pipe', 'pipe'],
+    // Epoch-2 schema-history receipts include the complete contract and plans;
+    // a single artifact exceeds Node's default 1 MiB stdout buffer.
+    maxBuffer: 64 * 1024 * 1024,
     timeout: COMMAND_TIMEOUT_MS,
   })
 }

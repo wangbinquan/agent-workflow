@@ -7,7 +7,6 @@ import type { Hono } from 'hono'
 import type { DevelopmentAutomationModule } from '@/modules/development-automation/composition'
 import type { SecretBox } from '@/auth/secretBox'
 
-import { createDigitalEmployeeWriterCutoverPersistence } from '@/modules/digital-employee/infrastructure/writerCutoverPersistence'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { sealRepoUrl } from '@/services/repoCredentials'
@@ -180,21 +179,13 @@ describeEachProviderHttpApplication(
         submission: { kind: 'direct', title: 'Valid', body: 'Valid request', uploads: [] },
         delivery: { kind: 'create-merge-request' },
       }
-      // 保留真实 drive，只等待该 HTTP 请求已启动的 Promise，避免清理目录抢在它前面。
+      // Retired admissions never start a drive; historical Missions can still be handed off.
       const drive = spyOn(automation, 'drive')
       try {
         const launched = await request('POST', '/api/code/missions', validLaunch)
-        expect(launched.status, await launched.clone().text()).toBe(201)
-        const launchReceipt = (await launched.json()) as { created: boolean; missionId: string }
-        expect(launchReceipt).toMatchObject({ created: true, missionId: expect.any(String) })
-        await drive.mock.results[0]!.value
-        await createDigitalEmployeeWriterCutoverPersistence(scope.harness.db).activate({
-          legacyAdmissionsEnabled: false,
-          now: Date.now(),
-        })
-        const retired = await request('POST', '/api/code/missions', validLaunch)
-        expect(retired.status).toBe(409)
-        expect(await retired.json()).toMatchObject({ code: 'legacy-mission-admission-retired' })
+        expect(launched.status, await launched.clone().text()).toBe(409)
+        expect(await launched.json()).toMatchObject({ code: 'legacy-mission-admission-retired' })
+        expect(drive).not.toHaveBeenCalled()
         const missionId = await fx.launchDirect('rfc370-handoff')
         const handedOff = await request('POST', `/api/code/missions/${missionId}/handoff`, {})
         expect(handedOff.status, await handedOff.clone().text()).toBe(200)

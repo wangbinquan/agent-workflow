@@ -1,3 +1,6 @@
+import type { RecordedNodeRunInput } from '../../domain/consumedInputs'
+import type { RunSlot } from './runSelection'
+import type { NodeRunMintGeneration } from '../nodeRunMintIdentity'
 import type { SelectionChange } from './runSelection'
 import type { NodeRunRole, NodeRunSyntheticKind } from '../../domain/nodeRunRole'
 import type { NodeRunLifecycleWrite, NodeRunMintWrite } from './nodeRunWrites'
@@ -26,6 +29,9 @@ export interface NodeRunMintInheritance {
 export type NodeRunMintOverrides = NodeRunMintWrite
 
 export interface NodeRunMintInput {
+  readonly slot: RunSlot
+  readonly envelopeNonce: string
+  readonly executionGeneration: NodeRunMintGeneration
   readonly role: NodeRunRole
   readonly syntheticKind: NodeRunSyntheticKind | null
   readonly id?: string
@@ -58,6 +64,9 @@ export interface NodeRunMintInput {
 
 /** Closed insert projection shared by both provider adapters. */
 export interface NodeRunMintRecord {
+  readonly slot: RunSlot
+  readonly slotKey: string
+  readonly executionGeneration: NodeRunMintGeneration
   readonly role: NodeRunRole
   readonly syntheticKind: NodeRunSyntheticKind | null
   readonly id: string
@@ -76,6 +85,7 @@ export interface NodeRunMintRecord {
   readonly checkpoints: readonly TaskRepositoryCheckpoint[]
   readonly shardValueHash: string | null
   readonly consumedUpstreamRunsJson: string | null
+  readonly recordedInputs: readonly RecordedNodeRunInput[] | null
   readonly errorMessage: string | null
   readonly forceActivated: boolean
   readonly startedAt: number | null
@@ -96,6 +106,7 @@ export interface NodeRunLifecyclePersistence {
     readonly event: NodeRunTransitionEvent
     readonly selection?: SelectionChange
     readonly extra?: NodeRunStatusMutation
+    readonly executionGeneration?: NodeRunMintGeneration
     readonly executionContext?: TaskExecutionContextRef
   }): Promise<{ readonly from: NodeRunStatus; readonly to: NodeRunStatus }>
   set(input: {
@@ -105,6 +116,7 @@ export interface NodeRunLifecyclePersistence {
     readonly extra?: NodeRunStatusMutation
     readonly allowTerminal?: boolean
     readonly reason?: string
+    readonly executionGeneration?: NodeRunMintGeneration
     readonly executionContext?: TaskExecutionContextRef
   }): Promise<{ readonly from: NodeRunStatus; readonly to: NodeRunStatus }>
   loadEnvelopeNonce(nodeRunId: string): Promise<string>

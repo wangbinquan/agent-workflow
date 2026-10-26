@@ -1,3 +1,13 @@
+import { epoch2ReviewReader } from './helpers/epoch2RuntimePorts'
+import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
+import type { TaskReadRow } from '@/modules/task-execution/infrastructure/taskRepositorySql'
+import { legacyContentRef } from '@/platform/content/contentRef'
+import { nodeRunFixtureColumns } from './helpers/model/nodeRun'
+import {
+  inlineContentColumns,
+  contentRowColumns,
+} from '@/platform/content/infrastructure/contentStore'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { withO2Closure } from './helpers/o2Closure'
 // RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-142 — 评审历史信息全量回显：多文档分轮（rounds）+ G4 混代修复。
@@ -27,19 +37,19 @@ import {
   workflowFixture,
 } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+
 import { registerProviderHttpApplicationLifetime } from './helpers/providerHttpApplication'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { dirname, join, resolve } from 'node:path'
+import { dirname, join } from 'node:path'
 import { and, eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type { Hono } from 'hono'
 import { createSession } from './helpers/auth/sessionStore'
-import type { DbClient } from '../src/db/client'
-import { createInMemoryDb } from '../src/db/client'
+import { type DbClient, createInMemoryDb } from '../src/db/client'
+
 import {
   dispatchReviewNode,
   getReviewDetail,
@@ -54,7 +64,6 @@ import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 
 const openTestApplication = registerProviderHttpApplicationLifetime()
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const CASE_GEN_AGENT_ID = 'agent-case-gen'
 
 // ---------------------------------------------------------------------------
@@ -220,7 +229,7 @@ describe('RFC-142 — listReviewRounds / getReviewDetail 混代（集成）', ()
     worktree = join(tmp, 'worktree')
     mkdirSync(appHome, { recursive: true })
     mkdirSync(worktree, { recursive: true })
-    db = createInMemoryDb(MIGRATIONS)
+    db = createInMemoryDb()
   })
   afterEach(() => {
     rmSync(appHome, { recursive: true, force: true })
@@ -231,7 +240,7 @@ describe('RFC-142 — listReviewRounds / getReviewDetail 混代（集成）', ()
 
   async function seed(): Promise<{
     taskId: string
-    task: PersistenceTables['tasks']['$inferSelect']
+    task: TaskReadRow
     definition: WorkflowDefinition
     reviewNode: WorkflowNode
   }> {
@@ -327,7 +336,7 @@ describe('RFC-142 — listReviewRounds / getReviewDetail 混代（集成）', ()
       contextBefore: '',
       contextAfter: '',
       occurrenceIndex: 0,
-      commentText: text,
+      ...inlineContentColumns(Buffer.from(text, 'utf8'), 'text/plain'),
       createdAt: Date.now(),
     })
   }
@@ -374,6 +383,7 @@ describe('RFC-142 — listReviewRounds / getReviewDetail 混代（集成）', ()
       }),
     )
     await wakeHumanGateContinuation(firstDecision.taskId, firstDecision.continuationRef, {
+      historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
       db,
       appHome,
       schedulerDriver: { async drive() {} },
@@ -384,7 +394,7 @@ describe('RFC-142 — listReviewRounds / getReviewDetail 混代（集成）', ()
     // 模拟上游重跑完成：iterate 铸出的 fresh pending src 行置 done + 补输出。
     const srcRerun = (
       await db
-        .select()
+        .select(nodeRunFixtureColumns(db))
         .from(nodeRuns)
         .where(
           and(
@@ -418,7 +428,12 @@ describe('RFC-142 — listReviewRounds / getReviewDetail 混代（集成）', ()
     )
     expect(r2.kind).toBe('awaiting_review')
 
-    const rounds = await listReviewRounds(db, appHome, reviewNodeRunId)
+    const rounds = await listReviewRounds(
+      db,
+      appHome,
+      reviewNodeRunId,
+      epoch2ReviewReader(db, appHome),
+    )
     expect(rounds.length).toBe(2)
     const [old, cur] = [rounds[0]!, rounds[1]!]
     expect(old.roundKey).toBe('g1')
@@ -455,7 +470,12 @@ describe('RFC-142 — listReviewRounds / getReviewDetail 混代（集成）', ()
         expectedReviewIteration: 1,
       }),
     )
-    const detail = await getReviewDetail(db, appHome, reviewNodeRunId)
+    const detail = await getReviewDetail(
+      db,
+      appHome,
+      reviewNodeRunId,
+      epoch2ReviewReader(db, appHome),
+    )
     expect(detail.documents).toBeDefined()
     expect(detail.documents!.length).toBe(3)
     expect(detail.documents!.map((d) => d.itemIndex)).toEqual([0, 1, 2])
@@ -464,7 +484,12 @@ describe('RFC-142 — listReviewRounds / getReviewDetail 混代（集成）', ()
     expect(detail.currentVersion.id).toBe(round2Docs[0]!.id)
     expect(detail.comments.length).toBe(1)
     expect(detail.comments[0]!.commentText).toBe('still too loose')
-    const roundsAfter = await listReviewRounds(db, appHome, reviewNodeRunId)
+    const roundsAfter = await listReviewRounds(
+      db,
+      appHome,
+      reviewNodeRunId,
+      epoch2ReviewReader(db, appHome),
+    )
     expect(roundsAfter[1]!.isCurrent).toBe(true) // 无 pending → 末轮
   })
 
@@ -515,14 +540,24 @@ describe('RFC-142 — listReviewRounds / getReviewDetail 混代（集成）', ()
       }),
     )
 
-    const detail = await getReviewDetail(db, appHome, reviewNodeRunId)
+    const detail = await getReviewDetail(
+      db,
+      appHome,
+      reviewNodeRunId,
+      epoch2ReviewReader(db, appHome),
+    )
     // G4：只允许最高代成员——旧实现按 max reviewIteration 过滤会给出 6 条（itemIndex 重复）。
     expect(detail.documents!.length).toBe(3)
     expect(detail.documents!.map((d) => d.itemIndex)).toEqual([0, 1, 2])
     const gen2Ids = new Set(gen2.map((d) => d.id))
     for (const d of detail.documents!) expect(gen2Ids.has(d.docVersionId)).toBe(true)
 
-    const rounds = await listReviewRounds(db, appHome, reviewNodeRunId)
+    const rounds = await listReviewRounds(
+      db,
+      appHome,
+      reviewNodeRunId,
+      epoch2ReviewReader(db, appHome),
+    )
     expect(rounds.map((r) => r.roundKey)).toEqual(['g1', 'g2'])
     expect(rounds[0]!.decision).toBe('superseded')
     expect(rounds[0]!.decisionReason).toBe('upstream-refreshed')
@@ -557,11 +592,15 @@ describe('RFC-142 — listReviewRounds / getReviewDetail 混代（集成）', ()
       sourcePortName: 'docpath',
       versionIndex: 1,
       reviewIteration: 0,
-      bodyPath: 'doc_versions/v1.md',
+      ...contentRowColumns(
+        legacyContentRef('review-body-path', 'local-file', 'doc_versions/v1.md'),
+      ),
       decision: 'pending',
       createdAt: Date.now(),
     })
-    expect(await listReviewRounds(db, appHome, reviewRunId)).toEqual([])
+    expect(
+      await listReviewRounds(db, appHome, reviewRunId, epoch2ReviewReader(db, appHome)),
+    ).toEqual([])
   })
 })
 
@@ -581,7 +620,7 @@ describe('RFC-142 — /rounds 路由 ACL', () => {
   let stranger = { id: '', token: '' }
 
   beforeEach(async () => {
-    db = createInMemoryDb(MIGRATIONS)
+    db = createInMemoryDb()
     const tmp = mkdtempSync(join(tmpdir(), 'aw-rfc142-http-'))
     appHome = join(tmp, 'appHome')
     mkdirSync(appHome, { recursive: true })
@@ -631,7 +670,8 @@ describe('RFC-142 — /rounds 路由 ACL', () => {
       edges: [],
     }
     const workflowId = ulid()
-    const { taskCollaborators, docVersions } = tablesOf(db)
+    const { taskCollaborators } = tablesOf(db)
+    const { docVersions } = tablesOf(db)
     await workflowFixture(db, {
       id: workflowId,
       name: 'wf',
@@ -682,7 +722,7 @@ describe('RFC-142 — /rounds 路由 ACL', () => {
         sourcePortName: 'cases',
         versionIndex: 1,
         reviewIteration: 0,
-        bodyPath: `dv/item${i}.md`,
+        ...contentRowColumns(legacyContentRef('review-body-path', 'local-file', `dv/item${i}.md`)),
         decision: 'pending',
         itemIndex: i,
         itemPath: `cases/${i}.md`,

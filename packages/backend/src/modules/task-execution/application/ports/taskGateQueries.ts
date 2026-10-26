@@ -1,8 +1,9 @@
 import type { TaskStatus } from '@agent-workflow/shared'
+import type { TaskDefinitionSubject } from '../../domain/taskSubject'
 import type { TaskWorkgroupConfig } from '../../domain/taskWorkgroupConfig'
 
 /** 人工门所需的生命周期字段；不含 Task 的存储/启动/仓库镜像列，也不含冻结定义。 */
-export interface TaskGateContext {
+export interface TaskGateContext extends TaskDefinitionSubject {
   readonly id: string
   readonly name: string
   readonly status: TaskStatus

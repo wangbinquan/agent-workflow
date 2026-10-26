@@ -15,7 +15,7 @@ import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { createAgentPersistenceValues } from '@/modules/resource-catalog/infrastructure/agentPersistence'
+
 import { mcpConfigHash } from '@/modules/resource-catalog/infrastructure/mcpPersistence'
 import { createMcpRepository } from '@/modules/resource-catalog/infrastructure/mcpRepository'
 import { transitionMcpAclRuntimeTests } from '@/modules/resource-catalog/infrastructure/mcpRuntimeTestTransitions'
@@ -192,19 +192,18 @@ describeEachProvider('RFC-359 W4-D16 —— Mcp 仓库', (harness) => {
       now: T0,
     })
     const agentId = ulid()
-    const { agents, mcpRuntimeTestSessions } = tablesOf(harness.db)
-    await agentFixture(
-      harness.db,
-      createAgentPersistenceValues({
-        id: agentId,
-        agent: CreateAgentSchema.parse({
-          name: `agent-${ulid().slice(-6).toLowerCase()}`,
-          mcp: [created.id],
-        }),
-        ownerUserId: owner,
-        now: T0,
+    const { agents } = tablesOf(harness.db)
+    const { mcpRuntimeTestSessions } = tablesOf(harness.db)
+    await agentFixture(harness.db, {
+      id: agentId,
+      ...CreateAgentSchema.parse({
+        name: `agent-${ulid().slice(-6).toLowerCase()}`,
+        mcp: [created.id],
       }),
-    )
+      ownerUserId: owner,
+      createdAt: T0,
+      updatedAt: T0,
+    })
     expect((await repository.findAgentReferences(created.id)).map((ref) => ref.id)).toEqual([
       agentId,
     ])

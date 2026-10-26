@@ -4,7 +4,7 @@
 // provider runtime.
 
 import { withNativeTransactions } from './helpers/nativeTransactions'
-import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { ALWAYS_WRITABLE_DATABASE_SOURCE } from '@/auth/application/authPersistence'
 import type { DatabaseConfig } from '@agent-workflow/shared'
 import { afterEach, describe, expect, test } from 'bun:test'
@@ -29,7 +29,6 @@ import type {
   SqlRows,
 } from '@/platform/persistence/postgresqlRuntime'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const roots: string[] = []
 
 function policy(): RealtimeCompositionPolicy {
@@ -155,14 +154,14 @@ describe('RFC-349 daemon provider core', () => {
   test('SQLite composes the same closed surface without owning client shutdown', async () => {
     const appHome = mkdtempSync(join(tmpdir(), 'rfc349-daemon-core-sqlite-'))
     roots.push(appHome)
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createInMemoryDb()
     const core = composeDaemonProviderCore({
       sourceWriteWindow: ALWAYS_WRITABLE_DATABASE_SOURCE,
       daemonToken: 'fixture-daemon',
       db,
       appHome,
       adapters: DAEMON_PROVIDER_CORE_ADAPTERS.sqlite({
-        contract: buildLogicalSchemaContract(),
+        contract: logicalSchemaContract,
         db,
         appHome,
         dbPath: join(appHome, 'db.sqlite'),
@@ -202,7 +201,7 @@ describe('RFC-349 daemon provider core', () => {
       daemonToken: 'fixture-daemon',
       db: fake.db,
       adapters: DAEMON_PROVIDER_CORE_ADAPTERS.postgresql({
-        contract: buildLogicalSchemaContract(),
+        contract: logicalSchemaContract,
         db: fake.db,
         runtime: fake.runtime,
         databaseConfig,

@@ -1,3 +1,4 @@
+import { readAgentReferences } from './agentPersistence'
 import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import type { BundleResourceType } from '@agent-workflow/shared'
 import { and, asc, eq, inArray } from 'drizzle-orm'
@@ -122,9 +123,20 @@ async function packageSnapshots(
           rows.map((row) => row.id),
         )
       : new Map<string, readonly PackageWorkgroupMemberDocument[]>()
+  const references =
+    type === 'agent'
+      ? await readAgentReferences(
+          db,
+          rows.map((row) => row.id),
+        )
+      : new Map()
   return rows.map((row) => {
     const document =
-      type === 'workgroup' ? { ...row, members: membersByWorkgroup.get(row.id) ?? [] } : row
+      type === 'workgroup'
+        ? { ...row, members: membersByWorkgroup.get(row.id) ?? [] }
+        : type === 'agent'
+          ? { ...row, ...references.get(row.id) }
+          : row
     return Object.freeze({
       type,
       id: row.id,

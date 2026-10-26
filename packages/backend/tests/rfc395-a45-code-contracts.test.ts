@@ -3,15 +3,12 @@
 import { expect, spyOn, test } from 'bun:test'
 import { decodeLegacyClarifyAnswerColumns } from '@/modules/collaboration/infrastructure/clarifyAnswerCodec'
 import { clarifyAnswerContentForPrompt } from '@/modules/collaboration/domain/clarifyAnswerContent'
-import {
-  copyLegacyPortArchive,
-  legacyPortArchiveTaskRoot,
-} from '@/platform/content/legacyPortArchive'
-import { decodeLegacyPrompt, encodeLegacyPrompt } from '@/platform/content/legacyPrompt'
-import { isLegacyHostedArchiveTemporary } from '@/platform/content/legacyHostedArchive'
-import { isLegacyHostedPluginReference } from '@/platform/content/legacyPlugin'
+import { copyPortArchive, portArchiveTaskRoot } from '@/platform/content/locations/portArchive'
+import { decodePrompt, encodePrompt } from '@/platform/content/locations/prompt'
+import { isHostedArchiveTemporary } from '@/platform/content/locations/hostedArchive'
+import { isHostedPluginReference } from '@/platform/content/locations/plugin'
 import * as hash from '@/util/hash'
-import { bindOracleRow } from '@/modules/task-execution/infrastructure/runSelection/oracle/scope'
+import { bindOracleRow } from '@/modules/task-execution/infrastructure/migration/oracle/scope'
 import { join } from 'node:path'
 import {
   CreateAgentSchema,
@@ -22,7 +19,7 @@ import {
 } from '@agent-workflow/shared'
 import { prepareAgentReferenceUpdate } from '@/modules/resource-catalog/infrastructure/agentReferenceWrite'
 import { extractWorkflowAgentRefs } from '@/modules/resource-catalog/infrastructure/legacy/resourceRefs'
-import type { RunHistoryFacts } from '@/modules/task-execution/infrastructure/runSelection/oracle/historySnapshot'
+import type { RunHistoryFacts } from '@/modules/task-execution/infrastructure/migration/oracle/historySnapshot'
 
 const answer = {
   questionId: 'q',
@@ -79,7 +76,7 @@ test('opaque archive copies preserve bytes without parsing their roster', () => 
   const parse = spyOn(JSON, 'parse')
   try {
     for (const raw of [null, '', 'broken {', ' { "v": 1, "items": [] } '])
-      expect(copyLegacyPortArchive(raw)).toBe(raw)
+      expect(copyPortArchive(raw)).toBe(raw)
     expect(parse).not.toHaveBeenCalled()
   } finally {
     parse.mockRestore()
@@ -90,8 +87,8 @@ test('reading or storing an inline prompt hashes only when its digest is request
   const digest = spyOn(hash, 'sha256Hex')
   try {
     const storage = { promptText: '', promptPath: 'old/path' }
-    const ref = decodeLegacyPrompt(storage)!
-    expect(encodeLegacyPrompt(ref)).toEqual(storage)
+    const ref = decodePrompt(storage)!
+    expect(encodePrompt(ref)).toEqual(storage)
     expect(ref.size).toBe(0)
     expect(digest).not.toHaveBeenCalled()
     expect(ref.sha256).toBe('e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855')
@@ -103,7 +100,7 @@ test('reading or storing an inline prompt hashes only when its digest is request
 })
 
 test('moved location classifiers keep the HEAD prefix and temporary-root rules', () => {
-  expect(legacyPortArchiveTaskRoot('t')).toBe(join('runs', 't', 'ports'))
+  expect(portArchiveTaskRoot('t')).toBe(join('runs', 't', 'ports'))
   for (const [path, expected] of [
     ['cs-plugin:', true],
     ['cs-plugin:invalid', true],
@@ -111,14 +108,14 @@ test('moved location classifiers keep the HEAD prefix and temporary-root rules',
     ['CS-plugin:x/y', false],
     ['local/path', false],
   ] as const)
-    expect(isLegacyHostedPluginReference(path)).toBe(expected)
+    expect(isHostedPluginReference(path)).toBe(expected)
   for (const [path, expected] of [
     ['cs-archive:tasks/.tmp-a', true],
     ['cs-archive:tasks/.tmp-', false],
     ['cs-archive:tasks/.tmp-a/nested', false],
     ['cs-archive:runs/.tmp-a', false],
   ] as const)
-    expect(isLegacyHostedArchiveTemporary(path)).toBe(expected)
+    expect(isHostedArchiveTemporary(path)).toBe(expected)
 })
 
 test('projection missing-field accessors are shared and explicit undefined is still missing', () => {

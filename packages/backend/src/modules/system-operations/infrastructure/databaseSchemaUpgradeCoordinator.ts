@@ -1,7 +1,7 @@
 // RFC-370 A-T2: compatibility entry for standalone schema preparation.
 // Application decisions and concrete installation effects have separate owners.
 import { prepareDatabaseInstallation } from '../application/prepareDatabaseInstallation'
-import { loadPostgresqlMigrationHistory } from '@/platform/persistence/postgresqlMigrationHistory'
+import { loadPostgresqlMigrationHistory } from '@/platform/persistence/schema/history/logicalHistory'
 import {
   createFileDatabaseInstallation,
   type DatabaseSchemaUpgradeOptions,

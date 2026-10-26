@@ -21,7 +21,10 @@
 // uses (buildWorkgroupHooks in scheduler.ts) — this module never imports
 // scheduler.ts (module-cycle ban) and tests drive it with fake hooks.
 
-import { deriveNodeRunRole, nodeRunAttemptIndex } from '@/modules/task-execution/public/types'
+import {
+  nodeRunMintIdentityForSlot,
+  nodeRunAttemptIndex,
+} from '@/modules/task-execution/public/types'
 import {
   DEFAULT_PROTOCOL_RETRY_BUDGET,
   DW_VALIDATION_CODES,
@@ -227,7 +230,15 @@ async function resolvePool(
 /** Mint the confirm-gate holder run (task awaiting_review lifecycle invariant). */
 async function openDwGate(nodeRuns: NodeRunLifecyclePersistence, taskId: string): Promise<void> {
   const gateRunId = await nodeRuns.mint({
-    ...deriveNodeRunRole({ nodeId: DW_ORCHESTRATOR_NODE_ID, rerunCause: DW_GATE_CAUSE }),
+    ...nodeRunMintIdentityForSlot(
+      {
+        kind: 'synthetic',
+        syntheticKind: 'dw-gate',
+        owner: { kind: 'task', id: taskId },
+        discriminator: DW_ORCHESTRATOR_NODE_ID,
+      },
+      { kind: 'current' },
+    ),
     taskId,
     nodeId: DW_ORCHESTRATOR_NODE_ID,
     status: 'pending',
@@ -342,7 +353,15 @@ export async function runDynamicWorkflowGenerate(
 
     const priorRunCount = await persistence.countNodeRuns(taskId, DW_ORCHESTRATOR_NODE_ID)
     const runId = await nodeRuns.mint({
-      ...deriveNodeRunRole({ nodeId: DW_ORCHESTRATOR_NODE_ID, rerunCause: DW_GENERATE_CAUSE }),
+      ...nodeRunMintIdentityForSlot(
+        {
+          kind: 'synthetic',
+          syntheticKind: 'dw-orchestrator',
+          owner: { kind: 'task', id: taskId },
+          discriminator: DW_ORCHESTRATOR_NODE_ID,
+        },
+        { kind: 'current' },
+      ),
       taskId,
       nodeId: DW_ORCHESTRATOR_NODE_ID,
       status: 'pending',

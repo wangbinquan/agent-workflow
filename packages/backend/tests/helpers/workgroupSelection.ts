@@ -1,5 +1,5 @@
 // RFC-395 II-a A3：旧房间用例经 owner selection 投影构造输入，断言仍覆盖原业务语义。
-import { projectWorkgroupRunSelections } from '@/modules/task-execution/infrastructure/runSelection/workgroupProjection'
+import { projectWorkgroupRunSelections } from './workgroupSelectionFixture'
 import * as room from '@/modules/resource-catalog/application/workgroups/workgroupRoomProjection'
 
 export type HostRunLite = Omit<room.HostRunLite, 'selection'>

@@ -19,22 +19,25 @@
 // exact failure it guards is a stale frozen name silently re-binding a DIFFERENT
 // tenant's agent on resume/retry.
 
+import {
+  migrateFrozenSqlite as migrate,
+  createFrozenEpoch1Db,
+  FROZEN_MIGRATIONS,
+} from './migration-freeze'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { Database } from 'bun:sqlite'
 import { drizzle } from 'drizzle-orm/bun-sqlite'
-import { migrate } from 'drizzle-orm/bun-sqlite/migrator'
 import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { QUARANTINED_SNAPSHOT_AGENT_ID } from '@agent-workflow/shared'
-import { createInMemoryDb } from '../src/db/client'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+const MIGRATIONS = resolve(FROZEN_MIGRATIONS)
 
 describe('migration 0113 (RFC-223 PR-3a) — fresh install is a no-op', () => {
   test('empty tables apply 0000..0113; agent_override_id column exists', () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createFrozenEpoch1Db(MIGRATIONS)
     const cols = db.$client.query("SELECT name FROM pragma_table_info('node_runs')").all() as {
       name: string
     }[]
@@ -59,7 +62,7 @@ describe('migration 0113 (RFC-223 PR-3a) — R4-1 snapshot backfill (frozen at 0
     writeFileSync(journalPath, JSON.stringify(journal))
 
     raw = new Database(':memory:')
-    raw.exec('PRAGMA foreign_keys = OFF') // match openDb: 12-step migrations
+    raw.exec('PRAGMA foreign_keys = OFF') // match openFrozenEpoch1Db: 12-step migrations
     migrate(drizzle(raw), { migrationsFolder: tmp })
   })
   afterEach(() => {

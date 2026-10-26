@@ -1,3 +1,4 @@
+import { epoch2RuntimeTestPorts } from './epoch2RuntimePorts'
 // RFC-395 II-pre：生产启动 / 延续依赖及工作区租约改接线，保留既有断言。
 // RFC-387: retained fixture admission composes the same application factory; W4 removes this adapter.
 import { composeTestTaskDriveFactory } from '@/services/task'
@@ -20,13 +21,20 @@ import { createLogger } from '@/util/log'
 import { Paths } from '@/util/paths'
 
 export function createTestTaskDriveCoordinator(
-  input: Parameters<typeof composeTestTaskDriveFactory>[0] & {
+  input: Omit<Parameters<typeof composeTestTaskDriveFactory>[0], 'historyRestrictions'> & {
+    readonly historyRestrictions?: Parameters<
+      typeof composeTestTaskDriveFactory
+    >[0]['historyRestrictions']
     readonly admittedContinuation?: AdmittedContinuationStep
     readonly engineFailureMessage?: string
     readonly failureReporter?: TaskDriveFailureReporter
   },
 ) {
-  return composeTestTaskDriveFactory(input).coordinatorFor({
+  return composeTestTaskDriveFactory({
+    ...input,
+    historyRestrictions:
+      input.historyRestrictions ?? epoch2RuntimeTestPorts(input.deps.db).historyRestrictions,
+  }).coordinatorFor({
     admittedContinuation: input.admittedContinuation,
   })
 }

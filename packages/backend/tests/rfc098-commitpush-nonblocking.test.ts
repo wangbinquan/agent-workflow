@@ -46,8 +46,6 @@ import { commitPushNodeId, COMMIT_AGENT_NAME } from '../src/services/commitPush'
 import { runTaskWithRealTestTopology as runTask } from './helpers/taskExecutionTestTopology'
 import { runGit } from '../src/util/git'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-
 // Runtime-generated shim opencode (per-test temp dir, not a shared fixture).
 // One shim plays all roles, keyed by --agent:
 //   'commit'  → optionally wait for a release marker on call 0, then sleep
@@ -181,7 +179,7 @@ async function buildHarness(slug: string): Promise<Harness> {
   await runGit(worktreePath, ['push', '-q', '-u', 'origin', 'main'])
   const shimPath = join(appHome, 'cp-shim-opencode.ts')
   writeFileSync(shimPath, SHIM_SOURCE)
-  const db = createInMemoryDb(MIGRATIONS)
+  const db = createInMemoryDb()
   return {
     db,
     appHome,

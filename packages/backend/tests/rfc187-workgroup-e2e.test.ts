@@ -1,3 +1,5 @@
+import { nodeRunFixtureColumns } from './helpers/model/nodeRun'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 // RFC-187 PR-1 — real-subprocess e2e locking the THREE live-probe findings (audit
 // design/workgroup-e2e-audit.md §3-7/§4/§5, probes A/B/C, 2026-07-14) into CI. Every
 // prior workgroup engine test stubs runHostNode; these drive the real spawn → envelope
@@ -13,7 +15,7 @@
 //                   scenario done is zero-delta — exactly the detection surface).
 
 import { readTaskFixtures } from './helpers/model'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+
 import { createSqliteMemoryDistillEnqueuer } from './helpers/memoryDistill'
 import { createResumeEngine } from './helpers/resumeEngine'
 import { describe, expect, test } from 'bun:test'
@@ -33,7 +35,6 @@ import {
 } from './helpers/participantLaunch'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const SCENARIO_STUB = resolve(import.meta.dir, 'fixtures', 'scenario-opencode.ts')
 
 interface Harness {
@@ -52,7 +53,7 @@ function harness(): Harness {
   mkdirSync(appHome, { recursive: true })
   mkdirSync(stateDir, { recursive: true })
   return {
-    db: createInMemoryDb(MIGRATIONS),
+    db: createInMemoryDb(),
     appHome,
     stateDir,
     planFile,
@@ -188,9 +189,9 @@ async function launch(h: Harness, workgroupId: string) {
 
 const leaderRunCount = async (db: DbClient, taskId: string): Promise<number> => {
   const { nodeRuns } = tablesOf(db)
-  return (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))).filter(
-    (r) => r.nodeId === '__wg_leader__',
-  ).length
+  return (
+    await db.select(nodeRunFixtureColumns(db)).from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
+  ).filter((r) => r.nodeId === '__wg_leader__').length
 }
 
 // RFC-254 T31 — EXPLICIT wall-clock budgets on the three cases below.

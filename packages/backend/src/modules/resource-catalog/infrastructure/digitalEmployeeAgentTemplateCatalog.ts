@@ -3,8 +3,13 @@ import { createAgentDependencyReadPort } from './agentDependencyRead'
 import { createAgentReferenceWriteParticipant } from './agentReferenceWrite'
 import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { first } from '@/platform/persistence/queryHelpers'
-import { agentReferenceIds } from '@agent-workflow/shared'
-import type { Agent, AgentSkillRef, CreateAgent } from '@agent-workflow/shared'
+import {
+  agentReferenceIds,
+  type Agent,
+  type AgentSkillRef,
+  type CreateAgent,
+} from '@agent-workflow/shared'
+
 import { and, eq, inArray, ne } from 'drizzle-orm'
 
 import { SYSTEM_USER_ID } from '@/auth/systemIdentity'
@@ -17,7 +22,7 @@ import type {
   DigitalEmployeeAgentTemplateRepository,
 } from '../application/agents/digitalEmployeeAgentTemplateCatalog'
 import { PLUGIN_DISABLED_ERROR_CODE } from '../public/types'
-import { agentFromPersistenceRow } from './agentPersistence'
+import { loadAgentPersistenceRow } from './agentPersistence'
 import {
   runResourceCatalogTransaction,
   type ResourceCatalogTransaction,
@@ -41,11 +46,12 @@ function stale(id: string): ConflictError {
   return staleConflictError('agent', `agent '${id}' changed; reload and retry`)
 }
 
-function requireSystemBuiltin(
+async function requireSystemBuiltin(
+  transaction: ResourceCatalogTransaction,
   id: string,
   row: AgentRow | undefined,
   fence?: DigitalEmployeeAgentTemplateFence,
-): Agent {
+): Promise<Agent> {
   if (row === undefined) throw new NotFoundError('agent-not-found', 'agent not found')
   if (row.ownerUserId !== SYSTEM_USER_ID || row.builtin !== true) throw occupied(id)
   if (
@@ -54,7 +60,7 @@ function requireSystemBuiltin(
   ) {
     throw stale(id)
   }
-  return agentFromPersistenceRow(row)
+  return loadAgentPersistenceRow(transaction, row)
 }
 
 function unique(values: readonly string[]): string[] {
@@ -188,9 +194,10 @@ export function createDigitalEmployeeAgentTemplateRepository(
     return target !== undefined && /agents[._](?:pkey|id)\b/i.test(target)
   }
   async function get(id: string): Promise<Agent | null> {
-    const { agents } = tablesOf(db)
-    const row = await first(db.select().from(agents).where(eq(agents.id, id)))
-    return row === undefined ? null : agentFromPersistenceRow(row)
+    return loadAgentPersistenceRow(db, async (tx) => {
+      const { agents } = tablesOf(tx)
+      return first(tx.select().from(agents).where(eq(agents.id, id)))
+    })
   }
 
   return Object.freeze({
@@ -245,7 +252,7 @@ export function createDigitalEmployeeAgentTemplateRepository(
         await runResourceCatalogTransaction(db, async (transaction) => {
           const { agents } = tablesOf(transaction)
           const row = await first(transaction.select().from(agents).where(eq(agents.id, input.id)))
-          const current = requireSystemBuiltin(input.id, row, input)
+          const current = await requireSystemBuiltin(transaction, input.id, row, input)
           if (current.name === input.newName) return
           const collision = await first(
             transaction
@@ -291,7 +298,7 @@ export function createDigitalEmployeeAgentTemplateRepository(
       await runResourceCatalogTransaction(db, async (transaction) => {
         const { agents } = tablesOf(transaction)
         const row = await first(transaction.select().from(agents).where(eq(agents.id, input.id)))
-        const current = requireSystemBuiltin(input.id, row, input)
+        const current = await requireSystemBuiltin(transaction, input.id, row, input)
         const runtime =
           input.patch.runtime === null ? undefined : (input.patch.runtime ?? current.runtime)
         await assertAgentDefinition({

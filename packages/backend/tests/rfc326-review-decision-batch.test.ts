@@ -1,3 +1,9 @@
+import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
+import { epoch2ReviewReader } from './helpers/epoch2RuntimePorts'
+import { nodeRunFixtureColumns } from './helpers/model/nodeRun'
+import { legacyContentRef } from '@/platform/content/contentRef'
+import { contentRowColumns } from '@/platform/content/infrastructure/contentStore'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { withO2Closure, o2Ports } from './helpers/o2Closure'
 // RFC-326 — batched decisions: comments[] + selections[] on the decision
 // (proposal AC-14 / AC-15; design §4.2, §6.1 prepare B/C/D).
@@ -36,7 +42,7 @@ import {
   readNodeRunFixtures,
 } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -44,8 +50,13 @@ import { dirname, join } from 'node:path'
 import { asc, eq } from 'drizzle-orm'
 import type { Hono } from 'hono'
 import { ulid } from 'ulid'
-import { joinMarkdownDocs } from '@agent-workflow/shared'
-import type { ReviewCommentAnchor, WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
+import {
+  joinMarkdownDocs,
+  type ReviewCommentAnchor,
+  type WorkflowDefinition,
+  type WorkflowNode,
+} from '@agent-workflow/shared'
+
 import { buildActor, type Actor } from '../src/auth/actor'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
@@ -78,7 +89,8 @@ interface Snapshot {
 }
 
 async function snapshot(db: PersistenceDb): Promise<Snapshot> {
-  const { docVersions, reviewComments, memoryDistillJobs } = tablesOf(db)
+  const { memoryDistillJobs } = tablesOf(db)
+  const { docVersions, reviewComments } = tablesOf(db)
   const runs = await readNodeRunFixtures(db, undefined, {
     orderBy: [{ field: 'id', direction: 'asc' }],
   })
@@ -181,7 +193,8 @@ async function buildSingle(
   const uninstallProjection = await installCommittedEventProjectionHarness(db)
 
   const [ownerId, memberId, strangerId] = ['owner', 'member', 'stranger'].map(() => ulid())
-  const { users, taskCollaborators, docVersions } = tablesOf(db)
+  const { users, taskCollaborators } = tablesOf(db)
+  const { docVersions } = tablesOf(db)
   await db.insert(users).values(
     [ownerId!, memberId!, strangerId!].map((id, i) => ({
       id,
@@ -286,7 +299,7 @@ async function buildSingle(
     sourcePortName: 'docpath',
     versionIndex: 1,
     reviewIteration: 0,
-    bodyPath,
+    ...contentRowColumns(legacyContentRef('review-body-path', 'local-file', bodyPath)),
     decision: 'pending',
   })
   return {
@@ -482,6 +495,8 @@ describeEachProvider('RFC-326 评审批量决定（双引擎）', (providerHarne
       f = await buildSingle()
       events = countTaskEvents(f.taskId)
       const earlier = await addReviewComment({
+        reviewReader: epoch2ReviewReader(f.db, f.appHome),
+
         db: f.db,
         appHome: f.appHome,
         nodeRunId: f.reviewRunId,
@@ -537,7 +552,12 @@ describeEachProvider('RFC-326 评审批量决定（双引擎）', (providerHarne
       }
       // Row-side comments are archived away; the review row re-opened at iteration 1.
       expect(await f.db.select().from(reviewComments)).toEqual([])
-      const run = (await f.db.select().from(nodeRuns).where(eq(nodeRuns.id, f.reviewRunId)))[0]!
+      const run = (
+        await f.db
+          .select(nodeRunFixtureColumns(f.db))
+          .from(nodeRuns)
+          .where(eq(nodeRuns.id, f.reviewRunId))
+      )[0]!
       expect(run.status).toBe('pending')
       expect(run.reviewIteration).toBe(1)
 
@@ -562,6 +582,8 @@ describeEachProvider('RFC-326 评审批量决定（双引擎）', (providerHarne
     test('a batch comment identical to an existing row is skipped, not duplicated', async () => {
       f = await buildSingle()
       await addReviewComment({
+        reviewReader: epoch2ReviewReader(f.db, f.appHome),
+
         db: f.db,
         appHome: f.appHome,
         nodeRunId: f.reviewRunId,
@@ -669,7 +691,12 @@ describeEachProvider('RFC-326 评审批量决定（双引擎）', (providerHarne
         ['not_accepted', false, 'approved'],
         ['accepted', false, 'approved'],
       ])
-      const run = (await m.db.select().from(nodeRuns).where(eq(nodeRuns.id, m.reviewRunId)))[0]!
+      const run = (
+        await m.db
+          .select(nodeRunFixtureColumns(m.db))
+          .from(nodeRuns)
+          .where(eq(nodeRuns.id, m.reviewRunId))
+      )[0]!
       expect(run.status).toBe('done')
       expect(events.types.filter((t) => t === 'review.selection_changed').length).toBe(3)
       expect(events.types.at(-1)).toBe('review.decision_made')
@@ -1006,7 +1033,9 @@ describeEachProviderHttpApplication(
     test('selections + comments land in one request; the response carries the counters', async () => {
       // The HTTP route returns the durable continuation receipt; the scheduler
       // wake itself remains outside this response contract.
-      const application = await scope.open()
+      const application = await scope.open({
+        contentStore: epoch2RuntimeTestPorts(scope.harness.db).content,
+      })
       m = await buildMulti('list<path<md>>', 'running', application.appHome)
       events = countTaskEvents(m.taskId)
       const [a, b, c] = m.docs as [
@@ -1059,7 +1088,9 @@ describeEachProviderHttpApplication(
     })
 
     test('schema refusals (duplicate docVersionId / oversized batch / both anchor forms) are 422 with zero writes', async () => {
-      const application = await scope.open()
+      const application = await scope.open({
+        contentStore: epoch2RuntimeTestPorts(scope.harness.db).content,
+      })
       m = await buildMulti('list<path<md>>', 'running', application.appHome)
       events = countTaskEvents(m.taskId)
       const a = m.docs[0]!
@@ -1118,7 +1149,9 @@ describeEachProviderHttpApplication(
     })
 
     test('service-level refusals surface with their own code over REST (single-document)', async () => {
-      const application = await scope.open()
+      const application = await scope.open({
+        contentStore: epoch2RuntimeTestPorts(scope.harness.db).content,
+      })
       f = await buildSingle('running', application.appHome)
       events = countTaskEvents(f.taskId)
       const before = await snapshot(f.db)

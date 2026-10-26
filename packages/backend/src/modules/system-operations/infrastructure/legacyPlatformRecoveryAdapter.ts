@@ -71,7 +71,7 @@ export function createLegacyPlatformRecoveryAdapter(deps: {
   readonly dbPath: string
   readonly lockPath: string
   readonly resolveRestoreMigrations: () => Promise<string>
-  readonly postOpenRecovery: SqlitePostRestoreRecovery
+  readonly postOpenRecovery?: SqlitePostRestoreRecovery
   readonly now?: () => number
   readonly mechanisms?: Partial<LegacySystemOperationMechanisms>
 }): LegacyPlatformRecoveryAdapter {
@@ -95,10 +95,11 @@ export function createLegacyPlatformRecoveryAdapter(deps: {
   }
 
   const restore: AdminRestoreCoordinatorPort = {
-    async plan(artifactRef) {
+    async plan(artifactRef, input) {
       const plan = await mechanisms.planRestore(deps.artifacts.pathOf(artifactRef), {
         appHome: deps.appHome,
         migrationsFolder: await deps.resolveRestoreMigrations(),
+        skipIntegrityCheck: input.skipIntegrityCheck,
       })
       return {
         backupKind: plan.manifest?.kind ?? null,
@@ -108,6 +109,7 @@ export function createLegacyPlatformRecoveryAdapter(deps: {
       }
     },
     async stage(artifactRef, input) {
+      await settleEpochSwitchBeforePointerReplacement({ appHome: deps.appHome })
       const path = deps.artifacts.pathOf(artifactRef)
       const migrationsFolder = await deps.resolveRestoreMigrations()
       const plan = await mechanisms.validateBackupForStage(path, {
@@ -148,6 +150,7 @@ export function createLegacyPlatformRecoveryAdapter(deps: {
       }
 
       try {
+        await settleEpochSwitchBeforePointerReplacement({ appHome: deps.appHome })
         const result = await mechanisms.restoreBackup(deps.artifacts.pathOf(artifactRef), {
           contract: deps.contract,
           appHome: deps.appHome,
@@ -167,3 +170,4 @@ export function createLegacyPlatformRecoveryAdapter(deps: {
 
   return Object.freeze({ backup: Object.freeze(backup), restore: Object.freeze(restore) })
 }
+import { settleEpochSwitchBeforePointerReplacement } from './epochSwitch/pointerReplacement'

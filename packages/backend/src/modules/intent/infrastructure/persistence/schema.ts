@@ -1,4 +1,4 @@
-// RFC-395 I-a: explicit epoch-1 schema contributions; no physical or runtime change.
+// RFC-395 activation: this context declares the live epoch-2 schema directly.
 import {
   column as c,
   defineContribution,
@@ -10,45 +10,6 @@ import {
 import { materializeDrizzle } from '@/platform/persistence/schema/drizzle'
 
 const owner = defineContribution('intent')
-
-const intentApplyJournalDefinition = owner.table({
-  id: 'intent_apply_journal',
-  schemaSymbol: 'intentApplyJournal',
-  columns: {
-    id: c.id('id', { primary: true }),
-    sessionId: c.id('session_id'),
-    clientMutationId: c.id('client_mutation_id'),
-    draftId: c.id('draft_id'),
-    draftHash: c.text('draft_hash'),
-    state: c.enum('state', ['prepared', 'applying', 'committed', 'failed'], {
-      default: 'prepared',
-    }),
-    preparedArtifactsJson: c.jsonText('prepared_artifacts_json', { default: '[]' }),
-    receiptJson: c.jsonText('receipt_json', { nullable: true }),
-    error: c.text('error', { nullable: true }),
-    createdAt: c.epochMs('created_at'),
-    updatedAt: c.epochMs('updated_at'),
-  },
-  foreignKeys: [
-    foreignKey(
-      'intent_apply_journal_session_id_intent_sessions_id_fk',
-      ['session_id'],
-      'intent_sessions',
-      ['id'],
-      { onDelete: 'cascade' },
-    ),
-  ],
-  indexes: [
-    index('uniq_intent_apply_journal_mutation', ['session_id', 'client_mutation_id'], {
-      unique: true,
-    }),
-    index('idx_intent_apply_journal_session', ['session_id']),
-    index('idx_intent_apply_journal_state', ['state']),
-  ],
-  retention: retention.operational,
-})
-
-export const intentApplyJournal = materializeDrizzle(intentApplyJournalDefinition).table
 
 const intentDraftResolutionsDefinition = owner.table({
   id: 'intent_draft_resolutions',
@@ -176,42 +137,6 @@ const intentSessionsDefinition = owner.table({
 })
 
 export const intentSessions = materializeDrizzle(intentSessionsDefinition).table
-
-const intentTurnEventsDefinition = owner.table({
-  id: 'intent_turn_events',
-  schemaSymbol: 'intentTurnEvents',
-  columns: {
-    id: c.identity('id', { primary: true }),
-    turnId: c.id('turn_id'),
-    eventSeq: c.int('event_seq'),
-    ts: c.int('ts'),
-    kind: c.text('kind'),
-    payload: c.text('payload'),
-    sessionId: c.id('session_id', { nullable: true }),
-    parentSessionId: c.id('parent_session_id', { nullable: true }),
-    source: c.enum('source', ['stream', 'live-child', 'post-run-child']),
-    externalEventId: c.id('external_event_id', { nullable: true }),
-  },
-  foreignKeys: [
-    foreignKey(
-      'intent_turn_events_turn_id_intent_turns_id_fk',
-      ['turn_id'],
-      'intent_turns',
-      ['id'],
-      { onDelete: 'cascade' },
-    ),
-  ],
-  indexes: [
-    index('uniq_intent_turn_events_turn_seq', ['turn_id', 'event_seq'], { unique: true }),
-    index('uniq_intent_turn_events_external', ['turn_id', 'source', 'external_event_id'], {
-      unique: true,
-    }),
-    index('idx_intent_turn_events_turn', ['turn_id', 'event_seq']),
-  ],
-  retention: retention.operational,
-})
-
-export const intentTurnEvents = materializeDrizzle(intentTurnEventsDefinition).table
 
 const intentTurnsDefinition = owner.table({
   id: 'intent_turns',
@@ -342,13 +267,167 @@ const intentWorkingSetChangesDefinition = owner.table({
 
 export const intentWorkingSetChanges = materializeDrizzle(intentWorkingSetChangesDefinition).table
 
-export const schemaContribution = owner.contribution([
-  intentApplyJournalDefinition,
-  intentDraftResolutionsDefinition,
-  intentDraftsDefinition,
-  intentProvenanceDefinition,
-  intentSessionsDefinition,
-  intentTurnEventsDefinition,
-  intentTurnsDefinition,
-  intentWorkingSetChangesDefinition,
-])
+const intentApplyJournalDefinition = owner.table({
+  version: 2,
+  unique: [],
+  foreignKeys: [
+    {
+      name: 'intent_apply_journal_session_id_intent_sessions_id_fk',
+      columns: ['session_id'],
+      foreignTable: 'intent_sessions',
+      foreignColumns: ['id'],
+      onDelete: 'cascade',
+      onUpdate: 'no action',
+      lifecycle:
+        'Preserve epoch-1 cascade delete and no action update semantics; target is a logical table reference.',
+    },
+  ],
+  checks: [],
+  indexes: [
+    {
+      name: 'uniq_intent_apply_journal_mutation',
+      unique: true,
+      nulls: 'distinct',
+      columns: [
+        { kind: 'column', name: 'session_id' },
+        { kind: 'column', name: 'client_mutation_id' },
+      ],
+      where: null,
+    },
+    {
+      name: 'idx_intent_apply_journal_session',
+      unique: false,
+      nulls: 'distinct',
+      columns: [{ kind: 'column', name: 'session_id' }],
+      where: null,
+    },
+    {
+      name: 'idx_intent_apply_journal_state',
+      unique: false,
+      nulls: 'distinct',
+      columns: [{ kind: 'column', name: 'state' }],
+      where: null,
+    },
+  ],
+  migrationPolicy: 'KEEP',
+  id: 'intent_apply_journal',
+  schemaSymbol: 'intentApplyJournal',
+  columns: {
+    id: c.id('id', { primary: true }),
+    sessionId: c.id('session_id'),
+    clientMutationId: c.id('client_mutation_id'),
+    draftId: c.id('draft_id'),
+    draftHash: c.text('draft_hash'),
+    state: c.enum('state', ['prepared', 'applying', 'committed', 'failed'], {
+      default: 'prepared',
+    }),
+    preparedArtifactsJson: c.jsonText('prepared_artifacts_json', {
+      default: '{"scene":"intent","version":3,"artifacts":[]}',
+    }),
+    receiptJson: c.jsonText('receipt_json', { nullable: true }),
+    error: c.text('error', { nullable: true }),
+    createdAt: c.epochMs('created_at'),
+    updatedAt: c.epochMs('updated_at'),
+  },
+  retention: {
+    class: 'owner-managed-operational',
+    rule: 'The owning bounded context defines retention and archive jobs through its application port.',
+  },
+  primaryKey: ['id'],
+  migrationKey: ['id'],
+})
+
+export const intentApplyJournal = materializeDrizzle(intentApplyJournalDefinition).table
+
+const intentTurnEventsDefinition = owner.table({
+  version: 2,
+  unique: [],
+  foreignKeys: [
+    {
+      name: 'intent_turn_events_turn_id_intent_turns_id_fk',
+      columns: ['turn_id'],
+      foreignTable: 'intent_turns',
+      foreignColumns: ['id'],
+      onDelete: 'cascade',
+      onUpdate: 'no action',
+      lifecycle:
+        'Preserve epoch-1 cascade delete and no action update semantics; target is a logical table reference.',
+    },
+  ],
+  checks: [],
+  indexes: [
+    {
+      name: 'uniq_intent_turn_events_turn_seq',
+      unique: true,
+      nulls: 'distinct',
+      columns: [
+        { kind: 'column', name: 'turn_id' },
+        { kind: 'column', name: 'event_seq' },
+      ],
+      where: null,
+    },
+    {
+      name: 'uniq_intent_turn_events_external',
+      unique: true,
+      nulls: 'distinct',
+      columns: [
+        { kind: 'column', name: 'turn_id' },
+        { kind: 'column', name: 'source' },
+        { kind: 'column', name: 'external_event_id' },
+      ],
+      where: {
+        kind: 'unary',
+        op: 'IS NOT NULL',
+        value: { kind: 'column', name: 'external_event_id' },
+      },
+    },
+    {
+      name: 'idx_intent_turn_events_turn',
+      unique: false,
+      nulls: 'distinct',
+      columns: [
+        { kind: 'column', name: 'turn_id' },
+        { kind: 'column', name: 'event_seq' },
+      ],
+      where: null,
+    },
+  ],
+  migrationPolicy: 'KEEP',
+  id: 'intent_turn_events',
+  schemaSymbol: 'intentTurnEvents',
+  columns: {
+    id: c.identity('id', { primary: true }),
+    turnId: c.id('turn_id'),
+    eventSeq: c.int('event_seq'),
+    ts: c.int('ts'),
+    kind: c.text('kind'),
+    payload: c.text('payload'),
+    sessionId: c.id('session_id', { nullable: true }),
+    parentSessionId: c.id('parent_session_id', { nullable: true }),
+    source: c.enum('source', ['stream', 'live-child', 'post-run-child']),
+    externalEventId: c.id('external_event_id', { nullable: true }),
+  },
+  retention: {
+    class: 'owner-managed-operational',
+    rule: 'The owning bounded context defines retention and archive jobs through its application port.',
+  },
+  primaryKey: ['id'],
+  migrationKey: ['id'],
+})
+
+export const intentTurnEvents = materializeDrizzle(intentTurnEventsDefinition).table
+
+export const schemaContribution = {
+  owner: 'intent',
+  version: 2,
+  tables: [
+    intentDraftResolutionsDefinition,
+    intentDraftsDefinition,
+    intentProvenanceDefinition,
+    intentSessionsDefinition,
+    intentTurnsDefinition,
+    intentWorkingSetChangesDefinition,
+    intentApplyJournalDefinition,
+    intentTurnEventsDefinition,
+  ],
+} as const

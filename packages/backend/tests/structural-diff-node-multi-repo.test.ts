@@ -17,7 +17,7 @@ import { nodeRunFixture, workflowFixture } from './helpers/model'
 import { afterEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import type { StartTask } from '@agent-workflow/shared'
 import { mkdtempSync, writeFileSync } from 'node:fs'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { removeTempDirSync } from './fixtures/tempDir'
@@ -27,8 +27,6 @@ import { launchTestTask } from './helpers/productionTaskLaunch'
 import { runGit } from '../src/util/git'
 import { seedRepoGroup } from './helpers/repoGroupFixture'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
-
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 const getTaskStructuralDiff = (
   db: DbClient,
@@ -58,7 +56,7 @@ async function buildHarness(repoCount: number): Promise<Harness> {
     await runGit(repoPath, ['commit', '-q', '-m', 'init'])
     repos.push(repoPath)
   }
-  const db = createInMemoryDb(MIGRATIONS)
+  const db = createInMemoryDb()
   await workflowFixture(db, {
     id: 'wf-node',
     name: 'wf',

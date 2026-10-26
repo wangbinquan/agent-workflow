@@ -35,13 +35,9 @@ export interface DigitalEmployeeWorkspacePort {
 }
 
 import type { ClarifyRoundStatus } from '@agent-workflow/shared'
+import type { TaskArchiveCollaborationSectionsPort } from '../application/ports/taskArchiveSections'
 
-export interface TaskArchiveCollaborationSectionsPort {
-  readonly sections: readonly string[]
-  load(
-    taskIds: readonly string[],
-  ): Promise<Readonly<Record<string, readonly Readonly<Record<string, unknown>>[]>>>
-}
+export type { TaskArchiveCollaborationSectionsPort }
 
 export interface TaskRecoveryHumanGateFactsPort {
   designerParkEntries(taskId: string): Promise<

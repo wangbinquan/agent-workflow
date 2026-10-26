@@ -1,8 +1,8 @@
 // RFC-374 T1: V8 appends compatible columns, replays exact SQL and bridges old rows without widening the index-only API.
-import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import { buildFrozenEpoch1LogicalSchemaContract as buildLogicalSchemaContract } from '@/platform/persistence/migration/epoch1/contract'
 import { beforeAll, describe, expect, test } from 'bun:test'
-import { loadPostgresqlMigrationHistory } from '@/platform/persistence/postgresqlMigrationHistory'
-import { buildPostgresqlSchemaPlan } from '@/platform/persistence/postgresqlSchema'
+import { loadPostgresqlMigrationHistory } from '@/platform/persistence/migration/legacy/postgresqlMigrationHistory'
+import { buildPostgresqlSchemaPlan } from '@/platform/persistence/migration/legacy/postgresqlSchema'
 import {
   digestSchemaContract,
   type LogicalTableContract,
@@ -15,7 +15,7 @@ import {
   resolvePostgresqlIndexOnlyRowBridge,
   type PostgresqlMigrationHistory,
   type PostgresqlIndexUpgrade,
-} from '@/platform/persistence/postgresqlMigrationSequence'
+} from '@/platform/persistence/migration/legacy/postgresqlMigrationSequence'
 
 let history: PostgresqlMigrationHistory
 beforeAll(async () => {

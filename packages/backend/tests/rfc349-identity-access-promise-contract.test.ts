@@ -2,17 +2,14 @@
 // when SQLite performs the underlying decision in a synchronous transaction.
 
 import { describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
 
 import { createInMemoryDb } from '@/db/client'
 import { createIdentityAccessRuntime } from '@/modules/identity-access/composition'
 import { admitTestDirectAuthority } from './helpers/identityAccessAuthority'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-
 describe('RFC-349 identity-access Promise contract', () => {
   test('SQLite public directory matches PostgreSQL filtering and lookup order', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createInMemoryDb()
     const insert = db.$client.query(
       `INSERT INTO users (
         id, username, display_name, git_name, role, status,
@@ -46,7 +43,7 @@ describe('RFC-349 identity-access Promise contract', () => {
   })
 
   test('SQLite profile mutation returns a Promise and keeps audit atomic', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createInMemoryDb()
     db.$client
       .query(
         `INSERT INTO users (

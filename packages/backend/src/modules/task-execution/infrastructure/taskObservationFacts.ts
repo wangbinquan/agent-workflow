@@ -1,21 +1,21 @@
+import { createNodeRunQueries } from './nodeRunQueries'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 // RFC-371 v2 §2/§5 — task facts offered to run-observability. Task execution is
 // the only owner of task visibility; observation never reads these tables.
 
-import { runHistoryOrder } from '@/platform/persistence/runHistoryOrder'
-import { tablesOf } from '@/platform/persistence/sessionTables'
-import { and, desc, eq, gte, inArray, isNull, lt, or } from 'drizzle-orm'
 import type { Actor } from '@/auth/actor'
+import type {
+  ObservationTaskFactsPort,
+  ObservedTaskFact,
+} from '@/modules/run-observability/public/queries'
+import { engineOf } from '@/platform/persistence/databaseTransaction'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
+import { and, desc, eq, gte, inArray, isNull, lt, or } from 'drizzle-orm'
 import {
   taskVisibilityCondition,
   taskVisibilitySubjectOf,
   visibleTaskIdsFor,
 } from './taskAuthorization'
-import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { engineOf } from '@/platform/persistence/databaseTransaction'
-import type {
-  ObservationTaskFactsPort,
-  ObservedTaskFact,
-} from '@/modules/run-observability/public/queries'
 
 const MAX_IDS = 500
 const MAX_DURATIONS = 100_000
@@ -173,17 +173,14 @@ export function createTaskObservationFacts(db: PersistenceDb): ObservationTaskFa
     },
 
     async attempts(taskId) {
-      const { nodeRuns } = tablesOf(db)
-      const rows = await db
-        .select({ id: nodeRuns.id, nodeId: nodeRuns.nodeId, retryIndex: nodeRuns.retryIndex })
-        .from(nodeRuns)
-        .where(eq(nodeRuns.taskId, taskId))
-        .orderBy(...runHistoryOrder(db, nodeRuns))
-        .limit(MAX_ATTEMPTS)
+      const rows = await createNodeRunQueries(db).listHistoryFields(
+        { taskId, order: 'seq-asc', limit: MAX_ATTEMPTS },
+        ['id', 'nodeId', 'retryIndex'],
+      )
       return rows.map((row) => ({
         nodeRunId: row.id,
         nodeId: row.nodeId,
-        retryIndex: Number(row.retryIndex),
+        retryIndex: row.retryIndex,
       }))
     },
   }

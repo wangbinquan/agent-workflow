@@ -1,16 +1,19 @@
+import { contentRefColumns } from '@/platform/content/contentStore'
+import { readDatabaseContent } from '@/platform/content/infrastructure/contentStore'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { taskReadColumns } from '../taskRepositorySql'
 // RFC-370 v3 V6 — what a hosted task archive move captures for `runs/<task>`
 // and `logs/<task>`: object-backed task artifacts, review documents and node
 // event chunks (linked by object id), plus the task's work-volume files
 // (enumerated in the task image, uploaded once).
-import { isTaskWorkspaceUnbound } from '@agent-workflow/shared'
-import { tablesOf } from '@/platform/persistence/sessionTables'
-import { eq } from 'drizzle-orm'
-import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type {
   CrewStationStreamObjectStorage,
   HostedStoredObject,
 } from '@/platform/crewstation/objectStorage'
 import type { WorkspaceHelper } from '@/platform/crewstation/workspaceProtocol'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
+import { isTaskWorkspaceUnbound } from '@agent-workflow/shared'
+import { eq } from 'drizzle-orm'
 import type { HostedArchiveFile, HostedArchiveSources } from './taskArchiveContent'
 
 export function createHostedTaskArchiveSources(input: {
@@ -47,8 +50,29 @@ export function createHostedTaskArchiveSources(input: {
       for (const row of await input.db
         .select()
         .from(hostedTaskArtifacts)
-        .where(eq(hostedTaskArtifacts.taskId, taskId)))
-        addObject(row.reference, { id: row.objectId, sha256: row.digest, size: row.size })
+        .where(eq(hostedTaskArtifacts.taskId, taskId))) {
+        const ref = contentRefColumns.decode(row.contentRefJson, row.contentInlineBytes)
+        if (ref === null) throw new Error('hosted-artifact-content-missing')
+        if (ref.kind === 'object') {
+          if (
+            ref.location.codec !== 'hosted-object-id' ||
+            typeof ref.location.value !== 'string' ||
+            ref.sha256 === null ||
+            ref.size === null
+          )
+            throw new Error('hosted-artifact-object-invalid')
+          addObject(row.reference, { id: ref.location.value, sha256: ref.sha256, size: ref.size })
+        } else {
+          const bytes = await readDatabaseContent(input.db, ref)
+          const path = row.reference.slice(prefix.length)
+          files.set(path, {
+            path,
+            sha256: row.digest,
+            size: row.size,
+            open: () => new Blob([Uint8Array.from(bytes)]).stream(),
+          })
+        }
+      }
       for (const file of await input.reviewFiles(taskId)) addObject(file.reference, file.object)
     }
     if (kind === 'logs')
@@ -57,7 +81,7 @@ export function createHostedTaskArchiveSources(input: {
     const { tasks } = tablesOf(input.db)
     const task = (
       await input.db
-        .select({ workspace: tasks.worktreePath })
+        .select({ workspace: taskReadColumns(input.db).worktreePath })
         .from(tasks)
         .where(eq(tasks.id, taskId))
         .limit(1)

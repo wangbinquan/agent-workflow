@@ -1,5 +1,6 @@
+import { replaceAgentReferences } from '../agentReferenceWrite'
 // Resource Catalog SQLite compatibility implementation — CRUD on the agents table.
-// JSON fields (outputs / skills / permission / frontmatterExtra) are stored as
+// JSON fields (outputs / permission / frontmatterExtra) are stored as
 // strings in the DB and (un)marshaled at this boundary. Routes upstream see
 // pure JS objects.
 
@@ -9,6 +10,7 @@ import { first, queryWrite } from '@/platform/persistence/queryHelpers'
 import type {
   Agent,
   AgentSkillRef,
+  AgentReferences,
   CreateAgent,
   RenameAgent,
   ResourceAccess,
@@ -16,7 +18,6 @@ import type {
 } from '@agent-workflow/shared'
 import { and, eq, inArray, type SQL } from 'drizzle-orm'
 import { ulid } from 'ulid'
-import type { DbClient } from '@/db/client'
 import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
 
 import type { DbTxSync } from '@/db/txSync'
@@ -67,6 +68,8 @@ import {
 import {
   agentContentPersistenceValues,
   agentFromStoredJsonRow,
+  loadAgentPersistenceRow,
+  loadAgentPersistenceRows,
   exposedFrontmatterExtra,
   serializeAgentInputs,
 } from '../agentPersistence'
@@ -89,7 +92,8 @@ const agentReferenceResolver = (db: PersistenceDb) => ({
 
 const agentResourceInventorySource = (db: PersistenceDb): AgentResourceInventorySource => ({
   async load() {
-    const { skills, mcps, plugins } = tablesOf(db)
+    const { skills } = tablesOf(db)
+    const { mcps, plugins } = tablesOf(db)
     const [agentRows, skillRows, mcpRows, pluginRows] = await Promise.all([
       listAgents(db),
       db
@@ -142,27 +146,23 @@ const agentResourceInventorySource = (db: PersistenceDb): AgentResourceInventory
 })
 
 export async function listAgents(db: PersistenceDb): Promise<Agent[]> {
-  const { agents } = tablesOf(db)
-  const rows = await db.select().from(agents)
-  return rows.map(rowToAgent)
+  return loadAgentPersistenceRows(
+    db,
+    async (tx) => tx.select().from(tablesOf(tx).agents),
+    'stored-json',
+  )
 }
 
 /** Fetch an agent by its canonical resource id. */
 export async function getAgentById(db: PersistenceDb, id: string): Promise<Agent | null> {
-  const { agents } = tablesOf(db)
-  const rows = await db.select().from(agents).where(eq(agents.id, id)).limit(1)
-  const row = rows[0]
-  return row ? rowToAgent(row) : null
-}
-
-/**
- * Read-only bootstrap/catalog projection for synchronous compositions. Runtime
- * execution continues to use the async resolver above; both share rowToAgent.
- */
-export function getAgentByIdSync(db: DbClient, id: string): Agent | null {
-  const { agents } = tablesOf(db)
-  const row = first(db.select().from(agents).where(eq(agents.id, id)))
-  return row === undefined ? null : rowToAgent(row)
+  return loadAgentPersistenceRow(
+    db,
+    async (tx) => {
+      const { agents } = tablesOf(tx)
+      return (await tx.select().from(agents).where(eq(agents.id, id)).limit(1))[0]
+    },
+    'stored-json',
+  )
 }
 
 /**
@@ -393,12 +393,7 @@ function commitAgentCreate(
           id,
           name: input.name,
           // RFC-223 (PR-1): resolved id refs / typed skill refs (already deduped).
-          ...agentContentPersistenceValues(input, fmExtra, {
-            skills: skillRefs,
-            dependsOn: dependsOnIds,
-            mcp: mcpIds,
-            plugins: pluginIds,
-          }),
+          ...agentContentPersistenceValues(input, fmExtra),
           // RFC-231: user resources are private; framework built-ins stay public.
           ...initialAcl,
           // RFC-104: built-in marker — only platform-owned seeders pass builtin:true;
@@ -407,7 +402,13 @@ function commitAgentCreate(
           createdAt: now,
           updatedAt: now,
         }),
-        () => {},
+        () =>
+          replaceAgentReferences(tx, id, {
+            skills: skillRefs,
+            dependsOn: dependsOnIds,
+            mcp: mcpIds,
+            plugins: pluginIds,
+          }),
       )
     },
   )
@@ -580,10 +581,6 @@ export async function prepareAgentUpdate(
   if (patch.runtime !== undefined) set.runtime = patch.runtime
   // RFC-223 (PR-1): persist the resolved id refs / typed skill refs (deduped by
   // the resolver), never the raw name-or-id wire values.
-  if (skillRefs !== undefined) set.skills = JSON.stringify(skillRefs)
-  if (dependsOnIds !== undefined) set.dependsOn = JSON.stringify(dependsOnIds)
-  if (mcpIds !== undefined) set.mcp = JSON.stringify(mcpIds)
-  if (pluginIds !== undefined) set.plugins = JSON.stringify(pluginIds)
   // RFC-005: merge outputKinds into frontmatter_extra alongside the explicit
   // patch (if any). Tests that PATCH only outputKinds preserve the rest of
   // frontmatter_extra; tests that PATCH only frontmatterExtra drop outputKinds
@@ -694,36 +691,42 @@ function commitAgentUpdate(
       if (currentRow === undefined) {
         throw new NotFoundError('agent-not-found', 'agent not found')
       }
-      const current = rowToAgent(currentRow)
-      const nextRefs = {
-        mcp: mcpIds ?? current.mcp,
-        plugins: pluginIds ?? current.plugins,
-        dependsOn: dependsOnIds ?? current.dependsOn,
-        skills: skillRefs ?? current.skills,
-      }
-      // Diff against the row snapshot from THIS transaction. A lost grant on an
-      // unchanged ref remains grandfathered; only ids this write introduces are
-      // re-authorized and existence-fenced.
       return continueResourceCommit(
-        checkRefs(
-          actor ?? null,
-          agentRefFenceGroups(nextRefs, current, resolvedRefs.matchedManagedSkillIds),
-        ),
-        () => {
-          set.updatedAt = monotonicNow(currentRow.updatedAt)
-          const where = revisionFenced
-            ? and(
-                eq(agents.id, id),
-                eq(agents.updatedAt, fence.expectedUpdatedAt),
-                eq(agents.aclRevision, fence.expectedAclRevision),
-              )
-            : eq(agents.id, id)
+        loadAgentPersistenceRows(tx, [currentRow], 'stored-json'),
+        ([current]) => {
+          if (current === undefined) throw new Error('agent-reference-projection-missing')
+          const nextRefs = {
+            mcp: mcpIds ?? current.mcp,
+            plugins: pluginIds ?? current.plugins,
+            dependsOn: dependsOnIds ?? current.dependsOn,
+            skills: skillRefs ?? current.skills,
+          }
+          // Diff against the row snapshot from THIS transaction. A lost grant on an
+          // unchanged ref remains grandfathered; only ids this write introduces are
+          // re-authorized and existence-fenced.
           return continueResourceCommit(
-            queryWrite(tx.update(agents).set(set).where(where)),
-            (result) => {
-              // RFC-359 W9：本地的 `changesOf` 退役，判据统一走中立的 `affectedRows`（两个引擎都读
-              // `changes`，缺失按 0 计 ⇒ 判据失真时「恰好一行」失败得大声）。共享提交体在执行完成后再读取这一判据。
-              if (revisionFenced && affectedRows(result) !== 1) throw staleAgentError(id)
+            checkRefs(
+              actor ?? null,
+              agentRefFenceGroups(nextRefs, current, resolvedRefs.matchedManagedSkillIds),
+            ),
+            () => {
+              set.updatedAt = monotonicNow(currentRow.updatedAt)
+              const where = revisionFenced
+                ? and(
+                    eq(agents.id, id),
+                    eq(agents.updatedAt, fence.expectedUpdatedAt),
+                    eq(agents.aclRevision, fence.expectedAclRevision),
+                  )
+                : eq(agents.id, id)
+              return continueResourceCommit(
+                queryWrite(tx.update(agents).set(set).where(where)),
+                (result) => {
+                  // RFC-359 W9：本地的 `changesOf` 退役，判据统一走中立的 `affectedRows`（两个引擎都读
+                  // `changes`，缺失按 0 计 ⇒ 判据失真时「恰好一行」失败得大声）。共享提交体在执行完成后再读取这一判据。
+                  if (revisionFenced && affectedRows(result) !== 1) throw staleAgentError(id)
+                  return replaceAgentReferences(tx, id, nextRefs)
+                },
+              )
             },
           )
         },
@@ -1083,8 +1086,8 @@ async function validatePluginReferences(db: PersistenceDb, ids: readonly string[
   }
 }
 
-export function rowToAgent(row: AgentRow): Agent {
-  return agentFromStoredJsonRow(row)
+export function rowToAgent(row: AgentRow, references: AgentReferences): Agent {
+  return agentFromStoredJsonRow(row, references)
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1119,7 +1122,8 @@ export async function loadClosureRefNames(
     for (const id of a.mcp ?? []) mcpIds.add(id)
     for (const id of a.plugins ?? []) pluginIds.add(id)
   }
-  const { skills, mcps, plugins } = tablesOf(db)
+  const { skills } = tablesOf(db)
+  const { mcps, plugins } = tablesOf(db)
   const [skillRows, mcpRows, pluginRows] = await Promise.all([
     skillIds.size > 0
       ? db

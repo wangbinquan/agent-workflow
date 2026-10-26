@@ -1,5 +1,6 @@
-import { tablesOf } from '@/platform/persistence/sessionTables'
 import { first } from '@/platform/persistence/queryHelpers'
+import { createSkillContentLocationQuery, skillReferencePath } from './databaseSkillTrees'
+import { createDatabaseSkillArtifactOwners } from './crewstation/skillArtifacts'
 import type { ResourcePackageRecoveryEffectsFactory } from '../application/package/recoveryContentEffects'
 import {
   selectedResourcePackageRecoveryEffects,
@@ -7,8 +8,6 @@ import {
 } from './recoveryContentEffects'
 import { pluginCachedPathQuery } from './pluginCachedPathQuery'
 import { errorValue } from './resourcePackageMaintenancePaths'
-
-import { and, eq } from 'drizzle-orm'
 
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 
@@ -121,12 +120,9 @@ async function rollForwardSkillArtifact(input: {
     liveDirectory: expectedLiveDirectory,
     versionDirectory: expectedVersionDirectory,
   })
-  const { skills, skillVersions } = tablesOf(input.db)
-  const skill = await first(
-    input.db
-      .select({ managedPath: skills.managedPath, contentVersion: skills.contentVersion })
-      .from(skills)
-      .where(eq(skills.id, input.artifact.skillId)),
+  const skill = await createSkillContentLocationQuery(input.db).publication(
+    input.artifact.skillId,
+    version,
   )
   const disposition = resourcePackageSkillRecoveryDisposition({
     currentContentVersion: skill?.contentVersion ?? null,
@@ -141,29 +137,27 @@ async function rollForwardSkillArtifact(input: {
     })
     return
   }
-  if (
-    disposition === 'reject-missing-generation' ||
-    skill === undefined ||
-    skill.managedPath === null
-  ) {
+  if (disposition === 'reject-missing-generation' || skill === null || skill.live === null) {
     throw new Error(`resource-package-skill-publication-missing:${input.artifact.skillId}`)
   }
-  const snapshot = await first(
-    input.db
-      .select({ filesPath: skillVersions.filesPath, contentHash: skillVersions.contentHash })
-      .from(skillVersions)
-      .where(
-        and(
-          eq(skillVersions.skillId, input.artifact.skillId),
-          eq(skillVersions.versionIndex, version),
-        ),
-      ),
-  )
-  if (snapshot === undefined || snapshot.contentHash === null) {
+  const snapshot = skill.snapshot
+  if (snapshot === null || snapshot.contentHash === null) {
     throw new Error(`resource-package-skill-snapshot-missing:${input.artifact.skillId}:${version}`)
   }
-  const liveDirectory = factory.storedReference(skill.managedPath)
-  const versionDirectory = factory.storedReference(snapshot.filesPath)
+  if (skill.live.kind === 'database-bytes' && snapshot.content.kind === 'database-bytes') {
+    await createDatabaseSkillArtifactOwners(input.db).recovery.publish({
+      skillId: input.artifact.skillId,
+      operationId: input.artifact.operationId,
+      version,
+    })
+    return
+  }
+  const liveDirectory = factory.storedReference(
+    skillReferencePath(skill.live, input.artifact.skillId, 'live')!,
+  )
+  const versionDirectory = factory.storedReference(
+    skillReferencePath(snapshot.content, input.artifact.skillId, `version:${version}`)!,
+  )
   assertSkillArtifactPaths({
     artifact: input.artifact,
     appHome: input.appHome,

@@ -61,7 +61,7 @@ describe('doctor: evaluateMigrationsStatus', () => {
       expect(r.ok).toBe(false)
       // Error message must point at the build script, not at the user's fs.
       expect(r.message).toContain('build-binary')
-      expect(r.message).not.toContain('db:generate')
+      expect(r.message).not.toContain('restore the frozen epoch-1 migration bundle')
     })
 
     test('embedded mode ignores any fs values — fs presence is irrelevant', () => {
@@ -106,7 +106,7 @@ describe('doctor: evaluateMigrationsStatus', () => {
       expect(r.message).not.toContain('migrations')
     })
 
-    test('fail when fs missing — message includes the path + db:generate hint', () => {
+    test('fail when fs missing — message includes the path + frozen-bundle restore hint', () => {
       const r = evaluateMigrationsStatus({
         embedded: false,
         embeddedSqlCount: 0,
@@ -116,7 +116,7 @@ describe('doctor: evaluateMigrationsStatus', () => {
       })
       expect(r.ok).toBe(false)
       expect(r.message).toContain('/repo/packages/backend/db/migrations')
-      expect(r.message).toContain('db:generate')
+      expect(r.message).toContain('restore the frozen epoch-1 migration bundle')
     })
 
     test('fail when fs exists but is empty of .sql', () => {
@@ -129,7 +129,7 @@ describe('doctor: evaluateMigrationsStatus', () => {
       })
       expect(r.ok).toBe(false)
       expect(r.message).toContain('no .sql migrations found')
-      expect(r.message).toContain('db:generate')
+      expect(r.message).toContain('restore the frozen epoch-1 migration bundle')
     })
 
     test('dev mode ignores embedded count — IS_EMBEDDED=false stays on fs check', () => {
@@ -143,7 +143,7 @@ describe('doctor: evaluateMigrationsStatus', () => {
         fsPath: '/repo/packages/backend/db/migrations',
       })
       expect(r.ok).toBe(false)
-      expect(r.message).toContain('db:generate')
+      expect(r.message).toContain('restore the frozen epoch-1 migration bundle')
     })
   })
 })

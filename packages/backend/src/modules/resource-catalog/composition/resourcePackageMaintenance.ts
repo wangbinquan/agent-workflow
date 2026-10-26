@@ -10,7 +10,7 @@ import {
 } from '../application/resourcePackageMaintenance'
 import { createPostgresqlResourcePackageApplyArtifactRecovery } from '../infrastructure/postgresqlResourcePackageMaintenance'
 import { createResourcePackageApplyJournalPort } from '../infrastructure/resourcePackageApplyJournal'
-import { createLegacyResourcePackageApplyArtifactRecovery } from '../infrastructure/resourcePackageLegacyRecovery'
+import { createResourcePackageOperationArtifactRecovery } from '../infrastructure/resourcePackageOperationRecovery'
 import { createVersionedResourcePackageArtifactRecovery } from '../infrastructure/resourcePackageArtifactRecovery'
 import { createResourcePackageRecoveryScene } from '../infrastructure/resourcePackageRecovery'
 import type { AtomicApplyRecoveryScene } from '@/platform/contracts/atomicApply'
@@ -71,7 +71,7 @@ export function composeResourcePackageApplyMaintenance(input: {
           pluginsDir: input.pluginsDir,
           effectsFactory,
         }),
-        createLegacyResourcePackageApplyArtifactRecovery({
+        createResourcePackageOperationArtifactRecovery({
           db: input.db,
           appHome: input.appHome,
           pluginsDir: input.pluginsDir,

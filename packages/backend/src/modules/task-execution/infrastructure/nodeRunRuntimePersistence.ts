@@ -11,13 +11,14 @@ import type {
   NodeRunRuntimeSelectionSession,
 } from '../application/ports/nodeRunRuntimePersistence'
 import { fenceTaskWrite, withTaskExecutionWrite } from './ownedTaskExecution'
+import { lockNodeRunTaskRootInTx, writeNodeRunTablesInTx } from './nodeRunWriteProtocol'
 
 const projection = (db: object) => {
-  const { nodeRuns } = tablesOf(db)
+  const { nodeRunConfigs } = tablesOf(db)
   return {
-    runtime: nodeRuns.runtime,
-    runtimeBinary: nodeRuns.runtimeBinary,
-    runtimeParamsJson: nodeRuns.runtimeParamsJson,
+    runtime: nodeRunConfigs.runtime,
+    runtimeBinary: nodeRunConfigs.runtimeBinary,
+    runtimeParamsJson: nodeRunConfigs.runtimeParamsJson,
   }
 }
 
@@ -39,7 +40,7 @@ export class DrizzleNodeRunRuntimePersistence implements NodeRunRuntimePersisten
     body: (session: NodeRunRuntimeSelectionSession) => Promise<T>,
   ): Promise<T> {
     return withTaskExecutionWrite(this.db, async (tx) => {
-      const { nodeRuns } = tablesOf(tx)
+      const { nodeRuns, nodeRunConfigs } = tablesOf(tx)
       // This capability never escapes the callback's live transaction. Its owner fence is
       // taken before either selection or snapshot write, including inherited snapshots.
       let active = true
@@ -55,7 +56,10 @@ export class DrizzleNodeRunRuntimePersistence implements NodeRunRuntimePersisten
           .from(nodeRuns)
           .where(eq(nodeRuns.id, nodeRunId))
           .limit(1)
-        if (rows[0] !== undefined) await fenceTaskWrite(tx, { taskId: rows[0].taskId })
+        if (rows[0] !== undefined) {
+          await fenceTaskWrite(tx, { taskId: rows[0].taskId })
+          await lockNodeRunTaskRootInTx(tx, nodeRunId)
+        }
         await engineOf(tx).lockAggregateRoot(tx, nodeRuns, nodeRuns.id, nodeRunId)
         fenced = true
       }
@@ -70,6 +74,7 @@ export class DrizzleNodeRunRuntimePersistence implements NodeRunRuntimePersisten
             let rows = await tx
               .select(projection(tx))
               .from(nodeRuns)
+              .leftJoin(nodeRunConfigs, eq(nodeRunConfigs.nodeRunId, nodeRuns.id))
               .where(eq(nodeRuns.id, nodeRunId))
               .limit(1)
             if (rows[0] === undefined || !this.isRuntimeKnown(rows[0].runtime)) {
@@ -78,6 +83,7 @@ export class DrizzleNodeRunRuntimePersistence implements NodeRunRuntimePersisten
               rows = await tx
                 .select(projection(tx))
                 .from(nodeRuns)
+                .leftJoin(nodeRunConfigs, eq(nodeRunConfigs.nodeRunId, nodeRuns.id))
                 .where(eq(nodeRuns.id, nodeRunId))
                 .limit(1)
             }
@@ -91,14 +97,13 @@ export class DrizzleNodeRunRuntimePersistence implements NodeRunRuntimePersisten
             if (input.nodeRunId !== nodeRunId)
               throw new Error('node-run-runtime-selection-node-mismatch')
             await ensureFence()
-            await tx
-              .update(nodeRuns)
-              .set({
+            await writeNodeRunTablesInTx(tx, nodeRunId, {
+              config: {
                 runtime: input.runtime,
                 runtimeBinary: input.runtimeBinary,
                 runtimeParamsJson: input.runtimeParamsJson,
-              })
-              .where(eq(nodeRuns.id, nodeRunId))
+              },
+            })
           },
         })
       } finally {
@@ -108,21 +113,24 @@ export class DrizzleNodeRunRuntimePersistence implements NodeRunRuntimePersisten
   }
 
   async load(nodeRunId: string) {
-    const { nodeRuns } = tablesOf(this.db)
+    const { nodeRuns, nodeRunConfigs } = tablesOf(this.db)
     const rows = await this.db
       .select(projection(this.db))
       .from(nodeRuns)
+      .leftJoin(nodeRunConfigs, eq(nodeRunConfigs.nodeRunId, nodeRuns.id))
       .where(eq(nodeRuns.id, nodeRunId))
       .limit(1)
     return rows[0] ?? null
   }
 
   async findBySessionId(sessionId: string) {
-    const { nodeRuns } = tablesOf(this.db)
+    const { nodeRuns, nodeRunConfigs, nodeRunRuntimeStates } = tablesOf(this.db)
     const rows = await this.db
       .select(projection(this.db))
       .from(nodeRuns)
-      .where(eq(nodeRuns.opencodeSessionId, sessionId))
+      .leftJoin(nodeRunConfigs, eq(nodeRunConfigs.nodeRunId, nodeRuns.id))
+      .innerJoin(nodeRunRuntimeStates, eq(nodeRunRuntimeStates.nodeRunId, nodeRuns.id))
+      .where(eq(nodeRunRuntimeStates.sessionId, sessionId))
       .limit(1)
     return rows[0] ?? null
   }
@@ -138,14 +146,14 @@ export class DrizzleNodeRunRuntimePersistence implements NodeRunRuntimePersisten
       const row = rows[0]
       if (row === undefined) return
       await fenceTaskWrite(tx, { taskId: row.taskId })
-      await tx
-        .update(nodeRuns)
-        .set({
+      await lockNodeRunTaskRootInTx(tx, input.nodeRunId)
+      await writeNodeRunTablesInTx(tx, input.nodeRunId, {
+        config: {
           runtime: input.runtime,
           runtimeBinary: input.runtimeBinary,
           runtimeParamsJson: input.runtimeParamsJson,
-        })
-        .where(eq(nodeRuns.id, input.nodeRunId))
+        },
+      })
     })
   }
 }

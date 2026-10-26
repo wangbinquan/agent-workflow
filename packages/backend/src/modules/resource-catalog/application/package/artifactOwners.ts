@@ -1,3 +1,4 @@
+import type { AtomicApplySkillRecovery } from '@/platform/contracts/atomicApply'
 import type { PluginSourceKind } from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
 import type { PackageResourceKind } from '../../domain/resourceKinds'
@@ -41,6 +42,7 @@ export interface ResourcePackageSkillPublication {
   readonly managedPath: string
   readonly filesPath: string
   readonly contentHash: string | null
+  readonly contentKind?: 'local-file' | 'database-bytes'
 }
 
 export interface ResourcePackagePluginPublication {
@@ -79,6 +81,7 @@ export type ResourcePackageMutationArtifact =
       operationId: string
       skillId: string
       stagingDirectory: string
+      readonly recovery?: AtomicApplySkillRecovery
       targetDirectory: string
     }>
   | Readonly<{
@@ -88,6 +91,7 @@ export type ResourcePackageMutationArtifact =
       publishId: string
       version: number
       stagingDirectory: string
+      readonly recovery?: AtomicApplySkillRecovery
       versionDirectory: string
     }>
 

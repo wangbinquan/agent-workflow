@@ -12,7 +12,10 @@ import {
 } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
-import { launchTestTask as launchTestTaskProduction } from './helpers/productionTaskLaunch'
+import {
+  launchTestTask as launchTestTaskProduction,
+  type TestTaskLaunchOptions,
+} from './helpers/productionTaskLaunch'
 import { workspaceMaintenanceFilesystemForTest } from './helpers/workspaceMaintenance'
 import { createTaskRouteWorkspaceParticipant } from '@/modules/task-execution/composition/taskRouteLaunch'
 import { composeRepositoryPreparation } from '@/modules/source-control/composition/repositoryPreparation'
@@ -37,11 +40,11 @@ import { createRetryEngine } from './helpers/retryEngine'
 import { createResumeEngine } from './helpers/resumeEngine'
 import ts from 'typescript'
 import { eq } from 'drizzle-orm'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, rmSync, writeFileSync, readFileSync as readSrc } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import type { TestTaskLaunchOptions } from './helpers/productionTaskLaunch'
+
 import { runGit } from '@/util/git'
 import { rememberVolatileRepoUrl } from '@/services/repoCredentials'
 import { ulid } from 'ulid'
@@ -99,8 +102,6 @@ async function settle(db: DbClient, taskId: string, budgetMs = 60_000): Promise<
     await new Promise((r) => setTimeout(r, 50))
   }
 }
-
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 /**
  * 本文件所有启动共用的**临时** app home。
@@ -169,7 +170,7 @@ describe('RFC-287 T13 — 延后准备（G7 核心）', () => {
 
   beforeAll(async () => {
     await startGitHttpRemote()
-    db = createInMemoryDb(MIGRATIONS)
+    db = createInMemoryDb()
     const s = await seed(db)
     workflowId = s.workflowId
     userId = s.userId
@@ -221,7 +222,7 @@ describe('RFC-287 T13 — 延后准备（G7 核心）', () => {
   }, 60_000)
 
   test('准备成功后原子回填双仓行与 tasks 首仓兼容投影', async () => {
-    const db2 = createInMemoryDb(MIGRATIONS)
+    const db2 = createInMemoryDb()
     const s = await seed(db2)
     const appHome = mkdtempSync(join(tmpdir(), 'aw-rfc287-deferred-home-'))
     const sourceRepos = [
@@ -354,7 +355,6 @@ describe('RFC-287 T13 — 延后准备（G7 核心）', () => {
 // 在「正在准备仓库」阶段点取消要取消得到东西）。两件事因此共用同一个前提。
 //
 // 本测试锁的就是这个前提：注册时机一旦被挪回准备之后，长克隆会被误收。
-import { readFileSync as readSrc } from 'node:fs'
 
 describe('RFC-287 T13 — 准备期间不被孤儿回收器误收', () => {
   test('TaskDriveCoordinator 在准备开始之前完成 attach（回收器据此判活）', () => {
@@ -403,7 +403,7 @@ describe('RFC-287 T13 — 准备期间不被孤儿回收器误收', () => {
 // 走的还是 retryNode。本测试验的是这条路真的通——而不是「看起来应该通」。
 describe('RFC-287 T13 — 重试准备（AC-11）', () => {
   test('准备失败后，__repo_prep__ 行可被 retryNode 接受（不被前置门挡掉）', async () => {
-    const db2 = createInMemoryDb(MIGRATIONS)
+    const db2 = createInMemoryDb()
     const s = await seed(db2)
     const task = await launchTestTask(
       {
@@ -485,7 +485,7 @@ describe('RFC-287 G6 — 基线同步窗口化重试', () => {
   }
 
   test('网络类失败会占用窗口（窗口越大，准备越晚收场）', async () => {
-    const db3 = createInMemoryDb(MIGRATIONS)
+    const db3 = createInMemoryDb()
     const s = await seed(db3)
     const launch = async (windowMs: number, name: string): Promise<number> => {
       const task = await launchTestTask(
@@ -515,7 +515,7 @@ describe('RFC-287 G6 — 基线同步窗口化重试', () => {
 
   // G7 的核心可观察行为：启动接口**不再**等工作树。
   test('G7：延后准备的启动立刻返回 pending 行，不等克隆完成', async () => {
-    const dbA = createInMemoryDb(MIGRATIONS)
+    const dbA = createInMemoryDb()
     const s = await seed(dbA)
     const t0 = Date.now()
     const task = await launchTestTask(
@@ -555,7 +555,7 @@ describe('RFC-287 G6 — 基线同步窗口化重试', () => {
   }, 90_000)
 
   test('窗口耗尽后仍按失败收场，且原因不被重试吞掉', async () => {
-    const db4 = createInMemoryDb(MIGRATIONS)
+    const db4 = createInMemoryDb()
     const s = await seed(db4)
     const task = await launchTestTask(
       {
@@ -617,7 +617,7 @@ describe('RFC-287 G6 — 只有网络类占窗口（接线锁）', () => {
 // 踩中这段窗口。
 describe('RFC-287 — scratch 启动排除在延后准备之外', () => {
   test('开着 deferRepoPreparation 时，scratch 任务仍立刻拿到正确的 spaceKind', async () => {
-    const db5 = createInMemoryDb(MIGRATIONS)
+    const db5 = createInMemoryDb()
     const s = await seed(db5)
     const task = await launchTestTask(
       {
@@ -690,7 +690,7 @@ describe('RFC-287 AC-11/AC-16 — 重试准备仓库', () => {
   // 填错了。请求里本来就有 URL，落库前按既有规则脱敏即可（RFC-054 W3-4：repo_url
   // 存脱敏形，只用于显示、不能驱动 relaunch）。
   test('占位行必须带上（脱敏的）repoUrl，否则准备期间看不到自己在等哪个仓', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createInMemoryDb()
     const s = await seed(db)
     const task = await launchTestTask(
       {
@@ -723,7 +723,7 @@ describe('RFC-287 AC-11/AC-16 — 重试准备仓库', () => {
   }, 90_000)
 
   test('占位行必须已带 cachedRepoId（否则重试无从重建来源）', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createInMemoryDb()
     const s = await seed(db)
     const id = await launchFailingPrep(db, s, 'ac11-identity')
     const { cachedRepos } = tablesOf(db)
@@ -740,7 +740,7 @@ describe('RFC-287 AC-11/AC-16 — 重试准备仓库', () => {
   }, 90_000)
 
   test('重试准备行 = 重跑准备，绝不把任务静默标成 done', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createInMemoryDb()
     const s = await seed(db)
     const id = await launchFailingPrep(db, s, 'ac11-retry')
     const { nodeRuns } = tablesOf(db)
@@ -777,7 +777,7 @@ describe('RFC-287 AC-11/AC-16 — 重试准备仓库', () => {
   }, 120_000)
 
   test('AC-16：对 done 的准备行重试被拒（不得对已有工作树的任务再物化）', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createInMemoryDb()
     const s = await seed(db)
     const id = await launchFailingPrep(db, s, 'ac16-done')
     const { nodeRuns } = tablesOf(db)
@@ -816,7 +816,7 @@ describe('RFC-287 AC-11/AC-16 — 重试准备仓库', () => {
   // 传的就是它而不是 URL）。占位时若不把它落进 tasks.cached_repo_id，准备失败后点
   // 「重试准备」会撞 `repo-prep-source-unavailable`——AC-11 对这条路完全失效。
   test('以 cachedRepoId 启动时，占位行同样带上来源（否则 AC-11 对这条路失效）', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createInMemoryDb()
     const s2 = await seed(db)
     const cachedId = ulid()
     const now = Date.now()
@@ -870,7 +870,7 @@ describe('RFC-287 AC-11/AC-16 — 重试准备仓库', () => {
   }, 120_000)
 
   test('AC-16 反面：interrupted 的准备行必须可重试（否则 daemon 重启 = 任务报废）', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createInMemoryDb()
     const s2 = await seed(db)
     const id = await launchFailingPrep(db, s2, 'ac16-interrupted')
     const { nodeRuns } = tablesOf(db)
@@ -908,7 +908,7 @@ describe('RFC-287 AC-11/AC-16 — 重试准备仓库', () => {
   }, 120_000)
 
   test('任务只在 tasks.cached_repo_id 上引用时，删除仍须被拒', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createInMemoryDb()
     const s = await seed(db)
     const id = await launchFailingPrep(db, s, 'refcount-blindspot')
     const { cachedRepos } = tablesOf(db)
@@ -1030,7 +1030,7 @@ describe('RFC-287 G7 —— 定时触发与手动启动同一套语义', () => {
     const { createTestTaskDriveCoordinator } = await import('./helpers/legacyTaskDrive')
     const { buildActor } = await import('../src/auth/actor')
 
-    const db2 = createInMemoryDb(MIGRATIONS)
+    const db2 = createInMemoryDb()
     const s = await seed(db2)
     const home = mkdtempSync(join(tmpdir(), 'aw-rfc287-sched-'))
     process.env.AGENT_WORKFLOW_HOME = home
@@ -1187,7 +1187,7 @@ describe('RFC-287 G7 —— 定时触发与手动启动同一套语义', () => {
 describe('RFC-287 G5×G7 —— 生产延后准备的地址拒绝', () => {
   // RFC-395 II-pre：生产同步段保存来源快照；存量镜像地址在实际准备时解析并留下失败行。
   test('cachedRepoId 指向 file:// 镜像：生产准备拒绝并保留失败任务', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createInMemoryDb()
     const seeded = await seed(db)
     const cachedRepoId = ulid(),
       url = 'file:///srv/private/repo'
@@ -1229,7 +1229,7 @@ describe('RFC-287 G5×G7 —— 生产延后准备的地址拒绝', () => {
   test('url_redacted 为 NULL 时预筛放行（不解密、交给唯一权威拒绝点）', async () => {
     // 密钥轮换等原因导致脱敏列缺失时，预筛拿不到 scheme。此时**不得**乱报
     // file 错误（那会把用户引向错误的修复方向），而是放行给后台解封后再判。
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createInMemoryDb()
     const s = await seed(db)
     const id = ulid()
     const { cachedRepos } = tablesOf(db)
@@ -1294,7 +1294,7 @@ async function launchFailingPrep2(
 // 推进」的未知态。首启早就是后台推进了，重试必须同语义。
 describe('RFC-287 AC-11 —— 重试立刻返回，准备在后台推进', () => {
   test('retryNode 不等准备跑完（否则长克隆必然撞连接超时）', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createInMemoryDb()
     const s = await seed(db)
     const id = await launchFailingPrep2(db, s, 'ac11-async')
     const { nodeRuns } = tablesOf(db)
@@ -1327,12 +1327,11 @@ describe('RFC-287 AC-11 —— 重试立刻返回，准备在后台推进', () =
   // 执行本身是对的，但历史被永久写成假事实——审计、诊断、按 retryIndex 排序的
   // 调用方全被打乱。
   test('重试铸出的准备行必须递增 retryIndex 并标 retry-node', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createInMemoryDb()
     const s = await seed(db)
     const id = await launchFailingPrep2(db, s, 'ac11-retryindex')
     const retryOnce = async (): Promise<void> => {
-      const { nodeRuns } = tablesOf(db)
-      const latest = (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, id)))
+      const latest = (await readNodeRunFixtures(db, { taskId: id }))
         .filter((r) => r.nodeId === REPO_PREP_NODE_ID)
         .sort((a, b) => a.retryIndex - b.retryIndex)
         .at(-1)!
@@ -1370,7 +1369,7 @@ describe('RFC-287 AC-11 —— 重试立刻返回，准备在后台推进', () =
 // 假的（proposal AC-14 原话要求「底层 git 子进程确实终止」）。
 describe('RFC-287 AC-14 —— 准备窗口内的取消', () => {
   test('准备中取消：任务落 canceled，且准备行不是永远 running 的孤儿', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createInMemoryDb()
     const s = await seed(db)
     const { cancelViaEngine } = await import('./helpers/cancelEngine')
     const task = await launchTestTask(
@@ -1457,7 +1456,7 @@ describe('RFC-287 AC-15 —— 准备失败不打墓碑（AC-11 的地基）', (
   test('端到端：准备失败的任务上没有墓碑，且能 CAS 回 pending', async () => {
     // 上一条锁的是「守卫写对了」，这条锁的是「墓碑真的没落下、复活真的能走」——
     // 只有源码锁的话，别处再补一个写点就完全测不出来。
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createInMemoryDb()
     const s = await seed(db)
     const id = await launchFailingPrep2(db, s, 'ac15-no-tombstone')
     const before = (await readTaskFixtures(db, { id }))[0]
@@ -1486,7 +1485,7 @@ describe('RFC-287 AC-15 —— 准备失败不打墓碑（AC-11 的地基）', (
 // 后端这一半还停在老不变量上。
 describe('RFC-287 AC-10 —— 准备阶段的 resume 归因与 auto-resume 跳过', () => {
   test('resume 准备失败的任务：报 task-repo-prep-incomplete，而不是「被 GC 回收」', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createInMemoryDb()
     const s = await seed(db)
     const id = await launchFailingPrep2(db, s, 'ac10-resume')
     let code = ''
@@ -1518,7 +1517,7 @@ describe('RFC-287 AC-10 —— 准备阶段的 resume 归因与 auto-resume 跳�
   // 现在的契约：不传 `retryRepoPrep` ⇒ 退回跳过（老调用方不受影响）；传了 ⇒ 走重跑，
   // 并且**计熔断**（一个永远拉不动的远端应当在 N 次后被隔离，否则每次 boot 白跑一轮）。
   test('不传 retryRepoPrep 时退回跳过（向后兼容）', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createInMemoryDb()
     const s = await seed(db)
     const id = await launchFailingPrep2(db, s, 'ac10-autoresume')
     // 造成 boot reap 之后的形态：任务 interrupted + daemon-restart 摘要。
@@ -1564,7 +1563,7 @@ describe('RFC-287 AC-10 —— 准备阶段的 resume 归因与 auto-resume 跳�
   }, 120_000)
 
   test('传了 retryRepoPrep 时改重跑准备（plan T13⑥），且不走 resume', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createInMemoryDb()
     const s = await seed(db)
     const id = await launchFailingPrep2(db, s, 'ac10-boot-reprep')
     const { DAEMON_RESTART_ERROR_SUMMARY } = await import('@agent-workflow/shared')
@@ -1629,7 +1628,7 @@ describe('RFC-287 三轮门并发面 —— 准备窗口的两条 P0', () => {
     // failed/interrupted ⇒ 重试撞 repo-prep-not-retryable、resume 撞
     // task-repo-prep-incomplete、auto-resume 按设计跳过，只剩删任务重开。
     // 这恰好把 AC-16 那扇刚修好的门（认 interrupted）从 canceled 这一侧又打开。
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createInMemoryDb()
     const s = await seed(db)
     const { DAEMON_SHUTDOWN_ABORT_REASON } = await import('@agent-workflow/shared')
     // 用生产入口 `abortAllActiveTasks`——`gracefulShutdown` 走的正是这一条
@@ -2067,7 +2066,7 @@ describe('RFC-287 五轮门 —— 第四轮修复的收尾', () => {
     const picker = readSrc(
       join(
         import.meta.dir,
-        '../src/modules/task-execution/infrastructure/runSelection/oracle/pickers.ts',
+        '../src/modules/task-execution/infrastructure/migration/oracle/pickers.ts',
       ),
       'utf8',
     )
@@ -2177,7 +2176,9 @@ describe('RFC-287 五轮门 —— 回填与准备行 done 的原子性', () => 
       'utf8',
     )
     expect(participant, '同一事务句柄内仍写 Task 投影').toMatch(/await tx\s*\.update\(tasks\)/)
-    expect(participant, '同一事务句柄内仍写挂载行').toMatch(/await tx\.insert\(taskRepos\)/)
+    expect(participant, '同一事务句柄内仍写挂载行').toMatch(
+      /await tx\.insert\(taskRepositoryMounts\)/,
+    )
     expect(participant, '同一事务句柄内仍写显式目录').toMatch(
       /await writeTaskWorkspaceDirectoriesInTx\(\s*tx,/,
     )
@@ -2271,7 +2272,7 @@ describe('RFC-287 AC-9 —— 网络类失败在窗口内重试并最终成功',
 describe('RFC-287 五轮门 —— 补齐零测试的两处', () => {
   test('S4：准备窗口内的 pending 不按 5 分钟判卡死，且文案不再说「调度器没认领」', async () => {
     const { runStuckTaskDetector } = await import('@/services/stuckTaskDetector')
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createInMemoryDb()
     const s = await seed(db)
     const id = await launchFailingPrep2(db, s, 's4-exempt')
     // 造回准备窗口形态：pending + 空路径 + 无墓碑，且已经等了 10 分钟。
@@ -2300,7 +2301,7 @@ describe('RFC-287 五轮门 —— 补齐零测试的两处', () => {
   test('AC-14「删除」这一格已划掉：准备中删除仍 409 并提示先取消', async () => {
     // 用户 2026-08-15 拍板保持该语义：删除要清工作区，而准备中的任务持有驱动租约、
     // git 在跑；先取消（现在能真杀 git）再删是安全的两步。
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createInMemoryDb()
     const s = await seed(db)
     const task = await launchTestTask(
       {

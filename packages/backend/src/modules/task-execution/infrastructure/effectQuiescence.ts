@@ -1,3 +1,7 @@
+import type { NodeRunFactSnapshot } from '../application/ports/nodeRunQueries'
+import { writeNodeRunOutputInTx } from './nodeExecutionPersistence'
+import { nodeRunReadColumns } from './nodeRunQueries'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 // RFC-359 W1-T7b（P0-10）—— effect 静默清算的**一份**实现，两个引擎共用。
 //
 // 此前 SQLite 侧是 `sqliteTaskExecutionEffect.ts` 的同步 `resolveQuiescedManagedProcesses` /
@@ -17,7 +21,7 @@
 // 已撤销之后跑，没有并发 worker 要用谓词锁去挡。
 
 import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+
 import { and, asc, eq, inArray, isNull, like } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
@@ -122,7 +126,7 @@ export function parseJsonRecord(value: string | null): Readonly<Record<string, u
 export function recoveredManagedProcessEvidence(input: {
   readonly attemptState: AttemptRow['state']
   readonly receiptJson: string | null
-  readonly run: PersistenceTables['nodeRuns']['$inferSelect']
+  readonly run: Pick<NodeRunFactSnapshot, 'status' | 'pid' | 'spawnLaunchNonce' | 'spawnBinaryPath'>
 }): 'applied' | 'definitely-not-applied' | null {
   if (input.run.status === 'pending' || input.run.status === 'running') return null
   if (input.receiptJson === null) {
@@ -408,10 +412,11 @@ async function resolveManagedProcessesTx(input: {
       unresolved.add(effect.id)
       continue
     }
-    const { nodeRuns, taskExecutionEffectAttempts, taskExecutionEffects } = tablesOf(tx)
+    const { taskExecutionEffectAttempts, taskExecutionEffects } = tablesOf(tx)
+    const { nodeRuns } = tablesOf(tx)
     const run = (
       await tx
-        .select()
+        .select(nodeRunReadColumns(tx))
         .from(nodeRuns)
         .where(and(eq(nodeRuns.id, candidate[2]!), eq(nodeRuns.taskId, owner.taskId)))
         .limit(1)
@@ -826,7 +831,7 @@ async function projectRecoveredCodeHostNodeRunTx(
   now: number,
 ): Promise<void> {
   if (resolution.nodeRunId === null) return
-  const { nodeRuns, nodeRunOutputs } = tablesOf(tx)
+  const { nodeRuns } = tablesOf(tx)
   const run = (
     await tx
       .select({ status: nodeRuns.status })
@@ -845,13 +850,7 @@ async function projectRecoveredCodeHostNodeRunTx(
       content: String(resolution.responseStatus),
     },
   ]) {
-    await tx
-      .insert(nodeRunOutputs)
-      .values(value)
-      .onConflictDoUpdate({
-        target: [nodeRunOutputs.nodeRunId, nodeRunOutputs.portName],
-        set: { content: value.content },
-      })
+    await writeNodeRunOutputInTx(tx, resolution.nodeRunId, value, now)
   }
   const projected = await tx
     .update(nodeRuns)

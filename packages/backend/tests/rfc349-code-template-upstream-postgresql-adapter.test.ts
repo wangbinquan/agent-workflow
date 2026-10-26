@@ -1,6 +1,8 @@
+import { createEpoch2PostgresqlMetadata } from './helpers/epoch2PostgresqlMetadata'
 // RFC-349 — capability-template upstream merge must execute as one real
 // PostgreSQL transaction: load local + upstream, decide purely, fence/write,
 // commit. No SQLite shadow or synchronous cast may participate.
+// RFC-395 BF-D27: AF-D1 fences the first mutation after the caller's locks/reads.
 
 import { withNativeTransactions } from './helpers/nativeTransactions'
 import { describe, expect, test } from 'bun:test'
@@ -38,12 +40,15 @@ function result(input: {
 function fixture() {
   const executions: Execution[] = []
   const queued: Array<Parameters<typeof result>[0]> = []
+  const epoch2Metadata = createEpoch2PostgresqlMetadata()
   const run = (sql: string, parameters?: readonly unknown[]) => {
     executions.push({ sql, parameters })
+    const metadata = epoch2Metadata(sql)
+    if (metadata) return metadata
     // RFC-349: the one-shot live-write marker and the per-transaction
     // generation fence are infrastructure, not part of the adapter contract
     // each case queues responses for. Answer them without consuming the queue.
-    if (sql.includes('database_generations')) {
+    if (sql.includes('generations')) {
       return result({ objects: [{ generation_id: 'dbg_code_template_pg' }] })
     }
     return result(queued.shift() ?? {})
@@ -174,7 +179,6 @@ describe('RFC-349 PostgreSQL capability-template upstream adapter', () => {
       { values: [values(local)] },
       { count: 0 },
       { values: [values(upstream)] },
-      { objects: [{ generation_id: 'dbg_code_template_upstream_pg' }] },
       { count: 1 },
       { count: 0 },
     )
@@ -197,17 +201,23 @@ describe('RFC-349 PostgreSQL capability-template upstream adapter', () => {
     })
 
     const normalized = fake.executions.map((execution) => execution.sql.trim().toLowerCase())
-    expect(normalized[0]).toBe('begin')
-    expect(normalized[1]).toContain('for update')
-    expect(normalized[2]).toContain('from "agent_workflow"."capability_templates"')
-    expect(normalized[3]).toContain('for update')
-    expect(normalized[4]).toContain('from "agent_workflow"."capability_templates"')
-    expect(normalized[5]).toContain('with marked as (update "agent_workflow_meta"')
-    expect(normalized[6]).toContain('select generation_id from "agent_workflow_meta"')
-    expect(normalized[7]).toContain('update "agent_workflow"."capability_templates"')
-    expect(normalized[8]).toBe('commit')
-    expect(fake.executions[7]?.parameters).toContain(JSON.stringify({ entry: 'new' }))
-    expect(fake.executions[7]?.parameters).toContain(200)
-    expect(fake.executions[7]?.parameters).toContain(300)
+    expect(normalized).toEqual([
+      'begin',
+      expect.stringContaining('for update'),
+      expect.stringContaining('from "agent_workflow"."capability_templates"'),
+      expect.stringContaining('for update'),
+      expect.stringContaining('from "agent_workflow"."capability_templates"'),
+      expect.stringMatching(/^select generation_id .*"generations".*for share$/),
+      expect.stringContaining('select first_live_write_at'),
+      expect.stringContaining('update "agent_workflow_meta"."first_write"'),
+      expect.stringContaining('update "agent_workflow"."capability_templates"'),
+      'commit',
+    ])
+    const updated = fake.executions.find((execution) =>
+      /^update "agent_workflow"\."capability_templates"/i.test(execution.sql),
+    )
+    expect(updated?.parameters).toContain(JSON.stringify({ entry: 'new' }))
+    expect(updated?.parameters).toContain(200)
+    expect(updated?.parameters).toContain(300)
   })
 })

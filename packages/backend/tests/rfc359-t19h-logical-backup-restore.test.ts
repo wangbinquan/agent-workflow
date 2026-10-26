@@ -1,16 +1,18 @@
-// RFC-359 T19h — restore old logical bytes into the current index-only schema.
-// Protocol cases use rows from the exact original SQLite migration prefix and
-// explicitly control the target port. The selected PostgreSQL mechanism below
-// uses the real source, export, reserved target and provider restore composition.
-
-import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
+// BF-D9: native epoch-2 backup/restore preserves business and archived bytes,
+// verifies complete contracts before prepare, and releases targets on failure.
+import { persistenceHead } from '@/bootstrap/persistenceHead'
+import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import { createSqliteBaseline } from '@/bootstrap/persistenceBaseline'
+import { bindSqliteClient } from '@/db/client'
+import { taskFixture } from './helpers/model/task'
+import { nodeRunFixture } from './helpers/model/nodeRun'
+import type { EpochMetadataSnapshot } from '@/platform/persistence/schema/history/metadataSnapshot'
 import { afterEach, beforeAll, describe, expect, setDefaultTimeout, test } from 'bun:test'
-import { Database } from 'bun:sqlite'
 import { createHash } from 'node:crypto'
 import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { createInMemoryDb } from '@/db/client'
+
 import {
   inspectPortableDatabaseBackup,
   restorePortableDatabaseBackup,
@@ -31,7 +33,7 @@ import {
   restoreLogicalDatabaseBackup,
   type LogicalDatabaseRestoreTarget,
 } from '@/platform/persistence/logicalDatabaseRestore'
-import { loadPostgresqlMigrationHistory } from '@/platform/persistence/postgresqlMigrationHistory'
+import { loadPostgresqlMigrationHistory } from '@/platform/persistence/schema/history/logicalHistory'
 import type { PostgresqlMigrationHistory } from '@/platform/persistence/postgresqlMigrationSequence'
 import { openPostgresqlLogicalSource } from '@/platform/persistence/postgresqlLogicalSource'
 import { openPostgresqlLogicalTarget } from '@/platform/persistence/postgresqlLogicalTarget'
@@ -40,7 +42,6 @@ import type { LogicalTableContract } from '@/platform/persistence/schemaContract
 import { openSqliteLogicalSource } from '@/platform/persistence/sqliteLogicalSource'
 import { createPortableBackupArchive } from '@/services/portableBackupArchive'
 import { resolvePostgresqlTestUrlEnv, resolveTestProviders } from './helpers/eachProvider'
-import { freezeAt } from './migration-freeze'
 
 // 与 rfc359-t19h-postgresql-migration-sequence.test.ts 同形（0b7f0057e 的先例）：协议用例
 // 每条都要构建/校验整份 logical artifact（beforeAll 的 loadPostgresqlMigrationHistory() 一次
@@ -64,7 +65,7 @@ const opaqueInputs = ' { "old" : true, "empty": null } '
 let history: PostgresqlMigrationHistory
 
 beforeAll(async () => {
-  history = await loadPostgresqlMigrationHistory({ headContract: buildLogicalSchemaContract() })
+  history = await loadPostgresqlMigrationHistory({ headContract: logicalSchemaContract })
 })
 
 afterEach(() => {
@@ -88,34 +89,41 @@ function fileTree(root: string): Readonly<Record<string, string>> {
   return files
 }
 
-async function historicalArtifact() {
+async function nativeArtifact() {
   const appHome = mkdtempSync(join(tmpdir(), 'rfc359-old-logical-restore-'))
-  const migrations = freezeAt(history.root.sqliteMigration.last.index)
-  roots.push(appHome, migrations)
+  roots.push(appHome)
   const sourcePath = join(appHome, 'db.sqlite')
-  {
-    const db = createInMemoryDb(migrations)
-    const sqlite: unknown = Reflect.get(db, '$client')
-    if (!(sqlite instanceof Database)) throw new Error('expected the published SQLite fixture')
-    try {
-      sqlite
-        .query(
-          `INSERT INTO tasks (id, name, workflow_id, workflow_snapshot, repo_path, worktree_path, base_branch, branch, status, inputs, started_at, finished_at, cached_repo_id)
-         VALUES (?, 'old restore task', 'old-workflow', '{}', '/tmp/repo', '/tmp/task', 'main', 'task', 'done', ?, 41, 42, 'old-repo')`,
-        )
-        .run('t19h-restored-task', opaqueInputs)
-      sqlite.exec(
-        `INSERT INTO code_artifacts (id, repo_path, commit_sha, base_sha, digest, keep_ref, generation, ref_count, state, created_at)
-         VALUES ('t19h-restored-archive', '/tmp/repo', 'old-commit', 'old-base', 'sha256:old', 'refs/keep/t19h', 1, 0, 'live', 43)`,
+  const sqlite = createSqliteBaseline({ generationId: 'dbg_t19h_sqlite_original' })
+  try {
+    const db = bindSqliteClient(sqlite)
+    await taskFixture(db, {
+      id: 't19h-restored-task',
+      name: 'restored task',
+      workflowId: 'workflow',
+      workflowSnapshot: { nodes: [], edges: [] },
+      repoPath: '/tmp/repo',
+      worktreePath: '/tmp/task',
+      baseBranch: 'main',
+      branch: 'task',
+      status: 'done',
+      inputs: opaqueInputs,
+      startedAt: 41,
+      finishedAt: 42,
+    })
+    await nodeRunFixture(db, {
+      id: 't19h-old-run',
+      taskId: 't19h-restored-task',
+      nodeId: 'n',
+      status: 'done',
+    })
+    sqlite
+      .query(
+        "INSERT INTO aw_meta_migration_archives (run_id,archive_ref,unit_id,kind,source_table,format,rows,byte_size,bytes) VALUES ('converted-run','code-artifact','unit','retired-table','code_artifacts','raw-chunk@1',1,3,?)",
       )
-      // RFC-374: explicit old columns avoid asking the frozen schema for HEAD seq.
-      sqlite.exec(
-        `INSERT INTO node_runs (id, task_id, node_id, status) VALUES ('t19h-old-run', 't19h-restored-task', 'n', 'done')`,
-      )
-      writeFileSync(sourcePath, sqlite.serialize())
-    } finally {
-      sqlite.close()
-    }
+      .run(Buffer.from('old'))
+    writeFileSync(sourcePath, sqlite.serialize())
+  } finally {
+    sqlite.close()
   }
   const artifactRoot = join(appHome, 'old-logical')
   const source = openSqliteLogicalSource({ path: sourcePath, contract: history.root.contract })
@@ -124,11 +132,12 @@ async function historicalArtifact() {
     const exported = await exportLogicalDatabaseArtifact({
       operationId: oldOperation,
       sourceProvider: 'sqlite',
-      sourceGenerationId: oldGeneration,
+      sourceGenerationId: 'dbg_t19h_sqlite_original',
       source: {
         provider: 'sqlite',
         assertUnchanged: () => source.assertUnchanged(snapshot),
         readChunk: (table, afterKey, limit) => source.readChunk(table, afterKey, limit),
+        readMetadata: () => source.readMetadata!(),
       },
       expectedTableRows: snapshot.tableRows,
       contract: history.root.contract,
@@ -148,7 +157,7 @@ async function historicalArtifact() {
 }
 
 async function archiveFromPostgresqlSource(
-  fixture: Awaited<ReturnType<typeof historicalArtifact>>,
+  fixture: Awaited<ReturnType<typeof nativeArtifact>>,
   source: LogicalDatabaseExportSource,
   tableRows: Readonly<Record<string, number>>,
 ) {
@@ -190,7 +199,7 @@ async function archiveFromPostgresqlSource(
 }
 
 async function protocolBackup() {
-  const fixture = await historicalArtifact()
+  const fixture = await nativeArtifact()
   const source = openSqliteLogicalSource({
     path: fixture.sourcePath,
     contract: history.root.contract,
@@ -209,6 +218,7 @@ async function protocolBackup() {
         provider: 'postgresql',
         assertUnchanged: () => source.assertUnchanged(snapshot),
         readChunk: (table, afterKey, limit) => source.readChunk(table, afterKey, limit),
+        readMetadata: () => source.readMetadata!(),
       },
       tableRows,
     )
@@ -221,6 +231,7 @@ async function protocolBackup() {
 function protocolTarget(failCopy?: Error) {
   const calls: string[] = []
   const chunks: Array<{ table: LogicalTableContract; chunk: LogicalTableChunk }> = []
+  const metadata: EpochMetadataSnapshot[] = []
   const target: LogicalDatabaseRestoreTarget = {
     provider: 'postgresql',
     operationId: restoreOperation,
@@ -232,30 +243,33 @@ function protocolTarget(failCopy?: Error) {
       if (failCopy !== undefined) throw failCopy
       chunks.push({ table, chunk })
     },
+    async restoreMetadata(snapshot) {
+      metadata.push(snapshot)
+    },
     async finalizeSchema() {
       calls.push('finalize')
     },
   }
-  return { target, calls, chunks }
+  return { target, calls, chunks, metadata }
 }
 
-describe('RFC-359 T19h old logical backup row bridge protocol', () => {
-  test('inspects original bytes and restores re-encoded current chunks while preserving the entire old archive', async () => {
+describe('RFC-359 T19h epoch-2 logical backup restore protocol', () => {
+  test('inspects original bytes and restores current chunks while preserving archived metadata', async () => {
     const fixture = await protocolBackup()
     const oldFiles = fileTree(fixture.artifactRoot)
     const backupDigest = digest(fixture.backup.path)
     const inspection = await inspectPortableDatabaseBackup({
-      headContract: buildLogicalSchemaContract(),
+      headContract: logicalSchemaContract,
       tarballPath: fixture.backup.path,
       appHome: fixture.appHome,
       restoreOperationId: restoreOperation,
       contract: history.head.contract,
     })
     expect(inspection.envelope.payload.schemaDigest).toBe(history.root.contract.digest)
-    expect(inspection.verification.archiveRows).toBe(1)
+    expect(inspection.verification.archiveRows).toBe(0)
     const receiver = protocolTarget()
     const result = await restorePortableDatabaseBackup({
-      headContract: buildLogicalSchemaContract(),
+      headContract: logicalSchemaContract,
       tarballPath: fixture.backup.path,
       appHome: fixture.appHome,
       restoreOperationId: restoreOperation,
@@ -277,7 +291,8 @@ describe('RFC-359 T19h old logical backup row bridge protocol', () => {
       now: () => 59,
     })
     const run = receiver.chunks.find((item) => item.table.id === 'node_runs')!
-    expect(run.table.columns.some((column) => column.name === 'seq')).toBe(false)
+    expect(run.table.columns.some((column) => column.name === 'seq')).toBe(true)
+    expect(decodeLogicalRow(run.table, run.chunk.payload.rows[0]!).seq).toBe(1)
     expect(decodeLogicalRow(run.table, run.chunk.payload.rows[0]!).id).toBe('t19h-old-run')
     const task = receiver.chunks.find((item) => item.table.id === 'tasks')!
     const oldTask = history.root.contract.tables.find((table) => table.id === 'tasks')!
@@ -286,7 +301,15 @@ describe('RFC-359 T19h old logical backup row bridge protocol', () => {
     expect(task.chunk.payload.schemaDigest).toBe(history.head.contract.digest)
     expect(task.chunk.payload.operationId).toBe(restoreOperation)
     expect(task.chunk.payload.rows).toEqual(original.payload.rows)
-    expect(decodeLogicalRow(task.table, task.chunk.payload.rows[0]!).inputs).toBe(opaqueInputs)
+    const definition = receiver.chunks.find((item) => item.table.id === 'task_definitions')!
+    expect(decodeLogicalRow(definition.table, definition.chunk.payload.rows[0]!).inputs).toBe(
+      opaqueInputs,
+    )
+    expect(receiver.metadata).toHaveLength(1)
+    expect(
+      receiver.metadata[0]!.payload.tables.find((table) => table.name === 'migration_archives')!
+        .rows[0]!.bytes,
+    ).toEqual({ type: 'bytes', base64: Buffer.from('old').toString('base64') })
     expect(task.chunk.digest).not.toBe(original.digest)
     expect(receiver.chunks.some((item) => item.table.disposition === 'ARCHIVE_THEN_OMIT')).toBe(
       false,
@@ -294,7 +317,7 @@ describe('RFC-359 T19h old logical backup row bridge protocol', () => {
     expect(receiver.calls.slice(-3)).toEqual(['finalize', 'assets', 'close'])
     expect(result.receipt).toMatchObject({
       schemaDigest: history.head.contract.digest,
-      archiveRowsPreserved: 1,
+      archiveRowsPreserved: 0,
       completedAt: 59,
     })
     expect(result.manifest.database.schemaDigest).toBe(history.root.contract.digest)
@@ -308,14 +331,14 @@ describe('RFC-359 T19h old logical backup row bridge protocol', () => {
     const changedSource = {
       ...history.root.contract,
       tables: history.root.contract.tables.map((table) =>
-        table.id === 'code_artifacts'
+        table.id === 'task_definitions'
           ? { ...table, rationale: `${table.rationale} changed` }
           : table,
       ),
     }
     await expect(
       restoreLogicalDatabaseBackup({
-        headContract: buildLogicalSchemaContract(),
+        headContract: logicalSchemaContract,
         artifactRoot: fixture.artifactRoot,
         expectedEnvelopeFileDigest: fixture.exported.envelopeFileDigest,
         restoreOperationId: restoreOperation,
@@ -333,7 +356,7 @@ describe('RFC-359 T19h old logical backup row bridge protocol', () => {
     }
     await expect(
       restoreLogicalDatabaseBackup({
-        headContract: buildLogicalSchemaContract(),
+        headContract: logicalSchemaContract,
         artifactRoot: fixture.artifactRoot,
         expectedEnvelopeFileDigest: fixture.exported.envelopeFileDigest,
         restoreOperationId: restoreOperation,
@@ -347,7 +370,7 @@ describe('RFC-359 T19h old logical backup row bridge protocol', () => {
     const failed = protocolTarget(failure)
     await expect(
       restorePortableDatabaseBackup({
-        headContract: buildLogicalSchemaContract(),
+        headContract: logicalSchemaContract,
         tarballPath: fixture.backup.path,
         appHome: fixture.appHome,
         restoreOperationId: restoreOperation,
@@ -378,7 +401,7 @@ describe('RFC-359 T19h old logical backup row bridge protocol', () => {
     let opened = false
     await expect(
       restorePortableDatabaseBackup({
-        headContract: buildLogicalSchemaContract(),
+        headContract: logicalSchemaContract,
         tarballPath: fixture.backup.path,
         appHome: fixture.appHome,
         restoreOperationId: restoreOperation,
@@ -396,13 +419,25 @@ describe('RFC-359 T19h old logical backup row bridge protocol', () => {
 
 describe('RFC-359 T19h selected provider restore mechanisms', () => {
   if (providers.includes('sqlite')) {
-    test('the published SQLite prefix supplies the unchanged task and archive row bytes', async () => {
-      const fixture = await historicalArtifact()
-      const task = history.root.contract.tables.find((table) => table.id === 'tasks')!
+    test('the native SQLite head supplies unchanged definition bytes and archived evidence', async () => {
+      const fixture = await nativeArtifact()
+      const task = history.root.contract.tables.find((table) => table.id === 'task_definitions')!
       const chunk = fixture.preservedArchive.readChunk(task, 0)
       expect(decodeLogicalRow(task, chunk.payload.rows[0]!).inputs).toBe(opaqueInputs)
       expect(fixture.snapshot.tableRows.tasks).toBe(1)
-      expect(fixture.snapshot.tableRows.code_artifacts).toBe(1)
+      const source = openSqliteLogicalSource({
+        path: fixture.sourcePath,
+        contract: history.root.contract,
+      })
+      try {
+        const metadata = await source.readMetadata!()
+        expect(
+          metadata.payload.tables.find((table) => table.name === 'migration_archives')!.rows[0]!
+            .bytes,
+        ).toEqual({ type: 'bytes', base64: Buffer.from('old').toString('base64') })
+      } finally {
+        await source.close()
+      }
       expect(encodeLogicalRow(task, decodeLogicalRow(task, chunk.payload.rows[0]!))).toEqual(
         chunk.payload.rows[0]!,
       )
@@ -410,11 +445,11 @@ describe('RFC-359 T19h selected provider restore mechanisms', () => {
   }
 
   if (providers.includes('postgresql')) {
-    test('a real old PostgreSQL logical backup restores into the current target and activates its current generation', async () => {
+    test('a real native PostgreSQL backup restores into the live head and activates its current generation', async () => {
       const urlEnv = resolvePostgresqlTestUrlEnv(process.env)
       if (urlEnv === undefined)
         throw new Error('selected PostgreSQL restore requires the real harness PostgreSQL URL')
-      const fixture = await historicalArtifact()
+      const fixture = await nativeArtifact()
       const originalFiles = fileTree(fixture.artifactRoot)
       const runtime = createPostgresqlDatabaseRuntime({
         config: {
@@ -432,7 +467,7 @@ describe('RFC-359 T19h selected provider restore mechanisms', () => {
         await pool.unsafe('DROP SCHEMA IF EXISTS agent_workflow CASCADE')
         await pool.unsafe('DROP SCHEMA IF EXISTS agent_workflow_meta CASCADE')
         const originalTarget = await openPostgresqlLogicalTarget({
-          headContract: buildLogicalSchemaContract(),
+          headContract: logicalSchemaContract,
           runtime,
           operationId: oldOperation,
           sourceGenerationId: oldGeneration,
@@ -441,7 +476,7 @@ describe('RFC-359 T19h selected provider restore mechanisms', () => {
         })
         try {
           await restoreLogicalDatabaseBackup({
-            headContract: buildLogicalSchemaContract(),
+            headContract: logicalSchemaContract,
             artifactRoot: fixture.artifactRoot,
             expectedEnvelopeFileDigest: fixture.exported.envelopeFileDigest,
             restoreOperationId: oldOperation,
@@ -473,6 +508,7 @@ describe('RFC-359 T19h selected provider restore mechanisms', () => {
               provider: 'postgresql',
               assertUnchanged: () => source.assertUnchanged(snapshot),
               readChunk: (table, afterKey, limit) => source.readChunk(table, afterKey, limit),
+              readMetadata: () => source.readMetadata!(),
             },
             snapshot.tableRows,
           )
@@ -483,7 +519,7 @@ describe('RFC-359 T19h selected provider restore mechanisms', () => {
         await pool.unsafe('DROP SCHEMA agent_workflow CASCADE')
         await pool.unsafe('DROP SCHEMA agent_workflow_meta CASCADE')
         const restored = await restorePostgresqlProviderBackup({
-          headContract: buildLogicalSchemaContract(),
+          headContract: logicalSchemaContract,
           tarballPath: backup.path,
           appHome: fixture.appHome,
           restoreOperationId: restoreOperation,
@@ -495,12 +531,24 @@ describe('RFC-359 T19h selected provider restore mechanisms', () => {
           now: () => 67,
         })
         expect(await pool.unsafe('SELECT * FROM agent_workflow.tasks ORDER BY id')).toEqual(oldRows)
-        expect(await pool.unsafe('SELECT id, seq FROM agent_workflow.node_runs')).toEqual([
-          { id: 't19h-old-run', seq: null },
-        ])
-        expect(await pool.unsafe('SELECT * FROM agent_workflow.node_run_seq_allocations')).toEqual(
-          [],
+        // Native PostgreSQL returns BIGINT as text.
+        const numericSeq = (rows: readonly Record<string, unknown>[]) =>
+          rows.map((row): Record<string, unknown> => ({ ...row, seq: Number(row.seq) }))
+        expect(
+          numericSeq(await pool.unsafe('SELECT id, seq FROM agent_workflow.node_runs')),
+        ).toEqual([{ id: 't19h-old-run', seq: 1 }])
+        expect(
+          numericSeq(
+            await pool.unsafe(
+              'SELECT node_run_id, seq FROM agent_workflow.node_run_seq_allocations',
+            ),
+          ),
+        ).toEqual([{ node_run_id: 't19h-old-run', seq: 1 }])
+        const archived = await pool.unsafe(
+          'SELECT bytes FROM agent_workflow_meta.migration_archives',
         )
+        expect(archived).toHaveLength(1)
+        expect(Buffer.from(archived[0]!.bytes as Uint8Array)).toEqual(Buffer.from('old'))
         for (const table of [
           'sc_repository_sources',
           'sc_repository_snapshots',
@@ -513,24 +561,30 @@ describe('RFC-359 T19h selected provider restore mechanisms', () => {
           sourceProvider: 'postgresql',
           targetProvider: 'postgresql',
           schemaDigest: history.head.contract.digest,
-          archiveRowsPreserved: 1,
+          archiveRowsPreserved: 0,
         })
         expect(restored.envelope.payload.schemaDigest).toBe(history.root.contract.digest)
         expect(
           await pool.unsafe(
             'SELECT indexname FROM pg_indexes WHERE schemaname = $1 AND indexname IN ($2, $3) ORDER BY indexname',
-            ['agent_workflow', 'idx_tasks_cached_repo_task', 'idx_tasks_overview_counts'],
+            [
+              'agent_workflow',
+              'task_repository_mounts_cached_repo_task',
+              'idx_tasks_overview_counts',
+            ],
           ),
         ).toEqual([
-          { indexname: 'idx_tasks_cached_repo_task' },
           { indexname: 'idx_tasks_overview_counts' },
+          { indexname: 'task_repository_mounts_cached_repo_task' },
         ])
         expect(
           await pool.unsafe(
-            'SELECT state, contract_digest FROM agent_workflow_meta.database_generations WHERE generation_id = $1',
+            'SELECT state, contract_digest FROM agent_workflow_meta.generations WHERE generation_id = $1',
             [restoreGeneration],
           ),
-        ).toEqual([{ state: 'active', contract_digest: history.head.contract.digest }])
+        ).toEqual([
+          { state: 'active', contract_digest: persistenceHead().contract.contract.digest },
+        ])
         const taskTable = history.head.contract.tables.find((table) => table.id === 'tasks')!
         const oldTaskTable = history.root.contract.tables.find((table) => table.id === 'tasks')!
         const expectedChunk = createLogicalTableChunk({
@@ -546,7 +600,7 @@ describe('RFC-359 T19h selected provider restore mechanisms', () => {
         })
         expect(
           await pool.unsafe(
-            'SELECT chunk_digest FROM agent_workflow_meta.logical_copy_chunks WHERE operation_id = $1 AND table_id = $2',
+            "SELECT receipt_digest AS chunk_digest FROM agent_workflow_meta.migration_units WHERE run_id = $1 AND unit_json::jsonb->>'table' = $2 AND rule_id='epoch2/logical-copy'",
             [restoreOperation, 'tasks'],
           ),
         ).toEqual([{ chunk_digest: expectedChunk.digest }])

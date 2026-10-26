@@ -1,14 +1,9 @@
-// RFC-359 W47 —— one node-run mint program, driven by the existing sync/async entries.
-// The callers retain transaction ownership.
-
-import { consumedInputColumns } from './consumedInputsParticipant'
-import { selectMintedRunInTx } from './runSelection/selectionWrite'
-import { insertOne } from '@/platform/persistence/singleInsert'
+import { encodeSyntheticOwner } from '../domain/runSelection/syntheticOwner'
+import { eq } from 'drizzle-orm'
+import type { PersistenceTx } from '@/platform/persistence/persistenceDb'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { first } from '@/platform/persistence/queryHelpers'
-import { eq } from 'drizzle-orm'
-
-import type { PersistenceTx } from '@/platform/persistence/persistenceDb'
+import { insertOne } from '@/platform/persistence/singleInsert'
 import {
   driveAsyncProgram,
   transactionStep,
@@ -19,111 +14,123 @@ import {
   nodeRunLineageColumns,
 } from '../application/buildNodeRunMintRecord'
 import type { NodeRunMintInput } from '../application/ports/nodeRunLifecyclePersistence'
-import { taskCheckpointProjectionPatch } from './taskCheckpointCodec'
 import { childScopePath } from '../domain/environmentChain'
+import { taskReadColumns } from './taskRepositorySql'
+import { resolveTaskExecutionGenerationInTx } from './taskExecutionGeneration'
+import { writeNodeRunTablesInTx } from './nodeRunWriteProtocol'
+import { selectMintedRunInTx } from './runSelection/selectionWrite'
 
-/** 在调用方已持有的事务里铸造 node_runs 行。 */
 export interface NodeRunMintParticipantInTx {
   mint(input: NodeRunMintInput): Promise<string>
 }
 
-/**
- * One mint sequence: scope / lineage resolution, identity allocation, then the insert.
- * RFC-374: allocation and insertion share the caller transaction; no run-row update or range read.
- *
- * RFC-369 —— 这里**不再**读同帧旧代、也不再把它们标成 abandoned。那次范围读在 PostgreSQL
- * SERIALIZABLE 下按索引页加谓词锁，同一任务里的任意两次并发铸造几乎必然互判读写依赖、其一被中止
- * （工作组领队 / 成员并发时 CI 上间歇红，本地实验去掉后 8→0 次冲突）。「旧代作废」改由读侧按同一
- * 判据推导：merge 状态机迁移（`mergeStateLifecyclePersistence.ts`）与入口重放
- * （`executionMergeRecovery.ts`），判据由 `runSelection/oracle/supersession.ts` 封装，经 selection port 读取。
- */
+/** Identity, companions, recorded-empty inputs and selection commit with the allocation. */
 export function* nodeRunMintProgram(
   tx: PersistenceTx,
   input: NodeRunMintInput,
 ): Generator<TransactionProgramStep, string, void> {
   const record = buildNodeRunMintRecord(input)
-  // RFC-354 — derive the breadcrumb from the generation row this row hangs
-  // off; the record carries null exactly when the caller left it to us.
+  const tables = tablesOf(tx)
+  const generationSeq = yield* transactionStep(() =>
+    resolveTaskExecutionGenerationInTx(tx, record.taskId, record.executionGeneration),
+  )
   let scopePath = record.scopePath
   if (scopePath === null) {
     const container =
       record.containerRunId === null
         ? undefined
-        : yield* transactionStep(() => {
-            const { nodeRuns } = tablesOf(tx)
-            return first(
+        : yield* transactionStep(() =>
+            first(
               tx
-                .select({ nodeId: nodeRuns.nodeId, scopePath: nodeRuns.scopePath })
-                .from(nodeRuns)
-                .where(eq(nodeRuns.id, record.containerRunId!)),
-            )
-          })
-    scopePath =
-      container === undefined
-        ? ''
-        : childScopePath(container.scopePath, container.nodeId, record.iteration)
+                .select({ nodeId: tables.nodeRuns.nodeId, scopePath: tables.nodeRuns.scopePath })
+                .from(tables.nodeRuns)
+                .where(eq(tables.nodeRuns.id, record.containerRunId!)),
+            ),
+          )
+    if (!container || container.scopePath === null) throw new Error('node-run-container-missing')
+    scopePath = childScopePath(container.scopePath, container.nodeId, record.iteration)
   }
-  // RFC-359 W6 —— 两个 lineage 列必须由**插入点显式写出**。此前它们在 SQLite 上由迁移 0210 的
-  // 触发器补齐、PostgreSQL 上留 null（那个触发器已随迁移 0224 退役）；推导现在两个引擎共用
-  // 一份，见 `nodeRunLineageColumns` 的头注释。
   const lineage = nodeRunLineageColumns(
     record,
     record.lineageSlotPathJson !== null
       ? undefined
-      : yield* transactionStep(() => {
-          const { tasks } = tablesOf(tx)
-          return first(
+      : yield* transactionStep(() =>
+          first(
             tx
               .select({
-                lineageSlotPathJson: tasks.lineageSlotPathJson,
-                workflowVersion: tasks.workflowVersion,
+                lineageSlotPathJson: taskReadColumns(tx).lineageSlotPathJson,
+                workflowVersion: taskReadColumns(tx).workflowVersion,
               })
-              .from(tasks)
-              .where(eq(tasks.id, record.taskId)),
-          )
-        }),
+              .from(tables.tasks)
+              .where(eq(tables.tasks.id, record.taskId)),
+          ),
+        ),
   )
-  const allocation = yield* transactionStep(() => {
-    const { nodeRunSeqAllocations } = tablesOf(tx)
-    return first(
+  const allocation = yield* transactionStep(() =>
+    first(
       tx
-        .insert(nodeRunSeqAllocations)
+        .insert(tables.nodeRunSeqAllocations)
         .values({ taskId: record.taskId, nodeRunId: record.id, allocatedAt: Date.now() })
-        .returning({ seq: nodeRunSeqAllocations.seq }),
-    )
-  })
-  if (allocation === undefined) throw new Error('node-run-seq-allocation-missing')
-  // Epoch-1 mint only copied the scalar historical workspace snapshot; map history and isolation stay absent.
-  const { role: _role, syntheticKind: _syntheticKind, ...storedRecord } = record
-  const values = {
-    ...taskCheckpointProjectionPatch(storedRecord, ['']),
-    ...consumedInputColumns(storedRecord),
-    scopePath,
-    continuationSlotKey: lineage.continuationSlotKey,
-    lineageSlotPathJson: lineage.lineageSlotPathJson,
-    seq: allocation.seq,
-  }
-  yield* transactionStep(() => {
-    const { nodeRuns } = tablesOf(tx)
-    return insertOne(tx, nodeRuns, values)
-  })
-  yield* transactionStep(() =>
-    selectMintedRunInTx(
-      tx,
-      {
-        ...record,
-        ...values,
-      },
-      input.cause,
+        .returning({ seq: tables.nodeRunSeqAllocations.seq }),
     ),
   )
-  return values.id
+  if (!allocation) throw new Error('node-run-seq-allocation-missing')
+  const values = {
+    id: record.id,
+    taskId: record.taskId,
+    nodeId: record.nodeId,
+    role: record.role,
+    slotKey: record.slotKey,
+    syntheticOwner:
+      record.role === 'synthetic'
+        ? encodeSyntheticOwner(
+            record.slot.kind === 'synthetic'
+              ? record.slot.owner
+              : { kind: 'task', id: record.taskId },
+          )
+        : null,
+    generationSeq,
+    seq: allocation.seq,
+    attemptIndex: record.retryIndex,
+    recordMode: 'executable' as const,
+    provenanceQuality: 'recorded' as const,
+    status: record.status,
+    rerunCause: record.rerunCause,
+    iteration: record.iteration,
+    reviewIteration: record.reviewIteration,
+    shardKey: record.shardKey,
+    historicalParentId: record.parentNodeRunId,
+    containerRunId: record.containerRunId,
+    scopePath,
+    envelopeNonce: record.envelopeNonce,
+    wgRound: record.wgRound,
+    startedAt: record.startedAt,
+    finishedAt: record.finishedAt,
+    errorMessage: record.errorMessage,
+    forceActivated: record.forceActivated,
+    operationGeneration: record.operationGeneration,
+    ...lineage,
+    inputsRecorded: record.recordedInputs !== null,
+  }
+  yield* transactionStep(() => insertOne(tx, tables.nodeRuns, values))
+  yield* transactionStep(() =>
+    writeNodeRunTablesInTx(tx, record.id, {
+      config: {
+        shardValueHash: record.shardValueHash,
+        agentOverrideName: record.agentOverrideName,
+        agentOverrideId: record.agentOverrideId,
+      },
+      checkpoint: { checkpoints: record.checkpoints },
+      inputs: record.recordedInputs,
+    }),
+  )
+  yield* transactionStep(() => selectMintedRunInTx(tx, { ...record, generationSeq }, input.cause))
+  return record.id
 }
 
 export function createNodeRunMintParticipantInTx(tx: PersistenceTx): NodeRunMintParticipantInTx {
   return Object.freeze({
-    async mint(input: NodeRunMintInput) {
-      return driveAsyncProgram(nodeRunMintProgram(tx, input), (step) => step())
-    },
+    mint: (input: NodeRunMintInput) =>
+      driveAsyncProgram(nodeRunMintProgram(tx, input), (step) => step()),
   })
 }

@@ -1,5 +1,5 @@
 export {
   hostedObjectReference,
   hostedObjectReferenceOwner,
-  parseLegacyHostedObject as parseHostedObjectReference,
-} from '@/platform/content/legacyHostedObject'
+  parseHostedObject as parseHostedObjectReference,
+} from '@/platform/content/locations/hostedObject'

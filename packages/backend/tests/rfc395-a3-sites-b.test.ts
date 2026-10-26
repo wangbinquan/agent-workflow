@@ -360,7 +360,7 @@ describeEachProvider('RFC-395 II-a A3 sites-b legacy decisions', (harness) => {
     const facts = (await createNodeRunQueries(db).list({ taskId })).filter((run) =>
       hostIds.has(run.id),
     )
-    const hosts = await projectWorkgroupRunSelections(facts)
+    const hosts = await projectWorkgroupRunSelections(facts, createRunSelectionReader(db), taskId)
     const killed = hosts.find((run) => run.id === id('killed'))!
     expect(killed.selection.current).toBe(true)
     expect(killed.selection.legacyGroupCurrent).toBe(false)

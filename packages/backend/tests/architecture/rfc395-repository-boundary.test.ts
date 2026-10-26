@@ -356,8 +356,8 @@ test('detail, launch, lists and WS keep the repository projection boundary', () 
   ).toBe(true)
   expect(
     source('modules/task-execution/infrastructure/repositoryPreparationRetryCommand.ts'),
-  ).toContain('taskWorkspaceUnboundSql(tasks.worktreePath)')
+  ).toContain('taskWorkspaceUnboundSql(tasks.workspaceRootRef)')
   expect(
     source('modules/task-execution/infrastructure/taskDefinitionWriteParticipant.ts'),
-  ).toContain('taskWorkspaceRootMatchesSql(tasks.worktreePath, input.expectedWorktreePath)')
+  ).toContain('taskWorkspaceRootMatchesSql(tasks.workspaceRootRef, input.expectedWorktreePath)')
 })

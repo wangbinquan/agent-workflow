@@ -1,4 +1,4 @@
-// RFC-395 I-a: explicit epoch-1 schema contributions; no physical or runtime change.
+// RFC-395 activation: this context declares the live epoch-2 schema directly.
 import {
   column as c,
   defineContribution,
@@ -870,41 +870,6 @@ const employeeOsSettingsDefinition = owner.table({
 
 export const employeeOsSettings = materializeDrizzle(employeeOsSettingsDefinition).table
 
-const employeeOsWriterStateDefinition = owner.table({
-  id: 'employee_os_writer_state',
-  schemaSymbol: 'employeeOsWriterState',
-  columns: {
-    id: c.id('id', { primary: true }),
-    activeGeneration: c.int('active_generation'),
-    mode: c.enum('mode', ['pre-cutover', 'legacy-draining', 'os-active']),
-    legacyAdmissionsEnabled: c.bool('legacy_admissions_enabled'),
-    legacyOpenMissionCount: c.int('legacy_open_mission_count'),
-    updatedAt: c.epochMs('updated_at'),
-  },
-  retention: retention.business,
-  migrationPolicy: 'DEFER',
-})
-
-export const employeeOsWriterState = materializeDrizzle(employeeOsWriterStateDefinition).table
-
-const employeeReactionArtifactsDefinition = owner.table({
-  id: 'employee_reaction_artifacts',
-  schemaSymbol: 'employeeReactionArtifacts',
-  columns: {
-    digest: c.id('digest', { primary: true }),
-    kind: c.enum('kind', ['retry-feedback', 'diagnostics']),
-    body: c.text('body'),
-    bytes: c.int('bytes'),
-    createdAt: c.epochMs('created_at'),
-  },
-  indexes: [index('idx_employee_reaction_artifacts_kind', ['kind', 'created_at'])],
-  retention: retention.business,
-})
-
-export const employeeReactionArtifacts = materializeDrizzle(
-  employeeReactionArtifactsDefinition,
-).table
-
 const employeeReactionDispatchDefinition = owner.table({
   id: 'employee_reaction_dispatch',
   schemaSymbol: 'employeeReactionDispatch',
@@ -1125,38 +1090,83 @@ export const employeeWorkScopeRevisions = materializeDrizzle(
   employeeWorkScopeRevisionsDefinition,
 ).table
 
-export const schemaContribution = owner.contribution([
-  employeeApprovalSagasDefinition,
-  employeeAttentionBindingsDefinition,
-  employeeCaseEventOriginsDefinition,
-  employeeCaseInboxDefinition,
-  employeeCaseMembersDefinition,
-  employeeCaseMeteringReceiptsDefinition,
-  employeeCaseWorkspacesDefinition,
-  employeeCasesDefinition,
-  employeeChangeCandidatesDefinition,
-  employeeChannelResultsDefinition,
-  employeeChannelsDefinition,
-  employeeContextLinksDefinition,
-  employeeContextRecordsDefinition,
-  employeeContextRevisionsDefinition,
-  employeeDefinitionRevisionsDefinition,
-  employeeDefinitionsDefinition,
-  employeeExecutionPolicyRevisionsDefinition,
-  employeeExternalContextBindingsDefinition,
-  employeeInputUploadsDefinition,
-  employeeInvocationsDefinition,
-  employeeJobTemplateRevisionsDefinition,
-  employeeJobTemplatesDefinition,
-  employeeOsOutboxDefinition,
-  employeeOsSettingsDefinition,
-  employeeOsWriterStateDefinition,
+const employeeReactionArtifactsDefinition = owner.table({
+  version: 2,
+  unique: [],
+  foreignKeys: [],
+  checks: [],
+  indexes: [
+    {
+      name: 'idx_employee_reaction_artifacts_kind',
+      unique: false,
+      nulls: 'distinct',
+      columns: [
+        { kind: 'column', name: 'kind' },
+        { kind: 'column', name: 'created_at' },
+      ],
+      where: null,
+    },
+  ],
+  migrationPolicy: 'KEEP',
+  id: 'employee_reaction_artifacts',
+  schemaSymbol: 'employeeReactionArtifacts',
+  columns: {
+    digest: c.id('digest', { primary: true }),
+    kind: c.enum('kind', ['retry-feedback', 'diagnostics']),
+    bytes: c.int('bytes'),
+    createdAt: c.epochMs('created_at'),
+    contentRefJson: c.jsonText('content_ref_json', {
+      document: { kind: 'content-ref', version: 1, inlineBytesColumn: 'content_inline_bytes' },
+    }),
+    contentInlineBytes: c.bytes('content_inline_bytes', { nullable: true }),
+  },
+  retention: {
+    class: 'owner-managed-business',
+    rule: 'Retain as live business or recovery state until the owning bounded context approves a replacement contract.',
+  },
+  primaryKey: ['digest'],
+  migrationKey: ['digest'],
+})
+
+export const employeeReactionArtifacts = materializeDrizzle(
   employeeReactionArtifactsDefinition,
-  employeeReactionDispatchDefinition,
-  employeeReactionRoundsDefinition,
-  employeeRoundWorkspaceStatesDefinition,
-  employeeToolRegistrationRevisionsDefinition,
-  employeeToolRegistrationsDefinition,
-  employeeTypePackagesDefinition,
-  employeeWorkScopeRevisionsDefinition,
-])
+).table
+
+export const schemaContribution = {
+  owner: 'digital-employee',
+  version: 2,
+  tables: [
+    employeeApprovalSagasDefinition,
+    employeeAttentionBindingsDefinition,
+    employeeCaseEventOriginsDefinition,
+    employeeCaseInboxDefinition,
+    employeeCaseMembersDefinition,
+    employeeCaseMeteringReceiptsDefinition,
+    employeeCaseWorkspacesDefinition,
+    employeeCasesDefinition,
+    employeeChangeCandidatesDefinition,
+    employeeChannelResultsDefinition,
+    employeeChannelsDefinition,
+    employeeContextLinksDefinition,
+    employeeContextRecordsDefinition,
+    employeeContextRevisionsDefinition,
+    employeeDefinitionRevisionsDefinition,
+    employeeDefinitionsDefinition,
+    employeeExecutionPolicyRevisionsDefinition,
+    employeeExternalContextBindingsDefinition,
+    employeeInputUploadsDefinition,
+    employeeInvocationsDefinition,
+    employeeJobTemplateRevisionsDefinition,
+    employeeJobTemplatesDefinition,
+    employeeOsOutboxDefinition,
+    employeeOsSettingsDefinition,
+    employeeReactionDispatchDefinition,
+    employeeReactionRoundsDefinition,
+    employeeRoundWorkspaceStatesDefinition,
+    employeeToolRegistrationRevisionsDefinition,
+    employeeToolRegistrationsDefinition,
+    employeeTypePackagesDefinition,
+    employeeWorkScopeRevisionsDefinition,
+    employeeReactionArtifactsDefinition,
+  ],
+} as const

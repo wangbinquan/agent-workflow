@@ -1,3 +1,4 @@
+import { createFrozenEpoch1Db, frozenTablesOf, frozenRawRows } from './migration-freeze'
 // RFC-311 PR-1 — foundation locks: migration 0180 indexes + tasks.branch_started_at
 // backfill semantics + maintenance_state + capacity PRAGMAs + slow-statement
 // telemetry.
@@ -19,9 +20,8 @@
 // 全量的索引对账（SQLite 的具名索引 PG 必须一条不少）在
 // `rfc359-w6-t26-postgresql-plan-audit.test.ts`；这里锁的是 0180 这一批的逐条存在性。
 
-import { readTaskFixtures, taskFixture, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+
 import { rawRows, rawExec } from '@/platform/persistence/queryHelpers'
 import { describe, expect, test } from 'bun:test'
 import { sql } from 'drizzle-orm'
@@ -30,7 +30,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 
 import { Database } from 'bun:sqlite'
-import { createInMemoryDb, instrumentSlowStatements, openDb } from '../src/db/client'
+import { instrumentSlowStatements, openDb } from '../src/db/client'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 
@@ -44,12 +44,14 @@ interface QueryPlanRow {
   detail: string
 }
 
-function indexNames(db: ReturnType<typeof createInMemoryDb>, table: string): IndexListRow[] {
-  return rawRows<IndexListRow>(db, sql.raw(`PRAGMA index_list('${table}')`), { partial: 'int' })
+function indexNames(db: ReturnType<typeof createFrozenEpoch1Db>, table: string): IndexListRow[] {
+  return frozenRawRows<IndexListRow>(db, sql.raw(`PRAGMA index_list('${table}')`), {
+    partial: 'int',
+  })
 }
 
-function plan(db: ReturnType<typeof createInMemoryDb>, query: string): string {
-  return rawRows<QueryPlanRow>(db, sql.raw(`EXPLAIN QUERY PLAN ${query}`))
+function plan(db: ReturnType<typeof createFrozenEpoch1Db>, query: string): string {
+  return frozenRawRows<QueryPlanRow>(db, sql.raw(`EXPLAIN QUERY PLAN ${query}`))
     .map((row) => row.detail)
     .join('\n')
 }
@@ -118,32 +120,36 @@ async function listIndexes(
   return rows.map((row) => ({ name: row.indexname, partial: / WHERE /i.test(row.indexdef) }))
 }
 
-describeEachProvider('migration 0180 — RFC-311 index batch（两个引擎都必须有）', (harness) => {
-  test('every 0180 index exists on this engine, with the intended partial flags', async () => {
-    const partials = new Set<string>()
-    let checked = 0
-    for (const [table, expected] of Object.entries(MIGRATION_0180_INDEXES)) {
-      const present = await listIndexes(harness, table)
-      // `code_artifacts` 一类按 RFC349_ARCHIVE_THEN_OMIT_TABLES 根本不投影到 PostgreSQL；
-      // 表不在就跳过，但**表在就一条都不许少**。
-      if (present.length === 0) continue
-      const names = present.map((row) => row.name)
-      checked += expected.length
-      expect(names, `${table} 少了 0180 的索引`).toEqual(expect.arrayContaining([...expected]))
-      for (const row of present) if (row.partial) partials.add(row.name)
-    }
-    // 失败关闭：扫描面下界，否则「没少索引」与「没扫到表」同形。
-    expect(checked).toBeGreaterThanOrEqual(18)
-    for (const name of PARTIAL_0180_INDEXES) {
-      if (!partials.has(name) && name.startsWith('idx_code_')) continue // 归档表，PG 上不存在
-      expect(partials.has(name), `${name} 应当是 partial index`).toBe(true)
-    }
-  }, 120_000)
-})
+describeEachProvider(
+  'migration 0180 — RFC-311 index batch（两个引擎都必须有）',
+  (harness) => {
+    test('every 0180 index exists on this engine, with the intended partial flags', async () => {
+      const partials = new Set<string>()
+      let checked = 0
+      for (const [table, expected] of Object.entries(MIGRATION_0180_INDEXES)) {
+        const present = await listIndexes(harness, table)
+        // `code_artifacts` 一类按 RFC349_ARCHIVE_THEN_OMIT_TABLES 根本不投影到 PostgreSQL；
+        // 表不在就跳过，但**表在就一条都不许少**。
+        if (present.length === 0) continue
+        const names = present.map((row) => row.name)
+        checked += expected.length
+        expect(names, `${table} 少了 0180 的索引`).toEqual(expect.arrayContaining([...expected]))
+        for (const row of present) if (row.partial) partials.add(row.name)
+      }
+      // 失败关闭：扫描面下界，否则「没少索引」与「没扫到表」同形。
+      expect(checked).toBeGreaterThanOrEqual(18)
+      for (const name of PARTIAL_0180_INDEXES) {
+        if (!partials.has(name) && name.startsWith('idx_code_')) continue // 归档表，PG 上不存在
+        expect(partials.has(name), `${name} 应当是 partial index`).toBe(true)
+      }
+    }, 120_000)
+  },
+  { sqliteMigrationsFolder: MIGRATIONS },
+)
 
 describe('migration 0180 — RFC-311 index batch', () => {
   test('new indexes exist with the intended partial flags', () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createFrozenEpoch1Db(MIGRATIONS)
     const byTable: Record<string, string[]> = {
       tasks: [
         'idx_tasks_branch_started_id',
@@ -197,7 +203,7 @@ describe('migration 0180 — RFC-311 index batch', () => {
   })
 
   test('maintenance_state exists as a bare KV table', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createFrozenEpoch1Db(MIGRATIONS)
     await rawExec(
       db,
       sql`INSERT INTO maintenance_state (key, value, updated_at) VALUES ('probe', 'v1', 1)`,
@@ -232,14 +238,14 @@ describe('migration 0180 — RFC-311 index batch', () => {
       'idx_dev_deferred_wakes_due',
     ],
   ] as const)('plan for %s uses %s', (query, index) => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createFrozenEpoch1Db(MIGRATIONS)
     expect(plan(db, query)).toContain(index)
   })
 
   test('backfill statements in 0180 aggregate branch_started_at over each subtree', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createFrozenEpoch1Db(MIGRATIONS)
     const now = 1_788_278_400_000
-    const { users } = tablesOf(db)
+    const { users, workflows, tasks } = frozenTablesOf(db)
     await insertOne(db, users, {
       id: 'u1',
       username: 'u1',
@@ -248,7 +254,7 @@ describe('migration 0180 — RFC-311 index batch', () => {
       createdAt: now,
       updatedAt: now,
     })
-    await workflowFixture(db, {
+    await db.insert(workflows).values({
       id: 'wf1',
       name: 'wf',
       definition: JSON.stringify({ nodes: [], edges: [], inputs: [] }),
@@ -274,12 +280,9 @@ describe('migration 0180 — RFC-311 index batch', () => {
       // Deliberately wrong so only the migration's own backfill can fix it.
       branchStartedAt: 0,
     })
-    await taskFixture(db, [
-      row('r1', 100),
-      row('c1', 200, 'r1'),
-      row('c2', 300, 'c1'),
-      row('r2', 500),
-    ])
+    await db
+      .insert(tasks)
+      .values([row('r1', 100), row('c1', 200, 'r1'), row('c2', 300, 'c1'), row('r2', 500)])
 
     // Execute the exact backfill statements from the shipped migration file, so
     // this test breaks if someone edits 0180 into a different semantic.
@@ -295,9 +298,10 @@ describe('migration 0180 — RFC-311 index batch', () => {
     expect(statements.length).toBe(3)
     for (const statement of statements) rawExec(db, sql.raw(statement))
 
-    const got = await readTaskFixtures(db).then((rows) =>
-      rows.map((row) => ({ id: row.id, branchStartedAt: row.branchStartedAt })),
-    )
+    const got = await db
+      .select()
+      .from(tasks)
+      .then((rows) => rows.map((row) => ({ id: row.id, branchStartedAt: row.branchStartedAt })))
     const byId = new Map(got.map((r) => [r.id, r.branchStartedAt]))
     expect(byId.get('r1')).toBe(300)
     expect(byId.get('c1')).toBe(300)
@@ -310,7 +314,7 @@ describe('migration 0180 — RFC-311 index batch', () => {
 // 取值器会抛「Cannot access invalid private field」——开了慢查询计时才炸,关掉不炸。
 describe('RFC-311 slow-query proxy keeps native statement getters usable', () => {
   test('columnNames / paramsCount read through the wrapper', () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createFrozenEpoch1Db(MIGRATIONS)
     const sqlite = (db as unknown as { $client: Database }).$client
     instrumentSlowStatements(sqlite, 50, () => {})
     const stmt = sqlite.query('SELECT 1 AS a, 2 AS b')
@@ -327,7 +331,7 @@ describe('RFC-311 capacity PRAGMAs (openDb)', () => {
     try {
       const db = openDb({
         path: join(dir, 'db.sqlite'),
-        migrationsFolder: MIGRATIONS,
+
         pageCacheMib: 64,
         mmapMib: 32,
         slowQueryMs: 0,

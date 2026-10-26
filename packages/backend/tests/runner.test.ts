@@ -1009,7 +1009,9 @@ describeEachProvider('runNode', (harness) => {
         }),
     )
     expect(result.status).toBe('done')
-    expect(result.prompt).toContain('audit develop of /Users/me/repo: diff text')
+    expect(result.prompt).toContain('audit develop of /Users/me/repo: ')
+    expect(result.prompt).toContain('name="changes"')
+    expect(result.prompt).toContain('>\ndiff text\n</aw-input>')
   })
 
   test('reads the same workdir we passed (cwd hook)', async () => {

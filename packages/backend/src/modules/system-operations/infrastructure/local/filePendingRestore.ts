@@ -27,6 +27,7 @@ import { createLogger } from '@/util/log'
 import { Paths } from '@/util/paths'
 import { restoreBackup, RestorePostSwapError } from '@/services/restore'
 import type { SqlitePostRestoreRecovery } from '@/platform/persistence/sqlite/systemProviderRestore'
+import { settleEpochSwitchBeforePointerReplacement } from '../epochSwitch/pointerReplacement'
 
 const log = createLogger('pendingRestore')
 
@@ -199,7 +200,7 @@ export interface ApplyPendingRestoreOptions {
   appHome?: string
   dbPath?: string
   migrationsFolder: string
-  postOpenRecovery: SqlitePostRestoreRecovery
+  postOpenRecovery?: SqlitePostRestoreRecovery
   now?: number
   /** Test-only: forwarded to restoreBackup's post-swap fault seam so a test can
    *  exercise the fail-closed rethrow path (P0-1). Never set in production. */
@@ -234,6 +235,7 @@ export async function applyPendingRestoreIfAny(opts: ApplyPendingRestoreOptions)
 
   log.warn('applying staged restore before openDb', { staged: marker.stagedTarball })
   try {
+    await settleEpochSwitchBeforePointerReplacement({ appHome })
     await restoreBackup(marker.stagedTarball, {
       contract: opts.contract,
       appHome,

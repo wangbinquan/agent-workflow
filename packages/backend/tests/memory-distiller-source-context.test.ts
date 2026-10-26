@@ -1,6 +1,9 @@
+import { legacyContentRef } from '@/platform/content/contentRef'
+import { contentRowColumns } from '@/platform/content/infrastructure/contentStore'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { clarifyRoundFixture, nodeRunFixture, taskFixture, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+
 import { rawExec } from '@/platform/persistence/queryHelpers'
 import { composeNodeRunPromptOperations } from '@/modules/task-execution/composition/nodeRunPrompts'
 import { createFileReviewArtifactContent } from '@/modules/collaboration/infrastructure/local/fileReviewArtifactContent'
@@ -39,7 +42,7 @@ import { DatabaseCommittedReviewArtifactReader } from '../src/modules/collaborat
 import { DrizzleMemoryDistillWorkStore } from '../src/modules/memory/infrastructure/memoryDistillWorkStore'
 import { appHome } from '../src/util/paths'
 import { createInMemoryDb } from '../src/db/client'
-import { MIGRATIONS } from './migration-freeze'
+
 import { describeEachProvider } from './helpers/eachProvider'
 import { createClarifyAnswerQueries } from '@/modules/collaboration/composition'
 
@@ -360,7 +363,7 @@ describeEachProvider('loadSourceEvents — review body', (harness) => {
       sourcePortName: 'design',
       versionIndex: 1,
       reviewIteration: 0,
-      bodyPath: relPath,
+      ...contentRowColumns(legacyContentRef('review-body-path', 'local-file', relPath)),
       commentsJson: '[]',
       decision: 'approved',
       createdAt: Date.now(),
@@ -459,7 +462,7 @@ describeEachProvider('loadSourceEvents — review body', (harness) => {
 // 留在账本上；等「测试夹具怎么在 PG 上造违反完整性的行」有统一答案再迁。
 describe('loadSourceEvents — clarify transcript (SQLite orphan fixture)', () => {
   test('returns null + reason when source node_run does not exist', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createInMemoryDb()
     const memory = createMemoryDistillTestContext(db)
     resetBroadcastersForTests()
     const { taskId } = await seedTask(db)

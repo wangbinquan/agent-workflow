@@ -32,7 +32,6 @@ import {
 import { runLifecycleInvariants } from '../src/services/lifecycleInvariants'
 import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
 
 interface Harness<TDatabase extends PersistenceDb = PersistenceDb> {
@@ -58,7 +57,7 @@ async function buildHarness(provider?: ProviderHarness): Promise<Harness> {
   writeFileSync(join(worktreePath, '.seed'), 'seed\n')
   await runGit(worktreePath, ['add', '.'])
   await runGit(worktreePath, ['commit', '-q', '-m', 'init'])
-  const db = provider === undefined ? createInMemoryDb(MIGRATIONS) : provider.db
+  const db = provider === undefined ? createInMemoryDb() : provider.db
   return {
     db,
     postgresql: provider?.applicationBinding.provider === 'postgresql',
@@ -217,12 +216,11 @@ function registerProviderCases1(provider: ProviderHarness) {
         }),
     )
 
-    const { nodeRuns } = tablesOf(h.db)
     const finalTask = (await readTaskFixtures(h.db, { id: taskId }))[0]
     expect(finalTask?.status).toBe('done')
     expect(finalTask?.errorMessage).toBeNull()
 
-    const runs = await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
+    const runs = await readNodeRunFixtures(h.db, { taskId })
     expect(runs.length).toBe(2)
     expect(runs.find((r) => r.nodeId === 'in')?.status).toBe('done')
     expect(runs.find((r) => r.nodeId === 'a1')?.status).toBe('done')
@@ -420,11 +418,10 @@ function registerNativeCases2() {
         binaryOverride: ['bun', 'run', MOCK_OPENCODE],
       }),
     )
-    const { nodeRuns } = tablesOf(h.db)
     const t = (await readTaskFixtures(h.db, { id: taskId }))[0]
     expect(t?.status).toBe('done')
 
-    const runs = await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
+    const runs = await readNodeRunFixtures(h.db, { taskId })
     expect(runs.find((r) => r.nodeId === 'a')?.status).toBe('done')
     const outRun = runs.find((r) => r.nodeId === 'o')
     expect(outRun).toBeDefined()
@@ -605,7 +602,6 @@ function registerProviderCases3(provider: ProviderHarness) {
           maxConcurrentNodes: 2,
         }),
     )
-    const { nodeRuns } = tablesOf(h.db)
     const t = (await readTaskFixtures(h.db, { id: taskId }))[0]
     expect(t?.status).toBe('done')
     // Parallelism is asserted STRUCTURALLY via execution-window OVERLAP, NOT a
@@ -616,7 +612,7 @@ function registerProviderCases3(provider: ProviderHarness) {
     // run in parallel) yet tripped the tight bound. Overlap is variance-proof: if the
     // two same-level writer nodes ran serially (one writeSem for the whole run),
     // r2.startedAt would be ≥ r1.finishedAt and the windows would not overlap.
-    const runs = await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
+    const runs = await readNodeRunFixtures(h.db, { taskId })
     const r1 = runs.find((r) => r.nodeId === 'r1')
     const r2 = runs.find((r) => r.nodeId === 'r2')
     expect(r1?.startedAt ?? 0).toBeGreaterThan(0)
@@ -660,11 +656,10 @@ function registerProviderCases3(provider: ProviderHarness) {
           defaultNodeRetries: 2,
         }),
     )
-    const { nodeRuns } = tablesOf(h.db)
     const t = (await readTaskFixtures(h.db, { id: taskId }))[0]
     expect(t?.status).toBe('done')
     // We should have 3 node_runs: retry_index 0,1 failed; 2 done.
-    const runs = await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
+    const runs = await readNodeRunFixtures(h.db, { taskId })
     const a1runs = runs.filter((r) => r.nodeId === 'a1').sort((a, b) => a.retryIndex - b.retryIndex)
     expect(a1runs.length).toBe(3)
     expect(a1runs[0]?.status).toBe('failed')
@@ -1020,10 +1015,9 @@ function registerProviderCases4(provider: ProviderHarness) {
       }),
     )
 
-    const { nodeRuns } = tablesOf(h.db)
     const t = (await readTaskFixtures(h.db, { id: taskId }))[0]
     expect(t?.status).toBe('done')
-    const runs = await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
+    const runs = await readNodeRunFixtures(h.db, { taskId })
     const loopRun = runs.find((run) => run.nodeId === 'loop')
     const publishRun = runs.find((run) => run.nodeId === 'publish')
     expect(loopRun?.status).toBe('done')
@@ -1071,11 +1065,10 @@ function registerProviderCases4(provider: ProviderHarness) {
       binaryOverride: ['bun', 'run', MOCK_OPENCODE],
     })
 
-    const { nodeRuns } = tablesOf(h.db)
     const t = (await readTaskFixtures(h.db, { id: taskId }))[0]
     expect(t?.status).toBe('failed')
     expect(t?.errorMessage).toContain('wrapper-loop-continue-on-max-iterations')
-    const runs = await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
+    const runs = await readNodeRunFixtures(h.db, { taskId })
     expect(runs.filter((run) => run.nodeId === 'loop' || run.nodeId === 'audit')).toHaveLength(0)
   })
 
@@ -1108,10 +1101,9 @@ function registerProviderCases4(provider: ProviderHarness) {
       }),
     )
 
-    const { nodeRuns } = tablesOf(h.db)
     const t = (await readTaskFixtures(h.db, { id: taskId }))[0]
     expect(t?.status).toBe('failed')
-    const runs = await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
+    const runs = await readNodeRunFixtures(h.db, { taskId })
     expect(runs.find((run) => run.nodeId === 'loop')?.status).toBe('failed')
     expect(
       runs.filter((run) => run.nodeId === 'audit').some((run) => run.status === 'failed'),

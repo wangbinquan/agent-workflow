@@ -1,3 +1,5 @@
+import { legacyContentRef } from '@/platform/content/contentRef'
+import { contentRowColumns } from '@/platform/content/infrastructure/contentStore'
 // RFC-359 AC-1 / AC-6（plan §5hn 之后的盘点，第 1 刀）—— **任务详情的纯读四件**在两个引擎上
 // 投影出同一份。
 //
@@ -184,7 +186,9 @@ describeEachProviderHttpApplication(
         itemIndex: 0,
         roundGeneration: 0,
         reviewIteration: 0,
-        bodyPath: 'reviews/dv-0001.md',
+        ...contentRowColumns(
+          legacyContentRef('review-body-path', 'local-file', 'reviews/dv-0001.md'),
+        ),
         decision: 'pending',
         createdAt: NOW + 2_500,
       })
@@ -212,8 +216,8 @@ describeEachProviderHttpApplication(
         '未开始的那条必须排在最前（两个引擎的 NULL 默认落位相反）',
       ).toEqual(['rr-pending-0001', 'rr-done-0001', 'rr-review-0001'])
 
-      // RFC-374: the GET wire includes both legacy NULL and allocated mint order.
-      expect(runs[0]!['seq']).toBeNull()
+      // Epoch 2 executable rows always expose their allocated mint order.
+      expect(runs[0]!['seq']).toBe(1)
       expect(runs[1]!['seq']).toBeLessThan(runs[2]!['seq'] as number)
       projected.set(scope.harness.capabilities.provider, comparableRuns(body))
       if (projected.size < 2) return

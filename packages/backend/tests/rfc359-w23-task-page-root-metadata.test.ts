@@ -1,3 +1,4 @@
+import { TASK_DEFINITION_HOSTS } from '@agent-workflow/shared'
 // RFC-359: keep root ordering over the complete matching set, but compute
 // root match metadata only for the selected families. The oracle restores the
 // exact previous SQL text while retaining every real bound value and snapshot.
@@ -30,10 +31,9 @@ const GLOBAL_ROOT_STATS = 'MAX(CASE WHEN m.id = m.rid THEN 1 ELSE 0 END) AS is_s
 const ORIGINAL_SQL_REWRITES: readonly (readonly [string, string])[] = [
   // RFC-395 II-a A7: the workflow name is now the resource-catalog owner's correlated
   // expression, so neither the emitter nor the restored text joins `workflows w`.
-  [
-    '      JOIN tasks t ON t.id = pr.rid\n      JOIN match_counts mc ON mc.rid = pr.rid\n',
-    '      JOIN tasks t ON t.id = pr.rid\n',
-  ],
+  // The task projection is an interpolated target-table subquery; remove only
+  // the metadata join, preserving its complete SQL and every bound value.
+  ['      JOIN match_counts mc ON mc.rid = pr.rid\n', ''],
   [
     '        mc.matching_descendant_count\n      FROM page_roots pr',
     '        pr.matching_descendant_count\n      FROM page_roots pr',
@@ -114,7 +114,11 @@ function originalRootBindings(
   const offset = [...before.matchAll(/\?|\$\d+/g)].length
   const added = [
     parsed.limit + 1,
-    // W28 emits the same budget again for the physical-prefix LIMIT.
+    // The physical-prefix target projection binds the four synthetic definition anchors.
+    TASK_DEFINITION_HOSTS.agent.id,
+    TASK_DEFINITION_HOSTS.workgroup.id,
+    TASK_DEFINITION_HOSTS['digital-employee'].id,
+    TASK_DEFINITION_HOSTS['code-round'].id,
     parsed.limit + 1,
     ...(parsed.cursor ? [parsed.cursor.branchStartedAt, parsed.cursor.taskId] : []),
   ]

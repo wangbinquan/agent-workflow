@@ -25,7 +25,6 @@ import {
   forEachResourceCommit,
 } from '@/modules/resource-catalog/infrastructure/resourceCommitSequence'
 import { describeEachProvider } from './helpers/eachProvider'
-import { MIGRATIONS } from './migration-freeze'
 
 function input(name: string): CreateAgent {
   return {
@@ -103,7 +102,7 @@ describe('resource commit sequencing', () => {
 test('the legacy SQLite bundle commit exports still finish before their void call returns', async () => {
   // This lane exercises the physical synchronous contract; the public async
   // entry points below run on both real providers.
-  const db = createInMemoryDb(MIGRATIONS)
+  const db = createInMemoryDb()
   try {
     const prepared = await prepareAgentCreate(db, input('synchronous-agent'), {
       id: 'synchronous-agent',

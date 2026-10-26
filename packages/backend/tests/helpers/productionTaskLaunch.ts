@@ -1,3 +1,4 @@
+import { epoch2RuntimeTestPorts } from './epoch2RuntimePorts'
 import { o2Ports } from './o2Closure'
 import { withSourceControlTaskPorts } from './sourceControlTaskPorts'
 import { composeSourceControlTaskPorts } from '@/modules/task-execution/composition'
@@ -55,7 +56,10 @@ import { Paths } from '@/util/paths'
 import { NotFoundError } from '@/util/errors'
 import type { WorktreeCleanupProvenance } from '@/util/git'
 
-export interface TestTaskLaunchOptions extends TaskContinuationDependencies {
+export interface TestTaskLaunchOptions extends Omit<
+  TaskContinuationDependencies,
+  'historyRestrictions'
+> {
   readonly sourceTerminationLaunchSignal?: AbortSignal
   readonly actor?: Actor
   readonly invoker?: RootTaskLaunchRequest['invoker']
@@ -247,12 +251,18 @@ export async function launchTestTask(
     ),
   }
   const persistence = createTaskExecutionPersistence(db, {
+    historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
     recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
   })
   if (options.callLaunch !== undefined) {
     const call = options.callLaunch
     if (options.materializedSpace === undefined) throw new Error('child fixture workspace missing')
-    const factory = composeTestTaskDriveFactory({ deps: options, appHome, persistence })
+    const factory = composeTestTaskDriveFactory({
+      deps: options,
+      appHome,
+      persistence,
+      historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
+    })
     const launch = createChildExecutionLaunchOperations({
       db,
       persistence,

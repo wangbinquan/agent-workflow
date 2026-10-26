@@ -1,3 +1,4 @@
+import { tablesOf } from '@/platform/persistence/sessionTables'
 // RFC-097 (audit S-23) — lifecycleRepair scheduler-liveness preflight.
 //
 // Locks in: repair options that flip tasks.status and/or resumeAfterApply must
@@ -15,14 +16,13 @@
 // those suites double as the gate's negative control; test 2 locks that
 // explicitly.
 
-import { agentFixture, taskFixture, workflowFixture } from './helpers/model'
-import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { monotonicFactory } from 'ulid'
+import { agentFixture, taskFixture, workflowFixture } from './helpers/model'
 
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 
@@ -30,19 +30,18 @@ import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { abortAllActiveTasks, isTaskActive } from '../src/services/task'
 import { runGit } from '../src/util/git'
 
+import { canonicalizeWorkflowAgentIds } from './helpers/canonicalWorkflowFixture'
+import { createRepairEngine } from './helpers/repairEngine'
+import { createResumeEngine } from './helpers/resumeEngine'
+import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 import {
   buildHarness as buildRepairHarness,
   insertAlert,
   readAuditRows,
   type RepairHarness,
 } from './lifecycle-repair-harness'
-import { canonicalizeWorkflowAgentIds } from './helpers/canonicalWorkflowFixture'
-import { createResumeEngine } from './helpers/resumeEngine'
-import { createRepairEngine } from './helpers/repairEngine'
-import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 
 const ulid = monotonicFactory()
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 const SCHEDULER_ACTIVE_KEY = 'diagnose.repair.common.schedulerActive'
 
@@ -96,7 +95,7 @@ async function buildLiveHarness(): Promise<LiveHarness> {
     await runGit(p, ['commit', '-m', 'init'])
   }
   writeFileSync(mockPath, gateMockSource(gateFile))
-  const db = createInMemoryDb(MIGRATIONS)
+  const db = createInMemoryDb()
   return {
     db,
     appHome,
@@ -284,7 +283,7 @@ describe('RFC-097 S-23 — repair preflight refuses while a live scheduler owns 
     afterEach(() => h.cleanup())
 
     test('running task without a live scheduler is NOT gated (liveness-keyed, not status-keyed)', async () => {
-      h = await buildRepairHarness(createInMemoryDb(MIGRATIONS), { taskStatus: 'running' })
+      h = await buildRepairHarness(createInMemoryDb(), { taskStatus: 'running' })
       const alertId = await insertAlert(h.db, h.taskId, { rule: 'S3', detail: {} })
       const listed = await h.engine.listRepairOptionsForAlert({
         taskId: h.taskId,

@@ -1,13 +1,12 @@
-import { rawRows, rawExec } from '@/platform/persistence/queryHelpers'
+import { createFrozenEpoch1Db, FROZEN_MIGRATIONS as MIGRATIONS } from './migration-freeze'
+import { frozenRawRows as rawRows } from './migration-freeze'
+import { rawExec } from '@/platform/persistence/queryHelpers'
 import { describe, expect, test } from 'bun:test'
 import { sql } from 'drizzle-orm'
 
-import { createInMemoryDb } from '@/db/client'
-import { MIGRATIONS } from './migration-freeze'
-
 describe('migration 0194 — unified multicast event delivery', () => {
   test('stores generic event launch provenance and removes transport priority', () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createFrozenEpoch1Db(MIGRATIONS)
     const taskColumns = rawRows<{ name: string }>(
       db,
       sql`SELECT name FROM pragma_table_info('tasks')`,
@@ -36,7 +35,7 @@ describe('migration 0194 — unified multicast event delivery', () => {
   })
 
   test('allows one event to fan out but forbids duplicate delivery per subscription', () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createFrozenEpoch1Db(MIGRATIONS)
     rawExec(
       db,
       sql`

@@ -7,6 +7,7 @@ import {
   type MaterializedPostgresqlTable,
 } from './drizzle'
 import type { TableDefinition } from './contribution'
+import { resolveColumnUniqueNulls } from './targetDefinition'
 
 type NativeSet<T extends readonly TableDefinition[], P extends DatabaseProvider> = {
   readonly [D in T[number] as D['schemaSymbol']]: P extends 'sqlite'
@@ -22,7 +23,9 @@ export function materializeTableSets<const R extends SchemaRegistry>(
 } {
   const entries = registry.tables.map((definition) => ({
     definition,
-    native: materializeDrizzle(definition),
+    native: materializeDrizzle(resolveColumnUniqueNulls(registry, definition), {
+      schemaEpoch: registry.schemaEpoch,
+    }),
   }))
   return Object.freeze({
     sqlite: Object.freeze(

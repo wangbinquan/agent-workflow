@@ -1,3 +1,7 @@
+import { frozenTablesOf } from '@/platform/persistence/migration/epoch1/tables'
+import { FROZEN_MIGRATIONS } from './migration-freeze'
+import { taskAggregateWrite } from '@/modules/task-execution/infrastructure/taskDefinitionWriteParticipant'
+import { withTargetMintIdentity } from './helpers/rfc395Mint'
 // RFC-369 —— node_run「旧代被取代」改由读侧推导（design/RFC-369-node-run-supersession-derived/）。
 //
 // 为什么这条测试存在：铸造事务里那次同帧范围读在 PostgreSQL SERIALIZABLE 下按索引页加谓词锁，同一
@@ -13,19 +17,26 @@
 import {
   isStructurallySuperseded,
   type SupersessionRow,
-} from '@/modules/task-execution/infrastructure/runSelection/oracle/supersession'
+} from '@/modules/task-execution/infrastructure/migration/oracle/supersession'
+import { createRunSelectionOracleSnapshot } from '@/modules/task-execution/infrastructure/migration/oracle/snapshot'
+import { createRunSelectionReader } from '@/modules/task-execution/public/queries'
 import {
-  createRunSelectionOracleSnapshot,
-  createRunSelectionReader,
-} from '@/modules/task-execution/public/queries'
-import { deriveNodeRunRole } from '@/modules/task-execution/public/types'
-import { readNodeRunFixtures, taskFixture, workflowFixture } from './helpers/model'
+  readNodeRunFixtures,
+  taskFixture,
+  workflowFixture,
+  nodeRunFixture,
+  checkpointValues,
+} from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { describe, expect, test } from 'bun:test'
-import { and, eq } from 'drizzle-orm'
+import { and, eq, sql } from 'drizzle-orm'
+import { rawRows } from '@/platform/persistence/queryHelpers'
 import { ulid } from 'ulid'
-import { IllegalMergeStateTransition, type MergeStateOrNull } from '@agent-workflow/shared'
-import type { NodeRunStatus } from '@agent-workflow/shared'
+import {
+  IllegalMergeStateTransition,
+  type MergeStateOrNull,
+  type NodeRunStatus,
+} from '@agent-workflow/shared'
 
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { isSupersedableMergeState } from '@/modules/task-execution/domain/nodeRunSupersession'
@@ -42,9 +53,9 @@ import { DrizzleMergeStateLifecyclePersistence } from '@/modules/task-execution/
 import { DrizzleNodeExecutionPersistence } from '@/modules/task-execution/infrastructure/nodeExecutionPersistence'
 import { DrizzleNodeRunLifecyclePersistence } from '@/modules/task-execution/infrastructure/nodeRunLifecyclePersistence'
 import { createNodeRunMintParticipantInTx } from '@/modules/task-execution/infrastructure/nodeRunMintParticipant'
-import { structurallySupersededCondition } from '@/modules/task-execution/infrastructure/runSelection/oracle/supersessionSql'
+import { structurallySupersededCondition } from '@/modules/task-execution/infrastructure/migration/oracle/supersessionSql'
 import {
-  withTaskExecutionSerializable,
+  withTaskExecutionAggregateWrite,
   withTaskExecutionWrite,
 } from '@/modules/task-execution/infrastructure/ownedTaskExecution'
 import { describeEachProvider } from './helpers/eachProvider'
@@ -162,10 +173,9 @@ async function seedRun(
   r: SupersessionRow,
   opts: { mergeState?: MergeStateOrNull; status?: NodeRunStatus; isoNodeTree?: string } = {},
 ): Promise<string> {
-  const { nodeRuns } = tablesOf(db)
-  await db.insert(nodeRuns).values({
+  await nodeRunFixture(db, {
     id: r.id,
-    seq: r.seq,
+    seq: r.seq ?? undefined,
     taskId,
     nodeId: r.nodeId,
     iteration: r.iteration,
@@ -175,15 +185,16 @@ async function seedRun(
     parentNodeRunId: r.parentNodeRunId,
     containerRunId: r.containerRunId,
     shardKey: r.shardKey,
-    ...(opts.isoNodeTree === undefined ? {} : { isoNodeTree: opts.isoNodeTree }),
+    ...(opts.isoNodeTree === undefined
+      ? {}
+      : { checkpoints: [{ mountPath: '', nodeTree: opts.isoNodeTree }] }),
     startedAt: Date.now() - 10,
   })
   return r.id
 }
 
 async function mergeStateOf(db: PersistenceDb, id: string) {
-  const { nodeRuns } = tablesOf(db)
-  return (await db.select().from(nodeRuns).where(eq(nodeRuns.id, id)))[0]!
+  return (await readNodeRunFixtures(db, { id }))[0]!
 }
 
 /** 确定性伪随机（LCG）：对拍的样本可复现。 */
@@ -195,107 +206,287 @@ function lcg(seed: number): () => number {
   }
 }
 
-describeEachProvider('RFC-369 §3 判据：生产 SQL 谓词与纯函数对拍', (harness) => {
-  test('随机样本上两者判出的结构性被取代集合逐行一致', async () => {
-    for (const seed of [1, 7, 42, 2026, 369]) {
+describeEachProvider(
+  'RFC-369 §3 判据：生产 SQL 谓词与纯函数对拍',
+  (harness) => {
+    test('随机样本上两者判出的结构性被取代集合逐行一致', async () => {
+      for (const seed of [1, 7, 42, 2026, 369]) {
+        const db = harness.db
+        const taskId = ulid()
+        const { tasks } = frozenTablesOf(db)
+        await db.insert(tasks).values({
+          id: taskId,
+          name: 'oracle',
+          workflowId: 'oracle',
+          workflowSnapshot: '{}',
+          repoPath: '/oracle',
+          worktreePath: '/oracle',
+          baseBranch: 'main',
+          branch: taskId,
+          status: 'running',
+          inputs: '{}',
+          startedAt: 0,
+        })
+        const random = lcg(seed)
+        const pick = <T>(values: readonly T[]): T => values[Math.floor(random() * values.length)]!
+        const rows: SupersessionRow[] = []
+        for (let n = 1; n <= 30; n += 1) {
+          const parent = rows.length > 0 && random() < 0.3 ? pick(rows).id : null
+          const r: SupersessionRow = {
+            id: mkId(seed * 1000 + n),
+            seq: random() < 0.3 ? null : seed * 1000 + 31 - n,
+            nodeId: pick(['a', 'b']),
+            iteration: pick([0, 1]),
+            containerRunId: rows.length > 0 && random() < 0.35 ? pick(rows).id : null,
+            parentNodeRunId: parent,
+            shardKey: pick([null, null, 's1', 's2']),
+          }
+          rows.push(r)
+          await db
+            .insert(frozenTablesOf(db).nodeRuns)
+            .values({ ...r, taskId, status: 'done', retryIndex: 0, mergeState: 'pending-merge' })
+        }
+        const { nodeRuns } = frozenTablesOf(db)
+        const sqlSet = (
+          await db
+            .select({ id: nodeRuns.id })
+            .from(nodeRuns)
+            .where(and(eq(nodeRuns.taskId, taskId), structurallySupersededCondition(db)))
+        )
+          .map((r) => r.id)
+          .sort()
+        const pureSet = rows
+          .filter((r) => isStructurallySuperseded(r, rows))
+          .map((r) => r.id)
+          .sort()
+        expect({ seed, ids: sqlSet }).toEqual({ seed, ids: pureSet })
+        // 样本必须真的覆盖两类结果，否则对拍是空洞绿。
+        expect(pureSet.length).toBeGreaterThan(0)
+        expect(pureSet.length).toBeLessThan(rows.length)
+      }
+    })
+  },
+  { sqliteMigrationsFolder: FROZEN_MIGRATIONS },
+)
+
+describeEachProvider('RFC-369 AC-2 —— 同任务并发铸造不再互相中止（L-1 task root）', (harness) => {
+  test.each([1, 2, 3, 4, 5, 6, 7, 8])(
+    'overlap %i: different-slot mints each run exactly once after waiting for the root',
+    async () => {
       const db = harness.db
       const taskId = await seedTask(db)
-      const random = lcg(seed)
-      const pick = <T>(values: readonly T[]): T => values[Math.floor(random() * values.length)]!
-      const rows: SupersessionRow[] = []
-      for (let n = 1; n <= 30; n += 1) {
-        const parent = rows.length > 0 && random() < 0.3 ? pick(rows).id : null
-        const r: SupersessionRow = {
-          id: mkId(seed * 1000 + n),
-          seq: random() < 0.3 ? null : seed * 1000 + 31 - n,
-          nodeId: pick(['a', 'b']),
-          iteration: pick([0, 1]),
-          containerRunId: rows.length > 0 && random() < 0.35 ? pick(rows).id : null,
-          parentNodeRunId: parent,
-          shardKey: pick([null, null, 's1', 's2']),
-        }
-        rows.push(r)
-        await seedRun(db, taskId, r, { mergeState: 'pending-merge' })
+      for (let n = 1; n <= 4; n += 1) {
+        await seedRun(db, taskId, row(n, { nodeId: n % 2 === 0 ? 'a' : 'b' }), {
+          mergeState: 'isolating',
+        })
       }
-      const { nodeRuns } = tablesOf(db)
-      const sqlSet = (
-        await db
-          .select({ id: nodeRuns.id })
-          .from(nodeRuns)
-          .where(and(eq(nodeRuns.taskId, taskId), structurallySupersededCondition(db)))
-      )
-        .map((r) => r.id)
-        .sort()
-      const pureSet = rows
-        .filter((r) => isStructurallySuperseded(r, rows))
-        .map((r) => r.id)
-        .sort()
-      expect({ seed, ids: sqlSet }).toEqual({ seed, ids: pureSet })
-      // 样本必须真的覆盖两类结果，否则对拍是空洞绿。
-      expect(pureSet.length).toBeGreaterThan(0)
-      expect(pureSet.length).toBeLessThan(rows.length)
-    }
-  })
-})
+      const concurrent = harness.applicationBinding.provider === 'postgresql'
+      const firstMinted = Promise.withResolvers<void>()
+      const releaseFirst = Promise.withResolvers<void>()
+      const bodyRuns = { a: 0, b: 0 }
+      let secondAcquired = false
+      const mintIn = (nodeId: 'a' | 'b', id: string) =>
+        withTaskExecutionAggregateWrite(db, async (tx) => {
+          // Count the whole callback, including attempts that fail at the root.
+          bodyRuns[nodeId] += 1
+          await taskAggregateWrite.lockTaskAggregateRoot(tx, taskId)
+          if (nodeId === 'b') secondAcquired = true
+          await createNodeRunMintParticipantInTx(tx).mint(
+            withTargetMintIdentity({
+              role: 'node-attempt',
+              syntheticKind: null,
+              id,
+              taskId,
+              nodeId,
+              iteration: 0,
+              status: 'pending',
+              cause: 'initial',
+            }),
+          )
+          if (nodeId === 'a' && concurrent) {
+            firstMinted.resolve()
+            await releaseFirst.promise
+          }
+        })
+      if (concurrent) {
+        const first = mintIn('a', mkId(10))
+        await Promise.race([firstMinted.promise, first])
+        const second = mintIn('b', mkId(11))
+        try {
+          // A post-mint barrier for BOTH writers deadlocks under L-1. Instead keep
+          // A's entire mint open until PostgreSQL proves B is waiting on its root.
+          // B has already acquired its snapshot; this deterministically exposed SSI.
+          const deadline = Date.now() + 10_000
+          let blocked = false
+          while (Date.now() < deadline) {
+            const rows = await rawRows(
+              db,
+              sql`
+              select 1 from pg_stat_activity
+              where datname = current_database() and pid <> pg_backend_pid()
+                and wait_event_type = 'Lock' and cardinality(pg_blocking_pids(pid)) > 0
+                and query like '%"tasks"%for update%'
+            `,
+            )
+            if (rows.length > 0) {
+              blocked = true
+              break
+            }
+            await Bun.sleep(10)
+          }
+          expect(blocked).toBe(true)
+          expect(secondAcquired).toBe(false)
+        } finally {
+          releaseFirst.resolve()
+          await Promise.all([first, second])
+        }
+      } else {
+        await mintIn('a', mkId(10))
+        await mintIn('b', mkId(11))
+      }
+      expect(bodyRuns).toEqual({ a: 1, b: 1 })
+      const rows = await readNodeRunFixtures(db, { taskId })
+      const allocated = rows.filter((run) => [mkId(10), mkId(11)].includes(run.id))
+      expect(allocated).toHaveLength(2)
+      expect(allocated.every((run) => run.seq !== null)).toBe(true)
+      expect(new Set(allocated.map((run) => run.seq)).size).toBe(2)
+      expect(rows).toHaveLength(6)
+      const { nodeRunSelections } = tablesOf(db)
+      const selections = await db
+        .select()
+        .from(nodeRunSelections)
+        .where(eq(nodeRunSelections.taskId, taskId))
+      expect(selections.map((selection) => selection.selectedRunId).sort()).toEqual([
+        mkId(10),
+        mkId(11),
+      ])
+      expect(selections.map((selection) => selection.revision)).toEqual([3, 3])
+    },
+  )
 
-describeEachProvider('RFC-369 AC-2 —— 同任务并发铸造不再互相中止（PG SERIALIZABLE）', (harness) => {
-  test('两笔都铸完再提交：每笔事务体只执行一次（无序列化重放）', async () => {
-    const db = harness.db
-    const taskId = await seedTask(db)
-    // 同一任务里已有若干行，让两次铸造落在同一批索引页上（改前的同帧范围读就在这里互判读写依赖）。
-    for (let n = 1; n <= 4; n += 1) {
-      await seedRun(db, taskId, row(n, { nodeId: n % 2 === 0 ? 'a' : 'b' }), {
-        mergeState: 'isolating',
-      })
+  test('same-slot production mints advance every revision without overwriting another slot', async () => {
+    const taskId = await seedTask(harness.db)
+    const lifecycle = new DrizzleNodeRunLifecyclePersistence(harness.db)
+    const recording = harness.recordStatements()
+    try {
+      await Promise.all(
+        ['a', 'b', 'c', 'd'].map((id) =>
+          lifecycle.mint(
+            withTargetMintIdentity({
+              id,
+              taskId,
+              nodeId: 'worker',
+              role: 'node-attempt',
+              syntheticKind: null,
+              status: 'pending',
+              cause: 'initial',
+            }),
+          ),
+        ),
+      )
+    } finally {
+      recording.stop()
     }
-    const concurrent = harness.applicationBinding.provider === 'postgresql'
-    let arrived = 0
-    let releaseBarrier!: () => void
-    const barrier = new Promise<void>((resolveBarrier) => {
-      releaseBarrier = resolveBarrier
+    expect(
+      recording.statements.filter(({ sql }) =>
+        /^insert into .*"node_run_seq_allocations"/.test(sql),
+      ),
+    ).toHaveLength(4)
+    const { nodeRunSelections } = tablesOf(harness.db)
+    const runs = await readNodeRunFixtures(harness.db, { taskId })
+    const selections = await harness.db
+      .select()
+      .from(nodeRunSelections)
+      .where(eq(nodeRunSelections.taskId, taskId))
+    expect(runs).toHaveLength(4)
+    expect(selections).toHaveLength(1)
+    expect(selections[0]).toMatchObject({
+      revision: 4,
+      selectedRunId: runs.sort((a, b) => a.seq - b.seq).at(-1)!.id,
     })
-    const bodyRuns = { a: 0, b: 0 }
-    const mintIn = async (nodeId: 'a' | 'b', id: string) =>
-      await withTaskExecutionSerializable(db, async (tx) => {
-        bodyRuns[nodeId] += 1
-        await createNodeRunMintParticipantInTx(tx).mint({
-          ...deriveNodeRunRole({ nodeId: nodeId, rerunCause: 'initial' }),
-          id,
+  })
+
+  test.each(['fanout-shard', 'retry-node', 'stale-redispatch'] as const)(
+    'production lifecycle mint: concurrent %s slots commit once with inputs and selections',
+    async (cause) => {
+      const taskId = await seedTask(harness.db)
+      const lifecycle = new DrizzleNodeRunLifecyclePersistence(harness.db)
+      const containerRunId = await lifecycle.mint(
+        withTargetMintIdentity({
           taskId,
-          nodeId,
-          iteration: 0,
+          nodeId: 'wrapper',
+          role: 'container',
+          syntheticKind: null,
           status: 'pending',
           cause: 'initial',
-        })
-        // 只在第一次执行时等对方：两笔都已铸完、都还没提交——改前这里必然互判读写依赖。
-        if (concurrent && bodyRuns[nodeId] === 1) {
-          arrived += 1
-          if (arrived === 2) releaseBarrier()
-          await barrier
-        }
-      })
-    // SQLite 的 BEGIN IMMEDIATE 全库独占，两笔只能先后执行；判据在那里同样成立（各执行一次）。
-    if (concurrent) {
-      await Promise.all([mintIn('a', mkId(10)), mintIn('b', mkId(11))])
-    } else {
-      await mintIn('a', mkId(10))
-      await mintIn('b', mkId(11))
-    }
-    expect(bodyRuns).toEqual({ a: 1, b: 1 })
-    const allocated = await readNodeRunFixtures(db, {
-      taskId,
-      id: [mkId(10), mkId(11)],
-    }).then((rows) => rows.map((row) => ({ seq: row.seq })))
-    expect(allocated.every((run) => run.seq !== null)).toBe(true)
-    expect(new Set(allocated.map((run) => run.seq)).size).toBe(2)
-    expect(
-      (
-        await readNodeRunFixtures(db, { taskId }).then((rows) =>
-          rows.map((row) => ({ id: row.id })),
+        }),
+      )
+      const recording = harness.recordStatements()
+      const inputs = ['a', 'b', 'c', 'd'].map((key) =>
+        withTargetMintIdentity({
+          id: `mint-${key}`,
+          taskId,
+          nodeId: cause === 'fanout-shard' ? 'worker' : key,
+          role: 'node-attempt',
+          syntheticKind: null,
+          status: 'pending',
+          cause,
+          containerRunId: cause === 'fanout-shard' ? containerRunId : null,
+          retryIndex: cause === 'retry-node' ? 1 : 0,
+          executionGeneration:
+            cause === 'retry-node'
+              ? { kind: 'operation', cause: 'retry', operationRef: 'same-retry' }
+              : { kind: 'current' },
+          overrides: {
+            identity:
+              cause === 'fanout-shard' ? { parentNodeRunId: containerRunId, shardKey: key } : {},
+            inputs: { consumedUpstreamRunsJson: JSON.stringify({ wrapper: containerRunId }) },
+          },
+        }),
+      )
+      try {
+        expect(await Promise.all(inputs.map((input) => lifecycle.mint(input)))).toEqual(
+          inputs.map((input) => input.id!),
         )
-      ).length,
-    ).toBe(6)
-  })
+      } finally {
+        recording.stop()
+      }
+      const allocations = recording.statements.filter((statement) =>
+        /^insert into .*"node_run_seq_allocations"/.test(statement.sql),
+      )
+      expect(allocations).toHaveLength(4)
+      expect(recording.statements.some(({ sql }) => /rollback/i.test(sql))).toBe(false)
+      const { nodeRunSelections, nodeRunInputs, taskExecutionGenerations } = tablesOf(harness.db)
+      const rows = await readNodeRunFixtures(harness.db, { taskId })
+      expect(rows).toHaveLength(5)
+      expect(new Set(rows.map((row) => row.seq)).size).toBe(5)
+      for (const input of inputs) {
+        const selected = (
+          await harness.db
+            .select()
+            .from(nodeRunSelections)
+            .where(eq(nodeRunSelections.selectedRunId, input.id!))
+        )[0]
+        expect(selected?.revision).toBe(1)
+        expect(
+          (
+            await harness.db
+              .select()
+              .from(nodeRunInputs)
+              .where(eq(nodeRunInputs.consumerRunId, input.id!))
+          )[0]?.producerRunId,
+        ).toBe(containerRunId)
+      }
+      expect(
+        (
+          await harness.db
+            .select()
+            .from(taskExecutionGenerations)
+            .where(eq(taskExecutionGenerations.taskId, taskId))
+        ).length,
+      ).toBe(cause === 'retry-node' ? 2 : 1)
+    },
+  )
 })
 
 describeEachProvider('RFC-369 AC-4 —— 迁移围栏：被取代即收成 abandoned 并落库', (harness) => {
@@ -324,7 +515,7 @@ describeEachProvider('RFC-369 AC-4 —— 迁移围栏：被取代即收成 aban
     expect(failure).toBeInstanceOf(IllegalMergeStateTransition)
     const after = await mergeStateOf(db, old)
     expect(after.mergeState).toBe('abandoned')
-    expect(after.isoNodeTree).toBe('old-tree')
+    expect(checkpointValues(after.checkpoints, 'nodeTree')).toEqual({ '': 'old-tree' })
   })
 
   test('tryTransition：被取代 → false，同样落 abandoned', async () => {
@@ -448,12 +639,12 @@ describeEachProvider('RFC-369 §4.3 / AC-7 —— 入口重放排除已被取代
     expect(live.map((r) => r.id)).toEqual([freshest, otherNode])
   })
 
-  test('AC-7 情形 2：ULID 不严格单调——id 更小、提交更晚的行一出现即被视为旧代', async () => {
+  test('AC-7 情形 2：迁移保留 seq 较小的晚写历史行，不能取代已有选择', async () => {
     const db = harness.db
     const taskId = await seedTask(db)
     // 先提交 id 更大的一代，再提交 id 更小的一行（先 ulid() 后提交）。
-    await seedRun(db, taskId, row(20))
-    const lateButSmaller = await seedRun(db, taskId, row(10))
+    await seedRun(db, taskId, row(20, { seq: 20 }))
+    const lateButSmaller = await seedRun(db, taskId, row(10, { seq: 10 }))
     const persistence = new DrizzleMergeStateLifecyclePersistence(db)
     await persistence.transition({ nodeRunId: lateButSmaller, event: { kind: 'begin-isolation' } })
     await expectFencedToAbandoned(db, lateButSmaller)
@@ -477,6 +668,7 @@ function candidate(
   } = {},
 ): FakeRow {
   return {
+    generationSeq: 0,
     seq: null,
     id: mkId(n),
     nodeId: 'n',
@@ -533,6 +725,16 @@ async function resolveWith(
       throw transitionError
     }
   }
+  f.projections.snapshotRead = async (read) =>
+    read({
+      selection: createRunSelectionOracleSnapshot(
+        rows.map((row) => ({ ...row, taskId: 't', nodeId: 'n', iteration: 0 })),
+        { scope: { kind: 'node', taskId: 't', nodeId: 'n', iteration: 0 } },
+      ),
+      list: async () => rows as unknown as Awaited<ReturnType<NodeExecutionPersistence['list']>>,
+      read: async () => null,
+      listOutputs: async () => [],
+    })
   const result = await resolveSchedulerRunRow({
     lifecycle: f.lifecycle,
     projections: f.projections,
@@ -660,16 +862,19 @@ describeEachProvider(
         await seedRun(db, taskId, row(3), { status: 'interrupted' })
         const lifecycle = new DrizzleNodeRunLifecyclePersistence(db)
         const projections = new DrizzleNodeExecutionPersistence(db)
-        const minted = await lifecycle.mint({
-          ...deriveNodeRunRole({ nodeId: 'n', rerunCause: cause }),
-          taskId,
-          nodeId: 'n',
-          status: 'pending',
-          cause,
-          retryIndex: 1,
-          containerRunId: null,
-          iteration: 0,
-        })
+        const minted = await lifecycle.mint(
+          withTargetMintIdentity({
+            role: 'node-attempt',
+            syntheticKind: null,
+            taskId,
+            nodeId: 'n',
+            status: 'pending',
+            cause,
+            retryIndex: 1,
+            containerRunId: null,
+            iteration: 0,
+          }),
+        )
         const canceled: string[] = []
         const result = await resolveSchedulerRunRow({
           lifecycle,

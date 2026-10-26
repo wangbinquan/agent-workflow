@@ -1,3 +1,4 @@
+import { databaseContentColumnsInTx } from '@/platform/content/infrastructure/contentStore'
 // RFC-359 W4-D7b —— Digital Employee OS 运行时案件持久化（案件 / 上下文 / 关注绑定 / 收件箱 / 反应轮次 / 调用与
 // 通道 / outbox）：一份实现，两个 provider 共用。
 //
@@ -45,15 +46,15 @@ import type {
   ReactionClaimEpoch,
   ReactionExecutionAdmissionParticipantV1,
 } from '../composition/required-ports'
-import type {
-  CaseInboxRecord,
-  EmployeeCaseRecord,
-  EmployeeContextRecord,
-  ReactionRoundRecord,
+import {
+  type CaseInboxRecord,
+  type EmployeeCaseRecord,
+  type EmployeeContextRecord,
+  type ReactionRoundRecord,
+  reactionExecutionPlanSchema,
 } from '../domain/runtimeModel'
 import { employeeCaseLifecycleObservation } from '../public/events'
 import { reactionArtifactRef, sanitizeReactionText } from '../domain/reactionArtifacts'
-import { reactionExecutionPlanSchema } from '../domain/runtimeModel'
 
 async function enqueueCaseLifecycleEventTx(
   tx: PersistenceTx,
@@ -1466,12 +1467,8 @@ export function createRuntimePersistence(
 
     async adoptLegacyReactionLaunches(input) {
       return await session.transaction(async (tx) => {
-        const {
-          employeeOsOutbox,
-          employeeReactionRounds,
-          employeeReactionArtifacts,
-          employeeReactionDispatch,
-        } = tablesOf(tx)
+        const { employeeOsOutbox, employeeReactionRounds, employeeReactionDispatch } = tablesOf(tx)
+        const { employeeReactionArtifacts } = tablesOf(tx)
         const rows = await tx
           .select()
           .from(employeeOsOutbox)
@@ -1509,7 +1506,12 @@ export function createRuntimePersistence(
                 .values({
                   digest: text.digest,
                   kind: 'retry-feedback',
-                  body: text.body,
+                  ...(await databaseContentColumnsInTx(
+                    tx,
+                    'employee-reaction',
+                    text.digest,
+                    Buffer.from(text.body),
+                  )),
                   bytes: Buffer.byteLength(text.body, 'utf8'),
                   createdAt: input.now,
                 })

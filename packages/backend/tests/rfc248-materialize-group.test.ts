@@ -31,7 +31,7 @@ import {
   writeFileSync,
 } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { startGitHttpRemote, remoteUrlFor } from './helpers/gitHttpRemote'
 import { ulid } from 'ulid'
 import { removeTempDirSync } from './fixtures/tempDir'
@@ -49,15 +49,13 @@ import { repoGroupNodesFromAttachments } from './helpers/repoGroupFixture'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 import { composeSqliteRepositoryWorkspaceStore } from '../src/modules/source-control/composition'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-
 let tmp = ''
 let db: DbClient
 const priorAppHome = process.env.AGENT_WORKFLOW_HOME
 beforeEach(() => {
   tmp = mkdtempSync(join(tmpdir(), 'aw-rfc248-mat-'))
   process.env.AGENT_WORKFLOW_HOME = join(tmp, 'home')
-  db = createInMemoryDb(MIGRATIONS)
+  db = createInMemoryDb()
 })
 afterEach(() => {
   if (priorAppHome === undefined) delete process.env.AGENT_WORKFLOW_HOME

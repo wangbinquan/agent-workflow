@@ -1,3 +1,4 @@
+import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { o2Ports } from './helpers/o2Closure'
 // RFC-108 T18 (AR-03) — boot auto-resume (default OFF).
 //
@@ -73,6 +74,7 @@ describeEachProvider('RFC-108 T18 — boot auto-resume', (harness) => {
     await seedTask(db, 'interrupted', 'node-timeout') // other errorSummary → skipped
     await seedTask(db, 'failed', 'daemon-restart') // other status → skipped
     const operations = createTaskExecutionPersistence(db, {
+      historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
       recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
     }).recoveryAdministration
     const resumedCalls: string[] = []
@@ -105,6 +107,7 @@ describeEachProvider('RFC-108 T18 — boot auto-resume', (harness) => {
       mode: 'dynamic_workflow',
     })
     const operations = createTaskExecutionPersistence(db, {
+      historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
       recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
     }).recoveryAdministration
     const res = await autoResumeInterruptedTasks({
@@ -123,6 +126,7 @@ describeEachProvider('RFC-108 T18 — boot auto-resume', (harness) => {
     const db = harness.db
     const a = await seedTask(db, 'interrupted', 'daemon-restart')
     const operations = createTaskExecutionPersistence(db, {
+      historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
       recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
     }).recoveryAdministration
     // Trip the breaker for `a` (4 attempts > maxPerWindow 3 → suspended).
@@ -151,6 +155,7 @@ describeEachProvider('RFC-108 T18 — boot auto-resume', (harness) => {
     const a = await seedTask(db, 'interrupted', 'daemon-restart')
     const b = await seedTask(db, 'interrupted', 'daemon-restart')
     const operations = createTaskExecutionPersistence(db, {
+      historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
       recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
     }).recoveryAdministration
     const res = await autoResumeInterruptedTasks({

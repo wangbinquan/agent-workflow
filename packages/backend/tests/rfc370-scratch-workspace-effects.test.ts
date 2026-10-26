@@ -107,7 +107,7 @@ describeEachProvider('RFC-370 selected scratch workspace effects', (harness) => 
         expect(first.space).toBe(value)
         const saved = await journal.read(taskId)
         expect(saved?.state).toBe('prepared')
-        expect(JSON.parse(saved!.artifactJson!)).toEqual({ version: 1, space: value })
+        expect(JSON.parse(saved!.artifactJson!)).toEqual({ version: 2, space: value })
         first.commit()
         let restored = false
         const replay = prepareScratchWorkspace(input).then((result) => {
@@ -359,14 +359,16 @@ describeEachProvider('RFC-370 selected scratch workspace effects', (harness) => 
         },
       }),
     )
-    for (const artifact of [
-      { version: 2, space: space(taskId) },
-      { version: 1, space: space('another-task') },
-      { version: 1, space: { ...space(taskId), kind: 'single' } },
-    ]) {
-      expect(() => binding.restoreScratch(taskId, JSON.stringify(artifact))).toThrow(
+    const rejected = [
+      [{ version: 1, space: space(taskId) }, 'Invalid input'],
+      [{ version: 2, space: space('another-task') }, 'workspace-preparation-artifact-mismatch'],
+      [
+        { version: 2, space: { ...space(taskId), kind: 'single' } },
         'scratch-preparation-artifact-mismatch',
-      )
+      ],
+    ] as const
+    for (const [artifact, message] of rejected) {
+      expect(() => binding.restoreScratch(taskId, JSON.stringify(artifact))).toThrow(message)
     }
     expect(restorations).toBe(0)
   })

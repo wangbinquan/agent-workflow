@@ -16,7 +16,7 @@ import type { StartTask, WorkflowDefinition } from '@agent-workflow/shared'
 import { beforeAll, afterEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { startGitHttpRemote, remoteUrlFor } from './helpers/gitHttpRemote'
 
 import { createInMemoryDb, type DbClient } from '../src/db/client'
@@ -55,8 +55,6 @@ import { runGit } from '../src/util/git'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 import { composeSqliteRepositoryWorkspaceStore } from '../src/modules/source-control/composition'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-
 interface Harness {
   tmp: string
   appHome: string
@@ -84,7 +82,7 @@ async function buildHarness(sourceCount: number): Promise<Harness> {
     expect((await runGit(repoPath, ['commit', '-q', '-m', 'init'])).exitCode).toBe(0)
     sourcePaths.push(repoPath)
   }
-  return { tmp, appHome, db: createInMemoryDb(MIGRATIONS), sourcePaths }
+  return { tmp, appHome, db: createInMemoryDb(), sourcePaths }
 }
 
 const SYSTEM: WorkflowWritePrincipal = { kind: 'system', reason: 'rfc199-launch-race-test' }

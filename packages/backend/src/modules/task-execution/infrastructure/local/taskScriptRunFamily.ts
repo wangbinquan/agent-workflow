@@ -8,7 +8,8 @@ import type {
   TaskScriptRunFamily,
   TaskScriptStartReceipt,
 } from '../../application/ports/taskScriptRunFamily'
-import { runRootFor } from '@/services/runtime'
+import { join } from 'node:path'
+import { Paths } from '@/util/paths'
 import type { ManagedProcessResult } from '@/platform/execution/local/managedProcess'
 import {
   describeInterpreterResolution,
@@ -25,7 +26,7 @@ import {
 
 /** Local contents are interpreted only by this selected owner. The common
  * script policy retains interpreter/attempt/install/receipt/settlement order. */
-export function createLocalTaskScriptRunFamily(): TaskScriptRunFamily {
+export function createLocalTaskScriptRunFamily(appHome: string = Paths.root): TaskScriptRunFamily {
   const interpreters = new WeakMap<object, ResolvedInterpreter>()
   const dependencyInterpreters = new WeakMap<object, { path: string; version: string }>()
   const environments = new WeakMap<object, ScriptDepsEnv>()
@@ -67,7 +68,7 @@ export function createLocalTaskScriptRunFamily(): TaskScriptRunFamily {
       return describeInterpreterResolution(language, overrides)
     },
     prepareRunContent(taskId, nodeRunId): TaskScriptRunContent {
-      const runDir = runRootFor(taskId, nodeRunId)
+      const runDir = join(appHome, 'runs', taskId, nodeRunId)
       mkdirSync(runDir, { recursive: true })
       const reference = {}
       runContents.set(reference, runDir)

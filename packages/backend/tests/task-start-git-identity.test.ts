@@ -24,7 +24,6 @@ import { nonInteractiveGitEnv } from '../src/util/git'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
 const GIT_TIMEOUT_MS = 10_000
 const NODE_TIMEOUT_MS = 10_000
@@ -89,7 +88,7 @@ async function setup(): Promise<Harness> {
   const envLog = join(root, 'env.jsonl')
   mkdirSync(appHome, { recursive: true })
   mkdirSync(repoPath, { recursive: true })
-  const db = createInMemoryDb(MIGRATIONS)
+  const db = createInMemoryDb()
   databases.push(db)
   await seedTestDefaultOpencodeRuntime(db)
 

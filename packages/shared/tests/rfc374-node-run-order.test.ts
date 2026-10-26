@@ -47,10 +47,10 @@ describe('RFC-374 shared mint order', () => {
     expect(nodeRunOrderAnchor([newer, legacy], newer.id)).toBe(newer)
     expect(nodeRunOrderAnchor([newer], 'missing')).toEqual({ id: 'missing', seq: null })
   })
-  test('DTO accepts absent, null and integer seq and rejects invalid sequence values', () => {
+  test('DTO requires integer seq while historical ordering helpers retain legacy anchors', () => {
     const schema = NodeRunSchema.pick({ id: true, seq: true })
-    expect(schema.parse({ id: 'legacy' })).toEqual({ id: 'legacy', seq: null })
-    expect(schema.parse({ id: 'legacy', seq: null }).seq).toBeNull()
+    expect(schema.safeParse({ id: 'legacy' }).success).toBe(false)
+    expect(schema.safeParse({ id: 'legacy', seq: null }).success).toBe(false)
     expect(schema.parse(newer)).toEqual(newer)
     for (const seq of [1.5, '1', Infinity])
       expect(schema.safeParse({ id: 'bad', seq }).success).toBe(false)

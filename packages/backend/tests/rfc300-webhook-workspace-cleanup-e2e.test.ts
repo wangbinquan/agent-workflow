@@ -1,7 +1,9 @@
+import { taskReadColumns } from '@/modules/task-execution/infrastructure/taskRepositorySql'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 // RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-395 II-pre：GC 改接生产 workspaceMaintenance，断言其回执及实际目录 / 行状态。
+
 import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
 import { workspaceMaintenanceForTest } from './helpers/workspaceMaintenance'
 // RFC-300 T14 — real Webhook dispatcher -> executor -> task driver -> terminal
 // CAS -> owner release -> physical cleanup. No launch/cancel fake is injected.
@@ -12,41 +14,39 @@ import {
   parseGitUrl,
   type CodeHostEvent,
 } from '@agent-workflow/shared'
-import { beforeAll, afterEach, expect, setDefaultTimeout, test } from 'bun:test'
+import { afterEach, beforeAll, expect, setDefaultTimeout, test } from 'bun:test'
+import { eq } from 'drizzle-orm'
 import { execFileSync } from 'node:child_process'
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
-import { startGitHttpRemote, remoteUrlFor } from './helpers/gitHttpRemote'
-import { eq } from 'drizzle-orm'
+import { join } from 'node:path'
 import { ulid } from 'ulid'
 import { buildActor } from '../src/auth/actor'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import { createInMemoryDb } from '../src/db/client'
-import { composeMrTerminalControl } from '../src/modules/integration/composition/webhookTerminalControl'
-import { composeTaskSourceTermination } from '../src/modules/task-execution/composition/sourceTermination'
-import { composeWebhookDispatchCore } from '../src/modules/integration/composition/webhookDispatch'
-import { createWebhookDispatchOrchestrationRuntime } from '../src/modules/integration/infrastructure/webhookDispatchRuntime'
 import { createIdentityAccessRuntime } from '../src/modules/identity-access/composition'
+import { composeWebhookDispatchCore } from '../src/modules/integration/composition/webhookDispatch'
+import { composeMrTerminalControl } from '../src/modules/integration/composition/webhookTerminalControl'
+import { createWebhookDispatchOrchestrationRuntime } from '../src/modules/integration/infrastructure/webhookDispatchRuntime'
+import { composeTaskSourceTermination } from '../src/modules/task-execution/composition/sourceTermination'
+import { cancelViaEngine } from './helpers/cancelEngine'
+import { remoteUrlFor, startGitHttpRemote } from './helpers/gitHttpRemote'
 import {
   integrationTriggerWebhookAuthorityDependencies,
   scheduledTaskRuntime,
 } from './helpers/integrationTriggerResourceBinding'
+import { createProviderHttpApplicationFromBinding } from './helpers/providerHttpApplication'
 import { composeTaskExecutionTestRuntime } from './helpers/taskExecutionTestTopology'
 import { createSqliteWebhookTaskExecutionParticipant } from './helpers/webhookTaskExecution'
-import { createProviderHttpApplicationFromBinding } from './helpers/providerHttpApplication'
-import { cancelViaEngine } from './helpers/cancelEngine'
 
+import { composeWebhookTerminalWorkspacePrunePolicy } from '../src/modules/integration/composition/terminalWorkspaceCleanup'
 import { registerTerminalWorkspacePrunePolicy, setTaskStatus } from '../src/services/lifecycle'
 import { getTask, isTaskActive } from '../src/services/task'
-import { createUser } from './helpers/userFixture'
 import { createWebhookDispatcher } from '../src/services/webhook/webhookDispatch'
-import { composeWebhookTerminalWorkspacePrunePolicy } from '../src/modules/integration/composition/terminalWorkspaceCleanup'
 import { createWorkflow } from '../src/services/workflow'
 import { sha1Hex } from '../src/util/hash'
 import { installTaskLifecycleAfterCommitTestPump } from './helpers/taskLifecycleCommittedEvents'
-
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+import { createUser } from './helpers/userFixture'
 
 setDefaultTimeout(30_000)
 
@@ -110,7 +110,7 @@ test('real Webhook remote/scratch done/canceled delete while failed/interrupted 
     JSON.stringify({ $schema_version: 1, webhookTaskWorkspaceAutoCleanup: true }),
   )
 
-  const db = createInMemoryDb(MIGRATIONS)
+  const db = createInMemoryDb()
   const box = createSecretBoxFromKey(Buffer.alloc(32, 30))
   const owner = await createUser(db, {
     username: 'rfc300-owner',
@@ -226,14 +226,9 @@ test('real Webhook remote/scratch done/canceled delete while failed/interrupted 
   const parsed = parseGitUrl(repoUrl)
   if (parsed === null) throw new Error('fixture URL did not parse')
   const cacheKey = gitUrlCacheKeyWith(parsed, sha1Hex)
-  const {
-    cachedRepos,
-    webhookEndpoints,
-    webhookTriggers,
-    webhookDeliveries,
-    webhookTriggerFires,
-    tasks,
-  } = tablesOf(db)
+  const { cachedRepos, webhookEndpoints, webhookTriggers, webhookDeliveries, webhookTriggerFires } =
+    tablesOf(db)
+  const { tasks } = tablesOf(db)
   await insertOne(db, cachedRepos, {
     id: 'cached-rfc300',
     urlHash: cacheKey.hash,
@@ -361,7 +356,9 @@ test('real Webhook remote/scratch done/canceled delete while failed/interrupted 
 
     if (one.terminal === 'canceled' || one.terminal === 'interrupted') {
       await waitFor(async () => {
-        const row = (await db.select().from(tasks).where(eq(tasks.id, taskId)).limit(1))[0]
+        const row = (
+          await db.select(taskReadColumns(db)).from(tasks).where(eq(tasks.id, taskId)).limit(1)
+        )[0]
         return row?.status === 'running' && isTaskActive(taskId) ? true : null
       }, `${one.space} task driver`)
       if (one.terminal === 'canceled') {
@@ -384,7 +381,9 @@ test('real Webhook remote/scratch done/canceled delete while failed/interrupted 
 
     if (one.terminal === 'failed' || one.terminal === 'interrupted') {
       const failed = await waitFor(async () => {
-        const row = (await db.select().from(tasks).where(eq(tasks.id, taskId)).limit(1))[0]
+        const row = (
+          await db.select(taskReadColumns(db)).from(tasks).where(eq(tasks.id, taskId)).limit(1)
+        )[0]
         return row?.status === one.terminal ? row : null
       }, `${one.space} ${one.terminal} control`)
       expect(failed.workspacePruningAt).toBeNull()
@@ -397,7 +396,9 @@ test('real Webhook remote/scratch done/canceled delete while failed/interrupted 
     }
 
     const final = await waitFor(async () => {
-      const row = (await db.select().from(tasks).where(eq(tasks.id, taskId)).limit(1))[0]
+      const row = (
+        await db.select(taskReadColumns(db)).from(tasks).where(eq(tasks.id, taskId)).limit(1)
+      )[0]
       return row?.workspacePrunedAt === null || row?.workspacePrunedAt === undefined ? null : row
     }, `${one.space}/${one.terminal} workspace prune`)
     expect(final.status).toBe(one.terminal)
@@ -431,7 +432,7 @@ test('RFC-303 real GitLab close stops the task driver and prunes its remote work
     JSON.stringify({ $schema_version: 1, webhookTaskWorkspaceAutoCleanup: true }),
   )
 
-  const db = createInMemoryDb(MIGRATIONS)
+  const db = createInMemoryDb()
   const box = createSecretBoxFromKey(Buffer.alloc(32, 31))
   const owner = await createUser(db, {
     username: 'rfc303-owner',
@@ -485,10 +486,10 @@ test('RFC-303 real GitLab close stops the task driver and prunes its remote work
     webhookEndpoints,
     webhookTriggers,
     webhookTriggerFires,
-    tasks,
     webhookMrControlEffects,
     webhookMrControlTargets,
   } = tablesOf(db)
+  const { tasks } = tablesOf(db)
   await insertOne(db, cachedRepos, {
     id: 'cached-rfc303',
     urlHash: gitUrlCacheKeyWith(parsed, sha1Hex).hash,
@@ -616,7 +617,9 @@ test('RFC-303 real GitLab close stops the task driver and prunes its remote work
     }, 'RFC-303 protected task launch')
     const taskId = fire.taskId!
     const running = await waitFor(async () => {
-      const row = (await db.select().from(tasks).where(eq(tasks.id, taskId)).limit(1))[0]
+      const row = (
+        await db.select(taskReadColumns(db)).from(tasks).where(eq(tasks.id, taskId)).limit(1)
+      )[0]
       return row?.status === 'running' && isTaskActive(taskId) ? row : null
     }, 'RFC-303 task driver attachment')
     expect(existsSync(running.worktreePath)).toBe(true)
@@ -625,7 +628,9 @@ test('RFC-303 real GitLab close stops the task driver and prunes its remote work
     expect(close.status).toBe(200)
     const closeDeliveryId = ((await close.json()) as { deliveryId: string }).deliveryId
     const final = await waitFor(async () => {
-      const row = (await db.select().from(tasks).where(eq(tasks.id, taskId)).limit(1))[0]
+      const row = (
+        await db.select(taskReadColumns(db)).from(tasks).where(eq(tasks.id, taskId)).limit(1)
+      )[0]
       return row?.workspacePrunedAt !== null && row?.workspacePrunedAt !== undefined ? row : null
     }, 'RFC-303 runtime release and workspace prune')
     expect(final.status).toBe('canceled')

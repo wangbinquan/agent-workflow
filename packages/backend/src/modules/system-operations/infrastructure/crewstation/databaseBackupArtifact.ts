@@ -91,6 +91,7 @@ export async function createHostedDatabaseBackupArchive(input: {
               await input.assertAuthority()
               await input.source.assertUnchanged(snapshot)
             },
+            readMetadata: () => input.source.readMetadata!(),
             readChunk: (table, key, limit) => input.source.readChunk(table, key, limit),
           },
           now,

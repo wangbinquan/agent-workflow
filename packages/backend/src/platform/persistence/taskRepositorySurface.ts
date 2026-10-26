@@ -1,15 +1,21 @@
-import { mountDepth, redactGitUrl } from '@agent-workflow/shared'
+import { renderSchemaExpression, type SchemaExpression } from './schema/expressions'
+import { engineForHandle } from './sessionTables'
+import { sql } from 'drizzle-orm'
 import {
+  decodeRequestedSourceJson,
   projectTaskRepositorySurface,
+  requestedSourcePrimary,
+  requestedSourceView,
   taskBranch,
-  taskRepositoryNodePaths,
   type RequestedSource,
   type TaskRepositoryMount,
 } from '@/platform/taskRepository'
+import { mountDepth, redactGitUrl } from '@agent-workflow/shared'
 type StoredTaskRepositoryMount = TaskRepositoryMount & { readonly worktreeDirName?: string }
 
 /** Epoch-1 input; optional fields allow the existing narrow list queries to stay narrow. */
 export interface TaskRepositorySourceColumns {
+  readonly requestedSource?: string
   readonly repoUrl?: string | null
   readonly cachedRepoId?: string | null
   readonly baseBranch?: string
@@ -68,7 +74,11 @@ export function projectStoredTaskRepositorySurface(
   urlProjection: 'redacted' | 'stored' = 'redacted',
   directoryProjection: 'frozen' | 'supplied' = 'frozen',
 ) {
-  const requestedSource = decodeRequestedSource(row)
+  const frozenSource =
+    row.requestedSource === undefined ? null : decodeRequestedSourceJson(row.requestedSource)
+  const requestedSource =
+    frozenSource === null ? decodeRequestedSource(row) : requestedSourceView(frozenSource)
+  const primaryUrl = row.repoUrl === undefined ? requestedSource.repoUrl : row.repoUrl
   return projectTaskRepositorySurface(
     {
       requestedSource,
@@ -79,7 +89,7 @@ export function projectStoredTaskRepositorySurface(
           ? [...nodePaths]
           : nodePaths.length > 0
             ? [...nodePaths].sort((a, b) => mountDepth(a) - mountDepth(b) || a.localeCompare(b))
-            : taskRepositoryNodePaths(mounts.map((mount) => mount.mountPath)),
+            : [],
     },
     row.worktreePath ?? '',
     mounts,
@@ -88,12 +98,18 @@ export function projectStoredTaskRepositorySurface(
         mounts.map((mount) => [mount.ordinal, mount.worktreeDirName ?? mount.mountPath]),
       ),
       primary: {
-        repoPath: row.repoPath ?? '',
-        repoUrl: urlProjection === 'stored' ? (row.repoUrl ?? null) : requestedSource.repoUrl,
-        cachedRepoId: requestedSource.cachedRepoId,
-        baseBranch: requestedSource.requestedRef,
+        ...(frozenSource === null
+          ? {}
+          : requestedSourcePrimary(frozenSource, taskBranch(row.id ?? '', row.workingBranch))),
+        repoPath: row.repoPath ?? frozenSource?.repoPath ?? '',
+        repoUrl:
+          urlProjection === 'stored' || primaryUrl === null ? primaryUrl : redactGitUrl(primaryUrl),
+        cachedRepoId:
+          row.cachedRepoId === undefined ? requestedSource.cachedRepoId : row.cachedRepoId,
+        baseBranch: row.baseBranch ?? requestedSource.requestedRef,
         branch: row.branch ?? taskBranch(row.id ?? '', row.workingBranch),
-        baseCommit: row.baseCommit ?? null,
+        baseCommit:
+          row.baseCommit === undefined ? (frozenSource?.legacyBaseCommit ?? null) : row.baseCommit,
       },
       repoCount: row.repoCount ?? Math.max(1, mounts.length),
     },
@@ -123,4 +139,20 @@ export function projectStoredTaskRepositoryMounts(
   return projectStoredTaskRepositorySurface(row, [], [], 'stored').repos.map(
     ({ repoIndex, worktreeDirName: _directoryName, ...repo }) => ({ ...repo, ordinal: repoIndex }),
   )
+}
+
+/** requestedSource@v2 has already validated this nullable string. The expression is
+ * shared with its index so requested-only probes stay bounded on both engines. */
+export const requestedSourceCachedRepoExpression: SchemaExpression = {
+  kind: 'raw',
+  reason:
+    'RFC-395 T: index the validated requestedSource@v2 cached repository without a mirror column.',
+  sqlite: "json_extract(requested_source, '$.cachedRepoId')",
+  postgresql: "(requested_source::jsonb ->> 'cachedRepoId')",
+}
+
+export function requestedSourceCachedRepoSql(db: object) {
+  return sql<
+    string | null
+  >`${sql.raw(renderSchemaExpression(requestedSourceCachedRepoExpression, engineForHandle(db).provider))}`
 }

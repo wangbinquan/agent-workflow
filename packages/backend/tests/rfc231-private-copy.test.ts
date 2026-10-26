@@ -275,7 +275,8 @@ describeEachProvider('RFC-231 private create invariant', (harness) => {
         { ownerUserId: 'alice', actor: alice },
       )
 
-      const { skills, mcps, plugins, workgroups } = tablesOf(db)
+      const { mcps, plugins, workgroups } = tablesOf(db),
+        { skills } = tablesOf(db)
       const rows = [
         (await readAgentFixtures(db, { id: createdAgent.id }))[0],
         (await db.select().from(skills).where(eq(skills.id, createdSkill.id)))[0],

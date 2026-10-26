@@ -1,7 +1,6 @@
-// RFC-395 II-b O3: schema-only entry stays independent of runtime phase composition.
+// Schema-only composition exit for the live registry.
 export {
   schemaContribution,
-  agents,
   mcpProbes,
   mcpRuntimeTestCreateReceipts,
   mcpRuntimeTestEvents,
@@ -11,13 +10,19 @@ export {
   mcps,
   pluginArtifactGenerations,
   plugins,
-  resourceBundleApplies,
-  skillContentEntries,
   skillOperationLocks,
   skillOperations,
-  skillVersions,
-  skills,
-  workflows,
   workgroupMembers,
   workgroups,
+  resourceBundleApplies,
+  agents,
+  agentSkillRefs,
+  agentMcpRefs,
+  agentPluginRefs,
+  agentDependencies,
+  workflows,
+  workflowDependencyIndex,
+  skills,
+  skillVersions,
+  skillContentEntries,
 } from '../infrastructure/persistence/schema'

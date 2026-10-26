@@ -1,3 +1,6 @@
+// Released picker oracle; executable runtime selection is covered through RunSelectionReader.
+import { isFresherNodeRun } from './helpers/model/frozenSelection/pickers'
+let fixtureRunSequence = 0
 // RFC-056 patch 2026-05-25 + RFC-064 — isFresherNodeRun ranking post unification.
 //
 // Pre-RFC-064 this file tested a 4-level rank:
@@ -11,7 +14,7 @@
 
 import { type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { describe, expect, test } from 'bun:test'
-import { isFresherNodeRun } from '../src/services/scheduler'
+
 type Row = PersistenceTables['nodeRuns']['$inferSelect']
 
 function mkRow(opts: {
@@ -21,7 +24,7 @@ function mkRow(opts: {
   status?: string
 }): Row {
   return {
-    seq: null,
+    seq: ++fixtureRunSequence,
 
     id: opts.id,
     taskId: 't',
@@ -52,7 +55,7 @@ function mkRow(opts: {
   } as unknown as Row
 }
 
-describe('RFC-064 — isFresherNodeRun ranks by unified clarifyIteration', () => {
+describe('RFC-064 — isFresherNodeRun ranks by persisted mint sequence', () => {
   test('live task 01KS7FAW reproducer (now expressed via unified clarifyIteration): clarify-bumped pending beats prior retry-bumped done', () => {
     // Pre-RFC-064 shape (task 01KS7FAW50V9KV2SPH859NV8ER):
     //   - done    (cli=0, cci=0, retry=1) — `<workflow-clarify>`-only
@@ -77,21 +80,21 @@ describe('RFC-064 — isFresherNodeRun ranks by unified clarifyIteration', () =>
     expect(isFresherNodeRun(done, pending)).toBe(false)
   })
 
-  test('clarifyIteration is the dominant rank: higher value always wins', () => {
+  test('a later explicit sequence wins despite retry counters', () => {
     const lower = mkRow({ id: 'A', clarifyIteration: 0, retryIndex: 9 })
     const higher = mkRow({ id: 'B', clarifyIteration: 1, retryIndex: 0 })
     expect(isFresherNodeRun(higher, lower)).toBe(true)
     expect(isFresherNodeRun(lower, higher)).toBe(false)
   })
 
-  test('retryIndex breaks ties at the same clarifyIteration', () => {
+  test('process retries use their newly minted sequence', () => {
     const older = mkRow({ id: 'A', clarifyIteration: 2, retryIndex: 0 })
     const newer = mkRow({ id: 'B', clarifyIteration: 2, retryIndex: 1 })
     expect(isFresherNodeRun(newer, older)).toBe(true)
     expect(isFresherNodeRun(older, newer)).toBe(false)
   })
 
-  test('id breaks ties at the same (clarifyIteration, retryIndex)', () => {
+  test('later sequence wins when counters are equal', () => {
     const older = mkRow({ id: 'A', clarifyIteration: 0, retryIndex: 0 })
     const newer = mkRow({ id: 'B', clarifyIteration: 0, retryIndex: 0 })
     expect(isFresherNodeRun(newer, older)).toBe(true)

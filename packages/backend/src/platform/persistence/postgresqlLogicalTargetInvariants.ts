@@ -2,6 +2,9 @@
 // verification for the logical PostgreSQL target. The caller owns the one
 // reserved migration connection and transaction; this module never reserves a
 // connection or opens a nested transaction.
+// RFC-395 BF-D8: all 15 subjects and the columns used by these predicates are
+// retained in epoch 2. Bind their physical names from the live contract; none
+// is retired or replaced by the per-table copy census.
 
 import type { LogicalSchemaContract, LogicalTableContract } from './schemaContract'
 import type { PostgresqlReservedConnection } from './postgresqlRuntime'

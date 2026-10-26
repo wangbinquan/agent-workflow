@@ -139,6 +139,9 @@ export interface EngineCapabilities {
    */
   claimLockClause(): SQL
 
+  /** Hold a read against every concurrent update until transaction completion. */
+  stableReadLockClause(): SQL
+
   /** 事务级 advisory lock，跨进程协调用。PG：`pg_advisory_xact_lock`；SQLite no-op。 */
   advisoryLock(tx: PersistenceTx, key: string): Promise<void>
   /**
@@ -353,6 +356,7 @@ export function createSqliteCapabilities(): EngineCapabilities {
       // 同上：独占事务里没有并发的转移者可挡。
     },
     claimLockClause: () => sql``,
+    stableReadLockClause: () => sql``,
     async advisoryLock() {
       // 单进程单写者；跨进程协调由 daemon 级 flock 承担。
     },
@@ -469,6 +473,7 @@ export function createPostgresqlCapabilities(): EngineCapabilities {
       await rawExec(tx, sql`select 1 from ${table} where ${idColumn} = ${id} for key share`)
     },
     claimLockClause: () => sql`for update skip locked`,
+    stableReadLockClause: () => sql`for share`,
     async advisoryLock(tx, key) {
       await rawExec(tx, sql`select pg_advisory_xact_lock(hashtextextended(${key}, 0))`)
     },

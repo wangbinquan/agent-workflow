@@ -45,7 +45,6 @@ import { extractWorkflowAgentRefs, stripWorkflowNodeAgentIds } from '../src/serv
 import { createUser } from './helpers/userFixture'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const SPEC = { kind: 'daily', at: '09:00', timezone: 'UTC' } as const
 const VALID_OPENCODE_RUNTIME = 'rfc224-test-opencode'
 
@@ -117,7 +116,7 @@ describe('RFC-223 PR-7 — scheduled payload writes + guards by id', () => {
   let db: DbClient
   let ownerId: string
   beforeEach(async () => {
-    db = createInMemoryDb(MIGRATIONS)
+    db = createInMemoryDb()
     await seedValidOpencodeRuntime(db)
     ownerId = await seedOwner(db)
   })
@@ -209,7 +208,7 @@ describe('RFC-223 PR-7 — workgroup member writes and launch target use canonic
   let db: DbClient
   let appHome: string
   beforeEach(async () => {
-    db = createInMemoryDb(MIGRATIONS)
+    db = createInMemoryDb()
     await seedValidOpencodeRuntime(db)
     appHome = mkdtempSync(join(tmpdir(), 'aw-rfc223pr2-'))
     process.env.AGENT_WORKFLOW_HOME = appHome

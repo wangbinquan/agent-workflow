@@ -1,3 +1,4 @@
+import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { o2Ports } from './helpers/o2Closure'
 import {
   nodeRunFixture,
@@ -398,6 +399,7 @@ describeEachProvider('RFC-328 归属与持久执行（双引擎）', (harness) =
       const claim = await module.claim({ db: database, intentId: intent.intentId })
       module.claimGate.leave(claim.permit)
       const context = createTaskExecutionContext({
+        historyRestrictions: epoch2RuntimeTestPorts(database).historyRestrictions,
         db: database,
         intentId: intent.intentId,
         token: claim.token,

@@ -19,8 +19,7 @@ export const COMMITTED_EVENT_AGGREGATE_KINDS = [
 ] as const
 export type CommittedEventAggregateKind = (typeof COMMITTED_EVENT_AGGREGATE_KINDS)[number]
 
-export type CommittedEventCutoverMode = 'legacy' | 'shadow' | 'dispatchable'
-export type CommittedEventDeliveryMode = Exclude<CommittedEventCutoverMode, 'legacy'>
+export type CommittedEventDeliveryMode = 'shadow' | 'dispatchable'
 export type CommittedEventDeliveryClass = 'critical' | 'rebuildable'
 export type CommittedEventDeliveryState = 'pending' | 'claimed' | 'accepted' | 'dead-letter'
 
@@ -61,7 +60,6 @@ export type CommittedEventRef = Readonly<{
 export type CommittedEventCutover = Readonly<{
   producer: CommittedEventProducer
   family: CommittedEventFamily
-  mode: CommittedEventCutoverMode
   epoch: number
   changedAt: number
   changeRef: string

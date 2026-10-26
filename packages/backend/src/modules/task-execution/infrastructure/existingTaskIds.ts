@@ -1,6 +1,6 @@
-import { inArray } from 'drizzle-orm'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { tablesOf } from '@/platform/persistence/sessionTables'
+import { inArray } from 'drizzle-orm'
 
 export async function existingTaskIds(
   db: PersistenceDb,

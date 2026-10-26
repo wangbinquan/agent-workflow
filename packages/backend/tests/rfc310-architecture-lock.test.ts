@@ -287,6 +287,24 @@ describe('rfc310 development-automation architecture lock', () => {
     expect(offenders).toEqual([])
   }, 30_000)
 
+  test('T108 negative fixture: a non-frozen file still consumes writer-private tables', () => {
+    const code = 'read(codeArtifacts)'
+    expect(
+      isSchemaDeclarationFile('platform/persistence/migration/epoch1/definitions.ts', code),
+    ).toBe(true)
+    expect(
+      isSchemaDeclarationFile('platform/persistence/migration/epoch1/notFrozen.ts', code),
+    ).toBe(false)
+    expect(/\bcodeArtifacts\b/.test(code)).toBe(true)
+    const frozenPath = 'platform/persistence/migration/epoch1/tables.ts'
+    const frozen = readFileSync(join(BACKEND_SRC, frozenPath), 'utf8')
+    expect(isSchemaDeclarationFile(frozenPath, frozen)).toBe(true)
+    expect(isSchemaDeclarationFile(frozenPath, `${frozen}\nread(codeArtifacts)`)).toBe(false)
+    expect(isSchemaDeclarationFile(frozenPath.replace('tables.ts', 'reader.ts'), frozen)).toBe(
+      false,
+    )
+  })
+
   test('composition entrypoint has no business branching and no db import', () => {
     // RFC-294 §2：composition 只实例化/注入——不查 DB、不做业务 if/switch。
     const text = readFileSync(join(MODULE_ROOT, 'composition.ts'), 'utf8')

@@ -1,8 +1,7 @@
+import { tablesOf } from '@/platform/persistence/sessionTables'
 // RFC-359 W4-B1 —— 节点激活快照读取：一份实现，两个 provider 共用（此前 sqlite / postgresql 两份只差客户端类型与同步 / 异步形态）。
 
-import { createRunSelectionOracleSnapshot } from './runSelection/oracle/snapshot'
-import type { NodeActivationRunSnapshot } from '../application/ports/nodeActivationSnapshotReader'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import { createRunSelectionReader } from './runSelection/table/reader'
 import { and, eq } from 'drizzle-orm'
 
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
@@ -11,11 +10,8 @@ import type { NodeActivationSnapshotReader } from '../application/ports/nodeActi
 export class DrizzleNodeActivationSnapshotReader implements NodeActivationSnapshotReader {
   constructor(private readonly db: PersistenceDb) {}
 
-  selectionFromRows(taskId: string, rows: readonly NodeActivationRunSnapshot[]) {
-    return createRunSelectionOracleSnapshot(
-      rows.map((row) => ({ ...row, taskId })),
-      { scope: { kind: 'rows' } },
-    )
+  get selection() {
+    return createRunSelectionReader(this.db)
   }
 
   async findRuns(taskId: string, nodeId: string) {
@@ -27,7 +23,7 @@ export class DrizzleNodeActivationSnapshotReader implements NodeActivationSnapsh
         nodeId: nodeRuns.nodeId,
         status: nodeRuns.status,
         iteration: nodeRuns.iteration,
-        parentNodeRunId: nodeRuns.parentNodeRunId,
+        parentNodeRunId: nodeRuns.historicalParentId,
         containerRunId: nodeRuns.containerRunId,
       })
       .from(nodeRuns)
@@ -43,7 +39,7 @@ export class DrizzleNodeActivationSnapshotReader implements NodeActivationSnapsh
         nodeId: nodeRuns.nodeId,
         status: nodeRuns.status,
         iteration: nodeRuns.iteration,
-        parentNodeRunId: nodeRuns.parentNodeRunId,
+        parentNodeRunId: nodeRuns.historicalParentId,
         containerRunId: nodeRuns.containerRunId,
       })
       .from(nodeRuns)

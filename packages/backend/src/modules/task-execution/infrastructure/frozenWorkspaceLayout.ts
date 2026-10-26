@@ -1,21 +1,25 @@
+import { projectTaskMountReadRow } from './taskRepositorySql'
 import { taskRepositoryNodePaths } from '@/modules/task-execution/domain/taskRepository'
-import { tablesOf } from '@/platform/persistence/sessionTables'
-import type { PlannedDirectoryNode, PlannedRepo } from '@agent-workflow/shared'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { ValidationError } from '@/util/errors'
+import type { PlannedDirectoryNode, PlannedRepo } from '@agent-workflow/shared'
 import { eq } from 'drizzle-orm'
 import type { PlannedSpaceLayout } from '../application/ports/preparedWorkspace'
-import { ValidationError } from '@/util/errors'
+import { taskMountReadColumns } from './taskRepositorySql'
 
 export async function loadFrozenSpaceLayout(
   db: PersistenceDb,
   sourceTaskId: string,
 ): Promise<PlannedSpaceLayout> {
-  const { taskRepos, taskSpaceNodes } = tablesOf(db)
+  const { taskSpaceNodes } = tablesOf(db)
+  const { taskRepositoryMounts: taskRepos } = tablesOf(db)
   const rows = await db
-    .select()
+    .select(taskMountReadColumns(db))
     .from(taskRepos)
     .where(eq(taskRepos.taskId, sourceTaskId))
-    .orderBy(taskRepos.repoIndex)
+    .orderBy(taskRepos.ordinal)
+    .then((rows) => rows.map(projectTaskMountReadRow))
   if (rows.length === 0) {
     throw new ValidationError(
       'source-task-not-replayable',

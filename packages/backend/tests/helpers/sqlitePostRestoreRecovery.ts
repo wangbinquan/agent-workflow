@@ -1,35 +1,21 @@
-import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
-import { composeSqliteFusionPersistence } from '@/modules/knowledge-evolution/composition/fusion'
-import type { DbClient } from '@/db/client'
+import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'
+
 import {
   restoreBackup as restoreSqliteBackup,
   type RestoreOptions,
-  type SqlitePostRestoreRecovery,
 } from '@/platform/persistence/sqlite/systemProviderRestore'
-import { repairFusionProvenance } from '@/modules/knowledge-evolution/application/fusionOrchestration'
 import {
   applyPendingRestoreIfAny as applyPendingSqliteRestore,
   type ApplyPendingRestoreOptions,
 } from '@/services/pendingRestore'
-import { TEST_SQLITE_FUSION_PARTICIPANTS } from './fusionParticipants'
-
-/** Test bootstrap for the same required post-open recovery used in production. */
-export const SQLITE_POST_RESTORE_RECOVERY: SqlitePostRestoreRecovery = Object.freeze({
-  async recover({ db, appHome }: { readonly db: DbClient; readonly appHome: string }) {
-    await repairFusionProvenance(
-      composeSqliteFusionPersistence({ db, appHome, ...TEST_SQLITE_FUSION_PARTICIPANTS }),
-    )
-  },
-})
 
 export function restoreSqliteBackupForTest(
   tarballPath: string,
   options: Omit<RestoreOptions, 'postOpenRecovery' | 'contract'>,
 ) {
   return restoreSqliteBackup(tarballPath, {
-    contract: buildLogicalSchemaContract(),
+    contract: logicalSchemaContract,
     ...options,
-    postOpenRecovery: SQLITE_POST_RESTORE_RECOVERY,
   })
 }
 
@@ -37,8 +23,7 @@ export function applyPendingSqliteRestoreForTest(
   options: Omit<ApplyPendingRestoreOptions, 'postOpenRecovery' | 'contract'>,
 ) {
   return applyPendingSqliteRestore({
-    contract: buildLogicalSchemaContract(),
+    contract: logicalSchemaContract,
     ...options,
-    postOpenRecovery: SQLITE_POST_RESTORE_RECOVERY,
   })
 }

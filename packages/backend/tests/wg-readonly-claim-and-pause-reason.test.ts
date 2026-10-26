@@ -1,3 +1,4 @@
+import { eq } from 'drizzle-orm'
 // 2026-07-21 工作组实战夜的两条根治回归锁（配套 fc 预算豁免 67fa7cdc）。
 //
 // ① fc 只读成员盲派（实测：任务 01KY25DM…10B1 三次 ROLE MISROUTE）：
@@ -21,7 +22,6 @@
 //    非 null，陈值永不外泄（列因此无需清理）。
 
 import { taskFixture, workflowFixture } from './helpers/model'
-import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { describe, expect, test } from 'bun:test'
 import { ulid } from 'ulid'
@@ -300,12 +300,10 @@ describeEachProvider('setPauseReason — 状态表单列更新（DB 级）', (ha
       startedAt: Date.now(),
       workgroupConfigJson: JSON.stringify({ maxRounds: 9 }),
     })
-    await insertOne(db, workgroupTaskState, {
-      taskId,
-      gateStatus: 'declared',
-      gateSummary: 'done-ish',
-      updatedAt: Date.now(),
-    })
+    await db
+      .update(workgroupTaskState)
+      .set({ gateStatus: 'declared', gateSummary: 'done-ish', updatedAt: Date.now() })
+      .where(eq(workgroupTaskState.taskId, taskId))
 
     await setPauseReason(db, taskId, 'max-rounds-wrapup')
     let st = await loadWorkgroupTaskState(db, taskId)

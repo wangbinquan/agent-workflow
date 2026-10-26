@@ -1,24 +1,63 @@
 // RFC-374 T10: real SQLite logical copying preserves run seq and the pruned allocation high-water row; PostgreSQL identity continues above it.
-import { patchTaskFixture } from './helpers/model'
+// RFC-395: both sources and targets use the installed epoch-2 head, including
+// native schema-history admission and the original allocator continuity checks.
 import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+import { taskFixture, workflowFixture, nodeRunFixture } from './helpers/model'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
+import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
+import { ulid } from 'ulid'
 import { first } from '@/platform/persistence/queryHelpers'
-import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { expect, test } from 'bun:test'
 import { Database } from 'bun:sqlite'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { eq } from 'drizzle-orm'
-import { loadPostgresqlMigrationHistory } from '@/platform/persistence/postgresqlMigrationHistory'
+import { eq, lt } from 'drizzle-orm'
+import { loadPostgresqlMigrationHistory } from '@/platform/persistence/schema/history/logicalHistory'
 import { openSqliteLogicalSource } from '@/platform/persistence/sqliteLogicalSource'
 import { openPostgresqlLogicalSource } from '@/platform/persistence/postgresqlLogicalSource'
 import { openPostgresqlLogicalTarget } from '@/platform/persistence/postgresqlLogicalTarget'
 import { exportLogicalDatabaseArtifact } from '@/platform/persistence/logicalDatabaseExport'
 import { restoreLogicalDatabaseBackup } from '@/platform/persistence/logicalDatabaseRestore'
-import { backfillNodeRunSequences } from '@/modules/task-execution/application/nodeRunSeqBackfill'
-import { createNodeRunSeqBackfillStore } from '@/modules/task-execution/infrastructure/legacyMigration/nodeRunSeqBackfillStore'
 import { describeEachProvider } from './helpers/eachProvider'
-import { seedSequenceTask, mintSequenceRun } from './helpers/rfc374Fixtures'
+async function seedSequenceTask(db: PersistenceDb): Promise<string> {
+  const id = ulid()
+  await workflowFixture(db, { id, name: id, definition: '{}' })
+  await taskFixture(db, {
+    id,
+    name: id,
+    workflowId: id,
+    workflowSnapshot: '{}',
+    repoPath: '/rfc374/repo',
+    worktreePath: '/rfc374/task',
+    baseBranch: 'main',
+    branch: id,
+    status: 'running',
+    inputs: '{}',
+    startedAt: 1,
+  })
+  return id
+}
+async function mintSequenceRun(
+  db: PersistenceDb,
+  taskId: string,
+  input: { id: string },
+): Promise<string> {
+  return databaseSessionFor(db).transaction(async (tx) => {
+    const { nodeRunSeqAllocations } = tablesOf(tx)
+    const [run] = await nodeRunFixture(tx, {
+      id: input.id,
+      taskId,
+      nodeId: 'n',
+      status: 'done',
+      startedAt: 1,
+    })
+    if (!run) throw new Error('node-run-seq-allocation-missing')
+    await tx.delete(nodeRunSeqAllocations).where(lt(nodeRunSeqAllocations.seq, run.seq))
+    return input.id
+  })
+}
 
 describeEachProvider(
   'RFC-374 SQLite copy source',
@@ -39,8 +78,10 @@ describeEachProvider(
           await mintSequenceRun(sourceDb, taskId, { id: 'z-old' })
           await mintSequenceRun(sourceDb, taskId, { id: 'a-new' })
           const { nodeRuns, nodeRunSeqAllocations } = tablesOf(sourceDb)
-          await patchTaskFixture(sourceDb, { id: taskId }, { status: 'done', finishedAt: 2 })
-          await backfillNodeRunSequences(createNodeRunSeqBackfillStore(sourceDb))
+          await sourceDb
+            .update(tablesOf(sourceDb).tasks)
+            .set({ status: 'done', finishedAt: 2 })
+            .where(eq(tablesOf(sourceDb).tasks.id, taskId))
           runs = await sourceDb.select().from(nodeRuns)
           allocations = await sourceDb.select().from(nodeRunSeqAllocations)
           writeFileSync(path, sqlite.serialize())
@@ -48,7 +89,7 @@ describeEachProvider(
           sqlite.close()
         }
         const history = await loadPostgresqlMigrationHistory({
-            headContract: buildLogicalSchemaContract(),
+            headContract: logicalSchemaContract,
           }),
           source = openSqliteLogicalSource({ path, contract: history.head.contract })
         try {
@@ -64,6 +105,7 @@ describeEachProvider(
               provider: 'sqlite',
               assertUnchanged: () => source.assertUnchanged(snapshot),
               readChunk: (table, after, limit) => source.readChunk(table, after, limit),
+              readMetadata: () => source.readMetadata!(),
             },
             now: () => 10,
           })
@@ -75,7 +117,7 @@ describeEachProvider(
             await pool.unsafe('DROP SCHEMA agent_workflow CASCADE')
             await pool.unsafe('DROP SCHEMA agent_workflow_meta CASCADE')
             const target = await openPostgresqlLogicalTarget({
-              headContract: buildLogicalSchemaContract(),
+              headContract: logicalSchemaContract,
               runtime,
               operationId: 'dbm_rfc374_target_copy',
               sourceGenerationId: 'dbg_rfc374_source_copy',
@@ -84,7 +126,7 @@ describeEachProvider(
             })
             try {
               await restoreLogicalDatabaseBackup({
-                headContract: buildLogicalSchemaContract(),
+                headContract: logicalSchemaContract,
                 artifactRoot,
                 expectedEnvelopeFileDigest: exported.envelopeFileDigest,
                 restoreOperationId: 'dbm_rfc374_target_copy',

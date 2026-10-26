@@ -1,3 +1,4 @@
+import { skillRowPath } from './databaseSkillTrees'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { queryRows } from '@/platform/persistence/queryHelpers'
 import type { Agent, Mcp, Plugin, Skill } from '@agent-workflow/shared'
@@ -7,7 +8,8 @@ import type {
   AgentResourceInventorySkill,
 } from '../application/agents/ports'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { agentFromPersistenceRow } from './agentPersistence'
+import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
+import { loadAgentPersistenceRows } from './agentPersistence'
 import { mcpFromPersistenceRow } from './mcpPersistence'
 import { pluginFromPersistenceRow } from './pluginPersistence'
 import { skillFromPersistenceRow } from './skillPersistence'
@@ -73,23 +75,29 @@ export function createDatabaseAgentResourceInventoryReadPort(input: {
   return createAgentResourceInventoryReadPort({
     skillAvailability: input.skillAvailability,
     async loadRows() {
-      const { agents, skills, mcps, plugins } = tablesOf(input.db)
-      const [agentRows, skillRows, mcpRows, pluginRows] = await Promise.all([
-        queryRows(input.db.select().from(agents)),
-        queryRows(input.db.select().from(skills)),
-        queryRows(input.db.select().from(mcps)),
-        queryRows(input.db.select().from(plugins)),
-      ])
-      return {
-        agents: agentRows.map(agentFromPersistenceRow),
-        skills: skillRows.map((row) => ({
-          skill: skillFromPersistenceRow(row),
-          reservationState: row.reservationState,
-          versionState: row.versionState,
-        })),
-        mcps: mcpRows.map(mcpFromPersistenceRow),
-        plugins: pluginRows.map(pluginFromPersistenceRow),
-      }
+      return databaseSessionFor(input.db).snapshotRead(async (tx) => {
+        const { agents, skills } = tablesOf(tx)
+        const { mcps, plugins } = tablesOf(tx)
+        const [agentRows, skillRows, mcpRows, pluginRows] = await Promise.all([
+          queryRows(tx.select().from(agents)),
+          queryRows(tx.select().from(skills)),
+          queryRows(tx.select().from(mcps)),
+          queryRows(tx.select().from(plugins)),
+        ])
+        return {
+          agents: await loadAgentPersistenceRows(tx, agentRows),
+          skills: skillRows.map((row) => ({
+            skill: skillFromPersistenceRow({
+              ...row,
+              managedPath: skillRowPath(row, row.id, 'live'),
+            }),
+            reservationState: row.reservationState,
+            versionState: row.versionState,
+          })),
+          mcps: mcpRows.map(mcpFromPersistenceRow),
+          plugins: pluginRows.map(pluginFromPersistenceRow),
+        }
+      })
     },
   })
 }

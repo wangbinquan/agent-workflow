@@ -8,14 +8,15 @@ export async function listSourceTerminationTargets(
   db: PersistenceDb,
   input: TaskSourceTerminationEffectInput,
 ): Promise<readonly { readonly id: string }[]> {
-  const { tasks } = tablesOf(db)
+  const { tasks, taskLaunchContexts: launch } = tablesOf(db)
   return await db
     .select({ id: tasks.id })
-    .from(tasks)
+    .from(launch)
+    .innerJoin(tasks, eq(tasks.id, launch.taskId))
     .where(
       and(
-        eq(tasks.sourceTerminationBinding, input.binding),
-        lt(tasks.sourceTerminationLaunchRev, input.streamRevision),
+        eq(launch.sourceTerminationBinding, input.binding),
+        lt(launch.sourceTerminationLaunchRev, input.streamRevision),
       ),
     )
     .orderBy(asc(tasks.invocationDepth), asc(tasks.id))

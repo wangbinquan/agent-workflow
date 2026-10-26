@@ -29,7 +29,7 @@ export type ReviewGateDocumentProjection = Readonly<{
   sourcePortName: string
   versionIndex: number
   reviewIteration: number
-  bodyPath: string
+  finalContentKey: string
   commentsJson: '[]'
   decision: 'pending'
   decisionReason: null
@@ -50,7 +50,7 @@ export type ReviewGateDocumentProjection = Readonly<{
 }>
 
 export interface ReviewGateOpenManifest {
-  readonly schemaVersion: 1
+  readonly schemaVersion: 2
   readonly kind: 'review-open'
   readonly gateRef: string
   readonly sourceSnapshotDigest: string
@@ -174,7 +174,7 @@ function decodeDocument(value: unknown): ReviewGateDocumentProjection {
     sourcePortName: stringField(value, 'sourcePortName'),
     versionIndex,
     reviewIteration: nonNegativeInteger(value, 'reviewIteration'),
-    bodyPath: stringField(value, 'bodyPath'),
+    finalContentKey: stringField(value, 'finalContentKey'),
     commentsJson: '[]',
     decision: 'pending',
     decisionReason: null,
@@ -222,7 +222,7 @@ export function decodeReviewGateOpenManifest(raw: string): ReviewGateOpenManifes
   } catch {
     invalid('review-open manifest is invalid JSON')
   }
-  if (!isRecord(value) || value.schemaVersion !== 1 || value.kind !== 'review-open') {
+  if (!isRecord(value) || value.schemaVersion !== 2 || value.kind !== 'review-open') {
     invalid('review-open manifest envelope is invalid')
   }
   if (!Array.isArray(value.documents) || value.documents.length === 0) {
@@ -268,7 +268,7 @@ export function decodeReviewGateOpenManifest(raw: string): ReviewGateOpenManifes
     invalid('review-open document set does not match its node projection')
   }
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     kind: 'review-open',
     gateRef: stringField(value, 'gateRef'),
     sourceSnapshotDigest,

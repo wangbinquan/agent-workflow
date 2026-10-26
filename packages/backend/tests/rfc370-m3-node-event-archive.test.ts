@@ -1,10 +1,11 @@
+import { tablesOf } from '@/platform/persistence/sessionTables'
 // RFC-370 v3 V6: node event chunks are `node-event-archive` publications whose
 // bytes are always re-encoded from their still-present source rows (no inline
 // copy in the database). Publication and deletion of exactly the source range
 // commit together; a service replacement resumes with the same lifetime; the
 // task object sweep releases the chunks of deleted tasks.
 import { nodeRunFixture, taskFixture, workflowFixture } from './helpers/model'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+
 import { expect, test } from 'bun:test'
 import { asc, eq } from 'drizzle-orm'
 import { createHostedBackupReleaseHorizon } from '@/modules/system-operations/infrastructure/crewstation/backupReleaseHorizon'
@@ -27,7 +28,8 @@ describeEachProvider('RFC-370 hosted node event archive', (harness) => {
   const setup = async () => {
     const db = harness.db,
       objects = objectFixture()
-    const { nodeRunEvents, hostedObjectPublications } = tablesOf(db)
+    const { nodeRunEvents } = tablesOf(db)
+    const { contentPublications } = tablesOf(db)
     await workflowFixture(db, { id: 'wf', name: 'archive', definition: '{}' })
     await taskFixture(db, {
       id: 'task',
@@ -110,8 +112,8 @@ describeEachProvider('RFC-370 hosted node event archive', (harness) => {
       publications: () => {
         return db
           .select()
-          .from(hostedObjectPublications)
-          .where(eq(hostedObjectPublications.owner, HOSTED_EVENT_ARCHIVE_OWNER))
+          .from(contentPublications)
+          .where(eq(contentPublications.owner, HOSTED_EVENT_ARCHIVE_OWNER))
       },
     }
   }
@@ -122,10 +124,11 @@ describeEachProvider('RFC-370 hosted node event archive', (harness) => {
     await expect(
       f.reopen().archive({ taskId: 'task', nodeRunId: 'run', rows: f.all.slice(0, 4) }),
     ).rejects.toThrow('lease lost')
-    const { nodeRunEvents, hostedNodeEventArchives } = tablesOf(f.db)
+    const { nodeRunEvents } = tablesOf(f.db)
+    const { hostedNodeEventArchives } = tablesOf(f.db)
     expect(await f.db.select().from(nodeRunEvents)).toHaveLength(7)
     expect(await f.db.select().from(hostedNodeEventArchives)).toMatchObject([
-      { state: 'prepared', objectId: null },
+      { state: 'prepared', contentRefJson: null },
     ])
     expect(await f.publications()).toMatchObject([{ state: 'pending', scope: 'task' }])
     f.acquire()

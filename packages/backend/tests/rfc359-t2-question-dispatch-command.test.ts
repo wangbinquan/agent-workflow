@@ -1,3 +1,4 @@
+import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { o2Ports, withO2Closure } from './helpers/o2Closure'
 // RFC-359 W1-T2a（F-H2-1 之一）—— 问题派发命令端口在两个引擎上各跑一遍。
 //
@@ -45,7 +46,9 @@ describeEachProvider('RFC-359 T2a —— 问题派发命令端口', (harness) =>
       defaultTargetNodeId: DESIGNER,
       stagedAt: Date.now(),
     })
-    const command = createQuestionDispatchCommand(db, o2Ports(db).taskLock)
+    const command = createQuestionDispatchCommand(db, o2Ports(db).taskLock, {
+      historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
+    })
     const context = createCollaborationCommandContext(
       withO2Closure({ db, questionDispatches: command }),
     )

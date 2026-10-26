@@ -1,3 +1,7 @@
+import { nodeRunFixtureColumns } from './helpers/model/nodeRun'
+import { legacyContentRef } from '@/platform/content/contentRef'
+import { contentRowColumns } from '@/platform/content/infrastructure/contentStore'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { withO2Closure } from './helpers/o2Closure'
 // RFC-052 regression: `dispatchReviewNode` must short-circuit when the
 // freshest top-level review node_run is already in a terminal state
@@ -21,7 +25,7 @@ import {
   workflowFixture,
 } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+
 import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -158,7 +162,9 @@ describeEachProvider('dispatchReviewNode terminal-state short-circuit (RFC-052)'
       sourcePortName: 'docpath',
       versionIndex: 1,
       reviewIteration: 0,
-      bodyPath: 'doc_versions/v1.md',
+      ...contentRowColumns(
+        legacyContentRef('review-body-path', 'local-file', 'doc_versions/v1.md'),
+      ),
       decision: 'approved',
       decidedAt: approvedFinishedAt,
       decidedBy: 'tester',
@@ -199,7 +205,10 @@ describeEachProvider('dispatchReviewNode terminal-state short-circuit (RFC-052)'
 
     // Approved row's status + finishedAt must be untouched.
     const approvedAfter = (
-      await db.select().from(nodeRuns).where(eq(nodeRuns.id, approvedRunId))
+      await db
+        .select(nodeRunFixtureColumns(db))
+        .from(nodeRuns)
+        .where(eq(nodeRuns.id, approvedRunId))
     )[0]!
     expect(approvedAfter.status).toBe('done')
     expect(approvedAfter.finishedAt).toBe(approvedFinishedAt)
@@ -214,7 +223,10 @@ describeEachProvider('dispatchReviewNode terminal-state short-circuit (RFC-052)'
     // future placeholders.) The terminal-state short-circuit must work
     // regardless of whether placeholders are still there.
     const placeholderAfter = (
-      await db.select().from(nodeRuns).where(eq(nodeRuns.id, placeholderRunId))
+      await db
+        .select(nodeRunFixtureColumns(db))
+        .from(nodeRuns)
+        .where(eq(nodeRuns.id, placeholderRunId))
     )[0]!
     expect(placeholderAfter.status).toBe('failed')
   })
@@ -239,6 +251,7 @@ describeEachProvider('dispatchReviewNode terminal-state short-circuit (RFC-052)'
     })
 
     const reviewNode = definition.nodes.find((n) => n.id === 'rev_1')!
+    const recording = harness.recordStatements()
     const result = await dispatchReviewNode(
       withO2Closure({
         db,
@@ -249,10 +262,24 @@ describeEachProvider('dispatchReviewNode terminal-state short-circuit (RFC-052)'
         node: reviewNode,
         iteration: 0,
       }),
-    )
+    ).finally(() => recording.stop())
+    if (harness.capabilities.isolation !== 'exclusive') {
+      const statements = recording.statements.map(({ sql }) =>
+        sql.replaceAll('"agent_workflow".', ''),
+      )
+      const root = statements.findIndex(
+        (sql) => sql.includes('from "tasks"') && sql.includes('for update'),
+      )
+      expect(root).toBeGreaterThanOrEqual(0)
+      expect(statements.findIndex((sql) => sql.startsWith('update "node_runs"'))).toBeGreaterThan(
+        root,
+      )
+    }
 
     expect(result.kind).toBe('awaiting_review')
-    const after = (await db.select().from(nodeRuns).where(eq(nodeRuns.id, reviewRunId)))[0]!
+    const after = (
+      await db.select(nodeRunFixtureColumns(db)).from(nodeRuns).where(eq(nodeRuns.id, reviewRunId))
+    )[0]!
     expect(after.status).toBe('awaiting_review')
     const dvs = await db.select().from(docVersions).where(eq(docVersions.taskId, taskId))
     expect(dvs.length).toBe(1)

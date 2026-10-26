@@ -20,15 +20,13 @@ import { describe, expect, test } from 'bun:test'
 import { Database } from 'bun:sqlite'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 
 import { buildActor, type Actor } from '../src/auth/actor'
 import { openDb } from '../src/db/client'
 import { isDbSnapshotInProgress, vacuumIntoOffThread } from '../src/services/backup'
 import { runWalCheckpointTick } from '../src/services/backupScheduler'
 import { listTaskOperationsPage } from './helpers/taskListPage'
-
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 function admin(): Actor {
   return buildActor({
@@ -42,7 +40,7 @@ describe('RFC-311 §6.6 — a running backup must not freeze the task list', () 
     const home = mkdtempSync(join(tmpdir(), 'aw-rfc311-backup-'))
     try {
       const dbPath = join(home, 'db.sqlite')
-      const db = openDb({ path: dbPath, migrationsFolder: MIGRATIONS })
+      const db = openDb({ path: dbPath })
       const { users } = tablesOf(db)
       await insertOne(db, users, {
         id: 'admin',

@@ -25,8 +25,12 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { monotonicFactory } from 'ulid'
 import { and, eq } from 'drizzle-orm'
-import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
-import { DEFAULT_PROTOCOL_RETRY_BUDGET } from '@agent-workflow/shared'
+import {
+  type WorkflowDefinition,
+  type WorkflowNode,
+  DEFAULT_PROTOCOL_RETRY_BUDGET,
+} from '@agent-workflow/shared'
+
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { runTaskWithRealTestTopology as runTask } from './helpers/taskExecutionTestTopology'
 import { createAgent } from '../src/modules/resource-catalog/infrastructure/legacy/agent'
@@ -38,7 +42,7 @@ import { runGit } from '../src/util/git'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 
 const ulid = monotonicFactory()
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+
 const SCENARIO_STUB = resolve(import.meta.dir, 'fixtures', 'scenario-opencode.ts')
 const FLOW_TIMEOUT_MS = 30_000
 setDefaultTimeout(FLOW_TIMEOUT_MS + 10_000)
@@ -59,7 +63,7 @@ async function buildHarness(): Promise<Harness> {
   const stateDir = join(tmp, 'state')
   const planFile = join(tmp, 'plan.json')
   const repoPath = join(tmp, 'repo')
-  const worktreePath = join(tmp, 'wt')
+  const worktreePath = join(appHome, 'wt')
   mkdirSync(appHome, { recursive: true })
   mkdirSync(stateDir, { recursive: true })
   for (const p of [repoPath, worktreePath]) {
@@ -75,7 +79,7 @@ async function buildHarness(): Promise<Harness> {
   const previousState = process.env.SCENARIO_STATE_DIR
   process.env.SCENARIO_PLAN_FILE = planFile
   process.env.SCENARIO_STATE_DIR = stateDir
-  const db = createInMemoryDb(MIGRATIONS)
+  const db = createInMemoryDb()
   await seedTestDefaultOpencodeRuntime(db)
   return {
     db,
@@ -273,7 +277,11 @@ describe('RFC-243 e2e — call-workgroup 全链', () => {
       })
 
       const parent = (await readTaskFixtures(h.db, { id: parentTaskId }))[0]!
-      expect(parent.status).toBe('done')
+      expect({
+        status: parent.status,
+        errorSummary: parent.errorSummary,
+        errorMessage: parent.errorMessage,
+      }).toEqual({ status: 'done', errorSummary: null, errorMessage: null })
 
       const children = await readTaskFixtures(h.db, { parentTaskId })
       expect(children.length).toBe(1)

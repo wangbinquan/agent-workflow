@@ -1,9 +1,13 @@
+import { contentRefOf, databaseContentText } from '@/platform/content/infrastructure/contentStore'
 // RFC-359 W4-B4 —— 记忆蒸馏工作存储：一份实现，两个 provider 共用。
 
-import { listNodeEventContents } from '@/modules/task-execution/public/queries'
-import { createTaskKnowledgeQueries } from '@/modules/task-execution/public/queries'
-import { createNodeOutputQueries } from '@/modules/task-execution/public/queries'
-import { createNodeRunQueries } from '@/modules/task-execution/public/queries'
+import {
+  listNodeEventContents,
+  createTaskKnowledgeQueries,
+  createNodeOutputQueries,
+  createNodeRunQueries,
+} from '@/modules/task-execution/public/queries'
+
 import { insertOne } from '@/platform/persistence/singleInsert'
 import type { ClarifyAnswerQueries } from '@/modules/collaboration/public/queries'
 import { tablesOf } from '@/platform/persistence/sessionTables'
@@ -175,10 +179,28 @@ export class DrizzleMemoryDistillWorkStore implements MemoryDistillWorkStore {
         taskId: docVersions.taskId,
         reviewNodeId: docVersions.reviewNodeId,
         decision: docVersions.decision,
-        bodyPath: docVersions.bodyPath,
+        contentRefJson: docVersions.contentRefJson,
+        contentInlineBytes: docVersions.contentInlineBytes,
       })
       .from(docVersions)
       .where(inArray(docVersions.id, [...ids]))
+      .then((rows) =>
+        rows.map((row) => {
+          const ref = contentRefOf(row)
+          return {
+            id: row.id,
+            taskId: row.taskId,
+            reviewNodeId: row.reviewNodeId,
+            decision: row.decision,
+            bodyPath:
+              ref.kind === 'local-file' &&
+              ['review-body', 'review-body-path'].includes(ref.location.codec) &&
+              typeof ref.location.value === 'string'
+                ? ref.location.value
+                : `doc-content:${row.id}`,
+          }
+        }),
+      )
   }
 
   async listReviewComments(ids: readonly string[]) {
@@ -187,13 +209,24 @@ export class DrizzleMemoryDistillWorkStore implements MemoryDistillWorkStore {
     return await this.db
       .select({
         docVersionId: reviewComments.docVersionId,
-        body: reviewComments.commentText,
+        contentRefJson: reviewComments.contentRefJson,
+        contentInlineBytes: reviewComments.contentInlineBytes,
         anchorParagraphIdx: reviewComments.anchorParagraphIdx,
         selectedText: reviewComments.selectedText,
       })
       .from(reviewComments)
       .where(inArray(reviewComments.docVersionId, [...ids]))
       .orderBy(asc(reviewComments.anchorParagraphIdx), asc(reviewComments.anchorOffsetStart))
+      .then((rows) =>
+        Promise.all(
+          rows.map(async (row) => ({
+            docVersionId: row.docVersionId,
+            body: await databaseContentText(this.db, row),
+            anchorParagraphIdx: row.anchorParagraphIdx,
+            selectedText: row.selectedText,
+          })),
+        ),
+      )
   }
 
   async listFeedbackSources(ids: readonly string[]) {
@@ -212,7 +245,7 @@ export class DrizzleMemoryDistillWorkStore implements MemoryDistillWorkStore {
 
   // RFC-366 agent-run 源：结算的那一行 node_run 本身。
   async listAgentRunSources(ids: readonly string[]) {
-    return createNodeRunQueries(this.db).listFields({ runIds: ids }, [
+    return createNodeRunQueries(this.db).listHistoryFields({ runIds: ids }, [
       'id',
       'taskId',
       'nodeId',
@@ -259,7 +292,7 @@ export class DrizzleMemoryDistillWorkStore implements MemoryDistillWorkStore {
    * 在未结算的行上还是 null。
    */
   async listTaskNodeStatuses(taskIds: readonly string[]) {
-    return (await createNodeRunQueries(this.db).latestPerNode(taskIds)).map((row) => ({
+    return (await createNodeRunQueries(this.db).latestHistoryPerNode(taskIds)).map((row) => ({
       taskId: row.taskId,
       nodeId: row.nodeId,
       nodeRunId: row.id,
@@ -270,7 +303,7 @@ export class DrizzleMemoryDistillWorkStore implements MemoryDistillWorkStore {
   }
 
   async listNodeRuns(ids: readonly string[]) {
-    return createNodeRunQueries(this.db).listFields({ runIds: ids }, [
+    return createNodeRunQueries(this.db).listHistoryFields({ runIds: ids }, [
       'id',
       'promptText',
       'promptPath',

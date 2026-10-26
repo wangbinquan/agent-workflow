@@ -1,3 +1,4 @@
+import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { o2Ports } from './helpers/o2Closure'
 // RFC-395 II-a A2: replay after the NULL scalar node-tree case now crosses list ports.
 // Standalone defect fix approved 2026-10-21: a single non-root group member
@@ -15,6 +16,8 @@ import {
   nodeRunOutputFixture,
   patchNodeRunFixture,
   readTaskFixtures,
+  readNodeRunFixtures,
+  checkpointValues,
 } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, beforeAll, beforeEach, expect, test } from 'bun:test'
@@ -57,10 +60,6 @@ async function git(cwd: string, args: string[]): Promise<string> {
   return result.stdout.trim()
 }
 
-function decodeMap(scalar: string | null, perRepo: string | null): Record<string, string> {
-  return perRepo === null ? (scalar === null ? {} : { '': scalar }) : JSON.parse(perRepo)
-}
-
 describeEachProvider('single non-root member isolation checkpoint regression', (harness) => {
   let tmp: string
   let appHome: string
@@ -95,6 +94,7 @@ describeEachProvider('single non-root member isolation checkpoint regression', (
     })
     const binding: IsolatedAgentRunBinding = {
       persistence: createTaskExecutionPersistence(db, {
+        historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
         recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
       }),
     }
@@ -128,8 +128,7 @@ describeEachProvider('single non-root member isolation checkpoint regression', (
       return { runId, handle }
     }
     async function row(runId: string) {
-      const { nodeRuns } = tablesOf(db)
-      return (await db.select().from(nodeRuns).where(eq(nodeRuns.id, runId)))[0]!
+      return (await readNodeRunFixtures(db, { id: runId }))[0]!
     }
     return { task, binding, writeSem, state, isolate, row }
   }
@@ -167,8 +166,8 @@ describeEachProvider('single non-root member isolation checkpoint regression', (
           await persistIsoBase(f.binding, runId, handle)
           await persistIsoNodeTree(f.binding, runId, trees, withHandle ? handle : undefined)
           const row = await f.row(runId)
-          expect(decodeMap(row.isoNodeTree, row.isoNodeTreeReposJson)).toEqual(trees)
-          expect(decodeMap(row.isoBaseSnapshot, row.isoBaseSnapshotReposJson)).toEqual(
+          expect(checkpointValues(row.checkpoints, 'nodeTree')).toEqual(trees)
+          expect(checkpointValues(row.checkpoints, 'isolationBase')).toEqual(
             Object.fromEntries(handle.repos.map((repo) => [repo.mountPath, repo.baseSnapshot])),
           )
           const topology = Object.fromEntries(
@@ -180,17 +179,24 @@ describeEachProvider('single non-root member isolation checkpoint regression', (
               },
             ]),
           )
+          expect(row.checkpoints.map((checkpoint) => checkpoint.mountPath).sort()).toEqual(
+            [...shape.mounts].sort(),
+          )
+          expect(checkpointValues(row.checkpoints, 'submodules')).toEqual(topology)
           if (shape.scalar) {
-            expect(row.isoNodeTree).toBe(trees['']!)
-            expect(row.isoNodeTreeReposJson).toBeNull()
-            expect(row.isoBaseSnapshotReposJson).toBeNull()
-            expect(JSON.parse(row.isoSubmodulesJson!)).toEqual(topology[''])
-            expect(row.isoSubmodulesReposJson).toBeNull()
+            expect(checkpointValues(row.checkpoints, 'nodeTree')['']).toBe(trees['']!)
+            expect(checkpointValues(row.checkpoints, 'submodules')['']).toEqual(topology[''])
+            expect(row.checkpoints).toHaveLength(1)
           } else {
-            expect(row.isoNodeTree).toBeNull()
-            expect(row.isoBaseSnapshot).toBeNull()
-            expect(row.isoSubmodulesJson).toBeNull()
-            expect(JSON.parse(row.isoSubmodulesReposJson!)).toEqual(topology)
+            expect(Object.keys(checkpointValues(row.checkpoints, 'nodeTree')).sort()).toEqual(
+              [...shape.mounts].sort(),
+            )
+            expect(Object.keys(checkpointValues(row.checkpoints, 'isolationBase')).sort()).toEqual(
+              [...shape.mounts].sort(),
+            )
+            expect(Object.keys(checkpointValues(row.checkpoints, 'submodules')).sort()).toEqual(
+              [...shape.mounts].sort(),
+            )
           }
           expect(row.mergeState).toBe('pending-merge')
         },
@@ -336,9 +342,7 @@ describeEachProvider('single non-root member isolation checkpoint regression', (
         })
         expect(result.kind).toBe('conflict-human')
         const row = await f.row(runId)
-        const topology = shape.scalar
-          ? { '': JSON.parse(row.isoSubmodulesJson!) }
-          : JSON.parse(row.isoSubmodulesReposJson!)
+        const topology = checkpointValues(row.checkpoints, 'submodules')
         expect(topology?.[repo.mountPath]).toEqual({
           subBases: { vendor: 'sub-base' },
           poolDirs: { vendor: join(tmp, 'pool') },

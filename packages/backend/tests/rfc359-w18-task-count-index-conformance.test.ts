@@ -12,20 +12,24 @@ import {
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { rawRows } from '@/platform/persistence/queryHelpers'
-import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import { persistenceHead } from '@/bootstrap/persistenceHead'
 import { expect, test } from 'bun:test'
 import { sql } from 'drizzle-orm'
 import { buildActor } from '@/auth/actor'
 import { composeRepositoryWorkspaceStore } from '@/modules/source-control/infrastructure/repositoryWorkspaceStore'
 import { createTaskOverviewQuery } from '@/modules/task-execution/infrastructure/taskOverviewQuery'
-import { loadPostgresqlMigrationHistory } from '@/platform/persistence/postgresqlMigrationHistory'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 import type { RecordedStatement } from './helpers/statementRecorder'
 
 const since = 1_700_000_000_000
 const repoIds = ['w18-repo-a', 'w18-repo-b', 'w18-repo-c'] as const
 const indexes = [
-  { name: 'idx_tasks_cached_repo_task', columns: ['cached_repo_id', 'id'] },
+  {
+    name: 'task_workspaces_requested_cached_repo',
+    columns: [null, 'task_id'],
+    expression: 'requested_source',
+  },
+  { name: 'task_repository_mounts_cached_repo_task', columns: ['cached_repo_id', 'task_id'] },
   {
     name: 'idx_tasks_overview_counts',
     columns: ['status', 'parent_task_id', 'catalog_visibility', 'finished_at'],
@@ -93,6 +97,7 @@ async function seed(harness: ProviderHarness) {
     ].map(([taskId, repoIndex, cachedRepoId]) => ({
       taskId: String(taskId),
       repoIndex: Number(repoIndex),
+      mountPath: `repo-${repoIndex}`,
       cachedRepoId: cachedRepoId === null ? null : String(cachedRepoId),
       repoPath: '/fixture/repo',
       branch: `task/${taskId}`,
@@ -200,10 +205,10 @@ test('count statement comparison ignores only concurrent completion order', () =
 })
 
 describeEachProvider('RFC-359 W18 count covering indexes', (harness) => {
-  test('actual provider catalogs contain both exact column sequences', async () => {
+  test('actual provider catalogs contain the overview and both repository-reference indexes', async () => {
     for (const index of indexes) {
       if (harness.capabilities.provider === 'sqlite') {
-        const columns = await rawRows<{ name: string }>(
+        const columns = await rawRows<{ name: string | null }>(
           harness.db,
           sql.raw(`PRAGMA index_info('${index.name}')`),
         )
@@ -216,7 +221,11 @@ describeEachProvider('RFC-359 W18 count covering indexes', (harness) => {
         `,
         )
         expect(rows).toHaveLength(1)
-        expect(rows[0]!.indexdef).toContain(`(${index.columns.join(', ')})`)
+        if ('expression' in index) {
+          expect(rows[0]!.indexdef).toContain('requested_source')
+          expect(rows[0]!.indexdef).toContain('cachedRepoId')
+          expect(rows[0]!.indexdef).toContain('task_id')
+        } else expect(rows[0]!.indexdef).toContain(`(${index.columns.join(', ')})`)
         expect(rows[0]!.indexdef).not.toContain(' WHERE ')
       }
     }
@@ -239,15 +248,15 @@ describeEachProvider('RFC-359 W18 count covering indexes', (harness) => {
     ])
     // RFC-395 O1 M12/M25: mounted and requested-only counts share one indexed owner query.
     expect(withIndexes.statements).toHaveLength(6)
-    const history = await loadPostgresqlMigrationHistory({
-      headContract: buildLogicalSchemaContract(),
+    const statements = persistenceHead()[harness.capabilities.provider].head
+    const recreate = indexes.map((index) => {
+      const declaration = statements.find(
+        (statement) =>
+          statement.kind === 'index' && statement.logicalId.endsWith(`:index:${index.name}`),
+      )
+      if (!declaration) throw new Error(`missing target index ${index.name}`)
+      return declaration.sql
     })
-    const recreate =
-      harness.capabilities.provider === 'sqlite'
-        ? indexes.map(
-            (index) => `CREATE INDEX ${index.name} ON tasks (${index.columns.join(', ')})`,
-          )
-        : history.steps[0]!.indexAdditions.map((addition) => addition.statement.sql)
     if (harness.capabilities.provider === 'sqlite') {
       const plans = await Promise.all(
         withIndexes.statements.map((statement) => harness.explain(statement)),
@@ -257,8 +266,8 @@ describeEachProvider('RFC-359 W18 count covering indexes', (harness) => {
           .slice(0, 4)
           .every((plan) => plan.includes('COVERING INDEX idx_tasks_overview_counts')),
       ).toBe(true)
-      expect(plans[4]).toContain('COVERING INDEX idx_tasks_cached_repo_task')
-      expect(plans[4]).toContain('COVERING INDEX idx_task_repos_cached_repo_task')
+      expect(plans[4]).toContain('COVERING INDEX task_workspaces_requested_cached_repo')
+      expect(plans[4]).toContain('COVERING INDEX task_repository_mounts_cached_repo_task')
     }
     let removed = 0
     try {

@@ -1,3 +1,6 @@
+import { sha256Hex } from '@/util/hash'
+import { inlineContentColumns } from '@/platform/content/infrastructure/contentStore'
+import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { composeHumanGateTaskLockPort } from '@/modules/task-execution/composition'
 // RFC-359 W1-T1（前置）—— human-gate 操作日志（journal）与其 db-owning 端口实现在两个引擎上各跑一遍。
 //
@@ -84,7 +87,11 @@ async function expectOperationError(
   expect((error as HumanGateOperationError).code).toBe(code)
 }
 
-const journal = new DatabaseHumanGateOperationJournal(composeHumanGateTaskLockPort)
+const journal = (db: PersistenceTx) =>
+  new DatabaseHumanGateOperationJournal(
+    composeHumanGateTaskLockPort,
+    epoch2RuntimeTestPorts(db).historyRestrictions,
+  )
 
 function begin(
   tx: PersistenceTx,
@@ -92,13 +99,16 @@ function begin(
   value: CanonicalHumanGateRequest,
   idempotencyKey: string,
 ) {
-  return journal.beginTx({ tx, operationId, request: value, idempotencyKey, now: NOW })
+  return journal(tx).beginTx({ tx, operationId, request: value, idempotencyKey, now: NOW })
 }
 
 describeEachProvider('RFC-359 T1 —— human-gate 操作日志', (harness) => {
   test('不会恢复认领一个有意等待任务 owner 的 manual-question 操作', async () => {
     await seedTask(harness.db)
-    const persistence = new DatabaseHumanGateOperationPersistence(harness.session, journal)
+    const persistence = new DatabaseHumanGateOperationPersistence(
+      harness.session,
+      journal(harness.db),
+    )
     const created = await persistence.begin({
       operationId: 'manual-wait',
       request: request({
@@ -175,7 +185,7 @@ describeEachProvider('RFC-359 T1 —— human-gate 操作日志', (harness) => {
       await begin(tx, 'operation-a', request(), 'decision-key')
       await expectOperationError(
         () =>
-          journal.markPreparedTx({
+          journal(tx).markPreparedTx({
             tx,
             operationId: 'operation-a',
             expectedClaimEpoch: 2,
@@ -184,7 +194,7 @@ describeEachProvider('RFC-359 T1 —— human-gate 操作日志', (harness) => {
           }),
         'human-gate-operation-stale',
       )
-      const prepared = await journal.markPreparedTx({
+      const prepared = await journal(tx).markPreparedTx({
         tx,
         operationId: 'operation-a',
         expectedClaimEpoch: 1,
@@ -192,7 +202,7 @@ describeEachProvider('RFC-359 T1 —— human-gate 操作日志', (harness) => {
         now: NOW + 2,
       })
       expect(prepared.state).toBe('prepared')
-      const committed = await journal.commitTx({
+      const committed = await journal(tx).commitTx({
         tx,
         operationId: 'operation-a',
         expectedClaimEpoch: 1,
@@ -207,7 +217,7 @@ describeEachProvider('RFC-359 T1 —— human-gate 操作日志', (harness) => {
       })
       expect(
         (
-          await journal.commitTx({
+          await journal(tx).commitTx({
             tx,
             operationId: 'operation-a',
             expectedClaimEpoch: 1,
@@ -218,7 +228,7 @@ describeEachProvider('RFC-359 T1 —— human-gate 操作日志', (harness) => {
       ).toBe(receiptJson)
       await expectOperationError(
         () =>
-          journal.commitTx({
+          journal(tx).commitTx({
             tx,
             operationId: 'operation-a',
             expectedClaimEpoch: 1,
@@ -229,7 +239,7 @@ describeEachProvider('RFC-359 T1 —— human-gate 操作日志', (harness) => {
       )
       expect(
         (
-          await journal.completeTx({
+          await journal(tx).completeTx({
             tx,
             operationId: 'operation-a',
             expectedClaimEpoch: 1,
@@ -238,7 +248,7 @@ describeEachProvider('RFC-359 T1 —— human-gate 操作日志', (harness) => {
         ).state,
       ).toBe('completed')
       expect(
-        await journal.latestGateRevisionTx({
+        await journal(tx).latestGateRevisionTx({
           tx,
           gateKind: 'review',
           gateRef: 'review:node-a:iteration-1',
@@ -257,7 +267,7 @@ describeEachProvider('RFC-359 T1 —— human-gate 操作日志', (harness) => {
     })
     await harness.session.transaction(async (tx) => {
       await begin(tx, 'operation-artifacts', openRequest, 'open-key')
-      await journal.declareArtifactsTx({
+      await journal(tx).declareArtifactsTx({
         tx,
         operationId: 'operation-artifacts',
         artifacts: [
@@ -265,24 +275,29 @@ describeEachProvider('RFC-359 T1 —— human-gate 操作日志', (harness) => {
             artifactKey: 'doc:0001',
             stagedPath: '.agent-workflow/staging/operation-artifacts/doc-1.md',
             finalPath: '.agent-workflow/reviews/task-359/doc-1.md',
-            sha256: 'digest-1',
-            byteSize: 42,
+            sha256: sha256Hex(Buffer.from('gate document')),
+            byteSize: Buffer.byteLength('gate document'),
           },
         ],
         now: NOW + 1,
       })
       await expectOperationError(
         () =>
-          journal.markPreparedTx({
+          journal(tx).markPreparedTx({
             tx,
             operationId: 'operation-artifacts',
             expectedClaimEpoch: 1,
-            manifestJson: JSON.stringify({ schemaVersion: 1, kind: 'review-open' }),
+            manifestJson: JSON.stringify({ schemaVersion: 2, kind: 'review-open' }),
             now: NOW + 2,
           }),
         'human-gate-operation-manifest-invalid',
       )
-      await journal.transitionArtifactTx({
+      const published = inlineContentColumns(Buffer.from('gate document'), 'text/markdown')
+      await tx
+        .update(tablesOf(tx).collaborationGateArtifacts)
+        .set(published)
+        .where(eq(tablesOf(tx).collaborationGateArtifacts.operationId, 'operation-artifacts'))
+      await journal(tx).transitionArtifactTx({
         tx,
         operationId: 'operation-artifacts',
         artifactKey: 'doc:0001',
@@ -291,14 +306,14 @@ describeEachProvider('RFC-359 T1 —— human-gate 操作日志', (harness) => {
         receiptJson: '{"written":true}',
         now: NOW + 3,
       })
-      await journal.markPreparedTx({
+      await journal(tx).markPreparedTx({
         tx,
         operationId: 'operation-artifacts',
         expectedClaimEpoch: 1,
-        manifestJson: JSON.stringify({ schemaVersion: 1, kind: 'review-open' }),
+        manifestJson: JSON.stringify({ schemaVersion: 2, kind: 'review-open' }),
         now: NOW + 4,
       })
-      await journal.commitTx({
+      await journal(tx).commitTx({
         tx,
         operationId: 'operation-artifacts',
         expectedClaimEpoch: 1,
@@ -323,7 +338,7 @@ describeEachProvider('RFC-359 T1 —— human-gate 操作日志', (harness) => {
       ).toBe('consumed')
       await expectOperationError(
         () =>
-          journal.completeTx({
+          journal(tx).completeTx({
             tx,
             operationId: 'operation-artifacts',
             expectedClaimEpoch: 1,
@@ -331,7 +346,7 @@ describeEachProvider('RFC-359 T1 —— human-gate 操作日志', (harness) => {
           }),
         'human-gate-operation-transition-invalid',
       )
-      await journal.transitionArtifactTx({
+      await journal(tx).transitionArtifactTx({
         tx,
         operationId: 'operation-artifacts',
         artifactKey: 'doc:0001',
@@ -342,7 +357,7 @@ describeEachProvider('RFC-359 T1 —— human-gate 操作日志', (harness) => {
       })
       expect(
         (
-          await journal.completeTx({
+          await journal(tx).completeTx({
             tx,
             operationId: 'operation-artifacts',
             expectedClaimEpoch: 1,
@@ -351,7 +366,7 @@ describeEachProvider('RFC-359 T1 —— human-gate 操作日志', (harness) => {
         ).state,
       ).toBe('completed')
       expect(
-        (await journal.listArtifactsTx(tx, 'operation-artifacts')).map((a) => a.state),
+        (await journal(tx).listArtifactsTx(tx, 'operation-artifacts')).map((a) => a.state),
       ).toEqual(['finalized'])
     })
 
@@ -387,14 +402,14 @@ describeEachProvider('RFC-359 T1 —— human-gate 操作日志', (harness) => {
     })
     await harness.session.transaction(async (tx) => {
       await begin(tx, 'legacy-operation', legacy, 'legacy:review:node-a:1')
-      await journal.commitTx({
+      await journal(tx).commitTx({
         tx,
         operationId: 'legacy-operation',
         expectedClaimEpoch: 1,
         receiptJson: '{"legacy":true}',
         now: NOW + 1,
       })
-      await journal.completeTx({
+      await journal(tx).completeTx({
         tx,
         operationId: 'legacy-operation',
         expectedClaimEpoch: 1,
@@ -418,7 +433,10 @@ describeEachProvider('RFC-359 T1 —— human-gate 操作日志', (harness) => {
 
   test('恢复认领：从未认领过（claim_expires_at 为 NULL）的操作排在最前，且认领推进 claimEpoch', async () => {
     await seedTask(harness.db)
-    const persistence = new DatabaseHumanGateOperationPersistence(harness.session, journal)
+    const persistence = new DatabaseHumanGateOperationPersistence(
+      harness.session,
+      journal(harness.db),
+    )
     await harness.session.transaction(async (tx) => {
       await begin(tx, 'op-expired', request({ gateRef: 'review:expired' }), 'k-expired')
       await begin(tx, 'op-never', request({ gateRef: 'review:never' }), 'k-never')

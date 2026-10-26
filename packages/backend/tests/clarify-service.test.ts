@@ -1,3 +1,5 @@
+import { nodeRunFixtureColumns } from './helpers/model/nodeRun'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { withO2Closure } from './helpers/o2Closure'
 // RFC-023 PR-B T9 — lock the clarify service contract.
 //
@@ -27,7 +29,7 @@ import {
   workflowFixture,
   readNodeRunFixtures,
 } from './helpers/model'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+
 import { first as firstRow } from '@/platform/persistence/queryHelpers'
 import { describeEachProvider } from './helpers/eachProvider'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
@@ -151,7 +153,8 @@ describeEachProvider('createClarifyRound', (harness) => {
 
     // Pre-existing source agent node_run (asking node_run).
     const sourceRunId = 'nr_source_1'
-    const { nodeRuns, clarifyRounds, taskQuestions } = tablesOf(db)
+    const { taskQuestions } = tablesOf(db)
+    const { nodeRuns, clarifyRounds } = tablesOf(db)
     await nodeRunFixture(db, {
       id: sourceRunId,
       taskId,
@@ -188,7 +191,10 @@ describeEachProvider('createClarifyRound', (harness) => {
       .where(eq(clarifyRounds.id, session.id))
     expect(sessionRows[0]?.status).toBe('awaiting_human')
 
-    const nrRows = await db.select().from(nodeRuns).where(eq(nodeRuns.id, clarifyNodeRunId))
+    const nrRows = await db
+      .select(nodeRunFixtureColumns(db))
+      .from(nodeRuns)
+      .where(eq(nodeRuns.id, clarifyNodeRunId))
     expect(nrRows[0]?.status).toBe('awaiting_human')
     expect(nrRows[0]?.nodeId).toBe('clarify1')
     expect((await readTaskFixtures(db, { id: taskId }))[0]?.status).toBe('awaiting_human')
@@ -210,7 +216,8 @@ describeEachProvider('createClarifyRound', (harness) => {
     const db = await createProjectionDb(harness.db)
     const { taskId } = await seedTask(db)
     const sourceRunId = 'nr_source_reemit'
-    const { clarifyRounds, taskQuestions, collaborationGateOperations } = tablesOf(db)
+    const { taskQuestions, collaborationGateOperations } = tablesOf(db)
+    const { clarifyRounds } = tablesOf(db)
     await nodeRunFixture(db, {
       id: sourceRunId,
       taskId,

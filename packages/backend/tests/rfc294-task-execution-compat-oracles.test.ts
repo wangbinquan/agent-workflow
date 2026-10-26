@@ -39,7 +39,7 @@ import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { abortAllActiveTasks, isTaskActive } from '@/services/task'
 import { launchTestTask, launchTestTaskWithLocalRepo } from './helpers/productionTaskLaunch'
-import { type MaterializedSpace } from '@/modules/source-control/infrastructure/workspaceMaterializer'
+import type { MaterializedSpace } from '@/modules/source-control/infrastructure/workspaceMaterializer'
 
 import { cancelViaEngine } from './helpers/cancelEngine'
 import { runGit } from '../src/util/git'
@@ -48,8 +48,6 @@ import {
   runTaskWithRealTestTopology as runTask,
 } from './helpers/taskExecutionTestTopology'
 import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
-
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 interface Harness {
   db: DbClient
@@ -107,7 +105,7 @@ async function buildHarness(): Promise<Harness> {
   writeFileSync(doneMock, doneMockSource(ctrlDir))
   writeFileSync(slowMock, slowMockSource(ctrlDir))
 
-  const db = createInMemoryDb(MIGRATIONS)
+  const db = createInMemoryDb()
   const agentId = ulid()
   await agentFixture(db, {
     id: agentId,
@@ -158,7 +156,7 @@ async function seedTask(
 ): Promise<{ taskId: string; failedRunId?: string }> {
   const taskId = ulid()
   const branch = `rfc294/${taskId}`
-  const worktreePath = join(harness.root, 'seeded-worktrees', taskId)
+  const worktreePath = join(harness.appHome, 'seeded-worktrees', taskId)
   mkdirSync(resolve(worktreePath, '..'), { recursive: true })
   await runGit(harness.sourceRepo, ['worktree', 'add', '-q', '-b', branch, worktreePath, 'main'])
   const head = (await runGit(worktreePath, ['rev-parse', 'HEAD'])).stdout.trim()

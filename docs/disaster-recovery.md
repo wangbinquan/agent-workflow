@@ -2,13 +2,18 @@
 
 本文面向运维 / 自部署用户，覆盖 agent-workflow 的备份、恢复、启动完整性检查与恢复后处置（RFC-213）。
 
-平台的全部状态落在 `~/.agent-workflow/`（可用 `AGENT_WORKFLOW_HOME` 改位置）两处：
+本篇默认当前 epoch-2。单机数据根是 `~/.agent-workflow/`（可用 `AGENT_WORKFLOW_HOME` 改位置）；
+PostgreSQL / CrewStation 使用独立数据库及选定的内容后端。恢复先辨别备份 epoch，再选路径：
 
-- **SQLite 库** `db.sqlite`（WAL 模式）——任务、工作流、代理、ACL、记忆、审计等一切结构化状态；
+- **SQLite 库**由 `database-generation.json` 的 v2 pointer 选择，通常是
+  `databases/<generationId>/db.sqlite`（WAL 模式）；结构化状态及 native history/meta 都在该库中。
+  根目录旧 `db.sqlite` 可能是尚未收尾的 epoch-1 源，不能拿它覆盖当前库；
 - **磁盘工作区** `worktrees/`（每任务一个 git worktree）、`repos/`（源仓镜像）、`runs/`、`logs/`。
 
-备份产物统一是 `~/.agent-workflow/backups/` 下的 `.tar.gz`，内含 `manifest.json`
-（种类、产生它的二进制版本、迁移身份），恢复时的版本闸靠它判定。
+本地系统备份位于 `~/.agent-workflow/backups/`；SQLite tar 包含 `manifest.json` 和原生
+数据库快照，逻辑备份按 recorded contract / artifact manifest 标识。托管备份存为平台对象。
+epoch-2 逻辑备份的 `epoch2-metadata.json` 绑定摘要，保留转换 archive、history restrictions、
+确认/批准材料及 generation lineage；不能只复制 business 表。SQLite 快照保留库内同类元数据。
 
 **备份永远不含 `secret.key` 与 `token`**。`secret.key` 是仓库凭据的加密钥匙——请与备份一起
 **单独**保管（见 [异机恢复](#4-异机恢复与凭据)）。
@@ -25,18 +30,19 @@ agent-workflow backup [--include-worktrees]
 
 产出 `backups/agent-workflow-<时间戳>.tar.gz`，内容：
 
-| 内容            | 说明                                             |
-| --------------- | ------------------------------------------------ |
-| `db.sqlite`     | `VACUUM INTO` 一致性快照                         |
-| `config.json`   | daemon 配置                                      |
-| `skills/`       | 完整技能目录（文件系统是技能的事实源）           |
-| `workflows/`    | 每个工作流一份 YAML（可移植形式；DB 里同样有）   |
-| `manifest.json` | 种类 / 二进制版本 / 迁移身份（恢复版本闸的依据） |
-| `worktrees/`    | 仅 `--include-worktrees` 时（见下）              |
+| 内容            | 说明                                                         |
+| --------------- | ------------------------------------------------------------ |
+| `db.sqlite`     | `VACUUM INTO` 一致性快照                                     |
+| `config.json`   | daemon 配置                                                  |
+| `skills/`       | 本地技能树；数据库内容按 ContentRef / content bytes 一并保留 |
+| `workflows/`    | 每个工作流一份 YAML（可移植形式；DB 里同样有）               |
+| `manifest.json` | 种类 / 二进制版本 / 迁移身份（恢复版本闸的依据）             |
+| `worktrees/`    | 仅 `--include-worktrees` 时（见下）                          |
 
 不包含：`secret.key`、`token`、`repos/`、`runs/`、`logs/`，默认也不含 `worktrees/`。
 
-该命令自己打开数据库（顺带应用 pending 迁移），daemon 在不在跑都能执行。
+该命令选择当前 pointer 指向的数据库，daemon 在不在跑都能执行。它不提供 epoch-1 升级入口；
+旧实例先用旧 build 备份，转换步骤见 §2.3。PostgreSQL 使用逻辑导出与 metadata sidecar。
 Settings 页的「导出备份」按钮（`POST /api/backup`）等价，但**不带** worktrees。
 
 #### `--include-worktrees` 及其限制
@@ -81,7 +87,8 @@ Settings 页的「导出备份」按钮（`POST /api/backup`）等价，但**不
 ### 1.3 pre-migration 自动备份
 
 `backupOnMigration=true`（默认）时，daemon 启动发现数据库的迁移进度落后于当前二进制
-（即本次启动会应用新迁移），会在迁移**之前**做一次**原始字节拷贝**备份：
+（当前 epoch-2 native history 有待应用后继），会在持有 daemon lock 时、迁移**之前**
+尝试一次**原始字节拷贝**备份。此机制不替代 epoch switch 的最终一致性备份：
 
 - 产物：`backups/pre-migration-<旧迁移轴>-<新迁移轴>-<时间戳>.tar.gz`；
 - 用 `rawCopyDb`（直接拷 `db.sqlite` + `-wal`/`-shm` 字节），不解析内容——旧 schema 的库
@@ -103,7 +110,7 @@ Settings 页的「导出备份」按钮（`POST /api/backup`）等价，但**不
 
 ### 2.0 什么时候需要恢复：启动完整性检查（fail-closed）
 
-daemon 每次启动都会对 `db.sqlite` 跑 `PRAGMA quick_check`（打不开 / 首个 PRAGMA 就抛错的
+daemon 每次启动都会对 pointer 选中的 SQLite 文件跑 `PRAGMA quick_check`（打不开 / 首个 PRAGMA 就抛错的
 文件同样按损坏处理）。**检测到损坏时拒绝启动**（退出码非 0），并在 stderr 打印：
 
 - 损坏详情（quick_check 前几行）；
@@ -146,7 +153,7 @@ usage: agent-workflow restore <tarball> [--yes] [--stage] [--dry-run]
    - **安全备份失败即中止整个恢复**，当前数据一字节不动。误恢复之后想反悔，就用这两个包
      再 restore 回来。
 4. 崩溃安全换库：先删当前库的 `-wal`/`-shm`（否则旧 WAL 帧会按页号叠进新库造成静默损坏），
-   再原子 `rename` 换入，再 fsync 目录。
+   再原子 `rename` 换入，再 fsync 目录；恢复完成发布协调的新 v2 generation pointer。
 5. 复原 `config.json` 与 `skills/`（`secret.key`、`token` 不被触碰）。
 6. 前滚迁移到当前二进制（`--no-migrate` 时跳过），随后：
    - 把所有非终态任务标记 `auto_recovery_suspended`（见 [第 3 节](#3-恢复后的状态)）；
@@ -157,14 +164,16 @@ usage: agent-workflow restore <tarball> [--yes] [--stage] [--dry-run]
 
 #### 2.1.1 版本闸语义
 
-版本闸比较的是**迁移身份**：备份库最后一条已应用迁移的 `created_at`，对比当前二进制
-迁移日志（`_journal.json`）的最大 `when`。
+epoch-2 版本闸读取备份的 **native schema-history 版本、合同和实际 catalog**，与当前 binary
+所带 history 比较。CLI 保留 `backup migration` / `this binary` 字段名，它们不表示继续使用
+epoch-1 `_journal.json` 的行数或时间戳判版。
 
 - 备份**更新**于二进制（`downgrade`）→ **拒绝**，现有数据不动。备份是新版本二进制做的，
   旧二进制没有对应 schema 的代码——先升级二进制，或挑更旧的备份。
 - 备份**更旧**（`forward`）→ 接受，恢复后自动前滚迁移到当前二进制。
 - 相同（`same`）→ 接受，无需前滚。
-- 无 manifest 的老备份按 `forward` 处理。
+- 缺外层 manifest 时仍须从数据库内的 recorded history 识别；未知、损坏或不支持的合同
+  不因“缺 manifest”而自动获准。epoch-1 备份进入 §2.3 converter。
 
 `pre-migration` 种类的包额外**绑定产生它的二进制版本**：拿着它在**不同版本**的二进制上
 做「恢复 + 前滚」会被拒绝——前滚只会把当初炸库的那次迁移重放一遍。正确姿势是先换回旧
@@ -190,6 +199,7 @@ daemon 在跑时不能冷换库，改为「**暂存，下次启动时应用**」
 - **UI**：Settings 页「从备份恢复…」按钮（走同一 API），成功后显示
   「已暂存，重启 daemon 生效」。
 
+本节用于同 epoch-2 的 SQLite 备份；epoch-1 备份不通过 staging 直接换入。
 三条入口都会先做**完整的入口校验**（与启动时真正应用的校验同深度）：包里必须有
 `db.sqlite`、WAL 可合并、`quick_check` 通过（CLI 可用 `--skip-integrity-check` 越过，
 该选择会随暂存一起生效）、且不是 downgrade。**坏包在门口就被拒绝**，daemon 保持健康——
@@ -203,7 +213,8 @@ agent-workflow stop && agent-workflow start
 # 或交给 supervisor（见第 5 节）
 ```
 
-下次启动时，暂存的恢复在**拿到单实例锁之后、打开数据库之前**应用（流程同冷恢复，含安全
+下次启动先做安装分类；epoch-1 或未协调切换会先被拒绝。符合条件的暂存恢复在
+**拿到单实例锁之后、打开业务数据库之前**应用（流程同冷恢复，含安全
 备份与前滚），恢复回来的 `config.json` 在同一次启动即生效。应用是严格幂等的：中途崩溃后
 再启动不会重复应用。
 
@@ -230,6 +241,44 @@ curl -X DELETE -H "Authorization: Bearer <admin token>" http://127.0.0.1:8720/ap
 `failed` 数组可见；隔离目录不会自动清理，取证后手工删除即可。只有极端的文件系统级异常
 （连隔离改名都失败）才会拒绝启动，此时 stderr 会给出 `rm -rf ~/.agent-workflow/.restore-pending`
 的手工解除指引。
+
+### 2.3 epoch-1 备份通过 converter 恢复
+
+epoch-1 SQLite 快照、逻辑 artifact / backup 和 hosted backup 都必须经过源识别、离线升级
+（若需要）、转换与批准。`restore <artifact>` 识别为旧 epoch 时只输出转换计划与下一步；
+`--yes`、`--stage`、`--no-migrate` 不能省掉 switch 的批准。显式入口为：
+
+```bash
+agent-workflow db migration restore-backup <artifact> --json
+# 外部 runs 内容单独提供；skills 仍来自备份，不由 content-root 替换。
+agent-workflow db migration restore-backup <artifact> --content-root <runs-root> --restore-config --json
+# 从返回值复制本次 op、approvalDigest，并审阅全部 blocks / restrictions / restoreFiles。
+agent-workflow db migration run <op> --approve <approvalDigest> --json
+agent-workflow db migration verify <op> --json
+agent-workflow db migration status <op> --json
+```
+
+两条 `restore-backup` 示例是不同选择，不要在同一个 operation 内改变输入。`--restore-config`
+是显式选择；缺省只替换备份技能树，保留当前配置。备份缺 skills 的情况与“应有内容丢失”
+分别处理；活跃恢复必需内容缺失会 block，不能补造空正文。目标 `role=restored`，原安装
+pointer 是 rollback 的 predecessor，源备份保持不变。空 home 可以建立新目标，成功后才发布 pointer。
+
+需要 PostgreSQL 目标时加 `--target postgresql --target-url-env <变量名>`；旧 PG 源需要离线
+升级时加 `--scratch-url-env <变量名>`。支持 SQLite → SQLite、SQLite → PostgreSQL 和
+PostgreSQL → PostgreSQL；反向路径不支持。恢复后的验证、首写前 rollback 演练、上线、
+`complete` 和 receipt 留存沿用 [发布手册](./release-upgrade-rollback.md#2-升级部署方)。
+
+### 2.4 epoch-2 PostgreSQL / 托管恢复与切换中的恢复
+
+epoch-2 PostgreSQL 备份走同 epoch logical restore：目标先安装 native head，再导入业务行与
+摘要绑定的 metadata，保留 archive bytes、历史限制及祖先 lineage。generation / first-write
+由目标恢复协议建立，不能把源的活动 writer 状态当成新安装继续使用。托管动作及两个 Job
+见 [CrewStation 备份与恢复](./crewstation-deployment.md#备份与恢复)。
+
+若当前安装还有 open epoch switch，首写前的 restore / provider move 会被拒绝，并提示先
+`complete` 或 `rollback`。已首写时，替换 pointer 前先持久化该 switch 的完成与保留记录；
+这不会授权回到旧快照。恢复后核对非空 Task / 人工门 / 内容、restrictions 和 generation lineage，
+再决定是否恢复执行。旧源、转换目标、备份与操作回执不会因完成自动删除。
 
 ---
 
@@ -274,6 +323,12 @@ curl -X DELETE -H "Authorization: Bearer <admin token>" http://127.0.0.1:8720/ap
   1. 把旧机的 `~/.agent-workflow/secret.key` 一并迁移到新机同路径（权限保持 0600），或
   2. 在新机上对相关仓库重新发起接入，并由管理员重录代码平台公共 token、各用户在
      “我的账号 → 代码提交与推送”重录个人 token。个人密文损坏不会静默回退公共身份。
+
+旧备份转换时，key 选择是：备份输入根自带的原 key 优先；没有时才尝试恢复安装的现有
+`secret.key`（托管对应源 key），并验证它能解开源中的 sealed URL。错误 key 会使计划失败，
+不会生成或轮换新 key 来掩盖缺失。普通备份不含 key，异机时先恢复原 key，再做 converter
+计划；`--content-root` 只补 runs 内容，不是 key 参数。托管 Job 的
+`CS_DATABASE_MIGRATION_SOURCE_KEY` 为源 key 的 base64，必须与该备份的源一致。
 
 worktree 重建同样默认**同机**（依赖 `repos/` 镜像与既有快照）；异机恢复后活跃任务的
 工作树无法重建，只能靠重新克隆 + 手工处理。
@@ -349,11 +404,11 @@ agent-workflow doctor
 
 与灾难恢复相关的检查项：
 
-| 项                 | 语义                                                                        |
-| ------------------ | --------------------------------------------------------------------------- |
-| `db integrity`     | 对 `db.sqlite` 只读 `quick_check`；损坏则 doctor 失败并给出 restore 指引    |
-| `backups`          | 信息项：备份数量 / 最新时间 / 总占用；一眼判断「最近一次备份是什么时候」    |
-| `repo credentials` | 封存凭据是否可用本机 `secret.key` 解开；异机恢复 / 丢 key 会在这里响亮报错  |
-| `lifecycle`        | 信息项：interrupted / awaiting-\* / 被挂起（quarantined）任务数与未关告警数 |
+| 项                 | 语义                                                                               |
+| ------------------ | ---------------------------------------------------------------------------------- |
+| `db integrity`     | 对 pointer 所选 SQLite 库只读 `quick_check`；损坏则 doctor 失败并给出 restore 指引 |
+| `backups`          | 信息项：备份数量 / 最新时间 / 总占用；一眼判断「最近一次备份是什么时候」           |
+| `repo credentials` | 封存凭据是否可用本机 `secret.key` 解开；异机恢复 / 丢 key 会在这里响亮报错         |
+| `lifecycle`        | 信息项：interrupted / awaiting-\* / 被挂起（quarantined）任务数与未关告警数        |
 
 建议在每次恢复完成后、以及例行巡检时各跑一次。

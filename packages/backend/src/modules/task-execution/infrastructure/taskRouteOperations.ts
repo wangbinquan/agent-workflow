@@ -1,4 +1,23 @@
+import { projectTaskMountReadRow } from './taskRepositorySql'
+import {
+  taskAggregateWrite,
+  createTaskDefinitionWriteParticipantInTx,
+} from './taskDefinitionWriteParticipant'
+import type { HistoryRestrictionPort } from '@/platform/contracts/historyRestriction'
+import { databaseContentText } from '@/platform/content/infrastructure/contentStore'
+import type { NodeRunCheckpointSnapshot } from '../application/ports/nodeRunQueries'
+import { createNodeRunQueries } from './nodeRunQueries'
+import { assertTaskHistoryExecutableInTx } from './taskRecoveryOperations'
+import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { TaskNodeRunClarifyNavPort } from '../composition/required-ports'
+import {
+  type TaskReadRow,
+  taskMountReadColumns,
+  taskReadColumns,
+  taskWorkflowNameSql,
+} from './taskRepositorySql'
+
 // RFC-359 AC-1（命名债收尾 §5hj）—— `/api/tasks` 这条经典路由面的**共用实现**。
 //
 // 它从 `postgresqlTaskRouteOperations.ts` 改名而来：文件里 22 个导出，**15 个被
@@ -10,43 +29,15 @@ import type { TaskNodeRunClarifyNavPort } from '../composition/required-ports'
 //   · `sqliteTaskRouteOperations.ts`     —— SQLite 绑定
 // 本文件只放实现，不放任何一侧的装配。
 //
-import { workflowNameExpression } from '@/modules/resource-catalog/public/queries'
-import { createWorkflowExecutionQueries } from '@/modules/resource-catalog/public/queries'
-import { runHistoryOrder } from '@/platform/persistence/runHistoryOrder'
-import { deriveNodeRunRole } from '../domain/nodeRunRole'
-import type { TaskWorkgroupLaunchConfig } from '../domain/taskWorkgroupConfig'
-import { isTaskWorkspaceUnbound } from '@agent-workflow/shared'
-import { taskWorkgroupLaunchSelection, taskWorkgroupConfigFromRow } from './taskWorkgroupConfig'
-import { createTaskDefinitionWriteParticipantInTx } from './taskDefinitionWriteParticipant'
-import { hasTaskRollbackCheckpoint } from '../domain/taskCheckpointRollback'
 import {
-  decodeTaskRollbackCheckpoints,
-  decodeTaskCheckpointInheritance,
-} from './taskCheckpointCodec'
-import { taskCheckpointMountPaths } from './taskCheckpointPersistence'
-import { builtinWorkflowSyncPreview } from '../domain/workflowSyncPreview'
+  createWorkflowExecutionQueries,
+  workflowNameExpression,
+} from '@/modules/resource-catalog/public/queries'
+
 import {
-  decodeTaskSubject,
-  isTurnEngineTaskSubject,
-  definitionHost,
-  projectTaskSubject,
-  taskDefinitionOrigin,
-  taskSubjectWorkflowVersion,
-} from '../domain/taskSubject'
-import { taskSubjectSqlColumns, taskWorkflowNameSql } from './taskSubjectSql'
-import { decodeTaskRepositoryMount } from './taskRepositoryCodec'
-import {
-  projectStoredTaskRepositorySurface,
-  projectStoredTaskRepositorySummary,
-} from './taskRepositorySurface'
-import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
-import type { TaskArchivedEventsReader } from '../public/types'
-import type { TaskDeletionEffects } from '../application/ports/taskDeletionContentEffects'
-import {
-  isSingleRootRepository,
   CommitPushMetaSchema,
-  NodeRunSchema,
   NodeRunEventsResponseSchema,
+  NodeRunSchema,
   StartTaskSchema,
   TaskListItemSchema,
   TaskSchema,
@@ -56,6 +47,8 @@ import {
   clarifyNavKindForRoundStatus,
   diffWorkflowForSync,
   isHumanReviewConclusion,
+  isSingleRootRepository,
+  isTaskWorkspaceUnbound,
   isTerminalNodeRunStatus,
   isWrapperKind,
   migrateWorkflowDefinitionToLatest,
@@ -78,6 +71,31 @@ import {
 } from '@agent-workflow/shared'
 import { and, asc, count, desc, eq, gt, inArray, isNull, sql, type SQL } from 'drizzle-orm'
 import { ulid } from 'ulid'
+import type { TaskDeletionEffects } from '../application/ports/taskDeletionContentEffects'
+import { nodeRunMintIdentityForSlot } from '../application/nodeRunMintIdentity'
+import { hasTaskRollbackCheckpoint } from '../domain/taskCheckpointRollback'
+import {
+  definitionHost,
+  isTurnEngineTaskSubject,
+  projectTaskSubject,
+  taskSubjectFromDefinition,
+  taskReadSubjectFromDefinition,
+  taskSubjectWorkflowVersion,
+} from '../domain/taskSubject'
+import type { TaskWorkgroupLaunchConfig } from '../domain/taskWorkgroupConfig'
+import {
+  builtinWorkflowSyncPreview,
+  notSyncableWorkflowPreview,
+} from '../domain/workflowSyncPreview'
+import type { TaskArchivedEventsReader } from '../public/types'
+
+import { decodeTaskRepositoryMount } from './taskRepositoryCodec'
+
+import {
+  projectStoredTaskRepositorySummary,
+  projectStoredTaskRepositorySurface,
+} from './taskRepositorySurface'
+import { taskWorkgroupConfigFromRow, taskWorkgroupLaunchSelection } from './taskWorkgroupConfig'
 
 import type { Actor } from '@/auth/actor'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
@@ -86,30 +104,28 @@ import type { TaskExecutionResourceAuthority } from '../application/ports/taskEx
 // RFC-328：跨 context 走 facade，不直接 import 别人的 infrastructure
 //（`@/services/taskCollab` 就是 collaboration 那套成员 / 可见性判据的既有 facade，
 // SQLite 那一侧一直走的也是它）。
-import {
-  canViewTask,
-  getTaskMembers,
-  requireTaskOperator,
-  updateTaskMembers,
-} from '@/services/taskCollab'
 import type {
   ClarifyRepairParticipant,
   CollaborationRuntimeMechanics,
   ReviewRepairParticipant,
 } from '@/modules/collaboration/public/participants'
+import {
+  canViewTask,
+  getTaskMembers,
+  requireTaskOperator,
+  updateTaskMembers,
+  assertCanReplaySourceTask,
+} from '@/services/taskCollab'
 
 import type { CollaborationCommandContext } from '@/modules/collaboration/public/types'
 import type { OwnerIdentityQueries } from '@/modules/identity-access/public/operations'
-import type { FrozenTaskExecutionResourceSnapshot } from '@/modules/resource-catalog/public/types'
+import type {
+  FrozenTaskExecutionResourceSnapshot,
+  WorkflowCatalogDetail,
+} from '@/modules/resource-catalog/public/types'
 import { publishCommittedEventsAfterCommit } from '@/platform/events/committed/runtime'
 
-import {
-  defaultTaskListRowRef,
-  taskListOwnershipScopeCondition,
-} from './taskListPage/authorization'
 import { branchTraceForTask } from '../application/branchTrace'
-import { sourceTerminationRevivalError } from '../domain/sourceTermination'
-import { DrizzleTaskRollbackQueries } from './taskRollbackQueries'
 import { nextRetryIndex } from '../application/nextRetryIndex'
 import type { RepositoryPreparationRetryCommand } from '../application/ports/taskAutoResumeCommand'
 import type { TaskExecutionPersistence } from '../application/ports/taskExecutionPersistence'
@@ -118,62 +134,72 @@ import type {
   ChildTaskLifecycleParticipant,
 } from '../application/ports/taskExecutionRuntimeParticipants'
 import type { ChildResumeRuntime } from '../application/ports/taskExecutionTopology'
+import { sourceTerminationRevivalError } from '../domain/sourceTermination'
 import type { SchedulerRuntimeTopology } from '../public/participants'
 import type { TaskRouteListFilters, TaskRouteOperations } from '../public/taskRoutes'
 import { DrizzleBranchTraceSnapshotReader } from './branchTraceSnapshotReader'
 import { createNodeRunMintParticipantInTx } from './nodeRunMintParticipant'
 import { createTaskAuthorizationQueries } from './taskAuthorization'
-import { type TaskExecutionLaunchParticipant } from './taskRouteLaunchOperations'
+import {
+  defaultTaskListRowRef,
+  taskListOwnershipScopeCondition,
+} from './taskListPage/authorization'
+import { DrizzleTaskRollbackQueries } from './taskRollbackQueries'
+import type { TaskExecutionLaunchParticipant } from './taskRouteLaunchOperations'
 
-import { withSerializableTaskExecution } from './taskLifecycleTransaction'
+import { readArchivedEvents } from '@/platform/background/eventsArchiveReader'
 import {
   appendTaskLifecycleTransitionCommittedEvent,
   appendTaskNodeStatusesCommittedEvent,
 } from './taskLifecycleCommittedEvents'
-import { readArchivedEvents } from '@/platform/background/eventsArchiveReader'
+import { withSerializableTaskExecution } from './taskLifecycleTransaction'
+import { withTaskExecutionAggregateWrite } from './ownedTaskExecution'
 
 import { parsePortValidationFailuresJson } from '@/services/envelope'
 import { parseMultipartLaunch } from '@/services/launchMultipart'
 
-import { computeWorkflowSyncPreview } from '@/services/task'
-import { canViewResource } from '@/services/resourceAcl'
-import { getWorkflow } from '@/services/workflow'
-import type { WorkflowCatalogDetail } from '@/modules/resource-catalog/public/types'
+import { replaceReviewNodeReviewers } from '@/modules/collaboration/public/commands'
+import { getReviewNodeReviewerConfig } from '@/modules/collaboration/public/queries'
 import { parseInjectedSnapshotJson } from '@/modules/memory/public/types'
-import { loadTaskFailureCodes, projectWorkflowSnapshotForRead } from '@/services/task'
-import { join } from 'node:path'
-import type { NodeRunPromptOperations } from '../application/ports/nodeRunPromptContent'
-import { selectNodeRunPromptOperations } from '../composition/nodeRunPrompts'
-import { createRunSelectionOracleSnapshot } from './runSelection/oracle/snapshot'
-import { assertNotBuiltin } from '@/services/systemResources'
-import { compareNodeRunsForTimeline, deriveReviewRoundTiming } from '@/services/reviewRoundStart'
-import { canonicalRepoKeysWire } from '@/services/repoLabels'
+
+import {
+  selectRepositoryWorkspaceReadQueries,
+  type RepositoryWorkspaceReadQueries,
+} from '@/modules/source-control/public/queries'
 import { assertTriggerPreflight } from '@/services/execution/triggerPreflight'
-import { assertFrozenTaskTriggerPreflight } from './frozenTaskTriggerPreflight'
 import {
   loadRollbackTargetFrom,
   rollbackNodeRunWorktrees,
   snapshotMissingDetail,
 } from '@/services/nodeRollback'
-import { selectSyncRollbackTargets } from '@/services/task'
-import { ConflictError, DomainError, NotFoundError, ValidationError } from '@/util/errors'
-import { createLogger } from '@/util/log'
-import { killStaleRunProcessTree } from '@/util/process'
+import { canonicalRepoKeysWire } from '@/services/repoLabels'
+import { canViewResource } from '@/services/resourceAcl'
+import { compareNodeRunsForTimeline, deriveReviewRoundTiming } from '@/services/reviewRoundStart'
+import { assertNotBuiltin } from '@/services/systemResources'
 import {
-  selectRepositoryWorkspaceReadQueries,
-  type RepositoryWorkspaceReadQueries,
-} from '@/modules/source-control/public/queries'
-import { assertCanReplaySourceTask } from '@/services/taskCollab'
+  computeWorkflowSyncPreview,
+  loadTaskFailureCodes,
+  projectWorkflowSnapshotForRead,
+  selectSyncRollbackTargets,
+} from '@/services/task'
+
 import { deleteTask } from '@/services/taskDelete'
-import { replaceReviewNodeReviewers } from '@/modules/collaboration/public/commands'
-import { getReviewNodeReviewerConfig } from '@/modules/collaboration/public/queries'
+import { getWorkflow } from '@/services/workflow'
+import { ConflictError, DomainError, NotFoundError, ValidationError } from '@/util/errors'
+import { createInFlightCoalescer, type InFlightCoalescer } from '@/util/inFlight'
+import { createLogger } from '@/util/log'
+import { Paths } from '@/util/paths'
+import { killStaleRunProcessTree } from '@/util/process'
+import { join } from 'node:path'
+import type { NodeRunPromptOperations } from '../application/ports/nodeRunPromptContent'
+import { selectNodeRunPromptOperations } from '../composition/nodeRunPrompts'
+
+import { assertFrozenTaskTriggerPreflight } from './frozenTaskTriggerPreflight'
+import { createRunSelectionReader } from './runSelection/table/reader'
 import {
   createTaskRouteRepairOperations,
   type TaskRepairOperations,
 } from './taskRouteRepairOperations'
-import { Paths } from '@/util/paths'
-import { createInFlightCoalescer, type InFlightCoalescer } from '@/util/inFlight'
-import { notSyncableWorkflowPreview } from '../domain/workflowSyncPreview'
 
 const log = createLogger('task-execution.postgresql-task-routes')
 
@@ -205,6 +231,7 @@ const RETRYABLE_TASK_STATUSES = [
  * PG 绑定的依赖面现在 `extends` 它、只把 `db` 收窄成 PG 客户端。
  */
 export interface TaskRouteOperationsDependencies {
+  readonly historyRestrictions: HistoryRestrictionPort
   readonly clarifyNav: TaskNodeRunClarifyNavPort
   readonly archivedEvents?: TaskArchivedEventsReader
   readonly workspaceReads?: RepositoryWorkspaceReadQueries
@@ -251,8 +278,8 @@ export interface TaskRouteOperationsDependencies {
   readonly id?: () => string
 }
 
-type TaskRow = PersistenceTables['tasks']['$inferSelect']
-type NodeRunRow = PersistenceTables['nodeRuns']['$inferSelect']
+type TaskRow = TaskReadRow
+type NodeRunRow = NodeRunCheckpointSnapshot
 
 function parseJson(raw: string | null | undefined, fallback: unknown): unknown {
   if (raw === null || raw === undefined || raw === '') return fallback
@@ -278,27 +305,7 @@ async function failedCode(
   task: Pick<TaskRow, 'id' | 'status' | 'failedNodeId'>,
 ): Promise<string | null | undefined> {
   if (task.status !== 'failed' || task.failedNodeId === null) return undefined
-  const { nodeRuns } = tablesOf(db)
-  const rows = await db
-    .select({
-      id: nodeRuns.id,
-      taskId: nodeRuns.taskId,
-      nodeId: nodeRuns.nodeId,
-      seq: nodeRuns.seq,
-      parentNodeRunId: nodeRuns.parentNodeRunId,
-      status: nodeRuns.status,
-      failureCode: nodeRuns.failureCode,
-    })
-    .from(nodeRuns)
-    .where(and(eq(nodeRuns.taskId, task.id), eq(nodeRuns.nodeId, task.failedNodeId)))
-  const selected = (
-    await createRunSelectionOracleSnapshot(rows, { scope: { kind: 'rows' } }).familyHistory(
-      task.id,
-      { nodeId: task.failedNodeId },
-      { topLevelOnly: true },
-    )
-  ).at(-1)
-  return rows.find((row) => row.id === selected?.id)?.failureCode ?? null
+  return (await loadTaskFailureCodes(db, [task])).get(task.id) ?? null
 }
 
 /**
@@ -354,19 +361,24 @@ export async function builtinCandidateWorkflow(
 }
 
 async function taskProjection(db: PersistenceDb, row: TaskRow): Promise<Task> {
-  const { taskRepos, taskSpaceNodes } = tablesOf(db)
+  const { taskSpaceNodes } = tablesOf(db)
+  const { taskRepositoryMounts: taskRepos } = tablesOf(db)
   const [repoRows, nodeRows, failureCode, identities] = await Promise.all([
     db
-      .select()
+      .select(taskMountReadColumns(db))
       .from(taskRepos)
       .where(eq(taskRepos.taskId, row.id))
-      .orderBy(asc(taskRepos.repoIndex)),
+      .orderBy(asc(taskRepos.ordinal))
+      .then((rows) => rows.map(projectTaskMountReadRow)),
     db
       .select({ path: taskSpaceNodes.nodePath })
       .from(taskSpaceNodes)
       .where(eq(taskSpaceNodes.taskId, row.id)),
     failedCode(db, row),
-    workflowIdentities(db, decodeTaskSubject(row).kind === 'workflow' ? [row.workflowId] : []),
+    workflowIdentities(
+      db,
+      taskReadSubjectFromDefinition(row).kind === 'workflow' ? [row.workflowId] : [],
+    ),
   ])
   const identity = identities.get(row.workflowId)
   const repository = projectStoredTaskRepositorySurface(
@@ -379,13 +391,13 @@ async function taskProjection(db: PersistenceDb, row: TaskRow): Promise<Task> {
   return TaskSchema.parse({
     id: row.id,
     name: row.name,
-    ...projectTaskSubject(decodeTaskSubject(row), identity?.name ?? null),
+    ...projectTaskSubject(taskReadSubjectFromDefinition(row), identity?.name ?? null),
     workflowSnapshot: projectWorkflowSnapshotForRead(
       parseJson(row.workflowSnapshot, null),
-      taskDefinitionOrigin(decodeTaskSubject(row), identity?.builtin === true) === 'platform',
+      row.definitionOrigin === 'platform',
     ),
     workflowVersion: taskSubjectWorkflowVersion(
-      decodeTaskSubject(row),
+      taskReadSubjectFromDefinition(row),
       row.workflowVersion ?? null,
     ),
     repoPath: repository.repoPath,
@@ -449,13 +461,13 @@ export async function loadTaskProjection(db: PersistenceDb, taskId: string): Pro
 
 export async function loadTask(db: PersistenceDb, taskId: string): Promise<Task | null> {
   const { tasks } = tablesOf(db)
-  const rows = await db.select().from(tasks).where(eq(tasks.id, taskId)).limit(1)
+  const rows = await db.select(taskReadColumns(db)).from(tasks).where(eq(tasks.id, taskId)).limit(1)
   return rows[0] === undefined ? null : await taskProjection(db, rows[0])
 }
 
 export async function requireTaskRow(db: PersistenceDb, taskId: string): Promise<TaskRow> {
   const { tasks } = tablesOf(db)
-  const rows = await db.select().from(tasks).where(eq(tasks.id, taskId)).limit(1)
+  const rows = await db.select(taskReadColumns(db)).from(tasks).where(eq(tasks.id, taskId)).limit(1)
   const row = rows[0]
   if (row === undefined) throw new NotFoundError('task-not-found', `task '${taskId}' not found`)
   return row
@@ -532,34 +544,34 @@ const TASK_LIST_COLUMNS = (db: object) => {
   return {
     id: tasks.id,
     name: tasks.name,
-    workflowId: tasks.workflowId,
-    repoPath: tasks.repoPath,
-    repoUrl: tasks.repoUrl,
-    cachedRepoId: tasks.cachedRepoId,
+    workflowId: taskReadColumns(db).workflowId,
+    subjectKind: taskReadColumns(db).subjectKind,
+    sourceId: taskReadColumns(db).sourceId,
+    sourceName: taskReadColumns(db).sourceName,
+    repoPath: taskReadColumns(db).repoPath,
+    repoUrl: taskReadColumns(db).repoUrl,
+    cachedRepoId: taskReadColumns(db).cachedRepoId,
     status: tasks.status,
     startedAt: tasks.startedAt,
     finishedAt: tasks.finishedAt,
     errorSummary: tasks.errorSummary,
-    repoCount: tasks.repoCount,
-    scheduledTaskId: tasks.scheduledTaskId,
-    workgroupId: tasks.workgroupId,
+    repoCount: taskReadColumns(db).repoCount,
+    scheduledTaskId: taskReadColumns(db).scheduledTaskId,
+    workgroupId: taskReadColumns(db).workgroupId,
     workgroupLaunch: taskWorkgroupLaunchSelection(db),
-    spaceKind: tasks.spaceKind,
+    spaceKind: taskReadColumns(db).spaceKind,
     parentTaskId: tasks.parentTaskId,
     invocationDepth: tasks.invocationDepth,
-    sourceAgentName: tasks.sourceAgentName,
-    sourceAgentId: tasks.sourceAgentId,
-    codeRoundId: tasks.codeRoundId,
+    sourceAgentName: taskReadColumns(db).sourceAgentName,
+    sourceAgentId: taskReadColumns(db).sourceAgentId,
+    codeRoundId: taskReadColumns(db).codeRoundId,
     failedNodeId: tasks.failedNodeId,
     ownerUserId: tasks.ownerUserId,
   } as const
 }
 
 type TaskListRow = {
-  [K in Exclude<
-    keyof ReturnType<typeof TASK_LIST_COLUMNS>,
-    'workgroupLaunch'
-  >]: PersistenceTables['tasks']['$inferSelect'][K]
+  [K in Exclude<keyof ReturnType<typeof TASK_LIST_COLUMNS>, 'workgroupLaunch'>]: TaskReadRow[K]
 } & { workflowName: string | null; workgroupLaunch: TaskWorkgroupLaunchConfig | null }
 
 async function listRows(
@@ -567,19 +579,38 @@ async function listRows(
   filters: TaskRouteListFilters,
 ): Promise<readonly TaskListRow[]> {
   const predicates: SQL<unknown>[] = []
-  const { tasks } = tablesOf(db)
+  const { tasks, taskLaunchContexts: launch } = tablesOf(db)
   if (filters.status !== undefined) predicates.push(eq(tasks.status, filters.status))
-  if (filters.workflowId !== undefined) predicates.push(eq(tasks.workflowId, filters.workflowId))
-  if (filters.repoPath !== undefined) predicates.push(eq(tasks.repoPath, filters.repoPath))
+  if (filters.workflowId !== undefined)
+    predicates.push(eq(taskReadColumns(db).workflowId, filters.workflowId))
+  if (filters.repoPath !== undefined)
+    predicates.push(eq(taskReadColumns(db).repoPath, filters.repoPath))
   if (filters.catalogVisibility !== undefined) {
     predicates.push(eq(tasks.catalogVisibility, filters.catalogVisibility))
   }
   if (filters.scheduledTaskId !== undefined) {
-    predicates.push(eq(tasks.scheduledTaskId, filters.scheduledTaskId))
+    predicates.push(
+      inArray(
+        tasks.id,
+        db
+          .select({ taskId: launch.taskId })
+          .from(launch)
+          .where(eq(launch.scheduledTaskId, filters.scheduledTaskId)),
+      ),
+    )
   }
   if (filters.origin !== undefined) {
     const origins = taskListOriginMatches(filters.origin)
-    if (origins !== null) predicates.push(inArray(tasks.launchOrigin, origins))
+    if (origins !== null)
+      predicates.push(
+        inArray(
+          tasks.id,
+          db
+            .select({ taskId: launch.taskId })
+            .from(launch)
+            .where(inArray(launch.launchOrigin, origins)),
+        ),
+      )
   }
   if (filters.topLevelOnly === true) predicates.push(isNull(tasks.parentTaskId))
   if (filters.parentTaskId !== undefined)
@@ -591,8 +622,10 @@ async function listRows(
     .select({
       ...TASK_LIST_COLUMNS(db),
       workflowName: taskWorkflowNameSql(
-        taskSubjectSqlColumns('tasks'),
-        workflowNameExpression(db, tasks.workflowId),
+        {
+          subjectKind: taskReadColumns(db).subjectKind,
+        },
+        workflowNameExpression(db, taskReadColumns(db).workflowId),
       ),
     })
     .from(tasks)
@@ -913,15 +946,10 @@ export async function taskNodeRunsProjection(
   const nodeRunPrompts = selectNodeRunPromptOperations(dependencies.nodeRunPrompts)
   const task = await loadTask(dependencies.db, taskId)
   if (task === null) throw new NotFoundError('task-not-found', `task '${taskId}' not found`)
-  const { nodeRuns, docVersions, nodeRunOutputs } = tablesOf(dependencies.db)
+  const { docVersions } = tablesOf(dependencies.db)
+  const { nodeRunOutputs } = tablesOf(dependencies.db)
   const [runRows, versions, latestRoundByRun] = await Promise.all([
-    dependencies.db
-      .select()
-      .from(nodeRuns)
-      .where(eq(nodeRuns.taskId, taskId))
-      // 还没开始的 run（started_at IS NULL）要排在最前：两个引擎的默认落位正好相反，
-      // NULL 掉到队尾会让时间线把「还没开始」排在「已完成」后面。渲染权在能力矩阵。
-      .orderBy(...runHistoryOrder(dependencies.db, nodeRuns, 'api-timeline')),
+    createNodeRunQueries(dependencies.db).listHistory({ taskId }),
     dependencies.db
       .select({
         reviewNodeRunId: docVersions.reviewNodeRunId,
@@ -967,9 +995,9 @@ export async function taskNodeRunsProjection(
       ) {
         clarifyNavKind = null
       }
-      return NodeRunSchema.parse({
+      const display = {
         id: row.id,
-        seq: row.seq ?? null,
+        seq: row.seq,
         taskId: row.taskId,
         nodeId: row.nodeId,
         parentNodeRunId: row.parentNodeRunId,
@@ -981,7 +1009,7 @@ export async function taskNodeRunsProjection(
         reviewIteration: row.reviewIteration,
         // RFC-354 — the frame (generation row + breadcrumb) for grouping / labels.
         containerRunId: row.containerRunId ?? null,
-        scopePath: row.scopePath ?? '',
+        scopePath: row.scopePath,
         status: row.status,
         startedAt: row.startedAt,
         finishedAt: row.finishedAt,
@@ -1006,7 +1034,8 @@ export async function taskNodeRunsProjection(
         reviewDecidedAt: timing?.decidedAt ?? null,
         reviewNavKind,
         clarifyNavKind,
-      })
+      }
+      return NodeRunSchema.parse(display)
     }),
   )
   // RFC-078 —— 评审行的时间线锚是它这一轮**内容**的时间，不是槽位首次打开时钉住的
@@ -1031,13 +1060,15 @@ export async function taskNodeRunsProjection(
   )
   return {
     runs,
-    outputs: outputRows.map((row) => ({
-      nodeRunId: row.nodeRunId,
-      port: row.portName,
-      value: row.content,
-      kind: row.kind,
-      ...(row.active === false ? { active: false } : {}),
-    })),
+    outputs: await Promise.all(
+      outputRows.map(async (row) => ({
+        nodeRunId: row.nodeRunId,
+        port: row.portName,
+        value: await databaseContentText(dependencies.db, row),
+        kind: row.kind,
+        ...(row.active === false ? { active: false } : {}),
+      })),
+    ),
     ...(branchTrace === undefined ? {} : { branchTrace }),
   }
 }
@@ -1314,8 +1345,8 @@ function definitionOf(value: unknown): WorkflowDefinition {
 }
 
 async function syncRunSummary(db: PersistenceDb, taskId: string) {
-  const { nodeRuns, nodeRunOutputs } = tablesOf(db)
-  const runs = await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
+  const { nodeRunOutputs } = tablesOf(db)
+  const runs = await createNodeRunQueries(db).listWithCheckpoints({ taskId })
   const byNode = new Map<string, NodeRunRow[]>()
   for (const run of runs) {
     const existing = byNode.get(run.nodeId)
@@ -1323,7 +1354,7 @@ async function syncRunSummary(db: PersistenceDb, taskId: string) {
     else existing.push(run)
   }
   const freshestDone = new Map<string, NodeRunRow>()
-  const selection = createRunSelectionOracleSnapshot(runs, { scope: { kind: 'rows' } })
+  const selection = createRunSelectionReader(db)
   for (const nodeId of byNode.keys()) {
     const selected = (
       await selection.familyHistory(taskId, { nodeId }, { topLevelOnly: true, statusIn: ['done'] })
@@ -1405,14 +1436,13 @@ export async function assertManualExecutionAllowedProjection(
 ): Promise<void> {
   const task = await loadTask(dependencies.db, taskId)
   if (task === null) return
-  const kind = decodeTaskSubject(task).kind
+  const frozenTask = await requireTaskRow(dependencies.db, taskId)
+  const subject = taskSubjectFromDefinition(frozenTask)
+  const kind = subject.kind
   if (kind === 'agent' || kind === 'code-round') return
   if (
     kind === 'workgroup' &&
-    !isTurnEngineTaskSubject(
-      decodeTaskSubject(task),
-      taskWorkgroupConfigFromRow(await requireTaskRow(dependencies.db, taskId)).launch.mode,
-    )
+    !isTurnEngineTaskSubject(subject, taskWorkgroupConfigFromRow(frozenTask).launch.mode)
   ) {
     return
   }
@@ -1476,7 +1506,7 @@ export async function taskWorkflowSyncPreviewProjection(
 ): Promise<WorkflowSyncPreview> {
   const task = await loadTask(dependencies.db, taskId)
   if (task === null) throw new NotFoundError('task-not-found', `task '${taskId}' not found`)
-  const subject = decodeTaskSubject(task)
+  const subject = taskSubjectFromDefinition(await requireTaskRow(dependencies.db, taskId))
   // 非工作流任务（agent / workgroup / code-round）没有可同步的工作流定义。
   if (subject.kind !== 'workflow' && subject.kind !== 'digital-employee') {
     return notSyncableWorkflowPreview(task, 'workflow-deleted')
@@ -1581,10 +1611,7 @@ async function assertRollbackBaselinesPresent(
 ): Promise<void> {
   // 没记过任何快照的行在 resume 口径下本来就是「什么都不动」，连 git 都不会跑到——
   // 提前滤掉，别为最常见的那条路径多发一次 rollback-target 查询。
-  const checkpointMounts = await taskCheckpointMountPaths(dependencies.db, input.taskId)
-  const candidates = input.runs.filter((run) =>
-    hasTaskRollbackCheckpoint(decodeTaskRollbackCheckpoints(run, checkpointMounts), false),
-  )
+  const candidates = input.runs.filter((run) => hasTaskRollbackCheckpoint(run.rollback, false))
   if (candidates.length === 0) return
   const target = await loadRollbackTargetFrom(
     new DrizzleTaskRollbackQueries(dependencies.db),
@@ -1592,15 +1619,7 @@ async function assertRollbackBaselinesPresent(
   )
   if (target === null) return
   for (const run of candidates) {
-    const outcome = await rollbackNodeRunWorktrees(
-      target,
-      decodeTaskRollbackCheckpoints(
-        run,
-        target.repos.map((repo) => repo.mountPath),
-      ),
-      { checkOnly: true },
-      log,
-    )
+    const outcome = await rollbackNodeRunWorktrees(target, run.rollback, { checkOnly: true }, log)
     const detail = snapshotMissingDetail(outcome)
     if (detail !== null) {
       await escalateUnsafeContinuation(dependencies, {
@@ -1660,15 +1679,7 @@ async function rollbackRunsForContinuation(
     }
   }
   for (const run of input.runs) {
-    const outcome = await rollbackNodeRunWorktrees(
-      target,
-      decodeTaskRollbackCheckpoints(
-        run,
-        target.repos.map((repo) => repo.mountPath),
-      ),
-      {},
-      log,
-    )
+    const outcome = await rollbackNodeRunWorktrees(target, run.rollback, {}, log)
     const detail = snapshotMissingDetail(outcome)
     if (detail !== null) {
       await escalateUnsafeContinuation(dependencies, {
@@ -1713,9 +1724,9 @@ export async function assertTaskWorkflowSyncable(
 ): Promise<Readonly<{ task: Task; workflow: WorkflowCatalogDetail }>> {
   const task = await loadTask(dependencies.db, taskId)
   if (task === null) throw new NotFoundError('task-not-found', `task '${taskId}' not found`)
-  if (decodeTaskSubject(task).kind === 'digital-employee')
-    assertNotBuiltin('workflow', { builtin: true })
-  if (decodeTaskSubject(task).kind !== 'workflow') {
+  const subject = taskSubjectFromDefinition(await requireTaskRow(dependencies.db, taskId))
+  if (subject.kind === 'digital-employee') assertNotBuiltin('workflow', { builtin: true })
+  if (subject.kind !== 'workflow') {
     throw new ValidationError(
       'task-host-sync-unsupported',
       'agent/workgroup host tasks run a synthesized snapshot — there is no workflow to sync from',
@@ -1842,11 +1853,10 @@ export async function syncWorkflow(
   const frozenWrapperNodeIds = new Set(
     frozenDefinition.nodes.filter((node) => isWrapperKind(node.kind)).map((node) => node.id),
   )
-  const { nodeRuns } = tablesOf(dependencies.db)
-  const syncRuns = await dependencies.db
-    .select()
-    .from(nodeRuns)
-    .where(eq(nodeRuns.taskId, input.taskId))
+
+  const syncRuns = await createNodeRunQueries(dependencies.db).listWithCheckpoints({
+    taskId: input.taskId,
+  })
   const syncRollbackRuns = await selectSyncRollbackTargets(syncRuns, ['canceled'], (nodeId) =>
     frozenWrapperNodeIds.has(nodeId),
   )
@@ -1975,6 +1985,7 @@ function retryNodeIds(
  * 或住在某个嵌套 wrapper 里由该 wrapper 自己的占位行重开，那时按老口径取最新顶层行即可。
  */
 async function inheritanceSourceInFrame(
+  db: PersistenceDb,
   rows: readonly NodeRunRow[],
   nodeId: string,
   frame: Readonly<{ containerRunId: string | null; iteration: number }>,
@@ -1984,9 +1995,13 @@ async function inheritanceSourceInFrame(
     (row) => row.containerRunId === frame.containerRunId && row.iteration === frame.iteration,
   )
   const candidates = sameFrame.length > 0 ? sameFrame : existing
-  const selection = createRunSelectionOracleSnapshot(candidates, { scope: { kind: 'rows' } })
+  const selection = createRunSelectionReader(db)
   const selected = (
-    await selection.familyHistory(candidates[0]?.taskId ?? '', { nodeId }, { topLevelOnly: true })
+    await selection.familyHistory(
+      candidates[0]?.taskId ?? '',
+      { nodeId, runIds: candidates.map((row) => row.id) },
+      { topLevelOnly: true },
+    )
   ).at(-1)
   return candidates.find((row) => row.id === selected?.id)
 }
@@ -2023,6 +2038,7 @@ async function finalizedParentCallRowStatus(
  * ——否则这一刀在那条路上根本落不了地。与第 8 刀给修复做的收窄同形。
  */
 export interface TaskRetryDependencies {
+  readonly historyRestrictions: HistoryRestrictionPort
   readonly db: PersistenceDb
   readonly persistence: TaskExecutionPersistence
   readonly activity: ActiveTaskExecutionParticipant
@@ -2064,11 +2080,30 @@ export async function retryNodeProjection(
         `('${finalizedCallRow}'); retry the parent's call node instead`,
     )
   }
-  const { nodeRuns } = tablesOf(dependencies.db)
-  const runs = await dependencies.db
-    .select()
-    .from(nodeRuns)
-    .where(eq(nodeRuns.taskId, input.taskId))
+
+  const runs = await databaseSessionFor(dependencies.db).snapshotRead(async (tx) => {
+    // Existence includes converted history. Only after the requested row belongs to this task
+    // may the restriction provider decide whether it can participate in a retry.
+    const { nodeRuns } = tablesOf(tx)
+    const [requested] = await tx
+      .select({ id: nodeRuns.id })
+      .from(nodeRuns)
+      .where(and(eq(nodeRuns.taskId, input.taskId), eq(nodeRuns.id, input.nodeRunId)))
+      .limit(1)
+    if (requested === undefined)
+      throw new NotFoundError(
+        'node-run-not-found',
+        `node_run '${input.nodeRunId}' not found under task '${input.taskId}'`,
+      )
+    await assertTaskHistoryExecutableInTx(
+      tx,
+      dependencies.historyRestrictions,
+      'retry',
+      input.taskId,
+      [input.nodeRunId],
+    )
+    return createNodeRunQueries(tx).listWithCheckpoints({ taskId: input.taskId })
+  })
   const target = runs.find((row) => row.id === input.nodeRunId)
   if (target === undefined) {
     throw new NotFoundError(
@@ -2099,9 +2134,7 @@ export async function retryNodeProjection(
       )
     }
     // RFC-395 II-a: runs contains every row of this task, including synthetic attempts.
-    const newer = await createRunSelectionOracleSnapshot(runs, {
-      scope: { kind: 'task' },
-    }).slotHistory(
+    const newer = await createRunSelectionReader(dependencies.db).slotHistory(
       input.taskId,
       {
         kind: 'synthetic',
@@ -2200,6 +2233,13 @@ export async function retryNodeProjection(
   // 事务因此拆成两笔——事件组 id 不变、ordinal 仍是 0 / 1（`appendProgram` 按
   // `(eventGroupId, eventGroupOrdinal)` 幂等，投递按同一对排序），跨两次提交不影响消费端。
   const admitted = await withSerializableTaskExecution(dependencies.db, async (tx) => {
+    await assertTaskHistoryExecutableInTx(
+      tx,
+      dependencies.historyRestrictions,
+      'retry',
+      input.taskId,
+      [input.nodeRunId],
+    )
     const { tasks } = tablesOf(tx)
     const changed = await tx
       .update(tasks)
@@ -2290,7 +2330,8 @@ export async function retryNodeProjection(
       )
     }
   }
-  const minted = await withSerializableTaskExecution(dependencies.db, async (tx) => {
+  const minted = await withTaskExecutionAggregateWrite(dependencies.db, async (tx) => {
+    await taskAggregateWrite.lockTaskAggregateRoot(tx, input.taskId)
     const mint = createNodeRunMintParticipantInTx(tx)
     const nodeChanges: Array<{
       nodeRunId: string
@@ -2303,7 +2344,7 @@ export async function retryNodeProjection(
       const selected =
         nodeId === target.nodeId
           ? target
-          : await inheritanceSourceInFrame(runs, nodeId, {
+          : await inheritanceSourceInFrame(dependencies.db, runs, nodeId, {
               containerRunId: target.containerRunId,
               iteration: target.iteration,
             })
@@ -2321,10 +2362,10 @@ export async function retryNodeProjection(
       }
       const nodeRows = runs.filter((row) => row.nodeId === nodeId)
       const nodeRunId = await mint.mint({
-        ...deriveNodeRunRole({
-          nodeId: nodeId,
-          rerunCause: nodeId === target.nodeId ? 'retry-node' : 'retry-node-cascade',
-        }),
+        ...nodeRunMintIdentityForSlot(
+          selected?.slot ?? { kind: 'node', nodeId, frame: { containerRunId: null, iteration: 0 } },
+          { kind: 'operation', cause: 'retry', operationRef },
+        ),
         taskId: input.taskId,
         nodeId,
         status: 'failed',
@@ -2339,7 +2380,7 @@ export async function retryNodeProjection(
                 shardKey: selected.shardKey,
                 parentNodeRunId: selected.parentNodeRunId,
                 containerRunId: selected.containerRunId,
-                checkpointInheritance: decodeTaskCheckpointInheritance(selected),
+                checkpointInheritance: selected.checkpointInheritance,
                 continuationSlotKey: selected.continuationSlotKey,
                 lineageSlotPathJson: selected.lineageSlotPathJson,
                 operationGeneration: selected.operationGeneration,
@@ -2506,6 +2547,7 @@ export function createTaskRouteOperations(
           persistence: dependencies.persistence,
           activity: dependencies.activity,
           repositoryPreparationRetry: dependencies.repositoryPreparationRetry,
+          historyRestrictions: dependencies.historyRestrictions,
           resumeTaskAs,
           cancelChildTaskForCascade,
           ...(dependencies.now === undefined ? {} : { now: dependencies.now }),

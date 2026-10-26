@@ -1,5 +1,7 @@
+import { createEpoch2PostgresqlMetadata } from './helpers/epoch2PostgresqlMetadata'
 // RFC-349 — the three owner maintenance jobs execute through real PostgreSQL
 // adapters and keep the same bounded counters as SQLite.
+// RFC-395 BF-D27: AF-D1 keeps one fence per mutation and one committed first-write marker per runtime.
 
 import { withNativeTransactions } from './helpers/nativeTransactions'
 import { describe, expect, test } from 'bun:test'
@@ -33,11 +35,14 @@ function rows(input: {
 
 function fixture() {
   const statements: string[] = []
+  const epoch2Metadata = createEpoch2PostgresqlMetadata()
   const execute = (sql: string): SqlRows => {
     statements.push(sql)
+    const metadata = epoch2Metadata(sql)
+    if (metadata) return metadata
     const normalized = sql.trim().toLowerCase()
     if (/^(begin|commit|rollback)$/.test(normalized)) return rows({})
-    if (sql.includes('database_generations')) {
+    if (sql.includes('generations')) {
       return rows({ objects: [{ generation_id: 'dbg_owner_maintenance_pg' }] })
     }
     if (normalized.startsWith('select') && normalized.includes('mission_input_uploads')) {
@@ -92,11 +97,14 @@ function fixture() {
 
 function writerFixture() {
   const statements: string[] = []
+  const epoch2Metadata = createEpoch2PostgresqlMetadata()
   const execute = (sql: string): SqlRows => {
     statements.push(sql)
+    const metadata = epoch2Metadata(sql)
+    if (metadata) return metadata
     const normalized = sql.trim().toLowerCase()
     if (/^(begin|commit|rollback)$/.test(normalized)) return rows({})
-    if (sql.includes('database_generations')) {
+    if (sql.includes('generations')) {
       return rows({ objects: [{ generation_id: 'dbg_owner_maintenance_pg' }] })
     }
     if (normalized.includes('for update')) return rows({})
@@ -160,33 +168,53 @@ describe('RFC-349 Digital/Development PostgreSQL maintenance owners', () => {
     expect(sql).toContain('"agent_workflow"."development_missions"')
     expect(sql).toContain('"agent_workflow"."development_bundle_refs"')
     expect(sql).toContain('"agent_workflow"."employee_input_uploads"')
-    // One process-wide live-write marker plus a generation fence per write.
-    expect(
-      fake.statements.filter((statement) => statement.includes('database_generations')),
-    ).toHaveLength(3)
+    const normalized = fake.statements.map((statement) => statement.trim().toLowerCase())
+    const mutations = normalized.filter((statement) => statement.startsWith('delete from'))
+    expect(mutations).toEqual([
+      expect.stringContaining('delete from "agent_workflow"."mission_input_uploads"'),
+      expect.stringContaining('delete from "agent_workflow"."employee_input_uploads"'),
+    ])
+    const fence = expect.stringMatching(/^select generation_id .*"generations".*for share$/)
+    const firstWrite = [
+      expect.stringContaining('select first_live_write_at'),
+      expect.stringContaining('update "agent_workflow_meta"."first_write"'),
+    ]
+    expect(normalized.filter((statement) => statement.includes('"generations"'))).toEqual(
+      mutations.map(() => fence),
+    )
+    expect(normalized.filter((statement) => statement.includes('"first_write"'))).toEqual(
+      firstWrite,
+    )
+    for (const [index, mutation] of mutations.entries()) {
+      const mutationIndex = normalized.indexOf(mutation)
+      const begin = normalized.lastIndexOf('begin', mutationIndex)
+      const commit = normalized.indexOf('commit', mutationIndex)
+      expect(begin).toBeGreaterThanOrEqual(0)
+      expect(commit).toBeGreaterThan(mutationIndex)
+      expect(normalized.slice(begin, commit + 1)).toEqual([
+        'begin',
+        fence,
+        ...(index === 0 ? firstWrite : []),
+        mutation,
+        'commit',
+      ])
+    }
   })
 
-  test('writer cutover locks, counts, fences and updates in one PostgreSQL transaction', async () => {
+  test('installed writer facts never issue retired PostgreSQL state queries', async () => {
     const fake = writerFixture()
-    const writer = composeDigitalEmployeeWriterCutover(fake.db)
-
-    await expect(writer.activate({ now: 2_000, legacyAdmissionsEnabled: false })).resolves.toEqual({
+    const writer = composeDigitalEmployeeWriterCutover(fake.db, {
       activeGeneration: 1,
-      mode: 'legacy-draining',
-      legacyAdmissionsEnabled: false,
-      legacyOpenMissionCount: 2,
-      updatedAt: 2_000,
+      updatedAt: 2000,
     })
-
-    const normalized = fake.statements.map((statement) => statement.trim().toLowerCase())
-    expect(normalized[0]).toBe('begin')
-    expect(normalized.some((statement) => statement.includes('for update'))).toBe(true)
-    expect(normalized.some((statement) => statement.includes('database_generations'))).toBe(true)
-    expect(
-      normalized.some((statement) =>
-        statement.includes('update "agent_workflow"."employee_os_writer_state"'),
-      ),
-    ).toBe(true)
-    expect(normalized.at(-1)).toBe('commit')
+    await expect(writer.read()).resolves.toEqual({
+      activeGeneration: 1,
+      mode: 'os-active',
+      legacyAdmissionsEnabled: false,
+      legacyOpenMissionCount: 0,
+      updatedAt: 2000,
+    })
+    expect((await writer.analyze()).draining).toEqual([])
+    expect(fake.statements).toEqual([])
   })
 })

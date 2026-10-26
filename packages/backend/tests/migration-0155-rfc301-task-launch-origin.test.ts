@@ -5,6 +5,7 @@
 // terminate, and an old writer's default-manual child must be repaired by the
 // DB trigger inside its INSERT transaction.
 
+import { FROZEN_MIGRATIONS } from './migration-freeze'
 import { afterEach, describe, expect, test } from 'bun:test'
 import { Database } from 'bun:sqlite'
 import { readFileSync } from 'node:fs'
@@ -12,10 +13,7 @@ import { resolve } from 'node:path'
 
 import { CODE_HOST_EVENT_TYPES, TRIGGER_CONTEXT_FIELDS } from '@agent-workflow/shared'
 
-const SQL = readFileSync(
-  resolve(import.meta.dir, '..', 'db', 'migrations', '0155_rfc301_task_launch_origin.sql'),
-  'utf8',
-)
+const SQL = readFileSync(resolve(FROZEN_MIGRATIONS, '0155_rfc301_task_launch_origin.sql'), 'utf8')
 
 const opened: Database[] = []
 

@@ -13,14 +13,8 @@
 // 受影响的是**用户敲进去的搜索框**：记忆列表 `?search=`、数字员工案件列表 `?q=`。
 // 修法是 PostgreSQL 侧改用 `ilike`（SQLite 侧保持 `like`，它本来就不敏感）。
 //
-// **有三处 `like` 是故意留着的**，别顺手一起改：
-//   1. `postgresqlPluginRepository` / `postgresqlMcpRepository` 的 `%"<id>"%` —— 模式由
-//      存下来的 id 原样拼出，大小写敏感才是对的；改成 ilike 等于把 SQLite 那边「只差
-//      大小写的两个 id 会互相误命中」的毛病搬过来。
-//   2. `postgresqlPersistence` 的 `event-center.%` —— consumer id 是代码常量、全小写，
-//      两个 provider 结果相同。
-//   3. `postgresqlNodeExecutionPersistence` 的 `notLike(payload, '[rfc%')` —— 前缀是代码
-//      常量、全小写；模型自己吐出的 `[RFC…` 在 PostgreSQL 上会被正确计入，SQLite 反而漏。
+// 机器标记的精确匹配另行登记。RFC-395 F-F1 将资源 ID 反查迁到 typed relations / index
+// 的等值查询，不再登记 JSON LIKE；精确 ID 不得受用户搜索的大小写规则影响。
 
 import { describe, expect, test } from 'bun:test'
 import { Database } from 'bun:sqlite'
@@ -37,8 +31,7 @@ const read = (path: string): string => readFileSync(resolve(backendRoot, path), 
 /**
  * `文件相对 src 的路径 -> 被匹配的列 -> 为什么这里大小写敏感才是对的`。
  *
- * 这几条模式都不是用户输入：一条按运行时写死的机器标记找证据，其余按代码写死的 JSON 片段
- * 找引用（id 是 ULID，大小写由生成器决定）。改成 ilike 反而会误召回。
+ * 模式不是用户输入：按运行时写死的机器标记找证据。改成 ilike 反而会误召回。
  *
  * RFC-359 W7 删掉了原先第四条（已提交事件出站存储按 'event-center.%' 过滤消费者）：那处
  * `like` 与它自己在 JS 里的 `stage` 投影语义相反——SQLite 的 LIKE 对 ASCII 不敏感，
@@ -50,17 +43,24 @@ const DELIBERATE_EXACT_CASE: Record<string, Record<string, string>> = {
     'nodeRuns.errorMessage':
       "按运行时写死的机器标记 '%child-unkillable%' 找无法回收子进程的证据；标记是常量，精确匹配才对",
   },
-  // RFC-359 W4-D23b：这份反查随技能删除路径迁到中立事务后进入 PG 执行面，守卫因此第一次看到它。
-  // 判据与上面两条同源：按 `%"<资源 id>"%` 在 JSON 数组文本里找引用，id 是 ULID，精确匹配才对。
-  'modules/resource-catalog/infrastructure/referenceLookup.ts': {
-    'agents[kind]': '按 `%"<资源 id>"%` 在 JSON 数组文本里找引用，id 是 ULID，精确匹配才对',
-  },
 }
 
 /** `like(` but not `ilike(` / `notLike(`. */
 const PLAIN_LIKE = /(?<![A-Za-z])like\(/gu
 
 describe('RFC-349 user search stays case-insensitive on both providers', () => {
+  test('resource references use exact relation and revision-bound index equality without LIKE', () => {
+    const source = read('src/modules/resource-catalog/infrastructure/referenceLookup.ts')
+    expect(source).not.toMatch(/\b(?:like|ilike)\s*\(|matchesStoredAgentReference/)
+    for (const table of ['agentSkillRefs', 'agentMcpRefs', 'agentPluginRefs', 'agentDependencies'])
+      expect(source).toContain(table)
+    expect(source).toContain('exists(')
+    expect(source).toContain('eq(relation.agentId, agents.id)')
+    expect(source).toContain('eq(target, id)')
+    expect(source).toContain('workflowDependencyIndex: index')
+    expect(source).toContain('eq(index.revision, workflows.version)')
+    expect(source).toContain('eq(index.selectorValue, value)')
+  })
   test('the premise: SQLite LIKE ignores ASCII case', () => {
     const db = new Database(':memory:')
     db.run('create table t(a text)')

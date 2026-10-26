@@ -1,3 +1,4 @@
+import type { HistoryRestrictionPort } from '@/platform/contracts/historyRestriction'
 import type { HumanGateTaskLockPort } from '../composition/required-ports'
 // RFC-359 W1-T2b（F-H2-1 之二）—— collaboration 的快速澄清决定命令端口：一份实现，两个引擎。
 //
@@ -22,6 +23,7 @@ export function createClarifyDecisionCommand(
   db: PersistenceDb,
   memoryDistillEnqueuer: MemoryDistillEnqueuer,
   taskLock: HumanGateTaskLockPort,
+  options: { readonly historyRestrictions: HistoryRestrictionPort },
 ): ClarifyDecisionCommandPort {
   return {
     async submit(command) {
@@ -29,6 +31,7 @@ export function createClarifyDecisionCommand(
       const decided = await autoDispatchClarifyRoundWithDecision({
         db,
         taskLock,
+        historyRestrictions: options?.historyRestrictions,
         originNodeRunId: command.nodeRunId,
         answers: [...command.answers],
         directive: command.directive,
@@ -70,6 +73,7 @@ export function createClarifyDecisionCommand(
 /** Legacy test bridge; production routes use the bootstrap-owned context. */
 export function createClarifyDecisionCommandContext(input: {
   readonly taskLock: HumanGateTaskLockPort
+  readonly historyRestrictions: HistoryRestrictionPort
   readonly db: DbClient
   readonly actor: Actor
   readonly role: TaskActorRole
@@ -77,11 +81,13 @@ export function createClarifyDecisionCommandContext(input: {
 }): CollaborationCommandContext<'clarifyDecisions'> {
   return createCollaborationCommandContext({
     taskLock: input.taskLock,
+    historyRestrictions: input.historyRestrictions,
     db: input.db,
     clarifyDecisions: createClarifyDecisionCommand(
       input.db,
       input.memoryDistillEnqueuer,
       input.taskLock,
+      { historyRestrictions: input.historyRestrictions },
     ),
   })
 }

@@ -1,3 +1,6 @@
+import { createEpoch2PostgresqlMetadata } from './helpers/epoch2PostgresqlMetadata'
+import { resourcePackageArtifactCodecs } from '@/modules/resource-catalog/infrastructure/resourcePackageArtifactCodec'
+import { createTestDb } from './helpers/testDatabase'
 // RFC-349 AC-12 — one executable behavior transcript crosses both provider
 // implementations. PostgreSQL uses the real adapters over a scripted SQL
 // runtime; the script verifies the adapter's actual transaction/fence path and
@@ -11,7 +14,7 @@ import { tablesOf } from '@/platform/persistence/sessionTables'
 import { queryWrite } from '@/platform/persistence/queryHelpers'
 import { describe, expect, test } from 'bun:test'
 
-import { createInMemoryDb, type DbClient } from '@/db/client'
+import type { DbClient } from '@/db/client'
 import {
   type ResourcePackageApplyArtifactRecoveryPort,
   type ResourcePackageApplyJournalPort,
@@ -36,7 +39,6 @@ import type {
 } from '@/platform/persistence/postgresqlRuntime'
 import { sha256Hex } from '@/util/hash'
 import { canonicalJson } from '@agent-workflow/shared'
-import { MIGRATIONS } from './migration-freeze'
 
 type SqlStep = Readonly<{
   label: string
@@ -68,12 +70,15 @@ function createScriptedPostgresqlFixture(
   steps: readonly SqlStep[],
 ): ScriptedPostgresqlFixture {
   const remaining = [...steps]
+  const epoch2Metadata = createEpoch2PostgresqlMetadata()
   const execute = (query: string): SqlRows => {
+    const metadata = epoch2Metadata(query)
+    if (metadata) return metadata
     // RFC-349: the one-shot live-write marker and the per-transaction
     // generation fence are provider plumbing, locked by
     // `rfc349-postgresql-database-client.test.ts`. This oracle scripts the
     // adapter's *behavior*, so they never consume a scripted step.
-    if (/"agent_workflow_meta"\."database_generations"/i.test(query)) {
+    if (/"agent_workflow_meta"\."generations"/i.test(query)) {
       return sqlRows({
         label: 'active generation fence',
         sql: /./,
@@ -568,7 +573,7 @@ const APPLY_ROWS: readonly ApplyFixtureRow[] = [
     key: 'committed',
     actorUserId: 'owner-oracle',
     state: 'committed',
-    preparedArtifactsJson: '[]',
+    preparedArtifactsJson: resourcePackageArtifactCodecs.encode([]),
     receiptJson: '{"journalId":"apply-committed","applied":[]}',
     error: null,
     createdAt: 1,
@@ -580,7 +585,7 @@ const APPLY_ROWS: readonly ApplyFixtureRow[] = [
     key: 'stale',
     actorUserId: 'owner-oracle',
     state: 'applying',
-    preparedArtifactsJson: '[]',
+    preparedArtifactsJson: resourcePackageArtifactCodecs.encode([]),
     receiptJson: null,
     error: null,
     createdAt: 1,
@@ -592,7 +597,7 @@ const APPLY_ROWS: readonly ApplyFixtureRow[] = [
     key: 'active',
     actorUserId: 'owner-oracle',
     state: 'applying',
-    preparedArtifactsJson: '[]',
+    preparedArtifactsJson: resourcePackageArtifactCodecs.encode([]),
     receiptJson: null,
     error: null,
     createdAt: 1,
@@ -652,9 +657,12 @@ describe('RFC-349 AC-12 dual-provider behavior oracle', () => {
   test('SQLite and PostgreSQL deep-equal CAS, lease/fence, idempotency, outbox, ordering and apply recovery', async () => {
     const events = [eventFixture(0), eventFixture(1)] as const
 
-    const sqliteMaintenanceDb = createInMemoryDb(MIGRATIONS)
-    const sqliteEventsDb = createInMemoryDb(MIGRATIONS)
-    const sqliteApplyDb = createInMemoryDb(MIGRATIONS)
+    const sqliteMaintenance = await createTestDb()
+    const sqliteMaintenanceDb = sqliteMaintenance.db as DbClient
+    const sqliteEvents = await createTestDb()
+    const sqliteEventsDb = sqliteEvents.db as DbClient
+    const sqliteApply = await createTestDb()
+    const sqliteApplyDb = sqliteApply.db as DbClient
     try {
       seedSqliteCommittedEvents(sqliteEventsDb, events)
       const { resourceBundleApplies } = tablesOf(sqliteApplyDb)
@@ -703,9 +711,9 @@ describe('RFC-349 AC-12 dual-provider behavior oracle', () => {
       postgresqlEvents.assertExhausted()
       postgresqlApply.assertExhausted()
     } finally {
-      sqliteMaintenanceDb.$client.close()
-      sqliteEventsDb.$client.close()
-      sqliteApplyDb.$client.close()
+      await sqliteMaintenance.close()
+      await sqliteEvents.close()
+      await sqliteApply.close()
     }
   })
 })

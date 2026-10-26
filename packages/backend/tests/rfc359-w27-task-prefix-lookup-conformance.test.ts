@@ -1,17 +1,9 @@
+import { TASK_DEFINITION_HOSTS } from '@agent-workflow/shared'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 // RFC-395 II-a rebaseline: HEAD inverse matches the previous pin; only A2 subject/name SQL
 // and A7 catalog-query forwarding changed. Prefix/gate inverses and binding assertions remain exact.
 // RFC359 W27: actual W25 PG root_prefix still scanned 100,000 tasks after a 204-row
 // physical prefix. Compare exact original SQL and real rows; no latency assertion.
-import { patchTaskFixture, taskFixture, workflowFixture, readTaskFixtures } from './helpers/model'
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
-import { rawRows } from '@/platform/persistence/queryHelpers'
-import { expect, test } from 'bun:test'
-import { createHash } from 'node:crypto'
-import { readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
-import { getTableColumns, SQL, StringChunk } from 'drizzle-orm'
-import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type {
   TaskListViewer,
   TaskOperationsRawQuery,
@@ -21,12 +13,22 @@ import {
   parseTaskOperationsQuery,
 } from '@/modules/task-execution/infrastructure/taskListPage/filters'
 import { fastFilteredRootQuery } from '@/modules/task-execution/infrastructure/taskListPage/query'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import {
   createPostgresqlDatabaseRuntime,
   type PostgresqlPool,
 } from '@/platform/persistence/postgresqlRuntime'
+import { rawRows } from '@/platform/persistence/queryHelpers'
+
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { expect, test } from 'bun:test'
+import { getTableColumns, SQL, StringChunk } from 'drizzle-orm'
+import { createHash } from 'node:crypto'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
+import { patchTaskFixture, readTaskFixtures, taskFixture, workflowFixture } from './helpers/model'
 
 const VIEWER: TaskListViewer = { userId: 'w27-owner', canReadAllTasks: true }
 const OPTIONS = { catalogVisibility: 'public' } as const
@@ -113,11 +115,19 @@ function originalBindings(
   const count = (text: string) =>
     [...text.replace(/'(?:''|[^'])*'|"(?:""|[^"])*"/g, '').matchAll(/\?|\$\d+/g)].length
   const offset = count(sql.slice(0, start))
-  if (count(sql.slice(0, limit)) !== offset + 1)
-    throw new Error('additional LIMIT must immediately follow the original budget binding')
+  if (count(sql.slice(0, limit)) !== offset + 5)
+    throw new Error('additional LIMIT must follow the budget and target projection bindings')
   const parsed = parseTaskOperationsQuery(VIEWER, raw, OPTIONS)
-  expect(values.slice(offset, offset + 2)).toEqual([parsed.limit + 1, parsed.limit + 1])
-  return [...values.slice(0, offset + 1), ...values.slice(offset + 2)]
+  expect(values.slice(offset, offset + 6)).toEqual([
+    parsed.limit + 1,
+    // The physical-prefix target projection binds the four synthetic definition anchors.
+    TASK_DEFINITION_HOSTS.agent.id,
+    TASK_DEFINITION_HOSTS.workgroup.id,
+    TASK_DEFINITION_HOSTS['digital-employee'].id,
+    TASK_DEFINITION_HOSTS['code-round'].id,
+    parsed.limit + 1,
+  ])
+  return [...values.slice(0, offset + 5), ...values.slice(offset + 6)]
 }
 function inspectCte(query: SQL, end: string, select: string): SQL {
   const chunks: SQL['queryChunks'] = []
@@ -283,7 +293,8 @@ const RAW = { subject: 'workflow', limit: '1' } satisfies TaskOperationsRawQuery
 describeEachProvider('RFC359 W27 bounded task prefix lookup', (harness) => {
   test('the original matches remain unique with multiple open alerts for one task', async () => {
     await seed(harness.db, roots())
-    const { lifecycleAlerts, tasks } = tablesOf(harness.db)
+    const { lifecycleAlerts } = tablesOf(harness.db)
+    const { tasks } = tablesOf(harness.db)
     for (const [id, resolvedAt] of [
       ['open-a', null],
       ['open-b', null],
@@ -418,12 +429,14 @@ describeEachProvider('RFC359 W27 bounded task prefix lookup', (harness) => {
   })
 })
 // RFC-395 I-b: the inverse includes the shared instr capability; SQL and bindings are still compared on both providers.
+// T18 P3B: reviewed epoch-2 taskCatalogReadSql/subject_kind delta; inverse, binding and row proofs stay exact.
+// T18 PGX-D: only the page projection split changed; reversing that hunk restores 8d09b429….
 test('the inverse retains the complete W26 source and all original interpolation sites', () => {
   expect(
     createHash('sha256')
       .update(restoreText(readFileSync(SOURCE_PATH, 'utf8')))
       .digest('hex'),
-  ).toBe('86b8742fd952555ec17a1eacac9bd828f5bff4ce54b3cee6903dc10dfb6c33ef')
+  ).toBe('4c26456e21d3ae8c93ec36262bb0215a65410e0b797338bf7177af7d7d7e1295')
 })
 test('the actual PG compiler preserves original SQL and bindings without executing PG', async () => {
   const statements: { sql: string; values: readonly unknown[] }[] = []

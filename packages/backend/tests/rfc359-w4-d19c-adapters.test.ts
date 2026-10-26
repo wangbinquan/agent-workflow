@@ -1,3 +1,5 @@
+import { nodeRunFixtureColumns } from './helpers/model/nodeRun'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 // RFC-359 W4-D19c —— 工作组回合引擎合一：SQLite 不再走 legacy engine，两个 provider 用同一条中立驱动
 // （`application/workgroups/workgroupTurnsDriver.ts` + 一份持久化适配器 `workgroupTurnsOperations.ts`）。
 //
@@ -13,23 +15,22 @@ import {
   workflowFixture,
   readNodeRunFixtures,
 } from './helpers/model'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+
 import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { DEFAULT_PROTOCOL_RETRY_BUDGET } from '@agent-workflow/shared'
 
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import type {
-  WorkgroupTurnHostRequest,
-  WorkgroupTurnHostResult,
-  WorkgroupTurnLogger,
-  WorkgroupTurnsOutcome,
-} from '@/modules/task-execution/public/commands'
 import {
+  type WorkgroupTurnHostRequest,
+  type WorkgroupTurnHostResult,
+  type WorkgroupTurnLogger,
+  type WorkgroupTurnsOutcome,
   WORKGROUP_TURN_LEADER_NODE_ID,
   WORKGROUP_TURN_MEMBER_NODE_ID,
 } from '@/modules/task-execution/public/commands'
+
 import { describeEachProvider } from './helpers/eachProvider'
 import { runWorkgroupTurns } from './helpers/workgroupTurns'
 
@@ -355,7 +356,7 @@ describeEachProvider('RFC-359 W4-D19c —— 工作组回合引擎', (harness) =
       })
       const memberRuns = (await readNodeRunFixtures(db, { taskId }))
         .filter((run) => run.nodeId === WORKGROUP_TURN_MEMBER_NODE_ID)
-        .sort((a, b) => a.retryIndex - b.retryIndex)
+        .sort((a, b) => (a.retryIndex ?? 0) - (b.retryIndex ?? 0))
       expect(memberRuns.map((run) => [run.retryIndex, run.rerunCause])).toEqual([
         [0, 'wg-assignment'],
         [1, 'wg-protocol-retry'],
@@ -410,16 +411,19 @@ describeEachProvider('RFC-359 W4-D19c —— 工作组回合引擎', (harness) =
     const outcome = await runWorkgroupTurns({ db, taskId, log, hooks })
 
     expect(outcome.kind, outcomeWhy(outcome)).toBe('ok')
-    const { workgroupAssignments, nodeRuns, workgroupMessages } = tablesOf(db)
+    const { workgroupAssignments, workgroupMessages } = tablesOf(db)
+    const { nodeRuns } = tablesOf(db)
     const cards = await db
       .select()
       .from(workgroupAssignments)
       .where(eq(workgroupAssignments.taskId, taskId))
     expect(cards).toHaveLength(1)
     // 卡片失败之后成员还可能响应未读消息；按卡片血缘只数这次派单的重跑。
-    const assignmentRuns = (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId)))
+    const assignmentRuns = (
+      await db.select(nodeRunFixtureColumns(db)).from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
+    )
       .filter((run) => run.shardKey === cards[0]?.id)
-      .sort((a, b) => a.retryIndex - b.retryIndex)
+      .sort((a, b) => (a.retryIndex ?? 0) - (b.retryIndex ?? 0))
     const assignmentRunIds = new Set(assignmentRuns.map((run) => run.id))
     expect(requests.filter((request) => assignmentRunIds.has(request.nodeRunId))).toHaveLength(
       DEFAULT_PROTOCOL_RETRY_BUDGET + 1,
@@ -472,7 +476,7 @@ describeEachProvider('RFC-359 W4-D19c —— 工作组回合引擎', (harness) =
     // `wg-protocol-retry`，铸成主 cause 就等于一次流中断白吃掉一整轮，小队会莫名撞上 max_rounds。
     // 按 retryIndex 排——同毫秒铸出的两条 ULID 之间没有稳定序，按 id 排会间歇性翻转。
     const runs = (await readNodeRunFixtures(db, { taskId })).sort(
-      (a, b) => a.retryIndex - b.retryIndex,
+      (a, b) => (a.retryIndex ?? 0) - (b.retryIndex ?? 0),
     )
     expect(runs.map((run) => [run.retryIndex, run.rerunCause])).toEqual([
       [0, 'wg-leader-round'],

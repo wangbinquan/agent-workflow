@@ -32,7 +32,7 @@ import { createRetryEngine } from './helpers/retryEngine'
 import { createResumeEngine } from './helpers/resumeEngine'
 import { existsSync, mkdirSync, readFileSync, rmSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { monotonicFactory } from 'ulid'
 import { and, eq } from 'drizzle-orm'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
@@ -59,7 +59,6 @@ import { installTaskLifecycleAfterCommitTestPump } from './helpers/taskLifecycle
 import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
 
 const ulid = monotonicFactory()
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 interface Harness {
   db: DbClient
@@ -130,7 +129,7 @@ async function buildHarness(): Promise<Harness> {
     await runGit(p, ['commit', '-m', 'init'])
   }
   writeFileSync(mockPath, mockSource(planFile))
-  const db = createInMemoryDb(MIGRATIONS)
+  const db = createInMemoryDb()
   const uninstallAfterCommitPump = installTaskLifecycleAfterCommitTestPump(db, {
     onExecutionWatch(_db, taskId, status) {
       notifyTaskTerminal(taskId, status)
@@ -871,7 +870,7 @@ describe('RFC-243 e2e — 叠加形态与恢复矩阵（实现门 P1-5 / 验收 
 
 describe('RFC-243 §3.1 — freezeCallClosure', () => {
   test('无 call 节点 → null；缺引用/环 → 专码', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createInMemoryDb()
     const plain: WorkflowDefinition = {
       $schema_version: 4,
       inputs: [],
@@ -922,7 +921,7 @@ describe('RFC-243 §3.1 — freezeCallClosure', () => {
   })
 
   test('PR-4：workgroups 叶随冻结入闭包（完整 roster）；缺失同码拒绝', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createInMemoryDb()
     const defWithWg = {
       $schema_version: 4,
       inputs: [],

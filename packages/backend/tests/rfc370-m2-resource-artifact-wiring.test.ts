@@ -1,9 +1,11 @@
+import { resourcePackageArtifactCodecs } from '@/modules/resource-catalog/infrastructure/resourcePackageArtifactCodec'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 // RFC-395 II-pre：hosted 工件恢复改接生产 journal convergence，保留远端内容断言。
 // Real Intent resource commits, durable recovery and the worker envelope share
 // selected content owners. Neither provider is allowed to touch a local root.
 import { createAtomicApplyRecovery } from '@/platform/atomic-apply/convergence'
 import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+
 import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
@@ -46,9 +48,8 @@ describeEachProvider('RFC-370 hosted resource production families', (harness) =>
       },
       source: 'session',
     })
-    const { users, intentSessions, intentDrafts, skills, plugins, intentApplyJournal } = tablesOf(
-      harness.db,
-    )
+    const { users, intentSessions, intentDrafts, plugins } = tablesOf(harness.db)
+    const { skills, intentApplyJournal } = tablesOf(harness.db)
     await insertOne(harness.db, users, { ...actor.user, createdAt: 1, updatedAt: 1 })
     const authority = composeIdentityAccess(harness.db).contexts.fromAuthenticatedPrincipal(
       { userId: actor.user.id, source: 'session' },
@@ -202,7 +203,7 @@ describeEachProvider('RFC-370 hosted resource production families', (harness) =>
         id: 'journal',
         state: 'committed',
         updatedAt: 1,
-        preparedArtifactsJson: JSON.stringify([
+        preparedArtifactsJson: resourcePackageArtifactCodecs.encode([
           {
             kind: 'plugin-install',
             operationId: 'op-1',

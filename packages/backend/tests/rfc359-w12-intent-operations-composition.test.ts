@@ -1,3 +1,4 @@
+import { tablesOf } from '@/platform/persistence/sessionTables'
 // RFC-359 W12 — construct all six provider apply/maintenance roots and exercise
 // their real resource commits, journal recovery, activity snapshots and files.
 // The prepare barrier only pauses the real resource session; it replaces no
@@ -5,7 +6,7 @@
 
 import { readAgentFixtures } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+
 import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { createHash } from 'node:crypto'
 import {
@@ -81,7 +82,7 @@ function composeFor(harness: ProviderHarness, appHome: string, prepared?: () => 
     db: harness.db,
     mcpLifecycle: createMcpTransactionLifecycle(),
     pluginArtifacts: createPostgresqlIntentPluginArtifactLifecycle({ pluginsDir }),
-    skillArtifacts: createPostgresqlIntentSkillArtifactLifecycle({ appHome }),
+    skillArtifacts: createPostgresqlIntentSkillArtifactLifecycle({ db: harness.db, appHome }),
     aclIdentities: composeResourceCatalogFor({ db: harness.db }).persistence.identities,
   })
   const operations = composeIntentApplyOperations({
@@ -247,7 +248,8 @@ async function seedJournal(
     draftHash: 'sha256:composition-recovery',
     state: input.state,
     preparedArtifactsJson: JSON.stringify({
-      version: 1,
+      scene: 'intent',
+      version: 3,
       artifacts: [
         {
           kind: 'plugin-install',
@@ -378,7 +380,8 @@ describeEachProvider('RFC-359 intent apply and maintenance composition', (harnes
     })
     expect(snapshot).toEqual([receipt.journalId])
     expect(composition.snapshots.activeApplyJournalIds()).toEqual([])
-    const { intentSessions, intentApplyJournal, intentProvenance } = tablesOf(harness.db)
+    const { intentSessions, intentProvenance } = tablesOf(harness.db)
+    const { intentApplyJournal } = tablesOf(harness.db)
     const [created] = await readAgentFixtures(harness.db, { id: receipt.applied[0]!.resourceId })
     expect(created).toMatchObject({
       name: 'composition-worker',
@@ -424,7 +427,8 @@ describeEachProvider('RFC-359 intent apply and maintenance composition', (harnes
     const laterSession = await seedSession(harness)
     const laterTurn = await seedTurn(harness, laterSession, stale)
     const laterScratch = writeScratch(appHome, laterTurn, stale)
-    const { intentWorkingSetChanges, intentTurns, intentApplyJournal } = tablesOf(harness.db)
+    const { intentWorkingSetChanges, intentTurns } = tablesOf(harness.db)
+    const { intentApplyJournal } = tablesOf(harness.db)
     await insertOne(harness.db, intentWorkingSetChanges, {
       id: ulid(),
       sessionId,
@@ -500,7 +504,8 @@ describeEachProvider('RFC-359 intent apply and maintenance composition', (harnes
     const sessionId = await seedSession(harness)
     const pluginId = ulid()
     const generationDir = join(appHome, 'plugins', pluginId, 'generation')
-    const { plugins, intentApplyJournal } = tablesOf(harness.db)
+    const { plugins } = tablesOf(harness.db)
+    const { intentApplyJournal } = tablesOf(harness.db)
     await insertOne(harness.db, plugins, {
       id: pluginId,
       name: 'published-plugin',

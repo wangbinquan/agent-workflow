@@ -1,0 +1,2295 @@
+[
+  {
+    "table": "action_template_revisions",
+    "disposition": "preserved",
+    "targets": ["action_template_revisions"],
+    "basis": "| `action_template_revisions` | resource-catalog / KEEP；6 | development-automation | 保留 | `action_template_revisions`；配置身份与不可变 revision 成对保留；不因旧名称与 OS 定义合并。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["action_template_revisions"]
+    }
+  },
+  {
+    "table": "action_templates",
+    "disposition": "preserved",
+    "targets": ["action_templates"],
+    "basis": "| `action_templates` | resource-catalog / KEEP；11 | development-automation | 保留 | `action_templates`；配置身份与不可变 revision 成对保留；不因旧名称与 OS 定义合并。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["action_templates"]
+    }
+  },
+  {
+    "table": "agents",
+    "disposition": "converted",
+    "targets": [
+      "agent_dependencies",
+      "agent_mcp_refs",
+      "agent_plugin_refs",
+      "agent_skill_refs",
+      "agents"
+    ],
+    "basis": "| `agents` | resource-catalog / KEEP；21 | resource-catalog | 关系化 | `agents + agent_skill_refs + agent_mcp_refs + agent_plugin_refs + agent_dependencies`；正文与端口定义保留；四类独立引用从 JSON 数组移至有序 typed 关系。 | R1 definition: target; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": [
+        "agent_dependencies",
+        "agent_mcp_refs",
+        "agent_plugin_refs",
+        "agent_skill_refs",
+        "agents"
+      ]
+    }
+  },
+  {
+    "table": "application_configuration",
+    "disposition": "preserved",
+    "targets": ["application_configuration"],
+    "basis": "| `application_configuration` | system-operations / KEEP；4 | system-operations | 保留 | `application_configuration`；应用配置、部署执行控制、备份、维护与修复证据分开；备份增加目标合同与内容清单关联。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["application_configuration"]
+    }
+  },
+  {
+    "table": "auth_login_policy",
+    "disposition": "preserved",
+    "targets": ["auth_login_policy"],
+    "basis": "| `auth_login_policy` | identity-access / KEEP；5 | identity-access | 保留 | `auth_login_policy`；身份、配置、session、grant、凭据与审计生命周期不合并；仅迁移显式类型/约束，原功能不扩改。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["auth_login_policy"]
+    }
+  },
+  {
+    "table": "automation_policies",
+    "disposition": "preserved",
+    "targets": ["automation_policies"],
+    "basis": "| `automation_policies` | resource-catalog / KEEP；10 | development-automation | 保留 | `automation_policies`；配置身份与不可变 revision 成对保留；不因旧名称与 OS 定义合并。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["automation_policies"]
+    }
+  },
+  {
+    "table": "automation_policy_revisions",
+    "disposition": "preserved",
+    "targets": ["automation_policy_revisions"],
+    "basis": "| `automation_policy_revisions` | resource-catalog / KEEP；6 | development-automation | 保留 | `automation_policy_revisions`；配置身份与不可变 revision 成对保留；不因旧名称与 OS 定义合并。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["automation_policy_revisions"]
+    }
+  },
+  {
+    "table": "cached_repos",
+    "disposition": "preserved",
+    "targets": ["cached_repos"],
+    "basis": "| `cached_repos` | source-control / KEEP；12 | source-control | 保留 | `cached_repos`；来源、冻结快照、缓存、分组、准备和托管命令各自保留；preparation 可早于 Task。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["cached_repos"]
+    }
+  },
+  {
+    "table": "capability_templates",
+    "disposition": "preserved",
+    "targets": ["capability_templates"],
+    "basis": "| `capability_templates` | resource-catalog / KEEP；22 | code-capability | 保留 | `capability_templates`；保留能力模板与仓库绑定，校正合同 owner；不迁入通用资源 CRUD。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["capability_templates"]
+    }
+  },
+  {
+    "table": "clarify_rounds",
+    "disposition": "converted",
+    "targets": [
+      "clarify_answer_attributions",
+      "clarify_answer_drafts",
+      "clarify_answers",
+      "clarify_rounds"
+    ],
+    "basis": "| `clarify_rounds` | collaboration / KEEP；25 | collaboration | 拆分 | `clarify_rounds + clarify_answers + clarify_answer_drafts + clarify_answer_attributions`；问题快照与非数组答案原文留 round；最终答案/草稿/独立归属按 question_id、occurrence 与源文本 ordinal 保留，封口原子。 | R1 definition: target; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": [
+        "clarify_answer_attributions",
+        "clarify_answer_drafts",
+        "clarify_answers",
+        "clarify_rounds"
+      ]
+    }
+  },
+  {
+    "table": "code_ai_attempts",
+    "disposition": "archived",
+    "targets": ["code_history_archives", "code_history_id_index"],
+    "basis": "| `code_ai_attempts` | integration / DEFER；12 | code-capability/history | 历史化 | `versioned code-history archive + ID index`；历史读者保留；未完工作阻塞预检并逐项转换/收敛；不因 DEFER 直接丢弃。 |",
+    "destination": {
+      "kind": "archive"
+    }
+  },
+  {
+    "table": "code_artifacts",
+    "disposition": "archived",
+    "targets": ["code_history_archives", "code_history_id_index"],
+    "basis": "| `code_artifacts` | integration / ARCHIVE_THEN_OMIT；13 | code-capability/history | 归档 | `versioned code-history archive`；现合同已 ARCHIVE_THEN_OMIT；双 provider 均归档原 ID/字节/关系，目标在线无表。 |",
+    "destination": {
+      "kind": "archive"
+    }
+  },
+  {
+    "table": "code_findings",
+    "disposition": "archived",
+    "targets": ["code_history_archives", "code_history_id_index"],
+    "basis": "| `code_findings` | integration / DEFER；23 | code-capability/history | 历史化 | `versioned code-history archive + ID index`；历史读者保留；未完工作阻塞预检并逐项转换/收敛；不因 DEFER 直接丢弃。 |",
+    "destination": {
+      "kind": "archive"
+    }
+  },
+  {
+    "table": "code_fix_attempts",
+    "disposition": "archived",
+    "targets": ["code_history_archives", "code_history_id_index"],
+    "basis": "| `code_fix_attempts` | integration / ARCHIVE_THEN_OMIT；9 | code-capability/history | 归档 | `versioned code-history archive`；现合同已 ARCHIVE_THEN_OMIT；双 provider 均归档原 ID/字节/关系，目标在线无表。 |",
+    "destination": {
+      "kind": "archive"
+    }
+  },
+  {
+    "table": "code_host_connections",
+    "disposition": "preserved",
+    "targets": ["code_host_connections"],
+    "basis": "| `code_host_connections` | integration / KEEP；11 | integration | 保留 | `code_host_connections`；触发配置、流状态、去重/投递与 MR effect 保留独立生命周期；scheduled_tasks 校正 owner。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["code_host_connections"]
+    }
+  },
+  {
+    "table": "code_mr_leases",
+    "disposition": "archived",
+    "targets": ["code_history_archives", "code_history_id_index"],
+    "basis": "| `code_mr_leases` | integration / ARCHIVE_THEN_OMIT；5 | code-capability/history | 归档 | `versioned code-history archive`；现合同已 ARCHIVE_THEN_OMIT；双 provider 均归档原 ID/字节/关系，目标在线无表。 |",
+    "destination": {
+      "kind": "archive"
+    }
+  },
+  {
+    "table": "code_produced_mrs",
+    "disposition": "archived",
+    "targets": ["code_history_archives", "code_history_id_index"],
+    "basis": "| `code_produced_mrs` | integration / ARCHIVE_THEN_OMIT；8 | code-capability/history | 归档 | `versioned code-history archive`；现合同已 ARCHIVE_THEN_OMIT；双 provider 均归档原 ID/字节/关系，目标在线无表。 |",
+    "destination": {
+      "kind": "archive"
+    }
+  },
+  {
+    "table": "code_publish_intents",
+    "disposition": "archived",
+    "targets": ["code_history_archives", "code_history_id_index"],
+    "basis": "| `code_publish_intents` | integration / ARCHIVE_THEN_OMIT；9 | code-capability/history | 归档 | `versioned code-history archive`；现合同已 ARCHIVE_THEN_OMIT；双 provider 均归档原 ID/字节/关系，目标在线无表。 |",
+    "destination": {
+      "kind": "archive"
+    }
+  },
+  {
+    "table": "code_round_stages",
+    "disposition": "archived",
+    "targets": ["code_history_archives", "code_history_id_index"],
+    "basis": "| `code_round_stages` | integration / DEFER；10 | code-capability/history | 历史化 | `versioned code-history archive + ID index`；历史读者保留；未完工作阻塞预检并逐项转换/收敛；不因 DEFER 直接丢弃。 |",
+    "destination": {
+      "kind": "archive"
+    }
+  },
+  {
+    "table": "code_trigger_deliveries",
+    "disposition": "archived",
+    "targets": ["code_history_archives", "code_history_id_index"],
+    "basis": "| `code_trigger_deliveries` | integration / DEFER；17 | code-capability/history | 历史化 | `versioned code-history archive + ID index`；历史读者保留；未完工作阻塞预检并逐项转换/收敛；不因 DEFER 直接丢弃。 |",
+    "destination": {
+      "kind": "archive"
+    }
+  },
+  {
+    "table": "code_work_items",
+    "disposition": "archived",
+    "targets": ["code_history_archives", "code_history_id_index"],
+    "basis": "| `code_work_items` | integration / DEFER；18 | code-capability/history | 历史化 | `versioned code-history archive + ID index`；历史读者保留；未完工作阻塞预检并逐项转换/收敛；不因 DEFER 直接丢弃。 |",
+    "destination": {
+      "kind": "archive"
+    }
+  },
+  {
+    "table": "code_work_observations",
+    "disposition": "archived",
+    "targets": ["code_history_archives", "code_history_id_index"],
+    "basis": "| `code_work_observations` | integration / ARCHIVE_THEN_OMIT；8 | code-capability/history | 归档 | `versioned code-history archive`；现合同已 ARCHIVE_THEN_OMIT；双 provider 均归档原 ID/字节/关系，目标在线无表。 |",
+    "destination": {
+      "kind": "archive"
+    }
+  },
+  {
+    "table": "code_work_rounds",
+    "disposition": "archived",
+    "targets": ["code_history_archives", "code_history_id_index"],
+    "basis": "| `code_work_rounds` | integration / DEFER；12 | code-capability/history | 历史化 | `versioned code-history archive + ID index`；历史读者保留；未完工作阻塞预检并逐项转换/收敛；不因 DEFER 直接丢弃。 |",
+    "destination": {
+      "kind": "archive"
+    }
+  },
+  {
+    "table": "collaboration_gate_artifacts",
+    "disposition": "converted",
+    "targets": ["collaboration_gate_artifacts", "content_bytes", "content_objects"],
+    "basis": "| `collaboration_gate_artifacts` | collaboration / KEEP；10 | collaboration | 内容引用 | `collaboration_gate_artifacts`；保留人工门/评论的独立关系与状态；正文或制品地址统一为内容引用。 | R1 definition: target; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["collaboration_gate_artifacts", "content_bytes", "content_objects"]
+    }
+  },
+  {
+    "table": "collaboration_gate_operations",
+    "disposition": "converted",
+    "targets": ["collaboration_gate_operations"],
+    "basis": "| `collaboration_gate_operations` | collaboration / KEEP；22 | collaboration | 保留 | `collaboration_gate_operations`；人工门操作、审核人、协作者、反馈、问题分发保留不同语义；task_questions 不与答案合表。 | R1 definition: target; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["collaboration_gate_operations"]
+    }
+  },
+  {
+    "table": "committed_event_aggregate_heads",
+    "disposition": "preserved",
+    "targets": ["committed_event_aggregate_heads"],
+    "basis": "| `committed_event_aggregate_heads` | platform-events / KEEP；6 | platform/committed-events | 保留 | `committed_event_aggregate_heads`；业务提交、aggregate 序号、消费者投递分别保留；跨库转换不重复业务 effect。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["committed_event_aggregate_heads"]
+    }
+  },
+  {
+    "table": "committed_event_deliveries",
+    "disposition": "preserved",
+    "targets": ["committed_event_deliveries"],
+    "basis": "| `committed_event_deliveries` | platform-events / KEEP；16 | platform/committed-events | 保留 | `committed_event_deliveries`；业务提交、aggregate 序号、消费者投递分别保留；跨库转换不重复业务 effect。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["committed_event_deliveries"]
+    }
+  },
+  {
+    "table": "committed_event_family_cutovers",
+    "disposition": "converted",
+    "targets": ["committed_event_family_cutovers"],
+    "basis": "| `committed_event_family_cutovers` | platform-events / DEFER；6 | platform/committed-events | 收缩迁移态 | `committed_event_family_cutovers (target routing)`；保留当前家族路由，移除仅迁移阶段的旧 writer 状态；不得整体归档删除。 | R1 definition: target; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["committed_event_family_cutovers"]
+    }
+  },
+  {
+    "table": "committed_events",
+    "disposition": "preserved",
+    "targets": ["committed_events"],
+    "basis": "| `committed_events` | platform-events / KEEP；19 | platform/committed-events | 保留 | `committed_events`；业务提交、aggregate 序号、消费者投递分别保留；跨库转换不重复业务 effect。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["committed_events"]
+    }
+  },
+  {
+    "table": "custom_event_source_definitions",
+    "disposition": "preserved",
+    "targets": ["custom_event_source_definitions"],
+    "basis": "| `custom_event_source_definitions` | event-center / KEEP；7 | event-center | 保留 | `custom_event_source_definitions`；事件来源/revision、采集事实、规则、订阅、投递和观察运行保留；不与 committed event 混并。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["custom_event_source_definitions"]
+    }
+  },
+  {
+    "table": "custom_event_source_revisions",
+    "disposition": "preserved",
+    "targets": ["custom_event_source_revisions"],
+    "basis": "| `custom_event_source_revisions` | event-center / KEEP；7 | event-center | 保留 | `custom_event_source_revisions`；事件来源/revision、采集事实、规则、订阅、投递和观察运行保留；不与 committed event 混并。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["custom_event_source_revisions"]
+    }
+  },
+  {
+    "table": "development_action_runs",
+    "disposition": "preserved",
+    "targets": ["development_action_runs"],
+    "basis": "| `development_action_runs` | development-automation / KEEP；17 | development-automation | 保留 | `development_action_runs`；定义/revision、Mission 子事实、步骤、上传、审批与 effect 各有持久恢复边界；保留关系并采用显式 codec。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["development_action_runs"]
+    }
+  },
+  {
+    "table": "development_adapter_definition_revisions",
+    "disposition": "preserved",
+    "targets": ["development_adapter_definition_revisions"],
+    "basis": "| `development_adapter_definition_revisions` | development-automation / KEEP；6 | development-automation | 保留 | `development_adapter_definition_revisions`；定义/revision、Mission 子事实、步骤、上传、审批与 effect 各有持久恢复边界；保留关系并采用显式 codec。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["development_adapter_definition_revisions"]
+    }
+  },
+  {
+    "table": "development_adapter_definitions",
+    "disposition": "preserved",
+    "targets": ["development_adapter_definitions"],
+    "basis": "| `development_adapter_definitions` | development-automation / KEEP；11 | development-automation | 保留 | `development_adapter_definitions`；定义/revision、Mission 子事实、步骤、上传、审批与 effect 各有持久恢复边界；保留关系并采用显式 codec。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["development_adapter_definitions"]
+    }
+  },
+  {
+    "table": "development_agent_attempts",
+    "disposition": "preserved",
+    "targets": ["development_agent_attempts"],
+    "basis": "| `development_agent_attempts` | development-automation / KEEP；14 | development-automation | 保留 | `development_agent_attempts`；定义/revision、Mission 子事实、步骤、上传、审批与 effect 各有持久恢复边界；保留关系并采用显式 codec。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["development_agent_attempts"]
+    }
+  },
+  {
+    "table": "development_approval_sagas",
+    "disposition": "preserved",
+    "targets": ["development_approval_sagas"],
+    "basis": "| `development_approval_sagas` | development-automation / KEEP；20 | development-automation | 保留 | `development_approval_sagas`；定义/revision、Mission 子事实、步骤、上传、审批与 effect 各有持久恢复边界；保留关系并采用显式 codec。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["development_approval_sagas"]
+    }
+  },
+  {
+    "table": "development_bundle_refs",
+    "disposition": "preserved",
+    "targets": ["development_bundle_refs"],
+    "basis": "| `development_bundle_refs` | development-automation / KEEP；9 | development-automation | 保留 | `development_bundle_refs`；定义/revision、Mission 子事实、步骤、上传、审批与 effect 各有持久恢复边界；保留关系并采用显式 codec。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["development_bundle_refs"]
+    }
+  },
+  {
+    "table": "development_decisions",
+    "disposition": "preserved",
+    "targets": ["development_decisions"],
+    "basis": "| `development_decisions` | development-automation / KEEP；16 | development-automation | 保留 | `development_decisions`；定义/revision、Mission 子事实、步骤、上传、审批与 effect 各有持久恢复边界；保留关系并采用显式 codec。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["development_decisions"]
+    }
+  },
+  {
+    "table": "development_deferred_wakes",
+    "disposition": "preserved",
+    "targets": ["development_deferred_wakes"],
+    "basis": "| `development_deferred_wakes` | development-automation / KEEP；10 | development-automation | 保留 | `development_deferred_wakes`；定义/revision、Mission 子事实、步骤、上传、审批与 effect 各有持久恢复边界；保留关系并采用显式 codec。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["development_deferred_wakes"]
+    }
+  },
+  {
+    "table": "development_designs",
+    "disposition": "preserved",
+    "targets": ["development_designs"],
+    "basis": "post-baseline contribution; R1 target roster R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["development_designs"]
+    }
+  },
+  {
+    "table": "development_design_revisions",
+    "disposition": "preserved",
+    "targets": ["development_design_revisions"],
+    "basis": "post-baseline contribution; R1 target roster R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["development_design_revisions"]
+    }
+  },
+  {
+    "table": "development_design_proposals",
+    "disposition": "preserved",
+    "targets": ["development_design_proposals"],
+    "basis": "post-baseline contribution; R1 target roster R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["development_design_proposals"]
+    }
+  },
+  {
+    "table": "development_design_baselines",
+    "disposition": "preserved",
+    "targets": ["development_design_baselines"],
+    "basis": "post-baseline contribution; R1 target roster R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["development_design_baselines"]
+    }
+  },
+  {
+    "table": "development_design_links",
+    "disposition": "preserved",
+    "targets": ["development_design_links"],
+    "basis": "post-baseline contribution; R1 target roster R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["development_design_links"]
+    }
+  },
+  {
+    "table": "development_effects",
+    "disposition": "preserved",
+    "targets": ["development_effects"],
+    "basis": "| `development_effects` | development-automation / KEEP；12 | development-automation | 保留 | `development_effects`；定义/revision、Mission 子事实、步骤、上传、审批与 effect 各有持久恢复边界；保留关系并采用显式 codec。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["development_effects"]
+    }
+  },
+  {
+    "table": "development_fact_snapshots",
+    "disposition": "preserved",
+    "targets": ["development_fact_snapshots"],
+    "basis": "| `development_fact_snapshots` | development-automation / KEEP；8 | development-automation | 保留 | `development_fact_snapshots`；定义/revision、Mission 子事实、步骤、上传、审批与 effect 各有持久恢复边界；保留关系并采用显式 codec。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["development_fact_snapshots"]
+    }
+  },
+  {
+    "table": "development_feedback_ledger",
+    "disposition": "preserved",
+    "targets": ["development_feedback_ledger"],
+    "basis": "| `development_feedback_ledger` | development-automation / KEEP；12 | development-automation | 保留 | `development_feedback_ledger`；定义/revision、Mission 子事实、步骤、上传、审批与 effect 各有持久恢复边界；保留关系并采用显式 codec。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["development_feedback_ledger"]
+    }
+  },
+  {
+    "table": "development_mission_links",
+    "disposition": "preserved",
+    "targets": ["development_mission_links"],
+    "basis": "| `development_mission_links` | development-automation / KEEP；18 | development-automation | 保留 | `development_mission_links`；定义/revision、Mission 子事实、步骤、上传、审批与 effect 各有持久恢复边界；保留关系并采用显式 codec。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["development_mission_links"]
+    }
+  },
+  {
+    "table": "development_mission_sources",
+    "disposition": "preserved",
+    "targets": ["development_mission_sources"],
+    "basis": "| `development_mission_sources` | development-automation / KEEP；14 | development-automation | 保留 | `development_mission_sources`；定义/revision、Mission 子事实、步骤、上传、审批与 effect 各有持久恢复边界；保留关系并采用显式 codec。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["development_mission_sources"]
+    }
+  },
+  {
+    "table": "development_missions",
+    "disposition": "converted",
+    "targets": ["development_missions"],
+    "basis": "| `development_missions` | development-automation / KEEP；41 | development-automation | 保留 | `development_missions`；41 列不是单凭 nullable 数量拆分；source/delivery/终态条件显式化，制品引用统一。 | R1 definition: target; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["development_missions"]
+    }
+  },
+  {
+    "table": "development_mr_claims",
+    "disposition": "preserved",
+    "targets": ["development_mr_claims"],
+    "basis": "| `development_mr_claims` | development-automation / KEEP；10 | development-automation | 保留 | `development_mr_claims`；定义/revision、Mission 子事实、步骤、上传、审批与 effect 各有持久恢复边界；保留关系并采用显式 codec。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["development_mr_claims"]
+    }
+  },
+  {
+    "table": "development_object_artifacts",
+    "disposition": "converted",
+    "targets": ["content_bytes", "content_objects", "development_object_artifacts"],
+    "basis": "| `development_object_artifacts` | development-automation / KEEP；5 | development-automation | 内容引用 | `development_object_artifacts`；保留开发业务对象索引，接入同一内容发布/引用机制。 | R1 definition: target; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["content_bytes", "content_objects", "development_object_artifacts"]
+    }
+  },
+  {
+    "table": "development_repository_upload_plan_entries",
+    "disposition": "preserved",
+    "targets": ["development_repository_upload_plan_entries"],
+    "basis": "| `development_repository_upload_plan_entries` | development-automation / KEEP；11 | development-automation | 保留 | `development_repository_upload_plan_entries`；定义/revision、Mission 子事实、步骤、上传、审批与 effect 各有持久恢复边界；保留关系并采用显式 codec。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["development_repository_upload_plan_entries"]
+    }
+  },
+  {
+    "table": "development_repository_upload_plans",
+    "disposition": "preserved",
+    "targets": ["development_repository_upload_plans"],
+    "basis": "| `development_repository_upload_plans` | development-automation / KEEP；8 | development-automation | 保留 | `development_repository_upload_plans`；定义/revision、Mission 子事实、步骤、上传、审批与 effect 各有持久恢复边界；保留关系并采用显式 codec。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["development_repository_upload_plans"]
+    }
+  },
+  {
+    "table": "development_repository_upload_receipts",
+    "disposition": "preserved",
+    "targets": ["development_repository_upload_receipts"],
+    "basis": "| `development_repository_upload_receipts` | development-automation / KEEP；10 | development-automation | 保留 | `development_repository_upload_receipts`；定义/revision、Mission 子事实、步骤、上传、审批与 effect 各有持久恢复边界；保留关系并采用显式 codec。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["development_repository_upload_receipts"]
+    }
+  },
+  {
+    "table": "development_step_joins",
+    "disposition": "preserved",
+    "targets": ["development_step_joins"],
+    "basis": "| `development_step_joins` | development-automation / KEEP；10 | development-automation | 保留 | `development_step_joins`；定义/revision、Mission 子事实、步骤、上传、审批与 effect 各有持久恢复边界；保留关系并采用显式 codec。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["development_step_joins"]
+    }
+  },
+  {
+    "table": "development_step_runs",
+    "disposition": "preserved",
+    "targets": ["development_step_runs"],
+    "basis": "| `development_step_runs` | development-automation / KEEP；19 | development-automation | 保留 | `development_step_runs`；定义/revision、Mission 子事实、步骤、上传、审批与 effect 各有持久恢复边界；保留关系并采用显式 codec。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["development_step_runs"]
+    }
+  },
+  {
+    "table": "development_wake_hints",
+    "disposition": "preserved",
+    "targets": ["development_wake_hints"],
+    "basis": "| `development_wake_hints` | development-automation / KEEP；6 | development-automation | 保留 | `development_wake_hints`；定义/revision、Mission 子事实、步骤、上传、审批与 effect 各有持久恢复边界；保留关系并采用显式 codec。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["development_wake_hints"]
+    }
+  },
+  {
+    "table": "digital_employee_revisions",
+    "disposition": "preserved",
+    "targets": ["digital_employee_revisions"],
+    "basis": "| `digital_employee_revisions` | digital-employee / KEEP；6 | development-automation | 保留 | `digital_employee_revisions`；配置身份与不可变 revision 成对保留；不因旧名称与 OS 定义合并。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["digital_employee_revisions"]
+    }
+  },
+  {
+    "table": "digital_employees",
+    "disposition": "preserved",
+    "targets": ["digital_employees"],
+    "basis": "| `digital_employees` | digital-employee / KEEP；10 | development-automation | 保留 | `digital_employees`；配置身份与不可变 revision 成对保留；不因旧名称与 OS 定义合并。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["digital_employees"]
+    }
+  },
+  {
+    "table": "doc_versions",
+    "disposition": "converted",
+    "targets": ["content_bytes", "content_objects", "doc_versions"],
+    "basis": "| `doc_versions` | resource-catalog / KEEP；23 | collaboration | 内容引用 | `doc_versions`；文档版本与协作关系保留；正文位置统一内容引用，校正 owner。 | R1 definition: target; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["content_bytes", "content_objects", "doc_versions"]
+    }
+  },
+  {
+    "table": "employee_approval_sagas",
+    "disposition": "preserved",
+    "targets": ["employee_approval_sagas"],
+    "basis": "| `employee_approval_sagas` | digital-employee / KEEP；19 | digital-employee | 保留 | `employee_approval_sagas`；OS 配置/revision、Case、Reaction、上下文、通道、inbox/outbox 与工作区分层保留；不与 Task 或旧开发配置混表。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["employee_approval_sagas"]
+    }
+  },
+  {
+    "table": "employee_attention_bindings",
+    "disposition": "preserved",
+    "targets": ["employee_attention_bindings"],
+    "basis": "| `employee_attention_bindings` | digital-employee / KEEP；13 | digital-employee | 保留 | `employee_attention_bindings`；OS 配置/revision、Case、Reaction、上下文、通道、inbox/outbox 与工作区分层保留；不与 Task 或旧开发配置混表。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["employee_attention_bindings"]
+    }
+  },
+  {
+    "table": "employee_case_event_origins",
+    "disposition": "preserved",
+    "targets": ["employee_case_event_origins"],
+    "basis": "| `employee_case_event_origins` | digital-employee / KEEP；4 | digital-employee | 保留 | `employee_case_event_origins`；OS 配置/revision、Case、Reaction、上下文、通道、inbox/outbox 与工作区分层保留；不与 Task 或旧开发配置混表。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["employee_case_event_origins"]
+    }
+  },
+  {
+    "table": "employee_case_inbox",
+    "disposition": "preserved",
+    "targets": ["employee_case_inbox"],
+    "basis": "| `employee_case_inbox` | digital-employee / KEEP；19 | digital-employee | 保留 | `employee_case_inbox`；OS 配置/revision、Case、Reaction、上下文、通道、inbox/outbox 与工作区分层保留；不与 Task 或旧开发配置混表。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["employee_case_inbox"]
+    }
+  },
+  {
+    "table": "employee_case_members",
+    "disposition": "preserved",
+    "targets": ["employee_case_members"],
+    "basis": "| `employee_case_members` | digital-employee / KEEP；5 | digital-employee | 保留 | `employee_case_members`；OS 配置/revision、Case、Reaction、上下文、通道、inbox/outbox 与工作区分层保留；不与 Task 或旧开发配置混表。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["employee_case_members"]
+    }
+  },
+  {
+    "table": "employee_case_metering_receipts",
+    "disposition": "preserved",
+    "targets": ["employee_case_metering_receipts"],
+    "basis": "| `employee_case_metering_receipts` | digital-employee / KEEP；6 | digital-employee | 保留 | `employee_case_metering_receipts`；OS 配置/revision、Case、Reaction、上下文、通道、inbox/outbox 与工作区分层保留；不与 Task 或旧开发配置混表。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["employee_case_metering_receipts"]
+    }
+  },
+  {
+    "table": "employee_case_workspaces",
+    "disposition": "preserved",
+    "targets": ["employee_case_workspaces"],
+    "basis": "| `employee_case_workspaces` | digital-employee / KEEP；10 | digital-employee | 保留 | `employee_case_workspaces`；OS 配置/revision、Case、Reaction、上下文、通道、inbox/outbox 与工作区分层保留；不与 Task 或旧开发配置混表。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["employee_case_workspaces"]
+    }
+  },
+  {
+    "table": "employee_cases",
+    "disposition": "preserved",
+    "targets": ["employee_cases"],
+    "basis": "| `employee_cases` | digital-employee / KEEP；24 | digital-employee | 保留 | `employee_cases`；OS 配置/revision、Case、Reaction、上下文、通道、inbox/outbox 与工作区分层保留；不与 Task 或旧开发配置混表。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["employee_cases"]
+    }
+  },
+  {
+    "table": "employee_change_candidates",
+    "disposition": "preserved",
+    "targets": ["employee_change_candidates"],
+    "basis": "| `employee_change_candidates` | digital-employee / KEEP；12 | digital-employee | 保留 | `employee_change_candidates`；OS 配置/revision、Case、Reaction、上下文、通道、inbox/outbox 与工作区分层保留；不与 Task 或旧开发配置混表。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["employee_change_candidates"]
+    }
+  },
+  {
+    "table": "employee_channel_results",
+    "disposition": "preserved",
+    "targets": ["employee_channel_results"],
+    "basis": "| `employee_channel_results` | digital-employee / KEEP；7 | digital-employee | 保留 | `employee_channel_results`；OS 配置/revision、Case、Reaction、上下文、通道、inbox/outbox 与工作区分层保留；不与 Task 或旧开发配置混表。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["employee_channel_results"]
+    }
+  },
+  {
+    "table": "employee_channels",
+    "disposition": "preserved",
+    "targets": ["employee_channels"],
+    "basis": "| `employee_channels` | digital-employee / KEEP；9 | digital-employee | 保留 | `employee_channels`；OS 配置/revision、Case、Reaction、上下文、通道、inbox/outbox 与工作区分层保留；不与 Task 或旧开发配置混表。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["employee_channels"]
+    }
+  },
+  {
+    "table": "employee_context_links",
+    "disposition": "preserved",
+    "targets": ["employee_context_links"],
+    "basis": "| `employee_context_links` | digital-employee / KEEP；6 | digital-employee | 保留 | `employee_context_links`；OS 配置/revision、Case、Reaction、上下文、通道、inbox/outbox 与工作区分层保留；不与 Task 或旧开发配置混表。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["employee_context_links"]
+    }
+  },
+  {
+    "table": "employee_context_records",
+    "disposition": "preserved",
+    "targets": ["employee_context_records"],
+    "basis": "| `employee_context_records` | digital-employee / KEEP；10 | digital-employee | 保留 | `employee_context_records`；OS 配置/revision、Case、Reaction、上下文、通道、inbox/outbox 与工作区分层保留；不与 Task 或旧开发配置混表。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["employee_context_records"]
+    }
+  },
+  {
+    "table": "employee_context_revisions",
+    "disposition": "preserved",
+    "targets": ["employee_context_revisions"],
+    "basis": "| `employee_context_revisions` | digital-employee / KEEP；6 | digital-employee | 保留 | `employee_context_revisions`；OS 配置/revision、Case、Reaction、上下文、通道、inbox/outbox 与工作区分层保留；不与 Task 或旧开发配置混表。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["employee_context_revisions"]
+    }
+  },
+  {
+    "table": "employee_definition_revisions",
+    "disposition": "preserved",
+    "targets": ["employee_definition_revisions"],
+    "basis": "| `employee_definition_revisions` | digital-employee / KEEP；6 | digital-employee | 保留 | `employee_definition_revisions`；OS 配置/revision、Case、Reaction、上下文、通道、inbox/outbox 与工作区分层保留；不与 Task 或旧开发配置混表。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["employee_definition_revisions"]
+    }
+  },
+  {
+    "table": "employee_definitions",
+    "disposition": "preserved",
+    "targets": ["employee_definitions"],
+    "basis": "| `employee_definitions` | digital-employee / KEEP；12 | digital-employee | 保留 | `employee_definitions`；OS 配置/revision、Case、Reaction、上下文、通道、inbox/outbox 与工作区分层保留；不与 Task 或旧开发配置混表。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["employee_definitions"]
+    }
+  },
+  {
+    "table": "employee_execution_policy_revisions",
+    "disposition": "preserved",
+    "targets": ["employee_execution_policy_revisions"],
+    "basis": "| `employee_execution_policy_revisions` | digital-employee / KEEP；5 | digital-employee | 保留 | `employee_execution_policy_revisions`；OS 配置/revision、Case、Reaction、上下文、通道、inbox/outbox 与工作区分层保留；不与 Task 或旧开发配置混表。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["employee_execution_policy_revisions"]
+    }
+  },
+  {
+    "table": "employee_external_context_bindings",
+    "disposition": "preserved",
+    "targets": ["employee_external_context_bindings"],
+    "basis": "| `employee_external_context_bindings` | digital-employee / KEEP；6 | digital-employee | 保留 | `employee_external_context_bindings`；OS 配置/revision、Case、Reaction、上下文、通道、inbox/outbox 与工作区分层保留；不与 Task 或旧开发配置混表。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["employee_external_context_bindings"]
+    }
+  },
+  {
+    "table": "employee_input_uploads",
+    "disposition": "preserved",
+    "targets": ["employee_input_uploads"],
+    "basis": "| `employee_input_uploads` | digital-employee / KEEP；12 | digital-employee | 保留 | `employee_input_uploads`；OS 配置/revision、Case、Reaction、上下文、通道、inbox/outbox 与工作区分层保留；不与 Task 或旧开发配置混表。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["employee_input_uploads"]
+    }
+  },
+  {
+    "table": "employee_invocations",
+    "disposition": "preserved",
+    "targets": ["employee_invocations"],
+    "basis": "| `employee_invocations` | digital-employee / KEEP；15 | digital-employee | 保留 | `employee_invocations`；OS 配置/revision、Case、Reaction、上下文、通道、inbox/outbox 与工作区分层保留；不与 Task 或旧开发配置混表。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["employee_invocations"]
+    }
+  },
+  {
+    "table": "employee_job_template_revisions",
+    "disposition": "preserved",
+    "targets": ["employee_job_template_revisions"],
+    "basis": "| `employee_job_template_revisions` | digital-employee / KEEP；6 | digital-employee | 保留 | `employee_job_template_revisions`；OS 配置/revision、Case、Reaction、上下文、通道、inbox/outbox 与工作区分层保留；不与 Task 或旧开发配置混表。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["employee_job_template_revisions"]
+    }
+  },
+  {
+    "table": "employee_job_templates",
+    "disposition": "preserved",
+    "targets": ["employee_job_templates"],
+    "basis": "| `employee_job_templates` | digital-employee / KEEP；12 | digital-employee | 保留 | `employee_job_templates`；OS 配置/revision、Case、Reaction、上下文、通道、inbox/outbox 与工作区分层保留；不与 Task 或旧开发配置混表。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["employee_job_templates"]
+    }
+  },
+  {
+    "table": "employee_os_outbox",
+    "disposition": "preserved",
+    "targets": ["employee_os_outbox"],
+    "basis": "| `employee_os_outbox` | digital-employee / KEEP；13 | digital-employee | 保留 | `employee_os_outbox`；OS 配置/revision、Case、Reaction、上下文、通道、inbox/outbox 与工作区分层保留；不与 Task 或旧开发配置混表。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["employee_os_outbox"]
+    }
+  },
+  {
+    "table": "employee_os_settings",
+    "disposition": "preserved",
+    "targets": ["employee_os_settings"],
+    "basis": "| `employee_os_settings` | digital-employee / KEEP；3 | digital-employee | 保留 | `employee_os_settings`；OS 配置/revision、Case、Reaction、上下文、通道、inbox/outbox 与工作区分层保留；不与 Task 或旧开发配置混表。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["employee_os_settings"]
+    }
+  },
+  {
+    "table": "employee_os_writer_state",
+    "disposition": "metadata",
+    "targets": [],
+    "basis": "| `employee_os_writer_state` | digital-employee / DEFER；6 | digital-employee | 退役迁移态 | `migration receipt + target startup configuration`；旧 drain 状态与切换判据入 receipt；未完任务先处置，目标直接以确认后的 OS active 启动。 |",
+    "destination": {
+      "kind": "migration-records",
+      "records": ["activation"]
+    }
+  },
+  {
+    "table": "employee_reaction_artifacts",
+    "disposition": "converted",
+    "targets": ["content_bytes", "content_objects", "employee_reaction_artifacts"],
+    "basis": "| `employee_reaction_artifacts` | digital-employee / KEEP；5 | digital-employee | 内容引用 | `employee_reaction_artifacts`；保留 Reaction 对制品的领域关系，引用统一内容对象。 | R1 definition: target; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["content_bytes", "content_objects", "employee_reaction_artifacts"]
+    }
+  },
+  {
+    "table": "employee_reaction_dispatch",
+    "disposition": "preserved",
+    "targets": ["employee_reaction_dispatch"],
+    "basis": "| `employee_reaction_dispatch` | digital-employee / KEEP；12 | digital-employee | 保留 | `employee_reaction_dispatch`；OS 配置/revision、Case、Reaction、上下文、通道、inbox/outbox 与工作区分层保留；不与 Task 或旧开发配置混表。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["employee_reaction_dispatch"]
+    }
+  },
+  {
+    "table": "employee_reaction_rounds",
+    "disposition": "preserved",
+    "targets": ["employee_reaction_rounds"],
+    "basis": "| `employee_reaction_rounds` | digital-employee / KEEP；22 | digital-employee | 保留 | `employee_reaction_rounds`；OS 配置/revision、Case、Reaction、上下文、通道、inbox/outbox 与工作区分层保留；不与 Task 或旧开发配置混表。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["employee_reaction_rounds"]
+    }
+  },
+  {
+    "table": "employee_round_workspace_states",
+    "disposition": "preserved",
+    "targets": ["employee_round_workspace_states"],
+    "basis": "| `employee_round_workspace_states` | digital-employee / KEEP；9 | digital-employee | 保留 | `employee_round_workspace_states`；OS 配置/revision、Case、Reaction、上下文、通道、inbox/outbox 与工作区分层保留；不与 Task 或旧开发配置混表。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["employee_round_workspace_states"]
+    }
+  },
+  {
+    "table": "employee_tool_registration_revisions",
+    "disposition": "preserved",
+    "targets": ["employee_tool_registration_revisions"],
+    "basis": "| `employee_tool_registration_revisions` | digital-employee / KEEP；8 | digital-employee | 保留 | `employee_tool_registration_revisions`；OS 配置/revision、Case、Reaction、上下文、通道、inbox/outbox 与工作区分层保留；不与 Task 或旧开发配置混表。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["employee_tool_registration_revisions"]
+    }
+  },
+  {
+    "table": "employee_tool_registrations",
+    "disposition": "preserved",
+    "targets": ["employee_tool_registrations"],
+    "basis": "| `employee_tool_registrations` | digital-employee / KEEP；13 | digital-employee | 保留 | `employee_tool_registrations`；OS 配置/revision、Case、Reaction、上下文、通道、inbox/outbox 与工作区分层保留；不与 Task 或旧开发配置混表。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["employee_tool_registrations"]
+    }
+  },
+  {
+    "table": "employee_type_packages",
+    "disposition": "preserved",
+    "targets": ["employee_type_packages"],
+    "basis": "| `employee_type_packages` | digital-employee / KEEP；6 | digital-employee | 保留 | `employee_type_packages`；OS 配置/revision、Case、Reaction、上下文、通道、inbox/outbox 与工作区分层保留；不与 Task 或旧开发配置混表。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["employee_type_packages"]
+    }
+  },
+  {
+    "table": "employee_work_scope_revisions",
+    "disposition": "preserved",
+    "targets": ["employee_work_scope_revisions"],
+    "basis": "| `employee_work_scope_revisions` | digital-employee / KEEP；9 | digital-employee | 保留 | `employee_work_scope_revisions`；OS 配置/revision、Case、Reaction、上下文、通道、inbox/outbox 与工作区分层保留；不与 Task 或旧开发配置混表。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["employee_work_scope_revisions"]
+    }
+  },
+  {
+    "table": "event_automation_work_intents",
+    "disposition": "preserved",
+    "targets": ["event_automation_work_intents"],
+    "basis": "| `event_automation_work_intents` | event-center / KEEP；19 | event-center | 保留 | `event_automation_work_intents`；事件来源/revision、采集事实、规则、订阅、投递和观察运行保留；不与 committed event 混并。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["event_automation_work_intents"]
+    }
+  },
+  {
+    "table": "event_deliveries",
+    "disposition": "preserved",
+    "targets": ["event_deliveries"],
+    "basis": "| `event_deliveries` | event-center / KEEP；15 | event-center | 保留 | `event_deliveries`；事件来源/revision、采集事实、规则、订阅、投递和观察运行保留；不与 committed event 混并。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["event_deliveries"]
+    }
+  },
+  {
+    "table": "event_observer_runs",
+    "disposition": "preserved",
+    "targets": ["event_observer_runs"],
+    "basis": "| `event_observer_runs` | event-center / KEEP；14 | event-center | 保留 | `event_observer_runs`；事件来源/revision、采集事实、规则、订阅、投递和观察运行保留；不与 committed event 混并。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["event_observer_runs"]
+    }
+  },
+  {
+    "table": "event_records",
+    "disposition": "preserved",
+    "targets": ["event_records"],
+    "basis": "| `event_records` | event-center / KEEP；12 | event-center | 保留 | `event_records`；事件来源/revision、采集事实、规则、订阅、投递和观察运行保留；不与 committed event 混并。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["event_records"]
+    }
+  },
+  {
+    "table": "event_response_rules",
+    "disposition": "preserved",
+    "targets": ["event_response_rules"],
+    "basis": "| `event_response_rules` | event-center / KEEP；17 | event-center | 保留 | `event_response_rules`；事件来源/revision、采集事实、规则、订阅、投递和观察运行保留；不与 committed event 混并。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["event_response_rules"]
+    }
+  },
+  {
+    "table": "event_sources",
+    "disposition": "preserved",
+    "targets": ["event_sources"],
+    "basis": "| `event_sources` | event-center / KEEP；6 | event-center | 保留 | `event_sources`；事件来源/revision、采集事实、规则、订阅、投递和观察运行保留；不与 committed event 混并。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["event_sources"]
+    }
+  },
+  {
+    "table": "event_subscriptions",
+    "disposition": "preserved",
+    "targets": ["event_subscriptions"],
+    "basis": "| `event_subscriptions` | event-center / KEEP；21 | event-center | 保留 | `event_subscriptions`；事件来源/revision、采集事实、规则、订阅、投递和观察运行保留；不与 committed event 混并。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["event_subscriptions"]
+    }
+  },
+  {
+    "table": "event_type_catalog",
+    "disposition": "preserved",
+    "targets": ["event_type_catalog"],
+    "basis": "| `event_type_catalog` | event-center / KEEP；9 | event-center | 保留 | `event_type_catalog`；事件来源/revision、采集事实、规则、订阅、投递和观察运行保留；不与 committed event 混并。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["event_type_catalog"]
+    }
+  },
+  {
+    "table": "external_identities",
+    "disposition": "preserved",
+    "targets": ["external_identities"],
+    "basis": "| `external_identities` | identity-access / KEEP；5 | identity-access | 保留 | `external_identities`；身份、配置、session、grant、凭据与审计生命周期不合并；仅迁移显式类型/约束，原功能不扩改。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["external_identities"]
+    }
+  },
+  {
+    "table": "fusions",
+    "disposition": "preserved",
+    "targets": ["fusions"],
+    "basis": "| `fusions` | resource-catalog / KEEP；22 | knowledge-evolution | 保留 | `fusions`；融合业务记录独立，校正 owner；资源写入复用所属 mutation participant。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["fusions"]
+    }
+  },
+  {
+    "table": "hosted_execution_bindings",
+    "disposition": "preserved",
+    "targets": ["hosted_execution_bindings"],
+    "basis": "| `hosted_execution_bindings` | task-execution / KEEP；18 | task-execution | 保留 | `hosted_execution_bindings`；保留各自准入/准备/归档/恢复/租约事实，改指新 Task/run/workspace 身份；admission owner 校正。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["hosted_execution_bindings"]
+    }
+  },
+  {
+    "table": "hosted_database_backups",
+    "disposition": "preserved",
+    "targets": ["hosted_database_backups"],
+    "basis": "| `hosted_database_backups` | system-operations / KEEP；14 | system-operations | 保留 | `hosted_database_backups`；应用配置、部署执行控制、备份、维护与修复证据分开；备份增加目标合同与内容清单关联。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["hosted_database_backups"]
+    }
+  },
+  {
+    "table": "hosted_execution_control",
+    "disposition": "preserved",
+    "targets": ["hosted_execution_control"],
+    "basis": "| `hosted_execution_control` | system-operations / KEEP；8 | system-operations | 保留 | `hosted_execution_control`；应用配置、部署执行控制、备份、维护与修复证据分开；备份增加目标合同与内容清单关联。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["hosted_execution_control"]
+    }
+  },
+  {
+    "table": "hosted_execution_events",
+    "disposition": "preserved",
+    "targets": ["hosted_execution_events"],
+    "basis": "| `hosted_execution_events` | task-execution / KEEP；4 | task-execution | 保留 | `hosted_execution_events`；执行事件与来源身份保留；不与业务 committed_events 或外部 event_records 合并。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["hosted_execution_events"]
+    }
+  },
+  {
+    "table": "hosted_task_artifacts",
+    "disposition": "converted",
+    "targets": ["content_bytes", "content_objects", "hosted_task_artifacts"],
+    "basis": "| `hosted_task_artifacts` | task-execution / KEEP；6 | task-execution | 内容引用 | `hosted_task_artifacts`；保留输出端口/归档/分片/托管索引语义；统一内容引用，不合为通用结果大表。 | R1 definition: target; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["content_bytes", "content_objects", "hosted_task_artifacts"]
+    }
+  },
+  {
+    "table": "hosted_task_archive_entries",
+    "disposition": "converted",
+    "targets": [
+      "content_bytes",
+      "content_objects",
+      "hosted_task_archive_entries",
+      "hosted_task_archive_entry_parts"
+    ],
+    "basis": "| `hosted_task_archive_entries` | task-execution / KEEP；5 | task-execution | 内容引用 | `hosted_task_archive_entries`；保留输出端口/归档/分片/托管索引语义；统一内容引用，不合为通用结果大表。 | R1 definition: target; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": [
+        "content_bytes",
+        "content_objects",
+        "hosted_task_archive_entries",
+        "hosted_task_archive_entry_parts"
+      ]
+    }
+  },
+  {
+    "table": "hosted_node_event_archives",
+    "disposition": "converted",
+    "targets": ["content_bytes", "content_objects", "hosted_node_event_archives"],
+    "basis": "| `hosted_node_event_archives` | task-execution / KEEP；11 | task-execution | 内容引用 | `hosted_node_event_archives`；保留输出端口/归档/分片/托管索引语义；统一内容引用，不合为通用结果大表。 | R1 definition: target; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["content_bytes", "content_objects", "hosted_node_event_archives"]
+    }
+  },
+  {
+    "table": "hosted_object_publications",
+    "disposition": "converted",
+    "targets": ["content_bytes", "content_objects", "content_publications"],
+    "basis": "| `hosted_object_publications` | system-operations / KEEP；16 | platform/content (system-operations 生命周期) | 中立化 | `content_publications`；演进已有发布账本，保留 owner/logical_key/epoch/attempt/state，不新造平行 journal。 | R1 definition: target; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["content_bytes", "content_objects", "content_publications"]
+    }
+  },
+  {
+    "table": "hosted_task_workspaces",
+    "disposition": "preserved",
+    "targets": ["hosted_task_workspaces"],
+    "basis": "| `hosted_task_workspaces` | source-control / KEEP；6 | source-control | 保留 | `hosted_task_workspaces`；来源、冻结快照、缓存、分组、准备和托管命令各自保留；preparation 可早于 Task。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["hosted_task_workspaces"]
+    }
+  },
+  {
+    "table": "hosted_workspace_commands",
+    "disposition": "preserved",
+    "targets": ["hosted_workspace_commands"],
+    "basis": "| `hosted_workspace_commands` | source-control / KEEP；14 | source-control | 保留 | `hosted_workspace_commands`；来源、冻结快照、缓存、分组、准备和托管命令各自保留；preparation 可早于 Task。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["hosted_workspace_commands"]
+    }
+  },
+  {
+    "table": "intent_apply_journal",
+    "disposition": "converted",
+    "targets": ["intent_apply_journal"],
+    "basis": "| `intent_apply_journal` | intent / KEEP；11 | intent | 共用机制 | `intent_apply_journal`；保留 session/client_mutation_id 幂等域，转换 artifact codec；复用唯一 AtomicApply 状态机。 | R1 definition: reused; target set is guarded against the business roster (migration §3). V2 decisions D6-D11 and decomposition §12: conversion is required even when the target definition is reused.",
+    "destination": {
+      "kind": "business",
+      "tables": ["intent_apply_journal"]
+    }
+  },
+  {
+    "table": "intent_draft_resolutions",
+    "disposition": "preserved",
+    "targets": ["intent_draft_resolutions"],
+    "basis": "| `intent_draft_resolutions` | intent / KEEP；4 | intent | 保留 | `intent_draft_resolutions`；会话、轮次、草稿、来源与变更具有不同生命周期；不合成可变 JSON 大行。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["intent_draft_resolutions"]
+    }
+  },
+  {
+    "table": "intent_drafts",
+    "disposition": "preserved",
+    "targets": ["intent_drafts"],
+    "basis": "| `intent_drafts` | intent / KEEP；9 | intent | 保留 | `intent_drafts`；会话、轮次、草稿、来源与变更具有不同生命周期；不合成可变 JSON 大行。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["intent_drafts"]
+    }
+  },
+  {
+    "table": "intent_provenance",
+    "disposition": "preserved",
+    "targets": ["intent_provenance"],
+    "basis": "| `intent_provenance` | intent / KEEP；5 | intent | 保留 | `intent_provenance`；会话、轮次、草稿、来源与变更具有不同生命周期；不合成可变 JSON 大行。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["intent_provenance"]
+    }
+  },
+  {
+    "table": "intent_sessions",
+    "disposition": "preserved",
+    "targets": ["intent_sessions"],
+    "basis": "| `intent_sessions` | intent / KEEP；14 | intent | 保留 | `intent_sessions`；会话、轮次、草稿、来源与变更具有不同生命周期；不合成可变 JSON 大行。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["intent_sessions"]
+    }
+  },
+  {
+    "table": "intent_turn_events",
+    "disposition": "converted",
+    "targets": ["intent_turn_events"],
+    "basis": "| `intent_turn_events` | intent / KEEP；10 | intent | 保留 | `intent_turn_events`；会话、轮次、草稿、来源与变更具有不同生命周期；不合成可变 JSON 大行。 | R1 definition: target; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["intent_turn_events"]
+    }
+  },
+  {
+    "table": "intent_turns",
+    "disposition": "preserved",
+    "targets": ["intent_turns"],
+    "basis": "| `intent_turns` | intent / KEEP；17 | intent | 保留 | `intent_turns`；会话、轮次、草稿、来源与变更具有不同生命周期；不合成可变 JSON 大行。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["intent_turns"]
+    }
+  },
+  {
+    "table": "intent_working_set_changes",
+    "disposition": "preserved",
+    "targets": ["intent_working_set_changes"],
+    "basis": "| `intent_working_set_changes` | intent / KEEP；14 | intent | 保留 | `intent_working_set_changes`；会话、轮次、草稿、来源与变更具有不同生命周期；不合成可变 JSON 大行。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["intent_working_set_changes"]
+    }
+  },
+  {
+    "table": "legacy_code_work_item_links",
+    "disposition": "archived",
+    "targets": ["code_history_archives", "code_history_id_index"],
+    "basis": "| `legacy_code_work_item_links` | integration / DEFER；6 | code-capability/history | 历史化 | `versioned code-history archive + ID index`；历史读者保留；未完工作阻塞预检并逐项转换/收敛；不因 DEFER 直接丢弃。 |",
+    "destination": {
+      "kind": "archive"
+    }
+  },
+  {
+    "table": "lifecycle_alerts",
+    "disposition": "preserved",
+    "targets": ["lifecycle_alerts"],
+    "basis": "| `lifecycle_alerts` | system-operations / KEEP；7 | system-operations | 保留 | `lifecycle_alerts`；应用配置、部署执行控制、备份、维护与修复证据分开；备份增加目标合同与内容清单关联。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["lifecycle_alerts"]
+    }
+  },
+  {
+    "table": "lifecycle_repair_audit",
+    "disposition": "preserved",
+    "targets": ["lifecycle_repair_audit"],
+    "basis": "| `lifecycle_repair_audit` | system-operations / KEEP；12 | system-operations | 保留 | `lifecycle_repair_audit`；应用配置、部署执行控制、备份、维护与修复证据分开；备份增加目标合同与内容清单关联。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["lifecycle_repair_audit"]
+    }
+  },
+  {
+    "table": "maintenance_runs",
+    "disposition": "preserved",
+    "targets": ["maintenance_runs"],
+    "basis": "| `maintenance_runs` | system-operations / KEEP；22 | system-operations | 保留 | `maintenance_runs`；应用配置、部署执行控制、备份、维护与修复证据分开；备份增加目标合同与内容清单关联。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["maintenance_runs"]
+    }
+  },
+  {
+    "table": "maintenance_state",
+    "disposition": "preserved",
+    "targets": ["maintenance_state"],
+    "basis": "| `maintenance_state` | system-operations / KEEP；3 | system-operations | 保留 | `maintenance_state`；应用配置、部署执行控制、备份、维护与修复证据分开；备份增加目标合同与内容清单关联。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["maintenance_state"]
+    }
+  },
+  {
+    "table": "mcp_probes",
+    "disposition": "preserved",
+    "targets": ["mcp_probes"],
+    "basis": "| `mcp_probes` | resource-catalog / KEEP；20 | resource-catalog | 保留 | `mcp_probes`；配置、探测、playground 会话/事件/租约、安装代保持各自生命周期；只统一 codec 与内容引用。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["mcp_probes"]
+    }
+  },
+  {
+    "table": "mcp_runtime_test_create_receipts",
+    "disposition": "preserved",
+    "targets": ["mcp_runtime_test_create_receipts"],
+    "basis": "| `mcp_runtime_test_create_receipts` | resource-catalog / KEEP；8 | resource-catalog | 保留 | `mcp_runtime_test_create_receipts`；配置、探测、playground 会话/事件/租约、安装代保持各自生命周期；只统一 codec 与内容引用。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["mcp_runtime_test_create_receipts"]
+    }
+  },
+  {
+    "table": "mcp_runtime_test_events",
+    "disposition": "preserved",
+    "targets": ["mcp_runtime_test_events"],
+    "basis": "| `mcp_runtime_test_events` | resource-catalog / KEEP；11 | resource-catalog | 保留 | `mcp_runtime_test_events`；配置、探测、playground 会话/事件/租约、安装代保持各自生命周期；只统一 codec 与内容引用。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["mcp_runtime_test_events"]
+    }
+  },
+  {
+    "table": "mcp_runtime_test_session_leases",
+    "disposition": "preserved",
+    "targets": ["mcp_runtime_test_session_leases"],
+    "basis": "| `mcp_runtime_test_session_leases` | resource-catalog / KEEP；8 | resource-catalog | 保留 | `mcp_runtime_test_session_leases`；配置、探测、playground 会话/事件/租约、安装代保持各自生命周期；只统一 codec 与内容引用。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["mcp_runtime_test_session_leases"]
+    }
+  },
+  {
+    "table": "mcp_runtime_test_sessions",
+    "disposition": "preserved",
+    "targets": ["mcp_runtime_test_sessions"],
+    "basis": "| `mcp_runtime_test_sessions` | resource-catalog / KEEP；26 | resource-catalog | 保留 | `mcp_runtime_test_sessions`；配置、探测、playground 会话/事件/租约、安装代保持各自生命周期；只统一 codec 与内容引用。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["mcp_runtime_test_sessions"]
+    }
+  },
+  {
+    "table": "mcp_runtime_test_turns",
+    "disposition": "preserved",
+    "targets": ["mcp_runtime_test_turns"],
+    "basis": "| `mcp_runtime_test_turns` | resource-catalog / KEEP；23 | resource-catalog | 保留 | `mcp_runtime_test_turns`；配置、探测、playground 会话/事件/租约、安装代保持各自生命周期；只统一 codec 与内容引用。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["mcp_runtime_test_turns"]
+    }
+  },
+  {
+    "table": "mcps",
+    "disposition": "preserved",
+    "targets": ["mcps"],
+    "basis": "| `mcps` | resource-catalog / KEEP；12 | resource-catalog | 保留 | `mcps`；配置、探测、playground 会话/事件/租约、安装代保持各自生命周期；只统一 codec 与内容引用。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["mcps"]
+    }
+  },
+  {
+    "table": "memories",
+    "disposition": "converted",
+    "targets": ["memories"],
+    "basis": "| `memories` | knowledge-evolution / KEEP；24 | memory | 保留 | `memories`；记忆条目、提炼任务/事件、范围移动分属不同事实；校正 owner 为 memory。 | R1 definition: target; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["memories"]
+    }
+  },
+  {
+    "table": "memory_distill_events",
+    "disposition": "preserved",
+    "targets": ["memory_distill_events"],
+    "basis": "| `memory_distill_events` | knowledge-evolution / KEEP；8 | memory | 保留 | `memory_distill_events`；记忆条目、提炼任务/事件、范围移动分属不同事实；校正 owner 为 memory。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["memory_distill_events"]
+    }
+  },
+  {
+    "table": "memory_distill_jobs",
+    "disposition": "preserved",
+    "targets": ["memory_distill_jobs"],
+    "basis": "| `memory_distill_jobs` | knowledge-evolution / KEEP；19 | memory | 保留 | `memory_distill_jobs`；记忆条目、提炼任务/事件、范围移动分属不同事实；校正 owner 为 memory。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["memory_distill_jobs"]
+    }
+  },
+  {
+    "table": "memory_scope_move_events",
+    "disposition": "preserved",
+    "targets": ["memory_scope_move_events"],
+    "basis": "| `memory_scope_move_events` | knowledge-evolution / KEEP；13 | memory | 保留 | `memory_scope_move_events`；记忆条目、提炼任务/事件、范围移动分属不同事实；校正 owner 为 memory。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["memory_scope_move_events"]
+    }
+  },
+  {
+    "table": "mission_input_uploads",
+    "disposition": "preserved",
+    "targets": ["mission_input_uploads"],
+    "basis": "| `mission_input_uploads` | development-automation / KEEP；12 | development-automation | 保留 | `mission_input_uploads`；定义/revision、Mission 子事实、步骤、上传、审批与 effect 各有持久恢复边界；保留关系并采用显式 codec。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["mission_input_uploads"]
+    }
+  },
+  {
+    "table": "node_execution_event_sources",
+    "disposition": "preserved",
+    "targets": ["node_execution_event_sources"],
+    "basis": "| `node_execution_event_sources` | task-execution / KEEP；2 | task-execution | 保留 | `node_execution_event_sources`；执行事件与来源身份保留；不与业务 committed_events 或外部 event_records 合并。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["node_execution_event_sources"]
+    }
+  },
+  {
+    "table": "node_run_events",
+    "disposition": "preserved",
+    "targets": ["node_run_events"],
+    "basis": "| `node_run_events` | task-execution / KEEP；7 | task-execution | 保留 | `node_run_events`；执行事件与来源身份保留；不与业务 committed_events 或外部 event_records 合并。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["node_run_events"]
+    }
+  },
+  {
+    "table": "node_run_outputs",
+    "disposition": "converted",
+    "targets": ["content_bytes", "content_objects", "node_run_outputs"],
+    "basis": "| `node_run_outputs` | task-execution / KEEP；6 | task-execution | 内容引用 | `node_run_outputs`；保留输出端口/归档/分片/托管索引语义；统一内容引用，不合为通用结果大表。 | R1 definition: target; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["content_bytes", "content_objects", "node_run_outputs"]
+    }
+  },
+  {
+    "table": "node_runs",
+    "disposition": "converted",
+    "targets": [
+      "execution_legacy_evidence",
+      "node_run_configs",
+      "node_run_inputs",
+      "node_run_repo_checkpoints",
+      "node_run_results",
+      "node_run_runtime_states",
+      "node_run_selections",
+      "node_run_seq_allocations",
+      "node_runs",
+      "task_execution_generations"
+    ],
+    "basis": "| `node_runs` | task-execution / KEEP；62 | task-execution | 拆分 | `node_runs + task_execution_generations + node_run_selections + node_run_inputs + node_run_configs + node_run_runtime_states + node_run_results + node_run_repo_checkpoints + execution_legacy_evidence`；角色/代/选择/消费边显式化，拆配置/运行态/结果/仓库 checkpoint；源 62 列见 design §5。 | R1 definition: target; target set is guarded against the business roster (migration §3). Activation A-1: destinations follow the final epoch-2 roster, including deterministic initial skill-version conversion.",
+    "destination": {
+      "kind": "business",
+      "tables": [
+        "execution_legacy_evidence",
+        "node_run_configs",
+        "node_run_inputs",
+        "node_run_repo_checkpoints",
+        "node_run_results",
+        "node_run_runtime_states",
+        "node_run_selections",
+        "node_run_seq_allocations",
+        "node_runs",
+        "task_execution_generations"
+      ]
+    }
+  },
+  {
+    "table": "node_run_seq_allocations",
+    "disposition": "converted",
+    "targets": ["node_run_seq_allocations"],
+    "basis": "| `node_run_seq_allocations` | task-execution / KEEP；4 | task-execution | 保留 | `node_run_seq_allocations`；继续同事务独立分配；保留高水位与历史负序号，删除运行时 NULL/id fallback。 | R1 definition: reused; target set is guarded against the business roster (migration §3). V2 decisions D6-D11 and decomposition §12: conversion is required even when the target definition is reused.",
+    "destination": {
+      "kind": "business",
+      "tables": ["node_run_seq_allocations"]
+    }
+  },
+  {
+    "table": "observation_call_models",
+    "disposition": "preserved",
+    "targets": ["observation_call_models"],
+    "basis": "| `observation_call_models` | run-observability / KEEP；10 | run-observability | 保留 | `observation_call_models`；保留 RFC-371 三表；独立用量/价格保留期，无新增 Task 级联删除。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["observation_call_models"]
+    }
+  },
+  {
+    "table": "observation_calls",
+    "disposition": "preserved",
+    "targets": ["observation_calls"],
+    "basis": "| `observation_calls` | run-observability / KEEP；24 | run-observability | 保留 | `observation_calls`；保留 RFC-371 三表；独立用量/价格保留期，无新增 Task 级联删除。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["observation_calls"]
+    }
+  },
+  {
+    "table": "observation_prices",
+    "disposition": "preserved",
+    "targets": ["observation_prices"],
+    "basis": "| `observation_prices` | run-observability / KEEP；11 | run-observability | 保留 | `observation_prices`；保留 RFC-371 三表；独立用量/价格保留期，无新增 Task 级联删除。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["observation_prices"]
+    }
+  },
+  {
+    "table": "observer_activations",
+    "disposition": "preserved",
+    "targets": ["observer_activations"],
+    "basis": "| `observer_activations` | event-center / KEEP；15 | event-center | 保留 | `observer_activations`；事件来源/revision、采集事实、规则、订阅、投递和观察运行保留；不与 committed event 混并。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["observer_activations"]
+    }
+  },
+  {
+    "table": "oidc_providers",
+    "disposition": "preserved",
+    "targets": ["oidc_providers"],
+    "basis": "| `oidc_providers` | identity-access / KEEP；24 | identity-access | 保留 | `oidc_providers`；身份、配置、session、grant、凭据与审计生命周期不合并；仅迁移显式类型/约束，原功能不扩改。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["oidc_providers"]
+    }
+  },
+  {
+    "table": "plugin_artifact_generations",
+    "disposition": "preserved",
+    "targets": ["plugin_artifact_generations"],
+    "basis": "| `plugin_artifact_generations` | resource-catalog / KEEP；12 | resource-catalog | 保留 | `plugin_artifact_generations`；配置、探测、playground 会话/事件/租约、安装代保持各自生命周期；只统一 codec 与内容引用。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["plugin_artifact_generations"]
+    }
+  },
+  {
+    "table": "hosted_recovery_requests",
+    "disposition": "preserved",
+    "targets": ["hosted_recovery_requests"],
+    "basis": "| `hosted_recovery_requests` | task-execution / KEEP；11 | task-execution | 保留 | `hosted_recovery_requests`；保留各自准入/准备/归档/恢复/租约事实，改指新 Task/run/workspace 身份；admission owner 校正。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["hosted_recovery_requests"]
+    }
+  },
+  {
+    "table": "cs_event_inbox",
+    "disposition": "preserved",
+    "targets": ["cs_event_inbox"],
+    "basis": "| `cs_event_inbox` | integration / KEEP；11 | integration | 保留 | `cs_event_inbox`；触发配置、流状态、去重/投递与 MR effect 保留独立生命周期；scheduled_tasks 校正 owner。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["cs_event_inbox"]
+    }
+  },
+  {
+    "table": "cs_event_routes",
+    "disposition": "preserved",
+    "targets": ["cs_event_routes"],
+    "basis": "| `cs_event_routes` | integration / KEEP；11 | integration | 保留 | `cs_event_routes`；触发配置、流状态、去重/投递与 MR effect 保留独立生命周期；scheduled_tasks 校正 owner。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["cs_event_routes"]
+    }
+  },
+  {
+    "table": "cs_event_targets",
+    "disposition": "preserved",
+    "targets": ["cs_event_targets"],
+    "basis": "| `cs_event_targets` | integration / KEEP；15 | integration | 保留 | `cs_event_targets`；触发配置、流状态、去重/投递与 MR effect 保留独立生命周期；scheduled_tasks 校正 owner。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["cs_event_targets"]
+    }
+  },
+  {
+    "table": "cs_webhook_verifications",
+    "disposition": "preserved",
+    "targets": ["cs_webhook_verifications"],
+    "basis": "| `cs_webhook_verifications` | integration / KEEP；2 | integration | 保留 | `cs_webhook_verifications`；触发配置、流状态、去重/投递与 MR effect 保留独立生命周期；scheduled_tasks 校正 owner。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["cs_webhook_verifications"]
+    }
+  },
+  {
+    "table": "plugins",
+    "disposition": "preserved",
+    "targets": ["plugins"],
+    "basis": "| `plugins` | resource-catalog / KEEP；16 | resource-catalog | 保留 | `plugins`；配置、探测、playground 会话/事件/租约、安装代保持各自生命周期；只统一 codec 与内容引用。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["plugins"]
+    }
+  },
+  {
+    "table": "reaction_execution_admissions",
+    "disposition": "preserved",
+    "targets": ["reaction_execution_admissions"],
+    "basis": "| `reaction_execution_admissions` | resource-catalog / KEEP；12 | task-execution | 保留 | `reaction_execution_admissions`；保留各自准入/准备/归档/恢复/租约事实，改指新 Task/run/workspace 身份；admission owner 校正。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["reaction_execution_admissions"]
+    }
+  },
+  {
+    "table": "recovery_events",
+    "disposition": "preserved",
+    "targets": ["recovery_events"],
+    "basis": "| `recovery_events` | system-operations / KEEP；9 | system-operations | 保留 | `recovery_events`；应用配置、部署执行控制、备份、维护与修复证据分开；备份增加目标合同与内容清单关联。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["recovery_events"]
+    }
+  },
+  {
+    "table": "repo_capability_config",
+    "disposition": "preserved",
+    "targets": ["repo_capability_config"],
+    "basis": "| `repo_capability_config` | source-control / KEEP；12 | code-capability | 保留 | `repo_capability_config`；保留能力模板与仓库绑定，校正合同 owner；不迁入通用资源 CRUD。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["repo_capability_config"]
+    }
+  },
+  {
+    "table": "repo_group_nodes",
+    "disposition": "converted",
+    "targets": ["repo_group_nodes"],
+    "basis": "| `repo_group_nodes` | source-control / KEEP；8 | source-control | 保留 | `repo_group_nodes`；来源、冻结快照、缓存、分组、准备和托管命令各自保留；preparation 可早于 Task。 | R1 definition: target; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["repo_group_nodes"]
+    }
+  },
+  {
+    "table": "repo_groups",
+    "disposition": "preserved",
+    "targets": ["repo_groups"],
+    "basis": "| `repo_groups` | source-control / KEEP；8 | source-control | 保留 | `repo_groups`；来源、冻结快照、缓存、分组、准备和托管命令各自保留；preparation 可早于 Task。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["repo_groups"]
+    }
+  },
+  {
+    "table": "repository_employee_assignments",
+    "disposition": "preserved",
+    "targets": ["repository_employee_assignments"],
+    "basis": "| `repository_employee_assignments` | digital-employee / KEEP；13 | development-automation | 保留 | `repository_employee_assignments`；旧开发员工配置的仓库 assignment；依据实际持久化 owner，不能只按 employee 前缀归 OS。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["repository_employee_assignments"]
+    }
+  },
+  {
+    "table": "repository_transport_connections",
+    "disposition": "preserved",
+    "targets": ["repository_transport_connections"],
+    "basis": "| `repository_transport_connections` | source-control / KEEP；12 | source-control | 保留 | `repository_transport_connections`；来源、冻结快照、缓存、分组、准备和托管命令各自保留；preparation 可早于 Task。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["repository_transport_connections"]
+    }
+  },
+  {
+    "table": "resource_bundle_applies",
+    "disposition": "converted",
+    "targets": ["resource_bundle_applies"],
+    "basis": "| `resource_bundle_applies` | resource-catalog / KEEP；10 | resource-catalog | 共用机制 | `resource_bundle_applies`；保留 scope/key 幂等域和 journal；复用唯一 AtomicApply 状态机。 | R1 definition: reused; target set is guarded against the business roster (migration §3). V2 decisions D6-D11 and decomposition §12: conversion is required even when the target definition is reused.",
+    "destination": {
+      "kind": "business",
+      "tables": ["resource_bundle_applies"]
+    }
+  },
+  {
+    "table": "resource_grants",
+    "disposition": "converted",
+    "targets": ["resource_grants"],
+    "basis": "| `resource_grants` | identity-access / KEEP；6 | identity-access | 保留 | `resource_grants`；身份、配置、session、grant、凭据与审计生命周期不合并；仅迁移显式类型/约束，原功能不扩改。 | R1 definition: reused; target set is guarded against the business roster (migration §3). V2 decisions D6-D11 and decomposition §12: conversion is required even when the target definition is reused.",
+    "destination": {
+      "kind": "business",
+      "tables": ["resource_grants"]
+    }
+  },
+  {
+    "table": "review_comments",
+    "disposition": "converted",
+    "targets": ["content_bytes", "content_objects", "review_comments"],
+    "basis": "| `review_comments` | collaboration / KEEP；14 | collaboration | 内容引用 | `review_comments`；保留人工门/评论的独立关系与状态；正文或制品地址统一为内容引用。 | R1 definition: target; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["content_bytes", "content_objects", "review_comments"]
+    }
+  },
+  {
+    "table": "review_node_reviewers",
+    "disposition": "preserved",
+    "targets": ["review_node_reviewers"],
+    "basis": "| `review_node_reviewers` | collaboration / KEEP；5 | collaboration | 保留 | `review_node_reviewers`；人工门操作、审核人、协作者、反馈、问题分发保留不同语义；task_questions 不与答案合表。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["review_node_reviewers"]
+    }
+  },
+  {
+    "table": "runtime_session_leases",
+    "disposition": "converted",
+    "targets": ["runtime_session_leases"],
+    "basis": "| `runtime_session_leases` | task-execution / KEEP；9 | task-execution | 保留 | `runtime_session_leases`；保留各自准入/准备/归档/恢复/租约事实，改指新 Task/run/workspace 身份；admission owner 校正。 | R1 definition: target; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["runtime_session_leases"]
+    }
+  },
+  {
+    "table": "runtimes",
+    "disposition": "preserved",
+    "targets": ["runtimes"],
+    "basis": "| `runtimes` | resource-catalog / KEEP；19 | runtime-management | 保留 | `runtimes`；运行配置注册名仍是产品选择器；冻结到 run 的实际配置独立保留。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["runtimes"]
+    }
+  },
+  {
+    "table": "scheduled_tasks",
+    "disposition": "preserved",
+    "targets": ["scheduled_tasks"],
+    "basis": "| `scheduled_tasks` | resource-catalog / KEEP；16 | integration | 保留 | `scheduled_tasks`；触发配置、流状态、去重/投递与 MR effect 保留独立生命周期；scheduled_tasks 校正 owner。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["scheduled_tasks"]
+    }
+  },
+  {
+    "table": "sc_preparation_operations",
+    "disposition": "preserved",
+    "targets": ["sc_preparation_operations"],
+    "basis": "| `sc_preparation_operations` | source-control / KEEP；11 | source-control | 保留 | `sc_preparation_operations`；来源、冻结快照、缓存、分组、准备和托管命令各自保留；preparation 可早于 Task。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["sc_preparation_operations"]
+    }
+  },
+  {
+    "table": "sc_repository_snapshots",
+    "disposition": "preserved",
+    "targets": ["sc_repository_snapshots"],
+    "basis": "| `sc_repository_snapshots` | source-control / KEEP；5 | source-control | 保留 | `sc_repository_snapshots`；来源、冻结快照、缓存、分组、准备和托管命令各自保留；preparation 可早于 Task。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["sc_repository_snapshots"]
+    }
+  },
+  {
+    "table": "sc_repository_sources",
+    "disposition": "preserved",
+    "targets": ["sc_repository_sources"],
+    "basis": "| `sc_repository_sources` | source-control / KEEP；6 | source-control | 保留 | `sc_repository_sources`；来源、冻结快照、缓存、分组、准备和托管命令各自保留；preparation 可早于 Task。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["sc_repository_sources"]
+    }
+  },
+  {
+    "table": "skill_content_entries",
+    "disposition": "converted",
+    "targets": ["content_bytes", "content_objects", "skill_content_entries"],
+    "basis": "| `skill_content_entries` | resource-catalog / KEEP；7 | resource-catalog | 内容引用 | `skill_content_entries`；保留技能、版本与 tree/path 关系；内容经 bytes / 文件 / 对象后端，迁移编码后逐字节校验。 | R1 definition: target; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["content_bytes", "content_objects", "skill_content_entries"]
+    }
+  },
+  {
+    "table": "skill_operation_locks",
+    "disposition": "preserved",
+    "targets": ["skill_operation_locks"],
+    "basis": "| `skill_operation_locks` | resource-catalog / KEEP；3 | resource-catalog | 共用机制 | `skill_operation_locks`；保留技能操作事实与互斥身份；与 AtomicApply 的 restore 场景共用内容准备/恢复机制，不混成其他 saga。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["skill_operation_locks"]
+    }
+  },
+  {
+    "table": "skill_operations",
+    "disposition": "preserved",
+    "targets": ["skill_operations"],
+    "basis": "| `skill_operations` | resource-catalog / KEEP；15 | resource-catalog | 共用机制 | `skill_operations`；保留技能操作事实与互斥身份；与 AtomicApply 的 restore 场景共用内容准备/恢复机制，不混成其他 saga。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["skill_operations"]
+    }
+  },
+  {
+    "table": "skill_versions",
+    "disposition": "converted",
+    "targets": ["content_bytes", "content_objects", "skill_content_entries", "skill_versions"],
+    "basis": "| `skill_versions` | resource-catalog / KEEP；11 | resource-catalog | 内容引用 | `skill_versions`；保留技能、版本与 tree/path 关系；内容经 bytes / 文件 / 对象后端，迁移编码后逐字节校验。 | R1 definition: target; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["content_bytes", "content_objects", "skill_content_entries", "skill_versions"]
+    }
+  },
+  {
+    "table": "skills",
+    "disposition": "converted",
+    "targets": [
+      "content_bytes",
+      "content_objects",
+      "skill_content_entries",
+      "skill_versions",
+      "skills"
+    ],
+    "basis": "| `skills` | resource-catalog / KEEP；14 | resource-catalog | 内容引用 | `skills`；保留技能、版本与 tree/path 关系；内容经 bytes / 文件 / 对象后端，迁移编码后逐字节校验。 | R1 definition: target; target set is guarded against the business roster (migration §3). Activation A-1: destinations follow the final epoch-2 roster, including deterministic initial skill-version conversion.",
+    "destination": {
+      "kind": "business",
+      "tables": [
+        "content_bytes",
+        "content_objects",
+        "skill_content_entries",
+        "skill_versions",
+        "skills"
+      ]
+    }
+  },
+  {
+    "table": "task_archive_audit",
+    "disposition": "preserved",
+    "targets": ["task_archive_audit"],
+    "basis": "| `task_archive_audit` | task-execution / KEEP；9 | task-execution | 保留 | `task_archive_audit`；保留各自准入/准备/归档/恢复/租约事实，改指新 Task/run/workspace 身份；admission owner 校正。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["task_archive_audit"]
+    }
+  },
+  {
+    "table": "task_collaborators",
+    "disposition": "converted",
+    "targets": ["task_collaborators"],
+    "basis": "| `task_collaborators` | collaboration / KEEP；5 | collaboration | 保留 | `task_collaborators`；人工门操作、审核人、协作者、反馈、问题分发保留不同语义；task_questions 不与答案合表。 | R1 definition: target; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["task_collaborators"]
+    }
+  },
+  {
+    "table": "task_execution_effect_attempts",
+    "disposition": "preserved",
+    "targets": ["task_execution_effect_attempts"],
+    "basis": "| `task_execution_effect_attempts` | task-execution / KEEP；20 | task-execution | 保留 | `task_execution_effect_attempts`；持久意图、执行 owner、effect、attempt、fence、lineage 操作与维护成员职责不同；不并入 AtomicApply。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["task_execution_effect_attempts"]
+    }
+  },
+  {
+    "table": "task_execution_effect_fences",
+    "disposition": "preserved",
+    "targets": ["task_execution_effect_fences"],
+    "basis": "| `task_execution_effect_fences` | task-execution / KEEP；5 | task-execution | 保留 | `task_execution_effect_fences`；持久意图、执行 owner、effect、attempt、fence、lineage 操作与维护成员职责不同；不并入 AtomicApply。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["task_execution_effect_fences"]
+    }
+  },
+  {
+    "table": "task_execution_effects",
+    "disposition": "preserved",
+    "targets": ["task_execution_effects"],
+    "basis": "| `task_execution_effects` | task-execution / KEEP；19 | task-execution | 保留 | `task_execution_effects`；持久意图、执行 owner、effect、attempt、fence、lineage 操作与维护成员职责不同；不并入 AtomicApply。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["task_execution_effects"]
+    }
+  },
+  {
+    "table": "task_execution_intents",
+    "disposition": "preserved",
+    "targets": ["task_execution_intents"],
+    "basis": "| `task_execution_intents` | task-execution / KEEP；20 | task-execution | 保留 | `task_execution_intents`；持久意图、执行 owner、effect、attempt、fence、lineage 操作与维护成员职责不同；不并入 AtomicApply。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["task_execution_intents"]
+    }
+  },
+  {
+    "table": "task_execution_lineage_operation_records",
+    "disposition": "preserved",
+    "targets": ["task_execution_lineage_operation_records"],
+    "basis": "| `task_execution_lineage_operation_records` | task-execution / KEEP；29 | task-execution | 保留 | `task_execution_lineage_operation_records`；持久意图、执行 owner、effect、attempt、fence、lineage 操作与维护成员职责不同；不并入 AtomicApply。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["task_execution_lineage_operation_records"]
+    }
+  },
+  {
+    "table": "task_execution_maintenance_claims",
+    "disposition": "preserved",
+    "targets": ["task_execution_maintenance_claims"],
+    "basis": "| `task_execution_maintenance_claims` | task-execution / KEEP；11 | task-execution | 保留 | `task_execution_maintenance_claims`；持久意图、执行 owner、effect、attempt、fence、lineage 操作与维护成员职责不同；不并入 AtomicApply。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["task_execution_maintenance_claims"]
+    }
+  },
+  {
+    "table": "task_execution_maintenance_members",
+    "disposition": "preserved",
+    "targets": ["task_execution_maintenance_members"],
+    "basis": "| `task_execution_maintenance_members` | task-execution / KEEP；7 | task-execution | 保留 | `task_execution_maintenance_members`；持久意图、执行 owner、effect、attempt、fence、lineage 操作与维护成员职责不同；不并入 AtomicApply。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["task_execution_maintenance_members"]
+    }
+  },
+  {
+    "table": "task_execution_owners",
+    "disposition": "preserved",
+    "targets": ["task_execution_owners"],
+    "basis": "| `task_execution_owners` | task-execution / KEEP；11 | task-execution | 保留 | `task_execution_owners`；持久意图、执行 owner、effect、attempt、fence、lineage 操作与维护成员职责不同；不并入 AtomicApply。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["task_execution_owners"]
+    }
+  },
+  {
+    "table": "task_feedback",
+    "disposition": "preserved",
+    "targets": ["task_feedback"],
+    "basis": "| `task_feedback` | collaboration / KEEP；7 | collaboration | 保留 | `task_feedback`；人工门操作、审核人、协作者、反馈、问题分发保留不同语义；task_questions 不与答案合表。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["task_feedback"]
+    }
+  },
+  {
+    "table": "task_node_clarify_directives",
+    "disposition": "preserved",
+    "targets": ["task_node_clarify_directives"],
+    "basis": "| `task_node_clarify_directives` | task-execution / KEEP；6 | task-execution | 保留 | `task_node_clarify_directives`；保留各自准入/准备/归档/恢复/租约事实，改指新 Task/run/workspace 身份；admission owner 校正。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["task_node_clarify_directives"]
+    }
+  },
+  {
+    "table": "task_questions",
+    "disposition": "preserved",
+    "targets": ["task_questions"],
+    "basis": "| `task_questions` | collaboration / KEEP；29 | collaboration | 保留 | `task_questions`；人工门操作、审核人、协作者、反馈、问题分发保留不同语义；task_questions 不与答案合表。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["task_questions"]
+    }
+  },
+  {
+    "table": "task_repos",
+    "disposition": "converted",
+    "targets": ["execution_legacy_evidence", "task_repository_mounts", "task_space_nodes"],
+    "basis": "| `task_repos` | task-execution / KEEP；21 | task-execution | 替换 | `task_repository_mounts`；稳定 repo_key、ordinal 与 mount_path；合并主仓镜像，保留来源/分支语义。 | R1 definition: target; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["execution_legacy_evidence", "task_repository_mounts", "task_space_nodes"]
+    }
+  },
+  {
+    "table": "task_workspace_preparations",
+    "disposition": "preserved",
+    "targets": ["task_workspace_preparations"],
+    "basis": "| `task_workspace_preparations` | task-execution / KEEP；12 | task-execution | 保留 | `task_workspace_preparations`；保留各自准入/准备/归档/恢复/租约事实，改指新 Task/run/workspace 身份；admission owner 校正。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["task_workspace_preparations"]
+    }
+  },
+  {
+    "table": "task_space_nodes",
+    "disposition": "converted",
+    "targets": ["task_space_nodes"],
+    "basis": "| `task_space_nodes` | task-execution / KEEP；3 | task-execution | 保留 | `task_space_nodes`；冻结目录树，旧版缺省 ancestor closure 在迁移时物化；正常读取无旧版重建回退。 | R1 definition: reused; target set is guarded against the business roster (migration §3). V2 decisions D6-D11 and decomposition §12: conversion is required even when the target definition is reused.",
+    "destination": {
+      "kind": "business",
+      "tables": ["task_space_nodes"]
+    }
+  },
+  {
+    "table": "tasks",
+    "disposition": "converted",
+    "targets": [
+      "execution_legacy_evidence",
+      "task_definitions",
+      "task_execution_generations",
+      "task_launch_contexts",
+      "task_repository_mounts",
+      "task_space_nodes",
+      "task_workspaces",
+      "tasks",
+      "workgroup_task_state"
+    ],
+    "basis": "| `tasks` | task-execution / KEEP；70 | task-execution | 拆分 | `tasks + task_definitions + task_launch_contexts + task_workspaces + task_repository_mounts`；保留热生命周期、与生命周期 CAS 同句的可变状态（工作区根、prune、来源终止 fence）与任务树，主体/定义/启动/工作区分离；源 70 列见 design §3.2。 | R1 definition: target; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": [
+        "execution_legacy_evidence",
+        "task_definitions",
+        "task_execution_generations",
+        "task_launch_contexts",
+        "task_repository_mounts",
+        "task_space_nodes",
+        "task_workspaces",
+        "tasks",
+        "workgroup_task_state"
+      ]
+    }
+  },
+  {
+    "table": "token_audit",
+    "disposition": "preserved",
+    "targets": ["token_audit"],
+    "basis": "| `token_audit` | identity-access / KEEP；12 | identity-access | 保留 | `token_audit`；身份、配置、session、grant、凭据与审计生命周期不合并；仅迁移显式类型/约束，原功能不扩改。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["token_audit"]
+    }
+  },
+  {
+    "table": "token_delete_snapshot",
+    "disposition": "preserved",
+    "targets": ["token_delete_snapshot"],
+    "basis": "| `token_delete_snapshot` | identity-access / KEEP；6 | identity-access | 保留 | `token_delete_snapshot`；身份、配置、session、grant、凭据与审计生命周期不合并；仅迁移显式类型/约束，原功能不扩改。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["token_delete_snapshot"]
+    }
+  },
+  {
+    "table": "user_access_audit",
+    "disposition": "converted",
+    "targets": ["user_access_audit"],
+    "basis": "| `user_access_audit` | identity-access / KEEP；12 | identity-access | 保留 | `user_access_audit`；身份、配置、session、grant、凭据与审计生命周期不合并；仅迁移显式类型/约束，原功能不扩改。 | R1 definition: target; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["user_access_audit"]
+    }
+  },
+  {
+    "table": "user_identities",
+    "disposition": "preserved",
+    "targets": ["user_identities"],
+    "basis": "| `user_identities` | identity-access / KEEP；8 | identity-access | 保留 | `user_identities`；身份、配置、session、grant、凭据与审计生命周期不合并；仅迁移显式类型/约束，原功能不扩改。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["user_identities"]
+    }
+  },
+  {
+    "table": "user_pats",
+    "disposition": "preserved",
+    "targets": ["user_pats"],
+    "basis": "| `user_pats` | identity-access / KEEP；10 | identity-access | 保留 | `user_pats`；身份、配置、session、grant、凭据与审计生命周期不合并；仅迁移显式类型/约束，原功能不扩改。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["user_pats"]
+    }
+  },
+  {
+    "table": "user_permission_grants",
+    "disposition": "preserved",
+    "targets": ["user_permission_grants"],
+    "basis": "| `user_permission_grants` | identity-access / KEEP；4 | identity-access | 保留 | `user_permission_grants`；身份、配置、session、grant、凭据与审计生命周期不合并；仅迁移显式类型/约束，原功能不扩改。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["user_permission_grants"]
+    }
+  },
+  {
+    "table": "user_repository_transport_credentials",
+    "disposition": "preserved",
+    "targets": ["user_repository_transport_credentials"],
+    "basis": "| `user_repository_transport_credentials` | identity-access / KEEP；9 | identity-access | 保留 | `user_repository_transport_credentials`；身份、配置、session、grant、凭据与审计生命周期不合并；仅迁移显式类型/约束，原功能不扩改。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["user_repository_transport_credentials"]
+    }
+  },
+  {
+    "table": "user_sessions",
+    "disposition": "preserved",
+    "targets": ["user_sessions"],
+    "basis": "| `user_sessions` | identity-access / KEEP；8 | identity-access | 保留 | `user_sessions`；身份、配置、session、grant、凭据与审计生命周期不合并；仅迁移显式类型/约束，原功能不扩改。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["user_sessions"]
+    }
+  },
+  {
+    "table": "users",
+    "disposition": "converted",
+    "targets": ["users"],
+    "basis": "| `users` | identity-access / KEEP；15 | identity-access | 保留 | `users`；身份、配置、session、grant、凭据与审计生命周期不合并；仅迁移显式类型/约束，原功能不扩改。 | R1 definition: target; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["users"]
+    }
+  },
+  {
+    "table": "verification_profile_revisions",
+    "disposition": "preserved",
+    "targets": ["verification_profile_revisions"],
+    "basis": "| `verification_profile_revisions` | resource-catalog / KEEP；6 | development-automation | 保留 | `verification_profile_revisions`；配置身份与不可变 revision 成对保留；不因旧名称与 OS 定义合并。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["verification_profile_revisions"]
+    }
+  },
+  {
+    "table": "verification_profiles",
+    "disposition": "preserved",
+    "targets": ["verification_profiles"],
+    "basis": "| `verification_profiles` | resource-catalog / KEEP；10 | development-automation | 保留 | `verification_profiles`；配置身份与不可变 revision 成对保留；不因旧名称与 OS 定义合并。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["verification_profiles"]
+    }
+  },
+  {
+    "table": "webhook_deliveries",
+    "disposition": "preserved",
+    "targets": ["webhook_deliveries"],
+    "basis": "| `webhook_deliveries` | integration / KEEP；18 | integration | 保留 | `webhook_deliveries`；触发配置、流状态、去重/投递与 MR effect 保留独立生命周期；scheduled_tasks 校正 owner。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["webhook_deliveries"]
+    }
+  },
+  {
+    "table": "webhook_endpoints",
+    "disposition": "preserved",
+    "targets": ["webhook_endpoints"],
+    "basis": "| `webhook_endpoints` | integration / KEEP；10 | integration | 保留 | `webhook_endpoints`；触发配置、流状态、去重/投递与 MR effect 保留独立生命周期；scheduled_tasks 校正 owner。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["webhook_endpoints"]
+    }
+  },
+  {
+    "table": "webhook_mr_control_effects",
+    "disposition": "preserved",
+    "targets": ["webhook_mr_control_effects"],
+    "basis": "| `webhook_mr_control_effects` | integration / KEEP；16 | integration | 保留 | `webhook_mr_control_effects`；触发配置、流状态、去重/投递与 MR effect 保留独立生命周期；scheduled_tasks 校正 owner。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["webhook_mr_control_effects"]
+    }
+  },
+  {
+    "table": "webhook_mr_control_targets",
+    "disposition": "preserved",
+    "targets": ["webhook_mr_control_targets"],
+    "basis": "| `webhook_mr_control_targets` | integration / KEEP；8 | integration | 保留 | `webhook_mr_control_targets`；触发配置、流状态、去重/投递与 MR effect 保留独立生命周期；scheduled_tasks 校正 owner。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["webhook_mr_control_targets"]
+    }
+  },
+  {
+    "table": "webhook_mr_launch_guards",
+    "disposition": "preserved",
+    "targets": ["webhook_mr_launch_guards"],
+    "basis": "| `webhook_mr_launch_guards` | integration / KEEP；15 | integration | 保留 | `webhook_mr_launch_guards`；触发配置、流状态、去重/投递与 MR effect 保留独立生命周期；scheduled_tasks 校正 owner。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["webhook_mr_launch_guards"]
+    }
+  },
+  {
+    "table": "webhook_mr_stream_states",
+    "disposition": "preserved",
+    "targets": ["webhook_mr_stream_states"],
+    "basis": "| `webhook_mr_stream_states` | integration / KEEP；9 | integration | 保留 | `webhook_mr_stream_states`；触发配置、流状态、去重/投递与 MR effect 保留独立生命周期；scheduled_tasks 校正 owner。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["webhook_mr_stream_states"]
+    }
+  },
+  {
+    "table": "webhook_trigger_fires",
+    "disposition": "preserved",
+    "targets": ["webhook_trigger_fires"],
+    "basis": "| `webhook_trigger_fires` | integration / KEEP；10 | integration | 保留 | `webhook_trigger_fires`；触发配置、流状态、去重/投递与 MR effect 保留独立生命周期；scheduled_tasks 校正 owner。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["webhook_trigger_fires"]
+    }
+  },
+  {
+    "table": "webhook_trigger_streams",
+    "disposition": "preserved",
+    "targets": ["webhook_trigger_streams"],
+    "basis": "| `webhook_trigger_streams` | integration / KEEP；6 | integration | 保留 | `webhook_trigger_streams`；触发配置、流状态、去重/投递与 MR effect 保留独立生命周期；scheduled_tasks 校正 owner。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["webhook_trigger_streams"]
+    }
+  },
+  {
+    "table": "webhook_triggers",
+    "disposition": "preserved",
+    "targets": ["webhook_triggers"],
+    "basis": "| `webhook_triggers` | integration / KEEP；24 | integration | 保留 | `webhook_triggers`；触发配置、流状态、去重/投递与 MR effect 保留独立生命周期；scheduled_tasks 校正 owner。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["webhook_triggers"]
+    }
+  },
+  {
+    "table": "workflows",
+    "disposition": "converted",
+    "targets": ["workflow_dependency_index", "workflows"],
+    "basis": "| `workflows` | resource-catalog / KEEP；12 | resource-catalog | 投影索引 | `workflows + workflow_dependency_index`；保留 canonical definition JSON；按 revision / reference_path 维护只读依赖索引；保留原 name selector。转换时删除四个宿主占位行（证据入包），目标库不再存在宿主行。 | R1 definition: target; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["workflow_dependency_index", "workflows"]
+    }
+  },
+  {
+    "table": "workgroup_assignments",
+    "disposition": "preserved",
+    "targets": ["workgroup_assignments"],
+    "basis": "| `workgroup_assignments` | task-execution / KEEP；16 | task-execution | 保留 | `workgroup_assignments`；运行中的派工/游标/消息/轮次状态归执行域，和 catalog 定义分开。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["workgroup_assignments"]
+    }
+  },
+  {
+    "table": "workgroup_member_cursors",
+    "disposition": "preserved",
+    "targets": ["workgroup_member_cursors"],
+    "basis": "| `workgroup_member_cursors` | task-execution / KEEP；4 | task-execution | 保留 | `workgroup_member_cursors`；运行中的派工/游标/消息/轮次状态归执行域，和 catalog 定义分开。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["workgroup_member_cursors"]
+    }
+  },
+  {
+    "table": "workgroup_members",
+    "disposition": "preserved",
+    "targets": ["workgroup_members"],
+    "basis": "| `workgroup_members` | task-execution / KEEP；10 | resource-catalog | 保留 | `workgroup_members`；定义与 roster 归 catalog；成员 ID、角色、顺序与合法可空条件保留，不与运行表混合。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["workgroup_members"]
+    }
+  },
+  {
+    "table": "workgroup_messages",
+    "disposition": "preserved",
+    "targets": ["workgroup_messages"],
+    "basis": "| `workgroup_messages` | task-execution / KEEP；14 | task-execution | 保留 | `workgroup_messages`；运行中的派工/游标/消息/轮次状态归执行域，和 catalog 定义分开。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["workgroup_messages"]
+    }
+  },
+  {
+    "table": "workgroup_task_state",
+    "disposition": "converted",
+    "targets": ["workgroup_task_state"],
+    "basis": "| `workgroup_task_state` | task-execution / KEEP；8 | task-execution | 保留 | `workgroup_task_state`；运行中的派工/游标/消息/轮次状态归执行域，和 catalog 定义分开。新增运行期配置 `runtime_config_json, config_revision`，承接 `tasks.workgroup_config_json` 中运行中可编辑的部分；`task_definitions` 只保存启动时不变的部分（mode、workgroup id / name、goal、leader）。 | R1 definition: target; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["workgroup_task_state"]
+    }
+  },
+  {
+    "table": "workgroups",
+    "disposition": "preserved",
+    "targets": ["workgroups"],
+    "basis": "| `workgroups` | task-execution / KEEP；21 | resource-catalog | 保留 | `workgroups`；定义与 roster 归 catalog；成员 ID、角色、顺序与合法可空条件保留，不与运行表混合。 | R1 definition: reused; target set is guarded against the business roster (migration §3).",
+    "destination": {
+      "kind": "business",
+      "tables": ["workgroups"]
+    }
+  }
+]

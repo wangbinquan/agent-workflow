@@ -25,9 +25,9 @@ import { composeSystemOperationsTaskPorts } from '@/modules/task-execution/compo
 // 所以这份文件真正的价值在于**它此前不存在**：全仓没有任何测试 import
 // `checkConfiguredDatabase`，在它之前把这整段删掉都不会有任何测试变红。
 
-import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, rmSync, writeFileSync, existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -61,7 +61,7 @@ describe('RFC-359 AC-10 —— doctor 的数据库检查', () => {
   test('配置读不出来时只报一条，且是 not-ok', async () => {
     writeFileSync(join(process.env.AGENT_WORKFLOW_HOME!, 'config.json'), '{ not json', 'utf8')
     const checks = await checkConfiguredDatabase(
-      buildLogicalSchemaContract(),
+      logicalSchemaContract,
       composeSystemOperationsTaskPorts(),
     )
     expect(checks).toHaveLength(1)
@@ -73,9 +73,14 @@ describe('RFC-359 AC-10 —— doctor 的数据库检查', () => {
   test('SQLite 且本地库文件还不存在：报「还没有库」，并带上另外两条检查', async () => {
     writeConfig({ provider: 'sqlite' })
     const checks = await checkConfiguredDatabase(
-      buildLogicalSchemaContract(),
+      logicalSchemaContract,
       composeSystemOperationsTaskPorts(),
     )
+    expect(existsSync(join(process.env.AGENT_WORKFLOW_HOME!, 'database-generation.json'))).toBe(
+      false,
+    )
+    expect(existsSync(join(process.env.AGENT_WORKFLOW_HOME!, 'databases'))).toBe(false)
+    expect(existsSync(join(process.env.AGENT_WORKFLOW_HOME!, 'db.sqlite'))).toBe(false)
     expect(checks).toHaveLength(3)
     expect(checks[0]).toMatchObject({
       name: 'database provider',
@@ -101,7 +106,7 @@ describe('RFC-359 AC-10 —— doctor 的数据库检查', () => {
       idleTimeoutMs: 1_000,
     })
     const checks = await checkConfiguredDatabase(
-      buildLogicalSchemaContract(),
+      logicalSchemaContract,
       composeSystemOperationsTaskPorts(),
     )
     // 关键断言：**没有**那句 SQLite 专属的回话。改动前这里拿到的就是它。
@@ -110,5 +115,10 @@ describe('RFC-359 AC-10 —— doctor 的数据库检查', () => {
     //（这个 home 里没有世代指针，解析必然失败）——重点是**失败在该失败的地方**。
     expect(checks).toHaveLength(1)
     expect(checks[0]).toMatchObject({ name: 'database provider', ok: false })
+    expect(existsSync(join(process.env.AGENT_WORKFLOW_HOME!, 'database-generation.json'))).toBe(
+      false,
+    )
+    expect(existsSync(join(process.env.AGENT_WORKFLOW_HOME!, 'databases'))).toBe(false)
+    expect(existsSync(join(process.env.AGENT_WORKFLOW_HOME!, 'db.sqlite'))).toBe(false)
   })
 })

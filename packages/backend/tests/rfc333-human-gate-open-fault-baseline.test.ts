@@ -1,3 +1,5 @@
+import { nodeRunFixtureColumns } from './helpers/model/nodeRun'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { withO2Closure } from './helpers/o2Closure'
 // RFC-333 — deterministic human-gate open fault witnesses.
 //
@@ -14,7 +16,7 @@ import {
   workflowFixture,
   readNodeRunFixtures,
 } from './helpers/model'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+
 import { first } from '@/platform/persistence/queryHelpers'
 import { afterEach, expect, test } from 'bun:test'
 import { Database } from 'bun:sqlite'
@@ -326,11 +328,11 @@ describeEachProvider('RFC-333 open fault witnesses', (harness) => {
       )
       expect(error.message).toContain('rfc333-second-doc')
 
-      const { docVersions, nodeRuns, collaborationGateOperations, collaborationGateArtifacts } =
-        tablesOf(db)
+      const { collaborationGateOperations } = tablesOf(db)
+      const { docVersions, nodeRuns, collaborationGateArtifacts } = tablesOf(db)
       const docs = await db.select().from(docVersions).where(eq(docVersions.taskId, taskId))
       const reviewRuns = await db
-        .select()
+        .select(nodeRunFixtureColumns(db))
         .from(nodeRuns)
         .where(eq(nodeRuns.taskId, taskId))
         .then((rows) => rows.filter((row) => row.nodeId === 'review'))
@@ -355,6 +357,8 @@ describeEachProvider('RFC-333 open fault witnesses', (harness) => {
         docRows: docs.length,
         canonicalFiles: canonicalFiles.length,
         stagedFiles: stagedFiles.length,
+        stagedReferences: artifacts.filter((artifact) => artifact.stagedContentRefJson !== null)
+          .length,
         reviewRuns: reviewRuns.map((row) => row.status),
         taskStatus: task.status,
         wsFrames: frames.length,
@@ -364,7 +368,8 @@ describeEachProvider('RFC-333 open fault witnesses', (harness) => {
       expect(observed).toEqual({
         docRows: 0,
         canonicalFiles: 0,
-        stagedFiles: 3,
+        stagedFiles: 0,
+        stagedReferences: 3,
         reviewRuns: [],
         taskStatus: 'running',
         wsFrames: 0,
@@ -389,9 +394,12 @@ describeEachProvider('RFC-333 open fault witnesses', (harness) => {
         await db.select().from(docVersions).where(eq(docVersions.taskId, taskId)),
       ).toHaveLength(3)
       expect(
-        (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))).filter(
-          (row) => row.nodeId === 'review',
-        ),
+        (
+          await db
+            .select(nodeRunFixtureColumns(db))
+            .from(nodeRuns)
+            .where(eq(nodeRuns.taskId, taskId))
+        ).filter((row) => row.nodeId === 'review'),
       ).toHaveLength(1)
       expect((await readTaskFixtures(db, { id: taskId }))[0]).toMatchObject({
         status: 'awaiting_review',
@@ -477,7 +485,8 @@ describeEachProvider('RFC-333 open fault witnesses', (harness) => {
         ),
       )
       expect(error.message).toContain('rfc333-task-park')
-      const { docVersions, collaborationGateOperations, collaborationGateArtifacts } = tablesOf(db)
+      const { collaborationGateOperations } = tablesOf(db)
+      const { docVersions, collaborationGateArtifacts } = tablesOf(db)
       expect(await db.select().from(docVersions).where(eq(docVersions.taskId, taskId))).toEqual([])
       expect(
         (await readNodeRunFixtures(db, { taskId })).filter((row) => row.nodeId === 'review'),
@@ -578,10 +587,11 @@ describeEachProvider('RFC-333 open fault witnesses', (harness) => {
       const error = await failureOf(() => createClarifyRound(withO2Closure(request)))
       expect(error.message).toContain('rfc333-clarify-round')
 
-      const { clarifyRounds, nodeRuns, taskQuestions, collaborationGateOperations } = tablesOf(db)
+      const { taskQuestions, collaborationGateOperations } = tablesOf(db)
+      const { clarifyRounds, nodeRuns } = tablesOf(db)
       const rounds = await db.select().from(clarifyRounds).where(eq(clarifyRounds.taskId, taskId))
       const clarifyRuns = await db
-        .select()
+        .select(nodeRunFixtureColumns(db))
         .from(nodeRuns)
         .where(eq(nodeRuns.taskId, taskId))
         .then((rows) => rows.filter((row) => row.nodeId === 'clarify'))
@@ -616,9 +626,12 @@ describeEachProvider('RFC-333 open fault witnesses', (harness) => {
       const retried = await createClarifyRound(withO2Closure(request))
       expect(retried.round.id).toBe(operations[0]!.id + ':round')
       expect(
-        (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))).filter(
-          (row) => row.nodeId === 'clarify',
-        ),
+        (
+          await db
+            .select(nodeRunFixtureColumns(db))
+            .from(nodeRuns)
+            .where(eq(nodeRuns.taskId, taskId))
+        ).filter((row) => row.nodeId === 'clarify'),
       ).toHaveLength(1)
       expect(
         await db.select().from(clarifyRounds).where(eq(clarifyRounds.taskId, taskId)),

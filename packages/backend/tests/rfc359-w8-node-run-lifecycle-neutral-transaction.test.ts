@@ -1,3 +1,4 @@
+import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { o2Ports } from './helpers/o2Closure'
 // RFC-359 W8 —— `transitionNodeRunStatus` / `setNodeRunStatus` 的「有执行上下文」分支从
 // `withOwnedTaskTx`（`dbTxSync` + inline owner CAS，bun:sqlite 独有的**同步**事务）改走中立事务原语
@@ -113,6 +114,7 @@ async function seedClaimedTask(db: PersistenceDb, runStatus: 'pending' | 'done')
     iteration: 0,
   })
   const persistence = createTaskExecutionPersistence(db, {
+    historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
     recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
   })
   const module = createProviderTaskExecutionModule({

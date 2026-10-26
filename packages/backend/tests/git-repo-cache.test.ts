@@ -20,7 +20,7 @@ import { startGitHttpRemote, remoteUrlFor } from './helpers/gitHttpRemote'
 import { existsSync, mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { createHash } from 'node:crypto'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { gitUrlCacheKeyWith, parseGitUrl, type StartTask } from '@agent-workflow/shared'
 import { eq } from 'drizzle-orm'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
@@ -38,8 +38,6 @@ import {
   composeSqliteRepositoryWorkspaceStore,
   type RepositoryWorkspaceStore,
 } from '../src/modules/source-control/composition'
-
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 // RFC-254 T32: every case here clones, fetches and re-resolves against a real
 // local bare repo, so what it spends is git's time on the host, not assertion
@@ -107,7 +105,7 @@ describe('gitRepoCache (RFC-024 T3)', () => {
   let remoteUrl: string
 
   beforeEach(async () => {
-    db = createInMemoryDb(MIGRATIONS)
+    db = createInMemoryDb()
     store = composeSqliteRepositoryWorkspaceStore(db, composeSourceControlTaskPorts(db))
     appHome = mkdtempSync(join(tmpdir(), 'aw-grc-home-'))
     const r = await buildFixtureRemote()

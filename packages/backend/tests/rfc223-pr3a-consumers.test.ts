@@ -1,3 +1,4 @@
+import { withTargetMintIdentity } from './helpers/rfc395Mint'
 import { deleteAgent } from './helpers/resourceCatalogDeletion'
 // RFC-223 (PR-3a) — frozen-snapshot id producers + consumer-matrix + task
 // guards resolve agents BY canonical id (name only for display / transitional).
@@ -9,7 +10,6 @@ import { deleteAgent } from './helpers/resourceCatalogDeletion'
 //     DIFFERENT agent's same-named task neither blocks the op nor leaks its id
 //     (R3-3 cross-tenant isolation — the failure PR-8 name-uniqueness would open).
 
-import { deriveNodeRunRole } from '@/modules/task-execution/public/types'
 import { readTaskFixtures, taskFixture, workflowFixture } from './helpers/model'
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { ulid } from 'ulid'
@@ -152,31 +152,37 @@ describe('extractAgentIdsFromSnapshot', () => {
 // ---------------------------------------------------------------------------
 describe('buildMintNodeRunValues — agentOverrideId', () => {
   test('stamps both override name and id', () => {
-    const v = buildMintNodeRunValues({
-      ...deriveNodeRunRole({ nodeId: 'n1', rerunCause: 'initial' }),
-      taskId: 't1',
-      nodeId: 'n1',
-      status: 'pending',
-      cause: 'initial',
-      overrides: {
-        config: {
-          agentOverrideName: 'x',
-          agentOverrideId: 'ag-x',
+    const v = buildMintNodeRunValues(
+      withTargetMintIdentity({
+        role: 'node-attempt',
+        syntheticKind: null,
+        taskId: 't1',
+        nodeId: 'n1',
+        status: 'pending',
+        cause: 'initial',
+        overrides: {
+          config: {
+            agentOverrideName: 'x',
+            agentOverrideId: 'ag-x',
+          },
         },
-      },
-    })
+      }),
+    )
     expect(v.agentOverrideName).toBe('x')
     expect(v.agentOverrideId).toBe('ag-x')
   })
 
   test('defaults to null when not overridden', () => {
-    const v = buildMintNodeRunValues({
-      ...deriveNodeRunRole({ nodeId: 'n1', rerunCause: 'initial' }),
-      taskId: 't1',
-      nodeId: 'n1',
-      status: 'pending',
-      cause: 'initial',
-    })
+    const v = buildMintNodeRunValues(
+      withTargetMintIdentity({
+        role: 'node-attempt',
+        syntheticKind: null,
+        taskId: 't1',
+        nodeId: 'n1',
+        status: 'pending',
+        cause: 'initial',
+      }),
+    )
     expect(v.agentOverrideId).toBeNull()
   })
 })

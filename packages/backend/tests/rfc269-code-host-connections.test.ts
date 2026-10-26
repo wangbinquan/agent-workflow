@@ -53,7 +53,7 @@ function codeHostService(db: ReturnType<typeof createInMemoryDb>) {
 }
 
 async function harness(opts?: { role?: 'admin' | 'user' | 'manager'; fetchImpl?: FetchStub }) {
-  const db = createInMemoryDb(MIGRATIONS)
+  const db = createInMemoryDb()
   const role = opts?.role ?? 'admin'
   const user = await createUser(db, {
     username: `u-${role}`,
@@ -632,7 +632,7 @@ describe('RFC-269 探活 — 四类可区分', () => {
 
 describe('RFC-269 凭据面 — 解封失败按未配置处理', () => {
   test('secret.key 换过导致 unseal 失败 ⇒ resolve 返回 null 而不是空 token', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createInMemoryDb()
     const { codeHostConnections } = tablesOf(db)
     insertOne(db, codeHostConnections, {
       provider: 'gitlab',

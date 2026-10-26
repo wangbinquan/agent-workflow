@@ -1,44 +1,48 @@
 import type { PersistenceTx } from '@/platform/persistence/persistenceDb'
 import type { NodeRunFactSnapshot } from '../../application/ports/nodeRunQueries'
-import type { OracleRunRow } from './oracle/rows'
-import { oracleRunSlot } from './oracle/rows'
-import { createRunSelectionParticipantInTx } from './oracle/participant'
+import type { RunSlot } from '../../application/ports/runSelection'
+import { createRunSelectionReader } from './table/reader'
+import { createRunSelectionParticipantInTx } from './table/selectionWrite'
 
-/** II-a 没有持久 revision/generation；0 仅是 oracle 的提案起点。 */
+/** The mint writer already holds the owner fence and task root. */
 export async function selectMintedRunInTx(
   tx: PersistenceTx,
-  run: Omit<
-    OracleRunRow,
-    'wrapperProgressJson' | 'childTaskId' | 'mergeState' | 'supersededByReview'
-  >,
+  run: {
+    readonly id: string
+    readonly taskId: string
+    readonly slot: RunSlot
+    readonly generationSeq: number
+    readonly retryIndex: number
+    readonly containerRunId: string | null
+    readonly parentNodeRunId: string | null
+    readonly shardKey: string | null
+  },
   cause: string,
 ) {
-  const row: OracleRunRow = {
-    wrapperProgressJson: null,
-    childTaskId: null,
-    mergeState: null,
-    supersededByReview: null,
-    ...run,
+  const reader = createRunSelectionReader(tx)
+  if (run.slot.kind === 'synthetic' && run.slot.syntheticKind === 'repo-prep') {
+    const incumbent = await reader.current(run.taskId, run.slot)
+    if (incumbent && incumbent.retryIndex > run.retryIndex) return []
   }
-  const slot = oracleRunSlot(row, [row])
-  return createRunSelectionParticipantInTx<PersistenceTx>().apply(tx, [
+  const expectedRevision = await reader.revision(run.taskId, run.slot)
+  return createRunSelectionParticipantInTx().apply(tx, [
     {
       kind: 'select',
       taskId: run.taskId,
-      slot,
-      run: { ...row, slot },
-      expectedRevision: 0,
-      generationSeq: 0,
+      slot: run.slot,
+      run,
+      expectedRevision,
+      generationSeq: run.generationSeq,
       cause,
     },
   ])
 }
 
-/** Reopening only changes status. Mint order and therefore every current selection stay unchanged. */
+/** Reopening changes status only; it never replaces a newer persisted selection. */
 export async function reselectRunInTx(
-  tx: PersistenceTx,
+  _tx: PersistenceTx,
   _run: NodeRunFactSnapshot,
   _cause: string,
 ) {
-  return createRunSelectionParticipantInTx<PersistenceTx>().apply(tx, [])
+  return []
 }

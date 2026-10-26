@@ -2,7 +2,7 @@ import { composeSourceControlTaskPorts } from '@/modules/task-execution/composit
 // Hosted-only real process: terminate at an acknowledged durable Git checkpoint,
 // then open the same real SQLite file / PostgreSQL generation in a fresh process.
 import { readFileSync, writeFileSync, renameSync } from 'node:fs'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import type { DatabaseConfig } from '@agent-workflow/shared'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { openDb } from '@/db/client'
@@ -45,7 +45,6 @@ let close: () => Promise<void>
 if (input.provider.kind === 'sqlite') {
   const opened = openDb({
     path: join(input.root, 'db.sqlite'),
-    migrationsFolder: resolve(import.meta.dir, '..', '..', 'db', 'migrations'),
   })
   db = opened
   close = async () => {

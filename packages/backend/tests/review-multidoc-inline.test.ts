@@ -1,3 +1,6 @@
+import { epoch2ReviewReader } from './helpers/epoch2RuntimePorts'
+import { nodeRunFixtureColumns } from './helpers/model/nodeRun'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { withO2Closure } from './helpers/o2Closure'
 // RFC-081 PR-C — multi-document review over an INLINE list<markdown> upstream.
 //
@@ -19,7 +22,7 @@ import {
   taskFixture,
   workflowFixture,
 } from './helpers/model'
-import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+
 import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -33,8 +36,11 @@ import {
   setDocumentSelection,
   submitReviewDecision,
 } from '@/modules/collaboration/infrastructure/review'
-import { joinMarkdownDocs } from '@agent-workflow/shared'
-import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
+import {
+  joinMarkdownDocs,
+  type WorkflowDefinition,
+  type WorkflowNode,
+} from '@agent-workflow/shared'
 
 import { describeEachProvider } from './helpers/eachProvider'
 const DOCS = ['# Alpha\n\nalpha body\nsecond line', '# Beta\n\nbeta body', '# Gamma\n\ngamma body']
@@ -189,7 +195,12 @@ describeEachProvider('RFC-081 — multi-document review over inline list<markdow
 
   test('getReviewDetail exposes inline documents with titles from the body heading', async () => {
     const { reviewNodeRunId } = await seedAndDispatch()
-    const detail = await getReviewDetail(db, appHome, reviewNodeRunId)
+    const detail = await getReviewDetail(
+      db,
+      appHome,
+      reviewNodeRunId,
+      epoch2ReviewReader(db, appHome),
+    )
     expect(detail.documents).toBeDefined()
     expect(detail.documents!.map((d) => d.title)).toEqual(['Alpha', 'Beta', 'Gamma'])
     expect(detail.documents!.every((d) => d.itemPath === '')).toBe(true)
@@ -236,7 +247,12 @@ describeEachProvider('RFC-081 — multi-document review over inline list<markdow
     expect(accepted.kind).toBe('list<markdown>')
     expect(accepted.content).toBe(joinMarkdownDocs([DOCS[0]!, DOCS[2]!]))
 
-    const run = (await db.select().from(nodeRuns).where(eq(nodeRuns.id, reviewNodeRunId)))[0]!
+    const run = (
+      await db
+        .select(nodeRunFixtureColumns(db))
+        .from(nodeRuns)
+        .where(eq(nodeRuns.id, reviewNodeRunId))
+    )[0]!
     expect(run.status).toBe('done')
   })
 })

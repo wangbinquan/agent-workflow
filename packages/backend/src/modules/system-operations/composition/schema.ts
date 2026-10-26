@@ -1,4 +1,4 @@
-// RFC-395 I-a: schema-only composition entry, also exported by the module composition root.
+// Schema-only composition exit for the live registry.
 export {
   schemaContribution,
   applicationConfiguration,
@@ -10,3 +10,5 @@ export {
   maintenanceState,
   recoveryEvents,
 } from '../infrastructure/persistence/schema'
+
+export { EPOCH2_META_TABLES } from '../infrastructure/persistence/migrationMetaTables'

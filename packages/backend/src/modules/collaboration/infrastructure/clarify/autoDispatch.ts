@@ -1,4 +1,5 @@
 import type { HumanGateTaskLockPort } from '../../composition/required-ports'
+import type { HistoryRestrictionPort } from '@/platform/contracts/historyRestriction'
 // RFC-128 / RFC-349 — SQLite quick-channel seal + AUTODISPATCH.
 //
 // RFC-132 (universal deferred model) UPDATE: the per-task `deferred_question_dispatch` flag and the
@@ -15,10 +16,10 @@ import type { HumanGateTaskLockPort } from '../../composition/required-ports'
 //     STAGED; the user dispatches it explicitly later (P5-BC, unchanged).
 //
 // LOCK ORDER / NO REENTRY (key correctness constraint): the per-task question-write lock B
-// (getTaskQuestionWriteSem) is a NON-reentrant Semaphore(1). sealRoundQuestions acquires + RELEASES
-// B for its tx; dispatchTaskQuestions acquires + RELEASES B for its tx. This module calls those two
-// SEQUENTIALLY (B taken twice in series, never nested) — wrapping the dispatch inside the seal's B
-// would deadlock (dispatch's B.acquire() would queue forever). The seal→dispatch gap is race-safe:
+// (getTaskQuestionWriteSem) is a NON-reentrant Semaphore(1). sealRoundQuestions uses database
+// round locks (task root first for a quick decision); dispatchTaskQuestions acquires B for its tx.
+// This module calls them sequentially, after the seal transaction releases its locks. The
+// seal→dispatch gap is race-safe:
 // dispatchTaskQuestions re-reads under B + CAS-guards every entry (`dispatched_at IS NULL` +
 // `confirmation='open'`) + re-runs its readiness/in-flight/immediate-ledger gates, so any interleaving
 // is caught there (no double-mint, no stamp of a superseded entry).
@@ -39,14 +40,23 @@ import type { HumanGateTaskLockPort } from '../../composition/required-ports'
 // The single-path invariant still holds: self/q (auto-triggered) + designer (manual-triggered) go
 // through the ONE dispatchTaskQuestions mechanism — a single delivery path, two triggers.
 
-import { createNodeOutputQueries } from '@/modules/task-execution/public/queries'
-import { createTaskGateQueries } from '@/modules/task-execution/public/queries'
 import {
+  createNodeOutputQueries,
+  createTaskGateQueries,
   createNodeRunQueries,
   type NodeRunCheckpointSnapshot,
+  hasTaskRollbackCheckpoint,
 } from '@/modules/task-execution/public/queries'
-import { isTaskWorkspaceUnbound } from '@agent-workflow/shared'
-import { hasTaskRollbackCheckpoint } from '@/modules/task-execution/public/queries'
+
+import {
+  isTaskWorkspaceUnbound,
+  resolveClarifySessionMode,
+  type ClarifyAnswer,
+  type ClarifyDirective,
+  type ClarifyQuestion,
+  type TaskActorRole,
+} from '@agent-workflow/shared'
+
 import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { and, eq, inArray, isNotNull, isNull } from 'drizzle-orm'
 
@@ -77,13 +87,6 @@ import { getTaskQuestionWriteSem, getTaskWriteSem } from '@/services/taskWriteLo
 import { ConflictError, NotFoundError } from '@/util/errors'
 import { createLogger } from '@/util/log'
 import { TASK_QUESTION_CONFLICT } from '@/services/taskQuestionConflicts'
-import {
-  resolveClarifySessionMode,
-  type ClarifyAnswer,
-  type ClarifyDirective,
-  type ClarifyQuestion,
-  type TaskActorRole,
-} from '@agent-workflow/shared'
 
 const { gateDecisionReceipt } = humanGateComposition
 
@@ -662,7 +665,8 @@ export async function finishCommittedClarifyAutoDispatch(input: {
   readonly expectedOriginNodeRunId?: string
   readonly expectedContinuationRef?: string
 }): Promise<AutoDispatchClarifyRoundResult> {
-  const { collaborationGateOperations, taskQuestions, clarifyRounds } = tablesOf(input.db)
+  const { collaborationGateOperations, taskQuestions } = tablesOf(input.db)
+  const { clarifyRounds } = tablesOf(input.db)
   const operation = (
     await input.db
       .select()
@@ -788,6 +792,7 @@ export async function finishCommittedClarifyAutoDispatch(input: {
 export async function autoDispatchClarifyRoundWithDecision(
   args: AutoDispatchClarifyRoundArgs & {
     readonly taskLock: HumanGateTaskLockPort
+    readonly historyRestrictions: HistoryRestrictionPort
     readonly decision?: ClarifyDecisionArgs
   },
 ): Promise<AutoDispatchClarifyDecisionResult> {
@@ -851,6 +856,7 @@ export async function autoDispatchClarifyRoundWithDecision(
   const prepared = await prepareClarifyDecision({
     db: args.db,
     taskLock: args.taskLock,
+    historyRestrictions: args.historyRestrictions,
     taskId: round.taskId,
     originNodeRunId: args.originNodeRunId,
     roundId: round.id,
@@ -907,7 +913,8 @@ export async function autoDispatchClarifyRound(
 ): Promise<AutoDispatchClarifyRoundResult> {
   const { db, originNodeRunId } = args
 
-  const { clarifyRounds, taskQuestions } = tablesOf(db)
+  const { taskQuestions } = tablesOf(db)
+  const { clarifyRounds } = tablesOf(db)
   // 1. Locate the round (kind + task + questions + asking run + clarify node). The route already
   //    gated membership. askingNodeRunId + intermediaryNodeId feed the self-clarify rollback below.
   const round = (

@@ -1,13 +1,13 @@
-// RFC-395 I-a: schema-only composition entry, also exported by the module composition root.
+// Schema-only composition exit for the live registry.
 export {
   schemaContribution,
   cachedRepos,
   hostedTaskWorkspaces,
   hostedWorkspaceCommands,
-  repoGroupNodes,
   repoGroups,
   repositoryTransportConnections,
   scPreparationOperations,
   scRepositorySnapshots,
   scRepositorySources,
+  repoGroupNodes,
 } from '../infrastructure/persistence/schema'

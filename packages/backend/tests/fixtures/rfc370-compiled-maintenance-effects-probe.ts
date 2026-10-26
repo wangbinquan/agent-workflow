@@ -13,7 +13,7 @@ const input = JSON.parse(process.argv[2]!) as {
 }
 const db = openDb({
   path: input.dbPath,
-  migrationsFolder: input.migrationsFolder,
+
   skipIntegrityCheck: true,
   slowQueryMs: 0,
 })

@@ -1,3 +1,4 @@
+import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { o2Ports } from './helpers/o2Closure'
 // The real Task core persists transported runtime facts while still running;
 // presentation-only observation failures do not change the business result.
@@ -58,6 +59,7 @@ describeEachProvider('RFC-370 Task startup inventory stream', (harness) => {
           id: nodeRunId,
           taskId,
           nodeId: 'n1',
+          envelopeNonce: 'inventory-nonce',
           iteration: 0,
           retryIndex: 0,
           status: 'pending',
@@ -142,7 +144,7 @@ describeEachProvider('RFC-370 Task startup inventory stream', (harness) => {
             // A replay must retain the first report, including a failure.
             await sink.record({ ...record, sourceKey: 'original:1' })
             const text =
-              '<workflow-output>\n<port name="summary">report.md</port>\n</workflow-output>'
+              '<workflow-output nonce="inventory-nonce">\n<port name="summary">report.md</port>\n</workflow-output>'
             await sink.record({ raw: text, event: { kind: 'text', text, rawLine: text } })
             await sink.checkpoint('records')
             await request.cleanup?.()
@@ -223,6 +225,7 @@ describeEachProvider('RFC-370 Task startup inventory stream', (harness) => {
             templateMeta: { taskId, repoPath: 'repo:declared', baseBranch: 'main' },
             runtime,
             persistence: createTaskExecutionPersistence(db, {
+              historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
               recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
             }),
             observationInvocations: composeRunObservationCalls(db),
@@ -233,7 +236,7 @@ describeEachProvider('RFC-370 Task startup inventory stream', (harness) => {
           },
           purpose,
         )
-        expect(result.status).toBe('done')
+        expect(result.status, result.errorMessage).toBe('done')
         expect(settled).toBe(true)
         const [final] = await readNodeRunFixtures(db, { id: nodeRunId })
         const inventory = JSON.parse(final!.runtimeInventoryJson!),

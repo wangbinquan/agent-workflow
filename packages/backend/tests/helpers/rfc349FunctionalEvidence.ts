@@ -134,7 +134,7 @@ export const RFC349_T10_FUNCTIONAL_EVIDENCE = Object.freeze([
         lane: 'e2e-full',
         testFile: 'e2e/rfc319-ops-doctor-and-migrate.spec.ts',
         testName:
-          'RFC-319 OPS-012: migrate 在发行二进制上真的把库建起来，应用条数与二进制自称嵌的条数逐一对上，且重跑不重复应用 @nightly',
+          'RFC-319 OPS-012: migrate installs the embedded epoch-2 history in its published generation and replay keeps its receipts @nightly',
       },
     ],
   },

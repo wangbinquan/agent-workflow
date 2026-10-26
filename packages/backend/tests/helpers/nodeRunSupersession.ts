@@ -13,17 +13,18 @@ import { IllegalMergeStateTransition, type MergeStateTransitionEvent } from '@ag
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { SUPERSEDABLE_MERGE_STATES } from '@/modules/task-execution/domain/nodeRunSupersession'
 import { DrizzleMergeStateLifecyclePersistence } from '@/modules/task-execution/infrastructure/mergeStateLifecyclePersistence'
-import { structurallySupersededCondition } from '@/modules/task-execution/infrastructure/runSelection/oracle/supersessionSql'
+import { structurallySupersededCondition } from '@/modules/task-execution/infrastructure/runSelection/table/supersessionSql'
 
 export async function derivedSupersededIds(db: PersistenceDb, taskId: string): Promise<string[]> {
-  const { nodeRuns } = tablesOf(db)
+  const { nodeRuns, nodeRunRuntimeStates } = tablesOf(db)
   const rows = await db
     .select({ id: nodeRuns.id })
     .from(nodeRuns)
+    .innerJoin(nodeRunRuntimeStates, eq(nodeRunRuntimeStates.nodeRunId, nodeRuns.id))
     .where(
       and(
         eq(nodeRuns.taskId, taskId),
-        inArray(nodeRuns.mergeState, [...SUPERSEDABLE_MERGE_STATES]),
+        inArray(nodeRunRuntimeStates.mergeState, [...SUPERSEDABLE_MERGE_STATES]),
         structurallySupersededCondition(db),
       ),
     )

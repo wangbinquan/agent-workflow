@@ -1,3 +1,4 @@
+import { liveSqlitePath } from './storage'
 // RFC-319/RFC-338 —— 后台维护节奏的用户面验收
 // （EVENT-28 / EVENT-X4 / OPS-X9 / OPS-X3 / OPS-X5）。
 //
@@ -137,7 +138,7 @@ async function jsonOf<T>(res: Response, what: string): Promise<T> {
 }
 
 function databasePath(daemon: DaemonHandle): string {
-  return join(daemon.home, 'db.sqlite')
+  return liveSqlitePath(daemon.home)
 }
 
 function sqlText(value: string): string {
@@ -754,6 +755,27 @@ test('RFC-319 OPS-X3/OPS-X5: 心跳停滞的 runtime 子进程与 S4 卡死任�
         '一个确定性崩溃的任务会被无限重驱、每轮都烧真实模型开销',
     })
     .toBe(HEAL_AFTER)
+    .catch(async (error: unknown) => {
+      // Keep the actual reap outcome before teardown removes the home. A timer
+      // failure and an unavailable host process-identity probe need different fixes.
+      await test.info().attach('heartbeat-kill-diagnostic', {
+        contentType: 'application/json',
+        body: JSON.stringify(
+          {
+            snapshot: healSnapshot(daemon, child),
+            recovery: querySqlite(
+              databasePath(daemon),
+              'SELECT kind, reason, after_json FROM recovery_events WHERE node_run_id = ? ORDER BY created_at, id;',
+              [child.runId],
+            ),
+            daemon: daemon.diagnostics(),
+          },
+          null,
+          2,
+        ),
+      })
+      throw error
+    })
 
   // --- OPS-X3 的补充判据：那条 recovery 事件必须说自己真的杀掉了 --------------
   // autoKill.ts:149-156 无论 outcome 是什么都会落一条 heartbeat-kill，所以只看

@@ -1,3 +1,5 @@
+import { nodeRunFixtureColumns } from './helpers/model/nodeRun'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { withO2Closure } from './helpers/o2Closure'
 // RFC-058 PR-A baseline (T2/T3) — merged & parameterized by RFC-217 T9.
 //
@@ -24,7 +26,7 @@ import {
   workflowFixture,
   readNodeRunFixtures,
 } from './helpers/model'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+
 import { createSqliteMemoryDistillEnqueuer } from './helpers/memoryDistill'
 import { describeEachProvider } from './helpers/eachProvider'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
@@ -314,7 +316,10 @@ for (const kind of ['self', 'cross'] as const) {
         expect(row?.taskId).toBe(taskId)
         expect(row?.status).toBe('awaiting_human')
         const nr = (
-          await db.select().from(nodeRuns).where(eq(nodeRuns.id, intermediaryNodeRunId))
+          await db
+            .select(nodeRunFixtureColumns(db))
+            .from(nodeRuns)
+            .where(eq(nodeRuns.id, intermediaryNodeRunId))
         )[0]
         expect(nr?.status).toBe('awaiting_human')
       })
@@ -364,7 +369,12 @@ describeEachProvider('RFC-058 baseline T2 — createClarifyRound / row shape', (
     expect(session.askingNodeId).toBe('designer')
     expect(session.askingShardKey).toBeNull()
     expect(session.iteration).toBe(0)
-    const cnr = (await db.select().from(nodeRuns).where(eq(nodeRuns.id, clarifyNodeRunId)))[0]
+    const cnr = (
+      await db
+        .select(nodeRunFixtureColumns(db))
+        .from(nodeRuns)
+        .where(eq(nodeRuns.id, clarifyNodeRunId))
+    )[0]
     expect(cnr?.status).toBe('awaiting_human')
     expect(cnr?.shardKey).toBeNull()
   })
@@ -538,7 +548,12 @@ describeEachProvider('RFC-058 baseline T3 — createClarifyRound iteration count
     expect(session.status).toBe('awaiting_human')
     expect(session.targetConsumerNodeId).toBe('designer')
     expect(session.loopIter).toBe(0)
-    const nr = (await db.select().from(nodeRuns).where(eq(nodeRuns.id, crossClarifyNodeRunId)))[0]
+    const nr = (
+      await db
+        .select(nodeRunFixtureColumns(db))
+        .from(nodeRuns)
+        .where(eq(nodeRuns.id, crossClarifyNodeRunId))
+    )[0]
     expect(nr?.status).toBe('awaiting_human')
   })
 

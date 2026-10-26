@@ -64,6 +64,6 @@ describe('RFC-119 — node mechanics source guards', () => {
     expect(start).toBeGreaterThan(-1)
     const region = NODE_MECHANICS_SRC.slice(start, start + 700)
     expect(region).toContain("status: 'done'")
-    expect(region).toContain('persistence.list({')
+    expect(region).toContain('snapshot.list({')
   })
 })

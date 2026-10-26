@@ -1,3 +1,4 @@
+import { withTargetMintIdentity } from './helpers/rfc395Mint'
 // RFC-127 借壳顶替 — RFC-132 ③ 收官后的残余锁。
 //
 // 借壳机制已整体删除(RFC-131 T4 dispatched 账本去借壳 → RFC-132 ③ 删 immediate 账本 +
@@ -9,7 +10,6 @@
 //      reject)只读图上 node id,绝不读归属列(confirmedBy/displayName/...)。
 // 原 buildBorrowedAgent 纯函数锁 + execution wiring 锁随函数/分支删除。
 
-import { deriveNodeRunRole } from '@/modules/task-execution/public/types'
 import { taskFixture, workflowFixture, readNodeRunFixtures } from './helpers/model'
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
@@ -43,28 +43,36 @@ describeEachProvider(
     })
 
     test('override persists; default null', async () => {
-      const id = await mintNodeRun(db, {
-        ...deriveNodeRunRole({ nodeId: 'n1', rerunCause: 'initial' }),
-        taskId: TASK_ID,
-        nodeId: 'n1',
-        status: 'pending',
-        cause: 'initial',
-        overrides: {
-          config: {
-            agentOverrideName: 'agent-x',
+      const id = await mintNodeRun(
+        db,
+        withTargetMintIdentity({
+          role: 'node-attempt',
+          syntheticKind: null,
+          taskId: TASK_ID,
+          nodeId: 'n1',
+          status: 'pending',
+          cause: 'initial',
+          overrides: {
+            config: {
+              agentOverrideName: 'agent-x',
+            },
           },
-        },
-      })
+        }),
+      )
       const row = (await readNodeRunFixtures(db, { id }))[0]!
       expect(row.agentOverrideName).toBe('agent-x')
 
-      const id2 = await mintNodeRun(db, {
-        ...deriveNodeRunRole({ nodeId: 'n2', rerunCause: 'initial' }),
-        taskId: TASK_ID,
-        nodeId: 'n2',
-        status: 'pending',
-        cause: 'initial',
-      })
+      const id2 = await mintNodeRun(
+        db,
+        withTargetMintIdentity({
+          role: 'node-attempt',
+          syntheticKind: null,
+          taskId: TASK_ID,
+          nodeId: 'n2',
+          status: 'pending',
+          cause: 'initial',
+        }),
+      )
       const row2 = (await readNodeRunFixtures(db, { id: id2 }))[0]!
       expect(row2.agentOverrideName).toBeNull()
     })

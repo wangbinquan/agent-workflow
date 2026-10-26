@@ -124,14 +124,15 @@ export function evaluateMigrationsStatus(input: {
     return {
       name: 'migrations folder',
       ok: false,
-      message: `${input.fsPath} missing; run \`bun run --filter '@agent-workflow/backend' db:generate\``,
+      message: `${input.fsPath} missing; restore the frozen epoch-1 migration bundle from the same release`,
     }
   }
   if (input.fsSqlCount === 0) {
     return {
       name: 'migrations folder',
       ok: false,
-      message: 'no .sql migrations found; run db:generate',
+      message:
+        'no .sql migrations found; restore the frozen epoch-1 migration bundle from the same release',
     }
   }
   return {

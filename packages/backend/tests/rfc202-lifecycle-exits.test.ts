@@ -1,3 +1,7 @@
+import { legacyContentRef } from '@/platform/content/contentRef'
+import { contentRowColumns } from '@/platform/content/infrastructure/contentStore'
+import { nodeRunFixtureColumns } from './helpers/model/nodeRun'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { withO2Closure } from './helpers/o2Closure'
 import { deleteWorkflow } from './helpers/resourceCatalogDeletion'
 // RFC-202 — lifecycle exits & terminal sweep locks (T2/T3/T5/T6).
@@ -20,7 +24,7 @@ import {
   readClarifyRoundFixtures,
 } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+
 import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { insertClarifyRoundRaw } from './clarify-fixtures'
 import { and, eq } from 'drizzle-orm'
@@ -150,7 +154,10 @@ describeEachProvider('RFC-202 T2 — terminal sweep', (provider) => {
     expect(cross?.status).toBe('abandoned')
     expect(cross?.abandonedAt).not.toBeNull()
 
-    const runs = await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
+    const runs = await db
+      .select(nodeRunFixtureColumns(db))
+      .from(nodeRuns)
+      .where(eq(nodeRuns.taskId, taskId))
     expect(runs.find((r) => r.id === selfRun)?.status).toBe('canceled')
     expect(runs.find((r) => r.id === crossRun)?.status).toBe('canceled')
     expect(runs.find((r) => r.id === reviewRun)?.status).toBe('canceled')
@@ -227,6 +234,7 @@ describeEachProvider('RFC-202 T3 — cancel from awaiting_*', (provider) => {
             cause: 'task-canceled',
           }),
         )
+        return Promise.all(terminalSweeps)
       },
     })
   })
@@ -246,7 +254,9 @@ describeEachProvider('RFC-202 T3 — cancel from awaiting_*', (provider) => {
       await db.select().from(clarifyRounds).where(eq(clarifyRounds.taskId, taskId))
     )[0]!
     expect(round.status).toBe('canceled')
-    const runRow = (await db.select().from(nodeRuns).where(eq(nodeRuns.id, run)))[0]!
+    const runRow = (
+      await db.select(nodeRunFixtureColumns(db)).from(nodeRuns).where(eq(nodeRuns.id, run))
+    )[0]!
     expect(runRow.status).toBe('canceled')
     // RFC-328 cancels live node rows inside the task-status transaction. The
     // post-commit terminal sweep must still retain its transition-time cause
@@ -310,7 +320,9 @@ describeEachProvider('RFC-202 T2-4 — write-path terminal guards', (provider) =
       sourcePortName: 'doc',
       reviewIteration: 0,
       versionIndex: 1,
-      bodyPath: '/tmp/nonexistent.md',
+      ...contentRowColumns(
+        legacyContentRef('review-body-path', 'local-file', '/tmp/nonexistent.md'),
+      ),
       decision: 'pending',
       createdAt: Date.now(),
     })
@@ -369,7 +381,7 @@ describeEachProvider('RFC-202 T6 — inbox terminal filtering (before pagination
         sourcePortName: 'doc',
         reviewIteration: 0,
         versionIndex: 1,
-        bodyPath: '/tmp/x.md',
+        ...contentRowColumns(legacyContentRef('review-body-path', 'local-file', '/tmp/x.md')),
         decision: 'pending',
         createdAt: Date.now(),
       })

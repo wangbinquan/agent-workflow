@@ -43,11 +43,7 @@ import {
   resumeMission,
 } from './application/commands/missionHandover'
 import { sweepMissionWakes } from './application/missionWakeSweep'
-export {
-  sweepWakesWhileDraining,
-  recoverWhileDraining,
-  type DevelopmentWriterCutover,
-} from './application/writerCutoverGates'
+export { type DevelopmentWriterCutover } from './application/writerCutoverGates'
 import type {
   AgentActionLauncherPort,
   ApprovalGatewayPort,

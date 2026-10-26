@@ -20,7 +20,6 @@ import type { StartTask } from '@agent-workflow/shared'
 import { mkdtempSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { resolve } from 'node:path'
 
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { removeTempDirSync } from './fixtures/tempDir'
@@ -29,8 +28,6 @@ import { taskDiffProjection } from '../src/modules/task-execution/infrastructure
 import { runGit } from '../src/util/git'
 import { seedRepoGroup } from './helpers/repoGroupFixture'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
-
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 interface Harness {
   db: DbClient
@@ -53,7 +50,7 @@ async function buildHarness(repoCount: number): Promise<Harness> {
     await runGit(repoPath, ['commit', '-q', '-m', 'init'])
     repos.push(repoPath)
   }
-  const db = createInMemoryDb(MIGRATIONS)
+  const db = createInMemoryDb()
   await workflowFixture(db, {
     id: 'wf-diff',
     name: 'wf',

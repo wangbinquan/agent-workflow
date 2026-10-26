@@ -1,12 +1,12 @@
-// RFC-395 II-b O3: schema-only entry stays independent of runtime phase composition.
+// Schema-only composition exit for the live registry.
 export {
   schemaContribution,
-  intentApplyJournal,
   intentDraftResolutions,
   intentDrafts,
   intentProvenance,
   intentSessions,
-  intentTurnEvents,
   intentTurns,
   intentWorkingSetChanges,
+  intentApplyJournal,
+  intentTurnEvents,
 } from '../infrastructure/persistence/schema'

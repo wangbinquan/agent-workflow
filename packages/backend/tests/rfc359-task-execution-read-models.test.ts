@@ -1,3 +1,5 @@
+import { legacyContentRef } from '@/platform/content/contentRef'
+import { contentRowColumns } from '@/platform/content/infrastructure/contentStore'
 // RFC-359 AC-1 / AC-6 —— 任务执行读模型**只有一份实现**，两个引擎跑同一组判据。
 //
 // 这个文件原名 `rfc349-task-execution-read-models-postgresql-adapter.test.ts`，
@@ -120,7 +122,7 @@ describeEachProvider('RFC-359 任务执行读模型（双引擎，单一实现�
       sourcePortName: 'result',
       versionIndex: 1,
       reviewIteration: 0,
-      bodyPath: 'docs/doc-1.md',
+      ...contentRowColumns(legacyContentRef('review-body-path', 'local-file', 'docs/doc-1.md')),
       decision: 'pending',
       createdAt: 1,
     })

@@ -1,3 +1,4 @@
+import { createRunHistorySnapshot } from '@/modules/task-execution/public/queries'
 // RFC-053 P-3 — double-layer invariant scan.
 //
 // Seven invariants span the doc_versions / clarify_sessions / node_runs /
@@ -39,7 +40,6 @@ import type {
   NodeKind,
 } from '@agent-workflow/shared'
 import { TERMINAL_TASK_STATUSES } from '@agent-workflow/shared'
-import { createRunSelectionOracleSnapshot } from '@/modules/task-execution/public/queries'
 
 import type {
   TaskLifecycleInvariantScope,
@@ -372,9 +372,9 @@ async function checkT3(ctx: TaskScanContext): Promise<LifecycleInvariantFinding[
   // made that hole bigger, and design.md promises the opposite — that a latest
   // `failed` output node still reports.
   const freshestByNode = new Map<string, { status: string }>()
-  const selection = createRunSelectionOracleSnapshot(
+  const selection = createRunHistorySnapshot(
+    ctx.taskId,
     ctx.nodeRuns.map((row) => ({ ...row, taskId: ctx.taskId })),
-    { scope: { kind: 'rows' } },
   )
   for (const nodeId of outputNodes) {
     const selected = (

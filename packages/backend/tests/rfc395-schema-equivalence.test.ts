@@ -1,3 +1,4 @@
+import { loadPostgresqlMigrationHistory } from '@/platform/persistence/migration/legacy/postgresqlMigrationHistory'
 // RFC-395 I-a: durable equivalence between contributions, the maintained v2 artifact and both provider projections.
 import { describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
@@ -5,9 +6,10 @@ import { readFileSync } from 'node:fs'
 import { is, SQL } from 'drizzle-orm'
 import { getTableConfig, SQLiteSyncDialect } from 'drizzle-orm/sqlite-core'
 import { getTableConfig as pgConfig, PgDialect } from 'drizzle-orm/pg-core'
-import { buildLogicalSchemaContract, persistenceSchema } from '@/bootstrap/persistenceSchema'
+import { buildFrozenEpoch1LogicalSchemaContract as buildLogicalSchemaContract } from '@/platform/persistence/migration/epoch1/contract'
+import { frozenEpoch1Registry as persistenceSchema } from '@/platform/persistence/migration/epoch1/definitions'
 import { canonicalSchemaJson } from '@/platform/persistence/schemaContract'
-import { buildPostgresqlSchemaPlan } from '@/platform/persistence/postgresqlSchema'
+import { buildPostgresqlSchemaPlan } from '@/platform/persistence/migration/legacy/postgresqlSchema'
 import { projectLegacyV2 } from '@/platform/persistence/migration/legacy/v2Contract'
 import { compileContract } from '@/platform/persistence/schema/contract'
 import { compilePostgresqlPlan } from '@/platform/persistence/schema/postgresqlPlan'
@@ -65,8 +67,13 @@ describe('RFC-395 I-a explicit schema equivalence', () => {
       expect(table.migrationPolicy, table.id).toBe(dispositions.get(table.id)!)
     }
   })
-  test('compiled PostgreSQL plan equals the production plan statement by statement', () => {
-    expect(compilePostgresqlPlan(persistenceSchema)).toEqual(buildPostgresqlSchemaPlan(contract))
+  test('frozen PostgreSQL compilation preserves the published baseline and the live compiler rejects epoch 1', async () => {
+    expect(() => compilePostgresqlPlan(persistenceSchema)).toThrow(
+      'epoch-1-schema-compilation-is-offline-only',
+    )
+    const plan = buildPostgresqlSchemaPlan(contract)
+    const published = await loadPostgresqlMigrationHistory({ headContract: contract })
+    expect(plan).toEqual(published.head.plan)
   })
   test('both materialized Drizzle column sets agree with their v2 provider projections', () => {
     const definitions = new Map<string, (typeof persistenceSchema.tables)[number]>(

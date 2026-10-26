@@ -3,24 +3,28 @@
 // last_submodule_sync_error). Legacy rows (inserts that omit the three
 // columns) come back with all three values null.
 
+import {
+  frozenTablesOf,
+  createFrozenEpoch1Db,
+  type FrozenDbClient,
+  FROZEN_MIGRATIONS,
+} from './migration-freeze'
 import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
 import { queryRows } from '@/platform/persistence/queryHelpers'
 import { describe, expect, test, beforeEach } from 'bun:test'
 import { resolve } from 'node:path'
 import { ulid } from 'ulid'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+const MIGRATIONS = resolve(FROZEN_MIGRATIONS)
 
 describe('migration 0017 (RFC-034 cached_repos submodule columns)', () => {
-  let db: DbClient
+  let db: FrozenDbClient
   beforeEach(() => {
-    db = createInMemoryDb(MIGRATIONS)
+    db = createFrozenEpoch1Db(MIGRATIONS)
   })
 
   test('legacy insert omitting the three columns → all three are null', () => {
     const now = Date.now()
-    const { cachedRepos } = tablesOf(db)
+    const { cachedRepos } = frozenTablesOf(db)
     insertOne(db, cachedRepos, {
       id: ulid(),
       urlHash: 'a1b2c3d4',
@@ -39,7 +43,7 @@ describe('migration 0017 (RFC-034 cached_repos submodule columns)', () => {
 
   test('insert with submodule telemetry persists round-trip', () => {
     const now = Date.now()
-    const { cachedRepos } = tablesOf(db)
+    const { cachedRepos } = frozenTablesOf(db)
     insertOne(db, cachedRepos, {
       id: ulid(),
       urlHash: 'beefcafe',
@@ -61,7 +65,7 @@ describe('migration 0017 (RFC-034 cached_repos submodule columns)', () => {
 
   test('success telemetry (ok=true, error=null) round-trips', () => {
     const now = Date.now()
-    const { cachedRepos } = tablesOf(db)
+    const { cachedRepos } = frozenTablesOf(db)
     insertOne(db, cachedRepos, {
       id: ulid(),
       urlHash: 'feedface',

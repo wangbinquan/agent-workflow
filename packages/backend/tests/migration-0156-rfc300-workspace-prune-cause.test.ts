@@ -2,12 +2,15 @@
 // remain NULL-cause on upgrade, otherwise boot recovery could reinterpret an
 // interrupted RFC-165/iso GC claim as permission to delete a Webhook workspace.
 
+import {
+  migrateFrozenSqlite as migrate,
+  freezeAt,
+  FROZEN_MIGRATIONS as MIGRATIONS,
+} from './migration-freeze'
 import { afterEach, describe, expect, test } from 'bun:test'
 import { Database } from 'bun:sqlite'
 import { drizzle } from 'drizzle-orm/bun-sqlite'
-import { migrate } from 'drizzle-orm/bun-sqlite/migrator'
 import { rmSync } from 'node:fs'
-import { freezeAt, MIGRATIONS } from './migration-freeze'
 
 const frozenFolders: string[] = []
 

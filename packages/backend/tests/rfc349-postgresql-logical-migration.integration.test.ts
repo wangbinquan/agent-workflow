@@ -1,14 +1,20 @@
+import { postgresqlHistorySession } from '@/platform/persistence/postgresql/historySession'
+import { createSqliteBaseline } from '@/bootstrap/persistenceBaseline'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { persistenceHead } from '@/bootstrap/persistenceHead'
+import { writeGenerationPointerV2 } from '@/platform/persistence/generationPointerV2'
+import { admitHistory } from '@/platform/persistence/schema/history/admission'
+import { runtimeHistoryAdmission } from '@/platform/persistence/schema/history/runtime'
 // Run with RFC349_DATABASE_URL pointed at an empty disposable PostgreSQL 17+
 // database. This is the real-driver acceptance path; ordinary unit runs skip it.
 
 import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+
 import { afterEach, describe, expect, test } from 'bun:test'
-import type { Database } from 'bun:sqlite'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { createInMemoryDb } from '@/db/client'
+
 import { createDatabaseMigrationControlPlane } from '@/modules/system-operations/application/databaseMigrationControlPlane'
 import { createDatabaseMigrationRunner } from '@/modules/system-operations/application/databaseMigrationRunner'
 import { createFileDatabaseMigrationStore } from '@/modules/system-operations/infrastructure/fileDatabaseMigrationStore'
@@ -19,14 +25,12 @@ import { exportLogicalDatabaseArtifact } from '@/platform/persistence/logicalDat
 import { openVerifiedLogicalDatabaseArtifactSource } from '@/platform/persistence/logicalDatabaseRestore'
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import { openPostgresqlLogicalSource } from '@/platform/persistence/postgresqlLogicalSource'
-import { migratePostgresqlSchema } from '@/platform/persistence/postgresqlMigrator'
 import { openPostgresqlLogicalTarget } from '@/platform/persistence/postgresqlLogicalTarget'
 import { createPostgresqlDatabaseRuntime } from '@/platform/persistence/postgresqlRuntime'
 import { buildPostgresqlSchemaPlan } from '@/platform/persistence/postgresqlSchema'
-import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { openSqliteLogicalSource } from '@/platform/persistence/sqliteLogicalSource'
 
-const MIGRATIONS = join(import.meta.dir, '..', 'db', 'migrations')
 const roots: string[] = []
 
 afterEach(() => {
@@ -37,23 +41,42 @@ const realTest = process.env.RFC349_DATABASE_URL === undefined ? test.skip : tes
 
 describe('RFC-349 real SQLite to PostgreSQL logical migration', () => {
   realTest(
-    'copies 182 active tables, archives six legacy tables and switches one verified generation',
+    'copies the live epoch-2 roster, metadata archive bytes and a recoverable provider generation',
     async () => {
       const root = mkdtempSync(join(tmpdir(), 'rfc349-real-copy-'))
       roots.push(root)
       const sourcePath = join(root, 'db.sqlite')
-      const drizzle = createInMemoryDb(MIGRATIONS)
-      const sqlite = (drizzle as unknown as { $client: Database }).$client
+      const sqlite = createSqliteBaseline({ generationId: 'dbg_real_sqlite_01' })
       sqlite.exec(
         "INSERT INTO users (id, username, display_name, role, status, force_password_change, created_at, updated_at, schema_version, access_revision, git_name) VALUES ('usr-rfc349', 'rfc349', 'RFC 349', 'user', 'active', 1, 9007199254740993, 9007199254740993, 1, 0, '')",
       )
-      sqlite.exec(
-        "INSERT INTO code_artifacts (id, repo_path, commit_sha, base_sha, digest, keep_ref, generation, ref_count, state, created_at) VALUES ('legacy-rfc349', '/tmp/repo', 'abc', 'def', 'sha256:legacy', 'refs/keep/rfc349', 1, 0, 'live', 123)",
-      )
+      sqlite
+        .query(
+          "INSERT INTO aw_meta_migration_archives (run_id,archive_ref,unit_id,kind,source_table,format,rows,byte_size,bytes) VALUES ('prior','archive','unit','retired-table','code_artifacts','raw-chunk@1',1,3,?)",
+        )
+        .run(Buffer.from([0, 255, 1]))
+      const head = persistenceHead()
+      writeGenerationPointerV2({
+        pointerPath: join(root, 'database-generation.json'),
+        payload: {
+          version: 2,
+          schemaEpoch: 2,
+          generationId: 'dbg_real_sqlite_01',
+          provider: 'sqlite',
+          role: 'installed',
+          database: { kind: 'sqlite-file', relativePath: 'db.sqlite' },
+          contractDigest: head.contract.contract.digest,
+          planDigest: head.sqlite.digest,
+          operationId: null,
+          manifestDigest: null,
+          activatedAt: 1,
+          previous: null,
+        },
+      })
       writeFileSync(sourcePath, sqlite.serialize())
       sqlite.close()
 
-      const contract = buildLogicalSchemaContract()
+      const contract = logicalSchemaContract
       const plan = buildPostgresqlSchemaPlan(contract)
       const source = openSqliteLogicalSource({ path: sourcePath, contract })
       const sourceSnapshot = await source.preflight()
@@ -96,7 +119,7 @@ describe('RFC-349 real SQLite to PostgreSQL logical migration', () => {
         generationId: 'dbg_pg_real_postgresql_01',
       })
       const target = await openPostgresqlLogicalTarget({
-        headContract: buildLogicalSchemaContract(),
+        headContract: logicalSchemaContract,
         runtime,
         operationId: 'dbm_real_postgresql_01',
         sourceGenerationId: 'dbg_real_sqlite_01',
@@ -126,7 +149,7 @@ describe('RFC-349 real SQLite to PostgreSQL logical migration', () => {
         })
         const status = await runner.run('dbm_real_postgresql_01')
         expect(status.phase).toBe('accepting-writes')
-        expect(status.progress.tablesCompleted).toBe(188)
+        expect(status.progress.tablesCompleted).toBe(contract.tables.length)
 
         const userRows = await runtime
           .providerPool()
@@ -141,10 +164,11 @@ describe('RFC-349 real SQLite to PostgreSQL logical migration', () => {
         const artifact = readLogicalArtifactManifest(
           join(operationsDir, 'dbm_real_postgresql_01', 'logical-manifest.json'),
         )
-        expect(artifact.payload.tables).toHaveLength(188)
-        expect(
-          artifact.payload.tables.find((table) => table.table === 'code_artifacts'),
-        ).toMatchObject({ disposition: 'ARCHIVE_THEN_OMIT', rowCount: 1 })
+        expect(artifact.payload.tables).toHaveLength(contract.tables.length)
+        const archives = await runtime
+          .providerPool()
+          .unsafe('SELECT bytes FROM agent_workflow_meta.migration_archives')
+        expect(Buffer.from(archives[0]!.bytes as Uint8Array)).toEqual(Buffer.from([0, 255, 1]))
 
         const liveDb = createPostgresqlDatabaseClient(runtime)
         const { agents } = tablesOf(liveDb)
@@ -178,6 +202,7 @@ describe('RFC-349 real SQLite to PostgreSQL logical migration', () => {
             sourceGenerationId: runtime.generationId,
             source: {
               provider: 'postgresql',
+              readMetadata: () => postgresqlSource.readMetadata!(),
               assertUnchanged: () => postgresqlSource.assertUnchanged(postgresqlSnapshot),
               readChunk: (table, afterKey, limit) =>
                 postgresqlSource.readChunk(table, afterKey, limit),
@@ -188,7 +213,7 @@ describe('RFC-349 real SQLite to PostgreSQL logical migration', () => {
             preservedArchive,
             chunkRows: 25,
           })
-          expect(backup.archiveRows).toBe(1)
+          expect(backup.archiveRows).toBe(0)
           // 归档制品自证可读：清单摘要与保留的归档行都落在物件里。
           // RFC-359 W8：这里原本还把这份 PG 逻辑备份**恢复进一个 SQLite 目标**，驱动
           // `platform/persistence/sqliteLogicalTarget.ts::createSqliteLogicalTarget`。那个目标
@@ -211,9 +236,13 @@ describe('RFC-349 real SQLite to PostgreSQL logical migration', () => {
         await source.close()
       }
       expect(
-        (await migratePostgresqlSchema({ headContract: buildLogicalSchemaContract(), runtime }))
-          .applied,
-      ).toBe(false)
+        (
+          await admitHistory(
+            postgresqlHistorySession(runtime.providerPool()),
+            runtimeHistoryAdmission(),
+          )
+        ).contract.version,
+      ).toBe(persistenceHead().contract.version)
       await runtime.close()
     },
     120_000,

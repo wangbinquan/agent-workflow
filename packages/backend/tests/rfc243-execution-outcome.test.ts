@@ -1,3 +1,4 @@
+import { eq } from 'drizzle-orm'
 // RFC-243 T4 — unified outcome projection matrix.
 //
 // Locks in (design.md §1.3/§6.4):
@@ -31,6 +32,14 @@ import {
 
 function baseTask(overrides: Partial<OutcomeTaskRow> = {}): OutcomeTaskRow {
   return {
+    subjectKind:
+      overrides.codeRoundId != null
+        ? 'code-round'
+        : overrides.workgroupId != null
+          ? 'workgroup'
+          : overrides.sourceAgentName != null
+            ? 'agent'
+            : 'workflow',
     id: 't1',
     workflowId: 'authored',
     status: 'done',
@@ -51,7 +60,13 @@ function baseTask(overrides: Partial<OutcomeTaskRow> = {}): OutcomeTaskRow {
 }
 
 function run(over: Partial<OutcomeRunRow> & { id: string; nodeId: string }): OutcomeRunRow {
-  return { seq: null, iteration: 0, parentNodeRunId: null, status: 'done', ...over }
+  return {
+    seq: over.id.charCodeAt(over.id.length - 1),
+    iteration: 0,
+    parentNodeRunId: null,
+    status: 'done',
+    ...over,
+  }
 }
 
 describe('RFC-243 T4 — workflow projection (pickUpstreamSourceRun口径)', () => {
@@ -278,12 +293,10 @@ describe('RFC-243 §6.4 — workgroup result anchor db assembly (PR-4)', () => {
         bodyMd: 'free-collab converged — 2 task(s) done',
         createdAt: Date.now() + 1,
       })
-      await insertOne(db, workgroupTaskState, {
-        taskId,
-        gateStatus: 'idle',
-        resultMessageId: anchorId,
-        updatedAt: Date.now(),
-      })
+      await db
+        .update(workgroupTaskState)
+        .set({ gateStatus: 'idle', resultMessageId: anchorId, updatedAt: Date.now() })
+        .where(eq(workgroupTaskState.taskId, taskId))
       const outcome = await getExecutionOutcome(db, taskId)
       expect(outcome.outputs).toEqual({
         result: { content: 'free-collab converged — 2 task(s) done', kind: 'text' },

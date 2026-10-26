@@ -1,10 +1,9 @@
+import { createRunSelectionReader } from './runSelection/table/reader'
+import { nodeRunReadColumns } from './nodeRunQueries'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { taskReadColumns } from './taskRepositorySql'
 // RFC-349 — TaskExecution-owned half of Resource Catalog task-room atoms.
 
-import { projectWorkgroupRunSelections } from './runSelection/workgroupProjection'
-import { taskWorkgroupConfigSelection } from './taskWorkgroupConfig'
-import { createTaskDefinitionWriteParticipantInTx } from './taskDefinitionWriteParticipant'
-import { decodeTaskSubject, type StoredTaskSubject } from '../domain/taskSubject'
-import { tablesOf } from '@/platform/persistence/sessionTables'
 import {
   CANCELABLE_TASK_STATUSES,
   type FailureCode,
@@ -13,6 +12,10 @@ import {
 } from '@agent-workflow/shared'
 import { and, eq, inArray, isNotNull, sql } from 'drizzle-orm'
 import { ulid } from 'ulid'
+import { taskSubjectFromDefinition, type TaskDefinitionSubject } from '../domain/taskSubject'
+import { projectWorkgroupRunSelections } from './runSelection/workgroupProjection'
+import { createTaskDefinitionWriteParticipantInTx } from './taskDefinitionWriteParticipant'
+import { taskWorkgroupConfigSelection } from './taskWorkgroupConfig'
 
 import type {
   WorkgroupTaskRoomClarifyParticipantInTx,
@@ -21,22 +24,22 @@ import type {
   WorkgroupTaskRoomTaskParticipantInTx,
   WorkgroupTaskRoomTaskSnapshot,
 } from '../public/commands'
-import { createTaskAuthorizationParticipantInTx } from './taskAuthorization'
 import { createNodeRunLifecycleParticipantInTx } from './nodeRunLifecyclePersistence'
+import { assertTaskOwnerlessTx, type TaskExecutionTransaction } from './ownedTaskExecution'
+import { createTaskAuthorizationParticipantInTx } from './taskAuthorization'
 import { submitTaskContinuation } from './taskContinuationAdmission'
 import { terminalizeTaskExecutionIntentsInTx } from './taskExecutionIntentTerminalPersistence'
-import { assertTaskOwnerlessTx, type TaskExecutionTransaction } from './ownedTaskExecution'
 import { appendTaskLifecycleTransitionCommittedEvent } from './taskLifecycleCommittedEvents'
 
 const HOST_NODE_IDS = ['__wg_leader__', '__wg_member__'] as const
 
 function taskSnapshot(
   row: Omit<WorkgroupTaskRoomTaskSnapshot, 'status' | 'subject'> &
-    StoredTaskSubject & { readonly status: string },
+    TaskDefinitionSubject & { readonly status: string },
 ): WorkgroupTaskRoomTaskSnapshot {
   return Object.freeze({
     ...row,
-    subject: decodeTaskSubject(row),
+    subject: taskSubjectFromDefinition(row),
     status: row.status as TaskStatus,
   })
 }
@@ -61,14 +64,17 @@ const taskProjection = (db: object) => {
     name: tasks.name,
     ownerUserId: tasks.ownerUserId,
     status: tasks.status,
-    workgroupId: tasks.workgroupId,
-    workflowId: tasks.workflowId,
-    codeRoundId: tasks.codeRoundId,
-    sourceAgentId: tasks.sourceAgentId,
-    sourceAgentName: tasks.sourceAgentName,
+    workgroupId: taskReadColumns(db).workgroupId,
+    workflowId: taskReadColumns(db).workflowId,
+    subjectKind: taskReadColumns(db).subjectKind,
+    sourceId: taskReadColumns(db).sourceId,
+    sourceName: taskReadColumns(db).sourceName,
+    codeRoundId: taskReadColumns(db).codeRoundId,
+    sourceAgentId: taskReadColumns(db).sourceAgentId,
+    sourceAgentName: taskReadColumns(db).sourceAgentName,
     workgroupConfig: taskWorkgroupConfigSelection(db),
-    workflowSnapshot: tasks.workflowSnapshot,
-    triggerContextJson: tasks.triggerContextJson,
+    workflowSnapshot: taskReadColumns(db).workflowSnapshot,
+    triggerContextJson: taskReadColumns(db).triggerContextJson,
   }
 }
 
@@ -80,6 +86,7 @@ async function closeHolders(
 ): Promise<readonly { readonly id: string; readonly nodeId: string }[]> {
   if (close === undefined) return []
   const { nodeRuns } = tablesOf(tx)
+
   return await tx
     .update(nodeRuns)
     .set({ status: 'done', finishedAt: occurredAt, errorMessage: null })
@@ -129,15 +136,18 @@ export function createWorkgroupTaskRoomTaskParticipantInTx(
    * 改回带参数的写法会让这个悬崖原样复发——判据见 `rfc359-ac11-generic-plan-probe`。
    */
   async function listActive(): Promise<readonly WorkgroupTaskRoomTaskSnapshot[]> {
-    const { tasks } = tablesOf(tx)
+    const { tasks, taskDefinitions } = tablesOf(tx)
     const rows = await tx
       .select(taskProjection(tx))
       .from(
-        sql`(SELECT 1 AS workgroup_present FROM ${tasks} WHERE ${tasks.workgroupId} IS NOT NULL LIMIT 1) AS nonempty_workgroup_scan`,
+        sql`(SELECT 1 AS workgroup_present FROM ${taskDefinitions} WHERE ${taskDefinitions.subjectKind} = 'workgroup' LIMIT 1) AS nonempty_workgroup_scan`,
       )
       .crossJoin(tasks)
       .where(
-        and(isNotNull(tasks.workgroupId), inArray(tasks.status, [...CANCELABLE_TASK_STATUSES])),
+        and(
+          isNotNull(taskReadColumns(tx).workgroupId),
+          inArray(tasks.status, [...CANCELABLE_TASK_STATUSES]),
+        ),
       )
     return Object.freeze(rows.map(taskSnapshot))
   }
@@ -181,6 +191,7 @@ export function createWorkgroupTaskRoomTaskParticipantInTx(
     },
     async listHostRuns(taskId: string) {
       const { nodeRuns } = tablesOf(tx)
+      const nodeRunColumns = nodeRunReadColumns(tx)
       const rows = await tx
         .select({
           id: nodeRuns.id,
@@ -192,13 +203,19 @@ export function createWorkgroupTaskRoomTaskParticipantInTx(
           startedAt: nodeRuns.startedAt,
           finishedAt: nodeRuns.finishedAt,
           failureCode: nodeRuns.failureCode,
-          agentOverrideName: nodeRuns.agentOverrideName,
-          agentOverrideId: nodeRuns.agentOverrideId,
+          agentOverrideName: nodeRunColumns.agentOverrideName,
+          agentOverrideId: nodeRunColumns.agentOverrideId,
           wgRound: nodeRuns.wgRound,
         })
         .from(nodeRuns)
         .where(and(eq(nodeRuns.taskId, taskId), inArray(nodeRuns.nodeId, [...HOST_NODE_IDS])))
-      return Object.freeze(await projectWorkgroupRunSelections(rows.map(hostRunSnapshot)))
+      return Object.freeze(
+        await projectWorkgroupRunSelections(
+          rows.map(hostRunSnapshot),
+          createRunSelectionReader(tx),
+          taskId,
+        ),
+      )
     },
     async replaceConfig(
       input: Parameters<WorkgroupTaskRoomTaskParticipantInTx['replaceConfig']>[0],
@@ -238,6 +255,7 @@ export function createWorkgroupTaskRoomTaskParticipantInTx(
       const assignmentShardKeys = new Set<string>()
       for (const park of dismissed.parks) {
         const { nodeRuns } = tablesOf(tx)
+
         const parked = (
           await tx
             .select({ status: nodeRuns.status })

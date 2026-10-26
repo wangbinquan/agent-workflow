@@ -38,8 +38,6 @@ import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { runTaskWithRealTestTopology as runTask } from './helpers/taskExecutionTestTopology'
 import { runGit } from '../src/util/git'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-
 // Runtime-generated shim opencode (written into the per-test temp dir — not a
 // shared fixture). Contract mirrored from fixtures/mock-opencode.ts: argv
 // 'run' + --agent NAME, one JSON text event carrying the envelope, exit 0.
@@ -94,7 +92,7 @@ async function buildHarness(slug: string): Promise<Harness> {
   await runGit(worktreePath, ['commit', '-q', '-m', 'init'])
   const shimPath = join(appHome, 's24-shim-opencode.ts')
   writeFileSync(shimPath, SHIM_SOURCE)
-  const db = createInMemoryDb(MIGRATIONS)
+  const db = createInMemoryDb()
   return {
     db,
     appHome,

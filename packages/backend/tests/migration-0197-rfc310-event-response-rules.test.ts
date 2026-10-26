@@ -1,13 +1,11 @@
-import { rawRows } from '@/platform/persistence/queryHelpers'
+import { createFrozenEpoch1Db, FROZEN_MIGRATIONS as MIGRATIONS } from './migration-freeze'
+import { frozenRawRows as rawRows } from './migration-freeze'
 import { describe, expect, test } from 'bun:test'
 import { sql } from 'drizzle-orm'
 
-import { createInMemoryDb } from '@/db/client'
-import { MIGRATIONS } from './migration-freeze'
-
 describe('migration 0197 — source-neutral event response rules and bounded audit reads', () => {
   test('creates the rule ledger and indexes the large event/subscription audits', () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createFrozenEpoch1Db(MIGRATIONS)
     const columns = rawRows<{ name: string }>(
       db,
       sql`SELECT name FROM pragma_table_info('event_response_rules')`,

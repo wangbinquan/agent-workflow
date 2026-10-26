@@ -1,22 +1,27 @@
-import { taskWorkspaceUnboundSql, taskWorkspaceRootMatchesSql } from './taskRepositorySql'
-import { tablesOf } from '@/platform/persistence/sessionTables'
-import type { RawRowCodecs } from '@/platform/persistence/queryHelpers'
+import { taskMountWorktreePath } from '../domain/taskMountPath'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { sql, type SQLWrapper } from 'drizzle-orm'
+import { type RawRowCodecs, rawRows } from '@/platform/persistence/queryHelpers'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import {
   isTaskWorkspaceUnbound,
-  TERMINAL_TASK_STATUSES,
   isTerminalTaskStatus,
+  TERMINAL_TASK_STATUSES,
   type TaskStatus,
 } from '@agent-workflow/shared'
+import { sql, type SQLWrapper } from 'drizzle-orm'
+import {
+  taskMountReadColumns,
+  taskReadColumns,
+  taskWorkspaceRootMatchesSql,
+  taskWorkspaceUnboundSql,
+} from './taskRepositorySql'
 
 import type {
-  WorkspaceGcTask,
-  WorkspaceGcMount,
   TaskWorkspaceGcQueries,
   TaskWorkspacePruneCommands,
+  WorkspaceGcMount,
+  WorkspaceGcTask,
 } from '../application/ports/taskWorkspaceMaintenance'
-import { rawRows } from '@/platform/persistence/queryHelpers'
 import { existingTaskIds } from './existingTaskIds'
 
 interface RawWorkspaceTaskRow extends Record<string, unknown> {
@@ -38,7 +43,7 @@ interface RawWorkspaceTaskRow extends Record<string, unknown> {
 interface RawWorkspaceRepositoryRow extends Record<string, unknown> {
   readonly mount_path: string
   readonly repo_path: string
-  readonly worktree_path: string
+  readonly workspace_root_ref: string | null
   readonly branch: string
   readonly base_branch: string
 }
@@ -48,11 +53,11 @@ const taskProjection = (db: object) => {
   return sql`
   ${tasks.id} AS id,
   ${tasks.status} AS status,
-  ${tasks.repoPath} AS repo_path,
-  ${tasks.worktreePath} AS worktree_path,
-  ${tasks.branch} AS branch,
-  ${tasks.baseBranch} AS base_branch,
-  ${tasks.spaceKind} AS space_kind,
+  ${taskReadColumns(db).repoPath} AS repo_path,
+  ${taskReadColumns(db).worktreePath} AS worktree_path,
+  ${taskReadColumns(db).branch} AS branch,
+  ${taskReadColumns(db).baseBranch} AS base_branch,
+  ${taskReadColumns(db).spaceKind} AS space_kind,
   ${tasks.startedAt} AS started_at,
   ${tasks.finishedAt} AS finished_at,
   ${tasks.workspacePruningAt} AS workspace_pruning_at,
@@ -96,7 +101,7 @@ function mapRepository(row: RawWorkspaceRepositoryRow): WorkspaceGcMount {
   return {
     mountPath: row.mount_path,
     repoPath: row.repo_path,
-    worktreePath: row.worktree_path,
+    worktreePath: taskMountWorktreePath(row.workspace_root_ref, row.mount_path),
     branch: row.branch,
     baseBranch: row.base_branch,
   }
@@ -124,8 +129,8 @@ export class TaskWorkspaceMaintenanceStore
       SELECT ${taskProjection(persistenceDb)}
       FROM ${tasks}
       WHERE ${tasks.status} IN (${terminalStatuses})
-        AND ${tasks.spaceKind} <> 'internal'
-        AND ${tasks.spaceKind} <> 'inherited'
+        AND ${taskReadColumns(persistenceDb).spaceKind} <> 'internal'
+        AND ${taskReadColumns(persistenceDb).spaceKind} <> 'inherited'
         AND ${tasks.workspacePruneCause} IS NULL
         AND ${tasks.workspacePrunedAt} IS NULL
     `,
@@ -165,17 +170,17 @@ export class TaskWorkspaceMaintenanceStore
   async listMounts(taskId: string): Promise<readonly WorkspaceGcMount[]> {
     const persistenceDb = this.database
 
-    const { taskRepos } = tablesOf(persistenceDb)
+    const { taskRepositoryMounts: taskRepos } = tablesOf(persistenceDb)
     const rows = await this.all<RawWorkspaceRepositoryRow>(sql`
       SELECT
         ${taskRepos.mountPath} AS mount_path,
         ${taskRepos.repoPath} AS repo_path,
-        ${taskRepos.worktreePath} AS worktree_path,
-        ${taskRepos.branch} AS branch,
-        ${taskRepos.baseBranch} AS base_branch
+        ${taskMountReadColumns(persistenceDb).workspaceRootRef} AS workspace_root_ref,
+        ${taskMountReadColumns(persistenceDb).branch} AS branch,
+        ${taskMountReadColumns(persistenceDb).baseBranch} AS base_branch
       FROM ${taskRepos}
       WHERE ${taskRepos.taskId} = ${taskId}
-      ORDER BY ${taskRepos.repoIndex}
+      ORDER BY ${taskRepos.ordinal}
     `)
     return rows.map(mapRepository)
   }
@@ -187,7 +192,8 @@ export class TaskWorkspaceMaintenanceStore
   async hasLiveOrRevivableChild(taskId: string): Promise<boolean> {
     const persistenceDb = this.database
 
-    const { tasks, nodeRuns } = tablesOf(persistenceDb)
+    const { nodeRuns } = tablesOf(persistenceDb)
+    const { tasks } = tablesOf(persistenceDb)
     const rows = await this.all<{ readonly status: string } & Record<string, unknown>>(sql`
       SELECT ${tasks.status} AS status
       FROM ${tasks}
@@ -313,7 +319,7 @@ export class TaskWorkspaceMaintenanceStore
         AND ${tasks.workspacePruningAt} IS NULL
         AND ${tasks.status} IN (${terminalStatuses})
         AND ${tasks.deletedAt} IS NULL
-        AND ${taskWorkspaceRootMatchesSql(tasks.worktreePath, expected.workspaceRootRef)}
+        AND ${taskWorkspaceRootMatchesSql(tasks.workspaceRootRef, expected.workspaceRootRef)}
         AND ${tasks.lifecycleEventRevision} = ${expected.lifecycleRevision}
       RETURNING ${tasks.id} AS id
     `)
@@ -334,13 +340,13 @@ export class TaskWorkspaceMaintenanceStore
       } & Record<string, unknown>
     >(
       sql`
-      SELECT ${tasks.id} AS id, ${tasks.worktreePath} AS worktree_path,
+      SELECT ${tasks.id} AS id, ${taskReadColumns(persistenceDb).worktreePath} AS worktree_path,
         ${tasks.lifecycleEventRevision} AS lifecycle_event_revision
       FROM ${tasks}
       WHERE ${tasks.status} IN (${terminalStatuses})
         AND ${tasks.workspacePrunedAt} IS NULL
         AND ${tasks.workspacePruningAt} IS NULL
-        AND not ${taskWorkspaceUnboundSql(tasks.worktreePath)}
+        AND not ${taskWorkspaceUnboundSql(tasks.workspaceRootRef)}
     `,
       { lifecycle_event_revision: 'int' },
     )
@@ -369,8 +375,8 @@ export class TaskWorkspaceMaintenanceStore
         ${tasks.workspacePruningAt} AS workspace_pruning_at
       FROM ${tasks}
       WHERE ${tasks.status} IN ('done', 'canceled')
-        AND (${tasks.eventSubscriptionId} IS NOT NULL OR ${tasks.webhookTriggerId} IS NOT NULL)
-        AND ${tasks.spaceKind} IN ('remote', 'scratch')
+        AND (${taskReadColumns(persistenceDb).eventSubscriptionId} IS NOT NULL OR ${taskReadColumns(persistenceDb).webhookTriggerId} IS NOT NULL)
+        AND ${taskReadColumns(persistenceDb).spaceKind} IN ('remote', 'scratch')
         AND ${tasks.workspacePruningAt} IS NOT NULL
         AND ${tasks.workspacePruningAt} < ${staleBefore}
         AND ${tasks.workspacePruneCause} = 'webhook-terminal'

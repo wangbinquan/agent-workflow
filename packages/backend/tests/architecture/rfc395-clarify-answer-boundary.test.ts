@@ -35,7 +35,11 @@ test('recorded readers use the same projection, without their former private par
   expect(readers.length).toBe(8)
   for (const path of readers) {
     const source = read(co + path)
-    expect(source).toContain('decodeLegacyClarifyAnswerColumns(')
+    expect(source).toContain(
+      path.endsWith('clarifyAnswerQueries.ts')
+        ? 'decodeLegacyClarifyAnswerColumns('
+        : 'readClarifyAnswerProjection(',
+    )
     expect(projectionViolations(source)).toEqual([])
   }
   for (const [path, query] of [
@@ -83,9 +87,22 @@ test('seal participant is typed in ports and domain transition commits inside th
     seal.indexOf('await args.decisionParticipant?.acceptTx('),
   )
   expect(seal).toContain('const taskHumanGate = createHumanGatePersistenceParticipantInTx(tx)')
-  expect(seal).toContain('taskHumanGate.lockTask(taskIdRow.taskId)')
-  expect(writer).toContain('const taskHumanGate = createHumanGatePersistenceParticipantInTx(tx)')
-  expect(writer).toContain('taskHumanGate.lockTask(row.taskId)')
+  expect(seal).toContain('lockClarifyRound(tx, roundIdentity.id)')
+  expect(writer).toContain('holdAggregateRoot(tx, clarifyRounds, clarifyRounds.id, input.roundId)')
+  expect(seal).toContain('if (args.decisionParticipant && roundIdentity)')
+  const root = seal.indexOf('await taskHumanGate.lockTask(roundIdentity.taskId)')
+  const round = seal.indexOf('await lockClarifyRound(tx, roundIdentity.id)')
+  expect(root).toBeGreaterThan(-1)
+  expect(round).toBeGreaterThan(root)
+  expect(seal.indexOf('await taskHumanGate.completeClarifyRun(')).toBeGreaterThan(round)
+  expect(seal).not.toContain('getTaskQuestionWriteSem')
+  for (const source of [writer, read(co + 'infrastructure/clarifyFollowupStore.ts')]) {
+    expect(source).not.toMatch(/\.lockTask\(|getTaskQuestionWriteSem/)
+  }
+  expect(writer).not.toMatch(
+    /answersJson|draftAnswersJson|answerAttributionsJson|saveClarifyQuestionDraft/,
+  )
+  expect(writer).toContain('eq(clarifyAnswerDrafts.revision, draft.revision)')
   expect(
     read('modules/task-execution/infrastructure/humanGatePersistenceParticipant.ts'),
   ).toContain('lockAggregateRoot(tx, tasks, tasks.id, taskId)')

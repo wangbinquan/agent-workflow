@@ -1,3 +1,4 @@
+import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { o2Ports } from './helpers/o2Closure'
 // A human-gate successor must cross every nested wrapper without publishing
 // completion, promoting empty outputs, or leaving admitted sibling work behind.
@@ -180,6 +181,14 @@ function scopeState(
         },
       },
       persistence: {
+        selection: {
+          async currentInFrame() {
+            return new Map()
+          },
+          async familyHistory() {
+            return []
+          },
+        },
         nodeExecution: {
           async list() {
             reads.node += 1
@@ -553,6 +562,7 @@ describeEachProvider('RFC-370 wrapper handoff durable generation', (harness) => 
       taskId,
       opts: {
         persistence: createTaskExecutionPersistence(harness.db, {
+          historyRestrictions: epoch2RuntimeTestPorts(harness.db).historyRestrictions,
           recoveryHumanGates: o2Ports(harness.db).collaborationReads.recovery,
         }),
       },

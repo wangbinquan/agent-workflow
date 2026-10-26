@@ -1,3 +1,4 @@
+import { tablesOf } from '@/platform/persistence/sessionTables'
 // RFC-359 W11 —— 裸方言账本（`tests/architecture/rfc359-w5-t20-dialect-completeness.test.ts`
 // 的 `RAW_DIALECT_DEBT`）四条清偿的**双引擎实测**。
 //
@@ -35,7 +36,7 @@ import {
   taskFixture,
   workflowFixture,
 } from './helpers/model'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+
 import { rawRows } from '@/platform/persistence/queryHelpers'
 import { describe, expect, test } from 'bun:test'
 import { readdirSync, readFileSync } from 'node:fs'

@@ -1,3 +1,5 @@
+import { nodeRunFixtureColumns } from './helpers/model/nodeRun'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 // RFC-053 PR-A T1d — retry-cascade kind matrix.
 //
 // For every NodeKind, verify `retry`'s cascade behavior when that kind is
@@ -23,7 +25,7 @@ import {
   workflowFixture,
   readNodeRunFixtures,
 } from './helpers/model'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+
 import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -296,7 +298,10 @@ describeEachProvider('RFC-053 PR-A T1d — retry cascade kind matrix', (provider
 
       const { nodeRuns } = tablesOf(h.db)
       const placeholders = (
-        await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
+        await h.db
+          .select(nodeRunFixtureColumns(h.db))
+          .from(nodeRuns)
+          .where(eq(nodeRuns.taskId, taskId))
       ).filter((r) => r.errorMessage === 'queued for retry')
       expect(placeholders.find((r) => r.nodeId === downId)).toBeUndefined()
     })
@@ -306,9 +311,12 @@ describeEachProvider('RFC-053 PR-A T1d — retry cascade kind matrix', (provider
     const downId = 'down_call_workflow'
     const { taskId } = await seedTaskWithEdge(h, downId, 'call-workflow')
     const { nodeRuns } = tablesOf(h.db)
-    const callRow = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))).find(
-      (r) => r.nodeId === downId,
-    )!
+    const callRow = (
+      await h.db
+        .select(nodeRunFixtureColumns(h.db))
+        .from(nodeRuns)
+        .where(eq(nodeRuns.taskId, taskId))
+    ).find((r) => r.nodeId === downId)!
     // rfc053-allow-direct-status-write -- realistic failed-parent/live-call test seeding
     await patchNodeRunFixture(h.db, { id: callRow.id }, { status: 'running', finishedAt: null })
     const childId = await seedLiveChildForCallRow(h, taskId, callRow.id)
@@ -330,9 +338,12 @@ describeEachProvider('RFC-053 PR-A T1d — retry cascade kind matrix', (provider
     const downId = 'down_call_workgroup'
     const { taskId, agentRunId } = await seedTaskWithEdge(h, downId, 'call-workgroup')
     const { nodeRuns } = tablesOf(h.db)
-    const callRow = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))).find(
-      (r) => r.nodeId === downId,
-    )!
+    const callRow = (
+      await h.db
+        .select(nodeRunFixtureColumns(h.db))
+        .from(nodeRuns)
+        .where(eq(nodeRuns.taskId, taskId))
+    ).find((r) => r.nodeId === downId)!
     // rfc053-allow-direct-status-write -- realistic failed-parent/live-call test seeding
     await patchNodeRunFixture(h.db, { id: callRow.id }, { status: 'running', finishedAt: null })
     const childId = await seedLiveChildForCallRow(h, taskId, callRow.id)
@@ -354,9 +365,12 @@ describeEachProvider('RFC-053 PR-A T1d — retry cascade kind matrix', (provider
     const downId = 'down_call_workflow'
     const { taskId } = await seedTaskWithEdge(h, downId, 'call-workflow')
     const { nodeRuns } = tablesOf(h.db)
-    const callRow = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))).find(
-      (r) => r.nodeId === downId,
-    )!
+    const callRow = (
+      await h.db
+        .select(nodeRunFixtureColumns(h.db))
+        .from(nodeRuns)
+        .where(eq(nodeRuns.taskId, taskId))
+    ).find((r) => r.nodeId === downId)!
     // rfc053-allow-direct-status-write -- realistic failed-parent/live-call test seeding
     await patchNodeRunFixture(h.db, { id: callRow.id }, { status: 'running', finishedAt: null })
     const childId = await seedLiveChildForCallRow(h, taskId, callRow.id)
@@ -384,9 +398,12 @@ describeEachProvider('RFC-053 PR-A T1d — retry cascade kind matrix', (provider
     expect(parent.errorSummary).toBe('retry-child-cancel-failed')
     expect(child.status).toBe('awaiting_human')
     expect(
-      (await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))).filter(
-        (r) => r.errorMessage === 'queued for retry',
-      ),
+      (
+        await h.db
+          .select(nodeRunFixtureColumns(h.db))
+          .from(nodeRuns)
+          .where(eq(nodeRuns.taskId, taskId))
+      ).filter((r) => r.errorMessage === 'queued for retry'),
     ).toHaveLength(0)
     // 同上：这条也跑注入的取消钩子，同一次 CI 里跟着从 37ms 涨到 497ms。它只跑一笔，离 5s
     // 还远，但放大来源相同，一并给预算，免得下一次排位更靠前时又变成掷硬币。
@@ -404,9 +421,12 @@ describeEachProvider('RFC-053 PR-A T1d — retry cascade kind matrix', (provider
     const downId = 'down_call_workflow'
     const { taskId } = await seedTaskWithEdge(h, downId, 'call-workflow')
     const { nodeRuns } = tablesOf(h.db)
-    const callRow = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))).find(
-      (r) => r.nodeId === downId,
-    )!
+    const callRow = (
+      await h.db
+        .select(nodeRunFixtureColumns(h.db))
+        .from(nodeRuns)
+        .where(eq(nodeRuns.taskId, taskId))
+    ).find((r) => r.nodeId === downId)!
     // rfc053-allow-direct-status-write -- realistic failed-parent/live-call test seeding
     await patchNodeRunFixture(h.db, { id: callRow.id }, { status: 'running', finishedAt: null })
     const childId = await seedLiveChildForCallRow(h, taskId, callRow.id)
@@ -451,9 +471,12 @@ describeEachProvider('RFC-053 PR-A T1d — retry cascade kind matrix', (provider
     expect(parent.errorSummary).toBe('retry-child-cancel-failed')
     expect(child.status).not.toBe('canceled')
     expect(
-      (await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))).filter(
-        (r) => r.errorMessage === 'queued for retry',
-      ),
+      (
+        await h.db
+          .select(nodeRunFixtureColumns(h.db))
+          .from(nodeRuns)
+          .where(eq(nodeRuns.taskId, taskId))
+      ).filter((r) => r.errorMessage === 'queued for retry'),
     ).toHaveLength(0)
   }, 60_000)
 
@@ -467,7 +490,12 @@ describeEachProvider('RFC-053 PR-A T1d — retry cascade kind matrix', (provider
 
     const { nodeRuns } = tablesOf(h.db)
     // Find the seeded review row and "retry" it.
-    const reviewRow = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.nodeId, downId)))[0]!
+    const reviewRow = (
+      await h.db
+        .select(nodeRunFixtureColumns(h.db))
+        .from(nodeRuns)
+        .where(eq(nodeRuns.nodeId, downId))
+    )[0]!
 
     await retryVia(h, { taskId, nodeRunId: reviewRow.id, cascade: false })
 
@@ -486,13 +514,21 @@ describeEachProvider('RFC-053 PR-A T1d — retry cascade kind matrix', (provider
       const { taskId } = await seedTaskWithEdge(h, downId, 'wrapper-loop')
       const { nodeRuns } = tablesOf(h.db)
       // Re-stamp the seeded wrapper row into the revival status and target it.
-      const wrapRow = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.nodeId, downId)))[0]!
+      const wrapRow = (
+        await h.db
+          .select(nodeRunFixtureColumns(h.db))
+          .from(nodeRuns)
+          .where(eq(nodeRuns.nodeId, downId))
+      )[0]!
       // rfc053-allow-direct-status-write -- test seeding, not a production transition
       await patchNodeRunFixture(h.db, { id: wrapRow.id }, { status })
 
       await retryVia(h, { taskId, nodeRunId: wrapRow.id, cascade: true })
 
-      const all = await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
+      const all = await h.db
+        .select(nodeRunFixtureColumns(h.db))
+        .from(nodeRuns)
+        .where(eq(nodeRuns.taskId, taskId))
       const wrapRows = all.filter((r) => r.nodeId === downId)
       // No placeholder: the canceled/interrupted row stays the node's latest
       // (isDispatchable revival + findResumableWrapperRun same-row resume).
@@ -508,7 +544,10 @@ describeEachProvider('RFC-053 PR-A T1d — retry cascade kind matrix', (provider
       const { taskId } = await seedTaskWithEdge(h, downId, 'wrapper-loop')
       const { nodeRuns } = tablesOf(h.db)
       const wrapRow = (
-        await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
+        await h.db
+          .select(nodeRunFixtureColumns(h.db))
+          .from(nodeRuns)
+          .where(eq(nodeRuns.taskId, taskId))
       ).filter((r) => r.nodeId === downId)[0]!
       // rfc053-allow-direct-status-write -- test seeding, not a production transition
       await patchNodeRunFixture(h.db, { id: wrapRow.id }, { status })

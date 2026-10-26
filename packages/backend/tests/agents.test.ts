@@ -460,9 +460,9 @@ describeEachProvider('agent service provider referenced-delete', (harness) => {
     const updated = await updateAgent(db, a.id, { dependsOn: [codeAuditor.id] })
     expect(updated.dependsOn).toEqual([codeAuditor.id])
 
-    // Legacy row whose depends_on JSON is malformed → exposed as [] (defensive
-    // parser). Simulate by raw UPDATE.
-    await patchAgentFixture(db, { name: 'orchestrator' }, { dependsOn: '{not-an-array}' })
+    // Epoch-2 references are normalized rows; absent dependencies still project as [].
+    // Malformed epoch-1 JSON belongs to conversion, not a live target-row fixture.
+    await patchAgentFixture(db, { name: 'orchestrator' }, { dependsOn: [] })
     const reread = await getAgent(db, 'orchestrator')
     expect(reread?.dependsOn).toEqual([])
   })

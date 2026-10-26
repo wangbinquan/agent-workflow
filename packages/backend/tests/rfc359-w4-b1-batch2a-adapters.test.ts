@@ -1,3 +1,4 @@
+import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { o2Ports } from './helpers/o2Closure'
 // RFC-359 W4-B1 批 2a —— 五对只差客户端类型 / 同步异步形态的适配器合成一份实现，两个引擎各跑一遍：
 // 节点激活快照读取、任务工件路径查询、动态工作流状态持久化、RFC-354 frame 回填存储、
@@ -135,7 +136,10 @@ describeEachProvider('RFC-359 W4-B1 批 2a —— 动态工作流状态持久化
     const db = harness.db
     const taskId = await seedTask(db, { workgroupConfigJson: '{"k":1}' })
     const { workgroupTaskState } = tablesOf(db)
-    await insertOne(db, workgroupTaskState, { taskId, dwStateJson: null, updatedAt: 1 })
+    await db
+      .update(workgroupTaskState)
+      .set({ dwStateJson: null, updatedAt: 1 })
+      .where(eq(workgroupTaskState.taskId, taskId))
     const agentId = `agent_${ulid()}`
     await agentFixture(db, {
       id: agentId,
@@ -181,6 +185,7 @@ describeEachProvider('RFC-359 W4-B1 批 2a —— 人工门 continuation 的 eff
     const db = harness.db
     const taskId = await seedTask(db)
     const persistence = createTaskExecutionPersistence(db, {
+      historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
       recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
     })
     const gate = new DrizzleGateContinuationEffectPersistence(db, persistence.effects)

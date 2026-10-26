@@ -5,8 +5,11 @@
 // 生产上每次 tick 抛 `deferred-question-dispatcher-not-bound`（dual-provider-parity-audit P0-7）。
 // 派发管线（`taskQuestionDispatch.ts`）已跑在 `DatabaseSession` 上，这里直接调用它。
 
-import { createNodeOutputQueries } from '@/modules/task-execution/public/queries'
-import { createRunSelectionReader } from '@/modules/task-execution/public/queries'
+import {
+  createNodeOutputQueries,
+  createRunSelectionReader,
+} from '@/modules/task-execution/public/queries'
+
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { and, eq, inArray, isNotNull, ne } from 'drizzle-orm'
 
@@ -49,7 +52,8 @@ async function loadParkEntries(
   db: PersistenceDb,
   taskId: string,
 ): Promise<readonly TaskDagParkEntry[]> {
-  const { taskQuestions, clarifyRounds } = tablesOf(db)
+  const { taskQuestions } = tablesOf(db)
+  const { clarifyRounds } = tablesOf(db)
   const projection = {
     dispatchedAt: taskQuestions.dispatchedAt,
     triggerRunId: taskQuestions.triggerRunId,

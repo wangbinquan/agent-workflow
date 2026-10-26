@@ -57,8 +57,8 @@ import {
   createLogicalTableChunk,
   encodeLogicalRow,
 } from '@/platform/persistence/logicalDatabaseArtifact'
-import { type LogicalTableContract } from '@/platform/persistence/schemaContract'
-import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import type { LogicalTableContract } from '@/platform/persistence/schemaContract'
+import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { describeEachProvider } from './helpers/eachProvider'
 
 /**
@@ -71,7 +71,7 @@ const BYTE_PRESERVING_POSTGRESQL_TYPES = new Set(['text'])
 const NON_CANONICAL_JSON = '{"b":1,"a":2, "n":1.0,"e":1e3}'
 
 describe('RFC-359 W6-T23 —— json-text 列必须保字节', () => {
-  const contract = buildLogicalSchemaContract()
+  const contract = logicalSchemaContract
 
   test('① 每个 json-text 列在 PostgreSQL 上都投影成保字节类型（不是 jsonb）', () => {
     const offenders: string[] = []
@@ -102,16 +102,16 @@ describe('RFC-359 W6-T23 —— json-text 列必须保字节', () => {
 
   test('② JSON 文本一旦被规范化，逻辑复制的块摘要就变（迁移会在这里停住）', () => {
     const table = contract.tables.find(
-      (candidate): candidate is LogicalTableContract => candidate.id === 'tasks',
+      (candidate): candidate is LogicalTableContract => candidate.id === 'workgroup_task_state',
     )
-    expect(table, '契约里没有 tasks 表').toBeDefined()
-    const jsonColumn = table!.columns.find((column) => column.name === 'workgroup_config_json')
-    expect(jsonColumn?.logicalCodec, 'workgroup_config_json 不再是 json-text 列').toBe('json-text')
+    expect(table, '契约里没有 workgroup_task_state 表').toBeDefined()
+    const jsonColumn = table!.columns.find((column) => column.name === 'runtime_config_json')
+    expect(jsonColumn?.logicalCodec, 'runtime_config_json 不再是 json-text 列').toBe('json-text')
 
     const rowWith = (document: string): Record<string, unknown> =>
       Object.fromEntries(
         table!.columns.map((column) => {
-          if (column.name === 'workgroup_config_json') return [column.name, document]
+          if (column.name === 'runtime_config_json') return [column.name, document]
           if (column.primary) return [column.name, 'w6t23']
           if (!column.nullable) {
             return [

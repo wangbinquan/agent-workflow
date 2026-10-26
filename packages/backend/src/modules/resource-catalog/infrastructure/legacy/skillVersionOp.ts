@@ -1,3 +1,4 @@
+import { skillRowPath } from '../databaseSkillTrees'
 // RFC-170 §6a/T7② — boot recovery for a crashed `version-write` op.
 //
 // Forward (in commitSkillVersion): intent(lock) → fs-staged(build op-scoped
@@ -74,7 +75,8 @@ async function assertVersionRow(
     await db
       .select({
         contentHash: skillVersions.contentHash,
-        filesPath: skillVersions.filesPath,
+        contentRefJson: skillVersions.contentRefJson,
+        contentInlineBytes: skillVersions.contentInlineBytes,
       })
       .from(skillVersions)
       .where(
@@ -99,7 +101,12 @@ async function assertVersionRow(
   if (skill?.contentVersion !== op.targetVersion) {
     throw new Error(`version-write ${op.opId} target is not the skill's current committed version`)
   }
-  if (!content.matchesVersionReference(plan, row.filesPath)) {
+  if (
+    !content.matchesVersionReference(
+      plan,
+      skillRowPath(row, op.skillId, `version:${op.targetVersion}`)!,
+    )
+  ) {
     throw new Error(`version-write ${op.opId} target row files_path does not match its candidate`)
   }
   if (row.contentHash === null) {

@@ -1,5 +1,10 @@
+import { schemaHistoryRuntime } from './history/runtime'
+import { resolveColumnUniqueNulls } from './targetDefinition'
+import { compileContract } from './contract'
+import { digestSchemaContract } from './canonical'
+import { compileRowRules } from './rowRules'
+import { targetCodecChecks } from './nativeConstraints'
 import { CODECS } from './codecs'
-import { projectLegacyV2 } from '../migration/legacy/v2Contract'
 import { validateSchemaRegistry, type SchemaRegistry } from './registry'
 import { renderSchemaExpression, type SchemaExpression } from './expressions'
 // RFC-349 T4 — deterministic PostgreSQL baseline projection. SQLite migration
@@ -36,7 +41,9 @@ export interface PostgresqlSchemaStatement {
 
 export interface PostgresqlSchemaPlan {
   readonly version: 1
-  readonly baselineId: typeof POSTGRESQL_BASELINE_ID
+  readonly baselineId: typeof POSTGRESQL_BASELINE_ID | '0000_rfc395_epoch2'
+  readonly schemaEpoch?: number
+  readonly contract?: ReturnType<typeof compileContract>
   readonly contractDigest: string
   readonly activeTableCount: number
   readonly archiveOnlyTableCount: number
@@ -309,6 +316,22 @@ export function buildPostgresqlSchemaPlan(
   contract: LogicalSchemaContract,
   expressions?: ReadonlyMap<string, ReadonlyMap<string, string>>,
 ): PostgresqlSchemaPlan {
+  if ('schemaEpoch' in contract && contract.schemaEpoch === 2) {
+    const head = schemaHistoryRuntime().head()
+    return {
+      version: 1,
+      baselineId: '0000_rfc395_epoch2',
+      schemaEpoch: 2,
+      contractDigest: contract.digest,
+      activeTableCount: contract.activeTableCount,
+      archiveOnlyTableCount: 0,
+      statements: head.postgresql.head.map((statement) => ({
+        ...statement,
+        kind: statement.kind as PostgresqlSchemaStatement['kind'],
+      })),
+      digest: head.postgresql.digest,
+    }
+  }
   const statements = [
     ...compatibilityStatements(),
     ...tableStatements(contract),
@@ -346,6 +369,7 @@ export function renderPostgresqlBaselineSql(plan: PostgresqlSchemaPlan): string 
 // expressions come directly from the explicit provider declarations.
 export function compilePostgresqlPlan(registry: SchemaRegistry): PostgresqlSchemaPlan {
   validateSchemaRegistry(registry)
+  if ((registry.schemaEpoch ?? 1) > 1) return compileTargetPostgresqlPlan(registry)
   const expressions = new Map<string, Map<string, string>>()
   for (const table of registry.tables) {
     const byText = new Map<string, string>()
@@ -362,44 +386,269 @@ export function compilePostgresqlPlan(registry: SchemaRegistry): PostgresqlSchem
     }
     expressions.set(table.id, byText)
   }
-  const legacy = projectLegacyV2(registry)
-  const definitions = new Map(registry.tables.map((table) => [table.id, table]))
-  // Epoch-1 artifact identity remains frozen. Physical column decisions use the
-  // explicit codec/default descriptors rather than the legacy name heuristics.
-  const physical: LogicalSchemaContract = {
-    ...legacy,
-    tables: legacy.tables.map((table) => {
-      const definition = definitions.get(table.id)!
-      const columns = new Map(
-        Object.values(definition.columns).map((column) => [column.name, column]),
-      )
-      return {
-        ...table,
-        disposition: definition.migrationPolicy,
-        primaryKey: [...definition.primaryKey],
-        migrationKey: [...definition.migrationKey],
-        columns: table.columns.map((column) => {
-          const declared = columns.get(column.name)!
-          const value = declared.default
-          const providerDefault =
-            value.kind === 'literal'
-              ? renderSchemaExpression({ kind: 'literal', value: value.value }, 'postgresql')
-              : value.kind === 'expression'
-                ? renderSchemaExpression(value.expression, 'postgresql')
-                : null
-          return {
-            ...column,
-            nullable: declared.nullable,
-            identity: declared.codec === 'identity',
-            providerType: {
-              sqlite: CODECS[declared.codec].sqlite,
-              postgresql: CODECS[declared.codec].postgresql,
-            },
-            providerDefault: { ...column.providerDefault, postgresql: providerDefault },
-          }
-        }),
-      }
-    }),
+  throw new Error('epoch-1-schema-compilation-is-offline-only')
+}
+
+/** Epoch 2 compiles declarations directly; it never enters the frozen v2 projection. */
+function compileTargetPostgresqlPlan(registry: SchemaRegistry): PostgresqlSchemaPlan {
+  const contract = compileContract(registry)
+  const tables = registry.tables.map((table) => resolveColumnUniqueNulls(registry, table))
+  const statements: PostgresqlSchemaStatement[] = [...compatibilityStatements()]
+  for (const table of tables) {
+    const columns = Object.values(table.columns).map(renderPostgresqlDefinitionColumn)
+    columns.push(
+      `CONSTRAINT ${quote(boundedIdentifier(`${table.id}_pkey`))} PRIMARY KEY (${table.primaryKey.map(quote).join(', ')})`,
+    )
+    statements.push({
+      kind: 'table',
+      logicalId: table.id,
+      sql: `CREATE TABLE ${qualifiedTable(table.id)} (\n  ${columns.join(',\n  ')}\n)`,
+    })
   }
-  return buildPostgresqlSchemaPlan(physical, expressions)
+  for (const table of tables) {
+    const constraint = (kind: string, name: string, sql: string): void => {
+      statements.push({
+        kind: 'constraint',
+        logicalId: `${table.id}:${kind}:${name}`,
+        sql: `ALTER TABLE ${qualifiedTable(table.id)} ADD CONSTRAINT ${quote(boundedIdentifier(name))} ${sql}`,
+      })
+    }
+    const uniqueKeys = [
+      ...table.unique,
+      ...Object.values(table.columns)
+        .filter((column) => column.unique)
+        .map((column) => ({
+          name: column.unique!,
+          columns: [column.name],
+          nulls: column.uniqueNulls ?? 'distinct',
+        })),
+    ]
+    for (const unique of uniqueKeys)
+      constraint(
+        'unique',
+        unique.name,
+        `UNIQUE${unique.nulls === 'not-distinct' ? ' NULLS NOT DISTINCT' : ''} (${unique.columns.map(quote).join(', ')})`,
+      )
+    for (const check of table.checks)
+      constraint(
+        'check',
+        check.name,
+        `CHECK (${renderSchemaExpression(check.expression, 'postgresql')})`,
+      )
+    for (const check of targetCodecChecks(table, 'postgresql'))
+      constraint('check', check.name, `CHECK (${check.sql})`)
+    for (const index of table.indexes)
+      statements.push({
+        kind: 'index',
+        logicalId: `${table.id}:index:${index.name}`,
+        sql: `CREATE ${index.unique ? 'UNIQUE ' : ''}INDEX ${quote(boundedIdentifier(index.name))} ON ${qualifiedTable(table.id)} (${index.columns.map((column) => renderSchemaExpression(column, 'postgresql')).join(', ')})${index.unique && index.nulls === 'not-distinct' ? ' NULLS NOT DISTINCT' : ''}${index.where ? ` WHERE ${renderSchemaExpression(index.where, 'postgresql')}` : ''}`,
+      })
+  }
+  for (const table of tables) {
+    for (const fk of table.foreignKeys)
+      statements.push({
+        kind: 'constraint',
+        logicalId: `${table.id}:fk:${fk.name}`,
+        sql: `ALTER TABLE ${qualifiedTable(table.id)} ADD CONSTRAINT ${quote(boundedIdentifier(fk.name))} FOREIGN KEY (${fk.columns.map(quote).join(', ')}) REFERENCES ${qualifiedTable(fk.foreignTable)} (${fk.foreignColumns.map(quote).join(', ')}) ON UPDATE ${action(fk.onUpdate)} ON DELETE ${action(fk.onDelete)}`,
+      })
+    statements.push(...compileRowRules(table, 'postgresql'))
+  }
+  const payload = {
+    version: 1 as const,
+    baselineId: '0000_rfc395_epoch2' as const,
+    schemaEpoch: registry.schemaEpoch,
+    contract,
+    contractDigest: contract.digest,
+    activeTableCount: registry.tables.length,
+    archiveOnlyTableCount: 0,
+    statements,
+  }
+  return { ...payload, digest: digestSchemaContract(payload) }
+}
+
+import type { ColumnDefinition, TableDefinition } from './contribution'
+import { SchemaHistoryError, type HistoryStatement, type SchemaEdge } from './history/types'
+import { sameSchemaValue } from './history/edgeDiff'
+
+/** Shared by the head and history ALTER edges. */
+export function renderPostgresqlDefinitionColumn(column: ColumnDefinition): string {
+  const parts = [quote(column.name), CODECS[column.codec].postgresql.toUpperCase()]
+  if (CODECS[column.codec].postgresql === 'text') parts.push('COLLATE "C"')
+  if (column.codec === 'identity') parts.push('GENERATED BY DEFAULT AS IDENTITY')
+  if (!column.nullable) parts.push('NOT NULL')
+  if (column.default.kind === 'literal')
+    parts.push(
+      `DEFAULT ${renderSchemaExpression({ kind: 'literal', value: column.default.value }, 'postgresql')}`,
+    )
+  if (column.default.kind === 'expression')
+    parts.push(`DEFAULT ${renderSchemaExpression(column.default.expression, 'postgresql')}`)
+  return parts.join(' ')
+}
+function orderedColumns(table: TableDefinition): readonly ColumnDefinition[] {
+  const columns = Object.values(table.columns)
+  return 'columnOrder' in table
+    ? (table.columnOrder as readonly string[]).map(
+        (name) => columns.find((column) => column.name === name)!,
+      )
+    : columns
+}
+function belongs(statement: HistoryStatement, tableId: string): boolean {
+  return statement.logicalId === tableId || statement.logicalId.startsWith(`${tableId}:`)
+}
+export function dropPostgresqlSchemaStatement(statement: HistoryStatement): string {
+  const constraint = /^(ALTER TABLE .+?) ADD CONSTRAINT ("(?:[^"]|"")+") /.exec(statement.sql)
+  if (constraint) return `${constraint[1]} DROP CONSTRAINT ${constraint[2]}`
+  const index = /^CREATE (?:UNIQUE )?INDEX ("(?:[^"]|"")+") /.exec(statement.sql)
+  if (index) return `DROP INDEX "agent_workflow".${index[1]}`
+  const trigger =
+    /^CREATE TRIGGER ("(?:[^"]|"")+")[\s\S]*? ON ("(?:[^"]|"")+"\."(?:[^"]|"")+")/.exec(
+      statement.sql,
+    )
+  if (trigger) return `DROP TRIGGER ${trigger[1]} ON ${trigger[2]}`
+  const fn = /^CREATE(?: OR REPLACE)? FUNCTION (.+?\(\))/.exec(statement.sql)
+  if (fn) return `DROP FUNCTION ${fn[1]}`
+  throw new SchemaHistoryError('unsupported-plan-fragment', statement.logicalId)
+}
+export function compilePostgresqlHistoryAlter(
+  before: TableDefinition,
+  after: TableDefinition,
+  previousHead: readonly HistoryStatement[],
+  head: readonly HistoryStatement[],
+  edge: SchemaEdge,
+): string[] {
+  const target = qualifiedTable(after.id)
+  const oldColumns = new Map(Object.values(before.columns).map((c) => [c.name, c]))
+  const columns = orderedColumns(after)
+  const retained = orderedColumns(before)
+    .filter((c) => columns.some((next) => next.name === c.name))
+    .map((c) => c.name)
+  const appended = columns.filter((c) => !oldColumns.has(c.name)).map((c) => c.name)
+  if (
+    !sameSchemaValue(
+      [...retained, ...appended],
+      columns.map((c) => c.name),
+    )
+  )
+    throw new SchemaHistoryError(
+      'postgresql-column-order',
+      'ALTER edges preserve existing column order and append new columns',
+    )
+  // Small edges touch only their own object and any codec CHECK introduced by a new column.
+  const oldObjects = previousHead.filter((s) => belongs(s, after.id) && s.kind !== 'table')
+  const newObjects = head.filter((s) => belongs(s, after.id) && s.kind !== 'table')
+  if (edge.kind === 'add-column') {
+    const column = columns.find((c) => c.name === edge.column)!
+    return [
+      `ALTER TABLE ${target} ADD COLUMN ${renderPostgresqlDefinitionColumn(column)}`,
+      ...newObjects
+        .filter((s) => !oldObjects.some((old) => sameSchemaValue(old, s)))
+        .map((s) => s.sql),
+    ]
+  }
+  if (edge.kind === 'replace-check' || edge.kind === 'add-fk') {
+    const id = `${after.id}:${edge.kind === 'replace-check' ? 'check' : 'fk'}:${edge.name}`
+    const next = newObjects.find((s) => s.logicalId === id)
+    if (!next) throw new SchemaHistoryError('edge-object-missing', id)
+    return [
+      ...(edge.kind === 'replace-check'
+        ? [dropPostgresqlSchemaStatement(oldObjects.find((s) => s.logicalId === id)!)]
+        : []),
+      next.sql,
+    ]
+  }
+  const keyChanged = !sameSchemaValue(before.primaryKey, after.primaryKey)
+  const incoming = (s: HistoryStatement) =>
+    s.kind === 'constraint' && s.sql.includes(`REFERENCES ${target} (`)
+  const own = (s: HistoryStatement) =>
+    s.kind !== 'table' && s.kind !== 'bootstrap' && belongs(s, after.id) && !incoming(s)
+  // Incoming FKs may depend on a UNIQUE constraint as well as the primary key.
+  const statements = [
+    ...previousHead.filter(incoming).map(dropPostgresqlSchemaStatement),
+    ...previousHead.filter(own).reverse().map(dropPostgresqlSchemaStatement),
+  ]
+  const added = [...head.filter(own), ...head.filter(incoming)]
+  const primaryName = (plan: readonly HistoryStatement[]): string => {
+    const table = plan.find((s) => s.kind === 'table' && s.logicalId === after.id)
+    const match = table?.sql.match(/CONSTRAINT ("(?:[^"]|"")+") PRIMARY KEY/)
+    if (!match) throw new SchemaHistoryError('primary-key-plan', after.id)
+    return match[1]!
+  }
+  if (keyChanged)
+    statements.push(`ALTER TABLE ${target} DROP CONSTRAINT ${primaryName(previousHead)}`)
+  const copy = edge.kind === 'rebuild-table' ? (edge.copy ?? {}) : {}
+  const mapped = columns.filter((c) => copy[c.name])
+  const temporaryName = (name: string) => quote(`__aw_history_copy_${name}`)
+  for (const c of mapped)
+    statements.push(
+      `ALTER TABLE ${target} ADD COLUMN ${temporaryName(c.name)} ${CODECS[c.codec].postgresql}`,
+    )
+  if (mapped.length)
+    statements.push(
+      `UPDATE ${target} SET ${mapped.map((c) => `${temporaryName(c.name)} = ${renderSchemaExpression(copy[c.name]!, 'postgresql')}`).join(', ')}`,
+    )
+  for (const column of columns) {
+    const old = oldColumns.get(column.name)
+    const expression = edge.kind === 'rebuild-table' ? edge.copy?.[column.name] : undefined
+    const name = quote(column.name)
+    if (!old) {
+      if (expression) {
+        statements.push(
+          `ALTER TABLE ${target} ADD COLUMN ${name} ${CODECS[column.codec].postgresql}${CODECS[column.codec].postgresql === 'text' ? ' COLLATE "C"' : ''}`,
+        )
+        statements.push(`UPDATE ${target} SET ${name} = ${temporaryName(column.name)}`)
+        if (!column.nullable)
+          statements.push(`ALTER TABLE ${target} ALTER COLUMN ${name} SET NOT NULL`)
+      } else
+        statements.push(
+          `ALTER TABLE ${target} ADD COLUMN ${renderPostgresqlDefinitionColumn(column)}`,
+        )
+    } else {
+      if (old.codec === 'identity' && column.codec !== 'identity')
+        statements.push(`ALTER TABLE ${target} ALTER COLUMN ${name} DROP IDENTITY`)
+      if (old.codec !== column.codec) {
+        if (old.default.kind !== 'identity')
+          statements.push(`ALTER TABLE ${target} ALTER COLUMN ${name} DROP DEFAULT`)
+        statements.push(
+          `ALTER TABLE ${target} ALTER COLUMN ${name} TYPE ${CODECS[column.codec].postgresql}${CODECS[column.codec].postgresql === 'text' ? ' COLLATE "C"' : ''} USING ${expression ? temporaryName(column.name) : `${name}::${CODECS[column.codec].postgresql}`}`,
+        )
+      } else if (expression)
+        statements.push(`UPDATE ${target} SET ${name} = ${temporaryName(column.name)}`)
+      if (old.nullable !== column.nullable)
+        statements.push(
+          `ALTER TABLE ${target} ALTER COLUMN ${name} ${column.nullable ? 'DROP' : 'SET'} NOT NULL`,
+        )
+    }
+    if (column.codec === 'identity' && old?.codec !== 'identity' && (old || expression)) {
+      statements.push(
+        `ALTER TABLE ${target} ALTER COLUMN ${name} ADD GENERATED BY DEFAULT AS IDENTITY`,
+      )
+      const relation = renderSchemaExpression({ kind: 'literal', value: target }, 'postgresql')
+      const field = renderSchemaExpression({ kind: 'literal', value: column.name }, 'postgresql')
+      statements.push(
+        `SELECT setval(pg_get_serial_sequence(${relation}, ${field}), GREATEST(COALESCE(MAX(${name}), 1), 1), COALESCE(MAX(${name}), 0) >= 1) FROM ${target}`,
+      )
+    }
+    if (column.codec !== 'identity' && (old || expression)) {
+      const value = column.default
+      const sql =
+        value.kind === 'literal'
+          ? renderSchemaExpression({ kind: 'literal', value: value.value }, 'postgresql')
+          : value.kind === 'expression'
+            ? renderSchemaExpression(value.expression, 'postgresql')
+            : null
+      statements.push(
+        `ALTER TABLE ${target} ALTER COLUMN ${name} ${sql === null ? 'DROP DEFAULT' : `SET DEFAULT ${sql}`}`,
+      )
+    }
+  }
+  for (const column of Object.values(before.columns))
+    if (!columns.some((c) => c.name === column.name))
+      statements.push(`ALTER TABLE ${target} DROP COLUMN ${quote(column.name)}`)
+  for (const c of mapped)
+    statements.push(`ALTER TABLE ${target} DROP COLUMN ${temporaryName(c.name)}`)
+  if (keyChanged)
+    statements.push(
+      `ALTER TABLE ${target} ADD CONSTRAINT ${primaryName(head)} PRIMARY KEY (${after.primaryKey.map(quote).join(', ')})`,
+    )
+  return [...statements, ...added.map((s) => s.sql)]
 }

@@ -1,3 +1,4 @@
+import * as epochBoot from '@/modules/system-operations/composition/epochBootAdmission'
 // RFC-394: exercise the real startup sequence for listen precedence, profile forwarding and fatal probes.
 import { expect, mock, spyOn, test } from 'bun:test'
 import { DEFAULT_CONFIG } from '@agent-workflow/shared'
@@ -69,6 +70,16 @@ function fixture(input: {
   const migration = spyOn(migrations, 'resolveMigrationsFolder').mockResolvedValue(
     '/unused/rfc394/migrations',
   )
+  const epochFacts = spyOn(epochBoot, 'readEpochBootFacts').mockReturnValue({
+    sourceExists: false,
+    pointer: null,
+    provider: 'sqlite',
+    operation: null,
+    rfc349Operation: null,
+    activationReceiptDigest: null,
+    targetState: null,
+    rollbackIncomplete: false,
+  })
   const recovery = spyOn(operations, 'prepareDatabasePreOpenRecovery').mockResolvedValue({
     history: {},
     applyStagedRestore: async () => false,
@@ -125,6 +136,7 @@ function fixture(input: {
       token.mockRestore()
       prepared.mockRestore()
       recovery.mockRestore()
+      epochFacts.mockRestore()
       migration.mockRestore()
       createLogger.mockRestore()
       configLogger.mockRestore()
@@ -164,7 +176,7 @@ for (const [name, launch, listen, expected] of [
       expect(received.applicationConfiguration).toBe(f.applicationConfiguration)
       expect(received.secretBox).toBe(f.profile.selections.secretBox!)
       expect(received.startupLease).toBe(f.profile.selections.startupLease)
-      expect(received.runtimeLegacyConfiguration).toBeDefined()
+      expect(received).not.toHaveProperty('runtimeLegacyConfiguration')
       for (const key of [
         'workspaceUploads',
         'isolationWorkspaces',

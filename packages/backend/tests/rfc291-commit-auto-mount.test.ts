@@ -1,3 +1,4 @@
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 // RFC-291 面 A/B/F —— 提交入库把创建物写进会话挂载清单（apply 集成面）。
 //
 // 锁的是用户报告的缺陷：「一个意图创建任务所提交的节点，应该被自动挂接到该意图
@@ -17,7 +18,7 @@
 
 import { agentFixture, type AgentFixtureSpec } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+
 import { first as firstRow } from '@/platform/persistence/queryHelpers'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { createHash } from 'node:crypto'

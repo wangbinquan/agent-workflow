@@ -1,7 +1,6 @@
-import { createHumanGatePersistenceParticipantInTx } from '@/modules/task-execution/public/participants'
 import { createTaskGateQueries } from '@/modules/task-execution/public/queries'
-import { decodeLegacyClarifyAnswerColumns } from './clarifyAnswerCodec'
-import { createClarifyAnswerWritePort } from './clarifyAnswerWrite'
+import { readClarifyAnswerProjection } from './clarifyAnswerQueries'
+import { createClarifyAnswerWritePort, lockClarifyRound } from './clarifyAnswerWrite'
 import { appendClarifyQuestions, clarifyQuestionsRevision } from '../domain/clarifyQuestions'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { and, eq, isNotNull } from 'drizzle-orm'
@@ -17,7 +16,6 @@ import {
 } from '@agent-workflow/shared'
 import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
-import { getTaskQuestionWriteSem } from '@/services/taskWriteLocks'
 import { ConflictError, NotFoundError } from '@/util/errors'
 import type {
   ClarifyFollowupSnapshot,
@@ -35,7 +33,8 @@ export function createClarifyFollowupStore(
     nodeRunId: string,
     target: ClarifyFollowupTarget,
   ): Promise<ClarifyFollowupSnapshot> => {
-    const { clarifyRounds, taskQuestions } = tablesOf(reader)
+    const { taskQuestions } = tablesOf(reader)
+    const { clarifyRounds } = tablesOf(reader)
     const round = (
       await reader
         .select()
@@ -84,7 +83,7 @@ export function createClarifyFollowupStore(
       askingNodeRunId: round.askingNodeRunId!,
       questions,
       categoryPaths: config.success ? clarifyCategoryPaths(config.data.categories) : [],
-      drafts: decodeLegacyClarifyAnswerColumns(round).requireEffectiveAnswers(),
+      drafts: (await readClarifyAnswerProjection(reader, round)).requireEffectiveAnswers(),
       instruction:
         typeof gate?.mindmap === 'object' && gate.mindmap
           ? String((gate.mindmap as { instructions?: string }).instructions ?? '')
@@ -93,48 +92,42 @@ export function createClarifyFollowupStore(
   }
   return {
     async read(nodeRunId, parentId) {
-      const first = await read(db, nodeRunId, parentId)
-      return getTaskQuestionWriteSem(first.taskId).run(() => read(db, nodeRunId, parentId))
+      return read(db, nodeRunId, parentId)
     },
     async append(nodeRunId, request, additions, signal, editor) {
       const target = request.parentQuestionId ?? request.categoryPath!
       const first = await read(db, nodeRunId, target)
-      await getTaskQuestionWriteSem(first.taskId).run(async () => {
-        await databaseSessionFor(db).transaction(async (tx) => {
-          const taskHumanGate = createHumanGatePersistenceParticipantInTx(tx)
-          await taskHumanGate.lockTask(first.taskId)
-          const current = await read(tx, nodeRunId, target)
-          if (!current.canAppend)
-            throw new ConflictError(
-              'clarify-followup-closed',
-              'This question no longer accepts follow-ups.',
-            )
-          if (signal.aborted)
-            throw new ConflictError('clarify-followup-canceled', 'Follow-up canceled.')
-          const existing = current.questions.filter(
-            (q) => q.mindmap?.requestId === request.requestId,
+      await databaseSessionFor(db).transaction(async (tx) => {
+        await lockClarifyRound(tx, first.roundId)
+        const current = await read(tx, nodeRunId, target)
+        if (!current.canAppend)
+          throw new ConflictError(
+            'clarify-followup-closed',
+            'This question no longer accepts follow-ups.',
           )
-          if (existing.length) {
-            if (existing.some((q) => q.mindmap?.requestBasis !== clarifyContentKey(request)))
-              throw new ConflictError('clarify-followup-request-conflict', 'Request ID was reused.')
-            return
-          }
-          if (
-            clarifyContentKey(clarifyFollowupContext(current.questions, current.drafts, target)) !==
-            request.basis
+        if (signal.aborted)
+          throw new ConflictError('clarify-followup-canceled', 'Follow-up canceled.')
+        const existing = current.questions.filter((q) => q.mindmap?.requestId === request.requestId)
+        if (existing.length) {
+          if (existing.some((q) => q.mindmap?.requestBasis !== clarifyContentKey(request)))
+            throw new ConflictError('clarify-followup-request-conflict', 'Request ID was reused.')
+          return
+        }
+        if (
+          clarifyContentKey(clarifyFollowupContext(current.questions, current.drafts, target)) !==
+          request.basis
+        )
+          throw new ConflictError(
+            'clarify-followup-stale',
+            'The branch changed while generating. Retry with the current answers.',
           )
-            throw new ConflictError(
-              'clarify-followup-stale',
-              'The branch changed while generating. Retry with the current answers.',
-            )
-          const revision = appendClarifyQuestions(
-            clarifyQuestionsRevision(current.questions),
-            additions,
-          )
-          const error = revision.error
-          if (error) throw new ConflictError('clarify-followup-invalid', error)
-          await createClarifyAnswerWritePort(db).appendQuestions(tx, current.roundId, revision)
-        })
+        const revision = appendClarifyQuestions(
+          clarifyQuestionsRevision(current.questions),
+          additions,
+        )
+        const error = revision.error
+        if (error) throw new ConflictError('clarify-followup-invalid', error)
+        await createClarifyAnswerWritePort(db).appendQuestions(tx, current.roundId, revision)
       })
       await events.publish({
         taskId: first.taskId,

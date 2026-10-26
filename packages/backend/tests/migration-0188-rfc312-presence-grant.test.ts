@@ -9,15 +9,13 @@
 //   · granted_by_user_id = NULL —— 表示**系统默认授予**，与"某管理员点的"在审计上可区分；
 //   · INSERT OR IGNORE —— 迁移必须可重复应用而不产生第二行。
 
+import { FROZEN_MIGRATIONS } from './migration-freeze'
 import { afterEach, describe, expect, test } from 'bun:test'
 import { Database } from 'bun:sqlite'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
-const SQL = readFileSync(
-  resolve(import.meta.dir, '..', 'db', 'migrations', '0188_rfc312_users_presence_grant.sql'),
-  'utf8',
-)
+const SQL = readFileSync(resolve(FROZEN_MIGRATIONS, '0188_rfc312_users_presence_grant.sql'), 'utf8')
 
 const opened: Database[] = []
 afterEach(() => {

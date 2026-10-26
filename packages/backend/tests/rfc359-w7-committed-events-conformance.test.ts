@@ -37,14 +37,15 @@ import type {
   CommittedEventDeliveryPersistencePort,
   CommittedEventDeliveryHealth,
 } from '@/platform/events/committed/persistence'
-import type {
-  AppendCommittedEventInput,
-  ClaimedCommittedEventDelivery,
-  CommittedEventDeliveryClass,
-  CommittedEventDeliveryState,
-  CommittedEventEnvelopeV1,
+import {
+  type AppendCommittedEventInput,
+  type ClaimedCommittedEventDelivery,
+  type CommittedEventDeliveryClass,
+  type CommittedEventDeliveryState,
+  type CommittedEventEnvelopeV1,
+  committedEventGroupId,
 } from '@/platform/events/committed/types'
-import { committedEventGroupId } from '@/platform/events/committed/types'
+
 import { sha256Hex } from '@/util/hash'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 
@@ -57,15 +58,11 @@ function persistenceFor(harness: ProviderHarness): CommittedEventDeliveryPersist
 }
 
 /** 把 collaboration/review 家族推到 dispatchable@EPOCH，让种下的事件可派发。 */
-async function enableCutover(
-  db: PersistenceDb,
-  mode: 'legacy' | 'shadow' | 'dispatchable' = 'dispatchable',
-  epoch = EPOCH,
-): Promise<void> {
+async function enableCutover(db: PersistenceDb, epoch = EPOCH): Promise<void> {
   const { committedEventFamilyCutovers } = tablesOf(db)
   await db
     .update(committedEventFamilyCutovers)
-    .set({ mode, epoch, changedAt: NOW, changeRef: 'test:rfc359-w7' })
+    .set({ epoch, changedAt: NOW, changeRef: 'test:rfc359-w7' })
     .where(
       and(
         eq(committedEventFamilyCutovers.producer, 'collaboration'),
@@ -261,16 +258,9 @@ describeEachProvider('RFC-359 W7 —— 已提交事件出站存储 · append �
     expect(await deliveryRows(db)).toHaveLength(2)
   })
 
-  test('legacy 家族不落行；同一 (group, ordinal) 的重放等价、冲突则抛错', async () => {
+  test('当前家族始终落行；同一 (group, ordinal) 的重放等价、冲突则抛错', async () => {
     const db = harness.db
-    await enableCutover(db, 'legacy', 1)
-    const legacy = await harness.session.transaction(
-      async (tx) => await appendCommittedEvent(tx, appendInput({ operation: 'legacy' })),
-    )
-    expect(legacy.eventRef).toBeNull()
     const { committedEvents } = tablesOf(db)
-    expect(await db.select().from(committedEvents)).toEqual([])
-
     await enableCutover(db)
     const input = appendInput({ operation: 'replayed' })
     const first = await harness.session.transaction(
@@ -576,11 +566,11 @@ describeEachProvider('RFC-359 W7 —— 已提交事件出站存储 · 投递一
     expect(await persistence.claimNext({ workerId: 'w1', now: NOW + 1 })).toBeNull()
   })
 
-  test('家族 cutover 回到 shadow ⇒ 已落的 dispatchable 事件也停止派发', async () => {
+  test('家族 epoch 前进后旧 epoch 事件停止派发', async () => {
     const db = harness.db
     await enableCutover(db)
     await seedEvent(db, { eventId: 'evt-1' })
-    await enableCutover(db, 'shadow', EPOCH)
+    await enableCutover(db, EPOCH + 1)
     const persistence = persistenceFor(harness)
     expect(await persistence.claimNext({ workerId: 'w1', now: NOW + 1 })).toBeNull()
   })

@@ -34,7 +34,12 @@ export type ClarifyGateRoundProjection = Readonly<{
   containerRunId: string | null
   iteration: number
   questionsJson: string
-  answersJson: null
+  questionsRevision: 1
+  sealedQuestionSetKey: null
+  answersRecorded: false
+  draftsRecorded: false
+  attributionsRecorded: false
+  legacyAnswersJson: null
   directive: null
   status: 'awaiting_human'
   truncationWarningsJson: string | null
@@ -44,8 +49,6 @@ export type ClarifyGateRoundProjection = Readonly<{
   answeredAt: null
   answeredBy: null
   submittedByRole: null
-  answerAttributionsJson: null
-  draftAnswersJson: null
 }>
 
 export type ClarifyGateQuestionProjection = Readonly<{
@@ -68,7 +71,7 @@ export type ClarifyGateQuestionProjection = Readonly<{
 }>
 
 export interface ClarifyGateOpenManifest {
-  readonly schemaVersion: 1
+  readonly schemaVersion: 2
   readonly kind: 'clarify-open'
   readonly gateRef: string
   readonly sourceSnapshotDigest: string
@@ -156,16 +159,19 @@ function decodeRound(value: unknown): ClarifyGateRoundProjection {
   const kind = value.kind
   if (kind !== 'self' && kind !== 'cross') invalid('clarify-open round kind is invalid')
   if (
-    value.answersJson !== null ||
+    value.questionsRevision !== 1 ||
+    value.sealedQuestionSetKey !== null ||
+    value.answersRecorded !== false ||
+    value.draftsRecorded !== false ||
+    value.attributionsRecorded !== false ||
+    value.legacyAnswersJson !== null ||
     value.directive !== null ||
     value.status !== 'awaiting_human' ||
     value.designerRunTriggeredAt !== null ||
     value.abandonedAt !== null ||
     value.answeredAt !== null ||
     value.answeredBy !== null ||
-    value.submittedByRole !== null ||
-    value.answerAttributionsJson !== null ||
-    value.draftAnswersJson !== null
+    value.submittedByRole !== null
   ) {
     invalid('clarify-open round mutable fields are invalid')
   }
@@ -206,7 +212,12 @@ function decodeRound(value: unknown): ClarifyGateRoundProjection {
     containerRunId: nullableString(value, 'containerRunId'),
     iteration: nonNegativeInteger(value, 'iteration'),
     questionsJson: stringField(value, 'questionsJson'),
-    answersJson: null,
+    questionsRevision: 1,
+    sealedQuestionSetKey: null,
+    answersRecorded: false,
+    draftsRecorded: false,
+    attributionsRecorded: false,
+    legacyAnswersJson: null,
     directive: null,
     status: 'awaiting_human',
     truncationWarningsJson,
@@ -216,8 +227,6 @@ function decodeRound(value: unknown): ClarifyGateRoundProjection {
     answeredAt: null,
     answeredBy: null,
     submittedByRole: null,
-    answerAttributionsJson: null,
-    draftAnswersJson: null,
   }
 }
 
@@ -288,7 +297,7 @@ export function decodeClarifyGateOpenManifest(raw: string): ClarifyGateOpenManif
   } catch {
     invalid('clarify-open manifest is invalid JSON')
   }
-  if (!isRecord(value) || value.schemaVersion !== 1 || value.kind !== 'clarify-open') {
+  if (!isRecord(value) || value.schemaVersion !== 2 || value.kind !== 'clarify-open') {
     invalid('clarify-open manifest envelope is invalid')
   }
   const node = decodeNode(value.node)
@@ -344,7 +353,7 @@ export function decodeClarifyGateOpenManifest(raw: string): ClarifyGateOpenManif
     invalid('clarify-open eager question snapshots do not match the round')
   }
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     kind: 'clarify-open',
     gateRef: `clarify:${node.id}`,
     sourceSnapshotDigest,

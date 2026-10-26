@@ -1,4 +1,7 @@
-import { legacyArchiveEntry } from '@/platform/content/legacyDirectories'
+import { createReadStream } from 'node:fs'
+import { readFile } from 'node:fs/promises'
+import type { TaskArchiveSource } from '@/platform/contracts/taskArchive'
+import { archiveEntry } from '@/platform/content/locations/directories'
 import {
   appendFileSync,
   existsSync,
@@ -31,7 +34,7 @@ export function restoreFileArchiveMovedDirectories(
 
 export function createFileTaskArchiveContent(): TaskArchiveContentPort {
   return {
-    resolve: (reference, ...segments) => legacyArchiveEntry(join, reference, ...segments),
+    resolve: (reference, ...segments) => archiveEntry(join, reference, ...segments),
     exists: (reference) => existsSync(reference),
     list: (reference) => readdirSync(reference),
     createDirectory(reference) {
@@ -46,5 +49,17 @@ export function createFileTaskArchiveContent(): TaskArchiveContentPort {
     // Local runs / logs were moved into the archive; an archived task's
     // worktree is left to worktree GC's orphan sweep.
     releaseTaskStorage: () => undefined,
+  }
+}
+
+/** Existing v2 and new v3 directories use the same filesystem layout. */
+export function createFileTaskArchiveSource(directory: string): TaskArchiveSource {
+  return {
+    readManifest: () => readFile(join(directory, 'manifest.json')),
+    async *readTable(table) {
+      const path = join(directory, 'db', `${table}.jsonl`)
+      if (!existsSync(path)) return
+      for await (const chunk of createReadStream(path)) yield Uint8Array.from(chunk as Buffer)
+    },
   }
 }

@@ -17,25 +17,25 @@ import {
   writeLogicalArtifactManifest,
   writeLogicalTableChunk,
   type LogicalTableChunk,
-} from '@/platform/persistence/logicalDatabaseArtifact'
+} from '@/platform/persistence/migration/legacy/logicalDatabaseArtifact'
 import {
   LogicalDatabaseRestoreError,
   restoreLogicalDatabaseBackup,
   restoreLogicalDatabaseArtifact,
   verifyLogicalDatabaseArtifactTree,
   type LogicalDatabaseRestoreTarget,
-} from '@/platform/persistence/logicalDatabaseRestore'
+} from '@/platform/persistence/migration/legacy/logicalDatabaseRestore'
 import {
   exportLogicalDatabaseArtifact,
   type LogicalDatabaseExportSource,
-} from '@/platform/persistence/logicalDatabaseExport'
+} from '@/platform/persistence/migration/legacy/logicalDatabaseExport'
 import {
   canonicalSchemaJson,
   type LogicalColumnContract,
   type LogicalSchemaContract,
   type LogicalTableContract,
 } from '@/platform/persistence/schemaContract'
-import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import { buildFrozenEpoch1LogicalSchemaContract as buildLogicalSchemaContract } from '@/platform/persistence/migration/epoch1/contract'
 
 const roots: string[] = []
 const SOURCE_OPERATION_ID = 'dbm_source_artifact_01'

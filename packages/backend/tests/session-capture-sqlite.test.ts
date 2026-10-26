@@ -11,7 +11,7 @@ import { describe, expect, test, beforeEach } from 'bun:test'
 import { Database } from 'bun:sqlite'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { resolve, join } from 'node:path'
+import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
@@ -22,8 +22,6 @@ import {
 } from '../src/services/runtime/opencode/sessionCapture'
 import type { Logger } from '../src/util/log'
 import { createRuntimeSessionCapturePersistence } from '../src/modules/task-execution/infrastructure/runtimeSessionCapturePersistence'
-
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 const capturePersistence = (db: DbClient) => createRuntimeSessionCapturePersistence(db)
 
@@ -144,7 +142,7 @@ describe('captureChildSessions', () => {
   let db: DbClient
   let nodeRunId: string
   beforeEach(async () => {
-    db = createInMemoryDb(MIGRATIONS)
+    db = createInMemoryDb()
     nodeRunId = await seedNodeRun(db)
   })
 

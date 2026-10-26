@@ -1,5 +1,6 @@
-// RFC-359 W44: share dependency JSON decoding without moving either original
-// row getter across its catch boundary. These are actual functions with pure read ports.
+// RFC-359 W44 / RFC-395 F-F1: preserve dependency order, missing-row semantics and
+// read-error identity through typed relations. Malformed epoch-1 JSON is covered by
+// rfc395-reference-target-relations; the remaining outputs JSON keeps its codec contract.
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import ts from 'typescript'
@@ -36,60 +37,66 @@ function loadActualOwner(side: Side, ports: Record<string, unknown>) {
 }
 
 interface Control {
-  readonly raw: string
+  readonly ids: readonly string[]
+  readonly missing?: boolean
   readonly rowError?: Error
-  readonly parseLookupError?: Error
-  readonly decode?: (raw: string) => unknown
   readonly hold?: Promise<void>
   readonly readError?: Error
+  readonly relationError?: Error
 }
 
 function scenario(side: Side, control: Control) {
   const events: string[] = []
   const parsed: { id: string; value: readonly string[] | undefined }[] = []
-  const queries: { id: string; columns: string[]; terminal: 'limit' | 'get' }[] = []
-  const readErrors: { id: string; error: unknown }[] = []
-  const table = { id: Symbol('agent-id'), dependsOn: Symbol('agent-dependencies') }
+  const queries: { id: string; table: 'agents' | 'dependencies'; terminal: 'limit' | 'orderBy' }[] =
+    []
+  const table = { id: Symbol('agent-id') }
+  const dependencies = {
+    agentId: Symbol('parent-id'),
+    dependencyAgentId: Symbol('dependency-id'),
+    ordinal: Symbol('ordinal'),
+  }
   const transaction = {
     select(projection: Record<string, unknown>) {
-      const columns = Object.keys(projection)
-      for (const column of columns) {
-        if (projection[column] !== table[column as keyof typeof table]) {
-          throw new Error('original projection changed')
-        }
-      }
+      expect(Object.keys(projection)).toEqual(['id'])
       return {
         from(received: unknown) {
-          if (received !== table) throw new Error('original table changed')
+          const parent = received === table
+          expect(received).toBe(parent ? table : dependencies)
+          expect(projection.id).toBe(parent ? table.id : dependencies.dependencyAgentId)
           return {
             where(condition: { column: unknown; id: string }) {
-              if (condition.column !== table.id) throw new Error('original equality changed')
-              const load = async () => {
-                events.push(`read:${condition.id}`)
-                if (condition.id === 'loaded' && control.hold !== undefined) await control.hold
-                if (condition.id === 'loaded' && control.readError !== undefined) {
-                  throw control.readError
-                }
-                return {
-                  id: condition.id,
-                  get dependsOn() {
-                    events.push(`row-get:${condition.id}`)
-                    if (condition.id === 'loaded' && control.rowError !== undefined) {
-                      throw control.rowError
-                    }
-                    return condition.id === 'loaded' ? control.raw : '[]'
-                  },
-                }
-              }
+              expect(condition.column).toBe(parent ? table.id : dependencies.agentId)
               return {
                 async limit(count: number) {
-                  if (count !== 1) throw new Error('original limit changed')
-                  queries.push({ id: condition.id, columns, terminal: 'limit' })
-                  return [await load()]
+                  expect(parent).toBe(true)
+                  expect(count).toBe(1)
+                  queries.push({ id: condition.id, table: 'agents', terminal: 'limit' })
+                  events.push(`parent:${condition.id}`)
+                  if (condition.id === 'loaded' && control.readError !== undefined)
+                    throw control.readError
+                  return condition.id === 'loaded' && control.missing ? [] : [{ id: condition.id }]
                 },
-                get() {
-                  queries.push({ id: condition.id, columns, terminal: 'get' })
-                  return load()
+                async orderBy(order: { column: unknown; direction: string }) {
+                  expect(parent).toBe(false)
+                  expect(order).toEqual({ column: dependencies.ordinal, direction: 'asc' })
+                  queries.push({ id: condition.id, table: 'dependencies', terminal: 'orderBy' })
+                  events.push(`references:${condition.id}`)
+                  if (condition.id !== 'loaded') return []
+                  if (control.hold !== undefined) await control.hold
+                  if (control.relationError !== undefined) throw control.relationError
+                  // Storage order deliberately differs from ordinal order.
+                  return control.ids
+                    .map((id, ordinal) => ({ id, ordinal }))
+                    .reverse()
+                    .sort((a, b) => a.ordinal - b.ordinal)
+                    .map(({ id }) => ({
+                      get id() {
+                        events.push('reference-get')
+                        if (control.rowError !== undefined) throw control.rowError
+                        return id
+                      },
+                    }))
                 },
               }
             },
@@ -98,43 +105,29 @@ function scenario(side: Side, control: Control) {
       }
     },
   }
-  function extract(file: string, name: string): string {
-    const text = readFileSync(new URL(file, import.meta.url), 'utf8')
-    const ast = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true)
-    const fn = ast.statements.find(
-      (node): node is ts.FunctionDeclaration =>
-        ts.isFunctionDeclaration(node) && node.name?.text === name,
-    )
-    if (fn === undefined) throw new Error(`missing ${name}`)
-    return new Bun.Transpiler({ loader: 'ts' }).transformSync(
-      fn.getText(ast).replace(/^export /, ''),
-    )
-  }
-  const decode = new Function(
-    'JSON',
-    `${extract('../src/modules/resource-catalog/infrastructure/agentReferenceCodec.ts', 'decodeAgentReferenceIds')}\nreturn decodeAgentReferenceIds;`,
-  )({
-    get parse() {
-      events.push('parse-get')
-      if (control.parseLookupError !== undefined) throw control.parseLookupError
-      return (raw: string) => {
-        events.push('parse-call')
-        return control.decode === undefined ? JSON.parse(raw) : control.decode(raw)
-      }
-    },
-  })
+  const file = '../src/modules/resource-catalog/infrastructure/agentDependencyRead.ts'
+  const source = readFileSync(new URL(file, import.meta.url), 'utf8')
+  const ast = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true)
+  const fn = ast.statements.find(
+    (node): node is ts.FunctionDeclaration =>
+      ts.isFunctionDeclaration(node) && node.name?.text === 'createAgentDependencyReadPort',
+  )
+  if (fn === undefined) throw new Error('missing dependency reader')
+  const javascript = new Bun.Transpiler({ loader: 'ts' }).transformSync(
+    fn.getText(ast).replace(/^export /, ''),
+  )
   const createReader = new Function(
     'tablesOf',
     'eq',
-    'decodeAgentReferenceIds',
-    `${extract('../src/modules/resource-catalog/infrastructure/agentDependencyRead.ts', 'createAgentDependencyReadPort')}\nreturn createAgentDependencyReadPort;`,
+    'asc',
+    `${javascript}\nreturn createAgentDependencyReadPort;`,
   )(
     (handle: unknown) => {
       expect(handle).toBe(transaction)
-      return { agents: table }
+      return { agents: table, agentDependencies: dependencies }
     },
     (column: unknown, id: string) => ({ column, id }),
-    decode,
+    (column: unknown) => ({ column, direction: 'asc' }),
   )
   const owner = loadActualOwner(side, {
     ValidationError,
@@ -143,126 +136,75 @@ function scenario(side: Side, control: Control) {
       assertAgentDependencyGraph({
         ...input,
         load: async (dependencyId) => {
-          try {
-            const value = await input.load(dependencyId)
-            parsed.push({ id: dependencyId, value })
-            return value
-          } catch (error) {
-            readErrors.push({ id: dependencyId, error })
-            throw error
-          }
+          const value = await input.load(dependencyId)
+          parsed.push({ id: dependencyId, value })
+          return value
         },
       }),
   })
-  return {
-    run: () => owner(transaction, 'candidate', ['loaded']),
-    events,
-    parsed,
-    queries,
-    readErrors,
-    side,
-    raw: control.raw,
-  }
+  return { run: () => owner(transaction, 'candidate', ['loaded']), events, parsed, queries }
 }
 
 for (const side of ['semantics', 'package'] as const) {
-  describe(`RFC-359 W44 dependency JSON ${side}`, () => {
-    test('the actual loader retains string order, duplicates, empty strings and parse fallbacks', async () => {
-      const inputs: { raw: string; expected: string[] }[] = [
-        {
-          raw: '["leaf","leaf","",null,2,false,{},[],"tail"]',
-          expected: ['leaf', 'leaf', '', 'tail'],
-        },
-        { raw: '["雪","é"]', expected: ['雪', 'é'] },
-        { raw: '[]', expected: [] },
-        { raw: 'null', expected: [] },
-        { raw: '{}', expected: [] },
-        { raw: '"scalar"', expected: [] },
-        { raw: '17', expected: [] },
-        { raw: 'false', expected: [] },
-        { raw: '', expected: [] },
-        { raw: '[invalid', expected: [] },
-      ]
-      for (const input of inputs) {
-        const s = scenario(side, input)
+  describe(`RFC-359 W44 / RFC-395 dependency relations ${side}`, () => {
+    test('the actual loader retains ordinal order, duplicates, empty strings and Unicode', async () => {
+      for (const ids of [['leaf', 'leaf', '', 'tail'], ['雪', 'é'], []]) {
+        const s = scenario(side, { ids })
         await s.run()
-        expect(s.parsed[0]?.value).toEqual(input.expected)
-        expect(s.queries[0]).toEqual({
-          id: 'loaded',
-          columns: side === 'semantics' ? ['dependsOn'] : ['id', 'dependsOn'],
-          terminal: 'limit',
-        })
+        expect(s.parsed[0]?.value).toEqual(ids)
+        expect(s.queries.slice(0, 2)).toEqual([
+          { id: 'loaded', table: 'agents', terminal: 'limit' },
+          { id: 'loaded', table: 'dependencies', terminal: 'orderBy' },
+        ])
       }
     })
 
-    test('the row getter keeps its original position relative to the parse catch', async () => {
-      const originalError = new Error('controlled row getter failure')
-      const s = scenario(side, { raw: '[]', rowError: originalError })
-      if (side === 'semantics') {
-        await s.run()
-        expect(s.parsed[0]?.value).toEqual([])
-        expect(s.events).toEqual(['read:loaded', 'parse-get', 'row-get:loaded'])
-      } else {
-        await expect(s.run()).rejects.toBe(originalError)
-        expect(s.events).toEqual(['read:loaded', 'row-get:loaded'])
+    test('a missing parent remains distinct from an existing agent with no references', async () => {
+      const absent = scenario(side, { ids: [], missing: true })
+      await expect(absent.run()).rejects.toMatchObject({ code: 'agent-dependency-not-found' })
+      expect(absent.parsed).toEqual([{ id: 'loaded', value: undefined }])
+      expect(absent.queries).toEqual([{ id: 'loaded', table: 'agents', terminal: 'limit' }])
+      const empty = scenario(side, { ids: [] })
+      await empty.run()
+      expect(empty.parsed).toEqual([{ id: 'loaded', value: [] }])
+    })
+
+    test('parent, relation and row getter errors propagate without a JSON fallback', async () => {
+      const error = new Error('controlled dependency read failure')
+      for (const fault of ['readError', 'relationError', 'rowError'] as const) {
+        const s = scenario(side, { ids: ['leaf'], [fault]: error })
+        await expect(s.run()).rejects.toBe(error)
+        expect(s.parsed).toEqual([])
+        expect(s.events).toEqual(
+          fault === 'readError'
+            ? ['parent:loaded']
+            : fault === 'relationError'
+              ? ['parent:loaded', 'references:loaded']
+              : ['parent:loaded', 'references:loaded', 'reference-get'],
+        )
       }
     })
 
-    test('parse lookup, execution and filter errors keep the original empty-array fallback', async () => {
-      const error = new Error('controlled decode failure')
-      const values: unknown[] = []
-      Object.defineProperty(values, 'filter', {
-        get() {
-          throw error
-        },
-      })
-      const controls: Control[] = [
-        { raw: '[]', parseLookupError: error },
-        {
-          raw: '[]',
-          decode: () => {
-            throw error
-          },
-        },
-        { raw: '[]', decode: () => values },
-      ]
-      for (const [index, control] of controls.entries()) {
-        const s = scenario(side, control)
-        await s.run()
-        expect(s.parsed[0]?.value).toEqual([])
-        if (index === 0) {
-          expect(s.events).toEqual(
-            side === 'semantics'
-              ? ['read:loaded', 'parse-get']
-              : ['read:loaded', 'row-get:loaded', 'parse-get'],
-          )
-        }
-      }
-    })
-
-    test('the original transaction read remains awaited and rejects with the same error', async () => {
+    test('the relation read is awaited before graph traversal completes', async () => {
       let release!: () => void
       const hold = new Promise<void>((resolve) => {
         release = resolve
       })
-      const s = scenario(side, { raw: '[]', hold })
+      const s = scenario(side, { ids: [], hold })
       let completed = false
       const running = s.run().then(() => {
         completed = true
       })
       try {
+        await Promise.resolve()
         expect(completed).toBe(false)
-        expect(s.events).toEqual(['read:loaded'])
+        expect(s.events).toEqual(['parent:loaded', 'references:loaded'])
         expect(s.parsed).toEqual([])
       } finally {
         release()
         await running
       }
-      expect(s.parsed[0]?.value).toEqual([])
-      const error = new Error('controlled read rejection')
-      const rejected = scenario(side, { raw: '[]', readError: error })
-      await expect(rejected.run()).rejects.toBe(error)
-      expect(rejected.events).toEqual(['read:loaded'])
+      expect(s.parsed).toEqual([{ id: 'loaded', value: [] }])
     })
   })
 }
@@ -291,11 +233,7 @@ function checkStringDecoder(file: string, name: string, fields: readonly string[
   }
   visit(ast)
   expect(calls.map((call) => call.getText(ast).replace(/\s+/g, ' '))).toEqual(
-    fields.map((field) =>
-      file.endsWith('agentDependencyRead.ts')
-        ? `${name}(source === 'semantics' ? () => row.${field} : row.${field})`
-        : `${name}(row.${field})`,
-    ),
+    fields.map((field) => `${name}(row.${field})`),
   )
   const javascript = new Bun.Transpiler({ loader: 'ts' }).transformSync(
     declarations[0].getText(decoderAst).replace(/^export /, ''),
@@ -402,22 +340,32 @@ test('RFC-359 W49 persistence decoder preserves ordered values and catch boundar
   checkStringDecoder(
     '../src/modules/resource-catalog/infrastructure/agentPersistence.ts',
     'decodeAgentReferenceIds',
-    ['outputs', 'dependsOn', 'mcp', 'plugins'],
+    ['outputs'],
   )
 })
 
-test('RFC-359 W49 Intent decoder preserves ordered values and catch boundaries', () => {
-  checkStringDecoder(
-    '../src/modules/resource-catalog/infrastructure/agentDependencyRead.ts',
-    'decodeAgentReferenceIds',
-    ['dependsOn'],
+test('RFC-359 W49 / W50 Intent and catalog use the ordered relation reader', () => {
+  for (const file of [
+    'aggregateAdapters/intentApplyResourcePorts.ts',
+    'digitalEmployeeAgentTemplateCatalog.ts',
+  ]) {
+    const source = readFileSync(
+      new URL(`../src/modules/resource-catalog/infrastructure/${file}`, import.meta.url),
+      'utf8',
+    )
+    expect(source).toContain('load: createAgentDependencyReadPort(transaction).load')
+    expect(source).not.toMatch(/decodeAgentReferenceIds\(row\.(?:dependsOn|mcp|plugins)\)/)
+  }
+  const reader = readFileSync(
+    new URL(
+      '../src/modules/resource-catalog/infrastructure/agentDependencyRead.ts',
+      import.meta.url,
+    ),
+    'utf8',
   )
-})
-
-test('RFC-359 W50 catalog decoder preserves ordered values and catch boundaries', () => {
-  checkStringDecoder(
-    '../src/modules/resource-catalog/infrastructure/agentDependencyRead.ts',
-    'decodeAgentReferenceIds',
-    ['dependsOn'],
-  )
+  expect(reader).toContain('tablesOf(db)')
+  expect(reader).toContain('from(agentDependencies)')
+  expect(reader).toContain('eq(agentDependencies.agentId, id)')
+  expect(reader).toContain('orderBy(asc(agentDependencies.ordinal))')
+  expect(reader).not.toMatch(/decodeAgentReferenceIds|JSON\.parse|\blike\s*\(/)
 })

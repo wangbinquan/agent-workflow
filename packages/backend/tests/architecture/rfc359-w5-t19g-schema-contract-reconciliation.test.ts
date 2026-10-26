@@ -70,8 +70,8 @@ import { describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
 
 import { migrateSqlite } from '@/platform/persistence/sqliteMigrator'
-import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
-import { buildPostgresqlSchemaPlan } from '@/platform/persistence/postgresqlSchema'
+import { buildFrozenEpoch1LogicalSchemaContract as buildLogicalSchemaContract } from '@/platform/persistence/migration/epoch1/contract'
+import { buildPostgresqlSchemaPlan } from '@/platform/persistence/migration/legacy/postgresqlSchema'
 
 const MIGRATIONS_FOLDER = resolve(import.meta.dir, '..', '..', 'db', 'migrations')
 
@@ -85,8 +85,9 @@ import {
   nativeTriggerProtections,
   reconcile,
   sortEntries,
+  type SchemaProtection,
 } from '../helpers/schemaReconciliation'
-import type { SchemaProtection } from '../helpers/schemaReconciliation'
+
 export {
   readSqliteMaster,
   migratedProtections,

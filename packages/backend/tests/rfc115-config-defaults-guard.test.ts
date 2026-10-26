@@ -1,168 +1,48 @@
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
-import { composeFileRuntimeLegacyConfiguration } from '../src/modules/runtime-management/composition/runtimeRegistry'
-// RFC-115 (Codex impl-gate F-high) — assertConfigDefaultsMigrated fail-loud
-// guard for the CONFIG-only skip-upgrade data-loss path.
-//
-// WHY THIS FILE EXISTS: PR-D dropped the 6 generation-default config keys
-// (defaultModel / defaultVariant / defaultTemperature / defaultSteps /
-// defaultMaxSteps / defaultClaudeModel) from ConfigSchema, so loadConfig() (Zod)
-// strips them silently. RFC-113 had backfilled them into the built-in runtime
-// rows' profile. A DB that jumps pre-RFC-113 → HEAD keeps those keys on disk but
-// never ran that backfill — silently continuing would change every inherited
-// runtime's default model (and the next config save deletes them from disk). The
-// 0057 agents guard does NOT cover this config-only case; this guard is its
-// symmetric counterpart. It reads the RAW config and ABORTs when legacy defaults
-// are present while every built-in runtime profile is still NULL.
-
-import { expect, test, beforeEach, afterEach } from 'bun:test'
-import { describeEachProvider } from './helpers/eachProvider'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
-import { eq } from 'drizzle-orm'
-import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
+// RFC-115 config loss cases enter B before parsing strips legacy defaults.
+import { expect, test } from 'bun:test'
 import {
-  assertConfigDefaultsMigrated,
-  seedBuiltinRuntimes,
-} from './helpers/runtimeRegistryApplication'
-import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
+  runtimeConfigBlock,
+  type RuntimeConfigFact,
+} from '@/modules/runtime-management/infrastructure/migration/runtimeConfigRule'
+const base: RuntimeConfigFact = {
+  state: 'present',
+  source: 'config.json',
+  opencodePath: null,
+  claudeCodePath: null,
+  legacyDefaults: {},
+  profiles: [],
+}
+test.each([
+  'defaultModel',
+  'defaultVariant',
+  'defaultTemperature',
+  'defaultSteps',
+  'defaultMaxSteps',
+  'defaultClaudeModel',
+])('%s with missing/all-null canonical profiles blocks conversion', (key) => {
+  expect(runtimeConfigBlock({ ...base, legacyDefaults: { [key]: 'legacy' } })).toBe(
+    'v2-boot-runtime-defaults-unmigrated',
+  )
+})
+test('a persisted canonical profile proves defaults survived the old upgrade', () => {
+  expect(
+    runtimeConfigBlock({
+      ...base,
+      legacyDefaults: { defaultModel: 'legacy' },
+      profiles: [
+        { id: 'canonical', name: 'opencode', protocol: 'opencode', values: { model: 'legacy' } },
+      ],
+    }),
+  ).toBeNull()
+})
+test('absent/default-free config is accepted; unreadable source requires evidence', () => {
+  expect(runtimeConfigBlock(base)).toBeNull()
+  expect(runtimeConfigBlock({ ...base, state: 'absent' })).toBeNull()
+  expect(runtimeConfigBlock({ ...base, state: 'unavailable' })).toBe(
+    'v2-boot-runtime-config-unproven',
+  )
+  expect(runtimeConfigBlock({ ...base, state: 'invalid' })).toBe('v2-boot-runtime-config-unproven')
+})
 
-describeEachProvider(
-  'RFC-115 assertConfigDefaultsMigrated — config skip-upgrade guard',
-  (harness) => {
-    let db: PersistenceDb
-    let tmp: string
-    let cfg: string
-    beforeEach(async () => {
-      db = harness.db
-      await seedBuiltinRuntimes(runtimeRegistryPersistence(db)) // built-in opencode / claude-code rows, profile NULL
-      tmp = mkdtempSync(join(tmpdir(), 'aw-cfg-guard-'))
-      cfg = join(tmp, 'config.json')
-    })
-    afterEach(() => rmSync(tmp, { recursive: true, force: true }))
-
-    test('asynchronous raw configuration preserves the same legacy-default decision', async () => {
-      const configuration = {
-        async readText() {
-          return JSON.stringify({ defaultClaudeModel: 'legacy-model' })
-        },
-      }
-      await expect(
-        assertConfigDefaultsMigrated(runtimeRegistryPersistence(db), configuration),
-      ).rejects.toThrow(/defaultClaudeModel/)
-      const { runtimes } = tablesOf(db)
-      await db
-        .update(runtimes)
-        .set({ model: 'legacy-model' })
-        .where(eq(runtimes.name, 'claude-code'))
-      await expect(
-        assertConfigDefaultsMigrated(runtimeRegistryPersistence(db), configuration),
-      ).resolves.toBeUndefined()
-    })
-
-    test('unreadable asynchronous legacy configuration retains the original boot fallback', async () => {
-      await expect(
-        assertConfigDefaultsMigrated(runtimeRegistryPersistence(db), {
-          async readText() {
-            throw new Error('raw configuration unavailable')
-          },
-        }),
-      ).resolves.toBeUndefined()
-    })
-
-    test('legacy defaults on disk + ALL built-in profiles NULL → ABORT (fail-loud)', async () => {
-      writeFileSync(cfg, JSON.stringify({ $schema_version: 1, defaultModel: 'anthropic/opus' }))
-      await expect(
-        assertConfigDefaultsMigrated(
-          runtimeRegistryPersistence(db),
-          composeFileRuntimeLegacyConfiguration(cfg),
-        ),
-      ).rejects.toThrow(/un-migrated generation defaults/)
-    })
-
-    test('legacy defaults on disk but a built-in profile is set (RFC-113 ran) → passes', async () => {
-      writeFileSync(cfg, JSON.stringify({ $schema_version: 1, defaultModel: 'anthropic/opus' }))
-      const { runtimes } = tablesOf(db)
-      // Simulate RFC-113's config→runtime backfill having migrated the default.
-      await db
-        .update(runtimes)
-        .set({ model: 'anthropic/opus' })
-        .where(eq(runtimes.name, 'opencode'))
-      await expect(
-        assertConfigDefaultsMigrated(
-          runtimeRegistryPersistence(db),
-          composeFileRuntimeLegacyConfiguration(cfg),
-        ),
-      ).resolves.toBeUndefined()
-    })
-
-    test('no legacy defaults in config → passes (normal upgraded / fresh config)', async () => {
-      writeFileSync(cfg, JSON.stringify({ $schema_version: 1, opencodePath: '/x' }))
-      await expect(
-        assertConfigDefaultsMigrated(
-          runtimeRegistryPersistence(db),
-          composeFileRuntimeLegacyConfiguration(cfg),
-        ),
-      ).resolves.toBeUndefined()
-    })
-
-    test('no config file (fresh install) → passes', async () => {
-      await expect(
-        assertConfigDefaultsMigrated(
-          runtimeRegistryPersistence(db),
-          composeFileRuntimeLegacyConfiguration(join(tmp, 'nonexistent.json')),
-        ),
-      ).resolves.toBeUndefined()
-    })
-
-    test('defaultClaudeModel alone also triggers the guard (names the offending key)', async () => {
-      writeFileSync(cfg, JSON.stringify({ $schema_version: 1, defaultClaudeModel: 'claude-opus' }))
-      await expect(
-        assertConfigDefaultsMigrated(
-          runtimeRegistryPersistence(db),
-          composeFileRuntimeLegacyConfiguration(cfg),
-        ),
-      ).rejects.toThrow(/defaultClaudeModel/)
-    })
-
-    // F4 (Codex gate followup): built-ins absent + legacy config must STILL abort —
-    // the config-loss risk is real (loadConfig already stripped the keys, no runtime
-    // profile preserves them, the next save deletes the only copy). The fix is an
-    // ACCURATE message that names the seed-failure possibility, NOT skipping the
-    // guard (my first F4 attempt returned here and reopened the data-loss path).
-    test('built-ins absent (seed failed) + legacy config → ABORTs with seed-aware message', async () => {
-      const { runtimes } = tablesOf(db)
-      await db.delete(runtimes) // simulate seedBuiltinRuntimes never having run
-      writeFileSync(cfg, JSON.stringify({ $schema_version: 1, defaultModel: 'anthropic/opus' }))
-      await expect(
-        assertConfigDefaultsMigrated(
-          runtimeRegistryPersistence(db),
-          composeFileRuntimeLegacyConfiguration(cfg),
-        ),
-      ).rejects.toThrow(/seed failed|rows are missing or all-NULL/)
-    })
-
-    test('RFC-153 F3: a user row reusing a preseeded NAME under a mismatched protocol does NOT satisfy the guard', async () => {
-      const { runtimes } = tablesOf(db)
-      // Delete the canonical opencode row and recreate 'opencode' as a claude-code
-      // row WITH a model. The name matches BUILTIN_NAMES but protocol !== name, so it
-      // must NOT count as proof the RFC-113 backfill preserved the legacy defaults —
-      // the surviving canonical claude-code row is still all-NULL → still ABORT.
-      await db.delete(runtimes).where(eq(runtimes.name, 'opencode'))
-      await insertOne(db, runtimes, {
-        id: 'r-fake-oc',
-        name: 'opencode',
-        protocol: 'claude-code',
-        model: 'anthropic/opus',
-      })
-      writeFileSync(cfg, JSON.stringify({ $schema_version: 1, defaultModel: 'anthropic/opus' }))
-      await expect(
-        assertConfigDefaultsMigrated(
-          runtimeRegistryPersistence(db),
-          composeFileRuntimeLegacyConfiguration(cfg),
-        ),
-      ).rejects.toThrow(/un-migrated generation defaults/)
-    })
-  },
-)
+// The wrong-protocol canonical-name case is exercised by the frozen-source
+// conversion matrix in rfc395-boot-runtime-config.test.ts (wrong-protocol).

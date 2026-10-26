@@ -1,3 +1,4 @@
+import { tablesOf } from '@/platform/persistence/sessionTables'
 // RFC-357 —— 「同一份列表页查询在两个 provider 上跑」的**前提清单**，逐条可执行地钉住。
 //
 // 为什么这条测试存在：`docs/dev-gotchas.md` §「SQL 长得一样」证明不了「两个 provider 行为
@@ -9,15 +10,14 @@
 // 真库执行面由 `rfc357-postgresql-page.integration.test.ts` + CI 的 postgres lane 承担；
 // 这个文件只负责前提与源码形状，普通跑批里就能跑。
 
-import { tablesOf } from '@/platform/persistence/sessionTables'
-import { schemaFixtureDb } from './helpers/schemaFixture'
-import { describe, expect, test } from 'bun:test'
 import { Database } from 'bun:sqlite'
+import { describe, expect, test } from 'bun:test'
 import { readFileSync, readdirSync } from 'node:fs'
 import { resolve } from 'node:path'
+import { schemaFixtureDb } from './helpers/schemaFixture'
 
-import { PgDialect } from 'drizzle-orm/pg-core'
 import { sql } from 'drizzle-orm'
+import { PgDialect } from 'drizzle-orm/pg-core'
 
 const PAGE_DIR = resolve(
   import.meta.dir,

@@ -1,3 +1,5 @@
+import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
+import { createEpoch2PostgresqlMetadata } from './helpers/epoch2PostgresqlMetadata'
 import { o2Ports } from './helpers/o2Closure'
 // RFC-349 T5/C2 — the task-execution provider adapters share one Promise
 // ownership contract.  This oracle locks the SQLite behavior and proves the
@@ -6,7 +8,6 @@ import { o2Ports } from './helpers/o2Closure'
 import { taskFixture, taskRepoFixture } from './helpers/model'
 import { withNativeTransactions } from './helpers/nativeTransactions'
 import { describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
 
 import { createInMemoryDb } from '@/db/client'
 import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
@@ -40,8 +41,6 @@ import type {
   SqlRows,
 } from '@/platform/persistence/postgresqlRuntime'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-
 interface Response {
   readonly objects?: readonly Record<string, unknown>[]
   readonly values?: readonly (readonly unknown[])[]
@@ -62,12 +61,15 @@ function rows(response: Response): SqlRows {
 
 function postgresqlFixture(responses: Response[]) {
   const executions: Array<{ readonly sql: string; readonly parameters?: readonly unknown[] }> = []
+  const epoch2Metadata = createEpoch2PostgresqlMetadata()
   const run = (query: string, parameters?: readonly unknown[]) => {
     executions.push({ sql: query, parameters })
+    const metadata = epoch2Metadata(query)
+    if (metadata) return metadata
     // RFC-349: the one-shot live-write marker and the per-transaction
     // generation fence are infrastructure, not part of the adapter contract
     // each case queues responses for. Answer them without consuming the queue.
-    if (query.includes('database_generations'))
+    if (query.includes('generations'))
       return rows({ objects: [{ generation_id: 'dbg_task_execution_pg' }] })
     return rows(responses.shift() ?? {})
   }
@@ -102,7 +104,7 @@ function postgresqlFixture(responses: Response[]) {
 
 describe('RFC-349 task-execution provider adapters', () => {
   test('SQLite aggregate admits, claims, and heartbeats through Promise ports', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createInMemoryDb()
     // RFC-395 II-a: the aggregate must observe committed fixture writes.
     await taskFixture(db, {
       id: 'task-1',
@@ -135,6 +137,7 @@ describe('RFC-349 task-execution provider adapters', () => {
       worktreePath: '/tmp/worktree',
     })
     const persistence = createTaskExecutionPersistence(db, {
+      historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
       recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
     })
     await expect(persistence.drive.load('task-1')).resolves.toMatchObject({
@@ -272,14 +275,21 @@ describe('RFC-349 task-execution provider adapters', () => {
       ownerRevision: 3,
     })
     // RFC-359 W4-B1 批 2d：统一写事务在 PG 上是 READ COMMITTED（不再有 SET TRANSACTION 一句），
-    // 语句序列为 BEGIN → owner 围栏 UPDATE → task_repos UPDATE → COMMIT；上下文必须由
+    // 语句序列为 BEGIN → owner 围栏 UPDATE → task 聚合根锁 → task_repository_mounts UPDATE → COMMIT；上下文必须由
     // createTaskExecutionContext 铸造（SQLite 正身的 assertTaskExecutionContext 现在两侧同一规则）。
-    const fake = postgresqlFixture([{}, { values: [[9]] }, { values: [[0]] }, {}])
-    const db = createInMemoryDb(MIGRATIONS)
+    const fake = postgresqlFixture([
+      {},
+      { values: [[9]] },
+      { values: [['task-1']] },
+      { values: [[0]] },
+      {},
+    ])
+    const db = createInMemoryDb()
     const executionContext = createTaskExecutionContext({
       intentId: 'intent-1',
       token,
       persistence: createTaskExecutionPersistence(db, {
+        historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
         recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
       }),
     })
@@ -298,7 +308,9 @@ describe('RFC-349 task-execution provider adapters', () => {
 
     const statements = fake.executions.map((execution) => execution.sql.toLowerCase())
     expect(statements.findIndex((sql) => sql.includes('task_execution_owners'))).toBeLessThan(
-      statements.findIndex((sql) => sql.includes('update "agent_workflow"."task_repos"')),
+      statements.findIndex((sql) =>
+        sql.includes('update "agent_workflow"."task_repository_mounts"'),
+      ),
     )
   })
 
@@ -341,7 +353,7 @@ describe('RFC-349 task-execution provider adapters', () => {
         }
       })
 
-    const sqlite = createInMemoryDb(MIGRATIONS)
+    const sqlite = createInMemoryDb()
     const participant = {
       async loadAuthorized(
         authority: ResourceRequestContext,

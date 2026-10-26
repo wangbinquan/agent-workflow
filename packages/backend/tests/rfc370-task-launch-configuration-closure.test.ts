@@ -1,3 +1,4 @@
+import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { o2Ports } from './helpers/o2Closure'
 import { withSourceControlTaskPorts } from './helpers/sourceControlTaskPorts'
 // RFC-395 II-pre：改接生产启动 / 读取路径，保留原断言意图。
@@ -441,6 +442,7 @@ describeEachProvider('RFC-370 selected task caller and repository budget closure
       startedAt: 1,
     })
     const persistence = createTaskExecutionPersistence(harness.db, {
+      historyRestrictions: epoch2RuntimeTestPorts(harness.db).historyRestrictions,
       recoveryHumanGates: o2Ports(harness.db).collaborationReads.recovery,
     })
     await submitTaskContinuation(persistence.intents, {

@@ -1,69 +1,63 @@
+import type { HistoryRestrictionPort } from '@/platform/contracts/historyRestriction'
 import {
-  createNodeRunQueries,
-  createNodeOutputQueries,
+  createRunHistorySnapshot,
+  createRunHistoryBatchSnapshot,
 } from '@/modules/task-execution/public/queries'
+import { createRunSelectionReader } from '@/modules/task-execution/public/queries'
+import {
+  cleanupMaterializedSpaceLease,
+  composeWorkspaceMaintenanceCommand,
+  createFileWorkspacePresenceQueries,
+  createMaterializedSpaceCleanup,
+  materializeSpaceWithProvider,
+  type MaterializedRepo,
+  type MaterializedSpace,
+  type MaterializedSpaceCleanup,
+  type PlannedSpaceLayout,
+  type WorkspaceCleanupHookEvent,
+} from '@/modules/source-control/composition'
+import type { WorkspacePresenceQueries } from '@/modules/source-control/public/queries'
+import { createTaskPreparationParticipantInTx } from '@/modules/task-execution/public/participants'
 import type {
-  NodeRunFactSnapshot,
   NodeRunCheckpointSnapshot,
+  NodeRunFactSnapshot,
 } from '@/modules/task-execution/public/queries'
-import { deriveNodeRunRole } from '@/modules/task-execution/public/types'
-import { isTaskWorkspaceUnbound } from '@agent-workflow/shared'
-import { decodeRequestedSource } from '@/platform/persistence/taskRepositorySurface'
 import {
+  createNodeOutputQueries,
+  createNodeRunQueries,
   createTaskDetailQueries,
   createTaskPreparationQueries,
   createTaskTriggerQueries,
 } from '@/modules/task-execution/public/queries'
-import { createTaskPreparationParticipantInTx } from '@/modules/task-execution/public/participants'
+import { nodeRunMintIdentityForSlot } from '@/modules/task-execution/public/types'
 import { tablesOf } from '@/platform/persistence/sessionTables'
-import {
-  type MaterializedRepo,
-  type MaterializedSpace,
-  type WorkspaceCleanupHookEvent,
-  type MaterializedSpaceCleanup,
-  createMaterializedSpaceCleanup,
-  cleanupMaterializedSpaceLease,
-  type PlannedSpaceLayout,
-  materializeSpaceWithProvider,
-  createFileWorkspacePresenceQueries,
-  composeWorkspaceMaintenanceCommand,
-} from '@/modules/source-control/composition'
-import type { WorkspacePresenceQueries } from '@/modules/source-control/public/queries'
+import { decodeRequestedSource } from '@/platform/persistence/taskRepositorySurface'
+import { isTaskWorkspaceUnbound } from '@agent-workflow/shared'
 // Task service — continuation and retained read projections.
 // Cancel/resume/retry land in P-1-15 + M3 (P-3-08, P-3-09).
 
-import type { PersistenceTx } from '@/platform/persistence/persistenceDb'
+import {
+  eq,
+  type LegacyProviderNeutralDatabase,
+  type LegacySqliteTaskDatabase,
+} from '@/modules/task-execution/infrastructure/legacySqliteTransportMechanisms'
 import { assertWorktreePresentForResume } from '@/modules/task-execution/public/participants'
 import {
   resolveTaskLaunchRuntimeConfiguration,
   resolveTaskSubagentLiveCapture,
   type TaskLaunchConfigurationQueries,
 } from '@/modules/task-execution/public/queries'
+import type { PersistenceTx } from '@/platform/persistence/persistenceDb'
 import type {
-  ScriptLanguage,
-  GitCommitIdentity,
+  DwState,
   FailureCode,
-  StartTask,
-  Task,
-} from '@agent-workflow/shared'
-import type { DwState } from '@agent-workflow/shared'
-import {
-  isRetryableGitFailure,
-  DAEMON_SHUTDOWN_ABORT_REASON,
-  isDaemonInterruptionAbortReason,
-  REPO_PREP_NODE_ID,
-  WorkflowDefinitionSchema,
-  allowedFromForTaskEvent,
-  diffWorkflowForSync,
-  isTerminalNodeRunStatus,
-  migrateWorkflowDefinitionToLatest,
-  planCanonicalWorkflowLayout,
-  parseTriggerContextJson,
-} from '@agent-workflow/shared'
-import type {
+  GitCommitIdentity,
   Language,
   NodeRunStatus,
   NodeRunSyncSummary,
+  ScriptLanguage,
+  StartTask,
+  Task,
   TaskStatus,
   TaskTransitionEvent,
   Workflow,
@@ -71,28 +65,37 @@ import type {
   WorkflowSyncPreview,
 } from '@agent-workflow/shared'
 import {
-  eq,
-  type LegacySqliteTaskDatabase,
-  type LegacyProviderNeutralDatabase,
-} from '@/modules/task-execution/infrastructure/legacySqliteTransportMechanisms'
+  DAEMON_SHUTDOWN_ABORT_REASON,
+  REPO_PREP_NODE_ID,
+  WorkflowDefinitionSchema,
+  allowedFromForTaskEvent,
+  diffWorkflowForSync,
+  isDaemonInterruptionAbortReason,
+  isRetryableGitFailure,
+  isTerminalNodeRunStatus,
+  migrateWorkflowDefinitionToLatest,
+  parseTriggerContextJson,
+  planCanonicalWorkflowLayout,
+} from '@agent-workflow/shared'
 import { existsSync, readdirSync } from 'node:fs'
 
+import type { SecretBox } from '@/auth/secretBox'
+import { setDwStateTx } from '@/services/workgroup/state'
 import { join } from 'node:path'
 import { ulid } from 'ulid'
-import { setDwStateTx } from '@/services/workgroup/state'
-import type { SecretBox } from '@/auth/secretBox'
 
-import { buildWorkflowValidationContext, validateWorkflowDef } from '@/services/workflow.validator'
-import { materializingSpaces } from '@/platform/workspace/materializingSpaces'
-import { rollbackNodeRunWorktrees } from '@/services/nodeRollback'
-import { composeGateContinuationPreDrive } from '@/modules/task-execution/composition/gateContinuationPreDrive'
-import type { RollbackOutcome, RollbackRunRow } from '@/services/nodeRollback'
-import { killStaleRunProcessTree } from '@/util/process'
-import type { StaleRunKillOutcome } from '@/util/process'
 import type { MemoryDistillEnqueuer } from '@/modules/memory/public/participants'
-import type { TaskRecoveryOperations } from '@/modules/task-execution/application/ports/taskRecoveryOperations'
 import type { RuntimeSessionLeaseOperations } from '@/modules/task-execution/application/ports/runtimeSessionLeaseOperations'
+import type { TaskRecoveryOperations } from '@/modules/task-execution/application/ports/taskRecoveryOperations'
+import { composeGateContinuationPreDrive } from '@/modules/task-execution/composition/gateContinuationPreDrive'
+import { materializingSpaces } from '@/platform/workspace/materializingSpaces'
+import { setNodeRunStatus, setTaskStatus, transitionTaskStatusByEvent } from '@/services/lifecycle'
+import type { RollbackOutcome, RollbackRunRow } from '@/services/nodeRollback'
+import { rollbackNodeRunWorktrees } from '@/services/nodeRollback'
+import { recordRecoveryEvent } from '@/services/recovery'
+import { repairRuntimeSessionLeasesAfterOrphanReap } from '@/services/runtimeSessionLease'
 import {
+  TaskExecutionError,
   createLocalEffectAttemptObserver,
   currentTaskExecutionContext,
   fenceTaskWrite,
@@ -100,23 +103,35 @@ import {
   withTaskExecutionWrite,
   type TaskExecutionIntentKind,
   type TaskExecutionIntentSource,
-  TaskExecutionError,
 } from '@/services/taskExecutionParticipants'
-import { repairRuntimeSessionLeasesAfterOrphanReap } from '@/services/runtimeSessionLease'
-import { recordRecoveryEvent } from '@/services/recovery'
-import { setNodeRunStatus, setTaskStatus, transitionTaskStatusByEvent } from '@/services/lifecycle'
+import { buildWorkflowValidationContext, validateWorkflowDef } from '@/services/workflow.validator'
+import type { StaleRunKillOutcome } from '@/util/process'
+import { killStaleRunProcessTree } from '@/util/process'
 // RFC-359 W10 —— 中立异步孪生（两个引擎共用），从 public 合同出去；与 `@/services/lifecycle`
 // 上同名的 bun:sqlite 专属**同步**版按名字区分开。
+import { SYSTEM_USER_ID } from '@/auth/actor'
 import {
+  composeSqliteRepositoryWorkspaceStore,
+  type RepositoryWorkspaceStore,
+} from '@/modules/source-control/composition'
+import { selectResumeRollbackTargets as selectResumeRollbackTargetsWithSelection } from '@/modules/task-execution/application/resumeRollbackTargets'
+import { composeAgentRunDistillObserver } from '@/modules/task-execution/composition/agentRunDistillObserver'
+import * as taskDriveComposition from '@/modules/task-execution/composition/taskDriveLegacy'
+import { assertFrozenTaskTriggerPreflight } from '@/modules/task-execution/infrastructure/frozenTaskTriggerPreflight'
+import type { SchedulerDriverPort } from '@/modules/task-execution/public/commands'
+import {
+  builtinWorkflowSyncPreview,
   setNodeRunStatusInTransaction,
   submitTaskContinuationInTransaction,
+  workflowSyncGateReason,
 } from '@/modules/task-execution/public/participants'
+import { freezeTaskExecutionCallClosure } from '@/services/execution/taskExecutionCallClosure'
+import type { TaskExecutionResourceAuthority } from '@/services/execution/taskExecutionResources'
+import { triggerPreflightIssue } from '@/services/execution/triggerPreflight'
 import type { TaskStatusUpdateExtra } from '@/services/lifecycle'
-import { nextRetryIndex, mintNodeRun } from '@/services/nodeRunMint'
-import { createRunSelectionOracleSnapshot } from '@/modules/task-execution/public/queries'
-import { reclaimStaleRefLocks, runGit, withWorktreeRegistryLock } from '@/util/git'
-import { removeDirectoryWithRetry } from '@/util/fsReclaim'
-import { redactGitUrl } from '@agent-workflow/shared'
+import { mintNodeRun, nextRetryIndex } from '@/services/nodeRunMint'
+import { resolveRepoGroupLayout } from '@/services/repoGroup'
+import {} from '@/services/taskAuthorization'
 import {
   ConflictError,
   DomainError,
@@ -124,28 +139,11 @@ import {
   ValidationError,
   diagnosticTextOf,
 } from '@/util/errors'
-import type { SchedulerDriverPort } from '@/modules/task-execution/public/commands'
-import { Paths } from '@/util/paths'
+import { removeDirectoryWithRetry } from '@/util/fsReclaim'
+import { reclaimStaleRefLocks, runGit, withWorktreeRegistryLock } from '@/util/git'
 import { createLogger, type Logger } from '@/util/log'
-import { resolveRepoGroupLayout } from '@/services/repoGroup'
-import {
-  composeSqliteRepositoryWorkspaceStore,
-  type RepositoryWorkspaceStore,
-} from '@/modules/source-control/composition'
-import {
-  builtinWorkflowSyncPreview,
-  workflowSyncGateReason,
-} from '@/modules/task-execution/public/participants'
-import { SYSTEM_USER_ID } from '@/auth/actor'
-import { freezeTaskExecutionCallClosure } from '@/services/execution/taskExecutionCallClosure'
-import type { TaskExecutionResourceAuthority } from '@/services/execution/taskExecutionResources'
-import { triggerPreflightIssue } from '@/services/execution/triggerPreflight'
-import { assertFrozenTaskTriggerPreflight } from '@/modules/task-execution/infrastructure/frozenTaskTriggerPreflight'
-import { collectExecutionRefs } from '@agent-workflow/shared'
-import {} from '@/services/taskAuthorization'
-import { composeAgentRunDistillObserver } from '@/modules/task-execution/composition/agentRunDistillObserver'
-import { selectResumeRollbackTargets as selectResumeRollbackTargetsWithSelection } from '@/modules/task-execution/application/resumeRollbackTargets'
-import * as taskDriveComposition from '@/modules/task-execution/composition/taskDriveLegacy'
+import { Paths } from '@/util/paths'
+import { collectExecutionRefs, redactGitUrl } from '@agent-workflow/shared'
 
 type WorkspacePreparationRepositoryProjection = Parameters<
   NonNullable<ReturnType<typeof createLocalEffectAttemptObserver>>['succeedWorkspacePreparation']
@@ -292,6 +290,7 @@ export async function shutdownActiveTaskExecutions(
 // 由 `services/shutdown.ts` 经 `dependencies.operations` 调用），这一份自那以后生产侧零调用方。
 
 export interface TaskContinuationDependencies {
+  readonly historyRestrictions: HistoryRestrictionPort
   /** Frozen commit identity used when resuming repository preparation. */
   gitCommitIdentity?: GitCommitIdentity | null
   /** The selected live configuration follows short-lived drive and continuation paths. */
@@ -551,9 +550,9 @@ export function selectResumeRollbackTargets<
 >(runs: readonly R[]): Promise<R[]> {
   return selectResumeRollbackTargetsWithSelection(
     runs,
-    createRunSelectionOracleSnapshot(
+    createRunHistorySnapshot(
+      '',
       runs.map((row) => ({ ...row, taskId: '' })),
-      { scope: { kind: 'rows' } },
     ),
     '',
   )
@@ -589,9 +588,9 @@ export async function selectSyncRollbackTargets<
   isWrapperNode: (nodeId: string) => boolean,
 ): Promise<R[]> {
   const latestPerNode = new Map<string, R>()
-  const selection = createRunSelectionOracleSnapshot(
+  const selection = createRunHistorySnapshot(
+    '',
     runs.map((row) => ({ ...row, taskId: '' })),
-    { scope: { kind: 'rows' } },
   )
   for (const nodeId of new Set(
     runs.filter((run) => run.parentNodeRunId === null).map((run) => run.nodeId),
@@ -764,6 +763,7 @@ export type TaskDriveCoordinatorDependencies = Parameters<typeof runtimeConfigOp
 
 /** RFC-387: test-only assembly for the legacy entry points; removed in W4. */
 export function composeTestTaskDriveFactory(input: {
+  readonly historyRestrictions: HistoryRestrictionPort
   readonly deps: TaskDriveCoordinatorDependencies
   readonly appHome: string
   readonly persistence?: ReturnType<typeof createTaskExecutionPersistence>
@@ -777,6 +777,7 @@ export function composeTestTaskDriveFactory(input: {
   const persistence =
     input.persistence ??
     createTaskExecutionPersistence(input.deps.db, {
+      historyRestrictions: input.historyRestrictions,
       workspacePresence: input.deps.workspacePresence,
     })
   const maintenance = composeWorkspaceMaintenanceCommand({
@@ -816,6 +817,7 @@ export function composeTestTaskDriveFactory(input: {
       }
     },
     lifecycle: createDatabaseTaskDriverLifecyclePort({
+      historyRestrictions: input.historyRestrictions,
       db: input.deps.db,
       persistence,
       workspacePresence: input.deps.workspacePresence,
@@ -825,6 +827,7 @@ export function composeTestTaskDriveFactory(input: {
     gateContinuationPreDrive:
       input.gateContinuationPreDrive ??
       composeGateContinuationPreDrive({
+        historyRestrictions: input.historyRestrictions,
         db: input.deps.db,
         persistence,
         memoryDistillEnqueuer: input.deps.memoryDistillEnqueuer ?? missingMemoryDistillEnqueuer,
@@ -935,9 +938,8 @@ function createPersistedRepositoryPreparationStep(input: {
         ...(descriptor.workingBranch !== null ? { workingBranch: descriptor.workingBranch } : {}),
         ...(descriptor.requestedRef !== null ? { ref: descriptor.requestedRef } : {}),
       } as unknown as StartTask
-      const ownership: RepositoryPreparationOwnership = {
-        cleanup: createMaterializedSpaceCleanup(descriptor.taskId, null),
-      }
+      const cleanup = createMaterializedSpaceCleanup(descriptor.taskId, null)
+      const ownership: RepositoryPreparationOwnership = { cleanup }
       const result = await runDeferredRepoPreparation({
         deps: {
           ...input.deps,
@@ -967,8 +969,8 @@ function createPersistedRepositoryPreparationStep(input: {
           resolvedSources: [],
           repos: [],
           nodePaths: [],
-          cleanup: ownership.cleanup as MaterializedSpaceCleanup,
-        } as MaterializedSpace,
+          cleanup,
+        },
         ownership,
       })
       return result.ok ? { kind: 'ready' } : { kind: 'terminal-won' }
@@ -976,7 +978,7 @@ function createPersistedRepositoryPreparationStep(input: {
   })
 }
 
-// RFC-359 AC-6：句柄放宽到中立、函数转 async。它读的两张表（`task_repos` / `task_space_nodes`）
+// RFC-359 AC-6：句柄放宽到中立、函数转 async。它读的两张表（`task_repository_mounts` / `task_space_nodes`）
 // 都是普通 drizzle 查询，零方言；钉在 bun:sqlite 上的只有那两个 `.all()` 同步终结子。
 // 三个调用点本来就在 `async (sourceTaskId) => …` 里，加一个 await 即可。
 async function loadFrozenSpaceLayout(
@@ -1296,7 +1298,11 @@ export async function wakeHumanGateContinuation(
 ): Promise<void> {
   if (deps.awaitScheduler === true) await awaitTaskDriverIdle(taskId)
   else if (isTaskDriverActive(taskId)) return
-  await composeTestTaskDriveFactory({ deps, appHome: deps.appHome ?? Paths.root }).session.submit({
+  await composeTestTaskDriveFactory({
+    deps,
+    historyRestrictions: deps.historyRestrictions,
+    appHome: deps.appHome ?? Paths.root,
+  }).session.submit({
     taskId,
     intentId: continuationRef,
     completionMode: deps.awaitScheduler === true ? 'await-settle' : 'background',
@@ -1582,6 +1588,7 @@ async function resumeKick(
     },
   }
   const coordinator = composeTestTaskDriveFactory({
+    historyRestrictions: deps.historyRestrictions,
     deps,
     appHome: deps.appHome ?? Paths.root,
   }).coordinatorFor({ admittedContinuation })
@@ -1720,7 +1727,7 @@ export async function computeWorkflowSyncPreview(
     if (list === undefined) runsByNode.set(r.nodeId, [r])
     else list.push(r)
   }
-  const selection = createRunSelectionOracleSnapshot(runs, { scope: { kind: 'rows' } })
+  const selection = createRunSelectionReader(db)
   for (const nodeId of runsByNode.keys()) {
     const fresh = (
       await selection.familyHistory(task.id, { nodeId }, { topLevelOnly: true, statusIn: ['done'] })
@@ -1977,6 +1984,7 @@ export async function retryRepositoryPreparation(
 ): Promise<Task> {
   const appHome = deps.appHome ?? Paths.root
   const factory = composeTestTaskDriveFactory({
+    historyRestrictions: deps.historyRestrictions,
     deps: { ...deps, db },
     appHome,
     repositoryPreparation: createPersistedRepositoryPreparationStep({
@@ -2097,10 +2105,15 @@ async function runDeferredRepoPreparation(args: {
   )
   const prepRetryIndex = nextRetryIndex(priorPrepRuns)
   const prepRunId = await mintNodeRun(deps.db, {
-    ...deriveNodeRunRole({
-      nodeId: REPO_PREP_NODE_ID,
-      rerunCause: prepRetryIndex === 0 ? 'initial' : 'retry-node',
-    }),
+    ...nodeRunMintIdentityForSlot(
+      {
+        kind: 'synthetic',
+        syntheticKind: 'repo-prep',
+        owner: { kind: 'task', id: taskId },
+        discriminator: REPO_PREP_NODE_ID,
+      },
+      { kind: 'current' },
+    ),
     taskId,
     nodeId: REPO_PREP_NODE_ID,
     status: 'pending',
@@ -2459,14 +2472,12 @@ async function runDeferredRepoPreparation(args: {
   // 刚建出来的工作树——任务删除时会留下孤儿目录。
   ownership.cleanup = prepared.cleanup
   // 回填：占位落行时仓库尚未物化，目录只有根；准备结算补齐成员目录。
-  // 与任务行的路径回写放进**同一个事务**——多仓任务的 repos 与 tasks.worktreePath
+  // 与任务行的路径回写放进**同一个事务**——多仓任务的 repos 与 tasks.workspaceRootRef
   // 必须同时可见，否则一个恰好落在中间的读者（诊断接口、structural diff、前端
   // 详情页）会看到「有工作树但没有成员仓」这种不存在的状态。
   //
-  // RFC-066 还要求 tasks 上的 legacy 仓库列逐字镜像 task_repos[0]，repoCount
-  // 等于成员行数。延后准备的占位 INSERT 不可能提前知道这些值，所以这里必须把
-  // **整份兼容投影**一起回填；只回填路径会让成功任务永久显示成 1 仓，且详情页
-  // 丢失远端 URL / cache id / base branch。
+  // RFC-395：主仓 DTO 与 repoCount 从有序挂载投影；冻结 requested_source 保持原请求。
+  // 根引用、空间属性与所有挂载必须共同回填，读取端才能同时看到完整主仓与成员数量。
   const preparedHead = prepared.repos[0]
   const preparedRepoRows = taskRepoRowsFor(taskId, prepared.repos, input.workingBranch ?? null)
   const preparedFinishedAt = Date.now()
@@ -2589,16 +2600,11 @@ export async function loadTaskFailureCodes(
   const out = new Map<string, FailureCode | null>()
   const wanted = rows.filter((r) => r.status === 'failed' && r.failedNodeId !== null)
   if (wanted.length === 0) return out
-  const runRows = await createNodeRunQueries(db).listFields({ taskIds: wanted.map((r) => r.id) }, [
-    'taskId',
-    'nodeId',
-    'id',
-    'seq',
-    'parentNodeRunId',
-    'status',
-    'failureCode',
-  ])
-  const snapshot = createRunSelectionOracleSnapshot(runRows, { scope: { kind: 'rows' } })
+  const runRows = await createNodeRunQueries(db).listHistoryFields(
+    { taskIds: wanted.map((r) => r.id) },
+    ['taskId', 'nodeId', 'id', 'seq', 'parentNodeRunId', 'status', 'failureCode'],
+  )
+  const snapshot = createRunHistoryBatchSnapshot(runRows)
   const runsById = new Map(runRows.map((row) => [row.id, row]))
   for (const t of wanted) {
     const selected = (

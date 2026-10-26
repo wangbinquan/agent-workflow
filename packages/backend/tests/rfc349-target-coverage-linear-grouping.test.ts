@@ -40,15 +40,14 @@ import type {
   PostgresqlReservedConnection,
   SqlRows,
 } from '@/platform/persistence/postgresqlRuntime'
-import type {
-  LogicalColumnContract,
-  LogicalSchemaContract,
-  LogicalTableContract,
-} from '@/platform/persistence/schemaContract'
+import { digestSchemaContract } from '@/platform/persistence/schemaContract'
 import { buildPostgresqlSchemaPlan } from '@/platform/persistence/postgresqlSchema'
-import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import { persistenceHead, persistencePostgresqlCatalogs } from '@/bootstrap/persistenceHead'
 
-const CONTRACT_DIGEST = `sha256:${'c'.repeat(64)}`
+const CONTRACT = logicalSchemaContract
+const PLAN = buildPostgresqlSchemaPlan(CONTRACT)
+const TABLE = CONTRACT.tables.find((table) => table.id === 'maintenance_state')!
 const CHUNK_ROWS = 1_000
 /** 与 full 种子里 `node_run_events` 同量级：1000 万行 ÷ 每片 1000 行。 */
 const CHUNKS = 10_000
@@ -64,55 +63,6 @@ const REPETITIONS = 5
 const RUNAWAY_MS = 4_000
 /** 线性约 8、二次方约 64，取几何中点。两侧各留 2.6～3.0 倍。 */
 const MAX_GROWTH = 21
-
-const ID_COLUMN: LogicalColumnContract = {
-  name: 'id',
-  logicalCodec: 'text-identity',
-  nullable: false,
-  primary: true,
-  hasDefault: false,
-  defaultKind: 'none',
-  defaultValue: null,
-  providerDefault: { sqlite: null, postgresql: null },
-  identity: false,
-  uniqueName: null,
-  enumValues: [],
-  providerType: { sqlite: 'text', postgresql: 'text' },
-}
-
-const TABLE: LogicalTableContract = {
-  id: 'wide_rows',
-  schemaSymbol: 'wideRows',
-  ownerContext: 'system-operations',
-  disposition: 'KEEP',
-  sourceTable: 'wide_rows',
-  providerTables: { sqlite: 'wide_rows', postgresql: 'wide_rows' },
-  migrationKey: ['id'],
-  columns: [ID_COLUMN],
-  primaryKey: ['id'],
-  unique: [],
-  foreignKeys: [],
-  checks: [],
-  indexes: [],
-  retention: { class: 'owner-managed-business', owner: 'system-operations', rule: 'fixture' },
-  consumers: {
-    productionReader: 'owner-required',
-    productionWriter: 'owner-required-or-immutable',
-    backgroundRecoveryDiagnostic: 'owner-reviewed',
-    evidence: 'fixture',
-  },
-  rationale: 'fixture',
-}
-
-const CONTRACT: LogicalSchemaContract = {
-  contractVersion: 2,
-  sourceProjection: 'sqlite',
-  sourceTableCount: 1,
-  activeTableCount: 1,
-  archiveOnlyTableCount: 0,
-  tables: [TABLE],
-  digest: CONTRACT_DIGEST,
-}
 
 function rows(values: readonly Record<string, unknown>[]): SqlRows {
   return Object.assign(Promise.resolve(values), {
@@ -134,35 +84,79 @@ function receiptsFor(chunkCount: number): readonly Record<string, unknown>[] {
   const cached = RECEIPTS_BY_CHUNK_COUNT.get(chunkCount)
   if (cached !== undefined) return cached
   const built = Array.from({ length: chunkCount }, (_unused, index) => ({
-    table_id: 'wide_rows',
-    chunk_index: index,
-    row_count: CHUNK_ROWS,
+    unit_json: JSON.stringify({ table: TABLE.id, chunk: index }),
+    rows_written: CHUNK_ROWS,
   }))
   RECEIPTS_BY_CHUNK_COUNT.set(chunkCount, built)
   return built
 }
 
-function runtimeFor(statements: string[], chunkCount: number): PostgresqlDatabaseRuntime {
-  const receipts = receiptsFor(chunkCount)
+function runtimeFor(
+  statements: string[],
+  chunkCount: number,
+  orphanReceipt = false,
+): PostgresqlDatabaseRuntime {
+  const receipts = orphanReceipt
+    ? [
+        {
+          unit_json: JSON.stringify({ table: 'outside_roster', chunk: 0 }),
+          rows_written: CHUNK_ROWS,
+        },
+      ]
+    : receiptsFor(chunkCount)
+  const head = persistenceHead()
+  const artifact = persistencePostgresqlCatalogs()[0]!
+  let state = {
+    sourceGenerationId: 'dbg_source_0001',
+    contractDigest: CONTRACT.digest,
+    planDigest: PLAN.digest,
+    stage: 'prepared',
+  }
   const connection: PostgresqlReservedConnection = withNativeTransactions({
-    unsafe(sql) {
+    unsafe(sql, values = []) {
       statements.push(sql)
       if (sql.includes('pg_try_advisory_lock')) return rows([{ acquired: true }])
       if (sql.includes('pg_advisory_unlock')) return rows([{ released: true }])
-      if (sql.startsWith('SELECT table_name FROM information_schema.tables')) {
-        return rows([{ table_name: 'wide_rows' }])
+      if (sql.startsWith('SELECT COUNT(*)'))
+        return rows([
+          {
+            count:
+              !orphanReceipt && sql.includes(`"${TABLE.providerTables.postgresql}"`)
+                ? chunkCount * CHUNK_ROWS
+                : 0,
+          },
+        ])
+      if (sql.includes('FROM "agent_workflow_meta"."migration_units"')) return rows(receipts)
+      if (sql.includes('FROM "agent_workflow_meta"."migration_records"'))
+        return rows([
+          { record_json: JSON.stringify(state), record_digest: digestSchemaContract(state) },
+        ])
+      if (sql.startsWith('INSERT INTO "agent_workflow_meta"."migration_records"')) {
+        state = JSON.parse(String(values[1]))
+        return rows([])
       }
-      if (sql.includes('FROM "agent_workflow_meta"."schema_migrations"')) return rows([])
-      if (sql.includes('SELECT count(*) AS count FROM "agent_workflow"."wide_rows"')) {
-        return rows([{ count: chunkCount * CHUNK_ROWS }])
-      }
-      if (sql.includes('FROM "agent_workflow_meta"."logical_copy_chunks"')) return rows(receipts)
-      if (sql.includes('SELECT stage FROM "agent_workflow_meta"."logical_copy_operations"')) {
-        return rows([{ stage: 'verified' }])
-      }
-      if (sql.startsWith('UPDATE "agent_workflow_meta"."logical_copy_operations"')) {
-        return rows([{ operation_id: 'dbm_linear_0001' }])
-      }
+      if (sql.includes('rfc349-invariant:')) return rows([])
+      if (sql.includes('pg_get_serial_sequence') && !sql.includes('setval'))
+        return rows([{ sequence_name: 'agent_workflow.fixture_identity_seq' }])
+      if (sql.includes('SELECT last_value')) return rows([{ last_value: 1, is_called: false }])
+      if (sql.includes('AS max_value')) return rows([{ max_value: null }])
+      if (sql.includes('SELECT nextval')) return rows([{ next_value: 1 }])
+      if (sql.includes('SELECT 1 FROM information_schema.tables')) return rows([{ present: 1 }])
+      if (sql.includes('FROM "agent_workflow_meta"."schema_history"'))
+        return rows([
+          {
+            version: head.contract.version,
+            contract_digest: head.contract.contract.digest,
+            sqlite_plan_digest: head.sqlite.digest,
+            postgresql_plan_digest: head.postgresql.digest,
+            applied_at: 1,
+            artifact_json: JSON.stringify(head),
+          },
+        ])
+      if (sql.includes("current_setting('server_version_num')"))
+        return rows([{ version: artifact.postgresqlMajor * 10000 }])
+      if (sql.includes("SELECT 'relation' AS kind"))
+        return rows(artifact.catalog.map((entry) => ({ ...entry })))
       return rows([])
     },
     release() {},
@@ -171,7 +165,9 @@ function runtimeFor(statements: string[], chunkCount: number): PostgresqlDatabas
     async reserve() {
       return connection
     },
-    unsafe: connection.unsafe,
+    unsafe() {
+      throw new Error('finalization must retain its reserved connection')
+    },
     async close() {},
   }
   return {
@@ -191,35 +187,42 @@ function runtimeFor(statements: string[], chunkCount: number): PostgresqlDatabas
   }
 }
 
+function expectedTables(chunkCount: number) {
+  return CONTRACT.tables.map((table) => ({
+    table: table.id,
+    disposition: table.disposition,
+    rowCount: table.id === TABLE.id ? chunkCount * CHUNK_ROWS : 0,
+    chunkCount: table.id === TABLE.id ? chunkCount : 0,
+  }))
+}
+
 /** 只量 `finalizeSchema` 一次调用：建目标、造收据、关闭都在窗口之外。 */
 async function measureFinalizeMs(chunkCount: number): Promise<number> {
   const statements: string[] = []
   const target = await openPostgresqlLogicalTarget({
-    headContract: buildLogicalSchemaContract(),
+    headContract: CONTRACT,
     runtime: runtimeFor(statements, chunkCount),
     operationId: 'dbm_linear_0001',
     sourceGenerationId: 'dbg_source_0001',
     contract: CONTRACT,
-    plan: buildPostgresqlSchemaPlan(CONTRACT),
-    verifyMigrationHistory: async () => undefined,
+    plan: PLAN,
   })
   try {
     const started = performance.now()
-    await target.finalizeSchema(10, [
-      {
-        table: 'wide_rows',
-        disposition: 'KEEP',
-        rowCount: chunkCount * CHUNK_ROWS,
-        chunkCount,
-      },
-    ])
-    return performance.now() - started
+    await target.finalizeSchema(10, expectedTables(chunkCount))
+    const elapsed = performance.now() - started
+    // A full roster must share one receipt census; rescanning all chunks per table
+    // adds a table-count multiplier that the two chunk-size timings cannot detect.
+    expect(
+      statements.filter((sql) => sql.includes('FROM "agent_workflow_meta"."migration_units"')),
+    ).toHaveLength(1)
+    return elapsed
   } finally {
     await target.close()
   }
 }
 
-describe('RFC-349 target coverage groups copy receipts in linear time', () => {
+describe('RFC-349 live epoch-2 target coverage groups copy receipts in linear time', () => {
   test('grouping cost grows with the chunk count, not with its square', async () => {
     let bestSmall = Number.POSITIVE_INFINITY
     let bestLarge = Number.POSITIVE_INFINITY
@@ -252,20 +255,17 @@ describe('RFC-349 target coverage groups copy receipts in linear time', () => {
   test('a receipt for a table outside the roster is still rejected', async () => {
     const statements: string[] = []
     const target = await openPostgresqlLogicalTarget({
-      headContract: buildLogicalSchemaContract(),
-      runtime: runtimeFor(statements, 1),
+      headContract: CONTRACT,
+      runtime: runtimeFor(statements, 1, true),
       operationId: 'dbm_linear_0001',
       sourceGenerationId: 'dbg_source_0001',
-      contract: { ...CONTRACT, tables: [{ ...TABLE, id: 'other_rows' }] },
-      plan: buildPostgresqlSchemaPlan(CONTRACT),
-      verifyMigrationHistory: async () => undefined,
+      contract: CONTRACT,
+      plan: PLAN,
     })
     try {
-      await expect(
-        target.finalizeSchema(10, [
-          { table: 'other_rows', disposition: 'KEEP', rowCount: 1, chunkCount: 1 },
-        ]),
-      ).rejects.toBeInstanceOf(PostgresqlLogicalTargetError)
+      await expect(target.finalizeSchema(10, expectedTables(0))).rejects.toBeInstanceOf(
+        PostgresqlLogicalTargetError,
+      )
     } finally {
       await target.close()
     }

@@ -1,3 +1,4 @@
+import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { o2Ports } from './helpers/o2Closure'
 // RFC-370: provider-session writers await their selected settings, keep each
 // tick live, and include pending startup reads/recovery in pause/stop drains.
@@ -45,6 +46,7 @@ function fixture(
   const module = new TaskExecutionModule('rfc370-background')
   const scheduled = scheduledTaskRuntime(db)
   const recovery = createTaskExecutionPersistence(db, {
+    historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
     recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
   }).recoveryAdministration
   const identity = composeIdentityAccess(db)

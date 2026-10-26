@@ -9,7 +9,7 @@ import {
   type DatabaseGenerationPayload,
 } from '@/platform/persistence/generationValidation'
 import type { LogicalSchemaContract } from '@/platform/persistence/schemaContract'
-import { databaseProviderTraits } from '@/platform/persistence/providerTraits'
+
 import { DatabaseMigrationRunnerError } from './databaseMigrationRunner'
 
 function candidatePayload(
@@ -38,8 +38,10 @@ export async function prepareDatabaseInstallation<TPrepared>(options: {
     )
     .sort((left, right) => right.updatedAt - left.updatedAt)[0]
   const pending =
-    databaseProviderTraits(initialGeneration.provider).migrationRole === 'target' &&
-    initialGeneration.operationId !== null
+    initialGeneration.operationId !== null &&
+    (await effects.listMigrations()).some(
+      (status) => status.operationId === initialGeneration.operationId,
+    )
       ? await effects.readMigration(initialGeneration.operationId)
       : interrupted === undefined
         ? null
@@ -48,7 +50,7 @@ export async function prepareDatabaseInstallation<TPrepared>(options: {
     pending !== null && pending.payload.source.schemaDigest !== options.contract.digest
   const boundTargetOperation =
     pending !== null &&
-    databaseProviderTraits(initialGeneration.provider).migrationRole === 'target' &&
+    initialGeneration.generationId === `dbg_pg_${pending.payload.operationId.slice(4)}` &&
     initialGeneration.operationId === pending.payload.operationId
   const needsCopyRecovery =
     pending !== null &&
@@ -89,10 +91,6 @@ export async function prepareDatabaseInstallation<TPrepared>(options: {
       (historicalCopy || boundTargetOperation || candidate.kind === 'operation-recovery') &&
       pending !== null
     ) {
-      const recoverySource = await effects.resolveRecoverySource({
-        fromContractDigest: pending.payload.source.schemaDigest,
-        toContractDigest: options.contract.digest,
-      })
       if (
         pending.payload.failure !== null ||
         pending.payload.cancelledAt !== null ||
@@ -104,6 +102,10 @@ export async function prepareDatabaseInstallation<TPrepared>(options: {
         )
       }
       if (needsCopyRecovery) {
+        const recoverySource = await effects.resolveRecoverySource({
+          fromContractDigest: pending.payload.source.schemaDigest,
+          toContractDigest: options.contract.digest,
+        })
         if (boundTargetOperation) {
           candidate = await effects.readGeneration({
             contract: options.contract,

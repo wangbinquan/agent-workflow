@@ -1,3 +1,4 @@
+import type { HistoryRestrictionPort } from '@/platform/contracts/historyRestriction'
 // RFC-359 AC-1（第 11 刀下半）—— 取消的**唯一**生产装配点。
 //
 // 合并之前，取消在 legacy 侧的入口是 `services/task.ts` 的 `cancelTask`：它既是实现、
@@ -28,10 +29,13 @@ export interface TaskCancellation {
   cancel(taskId: string, cause?: TaskCancelCause): Promise<void>
 }
 
-export function composeTaskCancellation(db: PersistenceDb): TaskCancellation {
+export function composeTaskCancellation(
+  db: PersistenceDb,
+  historyRestrictions: HistoryRestrictionPort,
+): TaskCancellation {
   const dependencies = {
     db,
-    persistence: createTaskExecutionPersistence(db),
+    persistence: createTaskExecutionPersistence(db, { historyRestrictions }),
     stop: taskExecutionModule.runtimeRegistry,
     log,
   }

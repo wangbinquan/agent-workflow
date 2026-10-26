@@ -11,13 +11,16 @@
 //
 // 另外锁住「扩容之后仍然拒绝非法值」：只加值不加把门的话，CHECK 还不如没有。
 
+import {
+  readFrozenMigrationFiles as readMigrationFiles,
+  migrateFrozenSqlite as migrateSqlite,
+  FROZEN_MIGRATIONS,
+} from './migration-freeze'
 import { Database } from 'bun:sqlite'
 import { describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
-import { readMigrationFiles } from 'drizzle-orm/migrator'
-import { migrateSqlite } from '@/platform/persistence/sqliteMigrator'
 
-const MIGRATIONS_FOLDER = resolve(import.meta.dir, '..', 'db', 'migrations')
+const MIGRATIONS_FOLDER = resolve(FROZEN_MIGRATIONS)
 const TAG = '0228_rfc366_distill_source_kinds'
 
 function freshDatabase(): Database {

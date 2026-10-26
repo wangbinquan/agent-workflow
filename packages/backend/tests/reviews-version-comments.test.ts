@@ -1,3 +1,8 @@
+import { legacyContentRef } from '@/platform/content/contentRef'
+import {
+  contentRowColumns,
+  inlineContentColumns,
+} from '@/platform/content/infrastructure/contentStore'
 // Locks in RFC-013-T2: GET /api/reviews/:nodeRunId/versions/:versionId now
 // returns the doc_version's body plus the review_comments captured against
 // that specific version (not the currentVersion's comments, not the union
@@ -17,7 +22,11 @@
 import { nodeRunFixture, taskFixture, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
-import type { ProviderHttpApplicationInput } from './helpers/providerHttpApplication'
+import {
+  type ProviderHttpApplicationInput,
+  createProviderHttpApplication,
+  type ProviderHttpApplication,
+} from './helpers/providerHttpApplication'
 import type { Hono } from 'hono'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
@@ -28,10 +37,6 @@ import type { DbClient } from '../src/db/client'
 import { getDocVersionDetail } from '@/modules/collaboration/infrastructure/review'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import {
-  createProviderHttpApplication,
-  type ProviderHttpApplication,
-} from './helpers/providerHttpApplication'
 
 interface Seed<Database extends PersistenceDb = DbClient> {
   db: Database
@@ -155,7 +160,7 @@ async function seed(db: PersistenceDb): Promise<Seed<PersistenceDb>> {
       sourcePortName: 'design',
       versionIndex: v.index,
       reviewIteration: v.index - 1,
-      bodyPath: bodyRel,
+      ...contentRowColumns(legacyContentRef('review-body-path', 'local-file', bodyRel)),
       commentsJson: JSON.stringify(archivedComments),
       decision: v.decision,
       createdAt: v.index, // ascending so order by createdAt matches versionIndex
@@ -173,7 +178,7 @@ async function seed(db: PersistenceDb): Promise<Seed<PersistenceDb>> {
         contextBefore: '',
         contextAfter: '',
         occurrenceIndex: 1,
-        commentText: `c v${v.index} #${lc.k}`,
+        ...inlineContentColumns(Buffer.from(`c v${v.index} #${lc.k}`)),
         author: 'local',
         createdAt: 1000 + lc.k,
       })
@@ -272,7 +277,13 @@ describeEachProvider('RFC-013-T2 getDocVersionDetail service', (harness) => {
         sourcePortName: 'design',
         versionIndex: 99,
         reviewIteration: 0,
-        bodyPath: `runs/${s.taskId}/review/rev_1/design/v1.md`,
+        ...contentRowColumns(
+          legacyContentRef(
+            'review-body-path',
+            'local-file',
+            `runs/${s.taskId}/review/rev_1/design/v1.md`,
+          ),
+        ),
         commentsJson: JSON.stringify([
           {
             id: 'c-b',
@@ -327,7 +338,13 @@ describeEachProvider('RFC-013-T2 getDocVersionDetail service', (harness) => {
         sourcePortName: 'design',
         versionIndex: 100,
         reviewIteration: 0,
-        bodyPath: `runs/${s.taskId}/review/rev_1/design/v1.md`,
+        ...contentRowColumns(
+          legacyContentRef(
+            'review-body-path',
+            'local-file',
+            `runs/${s.taskId}/review/rev_1/design/v1.md`,
+          ),
+        ),
         commentsJson: '{not json',
         decision: 'rejected',
         createdAt: 100,
@@ -477,7 +494,13 @@ describeEachProvider(
           sourcePortName: 'design',
           versionIndex: 1,
           reviewIteration: 0,
-          bodyPath: `runs/${s.taskId}/review/rev_1/design/v1.md`,
+          ...contentRowColumns(
+            legacyContentRef(
+              'review-body-path',
+              'local-file',
+              `runs/${s.taskId}/review/rev_1/design/v1.md`,
+            ),
+          ),
           decision: 'pending',
           createdAt: 1,
         })

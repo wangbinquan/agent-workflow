@@ -1,3 +1,11 @@
+import { Paths } from '@/util/paths'
+import { createContentHumanGateArtifactStore } from '@/modules/collaboration/composition/contentArtifacts'
+import { createActiveHistoryRestrictionProvider } from '@/modules/system-operations/composition/epochInstallation'
+import {
+  createContentStore,
+  createObjectContentTransport,
+  contentExclusive,
+} from '@/platform/content/composition'
 import { composeHumanGateTaskLockPort } from '@/modules/task-execution/composition'
 import { composeSourceControlTaskPorts } from '@/modules/task-execution/composition'
 import { createCrewStationMcpDiagnostics } from '@/modules/resource-catalog/composition/crewstationMcpDiagnostics'
@@ -24,7 +32,7 @@ import {
 } from '@/modules/integration/composition/crewstationEvents'
 import { composeCrewStationReviewArtifacts } from '@/modules/collaboration/composition/crewstationReviewArtifacts'
 import { composeCrewStationCodeReviewArtifacts } from '@/modules/code-capability/composition/crewstationCodeReviewArtifacts'
-import { buildLogicalSchemaContract } from './persistenceSchema'
+import { logicalSchemaContract } from './persistenceSchema'
 import { composeCrewStationMaintenanceDescriptor } from './crewstationMaintenance'
 import { composeCrewStationResourceArtifacts } from '@/modules/resource-catalog/composition/crewstationArtifacts'
 import {
@@ -95,13 +103,14 @@ export async function composeCrewStationProfile(
   if (new Set(profileKeys).size !== profileKeys.length)
     throw new Error('AW_AGENT_PROFILES contains duplicate runtime/model mappings')
   const prepared = await prepareCrewStationDatabase({
-    contract: buildLogicalSchemaContract(),
+    contract: logicalSchemaContract,
     environment,
     schema: 'verify',
     env,
   })
   const system = await composeCrewStationSystemSelections({ environment, prepared })
   const db = system.database
+  const historyRestrictions = createActiveHistoryRestrictionProvider()
   const initialized = selectExecutionInitialization(system.executionAuthority)
   const fence = system.mutationFence
   const api = createCrewStationBusinessExecution(system.platform)
@@ -220,6 +229,13 @@ export async function composeCrewStationProfile(
     objects,
     publications,
   })
+  const contentStore = createContentStore({
+    db,
+    exclusive: contentExclusive(Paths.root),
+    policy: { inlineMaxBytes: 64 * 1024, externalKind: 'object' },
+    transports: { object: createObjectContentTransport(objects) },
+    objectPublicationEpoch: () => fence.current().epoch,
+  })
   const workspaceSelections = workspace.bind()
   return {
     kind: 'crewstation',
@@ -230,9 +246,11 @@ export async function composeCrewStationProfile(
     },
     listen: { host: '0.0.0.0', port: environment.port },
     selections: {
+      historyRestrictions,
+      contentStore,
       taskInputFiles: composeCrewStationTaskInputFiles({ db, objects, publications }),
       databaseBackup: composeCrewStationDatabaseBackups({
-        contract: buildLogicalSchemaContract(),
+        contract: logicalSchemaContract,
         db,
         runtime: prepared.runtime.runtime,
         fence,
@@ -245,10 +263,11 @@ export async function composeCrewStationProfile(
       archivedNodeEvents,
       runtimeInventoryContent: composeStreamTaskRuntimeInventoryContent(),
       humanGateArtifactRecovery: composeCrewStationHumanGateRecovery({
+        historyRestrictions,
         db,
         taskLock: composeHumanGateTaskLockPort,
         fence,
-        artifacts: reviewArtifacts.store,
+        artifacts: createContentHumanGateArtifactStore({ db, content: contentStore }),
       }),
       beforeEventObservationWrite: (tx) => fence.assertHeld(tx, fence.current()),
       crewStationEvents: composeCrewStationEventIngress({

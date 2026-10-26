@@ -17,7 +17,7 @@ import { SYSTEM_USER_ID } from './auth/systemIdentity'
 import { createSecretBox } from './auth/secretBox'
 import type { Actor } from './auth/actor'
 import { backupCommand } from './cli/backup'
-import { restoreCommand } from './cli/restore'
+import { restoreCommand, parseRestoreArguments, RESTORE_USAGE } from './cli/restore'
 import { configGetCommand, configSetCommand } from './cli/config-cli'
 import { dbCompactCommand } from './cli/dbCompact'
 import { databaseCommand } from './cli/database'
@@ -46,7 +46,6 @@ import {
 } from './cli/package'
 import { runUserCommand, type UserCommandIdentityHandle } from './cli/userBootstrap'
 import { authCommand } from './cli/auth'
-import { rfc295DowngradeAuditCommand } from './cli/rfc295-downgrade-audit'
 import { loadConfig } from './config'
 import { createAuthRuntimeFor } from './auth/composition'
 import { createIdentityAccessRuntime } from './modules/identity-access/composition'
@@ -63,12 +62,10 @@ import {
   prepareDatabaseProviderForBoot,
 } from './modules/system-operations/composition'
 import { composeLocalDatabaseMigrationOperations } from './modules/system-operations/composition/databaseMigration'
-import { buildLogicalSchemaContract } from './bootstrap/persistenceSchema'
-import { databaseProviderTraits } from './platform/persistence/providerTraits'
-import { resolveDatabaseProviderRuntime } from './platform/persistence/databaseProviderRuntime'
-import { readDatabaseGenerationForBootstrap } from './platform/persistence/generationStore'
-import { loadPostgresqlMigrationHistory } from './platform/persistence/postgresqlMigrationHistory'
-import { resolvePostgresqlHistoricalContract } from './platform/persistence/postgresqlMigrationSequence'
+import { logicalSchemaContract } from './bootstrap/persistenceSchema'
+
+import { resolveDatabaseProviderRuntimeForRestore } from './platform/persistence/databaseProviderRuntime'
+
 import { createResourcePackageAtomicApplyOperations } from './modules/resource-catalog/composition/resourcePackageAtomicApply'
 import {
   MANAGED_PROCESS_LAUNCHER_SUBCOMMAND,
@@ -76,7 +73,6 @@ import {
   runManagedProcessLauncher,
 } from './services/execution/managedProcessLauncher'
 import { runManagedProcess } from './services/execution/managedProcess'
-import { resolveMigrationsFolder } from './util/migrationsFolder'
 import { Paths } from './util/paths'
 import { createLogger } from './util/log'
 import { createPostgresqlResourcePackageExecutionAdapter } from './services/resourcePackage/executionAdapter'
@@ -149,7 +145,7 @@ async function composeUserCommandBootstrap() {
 
 async function resolveCommandProvider() {
   const config = loadConfig(Paths.config)
-  const contract = buildLogicalSchemaContract()
+  const contract = logicalSchemaContract
   const prepared = await prepareDatabaseProviderForBoot({
     config: config.database,
     sqlitePath: Paths.db,
@@ -158,7 +154,7 @@ async function resolveCommandProvider() {
     contract,
     configPath: Paths.config,
     lockPath: Paths.lock,
-    sqliteOptions: { migrationsFolder: await resolveMigrationsFolder() },
+    sqliteOptions: {},
   })
   const runtime = prepared.runtime
   try {
@@ -280,9 +276,8 @@ async function main(): Promise<void> {
     | ReturnType<typeof composeLocalDatabaseMigrationOperations>
     | undefined
   const requireLocalDatabaseMigrationOperations = () =>
-    (localDatabaseMigrationOperations ??= composeLocalDatabaseMigrationOperations(
-      buildLogicalSchemaContract(),
-    ))
+    (localDatabaseMigrationOperations ??=
+      composeLocalDatabaseMigrationOperations(logicalSchemaContract))
 
   switch (sub) {
     case '__hosted-git-credential': {
@@ -432,7 +427,7 @@ async function main(): Promise<void> {
 
     case 'doctor': {
       const result = await composeDoctorApplication({
-        diagnostics: createLocalDoctorDiagnosticsFactory(buildLogicalSchemaContract()),
+        diagnostics: createLocalDoctorDiagnosticsFactory(logicalSchemaContract),
       }).run()
       process.stdout.write(formatDoctor(result))
       if (!result.ok) process.exit(1)
@@ -442,8 +437,25 @@ async function main(): Promise<void> {
     // RFC-311 T20 —— 停机回收 DB 内部空洞。只提供 CLI:VACUUM 持写锁重写整库,
     // 几 GB 上是分钟级,跑在 daemon 的单条同步连接上等于全站冻结那么久。
     case 'db': {
+      if (
+        Bun.argv[3] === 'migration' &&
+        !['resume', 'cancel', 'finalize', 'artifact'].includes(Bun.argv[4] ?? '') &&
+        (!['status', 'rollback'].includes(Bun.argv[4] ?? '') ||
+          !Bun.argv[5] ||
+          Bun.argv[5].startsWith('--') ||
+          Bun.argv[5].startsWith('dbm_e2_'))
+      ) {
+        const { composeEpochMigrationCommand } = await import('./bootstrap/epochMigrationEntry')
+        const { epochMigrationCommand } = await import('./cli/epochMigration')
+        const result = await epochMigrationCommand(Bun.argv.slice(4), {
+          application: composeEpochMigrationCommand(),
+        })
+        process.stdout.write(result.output)
+        if (result.status !== 'ok') process.exit(result.status === 'usage-error' ? 2 : 1)
+        break
+      }
       if (Bun.argv[3] === 'compact') {
-        const result = dbCompactCommand(buildLogicalSchemaContract())
+        const result = dbCompactCommand(logicalSchemaContract)
         process.stdout.write(result.output)
         if (result.status !== 'ok') process.exit(1)
         break
@@ -454,17 +466,6 @@ async function main(): Promise<void> {
       )
       process.stdout.write(result.output)
       if (result.status !== 'ok') process.exit(result.status === 'usage-error' ? 2 : 1)
-      break
-    }
-
-    case 'downgrade-audit': {
-      if (Bun.argv[3] !== 'rfc-295') {
-        console.error('usage: agent-workflow downgrade-audit rfc-295')
-        process.exit(2)
-      }
-      const result = rfc295DowngradeAuditCommand()
-      process.stdout.write(result.output)
-      if (result.status !== 'ok') process.exit(1)
       break
     }
 
@@ -496,8 +497,14 @@ async function main(): Promise<void> {
     }
 
     case 'migration-report': {
-      const { output } = await migrationReportCommand(Bun.argv.slice(3))
+      const { output } = await migrationReportCommand(Bun.argv.slice(3), logicalSchemaContract)
       process.stdout.write(output)
+      break
+    }
+
+    case 'verify-database-migration': {
+      const { verifyDatabaseMigrationForDeployment } = await import('./bootstrap/deployment')
+      process.stdout.write(await verifyDatabaseMigrationForDeployment(process.env))
       break
     }
 
@@ -514,7 +521,7 @@ async function main(): Promise<void> {
         try {
           return composeLocalSystemOperations({
             repositoryBackupPreparationFactory: composeRepositoryBackupPreparation,
-            contract: buildLogicalSchemaContract(),
+            contract: logicalSchemaContract,
             providerRuntime: provider.runtime,
           })
         } catch (error) {
@@ -533,27 +540,40 @@ async function main(): Promise<void> {
     }
 
     case 'restore': {
-      // Restore must inspect/stage the incoming artifact before any forward
-      // migration. Select a verified old SQLite runtime lazily for this one
-      // command; the restore owner keeps its existing backup/swap/open order.
-      const contract = buildLogicalSchemaContract()
-      const history = await loadPostgresqlMigrationHistory({ headContract: contract })
-      const generation = readDatabaseGenerationForBootstrap({
-        pointerPath: Paths.databaseGenerationPointer,
-        migrationsDir: Paths.databaseMigrationsDir,
-        expectedSchemaDigest: contract.digest,
-        supportedSchemaDigests: history.versions.map((version) => version.contract.digest),
-      })
-      const providerRuntime = resolveDatabaseProviderRuntime({
+      const { classifyRestoreArtifact, composeEpochMigrationCommand } =
+        await import('./bootstrap/epochMigrationEntry')
+      const { artifact, contentRoot } = parseRestoreArguments(Bun.argv.slice(3))
+      if (!artifact) {
+        process.stdout.write(RESTORE_USAGE)
+        process.exit(1)
+      }
+      if (
+        (await classifyRestoreArtifact(
+          artifact,
+          Bun.argv.includes('--stage') ? 'stage' : 'restore',
+        )) === 'epoch1'
+      ) {
+        if (Bun.argv.includes('--stage'))
+          throw new Error(
+            'epoch-1 backup requires offline db migration restore-backup; --stage is unavailable',
+          )
+        const plan = await composeEpochMigrationCommand().restoreBackup({
+          artifact,
+          restoreConfig: Bun.argv.includes('--restore-config'),
+          contentRoot,
+        })
+        process.stdout.write(
+          `${JSON.stringify(plan, null, 2)}\nRun db migration run ${plan.operationId} --approve ${plan.plan.approvalDigest} after reviewing this conversion plan.\n`,
+        )
+        break
+      }
+      const contract = logicalSchemaContract
+      const providerRuntime = resolveDatabaseProviderRuntimeForRestore({
         config: loadConfig(Paths.config).database,
         sqlitePath: Paths.db,
         generationPointerPath: Paths.databaseGenerationPointer,
         operationsRoot: Paths.databaseMigrationsDir,
-        contract:
-          generation.kind === 'schema-upgrade' &&
-          databaseProviderTraits(generation.payload.provider).migrationRole === 'source'
-            ? resolvePostgresqlHistoricalContract(history, generation.payload.schemaDigest)
-            : contract,
+        contract,
       })
       const operations = composeLocalSystemOperations({
         repositoryBackupPreparationFactory: composeRepositoryBackupPreparation,
@@ -610,14 +630,13 @@ async function main(): Promise<void> {
       console.log('  version                           print version')
       console.log('  doctor                            run health checks (does not start daemon)')
       console.log()
-      console.log(
-        '  downgrade-audit rfc-295            read-only compatibility gate before RFC-295 rollback',
-      )
+      console.log()
       console.log('  config get [key]                  print full config or a single key')
       console.log(
         '  config set <key> <value>          update a config field; value is parsed as JSON if possible',
       )
-      console.log('  migrate                           apply pending DB migrations')
+      console.log('  migrate                           install or upgrade the epoch-2 database')
+      console.log('  verify-database-migration         verify the hosted epoch switch')
       console.log(
         '  db compact                        reclaim free pages (VACUUM; daemon must be stopped)',
       )
@@ -626,8 +645,16 @@ async function main(): Promise<void> {
         'migrate SQLite to external PostgreSQL',
       )
       console.log(
-        '  db migration status|resume|cancel|finalize ID',
-        'operate a durable database migration',
+        '  db migration plan|acknowledge|withdraw-acknowledgement|run|status|trace|verify',
+        'plan, approve, run or inspect an epoch switch',
+      )
+      console.log(
+        '  db migration rollback|complete|discard|receipt|restore-backup',
+        'recover, finish or restore an epoch switch',
+      )
+      console.log(
+        '  db migration resume|cancel|finalize|artifact ID',
+        'operate an existing provider move',
       )
       console.log(
         '  migration-report [--json]         RFC-310 legacy asset migration analysis (read-only)',

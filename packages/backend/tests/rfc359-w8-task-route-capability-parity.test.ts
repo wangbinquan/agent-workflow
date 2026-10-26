@@ -1,3 +1,7 @@
+import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
+import { nodeRunFixtureColumns } from './helpers/model/nodeRun'
+import { taskReadColumns } from '@/modules/task-execution/infrastructure/taskRepositorySql'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { withO2Closure, o2Ports } from './helpers/o2Closure'
 // RFC-359 W8 —— `TaskRouteOperations` 两对适配器上**PostgreSQL 侧更弱**的能力缺口。
 //
@@ -62,7 +66,7 @@ import {
   taskFixture,
   workflowFixture,
 } from './helpers/model'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+
 import { afterAll, afterEach, beforeAll, expect, test } from 'bun:test'
 import { composeOwnerIdentityQueries } from '@/modules/identity-access/composition/providerOperations'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
@@ -229,6 +233,7 @@ function operations(harness: ProviderHarness, calls: ChildCalls): TaskRouteOpera
   const db = harness.db
   return createTaskRouteOperations(
     withO2Closure({
+      historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
       clarifyNav: o2Ports(db).collaborationReads.clarifyNav,
       db,
       collaboration: {} as never,
@@ -240,6 +245,7 @@ function operations(harness: ProviderHarness, calls: ChildCalls): TaskRouteOpera
       // RFC-359 AC-1（plan §5hn 批次二 ④）：本对拍不驱动工作流 JSON 启动。
       launches: { launch: async () => ({}) } as never,
       persistence: createTaskExecutionPersistence(db, {
+        historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
         recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
       }),
       children: {
@@ -424,20 +430,26 @@ async function code(promise: Promise<unknown>): Promise<string> {
 
 async function taskRow(db: PersistenceDb, taskId: string) {
   const { tasks } = tablesOf(db)
-  return (await db.select().from(tasks).where(eq(tasks.id, taskId)).limit(1))[0]
+  return (await db.select(taskReadColumns(db)).from(tasks).where(eq(tasks.id, taskId)).limit(1))[0]
 }
 
 /** 被拒绝的重试**不许**在时间线上留下假尝试；只有 retryNode 写这条 errorMessage。 */
 async function retryPlaceholders(db: PersistenceDb, taskId: string): Promise<readonly string[]> {
   const { nodeRuns } = tablesOf(db)
-  const rows = await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
+  const rows = await db
+    .select(nodeRunFixtureColumns(db))
+    .from(nodeRuns)
+    .where(eq(nodeRuns.taskId, taskId))
   return rows.filter((row) => row.errorMessage === 'queued for retry').map((row) => row.nodeId)
 }
 
 /** 重试铸出的占位行（`retryNode` 是唯一写这条 errorMessage 的地方），按 nodeId 取一条。 */
 async function retryPlaceholder(db: PersistenceDb, taskId: string, nodeId: string) {
   const { nodeRuns } = tablesOf(db)
-  const rows = await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
+  const rows = await db
+    .select(nodeRunFixtureColumns(db))
+    .from(nodeRuns)
+    .where(eq(nodeRuns.taskId, taskId))
   return rows.find((row) => row.nodeId === nodeId && row.errorMessage === 'queued for retry')
 }
 

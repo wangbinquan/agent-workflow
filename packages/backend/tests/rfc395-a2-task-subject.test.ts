@@ -1,3 +1,5 @@
+import { legacyContentRef } from '@/platform/content/contentRef'
+import { contentRowColumns } from '@/platform/content/infrastructure/contentStore'
 // RFC-395 II-a A2: all subject readers must work without catalog host rows on either provider.
 import { expect, test } from 'bun:test'
 import { ulid } from 'ulid'
@@ -16,11 +18,10 @@ import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import {
   createTaskSubjectQueries,
-  decodeTaskSubject,
   definitionAnchorId,
   TASK_DEFINITION_HOSTS,
 } from '@/modules/task-execution/public/queries'
-import type { StoredTaskSubject } from '@/modules/task-execution/public/types'
+import type { TaskSubject } from '@/modules/task-execution/public/types'
 import {
   loadTaskProjection,
   taskListSummariesProjection,
@@ -277,7 +278,7 @@ describeEachProvider('RFC-395 II-a A2 subject readers', (harness) => {
     const subjects = await queries.taskSubjectProjection(rows.map((row) => row.id!))
     const summaries = await taskListSummariesProjection(db, {})
     for (const row of rows) {
-      const subject = decodeTaskSubject(row as StoredTaskSubject)
+      const subject = legacySubjectOracle(row as StoredTaskSubject)
       const expected = {
         workflowId: definitionAnchorId(subject),
         workflowName: subject.kind === 'workflow' ? 'Live name' : hosts[subject.kind].name,
@@ -326,13 +327,13 @@ describeEachProvider('RFC-395 II-a A2 subject readers', (harness) => {
     )
     for (const row of rows) {
       const stored = row as StoredTaskSubject
-      expect(sqlKinds.get(row.id!)).toBe(decodeTaskSubject(stored).kind)
-      expect(taskExecutionKind(stored)).toBe(decodeTaskSubject(stored).kind)
+      expect(sqlKinds.get(row.id!)).toBe(legacySubjectOracle(stored).kind)
+      expect(taskExecutionKind(stored)).toBe(legacySubjectOracle(stored).kind)
     }
     for (const facet of ['workflow', 'agent', 'workgroup'] as const) {
       const expected = rows
         .filter((row) => {
-          const kind = decodeTaskSubject(row as StoredTaskSubject).kind
+          const kind = legacySubjectOracle(row as StoredTaskSubject).kind
           return (
             (kind === 'digital-employee' || kind === 'code-round' ? 'workflow' : kind) === facet
           )
@@ -372,7 +373,7 @@ describeEachProvider('RFC-395 II-a A2 subject readers', (harness) => {
         sourcePortName: 'doc',
         versionIndex: 1,
         reviewIteration: 0,
-        bodyPath: 'missing.md',
+        ...contentRowColumns(legacyContentRef('review-body-path', 'local-file', 'missing.md')),
         decision: 'pending',
       })
     }
@@ -394,7 +395,7 @@ describeEachProvider('RFC-395 II-a A2 subject readers', (harness) => {
     for (const row of cases.slice(1)) {
       const task = fixture(row)
       await taskFixture(db, task)
-      const kind = decodeTaskSubject(row).kind
+      const kind = legacySubjectOracle(row).kind
       const dependencies = { db, activity, resourceAuthorityFor }
       if (kind === 'agent' || kind === 'code-round')
         await assertManualExecutionAllowedProjection(dependencies, actor, task.id!)
@@ -442,7 +443,7 @@ describeEachProvider('RFC-395 II-a A2 subject readers', (harness) => {
     for (const row of cases.slice(1)) {
       const task = fixture(row)
       await taskFixture(db, task)
-      const scopeId = definitionAnchorId(decodeTaskSubject(row))
+      const scopeId = definitionAnchorId(legacySubjectOracle(row))
       await insertOne(db, memories, {
         id: ulid(),
         scopeType: 'workflow',
@@ -479,3 +480,22 @@ describeEachProvider('RFC-395 II-a A2 subject readers', (harness) => {
     expect(await readWorkflowFixtures(db)).toEqual([])
   })
 })
+
+// Frozen fixture oracle retains the epoch-1 precedence; runtime reads the native
+// definition subject and never imports this legacy projection.
+interface StoredTaskSubject {
+  readonly workflowId: string
+  readonly codeRoundId?: string | null
+  readonly workgroupId?: string | null
+  readonly sourceAgentId?: string | null
+  readonly sourceAgentName?: string | null
+}
+function legacySubjectOracle(row: StoredTaskSubject): TaskSubject {
+  if (row.codeRoundId) return { kind: 'code-round', sourceId: row.codeRoundId }
+  if (row.workgroupId) return { kind: 'workgroup', sourceId: row.workgroupId }
+  if (row.sourceAgentName)
+    return { kind: 'agent', sourceId: row.sourceAgentId ?? null, sourceName: row.sourceAgentName }
+  if (row.workflowId === hosts['digital-employee'].id)
+    return { kind: 'digital-employee', sourceId: null }
+  return { kind: 'workflow', sourceId: row.workflowId }
+}

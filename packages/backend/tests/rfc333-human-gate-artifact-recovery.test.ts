@@ -1,3 +1,12 @@
+import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
+import { contentRowColumns } from '@/platform/content/infrastructure/contentStore'
+import { legacyContentRef } from '@/platform/content/contentRef'
+import { contentRefColumns } from '@/platform/content/contentStore'
+import {
+  type HumanGateArtifactSnapshot,
+  DEFAULT_HUMAN_GATE_CLAIM_LEASE_MS,
+} from '@/modules/collaboration/application/ports/humanGateOperationStore'
+import { reviewStagedPath } from '@/platform/content/locations/review'
 import { withO2Closure } from './helpers/o2Closure'
 import { composeHumanGateTaskLockPort } from '@/modules/task-execution/composition'
 import { taskFixture } from './helpers/model'
@@ -16,16 +25,16 @@ import { afterEach, describe, expect, test } from 'bun:test'
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { eq } from 'drizzle-orm'
+import { and, eq } from 'drizzle-orm'
 
 import { HumanGateOperationRecovery } from '@/modules/collaboration/application/recoverHumanGateOperations'
 import type {
   HumanGateArtifactStore,
   PlannedReviewArtifact,
 } from '@/modules/collaboration/application/ports/humanGateArtifactStore'
-import { DEFAULT_HUMAN_GATE_CLAIM_LEASE_MS } from '@/modules/collaboration/application/ports/humanGateOperationStore'
+
 import type { CanonicalHumanGateRequest } from '@/modules/collaboration/domain/canonicalGateRequest'
-import { FsHumanGateArtifactStore } from '@/modules/collaboration/infrastructure/fsHumanGateArtifactStore'
+import { FsHumanGateArtifactStore } from './helpers/fsHumanGateArtifactStore'
 import { DatabaseCommittedReviewArtifactReader } from '@/modules/collaboration/infrastructure/committedReviewArtifactReader'
 import { DatabaseHumanGateOperationJournal } from '@/modules/collaboration/infrastructure/humanGateOperationJournal'
 import { DatabaseHumanGateOperationPersistence } from '@/modules/collaboration/infrastructure/humanGateOperationPersistence'
@@ -81,7 +90,7 @@ function openRequest(manifestDigest = 'source-v1'): CanonicalHumanGateRequest {
 async function prepareReviewOperation(input: {
   db: PersistenceDb
   operations: DatabaseHumanGateOperationJournal
-  artifacts: FsHumanGateArtifactStore
+  artifacts: HumanGateArtifactStore
   operationId: string
   idempotencyKey: string
   body: string
@@ -108,7 +117,7 @@ async function prepareReviewOperation(input: {
       now: NOW + 1,
     })
   })
-  const receiptJson = input.artifacts.stageReviewArtifact(plan, input.body)
+  const receiptJson = await input.artifacts.stageReviewArtifact(plan, input.body)
   await databaseSessionFor(input.db).transaction(async (tx) => {
     await input.operations.transitionArtifactTx({
       tx,
@@ -124,7 +133,7 @@ async function prepareReviewOperation(input: {
       operationId: input.operationId,
       expectedClaimEpoch: 1,
       manifestJson: JSON.stringify({
-        schemaVersion: 1,
+        schemaVersion: 2,
         kind: 'review-open',
         items: [plan],
       }),
@@ -180,8 +189,9 @@ describe('RFC-333 T4 review artifact recovery', () => {
       const operations = new DatabaseHumanGateOperationPersistence(
         databaseSessionFor(db),
         composeHumanGateTaskLockPort,
+        { historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions },
       )
-      const real = new FsHumanGateArtifactStore(appHome)
+      const real = fileArtifacts(db, appHome)
       const stage = deferredEffect()
       const publish = deferredEffect()
       const artifacts: HumanGateArtifactStore = {
@@ -268,6 +278,7 @@ describe('RFC-333 T4 review artifact recovery', () => {
           await new DatabaseCommittedReviewArtifactReader(
             db,
             createFileReviewArtifactContent(appHome),
+            epoch2RuntimeTestPorts(db).content,
           ).read(artifact.finalPath),
         ).toBe('# async content\n')
         expect(existsSync(absolute(appHome, artifact.finalPath))).toBe(false)
@@ -285,8 +296,11 @@ describe('RFC-333 T4 review artifact recovery', () => {
       const db = harness.db
       await seedTask(db)
       const appHome = tempHome()
-      const journal = new DatabaseHumanGateOperationJournal(composeHumanGateTaskLockPort)
-      const real = new FsHumanGateArtifactStore(appHome)
+      const journal = new DatabaseHumanGateOperationJournal(
+        composeHumanGateTaskLockPort,
+        epoch2RuntimeTestPorts(db).historyRestrictions,
+      )
+      const real = fileArtifacts(db, appHome)
       const plan = await prepareReviewOperation({
         db,
         operations: journal,
@@ -298,6 +312,7 @@ describe('RFC-333 T4 review artifact recovery', () => {
       const operations = new DatabaseHumanGateOperationPersistence(
         databaseSessionFor(db),
         composeHumanGateTaskLockPort,
+        { historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions },
       )
       const cleanup = deferredEffect()
       const artifacts: HumanGateArtifactStore = {
@@ -337,11 +352,14 @@ describe('RFC-333 T4 review artifact recovery', () => {
     test('composes asynchronous committed content without a local home and preserves staged fallback', async () => {
       const db = harness.db
       await seedTask(db)
-      const real = new FsHumanGateArtifactStore(tempHome())
+      const real = fileArtifacts(db, tempHome())
       const body = '# alternate content\n'
       const plan = await prepareReviewOperation({
         db,
-        operations: new DatabaseHumanGateOperationJournal(composeHumanGateTaskLockPort),
+        operations: new DatabaseHumanGateOperationJournal(
+          composeHumanGateTaskLockPort,
+          epoch2RuntimeTestPorts(db).historyRestrictions,
+        ),
         artifacts: real,
         operationId: 'operation-content-port',
         idempotencyKey: 'content-port',
@@ -349,7 +367,10 @@ describe('RFC-333 T4 review artifact recovery', () => {
       })
       await commitPrepared({
         db,
-        operations: new DatabaseHumanGateOperationJournal(composeHumanGateTaskLockPort),
+        operations: new DatabaseHumanGateOperationJournal(
+          composeHumanGateTaskLockPort,
+          epoch2RuntimeTestPorts(db).historyRestrictions,
+        ),
         operationId: plan.operationId,
       })
       const objects = new Map<string, Uint8Array>([[plan.stagedPath, Buffer.from(body)]])
@@ -412,8 +433,11 @@ describe('RFC-333 T4 review artifact recovery', () => {
       const db = harness.db
       await seedTask(db)
       const appHome = tempHome()
-      const operations = new DatabaseHumanGateOperationJournal(composeHumanGateTaskLockPort)
-      const artifacts = new FsHumanGateArtifactStore(appHome)
+      const operations = new DatabaseHumanGateOperationJournal(
+        composeHumanGateTaskLockPort,
+        epoch2RuntimeTestPorts(db).historyRestrictions,
+      )
+      const artifacts = fileArtifacts(db, appHome)
       const body = '# reviewed\n\ncomplete body\n'
       const plan = await prepareReviewOperation({
         db,
@@ -430,6 +454,7 @@ describe('RFC-333 T4 review artifact recovery', () => {
         await new DatabaseCommittedReviewArtifactReader(
           db,
           createFileReviewArtifactContent(appHome),
+          epoch2RuntimeTestPorts(db).content,
         ).read(plan.finalPath),
       ).toBe(body)
 
@@ -437,6 +462,7 @@ describe('RFC-333 T4 review artifact recovery', () => {
         operations: new DatabaseHumanGateOperationPersistence(
           databaseSessionFor(db),
           composeHumanGateTaskLockPort,
+          { historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions },
         ),
         artifacts,
         preparedInspector: {
@@ -455,9 +481,11 @@ describe('RFC-333 T4 review artifact recovery', () => {
         await new DatabaseCommittedReviewArtifactReader(
           db,
           createFileReviewArtifactContent(appHome),
+          epoch2RuntimeTestPorts(db).content,
         ).read(plan.finalPath),
       ).toBe(body)
-      const { collaborationGateOperations, collaborationGateArtifacts } = tablesOf(db)
+      const { collaborationGateOperations } = tablesOf(db),
+        { collaborationGateArtifacts } = tablesOf(db)
       expect(
         (
           await first(
@@ -485,8 +513,11 @@ describe('RFC-333 T4 review artifact recovery', () => {
       const db = harness.db
       await seedTask(db)
       const appHome = tempHome()
-      const operations = new DatabaseHumanGateOperationJournal(composeHumanGateTaskLockPort)
-      const realArtifacts = new FsHumanGateArtifactStore(appHome)
+      const operations = new DatabaseHumanGateOperationJournal(
+        composeHumanGateTaskLockPort,
+        epoch2RuntimeTestPorts(db).historyRestrictions,
+      )
+      const realArtifacts = fileArtifacts(db, appHome)
       const body = '# retryable\n'
       const plan = await prepareReviewOperation({
         db,
@@ -517,6 +548,7 @@ describe('RFC-333 T4 review artifact recovery', () => {
         operations: new DatabaseHumanGateOperationPersistence(
           databaseSessionFor(db),
           composeHumanGateTaskLockPort,
+          { historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions },
         ),
         artifacts: faultingArtifacts,
         preparedInspector: {
@@ -529,6 +561,7 @@ describe('RFC-333 T4 review artifact recovery', () => {
         await new DatabaseCommittedReviewArtifactReader(
           db,
           createFileReviewArtifactContent(appHome),
+          epoch2RuntimeTestPorts(db).content,
         ).read(plan.finalPath),
       ).toBe(body)
       expect(existsSync(absolute(appHome, plan.finalPath))).toBe(false)
@@ -538,6 +571,7 @@ describe('RFC-333 T4 review artifact recovery', () => {
         operations: new DatabaseHumanGateOperationPersistence(
           databaseSessionFor(db),
           composeHumanGateTaskLockPort,
+          { historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions },
         ),
         artifacts: realArtifacts,
         preparedInspector: {
@@ -557,8 +591,11 @@ describe('RFC-333 T4 review artifact recovery', () => {
       const db = harness.db
       await seedTask(db)
       const appHome = tempHome()
-      const operations = new DatabaseHumanGateOperationJournal(composeHumanGateTaskLockPort)
-      const artifacts = new FsHumanGateArtifactStore(appHome)
+      const operations = new DatabaseHumanGateOperationJournal(
+        composeHumanGateTaskLockPort,
+        epoch2RuntimeTestPorts(db).historyRestrictions,
+      )
+      const artifacts = fileArtifacts(db, appHome)
       const plan = await prepareReviewOperation({
         db,
         operations,
@@ -572,6 +609,7 @@ describe('RFC-333 T4 review artifact recovery', () => {
         operations: new DatabaseHumanGateOperationPersistence(
           databaseSessionFor(db),
           composeHumanGateTaskLockPort,
+          { historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions },
         ),
         artifacts,
         preparedInspector: {
@@ -581,7 +619,8 @@ describe('RFC-333 T4 review artifact recovery', () => {
       })
       expect(await recovery.runOnce()).toMatchObject({ claimed: 1, cleaned: 1, failed: 0 })
       expect(existsSync(absolute(appHome, plan.stagedPath))).toBe(false)
-      const { collaborationGateOperations, collaborationGateArtifacts } = tablesOf(db)
+      const { collaborationGateOperations } = tablesOf(db),
+        { collaborationGateArtifacts } = tablesOf(db)
       expect(
         await first(
           db
@@ -620,8 +659,11 @@ describe('RFC-333 T4 review artifact recovery', () => {
       const db = harness.db
       await seedTask(db)
       const appHome = tempHome()
-      const operations = new DatabaseHumanGateOperationJournal(composeHumanGateTaskLockPort)
-      const artifacts = new FsHumanGateArtifactStore(appHome)
+      const operations = new DatabaseHumanGateOperationJournal(
+        composeHumanGateTaskLockPort,
+        epoch2RuntimeTestPorts(db).historyRestrictions,
+      )
+      const artifacts = fileArtifacts(db, appHome)
       await databaseSessionFor(db).transaction(async (tx) => {
         await operations.beginTx({
           tx,
@@ -636,6 +678,7 @@ describe('RFC-333 T4 review artifact recovery', () => {
         operations: new DatabaseHumanGateOperationPersistence(
           databaseSessionFor(db),
           composeHumanGateTaskLockPort,
+          { historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions },
         ),
         artifacts,
         preparedInspector: {
@@ -675,3 +718,42 @@ describe('RFC-333 T4 review artifact recovery', () => {
     expect(recoverySource).not.toContain('resumeTask')
   })
 })
+
+function fileArtifacts(db: PersistenceDb, appHome: string): HumanGateArtifactStore {
+  const files = new FsHumanGateArtifactStore(appHome)
+  const physical = (artifact: HumanGateArtifactSnapshot) => ({
+    ...artifact,
+    stagedPath: reviewStagedPath(artifact.operationId, artifact.artifactKey),
+  })
+  return {
+    planReviewArtifact: files.planReviewArtifact,
+    async stageReviewArtifact(plan, body) {
+      const receipt = files.stageReviewArtifact(plan, body)
+      const final = contentRowColumns(
+        legacyContentRef('review-body-path', 'local-file', plan.finalPath, {
+          sha256: plan.sha256,
+          size: plan.byteSize,
+        }),
+      )
+      const staged = contentRefColumns.encode(
+        legacyContentRef('review-body-path', 'local-file', plan.stagedPath, {
+          sha256: plan.sha256,
+          size: plan.byteSize,
+        }),
+      )
+      const { collaborationGateArtifacts } = tablesOf(db)
+      await db
+        .update(collaborationGateArtifacts)
+        .set({ ...final, stagedContentRefJson: staged.json, stagedInlineBytes: null })
+        .where(
+          and(
+            eq(collaborationGateArtifacts.operationId, plan.operationId),
+            eq(collaborationGateArtifacts.artifactKey, plan.artifactKey),
+          ),
+        )
+      return receipt
+    },
+    finalizeReviewArtifact: (artifact) => files.finalizeReviewArtifact(physical(artifact)),
+    cleanupReviewArtifact: (artifact) => files.cleanupReviewArtifact(physical(artifact)),
+  }
+}

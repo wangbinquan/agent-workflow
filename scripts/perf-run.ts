@@ -15,7 +15,7 @@ import { createPostgresqlDatabaseClient } from '../packages/backend/src/platform
 import { openPostgresqlLogicalTarget } from '../packages/backend/src/platform/persistence/postgresqlLogicalTarget'
 import { createPostgresqlDatabaseRuntime } from '../packages/backend/src/platform/persistence/postgresqlRuntime'
 import { buildPostgresqlSchemaPlan } from '../packages/backend/src/platform/persistence/postgresqlSchema'
-import { buildLogicalSchemaContract } from '../packages/backend/src/bootstrap/persistenceSchema'
+import { logicalSchemaContract } from '../packages/backend/src/bootstrap/persistenceSchema'
 import { openSqliteLogicalSource } from '../packages/backend/src/platform/persistence/sqliteLogicalSource'
 import { createProductionPerformanceApplication } from '../packages/backend/tests/helpers/productionPerformanceApplication'
 import { measurePerformanceArchive, measurePerformanceHttp } from './perf-bench'
@@ -141,7 +141,7 @@ async function prepareTemplate(input: RunInput): Promise<void> {
   // Workflow's original database-generated timestamps are stored once. The
   // SQLite file copy and the real logical restore therefore share those bytes.
   const templateDigest = createHash('sha256').update(readFileSync(path)).digest('hex')
-  const contract = buildLogicalSchemaContract()
+  const contract = logicalSchemaContract
   const source = openSqliteLogicalSource({ path, contract })
   await withPerformanceCleanup(
     async () => {
@@ -231,13 +231,13 @@ async function seedSqlite(input: RunInput): Promise<void> {
 
 async function seedPostgresql(input: RunInput): Promise<void> {
   const receipt = templateReceipt(input)
-  const contract = buildLogicalSchemaContract()
+  const contract = logicalSchemaContract
   if (contract.digest !== receipt.schemaDigest) throw new Error('template schema changed')
   const runtime = postgresqlRuntime(receipt)
   await withPerformanceCleanup(
     async () => {
       const target = await openPostgresqlLogicalTarget({
-        headContract: buildLogicalSchemaContract(),
+        headContract: logicalSchemaContract,
         runtime,
         operationId: receipt.operationId,
         sourceGenerationId: SOURCE_GENERATION,
@@ -247,7 +247,7 @@ async function seedPostgresql(input: RunInput): Promise<void> {
       await withPerformanceCleanup(
         async () => {
           const restored = await restoreLogicalDatabaseArtifact({
-            headContract: buildLogicalSchemaContract(),
+            headContract: logicalSchemaContract,
             artifactRoot: join(input.directory, 'logical-template'),
             expectedManifestDigest: receipt.exported.manifest.digest,
             expectedLegacyArchiveFileDigest: receipt.exported.legacyArchiveFileDigest,

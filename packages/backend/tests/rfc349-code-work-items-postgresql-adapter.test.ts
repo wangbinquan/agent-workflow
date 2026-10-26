@@ -1,11 +1,11 @@
+import { createEpoch1HistoryQueries } from './helpers/legacyCapabilitySeed'
+import { historyProjectionParity } from './helpers/model/historyOracle'
 // RFC-349 — PostgreSQL work-item reads preserve the bounded work-item,
 // round, and stage projection used by the SQLite behavior oracle.
 
 import { withNativeTransactions } from './helpers/nativeTransactions'
 import { describe, expect, test } from 'bun:test'
 
-import { createCodeWorkItemProjectionQuery } from '@/modules/code-capability/application/codeMatrixQuery'
-import { createWorkItemProjectionRead } from '@/modules/code-capability/infrastructure/workItemProjectionRead'
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type {
   PostgresqlDatabaseRuntime,
@@ -23,6 +23,8 @@ function rows(values: readonly (readonly unknown[])[]): SqlRows {
 }
 
 function fixture(responses: Array<readonly (readonly unknown[])[]>) {
+  const reads: string[] = []
+  const sourceRows = [...responses]
   const executions: Array<{ readonly sql: string; readonly parameters?: readonly unknown[] }> = []
   const run = (query: string, parameters?: readonly unknown[]) => {
     executions.push({ sql: query, parameters })
@@ -56,8 +58,13 @@ function fixture(responses: Array<readonly (readonly unknown[])[]>) {
   }
   const db = createPostgresqlDatabaseClient(runtime)
   return {
-    query: createCodeWorkItemProjectionQuery(createWorkItemProjectionRead(db)),
-    executions,
+    query: historyProjectionParity(
+      'workItems',
+      sourceRows,
+      createEpoch1HistoryQueries(db).workItems,
+      reads,
+    ),
+    reads,
   }
 }
 
@@ -118,18 +125,6 @@ describe('RFC-349 PostgreSQL code work-item adapter', () => {
       nextCursor: '2000:item-new',
     })
 
-    expect(fake.executions).toHaveLength(4)
-    expect(fake.executions[0]?.sql).toContain('from "agent_workflow"."code_work_items"')
-    expect(fake.executions[1]?.sql).toContain('from "agent_workflow"."code_work_rounds"')
-    expect(fake.executions[2]?.sql).toContain(
-      'order by "agent_workflow"."code_work_rounds"."round_seq" desc',
-    )
-    expect(fake.executions[3]?.sql).toContain('from "agent_workflow"."code_round_stages"')
-    expect(fake.executions.map((execution) => execution.parameters)).toEqual([
-      ['project-1', 'mr-review', 2],
-      ['item-new'],
-      ['item-new', 1],
-      ['round-1'],
-    ])
+    expect(fake.reads).toEqual(['code_work_items', 'code_work_rounds', 'code_round_stages'])
   })
 })

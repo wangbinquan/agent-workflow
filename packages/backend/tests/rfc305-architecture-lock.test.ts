@@ -2,16 +2,16 @@
 // RFC-395 II-pre：守卫改锁生产路径或删除后的精确存量，保留原扫描判据。
 // RFC-305 architecture lock: additions must flow through the shared catalog,
 // the identity-access public surface, and the sole transactional writer.
-import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { registerProviderHttpApplicationLifetime } from './helpers/providerHttpApplication'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { existsSync, readdirSync, readFileSync } from 'node:fs'
-import { relative, resolve } from 'node:path'
+import { existsSync, readdirSync, readFileSync, mkdtempSync } from 'node:fs'
+import { relative, resolve, join } from 'node:path'
 import { PERMISSIONS, SYSTEM_DOMAIN_POINTS } from '@agent-workflow/shared'
 import ts from 'typescript'
-import { mkdtempSync } from 'node:fs'
+
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import { createInMemoryDb } from '../src/db/client'
 import { ALL_TOOLS } from '../src/mcp/tools'
@@ -24,7 +24,6 @@ const REPO_ROOT = resolve(import.meta.dir, '..', '..', '..')
 const BACKEND_SRC = resolve(REPO_ROOT, 'packages', 'backend', 'src')
 const IDENTITY_ROOT = resolve(BACKEND_SRC, 'modules', 'identity-access')
 const FRONTEND_SRC = resolve(REPO_ROOT, 'packages', 'frontend', 'src')
-const MIGRATIONS = resolve(REPO_ROOT, 'packages', 'backend', 'db', 'migrations')
 
 function sourceFiles(root: string, extensions = ['.ts']): string[] {
   const files: string[] = []
@@ -335,7 +334,6 @@ describe('RFC-305 identity-access architecture', () => {
       'packages/backend/src/bootstrap/deploymentProfile.ts -> @/modules/identity-access/composition/authentication',
       // RFC-395: the schema-only composition entry is imported and re-exported at the collection root.
       'packages/backend/src/bootstrap/persistenceSchema.ts -> @/modules/identity-access/composition/schema',
-      'packages/backend/src/bootstrap/persistenceSchema.ts -> @/modules/identity-access/composition/schema',
       'packages/backend/src/cli/package.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/cli/user.ts -> @/modules/identity-access/public/operations',
       'packages/backend/src/cli/user.ts -> @/modules/identity-access/public/participants',
@@ -541,7 +539,7 @@ describe('RFC-305 permission catalog architecture', () => {
     // 排到同一个分片里才红（plan §5gk 实撞）。补上这一组两件事一起解决。
     const home = mkdtempSync(join(tmpdir(), 'aw-rfc305-lock-'))
     await openTestApplication(
-      { provider: 'sqlite', db: createInMemoryDb(MIGRATIONS) },
+      { provider: 'sqlite', db: createInMemoryDb() },
       {
         token: 'd'.repeat(64),
         appHome: home,
@@ -550,7 +548,7 @@ describe('RFC-305 permission catalog architecture', () => {
         dbVersion: 162,
         secretBox: createSecretBoxFromKey(Buffer.alloc(32, 30)),
         databaseMigration: composeDatabaseMigrationModule({
-          contract: buildLogicalSchemaContract(),
+          contract: logicalSchemaContract,
           sqlitePath: join(home, 'db.sqlite'),
           operationsRoot: join(home, 'database-migrations'),
           generationPointerPath: join(home, 'database-generation.json'),

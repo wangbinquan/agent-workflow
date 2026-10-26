@@ -1,4 +1,4 @@
-// RFC-395 I-a: explicit epoch-1 schema contributions; no physical or runtime change.
+// RFC-395 activation: this context declares the live epoch-2 schema directly.
 import {
   column as c,
   defineContribution,
@@ -10,54 +10,6 @@ import {
 import { materializeDrizzle } from '@/platform/persistence/schema/drizzle'
 
 const owner = defineContribution('resource-catalog')
-
-const agentsDefinition = owner.table({
-  id: 'agents',
-  schemaSymbol: 'agents',
-  columns: {
-    id: c.id('id', { primary: true }),
-    name: c.text('name'),
-    description: c.text('description', { default: '' }),
-    outputs: c.jsonText('outputs', { default: '[]' }),
-    inputs: c.jsonText('inputs', { default: '[]' }),
-    syncOutputsOnIterate: c.bool('sync_outputs_on_iterate', { default: true }),
-    runtime: c.text('runtime', { nullable: true }),
-    permission: c.jsonText('permission', { default: '{}' }),
-    skills: c.jsonText('skills', { default: '[]' }),
-    dependsOn: c.jsonText('depends_on', { default: '[]' }),
-    mcp: c.jsonText('mcp', { default: '[]' }),
-    plugins: c.jsonText('plugins', { default: '[]' }),
-    frontmatterExtra: c.jsonText('frontmatter_extra', { default: '{}' }),
-    bodyMd: c.text('body_md', { default: '' }),
-    ownerUserId: c.id('owner_user_id', { nullable: true }),
-    visibility: c.enum('visibility', ['private', 'public'], { default: 'public' }),
-    aclRevision: c.int('acl_revision', { default: 0 }),
-    builtin: c.bool('builtin', { default: false }),
-    schemaVersion: c.int('schema_version', { default: 1 }),
-    createdAt: c.epochMs('created_at', {
-      default: raw(
-        '(unixepoch() * 1000)',
-        '(extract(epoch from clock_timestamp()) * 1000)::bigint',
-      ),
-    }),
-    updatedAt: c.epochMs('updated_at', {
-      default: raw(
-        '(unixepoch() * 1000)',
-        '(extract(epoch from clock_timestamp()) * 1000)::bigint',
-      ),
-    }),
-  },
-  indexes: [
-    index(
-      'agents_owner_name_unique',
-      [raw('COALESCE("agents"."owner_user_id", \'\')', 'COALESCE("owner_user_id", \'\')'), 'name'],
-      { unique: true },
-    ),
-  ],
-  retention: retention.business,
-})
-
-export const agents = materializeDrizzle(agentsDefinition).table
 
 const mcpProbesDefinition = owner.table({
   id: 'mcp_probes',
@@ -591,60 +543,6 @@ const pluginsDefinition = owner.table({
 
 export const plugins = materializeDrizzle(pluginsDefinition).table
 
-const resourceBundleAppliesDefinition = owner.table({
-  id: 'resource_bundle_applies',
-  schemaSymbol: 'resourceBundleApplies',
-  columns: {
-    id: c.id('id', { primary: true }),
-    scope: c.text('scope'),
-    key: c.text('key'),
-    actorUserId: c.id('actor_user_id'),
-    state: c.enum('state', ['prepared', 'applying', 'committed', 'failed'], {
-      default: 'prepared',
-    }),
-    preparedArtifactsJson: c.jsonText('prepared_artifacts_json', { default: '[]' }),
-    receiptJson: c.jsonText('receipt_json', { nullable: true }),
-    error: c.text('error', { nullable: true }),
-    createdAt: c.epochMs('created_at'),
-    updatedAt: c.epochMs('updated_at'),
-  },
-  indexes: [
-    index('uniq_resource_bundle_applies_key', ['scope', 'key'], { unique: true }),
-    index('idx_resource_bundle_applies_state', ['state']),
-    index('idx_resource_bundle_applies_actor', ['actor_user_id']),
-  ],
-  retention: retention.business,
-})
-
-export const resourceBundleApplies = materializeDrizzle(resourceBundleAppliesDefinition).table
-
-const skillContentEntriesDefinition = owner.table({
-  id: 'skill_content_entries',
-  schemaSymbol: 'skillContentEntries',
-  columns: {
-    skillId: c.id('skill_id'),
-    tree: c.text('tree'),
-    path: c.text('path'),
-    encoding: c.enum('encoding', ['utf8', 'base64']),
-    content: c.text('content'),
-    size: c.int('size'),
-    updatedAt: c.epochMs('updated_at'),
-  },
-  primaryKey: ['skill_id', 'tree', 'path'],
-  checks: [
-    {
-      name: 'skill_content_entries_encoding_enum',
-      expression: raw(
-        '"skill_content_entries"."encoding" IN (\'utf8\', \'base64\')',
-        "\"encoding\" IN ('utf8', 'base64')",
-      ),
-    },
-  ],
-  retention: retention.business,
-})
-
-export const skillContentEntries = materializeDrizzle(skillContentEntriesDefinition).table
-
 const skillOperationLocksDefinition = owner.table({
   id: 'skill_operation_locks',
   schemaSymbol: 'skillOperationLocks',
@@ -711,125 +609,6 @@ const skillOperationsDefinition = owner.table({
 })
 
 export const skillOperations = materializeDrizzle(skillOperationsDefinition).table
-
-const skillVersionsDefinition = owner.table({
-  id: 'skill_versions',
-  schemaSymbol: 'skillVersions',
-  columns: {
-    id: c.id('id', { primary: true }),
-    skillId: c.id('skill_id'),
-    versionIndex: c.int('version_index'),
-    filesPath: c.text('files_path'),
-    source: c.enum('source', ['initial', 'editor', 'fusion', 'restore', 'import']),
-    summary: c.text('summary', { nullable: true }),
-    fusionId: c.id('fusion_id', { nullable: true }),
-    restoredFromVersion: c.int('restored_from_version', { nullable: true }),
-    authorUserId: c.id('author_user_id', { nullable: true }),
-    contentHash: c.text('content_hash', { nullable: true }),
-    createdAt: c.epochMs('created_at', {
-      default: raw(
-        '(unixepoch() * 1000)',
-        '(extract(epoch from clock_timestamp()) * 1000)::bigint',
-      ),
-    }),
-  },
-  foreignKeys: [
-    foreignKey('skill_versions_skill_id_skills_id_fk', ['skill_id'], 'skills', ['id'], {
-      onDelete: 'cascade',
-    }),
-  ],
-  indexes: [
-    index('uq_skill_versions_skill_v', ['skill_id', 'version_index'], { unique: true }),
-    index('idx_skill_versions_created', ['created_at']),
-    index('idx_skill_versions_fusion', ['fusion_id']),
-  ],
-  retention: retention.business,
-})
-
-export const skillVersions = materializeDrizzle(skillVersionsDefinition).table
-
-const skillsDefinition = owner.table({
-  id: 'skills',
-  schemaSymbol: 'skills',
-  columns: {
-    id: c.id('id', { primary: true }),
-    name: c.text('name'),
-    description: c.text('description', { default: '' }),
-    managedPath: c.text('managed_path', { nullable: true }),
-    ownerUserId: c.id('owner_user_id', { nullable: true }),
-    visibility: c.enum('visibility', ['private', 'public'], { default: 'public' }),
-    schemaVersion: c.int('schema_version', { default: 1 }),
-    contentVersion: c.int('content_version', { default: 1 }),
-    aclRevision: c.int('acl_revision', { default: 0 }),
-    metaRevision: c.int('meta_revision', { default: 0 }),
-    reservationState: c.enum('reservation_state', ['reserving', 'ready'], { default: 'ready' }),
-    versionState: c.enum(
-      'version_state',
-      ['legacy-unbackfilled', 'snapshot-unverified', 'snapshot-authoritative', 'quarantined'],
-      { default: 'legacy-unbackfilled' },
-    ),
-    createdAt: c.epochMs('created_at', {
-      default: raw(
-        '(unixepoch() * 1000)',
-        '(extract(epoch from clock_timestamp()) * 1000)::bigint',
-      ),
-    }),
-    updatedAt: c.epochMs('updated_at', {
-      default: raw(
-        '(unixepoch() * 1000)',
-        '(extract(epoch from clock_timestamp()) * 1000)::bigint',
-      ),
-    }),
-  },
-  indexes: [
-    index(
-      'skills_owner_name_unique',
-      [raw('COALESCE("skills"."owner_user_id", \'\')', 'COALESCE("owner_user_id", \'\')'), 'name'],
-      { unique: true },
-    ),
-  ],
-  retention: retention.business,
-})
-
-export const skills = materializeDrizzle(skillsDefinition).table
-
-const workflowsDefinition = owner.table({
-  id: 'workflows',
-  schemaSymbol: 'workflows',
-  columns: {
-    id: c.id('id', { primary: true }),
-    name: c.text('name'),
-    description: c.text('description', { default: '' }),
-    definition: c.jsonText('definition'),
-    version: c.int('version', { default: 1 }),
-    ownerUserId: c.id('owner_user_id', { nullable: true }),
-    visibility: c.enum('visibility', ['private', 'public'], { default: 'public' }),
-    aclRevision: c.int('acl_revision', { default: 0 }),
-    builtin: c.bool('builtin', { default: false }),
-    schemaVersion: c.int('schema_version', { default: 1 }),
-    createdAt: c.epochMs('created_at', {
-      default: raw(
-        '(unixepoch() * 1000)',
-        '(extract(epoch from clock_timestamp()) * 1000)::bigint',
-      ),
-    }),
-    updatedAt: c.epochMs('updated_at', {
-      default: raw(
-        '(unixepoch() * 1000)',
-        '(extract(epoch from clock_timestamp()) * 1000)::bigint',
-      ),
-    }),
-  },
-  indexes: [
-    index('idx_workflows_builtin_name', ['name'], {
-      unique: true,
-      where: raw('"workflows"."builtin" = 1', '"builtin" = TRUE'),
-    }),
-  ],
-  retention: retention.business,
-})
-
-export const workflows = materializeDrizzle(workflowsDefinition).table
 
 const workgroupMembersDefinition = owner.table({
   id: 'workgroup_members',
@@ -931,24 +710,682 @@ const workgroupsDefinition = owner.table({
 
 export const workgroups = materializeDrizzle(workgroupsDefinition).table
 
-export const schemaContribution = owner.contribution([
-  agentsDefinition,
-  mcpProbesDefinition,
-  mcpRuntimeTestCreateReceiptsDefinition,
-  mcpRuntimeTestEventsDefinition,
-  mcpRuntimeTestSessionLeasesDefinition,
-  mcpRuntimeTestSessionsDefinition,
-  mcpRuntimeTestTurnsDefinition,
-  mcpsDefinition,
-  pluginArtifactGenerationsDefinition,
-  pluginsDefinition,
-  resourceBundleAppliesDefinition,
-  skillContentEntriesDefinition,
-  skillOperationLocksDefinition,
-  skillOperationsDefinition,
-  skillVersionsDefinition,
-  skillsDefinition,
-  workflowsDefinition,
-  workgroupMembersDefinition,
-  workgroupsDefinition,
-])
+const resourceBundleAppliesDefinition = owner.table({
+  version: 2,
+  unique: [],
+  foreignKeys: [],
+  checks: [],
+  indexes: [
+    {
+      name: 'uniq_resource_bundle_applies_key',
+      unique: true,
+      nulls: 'distinct',
+      columns: [
+        { kind: 'column', name: 'scope' },
+        { kind: 'column', name: 'key' },
+      ],
+      where: null,
+    },
+    {
+      name: 'idx_resource_bundle_applies_state',
+      unique: false,
+      nulls: 'distinct',
+      columns: [{ kind: 'column', name: 'state' }],
+      where: null,
+    },
+    {
+      name: 'idx_resource_bundle_applies_actor',
+      unique: false,
+      nulls: 'distinct',
+      columns: [{ kind: 'column', name: 'actor_user_id' }],
+      where: null,
+    },
+  ],
+  migrationPolicy: 'KEEP',
+  id: 'resource_bundle_applies',
+  schemaSymbol: 'resourceBundleApplies',
+  columns: {
+    id: c.id('id', { primary: true }),
+    scope: c.text('scope'),
+    key: c.text('key'),
+    actorUserId: c.id('actor_user_id'),
+    state: c.enum('state', ['prepared', 'applying', 'committed', 'failed'], {
+      default: 'prepared',
+    }),
+    preparedArtifactsJson: c.jsonText('prepared_artifacts_json', {
+      default: '{"scene":"resource-package","version":2,"artifacts":[]}',
+    }),
+    receiptJson: c.jsonText('receipt_json', { nullable: true }),
+    error: c.text('error', { nullable: true }),
+    createdAt: c.epochMs('created_at'),
+    updatedAt: c.epochMs('updated_at'),
+  },
+  retention: {
+    class: 'owner-managed-business',
+    rule: 'Retain as live business or recovery state until the owning bounded context approves a replacement contract.',
+  },
+  primaryKey: ['id'],
+  migrationKey: ['id'],
+})
+
+export const resourceBundleApplies = materializeDrizzle(resourceBundleAppliesDefinition).table
+
+const agentsDefinition = owner.table({
+  version: 2,
+  unique: [],
+  foreignKeys: [],
+  checks: [],
+  indexes: [
+    {
+      name: 'agents_owner_name_unique',
+      unique: true,
+      nulls: 'distinct',
+      columns: [
+        {
+          kind: 'raw',
+          reason: 'Preserve the epoch-1 expression spelling and provider semantics (RFC-395 I-a).',
+          sqlite: 'COALESCE("agents"."owner_user_id", \'\')',
+          postgresql: 'COALESCE("owner_user_id", \'\')',
+        },
+        { kind: 'column', name: 'name' },
+      ],
+      where: null,
+    },
+  ],
+  migrationPolicy: 'KEEP',
+  id: 'agents',
+  schemaSymbol: 'agents',
+  columns: {
+    id: c.id('id', { primary: true }),
+    name: c.text('name'),
+    description: c.text('description', { default: '' }),
+    outputs: c.jsonText('outputs', { default: '[]' }),
+    inputs: c.jsonText('inputs', { default: '[]' }),
+    syncOutputsOnIterate: c.bool('sync_outputs_on_iterate', { default: true }),
+    runtime: c.text('runtime', { nullable: true }),
+    permission: c.jsonText('permission', { default: '{}' }),
+    frontmatterExtra: c.jsonText('frontmatter_extra', { default: '{}' }),
+    bodyMd: c.text('body_md', { default: '' }),
+    ownerUserId: c.id('owner_user_id', { nullable: true }),
+    visibility: c.enum('visibility', ['private', 'public'], { default: 'public' }),
+    aclRevision: c.int('acl_revision', { default: 0 }),
+    builtin: c.bool('builtin', { default: false }),
+    schemaVersion: c.int('schema_version', { default: 1 }),
+    createdAt: c.epochMs('created_at', {
+      default: {
+        kind: 'raw',
+        reason: 'Preserve the epoch-1 expression spelling and provider semantics (RFC-395 I-a).',
+        sqlite: '(unixepoch() * 1000)',
+        postgresql: '(extract(epoch from clock_timestamp()) * 1000)::bigint',
+      },
+    }),
+    updatedAt: c.epochMs('updated_at', {
+      default: {
+        kind: 'raw',
+        reason: 'Preserve the epoch-1 expression spelling and provider semantics (RFC-395 I-a).',
+        sqlite: '(unixepoch() * 1000)',
+        postgresql: '(extract(epoch from clock_timestamp()) * 1000)::bigint',
+      },
+    }),
+  },
+  retention: {
+    class: 'owner-managed-business',
+    rule: 'Retain as live business or recovery state until the owning bounded context approves a replacement contract.',
+  },
+  primaryKey: ['id'],
+  migrationKey: ['id'],
+})
+
+export const agents = materializeDrizzle(agentsDefinition).table
+
+const agentSkillRefsDefinition = owner.table({
+  version: 1,
+  unique: [
+    { name: 'agent_skill_refs_ordinal', columns: ['agent_id', 'ordinal'], nulls: 'distinct' },
+  ],
+  foreignKeys: [
+    {
+      name: 'agent_skill_refs_agent_fk',
+      columns: ['agent_id'],
+      foreignTable: 'agents',
+      foreignColumns: ['id'],
+      onDelete: 'cascade',
+      onUpdate: 'no action',
+      lifecycle: 'The parent owns its ordered references; mutable targets may remain dangling.',
+    },
+  ],
+  checks: [
+    {
+      name: 'agent_skill_refs_kind_shape',
+      expression: {
+        kind: 'binary',
+        op: 'OR',
+        left: {
+          kind: 'binary',
+          op: 'AND',
+          left: {
+            kind: 'binary',
+            op: '=',
+            left: { kind: 'column', name: 'kind' },
+            right: { kind: 'literal', value: 'managed' },
+          },
+          right: {
+            kind: 'binary',
+            op: 'AND',
+            left: { kind: 'unary', op: 'IS NOT NULL', value: { kind: 'column', name: 'skill_id' } },
+            right: {
+              kind: 'unary',
+              op: 'IS NULL',
+              value: { kind: 'column', name: 'project_name' },
+            },
+          },
+        },
+        right: {
+          kind: 'binary',
+          op: 'AND',
+          left: {
+            kind: 'binary',
+            op: '=',
+            left: { kind: 'column', name: 'kind' },
+            right: { kind: 'literal', value: 'project' },
+          },
+          right: {
+            kind: 'binary',
+            op: 'AND',
+            left: {
+              kind: 'unary',
+              op: 'IS NOT NULL',
+              value: { kind: 'column', name: 'project_name' },
+            },
+            right: { kind: 'unary', op: 'IS NULL', value: { kind: 'column', name: 'skill_id' } },
+          },
+        },
+      },
+    },
+  ],
+  indexes: [
+    {
+      name: 'agent_skill_refs_target',
+      unique: false,
+      nulls: 'distinct',
+      columns: [{ kind: 'column', name: 'skill_id' }],
+      where: null,
+    },
+  ],
+  migrationPolicy: 'KEEP',
+  id: 'agent_skill_refs',
+  schemaSymbol: 'agentSkillRefs',
+  retention: {
+    class: 'owner-managed-business',
+    rule: 'Retain as live business or recovery state until the owning bounded context approves a replacement contract.',
+  },
+  columns: {
+    agentId: c.id('agent_id'),
+    referenceKey: c.slotKey('reference_key'),
+    occurrence: c.int('occurrence'),
+    ordinal: c.int('ordinal'),
+    kind: c.enum('kind', ['managed', 'project']),
+    skillId: c.id('skill_id', { nullable: true }),
+    projectName: c.text('project_name', { nullable: true }),
+  },
+  primaryKey: ['agent_id', 'reference_key', 'occurrence'],
+  migrationKey: ['agent_id', 'reference_key', 'occurrence'],
+})
+
+export const agentSkillRefs = materializeDrizzle(agentSkillRefsDefinition).table
+
+const agentMcpRefsDefinition = owner.table({
+  version: 1,
+  unique: [{ name: 'agent_mcp_refs_ordinal', columns: ['agent_id', 'ordinal'], nulls: 'distinct' }],
+  foreignKeys: [
+    {
+      name: 'agent_mcp_refs_agent_fk',
+      columns: ['agent_id'],
+      foreignTable: 'agents',
+      foreignColumns: ['id'],
+      onDelete: 'cascade',
+      onUpdate: 'no action',
+      lifecycle: 'The parent owns its ordered references; mutable targets may remain dangling.',
+    },
+  ],
+  checks: [],
+  indexes: [
+    {
+      name: 'agent_mcp_refs_target',
+      unique: false,
+      nulls: 'distinct',
+      columns: [{ kind: 'column', name: 'mcp_id' }],
+      where: null,
+    },
+  ],
+  migrationPolicy: 'KEEP',
+  id: 'agent_mcp_refs',
+  schemaSymbol: 'agentMcpRefs',
+  retention: {
+    class: 'owner-managed-business',
+    rule: 'Retain as live business or recovery state until the owning bounded context approves a replacement contract.',
+  },
+  columns: {
+    agentId: c.id('agent_id'),
+    mcpId: c.id('mcp_id'),
+    occurrence: c.int('occurrence'),
+    ordinal: c.int('ordinal'),
+  },
+  primaryKey: ['agent_id', 'mcp_id', 'occurrence'],
+  migrationKey: ['agent_id', 'mcp_id', 'occurrence'],
+})
+
+export const agentMcpRefs = materializeDrizzle(agentMcpRefsDefinition).table
+
+const agentPluginRefsDefinition = owner.table({
+  version: 1,
+  unique: [
+    { name: 'agent_plugin_refs_ordinal', columns: ['agent_id', 'ordinal'], nulls: 'distinct' },
+  ],
+  foreignKeys: [
+    {
+      name: 'agent_plugin_refs_agent_fk',
+      columns: ['agent_id'],
+      foreignTable: 'agents',
+      foreignColumns: ['id'],
+      onDelete: 'cascade',
+      onUpdate: 'no action',
+      lifecycle: 'The parent owns its ordered references; mutable targets may remain dangling.',
+    },
+  ],
+  checks: [],
+  indexes: [
+    {
+      name: 'agent_plugin_refs_target',
+      unique: false,
+      nulls: 'distinct',
+      columns: [{ kind: 'column', name: 'plugin_id' }],
+      where: null,
+    },
+  ],
+  migrationPolicy: 'KEEP',
+  id: 'agent_plugin_refs',
+  schemaSymbol: 'agentPluginRefs',
+  retention: {
+    class: 'owner-managed-business',
+    rule: 'Retain as live business or recovery state until the owning bounded context approves a replacement contract.',
+  },
+  columns: {
+    agentId: c.id('agent_id'),
+    pluginId: c.id('plugin_id'),
+    occurrence: c.int('occurrence'),
+    ordinal: c.int('ordinal'),
+  },
+  primaryKey: ['agent_id', 'plugin_id', 'occurrence'],
+  migrationKey: ['agent_id', 'plugin_id', 'occurrence'],
+})
+
+export const agentPluginRefs = materializeDrizzle(agentPluginRefsDefinition).table
+
+const agentDependenciesDefinition = owner.table({
+  version: 1,
+  unique: [
+    { name: 'agent_dependencies_ordinal', columns: ['agent_id', 'ordinal'], nulls: 'distinct' },
+  ],
+  foreignKeys: [
+    {
+      name: 'agent_dependencies_agent_fk',
+      columns: ['agent_id'],
+      foreignTable: 'agents',
+      foreignColumns: ['id'],
+      onDelete: 'cascade',
+      onUpdate: 'no action',
+      lifecycle: 'The parent owns its ordered references; mutable targets may remain dangling.',
+    },
+  ],
+  checks: [],
+  indexes: [
+    {
+      name: 'agent_dependencies_target',
+      unique: false,
+      nulls: 'distinct',
+      columns: [{ kind: 'column', name: 'dependency_agent_id' }],
+      where: null,
+    },
+  ],
+  migrationPolicy: 'KEEP',
+  id: 'agent_dependencies',
+  schemaSymbol: 'agentDependencies',
+  retention: {
+    class: 'owner-managed-business',
+    rule: 'Retain as live business or recovery state until the owning bounded context approves a replacement contract.',
+  },
+  columns: {
+    agentId: c.id('agent_id'),
+    dependencyAgentId: c.id('dependency_agent_id'),
+    occurrence: c.int('occurrence'),
+    ordinal: c.int('ordinal'),
+  },
+  primaryKey: ['agent_id', 'dependency_agent_id', 'occurrence'],
+  migrationKey: ['agent_id', 'dependency_agent_id', 'occurrence'],
+})
+
+export const agentDependencies = materializeDrizzle(agentDependenciesDefinition).table
+
+const workflowsDefinition = owner.table({
+  version: 2,
+  unique: [],
+  foreignKeys: [],
+  checks: [],
+  indexes: [
+    {
+      name: 'idx_workflows_builtin_name',
+      unique: true,
+      nulls: 'distinct',
+      columns: [{ kind: 'column', name: 'name' }],
+      where: {
+        kind: 'raw',
+        reason: 'Preserve the epoch-1 expression spelling and provider semantics (RFC-395 I-a).',
+        sqlite: '"workflows"."builtin" = 1',
+        postgresql: '"builtin" = TRUE',
+      },
+    },
+  ],
+  migrationPolicy: 'KEEP',
+  id: 'workflows',
+  schemaSymbol: 'workflows',
+  columns: {
+    id: c.id('id', { primary: true }),
+    name: c.text('name'),
+    description: c.text('description', { default: '' }),
+    definition: c.jsonText('definition'),
+    version: c.int('version', { default: 1 }),
+    ownerUserId: c.id('owner_user_id', { nullable: true }),
+    visibility: c.enum('visibility', ['private', 'public'], { default: 'public' }),
+    aclRevision: c.int('acl_revision', { default: 0 }),
+    builtin: c.bool('builtin', { default: false }),
+    schemaVersion: c.int('schema_version', { default: 1 }),
+    createdAt: c.epochMs('created_at', {
+      default: {
+        kind: 'raw',
+        reason: 'Preserve the epoch-1 expression spelling and provider semantics (RFC-395 I-a).',
+        sqlite: '(unixepoch() * 1000)',
+        postgresql: '(extract(epoch from clock_timestamp()) * 1000)::bigint',
+      },
+    }),
+    updatedAt: c.epochMs('updated_at', {
+      default: {
+        kind: 'raw',
+        reason: 'Preserve the epoch-1 expression spelling and provider semantics (RFC-395 I-a).',
+        sqlite: '(unixepoch() * 1000)',
+        postgresql: '(extract(epoch from clock_timestamp()) * 1000)::bigint',
+      },
+    }),
+  },
+  retention: {
+    class: 'owner-managed-business',
+    rule: 'Retain as live business or recovery state until the owning bounded context approves a replacement contract.',
+  },
+  primaryKey: ['id'],
+  migrationKey: ['id'],
+})
+
+export const workflows = materializeDrizzle(workflowsDefinition).table
+
+const workflowDependencyIndexDefinition = owner.table({
+  version: 1,
+  unique: [],
+  foreignKeys: [
+    {
+      name: 'workflow_dependency_index_workflow_fk',
+      columns: ['workflow_id'],
+      foreignTable: 'workflows',
+      foreignColumns: ['id'],
+      onDelete: 'cascade',
+      onUpdate: 'no action',
+      lifecycle:
+        'Parser-owned index is rebuilt with the canonical definition; selectors do not own mutable resources.',
+    },
+  ],
+  checks: [],
+  indexes: [
+    {
+      name: 'workflow_dependency_index_selector',
+      unique: false,
+      nulls: 'distinct',
+      columns: [
+        { kind: 'column', name: 'resource_kind' },
+        { kind: 'column', name: 'selector_kind' },
+        { kind: 'column', name: 'selector_value' },
+      ],
+      where: null,
+    },
+  ],
+  migrationPolicy: 'KEEP',
+  id: 'workflow_dependency_index',
+  schemaSymbol: 'workflowDependencyIndex',
+  retention: {
+    class: 'owner-managed-business',
+    rule: 'Retain as live business or recovery state until the owning bounded context approves a replacement contract.',
+  },
+  columns: {
+    workflowId: c.id('workflow_id'),
+    revision: c.int('revision'),
+    referencePath: c.text('reference_path'),
+    resourceKind: c.enum('resource_kind', ['agent', 'workflow', 'workgroup']),
+    selectorKind: c.enum('selector_kind', ['id', 'name']),
+    selectorValue: c.text('selector_value'),
+    namespaceJson: c.jsonText('namespace_json'),
+  },
+  primaryKey: ['workflow_id', 'revision', 'reference_path'],
+  migrationKey: ['workflow_id', 'revision', 'reference_path'],
+})
+
+export const workflowDependencyIndex = materializeDrizzle(workflowDependencyIndexDefinition).table
+
+const skillsDefinition = owner.table({
+  version: 2,
+  unique: [],
+  foreignKeys: [],
+  checks: [],
+  indexes: [
+    {
+      name: 'skills_owner_name_unique',
+      unique: true,
+      nulls: 'distinct',
+      columns: [
+        {
+          kind: 'raw',
+          reason: 'Preserve the epoch-1 expression spelling and provider semantics (RFC-395 I-a).',
+          sqlite: 'COALESCE("skills"."owner_user_id", \'\')',
+          postgresql: 'COALESCE("owner_user_id", \'\')',
+        },
+        { kind: 'column', name: 'name' },
+      ],
+      where: null,
+    },
+  ],
+  migrationPolicy: 'KEEP',
+  id: 'skills',
+  schemaSymbol: 'skills',
+  columns: {
+    id: c.id('id', { primary: true }),
+    name: c.text('name'),
+    description: c.text('description', { default: '' }),
+    ownerUserId: c.id('owner_user_id', { nullable: true }),
+    visibility: c.enum('visibility', ['private', 'public'], { default: 'public' }),
+    schemaVersion: c.int('schema_version', { default: 1 }),
+    contentVersion: c.int('content_version', { default: 1 }),
+    aclRevision: c.int('acl_revision', { default: 0 }),
+    metaRevision: c.int('meta_revision', { default: 0 }),
+    reservationState: c.enum('reservation_state', ['reserving', 'ready'], { default: 'ready' }),
+    versionState: c.enum(
+      'version_state',
+      ['legacy-unbackfilled', 'snapshot-unverified', 'snapshot-authoritative', 'quarantined'],
+      { default: 'legacy-unbackfilled' },
+    ),
+    createdAt: c.epochMs('created_at', {
+      default: {
+        kind: 'raw',
+        reason: 'Preserve the epoch-1 expression spelling and provider semantics (RFC-395 I-a).',
+        sqlite: '(unixepoch() * 1000)',
+        postgresql: '(extract(epoch from clock_timestamp()) * 1000)::bigint',
+      },
+    }),
+    updatedAt: c.epochMs('updated_at', {
+      default: {
+        kind: 'raw',
+        reason: 'Preserve the epoch-1 expression spelling and provider semantics (RFC-395 I-a).',
+        sqlite: '(unixepoch() * 1000)',
+        postgresql: '(extract(epoch from clock_timestamp()) * 1000)::bigint',
+      },
+    }),
+    contentRefJson: c.jsonText('content_ref_json', {
+      document: { kind: 'content-ref', version: 1, inlineBytesColumn: 'content_inline_bytes' },
+      nullable: true,
+    }),
+    contentInlineBytes: c.bytes('content_inline_bytes', { nullable: true }),
+  },
+  retention: {
+    class: 'owner-managed-business',
+    rule: 'Retain as live business or recovery state until the owning bounded context approves a replacement contract.',
+  },
+  primaryKey: ['id'],
+  migrationKey: ['id'],
+})
+
+export const skills = materializeDrizzle(skillsDefinition).table
+
+const skillVersionsDefinition = owner.table({
+  version: 2,
+  unique: [],
+  foreignKeys: [
+    {
+      name: 'skill_versions_skill_id_skills_id_fk',
+      columns: ['skill_id'],
+      foreignTable: 'skills',
+      foreignColumns: ['id'],
+      onDelete: 'cascade',
+      onUpdate: 'no action',
+      lifecycle:
+        'Preserve epoch-1 cascade delete and no action update semantics; target is a logical table reference.',
+    },
+  ],
+  checks: [],
+  indexes: [
+    {
+      name: 'uq_skill_versions_skill_v',
+      unique: true,
+      nulls: 'distinct',
+      columns: [
+        { kind: 'column', name: 'skill_id' },
+        { kind: 'column', name: 'version_index' },
+      ],
+      where: null,
+    },
+    {
+      name: 'idx_skill_versions_created',
+      unique: false,
+      nulls: 'distinct',
+      columns: [{ kind: 'column', name: 'created_at' }],
+      where: null,
+    },
+    {
+      name: 'idx_skill_versions_fusion',
+      unique: false,
+      nulls: 'distinct',
+      columns: [{ kind: 'column', name: 'fusion_id' }],
+      where: null,
+    },
+  ],
+  migrationPolicy: 'KEEP',
+  id: 'skill_versions',
+  schemaSymbol: 'skillVersions',
+  columns: {
+    id: c.id('id', { primary: true }),
+    skillId: c.id('skill_id'),
+    versionIndex: c.int('version_index'),
+    source: c.enum('source', ['initial', 'editor', 'fusion', 'restore', 'import']),
+    summary: c.text('summary', { nullable: true }),
+    fusionId: c.id('fusion_id', { nullable: true }),
+    restoredFromVersion: c.int('restored_from_version', { nullable: true }),
+    authorUserId: c.id('author_user_id', { nullable: true }),
+    contentHash: c.text('content_hash', { nullable: true }),
+    createdAt: c.epochMs('created_at', {
+      default: {
+        kind: 'raw',
+        reason: 'Preserve the epoch-1 expression spelling and provider semantics (RFC-395 I-a).',
+        sqlite: '(unixepoch() * 1000)',
+        postgresql: '(extract(epoch from clock_timestamp()) * 1000)::bigint',
+      },
+    }),
+    contentRefJson: c.jsonText('content_ref_json', {
+      document: { kind: 'content-ref', version: 1, inlineBytesColumn: 'content_inline_bytes' },
+    }),
+    contentInlineBytes: c.bytes('content_inline_bytes', { nullable: true }),
+  },
+  retention: {
+    class: 'owner-managed-business',
+    rule: 'Retain as live business or recovery state until the owning bounded context approves a replacement contract.',
+  },
+  primaryKey: ['id'],
+  migrationKey: ['id'],
+})
+
+export const skillVersions = materializeDrizzle(skillVersionsDefinition).table
+
+const skillContentEntriesDefinition = owner.table({
+  version: 2,
+  unique: [],
+  foreignKeys: [],
+  checks: [],
+  indexes: [],
+  migrationPolicy: 'KEEP',
+  id: 'skill_content_entries',
+  schemaSymbol: 'skillContentEntries',
+  columns: {
+    skillId: c.id('skill_id'),
+    tree: c.text('tree'),
+    path: c.text('path'),
+    size: c.int('size'),
+    updatedAt: c.epochMs('updated_at'),
+    contentRefJson: c.jsonText('content_ref_json', {
+      document: { kind: 'content-ref', version: 1, inlineBytesColumn: 'content_inline_bytes' },
+    }),
+    contentInlineBytes: c.bytes('content_inline_bytes', { nullable: true }),
+  },
+  primaryKey: ['skill_id', 'tree', 'path'],
+  retention: {
+    class: 'owner-managed-business',
+    rule: 'Retain as live business or recovery state until the owning bounded context approves a replacement contract.',
+  },
+  migrationKey: ['skill_id', 'tree', 'path'],
+})
+
+export const skillContentEntries = materializeDrizzle(skillContentEntriesDefinition).table
+
+export const schemaContribution = {
+  owner: 'resource-catalog',
+  version: 2,
+  tables: [
+    mcpProbesDefinition,
+    mcpRuntimeTestCreateReceiptsDefinition,
+    mcpRuntimeTestEventsDefinition,
+    mcpRuntimeTestSessionLeasesDefinition,
+    mcpRuntimeTestSessionsDefinition,
+    mcpRuntimeTestTurnsDefinition,
+    mcpsDefinition,
+    pluginArtifactGenerationsDefinition,
+    pluginsDefinition,
+    skillOperationLocksDefinition,
+    skillOperationsDefinition,
+    workgroupMembersDefinition,
+    workgroupsDefinition,
+    resourceBundleAppliesDefinition,
+    agentsDefinition,
+    agentSkillRefsDefinition,
+    agentMcpRefsDefinition,
+    agentPluginRefsDefinition,
+    agentDependenciesDefinition,
+    workflowsDefinition,
+    workflowDependencyIndexDefinition,
+    skillsDefinition,
+    skillVersionsDefinition,
+    skillContentEntriesDefinition,
+  ],
+} as const

@@ -1,3 +1,6 @@
+import { legacyContentRef } from '@/platform/content/contentRef'
+import { contentRowColumns } from '@/platform/content/infrastructure/contentStore'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 // RFC-053 PR-A T1c — double-layer / cross-table invariant demonstrations.
 //
 // Each invariant is implemented here as a small async function. Tests
@@ -23,7 +26,7 @@ import {
   readNodeRunFixtures,
 } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+
 import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { insertLegacySelfClarify } from './clarify-fixtures'
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
@@ -302,7 +305,9 @@ async function insertDocVersion(
     sourcePortName: 'docpath',
     versionIndex: opts.versionIndex,
     reviewIteration: opts.reviewIteration ?? 0,
-    bodyPath: `doc_versions/v${opts.versionIndex}.md`,
+    ...contentRowColumns(
+      legacyContentRef('review-body-path', 'local-file', `doc_versions/v${opts.versionIndex}.md`),
+    ),
     decision: opts.decision,
     decidedAt: opts.decision === 'pending' ? null : Date.now(),
   })

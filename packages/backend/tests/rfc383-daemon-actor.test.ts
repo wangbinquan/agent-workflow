@@ -31,7 +31,7 @@ describeEachProvider('RFC-383 per-call daemon admission', (harness) => {
         providers: ['postgresql'],
         phase: 'prepare',
       })
-      expect(bootDeclaration('legacy-mission-recovery')).not.toHaveProperty('providers')
+      expect(bootDeclaration('skill-operation-recovery')).not.toHaveProperty('providers')
     } finally {
       rmSync(appHome, { recursive: true, force: true })
     }

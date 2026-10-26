@@ -48,7 +48,7 @@ describe('RFC-338 maintenance architecture', () => {
     expect(start.match(/createMaintenanceService\(\{/g)).toHaveLength(1)
     expect(start).toMatch(/postgresql: \{[\s\S]*?createMaintenanceRunStore\(db\)/u)
     expect(start).toMatch(
-      /adapter\.maintenance\(\{[\s\S]*?dbPath: Paths\.db,[\s\S]*?migrationsFolder/u,
+      /adapter\.maintenance\(\{[\s\S]*?dbPath: activeDbPath,[\s\S]*?migrationsFolder: input\.migrationsFolder/u,
     )
     expect(start).toContain('maintenanceStatus: () => maintenanceService.status()')
     expect(start).toContain("maintenanceService.runSoon('backupPrune')")
@@ -57,15 +57,14 @@ describe('RFC-338 maintenance architecture', () => {
     expect(start).toContain('await input.bootstrap.stop()')
     expect(start.split('.bootstrap.stop()').length - 1).toBe(1)
     expect(start).toContain('startBatchImportGc(')
-    expect(start).toMatch(
-      /const developmentWakeRuntimeFactory = createPollingDaemonRuntimeHandleFactory\(\{[\s\S]*?developmentAutomationModules\.sweepWakesWhileDraining\(\)/u,
-    )
-
+    expect(start).not.toContain('sweepWakesWhileDraining(')
     const gates = readBackend(
       'src/modules/development-automation/application/writerCutoverGates.ts',
     )
-    expect(gates).toContain('await input.writerCutover.refresh()')
-    expect(gates).toContain('development writer refresh failed')
+    expect(gates).toContain('interface DevelopmentWriterCutover')
+    expect(gates).not.toMatch(
+      /export (?:async )?function|legacy-draining|sweepWakesWhileDraining|recoverWhileDraining/,
+    )
 
     for (const forbidden of [
       'startWorktreeGc(',

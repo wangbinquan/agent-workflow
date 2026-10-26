@@ -1,3 +1,4 @@
+import { tablesOf } from '@/platform/persistence/sessionTables'
 // RFC-395 II-pre：生产启动 / 延续依赖及工作区租约改接线，保留既有断言。
 // RFC-301 — launch-origin ownership and negative-wire source ratchets.
 //
@@ -5,11 +6,10 @@
 // locks keep the internal persisted fact out of public route/shared schemas and
 // prevent lifecycle code from gaining an origin UPDATE path.
 
-import { tablesOf } from '@/platform/persistence/sessionTables'
-import { schemaFixtureDb } from './helpers/schemaFixture'
 import { describe, expect, test } from 'bun:test'
 import { readdirSync, readFileSync } from 'node:fs'
 import { relative, resolve } from 'node:path'
+import { schemaFixtureDb } from './helpers/schemaFixture'
 
 import ts from 'typescript'
 const REPO_ROOT = resolve(import.meta.dir, '..', '..', '..')
@@ -160,9 +160,9 @@ describe('RFC-301 task launch-origin architecture ratchets', () => {
     expect((taskService.match(/\blaunchOrigin\b/g) ?? []).length).toBe(0)
     expect(taskService).not.toMatch(/\.update\(tasks\)[\s\S]{0,240}\blaunchOrigin\b/)
     const db = schemaFixtureDb()
-    const { tasks } = tablesOf(db)
-    expect(tasks.launchOrigin.name).toBe('launch_origin')
-    expect(tasks.launchOrigin.getSQLType()).toBe('text')
+    const { taskLaunchContexts } = tablesOf(db)
+    expect(taskLaunchContexts.launchOrigin.name).toBe('launch_origin')
+    expect(taskLaunchContexts.launchOrigin.getSQLType()).toBe('text')
     // RFC-311 G1:过滤谓词改成**可换别名**的形式(`col('launch_origin')`),因为
     // 旧穷举管线在已物化的 `base b` 上求值、新快路径直接打 `tasks t`,两条路径
     // 必须共用同一份过滤定义——写死 `b.` 前缀就做不到。棘轮跟着挪到新形态:
@@ -174,7 +174,9 @@ describe('RFC-301 task launch-origin architecture ratchets', () => {
     // 把它交给 SQL。棘轮锁的仍是同一件事，只是判据从「手写这两条谓词」变成
     // 「过滤走单一映射 + 落在 launch_origin 上」。
     expect(operations).toContain('taskListOriginMatches(filters.origin)')
-    expect(operations).toContain("${col('launch_origin')} IN (${list(originMatches)})")
+    expect(operations).toContain(
+      'select task_id from task_launch_contexts where launch_origin in (${list(originMatches)})',
+    )
     // 这里**不**加一条「文件里不许出现 scheduled_task_id」的否定断言：源码文本判据
     // 分不清代码与散文，第一版就被解释这个 bug 的注释自己命中了。「不按
     // scheduled_task_id 猜来源」由行为测试守

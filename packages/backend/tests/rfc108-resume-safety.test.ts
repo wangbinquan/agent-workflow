@@ -19,19 +19,18 @@ import { nodeRunFixture, taskFixture, workflowFixture } from './helpers/model'
 import { afterEach, describe, expect, test } from 'bun:test'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { ulid } from 'ulid'
 
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 
-import type { DbClient } from '../src/db/client'
-import { createInMemoryDb } from '../src/db/client'
+import { type DbClient, createInMemoryDb } from '../src/db/client'
+
 import { getTask } from '../src/services/task'
 import { runGit, snapshotRefName } from '../src/util/git'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 import { createResumeEngine } from './helpers/resumeEngine'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const DEPS_CMD = ['/usr/bin/env', 'true']
 
 interface Harness {
@@ -55,7 +54,7 @@ async function buildHarness(): Promise<Harness> {
   await runGit(repoPath, ['add', '.'])
   await runGit(repoPath, ['commit', '-q', '-m', 'i'])
 
-  const db = createInMemoryDb(MIGRATIONS)
+  const db = createInMemoryDb()
   const definition: WorkflowDefinition = {
     $schema_version: 2,
     inputs: [],

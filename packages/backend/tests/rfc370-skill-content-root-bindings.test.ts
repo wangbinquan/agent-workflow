@@ -178,7 +178,8 @@ describeEachProviderHttpApplication(
               )
             }),
           ])
-          const { skills, skillOperationLocks, skillOperations } = tablesOf(scope.harness.db)
+          const { skillOperationLocks, skillOperations } = tablesOf(scope.harness.db),
+            { skills } = tablesOf(scope.harness.db)
           const before = await scope.harness.db.select().from(skills)
           expect(before).toHaveLength(1)
           expect(before[0]).toMatchObject({ reservationState: 'reserving', contentVersion: 1 })
@@ -213,7 +214,7 @@ describeEachProviderHttpApplication(
             db: scope.harness.db,
             ...selectSkillContentDependencies(selection, appHome),
           })
-          await boot.runIdentityMigrationBarrier()
+          await boot.recoverOperations()
           await boot.reconcileLiveFiles()
           let recovered = false
           recovery = boot.reverifySnapshots().then((report) => {

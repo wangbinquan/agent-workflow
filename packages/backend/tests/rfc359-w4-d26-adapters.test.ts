@@ -1,4 +1,7 @@
+import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { composeHumanGateTaskLockPort } from '@/modules/task-execution/composition'
+import { taskReadColumns } from '@/modules/task-execution/infrastructure/taskRepositorySql'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 // RFC-359 W4-D26 —— 手工提问开启写面合一：此前 `sqliteManualQuestionOpenWriter.ts`（165 行，走
 // `SqliteHumanGateOperationStore` 记账）与 `postgresqlManualQuestionOpenWriter.ts`（269 行，把
 // begin / markPrepared 两步**内联重写**成裸 INSERT + UPDATE）各一份。现在只剩一份中立实现。
@@ -10,15 +13,14 @@ import { composeHumanGateTaskLockPort } from '@/modules/task-execution/compositi
 // 这套断言两个引擎各跑一遍写面的核心判据：一次创建落定问题行 + prepared 门操作 + 已提交事件；
 // 任务终态一律拒绝且什么都不落；重复 gateRef 的活跃操作按冲突拒绝。
 
-import { taskFixture, workflowFixture } from './helpers/model'
-import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
+import { taskFixture, workflowFixture } from './helpers/model'
 
-import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { DatabaseHumanGateOperationJournal } from '@/modules/collaboration/infrastructure/humanGateOperationJournal'
 import { DatabaseManualQuestionOpenWriter } from '@/modules/collaboration/infrastructure/manualQuestionOpenWriter'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 
 const NOW = 1_788_969_900_000
@@ -50,7 +52,10 @@ async function seedTask(
 function writerFor(db: PersistenceDb): DatabaseManualQuestionOpenWriter {
   return new DatabaseManualQuestionOpenWriter(
     db,
-    new DatabaseHumanGateOperationJournal(composeHumanGateTaskLockPort),
+    new DatabaseHumanGateOperationJournal(
+      composeHumanGateTaskLockPort,
+      epoch2RuntimeTestPorts(db).historyRestrictions,
+    ),
   )
 }
 
@@ -68,7 +73,8 @@ describeEachProvider('RFC-359 W4-D26 —— 手工提问开启写面', (harness)
       now: NOW,
     })
 
-    const { taskQuestions, collaborationGateOperations, tasks } = tablesOf(db)
+    const { taskQuestions, collaborationGateOperations } = tablesOf(db)
+    const { tasks } = tablesOf(db)
     const question = (
       await db.select().from(taskQuestions).where(eq(taskQuestions.id, created.id)).limit(1)
     )[0]
@@ -114,7 +120,9 @@ describeEachProvider('RFC-359 W4-D26 —— 手工提问开启写面', (harness)
     expect(created.eventRefs).toHaveLength(1)
 
     // 任务本身不动：手工提问只落义务，停靠是后面 settle 的事。
-    const task = (await db.select().from(tasks).where(eq(tasks.id, taskId)).limit(1))[0]
+    const task = (
+      await db.select(taskReadColumns(db)).from(tasks).where(eq(tasks.id, taskId)).limit(1)
+    )[0]
     expect(task?.status).toBe('running')
     expect(task?.lifecycleEventRevision).toBe(3)
   })

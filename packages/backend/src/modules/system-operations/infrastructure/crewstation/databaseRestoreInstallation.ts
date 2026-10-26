@@ -1,3 +1,11 @@
+import { withNativeTransaction } from '@/platform/persistence/nativeTransaction'
+import { postgresqlHistoryConnection } from '@/platform/persistence/schema/history/connection'
+import { schemaHistoryRuntime } from '@/platform/persistence/schema/history/runtime'
+import {
+  readRestoreReceipt,
+  writeRestoreReceipt,
+  type HostedEpoch2RestoreReceipt,
+} from './epoch2RestoreReceipt'
 // RFC-370 v3 V5 — restore a hosted backup into the EMPTY database the platform
 // provisioned for CS RFC-042 (or resume exactly this restore). Runs only in the
 // release migration Job (`agent-workflow migrate` with
@@ -15,71 +23,18 @@ import type { CrewStationStreamObjectStorage } from '@/platform/crewstation/obje
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import { openPostgresqlLogicalTarget } from '@/platform/persistence/postgresqlLogicalTarget'
-import type {
-  PostgresqlDatabaseRuntime,
-  PostgresqlReservedConnection,
-} from '@/platform/persistence/postgresqlRuntime'
-import {
-  POSTGRESQL_METADATA_SCHEMA,
-  type PostgresqlSchemaPlan,
-} from '@/platform/persistence/postgresqlSchema'
+import type { PostgresqlDatabaseRuntime } from '@/platform/persistence/postgresqlRuntime'
+import { type PostgresqlSchemaPlan } from '@/platform/persistence/postgresqlSchema'
 import type { LogicalSchemaContract } from '@/platform/persistence/schemaContract'
-import { createLogger } from '@/util/log'
 import type { HostedRestoreNormalizationParticipant } from './restoreNormalizationContract'
+import { openHostedDatabaseBackupArchive } from './databaseRestoreArtifact'
 import {
-  openHostedDatabaseBackupArchive,
-  type HostedRestoreArtifact,
-} from './databaseRestoreArtifact'
-import { recordRestoredDatabaseDigests } from './databaseRestoreVerification'
+  recordRestoredDatabaseDigests,
+  verifyHostedDatabaseRestore,
+} from './databaseRestoreVerification'
 import { createHostedSystemRestoreNormalization } from './hostedRestoreNormalization'
 
 const SCHEMA_LOCK = 'rfc359-schema-upgrade'
-const metadata = (table: string) => `"${POSTGRESQL_METADATA_SCHEMA}"."${table}"`
-
-type TargetState = 'empty' | 'copying' | 'verified' | 'activated' | 'finalized'
-
-async function inspectTarget(
-  connection: PostgresqlReservedConnection,
-  artifact: HostedRestoreArtifact,
-  generation: { readonly generationId: string; readonly operationId: string },
-  contract: LogicalSchemaContract,
-): Promise<TargetState> {
-  const tables = await connection.unsafe(
-    'SELECT table_name FROM information_schema.tables WHERE table_schema = $1 AND table_type = $2',
-    [POSTGRESQL_METADATA_SCHEMA, 'BASE TABLE'],
-  )
-  const names = new Set(tables.map((row) => String(row.table_name)))
-  let copyStage: string | undefined
-  if (names.has('logical_copy_operations')) {
-    const copy = await connection.unsafe(
-      `SELECT stage, source_generation_id FROM ${metadata('logical_copy_operations')} WHERE operation_id = $1`,
-      [artifact.copyOperationId],
-    )
-    if (copy.length === 1 && copy[0]!.source_generation_id !== artifact.marker)
-      throw new Error('hosted-restore-target-not-empty')
-    copyStage = copy[0]?.stage === undefined ? undefined : String(copy[0].stage)
-  }
-  if (names.has('database_generations')) {
-    const active = await connection.unsafe(
-      `SELECT generation_id, operation_id, source_generation_id, contract_digest FROM ${metadata('database_generations')} WHERE state = 'active'`,
-    )
-    if (active.length > 1) throw new Error('hosted-restore-target-not-empty')
-    if (active.length === 1) {
-      const row = active[0]!
-      // Only this exact restore may own the target's active generation.
-      if (
-        row.generation_id !== generation.generationId ||
-        row.operation_id !== generation.operationId ||
-        row.source_generation_id !== artifact.marker ||
-        row.contract_digest !== contract.digest
-      )
-        throw new Error('hosted-restore-target-not-empty')
-      return copyStage === 'finalized' ? 'finalized' : 'activated'
-    }
-  }
-  if (copyStage === 'verified' || copyStage === 'finalized') return 'verified'
-  return copyStage === undefined ? 'empty' : 'copying'
-}
 
 export async function restoreHostedDatabaseInstallation(input: {
   readonly headContract: LogicalSchemaContract
@@ -92,7 +47,6 @@ export async function restoreHostedDatabaseInstallation(input: {
   readonly plan: PostgresqlSchemaPlan
   readonly generation: { readonly generationId: string; readonly operationId: string }
   readonly objects: Pick<CrewStationStreamObjectStorage, 'open'>
-  /** Owner participants composed by bootstrap; System Operations adds its own. */
   readonly normalization: readonly HostedRestoreNormalizationParticipant[]
   readonly now?: () => number
   readonly openArtifact?: typeof openHostedDatabaseBackupArchive
@@ -100,17 +54,15 @@ export async function restoreHostedDatabaseInstallation(input: {
   readonly openClient?: (runtime: PostgresqlDatabaseRuntime) => PersistenceDb
 }): Promise<{ restored: boolean; backupId: string; normalized: Readonly<Record<string, number>> }> {
   const now = input.now ?? Date.now
-  const log = createLogger('hosted-database-restore')
   const artifact = await (input.openArtifact ?? openHostedDatabaseBackupArchive)(input)
   const connection = await input.runtime
     .providerPool()
     .reserve()
-    .catch((error: unknown) => {
+    .catch((error) => {
       artifact.close()
       throw error
     })
-  let locked = false,
-    transaction = false
+  let locked = false
   try {
     const acquired = await connection.unsafe(
       'SELECT pg_try_advisory_lock(hashtextextended($1, 0)) AS acquired',
@@ -118,11 +70,81 @@ export async function restoreHostedDatabaseInstallation(input: {
     )
     if (acquired[0]?.acquired !== true) throw new Error('hosted-restore-schema-lock-held')
     locked = true
-    const state = await inspectTarget(connection, artifact, input.generation, input.contract)
-    if (state === 'finalized')
-      return { restored: false, backupId: artifact.sidecar.backupId, normalized: {} }
-    if (state === 'empty' || state === 'copying' || state === 'verified') {
-      const target = await (input.openTarget ?? openPostgresqlLogicalTarget)({
+    const metadata = await connection.unsafe(
+      "SELECT table_name FROM information_schema.tables WHERE table_schema='agent_workflow_meta' AND table_type='BASE TABLE'",
+    )
+    const names = new Set(metadata.map((row) => String(row.table_name)))
+    const state = names.has('migration_records')
+      ? await readRestoreReceipt<{
+          stage: string
+          sourceGenerationId: string
+          installedSourceGenerationId?: string
+          contractDigest: string
+          planDigest: string
+        }>(connection, artifact.copyOperationId, 'epoch2-copy')
+      : null
+    const binding = names.has('migration_records')
+      ? await readRestoreReceipt<{ generationId: string; operationId: string }>(
+          connection,
+          artifact.copyOperationId,
+          'hosted-restore-binding',
+        )
+      : null
+    if (
+      binding &&
+      (binding.generationId !== input.generation.generationId ||
+        binding.operationId !== input.generation.operationId)
+    )
+      throw new Error('hosted-restore-target-not-empty')
+    if (
+      state &&
+      (state.sourceGenerationId !== artifact.marker ||
+        state.contractDigest !== input.contract.digest ||
+        state.planDigest !== input.plan.digest)
+    )
+      throw new Error('hosted-restore-target-not-empty')
+    // P-1: refuse a serving installation before opening a target or replaying
+    // any rows. Epoch 2 records copy ownership separately from the platform's
+    // final restore receipt and preserves the installed source as lineage.
+    if (names.has('generations')) {
+      const active = await connection.unsafe(
+        "SELECT generation_id, operation_id, source_generation_id, contract_digest, plan_digest FROM agent_workflow_meta.generations WHERE state='active'",
+      )
+      const head = schemaHistoryRuntime().head()
+      if (
+        active.length > 1 ||
+        (active.length === 1 &&
+          (!state ||
+            !binding ||
+            active[0]!.generation_id !== input.generation.generationId ||
+            active[0]!.operation_id !== artifact.copyOperationId ||
+            active[0]!.source_generation_id !==
+              (state.installedSourceGenerationId ?? artifact.marker) ||
+            active[0]!.contract_digest !== head.contract.contract.digest ||
+            active[0]!.plan_digest !== input.plan.digest))
+      )
+        throw new Error('hosted-restore-target-not-empty')
+    }
+    if (names.has('migration_records')) {
+      const receipt = await readRestoreReceipt<HostedEpoch2RestoreReceipt>(
+        connection,
+        input.generation.operationId,
+        'hosted-restore',
+      )
+      if (receipt) {
+        if (
+          receipt.generationId !== input.generation.generationId ||
+          receipt.copyOperationId !== artifact.copyOperationId ||
+          receipt.logicalDigest !== input.contract.digest ||
+          receipt.backupId !== artifact.sidecar.backupId
+        )
+          throw new Error('hosted-restore-target-not-empty')
+        await verifyHostedDatabaseRestore(input)
+        return { restored: false, backupId: receipt.backupId, normalized: {} }
+      }
+    }
+    const openTarget = () =>
+      (input.openTarget ?? openPostgresqlLogicalTarget)({
         headContract: input.headContract,
         runtime: input.runtime,
         operationId: artifact.copyOperationId,
@@ -130,52 +152,36 @@ export async function restoreHostedDatabaseInstallation(input: {
         contract: input.contract,
         plan: input.plan,
       })
-      try {
-        if (state === 'verified') {
-          // A resumed restore re-checks the already verified copy only.
+    const target = await openTarget()
+    try {
+      if (state?.stage !== 'activated' && state?.stage !== 'finalized') {
+        if (state?.stage === 'verified') {
           await target.prepare(now())
           await target.finalizeSchema(now(), artifact.tables)
         } else await artifact.replay(target)
-      } finally {
-        await target.close()
+        // Bind the platform operation before activation, so an interrupted
+        // normalization can only be resumed by this exact restore Job.
+        await writeRestoreReceipt(
+          connection,
+          artifact.copyOperationId,
+          'hosted-restore-binding',
+          input.generation,
+        )
+        await target.prepareGeneration({
+          generationId: input.generation.generationId,
+          sourceGenerationId: artifact.marker,
+        })
+        await target.activateGeneration(input.generation.generationId, now())
       }
-      await connection.unsafe('BEGIN')
-      transaction = true
-      const verified = await connection.unsafe(
-        `SELECT stage FROM ${metadata('logical_copy_operations')} WHERE operation_id = $1 FOR UPDATE`,
-        [artifact.copyOperationId],
-      )
-      if (verified.length !== 1 || verified[0]?.stage !== 'verified')
-        throw new Error('hosted-restore-target-not-verified')
-      // The platform's generation becomes active so owner participants write
-      // through the ordinary fenced business client. No instance serves this
-      // database before the CS switch, which follows a passing verify Job.
-      await connection.unsafe(
-        `INSERT INTO ${metadata('logical_copy_operations')} (operation_id, source_generation_id, contract_digest, plan_digest, stage, created_at, updated_at) VALUES ($1, $2, $3, $4, 'activated', $5, $5) ON CONFLICT (operation_id) DO NOTHING`,
-        [
-          input.generation.operationId,
-          artifact.marker,
-          input.contract.digest,
-          input.plan.digest,
-          now(),
-        ],
-      )
-      await connection.unsafe(
-        `INSERT INTO ${metadata('database_generations')} (generation_id, operation_id, source_generation_id, contract_digest, state, activated_at, first_live_write_at) VALUES ($1, $2, $3, $4, 'active', $5, NULL) ON CONFLICT (generation_id) DO NOTHING`,
-        [
-          input.generation.generationId,
-          input.generation.operationId,
-          artifact.marker,
-          input.contract.digest,
-          now(),
-        ],
-      )
-      await connection.unsafe('COMMIT')
-      transaction = false
+      await target.assertReady(input.generation.generationId)
+    } finally {
+      // The schema lock owns one of the two hosted pool slots. Release the copy
+      // connection before owner normalization opens its business transaction.
+      await target.close()
     }
     const client = (input.openClient ?? createPostgresqlDatabaseClient)(input.runtime)
-    const session = databaseSessionFor(client)
-    const normalized: Record<string, number> = {}
+    const session = databaseSessionFor(client),
+      normalized: Record<string, number> = {}
     for (const participant of [
       createHostedSystemRestoreNormalization({
         sidecar: artifact.sidecar,
@@ -184,50 +190,53 @@ export async function restoreHostedDatabaseInstallation(input: {
       ...input.normalization,
     ]) {
       const counters = await session.transaction((tx) =>
-        participant.normalize(tx, { restoreOperationId: input.generation.operationId, now: now() }),
+        participant.normalize(tx, {
+          restoreOperationId: input.generation.operationId,
+          now: now(),
+        }),
       )
       for (const [key, value] of Object.entries(counters))
         normalized[`${participant.name}.${key}`] = value
     }
-    await connection.unsafe('BEGIN')
-    transaction = true
-    const copy = await connection.unsafe(
-      `SELECT stage FROM ${metadata('logical_copy_operations')} WHERE operation_id = $1 FOR UPDATE`,
-      [artifact.copyOperationId],
-    )
-    if (copy.length !== 1 || !['verified', 'finalized'].includes(String(copy[0]?.stage)))
-      throw new Error('hosted-restore-target-not-verified')
-    await connection.unsafe(
-      `UPDATE ${metadata('logical_copy_operations')} SET stage = 'finalized', updated_at = $2 WHERE operation_id = $1`,
-      [artifact.copyOperationId, now()],
-    )
-    await connection.unsafe(
-      `DELETE FROM ${metadata('logical_copy_chunks')} WHERE operation_id = $1`,
-      [input.generation.operationId],
-    )
-    await recordRestoredDatabaseDigests(
-      connection,
-      input.contract,
-      input.generation.operationId,
-      now(),
-    )
-    // Normalization is part of producing the restored image, not live traffic:
-    // the verify Job requires that nothing wrote after this point.
-    await connection.unsafe(
-      `UPDATE ${metadata('database_generations')} SET first_live_write_at = NULL WHERE generation_id = $1 AND operation_id = $2 AND state = 'active'`,
-      [input.generation.generationId, input.generation.operationId],
-    )
-    await connection.unsafe('COMMIT')
-    transaction = false
-    log.info('hosted database restored', { backupId: artifact.sidecar.backupId, normalized })
+    // Normalization is part of the offline image. The final receipt, digests
+    // and cleared marker commit together, before the platform may activate it.
+    await withNativeTransaction(postgresqlHistoryConnection(connection), async () => {
+      const transaction = connection
+      const final = { unsafe: transaction.unsafe.bind(transaction) }
+      await transaction.unsafe(
+        "SELECT generation_id FROM agent_workflow_meta.generations WHERE generation_id=$1 AND state='active' FOR UPDATE",
+        [input.generation.generationId],
+      )
+      await recordRestoredDatabaseDigests(
+        final,
+        input.contract,
+        input.generation.operationId,
+        now(),
+      )
+      await writeRestoreReceipt(final, input.generation.operationId, 'hosted-restore', {
+        stage: 'finalized',
+        generationId: input.generation.generationId,
+        copyOperationId: artifact.copyOperationId,
+        backupId: artifact.sidecar.backupId,
+        logicalDigest: input.contract.digest,
+        completedAt: now(),
+      } satisfies HostedEpoch2RestoreReceipt)
+      await transaction.unsafe(
+        'UPDATE agent_workflow_meta.first_write SET first_live_write_at=NULL WHERE generation_id=$1',
+        [input.generation.generationId],
+      )
+    })
+    const finalizedTarget = await openTarget()
+    try {
+      await finalizedTarget.markFinalized(now())
+    } finally {
+      await finalizedTarget.close()
+    }
     return { restored: true, backupId: artifact.sidecar.backupId, normalized }
-  } catch (error) {
-    if (transaction) await Promise.resolve(connection.unsafe('ROLLBACK')).catch(() => undefined)
-    throw error
   } finally {
     try {
       if (locked)
-        await connection.unsafe('SELECT pg_advisory_unlock(hashtextextended($1, 0))', [SCHEMA_LOCK])
+        await connection.unsafe('SELECT pg_advisory_unlock(hashtextextended($1,0))', [SCHEMA_LOCK])
     } finally {
       connection.release()
       artifact.close()

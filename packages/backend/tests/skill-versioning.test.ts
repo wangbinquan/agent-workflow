@@ -7,14 +7,12 @@
 // oracles (memoriesToUnfuseOnRestore, gitStyleDirDiff, hashDir) are unit-tested
 // directly so PR-B can build the fusion flow on a trusted base.
 
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
 import { TEST_SKILL_RESTORE_MEMBERSHIP } from './helpers/skillRestoreMembership'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync, mkdirSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { ulid } from 'ulid'
+
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   createManagedSkill,
@@ -301,44 +299,7 @@ describeEachProvider('RFC-101 skill version persistence', (harness) => {
     })
     afterEach(() => h.cleanup())
 
-    async function seedLegacySkill(name: string, body: string): Promise<string> {
-      // Simulate a skill created before RFC-101: a DB row + files/ on disk, no
-      // skill_versions rows.
-      const id = ulid()
-      const filesDir = join(h.fsOpts.appHome, 'skills', id, 'files')
-      mkdirSync(filesDir, { recursive: true })
-      writeFileSync(
-        join(filesDir, 'SKILL.md'),
-        `---\nname: ${name}\ndescription: d\n---\n${body}\n`,
-        'utf-8',
-      )
-      const { skills } = tablesOf(h.db)
-      await insertOne(h.db, skills, {
-        id,
-        name,
-        managedPath: `skills/${id}/files`,
-      })
-      return id
-    }
-
-    test('ensureInitialSkillVersion backfills v1 from current files on first access', async () => {
-      const id = await seedLegacySkill('legacy', 'legacy body')
-      expect(await listSkillVersions(h.db, h.fsOpts, id)).toHaveLength(1)
-      expect((await getSkillVersionContent(h.db, h.fsOpts, id, 1)).content.bodyMd).toContain(
-        'legacy body',
-      )
-    })
-
-    test('a legacy skill then edited keeps legacy content as v1, edit as v2', async () => {
-      const id = await seedLegacySkill('legacy', 'legacy body')
-      await writeSkillContent(h.db, h.fsOpts, id, { bodyMd: 'edited body' }, 'u')
-      expect((await getSkillVersionContent(h.db, h.fsOpts, id, 1)).content.bodyMd).toContain(
-        'legacy body',
-      )
-      expect((await getSkillVersionContent(h.db, h.fsOpts, id, 2)).content.bodyMd).toContain(
-        'edited body',
-      )
-    })
+    // Legacy v1 preservation and post-conversion editing are covered at B's converter boundary in rfc395-skill-target-recovery.test.ts.
 
     test('reconcileSkillLiveFiles restores live files/ ONLY when it is lost entirely', async () => {
       const created = await createManagedSkill(h.db, h.fsOpts, {

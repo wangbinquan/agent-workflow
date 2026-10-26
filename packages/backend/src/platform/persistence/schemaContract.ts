@@ -28,7 +28,7 @@ export {
   digestSchemaContract,
 } from './schema/canonical'
 export { assertExactSchemaRoster } from './schema/roster'
-export { projectLegacyV2 as buildLogicalSchemaContract } from './migration/legacy/v2Contract'
+export { projectLogicalSchemaContract } from './schema/logicalContract'
 
 export function renderLogicalSchemaReport(contract: LogicalSchemaContract): string {
   const ownerCounts = new Map<OwnerContext, number>()

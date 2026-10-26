@@ -292,7 +292,13 @@ describe('RFC-376 C7 report-only consumers', () => {
 })
 describe('RFC-376 committed report contract', () => {
   test('node-run inventory recognizes native single-row inserts and keeps the canonical owner', () => {
-    for (const write of ['tx.insert(nodeRuns).values(row)', 'insertOne(tx, nodeRuns, row)']) {
+    for (const write of [
+      'tx.insert(nodeRuns).values(row)',
+      'insertOne(tx, nodeRuns, row)',
+      'tx.insert(tables.nodeRuns).values(row)',
+      'insertOne(tx, tables.nodeRuns, row)',
+      'insertOne(tx, tables["nodeRuns"], row)',
+    ]) {
       const sites = buildNodeRunInsertSites([
         sourceUnit(
           PREFIX + 'modules/task-execution/infrastructure/nodeRunMintParticipant.ts',

@@ -1,3 +1,5 @@
+import { convertedAgentFixture } from './helpers/model/frozenAgent'
+import { type PersistenceTables, tablesOf } from '@/platform/persistence/sessionTables'
 // RFC-284 批 C（T9/T10/T11）——资源侧去重的行为锁与结构锁。
 //
 // T9  §2.1 反查泛型：四域（mcp/plugin/managed-skill/dependsOn）收编
@@ -14,7 +16,7 @@
 // T11 §2.5 skill 唯一性：ownerScopedNameWhere 三态（占用/他人同名不占用/
 //     NULL-owner 域隔离）+ isOwnerNameUniqueViolation 对新旧两代错误文案的识别。
 import { type AgentFixtureSpec, agentFixture } from './helpers/model'
-import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+
 import { describe, expect, test } from 'bun:test'
 import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
@@ -39,7 +41,6 @@ import {
 import { scheduledRowsReferencing } from '../src/services/scheduledTaskRefs'
 import { isSkillNameOccupiedForOwner } from '../src/modules/resource-catalog/infrastructure/legacy/skill'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const SRC = (p: string): string => readFileSync(resolve(import.meta.dir, '..', 'src', p), 'utf8')
 
 function agentRow(overrides: Partial<AgentFixtureSpec>): AgentFixtureSpec {
@@ -73,14 +74,14 @@ function findArrayReferences(
 
 describe('rfc284 批C T9 §2.1 — 反查泛型四域行为锁', () => {
   test('mcp/plugin 数组域：命中、未命中、损坏行 fail-closed、结构误报被 matcher 拒', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createInMemoryDb()
     const hit = agentRow({ name: 'hit', mcp: '["M1","M2"]', plugins: '["P1"]' })
     const miss = agentRow({ name: 'miss', mcp: '["M9"]', plugins: '["P9"]' })
     // 损坏 JSON：LIKE 命中但 parse 抛 → fail-closed 空处理
     const corrupt = agentRow({ name: 'corrupt', mcp: '"M1"广告[', plugins: '{"P1"广告' })
     // LIKE 命中（子串 "P1" 在场）但形状不是数组 → matcher 拒
     const shapeMiss = agentRow({ name: 'shape', plugins: '{"x":"P1"}' })
-    await agentFixture(db, [hit, miss, corrupt, shapeMiss])
+    await convertedAgentFixture(db, [hit, miss, corrupt, shapeMiss])
 
     const mcpRefs = await findArrayReferences(db, 'mcp', 'M1')
     expect(mcpRefs.map((r) => r.name)).toEqual(['hit'])
@@ -97,7 +98,7 @@ describe('rfc284 批C T9 §2.1 — 反查泛型四域行为锁', () => {
   })
 
   test('managed-skill 对象域：skillId 精确匹配；非 managed 或它键同值不命中（LIKE 误报拒）', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createInMemoryDb()
     const hit = agentRow({
       name: 'hit',
       skills: '[{"kind":"managed","skillId":"S1"}]',
@@ -111,13 +112,13 @@ describe('rfc284 批C T9 §2.1 — 反查泛型四域行为锁', () => {
       name: 'proj',
       skills: '[{"kind":"project","skillId":"S1"}]',
     })
-    await agentFixture(db, [hit, likeTrap, projectKind])
+    await convertedAgentFixture(db, [hit, likeTrap, projectKind])
     const refs = await findAgentsUsingManagedSkill(createAgentSkillReferenceLookup(db), 'S1')
     expect(refs.map((r) => r.name)).toEqual(['hit'])
   })
 
   test('dependsOn 字符串数组域：includes 精确匹配（前缀相似 id 不误报）', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createInMemoryDb()
     const hit = agentRow({ name: 'hit', dependsOn: '["A1","A2"]' })
     // "A1x" 含子串 A1 但整串不等 → 不误报（LIKE `%"A1"%` 也不命中该行，属双保险）
     const near = agentRow({ name: 'near', dependsOn: '["A1x"]' })
@@ -137,7 +138,7 @@ describe('rfc284 批C T9 §2.1 — 反查泛型四域行为锁', () => {
     ).toEqual([{ id: hit.id, name: 'hit' }])
   })
 
-  test('结构锁：mcp/plugin provider 只做粗过滤，精确解析仍是单一 matcher', () => {
+  test('结构锁：四域反查统一走关系表，workflow 走当前 revision 的依赖索引', () => {
     for (const f of [
       'modules/resource-catalog/infrastructure/legacy/skillReferenceGuard.ts',
       'services/agentDeps.ts',
@@ -168,8 +169,17 @@ describe('rfc284 批C T9 §2.1 — 反查泛型四域行为锁', () => {
       'findAgentsReferencingIdInJsonColumn',
     )
     const adapter = SRC('modules/resource-catalog/infrastructure/referenceLookup.ts')
-    expect(adapter).toContain('like(agents[kind],')
-    expect(adapter).toContain('matchesStoredAgentReference(row.raw, id,')
+    // RFC-395 F-F1：保留集中反查与精确匹配的意图，JSON 粗过滤已由关系表取代。
+    expect(adapter).not.toMatch(/\b(?:like|ilike)\s*\(|matchesStoredAgentReference|JSON\.parse/)
+    for (const table of ['agentMcpRefs', 'agentPluginRefs', 'agentSkillRefs', 'agentDependencies'])
+      expect(adapter).toContain(table)
+    expect(adapter).toContain('exists(')
+    expect(adapter).toContain('eq(relation.agentId, agents.id)')
+    expect(adapter).toContain('eq(target, id)')
+    expect(adapter).toContain('workflowDependencyIndex: index')
+    expect(adapter).toContain('eq(index.revision, workflows.version)')
+    expect(adapter).toContain('eq(index.selectorValue, value)')
+    expect(adapter).toContain("kind === 'agent' ? 'id' : 'name'")
     expect(existsSync(resolve(import.meta.dir, '..', 'src', 'services/mcp.ts'))).toBe(false)
     expect(existsSync(resolve(import.meta.dir, '..', 'src', 'services/plugin.ts'))).toBe(false)
   })
@@ -235,7 +245,7 @@ describe('rfc284 批C T9 §2.2 — scheduled 引用扫描单点', () => {
 
 describe('rfc284 批C T10 §2.3 — grant 单点等价', () => {
   test('listResourceGrantUserIds 与 InTx 双形态、跨类型隔离', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createInMemoryDb()
     const { users, resourceGrants } = tablesOf(db)
     // FK：user_id → users.id（cascade），先立最小用户行
     await db.insert(users).values(
@@ -370,7 +380,7 @@ describe('rfc284 批C T10 §2.4 — 快照式可见性全矩阵（迁移快照�
 
 describe('rfc284 批C T11 — skill 唯一性三态 + 错误识别收编', () => {
   test('占用/他人同名不占用/NULL-owner 域隔离', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createInMemoryDb()
     const { skills } = tablesOf(db)
     await db.insert(skills).values([
       {

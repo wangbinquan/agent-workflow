@@ -14,6 +14,7 @@ import { and, eq, sql } from 'drizzle-orm'
 
 import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
+import { retryingWriteTransaction } from '@/platform/persistence/retryingWriteTransaction'
 import type { TaskExecutionContextRef } from '../application/ports/taskExecutionTopology'
 import {
   assertTaskExecutionContext,
@@ -33,9 +34,26 @@ export function withTaskExecutionWrite<T>(
 }
 
 /**
+ * L-1 single-task write: fence the owner, then lock the task root before reads/writes.
+ * The root protects generation allocation and selection reads; selection revision
+ * CAS, run identity FKs and unique sequence allocation remain authoritative.
+ * READ COMMITTED avoids SSI dependencies between sibling mints (including the
+ * selection FK's node_runs read). SQLite remains BEGIN IMMEDIATE. Bodies must stay
+ * replayable for deadlocks and inherited SERIALIZABLE transactions; cross-task or
+ * unlocked predicates still require withTaskExecutionSerializable.
+ */
+export function withTaskExecutionAggregateWrite<T>(
+  db: PersistenceDb,
+  body: (tx: TaskExecutionTransaction) => Promise<T>,
+): Promise<T> {
+  return retryingWriteTransaction(db, body)
+}
+
+/**
  * 带跨行不变量的任务执行写事务。PG 抬到 SERIALIZABLE 并按 40001 重放整笔，SQLite 的
  * `BEGIN IMMEDIATE` 本来就是全库独占——同一条 `DatabaseSession.serializable`，两个引擎各取所需。
- * 只给「先查后写」跨多行的写路径用；单行 CAS 走上面的 `withTaskExecutionWrite` 就够。
+ * 只给未被聚合根锁 / 约束覆盖的跨行判据用；单任务根锁写入走 `withTaskExecutionAggregateWrite`，
+ * 单行 CAS 走 `withTaskExecutionWrite`。
  * **体必须可重放**：PG 上它可能被整笔重跑。
  */
 export function withTaskExecutionSerializable<T>(

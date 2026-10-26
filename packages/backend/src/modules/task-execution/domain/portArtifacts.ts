@@ -1,12 +1,12 @@
 import { WORKTREE_FILE_MAX_BYTES, tryParseKind } from '@agent-workflow/shared'
-import { decodeLegacyPortArchive } from '@/platform/content/legacyPortArchive'
+import { decodePortArchive } from '@/platform/content/locations/portArchive'
 import type { PortArchive, PortArchiveItem } from '../application/ports/portArtifactContent'
 
-export { legacyPortSegment as encodePortSegment } from '@/platform/content/legacyPortArchive'
+export { portSegment as encodePortSegment } from '@/platform/content/locations/portArchive'
 export { repoRelForcedPaths } from '@/modules/source-control/public/queries'
 
 export function parseArchiveJson(raw: string | null | undefined): PortArchive | null {
-  return decodeLegacyPortArchive(raw)?.archive ?? null
+  return decodePortArchive(raw)?.archive ?? null
 }
 
 export function truncationNotice(containerRelPath: string): string {

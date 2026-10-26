@@ -1,15 +1,13 @@
 // RFC-303 migration lock: old rows stay unprotected, body_json remains the
 // physical tail column, MR fact dedupe excludes replay rows, and every control
 // ledger link is soft (no trigger/task/delivery cascade).
+import { FROZEN_MIGRATIONS } from './migration-freeze'
 import { afterEach, describe, expect, test } from 'bun:test'
 import { Database } from 'bun:sqlite'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
-const SQL = readFileSync(
-  resolve(import.meta.dir, '..', 'db', 'migrations', '0157_rfc303_mr_terminal_control.sql'),
-  'utf8',
-)
+const SQL = readFileSync(resolve(FROZEN_MIGRATIONS, '0157_rfc303_mr_terminal_control.sql'), 'utf8')
 
 const opened: Database[] = []
 

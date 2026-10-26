@@ -1,12 +1,17 @@
-import { existsSync } from 'node:fs'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { SkillVersionPresenceQueries } from '../../application/skills/contentAvailability'
-import { skillVersionAbs } from '../legacy/skillIdentityPaths'
+import { fileSkillTreeReference, fileSkillReferenceExists } from './fileSkillReferences'
 
 export function createFileSkillVersionPresenceQueries(
   appHome: string,
+  db?: PersistenceDb,
 ): SkillVersionPresenceQueries {
   return Object.freeze({
-    exists: (reference) =>
-      existsSync(skillVersionAbs(appHome, reference.id, reference.contentVersion)),
+    exists: async (reference) =>
+      fileSkillReferenceExists(
+        appHome,
+        db,
+        await fileSkillTreeReference(appHome, db, reference.id, reference.contentVersion),
+      ),
   } satisfies SkillVersionPresenceQueries)
 }

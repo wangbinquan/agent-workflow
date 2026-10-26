@@ -1,3 +1,4 @@
+import { tablesOf } from '@/platform/persistence/sessionTables'
 // RFC-359 W7 —— 终态维护认领（RFC-328 terminal maintenance claim）合一后的双引擎一致性。
 //
 // 合一前是一对逐行同构的适配器：`sqliteTerminalMaintenancePersistence.ts`（薄壳 → `sqliteTerminalMaintenance.ts`
@@ -16,23 +17,22 @@
 // 其余用例覆盖三个 assert* 的主要判据（open effect / 水位覆盖 / replay 决策 / owner 必须 released /
 // intents-attempts-holds 三查 / ledger digest 比对）与认领行的 CAS，两个引擎各跑一遍。
 
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { expect, test } from 'bun:test'
+import { eq } from 'drizzle-orm'
+import { ulid } from 'ulid'
 import {
   type TaskFixtureSpec,
   patchTaskFixture,
   taskFixture,
   workflowFixture,
 } from './helpers/model'
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
-import { expect, test } from 'bun:test'
-import { eq } from 'drizzle-orm'
-import { ulid } from 'ulid'
 
-import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { TaskExecutionError } from '@/modules/task-execution/application/taskExecutionError'
 import type { MaintenanceMemberSnapshot } from '@/modules/task-execution/domain/terminalMaintenance'
 import { DrizzleTerminalMaintenancePersistence } from '@/modules/task-execution/infrastructure/terminalMaintenancePersistence'
 import type { DatabaseSession } from '@/platform/persistence/databaseTransaction'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 
 const NOW = 1_788_278_400_000

@@ -1,9 +1,10 @@
-import type { TaskKnowledgeQueries } from '../application/ports/taskKnowledgeQueries'
-import { eq, inArray } from 'drizzle-orm'
+import { repositoryExistsExpression } from '@/modules/source-control/public/queries'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { tablesOf } from '@/platform/persistence/sessionTables'
-import { repositoryExistsExpression } from '@/modules/source-control/public/queries'
-import { decodeTaskSubject, definitionAnchorId } from '../domain/taskSubject'
+import { eq, inArray } from 'drizzle-orm'
+import type { TaskKnowledgeQueries } from '../application/ports/taskKnowledgeQueries'
+import { definitionAnchorId, taskSubjectFromDefinition } from '../domain/taskSubject'
+import { taskReadColumns } from './taskRepositorySql'
 import { taskWorkgroupConfigSelection } from './taskWorkgroupConfig'
 
 /** 注入与蒸馏消费的闭合投影；subject 解码和任务存储字段留在 owner。 */
@@ -13,13 +14,16 @@ export function createTaskKnowledgeQueries(db: PersistenceDb): TaskKnowledgeQuer
       const { tasks } = tablesOf(db)
       const rows = await db
         .select({
-          workflowId: tasks.workflowId,
-          codeRoundId: tasks.codeRoundId,
-          workgroupId: tasks.workgroupId,
-          sourceAgentId: tasks.sourceAgentId,
-          sourceAgentName: tasks.sourceAgentName,
-          cachedRepoId: tasks.cachedRepoId,
-          repoGroupId: tasks.repoGroupId,
+          workflowId: taskReadColumns(db).workflowId,
+          subjectKind: taskReadColumns(db).subjectKind,
+          sourceId: taskReadColumns(db).sourceId,
+          sourceName: taskReadColumns(db).sourceName,
+          codeRoundId: taskReadColumns(db).codeRoundId,
+          workgroupId: taskReadColumns(db).workgroupId,
+          sourceAgentId: taskReadColumns(db).sourceAgentId,
+          sourceAgentName: taskReadColumns(db).sourceAgentName,
+          cachedRepoId: taskReadColumns(db).cachedRepoId,
+          repoGroupId: taskReadColumns(db).repoGroupId,
         })
         .from(tasks)
         .where(eq(tasks.id, taskId))
@@ -28,13 +32,13 @@ export function createTaskKnowledgeQueries(db: PersistenceDb): TaskKnowledgeQuer
       return row === undefined
         ? null
         : {
-            workflowId: definitionAnchorId(decodeTaskSubject(row)),
+            workflowId: definitionAnchorId(taskSubjectFromDefinition(row)),
             cachedRepoId: row.cachedRepoId,
             repoGroupId: row.repoGroupId,
           }
     },
     async repositoryIds(taskId: string): Promise<readonly string[]> {
-      const { taskRepos } = tablesOf(db)
+      const { taskRepositoryMounts: taskRepos } = tablesOf(db)
       return (
         await db
           .select({ cachedRepoId: taskRepos.cachedRepoId })
@@ -47,19 +51,22 @@ export function createTaskKnowledgeQueries(db: PersistenceDb): TaskKnowledgeQuer
       const row = (
         await db
           .select({
-            workflowSnapshot: tasks.workflowSnapshot,
+            workflowSnapshot: taskReadColumns(db).workflowSnapshot,
             workgroupConfig: taskWorkgroupConfigSelection(db),
-            workflowId: tasks.workflowId,
-            codeRoundId: tasks.codeRoundId,
-            workgroupId: tasks.workgroupId,
-            sourceAgentId: tasks.sourceAgentId,
-            sourceAgentName: tasks.sourceAgentName,
-            cachedRepoId: tasks.cachedRepoId,
-            cachedRepoExists: repositoryExistsExpression(db, tasks.cachedRepoId),
+            workflowId: taskReadColumns(db).workflowId,
+            subjectKind: taskReadColumns(db).subjectKind,
+            sourceId: taskReadColumns(db).sourceId,
+            sourceName: taskReadColumns(db).sourceName,
+            codeRoundId: taskReadColumns(db).codeRoundId,
+            workgroupId: taskReadColumns(db).workgroupId,
+            sourceAgentId: taskReadColumns(db).sourceAgentId,
+            sourceAgentName: taskReadColumns(db).sourceAgentName,
+            cachedRepoId: taskReadColumns(db).cachedRepoId,
+            cachedRepoExists: repositoryExistsExpression(db, taskReadColumns(db).cachedRepoId),
             // RFC-366 admission facts — same row, no extra query.
-            launchOrigin: tasks.launchOrigin,
+            launchOrigin: taskReadColumns(db).launchOrigin,
             catalogVisibility: tasks.catalogVisibility,
-            spaceKind: tasks.spaceKind,
+            spaceKind: taskReadColumns(db).spaceKind,
           })
           .from(tasks)
           .where(eq(tasks.id, taskId))
@@ -70,7 +77,7 @@ export function createTaskKnowledgeQueries(db: PersistenceDb): TaskKnowledgeQuer
         : {
             workflowSnapshot: row.workflowSnapshot,
             workgroupConfig: row.workgroupConfig,
-            workflowId: definitionAnchorId(decodeTaskSubject(row)),
+            workflowId: definitionAnchorId(taskSubjectFromDefinition(row)),
             cachedRepoId: row.cachedRepoId,
             cachedRepoExists: row.cachedRepoExists,
             launchOrigin: row.launchOrigin,
@@ -92,8 +99,8 @@ export function createTaskKnowledgeQueries(db: PersistenceDb): TaskKnowledgeQuer
           errorSummary: tasks.errorSummary,
           errorMessage: tasks.errorMessage,
           failedNodeId: tasks.failedNodeId,
-          inputs: tasks.inputs,
-          workflowSnapshot: tasks.workflowSnapshot,
+          inputs: taskReadColumns(db).inputs,
+          workflowSnapshot: taskReadColumns(db).workflowSnapshot,
         })
         .from(tasks)
         .where(inArray(tasks.id, [...ids]))

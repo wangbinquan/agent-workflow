@@ -101,6 +101,17 @@ async function seedTask(db: PersistenceDb, def: WorkflowDefinition): Promise<{ t
     schemaVersion: def.$schema_version,
   })
   await taskFixture(db, {
+    // Historical checkpoints keep their real root mount after workspace removal.
+    repos: [
+      {
+        repoIndex: 0,
+        mountPath: '',
+        repoPath: '/tmp/aw-rfc128-p1',
+        baseBranch: 'main',
+        branch: `agent-workflow/${taskId}`,
+        worktreePath: '',
+      },
+    ],
     id: taskId,
     name: 'fixture',
     executionLineageId: taskId,

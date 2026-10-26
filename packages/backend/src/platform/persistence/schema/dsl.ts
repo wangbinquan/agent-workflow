@@ -1,6 +1,8 @@
 // RFC-395 I-a: concise declarations expand to the complete, serializable schema contract.
 import type { CodecName } from './codecs'
 import type { ColumnDefault, SchemaForeignKey, SchemaIndex, TableDefinition } from './contribution'
+import type { InstallSeed } from './seeds'
+import type { UniqueNullSemantics, ColumnDefinition } from './contribution'
 import type { SchemaExpression } from './expressions'
 
 type Literal = string | number | boolean | null
@@ -9,8 +11,10 @@ export interface ColumnOptions {
   readonly primary?: boolean
   readonly default?: Literal | SchemaExpression
   readonly unique?: string
+  readonly uniqueNulls?: UniqueNullSemantics
   readonly sqliteUniqueName?: string
   readonly originalTextDigest?: boolean
+  readonly document?: ColumnDefinition['document']
   readonly highWater?: 'preserve-source-high-water'
 }
 type DefaultFor<C extends CodecName, O extends ColumnOptions> = O extends { default: infer D }
@@ -113,7 +117,10 @@ export const retention = {
   },
 } as const
 
-type TableInput = Pick<TableDefinition, 'id' | 'schemaSymbol' | 'columns' | 'retention'> &
+type TableInput = { readonly triggers?: never } & Pick<
+  TableDefinition,
+  'id' | 'schemaSymbol' | 'columns' | 'retention'
+> &
   Partial<Omit<TableDefinition, 'id' | 'schemaSymbol' | 'columns' | 'retention' | 'owner'>>
 type TableDefaults = {
   readonly version: 1
@@ -151,26 +158,38 @@ export function defineContribution<const O extends string>(owner: O) {
         migrationKey: definition.migrationKey ?? primaryKey,
       } as DefinedTable<T, O>
     },
-    contribution<const T extends readonly TableDefinition[]>(tables: T) {
-      return { owner, version: 1, tables } as const
+    contribution<const T extends readonly TableDefinition[]>(
+      tables: T,
+      seeds?: readonly InstallSeed[],
+    ) {
+      return { owner, version: 1, tables, ...(seeds ? { seeds } : {}) } as const
     },
   }
 }
 
+const implicitIndexNulls = new WeakSet<SchemaIndex>()
+export const hasImplicitIndexNulls = (index: SchemaIndex): boolean => implicitIndexNulls.has(index)
+
 export function index(
   name: string,
   columns: readonly (string | SchemaExpression)[],
-  options: { readonly unique?: boolean; readonly where?: SchemaExpression } = {},
+  options: {
+    readonly unique?: boolean
+    readonly where?: SchemaExpression
+    readonly nulls?: UniqueNullSemantics
+  } = {},
 ): SchemaIndex {
-  return {
+  const result: SchemaIndex = {
     name,
     unique: options.unique ?? false,
-    nulls: 'distinct',
+    nulls: options.nulls ?? 'distinct',
     columns: columns.map((column) =>
       typeof column === 'string' ? { kind: 'column', name: column } : column,
     ),
     where: options.where ?? null,
   }
+  if (options.nulls === undefined) implicitIndexNulls.add(result)
+  return result
 }
 export function foreignKey(
   name: string,

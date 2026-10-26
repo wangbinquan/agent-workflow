@@ -1,4 +1,3 @@
-import type { RuntimeLegacyConfigurationPort } from './runtimeRegistryEffects'
 import type { RuntimeProtocol, CreateRuntimeInput, UpdateRuntimeInput } from '../../public/types'
 import type {
   RuntimeRow,
@@ -21,6 +20,11 @@ export type {
   RuntimeRefConfig,
   RuntimeExecutionProfileFingerprint,
 } from '../../domain/runtimeProfile'
+
+export interface RuntimeRegistrySeedConfiguration {
+  readonly opencodePath?: string
+  readonly claudeCodePath?: string
+}
 
 export interface RuntimeRegistryOperations {
   listRuntimes(): Promise<readonly RuntimeRow[]>
@@ -45,12 +49,7 @@ export interface RuntimeRegistryOperations {
     defaultRuntimeName: string | null | undefined,
   ): Promise<RuntimeRow>
   deleteRuntime(name: string, refs: RuntimeRefConfig): Promise<void>
-  seedBuiltinRuntimes(): Promise<void>
-  migrateConfigIntoBuiltins(config: {
-    readonly opencodePath?: string | null
-    readonly claudeCodePath?: string | null
-  }): Promise<void>
-  assertConfigDefaultsMigrated(configuration: RuntimeLegacyConfigurationPort): Promise<void>
+  seedBuiltinRuntimes(configuration?: RuntimeRegistrySeedConfiguration): Promise<void>
 }
 
 export interface RuntimeInsertRecord {
@@ -145,13 +144,7 @@ export interface RuntimeRegistryPersistence {
       readonly id: string
       readonly name: string
       readonly protocol: RuntimeProtocol
+      readonly binaryPath: string | null
     }[],
   ): Promise<void>
-  backfillBuiltinBinary(input: {
-    readonly name: string
-    readonly protocol: RuntimeProtocol
-    readonly binaryPath: string
-    readonly updatedAt: number
-  }): Promise<void>
-  listBuiltinProfiles(names: readonly string[]): Promise<readonly RuntimeBuiltinProfileRecord[]>
 }

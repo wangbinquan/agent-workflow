@@ -1,3 +1,4 @@
+import { memoryTaskWorkspaceProfiles } from './helpers/taskWorkspaceFixture'
 // RFC-370: exercise the selected script family through complete real provider
 // Task drives. These owner-issued references are fixtures, not CS acceptance.
 import {
@@ -385,6 +386,7 @@ describeEachProvider(
             userId,
             {
               workspacePresence: { exists: () => true },
+              workspaceExcludeProfiles: memoryTaskWorkspaceProfiles,
               isolationWorkspaces: new MemoryIsolationFactory(isolation),
               taskScriptRunsFor(request) {
                 selections++

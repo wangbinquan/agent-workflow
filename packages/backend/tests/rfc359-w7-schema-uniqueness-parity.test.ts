@@ -149,13 +149,17 @@ describeEachProvider('RFC-359 W7 —— W5 账本收敛掉的唯一性在两个�
       '`idx_task_space_nodes_path_ci` 是 UNIQUE(task_id, lower(node_path))',
     ).toBe(true)
     expect(
-      await harness.db.select({ nodePath: taskSpaceNodes.nodePath }).from(taskSpaceNodes),
-    ).toHaveLength(1)
+      (await harness.db.select({ nodePath: taskSpaceNodes.nodePath }).from(taskSpaceNodes))
+        .map((row) => row.nodePath)
+        .sort(),
+    ).toEqual(['', 'Repo/App'])
 
     await insertOne(harness.db, taskSpaceNodes, { taskId: 't_space', nodePath: 'Repo/Lib' })
     expect(
-      await harness.db.select({ nodePath: taskSpaceNodes.nodePath }).from(taskSpaceNodes),
-    ).toHaveLength(2)
+      (await harness.db.select({ nodePath: taskSpaceNodes.nodePath }).from(taskSpaceNodes))
+        .map((row) => row.nodePath)
+        .sort(),
+    ).toEqual(['', 'Repo/App', 'Repo/Lib'])
   })
 
   test('webhook_mr_launch_guards：一次 fire 只能预留一条 guard（迁移里的列级 UNIQUE）', async () => {

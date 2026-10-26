@@ -15,11 +15,20 @@ import type {
 import { createMaintenanceRunStore } from '@/platform/persistence/maintenanceRunStore'
 import { describeEachProvider, type ProviderDatabaseHarness } from './helpers/eachProvider'
 import { openProviderMaintenanceWorkerDatabase } from './helpers/providerMaintenanceWorker'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
+import {
+  createContentStore,
+  createObjectContentTransport,
+} from '@/platform/content/infrastructure/contentStore'
+import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
+import { sha256Hex } from '@/util/hash'
+import { objectFixture } from './helpers/rfc370Objects'
 
 type GraphInput = Parameters<MaintenanceWorkerGraphFactory>[0]
 async function fixture(
   harness: ProviderDatabaseHarness,
   body: (input: {
+    readonly db: PersistenceDb
     compose(effects?: MaintenanceWorkerEffectsSelections): Promise<MaintenanceWorkerGraph>
     close(): Promise<void>
     readonly mainStore: ReturnType<typeof createMaintenanceRunStore>
@@ -42,6 +51,7 @@ async function fixture(
   }
   try {
     await body({
+      db: database.db,
       async compose(effects) {
         const graph = await composeMaintenanceWorkerGraph({
           request,
@@ -79,6 +89,53 @@ async function fixture(
 }
 
 describeEachProvider('RFC-389 neutral maintenance Worker graph', (harness) => {
+  test('AF-D14 the hosted graph leaves uncommitted object publications for the hosted sweep', async () => {
+    await fixture(harness, async ({ compose, db }) => {
+      const objects = objectFixture()
+      const content = createContentStore({
+        db,
+        objectPublicationEpoch: () => 1,
+        policy: { inlineMaxBytes: 0, externalKind: 'object' },
+        transports: { object: createObjectContentTransport(objects.objects) },
+      })
+      const bytes = Buffer.from('hosted failed owner')
+      const publication = {
+        owner: 'task-execution',
+        logicalKey: 'hosted-upload',
+        scope: null,
+        attempt: 'attempt-1',
+        epoch: 1,
+        sha256: sha256Hex(bytes),
+        size: bytes.length,
+      }
+      await expect(
+        content.put(
+          {
+            publication,
+            source: { kind: 'bytes', bytes },
+            contentVersion: 1,
+            mediaType: null,
+            references: 'single',
+          },
+          async () => {
+            throw new Error('owner-commit-failed')
+          },
+        ),
+      ).rejects.toThrow('owner-commit-failed')
+      await databaseSessionFor(db).transaction((tx) =>
+        content.publications.release(
+          tx,
+          { owner: publication.owner, keys: [publication.logicalKey] },
+          1,
+        ),
+      )
+      const before = await content.publications.find(publication)
+      expect(before).toMatchObject({ state: 'releasing', contentId: null })
+      const graph = await compose({ contentStore: content })
+      await graph.ownerCommands.system.storage.run()
+      expect(await content.publications.find(publication)).toEqual(before)
+    })
+  })
   test('one passive graph preserves owner keys and does not recover/admit jobs during construction', async () => {
     await fixture(harness, async ({ compose, mainStore, request }) => {
       await mainStore.enqueue({
@@ -155,9 +212,12 @@ describeEachProvider('RFC-389 neutral maintenance Worker graph', (harness) => {
           'autoanalyzeRuns',
           'autovacuumRuns',
           'deadRows',
+          'protected',
+          'purged',
+          'released',
         ])
         for (const value of Object.values(storage)) expect(value).toBeGreaterThanOrEqual(0)
-      } else expect(storage).toEqual({ checkpointed: 1 })
+      } else expect(storage).toEqual({ checkpointed: 1, released: 0, purged: 0, protected: 0 })
     })
   })
 

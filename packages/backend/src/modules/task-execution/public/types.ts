@@ -1,29 +1,30 @@
+import type { TaskReadSubject } from '../domain/taskSubject'
 import type { TaskWorkgroupConfig } from '../domain/taskWorkgroupConfig'
-export type {
-  PortArchiveItem,
-  PortArchive,
-  ArchivePortArtifactsResult,
-  PortArtifactReadItem,
-  PortArtifactWorkspaceFile,
-  PortArtifactArchiveNamespace,
-  PortArtifactArchiveRequest,
-  PortArtifactReadRequest,
-  PortArtifactOperations,
-  PortArtifactContentEffects,
-} from '../application/ports/portArtifactContent'
 export type {
   NodeRunPromptContentEffects,
   NodeRunPromptOperations,
   PromptStorage,
 } from '../application/ports/nodeRunPromptContent'
+export type {
+  ArchivePortArtifactsResult,
+  PortArchive,
+  PortArchiveItem,
+  PortArtifactArchiveNamespace,
+  PortArtifactArchiveRequest,
+  PortArtifactContentEffects,
+  PortArtifactOperations,
+  PortArtifactReadItem,
+  PortArtifactReadRequest,
+  PortArtifactWorkspaceFile,
+} from '../application/ports/portArtifactContent'
 export type { TaskDeletionEffects } from '../application/ports/taskDeletionContentEffects'
 export type { TaskRuntimeInventoryContent } from '../application/ports/taskRuntimeInventoryContent'
 export type { TaskArchiveContentBinding } from '../composition/taskArchiveMaintenance'
 
 // RFC-303 exact public vocabulary. Cross-context callers may depend on these
 // types, never on task rows, activeTasks, scheduler, GC, or process internals.
-import type { ClarifyDirective, TaskActorRole, TaskStatus } from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
+import type { ClarifyDirective, TaskActorRole, TaskStatus } from '@agent-workflow/shared'
 
 export type { TaskEngineTaskSnapshot } from '../application/ports/taskEngineApplicationPersistence'
 
@@ -34,6 +35,7 @@ export type { TaskEngineTaskSnapshot } from '../application/ports/taskEngineAppl
  */
 export type { HumanGateTaskTransition } from '../infrastructure/humanGateTaskTransition'
 
+export { taskStopProjection } from '@/modules/task-execution/domain/sourceTermination'
 export type {
   SourceTerminationFence,
   SourceTerminationSnapshot,
@@ -41,7 +43,6 @@ export type {
   TaskStopProjection,
   WebhookTerminalCause,
 } from '@/modules/task-execution/domain/sourceTermination'
-export { taskStopProjection } from '@/modules/task-execution/domain/sourceTermination'
 
 /**
  * RFC-359 W8-A —— 子任务启动的父任务准入判定。两个引擎的铸行事务各自读行、调这一份，
@@ -157,6 +158,7 @@ export interface TaskStartupVerificationReadModel {
 
 export interface TaskExecutionOutcomeSource {
   readonly task: Readonly<{
+    subjectKind: TaskReadSubject['kind']
     workflowId: string
     id: string
     status: string
@@ -325,11 +327,11 @@ export interface WrapperExecutionScopeReadModel {
   find(wrapperId: string, kind: WrapperExecutionKind): WrapperExecutionScope
 }
 
-export type { UploadLimits, UploadInputDef, UploadFile } from '../domain/uploads'
 export type {
   WorkspaceUploadPlan,
   WorkspaceUploadResult,
 } from '../application/ports/workspaceUploads'
+export type { UploadFile, UploadInputDef, UploadLimits } from '../domain/uploads'
 
 export type { ArchivedEventsReader as TaskArchivedEventsReader } from '@/platform/background/eventsArchiveContent'
 /** Committed artifacts of a Case-bound Task; unfinished runs are never exposed. */
@@ -348,40 +350,54 @@ export interface EmployeeExecutionArtifactQueries {
   } | null>
 }
 
-export type { TaskSubject, StoredTaskSubject, TaskDefinitionOrigin } from '../domain/taskSubject'
 export type {
-  TaskSubjectQueries,
   TaskSubjectProjection,
+  TaskSubjectQueries,
 } from '../application/ports/taskSubjectQueries'
+export type {
+  TaskDefinitionOrigin,
+  TaskDefinitionSubject,
+  TaskSubject,
+  TaskReadSubject,
+} from '../domain/taskSubject'
 
-export type { TaskRepositoryMount } from '../domain/taskRepository'
 export type { TaskRepositoryCheckpoint } from '../domain/taskCheckpoint'
 export type { TaskRollbackCheckpointRun } from '../domain/taskCheckpointRollback'
+export type { TaskRepositoryMount } from '../domain/taskRepository'
 
+export type { RequestedSource } from '../domain/taskRepository'
 export type {
   TaskWorkgroupConfig,
   TaskWorkgroupLaunchConfig,
   TaskWorkgroupRuntimeConfig,
 } from '../domain/taskWorkgroupConfig'
-export type { RequestedSource } from '../domain/taskRepository'
 
-export { deriveNodeRunRole } from '../domain/nodeRunRole'
 export { nodeRunAttemptIndex } from '../domain/nodeRunAttempt'
-export type { NodeRunRole, NodeRunSyntheticKind, DerivedNodeRunRole } from '../domain/nodeRunRole'
+export { deriveNodeRunRole } from '../domain/nodeRunRole'
+export type { DerivedNodeRunRole, NodeRunRole, NodeRunSyntheticKind } from '../domain/nodeRunRole'
 export type {
-  NodeRunIdentitySnapshot,
-  NodeRunConfigView,
-  NodeRunRuntimeStateView,
-  NodeRunResultView,
   NodeRunCheckpointView,
+  NodeRunConfigView,
+  NodeRunIdentitySnapshot,
   NodeRunInputView,
+  NodeRunResultView,
+  NodeRunRuntimeStateView,
 } from '../domain/nodeRunSnapshot'
 
 export type {
-  TaskCodeWorkspaceQueries,
-  CodeWorkspaceTask,
-  CodeWorkspaceRepository,
   CodeNodeRunSnapshot,
+  CodeWorkspaceRepository,
+  CodeWorkspaceTask,
+  TaskCodeWorkspaceQueries,
 } from '../application/ports/taskCodeWorkspaceQueries'
 export type { TaskResourceLimitFacts } from '../application/ports/taskResourceLimitFacts'
 export type { TaskStatusCountQueries } from '../application/ports/taskStatusCounts'
+
+export type {
+  OpenTaskExecutionGeneration,
+  TaskExecutionGeneration,
+} from '../application/ports/taskExecutionGenerations'
+export type { TaskMountKey } from '../application/ports/taskMountKeys'
+
+export { nodeRunMintIdentity, nodeRunMintIdentityForSlot } from '../application/nodeRunMintIdentity'
+export type { NodeRunMintGeneration } from '../application/nodeRunMintIdentity'

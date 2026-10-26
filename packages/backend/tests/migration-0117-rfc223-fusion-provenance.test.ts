@@ -1,12 +1,14 @@
+// RFC-395 M-a-F1: observe FK mode inside the migration transaction so the
+// ON/OFF cases cannot silently replay with enforcement disabled in both.
+import { migrateFrozenSqlite as migrate, FROZEN_MIGRATIONS } from './migration-freeze'
 import { afterEach, describe, expect, test } from 'bun:test'
 import { Database } from 'bun:sqlite'
-import { migrate } from 'drizzle-orm/bun-sqlite/migrator'
 import { drizzle } from 'drizzle-orm/bun-sqlite'
 import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 
-const MIGRATIONS = resolve(import.meta.dir, '../db/migrations')
+const MIGRATIONS = resolve(FROZEN_MIGRATIONS)
 const QUARANTINED = '__rfc223_fusion_skill_quarantined__'
 const MERGER_ID = '00000000000000000000000001'
 const FUSION_WORKFLOW_ID = '00000000000000000000000002'
@@ -29,8 +31,8 @@ const freezeThrough0116 = (): string => freezeThrough(115)
 // RFC-285 T5 改锚：seeded 重放的第二段**封顶在 0117 自己**（idx 116），不再
 // replay 到 HEAD。原写法成立的前提是链后缀没有「父表重建」迁移；0151（tasks
 // 12-step rebuild，本仓首个带 14 条入向 FK 的父表重建）按 RFC-115 F1 契约只
-// 支持 FK-OFF 重放（drizzle 单事务内 pragma 无效；受支持路径 openDb /
-// migratedSnapshot 均事务外先 OFF）。本测试的意图是「0117 自身正确且 FK 两
+// 支持 FK-OFF 重放（drizzle 单事务内 pragma 无效；冻结 sqliteChain 事务外先 OFF）。
+// 本测试显式保留调用者 FK 模式，意图是「0117 自身正确且 FK 两
 // 模式无关」——封顶后意图不变，也不再把后缀链拽进不受支持的 FK-ON 重放。
 const freezeThrough0117 = (): string => freezeThrough(116)
 
@@ -42,7 +44,7 @@ describe('migration 0117 RFC-223 fusion provenance', () => {
   test('backfills only committed fusion/version provenance and quarantines name-only history', () => {
     const raw = new Database(':memory:')
     raw.exec('PRAGMA foreign_keys = ON')
-    migrate(drizzle(raw), { migrationsFolder: freezeThrough0116() })
+    migrate(drizzle(raw), { migrationsFolder: freezeThrough0116(), preserveForeignKeys: true })
 
     raw.exec(`
       INSERT INTO users (id, username, display_name, role, created_at, updated_at)
@@ -101,7 +103,8 @@ describe('migration 0117 RFC-223 fusion provenance', () => {
          'memory-parent', 4, 1);
     `)
 
-    migrate(drizzle(raw), { migrationsFolder: freezeThrough0117() })
+    migrate(drizzle(raw), { migrationsFolder: freezeThrough0117(), preserveForeignKeys: true })
+    expect(raw.query('PRAGMA foreign_keys').get()).toEqual({ foreign_keys: 1 })
 
     expect(raw.query('SELECT id, skill_id FROM fusions ORDER BY id').all()).toEqual([
       { id: 'fusion-conflict', skill_id: QUARANTINED },
@@ -151,7 +154,14 @@ describe('migration 0117 RFC-223 fusion provenance', () => {
     for (const foreignKeys of ['ON', 'OFF'] as const) {
       const raw = new Database(':memory:')
       raw.exec(`PRAGMA foreign_keys = ${foreignKeys}`)
-      migrate(drizzle(raw), { migrationsFolder: freezeThrough0116() })
+      migrate(drizzle(raw), { migrationsFolder: freezeThrough0116(), preserveForeignKeys: true })
+      raw.exec(`
+        CREATE TEMP TABLE migration_fk_modes (foreign_keys INTEGER NOT NULL);
+        CREATE TEMP TRIGGER record_migration_fk AFTER INSERT ON __drizzle_migrations
+        BEGIN
+          INSERT INTO migration_fk_modes SELECT foreign_keys FROM pragma_foreign_keys;
+        END;
+      `)
 
       raw.exec(`
       INSERT INTO users (id, username, display_name, role, created_at, updated_at) VALUES
@@ -241,7 +251,17 @@ describe('migration 0117 RFC-223 fusion provenance', () => {
         raw.query("SELECT id FROM users WHERE id IN ('owner','grantee') ORDER BY id").all(),
       ).toEqual([{ id: 'grantee' }, { id: 'owner' }])
       expect(raw.query('SELECT COUNT(*) AS n FROM resource_grants').get()).toEqual({ n: 4 })
-      migrate(drizzle(raw), { migrationsFolder: freezeThrough0117() })
+      const migrationOptions = {
+        migrationsFolder: freezeThrough0117(),
+        preserveForeignKeys: true,
+      }
+      expect(migrate(drizzle(raw), migrationOptions)).toBe(1)
+      const expectedMode = { foreign_keys: foreignKeys === 'ON' ? 1 : 0 }
+      expect(raw.query('SELECT foreign_keys FROM migration_fk_modes').all()).toEqual([expectedMode])
+      expect(raw.query('PRAGMA foreign_keys').get()).toEqual(expectedMode)
+      expect(migrate(drizzle(raw), migrationOptions)).toBe(0)
+      expect(raw.query('SELECT foreign_keys FROM migration_fk_modes').all()).toEqual([expectedMode])
+      expect(raw.query('PRAGMA foreign_keys').get()).toEqual(expectedMode)
 
       expect(
         raw
@@ -351,12 +371,22 @@ describe('migration 0117 RFC-223 fusion provenance', () => {
 
   test('fixed-id wrong-name collision aborts atomically without hijacking the row', () => {
     const raw = new Database(':memory:')
-    migrate(drizzle(raw), { migrationsFolder: freezeThrough0116() })
+    raw.exec('PRAGMA foreign_keys = ON')
+    migrate(drizzle(raw), { migrationsFolder: freezeThrough0116(), preserveForeignKeys: true })
     raw
       .query('INSERT INTO agents (id, name, builtin) VALUES (?, ?, 0)')
       .run(MERGER_ID, 'ordinary-agent')
 
-    expect(() => migrate(drizzle(raw), { migrationsFolder: freezeThrough0117() })).toThrow()
+    const receipts = raw
+      .query('SELECT hash, created_at FROM __drizzle_migrations ORDER BY created_at')
+      .all()
+    expect(() =>
+      migrate(drizzle(raw), { migrationsFolder: freezeThrough0117(), preserveForeignKeys: true }),
+    ).toThrow()
+    expect(raw.query('PRAGMA foreign_keys').get()).toEqual({ foreign_keys: 1 })
+    expect(
+      raw.query('SELECT hash, created_at FROM __drizzle_migrations ORDER BY created_at').all(),
+    ).toEqual(receipts)
     expect(raw.query('SELECT id, name, builtin FROM agents WHERE id = ?').get(MERGER_ID)).toEqual({
       id: MERGER_ID,
       name: 'ordinary-agent',

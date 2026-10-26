@@ -25,7 +25,7 @@ import { createDatabaseApplicationConfiguration } from '@/modules/system-operati
 import { readHostedDatabaseBackupProvenance } from '@/modules/system-operations/infrastructure/crewstation/databaseBackupProvenance'
 import { createPostgresqlDatabaseRuntime } from '@/platform/persistence/postgresqlRuntime'
 import { POSTGRESQL_METADATA_SCHEMA } from '@/platform/persistence/postgresqlSchema'
-import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { resolvePostgresqlTestUrlEnv, resolveTestProviders } from './helpers/eachProvider'
 
 const PROJECT = 'agent-workflow'
@@ -51,7 +51,7 @@ if (providers.includes('postgresql')) {
   })
   const serve = (service: string) =>
     prepareCrewStationDatabase({
-      contract: buildLogicalSchemaContract(),
+      contract: logicalSchemaContract,
       environment: { project: PROJECT, service },
       schema: 'verify',
       env: jobEnv(service),
@@ -72,7 +72,7 @@ if (providers.includes('postgresql')) {
 
   test('a serving instance never starts on a database the migration Job has not installed', async () => {
     await emptyDatabase()
-    await expect(serve(PROJECT)).rejects.toMatchObject({ code: 'postgresql-schema-not-current' })
+    await expect(serve(PROJECT)).rejects.toThrow('epoch-1 or uninstalled database')
   }, 120_000)
 
   // RFC-370 v3 acceptance: hosted backups failed on the real M0 → v3 database with
@@ -89,24 +89,33 @@ if (providers.includes('postgresql')) {
     })
     const [active] = await probe
       .providerPool()
-      .unsafe(`SELECT generation_id FROM ${meta}.database_generations WHERE state = 'active'`)
+      .unsafe(`SELECT generation_id FROM ${meta}.generations WHERE state = 'active'`)
     await probe.close()
     const runtime = createPostgresqlDatabaseRuntime({
       config: PostgresqlDatabaseConfigSchema.parse({ provider: 'postgresql', urlEnv }),
       generationId: String(active!.generation_id),
     })
     try {
-      const contract = buildLogicalSchemaContract()
+      const contract = logicalSchemaContract
       const pool = runtime.providerPool()
       expect(await readHostedDatabaseBackupProvenance(runtime, contract)).toEqual([])
-      // As an earlier release's installation leaves it.
-      await pool.unsafe(`UPDATE ${meta}.logical_copy_operations SET contract_digest = $1`, [
-        `sha256:${'0'.repeat(64)}`,
-      ])
+      // A retained ancestor may describe an older contract. Native lineage still resolves it.
+      await pool.unsafe(
+        `INSERT INTO ${meta}.generations
+        (generation_id,schema_epoch,role,state,provider,operation_id,run_id,source_generation_id,contract_digest,plan_digest,activation_receipt_digest,created_at,activated_at,retired_at)
+        SELECT 'dbg_rfc370_provenance_ancestor',schema_epoch,'installed','retired',provider,NULL,NULL,NULL,$1,plan_digest,NULL,created_at,activated_at,1
+        FROM ${meta}.generations WHERE generation_id=$2`,
+        [`sha256:${'0'.repeat(64)}`, runtime.generationId],
+      )
+      await pool.unsafe(
+        `UPDATE ${meta}.generations SET source_generation_id='dbg_rfc370_provenance_ancestor' WHERE generation_id=$1`,
+        [runtime.generationId],
+      )
       expect(await readHostedDatabaseBackupProvenance(runtime, contract)).toEqual([])
       // Rows that do not name the same hosted source still prove nothing.
       await pool.unsafe(
-        `UPDATE ${meta}.database_generations SET source_generation_id = 'dbg_standalone_sqlite'`,
+        `UPDATE ${meta}.generations SET source_generation_id = 'dbg_standalone_sqlite' WHERE generation_id=$1`,
+        [runtime.generationId],
       )
       await expect(readHostedDatabaseBackupProvenance(runtime, contract)).rejects.toThrow(
         'hosted-backup-installation-provenance-missing',
@@ -145,9 +154,9 @@ if (providers.includes('postgresql')) {
       await serving.runtime.close()
     }
 
-    await expect(migrateForDeployment(jobEnv('other'))).rejects.toMatchObject({
-      code: 'postgresql-generation-conflict',
-    })
-    await expect(serve('other')).rejects.toMatchObject({ code: 'postgresql-schema-not-current' })
+    await expect(migrateForDeployment(jobEnv('other'))).rejects.toThrow(
+      'postgresql-generation-conflict',
+    )
+    await expect(serve('other')).rejects.toThrow('postgresql-generation-conflict')
   }, 300_000)
 }

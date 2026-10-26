@@ -1,3 +1,5 @@
+import { taskReadColumns } from '@/modules/task-execution/infrastructure/taskRepositorySql'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 // RFC-359 AC-1（plan §5hn 批次二 ①）—— RFC-287 G7「延后仓库准备」在两个引擎上的落差。
 //
 // **已销账**（plan §5hn 批次二 ①）：这条用例上一版按 provider 分叉钉住的是缺陷形状，
@@ -26,8 +28,6 @@
 // `composeDeferredRepositoryPreparation`）。判据因此**不只看落行**，还要看完整的 G7 闭环：
 // 任务先 `pending`、第 0 步跑完转 `failed`、git 原文留在行上、并且留下一条可重试的
 // `__repo_prep__` 合成节点行——缺任何一环，AC-11 的「重试准备仓库」就是个死按钮。
-import { readNodeRunFixtures, readTaskFixtures } from './helpers/model'
-import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterAll, beforeAll, beforeEach, expect, test } from 'bun:test'
 import type { Hono } from 'hono'
 import { execFileSync } from 'node:child_process'
@@ -35,12 +35,13 @@ import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { ulid } from 'ulid'
+import { readNodeRunFixtures, readTaskFixtures } from './helpers/model'
 
-import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
-import { remoteUrlFor, startGitHttpRemote, stopGitHttpRemote } from './helpers/gitHttpRemote'
-import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
-import { eq } from 'drizzle-orm'
 import { REPO_PREP_NODE_ID } from '@agent-workflow/shared'
+import { eq } from 'drizzle-orm'
+import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
+import { remoteUrlFor, startGitHttpRemote, stopGitHttpRemote } from './helpers/gitHttpRemote'
+import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
 
 const TOKEN = 'i'.repeat(64)
 /**
@@ -131,7 +132,7 @@ describeEachProviderHttpApplication(
       for (;;) {
         const { tasks } = tablesOf(scope.harness.db)
         const rows = await scope.harness.db
-          .select()
+          .select(taskReadColumns(scope.harness.db))
           .from(tasks)
           .where(eq(tasks.id, taskId))
           .limit(1)

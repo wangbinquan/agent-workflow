@@ -1,3 +1,4 @@
+import { nodeRunFixtureColumns } from './helpers/model/nodeRun'
 import { withO2Closure } from './helpers/o2Closure'
 // RFC-128 P5-BC — self/questioner per-question rerun (深度重构核心；最高风险段)。
 //
@@ -21,7 +22,6 @@ import {
   taskFixture,
   workflowFixture,
   readClarifyRoundFixtures,
-  clarifyRoundFixtureRuntimeInput,
 } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
@@ -257,7 +257,7 @@ function entryRow(db: PersistenceDb, id: string) {
 }
 function runRow(db: PersistenceDb, id: string) {
   const { nodeRuns } = tablesOf(db)
-  return db.select().from(nodeRuns).where(eq(nodeRuns.id, id))
+  return db.select(nodeRunFixtureColumns(db)).from(nodeRuns).where(eq(nodeRuns.id, id))
 }
 
 beforeEach(() => resetBroadcastersForTests())
@@ -890,10 +890,12 @@ describeEachProvider('RFC-359 rfc128-p5-bc-self-questioner-rerun database behavi
         ),
       ).toBe(true)
       // The later LAZY reconcile (listTaskQuestions path) must NOT reset them to undispatched/open.
-      const roundRows = await readClarifyRoundFixtures(db, {
-        intermediaryNodeRunId: clarifyNodeRunId,
-      })
-      await reconcileTaskQuestionsForRound(db, clarifyRoundFixtureRuntimeInput(roundRows[0]!))
+      const { clarifyRounds } = tablesOf(db)
+      const roundRows = await db
+        .select()
+        .from(clarifyRounds)
+        .where(eq(clarifyRounds.intermediaryNodeRunId, clarifyNodeRunId))
+      await reconcileTaskQuestionsForRound(db, roundRows[0]!)
       const afterReconcile = await db
         .select()
         .from(taskQuestions)
@@ -942,7 +944,12 @@ describeEachProvider('RFC-359 rfc128-p5-bc-self-questioner-rerun database behavi
       const rerunNodeRunId = res.dispatch.reruns[0]!.nodeRunId
       const { nodeRuns, clarifyRounds } = tablesOf(db)
       // mint present (pending, clarify-answer, on the asking node).
-      const rerun = (await db.select().from(nodeRuns).where(eq(nodeRuns.id, rerunNodeRunId)))[0]
+      const rerun = (
+        await db
+          .select(nodeRunFixtureColumns(db))
+          .from(nodeRuns)
+          .where(eq(nodeRuns.id, rerunNodeRunId))
+      )[0]
       expect(rerun?.status).toBe('pending')
       expect(rerun?.rerunCause).toBe('clarify-answer')
       expect(rerun?.nodeId).toBe(P)
@@ -956,7 +963,10 @@ describeEachProvider('RFC-359 rfc128-p5-bc-self-questioner-rerun database behavi
       expect(sess?.status).toBe('answered')
       // clarify node closed (done) — the LAST step, after the rerun is committed.
       const clarifyRun = (
-        await db.select().from(nodeRuns).where(eq(nodeRuns.id, clarifyNodeRunId))
+        await db
+          .select(nodeRunFixtureColumns(db))
+          .from(nodeRuns)
+          .where(eq(nodeRuns.id, clarifyNodeRunId))
       )[0]
       expect(clarifyRun?.status).toBe('done')
     })
@@ -1013,9 +1023,9 @@ describeEachProvider('RFC-359 rfc128-p5-bc-self-questioner-rerun database behavi
       ]).toContain(loserCode!)
       const { nodeRuns } = tablesOf(db)
       // Exactly ONE clarify-answer rerun on P — no double mint.
-      const reruns = (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))).filter(
-        (r) => r.nodeId === P && r.rerunCause === 'clarify-answer',
-      )
+      const reruns = (
+        await db.select(nodeRunFixtureColumns(db)).from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
+      ).filter((r) => r.nodeId === P && r.rerunCause === 'clarify-answer')
       expect(reruns.length).toBe(1)
     })
 
@@ -1043,7 +1053,8 @@ describeEachProvider('RFC-359 rfc128-p5-bc-self-questioner-rerun database behavi
       )
       // q1 control-sealed-undispatched → dispatchable; the round is still awaiting (quick-finalizable).
       await sealRoundQuestions({ db, originNodeRunId: clarifyNodeRunId, answers: [ans('q1')] })
-      const { taskQuestions, nodeRuns } = tablesOf(db)
+      const { taskQuestions } = tablesOf(db)
+      const { nodeRuns } = tablesOf(db)
       const q1 = (
         await db
           .select()
@@ -1064,16 +1075,16 @@ describeEachProvider('RFC-359 rfc128-p5-bc-self-questioner-rerun database behavi
         }),
       ])
       // Exactly ONE clarify-answer rerun on P — no double mint under concurrency.
-      const reruns = (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))).filter(
-        (r) => r.nodeId === P && r.rerunCause === 'clarify-answer',
-      )
+      const reruns = (
+        await db.select(nodeRunFixtureColumns(db)).from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
+      ).filter((r) => r.nodeId === P && r.rerunCause === 'clarify-answer')
       expect(reruns.length).toBe(1)
     })
   })
 
   // ===========================================================================
   // §5.2.14 final-gate (2nd round) — critical-section boundary findings:
-  //   ②(b) sealRoundQuestions must take lock B (was its own unlocked tx);
+  //   ②(b) sealRoundQuestions must serialize the round before per-row writes (RFC-395);
   //   ②(a) locked-answer preservation: a committed control seal is never overwritten by a later
   //        whole-round finalize (the unified finalize filters lockedIds; the merge runs in the seal
   //        tx UNDER B). The legacy submit-side source-order locks (②(a) self/cross + ① deferred
@@ -1153,18 +1164,29 @@ describe('RFC-128 §5.2.14 final-gate (2nd round) — seal/merge/deferred critic
     return src.slice(start, after === -1 ? undefined : after)
   }
 
-  // ②(b) — sealRoundQuestions writes the round's answers_json + task_questions, so it MUST serialize on
-  // the SAME per-task question-write lock B as the quick submits. Source-lock: its dbTxSync runs inside
-  // getTaskQuestionWriteSem(...).run(runSealTx). (Behaviorally hard to force the unlocked race; the lock
-  // closes it structurally.)
-  test('②(b) — sealRoundQuestions runs its tx under getTaskQuestionWriteSem (lock B)', () => {
+  // ②(b), RFC-395: keep the lost-answer guard on the target protocol. The round
+  // lock precedes its projection; per-row writes/CAS replace the old whole-map
+  // rewrite under lock B. A quick decision additionally locks the task first.
+  test('②(b) — seal uses the round lock and per-row answer revision protocol', () => {
     const src = readFileSync(
       resolve(import.meta.dir, '../src/modules/collaboration/infrastructure/clarify/seal.ts'),
       'utf8',
     )
     const fn = fnBody(src, 'export async function sealRoundQuestions')
-    expect(fn.includes('getTaskQuestionWriteSem(')).toBe(true)
-    expect(fn.includes('.run(runSealTx)')).toBe(true)
+    expect(fn).not.toContain('getTaskQuestionWriteSem(')
+    const roundLock = fn.indexOf('await lockClarifyRound(tx, roundIdentity.id)')
+    const read = fn.indexOf('readClarifyAnswerProjection(tx, round)')
+    const write = fn.indexOf('createClarifyAnswerWritePort(args.db).seal(tx, round.id, transition)')
+    expect(roundLock).toBeGreaterThan(-1)
+    expect(read).toBeGreaterThan(roundLock)
+    expect(write).toBeGreaterThan(read)
+    const writer = readFileSync(
+      resolve(import.meta.dir, '../src/modules/collaboration/infrastructure/clarifyAnswerWrite.ts'),
+      'utf8',
+    )
+    expect(writer).toContain('eq(clarifyAnswers.revision, previous.revision)')
+    expect(writer).toContain('eq(clarifyAnswerDrafts.revision, draft.revision)')
+    expect(writer).not.toContain('answersJson:')
     expect(fn.includes('databaseSessionFor(args.db).transaction(')).toBe(true)
   })
 })

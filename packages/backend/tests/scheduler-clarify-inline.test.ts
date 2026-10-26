@@ -287,7 +287,8 @@ function registerCases(provider: ProviderHarness) {
         }),
     )
 
-    const { clarifyRounds, nodeRunEvents } = tablesOf(h.db)
+    const { nodeRunEvents } = tablesOf(h.db)
+    const { clarifyRounds } = tablesOf(h.db)
     // User submits answers → mints rerun row (clarifyIteration=1).
     const sessionRow = (
       await h.db.select().from(clarifyRounds).where(eq(clarifyRounds.taskId, taskId))
@@ -566,7 +567,8 @@ function registerCases(provider: ProviderHarness) {
           binaryOverride: ['bun', 'run', MOCK_OPENCODE],
         }),
     )
-    const { clarifyRounds, nodeRunEvents } = tablesOf(h.db)
+    const { nodeRunEvents } = tablesOf(h.db)
+    const { clarifyRounds } = tablesOf(h.db)
     const sessionRow = (
       await h.db.select().from(clarifyRounds).where(eq(clarifyRounds.taskId, taskId))
     )[0]

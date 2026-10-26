@@ -1,3 +1,4 @@
+import { liveSqlitePath } from './storage'
 // RFC-054 W2-5 + RFC-198 T8 + RFC-199 T16 + RFC-219 T6 + RFC-321 T18 — visual regression
 // baselines for the canonical shell pages, workflow-editor workspace modes,
 // a large categorized node catalog, and a deterministic dynamic-workflow preview.
@@ -30,7 +31,6 @@ import { patchTaskFixtureSql } from './fixtures/model'
 import { test, expect, type Locator, type Page } from '@playwright/test'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
-import { join } from 'node:path'
 
 import { defaultAutomationPolicyContent } from '../packages/backend/src/modules/development-automation/domain/automationPolicy'
 import { startDaemon, type DaemonHandle } from './harness'
@@ -745,7 +745,7 @@ async function seedTerminalTask(): Promise<{ taskId: string; agentId: string }> 
           },
         })
         runSqlite(
-          join(d.home, 'db.sqlite'),
+          liveSqlitePath(d.home),
           patchTaskFixtureSql({ id: task.id }, { triggerContextJson: context }),
         )
         return { taskId: task.id, agentId: agent.id }

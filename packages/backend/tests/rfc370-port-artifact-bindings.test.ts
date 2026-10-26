@@ -1,3 +1,7 @@
+import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
+import { readReviewFixture } from './helpers/model/content'
+import { nodeRunFixtureColumns } from './helpers/model/nodeRun'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { o2Ports } from './helpers/o2Closure'
 import {
   nodeRunFixture,
@@ -8,7 +12,7 @@ import {
   readTaskFixtures,
   readNodeRunFixtures,
 } from './helpers/model'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+
 import { first } from '@/platform/persistence/queryHelpers'
 import { expectDeploymentSelection } from './helpers/deploymentSelectionSource'
 import { readDaemonGraphSource } from './helpers/daemonGraphSource'
@@ -161,7 +165,11 @@ describeEachProvider('RFC-370 real port artifact consumers', (harness) => {
       const { nodeRuns } = tablesOf(db)
       expect(await readNodeRunOutputFixtures(db, { nodeRunId: h.nodeRunId })).toEqual([])
       expect(
-        (await first(db.select().from(nodeRuns).where(eq(nodeRuns.id, h.nodeRunId))))?.status,
+        (
+          await first(
+            db.select(nodeRunFixtureColumns(db)).from(nodeRuns).where(eq(nodeRuns.id, h.nodeRunId)),
+          )
+        )?.status,
       ).toBe('running')
       expect(content.archives.size).toBe(0)
       ack.resolve(undefined)
@@ -308,6 +316,7 @@ describeEachProvider('RFC-370 real port artifact consumers', (harness) => {
     const operations = composePortArtifactOperations(content, h.root),
       selectedHomes: string[] = []
     const collaboration = createCollaborationRuntimeMechanics(db, {
+      ...epoch2RuntimeTestPorts(db),
       taskLock: o2Ports(db).taskLock,
       ...{
         upstreamAgents: o2Ports(db).upstreamAgents,
@@ -355,13 +364,15 @@ describeEachProvider('RFC-370 real port artifact consumers', (harness) => {
       expect((await pending).kind).toBe('awaiting_review')
       const docs = await db.select().from(docVersions).where(eq(docVersions.taskId, h.taskId))
       expect(docs).toHaveLength(1)
-      expect(readFileSync(join(h.root, docs[0]!.bodyPath), 'utf8')).toBe('# selected review body')
+      expect(
+        await readReviewFixture(db, h.root, docs[0]!, epoch2RuntimeTestPorts(db).content),
+      ).toBe('# selected review body')
       expect(docs[0]!.sourceFilePath).toBe('report.md')
       expect(
         (
           await first(
             db
-              .select()
+              .select(nodeRunFixtureColumns(db))
               .from(nodeRuns)
               .where(and(eq(nodeRuns.taskId, h.taskId), eq(nodeRuns.nodeId, 'review'))),
           )

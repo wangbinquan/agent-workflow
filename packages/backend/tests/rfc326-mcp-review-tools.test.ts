@@ -1,3 +1,5 @@
+import { legacyContentRef } from '@/platform/content/contentRef'
+import { contentRowColumns } from '@/platform/content/infrastructure/contentStore'
 // RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-326 — the review gate over MCP (proposal AC-21 / 22 / 23 / 24 / 25 / 27;
 // design §8).
@@ -167,7 +169,8 @@ async function seedReview(
     ],
     edges: [],
   }
-  const { taskCollaborators, docVersions } = tablesOf(h.db)
+  const { taskCollaborators } = tablesOf(h.db),
+    { docVersions } = tablesOf(h.db)
   await workflowFixture(h.db, {
     id: workflowId,
     name: 'wf',
@@ -236,7 +239,7 @@ async function seedReview(
       sourcePortName: 'docpath',
       versionIndex: 1,
       reviewIteration: 0,
-      bodyPath,
+      ...contentRowColumns(legacyContentRef('review-body-path', 'local-file', bodyPath)),
       decision: 'pending',
       ...(mode === 'single'
         ? {}

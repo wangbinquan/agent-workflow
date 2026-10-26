@@ -16,6 +16,7 @@ import {
   composePostgresqlSkillArtifactCompensation,
   createFileIntentPluginArtifactOwner,
   createFileIntentSkillArtifactOwner,
+  createSkillContentLocationQuery,
 } from '@/modules/resource-catalog/composition/intentApply'
 import type {
   IntentPluginArtifactOwner,
@@ -106,6 +107,7 @@ export function composeIntentApplyArtifactLifecycle(input: {
     appHome: input.appHome,
     pluginsDir,
     content,
+    skillContentLocations: createSkillContentLocationQuery(input.db),
     legacySkillArtifacts: input.legacySkillArtifacts ?? composeLegacyIntentSkillArtifactCompat(),
   })
 }
@@ -126,7 +128,8 @@ export function composeIntentApplyOperations(
           dependencies.pluginArtifacts ??
           createFileIntentPluginArtifactOwner({ pluginsDir: join(appHome, 'plugins') }),
         skillArtifacts:
-          dependencies.skillArtifacts ?? createFileIntentSkillArtifactOwner({ appHome }),
+          dependencies.skillArtifacts ??
+          createFileIntentSkillArtifactOwner({ appHome, db: dependencies.db }),
         aclIdentities:
           dependencies.aclIdentities ?? createResourceCatalogAclIdentityReadPort(dependencies.db),
       }),

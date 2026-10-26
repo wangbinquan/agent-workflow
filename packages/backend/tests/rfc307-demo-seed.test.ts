@@ -27,7 +27,6 @@ import { describeEachProvider, type ProviderHarness } from './helpers/eachProvid
 import { SYSTEM_USER_ID } from '../src/auth/actor'
 import {
   DEMO_AGENT_ID,
-  DEMO_ENDPOINT_ID,
   DEMO_TEMPLATE_ID,
   DEMO_ROUND_ID,
   DEMO_WORKFLOW_REVIEW_ID,
@@ -65,15 +64,16 @@ describeEachProvider('RFC-307 示例内容（双引擎）', (harness) => {
   })
 
   describe('RFC-307 — demo content', () => {
-    test('a fresh install gets a framework, a binding, an agent, a round and workflows', async () => {
+    test('a fresh install gets a template, an agent and workflows without code-work history', async () => {
       const result = await seed()
       expect(result.seeded).toBe(true)
 
-      const { capabilityTemplates, codeWorkRounds } = tablesOf(db)
+      const { capabilityTemplates } = tablesOf(db)
+      const { codeHistoryArchives } = tablesOf(db)
       expect(await db.select().from(capabilityTemplates)).toHaveLength(1)
       expect(await db.select().from(capabilityTemplates)).toHaveLength(1)
       expect((await readAgentFixtures(db)).map((a) => a.id)).toContain(DEMO_AGENT_ID)
-      expect(await db.select().from(codeWorkRounds)).toHaveLength(1)
+      expect(await db.select().from(codeHistoryArchives)).toHaveLength(0)
       expect((await readWorkflowFixtures(db)).length).toBeGreaterThanOrEqual(2)
     })
 
@@ -184,21 +184,15 @@ describeEachProvider('RFC-307 示例内容（双引擎）', (harness) => {
       }
     })
 
-    test('the demo round has one stage row per contract stage, generated from the contract', async () => {
-      // Hand-listing them would drift the first time a stage was added, and drift
-      // in the sample is what teaches people the picture cannot be trusted.
+    test('the retained template names the current stage contract without generating history', async () => {
       await seed()
-      const contract = lookupStageContract('mr-review')
-      const { codeRoundStages, codeWorkRounds } = tablesOf(db)
-      const stages = await db.select().from(codeRoundStages)
-      expect(stages).toHaveLength(contract?.stages.length ?? 0)
-      expect(stages.map((s) => s.stageName).sort()).toEqual(
-        (contract?.stages ?? []).map((s) => s.name).sort(),
+      const { capabilityTemplates } = tablesOf(db)
+      const { codeHistoryArchives, codeHistoryIdIndex } = tablesOf(db)
+      expect((await db.select().from(capabilityTemplates))[0]?.stageContractVer).toBe(
+        lookupStageContract('mr-review')?.version,
       )
-      // And the round declares the version it ran, so the flow view's staleness
-      // notice has something true to compare against.
-      const [round] = await db.select().from(codeWorkRounds)
-      expect(round?.stageContractVer).toBe(contract?.version ?? 0)
+      expect(await db.select().from(codeHistoryArchives)).toEqual([])
+      expect(await db.select().from(codeHistoryIdIndex)).toEqual([])
     })
 
     test('the demo binding fills the slot BOTH AI stages share', async () => {
@@ -249,11 +243,8 @@ describeEachProvider('RFC-307 示例内容（双引擎）', (harness) => {
       }
       expect(calls).toEqual([])
 
-      const { codeWorkItems } = tablesOf(db)
-      // And the endpoint it references is disabled, so nothing that scans for
-      // live endpoints picks it up.
-      const [item] = await db.select().from(codeWorkItems)
-      expect(item?.codeHostEndpointId).toBeTruthy()
+      const { codeHistoryArchives } = tablesOf(db)
+      expect(await db.select().from(codeHistoryArchives)).toEqual([])
     })
 
     test('an existing marker means the seed does not even look at the database', async () => {
@@ -264,17 +255,16 @@ describeEachProvider('RFC-307 示例内容（双引擎）', (harness) => {
       expect(await db.select().from(capabilityTemplates)).toEqual([])
     })
 
-    test('the seeded round is settled and published — a finished example, not a stuck one', async () => {
-      // A sample that shows a round mid-flight would look like the platform hung.
-      await seed()
-      const { codeWorkItems, codeWorkRounds } = tablesOf(db)
-      const [item] = await db.select().from(codeWorkItems)
-      const [round] = await db.select().from(codeWorkRounds)
-      expect(item?.status).toBe('settled')
-      expect(round?.outcome).toBe('published')
-      expect(round?.endedAt).not.toBeNull()
-      expect(round?.id).toBe(DEMO_ROUND_ID)
-      expect(item?.currentRoundId).toBe(DEMO_ROUND_ID)
+    test('the participant reports no fabricated work item, round or stage ids', async () => {
+      const receipt = await composeCodeCapabilityDemoSeedParticipant(db).ensure({
+        agentId: DEMO_AGENT_ID,
+      })
+      expect(receipt).toEqual({
+        capabilityTemplateId: DEMO_TEMPLATE_ID,
+        workItemId: null,
+        roundId: null,
+        stageIds: [],
+      })
     })
 
     test('NOTHING seeded is marked builtin — the samples must be editable and deletable', async () => {
@@ -352,12 +342,8 @@ describeEachProvider('RFC-307 示例内容（双引擎）', (harness) => {
       // It is also unnecessary: the column carries no foreign key and no read
       // path joins the endpoint table, because the id is opaque there.
       await seed()
-      const { webhookEndpoints, codeWorkItems } = tablesOf(db)
+      const { webhookEndpoints } = tablesOf(db)
       expect(await db.select().from(webhookEndpoints)).toEqual([])
-      // The work item still names its (opaque) host identity, so the row is not
-      // half-populated.
-      const [item] = await db.select().from(codeWorkItems)
-      expect(item?.codeHostEndpointId).toBe(DEMO_ENDPOINT_ID)
     })
 
     test('ids are stable and readable, so a user can find every trace of the demo', async () => {

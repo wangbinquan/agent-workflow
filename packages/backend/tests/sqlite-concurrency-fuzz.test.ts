@@ -1,3 +1,4 @@
+import { tablesOf } from '@/platform/persistence/sessionTables'
 // RFC-054 W2-2 — fast-check property tests on the SQLite + lifecycle layer.
 //
 // Three properties:
@@ -34,22 +35,21 @@
 //     for catching invariant-violating compositions of operations but not
 //     SQLite engine concurrency bugs (those are the engine's problem).
 
-import { nodeRunFixture, patchTaskFixture, taskFixture, workflowFixture } from './helpers/model'
-import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
-import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
 import fc from 'fast-check'
 import { ulid } from 'ulid'
+import { nodeRunFixture, patchTaskFixture, taskFixture, workflowFixture } from './helpers/model'
+import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
 
 import { eq } from 'drizzle-orm'
 
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { describeEachProvider } from './helpers/eachProvider'
 import {
   INVARIANT_RULES,
   runLifecycleInvariants,
   type LifecycleAlertRow,
 } from '../src/services/lifecycleInvariants'
+import { describeEachProvider } from './helpers/eachProvider'
 
 const VALID_TASK_STATUSES = [
   'pending',

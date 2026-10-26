@@ -1,3 +1,4 @@
+import { hasTaskRollbackCheckpoint } from '@/modules/task-execution/public/queries'
 // RFC-395 II-a A2: one checkpoint-list planner drives both resume and durable review rollback.
 // Empty/missing historical pre-snapshots remain a no-op; current isolated runs carry no pre-snapshot.
 
@@ -16,7 +17,7 @@ import type { TaskRollbackQueries } from '@/modules/task-execution/application/p
 export interface RollbackTarget {
   taskId?: string
   db?: NodeRollbackDatabase
-  /** Root workspace reference; the epoch-1 adapter handles the historical scalar fallback. */
+  /** Root workspace reference; checkpoint targets come from the persisted mount list. */
   worktreePath: string
   repos: Array<{ worktreePath: string; mountPath: string }>
 }
@@ -74,8 +75,7 @@ export function planNodeRunRollbackTargets(
 
 /**
  * RFC-098 B1 (audit ⑥-10): load the RollbackTarget for a task — tasks row +
- * taskRepos (repoIndex order), with the same single-repo synthesized fallback
- * the scheduler uses for rows predating the multi-repo migration.
+ * taskRepos (repoIndex order), using the actual persisted repository mounts.
  */
 export async function loadRollbackTarget(
   db: NodeRollbackDatabase,
@@ -111,7 +111,7 @@ export async function rollbackNodeRunWorktrees(
       nodeRunId: run.id,
       error: plan.parseError,
     })
-  if (!plan.mapped && plan.targets.length === 0) return outcome
+  if (plan.targets.length === 0 && !hasTaskRollbackCheckpoint(run)) return outcome
   // Preserve the existing all-repository pre-pass and the single-worktree checkOnly path.
   if (plan.mapped || opts.checkOnly) {
     for (const entry of plan.targets) {

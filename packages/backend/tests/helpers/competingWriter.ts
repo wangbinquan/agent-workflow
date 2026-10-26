@@ -1,3 +1,4 @@
+import { getTableName, type Table } from 'drizzle-orm'
 // 把「读到写之间被人插队」变成**确定性**的构造，两个引擎同一条路径。
 //
 // 为什么这个助手存在：CAS 判据（`WHERE col = <刚读到的值>`）要证明的是「谓词 miss 会变成一个抛出的
@@ -65,10 +66,16 @@ export function dbWithCompetingWriter(
     new Proxy(node, {
       get(target, prop, receiver) {
         const value = Reflect.get(target, prop, receiver) as unknown
-        if (prop === 'update' && typeof value === 'function') {
+        if ((prop === 'update' || prop === 'insert') && typeof value === 'function') {
           return (...args: unknown[]) => {
             const builder = (value as (...a: unknown[]) => unknown).apply(target, args)
-            if (fired || typeof builder !== 'object' || builder === null) return builder
+            if (
+              fired ||
+              getTableName(args[0] as Table) !== 'node_run_runtime_states' ||
+              typeof builder !== 'object' ||
+              builder === null
+            )
+              return builder
             fired = true
             return fireBeforeAwait(builder as object, () =>
               sabotage(target as unknown as PersistenceTx),

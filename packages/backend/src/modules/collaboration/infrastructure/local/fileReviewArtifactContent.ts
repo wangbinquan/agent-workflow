@@ -1,4 +1,4 @@
-import { legacyReviewAbsolutePath } from '@/platform/content/legacyReview'
+import { reviewAbsolutePath } from '@/platform/content/locations/review'
 import { existsSync, readFileSync, mkdirSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
 import type { ReviewArtifactContentPort } from '../../application/ports/reviewArtifactContent'
@@ -6,7 +6,7 @@ import type { ReviewArtifactContentPort } from '../../application/ports/reviewAr
 export function createFileReviewArtifactContent(appHome: string): ReviewArtifactContentPort {
   return Object.freeze({
     async read(reference: string) {
-      const path = legacyReviewAbsolutePath(appHome, reference)
+      const path = reviewAbsolutePath(appHome, reference)
       return existsSync(path) ? { body: readFileSync(path), label: path } : null
     },
   })
@@ -14,7 +14,7 @@ export function createFileReviewArtifactContent(appHome: string): ReviewArtifact
 
 /** The pre-journal repair path keeps its original direct local overwrite behavior. */
 export function writeLegacyReviewBody(appHome: string, reference: string, body: string): void {
-  const path = legacyReviewAbsolutePath(appHome, reference)
+  const path = reviewAbsolutePath(appHome, reference)
   mkdirSync(dirname(path), { recursive: true })
   writeFileSync(path, body, 'utf8')
 }

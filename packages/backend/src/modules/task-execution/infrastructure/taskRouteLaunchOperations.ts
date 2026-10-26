@@ -1,28 +1,22 @@
-import { isTaskWorkspaceUnbound } from '@agent-workflow/shared'
-import { projectStoredTaskRepositorySurface } from './taskRepositorySurface'
-import { definitionAnchorId, projectTaskSubject, type TaskSubject } from '../domain/taskSubject'
-import { decodeTaskRepositoryMount } from './taskRepositoryCodec'
-import { createTaskCreationParticipantInTx } from './taskCreationParticipant'
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
-import { first } from '@/platform/persistence/queryHelpers'
 import type { WorkspaceUploadContentFactory } from '@/modules/source-control/public/types'
-import type { TaskInputFiles } from '../application/ports/taskInputFiles'
-import type { TaskLaunchConfigurationQueries } from '../application/ports/taskLaunchConfiguration'
-import { resolveTaskUploadLimits } from '../application/launchConfiguration'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
+import { first } from '@/platform/persistence/queryHelpers'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { insertOne } from '@/platform/persistence/singleInsert'
 import { DEFAULT_UPLOAD_LIMITS } from '@/services/upload'
-import { launchTask } from '../application/launch/launchTask'
-import type { TaskWorkspaceLaunchLane } from '../application/ports/workspaceLaunch'
 import {
-  UPLOAD_INPUTS_DIR,
   StartTaskSchema,
-  TaskStartOptionsSchema,
-  type TaskStartOptions,
   TaskSchema,
+  TaskStartOptionsSchema,
+  UPLOAD_INPUTS_DIR,
+  WorkflowDefinitionSchema,
   applySpaceFields,
   initialDwState,
+  isTaskWorkspaceUnbound,
   migrateWorkflowDefinitionToLatest,
   redactGitUrl,
+  webhookTaskSourceLinkOf,
+  workgroupLaunchReadiness,
   type Agent,
   type GitCommitIdentity,
   type StartAgentTask,
@@ -31,29 +25,38 @@ import {
   type Task,
   type TaskCatalogVisibility,
   type TaskLaunchOrigin,
+  type TaskStartOptions,
   type TriggerContext,
   type WorkflowDefinition,
-  WorkflowDefinitionSchema,
   type Workgroup,
   type WorkgroupRuntimeConfig,
-  webhookTaskSourceLinkOf,
-  workgroupLaunchReadiness,
 } from '@agent-workflow/shared'
-import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { and, eq, inArray } from 'drizzle-orm'
 import { ulid } from 'ulid'
+import { launchTask } from '../application/launch/launchTask'
+import { resolveTaskUploadLimits } from '../application/launchConfiguration'
+import type { TaskInputFiles } from '../application/ports/taskInputFiles'
+import type { TaskLaunchConfigurationQueries } from '../application/ports/taskLaunchConfiguration'
+import type { TaskWorkspaceLaunchLane } from '../application/ports/workspaceLaunch'
+import { definitionAnchorId, projectTaskSubject, type TaskSubject } from '../domain/taskSubject'
+import { createTaskCreationParticipantInTx } from './taskCreationParticipant'
+import { decodeTaskRepositoryMount } from './taskRepositoryCodec'
+import { projectStoredTaskRepositorySurface } from './taskRepositorySurface'
 
 import { SYSTEM_USER_ID, type Actor } from '@/auth/actor'
-import type { AgentLaunchResourceIntegrityParticipant } from '@/modules/resource-catalog/public/participants'
 import type { ProtectedMrLaunchGuard } from '@/modules/integration/public/mrTerminalControl'
-import type { SourceTerminationSnapshot } from '../public/types'
+import type { AgentLaunchResourceIntegrityParticipant } from '@/modules/resource-catalog/public/participants'
 import { publishCommittedEventsAfterCommit } from '@/platform/events/committed/runtime'
-import { acquireAgentLaunch, releaseAgentLaunch } from '@/services/agentLaunchReservation'
 import {
   AGENT_HOST_INPUT_KEY,
   buildAgentHostSnapshot,
   validateAgentLaunchShape,
 } from '@/services/agentLaunch'
+import { acquireAgentLaunch, releaseAgentLaunch } from '@/services/agentLaunchReservation'
+import {
+  assertTriggerPreflight,
+  triggerSourceFromContext,
+} from '@/services/execution/triggerPreflight'
 import {
   attachWorkspaceCleanupToMultipartError,
   bufferUploadParts,
@@ -61,19 +64,13 @@ import {
   resolveUploadLimits,
 } from '@/services/launchMultipart'
 import { buildDynamicWorkflowGenerateSnapshot } from '@/services/orchestratorAgent'
-import {
-  assertTriggerPreflight,
-  triggerSourceFromContext,
-} from '@/services/execution/triggerPreflight'
 import { assertNotBuiltin } from '@/services/systemResources'
-import { assertWorkflowLaunchInputs } from '@/services/workflowLaunchInputs'
 import { layoutBuiltinWorkflowSnapshot } from '@/services/task'
-import type { WorkspaceCleanupReport } from '../application/ports/preparedWorkspace'
-import { validateUploadPlan } from '../domain/uploads'
-import { applyTaskWorkspaceUploads } from './taskWorkspaceUploads'
+import { assertWorkflowLaunchInputs } from '@/services/workflowLaunchInputs'
 import { ConflictError, NotFoundError, ValidationError, staleConflictError } from '@/util/errors'
-import type { AgentLaunchResourceOperations } from '../application/ports/agentLaunchResourceOperations'
 import type { TaskDriveCoordinator } from '../application/drive/taskDriveTypes'
+import type { AgentLaunchResourceOperations } from '../application/ports/agentLaunchResourceOperations'
+import type { WorkspaceCleanupReport } from '../application/ports/preparedWorkspace'
 import type { TaskExecutionResourceAuthority } from '../application/ports/taskExecutionResourceSnapshots'
 import { sha256Hex } from '../domain/digest'
 import type { TaskExecutionIntentSource } from '../domain/executionIntent'
@@ -82,6 +79,7 @@ import {
   taskLaunchAdmissionIssue,
   type TaskLaunchProvenance,
 } from '../domain/taskLaunchOrigin'
+import { validateUploadPlan } from '../domain/uploads'
 import { directTaskInitiatorFromActorSource } from '../inbound/directTaskInitiator'
 import type {
   AgentRouteTaskLaunchOperations,
@@ -89,15 +87,17 @@ import type {
   TaskRouteMultipartFilePart,
   WorkgroupRouteTaskLaunchOperations,
 } from '../public/commands'
+import type { SourceTerminationSnapshot } from '../public/types'
 import { createTaskAuthorizationQueries } from './taskAuthorization'
-import {
-  type TaskExecutionTransaction,
-  withSerializableTaskExecution,
-} from './taskLifecycleTransaction'
 import { appendTaskCreatedCommittedEvent } from './taskLifecycleCommittedEvents'
 import {
-  buildWorkgroupRuntimeConfig,
+  withSerializableTaskExecution,
+  type TaskExecutionTransaction,
+} from './taskLifecycleTransaction'
+import { applyTaskWorkspaceUploads } from './taskWorkspaceUploads'
+import {
   buildWorkgroupHostSnapshot,
+  buildWorkgroupRuntimeConfig,
   resolveWorkgroupCollaborators,
 } from './workgroupRuntimeConfig'
 
@@ -740,7 +740,8 @@ function createRootLaunch(
           !isTaskWorkspaceUnbound(preparedWorkspace.worktreePath)
         )
           throw new Error('repository-preparation-lane-already-materialized')
-        const { taskCollaborators, taskExecutionIntents, workgroupTaskState } = tablesOf(tx)
+        const { taskCollaborators, taskExecutionIntents } = tablesOf(tx)
+        const { workgroupTaskState } = tablesOf(tx)
         const { lineageSlotPathJson: slotPathJson } = await createTaskCreationParticipantInTx(
           tx,
         ).create({
@@ -761,6 +762,7 @@ function createRootLaunch(
           },
           definition: {
             // 入口已按 `subject.builtin` 规范化过排版，这里落的就是返回投影用的同一份。
+            definitionOrigin: input.subject.builtin ? 'platform' : 'authored',
             workflowSnapshot: JSON.stringify(input.subject.workflowSnapshot),
             workflowVersion: input.subject.workflowVersion,
             inputs: JSON.stringify(persistedInputs),
@@ -853,15 +855,17 @@ function createRootLaunch(
           updatedAt: startedAt,
         })
         if (input.subject.workgroup !== undefined) {
-          await insertOne(tx, workgroupTaskState, {
-            taskId,
-            gateStatus: 'idle',
-            dwStateJson:
-              input.subject.workgroup.dynamicState === null
-                ? null
-                : JSON.stringify(input.subject.workgroup.dynamicState),
-            updatedAt: startedAt,
-          })
+          await tx
+            .update(workgroupTaskState)
+            .set({
+              gateStatus: 'idle',
+              dwStateJson:
+                input.subject.workgroup.dynamicState === null
+                  ? null
+                  : JSON.stringify(input.subject.workgroup.dynamicState),
+              updatedAt: startedAt,
+            })
+            .where(eq(workgroupTaskState.taskId, taskId))
         }
         return await appendTaskCreatedCommittedEvent(tx, {
           taskId,
@@ -1271,14 +1275,14 @@ export async function findTaskAutomationReceipt(
   db: PersistenceDb,
   eventDeliveryId: string,
 ): Promise<string | null> {
-  const { tasks } = tablesOf(db)
+  const { taskLaunchContexts: launch } = tablesOf(db)
   return (
     (
       await first(
         db
-          .select({ taskId: tasks.id })
-          .from(tasks)
-          .where(eq(tasks.eventDeliveryId, eventDeliveryId)),
+          .select({ taskId: launch.taskId })
+          .from(launch)
+          .where(eq(launch.eventDeliveryId, eventDeliveryId)),
       )
     )?.taskId ?? null
   )

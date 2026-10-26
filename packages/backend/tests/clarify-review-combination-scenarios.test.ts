@@ -1,3 +1,7 @@
+import { epoch2ReviewReader } from './helpers/epoch2RuntimePorts'
+import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
+import { nodeRunFixtureColumns } from './helpers/model/nodeRun'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { withO2Closure } from './helpers/o2Closure'
 // RFC-395 II-pre：改接生产启动 / 读取路径，保留原断言意图。
 // RFC-374 AC-7 also exercises this real continuation after legacy sequence catch-up.
@@ -9,9 +13,16 @@ import {
   type NodeRunFixtureRow,
   consumedProducerIds,
 } from './helpers/model'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+
 import { launchTestTaskWithLocalRepo as launchTestTaskWithLocalRepoBase } from './helpers/productionTaskLaunch'
-import { compareNodeRunMintOrder } from '@agent-workflow/shared'
+import {
+  compareNodeRunMintOrder,
+  DEFAULT_PROTOCOL_RETRY_BUDGET,
+  type ClarifyAnswer,
+  type ClarifyQuestion,
+  type WorkflowDefinition,
+  type WorkflowNode,
+} from '@agent-workflow/shared'
 import { catchUpLegacySequenceTask, mintSequenceRun } from './helpers/rfc374Fixtures'
 // EXPLORATORY combination-scenario probes (agent × review × clarify).
 //
@@ -33,8 +44,8 @@ import { join, resolve } from 'node:path'
 import { and, eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { readNodeRunPrompt } from '@/modules/task-execution/public/queries'
-import type { DbClient } from '../src/db/client'
-import { createInMemoryDb } from '../src/db/client'
+import { type DbClient, createInMemoryDb } from '../src/db/client'
+
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 import { createAgent } from '../src/modules/resource-catalog/infrastructure/legacy/agent'
 import { createWorkflow as createWorkflowBase } from '../src/services/workflow'
@@ -60,19 +71,12 @@ import { abortAllActiveTasks, wakeHumanGateContinuation } from '@/services/task'
 import { reenterScheduler } from './reenter-scheduler'
 import { canonicalizeWorkflowAgentIds } from './helpers/canonicalWorkflowFixture'
 import { runTestGit } from './helpers/testCommand'
-import {
-  DEFAULT_PROTOCOL_RETRY_BUDGET,
-  type ClarifyAnswer,
-  type ClarifyQuestion,
-  type WorkflowDefinition,
-  type WorkflowNode,
-} from '@agent-workflow/shared'
+
 import {
   createTaskExecutionTestTopology,
   runTaskWithRealTestTopology as runTaskBase,
 } from './helpers/taskExecutionTestTopology'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const SCENARIO_STUB = resolve(import.meta.dir, 'fixtures', 'scenario-opencode.ts')
 const actor = { userId: 'u1', role: 'owner' as const }
 const GIT_TIMEOUT_MS = 10_000
@@ -110,6 +114,7 @@ async function runTask(options: Parameters<typeof runTaskBase>[0]): Promise<void
       .limit(1)
   )[0]
   const runOptions = {
+    historyRestrictions: epoch2RuntimeTestPorts(options.db).historyRestrictions,
     ...options,
     defaultPerNodeTimeoutMs: NODE_TIMEOUT_MS,
     defaultNodeRetries: DEFAULT_PROTOCOL_RETRY_BUDGET,
@@ -193,7 +198,7 @@ async function freshCtx(): Promise<Ctx> {
   writeFileSync(join(repoPath, 'README.md'), '# r\n')
   await git('-C', repoPath, 'add', '.')
   await git('-C', repoPath, '-c', 'commit.gpgsign=false', 'commit', '--no-verify', '-m', 'init')
-  const db = createInMemoryDb(MIGRATIONS)
+  const db = createInMemoryDb()
   await seedTestDefaultOpencodeRuntime(db)
   return {
     db,
@@ -428,6 +433,8 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
 
     // iterate v1
     await addReviewComment({
+      reviewReader: epoch2ReviewReader(c.db, c.appHome),
+
       db: c.db,
       appHome: c.appHome,
       nodeRunId: rev1!.id,
@@ -580,6 +587,8 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
 
     // iterate → designer reruns and (per plan) emits clarify
     await addReviewComment({
+      reviewReader: epoch2ReviewReader(c.db, c.appHome),
+
       db: c.db,
       appHome: c.appHome,
       nodeRunId: rev1!.id,
@@ -1989,9 +1998,12 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
     }
 
     const finalStatus = await taskStatus(c.db, task.id)
-    const failedRun = (await c.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, task.id))).find(
-      (r) => r.status === 'failed',
-    )
+    const failedRun = (
+      await c.db
+        .select(nodeRunFixtureColumns(c.db))
+        .from(nodeRuns)
+        .where(eq(nodeRuns.taskId, task.id))
+    ).find((r) => r.status === 'failed')
     expect({ finalStatus, failedReason: failedRun?.errorMessage ?? null }).toEqual({
       finalStatus: 'done',
       failedReason: null,
@@ -2076,6 +2088,8 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
     const rev1a = await awaitingReviewRun(c.db, task.id, 'rev1')
     expect(rev1a).toBeDefined()
     await addReviewComment({
+      reviewReader: epoch2ReviewReader(c.db, c.appHome),
+
       db: c.db,
       appHome: c.appHome,
       nodeRunId: rev1a!.id,

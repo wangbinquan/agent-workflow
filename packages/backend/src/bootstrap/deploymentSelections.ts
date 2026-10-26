@@ -2,8 +2,9 @@
 import type { DeploymentSelections } from './deploymentProfile'
 
 export const DEPLOYMENT_SELECTION_KEYS = {
+  contentStore: true,
+  historyRestrictions: true,
   applicationConfiguration: true,
-  runtimeLegacyConfiguration: true,
   databasePreOpenRecovery: true,
   databaseInstallation: true,
   taskArchive: true,

@@ -53,23 +53,32 @@ interface PgSelectPrototype {
   _prepare(this: PgSelectQuery, name?: string): PgPreparedSelect
 }
 
+function isSourceTerminationSnapshot(statement: string): boolean {
+  // The launch revision is a companion-table subquery. Match the outer tasks
+  // source after it, retaining both table and projected-column checks.
+  const outer = /\bfrom\s+(?:"([^"]+)"\s*\.\s*)?"tasks"\s+where/i.exec(statement)
+  return (
+    /^\s*select\b/i.test(statement) &&
+    outer !== null &&
+    (outer[1] === undefined || outer[1] === 'agent_workflow') &&
+    /\(select\s+(?:"task_launch_contexts"\.)?"source_termination_launch_rev"\s+from\s+(?:"agent_workflow"\.)?"task_launch_contexts"/i.test(
+      statement.slice(0, outer.index),
+    )
+  )
+}
+
 function expectSourceTerminationStatementOrder(statements: readonly { readonly sql: string }[]) {
-  const isTasks = (schema: string | undefined, table: string | undefined) =>
-    (schema === undefined || schema === 'agent_workflow') && table === 'tasks'
   const firstUpdatedColumn = (sql: string) => {
     const match = /^\s*update\s+(?:"([^"]+)"\s*\.\s*)?"([^"]+)"\s+set\s+"([^"]+)"\s*=/i.exec(sql)
-    return match !== null && isTasks(match[1], match[2]) ? match[3] : undefined
+    return match !== null &&
+      (match[1] === undefined || match[1] === 'agent_workflow') &&
+      match[2] === 'tasks'
+      ? match[3]
+      : undefined
   }
-  const snapshotIndex = statements.findIndex((statement) => {
-    const match = /^\s*select\s+([\s\S]*?)\s+from\s+(?:"([^"]+)"\s*\.\s*)?"([^"]+)"(?=\s|$)/i.exec(
-      statement.sql,
-    )
-    return (
-      match !== null &&
-      isTasks(match[2], match[3]) &&
-      /"source_termination_launch_rev"/.test(match[1]!)
-    )
-  })
+  const snapshotIndex = statements.findIndex((statement) =>
+    isSourceTerminationSnapshot(statement.sql),
+  )
   const winnerIndex = statements.findIndex(
     (statement) => firstUpdatedColumn(statement.sql) === 'status',
   )
@@ -88,7 +97,7 @@ for (const { provider, table, bind } of [
   { provider: 'postgresql', table: '"agent_workflow"."tasks"', bind: '$1' },
 ]) {
   const snapshot = {
-    sql: `select "status", "source_termination_launch_rev" from ${table} where ${table}."id" = ${bind}`,
+    sql: `select "status", (select "task_launch_contexts"."source_termination_launch_rev" from ${provider === 'postgresql' ? '"agent_workflow".' : ''}"task_launch_contexts" where "task_launch_contexts"."task_id" = ${table}."id") from ${table} where ${table}."id" = ${bind}`,
   }
   const winner = {
     sql: `update ${table} set "status" = ${bind}, "lifecycle_event_revision" = 2 returning "lifecycle_event_revision"`,
@@ -100,7 +109,14 @@ for (const { provider, table, bind } of [
     expectSourceTerminationStatementOrder([snapshot, winner, fence])
   })
   for (const [name, statements] of [
-    ['snapshot table', [{ sql: snapshot.sql.replace(table, '"node_runs"') }, winner, fence]],
+    [
+      'snapshot table',
+      [
+        { sql: snapshot.sql.replace(`from ${table} where`, 'from "node_runs" where') },
+        winner,
+        fence,
+      ],
+    ],
     ['winner table', [snapshot, { sql: winner.sql.replace(table, '"node_runs"') }, fence]],
     ['fence table', [snapshot, winner, { sql: fence.sql.replace(table, '"node_runs"') }]],
     [
@@ -548,10 +564,7 @@ describeEachProvider('RFC-359 W12 source termination atom', (harness) => {
       // This is an intra-transaction CAS predicate, not inter-connection
       // PostgreSQL serialization or a replacement for either database write.
       const afterSnapshot = async (query: { sql: string; params: unknown[] }) => {
-        if (
-          query.params[0] === taskId &&
-          /^select "status", "parent_task_id", "source_termination_launch_rev",/.test(query.sql)
-        ) {
+        if (query.params[0] === taskId && isSourceTerminationSnapshot(query.sql)) {
           capturedSnapshots += 1
           winner = await writeTaskRuntimeLifecycleInTx(tx, {
             taskId,

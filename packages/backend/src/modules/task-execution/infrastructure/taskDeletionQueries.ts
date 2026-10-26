@@ -1,11 +1,13 @@
-import { eq, inArray } from 'drizzle-orm'
-import { isTerminalTaskStatus, type TaskStatus } from '@agent-workflow/shared'
+import { projectTaskMountReadRow } from './taskRepositorySql'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { tablesOf } from '@/platform/persistence/sessionTables'
+import { isTerminalTaskStatus, type TaskStatus } from '@agent-workflow/shared'
+import { eq, inArray } from 'drizzle-orm'
 import type { TaskDeletionQueries } from '../application/ports/taskDeletion'
+import { taskMountReadColumns, taskReadColumns } from './taskRepositorySql'
 
 export function createTaskDeletionQueries(db: PersistenceDb): TaskDeletionQueries {
-  const { tasks, taskRepos } = tablesOf(db)
+  const { tasks, taskRepositoryMounts: taskRepos } = tablesOf(db)
   return {
     async read(taskId) {
       return (
@@ -13,11 +15,11 @@ export function createTaskDeletionQueries(db: PersistenceDb): TaskDeletionQuerie
           .select({
             id: tasks.id,
             status: tasks.status,
-            spaceKind: tasks.spaceKind,
-            worktreePath: tasks.worktreePath,
-            repoPath: tasks.repoPath,
+            spaceKind: taskReadColumns(db).spaceKind,
+            worktreePath: taskReadColumns(db).worktreePath,
+            repoPath: taskReadColumns(db).repoPath,
             parentTaskId: tasks.parentTaskId,
-            parentNodeRunId: tasks.parentNodeRunId,
+            parentNodeRunId: taskReadColumns(db).parentNodeRunId,
           })
           .from(tasks)
           .where(eq(tasks.id, taskId))
@@ -33,21 +35,27 @@ export function createTaskDeletionQueries(db: PersistenceDb): TaskDeletionQuerie
       const memberTaskRows = await db
         .select({
           id: tasks.id,
-          spaceKind: tasks.spaceKind,
-          repoPath: tasks.repoPath,
-          worktreePath: tasks.worktreePath,
+          spaceKind: taskReadColumns(db).spaceKind,
+          repoPath: taskReadColumns(db).repoPath,
+          worktreePath: taskReadColumns(db).worktreePath,
         })
         .from(tasks)
         .where(inArray(tasks.id, [...taskIds]))
       const repoRows = await db
         .select({
           taskId: taskRepos.taskId,
+          mountPath: taskRepos.mountPath,
           repoPath: taskRepos.repoPath,
-          worktreePath: taskRepos.worktreePath,
+          workspaceRootRef: taskMountReadColumns(db).workspaceRootRef,
         })
         .from(taskRepos)
         .where(inArray(taskRepos.taskId, [...taskIds]))
-      return { tasks: memberTaskRows, repositories: repoRows }
+      return {
+        tasks: memberTaskRows,
+        repositories: repoRows
+          .map(projectTaskMountReadRow)
+          .map(({ mountPath: _mountPath, ...row }) => row),
+      }
     },
     async nonTerminalDescendant(rootId) {
       const visited = new Set<string>([rootId])

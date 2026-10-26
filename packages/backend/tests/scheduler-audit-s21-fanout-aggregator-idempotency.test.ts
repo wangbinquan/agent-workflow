@@ -1,3 +1,4 @@
+import { initializeTaskWorkspace } from './helpers/taskWorkspaceFixture'
 // REGRESSION LOCK — design/scheduler-audit-2026-06-10.md S-21 (WP-6b，
 // RFC-098 B3 已修复；本文件自此锁定修复后语义，不再是缺陷现状锁定)
 //
@@ -37,7 +38,7 @@ import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
-import { mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { monotonicFactory } from 'ulid'
@@ -55,7 +56,6 @@ import { canonicalizeWorkflowAgentIds } from './helpers/canonicalWorkflowFixture
 // 保证 id 顺序 == 插入顺序，latest-by-id 类断言才确定。
 const ulid = monotonicFactory()
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
 const WRAPPER_MECHANICS_SRC = resolve(
   import.meta.dir,
@@ -80,8 +80,8 @@ function buildHarness(provider: ProviderHarness): Harness
 function buildHarness(provider?: ProviderHarness): Harness {
   const appHome = mkdtempSync(join(tmpdir(), 'aw-audit-s21-'))
   const worktreePath = join(appHome, 'wt')
-  mkdirSync(worktreePath, { recursive: true })
-  const db = provider === undefined ? createInMemoryDb(MIGRATIONS) : provider.db
+  initializeTaskWorkspace(worktreePath)
+  const db = provider === undefined ? createInMemoryDb() : provider.db
   return {
     db,
     postgresql: provider?.applicationBinding.provider === 'postgresql',
@@ -400,17 +400,11 @@ function registerNativeCases2() {
     // (a) 挑行必须走 pickReusableShardRun（freshness.ts 的 done-only +
     //     isFresherNodeRun + hash null=match picker）——perShard 与 shared
     //     两个分支都不允许退回裸 find 首行匹配。
-    expect(body).toMatch(
-      /createRunSelectionOracleSnapshot\(innerRows,\s*\{\s*scope: \{ kind: 'rows' \},?\s*\}\)\.shardSet\(taskId, \{/,
-    )
+    expect(body).toMatch(/state\.opts\.persistence\.selection\.shardSet\(taskId, \{/)
     expect(body).toContain(
       'const request = { nodeId: edge.source.nodeId, shardKey: null, valueHash: null }',
     )
-    expect(
-      body.match(
-        /createRunSelectionOracleSnapshot\(innerRows,\s*\{\s*scope: \{ kind: 'rows' \},?\s*\}\)\.shardSet/g,
-      ),
-    ).toHaveLength(2)
+    expect(body.match(/state\.opts\.persistence\.selection\.shardSet/g)).toHaveLength(3)
     expect(body).not.toContain('innerRows.find((r) => r.shardKey === s.shardKey)')
     expect(body).not.toContain('innerRows.find((r) => r.shardKey === null)')
 
@@ -438,9 +432,7 @@ function registerNativeCases2() {
     expect(shardStart).toBeGreaterThan(-1)
     expect(shardStart).toBeLessThan(start)
     const shardBody = src.slice(shardStart, start)
-    expect(shardBody).toContain(
-      "createRunSelectionOracleSnapshot(candidates, { scope: { kind: 'rows' } }).shardSet",
-    )
+    expect(shardBody).toContain('state.opts.persistence.selection.shardSet')
   })
 }
 

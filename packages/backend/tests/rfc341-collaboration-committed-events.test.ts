@@ -41,7 +41,7 @@ async function dispatchCollaboration(db: PersistenceDb): Promise<void> {
   const { committedEventFamilyCutovers } = tablesOf(db)
   await db
     .update(committedEventFamilyCutovers)
-    .set({ mode: 'dispatchable', epoch: 2, changedAt: NOW, changeRef: 'rfc341-test' })
+    .set({ epoch: 2, changedAt: NOW, changeRef: 'rfc341-test' })
     .where(
       and(
         eq(committedEventFamilyCutovers.producer, 'collaboration'),

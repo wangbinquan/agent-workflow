@@ -39,6 +39,7 @@ describe('RFC-395 II-a A1 fixture write boundary', () => {
       const alias = taskRows
       await db.insert(alias).values([]).onConflictDoNothing()
       await insertOne(tx, nodeRuns, row)
+      await insertBatches(tx, tables.taskDefinitions, rows)
       await db.update(taskRows).set(patch).where(predicate)
       const statement = 'INSERT INTO clarify_rounds (id) VALUES (1)'
       db.exec(statement)
@@ -48,6 +49,7 @@ describe('RFC-395 II-a A1 fixture write boundary', () => {
     expect(found.map((row) => [row.table, row.shape])).toEqual([
       ['tasks', 'insert'],
       ['nodeRuns', 'insert'],
+      ['taskDefinitions', 'insert'],
       ['tasks', 'update'],
       ['clarifyRounds', 'raw-sql'],
       ['agents', 'raw-sql'],
@@ -59,4 +61,12 @@ describe('RFC-395 II-a A1 fixture write boundary', () => {
       ),
     ).toEqual([])
   })
+})
+
+test('target companions and ordered relations are inside the fixture boundary', () => {
+  const found = directFixtureWrites(
+    'target.ts',
+    `const { nodeRunConfigs: config } = tablesOf(db); db.insert(config).values(row); db.run('UPDATE agent_skill_refs SET ordinal = 1')`,
+  )
+  expect([...new Set(found.map((row) => row.table))]).toEqual(['nodeRunConfigs', 'agentSkillRefs'])
 })

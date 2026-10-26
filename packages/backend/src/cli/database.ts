@@ -1,3 +1,4 @@
+import type { EpochSwitchApplication } from '@/modules/system-operations/public/commands'
 // RFC-349 — `agent-workflow db ...` adapter. It calls the same
 // system-operations application as Settings; only human/JSON projection and
 // the offline daemon-lock boundary live here.
@@ -12,6 +13,7 @@ import { acquireLock, DaemonLockHeldError } from '@/util/lock'
 import { Paths } from '@/util/paths'
 import { databaseProviderTraits } from '@/platform/persistence/providerTraits'
 import { DATABASE_PROVIDERS } from '@/platform/persistence/databaseProviders'
+import { supportsProviderMove } from '@/platform/persistence/migrationSupport'
 import type { DatabaseMigrationCommands } from '@/modules/system-operations/public/commands'
 import type { DatabaseMigrationQueries } from '@/modules/system-operations/public/queries'
 import type {
@@ -25,6 +27,7 @@ import type {
 } from '@/modules/system-operations/public/types'
 
 export interface LocalDatabaseMigrationOperations {
+  readonly epochSwitch?: EpochSwitchApplication
   readonly context: LocalSystemOperationContext
   readonly application: Readonly<{
     readonly commands: DatabaseMigrationCommands
@@ -43,7 +46,8 @@ const USAGE =
   '  agent-workflow db status [--json]\n' +
   '  agent-workflow db preflight --to postgresql --url-env NAME [pool/timeout flags] [--json]\n' +
   '  agent-workflow db migrate --to postgresql --url-env NAME --auto [pool/timeout flags] [--json]\n' +
-  '  agent-workflow db migration status <operation-id> [--json]\n' +
+  '  agent-workflow db migration plan|acknowledge|withdraw-acknowledgement|run|status|trace|verify [arguments] [--json]\n' +
+  '  agent-workflow db migration rollback|complete|discard|receipt|restore-backup [arguments] [--json]\n' +
   '  agent-workflow db migration resume|cancel|rollback|finalize <operation-id> [--json]\n' +
   '  agent-workflow db migration artifact <operation-id> logical-backup|legacy-archive|verification|receipt|rollback-receipt\n' +
   '  agent-workflow db legacy inspect <operation-id> <table> [--json]\n' +
@@ -88,13 +92,20 @@ function targetFromArgs(argv: readonly string[]): DatabaseMigrationTargetView {
   // 原来直接比字面量 `'postgresql'`，于是第三个 provider 会被一句写死 PostgreSQL 的话拒绝掉，
   // 而不是被「这个 provider 不是迁移目标」拒绝。
   const requested = DATABASE_PROVIDERS.find((provider) => provider === flag(argv, '--to'))
-  if (requested === undefined || databaseProviderTraits(requested).migrationRole !== 'target') {
+  // The matrix supplies target eligibility. The coordinator owns the live-source
+  // check and replay of a move already bound to the PostgreSQL generation.
+  const target =
+    requested &&
+    DATABASE_PROVIDERS.map((source) =>
+      supportsProviderMove(source, requested) ? requested : null,
+    ).find((provider) => provider !== null)
+  if (!target) {
     throw new Error(
       `--to must name a provider that can be a migration target (got: ${flag(argv, '--to') ?? '<missing>'})`,
     )
   }
   return {
-    provider: 'postgresql',
+    provider: target,
     urlEnv: flag(argv, '--url-env') ?? 'AGENT_WORKFLOW_DATABASE_URL',
     poolMax: integerFlag(argv, '--pool-max', 16, 1, 256),
     connectTimeoutMs: integerFlag(argv, '--connect-timeout-ms', 10_000, 1_000, 120_000),
@@ -109,6 +120,8 @@ export function databaseMigrationStartIdempotencyKey(
 ): string {
   const identity = databaseMigrationStartIdentityFromOverview(overview, target)
   if (identity === null) {
+    if (!supportsProviderMove(overview.provider, target.provider))
+      return `cli-replay:${sha256Hex(JSON.stringify({ generationId: overview.generationId, target }))}`
     throw new Error('database migration source identity is unavailable or is not SQLite')
   }
   return databaseMigrationStartIdempotencyKeyWith(identity, sha256Hex)
@@ -205,6 +218,18 @@ export async function databaseCommand(
   operations: LocalDatabaseMigrationOperations,
   lockFactory: (path: string) => Lock = acquireLock,
 ): Promise<DatabaseCliResult> {
+  if (
+    argv[0] === 'migration' &&
+    operations.epochSwitch &&
+    !['resume', 'cancel', 'finalize', 'artifact'].includes(argv[1] ?? '') &&
+    (!['status', 'rollback'].includes(argv[1] ?? '') ||
+      !argv[2] ||
+      argv[2].startsWith('--') ||
+      argv[2].startsWith('dbm_e2_'))
+  ) {
+    const { epochMigrationCommand } = await import('./epochMigration')
+    return epochMigrationCommand(argv.slice(1), { application: operations.epochSwitch })
+  }
   const json = argv.includes('--json')
   const render = (status: DatabaseMigrationStatusView): DatabaseCliResult => ({
     status: 'ok',

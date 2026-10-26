@@ -12,15 +12,13 @@
 
 import { assertWorkflowCatalogIdWritable } from '../workflowCatalogPredicate'
 import { tablesOf } from '@/platform/persistence/sessionTables'
-import type {
-  ImportRefSelection,
-  ImportWorkflowRequest,
-  ImportWorkflowResult,
-  Workflow,
-  WorkflowDefinition,
-  WorkflowDefinitionSelector,
-} from '@agent-workflow/shared'
 import {
+  type ImportRefSelection,
+  type ImportWorkflowRequest,
+  type ImportWorkflowResult,
+  type Workflow,
+  type WorkflowDefinition,
+  type WorkflowDefinitionSelector,
   importRefSelectorKey,
   migrateWorkflowDefinitionToLatest,
   stringifyWorkflowYamlDocument,
@@ -29,6 +27,7 @@ import {
   WorkflowDefinitionSchema,
   WorkflowNameSchema,
 } from '@agent-workflow/shared'
+
 import { inArray } from 'drizzle-orm'
 import { parse as parseYaml } from 'yaml'
 import { SYSTEM_USER_ID, type Actor } from '@/auth/actor'
@@ -172,7 +171,9 @@ export async function workflowDefinitionToSelectors(
     return WorkflowDefinitionSelectorSchema.parse(definition)
   }
 
-  const { agents, users } = tablesOf(db)
+  const { agents } = tablesOf(db)
+
+  const { users } = tablesOf(db)
   const rows = await db
     .select({
       id: agents.id,

@@ -1,246 +1,217 @@
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
-import { first as firstRow } from '@/platform/persistence/queryHelpers'
+// RFC-395 U-4: the former boot repair is now a frozen conversion. Unproved
+// token/ledger and exact-memory evidence reproduces quarantine; source rows never change.
 import { expect, test } from 'bun:test'
-import { eq } from 'drizzle-orm'
-import { resolve } from 'node:path'
-import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { repairFusionProvenance } from '../src/modules/knowledge-evolution/application/fusionOrchestration'
-import { encodeSkillToken } from '../src/modules/resource-catalog/application/skills/skillToken'
-import { composeFusionPersistenceFor } from '../src/modules/knowledge-evolution/composition/fusion'
-import { QUARANTINED_FUSION_SKILL_ID } from '../src/services/systemResources'
-import { TEST_FUSION_PARTICIPANTS } from './helpers/fusionParticipants'
-import { describeEachProvider } from './helpers/eachProvider'
+import { conversion as fusion } from '@/modules/knowledge-evolution/infrastructure/migration/fusionProvenanceRule'
+import { conversion as memory } from '@/modules/memory/infrastructure/migration/legacyBootMemoryRule'
+import { encodeSkillToken } from '@/modules/resource-catalog/application/skills/skillToken'
+import { skillBootIdentityFacts } from '@/platform/persistence/migration/conversion/bootUpgradeFacts'
+import { memoryIds } from '@/platform/persistence/migration/conversion/generic/references'
+import { runConversion } from '@/platform/persistence/migration/conversion/engine'
+import { describeV2Providers, fixtureLookup } from './helpers/rfc395V2Harness'
+import { frozenValues } from './helpers/rfc395V2/contentFixtures'
+import { V2MemorySink } from './helpers/rfc395V2MemorySink'
+import { QUARANTINED_FUSION_SKILL_ID } from '@/services/systemResources'
 
-async function addSkill(db: PersistenceDb, id: string): Promise<void> {
-  const { skills } = tablesOf(db)
-  await insertOne(db, skills, {
-    id,
-    name: `name-${id}`,
-    managedPath: `skills/${id}/files`,
-    contentVersion: 10,
-    versionState: 'snapshot-authoritative',
-  })
-}
-
-async function addFusionVersion(
-  db: PersistenceDb,
-  fusionId: string,
-  skillId: string,
-  versionIndex: number,
-): Promise<void> {
-  const { skillVersions } = tablesOf(db)
-  await insertOne(db, skillVersions, {
-    id: `version-${fusionId}-${skillId}-${versionIndex}`,
-    skillId,
-    versionIndex,
-    filesPath: `skills/${skillId}/versions/v${versionIndex}/files`,
-    source: 'fusion',
-    fusionId,
-    createdAt: versionIndex,
-  })
-}
-
-async function addFusion(
-  db: PersistenceDb,
-  id: string,
-  patch: Partial<PersistenceTables['fusions']['$inferInsert']> = {},
-): Promise<void> {
-  const { fusions } = tablesOf(db)
-  await insertOne(db, fusions, {
-    id,
-    skillId: QUARANTINED_FUSION_SKILL_ID,
-    skillName: `historical-${id}`,
-    baseSkillVersion: 1,
-    memoryIdsJson: '[]',
-    status: 'failed',
-    ownerUserId: '__system__',
-    createdAt: 1,
-    ...patch,
-  })
-}
-
-describeEachProvider('RFC-223 fusion provenance boot repair', (harness) => {
-  test('uses only trustworthy token/ledger oracles, quarantines conflicts, and is idempotent', async () => {
-    const db = harness.db
-    const persistence = composeFusionPersistenceFor({
-      ...TEST_FUSION_PARTICIPANTS,
-      db,
-      appHome: resolve(import.meta.dir, '.rfc223-unused-app-home'),
-    })
-    for (const id of ['skill-ledger', 'skill-other', 'skill-duplicate', 'skill-applied']) {
-      await addSkill(db, id)
-    }
-
-    // Token-only remains trustworthy even after the current skill row was deleted.
-    await addFusion(db, 'token-only', {
-      preconditionToken: encodeSkillToken({
-        skillId: 'deleted-skill-id',
-        contentVersion: 1,
-        metaRevision: 0,
-      }),
-    })
-
-    // A malformed token contributes no identity; the exact single ledger is an
-    // independent durable oracle.
-    await addFusion(db, 'malformed-ledger', {
-      preconditionToken: 'not-a-token',
-      appliedSkillVersion: 2,
-    })
-    await addFusionVersion(db, 'malformed-ledger', 'skill-ledger', 2)
-
-    await addFusion(db, 'token-ledger-disagree', {
-      preconditionToken: encodeSkillToken({
-        skillId: 'deleted-skill-id',
-        contentVersion: 1,
-        metaRevision: 0,
-      }),
-    })
-    await addFusionVersion(db, 'token-ledger-disagree', 'skill-other', 2)
-
-    await addFusion(db, 'duplicate-ledger', { status: 'applying' })
-    await addFusionVersion(db, 'duplicate-ledger', 'skill-duplicate', 1)
-    await addFusionVersion(db, 'duplicate-ledger', 'skill-duplicate', 2)
-
-    await addFusion(db, 'token-base-mismatch', {
-      preconditionToken: encodeSkillToken({
-        skillId: 'deleted-skill-id',
-        contentVersion: 2,
-        metaRevision: 0,
-      }),
-    })
-
-    await addFusion(db, 'applied-version-mismatch', { appliedSkillVersion: 3 })
-    await addFusionVersion(db, 'applied-version-mismatch', 'skill-applied', 2)
-
-    await addFusion(db, 'sentinel-token', {
-      preconditionToken: encodeSkillToken({
-        skillId: QUARANTINED_FUSION_SKILL_ID,
-        contentVersion: 1,
-        metaRevision: 0,
-      }),
-    })
-
-    await addFusion(db, 'terminal-conflict', {
-      status: 'done',
-      preconditionToken: encodeSkillToken({
-        skillId: 'deleted-skill-id',
-        contentVersion: 9,
-        metaRevision: 0,
-      }),
-    })
-
-    const { memories, fusions } = tablesOf(db)
-    await db.insert(memories).values([
+describeV2Providers('fusion provenance converter preserves the old proof matrix', (h) => {
+  test('token/ledger oracles, exact fused versions, terminal status and idempotent retry', async () => {
+    await h.install()
+    const token = (skillId: string, contentVersion = 1) =>
+      encodeSkillToken({ skillId, contentVersion, metaRevision: 0 })
+    const cases = [
       {
-        id: 'memory-exact',
-        scopeType: 'global',
-        scopeId: null,
-        title: 'exact',
-        bodyMd: 'body',
-        status: 'fused',
-        sourceKind: 'manual',
-        createdAt: 1,
-        fusedIntoSkill: 'historical',
-        fusedIntoSkillId: QUARANTINED_FUSION_SKILL_ID,
-        fusedIntoSkillVersion: 2,
-        fusedFusionId: 'malformed-ledger',
+        id: 'token-only',
+        token: token('deleted-skill-id'),
+        ledger: [],
+        applied: null,
+        expected: 'deleted-skill-id',
       },
       {
-        id: 'memory-wrong-version',
-        scopeType: 'global',
-        scopeId: null,
-        title: 'wrong',
-        bodyMd: 'body',
-        status: 'fused',
-        sourceKind: 'manual',
-        createdAt: 2,
-        fusedIntoSkill: 'historical',
-        fusedIntoSkillId: 'skill-ledger',
-        fusedIntoSkillVersion: 3,
-        fusedFusionId: 'malformed-ledger',
+        id: 'malformed-ledger',
+        token: 'not-a-token',
+        ledger: ['skill-ledger'],
+        applied: 2,
+        expected: 'skill-ledger',
       },
       {
-        id: 'memory-quarantined-parent',
-        scopeType: 'global',
-        scopeId: null,
-        title: 'quarantined',
-        bodyMd: 'body',
-        status: 'fused',
-        sourceKind: 'manual',
-        createdAt: 3,
-        fusedIntoSkill: 'historical',
-        fusedIntoSkillId: 'deleted-skill-id',
-        fusedIntoSkillVersion: 2,
-        fusedFusionId: 'token-ledger-disagree',
+        id: 'token-ledger-agree',
+        token: token('skill-agree'),
+        ledger: ['skill-agree'],
+        applied: 2,
+        expected: 'skill-agree',
       },
       {
-        id: 'memory-approved',
-        scopeType: 'global',
-        scopeId: null,
-        title: 'approved',
-        bodyMd: 'body',
-        status: 'approved',
-        sourceKind: 'manual',
-        createdAt: 4,
+        id: 'token-ledger-disagree',
+        token: token('deleted-skill-id'),
+        ledger: ['skill-other'],
+        applied: null,
+        expected: null,
       },
-    ])
-
-    const first = await repairFusionProvenance(persistence)
-    expect(first.repairedFusions).toBe(2)
-    expect(first.terminalizedFusions).toBe(1)
-    expect(first.repairedMemories).toBe(1)
-    expect(first.quarantinedMemories).toBe(2)
-
-    const rows = await db
-      .select({ id: fusions.id, skillId: fusions.skillId, status: fusions.status })
-      .from(fusions)
-    const byId = new Map(rows.map((row) => [row.id, row]))
-    expect(byId.get('token-only')?.skillId).toBe('deleted-skill-id')
-    expect(byId.get('malformed-ledger')?.skillId).toBe('skill-ledger')
-    for (const id of [
-      'token-ledger-disagree',
-      'duplicate-ledger',
-      'token-base-mismatch',
-      'applied-version-mismatch',
-      'sentinel-token',
-      'terminal-conflict',
-    ]) {
-      expect(byId.get(id)?.skillId).toBe(QUARANTINED_FUSION_SKILL_ID)
-    }
-    expect(byId.get('duplicate-ledger')?.status).toBe('failed')
-    expect(byId.get('terminal-conflict')?.status).toBe('done')
-
-    expect(
-      (
-        await db
-          .select({ id: memories.id, skillId: memories.fusedIntoSkillId })
-          .from(memories)
-          .where(eq(memories.status, 'fused'))
-      ).sort((a, b) => a.id.localeCompare(b.id)),
-    ).toEqual([
-      { id: 'memory-exact', skillId: 'skill-ledger' },
       {
-        id: 'memory-quarantined-parent',
-        skillId: QUARANTINED_FUSION_SKILL_ID,
+        id: 'duplicate-ledger',
+        token: null,
+        ledger: ['skill-duplicate', 'skill-duplicate'],
+        applied: null,
+        expected: null,
       },
-      { id: 'memory-wrong-version', skillId: QUARANTINED_FUSION_SKILL_ID },
-    ])
-    expect(
-      await firstRow(
-        db
-          .select({ skillId: memories.fusedIntoSkillId })
-          .from(memories)
-          .where(eq(memories.id, 'memory-approved')),
+      {
+        id: 'token-base-mismatch',
+        token: token('deleted-skill-id', 2),
+        ledger: [],
+        applied: null,
+        expected: null,
+      },
+      {
+        id: 'applied-version-mismatch',
+        token: null,
+        ledger: ['skill-applied'],
+        applied: 3,
+        expected: null,
+      },
+      {
+        id: 'sentinel-token',
+        token: token(QUARANTINED_FUSION_SKILL_ID),
+        ledger: [],
+        applied: null,
+        expected: null,
+      },
+      {
+        id: 'terminal-conflict',
+        token: token('deleted-skill-id', 9),
+        ledger: [],
+        applied: null,
+        expected: null,
+      },
+    ]
+    // The released schema enforces skill-version parent identity. Historical
+    // evidence can disagree, but the source rows must still be constructible.
+    await h.write(
+      'skills',
+      [...new Set(cases.flatMap((item) => item.ledger))].map((id) =>
+        frozenValues('skills', { id, name: id }),
       ),
-    ).toEqual({ skillId: null })
-
-    expect(await repairFusionProvenance(persistence)).toEqual({
-      repairedFusions: 0,
-      quarantinedFusions: 0,
-      terminalizedFusions: 0,
-      repairedMemories: 0,
-      quarantinedMemories: 0,
-    })
-  })
+    )
+    for (const item of cases) {
+      await h.write('fusions', [
+        frozenValues('fusions', {
+          id: item.id,
+          skill_id: 'legacy-name',
+          skill_name: `historical-${item.id}`,
+          base_skill_version: 1,
+          precondition_token: item.token,
+          applied_skill_version: item.applied,
+          status:
+            item.id === 'duplicate-ledger'
+              ? 'applying'
+              : item.id === 'terminal-conflict'
+                ? 'done'
+                : 'failed',
+        }),
+      ])
+      for (const [index, id] of item.ledger.entries())
+        await h.write('skill_versions', [
+          frozenValues('skill_versions', {
+            id: `${item.id}-${index}`,
+            skill_id: id,
+            version_index: 2 + index,
+            fusion_id: item.id,
+            source: 'fusion',
+          }),
+        ])
+    }
+    for (const [id, version, parent] of [
+      ['memory-exact', 2, 'malformed-ledger'],
+      ['memory-wrong-version', 3, 'malformed-ledger'],
+      ['memory-quarantined-parent', 2, 'token-ledger-disagree'],
+    ] as const)
+      await h.write('memories', [
+        frozenValues('memories', {
+          id,
+          title: id,
+          body_md: 'body',
+          status: 'fused',
+          fused_into_skill: 'legacy-name',
+          fused_into_skill_id: 'legacy-name',
+          fused_into_skill_version: version,
+          fused_fusion_id: parent,
+          supersedes_id: null,
+          superseded_by_id: null,
+        }),
+      ])
+    await h.write('memories', [
+      frozenValues('memories', {
+        id: 'memory-approved',
+        status: 'approved',
+        fused_into_skill_id: null,
+        supersedes_id: null,
+        superseded_by_id: null,
+      }),
+    ])
+    const identities = [
+      'deleted-skill-id',
+      'skill-ledger',
+      'skill-other',
+      'skill-agree',
+      'skill-duplicate',
+      'skill-applied',
+    ]
+    const input = await h.input([
+      fusion,
+      memory,
+      {
+        rules: [],
+        validators: [],
+        lookups: [
+          memoryIds,
+          fixtureLookup(
+            skillBootIdentityFacts,
+            identities.map((skillId) => [
+              skillId,
+              { skillId, state: 'proven' as const, reason: null, factIds: [] },
+            ]),
+          ),
+        ],
+      },
+    ])
+    try {
+      const original = (await input.source.readChunk('fusions', null, 100)).decodedRows
+      const sink = new V2MemorySink()
+      const result = await runConversion(input, sink)
+      expect(result.status).toBe('converted')
+      for (const item of cases) {
+        const actual = sink.rows('fusions').find((row) => row.id === item.id)
+        if (item.expected) expect(actual?.skill_id).toBe(item.expected)
+        else expect(actual?.skill_id).toBe(QUARANTINED_FUSION_SKILL_ID)
+      }
+      expect(
+        sink.rows('memories').find((row) => row.id === 'memory-exact')?.fused_into_skill_id,
+      ).toBe('skill-ledger')
+      expect(
+        sink.rows('memories').find((row) => row.id === 'memory-wrong-version')?.fused_into_skill_id,
+      ).toBe(QUARANTINED_FUSION_SKILL_ID)
+      expect(
+        sink.rows('memories').find((row) => row.id === 'memory-quarantined-parent')
+          ?.fused_into_skill_id,
+      ).toBe(QUARANTINED_FUSION_SKILL_ID)
+      expect(sink.rows('memories').find((row) => row.id === 'memory-approved')).toMatchObject({
+        status: 'approved',
+        fused_into_skill_id: null,
+      })
+      expect(result.blocks).toEqual([])
+      expect(sink.rows('fusions').find((row) => row.id === 'duplicate-ledger')).toMatchObject({
+        status: 'failed',
+        skill_id: QUARANTINED_FUSION_SKILL_ID,
+        decided_at: input.planTime,
+      })
+      expect(sink.rows('fusions').find((row) => row.id === 'terminal-conflict')?.status).toBe(
+        'done',
+      )
+      expect((await input.source.readChunk('fusions', null, 100)).decodedRows).toEqual(original)
+      expect(original.find((row) => row.id === 'duplicate-ledger')?.status).toBe('applying')
+      const rows = structuredClone(sink.rows('fusions'))
+      await runConversion(input, sink)
+      expect(sink.rows('fusions')).toEqual(rows)
+    } finally {
+      await input.source.close()
+    }
+  }, 180_000)
 })

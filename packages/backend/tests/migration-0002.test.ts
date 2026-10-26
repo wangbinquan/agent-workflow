@@ -7,18 +7,20 @@
 //
 // Approach: file-backed SQLite, two-stage migration.
 //   1. Stage A: write a migrations folder containing only 0000 + 0001 (and a
-//      truncated _journal.json), openDb against it. drizzle applies 0000+0001
+//      truncated _journal.json), openFrozenEpoch1Db against it. drizzle applies 0000+0001
 //      to the file.
 //   2. Seed deterministic rows in tasks + node_runs.
 //   3. Stage B: write a full migrations folder (0000+0001+0002 + full journal),
-//      openDb again on the SAME file. drizzle sees the existing
+//      openFrozenEpoch1Db again on the SAME file. drizzle sees the existing
 //      __drizzle_migrations hashes for 0000+0001 and applies only 0002.
 //   4. Verify seed rows preserved + new schema reachable.
 
-import { nativeTableSets } from '@/bootstrap/persistenceSchema'
-import { createSqliteCapabilities } from '@/platform/persistence/capabilities'
-import { bindDatabaseHandle } from '@/platform/persistence/sessionTables'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import {
+  bindFrozenSqliteHandle,
+  frozenTablesOf,
+  migrateFrozenSqlite as migrate,
+  FROZEN_MIGRATIONS,
+} from './migration-freeze'
 import { queryRows } from '@/platform/persistence/queryHelpers'
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
 import { Database } from 'bun:sqlite'
@@ -27,10 +29,8 @@ import { removeTempDirSync } from './fixtures/tempDir'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
-import { drizzle } from 'drizzle-orm/bun-sqlite'
-import { migrate } from 'drizzle-orm/bun-sqlite/migrator'
 import { ulid } from 'ulid'
-const ROOT_MIGRATIONS = resolve(import.meta.dirname, '..', 'db', 'migrations')
+const ROOT_MIGRATIONS = resolve(FROZEN_MIGRATIONS)
 const JOURNAL_RAW = JSON.parse(readFileSync(join(ROOT_MIGRATIONS, 'meta', '_journal.json'), 'utf8'))
 
 function makeMigrationsFolder(entries: number[]): string {
@@ -62,11 +62,7 @@ function makeMigrationsFolder(entries: number[]): string {
 function openWithMigrations(filePath: string, migrationsFolder: string) {
   const sqlite = new Database(filePath, { create: true })
   sqlite.exec('PRAGMA foreign_keys = ON;')
-  const db = bindDatabaseHandle(
-    drizzle(sqlite, { schema: nativeTableSets.sqlite }),
-    nativeTableSets.sqlite,
-    createSqliteCapabilities(),
-  )
+  const db = bindFrozenSqliteHandle(sqlite)
   migrate(db, { migrationsFolder: resolve(migrationsFolder) })
   return { db, sqlite }
 }
@@ -207,7 +203,7 @@ describe('RFC-005 0002 migration — data integrity + new schema', () => {
     expect(idxNames).toContain('idx_doc_versions_task')
     expect(idxNames).toContain('idx_review_comments_version')
 
-    const { tasks, nodeRuns } = tablesOf(db)
+    const { tasks, nodeRuns } = frozenTablesOf(db)
     // 4. v1 seed rows preserved.
     const t = queryRows(db.select().from(tasks).where(eq(tasks.id, seededIds.taskId)))
     expect(t.length).toBe(1)
@@ -288,7 +284,7 @@ describe('RFC-005 0002 migration — data integrity + new schema', () => {
     openWithMigrations(dbPath, v2MigrationsDir).sqlite.close()
     // openWithMigrations should run cleanly without throwing on a fully-migrated file.
     const { db, sqlite } = openWithMigrations(dbPath, v2MigrationsDir)
-    const { tasks } = tablesOf(db)
+    const { tasks } = frozenTablesOf(db)
     // The seed rows survive across re-opens.
     const t = queryRows(db.select().from(tasks).where(eq(tasks.id, seededIds.taskId)))
     expect(t.length).toBe(1)

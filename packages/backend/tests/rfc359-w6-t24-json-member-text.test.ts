@@ -176,7 +176,7 @@ describeEachProvider('RFC-359 W6-T24 —— jsonMemberText', (harness) => {
   const evaluateAll = async (expression: SQL): Promise<Record<string, unknown>> => {
     const rows = await rawRows<{ label: string; r: unknown }>(
       harness.db,
-      sql`SELECT d.name AS label, ${expression} AS r FROM tasks d`,
+      sql`SELECT d.name AS label, ${expression} AS r FROM (SELECT t.name, s.runtime_config_json AS workgroup_config_json FROM tasks t LEFT JOIN workgroup_task_state s ON s.task_id = t.id) d`,
     )
     return Object.fromEntries(rows.map((row) => [row.label, row.r ?? null]))
   }

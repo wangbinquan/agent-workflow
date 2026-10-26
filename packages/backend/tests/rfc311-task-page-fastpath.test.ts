@@ -33,11 +33,13 @@ import { sql } from 'drizzle-orm'
 import { buildActor, type Actor } from '../src/auth/actor'
 import { createInMemoryDb } from '../src/db/client'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { isDefaultView } from '../src/modules/task-execution/infrastructure/taskListPage'
+import {
+  isDefaultView,
+  taskListViewerOf,
+} from '../src/modules/task-execution/infrastructure/taskListPage'
 import { describeEachProvider } from './helpers/eachProvider'
 import { computeForestBackfill } from './helpers/taskForestBackfill'
 import { listTaskOperationsPage } from './helpers/taskListPage'
-import { taskListViewerOf } from '../src/modules/task-execution/infrastructure/taskListPage'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
@@ -282,7 +284,7 @@ describeEachProvider('RFC-311 — default-view fast path === exhaustive pipeline
 
   test('the paging boundary keeps an ordered index seek (no TEMP B-TREE)', () => {
     if (harness.capabilities.provider !== 'sqlite') return
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createInMemoryDb()
     const plan = rawRows<{ detail: string }>(
       db,
       sql.raw(

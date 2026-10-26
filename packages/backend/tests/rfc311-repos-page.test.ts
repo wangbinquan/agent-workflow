@@ -40,7 +40,6 @@ import {
 } from '../src/modules/source-control/composition'
 
 const TOKEN = 'a'.repeat(64)
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 const T0 = 1_700_000_000_000
 
@@ -345,7 +344,7 @@ describeEachProvider('RFC-311 T28 — listCachedReposPage oracle', (harness) => 
 describe('RFC-311 T28 — listCachedReposPage oracle (SQLite query plans)', () => {
   let db: DbClient
   beforeEach(async () => {
-    db = createInMemoryDb(MIGRATIONS)
+    db = createInMemoryDb()
     await seed(db)
   })
   afterEach(() => {

@@ -22,14 +22,14 @@
 //   ① **不同库不互斥**——每文件一库这条路线的前提；
 //   ② **同库仍 fail-fast**——那把锁真正要保的东西：两个部署指向同一个库时不能同时 DDL。
 //
-import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import { buildFrozenEpoch1LogicalSchemaContract as buildLogicalSchemaContract } from '@/platform/persistence/migration/epoch1/contract'
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { SQL } from 'bun'
 
 import {
   migratePostgresqlSchema,
   PostgresqlMigrationError,
-} from '@/platform/persistence/postgresqlMigrator'
+} from '@/platform/persistence/migration/legacy/postgresqlMigrator'
 import {
   createPostgresqlDatabaseRuntime,
   type PostgresqlDatabaseRuntime,

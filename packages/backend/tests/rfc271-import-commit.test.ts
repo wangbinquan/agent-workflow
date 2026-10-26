@@ -1,3 +1,4 @@
+import { tablesOf } from '@/platform/persistence/sessionTables'
 // RFC-271 T27/T28 —— 导入提交。
 //
 // 四条承重断言，每条都对应一个具体的失败形态：
@@ -16,7 +17,7 @@
 //   （编号锚点由 rfc271-ac-coverage.test.ts 机械核查，别删）
 
 import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+
 import { first } from '@/platform/persistence/queryHelpers'
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { randomBytes } from 'node:crypto'
@@ -340,7 +341,8 @@ describeEachProvider(
           decisions: [{ localSlug: 'mcp-tools', action: 'new' }],
         })
         expect(receipt.applied).toHaveLength(1)
-        const { mcps, resourceBundleApplies } = tablesOf(db)
+        const { mcps } = tablesOf(db)
+        const { resourceBundleApplies } = tablesOf(db)
         const row = await first(db.select().from(mcps))
         if (row === undefined) throw new Error('expected imported MCP row')
         expect(row?.name).toBe('tools')
@@ -605,7 +607,8 @@ describeEachProvider(
           name: 'tools',
           action: 'reuse',
         })
-        const { resourceBundleApplies, mcps } = tablesOf(db)
+        const { mcps } = tablesOf(db)
+        const { resourceBundleApplies } = tablesOf(db)
         expect((await first(db.select().from(resourceBundleApplies)))?.state).toBe('committed')
         // 也没有多建一行。
         expect(await db.select().from(mcps)).toHaveLength(1)
@@ -930,7 +933,8 @@ describeEachProvider(
           ],
         })
 
-        const { mcps, resourceBundleApplies } = tablesOf(db)
+        const { mcps } = tablesOf(db)
+        const { resourceBundleApplies } = tablesOf(db)
         const row = await first(db.select().from(mcps).where(eq(mcps.name, 'tools-copy')))
         // 这一行必须真的存在：`row` 为空时下面两条（TOKEN 缺席 / 不含占位符）会**空转变绿**，
         // 正是 RFC-359 双引擎里「未 await 的 .get()」那种假绿。

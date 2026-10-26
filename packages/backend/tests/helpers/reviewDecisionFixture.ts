@@ -1,3 +1,5 @@
+import { legacyContentRef } from '@/platform/content/contentRef'
+import { contentRowColumns } from '@/platform/content/infrastructure/contentStore'
 // RFC-359 —— 评审决定场景的双引擎夹具（移植自 review-decision-full-asserts.test.ts 的种子）。
 // 只用 provider-中立的 drizzle 写入，SQLite 与 PostgreSQL 共用；正文文件落在临时 appHome 下。
 
@@ -66,7 +68,8 @@ export async function seedReviewRound(
   mkdirSync(join(appHome, 'doc_versions'), { recursive: true })
   const taskId = `t_${ulid()}`
   const agentName = `doc-${taskId}`
-  const { users, docVersions } = tablesOf(db)
+  const { users } = tablesOf(db),
+    { docVersions } = tablesOf(db)
   // tasks.owner_user_id 在 SQLite 迁移里带 FK → users（schema.ts 无 references，PG 投影没有这条
   // FK——RFC-359 W3-T16b 的又一条实证）；两引擎都插一行决定者，行为才是同一个起点。
   await db
@@ -159,7 +162,7 @@ export async function seedReviewRound(
       sourcePortName: 'docpath',
       versionIndex: 1,
       reviewIteration: 0,
-      bodyPath,
+      ...contentRowColumns(legacyContentRef('review-body-path', 'local-file', bodyPath)),
       commentsJson: '[]',
       decision: 'pending',
       ...(multi

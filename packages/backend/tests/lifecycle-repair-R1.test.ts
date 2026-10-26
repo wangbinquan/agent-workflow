@@ -1,8 +1,10 @@
+import { nodeRunFixtureColumns } from './helpers/model/nodeRun'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 // LOCKS: RFC-057 — R1 repair options (approved doc_version but review run not done).
 // 3 options × 3 cases = 9 tests.
 
 import { readNodeRunOutputFixtures, readTaskFixtures } from './helpers/model'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+
 import { afterEach, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 
@@ -404,7 +406,7 @@ describeEachProvider('RFC-057 — R1 writers vs task cancellation linearization'
       h = seeded.h
       uninstallAfterCommitPump = installTaskLifecycleAfterCommitTestPump(h.db, {
         onTerminalTask(db, taskId, to) {
-          void createHumanGateTerminalSweepCommand(db).run({ taskId, cause: `task-${to}` })
+          return createHumanGateTerminalSweepCommand(db).run({ taskId, cause: `task-${to}` })
         },
       })
       // 运维那一侧真实发生的次序：别人刚把任务取消掉，诊断面板上的那个按钮还在，点下去。
@@ -426,7 +428,12 @@ describeEachProvider('RFC-057 — R1 writers vs task cancellation linearization'
       const { nodeRuns, docVersions } = tablesOf(h.db)
       expect((await readTaskFixtures(h.db, { id: h.taskId }))[0]?.status).toBe('canceled')
       expect(
-        (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, seeded.reviewRunId)))[0]?.status,
+        (
+          await h.db
+            .select(nodeRunFixtureColumns(h.db))
+            .from(nodeRuns)
+            .where(eq(nodeRuns.id, seeded.reviewRunId))
+        )[0]?.status,
       ).toBe('canceled')
       expect(
         (await h.db.select().from(docVersions).where(eq(docVersions.id, seeded.dvId)))[0]?.decision,
@@ -445,7 +452,7 @@ describeEachProvider('RFC-057 — R1 writers vs task cancellation linearization'
       h = seeded.h
       uninstallAfterCommitPump = installTaskLifecycleAfterCommitTestPump(h.db, {
         onTerminalTask(db, taskId, to) {
-          void createHumanGateTerminalSweepCommand(db).run({ taskId, cause: `task-${to}` })
+          return createHumanGateTerminalSweepCommand(db).run({ taskId, cause: `task-${to}` })
         },
       })
       // 反过来的次序：修复先落库，随后任务被取消——取消的清扫不该把修复刚写下的事实抹掉。
@@ -460,7 +467,10 @@ describeEachProvider('RFC-057 — R1 writers vs task cancellation linearization'
       const { nodeRuns, docVersions } = tablesOf(h.db)
       expect((await readTaskFixtures(h.db, { id: h.taskId }))[0]?.status).toBe('canceled')
       const run = (
-        await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, seeded.reviewRunId))
+        await h.db
+          .select(nodeRunFixtureColumns(h.db))
+          .from(nodeRuns)
+          .where(eq(nodeRuns.id, seeded.reviewRunId))
       )[0]!
       const doc = (await h.db.select().from(docVersions).where(eq(docVersions.id, seeded.dvId)))[0]!
       const outputs = await readNodeRunOutputFixtures(h.db, { nodeRunId: seeded.reviewRunId })

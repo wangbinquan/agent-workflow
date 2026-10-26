@@ -1,3 +1,7 @@
+import { nodeRunFixtureColumns } from './helpers/model/nodeRun'
+import { legacyContentRef } from '@/platform/content/contentRef'
+import { contentRowColumns } from '@/platform/content/infrastructure/contentStore'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 // RFC-101 PR-B — fusion engine.
 //
 // Validates the parts that don't need a live opencode: the fusion state
@@ -11,7 +15,7 @@
 
 import { nodeRunFixture, patchTaskFixture, readTaskFixtures } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+
 import { queryWrite, queryRows, first } from '@/platform/persistence/queryHelpers'
 import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import {
@@ -25,7 +29,7 @@ import {
 } from 'node:fs'
 import { join as pjoin } from 'node:path'
 import { tmpdir } from 'node:os'
-import { resolve } from 'node:path'
+
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import {
@@ -69,7 +73,6 @@ import {
 } from './helpers/resourceScopeAuthority'
 import { TEST_SQLITE_FUSION_PARTICIPANTS } from './helpers/fusionParticipants'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const VALID_OPENCODE_RUNTIME = 'rfc224-test-opencode'
 
 type TestFusionDeps = FusionDeps & { readonly db: DbClient }
@@ -188,7 +191,7 @@ interface H {
 async function build(): Promise<H> {
   const tmp = mkdtempSync(pjoin(tmpdir(), 'aw-fusion-'))
   const appHome = pjoin(tmp, 'home')
-  const db = createInMemoryDb(MIGRATIONS)
+  const db = createInMemoryDb()
   await createRuntime(runtimeRegistryPersistence(db), {
     name: VALID_OPENCODE_RUNTIME,
     protocol: 'opencode',
@@ -404,7 +407,7 @@ describe('launch → reconcile → approve', () => {
         changelog: 'Integrated 2-space rule.',
       }),
     )
-    queryWrite(patchTaskFixture(h.db, { id: task!.id }, { status: 'done', finishedAt: Date.now() }))
+    await patchTaskFixture(h.db, { id: task!.id }, { status: 'done', finishedAt: Date.now() })
 
     // Reconcile → awaiting_approval with the proposed diff + incorporated set.
     await reconcileFusion(h.deps, fusion.id)
@@ -455,7 +458,7 @@ describe('launch → reconcile → approve', () => {
       pjoin(wt, PLATFORM_FUSION_MANIFEST),
       JSON.stringify({ incorporatedMemoryIds: [mem], skipped: [], changelog: 'x' }),
     )
-    queryWrite(patchTaskFixture(h.db, { id: task!.id }, { status: 'done', finishedAt: Date.now() }))
+    await patchTaskFixture(h.db, { id: task!.id }, { status: 'done', finishedAt: Date.now() })
     await reconcileFusion(h.deps, fusion.id)
 
     // A concurrent editor save bumps the skill (base was 1, now 2).
@@ -507,7 +510,7 @@ describe('launch → reconcile → approve', () => {
       pjoin(wt, PLATFORM_FUSION_MANIFEST),
       JSON.stringify({ incorporatedMemoryIds: [memA], skipped: [], changelog: 'x' }),
     )
-    queryWrite(patchTaskFixture(h.db, { id: task!.id }, { status: 'done', finishedAt: Date.now() }))
+    await patchTaskFixture(h.db, { id: task!.id }, { status: 'done', finishedAt: Date.now() })
     await reconcileFusion(h.deps, fusion.id)
     const f = await getFusion(h.deps, fusion.id)
     expect(f!.status).toBe('failed')
@@ -541,7 +544,7 @@ describe('RFC-170 T6 — fusion precondition token', () => {
       pjoin(wt, PLATFORM_FUSION_MANIFEST),
       JSON.stringify({ incorporatedMemoryIds: [memId], skipped: [], changelog: 'x' }),
     )
-    queryWrite(patchTaskFixture(h.db, { id: task!.id }, { status: 'done', finishedAt: Date.now() }))
+    await patchTaskFixture(h.db, { id: task!.id }, { status: 'done', finishedAt: Date.now() })
     await reconcileFusion(h.deps, fusion.id)
     return fusion
   }
@@ -895,7 +898,9 @@ describe('RFC-170 T6 F9 — recoverFusionDecisions (crash recovery)', () => {
       id: ulid(),
       skillId: lintId,
       versionIndex: 7,
-      filesPath: `skills/${lintId}/versions/v7/files`,
+      ...contentRowColumns(
+        legacyContentRef('skill-path', 'local-file', `skills/${lintId}/versions/v7/files`),
+      ),
       source: 'fusion',
       fusionId: 'fz-fwd',
       authorUserId: '__system__',
@@ -915,7 +920,13 @@ describe('RFC-170 T6 F9 — recoverFusionDecisions (crash recovery)', () => {
         id: ulid(),
         skillId: lintId,
         versionIndex,
-        filesPath: `skills/${lintId}/versions/v${versionIndex}/files`,
+        ...contentRowColumns(
+          legacyContentRef(
+            'skill-path',
+            'local-file',
+            `skills/${lintId}/versions/v${versionIndex}/files`,
+          ),
+        ),
         source: 'fusion',
         fusionId: 'fz-duplicate',
         authorUserId: '__system__',
@@ -940,7 +951,9 @@ describe('RFC-170 T6 F9 — recoverFusionDecisions (crash recovery)', () => {
       id: ulid(),
       skillId: lintId,
       versionIndex: 7,
-      filesPath: `skills/${lintId}/versions/v7/files`,
+      ...contentRowColumns(
+        legacyContentRef('skill-path', 'local-file', `skills/${lintId}/versions/v7/files`),
+      ),
       source: 'fusion',
       fusionId: 'fz-applied-mismatch',
       authorUserId: '__system__',
@@ -1128,7 +1141,8 @@ describe('RFC-170 T6 F12 — cancel is generation-safe + covers parked tasks', (
     const taskId = fusion.currentTaskId!
     const reviewRunId = ulid()
     const docVersionId = ulid()
-    const { nodeRuns, docVersions, fusions } = tablesOf(h.db)
+    const { fusions } = tablesOf(h.db)
+    const { nodeRuns, docVersions } = tablesOf(h.db)
     await patchTaskFixture(h.db, { id: taskId }, { status: 'awaiting_review' })
     await nodeRunFixture(h.db, {
       id: reviewRunId,
@@ -1148,14 +1162,14 @@ describe('RFC-170 T6 F12 — cancel is generation-safe + covers parked tasks', (
       sourcePortName: 'doc',
       versionIndex: 1,
       reviewIteration: 0,
-      bodyPath: 'review-lock.md',
+      ...contentRowColumns(legacyContentRef('review-body-path', 'local-file', 'review-lock.md')),
       commentsJson: '[]',
       decision: 'pending',
       createdAt: Date.now(),
     })
     const uninstallAfterCommitPump = installTaskLifecycleAfterCommitTestPump(h.db, {
       onTerminalTask(hookDb, hookTaskId, to) {
-        void createHumanGateTerminalSweepCommand(hookDb).run({
+        return createHumanGateTerminalSweepCommand(hookDb).run({
           taskId: hookTaskId,
           cause: `task-${to}`,
         })
@@ -1213,7 +1227,12 @@ describe('RFC-170 T6 F12 — cancel is generation-safe + covers parked tasks', (
       expect(result.status).toBe('canceled')
       expect((await getTask(h.db, taskId))?.status).toBe('canceled')
       expect(
-        (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, reviewRunId)))[0]?.status,
+        (
+          await h.db
+            .select(nodeRunFixtureColumns(h.db))
+            .from(nodeRuns)
+            .where(eq(nodeRuns.id, reviewRunId))
+        )[0]?.status,
       ).toBe('canceled')
     } finally {
       releaseHolder()

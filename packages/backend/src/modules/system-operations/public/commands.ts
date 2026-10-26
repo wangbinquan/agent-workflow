@@ -122,3 +122,59 @@ export type ConfigConcurrencyHotApplyInput = Pick<
 export interface ConfigConcurrencyHotApplyCommand {
   apply(input: ConfigConcurrencyHotApplyInput): void | Promise<void>
 }
+
+import type {
+  EpochSwitchPlanInput,
+  EpochSwitchTargetInput,
+  EpochSwitchPlanView,
+  EpochSwitchStatusView,
+  EpochSwitchSummaryView,
+  TraceInput,
+  MigrationTraceResult,
+  TaskRestrictionView,
+} from './types'
+
+export interface EpochSwitchApplication {
+  withdrawAcknowledgements(input: {
+    readonly operationId: string
+    readonly decisions: readonly string[] | 'all'
+  }): Promise<EpochSwitchPlanView>
+  plan(input: EpochSwitchPlanInput): Promise<EpochSwitchPlanView>
+  acknowledge(input: {
+    readonly operationId: string
+    readonly items: readonly string[] | 'all-unfinished-legacy-code-work'
+    readonly reason: string
+    readonly by: string
+  }): Promise<EpochSwitchPlanView>
+  run(input: {
+    readonly operationId: string
+    /** Material approval digest, never the full plan-document digest. */
+    readonly approve?: string
+    readonly newRun?: boolean
+    readonly drainTimeoutMs?: number
+  }): Promise<EpochSwitchStatusView>
+  status(input: {
+    readonly operationId?: string
+  }): Promise<EpochSwitchStatusView | readonly EpochSwitchSummaryView[]>
+  trace(
+    input: TraceInput | { readonly operationId: string; readonly taskId: string },
+  ): Promise<MigrationTraceResult | TaskRestrictionView>
+  verify(input: { readonly operationId: string }): Promise<EpochSwitchStatusView>
+  rollback(input: { readonly operationId: string }): Promise<EpochSwitchStatusView>
+  complete(input: { readonly operationId: string }): Promise<EpochSwitchStatusView>
+  discard(input: {
+    readonly operationId: string
+    readonly confirm: true
+  }): Promise<EpochSwitchStatusView>
+  receipt(input: {
+    readonly operationId: string
+    readonly kind: 'plan' | 'run' | 'activation' | 'switch' | 'rollback'
+  }): Promise<{ readonly path: string | null; readonly json: string }>
+  restoreBackup(input: {
+    readonly artifact: string
+    readonly target?: EpochSwitchTargetInput
+    readonly restoreConfig?: boolean
+    readonly contentRoot?: string
+    readonly scratchUrlEnv?: string
+  }): Promise<EpochSwitchPlanView>
+}

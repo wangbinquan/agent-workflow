@@ -1,3 +1,4 @@
+import { nodeOutputSlot } from '../domain/runSelection/nodeOutputSlot'
 // RFC-306 — DB side of the branch-activation judgment.
 //
 // Turns "this node is about to be dispatched" into `active` or `skipped`, by
@@ -100,17 +101,15 @@ export async function resolveNodeActivationForDispatch(args: {
             })
       const picked = sourceFrame.ok
         ? (
-            await reader
-              .selectionFromRows(taskId, await reader.findRuns(taskId, source.nodeId))
-              .slotHistory(
-                taskId,
-                {
-                  kind: 'node',
-                  nodeId: source.nodeId,
-                  frame: sourceFrame.frame,
-                },
-                { statusIn: ['done', 'skipped'] },
-              )
+            await reader.selection.slotHistory(
+              taskId,
+              nodeOutputSlot(
+                source.nodeId,
+                definition.nodes.find((candidate) => candidate.id === source.nodeId)?.kind,
+                sourceFrame.frame,
+              ),
+              { statusIn: ['done', 'skipped'], executableOnly: true },
+            )
           ).at(-1)
         : undefined
       runByNode.set(source.nodeId, picked)

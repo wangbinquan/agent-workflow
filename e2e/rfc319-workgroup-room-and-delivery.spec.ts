@@ -1,3 +1,4 @@
+import { liveSqlitePath } from './storage'
 // RFC-319 —— 工作组「房间实时 / 发言 / 派单与交付」能力簇的用户面 e2e。
 //
 // 覆盖能力账本行：WG-29 / WG-30 / WG-31 / WG-32 / WG-33 / WG-35 / WG-36 / WG-37 / WG-38。
@@ -413,7 +414,7 @@ function sqlLiteral(value: string): string {
 }
 
 function dbPath(): string {
-  return join(daemon.home, 'db.sqlite')
+  return liveSqlitePath(daemon.home)
 }
 
 /** 记录浏览器往某条 pathname 发过几次请求（用来证明「按不下去 = 一次都没发」）。 */

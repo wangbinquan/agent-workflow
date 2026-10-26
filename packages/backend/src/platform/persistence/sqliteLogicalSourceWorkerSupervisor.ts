@@ -1,3 +1,4 @@
+import { schemaHistoryRuntime } from './schema/history/runtime'
 // RFC-349 — fail-closed supervisor/proxy for the SQLite migration Worker.
 // There is deliberately no main-thread fallback: a missing or failed Worker
 // stops migration instead of turning a data-plane operation into UI latency.
@@ -166,6 +167,10 @@ export async function openSqliteLogicalSourceWorker(
       path: options.path,
       expectedSchemaDigest: options.contract.digest,
       contract: options.contract,
+      history: {
+        head: schemaHistoryRuntime().head(),
+        metaTables: schemaHistoryRuntime().metaTables,
+      },
     },
     'ready',
   )
@@ -173,6 +178,11 @@ export async function openSqliteLogicalSourceWorker(
   return Object.freeze<SqliteLogicalSource>({
     provider: 'sqlite',
     path: options.path,
+    async readMetadata() {
+      const event = await request({ type: 'metadata' }, 'metadata')
+      if (event.type !== 'metadata') throw new Error('unreachable SQLite source response')
+      return event.snapshot
+    },
     async preflight() {
       const event = await request({ type: 'preflight' }, 'snapshot')
       if (event.type !== 'snapshot') throw new Error('unreachable SQLite source response')

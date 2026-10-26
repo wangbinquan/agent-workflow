@@ -6,17 +6,23 @@
 > **本文只写仓内真实存在的机制**，每条命令都能在 `packages/backend/src/cli/` 找到实现。
 > 读到与源码不符的地方，以源码为准并回来改这份文档——一份过期的 runbook 比没有更危险。
 
-产品形态是**单二进制自托管 daemon**：没有集群、没有滚动发布、没有外部编排器。因此
-「发布」= 换一个可执行文件，「回滚」= 换回旧可执行文件 + 必要时恢复数据。
+本篇以**单二进制自托管 daemon** 为主。epoch-2 发布包含数据库 epoch 切换，已有 epoch-1
+安装不能只换二进制再启动。CrewStation 的迁移 Job、平台切换与独立校验见
+[托管部署运行手册](./crewstation-deployment.md#epoch-2-发布的数据库切换)。
 
 ---
 
 ## 0. 先记住三件事
 
-1. **数据在 `AGENT_WORKFLOW_HOME`（默认 `~/.agent-workflow`）**，不在二进制旁边。换二进制不动数据。
-2. **升级会自动改数据库结构**（migration），而 **migration 不可逆**。跨版本回滚必须靠备份。
-3. **`restore` 拒绝降级**：备份比当前二进制新时直接拒绝（`refused: the backup is NEWER than
-this binary; cannot downgrade`）。所以**先换回旧二进制，再 restore 旧备份**，顺序反了会被挡。
+1. **数据在 `AGENT_WORKFLOW_HOME`（默认 `~/.agent-workflow`）**。epoch 2 的 SQLite 库由
+   `database-generation.json` 的 v2 pointer 选择，通常是 `databases/<generationId>/db.sqlite`；
+   不要把根目录遗留的 `db.sqlite` 当作当前业务库。PostgreSQL pointer 记录目标 profile。
+2. **从 epoch 1 升级必须先审阅计划、批准，再离线切换**。daemon 遇到 epoch-1、未协调的切换、
+   pointer/receipt 不一致或退役 generation 会拒绝启动，避免 writer 在不确定的库上继续。
+   同 epoch 的后续结构升级由原生 schema history 执行，不能拿它代替 epoch 转换。
+3. **回退窗口截止于目标首次业务写入**；主动 `complete` 开始保留源库时也会关闭窗口。
+   之后走前滚修复或目标备份恢复。旧二进制不接受 epoch-2 文件或 v2 pointer；仅换回旧 binary
+   不会把目标库变回 epoch 1。切换源、备份、回执与历史证据不会因 `complete` 自动删除。
 
 ---
 
@@ -36,80 +42,144 @@ git tag v1.2.3 && git push origin v1.2.3
 
 ## 2. 升级（部署方）
 
+先保留当前 binary 的版本、完整构建 SHA / 摘要、原配置与 key，以及可用的切换前备份。
+每个实例用 [RFC-395 演练模板](../design/RFC-395-database-target-schema-rebuild/rehearsal-template.md)
+记录批准和结果。下面 `<op>`、`<approvalDigest>` 都从本次 CLI 输出复制。
+
 ```bash
-agent-workflow version          # 记下当前版本——restore 的版本闸门比的就是它
-agent-workflow status           # 确认在跑；记下 pid
-agent-workflow backup           # 显式备份，落 <home>/backups/，打印完整路径
-agent-workflow stop             # 优雅停机（30s 上限）
-#   —— 换掉可执行文件 ——
-agent-workflow doctor           # DB 完整性 + 备份健康；有红先别起
+agent-workflow version
+agent-workflow status
+# 以下使用 epoch-2 binary；plan 读取源并写操作证据，不切换业务库。
+agent-workflow db migration plan --rehearse --json
+agent-workflow db migration status <op> --json
+agent-workflow db migration receipt <op> plan --json
+```
+
+`plan` 返回 `operationId`、`plan.payload`、`plan.digest`、`plan.approvalDigest`、
+`jsonPath`、`markdownPath`、`acknowledgeable`、`requiresApproval` 和 `guidance`。
+逐项审阅 source fingerprint/watermark、目标合同与 build、备份/内容清单、容量估计、
+`blocks`、`restrictions`、`bootUpgradeEffects` 与未完任务。当前 `--rehearse` 记录的是转换 dry-run
+耗时，并填入维护时间估计；它不创建并校验一个原生目标库，也不是切换批准。T19 的完整演练须
+在独立实例副本实际执行 run / verify / rollback。计划有 block 时按指引处理后重做计划，不能靠
+`--approve` 绕过。
+
+需要操作者明确接受的未完旧代码工作，按计划的 item id 确认归档，保留理由和操作者：
+
+```bash
+agent-workflow db migration acknowledge <op> --item <item-id> --reason '<reason>' --by '<operator>' --json
+# 同类事项确实全部获准时才使用 --all-unfinished-legacy-code-work 代替 --item。
+agent-workflow db migration plan <op> --json
+# 需要撤销确认时：
+agent-workflow db migration withdraw-acknowledgement <op> --decision <decision-digest> --json
+```
+
+`acknowledge` 只解决对应的可确认项，不批准执行。`run --approve` 需要的是**材料批准摘要**
+`plan.approvalDigest`，不是完整文档 `plan.digest`。限制、确认或实际转换效果发生实质变化会
+要求重新批准；单纯计数或时间变化不应被当成新的材料批准。
+
+在已批准的维护窗口执行：
+
+```bash
+agent-workflow db migration run <op> --approve <approvalDigest> --json
+agent-workflow db migration status <op> --json
+agent-workflow db migration receipt <op> run --json
+agent-workflow db migration receipt <op> activation --json
+# 只读校验不启动 daemon；先完成首写前的回退演练。
+agent-workflow db migration verify <op> --json
+```
+
+`run` 负责备份、停止新准入并收敛 writer、冻结、转换、验证、准备并替换 pointer；它不启动
+新 daemon。不能另起旧 writer。若在冻结后等待重新批准，继续保持停机。重启同一命令复用原
+operation/run/target；源已变化时按 `status.guidance` 处理，`run <op> --new-run` 会保留旧
+证据并分配新 run，须审阅新的批准材料。PostgreSQL 新 run 需要独立空目标。
+
+SQLite → PostgreSQL 或 PostgreSQL → PostgreSQL 的计划显式指定目标环境变量名：
+
+```bash
+agent-workflow db migration plan --target postgresql --target-url-env AW_EPOCH2_TARGET_URL --json
+# 旧 PostgreSQL 源若需离线升级，再提供 --scratch-url-env AW_EPOCH1_SCRATCH_URL。
+```
+
+环境变量应已指向专用空目标 / scratch，不能指回源。PostgreSQL → SQLite 不支持。
+
+回退演练和只读验证通过、决定继续上线后，再换用本候选 binary 启动。**启动本身可能触发首写**，
+不必等用户创建任务才关闭窗口。按实例验收历史、人工门、执行恢复与队列，然后收尾：
+
+```bash
 agent-workflow start
+agent-workflow db migration status <op> --json
+agent-workflow db migration verify <op> --json
+agent-workflow db migration complete <op> --json
+agent-workflow db migration receipt <op> switch --json
 ```
 
-**关于 migration**：daemon 启动时若发现 `_journal.json` 比库里已应用的更新，会**先自动做一次
-原始 DB 拷贝**（`pre-migration-<from>-<to>`，见 `services/backupScheduler.ts`
-`maybePreMigrationBackup`），再应用。也就是说即使你忘了第 3 步，仍有一份升级前快照。
-想先看会发生什么：
+`activated` 只说明已到激活阶段；`verified` 才有校验回执，`completed` 才完成保留登记。
+`receipt` 返回 `{path, json}`，其中 `json` 是回执原文；保存外层输出和内层原文。`receipt switch`
+在完成前返回 verification receipt，完成后返回 completion receipt。
 
-```bash
-agent-workflow migration-report   # 只读：列出待应用的 migration
-agent-workflow migrate            # 只跑 migration，不起 daemon
-```
-
-**为什么第 5 步的 `stop` 不能省**：`restore` 与 `db compact` 都会检测 PID 文件，daemon 在跑
-就拒绝（`restore refused: a daemon is running (pid …)`）。升级本身不检测，但带着活 daemon 换
-二进制会让正在跑的任务面对一个已经不存在的可执行文件。
+**同 epoch 后续升级**：`agent-workflow migration-report` 读取当前 pointer 所选库；`agent-workflow migrate` / daemon prepare
+在锁内应用原生 history，SQLite 按 `backupOnMigration` 先尝试 pre-migration 备份。它不重放
+`db/migrations` 的 epoch-1 链。先停止 daemon，保留备份，再换 binary、检查并启动。
 
 ---
 
 ## 3. 回滚
 
-### 3a. 只回滚二进制（没有跑过 migration）
+### 3a. 首次业务写入前撤回 epoch 切换
 
-`migration-report` 显示无待应用项、或 `doctor` 确认库版本未变时，直接换回旧二进制重启即可，
-数据不动。这是最常见、也最安全的一种。
-
-### 3b. 跨 migration 回滚（必须动数据）
-
-**顺序不能反**：
+先检查 `status` 的 `firstLiveWriteAt` 与 `rollback.allowed/reason`，保持新 daemon 未启动：
 
 ```bash
-agent-workflow stop
-#   —— 先把可执行文件换回旧版本 ——
-agent-workflow version                     # 确认已是旧版本
-agent-workflow restore <tarball> --dry-run # 只读预演：打印将要发生什么，不改任何东西
-agent-workflow restore <tarball> --yes     # 真正应用（**覆盖当前数据**）
-agent-workflow doctor
-agent-workflow start
+agent-workflow db migration status <op> --json
+agent-workflow db migration rollback <op> --json
+agent-workflow db migration receipt <op> rollback --json
+# 确认 rolled-back 后，使用记录的源 build/config 启动源实例。
 ```
 
-- 不带 `--yes` / `--stage` 时，`restore` 只打印计划并提示 `re-run with --yes to APPLY`——
-  它不会因为你少打一个参数就动数据。
-- `--stage` 写一个待应用标记，**下次 daemon 启动时**再换入；staging 前会按与真正 apply
-  **同样深度**校验 tarball（历史上 staging 一个无效包会 arm 出 boot loop）。
-- `--no-safety-backup` / `--no-migrate` / `--skip-integrity-check` 是逃生口，正常回滚
-  **不要用**：安全备份是这条路径上最后一道网。
+rollback 会关闭目标写入权，再按 activation receipt 恢复原 pointer **字节**；源原来没有 pointer
+则恢复为没有。它保留目标和转换元数据。中断后继续同一 rollback；不能手工复制 pointer
+绕过 generation 围栏。旧备份转换的 rollback 还恢复被替换的 skills / 可选 config。
 
-### 3c. RFC-295 降级预检
+### 3b. 首写后前滚，或从目标备份恢复
 
-跨越 RFC-295 那次结构变更回滚前，先跑只读预检：
+`firstLiveWriteAt` 非空、`completion-started.json` 已存在或操作已 `completed` 时，直接撤回被拒绝
+（`reverse-migration-required`）。保留现状与错误证据，修复后前滚；需要恢复时使用 epoch-2
+一致性备份和匹配的 binary，步骤见 [灾难恢复](./disaster-recovery.md)。
+
+切回 epoch-1 只能在停写后使用切换前备份和对应旧 build，并明确接受备份之后事实的处置；本
+发布没有反向转换器。不能把旧备份恢复称为无损 rollback。普通 epoch-2 restore 仍拒绝比 binary
+更新的合同；`--no-migrate` 不会允许 epoch-1 数据绕过 converter。
+
+未激活的失败目标可以在确认放弃后执行：
 
 ```bash
-agent-workflow downgrade-audit rfc-295   # 输出 OK / BLOCKED
+agent-workflow db migration discard <op> --confirm --json
 ```
+
+discard 结束该操作并处理其目标残留，源不变；它不是清理源库、备份或迁移证据的命令。
+
+### 3c. RFC-295 降级预检已退役（U-6）
+
+`rfc295-downgrade-audit` 已随 epoch-2 激活删除，不再使用 `downgrade-audit rfc-295`。
+返回 epoch 1 使用本节的首写前 switch rollback，或切换前备份与旧 build。不要把旧命令的
+OK / BLOCKED 当成 epoch-2 的回退许可。
 
 ---
 
 ## 4. 备份
 
-- **自动**：daemon 内的 backup scheduler 周期性 `createBackup` 并 prune；`agent-workflow-*`
-  与各 `pre-*` 家族**各自保留最新 N 份**（`services/backupScheduler.ts` `pruneBackups`）。
-- **手动**：`agent-workflow backup`（daemon 在跑也可以，它自己开库、不碰 daemon 启动路径）。
-- **落点**：`<AGENT_WORKFLOW_HOME>/backups/`。
-- **健康度**：`agent-workflow doctor` 会报备份健康（info 级）与 DB 完整性（损坏则 doctor 失败）。
+- **切换保留**：源库、最终一致性备份、内容 manifest、journal、确认、批准与 receipt 都保留；
+  `completed` 不自动删除它们。SQLite 源在收尾时移入 `database-migrations/<op>/source/`，
+  WAL / SHM 如存在也逐项保留；PostgreSQL 源保留原 profile。
+- **日常备份**：`agent-workflow backup`，落 `<home>/backups/`；epoch-2 逻辑备份包含
+  `epoch2-metadata.json`，携带 history restrictions、archive bytes 和 generation lineage。
+- **日常轮转**：只对 `scheduled-*` / `auto-*` 按配置轮转；手动与 pre-restore / pre-migration
+  备份不自动删除。它与 switch 的“保留全部操作证据”是两个范围，详见灾难恢复 §1.2。
+- **内容与 key**：仍被 live / history / backup 持有的内容不能提前释放；普通备份不包含
+  `secret.key`，必须另行保留原 key。旧备份 converter 的 key 选择见灾难恢复 §4。
 
-**版本与备份要配对记**：`agent-workflow version` 打印的值正是 restore 前置闸门比较的那个值。
-归档备份时把它一起记下来，回滚时才知道该换回哪个二进制。
+记录版本、完整 build SHA、合同摘要、generation、备份水位和保留位置；“备份完成”之后还要
+实际恢复并核对非空数据，不能只核对 tar 文件存在。
 
 ---
 

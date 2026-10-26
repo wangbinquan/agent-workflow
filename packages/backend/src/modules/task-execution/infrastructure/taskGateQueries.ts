@@ -1,3 +1,7 @@
+import { workflowNameExpression } from '@/modules/resource-catalog/public/queries'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { TERMINAL_TASK_STATUSES } from '@agent-workflow/shared'
 import {
   and,
   eq,
@@ -11,14 +15,11 @@ import {
   type AnyColumn,
   type SQL,
 } from 'drizzle-orm'
-import { taskVisibilityCondition, visibleTaskIdsFor } from './taskAuthorization'
-import { TERMINAL_TASK_STATUSES } from '@agent-workflow/shared'
-import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { TaskGateQueries } from '../application/ports/taskGateQueries'
+import { taskVisibilityCondition, visibleTaskIdsFor } from './taskAuthorization'
+import { taskReadColumns, taskWorkflowNameSql } from './taskRepositorySql'
+
 import { taskWorkgroupConfigSelection } from './taskWorkgroupConfig'
-import { workflowNameExpression } from '@/modules/resource-catalog/public/queries'
-import { taskWorkflowNameSql } from './taskSubjectSql'
 
 /** 与调用者共用当前会话（包括事务），不另开事务或解释冻结定义。 */
 export function createTaskGateQueries(db: PersistenceDb): TaskGateQueries {
@@ -30,8 +31,11 @@ export function createTaskGateQueries(db: PersistenceDb): TaskGateQueries {
     ownerUserId: tasks.ownerUserId,
     lifecycleEventRevision: tasks.lifecycleEventRevision,
     sourceTerminationFence: tasks.sourceTerminationFence,
-    workflowId: tasks.workflowId,
-    worktreePath: tasks.worktreePath,
+    workflowId: taskReadColumns(db).workflowId,
+    subjectKind: taskReadColumns(db).subjectKind,
+    sourceId: taskReadColumns(db).sourceId,
+    sourceName: taskReadColumns(db).sourceName,
+    worktreePath: taskReadColumns(db).worktreePath,
   }
   return {
     visibleTaskIds(subject, taskIds) {
@@ -47,7 +51,7 @@ export function createTaskGateQueries(db: PersistenceDb): TaskGateQueries {
     async listDefinitionContexts(taskIds) {
       if (taskIds.length === 0) return []
       return db
-        .select({ ...context, workflowSnapshot: tasks.workflowSnapshot })
+        .select({ ...context, workflowSnapshot: taskReadColumns(db).workflowSnapshot })
         .from(tasks)
         .where(inArray(tasks.id, [...taskIds]))
     },
@@ -56,10 +60,10 @@ export function createTaskGateQueries(db: PersistenceDb): TaskGateQueries {
       return db
         .select({
           ...context,
-          workflowSnapshot: tasks.workflowSnapshot,
-          workgroupId: tasks.workgroupId,
-          codeRoundId: tasks.codeRoundId,
-          sourceAgentName: tasks.sourceAgentName,
+          workflowSnapshot: taskReadColumns(db).workflowSnapshot,
+          workgroupId: taskReadColumns(db).workgroupId,
+          codeRoundId: taskReadColumns(db).codeRoundId,
+          sourceAgentName: taskReadColumns(db).sourceAgentName,
           workgroupConfig: taskWorkgroupConfigSelection(db),
         })
         .from(tasks)
@@ -71,7 +75,7 @@ export function createTaskGateQueries(db: PersistenceDb): TaskGateQueries {
 /** 同语句的半连接，保留徽标计数的孤儿/终态语义与单次往返。 */
 export function taskGateOpenCondition(
   db: PersistenceDb,
-  taskId: AnyColumn,
+  taskId: AnyColumn | SQL,
   includeMissing = false,
   requireSubjectName = false,
 ): SQL {
@@ -97,22 +101,15 @@ export function taskGateOpenCondition(
 
 /** RFC-395 II-a: keep subject-name filtering in the badge's single SQL statement. */
 function taskGateSubjectName(db: PersistenceDb): SQL {
-  const { tasks } = tablesOf(db)
   return taskWorkflowNameSql(
-    {
-      workflowId: sql`${tasks.workflowId}`,
-      codeRoundId: sql`${tasks.codeRoundId}`,
-      workgroupId: sql`${tasks.workgroupId}`,
-      sourceAgentId: sql`${tasks.sourceAgentId}`,
-      sourceAgentName: sql`${tasks.sourceAgentName}`,
-    },
-    workflowNameExpression(db, tasks.workflowId),
+    { subjectKind: taskReadColumns(db).subjectKind },
+    workflowNameExpression(db, taskReadColumns(db).workflowId),
   )
 }
 
 export function taskGateVisibleCondition(
   db: PersistenceDb,
-  taskId: AnyColumn,
+  taskId: AnyColumn | SQL,
   viewer: {
     readonly userId: string
     readonly canReadAllTasks: boolean

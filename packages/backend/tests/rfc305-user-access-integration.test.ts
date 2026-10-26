@@ -3,7 +3,7 @@
 // current session/PAT authority is rebuilt from that state on every request.
 
 import { beforeEach, describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
+
 import {
   grantableAdditionalPermissions,
   PERMISSIONS,
@@ -29,15 +29,13 @@ import { createSession } from './helpers/auth/sessionStore'
 import { createPat } from './helpers/auth/patStore'
 import { resolveActor } from '../src/auth/session'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-
 describe('RFC-305 identity-access integration', () => {
   let db: DbClient
   let identityAccess: IdentityAccessFixtureRuntime
   let delegatedAttempt: number
 
   beforeEach(() => {
-    db = createInMemoryDb(MIGRATIONS)
+    db = createInMemoryDb()
     identityAccess = composeIdentityAccess(db)
     delegatedAttempt = 0
   })

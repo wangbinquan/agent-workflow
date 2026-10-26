@@ -1,14 +1,20 @@
 // RFC-395 A3 K8: independent frozen HEAD SQL and dispatch branches. Do not import
 // executable oracle helpers into an expectation, including its legacyPickers.
 import { expect, test } from 'bun:test'
-import { createRunSelectionOracleSnapshot } from '@/modules/task-execution/infrastructure/runSelection/oracle/snapshot'
-import { createRunSelectionReader } from '@/modules/task-execution/infrastructure/runSelection/oracle/reader'
+import { createRunSelectionOracleSnapshot } from '@/modules/task-execution/infrastructure/migration/oracle/snapshot'
+import { createRunSelectionReader } from '@/modules/task-execution/infrastructure/migration/oracle/reader'
 import { createNodeRunQueries } from '@/modules/task-execution/infrastructure/nodeRunQueries'
-import type { OracleRunRow } from '@/modules/task-execution/infrastructure/runSelection/oracle/rows'
+import { FROZEN_MIGRATIONS } from './migration-freeze'
+import { seedSelectionFamilies as seedLiveSelectionFamilies } from './helpers/model/runSelectionSeed'
+import {
+  frozenS6 as projectedS6,
+  frozenS7 as projectedS7,
+} from './helpers/model/frozenSelection/repositoryPreparation'
+import type { OracleRunRow } from '@/modules/task-execution/infrastructure/migration/oracle/rows'
 import type { WrapperSlotRef } from '@/modules/task-execution/application/ports/runSelection'
 import { describeEachProvider } from './helpers/eachProvider'
-import { seedSelectionFamilies } from './helpers/model/runSelectionSeed'
-import { frozenS6, frozenS7 } from './helpers/model/frozenSelection/repositoryPreparation'
+import { seedSelectionFamilies } from './helpers/model/frozenSelection/seed'
+import { frozenS6, frozenS7 } from './helpers/model/frozenSelection/epoch1RepositoryPreparation'
 import {
   frozenShardDecision,
   frozenAggregatorDecision,
@@ -63,97 +69,83 @@ async function expectFanout(
   )
 }
 
-describeEachProvider('RFC-395 A3 extended seeded evidence', (harness) => {
-  test.each([7, 395, 20261023])(
-    'seed %i covers fanout, host, synthetic and NULL sequence histories',
-    async (seed) => {
-      expect(await frozenS6({ deps: { db: harness.db } }, 'missing')).toBeUndefined()
-      expect(await frozenS7({ db: harness.db }, 'missing')).toBeUndefined()
-      const { taskIds, generations, histories, cases } = await seedSelectionFamilies(
-        harness.db,
-        seed,
-      )
-      const reader = createRunSelectionReader(harness.db)
-      for (const entry of cases) {
-        const rows = histories.find((history) => history.taskId === entry.taskId)!.rows
-        // Writer-owned membership is independent of oracle labels. HEAD #70 groups
-        // host + gate by node/shard; compare that legacy query separately below.
-        if (entry.slot.kind === 'workgroup-host') continue
-        const candidates = rows.filter((row) => entry.runIds.includes(row.id))
-        const current =
-          entry.slot.kind === 'synthetic' && entry.slot.syntheticKind === 'repo-prep'
-            ? await frozenS6({ deps: { db: harness.db } }, entry.taskId)
-            : pickFreshestRun(candidates, { topLevelOnly: false })
-        expect((await reader.current(entry.taskId, entry.slot))?.id).toBe(current?.id)
-        expect((await reader.slotHistory(entry.taskId, entry.slot)).map((row) => row.id)).toEqual(
-          [...candidates].sort(compareNodeRunMintOrder).map((row) => row.id),
+describeEachProvider(
+  'RFC-395 A3 extended seeded evidence',
+  (harness) => {
+    test.each([7, 395, 20261023])(
+      'seed %i covers fanout, host, synthetic and NULL sequence histories',
+      async (seed) => {
+        expect(await frozenS6({ deps: { db: harness.db } }, 'missing')).toBeUndefined()
+        expect(await frozenS7({ db: harness.db }, 'missing')).toBeUndefined()
+        const { taskIds, generations, histories, cases } = await seedSelectionFamilies(
+          harness.db,
+          seed,
         )
-      }
-      for (const history of histories) {
-        const nullRows = history.rows.filter((row) => row.seq === null)
-        expect(nullRows.length).toBeGreaterThanOrEqual(6)
-        expect((await reader.familyHistory(history.taskId, {})).map((row) => row.id)).toEqual(
-          [...history.rows].sort(compareNodeRunMintOrder).map((row) => row.id),
-        )
-      }
-      const hostRows = histories.find((history) => history.taskId === taskIds.host)!.rows
-      for (const nodeId of ['__wg_member__', '__wg_leader__'])
-        for (const shardKey of [null, '', 'assignment', 'msg:1']) {
-          const old = hostRows.filter((row) => row.nodeId === nodeId && row.shardKey === shardKey)
-          expect((await reader.familyHistory(taskIds.host, { nodeId, shardKey })).at(-1)?.id).toBe(
-            pickFreshestRun(old, { topLevelOnly: false })?.id,
+        const reader = createRunSelectionReader(harness.db)
+        for (const entry of cases) {
+          const rows = histories.find((history) => history.taskId === entry.taskId)!.rows
+          // Writer-owned membership is independent of oracle labels. HEAD #70 groups
+          // host + gate by node/shard; compare that legacy query separately below.
+          if (entry.slot.kind === 'workgroup-host') continue
+          const candidates = rows.filter((row) => entry.runIds.includes(row.id))
+          const current =
+            entry.slot.kind === 'synthetic' && entry.slot.syntheticKind === 'repo-prep'
+              ? await frozenS6({ deps: { db: harness.db } }, entry.taskId)
+              : pickFreshestRun(candidates, { topLevelOnly: false })
+          expect((await reader.current(entry.taskId, entry.slot))?.id).toBe(current?.id)
+          expect((await reader.slotHistory(entry.taskId, entry.slot)).map((row) => row.id)).toEqual(
+            [...candidates].sort(compareNodeRunMintOrder).map((row) => row.id),
           )
         }
-      const dagRows = histories.find((history) => history.taskId === taskIds.dag)!.rows
-      for (const iteration of [0, 1])
-        for (const wrapperRunId of generations)
-          for (const flags of [
-            {},
-            { reuseDisabled: true },
-            { processRetryIndex: 0 },
-            { reuseDisabled: true, processRetryIndex: 2 },
-          ]) {
-            await expectFanout(dagRows, taskIds.dag, {
-              wrapperRunId,
-              iteration,
-              ...flags,
-              aggregatorNodeId: 'agg',
-              shards: [
-                ...['', 'a', 'b', 'missing'].map((shardKey) => ({
-                  nodeId: 'inner',
-                  shardKey,
-                  valueHash: 'hash-a',
-                })),
-                { nodeId: 'shared', shardKey: null, valueHash: null },
-              ],
-            })
+        for (const history of histories) {
+          const nullRows = history.rows.filter((row) => row.seq === null)
+          expect(nullRows.length).toBeGreaterThanOrEqual(6)
+          expect((await reader.familyHistory(history.taskId, {})).map((row) => row.id)).toEqual(
+            [...history.rows].sort(compareNodeRunMintOrder).map((row) => row.id),
+          )
+        }
+        const hostRows = histories.find((history) => history.taskId === taskIds.host)!.rows
+        for (const nodeId of ['__wg_member__', '__wg_leader__'])
+          for (const shardKey of [null, '', 'assignment', 'msg:1']) {
+            const old = hostRows.filter((row) => row.nodeId === nodeId && row.shardKey === shardKey)
+            expect(
+              (await reader.familyHistory(taskIds.host, { nodeId, shardKey })).at(-1)?.id,
+            ).toBe(pickFreshestRun(old, { topLevelOnly: false })?.id)
           }
-      // The actual migrated S6 / S7 narrow reads and the selection oracle both
-      // compare with the two distinct frozen SQL statements, including NULL seq.
-      const s6 = await frozenS6({ deps: { db: harness.db } }, taskIds.dag)
-      const s7 = await frozenS7({ db: harness.db }, taskIds.dag)
-      expect(s6?.id).toBe(s7?.id)
-      const queries = createNodeRunQueries(harness.db)
-      expect(
-        (
-          await queries.listFields(
-            { taskId: taskIds.dag, nodeId: '__repo_prep__', order: 'retry-desc', limit: 1 },
-            ['id'],
-          )
-        )[0],
-      ).toEqual(s6)
-      expect(
-        (
-          await queries.listFields(
-            { taskId: taskIds.dag, nodeId: '__repo_prep__', order: 'retry-desc', limit: 1 },
-            ['id', 'retryIndex', 'status'],
-          )
-        )[0],
-      ).toEqual(s7)
-    },
-    60_000,
-  )
-})
+        const dagRows = histories.find((history) => history.taskId === taskIds.dag)!.rows
+        for (const iteration of [0, 1])
+          for (const wrapperRunId of generations)
+            for (const flags of [
+              {},
+              { reuseDisabled: true },
+              { processRetryIndex: 0 },
+              { reuseDisabled: true, processRetryIndex: 2 },
+            ]) {
+              await expectFanout(dagRows, taskIds.dag, {
+                wrapperRunId,
+                iteration,
+                ...flags,
+                aggregatorNodeId: 'agg',
+                shards: [
+                  ...['', 'a', 'b', 'missing'].map((shardKey) => ({
+                    nodeId: 'inner',
+                    shardKey,
+                    valueHash: 'hash-a',
+                  })),
+                  { nodeId: 'shared', shardKey: null, valueHash: null },
+                ],
+              })
+            }
+        // The source keeps NULL seq; the separate live block below checks target projections.
+        expect((await frozenS6({ deps: { db: harness.db } }, taskIds.dag))?.id).toBe(
+          (await frozenS7({ db: harness.db }, taskIds.dag))?.id,
+        )
+      },
+      60_000,
+    )
+  },
+  { sqliteMigrationsFolder: FROZEN_MIGRATIONS },
+)
 
 function row(id: string, changes: Partial<OracleRunRow> = {}): OracleRunRow {
   return {
@@ -264,4 +256,39 @@ test('frozen fanout branches cover replay merge-state, status, hash, generation,
       },
     )
   }
+})
+
+// The same retained narrow reads are exercised against the activated factories.
+describeEachProvider('RFC-395 activated repository-preparation projections', (harness) => {
+  test.each([7, 395, 20261023])(
+    'seed %i keeps S6/S7 rankings after sequence materialization',
+    async (seed) => {
+      const { taskIds } = await seedLiveSelectionFamilies(harness.db, seed)
+      // The actual migrated S6 / S7 narrow reads and the selection oracle both
+      // compare with the two distinct frozen SQL statements, including NULL seq.
+      const s6 = await projectedS6({ deps: { db: harness.db } }, taskIds.dag)
+      const s7 = await projectedS7({ db: harness.db }, taskIds.dag)
+      expect(s6?.id).toBe(s7?.id)
+      const queries = createNodeRunQueries(harness.db)
+      expect(
+        (
+          await queries.listFields(
+            { taskId: taskIds.dag, nodeId: '__repo_prep__', order: 'retry-desc', limit: 1 },
+            ['id'],
+          )
+        )[0],
+      ).toEqual(s6)
+      const selectedPrep = (
+        await queries.listFields(
+          { taskId: taskIds.dag, nodeId: '__repo_prep__', order: 'retry-desc', limit: 1 },
+          ['id', 'retryIndex', 'status'],
+        )
+      )[0]
+      if (s7 === undefined || s7.retryIndex === null)
+        throw new Error('frozen-repository-preparation-identity-missing')
+      expect(selectedPrep?.id).toBe(s7.id)
+      expect(selectedPrep?.retryIndex).toBe(s7.retryIndex)
+      expect(selectedPrep?.status).toBe(s7.status)
+    },
+  )
 })

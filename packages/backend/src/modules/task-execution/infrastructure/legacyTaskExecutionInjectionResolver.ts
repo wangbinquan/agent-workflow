@@ -1,3 +1,4 @@
+import { contentRefColumns } from '@/platform/content/contentStore'
 // RFC-349 compatibility adapter for the retired SQLite injection resolver.
 // Production task execution consumes TaskExecutionResourceBinding; this file
 // remains only as the behavior oracle for the pre-cutover focused tests.
@@ -21,8 +22,14 @@
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { eq, inArray } from 'drizzle-orm'
 import { join as pathJoin } from 'node:path'
-import type { Agent, AgentSkillRef, Mcp, Plugin } from '@agent-workflow/shared'
-import { DISPATCH_CALL_POLICY } from '@agent-workflow/shared'
+import {
+  type Agent,
+  type AgentSkillRef,
+  type Mcp,
+  type Plugin,
+  DISPATCH_CALL_POLICY,
+} from '@agent-workflow/shared'
+
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { Logger } from '@/util/log'
 import { ConflictError, SkillQuarantinedError } from '@/util/errors'
@@ -296,21 +303,23 @@ async function resolveSkills(
         message: new SkillQuarantinedError(row.name).code,
       }
     }
-    // RFC-223 PR-5: DB/FS identity is the immutable id; name survives only as
-    // the runtime-visible injection key. The boot barrier guarantees this exact
-    // path, and the scheduler refuses any bypassed/inconsistent row.
+    // The target row supplies the content location; epoch-1 path upgrades run only in B.
     const expectedPath = skillFilesRel(row.id)
-    if (row.managedPath !== expectedPath) {
+    const location = contentRefColumns.decode(row.contentRefJson, row.contentInlineBytes)
+    if (location === null) {
       return {
         kind: 'failed',
-        summarySuffix: `references Skill '${row.name}' pending identity migration`,
+        summarySuffix: `references Skill '${row.name}' without content`,
         message: new ConflictError(
-          'skill-path-not-canonical',
-          `skill '${row.name}' has not completed its identity migration`,
+          'skill-content-missing',
+          `skill '${row.name}' has no content reference`,
         ).code,
       }
     }
-    const skillPath = pathJoin(appHome, expectedPath)
+    const skillPath =
+      location.kind === 'local-file' && typeof location.location.value === 'string'
+        ? pathJoin(appHome, location.location.value)
+        : pathJoin(appHome, expectedPath)
     out.push({
       name: row.name,
       sourceKind: 'managed',

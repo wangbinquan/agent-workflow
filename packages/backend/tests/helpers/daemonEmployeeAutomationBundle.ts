@@ -1,6 +1,7 @@
+import { epoch2RuntimeTestPorts } from './epoch2RuntimePorts'
 import { withWorkspaceMaintenancePorts } from './sourceControlTaskPorts'
 // RFC-383: real session bundles on each provider; no daemon, timers or external services.
-import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { ALWAYS_WRITABLE_DATABASE_SOURCE } from '@/auth/application/authPersistence'
 import { DEFAULT_CONFIG } from '@agent-workflow/shared'
 import { createSecretBoxFromKey } from '@/auth/secretBox'
@@ -29,13 +30,13 @@ export function employeeAutomationFixture(harness: ProviderDatabaseHarness, appH
   const adapters =
     binding.provider === 'sqlite'
       ? DAEMON_PROVIDER_CORE_ADAPTERS.sqlite({
-          contract: buildLogicalSchemaContract(),
+          contract: logicalSchemaContract,
           db: binding.db,
           appHome,
           secretBox,
         })
       : DAEMON_PROVIDER_CORE_ADAPTERS.postgresql({
-          contract: buildLogicalSchemaContract(),
+          contract: logicalSchemaContract,
           db: binding.db,
           runtime: binding.runtime,
           databaseConfig: binding.databaseConfig,
@@ -105,6 +106,9 @@ export function employeeAutomationFixture(harness: ProviderDatabaseHarness, appH
     conflictWorkspaceSelected: false,
   })
   const employeeInput: DaemonDigitalEmployeeInput = {
+    historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
+    content: epoch2RuntimeTestPorts(db).content,
+    writerInstallation: { activeGeneration: 2, updatedAt: 0 },
     graphAssist: {
       registry: core.runtimeRegistry,
       getDefaultRuntime: async () => DEFAULT_CONFIG.defaultRuntime,

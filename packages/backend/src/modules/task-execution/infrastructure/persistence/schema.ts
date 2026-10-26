@@ -1,4 +1,4 @@
-// RFC-395 I-a: explicit epoch-1 schema contributions; no physical or runtime change.
+// RFC-395 activation: this context declares the live epoch-2 schema directly.
 import {
   column as c,
   defineContribution,
@@ -86,94 +86,6 @@ const hostedExecutionEventsDefinition = owner.table({
 
 export const hostedExecutionEvents = materializeDrizzle(hostedExecutionEventsDefinition).table
 
-const hostedTaskArtifactsDefinition = owner.table({
-  id: 'hosted_task_artifacts',
-  schemaSymbol: 'hostedTaskArtifacts',
-  columns: {
-    reference: c.id('reference', { primary: true }),
-    taskId: c.id('task_id'),
-    objectId: c.id('object_id'),
-    digest: c.text('digest'),
-    size: c.int('size'),
-    createdAt: c.epochMs('created_at'),
-  },
-  retention: retention.business,
-})
-
-export const hostedTaskArtifacts = materializeDrizzle(hostedTaskArtifactsDefinition).table
-
-const hostedTaskArchiveEntriesDefinition = owner.table({
-  id: 'hosted_task_archive_entries',
-  schemaSymbol: 'hostedTaskArchiveEntries',
-  columns: {
-    path: c.id('path', { primary: true }),
-    kind: c.enum('kind', ['directory', 'file']),
-    partsJson: c.jsonText('parts_json', { default: '[]' }),
-    createdAt: c.epochMs('created_at'),
-    updatedAt: c.epochMs('updated_at'),
-  },
-  checks: [
-    {
-      name: 'hosted_task_archive_entries_kind_known',
-      expression: raw(
-        '"hosted_task_archive_entries"."kind" IN (\'directory\', \'file\')',
-        "\"kind\" IN ('directory', 'file')",
-      ),
-    },
-  ],
-  retention: retention.business,
-})
-
-export const hostedTaskArchiveEntries = materializeDrizzle(hostedTaskArchiveEntriesDefinition).table
-
-const hostedNodeEventArchivesDefinition = owner.table({
-  id: 'hosted_node_event_archives',
-  schemaSymbol: 'hostedNodeEventArchives',
-  columns: {
-    id: c.id('id', { primary: true }),
-    taskId: c.id('task_id'),
-    nodeRunId: c.id('node_run_id'),
-    firstId: c.int('first_id'),
-    lastId: c.int('last_id'),
-    rowCount: c.int('row_count'),
-    digest: c.text('digest'),
-    size: c.int('size'),
-    state: c.enum('state', ['prepared', 'ready']),
-    objectId: c.id('object_id', { nullable: true }),
-    createdAt: c.epochMs('created_at'),
-  },
-  checks: [
-    {
-      name: 'hosted_node_event_archives_state_known',
-      expression: raw(
-        '"hosted_node_event_archives"."state" IN (\'prepared\', \'ready\')',
-        "\"state\" IN ('prepared', 'ready')",
-      ),
-    },
-    {
-      name: 'hosted_node_event_archives_object_known',
-      expression: raw(
-        '("hosted_node_event_archives"."state" = \'prepared\' AND "hosted_node_event_archives"."object_id" IS NULL) OR ("hosted_node_event_archives"."state" = \'ready\' AND "hosted_node_event_archives"."object_id" IS NOT NULL)',
-        '("state" = \'prepared\' AND "object_id" IS NULL) OR ("state" = \'ready\' AND "object_id" IS NOT NULL)',
-      ),
-    },
-    {
-      name: 'hosted_node_event_archives_range',
-      expression: raw(
-        '"hosted_node_event_archives"."first_id" > 0 AND "hosted_node_event_archives"."last_id" >= "hosted_node_event_archives"."first_id" AND "hosted_node_event_archives"."row_count" > 0',
-        '"first_id" > 0 AND "last_id" >= "first_id" AND "row_count" > 0',
-      ),
-    },
-  ],
-  indexes: [
-    index('hosted_node_event_archives_run', ['task_id', 'node_run_id', 'last_id']),
-    index('hosted_node_event_archives_pending', ['state', 'created_at']),
-  ],
-  retention: retention.operational,
-})
-
-export const hostedNodeEventArchives = materializeDrizzle(hostedNodeEventArchivesDefinition).table
-
 const nodeExecutionEventSourcesDefinition = owner.table({
   id: 'node_execution_event_sources',
   schemaSymbol: 'nodeExecutionEventSources',
@@ -236,128 +148,6 @@ const nodeRunEventsDefinition = owner.table({
 })
 
 export const nodeRunEvents = materializeDrizzle(nodeRunEventsDefinition).table
-
-const nodeRunOutputsDefinition = owner.table({
-  id: 'node_run_outputs',
-  schemaSymbol: 'nodeRunOutputs',
-  columns: {
-    nodeRunId: c.id('node_run_id'),
-    portName: c.text('port_name'),
-    content: c.text('content'),
-    kind: c.text('kind', { nullable: true }),
-    archiveJson: c.jsonText('archive_json', { nullable: true }),
-    active: c.bool('active', { default: true }),
-  },
-  primaryKey: ['node_run_id', 'port_name'],
-  foreignKeys: [
-    foreignKey(
-      'node_run_outputs_node_run_id_node_runs_id_fk',
-      ['node_run_id'],
-      'node_runs',
-      ['id'],
-      { onDelete: 'cascade' },
-    ),
-  ],
-  retention: retention.business,
-})
-
-export const nodeRunOutputs = materializeDrizzle(nodeRunOutputsDefinition).table
-
-const nodeRunsDefinition = owner.table({
-  id: 'node_runs',
-  schemaSymbol: 'nodeRuns',
-  columns: {
-    id: c.id('id', { primary: true }),
-    taskId: c.id('task_id'),
-    nodeId: c.id('node_id'),
-    parentNodeRunId: c.id('parent_node_run_id', { nullable: true }),
-    containerRunId: c.id('container_run_id', { nullable: true }),
-    scopePath: c.text('scope_path', { default: '' }),
-    iteration: c.int('iteration', { default: 0 }),
-    shardKey: c.id('shard_key', { nullable: true }),
-    retryIndex: c.int('retry_index', { default: 0 }),
-    wgRound: c.int('wg_round', { nullable: true }),
-    reviewIteration: c.int('review_iteration', { default: 0 }),
-    status: c.enum('status', [
-      'pending',
-      'running',
-      'done',
-      'failed',
-      'canceled',
-      'interrupted',
-      'skipped',
-      'exhausted',
-      'awaiting_review',
-      'awaiting_human',
-    ]),
-    startedAt: c.epochMs('started_at', { nullable: true }),
-    finishedAt: c.epochMs('finished_at', { nullable: true }),
-    pid: c.int('pid', { nullable: true }),
-    spawnBinaryPath: c.text('spawn_binary_path', { nullable: true }),
-    spawnLaunchNonce: c.text('spawn_launch_nonce', { nullable: true }),
-    exitCode: c.int('exit_code', { nullable: true }),
-    errorMessage: c.text('error_message', { nullable: true }),
-    failureCode: c.text('failure_code', { nullable: true }),
-    promptText: c.text('prompt_text', { nullable: true }),
-    promptPath: c.text('prompt_path', { nullable: true }),
-    envelopeNonce: c.text('envelope_nonce', { nullable: true }),
-    forceActivated: c.bool('force_activated', { default: false }),
-    tokInput: c.int('tok_input', { nullable: true }),
-    tokOutput: c.int('tok_output', { nullable: true }),
-    tokCacheCreate: c.int('tok_cache_create', { nullable: true }),
-    tokCacheRead: c.int('tok_cache_read', { nullable: true }),
-    tokTotal: c.int('tok_total', { nullable: true }),
-    preSnapshot: c.text('pre_snapshot', { nullable: true }),
-    opencodeSessionId: c.id('opencode_session_id', { nullable: true }),
-    runtime: c.text('runtime', { nullable: true }),
-    runtimeBinary: c.text('runtime_binary', { nullable: true }),
-    runtimeParamsJson: c.jsonText('runtime_params_json', { nullable: true }),
-    inventorySnapshotJson: c.jsonText('inventory_snapshot_json', { nullable: true }),
-    runtimeInventoryJson: c.jsonText('runtime_inventory_json', { nullable: true }),
-    startupVerificationJson: c.jsonText('startup_verification_json', { nullable: true }),
-    wrapperProgressJson: c.jsonText('wrapper_progress_json', { nullable: true }),
-    injectedMemoriesJson: c.jsonText('injected_memories_json', { nullable: true }),
-    portValidationFailuresJson: c.jsonText('port_validation_failures_json', { nullable: true }),
-    commitPushJson: c.jsonText('commit_push_json', { nullable: true }),
-    preSnapshotReposJson: c.jsonText('pre_snapshot_repos_json', { nullable: true }),
-    isoWorktreePath: c.text('iso_worktree_path', { nullable: true }),
-    isoBaseSnapshot: c.text('iso_base_snapshot', { nullable: true }),
-    isoBaseSnapshotReposJson: c.jsonText('iso_base_snapshot_repos_json', { nullable: true }),
-    isoNodeTree: c.text('iso_node_tree', { nullable: true }),
-    isoNodeTreeReposJson: c.jsonText('iso_node_tree_repos_json', { nullable: true }),
-    isoSubmodulesJson: c.jsonText('iso_submodules_json', { nullable: true }),
-    isoSubmodulesReposJson: c.jsonText('iso_submodules_repos_json', { nullable: true }),
-    mergeState: c.text('merge_state', { nullable: true }),
-    consumedUpstreamRunsJson: c.jsonText('consumed_upstream_runs_json', { nullable: true }),
-    shardValueHash: c.text('shard_value_hash', { nullable: true }),
-    rerunCause: c.text('rerun_cause', { nullable: true }),
-    supersededByReview: c.text('superseded_by_review', { nullable: true }),
-    rolledBack: c.bool('rolled_back', { nullable: true }),
-    agentOverrideName: c.text('agent_override_name', { nullable: true }),
-    agentOverrideId: c.id('agent_override_id', { nullable: true }),
-    childTaskId: c.id('child_task_id', { nullable: true }),
-    continuationSlotKey: c.id('continuation_slot_key', { nullable: true }),
-    lineageSlotPathJson: c.jsonText('lineage_slot_path_json', { nullable: true }),
-    operationGeneration: c.int('operation_generation', { default: 0 }),
-    seq: c.int('seq', { nullable: true }),
-  },
-  foreignKeys: [
-    foreignKey('node_runs_task_id_tasks_id_fk', ['task_id'], 'tasks', ['id'], {
-      onDelete: 'cascade',
-    }),
-  ],
-  indexes: [
-    index('idx_node_runs_task_seq', ['task_id', 'seq'], { unique: true }),
-    index('idx_node_runs_task', ['task_id', 'node_id', 'iteration', 'retry_index']),
-    index('idx_node_runs_parent', ['parent_node_run_id']),
-    index('idx_node_runs_container', ['task_id', 'container_run_id', 'node_id', 'iteration']),
-    index('idx_node_runs_child_task', ['child_task_id']),
-    index('idx_node_runs_status_active', ['status', 'started_at']),
-  ],
-  retention: retention.business,
-})
-
-export const nodeRuns = materializeDrizzle(nodeRunsDefinition).table
 
 const nodeRunSeqAllocationsDefinition = owner.table({
   id: 'node_run_seq_allocations',
@@ -434,66 +224,6 @@ const reactionExecutionAdmissionsDefinition = owner.table({
 export const reactionExecutionAdmissions = materializeDrizzle(
   reactionExecutionAdmissionsDefinition,
 ).table
-
-const runtimeSessionLeasesDefinition = owner.table({
-  id: 'runtime_session_leases',
-  schemaSymbol: 'runtimeSessionLeases',
-  columns: {
-    protocol: c.enum('protocol', ['opencode', 'claude-code']),
-    sessionId: c.id('session_id'),
-    taskId: c.id('task_id'),
-    nodeId: c.id('node_id'),
-    createdNodeRunId: c.id('created_node_run_id'),
-    leaseNodeRunId: c.id('lease_node_run_id', { nullable: true }),
-    leaseNonceDigest: c.id('lease_nonce_digest', { nullable: true }),
-    leasedAt: c.epochMs('leased_at', { nullable: true }),
-    resetPending: c.bool('reset_pending', { default: false }),
-  },
-  primaryKey: ['protocol', 'session_id'],
-  foreignKeys: [
-    foreignKey('runtime_session_leases_task_id_tasks_id_fk', ['task_id'], 'tasks', ['id'], {
-      onDelete: 'cascade',
-    }),
-  ],
-  checks: [
-    {
-      name: 'runtime_session_leases_all_or_none',
-      expression: raw(
-        '(\n        (\n          "runtime_session_leases"."lease_node_run_id" IS NULL\n          AND "runtime_session_leases"."lease_nonce_digest" IS NULL\n          AND "runtime_session_leases"."leased_at" IS NULL\n        )\n        OR\n        (\n          "runtime_session_leases"."lease_node_run_id" IS NOT NULL\n          AND "runtime_session_leases"."lease_nonce_digest" IS NOT NULL\n          AND "runtime_session_leases"."leased_at" IS NOT NULL\n        )\n      )',
-        '( ( "lease_node_run_id" IS NULL AND "lease_nonce_digest" IS NULL AND "leased_at" IS NULL ) OR ( "lease_node_run_id" IS NOT NULL AND "lease_nonce_digest" IS NOT NULL AND "leased_at" IS NOT NULL ) )',
-      ),
-    },
-    {
-      name: 'runtime_session_leases_protocol_shape',
-      expression: raw(
-        '"runtime_session_leases"."protocol" IN (\'opencode\', \'claude-code\')',
-        "\"protocol\" IN ('opencode', 'claude-code')",
-      ),
-    },
-    {
-      name: 'runtime_session_leases_reset_pending_held',
-      expression: raw(
-        '"runtime_session_leases"."reset_pending" = 0 OR "runtime_session_leases"."lease_node_run_id" IS NOT NULL',
-        '"reset_pending" = FALSE OR "lease_node_run_id" IS NOT NULL',
-      ),
-    },
-    {
-      name: 'runtime_session_leases_reset_pending_shape',
-      expression: raw(
-        '"runtime_session_leases"."reset_pending" IN (0, 1)',
-        '"reset_pending" IN (FALSE, TRUE)',
-      ),
-    },
-  ],
-  indexes: [
-    index('idx_runtime_session_leases_task', ['task_id']),
-    index('idx_runtime_session_leases_created_run', ['created_node_run_id']),
-    index('idx_runtime_session_leases_lease_run', ['lease_node_run_id']),
-  ],
-  retention: retention.operational,
-})
-
-export const runtimeSessionLeases = materializeDrizzle(runtimeSessionLeasesDefinition).table
 
 const taskArchiveAuditDefinition = owner.table({
   id: 'task_archive_audit',
@@ -1211,49 +941,6 @@ export const taskNodeClarifyDirectives = materializeDrizzle(
   taskNodeClarifyDirectivesDefinition,
 ).table
 
-const taskReposDefinition = owner.table({
-  id: 'task_repos',
-  schemaSymbol: 'taskRepos',
-  columns: {
-    taskId: c.id('task_id'),
-    repoIndex: c.int('repo_index'),
-    repoPath: c.text('repo_path'),
-    repoUrl: c.text('repo_url', { nullable: true }),
-    cachedRepoId: c.id('cached_repo_id', { nullable: true }),
-    baseBranch: c.text('base_branch', { default: '' }),
-    branch: c.text('branch'),
-    workingBranch: c.text('working_branch', { nullable: true }),
-    baseCommit: c.text('base_commit', { nullable: true }),
-    worktreePath: c.text('worktree_path'),
-    worktreeDirName: c.text('worktree_dir_name', { default: '' }),
-    mountPath: c.text('mount_path', { default: '' }),
-    subdir: c.text('subdir', { default: '' }),
-    readonly: c.bool('readonly', { default: false }),
-    readonlyDirtyCount: c.int('readonly_dirty_count', { nullable: true }),
-    workspaceProfileVersion: c.int('workspace_profile_version', { nullable: true }),
-    workspaceProfileDigest: c.id('workspace_profile_digest', { nullable: true }),
-    hasSubmodules: c.bool('has_submodules', { nullable: true }),
-    submoduleInitOk: c.bool('submodule_init_ok', { nullable: true }),
-    submoduleInitError: c.text('submodule_init_error', { nullable: true }),
-    schemaVersion: c.int('schema_version', { default: 1 }),
-  },
-  primaryKey: ['task_id', 'repo_index'],
-  foreignKeys: [
-    foreignKey('task_repos_task_id_tasks_id_fk', ['task_id'], 'tasks', ['id'], {
-      onDelete: 'cascade',
-    }),
-  ],
-  indexes: [
-    index('idx_task_repos_repo_path', ['repo_path']),
-    index('idx_task_repos_repo_url', ['repo_url']),
-    index('idx_task_repos_cached_repo_id', ['cached_repo_id']),
-    index('idx_task_repos_cached_repo_task', ['cached_repo_id', 'task_id']),
-  ],
-  retention: retention.business,
-})
-
-export const taskRepos = materializeDrizzle(taskReposDefinition).table
-
 const taskWorkspacePreparationsDefinition = owner.table({
   id: 'task_workspace_preparations',
   schemaSymbol: 'taskWorkspacePreparations',
@@ -1312,191 +999,6 @@ const taskSpaceNodesDefinition = owner.table({
 })
 
 export const taskSpaceNodes = materializeDrizzle(taskSpaceNodesDefinition).table
-
-const tasksDefinition = owner.table({
-  id: 'tasks',
-  schemaSymbol: 'tasks',
-  columns: {
-    id: c.id('id', { primary: true }),
-    name: c.text('name'),
-    workflowId: c.id('workflow_id'),
-    workflowSnapshot: c.text('workflow_snapshot'),
-    workflowVersion: c.int('workflow_version', { nullable: true }),
-    repoPath: c.text('repo_path'),
-    repoUrl: c.text('repo_url', { nullable: true }),
-    cachedRepoId: c.id('cached_repo_id', { nullable: true }),
-    repoGroupId: c.id('repo_group_id', { nullable: true }),
-    repoGroupName: c.text('repo_group_name', { nullable: true }),
-    worktreePath: c.text('worktree_path'),
-    baseBranch: c.text('base_branch'),
-    branch: c.text('branch'),
-    baseCommit: c.text('base_commit', { nullable: true }),
-    status: c.enum('status', [
-      'pending',
-      'running',
-      'done',
-      'failed',
-      'canceled',
-      'interrupted',
-      'awaiting_review',
-      'awaiting_human',
-    ]),
-    inputs: c.jsonText('inputs'),
-    maxDurationMs: c.int('max_duration_ms', { nullable: true }),
-    maxTotalTokens: c.int('max_total_tokens', { nullable: true }),
-    startedAt: c.epochMs('started_at'),
-    runningMs: c.int('running_ms', { default: 0 }),
-    runningSince: c.int('running_since', { nullable: true }),
-    finishedAt: c.epochMs('finished_at', { nullable: true }),
-    errorSummary: c.text('error_summary', { nullable: true }),
-    errorMessage: c.text('error_message', { nullable: true }),
-    failedNodeId: c.id('failed_node_id', { nullable: true }),
-    autoRecoveryAttempts: c.int('auto_recovery_attempts', { default: 0 }),
-    autoRecoverySuspended: c.bool('auto_recovery_suspended', { default: false }),
-    autoRecoveryWindowStartedAt: c.epochMs('auto_recovery_window_started_at', { nullable: true }),
-    expiresAt: c.epochMs('expires_at', { nullable: true }),
-    deletedAt: c.epochMs('deleted_at', { nullable: true }),
-    schemaVersion: c.int('schema_version', { default: 1 }),
-    ownerUserId: c.id('owner_user_id', { nullable: true }),
-    launchOrigin: c.enum('launch_origin', ['manual', 'scheduled', 'event', 'webhook', 'api'], {
-      default: 'manual',
-    }),
-    catalogVisibility: c.enum('catalog_visibility', ['public', 'internal'], { default: 'public' }),
-    gitUserName: c.text('git_user_name', { nullable: true }),
-    gitUserEmail: c.text('git_user_email', { nullable: true }),
-    workingBranch: c.text('working_branch', { nullable: true }),
-    autoCommitPush: c.bool('auto_commit_push', { default: false }),
-    repoCount: c.int('repo_count', { default: 1 }),
-    scheduledTaskId: c.id('scheduled_task_id', { nullable: true }),
-    webhookTriggerId: c.id('webhook_trigger_id', { nullable: true }),
-    webhookFireId: c.id('webhook_fire_id', { nullable: true }),
-    eventSubscriptionId: c.id('event_subscription_id', { nullable: true }),
-    eventDeliveryId: c.id('event_delivery_id', { nullable: true }),
-    lifecycleEventRevision: c.int('lifecycle_event_revision', { default: 1 }),
-    sourceTerminationBinding: c.text('source_termination_binding', { nullable: true }),
-    sourceTerminationLaunchRev: c.int('source_termination_launch_rev', { nullable: true }),
-    sourceTerminationFence: c.enum('source_termination_fence', ['closed', 'merged'], {
-      nullable: true,
-    }),
-    sourceTerminationEffectRev: c.int('source_termination_effect_rev', { nullable: true }),
-    workgroupId: c.id('workgroup_id', { nullable: true }),
-    workgroupConfigJson: c.jsonText('workgroup_config_json', { nullable: true }),
-    spaceKind: c.enum('space_kind', ['local', 'remote', 'scratch', 'internal', 'inherited'], {
-      default: 'remote',
-    }),
-    sourceAgentName: c.text('source_agent_name', { nullable: true }),
-    codeRoundId: c.id('code_round_id', { nullable: true }),
-    digitalEmployeeRoundId: c.id('digital_employee_round_id', { nullable: true }),
-    digitalEmployeeCaseId: c.id('digital_employee_case_id', { nullable: true }),
-    sourceAgentId: c.id('source_agent_id', { nullable: true }),
-    workspacePruningAt: c.epochMs('workspace_pruning_at', { nullable: true }),
-    workspacePruneCause: c.enum('workspace_prune_cause', ['webhook-terminal'], { nullable: true }),
-    workspacePrunedAt: c.epochMs('workspace_pruned_at', { nullable: true }),
-    parentTaskId: c.id('parent_task_id', { nullable: true }),
-    parentNodeRunId: c.id('parent_node_run_id', { nullable: true }),
-    invocationDepth: c.int('invocation_depth', { default: 0 }),
-    refClosureJson: c.jsonText('ref_closure_json', { nullable: true }),
-    triggerContextJson: c.jsonText('trigger_context_json', { nullable: true }),
-    platformInputPathsJson: c.jsonText('platform_input_paths_json', { nullable: true }),
-    branchStartedAt: c.epochMs('branch_started_at', { default: 0 }),
-    rootTaskId: c.id('root_task_id', { nullable: true }),
-    executionLineageId: c.id('execution_lineage_id', { nullable: true }),
-    lineageSlotPathJson: c.jsonText('lineage_slot_path_json', { nullable: true }),
-  },
-  foreignKeys: [
-    foreignKey('tasks_parent_task_id_tasks_id_fk', ['parent_task_id'], 'tasks', ['id'], {
-      onDelete: 'cascade',
-    }),
-  ],
-  checks: [
-    {
-      name: 'tasks_workspace_pruning_at_shape',
-      expression: raw(
-        '"tasks"."workspace_prune_cause" IS NULL OR ( "tasks"."workspace_prune_cause" = \'webhook-terminal\' AND "tasks"."workspace_pruning_at" IS NOT NULL )',
-        '"workspace_prune_cause" IS NULL OR ( "workspace_prune_cause" = \'webhook-terminal\' AND "workspace_pruning_at" IS NOT NULL )',
-      ),
-    },
-    {
-      name: 'tasks_source_termination_launch_rev_nonnegative',
-      expression: raw(
-        '"tasks"."source_termination_launch_rev" IS NULL OR "tasks"."source_termination_launch_rev" >= 0',
-        '"source_termination_launch_rev" IS NULL OR "source_termination_launch_rev" >= 0',
-      ),
-    },
-    {
-      name: 'tasks_source_termination_fence_enum',
-      expression: raw(
-        '"tasks"."source_termination_fence" IS NULL OR "tasks"."source_termination_fence" IN (\'closed\',\'merged\')',
-        '"source_termination_fence" IS NULL OR "source_termination_fence" IN (\'closed\',\'merged\')',
-      ),
-    },
-    {
-      name: 'tasks_source_termination_effect_rev_positive',
-      expression: raw(
-        '"tasks"."source_termination_effect_rev" IS NULL OR "tasks"."source_termination_effect_rev" >= 1',
-        '"source_termination_effect_rev" IS NULL OR "source_termination_effect_rev" >= 1',
-      ),
-    },
-    {
-      name: 'tasks_launch_origin_enum',
-      expression: raw(
-        "\"tasks\".\"launch_origin\" IN ('manual', 'scheduled', 'webhook', 'api', 'event')",
-        "\"launch_origin\" IN ('manual', 'scheduled', 'webhook', 'api', 'event')",
-      ),
-    },
-  ],
-  indexes: [
-    index('idx_tasks_live', ['id'], {
-      where: raw('"tasks"."deleted_at" is null', '"deleted_at" is null'),
-    }),
-    index('idx_tasks_list_started_id', ['started_at', 'id']),
-    index('idx_tasks_branch_started_id', ['branch_started_at', 'id']),
-    index('idx_tasks_cached_repo', ['cached_repo_id']),
-    index('idx_tasks_cached_repo_task', ['cached_repo_id', 'id']),
-    index('idx_tasks_status_finished', ['status', 'finished_at']),
-    index('idx_tasks_source_agent', ['source_agent_id']),
-    index('idx_tasks_code_round', ['code_round_id']),
-    index('idx_tasks_digital_employee_round', ['digital_employee_round_id']),
-    index('idx_tasks_list_status_started_id', ['status', 'started_at', 'id']),
-    index('idx_tasks_list_parent_started_id', ['parent_task_id', 'started_at', 'id']),
-    index('idx_tasks_list_owner_started_id', ['owner_user_id', 'started_at', 'id']),
-    index('idx_tasks_workflow', ['workflow_id', 'started_at']),
-    index('idx_tasks_scheduled_task', ['scheduled_task_id']),
-    index('idx_tasks_webhook_trigger', ['webhook_trigger_id']),
-    index('idx_tasks_event_subscription', ['event_subscription_id']),
-    index('idx_tasks_event_delivery_unique', ['event_delivery_id'], {
-      unique: true,
-      where: raw('"tasks"."event_delivery_id" IS NOT NULL', '"event_delivery_id" IS NOT NULL'),
-    }),
-    index('idx_tasks_source_termination', [
-      'source_termination_binding',
-      'source_termination_launch_rev',
-    ]),
-    index('idx_tasks_root_missing', ['id'], {
-      where: raw('"tasks"."root_task_id" is null', '"root_task_id" is null'),
-    }),
-    index('idx_tasks_root_started', ['root_task_id', 'started_at']),
-    index('idx_tasks_status_parent_finished', ['status', 'parent_task_id', 'finished_at']),
-    index('idx_tasks_overview_counts', [
-      'status',
-      'parent_task_id',
-      'catalog_visibility',
-      'finished_at',
-    ]),
-    index('idx_tasks_list_facets_cover', [
-      'catalog_visibility',
-      'source_agent_name',
-      'workgroup_id',
-      'status',
-      'id',
-    ]),
-    index('idx_tasks_status_workgroup', ['status', 'workgroup_id']),
-    index('idx_tasks_workgroup', ['workgroup_id']),
-  ],
-  retention: retention.business,
-})
-
-export const tasks = materializeDrizzle(tasksDefinition).table
 
 const workgroupAssignmentsDefinition = owner.table({
   id: 'workgroup_assignments',
@@ -1611,7 +1113,1539 @@ const workgroupMessagesDefinition = owner.table({
 
 export const workgroupMessages = materializeDrizzle(workgroupMessagesDefinition).table
 
+const tasksDefinition = owner.table({
+  version: 2,
+  unique: [],
+  foreignKeys: [
+    {
+      name: 'tasks_parent_task_id_tasks_id_fk',
+      columns: ['parent_task_id'],
+      foreignTable: 'tasks',
+      foreignColumns: ['id'],
+      onDelete: 'cascade',
+      onUpdate: 'no action',
+      lifecycle:
+        'Preserve epoch-1 cascade delete and no action update semantics; target is a logical table reference.',
+    },
+    {
+      name: 'tasks_owner_user_fk',
+      columns: ['owner_user_id'],
+      foreignTable: 'users',
+      foreignColumns: ['id'],
+      onDelete: 'set null',
+      onUpdate: 'no action',
+      lifecycle: 'User removal retains task history and clears attribution.',
+    },
+  ],
+  checks: [
+    {
+      name: 'tasks_workspace_pruning_at_shape',
+      expression: {
+        kind: 'raw',
+        reason: 'Preserve the epoch-1 expression spelling and provider semantics (RFC-395 I-a).',
+        sqlite:
+          '"tasks"."workspace_prune_cause" IS NULL OR ( "tasks"."workspace_prune_cause" = \'webhook-terminal\' AND "tasks"."workspace_pruning_at" IS NOT NULL )',
+        postgresql:
+          '"workspace_prune_cause" IS NULL OR ( "workspace_prune_cause" = \'webhook-terminal\' AND "workspace_pruning_at" IS NOT NULL )',
+      },
+    },
+    {
+      name: 'tasks_source_termination_fence_enum',
+      expression: {
+        kind: 'raw',
+        reason: 'Preserve the epoch-1 expression spelling and provider semantics (RFC-395 I-a).',
+        sqlite:
+          '"tasks"."source_termination_fence" IS NULL OR "tasks"."source_termination_fence" IN (\'closed\',\'merged\')',
+        postgresql:
+          '"source_termination_fence" IS NULL OR "source_termination_fence" IN (\'closed\',\'merged\')',
+      },
+    },
+    {
+      name: 'tasks_source_termination_effect_rev_positive',
+      expression: {
+        kind: 'raw',
+        reason: 'Preserve the epoch-1 expression spelling and provider semantics (RFC-395 I-a).',
+        sqlite:
+          '"tasks"."source_termination_effect_rev" IS NULL OR "tasks"."source_termination_effect_rev" >= 1',
+        postgresql:
+          '"source_termination_effect_rev" IS NULL OR "source_termination_effect_rev" >= 1',
+      },
+    },
+  ],
+  indexes: [
+    {
+      name: 'idx_tasks_live',
+      unique: false,
+      nulls: 'distinct',
+      columns: [{ kind: 'column', name: 'id' }],
+      where: {
+        kind: 'raw',
+        reason: 'Preserve the epoch-1 expression spelling and provider semantics (RFC-395 I-a).',
+        sqlite: '"tasks"."deleted_at" is null',
+        postgresql: '"deleted_at" is null',
+      },
+    },
+    {
+      name: 'idx_tasks_list_started_id',
+      unique: false,
+      nulls: 'distinct',
+      columns: [
+        { kind: 'column', name: 'started_at' },
+        { kind: 'column', name: 'id' },
+      ],
+      where: null,
+    },
+    {
+      name: 'idx_tasks_branch_started_id',
+      unique: false,
+      nulls: 'distinct',
+      columns: [
+        { kind: 'column', name: 'branch_started_at' },
+        { kind: 'column', name: 'id' },
+      ],
+      where: null,
+    },
+    {
+      name: 'idx_tasks_status_finished',
+      unique: false,
+      nulls: 'distinct',
+      columns: [
+        { kind: 'column', name: 'status' },
+        { kind: 'column', name: 'finished_at' },
+      ],
+      where: null,
+    },
+    {
+      name: 'idx_tasks_list_status_started_id',
+      unique: false,
+      nulls: 'distinct',
+      columns: [
+        { kind: 'column', name: 'status' },
+        { kind: 'column', name: 'started_at' },
+        { kind: 'column', name: 'id' },
+      ],
+      where: null,
+    },
+    {
+      name: 'idx_tasks_list_parent_started_id',
+      unique: false,
+      nulls: 'distinct',
+      columns: [
+        { kind: 'column', name: 'parent_task_id' },
+        { kind: 'column', name: 'started_at' },
+        { kind: 'column', name: 'id' },
+      ],
+      where: null,
+    },
+    {
+      name: 'idx_tasks_list_owner_started_id',
+      unique: false,
+      nulls: 'distinct',
+      columns: [
+        { kind: 'column', name: 'owner_user_id' },
+        { kind: 'column', name: 'started_at' },
+        { kind: 'column', name: 'id' },
+      ],
+      where: null,
+    },
+    {
+      name: 'idx_tasks_root_missing',
+      unique: false,
+      nulls: 'distinct',
+      columns: [{ kind: 'column', name: 'id' }],
+      where: {
+        kind: 'raw',
+        reason: 'Preserve the epoch-1 expression spelling and provider semantics (RFC-395 I-a).',
+        sqlite: '"tasks"."root_task_id" is null',
+        postgresql: '"root_task_id" is null',
+      },
+    },
+    {
+      name: 'idx_tasks_root_started',
+      unique: false,
+      nulls: 'distinct',
+      columns: [
+        { kind: 'column', name: 'root_task_id' },
+        { kind: 'column', name: 'started_at' },
+      ],
+      where: null,
+    },
+    {
+      name: 'idx_tasks_status_parent_finished',
+      unique: false,
+      nulls: 'distinct',
+      columns: [
+        { kind: 'column', name: 'status' },
+        { kind: 'column', name: 'parent_task_id' },
+        { kind: 'column', name: 'finished_at' },
+      ],
+      where: null,
+    },
+    {
+      name: 'idx_tasks_list_facets_cover',
+      unique: false,
+      nulls: 'distinct',
+      columns: [
+        { kind: 'column', name: 'catalog_visibility' },
+        { kind: 'column', name: 'status' },
+        { kind: 'column', name: 'id' },
+      ],
+      where: null,
+    },
+    {
+      name: 'idx_tasks_overview_counts',
+      unique: false,
+      nulls: 'distinct',
+      columns: [
+        { kind: 'column', name: 'status' },
+        { kind: 'column', name: 'parent_task_id' },
+        { kind: 'column', name: 'catalog_visibility' },
+        { kind: 'column', name: 'finished_at' },
+      ],
+      where: null,
+    },
+  ],
+  migrationPolicy: 'KEEP',
+  id: 'tasks',
+  schemaSymbol: 'tasks',
+  columns: {
+    id: c.id('id', { primary: true }),
+    name: c.text('name'),
+    status: c.enum('status', [
+      'pending',
+      'running',
+      'done',
+      'failed',
+      'canceled',
+      'interrupted',
+      'awaiting_review',
+      'awaiting_human',
+    ]),
+    startedAt: c.epochMs('started_at'),
+    runningMs: c.int('running_ms', { default: 0 }),
+    runningSince: c.int('running_since', { nullable: true }),
+    finishedAt: c.epochMs('finished_at', { nullable: true }),
+    errorSummary: c.text('error_summary', { nullable: true }),
+    errorMessage: c.text('error_message', { nullable: true }),
+    failedNodeId: c.id('failed_node_id', { nullable: true }),
+    autoRecoveryAttempts: c.int('auto_recovery_attempts', { default: 0 }),
+    autoRecoverySuspended: c.bool('auto_recovery_suspended', { default: false }),
+    autoRecoveryWindowStartedAt: c.epochMs('auto_recovery_window_started_at', { nullable: true }),
+    expiresAt: c.epochMs('expires_at', { nullable: true }),
+    deletedAt: c.epochMs('deleted_at', { nullable: true }),
+    ownerUserId: c.id('owner_user_id', { nullable: true }),
+    catalogVisibility: c.enum('catalog_visibility', ['public', 'internal'], { default: 'public' }),
+    lifecycleEventRevision: c.int('lifecycle_event_revision', { default: 1 }),
+    workspacePruningAt: c.epochMs('workspace_pruning_at', { nullable: true }),
+    workspacePruneCause: c.enum('workspace_prune_cause', ['webhook-terminal'], { nullable: true }),
+    workspacePrunedAt: c.epochMs('workspace_pruned_at', { nullable: true }),
+    sourceTerminationFence: c.enum('source_termination_fence', ['closed', 'merged'], {
+      nullable: true,
+    }),
+    sourceTerminationEffectRev: c.int('source_termination_effect_rev', { nullable: true }),
+    parentTaskId: c.id('parent_task_id', { nullable: true }),
+    rootTaskId: c.id('root_task_id', { nullable: true }),
+    invocationDepth: c.int('invocation_depth', { default: 0 }),
+    branchStartedAt: c.epochMs('branch_started_at', { default: 0 }),
+    workspaceRootRef: c.text('workspace_root_ref', { nullable: true }),
+  },
+  retention: {
+    class: 'owner-managed-business',
+    rule: 'Retain as live business or recovery state until the owning bounded context approves a replacement contract.',
+  },
+  primaryKey: ['id'],
+  migrationKey: ['id'],
+})
+
+export const tasks = materializeDrizzle(tasksDefinition).table
+
+const taskDefinitionsDefinition = owner.table({
+  version: 1,
+  unique: [],
+  foreignKeys: [
+    {
+      name: 'task_definitions_task_fk',
+      columns: ['task_id'],
+      foreignTable: 'tasks',
+      foreignColumns: ['id'],
+      onDelete: 'cascade',
+      onUpdate: 'no action',
+      lifecycle: 'Task owns this row; deleting its subtree deletes all owned state.',
+    },
+  ],
+  checks: [
+    {
+      name: 'task_definition_digital_employee_source',
+      expression: {
+        kind: 'binary',
+        op: 'OR',
+        left: {
+          kind: 'binary',
+          op: '<>',
+          left: { kind: 'column', name: 'subject_kind' },
+          right: { kind: 'literal', value: 'digital-employee' },
+        },
+        right: { kind: 'unary', op: 'IS NULL', value: { kind: 'column', name: 'source_id' } },
+      },
+    },
+  ],
+  indexes: [
+    {
+      name: 'task_definitions_source',
+      unique: false,
+      nulls: 'distinct',
+      columns: [
+        { kind: 'column', name: 'subject_kind' },
+        { kind: 'column', name: 'source_id' },
+      ],
+      where: null,
+    },
+    {
+      name: 'task_definitions_subject_task',
+      unique: false,
+      nulls: 'distinct',
+      columns: [
+        { kind: 'column', name: 'subject_kind' },
+        { kind: 'column', name: 'task_id' },
+      ],
+      where: null,
+    },
+    {
+      name: 'task_definitions_source_name',
+      unique: false,
+      nulls: 'distinct',
+      columns: [
+        { kind: 'column', name: 'subject_kind' },
+        { kind: 'column', name: 'source_name' },
+      ],
+      where: null,
+    },
+  ],
+  migrationPolicy: 'KEEP',
+  id: 'task_definitions',
+  schemaSymbol: 'taskDefinitions',
+  retention: {
+    class: 'owner-managed-business',
+    rule: 'Retain as live business or recovery state until the owning bounded context approves a replacement contract.',
+  },
+  columns: {
+    taskId: c.id('task_id', { primary: true }),
+    subjectKind: c.enum('subject_kind', [
+      'workflow',
+      'agent',
+      'workgroup',
+      'digital-employee',
+      'code-round',
+      'unknown',
+    ]),
+    sourceId: c.id('source_id', { nullable: true }),
+    sourceName: c.text('source_name', { nullable: true }),
+    sourceRevision: c.int('source_revision', { nullable: true }),
+    definitionOrigin: c.enum('definition_origin', ['authored', 'platform']),
+    engineKind: c.text('engine_kind'),
+    definitionRevision: c.int('definition_revision', { default: 1 }),
+    workflowSnapshot: c.text('workflow_snapshot'),
+    inputs: c.jsonText('inputs'),
+    maxDurationMs: c.int('max_duration_ms', { nullable: true }),
+    maxTotalTokens: c.int('max_total_tokens', { nullable: true }),
+    schemaVersion: c.int('schema_version', { default: 1 }),
+    refClosureJson: c.jsonText('ref_closure_json', { nullable: true }),
+    workgroupConfigJson: c.jsonText('workgroup_config_json', { nullable: true }),
+  },
+  primaryKey: ['task_id'],
+  migrationKey: ['task_id'],
+})
+
+export const taskDefinitions = materializeDrizzle(taskDefinitionsDefinition).table
+
+const taskLaunchContextsDefinition = owner.table({
+  version: 1,
+  unique: [],
+  foreignKeys: [
+    {
+      name: 'task_launch_contexts_task_fk',
+      columns: ['task_id'],
+      foreignTable: 'tasks',
+      foreignColumns: ['id'],
+      onDelete: 'cascade',
+      onUpdate: 'no action',
+      lifecycle: 'Task owns this row; deleting its subtree deletes all owned state.',
+    },
+  ],
+  checks: [
+    {
+      name: 'task_launch_contexts_termination_revision',
+      expression: {
+        kind: 'binary',
+        op: '>=',
+        left: { kind: 'column', name: 'source_termination_launch_rev' },
+        right: { kind: 'literal', value: 0 },
+      },
+    },
+  ],
+  indexes: [
+    {
+      name: 'idx_task_launch_contexts_event_delivery_unique',
+      unique: true,
+      nulls: 'distinct',
+      columns: [{ kind: 'column', name: 'event_delivery_id' }],
+      where: {
+        kind: 'unary',
+        op: 'IS NOT NULL',
+        value: { kind: 'column', name: 'event_delivery_id' },
+      },
+    },
+    {
+      name: 'idx_task_launch_contexts_source_termination',
+      unique: false,
+      nulls: 'distinct',
+      columns: [
+        { kind: 'column', name: 'source_termination_binding' },
+        { kind: 'column', name: 'source_termination_launch_rev' },
+      ],
+      where: null,
+    },
+    {
+      name: 'idx_task_launch_contexts_scheduled_task',
+      unique: false,
+      nulls: 'distinct',
+      columns: [{ kind: 'column', name: 'scheduled_task_id' }],
+      where: null,
+    },
+    {
+      name: 'idx_task_launch_contexts_webhook_trigger',
+      unique: false,
+      nulls: 'distinct',
+      columns: [{ kind: 'column', name: 'webhook_trigger_id' }],
+      where: null,
+    },
+    {
+      name: 'idx_task_launch_contexts_webhook_fire',
+      unique: false,
+      nulls: 'distinct',
+      columns: [{ kind: 'column', name: 'webhook_fire_id' }],
+      where: null,
+    },
+    {
+      name: 'idx_task_launch_contexts_event_subscription',
+      unique: false,
+      nulls: 'distinct',
+      columns: [{ kind: 'column', name: 'event_subscription_id' }],
+      where: null,
+    },
+    {
+      name: 'idx_task_launch_contexts_digital_employee_round',
+      unique: false,
+      nulls: 'distinct',
+      columns: [{ kind: 'column', name: 'digital_employee_round_id' }],
+      where: null,
+    },
+    {
+      name: 'idx_task_launch_contexts_lineage',
+      unique: false,
+      nulls: 'distinct',
+      columns: [{ kind: 'column', name: 'execution_lineage_id' }],
+      where: null,
+    },
+    {
+      name: 'task_launch_contexts_origin_task',
+      unique: false,
+      nulls: 'distinct',
+      columns: [
+        { kind: 'column', name: 'launch_origin' },
+        { kind: 'column', name: 'task_id' },
+      ],
+      where: null,
+    },
+  ],
+  migrationPolicy: 'KEEP',
+  id: 'task_launch_contexts',
+  schemaSymbol: 'taskLaunchContexts',
+  retention: {
+    class: 'owner-managed-business',
+    rule: 'Retain as live business or recovery state until the owning bounded context approves a replacement contract.',
+  },
+  columns: {
+    taskId: c.id('task_id', { primary: true }),
+    launchOrigin: c.enum('launch_origin', ['manual', 'scheduled', 'event', 'webhook', 'api'], {
+      default: 'manual',
+    }),
+    scheduledTaskId: c.id('scheduled_task_id', { nullable: true }),
+    webhookTriggerId: c.id('webhook_trigger_id', { nullable: true }),
+    webhookFireId: c.id('webhook_fire_id', { nullable: true }),
+    eventSubscriptionId: c.id('event_subscription_id', { nullable: true }),
+    eventDeliveryId: c.id('event_delivery_id', { nullable: true }),
+    digitalEmployeeRoundId: c.id('digital_employee_round_id', { nullable: true }),
+    digitalEmployeeCaseId: c.id('digital_employee_case_id', { nullable: true }),
+    parentNodeRunId: c.id('parent_node_run_id', { nullable: true }),
+    triggerContextJson: c.jsonText('trigger_context_json', { nullable: true }),
+    platformInputPathsJson: c.jsonText('platform_input_paths_json', { nullable: true }),
+    sourceTerminationBinding: c.text('source_termination_binding', { nullable: true }),
+    sourceTerminationLaunchRev: c.int('source_termination_launch_rev', { nullable: true }),
+    executionLineageId: c.id('execution_lineage_id', { nullable: true }),
+    lineageSlotPathJson: c.jsonText('lineage_slot_path_json', { nullable: true }),
+  },
+  primaryKey: ['task_id'],
+  migrationKey: ['task_id'],
+})
+
+export const taskLaunchContexts = materializeDrizzle(taskLaunchContextsDefinition).table
+
+const taskWorkspacesDefinition = owner.table({
+  version: 1,
+  unique: [],
+  foreignKeys: [
+    {
+      name: 'task_workspaces_task_fk',
+      columns: ['task_id'],
+      foreignTable: 'tasks',
+      foreignColumns: ['id'],
+      onDelete: 'cascade',
+      onUpdate: 'no action',
+      lifecycle: 'Task owns this row; deleting its subtree deletes all owned state.',
+    },
+  ],
+  checks: [],
+  indexes: [
+    {
+      name: 'task_workspaces_requested_cached_repo',
+      unique: false,
+      nulls: 'distinct',
+      columns: [
+        {
+          kind: 'raw',
+          reason:
+            'RFC-395 T: index the validated requestedSource@v2 cached repository without a mirror column.',
+          sqlite: "json_extract(requested_source, '$.cachedRepoId')",
+          postgresql: "(requested_source::jsonb ->> 'cachedRepoId')",
+        },
+        { kind: 'column', name: 'task_id' },
+      ],
+      where: null,
+    },
+  ],
+  migrationPolicy: 'KEEP',
+  id: 'task_workspaces',
+  schemaSymbol: 'taskWorkspaces',
+  retention: {
+    class: 'owner-managed-business',
+    rule: 'Retain as live business or recovery state until the owning bounded context approves a replacement contract.',
+  },
+  columns: {
+    taskId: c.id('task_id', { primary: true }),
+    repoGroupId: c.id('repo_group_id', { nullable: true }),
+    repoGroupName: c.text('repo_group_name', { nullable: true }),
+    gitUserName: c.text('git_user_name', { nullable: true }),
+    gitUserEmail: c.text('git_user_email', { nullable: true }),
+    autoCommitPush: c.bool('auto_commit_push', { default: false }),
+    spaceKind: c.enum('space_kind', ['local', 'remote', 'scratch', 'internal', 'inherited'], {
+      default: 'remote',
+    }),
+    workingBranch: c.text('working_branch', { nullable: true }),
+    requestedSource: c.jsonText('requested_source', {
+      document: { kind: 'requested-source', version: 2 },
+    }),
+    taskBranch: c.text('task_branch'),
+  },
+  primaryKey: ['task_id'],
+  migrationKey: ['task_id'],
+})
+
+export const taskWorkspaces = materializeDrizzle(taskWorkspacesDefinition).table
+
+const taskRepositoryMountsDefinition = owner.table({
+  version: 1,
+  unique: [
+    { name: 'task_repository_mounts_ordinal', columns: ['task_id', 'ordinal'], nulls: 'distinct' },
+    { name: 'task_repository_mounts_path', columns: ['task_id', 'mount_path'], nulls: 'distinct' },
+  ],
+  foreignKeys: [
+    {
+      name: 'task_repository_mounts_task_fk',
+      columns: ['task_id'],
+      foreignTable: 'tasks',
+      foreignColumns: ['id'],
+      onDelete: 'cascade',
+      onUpdate: 'no action',
+      lifecycle: 'Task owns this row; deleting its subtree deletes all owned state.',
+    },
+  ],
+  checks: [
+    {
+      name: 'task_repository_mounts_branch_shape',
+      expression: {
+        kind: 'binary',
+        op: 'OR',
+        left: {
+          kind: 'binary',
+          op: 'AND',
+          left: {
+            kind: 'binary',
+            op: '=',
+            left: { kind: 'column', name: 'branch_state' },
+            right: { kind: 'literal', value: 'branch' },
+          },
+          right: {
+            kind: 'binary',
+            op: 'AND',
+            left: { kind: 'unary', op: 'IS NOT NULL', value: { kind: 'column', name: 'branch' } },
+            right: {
+              kind: 'binary',
+              op: '<>',
+              left: { kind: 'column', name: 'branch' },
+              right: { kind: 'literal', value: '' },
+            },
+          },
+        },
+        right: {
+          kind: 'binary',
+          op: 'AND',
+          left: {
+            kind: 'binary',
+            op: '<>',
+            left: { kind: 'column', name: 'branch_state' },
+            right: { kind: 'literal', value: 'branch' },
+          },
+          right: { kind: 'unary', op: 'IS NULL', value: { kind: 'column', name: 'branch' } },
+        },
+      },
+    },
+    {
+      name: 'task_repository_mounts_base_shape',
+      expression: {
+        kind: 'binary',
+        op: 'AND',
+        left: {
+          kind: 'binary',
+          op: 'OR',
+          left: { kind: 'unary', op: 'IS NULL', value: { kind: 'column', name: 'base_branch' } },
+          right: {
+            kind: 'binary',
+            op: '<>',
+            left: { kind: 'column', name: 'base_branch' },
+            right: { kind: 'literal', value: '' },
+          },
+        },
+        right: {
+          kind: 'binary',
+          op: 'OR',
+          left: {
+            kind: 'binary',
+            op: 'AND',
+            left: {
+              kind: 'binary',
+              op: '=',
+              left: { kind: 'column', name: 'branch_state' },
+              right: { kind: 'literal', value: 'detached' },
+            },
+            right: {
+              kind: 'binary',
+              op: 'AND',
+              left: {
+                kind: 'binary',
+                op: 'OR',
+                left: {
+                  kind: 'unary',
+                  op: 'IS NULL',
+                  value: { kind: 'column', name: 'base_branch' },
+                },
+                right: {
+                  kind: 'binary',
+                  op: '=',
+                  left: { kind: 'column', name: 'base_branch' },
+                  right: { kind: 'column', name: 'base_commit' },
+                },
+              },
+              right: {
+                kind: 'binary',
+                op: 'AND',
+                left: {
+                  kind: 'unary',
+                  op: 'IS NOT NULL',
+                  value: { kind: 'column', name: 'base_commit' },
+                },
+                right: {
+                  kind: 'binary',
+                  op: '<>',
+                  left: { kind: 'column', name: 'base_commit' },
+                  right: { kind: 'literal', value: '' },
+                },
+              },
+            },
+          },
+          right: {
+            kind: 'binary',
+            op: 'OR',
+            left: {
+              kind: 'binary',
+              op: '=',
+              left: { kind: 'column', name: 'branch_state' },
+              right: { kind: 'literal', value: 'branch' },
+            },
+            right: {
+              kind: 'binary',
+              op: 'AND',
+              left: {
+                kind: 'binary',
+                op: 'OR',
+                left: {
+                  kind: 'binary',
+                  op: '=',
+                  left: { kind: 'column', name: 'branch_state' },
+                  right: { kind: 'literal', value: 'unborn' },
+                },
+                right: {
+                  kind: 'binary',
+                  op: '=',
+                  left: { kind: 'column', name: 'branch_state' },
+                  right: { kind: 'literal', value: 'none' },
+                },
+              },
+              right: {
+                kind: 'binary',
+                op: 'AND',
+                left: {
+                  kind: 'unary',
+                  op: 'IS NULL',
+                  value: { kind: 'column', name: 'base_branch' },
+                },
+                right: {
+                  kind: 'unary',
+                  op: 'IS NULL',
+                  value: { kind: 'column', name: 'base_commit' },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+    {
+      name: 'task_repository_mounts_ordinal_nonnegative',
+      expression: {
+        kind: 'binary',
+        op: '>=',
+        left: { kind: 'column', name: 'ordinal' },
+        right: { kind: 'literal', value: 0 },
+      },
+    },
+  ],
+  indexes: [
+    {
+      name: 'task_repository_mounts_repo_path',
+      unique: false,
+      nulls: 'distinct',
+      columns: [{ kind: 'column', name: 'repo_path' }],
+      where: null,
+    },
+    {
+      name: 'task_repository_mounts_repo_url',
+      unique: false,
+      nulls: 'distinct',
+      columns: [{ kind: 'column', name: 'repo_url' }],
+      where: null,
+    },
+    {
+      name: 'task_repository_mounts_cached_repo_task',
+      unique: false,
+      nulls: 'distinct',
+      columns: [
+        { kind: 'column', name: 'cached_repo_id' },
+        { kind: 'column', name: 'task_id' },
+      ],
+      where: null,
+    },
+  ],
+  migrationPolicy: 'KEEP',
+  id: 'task_repository_mounts',
+  schemaSymbol: 'taskRepositoryMounts',
+  retention: {
+    class: 'owner-managed-business',
+    rule: 'Retain as live business or recovery state until the owning bounded context approves a replacement contract.',
+  },
+  columns: {
+    taskId: c.id('task_id'),
+    repoKey: c.id('repo_key'),
+    ordinal: c.int('ordinal'),
+    repoPath: c.text('repo_path'),
+    repoUrl: c.text('repo_url', { nullable: true }),
+    cachedRepoId: c.id('cached_repo_id', { nullable: true }),
+    workingBranch: c.text('working_branch', { nullable: true }),
+    baseCommit: c.text('base_commit', { nullable: true }),
+    mountPath: c.text('mount_path', { default: '' }),
+    subdir: c.text('subdir', { default: '' }),
+    readonly: c.bool('readonly', { default: false }),
+    readonlyDirtyCount: c.int('readonly_dirty_count', { nullable: true }),
+    workspaceProfileVersion: c.int('workspace_profile_version', { nullable: true }),
+    workspaceProfileDigest: c.id('workspace_profile_digest', { nullable: true }),
+    hasSubmodules: c.bool('has_submodules', { nullable: true }),
+    submoduleInitOk: c.bool('submodule_init_ok', { nullable: true }),
+    submoduleInitError: c.text('submodule_init_error', { nullable: true }),
+    schemaVersion: c.int('schema_version', { default: 1 }),
+    baseBranch: c.text('base_branch', { nullable: true }),
+    branch: c.text('branch', { nullable: true }),
+    branchState: c.enum('branch_state', ['branch', 'detached', 'unborn', 'none']),
+  },
+  primaryKey: ['task_id', 'repo_key'],
+  migrationKey: ['task_id', 'repo_key'],
+})
+
+export const taskRepositoryMounts = materializeDrizzle(taskRepositoryMountsDefinition).table
+
+const taskExecutionGenerationsDefinition = owner.table({
+  version: 1,
+  unique: [
+    {
+      name: 'task_execution_generations_operation',
+      columns: ['task_id', 'operation_ref'],
+      nulls: 'distinct',
+    },
+  ],
+  foreignKeys: [
+    {
+      name: 'task_execution_generations_task_fk',
+      columns: ['task_id'],
+      foreignTable: 'tasks',
+      foreignColumns: ['id'],
+      onDelete: 'cascade',
+      onUpdate: 'no action',
+      lifecycle: 'Task owns this row; deleting its subtree deletes all owned state.',
+    },
+  ],
+  checks: [],
+  indexes: [],
+  migrationPolicy: 'KEEP',
+  id: 'task_execution_generations',
+  schemaSymbol: 'taskExecutionGenerations',
+  retention: {
+    class: 'owner-managed-business',
+    rule: 'Retain as live business or recovery state until the owning bounded context approves a replacement contract.',
+  },
+  columns: {
+    taskId: c.id('task_id'),
+    generationSeq: c.seq('generation_seq'),
+    cause: c.text('cause'),
+    previousGenerationSeq: c.seq('previous_generation_seq', { nullable: true }),
+    operationRef: c.id('operation_ref', { nullable: true }),
+    createdAt: c.epochMs('created_at'),
+  },
+  primaryKey: ['task_id', 'generation_seq'],
+  migrationKey: ['task_id', 'generation_seq'],
+})
+
+export const taskExecutionGenerations = materializeDrizzle(taskExecutionGenerationsDefinition).table
+
+const nodeRunsDefinition = owner.table({
+  version: 1,
+  unique: [
+    { name: 'node_runs_task_identity', columns: ['task_id', 'id'], nulls: 'distinct' },
+    {
+      name: 'node_runs_task_slot_identity',
+      columns: ['task_id', 'slot_key', 'id'],
+      nulls: 'distinct',
+    },
+  ],
+  foreignKeys: [
+    {
+      name: 'node_runs_task_fk',
+      columns: ['task_id'],
+      foreignTable: 'tasks',
+      foreignColumns: ['id'],
+      onDelete: 'cascade',
+      onUpdate: 'no action',
+      lifecycle: 'Task owns this row; deleting its subtree deletes all owned state.',
+    },
+    {
+      name: 'node_runs_container_same_task',
+      columns: ['task_id', 'container_run_id'],
+      foreignTable: 'node_runs',
+      foreignColumns: ['task_id', 'id'],
+      onDelete: 'no action',
+      onUpdate: 'no action',
+      lifecycle: 'Container belongs to the same task; task deletion removes both via its cascade.',
+    },
+    {
+      name: 'node_runs_generation',
+      columns: ['task_id', 'generation_seq'],
+      foreignTable: 'task_execution_generations',
+      foreignColumns: ['task_id', 'generation_seq'],
+      onDelete: 'no action',
+      onUpdate: 'no action',
+      lifecycle: 'Generation and run are owned by the same task and removed together.',
+    },
+  ],
+  checks: [
+    {
+      name: 'node_runs_executable_identity',
+      expression: {
+        kind: 'binary',
+        op: 'OR',
+        left: {
+          kind: 'binary',
+          op: '=',
+          left: { kind: 'column', name: 'record_mode' },
+          right: { kind: 'literal', value: 'history-only' },
+        },
+        right: {
+          kind: 'binary',
+          op: 'AND',
+          left: { kind: 'unary', op: 'IS NOT NULL', value: { kind: 'column', name: 'role' } },
+          right: {
+            kind: 'binary',
+            op: 'AND',
+            left: { kind: 'unary', op: 'IS NOT NULL', value: { kind: 'column', name: 'slot_key' } },
+            right: {
+              kind: 'binary',
+              op: 'AND',
+              left: {
+                kind: 'unary',
+                op: 'IS NOT NULL',
+                value: { kind: 'column', name: 'scope_path' },
+              },
+              right: {
+                kind: 'unary',
+                op: 'IS NOT NULL',
+                value: { kind: 'column', name: 'attempt_index' },
+              },
+            },
+          },
+        },
+      },
+    },
+    {
+      name: 'node_runs_executable_nonce',
+      expression: {
+        kind: 'binary',
+        op: 'OR',
+        left: {
+          kind: 'binary',
+          op: '=',
+          left: { kind: 'column', name: 'record_mode' },
+          right: { kind: 'literal', value: 'history-only' },
+        },
+        right: {
+          kind: 'unary',
+          op: 'IS NOT NULL',
+          value: { kind: 'column', name: 'envelope_nonce' },
+        },
+      },
+    },
+    {
+      name: 'node_runs_synthetic_owner',
+      expression: {
+        kind: 'binary',
+        op: 'OR',
+        left: {
+          kind: 'binary',
+          op: '=',
+          left: { kind: 'column', name: 'record_mode' },
+          right: { kind: 'literal', value: 'history-only' },
+        },
+        right: {
+          kind: 'binary',
+          op: 'OR',
+          left: {
+            kind: 'binary',
+            op: 'AND',
+            left: {
+              kind: 'binary',
+              op: '=',
+              left: { kind: 'column', name: 'role' },
+              right: { kind: 'literal', value: 'synthetic' },
+            },
+            right: {
+              kind: 'unary',
+              op: 'IS NOT NULL',
+              value: { kind: 'column', name: 'synthetic_owner' },
+            },
+          },
+          right: {
+            kind: 'binary',
+            op: 'AND',
+            left: {
+              kind: 'binary',
+              op: '<>',
+              left: { kind: 'column', name: 'role' },
+              right: { kind: 'literal', value: 'synthetic' },
+            },
+            right: {
+              kind: 'unary',
+              op: 'IS NULL',
+              value: { kind: 'column', name: 'synthetic_owner' },
+            },
+          },
+        },
+      },
+    },
+  ],
+  indexes: [
+    {
+      name: 'idx_node_runs_task_seq',
+      unique: true,
+      nulls: 'distinct',
+      columns: [
+        { kind: 'column', name: 'task_id' },
+        { kind: 'column', name: 'seq' },
+      ],
+      where: null,
+    },
+    {
+      name: 'idx_node_runs_task_slot_seq',
+      unique: false,
+      nulls: 'distinct',
+      columns: [
+        { kind: 'column', name: 'task_id' },
+        { kind: 'column', name: 'slot_key' },
+        { kind: 'column', name: 'seq' },
+      ],
+      where: null,
+    },
+    {
+      name: 'idx_node_runs_task',
+      unique: false,
+      nulls: 'distinct',
+      columns: [
+        { kind: 'column', name: 'task_id' },
+        { kind: 'column', name: 'node_id' },
+        { kind: 'column', name: 'iteration' },
+        { kind: 'column', name: 'attempt_index' },
+      ],
+      where: null,
+    },
+    {
+      name: 'idx_node_runs_parent',
+      unique: false,
+      nulls: 'distinct',
+      columns: [{ kind: 'column', name: 'historical_parent_id' }],
+      where: null,
+    },
+    {
+      name: 'idx_node_runs_container',
+      unique: false,
+      nulls: 'distinct',
+      columns: [
+        { kind: 'column', name: 'task_id' },
+        { kind: 'column', name: 'container_run_id' },
+        { kind: 'column', name: 'node_id' },
+        { kind: 'column', name: 'iteration' },
+      ],
+      where: null,
+    },
+    {
+      name: 'idx_node_runs_child_task',
+      unique: false,
+      nulls: 'distinct',
+      columns: [{ kind: 'column', name: 'child_task_id' }],
+      where: null,
+    },
+    {
+      name: 'idx_node_runs_status_active',
+      unique: false,
+      nulls: 'distinct',
+      columns: [
+        { kind: 'column', name: 'status' },
+        { kind: 'column', name: 'started_at' },
+      ],
+      where: null,
+    },
+  ],
+  migrationPolicy: 'KEEP',
+  id: 'node_runs',
+  schemaSymbol: 'nodeRuns',
+  retention: {
+    class: 'owner-managed-business',
+    rule: 'Retain as live business or recovery state until the owning bounded context approves a replacement contract.',
+  },
+  columns: {
+    id: c.id('id', { primary: true }),
+    taskId: c.id('task_id'),
+    nodeId: c.id('node_id'),
+    containerRunId: c.id('container_run_id', { nullable: true }),
+    iteration: c.int('iteration', { default: 0 }),
+    shardKey: c.id('shard_key', { nullable: true }),
+    wgRound: c.int('wg_round', { nullable: true }),
+    reviewIteration: c.int('review_iteration', { default: 0 }),
+    status: c.enum('status', [
+      'pending',
+      'running',
+      'done',
+      'failed',
+      'canceled',
+      'interrupted',
+      'skipped',
+      'exhausted',
+      'awaiting_review',
+      'awaiting_human',
+    ]),
+    startedAt: c.epochMs('started_at', { nullable: true }),
+    finishedAt: c.epochMs('finished_at', { nullable: true }),
+    exitCode: c.int('exit_code', { nullable: true }),
+    errorMessage: c.text('error_message', { nullable: true }),
+    failureCode: c.text('failure_code', { nullable: true }),
+    envelopeNonce: c.text('envelope_nonce', { nullable: true }),
+    forceActivated: c.bool('force_activated', { default: false }),
+    rerunCause: c.text('rerun_cause', { nullable: true }),
+    childTaskId: c.id('child_task_id', { nullable: true }),
+    continuationSlotKey: c.id('continuation_slot_key', { nullable: true }),
+    lineageSlotPathJson: c.jsonText('lineage_slot_path_json', { nullable: true }),
+    operationGeneration: c.int('operation_generation', { default: 0 }),
+    historicalParentId: c.id('historical_parent_id', { nullable: true }),
+    seq: c.seq('seq'),
+    role: c.enum('role', ['node-attempt', 'container', 'synthetic'], { nullable: true }),
+    syntheticOwner: c.text('synthetic_owner', { nullable: true }),
+    scopePath: c.text('scope_path', { nullable: true, default: '' }),
+    slotKey: c.slotKey('slot_key', { nullable: true }),
+    generationSeq: c.seq('generation_seq'),
+    attemptIndex: c.int('attempt_index', { nullable: true, default: 0 }),
+    inputsRecorded: c.bool('inputs_recorded', { default: false }),
+    recordMode: c.enum('record_mode', ['executable', 'history-only']),
+    provenanceQuality: c.enum('provenance_quality', ['recorded', 'legacy-derived', 'unknown']),
+  },
+  primaryKey: ['id'],
+  migrationKey: ['id'],
+})
+
+export const nodeRuns = materializeDrizzle(nodeRunsDefinition).table
+
+const nodeRunSelectionsDefinition = owner.table({
+  version: 1,
+  unique: [],
+  foreignKeys: [
+    {
+      name: 'node_run_selections_task_fk',
+      columns: ['task_id'],
+      foreignTable: 'tasks',
+      foreignColumns: ['id'],
+      onDelete: 'cascade',
+      onUpdate: 'no action',
+      lifecycle: 'Task owns this row; deleting its subtree deletes all owned state.',
+    },
+    {
+      name: 'node_run_selections_run_slot',
+      columns: ['task_id', 'slot_key', 'selected_run_id'],
+      foreignTable: 'node_runs',
+      foreignColumns: ['task_id', 'slot_key', 'id'],
+      onDelete: 'cascade',
+      onUpdate: 'no action',
+      lifecycle: 'Selected identity belongs to the same task and canonical slot.',
+    },
+    {
+      name: 'node_run_selections_generation',
+      columns: ['task_id', 'generation_seq'],
+      foreignTable: 'task_execution_generations',
+      foreignColumns: ['task_id', 'generation_seq'],
+      onDelete: 'no action',
+      onUpdate: 'no action',
+      lifecycle:
+        'Preserve epoch-1 no action delete and no action update semantics; target is a logical table reference.',
+    },
+  ],
+  checks: [],
+  indexes: [],
+  migrationPolicy: 'KEEP',
+  id: 'node_run_selections',
+  schemaSymbol: 'nodeRunSelections',
+  retention: {
+    class: 'owner-managed-business',
+    rule: 'Retain as live business or recovery state until the owning bounded context approves a replacement contract.',
+  },
+  columns: {
+    taskId: c.id('task_id'),
+    slotKey: c.slotKey('slot_key'),
+    selectedRunId: c.id('selected_run_id', { nullable: true }),
+    revision: c.int('revision'),
+    generationSeq: c.seq('generation_seq'),
+    cause: c.text('cause'),
+    selectedAt: c.epochMs('selected_at'),
+  },
+  primaryKey: ['task_id', 'slot_key'],
+  migrationKey: ['task_id', 'slot_key'],
+})
+
+export const nodeRunSelections = materializeDrizzle(nodeRunSelectionsDefinition).table
+
+const nodeRunInputsDefinition = owner.table({
+  version: 1,
+  unique: [
+    {
+      name: 'node_run_inputs_source',
+      columns: ['consumer_run_id', 'input_kind', 'producer_node_id', 'producer_shard_slot'],
+      nulls: 'distinct',
+    },
+  ],
+  foreignKeys: [
+    {
+      name: 'node_run_inputs_task_fk',
+      columns: ['task_id'],
+      foreignTable: 'tasks',
+      foreignColumns: ['id'],
+      onDelete: 'cascade',
+      onUpdate: 'no action',
+      lifecycle: 'Task owns this row; deleting its subtree deletes all owned state.',
+    },
+    {
+      name: 'node_run_inputs_consumer',
+      columns: ['task_id', 'consumer_run_id'],
+      foreignTable: 'node_runs',
+      foreignColumns: ['task_id', 'id'],
+      onDelete: 'cascade',
+      onUpdate: 'no action',
+      lifecycle:
+        'Preserve epoch-1 cascade delete and no action update semantics; target is a logical table reference.',
+    },
+    {
+      name: 'node_run_inputs_producer',
+      columns: ['task_id', 'producer_run_ref'],
+      foreignTable: 'node_runs',
+      foreignColumns: ['task_id', 'id'],
+      onDelete: 'no action',
+      onUpdate: 'no action',
+      lifecycle:
+        'Preserve epoch-1 no action delete and no action update semantics; target is a logical table reference.',
+    },
+  ],
+  checks: [
+    {
+      name: 'node_run_inputs_producer_provenance',
+      expression: {
+        kind: 'binary',
+        op: 'OR',
+        left: {
+          kind: 'binary',
+          op: 'AND',
+          left: {
+            kind: 'unary',
+            op: 'IS NOT NULL',
+            value: { kind: 'column', name: 'producer_run_ref' },
+          },
+          right: {
+            kind: 'binary',
+            op: '=',
+            left: { kind: 'column', name: 'producer_run_ref' },
+            right: { kind: 'column', name: 'producer_run_id' },
+          },
+        },
+        right: {
+          kind: 'binary',
+          op: 'AND',
+          left: {
+            kind: 'unary',
+            op: 'IS NULL',
+            value: { kind: 'column', name: 'producer_run_ref' },
+          },
+          right: {
+            kind: 'binary',
+            op: 'AND',
+            left: {
+              kind: 'binary',
+              op: '=',
+              left: { kind: 'column', name: 'provenance_quality' },
+              right: { kind: 'literal', value: 'legacy-derived' },
+            },
+            right: {
+              kind: 'unary',
+              op: 'IS NOT NULL',
+              value: { kind: 'column', name: 'evidence_ref_json' },
+            },
+          },
+        },
+      },
+    },
+  ],
+  indexes: [
+    {
+      name: 'node_run_inputs_producer',
+      unique: false,
+      nulls: 'distinct',
+      columns: [{ kind: 'column', name: 'producer_run_id' }],
+      where: null,
+    },
+  ],
+  migrationPolicy: 'KEEP',
+  id: 'node_run_inputs',
+  schemaSymbol: 'nodeRunInputs',
+  retention: {
+    class: 'owner-managed-business',
+    rule: 'Retain as live business or recovery state until the owning bounded context approves a replacement contract.',
+  },
+  columns: {
+    taskId: c.id('task_id'),
+    consumerRunId: c.id('consumer_run_id'),
+    ordinal: c.int('ordinal'),
+    producerRunId: c.id('producer_run_id'),
+    producerRunRef: c.id('producer_run_ref', { nullable: true }),
+    provenanceQuality: c.enum('provenance_quality', ['recorded', 'legacy-derived'], {
+      default: 'recorded',
+    }),
+    evidenceRefJson: c.jsonText('evidence_ref_json', { nullable: true }),
+    inputKind: c.enum('input_kind', [
+      'frame-input',
+      'wrapper-parameter',
+      'aggregator-shard',
+      'review-source',
+      'gate-open',
+    ]),
+    producerNodeId: c.id('producer_node_id'),
+    producerShardSlot: c.slotKey('producer_shard_slot'),
+  },
+  primaryKey: ['consumer_run_id', 'ordinal'],
+  migrationKey: ['consumer_run_id', 'ordinal'],
+})
+
+export const nodeRunInputs = materializeDrizzle(nodeRunInputsDefinition).table
+
+const nodeRunConfigsDefinition = owner.table({
+  version: 1,
+  unique: [],
+  foreignKeys: [
+    {
+      name: 'node_run_configs_run_fk',
+      columns: ['node_run_id'],
+      foreignTable: 'node_runs',
+      foreignColumns: ['id'],
+      onDelete: 'cascade',
+      onUpdate: 'no action',
+      lifecycle: 'Run owns this row; task deletion cascades through the run.',
+    },
+  ],
+  checks: [],
+  indexes: [],
+  migrationPolicy: 'KEEP',
+  id: 'node_run_configs',
+  schemaSymbol: 'nodeRunConfigs',
+  retention: {
+    class: 'owner-managed-business',
+    rule: 'Retain as live business or recovery state until the owning bounded context approves a replacement contract.',
+  },
+  columns: {
+    nodeRunId: c.id('node_run_id', { primary: true }),
+    runtime: c.text('runtime', { nullable: true }),
+    runtimeBinary: c.text('runtime_binary', { nullable: true }),
+    runtimeParamsJson: c.jsonText('runtime_params_json', { nullable: true }),
+    inventorySnapshotJson: c.jsonText('inventory_snapshot_json', { nullable: true }),
+    runtimeInventoryJson: c.jsonText('runtime_inventory_json', { nullable: true }),
+    injectedMemoriesJson: c.jsonText('injected_memories_json', { nullable: true }),
+    agentOverrideName: c.text('agent_override_name', { nullable: true }),
+    agentOverrideId: c.id('agent_override_id', { nullable: true }),
+    shardValueHash: c.text('shard_value_hash', { nullable: true }),
+    promptRefJson: c.jsonText('prompt_ref_json', {
+      document: { kind: 'content-ref', version: 1, inlineBytesColumn: 'prompt_inline_bytes' },
+      nullable: true,
+    }),
+    promptInlineBytes: c.bytes('prompt_inline_bytes', { nullable: true }),
+  },
+  primaryKey: ['node_run_id'],
+  migrationKey: ['node_run_id'],
+})
+
+export const nodeRunConfigs = materializeDrizzle(nodeRunConfigsDefinition).table
+
+const nodeRunRuntimeStatesDefinition = owner.table({
+  version: 1,
+  unique: [],
+  foreignKeys: [
+    {
+      name: 'node_run_runtime_states_run_fk',
+      columns: ['node_run_id'],
+      foreignTable: 'node_runs',
+      foreignColumns: ['id'],
+      onDelete: 'cascade',
+      onUpdate: 'no action',
+      lifecycle: 'Run owns this row; task deletion cascades through the run.',
+    },
+  ],
+  checks: [],
+  indexes: [
+    {
+      name: 'node_run_runtime_states_session',
+      unique: false,
+      nulls: 'distinct',
+      columns: [{ kind: 'column', name: 'session_id' }],
+      where: null,
+    },
+  ],
+  migrationPolicy: 'KEEP',
+  id: 'node_run_runtime_states',
+  schemaSymbol: 'nodeRunRuntimeStates',
+  retention: {
+    class: 'owner-managed-business',
+    rule: 'Retain as live business or recovery state until the owning bounded context approves a replacement contract.',
+  },
+  columns: {
+    nodeRunId: c.id('node_run_id', { primary: true }),
+    pid: c.int('pid', { nullable: true }),
+    spawnBinaryPath: c.text('spawn_binary_path', { nullable: true }),
+    spawnLaunchNonce: c.text('spawn_launch_nonce', { nullable: true }),
+    startupVerificationJson: c.jsonText('startup_verification_json', { nullable: true }),
+    wrapperProgressJson: c.jsonText('wrapper_progress_json', { nullable: true }),
+    mergeState: c.text('merge_state', { nullable: true }),
+    sessionId: c.id('session_id', { nullable: true }),
+    isolationRootRef: c.text('isolation_root_ref', { nullable: true }),
+  },
+  primaryKey: ['node_run_id'],
+  migrationKey: ['node_run_id'],
+})
+
+export const nodeRunRuntimeStates = materializeDrizzle(nodeRunRuntimeStatesDefinition).table
+
+const nodeRunResultsDefinition = owner.table({
+  version: 1,
+  unique: [],
+  foreignKeys: [
+    {
+      name: 'node_run_results_run_fk',
+      columns: ['node_run_id'],
+      foreignTable: 'node_runs',
+      foreignColumns: ['id'],
+      onDelete: 'cascade',
+      onUpdate: 'no action',
+      lifecycle: 'Run owns this row; task deletion cascades through the run.',
+    },
+  ],
+  checks: [],
+  indexes: [],
+  migrationPolicy: 'KEEP',
+  id: 'node_run_results',
+  schemaSymbol: 'nodeRunResults',
+  retention: {
+    class: 'owner-managed-business',
+    rule: 'Retain as live business or recovery state until the owning bounded context approves a replacement contract.',
+  },
+  columns: {
+    nodeRunId: c.id('node_run_id', { primary: true }),
+    tokInput: c.int('tok_input', { nullable: true }),
+    tokOutput: c.int('tok_output', { nullable: true }),
+    tokCacheCreate: c.int('tok_cache_create', { nullable: true }),
+    tokCacheRead: c.int('tok_cache_read', { nullable: true }),
+    tokTotal: c.int('tok_total', { nullable: true }),
+    portValidationFailuresJson: c.jsonText('port_validation_failures_json', { nullable: true }),
+    commitPushJson: c.jsonText('commit_push_json', { nullable: true }),
+    supersededByReview: c.text('superseded_by_review', { nullable: true }),
+    rolledBack: c.bool('rolled_back', { nullable: true }),
+  },
+  primaryKey: ['node_run_id'],
+  migrationKey: ['node_run_id'],
+})
+
+export const nodeRunResults = materializeDrizzle(nodeRunResultsDefinition).table
+
+const nodeRunRepoCheckpointsDefinition = owner.table({
+  version: 1,
+  unique: [],
+  foreignKeys: [
+    {
+      name: 'node_run_repo_checkpoints_task_fk',
+      columns: ['task_id'],
+      foreignTable: 'tasks',
+      foreignColumns: ['id'],
+      onDelete: 'cascade',
+      onUpdate: 'no action',
+      lifecycle: 'Task owns this row; deleting its subtree deletes all owned state.',
+    },
+    {
+      name: 'node_run_repo_checkpoints_run',
+      columns: ['task_id', 'node_run_id'],
+      foreignTable: 'node_runs',
+      foreignColumns: ['task_id', 'id'],
+      onDelete: 'cascade',
+      onUpdate: 'no action',
+      lifecycle:
+        'Preserve epoch-1 cascade delete and no action update semantics; target is a logical table reference.',
+    },
+    {
+      name: 'node_run_repo_checkpoints_mount',
+      columns: ['task_id', 'repo_key'],
+      foreignTable: 'task_repository_mounts',
+      foreignColumns: ['task_id', 'repo_key'],
+      onDelete: 'cascade',
+      onUpdate: 'no action',
+      lifecycle:
+        'Preserve epoch-1 cascade delete and no action update semantics; target is a logical table reference.',
+    },
+  ],
+  checks: [],
+  indexes: [],
+  migrationPolicy: 'KEEP',
+  id: 'node_run_repo_checkpoints',
+  schemaSymbol: 'nodeRunRepoCheckpoints',
+  retention: {
+    class: 'owner-managed-business',
+    rule: 'Retain as live business or recovery state until the owning bounded context approves a replacement contract.',
+  },
+  columns: {
+    nodeRunId: c.id('node_run_id'),
+    taskId: c.id('task_id'),
+    repoKey: c.id('repo_key'),
+    preSnapshot: c.text('pre_snapshot', { nullable: true }),
+    isolationBase: c.text('isolation_base', { nullable: true }),
+    nodeTree: c.text('node_tree', { nullable: true }),
+    submodules: c.jsonText('submodules', { nullable: true }),
+  },
+  primaryKey: ['node_run_id', 'repo_key'],
+  migrationKey: ['node_run_id', 'repo_key'],
+})
+
+export const nodeRunRepoCheckpoints = materializeDrizzle(nodeRunRepoCheckpointsDefinition).table
+
+const executionLegacyEvidenceDefinition = owner.table({
+  version: 1,
+  unique: [],
+  foreignKeys: [
+    {
+      name: 'execution_legacy_evidence_task_fk',
+      columns: ['task_id'],
+      foreignTable: 'tasks',
+      foreignColumns: ['id'],
+      onDelete: 'cascade',
+      onUpdate: 'no action',
+      lifecycle: 'Task owns this row; deleting its subtree deletes all owned state.',
+    },
+  ],
+  checks: [],
+  indexes: [],
+  migrationPolicy: 'KEEP',
+  id: 'execution_legacy_evidence',
+  schemaSymbol: 'executionLegacyEvidence',
+  retention: {
+    class: 'owner-managed-business',
+    rule: 'Retain as live business or recovery state until the owning bounded context approves a replacement contract.',
+  },
+  columns: {
+    taskId: c.id('task_id', { nullable: true }),
+    recordKind: c.text('record_kind'),
+    recordId: c.id('record_id'),
+    sourceContract: c.text('source_contract'),
+    provenanceQuality: c.enum('provenance_quality', ['recorded', 'legacy-derived', 'unknown']),
+    missingFieldsJson: c.jsonText('missing_fields_json'),
+    contentRefJson: c.jsonText('content_ref_json', {
+      document: { kind: 'content-ref', version: 1, inlineBytesColumn: 'content_inline_bytes' },
+    }),
+    contentInlineBytes: c.bytes('content_inline_bytes', { nullable: true }),
+  },
+  primaryKey: ['record_kind', 'record_id', 'source_contract'],
+  migrationKey: ['record_kind', 'record_id', 'source_contract'],
+})
+
+export const executionLegacyEvidence = materializeDrizzle(executionLegacyEvidenceDefinition).table
+
 const workgroupTaskStateDefinition = owner.table({
+  version: 2,
+  unique: [],
+  foreignKeys: [
+    {
+      name: 'workgroup_task_state_task_id_tasks_id_fk',
+      columns: ['task_id'],
+      foreignTable: 'tasks',
+      foreignColumns: ['id'],
+      onDelete: 'cascade',
+      onUpdate: 'no action',
+      lifecycle:
+        'Preserve epoch-1 cascade delete and no action update semantics; target is a logical table reference.',
+    },
+  ],
+  checks: [],
+  indexes: [],
+  migrationPolicy: 'KEEP',
   id: 'workgroup_task_state',
   schemaSymbol: 'workgroupTaskState',
   columns: {
@@ -1627,47 +2661,450 @@ const workgroupTaskStateDefinition = owner.table({
     dwStateJson: c.jsonText('dw_state_json', { nullable: true }),
     resultMessageId: c.id('result_message_id', { nullable: true }),
     updatedAt: c.epochMs('updated_at'),
+    runtimeConfigJson: c.jsonText('runtime_config_json', { nullable: true }),
+    configRevision: c.int('config_revision', { default: 1 }),
   },
-  foreignKeys: [
-    foreignKey('workgroup_task_state_task_id_tasks_id_fk', ['task_id'], 'tasks', ['id'], {
-      onDelete: 'cascade',
-    }),
-  ],
-  retention: retention.business,
+  retention: {
+    class: 'owner-managed-business',
+    rule: 'Retain as live business or recovery state until the owning bounded context approves a replacement contract.',
+  },
+  primaryKey: ['task_id'],
+  migrationKey: ['task_id'],
 })
 
 export const workgroupTaskState = materializeDrizzle(workgroupTaskStateDefinition).table
 
-export const schemaContribution = owner.contribution([
-  hostedExecutionBindingsDefinition,
-  hostedExecutionEventsDefinition,
-  hostedTaskArtifactsDefinition,
-  hostedTaskArchiveEntriesDefinition,
-  hostedNodeEventArchivesDefinition,
-  nodeExecutionEventSourcesDefinition,
-  nodeRunEventsDefinition,
-  nodeRunOutputsDefinition,
-  nodeRunsDefinition,
-  nodeRunSeqAllocationsDefinition,
-  hostedRecoveryRequestsDefinition,
-  reactionExecutionAdmissionsDefinition,
-  runtimeSessionLeasesDefinition,
-  taskArchiveAuditDefinition,
-  taskExecutionEffectAttemptsDefinition,
-  taskExecutionEffectFencesDefinition,
-  taskExecutionEffectsDefinition,
-  taskExecutionIntentsDefinition,
-  taskExecutionLineageOperationRecordsDefinition,
-  taskExecutionMaintenanceClaimsDefinition,
-  taskExecutionMaintenanceMembersDefinition,
-  taskExecutionOwnersDefinition,
-  taskNodeClarifyDirectivesDefinition,
-  taskReposDefinition,
-  taskWorkspacePreparationsDefinition,
-  taskSpaceNodesDefinition,
-  tasksDefinition,
-  workgroupAssignmentsDefinition,
-  workgroupMemberCursorsDefinition,
-  workgroupMessagesDefinition,
-  workgroupTaskStateDefinition,
-])
+const runtimeSessionLeasesDefinition = owner.table({
+  version: 2,
+  unique: [],
+  foreignKeys: [
+    {
+      name: 'runtime_session_leases_task_id_tasks_id_fk',
+      columns: ['task_id'],
+      foreignTable: 'tasks',
+      foreignColumns: ['id'],
+      onDelete: 'cascade',
+      onUpdate: 'no action',
+      lifecycle:
+        'Preserve epoch-1 cascade delete and no action update semantics; target is a logical table reference.',
+    },
+  ],
+  checks: [
+    {
+      name: 'runtime_session_leases_all_or_none',
+      expression: {
+        kind: 'raw',
+        reason: 'Preserve the epoch-1 expression spelling and provider semantics (RFC-395 I-a).',
+        sqlite:
+          '(\n        (\n          "runtime_session_leases"."lease_node_run_id" IS NULL\n          AND "runtime_session_leases"."lease_nonce_digest" IS NULL\n          AND "runtime_session_leases"."leased_at" IS NULL\n        )\n        OR\n        (\n          "runtime_session_leases"."lease_node_run_id" IS NOT NULL\n          AND "runtime_session_leases"."lease_nonce_digest" IS NOT NULL\n          AND "runtime_session_leases"."leased_at" IS NOT NULL\n        )\n      )',
+        postgresql:
+          '( ( "lease_node_run_id" IS NULL AND "lease_nonce_digest" IS NULL AND "leased_at" IS NULL ) OR ( "lease_node_run_id" IS NOT NULL AND "lease_nonce_digest" IS NOT NULL AND "leased_at" IS NOT NULL ) )',
+      },
+    },
+    {
+      name: 'runtime_session_leases_protocol_shape',
+      expression: {
+        kind: 'raw',
+        reason: 'Preserve the epoch-1 expression spelling and provider semantics (RFC-395 I-a).',
+        sqlite: '"runtime_session_leases"."protocol" IN (\'opencode\', \'claude-code\')',
+        postgresql: "\"protocol\" IN ('opencode', 'claude-code')",
+      },
+    },
+    {
+      name: 'runtime_session_leases_reset_pending_shape',
+      expression: {
+        kind: 'raw',
+        reason: 'Preserve the epoch-1 expression spelling and provider semantics (RFC-395 I-a).',
+        sqlite: '"runtime_session_leases"."reset_pending" IN (0, 1)',
+        postgresql: '"reset_pending" IN (FALSE, TRUE)',
+      },
+    },
+    {
+      name: 'runtime_session_leases_reset_pending_held',
+      expression: {
+        kind: 'binary',
+        op: 'OR',
+        left: {
+          kind: 'binary',
+          op: '=',
+          left: { kind: 'column', name: 'reset_pending' },
+          right: { kind: 'literal', value: false },
+        },
+        right: {
+          kind: 'unary',
+          op: 'IS NOT NULL',
+          value: { kind: 'column', name: 'lease_node_run_id' },
+        },
+      },
+    },
+  ],
+  indexes: [
+    {
+      name: 'idx_runtime_session_leases_task',
+      unique: false,
+      nulls: 'distinct',
+      columns: [{ kind: 'column', name: 'task_id' }],
+      where: null,
+    },
+    {
+      name: 'idx_runtime_session_leases_created_run',
+      unique: false,
+      nulls: 'distinct',
+      columns: [{ kind: 'column', name: 'created_node_run_id' }],
+      where: null,
+    },
+    {
+      name: 'idx_runtime_session_leases_lease_run',
+      unique: false,
+      nulls: 'distinct',
+      columns: [{ kind: 'column', name: 'lease_node_run_id' }],
+      where: null,
+    },
+  ],
+  migrationPolicy: 'KEEP',
+  id: 'runtime_session_leases',
+  schemaSymbol: 'runtimeSessionLeases',
+  columns: {
+    protocol: c.enum('protocol', ['opencode', 'claude-code']),
+    sessionId: c.id('session_id'),
+    taskId: c.id('task_id'),
+    nodeId: c.id('node_id'),
+    createdNodeRunId: c.id('created_node_run_id'),
+    leaseNodeRunId: c.id('lease_node_run_id', { nullable: true }),
+    leaseNonceDigest: c.id('lease_nonce_digest', { nullable: true }),
+    leasedAt: c.epochMs('leased_at', { nullable: true }),
+    resetPending: c.bool('reset_pending', { default: false }),
+  },
+  primaryKey: ['protocol', 'session_id'],
+  retention: {
+    class: 'owner-managed-operational',
+    rule: 'The owning bounded context defines retention and archive jobs through its application port.',
+  },
+  migrationKey: ['protocol', 'session_id'],
+})
+
+export const runtimeSessionLeases = materializeDrizzle(runtimeSessionLeasesDefinition).table
+
+const nodeRunOutputsDefinition = owner.table({
+  version: 2,
+  unique: [],
+  foreignKeys: [
+    {
+      name: 'node_run_outputs_node_run_id_node_runs_id_fk',
+      columns: ['node_run_id'],
+      foreignTable: 'node_runs',
+      foreignColumns: ['id'],
+      onDelete: 'cascade',
+      onUpdate: 'no action',
+      lifecycle:
+        'Preserve epoch-1 cascade delete and no action update semantics; target is a logical table reference.',
+    },
+  ],
+  checks: [],
+  indexes: [],
+  migrationPolicy: 'KEEP',
+  id: 'node_run_outputs',
+  schemaSymbol: 'nodeRunOutputs',
+  columns: {
+    nodeRunId: c.id('node_run_id'),
+    portName: c.text('port_name'),
+    kind: c.text('kind', { nullable: true }),
+    archiveJson: c.jsonText('archive_json', { nullable: true }),
+    active: c.bool('active', { default: true }),
+    contentRefJson: c.jsonText('content_ref_json', {
+      document: { kind: 'content-ref', version: 1, inlineBytesColumn: 'content_inline_bytes' },
+    }),
+    contentInlineBytes: c.bytes('content_inline_bytes', { nullable: true }),
+  },
+  primaryKey: ['node_run_id', 'port_name'],
+  retention: {
+    class: 'owner-managed-business',
+    rule: 'Retain as live business or recovery state until the owning bounded context approves a replacement contract.',
+  },
+  migrationKey: ['node_run_id', 'port_name'],
+})
+
+export const nodeRunOutputs = materializeDrizzle(nodeRunOutputsDefinition).table
+
+const hostedTaskArtifactsDefinition = owner.table({
+  version: 2,
+  unique: [],
+  foreignKeys: [],
+  checks: [],
+  indexes: [],
+  migrationPolicy: 'KEEP',
+  id: 'hosted_task_artifacts',
+  schemaSymbol: 'hostedTaskArtifacts',
+  columns: {
+    reference: c.id('reference', { primary: true }),
+    taskId: c.id('task_id'),
+    digest: c.text('digest'),
+    size: c.int('size'),
+    createdAt: c.epochMs('created_at'),
+    contentRefJson: c.jsonText('content_ref_json', {
+      document: { kind: 'content-ref', version: 1, inlineBytesColumn: 'content_inline_bytes' },
+    }),
+    contentInlineBytes: c.bytes('content_inline_bytes', { nullable: true }),
+  },
+  retention: {
+    class: 'owner-managed-business',
+    rule: 'Retain as live business or recovery state until the owning bounded context approves a replacement contract.',
+  },
+  primaryKey: ['reference'],
+  migrationKey: ['reference'],
+})
+
+export const hostedTaskArtifacts = materializeDrizzle(hostedTaskArtifactsDefinition).table
+
+const hostedNodeEventArchivesDefinition = owner.table({
+  version: 2,
+  unique: [],
+  foreignKeys: [],
+  checks: [
+    {
+      name: 'hosted_node_event_archives_state_known',
+      expression: {
+        kind: 'raw',
+        reason: 'Preserve the epoch-1 expression spelling and provider semantics (RFC-395 I-a).',
+        sqlite: '"hosted_node_event_archives"."state" IN (\'prepared\', \'ready\')',
+        postgresql: "\"state\" IN ('prepared', 'ready')",
+      },
+    },
+    {
+      name: 'hosted_node_event_archives_range',
+      expression: {
+        kind: 'raw',
+        reason: 'Preserve the epoch-1 expression spelling and provider semantics (RFC-395 I-a).',
+        sqlite:
+          '"hosted_node_event_archives"."first_id" > 0 AND "hosted_node_event_archives"."last_id" >= "hosted_node_event_archives"."first_id" AND "hosted_node_event_archives"."row_count" > 0',
+        postgresql: '"first_id" > 0 AND "last_id" >= "first_id" AND "row_count" > 0',
+      },
+    },
+    {
+      name: 'hosted_node_event_archives_reference_known',
+      expression: {
+        kind: 'binary',
+        op: 'OR',
+        left: {
+          kind: 'binary',
+          op: 'AND',
+          left: {
+            kind: 'binary',
+            op: '=',
+            left: { kind: 'column', name: 'state' },
+            right: { kind: 'literal', value: 'prepared' },
+          },
+          right: {
+            kind: 'unary',
+            op: 'IS NULL',
+            value: { kind: 'column', name: 'content_ref_json' },
+          },
+        },
+        right: {
+          kind: 'binary',
+          op: 'AND',
+          left: {
+            kind: 'binary',
+            op: '=',
+            left: { kind: 'column', name: 'state' },
+            right: { kind: 'literal', value: 'ready' },
+          },
+          right: {
+            kind: 'unary',
+            op: 'IS NOT NULL',
+            value: { kind: 'column', name: 'content_ref_json' },
+          },
+        },
+      },
+    },
+  ],
+  indexes: [
+    {
+      name: 'hosted_node_event_archives_run',
+      unique: false,
+      nulls: 'distinct',
+      columns: [
+        { kind: 'column', name: 'task_id' },
+        { kind: 'column', name: 'node_run_id' },
+        { kind: 'column', name: 'last_id' },
+      ],
+      where: null,
+    },
+    {
+      name: 'hosted_node_event_archives_pending',
+      unique: false,
+      nulls: 'distinct',
+      columns: [
+        { kind: 'column', name: 'state' },
+        { kind: 'column', name: 'created_at' },
+      ],
+      where: null,
+    },
+  ],
+  migrationPolicy: 'KEEP',
+  id: 'hosted_node_event_archives',
+  schemaSymbol: 'hostedNodeEventArchives',
+  columns: {
+    id: c.id('id', { primary: true }),
+    taskId: c.id('task_id'),
+    nodeRunId: c.id('node_run_id'),
+    firstId: c.int('first_id'),
+    lastId: c.int('last_id'),
+    rowCount: c.int('row_count'),
+    digest: c.text('digest'),
+    size: c.int('size'),
+    state: c.enum('state', ['prepared', 'ready']),
+    createdAt: c.epochMs('created_at'),
+    contentRefJson: c.jsonText('content_ref_json', {
+      document: { kind: 'content-ref', version: 1, inlineBytesColumn: 'content_inline_bytes' },
+      nullable: true,
+    }),
+    contentInlineBytes: c.bytes('content_inline_bytes', { nullable: true }),
+  },
+  retention: {
+    class: 'owner-managed-operational',
+    rule: 'The owning bounded context defines retention and archive jobs through its application port.',
+  },
+  primaryKey: ['id'],
+  migrationKey: ['id'],
+})
+
+export const hostedNodeEventArchives = materializeDrizzle(hostedNodeEventArchivesDefinition).table
+
+const hostedTaskArchiveEntriesDefinition = owner.table({
+  version: 2,
+  unique: [],
+  foreignKeys: [],
+  checks: [
+    {
+      name: 'hosted_task_archive_entries_kind_known',
+      expression: {
+        kind: 'raw',
+        reason: 'Preserve the epoch-1 expression spelling and provider semantics (RFC-395 I-a).',
+        sqlite: '"hosted_task_archive_entries"."kind" IN (\'directory\', \'file\')',
+        postgresql: "\"kind\" IN ('directory', 'file')",
+      },
+    },
+  ],
+  indexes: [],
+  migrationPolicy: 'KEEP',
+  id: 'hosted_task_archive_entries',
+  schemaSymbol: 'hostedTaskArchiveEntries',
+  columns: {
+    path: c.id('path', { primary: true }),
+    kind: c.enum('kind', ['directory', 'file']),
+    createdAt: c.epochMs('created_at'),
+    updatedAt: c.epochMs('updated_at'),
+  },
+  retention: {
+    class: 'owner-managed-business',
+    rule: 'Retain as live business or recovery state until the owning bounded context approves a replacement contract.',
+  },
+  primaryKey: ['path'],
+  migrationKey: ['path'],
+})
+
+export const hostedTaskArchiveEntries = materializeDrizzle(hostedTaskArchiveEntriesDefinition).table
+
+const hostedTaskArchiveEntryPartsDefinition = owner.table({
+  version: 1,
+  unique: [],
+  foreignKeys: [
+    {
+      name: 'hosted_task_archive_entry_parts_entry',
+      columns: ['path'],
+      foreignTable: 'hosted_task_archive_entries',
+      foreignColumns: ['path'],
+      onDelete: 'cascade',
+      onUpdate: 'no action',
+      lifecycle: 'An entry owns zero or more ordered publication parts; directories have no parts.',
+    },
+  ],
+  checks: [
+    {
+      name: 'hosted_task_archive_entry_parts_ordinal',
+      expression: {
+        kind: 'binary',
+        op: '>=',
+        left: { kind: 'column', name: 'ordinal' },
+        right: { kind: 'literal', value: 0 },
+      },
+    },
+  ],
+  indexes: [],
+  migrationPolicy: 'KEEP',
+  id: 'hosted_task_archive_entry_parts',
+  schemaSymbol: 'hostedTaskArchiveEntryParts',
+  retention: {
+    class: 'owner-managed-business',
+    rule: 'Retain as live business or recovery state until the owning bounded context approves a replacement contract.',
+  },
+  columns: {
+    path: c.text('path'),
+    ordinal: c.int('ordinal'),
+    partKey: c.id('part_key'),
+    contentRefJson: c.jsonText('content_ref_json', {
+      document: { kind: 'content-ref', version: 1, inlineBytesColumn: 'content_inline_bytes' },
+    }),
+    contentInlineBytes: c.bytes('content_inline_bytes', { nullable: true }),
+  },
+  primaryKey: ['path', 'ordinal'],
+  migrationKey: ['path', 'ordinal'],
+})
+
+export const hostedTaskArchiveEntryParts = materializeDrizzle(
+  hostedTaskArchiveEntryPartsDefinition,
+).table
+
+export const schemaContribution = {
+  owner: 'task-execution',
+  version: 2,
+  columnUniqueNulls: [
+    { table: 'task_workspace_preparations', column: 'admitted_task_id', nulls: 'distinct' },
+  ],
+  tables: [
+    hostedExecutionBindingsDefinition,
+    hostedExecutionEventsDefinition,
+    nodeExecutionEventSourcesDefinition,
+    nodeRunEventsDefinition,
+    nodeRunSeqAllocationsDefinition,
+    hostedRecoveryRequestsDefinition,
+    reactionExecutionAdmissionsDefinition,
+    taskArchiveAuditDefinition,
+    taskExecutionEffectAttemptsDefinition,
+    taskExecutionEffectFencesDefinition,
+    taskExecutionEffectsDefinition,
+    taskExecutionIntentsDefinition,
+    taskExecutionLineageOperationRecordsDefinition,
+    taskExecutionMaintenanceClaimsDefinition,
+    taskExecutionMaintenanceMembersDefinition,
+    taskExecutionOwnersDefinition,
+    taskNodeClarifyDirectivesDefinition,
+    taskWorkspacePreparationsDefinition,
+    taskSpaceNodesDefinition,
+    workgroupAssignmentsDefinition,
+    workgroupMemberCursorsDefinition,
+    workgroupMessagesDefinition,
+    tasksDefinition,
+    taskDefinitionsDefinition,
+    taskLaunchContextsDefinition,
+    taskWorkspacesDefinition,
+    taskRepositoryMountsDefinition,
+    taskExecutionGenerationsDefinition,
+    nodeRunsDefinition,
+    nodeRunSelectionsDefinition,
+    nodeRunInputsDefinition,
+    nodeRunConfigsDefinition,
+    nodeRunRuntimeStatesDefinition,
+    nodeRunResultsDefinition,
+    nodeRunRepoCheckpointsDefinition,
+    executionLegacyEvidenceDefinition,
+    workgroupTaskStateDefinition,
+    runtimeSessionLeasesDefinition,
+    nodeRunOutputsDefinition,
+    hostedTaskArtifactsDefinition,
+    hostedNodeEventArchivesDefinition,
+    hostedTaskArchiveEntriesDefinition,
+    hostedTaskArchiveEntryPartsDefinition,
+  ],
+} as const

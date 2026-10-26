@@ -1,3 +1,8 @@
+import {
+  readRestoreReceipt,
+  writeRestoreReceipt,
+  type HostedEpoch2RestoreReceipt,
+} from './epoch2RestoreReceipt'
 import type {
   PostgresqlDatabaseRuntime,
   PostgresqlReservedConnection,
@@ -7,24 +12,16 @@ import {
   canonicalSchemaJson,
   type LogicalSchemaContract,
 } from '@/platform/persistence/schemaContract'
-import {
-  POSTGRESQL_APPLICATION_SCHEMA,
-  POSTGRESQL_METADATA_SCHEMA,
-} from '@/platform/persistence/postgresqlSchema'
-import {
-  hostedRestoreCopyOperationId,
-  parseHostedBackupMarker,
-  parseHostedBackupReference,
-} from './databaseBackupFormat'
+import { POSTGRESQL_APPLICATION_SCHEMA } from '@/platform/persistence/postgresqlSchema'
+import { hostedRestoreCopyOperationId, parseHostedBackupReference } from './databaseBackupFormat'
 import { createSha256DigestBuilder, sha256Hex } from '@/util/hash'
 
 const quote = (name: string) => `"${name.replaceAll('"', '""')}"`
-const metadata = (name: string) => `${quote(POSTGRESQL_METADATA_SCHEMA)}.${quote(name)}`
 
 /** Hash the finalized rows after owner restore normalization. Bounded keyset
  * reads use the same logical codec as backup, inside the caller's transaction. */
 export async function restoredDatabaseDigests(
-  connection: PostgresqlReservedConnection,
+  connection: Pick<PostgresqlReservedConnection, 'unsafe'>,
   contract: LogicalSchemaContract,
 ) {
   const result: { table: string; digest: string; rows: number }[] = []
@@ -56,35 +53,34 @@ export async function restoredDatabaseDigests(
 }
 
 export async function recordRestoredDatabaseDigests(
-  connection: PostgresqlReservedConnection,
+  connection: Pick<PostgresqlReservedConnection, 'unsafe'>,
   contract: LogicalSchemaContract,
   operationId: string,
   now: number,
 ) {
-  for (const table of await restoredDatabaseDigests(connection, contract))
-    await connection.unsafe(
-      `INSERT INTO ${metadata('logical_copy_chunks')} (operation_id, table_id, chunk_index, chunk_digest, row_count, first_key_json, last_key_json, committed_at) VALUES ($1,$2,0,$3,$4,NULL,NULL,$5)`,
-      [operationId, table.table, table.digest, table.rows, now],
-    )
+  await writeRestoreReceipt(connection, operationId, 'hosted-restore-tables', {
+    tables: await restoredDatabaseDigests(connection, contract),
+    recordedAt: now,
+  })
 }
 
 /** An independent verification Job observes the committed final state. It
  * cannot repair, migrate, or bless a partial target while verifying it. */
 export async function verifyRestoredDatabaseDigests(
-  connection: PostgresqlReservedConnection,
+  connection: Pick<PostgresqlReservedConnection, 'unsafe'>,
   contract: LogicalSchemaContract,
   operationId: string,
 ) {
-  const expected = await connection.unsafe(
-    `SELECT table_id,chunk_digest,row_count FROM ${metadata('logical_copy_chunks')} WHERE operation_id=$1 AND chunk_index=0 ORDER BY table_id`,
-    [operationId],
-  )
+  const receipt = await readRestoreReceipt<{
+    tables: { table: string; digest: string; rows: number }[]
+  }>(connection, operationId, 'hosted-restore-tables')
+  const expected = receipt?.tables ?? []
   const actual = await restoredDatabaseDigests(connection, contract)
   if (
     expected.length !== actual.length ||
     actual.some((table) => {
-      const row = expected.find((entry) => entry.table_id === table.table)
-      return !row || row.chunk_digest !== table.digest || Number(row.row_count) !== table.rows
+      const row = expected.find((entry) => entry.table === table.table)
+      return !row || row.digest !== table.digest || row.rows !== table.rows
     })
   )
     throw new Error('hosted-restore-finalized-content-changed')
@@ -104,16 +100,23 @@ export async function verifyHostedDatabaseRestore(input: {
   const connection = await input.runtime.providerPool().reserve()
   try {
     await connection.unsafe('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY')
-    const rows = await connection.unsafe(
-      `SELECT g.source_generation_id FROM ${metadata('database_generations')} g JOIN ${metadata('logical_copy_operations')} r ON r.operation_id = $1 AND r.source_generation_id = g.source_generation_id JOIN ${metadata('logical_copy_operations')} o ON o.operation_id = g.operation_id AND o.source_generation_id = g.source_generation_id WHERE g.generation_id = $2 AND g.operation_id = $3 AND g.contract_digest = $4 AND g.state = 'active' AND g.first_live_write_at IS NULL AND r.stage = 'finalized'`,
-      [
-        hostedRestoreCopyOperationId(object),
-        input.generation.generationId,
-        input.generation.operationId,
-        input.contract.digest,
-      ],
+    const receipt = await readRestoreReceipt<HostedEpoch2RestoreReceipt>(
+      connection,
+      input.generation.operationId,
+      'hosted-restore',
     )
-    if (rows.length !== 1 || parseHostedBackupMarker(rows[0]!.source_generation_id) === null)
+    const rows = await connection.unsafe(
+      "SELECT g.generation_id FROM agent_workflow_meta.generations g JOIN agent_workflow_meta.first_write w USING (generation_id) WHERE g.generation_id=$1 AND g.state='active' AND w.first_live_write_at IS NULL",
+      [input.generation.generationId],
+    )
+    if (
+      rows.length !== 1 ||
+      !receipt ||
+      receipt.stage !== 'finalized' ||
+      receipt.generationId !== input.generation.generationId ||
+      receipt.logicalDigest !== input.contract.digest ||
+      receipt.copyOperationId !== hostedRestoreCopyOperationId(object)
+    )
       throw new Error('hosted-restore-finalization-not-confirmed')
     await verifyRestoredDatabaseDigests(connection, input.contract, input.generation.operationId)
     await connection.unsafe('COMMIT')

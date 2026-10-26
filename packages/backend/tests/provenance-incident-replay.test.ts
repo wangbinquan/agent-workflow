@@ -1,3 +1,6 @@
+import type { projectNodeRunReadFacts } from '@/modules/task-execution/infrastructure/nodeRunSnapshot'
+// Target fixture mint order; missing seq is covered only by conversion/rejection tests.
+let fixtureRunSequence = 0
 // RFC-074 incident `01KSHVXCH6RQ5F5P64MZ4FZVN6` replay — provenance resolution.
 //
 // WHY THIS FILE EXISTS (regression intent):
@@ -25,17 +28,16 @@
 //   one freshness source of truth (the consumed-run id), recorded at the single
 //   content read-point.
 
-import { type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { afterAll, beforeEach, describe, expect, test } from 'bun:test'
-import { isNodeRunFresh } from '../src/services/freshness'
+import { isNodeRunFresh } from '../src/modules/task-execution/application/runProvenance'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 
-type Row = PersistenceTables['nodeRuns']['$inferSelect']
+type Row = ReturnType<typeof projectNodeRunReadFacts>
 
 // Minimal row: isNodeRunFresh reads only (id, consumedUpstreamRunsJson).
 function run(id: string, consumed?: Record<string, string>): Row {
   return {
-    seq: null,
+    seq: ++fixtureRunSequence,
     parentNodeRunId: null,
     containerRunId: null,
     shardKey: null,

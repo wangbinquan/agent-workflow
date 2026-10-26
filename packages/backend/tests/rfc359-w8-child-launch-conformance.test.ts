@@ -1,3 +1,5 @@
+import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { o2Ports } from './helpers/o2Closure'
 // RFC-359 W8-A —— `ChildExecutionLaunchOperations` 的**双引擎对拍**。
 //
@@ -43,7 +45,7 @@ import {
   readTaskRepoFixtures,
 } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+
 import { testDriveFactory } from './helpers/taskDriveCoordinatorFactory'
 import { createWorkspacePreparationJournal } from '@/modules/task-execution/infrastructure/workspacePreparationJournal'
 import { expect, test } from 'bun:test'
@@ -85,7 +87,7 @@ import type {
   TaskExecutionTopologyLogger,
 } from '@/modules/task-execution/application/ports/taskExecutionTopology'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
-import { type MaterializedSpace } from '@/modules/source-control/infrastructure/workspaceMaterializer'
+import type { MaterializedSpace } from '@/modules/source-control/infrastructure/workspaceMaterializer'
 
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 
@@ -392,6 +394,7 @@ function operationsFor(
 ): LaunchTarget {
   const db = harness.db as unknown as PostgresqlDatabaseClient
   const persistence = createTaskExecutionPersistence(db, {
+    historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
     recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
   })
   let finalized = false
@@ -404,6 +407,7 @@ function operationsFor(
         coordinatorFactory: testDriveFactory(
           db,
           createDatabaseTaskDriverLifecyclePort({
+            historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
             db,
             log: logger(),
             async finalizeWorkspace() {

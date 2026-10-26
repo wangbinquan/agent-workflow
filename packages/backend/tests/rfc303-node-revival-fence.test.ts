@@ -3,18 +3,17 @@
 // revive external work after an MR / PR terminal fact committed.
 import { nodeRunFixture, patchTaskFixture, taskFixture, workflowFixture } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
-import { describe, expect, test } from 'bun:test'
+import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
-import { resolve } from 'node:path'
 
-import { createInMemoryDb } from '@/db/client'
-import { dbTxSync } from '@/db/txSync'
+import { describeEachProvider } from './helpers/eachProvider'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
+import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
+import { fenceTaskWrite } from '@/modules/task-execution/infrastructure/ownedTaskExecution'
+import { lockNodeRunTaskRootInTx } from '@/modules/task-execution/infrastructure/nodeRunWriteProtocol'
 import { setNodeRunStatus, setNodeRunStatusTx, transitionNodeRunStatus } from '@/services/lifecycle'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-
-async function fixture(status: 'pending' | 'done') {
-  const db = createInMemoryDb(MIGRATIONS)
+async function fixture(db: PersistenceDb, status: 'pending' | 'done') {
   await workflowFixture(db, { id: 'workflow-1', name: 'workflow', definition: '{}' })
   await taskFixture(db, {
     id: 'task-1',
@@ -48,9 +47,9 @@ async function expectClosed(operation: () => Promise<unknown> | unknown): Promis
   }
 }
 
-describe('RFC-303 node-run terminal fence', () => {
+describeEachProvider('RFC-303 node-run terminal fence', (harness) => {
   test('named transition cannot dispatch a pending node', async () => {
-    const db = await fixture('pending')
+    const db = await fixture(harness.db, 'pending')
     await expectClosed(() =>
       transitionNodeRunStatus({ db, nodeRunId: 'run-1', event: { kind: 'mark-running' } }),
     )
@@ -61,7 +60,7 @@ describe('RFC-303 node-run terminal fence', () => {
   })
 
   test('async and transactional lower-level revival paths fail with the stable code', async () => {
-    const db = await fixture('done')
+    const db = await fixture(harness.db, 'done')
     await expectClosed(() =>
       setNodeRunStatus({
         db,
@@ -72,20 +71,22 @@ describe('RFC-303 node-run terminal fence', () => {
       }),
     )
     await expectClosed(() =>
-      dbTxSync(db, (tx) =>
-        setNodeRunStatusTx({
+      databaseSessionFor(db).transaction(async (tx) => {
+        await fenceTaskWrite(tx, { taskId: 'task-1' })
+        await lockNodeRunTaskRootInTx(tx, 'run-1')
+        return setNodeRunStatusTx({
           tx,
           nodeRunId: 'run-1',
           to: 'pending',
           allowedFrom: ['done'],
           allowTerminal: true,
-        }),
-      ),
+        })
+      }),
     )
   })
 
   test('explicit reopen clearing the closed fence permits later lifecycle work', async () => {
-    const db = await fixture('pending')
+    const db = await fixture(harness.db, 'pending')
     await patchTaskFixture(db, { id: 'task-1' }, { sourceTerminationFence: null })
     await expect(
       transitionNodeRunStatus({ db, nodeRunId: 'run-1', event: { kind: 'mark-running' } }),

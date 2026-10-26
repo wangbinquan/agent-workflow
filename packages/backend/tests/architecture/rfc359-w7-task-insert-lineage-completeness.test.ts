@@ -43,6 +43,7 @@ import { join, relative, resolve } from 'node:path'
 import ts from 'typescript'
 
 import { portable } from './census'
+import { enclosingFunction, importedCallResult, returnedKeys, tableMember } from './insertLineage'
 
 const SRC = resolve(import.meta.dir, '..', '..', 'src')
 
@@ -50,7 +51,7 @@ const SRC = resolve(import.meta.dir, '..', '..', 'src')
 const REQUIRED_COLUMNS = ['executionLineageId', 'lineageSlotPathJson', 'launchOrigin'] as const
 
 const TASK_INSERT_SITES: readonly string[] = [
-  'modules/task-execution/infrastructure/taskCreationParticipant.ts:21 executionLineageId+ lineageSlotPathJson+ launchOrigin+',
+  'modules/task-execution/infrastructure/taskCreationParticipant.ts:20 executionLineageId+ lineageSlotPathJson+ launchOrigin+',
 ]
 
 function sourceFiles(dir: string): string[] {
@@ -69,8 +70,7 @@ function sourceFiles(dir: string): string[] {
  * 纯函数，扫描与自证共用。按 AST 取而不是正则匹配文本——`values({…})` 的键分布在几十行里，
  * 正则要么开窗口太小漏判（本判据初稿就是这么误判了两个站点「没写血缘」），要么跨站点串味。
  */
-export function taskInsertSites(text: string, rel: string): string[] {
-  if (!text.includes('insert(tasks)') && !text.includes('insertOne(')) return []
+export function taskInsertSites(text: string, rel: string, splitBuilder = ''): string[] {
   const source = ts.createSourceFile('probe.ts', text, ts.ScriptTarget.Latest, true)
   const out: string[] = []
   const visit = (node: ts.Node): void => {
@@ -80,7 +80,7 @@ export function taskInsertSites(text: string, rel: string): string[] {
       if (
         ts.isIdentifier(node.expression) &&
         node.expression.text === 'insertOne' &&
-        node.arguments[1]?.getText(source) === 'tasks'
+        tableMember(node.arguments[1], 'tasks')
       ) {
         isInsert = true
         argument = node.arguments[2]
@@ -93,7 +93,7 @@ export function taskInsertSites(text: string, rel: string): string[] {
           ts.isCallExpression(receiver) &&
           ts.isPropertyAccessExpression(receiver.expression) &&
           receiver.expression.name.text === 'insert' &&
-          receiver.arguments[0]?.getText(source) === 'tasks'
+          tableMember(receiver.arguments[0], 'tasks')
         ) {
           isInsert = true
           argument = node.arguments[0]
@@ -107,6 +107,39 @@ export function taskInsertSites(text: string, rel: string): string[] {
               keys.add(property.name.text)
             }
           }
+        }
+        if (
+          argument &&
+          ts.isPropertyAccessExpression(argument) &&
+          ts.isIdentifier(argument.expression) &&
+          argument.name.text === 'task' &&
+          importedCallResult(
+            source,
+            argument.expression.text,
+            'splitTaskCreation',
+            '../domain/taskCreation',
+            enclosingFunction(node),
+          )
+        ) {
+          const split = argument.expression.text
+          let writesLaunch = false
+          const scope = enclosingFunction(node)
+          const companion = (candidate: ts.Node): void => {
+            if (candidate !== scope && ts.isFunctionLike(candidate)) return
+            if (
+              ts.isCallExpression(candidate) &&
+              candidate.expression.getText(source) === 'insertOne' &&
+              candidate.arguments[0]?.getText(source) === node.arguments[0]?.getText(source) &&
+              tableMember(candidate.arguments[1], 'taskLaunchContexts') &&
+              candidate.arguments[2]?.getText(source) === `${split}.launchContext`
+            )
+              writesLaunch = true
+            ts.forEachChild(candidate, companion)
+          }
+          companion(scope)
+          if (writesLaunch)
+            for (const column of returnedKeys(splitBuilder, 'splitTaskCreation', 'launchContext'))
+              keys.add(column)
         }
         const line = source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1
         const columns = REQUIRED_COLUMNS.map(
@@ -127,7 +160,13 @@ function observedSites(): readonly string[] {
   if (cached !== undefined) return cached
   const rows: string[] = []
   for (const file of sourceFiles(SRC)) {
-    rows.push(...taskInsertSites(readFileSync(file, 'utf8'), portable(relative(SRC, file))))
+    rows.push(
+      ...taskInsertSites(
+        readFileSync(file, 'utf8'),
+        portable(relative(SRC, file)),
+        readFileSync(join(SRC, 'modules/task-execution/domain/taskCreation.ts'), 'utf8'),
+      ),
+    )
   }
   cached = rows.sort()
   return cached
@@ -212,5 +251,42 @@ describe('RFC-359 W7 —— insert(tasks) 的血缘 / 启动来源三列完整�
     ).toEqual(['native.ts:1 executionLineageId+ lineageSlotPathJson+ launchOrigin+'])
     const otherTable = 'async function f() { await tx.insert(nodeRuns).values({ id: 1 }) }'
     expect(taskInsertSites(otherTable, 'a.ts'), '别的表不该被算进来').toEqual([])
+  })
+  test('target lineage is required in the same aggregate launch-context write', () => {
+    const source = `import { splitTaskCreation } from '../domain/taskCreation'
+const split = splitTaskCreation(input)
+await insertOne(tx, tables.tasks, split.task)
+await insertOne(tx, tables.taskLaunchContexts, split.launchContext)`
+    const builder =
+      'export function splitTaskCreation() { return { launchContext: { executionLineageId, lineageSlotPathJson, launchOrigin } } }'
+    expect(taskInsertSites(source, 'p.ts', builder)[0]).toEndWith(
+      'executionLineageId+ lineageSlotPathJson+ launchOrigin+',
+    )
+    expect(
+      taskInsertSites(
+        source.replace('tables.taskLaunchContexts', 'tables.other'),
+        'p.ts',
+        builder,
+      )[0],
+    ).toEndWith('executionLineageId- lineageSlotPathJson- launchOrigin-')
+    expect(taskInsertSites(source, 'p.ts', builder.replace(', launchOrigin', ''))[0]).toEndWith(
+      'executionLineageId+ lineageSlotPathJson+ launchOrigin-',
+    )
+    for (const invalid of [
+      source.replace(
+        'insertOne(tx, tables.taskLaunchContexts',
+        'insertOne(otherTx, tables.taskLaunchContexts',
+      ),
+      source.replace(
+        'await insertOne(tx, tables.taskLaunchContexts, split.launchContext)',
+        'async function unrelated() { await insertOne(tx, tables.taskLaunchContexts, split.launchContext) }',
+      ),
+    ])
+      expect(taskInsertSites(invalid, 'p.ts', builder)[0]).toEndWith(
+        'executionLineageId- lineageSlotPathJson- launchOrigin-',
+      )
+    expect(taskInsertSites('tx.insert(tables["tasks"]).values({ id })', 'p.ts')[0]).toEndWith(
+      'executionLineageId- lineageSlotPathJson- launchOrigin-',
+    )
   })
 })

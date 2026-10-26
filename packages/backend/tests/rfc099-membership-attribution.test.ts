@@ -1,3 +1,5 @@
+import { legacyContentRef } from '@/platform/content/contentRef'
+import { contentRowColumns } from '@/platform/content/infrastructure/contentStore'
 import { withO2Closure } from './helpers/o2Closure'
 // RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-099 B3 — task-membership answer rights + attribution recording.
@@ -192,7 +194,9 @@ describeEachProviderHttpApplication(
         sourcePortName: 'docpath',
         versionIndex: 1,
         reviewIteration: 0,
-        bodyPath: 'doc_versions/v1.md',
+        ...contentRowColumns(
+          legacyContentRef('review-body-path', 'local-file', 'doc_versions/v1.md'),
+        ),
         decision: 'pending',
       })
     })

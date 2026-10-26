@@ -108,15 +108,19 @@ export interface SkillSnapshotReverifyReceipt {
  * Provider-owned Skill Catalog boot capability.
  *
  * Database clients, transactions and filesystem roots are fixed by composition;
- * bootstrap can only advance the four reviewed boot stages and receive closed
- * count receipts.
+ * bootstrap can advance ordinary recovery, availability and verification only.
+ * Legacy identity/version upgrades belong to the offline converter.
  */
 export interface SkillCatalogBootParticipant {
   readonly [skillCatalogBootParticipantBrand]: 'skill-catalog-boot-participant'
-  runIdentityMigrationBarrier(): Promise<SkillIdentityMigrationReceipt>
+  recoverOperations(): Promise<{
+    readonly total: number
+    readonly rolledBack: number
+    readonly rolledForward: number
+    readonly quarantined: number
+  }>
   activateAvailabilityGate(): void
   reconcileLiveFiles(): Promise<void>
-  backfillLegacyVersions(): Promise<SkillLegacyVersionBackfillReceipt>
   reverifySnapshots(): Promise<SkillSnapshotReverifyReceipt>
 }
 

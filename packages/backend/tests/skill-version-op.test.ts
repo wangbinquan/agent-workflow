@@ -1,3 +1,5 @@
+import { legacyContentRef } from '@/platform/content/contentRef'
+import { contentRowColumns } from '@/platform/content/infrastructure/contentStore'
 // RFC-170 §6a/T7② — commitSkillVersion runs under a version-write op: it takes a
 // serialising lease (concurrent same-skill write → busy 409), the lock is freed
 // after, `skipOp` lets a caller that already holds the lock (reserve) reuse it,
@@ -208,7 +210,9 @@ describeEachProvider('RFC-170 T7② — version-write op', (harness) => {
         id: ulid(),
         skillId,
         versionIndex: 2,
-        filesPath: skillVersionRelPath(skillId, 2),
+        ...contentRowColumns(
+          legacyContentRef('skill-path', 'local-file', skillVersionRelPath(skillId, 2)),
+        ),
         source: 'editor',
         authorUserId: 'u',
         contentHash,
@@ -284,7 +288,8 @@ describeEachProvider('RFC-170 T7② — version-write op', (harness) => {
       ),
     ).rejects.toThrow('post-commit-fault')
     expect((await getActiveOp(db, skillId))?.phase).toBe('db-committed')
-    const { skillOperationLocks, skills } = tablesOf(db)
+    const { skillOperationLocks } = tablesOf(db),
+      { skills } = tablesOf(db)
     expect(await db.select().from(skillOperationLocks)).toHaveLength(1)
     expect(isSkillBootVerified(skillId)).toBe(false)
     expect(

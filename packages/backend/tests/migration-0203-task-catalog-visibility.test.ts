@@ -1,15 +1,10 @@
+import { FROZEN_MIGRATIONS } from './migration-freeze'
 import { describe, expect, test } from 'bun:test'
 import { Database } from 'bun:sqlite'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
-const MIGRATION = resolve(
-  import.meta.dir,
-  '..',
-  'db',
-  'migrations',
-  '0203_task_catalog_visibility.sql',
-)
+const MIGRATION = resolve(FROZEN_MIGRATIONS, '0203_task_catalog_visibility.sql')
 
 describe('migration 0203 — generic task catalog visibility', () => {
   test('defaults ordinary rows to public and backfills every legacy internal execution descendant', () => {

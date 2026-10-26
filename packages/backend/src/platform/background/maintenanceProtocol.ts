@@ -10,7 +10,9 @@ const SqliteMaintenanceWorkerInitSchema = z
     version: z.literal(MAINTENANCE_PROTOCOL_VERSION),
     catalogDigest: z.string().check(utf16Length(64)),
     dbPath: z.string().min(1),
-    migrationsFolder: z.string().min(1),
+    // Epoch 2 admits the installed history before starting the Worker. The
+    // Worker never runs legacy migrations, so its retained wire field is empty.
+    migrationsFolder: z.string(),
     appHome: z.string().min(1),
     sqlite: z
       .object({

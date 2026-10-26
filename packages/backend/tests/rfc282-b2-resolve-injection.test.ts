@@ -1,3 +1,5 @@
+import { legacyContentRef } from '@/platform/content/contentRef'
+import { contentRowColumns } from '@/platform/content/infrastructure/contentStore'
 // RFC-282 B2 / RFC-345 T4a — the legacy resolver keeps its focused behavior
 // tests below, while all six TaskExecution entries now use the per-task named
 // Resource Catalog session (four managed + two synthetic code-owned entries).
@@ -78,7 +80,7 @@ describeEachProvider(
         id: skillId,
         name: 'quarantined-skill',
         description: '',
-        managedPath: skillFilesRel(skillId),
+        ...contentRowColumns(legacyContentRef('skill-path', 'local-file', skillFilesRel(skillId))),
         contentVersion: 1,
         createdAt: Date.now(),
         updatedAt: Date.now(),
@@ -98,14 +100,15 @@ describeEachProvider(
       expect(result.summary).toContain('quarantined-skill')
     })
 
-    test('non-canonical managed path → {kind:failed, skill-path-not-canonical} (was a THROW)', async () => {
+    test('missing content reference → typed skill-content-missing failure', async () => {
       const skillId = ulid()
       const { skills } = tablesOf(db)
       await insertOne(db, skills, {
         id: skillId,
         name: 'legacy-path-skill',
         description: '',
-        managedPath: `skills/legacy-name/files`, // pre-identity-migration shape
+        contentRefJson: null,
+        contentInlineBytes: null, // Legacy identity proof is exercised at B conversion.
         contentVersion: 1,
         createdAt: Date.now(),
         updatedAt: Date.now(),
@@ -120,7 +123,7 @@ describeEachProvider(
       })
       expect(result.kind).toBe('failed')
       if (result.kind !== 'failed') throw new Error('unreachable')
-      expect(result.message).toBe('skill-path-not-canonical')
+      expect(result.message).toBe('skill-content-missing')
     })
 
     test('the resolver no longer throws domain errors for these gates (typed-only surface)', async () => {
@@ -130,7 +133,7 @@ describeEachProvider(
         id: skillId,
         name: 'q2',
         description: '',
-        managedPath: skillFilesRel(skillId),
+        ...contentRowColumns(legacyContentRef('skill-path', 'local-file', skillFilesRel(skillId))),
         contentVersion: 1,
         createdAt: Date.now(),
         updatedAt: Date.now(),

@@ -1,3 +1,5 @@
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { taskReadColumns } from './taskRepositorySql'
 // RFC-359 W8 —— 冻结任务的溯源预检：**一份实现，两个 provider 共用**。
 //
 // 合一前这段在 `services/task.ts`（SQLite 路径）与本目录的
@@ -10,13 +12,12 @@
 // 本体所在处）是被守卫按住的：`rfc349-provider-cutover` 的
 // `databaseMechanismDependencies` 判据禁止 `services/` 面直接拥有 `@/db/*` / drizzle。
 // 纯判据留在那边，带读点的这一层归 task-execution 的 infrastructure。
-import { tablesOf } from '@/platform/persistence/sessionTables'
-import { eq } from 'drizzle-orm'
 import {
   WorkflowDefinitionSchema,
   migrateWorkflowDefinitionToLatest,
   parseTriggerContextJson,
 } from '@agent-workflow/shared'
+import { eq } from 'drizzle-orm'
 
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { assertTriggerPreflight } from '@/services/execution/triggerPreflight'
@@ -46,9 +47,9 @@ export async function assertFrozenTaskTriggerPreflight(
   const frozen = (
     await db
       .select({
-        workflowSnapshot: tasks.workflowSnapshot,
-        refClosureJson: tasks.refClosureJson,
-        triggerContextJson: tasks.triggerContextJson,
+        workflowSnapshot: taskReadColumns(db).workflowSnapshot,
+        refClosureJson: taskReadColumns(db).refClosureJson,
+        triggerContextJson: taskReadColumns(db).triggerContextJson,
       })
       .from(tasks)
       .where(eq(tasks.id, taskId))

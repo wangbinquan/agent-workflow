@@ -105,11 +105,11 @@ describe('RFC-078 compareNodeRunsForTimeline', () => {
     expect(sortIds([review, agent])).toEqual(['agent', 'rev'])
   })
 
-  test('non-review rows fall back to started_at; id breaks ties', () => {
-    const a = { seq: null, id: 'aaa', startedAt: 5000 }
-    const b = { seq: null, id: 'bbb', startedAt: 5000 }
+  test('non-review rows fall back to started_at; sequence breaks ties', () => {
+    const a = { seq: 2, id: 'aaa', startedAt: 5000 }
+    const b = { seq: 1, id: 'bbb', startedAt: 5000 }
     const c = { seq: null, id: 'ccc', startedAt: 1000 }
-    expect(sortIds([a, b, c])).toEqual(['ccc', 'aaa', 'bbb'])
+    expect(sortIds([a, b, c])).toEqual(['ccc', 'bbb', 'aaa'])
   })
 
   test('null anchors sort as 0 (NULL-first, matching old asc(started_at))', () => {

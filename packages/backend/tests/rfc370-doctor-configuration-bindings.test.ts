@@ -1,6 +1,6 @@
 import { composeSystemOperationsTaskPorts } from '@/modules/task-execution/composition'
 // Only the configuration entry points are exercised; other doctor checks are unchanged.
-import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { DEFAULT_CONFIG, type Config } from '@agent-workflow/shared'
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
@@ -108,7 +108,7 @@ describe('RFC-370 doctor configuration selection', () => {
     selected.error = new Error('selected database configuration offline')
     let finished = false
     const pending = checkConfiguredDatabase(
-      buildLogicalSchemaContract(),
+      logicalSchemaContract,
       composeSystemOperationsTaskPorts(),
       selected,
     ).then((result) => {
@@ -148,7 +148,7 @@ describe('RFC-370 doctor configuration selection', () => {
     })
     expect(
       await checkConfiguredDatabase(
-        buildLogicalSchemaContract(),
+        logicalSchemaContract,
         composeSystemOperationsTaskPorts(),
         selected,
       ),
@@ -177,7 +177,7 @@ describe('RFC-370 doctor configuration selection', () => {
       })
       expect(
         await checkConfiguredDatabase(
-          buildLogicalSchemaContract(),
+          logicalSchemaContract,
           composeSystemOperationsTaskPorts(),
           selected,
         ),

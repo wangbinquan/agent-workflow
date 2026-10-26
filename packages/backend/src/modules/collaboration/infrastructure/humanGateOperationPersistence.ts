@@ -1,4 +1,5 @@
 import type { HumanGateTaskLockPort } from '../composition/required-ports'
+import type { HistoryRestrictionPort } from '@/platform/contracts/historyRestriction'
 import { DatabaseHumanGateOperationJournal } from './humanGateOperationJournal'
 // RFC-359 —— 应用层 `HumanGateOperationStore` 端口（db-owning、每次调用自开事务）的**唯一**实现，
 // 两个 provider 共用：`DatabaseSession.transaction` 里跑 `DatabaseHumanGateOperationJournal`。
@@ -15,12 +16,23 @@ import type { HumanGateOperationSnapshot } from '../domain/humanGateOperation'
 import { type HumanGateOperationJournal } from './humanGateOperationJournal'
 
 export class DatabaseHumanGateOperationPersistence implements HumanGateOperationStore {
+  constructor(session: DatabaseSession, journal: HumanGateOperationJournal)
+  constructor(
+    session: DatabaseSession,
+    taskLock: HumanGateTaskLockPort,
+    options: { readonly historyRestrictions: HistoryRestrictionPort },
+  )
   constructor(
     private readonly session: DatabaseSession,
     journal: HumanGateOperationJournal | HumanGateTaskLockPort,
+    options?: { readonly historyRestrictions: HistoryRestrictionPort },
   ) {
+    if (typeof journal === 'function' && options === undefined)
+      throw new Error('gate-history-restriction-provider-required')
     this.journal =
-      typeof journal === 'function' ? new DatabaseHumanGateOperationJournal(journal) : journal
+      typeof journal === 'function'
+        ? new DatabaseHumanGateOperationJournal(journal, options!.historyRestrictions)
+        : journal
   }
 
   private readonly journal: HumanGateOperationJournal

@@ -1,3 +1,5 @@
+import { createSkillContentLocationQuery } from '@/modules/resource-catalog/infrastructure/databaseSkillTrees'
+import { resourcePackageArtifactCodecs } from '@/modules/resource-catalog/infrastructure/resourcePackageArtifactCodec'
 // RFC-395 II-a A6 — 场景回放、历史回执与共同恢复调度的双 provider 回归。
 import { beforeEach, expect, test } from 'bun:test'
 import { randomBytes } from 'node:crypto'
@@ -77,7 +79,7 @@ describeEachProvider('RFC-395 II-a A6 scene adapters', (harness) => {
       key: 'a6-import',
       actorUserId: actor.user.id,
       state,
-      preparedArtifactsJson: '[]',
+      preparedArtifactsJson: resourcePackageArtifactCodecs.encode([]),
       receiptJson: storedReceipt === undefined ? null : JSON.stringify(storedReceipt),
       createdAt: 1,
       updatedAt: 1,
@@ -85,7 +87,7 @@ describeEachProvider('RFC-395 II-a A6 scene adapters', (harness) => {
   }
 
   test('Intent compares the persisted draft hash before replay and rejects different-payload replay (RFC-395 II-a A6 deliberate change)', async () => {
-    await intentJournal('[]')
+    await intentJournal(intentApplyArtifactCodecs.encode([]))
     const engine = createIntentApplyEngine({
       db: harness.db,
       resources: {
@@ -206,14 +208,14 @@ describeEachProvider('RFC-395 II-a A6 scene adapters', (harness) => {
       ],
     }
     await expect(engine.apply(request)).resolves.toEqual(expected)
-    // 缺少原请求 digest，不能把改变 decisions 的重放伪装成已拒绝；II-b 需要 request identity。
+    // 缺少原请求 digest，不能把改变 decisions 的重放伪装成已拒绝；T-5 明确延后 request identity 列。
     await expect(
       engine.apply({ ...request, decisions: [{ localSlug: 'tools', action: 'new' }] }),
     ).resolves.toEqual(expected)
   })
 
   test('one registered recovery entry drives both journals and preserves per-scene active snapshots', async () => {
-    await intentJournal('[]', 'prepared')
+    await intentJournal(intentApplyArtifactCodecs.encode([]), 'prepared')
     await packageJournal('prepared')
     const calls: string[] = []
     const recovery = createAtomicApplyRecovery(
@@ -274,6 +276,7 @@ describeEachProvider('RFC-395 II-a A6 scene adapters', (harness) => {
     )
     const discarded: string[] = []
     const artifacts = createIntentApplyArtifactLifecycle({
+      skillContentLocations: createSkillContentLocationQuery(harness.db),
       db: harness.db,
       appHome: '/unused',
       pluginsDir: '/unused/plugins',
@@ -339,7 +342,7 @@ describeEachProvider('RFC-395 II-a A6 scene adapters', (harness) => {
   test.each(['decode', 'database'] as const)(
     'recovery classifies %s failures explicitly and keeps bare log messages',
     async (kind) => {
-      await intentJournal(kind === 'decode' ? '{' : '[]')
+      await intentJournal(kind === 'decode' ? '{' : intentApplyArtifactCodecs.encode([]))
       const warnings: Array<{ message: string; fields: unknown }> = []
       const logger: Logger = {
         ...log,

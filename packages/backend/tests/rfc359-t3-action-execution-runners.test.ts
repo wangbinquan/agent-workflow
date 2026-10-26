@@ -77,6 +77,7 @@ function fakeEnvironment(
         return {
           task: {
             id: taskId,
+            subjectKind: 'digital-employee',
             workflowId: TASK_DEFINITION_HOSTS['digital-employee'].id,
             status: row.status,
             errorSummary: null,

@@ -6,23 +6,26 @@
 // Stage 2 (migration 0032, follow-up) drops the old tables after services
 // switch to read/write the new table.
 
+import {
+  frozenTablesOf,
+  createFrozenEpoch1Db,
+  LAST_LEGACY_CLARIFY_IDX,
+  freezeAt,
+  FROZEN_MIGRATIONS,
+} from './migration-freeze'
 import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
 import { queryRows, rawExec } from '@/platform/persistence/queryHelpers'
 import { describe, expect, test } from 'bun:test'
-import { insertLegacySelfClarify, insertLegacyCrossClarify } from './clarify-fixtures'
 import { resolve } from 'node:path'
 import { eq, sql } from 'drizzle-orm'
 
-import { createInMemoryDb } from '../src/db/client'
-import { LAST_LEGACY_CLARIFY_IDX, freezeAt } from './migration-freeze'
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+const MIGRATIONS = resolve(FROZEN_MIGRATIONS)
 
-async function seedTask(db: ReturnType<typeof createInMemoryDb>): Promise<string> {
+async function seedTask(db: ReturnType<typeof createFrozenEpoch1Db>): Promise<string> {
   const id = `task_${Math.random().toString(36).slice(2, 8)}`
   const wfId = `wf_${id}`
   const def = { $schema_version: 3, inputs: [], nodes: [], edges: [], outputs: [] }
-  const { workflows, tasks } = tablesOf(db)
+  const { workflows, tasks } = frozenTablesOf(db)
   await insertOne(db, workflows, {
     id: wfId,
     name: 'mig-test',
@@ -49,7 +52,7 @@ async function seedTask(db: ReturnType<typeof createInMemoryDb>): Promise<string
 
 describe('RFC-058 migration 0031 — clarify_rounds table shape', () => {
   test('clarify_rounds table exists with all columns + indexes after migrate', () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createFrozenEpoch1Db(MIGRATIONS)
     // sqlite_master lookup confirms the migration ran and table exists.
     const tables = queryRows(
       db
@@ -74,7 +77,7 @@ describe('RFC-058 migration 0031 — clarify_rounds table shape', () => {
   })
 
   test('legacy clarify_sessions and cross_clarify_sessions still exist post-stage-1 (era-locked at 0106; 0107 drops them)', () => {
-    const db = createInMemoryDb(freezeAt(LAST_LEGACY_CLARIFY_IDX))
+    const db = createFrozenEpoch1Db(freezeAt(LAST_LEGACY_CLARIFY_IDX))
     const t = queryRows(
       db
         .select({ name: sql<string>`name` })
@@ -87,9 +90,9 @@ describe('RFC-058 migration 0031 — clarify_rounds table shape', () => {
 
 describe('RFC-058 migration 0031 — DB CHECK kind × status invariant', () => {
   test('rejects kind=self + status=abandoned (CR-1 invariant is cross-only)', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createFrozenEpoch1Db(MIGRATIONS)
     const taskId = await seedTask(db)
-    const { nodeRuns, clarifyRounds } = tablesOf(db)
+    const { nodeRuns, clarifyRounds } = frozenTablesOf(db)
     await insertOne(db, nodeRuns, {
       id: 'nr_a',
       taskId,
@@ -123,9 +126,9 @@ describe('RFC-058 migration 0031 — DB CHECK kind × status invariant', () => {
   })
 
   test('rejects kind=cross + status=canceled (task-cancel path is self-only)', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createFrozenEpoch1Db(MIGRATIONS)
     const taskId = await seedTask(db)
-    const { nodeRuns, clarifyRounds } = tablesOf(db)
+    const { nodeRuns, clarifyRounds } = frozenTablesOf(db)
     await insertOne(db, nodeRuns, {
       id: 'nr_a',
       taskId,
@@ -159,9 +162,9 @@ describe('RFC-058 migration 0031 — DB CHECK kind × status invariant', () => {
   })
 
   test('accepts legitimate (self, canceled) and (cross, abandoned) combinations', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createFrozenEpoch1Db(MIGRATIONS)
     const taskId = await seedTask(db)
-    const { nodeRuns, clarifyRounds } = tablesOf(db)
+    const { nodeRuns, clarifyRounds } = frozenTablesOf(db)
     await insertOne(db, nodeRuns, {
       id: 'nr_a',
       taskId,
@@ -225,9 +228,9 @@ describe('RFC-058 migration 0031 — DB CHECK kind × status invariant', () => {
 
 describe('RFC-058 migration 0031 — kind enum + directive CHECK', () => {
   test('rejects an unknown kind literal', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createFrozenEpoch1Db(MIGRATIONS)
     const taskId = await seedTask(db)
-    const { nodeRuns } = tablesOf(db)
+    const { nodeRuns } = frozenTablesOf(db)
     await insertOne(db, nodeRuns, {
       id: 'nr_a',
       taskId,
@@ -260,9 +263,9 @@ describe('RFC-058 migration 0031 — kind enum + directive CHECK', () => {
   })
 
   test('rejects directive other than continue/stop', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createFrozenEpoch1Db(MIGRATIONS)
     const taskId = await seedTask(db)
-    const { nodeRuns } = tablesOf(db)
+    const { nodeRuns } = frozenTablesOf(db)
     await insertOne(db, nodeRuns, {
       id: 'nr_a',
       taskId,
@@ -295,11 +298,11 @@ describe('RFC-058 migration 0031 — kind enum + directive CHECK', () => {
   })
 })
 
-describe('RFC-058 migration 0031 →（RFC-217 T8 终态）legacy 形状经 fixtures 落统一表', () => {
-  test('legacy 键名 fixture 助手写入 clarify_rounds 并可读回（双表时代结束）', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+describe('RFC-058 migration 0031 →（RFC-217 T8 终态）冻结形状落统一表', () => {
+  test('冻结 self/cross 行写入 clarify_rounds 并可读回（双表时代结束）', async () => {
+    const db = createFrozenEpoch1Db(MIGRATIONS)
     const taskId = await seedTask(db)
-    const { nodeRuns, clarifyRounds } = tablesOf(db)
+    const { nodeRuns, clarifyRounds } = frozenTablesOf(db)
     await insertOne(db, nodeRuns, {
       id: 'nr_a',
       taskId,
@@ -308,14 +311,17 @@ describe('RFC-058 migration 0031 →（RFC-217 T8 终态）legacy 形状经 fixt
       retryIndex: 0,
       iteration: 0,
     })
-    await insertLegacySelfClarify(db, {
+    await insertOne(db, clarifyRounds, {
+      kind: 'self',
+      loopIter: 0,
+      createdAt: Date.now(),
       id: 'legacy-self',
       taskId,
-      sourceAgentNodeId: 'designer',
-      sourceAgentNodeRunId: 'nr_a',
-      clarifyNodeId: 'clarify1',
-      clarifyNodeRunId: 'nr_a',
-      iterationIndex: 0,
+      askingNodeId: 'designer',
+      askingNodeRunId: 'nr_a',
+      intermediaryNodeId: 'clarify1',
+      intermediaryNodeRunId: 'nr_a',
+      iteration: 0,
       questionsJson: '[]',
     })
     const selfRows = await db
@@ -332,13 +338,17 @@ describe('RFC-058 migration 0031 →（RFC-217 T8 终态）legacy 形状经 fixt
       retryIndex: 0,
       iteration: 0,
     })
-    await insertLegacyCrossClarify(db, {
+    await insertOne(db, clarifyRounds, {
+      kind: 'cross',
+      loopIter: 0,
+      iteration: 0,
+      createdAt: Date.now(),
       id: 'legacy-cross',
       taskId,
-      crossClarifyNodeId: 'cc1',
-      crossClarifyNodeRunId: 'nr_b',
-      sourceQuestionerNodeId: 'questioner',
-      sourceQuestionerNodeRunId: 'nr_b',
+      intermediaryNodeId: 'cc1',
+      intermediaryNodeRunId: 'nr_b',
+      askingNodeId: 'questioner',
+      askingNodeRunId: 'nr_b',
       questionsJson: '[]',
     })
     const crossRows = await db

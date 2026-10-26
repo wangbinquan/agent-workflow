@@ -1,3 +1,5 @@
+import { resourcePackageArtifactCodecs } from '@/modules/resource-catalog/infrastructure/resourcePackageArtifactCodec'
+import { reencodeBundleApplyReceipt } from '@/modules/resource-catalog/infrastructure/migration/bundleAppliesRule'
 // RFC-359 W8 —— `modules/resource-catalog/infrastructure/ResourcePackageMaintenance` 的**双引擎对拍**。
 //
 // 这一对是「资源包应用的崩溃收敛」：进程在把技能目录 / 插件 generation 落盘的半路上死掉之后，
@@ -69,7 +71,6 @@ import { join } from 'node:path'
 
 import { eq } from 'drizzle-orm'
 
-import type { DbClient } from '@/db/client'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   type ResourcePackageApplyArtifactRecoveryPort,
@@ -80,8 +81,6 @@ import {
 // 会让这份对拍在账本里看不见。
 import { createPostgresqlResourcePackageApplyArtifactRecovery } from '@/modules/resource-catalog/infrastructure/postgresqlResourcePackageMaintenance'
 import { createResourcePackageApplyJournalPort } from '@/modules/resource-catalog/infrastructure/resourcePackageApplyJournal'
-import { createLegacyResourcePackageApplyArtifactRecovery } from '@/modules/resource-catalog/infrastructure/resourcePackageLegacyRecovery'
-import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 
 const NOW = 1_788_278_400_000
@@ -122,29 +121,13 @@ interface Warning {
 /** Journal 两引擎共用；artifact recovery 继续读取本引擎的工件格式。 */
 function portsFor(
   db: PersistenceDb,
-  isolation: 'exclusive' | 'read-committed',
+  _isolation: 'exclusive' | 'read-committed',
   paths: { readonly appHome: string; readonly pluginsDir: string },
 ): Ports {
   const journal = createResourcePackageApplyJournalPort(db)
-  if (isolation === 'exclusive') {
-    const client = db as unknown as DbClient
-    return {
-      journal,
-      artifacts: createLegacyResourcePackageApplyArtifactRecovery({
-        db: client,
-        appHome: paths.appHome,
-        pluginsDir: paths.pluginsDir,
-      }),
-    }
-  }
-  const client = db as unknown as PostgresqlDatabaseClient
   return {
     journal,
-    artifacts: createPostgresqlResourcePackageApplyArtifactRecovery({
-      db: client,
-      appHome: paths.appHome,
-      pluginsDir: paths.pluginsDir,
-    }),
+    artifacts: createPostgresqlResourcePackageApplyArtifactRecovery({ db, ...paths }),
   }
 }
 
@@ -153,24 +136,17 @@ function portsFor(
  * （SQLite 侧无 `operationId`；PostgreSQL 侧三个 kind 全带，且目录字段叫 `generationDirectory`。）
  */
 function pluginArtifactJson(
-  isolation: 'exclusive' | 'read-committed',
+  _isolation: 'exclusive' | 'read-committed',
   generationDirectory: string,
 ): string {
-  return JSON.stringify([
-    isolation === 'exclusive'
-      ? {
-          kind: 'plugin-install',
-          pluginId: PLUGIN_ID,
-          generationId: GENERATION_ID,
-          generationDir: generationDirectory,
-        }
-      : {
-          kind: 'plugin-install',
-          operationId: OPERATION_ID,
-          pluginId: PLUGIN_ID,
-          generationId: GENERATION_ID,
-          generationDirectory,
-        },
+  return resourcePackageArtifactCodecs.encode([
+    {
+      kind: 'plugin-install',
+      operationId: OPERATION_ID,
+      pluginId: PLUGIN_ID,
+      generationId: GENERATION_ID,
+      generationDirectory,
+    },
   ])
 }
 
@@ -188,26 +164,28 @@ function pluginReceiptJson(
   applied: 'own-shape' | 'other-engine-shape' = 'own-shape',
 ): string {
   const sqliteShape = (isolation === 'exclusive') === (applied === 'own-shape')
-  return JSON.stringify({
-    journalId,
-    applied: [
-      sqliteShape
-        ? {
-            opId: OPERATION_ID,
-            resourceType: 'plugin',
-            resourceId: PLUGIN_ID,
-            action: 'create',
-            name: 'w8-plugin',
-          }
-        : {
-            resourceType: 'plugin',
-            operationId: OPERATION_ID,
-            resourceId: PLUGIN_ID,
-            action: 'create',
-            name: 'w8-plugin',
-          },
-    ],
-  })
+  return reencodeBundleApplyReceipt(
+    JSON.stringify({
+      journalId,
+      applied: [
+        sqliteShape
+          ? {
+              opId: OPERATION_ID,
+              resourceType: 'plugin',
+              resourceId: PLUGIN_ID,
+              action: 'create',
+              name: 'w8-plugin',
+            }
+          : {
+              resourceType: 'plugin',
+              operationId: OPERATION_ID,
+              resourceId: PLUGIN_ID,
+              action: 'create',
+              name: 'w8-plugin',
+            },
+      ],
+    }),
+  )!
 }
 
 async function insertJournal(
@@ -227,7 +205,7 @@ async function insertJournal(
     key: `key-${row.id}`,
     actorUserId: 'w8-actor',
     state: row.state,
-    preparedArtifactsJson: row.preparedArtifactsJson ?? '[]',
+    preparedArtifactsJson: row.preparedArtifactsJson ?? resourcePackageArtifactCodecs.encode([]),
     receiptJson: row.receiptJson ?? null,
     error: null,
     createdAt: OLD,
@@ -287,7 +265,7 @@ describeEachProvider('RFC-359 W8 —— ResourcePackageMaintenance 双引擎对�
       await insertJournal(harness, {
         id: 'w8rpm-b',
         state: 'committed',
-        preparedArtifactsJson: '[]',
+        preparedArtifactsJson: resourcePackageArtifactCodecs.encode([]),
         receiptJson: pluginReceiptJson(harness.capabilities.isolation, 'w8rpm-b'),
         updatedAt: FRESH,
       })
@@ -299,7 +277,7 @@ describeEachProvider('RFC-359 W8 —— ResourcePackageMaintenance 双引擎对�
       expect(listed.map((row) => row.id)).toEqual(['w8rpm-a', 'w8rpm-b'])
       expect(listed.map((row) => row.state)).toEqual(['prepared', 'committed'])
       expect(listed[0]!.receiptJson).toBeNull()
-      expect(listed[0]!.preparedArtifactsJson).toBe('[]')
+      expect(listed[0]!.preparedArtifactsJson).toBe(resourcePackageArtifactCodecs.encode([]))
       expect(JSON.parse(listed[1]!.receiptJson!).journalId).toBe('w8rpm-b')
       // `updatedAt` 是收敛窗口的判据（`journal.updatedAt > reapBefore`）。PostgreSQL 的 int8
       // 经驱动回来可能是字符串——那会让窗口比较悄悄变成字典序比较。两侧都必须是 number。
@@ -669,7 +647,7 @@ describeEachProvider('RFC-359 W8 —— ResourcePackageMaintenance 双引擎对�
     })
   }
 
-  test('信封门只认 journalId：回执载荷用另一侧引擎的字段名，本引擎照样 roll-forward', async () => {
+  test('两种源回执先经转换器，目标回执保留 journalId 与 operationId 后正常前滚', async () => {
     const paths = makePaths()
     try {
       const generationDirectory = join(paths.pluginsDir, PLUGIN_ID, GENERATION_ID)

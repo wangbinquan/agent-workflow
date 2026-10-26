@@ -1,3 +1,4 @@
+import { createSkillCatalogBootAdapter } from '@/modules/resource-catalog/infrastructure/skillCatalogBootAdapter'
 // RFC-370 M0 — skill trees kept in the database for deployments without a
 // persistent disk (design/RFC-370-crewstation-hosted-deployment/redesign-v2-20261014.md §5.1).
 // Locks: the database tree hash is byte-for-byte the canonical file-tree hash
@@ -332,7 +333,10 @@ describeEachProviderHttpApplication(
         db: scope.harness.db,
         ...selectSkillContentDependencies(selection, appHome),
       })
-      await boot.runIdentityMigrationBarrier()
+      await createSkillCatalogBootAdapter({
+        db: scope.harness.db,
+        ...selectSkillContentDependencies(selection, appHome),
+      }).recoverOperations()
       await boot.reconcileLiveFiles()
       expect(await boot.reverifySnapshots()).toEqual({ verified: 1, quarantined: 0 })
       const { skills } = tablesOf(scope.harness.db)

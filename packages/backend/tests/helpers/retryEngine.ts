@@ -1,3 +1,4 @@
+import { epoch2RuntimeTestPorts } from './epoch2RuntimePorts'
 import { o2Ports } from './o2Closure'
 import { withSourceControlTaskPorts } from './sourceControlTaskPorts'
 // RFC-395 II-pre：生产启动留下的准备日志由同一生产 repositoryPreparation 装配继续重试。
@@ -64,7 +65,8 @@ export interface RetryEngineOptions {
    *     `task-execution-owner-conflict`。裸引擎入口没有这个前置。
    * 与 `resume` 二选一；两个都给时 `resume` 优先。
    */
-  readonly resumeWith?: TaskContinuationDependencies
+  readonly resumeWith?: Omit<TaskContinuationDependencies, 'historyRestrictions'> &
+    Partial<Pick<TaskContinuationDependencies, 'historyRestrictions'>>
   /** 级联取消一个子任务。缺省是空操作；并发用例在这里注入搅动。 */
   readonly cancelChildTaskForCascade?: (childTaskId: string, parentTaskId: string) => Promise<void>
   /**
@@ -91,10 +93,11 @@ export interface RetryEngine {
 async function driveInBackground(
   db: PersistenceDb,
   taskId: string,
-  deps: TaskContinuationDependencies,
+  deps: NonNullable<RetryEngineOptions['resumeWith']>,
   now?: () => number,
 ): Promise<void> {
   const persistence = createTaskExecutionPersistence(db, {
+    historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
     recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
   })
   const moved = await persistence.runtimeLifecycle.trySet({
@@ -136,6 +139,7 @@ export function createRetryEngine(
 ): RetryEngine {
   const appHome = options.appHome ?? mkdtempSync(join(tmpdir(), 'aw-retry-engine-'))
   const persistence = createTaskExecutionPersistence(db, {
+    historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
     recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
   })
   const resumedTaskIds: string[] = []
@@ -145,6 +149,7 @@ export function createRetryEngine(
     async retry(input) {
       return await retryNodeProjection(
         {
+          historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
           db,
           persistence,
           activity:
@@ -166,6 +171,7 @@ export function createRetryEngine(
                   db as unknown as Parameters<typeof retryRepositoryPreparation>[0],
                   taskId,
                   {
+                    historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
                     ...options.resumeWith,
                     repositoryPreparation:
                       options.resumeWith.repositoryPreparation ??

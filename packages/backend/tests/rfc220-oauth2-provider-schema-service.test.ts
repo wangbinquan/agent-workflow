@@ -18,7 +18,7 @@ import { rawRows } from '@/platform/persistence/queryHelpers'
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { sql } from 'drizzle-orm'
 import { randomBytes } from 'node:crypto'
-import { resolve } from 'node:path'
+
 import { CreateOidcProviderBodySchema } from '@agent-workflow/shared'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
@@ -30,15 +30,13 @@ import {
 import { createIdentity } from '../src/services/userIdentities'
 import { DomainError } from '../src/util/errors'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-
 interface Harness {
   db: DbClient
   svc: OidcProvidersService
 }
 
 function buildHarness(): Harness {
-  const db = createInMemoryDb(MIGRATIONS)
+  const db = createInMemoryDb()
   const secretBox = createSecretBoxFromKey(randomBytes(32))
   return { db, svc: createOidcProvidersService({ db, secretBox }) }
 }
@@ -326,7 +324,7 @@ describe('RFC-220 S9 — migration columns', () => {
     const trust = byName.get('trust_email_verified')
     expect(trust).toBeDefined()
     expect(trust!.notnull).toBe(1)
-    expect(String(trust!.dflt_value)).toBe('false')
+    expect(String(trust!.dflt_value)).toBe('0')
     // 0109 (D8): userinfo_request_style NOT NULL DEFAULT 'get_bearer'
     const style = byName.get('userinfo_request_style')
     expect(style).toBeDefined()

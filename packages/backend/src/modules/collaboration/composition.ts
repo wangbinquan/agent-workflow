@@ -63,7 +63,7 @@ import {
   composeTaskNodeRunClarifyNavPort,
 } from './application/adapters/task-execution-adapter'
 import {
-  createTaskArchiveCollaborationSections,
+  createTaskArchiveCollaborationSectionReader,
   createTaskRecoveryHumanGateFacts,
   createTaskNodeRunClarifyNav,
 } from './infrastructure/taskCollaborationReads'
@@ -71,7 +71,7 @@ import {
 export function composeTaskCollaborationReads(db: PersistenceDb) {
   return {
     archive: composeTaskArchiveCollaborationSectionsPort(
-      createTaskArchiveCollaborationSections(db),
+      createTaskArchiveCollaborationSectionReader(),
     ),
     recovery: composeTaskRecoveryHumanGateFactsPort(createTaskRecoveryHumanGateFacts(db)),
     clarifyNav: composeTaskNodeRunClarifyNavPort(createTaskNodeRunClarifyNav(db)),

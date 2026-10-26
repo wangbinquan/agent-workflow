@@ -3,6 +3,18 @@ import type { DirectAuthenticatedAuthority } from '@/modules/identity-access/pub
 import type { PersistenceTx } from '@/platform/persistence/persistenceDb'
 import type { VersionedIntentResourceChangesetPlan } from '../../public/types'
 
+/** Closed recovery data carried by the resource owner across the Intent boundary. */
+export type IntentSkillRecovery =
+  | { readonly kind: 'create'; readonly operationId: string; readonly rootDirectory: string }
+  | {
+      readonly kind: 'version'
+      readonly operationId: string | null
+      readonly publishId: string
+      readonly skillName: string
+      readonly contentHash: string
+      readonly liveDirectory: string
+    }
+
 type SkillPlan = Extract<VersionedIntentResourceChangesetPlan, { readonly kind: 'skill' }>
 
 // Persisted artifact fields are unchanged. The selected content owner interprets
@@ -19,6 +31,7 @@ export type IntentApplyArtifact =
       readonly skillId: string
       readonly operationId: string
       readonly stagingDirectory: string
+      readonly recovery?: IntentSkillRecovery
     }>
   | Readonly<{
       readonly kind: 'skill-version-stage'
@@ -26,6 +39,7 @@ export type IntentApplyArtifact =
       readonly operationId: string
       readonly version: number
       readonly stagingDirectory: string
+      readonly recovery?: IntentSkillRecovery
       readonly versionDirectory: string
     }>
 
@@ -59,6 +73,7 @@ export interface IntentSkillPublication {
   readonly managedPath: string
   readonly filesPath: string
   readonly contentHash: string | null
+  readonly contentKind?: 'local-file' | 'database-bytes'
   /** Consume the confirmed stage in AW's transaction; async storage effects
    * belong to stage/publication rather than this transaction callback. The
    * callback handle is derived from the neutral transaction, not its client. */

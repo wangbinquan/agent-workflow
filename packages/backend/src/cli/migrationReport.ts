@@ -5,8 +5,10 @@
 // （可推导、成本低），不落库也不建 candidate——T95 落库由 cutover runbook 的
 // materialize 步骤显式触发。daemon 无需在跑（直接开 db，与 migrate 同姿势）。
 
-import { openDb } from '@/db/client'
-import { resolveMigrationsFolder } from '@/util/migrationsFolder'
+import { resolveDatabaseProviderRuntime } from '@/platform/persistence/databaseProviderRuntime'
+import type { LogicalSchemaContract } from '@/platform/persistence/schemaContract'
+import { loadConfig } from '@/config'
+import { existsSync } from 'node:fs'
 import { Paths } from '@/util/paths'
 import {
   analyzeLegacyAssets,
@@ -14,16 +16,30 @@ import {
 } from '@/modules/development-automation/application/migrationAnalyzer'
 import { collectLegacyAssets } from '@/modules/development-automation/infrastructure/migrationAssets'
 
-export async function migrationReportCommand(args: readonly string[]): Promise<{ output: string }> {
+export async function migrationReportCommand(
+  args: readonly string[],
+  contract: LogicalSchemaContract,
+): Promise<{ output: string }> {
   const asJson = args.includes('--json')
-  const db = openDb({ path: Paths.db, migrationsFolder: await resolveMigrationsFolder() })
+  if (!existsSync(Paths.databaseGenerationPointer))
+    throw new Error('migration-report requires an installed database generation')
+  const runtime = resolveDatabaseProviderRuntime({
+    config: loadConfig(Paths.config).database,
+    sqlitePath: Paths.db,
+    generationPointerPath: Paths.databaseGenerationPointer,
+    operationsRoot: Paths.databaseMigrationsDir,
+    contract,
+  })
   try {
+    if ('sqlitePath' in runtime && !existsSync(runtime.sqlitePath))
+      throw new Error('migration-report requires an installed database generation')
+    const db = runtime.openClient({ skipMigrations: true })
     const report = analyzeLegacyAssets(await collectLegacyAssets(db), Date.now())
     return {
       output: asJson ? `${JSON.stringify(report, null, 2)}\n` : `${printMigrationReport(report)}\n`,
     }
   } finally {
     // 与 migrate.ts 相同的收尾纪律：Windows 上泄漏的 bun:sqlite 句柄会锁目录。
-    db.$client.close()
+    await runtime.close()
   }
 }

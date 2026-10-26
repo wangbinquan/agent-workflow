@@ -1,3 +1,5 @@
+import type { HistoryRestrictionPort } from '@/platform/contracts/historyRestriction'
+import type { ContentStore } from '@/platform/content/contentStore'
 import type { HumanGateTaskLockPort, ReviewUpstreamAgentPort } from '../composition/required-ports'
 import type { ReviewArtifactSelection } from '../application/ports/reviewArtifactSelection'
 import type { PortArtifactReader } from '@/modules/task-execution/public/queries'
@@ -29,6 +31,8 @@ import {
 export function createCollaborationRuntimeMechanics(
   db: PersistenceDb,
   dependencies: Readonly<{
+    historyRestrictions: HistoryRestrictionPort
+    content: ContentStore
     taskLock: HumanGateTaskLockPort
     upstreamAgents: ReviewUpstreamAgentPort
     portArtifactReaderFor?: (appHome: string) => PortArtifactReader
@@ -42,6 +46,8 @@ export function createCollaborationRuntimeMechanics(
         db,
         upstreamAgents: dependencies.upstreamAgents,
         taskLock: dependencies.taskLock,
+        historyRestrictions: dependencies.historyRestrictions,
+        content: dependencies.content,
         ...input,
         reviewArtifacts: dependencies.reviewArtifacts,
         ...(dependencies.portArtifactReaderFor === undefined
@@ -58,6 +64,8 @@ export function createCollaborationRuntimeMechanics(
       const common = {
         db,
         taskLock: dependencies.taskLock,
+        historyRestrictions: dependencies.historyRestrictions,
+        content: dependencies.content,
         taskId: input.taskId,
         askingNodeId: input.askingNodeId,
         askingNodeRunId: input.askingNodeRunId,

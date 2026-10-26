@@ -1,3 +1,5 @@
+import { legacyContentRef } from '@/platform/content/contentRef'
+import { contentRowColumns } from '@/platform/content/infrastructure/contentStore'
 // RFC-053 PR-D — POST /api/tasks/:id/diagnose
 //
 // Live invariant scan: returns the same shape as
@@ -133,7 +135,7 @@ describe('POST /api/tasks/:id/diagnose — RFC-052 shape', () => {
         sourcePortName: 'docpath',
         versionIndex: 1,
         reviewIteration: 0,
-        bodyPath: 'dv/v1.md',
+        ...contentRowColumns(legacyContentRef('review-body-path', 'local-file', 'dv/v1.md')),
         decision: 'approved',
         decidedAt: Date.now(),
       })
@@ -179,7 +181,7 @@ describe('POST /api/tasks/:id/diagnose — RFC-052 shape', () => {
         sourcePortName: 'docpath',
         versionIndex: 1,
         reviewIteration: 0,
-        bodyPath: 'dv/v1.md',
+        ...contentRowColumns(legacyContentRef('review-body-path', 'local-file', 'dv/v1.md')),
         decision: 'approved',
         decidedAt: Date.now(),
       })
@@ -284,7 +286,7 @@ describe('POST /api/tasks/:id/diagnose — RFC-057 stuck-rule merge', () => {
         sourcePortName: 'docpath',
         versionIndex: 1,
         reviewIteration: 0,
-        bodyPath: 'dv/v1.md',
+        ...contentRowColumns(legacyContentRef('review-body-path', 'local-file', 'dv/v1.md')),
         decision: 'approved',
         decidedAt: Date.now(),
       })

@@ -1,3 +1,5 @@
+import { taskAggregateWrite } from '@/modules/task-execution/infrastructure/taskDefinitionWriteParticipant'
+import { withTargetMintIdentity } from './helpers/rfc395Mint'
 // RFC-144 T2 —— merge_state 的两条写路径：状态机 CAS 迁移，与铸行时的 supersede 闭包。
 //
 // 为什么这条测试存在：merge_state 此前 19 处裸直写零 CAS（flag-audit §4.4），
@@ -25,7 +27,6 @@
 // 节点行 id 用定长补零字符串（字典序 = 数值序）而非 ulid()，保证「谁更新」
 // 100% 确定——同毫秒 ulid 随机段不保证单调。
 
-import { deriveNodeRunRole } from '@/modules/task-execution/public/types'
 import {
   nodeRunFixture,
   patchNodeRunFixture,
@@ -369,26 +370,30 @@ async function mint(
   taskId: string,
   opts: { id: string; nodeId?: string; iteration?: number; shardKey?: string | null },
 ): Promise<string> {
-  return await withTaskExecutionWrite(db, async (tx) =>
-    createNodeRunMintParticipantInTx(tx).mint({
-      ...deriveNodeRunRole({ nodeId: opts.nodeId ?? 'n', rerunCause: 'initial' }),
-      id: opts.id,
-      taskId,
-      nodeId: opts.nodeId ?? 'n',
-      iteration: opts.iteration ?? 0,
-      status: 'pending',
-      cause: 'initial',
-      ...(opts.shardKey === undefined
-        ? {}
-        : {
-            overrides: {
-              identity: {
-                shardKey: opts.shardKey,
+  return await withTaskExecutionWrite(db, async (tx) => {
+    await taskAggregateWrite.lockTaskAggregateRoot(tx, taskId)
+    return await createNodeRunMintParticipantInTx(tx).mint(
+      withTargetMintIdentity({
+        role: 'node-attempt',
+        syntheticKind: null,
+        id: opts.id,
+        taskId,
+        nodeId: opts.nodeId ?? 'n',
+        iteration: opts.iteration ?? 0,
+        status: 'pending',
+        cause: 'initial',
+        ...(opts.shardKey === undefined
+          ? {}
+          : {
+              overrides: {
+                identity: {
+                  shardKey: opts.shardKey,
+                },
               },
-            },
-          }),
-    }),
-  )
+            }),
+      }),
+    )
+  })
 }
 
 describeEachProvider('RFC-144 铸行即取代 —— supersede 闭包', (harness) => {
@@ -494,15 +499,20 @@ describeEachProvider('RFC-144 铸行即取代 —— supersede 闭包', (harness
     const zombie = await seedRun(db, taskId, { id: mkId(1), mergeState: 'pending-merge' })
     await expect(
       withTaskExecutionWrite(db, async (tx) => {
-        await createNodeRunMintParticipantInTx(tx).mint({
-          ...deriveNodeRunRole({ nodeId: 'n', rerunCause: 'initial' }),
-          id: mkId(10),
-          taskId,
-          nodeId: 'n',
-          iteration: 0,
-          status: 'pending',
-          cause: 'initial',
-        })
+        await taskAggregateWrite.lockTaskAggregateRoot(tx, taskId)
+
+        await createNodeRunMintParticipantInTx(tx).mint(
+          withTargetMintIdentity({
+            role: 'node-attempt',
+            syntheticKind: null,
+            id: mkId(10),
+            taskId,
+            nodeId: 'n',
+            iteration: 0,
+            status: 'pending',
+            cause: 'initial',
+          }),
+        )
         throw new Error('simulated crash after mint')
       }),
     ).rejects.toThrow('simulated crash after mint')

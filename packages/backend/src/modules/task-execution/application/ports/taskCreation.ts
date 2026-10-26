@@ -1,7 +1,7 @@
-import type { SpaceKind, TaskStatus, TaskCatalogVisibility } from '@agent-workflow/shared'
-import type { TaskSubject } from '../../domain/taskSubject'
+import type { SpaceKind, TaskCatalogVisibility, TaskStatus } from '@agent-workflow/shared'
 import type { TaskCreationLaunch } from '../../domain/taskCreation'
 import type { TaskRepositoryMount } from '../../domain/taskRepository'
+import type { TaskSubject } from '../../domain/taskSubject'
 
 export interface TaskCreationInput {
   readonly subject: TaskSubject
@@ -22,6 +22,7 @@ export interface TaskCreationInput {
     workspacePrunedAt?: number | null
   }
   readonly definition: {
+    definitionOrigin: 'authored' | 'platform'
     workflowSnapshot: string
     workflowVersion: number | null
     inputs: string

@@ -3,16 +3,17 @@ import { expect, test } from 'bun:test'
 import { SQL } from 'bun'
 import { randomUUID } from 'node:crypto'
 import { resolve } from 'node:path'
-import { buildLogicalSchemaContract, persistenceSchema } from '@/bootstrap/persistenceSchema'
-import { loadPostgresqlMigrationHistory } from '@/platform/persistence/postgresqlMigrationHistory'
-import { migratePostgresqlSchema } from '@/platform/persistence/postgresqlMigrator'
+import { buildFrozenEpoch1LogicalSchemaContract as buildLogicalSchemaContract } from '@/platform/persistence/migration/epoch1/contract'
+import { frozenEpoch1Registry as persistenceSchema } from '@/platform/persistence/migration/epoch1/definitions'
+import { loadPostgresqlMigrationHistory } from '@/platform/persistence/migration/legacy/postgresqlMigrationHistory'
+import { migratePostgresqlSchema } from '@/platform/persistence/migration/legacy/postgresqlMigrator'
 import { createPostgresqlDatabaseRuntime } from '@/platform/persistence/postgresqlRuntime'
-import { compilePostgresqlPlan } from '@/platform/persistence/schema/postgresqlPlan'
+import { buildPostgresqlSchemaPlan } from '@/platform/persistence/migration/legacy/postgresqlSchema'
 import { describeEachProvider, resolvePostgresqlTestUrlEnv } from './helpers/eachProvider'
 import { Database } from 'bun:sqlite'
 import { readFileSync } from 'node:fs'
 import { compileSqlitePlan } from '@/platform/persistence/schema/sqlitePlan'
-import { migrateSqlite } from '@/platform/persistence/sqliteMigrator'
+import { migrateFrozenSqlite as migrateSqlite } from './migration-freeze'
 import { sqliteManifest, manifestDifferences } from './helpers/rfc395SqliteManifest'
 const ledger = JSON.parse(
   readFileSync(resolve(import.meta.dir, 'fixtures/rfc395-sqlite-drift.json'), 'utf8'),
@@ -120,7 +121,7 @@ describeEachProvider('RFC-395 I-a compiled and migration-replay catalog equivale
       const compiled = databases[0]!
       const replay = databases[1]!
       for (const db of databases) await db.unsafe('SET search_path TO agent_workflow, public')
-      for (const statement of compilePostgresqlPlan(persistenceSchema).statements)
+      for (const statement of buildPostgresqlSchemaPlan(buildLogicalSchemaContract()).statements)
         await compiled.unsafe(statement.sql)
       const headContract = buildLogicalSchemaContract()
       const history = await loadPostgresqlMigrationHistory({ headContract })

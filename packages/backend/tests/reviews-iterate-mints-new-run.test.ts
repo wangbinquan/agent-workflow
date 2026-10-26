@@ -1,3 +1,4 @@
+import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { withO2Closure } from './helpers/o2Closure'
 // RFC-395 II-pre：改接生产启动 / 读取路径，保留原断言意图。
 // Locks in RFC-011 backend semantics: review reject / iterate must not
@@ -16,11 +17,11 @@ import { launchTestTaskWithLocalRepo as launchTestTaskWithLocalRepoBase } from '
 import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { and, eq } from 'drizzle-orm'
 import { DEFAULT_PROTOCOL_RETRY_BUDGET } from '@agent-workflow/shared'
-import type { DbClient } from '../src/db/client'
-import { createInMemoryDb } from '../src/db/client'
+import { type DbClient, createInMemoryDb } from '../src/db/client'
+
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 import { makeVersionedStubOpencode } from './fixtures/versionedStubOpencode'
 import { createAgent } from '../src/modules/resource-catalog/infrastructure/legacy/agent'
@@ -30,7 +31,6 @@ import { abortAllActiveTasks, wakeHumanGateContinuation } from '@/services/task'
 import { runTestGit } from './helpers/testCommand'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const GIT_TIMEOUT_MS = 10_000
 const NODE_TIMEOUT_MS = 10_000
 const FLOW_TIMEOUT_MS = 20_000
@@ -87,7 +87,7 @@ async function buildHarness(opts?: HarnessOpts): Promise<Harness> {
   const tmp = mkdtempSync(join(tmpdir(), `aw-rfc011-${runIdx}-`))
   const appHome = join(tmp, 'appHome')
   const repoPath = join(tmp, 'repo')
-  const db = createInMemoryDb(MIGRATIONS)
+  const db = createInMemoryDb()
   await seedTestDefaultOpencodeRuntime(db)
   const previousAppHome = process.env.AGENT_WORKFLOW_HOME
 
@@ -261,13 +261,14 @@ async function submitAndSettleReviewDecision(
   h: Harness,
   input: Omit<
     Parameters<typeof submitReviewDecision>[0],
-    'db' | 'appHome' | 'taskLock' | 'upstreamAgents'
+    'db' | 'appHome' | 'taskLock' | 'upstreamAgents' | 'historyRestrictions'
   >,
 ): Promise<Awaited<ReturnType<typeof submitReviewDecision>>> {
   const result = await submitReviewDecision(
     withO2Closure({ ...input, db: h.db, appHome: h.appHome }),
   )
   await wakeHumanGateContinuation(result.taskId, result.continuationRef, {
+    historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
     db: h.db,
     appHome: h.appHome,
     schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'noop' }).schedulerDriver,

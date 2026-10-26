@@ -55,7 +55,6 @@ import {
   runTaskWithRealTestTopology as runTaskBase,
 } from './helpers/taskExecutionTestTopology'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const SCENARIO_STUB = resolve(import.meta.dir, 'fixtures', 'scenario-opencode.ts')
 const GIT_TIMEOUT_MS = 10_000
 const NODE_TIMEOUT_MS = 10_000
@@ -177,7 +176,7 @@ async function freshCtx(): Promise<Ctx> {
   git('-C', repoPath, '-c', 'commit.gpgsign=false', 'commit', '--no-verify', '-m', 'init')
   process.env.SCENARIO_STATE_DIR = stateDir
   process.env.AGENT_WORKFLOW_HOME = appHome
-  const db = createInMemoryDb(MIGRATIONS)
+  const db = createInMemoryDb()
   await seedTestDefaultOpencodeRuntime(db)
   return {
     db,
@@ -560,7 +559,7 @@ describe('RFC-122 — STOP flip on a same-session FOLLOW-UP renders the full out
 
 describe('RFC-122 store round-trip + scheduler wiring lock', () => {
   test('set / get / list round-trip; continue is read back identically', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createInMemoryDb()
     await workflowFixture(db, {
       id: 'wf',
       name: 'wf',

@@ -1,3 +1,4 @@
+import { initializeTaskWorkspace } from './helpers/taskWorkspaceFixture'
 // RFC-354 — closure / parameter / local semantics across nested wrapper frames,
 // driven through the real scheduler (design §4 "输入边就是参数、输出边就是返回值、
 // 穿墙边是闭包").
@@ -36,7 +37,6 @@ import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { runTaskWithRealTestTopology as runTask } from './helpers/taskExecutionTestTopology'
 import { canonicalizeWorkflowAgentIds } from './helpers/canonicalWorkflowFixture'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const SCENARIO_OPENCODE = resolve(import.meta.dir, 'fixtures', 'scenario-opencode.ts')
 
 interface Harness {
@@ -52,10 +52,10 @@ function buildHarness(): Harness {
   const appHome = mkdtempSync(join(tmpdir(), 'aw-rfc354-closure-'))
   const worktreePath = join(appHome, 'wt')
   const stateDir = join(appHome, 'scenario-state')
-  mkdirSync(worktreePath, { recursive: true })
+  initializeTaskWorkspace(worktreePath)
   mkdirSync(stateDir, { recursive: true })
   const planFile = join(appHome, 'plan.json')
-  const db = createInMemoryDb(MIGRATIONS)
+  const db = createInMemoryDb()
   return {
     db,
     appHome,

@@ -1,3 +1,11 @@
+// Released picker oracle; executable runtime selection is covered through RunSelectionReader.
+import {
+  pickFrameSourceRun,
+  pickLatestRunInFrame,
+  pickLatestSettledRun,
+} from './helpers/model/frozenSelection/pickers'
+// Target fixture mint order; missing seq is covered only by conversion/rejection tests.
+let fixtureRunSequence = 0
 // RFC-354 — locks the lexical-environment frame arithmetic
 // (modules/task-execution/domain/environmentChain.ts) and the frame-level
 // source picker (services/freshness.ts pickFrameSourceRun).
@@ -18,11 +26,6 @@ import {
   TOP_FRAME,
   type ContainerRunRow,
 } from '../src/modules/task-execution/domain/environmentChain'
-import {
-  pickFrameSourceRun,
-  pickLatestRunInFrame,
-  pickLatestSettledRun,
-} from '../src/services/freshness'
 
 // Containment: outer ⊃ git ⊃ inner ⊃ worker; `top` and `sibling_loop` at root.
 const parents = new Map<string, string>([
@@ -161,7 +164,7 @@ describe('pickFrameSourceRun — settled row of a node inside ONE frame, latest 
   const settledRows = [
     // same node, previous round of the same container — never visible
     {
-      seq: null,
+      seq: ++fixtureRunSequence,
       id: '01A',
       iteration: 0,
       parentNodeRunId: null,
@@ -170,7 +173,7 @@ describe('pickFrameSourceRun — settled row of a node inside ONE frame, latest 
     },
     // same frame, older done row
     {
-      seq: null,
+      seq: ++fixtureRunSequence,
       id: '01B',
       iteration: 1,
       parentNodeRunId: null,
@@ -179,7 +182,7 @@ describe('pickFrameSourceRun — settled row of a node inside ONE frame, latest 
     },
     // same frame, fresher skipped row (RFC-306: skipped IS the current answer)
     {
-      seq: null,
+      seq: ++fixtureRunSequence,
       id: '01C',
       iteration: 1,
       parentNodeRunId: null,
@@ -188,7 +191,7 @@ describe('pickFrameSourceRun — settled row of a node inside ONE frame, latest 
     },
     // same frame but a born-running child (fan-out shard) — excluded
     {
-      seq: null,
+      seq: ++fixtureRunSequence,
       id: '01D',
       iteration: 1,
       parentNodeRunId: 'X',
@@ -197,7 +200,7 @@ describe('pickFrameSourceRun — settled row of a node inside ONE frame, latest 
     },
     // same frame, not settled
     {
-      seq: null,
+      seq: ++fixtureRunSequence,
       id: '01E',
       iteration: 1,
       parentNodeRunId: null,
@@ -206,7 +209,7 @@ describe('pickFrameSourceRun — settled row of a node inside ONE frame, latest 
     },
     // another container at the same round — a different frame
     {
-      seq: null,
+      seq: ++fixtureRunSequence,
       id: '01F',
       iteration: 1,
       parentNodeRunId: null,
@@ -231,7 +234,7 @@ describe('pickFrameSourceRun — settled row of a node inside ONE frame, latest 
   test('top frame is (null, 0)', () => {
     const top = [
       {
-        seq: null,
+        seq: ++fixtureRunSequence,
         id: '02A',
         iteration: 0,
         parentNodeRunId: null,
@@ -239,7 +242,7 @@ describe('pickFrameSourceRun — settled row of a node inside ONE frame, latest 
         status: 'done',
       },
       {
-        seq: null,
+        seq: ++fixtureRunSequence,
         id: '02B',
         iteration: 0,
         parentNodeRunId: null,
@@ -254,7 +257,7 @@ describe('pickFrameSourceRun — settled row of a node inside ONE frame, latest 
 describe('pickLatestRunInFrame / pickLatestSettledRun — the two non-window pickers', () => {
   const rows = [
     {
-      seq: null,
+      seq: ++fixtureRunSequence,
       id: '01A',
       iteration: 0,
       parentNodeRunId: null,
@@ -262,7 +265,7 @@ describe('pickLatestRunInFrame / pickLatestSettledRun — the two non-window pic
       status: 'done',
     },
     {
-      seq: null,
+      seq: ++fixtureRunSequence,
       id: '01B',
       iteration: 0,
       parentNodeRunId: null,
@@ -270,7 +273,7 @@ describe('pickLatestRunInFrame / pickLatestSettledRun — the two non-window pic
       status: 'pending',
     },
     {
-      seq: null,
+      seq: ++fixtureRunSequence,
       id: '01C',
       iteration: 0,
       parentNodeRunId: 'X',
@@ -278,7 +281,7 @@ describe('pickLatestRunInFrame / pickLatestSettledRun — the two non-window pic
       status: 'done',
     },
     {
-      seq: null,
+      seq: ++fixtureRunSequence,
       id: '01D',
       iteration: 1,
       parentNodeRunId: null,
@@ -286,7 +289,7 @@ describe('pickLatestRunInFrame / pickLatestSettledRun — the two non-window pic
       status: 'done',
     },
     {
-      seq: null,
+      seq: ++fixtureRunSequence,
       id: '01E',
       iteration: 0,
       parentNodeRunId: null,
@@ -316,8 +319,14 @@ describe('resolveSourceFrameInScope — a wrapper reading on behalf of its body'
     ['other', 'sib'],
   ])
   const rows = new Map([
-    ['O1', { seq: null, id: 'O1', nodeId: 'oloop', containerRunId: null, iteration: 0 }],
-    ['I2', { seq: null, id: 'I2', nodeId: 'iloop', containerRunId: 'O1', iteration: 1 }],
+    [
+      'O1',
+      { seq: ++fixtureRunSequence, id: 'O1', nodeId: 'oloop', containerRunId: null, iteration: 0 },
+    ],
+    [
+      'I2',
+      { seq: ++fixtureRunSequence, id: 'I2', nodeId: 'iloop', containerRunId: 'O1', iteration: 1 },
+    ],
   ])
   const lookup = (id: string) => rows.get(id)
   // The inner loop's body frame on outer round 1, inner round 0.

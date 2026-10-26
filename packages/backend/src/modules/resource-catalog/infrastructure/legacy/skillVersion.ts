@@ -1,3 +1,5 @@
+import { skillFilesRel } from './skillIdentityPaths'
+import { capturedSkillTreeColumns } from '../databaseSkillTrees'
 // RFC-101 — skill content versioning + history (PR-A foundation).
 //
 // THE single funnel for writing a managed skill's files/. Every write path
@@ -12,7 +14,11 @@
 // DIRECTLY and never imports services/skill.ts. skill.ts imports THIS — one
 // direction only.
 
-import { skillTextView, skillTreeTextView } from '../../application/skills/textView'
+import {
+  skillTextView,
+  skillTreeTextView,
+  type SkillVersionTextEntry as TreeEntry,
+} from '../../application/skills/textView'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import type {
@@ -24,7 +30,7 @@ import type {
   SkillVersionSource,
 } from '@agent-workflow/shared'
 import { structuredPatch } from 'diff'
-import { and, eq } from 'drizzle-orm'
+import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
@@ -38,7 +44,6 @@ import {
   finishOperation,
 } from '@/modules/resource-catalog/infrastructure/legacy/skillOperations'
 import { NotFoundError, ValidationError, staleConflictError } from '@/util/errors'
-import { createLogger } from '@/util/log'
 import { tokenToVersionFence } from '@/modules/resource-catalog/infrastructure/legacy/skillToken'
 import { parseFrontmatter } from '@/util/frontmatter'
 import { skillVersionRelPath } from '@/modules/resource-catalog/infrastructure/legacy/skillIdentityPaths'
@@ -62,6 +67,7 @@ import { createFileSkillLifecycleContentStore } from '../local/fileSkillLifecycl
 import type { SkillDeletionContentStore } from '../../application/skills/deletionContentStore'
 
 export interface SkillVersionFsOptions {
+  contentKind?: 'local-file' | 'database-bytes'
   /** App home dir; managed skills live under `${appHome}/skills/{id}/...`. */
   appHome: string
   lifecycleContent?: SkillLifecycleContentStore
@@ -113,7 +119,6 @@ import {
   skillVersionCompositeFenceRequested,
 } from '../../domain/skillVersionCommit'
 
-import type { SkillVersionTextEntry as TreeEntry } from '../../application/skills/textView'
 export type { SkillVersionTextEntry as TreeEntry } from '../../application/skills/textView'
 
 function sameEntry(a: TreeEntry | undefined, b: TreeEntry | undefined): boolean {
@@ -194,132 +199,19 @@ function rowToSkillVersion(row: SkillVersionRow, skillName: string): SkillVersio
 
 // --- backfill --------------------------------------------------------------
 
-/**
- * Lazily snapshot a managed skill's CURRENT files/ as v1 when it has no
- * skill_versions rows yet (legacy skill created before this RFC). Idempotent;
- * called at the top of every version-funnel access. No-op when files/ has no
- * SKILL.md (e.g. mid-create).
- */
+/** Epoch-1 backfill belongs to the switch converter; this old entry is no longer a writer. */
 export async function ensureInitialSkillVersion(
-  db: SkillVersionDb,
-  opts: SkillVersionFsOptions,
-  skillId: string,
+  _db: SkillVersionDb,
+  _opts: SkillVersionFsOptions,
+  _skillId: string,
 ): Promise<void> {
-  const skill = await loadSkillRow(db, skillId)
-  if (!skill) return
-  if ((await versionRows(db, skillId)).length > 0) return
-  const content = opts.lifecycleContent ?? createFileSkillLifecycleContentStore(opts.appHome)
-  const hash = await content.captureInitial(skillId)
-  if (hash === null) return
-  const now = Date.now()
-  await databaseSessionFor(db).transaction(async (tx) => {
-    const { skills, skillVersions } = tablesOf(tx)
-    await tx
-      .update(skills)
-      .set({
-        contentVersion: 1,
-        // RFC-170 §invariant④ / T4a: the lazily-materialised v1 IS the authority —
-        // promote out of 'legacy-unbackfilled' so the availability gate stops
-        // hiding it (and mark it boot-verified below, having just written it).
-        versionState: 'snapshot-authoritative',
-        updatedAt: now,
-      })
-      .where(eq(skills.id, skillId))
-    await insertOne(tx, skillVersions, {
-      id: ulid(),
-      skillId,
-      versionIndex: 1,
-      filesPath: skillVersionRelPath(skillId, 1),
-      source: 'initial',
-      summary: null,
-      fusionId: null,
-      restoredFromVersion: null,
-      authorUserId: '__system__',
-      contentHash: hash,
-      createdAt: now,
-    })
-    return null
-  })
-  markSkillBootVerified(skill.id)
+  throw new Error('skill-legacy-upgrade-requires-conversion')
 }
-
-/**
- * Boot-time legacy backfill + husk sweep (RFC-170 T4a; extracted from cli/start
- * so it is unit-testable). For every managed row still at
- * versionState='legacy-unbackfilled' AND reservationState='ready' — 'reserving'
- * rows belong to an in-flight/crashed create and are the reserve-op recovery
- * handler's job, never this sweep's:
- *   - live files/SKILL.md present → ensureInitialSkillVersion: archive live as
- *     v1, promote to 'snapshot-authoritative' + boot-verified (a pre-RFC-101
- *     legacy skill surfacing after an upgrade).
- *   - no SKILL.md, no skill_versions rows AND the skill dir is entirely empty
- *     (dirHasNoContent — zero files/symlinks anywhere under it) → an orphaned
- *     HUSK: zero recoverable content, yet the row keeps unique(name) reserved
- *     while the availability gate keeps it invisible — a permanent name
- *     squatter. Delete the row (+ leftover empty dir). Known producer: the
- *     pre-fix ZIP-import create failure path (rm'd files/, kept the row).
- *     Emptiness is REQUIRED (Codex P1): "SKILL.md missing" alone also matches
- *     a legacy skill whose main file was lost but whose support files remain —
- *     deleting that would destroy recoverable content, so it is left in place
- *     (warned) for a human to repair instead.
- *   - anything else (versions exist / dir has files) → leave it and warn;
- *     reconcile/reverify or a human decide, never this sweep.
- */
 export async function backfillLegacySkillVersions(
-  db: SkillVersionDb,
-  opts: SkillVersionFsOptions,
+  _db: SkillVersionDb,
+  _opts: SkillVersionFsOptions,
 ): Promise<{ backfilled: number; husksRemoved: number }> {
-  const log = createLogger('skill-version-backfill')
-  const content = opts.lifecycleContent ?? createFileSkillLifecycleContentStore(opts.appHome)
-  const { skills } = tablesOf(db)
-  const rows = (await db
-    .select()
-    .from(skills)
-    .where(
-      and(eq(skills.versionState, 'legacy-unbackfilled'), eq(skills.reservationState, 'ready')),
-    )) as SkillRow[]
-  let backfilled = 0
-  let husksRemoved = 0
-  for (const row of rows) {
-    try {
-      if (await content.hasLiveMain(row.id)) {
-        await ensureInitialSkillVersion(db, opts, row.id)
-        backfilled++
-        continue
-      }
-      if ((await versionRows(db, row.id)).length > 0) {
-        log.warn('legacy-state skill has versions but no live SKILL.md; leaving for reconcile', {
-          name: row.name,
-          id: row.id,
-        })
-        continue
-      }
-      if (!(await content.isRootEmpty(row.id))) {
-        log.warn('legacy skill has no SKILL.md but its dir is not empty; leaving for repair', {
-          name: row.name,
-          id: row.id,
-        })
-        continue
-      }
-      await databaseSessionFor(db).transaction(async (tx) => {
-        const { skills } = tablesOf(tx)
-        await tx.delete(skills).where(eq(skills.id, row.id))
-        return null
-      })
-      await content.removeRoot(row.id)
-      husksRemoved++
-      log.warn('removed orphaned skill husk (no content, no versions; was squatting the name)', {
-        name: row.name,
-        id: row.id,
-      })
-    } catch (e) {
-      log.warn('legacy skill v1 backfill failed on boot', {
-        name: row.name,
-        error: e instanceof Error ? e.message : String(e),
-      })
-    }
-  }
-  return { backfilled, husksRemoved }
+  throw new Error('skill-legacy-upgrade-requires-conversion')
 }
 
 // --- the funnel ------------------------------------------------------------
@@ -429,6 +321,7 @@ async function assertCompositePrecondition(
  * 发布的技能仍带着上一代的 admission。
  */
 export interface StagedSkillVersion {
+  contentKind?: 'local-file' | 'database-bytes'
   skillId: string
   skillName: string
   /** null = 调用方已持有该技能的 op 锁（reserve / create 路径的 skipOp）。 */
@@ -467,7 +360,6 @@ export async function stageSkillVersion(
 ): Promise<StagedSkillVersion> {
   const skill = await loadSkillRow(db, skillId)
   if (!skill) throw new NotFoundError('skill-not-found', `skill '${skillId}' not found`)
-  if (commit.source !== 'initial') await ensureInitialSkillVersion(db, opts, skillId)
 
   const cur = await loadSkillRow(db, skillId)
   if (!cur) throw new NotFoundError('skill-not-found', `skill '${skillId}' not found`)
@@ -492,6 +384,7 @@ export async function stageSkillVersion(
     createFileSkillVersionContentStore(
       opts.appHome,
       typeof produce === 'function' ? produce : undefined,
+      db,
     )
   const publishId = ulid()
   const publication = content.plan({ skillId, version: newVersion, publicationId: publishId })
@@ -515,6 +408,11 @@ export async function stageSkillVersion(
       )
 
   const staged: StagedSkillVersion = {
+    contentKind:
+      opts.contentKind ??
+      (content as SkillVersionContentStore & { contentKind?: 'local-file' | 'database-bytes' })
+        .contentKind ??
+      'local-file',
     skillId,
     skillName: cur.name,
     opId,
@@ -592,12 +490,28 @@ export async function commitSkillVersionInTx(
   }
   if (commit.setDescription !== undefined) skillSet.description = commit.setDescription
   const { skills, skillVersions } = tablesOf(tx)
-  await tx.update(skills).set(skillSet).where(eq(skills.id, staged.skillId))
+  await tx
+    .update(skills)
+    .set({
+      ...skillSet,
+      ...capturedSkillTreeColumns(
+        staged.contentKind ?? 'local-file',
+        staged.skillId,
+        'live',
+        skillFilesRel(staged.skillId),
+      ),
+    })
+    .where(eq(skills.id, staged.skillId))
   await insertOne(tx, skillVersions, {
     id,
     skillId: staged.skillId,
     versionIndex: staged.newVersion,
-    filesPath: skillVersionRelPath(staged.skillId, staged.newVersion),
+    ...(await capturedSkillTreeColumns(
+      staged.contentKind ?? 'local-file',
+      staged.skillId,
+      `version:${staged.newVersion}`,
+      skillVersionRelPath(staged.skillId, staged.newVersion),
+    )),
     source: commit.source,
     summary: commit.summary ?? null,
     fusionId: commit.fusionId ?? null,
@@ -710,7 +624,6 @@ export async function listSkillVersions(
   if (skill === null) {
     throw new NotFoundError('skill-not-found', `skill '${skillId}' not found`)
   }
-  await ensureInitialSkillVersion(db, opts, skillId)
   return (await versionRows(db, skillId))
     .sort((x, y) => y.versionIndex - x.versionIndex)
     .map((row) => rowToSkillVersion(row, skill.name))
@@ -750,9 +663,8 @@ export async function getSkillVersionContent(
   if (skill === null) {
     throw new NotFoundError('skill-not-found', `skill '${skillId}' not found`)
   }
-  await ensureInitialSkillVersion(db, opts, skillId)
   await requireVersionRow(db, skillId, v)
-  const reader = opts.versionReader ?? createFileSkillVersionContentReader(opts.appHome)
+  const reader = opts.versionReader ?? createFileSkillVersionContentReader(opts.appHome, db)
   const snapshot = await reader.readSnapshot({ skillId, version: v })
   let content: SkillContent
   if (snapshot.main !== null) {
@@ -780,10 +692,9 @@ export async function diffSkillVersions(
   if ((await loadSkillRow(db, skillId)) === null) {
     throw new NotFoundError('skill-not-found', `skill '${skillId}' not found`)
   }
-  await ensureInitialSkillVersion(db, opts, skillId)
   await requireVersionRow(db, skillId, from)
   await requireVersionRow(db, skillId, to)
-  const reader = opts.versionReader ?? createFileSkillVersionContentReader(opts.appHome)
+  const reader = opts.versionReader ?? createFileSkillVersionContentReader(opts.appHome, db)
   const a = await reader.readTree({ skillId, version: from })
   const b = await reader.readTree({ skillId, version: to })
   return {
@@ -841,7 +752,6 @@ export async function restoreSkillVersion(
 ): Promise<RestoreResult> {
   const skill = await loadSkillRow(db, skillId)
   if (skill === null) throw new NotFoundError('skill-not-found', `skill '${skillId}' not found`)
-  await ensureInitialSkillVersion(db, opts, skillId)
   await requireVersionRow(db, skillId, target)
   const fence = tokenToVersionFence(expectedToken)
   if (fence === null) {
@@ -852,7 +762,7 @@ export async function restoreSkillVersion(
   }
   let unfusedMemoryIds: string[] = []
   // The restored SKILL.md becomes current, and so does the description it declares.
-  const reader = opts.versionReader ?? createFileSkillVersionContentReader(opts.appHome)
+  const reader = opts.versionReader ?? createFileSkillVersionContentReader(opts.appHome, db)
   const restoredMain = (await reader.readSnapshot({ skillId, version: target })).main
   const restoredDescription = skillMainDescription(
     restoredMain === null ? null : skillTextView(restoredMain, reader),
@@ -910,12 +820,11 @@ export async function reconcileSkillLiveFiles(
   db: SkillVersionDb,
   opts: SkillVersionFsOptions,
 ): Promise<void> {
-  const content = opts.lifecycleContent ?? createFileSkillLifecycleContentStore(opts.appHome)
+  const content = opts.lifecycleContent ?? createFileSkillLifecycleContentStore(opts.appHome, db)
   const { skills } = tablesOf(db)
   const rows = (await db.select().from(skills)) as SkillRow[]
   for (const skill of rows) {
     try {
-      await ensureInitialSkillVersion(db, opts, skill.id)
       const fresh = await loadSkillRow(db, skill.id)
       if (!fresh) continue
       await content.restoreLiveIfMissing(skill.id, fresh.contentVersion)

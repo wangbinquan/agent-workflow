@@ -1,3 +1,5 @@
+import { nodeRunFixtureColumns } from './helpers/model/nodeRun'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { withO2Closure } from './helpers/o2Closure'
 // RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-128 P2 — 逐题 seal 端点 + defer 意图 + 待下发 gate（先红后绿，route 层）。
@@ -28,7 +30,7 @@ import { withO2Closure } from './helpers/o2Closure'
 // （RFC-132 后由统一 autoDispatchClarifyRound 驱动 + resume；legacy immediate mint 已删）。
 
 import { nodeRunFixture, readNodeRunFixtures, taskFixture, workflowFixture } from './helpers/model'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+
 import { createClarifyRound, resolveCrossNodeStopped } from '../src/services/clarify/service'
 import { afterEach, beforeEach, expect, test } from 'bun:test'
 import type { Hono } from 'hono'
@@ -158,7 +160,7 @@ async function seedTaskRow(
     workflowId,
     workflowSnapshot: JSON.stringify(def),
     repoPath: '/tmp/aw-rfc128-p2',
-    worktreePath: '',
+    worktreePath: '/tmp/fixture-bound-root',
     baseBranch: 'main',
     branch: `agent-workflow/${taskId}`,
     status: 'awaiting_human',
@@ -245,7 +247,10 @@ function roundOf(db: PersistenceDb, taskId: string) {
 
 async function clarifyAnswerReruns(db: PersistenceDb, taskId: string): Promise<number> {
   const { nodeRuns } = tablesOf(db)
-  const rows = await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
+  const rows = await db
+    .select(nodeRunFixtureColumns(db))
+    .from(nodeRuns)
+    .where(eq(nodeRuns.taskId, taskId))
   return rows.filter((r) => r.rerunCause === 'clarify-answer').length
 }
 

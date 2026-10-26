@@ -1,4 +1,4 @@
-import type { RunSelectionReader } from './ports/runSelection'
+import type { RunHistoryReader } from './runHistory'
 /**
  * RFC-359 AC-1（第 10 刀）—— resume 的回滚目标选择器，**全仓唯一一份**。
  *
@@ -30,14 +30,18 @@ export async function selectResumeRollbackTargets<
     status: string
     childTaskId?: string | null
   },
->(runs: readonly R[], selection: RunSelectionReader, taskId: string): Promise<R[]> {
+>(runs: readonly R[], selection: RunHistoryReader, taskId: string): Promise<R[]> {
   const latestPerNode = new Map<string, R>()
   for (const nodeId of new Set(
     runs.filter((run) => run.parentNodeRunId === null).map((run) => run.nodeId),
   )) {
-    const selected = (await selection.familyHistory(taskId, { nodeId }, { topLevelOnly: true })).at(
-      -1,
-    )
+    const selected = (
+      await selection.familyHistory(
+        taskId,
+        { nodeId, runIds: runs.map((run) => run.id) },
+        { topLevelOnly: true },
+      )
+    ).at(-1)
     const run = runs.find((row) => row.id === selected?.id)
     if (run !== undefined) latestPerNode.set(nodeId, run)
   }

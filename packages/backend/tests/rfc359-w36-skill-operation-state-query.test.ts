@@ -8,7 +8,6 @@ import { composeLegacyIntentSkillArtifactCompat } from '@/modules/resource-catal
 import { skillOperationStateQuery } from '@/modules/resource-catalog/infrastructure/skillOperationStateQuery'
 import { describeEachProvider, resolveTestProviders } from './helpers/eachProvider'
 import { recordStatements } from './helpers/statementRecorder'
-import { MIGRATIONS } from './migration-freeze'
 
 type OperationRow = PersistenceTables['skillOperations']['$inferSelect']
 
@@ -178,7 +177,7 @@ describeEachProvider('RFC359 W36 skill operation state query', (harness) => {
 
 if (resolveTestProviders(process.env).includes('sqlite')) {
   test('native compatibility loader returns the actual row or undefined immediately', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createInMemoryDb()
     try {
       const { skillOperations } = tablesOf(db)
       await db.insert(skillOperations).values(operations)

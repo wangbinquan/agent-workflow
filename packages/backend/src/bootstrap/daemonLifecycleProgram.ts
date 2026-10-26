@@ -23,14 +23,6 @@ export interface DaemonBootStepDeclaration {
 export const DAEMON_BOOT_STEPS = [
   { id: 'runtime-declarations', phase: 'prepare', failure: 'fail-closed' },
   { id: 'process-registrations', phase: 'prepare', failure: 'fail-closed' },
-  {
-    id: 'repository-url-sealing',
-    phase: 'prepare',
-    failure: 'fail-closed',
-    providers: ['sqlite'],
-    providerReason:
-      'Legacy SQLite plaintext repository URL convergence; PostgreSQL has no legacy URL migration.',
-  },
   { id: 'transport-projections', phase: 'prepare', failure: 'fail-closed' },
   { id: 'git-credential-lease-cleanup', phase: 'prepare', failure: 'best-effort' },
   {
@@ -41,8 +33,7 @@ export const DAEMON_BOOT_STEPS = [
     providerReason:
       'PostgreSQL retains its daemon identity boot check; both providers admit per operation.',
   },
-  { id: 'skill-identity-barrier', phase: 'prepare', failure: 'fail-closed' },
-  { id: 'fusion-provenance', phase: 'prepare', failure: 'fail-closed' },
+  { id: 'skill-operation-recovery', phase: 'prepare', failure: 'fail-closed' },
   { id: 'skill-availability-gate', phase: 'prepare', failure: 'fail-closed' },
   { id: 'skill-live-files', phase: 'prepare', failure: 'best-effort' },
   { id: 'runtime-registry', phase: 'prepare', failure: 'fail-closed' },
@@ -50,8 +41,6 @@ export const DAEMON_BOOT_STEPS = [
   { id: 'employee-agent-templates', phase: 'prepare', failure: 'fail-closed' },
   { id: 'employee-tool-catalog', phase: 'prepare', failure: 'fail-closed' },
   { id: 'employee-authoring-ready', phase: 'prepare', failure: 'fail-closed' },
-  { id: 'employee-writer-state', phase: 'prepare', failure: 'fail-closed' },
-  { id: 'scheduled-payload-heal', phase: 'prepare', failure: 'best-effort' },
   { id: 'fusion-resource-seed', phase: 'prepare', failure: 'best-effort' },
   { id: 'demo-seed', phase: 'prepare', failure: 'best-effort' },
   { id: 'task-execution-recovery', phase: 'execution-recovery', failure: 'fail-closed' },
@@ -62,11 +51,6 @@ export const DAEMON_BOOT_STEPS = [
   { id: 'fusion-decision-recovery', phase: 'execution-recovery', failure: 'best-effort' },
   { id: 'mr-terminal-reconcile', phase: 'execution-recovery', failure: 'fail-closed' },
   { id: 'webhook-delivery-recovery', phase: 'execution-recovery', failure: 'fail-closed' },
-  {
-    id: 'legacy-mission-recovery',
-    phase: 'execution-recovery',
-    failure: 'best-effort',
-  },
   { id: 'employee-upgrade-settlement', phase: 'execution-recovery', failure: 'fail-closed' },
   { id: 'maintenance-boot-snapshot', phase: 'execution-recovery', failure: 'fail-closed' },
   {
@@ -117,7 +101,6 @@ export const DAEMON_BACKGROUND_JOBS = [
     stopTimeoutMs: 10000,
   },
   { id: 'memory-distill', phase: 'pre-listen', requiresExecution: true, stopTimeoutMs: 10000 },
-  { id: 'development-wake', phase: 'pre-listen', requiresExecution: true, stopTimeoutMs: 10000 },
   { id: 'digital-employee-os', phase: 'pre-listen', requiresExecution: true, stopTimeoutMs: 10000 },
   { id: 'event-center', phase: 'pre-listen', requiresExecution: true, stopTimeoutMs: 10000 },
   { id: 'fusion-reconcile', phase: 'pre-listen', requiresExecution: true, stopTimeoutMs: 10000 },

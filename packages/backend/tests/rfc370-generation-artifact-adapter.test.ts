@@ -114,6 +114,8 @@ describe('RFC-370 generation artifact source conformance', () => {
   test.each([
     ['malformed JSON', '{', manifest, 'generation-pointer-corrupt'],
     ['invalid shape', '{}', manifest, 'generation-pointer-corrupt'],
+    ['null document', 'null', manifest, 'generation-pointer-corrupt'],
+    ['array document', '[]', manifest, 'generation-pointer-corrupt'],
     ['missing manifest', serialize(payload()), null, 'generation-manifest-missing'],
     [
       'wrong manifest',

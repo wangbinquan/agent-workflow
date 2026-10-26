@@ -1,3 +1,4 @@
+import { prepareEpoch2DatabaseProviderRuntime } from '@/platform/persistence/databaseProviderRuntime'
 // RFC-311 T20 —— 可回收空间的盘点、清理与 `db compact`。
 //
 // 审计量到的磁盘全景里，`opencode-stores/` 是 RFC-276 退役留下的**零引用死数据**
@@ -15,7 +16,7 @@
 //      500（2026-09-02 用户实撞：2866MB 的 store 一字节没删）。这条锁的就是它。
 
 import { rawExec } from '@/platform/persistence/queryHelpers'
-import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { describe, expect, test } from 'bun:test'
 import {
   chmodSync,
@@ -27,7 +28,7 @@ import {
   writeFileSync,
 } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { sql } from 'drizzle-orm'
 
 import { openDb } from '../src/db/client'
@@ -35,8 +36,6 @@ import {
   cleanupRetiredStores,
   reportDiskReclaimable,
 } from '@/platform/persistence/sqlite/systemMaintenanceDisk'
-
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 function seedRetiredStores(home: string): void {
   const dir = join(home, 'opencode-stores', 'abcdef', 'storage')
@@ -86,7 +85,7 @@ describe('RFC-311 T20 — reclaimable disk report and cleanup', () => {
   test('the report is read-only, cleanup is idempotent, and freelist tracks VACUUM', async () => {
     const home = mkdtempSync(join(tmpdir(), 'aw-rfc311-disk-'))
     try {
-      const db = openDb({ path: join(home, 'db.sqlite'), migrationsFolder: MIGRATIONS })
+      const db = openDb({ path: join(home, 'db.sqlite') })
       seedRetiredStores(home)
 
       const first = reportDiskReclaimable(db, home)
@@ -156,18 +155,26 @@ describe('RFC-311 T20 — reclaimable disk report and cleanup', () => {
     const prevHome = process.env.AGENT_WORKFLOW_HOME
     try {
       process.env.AGENT_WORKFLOW_HOME = home
-      openDb({ path: join(home, 'db.sqlite'), migrationsFolder: MIGRATIONS })
+      const installed = await prepareEpoch2DatabaseProviderRuntime({
+        config: { provider: 'sqlite' },
+        contract: logicalSchemaContract,
+        sqlitePath: join(home, 'db.sqlite'),
+        generationPointerPath: join(home, 'database-generation.json'),
+        operationsRoot: join(home, 'database-migrations'),
+        sqliteOptions: {},
+      })
+      await installed.runtime.close()
       // 伪造一个「daemon 在跑」的锁:写进本进程自己的 pid,它显然活着。
       writeFileSync(join(home, '.daemon.lock'), String(process.pid))
 
       const { dbCompactCommand } = await import('../src/cli/dbCompact')
-      const blocked = dbCompactCommand(buildLogicalSchemaContract())
+      const blocked = dbCompactCommand(logicalSchemaContract)
       expect(blocked.status).toBe('daemon-running')
       expect(blocked.output).toContain('agent-workflow stop')
 
       // 锁清掉之后才允许执行。
       rmSync(join(home, '.daemon.lock'))
-      const ok = dbCompactCommand(buildLogicalSchemaContract())
+      const ok = dbCompactCommand(logicalSchemaContract)
       expect(ok.status).toBe('ok')
       expect(ok.output).toContain('compacted')
     } finally {

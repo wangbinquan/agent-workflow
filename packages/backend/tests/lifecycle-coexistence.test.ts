@@ -1,3 +1,6 @@
+import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
+import { legacyContentRef } from '@/platform/content/contentRef'
+import { contentRowColumns } from '@/platform/content/infrastructure/contentStore'
 import { o2Ports } from './helpers/o2Closure'
 // RFC-053 — coexistence + isolation tests across the two writers
 // (lifecycle invariants in PR-D + stuck-task detector in PR-E).
@@ -97,7 +100,8 @@ describeEachProvider(
       })
       // Plant an R1 violation (stuck review approved-but-not-done).
       const runId = ulid()
-      const { docVersions, lifecycleAlerts } = tablesOf(env.db)
+      const { lifecycleAlerts } = tablesOf(env.db),
+        { docVersions } = tablesOf(env.db)
       await nodeRunFixture(env.db, {
         id: runId,
         taskId: t1.taskId,
@@ -117,7 +121,7 @@ describeEachProvider(
         sourcePortName: 'docpath',
         versionIndex: 1,
         reviewIteration: 0,
-        bodyPath: 'd/v1.md',
+        ...contentRowColumns(legacyContentRef('review-body-path', 'local-file', 'd/v1.md')),
         decision: 'approved',
         decidedAt: T0,
       })
@@ -139,6 +143,7 @@ describeEachProvider(
       // Run only invariants. R1 should be inserted; S1 must NOT be resolved.
       await runLifecycleInvariants({
         operations: createTaskExecutionPersistence(env.db, {
+          historyRestrictions: epoch2RuntimeTestPorts(env.db).historyRestrictions,
           recoveryHumanGates: o2Ports(env.db).collaborationReads.recovery,
         }).recoveryAdministration,
         scope: { taskId: t1.taskId },
@@ -172,6 +177,7 @@ describeEachProvider(
 
       await runStuckTaskDetector({
         operations: createTaskExecutionPersistence(env.db, {
+          historyRestrictions: epoch2RuntimeTestPorts(env.db).historyRestrictions,
           recoveryHumanGates: o2Ports(env.db).collaborationReads.recovery,
         }).recoveryAdministration,
         now: () => T0,
@@ -207,7 +213,8 @@ describeEachProvider('RFC-053 — multi-task reconcile isolation', (harness) => 
     const tB = await seedTask(env.db, 'awaiting_review', { nodes: [reviewNode] })
     const tC = await seedTask(env.db, 'awaiting_review', { nodes: [reviewNode] })
 
-    const { lifecycleAlerts, docVersions } = tablesOf(env.db)
+    const { lifecycleAlerts } = tablesOf(env.db),
+      { docVersions } = tablesOf(env.db)
     // Seed an OPEN R1 row for tA (will be resolved this pass).
     await insertOne(env.db, lifecycleAlerts, {
       id: ulid(),
@@ -240,7 +247,7 @@ describeEachProvider('RFC-053 — multi-task reconcile isolation', (harness) => 
       sourcePortName: 'docpath',
       versionIndex: 1,
       reviewIteration: 0,
-      bodyPath: 'd/v1.md',
+      ...contentRowColumns(legacyContentRef('review-body-path', 'local-file', 'd/v1.md')),
       decision: 'approved',
       decidedAt: T0,
     })
@@ -277,13 +284,14 @@ describeEachProvider('RFC-053 — multi-task reconcile isolation', (harness) => 
       sourcePortName: 'docpath',
       versionIndex: 1,
       reviewIteration: 0,
-      bodyPath: 'd/v1.md',
+      ...contentRowColumns(legacyContentRef('review-body-path', 'local-file', 'd/v1.md')),
       decision: 'approved',
       decidedAt: T0,
     })
 
     const result = await runLifecycleInvariants({
       operations: createTaskExecutionPersistence(env.db, {
+        historyRestrictions: epoch2RuntimeTestPorts(env.db).historyRestrictions,
         recoveryHumanGates: o2Ports(env.db).collaborationReads.recovery,
       }).recoveryAdministration,
       now: () => T0 + MIN_MS,
@@ -350,12 +358,13 @@ describeEachProvider('RFC-053 — deleted task is invisible to both modules', (h
       sourcePortName: 'docpath',
       versionIndex: 1,
       reviewIteration: 0,
-      bodyPath: 'd/v1.md',
+      ...contentRowColumns(legacyContentRef('review-body-path', 'local-file', 'd/v1.md')),
       decision: 'approved',
       decidedAt: T0,
     })
     const r = await runLifecycleInvariants({
       operations: createTaskExecutionPersistence(env.db, {
+        historyRestrictions: epoch2RuntimeTestPorts(env.db).historyRestrictions,
         recoveryHumanGates: o2Ports(env.db).collaborationReads.recovery,
       }).recoveryAdministration,
       now: () => T0 + MIN_MS,
@@ -373,6 +382,7 @@ describeEachProvider('RFC-053 — deleted task is invisible to both modules', (h
     })
     const r = await runStuckTaskDetector({
       operations: createTaskExecutionPersistence(env.db, {
+        historyRestrictions: epoch2RuntimeTestPorts(env.db).historyRestrictions,
         recoveryHumanGates: o2Ports(env.db).collaborationReads.recovery,
       }).recoveryAdministration,
       now: () => T0,
@@ -392,6 +402,7 @@ describeEachProvider('RFC-053 — terminal task is invisible to stuck-detector',
     await seedTask(env.db, 'done', { startedAt: T0 - 24 * 60 * MIN_MS })
     const r = await runStuckTaskDetector({
       operations: createTaskExecutionPersistence(env.db, {
+        historyRestrictions: epoch2RuntimeTestPorts(env.db).historyRestrictions,
         recoveryHumanGates: o2Ports(env.db).collaborationReads.recovery,
       }).recoveryAdministration,
       now: () => T0,
@@ -405,6 +416,7 @@ describeEachProvider('RFC-053 — terminal task is invisible to stuck-detector',
     await seedTask(env.db, 'canceled', { startedAt: T0 - 24 * 60 * MIN_MS })
     const r = await runStuckTaskDetector({
       operations: createTaskExecutionPersistence(env.db, {
+        historyRestrictions: epoch2RuntimeTestPorts(env.db).historyRestrictions,
         recoveryHumanGates: o2Ports(env.db).collaborationReads.recovery,
       }).recoveryAdministration,
       now: () => T0,

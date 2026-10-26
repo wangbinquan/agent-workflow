@@ -1,16 +1,16 @@
 // RFC-395 I-a: historical copy/restore contracts must not replace the binary head used to check migration history.
 import { beforeAll, describe, expect, test } from 'bun:test'
-import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import { buildFrozenEpoch1LogicalSchemaContract as buildLogicalSchemaContract } from '@/platform/persistence/migration/epoch1/contract'
 import {
   loadPostgresqlMigrationHistory,
   verifyPostgresqlMigrationHistory,
-} from '@/platform/persistence/postgresqlMigrationHistory'
-import type { PostgresqlMigrationHistory } from '@/platform/persistence/postgresqlMigrationSequence'
-import { openPostgresqlLogicalTarget } from '@/platform/persistence/postgresqlLogicalTarget'
+} from '@/platform/persistence/migration/legacy/postgresqlMigrationHistory'
+import type { PostgresqlMigrationHistory } from '@/platform/persistence/migration/legacy/postgresqlMigrationSequence'
+import { openPostgresqlLogicalTarget } from '@/platform/persistence/migration/legacy/postgresqlLogicalTarget'
 import {
   resolveLogicalDatabaseRestoreSourceContract,
   LogicalDatabaseRestoreError,
-} from '@/platform/persistence/logicalDatabaseRestore'
+} from '@/platform/persistence/migration/legacy/logicalDatabaseRestore'
 import { createPostgresqlDatabaseRuntime } from '@/platform/persistence/postgresqlRuntime'
 
 const headContract = buildLogicalSchemaContract()

@@ -1,3 +1,10 @@
+import { contentRefColumns } from '@/platform/content/contentStore'
+import { releaseContentRowsInTx } from '@/platform/content/infrastructure/contentStore'
+import type { HistoryRestrictionPort } from '@/platform/contracts/historyRestriction'
+import {
+  assertGateReplayAllowed,
+  type HumanGateOperationJournal,
+} from './humanGateOperationJournal'
 // RFC-359 W4-D25 —— human-gate 开启参与者：一份实现，两个引擎共用。
 //
 // 合一前这里是两份：`sqliteHumanGateOpenParticipant.ts`（RFC-333，`DbTxSync` 同步、经
@@ -11,7 +18,7 @@
 
 import { createNodeRunQueries } from '@/modules/task-execution/public/queries'
 import type { ConsumedInputsParticipantInTx } from '@/modules/task-execution/public/participants'
-import { deriveNodeRunRole } from '@/modules/task-execution/public/types'
+import { nodeRunMintIdentityForSlot } from '@/modules/task-execution/public/types'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { queryWrite } from '@/platform/persistence/queryHelpers'
@@ -22,9 +29,10 @@ import type { CommittedEventRef } from '@/platform/events/committed/types'
 import { insertInBatches } from '@/platform/persistence/batchInsert'
 import type { PersistenceTx } from '@/platform/persistence/persistenceDb'
 import { sha256Hex } from '@/util/hash'
+import { chunkedAll } from '@/util/sqlChunk'
 import type {
   HumanGateNodeRunLifecycleParticipantInTx,
-  HumanGateNodeRunMintParticipantInTx,
+  HumanGateNodeRunMintInput,
   HumanGateOpenParticipantInTx,
   HumanGateOpenParticipantResult,
 } from '../application/ports/humanGateOpenParticipant'
@@ -39,10 +47,9 @@ import {
 } from '../domain/manualQuestionOpen'
 import { decodeReviewGateOpenManifest, type ReviewGateOpenManifest } from '../domain/reviewGateOpen'
 import { appendHumanGateOpenedCommittedEvent } from './collaborationCommittedEvents'
-import type { HumanGateOperationJournal } from './humanGateOperationJournal'
 
 interface PreparedOpenManifest {
-  readonly schemaVersion: 1
+  readonly schemaVersion: 1 | 2
   readonly kind: 'review-open' | 'clarify-open' | 'questions-open' | 'manual-question-open'
   readonly gateRef: string
   readonly nodeProjectionDigest: string
@@ -67,7 +74,9 @@ function decodePreparedOpenManifest(raw: string): PreparedOpenManifest {
   }
   const value = decoded as Partial<PreparedOpenManifest>
   if (
-    value.schemaVersion !== 1 ||
+    (value.kind === 'review-open' || value.kind === 'clarify-open'
+      ? value.schemaVersion !== 2
+      : value.schemaVersion !== 1) ||
     !['review-open', 'clarify-open', 'questions-open', 'manual-question-open'].includes(
       value.kind ?? '',
     ) ||
@@ -115,7 +124,7 @@ async function parkGateNodeRun(
 /** The collaboration-owned review projection applied inside the park transaction. */
 async function projectReviewGateOpen(
   tx: PersistenceTx,
-  nodeRunMint: HumanGateNodeRunMintParticipantInTx<Promise<string>>,
+  nodeRunMint: TargetHumanGateMintParticipant,
   nodeRunLifecycle: HumanGateNodeRunLifecycleParticipantInTx,
   consumedInputs: ConsumedInputsParticipantInTx<PersistenceTx>,
   manifest: ReviewGateOpenManifest,
@@ -130,7 +139,14 @@ async function projectReviewGateOpen(
       )
     }
     await nodeRunMint.mint({
-      ...deriveNodeRunRole({ nodeId: node.nodeId, rerunCause: 'review-park' }),
+      ...nodeRunMintIdentityForSlot(
+        {
+          kind: 'node',
+          nodeId: node.nodeId,
+          frame: { containerRunId: node.containerRunId, iteration: node.iteration },
+        },
+        { kind: 'current' },
+      ),
       id: node.id,
       taskId: node.taskId,
       nodeId: node.nodeId,
@@ -220,9 +236,11 @@ async function projectReviewGateOpen(
         )
       }
       if (currentPendingIds.length > 0) {
-        await tx
+        const retiredComments = await tx
           .delete(reviewComments)
           .where(inArray(reviewComments.docVersionId, currentPendingIds))
+          .returning()
+        await releaseContentRowsInTx(tx, 'review-comment', retiredComments, node.startedAt)
         await tx
           .update(docVersions)
           .set({
@@ -239,7 +257,38 @@ async function projectReviewGateOpen(
     }
   }
 
-  const { docVersions, nodeRunEvents } = tablesOf(tx)
+  const { nodeRunEvents } = tablesOf(tx)
+  const { docVersions, collaborationGateArtifacts } = tablesOf(tx)
+  const artifactRows = await chunkedAll(
+    manifest.documents.map((document) => document.finalContentKey),
+    (keys) =>
+      tx
+        .select()
+        .from(collaborationGateArtifacts)
+        .where(inArray(collaborationGateArtifacts.finalContentKey, keys)),
+  )
+  const contentByKey = new Map(artifactRows.map((row) => [row.finalContentKey, row]))
+  const contentColumns = (document: ReviewGateOpenManifest['documents'][number]) => {
+    const row = contentByKey.get(document.finalContentKey)
+    if (
+      !row ||
+      row.state !== 'staged' ||
+      row.contentRefJson === null ||
+      row.sha256 !== document.bodySha256 ||
+      row.byteSize !== document.byteSize
+    )
+      throw new HumanGateOperationError(
+        'human-gate-artifact-missing',
+        'Prepared document content is missing.',
+      )
+    const ref = contentRefColumns.decode(row.contentRefJson, row.contentInlineBytes)
+    if (!ref || ref.sha256 !== document.bodySha256 || ref.size !== document.byteSize)
+      throw new HumanGateOperationError(
+        'human-gate-artifact-digest-mismatch',
+        'Prepared document content changed.',
+      )
+    return { contentRefJson: row.contentRefJson, contentInlineBytes: row.contentInlineBytes }
+  }
   // RFC-359 W6-T25 —— 文档投影按批落库。`manifest.documents` 的条数**无界**（它来自 agent 输出端口
   // 的 splitListItems，review 路径没有 wrapper-fanout 那道 256 闸），而这段跑在
   // `withTaskExecutionSerializable` 体内——SQLite 上那是全库独占，逐行写的 N 次往返阻塞的是所有任务。
@@ -256,7 +305,7 @@ async function projectReviewGateOpen(
       sourcePortName: document.sourcePortName,
       versionIndex: document.versionIndex,
       reviewIteration: document.reviewIteration,
-      bodyPath: document.bodyPath,
+      ...contentColumns(document),
       commentsJson: document.commentsJson,
       decision: document.decision,
       decisionReason: document.decisionReason,
@@ -290,9 +339,15 @@ async function projectReviewGateOpen(
 }
 
 /** The collaboration-owned clarify node + round + eager question projection. */
+type TargetHumanGateMintParticipant = {
+  mint(
+    input: HumanGateNodeRunMintInput & ReturnType<typeof nodeRunMintIdentityForSlot>,
+  ): Promise<string>
+}
+
 export async function projectClarifyGateOpen(
   tx: PersistenceTx,
-  nodeRunMint: HumanGateNodeRunMintParticipantInTx<Promise<string>>,
+  nodeRunMint: TargetHumanGateMintParticipant,
   nodeRunLifecycle: HumanGateNodeRunLifecycleParticipantInTx,
   manifest: ClarifyGateOpenManifest,
 ): Promise<void> {
@@ -306,7 +361,14 @@ export async function projectClarifyGateOpen(
       )
     }
     await nodeRunMint.mint({
-      ...deriveNodeRunRole({ nodeId: node.nodeId, rerunCause: node.cause }),
+      ...nodeRunMintIdentityForSlot(
+        {
+          kind: 'node',
+          nodeId: node.nodeId,
+          frame: { containerRunId: node.containerRunId, iteration: node.runIteration },
+        },
+        { kind: 'current' },
+      ),
       id: node.id,
       taskId: node.taskId,
       nodeId: node.nodeId,
@@ -368,7 +430,8 @@ export async function projectClarifyGateOpen(
     }
   }
 
-  const { clarifyRounds, taskQuestions, nodeRunEvents } = tablesOf(tx)
+  const { taskQuestions, nodeRunEvents } = tablesOf(tx)
+  const { clarifyRounds } = tablesOf(tx)
   const round = await tx
     .select({ id: clarifyRounds.id })
     .from(clarifyRounds)
@@ -523,11 +586,12 @@ export class DatabaseHumanGateOpenParticipantInTx implements HumanGateOpenPartic
   constructor(
     private readonly tx: PersistenceTx,
     private readonly journal: HumanGateOperationJournal,
-    private readonly nodeRunMint: HumanGateNodeRunMintParticipantInTx<Promise<string>>,
+    private readonly nodeRunMint: TargetHumanGateMintParticipant,
     private readonly nodeRunLifecycle: HumanGateNodeRunLifecycleParticipantInTx,
     // RFC-395 II-a：消费边写入由 task-execution 注入——本文件被其生命周期持久化 import，
     // 反向 value import 会形成文件级依赖环。
     private readonly consumedInputs: ConsumedInputsParticipantInTx<PersistenceTx>,
+    private readonly historyRestrictions: HistoryRestrictionPort,
   ) {}
 
   async listPreparedManualQuestionParksTx(taskId: string): Promise<readonly string[]> {
@@ -572,6 +636,7 @@ export class DatabaseHumanGateOpenParticipantInTx implements HumanGateOpenPartic
         { operationId: input.operationId },
       )
     }
+    await assertGateReplayAllowed(this.tx, this.historyRestrictions, operation)
     const manifest = decodeManualQuestionOpenManifest(operation.manifestJson)
     if (
       manifest.question.taskId !== operation.taskId ||
@@ -632,6 +697,7 @@ export class DatabaseHumanGateOpenParticipantInTx implements HumanGateOpenPartic
         { operationId: input.prepared.operationId },
       )
     }
+    await assertGateReplayAllowed(this.tx, this.historyRestrictions, operation)
     const manifest = decodePreparedOpenManifest(operation.manifestJson)
     if (manifest.gateRef !== operation.gateRef) {
       throw new HumanGateOperationError(
@@ -665,7 +731,7 @@ export class DatabaseHumanGateOpenParticipantInTx implements HumanGateOpenPartic
         const artifact = artifactByKey.get(document.artifactKey)
         if (
           artifact === undefined ||
-          artifact.finalPath !== document.bodyPath ||
+          artifact.finalPath !== document.finalContentKey ||
           artifact.sha256 !== document.bodySha256 ||
           artifact.byteSize !== document.byteSize
         ) {

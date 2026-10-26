@@ -1,3 +1,4 @@
+import { epoch2ReviewReader } from './helpers/epoch2RuntimePorts'
 import { withO2Closure } from './helpers/o2Closure'
 // RFC-395 II-pre：改接生产启动 / 读取路径，保留原断言意图。
 // RFC-119 END-TO-END verification — prior-output injection in a REAL task.
@@ -43,11 +44,11 @@ import { launchTestTaskWithLocalRepo as launchTestTaskWithLocalRepoBase } from '
 import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { and, eq } from 'drizzle-orm'
 import { DEFAULT_PROTOCOL_RETRY_BUDGET } from '@agent-workflow/shared'
-import type { DbClient } from '../src/db/client'
-import { createInMemoryDb } from '../src/db/client'
+import { type DbClient, createInMemoryDb } from '../src/db/client'
+
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 import { makeVersionedStubOpencode } from './fixtures/versionedStubOpencode'
 import { createAgent } from '../src/modules/resource-catalog/infrastructure/legacy/agent'
@@ -64,7 +65,6 @@ import {
   runTaskWithRealTestTopology as runTaskBase,
 } from './helpers/taskExecutionTestTopology'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const GIT_TIMEOUT_MS = 10_000
 const NODE_TIMEOUT_MS = 10_000
 const FLOW_TIMEOUT_MS = 20_000
@@ -121,7 +121,7 @@ async function buildHarness(): Promise<Harness> {
   const tmp = mkdtempSync(join(tmpdir(), `aw-rfc119-e2e-${runIdx}-`))
   const appHome = join(tmp, 'appHome')
   const repoPath = join(tmp, 'repo')
-  const db = createInMemoryDb(MIGRATIONS)
+  const db = createInMemoryDb()
   await seedTestDefaultOpencodeRuntime(db)
   const previousAppHome = process.env.AGENT_WORKFLOW_HOME
 
@@ -256,6 +256,7 @@ describe('RFC-119 e2e — review-iterate rerun gets the prior output in its prom
 
     await addReviewComment({
       db: h.db,
+      reviewReader: epoch2ReviewReader(h.db, h.appHome),
       appHome: h.appHome,
       nodeRunId: h.reviewNodeRunId,
       anchor: {

@@ -1,3 +1,4 @@
+import { liveSqlitePath } from './storage'
 // RFC-319 —— 设置分区外壳（CFG-03 / CFG-X5）、身份与出站凭据的**拆除**闸门
 // （CFG-X4 / CFG-X3）、反代部署下的对外地址（CFG-X6）、在线状态的实时推送（UX-39）、
 // 意图评审区的空态与工作上下文回填（INTENT-X5 / INTENT-X7），以及任务变更页签的
@@ -1239,7 +1240,7 @@ test('RFC-319 TASK-35：变更页签的作用域下拉切到某个节点时，�
     `${BETA_BASE}\nexport function betaTwo(): number {\n  return 2\n}\n`,
   )
 
-  const dbFile = join(taskDaemon.home, 'db.sqlite')
+  const dbFile = liveSqlitePath(taskDaemon.home)
   const runs = querySqlite<NodeRunRow>(
     dbFile,
     "SELECT id, node_id FROM node_runs WHERE task_id = ? AND node_id IN ('node_one','node_two') ORDER BY started_at ASC, id ASC",

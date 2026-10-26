@@ -1,3 +1,4 @@
+import { skillRowPath } from './databaseSkillTrees'
 import { workflowCatalogPredicate } from './workflowCatalogPredicate'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import {
@@ -8,13 +9,14 @@ import {
 } from '@agent-workflow/shared'
 import { inArray } from 'drizzle-orm'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
+import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { ValidationError } from '@/util/errors'
 import type { ResourceAuthorizationApplication } from '../application/resourceAuthorization'
 import type {
   WorkflowReferenceAdmissionPort,
   WorkflowValidationPort,
 } from '../application/workflows/ports'
-import { agentFromPersistenceRow } from './agentPersistence'
+import { loadAgentPersistenceRows } from './agentPersistence'
 import { mcpFromPersistenceRow } from './mcpPersistence'
 import { pluginFromPersistenceRow } from './pluginPersistence'
 import type { SkillContentAvailability } from '../application/skills/contentAvailability'
@@ -87,20 +89,35 @@ export function createWorkflowValidationPort(input: {
   const port: WorkflowValidationPort = {
     candidateHash: workflowDefinitionCandidateHashOf,
     async validate(candidate) {
-      const { agents, skills, mcps, plugins, workflows, workgroups } = tablesOf(input.db)
-      const [agentRows, skillRows, mcpRows, pluginRows, workflowRows, workgroupRows] =
-        await Promise.all([
-          input.db.select().from(agents),
-          input.db.select().from(skills),
-          input.db.select().from(mcps),
-          input.db.select().from(plugins),
-          input.db.select().from(workflows).where(workflowCatalogPredicate(workflows.id)),
-          input.db.select({ name: workgroups.name }).from(workgroups),
-        ])
+      const { agentRows, skillRows, mcpRows, pluginRows, workflowRows, workgroupRows } =
+        await databaseSessionFor(input.db).snapshotRead(async (tx) => {
+          const { agents, skills } = tablesOf(tx)
+          const { mcps, plugins, workflows, workgroups } = tablesOf(tx)
+          const [agentRows, skillRows, mcpRows, pluginRows, workflowRows, workgroupRows] =
+            await Promise.all([
+              tx.select().from(agents),
+              tx.select().from(skills),
+              tx.select().from(mcps),
+              tx.select().from(plugins),
+              tx.select().from(workflows).where(workflowCatalogPredicate(workflows.id)),
+              tx.select({ name: workgroups.name }).from(workgroups),
+            ])
+          return {
+            agentRows: await loadAgentPersistenceRows(tx, agentRows),
+            skillRows,
+            mcpRows,
+            pluginRows,
+            workflowRows,
+            workgroupRows,
+          }
+        })
       const availableSkills: Skill[] = []
       for (const row of skillRows) {
         if (row.reservationState !== 'ready') continue
-        const skill = skillFromPersistenceRow(row)
+        const skill = skillFromPersistenceRow({
+          ...row,
+          managedPath: skillRowPath(row, row.id, 'live'),
+        })
         if (await input.skillContent.isAvailable(skill)) availableSkills.push(skill)
       }
       const workflowInventory: ValidatorWorkflowRef[] = workflowRows.flatMap((row) => {
@@ -111,7 +128,7 @@ export function createWorkflowValidationPort(input: {
         collectWorkgroupCallRefs(candidate.definition).map((reference) => reference.workgroupName),
       )
       const context: ValidatorContext = {
-        agents: agentRows.map(agentFromPersistenceRow),
+        agents: agentRows,
         skills: availableSkills,
         mcps: mcpRows.map(mcpFromPersistenceRow),
         plugins: pluginRows.map(pluginFromPersistenceRow),
@@ -148,7 +165,8 @@ async function loadAdmissionRows(
 ): Promise<readonly AdmissionRow[]> {
   if (references.length === 0) return []
   const selected = [...new Set(references)]
-  const { agents, workflows, workgroups } = tablesOf(db)
+  const { agents } = tablesOf(db)
+  const { workflows, workgroups } = tablesOf(db)
   switch (resourceType) {
     case 'agent':
       return db

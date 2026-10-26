@@ -37,7 +37,7 @@ const BACKEND_SRC = resolve(import.meta.dir, '..', 'src')
  */
 const MERGE_STATE_WRITE_ALLOWLIST: Record<string, number> = {
   // RFC-369：铸造参与者的集合写已删除，铸造只 insert（mergeState 生为 NULL，见下方 insert 格）。
-  'modules/task-execution/infrastructure/mergeStateLifecyclePersistence.ts': 1,
+  'modules/task-execution/infrastructure/nodeRunWriteProtocol.ts': 1,
 }
 
 function walkTsFiles(dir: string): string[] {
@@ -86,13 +86,17 @@ interface Counts {
   insertWrites: Record<string, number>
 }
 
-function countMergeStateSites(): Counts {
+function countMergeStateSites(
+  sources = walkTsFiles(BACKEND_SRC).map((file) => ({
+    file: relative(BACKEND_SRC, file).split(sep).join('/'),
+    source: readFileSync(file, 'utf8'),
+  })),
+): Counts {
   const updateWrites: Record<string, number> = {}
   const insertWrites: Record<string, number> = {}
-  for (const file of walkTsFiles(BACKEND_SRC)) {
-    const rel = relative(BACKEND_SRC, file).split(sep).join('/')
-    const content = stripCommentLines(readFileSync(file, 'utf8'))
-    const updateRe = /\.update\s*\(\s*nodeRuns\s*\)/g
+  for (const { file: rel, source } of sources) {
+    const content = stripCommentLines(source)
+    const updateRe = /\.update\s*\(\s*(?:\w+\.)?(?:nodeRuns|nodeRunRuntimeStates|runtime)\s*\)/g
     for (;;) {
       if (updateRe.exec(content) === null) break
       const setArg = extractCallArg(content, updateRe.lastIndex, 'set')
@@ -100,7 +104,7 @@ function countMergeStateSites(): Counts {
         updateWrites[rel] = (updateWrites[rel] ?? 0) + 1
       }
     }
-    const insertRe = /\.insert\s*\(\s*nodeRuns\s*\)/g
+    const insertRe = /\.insert\s*\(\s*(?:\w+\.)?(?:nodeRuns|nodeRunRuntimeStates|runtime)\s*\)/g
     for (;;) {
       if (insertRe.exec(content) === null) break
       const valuesArg = extractCallArg(content, insertRe.lastIndex, 'values')
@@ -150,7 +154,18 @@ describe('RFC-144 ratchet: direct node_runs.merge_state writes confined to provi
   })
 
   test('insert writes: zero in production — every mint is born merge_state=NULL', () => {
-    expect(counts.insertWrites).toEqual({})
+    // Sparse runtime state is created by the same compare-and-write protocol,
+    // never by mint. Its task/run locks precede read and conflict-normalized insert.
+    expect(counts.insertWrites).toEqual({
+      'modules/task-execution/infrastructure/nodeRunWriteProtocol.ts': 1,
+    })
+    const protocol = readFileSync(
+      join(BACKEND_SRC, 'modules/task-execution/infrastructure/nodeRunWriteProtocol.ts'),
+      'utf8',
+    )
+    expect(protocol).toContain('if (from !== null)')
+    expect(protocol).toContain('.onConflictDoNothing({ target: runtime.nodeRunId })')
+    expect(protocol).toContain('if (inserted.length !== 1)')
   })
 
   test('buildMintNodeRunValues carries no mergeState field (mint-NULL 入口不变量的工厂侧锁)', () => {
@@ -159,4 +174,30 @@ describe('RFC-144 ratchet: direct node_runs.merge_state writes confined to provi
     )
     expect(/\bmergeState\s*:/.test(mint)).toBe(false)
   })
+})
+
+test('merge-state scanner rejects direct writes to both qualified target tables and the retired table', () => {
+  for (const table of [
+    'nodeRuns',
+    'tables.nodeRuns',
+    'nodeRunRuntimeStates',
+    'tables.nodeRunRuntimeStates',
+    'runtime',
+  ]) {
+    expect(
+      countMergeStateSites([
+        { file: 'bypass.ts', source: `db.update(${table}).set({ mergeState: 'merged' })` },
+      ]).updateWrites,
+    ).toEqual({ 'bypass.ts': 1 })
+    expect(
+      countMergeStateSites([
+        { file: 'bypass.ts', source: `db.insert(${table}).values({ mergeState: 'merged' })` },
+      ]).insertWrites,
+    ).toEqual({ 'bypass.ts': 1 })
+  }
+  expect(
+    countMergeStateSites([
+      { file: 'ordinary.ts', source: 'db.update(tables.nodeRunRuntimeStates).set({ pid: 1 })' },
+    ]),
+  ).toEqual({ updateWrites: {}, insertWrites: {} })
 })

@@ -9,7 +9,9 @@ import ts from 'typescript'
 import ledger from '../fixtures/rfc395-run-selection-boundary-ledger.json'
 
 const backend = resolve(import.meta.dir, '../..')
-const oracle = 'src/modules/task-execution/infrastructure/runSelection/'
+const oracle = 'src/modules/task-execution/infrastructure/migration/oracle/'
+// The target port implementation owns selection SQL; sibling business adapters do not.
+const targetReader = 'src/modules/task-execution/infrastructure/runSelection/table/reader.ts'
 const displayHelper = 'src/services/reviewRoundStart.ts'
 const legacy = new Set([
   'compareNodeRunMintOrder',
@@ -34,23 +36,16 @@ interface Hit {
 const portable = (path: string) => path.replaceAll('\\', '/')
 const key = (hit: Hit) => `${portable(hit.path)}|${hit.rule}|${hit.source}`
 const digest = (hit: Hit) => createHash('sha256').update(key(hit)).digest('hex')
-// Initial reviewed fingerprints. Removal is allowed; new exceptions require another approved stage.
+// RFC-395 II-b: exact successors of the reviewed owner/display sites plus frozen frame conversion.
+// Eleven epoch-1 entries retire; five target entries remain. T18 P3B makes the two
+// owner retry-order clauses explicitly NULLS LAST; only their exact hashes change.
+// Private runtime pickers are not allowed.
 const initialExceptions = new Set<string>([
-  // RFC-395 II-a A3: reviewed unchanged boot replay and bounded wrapper prefilter from HEAD.
-  'e6d6a63ab426eba3cc1a87af3f2f8ad3cb734cf385911346e8ddd4763fdb5391',
-  '3efd68547d78c2525e9cf809945ba31a548d9ae269141ce87da740673e10ca26',
-
-  'dc7e65bb3fb367df2f8e5143d3ae29c7942dc02ab96bfa23cb2744aa21397455',
-  '530da06e7973f42c971711c49774b4e043de8f6857d326389f4406c2f675ea38',
-  'ee35b3f1d3d2bc45c5b1fecb5b8db153a5318a0f8c3bb5884bf457dbd6f9ca5b',
-  '3c50fe1a2bdc4efe6162ea03815a9ac220ebf1ef7b2bafb96f13418be3adafa5',
-  'c757ba18c3558029bfedbab896c09f39b677d5b99403fef35d4406a0cc34b02f',
-  'f753214d95cd281e980963a39912684ad3b23541504a96b631169bfda50a27ad',
-  '60832c33c7975e63a9577ae87e210ccc4fadad1a007df43d259b0d91387cd9bb',
-  'f5f84d7395607ab7c93a448c0cfe2e6a418aedaba8a0ebc1aa1149f39a88a589',
-  'c86c83957d2fda3563f6ee8f07374a7aa0f8c329d5039ccf1386e715ee6dddc6',
-  // RFC-395 II-b O3: unchanged timeline statement moved into Task; replace, do not grow the exception.
-  '29eb898f100b67a03ef22ea44a0574c1afc71602bac4e2171773a52ff8620dc7',
+  '3650a7d35c8bc5bc13c6e748caa16b17578eec2568f733bcfa2bafb593cb18a3',
+  '4c1127f2284e9c1b61f3707b81b5a868cd1f34be90ddbcc9d5aa109dc2e0beeb',
+  'b7d6313ee8991f72c72c417f3c33411ea417617f65d7254557dc7975f5c4a1a5',
+  '481d640ee54d97c5ad353a00762d42a93f6ce065d805f71da43299fa99c6d5e7',
+  'd56f405b8568571feca9eac4e2b0dfb42064a0cddd6a6f486fc176faa82ce0da',
 ])
 
 function member(node: ts.Node): string | undefined {
@@ -77,7 +72,7 @@ function nodes(node: ts.Node): ts.Node[] {
 
 export function runSelectionBoundaryHits(path: string, text: string): Hit[] {
   path = portable(path)
-  if (path.startsWith(oracle)) return []
+  if (path.startsWith(oracle) || path === targetReader) return []
   const source = ts.createSourceFile(path, text, ts.ScriptTarget.Latest, true)
   const all = nodes(source)
   const aliases = new Map<string, string>()
@@ -245,7 +240,11 @@ describe('RFC-395 II-a A3 run-selection boundary', () => {
     expect(ledger.entries.length).toBeLessThanOrEqual(initialExceptions.size)
     for (const entry of ledger.entries) {
       expect(initialExceptions.has(digest(entry as Hit))).toBe(true)
-      expect(entry.removeBy).toBe('II-b')
+      expect(entry.removeBy).toBe(
+        entry.path.includes('/migration/')
+          ? 'epoch-1-conversion-retirement'
+          : 'owner-query-retirement',
+      )
       expect(entry.why.length).toBeGreaterThan(20)
     }
   })
@@ -320,6 +319,13 @@ describe('RFC-395 II-a A3 run-selection boundary', () => {
     expect(boundaryViolations([], [])).toEqual([])
     expect(runSelectionBoundaryHits('src\\example.ts', 'pickFreshestRun(rows)')).toEqual(allowed)
     expect(runSelectionBoundaryHits(`${oracle}fixture.ts`, 'pickFreshestRun(rows)')).toEqual([])
+    expect(runSelectionBoundaryHits(targetReader, 'query.orderBy(asc(nodeRuns.seq))')).toEqual([])
+    expect(
+      runSelectionBoundaryHits(
+        'src/modules/task-execution/infrastructure/runSelection/copied.ts',
+        'pickFreshestRun(rows)',
+      ),
+    ).not.toEqual([])
     expect(
       runSelectionBoundaryHits(
         displayHelper,
@@ -353,12 +359,10 @@ function failureSnapshotBeforeLoop(source: string): boolean {
   if (start < 0) return false
   const nextProjection = source.indexOf('function rowToTask(', start)
   const body = source.slice(start, nextProjection < 0 ? source.length : nextProjection)
-  const snapshot = body.indexOf('createRunSelectionOracleSnapshot(')
+  const snapshot = body.indexOf('createRunHistoryBatchSnapshot(')
   const loop = body.indexOf('for (const t of wanted)')
   return (
-    snapshot >= 0 &&
-    loop > snapshot &&
-    !body.slice(loop).includes('createRunSelectionOracleSnapshot(')
+    snapshot >= 0 && loop > snapshot && !body.slice(loop).includes('createRunHistoryBatchSnapshot(')
   )
 }
 
@@ -368,12 +372,12 @@ test('failure-code batching builds one snapshot outside the task loop, with a ne
   ).toBe(true)
   expect(
     failureSnapshotBeforeLoop(
-      'export async function loadTaskFailureCodes() { const snapshot = createRunSelectionOracleSnapshot(rows); for (const t of wanted) {} } function rowToTask(',
+      'export async function loadTaskFailureCodes() { const snapshot = createRunHistoryBatchSnapshot(rows); for (const t of wanted) {} } function rowToTask(',
     ),
   ).toBe(true)
   expect(
     failureSnapshotBeforeLoop(
-      'export async function loadTaskFailureCodes() { for (const t of wanted) { createRunSelectionOracleSnapshot(rows); } } function rowToTask(',
+      'export async function loadTaskFailureCodes() { for (const t of wanted) { createRunHistoryBatchSnapshot(rows); } } function rowToTask(',
     ),
   ).toBe(false)
 })

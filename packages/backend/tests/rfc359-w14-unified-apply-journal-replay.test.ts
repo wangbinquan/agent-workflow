@@ -1,3 +1,4 @@
+import { tablesOf } from '@/platform/persistence/sessionTables'
 // RFC-359 —— 统一 apply 引擎的 **journal 三态重放 / 失败终态**双引擎对拍。
 //
 // # 这份文件为什么存在（它是一次退役的前置条件）
@@ -44,7 +45,7 @@
 
 import { readAgentFixtures } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+
 import { afterEach, expect, test } from 'bun:test'
 import { randomBytes } from 'node:crypto'
 import { mkdtempSync } from 'node:fs'

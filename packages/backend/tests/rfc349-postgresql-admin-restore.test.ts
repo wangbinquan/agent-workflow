@@ -17,7 +17,7 @@ import type {
   PortableDatabaseRestoreResult,
 } from '../src/modules/system-operations/infrastructure/portableDatabaseRestore'
 import type { RestoreArtifactRef } from '../src/modules/system-operations/public/types'
-import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'
 
 const ENVELOPE_DIGEST = `sha256:${'a'.repeat(64)}`
 const RESTORE_OPERATION = `dbm_restore_${'a'.repeat(32)}`
@@ -74,7 +74,7 @@ function fixture(overrides: Partial<CreatePostgresqlAdminRestoreCoordinatorInput
   const preflightOperations: string[] = []
   const restoreOperations: string[] = []
   const coordinator = createPostgresqlAdminRestoreCoordinator({
-    headContract: buildLogicalSchemaContract(),
+    headContract: logicalSchemaContract,
     artifacts: { pathOf: () => tarballPath },
     runtime: { provider: 'postgresql', generationId: GENERATION } as PostgresqlDatabaseRuntime,
     targetGenerationId: GENERATION,
@@ -84,7 +84,7 @@ function fixture(overrides: Partial<CreatePostgresqlAdminRestoreCoordinatorInput
     plan: { contractDigest: `sha256:${'b'.repeat(64)}` } as PostgresqlSchemaPlan,
     filesystem: { async apply() {} },
     inspectBackup: async (options) => {
-      expect(options.headContract).toBe(buildLogicalSchemaContract())
+      expect(options.headContract).toBe(logicalSchemaContract)
       return inspection()
     },
     async preflightTarget({ operationId }) {
@@ -103,7 +103,7 @@ function fixture(overrides: Partial<CreatePostgresqlAdminRestoreCoordinatorInput
       }
     },
     async restoreBackup(options) {
-      expect(options.headContract).toBe(buildLogicalSchemaContract())
+      expect(options.headContract).toBe(logicalSchemaContract)
       restoreOperations.push(options.restoreOperationId)
       return {
         manifest: inspection().manifest,

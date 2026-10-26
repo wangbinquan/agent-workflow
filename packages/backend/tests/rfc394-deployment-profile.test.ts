@@ -28,6 +28,7 @@ const HOSTED_SELECTION_KEYS = [
   'bootExecutionRecovery',
   'codeReviewArtifacts',
   'conflictMergeWorkspaceEffects',
+  'contentStore',
   'credentials',
   'crewStationEvents',
   'customObserverPrograms',
@@ -43,6 +44,7 @@ const HOSTED_SELECTION_KEYS = [
   'evidenceRead',
   'executionAuthority',
   'fusionWorkspaceEffects',
+  'historyRestrictions',
   'hostedBackgroundOwners',
   'humanGateArtifactRecovery',
   'initializeExecution',
@@ -143,7 +145,7 @@ test('selection projection preserves all receivers and excludes session-only fie
     expect(selected[key]).toBe(values[key])
   expect('token' in selected).toBe(false)
   expect('requiredProvider' in selected).toBe(false)
-  expect(Object.keys(DEPLOYMENT_SELECTION_KEYS)).toHaveLength(71)
+  expect(Object.keys(DEPLOYMENT_SELECTION_KEYS)).toHaveLength(72)
 })
 for (const version of ['git version 2.37.9', null])
   test('incompatible standalone git returns the unchanged fatal message: ' + version, async () => {
@@ -313,7 +315,7 @@ describeEachProvider('RFC-394 hosted factory with provider-owned storage', (harn
           'selections',
         ])
         expect(Object.keys(profile.selections).sort()).toEqual([...HOSTED_SELECTION_KEYS].sort())
-        expect(HOSTED_SELECTION_KEYS).toHaveLength(67)
+        expect(HOSTED_SELECTION_KEYS).toHaveLength(69)
         expect(profile.selections.applicationConfiguration).toBe(system.applicationConfiguration)
         expect(profile.selections.databaseInstallation).toBe(system.databaseInstallation)
         expect(profile.selections.secretBox).toBe(system.secretBox)

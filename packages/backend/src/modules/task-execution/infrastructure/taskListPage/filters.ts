@@ -7,8 +7,6 @@
 //     （「事件」/「API」筛选直接 400），2026-09-04 收成一份判据后这里跟着用同一份。
 
 import { workflowNameExpression } from '@/modules/resource-catalog/public/queries'
-import { taskWorkgroupNameExpression } from '../taskWorkgroupConfig'
-import { taskSubjectKindSql, taskSubjectSqlColumns, taskWorkflowNameSql } from '../taskSubjectSql'
 import {
   TASK_LIST_ACTIVE_STATUSES,
   TASK_LIST_ATTENTION_STATUSES,
@@ -28,6 +26,8 @@ import {
 } from '@agent-workflow/shared'
 import { sql, type SQL } from 'drizzle-orm'
 import { z } from 'zod'
+import { taskSubjectSqlColumns, taskWorkflowNameSql } from '../taskRepositorySql'
+import { taskWorkgroupNameExpression } from '../taskWorkgroupConfig'
 
 import { engineOf } from '@/platform/persistence/databaseTransaction'
 import { ValidationError } from '@/util/errors'
@@ -215,20 +215,22 @@ export function nonViewCondition(
     conditions.push(sql`${col('status')} IN (${list(filters.statuses)})`)
   }
   if (filters.subject !== 'all') {
-    const subject = taskSubjectKindSql(taskSubjectSqlColumns(alias))
-    // 线上仍只有三个 facet；数字员工与 code-round 保留在原有 workflow 目录源。
-    conditions.push(
+    const kinds =
       filters.subject === 'workflow'
-        ? sql`${subject} IN ('workflow', 'digital-employee', 'code-round')`
-        : sql`${subject} = ${filters.subject}`,
-    )
+        ? ['workflow', 'digital-employee', 'code-round']
+        : [filters.subject]
+    conditions.push(sql`${col('id')} in (
+      select task_id from task_definitions where subject_kind in (${list(kinds)})
+    )`)
   }
   // RFC-357：来源 → 存储值的映射只有 shared 的 `taskListOriginMatches` 一份。
   // 它此前在这里是手写的 `IN ('event','webhook')`，而 PostgreSQL 目录源另写了一份按
   // `scheduled_task_id` 猜的实现——「事件」/「API」两个选项直接 400（2026-09-04 修）。
   const originMatches = taskListOriginMatches(filters.origin)
   if (originMatches !== null) {
-    conditions.push(sql`${col('launch_origin')} IN (${list(originMatches)})`)
+    conditions.push(
+      sql`${col('id')} in (select task_id from task_launch_contexts where launch_origin in (${list(originMatches)}))`,
+    )
   }
 
   if (filters.q !== undefined) {
@@ -258,7 +260,7 @@ export function nonViewCondition(
       OR ${engine.likeCaseInsensitive(sql`lower(COALESCE(${col('repo_path')}, ''))`, pattern, escape)}
       OR ${engine.likeCaseInsensitive(sql`lower(COALESCE(${col('repo_url')}, ''))`, pattern, escape)}
       OR EXISTS (
-        SELECT 1 FROM task_repos tr
+        SELECT 1 FROM task_repository_mounts tr
         WHERE tr.task_id = ${col('id')}
           AND (
             ${engine.likeCaseInsensitive(sql`lower(COALESCE(tr.repo_path, ''))`, pattern, escape)}

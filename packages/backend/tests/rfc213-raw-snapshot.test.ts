@@ -1,3 +1,5 @@
+import { openFrozenEpoch1Db } from './migration-freeze'
+import { persistenceHead } from '@/bootstrap/persistenceHead'
 // RFC-213 PR-0 — raw, corruption-tolerant DB snapshot + backup manifest.
 //
 // design/RFC-213-disaster-recovery/design.md §3.1 (design-gate blocker #1/#3):
@@ -12,7 +14,7 @@
 //     throws → the corrupt case reds.
 //   - stop writing the manifest → manifest assertions red.
 
-import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { afterEach, describe, expect, test } from 'bun:test'
 import { removeTempDirSync } from './fixtures/tempDir'
 import { Database } from 'bun:sqlite'
@@ -44,7 +46,7 @@ afterEach(() => {
  *  (so the on-disk bytes are stable for byte-equality). */
 function seedFileDb(appHome: string): string {
   const dbPath = join(appHome, 'db.sqlite')
-  const db: DbClient = openDb({ path: dbPath, migrationsFolder: MIGRATIONS })
+  const db: DbClient = openDb({ path: dbPath })
   const sqlite = (db as unknown as { $client: Database }).$client
   sqlite.exec('PRAGMA wal_checkpoint(TRUNCATE);')
   sqlite.close()
@@ -76,7 +78,7 @@ describe('RFC-213 rawCopyDb — healthy DB', () => {
   test('copies a live WAL/SHM pair before validation and preserves the checkpointed bytes', async () => {
     const appHome = tmp('rfc213-raw-live-wal-')
     const dbPath = join(appHome, 'db.sqlite')
-    const db = openDb({ path: dbPath, migrationsFolder: MIGRATIONS })
+    const db = openDb({ path: dbPath })
     const sqlite = (db as unknown as { $client: Database }).$client
     try {
       sqlite.exec('PRAGMA wal_checkpoint(TRUNCATE);')
@@ -133,7 +135,7 @@ describe('RFC-213 rawCopyDb — healthy DB', () => {
   test('a busy checkpoint preserves the complete raw DB/WAL bytes during copy validation', async () => {
     const home = tmp('rfc213-busy-checkpoint-copy-')
     const dbPath = join(home, 'db.sqlite')
-    const db = openDb({ path: dbPath, migrationsFolder: MIGRATIONS })
+    const db = openDb({ path: dbPath })
     const writer = (db as unknown as { $client: Database }).$client
     let reader: Database | null = null
     try {
@@ -171,9 +173,12 @@ describe('RFC-213 rawCopyDb — healthy DB', () => {
     }
   })
 
-  test('byte-copies db.sqlite and writes a manifest with migration identity', async () => {
+  test('byte-copies a frozen epoch-1 source and writes its legacy migration identity', async () => {
     const appHome = tmp('rfc213-raw-')
-    const dbPath = seedFileDb(appHome)
+    const dbPath = join(appHome, 'db.sqlite')
+    const frozen = openFrozenEpoch1Db({ path: dbPath, migrationsFolder: MIGRATIONS })
+    frozen.$client.exec('PRAGMA wal_checkpoint(TRUNCATE)')
+    frozen.$client.close()
     const srcBytes = readFileSync(dbPath)
     const identity = readDbMigrationIdentity(dbPath)
     expect(identity).not.toBeNull()
@@ -196,6 +201,34 @@ describe('RFC-213 rawCopyDb — healthy DB', () => {
   })
 })
 
+test('a native raw snapshot preserves its recorded epoch-2 contract and generation', async () => {
+  const appHome = tmp('rfc213-native-raw-')
+  const dbPath = seedFileDb(appHome)
+  const bytes = readFileSync(dbPath)
+  const result = await rawCopyDb({ kind: 'pre-restore', appHome, dbPath })
+  const out = tmp('rfc213-native-raw-out-')
+  await extractTarGz(result.path, out)
+  expect(readFileSync(join(out, 'db.sqlite'))).toEqual(bytes)
+  const copied = new Database(join(out, 'db.sqlite'), { readonly: true })
+  try {
+    expect(
+      copied.query('SELECT version, contract_digest FROM aw_meta_schema_history').all(),
+    ).toEqual([
+      {
+        version: persistenceHead().contract.version,
+        contract_digest: persistenceHead().contract.contract.digest,
+      },
+    ])
+    expect(
+      copied
+        .query("SELECT schema_epoch, state FROM aw_meta_generations WHERE state='active'")
+        .all(),
+    ).toEqual([{ schema_epoch: 2, state: 'active' }])
+  } finally {
+    copied.close()
+  }
+})
+
 describe('RFC-213 rawCopyDb — corrupt DB (the whole point)', () => {
   test('sidecar creation never creates a missing database', () => {
     const path = join(tmp('rfc213-missing-check-'), 'absent.sqlite')
@@ -206,7 +239,7 @@ describe('RFC-213 rawCopyDb — corrupt DB (the whole point)', () => {
   test('real page corruption remains reported and its original bytes remain recoverable', async () => {
     const appHome = tmp('rfc213-page-corrupt-copy-')
     const dbPath = join(appHome, 'db.sqlite')
-    const db = openDb({ path: dbPath, migrationsFolder: MIGRATIONS })
+    const db = openDb({ path: dbPath })
     const sqlite = (db as unknown as { $client: Database }).$client
     const root = sqlite
       .query("SELECT rootpage FROM sqlite_schema WHERE name = 'workflows'")
@@ -271,12 +304,12 @@ describe('RFC-213 createBackup manifest (PR-0 T2)', () => {
   test('createBackup embeds a manifest with kind + migration identity', async () => {
     const appHome = tmp('rfc213-cb-')
     const dbPath = join(appHome, 'db.sqlite')
-    const db: DbClient = openDb({ path: dbPath, migrationsFolder: MIGRATIONS })
+    const db: DbClient = openDb({ path: dbPath })
     const identity = readDbMigrationIdentity(dbPath)
 
     const { createBackup } = await import('../src/services/backup')
     const res = await createBackup({
-      contract: buildLogicalSchemaContract(),
+      contract: logicalSchemaContract,
       db,
       kind: 'scheduled',
       appHome,

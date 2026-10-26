@@ -34,12 +34,11 @@ import {
   gcOrphanLocks,
   listActiveOps,
   type SkillOperationRow,
+  type SkillOpKind,
+  type SkillOpPhase,
 } from '@/modules/resource-catalog/infrastructure/legacy/skillOperations'
 import { recoveryDirection } from '@/modules/resource-catalog/infrastructure/legacy/skillOpRecovery'
-import type {
-  SkillOpKind,
-  SkillOpPhase,
-} from '@/modules/resource-catalog/infrastructure/legacy/skillOperations'
+
 import type { SkillVersionRecoveryContentStore } from '../../application/skills/versionRecoveryContentStore'
 import type { SkillDeletionContentStore } from '../../application/skills/deletionContentStore'
 import type { SkillCreationContentStore } from '../../application/skills/creationContentStore'

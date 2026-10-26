@@ -3,18 +3,8 @@
 // `postgresqlClarifyRepairParticipant.ts` 是**零功能分叉**——同一组 where 子句、同一段排序、
 // 连下面那处「已被 inArray 排除的 awaiting_human 判断」都逐字复制了两遍。
 //
-// # 事务包裹：单语句 CAS 不包（与 `reviewRepairParticipant` 取一致的形态）
-//
-// 合一前 `reopen` 在 PG 侧包了 `db.transaction`、SQLite 侧是裸 UPDATE；隔壁
-// `reviewRepairParticipant` 的 `unapprove` 恰好反过来（SQLite 包、PG 裸）。同一类语句在两个端口
-// 上给出相反的包裹选择，说明这些包裹是随手加的、没有语义依据。这里按语义统一裁定：`reopen` 是
-// 单条带 `WHERE status=$expected` 的 CAS UPDATE，单语句在两个引擎上本来就是原子的——SQLite 的
-// autocommit 给每条语句自带一笔事务；PG 客户端的 `withWriteFence`
-// （`platform/persistence/postgresqlDatabaseClient.ts:136-163`）把每一条非事务写都放到独占连接上的
-// BEGIN / …UPDATE… / COMMIT 里。再显式包一层只多一次写者租约和一对 BEGIN/COMMIT 往返，
-// CAS 的判定结果一模一样，因此不包。
-// （对照：`reviewRepairParticipant.completeApproved` 是「读判定 + 写两个端口」的读改写序列，
-// 那一处**要**包，头注释同样写明了理由。）
+// RFC-395 II-b: reopen 交给 answer-write port，在同一事务内锁 round、CAS 终态并清理答案行。
+// 独立 attribution 与 draft 行继续保留；此处不再直接更新轮次 JSON 列。
 //
 // # 抽象层错位（本刀只记录，不动手）
 //

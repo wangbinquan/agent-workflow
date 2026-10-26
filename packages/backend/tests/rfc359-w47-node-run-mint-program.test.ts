@@ -20,7 +20,17 @@ import {
 } from '@/platform/persistence/transactionProgram'
 
 type Mode = 'sync' | 'async'
-type Stage = 'record' | 'container' | 'task' | 'prior' | 'abandon' | 'allocate' | 'insert'
+type Stage =
+  | 'record'
+  | 'generation'
+  | 'container'
+  | 'task'
+  | 'prior'
+  | 'abandon'
+  | 'allocate'
+  | 'insert'
+  | 'companions'
+  | 'selection'
 interface Scenario {
   readonly name: string
   readonly scopePath: string | null
@@ -50,7 +60,7 @@ const scenarios: readonly Scenario[] = [
   },
   {
     name: 'root',
-    scopePath: null,
+    scopePath: '',
     containerRunId: null,
     lineageSlotPathJson: null,
     shardKey: null,
@@ -145,6 +155,13 @@ function control(mode: Mode, scenario: Scenario, options: { fail?: Stage; hold?:
     taskId: 'task',
     nodeId: 'node',
     iteration: 2,
+    role: 'node',
+    slotKey: 'node-slot',
+    status: 'pending',
+    retryIndex: 0,
+    recordedInputs: [],
+    checkpoints: [],
+    envelopeNonce: 'nonce',
     parentNodeRunId: null,
     containerRunId: scenario.containerRunId,
     scopePath: scenario.scopePath,
@@ -305,8 +322,17 @@ function control(mode: Mode, scenario: Scenario, options: { fail?: Stage; hold?:
     consumedInputColumns() {
       return {}
     },
+    resolveTaskExecutionGenerationInTx() {
+      return finish('generation', 0)
+    },
+    taskReadColumns() {
+      return tasks
+    },
+    writeNodeRunTablesInTx() {
+      return finish('companions', undefined)
+    },
     selectMintedRunInTx() {
-      return []
+      return finish('selection', [])
     },
     transactionStep,
     driveAsyncProgram,
@@ -386,13 +412,35 @@ function control(mode: Mode, scenario: Scenario, options: { fail?: Stage; hold?:
       return value
     },
     expectedValues: {
+      id: record.id,
+      taskId: record.taskId,
+      nodeId: record.nodeId,
+      role: record.role,
+      slotKey: record.slotKey,
+      syntheticOwner: null,
+      generationSeq: 0,
       seq: allocationSeq,
-      ...record,
-      scopePath:
-        scenario.scopePath ??
-        (scenario.containerRunId === null || scenario.missingContainer ? '' : 'derived-scope'),
+      attemptIndex: record.retryIndex,
+      recordMode: 'executable',
+      provenanceQuality: 'recorded',
+      status: record.status,
+      rerunCause: undefined,
+      iteration: record.iteration,
+      reviewIteration: undefined,
+      shardKey: record.shardKey,
+      historicalParentId: record.parentNodeRunId,
+      containerRunId: record.containerRunId,
+      scopePath: scenario.scopePath ?? 'derived-scope',
+      envelopeNonce: record.envelopeNonce,
+      wgRound: undefined,
+      startedAt: undefined,
+      finishedAt: undefined,
+      errorMessage: undefined,
+      forceActivated: undefined,
+      operationGeneration: undefined,
       continuationSlotKey: 'lineage-key',
       lineageSlotPathJson: '[{"mint":"frame"}]',
+      inputsRecorded: true,
     },
     get inserted() {
       return inserted
@@ -404,8 +452,16 @@ function control(mode: Mode, scenario: Scenario, options: { fail?: Stage; hold?:
 }
 
 describe('RFC-359 W47 node-run mint completion contracts', () => {
+  test('a missing container fails before allocation, identity, companions or selection', async () => {
+    for (const mode of ['sync', 'async'] as const) {
+      const run = control(mode, scenarios[3]!)
+      await expect((async () => run.mint())()).rejects.toThrow('node-run-container-missing')
+      expect(run.completed).toEqual(['generation', 'container'])
+      expect(run.inserted).toBeUndefined()
+    }
+  })
   test('both entries preserve complete inserted values and conditional operation order', async () => {
-    for (const scenario of scenarios) {
+    for (const scenario of scenarios.filter((value) => !value.missingContainer)) {
       for (const mode of ['sync', 'async'] as const) {
         const run = control(mode, scenario)
         const pending = run.mint()
@@ -416,10 +472,13 @@ describe('RFC-359 W47 node-run mint completion contracts', () => {
         // RFC-369 AC-1: prior rows exist in some scenarios, yet nothing is read or abandoned.
         expect(run.abandoned).toBeUndefined()
         expect<readonly string[]>(run.completed).toEqual([
+          'generation',
           ...(scenario.scopePath === null && scenario.containerRunId !== null ? ['container'] : []),
           ...(scenario.lineageSlotPathJson === null ? ['task'] : []),
           'allocate',
           'insert',
+          'companions',
+          'selection',
         ])
         expect(
           run.events.filter((event) => (event as { operation?: unknown }).operation === 'update'),
@@ -431,7 +490,16 @@ describe('RFC-359 W47 node-run mint completion contracts', () => {
 
   test('native errors remain immediate and asynchronous errors reject with the same identity', async () => {
     const scenario = scenarios[1]!
-    for (const stage of ['record', 'container', 'task', 'allocate', 'insert'] as const) {
+    for (const stage of [
+      'record',
+      'generation',
+      'container',
+      'task',
+      'allocate',
+      'insert',
+      'companions',
+      'selection',
+    ] as const) {
       for (const mode of ['sync', 'async'] as const) {
         const run = control(mode, scenario, { fail: stage })
         let error: unknown
@@ -454,7 +522,15 @@ describe('RFC-359 W47 node-run mint completion contracts', () => {
           }
           expect(error).toBe(run.failure)
         }
-        const allStages: readonly Stage[] = ['container', 'task', 'allocate', 'insert']
+        const allStages: readonly Stage[] = [
+          'generation',
+          'container',
+          'task',
+          'allocate',
+          'insert',
+          'companions',
+          'selection',
+        ]
         expect(run.completed).toEqual(
           stage === 'record' ? [] : allStages.slice(0, allStages.indexOf(stage) + 1),
         )
@@ -468,7 +544,15 @@ describe('RFC-359 W47 node-run mint completion contracts', () => {
   })
 
   test('every asynchronous terminal finishes before the following operation or returned id', async () => {
-    const stages: readonly Stage[] = ['container', 'task', 'allocate', 'insert']
+    const stages: readonly Stage[] = [
+      'generation',
+      'container',
+      'task',
+      'allocate',
+      'insert',
+      'companions',
+      'selection',
+    ]
     for (const stage of stages) {
       const run = control('async', scenarios[1]!, { hold: stage })
       const pending = run.mint()

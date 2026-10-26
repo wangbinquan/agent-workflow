@@ -1,4 +1,4 @@
-// RFC-395 I-a: explicit epoch-1 schema contributions; no physical or runtime change.
+// RFC-395 activation: this context declares the live epoch-2 schema directly.
 import {
   column as c,
   defineContribution,
@@ -56,4 +56,8 @@ const fusionsDefinition = owner.table({
 
 export const fusions = materializeDrizzle(fusionsDefinition).table
 
-export const schemaContribution = owner.contribution([fusionsDefinition])
+export const schemaContribution = {
+  owner: 'knowledge-evolution',
+  version: 1,
+  tables: [fusionsDefinition],
+} as const

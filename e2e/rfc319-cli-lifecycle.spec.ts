@@ -1,3 +1,4 @@
+import { liveSqlitePath } from './storage'
 // RFC-319 —— 运维面 CLI 与守护进程生命周期（OPS-003/004/005/006/008/009/017/031）。
 //
 // 这一批用例跑的**不是浏览器**，是编译出来的那个二进制本身。理由很直接：这些能力
@@ -28,7 +29,7 @@ import { join } from 'node:path'
 
 import { expect, test } from '@playwright/test'
 
-import { RELEASE_CLI_TIMEOUT_MS, runCommandResult, runSqlite } from './command'
+import { querySqlite, RELEASE_CLI_TIMEOUT_MS, runCommandResult, runSqlite } from './command'
 import { defaultBinaryPath, startDaemon, type DaemonHandle } from './harness'
 
 // 两次 daemon 冷启动（各 ~3s）+ 一次端口冲突启动 + 若干秒级 CLI 调用；
@@ -664,9 +665,15 @@ test('RFC-319 OPS-031: /health 不带凭据就能读，且每个读数都是活�
       '/health 回的 ok 不为 true ⇒ 探活方拿到一个自称不健康的实例，直接把它摘掉',
     ).toBe(true)
     expect(
-      Number.isInteger(first.dbVersion) && first.dbVersion > 0,
-      'dbVersion 不是一个正整数 ⇒ 升级 / 恢复备份前「库在哪一版」这个判断没有依据',
+      Number.isInteger(first.dbVersion) && first.dbVersion >= 0,
+      'epoch-2 dbVersion 必须是可与 schema-history 回执比较的非负整数版本',
     ).toBe(true)
+    const history = querySqlite<{ version: number }>(
+      liveSqlitePath(home),
+      'SELECT version FROM aw_meta_schema_history ORDER BY version DESC LIMIT 1',
+    )
+    expect(history).toHaveLength(1)
+    expect(first.dbVersion, '/health 必须报告已安装的 epoch-2 历史版本').toBe(history[0]!.version)
     expect(
       Number.isInteger(first.uptime) && first.uptime >= 0,
       'uptime 不是一个非负整数秒 ⇒ 「进程是不是在反复崩溃重启」看不出来',
@@ -694,7 +701,7 @@ test('RFC-319 OPS-031: /health 不带凭据就能读，且每个读数都是活�
     //      走库而不是走完整启动流程是刻意的——这条断言问的是「这个仪表读的是不是真实的行」，
     //      不是任务生命周期本身（那由 task-lifecycle-* 系列覆盖）。
     runSqlite(
-      join(home, 'db.sqlite'),
+      liveSqlitePath(home),
       taskFixtureSql({
         id: '01RFC319HEALTHGAUGE000000',
         name: 'rfc319-health-gauge',

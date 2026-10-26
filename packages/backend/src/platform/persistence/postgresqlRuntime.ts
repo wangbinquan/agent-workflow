@@ -57,7 +57,7 @@ export interface PostgresqlDatabaseRuntime extends DatabaseRuntime {
   >
   acquireMigrationAdvisoryLock(operationId: string): Promise<PostgresqlAdvisoryLock | null>
   /** Bootstrap/infrastructure-only capability. Never export through a module public surface. */
-  providerPool(): PostgresqlPool
+  providerPool(purpose?: 'migration'): PostgresqlPool
 }
 
 export interface PostgresqlRuntimeTelemetrySnapshot extends DatabaseRuntimeTelemetry {
@@ -198,17 +198,22 @@ function defaultPoolFactory(options: PostgresqlPoolOptions): PostgresqlPool {
  * NOTE: these are the ONLINE budgets. `statementTimeoutMs` bounds one request and
  * `idleTimeoutMs` is really a pool knob ("how long may a pooled connection sit
  * unused") that doubles as the server's idle-in-transaction guard. The one
- * migration session overrides both — see `openPostgresqlLogicalTarget`, which
- * holds a single transaction far longer than any request may run.
+ * migration pool disables client idle eviction as well as server statement/idle
+ * budgets. A reserved migration connection can wait while another engine works.
+ * The online pool retains all configured budgets; both pools retain lock_timeout.
  */
-function urlWithServerTimeouts(url: string, config: PostgresqlConfig): string {
+function urlWithServerTimeouts(
+  url: string,
+  config: PostgresqlConfig,
+  purpose?: 'migration',
+): string {
   const parsed = new URL(url)
   const existing = parsed.searchParams.get('options')?.trim()
   const settings = [
     existing,
-    `-c statement_timeout=${config.statementTimeoutMs}`,
+    `-c statement_timeout=${purpose === 'migration' ? 0 : config.statementTimeoutMs}`,
     `-c lock_timeout=${config.statementTimeoutMs}`,
-    `-c idle_in_transaction_session_timeout=${config.idleTimeoutMs}`,
+    `-c idle_in_transaction_session_timeout=${purpose === 'migration' ? 0 : config.idleTimeoutMs}`,
     '-c search_path=agent_workflow,public',
     '-c timezone=UTC',
   ]
@@ -237,6 +242,7 @@ function errorCategory(error: unknown): DatabaseHealth['errorCategory'] {
 async function configureConnection(
   connection: PostgresqlReservedConnection,
   config: PostgresqlConfig,
+  purpose?: 'migration',
 ): Promise<void> {
   await connection.unsafe(
     "SELECT set_config('statement_timeout', $1, false), " +
@@ -245,9 +251,9 @@ async function configureConnection(
       "set_config('search_path', $4, false), " +
       "set_config('timezone', $5, false)",
     [
+      String(purpose === 'migration' ? 0 : config.statementTimeoutMs),
       String(config.statementTimeoutMs),
-      String(config.statementTimeoutMs),
-      String(config.idleTimeoutMs),
+      String(purpose === 'migration' ? 0 : config.idleTimeoutMs),
       'agent_workflow,public',
       'UTC',
     ],
@@ -264,26 +270,35 @@ export function createPostgresqlDatabaseRuntime(input: {
 }): InstrumentedPostgresqlDatabaseRuntime {
   const url = safeUrl(input.config, input.env ?? process.env)
   const factory = input.poolFactory ?? defaultPoolFactory
-  // Bun.SQL is lazy: constructing this object does not open a connection. The
-  // URL is captured only by the native pool closure and never copied to an
-  // observable DTO/error field owned by agent-workflow.
-  const physicalPool = factory({
-    url: urlWithServerTimeouts(url, input.config),
-    max: input.config.poolMax,
-    idleTimeout: seconds(input.config.idleTimeoutMs),
-    connectionTimeout: seconds(input.config.connectTimeoutMs),
-  })
   const poolWaitTelemetry = createPoolWaitTelemetry({
     wallNow: input.telemetryWallNow ?? Date.now,
     monotonicNow: input.telemetryMonotonicNow ?? (() => performance.now()),
   })
-  const pool: PostgresqlPool = Object.freeze({
-    reserve: (options: Parameters<PostgresqlPool['reserve']>[0]) =>
-      poolWaitTelemetry.reserve(physicalPool, options),
-    unsafe: physicalPool.unsafe.bind(physicalPool),
-    close: physicalPool.close.bind(physicalPool),
-  })
+  const createPool = (purpose?: 'migration'): PostgresqlPool => {
+    // Bun.SQL is lazy. The migration pool is created only when requested and
+    // owns its connections until runtime.close(), independently of online idle eviction.
+    const physical = factory({
+      url: urlWithServerTimeouts(url, input.config, purpose),
+      max: input.config.poolMax,
+      idleTimeout: purpose === 'migration' ? 0 : seconds(input.config.idleTimeoutMs),
+      connectionTimeout: seconds(input.config.connectTimeoutMs),
+    })
+    return Object.freeze({
+      reserve: (options: Parameters<PostgresqlPool['reserve']>[0]) =>
+        poolWaitTelemetry.reserve(physical, options),
+      unsafe: physical.unsafe.bind(physical),
+      close: physical.close.bind(physical),
+    })
+  }
+  const pool = createPool()
+  let migrationPool: PostgresqlPool | undefined
   let closed = false
+  const providerPool = (purpose?: 'migration'): PostgresqlPool => {
+    if (closed) {
+      throw new PostgresqlRuntimeError('postgresql-runtime-closed', 'PostgreSQL runtime is closed')
+    }
+    return purpose === 'migration' ? (migrationPool ??= createPool(purpose)) : pool
+  }
 
   const health = async (): Promise<DatabaseHealth> => {
     if (closed) {
@@ -375,13 +390,13 @@ export function createPostgresqlDatabaseRuntime(input: {
       const deadline = timeoutSignal(input.config.connectTimeoutMs)
       let connection: PostgresqlReservedConnection
       try {
-        connection = await pool.reserve({ signal: deadline.signal })
+        connection = await providerPool('migration').reserve({ signal: deadline.signal })
       } finally {
         deadline.cancel()
       }
       let held = false
       try {
-        await configureConnection(connection, input.config)
+        await configureConnection(connection, input.config, 'migration')
         const rows = await connection.unsafe(
           'SELECT pg_try_advisory_lock(hashtextextended($1, 0)) AS acquired',
           [operationId],
@@ -427,20 +442,16 @@ export function createPostgresqlDatabaseRuntime(input: {
         )
       }
     },
-    providerPool() {
-      if (closed) {
-        throw new PostgresqlRuntimeError(
-          'postgresql-runtime-closed',
-          'PostgreSQL runtime is closed',
-        )
-      }
-      return pool
-    },
+    providerPool,
     telemetry: poolWaitTelemetry.snapshot,
     async close() {
       if (closed) return
       closed = true
-      await pool.close({ timeout: seconds(input.config.idleTimeoutMs) })
+      await Promise.all(
+        [pool, migrationPool].map((owned) =>
+          owned?.close({ timeout: seconds(input.config.idleTimeoutMs) }),
+        ),
+      )
     },
   }
   return Object.freeze(runtime)

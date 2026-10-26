@@ -1,3 +1,4 @@
+import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { o2Ports } from './helpers/o2Closure'
 import { withWorkspaceMaintenancePorts } from './helpers/sourceControlTaskPorts'
 // RFC-381: one passive session graph owns all integration state; MR termination stops the selected driver and cleanup failures never stall its stream.
@@ -234,6 +235,7 @@ describeEachProvider('RFC-381 daemon integration bundles', (harness) => {
   test('MR close requests stop on the session registry and waits for released before succeeding', async () => {
     const taskId = await seed(harness.db)
     const persistence = createTaskExecutionPersistence(harness.db, {
+      historyRestrictions: epoch2RuntimeTestPorts(harness.db).historyRestrictions,
       recoveryHumanGates: o2Ports(harness.db).collaborationReads.recovery,
     })
     const executionModule =
@@ -307,6 +309,7 @@ describeEachProvider('RFC-381 daemon integration bundles', (harness) => {
   test('cleanup failure keeps the claim, completes the MR job and lets the next same-stream effect run', async () => {
     const taskId = await seed(harness.db)
     const persistence = createTaskExecutionPersistence(harness.db, {
+      historyRestrictions: epoch2RuntimeTestPorts(harness.db).historyRestrictions,
       recoveryHumanGates: o2Ports(harness.db).collaborationReads.recovery,
     })
     let fail = true

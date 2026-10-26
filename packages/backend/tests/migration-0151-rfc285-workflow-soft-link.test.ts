@@ -9,6 +9,7 @@
 // ④软链生效：删除仍被任务引用的 workflow 行不再撞 SQLITE_CONSTRAINT（应用层
 // 非终态门在 rfc285-b2-delete-tier / rfc199 套件，此处只证 SQL 层）。
 
+import { FROZEN_MIGRATIONS } from './migration-freeze'
 import { afterEach, describe, expect, test } from 'bun:test'
 import { Database } from 'bun:sqlite'
 import { mkdtempSync, readFileSync } from 'node:fs'
@@ -18,7 +19,7 @@ import { removeTempDirSync } from './fixtures/tempDir'
 
 const tempDirs: string[] = []
 const migrationSql = readFileSync(
-  resolve(import.meta.dir, '..', 'db', 'migrations', '0151_rfc285_workflow_soft_link.sql'),
+  resolve(FROZEN_MIGRATIONS, '0151_rfc285_workflow_soft_link.sql'),
   'utf8',
 )
 

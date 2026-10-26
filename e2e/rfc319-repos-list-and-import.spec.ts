@@ -1,3 +1,4 @@
+import { liveSqlitePath } from './storage'
 // RFC-319 —— `/repos`「远端仓库」页签的用户面 e2e（账本 REPO-01/02/03/08/09/10/11/33）。
 //
 // 这一页是**任务能不能开工**的前置面：镜像导进来了没有、导失败的那几行还救不救得回
@@ -122,7 +123,7 @@ test.afterAll(async () => {
 // ---------------------------------------------------------------------------
 
 function dbPath(): string {
-  return join(daemon.home, 'db.sqlite')
+  return liveSqlitePath(daemon.home)
 }
 
 async function req(path: string, init?: RequestInit, token?: string): Promise<Response> {

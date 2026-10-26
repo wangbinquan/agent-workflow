@@ -1,3 +1,4 @@
+import { tablesOf } from '@/platform/persistence/sessionTables'
 // RFC-223 final implementation gate — ordinary reference writers must not
 // persist a canonical id whose target was deleted or became invisible after
 // async preflight. Every case uses the production `beforeWriteTransaction`
@@ -16,7 +17,7 @@ import {
   workflowFixture,
 } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+
 import {
   CreateWorkgroupSchema,
   type CreateAgent,

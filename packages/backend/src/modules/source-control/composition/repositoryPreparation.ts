@@ -1,44 +1,45 @@
-import type { RepositoryWorkspaceTaskPorts } from './required-ports'
+import type { SecretBox } from '@/auth/secretBox'
+import type { RequestAuthority } from '@/modules/identity-access/public/participants'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
+import { resolveRepoGroupLayout } from '@/services/repoGroup'
+import { DomainError, NotFoundError } from '@/util/errors'
+import type { GitCommitIdentity, TaskStartOptions } from '@agent-workflow/shared'
+import { ulid } from 'ulid'
+import type { RepositoryPreparationEffectFactory } from '../application/ports/repositoryPreparationEffects'
+import type { ScratchWorkspaceEffects } from '../application/ports/scratchWorkspaceEffects'
+import { cleanupRepositoryWorkspace } from '../application/repositoryPreparationCleanup'
+import { decodeRepositoryLaunchRef } from '../domain/repositoryLaunchRef'
+import { SealedRepositorySourceFactsSchema } from '../domain/repositoryPreparationFacts'
 import {
   reclaimLegacyWorkspaceArtifacts,
   type LegacyWorkspaceRecoveryLog,
 } from '../infrastructure/legacyWorkspaceRecovery'
-import {
-  materializeSpaceWithProvider,
-  commitMaterializedSpace,
-  cleanupMaterializedSpace,
-} from '../infrastructure/workspaceMaterializer'
+import { createFileRepositoryPreparationEffects } from '../infrastructure/local/fileRepositoryPreparationEffects'
+import { createFileScratchWorkspaceEffects } from '../infrastructure/local/fileScratchWorkspaceEffects'
 import { createPublicRepositorySourceSeal } from '../infrastructure/publicRepositorySourceSeal'
-import { SealedRepositorySourceFactsSchema } from '../domain/repositoryPreparationFacts'
-import { resolveRepoGroupLayout } from '@/services/repoGroup'
-import type { PlannedSpaceLayout } from '../infrastructure/workspaceMaterializer'
-import type { GitCommitIdentity, TaskStartOptions } from '@agent-workflow/shared'
-import { ulid } from 'ulid'
-import type { SecretBox } from '@/auth/secretBox'
-import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import type { RequestAuthority } from '@/modules/identity-access/public/participants'
-import { DomainError, NotFoundError } from '@/util/errors'
-import { decodeRepositoryLaunchRef } from '../domain/repositoryLaunchRef'
 import { createRepositoryLaunchSnapshotInTx } from '../infrastructure/repositoryLaunchSnapshot'
 import { createRepositoryPreparationJournal } from '../infrastructure/repositoryPreparationJournal'
 import { composeRepositoryPreparationParticipant } from '../infrastructure/repositoryPreparationParticipant'
-import { createFileRepositoryPreparationEffects } from '../infrastructure/local/fileRepositoryPreparationEffects'
-import type { RepositoryPreparationEffectFactory } from '../application/ports/repositoryPreparationEffects'
-import type { ScratchWorkspaceEffects } from '../application/ports/scratchWorkspaceEffects'
-import { decodeScratchWorkspaceArtifact } from '../application/workspaceMaterialization'
-import { createFileScratchWorkspaceEffects } from '../infrastructure/local/fileScratchWorkspaceEffects'
 import { composeRepositoryWorkspaceStore } from '../infrastructure/repositoryWorkspaceStore'
-import { cleanupRepositoryWorkspace } from '../application/repositoryPreparationCleanup'
+import type {
+  MaterializedSpace,
+  PlannedSpaceLayout,
+  WorkspaceCleanupHookEvent,
+  WorkspaceCleanupReport,
+} from '../infrastructure/workspaceMaterializer'
+import {
+  cleanupMaterializedSpace,
+  commitMaterializedSpace,
+  decodeWorkspacePreparationReceipt,
+  encodeWorkspacePreparationReceipt,
+  materializeSpaceWithProvider,
+} from '../infrastructure/workspaceMaterializer'
 import type {
   FrozenRepositoryPreparationRef,
   RepositoryLaunchSource,
   SealedPublicRepositorySourceRef,
 } from '../public/types'
-import type {
-  MaterializedSpace,
-  WorkspaceCleanupReport,
-  WorkspaceCleanupHookEvent,
-} from '../infrastructure/workspaceMaterializer'
+import type { RepositoryWorkspaceTaskPorts } from './required-ports'
 
 /** Root-only bridge. No Task rows, Task lease or autonomous worker are owned here. */
 export function composeRepositoryPreparation(input: {
@@ -166,7 +167,9 @@ export function composeRepositoryPreparation(input: {
       taskId: string,
       artifactJson: string,
     ): MaterializedSpace | Promise<MaterializedSpace> {
-      return scratch.restore(taskId, decodeScratchWorkspaceArtifact(taskId, artifactJson))
+      const saved = decodeWorkspacePreparationReceipt(taskId, artifactJson)
+      if (saved.space?.kind !== 'scratch') throw new Error('scratch-preparation-artifact-mismatch')
+      return scratch.restore(taskId, saved.space)
     },
     async cleanupScratch(request: {
       taskId: string
@@ -276,7 +279,32 @@ export function composeRepositoryPreparation(input: {
         signal: request.signal,
         assertCurrent: request.assertCurrent,
       })
-      const scope = driver.bindEffect({ operation, source, effects })
+      const scope = driver.bindEffect({
+        operation,
+        source,
+        effects: {
+          assertCurrent: () => effects.assertCurrent(),
+          async resolveCommits(facts) {
+            const result = await effects.resolveCommits(facts)
+            if (result.kind === 'resolved') return result
+            return result.kind === 'failed'
+              ? {
+                  ...result,
+                  diagnosticsJson: encodeWorkspacePreparationReceipt(result.diagnosticsJson),
+                }
+              : { ...result, receiptJson: encodeWorkspacePreparationReceipt(result.receiptJson) }
+          },
+          async materialize(input) {
+            const result = await effects.materialize(input)
+            return result.kind === 'failed'
+              ? {
+                  ...result,
+                  diagnosticsJson: encodeWorkspacePreparationReceipt(result.diagnosticsJson),
+                }
+              : { ...result, receiptJson: encodeWorkspacePreparationReceipt(result.receiptJson) }
+          },
+        },
+      })
       return {
         participant: driver.participant,
         capability: scope.capability,
@@ -287,8 +315,9 @@ export function composeRepositoryPreparation(input: {
           const saved = await journal.operation(operation)
           if (saved === null) throw new Error('repository-preparation-result-missing')
           const raw = saved.state === 'prepared' ? saved.receiptJson : saved.diagnosticsJson
-          const result = raw === null ? null : JSON.parse(raw)
-          if (result?.space !== undefined) return result.space as MaterializedSpace
+          const result =
+            raw === null ? null : decodeWorkspacePreparationReceipt(request.taskId, raw)
+          if (result?.space !== undefined) return result.space
           if (result?.error !== undefined)
             throw new DomainError(
               result.error.code,

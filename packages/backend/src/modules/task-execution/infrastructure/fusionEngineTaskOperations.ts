@@ -1,29 +1,31 @@
-// RFC-387: fusion uses the session's drive and cancellation commands on both engines.
-import { createWorkflowExecutionQueries } from '@/modules/resource-catalog/public/queries'
-import { createTaskCreationParticipantInTx } from './taskCreationParticipant'
-import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
-import { admitTransferredWorkspace } from './transferredWorkspaceAdmission'
+import { taskReadColumns } from './taskRepositorySql'
+// RFC-387: fusion uses the session's drive and cancellation commands on both engines.
 import type {
   FusionEngineTaskLaunch,
   FusionEngineTaskOperations,
 } from '@/modules/knowledge-evolution/public/participants'
+import { createWorkflowExecutionQueries } from '@/modules/resource-catalog/public/queries'
 import type {
   FusionWorkspaceEffects,
   FusionWorkspacePreparation,
 } from '@/modules/source-control/public/participants'
+import { publishCommittedEventsAfterCommit } from '@/platform/events/committed/runtime'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
+
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { layoutBuiltinWorkflowSnapshotJson } from '@/services/task'
+import { ConflictError, ValidationError } from '@/util/errors'
 import { and, eq, inArray } from 'drizzle-orm'
 import { ulid } from 'ulid'
-import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { publishCommittedEventsAfterCommit } from '@/platform/events/committed/runtime'
-import { ConflictError, ValidationError } from '@/util/errors'
-import { layoutBuiltinWorkflowSnapshotJson } from '@/services/task'
 import type { TaskDriveCoordinator } from '../application/drive/taskDriveTypes'
-import type { TaskCancellationCommand } from '../public/commands'
 import { sha256Hex } from '../domain/digest'
+import type { TaskCancellationCommand } from '../public/commands'
 import { launchInFusionWorkspace, releaseFusionWorkspace } from './fusionWorkspaceLaunch'
-import { withSerializableTaskExecution } from './taskLifecycleTransaction'
+import { createTaskCreationParticipantInTx } from './taskCreationParticipant'
 import { appendTaskCreatedCommittedEvent } from './taskLifecycleCommittedEvents'
+import { withSerializableTaskExecution } from './taskLifecycleTransaction'
+import { admitTransferredWorkspace } from './transferredWorkspaceAdmission'
 
 export interface FusionEngineTaskDependencies {
   readonly db: PersistenceDb
@@ -96,6 +98,7 @@ async function insertFusionTask(
         branchStartedAt: now,
       },
       definition: {
+        definitionOrigin: 'platform',
         workflowSnapshot: layoutBuiltinWorkflowSnapshotJson(workflow.definition),
         workflowVersion: workflow.version,
         inputs: JSON.stringify(command.inputs),
@@ -192,8 +195,8 @@ export function createFusionEngineTaskOperations(
       .select({
         status: tasks.status,
         errorSummary: tasks.errorSummary,
-        worktreePath: tasks.worktreePath,
-        baseCommit: tasks.baseCommit,
+        worktreePath: taskReadColumns(dependencies.db).worktreePath,
+        baseCommit: taskReadColumns(dependencies.db).baseCommit,
       })
       .from(tasks)
       .where(eq(tasks.id, taskId))

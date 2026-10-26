@@ -15,6 +15,7 @@
 //   bun run sqlite-exec.ts query <db-path> [params…]  SQL on stdin, rows as JSON
 
 import { Database } from 'bun:sqlite'
+import { executeSqliteFixtureSql } from './sqlite-statements'
 
 // Matches the daemon's own connection (packages/backend/src/db/client.ts) so a
 // fixture write that overlaps a daemon write waits instead of failing instantly
@@ -35,7 +36,7 @@ const db = new Database(dbPath, { readwrite: true })
 try {
   db.exec(`PRAGMA busy_timeout = ${SQLITE_BUSY_TIMEOUT_MS};`)
   if (mode === 'exec') {
-    db.exec(sql)
+    executeSqliteFixtureSql(db, sql)
   } else {
     process.stdout.write(`${JSON.stringify(db.query(sql).all(...params))}\n`)
   }

@@ -1,52 +1,39 @@
-import { tablesOf } from '@/platform/persistence/sessionTables'
-import { first } from '@/platform/persistence/queryHelpers'
-import { createNodeRunQueries } from '../infrastructure/nodeRunQueries'
-import { createRunSelectionOracleSnapshot } from '../infrastructure/runSelection/oracle/snapshot'
-import { eq } from 'drizzle-orm'
+import type { HistoryRestrictionPort } from '@/platform/contracts/historyRestriction'
+import { createRunHistorySnapshot } from '@/modules/task-execution/public/queries'
 import type { Actor } from '@/auth/actor'
-import { z } from 'zod'
-import { utf16MaxLength, utf16MinLength } from '@agent-workflow/shared'
-
+import { first } from '@/platform/persistence/queryHelpers'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import {
+  utf16MaxLength,
+  utf16MinLength,
   DAEMON_RESTART_ERROR_SUMMARY,
+  WorkflowDefinitionSchema,
   isTerminalTaskStatus,
   type TaskStartOptions,
   type TaskStatus,
   type WorkflowDefinition,
-  WorkflowDefinitionSchema,
 } from '@agent-workflow/shared'
-import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
+import { eq } from 'drizzle-orm'
+import { z } from 'zod'
+import { createNodeRunQueries } from '../infrastructure/nodeRunQueries'
+import { taskReadColumns } from '../infrastructure/taskRepositorySql'
+
 import {
-  executionContractAgentImplementationSchema,
-  executionContractImplementationSchema,
   EXECUTION_CONTRACT_SCRIPT_INPUT_PORT,
   buildExecutionContractAgentPrompt,
+  executionContractAgentImplementationSchema,
+  executionContractImplementationSchema,
   type ExecutionContractParticipant,
   type ExecutionContractProjectionParticipant,
   type ExecutionContractRuntimeView,
 } from '@/modules/execution-contract/public/types'
-import { composeTaskCancellation } from './taskCancellation'
-import { getTask } from '@/services/task'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { projectExecutionOutcome } from '@/services/execution/outcome'
+import { getTask } from '@/services/task'
 import { NotFoundError } from '@/util/errors'
-import { createTaskExecutionReadModels } from '../infrastructure/taskExecutionReadModels'
-import { readTaskResourceUsage } from '../application/taskResourceUsage'
-import { createTaskResourceLimitFacts } from '../infrastructure/taskResourceLimitFacts'
-import { createFileProgramToolSource } from '../infrastructure/local/fileProgramToolSource'
-import type { ProgramToolSource } from '../application/ports/scriptFixture'
-import {
-  DIGITAL_EMPLOYEE_PLAN_AGENT_NODE_ID,
-  DIGITAL_EMPLOYEE_PLAN_REVIEW_NODE_ID,
-  DIGITAL_EMPLOYEE_PROMPT_KEY,
-  DIGITAL_EMPLOYEE_PLAN_PROMPT_KEY,
-  DIGITAL_EMPLOYEE_RESULT_PORT,
-  synthesizeDigitalEmployeeHostSnapshot,
-  synthesizeReviewedDigitalEmployeeHostSnapshot,
-  synthesizeDigitalEmployeeScriptHostSnapshot,
-} from '../domain/digitalEmployeeHost'
-import { borrowedPostgresqlWorkspace } from './actionExecutionEnvironment'
-import { taskStopProjection } from '../domain/sourceTermination'
-import type { DigitalEmployeeWorkspacePort } from './required-ports'
+
+import { composeReactionExecutionAdmissionParticipantInTx } from '../application/adapters/reaction-admission-adapter'
+import { composeReactionExecutionPortV1 } from '../application/adapters/reaction-execution-adapter'
 import type {
   DigitalEmployeeExecutionCore,
   DigitalEmployeeExecutionCoreSnapshot,
@@ -54,15 +41,32 @@ import type {
   DigitalEmployeeHumanReviewCoreSnapshot,
   TaskExecutionFailureClass,
 } from '../application/ports/digitalEmployeeExecutionCore'
-import { composeReactionExecutionAdmissionParticipantInTx } from '../application/adapters/reaction-admission-adapter'
-import { composeReactionExecutionPortV1 } from '../application/adapters/reaction-execution-adapter'
+import type { ProgramToolSource } from '../application/ports/scriptFixture'
+import { readTaskResourceUsage } from '../application/taskResourceUsage'
+import {
+  DIGITAL_EMPLOYEE_PLAN_AGENT_NODE_ID,
+  DIGITAL_EMPLOYEE_PLAN_PROMPT_KEY,
+  DIGITAL_EMPLOYEE_PLAN_REVIEW_NODE_ID,
+  DIGITAL_EMPLOYEE_PROMPT_KEY,
+  DIGITAL_EMPLOYEE_RESULT_PORT,
+  synthesizeDigitalEmployeeHostSnapshot,
+  synthesizeDigitalEmployeeScriptHostSnapshot,
+  synthesizeReviewedDigitalEmployeeHostSnapshot,
+} from '../domain/digitalEmployeeHost'
+import { taskStopProjection } from '../domain/sourceTermination'
+import { createFileProgramToolSource } from '../infrastructure/local/fileProgramToolSource'
 import { createReactionAdmissionStore } from '../infrastructure/reactionExecutionAdmissions'
+import { createTaskExecutionReadModels } from '../infrastructure/taskExecutionReadModels'
+import { createTaskResourceLimitFacts } from '../infrastructure/taskResourceLimitFacts'
 import type {
   RootTaskLaunchKernel,
   RootTaskLaunchSubject,
 } from '../infrastructure/taskRouteLaunchOperations'
-import type { TaskExecutionReadModels } from '../public/types'
 import type { TaskRouteOperations } from '../public/taskRoutes'
+import type { TaskExecutionReadModels } from '../public/types'
+import { borrowedPostgresqlWorkspace } from './actionExecutionEnvironment'
+import type { DigitalEmployeeWorkspacePort } from './required-ports'
+import { composeTaskCancellation } from './taskCancellation'
 
 const exactRefSchema = z
   .object({ id: z.string().min(1), revision: z.number().int().positive() })
@@ -265,7 +269,10 @@ export async function inspectDigitalEmployeeHumanReviewSnapshot(
 ): Promise<DigitalEmployeeHumanReviewCoreSnapshot> {
   const { tasks } = tablesOf(db)
   const task = await first(
-    db.select({ inputs: tasks.inputs }).from(tasks).where(eq(tasks.id, executionRef)),
+    db
+      .select({ inputs: taskReadColumns(db).inputs })
+      .from(tasks)
+      .where(eq(tasks.id, executionRef)),
   )
   if (task === undefined) return 'unknown'
   let parsedInputs: z.ZodSafeParseResult<Record<string, unknown>>
@@ -705,9 +712,9 @@ function buildDigitalEmployeeExecution(
     if (typeof planPrompt === 'string') {
       const expectedPath = parsedPlanOutputPath(planPrompt)
       const planRun = (
-        await createRunSelectionOracleSnapshot(
+        await createRunHistorySnapshot(
+          executionRef,
           outcome.runs.map((run) => ({ ...run, taskId: executionRef })),
-          { scope: { kind: 'rows' } },
         ).familyHistory(
           executionRef,
           { nodeId: DIGITAL_EMPLOYEE_PLAN_AGENT_NODE_ID },
@@ -861,6 +868,7 @@ export function composeReactionExecutionProvider(
  */
 export function composeDatabaseDigitalEmployeeExecutionPorts(
   db: PersistenceDb,
+  historyRestrictions: HistoryRestrictionPort,
 ): Pick<
   DigitalEmployeeExecutionDependencies,
   'tasks' | 'readModels' | 'resourceUsage' | 'executionMetadata' | 'humanReview'
@@ -869,7 +877,7 @@ export function composeDatabaseDigitalEmployeeExecutionPorts(
     tasks: {
       get: (taskId: string) => getTask(db, taskId),
       async cancel(taskId: string) {
-        await composeTaskCancellation(db).cancel(taskId)
+        await composeTaskCancellation(db, historyRestrictions).cancel(taskId)
         const task = await getTask(db, taskId)
         if (task === null) throw new NotFoundError('task-not-found', `task '${taskId}' not found`)
         return task
@@ -885,7 +893,7 @@ export function composeDatabaseDigitalEmployeeExecutionPorts(
         const row = await first(
           db
             .select({
-              roundRef: tasks.digitalEmployeeRoundId,
+              roundRef: taskReadColumns(db).digitalEmployeeRoundId,
               autoRecoverySuspended: tasks.autoRecoverySuspended,
             })
             .from(tasks)

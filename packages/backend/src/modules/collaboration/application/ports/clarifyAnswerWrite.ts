@@ -3,7 +3,7 @@ import type { PersistenceTx } from '@/platform/persistence/persistenceDb'
 import type { sealClarifyAnswers } from '../../domain/clarifyAnswers'
 import type { appendClarifyQuestions } from '../../domain/clarifyQuestions'
 
-/** II-a 保留现有锁 / 事务；端口只携带逐题值和领域变更，不携带 JSON 列。 */
+/** Target rows use revision CAS; clients retain per-question last-write-wins. */
 export interface ClarifyAnswerWritePort {
   saveDraft(input: {
     readonly roundId: string

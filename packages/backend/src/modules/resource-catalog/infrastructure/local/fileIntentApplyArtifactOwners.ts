@@ -1,3 +1,5 @@
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
+import { currentFileSkillReference, readFileSkillReference } from './fileSkillReferences'
 // RFC-355 T6（RFC-294 W4-E4a）—— 本文件自 `modules/intent/infrastructure/` 迁来。
 //
 // **它实现的是 resource-catalog 的端口（`intentApplyResourcePorts`），
@@ -109,6 +111,7 @@ function publishSkillStage(state: SkillStageState): void {
 }
 
 function createSkillStage(input: {
+  readonly db: PersistenceDb
   readonly appHome: string
   readonly skillId: string
   readonly operationId: string
@@ -152,8 +155,21 @@ function createSkillStage(input: {
       rmSync(stagingDirectory, { recursive: true, force: true })
       rmSync(candidateDirectory, { recursive: true, force: true })
       try {
-        if (input.copyCurrent) copyRegularTree(liveDirectory, stagingDirectory)
-        else mkdirSync(stagingDirectory, { recursive: true, mode: 0o700 })
+        mkdirSync(stagingDirectory, { recursive: true, mode: 0o700 })
+        if (input.copyCurrent) {
+          const ref = await currentFileSkillReference(input.appHome, input.db, {
+            id: input.skillId,
+            name: input.skillId,
+            contentVersion: input.version - 1,
+          })
+          const source = await readFileSkillReference(input.appHome, input.db, ref)
+          if (source === null) throw new Error('intent-skill-source-tree-missing')
+          for (const file of source.files) {
+            const target = safeJoin(stagingDirectory, file.path)
+            mkdirSync(dirname(target), { recursive: true, mode: 0o700 })
+            writeFileSync(target, file.bytes, { mode: 0o600 })
+          }
+        }
         writeSkillTree(stagingDirectory, input.payload)
         copyRegularTree(stagingDirectory, candidateDirectory)
         const contentHash = hashRegularFileTree(candidateDirectory)
@@ -161,6 +177,7 @@ function createSkillStage(input: {
           managedPath: skillFilesRel(input.skillId),
           filesPath: skillVersionRelPath(input.skillId, input.version),
           contentHash,
+          contentKind: 'local-file',
           async commitInTransaction() {
             if (
               !existsSync(candidateDirectory) ||
@@ -193,11 +210,13 @@ function createSkillStage(input: {
 
 /** File content owner used by the shared Intent resource session. */
 export function createFileIntentSkillArtifactOwner(input: {
+  readonly db: PersistenceDb
   readonly appHome: string
 }): IntentSkillArtifactOwner {
   const lifecycle: IntentSkillArtifactOwner = {
     async planCreate(request) {
       return createSkillStage({
+        db: input.db,
         appHome: input.appHome,
         skillId: request.skillId,
         operationId: request.operationId,
@@ -208,6 +227,7 @@ export function createFileIntentSkillArtifactOwner(input: {
     },
     async planUpdate(request) {
       return createSkillStage({
+        db: input.db,
         appHome: input.appHome,
         skillId: request.current.id,
         operationId: request.operationId,

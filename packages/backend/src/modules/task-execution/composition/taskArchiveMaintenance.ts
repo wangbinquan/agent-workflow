@@ -1,4 +1,4 @@
-import type { TaskArchiveCollaborationSectionsPort } from './required-ports'
+import type { TaskArchiveCollaborationSectionsPort } from '../application/ports/taskArchiveSections'
 // RFC-370: select archive content at composition; both providers share the original coordinator.
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { TaskArchiveContentPort } from '../application/ports/taskArchiveContent'

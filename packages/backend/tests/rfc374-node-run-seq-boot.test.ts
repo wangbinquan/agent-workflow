@@ -1,31 +1,20 @@
-// RFC-374 T6: catch-up is boot step zero and hosted recovery starts only after activation; failure stops execution initialization.
-import { nodeRunFixture } from './helpers/model'
-import { patchLegacyRunSelectionFixture } from './helpers/model/runSelectionOracle'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+// RFC-395 D4: normal boot has four recovery steps; hosted admission waits for recovery.
 import { describe, expect, test } from 'bun:test'
 import { runTaskExecutionBootRecovery } from '@/modules/task-execution/composition/bootRecovery'
-import { createNodeRunSeqBackfillStore } from '@/modules/task-execution/infrastructure/legacyMigration/nodeRunSeqBackfillStore'
 import type {
   TaskExecutionBootRecoveryInput,
   BootExecutionRecoveryFactory,
 } from '@/modules/task-execution/application/ports/bootExecutionRecovery'
-import type { NodeRunSeqBackfillStore } from '@/modules/task-execution/application/ports/nodeRunSeqBackfillStore'
 import { selectExecutionInitialization } from '@/bootstrap/executionInitialization'
 import type {
   ExecutionAuthorityPort,
   ExecutionAuthorityState,
   ExecutionFence,
 } from '@/modules/system-operations/application/ports/executionAuthority'
-import { describeEachProvider } from './helpers/eachProvider'
-import { seedSequenceTask } from './helpers/rfc374Fixtures'
 
-function bootInput(
-  store: NodeRunSeqBackfillStore,
-  factory: BootExecutionRecoveryFactory,
-): TaskExecutionBootRecoveryInput {
+function bootInput(factory: BootExecutionRecoveryFactory): TaskExecutionBootRecoveryInput {
   return {
     persistence: {
-      nodeRunSeqBackfill: store,
       get recovery(): never {
         throw new Error('unexpected local recovery')
       },
@@ -74,54 +63,43 @@ function sequence(order: string[]): BootExecutionRecoveryFactory {
     },
   }
 }
-describeEachProvider('RFC-374 boot step zero', (harness) => {
-  test('real backfill completes before preparing or reaping, and reports its work', async () => {
-    const taskId = await seedSequenceTask(harness.db)
-    const { nodeRuns } = tablesOf(harness.db)
-    await nodeRunFixture(harness.db, { id: 'legacy', taskId, nodeId: 'n', status: 'running' })
-    // RFC-395 II-a A1 normally allocates seq; this boot test explicitly needs a pre-backfill row.
-    await patchLegacyRunSelectionFixture(harness.db, 'legacy', { seq: null })
-    const order: string[] = [],
-      store = createNodeRunSeqBackfillStore(harness.db)
-    const report = await runTaskExecutionBootRecovery(
-      bootInput(
-        {
-          ...store,
-          async assertAllocatorCurrent() {
-            await store.assertAllocatorCurrent()
-            expect((await harness.db.select().from(nodeRuns))[0]!.seq).not.toBeNull()
-            order.push('backfill')
-          },
-        },
-        sequence(order),
-      ),
-    )
-    expect(order).toEqual(['backfill', 'create', 'prepare', 'reap', 'repair', 'finalize'])
-    expect(report.nodeRunSeqBackfill).toMatchObject({ tasks: 1, runs: 1 })
-  })
-  test('a real allocator failure rejects daemon boot before recovery or listeners', async () => {
-    const taskId = await seedSequenceTask(harness.db)
-    await nodeRunFixture(harness.db, {
-      id: 'invalid',
-      taskId,
-      nodeId: 'n',
-      status: 'running',
-      seq: 1,
-    })
+describe('RFC-395 normal boot without sequence compatibility', () => {
+  test('runs exactly four recovery steps and has no backfill report', async () => {
     const order: string[] = []
+    const report = await runTaskExecutionBootRecovery(bootInput(sequence(order)))
+    expect(order).toEqual(['create', 'prepare', 'reap', 'repair', 'finalize'])
+    expect(Object.keys(report).sort()).toEqual([
+      'finalization',
+      'reap',
+      'repairedRuntimeLeases',
+      'revokedTaskIds',
+    ])
+  })
+  test('prepare failure stops before reaping and listeners', async () => {
+    const order: string[] = []
+    const factory = sequence(order)
     const start = async () => {
       await runTaskExecutionBootRecovery(
-        bootInput(createNodeRunSeqBackfillStore(harness.db), sequence(order)),
+        bootInput({
+          create(input) {
+            return {
+              ...factory.create(input),
+              prepare() {
+                throw new Error('prepare-injected')
+              },
+            }
+          },
+        }),
       )
       order.push('listen')
     }
-    await expect(start()).rejects.toThrow('node-run-seq-allocator-behind')
-    expect(order).toEqual([])
+    await expect(start()).rejects.toThrow('prepare-injected')
+    expect(order).toEqual(['create'])
   })
 })
 describe('RFC-374 hosted activation', () => {
   for (const fail of [false, true])
-    test(`backfill waits for activation and ${fail ? 'freezes on failure' : 'finishes before business admission'}`, async () => {
+    test(`recovery waits for activation and ${fail ? 'freezes on failure' : 'finishes before business admission'}`, async () => {
       const grant = Promise.withResolvers<ExecutionFence>(),
         entered = Promise.withResolvers<void>(),
         release = Promise.withResolvers<void>()
@@ -138,23 +116,23 @@ describe('RFC-374 hosted activation', () => {
         lost = Promise.withResolvers<void>(),
         order: string[] = []
       selected.authority.onLost(() => lost.resolve())
-      const store: NodeRunSeqBackfillStore = {
-        async listTaskIds() {
-          entered.resolve()
-          await release.promise
-          if (fail) throw new Error('backfill-injected')
-          return []
-        },
-        async backfillTask() {
-          return 0
-        },
-        async assertAllocatorCurrent() {},
-        async pruneAllocations() {
-          return 0
+      const factory = sequence(order)
+      const delayed: BootExecutionRecoveryFactory = {
+        create(input) {
+          const effects = factory.create(input)
+          return {
+            ...effects,
+            async prepare() {
+              entered.resolve()
+              await release.promise
+              if (fail) throw new Error('prepare-injected')
+              return effects.prepare()
+            },
+          }
         },
       }
       await selected.initialize(async () => {
-        await runTaskExecutionBootRecovery(bootInput(store, sequence(order)))
+        await runTaskExecutionBootRecovery(bootInput(delayed))
       })
       expect(order).toEqual([])
       expect(selected.authority.current().kind).toBe('standby')
@@ -166,15 +144,15 @@ describe('RFC-374 hosted activation', () => {
         kind: 'standby',
         reason: 'execution-recovery-in-progress',
       })
-      expect(order).toEqual([])
+      expect(order).toEqual(['create'])
       release.resolve()
       if (fail) {
         await lost.promise
         expect(selected.authority.current()).toEqual({
           kind: 'frozen',
-          reason: 'execution-initialization-failed: backfill-injected',
+          reason: 'execution-initialization-failed: prepare-injected',
         })
-        expect(order).toEqual([])
+        expect(order).toEqual(['create'])
       } else {
         await selected.authority.whenActive()
         expect(order).toEqual(['create', 'prepare', 'reap', 'repair', 'finalize'])

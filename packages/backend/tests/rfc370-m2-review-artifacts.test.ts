@@ -1,3 +1,9 @@
+import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
+import {
+  createContentStore,
+  createObjectContentTransport,
+} from '@/platform/content/infrastructure/contentStore'
+import { rowToDocVersion } from '@/modules/collaboration/infrastructure/review'
 import { o2Ports, withO2Closure } from './helpers/o2Closure'
 // RFC-370 v3 V6: review documents are `collaboration-review` publications of
 // the neutral journal; the gate journal keeps receipts and stays the recovery
@@ -15,8 +21,12 @@ import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
-import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
-import { joinMarkdownDocs } from '@agent-workflow/shared'
+import {
+  type WorkflowDefinition,
+  type WorkflowNode,
+  joinMarkdownDocs,
+} from '@agent-workflow/shared'
+
 import {
   composeCrewStationReviewArtifacts,
   composeCrewStationReviewObjectSweep,
@@ -77,6 +87,38 @@ describeEachProvider('RFC-370 CS review journal content', (harness) => {
     }
   }
 
+  test('a converted legacy receipt finalizes after stagedPath becomes a gate-stage key', async () => {
+    const { selection } = setup()
+    const body = 'legacy committed review'
+    const plan = selection().store.planReviewArtifact({
+      operationId: 'legacy-review-op',
+      artifactKey: 'doc',
+      finalPath: 'runs/task/review/legacy.md',
+      body,
+    })
+    const staged = await selection().store.stageReviewArtifact(plan, body)
+    const artifact = {
+      ...plan,
+      stagedPath: `gate-stage:${plan.operationId}:${plan.artifactKey}`,
+      artifactKind: 'review-doc' as const,
+      state: 'consumed' as const,
+      receiptJson: JSON.stringify({
+        ...JSON.parse(staged),
+        stagedPath: 'runs/.human-gate-staging/legacy-review-op/doc.md',
+      }),
+      updatedAt: 1,
+    }
+    await selection().store.finalizeReviewArtifact(artifact)
+    const corrupt = JSON.parse(staged)
+    corrupt.object.sha256 = 'f'.repeat(64)
+    await expect(
+      selection().store.finalizeReviewArtifact({
+        ...artifact,
+        receiptJson: JSON.stringify(corrupt),
+      }),
+    ).rejects.toMatchObject({ code: 'human-gate-artifact-digest-mismatch' })
+  })
+
   test('cold cleanup releases a lost pin receipt from the durable declaration without the original body', async () => {
     const { f, settle, selection } = setup()
     const plan = selection().store.planReviewArtifact({
@@ -122,8 +164,8 @@ describeEachProvider('RFC-370 CS review journal content', (harness) => {
     })
     // The declaration precedes the put: an interrupted upload left only its facts.
     const key = hostedReviewPublicationKey(plan)
-    const { hostedObjectPublications } = tablesOf(harness.db)
-    await insertOne(harness.db, hostedObjectPublications, {
+    const { contentPublications } = tablesOf(harness.db)
+    await insertOne(harness.db, contentPublications, {
       id: hostedPublicationId(HOSTED_REVIEW_OWNER, key),
       owner: HOSTED_REVIEW_OWNER,
       logicalKey: key,
@@ -230,6 +272,7 @@ describeEachProvider('RFC-370 CS review journal content', (harness) => {
     })
     let failFinalization = true
     const mechanics = createCollaborationRuntimeMechanics(db, {
+      ...epoch2RuntimeTestPorts(db),
       taskLock: o2Ports(db).taskLock,
       ...{
         upstreamAgents: o2Ports(db).upstreamAgents,
@@ -266,10 +309,20 @@ describeEachProvider('RFC-370 CS review journal content', (harness) => {
       objects: f.objects,
       publications: journal.publications,
     })
-    const reader = new DatabaseCommittedReviewArtifactReader(db, second.content)
+    const reader = new DatabaseCommittedReviewArtifactReader(
+      db,
+      second.content,
+      createContentStore({
+        db,
+        policy: { inlineMaxBytes: 0, externalKind: 'object' },
+        transports: { object: createObjectContentTransport(f.objects) },
+      }),
+    )
     expect(
       await Promise.all(
-        docs.sort((a, b) => a.itemIndex! - b.itemIndex!).map((doc) => reader.read(doc.bodyPath)),
+        docs
+          .sort((a, b) => a.itemIndex! - b.itemIndex!)
+          .map((doc) => reader.read(rowToDocVersion(doc).bodyPath)),
       ),
     ).toEqual(bodies)
     const routes = createCollaborationRouteOperations(
@@ -317,7 +370,9 @@ describeEachProvider('RFC-370 CS review journal content', (harness) => {
     const gateArtifacts = await db.select().from(collaborationGateArtifacts)
     expect(gateArtifacts.every((artifact) => artifact.state === 'finalized')).toBe(true)
     f.tamper('body')
-    await expect(reader.read(docs[0]!.bodyPath)).rejects.toThrow('content-mismatch')
+    await expect(reader.read(rowToDocVersion(docs[0]!).bodyPath)).rejects.toMatchObject({
+      code: 'human-gate-artifact-digest-mismatch',
+    })
   })
 
   test('uncommitted content stays hidden; cleanup releases only its own object pin', async () => {
@@ -355,7 +410,8 @@ describeEachProvider('RFC-370 CS review journal content', (harness) => {
   test('the collaboration sweep releases review documents of tasks without gate operations', async () => {
     const { journal, selection } = setup()
     const live = ulid()
-    const { collaborationGateOperations, hostedObjectPublications } = tablesOf(harness.db)
+    const { collaborationGateOperations } = tablesOf(harness.db)
+    const { contentPublications } = tablesOf(harness.db)
     await workflowFixture(harness.db, {
       id: live,
       name: live,
@@ -417,8 +473,8 @@ describeEachProvider('RFC-370 CS review journal content', (harness) => {
       (
         await harness.db
           .select()
-          .from(hostedObjectPublications)
-          .where(eq(hostedObjectPublications.owner, HOSTED_REVIEW_OWNER))
+          .from(contentPublications)
+          .where(eq(contentPublications.owner, HOSTED_REVIEW_OWNER))
       ).map((row) => [row.scope, row.state] as const),
     )
     expect(states.get(live)).toBe('ready')

@@ -1,12 +1,12 @@
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { taskReadColumns } from './taskRepositorySql'
 // RFC-359 W12: one per-target atom for both providers. Runtime publication,
 // stopping and SQLite's no-driver finalization remain in their existing hosts.
-import { tablesOf } from '@/platform/persistence/sessionTables'
+
 import { CANCELABLE_TASK_STATUSES, allowedFromStatusesForEvent } from '@agent-workflow/shared'
 import { and, eq, inArray } from 'drizzle-orm'
 
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { ConcurrentTaskTransition } from './taskLifecycle'
-import { resolveTerminalWorkspacePruneDecision } from './terminalWorkspacePrune'
 import { ConflictError } from '@/util/errors'
 import type {
   TaskSourceTerminationEffectInput,
@@ -25,9 +25,11 @@ import type { InMemoryTaskRuntimeRegistry } from './inMemoryTaskRuntimeRegistry'
 import { transitionNodeRunStatusTx } from './nodeRunLifecycleTransition'
 import { withTaskExecutionSerializable, type TaskExecutionTransaction } from './ownedTaskExecution'
 import { terminalizeTaskExecutionIntentsInTx } from './taskExecutionIntentTerminalPersistence'
+import { ConcurrentTaskTransition } from './taskLifecycle'
 import { appendTaskNodeStatusesCommittedEvent } from './taskLifecycleCommittedEvents'
 import { revokeExactOwnerInTx } from './taskOwnershipPersistence'
 import { writeTaskRuntimeLifecycleInTx } from './taskRuntimeLifecyclePersistence'
+import { resolveTerminalWorkspacePruneDecision } from './terminalWorkspacePrune'
 
 const CANCELABLE_NODE_STATUSES = [...allowedFromStatusesForEvent({ kind: 'mark-canceled' })]
 
@@ -51,12 +53,12 @@ async function readTarget(tx: TaskExecutionTransaction, taskId: string) {
       .select({
         status: tasks.status,
         parentTaskId: tasks.parentTaskId,
-        launchRevision: tasks.sourceTerminationLaunchRev,
+        launchRevision: taskReadColumns(tx).sourceTerminationLaunchRev,
         fence: tasks.sourceTerminationFence,
         effectRevision: tasks.sourceTerminationEffectRev,
         lifecycleEventRevision: tasks.lifecycleEventRevision,
         errorSummary: tasks.errorSummary,
-        spaceKind: tasks.spaceKind,
+        spaceKind: taskReadColumns(tx).spaceKind,
         workspacePruningAt: tasks.workspacePruningAt,
         workspacePruneCause: tasks.workspacePruneCause,
         workspacePrunedAt: tasks.workspacePrunedAt,

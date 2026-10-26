@@ -1,4 +1,4 @@
-// RFC-395 I-a: explicit epoch-1 schema contributions; no physical or runtime change.
+// RFC-395 activation: this context declares the live epoch-2 schema directly.
 import { column as c, defineContribution, retention, raw } from '@/platform/persistence/schema/dsl'
 import { materializeDrizzle } from '@/platform/persistence/schema/drizzle'
 
@@ -43,4 +43,8 @@ const runtimesDefinition = owner.table({
 
 export const runtimes = materializeDrizzle(runtimesDefinition).table
 
-export const schemaContribution = owner.contribution([runtimesDefinition])
+export const schemaContribution = {
+  owner: 'runtime-management',
+  version: 1,
+  tables: [runtimesDefinition],
+} as const

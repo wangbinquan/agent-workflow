@@ -1,5 +1,4 @@
 import type { TaskRepositoryCheckpoint } from './taskCheckpoint'
-import type { TaskCheckpointRollbackRequest } from '@/platform/taskCheckpoint'
 
 export interface TaskRollbackMount {
   readonly mountPath: string
@@ -26,23 +25,15 @@ export function planTaskCheckpointRollback(
 export interface TaskRollbackCheckpointRun {
   readonly id: string
   readonly checkpoints: readonly TaskRepositoryCheckpoint[]
-  /** Epoch-1 scalar fallback targets the workspace; map rows target their mounts. */
-  readonly checkpointScope?: 'workspace' | 'mounts'
-  readonly checkpointParseError?: string | null
-  /** Opaque epoch-1 effect payload; preserve parsed JSON values and insertion order. */
-  readonly checkpointRequest?: TaskCheckpointRollbackRequest
 }
 
-/** Empty/malformed historic maps still enter the same rollback/no-op path. */
+/** Only recorded pre-snapshots can request rollback, including a recorded clean tree. */
 export function hasTaskRollbackCheckpoint(
-  run: TaskRollbackCheckpointRun,
+  run: { readonly checkpoints: readonly TaskRepositoryCheckpoint[] },
   includeCleanTree = true,
 ): boolean {
-  return (
-    run.checkpointScope === 'mounts' ||
-    run.checkpoints.some(
-      (checkpoint) =>
-        checkpoint.preSnapshot !== undefined && (includeCleanTree || checkpoint.preSnapshot !== ''),
-    )
+  return run.checkpoints.some(
+    (checkpoint) =>
+      checkpoint.preSnapshot !== undefined && (includeCleanTree || checkpoint.preSnapshot !== ''),
   )
 }

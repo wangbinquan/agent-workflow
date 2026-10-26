@@ -16,6 +16,7 @@ import type {
 } from '@/modules/task-execution/public/commands'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { databaseSessionFor, engineOf } from '@/platform/persistence/databaseTransaction'
+import { retryingWriteTransaction } from '@/platform/persistence/retryingWriteTransaction'
 import { runWorkgroupCommit } from './workgroupCommitQueue'
 import {
   WORKGROUP_TURN_ASSIGNMENT_TRANSITIONS,
@@ -32,11 +33,8 @@ import {
   type WorkgroupTurnsPersistencePort,
   type WorkgroupTurnsSnapshot,
 } from '../application/workgroups/workgroupTurnsDriver'
-import { agentFromPersistenceRow } from './agentPersistence'
-import {
-  runResourceCatalogTransaction,
-  type ResourceCatalogTransaction,
-} from './resourceCatalogTransaction'
+import { loadAgentPersistenceRows } from './agentPersistence'
+import type { ResourceCatalogTransaction } from './resourceCatalogTransaction'
 
 const ROSTER_CARD_PROMPT_BUDGET = 240
 const ROSTER_INPUT_DESCRIPTION_TOTAL_BUDGET = 2_400
@@ -148,13 +146,9 @@ async function loadSnapshot(
   if (hostSnapshot === null) return null
   const config = hostSnapshot.workgroupConfig?.runtime.config
   if (config == null) return null
-  const {
-    workgroupTaskState,
-    workgroupAssignments,
-    workgroupMessages,
-    workgroupMemberCursors,
-    agents,
-  } = tablesOf(transaction)
+  const { agents } = tablesOf(transaction)
+  const { workgroupTaskState, workgroupAssignments, workgroupMessages, workgroupMemberCursors } =
+    tablesOf(transaction)
   const [stateRow, assignmentRows, messageRows, cursorRows] = await Promise.all([
     first(
       transaction.select().from(workgroupTaskState).where(eq(workgroupTaskState.taskId, taskId)),
@@ -195,12 +189,8 @@ async function loadSnapshot(
     agentIds.length === 0
       ? []
       : await transaction.select().from(agents).where(inArray(agents.id, agentIds))
-  const agentById = new Map(
-    agentRows.map((row) => {
-      const agent = agentFromPersistenceRow(row)
-      return [agent.id, agent]
-    }),
-  )
+  const hydratedAgents = await loadAgentPersistenceRows(transaction, agentRows)
+  const agentById = new Map(hydratedAgents.map((agent) => [agent.id, agent]))
   const agentMemberCount = config.members.filter((member) => member.memberType === 'agent').length
   const inputDescriptionBudget = perCardInputDescriptionBudget(
     ROSTER_INPUT_DESCRIPTION_TOTAL_BUDGET,
@@ -553,8 +543,12 @@ export function createWorkgroupTurnsPersistence(
     ): Promise<WorkgroupTurnsLedgerCommitReceipt> {
       return await runWorkgroupCommit(dependencies.db, input.taskId, async () => {
         try {
-          return await runResourceCatalogTransaction(dependencies.db, async (transaction) => {
+          // This commit touches one task's ledger, unlike catalog-wide transactions.
+          // Lock before every ledger read/write; a process-local queue alone cannot
+          // serialize writers using another client or process.
+          return await retryingWriteTransaction(dependencies.db, async (transaction) => {
             const hostLedger = dependencies.hostLedgerFactory.inTransaction(transaction)
+            await hostLedger.lockTask(input.taskId)
             const mintedRuns: WorkgroupTurnMintedRun[] = []
             const skippedOperationKeys: string[] = []
             const failedRunIds: string[] = []

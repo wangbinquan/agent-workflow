@@ -214,7 +214,7 @@ describeEachProviderHttpApplication(
       const alicesRef = (await (await uploadBytes(h, h.tokenA, 'secret doc')).json()) as {
         uploadRef: string
       }
-      // Bob 的 token + body 里伪造 alice 的 actorUserId：server 覆盖 → 404 同形。
+      // Live admission is retired. Preview still proves that the server actor cannot read another user's upload.
       const launch = await h.app.request(
         '/api/code/missions',
         authed(h.tokenB, {
@@ -237,8 +237,10 @@ describeEachProviderHttpApplication(
           }),
         }),
       )
-      expect(launch.status).toBe(404)
-      expect(((await launch.json()) as { code: string }).code).toBe('upload-not-found')
+      expect(launch.status).toBe(409)
+      expect(((await launch.json()) as { code: string }).code).toBe(
+        'legacy-mission-admission-retired',
+      )
 
       const preview = await h.app.request(
         '/api/code/missions/direct-input/preview',

@@ -1,3 +1,4 @@
+import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { describe, expect, test } from 'bun:test'
 import { ulid } from 'ulid'
 import { schemaFixtureDb } from './helpers/schemaFixture'
@@ -56,6 +57,7 @@ function applicationFixture(input?: {
         attachment: {
           intentKind: 'launch',
           execution: createTaskExecutionContext({
+            historyRestrictions: epoch2RuntimeTestPorts(schemaFixtureDb()).historyRestrictions,
             intentId: request.intentId,
             token,
             db: schemaFixtureDb(),

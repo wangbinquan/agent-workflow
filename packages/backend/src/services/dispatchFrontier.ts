@@ -1,3 +1,4 @@
+import { createRunHistorySnapshot } from '@/modules/task-execution/public/queries'
 // RFC-076 PR-A — trim-B dispatch predicates (PURE; LIVE since PR-B wired
 // deriveFrontier into runScope — scheduler.ts consumes isDispatchable every
 // dispatch tick; RFC-094 removed the stale "currently UNWIRED" claim that
@@ -45,16 +46,18 @@ import {
   WRAPPER_NODE_KINDS,
 } from '@agent-workflow/shared'
 import type { NodeKind, WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
-import { buildFreshestSettledPerNode, isNodeRunFresh } from './freshness'
 import {
-  createRunSelectionOracleSnapshot,
+  buildFreshestSettledPerNode,
+  isNodeRunFresh,
+} from '@/modules/task-execution/public/queries'
+import {
   containerMemberRunsInRound,
   readWrapperRevivalIteration,
 } from '@/modules/task-execution/public/queries'
 
 // RFC-311：收窄到 freshness 的调度列合同（本文件消费 id/nodeId/status/iteration/
 // supersededByReview/wrapperProgressJson，全部 ⊂ 合同），使 tick 投影行可直达。
-import type { NodeRunRow } from '@/services/freshness'
+import type { NodeRunRow } from '@/modules/task-execution/public/queries'
 
 /** The container kinds whose parked rows are resume anchors (exported for
  *  deriveFrontier's wrapper-anchor release and retryNode's ⑥-11 carve-out).
@@ -226,7 +229,7 @@ export async function wrapperRevivalEvidence(
   const inner = wrapperInnerDescendants(wrapperRow.nodeId, definition)
   // A done review row is evidence only while it is the FRESH settled row of
   // its node inside its own frame; the map is built lazily per frame.
-  const freshestByFrame = new Map<string, Map<string, NodeRunRow>>()
+  const freshestByFrame = new Map<string, ReadonlyMap<string, NodeRunRow>>()
   const candidates: NodeRunRow[] = []
   for (const r of members) {
     if (!inner.has(r.nodeId)) continue
@@ -247,9 +250,9 @@ export async function wrapperRevivalEvidence(
     candidates.push(r)
   }
   const best = (
-    await createRunSelectionOracleSnapshot(
+    await createRunHistorySnapshot(
+      '',
       candidates.map((row) => ({ ...row, taskId: '' })),
-      { scope: { kind: 'rows' } },
     ).familyHistory('', {})
   ).at(-1)
   return best === undefined ? null : { rowId: best.id, nodeId: best.nodeId }
@@ -299,7 +302,7 @@ export async function wrapperHasFreshInnerWork(
 export async function isDispatchable(
   row: NodeRunRow | undefined,
   kind: NodeKind,
-  freshestSettledPerUpstream: Map<string, NodeRunRow>,
+  freshestSettledPerUpstream: ReadonlyMap<string, NodeRunRow>,
   rows: readonly NodeRunRow[],
   definition: WorkflowDefinition,
 ): Promise<boolean> {

@@ -1,3 +1,6 @@
+import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
+import { nodeRunFixtureColumns } from './helpers/model/nodeRun'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { o2Ports } from './helpers/o2Closure'
 // RFC-359: both providers use one automatic loop and their existing repair engine.
 // PostgreSQL manual and automatic repair share preflight, apply, audit and alert
@@ -6,7 +9,7 @@ import { o2Ports } from './helpers/o2Closure'
 
 import { nodeRunFixture, patchTaskFixture, readTaskFixtures, taskFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+
 import { first as firstRow } from '@/platform/persistence/queryHelpers'
 import { expect, test } from 'bun:test'
 import { mkdtempSync } from 'node:fs'
@@ -88,6 +91,7 @@ function repairEngineFor(
   } = {},
 ) {
   const persistence = createTaskExecutionPersistence(harness.db, {
+    historyRestrictions: epoch2RuntimeTestPorts(harness.db).historyRestrictions,
     recoveryHumanGates: o2Ports(harness.db).collaborationReads.recovery,
   })
   if (options.beforeTransition !== undefined) {
@@ -392,7 +396,8 @@ describeEachProvider('RFC-359 manual and automatic repair share the same engine'
     const db = harness.db
     const { taskId, alertId } = await seed(db)
     const nodeRunId = `run-${ulid()}`
-    const { nodeRuns, committedEventFamilyCutovers, committedEvents } = tablesOf(db)
+    const { committedEvents } = tablesOf(db)
+    const { nodeRuns, committedEventFamilyCutovers } = tablesOf(db)
     await nodeRunFixture(db, {
       id: nodeRunId,
       taskId,
@@ -403,7 +408,7 @@ describeEachProvider('RFC-359 manual and automatic repair share the same engine'
     })
     await db
       .update(committedEventFamilyCutovers)
-      .set({ mode: 'dispatchable', epoch: 1, changedAt: NOW, changeRef: 'rfc359-p04-s4' })
+      .set({ epoch: 1, changedAt: NOW, changeRef: 'rfc359-p04-s4' })
       .where(eq(committedEventFamilyCutovers.family, 'task-lifecycle'))
     const before = (await readTaskFixtures(db, { id: taskId }))[0]
     if (before === undefined) throw new Error(`missing fixture task ${taskId}`)
@@ -468,7 +473,9 @@ describeEachProvider('RFC-359 manual and automatic repair share the same engine'
     })
     const result = forTask(await command.run(OPEN_POLICY), taskId)
     const after = (await readTaskFixtures(db, { id: taskId }))[0]
-    const run = await firstRow(db.select().from(nodeRuns).where(eq(nodeRuns.id, nodeRunId)))
+    const run = await firstRow(
+      db.select(nodeRunFixtureColumns(db)).from(nodeRuns).where(eq(nodeRuns.id, nodeRunId)),
+    )
     const audit = await auditRows(db, taskId)
     const events = await db
       .select()

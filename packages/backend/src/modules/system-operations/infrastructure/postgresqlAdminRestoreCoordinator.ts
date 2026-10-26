@@ -5,6 +5,9 @@
 // A live non-empty schema is never dropped or overwritten.
 
 import { existsSync } from 'node:fs'
+import { join } from 'node:path'
+import { writeGenerationPointerV2 } from '@/platform/persistence/generationPointerV2'
+import { schemaHistoryRuntime } from '@/platform/persistence/schema/history/runtime'
 import type { PostgresqlDatabaseRuntime } from '@/platform/persistence/postgresqlRuntime'
 import {
   preflightPostgresqlTarget,
@@ -16,6 +19,7 @@ import { DomainError } from '@/util/errors'
 import { acquireLock, isProcessAlive, readPidFromLock } from '@/util/lock'
 import type { AdminRestoreCoordinatorPort } from '../application/ports/adminRestoreCoordinator'
 import type { RestoreArtifactPathResolver } from './restoreArtifactIngress'
+import { settleEpochSwitchBeforePointerReplacement } from './epochSwitch/pointerReplacement'
 import {
   inspectPortableDatabaseBackup,
   type PortableDatabaseBackupInspection,
@@ -55,6 +59,7 @@ export interface CreatePostgresqlAdminRestoreCoordinatorInput {
   readonly contract: LogicalSchemaContract
   readonly plan: PostgresqlSchemaPlan
   readonly filesystem: PortableRestoreFilesystemAssets
+  readonly targetProfileRef?: string
   readonly now?: () => number
   readonly inspectBackup?: InspectBackup
   readonly preflightTarget?: PreflightTarget
@@ -102,8 +107,8 @@ export function createPostgresqlAdminRestoreCoordinator(
     }
   }
 
-  const restoreArtifact = async (tarballPath: string, operationId: string) =>
-    await restore({
+  const restoreArtifact = async (tarballPath: string, operationId: string) => {
+    const result = await restore({
       headContract: input.headContract,
       tarballPath,
       appHome: input.appHome,
@@ -115,6 +120,29 @@ export function createPostgresqlAdminRestoreCoordinator(
       filesystem: input.filesystem,
       now,
     })
+    const pointerPath = join(input.appHome, 'database-generation.json')
+    if (input.targetProfileRef && !existsSync(pointerPath)) {
+      const head = schemaHistoryRuntime().head()
+      writeGenerationPointerV2({
+        pointerPath,
+        payload: {
+          version: 2,
+          schemaEpoch: 2,
+          generationId: input.targetGenerationId,
+          provider: 'postgresql',
+          role: 'installed',
+          database: { kind: 'postgresql-target', profileRef: input.targetProfileRef },
+          contractDigest: head.contract.contract.digest,
+          planDigest: head.postgresql.digest,
+          operationId: null,
+          manifestDigest: null,
+          activatedAt: now(),
+          previous: null,
+        },
+      })
+    }
+    return result
+  }
 
   const coordinator: PostgresqlAdminRestoreCoordinator = {
     async plan(artifactRef) {
@@ -130,6 +158,7 @@ export function createPostgresqlAdminRestoreCoordinator(
     },
 
     async stage(artifactRef, options) {
+      await settleEpochSwitchBeforePointerReplacement({ appHome: input.appHome })
       const tarballPath = input.artifacts.pathOf(artifactRef)
       const inspection = await inspectArtifact(tarballPath)
       const operationId = restoreOperationId(inspection)
@@ -171,6 +200,7 @@ export function createPostgresqlAdminRestoreCoordinator(
         return { status: 'lock-unavailable' }
       }
       try {
+        await settleEpochSwitchBeforePointerReplacement({ appHome: input.appHome })
         const tarballPath = input.artifacts.pathOf(artifactRef)
         const inspection = await inspectArtifact(tarballPath)
         const operationId = restoreOperationId(inspection)
@@ -208,6 +238,7 @@ export function createPostgresqlAdminRestoreCoordinator(
         )
       }
       try {
+        await settleEpochSwitchBeforePointerReplacement({ appHome: input.appHome })
         const inspection = await inspectArtifact(pending.stagedTarball)
         if (restoreOperationId(inspection) !== pending.operationId) {
           throw new DomainError(

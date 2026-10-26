@@ -39,8 +39,6 @@ import { runGit } from '../src/util/git'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 import { createResumeEngine } from './helpers/resumeEngine'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-
 // 慢 mock：先把完整 envelope 写上 stdout，再写起跑 marker，然后挂起等 SIGTERM。
 // 「envelope 已在手但 abort 仍赢」是比单纯挂起更尖的 oracle——runner 对 abort 的
 // 处置不依赖子进程输出内容。
@@ -89,7 +87,7 @@ async function buildHarness(): Promise<Harness> {
   const slowMock = join(ctrlDir, 'mock-slow-envelope.ts')
   writeFileSync(slowMock, buildSlowEnvelopeMock(ctrlDir))
 
-  const db = createInMemoryDb(MIGRATIONS)
+  const db = createInMemoryDb()
   const workerId = ulid()
   await agentFixture(db, {
     id: workerId,

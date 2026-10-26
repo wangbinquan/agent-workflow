@@ -1,5 +1,5 @@
 import { prepareConsumedInputs } from '../infrastructure/consumedInputsParticipant'
-import { deriveNodeRunRole } from '../domain/nodeRunRole'
+import { nodeRunMintIdentityForSlot } from '../application/nodeRunMintIdentity'
 import type { WrapperRunLedgerPort } from '../application/ports/wrapperRunLedger'
 import type { WrapperStatusPublisherPort } from '../application/ports/wrapperStatusPublisher'
 import {
@@ -145,7 +145,7 @@ export function createWrapperRunLedger(state: SchedulerState): WrapperRunLedgerP
           (id: string) => state.opts.persistence.nodeExecution.read(id),
           frame,
         )
-        const sources: Array<{ nodeId: string; frame: typeof frame }> = []
+        const sources: Array<{ nodeId: string; nodeKind?: string; frame: typeof frame }> = []
         for (const sourceNodeId of [
           ...wrapperExternalUpstreamSources(request.node.id, state.definition),
         ].sort()) {
@@ -156,7 +156,12 @@ export function createWrapperRunLedger(state: SchedulerState): WrapperRunLedgerP
             frame,
             containerRowById: chain.lookup,
           })
-          if (resolved.ok) sources.push({ nodeId: sourceNodeId, frame: resolved.frame })
+          if (resolved.ok)
+            sources.push({
+              nodeId: sourceNodeId,
+              nodeKind: state.definition.nodes.find((node) => node.id === sourceNodeId)?.kind,
+              frame: resolved.frame,
+            })
         }
         consumed = await state.opts.persistence.wrapperRuns.resolveConsumed({
           taskId: state.taskId,
@@ -164,7 +169,14 @@ export function createWrapperRunLedger(state: SchedulerState): WrapperRunLedgerP
         })
       }
       const runId = await state.opts.persistence.nodeRuns.mint({
-        ...deriveNodeRunRole({ nodeId: request.node.id, rerunCause: 'wrapper-init' }),
+        ...nodeRunMintIdentityForSlot(
+          {
+            kind: 'container',
+            nodeId: request.node.id,
+            frame: { containerRunId: request.containerRunId, iteration: request.iteration },
+          },
+          { kind: 'current' },
+        ),
         taskId: state.taskId,
         nodeId: request.node.id,
         status: 'pending',

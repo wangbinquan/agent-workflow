@@ -284,27 +284,14 @@ export const COVERAGE_PARITY_LEDGER: readonly string[] = [
   // RFC-370 v3 V5: the hosted backup/restore regression reads the PostgreSQL
   // source directly (+1 ref); the gap narrows from 5 to 4.
   // RFC-374 adds one real source/copy witness on each provider; coverage gap is unchanged.
-  'platform/persistence/LogicalSource: sqlite 15/11, postgresql 10/7',
-  // W55 CI：原 SQLite 迁移器全文逐字移入既有 PostgreSQL 迁移器所在目录，
-  // 同目录判据首次识别这两个原文件；补录原 ref/drive，不代表新增实现或行覆盖。
-  // RFC-359 W8（2026-09-11）：两侧各 +1（2/1 → 3/2、11/10 → 12/11），来自
-  // `tests/rfc359-w8-migrator-conformance.test.ts` 对**两侧迁移器各一条值 import**——
-  // 它在两个引擎上各把迁移器从零跑一遍，正是上一版注释预告的收敛路径（harness 每文件一库落地后
-  // PG 迁移器终于能在隔离库上被驱动）。倒挂的**绝对差没变**（9），但两侧现在被同一条用例喂到，
-  // 这一行的性质已经从「强侧独自变强」变成「两侧同步」。
-  // 剩下的 9 是 PG 侧多出来的机制专属判据（迁移生成代、schema 锁作用域、计划审计…），
-  // SQLite 侧没有对应物；真正的收敛要等那些机制本身消失，不是再补 SQLite 侧的空壳用例。
-  // RFC-366（2026-09-21）：migration 0228 给 memories.source_kind 扩容，SQLite 侧迁移
-  // 引用 +1（3/2 → 4/3）；PostgreSQL 侧由 V3 upgrade edge 承接，计数不变。
-  // RFC-371 dev startup repair adds the original real migrator reload case; the scanner and threshold are unchanged.
-  // RFC-370 v3 V7/V11: the hosted expand-only successor verification drives the
-  // PostgreSQL migrator (+1/+1); hosted deployments are PostgreSQL-only.
-  // RFC-374 adds the same legacy-upgrade assertion on both providers.
-  // RFC-395 compares compiled DDL with migration replay on both providers (+1/+1 each side).
-  'platform/persistence/Migrator: sqlite 7/6, postgresql 16/15',
+  'platform/persistence/LogicalSource: sqlite 12/8, postgresql 9/6',
+  // T18: the retired Migrator pair is gone. Frozen SourceReader is the exact
+  // relocated provider pair; 10/9 vs 3/3 comes from this guard's import/drive census,
+  // not line coverage. The reference gap of seven remains an observation.
+  'platform/persistence/migration/SourceReader: sqlite 10/9, postgresql 3/3',
   // RFC-395 relocates the existing PostgreSQL DDL compiler (and its old references)
   // alongside the new SQLite compiler; equivalence tests drive both explicit plans.
-  'platform/persistence/schema/Plan: sqlite 2/2, postgresql 25/3',
+  'platform/persistence/schema/Plan: sqlite 8/7, postgresql 32/7',
 ]
 
 /** plan §5 T19d 的「阈值」：两侧 ref 差到这个数就算倒挂，要么补测试、要么进下面的观察名单。 */
@@ -349,10 +336,10 @@ export const INVERTED_PAIRS: readonly string[] = [
   // RFC-359 AC-1（plan §5hn 批次一）：12 → 11，来源同上（注释里的提及被计入引用数）。
   // RFC-359 AC-1（plan §5hn 批次二 ④）：**退出名单**——差额 3 → 2，跌破阈值
   //（新基线 `rfc359-w5hn-workflow-route-launch-provider-parity` 归在 SQLite 一侧）。
-  'platform/persistence/LogicalSource: 15 vs 10',
+  'platform/persistence/LogicalSource: 12 vs 9',
   // 同上：原文件落位使这一既有引用差首次进入观察名单，阈值保持不变。
-  'platform/persistence/Migrator: 7 vs 16',
-  'platform/persistence/schema/Plan: 2 vs 25',
+  'platform/persistence/migration/SourceReader: 10 vs 3',
+  'platform/persistence/schema/Plan: 8 vs 32',
 ]
 
 interface Side {

@@ -1,22 +1,22 @@
-import { tablesOf } from '@/platform/persistence/sessionTables'
-import { preparedArtifactLane } from './workspaceLaunchLane'
-import type { TaskWorkspaceLaunchLane } from '../application/ports/workspaceLaunch'
+import type { RequestAuthority } from '@/modules/identity-access/public/participants'
 import type { SealedPublicRepositorySourceRef } from '@/modules/source-control/public/types'
-import { loadFrozenSpaceLayout } from './frozenWorkspaceLayout'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { materializingSpaces } from '@/platform/workspace/materializingSpaces'
+import { ConflictError } from '@/util/errors'
+import { sha256Hex } from '@/util/hash'
 import type { GitCommitIdentity } from '@agent-workflow/shared'
 import { eq } from 'drizzle-orm'
-import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import type { RequestAuthority } from '@/modules/identity-access/public/participants'
-import { materializingSpaces } from '@/platform/workspace/materializingSpaces'
 import type {
   MaterializedSpace,
   WorkspaceCleanupReport,
 } from '../application/ports/preparedWorkspace'
-import { ConflictError } from '@/util/errors'
-import { sha256Hex } from '@/util/hash'
-import { createWorkspacePreparationJournal } from './workspacePreparationJournal'
+import type { TaskWorkspaceLaunchLane } from '../application/ports/workspaceLaunch'
+import { loadFrozenSpaceLayout } from './frozenWorkspaceLayout'
 import { withTaskExecutionWrite } from './ownedTaskExecution'
 import type { TaskRepositoryPreparationBinding } from './repositoryPreparationBinding'
+import { preparedArtifactLane } from './workspaceLaunchLane'
+import { createWorkspacePreparationJournal } from './workspacePreparationJournal'
 
 export function preMaterializedAdmissionPrefix(appHome: string): string {
   return `task-prepared:${sha256Hex(appHome)}:`
@@ -224,7 +224,7 @@ export async function preparePreMaterializedRepository(input: {
             ownerFence: current.ownerFence,
             from: 'preparing',
             to: 'prepared',
-            artifactJson: JSON.stringify({ version: 1, operation: effect.operation, outcome }),
+            artifactJson: JSON.stringify({ version: 2, operation: effect.operation, outcome }),
             now: Date.now(),
           })) === null
         )

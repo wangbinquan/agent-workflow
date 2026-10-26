@@ -9,6 +9,7 @@ import {
   nodeRunFixture,
   nodeRunOutputFixture,
   taskFixture,
+  patchTaskFixture,
   taskRepoFixture,
   workflowFixture,
 } from './helpers/model'
@@ -214,6 +215,7 @@ describeEachProvider('RFC-359 W4-B1 —— 回滚目标投影一份实现', (har
     const db = harness.db
     const wf = await seedWorkflow(db)
     const multi = await seedTask(db, wf, { status: 'running' })
+    await patchTaskFixture(db, { id: multi }, { worktreePath: '/tmp/wt' })
     await taskRepoFixture(db, [
       {
         taskId: multi,

@@ -14,25 +14,29 @@
 // §2.1) is broken — callers in services/mcp.ts deleteMcp would need an
 // explicit DELETE FROM mcp_probes before dropping the parent row.
 
+import {
+  frozenTablesOf,
+  createFrozenEpoch1Db,
+  type FrozenDbClient,
+  FROZEN_MIGRATIONS,
+} from './migration-freeze'
 import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
 import { queryWrite, queryRows } from '@/platform/persistence/queryHelpers'
 import { describe, expect, test, beforeEach } from 'bun:test'
 import { resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+const MIGRATIONS = resolve(FROZEN_MIGRATIONS)
 
 describe('migration 0013 (RFC-030 mcp_probes)', () => {
-  let db: DbClient
+  let db: FrozenDbClient
   beforeEach(() => {
-    db = createInMemoryDb(MIGRATIONS)
+    db = createFrozenEpoch1Db(MIGRATIONS)
   })
 
   function seedMcp(name = 'postgres-prod'): string {
     const id = ulid()
-    const { mcps } = tablesOf(db)
+    const { mcps } = frozenTablesOf(db)
     insertOne(db, mcps, {
       id,
       name,
@@ -46,7 +50,7 @@ describe('migration 0013 (RFC-030 mcp_probes)', () => {
     const mcpId = seedMcp()
     const id = ulid()
     const now = Date.now()
-    const { mcpProbes } = tablesOf(db)
+    const { mcpProbes } = frozenTablesOf(db)
     insertOne(db, mcpProbes, {
       id,
       mcpId,
@@ -81,7 +85,7 @@ describe('migration 0013 (RFC-030 mcp_probes)', () => {
 
   test('mcp_probes.mcp_id is UNIQUE — second probe insert for same mcp rejected', () => {
     const mcpId = seedMcp()
-    const { mcpProbes } = tablesOf(db)
+    const { mcpProbes } = frozenTablesOf(db)
     insertOne(db, mcpProbes, {
       id: ulid(),
       mcpId,
@@ -105,7 +109,7 @@ describe('migration 0013 (RFC-030 mcp_probes)', () => {
 
   test('ON DELETE CASCADE: deleting parent mcp removes probe row', () => {
     const mcpId = seedMcp()
-    const { mcpProbes, mcps } = tablesOf(db)
+    const { mcpProbes, mcps } = frozenTablesOf(db)
     insertOne(db, mcpProbes, {
       id: ulid(),
       mcpId,
@@ -123,7 +127,7 @@ describe('migration 0013 (RFC-030 mcp_probes)', () => {
 
   test('error probe shape: all list columns nullable, errorCode + errorDetailJson populated', () => {
     const mcpId = seedMcp('broken')
-    const { mcpProbes } = tablesOf(db)
+    const { mcpProbes } = frozenTablesOf(db)
     insertOne(db, mcpProbes, {
       id: ulid(),
       mcpId,

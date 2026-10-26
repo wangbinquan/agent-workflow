@@ -1,3 +1,4 @@
+import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { withO2Closure, o2Ports } from './helpers/o2Closure'
 // RFC-359 W1-T2b（F-H2-1 之二）—— 快速澄清决定命令在两个引擎上各跑一遍。
 //
@@ -111,7 +112,9 @@ describeEachProvider('RFC-359 T2b —— 快速澄清决定命令（clarifyDecis
     const context = createCollaborationCommandContext(
       withO2Closure({
         db,
-        clarifyDecisions: createClarifyDecisionCommand(db, enqueuer, o2Ports(db).taskLock),
+        clarifyDecisions: createClarifyDecisionCommand(db, enqueuer, o2Ports(db).taskLock, {
+          historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
+        }),
       }),
     )
     const result = await submitClarifyDecision(context, {
@@ -172,7 +175,9 @@ describeEachProvider('RFC-359 T2b —— 快速澄清决定命令（clarifyDecis
     const taskId = freshTaskId()
     const round = await seedOpenSelfRound(db, taskId)
     const enqueuer = recordingEnqueuer()
-    const command = createClarifyDecisionCommand(db, enqueuer, o2Ports(db).taskLock)
+    const command = createClarifyDecisionCommand(db, enqueuer, o2Ports(db).taskLock, {
+      historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
+    })
     const submit = (idempotencyKey: string) =>
       command.submit({
         actor,
@@ -203,7 +208,9 @@ describeEachProvider('RFC-359 T2b —— 快速澄清决定命令（clarifyDecis
     const enqueuer = recordingEnqueuer()
     let error: unknown
     try {
-      await createClarifyDecisionCommand(db, enqueuer, o2Ports(db).taskLock).submit({
+      await createClarifyDecisionCommand(db, enqueuer, o2Ports(db).taskLock, {
+        historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
+      }).submit({
         actor,
         actorRole: 'owner',
         nodeRunId: round.origin,
@@ -232,6 +239,7 @@ describeEachProvider('RFC-359 T2b —— 快速澄清决定命令（clarifyDecis
       db,
       recordingEnqueuer(),
       o2Ports(db).taskLock,
+      { historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions },
     ).submit({
       actor,
       actorRole: 'owner',

@@ -1,7 +1,7 @@
 // RFC-359 W4-B1 —— node run merge_state 迁移：一份实现，两个 provider 共用；读 + CAS 写在同一事务里。
 
 import { tablesOf } from '@/platform/persistence/sessionTables'
-import { and, eq, isNull } from 'drizzle-orm'
+import { eq } from 'drizzle-orm'
 import {
   IllegalMergeStateTransition,
   nextMergeState,
@@ -14,9 +14,8 @@ import { ConflictError, NotFoundError } from '@/util/errors'
 import type { MergeStateLifecyclePersistence } from '../application/ports/mergeStateLifecyclePersistence'
 import { holdsExplicitTransaction } from '@/db/transactionScope'
 import { isSupersedableMergeState } from '../domain/nodeRunSupersession'
-import { taskCheckpointProjectionPatch } from './taskCheckpointCodec'
-import { taskCheckpointMountPaths } from './taskCheckpointPersistence'
-import { structurallySupersededCondition } from './runSelection/oracle/supersessionSql'
+import { compareAndWriteMergeStateInTx, lockNodeRunTaskRootInTx } from './nodeRunWriteProtocol'
+import { createRunSelectionReader } from './runSelection/table/reader'
 import {
   fenceTaskWrite,
   type TaskExecutionTransaction,
@@ -37,22 +36,27 @@ export class DrizzleMergeStateLifecyclePersistence implements MergeStateLifecycl
       )
     }
     const outcome = await withTaskExecutionWrite(this.db, async (tx) => {
-      const { nodeRuns } = tablesOf(tx)
-      const rows = await tx
-        .select({ mergeState: nodeRuns.mergeState, taskId: nodeRuns.taskId })
+      const { nodeRuns, nodeRunRuntimeStates } = tablesOf(tx)
+      const [located] = await tx
+        .select({ taskId: nodeRuns.taskId })
         .from(nodeRuns)
         .where(eq(nodeRuns.id, input.nodeRunId))
         .limit(1)
-      const row = rows[0]
-      if (row === undefined) {
+      if (located === undefined) {
         throw new NotFoundError('node-run-not-found', `node_run ${input.nodeRunId} not found`)
       }
       await fenceTaskWrite(tx, {
-        taskId: row.taskId,
+        taskId: located.taskId,
         context: input.executionContext,
         ...(input.now === undefined ? {} : { now: input.now }),
       })
-      const from = (row.mergeState ?? null) as MergeStateOrNull
+      await lockNodeRunTaskRootInTx(tx, input.nodeRunId)
+      const [row] = await tx
+        .select({ mergeState: nodeRunRuntimeStates.mergeState })
+        .from(nodeRunRuntimeStates)
+        .where(eq(nodeRunRuntimeStates.nodeRunId, input.nodeRunId))
+        .limit(1)
+      const from = (row?.mergeState ?? null) as MergeStateOrNull
       // RFC-369 —— 旧代作废改由这里推导（原先在铸造事务里同事务 abandon）：被更新一代取代的行再发任何
       // 非 abandon 迁移，都与今天「终态上迁移非法」同一个对外表现；这一刻把它收成 abandoned 落库。
       const superseded =
@@ -60,33 +64,24 @@ export class DrizzleMergeStateLifecyclePersistence implements MergeStateLifecycl
         isSupersedableMergeState(from) &&
         (await isRunSuperseded(tx, input.nodeRunId))
       const to: MergeStateOrNull = superseded ? 'abandoned' : nextMergeState(from, input.event)
-      const extra = superseded
-        ? {}
-        : taskCheckpointProjectionPatch(
-            { ...input.extra?.runtime, ...input.extra?.checkpoint },
-            input.extra?.checkpoint?.checkpoints === undefined
-              ? []
-              : await taskCheckpointMountPaths(tx, row.taskId),
-          )
-      const updated = await tx
-        .update(nodeRuns)
-        // rfc144-allow-direct-merge-state-write -- 事件 CAS：唯一的 merge_state 迁移写手
-        // 收尾成 abandoned 时**不带** extra：否则本次迁移的载荷（isoNodeTree* / iso base 列）会覆写
-        // 被取代行（设计门 r2 P2-3）。
-        .set({ mergeState: to, ...extra })
-        .where(
-          and(
-            eq(nodeRuns.id, input.nodeRunId),
-            from === null ? isNull(nodeRuns.mergeState) : eq(nodeRuns.mergeState, from),
-          ),
-        )
-        .returning({ id: nodeRuns.id })
-      if (updated.length === 0) {
-        throw new ConflictError(
-          'concurrent-merge-state-transition',
-          `node_run ${input.nodeRunId} merge_state changed concurrently`,
-        )
-      }
+      await compareAndWriteMergeStateInTx(
+        tx,
+        input.nodeRunId,
+        from,
+        to,
+        superseded
+          ? {}
+          : {
+              runtime:
+                input.extra?.runtime === undefined
+                  ? undefined
+                  : {
+                      isolationRootRef: input.extra.runtime.isoWorktreePath,
+                      wrapperProgressJson: input.extra.runtime.wrapperProgressJson,
+                    },
+              checkpoint: input.extra?.checkpoint,
+            },
+      )
       return { from, to, superseded }
     })
     if (outcome.superseded) {
@@ -121,10 +116,12 @@ export class DrizzleMergeStateLifecyclePersistence implements MergeStateLifecycl
 /** 本行是否被同帧更新一代结构性取代（design §3），按主键点查 + 取代谓词。 */
 async function isRunSuperseded(tx: TaskExecutionTransaction, nodeRunId: string): Promise<boolean> {
   const { nodeRuns } = tablesOf(tx)
-  const rows = await tx
-    .select({ id: nodeRuns.id })
+  const [run] = await tx
+    .select({ taskId: nodeRuns.taskId })
     .from(nodeRuns)
-    .where(and(eq(nodeRuns.id, nodeRunId), structurallySupersededCondition(tx)))
+    .where(eq(nodeRuns.id, nodeRunId))
     .limit(1)
-  return rows.length > 0
+  if (!run) return false
+  const rows = await createRunSelectionReader(tx).familyHistory(run.taskId, { runIds: [nodeRunId] })
+  return rows[0]?.structurallySuperseded ?? false
 }

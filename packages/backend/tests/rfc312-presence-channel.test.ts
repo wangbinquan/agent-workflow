@@ -11,7 +11,7 @@
 //   4. 声明了 rerunUpgradeGate ⇒ 权限被收回时既有复核机制会关掉它。
 
 import { describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
+
 import type { ServerWebSocket } from 'bun'
 
 import { buildActor, type Actor } from '../src/auth/actor'
@@ -20,8 +20,6 @@ import { checkUpgradeGate, WS_CHANNELS, type WsConnectionData } from '../src/ws/
 import { composeIdentityAccess } from '../src/modules/identity-access/composition'
 import { admitWsIdentity } from './helpers/identityAccessWs'
 import { STUB_REALTIME_RUNTIME } from './helpers/realtimeRuntime'
-
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 /**
  * 必须真的把用户行写进库：`sendJson` 会先过 RFC-305 的出站 fence
@@ -95,7 +93,7 @@ describe('rfc312 /ws/presence channel', () => {
   })
 
   test('连接建立即收到一次全量快照，内容 = 当前在线者', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createInMemoryDb()
     seedUser(db, 'viewer')
     const identityAccess = composeIdentityAccess(db)
     const { trackUserPresence } = identityAccess
@@ -117,7 +115,7 @@ describe('rfc312 /ws/presence channel', () => {
   })
 
   test('onOpenExtra 会登记本连接：登记后自己也出现在快照里，释放后消失', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createInMemoryDb()
     seedUser(db, 'me')
     const identityAccess = composeIdentityAccess(db)
     const { getUserPresence } = identityAccess
@@ -139,7 +137,7 @@ describe('rfc312 /ws/presence channel', () => {
   })
 
   test('PAT 凭据不计入在线（那是脚本在跑，不是人在看）', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createInMemoryDb()
     seedUser(db, 'bot')
     const identityAccess = composeIdentityAccess(db)
     const { getUserPresence } = identityAccess

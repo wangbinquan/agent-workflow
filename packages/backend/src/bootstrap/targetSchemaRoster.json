@@ -1,0 +1,1452 @@
+[
+  {
+    "table": "action_template_revisions",
+    "owner": "development-automation",
+    "sources": ["action_template_revisions"],
+    "definition": "reused"
+  },
+  {
+    "table": "action_templates",
+    "owner": "development-automation",
+    "sources": ["action_templates"],
+    "definition": "reused"
+  },
+  {
+    "table": "agent_dependencies",
+    "owner": "resource-catalog",
+    "sources": ["agents"],
+    "definition": "target"
+  },
+  {
+    "table": "agent_mcp_refs",
+    "owner": "resource-catalog",
+    "sources": ["agents"],
+    "definition": "target"
+  },
+  {
+    "table": "agent_plugin_refs",
+    "owner": "resource-catalog",
+    "sources": ["agents"],
+    "definition": "target"
+  },
+  {
+    "table": "agent_skill_refs",
+    "owner": "resource-catalog",
+    "sources": ["agents"],
+    "definition": "target"
+  },
+  {
+    "table": "agents",
+    "owner": "resource-catalog",
+    "sources": ["agents"],
+    "definition": "target"
+  },
+  {
+    "table": "application_configuration",
+    "owner": "system-operations",
+    "sources": ["application_configuration"],
+    "definition": "reused"
+  },
+  {
+    "table": "auth_login_policy",
+    "owner": "identity-access",
+    "sources": ["auth_login_policy"],
+    "definition": "reused"
+  },
+  {
+    "table": "automation_policies",
+    "owner": "development-automation",
+    "sources": ["automation_policies"],
+    "definition": "reused"
+  },
+  {
+    "table": "automation_policy_revisions",
+    "owner": "development-automation",
+    "sources": ["automation_policy_revisions"],
+    "definition": "reused"
+  },
+  {
+    "table": "cached_repos",
+    "owner": "source-control",
+    "sources": ["cached_repos"],
+    "definition": "reused"
+  },
+  {
+    "table": "capability_templates",
+    "owner": "code-capability",
+    "sources": ["capability_templates"],
+    "definition": "reused"
+  },
+  {
+    "table": "clarify_answer_attributions",
+    "owner": "collaboration",
+    "sources": ["clarify_rounds"],
+    "definition": "target"
+  },
+  {
+    "table": "clarify_answer_drafts",
+    "owner": "collaboration",
+    "sources": ["clarify_rounds"],
+    "definition": "target"
+  },
+  {
+    "table": "clarify_answers",
+    "owner": "collaboration",
+    "sources": ["clarify_rounds"],
+    "definition": "target"
+  },
+  {
+    "table": "clarify_rounds",
+    "owner": "collaboration",
+    "sources": ["clarify_rounds"],
+    "definition": "target"
+  },
+  {
+    "table": "code_history_archives",
+    "owner": "code-capability/history",
+    "sources": [
+      "code_ai_attempts",
+      "code_artifacts",
+      "code_findings",
+      "code_fix_attempts",
+      "code_mr_leases",
+      "code_produced_mrs",
+      "code_publish_intents",
+      "code_round_stages",
+      "code_trigger_deliveries",
+      "code_work_items",
+      "code_work_observations",
+      "code_work_rounds",
+      "legacy_code_work_item_links"
+    ],
+    "definition": "target"
+  },
+  {
+    "table": "code_history_id_index",
+    "owner": "code-capability/history",
+    "sources": [
+      "code_ai_attempts",
+      "code_artifacts",
+      "code_findings",
+      "code_fix_attempts",
+      "code_mr_leases",
+      "code_produced_mrs",
+      "code_publish_intents",
+      "code_round_stages",
+      "code_trigger_deliveries",
+      "code_work_items",
+      "code_work_observations",
+      "code_work_rounds",
+      "legacy_code_work_item_links"
+    ],
+    "definition": "target"
+  },
+  {
+    "table": "code_host_connections",
+    "owner": "integration",
+    "sources": ["code_host_connections"],
+    "definition": "reused"
+  },
+  {
+    "table": "collaboration_gate_artifacts",
+    "owner": "collaboration",
+    "sources": ["collaboration_gate_artifacts"],
+    "definition": "target"
+  },
+  {
+    "table": "collaboration_gate_operations",
+    "owner": "collaboration",
+    "sources": ["collaboration_gate_operations"],
+    "definition": "target"
+  },
+  {
+    "table": "committed_event_aggregate_heads",
+    "owner": "platform/committed-events",
+    "sources": ["committed_event_aggregate_heads"],
+    "definition": "reused"
+  },
+  {
+    "table": "committed_event_deliveries",
+    "owner": "platform/committed-events",
+    "sources": ["committed_event_deliveries"],
+    "definition": "reused"
+  },
+  {
+    "table": "committed_event_family_cutovers",
+    "owner": "platform/committed-events",
+    "sources": ["committed_event_family_cutovers"],
+    "definition": "target"
+  },
+  {
+    "table": "committed_events",
+    "owner": "platform/committed-events",
+    "sources": ["committed_events"],
+    "definition": "reused"
+  },
+  {
+    "table": "content_bytes",
+    "owner": "platform/content",
+    "sources": [
+      "collaboration_gate_artifacts",
+      "development_object_artifacts",
+      "doc_versions",
+      "employee_reaction_artifacts",
+      "hosted_node_event_archives",
+      "hosted_object_publications",
+      "hosted_task_archive_entries",
+      "hosted_task_artifacts",
+      "node_run_outputs",
+      "review_comments",
+      "skill_content_entries",
+      "skill_versions",
+      "skills"
+    ],
+    "definition": "target"
+  },
+  {
+    "table": "content_objects",
+    "owner": "platform/content",
+    "sources": [
+      "collaboration_gate_artifacts",
+      "development_object_artifacts",
+      "doc_versions",
+      "employee_reaction_artifacts",
+      "hosted_node_event_archives",
+      "hosted_object_publications",
+      "hosted_task_archive_entries",
+      "hosted_task_artifacts",
+      "node_run_outputs",
+      "review_comments",
+      "skill_content_entries",
+      "skill_versions",
+      "skills"
+    ],
+    "definition": "target"
+  },
+  {
+    "table": "content_publications",
+    "owner": "platform/content",
+    "sources": ["hosted_object_publications"],
+    "definition": "target"
+  },
+  {
+    "table": "cs_event_inbox",
+    "owner": "integration",
+    "sources": ["cs_event_inbox"],
+    "definition": "reused"
+  },
+  {
+    "table": "cs_event_routes",
+    "owner": "integration",
+    "sources": ["cs_event_routes"],
+    "definition": "reused"
+  },
+  {
+    "table": "cs_event_targets",
+    "owner": "integration",
+    "sources": ["cs_event_targets"],
+    "definition": "reused"
+  },
+  {
+    "table": "cs_webhook_verifications",
+    "owner": "integration",
+    "sources": ["cs_webhook_verifications"],
+    "definition": "reused"
+  },
+  {
+    "table": "custom_event_source_definitions",
+    "owner": "event-center",
+    "sources": ["custom_event_source_definitions"],
+    "definition": "reused"
+  },
+  {
+    "table": "custom_event_source_revisions",
+    "owner": "event-center",
+    "sources": ["custom_event_source_revisions"],
+    "definition": "reused"
+  },
+  {
+    "table": "development_action_runs",
+    "owner": "development-automation",
+    "sources": ["development_action_runs"],
+    "definition": "reused"
+  },
+  {
+    "table": "development_adapter_definition_revisions",
+    "owner": "development-automation",
+    "sources": ["development_adapter_definition_revisions"],
+    "definition": "reused"
+  },
+  {
+    "table": "development_adapter_definitions",
+    "owner": "development-automation",
+    "sources": ["development_adapter_definitions"],
+    "definition": "reused"
+  },
+  {
+    "table": "development_agent_attempts",
+    "owner": "development-automation",
+    "sources": ["development_agent_attempts"],
+    "definition": "reused"
+  },
+  {
+    "table": "development_approval_sagas",
+    "owner": "development-automation",
+    "sources": ["development_approval_sagas"],
+    "definition": "reused"
+  },
+  {
+    "table": "development_bundle_refs",
+    "owner": "development-automation",
+    "sources": ["development_bundle_refs"],
+    "definition": "reused"
+  },
+  {
+    "table": "development_decisions",
+    "owner": "development-automation",
+    "sources": ["development_decisions"],
+    "definition": "reused"
+  },
+  {
+    "table": "development_deferred_wakes",
+    "owner": "development-automation",
+    "sources": ["development_deferred_wakes"],
+    "definition": "reused"
+  },
+  {
+    "table": "development_design_baselines",
+    "owner": "development-automation",
+    "sources": ["development_design_baselines"],
+    "definition": "reused"
+  },
+  {
+    "table": "development_design_links",
+    "owner": "development-automation",
+    "sources": ["development_design_links"],
+    "definition": "reused"
+  },
+  {
+    "table": "development_design_proposals",
+    "owner": "development-automation",
+    "sources": ["development_design_proposals"],
+    "definition": "reused"
+  },
+  {
+    "table": "development_design_revisions",
+    "owner": "development-automation",
+    "sources": ["development_design_revisions"],
+    "definition": "reused"
+  },
+  {
+    "table": "development_designs",
+    "owner": "development-automation",
+    "sources": ["development_designs"],
+    "definition": "reused"
+  },
+  {
+    "table": "development_effects",
+    "owner": "development-automation",
+    "sources": ["development_effects"],
+    "definition": "reused"
+  },
+  {
+    "table": "development_fact_snapshots",
+    "owner": "development-automation",
+    "sources": ["development_fact_snapshots"],
+    "definition": "reused"
+  },
+  {
+    "table": "development_feedback_ledger",
+    "owner": "development-automation",
+    "sources": ["development_feedback_ledger"],
+    "definition": "reused"
+  },
+  {
+    "table": "development_mission_links",
+    "owner": "development-automation",
+    "sources": ["development_mission_links"],
+    "definition": "reused"
+  },
+  {
+    "table": "development_mission_sources",
+    "owner": "development-automation",
+    "sources": ["development_mission_sources"],
+    "definition": "reused"
+  },
+  {
+    "table": "development_missions",
+    "owner": "development-automation",
+    "sources": ["development_missions"],
+    "definition": "target"
+  },
+  {
+    "table": "development_mr_claims",
+    "owner": "development-automation",
+    "sources": ["development_mr_claims"],
+    "definition": "reused"
+  },
+  {
+    "table": "development_object_artifacts",
+    "owner": "development-automation",
+    "sources": ["development_object_artifacts"],
+    "definition": "target"
+  },
+  {
+    "table": "development_repository_upload_plan_entries",
+    "owner": "development-automation",
+    "sources": ["development_repository_upload_plan_entries"],
+    "definition": "reused"
+  },
+  {
+    "table": "development_repository_upload_plans",
+    "owner": "development-automation",
+    "sources": ["development_repository_upload_plans"],
+    "definition": "reused"
+  },
+  {
+    "table": "development_repository_upload_receipts",
+    "owner": "development-automation",
+    "sources": ["development_repository_upload_receipts"],
+    "definition": "reused"
+  },
+  {
+    "table": "development_step_joins",
+    "owner": "development-automation",
+    "sources": ["development_step_joins"],
+    "definition": "reused"
+  },
+  {
+    "table": "development_step_runs",
+    "owner": "development-automation",
+    "sources": ["development_step_runs"],
+    "definition": "reused"
+  },
+  {
+    "table": "development_wake_hints",
+    "owner": "development-automation",
+    "sources": ["development_wake_hints"],
+    "definition": "reused"
+  },
+  {
+    "table": "digital_employee_revisions",
+    "owner": "development-automation",
+    "sources": ["digital_employee_revisions"],
+    "definition": "reused"
+  },
+  {
+    "table": "digital_employees",
+    "owner": "development-automation",
+    "sources": ["digital_employees"],
+    "definition": "reused"
+  },
+  {
+    "table": "doc_versions",
+    "owner": "collaboration",
+    "sources": ["doc_versions"],
+    "definition": "target"
+  },
+  {
+    "table": "employee_approval_sagas",
+    "owner": "digital-employee",
+    "sources": ["employee_approval_sagas"],
+    "definition": "reused"
+  },
+  {
+    "table": "employee_attention_bindings",
+    "owner": "digital-employee",
+    "sources": ["employee_attention_bindings"],
+    "definition": "reused"
+  },
+  {
+    "table": "employee_case_event_origins",
+    "owner": "digital-employee",
+    "sources": ["employee_case_event_origins"],
+    "definition": "reused"
+  },
+  {
+    "table": "employee_case_inbox",
+    "owner": "digital-employee",
+    "sources": ["employee_case_inbox"],
+    "definition": "reused"
+  },
+  {
+    "table": "employee_case_members",
+    "owner": "digital-employee",
+    "sources": ["employee_case_members"],
+    "definition": "reused"
+  },
+  {
+    "table": "employee_case_metering_receipts",
+    "owner": "digital-employee",
+    "sources": ["employee_case_metering_receipts"],
+    "definition": "reused"
+  },
+  {
+    "table": "employee_case_workspaces",
+    "owner": "digital-employee",
+    "sources": ["employee_case_workspaces"],
+    "definition": "reused"
+  },
+  {
+    "table": "employee_cases",
+    "owner": "digital-employee",
+    "sources": ["employee_cases"],
+    "definition": "reused"
+  },
+  {
+    "table": "employee_change_candidates",
+    "owner": "digital-employee",
+    "sources": ["employee_change_candidates"],
+    "definition": "reused"
+  },
+  {
+    "table": "employee_channel_results",
+    "owner": "digital-employee",
+    "sources": ["employee_channel_results"],
+    "definition": "reused"
+  },
+  {
+    "table": "employee_channels",
+    "owner": "digital-employee",
+    "sources": ["employee_channels"],
+    "definition": "reused"
+  },
+  {
+    "table": "employee_context_links",
+    "owner": "digital-employee",
+    "sources": ["employee_context_links"],
+    "definition": "reused"
+  },
+  {
+    "table": "employee_context_records",
+    "owner": "digital-employee",
+    "sources": ["employee_context_records"],
+    "definition": "reused"
+  },
+  {
+    "table": "employee_context_revisions",
+    "owner": "digital-employee",
+    "sources": ["employee_context_revisions"],
+    "definition": "reused"
+  },
+  {
+    "table": "employee_definition_revisions",
+    "owner": "digital-employee",
+    "sources": ["employee_definition_revisions"],
+    "definition": "reused"
+  },
+  {
+    "table": "employee_definitions",
+    "owner": "digital-employee",
+    "sources": ["employee_definitions"],
+    "definition": "reused"
+  },
+  {
+    "table": "employee_execution_policy_revisions",
+    "owner": "digital-employee",
+    "sources": ["employee_execution_policy_revisions"],
+    "definition": "reused"
+  },
+  {
+    "table": "employee_external_context_bindings",
+    "owner": "digital-employee",
+    "sources": ["employee_external_context_bindings"],
+    "definition": "reused"
+  },
+  {
+    "table": "employee_input_uploads",
+    "owner": "digital-employee",
+    "sources": ["employee_input_uploads"],
+    "definition": "reused"
+  },
+  {
+    "table": "employee_invocations",
+    "owner": "digital-employee",
+    "sources": ["employee_invocations"],
+    "definition": "reused"
+  },
+  {
+    "table": "employee_job_template_revisions",
+    "owner": "digital-employee",
+    "sources": ["employee_job_template_revisions"],
+    "definition": "reused"
+  },
+  {
+    "table": "employee_job_templates",
+    "owner": "digital-employee",
+    "sources": ["employee_job_templates"],
+    "definition": "reused"
+  },
+  {
+    "table": "employee_os_outbox",
+    "owner": "digital-employee",
+    "sources": ["employee_os_outbox"],
+    "definition": "reused"
+  },
+  {
+    "table": "employee_os_settings",
+    "owner": "digital-employee",
+    "sources": ["employee_os_settings"],
+    "definition": "reused"
+  },
+  {
+    "table": "employee_reaction_artifacts",
+    "owner": "digital-employee",
+    "sources": ["employee_reaction_artifacts"],
+    "definition": "target"
+  },
+  {
+    "table": "employee_reaction_dispatch",
+    "owner": "digital-employee",
+    "sources": ["employee_reaction_dispatch"],
+    "definition": "reused"
+  },
+  {
+    "table": "employee_reaction_rounds",
+    "owner": "digital-employee",
+    "sources": ["employee_reaction_rounds"],
+    "definition": "reused"
+  },
+  {
+    "table": "employee_round_workspace_states",
+    "owner": "digital-employee",
+    "sources": ["employee_round_workspace_states"],
+    "definition": "reused"
+  },
+  {
+    "table": "employee_tool_registration_revisions",
+    "owner": "digital-employee",
+    "sources": ["employee_tool_registration_revisions"],
+    "definition": "reused"
+  },
+  {
+    "table": "employee_tool_registrations",
+    "owner": "digital-employee",
+    "sources": ["employee_tool_registrations"],
+    "definition": "reused"
+  },
+  {
+    "table": "employee_type_packages",
+    "owner": "digital-employee",
+    "sources": ["employee_type_packages"],
+    "definition": "reused"
+  },
+  {
+    "table": "employee_work_scope_revisions",
+    "owner": "digital-employee",
+    "sources": ["employee_work_scope_revisions"],
+    "definition": "reused"
+  },
+  {
+    "table": "event_automation_work_intents",
+    "owner": "event-center",
+    "sources": ["event_automation_work_intents"],
+    "definition": "reused"
+  },
+  {
+    "table": "event_deliveries",
+    "owner": "event-center",
+    "sources": ["event_deliveries"],
+    "definition": "reused"
+  },
+  {
+    "table": "event_observer_runs",
+    "owner": "event-center",
+    "sources": ["event_observer_runs"],
+    "definition": "reused"
+  },
+  {
+    "table": "event_records",
+    "owner": "event-center",
+    "sources": ["event_records"],
+    "definition": "reused"
+  },
+  {
+    "table": "event_response_rules",
+    "owner": "event-center",
+    "sources": ["event_response_rules"],
+    "definition": "reused"
+  },
+  {
+    "table": "event_sources",
+    "owner": "event-center",
+    "sources": ["event_sources"],
+    "definition": "reused"
+  },
+  {
+    "table": "event_subscriptions",
+    "owner": "event-center",
+    "sources": ["event_subscriptions"],
+    "definition": "reused"
+  },
+  {
+    "table": "event_type_catalog",
+    "owner": "event-center",
+    "sources": ["event_type_catalog"],
+    "definition": "reused"
+  },
+  {
+    "table": "execution_legacy_evidence",
+    "owner": "task-execution",
+    "sources": ["tasks", "node_runs", "task_repos"],
+    "definition": "target"
+  },
+  {
+    "table": "external_identities",
+    "owner": "identity-access",
+    "sources": ["external_identities"],
+    "definition": "reused"
+  },
+  {
+    "table": "fusions",
+    "owner": "knowledge-evolution",
+    "sources": ["fusions"],
+    "definition": "reused"
+  },
+  {
+    "table": "hosted_database_backups",
+    "owner": "system-operations",
+    "sources": ["hosted_database_backups"],
+    "definition": "reused"
+  },
+  {
+    "table": "hosted_execution_bindings",
+    "owner": "task-execution",
+    "sources": ["hosted_execution_bindings"],
+    "definition": "reused"
+  },
+  {
+    "table": "hosted_execution_control",
+    "owner": "system-operations",
+    "sources": ["hosted_execution_control"],
+    "definition": "reused"
+  },
+  {
+    "table": "hosted_execution_events",
+    "owner": "task-execution",
+    "sources": ["hosted_execution_events"],
+    "definition": "reused"
+  },
+  {
+    "table": "hosted_node_event_archives",
+    "owner": "task-execution",
+    "sources": ["hosted_node_event_archives"],
+    "definition": "target"
+  },
+  {
+    "table": "hosted_recovery_requests",
+    "owner": "task-execution",
+    "sources": ["hosted_recovery_requests"],
+    "definition": "reused"
+  },
+  {
+    "table": "hosted_task_archive_entries",
+    "owner": "task-execution",
+    "sources": ["hosted_task_archive_entries"],
+    "definition": "target"
+  },
+  {
+    "table": "hosted_task_archive_entry_parts",
+    "owner": "task-execution",
+    "sources": ["hosted_task_archive_entries"],
+    "definition": "target"
+  },
+  {
+    "table": "hosted_task_artifacts",
+    "owner": "task-execution",
+    "sources": ["hosted_task_artifacts"],
+    "definition": "target"
+  },
+  {
+    "table": "hosted_task_workspaces",
+    "owner": "source-control",
+    "sources": ["hosted_task_workspaces"],
+    "definition": "reused"
+  },
+  {
+    "table": "hosted_workspace_commands",
+    "owner": "source-control",
+    "sources": ["hosted_workspace_commands"],
+    "definition": "reused"
+  },
+  {
+    "table": "intent_apply_journal",
+    "owner": "intent",
+    "sources": ["intent_apply_journal"],
+    "definition": "target"
+  },
+  {
+    "table": "intent_draft_resolutions",
+    "owner": "intent",
+    "sources": ["intent_draft_resolutions"],
+    "definition": "reused"
+  },
+  {
+    "table": "intent_drafts",
+    "owner": "intent",
+    "sources": ["intent_drafts"],
+    "definition": "reused"
+  },
+  {
+    "table": "intent_provenance",
+    "owner": "intent",
+    "sources": ["intent_provenance"],
+    "definition": "reused"
+  },
+  {
+    "table": "intent_sessions",
+    "owner": "intent",
+    "sources": ["intent_sessions"],
+    "definition": "reused"
+  },
+  {
+    "table": "intent_turn_events",
+    "owner": "intent",
+    "sources": ["intent_turn_events"],
+    "definition": "target"
+  },
+  {
+    "table": "intent_turns",
+    "owner": "intent",
+    "sources": ["intent_turns"],
+    "definition": "reused"
+  },
+  {
+    "table": "intent_working_set_changes",
+    "owner": "intent",
+    "sources": ["intent_working_set_changes"],
+    "definition": "reused"
+  },
+  {
+    "table": "lifecycle_alerts",
+    "owner": "system-operations",
+    "sources": ["lifecycle_alerts"],
+    "definition": "reused"
+  },
+  {
+    "table": "lifecycle_repair_audit",
+    "owner": "system-operations",
+    "sources": ["lifecycle_repair_audit"],
+    "definition": "reused"
+  },
+  {
+    "table": "maintenance_runs",
+    "owner": "system-operations",
+    "sources": ["maintenance_runs"],
+    "definition": "reused"
+  },
+  {
+    "table": "maintenance_state",
+    "owner": "system-operations",
+    "sources": ["maintenance_state"],
+    "definition": "reused"
+  },
+  {
+    "table": "mcp_probes",
+    "owner": "resource-catalog",
+    "sources": ["mcp_probes"],
+    "definition": "reused"
+  },
+  {
+    "table": "mcp_runtime_test_create_receipts",
+    "owner": "resource-catalog",
+    "sources": ["mcp_runtime_test_create_receipts"],
+    "definition": "reused"
+  },
+  {
+    "table": "mcp_runtime_test_events",
+    "owner": "resource-catalog",
+    "sources": ["mcp_runtime_test_events"],
+    "definition": "reused"
+  },
+  {
+    "table": "mcp_runtime_test_session_leases",
+    "owner": "resource-catalog",
+    "sources": ["mcp_runtime_test_session_leases"],
+    "definition": "reused"
+  },
+  {
+    "table": "mcp_runtime_test_sessions",
+    "owner": "resource-catalog",
+    "sources": ["mcp_runtime_test_sessions"],
+    "definition": "reused"
+  },
+  {
+    "table": "mcp_runtime_test_turns",
+    "owner": "resource-catalog",
+    "sources": ["mcp_runtime_test_turns"],
+    "definition": "reused"
+  },
+  {
+    "table": "mcps",
+    "owner": "resource-catalog",
+    "sources": ["mcps"],
+    "definition": "reused"
+  },
+  {
+    "table": "memories",
+    "owner": "memory",
+    "sources": ["memories"],
+    "definition": "target"
+  },
+  {
+    "table": "memory_distill_events",
+    "owner": "memory",
+    "sources": ["memory_distill_events"],
+    "definition": "reused"
+  },
+  {
+    "table": "memory_distill_jobs",
+    "owner": "memory",
+    "sources": ["memory_distill_jobs"],
+    "definition": "reused"
+  },
+  {
+    "table": "memory_scope_move_events",
+    "owner": "memory",
+    "sources": ["memory_scope_move_events"],
+    "definition": "reused"
+  },
+  {
+    "table": "mission_input_uploads",
+    "owner": "development-automation",
+    "sources": ["mission_input_uploads"],
+    "definition": "reused"
+  },
+  {
+    "table": "node_execution_event_sources",
+    "owner": "task-execution",
+    "sources": ["node_execution_event_sources"],
+    "definition": "reused"
+  },
+  {
+    "table": "node_run_configs",
+    "owner": "task-execution",
+    "sources": ["node_runs"],
+    "definition": "target"
+  },
+  {
+    "table": "node_run_events",
+    "owner": "task-execution",
+    "sources": ["node_run_events"],
+    "definition": "reused"
+  },
+  {
+    "table": "node_run_inputs",
+    "owner": "task-execution",
+    "sources": ["node_runs"],
+    "definition": "target"
+  },
+  {
+    "table": "node_run_outputs",
+    "owner": "task-execution",
+    "sources": ["node_run_outputs"],
+    "definition": "target"
+  },
+  {
+    "table": "node_run_repo_checkpoints",
+    "owner": "task-execution",
+    "sources": ["node_runs"],
+    "definition": "target"
+  },
+  {
+    "table": "node_run_results",
+    "owner": "task-execution",
+    "sources": ["node_runs"],
+    "definition": "target"
+  },
+  {
+    "table": "node_run_runtime_states",
+    "owner": "task-execution",
+    "sources": ["node_runs"],
+    "definition": "target"
+  },
+  {
+    "table": "node_run_selections",
+    "owner": "task-execution",
+    "sources": ["node_runs"],
+    "definition": "target"
+  },
+  {
+    "table": "node_run_seq_allocations",
+    "owner": "task-execution",
+    "sources": ["node_run_seq_allocations", "node_runs"],
+    "definition": "reused"
+  },
+  {
+    "table": "node_runs",
+    "owner": "task-execution",
+    "sources": ["node_runs"],
+    "definition": "target"
+  },
+  {
+    "table": "observation_call_models",
+    "owner": "run-observability",
+    "sources": ["observation_call_models"],
+    "definition": "reused"
+  },
+  {
+    "table": "observation_calls",
+    "owner": "run-observability",
+    "sources": ["observation_calls"],
+    "definition": "reused"
+  },
+  {
+    "table": "observation_prices",
+    "owner": "run-observability",
+    "sources": ["observation_prices"],
+    "definition": "reused"
+  },
+  {
+    "table": "observer_activations",
+    "owner": "event-center",
+    "sources": ["observer_activations"],
+    "definition": "reused"
+  },
+  {
+    "table": "oidc_providers",
+    "owner": "identity-access",
+    "sources": ["oidc_providers"],
+    "definition": "reused"
+  },
+  {
+    "table": "plugin_artifact_generations",
+    "owner": "resource-catalog",
+    "sources": ["plugin_artifact_generations"],
+    "definition": "reused"
+  },
+  {
+    "table": "plugins",
+    "owner": "resource-catalog",
+    "sources": ["plugins"],
+    "definition": "reused"
+  },
+  {
+    "table": "reaction_execution_admissions",
+    "owner": "task-execution",
+    "sources": ["reaction_execution_admissions"],
+    "definition": "reused"
+  },
+  {
+    "table": "recovery_events",
+    "owner": "system-operations",
+    "sources": ["recovery_events"],
+    "definition": "reused"
+  },
+  {
+    "table": "repo_capability_config",
+    "owner": "code-capability",
+    "sources": ["repo_capability_config"],
+    "definition": "reused"
+  },
+  {
+    "table": "repo_group_nodes",
+    "owner": "source-control",
+    "sources": ["repo_group_nodes"],
+    "definition": "target"
+  },
+  {
+    "table": "repo_groups",
+    "owner": "source-control",
+    "sources": ["repo_groups"],
+    "definition": "reused"
+  },
+  {
+    "table": "repository_employee_assignments",
+    "owner": "development-automation",
+    "sources": ["repository_employee_assignments"],
+    "definition": "reused"
+  },
+  {
+    "table": "repository_transport_connections",
+    "owner": "source-control",
+    "sources": ["repository_transport_connections"],
+    "definition": "reused"
+  },
+  {
+    "table": "resource_bundle_applies",
+    "owner": "resource-catalog",
+    "sources": ["resource_bundle_applies"],
+    "definition": "target"
+  },
+  {
+    "table": "resource_grants",
+    "owner": "identity-access",
+    "sources": ["resource_grants"],
+    "definition": "reused"
+  },
+  {
+    "table": "review_comments",
+    "owner": "collaboration",
+    "sources": ["review_comments"],
+    "definition": "target"
+  },
+  {
+    "table": "review_node_reviewers",
+    "owner": "collaboration",
+    "sources": ["review_node_reviewers"],
+    "definition": "reused"
+  },
+  {
+    "table": "runtime_session_leases",
+    "owner": "task-execution",
+    "sources": ["runtime_session_leases"],
+    "definition": "target"
+  },
+  {
+    "table": "runtimes",
+    "owner": "runtime-management",
+    "sources": ["runtimes"],
+    "definition": "reused"
+  },
+  {
+    "table": "sc_preparation_operations",
+    "owner": "source-control",
+    "sources": ["sc_preparation_operations"],
+    "definition": "reused"
+  },
+  {
+    "table": "sc_repository_snapshots",
+    "owner": "source-control",
+    "sources": ["sc_repository_snapshots"],
+    "definition": "reused"
+  },
+  {
+    "table": "sc_repository_sources",
+    "owner": "source-control",
+    "sources": ["sc_repository_sources"],
+    "definition": "reused"
+  },
+  {
+    "table": "scheduled_tasks",
+    "owner": "integration",
+    "sources": ["scheduled_tasks"],
+    "definition": "reused"
+  },
+  {
+    "table": "skill_content_entries",
+    "owner": "resource-catalog",
+    "sources": ["skill_content_entries", "skill_versions", "skills"],
+    "definition": "target"
+  },
+  {
+    "table": "skill_operation_locks",
+    "owner": "resource-catalog",
+    "sources": ["skill_operation_locks"],
+    "definition": "reused"
+  },
+  {
+    "table": "skill_operations",
+    "owner": "resource-catalog",
+    "sources": ["skill_operations"],
+    "definition": "reused"
+  },
+  {
+    "table": "skill_versions",
+    "owner": "resource-catalog",
+    "sources": ["skill_versions", "skills"],
+    "definition": "target"
+  },
+  {
+    "table": "skills",
+    "owner": "resource-catalog",
+    "sources": ["skills"],
+    "definition": "target"
+  },
+  {
+    "table": "task_archive_audit",
+    "owner": "task-execution",
+    "sources": ["task_archive_audit"],
+    "definition": "reused"
+  },
+  {
+    "table": "task_collaborators",
+    "owner": "collaboration",
+    "sources": ["task_collaborators"],
+    "definition": "target"
+  },
+  {
+    "table": "task_definitions",
+    "owner": "task-execution",
+    "sources": ["tasks"],
+    "definition": "target"
+  },
+  {
+    "table": "task_execution_effect_attempts",
+    "owner": "task-execution",
+    "sources": ["task_execution_effect_attempts"],
+    "definition": "reused"
+  },
+  {
+    "table": "task_execution_effect_fences",
+    "owner": "task-execution",
+    "sources": ["task_execution_effect_fences"],
+    "definition": "reused"
+  },
+  {
+    "table": "task_execution_effects",
+    "owner": "task-execution",
+    "sources": ["task_execution_effects"],
+    "definition": "reused"
+  },
+  {
+    "table": "task_execution_generations",
+    "owner": "task-execution",
+    "sources": ["node_runs", "tasks"],
+    "definition": "target",
+    "notes": "Task creation and V2 create generation 0 before minting any run (M4)."
+  },
+  {
+    "table": "task_execution_intents",
+    "owner": "task-execution",
+    "sources": ["task_execution_intents"],
+    "definition": "reused"
+  },
+  {
+    "table": "task_execution_lineage_operation_records",
+    "owner": "task-execution",
+    "sources": ["task_execution_lineage_operation_records"],
+    "definition": "reused"
+  },
+  {
+    "table": "task_execution_maintenance_claims",
+    "owner": "task-execution",
+    "sources": ["task_execution_maintenance_claims"],
+    "definition": "reused"
+  },
+  {
+    "table": "task_execution_maintenance_members",
+    "owner": "task-execution",
+    "sources": ["task_execution_maintenance_members"],
+    "definition": "reused"
+  },
+  {
+    "table": "task_execution_owners",
+    "owner": "task-execution",
+    "sources": ["task_execution_owners"],
+    "definition": "reused"
+  },
+  {
+    "table": "task_feedback",
+    "owner": "collaboration",
+    "sources": ["task_feedback"],
+    "definition": "reused"
+  },
+  {
+    "table": "task_launch_contexts",
+    "owner": "task-execution",
+    "sources": ["tasks"],
+    "definition": "target"
+  },
+  {
+    "table": "task_node_clarify_directives",
+    "owner": "task-execution",
+    "sources": ["task_node_clarify_directives"],
+    "definition": "reused"
+  },
+  {
+    "table": "task_questions",
+    "owner": "collaboration",
+    "sources": ["task_questions"],
+    "definition": "reused"
+  },
+  {
+    "table": "task_repository_mounts",
+    "owner": "task-execution",
+    "sources": ["tasks", "task_repos"],
+    "definition": "target"
+  },
+  {
+    "table": "task_space_nodes",
+    "owner": "task-execution",
+    "sources": ["task_space_nodes", "tasks", "task_repos"],
+    "definition": "reused"
+  },
+  {
+    "table": "task_workspace_preparations",
+    "owner": "task-execution",
+    "sources": ["task_workspace_preparations"],
+    "definition": "reused"
+  },
+  {
+    "table": "task_workspaces",
+    "owner": "task-execution",
+    "sources": ["tasks"],
+    "definition": "target"
+  },
+  {
+    "table": "tasks",
+    "owner": "task-execution",
+    "sources": ["tasks"],
+    "definition": "target",
+    "notes": "Task-list facet index successors are owned by package T with its rewritten queries (M9)."
+  },
+  {
+    "table": "token_audit",
+    "owner": "identity-access",
+    "sources": ["token_audit"],
+    "definition": "reused"
+  },
+  {
+    "table": "token_delete_snapshot",
+    "owner": "identity-access",
+    "sources": ["token_delete_snapshot"],
+    "definition": "reused"
+  },
+  {
+    "table": "user_access_audit",
+    "owner": "identity-access",
+    "sources": ["user_access_audit"],
+    "definition": "target"
+  },
+  {
+    "table": "user_identities",
+    "owner": "identity-access",
+    "sources": ["user_identities"],
+    "definition": "reused"
+  },
+  {
+    "table": "user_pats",
+    "owner": "identity-access",
+    "sources": ["user_pats"],
+    "definition": "reused"
+  },
+  {
+    "table": "user_permission_grants",
+    "owner": "identity-access",
+    "sources": ["user_permission_grants"],
+    "definition": "reused"
+  },
+  {
+    "table": "user_repository_transport_credentials",
+    "owner": "identity-access",
+    "sources": ["user_repository_transport_credentials"],
+    "definition": "reused"
+  },
+  {
+    "table": "user_sessions",
+    "owner": "identity-access",
+    "sources": ["user_sessions"],
+    "definition": "reused"
+  },
+  {
+    "table": "users",
+    "owner": "identity-access",
+    "sources": ["users"],
+    "definition": "target"
+  },
+  {
+    "table": "verification_profile_revisions",
+    "owner": "development-automation",
+    "sources": ["verification_profile_revisions"],
+    "definition": "reused"
+  },
+  {
+    "table": "verification_profiles",
+    "owner": "development-automation",
+    "sources": ["verification_profiles"],
+    "definition": "reused"
+  },
+  {
+    "table": "webhook_deliveries",
+    "owner": "integration",
+    "sources": ["webhook_deliveries"],
+    "definition": "reused"
+  },
+  {
+    "table": "webhook_endpoints",
+    "owner": "integration",
+    "sources": ["webhook_endpoints"],
+    "definition": "reused"
+  },
+  {
+    "table": "webhook_mr_control_effects",
+    "owner": "integration",
+    "sources": ["webhook_mr_control_effects"],
+    "definition": "reused"
+  },
+  {
+    "table": "webhook_mr_control_targets",
+    "owner": "integration",
+    "sources": ["webhook_mr_control_targets"],
+    "definition": "reused"
+  },
+  {
+    "table": "webhook_mr_launch_guards",
+    "owner": "integration",
+    "sources": ["webhook_mr_launch_guards"],
+    "definition": "reused"
+  },
+  {
+    "table": "webhook_mr_stream_states",
+    "owner": "integration",
+    "sources": ["webhook_mr_stream_states"],
+    "definition": "reused"
+  },
+  {
+    "table": "webhook_trigger_fires",
+    "owner": "integration",
+    "sources": ["webhook_trigger_fires"],
+    "definition": "reused"
+  },
+  {
+    "table": "webhook_trigger_streams",
+    "owner": "integration",
+    "sources": ["webhook_trigger_streams"],
+    "definition": "reused"
+  },
+  {
+    "table": "webhook_triggers",
+    "owner": "integration",
+    "sources": ["webhook_triggers"],
+    "definition": "reused"
+  },
+  {
+    "table": "workflow_dependency_index",
+    "owner": "resource-catalog",
+    "sources": ["workflows"],
+    "definition": "target"
+  },
+  {
+    "table": "workflows",
+    "owner": "resource-catalog",
+    "sources": ["workflows"],
+    "definition": "target"
+  },
+  {
+    "table": "workgroup_assignments",
+    "owner": "task-execution",
+    "sources": ["workgroup_assignments"],
+    "definition": "reused"
+  },
+  {
+    "table": "workgroup_member_cursors",
+    "owner": "task-execution",
+    "sources": ["workgroup_member_cursors"],
+    "definition": "reused"
+  },
+  {
+    "table": "workgroup_members",
+    "owner": "resource-catalog",
+    "sources": ["workgroup_members"],
+    "definition": "reused"
+  },
+  {
+    "table": "workgroup_messages",
+    "owner": "task-execution",
+    "sources": ["workgroup_messages"],
+    "definition": "reused"
+  },
+  {
+    "table": "workgroup_task_state",
+    "owner": "task-execution",
+    "sources": ["workgroup_task_state", "tasks"],
+    "definition": "target"
+  },
+  {
+    "table": "workgroups",
+    "owner": "resource-catalog",
+    "sources": ["workgroups"],
+    "definition": "reused"
+  }
+]

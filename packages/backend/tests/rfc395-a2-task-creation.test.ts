@@ -36,7 +36,12 @@ function command(id: string, subject: TaskSubject): TaskCreationInput {
       catalogVisibility: 'public',
       branchStartedAt: 10,
     },
-    definition: { workflowSnapshot: '{"nodes":[],"edges":[]}', workflowVersion: 3, inputs: '{}' },
+    definition: {
+      definitionOrigin: 'authored',
+      workflowSnapshot: '{"nodes":[],"edges":[]}',
+      workflowVersion: 3,
+      inputs: '{}',
+    },
     launch: { kind: 'root', launchOrigin: 'event' },
     launchContext: {},
     workspace: {
@@ -87,16 +92,21 @@ describeEachProvider('RFC-395 II-a A2 task creation and checkpoints', (harness) 
     )
     expect(insert).toBeDefined()
     expect(insert!.values).toContain(id)
-    expect(insert!.values).toContain(row.lineageSlotPathJson)
-    expect(insert!.values).toContain('event')
+    const launchInsert = recording.statements.find((entry) =>
+      /insert into .*"task_launch_contexts"/i.test(entry.sql),
+    )
+    expect(launchInsert).toBeDefined()
+    expect(launchInsert!.values).toContain(id)
+    expect(launchInsert!.values).toContain(row.lineageSlotPathJson)
+    expect(launchInsert!.values).toContain('event')
     const { taskSpaceNodes } = tablesOf(harness.db)
-    // RFC-395 II-a 集中验证：与 HEAD 相同，接纳时只写调用方解析出的 nodePaths（此处为空），不推导根目录。
+    // Target directory closure always records the root, including an unbound workspace.
     expect(
       await harness.db
         .select({ nodePath: taskSpaceNodes.nodePath })
         .from(taskSpaceNodes)
         .where(eq(taskSpaceNodes.taskId, id)),
-    ).toEqual([])
+    ).toEqual([{ nodePath: '' }])
   })
 
   test('child participant inherits origin and prefers the calling run lineage; preparation extends its root', async () => {
@@ -168,8 +178,14 @@ describeEachProvider('RFC-395 II-a A2 task creation and checkpoints', (harness) 
       .select({ path: taskSpaceNodes.nodePath })
       .from(taskSpaceNodes)
       .where(eq(taskSpaceNodes.taskId, childId))
-    // 与 HEAD 相同：只写调用方给出的 nodePaths，不推导根与祖先，挂载路径归 task_repos。
-    expect(nodes.map((node) => node.path).sort()).toEqual(['empty/leaf'])
+    // T-F6: persisted directories contain the root, mount ancestors and explicit leaf paths.
+    expect(nodes.map((node) => node.path).sort()).toEqual([
+      '',
+      'empty',
+      'empty/leaf',
+      'nested',
+      'nested/svc',
+    ])
   })
 
   test('all four platform subjects create without a catalog host row', async () => {
@@ -291,6 +307,12 @@ describeEachProvider('RFC-395 II-a A2 task creation and checkpoints', (harness) 
           })),
           run.checkpoints,
         ),
-      ).toEqual([{ mountPath, worktreePath: `/root/${mountPath}`, snapshot: 'sha' }])
+      ).toEqual([
+        {
+          mountPath,
+          worktreePath: mountPath === '' ? '/root' : `/root/${mountPath}`,
+          snapshot: 'sha',
+        },
+      ])
     })
 })

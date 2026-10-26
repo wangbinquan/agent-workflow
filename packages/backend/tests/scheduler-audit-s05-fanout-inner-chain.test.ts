@@ -1,3 +1,7 @@
+import { initializeTaskWorkspace } from './helpers/taskWorkspaceFixture'
+import { nodeRunFixtureColumns } from './helpers/model/nodeRun'
+import { taskReadColumns } from '@/modules/task-execution/infrastructure/taskRepositorySql'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 // design/scheduler-audit-2026-06-10.md S-5 — 分层状态（RFC-094 / WP-6a 已部分修复）：
 //
 // 【层 2 = 已修复（RFC-094），断言锁定正确语义】
@@ -29,11 +33,11 @@ import {
   workflowFixture,
   readNodeRunFixtures,
 } from './helpers/model'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+
 import type { Agent, WorkflowDefinition, WorkflowEdge } from '@agent-workflow/shared'
 import { afterAll, afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
-import { mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { monotonicFactory } from 'ulid'
@@ -338,7 +342,7 @@ interface Harness {
 function buildHarness(provider: ProviderHarness): Harness {
   const appHome = mkdtempSync(join(tmpdir(), 'aw-s05-'))
   const worktreePath = join(appHome, 'wt')
-  mkdirSync(worktreePath, { recursive: true })
+  initializeTaskWorkspace(worktreePath)
   const db = provider.db
   return {
     db,
@@ -479,9 +483,16 @@ function registerProviderCases1(provider: ProviderHarness) {
 
     const { tasks, nodeRuns } = tablesOf(h.db)
     // —— 静默成功的全套外观：任务 done、wrapper done、B 的 shard 行 done。
-    const t = await h.db.select().from(tasks).where(eq(tasks.id, taskId)).limit(1)
+    const t = await h.db
+      .select(taskReadColumns(h.db))
+      .from(tasks)
+      .where(eq(tasks.id, taskId))
+      .limit(1)
     expect(t[0]?.status).toBe('done')
-    const wrapperRow = await h.db.select().from(nodeRuns).where(eq(nodeRuns.nodeId, 'fan'))
+    const wrapperRow = await h.db
+      .select(nodeRunFixtureColumns(h.db))
+      .from(nodeRuns)
+      .where(eq(nodeRuns.nodeId, 'fan'))
     expect(wrapperRow[0]?.status).toBe('done')
 
     // audit 的 2 个 shard child 行确实带着真实产出落库了（数据存在）。
@@ -548,7 +559,11 @@ function registerProviderCases1(provider: ProviderHarness) {
         }),
     )
     const { tasks } = tablesOf(h.db)
-    const t = await h.db.select().from(tasks).where(eq(tasks.id, taskId)).limit(1)
+    const t = await h.db
+      .select(taskReadColumns(h.db))
+      .from(tasks)
+      .where(eq(tasks.id, taskId))
+      .limit(1)
     expect(t[0]?.status).toBe('done')
 
     // [FLIP] 修复（拓扑序派发）后：无论 nodeIds 数组序如何，audit 都应先于

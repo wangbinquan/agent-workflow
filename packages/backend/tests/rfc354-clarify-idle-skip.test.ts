@@ -26,8 +26,12 @@
 
 import { agentFixture, readTaskFixtures, taskFixture, workflowFixture } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
-import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
-import { buildWorkflowScopeParentMap } from '@agent-workflow/shared'
+import {
+  type WorkflowDefinition,
+  type WorkflowNode,
+  buildWorkflowScopeParentMap,
+} from '@agent-workflow/shared'
+
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
@@ -35,13 +39,12 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { deriveFrontier } from '../src/modules/task-execution/composition/dagFrontier'
+import { deriveFrontier } from './helpers/frontierSelection'
 import { buildScopeUpstreams } from '../src/modules/task-execution/composition/taskDagGraph'
 import { runGit } from '../src/util/git'
 import { canonicalizeWorkflowAgentIds } from './helpers/canonicalWorkflowFixture'
 import { runTaskWithRealTestTopology as runTask } from './helpers/taskExecutionTestTopology'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
 
 type FrontierRow = Parameters<typeof deriveFrontier>[0][number]
@@ -287,7 +290,7 @@ async function buildHarness(): Promise<Harness> {
     await runGit(dir, ['commit', '-m', 'init'])
   }
   return {
-    db: createInMemoryDb(MIGRATIONS),
+    db: createInMemoryDb(),
     appHome,
     worktreePath,
     repoPath,

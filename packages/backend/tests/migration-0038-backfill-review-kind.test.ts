@@ -2,30 +2,34 @@
 // review-approved file docs that predate kind-persistence. The marker is
 // reliable (not heuristic): doc_versions.source_file_path is non-NULL exactly
 // when the reviewed upstream port was kind markdown_file, so approved_doc holds
-// a worktree-relative path. createInMemoryDb already applied 0038 on empty data,
+// a worktree-relative path. createFrozenEpoch1Db already applied 0038 on empty data,
 // so we re-run the idempotent (kind IS NULL-gated) UPDATE against freshly seeded
 // rows to exercise the backfill logic.
 
+import {
+  frozenTablesOf,
+  createFrozenEpoch1Db,
+  type FrozenDbClient,
+  FROZEN_MIGRATIONS,
+} from './migration-freeze'
 import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
 import { rawExec } from '@/platform/persistence/queryHelpers'
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { eq, sql } from 'drizzle-orm'
 
-import { createInMemoryDb, type DbClient } from '../src/db/client'
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+const MIGRATIONS = resolve(FROZEN_MIGRATIONS)
 const BACKFILL_SQL = readFileSync(
   resolve(MIGRATIONS, '0038_rfc072_backfill_review_output_kind.sql'),
   'utf8',
 )
 
 async function seedReviewApproval(
-  db: DbClient,
+  db: FrozenDbClient,
   opts: { taskId: string; reviewRunId: string; sourceFilePath: string | null; content: string },
 ): Promise<void> {
-  const { nodeRuns, nodeRunOutputs, docVersions } = tablesOf(db)
+  const { nodeRuns, nodeRunOutputs, docVersions } = frozenTablesOf(db)
   await insertOne(db, nodeRuns, {
     id: opts.reviewRunId,
     taskId: opts.taskId,
@@ -59,8 +63,8 @@ async function seedReviewApproval(
 
 describe('RFC-072 — migration 0038 backfills review approved_doc kind', () => {
   test('file-backed approval → markdown_file; inline approval → stays NULL', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
-    const { workflows, tasks, nodeRunOutputs } = tablesOf(db)
+    const db = createFrozenEpoch1Db(MIGRATIONS)
+    const { workflows, tasks, nodeRunOutputs } = frozenTablesOf(db)
     await insertOne(db, workflows, {
       id: 'wf',
       name: 'wf',

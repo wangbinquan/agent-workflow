@@ -1,3 +1,4 @@
+import { tablesOf } from '@/platform/persistence/sessionTables'
 // RFC-359 —— human-gate 的任务生命周期跃迁：一份实现，两个引擎。
 //
 // 蓝本是 `modules/task-execution/infrastructure/taskLifecycle.ts` 的 `transitionHumanGateTaskTx`（生产跑了
@@ -10,7 +11,6 @@
 // 体内传 `tx`。PostgreSQL READ COMMITTED 下 CAS（status + lifecycle_event_revision 双条件 UPDATE）
 // 自身即是并发判据；需要与同任务的其它写手串行时由调用方先 `engineOf(tx).lockAggregateRoot`。
 
-import { tablesOf } from '@/platform/persistence/sessionTables'
 import { first } from '@/platform/persistence/queryHelpers'
 import {
   allowedFromForTaskEvent,
@@ -20,9 +20,9 @@ import {
 } from '@agent-workflow/shared'
 import { and, eq, sql } from 'drizzle-orm'
 
+import { ConcurrentTaskTransition } from '@/modules/task-execution/infrastructure/taskLifecycle'
 import type { CommittedEventRef } from '@/platform/events/committed/types'
 import type { PersistenceTx } from '@/platform/persistence/persistenceDb'
-import { ConcurrentTaskTransition } from '@/modules/task-execution/infrastructure/taskLifecycle'
 import { ConflictError, NotFoundError } from '@/util/errors'
 import type { TaskNodeChangeV1 } from '../domain/taskLifecycleCommittedEvent'
 import {

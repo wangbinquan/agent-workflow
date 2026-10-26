@@ -1,3 +1,4 @@
+import { liveSqlitePath } from './storage'
 // RFC-319 —— 首页总览 + API 文档 + 公开发现文档的用户面 e2e。
 //
 // 覆盖能力账本 CFG-41 / 42 / 20 / 39 / 40 / 43 / 34 七行。它们锁的是**平台的第一
@@ -260,7 +261,7 @@ async function overviewOf(token: string): Promise<OverviewLite> {
 }
 
 function dbPath(): string {
-  return join(daemon.home, 'db.sqlite')
+  return liveSqlitePath(daemon.home)
 }
 
 /** 把 config.json 打一个补丁（PUT /api/config 会顺手让进程内的 config 读缓存失效，
@@ -738,11 +739,13 @@ test('CFG-42 /api/overview 失败：计数降级为占位、脉冲行整行消�
 // ---------------------------------------------------------------------------
 
 const MISSING_RUNTIME = 'rfc319-cfg20-missing'
-const RETIRED_RUNTIME = 'rfc319-cfg20-retired-fork'
+const UNAVAILABLE_RUNTIME = 'rfc319-cfg20-unavailable'
 
 test('CFG-20 首页运行时状态行：三种失败各说各的话，缺失的默认运行时必须是红点 @nightly', async ({
   browser,
 }) => {
+  // Each case creates its own dashboard precondition, including worker restarts.
+  await createAgent(daemon.token, `rfc319-cfg20-${Date.now()}`)
   // 造出三行、且只有三行 —— HomepageGreeting.tsx:86 的 AGGREGATE_THRESHOLD=3，
   // 超过就折叠成一句聚合，逐行的措辞与颜色就再也看不见了。内置的 claude-code
   // 在本 harness 里指向同一个 stub（会是 ready），先停用它腾出位置。
@@ -764,14 +767,20 @@ test('CFG-20 首页运行时状态行：三种失败各说各的话，缺失的�
   })
   expect(created.status, `register ${MISSING_RUNTIME}: ${created.body}`).toBe(201)
 
-  // ② protocol-incompatible：库里留着一行、但这个构建已经不认识它的协议了
-  //    （RFC-282 C2 的现实来源：降级 / 驱动被移除，行还在）。这条分支只能从
-  //    数据侧造 —— HTTP 面的 protocol 是 enum，进不来。
-  runSqlite(
-    dbPath(),
-    `INSERT INTO runtimes (id, name, protocol, binary_path, enabled) VALUES ` +
-      `('01JC319CFG20RETIRED0000000', '${RETIRED_RUNTIME}', 'retired-fork-protocol', NULL, 1);`,
-  )
+  // Epoch 2 enforces the supported protocol enum in storage. Register another
+  // unavailable binary through the public API; an unknown storage protocol is
+  // no longer a valid installed scenario. The next case covers the separate
+  // protocol-incompatible presentation with its explicit response fixture.
+  const unavailable = await rawRequest(daemon.token, '/api/runtimes', {
+    method: 'POST',
+    body: JSON.stringify({
+      name: UNAVAILABLE_RUNTIME,
+      protocol: 'opencode',
+      binaryPath: join(daemon.home, 'unavailable-opencode-binary'),
+      probe: false,
+    }),
+  })
+  expect(unavailable.status, unavailable.body).toBe(201)
 
   try {
     // 服务端事实先对账：三行、三态、默认仍是 opencode。
@@ -789,21 +798,15 @@ test('CFG-20 首页运行时状态行：三种失败各说各的话，缺失的�
       byName.get(MISSING_RUNTIME)?.state,
       '指向不存在的文件却不是 not-found ⇒ 状态行分不清「没装」和别的失败',
     ).toBe('not-found')
-    // 库里那行协议不认识的运行时**必须仍然出现在清单里、并且判成不可用**。
-    // 它今天落在 not-found 而不是 protocol-incompatible，是因为
-    // runtimes.ts:207-211 只在 `ran===true && compatible===false` 时给出后者，
-    // 而两个驱动的 probe 都是 `compatible = ran`
-    // （opencode/util.ts:95、claudeCode/probe.ts:79）——详见本文件末尾对
-    // protocol-incompatible 的说明。这里锁的是 RFC-282 C2 真正保证的那件事：
-    // 一行脏数据只拖垮自己。
+    // Both unavailable registrations remain visible alongside the ready default.
     expect(
-      byName.has(RETIRED_RUNTIME),
-      '协议不认识的那一行整个从清单里消失 ⇒ 管理员在首页看不到它、也就永远不知道' +
-        '库里躺着一个再也起不来的运行时',
+      byName.has(UNAVAILABLE_RUNTIME),
+      '不可用的注册项整个从清单里消失 ⇒ 管理员在首页看不到它、也就永远不知道' +
+        '还有一个起不来的运行时',
     ).toBe(true)
     expect(
-      byName.get(RETIRED_RUNTIME)?.ok,
-      '协议不认识的那一行被判成可用 ⇒ 首页说它没问题，派发过去才发现根本没有驱动',
+      byName.get(UNAVAILABLE_RUNTIME)?.ok,
+      '不可用的注册项被判成可用 ⇒ 首页说它没问题，派发过去才发现找不到二进制',
     ).toBe(false)
     expect(byName.get('opencode')?.isDefault).toBe(true)
 
@@ -831,8 +834,8 @@ test('CFG-20 首页运行时状态行：三种失败各说各的话，缺失的�
       ).toContainText(`${MISSING_RUNTIME} not found`)
       await expect(
         line,
-        '库里那行坏掉的运行时在首页上没有任何痕迹 ⇒ 它会一直躺在注册表里没人处理',
-      ).toContainText(`${RETIRED_RUNTIME} not found`)
+        '不可用的运行时在首页上没有任何痕迹 ⇒ 它会一直躺在注册表里没人处理',
+      ).toContainText(`${UNAVAILABLE_RUNTIME} not found`)
 
       // 颜色就是 dot 的 modifier 类（span 是 aria-hidden 的纯装饰，类名是它
       // 唯一的载体）。默认运行时健在时，两条失败都是「灰」而非「红」——非默认
@@ -870,7 +873,7 @@ test('CFG-20 首页运行时状态行：三种失败各说各的话，缺失的�
     // 复位：后面的用例不该继承一个坏掉的默认运行时。
     await patchConfig({ defaultRuntime: 'opencode' })
     await rawRequest(daemon.token, `/api/runtimes/${MISSING_RUNTIME}`, { method: 'DELETE' })
-    runSqlite(dbPath(), `DELETE FROM runtimes WHERE name = '${RETIRED_RUNTIME}';`)
+    await rawRequest(daemon.token, `/api/runtimes/${UNAVAILABLE_RUNTIME}`, { method: 'DELETE' })
     await rawRequest(daemon.token, '/api/runtimes/claude-code/enabled', {
       method: 'POST',
       body: JSON.stringify({ enabled: true }),
@@ -881,11 +884,11 @@ test('CFG-20 首页运行时状态行：三种失败各说各的话，缺失的�
 test('CFG-20 protocol-incompatible 这一档：与「没装」必须是两句不同的话，当默认时同样是红点 @nightly', async ({
   browser,
 }) => {
+  await createAgent(daemon.token, `rfc319-cfg20-incompatible-${Date.now()}`)
   // 诚实说明：这个状态在**当前构建里服务端产不出来**。routes/runtimes.ts:207-211
   // 只在 `ran===true && compatible===false` 时给出它，而现存两个驱动的 probe 都
   // 写死 `compatible = ran`（opencode/util.ts:95、claudeCode/probe.ts:79），
-  // 于是「二进制跑起来了、但协议对不上」没有产生者；上一条用例里那行协议不认识
-  // 的运行时因此落在 not-found。它仍是 shared 契约的合法取值
+  // 于是「二进制跑起来了、但协议对不上」没有产生者。它仍是 shared 契约的合法取值
   // （packages/shared/src/schemas/runtime.ts:17）并且有专属文案，任何一天某个
   // 驱动开始区分这两件事，用户看到的就是这句话。
   //

@@ -2,12 +2,16 @@
 import type { DbClient } from '@/db/client'
 import type { PostgresqlDatabaseClient } from './postgresqlDatabaseClient'
 import type { DbTxSync } from '@/db/txSync'
-import type { nativeTableSets, persistenceSchema } from '@/db/schema'
-import type { NeutralTableSet } from './schema/neutral'
+import {
+  persistenceSchemaBinding,
+  type NativeTableSets,
+  type PersistenceTables,
+} from './schema/tables'
 import type { EngineCapabilities } from './capabilities'
 
-export type PersistenceTables = NeutralTableSet<typeof persistenceSchema.tables>
+export type { PersistenceTables } from './schema/tables'
 interface DatabaseHandleContext {
+  readonly identity: object
   readonly tables: PersistenceTables
   readonly engine: EngineCapabilities
 }
@@ -20,18 +24,29 @@ export function bindDatabaseHandle<T extends object>(
   tables: PersistenceTables,
   engine: EngineCapabilities,
 ): T {
-  const context = Object.freeze({ tables, engine })
+  const context = Object.freeze({ identity: handle, tables, engine })
   contexts.set(handle, context)
-  Object.defineProperty(handle, contextKey, { value: context, configurable: true })
+  if (Object.isExtensible(handle))
+    Object.defineProperty(handle, contextKey, { value: context, configurable: true })
+  // Native Drizzle transactions create a new session around the same provider client.
+  const client = (handle as { session?: { client?: object } }).session?.client
+  if (client) {
+    contexts.set(client, context)
+    if (Object.isExtensible(client))
+      Object.defineProperty(client, contextKey, { value: context, configurable: true })
+  }
   return handle
 }
 
 /** The full schema is available for now; module-scoped subsets belong to RFC-395 T11. */
-export function tablesOf(handle: DbClient | DbTxSync): typeof nativeTableSets.sqlite
-export function tablesOf(handle: PostgresqlDatabaseClient): typeof nativeTableSets.postgresql
+export function tablesOf(handle: DbClient | DbTxSync): NativeTableSets['sqlite']
+export function tablesOf(handle: PostgresqlDatabaseClient): NativeTableSets['postgresql']
 export function tablesOf(handle: object): PersistenceTables
 export function tablesOf(handle: object): PersistenceTables {
-  return databaseHandleContext(handle).tables
+  const context = databaseHandleContext(handle)
+  if (context.tables !== persistenceSchemaBinding().nativeTables[context.engine.provider])
+    throw new Error('Native persistence handle has no epoch-2 table set')
+  return context.tables
 }
 export function engineForHandle(handle: object): EngineCapabilities {
   return databaseHandleContext(handle).engine
@@ -43,7 +58,8 @@ export function boundEngineOf(handle: object): EngineCapabilities | undefined {
 export function inheritDatabaseHandle<T extends object>(handle: T, parent: object): T {
   const context = databaseHandleContext(parent)
   contexts.set(handle, context)
-  Object.defineProperty(handle, contextKey, { value: context, configurable: true })
+  if (Object.isExtensible(handle))
+    Object.defineProperty(handle, contextKey, { value: context, configurable: true })
   return handle
 }
 function boundContext(handle: object): DatabaseHandleContext | undefined {
@@ -51,9 +67,14 @@ function boundContext(handle: object): DatabaseHandleContext | undefined {
     [contextKey]?: DatabaseHandleContext
     session?: { client?: { [contextKey]?: DatabaseHandleContext } }
   }
-  return contexts.get(handle) ?? native[contextKey] ?? native.session?.client?.[contextKey]
+  const client = native.session?.client
+  return (
+    contexts.get(handle) ??
+    native[contextKey] ??
+    (client && (contexts.get(client) ?? client[contextKey]))
+  )
 }
-function databaseHandleContext(handle: object): DatabaseHandleContext {
+export function databaseHandleContext(handle: object): DatabaseHandleContext {
   const context = boundContext(handle)
   if (!context) throw new Error('Native persistence handle has no session table set')
   return context

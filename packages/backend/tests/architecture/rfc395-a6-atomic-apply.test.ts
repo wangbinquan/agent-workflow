@@ -89,7 +89,7 @@ describe('RFC-395 II-a A6 one AtomicApply mechanism', () => {
       }),
     ).toEqual(['error-driven codec fallback'])
   })
-  test('one maintenance entry registers both scenes and keeps the skill barrier ahead of convergence', () => {
+  test('one maintenance entry registers both scenes and keeps normal skill-operation recovery ahead of availability and convergence', () => {
     const graph = read('bootstrap/maintenanceWorkerGraph.ts')
     expect(
       calls(graph + '\ncreateAtomicApplyRecovery([])', 'createAtomicApplyRecovery'),
@@ -109,13 +109,16 @@ describe('RFC-395 II-a A6 one AtomicApply mechanism', () => {
     expect(read('modules/intent/public/commands.ts')).not.toContain('activeBundleApplyIds')
     expect(read('platform/background/maintenanceJobRunner.ts')).toContain("case 'intentRecovery'")
     const steps = DAEMON_BOOT_STEPS.map((step) => step.id)
-    expect(steps.filter((id) => id === 'skill-identity-barrier')).toHaveLength(1)
+    expect(steps.filter((id) => id === 'skill-operation-recovery')).toHaveLength(1)
     expect(steps.filter((id) => id === 'maintenance-boot-snapshot')).toHaveLength(1)
-    expect(DAEMON_BOOT_STEPS.find((step) => step.id === 'skill-identity-barrier')).toMatchObject({
+    expect(DAEMON_BOOT_STEPS.find((step) => step.id === 'skill-operation-recovery')).toMatchObject({
       phase: 'prepare',
       failure: 'fail-closed',
     })
-    expect(steps.indexOf('skill-identity-barrier')).toBeLessThan(
+    expect(steps.indexOf('skill-operation-recovery')).toBeLessThan(
+      steps.indexOf('skill-availability-gate'),
+    )
+    expect(steps.indexOf('skill-operation-recovery')).toBeLessThan(
       steps.indexOf('maintenance-boot-snapshot'),
     )
   })

@@ -19,10 +19,11 @@ describe('RFC-200 source wiring locks', () => {
     )
     expect(mint).toContain('return generateNodeRunEnvelopeNonce()')
     expect(mintRecord).toContain("return randomBytes(8).toString('hex')")
-    expect(mintRecord).toContain(
-      'envelopeNonce: overrides.envelopeNonce ?? generateNodeRunEnvelopeNonce()',
-    )
+    expect(mintRecord).toContain('envelopeNonce: input.envelopeNonce')
 
+    expect(mintRecord).toContain(
+      "if (!input.envelopeNonce) throw new Error('node-run-envelope-nonce-required')",
+    )
     const runner = readTaskAgentSources()
     expect(runner).toContain(
       'const envelopeNonce = await opts.persistence.nodeRuns.loadEnvelopeNonce(opts.nodeRunId)',

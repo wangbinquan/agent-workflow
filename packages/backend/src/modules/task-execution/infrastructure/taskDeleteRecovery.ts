@@ -1,3 +1,4 @@
+import { tablesOf } from '@/platform/persistence/sessionTables'
 // RFC-359 W1-T7c —— 任务删除认领的崩溃恢复：**一份**实现，两个引擎共用。
 //
 // 此前 `services/taskDelete.ts` 的 `recoverInterruptedTaskDeletes` 形参是 `LegacySqliteTaskDatabase`，
@@ -7,7 +8,8 @@
 // `TerminalMaintenanceStore` 端口重写一次；级联树用 parent_task_id 的 BFS（与 snapshotTree 同形），
 // 事务开头锁认领行（PG `FOR UPDATE`，SQLite no-op）。清理计划的解析与磁盘清理是纯 I/O，随之搬入。
 
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import { isTerminalTaskStatus, type TaskStatus } from '@agent-workflow/shared'
+import { asc, eq, inArray, sql } from 'drizzle-orm'
 import type {
   TaskDeletionContentEffects,
   TaskDeletionEffects,
@@ -17,19 +19,17 @@ import {
   selectedTaskDeletionEffects,
 } from '../composition/taskDeletionEffects'
 export { selectedTaskDeletionEffects } from '../composition/taskDeletionEffects'
-import { isTerminalTaskStatus, type TaskStatus } from '@agent-workflow/shared'
-import { asc, eq, inArray, sql } from 'drizzle-orm'
 
-import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { databaseSessionFor, engineOf } from '@/platform/persistence/databaseTransaction'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { getTaskWriteSem } from '@/services/taskWriteLocks'
 import { ConflictError } from '@/util/errors'
 import { createLogger } from '@/util/log'
 import { TASKS_LIST_CHANNEL, tasksListBroadcaster } from '@/ws/broadcaster'
 import type { TerminalMaintenanceStore } from '../application/ports/terminalMaintenanceStore'
+import { DrizzleTerminalMaintenancePersistence } from './terminalMaintenancePersistence'
 import type { TerminalMaintenanceClaim } from '../domain/ownership'
 import type { MaintenanceMemberSnapshot } from '../domain/terminalMaintenance'
-import { createTaskExecutionPersistence } from '../composition/taskExecutionPersistence'
 import {
   assertTerminalMaintenanceClaimTx,
   transitionTerminalMaintenanceClaimTx,
@@ -175,7 +175,8 @@ async function finalizeDeleteRowsTx(input: {
   readonly plan: DeleteCleanupPlanV2
 }): Promise<{ claim: TerminalMaintenanceClaim; audiences: readonly DeletedAudience[] }> {
   return await databaseSessionFor(input.db).transaction(async (tx) => {
-    const { taskExecutionMaintenanceClaims, tasks, taskCollaborators, taskFeedback } = tablesOf(tx)
+    const { taskExecutionMaintenanceClaims, taskCollaborators, taskFeedback } = tablesOf(tx)
+    const { tasks } = tablesOf(tx)
     await engineOf(tx).lockAggregateRoot(
       tx,
       taskExecutionMaintenanceClaims,
@@ -284,8 +285,7 @@ async function finalizeDeleteRowsTx(input: {
 /** Resume exact RFC-328 delete claims left by a daemon/process crash. */
 export async function recoverInterruptedTaskDeletes(
   db: PersistenceDb,
-  terminalMaintenance: TerminalMaintenanceStore = createTaskExecutionPersistence(db)
-    .terminalMaintenance,
+  terminalMaintenance: TerminalMaintenanceStore = new DrizzleTerminalMaintenancePersistence(db),
   selected?: TaskDeletionEffects,
 ): Promise<DeleteRecoveryResult> {
   const effects = selectedTaskDeletionEffects(selected)

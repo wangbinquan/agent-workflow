@@ -1,3 +1,5 @@
+import { legacyContentRef } from '@/platform/content/contentRef'
+import { contentRowColumns } from '@/platform/content/infrastructure/contentStore'
 // RFC-359 W4-D23c —— 技能崩溃安全机器的**双引擎**取证。
 //
 // D23c 把 PostgreSQL 的 3342 行原生技能实现退役，两个数据库从此跑同一套崩溃安全机器
@@ -25,7 +27,7 @@ import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterAll, afterEach, expect, test } from 'bun:test'
 import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
@@ -46,7 +48,6 @@ import {
 } from '@/modules/resource-catalog/infrastructure/legacy/skillOperations'
 import { recoverSkillOperations } from '@/modules/resource-catalog/infrastructure/legacy/skillOpRecoveryDriver'
 import { SKILL_OP_RECOVERY_REGISTRY } from '@/modules/resource-catalog/infrastructure/legacy/skillOpRegistry'
-import { assertSkillIdentityPostcondition } from '@/modules/resource-catalog/infrastructure/legacy/skillIdentityMigration'
 import {
   commitSkillVersion,
   listSkillVersions,
@@ -143,7 +144,8 @@ describeEachProvider('RFC-359 W4-D23c —— 技能崩溃安全机器在两个�
       status: 409,
       code: 'skill-name-in-use',
     })
-    const { skills, skillOperationLocks } = tablesOf(harness.db)
+    const { skillOperationLocks } = tablesOf(harness.db),
+      { skills } = tablesOf(harness.db)
     // 失败的那次不留残渣：没有多出来的行、没有挂着的 op 或锁。
     expect(await harness.db.select().from(skills)).toHaveLength(1)
     expect(await listActiveOps(harness.db)).toHaveLength(0)
@@ -164,7 +166,9 @@ describeEachProvider('RFC-359 W4-D23c —— 技能崩溃安全机器在两个�
         id: orphanId,
         name: 'crashed-create',
         description: 'never completed',
-        managedPath: `skills/${orphanId}/files`,
+        ...contentRowColumns(
+          legacyContentRef('skill-path', 'local-file', `skills/${orphanId}/files`),
+        ),
         ownerUserId: OWNER,
         visibility: 'private',
         aclRevision: 0,
@@ -184,7 +188,8 @@ describeEachProvider('RFC-359 W4-D23c —— 技能崩溃安全机器在两个�
     const report = await recoverSkillOperations(harness.db, { appHome }, SKILL_OP_RECOVERY_REGISTRY)
     expect(report).toMatchObject({ total: 1, rolledBack: 1, noHandler: 0, quarantined: 0 })
     expect(await listActiveOps(harness.db)).toHaveLength(0)
-    const { skillOperationLocks, skills } = tablesOf(harness.db)
+    const { skillOperationLocks } = tablesOf(harness.db),
+      { skills } = tablesOf(harness.db)
     expect(
       await harness.db.select().from(skillOperationLocks).where(eq(skillOperationLocks.opId, opId)),
     ).toHaveLength(0)
@@ -195,39 +200,8 @@ describeEachProvider('RFC-359 W4-D23c —— 技能崩溃安全机器在两个�
     expect(revived.id).not.toBe(orphanId)
   })
 
-  test('④ 身份迁移屏障的引用完整性复核在两个引擎上都真的跑了一遍', async () => {
-    const appHome = appHomeDir()
-    await seed(harness.db, appHome, 'identity-postcondition')
-    // 干净状态下屏障放行，且**两个引擎都执行到了**那条复核——D23c 之前 PG 那份原生实现整条略过它。
-    await expect(assertSkillIdentityPostcondition(harness.db, appHome)).resolves.toMatchObject({
-      skills: 1,
-      versions: 1,
-    })
-  })
-
-  // 孤儿版本行在两个引擎上都被外键挡住，制造不出来（`skill_versions.skill_id` 有 FK），
-  // 所以那条复核是**防御外部损坏存量**的一道，无法用普通写路径провок。这里退一步用源码层锁：
-  // 判据必须是两个引擎都能跑的孤儿行查询，而不是 SQLite 独有的 PRAGMA——否则合一等于把
-  // PG 侧那条缺失的屏障固化下来。
-  test('④b 源码锁：引用完整性判据是可移植的孤儿行查询，不是 SQLite 的 PRAGMA', () => {
-    // 注释里会提到 PRAGMA（记录它被换掉的由来），所以先剥掉注释再断言**代码**。
-    const barrier = readFileSync(
-      resolve(
-        import.meta.dir,
-        '..',
-        'src/modules/resource-catalog/infrastructure/legacy/skillIdentityMigration.ts',
-      ),
-      'utf8',
-    )
-      .split('\n')
-      .filter((line) => !line.trimStart().startsWith('//') && !line.trimStart().startsWith('*'))
-      .join('\n')
-    expect(barrier).not.toContain('PRAGMA')
-    expect(barrier).not.toContain('$client')
-    expect(barrier).toContain('.leftJoin(skills, eq(skillVersions.skillId, skills.id))')
-    expect(barrier).toContain('isNull(skills.id)')
-    expect(barrier).toContain("'skill-migration-foreign-key-failed'")
-  })
+  // Canonical identity, orphan reference and filesystem outcomes now enter the
+  // frozen converter in skill-identity-migration.test.ts / rfc395-boot-skill-conversion.test.ts.
 
   test('⑤ 版本提交与回滚在两个引擎上同形：版本行、live 内容、序号都一致', async () => {
     const appHome = appHomeDir()
@@ -319,7 +293,8 @@ describeEachProvider('RFC-359 W4-D23c —— 技能崩溃安全机器在两个�
     await session.transaction(async (tx) => await finishOperation(tx, opId))
 
     expect(await listActiveOps(harness.db)).toHaveLength(0)
-    const { skillOperationLocks, skills } = tablesOf(harness.db)
+    const { skillOperationLocks } = tablesOf(harness.db),
+      { skills } = tablesOf(harness.db)
     expect(
       await harness.db.select().from(skillOperationLocks).where(eq(skillOperationLocks.opId, opId)),
     ).toHaveLength(0)

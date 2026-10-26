@@ -1,3 +1,7 @@
+import { createFrozenEpoch1Db, migrateFrozenSqlite } from './migration-freeze'
+import { nodeRunFixtureColumns } from './helpers/model/nodeRun'
+import { frozenTablesOf } from './migration-freeze'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 // RFC-189 — 轮序数 vs 重试数上游拆分：wg_round 列 + retryIndex 回归纯 attempt。
 //
 // 锁四件事：
@@ -16,7 +20,7 @@
 // → 换回完整目录再 migrate（drizzle 按 journal 差量补跑 0095）。
 
 import { nodeRunFixture, patchNodeRunFixture, taskFixture, workflowFixture } from './helpers/model'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+
 import { rawExec } from '@/platform/persistence/queryHelpers'
 import { describe, expect, test } from 'bun:test'
 import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
@@ -25,8 +29,7 @@ import { join, resolve } from 'node:path'
 import { and, asc, eq, sql } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type { WorkgroupRuntimeConfig } from '@agent-workflow/shared'
-import { migrate } from 'drizzle-orm/bun-sqlite/migrator'
-import { createInMemoryDb } from '../src/db/client'
+
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 import { createAgent } from '../src/modules/resource-catalog/infrastructure/legacy/agent'
@@ -109,7 +112,7 @@ function oracleRounds(rows: SynthRow[]): Array<number> {
 describe('RFC-189 迁移 0095 — 回填互 oracle', () => {
   test('lw 混排行回填 = 旧口径；assignment 行取 wa.round；fc/clarify 行 NULL', async () => {
     const partial = partialMigrationsDir()
-    const db = createInMemoryDb(partial)
+    const db = createFrozenEpoch1Db(partial)
 
     const mkTask = async (mode: 'leader_worker' | 'free_collab'): Promise<string> => {
       const wfId = ulid()
@@ -228,27 +231,45 @@ describe('RFC-189 迁移 0095 — 回填互 oracle', () => {
     // 父表重建）按 RFC-115 F1 契约只支持 FK-OFF 重放；本连接是 createInMemoryDb
     // 的 FK-ON 面，继续全链会级联清掉 seeded node_runs。0095 回填 oracle 的
     // 意图不受封顶影响。
-    migrate(db, { migrationsFolder: partialMigrationsThrough0095() })
+    migrateFrozenSqlite(db.$client, { migrationsFolder: partialMigrationsThrough0095() })
 
     const expected = oracleRounds(lwLeaderRows)
-    const { nodeRuns } = tablesOf(db)
+    const { nodeRuns } = frozenTablesOf(db)
     const leaderRows = await db
-      .select()
+      .select({ id: nodeRuns.id, wgRound: nodeRuns.wgRound })
       .from(nodeRuns)
       .where(and(eq(nodeRuns.taskId, lwTask), eq(nodeRuns.nodeId, '__wg_leader__')))
       .orderBy(asc(nodeRuns.id))
     expect(leaderRows.map((r) => r.wgRound)).toEqual(expected)
 
     const memberAssign = (
-      await db.select().from(nodeRuns).where(eq(nodeRuns.id, lwMemberAssignId))
+      await db
+        .select({ id: nodeRuns.id, wgRound: nodeRuns.wgRound })
+        .from(nodeRuns)
+        .where(eq(nodeRuns.id, lwMemberAssignId))
     )[0]
     expect(memberAssign?.wgRound).toBe(3) // wa.round 权威覆盖
-    const memberMsg = (await db.select().from(nodeRuns).where(eq(nodeRuns.id, lwMemberMsgId)))[0]
+    const memberMsg = (
+      await db
+        .select({ id: nodeRuns.id, wgRound: nodeRuns.wgRound })
+        .from(nodeRuns)
+        .where(eq(nodeRuns.id, lwMemberMsgId))
+    )[0]
     // 窗口号：member 分区按 id 序，assignment 行（qualifying）在前 → msg 行 = 2。
     expect(memberMsg?.wgRound).toBe(2)
-    const clarify = (await db.select().from(nodeRuns).where(eq(nodeRuns.id, lwClarifyId)))[0]
+    const clarify = (
+      await db
+        .select({ id: nodeRuns.id, wgRound: nodeRuns.wgRound })
+        .from(nodeRuns)
+        .where(eq(nodeRuns.id, lwClarifyId))
+    )[0]
     expect(clarify?.wgRound).toBeNull()
-    const fcRow = (await db.select().from(nodeRuns).where(eq(nodeRuns.id, fcMemberId)))[0]
+    const fcRow = (
+      await db
+        .select({ id: nodeRuns.id, wgRound: nodeRuns.wgRound })
+        .from(nodeRuns)
+        .where(eq(nodeRuns.id, fcMemberId))
+    )[0]
     expect(fcRow?.wgRound).toBeNull()
     rmSync(partial, { recursive: true, force: true })
   })
@@ -386,7 +407,11 @@ const skipEnvelope = (): WorkgroupHostRunResult => ({
 async function hostRows(db: PersistenceDb, taskId: string) {
   const { nodeRuns } = tablesOf(db)
   return (
-    await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId)).orderBy(asc(nodeRuns.id))
+    await db
+      .select(nodeRunFixtureColumns(db))
+      .from(nodeRuns)
+      .where(eq(nodeRuns.taskId, taskId))
+      .orderBy(asc(nodeRuns.id))
   ).filter((r) => r.nodeId === '__wg_leader__' || r.nodeId === '__wg_member__')
 }
 
@@ -434,7 +459,8 @@ describeEachProvider('RFC-189 workgroup round providers', (harness) => {
       const taskId = await seedEngineTask(db, cfg())
       // 模拟崩溃残留：引擎外 mint 的 pending leader 行（无 wgRound）。
       const orphanId = ulid()
-      const { nodeRuns, workgroupAssignments } = tablesOf(db)
+      const { workgroupAssignments } = tablesOf(db)
+      const { nodeRuns } = tablesOf(db)
       await nodeRunFixture(db, {
         id: orphanId,
         taskId,
@@ -467,7 +493,9 @@ describeEachProvider('RFC-189 workgroup round providers', (harness) => {
       }
       const res = await runWorkgroupEngine({ db, taskId, log, hooks: flipping })
       expect(res.kind).toBe('ok')
-      const adopted = (await db.select().from(nodeRuns).where(eq(nodeRuns.id, orphanId)))[0]
+      const adopted = (
+        await db.select(nodeRunFixtureColumns(db)).from(nodeRuns).where(eq(nodeRuns.id, orphanId))
+      )[0]
       expect(adopted?.wgRound).toBe(1) // NULL-qualifying 尾巴计入后就地 stamp 为当前轮
       const leaders = (await hostRows(db, taskId)).filter((r) => r.nodeId === '__wg_leader__')
       // P2-1：领养轮的协议重试 retryIndex = 存量 4 续排为 5（同轮 wgRound=1），

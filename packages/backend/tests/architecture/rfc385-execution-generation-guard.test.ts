@@ -96,7 +96,7 @@ test('SQLite, child runtime inheritance and CrewStation keep their existing gene
 
 test('database write fencing continues to use the database generation', () => {
   const source = read('platform/persistence/postgresqlDatabaseClient.ts')
-  expect(source.match(/\[runtime\.generationId\]/g)).toHaveLength(2)
+  expect(source.match(/\[runtime\.generationId\]/g)).toHaveLength(3)
   expect(source).toContain('fencedInsert(table, value, runtime.generationId)')
   expect(source).toContain('generation_id = ${generationId}')
   expect(source).toContain('unfenced.execute(query)')

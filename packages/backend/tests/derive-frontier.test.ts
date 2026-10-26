@@ -1,3 +1,4 @@
+import type { projectNodeRunReadFacts } from '@/modules/task-execution/infrastructure/nodeRunSnapshot'
 // RFC-076 PR-B — deriveFrontier orchestrator (the dispatch brain).
 //
 // End-to-end pure-function locks for the frontier derivation that runScope's
@@ -8,12 +9,11 @@
 // evidence + N3 per-invocation dedup (+ RFC-092 pending-anchor row-id release,
 // locked separately in scheduler-audit-s01 / rfc092-answer-race-window).
 
-import { type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { describe, expect, test } from 'bun:test'
 import type { NodeKind, WorkflowDefinition } from '@agent-workflow/shared'
-import { deriveFrontier } from '../src/modules/task-execution/composition/dagFrontier'
+import { deriveFrontier } from './helpers/frontierSelection'
 
-type Row = PersistenceTables['nodeRuns']['$inferSelect']
+type Row = ReturnType<typeof projectNodeRunReadFacts>
 const NONE: ReadonlySet<string> = new Set()
 
 let seq = 0

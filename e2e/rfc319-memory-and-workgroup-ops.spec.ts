@@ -1,3 +1,4 @@
+import { liveSqlitePath } from './storage'
 // RFC-319 —— 记忆（MEM）与工作组（WG）两个域里「东西真的落库 / 真的被读出来」的那几条。
 //
 // 覆盖能力账本行：MEM-X9 / MEM-40 / MEM-X8 / MEM-44 / WG-46 / WG-X4 / WG-39 / WG-40 / WG-X3。
@@ -102,7 +103,12 @@
 //     「徽记数 == 共用 run 的卡数」——它在这套夹具上锁住的是**反方向**（判据写成 `>= 1`
 //     会给每一张卡挂上「同批 ×1」，当场变红，已实测），正向那一半如实登记为未覆盖。
 
-import { patchTaskFixtureSql, readTaskFixturesSql, fixtureSqlParameter } from './fixtures/model'
+import {
+  corruptWorkgroupLaunchFixtureSql,
+  readWorkgroupLaunchFixtureSql,
+  patchWorkgroupPauseReasonFixtureSql,
+  readWorkgroupPauseReasonFixtureSql,
+} from './fixtures/model'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -257,10 +263,6 @@ function makeFixtureRepo(tag: string, scratch: string[]): string {
   writeFileSync(join(dir, 'README.md'), `# rfc319 ${tag} fixture\n`, 'utf-8')
   initGitRepo(dir)
   return dir
-}
-
-function sqlLiteral(value: string): string {
-  return `'${value.replaceAll("'", "''")}'`
 }
 
 // ===========================================================================
@@ -1083,17 +1085,28 @@ test('RFC-319 MEM-X8: 反问答完与评审决定各自排进一条蒸馏任务�
     )
     expect(reviewJob?.status, '蒸馏 worker 已关闭，这条应当停在 pending').toBe('pending')
 
-    // ④ 各类来源各自成行，不会被去重键合并掉。RFC-366 又给同一个任务加了
-    // agent-run（agent node_run 结算）与 task-run（任务达 done/failed）两类执行
-    // 结束来源，所以这里应当是四条、四个 sourceKind——任何两条被并成一条，
-    // 都意味着有一份语料不会被蒸馏。
+    // RFC-366 enqueues per settled agent run. Clarify reruns the designer, so
+    // agent-run cardinality is not the number of source kinds. Lock the gate
+    // sources exactly and check every execution source against its real run.
+    await waitTask(d, taskId, (t) => t.status === 'done', 'review approval did not finish the task')
     const all = (await api<{ items: DistillJobRow[] }>(d, '/api/memory-distill-jobs')).items.filter(
       (j) => j.taskId === taskId,
     )
     expect(
-      all.map((j) => j.sourceKind).sort(),
-      '同一个任务的多类来源被并成了一条 ⇒ 有几份语料只会被蒸馏其中一份',
-    ).toEqual(['agent-run', 'clarify', 'review', 'task-run'])
+      all
+        .filter((j) => j.sourceKind !== 'agent-run')
+        .map((j) => j.sourceKind)
+        .sort(),
+    ).toEqual(['clarify', 'review', 'task-run'])
+    const executions = all.filter((j) => j.sourceKind === 'agent-run')
+    const designerRuns = (await nodeRunsOf(d, taskId)).filter((run) => run.nodeId === 'designer')
+    expect(executions.length).toBeGreaterThan(0)
+    expect(new Set(executions.map((j) => j.sourceEventId)).size).toBe(executions.length)
+    for (const job of executions) {
+      expect(designerRuns.some((run) => run.id === job.sourceEventId)).toBe(true)
+      expect(job.debounceKey).toBe(`${taskId}:agent-run:${agent.id}`)
+      expect(job.status).toBe('pending')
+    }
   } finally {
     await d.stop()
     for (const dir of [stubState, repoDir]) {
@@ -1191,7 +1204,7 @@ async function openRoom(page: Page, taskId: string): Promise<void> {
 }
 
 function wgDbPath(): string {
-  return join(wgDaemon.home, 'db.sqlite')
+  return liveSqlitePath(wgDaemon.home)
 }
 
 test.beforeAll(async () => {
@@ -1437,19 +1450,12 @@ test('RFC-319 WG-X4: 任务显示的组名冻在启动那一刻——事后改�
     (t) => t.status === 'canceled' || t.status === 'failed' || t.status === 'done',
     'WG-X4 的任务没有被取消掉',
   )
-  runSqlite(
-    wgDbPath(),
-    patchTaskFixtureSql({ id: taskId }, { workgroupConfigJson: '{not json at all' }),
-  )
+  runSqlite(wgDbPath(), corruptWorkgroupLaunchFixtureSql(taskId))
   const readback = querySqlite<{ workgroupConfigJson: string | null }>(
     wgDbPath(),
-    readTaskFixturesSql(
-      { id: fixtureSqlParameter },
-      { workgroupConfigJson: 'workgroupConfigJson' },
-    ),
-    [taskId],
+    readWorkgroupLaunchFixtureSql(taskId),
   )
-  // runSqlite 的 exec 对约束错误不抛异常（docs/dev-gotchas.md 有最小复现），种完必须回读自证。
+  // Read back the frozen document so the degradation assertion cannot pass vacuously.
   expect(readback[0]?.workgroupConfigJson, '把冻结配置弄坏这一步根本没落库').toBe(
     '{not json at all',
   )
@@ -1510,16 +1516,10 @@ test('RFC-319 WG-39: awaiting_human 的成因卡把「等回答」和「触顶�
   // 触顶收尾停机走的是同一张卡、不同的文案。真实产生它需要把预算跑干（引擎侧语义已由
   // packages/backend/tests 覆盖），这里只锁**读面**：换一个成因，卡片必须换一套说法。
   const setPause = (reason: string | null): void => {
-    runSqlite(
-      wgDbPath(),
-      reason === null
-        ? `UPDATE workgroup_task_state SET pause_reason = NULL WHERE task_id = ${sqlLiteral(taskId)};`
-        : `UPDATE workgroup_task_state SET pause_reason = ${sqlLiteral(reason)} WHERE task_id = ${sqlLiteral(taskId)};`,
-    )
+    runSqlite(wgDbPath(), patchWorkgroupPauseReasonFixtureSql(taskId, reason))
     const rows = querySqlite<{ pause_reason: string | null }>(
       wgDbPath(),
-      'SELECT pause_reason FROM workgroup_task_state WHERE task_id = ?',
-      [taskId],
+      readWorkgroupPauseReasonFixtureSql(taskId),
     )
     expect(rows[0]?.pause_reason ?? null, `把停机成因改成 ${String(reason)} 这一步没落库`).toBe(
       reason,

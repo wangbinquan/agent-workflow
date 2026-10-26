@@ -6,6 +6,7 @@ import type {
   ProcessEffectProjection,
   ProcessEffectOutcome,
 } from '../../application/ports/processEffectProjection'
+import { lockNodeRunTaskRootInTx, writeNodeRunTablesInTx } from '../nodeRunWriteProtocol'
 import { requestHash } from '../../domain/executionEffect'
 import { sha256Hex } from '../../domain/digest'
 import { assertTaskOwnerTx, withTaskExecutionSerializable } from '../ownedTaskExecution'
@@ -41,7 +42,9 @@ export function createHostedProcessEffectProjection<Outcome extends ProcessEffec
       await withTaskExecutionSerializable(input.db, async (tx) => {
         await input.fence.assertHeld(tx, lease)
         await assertTaskOwnerTx(tx, record.token, record.now)
-        const { taskExecutionEffects, taskExecutionEffectAttempts, nodeRuns } = tablesOf(tx)
+        const taskId = await lockNodeRunTaskRootInTx(tx, record.nodeRunId)
+        if (taskId !== record.token.taskId) throw new Error('hosted-execution-node-receipt-fenced')
+        const { taskExecutionEffects, taskExecutionEffectAttempts } = tablesOf(tx)
         const attempt = (
           await tx
             .select({ taskId: taskExecutionEffects.taskId })
@@ -69,19 +72,13 @@ export function createHostedProcessEffectProjection<Outcome extends ProcessEffec
             updatedAt: record.now,
           })
           .where(eq(taskExecutionEffectAttempts.id, record.attemptId))
-        const rows = await tx
-          .update(nodeRuns)
-          .set({
-            pid: null,
-            spawnBinaryPath: null,
-            spawnLaunchNonce: null,
-            ...(record.runtimeParamsJson === undefined
-              ? {}
-              : { runtimeParamsJson: record.runtimeParamsJson }),
-          })
-          .where(and(eq(nodeRuns.id, record.nodeRunId), eq(nodeRuns.taskId, record.token.taskId)))
-          .returning({ id: nodeRuns.id })
-        if (rows.length !== 1) throw new Error('hosted-execution-node-receipt-fenced')
+        await writeNodeRunTablesInTx(tx, record.nodeRunId, {
+          runtime: { pid: null, spawnBinaryPath: null, spawnLaunchNonce: null },
+          config:
+            record.runtimeParamsJson === undefined
+              ? undefined
+              : { runtimeParamsJson: record.runtimeParamsJson },
+        })
       })
     },
     settlementReceipt: (outcome) =>

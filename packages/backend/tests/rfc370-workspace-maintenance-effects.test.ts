@@ -164,7 +164,15 @@ describeEachProvider('RFC-370 selected async workspace maintenance', (harness) =
         },
         async removeWorkspace(task, repositories) {
           expect(task.id).toBe(taskId)
-          expect(repositories).toEqual([])
+          expect(repositories).toEqual([
+            {
+              mountPath: '',
+              repoPath: workspace,
+              worktreePath: workspace,
+              baseBranch: 'main',
+              branch: `agent-workflow/${taskId}`,
+            },
+          ])
           removes++
           if (removes === 1) throw new Error('remote cleanup unavailable')
           entered.release()

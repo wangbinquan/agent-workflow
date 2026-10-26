@@ -1,5 +1,7 @@
-import { createTaskRepositoryUsageQueries } from '@/modules/task-execution/infrastructure/taskRepositoryUsage'
 import { composeSourceControlTaskPorts } from '@/modules/task-execution/composition'
+import { taskReadColumns } from '@/modules/task-execution/infrastructure/taskRepositorySql'
+import { createTaskRepositoryUsageQueries } from '@/modules/task-execution/infrastructure/taskRepositoryUsage'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 // RFC-359 W8-T26 —— 「聚合 CASE 里的相关子查询」两处改写的**结果等价**锁。
 //
 // # 为什么这条测试存在
@@ -37,17 +39,17 @@ import { composeSourceControlTaskPorts } from '@/modules/task-execution/composit
 // 就写在这个文件里当 oracle——它是被替换掉的那段 SQL 的逐字副本，不是重新推导的等价物。
 // 另外用 JS 侧手算的期望值对一遍账，防的是「两个 SQL 形状一起错」。
 
-import { taskFixture, taskRepoFixture, workflowFixture } from './helpers/model'
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
 import { rawRows } from '@/platform/persistence/queryHelpers'
+
+import { insertOne } from '@/platform/persistence/singleInsert'
 import { expect, test } from 'bun:test'
 import { sql, type SQL } from 'drizzle-orm'
+import { taskFixture, taskRepoFixture, workflowFixture } from './helpers/model'
 
 import { buildActor, type Actor } from '@/auth/actor'
-import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { DrizzleRepositoryWorkspaceStore } from '@/modules/source-control/infrastructure/repositoryWorkspaceStore'
 import { invalidateRepositoryWorkspaceFacetCaches } from '@/modules/source-control/public/operations'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 import { listTaskOperationsPage } from './helpers/taskListPage'
 
@@ -275,7 +277,8 @@ async function seedRepos(db: PersistenceDb): Promise<void> {
 
 /** `taskListPage/query.ts` 的 `facet_values` 改写前：`SUM(CASE … OR EXISTS(…) …)`。 */
 const legacyAttentionFacets = (db: object) => {
-  const { lifecycleAlerts, tasks } = tablesOf(db)
+  const { lifecycleAlerts } = tablesOf(db)
+  const { tasks } = tablesOf(db)
   return sql`
   SELECT
     COUNT(*) AS facet_all,
@@ -292,7 +295,8 @@ const legacyAttentionFacets = (db: object) => {
 
 /** 同一格，改写后的形状：预聚合 + LEFT JOIN。 */
 const reshapedAttentionFacets = (db: object) => {
-  const { tasks, lifecycleAlerts } = tablesOf(db)
+  const { lifecycleAlerts } = tablesOf(db)
+  const { tasks } = tablesOf(db)
   return sql`
   SELECT
     COUNT(*) AS facet_all,
@@ -321,14 +325,15 @@ const ONE_SCHEDULE = (db: object) => {
 
 /** `repositoryWorkspaceSqlStore` 的 facets 改写前：两个相关 EXISTS 打在 CASE 里。 */
 function legacyRepoFacets(db: object, scheduled: SQL): SQL {
-  const { taskRepos, cachedRepos, tasks } = tablesOf(db)
+  const { cachedRepos } = tablesOf(db)
+  const { taskRepositoryMounts: taskRepos, tasks } = tablesOf(db)
   return sql`
     SELECT
       count(*) AS all_count,
       sum(case when (
         exists (select 1 from ${taskRepos} where ${taskRepos.cachedRepoId} = ${cachedRepos.id})
         or exists (
-          select 1 from ${tasks} where ${tasks.cachedRepoId} = ${cachedRepos.id}
+          select 1 from ${tasks} where ${taskReadColumns(db).cachedRepoId} = ${cachedRepos.id}
             and not exists (select 1 from ${taskRepos} where ${taskRepos.taskId} = ${tasks.id})
         )
         or ${scheduled}

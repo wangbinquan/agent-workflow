@@ -7,6 +7,14 @@
 // "RFC-102 overwrite permission" block below locks in the new gate with
 // non-admin owners.
 
+// RFC-019: backend commit logic — decision matrix + per-skill failure
+// isolation + filesystem layout invariants.
+//
+// RFC-102: ZIP overwrite now requires write permission (owner/admin). Every
+// pre-existing call passes an ADMIN actor so the legacy decision-matrix
+// behaviour is unchanged (admin bypasses the permission gate); the dedicated
+// "RFC-102 overwrite permission" block below locks in the new gate with
+// non-admin owners.
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'

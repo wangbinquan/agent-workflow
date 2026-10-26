@@ -1,3 +1,9 @@
+import {
+  type TaskReadRow,
+  taskReadColumns,
+} from '@/modules/task-execution/infrastructure/taskRepositorySql'
+
+import { tablesOf } from '@/platform/persistence/sessionTables'
 // RFC-395 II-pre：改接生产启动 / 读取路径，保留原断言意图。
 // RFC-269 regression — webhook trigger context is execution input.
 //
@@ -7,22 +13,20 @@
 // publication boundary: attribution + context are visible at task commit,
 // before scheduler kickoff; non-webhook NULL stays distinct from webhook `{}`;
 // and serialization failure cannot leave a schedulable task behind.
-import { readTaskFixtures, workflowFixture } from './helpers/model'
-import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { afterEach, describe, expect, test } from 'bun:test'
+import { eq } from 'drizzle-orm'
 import { existsSync, mkdtempSync, readdirSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
-import { eq } from 'drizzle-orm'
+import { join } from 'node:path'
+import { readTaskFixtures, workflowFixture } from './helpers/model'
 
 import type { TriggerContext } from '@agent-workflow/shared'
 import { buildActor, type Actor } from '../src/auth/actor'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { launchTestTask, type TestTaskLaunchOptions } from './helpers/productionTaskLaunch'
 import type { ExecutionInvoker } from '../src/services/execution/types'
+import { launchTestTask, type TestTaskLaunchOptions } from './helpers/productionTaskLaunch'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const ACTOR = buildActor({
   user: {
     id: '__system__',
@@ -65,7 +69,7 @@ function launchOptionsForInvoker(
 }
 
 function buildHarness(): Harness {
-  const db = createInMemoryDb(MIGRATIONS)
+  const db = createInMemoryDb()
   const appHome = mkdtempSync(join(tmpdir(), 'aw-rfc269-trigger-context-'))
   const workflowId = 'wf-rfc269-trigger-context'
   workflowFixture(db, {
@@ -81,8 +85,8 @@ async function launchAndObserveCommit(
   invoker: ExecutionInvoker,
   name: string,
   actor: Actor = ACTOR,
-): Promise<PersistenceTables['tasks']['$inferSelect']> {
-  let committedRow: PersistenceTables['tasks']['$inferSelect'] | undefined
+): Promise<TaskReadRow> {
+  let committedRow: TaskReadRow | undefined
   const task = await launchTestTask(
     { workflowId: h.workflowId, name, inputs: {}, scratch: true },
     {
@@ -96,7 +100,11 @@ async function launchAndObserveCommit(
         async submit(event) {
           const { tasks } = tablesOf(h.db)
           committedRow = (
-            await h.db.select().from(tasks).where(eq(tasks.id, event.taskId)).limit(1)
+            await h.db
+              .select(taskReadColumns(h.db))
+              .from(tasks)
+              .where(eq(tasks.id, event.taskId))
+              .limit(1)
           )[0]
           return { kind: 'accepted', taskId: event.taskId }
         },
@@ -171,7 +179,7 @@ describe('RFC-269 webhook trigger context publication boundary', () => {
       name: string
       actor: Actor
       invoker: ExecutionInvoker
-      expected: PersistenceTables['tasks']['$inferSelect']['launchOrigin']
+      expected: TaskReadRow['launchOrigin']
     }> = [
       {
         name: 'session-json',

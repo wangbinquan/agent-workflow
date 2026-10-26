@@ -1,36 +1,11 @@
 // RFC-395 I-b: native INSERT omission must use database defaults identical to every declared contract column.
 import { agentFixture } from './helpers/model'
 import { expect, test } from 'bun:test'
-import { readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
 import { sql } from 'drizzle-orm'
-import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { rawRows } from '@/platform/persistence/queryHelpers'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 import { normalizeSqlText } from './helpers/schemaReconciliation'
-
-// SQLite migration replay keeps the history drift reviewed in RFC-395 I-a
-// (`rfc395-provider-catalog-equivalence` locks that ledger exactly); a column default recorded
-// there is not a new disagreement. PostgreSQL has no such ledger and stays strict.
-const reviewedSqliteDefaults = new Set(
-  (
-    JSON.parse(
-      readFileSync(resolve(import.meta.dir, 'fixtures/rfc395-sqlite-drift.json'), 'utf8'),
-    ) as {
-      differences: {
-        table: string
-        kind: string
-        replay?: { default?: unknown }
-        declared?: { default?: unknown }
-      }[]
-    }
-  ).differences
-    .filter(
-      (entry) =>
-        entry.kind.startsWith('column:') && entry.replay?.default !== entry.declared?.default,
-    )
-    .map((entry) => `${entry.table}.${entry.kind.slice('column:'.length)}`),
-)
 
 const quote = (name: string) => '"' + name.replaceAll('"', '""') + '"'
 type DefaultRow = { name: string; expression: string | null; identity: string }
@@ -62,7 +37,7 @@ async function defaults(harness: ProviderHarness, table: string): Promise<Defaul
 
 describeEachProvider('RFC-395 I-b database defaults equal contract defaults', (harness) => {
   test('every live column has the same default as a server-canonicalized contract declaration', async () => {
-    const contract = buildLogicalSchemaContract()
+    const contract = logicalSchemaContract
     const tables = contract.tables.filter((table) => table.disposition !== 'ARCHIVE_THEN_OMIT')
     expect(tables.length).toBeGreaterThan(200)
     const provider = harness.capabilities.provider
@@ -106,13 +81,7 @@ describeEachProvider('RFC-395 I-b database defaults equal contract defaults', (h
         await harness.executeFixtureDdl(`DROP TABLE ${target}`)
       }
     }
-    expect(
-      mismatches.filter(
-        (mismatch) =>
-          provider !== 'sqlite' ||
-          !reviewedSqliteDefaults.has(`${mismatch.table}.${mismatch.name}`),
-      ),
-    ).toEqual([])
+    expect(mismatches).toEqual([])
     expect(columnCount).toBe(tables.reduce((count, table) => count + table.columns.length, 0))
   }, 180_000)
 

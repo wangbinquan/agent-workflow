@@ -34,7 +34,6 @@ import type { CommittedEventRef } from '@/platform/events/committed/types'
 import { setTaskStatus } from '@/modules/task-execution/infrastructure/taskLifecycle'
 import { sha256Hex } from '@/util/hash'
 import { describeEachProvider } from './helpers/eachProvider'
-import { MIGRATIONS } from './migration-freeze'
 
 const NOW = 1_700_000_000_250
 const INITIAL: TaskNodeChangeV1 = {
@@ -83,7 +82,7 @@ async function seedTask(
   })
   await db
     .update(committedEventFamilyCutovers)
-    .set({ mode: 'dispatchable', epoch: 7, changedAt: NOW, changeRef: 'lifecycle-sequence-test' })
+    .set({ epoch: 7, changedAt: NOW, changeRef: 'lifecycle-sequence-test' })
     .where(eq(committedEventFamilyCutovers.family, 'task-lifecycle'))
 }
 
@@ -119,7 +118,7 @@ describe('RFC-359 lifecycle native writer contract', () => {
   let db: DbClient
 
   beforeEach(async () => {
-    db = createInMemoryDb(MIGRATIONS)
+    db = createInMemoryDb()
     await seedTask(db, 'native')
   })
 
@@ -480,12 +479,12 @@ describeEachProvider('RFC-359 lifecycle physical write sequence', (harness) => {
     expect(await durableRows(harness.db)).toEqual({ events: [], heads: [], deliveries: [] })
   })
 
-  test('legacy cutover still commits the CAS and companion while returning a null receipt', async () => {
+  test('current routing commits the CAS and companion with a dispatchable receipt', async () => {
     await seedTask(harness.db, 'legacy', { runningSince: null })
     const { committedEventFamilyCutovers } = tablesOf(harness.db)
     await harness.db
       .update(committedEventFamilyCutovers)
-      .set({ mode: 'legacy' })
+      .set({ epoch: 9 })
       .where(eq(committedEventFamilyCutovers.family, 'task-lifecycle'))
     let companions = 0
     const result = await harness.session.transaction((tx) =>
@@ -496,13 +495,16 @@ describeEachProvider('RFC-359 lifecycle physical write sequence', (harness) => {
         },
       }),
     )
-    expect(result).toEqual({ lifecycleEventRevision: 5, eventRef: null })
+    expect(result).toMatchObject({
+      lifecycleEventRevision: 5,
+      eventRef: { deliveryMode: 'dispatchable', producerEpoch: 9 },
+    })
     expect(companions).toBe(1)
     expect(await taskRow(harness.db, 'legacy')).toMatchObject({
       status: 'done',
       runningMs: 50,
       runningSince: null,
     })
-    expect(await durableRows(harness.db)).toEqual({ events: [], heads: [], deliveries: [] })
+    expect((await durableRows(harness.db)).events).toHaveLength(1)
   })
 })

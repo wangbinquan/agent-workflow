@@ -1,3 +1,5 @@
+import '@/bootstrap/persistenceSchema'
+// AF-D21: exercise the live epoch-2 provider-move protocol.
 import { afterEach, describe, expect, test } from 'bun:test'
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -26,6 +28,12 @@ import type {
   SqliteLogicalSource,
   SqliteLogicalSourceSnapshot,
 } from '@/platform/persistence/sqliteLogicalSource'
+import { persistenceHead } from '@/bootstrap/persistenceHead'
+import {
+  writeGenerationPointerV2,
+  readGenerationPointerV2,
+} from '@/platform/persistence/generationPointerV2'
+import type { EpochMetadataSnapshot } from '@/platform/persistence/schema/history/metadataSnapshot'
 
 const roots: string[] = []
 const DIGEST = `sha256:${'a'.repeat(64)}`
@@ -130,6 +138,8 @@ function harness(
     assertUnchanged: async () => undefined,
     readChunk: async (_table, afterKey) => (afterKey === null ? SOURCE_ROWS : []),
     close: async () => undefined,
+    readMetadata: async () =>
+      ({ payload: { version: 1, tables: [] }, digest: DIGEST }) satisfies EpochMetadataSnapshot,
   }
   const calls: string[] = []
   let failFirstChunk = options.failFirstChunk === true
@@ -137,6 +147,9 @@ function harness(
   const target: PostgresqlLogicalTarget = {
     provider: 'postgresql',
     operationId: 'dbm_operation_01',
+    restoreMetadata: async (snapshot) => {
+      expect(snapshot.payload.version).toBe(1)
+    },
     prepare: async () => {
       calls.push('target:prepare')
     },
@@ -157,6 +170,15 @@ function harness(
       calls.push('target:generation-prepared')
     },
     activateGeneration: async () => {
+      // AF-D6: the target commits its active state before the external pointer moves.
+      if (!calls.includes('target:active')) {
+        expect(
+          readGenerationPointerV2(join(root, 'database-generation.json')).payload.provider,
+        ).toBe('sqlite')
+        expect(readFileSync(join(root, '.dbm_operation_01-previous-pointer.json'))).toEqual(
+          readFileSync(join(root, 'database-generation.json')),
+        )
+      }
       calls.push('target:active')
       if (options.failAt === 'target-activation') {
         throw Object.assign(new Error('target activation failed'), {
@@ -258,6 +280,24 @@ function harness(
     now: 1,
   })
   let clock = 10
+  const head = persistenceHead()
+  writeGenerationPointerV2({
+    pointerPath: join(root, 'database-generation.json'),
+    payload: {
+      version: 2,
+      schemaEpoch: 2,
+      generationId: 'dbg_source_0001',
+      provider: 'sqlite',
+      role: 'installed',
+      database: { kind: 'sqlite-file', relativePath: 'databases/dbg_source_0001/db.sqlite' },
+      contractDigest: head.contract.contract.digest,
+      planDigest: head.sqlite.digest,
+      operationId: null,
+      manifestDigest: null,
+      activatedAt: 1,
+      previous: null,
+    },
+  })
   const runner = createDatabaseMigrationRunner({
     controlPlane,
     source,
@@ -486,6 +526,7 @@ describe('RFC-349 database migration runner', () => {
   ] as const) {
     test(`${failAt} failure before a live write atomically restores SQLite`, async () => {
       const fixture = harness({ failAt })
+      const sourcePointer = readFileSync(join(fixture.root, 'database-generation.json'))
       await expect(fixture.runner.run('dbm_operation_01')).rejects.toThrow('failed')
 
       const status = fixture.controlPlane.get('dbm_operation_01')
@@ -498,6 +539,7 @@ describe('RFC-349 database migration runner', () => {
       })
       expect(fixture.calls).toContain('target:retired')
       expect(fixture.calls.at(-1)).toBe('admission:sqlite')
+      expect(readFileSync(join(fixture.root, 'database-generation.json'))).toEqual(sourcePointer)
       expect(
         readDatabaseGeneration({
           pointerPath: join(fixture.root, 'database-generation.json'),

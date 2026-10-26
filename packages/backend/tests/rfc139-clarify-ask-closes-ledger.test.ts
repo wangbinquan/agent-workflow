@@ -1,3 +1,6 @@
+import type { projectNodeRunReadFacts } from '@/modules/task-execution/infrastructure/nodeRunSnapshot'
+// Target fixture mint order; missing seq is covered only by conversion/rejection tests.
+let fixtureRunSequence = 0
 // RFC-139 (design/RFC-139-clarify-ask-closes-ledger) — 反问收场的承接 run 关闭改派台账。
 //
 // Live failure (2026-07-03, task 01KWFZRQFPZFQQEM8JTCHQMGP5 "QMGP5" — the SAME task RFC-133's
@@ -178,7 +181,7 @@ afterAll(() => resetBroadcastersForTests())
 // ① pure oracle matrix — isDispatchedEntryConsumed, bound branch
 // ===========================================================================
 
-type NodeRunRow = PersistenceTables['nodeRuns']['$inferSelect']
+type NodeRunRow = ReturnType<typeof projectNodeRunReadFacts>
 type TaskQuestionRow = PersistenceTables['taskQuestions']['$inferSelect']
 type EntryPick = Pick<
   TaskQuestionRow,
@@ -196,7 +199,7 @@ function mkRun(over: Partial<NodeRunRow>): NodeRunRow {
     wrapperProgressJson: null,
     mergeState: null,
 
-    seq: null,
+    seq: ++fixtureRunSequence,
     id: 'run',
     nodeId: TARGET,
     iteration: 0,
@@ -209,7 +212,7 @@ function mkRun(over: Partial<NodeRunRow>): NodeRunRow {
 
 function mkLineage(over: Partial<RunLineageView>): RunLineageView {
   return {
-    seq: null,
+    seq: ++fixtureRunSequence,
     id: 'h1',
     nodeId: TARGET,
     iteration: 0,

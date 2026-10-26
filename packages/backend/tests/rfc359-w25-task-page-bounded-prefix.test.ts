@@ -1,3 +1,4 @@
+import { TASK_DEFINITION_HOSTS } from '@agent-workflow/shared'
 // RFC-395 II-a rebaseline: HEAD inverse matches the previous pin; only A2 subject/name SQL
 // and A7 catalog-query forwarding changed. Prefix/gate inverses and binding assertions remain exact.
 // RFC359 W25: real original SQL, original bindings, complete rows and snapshot.
@@ -97,6 +98,11 @@ function originalBindings(
   const parsed = parseTaskOperationsQuery(VIEWER, raw, OPTIONS)
   const added = [
     parsed.limit + 1,
+    // The physical-prefix target projection binds the four synthetic definition anchors.
+    TASK_DEFINITION_HOSTS.agent.id,
+    TASK_DEFINITION_HOSTS.workgroup.id,
+    TASK_DEFINITION_HOSTS['digital-employee'].id,
+    TASK_DEFINITION_HOSTS['code-round'].id,
     parsed.limit + 1,
     ...(parsed.cursor ? [parsed.cursor.branchStartedAt, parsed.cursor.taskId] : []),
   ]
@@ -366,12 +372,14 @@ describeEachProvider('RFC359 W25 bounded root prefix', (harness) => {
 
 // RFC-395 I-b rebaseline: the W23 page outside the prefix now renders `instr` through the engine
 // capability and passes the handle to `branchCtes`; the pre-I-b source still restores to bdb4e8fd….
+// T18 P3B: reviewed epoch-2 taskCatalogReadSql/subject_kind delta; inverse, binding and row proofs stay exact.
+// T18 PGX-D: only the page projection split changed; reversing that hunk restores 122eda37….
 test('the inverse retains the exact complete W23 source', () => {
   expect(
     createHash('sha256')
       .update(restoreText(readFileSync(SOURCE_PATH, 'utf8')))
       .digest('hex'),
-  ).toBe('a7ac309b24ca035cdcad79cd1e04d43c352c0c11bb576462f29741eeb122e164')
+  ).toBe('e3db2ed782ba18c1dc0730b906a9a07980b496fb7815cc919936b3e8d9a4bb15')
 })
 test('the real PG compiler retains the original SQL and explains every additional binding', async () => {
   const statements: { sql: string; values: readonly unknown[] }[] = []
@@ -449,7 +457,7 @@ function poisonFullAggregate(query: SQL): SQL {
 }
 
 test('SQLite runtime skips the full aggregate after a certified page and executes it on fallback', async () => {
-  const db = createInMemoryDb(resolve(import.meta.dir, '../db/migrations'))
+  const db = createInMemoryDb()
   const sqlite = db.$client
   try {
     await seed(db, independentRoots())
@@ -479,7 +487,7 @@ test('SQLite runtime skips the full aggregate after a certified page and execute
       const lookup = plan.find((row) => row.detail === 'MATERIALIZE root_prefix_lookup')
       if (!physical || !matching || !lookup) throw new Error('missing bounded prefix plan')
       expect(plan.filter((row) => row.parent === physical.id).map((row) => row.detail)).toContain(
-        'SCAN t USING COVERING INDEX idx_tasks_list_started_id',
+        'SCAN tasks USING COVERING INDEX idx_tasks_list_started_id',
       )
       expect(
         plan
@@ -496,22 +504,23 @@ test('SQLite runtime skips the full aggregate after a certified page and execute
         expect(
           plan
             .filter(
-              (row) => row.parent === probe.id && /^(?:SCAN|SEARCH) t(?: |$)/.test(row.detail),
+              (row) => row.parent === probe.id && /^(?:SCAN|SEARCH) tasks(?: |$)/.test(row.detail),
             )
             .map((row) => row.detail),
-        ).toEqual(['SEARCH t USING INDEX sqlite_autoindex_tasks_1 (id=?)'])
+        ).toEqual(['SEARCH tasks USING INDEX sqlite_autoindex_tasks_1 (id=?)'])
       const lookupDescendants = new Set([lookup.id])
       for (const row of plan) if (lookupDescendants.has(row.parent)) lookupDescendants.add(row.id)
       expect(
         plan
           .filter(
-            (row) => lookupDescendants.has(row.id) && /^(?:SCAN|SEARCH) t(?: |$)/.test(row.detail),
+            (row) =>
+              lookupDescendants.has(row.id) && /^(?:SCAN|SEARCH) tasks(?: |$)/.test(row.detail),
           )
           .map((row) => row.detail),
       ).toEqual([
-        'SCAN t USING COVERING INDEX idx_tasks_list_started_id',
-        'SEARCH t USING INDEX sqlite_autoindex_tasks_1 (id=?)',
-        'SEARCH t USING INDEX sqlite_autoindex_tasks_1 (id=?)',
+        'SCAN tasks USING COVERING INDEX idx_tasks_list_started_id',
+        'SEARCH tasks USING INDEX sqlite_autoindex_tasks_1 (id=?)',
+        'SEARCH tasks USING INDEX sqlite_autoindex_tasks_1 (id=?)',
       ])
       const deep = withCursor(RAW, 890, 'root-11')
       const deepQuery = fastFilteredRootQuery(

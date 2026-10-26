@@ -1,3 +1,5 @@
+import { DrizzleNodeExecutionPersistence } from '@/modules/task-execution/infrastructure/nodeExecutionPersistence'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { o2Ports } from './helpers/o2Closure'
 import {
   nodeRunFixture,
@@ -38,7 +40,7 @@ import { count, eq } from 'drizzle-orm'
 import type { Hono } from 'hono'
 
 import { SYSTEM_USER_ID } from '../src/auth/actor'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+
 import { schemaFixtureDb } from './helpers/schemaFixture'
 import { cascadeClosure, cascadeEdges, closureOverEdges } from './architecture/cascadeClosure'
 // RFC-359 W8-A：归档管线合一后，级联对账的两张清单跟着**活着的那份实现**走
@@ -254,8 +256,18 @@ describeEachProvider('RFC-311 T19 — task archive', (harness) => {
     })
     await addRunWithEvents(db, 'root', 'run-root', 3)
     await addRunWithEvents(db, 'child', 'run-child', 2)
-    const { reviewNodeReviewers, nodeRuns, nodeRunEvents, taskExecutionMaintenanceClaims } =
-      tablesOf(db)
+    const nodes = new DrizzleNodeExecutionPersistence(db)
+    await nodes.patch({
+      nodeRunId: 'run-root',
+      values: { config: { promptText: 'p'.repeat(70_000) } },
+    })
+    await nodes.upsertOutputs({
+      nodeRunId: 'run-child',
+      outputs: [{ portName: 'out', content: 'o'.repeat(70_000) }],
+    })
+
+    const { reviewNodeReviewers, nodeRunEvents, taskExecutionMaintenanceClaims } = tablesOf(db)
+    const { nodeRuns } = tablesOf(db)
     await insertOne(db, reviewNodeReviewers, {
       taskId: 'root',
       reviewNodeId: 'review-node',
@@ -276,6 +288,14 @@ describeEachProvider('RFC-311 T19 — task archive', (harness) => {
       o2Ports(db).collaborationReads.archive,
     ).runSweep({ enabled: true, retentionDays: 90 }, { ...dirs, now: NOW })
     expect(archived.archived).toHaveLength(1)
+    const publications = await db.select().from(tablesOf(db).contentPublications)
+    expect(
+      publications.filter(
+        (row) => row.owner === 'node-run-output' || row.owner === 'node-run-prompt',
+      ),
+    ).toHaveLength(2)
+    expect(publications.every((row) => row.state === 'releasing')).toBe(true)
+
     const result = archived.archived[0]!
 
     // 库里清空。
@@ -297,7 +317,7 @@ describeEachProvider('RFC-311 T19 — task archive', (harness) => {
         members: Array<{ taskId: string }>
       }
     }
-    expect(manifest.schemaVersion).toBe(2)
+    expect(manifest.schemaVersion).toBe(3)
     expect(manifest.taskIds.sort()).toEqual(['child', 'root'])
     expect(manifest.rows.tasks).toBe(2)
     expect(manifest.rows.node_runs).toBe(2)
@@ -305,7 +325,7 @@ describeEachProvider('RFC-311 T19 — task archive', (harness) => {
     // RFC-371 v2: run-observation calls are accounting facts outside the task
     // tree (no FK); archival neither copies nor deletes them.
     expect(manifest.rows.task_execution_observation_sources).toBeUndefined()
-    expect(manifest.rows.task_repos).toBe(2)
+    expect(manifest.rows.task_repository_mounts).toBe(2)
     expect(manifest.rows.review_node_reviewers).toBe(1)
     expect(manifest.rows.task_execution_owners).toBe(0)
     expect(manifest.rows.task_execution_intents).toBe(0)
@@ -333,7 +353,15 @@ describeEachProvider('RFC-311 T19 — task archive', (harness) => {
       .trim()
       .split('\n')
     expect(taskLines).toHaveLength(2)
-    expect(JSON.parse(taskLines[0]!)).toMatchObject({ workflowId: 'wf1' })
+    expect(JSON.parse(taskLines[0]!)).toMatchObject({ rootTaskId: 'root' })
+    const definitions = readFileSync(join(dir, 'db', 'task_definitions.jsonl'), 'utf8')
+      .trim()
+      .split('\n')
+      .map((line) => JSON.parse(line))
+    expect(definitions).toHaveLength(2)
+    expect(
+      definitions.every((row) => row.subjectKind === 'workflow' && row.sourceId === 'wf1'),
+    ).toBe(true)
     const eventLines = readFileSync(join(dir, 'db', 'node_run_events.jsonl'), 'utf-8')
       .trim()
       .split('\n')
@@ -361,7 +389,11 @@ describeEachProvider('RFC-311 T19 — task archive', (harness) => {
     // 残留 tmp ②:对应任务已不在库里(崩在 rename 与删库之间的窗口,行已删)⇒
     // 提升为正式目录,否则数据就真的没了。
     mkdirSync(join(dirs.archiveDir, '.tmp-gone', 'db'), { recursive: true })
-    writeFileSync(join(dirs.archiveDir, '.tmp-gone', 'manifest.json'), '{}', 'utf-8')
+    writeFileSync(
+      join(dirs.archiveDir, '.tmp-gone', 'manifest.json'),
+      '{"schemaVersion":2}',
+      'utf-8',
+    )
 
     // RFC-359 W3-T15-B：`.tmp-*` 收尾在模块的 SQLite 适配器里（与 PostgreSQL 共用一份规则），
     // legacy 的 recoverInterruptedArchives 只续做 RFC-328 认领并交出 claimedRoots。

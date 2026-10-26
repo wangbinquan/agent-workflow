@@ -1,5 +1,11 @@
+import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
+import { nodeRunFixtureColumns } from './helpers/model/nodeRun'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { withO2Closure } from './helpers/o2Closure'
-import { composeHumanGateTaskLockPort } from '@/modules/task-execution/composition'
+import {
+  composeHumanGateTaskLockPort,
+  createTaskExecutionTestModule,
+} from '@/modules/task-execution/composition'
 // RFC-333 T5 — human-gate park/decision participants share one SQLite
 // transaction with domain projections, the canonical lifecycle event, exactly
 // one continuation intent, and the linked pre-drive rollback effect.
@@ -13,7 +19,7 @@ import {
   taskFixture,
   readNodeRunFixtures,
 } from './helpers/model'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+
 import { createTaskRuntimeLifecyclePersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import { DrizzleTaskExecutionIntentPersistence } from '@/modules/task-execution/infrastructure/taskExecutionIntentPersistence'
 import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
@@ -41,7 +47,7 @@ import { resolveTaskDriveConfig } from '@/modules/task-execution/application/dri
 import { DatabaseHumanGateTaskLifecyclePersistence } from '@/modules/task-execution/infrastructure/humanGateTaskLifecyclePersistence'
 import type { GateWorkspaceRollbackExecutor } from '@/modules/task-execution/application/ports/gateWorkspaceRollback'
 import { createTaskExecutionContext } from '@/modules/task-execution/composition/sqliteTaskExecutionContext'
-import { createTaskExecutionTestModule } from '@/modules/task-execution/composition'
+
 import { acceptHumanGateDecisionTx } from '@/modules/task-execution/infrastructure/taskDecisionParticipant'
 import { humanGateNodeProjectionFence } from '@/modules/task-execution/domain/humanGateContinuation'
 import {
@@ -181,6 +187,7 @@ async function prepareOpenOperation(input: { db: PersistenceDb; taskId: string }
     new DatabaseHumanGateOperationPersistence(
       databaseSessionFor(input.db),
       composeHumanGateTaskLockPort,
+      { historyRestrictions: epoch2RuntimeTestPorts(input.db).historyRestrictions },
     ),
     new DatabaseClarifyQuestionSnapshotReader(input.db),
   ).prepare({
@@ -254,6 +261,7 @@ describeEachProvider('RFC-333 T5 TaskParkTx', (harness) => {
     const parked = await new DatabaseHumanGateTaskLifecyclePersistence(
       db,
       createTaskRuntimeLifecyclePersistence(db),
+      { historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions },
     ).parkPrepared({
       prepared,
       token: claimed.token,
@@ -268,8 +276,8 @@ describeEachProvider('RFC-333 T5 TaskParkTx', (harness) => {
     })
     // 停靠一次要发两条已提交事件：任务生命周期一条 + collaboration 开门一条。
     expect(parked.eventRefs).toHaveLength(2)
-    const { collaborationGateOperations, clarifyRounds, taskQuestions, committedEvents } =
-      tablesOf(db)
+    const { collaborationGateOperations, taskQuestions, committedEvents } = tablesOf(db)
+    const { clarifyRounds } = tablesOf(db)
     expect((await readTaskFixtures(db, { id: taskId }))[0]).toMatchObject({
       status: 'awaiting_human',
       lifecycleEventRevision: 2,
@@ -343,6 +351,7 @@ describeEachProvider('RFC-333 T5 TaskParkTx', (harness) => {
         new DatabaseHumanGateTaskLifecyclePersistence(
           db,
           createTaskRuntimeLifecyclePersistence(db),
+          { historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions },
         ).parkPrepared({
           prepared,
           token: claimed.token,
@@ -486,6 +495,7 @@ describeEachProvider('RFC-333 T7 manual-question durable park obligation', (harn
     const settled = await new DatabaseHumanGateTaskLifecyclePersistence(
       db,
       createTaskRuntimeLifecyclePersistence(db),
+      { historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions },
     )
       .settleManualQuestionParks({ taskId, token: claimed.token, now: NOW + 20 })
       .then(settleShape)
@@ -518,6 +528,7 @@ describeEachProvider('RFC-333 T7 manual-question durable park obligation', (harn
     const settled = await new DatabaseHumanGateTaskLifecyclePersistence(
       db,
       createTaskRuntimeLifecyclePersistence(db),
+      { historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions },
     )
       .settleManualQuestionParks({ taskId, now: NOW + 20 })
       .then(settleShape)
@@ -551,6 +562,7 @@ describeEachProvider('RFC-333 T7 manual-question durable park obligation', (harn
     const settled = await new DatabaseHumanGateTaskLifecyclePersistence(
       db,
       createTaskRuntimeLifecyclePersistence(db),
+      { historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions },
     )
       .settleManualQuestionParks({ taskId, now: NOW + 20 })
       .then(settleShape)
@@ -572,7 +584,8 @@ describeEachProvider('RFC-333 T7 manual-question durable park obligation', (harn
     const taskId = 'task-333-manual-revision-rebase'
     await seedTask(db, taskId, 'awaiting_human')
     const created = await createManual(db, taskId)
-    const { tasks, collaborationGateOperations } = tablesOf(db)
+    const { collaborationGateOperations } = tablesOf(db)
+    const { tasks } = tablesOf(db)
     await patchTaskFixture(
       db,
       { id: taskId },
@@ -582,6 +595,7 @@ describeEachProvider('RFC-333 T7 manual-question durable park obligation', (harn
     const settled = await new DatabaseHumanGateTaskLifecyclePersistence(
       db,
       createTaskRuntimeLifecyclePersistence(db),
+      { historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions },
     )
       .settleManualQuestionParks({ taskId, now: NOW + 30 })
       .then(settleShape)
@@ -608,6 +622,7 @@ describeEachProvider('RFC-333 T7 manual-question durable park obligation', (harn
     const outcome = await new DatabaseHumanGateTaskLifecyclePersistence(
       db,
       createTaskRuntimeLifecyclePersistence(db),
+      { historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions },
     ).trySetWhenNoManualQuestionParks({
       taskId,
       to: 'done',
@@ -816,10 +831,15 @@ describeEachProvider('RFC-333 T5 TaskDecisionParticipantInTx', (harness) => {
           }),
         ).rejects.toThrow()
 
-        const { nodeRuns, taskExecutionIntents, committedEvents } = tablesOf(db)
+        const { taskExecutionIntents, committedEvents } = tablesOf(db)
+        const { nodeRuns } = tablesOf(db)
         expect(
-          (await db.select().from(nodeRuns).where(eq(nodeRuns.id, ids.sourceNodeRunId)))[0]
-            ?.reviewIteration,
+          (
+            await db
+              .select(nodeRunFixtureColumns(db))
+              .from(nodeRuns)
+              .where(eq(nodeRuns.id, ids.sourceNodeRunId))
+          )[0]?.reviewIteration,
         ).toBe(0)
         expect((await readTaskFixtures(db, { id: taskId }))[0]).toMatchObject({
           status: 'awaiting_review',
@@ -879,6 +899,7 @@ describeEachProvider('RFC-333 T5 TaskDecisionParticipantInTx', (harness) => {
       executor,
     )
     const execution = createTaskExecutionContext({
+      historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
       intentId: decision.continuationRef,
       token: claimed.token,
       db,
@@ -950,6 +971,7 @@ describeEachProvider('RFC-333 T5 TaskDecisionParticipantInTx', (harness) => {
       taskId,
       intentKind: claimed.intentKind,
       execution: createTaskExecutionContext({
+        historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
         intentId: submitted.intentId,
         token: claimed.token,
         db,

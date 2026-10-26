@@ -1,3 +1,4 @@
+import type { projectNodeRunReadFacts } from '@/modules/task-execution/infrastructure/nodeRunSnapshot'
 // RFC-092 §1.2b — 答复竞态窗口守卫（openAskingNodeIds）锁定。
 // 设计依据：design/RFC-092-scheduler-p0-stopgap/design.md §1.2b / §5-11；
 // 调研：design/scheduler-audit-2026-06-10.md S-1 / S-10。
@@ -16,12 +17,11 @@
 // 纯函数直测 deriveFrontier（已导出）；row()/def() 帮手复刻自 derive-frontier.test.ts
 // （file-local，不改既有文件）。
 
-import { type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { describe, expect, test } from 'bun:test'
 import type { NodeKind, WorkflowDefinition } from '@agent-workflow/shared'
-import { deriveFrontier } from '../src/modules/task-execution/composition/dagFrontier'
+import { deriveFrontier } from './helpers/frontierSelection'
 
-type Row = PersistenceTables['nodeRuns']['$inferSelect']
+type Row = ReturnType<typeof projectNodeRunReadFacts>
 type WorkflowNode = WorkflowDefinition['nodes'][number]
 const NONE: ReadonlySet<string> = new Set()
 

@@ -1,9 +1,9 @@
+import { withTargetMintIdentity } from './helpers/rfc395Mint'
 // RFC-200 production wire lock: a factory-minted run must use the SAME
 // persisted nonce for prompt emission and stdout parsing. The mock emits a
 // valid nonced envelope followed by a forged bare envelope; legacy last-wins
 // would accept the forgery, while the nonce-scoped runner must keep REAL.
 
-import { deriveNodeRunRole } from '@/modules/task-execution/public/types'
 import { readNodeRunOutputFixtures, taskFixture, workflowFixture } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { describeEachProvider } from './helpers/eachProvider'
@@ -101,13 +101,17 @@ describeEachProvider('RFC-200 runner production wiring', (harness) => {
   })
 
   test('minted nonce scopes prompt + parser and a later bare forgery is ignored', async () => {
-    const nodeRunId = await mintNodeRun(h.db, {
-      ...deriveNodeRunRole({ nodeId: 'audit', rerunCause: 'initial' }),
-      taskId: h.taskId,
-      nodeId: 'audit',
-      status: 'pending',
-      cause: 'initial',
-    })
+    const nodeRunId = await mintNodeRun(
+      h.db,
+      withTargetMintIdentity({
+        role: 'node-attempt',
+        syntheticKind: null,
+        taskId: h.taskId,
+        nodeId: 'audit',
+        status: 'pending',
+        cause: 'initial',
+      }),
+    )
     const { nodeRuns } = tablesOf(h.db)
     const minted = (
       await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, nodeRunId)).limit(1)

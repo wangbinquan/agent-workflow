@@ -1,7 +1,12 @@
-// RFC-395 II-a A1: lock target fixture inputs and today's provider behavior before II-b replaces storage.
-import { persistenceSchema } from '@/bootstrap/persistenceSchema'
-import { first } from '@/platform/persistence/queryHelpers'
+import { readStoredCheckpointFixture } from './helpers/model/checkpoint'
+import { taskFixtureSql, taskRepoFixtureSql, nodeRunFixtureSql } from '../../../e2e/fixtures/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
+// RFC-395 II-a A1: lock target fixture inputs and today's provider behavior before II-b replaces storage.
+import { frozenEpoch1Registry } from '@/platform/persistence/migration/epoch1/definitions'
+import { persistenceSchema } from '@/bootstrap/persistenceSchema'
+import { contentRefColumns } from '@/platform/content/contentStore'
+import { first } from '@/platform/persistence/queryHelpers'
+
 import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { readFileSync } from 'node:fs'
@@ -15,6 +20,7 @@ import {
   nodeRunFixture,
   nodeRunOutputFixture,
   patchNodeRunFixture,
+  patchTaskFixture,
   readNodeRunFixtures,
   readTaskFixtures,
   taskFixture,
@@ -35,7 +41,7 @@ const specs = {
   clarify_rounds: 'clarifyRound',
 }
 test('inventory covers every bootstrap contract column once and each settable destination has a public spec field', () => {
-  const columns = persistenceSchema.tables
+  const columns = frozenEpoch1Registry.tables
     .filter((t) => t.id in specs)
     .flatMap((table) =>
       Object.entries(table.columns).map(([property, column]) => ({
@@ -54,6 +60,15 @@ test('inventory covers every bootstrap contract column once and each settable de
     columns.sort((a, b) => key(a).localeCompare(key(b))),
   )
   expect(new Set(actual.map(key)).size).toBe(actual.length)
+  for (const [name, expected] of Object.entries(inventory.targetColumns)) {
+    const table = persistenceSchema.tables.find((table) => table.id === name)!
+    expect(table, name).toBeDefined()
+    expect(
+      Object.fromEntries(
+        Object.entries(table.columns).map(([property, column]) => [property, column.name]),
+      ),
+    ).toEqual(expected)
+  }
   for (const [table, module] of Object.entries(specs)) {
     const file = resolve(import.meta.dir, 'helpers/model/' + module + '.spec.ts')
     const source = ts.createSourceFile(
@@ -78,6 +93,15 @@ test('inventory covers every bootstrap contract column once and each settable de
           /^[a-z_]+\.[a-z_]+$/.test(entry.target),
         key(entry),
       ).toBe(true)
+      if (entry.target.includes('.')) {
+        const [table, name] = entry.target.split('.')
+        const destination = persistenceSchema.tables.find((value) => value.id === table)
+        expect(destination, entry.target).toBeDefined()
+        expect(
+          Object.values(destination!.columns).map((column) => column.name),
+          entry.target,
+        ).toContain(name)
+      }
     }
   }
 })
@@ -141,22 +165,138 @@ describeEachProvider('RFC-395 II-a A1 model fixtures', (h) => {
         mountPath: 'svc/' + repoIndex,
       })),
     )
-    const { tasks, taskRepos } = tablesOf(h.db)
-    expect((await first(h.db.select().from(tasks).where(eq(tasks.id, root!.id))))!.repoCount).toBe(
-      2,
-    )
-    expect((await h.db.select().from(taskRepos)).map((r) => r.worktreeDirName)).toEqual([
-      'svc/0',
-      'svc/1',
-    ])
-    expect((await readTaskFixtures(h.db, { id: root!.id }))[0]!.repoPath).toBe('/fixture/repo')
+    const { tasks, taskRepositoryMounts: taskRepos } = tablesOf(h.db)
+    expect((await readTaskFixtures(h.db, { id: root!.id }))[0]!.repoCount).toBe(2)
+    expect(Object.hasOwn(tasks, 'repoCount')).toBe(false)
+    expect(
+      (
+        await h.db
+          .select()
+          .from(taskRepos)
+          .where(eq(taskRepos.taskId, root!.id))
+          .orderBy(taskRepos.ordinal)
+      ).map((r) => r.mountPath),
+    ).toEqual(['svc/0', 'svc/1'])
+    expect((await readTaskFixtures(h.db, { id: root!.id }))[0]!.repoPath).toBe('/repo/0')
   })
-  test('placeholder and materialized root inputs create no implicit epoch-1 repository rows', async () => {
+  test('placeholder has no mount while a materialized root has an explicit stable-key mount', async () => {
     await taskFixture(h.db, [{ ...task('placeholder'), worktreePath: '' }, task('materialized')])
-    const { taskRepos } = tablesOf(h.db)
-    expect(await h.db.select().from(taskRepos)).toEqual([])
+    const { taskRepositoryMounts: taskRepos } = tablesOf(h.db)
+    expect(await h.db.select().from(taskRepos)).toMatchObject([
+      { taskId: 'materialized', repoKey: 'materialized:mount:', ordinal: 0, mountPath: '' },
+    ])
     const rows = await readTaskFixtures(h.db)
     expect(rows.every((row) => row.repoCount === 1)).toBe(true)
+  })
+  test('binding an unbound task creates one root mount and checkpoint lookup keeps its key', async () => {
+    await taskFixture(h.db, { ...task('binding'), worktreePath: '' })
+    const { taskRepositoryMounts, taskSpaceNodes } = tablesOf(h.db)
+    expect(await h.db.select().from(taskRepositoryMounts)).toEqual([])
+    await patchTaskFixture(h.db, { id: 'binding' }, { worktreePath: '/bound', branch: 'bound' })
+    const before = await h.db.select().from(taskRepositoryMounts)
+    expect(before).toMatchObject([
+      {
+        taskId: 'binding',
+        repoKey: 'binding:mount:',
+        ordinal: 0,
+        mountPath: '',
+        repoPath: '/fixture/repo',
+        branch: 'bound',
+        branchState: 'branch',
+      },
+    ])
+    expect(await h.db.select({ path: taskSpaceNodes.nodePath }).from(taskSpaceNodes)).toEqual([
+      { path: '' },
+    ])
+    await patchTaskFixture(h.db, { id: 'binding' }, { worktreePath: '/bound-again' })
+    expect(await h.db.select().from(taskRepositoryMounts)).toEqual(before)
+    await nodeRunFixture(h.db, {
+      id: 'binding-run',
+      taskId: 'binding',
+      nodeId: 'n',
+      status: 'done',
+      checkpoints: [{ mountPath: '', preSnapshot: '' }],
+    })
+    expect((await readStoredCheckpointFixture(h.db, 'binding-run')).checkpoints).toMatchObject([
+      { repoKey: 'binding:mount:', preSnapshot: '' },
+    ])
+  })
+  test('selected run identity patches release the immediate FK before changing slots', async () => {
+    await taskFixture(h.db, task('identity-task'))
+    await nodeRunFixture(h.db, [
+      { id: 'host', taskId: 'identity-task', nodeId: '__wg_member__', status: 'done' },
+      {
+        id: 'wrapper',
+        taskId: 'identity-task',
+        nodeId: 'wrapper',
+        status: 'done',
+        wrapperProgressJson: '{}',
+      },
+      { id: 'node', taskId: 'identity-task', nodeId: 'inner', status: 'done' },
+    ])
+    const { nodeRuns, nodeRunSelections } = tablesOf(h.db)
+    for (const [id, patch] of [
+      ['host', { shardKey: 'assignment' }],
+      [
+        'node',
+        {
+          parentNodeRunId: 'wrapper',
+          containerRunId: 'wrapper',
+          rerunCause: 'fanout-shard',
+          shardKey: 'shard-b',
+        },
+      ],
+    ] as const) {
+      const old = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, id)))[0]!
+      const selection = (
+        await h.db.select().from(nodeRunSelections).where(eq(nodeRunSelections.selectedRunId, id))
+      )[0]!
+      expect(selection.slotKey).toBe(old.slotKey!)
+      await patchNodeRunFixture(h.db, { id }, patch)
+      const updated = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, id)))[0]!
+      expect(updated.slotKey).not.toBe(old.slotKey)
+      const selections = await h.db.select().from(nodeRunSelections)
+      expect(selections.find((row) => row.slotKey === old.slotKey)).toMatchObject({
+        selectedRunId: null,
+        revision: selection.revision + 1,
+      })
+      expect(selections.find((row) => row.slotKey === updated.slotKey)).toMatchObject({
+        selectedRunId: id,
+        revision: 1,
+      })
+    }
+  })
+  test('explicit null lineage stays null while omitted lineage is derived', async () => {
+    await taskFixture(h.db, task('lineage-task'))
+    await nodeRunFixture(h.db, [
+      {
+        id: 'explicit-null',
+        taskId: 'lineage-task',
+        nodeId: 'n',
+        status: 'done',
+        continuationSlotKey: null,
+        lineageSlotPathJson: null,
+      },
+      {
+        id: 'derived',
+        taskId: 'lineage-task',
+        nodeId: 'n',
+        status: 'done',
+        iteration: 2,
+        shardKey: 'part',
+      },
+    ])
+    const { nodeRuns } = tablesOf(h.db)
+    const rows = await h.db.select().from(nodeRuns)
+    expect(rows.find((row) => row.id === 'explicit-null')).toMatchObject({
+      continuationSlotKey: null,
+      lineageSlotPathJson: null,
+    })
+    const derived = rows.find((row) => row.id === 'derived')!
+    expect(derived.continuationSlotKey).toBeString()
+    expect(JSON.parse(derived.lineageSlotPathJson!).at(-1)).toMatchObject({
+      frozenOccurrenceKey: '2|part',
+    })
   })
   test('allocation follows call order, preserves negative history and rolls back with the caller', async () => {
     await taskFixture(h.db, task('sequence-task'))
@@ -219,14 +359,31 @@ describeEachProvider('RFC-395 II-a A1 model fixtures', (h) => {
         checkpoints: [{ mountPath: 'svc', isolationBase: '', nodeTree: 'group-tree' }],
       },
     ])
-    const { nodeRuns } = tablesOf(h.db)
-    const root = await first(h.db.select().from(nodeRuns).where(eq(nodeRuns.id, 'root-run')))
-    const group = await first(h.db.select().from(nodeRuns).where(eq(nodeRuns.id, 'group-run')))
-    expect(root!.preSnapshot).toBe('')
-    expect(root!.isoBaseSnapshot).toBeNull()
-    expect(root!.isoNodeTreeReposJson).toBeNull()
-    expect(group!.isoNodeTree).toBeNull()
-    expect(JSON.parse(group!.isoNodeTreeReposJson!)).toEqual({ svc: 'group-tree' })
+    const { nodeRunRepoCheckpoints } = tablesOf(h.db)
+    const root = await first(
+      h.db
+        .select()
+        .from(nodeRunRepoCheckpoints)
+        .where(eq(nodeRunRepoCheckpoints.nodeRunId, 'root-run')),
+    )
+    const group = await first(
+      h.db
+        .select()
+        .from(nodeRunRepoCheckpoints)
+        .where(eq(nodeRunRepoCheckpoints.nodeRunId, 'group-run')),
+    )
+    expect(root).toMatchObject({
+      preSnapshot: '',
+      isolationBase: null,
+      nodeTree: 'tree',
+      repoKey: 'root-checkpoint:mount:',
+    })
+    expect(group).toMatchObject({
+      preSnapshot: null,
+      isolationBase: '',
+      nodeTree: 'group-tree',
+      repoKey: 'group-checkpoint:mount:svc',
+    })
     expect((await readNodeRunFixtures(h.db, { id: 'group-run' }))[0]!.checkpoints).toEqual([
       { mountPath: 'svc', isolationBase: '', nodeTree: 'group-tree' },
     ])
@@ -270,17 +427,21 @@ describeEachProvider('RFC-395 II-a A1 model fixtures', (h) => {
         { mountPath: 'b', nodeTree: 'tree-b', submodules: { lib: 'sha' } },
       ],
     })
-    const { nodeRuns } = tablesOf(h.db)
-    const stored = (await first(h.db.select().from(nodeRuns).where(eq(nodeRuns.id, 'multi-run'))))!
-    expect(stored.preSnapshot).toBeNull()
-    expect(JSON.parse(stored.preSnapshotReposJson!)).toEqual({ a: '' })
-    expect(JSON.parse(stored.isoNodeTreeReposJson!)).toEqual({ b: 'tree-b' })
+    const { nodeRunRepoCheckpoints } = tablesOf(h.db)
+    const stored = await h.db
+      .select()
+      .from(nodeRunRepoCheckpoints)
+      .orderBy(nodeRunRepoCheckpoints.repoKey)
+    expect(stored).toMatchObject([
+      { repoKey: 'multi:mount:a', preSnapshot: '', nodeTree: null },
+      { repoKey: 'multi:mount:b', preSnapshot: null, nodeTree: 'tree-b' },
+    ])
     expect((await readNodeRunFixtures(h.db, { id: 'multi-run' }))[0]!.checkpoints).toEqual([
       { mountPath: 'a', preSnapshot: '', submodules: '' },
       { mountPath: 'b', nodeTree: 'tree-b', submodules: { lib: 'sha' } },
     ])
   })
-  test('JSON text stays exact, public names encode correctly, and consumed edges retain producer identity', async () => {
+  test('ordered references and content bytes project correctly and input edges retain producer identity', async () => {
     await taskFixture(h.db, task('json-task'))
     await agentFixture(h.db, { id: 'agent', name: 'agent', skills: ' [ ] ' })
     await nodeRunFixture(h.db, [
@@ -311,15 +472,20 @@ describeEachProvider('RFC-395 II-a A1 model fixtures', (h) => {
     await nodeRunOutputFixture(h.db, [
       { nodeRunId: 'producer', portName: 'out', content: 'exact bytes' },
     ])
-    const { agents, clarifyRounds, nodeRunOutputs } = tablesOf(h.db)
-    expect((await first(h.db.select().from(agents).where(eq(agents.id, 'agent'))))!.skills).toBe(
-      ' [ ] ',
-    )
-    expect(
-      (await first(h.db.select().from(clarifyRounds).where(eq(clarifyRounds.id, 'round'))))!
-        .answersJson,
-    ).toBe('[]')
-    expect((await first(h.db.select().from(nodeRunOutputs)))!.content).toBe('exact bytes')
+    const { agents, agentSkillRefs, clarifyRounds, clarifyAnswers, nodeRunOutputs } = tablesOf(h.db)
+    expect(Object.hasOwn((await first(h.db.select().from(agents)))!, 'skills')).toBe(false)
+    expect(await h.db.select().from(agentSkillRefs)).toEqual([])
+    expect(await first(h.db.select().from(clarifyRounds))).toMatchObject({
+      answersRecorded: true,
+      draftsRecorded: true,
+      attributionsRecorded: false,
+      legacyAnswersJson: null,
+    })
+    expect(await h.db.select().from(clarifyAnswers)).toEqual([])
+    const output = (await first(h.db.select().from(nodeRunOutputs)))!
+    const ref = contentRefColumns.decode(output.contentRefJson, output.contentInlineBytes)
+    expect(ref?.kind).toBe('inline')
+    expect(Buffer.from(output.contentInlineBytes!).toString('utf8')).toBe('exact bytes')
     const consumer = (await readNodeRunFixtures(h.db, { id: 'consumer' }))[0]!
     expect(consumer.consumedEdges).toEqual([
       { producerNodeId: 'source', producerRunId: 'producer', producerShardKey: 's' },
@@ -363,4 +529,44 @@ describeEachProvider('RFC-395 II-a A1 model fixtures', (h) => {
       ).map((row) => row.id),
     ).toEqual(['read-old', 'read-new', 'read-other'])
   })
+})
+
+test('e2e SQL includes root and mount directories and uses production occurrence identities', () => {
+  const task = {
+    id: 'sql-task',
+    workflowId: 'wf',
+    workflowSnapshot: '{}',
+    repoPath: '/repo',
+    worktreePath: '/work',
+    baseBranch: 'main',
+    branch: 'branch',
+    status: 'running' as const,
+    inputs: '{}',
+    startedAt: 1,
+  }
+  expect(taskFixtureSql(task)).toContain("VALUES('sql-task','',1)")
+  const nested = taskRepoFixtureSql({
+    taskId: 'sql-task',
+    repoIndex: 0,
+    repoPath: '/repo',
+    worktreePath: '/work/nested/svc',
+    branch: 'branch',
+    mountPath: 'nested/svc',
+  })
+  for (const path of ['', 'nested', 'nested/svc'])
+    expect(nested).toContain(`VALUES('sql-task','${path}',1)`)
+  for (const [iteration, shardKey, occurrence] of [
+    [0, null, '0|'],
+    [2, 'part', '2|part'],
+  ] as const)
+    expect(
+      nodeRunFixtureSql({
+        id: 'sql-run',
+        taskId: 'sql-task',
+        nodeId: 'n',
+        status: 'done',
+        iteration,
+        shardKey,
+      }),
+    ).toContain(`'frozenOccurrenceKey','${occurrence}'`)
 })

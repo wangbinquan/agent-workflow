@@ -1,3 +1,4 @@
+import { epoch2RuntimeTestPorts } from './epoch2RuntimePorts'
 import { o2Ports } from './o2Closure'
 // RFC-359 AC-1（第 11 刀）—— `cancel` 的**唯一**测试装配点。
 //
@@ -41,6 +42,7 @@ export async function cancelViaEngine(
     {
       db,
       persistence: createTaskExecutionPersistence(db, {
+        historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
         recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
       }),
       // ⚠️ 交的是**任务驱动**注册表（停机票据），不是 `platform/runtime-registry` 的运行时档案表。

@@ -6,7 +6,7 @@ import { SYSTEM_USER_ID } from '@/auth/actor'
 import { applyUploadsToWorktree } from '@/services/upload'
 import { applyTaskWorkspaceUploads } from '@/modules/task-execution/infrastructure/taskWorkspaceUploads'
 import { readFileSync, writeFileSync, renameSync } from 'node:fs'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import {
   WorkflowDefinitionSchema,
   StartTaskSchema,
@@ -52,7 +52,6 @@ let close: () => Promise<void>
 if (input.provider.kind === 'sqlite') {
   const opened = openDb({
     path: join(input.root, 'db.sqlite'),
-    migrationsFolder: resolve(import.meta.dir, '..', '..', 'db', 'migrations'),
   })
   db = opened
   close = async () => {

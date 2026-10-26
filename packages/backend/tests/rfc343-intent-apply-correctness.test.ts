@@ -1,3 +1,5 @@
+import { intentApplyArtifactCodecs } from '@/modules/intent/infrastructure/intentApplyArtifactCodec'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 // RFC-395 II-pre：崩溃收敛改走生产维护装配，保留补偿与前滚断言。
 // RFC-343 / RFC-294 P0-B — Intent apply must not be weaker than BundleApply:
 // bounded lock cardinality, durable/retryable compensation, a versioned and
@@ -14,7 +16,7 @@
 
 import { createAtomicApplyRecovery } from '@/platform/atomic-apply/convergence'
 import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+
 import { first as firstRow } from '@/platform/persistence/queryHelpers'
 import { composeIntentApplyRecoveryScene } from '@/modules/intent/composition/applyMaintenance'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
@@ -36,7 +38,7 @@ import {
   decodeIntentJournalArtifacts,
   encodeIntentJournalArtifacts,
   type IntentJournalArtifactV1,
-} from '@/modules/intent/infrastructure/intentApplyLegacyCodec'
+} from '@/modules/intent/infrastructure/migration/intentApplyLegacyCodec'
 import { createManagedSkillWithFiles } from '../src/modules/resource-catalog/infrastructure/legacy/skill'
 import {
   commitSkillVersionInTx,
@@ -221,7 +223,7 @@ describeEachProvider('RFC-343 Intent apply 正确性（双引擎）', (harness) 
       const preparedId = await seedJournal('prepared', '{broken')
       const committedId = await seedJournal(
         'committed',
-        JSON.stringify({ version: 1, artifacts: [{ kind: 'unknown' }] }),
+        JSON.stringify({ scene: 'intent', version: 3, artifacts: [{ kind: 'unknown' }] }),
       )
 
       expect(
@@ -291,7 +293,24 @@ describeEachProvider('RFC-343 Intent apply 正确性（双引擎）', (harness) 
       )
       const journalId = await seedJournal(
         'committed',
-        encodeIntentJournalArtifacts([{ kind: 'skill-version-stage', staged }]),
+        intentApplyArtifactCodecs.encode([
+          {
+            kind: 'skill-version-stage',
+            skillId: staged.skillId,
+            operationId: staged.publishId,
+            version: staged.newVersion,
+            stagingDirectory: staged.stagingDir,
+            versionDirectory: staged.versionDir,
+            recovery: {
+              kind: 'version',
+              operationId: staged.opId,
+              publishId: staged.publishId,
+              skillName: staged.skillName,
+              contentHash: staged.newHash,
+              liveDirectory: staged.filesDir,
+            },
+          },
+        ]),
       )
 
       expect(
@@ -310,7 +329,8 @@ describeEachProvider('RFC-343 Intent apply 正确性（双引擎）', (harness) 
         failed: 0,
         rolledForward: 0,
       })
-      const { intentApplyJournal, skillOperations } = tablesOf(db)
+      const { skillOperations } = tablesOf(db)
+      const { intentApplyJournal } = tablesOf(db)
       expect(
         await firstRow(
           db

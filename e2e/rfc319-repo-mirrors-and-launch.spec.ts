@@ -1,3 +1,4 @@
+import { liveSqlitePath } from './storage'
 // RFC-319 —— 缓存镜像的**保鲜 / 回收**与**以仓库开工**这两段用户面
 // （账本 REPO-04/05/06/12/15/16/44/X4/X5）。
 //
@@ -303,7 +304,7 @@ function commitAll(workingDir: string, message: string): void {
 function seedReferencingTask(taskId: string, cachedRepoId: string): void {
   const now = Date.now()
   runSqlite(
-    join(daemon.home, 'db.sqlite'),
+    liveSqlitePath(daemon.home),
     taskFixtureSql({
       id: taskId,
       name: 'RFC-319 mirror-delete control task',
@@ -963,7 +964,7 @@ test('REPO-05 刷新失败的五种原因在界面上各说各的：抓取失败
   //    （密钥轮换后 `url_enc` 解不开），产品今天没有任何路径能造出它——直连落库。
   const unreadableId = 'rfc319-unreadable-url-mirror'
   runSqlite(
-    join(daemon.home, 'db.sqlite'),
+    liveSqlitePath(daemon.home),
     'INSERT INTO cached_repos (id, url_hash, url_redacted, local_path, default_branch,' +
       ' last_fetched_at, created_at) VALUES (' +
       `'${unreadableId}', 'feed9901', NULL, '/var/fixture/rfc319/unreadable',` +

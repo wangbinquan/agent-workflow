@@ -1,6 +1,6 @@
 import type { HumanGateNodeProjectionMember } from '../domain/humanGateContinuation'
 import type { TaskRepositoryCheckpoint } from '../domain/taskCheckpoint'
-import { encodeTaskCheckpoints } from './taskCheckpointCodec'
+import { isSingleRootRepository } from '@agent-workflow/shared'
 
 /**
  * `node_runs` 行 → 人工门投影成员：只保留上面那 18 个字段，逐字段同名。
@@ -47,6 +47,19 @@ export function humanGateCheckpointProjectionMember(
   },
   mountPaths: readonly string[],
 ): HumanGateNodeProjectionMember {
-  const { preSnapshot, preSnapshotReposJson } = encodeTaskCheckpoints(row.checkpoints, mountPaths)
+  const snapshots = row.checkpoints.filter((checkpoint) => checkpoint.preSnapshot !== undefined)
+  // The durable gate fence retains its v1 field names; these are projections, never storage mirrors.
+  const single = isSingleRootRepository(mountPaths)
+  const preSnapshot = single
+    ? (snapshots.find((checkpoint) => checkpoint.mountPath === '')?.preSnapshot ?? null)
+    : null
+  const preSnapshotReposJson =
+    single || snapshots.length === 0
+      ? null
+      : JSON.stringify(
+          Object.fromEntries(
+            snapshots.map((checkpoint) => [checkpoint.mountPath, checkpoint.preSnapshot]),
+          ),
+        )
   return humanGateNodeProjectionMember({ ...row, preSnapshot, preSnapshotReposJson })
 }

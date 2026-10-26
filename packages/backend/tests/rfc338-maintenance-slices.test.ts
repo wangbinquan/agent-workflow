@@ -1,3 +1,4 @@
+import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { composeRetentionSweepPhases } from '@/bootstrap/retentionSweepPhases'
 import { o2Ports } from './helpers/o2Closure'
 // RFC-338 D5 / AC-2 — owner adapters expose bounded, replay-safe slices so
@@ -66,6 +67,7 @@ const unusedOwnerCommands = (db: DbClient, appHome = '/provider-owned/applicatio
   },
   integration: composeIntegrationMaintenanceCommands(createWebhookDeliveryPersistence(db)),
   taskRecovery: createTaskExecutionPersistence(db, {
+    historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
     recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
   }).recoveryAdministration,
   taskArchive: createDrizzleTaskArchiveMaintenanceCommand(
@@ -87,7 +89,7 @@ const unusedOwnerCommands = (db: DbClient, appHome = '/provider-owned/applicatio
 
 describe('RFC-338 bounded maintenance owner slices', () => {
   test('plugin generation GC receives the selected command and active-node fence', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createInMemoryDb()
     const received: Array<{ readonly executionFence: 'clear' | 'busy' }> = []
     const ownerCommands = unusedOwnerCommands(db)
     const result = await runMaintenanceJob({
@@ -113,7 +115,7 @@ describe('RFC-338 bounded maintenance owner slices', () => {
   })
 
   test('event archive counts a large id space in durable primary-key windows', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createInMemoryDb()
     const appHome = mkdtempSync(join(tmpdir(), 'rfc338-event-count-'))
     try {
       const { nodeRunEvents } = tablesOf(db)
@@ -205,7 +207,7 @@ describe('RFC-338 bounded maintenance owner slices', () => {
     const transactions: number[] = []
     const db = openDb({
       path: dbPath,
-      migrationsFolder: MIGRATIONS,
+
       skipIntegrityCheck: true,
       slowQueryMs: 0,
       observeStatementMs: (ms) => statements.push(ms),
@@ -240,7 +242,7 @@ describe('RFC-338 bounded maintenance owner slices', () => {
     const dbPath = join(root, 'db.sqlite')
     const primary = openDb({
       path: dbPath,
-      migrationsFolder: MIGRATIONS,
+
       skipIntegrityCheck: true,
       slowQueryMs: 0,
     })
@@ -253,7 +255,7 @@ describe('RFC-338 bounded maintenance owner slices', () => {
       inTransaction = true
       secondary = openDb({
         path: dbPath,
-        migrationsFolder: MIGRATIONS,
+
         skipMigrations: true,
         skipIntegrityCheck: true,
         journalMode: 'preserve',
@@ -271,7 +273,7 @@ describe('RFC-338 bounded maintenance owner slices', () => {
   })
 
   test('token audit advances a versioned phase cursor and deletes at most one batch', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createInMemoryDb()
     const old = 1_000
     const { tokenAudit, tokenDeleteSnapshot } = tablesOf(db)
     await db.insert(tokenAudit).values(
@@ -321,7 +323,7 @@ describe('RFC-338 bounded maintenance owner slices', () => {
   })
 
   test('token audit rejects an unknown durable cursor version without deleting rows', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createInMemoryDb()
     await expect(pruneTokenAuditSlice(db, 90, { version: 2, phase: 'audits' })).rejects.toThrow(
       'maintenance-token-audit-cursor-invalid',
     )
@@ -465,7 +467,7 @@ describe('RFC-338 bounded maintenance owner slices', () => {
     const dbPath = join(root, 'db.sqlite')
     const primary = openDb({
       path: dbPath,
-      migrationsFolder: MIGRATIONS,
+
       skipIntegrityCheck: true,
       slowQueryMs: 0,
     })
@@ -542,7 +544,7 @@ describe('RFC-338 bounded maintenance owner slices', () => {
     const dbPath = join(root, 'db.sqlite')
     const primary = openDb({
       path: dbPath,
-      migrationsFolder: MIGRATIONS,
+
       skipIntegrityCheck: true,
       slowQueryMs: 0,
       busyTimeoutMs: 1_000,
@@ -592,7 +594,7 @@ describe('RFC-338 bounded maintenance owner slices', () => {
     const dbPath = join(root, 'db.sqlite')
     const primary = openDb({
       path: dbPath,
-      migrationsFolder: MIGRATIONS,
+
       skipIntegrityCheck: true,
       slowQueryMs: 0,
       busyTimeoutMs: 1_000,

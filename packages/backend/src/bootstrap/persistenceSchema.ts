@@ -1,6 +1,12 @@
-// RFC-395 I-a: the only production collection point for schema contributions.
-import { schemaContribution as contribution0 } from '@/modules/code-capability/composition/schema'
-import { historySchemaContribution as contribution1 } from '@/modules/code-capability/composition/schema'
+import { persistenceHead, persistenceHistory, persistenceCatalogCache } from './persistenceHead'
+import { EPOCH2_META_TABLES } from '@/modules/system-operations/composition/schema'
+import { registerSchemaHistoryRuntime } from '@/platform/persistence/schema/history/runtime'
+// RFC-395 activation: the single live epoch-2 registry.
+import {
+  schemaContribution as contribution0,
+  historySchemaContribution as contribution1,
+} from '@/modules/code-capability/composition/schema'
+
 import { schemaContribution as contribution2 } from '@/modules/collaboration/composition/schema'
 import { schemaContribution as contribution3 } from '@/modules/development-automation/composition/schema'
 import { schemaContribution as contribution4 } from '@/modules/digital-employee/composition/schema'
@@ -18,70 +24,241 @@ import { schemaContribution as contribution15 } from '@/modules/runtime-manageme
 import { schemaContribution as contribution16 } from '@/modules/source-control/composition/schema'
 import { schemaContribution as contribution17 } from '@/modules/system-operations/composition/schema'
 import { schemaContribution as contribution18 } from '@/modules/task-execution/composition/schema'
+import { registerPersistenceSchema } from '@/platform/persistence/schema/tables'
 import { materializeTableSets } from '@/platform/persistence/schema/nativeTables'
 import { createSchemaRegistry } from '@/platform/persistence/schema/registry'
+import { projectLogicalSchemaContract } from '@/platform/persistence/schema/logicalContract'
 import { compileContract } from '@/platform/persistence/schema/contract'
-import { projectLegacyV2 } from '@/platform/persistence/migration/legacy/v2Contract'
+import { compileSqlitePlan } from '@/platform/persistence/schema/sqlitePlan'
+import { compilePostgresqlPlan } from '@/platform/persistence/schema/postgresqlPlan'
+import { compileSchemaRowRuleCodes } from '@/platform/persistence/schema/rowRules'
 
-export const persistenceSchema = createSchemaRegistry([
-  contribution0,
-  contribution1,
-  contribution2,
-  contribution3,
-  contribution4,
-  contribution5,
-  contribution6,
-  contribution7,
-  contribution8,
-  contribution9,
-  contribution10,
-  contribution11,
-  contribution12,
-  contribution13,
-  contribution14,
-  contribution15,
-  contribution16,
-  contribution17,
-  contribution18,
-])
+export const persistenceSchema = createSchemaRegistry(
+  [
+    {
+      ...contribution0,
+      indexUniqueNulls: [
+        {
+          table: 'capability_templates',
+          index: 'capability_templates_owner_name_unique',
+          nulls: 'distinct' as const,
+        },
+      ],
+    },
+    contribution1,
+    {
+      ...contribution2,
+      indexUniqueNulls: [
+        {
+          table: 'collaboration_gate_operations',
+          index: 'idx_collaboration_gate_operations_revision',
+          nulls: 'distinct' as const,
+        },
+      ],
+    },
+    {
+      ...contribution3,
+      indexUniqueNulls: [
+        {
+          table: 'action_templates',
+          index: 'action_templates_owner_name_unique',
+          nulls: 'distinct' as const,
+        },
+        {
+          table: 'automation_policies',
+          index: 'automation_policies_owner_name_unique',
+          nulls: 'distinct' as const,
+        },
+        {
+          table: 'development_adapter_definitions',
+          index: 'development_adapter_definitions_owner_name_unique',
+          nulls: 'distinct' as const,
+        },
+        {
+          table: 'digital_employees',
+          index: 'digital_employees_owner_name_unique',
+          nulls: 'distinct' as const,
+        },
+        {
+          table: 'repository_employee_assignments',
+          index: 'repository_employee_assignments_scope_unique',
+          nulls: 'distinct' as const,
+        },
+        {
+          table: 'verification_profiles',
+          index: 'verification_profiles_owner_name_unique',
+          nulls: 'distinct' as const,
+        },
+        {
+          table: 'development_mission_links',
+          index: 'dev_mission_links_child_unique',
+          nulls: 'distinct' as const,
+        },
+        {
+          table: 'development_missions',
+          index: 'development_missions_launch_idem_unique',
+          nulls: 'distinct' as const,
+        },
+        {
+          table: 'mission_input_uploads',
+          index: 'mission_input_uploads_idem_unique',
+          nulls: 'distinct' as const,
+        },
+      ],
+    },
+    {
+      ...contribution4,
+      indexUniqueNulls: [
+        {
+          table: 'employee_definitions',
+          index: 'employee_definitions_owner_name_unique',
+          nulls: 'distinct' as const,
+        },
+        {
+          table: 'employee_job_templates',
+          index: 'employee_job_templates_owner_type_name_unique',
+          nulls: 'distinct' as const,
+        },
+        {
+          table: 'employee_approval_sagas',
+          index: 'employee_approval_sagas_correlation_unique',
+          nulls: 'distinct' as const,
+        },
+        {
+          table: 'employee_input_uploads',
+          index: 'employee_input_uploads_actor_idempotency_unique',
+          nulls: 'distinct' as const,
+        },
+        {
+          table: 'employee_reaction_rounds',
+          index: 'employee_reaction_rounds_inbox_unique',
+          nulls: 'distinct' as const,
+        },
+      ],
+    },
+    {
+      ...contribution5,
+      indexUniqueNulls: [
+        {
+          table: 'event_subscriptions',
+          index: 'event_subscriptions_active_identity_unique',
+          nulls: 'distinct' as const,
+        },
+      ],
+    },
+    contribution6,
+    {
+      ...contribution7,
+      indexUniqueNulls: [
+        {
+          table: 'webhook_deliveries',
+          index: 'idx_webhook_deliveries_dedupe',
+          nulls: 'distinct' as const,
+        },
+        {
+          table: 'webhook_deliveries',
+          index: 'idx_webhook_deliveries_mr_fact',
+          nulls: 'distinct' as const,
+        },
+      ],
+    },
+    {
+      ...contribution8,
+      indexUniqueNulls: [
+        {
+          table: 'intent_turns',
+          index: 'uniq_intent_turns_session_mutation',
+          nulls: 'distinct' as const,
+        },
+      ],
+    },
+    contribution9,
+    contribution10,
+    contribution11,
+    contribution12,
+    {
+      ...contribution13,
+      indexUniqueNulls: [
+        { table: 'agents', index: 'agents_owner_name_unique', nulls: 'distinct' as const },
+        { table: 'mcps', index: 'mcps_owner_name_unique', nulls: 'distinct' as const },
+        { table: 'plugins', index: 'plugins_owner_name_unique', nulls: 'distinct' as const },
+        { table: 'skills', index: 'skills_owner_name_unique', nulls: 'distinct' as const },
+        { table: 'workgroups', index: 'workgroups_owner_name_unique', nulls: 'distinct' as const },
+        {
+          table: 'mcp_runtime_test_events',
+          index: 'uniq_mcp_runtime_test_events_external',
+          nulls: 'distinct' as const,
+        },
+      ],
+    },
+    contribution14,
+    contribution15,
+    {
+      ...contribution16,
+      indexUniqueNulls: [
+        { table: 'repo_group_nodes', index: 'idx_rgn_path_ci', nulls: 'distinct' as const },
+        { table: 'repo_groups', index: 'idx_repo_groups_name_ci', nulls: 'distinct' as const },
+        {
+          table: 'hosted_task_workspaces',
+          index: 'hosted_task_workspaces_business_task_unique',
+          nulls: 'distinct' as const,
+        },
+      ],
+    },
+    contribution17,
+    {
+      ...contribution18,
+      indexUniqueNulls: [
+        {
+          table: 'task_space_nodes',
+          index: 'idx_task_space_nodes_path_ci',
+          nulls: 'distinct' as const,
+        },
+        {
+          table: 'task_execution_lineage_operation_records',
+          index: 'idx_task_execution_lineage_decision',
+          nulls: 'distinct' as const,
+        },
+      ],
+    },
+  ],
+  { schemaEpoch: 2 },
+)
 export const nativeTableSets = materializeTableSets(persistenceSchema)
-export const explicitSchemaContract = compileContract(persistenceSchema)
-let epoch1Contract: ReturnType<typeof projectLegacyV2> | undefined
-export function buildLogicalSchemaContract() {
-  return (epoch1Contract ??= projectLegacyV2(persistenceSchema))
+declare module '@/platform/persistence/schema/tables' {
+  interface SchemaBinding {
+    readonly definitions: typeof persistenceSchema.tables
+    readonly nativeTables: typeof nativeTableSets
+  }
 }
+export const rowRuleCodes = compileSchemaRowRuleCodes(persistenceSchema)
+registerPersistenceSchema({
+  definitions: persistenceSchema.tables,
+  nativeTables: nativeTableSets,
+  rowRuleCodes,
+})
+export const logicalSchemaContract = projectLogicalSchemaContract(persistenceSchema)
+export const schemaContract = compileContract(persistenceSchema)
+export const sqlitePlan = compileSqlitePlan(persistenceSchema)
+export const postgresqlPlan = compilePostgresqlPlan(persistenceSchema)
 
-export { compileSqlitePlan } from '@/platform/persistence/schema/sqlitePlan'
-
-export {
+export const {
   capabilityTemplates,
   repoCapabilityConfig,
-  codeAiAttempts,
-  codeArtifacts,
-  codeFindings,
-  codeFixAttempts,
-  codeMrLeases,
-  codeProducedMrs,
-  codePublishIntents,
-  codeRoundStages,
-  codeTriggerDeliveries,
-  codeWorkItems,
-  codeWorkObservations,
-  codeWorkRounds,
-  legacyCodeWorkItemLinks,
-} from '@/modules/code-capability/composition/schema'
-export {
-  clarifyRounds,
-  collaborationGateArtifacts,
-  collaborationGateOperations,
-  docVersions,
-  reviewComments,
+  codeHistoryArchives,
+  codeHistoryIdIndex,
   reviewNodeReviewers,
-  taskCollaborators,
   taskFeedback,
   taskQuestions,
-} from '@/modules/collaboration/composition/schema'
-export {
+  clarifyRounds,
+  clarifyAnswers,
+  clarifyAnswerDrafts,
+  clarifyAnswerAttributions,
+  collaborationGateOperations,
+  taskCollaborators,
+  docVersions,
+  reviewComments,
+  collaborationGateArtifacts,
   actionTemplateRevisions,
   actionTemplates,
   automationPolicies,
@@ -104,9 +281,7 @@ export {
   developmentFeedbackLedger,
   developmentMissionLinks,
   developmentMissionSources,
-  developmentMissions,
   developmentMrClaims,
-  developmentObjectArtifacts,
   developmentRepositoryUploadPlanEntries,
   developmentRepositoryUploadPlans,
   developmentRepositoryUploadReceipts,
@@ -119,8 +294,8 @@ export {
   repositoryEmployeeAssignments,
   verificationProfileRevisions,
   verificationProfiles,
-} from '@/modules/development-automation/composition/schema'
-export {
+  developmentMissions,
+  developmentObjectArtifacts,
   employeeApprovalSagas,
   employeeAttentionBindings,
   employeeCaseEventOrigins,
@@ -145,8 +320,6 @@ export {
   employeeJobTemplates,
   employeeOsOutbox,
   employeeOsSettings,
-  employeeOsWriterState,
-  employeeReactionArtifacts,
   employeeReactionDispatch,
   employeeReactionRounds,
   employeeRoundWorkspaceStates,
@@ -154,8 +327,7 @@ export {
   employeeToolRegistrations,
   employeeTypePackages,
   employeeWorkScopeRevisions,
-} from '@/modules/digital-employee/composition/schema'
-export {
+  employeeReactionArtifacts,
   customEventSourceDefinitions,
   customEventSourceRevisions,
   eventAutomationWorkIntents,
@@ -167,23 +339,19 @@ export {
   eventSubscriptions,
   eventTypeCatalog,
   observerActivations,
-} from '@/modules/event-center/composition/schema'
-export {
   authLoginPolicy,
   externalIdentities,
   oidcProviders,
   resourceGrants,
   tokenAudit,
   tokenDeleteSnapshot,
-  userAccessAudit,
   userIdentities,
   userPats,
   userPermissionGrants,
   userRepositoryTransportCredentials,
   userSessions,
   users,
-} from '@/modules/identity-access/composition/schema'
-export {
+  userAccessAudit,
   codeHostConnections,
   csEventInbox,
   csEventRoutes,
@@ -199,33 +367,26 @@ export {
   webhookTriggerFires,
   webhookTriggerStreams,
   webhookTriggers,
-} from '@/modules/integration/composition/schema'
-export {
-  intentApplyJournal,
   intentDraftResolutions,
   intentDrafts,
   intentProvenance,
   intentSessions,
-  intentTurnEvents,
   intentTurns,
   intentWorkingSetChanges,
-} from '@/modules/intent/composition/schema'
-export { fusions } from '@/modules/knowledge-evolution/composition/schema'
-export {
-  memories,
+  intentApplyJournal,
+  intentTurnEvents,
+  fusions,
   memoryDistillEvents,
   memoryDistillJobs,
   memoryScopeMoveEvents,
-} from '@/modules/memory/composition/schema'
-export {
+  memories,
   committedEventAggregateHeads,
   committedEventDeliveries,
-  committedEventFamilyCutovers,
   committedEvents,
-} from '@/platform/committed-events/infrastructure/persistence/schema'
-export { hostedObjectPublications } from '@/platform/content/infrastructure/persistence/schema'
-export {
-  agents,
+  committedEventFamilyCutovers,
+  contentObjects,
+  contentBytes,
+  contentPublications,
   mcpProbes,
   mcpRuntimeTestCreateReceipts,
   mcpRuntimeTestEvents,
@@ -235,34 +396,34 @@ export {
   mcps,
   pluginArtifactGenerations,
   plugins,
-  resourceBundleApplies,
-  skillContentEntries,
   skillOperationLocks,
   skillOperations,
-  skillVersions,
-  skills,
-  workflows,
   workgroupMembers,
   workgroups,
-} from '@/modules/resource-catalog/composition/schema'
-export {
+  resourceBundleApplies,
+  agents,
+  agentSkillRefs,
+  agentMcpRefs,
+  agentPluginRefs,
+  agentDependencies,
+  workflows,
+  workflowDependencyIndex,
+  skills,
+  skillVersions,
+  skillContentEntries,
   observationCallModels,
   observationCalls,
   observationPrices,
-} from '@/modules/run-observability/composition/schema'
-export { runtimes } from '@/modules/runtime-management/composition/schema'
-export {
+  runtimes,
   cachedRepos,
   hostedTaskWorkspaces,
   hostedWorkspaceCommands,
-  repoGroupNodes,
   repoGroups,
   repositoryTransportConnections,
   scPreparationOperations,
   scRepositorySnapshots,
   scRepositorySources,
-} from '@/modules/source-control/composition/schema'
-export {
+  repoGroupNodes,
   applicationConfiguration,
   hostedDatabaseBackups,
   hostedExecutionControl,
@@ -271,21 +432,13 @@ export {
   maintenanceRuns,
   maintenanceState,
   recoveryEvents,
-} from '@/modules/system-operations/composition/schema'
-export {
   hostedExecutionBindings,
   hostedExecutionEvents,
-  hostedTaskArtifacts,
-  hostedTaskArchiveEntries,
-  hostedNodeEventArchives,
   nodeExecutionEventSources,
   nodeRunEvents,
-  nodeRunOutputs,
-  nodeRuns,
   nodeRunSeqAllocations,
   hostedRecoveryRequests,
   reactionExecutionAdmissions,
-  runtimeSessionLeases,
   taskArchiveAudit,
   taskExecutionEffectAttempts,
   taskExecutionEffectFences,
@@ -296,12 +449,39 @@ export {
   taskExecutionMaintenanceMembers,
   taskExecutionOwners,
   taskNodeClarifyDirectives,
-  taskRepos,
   taskWorkspacePreparations,
   taskSpaceNodes,
-  tasks,
   workgroupAssignments,
   workgroupMemberCursors,
   workgroupMessages,
+  tasks,
+  taskDefinitions,
+  taskLaunchContexts,
+  taskWorkspaces,
+  taskRepositoryMounts,
+  taskExecutionGenerations,
+  nodeRuns,
+  nodeRunSelections,
+  nodeRunInputs,
+  nodeRunConfigs,
+  nodeRunRuntimeStates,
+  nodeRunResults,
+  nodeRunRepoCheckpoints,
+  executionLegacyEvidence,
   workgroupTaskState,
-} from '@/modules/task-execution/composition/schema'
+  runtimeSessionLeases,
+  nodeRunOutputs,
+  hostedTaskArtifacts,
+  hostedNodeEventArchives,
+  hostedTaskArchiveEntries,
+  hostedTaskArchiveEntryParts,
+} = nativeTableSets.sqlite
+
+export { compileSqlitePlan } from '@/platform/persistence/schema/sqlitePlan'
+
+registerSchemaHistoryRuntime({
+  head: persistenceHead,
+  history: persistenceHistory,
+  catalogCache: persistenceCatalogCache,
+  metaTables: EPOCH2_META_TABLES,
+})

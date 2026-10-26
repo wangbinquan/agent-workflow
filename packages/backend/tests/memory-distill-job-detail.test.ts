@@ -1,3 +1,5 @@
+import { legacyContentRef } from '@/platform/content/contentRef'
+import { contentRowColumns } from '@/platform/content/infrastructure/contentStore'
 // RFC-043 T4 — getDistillJobDetail aggregator unit tests.
 
 import {
@@ -246,7 +248,7 @@ describe('getDistillJobDetail', () => {
         sourcePortName: 'output',
         versionIndex: 2,
         reviewIteration: 0,
-        bodyPath: 'doc.md',
+        ...contentRowColumns(legacyContentRef('review-body-path', 'local-file', 'doc.md')),
         commentsJson: '[]',
         decision: 'approved',
         decisionReason: null,

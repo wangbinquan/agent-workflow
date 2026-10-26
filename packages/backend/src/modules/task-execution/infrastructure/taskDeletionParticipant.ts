@@ -1,9 +1,11 @@
-import { eq, sql } from 'drizzle-orm'
-import type { PersistenceTx } from '@/platform/persistence/persistenceDb'
-import { tablesOf } from '@/platform/persistence/sessionTables'
-import { rawRows } from '@/platform/persistence/queryHelpers'
+import { createContentPublicationLedger } from '@/platform/content/infrastructure/contentStore'
 import { engineOf } from '@/platform/persistence/databaseTransaction'
+import type { PersistenceTx } from '@/platform/persistence/persistenceDb'
+import { rawRows } from '@/platform/persistence/queryHelpers'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { eq, sql } from 'drizzle-orm'
 import type { TaskDeletionParticipant } from '../application/ports/taskDeletion'
+import { lockTaskAggregateRoots, taskAggregateWrite } from './taskDefinitionWriteParticipant'
 
 export function createTaskDeletionParticipantInTx(tx: PersistenceTx): TaskDeletionParticipant {
   const { tasks } = tablesOf(tx)
@@ -30,9 +32,38 @@ export function createTaskDeletionParticipantInTx(tx: PersistenceTx): TaskDeleti
       `,
       )) as Array<{ id: string; owner_user_id: string | null }>
 
+      const ancestors = await rawRows<{ id: string }>(
+        tx,
+        sql`
+        WITH RECURSIVE ancestors(id, parent_task_id) AS (
+          SELECT id, parent_task_id FROM tasks WHERE id = ${taskId}
+          UNION
+          SELECT parent.id, parent.parent_task_id FROM tasks parent
+            JOIN ancestors child ON parent.id = child.parent_task_id
+        ) SELECT id FROM ancestors
+      `,
+      )
+      await lockTaskAggregateRoots(tx, [
+        ...rows.map((row) => row.id),
+        ...ancestors.map((row) => row.id),
+      ])
       return rows.map((row) => ({ id: row.id, ownerUserId: row.owner_user_id }))
     },
     async deleteRoot(taskId) {
+      await taskAggregateWrite.lockTaskAggregateRoot(tx, taskId)
+      const descendants = await rawRows<{ id: string }>(
+        tx,
+        sql`
+        WITH RECURSIVE deleted_tasks(id) AS (
+          SELECT id FROM tasks WHERE id = ${taskId}
+          UNION SELECT child.id FROM tasks child JOIN deleted_tasks parent ON child.parent_task_id = parent.id
+        ) SELECT id FROM deleted_tasks
+      `,
+      )
+      const publications = createContentPublicationLedger(tx)
+      for (const { id } of descendants)
+        for (const owner of ['node-run-output', 'node-run-prompt'])
+          await publications.release(tx, { owner, scope: id }, Date.now())
       await tx.delete(tasks).where(eq(tasks.id, taskId))
     },
     async recomputeAncestors(parentTaskId) {
@@ -46,7 +77,7 @@ export function createTaskDeletionParticipantInTx(tx: PersistenceTx): TaskDeleti
       // 拿的是两把不同的锁，彼此完全不串行。PG 的 READ COMMITTED 下双方都会读到「对方还在」的
       // 子树 MAX，后写的那笔于是把父行永久停在一个**已删子树**的时间戳上，正是上面这段注释要
       // 闭合的那个 bug 换了个入口复发。先锁住父行：第二笔在锁上等，等到的是对方已提交的视图。
-      // 锁序恒定自下而上、沿同一条父链，两笔并发不构成环。
+      // cascade 已按 id 排序锁住整棵删除子树与祖先；这里重用那些根锁。
       let cursor: string | null = parentTaskId
       for (let depth = 0; cursor !== null && depth < 64; depth += 1) {
         await engineOf(tx).lockAggregateRoot(tx, tasks, tasks.id, cursor)

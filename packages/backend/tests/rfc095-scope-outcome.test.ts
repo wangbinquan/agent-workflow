@@ -1,3 +1,4 @@
+import type { projectNodeRunReadFacts } from '@/modules/task-execution/infrastructure/nodeRunSnapshot'
 // RFC-095 — scope-outcome exhaustive bucketing
 // (design/RFC-095-scope-outcome-exhaustive/design.md; audit S-12 / S-22 / S-1).
 //
@@ -30,10 +31,14 @@
 // Frontier.blocked[].reason is a DIAGNOSTIC payload, not an API contract —
 // assertions below prefix-match only (design §2.2 备注).
 
-import { type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { describe, expect, test } from 'bun:test'
-import type { NodeKind, NodeRunStatus, WorkflowDefinition } from '@agent-workflow/shared'
-import { NODE_RUN_STATUS } from '@agent-workflow/shared'
+import {
+  type NodeKind,
+  type NodeRunStatus,
+  type WorkflowDefinition,
+  NODE_RUN_STATUS,
+} from '@agent-workflow/shared'
+
 import {
   decideScopeOutcome,
   isDispatchable,
@@ -41,12 +46,9 @@ import {
   type ScopeOutcome,
   type ScopeOutcomeInput,
 } from '../src/services/dispatchFrontier'
-import {
-  deriveFrontier,
-  type Frontier,
-} from '../src/modules/task-execution/composition/dagFrontier'
+import { deriveFrontier, type Frontier } from './helpers/frontierSelection'
 
-type Row = PersistenceTables['nodeRuns']['$inferSelect']
+type Row = ReturnType<typeof projectNodeRunReadFacts>
 type WorkflowNode = WorkflowDefinition['nodes'][number]
 const NONE: ReadonlySet<string> = new Set()
 

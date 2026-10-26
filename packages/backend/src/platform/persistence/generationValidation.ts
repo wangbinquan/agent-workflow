@@ -1,7 +1,8 @@
+import type { GenerationPointerV2 as ImportedGenerationPointerV2 } from './generationPointerV2'
+import { parseGenerationPointerV2 } from './generationPointerV2'
 // RFC-370 A-T2 — generation validation is independent of installation storage.
 // This preserves RFC-349/359 pointer, manifest, schema and recovery decisions.
 import { z } from 'zod'
-import { databaseProviderTraits } from './providerTraits'
 import { sha256Hex } from '@/util/hash'
 import { canonicalSchemaJson } from './schemaContract'
 
@@ -28,18 +29,6 @@ export const DatabaseGenerationPayloadSchema = z
         message: 'operationId and manifestDigest must either both be present or both be null',
       })
     }
-    // A generation that was migrated INTO a target must name the manifest that
-    // produced it; the source generation legitimately has none.
-    if (
-      databaseProviderTraits(value.provider).migrationRole === 'target' &&
-      value.operationId === null
-    ) {
-      context.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ['operationId'],
-        message: 'a PostgreSQL generation must reference its verified migration manifest',
-      })
-    }
   })
 
 const DatabaseGenerationFileSchema = z
@@ -52,7 +41,19 @@ const DatabaseGenerationFileSchema = z
 export type DatabaseGenerationPayload = z.infer<typeof DatabaseGenerationPayloadSchema>
 export type DatabaseGenerationFile = z.infer<typeof DatabaseGenerationFileSchema>
 
+export interface HostedDatabaseIdentity {
+  readonly project: string
+  readonly service: string
+  readonly platformGenerationId: string | null
+  readonly platformOperationId: string | null
+}
+
 export type ResolvedDatabaseGeneration =
+  | {
+      readonly source: 'epoch2-pointer'
+      readonly pointer: ImportedGenerationPointerV2
+      readonly payload: DatabaseGenerationPayload
+    }
   | { readonly source: 'legacy-missing-pointer'; readonly payload: DatabaseGenerationPayload }
   | { readonly source: 'verified-pointer'; readonly payload: DatabaseGenerationPayload }
   /**
@@ -60,7 +61,11 @@ export type ResolvedDatabaseGeneration =
    * provisioned by the platform and installed by the release migration Job, so
    * there is no local pointer and no SQLite migration manifest behind it.
    */
-  | { readonly source: 'hosted-installation'; readonly payload: DatabaseGenerationPayload }
+  | {
+      readonly source: 'hosted-installation'
+      readonly payload: DatabaseGenerationPayload
+      readonly identity: HostedDatabaseIdentity
+    }
 
 export class DatabaseGenerationError extends Error {
   constructor(
@@ -176,6 +181,46 @@ function readGenerationDocument(
   return text === null ? null : parseDatabaseGenerationText(text, artifacts.pointerLabel)
 }
 
+function epoch2Generation(
+  artifacts: DatabaseGenerationArtifactReader,
+  logicalDigest: string,
+): ResolvedDatabaseGeneration | null {
+  let text: string | null
+  let document: unknown
+  try {
+    text = artifacts.readPointer()
+    if (text === null) return null
+    document = JSON.parse(text)
+  } catch {
+    throw new DatabaseGenerationError(
+      'generation-pointer-corrupt',
+      `database generation pointer is unreadable: ${artifacts.pointerLabel}`,
+    )
+  }
+  if (
+    typeof document !== 'object' ||
+    document === null ||
+    (document as { payload?: { version?: number } }).payload?.version !== 2
+  )
+    return null
+  const pointer = parseGenerationPointerV2(text)
+  if (pointer.payload.schemaEpoch !== 2) throw new Error('unsupported-schema-epoch')
+  const p = pointer.payload
+  return {
+    source: 'epoch2-pointer',
+    pointer,
+    payload: {
+      version: 1,
+      generationId: p.generationId,
+      provider: p.provider,
+      operationId: p.operationId,
+      schemaDigest: logicalDigest,
+      manifestDigest: p.manifestDigest,
+      activatedAt: p.activatedAt,
+    },
+  }
+}
+
 function legacyResolvedGeneration(schemaDigest: string): ResolvedDatabaseGeneration {
   return { source: 'legacy-missing-pointer', payload: legacyGeneration(schemaDigest) }
 }
@@ -221,6 +266,8 @@ export function readDatabaseGenerationForBootstrapFromArtifacts(
   artifacts: DatabaseGenerationArtifactReader,
   options: DatabaseGenerationBootstrapPolicy,
 ): DatabaseGenerationBootstrapCandidate {
+  const epoch2 = epoch2Generation(artifacts, options.expectedSchemaDigest)
+  if (epoch2) return { kind: 'current', generation: epoch2 }
   const file = readGenerationDocument(artifacts)
   if (file === null) {
     return { kind: 'current', generation: legacyResolvedGeneration(options.expectedSchemaDigest) }
@@ -260,6 +307,8 @@ export function readDatabaseGenerationFromArtifacts(
   artifacts: DatabaseGenerationArtifactReader,
   options: DatabaseGenerationReadPolicy,
 ): ResolvedDatabaseGeneration {
+  const epoch2 = epoch2Generation(artifacts, options.expectedSchemaDigest)
+  if (epoch2) return epoch2
   const file = readGenerationDocument(artifacts)
   if (file === null) return legacyResolvedGeneration(options.expectedSchemaDigest)
   if (file.payload.schemaDigest !== options.expectedSchemaDigest) {
@@ -279,14 +328,15 @@ export function readDatabaseGenerationFromArtifacts(
  *
  * Like every PostgreSQL generation it names the operation that produced its
  * rows: the release migration Job's installation copy, registered once in the
- * database's logical-copy metadata (`activateHostedPostgresqlGeneration`).
+ * database's epoch-2 installation identity receipt. The active generation may
+ * change after a move or restore without changing the installation identity.
  */
 export function hostedDatabaseGeneration(input: {
   readonly project: string
   readonly service: string
   readonly schemaDigest: string
   readonly env?: Readonly<Record<string, string | undefined>>
-}): ResolvedDatabaseGeneration {
+}): Extract<ResolvedDatabaseGeneration, { source: 'hosted-installation' }> {
   const platformId = input.env?.CS_DATABASE_GENERATION_ID
   const platformOperation = input.env?.CS_DATABASE_GENERATION_OPERATION
   const resourceId = /^[a-f0-9]{8}-[a-f0-9]{4}-7[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/
@@ -309,6 +359,12 @@ export function hostedDatabaseGeneration(input: {
   })
   return {
     source: 'hosted-installation',
+    identity: {
+      project: input.project,
+      service: input.service,
+      platformGenerationId: platformId ?? null,
+      platformOperationId: platformOperation ?? null,
+    },
     payload: {
       version: 1,
       generationId,

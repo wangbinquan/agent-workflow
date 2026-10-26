@@ -1,3 +1,9 @@
+// Released picker oracle; executable runtime selection is covered through RunSelectionReader.
+import { isFresherNodeRun } from './helpers/model/frozenSelection/pickers'
+import { legacyContentRef } from '@/platform/content/contentRef'
+import { contentRowColumns } from '@/platform/content/infrastructure/contentStore'
+import { nodeRunFixtureColumns } from './helpers/model/nodeRun'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { withO2Closure } from './helpers/o2Closure'
 // RFC-053 PR-A T1f — loop / fan-out / wrapper nesting interactions.
 //
@@ -21,7 +27,7 @@ import {
   readNodeRunFixtures,
 } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -35,7 +41,7 @@ import {
   submitReviewDecision,
 } from '@/modules/collaboration/infrastructure/review'
 import { transitionTaskStatusByEvent } from '../src/services/lifecycle'
-import { isFresherNodeRun } from '../src/services/scheduler'
+
 import { runGit } from '../src/util/git'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 
@@ -203,14 +209,17 @@ describeEachProvider('循环 / 扇出 / 包装器嵌套（双引擎）', (harnes
 
       // iter=0 row untouched.
       const iter0After = (
-        await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, iter0Review))
+        await h.db
+          .select(nodeRunFixtureColumns(h.db))
+          .from(nodeRuns)
+          .where(eq(nodeRuns.id, iter0Review))
       )[0]!
       expect(iter0After.status).toBe('done')
       expect(iter0After.iteration).toBe(0)
 
       // New iter=1 review row created.
       const iter1Rows = await h.db
-        .select()
+        .select(nodeRunFixtureColumns(h.db))
         .from(nodeRuns)
         .where(and(eq(nodeRuns.taskId, h.taskId), eq(nodeRuns.nodeId, 'rev_1')))
       const iter1Row = iter1Rows.find((r) => r.iteration === 1)
@@ -277,7 +286,9 @@ describeEachProvider('循环 / 扇出 / 包装器嵌套（双引擎）', (harnes
         sourcePortName: 'docpath',
         versionIndex: 1,
         reviewIteration: 0,
-        bodyPath: 'doc_versions/v1.md',
+        ...contentRowColumns(
+          legacyContentRef('review-body-path', 'local-file', 'doc_versions/v1.md'),
+        ),
         decision: 'pending',
       })
 
@@ -303,7 +314,12 @@ describeEachProvider('循环 / 扇出 / 包装器嵌套（双引擎）', (harnes
       )
 
       // iter=0 agent row untouched.
-      const iter0After = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, iter0Agent)))[0]!
+      const iter0After = (
+        await h.db
+          .select(nodeRunFixtureColumns(h.db))
+          .from(nodeRuns)
+          .where(eq(nodeRuns.id, iter0Agent))
+      )[0]!
       expect(iter0After.status).toBe('done')
 
       // iter=1 has TWO doc rows now: original (canceled supersede) + retry=1 (pending).
@@ -457,7 +473,9 @@ describeEachProvider('循环 / 扇出 / 包装器嵌套（双引擎）', (harnes
           sourcePortName: 'docpath',
           versionIndex: 1,
           reviewIteration: 0,
-          bodyPath: `doc_versions/iter${iter}.md`,
+          ...contentRowColumns(
+            legacyContentRef('review-body-path', 'local-file', `doc_versions/iter${iter}.md`),
+          ),
           decision: 'approved',
           decidedAt: Date.now() - 600,
         })

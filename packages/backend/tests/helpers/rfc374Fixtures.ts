@@ -1,13 +1,12 @@
+import { taskAggregateWrite } from '@/modules/task-execution/infrastructure/taskDefinitionWriteParticipant'
+import { withTargetMintIdentity } from './rfc395Mint'
 // RFC-374: shared real persistence fixtures; assertions never depend on an absolute allocated seq.
-import { deriveNodeRunRole } from '@/modules/task-execution/public/types'
 import { taskFixture, workflowFixture } from './model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { first } from '@/platform/persistence/queryHelpers'
 import { ulid } from 'ulid'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { eq } from 'drizzle-orm'
-import { backfillNodeRunSequences } from '@/modules/task-execution/application/nodeRunSeqBackfill'
-import { createNodeRunSeqBackfillStore } from '@/modules/task-execution/infrastructure/legacyMigration/nodeRunSeqBackfillStore'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { createNodeRunMintParticipantInTx } from '@/modules/task-execution/infrastructure/nodeRunMintParticipant'
 import type { NodeRunMintInput } from '@/modules/task-execution/application/ports/nodeRunLifecyclePersistence'
@@ -45,17 +44,21 @@ export async function mintSequenceRun(
   taskId: string,
   input: Partial<NodeRunMintInput> = {},
 ): Promise<string> {
-  return databaseSessionFor(db).transaction((tx) =>
-    createNodeRunMintParticipantInTx(tx).mint({
-      ...deriveNodeRunRole({ nodeId: input.nodeId ?? 'n', rerunCause: input.cause ?? 'initial' }),
-      taskId,
-      nodeId: 'n',
-      iteration: 0,
-      status: 'done',
-      cause: 'initial',
-      ...input,
-    }),
-  )
+  return databaseSessionFor(db).transaction(async (tx) => {
+    await taskAggregateWrite.lockTaskAggregateRoot(tx, taskId)
+    return await createNodeRunMintParticipantInTx(tx).mint(
+      withTargetMintIdentity({
+        role: 'node-attempt',
+        syntheticKind: null,
+        taskId,
+        nodeId: 'n',
+        iteration: 0,
+        status: 'done',
+        cause: 'initial',
+        ...input,
+      }),
+    )
+  })
 }
 
 /**
@@ -81,9 +84,13 @@ export async function allocateNodeRunSeq(
   return allocation.seq
 }
 
-/** Simulate rows written by the old binary, then exercise the real startup catch-up before resuming. */
+/** Target fixtures arrive sequenced by mint or conversion; resume never backfills them. */
 export async function catchUpLegacySequenceTask(db: PersistenceDb, taskId: string): Promise<void> {
   const { nodeRuns } = tablesOf(db)
-  await db.update(nodeRuns).set({ seq: null }).where(eq(nodeRuns.taskId, taskId))
-  await backfillNodeRunSequences(createNodeRunSeqBackfillStore(db))
+  const rows = await db
+    .select({ seq: nodeRuns.seq })
+    .from(nodeRuns)
+    .where(eq(nodeRuns.taskId, taskId))
+  if (rows.some((row) => !Number.isSafeInteger(row.seq)))
+    throw new Error('target-sequence-required')
 }

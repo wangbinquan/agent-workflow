@@ -20,7 +20,6 @@ import { dbTxSync } from '../src/db/txSync'
 import { listGrantedResourceIdsInTx } from '../src/modules/resource-catalog/infrastructure/sqliteResourceGrantRepository'
 import { listGrantedResourceIds } from '../src/services/resourceAcl'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const SRC = resolve(import.meta.dir, '..', 'src')
 
 function actorOf(id: string): Actor {
@@ -36,7 +35,7 @@ describe('RFC-282 D2 — grant-set query single source', () => {
   const userB = ulid()
 
   beforeEach(async () => {
-    db = createInMemoryDb(MIGRATIONS)
+    db = createInMemoryDb()
     for (const id of [userA, userB]) {
       const { users } = tablesOf(db)
       await insertOne(db, users, {

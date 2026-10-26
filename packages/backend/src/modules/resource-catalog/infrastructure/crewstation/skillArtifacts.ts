@@ -1,4 +1,4 @@
-import { legacySkillStagingPath } from '@/platform/content/legacySkill'
+import { skillStagingPath } from '@/platform/content/locations/skill'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { and, eq } from 'drizzle-orm'
 import { BundleSkillPayloadSchema, IntentSkillPayloadSchema } from '@agent-workflow/shared'
@@ -20,6 +20,7 @@ import { markSkillBootVerified } from '../legacy/skillBootVerify'
 import { resourcePackageSkillRecoveryDisposition } from '../../domain/resourcePackageSkillRecovery'
 import {
   LIVE_TREE,
+  skillRowPath,
   deleteTree,
   hashSkillTree,
   normalizeSkillPath,
@@ -28,6 +29,7 @@ import {
   treeExists,
   versionTree,
   writeTree,
+  copyTree,
   type SkillTreeFile,
 } from '../databaseSkillTrees'
 
@@ -36,8 +38,7 @@ interface SkillStage {
   readonly operationId: string
   readonly version: number
 }
-const stageReference = (stage: SkillStage) =>
-  legacySkillStagingPath(stage.skillId, stage.operationId)
+const stageReference = (stage: SkillStage) => skillStagingPath(stage.skillId, stage.operationId)
 function assertStage(stage: SkillStage) {
   if (
     ![stage.skillId, stage.operationId].every((id) => /^[A-Za-z0-9_-]+$/.test(id)) ||
@@ -88,6 +89,7 @@ export function createDatabaseSkillArtifactOwners(
       if (await treeExists(tx, identity.skillId, staging)) await checkStage(tx, identity, digest)
       else await writeTree(tx, identity.skillId, staging, candidate, Date.now())
       return {
+        contentKind: 'database-bytes' as const,
         managedPath: skillFilesRel(identity.skillId),
         filesPath: skillVersionRelPath(identity.skillId, identity.version),
         contentHash: digest,
@@ -117,19 +119,20 @@ export function createDatabaseSkillArtifactOwners(
         !skill ||
         skill.contentVersion < identity.version ||
         !version?.contentHash ||
-        skill.managedPath !== skillFilesRel(identity.skillId) ||
-        version.filesPath !== skillVersionRelPath(identity.skillId, identity.version)
+        skillRowPath(skill, identity.skillId, 'live') !== skillFilesRel(identity.skillId) ||
+        skillRowPath(version, identity.skillId, `version:${identity.version}`) !==
+          skillVersionRelPath(identity.skillId, identity.version)
       )
         throw new Error('hosted-skill-publication-metadata-mismatch')
       const target = versionTree(identity.version)
       let files = await readTree(tx, identity.skillId, target)
       if (files.length === 0) {
         files = await checkStage(tx, identity, version.contentHash)
-        await writeTree(tx, identity.skillId, target, files, Date.now())
+        await copyTree(tx, identity.skillId, stagingTree(identity.operationId), target, Date.now())
       } else if (hashSkillTree(files) !== version.contentHash)
         throw new Error('hosted-skill-version-hash-mismatch')
       if (skill.contentVersion === identity.version)
-        await writeTree(tx, identity.skillId, LIVE_TREE, files, Date.now())
+        await copyTree(tx, identity.skillId, target, LIVE_TREE, Date.now())
       await deleteTree(tx, identity.skillId, stagingTree(identity.operationId))
       return skill.contentVersion === identity.version
     })

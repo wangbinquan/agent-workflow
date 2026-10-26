@@ -2,16 +2,16 @@
 // tests use the exact external-connection protocol without a SQLite fallback.
 
 import { withNativeTransactions } from './helpers/nativeTransactions'
-import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import { buildFrozenEpoch1LogicalSchemaContract as buildLogicalSchemaContract } from '@/platform/persistence/migration/epoch1/contract'
 import { describe, expect, test } from 'bun:test'
 import {
   migratePostgresqlSchema,
   PostgresqlMigrationError,
-} from '@/platform/persistence/postgresqlMigrator'
+} from '@/platform/persistence/migration/legacy/postgresqlMigrator'
 import {
   POSTGRESQL_BASELINE_ID,
   type PostgresqlSchemaPlan,
-} from '@/platform/persistence/postgresqlSchema'
+} from '@/platform/persistence/migration/legacy/postgresqlSchema'
 import type {
   PostgresqlDatabaseRuntime,
   PostgresqlPool,

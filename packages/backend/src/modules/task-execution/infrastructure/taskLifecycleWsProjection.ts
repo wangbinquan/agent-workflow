@@ -1,10 +1,11 @@
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { taskReadColumns } from './taskRepositorySql'
 // RFC-359 W4-B1 —— 任务生命周期 WS 投影：一份实现，两个 provider 共用。
 
 import { workflowNameExpression } from '@/modules/resource-catalog/public/queries'
-import { projectStoredTaskRepositorySummary } from './taskRepositorySurface'
-import { decodeTaskSubject, projectTaskSubject } from '../domain/taskSubject'
-import { tablesOf } from '@/platform/persistence/sessionTables'
 import { eq } from 'drizzle-orm'
+import { projectTaskSubject, taskReadSubjectFromDefinition } from '../domain/taskSubject'
+import { projectStoredTaskRepositorySummary } from './taskRepositorySurface'
 
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 
@@ -21,7 +22,10 @@ export function createDatabaseTaskLifecycleWsProjection(
     async findCreatedTask(taskId: string): Promise<TaskLifecycleCreatedProjection | null> {
       const { tasks } = tablesOf(db)
       const rows = await db
-        .select({ task: tasks, workflowName: workflowNameExpression(db, tasks.workflowId) })
+        .select({
+          task: taskReadColumns(db),
+          workflowName: workflowNameExpression(db, taskReadColumns(db).workflowId),
+        })
         .from(tasks)
         .where(eq(tasks.id, taskId))
         .limit(1)
@@ -31,7 +35,7 @@ export function createDatabaseTaskLifecycleWsProjection(
       return Object.freeze({
         id: row.task.id,
         name: row.task.name,
-        ...projectTaskSubject(decodeTaskSubject(row.task), row.workflowName),
+        ...projectTaskSubject(taskReadSubjectFromDefinition(row.task), row.workflowName),
         repoPath: repository.repoPath,
         repoUrl: repository.repoUrl,
         cachedRepoId: repository.cachedRepoId,

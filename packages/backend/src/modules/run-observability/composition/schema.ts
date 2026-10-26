@@ -1,7 +1,7 @@
-// RFC-395 I-a: schema-only entry; this context's composition root contains only schema exports.
+// Schema-only composition exit for the live registry.
 export {
   schemaContribution,
   observationCallModels,
   observationCalls,
   observationPrices,
-} from '../composition'
+} from '../infrastructure/persistence/schema'

@@ -16,7 +16,7 @@ import { ulid } from 'ulid'
 
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { PluginCreateRecord } from '@/modules/resource-catalog/application/plugins/ports'
-import { createAgentPersistenceValues } from '@/modules/resource-catalog/infrastructure/agentPersistence'
+
 import { pluginConfigHash } from '@/modules/resource-catalog/infrastructure/pluginPersistence'
 import { createPluginRepository } from '@/modules/resource-catalog/infrastructure/pluginRepository'
 import { staleConflictError } from '@/util/errors'
@@ -165,18 +165,16 @@ describeEachProvider('RFC-359 W4-D17 —— Plugin 仓库', (harness) => {
     )
     const agentId = ulid()
     const { agents } = tablesOf(harness.db)
-    await agentFixture(
-      harness.db,
-      createAgentPersistenceValues({
-        id: agentId,
-        agent: CreateAgentSchema.parse({
-          name: `agent-${ulid().slice(-6).toLowerCase()}`,
-          plugins: [created.id],
-        }),
-        ownerUserId: owner,
-        now: T0,
+    await agentFixture(harness.db, {
+      id: agentId,
+      ...CreateAgentSchema.parse({
+        name: `agent-${ulid().slice(-6).toLowerCase()}`,
+        plugins: [created.id],
       }),
-    )
+      ownerUserId: owner,
+      createdAt: T0,
+      updatedAt: T0,
+    })
     expect((await repository.findAgentReferences(created.id)).map((ref) => ref.id)).toEqual([
       agentId,
     ])

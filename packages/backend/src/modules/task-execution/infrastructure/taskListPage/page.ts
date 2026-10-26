@@ -1,10 +1,10 @@
+import { tablesOf } from '@/platform/persistence/sessionTables'
 // RFC-357 —— 列表页的编排：解析 → 选查询形状 → 一次 `db.all` → 页内富化 → 组页。
 //
 // 平移自 `services/taskOperations.ts` 的 `listTaskOperationsPage`，管线选择规则逐字不变
 // （默认视图快路径 / 过滤视图快路径 / 穷举管线 / 子页），只把数据库参数放宽到两个
 // provider 的公共基类型。
 
-import { tablesOf } from '@/platform/persistence/sessionTables'
 import { rawRows as rawRowsRow } from '@/platform/persistence/queryHelpers'
 import {
   TaskOperationsChildPageSchema,

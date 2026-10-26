@@ -1,10 +1,16 @@
+import {
+  seedCodeHistoryRows,
+  historyFixtureReader,
+  seedEmptyCodeHistory,
+  type HistoryFixtureInsert,
+} from './helpers/legacyCapabilitySeed'
 // RFC-359 W4-B5 批 b —— code-capability 四对（评审人解析读取 / 工作项投影 / 投递链读取 / 模板上游持久化）+
 // digital-employee 一对（反应轮次查询）合一，两个引擎各跑一遍：NULL settled_at 两引擎都排最后、count() 回 number、
 // 分页游标、模板上游的锁定读 + 决策 + 落补丁在一个事务里。
 
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
-import { expect, test } from 'bun:test'
+import { beforeEach, expect, test } from 'bun:test'
 
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { TemplateUpstreamMergePatch } from '@/modules/code-capability/application/ports/templateUpstreamPersistence'
@@ -37,8 +43,7 @@ async function seedWorkItem(
   createdAt: number,
   rounds: number,
 ): Promise<void> {
-  const { codeWorkItems, codeWorkRounds } = tablesOf(db)
-  await insertOne(db, codeWorkItems, {
+  await seedCodeHistoryRows(db, 'code_work_items', {
     id,
     codeHostEndpointId: 'ep-b5b',
     stableProjectId: 'proj-b5b',
@@ -51,7 +56,9 @@ async function seedWorkItem(
     updatedAt: createdAt,
   })
   if (rounds === 0) return
-  await db.insert(codeWorkRounds).values(
+  await seedCodeHistoryRows(
+    db,
+    'code_work_rounds',
     Array.from({ length: rounds }, (_, index) => ({
       id: `${id}-r${String(index + 1)}`,
       workItemId: id,
@@ -67,6 +74,9 @@ async function seedWorkItem(
 describeEachProvider(
   'RFC-359 W4-B5b —— code-capability / digital-employee 读取与上游持久化',
   (harness) => {
+    beforeEach(async () => {
+      await seedEmptyCodeHistory(harness.db)
+    })
     test('反应轮次查询', async () => {
       const db = harness.db
       const rounds = createReactionRoundQueries(db)
@@ -143,10 +153,10 @@ describeEachProvider(
 
     test('投递链读取 / 工作项投影分页', async () => {
       const db = harness.db
-      const deliveries = createDeliveryChainRead(db)
+      const deliveries = createDeliveryChainRead(historyFixtureReader(db))
       const delivery = (
         id: string,
-        over: Partial<PersistenceTables['codeTriggerDeliveries']['$inferInsert']> & {
+        over: HistoryFixtureInsert<'code_trigger_deliveries'> & {
           readonly createdAt: number
         },
       ) => ({
@@ -159,16 +169,13 @@ describeEachProvider(
         updatedAt: over.createdAt,
         ...over,
       })
-      const { codeTriggerDeliveries, codeRoundStages } = tablesOf(db)
-      await db
-        .insert(codeTriggerDeliveries)
-        .values([
-          delivery('d1', { createdAt: NOW, outcome: 'failed', reason: 'boom', queuePosition: 3 }),
-          delivery('d2', { createdAt: NOW + 1, step: 'published' }),
-          delivery('d3', { createdAt: NOW + 2, outcome: 'failed', correlationId: 'corr-d1' }),
-          delivery('d4', { createdAt: NOW + 3, outcome: 'failed', stableProjectId: 'proj-other' }),
-          delivery('d5', { createdAt: NOW + 4, outcome: 'dropped', stableProjectId: 'proj-other' }),
-        ])
+      await seedCodeHistoryRows(db, 'code_trigger_deliveries', [
+        delivery('d1', { createdAt: NOW, outcome: 'failed', reason: 'boom', queuePosition: 3 }),
+        delivery('d2', { createdAt: NOW + 1, step: 'published' }),
+        delivery('d3', { createdAt: NOW + 2, outcome: 'failed', correlationId: 'corr-d1' }),
+        delivery('d4', { createdAt: NOW + 3, outcome: 'failed', stableProjectId: 'proj-other' }),
+        delivery('d5', { createdAt: NOW + 4, outcome: 'dropped', stableProjectId: 'proj-other' }),
+      ])
       expect(
         (await deliveries.recent({ stableProjectId: 'proj-b5b' })).map((row) => row.id),
       ).toEqual(['d3', 'd2', 'd1'])
@@ -196,11 +203,11 @@ describeEachProvider(
         updatedAt: NOW,
       })
 
-      const projection = createWorkItemProjectionRead(db)
+      const projection = createWorkItemProjectionRead(historyFixtureReader(db))
       expect(await projection.readPage({})).toEqual({ items: [], nextCursor: null })
       await seedWorkItem(db, 'wi-old', NOW, 3)
       await seedWorkItem(db, 'wi-new', NOW + 100, 0)
-      await db.insert(codeRoundStages).values([
+      await seedCodeHistoryRows(db, 'code_round_stages', [
         {
           id: 's-b',
           roundId: 'wi-old-r3',

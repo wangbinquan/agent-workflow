@@ -2,6 +2,7 @@
 import { is, type SQL, type SQLWrapper } from 'drizzle-orm'
 import { SQLiteSelectBase } from 'drizzle-orm/sqlite-core'
 import type { DbClient } from '@/db/client'
+import type { BunSQLiteDatabase } from 'drizzle-orm/bun-sqlite'
 import type { DbTxSync } from '@/db/txSync'
 import { PgSelectBase } from 'drizzle-orm/pg-core'
 import type { PersistenceDb, PersistenceWriteResult } from './querySurface'
@@ -135,7 +136,7 @@ function nativeRaw(db: PersistenceDb): NativeRawDatabase {
 }
 
 type RawQuery = SQL | SQLWrapper | string
-type SyncDatabase = DbClient | DbTxSync
+type SyncDatabase = (Pick<BunSQLiteDatabase, 'all' | 'get' | 'run'> & PersistenceDb) | DbTxSync
 
 function decodeRows<R extends object>(result: unknown, codecs: RawRowCodecs<R>): R[] {
   if (!Array.isArray(result)) throw new Error('Native raw query did not return rows')

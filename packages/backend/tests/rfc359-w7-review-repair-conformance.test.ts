@@ -1,3 +1,5 @@
+import { legacyContentRef } from '@/platform/content/contentRef'
+import { contentRowColumns } from '@/platform/content/infrastructure/contentStore'
 // RFC-359 W7 —— `ReviewRepairParticipant`（RFC-057 R1 修复的协作侧事实面）双引擎对拍。
 //
 // 这条测试存在的理由：合一前 `sqliteReviewRepairParticipant.ts` /
@@ -86,7 +88,13 @@ async function seedDocVersion(
     sourcePortName: 'document',
     versionIndex: seed.versionIndex ?? 3,
     reviewIteration: seed.reviewIteration ?? 2,
-    bodyPath: `runs/${taskId}/review/review/document/v3.md`,
+    ...contentRowColumns(
+      legacyContentRef(
+        'review-body-path',
+        'local-file',
+        `runs/${taskId}/review/review/document/v3.md`,
+      ),
+    ),
     sourceFilePath: seed.sourceFilePath === undefined ? 'docs/result.md' : seed.sourceFilePath,
     decision: seed.decision ?? 'approved',
   })

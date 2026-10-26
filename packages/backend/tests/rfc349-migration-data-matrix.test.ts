@@ -13,23 +13,23 @@ import {
   encodeLogicalRow,
   type CanonicalLogicalRow,
   type LogicalTableChunk,
-} from '@/platform/persistence/logicalDatabaseArtifact'
+} from '@/platform/persistence/migration/legacy/logicalDatabaseArtifact'
 import {
   exportLogicalDatabaseArtifact,
   type LogicalDatabaseExportSource,
-} from '@/platform/persistence/logicalDatabaseExport'
+} from '@/platform/persistence/migration/legacy/logicalDatabaseExport'
 import {
   restoreLogicalDatabaseBackup,
   type LogicalDatabaseRestoreTarget,
   type LogicalTargetTableVerification,
-} from '@/platform/persistence/logicalDatabaseRestore'
+} from '@/platform/persistence/migration/legacy/logicalDatabaseRestore'
 import type {
   LogicalCodec,
   LogicalColumnContract,
   LogicalSchemaContract,
   LogicalTableContract,
 } from '@/platform/persistence/schemaContract'
-import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import { buildFrozenEpoch1LogicalSchemaContract as buildLogicalSchemaContract } from '@/platform/persistence/migration/epoch1/contract'
 
 const roots: string[] = []
 const SCHEMA_DIGEST = `sha256:${'d'.repeat(64)}`

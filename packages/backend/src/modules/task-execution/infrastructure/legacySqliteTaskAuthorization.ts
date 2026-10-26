@@ -1,3 +1,4 @@
+import { tablesOf } from '@/platform/persistence/sessionTables'
 // 任务可见性 / 归属范围谓词的**兼容出口**。
 //
 // RFC-357 之前这里是判据本身；现在判据的唯一实现在
@@ -9,9 +10,7 @@
 // 缺陷（facets 数在 view 之后、origin 按 scheduled_task_id 猜、层级写死）。在同一个模块
 // 里再留一份「长得一样的」授权谓词，是同一个错误的更小号版本。
 
-import { tablesOf } from '@/platform/persistence/sessionTables'
-import type { SQL, SQLWrapper } from 'drizzle-orm'
-import { and, inArray } from 'drizzle-orm'
+import { type SQL, type SQLWrapper, and, inArray } from 'drizzle-orm'
 
 import type { Actor } from '@/auth/actor'
 import { chunkedAll } from '@/util/sqlChunk'

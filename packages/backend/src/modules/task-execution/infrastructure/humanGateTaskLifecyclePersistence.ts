@@ -1,11 +1,14 @@
+import type { HistoryRestrictionPort } from '@/platform/contracts/historyRestriction'
+import { taskAggregateWrite } from './taskDefinitionWriteParticipant'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { createHumanGatePersistenceParticipantInTx } from './humanGatePersistenceParticipant'
 // RFC-359 W4-D25 —— human-gate 停靠原子：一份实现，两个引擎共用。
 //
 // 合一前 `sqliteHumanGateTaskLifecyclePersistence.ts` 与 `postgresqlHumanGateTaskLifecyclePersistence.ts`
 // 各一份（相似度 0.50），差别只在三处：事务原语（dbTxSync ↔ PG serializable）、owner 围栏
 // （ownership store 的库外预读 ↔ 事务内 assert）与停靠候选行的读法。现在三处都取中立原语：
-//   * `withTaskExecutionSerializable` —— SQLite 是 BEGIN IMMEDIATE（本来就全库独占），PG 抬到
-//     SERIALIZABLE 并按 40001 重放；合一没有改任一引擎的隔离级别。
+//   * `withTaskExecutionAggregateWrite` —— SQLite 保持 BEGIN IMMEDIATE；PG READ COMMITTED，
+//     L-1 的 owner → task 根锁保护门操作、问题唯一性、任务修订号与铸行，保留整笔冲突重放。
 //   * `assertTaskOwnerTx` / `assertTaskOwnerlessTx` —— 「有 token 按 owner、没有按无主」同一条围栏，
 //     且从库外预读挪进**同一笔事务**，两个引擎都不再有「读完到写之间被人认领」的窗口。
 //   * `transitionHumanGateTask` —— 蓝本是 SQLite 跑了最久的 `transitionHumanGateTaskTx`，错误类
@@ -14,35 +17,32 @@ import { createHumanGatePersistenceParticipantInTx } from './humanGatePersistenc
 // collaboration 侧的投影由 `DatabaseHumanGateOpenParticipantInTx` 在同一笔事务里完成；本文件只
 // 负责任务生命周期 CAS、围栏与提交后的事件发布。
 
-import { tablesOf } from '@/platform/persistence/sessionTables'
 import { eq } from 'drizzle-orm'
 
-import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { DatabaseHumanGateOpenParticipantInTx } from '@/modules/collaboration/infrastructure/humanGateOpenParticipant'
 import { DatabaseHumanGateOperationJournal } from '@/modules/collaboration/infrastructure/humanGateOperationJournal'
 import { publishCommittedEventsAfterCommit } from '@/platform/events/committed/runtime'
 import { committedEventGroupId } from '@/platform/events/committed/types'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type {
   HumanGateTaskLifecycle,
   HumanGateTaskParkResult,
 } from '../application/ports/humanGateTaskLifecycle'
 import type { OwnershipToken } from '../domain/ownership'
 import type { TaskExecutionPostCommitEventRef } from '../domain/postCommitEventRef'
+import { createConsumedInputsParticipantInTx } from './consumedInputsParticipant'
 import { transitionHumanGateTask } from './humanGateTaskTransition'
 import { createNodeRunLifecycleParticipantInTx } from './nodeRunLifecyclePersistence'
 import { createNodeRunMintParticipantInTx } from './nodeRunMintParticipant'
-import { createConsumedInputsParticipantInTx } from './consumedInputsParticipant'
 import {
   assertTaskOwnerTx,
   assertTaskOwnerlessTx,
-  withTaskExecutionSerializable,
+  withTaskExecutionAggregateWrite,
   type TaskExecutionTransaction,
 } from './ownedTaskExecution'
 import type { DrizzleTaskRuntimeLifecyclePersistence } from './taskRuntimeLifecyclePersistence'
 
 class ManualQuestionPending extends Error {}
-
-const journal = new DatabaseHumanGateOperationJournal(createHumanGatePersistenceParticipantInTx)
 
 /** 「有 token 就按 owner 围栏，没有就按无主围栏」——与合一前两侧同一条判据，只是挪进了同一笔事务。 */
 async function fence(
@@ -53,9 +53,10 @@ async function fence(
 ): Promise<void> {
   if (token === undefined) {
     await assertTaskOwnerlessTx(tx, taskId)
-    return
+  } else {
+    await assertTaskOwnerTx(tx, token, now)
   }
-  await assertTaskOwnerTx(tx, token, now)
+  await taskAggregateWrite.lockTaskAggregateRoot(tx, taskId)
 }
 
 /**
@@ -84,21 +85,30 @@ async function parkRevision(
   return row?.lifecycleEventRevision ?? input.prepared.expectedTaskRevision
 }
 
-function gatesIn(tx: TaskExecutionTransaction): DatabaseHumanGateOpenParticipantInTx {
-  return new DatabaseHumanGateOpenParticipantInTx(
-    tx,
-    journal,
-    createNodeRunMintParticipantInTx(tx),
-    createNodeRunLifecycleParticipantInTx(tx),
-    createConsumedInputsParticipantInTx(),
-  )
-}
-
 export class DatabaseHumanGateTaskLifecyclePersistence implements HumanGateTaskLifecycle {
+  private readonly journal: DatabaseHumanGateOperationJournal
+
   constructor(
     private readonly db: PersistenceDb,
     private readonly runtimeLifecycle: DrizzleTaskRuntimeLifecyclePersistence,
-  ) {}
+    private readonly options: { readonly historyRestrictions: HistoryRestrictionPort },
+  ) {
+    this.journal = new DatabaseHumanGateOperationJournal(
+      createHumanGatePersistenceParticipantInTx,
+      options?.historyRestrictions,
+    )
+  }
+
+  private gatesIn(tx: TaskExecutionTransaction): DatabaseHumanGateOpenParticipantInTx {
+    return new DatabaseHumanGateOpenParticipantInTx(
+      tx,
+      this.journal,
+      createNodeRunMintParticipantInTx(tx),
+      createNodeRunLifecycleParticipantInTx(tx),
+      createConsumedInputsParticipantInTx(),
+      this.options?.historyRestrictions,
+    )
+  }
 
   async parkPrepared(
     input: Parameters<HumanGateTaskLifecycle['parkPrepared']>[0],
@@ -111,9 +121,9 @@ export class DatabaseHumanGateTaskLifecyclePersistence implements HumanGateTaskL
     ) {
       throw new Error('prepared-human-gate-task-or-manifest-mismatch')
     }
-    const result = await withTaskExecutionSerializable(this.db, async (tx) => {
+    const result = await withTaskExecutionAggregateWrite(this.db, async (tx) => {
       await fence(tx, input.prepared.taskId, input.token, input.now)
-      const consumed = await gatesIn(tx).consumePreparedGateTx({
+      const consumed = await this.gatesIn(tx).consumePreparedGateTx({
         prepared: input.prepared,
         taskRevision: input.prepared.expectedTaskRevision,
         now: input.now,
@@ -147,7 +157,7 @@ export class DatabaseHumanGateTaskLifecyclePersistence implements HumanGateTaskL
   async settleManualQuestionParks(
     input: Parameters<HumanGateTaskLifecycle['settleManualQuestionParks']>[0],
   ): ReturnType<HumanGateTaskLifecycle['settleManualQuestionParks']> {
-    const result = await withTaskExecutionSerializable(this.db, async (tx) => {
+    const result = await withTaskExecutionAggregateWrite(this.db, async (tx) => {
       await fence(tx, input.taskId, input.token, input.now)
       const { tasks } = tablesOf(tx)
       const task = (
@@ -169,7 +179,7 @@ export class DatabaseHumanGateTaskLifecyclePersistence implements HumanGateTaskL
       ) {
         return empty
       }
-      const gates = gatesIn(tx)
+      const gates = this.gatesIn(tx)
       const operationIds = await gates.listPreparedManualQuestionParksTx(input.taskId)
       if (operationIds.length === 0) {
         return { ...empty, taskRevision: task.lifecycleEventRevision, operationIds }
@@ -208,7 +218,7 @@ export class DatabaseHumanGateTaskLifecyclePersistence implements HumanGateTaskL
   ): ReturnType<HumanGateTaskLifecycle['trySetWhenNoManualQuestionParks']> {
     try {
       const won = await this.runtimeLifecycle.trySetWithGuard(input, async (tx) => {
-        const pending = await gatesIn(tx).listPreparedManualQuestionParksTx(input.taskId)
+        const pending = await this.gatesIn(tx).listPreparedManualQuestionParksTx(input.taskId)
         if (pending.length > 0) throw new ManualQuestionPending()
       })
       return { kind: 'settled', won }

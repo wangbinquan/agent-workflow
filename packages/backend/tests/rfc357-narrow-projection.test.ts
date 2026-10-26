@@ -106,10 +106,10 @@ describe('RFC-357 the task list never pays for rows or columns it does not retur
     )
     expect(block.length).toBeGreaterThan(0)
     for (const column of LIST_COLUMNS) {
-      expect(block, `TASK_LIST_COLUMNS is missing ${column}`).toContain(
+      expect(block, `TASK_LIST_COLUMNS is missing ${column}`).toMatch(
         column === 'workgroupLaunch'
           ? 'workgroupLaunch: taskWorkgroupLaunchSelection(db)'
-          : `${column}: tasks.${column}`,
+          : new RegExp(`${column}: (?:tasks\\.${column}|taskReadColumns\\(db\\)\\.${column})`),
       )
     }
     const configReader = read(
@@ -118,8 +118,8 @@ describe('RFC-357 the task list never pays for rows or columns it does not retur
       'infrastructure',
       'taskWorkgroupConfig.ts',
     )
-    expect(configReader).toContain('tasks.workgroupConfigJson')
-    expect(configReader).toContain('.mapWith(decodeTaskWorkgroupLaunchConfig)')
+    expect(configReader).toContain('taskDefinitions.workgroupConfigJson')
+    expect(configReader).toMatch(/\.mapWith\(\s*decodeTaskWorkgroupLaunchConfig,?\s*\)/)
     expect(block).not.toContain('taskWorkgroupConfigSelection(')
     const configDecoder = readFileSync(
       resolve(SRC, '../../shared/src/schemas/workgroupRuntime.ts'),
@@ -142,7 +142,10 @@ describe('RFC-357 the task list never pays for rows or columns it does not retur
     //（工作流名从「另一次批量查询」并进同一次 `leftJoin`，少一次往返），于是形状从
     // `.select(TASK_LIST_COLUMNS)` 变成 `.select({ ...TASK_LIST_COLUMNS, workflowName })`。
     // 本条锁的不变量没变——**列清单必须被真的摊进去**，且不得回退成裸 `select()`。
-    const listRows = source.slice(source.indexOf('async function listRows(')).slice(0, 1600)
+    const listRows = source.slice(
+      source.indexOf('async function listRows('),
+      source.indexOf('async function listSummaries('),
+    )
     expect(listRows).toMatch(/\.select\(\{\s*\.\.\.TASK_LIST_COLUMNS\(db\),/)
     expect(listRows, '裸 select() 会把整行重列拖过来').not.toMatch(/\.select\(\)/)
   })

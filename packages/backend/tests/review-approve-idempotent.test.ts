@@ -1,3 +1,7 @@
+import { nodeRunFixtureColumns } from './helpers/model/nodeRun'
+import { legacyContentRef } from '@/platform/content/contentRef'
+import { contentRowColumns } from '@/platform/content/infrastructure/contentStore'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { withO2Closure } from './helpers/o2Closure'
 // RFC-052 regression: `submitReviewDecision({ decision: 'approved' })` must
 // upsert (NOT plain-insert) the `approved_doc` + `approval_meta` rows into
@@ -17,7 +21,7 @@ import {
   workflowFixture,
 } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+
 import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -130,7 +134,7 @@ describeEachProvider('submitReviewDecision approved branch is idempotent (RFC-05
       sourcePortName: 'docpath',
       versionIndex: 5,
       reviewIteration: 4,
-      bodyPath: bodyPathRel,
+      ...contentRowColumns(legacyContentRef('review-body-path', 'local-file', bodyPathRel)),
       decision: 'pending',
     })
 
@@ -163,7 +167,9 @@ describeEachProvider('submitReviewDecision approved branch is idempotent (RFC-05
     expect(result.taskId).toBe(taskId)
 
     // node_run is now done with a finishedAt timestamp.
-    const after = (await db.select().from(nodeRuns).where(eq(nodeRuns.id, reviewRunId)))[0]!
+    const after = (
+      await db.select(nodeRunFixtureColumns(db)).from(nodeRuns).where(eq(nodeRuns.id, reviewRunId))
+    )[0]!
     expect(after.status).toBe('done')
     expect(typeof after.finishedAt).toBe('number')
 

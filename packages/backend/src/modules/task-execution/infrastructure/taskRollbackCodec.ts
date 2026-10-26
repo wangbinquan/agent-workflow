@@ -1,49 +1,25 @@
-import { isTaskWorkspaceUnbound } from '@agent-workflow/shared'
+import { isSingleRootRepository } from '@agent-workflow/shared'
 import type { TaskRollbackCheckpointRun } from '../domain/taskCheckpointRollback'
 import { planTaskCheckpointRollback } from '../domain/taskCheckpointRollback'
 import { taskCheckpointRefs } from '../domain/taskCheckpoint'
-import { decodeTaskRollbackCheckpoints, taskCheckpointLayout } from './taskCheckpointCodec'
 
-type RollbackWorkspace = {
-  worktreePath: string
-  repos: readonly { worktreePath: string; mountPath: string }[]
-}
-
-/** Epoch-1 input boundary retained for storage readers and converter reuse. */
-export function decodeTaskRollbackPlan(
-  target: RollbackWorkspace,
-  run: { id: string; preSnapshot: string | null; preSnapshotReposJson: string | null },
+/** Target checkpoints always refer to real mounts, including a real ordinal-0 root mount. */
+export function taskRollbackPlan(
+  target: {
+    readonly worktreePath: string
+    readonly repos: readonly { readonly worktreePath: string; readonly mountPath: string }[]
+  },
+  run: TaskRollbackCheckpointRun,
 ) {
-  return taskRollbackPlan(
-    target,
-    decodeTaskRollbackCheckpoints(
-      run,
-      target.repos.map((repo) => repo.mountPath),
-    ),
-  )
-}
-
-/** The durable v1 request keeps its field names and ordering. */
-export function taskRollbackPlan(target: RollbackWorkspace, run: TaskRollbackCheckpointRun) {
-  const mapped =
-    run.checkpointScope === undefined
-      ? taskCheckpointLayout(target.repos.map((repo) => repo.mountPath)) === 'mounts'
-      : run.checkpointScope === 'mounts'
-  const repositories = mapped
-    ? target.repos
-    : isTaskWorkspaceUnbound(target.worktreePath)
-      ? []
-      : [{ mountPath: '', worktreePath: target.worktreePath }]
+  const mapped = !isSingleRootRepository(target.repos.map((repo) => repo.mountPath))
   const snapshots = taskCheckpointRefs(run.checkpoints, 'preSnapshot')
   return {
     mapped,
-    parseError: run.checkpointParseError ?? null,
-    targets: planTaskCheckpointRollback(repositories, run.checkpoints),
-    request:
-      run.checkpointRequest ??
-      (mapped
-        ? { v: 1, runId: run.id, snapshots }
-        : { v: 1, runId: run.id, snapshot: snapshots[''] ?? '' }),
-    worktreePaths: repositories.map((repo) => repo.worktreePath),
+    parseError: null,
+    targets: planTaskCheckpointRollback(target.repos, run.checkpoints),
+    request: mapped
+      ? { v: 1 as const, runId: run.id, snapshots }
+      : { v: 1 as const, runId: run.id, snapshot: snapshots[''] ?? '' },
+    worktreePaths: target.repos.map((repo) => repo.worktreePath),
   }
 }

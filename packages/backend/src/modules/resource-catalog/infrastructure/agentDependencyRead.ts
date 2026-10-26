@@ -1,30 +1,26 @@
-import { eq } from 'drizzle-orm'
+import { asc, eq } from 'drizzle-orm'
 import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { AgentDependencyReadPort } from '../application/ports/agentDependencyRead'
-import { decodeAgentReferenceIds } from './agentReferenceCodec'
 
 export function createAgentDependencyReadPort(
   db: PersistenceDb | PersistenceTx,
-  source: 'semantics' | 'package' | 'other' = 'other',
+  _source: 'semantics' | 'package' | 'other' = 'other',
 ): AgentDependencyReadPort {
   return {
     async load(id) {
-      const { agents } = tablesOf(db)
+      const { agents, agentDependencies } = tablesOf(db)
       const row = (
-        await db
-          .select(
-            source === 'package'
-              ? { id: agents.id, dependsOn: agents.dependsOn }
-              : { dependsOn: agents.dependsOn },
-          )
-          .from(agents)
-          .where(eq(agents.id, id))
-          .limit(1)
+        await db.select({ id: agents.id }).from(agents).where(eq(agents.id, id)).limit(1)
       )[0]
-      return row === undefined
-        ? undefined
-        : decodeAgentReferenceIds(source === 'semantics' ? () => row.dependsOn : row.dependsOn)
+      if (row === undefined) return undefined
+      return (
+        await db
+          .select({ id: agentDependencies.dependencyAgentId })
+          .from(agentDependencies)
+          .where(eq(agentDependencies.agentId, id))
+          .orderBy(asc(agentDependencies.ordinal))
+      ).map((ref) => ref.id)
     },
   }
 }

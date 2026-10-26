@@ -1,3 +1,4 @@
+import { taskReadSql, taskReadColumns } from '../taskRepositorySql'
 // RFC-357 —— 列表页的四种 SQL 形状：穷举管线（root / children）与 RFC-311 的两条快路径。
 //
 // 平移自 `services/taskOperations.ts`，SQL 文本逐字不变。可以逐字搬到两个 provider 上跑，
@@ -5,7 +6,7 @@
 // `MATERIALIZED`、行值比较、递归 CTE 两方言同义 / 搜索两侧都已 `lower()`）。
 
 import { workflowNameExpression } from '@/modules/resource-catalog/public/queries'
-import { taskSubjectSqlColumns, taskWorkflowNameSql } from '../taskSubjectSql'
+import { engineOf } from '@/platform/persistence/databaseTransaction'
 import {
   TASK_LIST_ACTIVE_STATUSES,
   TASK_LIST_ATTENTION_STATUSES,
@@ -14,7 +15,7 @@ import {
   type TaskOperationsFilters,
 } from '@agent-workflow/shared'
 import { sql, type SQL } from 'drizzle-orm'
-import { engineOf } from '@/platform/persistence/databaseTransaction'
+import { taskSubjectSqlColumns, taskWorkflowNameSql } from '../taskRepositorySql'
 
 import {
   taskListOwnershipScopeCondition,
@@ -32,15 +33,67 @@ import {
   type TaskPageCursorV1,
 } from './filters'
 
+/** The list carries scalar display facts, never frozen definitions or runtime documents. */
+function taskCatalogReadSql(db: TaskListPageDb, alias: string): SQL {
+  const columns = taskReadColumns(db)
+  return taskReadSql(db, alias, {
+    id: columns.id,
+    name: columns.name,
+    workflowId: columns.workflowId,
+    subjectKind: columns.subjectKind,
+    repoPath: columns.repoPath,
+    repoUrl: columns.repoUrl,
+    cachedRepoId: columns.cachedRepoId,
+    status: columns.status,
+    startedAt: columns.startedAt,
+    runningMs: columns.runningMs,
+    runningSince: columns.runningSince,
+    finishedAt: columns.finishedAt,
+    errorSummary: columns.errorSummary,
+    failedNodeId: columns.failedNodeId,
+    repoCount: columns.repoCount,
+    scheduledTaskId: columns.scheduledTaskId,
+    launchOrigin: columns.launchOrigin,
+    codeRoundId: columns.codeRoundId,
+    workgroupId: columns.workgroupId,
+    spaceKind: columns.spaceKind,
+    parentTaskId: columns.parentTaskId,
+    invocationDepth: columns.invocationDepth,
+    sourceAgentName: columns.sourceAgentName,
+    sourceAgentId: columns.sourceAgentId,
+    ownerUserId: columns.ownerUserId,
+    branchStartedAt: columns.branchStartedAt,
+    rootTaskId: columns.rootTaskId,
+    catalogVisibility: columns.catalogVisibility,
+    workgroupName: sql`NULLIF(${engineOf(db).jsonMemberText(columns.workgroupLaunchConfigJson, 'workgroupName')}, '')`,
+  })
+}
 const MAX_TREE_DEPTH = 64
-export function baseCtes(db: TaskListPageDb, authorizedIds: SQL, nonView: SQL, view: SQL): SQL {
+export function baseCtes(
+  db: TaskListPageDb,
+  authorizedIds: SQL,
+  nonView: SQL,
+  view: SQL,
+  search?: boolean,
+): SQL {
+  // Epoch-2 display facts span several indexed companions. Materializing them
+  // for every tree member repeats those lookups before LIMIT and makes PG JIT
+  // dominate a page. Walk/filter on the required facts; project the selected
+  // page from the same authorized catalog below. Fragment callers retain the
+  // full base by default, including the subject/origin facet contract.
+  const baseColumns =
+    search === undefined
+      ? sql`c.*`
+      : sql`c.id, c.status, c.started_at, c.parent_task_id, c.owner_user_id, c.open_alert_count
+          ${search ? sql`, c.name, c.workflow_name, c.workgroup_name, c.source_agent_name, c.repo_path, c.repo_url` : sql``}`
   return sql`
     authorized_ids AS MATERIALIZED (${authorizedIds}),
-    base AS MATERIALIZED (
+    catalog_rows AS NOT MATERIALIZED (
       SELECT
         t.id,
         t.name,
         t.workflow_id,
+      t.subject_kind,
         ${taskWorkflowNameSql(taskSubjectSqlColumns('t'), workflowNameExpression(db, sql`t.workflow_id`))} AS workflow_name,
         t.repo_path,
         t.repo_url,
@@ -68,8 +121,11 @@ export function baseCtes(db: TaskListPageDb, authorizedIds: SQL, nonView: SQL, v
         t.source_agent_name,
         t.source_agent_id,
         t.owner_user_id
-      FROM tasks t
+      FROM ${taskCatalogReadSql(db, 't')}
       JOIN authorized_ids ai ON ai.id = t.id
+    ),
+    base AS MATERIALIZED (
+      SELECT ${baseColumns} FROM catalog_rows c
     ),
     non_view_matches AS MATERIALIZED (
       SELECT b.* FROM base b WHERE ${nonView}
@@ -140,11 +196,14 @@ export function projectedRows(limit: number, cursor: TaskPageCursorV1 | undefine
       CASE WHEN bs.is_self = 1 THEN 'self' ELSE 'context' END AS match_kind,
       bs.qualifying_child_count,
       bs.matching_descendant_count
-    FROM branch_stats bs
-    JOIN base b ON b.id = bs.id
-    WHERE ${pageBoundary(cursor)}
+    FROM (
+      SELECT * FROM branch_stats bs
+      WHERE ${pageBoundary(cursor)}
+      ORDER BY bs.branch_started_at DESC, bs.id DESC
+      LIMIT ${limit + 1}
+    ) bs
+    JOIN catalog_rows b ON b.id = bs.id
     ORDER BY bs.branch_started_at DESC, bs.id DESC
-    LIMIT ${limit + 1}
   `
 }
 export function rootQuery(
@@ -159,7 +218,7 @@ export function rootQuery(
     viewer,
   )
   const authorizedIds = sql`
-    SELECT t.id FROM tasks t
+    SELECT t.id FROM ${taskCatalogReadSql(db, 't')}
     WHERE ${auth} AND ${catalogVisibilityCondition('t', catalogVisibility)}
   `
   const base = baseCtes(
@@ -167,6 +226,7 @@ export function rootQuery(
     authorizedIds,
     nonViewCondition(db, viewer, parsed.filters),
     viewCondition(parsed.filters.view),
+    parsed.filters.q !== undefined,
   )
   const roots = sql`
     SELECT q.id
@@ -218,13 +278,13 @@ export function childQuery(
   )
   const authorizedIds = sql`
     SELECT t.id, ',' || t.id || ',' AS path, 1 AS depth
-    FROM tasks t
+    FROM ${taskCatalogReadSql(db, 't')}
     WHERE t.parent_task_id = ${parsed.parentId}
       AND ${auth}
       AND ${catalogVisibilityCondition('t', catalogVisibility)}
     UNION ALL
     SELECT t.id, subtree.path || t.id || ',', subtree.depth + 1
-    FROM tasks t
+    FROM ${taskCatalogReadSql(db, 't')}
     JOIN authorized_ids subtree ON t.parent_task_id = subtree.id
     WHERE subtree.depth < ${MAX_TREE_DEPTH}
       AND ${engineOf(db).instr(sql`subtree.path`, sql`',' || t.id || ','`)} = 0
@@ -236,6 +296,7 @@ export function childQuery(
     authorizedIds,
     nonViewCondition(db, viewer, parsed.filters),
     viewCondition(parsed.filters.view),
+    parsed.filters.q !== undefined,
   )
   const roots = sql`
     SELECT q.id
@@ -342,6 +403,7 @@ export function fastDefaultRootQuery(
       t.id,
       t.name,
       t.workflow_id,
+      t.subject_kind,
       ${taskWorkflowNameSql(taskSubjectSqlColumns('t'), workflowNameExpression(db, sql`t.workflow_id`))} AS workflow_name,
       t.repo_path,
       t.repo_url,
@@ -372,7 +434,7 @@ export function fastDefaultRootQuery(
       t.branch_started_at,
       'self' AS match_kind,
       (
-        SELECT COUNT(*) FROM tasks c
+        SELECT COUNT(*) FROM ${taskCatalogReadSql(db, 'c')}
         WHERE c.parent_task_id = t.id AND ${taskListVisibilityCondition(
           db,
           { id: sql.raw('c.id'), ownerUserId: sql.raw('c.owner_user_id') },
@@ -381,20 +443,20 @@ export function fastDefaultRootQuery(
       ) AS qualifying_child_count,
       (
         WITH RECURSIVE walk(id, depth) AS (
-          SELECT d.id, 1 FROM tasks d WHERE d.parent_task_id = t.id
+          SELECT d.id, 1 FROM ${taskCatalogReadSql(db, 'd')} WHERE d.parent_task_id = t.id
           UNION ALL
-          SELECT d2.id, walk.depth + 1 FROM tasks d2
+          SELECT d2.id, walk.depth + 1 FROM ${taskCatalogReadSql(db, 'd2')}
           JOIN walk ON d2.parent_task_id = walk.id
           WHERE walk.depth < ${MAX_TREE_DEPTH}
         )
         SELECT COUNT(*) FROM walk
       ) AS matching_descendant_count
-    FROM tasks t
+    FROM ${taskCatalogReadSql(db, 't')}
     WHERE ${auth} AND ${scope} AND ${boundary}
       AND (
         t.parent_task_id IS NULL
         OR NOT EXISTS (
-          SELECT 1 FROM tasks p WHERE p.id = t.parent_task_id AND ${parentAuth}
+          SELECT 1 FROM ${taskCatalogReadSql(db, 'p')} WHERE p.id = t.parent_task_id AND ${parentAuth}
         )
       )
     ORDER BY t.branch_started_at DESC, t.id DESC
@@ -423,7 +485,7 @@ export function fastDefaultRootQuery(
           THEN 1 ELSE 0 END), 0) AS facet_attention,
         COALESCE(SUM(CASE WHEN t.status IN (${list(TASK_LIST_FINISHED_STATUSES)}) THEN 1 ELSE 0 END), 0)
           AS facet_finished
-      FROM tasks t
+      FROM ${taskCatalogReadSql(db, 't')}
       ${openAlertTasks}
       WHERE ${taskListVisibilityCondition(
         db,
@@ -510,7 +572,7 @@ export function fastFilteredRootQuery(
         t.started_at,
         t.status,
         (open_alerts.task_id IS NOT NULL) AS has_open_alert
-      FROM tasks t
+      FROM ${taskCatalogReadSql(db, 't')}
       ${openAlertTasks}
       WHERE ${authOf('t')}
         AND ${catalogVisibilityCondition('t', catalogVisibility)}
@@ -524,7 +586,7 @@ export function fastFilteredRootQuery(
       SELECT CAST(${parsed.limit + 1} AS INTEGER) AS page_rows
     ),
     physical_prefix AS MATERIALIZED (
-      SELECT t.id, t.started_at FROM tasks t
+      SELECT t.id, t.started_at FROM ${taskCatalogReadSql(db, 't')}
       ORDER BY t.started_at DESC, t.id DESC
       LIMIT 4 * CAST(${parsed.limit + 1} AS INTEGER)
     ),
@@ -585,7 +647,7 @@ export function fastFilteredRootQuery(
         CASE WHEN (${nonView})
           AND ${viewCondition(parsed.filters.view, 't', sql`(open_alerts.task_id IS NOT NULL)`)}
           THEN 1 ELSE 0 END AS is_match
-      FROM tasks t
+      FROM ${taskCatalogReadSql(db, 't')}
       ${parsed.filters.view === 'attention' ? openAlertTasks : sql``}
       WHERE t.root_task_id IN (SELECT pr.rid FROM page_roots pr)
         AND ${authOf('t')} AND ${catalogVisibilityCondition('t', catalogVisibility)}
@@ -629,6 +691,7 @@ export function fastFilteredRootQuery(
         t.id,
         t.name,
         t.workflow_id,
+      t.subject_kind,
         ${taskWorkflowNameSql(taskSubjectSqlColumns('t'), workflowNameExpression(db, sql`t.workflow_id`))} AS workflow_name,
         t.repo_path,
         t.repo_url,
@@ -661,7 +724,7 @@ export function fastFilteredRootQuery(
         COALESCE(cc.qualifying_child_count, 0) AS qualifying_child_count,
         mc.matching_descendant_count
       FROM page_roots pr
-      JOIN tasks t ON t.id = pr.rid
+      JOIN ${taskCatalogReadSql(db, 't')} ON t.id = pr.rid
       JOIN match_counts mc ON mc.rid = pr.rid
       LEFT JOIN child_counts cc ON cc.rid = pr.rid
     )

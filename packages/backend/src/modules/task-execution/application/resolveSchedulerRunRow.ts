@@ -1,5 +1,5 @@
 import { nodeRunAttemptIndex } from '../domain/nodeRunAttempt'
-import { deriveNodeRunRole } from '../domain/nodeRunRole'
+import { nodeRunMintIdentityForSlot } from './nodeRunMintIdentity'
 import type { TaskRepositoryCheckpoint } from '../domain/taskCheckpoint'
 import type { RunSelectionReader } from './ports/runSelection'
 import type { NodeRunStatus, RerunCause } from '@agent-workflow/shared'
@@ -11,6 +11,7 @@ import type { TaskExecutionContextRef } from './ports/taskExecutionTopology'
 export interface SchedulerRunRowCandidate {
   readonly id: string
   readonly seq: number | null
+  readonly generationSeq: number
   readonly status: NodeRunStatus
   readonly retryIndex: number
   readonly reviewIteration: number
@@ -73,16 +74,37 @@ function schedulerMintCause(
 export async function resolveSchedulerRunRow<R extends SchedulerRunRowCandidate>(
   input: ResolveSchedulerRunRowInput<R>,
 ): Promise<ResolvedSchedulerRunRow<R>> {
-  const topLevelRows = input.rows.filter(
-    (row) => row.parentNodeRunId === null && row.containerRunId === input.containerRunId,
-  )
   const slot = {
     kind: 'node' as const,
     nodeId: input.nodeId,
     frame: { containerRunId: input.containerRunId, iteration: input.iteration },
   }
-  const selected = await input.selection.current(input.taskId, slot)
-  const latestExisting = topLevelRows.find((row) => row.id === selected?.id)
+  const snapshot = await input.projections.snapshotRead(async (reader) => {
+    const rows = await reader.list({
+      taskId: input.taskId,
+      nodeId: input.nodeId,
+      iteration: input.iteration,
+    })
+    const ids = new Set(rows.map((row) => row.id))
+    const selected = await reader.selection.current(input.taskId, slot)
+    const pending = (
+      await reader.selection.slotHistory(input.taskId, slot, {
+        statusIn: ['pending'],
+        executableOnly: true,
+      })
+    ).filter((row) => ids.has(row.id))
+    return { rows, selected, pending }
+  })
+  const currentById = new Map(snapshot.rows.map((row) => [row.id, row]))
+  const rows = input.rows.flatMap((candidate) => {
+    const current = currentById.get(candidate.id)
+    return current === undefined ? [] : [{ ...candidate, ...current }]
+  })
+  const candidateIds = new Set(rows.map((row) => row.id))
+  const topLevelRows = rows.filter(
+    (row) => row.parentNodeRunId === null && row.containerRunId === input.containerRunId,
+  )
+  const latestExisting = topLevelRows.find((row) => row.id === snapshot.selected?.id)
 
   if (input.preResolve !== undefined) {
     const adopted = await input.preResolve(latestExisting)
@@ -96,9 +118,7 @@ export async function resolveSchedulerRunRow<R extends SchedulerRunRowCandidate>
   // 调用方按 {taskId, nodeId, iteration} 取行、不按帧过滤：判定与「不采纳」跨帧生效，但只终结
   // **本帧**的行（别的帧由它自己的调度器收尾）；终结时行已被别处改走（取消 / 并发收尾）就跳过。
   const superseded = new Set(
-    (await input.selection.slotHistory(input.taskId, slot, { statusIn: ['pending'] }))
-      .filter((row) => row.structurallySuperseded)
-      .map((row) => row.id),
+    snapshot.pending.filter((row) => row.structurallySuperseded).map((row) => row.id),
   )
   const canceled = new Set<string>()
   for (const row of topLevelRows) {
@@ -130,8 +150,8 @@ export async function resolveSchedulerRunRow<R extends SchedulerRunRowCandidate>
     canceled.add(row.id)
     input.broadcastCanceled?.(row.id)
   }
-  const pending = (await input.selection.slotHistory(input.taskId, slot, { statusIn: ['pending'] }))
-    .filter((row) => !superseded.has(row.id))
+  const pending = snapshot.pending
+    .filter((row) => candidateIds.has(row.id) && !superseded.has(row.id))
     .at(-1)
   const pendingExisting = topLevelRows.find((row) => row.id === pending?.id)
   if (pendingExisting !== undefined) {
@@ -150,8 +170,8 @@ export async function resolveSchedulerRunRow<R extends SchedulerRunRowCandidate>
           parentNodeRunId: pendingExisting.parentNodeRunId,
           shardKey: pendingExisting.shardKey,
         },
-        expectedRevision: 0,
-        generationSeq: 0,
+        expectedRevision: 'current',
+        generationSeq: pendingExisting.generationSeq,
         cause: 'scheduler-adopt',
       },
       values: {
@@ -170,16 +190,16 @@ export async function resolveSchedulerRunRow<R extends SchedulerRunRowCandidate>
     }
   }
 
-  const retryIndex = nodeRunAttemptIndex({ kind: 'max-plus-one', rows: input.rows })
+  const retryIndex = nodeRunAttemptIndex({ kind: 'max-plus-one', rows })
   const nodeRunId = await input.lifecycle.mint({
-    ...deriveNodeRunRole({
-      nodeId: input.nodeId,
-      rerunCause: schedulerMintCause(
-        latestExisting !== undefined && canceled.has(latestExisting.id)
-          ? { status: 'canceled' }
-          : latestExisting,
-      ),
-    }),
+    ...nodeRunMintIdentityForSlot(
+      {
+        kind: 'node',
+        nodeId: input.nodeId,
+        frame: { containerRunId: input.containerRunId, iteration: input.iteration },
+      },
+      { kind: 'current' },
+    ),
     taskId: input.taskId,
     nodeId: input.nodeId,
     status: 'pending',

@@ -3,6 +3,7 @@ import { posix } from 'node:path'
 import ts from 'typescript'
 import { importEdges, moduleLocation, sourceUnit, type ImportEdge, type SourceUnit } from './census'
 import { OFFERED_CONTEXT_PAIRS } from './rfc294Target'
+import { nonruntimeSourceRole } from './nonruntimeSourceRoles'
 
 function gateModuleLocation(path: string): { context: string; rest: string } | null {
   const resolved = moduleLocation(path)
@@ -945,7 +946,12 @@ export function unreachableProductionFiles(
       if (corpus.byPath.has(edge.target)) pending.push(edge.target)
   }
   return corpus.backend
-    .filter((unit) => !reachable.has(unit.path) && !unit.path.endsWith('.d.ts'))
+    .filter(
+      (unit) =>
+        !reachable.has(unit.path) &&
+        !unit.path.endsWith('.d.ts') &&
+        nonruntimeSourceRole(unit) === undefined,
+    )
     .map((unit) => unit.path)
     .sort()
 }
@@ -1542,6 +1548,35 @@ function containsSensitiveTypeName(
   return found
 }
 
+// These three W0 interfaces accept the caller's transaction; they do not mint
+// authorization. Require their actual method-only declarations, not just an
+// InTx name, so a private brand or data-bearing capability remains sensitive.
+const TRANSACTION_PORT_DECLARATIONS: Readonly<Record<string, string>> = {
+  'modules/task-execution/application/ports/runSelection.ts': 'RunSelectionParticipantInTx',
+  'modules/task-execution/application/ports/taskMountKeys.ts': 'TaskMountKeysReaderInTx',
+  'modules/task-execution/application/ports/taskExecutionGenerations.ts':
+    'TaskExecutionGenerationsParticipantInTx',
+}
+
+function isReviewedTransactionPort(unit: SourceUnit, declaration: ts.Declaration): boolean {
+  return (
+    ts.isInterfaceDeclaration(declaration) &&
+    TRANSACTION_PORT_DECLARATIONS[unit.path.replace(BACKEND_PREFIX, '')] ===
+      declaration.name.text &&
+    !declaration.heritageClauses?.length &&
+    declaration.members.length > 0 &&
+    declaration.members.every(
+      (member) =>
+        ts.isMethodSignature(member) &&
+        member.parameters.length > 0 &&
+        ts.isIdentifier(member.parameters[0]!.name) &&
+        member.parameters[0]!.name.text === 'tx' &&
+        member.parameters[0]!.type !== undefined &&
+        /^(?:PersistenceTx|Tx)$/.test(member.parameters[0]!.type!.getText(unit.source)),
+    )
+  )
+}
+
 function sensitiveIdentityName(
   units: readonly SourceUnit[],
   unit: SourceUnit,
@@ -1553,6 +1588,7 @@ function sensitiveIdentityName(
     const name = ts.isIdentifier(node.typeName) ? node.typeName.text : node.typeName.right.text
     const target = declarationForTypeReference(units, unit, node)
     if (target !== undefined) {
+      if (isReviewedTransactionPort(target.unit, target.declaration)) return undefined
       const key = `${target.unit.path}:${target.declaration.pos}`
       if (seen.has(key)) return undefined
       seen.add(key)

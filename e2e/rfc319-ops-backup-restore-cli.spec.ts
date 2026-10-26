@@ -1,3 +1,4 @@
+import { liveSqlitePath } from './storage'
 // RFC-319 —— 运维 CLI：备份 / 恢复 / 用户管理 / 配置包 / 配置读写
 // （OPS-016 / OPS-018 / OPS-019 / OPS-021 / OPS-023）。
 //
@@ -128,7 +129,7 @@ interface UserRow {
 
 function readUsers(home: string): UserRow[] {
   return querySqlite<UserRow>(
-    join(home, 'db.sqlite'),
+    liveSqlitePath(home),
     'SELECT username, role, status, display_name, email, force_password_change, ' +
       '(password_hash IS NOT NULL) AS has_password FROM users ORDER BY username',
   )
@@ -136,7 +137,7 @@ function readUsers(home: string): UserRow[] {
 
 function bootstrapCompleted(home: string): boolean {
   const rows = querySqlite<{ done: number }>(
-    join(home, 'db.sqlite'),
+    liveSqlitePath(home),
     'SELECT (bootstrap_completed_at IS NOT NULL) AS done FROM auth_login_policy',
   )
   expect(rows.length, '`auth_login_policy` 里没有那一行全局策略 —— 迁移就没跑对').toBe(1)
@@ -207,18 +208,20 @@ function forgeNewerBackup(sourceTarball: string, workDir: string): string {
   mkdirSync(staging, { recursive: true })
   const extract = runTar(['-xzf', sourceTarball, '-C', staging])
   expect(extract.code, `解包真备份失败：${extract.out}`).toBe(0)
-  // manifest 缺失会让 planRestore 判成 legacy backup，那是另一条分支——夹具必须
-  // 确认自己造的是「有 manifest、只是时间戳更新」的那一种。
-  const manifestPath = join(staging, 'manifest.json')
-  expect(
-    existsSync(manifestPath),
-    '真备份里没有 manifest.json —— 降级判据读的就是它，夹具造不出来',
-  ).toBe(true)
-  const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as {
-    migration: { lastCreatedAt: number }
-  }
-  manifest.migration.lastCreatedAt += 86_400_000
-  writeFileSync(manifestPath, JSON.stringify(manifest), 'utf8')
+  // The SQLite history receipt, rather than the retired manifest migration
+  // timestamp, is epoch 2's authority. Keep the older manifest as an explicit
+  // counterexample: a newer physical database must still be refused.
+  const upgraded = runCommandResult(
+    process.env.AGENT_WORKFLOW_E2E_BUN ?? 'bun',
+    [
+      '--tsconfig-override',
+      join(process.cwd(), 'packages/backend/tsconfig.json'),
+      join(process.cwd(), 'e2e/fixtures/epoch2-future-backup.ts'),
+      staging,
+    ],
+    { timeoutMs: RELEASE_CLI_TIMEOUT_MS },
+  )
+  expect(upgraded.status, upgraded.output).toBe(0)
   const out = join(workDir, 'forged-newer.tar.gz')
   const packed = runTar(['-czf', out, '-C', staging, '.'])
   expect(packed.code, `重新打包失败：${packed.out}`).toBe(0)
@@ -865,7 +868,7 @@ test('RFC-319 OPS-019: restore --yes 冷恢复把库换回备份时点，并按 
     await daemon.stop()
     stopped = true
 
-    const dbPath = join(home, 'db.sqlite')
+    const dbPath = liveSqlitePath(home)
     const namesInDb = (): string[] =>
       querySqlite<{ name: string }>(
         dbPath,

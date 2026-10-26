@@ -1,3 +1,4 @@
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 // Capability protection for the intent builder's privileged-node surface
 // (RFC-234 apply × RFC-253 scripts:author × RFC-269 code-host-calls:author ×
 // RFC-270 privileged lens), added after the Codex implementation gate on
@@ -30,7 +31,7 @@
 
 import { workflowFixture, type WorkflowFixtureSpec } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 import { createHash } from 'node:crypto'
@@ -434,7 +435,8 @@ describeEachProvider('特权节点能力门（双引擎）', (harness) => {
       await expect(applyAs(plain, bundle)).rejects.toMatchObject({
         code: 'script-author-forbidden',
       })
-      const { workflows, agents } = tablesOf(db)
+      const { workflows } = tablesOf(db)
+      const { agents } = tablesOf(db)
       expect((await db.select().from(workflows)).length).toBe(0)
       // the agent op ran EARLIER in the same transaction and must be rolled back
       expect((await db.select().from(agents)).length).toBe(0)

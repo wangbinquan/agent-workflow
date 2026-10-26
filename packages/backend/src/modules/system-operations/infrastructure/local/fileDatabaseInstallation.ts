@@ -24,6 +24,7 @@ import { createFileDatabaseMigrationStore } from '../fileDatabaseMigrationStore'
 export interface DatabaseSchemaUpgradeOptions extends ResolveDatabaseProviderRuntimeOptions {
   readonly sqliteOptions: Omit<OpenDbOptions, 'path'>
   readonly beforeSqliteOpen?: () => void | Promise<void>
+  readonly backupOnMigration?: boolean
   readonly lockPath: string
   /** Daemon start already owns this lock before pending restore. */
   readonly lock?: Pick<DaemonStartupLease, 'release'>

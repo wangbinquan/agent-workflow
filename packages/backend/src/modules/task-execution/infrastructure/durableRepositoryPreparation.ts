@@ -1,18 +1,19 @@
-import { isTaskWorkspaceUnbound } from '@agent-workflow/shared'
-import { tablesOf } from '@/platform/persistence/sessionTables'
-import { repositoryPreparationLane } from './workspaceLaunchLane'
-import type { SealedPublicRepositorySourceRef } from '@/modules/source-control/public/types'
-import type { GitCommitIdentity } from '@agent-workflow/shared'
-import { eq } from 'drizzle-orm'
-import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { RequestAuthority } from '@/modules/identity-access/public/participants'
+import type { SealedPublicRepositorySourceRef } from '@/modules/source-control/public/types'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { ConflictError } from '@/util/errors'
 import { sha256Hex } from '@/util/hash'
+import { type GitCommitIdentity, isTaskWorkspaceUnbound } from '@agent-workflow/shared'
+
+import { eq } from 'drizzle-orm'
 import type { MaterializedSpace } from '../application/ports/preparedWorkspace'
 import { currentTaskExecutionContext } from '../application/taskExecutionContext'
-import { createWorkspacePreparationJournal } from './workspacePreparationJournal'
 import { fenceTaskWrite, withTaskExecutionWrite } from './ownedTaskExecution'
 import type { TaskRepositoryPreparationBinding } from './repositoryPreparationBinding'
+import { taskReadColumns } from './taskRepositorySql'
+import { repositoryPreparationLane } from './workspaceLaunchLane'
+import { createWorkspacePreparationJournal } from './workspacePreparationJournal'
 
 export async function admitDeferredRepositoryPreparation(input: {
   transaction: PersistenceDb
@@ -126,7 +127,10 @@ export async function prepareDurableRepositoryWorkspace(input: {
       const current = await createWorkspacePreparationJournal(tx).forTask(input.taskId)
       const { tasks } = tablesOf(tx)
       const task = (
-        await tx.select({ path: tasks.worktreePath }).from(tasks).where(eq(tasks.id, input.taskId))
+        await tx
+          .select({ path: taskReadColumns(tx).worktreePath })
+          .from(tasks)
+          .where(eq(tasks.id, input.taskId))
       )[0]
       if (
         current?.operationRef !== operationRef ||
@@ -208,7 +212,7 @@ export async function prepareDurableRepositoryWorkspace(input: {
           from: 'preparing',
           to: 'prepared',
           artifactJson: JSON.stringify({
-            version: 1,
+            version: 2,
             operation: effect.operation,
             receipt: outcome.receipt,
           }),
@@ -272,7 +276,10 @@ export async function cleanupDurableRepositoryWorkspace(input: {
       const current = await createWorkspacePreparationJournal(tx).forTask(input.taskId)
       const { tasks } = tablesOf(tx)
       const task = (
-        await tx.select({ path: tasks.worktreePath }).from(tasks).where(eq(tasks.id, input.taskId))
+        await tx
+          .select({ path: taskReadColumns(tx).worktreePath })
+          .from(tasks)
+          .where(eq(tasks.id, input.taskId))
       )[0]
       if (
         current?.operationRef !== plan.operationRef ||

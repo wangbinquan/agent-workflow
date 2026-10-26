@@ -160,7 +160,7 @@ describe('RFC-349 provider-neutral Resource Package maintenance', () => {
       'utf8',
     )
     const sqlite = readFileSync(
-      join(root, 'src/modules/resource-catalog/infrastructure/resourcePackageLegacyRecovery.ts'),
+      join(root, 'src/modules/resource-catalog/infrastructure/resourcePackageOperationRecovery.ts'),
       'utf8',
     )
     const postgresql = readFileSync(
@@ -204,7 +204,7 @@ describe('RFC-349 provider-neutral Resource Package maintenance', () => {
     expect(nativeRecovery).toContain('return swapInStaged(liveReference, publicationId)')
     expect(nativeRecovery).toContain('return restoreFromBackup(liveReference, publicationId)')
     expect(nativeRecovery).toContain('return hashRegularFileTree(reference)')
-    expect(postgresql).not.toMatch(/from ['"][^'"]*resourcePackageLegacyRecovery['"]/)
+    expect(postgresql).not.toMatch(/from ['"][^'"]*resourcePackageOperationRecovery['"]/)
     expect(composition).toContain('createVersionedResourcePackageArtifactRecovery(')
   })
 })

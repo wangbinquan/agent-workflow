@@ -160,3 +160,8 @@ define 固定为 `false`，所以同名进程变量不会暂停正式服务。
 ### `AGENT_WORKFLOW_DEV_HOT_RELOAD`
 
 内部开发监督器的模式标记，`bun dev` 的原启动链设置为 `1`。用于同一进程来源重载的数据库检查复用与失败日志；冷启动完整性检查、迁移和备份保持。普通启动缺省不设置，不是运行时或模型配置项。
+
+### RFC-395 epoch migration inputs
+
+- `AGENT_WORKFLOW_BUILD`: read by `backend/src/bootstrap/epochMigration.ts`; identifies the candidate binary in the migration plan, run binding and receipts. Explicit composition input wins; otherwise the default is `rfc395-epoch2-candidate`. Keep it stable between planning, approval and execution for the same candidate.
+- `AGENT_WORKFLOW_SOURCE_BORN_ON_POSTGRESQL`: read by `backend/src/bootstrap/epochMigrationEntry.ts`; only the exact value `1` declares a source installed originally on PostgreSQL. The converter still proves the frozen catalog and admitted absence of retired tables before using the never-installed archive case. Unset or any other value is false; this does not select the target provider.

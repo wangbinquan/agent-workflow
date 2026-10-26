@@ -20,12 +20,11 @@ import { eq } from 'drizzle-orm'
 import { resolve } from 'node:path'
 import { readFileSync, readdirSync } from 'node:fs'
 import { createLogger } from '../src/util/log'
-import { createSession } from './helpers/auth/sessionStore'
+import { createSession, revokeSession } from './helpers/auth/sessionStore'
 import { describeCredential } from '../src/auth/session'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { createUser } from './helpers/userFixture'
-import { revokeSession } from './helpers/auth/sessionStore'
-import { disableUser, patchUser } from './helpers/userFixture'
+import { createUser, disableUser, patchUser } from './helpers/userFixture'
+
 import {
   liveConnections,
   resetConnectionsForTest,
@@ -34,7 +33,12 @@ import {
   WS_CLOSE_AUTH_REVOKED,
   WS_CLOSE_NOT_VISIBLE,
 } from '../src/ws/connections'
-import type { AnyChannelParams, WsConnectionData, WsCredential } from '../src/ws/registry'
+import type {
+  AnyChannelParams,
+  WsConnectionData,
+  WsCredential,
+  IdentityAccessWsBinding,
+} from '../src/ws/registry'
 import type { Actor } from '../src/auth/actor'
 import { triggerAuthorityRevalidation } from '../src/ws/revalidationHook'
 import { createIdentityAccessRuntime } from '../src/modules/identity-access/composition'
@@ -43,12 +47,11 @@ import {
   stubIdentityAccessWsBinding,
   TEST_DIRECT_AUTHORITY,
 } from './helpers/identityAccessWs'
-import type { IdentityAccessWsBinding } from '../src/ws/registry'
+
 import type { DirectRequestAuthority } from '../src/modules/identity-access/public/participants'
 import type { RealtimeRuntime } from '../src/modules/runtime-management/public/participants'
 import { composeTestSqliteRealtimeRuntime } from './helpers/realtimeRuntime'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const log = createLogger('test')
 
 interface FakeWs {
@@ -172,7 +175,7 @@ afterEach(() => {
 
 describe('RFC-338 revalidation load containment', () => {
   test('one pass resolves a shared credential once while refreshing every connection', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createInMemoryDb()
     const user = await seedUser(db, 'shared-credential', 'user')
     const composed = identityByActor.get(user.actor)?.realtime
     if (composed === undefined) throw new Error('test realtime runtime was not composed')
@@ -203,7 +206,7 @@ describe('RFC-338 revalidation load containment', () => {
 
 describe('RFC-212 AC-1 — task member removal closes the task socket', () => {
   test('member sees the task before removal, socket closes 4403 after (positive control included)', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createInMemoryDb()
     const owner = await seedUser(db, 'owner', 'user')
     const member = await seedUser(db, 'member', 'user')
     const taskId = await seedTask(db, owner.id)
@@ -241,7 +244,7 @@ describe('RFC-212 AC-1 — task member removal closes the task socket', () => {
 
 describe('RFC-212 AC-2 — demotion refreshes the actor (admin short-circuit + permission set)', () => {
   test('a demoted admin loses tasks:read:all: task socket for a foreign task closes', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createInMemoryDb()
     const owner = await seedUser(db, 'owner', 'user')
     const admin = await seedUser(db, 'root', 'admin')
     // A second admin so demoting the first is not blocked by last-admin protection.
@@ -271,7 +274,7 @@ describe('RFC-212 AC-2 — demotion refreshes the actor (admin short-circuit + p
 
 describe('RFC-212 AC-3 — revoked / disabled credentials close with 4401', () => {
   test('revoking the session closes the socket regardless of channel', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createInMemoryDb()
     const user = await seedUser(db, 'alice', 'user')
     const conn = fakeConn(user.actor, user.credential, { kind: 'workflows' })
     trackConnection(conn.ws)
@@ -283,7 +286,7 @@ describe('RFC-212 AC-3 — revoked / disabled credentials close with 4401', () =
   })
 
   test('disabling the user closes even a silent socket (no frame required)', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createInMemoryDb()
     const admin = await seedUser(db, 'root', 'admin')
     const victim = await seedUser(db, 'victim', 'user')
     const conn = fakeConn(victim.actor, victim.credential, { kind: 'memories' })
@@ -297,7 +300,7 @@ describe('RFC-212 AC-3 — revoked / disabled credentials close with 4401', () =
 
 describe('RFC-324 —— 授权面变更要通知客户端让 ACL 判定失效', () => {
   test('resource-acl-changed 给每条活连接发一帧；不关连接、不发 authority.changed', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createInMemoryDb()
     const alice = await seedUser(db, 'acl-alice', 'user')
     const bob = await seedUser(db, 'acl-bob', 'user')
     const aliceConn = fakeConn(alice.actor, alice.credential, { kind: 'workflows' })
@@ -319,7 +322,7 @@ describe('RFC-324 —— 授权面变更要通知客户端让 ACL 判定失效',
   })
 
   test('其它 reason 不发这一帧（避免变成"什么都刷一遍"的广播）', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createInMemoryDb()
     const alice = await seedUser(db, 'acl-quiet', 'user')
     const conn = fakeConn(alice.actor, alice.credential, { kind: 'workflows' })
     trackConnection(conn.ws)
@@ -331,7 +334,7 @@ describe('RFC-324 —— 授权面变更要通知客户端让 ACL 判定失效',
 
 describe('RFC-305 targeted authority refresh', () => {
   test('refreshes only the changed subject and emits a revision-only control frame', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createInMemoryDb()
     const alice = await seedUser(db, 'target-alice', 'user')
     const bob = await seedUser(db, 'other-bob', 'user')
     const aliceConn = fakeConn(alice.actor, alice.credential, { kind: 'workflows' })
@@ -360,7 +363,7 @@ describe('RFC-305 targeted authority refresh', () => {
   })
 
   test('emits authority.changed before a revoked channel gate closes with 4403', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createInMemoryDb()
     const target = await seedUser(db, 'gate-revoked-admin', 'admin')
     const conn = fakeConn(target.actor, target.credential, { kind: 'memory-distill-jobs' })
     trackConnection(conn.ws)
@@ -380,7 +383,7 @@ describe('RFC-305 targeted authority refresh', () => {
   })
 
   test('fails closed and reports a catastrophic targeted refresh failure', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createInMemoryDb()
     const alice = await seedUser(db, 'target-failure', 'user')
     const conn = fakeConn(alice.actor, alice.credential, {
       kind: 'invalid-test-channel',
@@ -399,7 +402,7 @@ describe('RFC-305 targeted authority refresh', () => {
 
 describe('RFC-212 AC-4 — cache handling by channel kind', () => {
   test('AC-4a: a caching channel has its visibility cache cleared on revalidation', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createInMemoryDb()
     const user = await seedUser(db, 'alice', 'user')
     const conn = fakeConn(user.actor, user.credential, { kind: 'workflows' })
     conn.ws.data.visibilityCache.set('wf:stale', true)
@@ -411,7 +414,7 @@ describe('RFC-212 AC-4 — cache handling by channel kind', () => {
   })
 
   test('AC-4b: an uncached channel is not closed and keeps working via the fresh actor', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createInMemoryDb()
     const user = await seedUser(db, 'alice', 'user')
     const conn = fakeConn(user.actor, user.credential, { kind: 'scheduled-tasks' })
     trackConnection(conn.ws)
@@ -426,7 +429,7 @@ describe('RFC-212 AC-4 — cache handling by channel kind', () => {
 
 describe('RFC-212 AC-8 — revalidation does not write last_used_at', () => {
   test('a full rescan touches no user_sessions row', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createInMemoryDb()
     const user = await seedUser(db, 'alice', 'user')
     const conn = fakeConn(user.actor, user.credential, { kind: 'workflows' })
     trackConnection(conn.ws)

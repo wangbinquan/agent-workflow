@@ -1,67 +1,94 @@
+import { createTaskCreationParticipantInTx } from '@/modules/task-execution/infrastructure/taskCreationParticipant'
+import {
+  taskMountReadColumns,
+  projectTaskMountReadRow,
+  taskReadColumns,
+} from '@/modules/task-execution/infrastructure/taskRepositorySql'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 // One rollback target loader runs against both real provider databases. The
 // no-context observer case covers construction only, with no workspace effect.
-import { patchTaskRepoFixture } from './helpers/model'
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
-import { expect, test } from 'bun:test'
-import { asc, eq } from 'drizzle-orm'
-import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   createNodeRollbackEffectObserver,
   loadNodeRollbackTarget,
 } from '@/modules/task-execution/infrastructure/nodeRollbackPersistence'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { expect, test } from 'bun:test'
+import { asc, eq } from 'drizzle-orm'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 
-const repositoryIndexOrder = /order by (?:"agent_workflow"\.)?"task_repos"\."repo_index" asc$/i
+const repositoryIndexOrder =
+  /order by (?:"agent_workflow"\.)?"task_repository_mounts"\."ordinal" asc$/i
 
 const taskId = 'w26-rollback-task'
 const startedAt = 1_700_000_000_000
 const originalInputs = '{ "value": "保留原字节", "items": [2, 1] }'
 const originalSnapshot = '{ "version": 1, "nodes": [] }'
 
-async function seedTask(harness: ProviderHarness, repoCount: number) {
-  const { tasks } = tablesOf(harness.db)
-  await insertOne(harness.db, tasks, {
-    id: taskId,
-    name: 'rollback fixture',
-    workflowId: 'w26-rollback-workflow',
-    workflowSnapshot: originalSnapshot,
-    workflowVersion: 1,
-    inputs: originalInputs,
-    repoPath: '/fixture/source',
-    worktreePath: '/fixture/worktrees/task',
-    baseBranch: 'main',
-    branch: 'task/w26-rollback',
-    status: 'pending',
-    repoCount,
-    startedAt,
-    branchStartedAt: startedAt,
-    rootTaskId: taskId,
-    executionLineageId: taskId,
-    lineageSlotPathJson: '[]',
+async function seedTask(harness: ProviderHarness) {
+  await harness.session.transaction(async (tx) => {
+    await createTaskCreationParticipantInTx(tx).create({
+      subject: { kind: 'workflow', sourceId: 'w26-rollback-workflow' },
+      core: {
+        id: taskId,
+        name: 'rollback fixture',
+        status: 'pending',
+        startedAt,
+        branchStartedAt: startedAt,
+        ownerUserId: null,
+        catalogVisibility: 'public',
+      },
+      definition: {
+        definitionOrigin: 'authored',
+        workflowSnapshot: originalSnapshot,
+        workflowVersion: 1,
+        inputs: originalInputs,
+      },
+      launch: { kind: 'root', launchOrigin: 'api' },
+      launchContext: {},
+      workspace: {
+        repoPath: '/fixture/source',
+        worktreePath: '/fixture/worktrees/task',
+        baseBranch: 'main',
+        branch: 'task/w26-rollback',
+        baseCommit: null,
+        spaceKind: 'remote',
+      },
+      repos: [],
+      nodePaths: [],
+    })
+    const { taskLaunchContexts, taskRepositoryMounts } = tablesOf(tx)
+    // This suite deliberately models converted zero-mount history. New bound tasks
+    // acquire a root mount automatically; remove it explicitly before this fixture's rows.
+    await tx.delete(taskRepositoryMounts).where(eq(taskRepositoryMounts.taskId, taskId))
+    await tx
+      .update(taskLaunchContexts)
+      .set({ lineageSlotPathJson: '[]' })
+      .where(eq(taskLaunchContexts.taskId, taskId))
   })
 }
 
-function repositoryRow(repoIndex: number) {
+function repositoryRow(ordinal: number) {
   return {
     taskId,
-    repoIndex,
-    repoPath: `/fixture/source/repo-${repoIndex}`,
+    repoKey: `${taskId}:mount:${ordinal}`,
+    ordinal,
+    repoPath: `/fixture/source/repo-${ordinal}`,
     baseBranch: 'main',
-    branch: `task/w26-repo-${repoIndex}`,
-    worktreePath: `/fixture/worktrees/repo-${repoIndex}`,
-    worktreeDirName: `repo-${repoIndex}`,
-    mountPath: `repo-${repoIndex}`,
+    branch: `task/w26-repo-${ordinal}`,
+    branchState: 'branch' as const,
+    mountPath: `repo-${ordinal}`,
   }
 }
 
 async function readStored(db: PersistenceDb) {
-  const { tasks, taskRepos } = tablesOf(db)
-  const taskRows = await db.select().from(tasks).orderBy(asc(tasks.id))
+  const { tasks, taskRepositoryMounts: taskRepos } = tablesOf(db)
+  const taskRows = await db.select(taskReadColumns(db)).from(tasks).orderBy(asc(tasks.id))
   const repositoryRows = await db
-    .select()
+    .select(taskMountReadColumns(db))
     .from(taskRepos)
-    .orderBy(asc(taskRepos.taskId), asc(taskRepos.repoIndex))
+    .orderBy(asc(taskRepos.taskId), asc(taskRepos.ordinal))
+    .then((rows) => rows.map(projectTaskMountReadRow))
   return { taskRows, repositoryRows }
 }
 
@@ -80,15 +107,15 @@ describeEachProvider('RFC-359 W26 node rollback persistence', (harness) => {
   })
 
   test('a task without repository rows keeps its original single-repository fallback', async () => {
-    await seedTask(harness, 1)
+    await seedTask(harness)
     const before = await readStored(harness.db)
     const recording = harness.recordStatements()
     try {
       const target = await loadNodeRollbackTarget(harness.db, taskId)
       expect(target?.db).toBe(harness.db)
-      expect(target).toEqual({
+      expect({ ...target, db: undefined }).toEqual({
         taskId,
-        db: harness.db,
+        db: undefined,
         worktreePath: '/fixture/worktrees/task',
         repos: [{ worktreePath: '/fixture/worktrees/task', mountPath: '' }],
       })
@@ -106,20 +133,20 @@ describeEachProvider('RFC-359 W26 node rollback persistence', (harness) => {
   })
 
   test('repository index order and stored task fields survive the target projection', async () => {
-    await seedTask(harness, 7)
-    const { taskRepos } = tablesOf(harness.db)
+    await seedTask(harness)
+    const { taskRepositoryMounts: taskRepos } = tablesOf(harness.db)
     await harness.db.insert(taskRepos).values([4, 1, 2].map(repositoryRow))
     const before = await readStored(harness.db)
     const recording = harness.recordStatements()
     try {
       const target = await loadNodeRollbackTarget(harness.db, taskId)
       expect(target?.db).toBe(harness.db)
-      expect(target).toEqual({
+      expect({ ...target, db: undefined }).toEqual({
         taskId,
-        db: harness.db,
+        db: undefined,
         worktreePath: '/fixture/worktrees/task',
         repos: [1, 2, 4].map((index) => ({
-          worktreePath: `/fixture/worktrees/repo-${index}`,
+          worktreePath: `/fixture/worktrees/task/repo-${index}`,
           mountPath: `repo-${index}`,
         })),
       })
@@ -136,8 +163,8 @@ describeEachProvider('RFC-359 W26 node rollback persistence', (harness) => {
   })
 
   test('the actual transaction handle sees edits and rolls both complete rows back on failure', async () => {
-    await seedTask(harness, 1)
-    const { taskRepos } = tablesOf(harness.db)
+    await seedTask(harness)
+    const { taskRepositoryMounts: taskRepos } = tablesOf(harness.db)
     await insertOne(harness.db, taskRepos, repositoryRow(1))
     const before = await readStored(harness.db)
     const rollbackError = new Error('w26 rollback fixture failure')
@@ -145,29 +172,39 @@ describeEachProvider('RFC-359 W26 node rollback persistence', (harness) => {
     let receivedError: unknown
     try {
       await harness.session.transaction(async (tx) => {
-        const { tasks, taskRepos } = tablesOf(tx)
+        const { tasks, taskDefinitions, taskRepositoryMounts: taskRepos } = tablesOf(tx)
         await tx
           .update(tasks)
-          .set({ repoCount: 9, worktreePath: '/fixture/transaction/task', inputs: editedInputs })
+          .set({ workspaceRootRef: '/fixture/transaction/task' })
           .where(eq(tasks.id, taskId))
-        await patchTaskRepoFixture(tx, { taskId }, { worktreePath: '/fixture/transaction/repo-1' })
+        await tx
+          .update(taskDefinitions)
+          .set({ inputs: editedInputs })
+          .where(eq(taskDefinitions.taskId, taskId))
+        await tx
+          .update(taskRepos)
+          .set({ mountPath: 'nested/repo-1' })
+          .where(eq(taskRepos.repoKey, repositoryRow(1).repoKey))
         await insertOne(tx, taskRepos, repositoryRow(0))
         const target = await loadNodeRollbackTarget(tx, taskId)
         expect(target?.db).toBe(tx)
-        expect(target).toEqual({
+        expect({ ...target, db: undefined }).toEqual({
           taskId,
-          db: tx,
+          db: undefined,
           worktreePath: '/fixture/transaction/task',
           repos: [
-            { worktreePath: '/fixture/worktrees/repo-0', mountPath: 'repo-0' },
-            { worktreePath: '/fixture/transaction/repo-1', mountPath: 'repo-1' },
+            { worktreePath: '/fixture/transaction/task/repo-0', mountPath: 'repo-0' },
+            { worktreePath: '/fixture/transaction/task/nested/repo-1', mountPath: 'nested/repo-1' },
           ],
         })
         const inside = await readStored(tx)
         expect(inside.taskRows).toEqual(
           before.taskRows.map((row) => ({
             ...row,
-            repoCount: 9,
+            repoCount: 2,
+            repoPath: '/fixture/source/repo-0',
+            branch: 'task/w26-repo-0',
+            workspaceRootRef: '/fixture/transaction/task',
             worktreePath: '/fixture/transaction/task',
             inputs: editedInputs,
           })),
@@ -175,7 +212,9 @@ describeEachProvider('RFC-359 W26 node rollback persistence', (harness) => {
         expect(inside.repositoryRows).toHaveLength(2)
         expect(inside.repositoryRows.find((row) => row.repoIndex === 1)).toEqual({
           ...before.repositoryRows[0]!,
-          worktreePath: '/fixture/transaction/repo-1',
+          worktreePath: '/fixture/transaction/task/nested/repo-1',
+          mountPath: 'nested/repo-1',
+          worktreeDirName: 'nested/repo-1',
         })
         throw rollbackError
       })
@@ -191,7 +230,7 @@ describeEachProvider('RFC-359 W26 node rollback persistence', (harness) => {
   })
 
   test('observer construction without an execution context returns undefined without SQL', async () => {
-    await seedTask(harness, 1)
+    await seedTask(harness)
     const before = await readStored(harness.db)
     const recording = harness.recordStatements()
     try {
@@ -212,11 +251,11 @@ describeEachProvider('RFC-359 W26 node rollback persistence', (harness) => {
   })
 })
 
-// Original SQLite recorder output and the PostgreSQL SQL received by the W26
-// hosted test (run 34275439627). These pure checks do not execute PostgreSQL.
+// Target-shaped qualification fixtures, adapted from the W26 recorder cases.
+// These pure checks do not execute PostgreSQL or claim a new hosted trace.
 const recordedRepositoryQueries = [
-  'select "task_id", "repo_index", "repo_path", "repo_url", "cached_repo_id", "base_branch", "branch", "working_branch", "base_commit", "worktree_path", "worktree_dir_name", "mount_path", "subdir", "readonly", "readonly_dirty_count", "workspace_profile_version", "workspace_profile_digest", "has_submodules", "submodule_init_ok", "submodule_init_error", "schema_version" from "task_repos" where "task_repos"."task_id" = ? order by "task_repos"."repo_index" asc',
-  'select "task_id", "repo_index", "repo_path", "repo_url", "cached_repo_id", "base_branch", "branch", "working_branch", "base_commit", "worktree_path", "worktree_dir_name", "mount_path", "subdir", "readonly", "readonly_dirty_count", "workspace_profile_version", "workspace_profile_digest", "has_submodules", "submodule_init_ok", "submodule_init_error", "schema_version" from "agent_workflow"."task_repos" where "agent_workflow"."task_repos"."task_id" = $1 order by "agent_workflow"."task_repos"."repo_index" asc',
+  'select "task_id", "repo_key", "ordinal" from "task_repository_mounts" where "task_repository_mounts"."task_id" = ? order by "task_repository_mounts"."ordinal" asc',
+  'select "task_id", "repo_key", "ordinal" from "agent_workflow"."task_repository_mounts" where "agent_workflow"."task_repository_mounts"."task_id" = $1 order by "agent_workflow"."task_repository_mounts"."ordinal" asc',
 ]
 
 test('repository index SQL lock accepts both recorded provider qualification forms', () => {
@@ -227,13 +266,13 @@ test('repository index SQL lock accepts both recorded provider qualification for
 
 test('repository index SQL lock rejects another schema, table, column, or direction', () => {
   const otherOrders = [
-    '"other_schema"."task_repos"."repo_index" asc',
-    '"task_runs"."repo_index" asc',
-    '"agent_workflow"."task_runs"."repo_index" asc',
-    '"task_repos"."task_id" asc',
-    '"agent_workflow"."task_repos"."task_id" asc',
-    '"task_repos"."repo_index" desc',
-    '"agent_workflow"."task_repos"."repo_index" desc',
+    '"other_schema"."task_repository_mounts"."ordinal" asc',
+    '"task_runs"."ordinal" asc',
+    '"agent_workflow"."task_runs"."ordinal" asc',
+    '"task_repository_mounts"."task_id" asc',
+    '"agent_workflow"."task_repository_mounts"."task_id" asc',
+    '"task_repository_mounts"."ordinal" desc',
+    '"agent_workflow"."task_repository_mounts"."ordinal" desc',
   ]
   for (const statement of recordedRepositoryQueries) {
     const query = statement.slice(0, statement.lastIndexOf(' order by '))

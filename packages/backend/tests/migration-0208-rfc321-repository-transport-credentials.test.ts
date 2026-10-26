@@ -2,18 +2,13 @@
 // while personal publication credentials start empty and remain bound to the
 // exact user + provider + logical connection generation.
 
+import { FROZEN_MIGRATIONS } from './migration-freeze'
 import { describe, expect, test } from 'bun:test'
 import { Database } from 'bun:sqlite'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
-const MIGRATION = resolve(
-  import.meta.dir,
-  '..',
-  'db',
-  'migrations',
-  '0208_rfc321_repository_transport_credentials.sql',
-)
+const MIGRATION = resolve(FROZEN_MIGRATIONS, '0208_rfc321_repository_transport_credentials.sql')
 
 function legacyDatabase(): Database {
   const sqlite = new Database(':memory:')

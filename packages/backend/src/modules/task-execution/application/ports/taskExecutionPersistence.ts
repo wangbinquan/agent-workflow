@@ -1,4 +1,4 @@
-import type { NodeRunSeqBackfillStore } from './nodeRunSeqBackfillStore'
+import type { RunSelectionReader } from './runSelection'
 import type { TaskExecutionReadModels } from '../../public/types'
 import type { TaskExecutionIntentPersistence } from './taskExecutionIntentPersistence'
 import type { TaskOwnershipPersistence } from './taskOwnershipPersistence'
@@ -27,7 +27,7 @@ import type { TaskExecutionShutdownOperations } from './taskExecutionShutdownOpe
 /** Bootstrap-selected task-execution persistence. Every member is a named
  * Promise port; provider clients remain in infrastructure factories. */
 export interface TaskExecutionPersistence {
-  readonly nodeRunSeqBackfill: NodeRunSeqBackfillStore
+  readonly selection: RunSelectionReader
   readonly drive: TaskEngineApplicationPersistence
   readonly ownership: TaskOwnershipPersistence
   readonly intents: TaskExecutionIntentPersistence

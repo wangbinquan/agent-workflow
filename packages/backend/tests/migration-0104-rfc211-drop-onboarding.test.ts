@@ -6,24 +6,25 @@
 // locks the removal: the columns are gone, the tables are gone, and the tables
 // the columns lived on are otherwise intact.
 
+import { FROZEN_MIGRATIONS } from './migration-freeze'
+import { openFrozenEpoch1Db } from './migration-freeze'
 import { describe, expect, test } from 'bun:test'
 import { Database } from 'bun:sqlite'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { openDb } from '@/db/client'
 import { removeTempDirSync } from './fixtures/tempDir'
 
 function withMigratedDb<T>(fn: (raw: Database) => T): T {
   const dir = mkdtempSync(join(tmpdir(), 'aw-mig-0104-'))
   const dbPath = join(dir, 'test.db')
   try {
-    // RFC-254: capture and close the openDb (drizzle) handle — a discarded
+    // RFC-254: capture and close the openFrozenEpoch1Db (drizzle) handle — a discarded
     // return leaks it, and on Windows bun:sqlite frees the OS handle on GC, not
     // close(), so the leaked + raw handles keep the dir busy at rm time.
-    const client = openDb({
+    const client = openFrozenEpoch1Db({
       path: dbPath,
-      migrationsFolder: join(import.meta.dir, '..', 'db', 'migrations'),
+      migrationsFolder: FROZEN_MIGRATIONS,
     })
     const raw = new Database(dbPath, { readwrite: true })
     try {

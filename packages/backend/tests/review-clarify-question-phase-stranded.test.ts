@@ -25,8 +25,8 @@ import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { and, eq } from 'drizzle-orm'
-import type { DbClient } from '../src/db/client'
-import { createInMemoryDb } from '../src/db/client'
+import { type DbClient, createInMemoryDb } from '../src/db/client'
+
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 import { createAgent } from '../src/modules/resource-catalog/infrastructure/legacy/agent'
 import { createWorkflow } from '../src/services/workflow'
@@ -47,7 +47,6 @@ import {
   runTaskWithRealTestTopology as runTask,
 } from './helpers/taskExecutionTestTopology'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const SCENARIO_STUB = resolve(import.meta.dir, 'fixtures', 'scenario-opencode.ts')
 const actor = { userId: 'u1', role: 'owner' as const }
 const GIT_TIMEOUT_MS = 10_000
@@ -108,7 +107,7 @@ beforeEach(async () => {
   writeFileSync(join(repoPath, 'README.md'), '# r\n')
   await git('-C', repoPath, 'add', '.')
   await git('-C', repoPath, '-c', 'commit.gpgsign=false', 'commit', '--no-verify', '-m', 'init')
-  db = createInMemoryDb(MIGRATIONS)
+  db = createInMemoryDb()
   await seedTestDefaultOpencodeRuntime(db)
   process.env.SCENARIO_PLAN_FILE = join(tmp, 'plan.json')
   process.env.SCENARIO_STATE_DIR = join(tmp, 'state')

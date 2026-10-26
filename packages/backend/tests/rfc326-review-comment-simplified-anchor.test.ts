@@ -1,3 +1,7 @@
+import { contentRowColumns } from '@/platform/content/infrastructure/contentStore'
+import { legacyContentRef } from '@/platform/content/contentRef'
+import { nodeRunFixtureColumns } from './helpers/model/nodeRun'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 // RFC-326 — REST: the simplified anchor on POST /api/reviews/:nodeRunId/comments
 // (proposal AC-11 / AC-12 / AC-13 / AC-16; design §4.1, §4.3, §5).
 //
@@ -23,7 +27,7 @@
 
 import { nodeRunFixture, taskFixture, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+
 import type { Hono } from 'hono'
 import { afterEach, describe, expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
@@ -35,9 +39,10 @@ import {
   REVIEW_ANCHOR_QUOTE_MAX_CHARS,
   REVIEW_ANCHOR_SECTION_MAX_CHARS,
   REVIEW_COMMENT_TEXT_MAX_CHARS,
+  type ReviewCommentAnchor,
 } from '@agent-workflow/shared'
-import type { ReviewCommentAnchor } from '@agent-workflow/shared'
-import { type DbClient } from '../src/db/client'
+
+import type { DbClient } from '../src/db/client'
 import {
   buildReviewAnchorDocument,
   resolveReviewAnchor,
@@ -174,7 +179,7 @@ async function buildFixture(
     sourcePortName: 'docpath',
     versionIndex: 1,
     reviewIteration: 0,
-    bodyPath: writeBody(id, body),
+    ...contentRowColumns(legacyContentRef('review-body-path', 'local-file', writeBody(id, body))),
   })
 
   const docs: DocRow[] = []
@@ -653,7 +658,12 @@ registerProviderFixture(
       }
       expect(await commentRowCount(f)).toBe(0)
       const { nodeRuns } = tablesOf(f.db)
-      const run = (await f.db.select().from(nodeRuns).where(eq(nodeRuns.id, f.reviewRunId)))[0]!
+      const run = (
+        await f.db
+          .select(nodeRunFixtureColumns(f.db))
+          .from(nodeRuns)
+          .where(eq(nodeRuns.id, f.reviewRunId))
+      )[0]!
       expect(run.status).toBe('awaiting_review')
     })
 

@@ -1,3 +1,5 @@
+import { legacyContentRef } from '@/platform/content/contentRef'
+import { contentRowColumns } from '@/platform/content/infrastructure/contentStore'
 // RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-099 ACL endpoints — cross-user enforcement for EVERY ACL'd resource type.
 //
@@ -169,7 +171,7 @@ const CASES: ResourceCase[] = [
       await insertOne(db, skills, {
         ...row,
         description: 'acl matrix subject',
-        managedPath: `skills/${KEY}/files/`,
+        ...contentRowColumns(legacyContentRef('skill-path', 'local-file', `skills/${KEY}/files/`)),
         ownerUserId,
         visibility: 'private',
       })

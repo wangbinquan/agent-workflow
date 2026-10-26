@@ -10,12 +10,10 @@ import { removeTempDirSync } from './fixtures/tempDir'
 import type { Database } from 'bun:sqlite'
 import { mkdtempSync, statSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { ulid } from 'ulid'
 import { openDb, type DbClient } from '../src/db/client'
 import { checkpointWal } from '../src/services/backupScheduler'
-
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 const tmps: string[] = []
 function tmp(): string {
@@ -30,7 +28,7 @@ afterEach(() => {
 describe('RFC-213 checkpointWal', () => {
   test('truncates a grown -wal', async () => {
     const dbPath = join(tmp(), 'db.sqlite')
-    const db: DbClient = openDb({ path: dbPath, migrationsFolder: MIGRATIONS })
+    const db: DbClient = openDb({ path: dbPath })
     // Grow the WAL without checkpointing.
     for (let i = 0; i < 50; i++) {
       await workflowFixture(db, {

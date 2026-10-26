@@ -8,7 +8,7 @@ import type { Database } from 'bun:sqlite'
 import { sql } from 'drizzle-orm'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import {
   createInMemoryDb,
   instrumentSlowStatements,
@@ -17,7 +17,6 @@ import {
 } from '../../src/db/client'
 import { affectedRows } from '../../src/platform/persistence/databaseTransaction'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', '..', 'db', 'migrations')
 type Factory = 'snapshot' | 'file'
 
 function withDatabase(
@@ -30,10 +29,10 @@ function withDatabase(
   try {
     const db =
       factory === 'snapshot'
-        ? createInMemoryDb(MIGRATIONS)
+        ? createInMemoryDb()
         : openDb({
             path: join(dir!, 'db.sqlite'),
-            migrationsFolder: MIGRATIONS,
+
             slowQueryMs: 0,
             observeStatementMs: observe,
           })

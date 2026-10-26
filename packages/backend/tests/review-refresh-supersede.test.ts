@@ -1,3 +1,13 @@
+import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
+import type { TaskReadRow } from '@/modules/task-execution/infrastructure/taskRepositorySql'
+import { readReviewFixture } from './helpers/model/content'
+import { nodeRunFixtureColumns } from './helpers/model/nodeRun'
+import { legacyContentRef } from '@/platform/content/contentRef'
+import {
+  contentRowColumns,
+  inlineContentColumns,
+} from '@/platform/content/infrastructure/contentStore'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { withO2Closure } from './helpers/o2Closure'
 // RFC-074 PR-B — review awaiting-refresh (B14-B15, design §7 / decision D5).
 //
@@ -18,11 +28,11 @@ import {
   consumedProducerIds,
 } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+
 import { describeEachProvider } from './helpers/eachProvider'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { afterEach, beforeEach, expect, test } from 'bun:test'
-import { mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { and, eq } from 'drizzle-orm'
@@ -52,7 +62,7 @@ describeEachProvider(
 
     async function seed(status: 'running' | 'awaiting_review' = 'awaiting_review'): Promise<{
       taskId: string
-      task: PersistenceTables['tasks']['$inferSelect']
+      task: TaskReadRow
       definition: WorkflowDefinition
       reviewNode: WorkflowNode
     }> {
@@ -155,7 +165,9 @@ describeEachProvider(
         sourcePortName: 'docpath',
         versionIndex: 1,
         reviewIteration: 0,
-        bodyPath: 'doc_versions/v1.md',
+        ...contentRowColumns(
+          legacyContentRef('review-body-path', 'local-file', 'doc_versions/v1.md'),
+        ),
         decision: 'pending',
         createdAt: Date.now(),
       })
@@ -170,7 +182,10 @@ describeEachProvider(
         contextBefore: '',
         contextAfter: '',
         occurrenceIndex: 0,
-        commentText: 'this comment anchors the OLD body',
+        ...inlineContentColumns(
+          Buffer.from('this comment anchors the OLD body', 'utf8'),
+          'text/plain',
+        ),
         createdAt: Date.now(),
       })
 
@@ -230,8 +245,14 @@ describeEachProvider(
         }),
       )
       expect(opened.kind).toBe('awaiting_review')
-      const { nodeRuns, docVersions, collaborationGateOperations } = tablesOf(db)
-      const firstRun = (await db.select().from(nodeRuns).where(eq(nodeRuns.nodeId, 'rev_1')))[0]!
+      const { collaborationGateOperations } = tablesOf(db)
+      const { nodeRuns, docVersions } = tablesOf(db)
+      const firstRun = (
+        await db
+          .select(nodeRunFixtureColumns(db))
+          .from(nodeRuns)
+          .where(eq(nodeRuns.nodeId, 'rev_1'))
+      )[0]!
       const firstVersion = (
         await db.select().from(docVersions).where(eq(docVersions.reviewNodeRunId, firstRun.id))
       )[0]!
@@ -252,7 +273,10 @@ describeEachProvider(
       )
       expect(refreshed.kind).toBe('awaiting_review')
 
-      const reviewRuns = await db.select().from(nodeRuns).where(eq(nodeRuns.nodeId, 'rev_1'))
+      const reviewRuns = await db
+        .select(nodeRunFixtureColumns(db))
+        .from(nodeRuns)
+        .where(eq(nodeRuns.nodeId, 'rev_1'))
       expect(reviewRuns.map((run) => run.id)).toEqual([firstRun.id])
       const versions = await db
         .select()
@@ -263,11 +287,13 @@ describeEachProvider(
         [1, 'superseded'],
         [2, 'pending'],
       ])
-      expect(versions[0]!.bodyPath).not.toBe(versions[1]!.bodyPath)
-      expect(readFileSync(join(appHome, firstVersion.bodyPath), 'utf8')).toBe('# old body')
-      expect(readFileSync(join(appHome, versions[1]!.bodyPath), 'utf8')).toBe(
-        '# new body after upstream rerun',
-      )
+      expect(versions[0]!.contentRefJson).not.toBe(versions[1]!.contentRefJson)
+      expect(
+        await readReviewFixture(db, appHome, firstVersion, epoch2RuntimeTestPorts(db).content),
+      ).toBe('# old body')
+      expect(
+        await readReviewFixture(db, appHome, versions[1]!, epoch2RuntimeTestPorts(db).content),
+      ).toBe('# new body after upstream rerun')
       const operations = await db
         .select()
         .from(collaborationGateOperations)
@@ -290,7 +316,8 @@ describeEachProvider(
       await seedSrc(taskId, '01A_OLD', 0, '# old body')
       await seedSrc(taskId, '01B_NEW', 4, '# new body after upstream rerun')
       const reviewRunId = ulid()
-      const { docVersions, reviewComments, collaborationGateOperations } = tablesOf(db)
+      const { collaborationGateOperations } = tablesOf(db)
+      const { docVersions, reviewComments } = tablesOf(db)
       await nodeRunFixture(db, {
         id: reviewRunId,
         taskId,
@@ -312,7 +339,9 @@ describeEachProvider(
         sourcePortName: 'docpath',
         versionIndex: 1,
         reviewIteration: 0,
-        bodyPath: 'doc_versions/v1.md',
+        ...contentRowColumns(
+          legacyContentRef('review-body-path', 'local-file', 'doc_versions/v1.md'),
+        ),
         decision: 'pending',
         createdAt: Date.now(),
       })
@@ -328,7 +357,10 @@ describeEachProvider(
         contextBefore: '',
         contextAfter: '',
         occurrenceIndex: 0,
-        commentText: 'preserve until refresh commits',
+        ...inlineContentColumns(
+          Buffer.from('preserve until refresh commits', 'utf8'),
+          'text/plain',
+        ),
         createdAt: Date.now(),
       })
       const exclusive = harness.capabilities.isolation === 'exclusive'

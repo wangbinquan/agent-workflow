@@ -104,3 +104,11 @@ describe('RFC-395 II-a A1 fixture read boundary', () => {
     ).toEqual(['write', 'write', 'read', 'read', 'read'])
   })
 })
+
+test('target companions and ordered relations are inside the fixture boundary', () => {
+  const found = directFixtureReads(
+    'target.ts',
+    `const { nodeRunConfigs: config } = tablesOf(db); db.select({ value: config.runtime }).from(config); db.query('SELECT value_json FROM clarify_answers')`,
+  )
+  expect([...new Set(found.map((row) => row.table))]).toEqual(['nodeRunConfigs', 'clarifyAnswers'])
+})

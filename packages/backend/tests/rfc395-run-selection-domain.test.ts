@@ -25,7 +25,7 @@ import {
   type SelectionChange,
   type SelectionState,
 } from '@/modules/task-execution/domain/runSelection/changes'
-import { createRunSelectionParticipantInTx } from '@/modules/task-execution/infrastructure/runSelection/oracle/participant'
+import { createRunSelectionParticipantInTx } from '@/modules/task-execution/infrastructure/migration/oracle/participant'
 
 const slots: readonly RunSlot[] = [
   { kind: 'node', nodeId: 'n|["汉字"]', frame: { containerRunId: null, iteration: 0 } },

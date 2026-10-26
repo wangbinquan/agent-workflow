@@ -1,7 +1,8 @@
-import { o2Ports } from './helpers/o2Closure'
-import { readTaskFixtures, taskFixture, workflowFixture } from './helpers/model'
+import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { tablesOf } from '@/platform/persistence/sessionTables'
-import { bootImplementation, bootDeclaration, expectBootOrder } from './helpers/daemonProgramSource'
+import { bootDeclaration, bootImplementation, expectBootOrder } from './helpers/daemonProgramSource'
+import { readTaskFixtures, taskFixture, workflowFixture } from './helpers/model'
+import { o2Ports } from './helpers/o2Closure'
 // RFC-359 W1-T7c —— 任务删除认领的崩溃恢复，两个引擎各跑一遍。
 //
 // dual-provider-parity-audit-2026-09-04 T7c：`recoverInterruptedTaskDeletes` 形参是
@@ -17,9 +18,9 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { ulid } from 'ulid'
 
-import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import { recoverInterruptedTaskDeletes } from '@/modules/task-execution/infrastructure/taskDeleteRecovery'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 
 async function seedTask(
@@ -66,6 +67,7 @@ function plan(taskId: string, over: Partial<Record<'worktrees', unknown>> = {}):
 
 async function claimTree(db: PersistenceDb, rootTaskId: string, cleanupPlanJson: string) {
   const persistence = createTaskExecutionPersistence(db, {
+    historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
     recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
   })
   const members = await persistence.terminalMaintenance.snapshotTree(rootTaskId)

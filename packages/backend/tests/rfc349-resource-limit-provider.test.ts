@@ -1,5 +1,7 @@
+import { createEpoch2PostgresqlMetadata } from './helpers/epoch2PostgresqlMetadata'
 // RFC-349 — resource-limit policy consumes a provider-neutral persistence and
 // Task Execution cancellation command; SQLite/PG SQL lives in infrastructure.
+// RFC-395 BF-D27: the first UPDATE commits the marker; the following insertOne folds its fence.
 
 import { withNativeTransactions } from './helpers/nativeTransactions'
 import { describe, expect, test } from 'bun:test'
@@ -24,8 +26,9 @@ function source(relativePath: string): string {
 function rows(
   values: readonly (readonly unknown[])[] = [],
   objects: readonly Record<string, unknown>[] = [],
+  count = objects.length,
 ): SqlRows {
-  return Object.assign(Promise.resolve([...objects]), {
+  return Object.assign(Promise.resolve(Object.assign([...objects], { count })), {
     async values() {
       return values
     },
@@ -35,11 +38,15 @@ function rows(
 function postgresqlFixture() {
   const executions: string[] = []
   let releases = 0
+  const epoch2Metadata = createEpoch2PostgresqlMetadata()
   const execute = (query: string): SqlRows => {
     executions.push(query)
+    const metadata = epoch2Metadata(query)
+    if (metadata) return metadata
     const compact = query.replace(/\s+/g, ' ').toLowerCase()
-    if (compact.includes('database_generations')) {
-      return rows([], [{ generation_id: 'dbg_limits_pg' }])
+    // A folded INSERT mentions generations too; return its native affected-row count.
+    if (compact.startsWith('insert into "agent_workflow"."recovery_events"')) {
+      return rows([], [], 1)
     }
     if (
       compact.startsWith('select') &&
@@ -168,21 +175,27 @@ describe('RFC-349 resource-limit provider seam', () => {
     expect(
       statements.some((query) => query.includes('insert into "agent_workflow"."recovery_events"')),
     ).toBe(true)
-    // One process-wide live-write marker plus a generation fence per write.
-    expect(statements.filter((query) => query.includes('database_generations'))).toHaveLength(3)
-    // RFC-359 AC-11：这里原本是 `toBe(2)`——两笔写各 reserve 一条连接。现在只剩 1，
-    // 因为**单行 INSERT 的围栏被折进语句自己**（`postgresqlDatabaseClient.ts` 的
-    // `foldGenerationFenceIntoInsert`），那一笔写不再开 `BEGIN`/`COMMIT`、也就不必 reserve；
-    // UPDATE 不在可折范围内，照旧走四往返路径，贡献这仅有的 1 次。
-    expect(fixture.releases).toBe(1)
-    // 只锁次数会让「把折叠改回去」悄悄变绿（次数会涨回 2，但没人会注意到那是回归）。
-    // 所以同时锁形状：那笔 INSERT 必须**自带**围栏谓词，UPDATE 必须**不**自带。
+    const transactionStart = statements.indexOf('begin')
+    expect(transactionStart).toBeGreaterThanOrEqual(0)
+    expect(statements.slice(transactionStart)).toEqual([
+      'begin',
+      expect.stringMatching(/^select generation_id .*"generations".*for share$/),
+      expect.stringContaining('select first_live_write_at'),
+      expect.stringContaining('update "agent_workflow_meta"."first_write"'),
+      expect.stringContaining('update "agent_workflow"."tasks"'),
+      'commit',
+      expect.stringContaining('insert into "agent_workflow"."recovery_events"'),
+    ])
     const insert = statements.find((query) =>
-      query.includes('insert into "agent_workflow"."recovery_events"'),
+      query.startsWith('insert into "agent_workflow"."recovery_events"'),
     )
-    const update = statements.find((query) => query.includes('update "agent_workflow"."tasks"'))
-    expect(insert).toContain('database_generations')
-    expect(update).not.toContain('database_generations')
+    expect(insert).toMatch(/^insert into .* select /)
+    expect(insert).toContain('where exists (select 1 from "agent_workflow_meta"."generations"')
+    expect(insert).toContain("and state = 'active' for share)")
+    expect(
+      statements.filter((query) => query.includes('"agent_workflow_meta"."generations"')),
+    ).toEqual([expect.stringMatching(/^select generation_id .*for share$/), insert])
+    expect(fixture.releases).toBe(1)
   })
 
   test('service and the shared adapter prohibit direct DB facade casts and SQLite fallback', () => {

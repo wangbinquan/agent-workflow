@@ -1,3 +1,5 @@
+import { taskReadColumns } from '@/modules/task-execution/infrastructure/taskRepositorySql'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 // Locks the RFC-099 audit (2026-07-15) fix: retryNode must validate that the
 // nodeRunId belongs to the task BEFORE it CASes the task status to pending
 // (that CAS also clears finishedAt/errorSummary/errorMessage/failedNodeId).
@@ -6,25 +8,24 @@
 // scheduler-less `pending` zombie and wiped its completion metadata before the
 // 404 fired. A bad nodeRunId must now leave the task completely untouched.
 
+import { afterEach, beforeEach, expect, test } from 'bun:test'
 import {
   nodeRunFixture,
   patchNodeRunFixture,
+  readNodeRunFixtures,
   readTaskFixtures,
   taskFixture,
   workflowFixture,
-  readNodeRunFixtures,
 } from './helpers/model'
-import { tablesOf } from '@/platform/persistence/sessionTables'
-import { afterEach, beforeEach, expect, test } from 'bun:test'
 
-import { createRetryEngine } from './helpers/retryEngine'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
+import { eq } from 'drizzle-orm'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
-import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
+import { createRetryEngine } from './helpers/retryEngine'
 
 // RFC-359 AC-1（第 9 刀）：`retry` 两份实现合一之后，本文件验的是**共用**那一份的前置门，
 // 所以它必须在两个引擎上各跑一遍——合并前它只喂 SQLite 那份 `retryNode`，PG 上这三道门
@@ -94,7 +95,11 @@ describeEachProvider(
       }
       expect(code).toBe('node-run-not-found')
 
-      const rows = await db.select().from(tasks).where(eq(tasks.id, taskId)).limit(1)
+      const rows = await db
+        .select(taskReadColumns(db))
+        .from(tasks)
+        .where(eq(tasks.id, taskId))
+        .limit(1)
       expect(rows[0]?.status).toBe('done')
       expect(rows[0]?.finishedAt).toBe(finishedAt)
     })

@@ -24,9 +24,9 @@ import { resolve } from 'node:path'
 import {
   createLogicalTableChunk,
   type CanonicalLogicalRow,
-} from '@/platform/persistence/logicalDatabaseArtifact'
+} from '@/platform/persistence/migration/legacy/logicalDatabaseArtifact'
 import { SqliteLogicalSourceWorkerEventSchema } from '@/platform/persistence/sqliteLogicalSourceProtocol'
-import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import { buildFrozenEpoch1LogicalSchemaContract as buildLogicalSchemaContract } from '@/platform/persistence/migration/epoch1/contract'
 
 const contract = buildLogicalSchemaContract()
 const table = contract.tables.find((candidate) => candidate.sourceTable === 'node_run_events')!

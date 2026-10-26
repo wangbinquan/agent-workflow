@@ -1,17 +1,19 @@
 import type {
   SkillCatalogBootParticipant,
-  SkillIdentityMigrationReceipt,
-  SkillLegacyVersionBackfillReceipt,
   SkillSnapshotReverifyReceipt,
 } from '../../public/participants'
 import { skillCatalogBootParticipantBrand } from '../../domain/participantBrands'
 
 /** Provider-private mechanics consumed by the owner factory. */
 export interface SkillCatalogBootAdapter {
-  runIdentityMigrationBarrier(): Promise<SkillIdentityMigrationReceipt>
+  recoverOperations(): Promise<{
+    readonly total: number
+    readonly rolledBack: number
+    readonly rolledForward: number
+    readonly quarantined: number
+  }>
   activateAvailabilityGate(): void
   reconcileLiveFiles(): Promise<void>
-  backfillLegacyVersions(): Promise<SkillLegacyVersionBackfillReceipt>
   reverifySnapshots(): Promise<SkillSnapshotReverifyReceipt>
 }
 
@@ -21,10 +23,9 @@ export function createSkillCatalogBootParticipant(
 ): SkillCatalogBootParticipant {
   const participant = Object.freeze({
     [skillCatalogBootParticipantBrand]: 'skill-catalog-boot-participant' as const,
-    runIdentityMigrationBarrier: () => adapter.runIdentityMigrationBarrier(),
+    recoverOperations: () => adapter.recoverOperations(),
     activateAvailabilityGate: () => adapter.activateAvailabilityGate(),
     reconcileLiveFiles: () => adapter.reconcileLiveFiles(),
-    backfillLegacyVersions: () => adapter.backfillLegacyVersions(),
     reverifySnapshots: () => adapter.reverifySnapshots(),
   })
   return participant

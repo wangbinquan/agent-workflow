@@ -1,3 +1,4 @@
+import { liveSqlitePath } from './storage'
 // RFC-229 — workgroup message-turn replies preserve and render their trigger.
 //
 // Backend integration tests own trigger resolution and persistence. This real
@@ -5,7 +6,6 @@
 // one-level quote: it previews the parent, jumps back to it with focus +
 // transient highlight, and remains contained on a narrow viewport.
 
-import { join } from 'node:path'
 import AxeBuilder from '@axe-core/playwright'
 import { expect, test, type Page } from '@playwright/test'
 
@@ -183,7 +183,7 @@ test.beforeAll(async () => {
     `(${sqlLiteral(childMessageId)},${sqlLiteral(taskId)},1,'member',${sqlLiteral(builder.id)},NULL,'result',${sqlLiteral(CHILD_BODY)},'[]',NULL,${sqlLiteral(parentMessageId)},${now + fillerIds.length + 1})`,
   ]
   runSqlite(
-    join(daemon.home, 'db.sqlite'),
+    liveSqlitePath(daemon.home),
     `PRAGMA foreign_keys=ON;
      BEGIN IMMEDIATE;
      INSERT INTO workgroup_messages (

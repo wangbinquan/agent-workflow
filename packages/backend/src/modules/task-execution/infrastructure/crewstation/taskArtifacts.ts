@@ -1,3 +1,8 @@
+import {
+  hostedContentColumnsInTx,
+  hostedObjectOf,
+  contentRefOf,
+} from '@/platform/content/infrastructure/contentStore'
 // RFC-370 v3 V6 — `hosted_task_artifacts` is Task Execution's owner reference
 // for `task-artifact` publications (key = artifact reference, scope = task id).
 // A row is written only in the ready transaction of its publication.
@@ -22,7 +27,7 @@ export async function retainHostedTaskArtifactInTx(
     .values({
       reference: input.reference,
       taskId: input.taskId,
-      objectId: input.object.id,
+      ...(await hostedContentColumnsInTx(tx, input.object)),
       digest: input.object.sha256,
       size: input.object.size,
       createdAt: Date.now(),
@@ -35,7 +40,7 @@ export async function retainHostedTaskArtifactInTx(
     .limit(1)
   if (
     saved?.taskId !== input.taskId ||
-    saved.objectId !== input.object.id ||
+    hostedObjectOf(contentRefOf(saved)).id !== input.object.id ||
     saved.digest !== input.object.sha256 ||
     saved.size !== input.object.size
   )

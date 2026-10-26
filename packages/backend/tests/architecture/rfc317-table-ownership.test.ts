@@ -97,19 +97,6 @@ const LEGACY_OWNERSHIP_DEBT: readonly OwnershipDebt[] = [
     removeWhen:
       'RFC-294 W4-E8 将定义存储收回 Development Automation，并让 Integration 只消费 owner-owned public port。',
   })),
-  ...[
-    'developmentApprovalSagas',
-    'developmentMissionLinks',
-    'developmentMissions',
-    'developmentMrClaims',
-  ].map((table) => ({
-    table,
-    owner: 'development-automation',
-    file: 'digital-employee/infrastructure/writerCutoverPersistence.ts',
-    why: 'Digital Employee 的 writer cutover infrastructure 仍跨 context 操作 Development Automation 的 mission lifecycle 表；调用点已被精确钉住。',
-    removeWhen:
-      'RFC-294 W4-E9 把 writer cutover 收敛为 Development Automation owner-owned command，Digital Employee 只传 closed request。',
-  })),
   {
     table: 'employeeApprovalSagas',
     owner: 'digital-employee',
@@ -364,6 +351,18 @@ const TABLES = persistenceSchema.tables.map((table) => table.schemaSymbol)
 const key = (entry: { readonly table: string; readonly file: string }): string =>
   `${entry.table}|${entry.file}`
 
+// Window decision T-4 keeps the original publication debt identity while the
+// single epoch-1 table becomes target object/publication companions. No other
+// target table or copied path may spend these frozen predecessor identities.
+const CONTENT_DEBT_SUCCESSORS: Readonly<Record<string, string>> = {
+  'contentObjects|system-operations/infrastructure/crewstation/objectPublications.ts':
+    'hostedObjectPublications|system-operations/infrastructure/crewstation/objectPublications.ts',
+  'contentPublications|system-operations/infrastructure/crewstation/hostedRestoreNormalization.ts':
+    'hostedObjectPublications|system-operations/infrastructure/crewstation/hostedRestoreNormalization.ts',
+  'contentPublications|system-operations/infrastructure/crewstation/objectPublications.ts':
+    'hostedObjectPublications|system-operations/infrastructure/crewstation/objectPublications.ts',
+}
+
 /**
  * 有 offered 边仍须记账的被重塑表站点（RFC-395 II-a 集中验证发现）：
  *   · 人工门 journal 被 task-execution 生命周期持久化反向 import，改走 owner public participant
@@ -414,7 +413,7 @@ describe('RFC-395 II-a A7 / RFC-317 T41 · R5 —— 一张表只属于一个 bo
     }
     for (const reshaped of [
       'tasks',
-      'taskRepos',
+      'taskRepositoryMounts',
       'nodeRuns',
       'nodeRunOutputs',
       'agents',
@@ -426,7 +425,11 @@ describe('RFC-395 II-a A7 / RFC-317 T41 · R5 —— 一张表只属于一个 bo
     expect(OWNERSHIP_DEBT.length).toBeLessThanOrEqual(INITIAL_DEBT.size)
     for (const debt of OWNERSHIP_DEBT) {
       expect(
-        INITIAL_DEBT.has(createHash('sha256').update(key(debt)).digest('hex')),
+        INITIAL_DEBT.has(
+          createHash('sha256')
+            .update(CONTENT_DEBT_SUCCESSORS[key(debt)] ?? key(debt))
+            .digest('hex'),
+        ),
         key(debt),
       ).toBe(true)
       expect(TABLE_OWNERS[debt.table], key(debt)).toBe(debt.owner)
@@ -442,6 +445,19 @@ describe('RFC-395 II-a A7 / RFC-317 T41 · R5 —— 一张表只属于一个 bo
     for (const blocked of OFFERED_BUT_BLOCKED) {
       expect(OWNERSHIP_DEBT.map(key), blocked).toContain(blocked)
     }
+  })
+
+  test('T-4 successor identities are exact, live and backed by the original debt', () => {
+    for (const [successor, predecessor] of Object.entries(CONTENT_DEBT_SUCCESSORS)) {
+      expect(OWNERSHIP_DEBT.map(key)).toContain(successor)
+      expect(INITIAL_DEBT.has(createHash('sha256').update(predecessor).digest('hex'))).toBe(true)
+      expect(CONTENT_DEBT_SUCCESSORS[successor.replace('.ts', 'Copy.ts')]).toBeUndefined()
+    }
+    expect(
+      CONTENT_DEBT_SUCCESSORS[
+        'taskNodeClarifyDirectives|collaboration/infrastructure/taskCollaborationReads.ts'
+      ],
+    ).toBeUndefined()
   })
 
   test('每条债都写了 why 与 removeWhen（写不出出路的债不该记）', () => {
@@ -612,11 +628,7 @@ const GLOBAL_INFRASTRUCTURE: Readonly<
     }
   >
 > = {
-  'cli/rfc295-downgrade-audit.ts': {
-    tables: ['tasks', 'workflows'],
-    why: '只读降级诊断，核对当前库的 Task/workflow 兼容性，不参与业务查询。',
-  },
-  'db/client.ts': {
+  'platform/persistence/sqlite/baseline.ts': {
     tables: ['authLoginPolicy'],
     why: '迁移后的内存数据库夹具初始化；只设置既有 bootstrap 标记，不提供领域业务操作。',
   },
@@ -642,12 +654,20 @@ const GLOBAL_INFRASTRUCTURE: Readonly<
     why: '全库迁移播种，从刚迁移的源库复制 registry 各表初始行并标记一次性完成。',
   },
   'platform/persistence/portableApplicationAssets.ts': {
-    tables: ['tasks', 'workflows'],
+    tables: ['taskRepositoryMounts', 'taskWorkspaces', 'tasks', 'workflows'],
     why: '全库便携备份/恢复的应用资产附件，按原有选择规则导出工作流和工作区。',
   },
   'platform/persistence/sqlite/systemProviderRestore.ts': {
     tables: ['recoveryEvents', 'skills', 'tasks'],
     why: '全库恢复入口，重建工作区、核对技能引用并记录恢复回执。',
+  },
+  'platform/content/infrastructure/contentStore.ts': {
+    tables: ['contentBytes', 'contentObjects', 'contentPublications'],
+    why: 'RFC-395 II-b: ContentStore owns its object, bytes and publication tables; this is not a cross-context business-table exemption.',
+  },
+  'platform/content/migration/probes.ts': {
+    tables: ['contentBytes', 'contentObjects', 'contentPublications'],
+    why: 'RFC-395 II-b: the content owner validates its own object/bytes/publication closure after conversion.',
   },
 }
 const INITIAL_HORIZONTAL_DEBT = new Set([

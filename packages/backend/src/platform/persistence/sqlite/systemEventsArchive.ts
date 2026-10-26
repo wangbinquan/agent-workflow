@@ -13,10 +13,7 @@
 // System Operations SQLite event-archive adapter. Transport and maintenance orchestration consume
 // its closed receipts through the compatibility surface.
 
-import {
-  legacyEventArchivePath,
-  legacyEventAppendJournal,
-} from '@/platform/content/legacyEventArchive'
+import { eventArchivePath, eventAppendJournal } from '@/platform/content/locations/eventArchive'
 import {
   closeSync,
   existsSync,
@@ -407,7 +404,7 @@ async function archiveOldestForNode(
 }
 
 function archiveJournalPath(file: string): string {
-  return legacyEventAppendJournal(file)
+  return eventAppendJournal(file)
 }
 
 function writeArchiveJournal(file: string, journal: ArchiveAppendJournalV1): void {
@@ -583,5 +580,5 @@ function finalizeArchiveJournal(file: string): void {
 }
 
 function jsonlPath(logsDir: string, taskId: string, nodeRunId: string): string {
-  return legacyEventArchivePath(logsDir, taskId, nodeRunId)
+  return eventArchivePath(logsDir, taskId, nodeRunId)
 }

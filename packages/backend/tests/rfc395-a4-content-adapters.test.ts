@@ -1,3 +1,4 @@
+import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { composeHumanGateTaskLockPort } from '@/modules/task-execution/composition'
 // RFC-395 II-a A4: persisted prompts, copied port archives and gate bodies retain the original read/fallback behavior on both providers.
 import { expect, test } from 'bun:test'
@@ -13,8 +14,8 @@ import {
 import { createFileNodeRunPromptContent } from '@/modules/task-execution/infrastructure/local/fileNodeRunPromptContent'
 import { createFilePortArtifactContent } from '@/modules/task-execution/infrastructure/local/filePortArtifactContent'
 import { composePortArtifactOperations } from '@/modules/task-execution/composition/portArtifacts'
-import { copyLegacyPortArchive } from '@/platform/content/legacyPortArchive'
-import { FsHumanGateArtifactStore } from '@/modules/collaboration/infrastructure/fsHumanGateArtifactStore'
+import { copyPortArchive } from '@/platform/content/locations/portArchive'
+import { legacyReviewArtifacts } from './helpers/legacyReviewArtifacts'
 import { DatabaseHumanGateOperationJournal } from '@/modules/collaboration/infrastructure/humanGateOperationJournal'
 import { DatabaseCommittedReviewArtifactReader } from '@/modules/collaboration/infrastructure/committedReviewArtifactReader'
 import { createFileReviewArtifactContent } from '@/modules/collaboration/infrastructure/local/fileReviewArtifactContent'
@@ -127,7 +128,7 @@ describeEachProvider('A4 content persistence', (harness) => {
         portName: 'doc',
         content: 'doc.md',
         kind: 'path<md>',
-        archiveJson: copyLegacyPortArchive(archived.archiveJson),
+        archiveJson: copyPortArchive(archived.archiveJson),
       })
       const output = (await readNodeRunOutputFixtures(harness.db, { nodeRunId: call }))[0]!
       expect(output.archiveJson).toBe(archived.archiveJson)
@@ -175,8 +176,11 @@ describeEachProvider('A4 content persistence', (harness) => {
         operationId = ulid()
       await seedTask(taskId, home)
       const body = '\ufeff# review\n中文\0'
-      const artifacts = new FsHumanGateArtifactStore(home)
-      const journal = new DatabaseHumanGateOperationJournal(composeHumanGateTaskLockPort)
+      const artifacts = legacyReviewArtifacts(harness.db, home)
+      const journal = new DatabaseHumanGateOperationJournal(
+        composeHumanGateTaskLockPort,
+        epoch2RuntimeTestPorts(harness.db).historyRestrictions,
+      )
       const session = databaseSessionFor(harness.db)
       const plan = artifacts.planReviewArtifact({
         operationId,
@@ -186,7 +190,7 @@ describeEachProvider('A4 content persistence', (harness) => {
         body,
       })
       const manifest = JSON.stringify({
-        schemaVersion: 1,
+        schemaVersion: 2,
         kind: 'review-open',
         documents: [{ bodyPath: plan.finalPath }],
       })
@@ -210,7 +214,7 @@ describeEachProvider('A4 content persistence', (harness) => {
         })
         await journal.declareArtifactsTx({ tx, operationId, artifacts: [plan], now: 1001 })
       })
-      const receiptJson = artifacts.stageReviewArtifact(plan, body)
+      const receiptJson = await artifacts.stageReviewArtifact(plan, body)
       await session.transaction(async (tx) => {
         await journal.transitionArtifactTx({
           tx,
@@ -239,9 +243,10 @@ describeEachProvider('A4 content persistence', (harness) => {
       const reader = new DatabaseCommittedReviewArtifactReader(
         harness.db,
         createFileReviewArtifactContent(home),
+        epoch2RuntimeTestPorts(harness.db).content,
       )
       expect(await reader.read(plan.finalPath)).toBe(body)
-      const finalized = artifacts.finalizeReviewArtifact({
+      const finalized = await artifacts.finalizeReviewArtifact({
         ...plan,
         artifactKind: 'review-doc',
         state: 'consumed',

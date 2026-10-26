@@ -1,3 +1,4 @@
+import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 // RFC-386: real provider claims exercise shared profiles, live child settings and epoch-scoped failures.
 // Former wiring controls preserve missing settings/profiles; current epoch wiring and an unscoped
 // negative control distinguish existing behavior from the factory consolidation.
@@ -219,6 +220,7 @@ function resumeDependencies(
   factory = bundle.coordinatorFactory,
 ) {
   return {
+    historyRestrictions: epoch2RuntimeTestPorts(fixture.input.db).historyRestrictions,
     db: fixture.input.db,
     persistence: bundle.persistence,
     coordinatorFactory: factory,
@@ -775,6 +777,7 @@ describeEachProvider('RFC-386 coordinator factory', (harness) => {
             runtime: resolveTaskDriveConfig(await bundle.runConfiguration()),
             lifecycle: bundle.driverLifecycle,
             gateContinuationPreDrive: composeGateContinuationPreDrive({
+              historyRestrictions: epoch2RuntimeTestPorts(harness.db).historyRestrictions,
               db: harness.db,
               persistence: bundle.persistence,
               memoryDistillEnqueuer: fixture.input.memory.memoryOperations.distillCommands,

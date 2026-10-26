@@ -1,3 +1,4 @@
+import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { o2Ports } from './helpers/o2Closure'
 // RFC-359 W4-B1 批 2c —— 四对适配器合一，两个引擎各跑一遍：wrapper run 持久化 / node run 冻结运行时 /
 // 调度器收尾读写（三者此前 SQLite 走 dbTxSync + withOwnedTaskTx、PG 走 SERIALIZABLE + assertPostgresqlTaskOwnerTx，
@@ -107,6 +108,7 @@ async function seedClaimedOwner(
     intentId: `intent_${ulid()}`,
     token,
     persistence: createTaskExecutionPersistence(db, {
+      historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
       recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
     }),
   })

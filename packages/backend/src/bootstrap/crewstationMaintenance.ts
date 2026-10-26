@@ -1,5 +1,10 @@
+import {
+  createContentStore,
+  createObjectContentTransport,
+  contentExclusive,
+} from '@/platform/content/composition'
 import { composeSourceControlTaskPorts } from '@/modules/task-execution/composition'
-import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { PostgresqlDatabaseConfigSchema, type DatabaseConfig } from '@agent-workflow/shared'
 import { composeCrewStationDatabaseBackups } from '@/modules/system-operations/composition/crewstationDatabaseBackups'
 import { composeCrewStationObjectPublications } from '@/modules/system-operations/composition/crewstationObjectPublications'
@@ -88,6 +93,7 @@ export function composeCrewStationMaintenanceDescriptor(input: {
       'eventsArchive',
       'databaseBackups',
       'objectPublications',
+      'contentStore',
     ],
     get configurationJson() {
       return JSON.stringify(
@@ -167,6 +173,13 @@ export const createCrewStationMaintenanceEffects: MaintenanceWorkerEffectsFactor
     const reviews = composeCrewStationReviewArtifacts({ db, objects, publications })
     const eventsArchive = composeCrewStationNodeEventArchive({ db, objects, fence, publications })
     return {
+      contentStore: createContentStore({
+        db,
+        exclusive: contentExclusive(context.appHome),
+        policy: { inlineMaxBytes: 64 * 1024, externalKind: 'object' },
+        transports: { object: createObjectContentTransport(objects) },
+        objectPublicationEpoch: () => fence.current().epoch,
+      }),
       // RFC-370 v3 V6: the one hosted object recovery/GC job, with every owner sweep.
       objectPublications: objectPublications.maintenance([
         composeCrewStationTaskObjectSweep({ db, fence, publications }),
@@ -178,7 +191,7 @@ export const createCrewStationMaintenanceEffects: MaintenanceWorkerEffectsFactor
         }),
       ]),
       databaseBackups: composeCrewStationDatabaseBackups({
-        contract: buildLogicalSchemaContract(),
+        contract: logicalSchemaContract,
         db,
         runtime,
         fence,

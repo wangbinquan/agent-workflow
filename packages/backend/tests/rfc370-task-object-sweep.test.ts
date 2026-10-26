@@ -43,13 +43,13 @@ describeEachProvider('RFC-370 hosted task object sweep', (harness) => {
         },
       )
     const states = async (owner: string) => {
-      const { hostedObjectPublications } = tablesOf(harness.db)
+      const { contentPublications } = tablesOf(harness.db)
       return new Map(
         (
           await harness.db
             .select()
-            .from(hostedObjectPublications)
-            .where(eq(hostedObjectPublications.owner, owner))
+            .from(contentPublications)
+            .where(eq(contentPublications.owner, owner))
         ).map((row) => [row.scope, row.state] as const),
       )
     }
@@ -59,7 +59,8 @@ describeEachProvider('RFC-370 hosted task object sweep', (harness) => {
   test('publications of deleted tasks are released and their artifact rows dropped; live and launching tasks keep theirs', async () => {
     const { journal, fence, artifact, states } = setup()
     await seedTask(harness.db, 'live-task')
-    const { taskWorkspacePreparations, hostedTaskArtifacts } = tablesOf(harness.db)
+    const { taskWorkspacePreparations } = tablesOf(harness.db),
+      { hostedTaskArtifacts } = tablesOf(harness.db)
     await insertOne(harness.db, taskWorkspacePreparations, {
       id: 'launching-task',
       admissionKey: 'admission',

@@ -1,7 +1,4 @@
-import {
-  isLegacyHostedPluginReference,
-  legacyPluginPublicationRoot,
-} from '@/platform/content/legacyPlugin'
+import { isHostedPluginReference, pluginPublicationRoot } from '@/platform/content/locations/plugin'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { and, eq } from 'drizzle-orm'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
@@ -12,8 +9,8 @@ export async function assertHostedPluginPublicationInTx(
   pluginId: string,
   cachedPath: string,
 ): Promise<void> {
-  if (!isLegacyHostedPluginReference(cachedPath)) return
-  const match = legacyPluginPublicationRoot(cachedPath)
+  if (!isHostedPluginReference(cachedPath)) return
+  const match = pluginPublicationRoot(cachedPath)
   if (!match || match.pluginId !== pluginId)
     throw new Error('hosted-plugin-publication-owner-mismatch')
   const { pluginArtifactGenerations } = tablesOf(tx)

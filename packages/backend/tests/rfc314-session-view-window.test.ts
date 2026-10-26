@@ -20,7 +20,6 @@ import { nodeRunFixture, taskFixture, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
 
 import { createInMemoryDb } from '../src/db/client'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
@@ -29,7 +28,6 @@ import { createTaskExecutionReadModels } from '../src/modules/task-execution/inf
 import { getSessionTree } from '../src/services/sessionView'
 import { recordStatements, type RecordedStatement } from './helpers/statementRecorder'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const SESSION = 'ses_parent'
 
 interface SeedEvent {
@@ -205,7 +203,7 @@ async function capture(
   statements: RecordedStatement[]
   db: PersistenceDb
 }> {
-  const db = database?.db ?? createInMemoryDb(MIGRATIONS)
+  const db = database?.db ?? createInMemoryDb()
   await seedBase(db)
   // W22 hosted PG timed out in this unrecorded fixture setup. Keep all rows and
   // their order, with at most 700 explicit parameters per batch. The native

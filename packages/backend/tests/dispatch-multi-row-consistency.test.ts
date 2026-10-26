@@ -1,3 +1,7 @@
+// Released picker oracle; executable runtime selection is covered through RunSelectionReader.
+import { isFresherNodeRun } from './helpers/model/frozenSelection/pickers'
+import { nodeRunFixtureColumns } from './helpers/model/nodeRun'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { withO2Closure } from './helpers/o2Closure'
 // RFC-053 PR-A T1b — multi-row dispatch consistency.
 //
@@ -24,7 +28,7 @@ import {
   workflowFixture,
   readNodeRunFixtures,
 } from './helpers/model'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -38,7 +42,7 @@ const ulid = monotonicFactory()
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 import { dispatchReviewNode } from '@/modules/collaboration/infrastructure/review'
-import { isFresherNodeRun } from '../src/services/scheduler'
+
 import { runGit } from '../src/util/git'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 
@@ -223,7 +227,12 @@ describeEachProvider('RFC-359 W25 multi-row dispatch providers', (harness) => {
         }),
       )
       expect(res.kind).toBe('awaiting_review')
-      const after = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, reviewId)))[0]!
+      const after = (
+        await h.db
+          .select(nodeRunFixtureColumns(h.db))
+          .from(nodeRuns)
+          .where(eq(nodeRuns.id, reviewId))
+      )[0]!
       expect(after.status).toBe('awaiting_review')
     })
 
@@ -250,7 +259,9 @@ describeEachProvider('RFC-359 W25 multi-row dispatch providers', (harness) => {
         }),
       )
       expect(res.kind).toBe('ok')
-      const after = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, doneId)))[0]!
+      const after = (
+        await h.db.select(nodeRunFixtureColumns(h.db)).from(nodeRuns).where(eq(nodeRuns.id, doneId))
+      )[0]!
       expect(after.status).toBe('done') // not touched
     })
 
@@ -289,10 +300,15 @@ describeEachProvider('RFC-359 W25 multi-row dispatch providers', (harness) => {
       )
       expect(res.kind).toBe('ok')
 
-      const doneAfter = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, doneId)))[0]!
+      const doneAfter = (
+        await h.db.select(nodeRunFixtureColumns(h.db)).from(nodeRuns).where(eq(nodeRuns.id, doneId))
+      )[0]!
       expect(doneAfter.status).toBe('done')
       const placeholderAfter = (
-        await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, placeholderId))
+        await h.db
+          .select(nodeRunFixtureColumns(h.db))
+          .from(nodeRuns)
+          .where(eq(nodeRuns.id, placeholderId))
       )[0]!
       expect(placeholderAfter.status).toBe('failed')
     })
@@ -333,12 +349,18 @@ describeEachProvider('RFC-359 W25 multi-row dispatch providers', (harness) => {
       // Canceled row stays canceled (no done row exists in this shape, so the
       // ANY-done short-circuit does NOT fire).
       const canceledAfter = (
-        await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, canceledId))
+        await h.db
+          .select(nodeRunFixtureColumns(h.db))
+          .from(nodeRuns)
+          .where(eq(nodeRuns.id, canceledId))
       )[0]!
       expect(canceledAfter.status).toBe('canceled')
       // Dispatch operates on the latest (pending row) and parks it.
       const pendingAfter = (
-        await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, pendingId))
+        await h.db
+          .select(nodeRunFixtureColumns(h.db))
+          .from(nodeRuns)
+          .where(eq(nodeRuns.id, pendingId))
       )[0]!
       expect(pendingAfter.status).toBe('awaiting_review')
     })
@@ -378,10 +400,18 @@ describeEachProvider('RFC-359 W25 multi-row dispatch providers', (harness) => {
       )
       expect(res.kind).toBe('ok')
 
-      const staleAfter = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, staleId)))[0]!
+      const staleAfter = (
+        await h.db
+          .select(nodeRunFixtureColumns(h.db))
+          .from(nodeRuns)
+          .where(eq(nodeRuns.id, staleId))
+      )[0]!
       expect(staleAfter.status).toBe('done')
       const clarifyAfter = (
-        await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, clarifyRerunId))
+        await h.db
+          .select(nodeRunFixtureColumns(h.db))
+          .from(nodeRuns)
+          .where(eq(nodeRuns.id, clarifyRerunId))
       )[0]!
       // pending row left as-is; scheduler short-circuits on the done row.
       expect(clarifyAfter.status).toBe('pending')
@@ -426,16 +456,22 @@ describeEachProvider('RFC-359 W25 multi-row dispatch providers', (harness) => {
         }),
       )
       expect(res.kind).toBe('awaiting_review')
-      const after = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, p2)))[0]!
+      const after = (
+        await h.db.select(nodeRunFixtureColumns(h.db)).from(nodeRuns).where(eq(nodeRuns.id, p2))
+      )[0]!
       expect(after.status).toBe('awaiting_review')
       expect(after.reviewIteration).toBe(2)
       // Canceled siblings untouched.
-      expect((await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, c0)))[0]!.status).toBe(
-        'canceled',
-      )
-      expect((await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, c1)))[0]!.status).toBe(
-        'canceled',
-      )
+      expect(
+        (
+          await h.db.select(nodeRunFixtureColumns(h.db)).from(nodeRuns).where(eq(nodeRuns.id, c0))
+        )[0]!.status,
+      ).toBe('canceled')
+      expect(
+        (
+          await h.db.select(nodeRunFixtureColumns(h.db)).from(nodeRuns).where(eq(nodeRuns.id, c1))
+        )[0]!.status,
+      ).toBe('canceled')
     })
 
     test('C7 mint order: two rows at identical (ci, retryIndex) → later seq wins', async () => {
@@ -552,11 +588,21 @@ describeEachProvider('RFC-359 W25 multi-row dispatch providers', (harness) => {
       expect(dvs.length).toBe(0)
 
       // Both rows untouched.
-      expect((await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, doneId)))[0]!.status).toBe(
-        'done',
-      )
       expect(
-        (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, pendingId)))[0]!.status,
+        (
+          await h.db
+            .select(nodeRunFixtureColumns(h.db))
+            .from(nodeRuns)
+            .where(eq(nodeRuns.id, doneId))
+        )[0]!.status,
+      ).toBe('done')
+      expect(
+        (
+          await h.db
+            .select(nodeRunFixtureColumns(h.db))
+            .from(nodeRuns)
+            .where(eq(nodeRuns.id, pendingId))
+        )[0]!.status,
       ).toBe('pending')
     })
   })

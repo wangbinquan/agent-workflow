@@ -61,7 +61,23 @@ export interface AtomicApplyConvergenceReceipt {
   readonly rolledForward: number
 }
 
-export type AtomicApplyWriteFormat = 'head-array' | 'versioned-envelope'
+export type AtomicApplyWriteFormat = 'versioned-envelope'
+
+/** Versioned recovery instructions, never an embedded epoch-1 SQL row. */
+export type AtomicApplySkillRecovery =
+  | {
+      readonly kind: 'create'
+      readonly operationId: string
+      readonly rootDirectory: string
+    }
+  | {
+      readonly kind: 'version'
+      readonly operationId: string | null
+      readonly publishId: string
+      readonly skillName: string
+      readonly contentHash: string
+      readonly liveDirectory: string
+    }
 
 export type AtomicApplyClaim<Value, Receipt> =
   | { readonly kind: 'replay'; readonly receipt: Receipt }

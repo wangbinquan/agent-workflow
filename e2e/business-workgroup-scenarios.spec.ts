@@ -1,3 +1,4 @@
+import { liveSqlitePath } from './storage'
 // Real-business Workgroup scenarios against the public API and compiled daemon.
 //
 // The scenario exercises durable free-collab planning, batch task settlement,
@@ -223,7 +224,7 @@ function batchAssignmentIds(shardKey: string | null): string[] {
 
 function persistedAssignmentAttempts(taskId: string): Map<string, number> {
   const rows = querySqlite<{ id: string; attempt_count: number }>(
-    join(daemon.home, 'db.sqlite'),
+    liveSqlitePath(daemon.home),
     'SELECT id, attempt_count FROM workgroup_assignments WHERE task_id = ? ORDER BY id',
     [taskId],
   )

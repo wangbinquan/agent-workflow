@@ -10,13 +10,12 @@
 // 普通 backend 跑批跳过本文件（无 `RFC357_DATABASE_URL` 即 skip）；CI 的
 // `test-backend-postgresql` lane 起一台 postgres 服务容器后跑它。
 
-import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { describe, test } from 'bun:test'
 
 import { composeOwnerIdentityQueries } from '@/modules/identity-access/composition/providerOperations'
 import { createDatabaseTaskListPage } from '@/modules/task-execution/infrastructure/taskListPage'
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
-import { migratePostgresqlSchema } from '@/platform/persistence/postgresqlMigrator'
+import { createPostgresqlTestDatabase } from './helpers/testDatabase'
 import { createPostgresqlDatabaseRuntime } from '@/platform/persistence/postgresqlRuntime'
 
 import { expectRfc357PageScenario } from './helpers/rfc357PageScenario'
@@ -25,7 +24,6 @@ import { seedRfc357Page } from './helpers/rfc357PageSeed'
 const URL_ENV = 'RFC357_DATABASE_URL'
 const realTest = process.env[URL_ENV] === undefined ? test.skip : test
 const GENERATION_ID = 'dbg_rfc357_page_01'
-const OPERATION_ID = 'dbm_rfc357_page_01'
 
 describe('RFC-357 shared page scenario — real PostgreSQL', () => {
   realTest(
@@ -46,18 +44,7 @@ describe('RFC-357 shared page scenario — real PostgreSQL', () => {
         const pool = runtime.providerPool()
         await pool.unsafe('DROP SCHEMA IF EXISTS agent_workflow CASCADE')
         await pool.unsafe('DROP SCHEMA IF EXISTS agent_workflow_meta CASCADE')
-        await migratePostgresqlSchema({ headContract: buildLogicalSchemaContract(), runtime })
-        // 业务客户端把每次写都对活跃代际做 fence，所以这两行簿记必须先在。
-        await pool.unsafe(
-          'INSERT INTO "agent_workflow_meta"."logical_copy_operations" ' +
-            '(operation_id, source_generation_id, contract_digest, plan_digest, stage, created_at, updated_at) ' +
-            `VALUES ('${OPERATION_ID}', 'dbg_rfc357_source', 'digest', 'plan', 'prepared', 1, 1)`,
-        )
-        await pool.unsafe(
-          'INSERT INTO "agent_workflow_meta"."database_generations" ' +
-            '(generation_id, operation_id, source_generation_id, contract_digest, state, activated_at, first_live_write_at) ' +
-            `VALUES ('${GENERATION_ID}', '${OPERATION_ID}', 'dbg_rfc357_source', 'digest', 'active', 1, 1)`,
-        )
+        await createPostgresqlTestDatabase(runtime)
 
         // 进程级 provider 选择必须还原：一个 bun 进程会跑多个测试文件，
         // 留着 postgresql 投影会渗进后面的文件（跨文件污染在本仓有前科）。

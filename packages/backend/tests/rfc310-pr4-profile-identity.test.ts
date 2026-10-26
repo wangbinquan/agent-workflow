@@ -27,7 +27,6 @@ import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopo
 
 setDefaultTimeout(120_000)
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
 const BACKEND_SRC = resolve(import.meta.dir, '..', 'src')
 
@@ -61,7 +60,7 @@ let tmp = ''
 let db: DbClient
 beforeEach(() => {
   tmp = mkdtempSync(join(tmpdir(), 'rfc310-pr4-ident-'))
-  db = createInMemoryDb(MIGRATIONS)
+  db = createInMemoryDb()
 })
 afterEach(() => rmSync(tmp, { recursive: true, force: true }))
 

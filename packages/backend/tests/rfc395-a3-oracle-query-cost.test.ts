@@ -1,3 +1,5 @@
+import { encodeCanonicalRunSlot } from '@/modules/task-execution/domain/runSelection/slotKey'
+import { withTargetMintIdentity } from './helpers/rfc395Mint'
 // RFC-395 A3 fix round: cost is statements/projections/rows, compared with frozen HEAD queries.
 import { expect, test } from 'bun:test'
 import { describeEachProvider } from './helpers/eachProvider'
@@ -12,29 +14,96 @@ import { createNodeRunQueries } from '@/modules/task-execution/infrastructure/no
 import { DrizzleNodeExecutionPersistence } from '@/modules/task-execution/infrastructure/nodeExecutionPersistence'
 import { DrizzleWrapperRunPersistence } from '@/modules/task-execution/infrastructure/wrapperRunPersistence'
 import { DrizzleSchedulerCompletionPersistence } from '@/modules/task-execution/infrastructure/schedulerCompletionPersistence'
+import type { NodeActivationSnapshotReader } from '@/modules/task-execution/application/ports/nodeActivationSnapshotReader'
 import { DrizzleNodeActivationSnapshotReader } from '@/modules/task-execution/infrastructure/nodeActivationSnapshotReader'
 import { DrizzleMergeStateLifecyclePersistence } from '@/modules/task-execution/infrastructure/mergeStateLifecyclePersistence'
 import { reselectRunInTx } from '@/modules/task-execution/infrastructure/runSelection/selectionWrite'
 import { resolveSchedulerRunRow } from '@/modules/task-execution/application/resolveSchedulerRunRow'
 import { DrizzleNodeRunLifecyclePersistence } from '@/modules/task-execution/infrastructure/nodeRunLifecyclePersistence'
-import { createRunSelectionOracleSnapshot } from '@/modules/task-execution/infrastructure/runSelection/oracle/snapshot'
-import { createRunSelectionReader } from '@/modules/task-execution/infrastructure/runSelection/oracle/reader'
+import { createRunSelectionReader } from '@/modules/task-execution/infrastructure/runSelection/table/reader'
 import type { NodeRunLifecyclePersistence } from '@/modules/task-execution/application/ports/nodeRunLifecyclePersistence'
 import { buildNodeRunMintRecord } from '@/modules/task-execution/application/buildNodeRunMintRecord'
-import { deriveNodeRunRole } from '@/modules/task-execution/domain/nodeRunRole'
 import {
   oracleRunRef,
   type OracleRunRow,
-} from '@/modules/task-execution/infrastructure/runSelection/oracle/rows'
+} from '@/modules/task-execution/infrastructure/migration/oracle/rows'
 import type { StatementRecording } from './helpers/statementRecorder'
 import { createClarifyAnswerQueries } from '@/modules/collaboration/composition'
 
+// Scalar target projections contain nested SELECTs; stop only at the outer FROM.
+function outerProjection(statement: string): string {
+  let depth = 0
+  let quoted: string | null = null
+  for (let index = 0; index < statement.length; index++) {
+    const char = statement[index]!
+    if (quoted !== null) {
+      if (char === quoted) {
+        if (statement[index + 1] === quoted) index++
+        else quoted = null
+      }
+      continue
+    }
+    if (char === '"' || char === "'" || char === '`') quoted = char
+    else if (char === '(') depth++
+    else if (char === ')') depth--
+    else if (depth === 0 && /^\sfrom\s/i.test(statement.slice(index)))
+      return statement.slice(0, index).replace(/\s+/g, ' ')
+  }
+  throw new Error('recorded SELECT has no outer FROM')
+}
+// Compare logical scalar columns, allowing only the required epoch-1 evidence envelope.
+// Qualification and column order change with target companion joins, not their payload cost.
+function scalarColumns(statement: string): { columns: string[]; history: boolean } {
+  const projection = outerProjection(statement)
+    .replace(/"[a-z_]+"\./g, '')
+    .replace(/^select /i, '')
+  const columns: string[] = []
+  let depth = 0,
+    start = 0
+  for (let i = 0; i < projection.length; i++) {
+    if (projection[i] === '(') depth++
+    if (projection[i] === ')') depth--
+    if (projection[i] === ',' && depth === 0) {
+      columns.push(projection.slice(start, i).trim())
+      start = i + 1
+    }
+  }
+  columns.push(projection.slice(start).trim())
+  const evidence = [
+    'id',
+    'task_id',
+    'record_mode',
+    'role',
+    'slot_key',
+    'attempt_index',
+    'scope_path',
+    'content_ref_json',
+    'content_inline_bytes',
+  ].map((column) => `"${column}"`)
+  const history = evidence.every((column, index) => columns[index] === column)
+  if (history) columns.splice(0, evidence.length)
+  return { columns: columns.sort(), history }
+}
 const selectShape = (recording: StatementRecording) =>
-  recording.selects().map((entry) => ({
-    projection: entry.sql.slice(0, entry.sql.toLowerCase().indexOf(' from ')).replace(/\s+/g, ' '),
-    values: entry.values,
-    rows: entry.rows,
-  }))
+  recording.selects().map((entry) => {
+    const { columns, history } = scalarColumns(entry.sql)
+    const values = [...entry.values]
+    if (history) {
+      expect(values.shift()).toBe('node-run')
+    }
+    if (values.at(-1) === 'executable') values.pop()
+    return { projection: columns, values, rows: entry.rows }
+  })
+
+test('cost comparison keeps extra full-document columns visible', () => {
+  expect(scalarColumns('select "id", "runtime_config_json" from "tasks"').columns).toEqual([
+    '"id"',
+    '"runtime_config_json"',
+  ])
+  expect(scalarColumns('select "id", "prompt_inline_bytes" from "node_runs"').columns).not.toEqual(
+    scalarColumns('select "id" from "node_runs"').columns,
+  )
+})
 
 describeEachProvider('RFC-395 A3 oracle query costs', (harness) => {
   async function seed() {
@@ -126,6 +195,9 @@ describeEachProvider('RFC-395 A3 oracle query costs', (harness) => {
       expect(before.selects()).toHaveLength(1)
       expect(selectShape(after)).toEqual(selectShape(before))
       expect(after.selects()[0]!.sql).not.toContain('task_repos')
+      expect(after.selects()[0]!.sql).not.toMatch(/select\s+(?:[\w"]+\.)?\*/i)
+      if (!before.selects()[0]!.sql.includes('prompt_inline_bytes'))
+        expect(after.selects()[0]!.sql).not.toContain('prompt_inline_bytes')
     }
   })
 
@@ -152,13 +224,12 @@ describeEachProvider('RFC-395 A3 oracle query costs', (harness) => {
     })
   })
 
-  test('node activation and wrapper consumed reads stay node-scoped; resumable fetch returns at most one run', async () => {
+  test('node activation and wrapper consumed reads stay node-scoped; resumable selection and snapshot each return at most one run', async () => {
     await seed()
-    const reader = new DrizzleNodeActivationSnapshotReader(harness.db)
+    const reader: NodeActivationSnapshotReader = new DrizzleNodeActivationSnapshotReader(harness.db)
     const activation = harness.recordStatements()
     try {
-      const rows = await reader.findRuns('query-a', 'n')
-      const history = await reader.selectionFromRows('query-a', rows).slotHistory(
+      const history = await reader.selection.slotHistory(
         'query-a',
         {
           kind: 'node',
@@ -169,8 +240,15 @@ describeEachProvider('RFC-395 A3 oracle query costs', (harness) => {
       )
       expect(history.at(-1)?.id).toBe('query-a-new')
       expect(activation.selects()).toHaveLength(1)
-      expect(activation.selects()[0]!.values).toEqual(['query-a', 'n'])
-      expect(activation.selects()[0]!.sql).not.toContain('prompt_text')
+      expect(activation.selects()[0]!.values).toContain('query-a')
+      expect(activation.selects()[0]!.values).toContain(
+        encodeCanonicalRunSlot({
+          kind: 'node',
+          nodeId: 'n',
+          frame: { containerRunId: null, iteration: 0 },
+        }),
+      )
+      expect(activation.selects()[0]!.sql).not.toMatch(/prompt_ref_json|prompt_inline_bytes/)
     } finally {
       activation.stop()
     }
@@ -184,7 +262,14 @@ describeEachProvider('RFC-395 A3 oracle query costs', (harness) => {
         }),
       ).toEqual({ n: 'query-a-new' })
       expect(consumed.selects()).toHaveLength(1)
-      expect(consumed.selects()[0]!.values).toEqual(['query-a', 'n'])
+      expect(consumed.selects()[0]!.values).toEqual([
+        'query-a',
+        encodeCanonicalRunSlot({
+          kind: 'node',
+          nodeId: 'n',
+          frame: { containerRunId: null, iteration: 0 },
+        }),
+      ])
     } finally {
       consumed.stop()
     }
@@ -201,9 +286,11 @@ describeEachProvider('RFC-395 A3 oracle query costs', (harness) => {
         )?.id,
       ).toBe('query-a-wrapper')
       const runs = resumed.selects().filter((entry) => entry.sql.includes('node_runs'))
-      expect(runs).toHaveLength(1)
-      expect(runs[0]!.rows).toBe(1)
-      expect(runs[0]!.sql).toMatch(/limit/i)
+      expect(runs).toHaveLength(2) // Selected slot identity, then the selected aggregate snapshot.
+      expect(runs.map((entry) => entry.rows)).toEqual([1, 1])
+      expect(runs[0]!.sql).toContain('node_run_selections')
+      expect(runs[1]!.values).toContain('query-a-wrapper')
+      expect(runs[1]!.sql).toMatch(/limit/i)
     } finally {
       resumed.stop()
     }
@@ -231,9 +318,7 @@ describeEachProvider('RFC-395 A3 oracle query costs', (harness) => {
       iteration: 0,
       containerRunId: null,
       rows,
-      selection: createRunSelectionOracleSnapshot(rows, {
-        scope: { kind: 'node', taskId: 'query-a', nodeId: 'ac8' },
-      }),
+      selection: createRunSelectionReader(harness.db),
       projections: nodes,
       lifecycle: {
         mint: async () => 'not-yet-persisted',
@@ -262,7 +347,7 @@ describeEachProvider('RFC-395 A3 oracle query costs', (harness) => {
     ).toMatchObject({ id: 'ac8-pending', status: 'canceled' })
   })
 
-  test('S16 uses one node-run statement with EXISTS; S21 keeps the narrow unordered query', async () => {
+  test('S16 uses bounded identity/selection/snapshot batches; the write protocol uses PK reads; S21 stays narrow', async () => {
     await seed()
     const nodes = new DrizzleNodeExecutionPersistence(harness.db)
     const listing = harness.recordStatements()
@@ -270,10 +355,13 @@ describeEachProvider('RFC-395 A3 oracle query costs', (harness) => {
       const rows = await nodes.list({ taskId: 'query-a', nodeId: 'n', excludeSuperseded: true })
       expect(rows.map((row) => row.id)).not.toContain('query-a-old')
       const statements = listing.selects().filter((entry) => entry.sql.includes('node_runs'))
-      expect(statements).toHaveLength(1)
-      expect(statements[0]!.sql).toMatch(/exists/i)
-      expect(statements[0]!.sql).toContain('nr_container_child')
-      expect(statements[0]!.sql).toContain('task_id')
+      expect(statements).toHaveLength(3) // Node IDs, selection predicate, batched companion snapshot.
+      expect(statements[0]!.values).toContain('n')
+      expect(statements[1]!.values).toContain('n')
+      expect(statements[1]!.sql).toMatch(/exists/i)
+      expect(statements[1]!.sql).toContain('nr_superseded_parent')
+      expect(statements[2]!.rows).toBe(rows.length)
+      expect(statements.every((entry) => entry.rows <= 3)).toBe(true)
     } finally {
       listing.stop()
     }
@@ -284,10 +372,15 @@ describeEachProvider('RFC-395 A3 oracle query costs', (harness) => {
         event: { kind: 'mark-merged' },
       })
       const reads = transition.selects().filter((entry) => entry.sql.includes('node_runs'))
-      expect(reads).toHaveLength(2) // HEAD: merge state PK read, then the supersession PK/EXISTS read.
-      expect(reads[1]!.sql).toMatch(/exists/i)
-      expect(reads[1]!.sql).toMatch(/limit/i)
-      expect(reads[1]!.values).toContain('query-a-new')
+      const facts = reads.filter((entry) => !/for update/i.test(entry.sql))
+      expect(facts).toHaveLength(6) // Locate/fence/root, selection identity/predicate, protocol locate/run lock read.
+      expect(facts.every((entry) => entry.rows === 1 && entry.values.includes('query-a-new'))).toBe(
+        true,
+      )
+      expect(facts.filter((entry) => /exists/i.test(entry.sql))).toHaveLength(1)
+      expect(facts.every((entry) => !/prompt_ref_json|prompt_inline_bytes/.test(entry.sql))).toBe(
+        true,
+      )
     } finally {
       transition.stop()
     }
@@ -301,16 +394,17 @@ describeEachProvider('RFC-395 A3 oracle query costs', (harness) => {
       expect(rows).toHaveLength(3)
       expect(done.selects()).toHaveLength(1)
       expect(done.selects()[0]!.sql).not.toMatch(/order by/i)
-      expect(done.selects()[0]!.sql).not.toContain('prompt_text')
+      expect(done.selects()[0]!.sql).not.toMatch(/prompt_ref_json|prompt_inline_bytes/)
     } finally {
       done.stop()
     }
   })
 })
 
-test('mint resolves parent and container overrides before enforcing both born-running rules', () => {
+test('mint resolves historical parent independently and enforces the explicit node frame', () => {
   const base = {
-    ...deriveNodeRunRole({ nodeId: 'n', rerunCause: 'initial' }),
+    role: 'node-attempt' as const,
+    syntheticKind: null,
     taskId: 't',
     nodeId: 'n',
     status: 'running' as const,
@@ -323,29 +417,36 @@ test('mint resolves parent and container overrides before enforcing both born-ru
       checkpointInheritance: [],
     },
   }
-  expect(buildNodeRunMintRecord(base)).toMatchObject({
+  expect(buildNodeRunMintRecord(withTargetMintIdentity(base))).toMatchObject({
     parentNodeRunId: 'parent',
     containerRunId: 'container',
   })
-  expect(() => buildNodeRunMintRecord({ ...base, containerRunId: null })).toThrow('containerRunId')
-  expect(buildNodeRunMintRecord({ ...base, containerRunId: 'explicit' }).containerRunId).toBe(
-    'explicit',
-  )
   expect(() =>
-    buildNodeRunMintRecord({ ...base, overrides: { identity: { parentNodeRunId: null } } }),
-  ).toThrow('parentNodeRunId')
+    buildNodeRunMintRecord(withTargetMintIdentity({ ...base, containerRunId: null })),
+  ).toThrow('containerRunId')
+  expect(
+    buildNodeRunMintRecord(withTargetMintIdentity({ ...base, containerRunId: 'explicit' }))
+      .containerRunId,
+  ).toBe('explicit')
+  expect(
+    buildNodeRunMintRecord(
+      withTargetMintIdentity({ ...base, overrides: { identity: { parentNodeRunId: null } } }),
+    ).parentNodeRunId,
+  ).toBeNull()
   const synthetic = {
     ...base,
-    ...deriveNodeRunRole({ nodeId: '__commit_push__:n', rerunCause: 'commit-push' }),
+    role: 'synthetic' as const,
+    syntheticKind: 'commit-push' as const,
     nodeId: '__commit_push__:n',
     cause: 'commit-push' as const,
   }
-  expect(() => buildNodeRunMintRecord({ ...synthetic, inheritFrom: null })).toThrow(
-    'parentNodeRunId',
-  )
-  expect(buildNodeRunMintRecord({ ...synthetic, containerRunId: null }).parentNodeRunId).toBe(
-    'parent',
-  )
+  expect(
+    buildNodeRunMintRecord(withTargetMintIdentity({ ...synthetic, inheritFrom: null })).role,
+  ).toBe('synthetic')
+  expect(
+    buildNodeRunMintRecord(withTargetMintIdentity({ ...synthetic, containerRunId: null }))
+      .parentNodeRunId,
+  ).toBe('parent')
 })
 
 test('labelling and supersession index a 6000-row snapshot once instead of scanning it per reference', () => {

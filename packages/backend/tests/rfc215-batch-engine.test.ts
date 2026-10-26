@@ -1,3 +1,5 @@
+import { nodeRunFixtureColumns } from './helpers/model/nodeRun'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 // RFC-215 — fc 批量认领的引擎级（DB）行为锁（design §10-8..14）。
 //
 // 锁的行为：批 drive 全链（一批一 run、逐卡 done + 各自 result 消息）、
@@ -7,12 +9,16 @@
 // ⇒ redispatch / host 行 done ⇒ 收 done 不重跑）、游标单一归属（批 run 不推）。
 import { nodeRunFixture, patchNodeRunFixture, taskFixture, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
-import type { WorkgroupRuntimeConfig } from '@agent-workflow/shared'
-import { DEFAULT_PROTOCOL_RETRY_BUDGET, parseBatchShardKey } from '@agent-workflow/shared'
+import {
+  type WorkgroupRuntimeConfig,
+  DEFAULT_PROTOCOL_RETRY_BUDGET,
+  parseBatchShardKey,
+} from '@agent-workflow/shared'
+
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 import { createAgent } from '../src/modules/resource-catalog/infrastructure/legacy/agent'
@@ -192,7 +198,8 @@ describeEachProvider('RFC-215 batch execution providers', (harness) => {
       expect(requests[0]?.promptTemplate).toContain('Task 1: card one')
       expect(requests[0]?.promptTemplate).toContain('Task 2: card two')
 
-      const { workgroupAssignments, nodeRuns, workgroupMessages } = tablesOf(db)
+      const { workgroupAssignments, workgroupMessages } = tablesOf(db)
+      const { nodeRuns } = tablesOf(db)
       const cards = await db
         .select()
         .from(workgroupAssignments)
@@ -203,7 +210,7 @@ describeEachProvider('RFC-215 batch execution providers', (harness) => {
 
       // 批 shardKey 编码可回解出成员 + 两张卡。
       const memberRows = (
-        await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
+        await db.select(nodeRunFixtureColumns(db)).from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
       ).filter((r) => r.nodeId === WG_MEMBER_NODE_ID && r.rerunCause === 'wg-assignment')
       expect(memberRows).toHaveLength(1)
       const parsed = parseBatchShardKey(memberRows[0]?.shardKey ?? null)
@@ -465,7 +472,8 @@ describeEachProvider('RFC-215 batch execution providers', (harness) => {
       await seedPastRun(db, taskId)
       const c1 = await seedOpenCard(db, taskId, 'doomed one')
       const c2 = await seedOpenCard(db, taskId, 'doomed two')
-      const { agents, workgroupAssignments, workgroupMessages } = tablesOf(db)
+      const { workgroupAssignments, workgroupMessages } = tablesOf(db)
+      const { agents } = tablesOf(db)
       await db.delete(agents).where(eq(agents.name, 'wg-a'))
       const { hooks, requests } = scripted([])
       for (let pass = 0; pass < DEFAULT_PROTOCOL_RETRY_BUDGET + 2; pass++) {
@@ -559,7 +567,8 @@ describeEachProvider('RFC-215 batch execution providers', (harness) => {
       const taskId = await seedTask(db, fcCfg())
       await seedPastRun(db, taskId)
       const cardId = await seedOpenCard(db, taskId, 'parallel card')
-      const { workgroupMessages, nodeRuns, workgroupAssignments } = tablesOf(db)
+      const { workgroupMessages, workgroupAssignments } = tablesOf(db)
+      const { nodeRuns } = tablesOf(db)
       await insertOne(db, workgroupMessages, {
         id: ulid(),
         taskId,
@@ -595,7 +604,9 @@ describeEachProvider('RFC-215 batch execution providers', (harness) => {
       expect(ports.some((p) => p.includes('wg_result') && !p.includes('wg_task_results'))).toBe(
         true,
       ) // 消息轨
-      const keys = (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId)))
+      const keys = (
+        await db.select(nodeRunFixtureColumns(db)).from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
+      )
         .filter((r) => r.nodeId === WG_MEMBER_NODE_ID && r.shardKey !== null)
         .map((r) => r.shardKey ?? '')
       expect(keys.some((k) => k.startsWith('batch:m-a:') && k.includes(cardId))).toBe(true)

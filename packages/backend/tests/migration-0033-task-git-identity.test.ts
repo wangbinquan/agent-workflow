@@ -5,14 +5,14 @@
 // constraint. The XOR (only one set) is rejected at StartTaskSchema, not at
 // the DB level.
 
-import { rawRows, rawExec } from '@/platform/persistence/queryHelpers'
+import { createFrozenEpoch1Db, FROZEN_MIGRATIONS } from './migration-freeze'
+import { frozenRawRows as rawRows } from './migration-freeze'
+import { rawExec } from '@/platform/persistence/queryHelpers'
 import { describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
 import { sql } from 'drizzle-orm'
 
-import { createInMemoryDb } from '../src/db/client'
-
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+const MIGRATIONS = resolve(FROZEN_MIGRATIONS)
 
 interface SqlMaster {
   type: string
@@ -23,7 +23,7 @@ interface SqlMaster {
 
 describe('RFC-067 — migration 0033 task_git_identity', () => {
   test('tasks table gains git_user_name + git_user_email columns', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createFrozenEpoch1Db(MIGRATIONS)
     const rows = (await rawRows(
       db,
       sql`SELECT type, name, tbl_name, sql FROM sqlite_master WHERE name='tasks'`,
@@ -35,7 +35,7 @@ describe('RFC-067 — migration 0033 task_git_identity', () => {
   })
 
   test('both columns nullable (no `not null` on either)', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createFrozenEpoch1Db(MIGRATIONS)
     const cols = (await rawRows(db, sql`PRAGMA table_info(tasks)`)) as Array<{
       name: string
       notnull: number
@@ -47,7 +47,7 @@ describe('RFC-067 — migration 0033 task_git_identity', () => {
   })
 
   test('a row that omits both columns gets NULL for both (legacy behavior)', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createFrozenEpoch1Db(MIGRATIONS)
     await rawExec(
       db,
       sql`INSERT INTO workflows (id, name, definition) VALUES ('wf-1', 'fixture', '{}')`,
@@ -72,7 +72,7 @@ describe('RFC-067 — migration 0033 task_git_identity', () => {
   })
 
   test('a row with both columns set round-trips verbatim', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createFrozenEpoch1Db(MIGRATIONS)
     await rawExec(
       db,
       sql`INSERT INTO workflows (id, name, definition) VALUES ('wf-1', 'fixture', '{}')`,

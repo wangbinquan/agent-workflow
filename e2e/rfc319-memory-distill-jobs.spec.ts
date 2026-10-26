@@ -1,3 +1,4 @@
+import { liveSqlitePath } from './storage'
 // RFC-319 —— 蒸馏任务队列的用户面（MEM-25/26/27/28/29/30/32/33/47）。
 //
 // 蒸馏队列是记忆体系里**唯一一段没有人盯着的自动流程**：任务反馈 / 评审 / 反问
@@ -74,7 +75,6 @@
 
 import { expect, test, type Page } from '@playwright/test'
 import { rmSync } from 'node:fs'
-import { join } from 'node:path'
 
 import { runSqlite } from './command'
 import { startDaemon, type DaemonHandle } from './harness'
@@ -153,7 +153,7 @@ const createdAtOf = new Map<string, number>()
 // ---------------------------------------------------------------------------
 
 function dbPath(handle: DaemonHandle): string {
-  return join(handle.home, 'db.sqlite')
+  return liveSqlitePath(handle.home)
 }
 
 /** SQL 字面量转义：夹具文本里有引号和换行，拼进 SQL 前必须转义。 */

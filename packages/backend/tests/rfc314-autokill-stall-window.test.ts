@@ -1,3 +1,4 @@
+import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { o2Ports } from './helpers/o2Closure'
 // RFC-314 D1 —— autoKill 的「最后一次活动」判据：有界窗口取代全表 max(ts)。
 //
@@ -18,7 +19,7 @@ import { o2Ports } from './helpers/o2Closure'
 import { nodeRunFixture, taskFixture, workflowFixture } from './helpers/model'
 import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
+
 import { ulid } from 'ulid'
 
 import { createInMemoryDb } from '../src/db/client'
@@ -29,7 +30,6 @@ import { recordStatements, type RecordedStatement } from './helpers/statementRec
 import { createTaskExecutionPersistence } from '../src/modules/task-execution/composition/taskExecutionPersistence'
 import { insertInBatches } from '../src/platform/persistence/batchInsert'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const NOW = 1_788_000_000_000
 const STALL_MS = 60_000
 /** 与 services/autoKill.ts 的 STALL_TS_WINDOW_ROWS 对齐（那边不导出，这里显式复述）。 */
@@ -101,6 +101,7 @@ describeEachProvider('RFC-314 D1 —— 窗口内的 ts 乱序必须被吸收', 
 
     const found = await findStalledRunningChildren(
       createTaskExecutionPersistence(db, {
+        historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
         recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
       }).recoveryAdministration,
       STALL_MS,
@@ -117,6 +118,7 @@ describeEachProvider('RFC-314 D1 —— 窗口内的 ts 乱序必须被吸收', 
 
     const found = await findStalledRunningChildren(
       createTaskExecutionPersistence(db, {
+        historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
         recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
       }).recoveryAdministration,
       STALL_MS,
@@ -132,6 +134,7 @@ describeEachProvider('RFC-314 D1 —— 窗口内的 ts 乱序必须被吸收', 
 
     const found = await findStalledRunningChildren(
       createTaskExecutionPersistence(db, {
+        historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
         recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
       }).recoveryAdministration,
       STALL_MS,
@@ -156,6 +159,7 @@ describeEachProvider(
 
       const found = await findStalledRunningChildren(
         createTaskExecutionPersistence(db, {
+          historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
           recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
         }).recoveryAdministration,
         STALL_MS,
@@ -176,7 +180,7 @@ async function capture(
   statements: RecordedStatement[]
   db: PersistenceDb
 }> {
-  const db = database?.db ?? createInMemoryDb(MIGRATIONS)
+  const db = database?.db ?? createInMemoryDb()
   for (let i = 0; i < 3; i += 1) {
     await seedRun(db, {
       startedAt: NOW - 10 * STALL_MS,
@@ -189,6 +193,7 @@ async function capture(
   try {
     await findStalledRunningChildren(
       createTaskExecutionPersistence(db, {
+        historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
         recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
       }).recoveryAdministration,
       STALL_MS,

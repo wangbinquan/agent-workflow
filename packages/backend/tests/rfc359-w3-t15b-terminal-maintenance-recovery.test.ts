@@ -1,3 +1,4 @@
+import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { o2Ports } from './helpers/o2Closure'
 import { withWorkspaceMaintenancePorts } from './helpers/sourceControlTaskPorts'
 // RFC-359 W3-T15-B —— 终态维护恢复的其余四步（archive / workspace-gc / webhook prune / legacy pruned），
@@ -124,6 +125,7 @@ describeEachProvider('RFC-359 W3-T15-B —— 归档恢复（archive.recover）'
       const taskId = `t15b_${ulid()}`
       await seedTask(db, taskId)
       const maintenance = createTaskExecutionPersistence(db, {
+        historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
         recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
       }).terminalMaintenance
       const members = await maintenance.snapshotTree(taskId)
@@ -174,6 +176,7 @@ describeEachProvider(
           db,
           appHome,
           terminalMaintenance: createTaskExecutionPersistence(db, {
+            historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
             recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
           }).terminalMaintenance,
           isMaterializingTask: () => false,

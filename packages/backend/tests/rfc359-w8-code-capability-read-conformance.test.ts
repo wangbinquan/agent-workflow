@@ -1,3 +1,8 @@
+import {
+  seedCodeHistoryRows,
+  historyFixtureReader,
+  seedEmptyCodeHistory,
+} from './helpers/legacyCapabilitySeed'
 import { createAgentExecutionQueries } from '@/modules/resource-catalog/public/queries'
 // RFC-359 W8 / W12 —— 能力矩阵与代码度量的双引擎行为对拍。
 // W8 钉住的页面内容在 W12 合一后仍须成立：两个真实数据库通过同一个
@@ -7,7 +12,7 @@ import { createAgentExecutionQueries } from '@/modules/resource-catalog/public/q
 import { agentFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
-import { expect, test } from 'bun:test'
+import { beforeEach, expect, test } from 'bun:test'
 
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { DEFAULT_METRICS_WINDOW_MS } from '@/modules/code-capability/application/codeMetricsQuery'
@@ -31,6 +36,7 @@ async function renderMatrix(
   return composeCodeHistoryQueries(
     harness.db,
     createAgentExecutionQueries(harness.db),
+    historyFixtureReader(harness.db),
   ).matrix.forRepo(repoId)
 }
 
@@ -38,6 +44,7 @@ async function renderMetrics(harness: ProviderHarness): Promise<CodeMetricsSumma
   return composeCodeHistoryQueries(
     harness.db,
     createAgentExecutionQueries(harness.db),
+    historyFixtureReader(harness.db),
   ).metrics.summary({ now: NOW })
 }
 
@@ -146,8 +153,7 @@ async function seedFinding(
     createdAt: number
   },
 ): Promise<void> {
-  const { codeFindings } = tablesOf(db)
-  await insertOne(db, codeFindings, {
+  await seedCodeHistoryRows(db, 'code_findings', {
     id: input.id,
     codeHostEndpointId: GITLAB_ENDPOINT,
     stableProjectId: 'proj-1',
@@ -174,8 +180,7 @@ async function seedRound(
     endedAt: number | null
   },
 ): Promise<void> {
-  const { codeWorkRounds } = tablesOf(db)
-  await insertOne(db, codeWorkRounds, {
+  await seedCodeHistoryRows(db, 'code_work_rounds', {
     id: input.id,
     workItemId: input.workItemId,
     roundSeq: input.roundSeq,
@@ -190,8 +195,7 @@ async function seedWorkItem(
   db: PersistenceDb,
   input: { id: string; capability: string },
 ): Promise<void> {
-  const { codeWorkItems } = tablesOf(db)
-  await insertOne(db, codeWorkItems, {
+  await seedCodeHistoryRows(db, 'code_work_items', {
     id: input.id,
     codeHostEndpointId: GITLAB_ENDPOINT,
     stableProjectId: 'proj-1',
@@ -206,6 +210,9 @@ async function seedWorkItem(
 // ---------------------------------------------------------------------------
 
 describeEachProvider('RFC-359 W8 —— 能力矩阵 / 代码度量的双引擎对拍', (harness) => {
+  beforeEach(async () => {
+    await seedEmptyCodeHistory(harness.db)
+  })
   test('能力矩阵：两引擎的统一读面渲染出相同的 readiness 和修复入口', async () => {
     const db = harness.db
     await seedGitlabDeployment(db)

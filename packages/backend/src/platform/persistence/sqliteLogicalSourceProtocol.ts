@@ -1,3 +1,6 @@
+import type { HistoryVersion } from './schema/history/types'
+import type { MetaTableDeclaration } from './schema/history/meta'
+import { EpochMetadataSnapshotSchema } from './schema/history/metadataSnapshot'
 // RFC-349 — validated, bounded RPC between the request-serving daemon and the
 // SQLite logical-source Worker. Only table identifiers and canonical logical
 // rows cross the boundary; bootstrap supplies the selected schema contract
@@ -41,9 +44,13 @@ export const SqliteLogicalSourceWorkerRequestSchema = z.discriminatedUnion('type
       path: z.string().min(1),
       expectedSchemaDigest: DigestSchema,
       contract: z.custom<LogicalSchemaContract>(),
+      history: z
+        .custom<{ head: HistoryVersion; metaTables: readonly MetaTableDeclaration[] }>()
+        .optional(),
     })
     .strict(),
   z.object({ ...BaseRequest, type: z.literal('preflight') }).strict(),
+  z.object({ ...BaseRequest, type: z.literal('metadata') }).strict(),
   z
     .object({
       ...BaseRequest,
@@ -74,6 +81,9 @@ const EventBase = {
 
 export const SqliteLogicalSourceWorkerEventSchema = z.discriminatedUnion('type', [
   z.object({ ...EventBase, type: z.literal('ready') }).strict(),
+  z
+    .object({ ...EventBase, type: z.literal('metadata'), snapshot: EpochMetadataSnapshotSchema })
+    .strict(),
   z
     .object({
       ...EventBase,

@@ -1,3 +1,4 @@
+// AF-D21: exercise the live epoch-2 provider-move protocol.
 // RFC-349 T8 — legacy inspection/export must be bounded to the approved six-
 // table archive and re-verify every durable digest before returning bytes.
 

@@ -1,3 +1,4 @@
+import { epoch2RuntimeTestPorts } from './epoch2RuntimePorts'
 import { o2Ports } from './o2Closure'
 // RFC-395 II-pre：GC 改接生产 workspaceMaintenance，断言其回执及实际目录 / 行状态。
 import { workspaceMaintenanceForTest } from './workspaceMaintenance'
@@ -129,6 +130,7 @@ export function singleProcessDeploymentPorts(db: DbClient) {
     coordinatorFactory: testDriveFactory(
       db,
       createDatabaseTaskDriverLifecyclePort({
+        historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
         db,
         log,
         finalizeWorkspace: async (taskId: string) => {
@@ -152,11 +154,13 @@ export function composeTaskExecutionTestRuntime(
 ) {
   const identity = createTaskExecutionTestIdentity(db)
   const persistence = createTaskExecutionPersistence(db, {
+    historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
     recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
   })
   return composeTaskExecutionRuntime({
     readModels: persistence.reads,
     participants: createTaskExecutionRuntimeParticipants({
+      historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
       taskRunBinding: composeLegacyTaskRunDriveBinding({
         taskAgentRunsFor: composeLocalTaskAgentRunFamilyFor,
         taskScriptRunsFor: composeLocalTaskScriptRunFamily,
@@ -172,6 +176,7 @@ export function composeTaskExecutionTestRuntime(
       observationInvocations: composeRunObservationCalls(db),
       memoryInjectionQueries: sqliteMemoryInjectionQueries(db),
       collaborationRuntime: createCollaborationRuntimeMechanics(db, {
+        ...epoch2RuntimeTestPorts(db),
         taskLock: o2Ports(db).taskLock,
         ...{ upstreamAgents: o2Ports(db).upstreamAgents },
       }),
@@ -295,6 +300,7 @@ export function runTaskWithRealTestTopology(
   const persistence =
     options.persistence ??
     createTaskExecutionPersistence(options.db, {
+      historyRestrictions: epoch2RuntimeTestPorts(options.db).historyRestrictions,
       recoveryHumanGates: o2Ports(options.db).collaborationReads.recovery,
     })
   const runtimeSessionLeases =
@@ -315,7 +321,7 @@ export function runTaskWithRealTestTopology(
       nodeRunPrompts,
       portArtifacts,
     })
-  const taskScriptRuns = options.taskScriptRuns ?? composeLocalTaskScriptRunFamily()
+  const taskScriptRuns = options.taskScriptRuns ?? composeLocalTaskScriptRunFamily(options)
   const workspaceExcludeProfilesFor = composeTaskWorkspaceExcludeProfilesFor(
     options.workspaceExcludeProfiles,
   )
@@ -335,10 +341,12 @@ export function runTaskWithRealTestTopology(
   const runtime = composeTaskExecutionRuntime({
     readModels: persistence.reads,
     participants: createTaskExecutionRuntimeParticipants({
+      historyRestrictions: epoch2RuntimeTestPorts(options.db).historyRestrictions,
       taskRunBinding: composeLegacyTaskRunDriveBinding({
         taskAgentRunsFor: (binding) =>
           options.taskAgentRuns ?? composeLocalTaskAgentRunFamilyFor(binding),
-        taskScriptRunsFor: () => options.taskScriptRuns ?? composeLocalTaskScriptRunFamily(),
+        taskScriptRunsFor: (request) =>
+          options.taskScriptRuns ?? composeLocalTaskScriptRunFamily(request),
         nodeRunPromptsFor: () => nodeRunPrompts,
         portArtifactsFor: () => portArtifacts,
       }),
@@ -350,6 +358,7 @@ export function runTaskWithRealTestTopology(
       memoryInjectionQueries,
       observationInvocations,
       collaborationRuntime: createCollaborationRuntimeMechanics(options.db, {
+        ...epoch2RuntimeTestPorts(options.db),
         taskLock: o2Ports(options.db).taskLock,
         ...{
           upstreamAgents: o2Ports(options.db).upstreamAgents,
@@ -395,6 +404,7 @@ export function runTaskWithRealTestTopology(
       collaborationRuntime:
         options.collaborationRuntime ??
         createCollaborationRuntimeMechanics(options.db, {
+          ...epoch2RuntimeTestPorts(options.db),
           taskLock: o2Ports(options.db).taskLock,
           ...{
             upstreamAgents: o2Ports(options.db).upstreamAgents,
@@ -417,11 +427,13 @@ export function runTaskWithRealTestTopology(
         createChildExecutionLaunchOperations({
           db: options.db,
           persistence: createChildPersistence(options.db, {
+            historyRestrictions: epoch2RuntimeTestPorts(options.db).historyRestrictions,
             recoveryHumanGates: o2Ports(options.db).collaborationReads.recovery,
           }),
           coordinatorFactory: testDriveFactory(
             options.db,
             createDatabaseTaskDriverLifecyclePort({
+              historyRestrictions: epoch2RuntimeTestPorts(options.db).historyRestrictions,
               db: options.db,
               log: createLogger('task'),
               finalizeWorkspace: async (taskId) => {

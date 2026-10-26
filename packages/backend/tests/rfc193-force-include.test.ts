@@ -33,7 +33,7 @@ import {
   writeFileSync,
 } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { monotonicFactory } from 'ulid'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
@@ -43,7 +43,6 @@ import { runTaskWithRealTestTopology as runTask } from './helpers/taskExecutionT
 import { runGit, snapshotFullState } from '../src/util/git'
 
 const ulid = monotonicFactory()
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 // ---------------------------------------------------------------------------
 // case 8e — snapshotFullState.forceIncludePaths（模块级）
@@ -222,7 +221,7 @@ async function buildHarness(): Promise<Harness> {
     await runGit(p, ['commit', '-m', 'init'])
   }
   writeFileSync(mockPath, mockSource(planFile))
-  const db = createInMemoryDb(MIGRATIONS)
+  const db = createInMemoryDb()
   return {
     db,
     appHome,

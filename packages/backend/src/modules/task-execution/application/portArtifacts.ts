@@ -1,8 +1,8 @@
 import {
-  legacyPortArchiveRoot,
-  legacyContainerPath,
-  decodeLegacyPortArchiveFile,
-} from '@/platform/content/legacyPortArchive'
+  portArchiveRoot,
+  containerPath,
+  decodePortArchiveFile,
+} from '@/platform/content/locations/portArchive'
 import type { TaskArtifactPathQueries } from './ports/taskArtifactPathQueries'
 import { extname } from 'node:path'
 import { WORKTREE_FILE_MAX_BYTES, tryParseKind, splitPortItems } from '@agent-workflow/shared'
@@ -143,10 +143,7 @@ export function* readPortArtifactPolicy(
         if (!wantBytes(idx)) {
           if (
             yield* readableExists(() =>
-              content.existsArchive(
-                opts.taskId,
-                decodeLegacyPortArchiveFile(it.file!).location.value,
-              ),
+              content.existsArchive(opts.taskId, decodePortArchiveFile(it.file!).location.value),
             )
           ) {
             items.push({
@@ -161,7 +158,7 @@ export function* readPortArtifactPolicy(
           }
         } else {
           const buf = yield* readableBytes(() =>
-            content.readArchive(opts.taskId, decodeLegacyPortArchiveFile(it.file!).location.value),
+            content.readArchive(opts.taskId, decodePortArchiveFile(it.file!).location.value),
           )
           if (buf !== null) {
             items.push({
@@ -282,11 +279,11 @@ export function* readPortArtifactPolicy(
 }
 
 export function portArchiveRootRel(taskId: string, nodeRunId: string): string {
-  return legacyPortArchiveRoot(taskId, nodeRunId)
+  return portArchiveRoot(taskId, nodeRunId)
 }
 
 export function toContainerRelative(mountPath: string, repoRelPath: string): string {
-  return legacyContainerPath(mountPath, repoRelPath)
+  return containerPath(mountPath, repoRelPath)
 }
 
 export async function forcedPortPathsForTask(

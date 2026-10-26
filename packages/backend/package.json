@@ -15,11 +15,10 @@
     "lint:fix": "eslint src tests --fix",
     "typecheck": "tsc --noEmit",
     "test": "bun test --isolate --randomize",
-    "db:generate": "drizzle-kit generate",
-    "db:check": "drizzle-kit check",
-    "db:rfc349-contract": "bun run scripts/rfc349-schema-contract.ts",
-    "db:rfc349-postgresql-schema": "bun run scripts/rfc349-postgresql-schema.ts",
-    "perf:sweep": "bun run scripts/perf-sweep.ts"
+    "perf:sweep": "bun run scripts/perf-sweep.ts",
+    "db:schema-history": "bun run ../../scripts/schema-history.ts",
+    "db:epoch1-contract": "bun run src/platform/persistence/migration/legacy/scripts/rfc349-schema-contract.ts",
+    "db:epoch1-postgresql-schema": "bun run src/platform/persistence/migration/legacy/scripts/rfc349-postgresql-schema.ts"
   },
   "dependencies": {
     "@agent-workflow/shared": "workspace:*",
@@ -40,7 +39,6 @@
   "devDependencies": {
     "@types/bun": "latest",
     "@types/diff": "^8.0.0",
-    "drizzle-kit": "^0.30.0",
     "fast-check": "^3.23.0"
   }
 }

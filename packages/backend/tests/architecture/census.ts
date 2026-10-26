@@ -72,6 +72,17 @@ export const MODULE_TOP_LEVEL_ENTRIES = [
 
 /** 只有 bootstrap 可以指向模块的 `composition` 入口（RFC-294 §G1）。 */
 export const BOOTSTRAP_FILES = [
+  // RFC-395 II-b activation: explicit registry, conversion and content assembly roots.
+  'packages/backend/src/bootstrap/conversionRules.ts',
+  'packages/backend/src/bootstrap/epochMigration.ts',
+  'packages/backend/src/bootstrap/epochMigrationEntry.ts',
+  'packages/backend/src/bootstrap/epochMigrationHosted.ts',
+  'packages/backend/src/bootstrap/epochMigrationHostedEntry.ts',
+  'packages/backend/src/bootstrap/epochMigrationKeys.ts',
+  'packages/backend/src/bootstrap/persistenceHead.ts',
+  'packages/backend/src/bootstrap/persistenceBaseline.ts',
+  'packages/backend/src/bootstrap/contentRuntime.ts',
+  'packages/backend/src/bootstrap/historyRestrictions.ts',
   // RFC-395 II-b O: exact owner-adapter assembly roots, not legacy consumers.
   'packages/backend/src/bootstrap/crossContextClosure.ts',
   'packages/backend/src/bootstrap/doctorDiagnostics.ts',

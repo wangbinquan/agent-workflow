@@ -9,7 +9,7 @@
 //      'legacy-admission-frozen'；webhook code-round fire 落
 //      'skipped-legacy-admission-frozen' 且零任务启动。rollback 后双入口恢复。
 //   3. adoptActiveMr 验收样本（runbook 八样本的机内可测子集）：opened →
-//      watching + active claim + legacy link；merged/closed → authoritative
+//      watching + active claim（RFC-395 不再写 legacy link）；merged/closed → authoritative
 //      terminal（无 claim、无 action）；同 MR 重放幂等；claim 被他人占用拒
 //      'mr-owned-by-another-mission'；observe 失败原码传播（「无 MR」样本）。
 //      其余样本（运行中 legacy agent 停机、receipt 丢失重建）是 runbook 人工
@@ -305,6 +305,19 @@ describeEachProviderHttpApplication(
     // -----------------------------------------------------------------------
 
     describe('adoptActiveMr builds missions from external truth', () => {
+      async function recordedAdopt(...args: Parameters<typeof adoptActiveMr>) {
+        const recording = scope.harness.recordStatements()
+        try {
+          return { result: await adoptActiveMr(...args), statements: recording.statements }
+        } finally {
+          recording.stop()
+          // Assert the actual adoption call never writes retired rows or edits converted history.
+          for (const { sql } of recording.statements)
+            expect(sql).not.toMatch(
+              /(?:insert\s+into|update|delete\s+from)\s+(?:"?\w+"?\.)?"?(?:legacy_code_work_item_links|code_history_archives|code_history_id_index)"?\b/i,
+            )
+        }
+      }
       const input = {
         repositoryId: 'repo-1',
         mrIid: '42',
@@ -317,14 +330,14 @@ describeEachProviderHttpApplication(
         actorUserId: null,
       }
 
-      test('an open MR becomes a watching mission with an active claim and a legacy link', async () => {
+      test('an open MR persists its observation in the watching mission and active claim', async () => {
         const store = createMissionPersistence(db)
         const deps = {
           store: createMissionPersistence(db),
           ports: { mrEffects: mrEffectsObserving('opened') },
           ...freshDeps(db),
         }
-        const result = await adoptActiveMr(deps, input)
+        const { result, statements } = await recordedAdopt(deps, input)
         expect(result.ok).toBe(true)
         if (!result.ok) return
         expect(result.terminal).toBeNull()
@@ -343,17 +356,25 @@ describeEachProviderHttpApplication(
         })
         expect(claim?.missionId).toBe(result.missionId)
 
-        const { legacyCodeWorkItemLinks } = tablesOf(db)
-        const links = await db
-          .select()
-          .from(legacyCodeWorkItemLinks)
-          .where(eq(legacyCodeWorkItemLinks.missionId, result.missionId))
-        expect(links).toHaveLength(1)
-        expect(links[0]!.legacyWorkItemId).toBe('wi-9')
-        expect(JSON.parse(links[0]!.cutoverReceiptJson)).toMatchObject({
-          observedState: 'opened',
-          targetBranch: 'main',
+        expect(claim).toMatchObject({ id: mission.mrClaimId, state: 'active' })
+        const { developmentMrClaims } = tablesOf(db)
+        expect(
+          await db.select().from(developmentMrClaims).where(eq(developmentMrClaims.id, claim!.id)),
+        ).toMatchObject([
+          { missionId: result.missionId, headSha: 'a'.repeat(40), epoch: 0, createdAt: NOW },
+        ])
+        expect(mission).toMatchObject({
+          repositoryId: 'repo-1',
+          employeeId: 'emp-1',
+          launchIdempotencyKey: 'cutover:gitlab:team/app:42',
+          createdAt: NOW,
+          revision: 1,
         })
+        expect(
+          statements.some(({ sql }) =>
+            /insert\s+into\s+(?:"?\w+"?\.)?"?development_missions"?\b/i.test(sql),
+          ),
+        ).toBe(true)
       })
 
       test('a merged MR is adopted as authoritative terminal: no claim, no action', async () => {
@@ -402,8 +423,15 @@ describeEachProviderHttpApplication(
           ports: { mrEffects: mrEffectsObserving('opened') },
           ...freshDeps(db),
         }
-        const first = await adoptActiveMr(deps, input)
-        const second = await adoptActiveMr(
+        const { result: first } = await recordedAdopt(deps, input)
+        const { developmentMissions } = tablesOf(db)
+        const before = await db.select().from(developmentMissions)
+        const claimBefore = await deps.store.findMrClaim({
+          codeHostEndpointRef: 'gitlab',
+          stableProjectRef: 'team/app',
+          mrIid: '42',
+        })
+        const { result: second } = await recordedAdopt(
           {
             store: createMissionPersistence(db),
             ports: { mrEffects: mrEffectsObserving('opened') },
@@ -413,9 +441,16 @@ describeEachProviderHttpApplication(
         )
         expect(first.ok && second.ok).toBe(true)
         if (first.ok && second.ok) expect(second.missionId).toBe(first.missionId)
-        const { legacyCodeWorkItemLinks } = tablesOf(db)
-        const links = await db.select().from(legacyCodeWorkItemLinks)
-        expect(links).toHaveLength(1)
+        expect(before).toHaveLength(1)
+        expect(await db.select().from(developmentMissions)).toEqual(before)
+        expect(claimBefore).not.toBeNull()
+        expect(
+          await deps.store.findMrClaim({
+            codeHostEndpointRef: 'gitlab',
+            stableProjectRef: 'team/app',
+            mrIid: '42',
+          }),
+        ).toEqual(claimBefore)
       })
 
       test('an MR already claimed by a non-adopt mission is refused', async () => {
@@ -481,7 +516,12 @@ describeEachProviderHttpApplication(
             })
           ).ok,
         ).toBe(true)
-        const clashing = await adoptActiveMr(
+        const claimBefore = await store.findMrClaim({
+          codeHostEndpointRef: 'gitlab',
+          stableProjectRef: 'team/app',
+          mrIid: '42',
+        })
+        const { result: clashing } = await recordedAdopt(
           {
             store: createMissionPersistence(db),
             ports: { mrEffects: mrEffectsObserving('opened') },
@@ -491,9 +531,15 @@ describeEachProviderHttpApplication(
         )
         expect(clashing.ok).toBe(false)
         if (!clashing.ok) expect(clashing.code).toBe('mr-owned-by-another-mission')
-        const { legacyCodeWorkItemLinks } = tablesOf(db)
-        // 拒绝路径不留 legacy link 半行。
-        expect(await db.select().from(legacyCodeWorkItemLinks)).toHaveLength(0)
+        expect(claimBefore?.missionId).toBe(holdingMissionId)
+        expect(
+          await store.findMrClaim({
+            codeHostEndpointRef: 'gitlab',
+            stableProjectRef: 'team/app',
+            mrIid: '42',
+          }),
+        ).toEqual(claimBefore)
+        expect((await store.getMission(holdingMissionId))?.status).toBe('watching')
       })
 
       test('observe failure propagates its typed code (the "MR does not exist" sample)', async () => {
@@ -502,7 +548,7 @@ describeEachProviderHttpApplication(
           observe: () =>
             Promise.resolve({ ok: false as const, code: 'mr-not-found', detail: '42' }),
         }
-        const result = await adoptActiveMr(
+        const { result, statements } = await recordedAdopt(
           {
             store: createMissionPersistence(db),
             ports: { mrEffects: failing },
@@ -512,8 +558,7 @@ describeEachProviderHttpApplication(
         )
         expect(result.ok).toBe(false)
         if (!result.ok) expect(result.code).toBe('mr-not-found')
-        const { legacyCodeWorkItemLinks } = tablesOf(db)
-        expect(await db.select().from(legacyCodeWorkItemLinks)).toHaveLength(0)
+        expect(statements).toEqual([])
       })
     })
 

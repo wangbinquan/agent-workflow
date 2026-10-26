@@ -1,3 +1,4 @@
+import { assertFixedWriterInstallation } from './helpers/model/writerInstallation'
 // RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-317 T41（findings TP-03 / DE-01 / DE-02）—— 三条新端口的行为回归。
 //
@@ -8,8 +9,7 @@
 //   · `UserAccessFenceReader`（identity-access）—— 原本是 `ws/registry.ts` 里手写的
 //     `SELECT status, access_revision FROM users WHERE id = ?`。那条字符串在列改名时
 //     **typecheck 全绿、运行期在授权围栏上失败**，且不是 import 边，任何架构守卫都看不见。
-//   · `LegacyMissionDrainPort`（digital-employee 声明 / development-automation 实现）——
-//     原本通用 OS 直接查 development 的四张 Mission 表并抄了一份审批终态词表。
+//   · RFC-395 后 DE-01 使用显式 installation 的固定 writer view；旧 drain 扫描已退役。
 //   · `EmployeeReactionRoundQueryPort`（digital-employee）—— 原本 development-automation
 //     直接查 OS 的私表，读它冻结的 planJson，并按 `state === 'completed'` 过滤。
 
@@ -17,17 +17,13 @@ import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { queryWrite } from '@/platform/persistence/queryHelpers'
 import { describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
 
 import { createInMemoryDb } from '@/db/client'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 import { composeIdentityAccess } from '@/modules/identity-access/composition'
-import { createDigitalEmployeeWriterCutoverPersistence } from '@/modules/digital-employee/infrastructure/writerCutoverPersistence'
 import { createEmployeeReactionRoundQueries } from '@/modules/digital-employee/composition'
 import { createUser } from './helpers/userFixture'
-
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 // RFC-359：这一块**有意留在单引擎**。`readAuthorityFence` 是 WS 发帧热路径上的**同步**读
 // ——帧要在当前 tick 内定夺，改 async 会让判定落到下一个微任务、而帧那时已经发出去了。
@@ -37,7 +33,7 @@ const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 // 只在 SQLite 上成立——拿双引擎 harness 跑它等于断言 PG 必须有一个它按设计就没有的能力。
 describe('RFC-317 T41 · TP-03 —— identity-access 的同步授权围栏读', () => {
   test('返回账号状态与授权版本；查无此人返回 null', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createInMemoryDb()
     const user = await createUser(db, {
       username: 'fence-subject',
       displayName: 'Fence Subject',
@@ -51,7 +47,7 @@ describe('RFC-317 T41 · TP-03 —— identity-access 的同步授权围栏读',
   })
 
   test('账号被停用 / 授权版本前进后，围栏立刻看得见（这正是它存在的理由）', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createInMemoryDb()
     const user = await createUser(db, {
       username: 'fence-revoked',
       displayName: 'Fence Revoked',
@@ -68,162 +64,15 @@ describe('RFC-317 T41 · TP-03 —— identity-access 的同步授权围栏读',
   })
 
   test('**同步**返回，不是 Promise —— 异步化会让判定落到帧发出之后', () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createInMemoryDb()
     const result = composeIdentityAccess(db).authorityFence.readAuthorityFence('anyone')
     expect(result instanceof Promise).toBe(false)
   })
 })
 
-describeEachProvider('RFC-317 T41 · DE-01 —— 旧 Mission 排空视图', (harness) => {
-  const seedMission = async (db: PersistenceDb, id: string, terminal: boolean) => {
-    const { developmentMissions } = tablesOf(db)
-    await insertOne(db, developmentMissions, {
-      id,
-      status: terminal ? 'completed' : 'running',
-      repositoryId: 'repo-1',
-      sourceKind: 'direct',
-      deliveryKind: 'merge-request',
-      createdAt: 1,
-      updatedAt: 1,
-      ...(terminal ? { terminalAt: 2 } : {}),
-    })
-  }
-
-  test('只数未终结的 Mission（terminalAt 为 NULL）', async () => {
-    const db = harness.db
-    const drain = createDigitalEmployeeWriterCutoverPersistence(db)
-    expect((await drain.refresh(Date.now())).legacyOpenMissionCount).toBe(0)
-
-    await seedMission(db, 'open-1', false)
-    await seedMission(db, 'closed-1', true)
-    expect((await drain.refresh(Date.now())).legacyOpenMissionCount).toBe(1)
-  })
-
-  /**
-   * 审批 saga 行挂在 step run 上，step run 又挂在 mission 上。这里把这条外键链一次性
-   * 补齐——本组断言只关心「未决审批计数」，链上的业务语义不参与。
-   */
-  const seedStepRun = async (db: PersistenceDb, id: string, missionId: string) => {
-    const { developmentStepRuns } = tablesOf(db)
-    await insertOne(db, developmentStepRuns, {
-      id,
-      missionId,
-      employeeId: 'employee-1',
-      employeeRevision: 1,
-      stepId: 'approval',
-      // 唯一键是 (mission, employee, revision, step, attempt, inputDigest)——
-      // 同一个 mission 上播多条时必须让 digest 各不相同。
-      inputDigest: `digest-${id}`,
-      producerKind: 'platform',
-      createdAt: 2,
-      updatedAt: 2,
-    })
-
-    return id
-  }
-
-  const seedApproval = async (
-    db: PersistenceDb,
-    input: { id: string; missionId: string; latestStatus: string },
-  ) => {
-    const stepRunId = await seedStepRun(db, `step-${input.id}`, input.missionId)
-    const { developmentApprovalSagas } = tablesOf(db)
-    await insertOne(db, developmentApprovalSagas, {
-      id: input.id,
-      missionId: input.missionId,
-      stepRunId,
-      adapterId: 'adapter-1',
-      adapterRevision: 1,
-      draftRef: 'draft-1',
-      submitIntentDigest: 'intent-digest',
-      idempotencyKey: `key-${input.id}`,
-      latestStatus: input.latestStatus,
-      deadlineAt: 10_000,
-      createdAt: 2,
-      updatedAt: 2,
-    })
-  }
-
-  test('排空报告带上活跃 MR 认领 / 子链接 / 未决审批三项计数', async () => {
-    const db = harness.db
-    await seedMission(db, 'parent-1', false)
-    await seedMission(db, 'child-1', false)
-    const { developmentMrClaims, developmentMissionLinks } = tablesOf(db)
-    await insertOne(db, developmentMrClaims, {
-      id: 'claim-1',
-      codeHostEndpointRef: 'endpoint-1',
-      stableProjectRef: 'project-1',
-      mrIid: '7',
-      missionId: 'parent-1',
-      epoch: 1,
-      state: 'active',
-      createdAt: 2,
-    })
-
-    await insertOne(db, developmentMissionLinks, {
-      id: 'link-1',
-      parentMissionId: 'parent-1',
-      parentStepRunId: await seedStepRun(db, 'step-link-1', 'parent-1'),
-      targetRepositoryId: 'repo-1',
-      targetEmployeeId: 'employee-1',
-      targetEmployeeRevision: 1,
-      inputDigest: 'link-digest',
-      idempotencyKey: 'link-key',
-      childMissionId: 'child-1',
-      completion: 'await-terminal',
-      createdAt: 2,
-      updatedAt: 2,
-    })
-
-    await seedApproval(db, { id: 'saga-1', missionId: 'parent-1', latestStatus: 'pending' })
-
-    const report = (await createDigitalEmployeeWriterCutoverPersistence(db).migrationSnapshot(10))
-      .drain
-    expect(report.truncated).toBe(false)
-    // 顺序是端口契约的一部分：按 (createdAt, id) 升序。两条 createdAt 相同，
-    // 于是按 id —— 'child-1' 在 'parent-1' 之前。截断判据（下一条用例）依赖这个
-    // 确定顺序，报告页的分页也依赖它，所以这里逐条断言而不是用 arrayContaining。
-    expect(report.entries).toEqual([
-      {
-        missionId: 'child-1',
-        status: 'running',
-        activeMrClaimCount: 0,
-        childLinkCount: 0,
-        pendingApprovalCount: 0,
-      },
-      {
-        missionId: 'parent-1',
-        status: 'running',
-        activeMrClaimCount: 1,
-        childLinkCount: 1,
-        pendingApprovalCount: 1,
-      },
-    ])
-  })
-
-  test('**已了结**的审批不计入未决数（这份终态词表归 development-automation）', async () => {
-    const db = harness.db
-    await seedMission(db, 'settled-1', false)
-    for (const [index, status] of ['approved', 'rejected', 'expired', 'unavailable'].entries()) {
-      await seedApproval(db, {
-        id: `saga-settled-${index}`,
-        missionId: 'settled-1',
-        latestStatus: status,
-      })
-    }
-    expect(
-      (await createDigitalEmployeeWriterCutoverPersistence(db).migrationSnapshot(10)).drain
-        .entries[0]?.pendingApprovalCount,
-    ).toBe(0)
-  })
-
-  test('超过 limit 时如实标 truncated（报告不能假装自己是全部）', async () => {
-    const db = harness.db
-    for (let index = 0; index < 4; index += 1) await seedMission(db, `bulk-${index}`, false)
-    const report = (await createDigitalEmployeeWriterCutoverPersistence(db).migrationSnapshot(2))
-      .drain
-    expect(report.truncated).toBe(true)
-    expect(report.entries).toHaveLength(2)
+describeEachProvider('RFC-317 T41 · DE-01 installed writer view', (harness) => {
+  test('installation supplies the fixed mode, generation and empty drain report', async () => {
+    await assertFixedWriterInstallation(harness.db)
   })
 })
 

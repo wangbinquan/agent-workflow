@@ -529,12 +529,6 @@ export const OFF_DAG_OFFERED_EDGE_DEBT: readonly OfferedEdgeDebt[] = [
   },
   {
     from: 'packages/backend/src/modules/system-operations/composition.ts',
-    to: 'knowledge-evolution',
-    why: "RFC-353 T5：`repairFusionProvenance` 随 fusion 编排迁进 knowledge-evolution，system-operations 的备份恢复序列改经 KE `public/operations` 消费（此前是 legacy→legacy，不计跨域）。目标形态是 system-operations 经 RestoreParticipant<'knowledge-evolution'> 拿这一步，属 W9-E 物理恢复协议那一刀。",
-    removeAfterWave: 'W9-E（物理恢复生成协议独立 RFC）',
-  },
-  {
-    from: 'packages/backend/src/modules/system-operations/composition.ts',
     to: 'source-control',
     why: 'RFC-349 provider cutover 新增了 owner-closed public participant 消费，但该 bounded-context 对尚未进入 design §3.1 目标 DAG；先逐文件精确锁定，待 ownership/DAG 正式收敛后销账。',
     removeAfterWave: 'W4-E（RFC-294 provider-neutral bounded-context convergence）',

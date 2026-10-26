@@ -1,3 +1,4 @@
+import { liveSqlitePath } from './storage'
 // RFC-319 —— 任务工作树、变更浏览与自动提交。
 //
 // 这一域的共同点是「产出物在磁盘上」：任务工作树是 agent 真正写字的地方，
@@ -327,7 +328,7 @@ test('RFC-319 REPO-14b: 带凭据的远端 URL 在接口与任务详情页都只
   })
   await waitForStatus(runDaemon, taskId, 'done', '带凭据的 URL 没能启动任务 ⇒ 判据无从谈起')
 
-  const dbFile = join(runDaemon.home, 'db.sqlite')
+  const dbFile = liveSqlitePath(runDaemon.home)
 
   // ① 夹具自证（第二层）：镜像行的 `url_redacted` 带 `***@`，只有**真的含 userinfo**
   //    的 URL 才会长成这样。没有这一条，下面所有「脱敏成功」的断言都可能是在一个
@@ -512,7 +513,7 @@ test('RFC-319 REPO-38c: 恢复失败任务时，重试节点的工作树被 pre_
     .sort((a, b) => (a.id < b.id ? 1 : -1))[0]
   expect(failedRun, '找不到节点 w 的失败行 ⇒ resume 不会把它选进回滚集合').toBeTruthy()
 
-  const dbFile = join(failDaemon.home, 'db.sqlite')
+  const dbFile = liveSqlitePath(failDaemon.home)
   runSqlite(
     dbFile,
     patchNodeRunFixtureSql(

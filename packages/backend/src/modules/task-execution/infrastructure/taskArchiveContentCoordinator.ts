@@ -1,4 +1,25 @@
-import type { TaskArchiveCollaborationSectionsPort } from '../composition/required-ports'
+import { createSha256DigestBuilder } from '@/util/hash'
+import {
+  TASK_ARCHIVE_SCHEMA_VERSION,
+  TASK_ARCHIVE_V3_TABLES,
+} from '@/platform/contracts/taskArchive'
+import {
+  encodeTaskArchiveValue,
+  taskArchiveManifestDigest,
+  taskArchiveV3Sections,
+} from './taskArchiveWire'
+import {
+  createContentPublicationLedger,
+  readDatabaseContent,
+} from '@/platform/content/infrastructure/contentStore'
+import { lockTaskAggregateRoots } from './taskDefinitionWriteParticipant'
+import type { TaskArchiveCollaborationSectionsPort } from '../application/ports/taskArchiveSections'
+import type { TaskArchiveTaskSection } from '@/platform/contracts/taskArchive'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+import type {
+  TaskArchiveNodeRunSectionReader,
+  TaskArchiveTaskSectionReader,
+} from '../application/ports/taskArchiveSections'
 // RFC-359 W8-A —— 终态任务树归档出库（RFC-311 T19）：**一份实现，两个 provider 共用**。
 //
 // 合一前是一对：SQLite 侧 `sqliteTaskArchiveMaintenanceCommand.ts`（66 行薄壳，逐方法转发给
@@ -31,17 +52,17 @@ import type { TaskArchiveCollaborationSectionsPort } from '../composition/requir
 // `SQLITE_MAX_VARIABLE_NUMBER` 上限且随构建而变（`util/sqlChunk.ts`），中立实现按最保守构建取值。
 // JSONL 的写批次仍是 2000 行一段——那只关乎 `appendFileSync` 的粒度，与绑定参数无关。
 
+import { readNodeRunLegacyEvidence } from './nodeRunLegacyEvidence'
+import { projectNodeRunDisplayValues } from '../domain/nodeRunDisplayProjection'
 import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { and, asc, eq, inArray, isNull, lte, or } from 'drizzle-orm'
-import type { TaskArchiveContentPort } from '../application/ports/taskArchiveContent'
 import { ulid } from 'ulid'
+import type { TaskArchiveContentPort } from '../application/ports/taskArchiveContent'
 
 import { TERMINAL_TASK_STATUSES } from '@agent-workflow/shared'
 
-import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
-import { sha256Hex } from '@/util/hash'
+import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
 import { createLogger } from '@/util/log'
 import { chunkedAll, SQL_IN_CHUNK } from '@/util/sqlChunk'
 import type {
@@ -65,7 +86,7 @@ import { DrizzleTerminalMaintenancePersistence } from './terminalMaintenancePers
 
 const log = createLogger('task-archive')
 
-const ARCHIVE_SCHEMA_VERSION = 2
+const ARCHIVE_SCHEMA_VERSION = TASK_ARCHIVE_SCHEMA_VERSION
 /** JSONL 落盘的写批次（行数），与 SQL 绑定参数无关。 */
 const WRITE_BATCH = 2_000
 /** 一棵树最多下潜多少层（同 MAX_TREE_DEPTH 口径）。 */
@@ -161,18 +182,20 @@ async function writeJsonl(
   content: TaskArchiveContentPort,
   path: string,
   rows: readonly unknown[],
-): Promise<number> {
-  if (rows.length === 0) return 0
+): Promise<{ count: number; digest: string }> {
+  const hash = createSha256DigestBuilder()
+  // Empty tables have an explicit file in v3.
+  await content.writeText(path, '')
   for (let offset = 0; offset < rows.length; offset += WRITE_BATCH) {
-    await content.appendText(
-      path,
+    const text =
       rows
         .slice(offset, offset + WRITE_BATCH)
-        .map((row) => JSON.stringify(row))
-        .join('\n') + '\n',
-    )
+        .map((row) => JSON.stringify(encodeTaskArchiveValue(row)))
+        .join('\n') + '\n'
+    hash.update(text)
+    await content.appendText(path, text)
   }
-  return rows.length
+  return { count: rows.length, digest: hash.digestHex() }
 }
 
 /**
@@ -186,265 +209,309 @@ async function writeJsonl(
  *
  * 键序进 manifest 的 `rows`，`rows` 又进 digest —— **不要重排**。
  */
+export function createTaskArchiveTaskSectionReader(): TaskArchiveTaskSectionReader {
+  return {
+    async load(db, taskIds): Promise<TaskArchiveTaskSection> {
+      const byTask = <T>(load: (ids: string[]) => Promise<T[]>) => chunkedAll(taskIds, load)
+      const hostedBindings = await byTask(async (ids) => {
+        const { hostedExecutionBindings } = tablesOf(db)
+        return await db
+          .select()
+          .from(hostedExecutionBindings)
+          .where(inArray(hostedExecutionBindings.taskId, ids))
+      })
+      const hostedExecutionIds = hostedBindings.map((row) => row.executionId)
+      const effectRows = await byTask(async (ids) => {
+        const { taskExecutionEffects } = tablesOf(db)
+        return await db
+          .select()
+          .from(taskExecutionEffects)
+          .where(inArray(taskExecutionEffects.taskId, ids))
+      })
+      const effectIds = effectRows.map((row) => row.id)
+      const attemptRows = await chunkedAll(effectIds, async (ids) => {
+        const { taskExecutionEffectAttempts } = tablesOf(db)
+        return await db
+          .select()
+          .from(taskExecutionEffectAttempts)
+          .where(inArray(taskExecutionEffectAttempts.effectId, ids))
+      })
+      const attemptIds = attemptRows.map((row) => row.id)
+      const lineage = new Map<
+        string,
+        PersistenceTables['taskExecutionLineageOperationRecords']['$inferSelect']
+      >()
+      for (const row of await byTask(async (ids) => {
+        const { taskExecutionLineageOperationRecords } = tablesOf(db)
+        return await db
+          .select()
+          .from(taskExecutionLineageOperationRecords)
+          .where(
+            or(
+              inArray(taskExecutionLineageOperationRecords.rootAnchorTaskId, ids),
+              inArray(taskExecutionLineageOperationRecords.ancestorAnchorTaskId, ids),
+              inArray(taskExecutionLineageOperationRecords.currentAnchorTaskId, ids),
+              inArray(taskExecutionLineageOperationRecords.sourceTaskId, ids),
+            ),
+          )
+      })) {
+        lineage.set(row.id, row)
+      }
+      for (const row of await chunkedAll(effectIds, async (ids) => {
+        const { taskExecutionLineageOperationRecords } = tablesOf(db)
+        return await db
+          .select()
+          .from(taskExecutionLineageOperationRecords)
+          .where(inArray(taskExecutionLineageOperationRecords.sourceEffectId, ids))
+      })) {
+        lineage.set(row.id, row)
+      }
+
+      return {
+        owner: 'T',
+        rows: {
+          tasks: await byTask(async (ids) => {
+            const { tasks } = tablesOf(db)
+            return await db.select().from(tasks).where(inArray(tasks.id, ids))
+          }),
+          task_space_nodes: await byTask(async (ids) => {
+            const { taskSpaceNodes } = tablesOf(db)
+            return await db.select().from(taskSpaceNodes).where(inArray(taskSpaceNodes.taskId, ids))
+          }),
+          lifecycle_alerts: await byTask(async (ids) => {
+            const { lifecycleAlerts } = tablesOf(db)
+            return await db
+              .select()
+              .from(lifecycleAlerts)
+              .where(inArray(lifecycleAlerts.taskId, ids))
+          }),
+          recovery_events: await byTask(async (ids) => {
+            const { recoveryEvents } = tablesOf(db)
+            return await db.select().from(recoveryEvents).where(inArray(recoveryEvents.taskId, ids))
+          }),
+          workgroup_task_state: await byTask(async (ids) => {
+            const { workgroupTaskState } = tablesOf(db)
+            return await db
+              .select()
+              .from(workgroupTaskState)
+              .where(inArray(workgroupTaskState.taskId, ids))
+          }),
+          workgroup_assignments: await byTask(async (ids) => {
+            const { workgroupAssignments } = tablesOf(db)
+            return await db
+              .select()
+              .from(workgroupAssignments)
+              .where(inArray(workgroupAssignments.taskId, ids))
+          }),
+          workgroup_messages: await byTask(async (ids) => {
+            const { workgroupMessages } = tablesOf(db)
+            return await db
+              .select()
+              .from(workgroupMessages)
+              .where(inArray(workgroupMessages.taskId, ids))
+          }),
+          workgroup_member_cursors: await byTask(async (ids) => {
+            const { workgroupMemberCursors } = tablesOf(db)
+            return await db
+              .select()
+              .from(workgroupMemberCursors)
+              .where(inArray(workgroupMemberCursors.taskId, ids))
+          }),
+          task_execution_owners: await byTask(async (ids) => {
+            const { taskExecutionOwners } = tablesOf(db)
+            return await db
+              .select()
+              .from(taskExecutionOwners)
+              .where(inArray(taskExecutionOwners.taskId, ids))
+          }),
+          task_execution_intents: await byTask(async (ids) => {
+            const { taskExecutionIntents } = tablesOf(db)
+            return await db
+              .select()
+              .from(taskExecutionIntents)
+              .where(inArray(taskExecutionIntents.taskId, ids))
+          }),
+          task_execution_effects: effectRows,
+          task_execution_effect_attempts: attemptRows,
+          task_execution_effect_fences: await chunkedAll(attemptIds, async (ids) => {
+            const { taskExecutionEffectFences } = tablesOf(db)
+            return await db
+              .select()
+              .from(taskExecutionEffectFences)
+              .where(inArray(taskExecutionEffectFences.effectAttemptId, ids))
+          }),
+          task_execution_lineage_operation_records: [...lineage.values()].sort((left, right) =>
+            left.id.localeCompare(right.id),
+          ),
+          hosted_task_artifacts: await byTask(async (ids) => {
+            const { hostedTaskArtifacts } = tablesOf(db)
+            return await db
+              .select()
+              .from(hostedTaskArtifacts)
+              .where(inArray(hostedTaskArtifacts.taskId, ids))
+          }),
+          hosted_execution_bindings: hostedBindings,
+          hosted_execution_events: await chunkedAll(hostedExecutionIds, async (ids) => {
+            const { hostedExecutionEvents } = tablesOf(db)
+            return await db
+              .select()
+              .from(hostedExecutionEvents)
+              .where(inArray(hostedExecutionEvents.executionId, ids))
+          }),
+          task_definitions: await byTask(async (ids) => {
+            const { taskDefinitions } = tablesOf(db)
+            return await db
+              .select()
+              .from(taskDefinitions)
+              .where(inArray(taskDefinitions.taskId, ids))
+          }),
+          task_launch_contexts: await byTask(async (ids) => {
+            const { taskLaunchContexts } = tablesOf(db)
+            return await db
+              .select()
+              .from(taskLaunchContexts)
+              .where(inArray(taskLaunchContexts.taskId, ids))
+          }),
+          task_workspaces: await byTask(async (ids) => {
+            const { taskWorkspaces } = tablesOf(db)
+            return await db.select().from(taskWorkspaces).where(inArray(taskWorkspaces.taskId, ids))
+          }),
+          task_repository_mounts: await byTask(async (ids) => {
+            const { taskRepositoryMounts } = tablesOf(db)
+            return await db
+              .select()
+              .from(taskRepositoryMounts)
+              .where(inArray(taskRepositoryMounts.taskId, ids))
+          }),
+          task_execution_generations: await byTask(async (ids) => {
+            const { taskExecutionGenerations } = tablesOf(db)
+            return await db
+              .select()
+              .from(taskExecutionGenerations)
+              .where(inArray(taskExecutionGenerations.taskId, ids))
+          }),
+        },
+      }
+    },
+  }
+}
+
+/** N owns the complete run section; caller supplies one snapshot for every owner section. */
+export function createTaskArchiveNodeRunSectionReader(): TaskArchiveNodeRunSectionReader {
+  return {
+    async load(tx, taskIds) {
+      const runRows = await chunkedAll(taskIds, async (ids) => {
+        const { nodeRuns } = tablesOf(tx)
+        return tx.select().from(nodeRuns).where(inArray(nodeRuns.taskId, ids))
+      })
+      const runIds = runRows.map((run) => run.id)
+      const legacyEvidence = await chunkedAll(taskIds, async (ids) => {
+        const { executionLegacyEvidence } = tablesOf(tx)
+        return tx
+          .select()
+          .from(executionLegacyEvidence)
+          .where(inArray(executionLegacyEvidence.taskId, ids))
+      })
+      const evidenceByRun = new Map(
+        legacyEvidence
+          .filter((row) => row.recordKind === 'node-run')
+          .map((row) => [row.recordId, row]),
+      )
+      for (const run of runRows) {
+        const source = await readNodeRunLegacyEvidence(run, evidenceByRun.get(run.id) ?? null, {
+          read: (ref) => readDatabaseContent(tx, ref),
+        })
+        projectNodeRunDisplayValues(
+          { retryIndex: run.attemptIndex, scopePath: run.scopePath },
+          source,
+          run.id,
+        )
+      }
+      return {
+        owner: 'N',
+        rows: {
+          node_runs: runRows,
+          node_run_configs: await chunkedAll(runIds, async (ids) => {
+            const { nodeRunConfigs } = tablesOf(tx)
+            return tx.select().from(nodeRunConfigs).where(inArray(nodeRunConfigs.nodeRunId, ids))
+          }),
+          node_run_runtime_states: await chunkedAll(runIds, async (ids) => {
+            const { nodeRunRuntimeStates } = tablesOf(tx)
+            return tx
+              .select()
+              .from(nodeRunRuntimeStates)
+              .where(inArray(nodeRunRuntimeStates.nodeRunId, ids))
+          }),
+          node_run_results: await chunkedAll(runIds, async (ids) => {
+            const { nodeRunResults } = tablesOf(tx)
+            return tx.select().from(nodeRunResults).where(inArray(nodeRunResults.nodeRunId, ids))
+          }),
+          node_run_inputs: await chunkedAll(taskIds, async (ids) => {
+            const { nodeRunInputs } = tablesOf(tx)
+            return tx.select().from(nodeRunInputs).where(inArray(nodeRunInputs.taskId, ids))
+          }),
+          node_run_selections: await chunkedAll(taskIds, async (ids) => {
+            const { nodeRunSelections } = tablesOf(tx)
+            return tx.select().from(nodeRunSelections).where(inArray(nodeRunSelections.taskId, ids))
+          }),
+          node_run_repo_checkpoints: await chunkedAll(taskIds, async (ids) => {
+            const { nodeRunRepoCheckpoints } = tablesOf(tx)
+            return tx
+              .select()
+              .from(nodeRunRepoCheckpoints)
+              .where(inArray(nodeRunRepoCheckpoints.taskId, ids))
+          }),
+          node_run_outputs: await chunkedAll(runIds, async (ids) => {
+            const { nodeRunOutputs } = tablesOf(tx)
+            return tx.select().from(nodeRunOutputs).where(inArray(nodeRunOutputs.nodeRunId, ids))
+          }),
+          node_run_events: await chunkedAll(runIds, async (ids) => {
+            const { nodeRunEvents } = tablesOf(tx)
+            return tx.select().from(nodeRunEvents).where(inArray(nodeRunEvents.nodeRunId, ids))
+          }),
+          node_run_seq_allocations: await chunkedAll(taskIds, async (ids) => {
+            const { nodeRunSeqAllocations } = tablesOf(tx)
+            return tx
+              .select()
+              .from(nodeRunSeqAllocations)
+              .where(inArray(nodeRunSeqAllocations.taskId, ids))
+          }),
+          execution_legacy_evidence: legacyEvidence,
+          node_execution_event_sources: await chunkedAll(runIds, async (ids) => {
+            const { nodeExecutionEventSources } = tablesOf(tx)
+            return tx
+              .select()
+              .from(nodeExecutionEventSources)
+              .where(inArray(nodeExecutionEventSources.nodeRunId, ids))
+          }),
+        },
+      }
+    },
+  }
+}
+
 async function loadArchiveRows(
   db: PersistenceDb,
   collaboration: TaskArchiveCollaborationSectionsPort,
   taskIds: readonly string[],
 ): Promise<Readonly<Record<string, readonly unknown[]>>> {
-  const byTask = <T>(load: (ids: string[]) => Promise<T[]>) => chunkedAll(taskIds, load)
-  const operationRows = await byTask(async (ids) => {
-    const { collaborationGateOperations } = tablesOf(db)
-    return await db
-      .select()
-      .from(collaborationGateOperations)
-      .where(inArray(collaborationGateOperations.taskId, ids))
-  })
-  const operationIds = operationRows.map((row) => row.id)
-  const documentRows = await byTask(async (ids) => {
-    const { docVersions } = tablesOf(db)
-    return await db.select().from(docVersions).where(inArray(docVersions.taskId, ids))
-  })
-  const documentIds = documentRows.map((row) => row.id)
-  const runRows = await byTask(async (ids) => {
-    const { nodeRuns } = tablesOf(db)
-    return await db.select().from(nodeRuns).where(inArray(nodeRuns.taskId, ids))
-  })
-  const runIds = runRows.map((row) => row.id)
-  const hostedBindings = await byTask(async (ids) => {
-    const { hostedExecutionBindings } = tablesOf(db)
-    return await db
-      .select()
-      .from(hostedExecutionBindings)
-      .where(inArray(hostedExecutionBindings.taskId, ids))
-  })
-  const hostedExecutionIds = hostedBindings.map((row) => row.executionId)
-  const effectRows = await byTask(async (ids) => {
-    const { taskExecutionEffects } = tablesOf(db)
-    return await db
-      .select()
-      .from(taskExecutionEffects)
-      .where(inArray(taskExecutionEffects.taskId, ids))
-  })
-  const effectIds = effectRows.map((row) => row.id)
-  const attemptRows = await chunkedAll(effectIds, async (ids) => {
-    const { taskExecutionEffectAttempts } = tablesOf(db)
-    return await db
-      .select()
-      .from(taskExecutionEffectAttempts)
-      .where(inArray(taskExecutionEffectAttempts.effectId, ids))
-  })
-  const attemptIds = attemptRows.map((row) => row.id)
-  const lineage = new Map<
-    string,
-    PersistenceTables['taskExecutionLineageOperationRecords']['$inferSelect']
-  >()
-  for (const row of await byTask(async (ids) => {
-    const { taskExecutionLineageOperationRecords } = tablesOf(db)
-    return await db
-      .select()
-      .from(taskExecutionLineageOperationRecords)
-      .where(
-        or(
-          inArray(taskExecutionLineageOperationRecords.rootAnchorTaskId, ids),
-          inArray(taskExecutionLineageOperationRecords.ancestorAnchorTaskId, ids),
-          inArray(taskExecutionLineageOperationRecords.currentAnchorTaskId, ids),
-          inArray(taskExecutionLineageOperationRecords.sourceTaskId, ids),
-        ),
-      )
-  })) {
-    lineage.set(row.id, row)
+  const task = await createTaskArchiveTaskSectionReader().load(db, taskIds)
+  const runs = await createTaskArchiveNodeRunSectionReader().load(db, taskIds)
+  const collaborationSection = await collaboration.load(db, taskIds)
+  const sections = { task, nodeRuns: runs, collaboration: collaborationSection }
+  const rows: Record<string, readonly unknown[]> = {}
+  for (const section of ['task', 'nodeRuns', 'collaboration'] as const) {
+    const owned: Readonly<Record<string, readonly unknown[]>> = sections[section].rows
+    for (const table of Object.keys(TASK_ARCHIVE_V3_TABLES[section])) rows[table] = owned[table]!
   }
-  for (const row of await chunkedAll(effectIds, async (ids) => {
-    const { taskExecutionLineageOperationRecords } = tablesOf(db)
-    return await db
-      .select()
-      .from(taskExecutionLineageOperationRecords)
-      .where(inArray(taskExecutionLineageOperationRecords.sourceEffectId, ids))
-  })) {
-    lineage.set(row.id, row)
-  }
-
-  return {
-    tasks: await byTask(async (ids) => {
-      const { tasks } = tablesOf(db)
-      return await db.select().from(tasks).where(inArray(tasks.id, ids))
-    }),
-    task_repos: await byTask(async (ids) => {
-      const { taskRepos } = tablesOf(db)
-      return await db.select().from(taskRepos).where(inArray(taskRepos.taskId, ids))
-    }),
-    task_space_nodes: await byTask(async (ids) => {
-      const { taskSpaceNodes } = tablesOf(db)
-      return await db.select().from(taskSpaceNodes).where(inArray(taskSpaceNodes.taskId, ids))
-    }),
-    task_collaborators: await byTask(async (ids) => {
-      const { taskCollaborators } = tablesOf(db)
-      return await db.select().from(taskCollaborators).where(inArray(taskCollaborators.taskId, ids))
-    }),
-    review_node_reviewers: await byTask(async (ids) => {
-      const { reviewNodeReviewers } = tablesOf(db)
-      return await db
-        .select()
-        .from(reviewNodeReviewers)
-        .where(inArray(reviewNodeReviewers.taskId, ids))
-    }),
-    task_questions: await byTask(async (ids) => {
-      const { taskQuestions } = tablesOf(db)
-      return await db.select().from(taskQuestions).where(inArray(taskQuestions.taskId, ids))
-    }),
-    task_feedback: await byTask(async (ids) => {
-      const { taskFeedback } = tablesOf(db)
-      return await db.select().from(taskFeedback).where(inArray(taskFeedback.taskId, ids))
-    }),
-    task_node_clarify_directives: await byTask(async (ids) => {
-      const { taskNodeClarifyDirectives } = tablesOf(db)
-      return await db
-        .select()
-        .from(taskNodeClarifyDirectives)
-        .where(inArray(taskNodeClarifyDirectives.taskId, ids))
-    }),
-    clarify_rounds: (await collaboration.load(taskIds)).clarify_rounds ?? [],
-    collaboration_gate_operations: operationRows,
-    collaboration_gate_artifacts: await chunkedAll(operationIds, async (ids) => {
-      const { collaborationGateArtifacts } = tablesOf(db)
-      return await db
-        .select()
-        .from(collaborationGateArtifacts)
-        .where(inArray(collaborationGateArtifacts.operationId, ids))
-    }),
-    doc_versions: documentRows,
-    review_comments: await chunkedAll(documentIds, async (ids) => {
-      const { reviewComments } = tablesOf(db)
-      return await db.select().from(reviewComments).where(inArray(reviewComments.docVersionId, ids))
-    }),
-    lifecycle_alerts: await byTask(async (ids) => {
-      const { lifecycleAlerts } = tablesOf(db)
-      return await db.select().from(lifecycleAlerts).where(inArray(lifecycleAlerts.taskId, ids))
-    }),
-    recovery_events: await byTask(async (ids) => {
-      const { recoveryEvents } = tablesOf(db)
-      return await db.select().from(recoveryEvents).where(inArray(recoveryEvents.taskId, ids))
-    }),
-    workgroup_task_state: await byTask(async (ids) => {
-      const { workgroupTaskState } = tablesOf(db)
-      return await db
-        .select()
-        .from(workgroupTaskState)
-        .where(inArray(workgroupTaskState.taskId, ids))
-    }),
-    workgroup_assignments: await byTask(async (ids) => {
-      const { workgroupAssignments } = tablesOf(db)
-      return await db
-        .select()
-        .from(workgroupAssignments)
-        .where(inArray(workgroupAssignments.taskId, ids))
-    }),
-    workgroup_messages: await byTask(async (ids) => {
-      const { workgroupMessages } = tablesOf(db)
-      return await db.select().from(workgroupMessages).where(inArray(workgroupMessages.taskId, ids))
-    }),
-    workgroup_member_cursors: await byTask(async (ids) => {
-      const { workgroupMemberCursors } = tablesOf(db)
-      return await db
-        .select()
-        .from(workgroupMemberCursors)
-        .where(inArray(workgroupMemberCursors.taskId, ids))
-    }),
-    node_runs: runRows,
-    node_run_outputs: await chunkedAll(runIds, async (ids) => {
-      const { nodeRunOutputs } = tablesOf(db)
-      return await db.select().from(nodeRunOutputs).where(inArray(nodeRunOutputs.nodeRunId, ids))
-    }),
-    node_run_events: await chunkedAll(runIds, async (ids) => {
-      const { nodeRunEvents } = tablesOf(db)
-      return await db.select().from(nodeRunEvents).where(inArray(nodeRunEvents.nodeRunId, ids))
-    }),
-    task_execution_owners: await byTask(async (ids) => {
-      const { taskExecutionOwners } = tablesOf(db)
-      return await db
-        .select()
-        .from(taskExecutionOwners)
-        .where(inArray(taskExecutionOwners.taskId, ids))
-    }),
-    task_execution_intents: await byTask(async (ids) => {
-      const { taskExecutionIntents } = tablesOf(db)
-      return await db
-        .select()
-        .from(taskExecutionIntents)
-        .where(inArray(taskExecutionIntents.taskId, ids))
-    }),
-    task_execution_effects: effectRows,
-    task_execution_effect_attempts: attemptRows,
-    task_execution_effect_fences: await chunkedAll(attemptIds, async (ids) => {
-      const { taskExecutionEffectFences } = tablesOf(db)
-      return await db
-        .select()
-        .from(taskExecutionEffectFences)
-        .where(inArray(taskExecutionEffectFences.effectAttemptId, ids))
-    }),
-    task_execution_lineage_operation_records: [...lineage.values()].sort((left, right) =>
-      left.id.localeCompare(right.id),
-    ),
-    hosted_task_artifacts: await byTask(async (ids) => {
-      const { hostedTaskArtifacts } = tablesOf(db)
-      return await db
-        .select()
-        .from(hostedTaskArtifacts)
-        .where(inArray(hostedTaskArtifacts.taskId, ids))
-    }),
-    hosted_execution_bindings: hostedBindings,
-    hosted_execution_events: await chunkedAll(hostedExecutionIds, async (ids) => {
-      const { hostedExecutionEvents } = tablesOf(db)
-      return await db
-        .select()
-        .from(hostedExecutionEvents)
-        .where(inArray(hostedExecutionEvents.executionId, ids))
-    }),
-    node_execution_event_sources: await chunkedAll(runIds, async (ids) => {
-      const { nodeExecutionEventSources } = tablesOf(db)
-      return await db
-        .select()
-        .from(nodeExecutionEventSources)
-        .where(inArray(nodeExecutionEventSources.nodeRunId, ids))
-    }),
-  }
+  rows.clarify_disposition_evidence = collaborationSection.dispositionEvidence ?? []
+  return rows
 }
 
 /** 归档目录里会出现的全部表名（供 `rfc311-task-archive` 的级联对账守卫比对）。 */
-export const ARCHIVED_TABLES: readonly string[] = [
-  'tasks',
-  'task_repos',
-  'task_space_nodes',
-  'task_collaborators',
-  'review_node_reviewers',
-  'task_questions',
-  'task_feedback',
-  'task_node_clarify_directives',
-  'clarify_rounds',
-  'collaboration_gate_operations',
-  'collaboration_gate_artifacts',
-  'doc_versions',
-  'review_comments',
-  'lifecycle_alerts',
-  'recovery_events',
-  'workgroup_task_state',
-  'workgroup_assignments',
-  'workgroup_messages',
-  'workgroup_member_cursors',
-  'node_runs',
-  'node_run_outputs',
-  'node_run_events',
-  'task_execution_owners',
-  'task_execution_intents',
-  'task_execution_effects',
-  'task_execution_effect_attempts',
-  'task_execution_effect_fences',
-  'task_execution_lineage_operation_records',
-  'hosted_task_artifacts',
-  'hosted_execution_bindings',
-  'hosted_execution_events',
-  'node_execution_event_sources',
-]
+export const ARCHIVED_TABLES: readonly string[] = Object.values(TASK_ARCHIVE_V3_TABLES).flatMap(
+  (section) => Object.keys(section),
+)
 
 /** 会随删库级联消失、但**故意**不归档的表。
  *  `runtime_session_leases` 是「哪个进程当前持有该原生会话」的活跃运行态租约，对一棵整树终态的
@@ -471,9 +538,15 @@ async function finalizeDatabase(
     if (JSON.stringify(currentIds) !== JSON.stringify(expectedIds)) {
       throw new Error(`archive task tree changed after claim '${claim.claimId}'`)
     }
+    await lockTaskAggregateRoots(tx, expectedIds)
+    const publications = createContentPublicationLedger(tx)
+    for (const taskId of expectedIds)
+      for (const owner of ['node-run-output', 'node-run-prompt'])
+        await publications.release(tx, { owner, scope: taskId }, now)
     for (let offset = 0; offset < expectedIds.length; offset += SQL_IN_CHUNK) {
       const chunk = expectedIds.slice(offset, offset + SQL_IN_CHUNK)
-      const { taskFeedback, tasks } = tablesOf(tx)
+      const { taskFeedback } = tablesOf(tx)
+      const { tasks } = tablesOf(tx)
       // `task_feedback` 不是 FK 级联后代，显式先删；`tasks` 的删除带走其余级联族。
       await tx.delete(taskFeedback).where(inArray(taskFeedback.taskId, chunk))
       await tx.delete(tasks).where(inArray(tasks.id, chunk))
@@ -506,14 +579,34 @@ async function archiveClaimed(
   await content.remove(content.resolve(tmpDir, 'manifest.json'))
   await content.createDirectory(content.resolve(tmpDir, 'db'))
 
-  const rows = await loadArchiveRows(db, collaboration, taskIds)
+  const { rows, claimRow, memberRows } = await databaseSessionFor(db).snapshotRead(async (tx) => {
+    const rows = await loadArchiveRows(tx, collaboration, taskIds)
+    const { taskExecutionMaintenanceClaims: claims, taskExecutionMaintenanceMembers: members } =
+      tablesOf(tx)
+    const [claimRow] = await tx
+      .select()
+      .from(claims)
+      .where(eq(claims.id, initialClaim.claimId))
+      .limit(1)
+    if (claimRow === undefined)
+      throw new Error(`archive claim '${initialClaim.claimId}' disappeared`)
+    const memberRows = await tx
+      .select()
+      .from(members)
+      .where(eq(members.claimId, initialClaim.claimId))
+      .orderBy(asc(members.taskId))
+    return { rows, claimRow, memberRows }
+  })
   const counts: Record<string, number> = {}
+  const tableDigests: Record<string, string> = {}
   for (const [name, tableRows] of Object.entries(rows)) {
-    counts[name] = await writeJsonl(
+    const written = await writeJsonl(
       content,
       content.resolve(tmpDir, 'db', `${name}.jsonl`),
       tableRows,
     )
+    counts[name] = written.count
+    tableDigests[name] = written.digest
   }
   // runs / logs 整体**挪入**（而不是复制+删除：大目录复制会把归档变成一次长 IO）。
   for (const [kind, root] of [
@@ -536,46 +629,19 @@ async function archiveClaimed(
     counts[`${kind}_dirs`] = moved
   }
 
-  const { taskExecutionMaintenanceClaims, taskExecutionMaintenanceMembers } = tablesOf(db)
-  // 这两条读必须 `await`：少写 await 在 bun:sqlite 上照样拿得到行，在 PostgreSQL 上会把两个
-  // **Promise** 写进 manifest（claimRow 恒真、于是连「认领消失了」这条判据都失效），而 tsc 不报错。
-  const claimRows = await db
-    .select()
-    .from(taskExecutionMaintenanceClaims)
-    .where(eq(taskExecutionMaintenanceClaims.id, initialClaim.claimId))
-    .limit(1)
-  const memberRows = await db
-    .select()
-    .from(taskExecutionMaintenanceMembers)
-    .where(eq(taskExecutionMaintenanceMembers.claimId, initialClaim.claimId))
-    .orderBy(asc(taskExecutionMaintenanceMembers.taskId))
-  const claimRow = claimRows[0]
-  if (claimRow === undefined) throw new Error(`archive claim '${initialClaim.claimId}' disappeared`)
-
+  const manifest = {
+    schemaVersion: ARCHIVE_SCHEMA_VERSION,
+    rootTaskId,
+    taskIds,
+    exportedAt: new Date(now).toISOString(),
+    sections: taskArchiveV3Sections(),
+    rows: counts,
+    tableDigests,
+    terminalMaintenance: { claim: claimRow, members: memberRows },
+  }
   await content.writeText(
     content.resolve(tmpDir, 'manifest.json'),
-    JSON.stringify(
-      {
-        schemaVersion: ARCHIVE_SCHEMA_VERSION,
-        rootTaskId,
-        taskIds,
-        exportedAt: new Date(now).toISOString(),
-        rows: counts,
-        terminalMaintenance: { claim: claimRow, members: memberRows },
-        // 校验和覆盖「导出了什么」这一事实本身，便于事后确认目录未被截断。
-        digest: sha256Hex(
-          JSON.stringify({
-            rootTaskId,
-            taskIds: [...taskIds],
-            rows: counts,
-            maintenanceClaimId: claimRow.id,
-            memberSetDigest: claimRow.memberSetDigest,
-          }),
-        ),
-      },
-      null,
-      2,
-    ),
+    JSON.stringify({ ...manifest, digest: taskArchiveManifestDigest(manifest) }, null, 2),
   )
   // 全部落盘成功后才 rename；rename 之后库里的行才允许删。
   await content.move(tmpDir, finalDir)

@@ -2,6 +2,7 @@
 // Intent engine a durable working-context queue and immutable draft resolution
 // without rebuilding or rewriting historical turns/drafts.
 
+import { FROZEN_MIGRATIONS } from './migration-freeze'
 import { afterEach, describe, expect, test } from 'bun:test'
 import { Database } from 'bun:sqlite'
 import { mkdtempSync, readFileSync } from 'node:fs'
@@ -11,7 +12,7 @@ import { removeTempDirSync } from './fixtures/tempDir'
 
 const tempDirs: string[] = []
 const migrationSql = readFileSync(
-  resolve(import.meta.dir, '..', 'db', 'migrations', '0152_rfc293_intent_workbench.sql'),
+  resolve(FROZEN_MIGRATIONS, '0152_rfc293_intent_workbench.sql'),
   'utf8',
 )
 

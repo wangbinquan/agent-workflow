@@ -1,4 +1,4 @@
-// RFC-395 II-a A6 — 旧 binary 回滚仍可读新写入；codec 形状、错误与 II-b 显式开关独立于 provider。
+// RFC-395 II-b: source codecs belong to conversion; live recovery accepts target envelopes only.
 import { expect, test } from 'bun:test'
 import { ZodError } from 'zod'
 import {
@@ -12,6 +12,13 @@ import {
   decodeResourcePackageReceiptJson,
 } from '@/modules/resource-catalog/infrastructure/resourcePackageArtifactCodec'
 import { decideAtomicApplyConverge } from '@/platform/atomic-apply/convergence'
+
+import { reencodeIntentApplyArtifacts } from '@/modules/intent/infrastructure/migration/applyJournalRule'
+import { decodeIntentJournalArtifacts } from '@/modules/intent/infrastructure/migration/intentApplyLegacyCodec'
+import {
+  reencodeBundleApplyArtifacts,
+  reencodeBundleApplyReceipt,
+} from '@/modules/resource-catalog/infrastructure/migration/bundleAppliesRule'
 
 const oldStage = {
   kind: 'skill-stage',
@@ -42,143 +49,189 @@ const plugin = {
 } as const
 const packagePlugin = {
   kind: 'plugin-install',
-  pluginId: 'p',
   operationId: 'op',
+  pluginId: 'p',
   generationId: 'g',
   generationDirectory: '/g',
 } as const
 
-for (const [scene, version, head, switched, artifacts] of [
-  [
-    'intent',
-    2,
-    intentApplyArtifactCodecs,
-    createIntentApplyArtifactCodecs('versioned-envelope'),
-    [plugin],
-  ],
-  [
-    'resource-package',
-    1,
-    resourcePackageArtifactCodecs,
-    createResourcePackageArtifactCodecs('versioned-envelope'),
-    [packagePlugin],
-  ],
+for (const [scene, version, registry, artifacts] of [
+  ['intent', 3, intentApplyArtifactCodecs, [plugin]],
+  ['resource-package', 2, resourcePackageArtifactCodecs, [packagePlugin]],
 ] as const) {
-  test(`${scene} writes HEAD bytes until its II-b switch and supports envelope encode/decode`, () => {
-    // 二者的插件形状不同，用各自 registry 的输入类型保留类型约束。
+  test(`${scene} writes only its activated scene/version envelope`, () => {
     const encoded =
       scene === 'intent'
         ? intentApplyArtifactCodecs.encode([plugin])
         : resourcePackageArtifactCodecs.encode([packagePlugin])
-    const envelope =
-      scene === 'intent'
-        ? createIntentApplyArtifactCodecs('versioned-envelope').encode([plugin])
-        : createResourcePackageArtifactCodecs('versioned-envelope').encode([packagePlugin])
-    expect(head.encode([])).toBe('[]')
-    expect(encoded).toBe(JSON.stringify(artifacts))
-    expect(envelope).toBe(JSON.stringify({ scene, version, artifacts }))
-    expect(switched.encode([])).toBe(JSON.stringify({ scene, version, artifacts: [] }))
-    expect(head.decode(encoded)).toEqual(artifacts)
-    expect(head.decode(envelope)).toEqual(artifacts)
-    expect(switched.decode(encoded)).toEqual(artifacts)
-    expect(switched.decode(envelope)).toEqual(artifacts)
-    expect(() => head.decode(JSON.stringify({ scene, version: 999, artifacts: [] }))).toThrow(
+    expect(registry.encode([])).toBe(JSON.stringify({ scene, version, artifacts: [] }))
+    expect(encoded).toBe(JSON.stringify({ scene, version, artifacts }))
+    expect(registry.decode(encoded)).toEqual(artifacts)
+    expect(() => registry.decode(JSON.stringify(artifacts))).toThrow(
+      'atomic-apply-artifact-envelope-invalid',
+    )
+    expect(() =>
+      registry.decode(JSON.stringify({ scene, version: version - 1, artifacts: [] })),
+    ).toThrow('version-unsupported')
+    expect(() => registry.decode(JSON.stringify({ scene, version: 999, artifacts: [] }))).toThrow(
       `atomic-apply-artifact-version-unsupported:${scene}:999`,
     )
+    expect(() =>
+      scene === 'intent'
+        ? Reflect.apply(createIntentApplyArtifactCodecs, undefined, ['head-array'])
+        : Reflect.apply(createResourcePackageArtifactCodecs, undefined, ['head-array']),
+    ).toThrow(`atomic-apply-write-format-unsupported:${scene}`)
   })
 }
 
-test('Intent retains HEAD plugin field errors and rejects persisted derived kinds', () => {
+const intentEnvelope = (artifacts: readonly unknown[]) =>
+  JSON.stringify({ scene: 'intent', version: 3, artifacts })
+
+test('Intent target envelopes retain plugin field errors and reject derived source kinds', () => {
   for (const artifact of [
     { kind: 'plugin-install', pluginId: 'p' },
     { kind: 'plugin-install', pluginId: 'p', generationDir: '/g' },
   ])
-    expect(() => intentApplyArtifactCodecs.decode(JSON.stringify([artifact]))).toThrow(
+    expect(() => intentApplyArtifactCodecs.decode(intentEnvelope([artifact]))).toThrow(
       'intent-apply-artifact-generationId-invalid',
     )
   expect(() =>
     intentApplyArtifactCodecs.decode(
-      JSON.stringify([{ kind: 'plugin-install', pluginId: 'p', generationId: 'g' }]),
+      intentEnvelope([{ kind: 'plugin-install', pluginId: 'p', generationId: 'g' }]),
     ),
   ).toThrow('intent-apply-artifact-generationDir-invalid')
   expect(() =>
-    intentApplyArtifactCodecs.decode('[{"kind":"legacy-plugin-install-untracked","pluginId":"p"}]'),
-  ).toThrow('legacy intent journal artifact is invalid:')
+    intentApplyArtifactCodecs.decode(
+      intentEnvelope([{ kind: 'legacy-plugin-install-untracked', pluginId: 'p' }]),
+    ),
+  ).toThrow('intent apply journal artifact is invalid')
   expect(() => intentApplyArtifactCodecs.decode('{')).toThrow(
     'intent apply journal artifacts are not valid JSON',
   )
 })
 
-test('Intent accepts V1 staged versions only in the V1 envelope, preserving HEAD bare-array semantics', () => {
+test('Intent converts complete V1 versions and bare source creates, rejecting incomplete versions', () => {
+  const source = JSON.stringify({ version: 1, artifacts: [oldVersion] })
+  expect(decodeIntentJournalArtifacts(source)).toEqual([oldVersion])
+  expect(intentApplyArtifactCodecs.decode(reencodeIntentApplyArtifacts(source))).toEqual([
+    {
+      kind: 'skill-version-stage',
+      skillId: 's',
+      operationId: 'publish',
+      version: 2,
+      stagingDirectory: '/skills/s/staged',
+      versionDirectory: '/skills/s/versions/2',
+      recovery: {
+        kind: 'version',
+        operationId: 'old-op',
+        publishId: 'publish',
+        skillName: 'skill',
+        contentHash: 'hash',
+        liveDirectory: '/skills/s/files',
+      },
+    },
+  ])
   expect(
-    intentApplyArtifactCodecs.decode(JSON.stringify({ version: 1, artifacts: [oldVersion] })),
-  ).toEqual([oldVersion])
-  expect(intentApplyArtifactCodecs.decode(JSON.stringify([oldStage, plugin]))).toEqual([
-    oldStage,
+    intentApplyArtifactCodecs.decode(
+      reencodeIntentApplyArtifacts(JSON.stringify([oldStage, plugin])),
+    ),
+  ).toEqual([
+    {
+      kind: 'skill-stage',
+      skillId: 's',
+      operationId: 'old-op',
+      stagingDirectory: '/skills/s',
+      recovery: { kind: 'create', operationId: 'old-op', rootDirectory: '/skills/s' },
+    },
     plugin,
   ])
-  for (const artifact of [oldVersion, { kind: 'skill-version-stage', skillId: 's', opId: 'old' }]) {
-    expect(() => intentApplyArtifactCodecs.decode(JSON.stringify([artifact]))).toThrow(
+  for (const artifact of [oldVersion, { kind: 'skill-version-stage', skillId: 's', opId: 'old' }])
+    expect(() => reencodeIntentApplyArtifacts(JSON.stringify([artifact]))).toThrow(
       'legacy skill-version-stage artifact is incomplete and cannot be converged safely',
     )
-  }
+  expect(() => intentApplyArtifactCodecs.decode(source)).toThrow('envelope-invalid')
 })
 
-test('package selects one format for the entire array and retains receipt pairing', () => {
-  const currentReceipt = {
-    journalId: 'j',
-    applied: [
-      {
-        operationId: 'op',
-        resourceType: 'plugin',
-        resourceId: 'p',
-        name: 'plugin',
-        action: 'create',
-      },
-    ],
+test('package converter selects one source format for the whole array and preserves receipt pairing', () => {
+  const applied = {
+    operationId: 'op',
+    resourceType: 'plugin' as const,
+    resourceId: 'p',
+    name: 'plugin',
+    action: 'create' as const,
   }
+  const currentReceipt = { journalId: 'j', applied: [applied] }
   const legacyReceipt = {
     journalId: 'j',
-    applied: [
-      { opId: 'op', resourceType: 'plugin', resourceId: 'p', name: 'plugin', action: 'create' },
-    ],
+    applied: [{ ...applied, operationId: undefined, opId: 'op' }],
   }
-  const row = (artifacts: readonly unknown[], receipt = currentReceipt) => ({
-    id: 'j',
-    preparedArtifactsJson: JSON.stringify(artifacts),
-    receiptJson: JSON.stringify(receipt),
-  })
-  expect(
-    resourcePackageArtifactCodecs.decode(JSON.stringify([oldStage, oldVersion, plugin])),
-  ).toEqual([oldStage, oldVersion, plugin])
-  expect(() =>
-    resourcePackageArtifactCodecs.decode(JSON.stringify([packagePlugin, oldStage])),
-  ).toThrow(ZodError)
-  expect(decodeResourcePackageRecoveryRow(row([packagePlugin]), 'rollForward').format).toBe(
-    'current',
+  const converted = resourcePackageArtifactCodecs.decode(
+    reencodeBundleApplyArtifacts(JSON.stringify([oldStage, oldVersion, plugin]), null),
   )
-  expect(
-    decodeResourcePackageRecoveryRow(
-      { ...row([oldStage]), receiptJson: JSON.stringify(legacyReceipt) },
-      'rollForward',
-    ).format,
-  ).toBe('legacy')
+  expect(converted).toEqual([
+    {
+      kind: 'skill-stage',
+      skillId: 's',
+      operationId: 'old-op',
+      stagingDirectory: '/skills/s',
+      targetDirectory: '/skills/s',
+      recovery: { kind: 'create', operationId: 'old-op', rootDirectory: '/skills/s' },
+    },
+    {
+      kind: 'skill-version-stage',
+      skillId: 's',
+      operationId: 'publish',
+      publishId: 'publish',
+      version: 2,
+      stagingDirectory: '/skills/s/staged',
+      versionDirectory: '/skills/s/versions/2',
+      recovery: {
+        kind: 'version',
+        operationId: 'old-op',
+        publishId: 'publish',
+        skillName: 'skill',
+        contentHash: 'hash',
+        liveDirectory: '/skills/s/files',
+      },
+    },
+    { ...packagePlugin, operationId: 'g' },
+  ])
+  expect(() =>
+    reencodeBundleApplyArtifacts(JSON.stringify([packagePlugin, oldStage]), null),
+  ).toThrow(ZodError)
+  const receipt = reencodeBundleApplyReceipt(JSON.stringify(legacyReceipt))!
+  expect(decodeResourcePackageReceiptJson(receipt)).toEqual(currentReceipt)
+  const row = {
+    id: 'j',
+    preparedArtifactsJson: reencodeBundleApplyArtifacts(JSON.stringify([plugin]), receipt),
+    receiptJson: receipt,
+  }
+  expect(decodeResourcePackageRecoveryRow(row, 'rollForward')).toEqual({
+    format: 'current',
+    artifacts: [packagePlugin],
+  })
   expect(() =>
     decodeResourcePackageRecoveryRow(
-      { ...row([packagePlugin]), receiptJson: JSON.stringify(legacyReceipt) },
+      { ...row, receiptJson: JSON.stringify(legacyReceipt) },
       'rollForward',
     ),
   ).toThrow(ZodError)
   expect(() => decodeResourcePackageReceiptJson(JSON.stringify(legacyReceipt))).toThrow(ZodError)
   expect(
     decodeResourcePackageRecoveryRow(
-      { ...row([]), receiptJson: JSON.stringify(legacyReceipt) },
+      { ...row, preparedArtifactsJson: reencodeBundleApplyArtifacts('[]', receipt) },
       'rollForward',
-    ).format,
-  ).toBe('legacy')
+    ),
+  ).toEqual({ format: 'current', artifacts: [] })
   expect(() =>
-    decodeResourcePackageRecoveryRow({ ...row([oldStage]), receiptJson: null }, 'rollForward'),
+    decodeResourcePackageRecoveryRow({ ...row, receiptJson: null }, 'rollForward'),
   ).toThrow('resource-package-committed-receipt-missing:j')
+  expect(() =>
+    decodeResourcePackageRecoveryRow(
+      { ...row, preparedArtifactsJson: JSON.stringify([oldStage]) },
+      'compensate',
+    ),
+  ).toThrow('envelope-invalid')
 })
 
 test('pure convergence decisions preserve fresh/active claims and retry committed tails', () => {

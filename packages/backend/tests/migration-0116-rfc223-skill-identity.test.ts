@@ -5,16 +5,19 @@
 // contract. An orphan fixture must stop at the guard with the legacy table and
 // row still intact; INNER JOIN must never become a silent data-loss filter.
 
+import {
+  migrateFrozenSqlite as migrate,
+  createFrozenEpoch1Db,
+  FROZEN_MIGRATIONS,
+} from './migration-freeze'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { Database } from 'bun:sqlite'
 import { drizzle } from 'drizzle-orm/bun-sqlite'
-import { migrate } from 'drizzle-orm/bun-sqlite/migrator'
 import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { createInMemoryDb } from '../src/db/client'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+const MIGRATIONS = resolve(FROZEN_MIGRATIONS)
 
 interface VersionFixture {
   id: string
@@ -32,7 +35,7 @@ interface VersionFixture {
 
 describe('migration 0116 (RFC-223 PR-5) — fresh replay', () => {
   test('fresh install exposes skill_id with the final FK and indexes', () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createFrozenEpoch1Db(MIGRATIONS)
     assertFinalShape(db.$client)
     expect(db.$client.query("PRAGMA foreign_key_check('skill_versions')").all()).toEqual([])
   })

@@ -27,7 +27,6 @@ import { composeSqliteRepositoryWorkspaceStore } from '../src/modules/source-con
 import { listCachedRepos } from '../src/services/gitRepoCache'
 import { normalizeStartTaskRepos } from '@/modules/source-control/infrastructure/workspaceMaterializer'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const TOKEN = 'ghp_SUPERSECRET_TOKEN_VALUE'
 
 function seedCredentialedRepo(db: ReturnType<typeof createInMemoryDb>, id: string): void {
@@ -52,7 +51,7 @@ describe('RFC-204 P0-a — cached_repos never serves a credential', () => {
   })
 
   test('listCachedRepos output contains no substring of the token', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createInMemoryDb()
     seedCredentialedRepo(db, ulid())
 
     const items = await listCachedRepos(
@@ -69,7 +68,7 @@ describe('RFC-204 P0-a — cached_repos never serves a credential', () => {
   })
 
   test('a row missing url_redacted fails closed to a placeholder', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createInMemoryDb()
     const now = Date.now()
     const { cachedRepos } = tablesOf(db)
     insertOne(db, cachedRepos, {
@@ -93,7 +92,7 @@ describe('RFC-204 P0-a — cached_repos never serves a credential', () => {
   test('a query-form token in the local path is redacted on the wire', async () => {
     // parseGitUrl keeps `?access_token=` inside parsed.path, so historical cache
     // slugs (and therefore local_path, which IS on the wire) can embed one.
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createInMemoryDb()
     const now = Date.now()
     const { cachedRepos } = tablesOf(db)
     insertOne(db, cachedRepos, {

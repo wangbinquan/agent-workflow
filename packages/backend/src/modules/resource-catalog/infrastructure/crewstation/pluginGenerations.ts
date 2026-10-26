@@ -7,13 +7,13 @@
 // transaction that marks the generation retired; physical unpin is deferred to
 // the hosted object maintenance job.
 import {
-  isLegacyHostedPluginReference,
-  legacyPluginGenerationReference as generationReference,
-  parseLegacyPluginReference as parseReference,
-  legacyPluginFileKey as fileKey,
-  legacyPluginManifestKey as manifestKey,
-  legacyPluginCachedReference as cachedReference,
-} from '@/platform/content/legacyPlugin'
+  isHostedPluginReference,
+  pluginGenerationReference as generationReference,
+  parsePluginReference as parseReference,
+  pluginFileKey as fileKey,
+  pluginManifestKey as manifestKey,
+  pluginCachedReference as cachedReference,
+} from '@/platform/content/locations/plugin'
 import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { eq, ne } from 'drizzle-orm'
 import { ulid } from 'ulid'
@@ -368,7 +368,7 @@ export function createHostedPluginGenerations(input: {
           'plugin-install-failed',
           'file source is externally managed and cannot be checked',
         )
-      const currentRow = isLegacyHostedPluginReference(currentCachedPath)
+      const currentRow = isHostedPluginReference(currentCachedPath)
         ? await find(parseReference(currentCachedPath).root)
         : undefined
       const current = currentRow ? await read(currentCachedPath) : null

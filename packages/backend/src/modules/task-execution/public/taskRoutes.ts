@@ -90,7 +90,11 @@ export interface TaskRouteOperations {
     readonly cascade: boolean
   }): Promise<Task>
 
-  nodeRuns(taskId: string): Promise<TaskNodeRuns>
+  nodeRuns(taskId: string): Promise<
+    Omit<TaskNodeRuns, 'runs'> & {
+      readonly runs: readonly TaskNodeRuns['runs'][number][]
+    }
+  >
   diff(taskId: string): Promise<TaskDiff>
   stdout(taskId: string, nodeRunId: string): Promise<string>
   events(

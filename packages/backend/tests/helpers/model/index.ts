@@ -15,3 +15,5 @@ export type {
 } from './core'
 export type { RunCheckpointFixture, ConsumedEdgeFixture } from './checkpoint'
 export { checkpointValues, consumedProducerIds } from './checkpoint'
+
+export { agentFixtureReferences } from './agent'

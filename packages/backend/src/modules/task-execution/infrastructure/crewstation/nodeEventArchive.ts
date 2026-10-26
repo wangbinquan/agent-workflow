@@ -1,3 +1,9 @@
+import {
+  hostedContentColumnsInTx,
+  hostedObjectOf,
+  contentRefOf,
+} from '@/platform/content/infrastructure/contentStore'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 // RFC-370 v3 V6 — hosted node event chunks. A prepared row names an exact
 // event range; its bytes are always re-encoded from those still-present source
 // rows, so nothing but facts is stored before upload. The chunk is a
@@ -5,11 +11,11 @@
 // ready, recording the object and deleting exactly the source range commit in
 // one transaction. Rows of deleted tasks are released by the task object sweep.
 import {
-  legacyHostedEventArchiveReference,
-  legacyEventArchiveChunkPath,
-} from '@/platform/content/legacyEventArchive'
+  hostedEventArchiveReference,
+  eventArchiveChunkPath,
+} from '@/platform/content/locations/eventArchive'
 import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+
 import { and, asc, eq, gt, gte, lte } from 'drizzle-orm'
 import { z } from 'zod'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
@@ -40,10 +46,10 @@ const EventRow = z
   })
   .strict()
 type Row = PersistenceTables['hostedNodeEventArchives']['$inferSelect']
-const reference = legacyHostedEventArchiveReference
+const reference = hostedEventArchiveReference
 const objectOf = (row: Row): HostedStoredObject => {
-  if (row.objectId === null) throw new Error('hosted-event-archive-not-published')
-  return { id: row.objectId, sha256: row.digest, size: row.size }
+  if (row.contentRefJson === null) throw new Error('hosted-event-archive-not-published')
+  return { id: hostedObjectOf(contentRefOf(row)).id, sha256: row.digest, size: row.size }
 }
 const encode = (rows: readonly EventsArchiveRow[]) =>
   rows.map((row) => JSON.stringify(EventRow.parse(row)) + '\n').join('')
@@ -116,7 +122,8 @@ export function createHostedNodeEventArchive(input: {
       ],
       {
         async commit(tx, [object]) {
-          const { nodeRuns, hostedNodeEventArchives, nodeRunEvents } = tablesOf(tx)
+          const { hostedNodeEventArchives, nodeRunEvents } = tablesOf(tx)
+          const { nodeRuns } = tablesOf(tx)
           await session.engine.lockAggregateRoot(tx, nodeRuns, nodeRuns.id, row.nodeRunId)
           const owner = (
             await tx
@@ -137,7 +144,7 @@ export function createHostedNodeEventArchive(input: {
           if (encode(actual) !== encoded) throw new Error('hosted-event-archive-source-changed')
           await tx
             .update(hostedNodeEventArchives)
-            .set({ state: 'ready', objectId: object!.id })
+            .set({ state: 'ready', ...(await hostedContentColumnsInTx(tx, object!)) })
             .where(eq(hostedNodeEventArchives.id, row.id))
           await tx.delete(nodeRunEvents).where(range(tx, row))
           archived = actual.length
@@ -148,7 +155,8 @@ export function createHostedNodeEventArchive(input: {
   }
   return {
     async recover() {
-      const { hostedNodeEventArchives, nodeRuns } = tablesOf(input.db)
+      const { hostedNodeEventArchives } = tablesOf(input.db)
+      const { nodeRuns } = tablesOf(input.db)
       // Rows of a deleted run are the task object sweep's to remove; they must
       // not starve the prepared chunks of live runs.
       const row = (
@@ -191,11 +199,13 @@ export function createHostedNodeEventArchive(input: {
         size: length,
         digest,
         state: 'prepared',
-        objectId: null,
+        contentRefJson: null,
+        contentInlineBytes: null,
         createdAt: Date.now(),
       }
       const prepared = await write(async (tx) => {
-        const { nodeRuns, hostedNodeEventArchives } = tablesOf(tx)
+        const { hostedNodeEventArchives } = tablesOf(tx)
+        const { nodeRuns } = tablesOf(tx)
         await session.engine.lockAggregateRoot(tx, nodeRuns, nodeRuns.id, request.nodeRunId)
         const owner = (
           await tx
@@ -295,7 +305,7 @@ export function createHostedNodeEventArchive(input: {
           )
           .orderBy(asc(hostedNodeEventArchives.firstId))
       ).map((row) => ({
-        path: legacyEventArchiveChunkPath(row.nodeRunId, row.firstId, row.lastId),
+        path: eventArchiveChunkPath(row.nodeRunId, row.firstId, row.lastId),
         object: objectOf(row),
       }))
     },

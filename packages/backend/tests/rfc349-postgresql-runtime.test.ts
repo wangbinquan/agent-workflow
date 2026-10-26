@@ -1,3 +1,4 @@
+import '@/bootstrap/persistenceSchema'
 // RFC-349 T3 — locks the external PostgreSQL pool boundary: URL secrets never
 // enter observable errors, readiness uses a reserved/configured connection,
 // advisory locks remain session-scoped, and shutdown is idempotent.

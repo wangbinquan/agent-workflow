@@ -6,16 +6,16 @@ import { describe, expect, test } from 'bun:test'
 import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { loadPostgresqlMigrationHistory } from '@/platform/persistence/postgresqlMigrationHistory'
+import { loadPostgresqlMigrationHistory } from '@/platform/persistence/migration/legacy/postgresqlMigrationHistory'
 import {
   buildPostgresqlSchemaPlan,
   renderPostgresqlBaselineSql,
-} from '@/platform/persistence/postgresqlSchema'
+} from '@/platform/persistence/migration/legacy/postgresqlSchema'
 import {
   canonicalSchemaJson,
   RFC349_ARCHIVE_THEN_OMIT_TABLES,
 } from '@/platform/persistence/schemaContract'
-import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import { buildFrozenEpoch1LogicalSchemaContract as buildLogicalSchemaContract } from '@/platform/persistence/migration/epoch1/contract'
 
 describe('RFC-349 PostgreSQL schema projection', () => {
   test('projects the exact active parity set', () => {

@@ -17,7 +17,7 @@
 
 import { TOKEN_ALLOWED_WS_CHANNELS } from '../src/ws/server'
 import { describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
+
 import type { ServerWebSocket } from 'bun'
 import { buildActor, type Actor } from '../src/auth/actor'
 import { createInMemoryDb } from '../src/db/client'
@@ -48,8 +48,6 @@ import {
 import { stubIdentityAccessWsBinding, TEST_DIRECT_AUTHORITY } from './helpers/identityAccessWs'
 import { composeIdentityAccess } from '../src/modules/identity-access/composition'
 import { composeTestSqliteRealtimeRuntime, STUB_REALTIME_RUNTIME } from './helpers/realtimeRuntime'
-
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 // RFC-222: build a REALISTIC actor (permissions resolved from the role
 // baseline) — the memory-distill-jobs gate is now a double-check (identity AND
@@ -285,7 +283,7 @@ describe('RFC-152 — WS_CHANNELS exhaustion lock', () => {
 })
 
 describe('RFC-152 — upgrade gates', () => {
-  const db = createInMemoryDb(MIGRATIONS)
+  const db = createInMemoryDb()
   const identityAccess = composeIdentityAccess(db)
   const channels = composeTestSqliteRealtimeRuntime({ db, identityAccess }).channels
 
@@ -364,7 +362,7 @@ describe('RFC-152 — gatedSubscribe pipeline (ACL-bypass shortcut → frameGate
     }
   }
 
-  const db = createInMemoryDb(MIGRATIONS)
+  const db = createInMemoryDb()
   const identityAccess = composeIdentityAccess(db)
   const channels = composeTestSqliteRealtimeRuntime({ db, identityAccess }).channels
   db.$client.exec(`

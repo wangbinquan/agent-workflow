@@ -1,3 +1,12 @@
+import {
+  databaseContentText,
+  contentRowColumns,
+  inlineContentColumns,
+} from '@/platform/content/infrastructure/contentStore'
+import { nodeRunFixtureColumns } from './helpers/model/nodeRun'
+import { legacyContentRef } from '@/platform/content/contentRef'
+
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { withO2Closure } from './helpers/o2Closure'
 import {
   nodeRunFixture,
@@ -13,7 +22,7 @@ import {
   readNodeRunFixtures,
 } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+
 import { queryRows } from '@/platform/persistence/queryHelpers'
 import { taskExecutionModule } from '@/modules/task-execution/composition'
 import { clearTaskDriverLifecycleForTesting } from '@/modules/task-execution/infrastructure/taskDriverLifecycle'
@@ -41,8 +50,8 @@ import { join } from 'node:path'
 import { and, eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type { ReviewDecisionKind, WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
-import type { DbClient } from '../src/db/client'
-import { createInMemoryDb } from '../src/db/client'
+import { type DbClient, createInMemoryDb } from '../src/db/client'
+
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { trySetTaskStatus } from '../src/services/lifecycle'
 import {
@@ -69,7 +78,6 @@ import {
 import { installTaskLifecycleAfterCommitTestPump } from './helpers/taskLifecycleCommittedEvents'
 import { drainCommittedEventDeliveriesForTests } from './helpers/committedEventHarness'
 import { describeEachProvider } from './helpers/eachProvider'
-import { MIGRATIONS } from './migration-freeze'
 
 interface Harness<Database extends PersistenceDb = PersistenceDb> {
   db: Database
@@ -186,7 +194,7 @@ async function seedHarness<Database extends PersistenceDb>(
     sourcePortName: 'doc',
     versionIndex: 1,
     reviewIteration: 0,
-    bodyPath,
+    ...contentRowColumns(legacyContentRef('review-body-path', 'local-file', bodyPath)),
     commentsJson: '[]',
     decision: 'pending',
     itemIndex: options.multiDoc === true ? 0 : null,
@@ -206,14 +214,14 @@ async function seedHarness<Database extends PersistenceDb>(
     contextBefore: '# ',
     contextAfter: ' inline',
     occurrenceIndex: 1,
-    commentText: 'original',
+    ...inlineContentColumns(Buffer.from('original', 'utf8'), 'text/plain'),
     author: 'reviewer',
     createdAt: Date.now(),
   })
 
   const uninstallAfterCommitPump = installTaskLifecycleAfterCommitTestPump(db, {
     onTerminalTask(hookDb, hookTaskId, to) {
-      void createHumanGateTerminalSweepCommand(hookDb).run({
+      return createHumanGateTerminalSweepCommand(hookDb).run({
         taskId: hookTaskId,
         cause: `task-${to}`,
       })
@@ -253,7 +261,7 @@ function taskRootLineage(taskId: string): {
 
 /** 原生库夹具：只给下面那组 SQLite-only 用例用。 */
 function seedNativeHarness(options: { multiDoc?: boolean } = {}): Promise<Harness<DbClient>> {
-  return seedHarness(createInMemoryDb(MIGRATIONS), options)
+  return seedHarness(createInMemoryDb(), options)
 }
 
 async function settleInOrder<A, B>(
@@ -347,10 +355,15 @@ function delayArchiveSelect(db: DbClient, onBlocked: () => void, release: Promis
         const isArchiveSelect =
           typeof fields === 'object' &&
           fields !== null &&
-          Object.keys(fields).length === 5 &&
-          ['nodeRunId', 'portName', 'content', 'kind', 'archiveJson'].every((key) =>
-            Object.hasOwn(fields, key),
-          )
+          Object.keys(fields).length === 6 &&
+          [
+            'nodeRunId',
+            'portName',
+            'contentRefJson',
+            'contentInlineBytes',
+            'kind',
+            'archiveJson',
+          ].every((key) => Object.hasOwn(fields, key))
         return isArchiveSelect ? wrapBuilder(builder) : builder
       }
     },
@@ -505,10 +518,16 @@ describeEachProvider('评审写入与取消的线性化（双引擎）', (harnes
 
       expect(cancelResult.status).toBe('fulfilled')
       expectRejectedCode(decisionResult, 'task-terminal')
-      const { nodeRuns, docVersions, reviewComments, memoryDistillJobs } = tablesOf(h.db)
+      const { memoryDistillJobs } = tablesOf(h.db)
+      const { nodeRuns, docVersions, reviewComments } = tablesOf(h.db)
       expect((await readTaskFixtures(h.db, { id: h.taskId }))[0]?.status).toBe('canceled')
       expect(
-        (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, h.reviewRunId)))[0]?.status,
+        (
+          await h.db
+            .select(nodeRunFixtureColumns(h.db))
+            .from(nodeRuns)
+            .where(eq(nodeRuns.id, h.reviewRunId))
+        )[0]?.status,
       ).toBe('canceled')
       const doc = (
         await h.db.select().from(docVersions).where(eq(docVersions.id, h.docVersionId))
@@ -520,11 +539,13 @@ describeEachProvider('评审写入与取消的线性化（双引擎）', (harnes
         .select()
         .from(reviewComments)
         .where(eq(reviewComments.docVersionId, h.docVersionId))
-      expect(comments.map((row) => row.commentText)).toEqual(['original'])
+      expect(await Promise.all(comments.map((row) => databaseContentText(h.db, row)))).toEqual([
+        'original',
+      ])
       expect(await readNodeRunOutputFixtures(h.db, { nodeRunId: h.reviewRunId })).toHaveLength(0)
       expect(
         await h.db
-          .select()
+          .select(nodeRunFixtureColumns(h.db))
           .from(nodeRuns)
           .where(and(eq(nodeRuns.taskId, h.taskId), eq(nodeRuns.nodeId, 'writer'))),
       ).toHaveLength(1)
@@ -542,10 +563,16 @@ describeEachProvider('评审写入与取消的线性化（双引擎）', (harnes
 
     expect(decisionResult.status).toBe('fulfilled')
     expect(cancelResult.status).toBe('fulfilled')
-    const { nodeRuns, docVersions, reviewComments, memoryDistillJobs } = tablesOf(h.db)
+    const { memoryDistillJobs } = tablesOf(h.db)
+    const { nodeRuns, docVersions, reviewComments } = tablesOf(h.db)
     expect((await readTaskFixtures(h.db, { id: h.taskId }))[0]?.status).toBe('canceled')
     expect(
-      (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, h.reviewRunId)))[0]?.status,
+      (
+        await h.db
+          .select(nodeRunFixtureColumns(h.db))
+          .from(nodeRuns)
+          .where(eq(nodeRuns.id, h.reviewRunId))
+      )[0]?.status,
     ).toBe('done')
     const doc = (
       await h.db.select().from(docVersions).where(eq(docVersions.id, h.docVersionId))
@@ -560,7 +587,7 @@ describeEachProvider('评审写入与取消的线性化（双引擎）', (harnes
     ])
     expect(
       await h.db
-        .select()
+        .select(nodeRunFixtureColumns(h.db))
         .from(nodeRuns)
         .where(and(eq(nodeRuns.taskId, h.taskId), eq(nodeRuns.nodeId, 'writer'))),
     ).toHaveLength(1)
@@ -679,7 +706,7 @@ describeEachProvider('评审写入与取消的线性化（双引擎）', (harnes
         .where(eq(reviewComments.docVersionId, h.docVersionId))
       expect(comments).toHaveLength(1)
       expect(comments[0]?.id).toBe(h.commentId)
-      expect(comments[0]?.commentText).toBe('original')
+      expect(await databaseContentText(h.db, comments[0]!)).toBe('original')
     },
   )
 
@@ -695,11 +722,18 @@ describeEachProvider('评审写入与取消的线性化（双引擎）', (harnes
     expect(cancelResult.status).toBe('fulfilled')
     const { reviewComments, nodeRuns } = tablesOf(h.db)
     expect(
-      (await h.db.select().from(reviewComments).where(eq(reviewComments.id, h.commentId)))[0]
-        ?.commentText,
+      await databaseContentText(
+        h.db,
+        (await h.db.select().from(reviewComments).where(eq(reviewComments.id, h.commentId)))[0]!,
+      ),
     ).toBe('landed first')
     expect(
-      (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, h.reviewRunId)))[0]?.status,
+      (
+        await h.db
+          .select(nodeRunFixtureColumns(h.db))
+          .from(nodeRuns)
+          .where(eq(nodeRuns.id, h.reviewRunId))
+      )[0]?.status,
     ).toBe('canceled')
   })
 
@@ -771,9 +805,9 @@ describe('review mutation vs task cancellation linearization (SQLite 原生注�
   test('decision WS is emitted only after outputs and the lifecycle transition are complete', async () => {
     const h = (current = await seedNativeHarness())
     let stateAtEvent: { runStatus: string | undefined; outputCount: number } | undefined
-    const unsubscribe = taskBroadcaster.subscribe(TASK_CHANNEL(h.taskId), async (event) => {
+    const unsubscribe = taskBroadcaster.subscribe(TASK_CHANNEL(h.taskId), (event) => {
       if (event.type !== 'review.decision_made') return
-      const { nodeRuns } = tablesOf(h.db)
+      const { nodeRuns, nodeRunOutputs } = tablesOf(h.db)
       stateAtEvent = {
         runStatus: queryRows(
           h.db
@@ -782,7 +816,12 @@ describe('review mutation vs task cancellation linearization (SQLite 原生注�
             .where(eq(nodeRuns.id, h.reviewRunId))
             .limit(1),
         )[0]?.status,
-        outputCount: (await readNodeRunOutputFixtures(h.db, { nodeRunId: h.reviewRunId })).length,
+        outputCount: queryRows(
+          h.db
+            .select({ portName: nodeRunOutputs.portName })
+            .from(nodeRunOutputs)
+            .where(eq(nodeRunOutputs.nodeRunId, h.reviewRunId)),
+        ).length,
       }
     })
     try {
@@ -808,7 +847,12 @@ describe('review mutation vs task cancellation linearization (SQLite 原生注�
     expect(decisions).toHaveLength(0)
     const { nodeRuns } = tablesOf(h.db)
     expect(
-      (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, h.reviewRunId)))[0]?.status,
+      (
+        await h.db
+          .select(nodeRunFixtureColumns(h.db))
+          .from(nodeRuns)
+          .where(eq(nodeRuns.id, h.reviewRunId))
+      )[0]?.status,
     ).toBe('awaiting_review')
   })
 
@@ -892,7 +936,12 @@ describe('review mutation vs task cancellation linearization (SQLite 原生注�
     expect(dispatchResult.kind).toBe('awaiting_review')
 
     expect(
-      (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, h.reviewRunId)))[0]?.status,
+      (
+        await h.db
+          .select(nodeRunFixtureColumns(h.db))
+          .from(nodeRuns)
+          .where(eq(nodeRuns.id, h.reviewRunId))
+      )[0]?.status,
     ).toBe('done')
     expect(
       await h.db
@@ -903,7 +952,7 @@ describe('review mutation vs task cancellation linearization (SQLite 原生注�
         ),
     ).toHaveLength(0)
     const reopenedRuns = await h.db
-      .select()
+      .select(nodeRunFixtureColumns(h.db))
       .from(nodeRuns)
       .where(and(eq(nodeRuns.taskId, h.taskId), eq(nodeRuns.nodeId, 'review')))
     expect(reopenedRuns).toHaveLength(2)
@@ -934,7 +983,12 @@ describe('review mutation vs task cancellation linearization (SQLite 原生注�
     expect(result.status).toBe('canceled')
     expect((await readTaskFixtures(h.db, { id: h.taskId }))[0]?.status).toBe('canceled')
     expect(
-      (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, h.reviewRunId)))[0]?.status,
+      (
+        await h.db
+          .select(nodeRunFixtureColumns(h.db))
+          .from(nodeRuns)
+          .where(eq(nodeRuns.id, h.reviewRunId))
+      )[0]?.status,
     ).toBe('canceled')
   })
 
@@ -1085,11 +1139,18 @@ describe('review mutation vs task cancellation linearization (SQLite 原生注�
       )
 
       expect(
-        (await h.db.select().from(reviewComments).where(eq(reviewComments.id, h.commentId)))[0]
-          ?.commentText,
+        await databaseContentText(
+          h.db,
+          (await h.db.select().from(reviewComments).where(eq(reviewComments.id, h.commentId)))[0]!,
+        ),
       ).toBe(`${taskStatus}-draft`)
       expect(
-        (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, h.reviewRunId)))[0]?.status,
+        (
+          await h.db
+            .select(nodeRunFixtureColumns(h.db))
+            .from(nodeRuns)
+            .where(eq(nodeRuns.id, h.reviewRunId))
+        )[0]?.status,
       ).toBe('awaiting_review')
     },
   )

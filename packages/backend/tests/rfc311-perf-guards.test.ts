@@ -1,3 +1,6 @@
+import { persistenceSchemaBinding } from '@/platform/persistence/schema/tables'
+import { getTableColumns } from 'drizzle-orm'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { composeSourceControlTaskPorts } from '@/modules/task-execution/composition'
 // RFC-311 —— 数据库性能的**结构性**防护网。**RFC-359 W6-T27 起两个引擎各跑一遍。**
 //
@@ -64,7 +67,7 @@ import {
   workflowFixture,
 } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+
 import { afterAll, describe, expect, test } from 'bun:test'
 import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
 import { mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs'
@@ -108,7 +111,18 @@ const LEGACY_TERMINAL_STATUSES = [
  */
 const UNBOUNDED_TABLES = [
   'tasks',
-  'task_repos',
+  'task_repository_mounts',
+  'task_definitions',
+  'task_launch_contexts',
+  'task_workspaces',
+  'task_execution_generations',
+  'task_space_nodes',
+  'node_run_configs',
+  'node_run_runtime_states',
+  'node_run_results',
+  'node_run_selections',
+  'node_run_inputs',
+  'node_run_repo_checkpoints',
   'node_runs',
   'events',
   'cached_repos',
@@ -220,17 +234,9 @@ async function seed(db: PersistenceDb, n: number): Promise<void> {
  * lifecycle_alerts）也要清，否则第二次测量会带上第一次的残留。
  */
 async function clearCorpus(db: PersistenceDb): Promise<void> {
-  const {
-    lifecycleAlerts,
-    nodeRunEvents,
-    nodeRuns,
-    developmentMissions,
-    taskRepos,
-    tasks,
-    cachedRepos,
-    workflows,
-    users,
-  } = tablesOf(db)
+  const { lifecycleAlerts, nodeRunEvents, developmentMissions, cachedRepos, workflows, users } =
+    tablesOf(db)
+  const { nodeRuns, taskRepositoryMounts: taskRepos, tasks } = tablesOf(db)
   await db.delete(lifecycleAlerts)
   await db.delete(nodeRunEvents)
   await db.delete(nodeRuns)
@@ -272,18 +278,64 @@ interface GuardedPath {
  * 从一份 schema 源码里挑出「重列」。**纯函数**——扫描与 RFC-317 T14 的
  * 「matcher 自证」共用它，避免判据长出第二份实现。
  */
-function heavyColumnsIn(schema: string): string[] {
-  const cols = new Set(Array.from(schema.matchAll(/text\('([a-z0-9_]+)'\)/g), (m) => m[1]!))
+function heavyColumnsIn(schema: string | readonly string[]): string[] {
+  const cols = new Set(
+    typeof schema === 'string'
+      ? Array.from(schema.matchAll(/text\('([a-z0-9_]+)'\)/g), (m) => m[1]!)
+      : schema,
+  )
   return [...cols].filter(
     (c) =>
-      /(_json|_snapshot|_text|_body|_md|_yaml)$/.test(c) ||
+      /(_json|_snapshot|_text|_body|_md|_yaml|_bytes)$/.test(c) ||
       ['stdout', 'stderr', 'inputs', 'outputs', 'definition'].includes(c),
   )
 }
 
+/** Remove only the renderer's type-checked scalar text expression, never arbitrary JSON extraction.
+ * Both the document and member must match across the validity/type checks and returned value. */
+function withoutScalarJsonReads(statement: string): string {
+  return statement
+    .replace(
+      /CASE\s+WHEN\s+json_valid\(([\s\S]*?)\)\s+THEN\s+CASE\s+WHEN\s+json_type\(\1,\s*('\$\.[A-Za-z_][A-Za-z0-9_.]*')\)\s*=\s*'text'\s+THEN\s+json_extract\(\1,\s*\2\)\s+ELSE\s+NULL\s+END\s+ELSE\s+NULL\s+END/gi,
+      'scalar_json_text',
+    )
+    .replace(
+      /CASE\s+WHEN\s+pg_input_is_valid\(([\s\S]*?),\s*'jsonb'\)\s+THEN\s+CASE\s+WHEN\s+jsonb_typeof\(\(\1\)::jsonb\s*->\s*('[A-Za-z_][A-Za-z0-9_]*')\)\s*=\s*'string'\s+THEN\s+\(\1\)::jsonb\s*->>\s*\2\s+ELSE\s+NULL\s+END\s+ELSE\s+NULL\s+END/gi,
+      'scalar_json_text',
+    )
+}
+
+test('heavy projection guard accepts only checked scalar text and retains full documents, arrays and unchecked extractions', () => {
+  const field = '"workgroup_config_json"'
+  const document = `(select ${field} from task_definitions)`
+  const sqlite = `CASE WHEN json_valid(${document}) THEN CASE WHEN json_type(${document}, '$.workgroupName') = 'text' THEN json_extract(${document}, '$.workgroupName') ELSE NULL END ELSE NULL END`
+  const postgresql = `CASE WHEN pg_input_is_valid(${document}, 'jsonb') THEN CASE WHEN jsonb_typeof((${document})::jsonb -> 'workgroupName') = 'string' THEN (${document})::jsonb ->> 'workgroupName' ELSE NULL END ELSE NULL END`
+  for (const checked of [sqlite, postgresql]) {
+    expect(withoutScalarJsonReads(`select ${checked}`)).not.toContain(field)
+    expect(withoutScalarJsonReads(`select ${checked}, ${field}`)).toContain(field)
+    expect(withoutScalarJsonReads(checked.replace(/'text'|'string'/, "'array'"))).toContain(field)
+    expect(
+      withoutScalarJsonReads(
+        checked.replace(/THEN\s+(json_extract|\()/, 'THEN ' + field + ' + $1'),
+      ),
+    ).toContain(field)
+  }
+  for (const whole of [
+    field,
+    `json_extract(${field}, '$')`,
+    `json_extract(${field}, '$.workgroupName')`,
+    `(${field})::jsonb ->> 'workgroupName'`,
+    '"content_inline_bytes"',
+  ]) {
+    expect(withoutScalarJsonReads(`select ${whole}`)).toContain(whole)
+  }
+})
+
 function heavyColumns(): string[] {
   return heavyColumnsIn(
-    readFileSync(resolve(import.meta.dir, '..', 'src', 'db', 'schema.ts'), 'utf-8'),
+    Object.values(persistenceSchemaBinding().nativeTables.sqlite).flatMap((table) =>
+      Object.values(getTableColumns(table)).map((column) => column.name),
+    ),
   )
 }
 
@@ -467,6 +519,32 @@ function repositoryReferenceCensusRows(
  * 独立成 `rfc359-w6-t26-postgresql-plan-audit.test.ts`：一万行语料 + 真
  * `EXPLAIN (ANALYZE, BUFFERS)` + 一本只降不升的缺口账。
  */
+function unindexedScans(plan: string): string[] {
+  return UNBOUNDED_TABLES.filter((table) => new RegExp(`SCAN ${table}(?! USING)\\b`).test(plan))
+}
+
+test('plan audit catches target mounts and companion scans and accepts indexed scans', () => {
+  const targetTables = [
+    'task_repository_mounts',
+    'task_definitions',
+    'task_launch_contexts',
+    'task_workspaces',
+    'task_execution_generations',
+    'task_space_nodes',
+    'node_run_configs',
+    'node_run_runtime_states',
+    'node_run_results',
+    'node_run_selections',
+    'node_run_inputs',
+    'node_run_repo_checkpoints',
+  ]
+  for (const table of targetTables) {
+    expect(unindexedScans(`SCAN ${table}`)).toEqual([table])
+    expect(unindexedScans(`SCAN ${table} USING COVERING INDEX selected`)).toEqual([])
+    expect(unindexedScans(`SEARCH ${table} USING INDEX selected (task_id=?)`)).toEqual([])
+  }
+})
+
 async function assertPlans(
   harness: ProviderHarness,
   statements: readonly RecordedStatement[],
@@ -482,15 +560,10 @@ async function assertPlans(
   )) {
     const plan = await harness.explain(stmt)
     if (plan.length === 0) continue // EXPLAIN 解释不了的（CTE 里的临时构造等）跳过
-    for (const table of UNBOUNDED_TABLES) {
-      // SQLite 把**有序索引扫描**也叫 SCAN（`SCAN t USING COVERING INDEX ix`），
-      // 那正是 keyset 首页该有的形态（顺着索引走、到 LIMIT 就停），不是缺陷。
-      // 真正要拦的是**没有 USING** 的裸表扫描。
-      if (new RegExp(`SCAN ${table}(?! USING)\\b`).test(plan))
-        offenders.push(
-          `SCAN ${table}（裸表扫描）\n  SQL: ${stmt.sql.replace(/\s+/g, ' ').slice(0, 160)}`,
-        )
-    }
+    for (const table of unindexedScans(plan))
+      offenders.push(
+        `SCAN ${table}（裸表扫描）\n  SQL: ${stmt.sql.replace(/\s+/g, ' ').slice(0, 160)}`,
+      )
     if (/USE TEMP B-TREE/.test(plan))
       offenders.push(
         `TEMP B-TREE\n  SQL: ${stmt.sql.replace(/\s+/g, ' ').slice(0, 160)}\n  PLAN: ${plan}`,
@@ -642,7 +715,7 @@ describeEachProvider('RFC-311 性能防护 —— 每条受防护读路径的结
         const touched = new Set<string>()
         for (const stmt of large) {
           for (const col of heavy) {
-            if (new RegExp(`"${col}"`).test(stmt.sql)) touched.add(col)
+            if (new RegExp(`"${col}"`).test(withoutScalarJsonReads(stmt.sql))) touched.add(col)
           }
         }
         expect(
@@ -855,7 +928,9 @@ const UNBOUNDED_READ_RATCHET = 40
 describe('RFC-311 性能防护 —— 未受保护的无界读只许减不许增', () => {
   test('no new unbounded .all() reads on growing tables', () => {
     const src = resolve(import.meta.dir, '..', 'src')
-    const names = ['tasks', 'taskRepos', 'nodeRuns', 'events', 'cachedRepos', 'developmentMissions']
+    const names = UNBOUNDED_TABLES.map((name) =>
+      name.replace(/_([a-z])/g, (_match, letter: string) => letter.toUpperCase()),
+    )
     const pattern = new RegExp(
       `\\.from\\((${names.join('|')})\\)([\\s\\S]{0,400}?)\\.all\\(\\)`,
       'g',

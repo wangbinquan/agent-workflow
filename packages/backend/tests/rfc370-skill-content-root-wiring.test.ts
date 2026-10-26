@@ -57,7 +57,10 @@ function selectedCatalog(
   const selected = calls(node, file, name)
   expect(selected).toHaveLength(1)
   const input = compact(selected[0]!.arguments[0]!, file)
-  expect(input).toContain(`skillContent:${receiver}.skillContent,`)
+  expect(input).toContain('skillContent,')
+  expect(compact(node, file)).toContain(
+    `constskillContent=${receiver}.skillContent??createFileSkillContentBinding(${receiver}.db,${fallback})`,
+  )
   expect(input).toContain(`skillContentRoot:${fallback},`)
 }
 

@@ -54,14 +54,14 @@ export const IGNORED_ADVISORIES: readonly IgnoreEntry[] = [
   {
     id: 'GHSA-w7jw-789q-3m8p',
     package: 'shell-quote',
-    why: '传递依赖，dev/工具链专用——经 drizzle-orm/drizzle-kit › gel（EdgeDB/Gel 驱动）引入，平台运行时是 bun:sqlite，从不使用它，也不在发布的单二进制里。',
+    why: '传递依赖，dev/工具链专用——经 drizzle-orm › gel（EdgeDB/Gel 驱动）引入，平台运行时是 bun:sqlite，从不使用它，也不在发布的单二进制里。',
     removeWhen:
       'drizzle 把传递的 shell-quote 提过该公告范围（当前安装的 1.8.3 已是满足区间的最新版，尚无可升级目标）。',
   },
   {
     id: 'GHSA-395f-4hp3-45gv',
     package: 'shell-quote',
-    why: 'parse() 的二次复杂度 DoS，同样只经 drizzle-kit / drizzle-orm 的迁移工具链引入，不在运行时与产物中。',
+    why: 'parse() 的二次复杂度 DoS，同样只经 drizzle-orm 的迁移工具链引入，不在运行时与产物中。',
     removeWhen: '同上，drizzle 传递依赖升级后。',
   },
 ]

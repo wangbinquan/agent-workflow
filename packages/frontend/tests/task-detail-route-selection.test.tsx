@@ -128,7 +128,7 @@ function task(id: string, overrides: Partial<Task> = {}): Task {
 
 function nodeRun(overrides: Partial<NodeRun> = {}): NodeRun {
   return {
-    seq: null,
+    seq: 0,
     id: 'run_1',
     taskId: 'parent',
     nodeId: 'call1',

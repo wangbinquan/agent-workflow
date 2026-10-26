@@ -1,6 +1,7 @@
 import type { NodeRunStatus } from '@agent-workflow/shared'
 import type { WorkgroupRunSelectionProjection } from '@/platform/runSelectionProjection'
-import { createRunHistorySnapshot } from './oracle/historySnapshot'
+import { createRunHistorySnapshot } from '../../application/runHistory'
+import type { RunSlot } from '../../application/ports/runSelection'
 
 interface HostRunFacts {
   readonly id: string
@@ -14,6 +15,8 @@ interface HostRunFacts {
 /** 工作组按宿主槽位取选中；wg_round 是属性，不进入槽位。纯快照无数据库查询。 */
 export async function projectWorkgroupRunSelections<R extends HostRunFacts>(
   rows: readonly R[],
+  selection: { current(taskId: string, slot: RunSlot): Promise<{ readonly id: string } | null> },
+  taskId: string,
 ): Promise<Array<R & { readonly selection: WorkgroupRunSelectionProjection }>> {
   const reader = createRunHistorySnapshot(
     '',
@@ -27,7 +30,7 @@ export async function projectWorkgroupRunSelections<R extends HostRunFacts>(
   for (const row of rows) {
     const slot = { kind: 'workgroup-host' as const, nodeId: row.nodeId, shardKey: row.shardKey }
     const key = JSON.stringify(slot)
-    if (!slots.has(key)) slots.set(key, (await reader.current('', slot))?.id ?? null)
+    if (!slots.has(key)) slots.set(key, (await selection.current(taskId, slot))?.id ?? null)
   }
   return rows.map((row) => {
     const slot = { kind: 'workgroup-host' as const, nodeId: row.nodeId, shardKey: row.shardKey }

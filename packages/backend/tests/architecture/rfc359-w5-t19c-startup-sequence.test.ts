@@ -539,23 +539,13 @@ describe('RFC-359 W5-T19c —— 语料下限（扫空 = 假绿）', () => {
   })
 
   test('判别式判据在真文件上确实识别得出东西（识别到 0 = 判据瞎了）', () => {
-    const start = readFileSync(resolve(BACKEND_SRC, 'bootstrap', 'daemonStart.ts'), 'utf8')
+    // RFC-395 retires the final daemonStart migration-role refusal (U4 / AF-D11).
+    // Keep a nonzero real corpus witness in the provider resolver, plus the negative fixtures below.
+    const path = 'platform/persistence/databaseProviderRuntime.ts'
+    const source = readFileSync(resolve(BACKEND_SRC, path), 'utf8')
     expect(
-      providerConditions(start, 'bootstrap/daemonStart.ts').length,
-      'bootstrap/daemonStart.ts 里一个 provider 判别式都没识别出来。' +
-        '识别成 0 说明判据失效，此时「没有执行分支」的绿是假绿。',
-      // RFC-359 AC-10 §5fd：门槛 2 → **1**（实测 1）。原来这里写「至少有两处『拒绝装配』的
-      // provider 收窄」——那两处正是本波销掉的：`storage === 'embedded-file'` 换成了按
-      // provider 查表，`requirePostgresqlConfig` 的 `if (…) throw` 搬进了
-      // `platform/persistence/` 成为 `requireDatabaseConfig`。今天剩下的唯一一处是
-      // `databaseProviderTraits(lifecycleInput.provider).migrationRole !== 'target'`
-      // （assembly=true，拒绝装配，不计执行分支账）。
-      //
-      // 注意这条**不是**判据存活的主证据：主证据是本文件末尾那组负向 fixture（注释 / 字符串
-      // 不算、执行分支计入、拒绝装配放过、return-only 计入），它们喂的是伪造源码、
-      // 不随生产代码收敛而失效。这条只是「真语料上也还咬得到」的二次确认，
-      // 所以它可以跟着生产代码往下走，但**不许走到 0**——走到 0 就该换一份真语料，
-      // 而不是默默接受假绿。
+      providerConditions(source, path).length,
+      `${path}: provider discriminator scan must retain a real nonzero witness`,
     ).toBeGreaterThanOrEqual(1)
   })
 })

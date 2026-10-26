@@ -1,3 +1,7 @@
+import { runGit } from '@/util/git'
+import type { OracleRunRow } from '@/modules/task-execution/infrastructure/migration/oracle/rows'
+import type { TaskReadRow } from '@/modules/task-execution/infrastructure/taskRepositorySql'
+
 // RFC-095 SEMANTICS LOCK — design/scheduler-audit-2026-06-10.md S-22 (WP-2)
 // design/RFC-095-scope-outcome-exhaustive/design.md §1 / §5-2 / §5-5
 //
@@ -28,7 +32,7 @@ import {
   workflowFixture,
   readNodeRunFixtures,
 } from './helpers/model'
-import { type PersistenceTables } from '@/platform/persistence/sessionTables'
+
 import { afterAll, describe, expect, test } from 'bun:test'
 
 import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
@@ -39,14 +43,13 @@ import { join, resolve } from 'node:path'
 import { monotonicFactory } from 'ulid'
 import type { NodeKind, WorkflowDefinition } from '@agent-workflow/shared'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { deriveFrontier } from '../src/modules/task-execution/composition/dagFrontier'
+import { deriveFrontier } from './helpers/frontierSelection'
 import { canonicalizeWorkflowAgentIds } from './helpers/canonicalWorkflowFixture'
 
 // 同毫秒多行排序确定化（先例：scheduler-clarify-dispatch.test.ts:33-40）——freshest
 // 判定是纯 ULID id 序，monotonicFactory 保证后铸的行恒为 latest。
 const ulid = monotonicFactory()
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
 
 // retryNode 尾部后台 void runTask 会在 appHome 下创建 run 目录。用 pid 唯一路径避免
@@ -60,7 +63,7 @@ afterAll(() => {
 // 纯函数面：canceled latest 行 = 复活信号 → ready（不再无桶黑洞）
 // ---------------------------------------------------------------------------
 
-type Row = PersistenceTables['nodeRuns']['$inferSelect']
+type Row = OracleRunRow
 type WorkflowNode = WorkflowDefinition['nodes'][number]
 const NONE: ReadonlySet<string> = new Set()
 
@@ -202,10 +205,7 @@ function withEnv<T>(env: Record<string, string>, body: () => Promise<T>): Promis
 
 // retryNode 尾部 void runTask 在后台推进——确定化等待任务离开 pending/running
 // （有限次 × 小间隔，轮询模式参考 scheduler-clarify-dispatch.test.ts 的集成先例）。
-async function waitForTerminalTask(
-  db: DbClient,
-  taskId: string,
-): Promise<PersistenceTables['tasks']['$inferSelect']> {
+async function waitForTerminalTask(db: DbClient, taskId: string): Promise<TaskReadRow> {
   for (let i = 0; i < 400; i++) {
     const t = (await readTaskFixtures(db, { id: taskId }))[0]
     if (t !== undefined && t.status !== 'pending' && t.status !== 'running') return t
@@ -221,8 +221,7 @@ describe('S-22（DB 面）— retryNode 对 canceled 任务放行，复活后任
     runB: string
   }> {
     // mock opencode 需要 agent 行（getAgent）与真实存在的 worktree 目录（spawn cwd）。
-    // readonly=true ⇒ stash 快照路径 permissive，纯目录（非 git）即可——先例：
-    // scheduler-boundary-wrapper-resume-interrupted.test.ts。
+    // The target mount still owns a real Git workspace for exclusion-profile preparation.
     await agentFixture(db, {
       id: ulid(),
       name: 'x',
@@ -252,12 +251,26 @@ describe('S-22（DB 面）— retryNode 对 canceled 任务放行，复活后任
     const taskId = ulid()
     const worktreePath = join(APP_HOME, `wt-${taskId}`)
     mkdirSync(worktreePath, { recursive: true })
+    await runGit(worktreePath, ['init', '-q', '-b', 'main'])
+    await runGit(worktreePath, [
+      '-c',
+      'user.email=fixture@test.invalid',
+      '-c',
+      'user.name=Fixture',
+      '-c',
+      'commit.gpgsign=false',
+      'commit',
+      '-q',
+      '--allow-empty',
+      '-m',
+      'fixture',
+    ])
     await taskFixture(db, {
       name: 't-s22',
       id: taskId,
       workflowId,
       workflowSnapshot: JSON.stringify(canonicalDefinition),
-      repoPath: '/nonexistent-s22-repo',
+      repoPath: worktreePath,
       worktreePath, // 真实目录（mock spawn cwd）；preSnapshot=null ⇒ rollback 仍全程跳过
       baseBranch: 'main',
       branch: `agent-workflow/${taskId}`,
@@ -293,7 +306,7 @@ describe('S-22（DB 面）— retryNode 对 canceled 任务放行，复活后任
   }
 
   test('canceled 任务 + canceled 行调 retryNode：放行（任务翻 pending、目标铸 failed 重试行），后台 runTask 给 a、b 都铸新 done 行——任务终态 done（S-22 根治的端到端证明）', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createInMemoryDb()
     const { taskId, runA, runB } = await seedCanceledTask(db)
 
     const final = await withEnv(
@@ -342,7 +355,7 @@ describe('S-22（DB 面）— retryNode 对 canceled 任务放行，复活后任
   }, 20000)
 
   test('对照：running 任务仍被状态门拒绝（ConflictError "task-still-running"）——证明放行 canceled 是门的选择而非门失效', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createInMemoryDb()
     const { taskId, runA } = await seedCanceledTask(db)
     await patchTaskFixture(db, { id: taskId }, { status: 'running' })
 

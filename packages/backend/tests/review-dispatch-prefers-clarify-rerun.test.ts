@@ -1,3 +1,7 @@
+import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
+import { rowToDocVersion, dispatchReviewNode } from '@/modules/collaboration/infrastructure/review'
+import { DatabaseCommittedReviewArtifactReader } from '@/modules/collaboration/infrastructure/committedReviewArtifactReader'
+import { createFileReviewArtifactContent } from '@/modules/collaboration/infrastructure/local/fileReviewArtifactContent'
 import { withO2Closure } from './helpers/o2Closure'
 // Regression: when an upstream agent has multiple done node_runs at the same
 // iteration — a stale (clarifyIteration=0, retryIndex=N>0) row finished before
@@ -26,11 +30,11 @@ import { tablesOf } from '@/platform/persistence/sessionTables'
 import { describeEachProvider } from './helpers/eachProvider'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { afterEach, beforeEach, expect, test } from 'bun:test'
-import { mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { ulid } from 'ulid'
-import { dispatchReviewNode } from '@/modules/collaboration/infrastructure/review'
+
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 
 describeEachProvider(
@@ -166,7 +170,11 @@ describeEachProvider(
       expect(dvs.length).toBe(1)
       // Stronger assertion: archived body must match the clarify rerun's port
       // content, not the stale row's (which has none).
-      const onDisk = readFileSync(join(appHome, dvs[0]!.bodyPath), 'utf8')
+      const onDisk = await new DatabaseCommittedReviewArtifactReader(
+        db,
+        createFileReviewArtifactContent(appHome),
+        epoch2RuntimeTestPorts(db).content,
+      ).read(rowToDocVersion(dvs[0]!).bodyPath)
       expect(onDisk).toBe('# approved doc body')
     })
   },

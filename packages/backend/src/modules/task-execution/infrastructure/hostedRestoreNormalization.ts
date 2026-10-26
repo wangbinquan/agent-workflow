@@ -1,3 +1,4 @@
+import { tablesOf } from '@/platform/persistence/sessionTables'
 // RFC-370 v3 V5 — Task Execution's hosted restore normalization (standalone
 // RFC-213 semantics). A restored snapshot is not a crash of this instance:
 //   · every task that still owns a live worktree gets auto_recovery_suspended,
@@ -9,12 +10,12 @@
 //     instance, and boot recovery cancels and settles it instead of adopting it;
 //   · platform recovery requests still in flight end as failed: resuming a
 //     task now is the user's informed choice, not a backup-era request's.
-import { tablesOf } from '@/platform/persistence/sessionTables'
-import { DAEMON_RESTART_ERROR_SUMMARY, LIVE_WORKTREE_TASK_STATUSES } from '@agent-workflow/shared'
-import type { TaskNodeChangeV1 } from '../domain/taskLifecycleCommittedEvent'
-import { and, eq, inArray, isNull, ne, or } from 'drizzle-orm'
-import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { HostedRestoreNormalizationParticipant } from '@/modules/system-operations/public/participants'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
+
+import { DAEMON_RESTART_ERROR_SUMMARY, LIVE_WORKTREE_TASK_STATUSES } from '@agent-workflow/shared'
+import { and, eq, inArray, isNull, ne, or } from 'drizzle-orm'
+import type { TaskNodeChangeV1 } from '../domain/taskLifecycleCommittedEvent'
 import { setNodeRunStatusTx } from './nodeRunLifecycleTransition'
 import { terminalizeTaskExecutionIntentsUncheckedInTx } from './taskExecutionIntentTerminalPersistence'
 import { writeTaskRuntimeLifecycleInTx } from './taskRuntimeLifecyclePersistence'
@@ -26,7 +27,9 @@ export function createHostedRestoreTaskNormalization(): HostedRestoreNormalizati
   return {
     name: 'task-execution',
     async normalize(tx: PersistenceDb, { now }) {
-      const { tasks, nodeRuns, hostedExecutionBindings, hostedRecoveryRequests } = tablesOf(tx)
+      const { hostedExecutionBindings, hostedRecoveryRequests } = tablesOf(tx)
+      const { nodeRuns } = tablesOf(tx)
+      const { tasks } = tablesOf(tx)
       const suspended = await tx
         .update(tasks)
         .set({ autoRecoverySuspended: true })

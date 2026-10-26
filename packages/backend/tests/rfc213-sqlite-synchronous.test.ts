@@ -9,10 +9,8 @@ import { removeTempDirSync } from './fixtures/tempDir'
 import type { Database } from 'bun:sqlite'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { openDb, type DbClient } from '../src/db/client'
-
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 const tmps: string[] = []
 function tmp(): string {
@@ -36,13 +34,13 @@ describe('RFC-213 AC-9 sqlite synchronous', () => {
   test('synchronous:FULL is dispatched (2); default is NORMAL (1)', () => {
     const full = openDb({
       path: join(tmp(), 'db.sqlite'),
-      migrationsFolder: MIGRATIONS,
+
       synchronous: 'FULL',
     })
     expect(synchronousLevel(full)).toBe(2) // FULL
     close(full)
 
-    const norm = openDb({ path: join(tmp(), 'db.sqlite'), migrationsFolder: MIGRATIONS })
+    const norm = openDb({ path: join(tmp(), 'db.sqlite') })
     expect(synchronousLevel(norm)).toBe(1) // NORMAL default (historical)
     close(norm)
   })

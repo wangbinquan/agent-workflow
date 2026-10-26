@@ -13,7 +13,12 @@ import {
   createAgentReferenceWriteParticipant,
   prepareAgentReferenceUpdate,
 } from './agentReferenceWrite'
-import { agentFromPersistenceRow, createAgentPersistenceValues } from './agentPersistence'
+import {
+  agentFromPersistenceRow,
+  loadAgentPersistenceRow,
+  loadAgentPersistenceRows,
+  createAgentPersistenceValues,
+} from './agentPersistence'
 import {
   runResourceCatalogTransaction,
   type ResourceCatalogTransaction,
@@ -99,15 +104,15 @@ export function createAgentRepository(input: {
   }
 
   async function get(id: string): Promise<Agent | null> {
-    const { agents } = tablesOf(input.db)
-    const row = (await input.db.select().from(agents).where(eq(agents.id, id)).limit(1))[0]
-    return row === undefined ? null : agentFromPersistenceRow(row)
+    return loadAgentPersistenceRow(input.db, async (tx) => {
+      const { agents } = tablesOf(tx)
+      return (await tx.select().from(agents).where(eq(agents.id, id)).limit(1))[0]
+    })
   }
 
   const repository: AgentRepository = {
     async list(): Promise<readonly Agent[]> {
-      const { agents } = tablesOf(input.db)
-      return (await input.db.select().from(agents)).map(agentFromPersistenceRow)
+      return loadAgentPersistenceRows(input.db, async (tx) => tx.select().from(tablesOf(tx).agents))
     },
     get,
     async create(authority, submitted): Promise<Agent> {
@@ -119,7 +124,7 @@ export function createAgentRepository(input: {
         ownerUserId: authority.user.id,
         now: now(),
       })
-      const candidate = agentFromPersistenceRow(values)
+      const candidate = agentFromPersistenceRow(values, canonical)
       try {
         return await runResourceCatalogTransaction(input.db, async (transaction) => {
           await input.semantics.assertCreateInTransaction(transaction, authority, candidate)
@@ -164,7 +169,7 @@ export function createAgentRepository(input: {
         const { agents } = tablesOf(transaction)
         const row = (await transaction.select().from(agents).where(eq(agents.id, id)).limit(1))[0]
         if (row === undefined) throw new NotFoundError('agent-not-found', 'agent not found')
-        const fresh = agentFromPersistenceRow(row)
+        const fresh = await loadAgentPersistenceRow(transaction, row)
         if (
           fresh.updatedAt !== fence.expectedUpdatedAt ||
           (fresh.aclRevision ?? 0) !== fence.expectedAclRevision
@@ -182,7 +187,7 @@ export function createAgentRepository(input: {
         const { agents } = tablesOf(transaction)
         const row = (await transaction.select().from(agents).where(eq(agents.id, id)).limit(1))[0]
         if (row === undefined) throw new NotFoundError('agent-not-found', 'agent not found')
-        const current = agentFromPersistenceRow(row)
+        const current = await loadAgentPersistenceRow(transaction, row)
         if (
           current.updatedAt !== fence.expectedUpdatedAt ||
           (current.aclRevision ?? 0) !== fence.expectedAclRevision
@@ -209,7 +214,7 @@ export function createAgentRepository(input: {
           const { agents } = tablesOf(transaction)
           const row = (await transaction.select().from(agents).where(eq(agents.id, id)).limit(1))[0]
           if (row === undefined) throw new NotFoundError('agent-not-found', 'agent not found')
-          const current = agentFromPersistenceRow(row)
+          const current = await loadAgentPersistenceRow(transaction, row)
           if (
             current.updatedAt !== fence.expectedUpdatedAt ||
             (current.aclRevision ?? 0) !== fence.expectedAclRevision
@@ -239,7 +244,7 @@ export function createAgentRepository(input: {
             )
             .returning()
           if (changed.length !== 1) throw stale(id)
-          return agentFromPersistenceRow(changed[0]!)
+          return loadAgentPersistenceRow(transaction, changed[0]!)
         })
       } catch (error) {
         if (isOwnerNameConflict(error)) {

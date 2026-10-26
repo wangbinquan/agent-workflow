@@ -20,7 +20,7 @@ import { describe, expect, test, beforeEach, afterEach } from 'bun:test'
 import { mkdtempSync } from 'node:fs'
 import { removeTempDirSync } from './fixtures/tempDir'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { openDb, type DbClient } from '../src/db/client'
 import { ulid } from 'ulid'
 import {
@@ -29,8 +29,6 @@ import {
   migrateDefinitionToLatest,
   updateWorkflow,
 } from '../src/services/workflow'
-
-const migrationsFolder = resolve(import.meta.dirname, '..', 'db', 'migrations')
 
 describe('migrateDefinitionToLatest pure helper', () => {
   test('v1 walks up to the latest version, preserving shape', () => {
@@ -83,7 +81,7 @@ describe('GET path: legacy row → latest definition returned by getWorkflow', (
 
   beforeEach(() => {
     tmp = mkdtempSync(join(tmpdir(), 'aw-migrate-'))
-    db = openDb({ path: join(tmp, 'db.sqlite'), migrationsFolder })
+    db = openDb({ path: join(tmp, 'db.sqlite') })
   })
 
   afterEach(() => {
@@ -156,7 +154,7 @@ describe('POST / PUT paths normalize older versions → latest on write', () => 
 
   beforeEach(() => {
     tmp = mkdtempSync(join(tmpdir(), 'aw-migrate-write-'))
-    db = openDb({ path: join(tmp, 'db.sqlite'), migrationsFolder })
+    db = openDb({ path: join(tmp, 'db.sqlite') })
   })
 
   afterEach(() => {

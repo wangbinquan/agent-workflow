@@ -1,3 +1,4 @@
+import { tablesOf } from '@/platform/persistence/sessionTables'
 // RFC-359 W12: both provider compositions must reach the real multipart commit,
 // persist a nonempty package, publish its skill files, and replay the durable
 // receipt through a fresh catalog. Read assertions also pin ordered snapshots
@@ -5,7 +6,7 @@
 
 import { agentFixture, readAgentFixtures, readWorkflowFixtures } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+
 import { first } from '@/platform/persistence/queryHelpers'
 import { afterEach, expect, test } from 'bun:test'
 import { randomBytes } from 'node:crypto'
@@ -767,7 +768,8 @@ describeEachProvider('RFC-359 W12 resource package provider commit', (harness: P
         id,
         name,
         description: '',
-        managedPath: null,
+        contentRefJson: null,
+        contentInlineBytes: null,
         ownerUserId: OWNER,
         visibility: 'private',
         schemaVersion: 1,
@@ -801,7 +803,7 @@ describeEachProvider('RFC-359 W12 resource package provider commit', (harness: P
       ['skill-a', 'Alpha'],
       ['skill-z', 'Zebra'],
     ])
-    expect(rows.map((row) => JSON.parse(row.document).managedPath)).toEqual([null, null])
+    expect(rows.map((row) => JSON.parse(row.document).contentRefJson)).toEqual([null, null])
     expect(await provider.reads.listByIds('skill', [])).toEqual([])
 
     writeTree(join(f.appHome, 'skills', 'skill-a', 'files'), {

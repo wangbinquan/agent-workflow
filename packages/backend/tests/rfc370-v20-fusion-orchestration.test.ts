@@ -40,8 +40,11 @@ import type {
 } from '../src/modules/knowledge-evolution/public/participants'
 import type { FusionEngineTaskResult } from '../src/modules/knowledge-evolution/public/types'
 import { composeIdentityAccess } from '../src/modules/identity-access/composition'
-import { composeMemoryCatalogOperations } from '../src/modules/memory/composition'
-import { composeSkillMemoryFusionParticipantFactory } from '../src/modules/memory/composition'
+import {
+  composeMemoryCatalogOperations,
+  composeSkillMemoryFusionParticipantFactory,
+} from '../src/modules/memory/composition'
+
 import { selectSkillContentDependencies } from '../src/modules/resource-catalog/composition/skillContentBinding'
 import { composeSkillVersionCommitParticipantFactory } from '../src/modules/resource-catalog/composition/skillVersionCommit'
 import { createDatabaseSkillContent } from '../src/modules/resource-catalog/infrastructure/databaseSkillContent'
@@ -131,7 +134,8 @@ describeEachProvider(
       // Nothing of the skill may live on the local disk.
       rmSync(appHome, { recursive: true, force: true })
       const memoryId = ulid()
-      const { memories, skillContentEntries } = tablesOf(db)
+      const { memories } = tablesOf(db),
+        { skillContentEntries } = tablesOf(db)
       await insertOne(db, memories, {
         id: memoryId,
         scopeType: 'global',
@@ -272,7 +276,8 @@ describeEachProvider(
         'SKILL.md': expect.stringContaining('fused body (2 spaces)'),
         'assets/rule.bin': dec(new Uint8Array([0, 1, 255])),
       })
-      const { skills, memories } = tablesOf(h.db)
+      const { memories } = tablesOf(h.db),
+        { skills } = tablesOf(h.db)
       expect(
         (await h.db.select().from(skills).where(eq(skills.id, h.skillId)))[0]!.contentVersion,
       ).toBe(2)

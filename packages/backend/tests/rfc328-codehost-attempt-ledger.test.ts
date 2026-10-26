@@ -1,3 +1,4 @@
+import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { o2Ports } from './helpers/o2Closure'
 // RFC-328 code-host effect contract: every real mutation send owns one durable
 // attempt, existing transport retries remain live, and earlier ambiguity is
@@ -84,6 +85,7 @@ async function fixture(
   const claim = await module.claim({ db, intentId: intent.intentId })
   module.claimGate.leave(claim.permit)
   const context = createTaskExecutionContext({
+    historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
     intentId: intent.intentId,
     token: claim.token,
     db,
@@ -106,6 +108,7 @@ async function fixture(
   } as const
   const observer = createCodeHostEffectAttemptObserver({
     persistence: createTaskExecutionPersistence(db, {
+      historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
       recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
     }).effects,
     context,
@@ -493,9 +496,11 @@ describeEachProvider('RFC-328 code-host per-send attempt ledger', (harness) => {
     })
     const nextObserver = createCodeHostEffectAttemptObserver({
       persistence: createTaskExecutionPersistence(h.db, {
+        historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
         recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
       }).effects,
       context: createTaskExecutionContext({
+        historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
         db: h.db,
         intentId: manualIntentId,
         token: claim.token,

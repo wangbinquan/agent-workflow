@@ -1,31 +1,33 @@
 import { createWorkflowExecutionQueries } from '@/modules/resource-catalog/public/queries'
-import { definitionAnchorId, definitionHost, type TaskSubject } from '../domain/taskSubject'
-import { decodeTaskRepositoryMount } from './taskRepositoryCodec'
-import { createTaskCreationParticipantInTx } from './taskCreationParticipant'
-import { insertOne } from '@/platform/persistence/singleInsert'
+import { lockTaskAggregateRoots } from './taskDefinitionWriteParticipant'
 import { tablesOf } from '@/platform/persistence/sessionTables'
-import { admitTransferredWorkspace } from './transferredWorkspaceAdmission'
+import { insertOne } from '@/platform/persistence/singleInsert'
 import {
-  WorkflowDefinitionSchema,
   WORKFLOW_SCHEMA_VERSION,
+  WorkflowDefinitionSchema,
   buildClarifyEdges,
   initialDwState,
   migrateWorkflowDefinitionToLatest,
   redactGitUrl,
-  type TaskStartOptions,
   type TaskCatalogVisibility,
   type TaskLaunchOrigin,
-  type WorkgroupRuntimeConfig,
+  type TaskStartOptions,
   type WorkflowDefinition,
+  type WorkgroupRuntimeConfig,
 } from '@agent-workflow/shared'
 import { and, eq, inArray, sql } from 'drizzle-orm'
 import { ulid } from 'ulid'
+import { definitionAnchorId, definitionHost, type TaskSubject } from '../domain/taskSubject'
+import { createTaskCreationParticipantInTx } from './taskCreationParticipant'
+import { decodeTaskRepositoryMount } from './taskRepositoryCodec'
+import { taskReadColumns } from './taskRepositorySql'
+import { admitTransferredWorkspace } from './transferredWorkspaceAdmission'
 
-import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { AgentLaunchResourceIntegrityParticipant } from '@/modules/resource-catalog/public/participants'
 import { FrozenWorkgroupGroupSchema } from '@/modules/task-execution/infrastructure/legacyCallClosure'
 import { publishCommittedEventsAfterCommit } from '@/platform/events/committed/runtime'
 import { engineOf } from '@/platform/persistence/databaseTransaction'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   assertTriggerPreflight,
   triggerSourceFromContext,
@@ -45,11 +47,11 @@ import type {
 import type { TaskExecutionPersistence } from '../application/ports/taskExecutionPersistence'
 import { childLaunchAdmissionIssue } from '../domain/childLaunchAdmission'
 import { sha256Hex } from '../domain/digest'
-import {
-  type TaskExecutionTransaction,
-  withSerializableTaskExecution,
-} from './taskLifecycleTransaction'
 import { appendTaskCreatedCommittedEvent } from './taskLifecycleCommittedEvents'
+import {
+  withSerializableTaskExecution,
+  type TaskExecutionTransaction,
+} from './taskLifecycleTransaction'
 import { buildWorkgroupRuntimeConfig } from './workgroupRuntimeConfig'
 
 // Wire-frozen task/workflow identities. TaskExecution repeats them here rather
@@ -344,29 +346,45 @@ async function launchPreparedChild(
   if (primary === undefined) throw new Error('child-materialized-space-missing-primary-repo')
 
   const eventRef = await withSerializableTaskExecution(dependencies.db, async (tx) => {
-    const { tasks, nodeRuns, taskCollaborators, taskExecutionIntents, workgroupTaskState } =
-      tablesOf(tx)
+    const { taskCollaborators, taskExecutionIntents } = tablesOf(tx)
+    const { nodeRuns } = tablesOf(tx)
+    const { tasks, workgroupTaskState } = tablesOf(tx)
+    const ancestorIds: string[] = []
+    let cursor: string | null = request.parentTaskId
+    for (let depth = 0; cursor !== null && depth < 64; depth += 1) {
+      const ancestor: { id: string; parentTaskId: string | null } | undefined = (
+        await tx
+          .select({ id: tasks.id, parentTaskId: tasks.parentTaskId })
+          .from(tasks)
+          .where(eq(tasks.id, cursor))
+          .limit(1)
+      )[0]
+      if (!ancestor || ancestorIds.includes(ancestor.id)) break
+      ancestorIds.push(ancestor.id)
+      cursor = ancestor.parentTaskId
+    }
+    await lockTaskAggregateRoots(tx, ancestorIds)
     const parent = (
       await tx
         .select({
           id: tasks.id,
           status: tasks.status,
           ownerUserId: tasks.ownerUserId,
-          launchOrigin: tasks.launchOrigin,
+          launchOrigin: taskReadColumns(tx).launchOrigin,
           catalogVisibility: tasks.catalogVisibility,
           rootTaskId: tasks.rootTaskId,
-          executionLineageId: tasks.executionLineageId,
-          lineageSlotPathJson: tasks.lineageSlotPathJson,
+          executionLineageId: taskReadColumns(tx).executionLineageId,
+          lineageSlotPathJson: taskReadColumns(tx).lineageSlotPathJson,
           invocationDepth: tasks.invocationDepth,
-          triggerContextJson: tasks.triggerContextJson,
-          sourceTerminationBinding: tasks.sourceTerminationBinding,
-          sourceTerminationLaunchRev: tasks.sourceTerminationLaunchRev,
+          triggerContextJson: taskReadColumns(tx).triggerContextJson,
+          sourceTerminationBinding: taskReadColumns(tx).sourceTerminationBinding,
+          sourceTerminationLaunchRev: taskReadColumns(tx).sourceTerminationLaunchRev,
           sourceTerminationFence: tasks.sourceTerminationFence,
           sourceTerminationEffectRev: tasks.sourceTerminationEffectRev,
-          gitUserName: tasks.gitUserName,
-          gitUserEmail: tasks.gitUserEmail,
-          repoGroupId: tasks.repoGroupId,
-          repoGroupName: tasks.repoGroupName,
+          gitUserName: taskReadColumns(tx).gitUserName,
+          gitUserEmail: taskReadColumns(tx).gitUserEmail,
+          repoGroupId: taskReadColumns(tx).repoGroupId,
+          repoGroupName: taskReadColumns(tx).repoGroupName,
         })
         .from(tasks)
         .where(eq(tasks.id, request.parentTaskId))
@@ -466,6 +484,7 @@ async function launchPreparedChild(
         branchStartedAt: occurredAt,
       },
       definition: {
+        definitionOrigin: prepared.subject.subject.kind === 'workgroup' ? 'platform' : 'authored',
         workflowSnapshot: prepared.subject.workflowSnapshotJson,
         workflowVersion: prepared.subject.workflowVersion,
         inputs: JSON.stringify(prepared.task.inputs),
@@ -578,24 +597,17 @@ async function launchPreparedChild(
       updatedAt: occurredAt,
     })
     if (prepared.subject.workgroup !== null) {
-      await insertOne(tx, workgroupTaskState, {
-        taskId,
-        gateStatus: 'idle',
-        dwStateJson: prepared.subject.workgroup.dynamic ? JSON.stringify(initialDwState()) : null,
-        updatedAt: occurredAt,
-      })
+      await tx
+        .update(workgroupTaskState)
+        .set({
+          gateStatus: 'idle',
+          dwStateJson: prepared.subject.workgroup.dynamic ? JSON.stringify(initialDwState()) : null,
+          updatedAt: occurredAt,
+        })
+        .where(eq(workgroupTaskState.taskId, taskId))
     }
 
-    let cursor: string | null = request.parentTaskId
-    for (let depth = 0; cursor !== null && depth < 64; depth += 1) {
-      const row: Readonly<{ id: string; parentTaskId: string | null }> | undefined = (
-        await tx
-          .select({ id: tasks.id, parentTaskId: tasks.parentTaskId })
-          .from(tasks)
-          .where(eq(tasks.id, cursor))
-          .limit(1)
-      )[0]
-      if (row === undefined) break
+    for (const ancestorId of [...ancestorIds].sort()) {
       await tx
         .update(tasks)
         .set({
@@ -608,8 +620,7 @@ async function launchPreparedChild(
             sql`${occurredAt}`,
           ),
         })
-        .where(eq(tasks.id, row.id))
-      cursor = row.parentTaskId
+        .where(eq(tasks.id, ancestorId))
     }
     return await appendTaskCreatedCommittedEvent(tx, {
       taskId,

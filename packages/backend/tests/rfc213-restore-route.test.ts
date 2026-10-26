@@ -2,7 +2,7 @@
 // (never hot-swaps). MUTATION CHECK (manually verified): drop the
 // stagePendingRestore call → no marker written → the hasPendingRestore assertion reds.
 
-import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { afterEach, describe, expect, test } from 'bun:test'
 import { removeTempDirSync } from './fixtures/tempDir'
 import { errorHandler } from '../src/util/errors'
@@ -81,7 +81,7 @@ async function appWithRoute(role: 'admin' | 'user' = 'admin'): Promise<Hono> {
   mountRestoreRoutes(
     app,
     composeSystemOperations({
-      contract: buildLogicalSchemaContract(),
+      contract: logicalSchemaContract,
       db: {} as DbClient,
       secretBox: undefined,
       repositoryBackupPreparation: {
@@ -107,9 +107,9 @@ describe('POST /api/restore', () => {
   test('stages an uploaded backup for next-boot apply', async () => {
     const appHome = tmp()
     process.env.AGENT_WORKFLOW_HOME = appHome
-    const db = openDb({ path: join(appHome, 'db.sqlite'), migrationsFolder: MIGRATIONS })
+    const db = openDb({ path: join(appHome, 'db.sqlite') })
     const backup = await createBackup({
-      contract: buildLogicalSchemaContract(),
+      contract: logicalSchemaContract,
       db,
       appHome,
       now: 1,
@@ -139,9 +139,9 @@ describe('POST /api/restore', () => {
   test('preserves the established repeated-stage 400 body and releases the upload', async () => {
     const appHome = tmp()
     process.env.AGENT_WORKFLOW_HOME = appHome
-    const db = openDb({ path: join(appHome, 'db.sqlite'), migrationsFolder: MIGRATIONS })
+    const db = openDb({ path: join(appHome, 'db.sqlite') })
     const backup = await createBackup({
-      contract: buildLogicalSchemaContract(),
+      contract: logicalSchemaContract,
       db,
       appHome,
       now: 1,
@@ -207,9 +207,9 @@ describe('impl-gate P1-5 — admin gate + pending visibility + cancel', () => {
     expect(empty.failed).toEqual([])
 
     // stage something real, then observe + cancel through the API
-    const db = openDb({ path: join(appHome, 'db.sqlite'), migrationsFolder: MIGRATIONS })
+    const db = openDb({ path: join(appHome, 'db.sqlite') })
     const backup = await createBackup({
-      contract: buildLogicalSchemaContract(),
+      contract: logicalSchemaContract,
       db,
       appHome,
       now: 1,

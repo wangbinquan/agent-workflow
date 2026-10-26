@@ -1,3 +1,4 @@
+import { tablesOf } from '@/platform/persistence/sessionTables'
 // RFC-359 —— PostgreSQL 专属的任务聚合写事务。
 //
 // RFC-359 AC-1（命名债收尾 §5hj）：中立的那两样（`withSerializableTaskExecution` /
@@ -8,9 +9,8 @@
 // plan §5hn 的裁决仍然有效：`withPostgresqlTaskAggregateTransaction` 生产调用方已归零，
 // **不删**——两个测试文件仍用它锁方言行为，且它的函数体就是这条技术的锁定参照。
 
-import { tablesOf } from '@/platform/persistence/sessionTables'
-import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import { databaseSessionFor, engineOf } from '@/platform/persistence/databaseTransaction'
+import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 
 import type { TaskExecutionTransaction } from './taskLifecycleTransaction'
 

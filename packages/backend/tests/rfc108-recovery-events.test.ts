@@ -1,3 +1,4 @@
+import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { o2Ports } from './helpers/o2Closure'
 // RFC-108 T3 (AR-11) — recovery_events audit + counters.
 //
@@ -55,6 +56,7 @@ describeEachProvider('RFC-108 T3 — recordRecoveryEvent + counters', (harness) 
     const db = harness.db
     const taskId = await seedRunningTask(db)
     const operations = createTaskExecutionPersistence(db, {
+      historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
       recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
     }).recoveryAdministration
     await recordRecoveryEvent(operations, {
@@ -81,6 +83,7 @@ describeEachProvider('RFC-108 T3 — actors record recovery_events', (harness) =
     const db = harness.db
     const taskId = await seedRunningTask(db)
     const operations = createTaskExecutionPersistence(db, {
+      historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
       recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
     }).recoveryAdministration
     await reapOrphanRuns(operations)

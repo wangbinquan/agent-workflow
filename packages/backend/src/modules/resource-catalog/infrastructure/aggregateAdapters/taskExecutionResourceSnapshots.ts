@@ -13,17 +13,24 @@
 // 事务由 task-execution 侧的 `snapshotRead` 打开（PG: REPEATABLE READ READ ONLY；
 // SQLite: BEGIN IMMEDIATE，与合一前 `dbTxSync` 同一条边界），闭包递归取数全绑在那一笔上。
 
-import { agentSkillReferences, agentReferenceIds } from '@agent-workflow/shared'
+import {
+  agentSkillReferences,
+  agentReferenceIds,
+  type AclResourceType,
+  type Agent,
+  type Mcp,
+  type Plugin,
+} from '@agent-workflow/shared'
 import { workflowCatalogPredicate } from '../workflowCatalogPredicate'
 import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { first } from '@/platform/persistence/queryHelpers'
-import type { AclResourceType, Agent, Mcp, Plugin } from '@agent-workflow/shared'
+
 import { asc, eq, inArray } from 'drizzle-orm'
 
 import type { Actor } from '@/auth/actor'
 import type { PersistenceTx } from '@/platform/persistence/persistenceDb'
-import { ConflictError, NotFoundError, SkillQuarantinedError, ValidationError } from '@/util/errors'
-import { agentFromPersistenceRow } from '../agentPersistence'
+import { NotFoundError, SkillQuarantinedError, ValidationError } from '@/util/errors'
+import { loadAgentPersistenceRow } from '../agentPersistence'
 import { mcpFromPersistenceRow } from '../mcpPersistence'
 import { pluginFromPersistenceRow } from '../pluginPersistence'
 import { workflowDetailOf, workflowFromPersistenceRow } from '../workflowPersistence'
@@ -254,12 +261,13 @@ export function createTaskExecutionResourceSnapshotPorts(
     Extract<FrozenTaskExecutionResourceSnapshot, { readonly kind: 'agent-injection' }>
   > => {
     actorFor(authority)
-    const { agents, skills, mcps, plugins } = tablesOf(tx)
+    const { agents, skills } = tablesOf(tx)
+    const { mcps, plugins } = tablesOf(tx)
     const rootRow = await first(tx.select().from(agents).where(eq(agents.id, agentId)))
     if (rootRow === undefined) {
       return requestFailure('agent-not-found', `agent '${agentId}' not found`)
     }
-    const root = agentFromPersistenceRow(rootRow)
+    const root = await loadAgentPersistenceRow(tx, rootRow)
     const ordered: Agent[] = [root]
     const seen = new Set<string>([root.id])
     const queue = agentReferenceIds(root, 'agent').map((id) => ({ id, path: [root.id] }))
@@ -282,7 +290,7 @@ export function createTaskExecutionResourceSnapshotPorts(
           `agent '${root.name}' depends on missing agent`,
         )
       }
-      const agent = agentFromPersistenceRow(row)
+      const agent = await loadAgentPersistenceRow(tx, row)
       seen.add(agent.id)
       ordered.push(agent)
       for (const next of agentReferenceIds(agent, 'agent'))
@@ -315,15 +323,6 @@ export function createTaskExecutionResourceSnapshotPorts(
         return requestFailure(
           new SkillQuarantinedError(row.name).code,
           `agent '${root.name}' references quarantined Skill '${row.name}'`,
-        )
-      }
-      if (row.managedPath !== dependencies.skillFilesRel(row.id)) {
-        return requestFailure(
-          new ConflictError(
-            'skill-path-not-canonical',
-            `skill '${row.name}' has not completed its identity migration`,
-          ).code,
-          `agent '${root.name}' references Skill '${row.name}' pending identity migration`,
         )
       }
       skillSnapshots.push(

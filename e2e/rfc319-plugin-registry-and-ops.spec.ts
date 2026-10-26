@@ -1,3 +1,4 @@
+import { liveSqlitePath } from './storage'
 // RFC-319 —— 插件的 npm registry 全链（RES-30 / RES-32 / RES-33）+ 若干运维 / 工作组缺口。
 //
 // 为什么这批用例此前一条都没有：`services/pluginInstaller.ts:274-289` spawn 的是**真的**
@@ -1190,7 +1191,7 @@ test('RFC-319 DE-X2: 岗位模板把一条 dispatch 路由派给数字员工—�
 // ---------------------------------------------------------------------------
 
 function databaseFileOf(home: string): string {
-  return join(home, 'db.sqlite')
+  return liveSqlitePath(home)
 }
 
 async function cancelTask(handle: DaemonHandle, taskId: string): Promise<void> {

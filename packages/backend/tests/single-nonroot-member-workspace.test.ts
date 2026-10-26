@@ -1,3 +1,4 @@
+import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { o2Ports } from './helpers/o2Closure'
 import { withWorkspaceMaintenancePorts } from './helpers/sourceControlTaskPorts'
 import { createTaskWorktreeLocator } from '@/modules/task-execution/composition'
@@ -11,8 +12,7 @@ import { createTaskWorktreeLocator } from '@/modules/task-execution/composition'
 // Both providers exercise production operations; root and multi-member controls
 // also cover root sparse/explicit-directory layouts materialized as groups.
 
-import { readStoredCheckpointFixture } from './helpers/model/checkpoint'
-import { decodeTaskRollbackCheckpoints } from '@/modules/task-execution/infrastructure/taskCheckpointCodec'
+import { createNodeRunQueries } from '@/modules/task-execution/infrastructure/nodeRunQueries'
 import { legacyStashSnapshotFixture } from './helpers/legacyStashSnapshot'
 import {
   nodeRunFixture,
@@ -154,6 +154,7 @@ describeEachProvider('single non-root member workspace regression', (harness) =>
       const legacyId = ulid()
       await taskFixture(harness.db, {
         id: legacyId,
+        repos: [],
         workflowId: task.workflowId,
         workflowSnapshot: definition,
         repoPath: task.repoPath,
@@ -165,6 +166,9 @@ describeEachProvider('single non-root member workspace regression', (harness) =>
         inputs: '{}',
         startedAt: 1,
       })
+      // Model the retained legacy no-mount shape explicitly; ordinary target creation adds a root mount.
+      const { taskRepositoryMounts } = tablesOf(harness.db)
+      await harness.db.delete(taskRepositoryMounts).where(eq(taskRepositoryMounts.taskId, legacyId))
       expect((await readTaskFixtures(harness.db, { id: legacyId }))[0]!.repos).toEqual([])
       change(task)
       const store = createTaskWorktreeLocator(harness.db)
@@ -257,6 +261,7 @@ describeEachProvider('single non-root member workspace regression', (harness) =>
         const handle = await createIsoUnderLock({
           binding: {
             persistence: createTaskExecutionPersistence(harness.db, {
+              historyRestrictions: epoch2RuntimeTestPorts(harness.db).historyRestrictions,
               recoveryHumanGates: o2Ports(harness.db).collaborationReads.recovery,
             }),
           },
@@ -402,6 +407,7 @@ describeEachProvider('single non-root member workspace regression', (harness) =>
           expect(task.worktreePath).toContain(join('worktrees', 'group'))
         const binding = {
           persistence: createTaskExecutionPersistence(harness.db, {
+            historyRestrictions: epoch2RuntimeTestPorts(harness.db).historyRestrictions,
             recoveryHumanGates: o2Ports(harness.db).collaborationReads.recovery,
           }),
         }
@@ -665,11 +671,7 @@ describeEachProvider('single non-root member workspace regression', (harness) =>
             nodeId: 'A',
             status: 'failed',
           })
-          const stored = await readStoredCheckpointFixture(harness.db, runId)
-          const run = decodeTaskRollbackCheckpoints(
-            stored,
-            task.repos.map((repo) => repo.mountPath),
-          )
+          const run = (await createNodeRunQueries(harness.db).readWithCheckpoints(runId))!.rollback
           const target = (await loadRollbackTarget(harness.db, task.id))!
           if (operation === 'plan') {
             const plan = planNodeRunRollbackTargets(target, run)
@@ -717,8 +719,10 @@ describeEachProvider('single non-root member workspace regression', (harness) =>
         const { task } = await fixture(shape)
         await settle(task.id, 'interrupted')
         const dependencies = {
+          historyRestrictions: epoch2RuntimeTestPorts(harness.db).historyRestrictions,
           db: harness.db,
           persistence: createTaskExecutionPersistence(harness.db, {
+            historyRestrictions: epoch2RuntimeTestPorts(harness.db).historyRestrictions,
             recoveryHumanGates: o2Ports(harness.db).collaborationReads.recovery,
           }),
           log,

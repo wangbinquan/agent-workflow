@@ -10,7 +10,7 @@
 // 否则会出现"权限生效了、但审计里查不到是谁给的"。
 
 import { describe, expect, test, beforeEach } from 'bun:test'
-import { resolve } from 'node:path'
+
 import { randomBytes } from 'node:crypto'
 
 import { createInMemoryDb, type DbClient } from '../src/db/client'
@@ -21,8 +21,6 @@ import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import { initialGrantsForRole } from '../src/modules/identity-access/domain/initialGrants'
 import type { Role } from '@agent-workflow/shared'
 import { setOidcDefaultRole } from './helpers/auth/loginPolicy'
-
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 function grantsOf(db: DbClient, userId: string): string[] {
   return (
@@ -53,7 +51,7 @@ function grantedByOf(db: DbClient, userId: string, permission: string): string |
 describe('rfc312 默认授权覆盖 OIDC 自助建号', () => {
   let db: DbClient
   beforeEach(() => {
-    db = createInMemoryDb(MIGRATIONS)
+    db = createInMemoryDb()
   })
 
   async function makeProvider() {

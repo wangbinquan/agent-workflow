@@ -1,12 +1,11 @@
 // P-5-12 — performance + stability sweep.
 //
 // Spins up an in-memory DB, seeds synthetic data, and measures end-to-end
-// latency for the four scenarios called out in design/plan.md §6 P-5-12:
+// latency for the retained scenarios called out in design/plan.md §6 P-5-12:
 //
 //   1.  Node-detail page fetching 1000 events.
 //   2.  Tasks list with 100 rows.
-//   3.  Diff splitting on a synthetic 10 MiB diff.
-//   4.  10 concurrent task runs against scheduler.ts + stub-opencode.sh.
+//   3.  10 concurrent tasks through the production launch kernel + portable stub.
 //
 // Bypasses the HTTP layer so we measure the service-level cost. The HTTP
 // overhead (Hono + middleware) is fixed-cost and accounted for in the
@@ -18,21 +17,26 @@ import { execSync } from 'node:child_process'
 import { cpus, totalmem } from 'node:os'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { dirname, join, resolve } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { join } from 'node:path'
 import { ulid } from 'ulid'
 
 import { createInMemoryDb } from '@/db/client'
-import { agents, nodeRuns, nodeRunEvents, tasks, workflows } from '@/db/schema'
-import { startTask } from '@/services/task'
-import { listTasks, getNodeRunEvents } from '@/services/task'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import {
+  agentFixture,
+  workflowFixture,
+  taskFixture,
+  nodeRunFixture,
+  readNodeRunFixtures,
+} from '../tests/helpers/model'
+import { makeVersionedStubOpencode } from '../tests/fixtures/versionedStubOpencode'
+import { seedTestDefaultOpencodeRuntime } from '../tests/helpers/executionRuntimeFixture'
+import { taskListSummariesProjection as listTasks } from '@/modules/task-execution/infrastructure/taskRouteOperations'
+import { nodeRunEventsProjection as getNodeRunEvents } from '@/modules/task-execution/infrastructure/taskRouteOperations'
+import { launchTestTask as startTask } from '../tests/helpers/productionTaskLaunch'
+import { createTaskExecutionTestTopology } from '../tests/helpers/taskExecutionTestTopology'
 import { createLogger } from '@/util/log'
 
-const here = dirname(fileURLToPath(import.meta.url))
-const backendRoot = resolve(here, '..')
-const repoRoot = resolve(backendRoot, '..', '..')
-const STUB_OPENCODE = resolve(repoRoot, 'e2e', 'fixtures', 'stub-opencode.sh')
-const MIGRATIONS_DIR = resolve(backendRoot, 'db', 'migrations')
 const log = createLogger('perf')
 
 interface Sample {
@@ -66,20 +70,21 @@ async function bench<T>(name: string, fn: () => Promise<T> | T): Promise<T> {
 // -------------------------------------------------------------------------
 // Scenario 1: 1000 events on node-detail.
 // -------------------------------------------------------------------------
-async function scenarioEvents(): Promise<void> {
-  const db = createInMemoryDb(MIGRATIONS_DIR)
+export async function scenarioEvents(): Promise<void> {
+  const db = createInMemoryDb()
+  const { nodeRunEvents } = tablesOf(db)
   const workflowId = ulid()
   const taskId = ulid()
   const nodeRunId = ulid()
 
-  await db.insert(workflows).values({
+  await workflowFixture(db, {
     id: workflowId,
     name: 'perf',
     description: '',
     definition: JSON.stringify({ $schema_version: 1, inputs: [], nodes: [], edges: [] }),
     version: 1,
   })
-  await db.insert(tasks).values({
+  await taskFixture(db, {
     id: taskId,
     workflowId,
     workflowSnapshot: '{}',
@@ -92,7 +97,7 @@ async function scenarioEvents(): Promise<void> {
     startedAt: Date.now(),
     finishedAt: Date.now(),
   })
-  await db.insert(nodeRuns).values({
+  await nodeRunFixture(db, {
     id: nodeRunId,
     taskId,
     nodeId: 'agent_1',
@@ -122,15 +127,15 @@ async function scenarioEvents(): Promise<void> {
   })
 
   await bench('events_fetch_first_500', () =>
-    getNodeRunEvents(db, taskId, nodeRunId, { since: 0, limit: 500 }),
+    getNodeRunEvents({ db }, taskId, nodeRunId, { since: 0, limit: 500 }),
   )
   await bench('events_fetch_next_500_cursor', async () => {
-    const first = await getNodeRunEvents(db, taskId, nodeRunId, { since: 0, limit: 500 })
+    const first = await getNodeRunEvents({ db }, taskId, nodeRunId, { since: 0, limit: 500 })
     const cursor = first.events[first.events.length - 1]?.id ?? 0
-    return getNodeRunEvents(db, taskId, nodeRunId, { since: cursor, limit: 500 })
+    return getNodeRunEvents({ db }, taskId, nodeRunId, { since: cursor, limit: 500 })
   })
   await bench('events_full_1000_in_one_call', () =>
-    getNodeRunEvents(db, taskId, nodeRunId, { since: 0, limit: 1000 }),
+    getNodeRunEvents({ db }, taskId, nodeRunId, { since: 0, limit: 1000 }),
   )
 
   db.$client.close()
@@ -139,10 +144,10 @@ async function scenarioEvents(): Promise<void> {
 // -------------------------------------------------------------------------
 // Scenario 2: list 100 tasks.
 // -------------------------------------------------------------------------
-async function scenarioTasksList(): Promise<void> {
-  const db = createInMemoryDb(MIGRATIONS_DIR)
+export async function scenarioTasksList(): Promise<void> {
+  const db = createInMemoryDb()
   const workflowId = ulid()
-  await db.insert(workflows).values({
+  await workflowFixture(db, {
     id: workflowId,
     name: 'perf',
     description: '',
@@ -160,12 +165,12 @@ async function scenarioTasksList(): Promise<void> {
     worktreePath: '/tmp/perf-wt',
     baseBranch: 'main',
     branch: 'agent-workflow/x',
-    status: (['pending', 'running', 'done', 'failed', 'canceled'] as const)[i % 5],
+    status: (['pending', 'running', 'done', 'failed', 'canceled'] as const)[i % 5]!,
     inputs: '{}',
     startedAt: Date.now() - i * 60_000,
     finishedAt: i % 5 >= 2 ? Date.now() - i * 60_000 + 10_000 : null,
   }))
-  await db.insert(tasks).values(rows)
+  await taskFixture(db, rows)
   samples.push({ name: 'seed_100_tasks', ms: nowMs() - t0, rssDeltaKb: 0 })
 
   await bench('tasks_list_500_limit', () => listTasks(db, { limit: 500 }))
@@ -176,11 +181,7 @@ async function scenarioTasksList(): Promise<void> {
 }
 
 // -------------------------------------------------------------------------
-// Scenario 3: 10 MiB diff split.
-// -------------------------------------------------------------------------
-
-// -------------------------------------------------------------------------
-// Scenario 4: 10 concurrent tasks against scheduler + stub-opencode.
+// Scenario 3: 10 concurrent tasks against scheduler + stub-opencode.
 // -------------------------------------------------------------------------
 async function scenarioConcurrentTasks(): Promise<void> {
   const appHome = mkdtempSync(join(tmpdir(), 'aw-perf-home-'))
@@ -194,9 +195,10 @@ async function scenarioConcurrentTasks(): Promise<void> {
   execSync('git add .', { cwd: repoPath })
   execSync('git commit -qm initial', { cwd: repoPath })
 
-  const db = createInMemoryDb(MIGRATIONS_DIR)
+  const db = createInMemoryDb()
+  const { tasks } = tablesOf(db)
   const workflowId = ulid()
-  await db.insert(workflows).values({
+  await workflowFixture(db, {
     id: workflowId,
     name: 'perf',
     description: '',
@@ -232,12 +234,11 @@ async function scenarioConcurrentTasks(): Promise<void> {
     }),
     version: 1,
   })
-  await db.insert(agents).values({
+  await agentFixture(db, {
     id: ulid(),
     name: 'perf-agent',
     description: '',
     outputs: JSON.stringify(['answer']),
-    readonly: true,
     permission: '{}',
     skills: '[]',
     frontmatterExtra: '{}',
@@ -247,6 +248,9 @@ async function scenarioConcurrentTasks(): Promise<void> {
     updatedAt: Date.now(),
   })
 
+  await seedTestDefaultOpencodeRuntime(db)
+  const opencodeCmd = makeVersionedStubOpencode(appHome, { v1: 'perf', port: 'answer' })
+  const schedulerDriver = createTaskExecutionTestTopology({ db, driver: 'real' }).schedulerDriver
   const N = 10
   const rss0 = rssKb()
   const t0 = nowMs()
@@ -254,11 +258,14 @@ async function scenarioConcurrentTasks(): Promise<void> {
   await Promise.all(
     Array.from({ length: N }, async (_, i) => {
       await startTask(
-        { workflowId, repoPath, baseBranch: 'main', inputs: { topic: 'perf-' + i } },
+        { workflowId, name: 'perf-' + i, inputs: { topic: 'perf-' + i } },
         {
           db,
           appHome,
-          opencodeCmd: [STUB_OPENCODE],
+          binaryOverride: opencodeCmd,
+          schedulerDriver,
+          internalSource: { kind: 'local-path', repoPath, baseBranch: 'main' },
+          awaitScheduler: true,
         },
       )
     }),
@@ -280,7 +287,7 @@ async function scenarioConcurrentTasks(): Promise<void> {
     notes: `${N} tasks reach terminal`,
   })
 
-  const allRuns = await db.select().from(nodeRuns)
+  const allRuns = await readNodeRunFixtures(db)
   const durations = allRuns
     .filter((r) => r.startedAt !== null && r.finishedAt !== null && r.nodeId === 'agent_1')
     .map((r) => (r.finishedAt as number) - (r.startedAt as number))
@@ -359,4 +366,4 @@ async function main(): Promise<void> {
   process.stdout.write('\n' + md + '\n')
 }
 
-await main()
+if (import.meta.main) await main()

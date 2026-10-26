@@ -1,3 +1,4 @@
+import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { o2Ports } from './helpers/o2Closure'
 // Locks the boot/periodic lifecycle-scan log tiering introduced when a real
 // daemon boot logged `ERROR [lifecycle.invariants] lifecycle invariants
@@ -300,6 +301,7 @@ describeEachProvider('lifecycle invariants boot log — tiering by task terminal
   async function detectThenPromote(db: PersistenceDb, taskId: string): Promise<void> {
     await runLifecycleInvariants({
       operations: createTaskExecutionPersistence(db, {
+        historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
         recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
       }).recoveryAdministration,
       scope: { taskId },
@@ -308,6 +310,7 @@ describeEachProvider('lifecycle invariants boot log — tiering by task terminal
     captured = '' // ignore the first (warning) scan; assert on the promoting scan only
     await runLifecycleInvariants({
       operations: createTaskExecutionPersistence(db, {
+        historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
         recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
       }).recoveryAdministration,
       scope: { taskId },
@@ -347,6 +350,7 @@ describeEachProvider('lifecycle invariants boot log — tiering by task terminal
     // Scan 1: detect (newAlerts=1 → stateChanged=true → logs)
     await runLifecycleInvariants({
       operations: createTaskExecutionPersistence(db, {
+        historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
         recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
       }).recoveryAdministration,
       scope: { taskId },
@@ -355,6 +359,7 @@ describeEachProvider('lifecycle invariants boot log — tiering by task terminal
     // Scan 2: promote (promotedAlerts=1 → stateChanged=true → logs ERROR)
     await runLifecycleInvariants({
       operations: createTaskExecutionPersistence(db, {
+        historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
         recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
       }).recoveryAdministration,
       scope: { taskId },
@@ -364,6 +369,7 @@ describeEachProvider('lifecycle invariants boot log — tiering by task terminal
     // Scan 3: nothing changed (newAlerts=0, promotedAlerts=0, resolvedAlerts=0)
     await runLifecycleInvariants({
       operations: createTaskExecutionPersistence(db, {
+        historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
         recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
       }).recoveryAdministration,
       scope: { taskId },

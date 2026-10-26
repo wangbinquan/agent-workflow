@@ -1242,6 +1242,11 @@ bunx eslint --no-config-lookup -c eslint.promises.config.js "packages/backend/sr
 **为什么它值得单独一条**：漏掉的 await 不只是 lint 洁癖——未 await 的拒绝会变成
 unhandled rejection，而本仓已经为此红过一次 CI（§5dk 的 `void <promise>` 没接 rejection）。
 
+**2026-10-25 补充**：RFC-395 之后这一遍的类型程序超过 V8 默认堆，本地直接跑（包括经
+`bun run lint` 跑到它）会以 134（SIGABRT，heap out of memory）中止——那不是 lint 结论。
+本地照 CI 的 Lint step 加 `NODE_OPTIONS=--max-old-space-size=6144` 再跑；同日它因此才报出
+`epochSwitch/pointerReplacement.ts` 里一个漏掉的 `await lock.release()`。
+
 ## 改名时 `git commit -- <pathspec>` 会把「旧文件的删除」整个漏掉（2026-09-18 实撞，14 个 shard 全红）
 
 本仓强制「按路径精确提交」（`git commit -F msg -- <你的路径…>`，见 `CLAUDE.md`）。把路径清单
@@ -2492,11 +2497,10 @@ run」单独记即可。
 
 ## PG 的表 / 索引 / 约束来自 drizzle 声明，不是 SQLite 迁移 SQL：迁移里手写的索引 PG 没有（2026-09-05 实撞）
 
-`buildLogicalSchemaContract()`（`bootstrap/persistenceSchema.ts`）汇集 owner 的 schema contribution，并经冻结的 legacy v2 规则生成兼容合同；PG plan 的实现位于 `platform/persistence/schema/postgresqlPlan.ts`。`db/schema.ts` 保留表的兼容导出。
+RFC-395 activation 后，`bootstrap/persistenceSchema.ts` 汇集唯一 live schema contribution，运行库的逻辑合同从该 registry 派生；两 provider 的 DDL 来自 `schema/{sqlitePlan,postgresqlPlan}.ts`，`db/schema.ts` 兼容出口已删除。以下事故描述的是 epoch 1。
 迁移 SQL 里手写、没同步进 drizzle 声明的东西——部分唯一索引、CHECK、触发器——PG 上一律不存在：`webhook_deliveries` 的
 `idx_webhook_deliveries_dedupe` / `idx_webhook_deliveries_mr_fact` 只在迁移 0157 里，PG 上同 uuid 重投不撞唯一键，去重分支
-永远走不到（RFC-359 W4-D2 双引擎用例抓到）。规矩：**迁移里加索引 / 约束，必须同时更新 owner 的 `infrastructure/persistence/schema.ts` contribution**。用 `defineContribution(owner).table(...)` 声明表，索引用 `index(name, [columnName], { unique: true, where: expression })`，外键用 `foreignKey(...)`，CHECK 放入 `checks`；epoch-1 表达式用 `raw(sqliteText, postgresqlText)` 保留既有拼写，目标贡献采用类型化表达式 AST，然后`cd packages/backend && bun run db:rfc349-postgresql-schema`重采 PG 基线与 journal（否则`rfc349-postgresql-schema`守卫红、PG harness 直接`postgresql-migration-history-drift`）。契约 digest 变了，已部署的 PG 目标要重做
-RFC-349 cutover（PG 侧暂无增量迁移）。
+永远走不到（RFC-359 W4-D2 双引擎用例抓到）。规矩：**迁移里加索引 / 约束，必须同时更新 owner 的 `infrastructure/persistence/schema.ts` contribution**。用 `defineContribution(owner).table(...)` 声明表，索引用 `index(name, [columnName], { unique: true, where: expression })`，外键用 `foreignKey(...)`，CHECK 放入 `checks`；epoch-1 表达式用 `raw(sqliteText, postgresqlText)` 保留既有拼写，目标贡献采用类型化表达式 AST，epoch-2 变更完成后，在仓库根运行 `bun run scripts/schema-history.ts --append <edgeKind> <slug> --postgresql-url-env <变量名>`，生成两侧 history 与对应 PostgreSQL major 的 catalog。`--check` 将最后一份 artifact 与唯一 live registry 比较；epoch-1 历史材料保持冻结。
 
 ## prettier 只认仓库根的配置：在 `packages/backend` 下跑出来的排版会被 CI 的 format 门打回（2026-09-05 实撞）
 
@@ -3860,7 +3864,7 @@ git show HEAD:architecture/ledger-baselines.json | grep -c '"allowGrowth"'   # �
 
 `seq` 是同事务铸造分配的顺序；手工种子行没有 `seq` 时，比较器把它视为比任何非 NULL 行更旧，两行都为 NULL 才按 id 回退。测试需要代表较新一代时，应经 mint 工厂铸造；直接 `insert(nodeRuns)` 的夹具用 `tests/helpers/rfc374Fixtures.ts` 的 `allocateNodeRunSeq` 从 identity 表取号（与 mint 同源；手写的 `seq` 数值可能高于分配表，启动追平会以 `node-run-seq-allocator-behind` 拒绝启动），不要依靠更大的 ULID。SQL 升序写 `engineOf(db).ascNullsFirst(nodeRuns.seq), asc(nodeRuns.id)`；降序写 `engineOf(db).descNullsLast(nodeRuns.seq), desc(nodeRuns.id)`。已有的 `retryIndex` / `startedAt` 主排序键保留，seq 替换原 id 平局位置。
 
-给已有 KEEP 表加列时，把列追加在 schema 的末尾，使用可空列或字面量默认值；V8 不接受主键、identity、具名唯一列或外键，新增唯一索引必须包含同一步追加的列。先用 `db:generate` 生成新 SQLite 迁移，再用 `db:rfc349-postgresql-schema --append <新编号_名称>` 生成 V8 SQL / upgrade.json，最后运行 `db:rfc349-contract`。旧归档恢复沿用源列清单，新可空列得到 NULL；冻结旧迁移的测试也必须用显式旧列清单的 raw INSERT，不能通过 HEAD drizzle 写不存在的新列。历史迁移不可改写。
+epoch-2 给已有表加列时，在 owner contribution 中追加可空列或字面量默认值，再用 `bun run scripts/schema-history.ts --append add-column <slug> --postgresql-url-env <变量名>` 生成不可变 history。边编译器拒绝歧义变更、PostgreSQL 列重排及不满足严格 expand-only 条件的旧 binary 准入。冻结 epoch-1 迁移测试使用 frozen 表集；历史迁移不可改写。
 
 ## 迁移（Drizzle + bun:sqlite）
 
@@ -6871,9 +6875,8 @@ replace 掉、不会再出现，只能挂满 30s 超时。满载 runner 更容�
 
 **规矩**：
 
-- **改 `db/schema.ts` 的那一步就跑 `bun run db:rfc349-postgresql-schema`**，不要攒到最后。
-  分批补声明时，每批落地当步重生成，别留漂移窗口。
-- 顺带刷新契约文档：`bun run db:rfc349-contract`。
+- **epoch-2 的完整实现和测试编写完成后生成 schema history**：在仓库根运行 `bun run scripts/schema-history.ts --append <edgeKind> <slug> --postgresql-url-env <变量名>`，随后 `--check` 对齐 artifact 和 registry。
+- 下述旧 PG 漂移错误只适用于冻结的 epoch-1 converter 输入；历史报告工具已移至 `migration/legacy/scripts/`。
 - 看到 `postgresql-migration-history-drift` 时**先怀疑基线没同步**，不要去改测试、更不要绕过校验
   （`postgresqlMigrator.ts` 里显式传 `plan` 能跳过这道校验——那是给别的用途的分支，拿它来消红
   等于把 PG 的 schema 正确性关掉）。
@@ -7091,11 +7094,13 @@ PostgreSQL 文档说「用 `CASE` 而不是 `AND`/`OR` 来控制求值顺序」�
 处置：需要真执行一个失败语句的反面 fixture，**自己开一条裸连接**（`new SQL(url)`）跑完即
 `end()`，不要借共享 harness 的池。或者干脆别用异常当判据——先跑正面断言，异常那一半单独安置。
 
-## `bun run db:rfc349-postgresql-schema` 注册在 `packages/backend/package.json`，不在仓库根
+## epoch-2 schema-history 命令与冻结的 epoch-1 工具
 
-改了 `db/schema.ts` 之后要重生成 PG 基线（见上文那条），命令必须**在 `packages/backend` 下跑**；
-在仓库根跑是 `script not found`。错误消息此前只写了命令名没写目录，已补上（
-`platform/persistence/postgresqlMigrationHistory.ts` 与 `db/schema.ts` 顶部注释两处）。
+在仓库根运行 `bun run scripts/schema-history.ts --check`；默认使用唯一 live registry，`--registry <module> [--export <symbol>]` 保留给显式 registry 工具。追加变更使用 `--append <edgeKind> <slug>`，PG catalog 生成使用 `--postgresql-url-env <变量名>`。首次 baseline 只用一次 `--baseline <slug>`。
+
+PostgreSQL 当前随 artifact 支持 17；新增 major 时只需将 URL 指向该 major 并运行 `bun run scripts/schema-history.ts --catalog --postgresql-url-env <变量名>`。生成器创建并删除独立 scratch database，文件名携带 major，支持列表由完整 artifact 集合派生。
+
+`packages/backend` 下的 `db:epoch1-contract` / `db:epoch1-postgresql-schema` 只维护冻结的 RFC-349 材料，不描述运行库。旧 `db:generate` / `db:check` 和 drizzle-kit 已移除；不要用旧生成器修改 epoch-2。
 
 ## 「减少往返」这个杠杆只对**串行**往返成立（2026-09-10 实测，推翻了我自己的判断）
 

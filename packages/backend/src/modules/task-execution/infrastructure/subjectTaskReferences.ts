@@ -1,8 +1,9 @@
-import { TERMINAL_TASK_STATUSES } from '@agent-workflow/shared'
-import { and, eq, notInArray } from 'drizzle-orm'
 import type { PersistenceTx } from '@/platform/persistence/persistenceDb'
 import { tablesOf } from '@/platform/persistence/sessionTables'
+import { TERMINAL_TASK_STATUSES } from '@agent-workflow/shared'
+import { and, eq, notInArray } from 'drizzle-orm'
 import type { SubjectTaskReferences } from '../application/ports/subjectTaskReferences'
+import { taskReadColumns } from './taskRepositorySql'
 
 export function createSubjectTaskReferences(tx: PersistenceTx): SubjectTaskReferences {
   return {
@@ -10,10 +11,10 @@ export function createSubjectTaskReferences(tx: PersistenceTx): SubjectTaskRefer
       const { tasks } = tablesOf(tx)
       const column =
         subject.kind === 'agent'
-          ? tasks.sourceAgentId
+          ? taskReadColumns(tx).sourceAgentId
           : subject.kind === 'workflow'
-            ? tasks.workflowId
-            : tasks.workgroupId
+            ? taskReadColumns(tx).workflowId
+            : taskReadColumns(tx).workgroupId
       const rows = await tx
         .select({ id: tasks.id })
         .from(tasks)

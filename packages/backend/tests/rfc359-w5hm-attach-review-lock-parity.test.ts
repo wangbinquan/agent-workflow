@@ -1,3 +1,4 @@
+import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { o2Ports } from './helpers/o2Closure'
 // RFC-359 AC-1（plan §5hm）—— attach 与评审变更必须在**两个引擎上**走同一个临界区。
 //
@@ -70,6 +71,7 @@ describeEachProvider('RFC-359 AC-1 —— attach 与评审变更共用一个临�
     const db = harness.db
     const taskId = await seedTerminalTask(db)
     const persistence = createTaskExecutionPersistence(db, {
+      historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
       recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
     })
     // RFC-359 AC-1（plan §5hm）：**两个引擎装同一个端口实现**，差别只剩认领方式——
@@ -91,6 +93,7 @@ describeEachProvider('RFC-359 AC-1 —— attach 与评审变更共用一个临�
             })
           })()
         : createDatabaseTaskDriverLifecyclePort({
+            historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
             db,
             log: silentLog,
             finalizeWorkspace: async () => {},

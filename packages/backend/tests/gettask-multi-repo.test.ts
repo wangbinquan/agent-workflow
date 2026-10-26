@@ -11,20 +11,17 @@ import { workflowFixture } from './helpers/model'
 import { afterEach, describe, expect, test } from 'bun:test'
 import type { StartTask } from '@agent-workflow/shared'
 import { mkdtempSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { join, basename } from 'node:path'
 import { tmpdir } from 'node:os'
-import { resolve } from 'node:path'
 
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { getTask } from '@/services/task'
 import { launchTestTask, launchTestTaskWithLocalRepo } from './helpers/productionTaskLaunch'
 import { runGit } from '../src/util/git'
-import { basename } from 'node:path'
+
 import { seedRepoGroup } from './helpers/repoGroupFixture'
 import { removeTempDirSync } from './fixtures/tempDir'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
-
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 interface Harness {
   db: DbClient
@@ -48,7 +45,7 @@ async function buildHarness(repoCount: number): Promise<Harness> {
     repos.push(repoPath)
   }
 
-  const db = createInMemoryDb(MIGRATIONS)
+  const db = createInMemoryDb()
   await workflowFixture(db, {
     id: 'wf-gt',
     name: 'wf',

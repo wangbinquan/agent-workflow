@@ -1,3 +1,4 @@
+import { createEpoch2PostgresqlMetadata } from './helpers/epoch2PostgresqlMetadata'
 import { withSourceControlTaskPorts } from './helpers/sourceControlTaskPorts'
 // RFC-349 — direct Agent/Workgroup launch keeps the existing route contract
 // while the selected PostgreSQL provider owns the task row, collaborators,
@@ -78,8 +79,11 @@ function postgresqlFixture(input: {
 }) {
   const executions: Array<{ readonly sql: string; readonly parameters: readonly unknown[] }> = []
   let insertedEvent: readonly unknown[] | null = null
+  const epoch2Metadata = createEpoch2PostgresqlMetadata()
   const run = (query: string, parameters: readonly unknown[] = []): SqlRows => {
     executions.push({ sql: query, parameters })
+    const metadata = epoch2Metadata(query)
+    if (metadata) return metadata
     const normalized = query.trim().toLowerCase()
     if (normalized.startsWith('insert into "agent_workflow"."tasks"')) {
       input.trace.push('task:insert')
@@ -87,7 +91,7 @@ function postgresqlFixture(input: {
     if (normalized === 'commit') input.trace.push('db:commit')
     // RFC-349: matches both the one-shot live-write marker and the
     // per-transaction generation fence.
-    if (normalized.includes('agent_workflow_meta') && normalized.includes('database_generations')) {
+    if (normalized.includes('agent_workflow_meta') && normalized.includes('generations')) {
       return sqlRows({
         objects: [{ generation_id: 'dbg_task_route_launch_pg' }],
         values: [['dbg_task_route_launch_pg']],
@@ -98,7 +102,7 @@ function postgresqlFixture(input: {
     }
     if (normalized.includes('from "agent_workflow"."committed_event_family_cutovers"')) {
       return sqlRows({
-        values: [['task-execution', 'task-lifecycle', 'dispatchable', 1, 0, 'test-cutover']],
+        values: [['task-execution', 'task-lifecycle', 1, 0, 'test-cutover']],
       })
     }
     if (normalized.startsWith('insert into "agent_workflow"."committed_events"')) {
@@ -631,7 +635,7 @@ describe('RFC-349 PostgreSQL task route launch operations', () => {
     })
     expect(scheduledTask.scheduledTaskId).toBe('schedule-1')
     const scheduledInsert = scheduled.executions.find((execution) =>
-      execution.sql.toLowerCase().includes('insert into "agent_workflow"."tasks"'),
+      execution.sql.toLowerCase().includes('insert into "agent_workflow"."task_launch_contexts"'),
     )
     expect(scheduledInsert?.parameters).toContain('scheduled')
     expect(scheduledInsert?.parameters).toContain('schedule-1')
@@ -665,7 +669,7 @@ describe('RFC-349 PostgreSQL task route launch operations', () => {
       resources: event.resources,
     })
     const eventInsert = event.executions.find((execution) =>
-      execution.sql.toLowerCase().includes('insert into "agent_workflow"."tasks"'),
+      execution.sql.toLowerCase().includes('insert into "agent_workflow"."task_launch_contexts"'),
     )
     expect(eventInsert?.parameters).toContain('event')
     expect(eventInsert?.parameters).toContain('subscription-1')
@@ -711,7 +715,7 @@ describe('RFC-349 PostgreSQL task route launch operations', () => {
     })
 
     const taskInsert = testHarness.executions.find((execution) =>
-      execution.sql.toLowerCase().includes('insert into "agent_workflow"."tasks"'),
+      execution.sql.toLowerCase().includes('insert into "agent_workflow"."task_launch_contexts"'),
     )
     expect(taskInsert?.parameters).toContain('webhook')
     expect(taskInsert?.parameters).toContain('trigger-1')
@@ -876,24 +880,27 @@ function gitMetadataHarness(
 }
 
 function insertedTaskMetadata(executions: ReturnType<typeof postgresqlFixture>['executions']) {
-  const insert = executions.find((execution) =>
-    execution.sql.toLowerCase().startsWith('insert into "agent_workflow"."tasks"'),
-  )
-  if (insert === undefined) throw new Error('task INSERT was not executed')
-  const match = /\(([^)]+)\) values \(([^)]+)\)/i.exec(insert.sql)
-  if (match === null) throw new Error('task INSERT columns and values were not recorded')
-  const columns = match[1]!.split(',').map((column) => column.trim().replace(/^"|"$/g, ''))
-  const values = match[2]!.split(',').map((value) => value.trim())
-  const valueOf = (column: string): unknown => {
+  const valueOf = (table: string, column: string): unknown => {
+    const insert = executions.find((execution) =>
+      execution.sql.toLowerCase().startsWith(`insert into "agent_workflow"."${table}"`),
+    )
+    if (!insert) throw new Error(`${table} INSERT was not executed`)
+    const match = /\(([^)]+)\) values \(([^)]+)\)/i.exec(insert.sql)
+    if (!match) throw new Error(`${table} INSERT columns and values were not recorded`)
+    const columns = match[1]!.split(',').map((value) => value.trim().replace(/^"|"$/g, ''))
     const index = columns.indexOf(column)
-    if (index === -1) throw new Error(`task INSERT omitted ${column}`)
-    const parameter = /^\$(\d+)$/.exec(values[index] ?? '')
-    if (parameter === null) throw new Error(`task INSERT did not bind ${column}`)
+    if (index < 0) throw new Error(`${table} INSERT omitted ${column}`)
+    const placeholder = match[2]!.split(',')[index]!.trim()
+    const parameter = /^\$(\d+)$/.exec(placeholder)
+    if (!parameter) throw new Error(`${table} INSERT did not bind ${column}`)
     return insert.parameters[Number(parameter[1]) - 1]
   }
   return {
-    git: { name: valueOf('git_user_name'), email: valueOf('git_user_email') },
-    ownerUserId: valueOf('owner_user_id'),
+    git: {
+      name: valueOf('task_workspaces', 'git_user_name'),
+      email: valueOf('task_workspaces', 'git_user_email'),
+    },
+    ownerUserId: valueOf('tasks', 'owner_user_id'),
   }
 }
 

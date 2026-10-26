@@ -102,8 +102,7 @@ export async function preflightPostgresqlTarget(input: {
     if (applicationTableCount > 0 || metadataTableCount > 0) {
       const hasOperationTable = tableRows.some(
         (row) =>
-          row.table_schema === POSTGRESQL_METADATA_SCHEMA &&
-          row.table_name === 'logical_copy_operations',
+          row.table_schema === POSTGRESQL_METADATA_SCHEMA && row.table_name === 'migration_records',
       )
       if (!hasOperationTable) {
         throw new PostgresqlPreflightError(
@@ -112,7 +111,7 @@ export async function preflightPostgresqlTarget(input: {
         )
       }
       const operationRows = await connection.unsafe(
-        `SELECT operation_id FROM "${POSTGRESQL_METADATA_SCHEMA}"."logical_copy_operations" WHERE operation_id = $1`,
+        `SELECT run_id FROM "${POSTGRESQL_METADATA_SCHEMA}"."migration_records" WHERE run_id = $1 AND unit_id = 'epoch2-copy' AND ordinal = 0`,
         [input.operationId],
       )
       if (operationRows.length !== 1) {

@@ -1,3 +1,5 @@
+import { taskMountWorktreePath } from '@/modules/task-execution/domain/taskMountPath'
+import { eq } from 'drizzle-orm'
 // RFC-395 II-a A7 part 2：横向调用方改走 owner 后保留投影、空值、原字节、排序与事务可见性。
 import { beforeEach, expect, test } from 'bun:test'
 import { tablesOf } from '@/platform/persistence/sessionTables'
@@ -149,6 +151,8 @@ describeEachProvider('RFC-395 II-a A7 horizontal owner queries', (h) => {
   test('frozen replay retains both error cases, ordinal order and explicit node versus ancestor fallback', async () => {
     const query = createTaskPreparationQueries(h.db)
     await task('replay')
+    const { taskRepositoryMounts } = tablesOf(h.db)
+    await h.db.delete(taskRepositoryMounts).where(eq(taskRepositoryMounts.taskId, 'replay'))
     await expect(query.frozenLayout('replay')).rejects.toThrow('no frozen repo snapshot')
     await taskRepoFixture(h.db, {
       taskId: 'replay',
@@ -193,7 +197,11 @@ describeEachProvider('RFC-395 II-a A7 horizontal owner queries', (h) => {
       { taskId: 'valid', nodePath: 'empty', schemaVersion: 1 },
     ])
     expect((await query.frozenLayout('valid')).nodes).toEqual([
+      { path: '', origins: [] },
+      { path: 'b', origins: [] },
+      { path: 'dir', origins: [] },
       { path: 'empty', origins: [] },
+      { path: 'dir/a', origins: [] },
       { path: 'z/deep', origins: [] },
     ])
   })
@@ -211,6 +219,7 @@ describeEachProvider('RFC-395 II-a A7 horizontal owner queries', (h) => {
       taskId: 'parent',
       repoIndex: 0,
       repoPath: '/member',
+      mountPath: 'member',
       branch: 'main',
       worktreePath: '/work/member',
     })
@@ -227,6 +236,7 @@ describeEachProvider('RFC-395 II-a A7 horizontal owner queries', (h) => {
     const workspaces = await query.workspaces(['parent', 'child', 'missing'])
     expect(workspaces.tasks.map((t) => t.id).sort()).toEqual(['child', 'parent'])
     expect(workspaces.repositories).toEqual([
+      { taskId: 'child', repoPath: '/repo', worktreePath: '/work' },
       { taskId: 'parent', repoPath: '/member', worktreePath: '/work/member' },
     ])
     expect(await query.nonTerminalDescendant('parent')).toEqual({
@@ -264,13 +274,12 @@ describeEachProvider('RFC-395 II-a A7 horizontal owner queries', (h) => {
     expect(runs.map((r) => r.id)).toEqual((await query.list({ taskId: 'runs' })).map((r) => r.id))
     expect(runs.find((r) => r.id === 'z-first')?.rollback).toMatchObject({
       id: 'z-first',
-      checkpointScope: 'mounts',
       checkpoints: [{ mountPath: 'nested', preSnapshot: 'snapshot' }],
     })
     expect(
       (await query.listResumeRuns('runs', [''])).find((r) => r.id === 'z-first')?.rollback
-        .checkpointScope,
-    ).toBe('workspace')
+        .checkpoints,
+    ).toEqual([{ mountPath: 'nested', preSnapshot: 'snapshot' }])
     expect(runs.every((r) => !('preSnapshotReposJson' in r))).toBe(true)
   })
 
@@ -366,4 +375,12 @@ describeEachProvider('RFC-395 II-a A7 horizontal owner queries', (h) => {
     ).toEqual(new Map([['failed', 'spawn-failed']]))
     expect((await getTask(h.db, 'failed'))?.failureCode).toBe('spawn-failed')
   })
+})
+
+test('mount worktree projection is independent of SQL dialect and preserves root references', () => {
+  expect(taskMountWorktreePath(null, 'a')).toBe('')
+  expect(taskMountWorktreePath('/root/', '')).toBe('/root/')
+  expect(taskMountWorktreePath('/root/', 'a/b')).toBe('/root/a/b')
+  expect(taskMountWorktreePath('C:\\root\\', 'a/b')).toBe('C:\\root\\a\\b')
+  expect(taskMountWorktreePath('memory:root', 'a')).toBe('memory:root/a')
 })

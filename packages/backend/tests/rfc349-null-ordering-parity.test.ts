@@ -24,6 +24,7 @@ import { readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { is } from 'drizzle-orm'
 import { SQLiteTable } from 'drizzle-orm/sqlite-core'
+import ts from 'typescript'
 
 import { nativeQueryFixture } from './helpers/nativeQueryFixture'
 import { postgresqlExecutionSurface } from './architecture/postgresqlSurface'
@@ -35,6 +36,10 @@ const srcRoot = resolve(import.meta.dir, '..', 'src')
  * 每条都必须是能在同一个查询里读出来的判据，不是「一般不会为空」。
  */
 const PROVABLY_NULL_FREE: Record<string, Record<string, string>> = {
+  // RFC-395: publication scopes are enumerated only after this query excludes NULL.
+  'platform/content/infrastructure/contentStore.ts': {
+    scope: '同一个 WHERE 里有 isNotNull(contentPublications.scope)，随后按 scope 分页',
+  },
   // RFC-370 v3 V6：中立托管对象发布日志的两处有序读取。
   'modules/system-operations/infrastructure/crewstation/objectPublications.ts': {
     scope: '同一个 WHERE 里有 `scope IS NOT NULL`（按 scope 分页的 owner 范围枚举）',
@@ -95,6 +100,67 @@ function nullableColumnsByTableExport(): Map<string, Record<string, NullableColu
   return tables
 }
 
+/** Epoch 2 can preserve a local table name while changing its registry key.
+ * Bind each receiver to its own declaration, so sibling scopes may reuse an
+ * alias without hiding nullable columns or borrowing another table's proof.
+ */
+function nullableOrders(text: string, tables: Map<string, Record<string, NullableColumn>>) {
+  const file = '/nullable-order-source.ts'
+  const source = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true)
+  const options: ts.CompilerOptions = { noLib: true, noResolve: true }
+  const host = ts.createCompilerHost(options)
+  host.getSourceFile = (name) => (name === file ? source : undefined)
+  const checker = ts.createProgram([file], options, host).getTypeChecker()
+  const orders: Array<{ table: string; property: string; direction: string; index: number }> = []
+  const isTablesCall = (node: ts.Node | undefined): node is ts.CallExpression =>
+    node !== undefined &&
+    ts.isCallExpression(node) &&
+    ts.isIdentifier(node.expression) &&
+    node.expression.text === 'tablesOf'
+  const tableName = (receiver: ts.Expression): string | undefined => {
+    if (ts.isPropertyAccessExpression(receiver) && isTablesCall(receiver.expression))
+      return receiver.name.text
+    if (!ts.isIdentifier(receiver)) return undefined
+    const declarations = checker.getSymbolAtLocation(receiver)?.declarations ?? []
+    for (const declaration of declarations) {
+      if (
+        ts.isBindingElement(declaration) &&
+        ts.isObjectBindingPattern(declaration.parent) &&
+        ts.isVariableDeclaration(declaration.parent.parent) &&
+        isTablesCall(declaration.parent.parent.initializer)
+      ) {
+        const key = declaration.propertyName ?? declaration.name
+        if (ts.isIdentifier(key) || ts.isStringLiteral(key)) return key.text
+      }
+    }
+    return receiver.text
+  }
+  const visit = (node: ts.Node): void => {
+    if (
+      ts.isCallExpression(node) &&
+      ts.isIdentifier(node.expression) &&
+      ['asc', 'desc'].includes(node.expression.text)
+    ) {
+      const column = node.arguments[0]
+      if (column && ts.isPropertyAccessExpression(column)) {
+        const table = tableName(column.expression)
+        const property = column.name.text
+        const definition = table === undefined ? undefined : tables.get(table)?.[property]
+        if (definition && !definition.notNull)
+          orders.push({
+            table: table!,
+            property,
+            direction: node.expression.text,
+            index: node.getStart(source),
+          })
+      }
+    }
+    ts.forEachChild(node, visit)
+  }
+  visit(source)
+  return orders
+}
+
 /**
  * 语料是**类型可达**的 PG 执行面，不是文件名前缀——按前缀取语料会漏掉双 provider 共用
  * 实现与按领域命名却吃 PG 客户端的文件（2026-09-04 实测 27 个）。判据单一实现见
@@ -102,6 +168,29 @@ function nullableColumnsByTableExport(): Map<string, Record<string, NullableColu
  */
 
 describe('RFC-349 NULL ordering is the same on both providers', () => {
+  test('nullable-order scanning resolves table aliases in their lexical scope', () => {
+    const orders = nullableOrders(
+      `function first(db) {
+        const { nodeRuns: rows } = tablesOf(db)
+        asc(rows.attemptIndex)
+        desc(rows.seq)
+      }
+      function second(db) {
+        const { tasks: rows } = tablesOf(db)
+        desc(rows.finishedAt)
+        descNullsLast(rows.finishedAt)
+      }
+      asc(tablesOf(db).nodeRuns.attemptIndex)`,
+      nullableColumnsByTableExport(),
+    )
+    expect(
+      orders.map(({ table, property, direction }) => ({ table, property, direction })),
+    ).toEqual([
+      { table: 'nodeRuns', property: 'attemptIndex', direction: 'asc' },
+      { table: 'tasks', property: 'finishedAt', direction: 'desc' },
+      { table: 'nodeRuns', property: 'attemptIndex', direction: 'asc' },
+    ])
+  })
   test('the premise: SQLite sorts NULL first ascending and last descending', () => {
     const db = new Database(':memory:')
     db.run('create table t(a integer, id text)')
@@ -142,19 +231,14 @@ describe('RFC-349 NULL ordering is the same on both providers', () => {
     for (const file of postgresqlExecutionSurface(srcRoot)) {
       const relative = file.path
       const text = file.text
-      for (const match of text.matchAll(
-        /\b(asc|desc)\((?:tablesOf\([^)]*\)\.)?([A-Za-z_][A-Za-z0-9_]*)\.([A-Za-z_][A-Za-z0-9_]*)\)/gu,
-      )) {
-        const [, , table, property] = match
-        const column = tables.get(table!)?.[property!]
-        if (column === undefined || column.notNull) continue
-        const proof = PROVABLY_NULL_FREE[relative]?.[property!]
+      for (const { table, property, direction, index } of nullableOrders(text, tables)) {
+        const proof = PROVABLY_NULL_FREE[relative]?.[property]
         if (proof !== undefined) {
-          staleProofs.get(relative)?.delete(property!)
+          staleProofs.get(relative)?.delete(property)
           continue
         }
-        const line = text.slice(0, match.index).split('\n').length
-        unaccounted.push(`${relative}:${line} ${match[1]}(${table}.${property})`)
+        const line = text.slice(0, index).split('\n').length
+        unaccounted.push(`${relative}:${line} ${direction}(${table}.${property})`)
       }
     }
 

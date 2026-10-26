@@ -12,7 +12,7 @@ import { expect, setDefaultTimeout, test } from 'bun:test'
 import { createHash } from 'node:crypto'
 import { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
@@ -54,7 +54,6 @@ import { createWorkflow } from '../src/services/workflow'
 import { Paths } from '../src/util/paths'
 import { intentApplyResourceBinding } from './helpers/intentApplyResourceBinding'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const TOKEN = 'aw-rfc269-local-fixture-token' // gitleaks:allow
 const INTENT_RUNTIME = 'rfc292-intent-opencode'
 
@@ -137,7 +136,7 @@ test('webhook trigger vars are visible to the first code-host scheduler read', a
   try {
     const configPath = join(appHome, 'config.json')
     writeFileSync(configPath, JSON.stringify({ $schema_version: 1 }))
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createInMemoryDb()
     const box = createSecretBox(Paths.secretKeyFile)
     const repositoryTransport = composeRepositoryTransportCredentials(
       new SQLiteRepositoryTransportCredentialRepository(db),
@@ -300,7 +299,7 @@ test('RFC-292 Intent-generated workflow reaches webhook agent prompt without roo
   try {
     const configPath = join(appHome, 'config.json')
     writeFileSync(configPath, JSON.stringify({ $schema_version: 1 }))
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createInMemoryDb()
     await composeRuntimeRegistryOperations(db).createRuntime({
       name: INTENT_RUNTIME,
       protocol: 'opencode',

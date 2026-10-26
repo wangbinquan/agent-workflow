@@ -1,3 +1,4 @@
+import type { HistoryRestrictionPort } from '@/platform/contracts/historyRestriction'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   assertTaskExecutionContext,
@@ -23,11 +24,12 @@ export function createTaskExecutionContext(input: {
   readonly intentId: string
   readonly token: OwnershipToken
   readonly db: PersistenceDb
+  readonly historyRestrictions: HistoryRestrictionPort
 }): SqliteTaskExecutionContext {
   const context = createProviderTaskExecutionContext({
     intentId: input.intentId,
     token: input.token,
-    persistence: createTaskExecutionPersistence(input.db),
+    persistence: createTaskExecutionPersistence(input.db, input),
     legacyConnection: input.db,
     compatibility: { db: input.db },
   })

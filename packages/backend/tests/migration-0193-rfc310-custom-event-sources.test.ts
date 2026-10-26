@@ -1,13 +1,11 @@
-import { rawRows } from '@/platform/persistence/queryHelpers'
+import { createFrozenEpoch1Db, FROZEN_MIGRATIONS as MIGRATIONS } from './migration-freeze'
+import { frozenRawRows as rawRows } from './migration-freeze'
 import { describe, expect, test } from 'bun:test'
 import { sql } from 'drizzle-orm'
 
-import { createInMemoryDb } from '@/db/client'
-import { MIGRATIONS } from './migration-freeze'
-
 describe('migration 0193 — global custom event sources', () => {
   test('adds stable definitions and immutable revision receipts without changing event runtime tables', () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createFrozenEpoch1Db(MIGRATIONS)
     const tables = rawRows<{ name: string }>(
       db,
       sql`SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name`,

@@ -28,9 +28,8 @@ import {
 
 /** RFC-345 D4 —— canonical ACL roster 的表注册（两个 provider 共用同一张逻辑表清单）。 */
 export const ACL_TABLES = (db: object) => {
+  const { agents, skills } = tablesOf(db)
   const {
-    agents,
-    skills,
     mcps,
     plugins,
     workflows,

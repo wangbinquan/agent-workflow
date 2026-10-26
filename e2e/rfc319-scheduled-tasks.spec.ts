@@ -1,3 +1,4 @@
+import { liveSqlitePath } from './storage'
 // RFC-319 —— 定时任务（Scheduled Tasks）的用户面验收
 // （EVENT-39 / EVENT-40 / EVENT-41 / EVENT-43 / EVENT-44 / EVENT-45 / EVENT-47 /
 //   EVENT-X1 / EVENT-X3）。
@@ -73,7 +74,6 @@
 //     同一条结论，并额外要求详情页说出**具体的解析原因**。
 
 import { expect, test, type Locator, type Page } from '@playwright/test'
-import { join } from 'node:path'
 
 import { querySqlite, runSqlite } from './command'
 import { startDaemon, type DaemonHandle } from './harness'
@@ -272,7 +272,7 @@ async function runNow(id: string): Promise<{ taskId: string }> {
 }
 
 function dbPath(): string {
-  return join(daemon.home, 'db.sqlite')
+  return liveSqlitePath(daemon.home)
 }
 
 /**

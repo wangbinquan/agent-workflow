@@ -8,16 +8,17 @@ import { afterEach, describe, expect, test } from 'bun:test'
 import type { Database } from 'bun:sqlite'
 import type { DatabaseConfig } from '@agent-workflow/shared'
 import { composeDatabaseMigrationModule } from '@/modules/system-operations/composition/databaseMigration'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, rmSync, writeFileSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createInMemoryDb } from '@/db/client'
 import { createDatabaseMigrationCoordinator } from '@/modules/system-operations/infrastructure/databaseMigrationCoordinator'
-import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import { persistenceHead } from '@/bootstrap/persistenceHead'
+import { writeGenerationPointerV2 } from '@/platform/persistence/generationPointerV2'
+import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { createPostgresqlDatabaseRuntime } from '@/platform/persistence/postgresqlRuntime'
 import { resolvePostgresqlTestUrlEnv, resolveTestProviders } from './helpers/eachProvider'
 
-const MIGRATIONS = join(import.meta.dir, '..', 'db', 'migrations')
 const roots: string[] = []
 
 afterEach(() => {
@@ -31,14 +32,14 @@ describe('RFC-349 production database migration coordinator', () => {
     const root = mkdtempSync(join(tmpdir(), 'rfc349-coordinator-preflight-env-'))
     roots.push(root)
     const sqlitePath = join(root, 'db.sqlite')
-    const drizzle = createInMemoryDb(MIGRATIONS)
+    const drizzle = createInMemoryDb()
     const sqlite = (drizzle as unknown as { $client: Database }).$client
     writeFileSync(sqlitePath, sqlite.serialize())
     sqlite.close()
 
     const coordinator = createDatabaseMigrationCoordinator({
-      headContract: buildLogicalSchemaContract(),
-      contract: buildLogicalSchemaContract(),
+      headContract: logicalSchemaContract,
+      contract: logicalSchemaContract,
       sqlitePath,
       operationsRoot: join(root, 'database-migrations'),
       generationPointerPath: join(root, 'database-generation.json'),
@@ -75,14 +76,14 @@ describe('RFC-349 production database migration coordinator', () => {
     const root = mkdtempSync(join(tmpdir(), 'rfc349-coordinator-bootstrap-failure-'))
     roots.push(root)
     const sqlitePath = join(root, 'db.sqlite')
-    const drizzle = createInMemoryDb(MIGRATIONS)
+    const drizzle = createInMemoryDb()
     const sqlite = (drizzle as unknown as { $client: Database }).$client
     writeFileSync(sqlitePath, sqlite.serialize())
     sqlite.close()
 
     const coordinator = createDatabaseMigrationCoordinator({
-      headContract: buildLogicalSchemaContract(),
-      contract: buildLogicalSchemaContract(),
+      headContract: logicalSchemaContract,
+      contract: logicalSchemaContract,
       sqlitePath,
       operationsRoot: join(root, 'database-migrations'),
       generationPointerPath: join(root, 'database-generation.json'),
@@ -127,17 +128,37 @@ describe('RFC-349 production database migration coordinator', () => {
       const root = mkdtempSync(join(tmpdir(), 'rfc349-coordinator-'))
       roots.push(root)
       const sqlitePath = join(root, 'db.sqlite')
-      const drizzle = createInMemoryDb(MIGRATIONS)
+      const drizzle = createInMemoryDb()
       const sqlite = (drizzle as unknown as { $client: Database }).$client
       writeFileSync(sqlitePath, sqlite.serialize())
       sqlite.close()
+      const head = persistenceHead()
+      const pointerPath = join(root, 'database-generation.json')
+      writeGenerationPointerV2({
+        pointerPath,
+        payload: {
+          version: 2,
+          schemaEpoch: 2,
+          generationId: 'dbg_coordinator_installed',
+          provider: 'sqlite',
+          role: 'installed',
+          database: { kind: 'sqlite-file', relativePath: 'db.sqlite' },
+          contractDigest: head.contract.contract.digest,
+          planDigest: head.sqlite.digest,
+          operationId: null,
+          manifestDigest: null,
+          activatedAt: 1,
+          previous: null,
+        },
+      })
+      const installedPointer = readFileSync(pointerPath)
 
       const urlEnv = process.env.RFC349_DATABASE_URL
         ? 'RFC349_DATABASE_URL'
         : resolvePostgresqlTestUrlEnv(process.env)
       if (urlEnv === undefined)
         throw new Error('selected PostgreSQL migration requires a disposable test URL')
-      const contract = buildLogicalSchemaContract()
+      const contract = logicalSchemaContract
       const admissions: string[] = []
       let activatedTarget: unknown
       let sourceActivations = 0
@@ -163,7 +184,7 @@ describe('RFC-349 production database migration coordinator', () => {
         failBackground = reject
       })
       const { coordinator } = composeDatabaseMigrationModule({
-        contract: buildLogicalSchemaContract(),
+        contract: logicalSchemaContract,
         sqlitePath,
         operationsRoot: join(root, 'database-migrations'),
         generationPointerPath: join(root, 'database-generation.json'),
@@ -299,6 +320,7 @@ describe('RFC-349 production database migration coordinator', () => {
         rolledBackAt: expect.any(Number),
         rollback: { eligible: false, reason: 'operation-rolled-back' },
       })
+      expect(readFileSync(pointerPath)).toEqual(installedPointer)
       expect(sourceActivations).toBe(1)
       expect(configurationState.current).toEqual({ provider: 'sqlite' })
       expect(admissions.slice(-2)).toEqual(['freeze', 'sqlite'])

@@ -104,7 +104,14 @@ function postgresqlRegistration(text: string): string {
   const statements = loop.statements
   const resetIndex = statements.findIndex((statement) => isAwaitedSnapshotReset(statement, source))
   if (resetIndex < 0) throw new Error('missing awaited original snapshot reset')
-  const registration = registrationBranch(statements[resetIndex + 1], source, 'options', 'client')
+  if (
+    compact(statements[resetIndex + 1]!, source) !==
+    'resetPostgresqlGenerationWriteCache(database.applicationBinding.runtime)'
+  )
+    throw new Error(
+      'fixture generation cache must reset after the database and before registration',
+    )
+  const registration = registrationBranch(statements[resetIndex + 2], source, 'options', 'client')
   if (
     compact(statements[0]!, source) !== 'const{client,raw,snapshot,sinks}=database' ||
     !statements.some((statement) => compact(statement, source) === 'state.db=client') ||
@@ -148,6 +155,8 @@ function runPostgresqlRegistration(
     'snapshot',
     'registerLegacyDaemonTestFixture',
     'phase',
+    'database',
+    'resetPostgresqlGenerationWriteCache',
     `${stepJavaScript}\nreturn (async () => { ${postgresqlRegistration(harnessText)} })()`,
   )
   return run(
@@ -158,6 +167,8 @@ function runPostgresqlRegistration(
     snapshot,
     fixtureRegistry.registerLegacyDaemonTestFixture,
     undefined,
+    { applicationBinding: { runtime: {} } },
+    () => {},
   )
 }
 

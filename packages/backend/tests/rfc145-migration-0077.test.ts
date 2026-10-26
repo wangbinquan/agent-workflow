@@ -12,7 +12,7 @@
 // 另按 0044 先例锁列存在/往返/历史行 NULL/全枚举可存（真迁移链路）。
 
 import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import { frozenTablesOf as tablesOf, createFrozenEpoch1Db } from './migration-freeze'
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
@@ -20,7 +20,7 @@ import { Database } from 'bun:sqlite'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { FAILURE_CODES } from '@agent-workflow/shared'
-import { createInMemoryDb } from '../src/db/client'
+
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const MIGRATION = readFileSync(resolve(MIGRATIONS, '0077_rfc145_failure_code.sql'), 'utf8')
 
@@ -157,12 +157,12 @@ describe('migration 0077 — 信封前缀 backfill 逐格', () => {
 })
 
 // ---------------------------------------------------------------------------
-// 0044 式四测：真迁移链路（createInMemoryDb 应用全部 77 个迁移）。
+// 0044 式四测：真迁移链路（createFrozenEpoch1Db 应用全部 77 个迁移）。
 // ---------------------------------------------------------------------------
 
 describe('migration 0077 — 真迁移链路（0044 先例四测）', () => {
   async function harness() {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createFrozenEpoch1Db()
     const workflowId = ulid()
     const { workflows, tasks } = tablesOf(db)
     await insertOne(db, workflows, {

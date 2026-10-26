@@ -1,15 +1,15 @@
-import { tablesOf } from '@/platform/persistence/sessionTables'
-import { preparedArtifactLane } from './workspaceLaunchLane'
-import type { GitCommitIdentity } from '@agent-workflow/shared'
-import { eq } from 'drizzle-orm'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { materializingSpaces } from '@/platform/workspace/materializingSpaces'
 import { ConflictError } from '@/util/errors'
 import { sha256Hex } from '@/util/hash'
-import type { TaskRepositoryPreparationBinding } from './repositoryPreparationBinding'
+import type { GitCommitIdentity } from '@agent-workflow/shared'
+import { eq } from 'drizzle-orm'
 import type { WorkspacePreparationState } from '../application/ports/workspacePreparationJournal'
-import { createWorkspacePreparationJournal } from './workspacePreparationJournal'
 import { withTaskExecutionWrite } from './ownedTaskExecution'
+import type { TaskRepositoryPreparationBinding } from './repositoryPreparationBinding'
+import { preparedArtifactLane } from './workspaceLaunchLane'
+import { createWorkspacePreparationJournal } from './workspacePreparationJournal'
 
 export function scratchAdmissionPrefix(appHome: string): string {
   return `task-scratch:${sha256Hex(appHome)}:`
@@ -144,7 +144,7 @@ export async function prepareScratchWorkspace(input: {
           ownerFence: current.ownerFence,
           from: 'preparing',
           to: 'prepared',
-          artifactJson: JSON.stringify({ version: 1, space }),
+          artifactJson: JSON.stringify({ version: 2, space }),
           now: Date.now(),
         })) === null
       )

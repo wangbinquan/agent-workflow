@@ -1,3 +1,4 @@
+import { liveSqlitePath } from './storage'
 // RFC-319 —— 设置页运维面板的用户面 e2e
 // （账本 OPS-032 / OPS-033 / OPS-034 / OPS-035 / OPS-036 / OPS-037 / OPS-038 / OPS-X6）。
 //
@@ -204,7 +205,7 @@ test.afterAll(async () => {
 // --------------------------------------------------------------------------
 
 function dbPath(): string {
-  return join(homeDir, 'db.sqlite')
+  return liveSqlitePath(homeDir)
 }
 
 async function api(path: string, init: RequestInit = {}): Promise<Response> {

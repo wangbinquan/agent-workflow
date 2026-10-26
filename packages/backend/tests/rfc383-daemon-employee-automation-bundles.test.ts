@@ -1,3 +1,4 @@
+import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 // RFC-383: session identity, initialization and selected program reads, with former SQLite/PG controls.
 import { createProviderHttpCompositionFixture } from './helpers/providerHttpComposition'
 import { afterEach, expect, spyOn, test } from 'bun:test'
@@ -70,15 +71,11 @@ describeEachProvider('RFC-383 employee and development session bundles', (harnes
         ].sort(),
       )
       expect(Object.keys(automation).sort()).toEqual(
-        [
-          'admissionLookup',
-          'automation',
-          'missionOperations',
-          'missionInputUploads',
-          'sweepWakesWhileDraining',
-          'recoverWhileDraining',
-        ].sort(),
+        ['admissionLookup', 'automation', 'missionOperations', 'missionInputUploads'].sort(),
       )
+      // RFC-395 design D11 retires legacy writer drain from the epoch-2 root.
+      expect('sweepWakesWhileDraining' in automation).toBe(false)
+      expect('recoverWhileDraining' in automation).toBe(false)
       expect(employee.module).not.toBe(f.employee.module)
       expect(employee.writerCutover).not.toBe(f.employee.writerCutover)
       expect(employeeSpy.mock.calls[0]![0].writerCutover).toBe(employee.writerCutover)
@@ -280,7 +277,11 @@ describeEachProvider('RFC-383 employee and development session bundles', (harnes
         // Former SQLite constructed the facade per call, but it already reached the same registry.
         // Former PG used its session cancellation participant directly.
         const formerFacade = former && harness.applicationBinding.provider === 'sqlite'
-        if (formerFacade) await composeTaskCancellation(harness.db).cancel(seeded.taskId)
+        if (formerFacade)
+          await composeTaskCancellation(
+            harness.db,
+            epoch2RuntimeTestPorts(harness.db).historyRestrictions,
+          ).cancel(seeded.taskId)
         else if (former)
           await f.taskExecution.cancellation.cancel({
             taskId: seeded.taskId,
@@ -314,7 +315,7 @@ describeEachProvider('RFC-383 HTTP uses the initialized session', (harness) => {
       token = 'rfc383-http'
     await f.employee.platformTools.load()
     await f.employee.module.maintenance.ready()
-    await f.employee.writerCutover.activate()
+    expect(Object.keys(f.employee.writerCutover).sort()).toEqual(['analyze', 'read'])
     const opened = await createProviderHttpCompositionFixture(harness, {
       appHome,
       token,

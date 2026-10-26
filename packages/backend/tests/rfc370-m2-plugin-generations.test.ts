@@ -136,13 +136,14 @@ describeEachProvider('RFC-370 durable hosted plugin generations', (harness) => {
     await expect(f.create().installGeneration('plugin', 'fixture@1', 'gen')).rejects.toThrow(
       'pin reply lost',
     )
-    const { pluginArtifactGenerations, hostedObjectPublications } = tablesOf(harness.db)
+    const { pluginArtifactGenerations } = tablesOf(harness.db)
+    const { contentPublications } = tablesOf(harness.db)
     const installing = (await harness.db.select().from(pluginArtifactGenerations))[0]!
     expect(installing).toMatchObject({ state: 'installing', objectId: null })
     expect(installing.installedJson).not.toBeNull()
-    expect(
-      (await harness.db.select().from(hostedObjectPublications)).map((row) => row.state),
-    ).toEqual(['pending'])
+    expect((await harness.db.select().from(contentPublications)).map((row) => row.state)).toEqual([
+      'pending',
+    ])
     const publication = await f.create().installGeneration('plugin', 'fixture@1', 'gen')
     const manifest = await f.create().read(publication.cachedPath)
     expect(manifest.entry).toBe('node_modules/fixture')
@@ -168,7 +169,8 @@ describeEachProvider('RFC-370 durable hosted plugin generations', (harness) => {
     const f = fixture()
     const publication = await f.create().installGeneration('plugin', 'fixture@1', 'gen')
     const reference = f.create().generationReference('plugin', 'gen')
-    const { plugins, pluginArtifactGenerations, hostedObjectPublications } = tablesOf(harness.db)
+    const { plugins, pluginArtifactGenerations } = tablesOf(harness.db)
+    const { contentPublications } = tablesOf(harness.db)
     await insertOne(harness.db, plugins, {
       id: 'plugin',
       name: 'Plugin',
@@ -199,7 +201,7 @@ describeEachProvider('RFC-370 durable hosted plugin generations', (harness) => {
     expect(f.releases).toHaveLength(0)
     f.loseRelease()
     expect(await f.settle()).toMatchObject({ failures: 1 })
-    await harness.db.update(hostedObjectPublications).set({ nextAttemptAt: 0 })
+    await harness.db.update(contentPublications).set({ nextAttemptAt: 0 })
     await f.settle()
     expect(f.releases).toHaveLength(2)
     await expect(f.create().read(publication.cachedPath)).rejects.toThrow('not-ready')
@@ -218,9 +220,10 @@ describeEachProvider('RFC-370 durable hosted plugin generations', (harness) => {
     await expect(f.create().installGeneration('plugin', 'fixture@1', 'gen')).rejects.toThrow(
       'fence lost',
     )
-    const { pluginArtifactGenerations, hostedObjectPublications } = tablesOf(harness.db)
+    const { pluginArtifactGenerations } = tablesOf(harness.db)
+    const { contentPublications } = tablesOf(harness.db)
     expect(await harness.db.select().from(pluginArtifactGenerations)).toHaveLength(0)
-    expect(await harness.db.select().from(hostedObjectPublications)).toHaveLength(0)
+    expect(await harness.db.select().from(contentPublications)).toHaveLength(0)
     expect(f.pins).toHaveLength(0)
   })
 

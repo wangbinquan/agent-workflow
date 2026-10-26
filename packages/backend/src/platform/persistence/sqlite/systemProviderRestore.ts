@@ -1,3 +1,11 @@
+import { sqliteHistorySession } from '@/platform/persistence/sqlite/historySession'
+import { atomicScratch } from './atomicScratch'
+import { recordedLiveLogicalContract } from '@/platform/persistence/schema/history/logicalHistory'
+import { admitSqliteHistorySync } from '@/platform/persistence/schema/history/admission'
+import { schemaHistoryRuntime } from '../schema/history/runtime'
+import { applyHistoryVersion } from '../schema/history/apply'
+import { writeGenerationPointerV2 } from '../generationPointerV2'
+import { relative } from 'node:path'
 // RFC-213 PR-1a — cold restore (daemon stopped).
 //
 // Rehydrates ~/.agent-workflow from a backup tarball produced by createBackup or
@@ -32,7 +40,7 @@ import {
   rmSync,
   unlinkSync,
 } from 'node:fs'
-import { dirname, join } from 'node:path'
+import { basename, dirname, join, resolve } from 'node:path'
 import { openDb, type DbClient } from '@/db/client'
 import { quickCheckDbFile } from '@/db/integrity'
 import { bumpRecoveryCounter } from '@/services/recovery'
@@ -42,15 +50,8 @@ import { openSqliteLogicalSource } from '@/platform/persistence/sqliteLogicalSou
 import { readLogicalDatabaseBackupEnvelope } from '@/platform/persistence/logicalDatabaseExport'
 import { verifyLogicalDatabaseSourceMatchesArtifact } from '@/platform/persistence/logicalDatabaseRestore'
 import type { LogicalSchemaContract } from '@/platform/persistence/schemaContract'
-import { loadPostgresqlMigrationHistory } from '@/platform/persistence/postgresqlMigrationHistory'
-import { resolvePostgresqlAdditiveRowBridge } from '@/platform/persistence/postgresqlMigrationSequence'
 import { Paths } from '@/util/paths'
-import {
-  type BackupManifest,
-  currentAppVersion,
-  readManifest,
-  readMigrationAxisFromJournal,
-} from './systemBackupManifest'
+import { type BackupManifest, currentAppVersion, readManifest } from './systemBackupManifest'
 import { rawCopyDb } from '@/services/rawDbSnapshot'
 import { reconstructWorktrees } from '@/platform/persistence/portableApplicationAssets'
 import { ulid } from 'ulid'
@@ -96,25 +97,17 @@ async function verifyPortableDatabasePayload(
   currentContract: LogicalSchemaContract,
 ): Promise<void> {
   if (manifest?.manifestVersion !== 2) return
-  let contract = currentContract
   const database = manifest.database
+  const contract = await recordedLiveLogicalContract(database.schemaDigest, currentContract)
   if (database.provider !== 'sqlite' || database.rawSqlitePath !== 'db.sqlite') {
     throw new Error(
       `${prefix}: this restore path requires a matching SQLite raw+logical database payload`,
     )
   }
-  if (database.schemaDigest !== contract.digest) {
-    try {
-      const history = await loadPostgresqlMigrationHistory({ headContract: currentContract })
-      contract = resolvePostgresqlAdditiveRowBridge(history, {
-        fromContractDigest: database.schemaDigest,
-        toContractDigest: contract.digest,
-      }).source
-    } catch {
-      throw new Error(
-        `${prefix}: this restore path requires a matching SQLite raw+logical database payload`,
-      )
-    }
+  if (!contract) {
+    throw new Error(
+      `${prefix}: recorded contract is not in this binary's epoch-2 history; use the matching binary or db migration restore-backup`,
+    )
   }
   const artifactRoot = join(staging, database.logicalPath)
   const envelope = readLogicalDatabaseBackupEnvelope({
@@ -153,22 +146,6 @@ async function verifyPortableDatabasePayload(
 }
 
 export type RestoreDirection = 'same' | 'forward' | 'downgrade'
-
-/** `--no-migrate` may deliberately expose a pre-0117 schema to an older binary. */
-function hasFusionProvenanceSchema(db: DbClient): boolean {
-  const raw = (db as unknown as { $client: Database }).$client
-  const fusionColumns = new Set(
-    (
-      raw.query("SELECT name FROM pragma_table_info('fusions')").all() as Array<{ name: string }>
-    ).map((column) => column.name),
-  )
-  const memoryColumns = new Set(
-    (
-      raw.query("SELECT name FROM pragma_table_info('memories')").all() as Array<{ name: string }>
-    ).map((column) => column.name),
-  )
-  return fusionColumns.has('skill_id') && memoryColumns.has('fused_into_skill_id')
-}
 
 export class RestoreDowngradeError extends Error {
   constructor(backupCreatedAt: number, currentMaxWhen: number) {
@@ -229,6 +206,97 @@ export class RestorePostSwapError extends Error {
   }
 }
 
+function recordedEpoch2Version(staging: string, skipIntegrityCheck = false): number {
+  const path = join(staging, 'db.sqlite')
+  if (!existsSync(path)) throw new Error('restore refused: backup contains no db.sqlite')
+  if (!skipIntegrityCheck) {
+    const check = quickCheckDbFile(path)
+    if (!check.ok) throw new RestoreIntegrityError(check.errors)
+  }
+  let db: Database | undefined
+  try {
+    try {
+      db = new Database(path, { readonly: true })
+      db.query('SELECT name FROM sqlite_schema LIMIT 1').get()
+    } catch (error) {
+      throw new RestoreIntegrityError([
+        `${error instanceof Error ? error.message : String(error)}; ` +
+          '--skip-integrity-check cannot restore an unreadable SQLite database; use a readable verified backup or recover it with SQLite recovery tools first',
+      ])
+    }
+    if (!db.query("SELECT 1 FROM sqlite_schema WHERE name = 'aw_meta_schema_history'").get())
+      throw new Error('epoch-1 backup requires offline db migration restore-backup')
+    const row = db
+      .query(
+        'SELECT version, artifact_json FROM aw_meta_schema_history ORDER BY version DESC LIMIT 1',
+      )
+      .get() as { version: number; artifact_json: string } | null
+    if (!row) throw new Error('restore recorded epoch-2 contract missing')
+    admitSqliteHistorySync(db, {
+      binary: JSON.parse(row.artifact_json),
+      metaTables: schemaHistoryRuntime().metaTables,
+    })
+    return row.version
+  } finally {
+    db?.close()
+  }
+}
+function publishRestoredSqliteGeneration(
+  db: Database,
+  appHome: string,
+  dbPath: string,
+  now: number,
+): void {
+  const head = schemaHistoryRuntime().head()
+  // A fresh restore resolver already reserved this generation's directory. Keep
+  // that identity when publishing the first pointer; later restores mint a new one.
+  const generationDirectory = dirname(resolve(dbPath))
+  const generationId =
+    !existsSync(join(appHome, 'database-generation.json')) &&
+    dirname(generationDirectory) === resolve(appHome, 'databases')
+      ? basename(generationDirectory)
+      : `dbg_${crypto.randomUUID()}`
+  atomicScratch(db, () => {
+    const rows = db
+      .query("SELECT generation_id FROM aw_meta_generations WHERE state = 'active'")
+      .all() as { generation_id: string }[]
+    if (rows.length !== 1) throw new Error('restore-active-generation-missing')
+    db.query(
+      "UPDATE aw_meta_generations SET state='retired',retired_at=? WHERE generation_id=?",
+    ).run(now, rows[0]!.generation_id)
+    db.query(
+      "INSERT INTO aw_meta_generations (generation_id,schema_epoch,role,state,provider,source_generation_id,contract_digest,plan_digest,created_at,activated_at) VALUES (?,2,'installed','active','sqlite',?,?,?,?,?)",
+    ).run(
+      generationId,
+      rows[0]!.generation_id,
+      head.contract.contract.digest,
+      head.sqlite.digest,
+      now,
+      now,
+    )
+    db.query(
+      'INSERT INTO aw_meta_first_write (generation_id,first_live_write_at) VALUES (?,NULL)',
+    ).run(generationId)
+  })
+  writeGenerationPointerV2({
+    pointerPath: join(appHome, 'database-generation.json'),
+    payload: {
+      version: 2,
+      schemaEpoch: 2,
+      generationId,
+      provider: 'sqlite',
+      role: 'installed',
+      database: { kind: 'sqlite-file', relativePath: relative(appHome, dbPath) },
+      contractDigest: head.contract.contract.digest,
+      planDigest: head.sqlite.digest,
+      operationId: null,
+      manifestDigest: null,
+      activatedAt: now,
+      previous: null,
+    },
+  })
+}
+
 export interface RestorePlan {
   manifest: BackupManifest | null
   backupLastCreatedAt: number | null
@@ -266,7 +334,7 @@ export interface RestoreOptions {
    * restored generation before its database handle closes. SQLite restore owns
    * the handle lifecycle, while Memory owns fusion provenance semantics.
    */
-  postOpenRecovery: SqlitePostRestoreRecovery
+  postOpenRecovery?: SqlitePostRestoreRecovery
   now?: number
   /** Test-only fault-injection seam: invoked immediately AFTER the DB swap so a
    *  test can force a post-swap failure and assert the RestorePostSwapError /
@@ -285,10 +353,10 @@ export interface RestoreResult {
   restored: { db: boolean; config: boolean; skills: boolean }
 }
 
-/** Extract a tarball's manifest without touching live state (for --dry-run). */
+/** Inspect the incoming archive and history without touching live state (for --dry-run). */
 export async function planRestore(
   tarballPath: string,
-  opts: { migrationsFolder?: string; appHome?: string } = {},
+  opts: { migrationsFolder?: string; appHome?: string; skipIntegrityCheck?: boolean } = {},
 ): Promise<RestorePlan> {
   const appHome = opts.appHome ?? Paths.root
   const staging = join(appHome, 'backups', `.plan-${Date.now()}-${process.pid}`)
@@ -296,10 +364,8 @@ export async function planRestore(
   try {
     await extractTarGz(tarballPath, staging)
     const manifest = readManifest(staging)
-    const currentMaxWhen = readMigrationAxisFromJournal(
-      opts.migrationsFolder ?? Paths.migrationsDir,
-    ).maxWhen
-    const backupLastCreatedAt = manifest?.migration.lastCreatedAt ?? null
+    const currentMaxWhen = schemaHistoryRuntime().head().contract.version
+    const backupLastCreatedAt = recordedEpoch2Version(staging, opts.skipIntegrityCheck)
     return {
       manifest,
       backupLastCreatedAt,
@@ -313,7 +379,7 @@ export async function planRestore(
 
 /**
  * Impl-gate P1-1 (2026-07-22) — FULL entry validation before STAGING a hot
- * restore. `planRestore` only reads the manifest; a staged tarball that later
+ * restore. Planning does not verify every application payload; a staged tarball that later
  * failed `restoreBackup` on boot used to loop forever: marker + tarball survive
  * a failed apply, so every startup re-failed identically until someone hand-rm'd
  * `.restore-pending/` (which no error message mentioned). Validate here exactly
@@ -338,17 +404,15 @@ export async function validateBackupForStage(
   try {
     await extractTarGz(tarballPath, staging)
     const manifest = readManifest(staging)
-    const currentMaxWhen = readMigrationAxisFromJournal(
-      opts.migrationsFolder ?? Paths.migrationsDir,
-    ).maxWhen
-    const backupLastCreatedAt = manifest?.migration.lastCreatedAt ?? null
-    const direction = computeRestoreDirection(backupLastCreatedAt, currentMaxWhen)
-    if (direction === 'downgrade') {
-      throw new RestoreDowngradeError(backupLastCreatedAt!, currentMaxWhen)
-    }
     const incomingDb = join(staging, 'db.sqlite')
     if (!existsSync(incomingDb)) {
       throw new Error('stage refused: backup contains no db.sqlite (not a backup tarball?)')
+    }
+    const currentMaxWhen = schemaHistoryRuntime().head().contract.version
+    const backupLastCreatedAt = recordedEpoch2Version(staging, opts.skipIntegrityCheck)
+    const direction = computeRestoreDirection(backupLastCreatedAt, currentMaxWhen)
+    if (direction === 'downgrade') {
+      throw new RestoreDowngradeError(backupLastCreatedAt!, currentMaxWhen)
     }
     if (existsSync(`${incomingDb}-wal`)) {
       try {
@@ -408,6 +472,7 @@ function fsyncFile(path: string): void {
  * WAL-mismatch detection masks it at the behavioural level).
  */
 export function swapInDbFile(incomingDb: string, dbPath: string): void {
+  mkdirSync(dirname(dbPath), { recursive: true })
   fsyncFile(incomingDb)
   // RFC-254: on Windows, bun:sqlite releases the OS file handle on GC, not on
   // close(). Restore's own pre-swap safety copy (rawCopyDb) opens the live DB to
@@ -494,15 +559,19 @@ export async function restoreBackup(
   try {
     await extractTarGz(tarballPath, staging)
     const manifest = readManifest(staging)
-    const currentMaxWhen = readMigrationAxisFromJournal(migrationsFolder).maxWhen
-    const backupLastCreatedAt = manifest?.migration.lastCreatedAt ?? null
+    const currentMaxWhen = schemaHistoryRuntime().head().contract.version
+    const backupLastCreatedAt = recordedEpoch2Version(staging, opts.skipIntegrityCheck)
     const direction = computeRestoreDirection(backupLastCreatedAt, currentMaxWhen)
 
     // Refusal checks BEFORE touching live state.
     if (direction === 'downgrade') {
       throw new RestoreDowngradeError(backupLastCreatedAt!, currentMaxWhen)
     }
-    const willMigrate = !opts.noMigrate && direction === 'forward'
+    if (opts.noMigrate && direction === 'forward')
+      throw new Error(
+        'restore requires epoch-2 schema history upgrade; --no-migrate cannot admit an older contract',
+      )
+    const willMigrate = direction === 'forward'
     if (
       manifest?.kind === 'pre-migration' &&
       willMigrate &&
@@ -588,8 +657,12 @@ export async function restoreBackup(
       rmSync(liveSkills, { recursive: true, force: true })
       if (isRealDirectory(stagedSkills)) {
         cpSync(stagedSkills, liveSkills, { recursive: true })
-        restored.skills = true
+      } else {
+        mkdirSync(liveSkills, { recursive: true })
       }
+      // Clearing the previous tree restores the empty backup-era state too.
+      // The receipt describes what was restored, not whether tar had a folder.
+      restored.skills = true
 
       // Forward-migrate the swapped-in DB (also re-runs the boot integrity gate).
       const migrated = willMigrate
@@ -599,28 +672,25 @@ export async function restoreBackup(
         // quick_check then threw AFTER the swap — the flag's whole purpose
         // (salvage a quick_check-failing but readable backup) self-defeated, and
         // the abort landed mid-restore (DB swapped, suspend/reconstruct skipped).
+        const native = new Database(dbPath)
+        try {
+          if (willMigrate)
+            for (const version of schemaHistoryRuntime().history?.() ?? [])
+              if (version.contract.version > backupLastCreatedAt)
+                await applyHistoryVersion(sqliteHistorySession(native), {
+                  version,
+                  metaTables: schemaHistoryRuntime().metaTables,
+                })
+          publishRestoredSqliteGeneration(native, appHome, dbPath, now)
+        } finally {
+          native.close()
+        }
         const db = openDb({
           path: dbPath,
           migrationsFolder,
-          skipMigrations: !willMigrate,
+          skipMigrations: false,
           skipIntegrityCheck: opts.skipIntegrityCheck,
         })
-        // RFC-223 PR-5: filesystem state was copied just before openDb and the
-        // restored DB has now been forward-migrated. Reuse the exact boot
-        // barrier before any restored task/state is exposed or the DB closes;
-        // absolute legacy op paths are rebased to this restore's appHome.
-        if (willMigrate || direction === 'same') {
-          const { runSkillIdentityMigrationBarrier } =
-            await import('@/services/skillIdentityMigration')
-          await runSkillIdentityMigrationBarrier(db, { appHome })
-        }
-        // RFC-223 PR-4: SQL can recover committed fusion versions, while
-        // in-flight legacy rows require decoding their launch-time token in
-        // application code. Run the same fail-closed repair as normal boot
-        // before this forward-restored DB can be exposed.
-        if (hasFusionProvenanceSchema(db)) {
-          await opts.postOpenRecovery.recover({ db, appHome })
-        }
         // RFC-213 G4a mismatch-protect: the restored rows are backup-era, but the
         // on-disk worktrees are current. Suspend auto-recovery for every non-terminal
         // task so the auto-resume loop can't silently roll a NEWER worktree back to a

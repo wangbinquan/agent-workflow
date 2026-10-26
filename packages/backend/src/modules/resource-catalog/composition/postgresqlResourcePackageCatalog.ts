@@ -87,6 +87,7 @@ export function composePostgresqlResourcePackageProvider(
     skillArtifacts:
       input.skillArtifacts ??
       createFileResourcePackageSkillArtifactOwner({
+        db: input.db,
         appHome: input.appHome,
       }),
     capabilityTemplates: input.capabilityTemplates,

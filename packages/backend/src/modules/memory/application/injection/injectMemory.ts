@@ -6,7 +6,6 @@
 // 不从 memory public query 暴露正文。RFC-041 的 live-read 语义保持不变——每次 runNode
 // 重新取当前 approved 的行，中途新批准的记忆下一次 runNode 即生效。
 
-import { nodeRunOrderAnchor } from '@agent-workflow/shared'
 import { createRunHistorySnapshot } from '@/modules/task-execution/public/queries'
 import type { Agent, InjectedMemorySnapshot } from '@agent-workflow/shared'
 import type { MemoryInjectionReadStore, MemoryInjectionRecord } from '../ports/injectionReadStore'
@@ -292,7 +291,8 @@ export async function loadInjectedSnapshotFromFirstAttempt(
   const candidates = await store.listRunRecords(ctx)
   // Walk the in-scope top-level rows up to the runId anchor in mint order; the anchor is the
   // LATEST generation start (first row, or a row whose predecessor was `done`).
-  const anchorKey = nodeRunOrderAnchor(candidates, ctx.runId)
+  const anchorKey = candidates.find((row) => row.id === ctx.runId)
+  if (anchorKey === undefined || anchorKey.seq === null) return null
   const history = await createRunHistorySnapshot(
     ctx.taskId,
     candidates.map((row) => ({

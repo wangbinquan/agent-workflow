@@ -1,3 +1,4 @@
+import { epoch2RuntimeTestPorts } from './epoch2RuntimePorts'
 import { composeSourceControlTaskPorts } from '@/modules/task-execution/composition'
 import { readTaskFixtures, taskFixture, workflowFixture } from './model'
 import { insertOne } from '@/platform/persistence/singleInsert'
@@ -90,6 +91,7 @@ export function taskBundleInput(
   const distill = createSqliteMemoryDistillEnqueuer(db)
   const distillRequests: Parameters<typeof distill.enqueue>[0][] = []
   const input: DaemonTaskExecutionInput = {
+    ...epoch2RuntimeTestPorts(db),
     db,
     appHome,
     configPath: join(appHome, 'config.json'),

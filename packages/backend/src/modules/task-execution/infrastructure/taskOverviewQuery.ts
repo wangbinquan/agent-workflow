@@ -1,13 +1,13 @@
+import { tablesOf } from '@/platform/persistence/sessionTables'
 // RFC-359 W4-B1 —— 任务总览计数：一份实现，两个 provider 共用（此前 sqlite / postgresql 两份逐字相同）。
 
-import { tablesOf } from '@/platform/persistence/sessionTables'
 import { queryRows } from '@/platform/persistence/queryHelpers'
 import { and, count, eq, gte, inArray, isNull, sql, type SQL } from 'drizzle-orm'
 
-import type { OverviewTasks } from '@agent-workflow/shared'
-import { taskVisibilityCondition } from './taskAuthorization'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
+import type { OverviewTasks } from '@agent-workflow/shared'
 import type { TaskOverviewQuery } from '../public/queries'
+import { taskVisibilityCondition } from './taskAuthorization'
 
 function createCountTemplates(db: PersistenceDb, canReadAll: boolean) {
   // RFC-359 W57：判据走 `taskAuthorization.ts` 的唯一一份。这里的请求者 id 是**预编译占位符**

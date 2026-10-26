@@ -1,3 +1,5 @@
+import { renderGenerated } from '../../../scripts/build-binary'
+import { resourcePackageArtifactCodecs } from '@/modules/resource-catalog/infrastructure/resourcePackageArtifactCodec'
 // RFC-370 CI: explicitly bind the real Worker to the current per-file PG environment.
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
@@ -109,7 +111,7 @@ describeEachProvider('RFC-370 actual selected maintenance Worker', (harness) => 
           key: journalId,
           actorUserId: 'worker-content-actor',
           state: 'prepared',
-          preparedArtifactsJson: JSON.stringify([
+          preparedArtifactsJson: resourcePackageArtifactCodecs.encode([
             {
               kind: 'plugin-install',
               operationId: randomUUID(),
@@ -433,6 +435,7 @@ test('a compiled standalone entry loads an external assembly module through the 
       define: { AW_COMPILED_BUILD: 'true' },
       compile: { outfile },
       files: {
+        [join(backendSrc, 'embed.generated.ts')]: renderGenerated('', '').contents,
         [virtualMain]: readFileSync(
           new URL('./fixtures/rfc370-compiled-maintenance-effects-probe.ts', import.meta.url),
           'utf8',

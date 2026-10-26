@@ -1,412 +1,152 @@
-import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
-import { readDaemonGraphSource } from './helpers/daemonGraphSource'
-import { bootImplementation, bootDeclaration, expectBootOrder } from './helpers/daemonProgramSource'
-// RFC-223 PR-5 — boot/restore placement and real backup forward-restore proof.
-//
-// The barrier is the first post-migration production behavior and is not wrapped
-// in best-effort handling. Restore must copy filesystem state, open/forward-
-// migrate the restored DB, run the same barrier, and only then expose/suspend/
-// reconstruct restored state. `--no-migrate` intentionally keeps the old schema
-// and skips a barrier that cannot query 0116 columns.
-
-import { afterEach, describe, expect, test } from 'bun:test'
-import { Database } from 'bun:sqlite'
-import {
-  cpSync,
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  readdirSync,
-  rmSync,
-  writeFileSync,
-} from 'node:fs'
+import { expect, test } from 'bun:test'
+import { readFileSync, mkdtempSync, mkdirSync, writeFileSync, existsSync, rmSync } from 'node:fs'
+import { resolve, join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
-import { openDb, type DbClient } from '../src/db/client'
-import { removeTempDirSync } from './fixtures/tempDir'
-import { maybePreMigrationBackup } from '../src/services/backupScheduler'
-import { rawCopyDb } from '../src/services/rawDbSnapshot'
-import { validateBackupForStage } from '../src/services/restore'
-import { extractTarGz, tarGz } from '../src/util/archive'
-import { restoreSqliteBackupForTest as restoreBackup } from './helpers/sqlitePostRestoreRecovery'
-
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
-const tmps: string[] = []
-
-describe('RFC-223 PR-5 boot/restore source ordering', () => {
-  test('boot barrier is fail-closed immediately after db-ready and before every consumer', () => {
-    const source = readDaemonGraphSource()
-    expect(source).toContain("log.info('db ready'")
-    expectBootOrder([
-      'skill-identity-barrier',
-      'skill-availability-gate',
-      'skill-live-files',
-      'fusion-resource-seed',
-      'task-execution-recovery',
-      'fusion-decision-recovery',
-    ])
-    for (const [id, call] of [
-      ['skill-identity-barrier', 'runIdentityMigrationBarrier'],
-      ['skill-availability-gate', 'activateAvailabilityGate'],
-    ] as const) {
-      expect(bootDeclaration(id)).toMatchObject({ phase: 'prepare', failure: 'fail-closed' })
-      const body = bootImplementation(source, id)
-      expect(body).toContain(`skillCatalogBoot.${call}()`)
-      expect(body).not.toContain('try {')
-      expect(body).not.toContain('catch')
-    }
-  })
-
-  test('restore copies FS then runs the barrier before restored-state consumers', () => {
-    const source = readFileSync(
-      resolve(
-        import.meta.dir,
-        '..',
-        'src',
-        'platform',
-        'persistence',
-        'sqlite',
-        'systemProviderRestore.ts',
-      ),
-      'utf-8',
-    )
-    const copySkills = source.indexOf('cpSync(stagedSkills, liveSkills')
-    const openRestored = source.indexOf('const db = openDb', copySkills)
-    const condition = source.indexOf("willMigrate || direction === 'same'", openRestored)
-    const barrier = source.indexOf('runSkillIdentityMigrationBarrier', condition)
-    const fusionRecovery = source.indexOf('opts.postOpenRecovery.recover', barrier)
-    const suspend = source.indexOf('suspendNonTerminalTasksAfterRestore(db)', barrier)
-    const reconstruct = source.indexOf('reconstructWorktrees(db, staging)', barrier)
-    const recoveryEvent = source.indexOf('recordSqliteRestoreRecoveryEvent(db', barrier)
-    expect(copySkills).toBeGreaterThan(-1)
-    expect(openRestored).toBeGreaterThan(copySkills)
-    expect(condition).toBeGreaterThan(openRestored)
-    expect(barrier).toBeGreaterThan(condition)
-    expect(fusionRecovery).toBeGreaterThan(barrier)
-    expect(suspend).toBeGreaterThan(barrier)
-    expect(suspend).toBeGreaterThan(fusionRecovery)
-    expect(reconstruct).toBeGreaterThan(barrier)
-    expect(recoveryEvent).toBeGreaterThan(barrier)
-  })
-})
-
-describe('RFC-223 PR-5 real backup restore modes', () => {
-  afterEach(() => {
-    // RFC-254: tmps hold file-backed sqlite whose handle Windows frees on GC, not
-    // close() — removeTempDirSync GCs first so the rm doesn't EBUSY.
-    for (const path of tmps.splice(0)) removeTempDirSync(path)
-  })
-
-  test('forward restore applies 0116 then migrates restored legacy FS to skill id', async () => {
-    const sourceHome = temp('aw-pr5-forward-source-')
-    const frozen = frozenAt0115()
-    const backup = await makeSkillBackup(sourceHome, frozen, 'legacy-forward', 'id-forward', true)
-    const targetHome = temp('aw-pr5-forward-target-')
-    createEmptyLiveDb(targetHome)
-
-    const result = await restoreBackup(backup, {
-      appHome: targetHome,
-      dbPath: join(targetHome, 'db.sqlite'),
-      migrationsFolder: MIGRATIONS,
-      noSafetyBackup: true,
-      now: 501,
-    })
-    expect(result.direction).toBe('forward')
-    expect(result.migrated).toBe(true)
-    assertRestoredCanonical(targetHome, 'legacy-forward', 'id-forward')
-  })
-
-  test('same-schema restore still runs the barrier for non-canonical DB/FS paths', async () => {
-    const sourceHome = temp('aw-pr5-same-source-')
-    const backup = await makeSkillBackup(sourceHome, MIGRATIONS, 'legacy-same', 'id-same', false)
-    const targetHome = temp('aw-pr5-same-target-')
-    createEmptyLiveDb(targetHome)
-
-    const result = await restoreBackup(backup, {
-      appHome: targetHome,
-      dbPath: join(targetHome, 'db.sqlite'),
-      migrationsFolder: MIGRATIONS,
-      noSafetyBackup: true,
-      now: 502,
-    })
-    expect(result.direction).toBe('same')
-    expect(result.migrated).toBe(false)
-    assertRestoredCanonical(targetHome, 'legacy-same', 'id-same')
-  })
-
-  test('forward --no-migrate preserves the old schema/legacy FS escape hatch', async () => {
-    const sourceHome = temp('aw-pr5-no-migrate-source-')
-    const frozen = frozenAt0115()
-    const backup = await makeSkillBackup(
-      sourceHome,
-      frozen,
-      'legacy-no-migrate',
-      'id-no-migrate',
-      true,
-    )
-    const targetHome = temp('aw-pr5-no-migrate-target-')
-    createEmptyLiveDb(targetHome)
-
-    const result = await restoreBackup(backup, {
-      appHome: targetHome,
-      dbPath: join(targetHome, 'db.sqlite'),
-      migrationsFolder: MIGRATIONS,
-      noSafetyBackup: true,
-      noMigrate: true,
-      now: 503,
-    })
-    expect(result.direction).toBe('forward')
-    expect(result.migrated).toBe(false)
-    const raw = new Database(join(targetHome, 'db.sqlite'), { readonly: true })
-    try {
-      const columns = raw
-        .query("SELECT name FROM pragma_table_info('skill_versions')")
-        .all() as Array<{ name: string }>
-      expect(columns.map((row) => row.name)).toContain('skill_name')
-      expect(columns.map((row) => row.name)).not.toContain('skill_id')
-    } finally {
-      raw.close()
-    }
-    expect(existsSync(join(targetHome, 'skills', 'legacy-no-migrate'))).toBe(true)
-    expect(existsSync(join(targetHome, 'skills', 'id-no-migrate'))).toBe(false)
-  })
-
-  test('raw pre-migration backup round-trips frozen 0115 DB and legacy skill tree', async () => {
-    const sourceHome = temp('aw-pr5-raw-source-')
-    const frozen = frozenAt0115()
-    const dbPath = join(sourceHome, 'db.sqlite')
-    const db = openDb({ path: dbPath, migrationsFolder: frozen })
-    const raw = sqliteOf(db)
-    raw
-      .query(
-        `INSERT INTO skills
-           (id, name, source_kind, managed_path, content_version,
-            reservation_state, version_state)
-         VALUES (?, ?, 'managed', ?, 1, 'ready', 'snapshot-authoritative')`,
-      )
-      .run('raw-id', 'raw-legacy', 'skills/raw-legacy/files')
-    raw
-      .query(
-        `INSERT INTO skill_versions
-           (id, skill_name, version_index, files_path, source, author_user_id,
-            content_hash)
-         VALUES (?, ?, 1, ?, 'initial', '__system__', 'fixture-hash')`,
-      )
-      .run('raw-version', 'raw-legacy', 'skills/raw-legacy/versions/v1/files')
-    writeTree(join(sourceHome, 'skills', 'raw-legacy', 'files'), 'raw-live-bytes')
-    writeTree(join(sourceHome, 'skills', 'raw-legacy', 'versions', 'v1', 'files'), 'raw-v1-bytes')
-    raw.exec('PRAGMA wal_checkpoint(TRUNCATE)')
-    raw.close()
-
-    const backup = await maybePreMigrationBackup({
-      appHome: sourceHome,
-      dbPath,
-      migrationsFolder: MIGRATIONS,
-      enabled: true,
-      now: 504,
-    })
-    expect(backup).not.toBeNull()
-    const extracted = temp('aw-pr5-raw-extracted-')
-    await extractTarGz(backup!, extracted)
-    expect(
-      readFileSync(join(extracted, 'skills', 'raw-legacy', 'files', 'SKILL.md'), 'utf-8'),
-    ).toContain('raw-live-bytes')
-
-    const targetHome = temp('aw-pr5-raw-target-')
-    createEmptyLiveDb(targetHome)
-    writeTree(join(targetHome, 'skills', 'new-generation'), 'must-be-replaced')
-    await restoreBackup(backup!, {
-      appHome: targetHome,
-      dbPath: join(targetHome, 'db.sqlite'),
-      migrationsFolder: MIGRATIONS,
-      noSafetyBackup: true,
-      noMigrate: true,
-      now: 505,
-    })
-    const restored = new Database(join(targetHome, 'db.sqlite'), { readonly: true })
-    try {
-      const columns = restored
-        .query("SELECT name FROM pragma_table_info('skill_versions')")
-        .all() as Array<{ name: string }>
-      expect(columns.map((column) => column.name)).toContain('skill_name')
-      expect(columns.map((column) => column.name)).not.toContain('skill_id')
-    } finally {
-      restored.close()
-    }
-    expect(
-      readFileSync(join(targetHome, 'skills', 'raw-legacy', 'files', 'SKILL.md'), 'utf-8'),
-    ).toContain('raw-live-bytes')
-    expect(existsSync(join(targetHome, 'skills', 'new-generation'))).toBe(false)
-  })
-
-  test('skill rows without a real skills payload are refused by cold and staged restore', async () => {
-    const sourceHome = temp('aw-pr5-db-only-skill-source-')
-    const frozen = frozenAt0115()
-    const full = await makeSkillBackup(
-      sourceHome,
-      frozen,
-      'missing-payload',
-      'missing-payload-id',
-      true,
-    )
-    const extracted = temp('aw-pr5-db-only-skill-stage-')
-    await extractTarGz(full, extracted)
-    rmSync(join(extracted, 'skills'), { recursive: true, force: true })
-    const dbOnly = join(sourceHome, 'db-only-skill.tar.gz')
-    await tarGz(extracted, dbOnly)
-
-    const targetHome = temp('aw-pr5-db-only-skill-target-')
-    createEmptyLiveDb(targetHome)
-    writeTree(join(targetHome, 'skills', 'live-sentinel'), 'still-live')
-    await expect(
-      restoreBackup(dbOnly, {
-        appHome: targetHome,
-        dbPath: join(targetHome, 'db.sqlite'),
-        migrationsFolder: MIGRATIONS,
-        noSafetyBackup: true,
-        now: 506,
-      }),
-    ).rejects.toThrow(/skill rows but no matching skills filesystem payload/)
-    expect(existsSync(join(targetHome, 'skills', 'live-sentinel', 'SKILL.md'))).toBe(true)
-    await expect(
-      validateBackupForStage(dbOnly, {
-        contract: buildLogicalSchemaContract(),
-        appHome: targetHome,
-        migrationsFolder: MIGRATIONS,
-      }),
-    ).rejects.toThrow(/skill rows but no matching skills filesystem payload/)
-  })
-
-  test('empty DB-only restore clears the prior live skills generation', async () => {
-    const sourceHome = temp('aw-pr5-empty-db-source-')
-    createEmptyLiveDb(sourceHome)
-    const dbOnly = (
-      await rawCopyDb({
-        kind: 'pre-restore',
-        appHome: sourceHome,
-        dbPath: join(sourceHome, 'db.sqlite'),
-        now: 507,
-      })
-    ).path
-
-    const targetHome = temp('aw-pr5-empty-db-target-')
-    createEmptyLiveDb(targetHome)
-    writeTree(join(targetHome, 'skills', 'old-skill-root'), 'old-generation')
-    await restoreBackup(dbOnly, {
-      appHome: targetHome,
-      dbPath: join(targetHome, 'db.sqlite'),
-      migrationsFolder: MIGRATIONS,
-      noSafetyBackup: true,
-      now: 508,
-    })
-    expect(existsSync(join(targetHome, 'skills', 'old-skill-root'))).toBe(false)
-    expect(readdirSync(join(targetHome, 'skills'))).toEqual([])
-  })
-})
-
-async function makeSkillBackup(
-  appHome: string,
-  migrationsFolder: string,
-  name: string,
-  id: string,
-  legacySchema: boolean,
-): Promise<string> {
-  const dbPath = join(appHome, 'db.sqlite')
-  const db = openDb({ path: dbPath, migrationsFolder })
-  const raw = sqliteOf(db)
-  const skillInsert = legacySchema
-    ? `INSERT INTO skills
-         (id, name, source_kind, managed_path, content_version,
-          reservation_state, version_state)
-       VALUES (?, ?, 'managed', ?, 1, 'ready', 'snapshot-authoritative')`
-    : `INSERT INTO skills
-         (id, name, managed_path, content_version, reservation_state, version_state)
-       VALUES (?, ?, ?, 1, 'ready', 'snapshot-authoritative')`
-  raw.query(skillInsert).run(id, name, `skills/${name}/files`)
-  if (legacySchema) {
-    raw
-      .query(
-        `INSERT INTO skill_versions
-           (id, skill_name, version_index, files_path, source, author_user_id,
-            content_hash)
-         VALUES (?, ?, 1, ?, 'initial', '__system__', 'fixture-hash')`,
-      )
-      .run(`version-${id}`, name, `skills/${name}/versions/v1/files`)
-  } else {
-    raw
-      .query(
-        `INSERT INTO skill_versions
-           (id, skill_id, version_index, files_path, source, author_user_id,
-            content_hash)
-         VALUES (?, ?, 1, ?, 'initial', '__system__', 'fixture-hash')`,
-      )
-      .run(`version-${id}`, id, `skills/${name}/versions/v1/files`)
+import { createSqliteBaseline } from '@/bootstrap/persistenceBaseline'
+import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import {
+  validateBackupForStage,
+  restoreBackup,
+} from '@/platform/persistence/sqlite/systemProviderRestore'
+import { tarGz } from '@/util/archive'
+import { openDb } from '@/db/client'
+import { bootImplementation, bootDeclaration, expectBootOrder } from './helpers/daemonProgramSource'
+import { readDaemonGraphSource } from './helpers/daemonGraphSource'
+const source = (path: string) => readFileSync(resolve(import.meta.dir, '../src', path), 'utf8')
+test('normal skill recovery remains fail-closed before consumers', () => {
+  const graph = readDaemonGraphSource()
+  expectBootOrder([
+    'skill-operation-recovery',
+    'skill-availability-gate',
+    'skill-live-files',
+    'fusion-resource-seed',
+    'task-execution-recovery',
+    'fusion-decision-recovery',
+  ])
+  for (const [id, call] of [
+    ['skill-operation-recovery', 'recoverOperations'],
+    ['skill-availability-gate', 'activateAvailabilityGate'],
+  ] as const) {
+    expect(bootDeclaration(id)).toMatchObject({ phase: 'prepare', failure: 'fail-closed' })
+    const body = bootImplementation(graph, id)
+    expect(body).toContain(`skillCatalogBoot.${call}()`)
+    expect(body).not.toContain('catch')
   }
-  writeTree(join(appHome, 'skills', name, 'files'), `${name}-live`)
-  writeTree(join(appHome, 'skills', name, 'versions', 'v1', 'files'), `${name}-v1`)
-  raw.exec('PRAGMA wal_checkpoint(TRUNCATE)')
-  raw.close()
-  return (
-    await rawCopyDb({
-      kind: 'pre-restore',
+})
+test('restore classifies the recorded contract before opening the active provider', () => {
+  const main = source('main.ts'),
+    start = main.indexOf("case 'restore':")
+  expect(main.indexOf('classifyRestoreArtifact(artifact)', start)).toBeLessThan(
+    main.indexOf('resolveDatabaseProviderRuntimeForRestore(', start),
+  )
+  expect(main.slice(start)).toContain('composeEpochMigrationCommand().restoreBackup')
+  const entry = source('bootstrap/epochMigrationEntry.ts')
+  expect(entry).toContain('manifest.database.schemaDigest')
+  expect(entry).toContain('restore-artifact-contract-unsupported')
+  expect(source('bootstrap/epochMigration.ts')).toContain(
+    'bootUpgradeEnvironment: composeBootUpgradeEnvironment(epochMigrationKeys(undefined, appHome))',
+  )
+})
+test('same-epoch restore validates before swap and retains current recovery without legacy repair', () => {
+  const restore = source('platform/persistence/sqlite/systemProviderRestore.ts')
+  expect(restore).not.toContain('runSkillIdentityMigrationBarrier')
+  expect(restore).not.toContain('postOpenRecovery.recover')
+  expect(restore).toContain('epoch-1 backup requires offline db migration restore-backup')
+  const body = restore.slice(restore.indexOf('export async function restoreBackup'))
+  expect(body.indexOf('verifyPortableDatabasePayload')).toBeLessThan(body.indexOf('swapInDbFile'))
+  expect(body.indexOf('assertBackupSkillsPayload')).toBeLessThan(body.indexOf('swapInDbFile'))
+  expect(body.indexOf('cpSync(stagedSkills, liveSkills')).toBeLessThan(
+    body.indexOf('const db = openDb'),
+  )
+  expect(body.indexOf('const db = openDb')).toBeLessThan(
+    body.indexOf('suspendNonTerminalTasksAfterRestore(db)'),
+  )
+  expect(body).toContain('reconstructWorktrees(db, staging)')
+  expect(body).toContain('rmSync(liveSkills')
+})
+test('old identity, alias and filesystem outcomes remain converter tests', () => {
+  const cases = readFileSync(resolve(import.meta.dir, 'skill-identity-migration.test.ts'), 'utf8')
+  for (const name of [
+    'canonical-alias',
+    'husk-alias',
+    'symlink-skills-root',
+    'protocol-residue',
+    'similar-support-name',
+    'multi-version',
+    'missing-root',
+  ])
+    expect(cases).toContain(name)
+  expect(cases).toContain('runConversion(')
+  expect(cases).toContain('before.decodedRows')
+})
+
+async function nativeArtifact(root: string, skillRows: boolean) {
+  const staging = join(root, 'artifact')
+  mkdirSync(staging)
+  const db = createSqliteBaseline()
+  try {
+    if (skillRows)
+      db.exec("INSERT INTO skills (id,name) VALUES ('skill-without-files','Missing payload')")
+    writeFileSync(join(staging, 'db.sqlite'), db.serialize())
+  } finally {
+    db.close()
+  }
+  const artifact = join(root, 'backup.tar.gz')
+  await tarGz(staging, artifact)
+  return artifact
+}
+test('epoch-2 skill rows without a skills payload are refused by cold and staged restore', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'rfc223-native-refusal-'))
+  try {
+    const artifact = await nativeArtifact(root, true)
+    const appHome = join(root, 'home')
+    const dbPath = join(appHome, 'db.sqlite')
+    await expect(
+      validateBackupForStage(artifact, { appHome, contract: logicalSchemaContract }),
+    ).rejects.toThrow(
+      'stage refused: backup contains skill rows but no matching skills filesystem payload',
+    )
+    await expect(
+      restoreBackup(artifact, {
+        appHome,
+        dbPath,
+        contract: logicalSchemaContract,
+        noSafetyBackup: true,
+      }),
+    ).rejects.toThrow(
+      'restore refused: backup contains skill rows but no matching skills filesystem payload',
+    )
+    expect(existsSync(dbPath)).toBeFalse()
+    expect(existsSync(join(appHome, 'database-generation.json'))).toBeFalse()
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
+})
+test('an empty epoch-2 DB-only restore clears the prior live skills generation', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'rfc223-native-empty-'))
+  try {
+    const artifact = await nativeArtifact(root, false)
+    const appHome = join(root, 'home'),
+      dbPath = join(appHome, 'db.sqlite')
+    mkdirSync(join(appHome, 'skills/prior/files'), { recursive: true })
+    writeFileSync(join(appHome, 'skills/prior/files/SKILL.md'), 'old generation')
+    const restored = await restoreBackup(artifact, {
       appHome,
       dbPath,
-      now: Date.now(),
+      contract: logicalSchemaContract,
+      noSafetyBackup: true,
     })
-  ).path
-}
-
-function assertRestoredCanonical(appHome: string, name: string, id: string): void {
-  const raw = new Database(join(appHome, 'db.sqlite'), { readonly: true })
-  try {
-    expect(raw.query('SELECT managed_path AS path FROM skills WHERE id = ?').get(id)).toEqual({
-      path: `skills/${id}/files`,
-    })
-    expect(
-      raw.query('SELECT skill_id AS skillId, files_path AS filesPath FROM skill_versions').get(),
-    ).toEqual({
-      skillId: id,
-      filesPath: `skills/${id}/versions/v1/files`,
-    })
+    expect(existsSync(join(appHome, 'skills/prior'))).toBeFalse()
+    expect(restored.restored.skills).toBeTrue()
+    expect(existsSync(join(appHome, 'skills'))).toBeTrue()
+    const db = openDb({ path: dbPath })
+    try {
+      expect(db.$client.query('SELECT id FROM skills').all()).toEqual([])
+    } finally {
+      db.$client.close()
+    }
+    expect(existsSync(join(appHome, 'database-generation.json'))).toBeTrue()
   } finally {
-    raw.close()
+    rmSync(root, { recursive: true, force: true })
   }
-  expect(existsSync(join(appHome, 'skills', name))).toBe(false)
-  expect(readFileSync(join(appHome, 'skills', id, 'files', 'SKILL.md'), 'utf-8')).toContain(
-    `${name}-live`,
-  )
-}
-
-function frozenAt0115(): string {
-  const folder = temp('aw-pr5-migrations-0115-')
-  cpSync(MIGRATIONS, folder, { recursive: true })
-  const journalPath = join(folder, 'meta', '_journal.json')
-  const journal = JSON.parse(readFileSync(journalPath, 'utf-8'))
-  journal.entries = journal.entries.filter((entry: { idx: number }) => entry.idx <= 114)
-  writeFileSync(journalPath, JSON.stringify(journal))
-  return folder
-}
-
-function createEmptyLiveDb(appHome: string): void {
-  const db = openDb({
-    path: join(appHome, 'db.sqlite'),
-    migrationsFolder: MIGRATIONS,
-  })
-  sqliteOf(db).close()
-}
-
-function writeTree(root: string, marker: string): void {
-  mkdirSync(root, { recursive: true })
-  writeFileSync(join(root, 'SKILL.md'), `# ${marker}\n`)
-}
-
-function sqliteOf(db: DbClient): Database {
-  return (db as unknown as { $client: Database }).$client
-}
-
-function temp(prefix: string): string {
-  const path = mkdtempSync(join(tmpdir(), prefix))
-  tmps.push(path)
-  return path
-}
+})

@@ -147,28 +147,22 @@ describeEachProvider('RFC-359 W4-D7a —— 临时输入上传与 writer cutover
     expect(await uploads.sweepExpired(NOW, 2)).toBe(0)
   })
 
-  test('writer cutover：activate 把第 0 代升到第 1 代、refresh 重算模式、migrationSnapshot 给出有界排空投影', async () => {
-    const writer = createDigitalEmployeeWriterCutoverPersistence(harness.db)
-    const initial = await writer.read()
-    expect(initial.activeGeneration).toBeGreaterThanOrEqual(0)
-    const activated = await writer.activate({ now: NOW, legacyAdmissionsEnabled: false })
-    expect(activated).toEqual({
-      activeGeneration: Math.max(1, initial.activeGeneration),
+  test('writer installation is explicit, read-only and stable across repeated reads', async () => {
+    const facts = { activeGeneration: 4, updatedAt: NOW }
+    const writer = createDigitalEmployeeWriterCutoverPersistence(facts)
+    facts.activeGeneration = 5
+    expect(await writer.read()).toEqual({
+      activeGeneration: 4,
+      updatedAt: NOW,
       mode: 'os-active',
       legacyAdmissionsEnabled: false,
       legacyOpenMissionCount: 0,
-      updatedAt: NOW,
     })
-    expect(await writer.read()).toEqual(activated)
-    const refreshed = await writer.refresh(NOW + 1)
-    expect(refreshed).toEqual({ ...activated, updatedAt: NOW + 1 })
-    const snapshot = await writer.migrationSnapshot(5)
-    expect(snapshot.writer).toEqual(refreshed)
-    expect(snapshot.drain).toEqual({ truncated: false, entries: [] })
-    // 再次 activate 保持第 1 代（幂等）。
-    expect(
-      (await writer.activate({ now: NOW + 2, legacyAdmissionsEnabled: true })).activeGeneration,
-    ).toBe(activated.activeGeneration)
+    expect(await writer.read()).toEqual(await writer.read())
+    expect(Object.keys(writer)).toEqual(['read'])
+    await expect(createDigitalEmployeeWriterCutoverPersistence().read()).rejects.toThrow(
+      'digital-employee-writer-installation-unbound',
+    )
   })
 })
 
@@ -181,6 +175,12 @@ test('源码锁：临时上传与 writer cutover 不再有 provider 专属文件
       .filter((line) => !line.trimStart().startsWith('//'))
       .join('\n')
     expect(source).not.toMatch(/PostgresqlDatabaseClient|\bDbClient\b|dbTxSync|for update/i)
-    expect(source).toContain('PersistenceDb')
+    if (neutral === 'inputUploadStore.ts') expect(source).toContain('PersistenceDb')
+    else {
+      expect(source).toContain('DigitalEmployeeWriterInstallation')
+      expect(source).toContain('Object.freeze({ ...installation })')
+      expect(source).toContain('legacyAdmissionsEnabled: false')
+      expect(source).not.toMatch(/PersistenceDb|\.select\(|\.insert\(|\.update\(/)
+    }
   }
 })

@@ -162,6 +162,7 @@ describe('TaskRepoSchema.workingBranch default', () => {
 describe('NodeRunSchema.commitPush', () => {
   const RUN = {
     id: 'nr-1',
+    seq: 1,
     taskId: 't-1',
     nodeId: '__commit_push__:agent-1',
     parentNodeRunId: 'nr-agent-1',

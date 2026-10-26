@@ -7,8 +7,10 @@ import {
   buildFreshestSettledPerNode,
   isNodeRunFresh,
   type NodeRunRow,
-} from '@/services/freshness'
-import { createRunSelectionOracleSnapshot } from '../infrastructure/runSelection/oracle/snapshot'
+} from '@/modules/task-execution/application/runProvenance'
+import { createRunHistorySnapshot } from '../application/runHistory'
+import { decodeConsumedEdges } from '../domain/consumedInputs'
+import type { Frame } from '../application/ports/runSelection'
 import {
   isDispatchable,
   isReviewSupersededRow,
@@ -87,11 +89,9 @@ export interface Frontier {
 async function freshestUpstreamEvidenceId(
   skippedRow: NodeRunRow,
   upstreams: readonly string[],
-  freshestSettled: Map<string, NodeRunRow>,
+  freshestSettled: ReadonlyMap<string, NodeRunRow>,
 ): Promise<string | undefined> {
-  const consumed = await createRunSelectionOracleSnapshot([skippedRow], {
-    scope: { kind: 'rows' },
-  }).consumed(skippedRow.id)
+  const consumed = decodeConsumedEdges(skippedRow.consumedUpstreamRunsJson)
   const candidates = upstreams.flatMap((upstreamId) => {
     const current = freshestSettled.get(upstreamId)
     return current === undefined ||
@@ -101,12 +101,7 @@ async function freshestUpstreamEvidenceId(
       ? []
       : [current]
   })
-  return (
-    await createRunSelectionOracleSnapshot(
-      candidates.map((row) => ({ ...row, taskId: '' })),
-      { scope: { kind: 'rows' } },
-    ).familyHistory('', {})
-  ).at(-1)?.id
+  return (await createRunHistorySnapshot('', candidates).familyHistory('', {})).at(-1)?.id
 }
 
 /** RFC-311 — the frontier consumes the freshness column contract (see
@@ -115,6 +110,13 @@ async function freshestUpstreamEvidenceId(
 export type FrontierRunRow = NodeRunRow
 
 export async function deriveFrontier(
+  selection: {
+    currentInFrame(
+      taskId: string,
+      frame: Frame,
+    ): Promise<ReadonlyMap<string, { readonly id: string }>>
+  },
+  taskId: string,
   rows: ReadonlyArray<FrontierRunRow>,
   definition: WorkflowDefinition,
   scopeNodes: WorkflowNode[],
@@ -137,11 +139,7 @@ export async function deriveFrontier(
   // every non-deferred task → byte-for-byte today's frontier (golden-lock).
   deferredHandlerNodeIds: ReadonlySet<string> = new Set(),
 ): Promise<Frontier> {
-  const selection = createRunSelectionOracleSnapshot(
-    rows.map((row) => ({ ...row, taskId: '' })),
-    { scope: { kind: 'rows' } },
-  )
-  const current = await selection.currentInFrame('', frame)
+  const current = await selection.currentInFrame(taskId, frame)
   const latestPerNode = new Map<string, FrontierRunRow>()
   for (const nodeId of new Set(
     rows
@@ -154,7 +152,22 @@ export async function deriveFrontier(
       )
       .map((row) => row.nodeId),
   )) {
-    const row = rows.find((row) => row.id === current.get(nodeId)?.id)
+    const selectedId = current.get(nodeId)?.id
+    const row =
+      selectedId === undefined
+        ? undefined
+        : (rows.find((row) => row.id === selectedId) ??
+          rows
+            .filter(
+              (row) =>
+                row.nodeId === nodeId &&
+                row.parentNodeRunId === null &&
+                row.containerRunId === frame.containerRunId &&
+                row.iteration === frame.iteration,
+            )
+            .reduce<
+              FrontierRunRow | undefined
+            >((latest, row) => (latest === undefined || (row.seq !== null && (latest.seq === null || row.seq > latest.seq)) ? row : latest), undefined))
     if (row !== undefined) latestPerNode.set(nodeId, row)
   }
   const freshestSettled = await buildFreshestSettledPerNode(rows, scopeIds, frame)

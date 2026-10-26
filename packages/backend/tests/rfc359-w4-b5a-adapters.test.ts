@@ -1,3 +1,9 @@
+import {
+  seedCodeHistoryRows,
+  historyFixtureReader,
+  seedEmptyCodeHistory,
+  type HistoryFixtureInsert,
+} from './helpers/legacyCapabilitySeed'
 // RFC-359 W4-B5 批 a —— code-capability / development-automation 九对机械合一的适配器，两个引擎各跑一遍：
 // 能力模板持久化（同 owner 撞名经引擎能力矩阵归类成 ConflictError）、仓库能力参数读取、就绪度事实读取、
 // 端点 / 连接事实读取、演示种子幂等落库、代码工作区读取（未启动 run 两个引擎都排最前）、轮次尝试投影
@@ -5,9 +11,8 @@
 
 import { nodeRunFixture, taskFixture, taskRepoFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
-import { expect, test } from 'bun:test'
-import { eq } from 'drizzle-orm'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { beforeEach, expect, test } from 'bun:test'
 import { ulid } from 'ulid'
 
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
@@ -91,6 +96,9 @@ async function seedTask(db: PersistenceDb, taskId: string): Promise<void> {
 describeEachProvider(
   'RFC-359 W4-B5a —— code-capability / development-automation 机械合一适配器',
   (harness) => {
+    beforeEach(async () => {
+      await seedEmptyCodeHistory(harness.db)
+    })
     test('能力模板持久化 / 参数读取 / 就绪度与端点事实 / 演示种子', async () => {
       const db = harness.db
       const owner = await seedUser(db)
@@ -134,8 +142,7 @@ describeEachProvider(
       await persistence.delete('tpl-b')
       expect(await persistence.load('tpl-b')).toBeNull()
 
-      const { repoCapabilityConfig, cachedRepos, codeHostConnections, codeRoundStages } =
-        tablesOf(db)
+      const { repoCapabilityConfig, cachedRepos, codeHostConnections } = tablesOf(db)
       // 仓库能力格 → 模板参数三元组。
       await insertOne(db, repoCapabilityConfig, {
         id: ulid(),
@@ -183,60 +190,43 @@ describeEachProvider(
         },
       ])
 
-      // 演示种子：一次事务落模板 + 历史，重复 ensure 不覆盖既有行。
+      // RFC-395：实际写语句只能落模板，重复 ensure 不覆盖既有行或历史包。
       const seed = createCodeCapabilityDemoSeedPersistence(db)
       const aggregate = {
         template: template('tpl-demo', { ownerUserId: owner }),
-        history: {
-          workItem: {
-            id: 'wi-demo',
-            codeHostEndpointId: 'ep-b5a',
-            stableProjectId: 'demo/sample',
-            capability: 'mr-review',
-            anchorKind: 'mr' as const,
-            anchorId: '42',
-            status: 'settled' as const,
-            epoch: 1,
-            currentRoundId: 'round-demo',
-            createdAt: NOW,
-            updatedAt: NOW,
-          },
-          round: {
-            id: 'round-demo',
-            workItemId: 'wi-demo',
-            roundSeq: 1,
-            epoch: 1,
-            baselineSha: '0000000000000000000000000000000000000000',
-            stageContractVer: 1,
-            outcome: 'published' as const,
-            startedAt: NOW,
-            endedAt: NOW + 1,
-          },
-          stages: [0, 1].map((index) => ({
-            id: `round-demo-${String(index)}`,
-            roundId: 'round-demo',
-            stageSeq: index,
-            stageName: `stage-${String(index)}`,
-            stageKind: 'ai' as const,
-            status: 'done' as const,
-            startedAt: NOW + index,
-            endedAt: NOW + index + 1,
-          })),
-        },
       }
-      await seed.ensure(aggregate)
-      await seed.ensure({
-        ...aggregate,
-        template: { ...aggregate.template, description: 'must not overwrite' },
+      await seedCodeHistoryRows(db, 'code_round_stages', {
+        id: 'archived-stage',
+        roundId: 'old-round',
+        stageSeq: 0,
+        stageName: 'old',
+        status: 'done',
       })
-      expect((await persistence.load('tpl-demo'))?.description).toBeNull()
+      const archived = await historyFixtureReader(db).rows('code_round_stages')
+      expect(archived).toHaveLength(1)
+      const recording = harness.recordStatements()
+      try {
+        await seed.ensure(aggregate)
+        await seed.ensure({
+          ...aggregate,
+          template: { ...aggregate.template, description: 'must not overwrite' },
+        })
+      } finally {
+        recording.stop()
+      }
+      const writes = recording.statements.filter(({ sql }) =>
+        /^\s*(?:insert|update|delete)\b/i.test(sql),
+      )
+      expect(writes).toHaveLength(2)
       expect(
-        (await db.select().from(codeRoundStages).where(eq(codeRoundStages.roundId, 'round-demo')))
-          .length,
-      ).toBe(2)
+        writes.every(({ sql }) =>
+          /^\s*insert\s+into\s+(?:"?\w+"?\.)?"?capability_templates"?\b/i.test(sql),
+        ),
+      ).toBe(true)
+      expect((await persistence.load('tpl-demo'))?.description).toBeNull()
+      expect(await historyFixtureReader(db).rows('code_round_stages')).toEqual(archived)
       await seed.ensure({
         template: template('tpl-demo-bare', { ownerUserId: owner }),
-        history: null,
       })
       expect(await persistence.load('tpl-demo-bare')).not.toBeNull()
     })
@@ -309,12 +299,8 @@ describeEachProvider(
       })
       expect(await read.findNodeRun('missing')).toBeNull()
 
-      const { codeAiAttempts } = tablesOf(db)
-      const attempts = createRoundAttemptsRead(db)
-      const attempt = (
-        id: string,
-        over: Partial<PersistenceTables['codeAiAttempts']['$inferInsert']>,
-      ) => ({
+      const attempts = createRoundAttemptsRead(historyFixtureReader(db))
+      const attempt = (id: string, over: HistoryFixtureInsert<'code_ai_attempts'>) => ({
         id,
         roundId: 'round-b5a',
         stageName: 'review-shard',
@@ -326,13 +312,11 @@ describeEachProvider(
         ...over,
       })
       // id 顺序与时间线相反：按 started_at / rerun / attempt 排序才是真序。
-      await db
-        .insert(codeAiAttempts)
-        .values([
-          attempt('zz-first', { status: 'failed' }),
-          attempt('mm-second', { rerunSeq: 1, startedAt: NOW + 10, status: 'failed' }),
-          attempt('aa-third', { attemptSeq: 1, startedAt: NOW + 20, endedAt: NOW + 30 }),
-        ])
+      await seedCodeHistoryRows(db, 'code_ai_attempts', [
+        attempt('zz-first', { status: 'failed' }),
+        attempt('mm-second', { rerunSeq: 1, startedAt: NOW + 10, status: 'failed' }),
+        attempt('aa-third', { attemptSeq: 1, startedAt: NOW + 20, endedAt: NOW + 30 }),
+      ])
       expect((await attempts.load('round-b5a', 10)).map((row) => row.attemptId)).toEqual([
         'zz-first',
         'mm-second',
@@ -355,7 +339,7 @@ describeEachProvider(
       expect(await attempts.load('round-none', 10)).toEqual([])
     })
 
-    test('cutover 状态与 legacy link / 数字员工工作区持久化', async () => {
+    test('cutover 状态与 retired link closure / 数字员工工作区持久化', async () => {
       const db = harness.db
       const cutover = createCutoverStore(db)
       expect(await cutover.readState()).toEqual(INITIAL_CUTOVER_STATE)
@@ -373,13 +357,8 @@ describeEachProvider(
         flippedAt: NOW + 1,
         generation: 'g1',
       })
-      const {
-        developmentMissions,
-        legacyCodeWorkItemLinks,
-        employeeCases,
-        cachedRepos,
-        employeeReactionRounds,
-      } = tablesOf(db)
+      const { developmentMissions, employeeCases, cachedRepos, employeeReactionRounds } =
+        tablesOf(db)
       await insertOne(db, developmentMissions, {
         id: 'm-b5a',
         status: 'working',
@@ -390,28 +369,7 @@ describeEachProvider(
         createdAt: NOW,
         updatedAt: NOW,
       })
-      await cutover.insertLegacyLink({
-        id: 'link-b5a',
-        missionId: 'm-b5a',
-        legacyWorkItemId: 'wi-1',
-        legacyRoundId: null,
-        cutoverReceiptJson: '{"from":"legacy"}',
-        now: NOW,
-      })
-      expect(
-        (
-          await db
-            .select()
-            .from(legacyCodeWorkItemLinks)
-            .where(eq(legacyCodeWorkItemLinks.id, 'link-b5a'))
-        )[0],
-      ).toMatchObject({
-        missionId: 'm-b5a',
-        legacyWorkItemId: 'wi-1',
-        legacyRoundId: null,
-        cutoverReceiptJson: '{"from":"legacy"}',
-        createdAt: NOW,
-      })
+      expect('insertLegacyLink' in cutover).toBe(false)
 
       const workspaces = createEmployeeWorkspacePersistence(db)
       await insertOne(db, employeeCases, {

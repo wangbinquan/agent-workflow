@@ -8,19 +8,23 @@
 // assumption breaks (frontend parseSessionTree relies on session_id
 // being present per row, with NULL meaning "root bucket").
 
+import {
+  frozenTablesOf,
+  createFrozenEpoch1Db,
+  type FrozenDbClient,
+  FROZEN_MIGRATIONS,
+} from './migration-freeze'
 import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
 import { queryRows } from '@/platform/persistence/queryHelpers'
 import { describe, expect, test, beforeEach } from 'bun:test'
 import { resolve } from 'node:path'
 import { sql } from 'drizzle-orm'
 import { ulid } from 'ulid'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+const MIGRATIONS = resolve(FROZEN_MIGRATIONS)
 
-function seedNodeRun(db: DbClient): string {
+function seedNodeRun(db: FrozenDbClient): string {
   const wfId = ulid()
-  const { workflows, tasks, nodeRuns } = tablesOf(db)
+  const { workflows, tasks, nodeRuns } = frozenTablesOf(db)
   insertOne(db, workflows, {
     id: wfId,
     name: 'wf',
@@ -59,14 +63,14 @@ function seedNodeRun(db: DbClient): string {
 }
 
 describe('migration 0012 (RFC-027 node_run_events.session_id / parent_session_id)', () => {
-  let db: DbClient
+  let db: FrozenDbClient
   beforeEach(() => {
-    db = createInMemoryDb(MIGRATIONS)
+    db = createFrozenEpoch1Db(MIGRATIONS)
   })
 
   test('session_id stores values and is null when omitted', () => {
     const nodeRunId = seedNodeRun(db)
-    const { nodeRunEvents } = tablesOf(db)
+    const { nodeRunEvents } = frozenTablesOf(db)
     insertOne(db, nodeRunEvents, {
       nodeRunId,
       ts: 1,
@@ -90,7 +94,7 @@ describe('migration 0012 (RFC-027 node_run_events.session_id / parent_session_id
 
   test('parent_session_id stores child→parent linkage and is null for root', () => {
     const nodeRunId = seedNodeRun(db)
-    const { nodeRunEvents } = tablesOf(db)
+    const { nodeRunEvents } = frozenTablesOf(db)
     insertOne(db, nodeRunEvents, {
       nodeRunId,
       ts: 1,
@@ -116,7 +120,7 @@ describe('migration 0012 (RFC-027 node_run_events.session_id / parent_session_id
 
   test('subagent_capture_failed marker kind is accepted by the enum', () => {
     const nodeRunId = seedNodeRun(db)
-    const { nodeRunEvents } = tablesOf(db)
+    const { nodeRunEvents } = frozenTablesOf(db)
     insertOne(db, nodeRunEvents, {
       nodeRunId,
       ts: 1,

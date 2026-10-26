@@ -1,6 +1,9 @@
+import { DAEMON_BOOT_STEPS } from '@/bootstrap/daemonLifecycleProgram'
+import { legacyContentRef } from '@/platform/content/contentRef'
+import { contentRowColumns } from '@/platform/content/infrastructure/contentStore'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
-import { bootImplementation, bootDeclaration, expectBootOrder } from './helpers/daemonProgramSource'
+import { bootImplementation, bootDeclaration, propertyBodies } from './helpers/daemonProgramSource'
 // RFC-359 W1-T7d（P0-11）—— PostgreSQL daemon 也装配技能启动屏障。
 //
 // dual-provider-parity-audit-2026-09-04 P0-11：`composePostgresqlSkillCatalogBoot` 零生产调用方——
@@ -43,17 +46,23 @@ test('PostgreSQL daemon：屏障紧跟 restore、fail-closed、闸在 HTTP 之�
   const compose = source.indexOf('composeDaemonResourceCatalogModules({', restore)
   expect(restore).toBeGreaterThan(-1)
   expect(compose).toBeGreaterThan(restore)
-  expectBootOrder([
-    'skill-identity-barrier',
+  const names: readonly string[] = DAEMON_BOOT_STEPS.map((step) => step.id)
+  const expected = [
+    'skill-operation-recovery',
     'skill-availability-gate',
     'skill-live-files',
     'task-execution-recovery',
     'resource-reverify',
-  ])
-  expect(bootDeclaration('skill-identity-barrier')).toMatchObject({
-    phase: 'prepare',
-    failure: 'fail-closed',
-  })
+  ]
+  let previous = -1
+  for (const name of expected) {
+    const position = names.indexOf(name)
+    expect(position, `missing or unordered step ${name}`).toBeGreaterThan(previous)
+    previous = position
+  }
+  expect(
+    DAEMON_BOOT_STEPS.find((step) => String(step.id) === 'skill-operation-recovery'),
+  ).toMatchObject({ phase: 'prepare', failure: 'fail-closed' })
   expect(bootDeclaration('skill-availability-gate')).toMatchObject({
     phase: 'prepare',
     failure: 'fail-closed',
@@ -63,11 +72,13 @@ test('PostgreSQL daemon：屏障紧跟 restore、fail-closed、闸在 HTTP 之�
     failure: 'tracked-detached',
   })
   for (const [id, call] of [
-    ['skill-identity-barrier', 'runIdentityMigrationBarrier'],
+    ['skill-operation-recovery', 'recoverOperations'],
     ['skill-availability-gate', 'activateAvailabilityGate'],
     ['skill-live-files', 'reconcileLiveFiles'],
   ] as const) {
-    const body = bootImplementation(source, id)
+    const bodies = propertyBodies(source, id).filter((body) => body !== 'NotApplicable')
+    expect(bodies).toHaveLength(1)
+    const body = bodies[0]!
     expect(body).toContain(`skillCatalogBoot.${call}()`)
     if (id !== 'skill-live-files') {
       expect(body).not.toContain('try {')
@@ -75,9 +86,8 @@ test('PostgreSQL daemon：屏障紧跟 restore、fail-closed、闸在 HTTP 之�
     }
   }
   const reverify = bootImplementation(source, 'resource-reverify')
-  const backfill = reverify.indexOf('skillCatalogBoot.backfillLegacyVersions()')
-  expect(backfill).toBeGreaterThan(-1)
-  expect(reverify.indexOf('skillCatalogBoot.reverifySnapshots()')).toBeGreaterThan(backfill)
+  expect(reverify).not.toContain('backfillLegacyVersions')
+  expect(reverify).toContain('skillCatalogBoot.reverifySnapshots()')
 })
 
 describeEachProvider('RFC-359 T7d —— 技能启动屏障在两个引擎上各跑一遍', (harness) => {
@@ -87,12 +97,11 @@ describeEachProvider('RFC-359 T7d —— 技能启动屏障在两个引擎上各
     try {
       // W4-D23c：不再按引擎分叉装配——同一个 `composeSkillCatalogBoot` 两个引擎各跑一遍。
       const boot = composeSkillCatalogBoot({ db: harness.db, appHome: tmp })
-      const report = await boot.runIdentityMigrationBarrier()
-      expect(report).toMatchObject({ recoveredOperations: 0, removedHusks: 0, migratedSkills: 0 })
+      const report = await boot.recoverOperations()
+      expect(report).toMatchObject({ total: 0, rolledBack: 0, rolledForward: 0 })
       boot.activateAvailabilityGate()
       expect(isBootReverifyActive()).toBe(true)
       await boot.reconcileLiveFiles()
-      expect(await boot.backfillLegacyVersions()).toMatchObject({ backfilled: 0, husksRemoved: 0 })
       expect(await boot.reverifySnapshots()).toMatchObject({ verified: 0, quarantined: 0 })
     } finally {
       rmSync(tmp, { recursive: true, force: true })
@@ -112,7 +121,9 @@ describeEachProvider('RFC-359 T7d —— 技能启动屏障在两个引擎上各
           id: skillId,
           name: 'crashed-boot-create',
           description: 'not yet published',
-          managedPath: `skills/${skillId}/files`,
+          ...contentRowColumns(
+            legacyContentRef('skill-path', 'local-file', `skills/${skillId}/files`),
+          ),
           reservationState: 'reserving',
           contentVersion: 0,
           createdAt: Date.now(),
@@ -126,10 +137,11 @@ describeEachProvider('RFC-359 T7d —— 技能启动屏障在两个引擎上各
       })
       expect((await listActiveOps(db)).map((op) => op.opId)).toEqual([opId])
       const boot = composeSkillCatalogBoot({ db, appHome })
-      await boot.runIdentityMigrationBarrier()
+      await boot.recoverOperations()
       // Observe actual persistence, independent of the barrier's receipt.
       expect((await listActiveOps(db)).map((op) => op.phase)).toEqual([])
-      const { skillOperationLocks, skills } = tablesOf(db)
+      const { skillOperationLocks } = tablesOf(db),
+        { skills } = tablesOf(db)
       expect(
         await db.select().from(skillOperationLocks).where(eq(skillOperationLocks.opId, opId)),
       ).toEqual([])
@@ -183,13 +195,12 @@ describeEachProvider('RFC-359 T7d —— 技能启动屏障在两个引擎上各
       // A new boot starts with no remembered verification of persisted rows.
       resetSkillBootVerifyForTest()
       const boot = composeSkillCatalogBoot({ db, appHome })
-      await boot.runIdentityMigrationBarrier()
+      await boot.recoverOperations()
       boot.activateAvailabilityGate()
       expect(isBootReverifyActive()).toBe(true)
       expect(isSkillBootVerified(skill.id)).toBe(false)
       expect((await listSkills(db)).map((row) => row.id)).toEqual([])
       await boot.reconcileLiveFiles()
-      await boot.backfillLegacyVersions()
       await boot.reverifySnapshots()
       expect(isSkillBootVerified(skill.id)).toBe(true)
       expect((await listSkills(db)).map((row) => row.id)).toEqual([skill.id])

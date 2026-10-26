@@ -1,3 +1,4 @@
+import type { RecordedNodeRunInput } from '../../domain/consumedInputs'
 import type {
   NodeRunIdentitySnapshot,
   NodeRunConfigView,
@@ -45,6 +46,7 @@ export interface NodeRunLifecycleWrite {
   }
   readonly inputs?: {
     readonly consumedUpstreamRunsJson?: NodeRunInputView['consumedUpstreamRunsJson']
+    readonly recordedInputs?: readonly RecordedNodeRunInput[] | null
   }
 }
 
@@ -60,7 +62,9 @@ export interface NodeRunProjectionWrite {
   readonly runtime?: Partial<Omit<NodeRunRuntimeStateView, 'mergeState'>>
   readonly result?: Partial<Omit<NodeRunResultView, 'supersededByReview'>>
   readonly checkpoint?: NodeRunCheckpointWrite
-  readonly inputs?: Partial<NodeRunInputView>
+  readonly inputs?: Partial<NodeRunInputView> & {
+    readonly recordedInputs?: readonly RecordedNodeRunInput[] | null
+  }
 }
 
 /** merge_state 与隔离根 / wrapper 进度同组，checkpoint 只在 CAS 命中时随写。 */
@@ -92,5 +96,7 @@ export interface NodeRunMintWrite {
     Pick<NodeRunConfigView, 'shardValueHash' | 'agentOverrideName' | 'agentOverrideId'>
   >
   readonly checkpoint?: Pick<NodeRunCheckpointWrite, 'checkpoints'>
-  readonly inputs?: Partial<NodeRunInputView>
+  readonly inputs?: Partial<NodeRunInputView> & {
+    readonly recordedInputs?: readonly RecordedNodeRunInput[] | null
+  }
 }

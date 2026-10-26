@@ -1,3 +1,4 @@
+import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { o2Ports } from './helpers/o2Closure'
 // RFC-310 PR-4 T41/T43/T52 —— digital-employee host 执行链（真子进程）。
 //
@@ -16,7 +17,6 @@ import { o2Ports } from './helpers/o2Closure'
 
 import { TASK_DEFINITION_HOSTS } from '@/modules/task-execution/public/queries'
 import { patchTaskFixture, readTaskFixtures } from './helpers/model'
-import { queryWrite } from '@/platform/persistence/queryHelpers'
 import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -53,7 +53,6 @@ import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
 
 setDefaultTimeout(120_000)
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
 
 function git(cwd: string, ...args: string[]): void {
@@ -86,7 +85,7 @@ async function buildHarness(): Promise<Harness> {
   const tmp = mkdtempSync(join(tmpdir(), 'rfc310-pr4-host-'))
   const appHome = join(tmp, 'home')
   mkdirSync(appHome, { recursive: true })
-  const db = createInMemoryDb(MIGRATIONS)
+  const db = createInMemoryDb()
   await seedTestDefaultOpencodeRuntime(db)
   // 组合根怎么取身份，这里就怎么取：两个 SQLite 组合根（`cli/start.ts` /
   // `server.ts`）与 PostgreSQL daemon 都用 `admitDaemonIdentity` admit `__system__`，
@@ -163,6 +162,7 @@ async function buildHarness(): Promise<Harness> {
     identityAccess,
     launchResources,
     persistence: createTaskExecutionPersistence(db, {
+      historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
       recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
     }),
   }
@@ -437,7 +437,7 @@ describe('rfc310 pr4 — digital-employee host execution (real subprocess)', () 
     // 模拟 daemon 崩溃残留：行退回 running + 死 pid（重启后无 owner），
     // 然后跑**真实**的 boot 修复入口 reapOrphanRuns——DE host 行走的就是
     // 普通任务的 interrupted 收敛，没有专用逻辑。
-    queryWrite(patchTaskFixture(h.db, { id: launched.executionRef }, { status: 'running' }))
+    await patchTaskFixture(h.db, { id: launched.executionRef }, { status: 'running' })
     const { reapOrphanRuns } = await import('../src/services/orphans')
     await reapOrphanRuns(taskRecoveryOperations(h.db))
     const snap = await r.fetchOutcome(launched.executionRef)

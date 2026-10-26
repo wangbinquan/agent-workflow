@@ -3,7 +3,7 @@ import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { queryWrite, first } from '@/platform/persistence/queryHelpers'
 import { describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
+
 import { eq } from 'drizzle-orm'
 import { buildActor, SYSTEM_USER_ID } from '../src/auth/actor'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
@@ -23,7 +23,6 @@ import {
 } from './helpers/runtimeRegistryApplication'
 import { disableUser } from './helpers/userFixture'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const HASH = 'a'.repeat(64)
 
 const admin = buildActor({
@@ -136,7 +135,7 @@ function lifecycle(db: DbClient, id: string) {
 
 describe('RFC-238 canonical mutation lifecycle transitions', () => {
   test('MCP update and session invalidation roll back as one transaction', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createInMemoryDb()
     insertMcp(db)
     insertIdleSession(db, { id: 'session-rollback' })
     db.$client.exec(`
@@ -163,7 +162,7 @@ describe('RFC-238 canonical mutation lifecycle transitions', () => {
   })
 
   test('final MCP delete and prepared transcript teardown roll back together', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createInMemoryDb()
     insertMcp(db)
     insertIdleSession(db, { id: 'session-delete-rollback' })
     const { mcpRuntimeTestSessions } = tablesOf(db)
@@ -203,7 +202,7 @@ describe('RFC-238 canonical mutation lifecycle transitions', () => {
   })
 
   test('MCP ACL revocation ends only lost viewers and blocks retained viewers', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createInMemoryDb()
     insertUser(db, 'owner-a')
     insertUser(db, 'viewer-b')
     insertMcp(db, 'owner-a')
@@ -252,7 +251,7 @@ describe('RFC-238 canonical mutation lifecycle transitions', () => {
 
   test('runtime profile, inherited binary, and user disable mutations persist end intent', async () => {
     {
-      const db = createInMemoryDb(MIGRATIONS)
+      const db = createInMemoryDb()
       const runtimeRegistry = new DrizzleRuntimeRegistryPersistence(db)
       insertMcp(db)
       insertRuntime(db)
@@ -266,7 +265,7 @@ describe('RFC-238 canonical mutation lifecycle transitions', () => {
     }
 
     {
-      const db = createInMemoryDb(MIGRATIONS)
+      const db = createInMemoryDb()
       const runtimeRegistry = new DrizzleRuntimeRegistryPersistence(db)
       insertMcp(db)
       insertRuntime(db, { binaryPath: null })
@@ -280,7 +279,7 @@ describe('RFC-238 canonical mutation lifecycle transitions', () => {
     }
 
     {
-      const db = createInMemoryDb(MIGRATIONS)
+      const db = createInMemoryDb()
       insertUser(db, 'viewer')
       insertMcp(db)
       insertIdleSession(db, { id: 'session-user', ownerUserId: 'viewer' })

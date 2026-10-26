@@ -1,3 +1,4 @@
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 // RFC-359 W11 —— 两台 apply 编排机的**事务边界**双引擎对拍。
 //
 // # 为什么这些用例存在
@@ -26,7 +27,7 @@
 // 于是「这一行有没有留下」就直接回答了「参与者的写在不在这笔事务里」。
 
 import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+
 import { randomBytes, createHash } from 'node:crypto'
 import { beforeEach, expect, test } from 'bun:test'
 import { and, eq } from 'drizzle-orm'

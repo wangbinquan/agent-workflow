@@ -1,3 +1,7 @@
+import { contentRefColumns } from '@/platform/content/contentStore'
+import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
+import { legacyContentRef } from '@/platform/content/contentRef'
+import { contentRowColumns } from '@/platform/content/infrastructure/contentStore'
 // RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-294 W4/P0-C pre-refactor oracle.
 //
@@ -195,7 +199,7 @@ describeEachProviderHttpApplication(
         sourcePortName: 'document',
         versionIndex: 1,
         reviewIteration: 0,
-        bodyPath,
+        ...contentRowColumns(legacyContentRef('review-body-path', 'local-file', bodyPath)),
         decision: 'pending',
       })
 
@@ -285,10 +289,13 @@ describeEachProviderHttpApplication(
         const row = (await fixture.db.select().from(reviewComments))[0]
         expect(row).toMatchObject({
           docVersionId: fixture.docVersionId,
-          commentText: 'Please preserve this user-visible contract.',
           author: fixture.collaborator.id,
           authorRole: 'user',
         })
+        const ref = contentRefColumns.decode(row!.contentRefJson, row!.contentInlineBytes)!
+        expect(
+          Buffer.from(await epoch2RuntimeTestPorts(fixture.db).content.read(ref)).toString('utf8'),
+        ).toBe('Please preserve this user-visible contract.')
         const state = await currentDecisionState()
         expect(state.doc?.decision).toBe('pending')
         expect(state.run?.status).toBe('awaiting_review')

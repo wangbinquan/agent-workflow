@@ -1,8 +1,8 @@
 // Released epoch-1 defect: user_permission_grants.permission is plain text, not JSON.
 // User decision (2026-10-24): fix epoch 1 now, append history and retain old backup contracts.
 import { beforeAll, describe, expect, setDefaultTimeout, test } from 'bun:test'
-import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
-import { loadPostgresqlMigrationHistory } from '@/platform/persistence/postgresqlMigrationHistory'
+import { buildFrozenEpoch1LogicalSchemaContract as buildLogicalSchemaContract } from '@/platform/persistence/migration/epoch1/contract'
+import { loadPostgresqlMigrationHistory } from '@/platform/persistence/migration/legacy/postgresqlMigrationHistory'
 import {
   createPostgresqlCodecUpgrade,
   postgresqlMigrationDigest,
@@ -12,9 +12,9 @@ import {
   resolvePostgresqlIndexOnlyRowBridge,
   type PostgresqlMigrationHistory,
   type PostgresqlMigrationVersion,
-} from '@/platform/persistence/postgresqlMigrationSequence'
-import { buildPostgresqlSchemaPlan } from '@/platform/persistence/postgresqlSchema'
-import { encodeLogicalRow } from '@/platform/persistence/logicalDatabaseArtifact'
+} from '@/platform/persistence/migration/legacy/postgresqlMigrationSequence'
+import { buildPostgresqlSchemaPlan } from '@/platform/persistence/migration/legacy/postgresqlSchema'
+import { encodeLogicalRow } from '@/platform/persistence/migration/legacy/logicalDatabaseArtifact'
 import {
   digestSchemaContract,
   type LogicalColumnContract,

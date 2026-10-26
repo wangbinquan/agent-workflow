@@ -8,15 +8,15 @@
 // still refused. These cases drive the pure classification with the real
 // on-disk history; the real-PostgreSQL cycle is in
 // `rfc370-v3-hosted-write-window.integration.test.ts`.
-import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import { buildFrozenEpoch1LogicalSchemaContract as buildLogicalSchemaContract } from '@/platform/persistence/migration/epoch1/contract'
 import { describe, expect, test } from 'bun:test'
-import { loadPostgresqlMigrationHistory } from '@/platform/persistence/postgresqlMigrationHistory'
+import { loadPostgresqlMigrationHistory } from '@/platform/persistence/migration/legacy/postgresqlMigrationHistory'
 import {
   expandOnlySuccessorOf,
   type PostgresqlSchemaSnapshot,
-} from '@/platform/persistence/postgresqlMigrator'
-import { postgresqlUpgradeReceipt } from '@/platform/persistence/postgresqlMigrationSequence'
-import { POSTGRESQL_BASELINE_ID } from '@/platform/persistence/postgresqlSchema'
+} from '@/platform/persistence/migration/legacy/postgresqlMigrator'
+import { postgresqlUpgradeReceipt } from '@/platform/persistence/migration/legacy/postgresqlMigrationSequence'
+import { POSTGRESQL_BASELINE_ID } from '@/platform/persistence/migration/legacy/postgresqlSchema'
 
 const history = await loadPostgresqlMigrationHistory({ headContract: buildLogicalSchemaContract() })
 const head = history.head
@@ -174,7 +174,10 @@ describe('RFC-370 v3 V7 — the migration Job of the previous release', () => {
   test('a switch back to the previous release applies nothing over an expand-only successor', async () => {
     const { readFileSync } = await import('node:fs')
     const source = readFileSync(
-      new URL('../src/platform/persistence/postgresqlMigrator.ts', import.meta.url),
+      new URL(
+        '../src/platform/persistence/migration/legacy/postgresqlMigrator.ts',
+        import.meta.url,
+      ),
       'utf8',
     )
     const migrate = source.slice(source.indexOf('export async function migratePostgresqlSchema('))

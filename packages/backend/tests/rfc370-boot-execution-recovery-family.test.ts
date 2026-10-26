@@ -54,22 +54,9 @@ function logger() {
   }
   return { log, entries }
 }
-const emptySeqBackfill = () => ({
-  async listTaskIds() {
-    return []
-  },
-  async backfillTask() {
-    return 0
-  },
-  async assertAllocatorCurrent() {},
-  async pruneAllocations() {
-    return 0
-  },
-})
 function portableInput(log: BootRecoveryLogger): TaskExecutionBootRecoveryInput {
   return {
     persistence: {
-      nodeRunSeqBackfill: emptySeqBackfill(),
       get recovery(): never {
         throw new Error('common recovery read local recovery')
       },
@@ -427,7 +414,7 @@ function nativeInput(failureAt?: Member, probePresent = true) {
     discard: unexpected,
     release: unexpected,
   }
-  const persistence = { recovery, recoveryAdministration, nodeRunSeqBackfill: emptySeqBackfill() }
+  const persistence = { recovery, recoveryAdministration }
   const { log } = logger()
   const input: TaskExecutionBootRecoveryInput = {
     get persistence() {

@@ -353,8 +353,8 @@ describe('RFC-380 daemon module bundles', () => {
   })
 })
 
-// RFC-383: legacy recovery is provider-neutral, unlike the retained PG identity boot check.
-function legacyRecoveryRestrictions(source: SourceUnit): number {
+// RFC-395 U4 retires legacy boot upgrades. The retained skill-operation recovery is provider-neutral.
+function operationRecoveryRestrictions(source: SourceUnit): number {
   let restrictions = 0
   walk(source.source, (node) => {
     if (!ts.isObjectLiteralExpression(node)) return
@@ -365,7 +365,7 @@ function legacyRecoveryRestrictions(source: SourceUnit): number {
       !id ||
       !ts.isPropertyAssignment(id) ||
       !ts.isStringLiteral(id.initializer) ||
-      id.initializer.text !== 'legacy-mission-recovery'
+      id.initializer.text !== 'skill-operation-recovery'
     )
       return
     restrictions += node.properties.filter(
@@ -374,18 +374,19 @@ function legacyRecoveryRestrictions(source: SourceUnit): number {
   })
   return restrictions
 }
-test('both providers register legacy recovery; provider restrictions are rejected', () => {
+test('both providers register operation recovery; retired boot upgrades stay absent', () => {
   const lifecycle = backendUnits(resolve(import.meta.dir, '../../../..')).find(
     (u) => u.path === PREFIX + 'bootstrap/daemonLifecycleProgram.ts',
   )!
   expect(lifecycle).toBeDefined()
-  expect(lifecycle.text).toContain("id: 'legacy-mission-recovery'")
-  expect(legacyRecoveryRestrictions(lifecycle)).toBe(0)
+  expect(lifecycle.text).toContain("id: 'skill-operation-recovery'")
+  expect(lifecycle.text).not.toContain("id: 'legacy-mission-recovery'")
+  expect(operationRecoveryRestrictions(lifecycle)).toBe(0)
   expect(
-    legacyRecoveryRestrictions(
+    operationRecoveryRestrictions(
       unit(
         'bootstrap/daemonLifecycleProgram.ts',
-        "const steps = [{ id: 'legacy-mission-recovery', providers: ['sqlite'] }]",
+        "const steps = [{ id: 'skill-operation-recovery', providers: ['sqlite'] }]",
       ),
     ),
   ).toBe(1)

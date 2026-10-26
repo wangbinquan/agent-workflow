@@ -1,3 +1,4 @@
+import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { o2Ports } from './helpers/o2Closure'
 // RFC-359 W4-B1 批 2d —— 四对只差事务 / 围栏原语的适配器合到 `ownedTaskExecution.ts` 上，两个引擎各跑一遍：
 // 运行时会话捕获（appendEvents 受围栏）、人工门 continuation pre-drive（inspect / releaseClarifyForRetry
@@ -97,6 +98,7 @@ async function seedClaimedOwner(
     intentId: `intent_${ulid()}`,
     token,
     persistence: createTaskExecutionPersistence(db, {
+      historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
       recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
     }),
   })
@@ -222,6 +224,7 @@ describeEachProvider('RFC-359 W4-B1 批 2d —— 人工门 continuation pre-dri
     const payloadJson = '{"v":1,"event":"resume"}'
     const intentId = await seedIntent(db, taskId, { payloadJson })
     const step = composeGateContinuationPreDrive({
+      historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
       db,
       memoryDistillEnqueuer: {
         async enqueue() {
@@ -236,6 +239,7 @@ describeEachProvider('RFC-359 W4-B1 批 2d —— 人工门 continuation pre-dri
         intentId,
         token,
         persistence: createTaskExecutionPersistence(db, {
+          historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
           recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
         }),
       }),

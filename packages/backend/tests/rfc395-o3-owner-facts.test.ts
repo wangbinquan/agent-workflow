@@ -1,3 +1,5 @@
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { eq } from 'drizzle-orm'
 // RFC-395 II-b package O3: real-engine compatibility for Task-owned workspace, usage and Doctor facts.
 import { expect, test } from 'bun:test'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
@@ -12,7 +14,6 @@ import { readTaskResourceUsage } from '@/modules/task-execution/public/queries'
 import { taskCheckpointMountPaths } from '@/modules/task-execution/infrastructure/taskCheckpointPersistence'
 import { describeEachProvider } from './helpers/eachProvider'
 import { taskFixture, taskRepoFixture, nodeRunFixture, patchTaskFixture } from './helpers/model'
-import { readStoredNodeRunRows } from './helpers/model/storedRows'
 
 async function seedTask(db: PersistenceDb, id: string) {
   await taskFixture(db, {
@@ -74,7 +75,7 @@ describeEachProvider('RFC-395 II-b O3 owner facts', (harness) => {
         mountPath: 'z',
         repoPath: '/repo/z',
         branch: 'z',
-        worktreePath: '/work/z',
+        worktreePath: '/work/mounts/z',
         baseCommit: 'z-base',
       },
       {
@@ -83,7 +84,7 @@ describeEachProvider('RFC-395 II-b O3 owner facts', (harness) => {
         mountPath: 'a',
         repoPath: '/repo/a',
         branch: 'a',
-        worktreePath: '/work/a',
+        worktreePath: '/work/mounts/a',
         baseCommit: null,
       },
     ])
@@ -100,8 +101,8 @@ describeEachProvider('RFC-395 II-b O3 owner facts', (harness) => {
     const queries = createTaskCodeWorkspaceQueries(db)
     expect(await taskCheckpointMountPaths(db, 'mounts')).toEqual(['a', 'z'])
     expect((await queries.findTask('mounts'))?.repos).toEqual([
-      { mountPath: 'a', worktreePath: '/work/a', baseCommit: null },
-      { mountPath: 'z', worktreePath: '/work/z', baseCommit: 'z-base' },
+      { mountPath: 'a', worktreePath: '/work/mounts/a', baseCommit: null },
+      { mountPath: 'z', worktreePath: '/work/mounts/z', baseCommit: 'z-base' },
     ])
     expect((await queries.findNodeRun('mount-run'))?.checkpoints).toEqual([
       { mountPath: 'a', preSnapshot: '' },
@@ -152,9 +153,16 @@ describeEachProvider('RFC-395 II-b O3 owner facts', (harness) => {
     })
     expect(await readTaskResourceUsage(facts, 'missing', 10000)).toBeNull()
     expect(await facts.listTaskStatuses([])).toEqual([])
-    expect((await readStoredNodeRunRows(db)).map((row) => row.wrapperProgressJson)).toEqual(
-      payloads,
-    )
+    const { nodeRuns, nodeRunRuntimeStates } = tablesOf(db)
+    expect(
+      (
+        await db
+          .select({ value: nodeRunRuntimeStates.wrapperProgressJson })
+          .from(nodeRuns)
+          .leftJoin(nodeRunRuntimeStates, eq(nodeRunRuntimeStates.nodeRunId, nodeRuns.id))
+          .orderBy(nodeRuns.seq)
+      ).map((row) => row.value),
+    ).toEqual(payloads)
   })
 
   test('Doctor keeps its native read handle and shares the Task status-count owner with health', async () => {

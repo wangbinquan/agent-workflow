@@ -1,3 +1,6 @@
+import { legacyContentRef } from '@/platform/content/contentRef'
+import { contentRowColumns } from '@/platform/content/infrastructure/contentStore'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 // LOCKS: RFC-057 — shared test harness for repair option suites.
 // Not a *.test.ts file so bun:test doesn't try to run it.
 //
@@ -8,7 +11,7 @@
 
 import { nodeRunFixture, taskFixture, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { insertLegacySelfClarify } from './clarify-fixtures'
 import { tmpdir } from 'node:os'
@@ -165,7 +168,7 @@ export async function insertDocVersion(
     sourcePortName: 'docpath',
     versionIndex: opts.versionIndex ?? 1,
     reviewIteration: opts.reviewIteration ?? 0,
-    bodyPath: 'dv/v1.md',
+    ...contentRowColumns(legacyContentRef('review-body-path', 'local-file', 'dv/v1.md')),
     decision: opts.decision,
     decidedAt: opts.decision === 'pending' ? null : Date.now(),
     sourceFilePath: opts.sourceFilePath ?? null,

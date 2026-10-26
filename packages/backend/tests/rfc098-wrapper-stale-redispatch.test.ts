@@ -52,7 +52,6 @@ import { runGit } from '../src/util/git'
 
 const ulid = monotonicFactory()
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
 
 interface Harness {
@@ -75,7 +74,7 @@ async function buildHarness(slug: string): Promise<Harness> {
   writeFileSync(join(worktreePath, 'base.txt'), 'baseline\n')
   await runGit(worktreePath, ['add', '.'])
   await runGit(worktreePath, ['commit', '-q', '-m', 'init'])
-  const db = createInMemoryDb(MIGRATIONS)
+  const db = createInMemoryDb()
   return {
     db,
     appHome,

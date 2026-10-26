@@ -10,7 +10,7 @@
 //
 // 行为逐字不变：同一条 `select … from agents where id = ? limit 1` + 同一个行映射器。
 
-import { readAgentFixtures } from './model'
+import { readAgentFixtures, agentFixtureReferences } from './model'
 
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { AgentDependencyLookup } from '@/services/agentDeps'
@@ -20,7 +20,9 @@ export function legacyInjectionAgentLookup(db: PersistenceDb): AgentDependencyLo
   return Object.freeze({
     async get(id: string) {
       const rows = await readAgentFixtures(db, { id }, { limit: 1 })
-      return rows[0] === undefined ? null : taskExecutionResourceDependencies.rowToAgent(rows[0])
+      return rows[0] === undefined
+        ? null
+        : taskExecutionResourceDependencies.rowToAgent(rows[0], agentFixtureReferences(rows[0]))
     },
   })
 }

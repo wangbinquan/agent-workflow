@@ -1,4 +1,4 @@
-// Frozen from 67ab6b9aed08d97dcd6d3d9dfb57b8885a11f8e6. Query bodies are verbatim HEAD, with their original bindings.
+// Frozen from 67ab6b9aed08d97dcd6d3d9dfb57b8885a11f8e6. Query ordering is frozen; columns are projected from target identity rows.
 // S6: services/task.ts; S7: infrastructure/repositoryPreparationRetryCommand.ts.
 import { and, desc, eq } from 'drizzle-orm'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
@@ -14,7 +14,7 @@ export async function frozenS6(input: { deps: { db: PersistenceDb } }, taskId: s
       .from(nodeRuns)
       .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, REPO_PREP_NODE_ID)))
       .orderBy(
-        desc(nodeRuns.retryIndex),
+        desc(nodeRuns.attemptIndex),
         engineOf(input.deps.db).descNullsLast(nodeRuns.seq),
         desc(nodeRuns.id),
       )
@@ -26,11 +26,11 @@ export async function frozenS6(input: { deps: { db: PersistenceDb } }, taskId: s
 export async function frozenS7(dependencies: { db: PersistenceDb }, taskId: string) {
   const { nodeRuns } = tablesOf(dependencies.db)
   const prepRows = await dependencies.db
-    .select({ id: nodeRuns.id, retryIndex: nodeRuns.retryIndex, status: nodeRuns.status })
+    .select({ id: nodeRuns.id, retryIndex: nodeRuns.attemptIndex, status: nodeRuns.status })
     .from(nodeRuns)
     .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, REPO_PREP_NODE_ID)))
     .orderBy(
-      desc(nodeRuns.retryIndex),
+      desc(nodeRuns.attemptIndex),
       engineOf(dependencies.db).descNullsLast(nodeRuns.seq),
       desc(nodeRuns.id),
     )

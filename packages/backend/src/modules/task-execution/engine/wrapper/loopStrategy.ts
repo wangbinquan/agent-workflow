@@ -1,4 +1,4 @@
-import { copyLegacyPortArchive } from '@/platform/content/legacyPortArchive'
+import { copyPortArchive } from '@/platform/content/locations/portArchive'
 import { readContinueOnMaxIterations } from '@agent-workflow/shared'
 import { evaluateExitCondition, parseExitCondition } from '../../domain/loopExitCondition'
 import type { WrapperDataPort } from '../../application/ports/wrapperData'
@@ -138,7 +138,7 @@ export class LoopStrategy implements WrapperStrategy<'wrapper-loop'> {
         portName: binding.name,
         content: value.content,
         kind: value.kind,
-        archiveJson: copyLegacyPortArchive(value.archiveJson),
+        archiveJson: copyPortArchive(value.archiveJson),
         active: value.active,
       })
       promoted.set(binding.name, { content: value.content, active: value.active })

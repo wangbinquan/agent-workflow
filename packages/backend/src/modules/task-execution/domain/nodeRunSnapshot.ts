@@ -1,3 +1,4 @@
+import type { RunSlot } from './runSelection/slots'
 import type { MergeStateOrNull, NodeRunStatus, RerunCause } from '@agent-workflow/shared'
 
 import type { NodeRunRole, NodeRunSyntheticKind } from './nodeRunRole'
@@ -5,6 +6,8 @@ import type { TaskRepositoryCheckpoint } from './taskCheckpoint'
 
 // RFC-395 II-a：视图按目标表分组；旧协议字段名与 JSON 字节留到存储适配器切换时处理。
 export interface NodeRunIdentitySnapshot {
+  readonly slot: RunSlot
+  readonly generationSeq: number
   readonly role: NodeRunRole
   readonly syntheticKind: NodeRunSyntheticKind | null
   /** 当前 retry_index 的值，不承担时间排序。 */

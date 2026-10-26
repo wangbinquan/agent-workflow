@@ -15,14 +15,12 @@ import type { Database } from 'bun:sqlite'
 import { mkdtempSync, unlinkSync } from 'node:fs'
 import { removeTempDirSync } from './fixtures/tempDir'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { ulid } from 'ulid'
 import { createSecretBox } from '../src/auth/secretBox'
 import { openDb, type DbClient } from '../src/db/client'
 import { checkSealedCredentials } from '../src/cli/doctor'
 import { sealRepoUrl } from '../src/services/repoCredentials'
-
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 const tmps: string[] = []
 function tmp(): string {
@@ -57,7 +55,7 @@ function seed(appHome: string): void {
   process.env.AGENT_WORKFLOW_HOME = appHome
   const keyPath = join(appHome, 'secret.key')
   const box = createSecretBox(keyPath)
-  const db: DbClient = openDb({ path: join(appHome, 'db.sqlite'), migrationsFolder: MIGRATIONS })
+  const db: DbClient = openDb({ path: join(appHome, 'db.sqlite') })
   const { cachedRepos } = tablesOf(db)
   insertOne(db, cachedRepos, {
     id: ulid(),
@@ -104,7 +102,7 @@ describe('RFC-213 AC-12 sealed-credential decryptability', () => {
   test('no sealed credentials → ok', () => {
     const appHome = tmp()
     process.env.AGENT_WORKFLOW_HOME = appHome
-    const db = openDb({ path: join(appHome, 'db.sqlite'), migrationsFolder: MIGRATIONS })
+    const db = openDb({ path: join(appHome, 'db.sqlite') })
     const s = (db as unknown as { $client: Database }).$client
     s.exec('PRAGMA wal_checkpoint(TRUNCATE);') // fold migrations into the base (immutable read)
     s.close()

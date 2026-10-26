@@ -64,7 +64,8 @@ async function rowsByIds(
   ids: readonly string[],
 ): Promise<readonly NamedAclRow[]> {
   if (ids.length === 0) return []
-  const { agents, skills, mcps, plugins } = tablesOf(transaction)
+  const { agents, skills } = tablesOf(transaction)
+  const { mcps, plugins } = tablesOf(transaction)
   switch (type) {
     case 'agent':
       return transaction
@@ -398,7 +399,8 @@ export function createAgentPersistenceSemantics(input: {
     const skillIds = unique(selected.flatMap((agent) => agentReferenceIds(agent, 'skill')))
     const mcpIds = unique(selected.flatMap((agent) => agentReferenceIds(agent, 'mcp')))
     const pluginIds = unique(selected.flatMap((agent) => agentReferenceIds(agent, 'plugin')))
-    const { skills, mcps, plugins } = tablesOf(input.db)
+    const { skills } = tablesOf(input.db)
+    const { mcps, plugins } = tablesOf(input.db)
     const [skillRows, mcpRows, pluginRows] = await Promise.all([
       skillIds.length === 0
         ? Promise.resolve([])

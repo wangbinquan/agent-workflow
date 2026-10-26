@@ -52,7 +52,9 @@ import {
 } from '@agent-workflow/shared'
 
 import type { Actor } from '@/auth/actor'
-import type { IntentJournalArtifactV1 } from '@/modules/intent/infrastructure/intentApplyLegacyCodec'
+import type { IntentApplyArtifact as IntentJournalArtifactV1 } from '@/modules/resource-catalog/public/types'
+import { intentApplyArtifactCodecs } from '@/modules/intent/infrastructure/intentApplyArtifactCodec'
+
 import {
   createIntentApplyEngine,
   type ApplyIntentFaults,
@@ -464,7 +466,11 @@ describeEachProvider('RFC-359 W9 Intent apply 同步事务切换', (harness) => 
     // RFC-359 —— 新写的行用**现行词汇**（裸数组）。合一之前 SQLite 那台写的是带版本号的信封
     // `{version:1, artifacts:[…]}`；那种行仍然读得回来（收敛侧的回落，判据在
     // `rfc359-w7-intent-apply-artifact-conformance` 的「工件词汇 ③」），但不再有人写它。
-    expect(JSON.parse(seenDuringPrestage ?? 'null')).toEqual([ARTIFACT])
+    expect(JSON.parse(seenDuringPrestage ?? 'null')).toEqual({
+      scene: 'intent',
+      version: 3,
+      artifacts: [ARTIFACT],
+    })
   })
 
   test('settleFailed：提交前失败 ⇒ apply 落地时 journal **已经**是 failed', async () => {
@@ -554,7 +560,7 @@ describeEachProvider('RFC-359 W9 Intent apply 同步事务切换', (harness) => 
     })
     const journalId = await seedJournal(harness, fixture, {
       state: 'applying',
-      preparedArtifactsJson: JSON.stringify([ARTIFACT]),
+      preparedArtifactsJson: intentApplyArtifactCodecs.encode([ARTIFACT]),
     })
 
     expect(await port.converge()).toEqual({ failed: 0, rolledForward: 0 })
@@ -573,7 +579,7 @@ describeEachProvider('RFC-359 W9 Intent apply 同步事务切换', (harness) => 
     })
     const journalId = await seedJournal(harness, fixture, {
       state: 'prepared',
-      preparedArtifactsJson: JSON.stringify([ARTIFACT]),
+      preparedArtifactsJson: intentApplyArtifactCodecs.encode([ARTIFACT]),
     })
 
     // `affectedRows` 缺失按 0 计：判据失真时这里会读到 0，计数直接对不上。
@@ -591,7 +597,7 @@ describeEachProvider('RFC-359 W9 Intent apply 同步事务切换', (harness) => 
     const port = applyPortFor(harness, appHome)
     const journalId = await seedJournal(harness, fixture, {
       state: 'prepared',
-      preparedArtifactsJson: '[]',
+      preparedArtifactsJson: intentApplyArtifactCodecs.encode([]),
     })
 
     expect(await port.converge({ activeJournalIds: [journalId] })).toEqual({
@@ -606,7 +612,7 @@ describeEachProvider('RFC-359 W9 Intent apply 同步事务切换', (harness) => 
     const port = applyPortFor(harness, appHome, { rollForward: async () => true })
     const journalId = await seedJournal(harness, fixture, {
       state: 'committed',
-      preparedArtifactsJson: JSON.stringify([ARTIFACT]),
+      preparedArtifactsJson: intentApplyArtifactCodecs.encode([ARTIFACT]),
       error: 'retryable: committed roll-forward incomplete; inspect intent apply logs',
     })
 
@@ -621,7 +627,7 @@ describeEachProvider('RFC-359 W9 Intent apply 同步事务切换', (harness) => 
     const port = applyPortFor(harness, appHome, { rollForward: async () => false })
     const journalId = await seedJournal(harness, fixture, {
       state: 'committed',
-      preparedArtifactsJson: JSON.stringify([ARTIFACT]),
+      preparedArtifactsJson: intentApplyArtifactCodecs.encode([ARTIFACT]),
     })
 
     expect(await port.converge()).toEqual({ failed: 0, rolledForward: 0 })

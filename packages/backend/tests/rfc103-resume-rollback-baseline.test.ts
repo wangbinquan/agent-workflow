@@ -20,9 +20,9 @@ type Row = {
 describe('RFC-103 T1 selectResumeRollbackTargets', () => {
   test('fanout 子行（ULID 更大）不冒充节点最新行——只回滚 top-level 父行', async () => {
     const rows: Row[] = [
-      { seq: null, id: '0001', nodeId: 'A', parentNodeRunId: null, status: 'failed' }, // top-level 父行
-      { seq: null, id: '0009', nodeId: 'A', parentNodeRunId: '0001', status: 'failed' }, // shard 子行，ULID 更大
-      { seq: null, id: '0010', nodeId: 'A', parentNodeRunId: '0001', status: 'interrupted' },
+      { seq: 1, id: '0001', nodeId: 'A', parentNodeRunId: null, status: 'failed' }, // top-level 父行
+      { seq: 9, id: '0009', nodeId: 'A', parentNodeRunId: '0001', status: 'failed' }, // shard 子行，ULID 更大
+      { seq: 10, id: '0010', nodeId: 'A', parentNodeRunId: '0001', status: 'interrupted' },
     ]
     const got = await selectResumeRollbackTargets(rows)
     expect(got).toHaveLength(1)
@@ -32,17 +32,17 @@ describe('RFC-103 T1 selectResumeRollbackTargets', () => {
 
   test('子行 failed/interrupted 也不进 rollback 集（只 top-level）', async () => {
     const rows: Row[] = [
-      { seq: null, id: '0002', nodeId: 'B', parentNodeRunId: '00xx', status: 'failed' }, // 仅子行，无 top-level
-      { seq: null, id: '0003', nodeId: 'B', parentNodeRunId: '00yy', status: 'interrupted' },
+      { seq: 2, id: '0002', nodeId: 'B', parentNodeRunId: '00xx', status: 'failed' }, // 仅子行，无 top-level
+      { seq: 3, id: '0003', nodeId: 'B', parentNodeRunId: '00yy', status: 'interrupted' },
     ]
     expect(await selectResumeRollbackTargets(rows)).toHaveLength(0)
   })
 
-  test('top-level 多行取 freshest（最大 ULID）', async () => {
+  test('top-level 多行取 freshest（最大 seq）', async () => {
     const rows: Row[] = [
-      { seq: null, id: '0001', nodeId: 'C', parentNodeRunId: null, status: 'failed' },
-      { seq: null, id: '0005', nodeId: 'C', parentNodeRunId: null, status: 'interrupted' }, // freshest
-      { seq: null, id: '0003', nodeId: 'C', parentNodeRunId: null, status: 'failed' },
+      { seq: 1, id: '0001', nodeId: 'C', parentNodeRunId: null, status: 'failed' },
+      { seq: 5, id: '0005', nodeId: 'C', parentNodeRunId: null, status: 'interrupted' }, // freshest
+      { seq: 3, id: '0003', nodeId: 'C', parentNodeRunId: null, status: 'failed' },
     ]
     const got = await selectResumeRollbackTargets(rows)
     expect(got).toHaveLength(1)
@@ -51,18 +51,18 @@ describe('RFC-103 T1 selectResumeRollbackTargets', () => {
 
   test('done/其他终态的 top-level 行不进集（仅 failed/interrupted）', async () => {
     const rows: Row[] = [
-      { seq: null, id: '0001', nodeId: 'D', parentNodeRunId: null, status: 'done' },
-      { seq: null, id: '0002', nodeId: 'E', parentNodeRunId: null, status: 'canceled' },
+      { seq: 1, id: '0001', nodeId: 'D', parentNodeRunId: null, status: 'done' },
+      { seq: 2, id: '0002', nodeId: 'E', parentNodeRunId: null, status: 'canceled' },
     ]
     expect(await selectResumeRollbackTargets(rows)).toHaveLength(0)
   })
 
   test('多节点混合：各取自己的 top-level freshest 失败行', async () => {
     const rows: Row[] = [
-      { seq: null, id: '0001', nodeId: 'A', parentNodeRunId: null, status: 'failed' },
-      { seq: null, id: '0002', nodeId: 'A', parentNodeRunId: '0001', status: 'failed' }, // 子行排除
-      { seq: null, id: '0003', nodeId: 'B', parentNodeRunId: null, status: 'interrupted' },
-      { seq: null, id: '0004', nodeId: 'C', parentNodeRunId: null, status: 'done' }, // 终态排除
+      { seq: 1, id: '0001', nodeId: 'A', parentNodeRunId: null, status: 'failed' },
+      { seq: 2, id: '0002', nodeId: 'A', parentNodeRunId: '0001', status: 'failed' }, // 子行排除
+      { seq: 3, id: '0003', nodeId: 'B', parentNodeRunId: null, status: 'interrupted' },
+      { seq: 4, id: '0004', nodeId: 'C', parentNodeRunId: null, status: 'done' }, // 终态排除
     ]
     const got = (await selectResumeRollbackTargets(rows)).map((r) => r.id).sort()
     expect(got).toEqual(['0001', '0003'])

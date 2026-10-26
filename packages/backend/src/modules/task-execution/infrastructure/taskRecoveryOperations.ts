@@ -1,4 +1,11 @@
+import { createRunSelectionReader } from './runSelection/table/reader'
+import type { HistoryRestrictionPort } from '@/platform/contracts/historyRestriction'
+import type { PersistenceTx, PersistenceDb } from '@/platform/persistence/persistenceDb'
+import { ConflictError } from '@/util/errors'
+import { nodeRunReadColumns } from './nodeRunQueries'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { TaskRecoveryHumanGateFactsPort } from '../composition/required-ports'
+import { taskReadColumns } from './taskRepositorySql'
 // RFC-359 W4-B1 批 2e —— 任务恢复读 / 写：一份实现，两个 provider 共用。
 //
 // 此前 sqlite / postgresql 两份约千行只差客户端类型、同步 / 异步形态，以及「四条状态迁移」的来源：
@@ -6,17 +13,17 @@ import type { TaskRecoveryHumanGateFactsPort } from '../composition/required-por
 // （`composition/taskExecutionPersistence.ts`），其余读 / 写共用；`recordAutoRecoveryAttempt` 取 PG 的
 // 事务形态（读 + 写同一事务，SQLite 侧此前是两条自动提交语句）。
 
-import { taskWorkgroupConfigSelection } from './taskWorkgroupConfig'
-import { decodeTaskSubject } from '../domain/taskSubject'
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
 import { first, queryRows } from '@/platform/persistence/queryHelpers'
+
+import { insertOne } from '@/platform/persistence/singleInsert'
 import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, lt, or } from 'drizzle-orm'
 import { ulid } from 'ulid'
+import { taskSubjectFromDefinition } from '../domain/taskSubject'
+import { taskWorkgroupConfigSelection } from './taskWorkgroupConfig'
 
 import { SYSTEM_USER_ID } from '@/auth/systemIdentity'
-import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { databaseSessionFor, engineOf } from '@/platform/persistence/databaseTransaction'
+
 import {
   CANCELABLE_TASK_STATUSES,
   DAEMON_RESTART_ERROR_SUMMARY,
@@ -24,8 +31,8 @@ import {
 } from '@agent-workflow/shared'
 import type {
   RecordTaskRecoveryEventInput,
-  TaskLifecycleAlertRecord,
   TaskLifecycleAlertReconciliation,
+  TaskLifecycleAlertRecord,
   TaskLifecycleInvariantScope,
   TaskLifecycleInvariantSnapshot,
   TaskRecoveryAutoResumeCandidate,
@@ -38,8 +45,8 @@ import type {
   TaskRecoveryRunRecord,
   TaskRecoveryStuckTaskSnapshot,
 } from '../application/ports/taskRecoveryOperations'
-import { resolveHandlerRun } from './runSelection/oracle/handlerHistory'
 import { isLegacyTaskGateContinuationPayload } from '../domain/humanGateContinuation'
+import { resolveHandlerRun } from '../application/resolveHandlerRun'
 
 /** Exact RFC-120 designer-park evidence used by stuck detection. Keeping the
  * lineage partition pure lets both provider adapters expose the same closed
@@ -135,6 +142,7 @@ async function latestEventTsForRun(db: PersistenceDb, nodeRunId: string): Promis
 
 async function latestEventTsForTask(db: PersistenceDb, taskId: string): Promise<number | null> {
   const { nodeRuns } = tablesOf(db)
+
   const runs = await db
     .select({ id: nodeRuns.id })
     .from(nodeRuns)
@@ -153,6 +161,7 @@ async function hasUndispatchedDesignerQuestions(
   taskId: string,
 ): Promise<boolean> {
   const { nodeRuns, nodeRunOutputs } = tablesOf(db)
+
   const entries = await humanGates.designerParkEntries(taskId)
   if (entries.length === 0) return false
   const runs = await db
@@ -164,7 +173,7 @@ async function hasUndispatchedDesignerQuestions(
       rerunCause: nodeRuns.rerunCause,
       status: nodeRuns.status,
       startedAt: nodeRuns.startedAt,
-      parentNodeRunId: nodeRuns.parentNodeRunId,
+      parentNodeRunId: nodeRuns.historicalParentId,
       shardKey: nodeRuns.shardKey,
     })
     .from(nodeRuns)
@@ -203,14 +212,17 @@ async function loadLifecycleInvariantSnapshots(
   humanGates: TaskRecoveryHumanGateFactsPort,
   scope: TaskLifecycleInvariantScope,
 ): Promise<readonly TaskLifecycleInvariantSnapshot[]> {
-  const { tasks, docVersions, nodeRuns, taskQuestions, nodeRunOutputs } = tablesOf(db)
+  const { docVersions, taskQuestions } = tablesOf(db)
+  const { nodeRuns, nodeRunOutputs } = tablesOf(db)
+
+  const { tasks } = tablesOf(db)
   const taskRows =
     'taskId' in scope
       ? await db
           .select({
             taskId: tasks.id,
             taskStatus: tasks.status,
-            workflowSnapshot: tasks.workflowSnapshot,
+            workflowSnapshot: taskReadColumns(db).workflowSnapshot,
           })
           .from(tasks)
           .where(eq(tasks.id, scope.taskId))
@@ -218,7 +230,7 @@ async function loadLifecycleInvariantSnapshots(
           .select({
             taskId: tasks.id,
             taskStatus: tasks.status,
-            workflowSnapshot: tasks.workflowSnapshot,
+            workflowSnapshot: taskReadColumns(db).workflowSnapshot,
           })
           .from(tasks)
           .where(
@@ -259,7 +271,7 @@ async function loadLifecycleInvariantSnapshots(
           iteration: nodeRuns.iteration,
           rerunCause: nodeRuns.rerunCause,
           startedAt: nodeRuns.startedAt,
-          parentNodeRunId: nodeRuns.parentNodeRunId,
+          parentNodeRunId: nodeRuns.historicalParentId,
           reviewIteration: nodeRuns.reviewIteration,
           shardKey: nodeRuns.shardKey,
         })
@@ -414,7 +426,10 @@ async function loadStuckTaskSnapshots(
   humanGates: TaskRecoveryHumanGateFactsPort,
   taskIdFilter?: readonly string[],
 ): Promise<readonly TaskRecoveryStuckTaskSnapshot[]> {
-  const { tasks, nodeRuns, docVersions } = tablesOf(db)
+  const { docVersions } = tablesOf(db)
+  const { nodeRuns } = tablesOf(db)
+  const nodeRunColumns = nodeRunReadColumns(db)
+  const { tasks } = tablesOf(db)
   const base = and(isNull(tasks.deletedAt), inArray(tasks.status, [...CANCELABLE_TASK_STATUSES]))
   const rows = await db
     .select({
@@ -423,15 +438,18 @@ async function loadStuckTaskSnapshots(
       status: tasks.status,
       startedAt: tasks.startedAt,
       ownerUserId: tasks.ownerUserId,
-      workgroupId: tasks.workgroupId,
-      workflowId: tasks.workflowId,
-      codeRoundId: tasks.codeRoundId,
-      sourceAgentId: tasks.sourceAgentId,
-      sourceAgentName: tasks.sourceAgentName,
-      worktreePath: tasks.worktreePath,
+      workgroupId: taskReadColumns(db).workgroupId,
+      workflowId: taskReadColumns(db).workflowId,
+      subjectKind: taskReadColumns(db).subjectKind,
+      sourceId: taskReadColumns(db).sourceId,
+      sourceName: taskReadColumns(db).sourceName,
+      codeRoundId: taskReadColumns(db).codeRoundId,
+      sourceAgentId: taskReadColumns(db).sourceAgentId,
+      sourceAgentName: taskReadColumns(db).sourceAgentName,
+      worktreePath: taskReadColumns(db).worktreePath,
       workspacePruningAt: tasks.workspacePruningAt,
       workspacePrunedAt: tasks.workspacePrunedAt,
-      workflowSnapshot: tasks.workflowSnapshot,
+      workflowSnapshot: taskReadColumns(db).workflowSnapshot,
     })
     .from(tasks)
     .where(
@@ -467,7 +485,7 @@ async function loadStuckTaskSnapshots(
         seq: nodeRuns.seq,
         nodeId: nodeRuns.nodeId,
         status: nodeRuns.status,
-        pid: nodeRuns.pid,
+        pid: nodeRunColumns.pid,
         childTaskId: nodeRuns.childTaskId,
       })
       .from(nodeRuns)
@@ -513,7 +531,7 @@ async function loadStuckTaskSnapshots(
     snapshots.push(
       Object.freeze({
         ...row,
-        subject: decodeTaskSubject(row),
+        subject: taskSubjectFromDefinition(row),
         hasRepoPrepRow: prepIds.has(row.taskId),
         latestEventTs: latestTaskEventTs,
         hasPendingDocVersion: pendingDoc !== undefined,
@@ -658,6 +676,7 @@ export function createTaskRecoveryOperations(
     async taskIdsWithRepoPrepRow(taskIds: readonly string[]): Promise<ReadonlySet<string>> {
       if (taskIds.length === 0) return new Set()
       const { nodeRuns } = tablesOf(db)
+
       const rows = await db
         .select({ taskId: nodeRuns.taskId })
         .from(nodeRuns)
@@ -668,7 +687,9 @@ export function createTaskRecoveryOperations(
     },
 
     async listStalledRunningChildren(input) {
-      const { nodeRuns, nodeRunEvents } = tablesOf(db)
+      const { nodeRunEvents } = tablesOf(db)
+      const { nodeRuns } = tablesOf(db)
+      const nodeRunColumns = nodeRunReadColumns(db)
       const runs = await db
         .select({
           id: nodeRuns.id,
@@ -676,16 +697,16 @@ export function createTaskRecoveryOperations(
           taskId: nodeRuns.taskId,
           nodeId: nodeRuns.nodeId,
           status: nodeRuns.status,
-          pid: nodeRuns.pid,
+          pid: nodeRunColumns.pid,
           startedAt: nodeRuns.startedAt,
-          spawnBinaryPath: nodeRuns.spawnBinaryPath,
-          spawnLaunchNonce: nodeRuns.spawnLaunchNonce,
-          parentNodeRunId: nodeRuns.parentNodeRunId,
+          spawnBinaryPath: nodeRunColumns.spawnBinaryPath,
+          spawnLaunchNonce: nodeRunColumns.spawnLaunchNonce,
+          parentNodeRunId: nodeRuns.historicalParentId,
           containerRunId: nodeRuns.containerRunId,
           childTaskId: nodeRuns.childTaskId,
         })
         .from(nodeRuns)
-        .where(and(eq(nodeRuns.status, 'running'), isNotNull(nodeRuns.pid)))
+        .where(and(eq(nodeRuns.status, 'running'), isNotNull(nodeRunColumns.pid)))
       const cutoff = input.now - input.stallMs
       const stalled: TaskRecoveryRunRecord[] = []
       for (const run of runs) {
@@ -707,12 +728,14 @@ export function createTaskRecoveryOperations(
     },
 
     async listAutoResumeCandidates(): Promise<readonly TaskRecoveryAutoResumeCandidate[]> {
-      const { tasks, nodeRuns } = tablesOf(db)
+      const { nodeRuns } = tablesOf(db)
+
+      const { tasks } = tablesOf(db)
       const projection = {
         id: tasks.id,
-        workgroupId: tasks.workgroupId,
+        workgroupId: taskReadColumns(db).workgroupId,
         workgroupConfig: taskWorkgroupConfigSelection(db),
-        worktreePath: tasks.worktreePath,
+        worktreePath: taskReadColumns(db).worktreePath,
         workspacePruningAt: tasks.workspacePruningAt,
         workspacePrunedAt: tasks.workspacePrunedAt,
       }
@@ -745,7 +768,10 @@ export function createTaskRecoveryOperations(
     },
 
     async loadBootOrphanSnapshot(): Promise<TaskRecoveryBootSnapshot> {
-      const { tasks, nodeRuns, taskExecutionIntents, runtimeSessionLeases } = tablesOf(db)
+      const { taskExecutionIntents, runtimeSessionLeases } = tablesOf(db)
+      const { nodeRuns } = tablesOf(db)
+      const nodeRunColumns = nodeRunReadColumns(db)
+      const { tasks } = tablesOf(db)
       const taskCandidates = await db
         .select({ id: tasks.id, status: tasks.status })
         .from(tasks)
@@ -756,11 +782,11 @@ export function createTaskRecoveryOperations(
         taskId: nodeRuns.taskId,
         nodeId: nodeRuns.nodeId,
         status: nodeRuns.status,
-        pid: nodeRuns.pid,
+        pid: nodeRunColumns.pid,
         startedAt: nodeRuns.startedAt,
-        spawnBinaryPath: nodeRuns.spawnBinaryPath,
-        spawnLaunchNonce: nodeRuns.spawnLaunchNonce,
-        parentNodeRunId: nodeRuns.parentNodeRunId,
+        spawnBinaryPath: nodeRunColumns.spawnBinaryPath,
+        spawnLaunchNonce: nodeRunColumns.spawnLaunchNonce,
+        parentNodeRunId: nodeRuns.historicalParentId,
         containerRunId: nodeRuns.containerRunId,
         childTaskId: nodeRuns.childTaskId,
       }
@@ -832,6 +858,7 @@ export function createTaskRecoveryOperations(
 
     async listPeriodicReconcileCandidates(startedBefore: number) {
       const { nodeRuns } = tablesOf(db)
+      const nodeRunColumns = nodeRunReadColumns(db)
       const rows = await db
         .select({
           id: nodeRuns.id,
@@ -839,11 +866,11 @@ export function createTaskRecoveryOperations(
           taskId: nodeRuns.taskId,
           nodeId: nodeRuns.nodeId,
           status: nodeRuns.status,
-          pid: nodeRuns.pid,
+          pid: nodeRunColumns.pid,
           startedAt: nodeRuns.startedAt,
-          spawnBinaryPath: nodeRuns.spawnBinaryPath,
-          spawnLaunchNonce: nodeRuns.spawnLaunchNonce,
-          parentNodeRunId: nodeRuns.parentNodeRunId,
+          spawnBinaryPath: nodeRunColumns.spawnBinaryPath,
+          spawnLaunchNonce: nodeRunColumns.spawnLaunchNonce,
+          parentNodeRunId: nodeRuns.historicalParentId,
           containerRunId: nodeRuns.containerRunId,
           childTaskId: nodeRuns.childTaskId,
         })
@@ -855,10 +882,12 @@ export function createTaskRecoveryOperations(
     async loadPeriodicReconcileSnapshot(
       taskId: string,
     ): Promise<TaskRecoveryPeriodicSnapshot | null> {
-      const { tasks, nodeRuns } = tablesOf(db)
+      const { nodeRuns } = tablesOf(db)
+      const nodeRunColumns = nodeRunReadColumns(db)
+      const { tasks } = tablesOf(db)
       const task = await first(
         db
-          .select({ workflowSnapshot: tasks.workflowSnapshot })
+          .select({ workflowSnapshot: taskReadColumns(db).workflowSnapshot })
           .from(tasks)
           .where(eq(tasks.id, taskId))
           .limit(1),
@@ -871,11 +900,11 @@ export function createTaskRecoveryOperations(
           taskId: nodeRuns.taskId,
           nodeId: nodeRuns.nodeId,
           status: nodeRuns.status,
-          pid: nodeRuns.pid,
+          pid: nodeRunColumns.pid,
           startedAt: nodeRuns.startedAt,
-          spawnBinaryPath: nodeRuns.spawnBinaryPath,
-          spawnLaunchNonce: nodeRuns.spawnLaunchNonce,
-          parentNodeRunId: nodeRuns.parentNodeRunId,
+          spawnBinaryPath: nodeRunColumns.spawnBinaryPath,
+          spawnLaunchNonce: nodeRunColumns.spawnLaunchNonce,
+          parentNodeRunId: nodeRuns.historicalParentId,
           containerRunId: nodeRuns.containerRunId,
           childTaskId: nodeRuns.childTaskId,
         })
@@ -918,6 +947,7 @@ export function createTaskRecoveryOperations(
 
     async interruptPeriodicTaskIfIdle(input): Promise<boolean> {
       const { nodeRuns } = tablesOf(db)
+
       const active = await first(
         db
           .select({ id: nodeRuns.id })
@@ -1042,4 +1072,68 @@ export function createTaskRecoveryOperations(
     },
   }
   return Object.freeze(operations)
+}
+
+/** Admission covers the rows execution will use; recorded provenance is not an execution dependency. */
+export async function assertTaskHistoryExecutableInTx(
+  tx: PersistenceTx,
+  restrictions: HistoryRestrictionPort,
+  action: 'resume' | 'retry',
+  taskId: string,
+  requestedRunIds: readonly string[] = [],
+): Promise<void> {
+  if (!restrictions) throw new Error('task-history-restriction-provider-required')
+  const { nodeRuns, nodeRunSelections } = tablesOf(tx)
+  const selected = await tx
+    .select({ id: nodeRunSelections.selectedRunId })
+    .from(nodeRunSelections)
+    .where(eq(nodeRunSelections.taskId, taskId))
+  const { runtimeSessionLeases } = tablesOf(tx)
+  const held = await tx
+    .select({ id: runtimeSessionLeases.leaseNodeRunId })
+    .from(runtimeSessionLeases)
+    .where(eq(runtimeSessionLeases.taskId, taskId))
+  const ids = new Set([
+    ...requestedRunIds,
+    ...selected.flatMap((row) => (row.id === null ? [] : [row.id])),
+    ...held.flatMap((row) => (row.id === null ? [] : [row.id])),
+  ])
+  const history = await createRunSelectionReader(tx).familyHistory(taskId, {})
+  const newestTopLevel = new Map<string, (typeof history)[number]>()
+  const pendingSlots = new Map<string, (typeof history)[number]>()
+  for (const row of history) {
+    if (row.parentNodeRunId === null) newestTopLevel.set(row.nodeId, row)
+    if (row.status !== 'pending') continue
+    if (row.slot?.kind === 'workgroup-host') ids.add(row.id)
+    if (row.slot?.kind === 'node' && !row.structurallySuperseded)
+      pendingSlots.set(JSON.stringify(row.slot), row)
+  }
+  for (const row of newestTopLevel.values())
+    if ((row.status === 'failed' || row.status === 'interrupted') && row.childTaskId === null)
+      ids.add(row.id)
+  for (const row of pendingSlots.values()) ids.add(row.id)
+  const decision = await restrictions.check(tx, {
+    action,
+    taskId,
+    nodeRunIds: [...ids].sort(),
+    gates: [],
+  })
+  if (!decision.allowed)
+    throw new ConflictError(
+      'history-only',
+      `task ${taskId} has history-only ${action} dependencies`,
+      { restrictions: decision.restrictions },
+    )
+  for (let offset = 0; offset < ids.size; offset += 400) {
+    const batch = [...ids].slice(offset, offset + 400)
+    const rows = await tx
+      .select({ id: nodeRuns.id, recordMode: nodeRuns.recordMode })
+      .from(nodeRuns)
+      .where(and(eq(nodeRuns.taskId, taskId), inArray(nodeRuns.id, batch)))
+    if (rows.length !== batch.length || rows.some((row) => row.recordMode !== 'executable'))
+      throw new ConflictError(
+        'history-only',
+        `task ${taskId} has unresolved ${action} dependencies`,
+      )
+  }
 }

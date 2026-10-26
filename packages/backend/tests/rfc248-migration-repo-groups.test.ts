@@ -1,3 +1,4 @@
+import { createFrozenEpoch1Db, type FrozenDbClient as DbClient } from './migration-freeze'
 // RFC-248 PR-2 —— 锁 migration 0131（repo_groups / repo_group_members +
 // tasks / task_repos 新列）与 0132（memories.scope_type 扩到 repo_group）。
 //
@@ -13,7 +14,7 @@
 // 而 daemon 迁移期跑在 foreign_keys=OFF、直连 migrator 与测试跑在 ON。
 
 import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import { frozenTablesOf as tablesOf } from '@/platform/persistence/migration/epoch1/tables'
 import { rawExec, queryWrite, queryRows, rawRows } from '@/platform/persistence/queryHelpers'
 import { afterAll, beforeEach, describe, expect, test } from 'bun:test'
 import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
@@ -22,7 +23,7 @@ import { join, resolve } from 'node:path'
 import { sql } from 'drizzle-orm'
 import { integer, primaryKey, sqliteTable, text } from 'drizzle-orm/sqlite-core'
 import { ulid } from 'ulid'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
+
 // Historical 0131-only ORM projection. The current production schema no
 // longer exports the table removed by migration 0134.
 const legacyRepoGroupAttachments = sqliteTable(
@@ -85,7 +86,7 @@ function makeGroup(db: DbClient, name: string): string {
 describe('migration 0131 — repo_groups / repo_group_members', () => {
   let db: DbClient
   beforeEach(() => {
-    db = createInMemoryDb(legacyMigrations)
+    db = createFrozenEpoch1Db(legacyMigrations)
   })
 
   test('组名大小写不敏感唯一', () => {
@@ -227,7 +228,7 @@ describe('migration 0131 — repo_groups / repo_group_members', () => {
 describe('T19c —— migration ↔ ORM schema 一致性（设计门二轮 P2-1）', () => {
   let db: DbClient
   beforeEach(() => {
-    db = createInMemoryDb(legacyMigrations)
+    db = createFrozenEpoch1Db(legacyMigrations)
   })
 
   // drizzle 的 `schema.ts` **表达不了**下面这几样东西：表达式唯一索引
@@ -301,7 +302,7 @@ describe('T19c —— migration ↔ ORM schema 一致性（设计门二轮 P2-1�
 describe('migration 0132 — memories.scope_type 扩到 repo_group', () => {
   let db: DbClient
   beforeEach(() => {
-    db = createInMemoryDb(MIGRATIONS)
+    db = createFrozenEpoch1Db()
   })
 
   function insertMemory(scopeType: string, scopeId: string | null): void {

@@ -1,3 +1,4 @@
+import { initializeTaskWorkspace } from './helpers/taskWorkspaceFixture'
 // REGRESSION — design/scheduler-audit-2026-06-10.md §⑥ 缺口4 + 附录C-4 (WP-6a)
 //
 // loop 的 exitCondition 不应绕过包装器作用域。RFC-354 schema v6 起 exitCondition
@@ -29,7 +30,7 @@ import {
 import { validateWorkflowDef } from '../src/services/workflow.validator'
 
 const ulid = monotonicFactory()
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+
 const SCENARIO_OPENCODE = resolve(import.meta.dir, 'fixtures', 'scenario-opencode.ts')
 
 // Five findings lines — count=5 with the default '\n' separator. Under
@@ -56,7 +57,7 @@ function buildHarness(provider?: ProviderHarness): Harness {
   const appHome = mkdtempSync(join(tmpdir(), 'aw-gap4-loop-exit-'))
   const worktreePath = join(appHome, 'wt')
   const stateDir = join(appHome, 'scenario-state')
-  mkdirSync(worktreePath, { recursive: true })
+  initializeTaskWorkspace(worktreePath)
   mkdirSync(stateDir, { recursive: true })
   const planFile = join(appHome, 'plan.json')
   writeFileSync(
@@ -66,7 +67,7 @@ function buildHarness(provider?: ProviderHarness): Harness {
       worker: [{ output: { out: 'iter-result' } }],
     }),
   )
-  const db = provider === undefined ? createInMemoryDb(MIGRATIONS) : provider.db
+  const db = provider === undefined ? createInMemoryDb() : provider.db
   return {
     db,
     postgresql: provider?.applicationBinding.provider === 'postgresql',

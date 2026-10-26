@@ -41,7 +41,7 @@ import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
 import type { StartTask } from '@agent-workflow/shared'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { selectResumeRollbackTargets } from '@/services/task'
+import { selectResumeRollbackTargets, type TaskContinuationDependencies } from '@/services/task'
 import { cancelViaEngine } from './helpers/cancelEngine'
 import { deleteTask } from '../src/services/taskDelete'
 import { enforceLimits } from './helpers/resourceLimits'
@@ -49,13 +49,11 @@ import { parseCallHumanWait } from '../src/services/limits'
 
 import { reconcileDeadRunningRuns } from '../src/services/orphanReconcile'
 import { resolveRunLiveness } from '../src/services/runLiveness'
-import type { TaskContinuationDependencies } from '@/services/task'
-import { type MaterializedSpace } from '@/modules/source-control/infrastructure/workspaceMaterializer'
+
+import type { MaterializedSpace } from '@/modules/source-control/infrastructure/workspaceMaterializer'
 
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
-
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 const EMPTY_DEF = JSON.stringify({ $schema_version: 4, inputs: [], nodes: [], edges: [] })
 
@@ -129,7 +127,7 @@ async function seedRun(
 
 describe('RFC-243 §4.3 — cancel cascade with durable marker', () => {
   test('parent cancel cascades recursively; markers distinguish cascade vs direct', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createInMemoryDb()
     const wf = await seedWorkflow(db)
     const parent = await seedTask(db, wf, { status: 'running' })
     const child = await seedTask(db, wf, { status: 'running', parentTaskId: parent })
@@ -145,7 +143,7 @@ describe('RFC-243 §4.3 — cancel cascade with durable marker', () => {
   })
 
   test('direct child cancel keeps the non-cascade marker', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createInMemoryDb()
     const wf = await seedWorkflow(db)
     const parent = await seedTask(db, wf, { status: 'running' })
     const child = await seedTask(db, wf, { status: 'running', parentTaskId: parent })
@@ -156,7 +154,7 @@ describe('RFC-243 §4.3 — cancel cascade with durable marker', () => {
   })
 
   test('a canceled parent transaction-fences a late child task insert', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createInMemoryDb()
     const wf = await seedWorkflow(db)
     const parent = await seedTask(db, wf, { status: 'running' })
     const childId = ulid()
@@ -240,7 +238,7 @@ describe('RFC-243 §4.3 — cancel cascade with durable marker', () => {
 
 describe('RFC-243 §4.4 — deleteTask two-way gates + inherited workspace skip', () => {
   test('parent with a non-terminal grandchild 409s task-has-active-children', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createInMemoryDb()
     const wf = await seedWorkflow(db)
     const parent = await seedTask(db, wf, { status: 'done' })
     const child = await seedTask(db, wf, { status: 'done', parentTaskId: parent })
@@ -255,7 +253,7 @@ describe('RFC-243 §4.4 — deleteTask two-way gates + inherited workspace skip'
   })
 
   test('child under a non-terminal parent 409s task-parent-active', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createInMemoryDb()
     const wf = await seedWorkflow(db)
     const parent = await seedTask(db, wf, { status: 'running' })
     const child = await seedTask(db, wf, { status: 'done', parentTaskId: parent })
@@ -267,7 +265,7 @@ describe('RFC-243 §4.4 — deleteTask two-way gates + inherited workspace skip'
   })
 
   test("an inherited child's delete never removes the (parent-owned) workspace dir", async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createInMemoryDb()
     const wf = await seedWorkflow(db)
     const isoDir = mkdtempSync(join(tmpdir(), 'aw-rfc243-inherited-'))
     writeFileSync(join(isoDir, 'work.txt'), 'child output')
@@ -290,7 +288,7 @@ describe('RFC-243 §4.2 — resume/rollback carve-outs', () => {
   test('selectResumeRollbackTargets excludes call rows', async () => {
     const rows = [
       {
-        seq: null,
+        seq: 1,
         id: '01A',
         nodeId: 'work',
         parentNodeRunId: null,
@@ -299,7 +297,7 @@ describe('RFC-243 §4.2 — resume/rollback carve-outs', () => {
       },
       {
         id: '01B',
-        seq: null,
+        seq: 2,
         nodeId: 'call',
         parentNodeRunId: null,
         status: 'interrupted',
@@ -310,7 +308,7 @@ describe('RFC-243 §4.2 — resume/rollback carve-outs', () => {
   })
 
   test('child resume under a terminal call row 409s call-row-finalized', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createInMemoryDb()
     const wf = await seedWorkflow(db)
     const parent = await seedTask(db, wf, { status: 'failed' })
     const callRow = await seedRun(db, parent, 'call1', { status: 'failed', childTaskId: 'pending' })
@@ -320,6 +318,7 @@ describe('RFC-243 §4.2 — resume/rollback carve-outs', () => {
       parentNodeRunId: callRow,
     })
     await patchNodeRunFixture(db, { id: callRow }, { childTaskId: child })
+    const childRun = await seedRun(db, child, 'work', { status: 'failed' })
     const deps = {} as unknown as TaskContinuationDependencies
     // RFC-359 AC-1（第 10 刀）：`resume` 与 PostgreSQL 共用同一份实现。这一格验的是
     // **准入门早于任何驱动**——门在 `schedulerDriver` 被用到之前就拒，所以这里连驱动面
@@ -330,7 +329,7 @@ describe('RFC-243 §4.2 — resume/rollback carve-outs', () => {
       code: 'call-row-finalized',
     })
     await expect(
-      createRetryEngine(db, { resumeWith: deps }).retry({ taskId: child, nodeRunId: ulid() }),
+      createRetryEngine(db, { resumeWith: deps }).retry({ taskId: child, nodeRunId: childRun }),
     ).rejects.toMatchObject({
       code: 'call-row-finalized',
     })
@@ -374,7 +373,7 @@ describe('RFC-243 §4.1 — liveness delegation to the child task', () => {
   })
 
   test('orphanReconcile end-to-end: live child protects the call row; settled child reaps it', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createInMemoryDb()
     const wf = await seedWorkflow(db)
     const parent = await seedTask(db, wf, { status: 'running' })
     const child = await seedTask(db, wf, { status: 'running', parentTaskId: parent })
@@ -407,7 +406,7 @@ describe('RFC-243 §4.5 — duration limit human-wait deduction', () => {
   })
 
   test('ledger deduction keeps the parent alive; awaiting child defers the kill', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createInMemoryDb()
     const wf = await seedWorkflow(db)
     const now = Date.now()
     // Parent A: raw elapsed 100s > 60s limit, but 70s of it is ledgered
@@ -452,7 +451,7 @@ describe('RFC-243 §4.5 — duration limit human-wait deduction', () => {
 
 describe('RFC-243 §4.5 — humanWaitMs 台账不跨代双记（实现门 P2-1）', () => {
   test('新代调用行台账归零；仅领养同一行才继承', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createInMemoryDb()
     const wf = await seedWorkflow(db)
     const parent = await seedTask(db, wf, {
       status: 'running',
@@ -493,7 +492,7 @@ describe('RFC-243 §4.5 — humanWaitMs 台账不跨代双记（实现门 P2-1�
 
 describe('RFC-243 §8 — 列表口径（PR-5 翻转）', () => {
   test('listTasks topLevelOnly 隐藏子任务；parentTaskId 过滤只出直接子代', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createInMemoryDb()
     const wf = await seedWorkflow(db)
     const parent = await seedTask(db, wf, { status: 'running' })
     const child = await seedTask(db, wf, { status: 'running', parentTaskId: parent })
@@ -509,7 +508,7 @@ describe('RFC-243 §8 — 列表口径（PR-5 翻转）', () => {
 
 describe('RFC-243 §4.4 — iso GC revivability carve-outs (design-gate P0-2)', () => {
   test('interrupted parents and parents with live/interrupted children keep their iso', async () => {
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createInMemoryDb()
     const wf = await seedWorkflow(db)
     const appHome = mkdtempSync(join(tmpdir(), 'aw-rfc243-isogc-'))
     const mkIso = (taskId: string): string => {

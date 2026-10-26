@@ -1,10 +1,11 @@
+import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
+import { withTargetMintIdentity } from './helpers/rfc395Mint'
 import { o2Ports } from './helpers/o2Closure'
 // RFC-359 W4-B1 批 2g —— lifecycle 内核四对合一，两个引擎各跑一遍：任务运行时状态迁移（CAS + revision +
 // 复活门 + owner 围栏）、node run 生命周期（mint / transition / set / 事务内参与者）、执行 intent 准入
 // （提交 / continuation / 待处理 gate successor）、intent 终态化（按 epoch 过滤 + replay 授权释放）。
 // 此前 SQLite 侧四个薄壳套 `modules/task-execution/infrastructure/taskLifecycle.ts` 等同步内核，PG 侧各自整份实现。
 
-import { deriveNodeRunRole } from '@/modules/task-execution/public/types'
 import {
   type TaskFixtureSpec,
   patchTaskFixture,
@@ -118,6 +119,7 @@ async function seedClaimedOwner(
     intentId: `intent_${ulid()}`,
     token,
     persistence: createTaskExecutionPersistence(db, {
+      historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
       recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
     }),
   })
@@ -331,15 +333,20 @@ describeEachProvider('RFC-359 W4-B1 批 2g —— node run 生命周期', (harne
     const db = harness.db
     const taskId = await seedTask(db)
     const lifecycle = new DrizzleNodeRunLifecyclePersistence(db)
-    const runId = await lifecycle.mint({
-      ...deriveNodeRunRole({ nodeId: 'n', rerunCause: 'initial' }),
-      taskId,
-      nodeId: 'n',
-      status: 'pending',
-      cause: 'initial',
-    })
+    const runId = await lifecycle.mint(
+      withTargetMintIdentity({
+        role: 'node-attempt',
+        syntheticKind: null,
+        taskId,
+        nodeId: 'n',
+        status: 'pending',
+        cause: 'initial',
+      }),
+    )
     expect(await lifecycle.loadEnvelopeNonce(runId)).toEqual(expect.any(String))
-    expect(await lifecycle.loadEnvelopeNonce('missing')).toBe('')
+    await expect(lifecycle.loadEnvelopeNonce('missing')).rejects.toMatchObject({
+      code: 'node-run-envelope-unavailable',
+    })
     expect(
       await lifecycle.transition({
         nodeRunId: runId,
@@ -385,22 +392,28 @@ describeEachProvider('RFC-359 W4-B1 批 2g —— node run 生命周期', (harne
 
     const { context } = await seedClaimedOwner(db, taskId)
     await expect(
-      lifecycle.mint({
-        ...deriveNodeRunRole({ nodeId: 'm', rerunCause: 'initial' }),
-        taskId,
-        nodeId: 'm',
-        status: 'pending',
-        cause: 'initial',
-      }),
+      lifecycle.mint(
+        withTargetMintIdentity({
+          role: 'node-attempt',
+          syntheticKind: null,
+          taskId,
+          nodeId: 'm',
+          status: 'pending',
+          cause: 'initial',
+        }),
+      ),
     ).rejects.toMatchObject({ code: 'task-execution-stale-owner' })
     const minted = await runWithTaskExecutionContext(context, () =>
-      lifecycle.mint({
-        ...deriveNodeRunRole({ nodeId: 'm', rerunCause: 'initial' }),
-        taskId,
-        nodeId: 'm',
-        status: 'pending',
-        cause: 'initial',
-      }),
+      lifecycle.mint(
+        withTargetMintIdentity({
+          role: 'node-attempt',
+          syntheticKind: null,
+          taskId,
+          nodeId: 'm',
+          status: 'pending',
+          cause: 'initial',
+        }),
+      ),
     )
     const rows = await readNodeRunFixtures(db, { id: minted }).then((rows) =>
       rows.map((row) => ({ nodeId: row.nodeId, status: row.status })),
@@ -414,31 +427,37 @@ describeEachProvider('RFC-359 W4-B1 批 2g —— born-done 行与初始输出�
     const db = harness.db
     const taskId = await seedTask(db)
     const lifecycle = new DrizzleNodeRunLifecyclePersistence(db)
-    const runId = await lifecycle.mint({
-      ...deriveNodeRunRole({ nodeId: 'in1', rerunCause: 'io-virtual' }),
-      taskId,
-      nodeId: 'in1',
-      status: 'done',
-      cause: 'io-virtual',
-      outputs: [{ portName: 'k1', content: 'AAA' }],
-    })
+    const runId = await lifecycle.mint(
+      withTargetMintIdentity({
+        role: 'node-attempt',
+        syntheticKind: null,
+        taskId,
+        nodeId: 'in1',
+        status: 'done',
+        cause: 'io-virtual',
+        outputs: [{ portName: 'k1', content: 'AAA' }],
+      }),
+    )
     const outputs = await readNodeRunOutputFixtures(db, { nodeRunId: runId }).then((rows) =>
       rows.map((row) => ({ portName: row.portName, content: row.content })),
     )
     expect(outputs).toEqual([{ portName: 'k1', content: 'AAA' }])
     // 同一端口重复 ⇒ 唯一键冲突 ⇒ 行随输出一起回滚。
     await expect(
-      lifecycle.mint({
-        ...deriveNodeRunRole({ nodeId: 'in2', rerunCause: 'io-virtual' }),
-        taskId,
-        nodeId: 'in2',
-        status: 'done',
-        cause: 'io-virtual',
-        outputs: [
-          { portName: 'k2', content: 'B' },
-          { portName: 'k2', content: 'B-dup' },
-        ],
-      }),
+      lifecycle.mint(
+        withTargetMintIdentity({
+          role: 'node-attempt',
+          syntheticKind: null,
+          taskId,
+          nodeId: 'in2',
+          status: 'done',
+          cause: 'io-virtual',
+          outputs: [
+            { portName: 'k2', content: 'B' },
+            { portName: 'k2', content: 'B-dup' },
+          ],
+        }),
+      ),
     ).rejects.toBeDefined()
     const rows = await readNodeRunFixtures(db, { nodeId: 'in2' }).then((rows) =>
       rows.map((row) => ({ id: row.id })),

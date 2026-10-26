@@ -26,11 +26,10 @@ import {
   orderSeedTables,
   seedHostedInstallation,
 } from '@/platform/persistence/hostedInstallationSeed'
-import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { describeEachProvider } from './helpers/eachProvider'
-import { MIGRATIONS } from './migration-freeze'
 
-const contract = buildLogicalSchemaContract()
+const contract = logicalSchemaContract
 
 test('the hosted generation is derived from the platform service and names its installation copy', () => {
   const first = hostedDatabaseGeneration({
@@ -158,35 +157,37 @@ describeEachProvider('RFC-370 M0 hosted installation rows and Settings document'
     return counts
   }
 
-  test('a fresh database receives the migrated SQLite seed rows once', async () => {
+  test('seed reporting is read-only and retries never replay installation seeds', async () => {
     const reference = await countRows()
-    expect(reference.auth_login_policy).toBe(1)
-    for (const entry of orderSeedTables(
-      allTables(harness.db, harness.applicationBinding.provider),
-    ).reverse()) {
-      await harness.db.delete(entry.table)
+    const recording = harness.recordStatements()
+    const installed = {
+      tables: Object.keys(reference).length,
+      rows: Object.values(reference).reduce((sum, n) => sum + n, 0),
     }
-    expect(await countRows()).toEqual({})
-    const receipt = await seedHostedInstallation({
-      contract: buildLogicalSchemaContract(),
-      target: harness.db,
-      migrationsFolder: MIGRATIONS,
-      now: 42,
-    })
-    expect(receipt.seeded).toBe(true)
-    expect(await countRows()).toEqual(reference)
-    const { authLoginPolicy } = tablesOf(harness.db)
-    const policy = (await harness.db.select().from(authLoginPolicy))[0]!
-    expect(policy.bootstrapCompletedAt).toBe(42)
     expect(
       await seedHostedInstallation({
-        contract: buildLogicalSchemaContract(),
+        contract: logicalSchemaContract,
         target: harness.db,
-        migrationsFolder: MIGRATIONS,
+        now: 42,
+        installed,
+      }),
+    ).toEqual({ seeded: true, ...installed })
+    expect(
+      await seedHostedInstallation({
+        contract: logicalSchemaContract,
+        target: harness.db,
         now: 99,
       }),
     ).toEqual({ seeded: false, tables: 0, rows: 0 })
-  }, 60_000)
+    recording.stop()
+    expect(recording.statements.every((row) => /^select/i.test(row.sql.trim()))).toBeTrue()
+    expect(await countRows()).toEqual(reference)
+    const { authLoginPolicy } = tablesOf(harness.db)
+    await harness.db.delete(authLoginPolicy)
+    await expect(
+      seedHostedInstallation({ contract: logicalSchemaContract, target: harness.db, now: 100 }),
+    ).rejects.toThrow('epoch2-head-seed-login-policy-missing')
+  })
 
   test('Settings live in the database and the deployment owns the database connection', async () => {
     const managed = { provider: 'postgresql', urlEnv: 'CS_DATABASE_URL' } as DatabaseConfig

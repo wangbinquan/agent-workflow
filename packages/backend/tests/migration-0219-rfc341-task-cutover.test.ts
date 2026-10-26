@@ -1,10 +1,9 @@
+import { migrateFrozenSqlite as migrate, freezeAt } from './migration-freeze'
 import { describe, expect, test } from 'bun:test'
 import { Database } from 'bun:sqlite'
 import { drizzle } from 'drizzle-orm/bun-sqlite'
-import { migrate } from 'drizzle-orm/bun-sqlite/migrator'
 
 import { decodeTaskLifecycleCommittedEvent } from '@/modules/task-execution/domain/taskLifecycleCommittedEvent'
-import { freezeAt } from './migration-freeze'
 
 describe('migration 0219 — RFC-341 task lifecycle cutover', () => {
   test('moves unresolved legacy publication into a canonical event and preserves retry state', () => {

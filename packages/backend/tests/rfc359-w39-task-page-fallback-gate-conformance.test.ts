@@ -444,11 +444,15 @@ describeEachProvider('RFC-359 W39 fallback gate preserves the complete task quer
 })
 
 // RFC-395 I-b: the inverse includes the shared instr capability; gate and binding proofs are unchanged.
+// II-b: include the activated scalar task projection (T18 P2's heavy-column fix);
+// the previous pin matches its input exactly. Gate text, bindings and VM proofs stay unchanged.
+// T18 PGX-D: only the page projection split (walk/filter facts, display after LIMIT) changed;
+// reversing that hunk restores the previous pin 165ae3e3….
 test('the gate inverse retains the complete published W38 query source', () => {
   const source = readFileSync(SOURCE_PATH, 'utf8')
   expect(source.split(GATE)).toHaveLength(2)
   expect(source.split(GATED_FROM)).toHaveLength(2)
   expect(createHash('sha256').update(restoreText(source)).digest('hex')).toBe(
-    '6fde35d8c76cb67c4fb9214181d731687072639fdb376fd90340c508c56ab89e',
+    'c5141b5729d60a2b3c22a4db4d7039098795fafa9b0aa78e6455b37cc3bdeebf',
   )
 })

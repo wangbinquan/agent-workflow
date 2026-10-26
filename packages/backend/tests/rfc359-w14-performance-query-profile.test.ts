@@ -3,7 +3,7 @@ import { afterEach, describe, expect, test } from 'bun:test'
 import type { SQLQueryBindings } from 'bun:sqlite'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { openDb } from '../src/db/client'
 import {
   createPostgresqlDatabaseRuntime,
@@ -31,7 +31,6 @@ function sqliteFixture() {
   const directory = mkdtempSync(join(tmpdir(), 'rfc359-query-profile-'))
   const db = openDb({
     path: join(directory, 'test.db'),
-    migrationsFolder: resolve(import.meta.dir, '../db/migrations'),
   })
   cleanup.push(() => {
     db.$client.close()

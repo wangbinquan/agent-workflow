@@ -1,3 +1,13 @@
+import {
+  createContentMaintenance,
+  createContentHolderQuery,
+  createLocalFileContentTransport,
+  contentExclusive,
+} from '@/platform/content/composition'
+import { persistenceSchema } from './persistenceSchema'
+import { composeContentBackupHorizon } from '@/modules/system-operations/composition/contentRetention'
+import { createLocalRuntimeContent } from './contentRuntime'
+import { createActiveHistoryRestrictionProvider } from '@/modules/system-operations/composition/epochInstallation'
 import { composeCrossContextClosure } from './crossContextClosure'
 import { composeSourceControlTaskPorts } from '@/modules/task-execution/composition'
 // RFC-389 — one passive in-thread graph; provider differences live in the adapter table.
@@ -30,7 +40,7 @@ import { checkpointSqliteWal } from '@/platform/persistence/sqlite/systemMainten
 import { createPostgresqlDatabaseOperationalAdapter } from '@/platform/persistence/databaseOperationalAdapter'
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import { createPostgresqlDatabaseRuntime } from '@/platform/persistence/postgresqlRuntime'
-import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { createPluginGenerationFilesystemGcPort } from '@/services/pluginGenerationGc'
 import { invalidateCallGraphIndex } from '@/services/structuralDiff/callGraph/expandService'
 import { createLogger } from '@/util/log'
@@ -50,9 +60,36 @@ interface MaintenanceWorkerAdapter {
   readonly db: PersistenceDb
   readonly eventsArchiveStore: EventsArchiveStore
   readonly storage: MaintenanceSystemOperations['storage']
+  readonly contentMaintenance: ReturnType<typeof createContentMaintenance>
   readonly resourcePackageRecoveryScene: AtomicApplyRecoveryScene<'resource-package'>
   readonly busyDeferralCounter: MaintenanceWorkerGraph['busyDeferralCounter']
   close(): Promise<void>
+}
+
+function composeWorkerContentMaintenance(
+  db: PersistenceDb,
+  appHome: string,
+  effects: GraphInput['effects'],
+) {
+  const local = (effects?.contentStore?.policy.externalKind ?? 'local-file') === 'local-file'
+  return createContentMaintenance({
+    db,
+    horizon: composeContentBackupHorizon(db, appHome),
+    hasHolders: createContentHolderQuery(persistenceSchema),
+    exclusive: contentExclusive(appHome),
+    ...(local
+      ? {
+          localFiles: createLocalFileContentTransport(join(appHome, 'content'), appHome),
+          localOwners: [
+            'collaboration-review',
+            'skill-content',
+            'task-execution',
+            'code-history',
+            'intent',
+          ],
+        }
+      : {}),
+  })
 }
 
 const MAINTENANCE_WORKER_ADAPTERS = {
@@ -74,7 +111,7 @@ const MAINTENANCE_WORKER_ADAPTERS = {
     })
     const operational = createPostgresqlDatabaseOperationalAdapter({
       runtime,
-      contract: buildLogicalSchemaContract(),
+      contract: logicalSchemaContract,
     })
     const resourcePackageMaintenance = composeResourcePackageApplyMaintenance({
       db,
@@ -86,6 +123,7 @@ const MAINTENANCE_WORKER_ADAPTERS = {
     return {
       db,
       close,
+      contentMaintenance: composeWorkerContentMaintenance(db, appHome, workerEffects),
       eventsArchiveStore: createTaskNodeEventArchiveStore(db),
       storage: Object.freeze({
         async run() {
@@ -134,6 +172,7 @@ const MAINTENANCE_WORKER_ADAPTERS = {
     return {
       db,
       close,
+      contentMaintenance: composeWorkerContentMaintenance(db, appHome, workerEffects),
       eventsArchiveStore: createTaskNodeEventArchiveStore(db),
       storage: Object.freeze({
         async run() {
@@ -164,6 +203,8 @@ export const composeMaintenanceWorkerGraph: MaintenanceWorkerGraphFactory = asyn
     composeWebhookDeliveryPersistenceFor(client),
   )
   const taskExecution = createTaskExecutionPersistence(client, {
+    content: workerEffects?.contentStore ?? createLocalRuntimeContent(client, appHome),
+    historyRestrictions: createActiveHistoryRestrictionProvider(),
     recoveryHumanGates: closure.collaborationReads.recovery,
   })
   const taskRecoveryOperations = taskExecution.recoveryAdministration
@@ -207,7 +248,11 @@ export const composeMaintenanceWorkerGraph: MaintenanceWorkerGraphFactory = asyn
     retentionPhases: composeRetentionSweepPhases(client),
     eventsArchiveStore: adapter.eventsArchiveStore,
     eventsArchiveContent: workerEffects?.eventsArchive,
-    storage: adapter.storage,
+    storage: {
+      async run() {
+        return { ...(await adapter.storage.run()), ...(await adapter.contentMaintenance.run()) }
+      },
+    },
     databaseBackups: workerEffects?.databaseBackups,
     objectPublications: workerEffects?.objectPublications,
     logsDir: join(appHome, 'logs'),

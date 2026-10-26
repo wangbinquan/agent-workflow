@@ -34,8 +34,11 @@ import type { Hono } from 'hono'
 import { ulid } from 'ulid'
 import { SYSTEM_USER_ID } from '../src/auth/actor'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
-import type { ProviderHttpApplicationScope } from './helpers/providerHttpApplicationScope'
+import {
+  describeEachProviderHttpApplication,
+  type ProviderHttpApplicationScope,
+} from './helpers/providerHttpApplicationScope'
+
 import {
   SKILL_FUSION_WORKFLOW_NAME,
   SKILL_MERGER_AGENT_NAME,

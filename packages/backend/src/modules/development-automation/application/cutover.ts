@@ -63,7 +63,7 @@ export type AdoptActiveMrResult =
 /**
  * 从外部真相建立 Mission（cutover runbook 步骤 4/5）：observe 当前 MR →
  * createMission(adopt) → claimMr（active MR 单占；被别的 mission 占用即拒）→
- * legacy link（cutoverReceiptJson=观察到的外部状态）。旧未发布 workspace 一概
+ * 当前 Mission 身份。旧未发布 workspace 一概
  * 不接管——baseline 就是外部已发布的 head。已 merged/closed 的 MR 同一调用内
  * 记 authoritative terminal（不建 active claim、不启动任何 action）。
  */
@@ -172,18 +172,5 @@ export async function adoptActiveMr(
     }
   }
 
-  await deps.cutoverStore.insertLegacyLink({
-    id: deps.mintId(),
-    missionId,
-    legacyWorkItemId: input.legacyWorkItemId,
-    legacyRoundId: input.legacyRoundId,
-    cutoverReceiptJson: JSON.stringify({
-      observedState: observation.state,
-      headSha: observation.sourceSha,
-      targetBranch: observation.targetBranch,
-      adoptedAt: now,
-    }),
-    now,
-  })
   return { ok: true, missionId, terminal }
 }

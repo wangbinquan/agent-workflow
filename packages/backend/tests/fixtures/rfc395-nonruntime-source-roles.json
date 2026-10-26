@@ -1,0 +1,114 @@
+{
+  "version": 1,
+  "policy": "Exact reviewed non-runtime roles. A path or source change loses classification; runtime imports are still checked by the frozen/dormancy guards. Test use alone does not exempt production implementations.",
+  "entries": [
+    {
+      "path": "packages/backend/src/db/graphDevelopment.ts",
+      "role": "schema-declaration",
+      "sha256": "5f019cbcd9256dedf84b38a555155d7b9d31cdbf83eb57a05d1e12904bd91117",
+      "evidence": "Only schema exports; owner contributions are assembled by bootstrap/persistenceSchema.ts. No runtime behavior is excluded."
+    },
+    {
+      "path": "packages/backend/src/db/observation.ts",
+      "role": "schema-declaration",
+      "sha256": "ba642faffce5c10557bd78a9c1848683ea8b1edb48e66bf413793bbce5ef5095",
+      "evidence": "Only schema exports; owner contributions are assembled by bootstrap/persistenceSchema.ts. No runtime behavior is excluded."
+    },
+    {
+      "path": "packages/backend/src/modules/code-capability/composition.ts",
+      "role": "schema-declaration",
+      "sha256": "df1c630cb0bb4cd23d41919fe061b2dbcda7751851d8c0b0fa63a78774a5f19f",
+      "evidence": "Only schema exports; owner contributions are assembled by bootstrap/persistenceSchema.ts. No runtime behavior is excluded."
+    },
+    {
+      "path": "packages/backend/src/modules/knowledge-evolution/composition.ts",
+      "role": "schema-declaration",
+      "sha256": "c91398b8d44c8d3ed2697fb4c070affc1c3b3c108aea43fe6d3fd57870f694d8",
+      "evidence": "Only schema exports; owner contributions are assembled by bootstrap/persistenceSchema.ts. No runtime behavior is excluded."
+    },
+    {
+      "path": "packages/backend/src/modules/run-observability/composition.ts",
+      "role": "schema-declaration",
+      "sha256": "f7911727b092359724deb4a7fa929975d5b362cccee6fcf14ad9b28e12f8a1d0",
+      "evidence": "Only schema exports; owner contributions are assembled by bootstrap/persistenceSchema.ts. No runtime behavior is excluded."
+    },
+    {
+      "path": "packages/backend/src/modules/task-execution/infrastructure/migration/oracle/handlerHistory.ts",
+      "role": "frozen-epoch1",
+      "sha256": "2a11fb898ded39411a57c4078794aa3b5ae0ffb311d6ee3c0e8103b13f0fb118",
+      "evidence": "Frozen NULL-seq/anchor handler oracle: source lines 9-32 preserve epoch-1 boundaries. It has no current test importer; this classifies frozen source, not executed coverage. The V1 runtime boundary prohibits migration/oracle imports."
+    },
+    {
+      "path": "packages/backend/src/modules/task-execution/infrastructure/migration/oracle/historySnapshot.ts",
+      "role": "frozen-epoch1",
+      "sha256": "a39d597aa1cec68e5fb61a792276b0046540dfe653306c8ff2d85a70d7b31bfa",
+      "evidence": "Frozen supplied-row snapshot, imported by tests/rfc395-a3-oracle-scope.test.ts:8. Delegates to the frozen snapshot oracle and is forbidden on V1 runtime paths."
+    },
+    {
+      "path": "packages/backend/src/modules/task-execution/infrastructure/migration/oracle/participant.ts",
+      "role": "frozen-epoch1",
+      "sha256": "a84b31d1f34d162635ba16aa1b8fef9213a0a8319613ce70e31922d468aea746",
+      "evidence": "Epoch-1 proposed revision participant, without persisted CAS; tests/rfc395-run-selection-domain.test.ts:28 and rfc395-run-selection-oracle.test.ts:24 deliberately retain it."
+    },
+    {
+      "path": "packages/backend/src/modules/task-execution/infrastructure/migration/oracle/reader.ts",
+      "role": "frozen-epoch1",
+      "sha256": "853a205354c5bf44321270bbec2f9be72052be5498bc5721020a12383bf1e79a",
+      "evidence": "Reads frozenTablesOf(db), not the live registry; tests/rfc395-run-selection-oracle.test.ts:22 imports this independent epoch-1 SQL oracle."
+    },
+    {
+      "path": "packages/backend/src/modules/task-execution/infrastructure/migration/oracle/supersessionSql.ts",
+      "role": "frozen-epoch1",
+      "sha256": "7792db35c98432c0f1739cd0f33750ca13a247f64504e0c22905b59b4dd8d4d5",
+      "evidence": "Frozen NULL-seq supersession SQL over frozenTablesOf, imported by tests/rfc369-node-run-supersession.test.ts:55 for historical behavior comparisons."
+    },
+    {
+      "path": "packages/backend/src/modules/task-execution/infrastructure/migration/run/legacyCheckpointCodec.ts",
+      "role": "frozen-epoch1",
+      "sha256": "06210dd1f6146dca8f8cff38a91c1fdb3adc248795fb4632cd25f4db14511894",
+      "evidence": "Frozen scalar/map checkpoint decoder; tests/rfc395-a2-checkpoint-bytes.test.ts:19 and rfc395-a2-task-domain.test.ts:36 keep byte and malformed-storage oracles."
+    },
+    {
+      "path": "packages/backend/src/modules/task-execution/infrastructure/migration/run/legacyRollback.ts",
+      "role": "frozen-epoch1",
+      "sha256": "4d46094e0795efe6139a7b57d5f848106b4d1906e774a0c74afbc3fb5958a22a",
+      "evidence": "Frozen rollback request field names and ordering; tests/rfc395-a2-checkpoint-bytes.test.ts:20 and rfc395-a2-task-domain.test.ts:38 import this storage oracle."
+    },
+    {
+      "path": "packages/backend/src/modules/task-execution/infrastructure/migration/run/legacyWrapperSnapshot.ts",
+      "role": "frozen-epoch1",
+      "sha256": "82cc6bc8f5e526f50357aa9909c50113a009585a8681fa08791813e03e308986",
+      "evidence": "Frozen wrapper storage fields decoded through legacyCheckpointCodec; tests/rfc395-a2-checkpoint-bytes.test.ts:21 preserves the epoch-1 boundary."
+    },
+    {
+      "path": "packages/backend/src/platform/committed-events/composition.ts",
+      "role": "schema-declaration",
+      "sha256": "3d17bc3495607ec5ef123c5184501004ab71ef73614113c5e8c6c5117fdebd4e",
+      "evidence": "Only schema exports; owner contributions are assembled by bootstrap/persistenceSchema.ts. No runtime behavior is excluded."
+    },
+    {
+      "path": "packages/backend/src/platform/persistence/migration/auditSourceEvidence.ts",
+      "role": "offline-evidence",
+      "sha256": "da6f466805410082677d5f0deb638a1bf88d2387666c3a2d35a7e5ba87cb757d",
+      "evidence": "captureEpoch1SqliteEvidence copies and inspects an offline source; tests/rfc395-v1-source-evidence.test.ts imports it. It must never join the daemon graph."
+    },
+    {
+      "path": "packages/backend/src/platform/persistence/migration/epoch1/tables.ts",
+      "role": "frozen-epoch1",
+      "sha256": "6d2a8e268180f9cf8ad5b218d457ce4c86db7d903f2162b5f492435e04473e5d",
+      "evidence": "Materializes only frozenEpoch1Registry and binds historical handles. tests/migration-freeze.ts and tests/helpers/epoch1Protocol/sqliteClient.ts use the frozen table set; schemaRoles also rejects added row reads."
+    },
+    {
+      "path": "packages/backend/src/platform/persistence/migration/legacy/scripts/rfc349-postgresql-schema.ts",
+      "role": "maintenance-command",
+      "sha256": "1ae38eb33ca884965a62d65f51aa5a5861407ea24ab19b831bf1102db71d8f74",
+      "evidence": "Explicit db:epoch1-* package.json command, relocated from scripts; maintains frozen epoch-1 artifacts, not a daemon service."
+    },
+    {
+      "path": "packages/backend/src/platform/persistence/migration/legacy/scripts/rfc349-schema-contract.ts",
+      "role": "maintenance-command",
+      "sha256": "6443cf2eda84d232929a26552ab58e99961112f0dc1dc8ec1f2fa856dd6d358e",
+      "evidence": "Explicit db:epoch1-* package.json command, relocated from scripts; maintains frozen epoch-1 artifacts, not a daemon service."
+    }
+  ]
+}

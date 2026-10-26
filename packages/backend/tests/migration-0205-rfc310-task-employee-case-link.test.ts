@@ -2,18 +2,13 @@
 // their owning digital employee Case. The migration also repairs executions
 // launched before the dedicated task-owned provenance column existed.
 
+import { FROZEN_MIGRATIONS } from './migration-freeze'
 import { describe, expect, test } from 'bun:test'
 import { Database } from 'bun:sqlite'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
-const MIGRATION = resolve(
-  import.meta.dir,
-  '..',
-  'db',
-  'migrations',
-  '0205_rfc310_task_employee_case_link.sql',
-)
+const MIGRATION = resolve(FROZEN_MIGRATIONS, '0205_rfc310_task_employee_case_link.sql')
 
 describe('migration 0205 — TaskEngine to digital employee Case provenance', () => {
   test('backfills real OS rounds and leaves unrelated legacy action runs unlinked', () => {

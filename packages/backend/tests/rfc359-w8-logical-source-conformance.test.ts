@@ -25,16 +25,15 @@
 // 但**冻结围栏是两台机器**，不是一份实现的两个方言：
 //   · SQLite 的 `assertUnchanged` 比对 `PRAGMA data_version` / `page_count` / 文件字节数
 //     ——**文件级**代号，任何别的连接写一下（哪怕只是 `PRAGMA wal_checkpoint`）就翻；
-//   · PostgreSQL 的 `assertUnchanged` 只复核 `database_generations` 那一行还是不是 active
+//   · PostgreSQL 的 `assertUnchanged` 只复核 `generations` 那一行还是不是 active
 //     的契约代——**并发写它根本看不见**，因为读出本身跑在一条
 //     `REPEATABLE READ READ ONLY` 事务的快照里。
 // 这不是一侧漏做：SQLite 没有跨表快照可用，只能靠「文件没动过」反推；PostgreSQL 有快照，
 // 于是围栏该守的是「这一代还没被退役」。**两条围栏在本文件里各有一条正向用例，互为对照**，
 // 谁将来被改成对方那套，这里就红。
 //
-// 另一处**能力面**的不对称同样锁在这里：契约里 6 张 `ARCHIVE_THEN_OMIT` 表在 PostgreSQL 的
-// 活跃 schema 里**根本不存在**，所以 PG 侧 `preflight` 的表册与 `readChunk` 都把它们排除、
-// 读它是 `postgresql-source-schema`；SQLite 侧照读不误（归档产物正是从那里来的）。
+// II-b：两端只读 native business roster；退役物理表不再属于 live contract。
+// 历史归档由 epoch2-metadata.json 传输，非空 bytes 往返另见 rfc395-backup-metadata。
 //
 // # 用户可见面
 //
@@ -72,17 +71,17 @@ import {
   type PostgresqlDatabaseRuntime,
 } from '@/platform/persistence/postgresqlRuntime'
 import { openSqliteLogicalSource } from '@/platform/persistence/sqliteLogicalSource'
-import { type LogicalTableContract } from '@/platform/persistence/schemaContract'
-import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import type { LogicalTableContract } from '@/platform/persistence/schemaContract'
+import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import {
   describeEachProvider,
   resolvePostgresqlTestUrlEnv,
   type ProviderHarness,
 } from './helpers/eachProvider'
 
-const CONTRACT = buildLogicalSchemaContract()
+const CONTRACT = logicalSchemaContract
 const USERS = CONTRACT.tables.find((table) => table.id === 'users')!
-const ARCHIVE_ONLY = CONTRACT.tables.find((table) => table.disposition === 'ARCHIVE_THEN_OMIT')!
+const RETIRED_TABLE = 'code_artifacts'
 /** `describeEachProvider` 的 PostgreSQL harness 自己登记的那一代（helpers/eachProvider.ts）。 */
 const GENERATION_ID = 'dbg_each_provider_harness'
 
@@ -133,12 +132,7 @@ function openSqliteSource(harness: ProviderHarness): OpenedSource {
   }
 }
 
-/**
- * PostgreSQL 侧：`openPostgresqlLogicalSource` 要的是 runtime + 活跃代，harness 只交出
- * provider-中立客户端，所以这里对同一个库另开一条 runtime。harness 登记那一代时用的是占位
- * 摘要 `'digest'`，而逻辑源要求它等于契约摘要——先把它改成真摘要（写围栏
- * `assertActiveGeneration` 只看 `state`，改摘要不影响 harness 自己的写）。
- */
+// Read the active generation installed by the canonical provider harness unchanged.
 async function openPostgresqlSource(): Promise<OpenedSource> {
   const urlEnv = resolvePostgresqlTestUrlEnv(process.env)
   if (urlEnv === undefined) throw new Error('PostgreSQL harness 已就绪却读不到 URL 环境变量名')
@@ -154,12 +148,6 @@ async function openPostgresqlSource(): Promise<OpenedSource> {
     generationId: GENERATION_ID,
   })
   try {
-    await runtime
-      .providerPool()
-      .unsafe(
-        'UPDATE "agent_workflow_meta"."database_generations" SET contract_digest = $1 WHERE generation_id = $2',
-        [CONTRACT.digest, GENERATION_ID],
-      )
     const source = await openPostgresqlLogicalSource({
       runtime,
       generationId: GENERATION_ID,
@@ -245,7 +233,7 @@ function idsOf(rows: readonly CanonicalLogicalRow[]): string[] {
 // ---------------------------------------------------------------------------
 
 describeEachProvider('RFC-359 W8 —— LogicalSource 双引擎对拍', (harness) => {
-  test('preflight 的表册与逐表行数落在同一份逻辑数据上（归档表的收录面按能力分叉）', async () => {
+  test('preflight 的表册与逐表行数落在同一份 epoch-2 逻辑数据上', async () => {
     await seedUsers(harness)
     const opened = await openSource(harness)
     try {
@@ -259,15 +247,11 @@ describeEachProvider('RFC-359 W8 —— LogicalSource 双引擎对拍', (harness
         snapshot.totalRows,
       )
 
-      // 能力面差异：PostgreSQL 的活跃 schema 里没有 ARCHIVE_THEN_OMIT 表，表册也就不该收录它们。
       const keys = Object.keys(snapshot.tableRows)
-      if (harness.capabilities.isolation === 'exclusive') {
-        expect(keys).toHaveLength(CONTRACT.tables.length)
-        expect(keys).toContain(ARCHIVE_ONLY.id)
-      } else {
-        expect(keys).toHaveLength(CONTRACT.activeTableCount)
-        expect(keys).not.toContain(ARCHIVE_ONLY.id)
-      }
+      expect(keys.sort()).toEqual(CONTRACT.tables.map((table) => table.id).sort())
+      expect(CONTRACT.archiveOnlyTableCount).toBe(0)
+      expect(keys).not.toContain(RETIRED_TABLE)
+      expect(keys.some((key) => key.startsWith('aw_meta_'))).toBe(false)
     } finally {
       await opened.dispose()
     }
@@ -356,16 +340,12 @@ describeEachProvider('RFC-359 W8 —— LogicalSource 双引擎对拍', (harness
     }
   })
 
-  test('归档表的读出面按能力分叉：SQLite 照读，PostgreSQL 明拒', async () => {
+  test('native sources omit retired physical archive tables from the business roster', async () => {
     const opened = await openSource(harness)
     try {
-      if (harness.capabilities.isolation === 'exclusive') {
-        expect(await opened.source.readChunk(ARCHIVE_ONLY, null, 10)).toEqual([])
-      } else {
-        await expect(opened.source.readChunk(ARCHIVE_ONLY, null, 10)).rejects.toThrow(
-          `does not contain archive-only table ${ARCHIVE_ONLY.id}`,
-        )
-      }
+      const snapshot = await opened.source.preflight()
+      expect(snapshot.tableRows[RETIRED_TABLE]).toBeUndefined()
+      expect(Object.keys(snapshot.tableRows)).toHaveLength(CONTRACT.activeTableCount)
     } finally {
       await opened.dispose()
     }
@@ -468,7 +448,7 @@ describeEachProvider('RFC-359 W8 —— LogicalSource 双引擎对拍', (harness
           await runtime
             .providerPool()
             .unsafe(
-              `UPDATE "agent_workflow_meta"."database_generations" SET state = 'retired' WHERE generation_id = $1`,
+              `UPDATE "agent_workflow_meta"."generations" SET state = 'retired' WHERE generation_id = $1`,
               [GENERATION_ID],
             )
           await expect(opened.source.assertUnchanged(snapshot as never)).rejects.toThrow(
@@ -478,7 +458,7 @@ describeEachProvider('RFC-359 W8 —— LogicalSource 双引擎对拍', (harness
           await runtime
             .providerPool()
             .unsafe(
-              `UPDATE "agent_workflow_meta"."database_generations" SET state = 'active' WHERE generation_id = $1`,
+              `UPDATE "agent_workflow_meta"."generations" SET state = 'active' WHERE generation_id = $1`,
               [GENERATION_ID],
             )
           await runtime.close()

@@ -109,7 +109,7 @@ describe.skipIf(!RUN_CHAOS)('RFC-054 W3-1 — chaos injection', () => {
     const worktree = mkdtempSync(join(tmpdir(), 'aw-chaos-wt-'))
     writeFileSync(join(worktree, 'README.md'), 'transient', 'utf-8')
 
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createInMemoryDb()
     const seeded = await seedRunningTask(db, worktree)
 
     // External actor deletes the worktree from under the daemon.
@@ -151,7 +151,7 @@ describe.skipIf(!RUN_CHAOS)('RFC-054 W3-1 — chaos injection', () => {
     const dbPath = join(dir, 'db.sqlite')
 
     // 1. Open + write some data.
-    const db1 = openDb({ path: dbPath, migrationsFolder: MIGRATIONS })
+    const db1 = openDb({ path: dbPath })
     await workflowFixture(db1, {
       id: 'pre-truncate-wf',
       name: 'pre',
@@ -181,7 +181,7 @@ describe.skipIf(!RUN_CHAOS)('RFC-054 W3-1 — chaos injection', () => {
     let reopened: ReturnType<typeof openDb> | null = null
     let openErr: unknown = null
     try {
-      reopened = openDb({ path: dbPath, migrationsFolder: MIGRATIONS })
+      reopened = openDb({ path: dbPath })
     } catch (err) {
       openErr = err
     }

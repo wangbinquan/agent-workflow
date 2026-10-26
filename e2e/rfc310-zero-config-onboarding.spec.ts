@@ -1,3 +1,4 @@
+import { liveSqlitePath } from './storage'
 // RFC-310 current first-use browser contract.
 //
 // A new administrator starts from the Digital Employees catalog, sees the
@@ -6,7 +7,6 @@
 // `/code` journey, stage selector, or editable line: the fixed cards are the navigation model.
 
 import { expect, test, type Page } from '@playwright/test'
-import { join } from 'node:path'
 
 import { developmentEmployeeTypePackage } from '../packages/backend/src/modules/development-automation/composition/employeeTypePackage'
 import { runSqlite } from './command'
@@ -184,7 +184,7 @@ test('an older definition never becomes a user migration task or manual API', as
     compiledClosureDigest: '0'.repeat(64),
   }).replaceAll("'", "''")
   runSqlite(
-    join(daemon.home, 'db.sqlite'),
+    liveSqlitePath(daemon.home),
     `INSERT INTO employee_job_templates
        (id, type_id, type_revision, name, draft_json, published_revision,
         owner_user_id, created_at, updated_at, archived_at)

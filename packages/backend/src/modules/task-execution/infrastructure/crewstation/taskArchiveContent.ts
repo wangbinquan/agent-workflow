@@ -1,3 +1,9 @@
+import { contentRefColumns } from '@/platform/content/contentStore'
+import {
+  createContentPublicationLedger,
+  readContentObject,
+  readDatabaseContent,
+} from '@/platform/content/infrastructure/contentStore'
 // RFC-370 v3 V6 — hosted task archive content over the neutral object journal.
 // The archive index is `hosted_task_archive_entries` (path -> ordered object
 // parts); every part is a `task-archive` publication committed in the same
@@ -6,45 +12,32 @@
 // object, never copied; only work-volume files are uploaded. A directory rename
 // rewrites index rows only. Removing entries releases their parts; physical
 // unpin is deferred to maintenance behind the backup release horizon.
-import {
-  normalizeLegacyHostedArchive as normalized,
-  legacyHostedArchiveSource as sourceOf,
-  legacyHostedArchiveRoot,
-  isLegacyHostedArchiveTemporary,
-} from '@/platform/content/legacyHostedArchive'
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
-import { eq, or, sql } from 'drizzle-orm'
-import { z } from 'zod'
-import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type {
   HostedObjectPublicationRequest,
   HostedObjectPublications,
-  HostedObjectReceipt,
 } from '@/modules/system-operations/public/participants'
+import {
+  isHostedArchiveTemporary,
+  hostedArchiveRoot,
+  normalizeHostedArchive as normalized,
+  hostedArchiveSource as sourceOf,
+} from '@/platform/content/locations/hostedArchive'
 import type { CrewStationMutationFence } from '@/platform/crewstation/mutationFence'
 import type {
   CrewStationStreamObjectStorage,
   HostedStoredObject,
 } from '@/platform/crewstation/objectStorage'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
+import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { asc, eq, or, sql } from 'drizzle-orm'
 import type { TaskArchiveContentBinding } from '../../composition/taskArchiveMaintenance'
 
 export const HOSTED_ARCHIVE_OWNER = 'task-archive'
-const ROOT = legacyHostedArchiveRoot('tasks')
+const ROOT = hostedArchiveRoot('tasks')
 
-const Part = z
-  .object({
-    key: z.string().min(1),
-    id: z.guid({ error: 'Invalid uuid' }).meta({ format: 'uuid' }),
-    sha256: z.string().regex(/^[a-f0-9]{64}$/),
-    size: z.number().int().nonnegative(),
-  })
-  .strict()
-type Part = z.infer<typeof Part>
 type Row = PersistenceTables['hostedTaskArchiveEntries']['$inferSelect']
-const partsOf = (row: Row): Part[] => z.array(Part).parse(JSON.parse(row.partsJson))
-
 export interface HostedArchiveFile {
   readonly path: string
   readonly sha256: string
@@ -68,13 +61,6 @@ function assertRelative(path: string): void {
     throw new Error('hosted-archive-file-reference-invalid')
 }
 const partKey = () => `part:${crypto.randomUUID()}`
-const partOf = (key: string, object: HostedObjectReceipt): Part => ({
-  key,
-  id: object.id,
-  sha256: object.sha256,
-  size: object.size,
-})
-
 export function createHostedTaskArchiveContent(input: {
   readonly db: PersistenceDb
   readonly fence: CrewStationMutationFence
@@ -121,9 +107,33 @@ export function createHostedTaskArchiveContent(input: {
         .limit(1)
     )[0]
   }
+  const partsOf = async (db: PersistenceDb, path: string) => {
+    const { hostedTaskArchiveEntryParts: parts } = tablesOf(db)
+    return await db.select().from(parts).where(eq(parts.path, path)).orderBy(asc(parts.ordinal))
+  }
+  const partOf = async (tx: PersistenceDb, path: string, ordinal: number, key: string) => {
+    const publication = await createContentPublicationLedger(tx).find({
+      owner: HOSTED_ARCHIVE_OWNER,
+      logicalKey: key,
+    })
+    if (publication?.state !== 'ready') throw new Error('hosted-archive-publication-not-ready')
+    const ref = await readContentObject(tx, publication.contentId)
+    const columns = contentRefColumns.encode(ref)
+    return {
+      path,
+      ordinal,
+      partKey: key,
+      contentRefJson: columns.json,
+      contentInlineBytes: columns.inlineBytes === null ? null : Buffer.from(columns.inlineBytes),
+    }
+  }
   const releaseParts = async (tx: PersistenceDb, rows: readonly Row[]) => {
-    const keys = rows.flatMap((row) => partsOf(row).map((part) => part.key))
-    if (keys.length > 0) await input.publications.release({ owner: HOSTED_ARCHIVE_OWNER, keys }, tx)
+    const { hostedTaskArchiveEntryParts: parts } = tablesOf(tx)
+    for (const row of rows) {
+      const keys = (await partsOf(tx, row.path)).map((part) => part.partKey)
+      if (keys.length) await input.publications.release({ owner: HOSTED_ARCHIVE_OWNER, keys }, tx)
+      await tx.delete(parts).where(eq(parts.path, row.path))
+    }
   }
   const saveFile = async (reference: string, text: string, append: boolean) => {
     normalized(reference)
@@ -132,15 +142,13 @@ export function createHostedTaskArchiveContent(input: {
     await input.publications.publish(
       [{ owner: HOSTED_ARCHIVE_OWNER, key, bytes: Buffer.from(text, 'utf8') }],
       {
-        async commit(tx, [object]) {
+        async commit(tx, _receipts) {
           const current = await find(reference, tx)
           if (current && current.kind !== 'file') throw new Error('hosted-archive-not-file')
-          const previous = current ? partsOf(current) : []
+          const previous = current ? await partsOf(tx, current.path) : []
           if (current && !append) await releaseParts(tx, [current])
-          const parts = [...(append ? previous : []), partOf(key, object!)]
           const values = {
             kind: 'file' as const,
-            partsJson: JSON.stringify(parts),
             updatedAt: now(),
           }
           const { hostedTaskArchiveEntries } = tablesOf(tx)
@@ -148,6 +156,12 @@ export function createHostedTaskArchiveContent(input: {
             .insert(hostedTaskArchiveEntries)
             .values({ path: reference, createdAt: now(), ...values })
             .onConflictDoUpdate({ target: hostedTaskArchiveEntries.path, set: values })
+          const { hostedTaskArchiveEntryParts } = tablesOf(tx)
+          await insertOne(
+            tx,
+            hostedTaskArchiveEntryParts,
+            await partOf(tx, reference, append ? previous.length : 0, key),
+          )
         },
       },
     )
@@ -197,7 +211,6 @@ export function createHostedTaskArchiveContent(input: {
         .values({
           path: reference,
           kind: 'directory',
-          partsJson: '[]',
           createdAt: now(),
           updatedAt: now(),
         })
@@ -226,25 +239,30 @@ export function createHostedTaskArchiveContent(input: {
     }
     await input.publications.publish(requests, {
       concurrency: 4,
-      async commit(tx, receipts) {
+      async commit(tx, _receipts) {
         if ((await rowsBelow(to, tx)).length > 0)
           throw new Error('hosted-archive-destination-exists')
         const { hostedTaskArchiveEntries } = tablesOf(tx)
         await insertOne(tx, hostedTaskArchiveEntries, {
           path: to,
           kind: 'directory',
-          partsJson: '[]',
           createdAt: now(),
           updatedAt: now(),
         })
-        for (let index = 0; index < files.length; index++)
+        for (let index = 0; index < files.length; index++) {
           await insertOne(tx, hostedTaskArchiveEntries, {
             path: `${to}/${files[index]!.path}`,
             kind: 'file',
-            partsJson: JSON.stringify([partOf(requests[index]!.key, receipts[index]!)]),
             createdAt: now(),
             updatedAt: now(),
           })
+          const { hostedTaskArchiveEntryParts } = tablesOf(tx)
+          await insertOne(
+            tx,
+            hostedTaskArchiveEntryParts,
+            await partOf(tx, `${to}/${files[index]!.path}`, 0, requests[index]!.key),
+          )
+        }
       },
     })
     // Physical source retention belongs to the task maintenance owner. The
@@ -261,7 +279,7 @@ export function createHostedTaskArchiveContent(input: {
       const rows = await rowsBelow(from, tx)
       if (rows.length === 0) throw new Error('hosted-archive-source-missing')
       if (
-        isLegacyHostedArchiveTemporary(from) &&
+        isHostedArchiveTemporary(from) &&
         !rows.some((row) => row.path === `${from}/manifest.json`)
       )
         throw new Error('hosted-archive-manifest-missing')
@@ -273,14 +291,21 @@ export function createHostedTaskArchiveContent(input: {
           path: to + row.path.slice(from.length),
           updatedAt: now(),
         })
+      const { hostedTaskArchiveEntryParts } = tablesOf(tx)
+      for (const row of rows)
+        for (const part of await partsOf(tx, row.path))
+          await insertOne(tx, hostedTaskArchiveEntryParts, {
+            ...part,
+            path: to + row.path.slice(from.length),
+          })
       await tx.delete(hostedTaskArchiveEntries).where(below(from))
     })
   }
   return {
     locations: {
       archiveDir: ROOT,
-      runsDir: legacyHostedArchiveRoot('runs'),
-      logsDir: legacyHostedArchiveRoot('logs'),
+      runsDir: hostedArchiveRoot('runs'),
+      logsDir: hostedArchiveRoot('logs'),
     },
     content: {
       resolve: (reference, ...segments) => normalized([reference, ...segments].join('/')),
@@ -292,7 +317,7 @@ export function createHostedTaskArchiveContent(input: {
       appendText: (reference, text) => saveFile(reference, text, true),
       writeText: (reference, text) => saveFile(reference, text, false),
       async restoreMovedDirectories(temporary, kind, root) {
-        if (root !== legacyHostedArchiveRoot(kind))
+        if (root !== hostedArchiveRoot(kind))
           throw new Error('hosted-archive-restoration-root-mismatch')
         // Sources are never consumed by a move; discard the temporary links
         // only after confirming their corresponding source is still present.
@@ -319,8 +344,28 @@ export function createHostedTaskArchiveContent(input: {
       if (!row) throw new Error('hosted-archive-file-missing')
       if (row.kind !== 'file') throw new Error('hosted-archive-not-file')
       const chunks = []
-      for (const part of partsOf(row))
-        chunks.push(await new Response(await input.objects.open(part)).text())
+      for (const part of await partsOf(input.db, row.path)) {
+        const ref = contentRefColumns.decode(part.contentRefJson, part.contentInlineBytes)
+        if (ref === null) throw new Error('hosted-archive-content-missing')
+        if (ref.kind === 'object') {
+          if (
+            ref.location.codec !== 'hosted-object-id' ||
+            typeof ref.location.value !== 'string' ||
+            ref.sha256 === null ||
+            ref.size === null
+          )
+            throw new Error('hosted-archive-object-reference-invalid')
+          chunks.push(
+            await new Response(
+              await input.objects.open({
+                id: ref.location.value,
+                sha256: ref.sha256,
+                size: ref.size,
+              }),
+            ).text(),
+          )
+        } else chunks.push(new TextDecoder().decode(await readDatabaseContent(input.db, ref)))
+      }
       return chunks.join('')
     },
   }

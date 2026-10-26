@@ -26,7 +26,7 @@ import { DEFAULT_PROTOCOL_RETRY_BUDGET, type StartTask } from '@agent-workflow/s
 import { execFileSync } from 'node:child_process'
 import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { startGitHttpRemote, remoteUrlFor } from './helpers/gitHttpRemote'
 import { readNodeRunPrompt } from '@/modules/task-execution/public/queries'
 import { createInMemoryDb } from '../src/db/client'
@@ -41,7 +41,6 @@ import { nonInteractiveGitEnv } from '../src/util/git'
 import { ulid } from 'ulid'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const GIT_TIMEOUT_MS = 10_000
 const NODE_TIMEOUT_MS = 10_000
 const FLOW_TIMEOUT_MS = 20_000
@@ -126,7 +125,7 @@ async function setup() {
   const tmp = makeTempDir('aw-start-pre-')
   const appHome = join(tmp, 'appHome')
   const repoPath = join(tmp, 'repo')
-  const db = createInMemoryDb(MIGRATIONS)
+  const db = createInMemoryDb()
   await seedTestDefaultOpencodeRuntime(db)
 
   git('init', '-b', 'main', repoPath)

@@ -41,7 +41,7 @@
 
 import { sql } from 'drizzle-orm'
 import {
-  tablesOf,
+  databaseHandleContext,
   boundEngineOf,
   engineForHandle,
   inheritDatabaseHandle,
@@ -149,7 +149,17 @@ function reuseFrame(client: object): PersistenceTx | undefined {
 
 /** A durable receipt cannot be returned from an outer transaction that has not committed. */
 export function databaseTransactionIsActive(handle: PersistenceTx): boolean {
-  return frames.getStore()?.some((frame) => frame.client === handle || frame.tx === handle) ?? false
+  const identity = databaseHandleContext(handle).identity
+  return (
+    frames
+      .getStore()
+      ?.some(
+        (frame) =>
+          frame.client === identity ||
+          frame.tx === handle ||
+          databaseHandleContext(frame.tx).identity === identity,
+      ) ?? false
+  )
 }
 
 function withFrame<T>(client: object, tx: PersistenceTx, run: () => Promise<T>): Promise<T> {
@@ -179,7 +189,7 @@ function withFrame<T>(client: object, tx: PersistenceTx, run: () => Promise<T>):
 const SQLITE_TRANSACTION_MAX_ATTEMPTS = 3
 
 export function createSqliteDatabaseSession(db: DbClient): DatabaseSession {
-  const client: object = db
+  const client: object = databaseHandleContext(db).identity
   const transaction = async <T>(body: (tx: PersistenceTx) => Promise<T>): Promise<T> => {
     const reused = reuseFrame(client)
     if (reused !== undefined) return await body(reused)
@@ -233,7 +243,7 @@ export function createSqliteDatabaseSession(db: DbClient): DatabaseSession {
   // `.transaction(`，自调会被误记成一处绕过 dbTxSync 的裸 drizzle 事务。）
   return Object.freeze({
     engine: engineForHandle(db),
-    tables: tablesOf(db),
+    tables: databaseHandleContext(db).tables,
     transaction,
     serializable: transaction,
     // BEGIN IMMEDIATE 已经是全库独占的一致视图；合一前这些读路径走的 `dbTxSync` 也是同一条边界。
@@ -243,10 +253,10 @@ export function createSqliteDatabaseSession(db: DbClient): DatabaseSession {
 
 /** PostgreSQL 会话。驱动自带异步事务，不需要应用层单写者（每笔事务一条独立连接）。 */
 export function createPostgresqlDatabaseSession(db: PostgresqlDatabaseClient): DatabaseSession {
-  const client: object = db
+  const client: object = databaseHandleContext(db).identity
   return Object.freeze({
     engine: engineForHandle(db),
-    tables: tablesOf(db),
+    tables: databaseHandleContext(db).tables,
     async transaction<T>(body: (tx: PersistenceTx) => Promise<T>): Promise<T> {
       const reused = reuseFrame(client)
       if (reused !== undefined) return await body(reused)

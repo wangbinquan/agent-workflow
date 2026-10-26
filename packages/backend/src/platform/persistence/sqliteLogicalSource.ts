@@ -1,3 +1,6 @@
+import { sqliteHistoryConnection } from './schema/history/connection'
+import { captureEpochMetadata, type EpochMetadataSnapshot } from './schema/history/metadataSnapshot'
+import { schemaHistoryRuntime } from './schema/history/runtime'
 // RFC-349 — read-only, lossless SQLite source used by the logical migration
 // worker. Every integer query opts into Bun SQLite safeIntegers so a value is
 // rejected or copied exactly instead of first passing through a JS double.
@@ -37,6 +40,7 @@ export interface SqliteLogicalSource {
     afterKey: readonly CanonicalLogicalValue[] | null,
     limit: number,
   ): Promise<readonly CanonicalLogicalRow[]>
+  readMetadata?(): Promise<EpochMetadataSnapshot>
   close(): Promise<void>
 }
 
@@ -98,7 +102,12 @@ function tableNames(db: Database): string[] {
       .all() as { name: string }[]
   )
     .map((row) => row.name)
-    .filter((name) => name !== '__drizzle_migrations' && name !== '_drizzle_migrations')
+    .filter(
+      (name) =>
+        name !== '__drizzle_migrations' &&
+        name !== '_drizzle_migrations' &&
+        !schemaHistoryRuntime().metaTables.some((table) => name === `aw_meta_${table.name}`),
+    )
 }
 
 export function openSqliteLogicalSource(input: {
@@ -183,6 +192,7 @@ export function openSqliteLogicalSource(input: {
   const source: SqliteLogicalSource = {
     provider: 'sqlite' as const,
     path: input.path,
+    readMetadata: () => captureEpochMetadata(sqliteHistoryConnection(db)),
     async preflight() {
       return snapshot()
     },

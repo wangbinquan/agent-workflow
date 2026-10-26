@@ -19,8 +19,8 @@ import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { ulid } from 'ulid'
-import { buildActor } from '../src/auth/actor'
-import type { Actor } from '../src/auth/actor'
+import { buildActor, type Actor } from '../src/auth/actor'
+
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 import { resolveIntentApplyResourcePreflight } from '../src/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourcePreflight'
@@ -59,6 +59,7 @@ const ARTIFACT_SRC = resolve(
   'modules',
   'intent',
   'infrastructure',
+  'migration',
   'intentApplyLegacyCodec.ts',
 )
 const ARTIFACT_LIFECYCLE_SRC = resolve(

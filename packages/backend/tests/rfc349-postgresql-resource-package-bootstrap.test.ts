@@ -1,4 +1,5 @@
-import { afterEach, describe, expect, test } from 'bun:test'
+import { describeEachProvider } from './helpers/eachProvider'
+import { afterEach, expect, test } from 'bun:test'
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { mkdtemp } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -22,7 +23,6 @@ import {
 
 const backendRoot = resolve(import.meta.dir, '..')
 const temporaryRoots: string[] = []
-
 afterEach(() => {
   for (const root of temporaryRoots.splice(0)) {
     rmSync(root, { recursive: true, force: true })
@@ -97,7 +97,7 @@ function receipt(operationId: string, resourceId: string): PostgresqlResourcePac
   })
 }
 
-describe('RFC-349 PostgreSQL ResourcePackage bootstrap', () => {
+describeEachProvider('RFC-349 ResourcePackage bootstrap', (harness) => {
   test('composition exposes the seven-arm provider session to the injected W6 execution owner', () => {
     const source = readFileSync(
       resolve(
@@ -166,7 +166,7 @@ describe('RFC-349 PostgreSQL ResourcePackage bootstrap', () => {
       },
     })
     if (parsed.kind !== 'skill-create') throw new Error('fixture kind mismatch')
-    const owner = createPostgresqlResourcePackageSkillArtifactOwner({ appHome })
+    const owner = createPostgresqlResourcePackageSkillArtifactOwner({ db: harness.db, appHome })
     const plan = owner.planCreate(context, { mutation: parsed, skillId: 'skill-helper' })
 
     expect(existsSync(plan.artifact.stagingDirectory)).toBeFalse()
@@ -209,7 +209,7 @@ describe('RFC-349 PostgreSQL ResourcePackage bootstrap', () => {
       },
     })
     if (parsed.kind !== 'skill-create') throw new Error('fixture kind mismatch')
-    const owner = createPostgresqlResourcePackageSkillArtifactOwner({ appHome })
+    const owner = createPostgresqlResourcePackageSkillArtifactOwner({ db: harness.db, appHome })
     const plan = owner.planCreate(context, { mutation: parsed, skillId: 'skill-abortable' })
     await plan.stage()
     await owner.compensate(context, { artifact: plan.artifact, databaseCommitted: false })

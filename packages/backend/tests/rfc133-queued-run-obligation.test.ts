@@ -1,3 +1,6 @@
+import type { projectNodeRunReadFacts } from '@/modules/task-execution/infrastructure/nodeRunSnapshot'
+// Target fixture mint order; missing seq is covered only by conversion/rejection tests.
+let fixtureRunSequence = 0
 // RFC-133 (design/RFC-133-dispatch-queued-run-obligation) — the QUEUED-entry「run 义务」matrix.
 //
 // Live deadlock (2026-07-02, task 01KWFZRQFPZFQQEM8JTCHQMGP5 "QMGP5"): the in-flight gate judged a
@@ -17,14 +20,14 @@
 // These are pure unit tests on the exported oracle; the gate integration (dispatchTaskQuestions /
 // quick-finalize) is covered in rfc133-dispatch-queued-deadlock.test.ts.
 
-import { type PersistenceTables } from '@/platform/persistence/sessionTables'
+import type { PersistenceTables } from '@/platform/persistence/sessionTables'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, test } from 'bun:test'
 
 import { causeClassForEntry, isDispatchedEntryConsumed } from '../src/services/clarifyRerunLedger'
 import type { RunLineageView } from '@agent-workflow/shared'
 
-type NodeRunRow = PersistenceTables['nodeRuns']['$inferSelect']
+type NodeRunRow = ReturnType<typeof projectNodeRunReadFacts>
 type TaskQuestionRow = PersistenceTables['taskQuestions']['$inferSelect']
 
 const TARGET = 'agent_target'
@@ -38,7 +41,7 @@ function mkRun(over: Partial<NodeRunRow>): NodeRunRow {
     wrapperProgressJson: null,
     mergeState: null,
 
-    seq: null,
+    seq: ++fixtureRunSequence,
     id: 'run',
     nodeId: TARGET,
     iteration: 0,
@@ -51,7 +54,7 @@ function mkRun(over: Partial<NodeRunRow>): NodeRunRow {
 
 function mkLineage(over: Partial<RunLineageView>): RunLineageView {
   return {
-    seq: null,
+    seq: ++fixtureRunSequence,
     id: 'h1',
     nodeId: TARGET,
     iteration: 0,

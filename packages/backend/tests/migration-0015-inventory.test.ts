@@ -4,19 +4,23 @@
 // test fails, the Session-tab Runtime Inventory section loses its data
 // channel.
 
+import {
+  frozenTablesOf,
+  createFrozenEpoch1Db,
+  type FrozenDbClient,
+  FROZEN_MIGRATIONS,
+} from './migration-freeze'
 import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
 import { queryRows } from '@/platform/persistence/queryHelpers'
 import { describe, expect, test, beforeEach } from 'bun:test'
 import { resolve } from 'node:path'
 import { sql } from 'drizzle-orm'
 import { ulid } from 'ulid'
-import { createInMemoryDb, type DbClient } from '../src/db/client'
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+const MIGRATIONS = resolve(FROZEN_MIGRATIONS)
 
-function seedTask(db: DbClient): string {
+function seedTask(db: FrozenDbClient): string {
   const wfId = ulid()
-  const { workflows, tasks } = tablesOf(db)
+  const { workflows, tasks } = frozenTablesOf(db)
   insertOne(db, workflows, {
     id: wfId,
     name: 'wf',
@@ -45,15 +49,15 @@ function seedTask(db: DbClient): string {
 }
 
 describe('migration 0015 (RFC-029 node_runs.inventory_snapshot_json)', () => {
-  let db: DbClient
+  let db: FrozenDbClient
   beforeEach(() => {
-    db = createInMemoryDb(MIGRATIONS)
+    db = createFrozenEpoch1Db(MIGRATIONS)
   })
 
   test('legacy node_run rows (no inventory_snapshot_json supplied) come back as NULL', () => {
     const taskId = seedTask(db)
     const nodeRunId = ulid()
-    const { nodeRuns } = tablesOf(db)
+    const { nodeRuns } = frozenTablesOf(db)
     insertOne(db, nodeRuns, {
       id: nodeRunId,
       taskId,
@@ -87,7 +91,7 @@ describe('migration 0015 (RFC-029 node_runs.inventory_snapshot_json)', () => {
       mcps: [{ name: 'memcache', type: 'local', status: 'connected', hint: null }],
       plugins: [{ specifier: 'file:///tmp/p.mjs', source: 'inline' }],
     }
-    const { nodeRuns } = tablesOf(db)
+    const { nodeRuns } = frozenTablesOf(db)
     insertOne(db, nodeRuns, {
       id: nodeRunId,
       taskId,

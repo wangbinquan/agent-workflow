@@ -1,3 +1,4 @@
+import { liveSqlitePath } from './storage'
 // RFC-294 pre-refactor E2E oracle for Webhook MR/runtime races.
 //
 // This suite never launches a task through POST /api/tasks.  Every task crosses
@@ -454,7 +455,7 @@ async function launchFromWebhook(
     eventSubscriptionId: string | null
     eventDeliveryId: string | null
   }>(
-    join(daemon!.home, 'db.sqlite'),
+    liveSqlitePath(daemon!.home),
     readTaskFixturesSql(
       { id: fixtureSqlParameter },
       {
@@ -820,7 +821,7 @@ test('different-UUID close/update facts on one MR stream linearize; reopen and a
     })
     expect(
       querySqlite<{ fence: string | null }>(
-        join(daemon!.home, 'db.sqlite'),
+        liveSqlitePath(daemon!.home),
         'SELECT source_termination_fence AS fence FROM tasks WHERE id = ?',
         [oldTaskId],
       ),
@@ -961,7 +962,7 @@ test('different-UUID launch-eligible facts serialize, supersede to one live runt
       eventSubscriptionId: string | null
       eventDeliveryId: string | null
     }>(
-      join(daemon!.home, 'db.sqlite'),
+      liveSqlitePath(daemon!.home),
       readTaskFixturesSql(
         { id: fixtureSqlParameter },
         {
@@ -1130,7 +1131,7 @@ if (process.platform !== 'win32') {
     const effect = await waitFor(
       async () =>
         querySqlite<{ status: string; attemptCount: number }>(
-          join(daemon!.home, 'db.sqlite'),
+          liveSqlitePath(daemon!.home),
           'SELECT status, attempt_count AS attemptCount FROM webhook_mr_control_effects WHERE delivery_id = ?',
           [close.deliveryId],
         )[0] ?? null,
@@ -1190,7 +1191,7 @@ if (process.platform !== 'win32') {
     expect(target?.fenceOutcome).toBe('unchanged')
     expect(
       querySqlite<{ fence: string | null }>(
-        join(daemon.home, 'db.sqlite'),
+        liveSqlitePath(daemon.home),
         'SELECT source_termination_fence AS fence FROM tasks WHERE id = ?',
         [launched.task.id],
       ),

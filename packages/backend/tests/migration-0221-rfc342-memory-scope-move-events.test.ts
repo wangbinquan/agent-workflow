@@ -1,13 +1,12 @@
-import { rawRows, rawExec } from '@/platform/persistence/queryHelpers'
+import { createFrozenEpoch1Db, freezeAt } from './migration-freeze'
+import { frozenRawRows as rawRows } from './migration-freeze'
+import { rawExec } from '@/platform/persistence/queryHelpers'
 import { describe, expect, test } from 'bun:test'
 import { sql } from 'drizzle-orm'
 
-import { createInMemoryDb } from '@/db/client'
-import { freezeAt } from './migration-freeze'
-
 describe('migration 0221 — RFC-342 memory scope move events', () => {
   test('adds the durable receipt table, indexes, and closed scope/version invariants', () => {
-    const db = createInMemoryDb(freezeAt(220))
+    const db = createFrozenEpoch1Db(freezeAt(220))
     expect(
       rawRows<{ name: string }>(
         db,

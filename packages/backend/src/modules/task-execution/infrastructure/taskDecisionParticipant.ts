@@ -1,3 +1,5 @@
+import { createNodeRunQueries } from './nodeRunQueries'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 // RFC-359 —— human-gate 决定的接受原子：一份实现，两个引擎。
 //
 // 投影围栏复核 → 任务生命周期释放 → 后继 continuation 准入 → 可选的 workspace-rollback 效果
@@ -9,8 +11,8 @@
 // 一笔 `session.transaction`，先锁任务聚合根（PostgreSQL：`FOR UPDATE`，同任务的决定串行；
 // SQLite：独占事务，no-op），再走上面的原子。
 
-import { tablesOf } from '@/platform/persistence/sessionTables'
 import { first } from '@/platform/persistence/queryHelpers'
+
 import { and, eq, inArray } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
@@ -32,10 +34,10 @@ import {
   type HumanGateContinuationLineage,
   type HumanGateNodeProjectionFence,
 } from '../domain/humanGateContinuation'
+
 import { transitionHumanGateTask } from './humanGateTaskTransition'
 import { submitTaskContinuation } from './taskContinuationAdmission'
 import { linkWorkspaceRollbackEffect } from './workspaceRollbackEffect'
-import { humanGateNodeProjectionMember } from './humanGateProjection'
 
 function assertInput(input: AcceptHumanGateDecisionInput): void {
   if (
@@ -87,7 +89,9 @@ async function assertProjection(
       `human-gate node projection changed for task '${input.taskId}'`,
     )
   }
-  const actual = humanGateNodeProjectionFence(rows.map(humanGateNodeProjectionMember))
+  const actual = humanGateNodeProjectionFence(
+    await createNodeRunQueries(tx).humanGateProjection(ids),
+  )
   if (
     actual.memberCount !== input.expected.memberCount ||
     actual.digest !== input.expected.digest

@@ -1,4 +1,4 @@
-// RFC-395 I-a: explicit epoch-1 schema contributions; no physical or runtime change.
+// RFC-395 activation: this context declares the live epoch-2 schema directly.
 import {
   column as c,
   defineContribution,
@@ -101,61 +101,6 @@ const hostedWorkspaceCommandsDefinition = owner.table({
 })
 
 export const hostedWorkspaceCommands = materializeDrizzle(hostedWorkspaceCommandsDefinition).table
-
-const repoGroupNodesDefinition = owner.table({
-  id: 'repo_group_nodes',
-  schemaSymbol: 'repoGroupNodes',
-  columns: {
-    groupId: c.id('group_id'),
-    path: c.text('path'),
-    attachmentKind: c.enum('attachment_kind', ['repo', 'group'], { nullable: true }),
-    cachedRepoId: c.id('cached_repo_id', { nullable: true }),
-    ref: c.text('ref', { default: '' }),
-    subdir: c.text('subdir', { default: '' }),
-    childGroupId: c.id('child_group_id', { nullable: true }),
-    readonly: c.bool('readonly', { default: false }),
-  },
-  primaryKey: ['group_id', 'path'],
-  foreignKeys: [
-    foreignKey('repo_group_nodes_group_id_repo_groups_id_fk', ['group_id'], 'repo_groups', ['id'], {
-      onDelete: 'cascade',
-    }),
-    foreignKey(
-      'repo_group_nodes_cached_repo_id_cached_repos_id_fk',
-      ['cached_repo_id'],
-      'cached_repos',
-      ['id'],
-    ),
-  ],
-  checks: [
-    {
-      name: 'repo_group_nodes_attachment_kind_enum',
-      expression: raw(
-        '"repo_group_nodes"."attachment_kind" IS NULL OR "repo_group_nodes"."attachment_kind" IN (\'repo\',\'group\')',
-        '"attachment_kind" IS NULL OR "attachment_kind" IN (\'repo\',\'group\')',
-      ),
-    },
-    {
-      name: 'repo_group_nodes_attachment_kind_shape',
-      expression: raw(
-        '("repo_group_nodes"."attachment_kind" IS NULL AND "repo_group_nodes"."cached_repo_id" IS NULL AND "repo_group_nodes"."child_group_id" IS NULL AND "repo_group_nodes"."ref" = \'\' AND "repo_group_nodes"."subdir" = \'\' AND "repo_group_nodes"."readonly" = 0) OR ("repo_group_nodes"."attachment_kind" = \'repo\' AND "repo_group_nodes"."cached_repo_id" IS NOT NULL AND "repo_group_nodes"."child_group_id" IS NULL) OR ("repo_group_nodes"."attachment_kind" = \'group\' AND "repo_group_nodes"."child_group_id" IS NOT NULL AND "repo_group_nodes"."cached_repo_id" IS NULL AND "repo_group_nodes"."ref" = \'\' AND "repo_group_nodes"."subdir" = \'\')',
-        '("attachment_kind" IS NULL AND "cached_repo_id" IS NULL AND "child_group_id" IS NULL AND "ref" = \'\' AND "subdir" = \'\' AND "readonly" = FALSE) OR ("attachment_kind" = \'repo\' AND "cached_repo_id" IS NOT NULL AND "child_group_id" IS NULL) OR ("attachment_kind" = \'group\' AND "child_group_id" IS NOT NULL AND "cached_repo_id" IS NULL AND "ref" = \'\' AND "subdir" = \'\')',
-      ),
-    },
-  ],
-  indexes: [
-    index('idx_rgn_cached_repo', ['cached_repo_id']),
-    index('idx_rgn_child_group', ['child_group_id']),
-    index(
-      'idx_rgn_path_ci',
-      ['group_id', raw('lower("repo_group_nodes"."path")', 'lower("path")')],
-      { unique: true },
-    ),
-  ],
-  retention: retention.business,
-})
-
-export const repoGroupNodes = materializeDrizzle(repoGroupNodesDefinition).table
 
 const repoGroupsDefinition = owner.table({
   id: 'repo_groups',
@@ -337,14 +282,132 @@ const scRepositorySourcesDefinition = owner.table({
 
 export const scRepositorySources = materializeDrizzle(scRepositorySourcesDefinition).table
 
-export const schemaContribution = owner.contribution([
-  cachedReposDefinition,
-  hostedTaskWorkspacesDefinition,
-  hostedWorkspaceCommandsDefinition,
-  repoGroupNodesDefinition,
-  repoGroupsDefinition,
-  repositoryTransportConnectionsDefinition,
-  scPreparationOperationsDefinition,
-  scRepositorySnapshotsDefinition,
-  scRepositorySourcesDefinition,
-])
+const repoGroupNodesDefinition = owner.table({
+  version: 2,
+  unique: [],
+  foreignKeys: [
+    {
+      name: 'repo_group_nodes_group_id_repo_groups_id_fk',
+      columns: ['group_id'],
+      foreignTable: 'repo_groups',
+      foreignColumns: ['id'],
+      onDelete: 'cascade',
+      onUpdate: 'no action',
+      lifecycle:
+        'Preserve epoch-1 cascade delete and no action update semantics; target is a logical table reference.',
+    },
+    {
+      name: 'repo_group_nodes_cached_repo_id_cached_repos_id_fk',
+      columns: ['cached_repo_id'],
+      foreignTable: 'cached_repos',
+      foreignColumns: ['id'],
+      onDelete: 'no action',
+      onUpdate: 'no action',
+      lifecycle:
+        'Preserve epoch-1 no action delete and no action update semantics; target is a logical table reference.',
+    },
+    {
+      name: 'repo_group_nodes_child_group_fk',
+      columns: ['child_group_id'],
+      foreignTable: 'repo_groups',
+      foreignColumns: ['id'],
+      onDelete: 'no action',
+      onUpdate: 'no action',
+      lifecycle: 'The application must detach group references before deleting the group.',
+    },
+  ],
+  checks: [
+    {
+      name: 'repo_group_nodes_attachment_kind_enum',
+      expression: {
+        kind: 'raw',
+        reason: 'Preserve the epoch-1 expression spelling and provider semantics (RFC-395 I-a).',
+        sqlite:
+          '"repo_group_nodes"."attachment_kind" IS NULL OR "repo_group_nodes"."attachment_kind" IN (\'repo\',\'group\')',
+        postgresql: '"attachment_kind" IS NULL OR "attachment_kind" IN (\'repo\',\'group\')',
+      },
+    },
+    {
+      name: 'repo_group_nodes_attachment_kind_shape',
+      expression: {
+        kind: 'raw',
+        reason: 'Preserve the epoch-1 expression spelling and provider semantics (RFC-395 I-a).',
+        sqlite:
+          '("repo_group_nodes"."attachment_kind" IS NULL AND "repo_group_nodes"."cached_repo_id" IS NULL AND "repo_group_nodes"."child_group_id" IS NULL AND "repo_group_nodes"."ref" = \'\' AND "repo_group_nodes"."subdir" = \'\' AND "repo_group_nodes"."readonly" = 0) OR ("repo_group_nodes"."attachment_kind" = \'repo\' AND "repo_group_nodes"."cached_repo_id" IS NOT NULL AND "repo_group_nodes"."child_group_id" IS NULL) OR ("repo_group_nodes"."attachment_kind" = \'group\' AND "repo_group_nodes"."child_group_id" IS NOT NULL AND "repo_group_nodes"."cached_repo_id" IS NULL AND "repo_group_nodes"."ref" = \'\' AND "repo_group_nodes"."subdir" = \'\')',
+        postgresql:
+          '("attachment_kind" IS NULL AND "cached_repo_id" IS NULL AND "child_group_id" IS NULL AND "ref" = \'\' AND "subdir" = \'\' AND "readonly" = FALSE) OR ("attachment_kind" = \'repo\' AND "cached_repo_id" IS NOT NULL AND "child_group_id" IS NULL) OR ("attachment_kind" = \'group\' AND "child_group_id" IS NOT NULL AND "cached_repo_id" IS NULL AND "ref" = \'\' AND "subdir" = \'\')',
+      },
+    },
+  ],
+  indexes: [
+    {
+      name: 'idx_rgn_cached_repo',
+      unique: false,
+      nulls: 'distinct',
+      columns: [{ kind: 'column', name: 'cached_repo_id' }],
+      where: null,
+    },
+    {
+      name: 'idx_rgn_child_group',
+      unique: false,
+      nulls: 'distinct',
+      columns: [{ kind: 'column', name: 'child_group_id' }],
+      where: null,
+    },
+    {
+      name: 'idx_rgn_path_ci',
+      unique: true,
+      nulls: 'distinct',
+      columns: [
+        { kind: 'column', name: 'group_id' },
+        {
+          kind: 'raw',
+          reason: 'Preserve the epoch-1 expression spelling and provider semantics (RFC-395 I-a).',
+          sqlite: 'lower("repo_group_nodes"."path")',
+          postgresql: 'lower("path")',
+        },
+      ],
+      where: null,
+    },
+  ],
+  migrationPolicy: 'KEEP',
+  id: 'repo_group_nodes',
+  schemaSymbol: 'repoGroupNodes',
+  columns: {
+    groupId: c.id('group_id'),
+    path: c.text('path'),
+    attachmentKind: c.enum('attachment_kind', ['repo', 'group'], { nullable: true }),
+    cachedRepoId: c.id('cached_repo_id', { nullable: true }),
+    ref: c.text('ref', { default: '' }),
+    subdir: c.text('subdir', { default: '' }),
+    childGroupId: c.id('child_group_id', { nullable: true }),
+    readonly: c.bool('readonly', { default: false }),
+  },
+  primaryKey: ['group_id', 'path'],
+  retention: {
+    class: 'owner-managed-business',
+    rule: 'Retain as live business or recovery state until the owning bounded context approves a replacement contract.',
+  },
+  migrationKey: ['group_id', 'path'],
+})
+
+export const repoGroupNodes = materializeDrizzle(repoGroupNodesDefinition).table
+
+export const schemaContribution = {
+  owner: 'source-control',
+  version: 2,
+  columnUniqueNulls: [
+    { table: 'sc_preparation_operations', column: 'receipt_ref', nulls: 'distinct' },
+  ],
+  tables: [
+    cachedReposDefinition,
+    hostedTaskWorkspacesDefinition,
+    hostedWorkspaceCommandsDefinition,
+    repoGroupsDefinition,
+    repositoryTransportConnectionsDefinition,
+    scPreparationOperationsDefinition,
+    scRepositorySnapshotsDefinition,
+    scRepositorySourcesDefinition,
+    repoGroupNodesDefinition,
+  ],
+} as const

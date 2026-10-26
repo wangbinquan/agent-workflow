@@ -1,3 +1,10 @@
+import {
+  databaseContentText,
+  contentRowColumns,
+  inlineContentColumns,
+} from '@/platform/content/infrastructure/contentStore'
+import { legacyContentRef } from '@/platform/content/contentRef'
+
 // Locks in RFC-009-T1: PATCH /api/reviews/:nodeRunId/comments/:commentId.
 //
 // Coverage:
@@ -20,7 +27,11 @@
 import { nodeRunFixture, patchTaskFixture, taskFixture, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
-import type { ProviderHttpApplicationInput } from './helpers/providerHttpApplication'
+import {
+  type ProviderHttpApplicationInput,
+  createProviderHttpApplication,
+  type ProviderHttpApplication,
+} from './helpers/providerHttpApplication'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import { eq } from 'drizzle-orm'
@@ -33,10 +44,7 @@ import { TASK_CHANNEL, taskBroadcaster } from '../src/ws/broadcaster'
 import { installCommittedEventProjectionHarness } from './helpers/committedEventHarness'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import {
-  createProviderHttpApplication,
-  type ProviderHttpApplication,
-} from './helpers/providerHttpApplication'
+
 import { mkdtempSync as createFixtureDirectory, rmSync as removeFixtureDirectory } from 'node:fs'
 import { tmpdir as fixtureTmpDirectory } from 'node:os'
 import { join as joinFixturePath } from 'node:path'
@@ -112,7 +120,7 @@ async function seed(
     sourcePortName: 'design',
     versionIndex: 1,
     reviewIteration: 0,
-    bodyPath: 'irrelevant',
+    ...contentRowColumns(legacyContentRef('review-body-path', 'local-file', 'irrelevant')),
     commentsJson: '[]',
     decision,
     createdAt: 1,
@@ -128,7 +136,7 @@ async function seed(
     contextBefore: '',
     contextAfter: '',
     occurrenceIndex: 1,
-    commentText: 'original',
+    ...inlineContentColumns(Buffer.from('original')),
     author: 'local',
     createdAt: 1,
   })
@@ -141,6 +149,110 @@ async function seed(
 const OWNER_AUTHZ = { actorUserId: 'u_owner_authz', role: 'owner' as const }
 
 describeEachProvider('RFC-009-T1 updateReviewCommentText service', (harness) => {
+  test('large comment edits and deletion release their prior publication without losing text', async () => {
+    const fixture = await seed(harness.db)
+    const { reviewComments, contentPublications } = tablesOf(harness.db)
+    const large = '﻿' + 'long comment\r\n'.repeat(6000)
+    const stored = async () =>
+      (
+        await harness.db
+          .select()
+          .from(reviewComments)
+          .where(eq(reviewComments.id, fixture.commentId))
+      )[0]!
+    await updateReviewCommentText(
+      harness.db,
+      fixture.nodeRunId,
+      fixture.commentId,
+      large,
+      OWNER_AUTHZ,
+    )
+    const first = await stored()
+    expect(await databaseContentText(harness.db, first)).toBe(large)
+    expect(JSON.parse(first.contentRefJson).kind).toBe('database-bytes')
+    await updateReviewCommentText(
+      harness.db,
+      fixture.nodeRunId,
+      fixture.commentId,
+      'short',
+      OWNER_AUTHZ,
+    )
+    expect(await databaseContentText(harness.db, await stored())).toBe('short')
+    expect(JSON.parse((await stored()).contentRefJson).kind).toBe('inline')
+    expect((await harness.db.select().from(contentPublications)).map((row) => row.state)).toEqual([
+      'releasing',
+    ])
+    await updateReviewCommentText(
+      harness.db,
+      fixture.nodeRunId,
+      fixture.commentId,
+      large,
+      OWNER_AUTHZ,
+    )
+    const second = await stored()
+    expect(JSON.parse(second.contentRefJson).contentId).not.toBe(
+      JSON.parse(first.contentRefJson).contentId,
+    )
+    expect(await databaseContentText(harness.db, second)).toBe(large)
+    await deleteReviewComment(harness.db, fixture.nodeRunId, fixture.commentId, OWNER_AUTHZ)
+    expect((await harness.db.select().from(contentPublications)).map((row) => row.state)).toEqual([
+      'releasing',
+      'releasing',
+    ])
+    expect(await stored()).toBeUndefined()
+  })
+
+  test('two large PATCHes release the immediately preceding content; DELETE leaves no ready orphan', async () => {
+    const fixture = await seed(harness.db)
+    await Promise.all([
+      updateReviewCommentText(
+        harness.db,
+        fixture.nodeRunId,
+        fixture.commentId,
+        'a'.repeat(70_000),
+        OWNER_AUTHZ,
+      ),
+      updateReviewCommentText(
+        harness.db,
+        fixture.nodeRunId,
+        fixture.commentId,
+        'b'.repeat(70_000),
+        OWNER_AUTHZ,
+      ),
+    ])
+    const { reviewComments, contentPublications } = tablesOf(harness.db)
+    const [row] = await harness.db
+      .select()
+      .from(reviewComments)
+      .where(eq(reviewComments.id, fixture.commentId))
+    const publications = await harness.db.select().from(contentPublications)
+    const ready = publications.filter((publication) => publication.state === 'ready')
+    expect(ready).toHaveLength(1)
+    expect(ready[0]!.contentId).toBe(JSON.parse(row!.contentRefJson).contentId)
+    expect(publications.filter((publication) => publication.state === 'releasing')).toHaveLength(1)
+    await Promise.allSettled([
+      deleteReviewComment(harness.db, fixture.nodeRunId, fixture.commentId, OWNER_AUTHZ),
+      updateReviewCommentText(
+        harness.db,
+        fixture.nodeRunId,
+        fixture.commentId,
+        'c'.repeat(70_000),
+        OWNER_AUTHZ,
+      ),
+    ])
+    expect(
+      await harness.db
+        .select()
+        .from(reviewComments)
+        .where(eq(reviewComments.id, fixture.commentId)),
+    ).toEqual([])
+    expect(
+      (await harness.db.select().from(contentPublications)).filter(
+        (publication) => publication.state === 'ready',
+      ),
+    ).toEqual([])
+  })
+
   test('200 happy path — updates commentText, returns new row, fires ws event', async () => {
     const s = await seed(harness.db)
     const uninstallProjection = await installCommittedEventProjectionHarness(s.db)
@@ -170,7 +282,7 @@ describeEachProvider('RFC-009-T1 updateReviewCommentText service', (harness) => 
       .select()
       .from(reviewComments)
       .where(eq(reviewComments.id, s.commentId))
-    expect(stored[0]?.commentText).toBe('revised text')
+    expect(await databaseContentText(s.db, stored[0]!)).toBe('revised text')
 
     expect(captured).toMatchObject({
       type: 'review.comment_updated',
@@ -205,7 +317,7 @@ describeEachProvider('RFC-009-T1 updateReviewCommentText service', (harness) => 
       .select()
       .from(reviewComments)
       .where(eq(reviewComments.id, s.commentId))
-    expect(stored[0]?.commentText).toBe('original')
+    expect(await databaseContentText(s.db, stored[0]!)).toBe('original')
   })
 })
 
@@ -231,7 +343,7 @@ describeEachProvider('review comment ownership and terminal guards', (harness) =
       sourcePortName: 'other',
       versionIndex: 1,
       reviewIteration: 0,
-      bodyPath: 'irrelevant',
+      ...contentRowColumns(legacyContentRef('review-body-path', 'local-file', 'irrelevant')),
       commentsJson: '[]',
       decision: 'pending',
       createdAt: 1,
@@ -247,7 +359,7 @@ describeEachProvider('review comment ownership and terminal guards', (harness) =
       contextBefore: '',
       contextAfter: '',
       occurrenceIndex: 1,
-      commentText: 'belongs elsewhere',
+      ...inlineContentColumns(Buffer.from('belongs elsewhere')),
       author: 'local',
       createdAt: 1,
     })
@@ -276,7 +388,7 @@ describeEachProvider('review comment ownership and terminal guards', (harness) =
       .select()
       .from(reviewComments)
       .where(eq(reviewComments.id, s.commentId))
-    expect(stored[0]?.commentText).toBe('original')
+    expect(await databaseContentText(s.db, stored[0]!)).toBe('original')
   })
 })
 
@@ -350,7 +462,7 @@ describeEachProvider('RFC-009-T1 PATCH /api/reviews/:nodeRunId/comments/:id rout
         .select()
         .from(reviewComments)
         .where(eq(reviewComments.id, s.commentId))
-      expect(stored[0]?.commentText).toBe('edited via http')
+      expect(await databaseContentText(s.db, stored[0]!)).toBe('edited via http')
     })
 
     test('422 — empty commentText rejected by zod (min length 1)', async () => {
@@ -402,7 +514,7 @@ describeEachProvider('RFC-285 B6① — review comment authorship matrix', (harn
     const row = (
       await s.db.select().from(reviewComments).where(eq(reviewComments.id, s.commentId))
     )[0]!
-    expect(row.commentText).toBe('original')
+    expect(await databaseContentText(s.db, row)).toBe('original')
   })
 
   test('作者本人（user 角色）改自己的评论 → 成功', async () => {

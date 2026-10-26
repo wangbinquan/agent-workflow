@@ -67,8 +67,7 @@ const PROVIDER_SPECIFIC_BUSINESS_DEPENDENCY_DEBT = [
 const PROVIDER_SELECTION_SITES = [
   'packages/backend/src/bootstrap/daemonStart.ts',
   'packages/backend/src/cli/dbCompact.ts',
-  'packages/backend/src/main.ts',
-  'packages/backend/src/modules/system-operations/composition.ts',
+  'packages/backend/src/cli/migrationReport.ts',
   'packages/backend/src/modules/system-operations/infrastructure/local/doctorDiagnostics.ts',
 ] as const
 
@@ -373,7 +372,12 @@ describe('RFC-349 provider cutover', () => {
 
     expect(source).not.toMatch(/from\s+['"]\.\/db\/client['"]/) // user/package/ops share provider bootstrap
     expect(source).not.toMatch(/\bopenDb\s*\(/)
-    expect(source).toContain('resolveDatabaseProviderRuntime')
+    // The CLI report owns provider resolution after command extraction. Keep both entry surfaces SQLite-free.
+    const report = unit('packages/backend/src/cli/migrationReport.ts').text
+    expect(report).not.toMatch(/from\s+['"](?:@|\.)\/db\/client['"]/)
+    expect(report).not.toMatch(/\bopenDb\s*\(/)
+    expect(report).toContain('resolveDatabaseProviderRuntime')
+    expect(source).toContain('migrationReportCommand')
   })
 
   /**

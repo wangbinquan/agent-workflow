@@ -1,3 +1,4 @@
+import { migrationPostgresqlRuntime } from '@/platform/persistence/migration/freeze/postgresqlDatabases'
 // RFC-370 v3 V5 — CS RFC-042 restore and verify Jobs. `agent-workflow migrate`
 // restores when the platform supplies CS_DATABASE_RESTORE_REFERENCE; the
 // database URL already names the empty platform-provisioned target. This file
@@ -8,7 +9,7 @@ import { createCrewStationObjectReader } from '@/platform/crewstation/objectStor
 import { createPostgresqlDatabaseRuntime } from '@/platform/persistence/postgresqlRuntime'
 import { hostedDatabaseGeneration } from '@/platform/persistence/generationValidation'
 import type { LogicalSchemaContract } from '@/platform/persistence/schemaContract'
-import { loadPostgresqlMigrationHistory } from '@/platform/persistence/postgresqlMigrationHistory'
+import { loadPostgresqlMigrationHistory } from '@/platform/persistence/schema/history/logicalHistory'
 import type { HostedRestoreNormalizationParticipant } from '../infrastructure/crewstation/restoreNormalizationContract'
 import { parseHostedBackupReference } from '../infrastructure/crewstation/databaseBackupFormat'
 import { restoreHostedDatabaseInstallation } from '../infrastructure/crewstation/databaseRestoreInstallation'
@@ -69,15 +70,17 @@ function prepareRestore(input: RestoreEnvironmentInput) {
   }).payload
   if (generation.operationId === null)
     throw new Error('hosted-restore-generation-operation-missing')
-  const runtime = createPostgresqlDatabaseRuntime({
-    config: PostgresqlDatabaseConfigSchema.parse({
-      provider: 'postgresql',
-      urlEnv: 'CS_DATABASE_URL',
-      poolMax: 2,
+  const runtime = migrationPostgresqlRuntime(
+    createPostgresqlDatabaseRuntime({
+      config: PostgresqlDatabaseConfigSchema.parse({
+        provider: 'postgresql',
+        urlEnv: 'CS_DATABASE_URL',
+        poolMax: 2,
+      }),
+      generationId: generation.generationId,
+      env: input.env,
     }),
-    generationId: generation.generationId,
-    env: input.env,
-  })
+  )
   return {
     runtime,
     reference,

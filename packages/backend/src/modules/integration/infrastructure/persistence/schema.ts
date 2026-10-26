@@ -1,4 +1,4 @@
-// RFC-395 I-a: explicit epoch-1 schema contributions; no physical or runtime change.
+// RFC-395 activation: this context declares the live epoch-2 schema directly.
 import {
   column as c,
   defineContribution,
@@ -692,20 +692,24 @@ const webhookTriggersDefinition = owner.table({
 
 export const webhookTriggers = materializeDrizzle(webhookTriggersDefinition).table
 
-export const schemaContribution = owner.contribution([
-  codeHostConnectionsDefinition,
-  csEventInboxDefinition,
-  csEventRoutesDefinition,
-  csEventTargetsDefinition,
-  csWebhookVerificationsDefinition,
-  scheduledTasksDefinition,
-  webhookDeliveriesDefinition,
-  webhookEndpointsDefinition,
-  webhookMrControlEffectsDefinition,
-  webhookMrControlTargetsDefinition,
-  webhookMrLaunchGuardsDefinition,
-  webhookMrStreamStatesDefinition,
-  webhookTriggerFiresDefinition,
-  webhookTriggerStreamsDefinition,
-  webhookTriggersDefinition,
-])
+export const schemaContribution = {
+  owner: 'integration',
+  version: 1,
+  tables: [
+    codeHostConnectionsDefinition,
+    csEventInboxDefinition,
+    csEventRoutesDefinition,
+    csEventTargetsDefinition,
+    csWebhookVerificationsDefinition,
+    scheduledTasksDefinition,
+    webhookDeliveriesDefinition,
+    webhookEndpointsDefinition,
+    webhookMrControlEffectsDefinition,
+    webhookMrControlTargetsDefinition,
+    webhookMrLaunchGuardsDefinition,
+    webhookMrStreamStatesDefinition,
+    webhookTriggerFiresDefinition,
+    webhookTriggerStreamsDefinition,
+    webhookTriggersDefinition,
+  ],
+} as const

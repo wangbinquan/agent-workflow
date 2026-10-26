@@ -1,6 +1,8 @@
 // RFC-395 I-a: ordered, serializable definitions owned by their contributing context.
 import type { CodecName } from './codecs'
 import type { SchemaExpression } from './expressions'
+import type { RowRule } from './rowRules'
+import type { InstallSeed } from './seeds'
 import type { TableDisposition } from './contractTypes'
 
 export type ColumnDefault =
@@ -17,8 +19,12 @@ export interface ColumnDefinition {
   /** Preserve metadata from reused legacy SQLite builders, even on non-unique columns. */
   readonly sqliteUniqueName?: string
   readonly unique?: string
+  readonly uniqueNulls?: UniqueNullSemantics
   readonly enumValues?: readonly string[]
   readonly originalTextDigest?: boolean
+  readonly document?:
+    | { readonly kind: 'content-ref'; readonly version: 1; readonly inlineBytesColumn: string }
+    | { readonly kind: 'requested-source'; readonly version: 1 | 2 }
   readonly highWater?: 'preserve-source-high-water'
 }
 export interface SchemaForeignKey {
@@ -30,10 +36,11 @@ export interface SchemaForeignKey {
   readonly onUpdate: 'no action' | 'restrict' | 'cascade' | 'set null' | 'set default'
   readonly lifecycle: string
 }
+export type UniqueNullSemantics = 'distinct' | 'not-distinct'
 export interface SchemaIndex {
   readonly name: string
   readonly unique: boolean
-  readonly nulls: 'distinct'
+  readonly nulls: UniqueNullSemantics
   readonly columns: readonly SchemaExpression[]
   readonly where: SchemaExpression | null
 }
@@ -48,7 +55,7 @@ export interface TableDefinition {
   readonly unique: readonly {
     readonly name: string
     readonly columns: readonly string[]
-    readonly nulls: 'distinct'
+    readonly nulls: UniqueNullSemantics
   }[]
   readonly foreignKeys: readonly SchemaForeignKey[]
   readonly checks: readonly { readonly name: string; readonly expression: SchemaExpression }[]
@@ -58,9 +65,22 @@ export interface TableDefinition {
     readonly rule: string
   }
   readonly migrationPolicy: TableDisposition
+  readonly rowRules?: readonly RowRule[]
 }
 export interface SchemaContribution {
   readonly owner: string
   readonly version: number
   readonly tables: readonly TableDefinition[]
+  readonly seeds?: readonly InstallSeed[]
+  /** Explicit target NULL semantics for retained inline unique columns, without cloning their table. */
+  readonly indexUniqueNulls?: readonly {
+    readonly table: string
+    readonly index: string
+    readonly nulls: UniqueNullSemantics
+  }[]
+  readonly columnUniqueNulls?: readonly {
+    readonly table: string
+    readonly column: string
+    readonly nulls: UniqueNullSemantics
+  }[]
 }

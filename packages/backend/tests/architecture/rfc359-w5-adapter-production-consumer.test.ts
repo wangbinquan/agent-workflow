@@ -325,10 +325,10 @@ export const DEAD_PROVIDER_ADAPTER_DEBT: readonly (readonly [string, string])[] 
 
 describe('RFC-359 W5 —— provider 适配器必须有生产消费者', () => {
   test('migration authoring commands must actually call their immutable artifact constructors', () => {
-    const sequence = UNITS.find((unit) => unit.path.endsWith('/postgresqlMigrationSequence.ts'))!
-    const authoring = SCRIPT_UNITS.find((unit) =>
-      unit.path.endsWith('/rfc349-postgresql-schema.ts'),
+    const sequence = UNITS.find((unit) =>
+      unit.path.endsWith('/migration/legacy/postgresqlMigrationSequence.ts'),
     )!
+    const authoring = UNITS.find((unit) => unit.path.endsWith('/rfc349-postgresql-schema.ts'))!
     expect(adaptersWithoutProductionConsumer([sequence, authoring])).toEqual([])
     const constructors = [
       'createPostgresqlAdditiveUpgrade',
@@ -343,7 +343,8 @@ describe('RFC-359 W5 —— provider 适配器必须有生产消费者', () => {
       adaptersWithoutProductionConsumer([sequence, sourceUnit(authoring.path, withoutCalls)]),
     ).toEqual(
       constructors.map(
-        (symbol) => `platform/persistence/postgresqlMigrationSequence.ts::${symbol}`,
+        (symbol) =>
+          `platform/persistence/migration/legacy/postgresqlMigrationSequence.ts::${symbol}`,
       ),
     )
   })

@@ -1,15 +1,17 @@
-// RFC-395 II-b O3 — unchanged resource-limit queries and canceled-row reason write, owned by Task.
+import { nodeRunReadColumns } from './nodeRunQueries'
 import { tablesOf } from '@/platform/persistence/sessionTables'
+import { taskReadColumns } from './taskRepositorySql'
+// RFC-395 II-b O3 — unchanged resource-limit queries and canceled-row reason write, owned by Task.
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { first } from '@/platform/persistence/queryHelpers'
 import { and, eq, inArray, isNotNull, sql } from 'drizzle-orm'
-import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { decodeCallHumanWait, decodeResourceLimitTokenTotal } from '../domain/resourceLimitUsage'
 import type {
-  TaskResourceLimitFacts,
-  ResourceLimitTask,
   ResourceLimitCallHumanWait,
+  ResourceLimitTask,
   ResourceLimitTaskClock,
+  TaskResourceLimitFacts,
 } from '../application/ports/taskResourceLimitFacts'
+import { decodeCallHumanWait, decodeResourceLimitTokenTotal } from '../domain/resourceLimitUsage'
 
 export function createTaskResourceLimitFacts(db: PersistenceDb): TaskResourceLimitFacts {
   return {
@@ -18,8 +20,8 @@ export function createTaskResourceLimitFacts(db: PersistenceDb): TaskResourceLim
       return await db
         .select({
           id: tasks.id,
-          maxDurationMs: tasks.maxDurationMs,
-          maxTotalTokens: tasks.maxTotalTokens,
+          maxDurationMs: taskReadColumns(db).maxDurationMs,
+          maxTotalTokens: taskReadColumns(db).maxTotalTokens,
           runningMs: tasks.runningMs,
           runningSince: tasks.runningSince,
         })
@@ -29,10 +31,11 @@ export function createTaskResourceLimitFacts(db: PersistenceDb): TaskResourceLim
 
     async callHumanWaits(taskId: string): Promise<ReadonlyArray<ResourceLimitCallHumanWait>> {
       const { nodeRuns } = tablesOf(db)
+      const nodeRunColumns = nodeRunReadColumns(db)
       const rows = await db
         .select({
           childTaskId: nodeRuns.childTaskId,
-          wrapperProgressJson: nodeRuns.wrapperProgressJson,
+          wrapperProgressJson: nodeRunColumns.wrapperProgressJson,
         })
         .from(nodeRuns)
         .where(and(eq(nodeRuns.taskId, taskId), isNotNull(nodeRuns.childTaskId)))
@@ -55,8 +58,9 @@ export function createTaskResourceLimitFacts(db: PersistenceDb): TaskResourceLim
 
     async sumTaskTokens(taskId: string): Promise<number> {
       const { nodeRuns } = tablesOf(db)
+      const nodeRunColumns = nodeRunReadColumns(db)
       const rows = await db
-        .select({ total: sql<number | null>`sum(${nodeRuns.tokTotal})` })
+        .select({ total: sql<number | null>`sum(${nodeRunColumns.tokTotal})` })
         .from(nodeRuns)
         .where(eq(nodeRuns.taskId, taskId))
       return decodeResourceLimitTokenTotal(rows[0]?.total)

@@ -27,6 +27,7 @@ export interface WrapperRunPersistence {
     readonly taskId: string
     readonly sources: ReadonlyArray<{
       readonly nodeId: string
+      readonly nodeKind?: string
       readonly frame: { readonly containerRunId: string | null; readonly iteration: number }
     }>
   }): Promise<Readonly<Record<string, string>>>

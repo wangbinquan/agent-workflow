@@ -1,3 +1,4 @@
+import { currentSqlitePath } from '@/platform/persistence/databaseProviderRuntime'
 import type { DoctorTaskLifecyclePort } from '../../composition/required-ports'
 import {
   evaluateLifecycleHealth,
@@ -174,12 +175,13 @@ export async function checkConfiguredDatabase(
       },
     ]
   }
-  // RFC-359 AC-10 —— 判据与文案是同一件事，一起由引擎声明：`absentLocalStoreMessage` 为
-  // `null` 就表示「这个引擎没有本地库文件这回事」，于是连 `existsSync` 都不必做。
-  // 原来问的是 `storage === 'embedded-file'` 且那句话里写死了「SQLite」——`storage` 比品牌名
-  // 好一档，但仍是两值枚举，第三个 provider 只能落进其中一边。
+  // Diagnostics follow the published installation, never an obsolete provider config.
   const absentLocalStore = databaseProviderTraits(config.database.provider).absentLocalStoreMessage
-  if (absentLocalStore !== null && !existsSync(Paths.db)) {
+  if (
+    !existsSync(Paths.databaseGenerationPointer) &&
+    !existsSync(Paths.db) &&
+    absentLocalStore !== null
+  ) {
     return [
       {
         name: 'database provider',
@@ -195,7 +197,7 @@ export async function checkConfiguredDatabase(
   try {
     resolved = resolveDatabaseProviderRuntime({
       config: config.database,
-      sqlitePath: Paths.db,
+      sqlitePath: diagnosticSqlitePath(),
       generationPointerPath: Paths.databaseGenerationPointer,
       operationsRoot: Paths.databaseMigrationsDir,
       contract,
@@ -238,14 +240,14 @@ export async function checkConfiguredDatabase(
  * clone failures. Read-only + immutable so a bare-WAL / stopped daemon still works.
  */
 export function checkSealedCredentials(): CheckResult {
-  if (!existsSync(Paths.db)) {
+  if (!existsSync(diagnosticSqlitePath())) {
     return { name: 'repo credentials', ok: true, message: '(no database yet)' }
   }
   let db: Database | null = null
   try {
     // Plain read-only (sidecars persist after checkpoint+close). Not the
     // `file:…?immutable=1` URI — bun:sqlite rejects it on Linux.
-    db = new Database(Paths.db, { readonly: true })
+    db = new Database(diagnosticSqlitePath(), { readonly: true })
     const rows = db
       .query(
         "SELECT url_enc AS urlEnc FROM cached_repos WHERE url_enc IS NOT NULL AND url_enc != ''",
@@ -296,10 +298,10 @@ export function checkSealedCredentials(): CheckResult {
  * mutate the very file it is diagnosing). A corrupt DB FAILS doctor.
  */
 export function checkDbIntegrity(): CheckResult {
-  if (!existsSync(Paths.db)) {
+  if (!existsSync(diagnosticSqlitePath())) {
     return { name: 'db integrity', ok: true, message: '(no database yet)' }
   }
-  const r = quickCheckDbFile(Paths.db)
+  const r = quickCheckDbFile(diagnosticSqlitePath())
   if (r.ok) return { name: 'db integrity', ok: true, message: 'quick_check ok' }
   return {
     name: 'db integrity',
@@ -340,12 +342,12 @@ export function checkBackups(): CheckResult {
 }
 
 async function checkLifecycleHealth(tasks: DoctorTaskLifecyclePort): Promise<CheckResult> {
-  if (!existsSync(Paths.db)) {
+  if (!existsSync(diagnosticSqlitePath())) {
     return { name: 'lifecycle', ok: true, message: '(no database yet)' }
   }
   let dbh: Database | null = null
   try {
-    dbh = new Database(Paths.db, { readonly: true })
+    dbh = new Database(diagnosticSqlitePath(), { readonly: true })
     const counts: LifecycleHealthCounts = {
       ...(await tasks.countLifecycleStates({ provider: 'sqlite', db: dbh })),
       openAlerts: (
@@ -580,5 +582,13 @@ export function createLocalDoctorDiagnosticsFactory(
     create(input) {
       return createLocalDoctorDiagnostics({ ...input, contract, tasks })
     },
+  }
+}
+
+function diagnosticSqlitePath(): string {
+  try {
+    return currentSqlitePath(Paths.databaseGenerationPointer, Paths.db)
+  } catch {
+    return Paths.db
   }
 }

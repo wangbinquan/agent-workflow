@@ -493,14 +493,8 @@ jobs:
             | tar -xz -C "$tmp" gitleaks
           "$tmp/gitleaks" detect --source . --no-banner --redact --verbose
 
-      - name: drizzle-kit check (DB schema/migration drift)
-        # The SQLite DB is the platform's source of truth; an inconsistent
-        # migrations folder (re-numbered, duplicated, or missing journal
-        # entries after a bad rebase) silently corrupts every user's DB on
-        # next `start`. `db:check` (= `drizzle-kit check`) validates the
-        # migrations folder is internally consistent — no orphan SQL files,
-        # journal in sync, no version collisions. Runs in <1s.
-        run: bun run --filter @agent-workflow/backend db:check
+      - name: Epoch-2 schema history matches the live registry
+        run: bun run scripts/schema-history.ts --check
 
   perf:
     # RFC-054 W3-2 — perf microbenchmark gate. Runs 5 hot-path operations

@@ -6,9 +6,9 @@ import { createHash } from 'node:crypto'
 import { Name, Param, Placeholder, SQL, StringChunk } from 'drizzle-orm'
 import { PgDialect } from 'drizzle-orm/pg-core'
 import { SQLiteDialect } from 'drizzle-orm/sqlite-core'
-import { SQLiteSession } from 'drizzle-orm/sqlite-core/session'
 import { PreparedQuery as BunPreparedQuery } from 'drizzle-orm/bun-sqlite/session'
-import { BunSQLPreparedQuery, BunSQLSession } from 'drizzle-orm/bun-sql/session'
+import { BunSQLPreparedQuery, type BunSQLSession } from 'drizzle-orm/bun-sql/session'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { buildActor } from '@/auth/actor'
 import { createTaskOverviewQuery } from '@/modules/task-execution/infrastructure/taskOverviewQuery'
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
@@ -121,7 +121,7 @@ function createAstObserver() {
   }
 }
 
-function observeCountCompilation() {
+function observeCountCompilation(db: PersistenceDb) {
   const snapshot = createAstObserver()
   const roots = new Set<SQL>()
   const retained: { root: SQL; before: string }[] = []
@@ -151,10 +151,16 @@ function observeCountCompilation() {
     }
     return result
   })
-  const prepare = spyOn(SQLiteSession.prototype, 'prepareOneTimeQuery')
+  // Epoch-2 row-rule translation binds prepareQuery on the live session at
+  // construction. A later prototype spy cannot observe that captured method.
+  // Observe the same decorated session used by both native query builders.
+  const session = Reflect.get(db, 'session') as Pick<
+    InstanceType<typeof BunSQLSession>,
+    'prepareQuery'
+  >
+  const prepare = spyOn(session, 'prepareQuery')
   const nativeAll = spyOn(BunPreparedQuery.prototype, 'all')
   const remoteExecute = spyOn(BunSQLPreparedQuery.prototype, 'execute')
-  const pgPrepare = spyOn(BunSQLSession.prototype, 'prepareQuery')
   const originalPgBuild = PgDialect.prototype.buildSelectQuery
   const pgBuild = spyOn(PgDialect.prototype, 'buildSelectQuery').mockImplementation(function (
     this: PgDialect,
@@ -188,7 +194,7 @@ function observeCountCompilation() {
         return {
           generations,
           compilations: retained.length,
-          prepares: [...prepare.mock.calls, ...pgPrepare.mock.calls].filter(([query]) =>
+          prepares: prepare.mock.calls.filter(([query]) =>
             /^select count\(\*\) from /.test(query.sql),
           ).length,
           allCalls: nativeAll.mock.calls.length + remoteExecute.mock.calls.length,
@@ -199,7 +205,6 @@ function observeCountCompilation() {
         prepare.mockRestore()
         nativeAll.mockRestore()
         remoteExecute.mockRestore()
-        pgPrepare.mockRestore()
         pgBuild.mockRestore()
         pgCompile.mockRestore()
       }
@@ -220,7 +225,7 @@ describeEachProvider('RFC359 W25 overview SQL template semantics', (harness) => 
         }),
     )
     const owner = createTaskOverviewQuery(harness.db)
-    const meter = observeCountCompilation()
+    const meter = observeCountCompilation(harness.db)
     let metrics: ReturnType<typeof meter.finish>
     let second: StatementRecording | undefined
     let third: StatementRecording | undefined
@@ -246,12 +251,12 @@ describeEachProvider('RFC359 W25 overview SQL template semantics', (harness) => 
       metrics = meter.finish()
     }
     if (third === undefined) throw new Error('missing actual third recording')
+    console.log('RFC359_W25_OVERVIEW_COMPILATION ' + JSON.stringify(metrics))
     expect(metrics.compilations).toBe(12)
     expect(metrics.prepares).toBe(12)
     expect(metrics.allCalls).toBe(12)
     expect(metrics.generations).toBeGreaterThan(0)
     expect(metrics.generations).toBeLessThanOrEqual(metrics.compilations)
-    console.log('RFC359_W25_OVERVIEW_COMPILATION ' + JSON.stringify(metrics))
     const reference = harness.recordStatements()
     try {
       const value = await createTaskOverviewQuery(harness.db).load({ actor, since: T0 })

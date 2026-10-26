@@ -1,1 +1,0 @@
-export { decodeConsumedEdges } from '../consumedCodec'

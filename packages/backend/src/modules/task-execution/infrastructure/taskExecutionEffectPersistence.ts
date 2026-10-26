@@ -1,6 +1,15 @@
-import { insertOne } from '@/platform/persistence/singleInsert'
+import { writeNodeRunOutputInTx } from './nodeExecutionPersistence'
+import {
+  compareAndWriteNodeRunInTx,
+  lockNodeRunTaskRootInTx,
+  writeNodeRunTablesInTx,
+} from './nodeRunWriteProtocol'
 import { tablesOf } from '@/platform/persistence/sessionTables'
+import { insertOne } from '@/platform/persistence/singleInsert'
 import { acceptDurableRepositoryWorkspace } from './durableRepositoryPreparation'
+import { taskAggregateWrite } from './taskDefinitionWriteParticipant'
+import { createTaskPreparationParticipantInTx } from './taskPreparationParticipant'
+import { taskReadColumns } from './taskRepositorySql'
 // RFC-359 W8 —— effect 账本 / attempt 台账 / 资源围栏：**一份**实现，两个 provider 共用。
 //
 // 此前是一对同构引擎：
@@ -31,12 +40,11 @@ import { acceptDurableRepositoryWorkspace } from './durableRepositoryPreparation
 // 事务形状沿用两侧原有的最强档：`withTaskExecutionSerializable`（PG = SERIALIZABLE + 40001 重放；
 // SQLite = BEGIN IMMEDIATE，本就全库独占）。事务体只 await 数据库操作。
 
-import { writeTaskWorkspaceDirectoriesInTx } from './taskWorkspaceDirectoryParticipant'
 import { and, asc, desc, eq, inArray, max } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
-import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { engineOf } from '@/platform/persistence/databaseTransaction'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type {
   CodeHostNodeSettlementProjection,
   GateRollbackSettlement,
@@ -87,15 +95,9 @@ async function applyCodeHostProjection(
   tx: TaskExecutionTransaction,
   projection: CodeHostNodeSettlementProjection,
 ): Promise<void> {
+  await lockNodeRunTaskRootInTx(tx, projection.nodeRunId)
   for (const output of projection.outputs ?? []) {
-    const { nodeRunOutputs } = tablesOf(tx)
-    await tx
-      .insert(nodeRunOutputs)
-      .values({ nodeRunId: projection.nodeRunId, ...output })
-      .onConflictDoUpdate({
-        target: [nodeRunOutputs.nodeRunId, nodeRunOutputs.portName],
-        set: { content: output.content },
-      })
+    await writeNodeRunOutputInTx(tx, projection.nodeRunId, output)
   }
   await setNodeRunStatusTx({
     tx,
@@ -118,18 +120,23 @@ async function applyWorkspacePreparationProjection(
   tx: TaskExecutionTransaction,
   projection: WorkspacePreparationSettlementProjection,
 ): Promise<void> {
+  await taskAggregateWrite.lockTaskAggregateRoot(tx, projection.taskId)
   await acceptDurableRepositoryWorkspace(tx, projection.taskId)
-  const { tasks, taskRepos } = tablesOf(tx)
-  await tx.update(tasks).set(projection.task).where(eq(tasks.id, projection.taskId))
-  if (projection.repositories.length > 0) {
-    await tx.insert(taskRepos).values(projection.repositories.map((row) => ({ ...row })))
-  }
-  await writeTaskWorkspaceDirectoriesInTx(
-    tx,
-    projection.taskId,
-    projection.repositories.map((repo) => repo.mountPath),
-    projection.nodePaths,
-  )
+  const { taskWorkspaces } = tablesOf(tx)
+  const [workspace] = await tx
+    .select()
+    .from(taskWorkspaces)
+    .where(eq(taskWorkspaces.taskId, projection.taskId))
+  if (!workspace) throw new Error('task-workspace-missing')
+  await createTaskPreparationParticipantInTx(tx).writeWorkspace({
+    taskId: projection.taskId,
+    ...projection.task,
+    spaceKind: workspace.spaceKind,
+    repositories: projection.repositories.map(
+      ({ repoIndex, worktreeDirName: _directory, ...repo }) => ({ ...repo, ordinal: repoIndex }),
+    ),
+    nodePaths: projection.nodePaths,
+  })
   await setNodeRunStatusTx({
     tx,
     nodeRunId: projection.prepNodeRunId,
@@ -175,10 +182,11 @@ async function applyGateRollbackProjection(
   const successful = new Set(input.outcome.successfulSourceNodeRunIds)
   for (const row of rows) {
     const rolledBack = successful.has(row.id)
-    const updated = await tx
-      .update(nodeRuns)
-      .set({
-        rolledBack,
+    await compareAndWriteNodeRunInTx(
+      tx,
+      row.id,
+      eq(nodeRuns.taskId, input.taskId),
+      {
         errorMessage:
           row.errorMessage === null
             ? null
@@ -186,15 +194,9 @@ async function applyGateRollbackProjection(
                 /^(superseded-by-review-(?:rejected|iterated))(?:-rollback)?:/,
                 `$1${rolledBack ? '-rollback' : ''}:`,
               ),
-      })
-      .where(and(eq(nodeRuns.id, row.id), eq(nodeRuns.taskId, input.taskId)))
-      .returning({ id: nodeRuns.id })
-    if (updated[0] === undefined) {
-      throw new TaskExecutionError(
-        'task-continuation-stale',
-        `workspace rollback projection for '${input.operationId}' lost source '${row.id}'`,
-      )
-    }
+      },
+      { result: { rolledBack } },
+    )
   }
 }
 
@@ -202,12 +204,14 @@ export class DrizzleTaskExecutionEffectPersistence implements TaskExecutionEffec
   constructor(private readonly db: PersistenceDb) {}
 
   async readLineage(input: Parameters<TaskExecutionEffectPersistence['readLineage']>[0]) {
-    const { tasks, taskExecutionIntents, nodeRuns } = tablesOf(this.db)
+    const { taskExecutionIntents } = tablesOf(this.db)
+    const { nodeRuns } = tablesOf(this.db)
+    const { tasks } = tablesOf(this.db)
     const taskRows = await this.db
       .select({
-        executionLineageId: tasks.executionLineageId,
-        lineageSlotPathJson: tasks.lineageSlotPathJson,
-        workflowVersion: tasks.workflowVersion,
+        executionLineageId: taskReadColumns(this.db).executionLineageId,
+        lineageSlotPathJson: taskReadColumns(this.db).lineageSlotPathJson,
+        workflowVersion: taskReadColumns(this.db).workflowVersion,
       })
       .from(tasks)
       .where(eq(tasks.id, input.taskId))
@@ -233,7 +237,7 @@ export class DrizzleTaskExecutionEffectPersistence implements TaskExecutionEffec
             .select({
               nodeId: nodeRuns.nodeId,
               iteration: nodeRuns.iteration,
-              retryIndex: nodeRuns.retryIndex,
+              retryIndex: nodeRuns.attemptIndex,
               shardKey: nodeRuns.shardKey,
               continuationSlotKey: nodeRuns.continuationSlotKey,
               lineageSlotPathJson: nodeRuns.lineageSlotPathJson,
@@ -339,6 +343,7 @@ export class DrizzleTaskExecutionEffectPersistence implements TaskExecutionEffec
     const recoveryDescriptorJson = bounded(input.recoveryDescriptorJson)
     return await withTaskExecutionSerializable(this.db, async (tx) => {
       await assertTaskOwnerTx(tx, input.token, now)
+      await taskAggregateWrite.lockTaskAggregateRoot(tx, input.token.taskId)
       const {
         taskExecutionIntents,
         taskExecutionEffects,
@@ -620,6 +625,7 @@ export class DrizzleTaskExecutionEffectPersistence implements TaskExecutionEffec
     }
     const now = input.now ?? Date.now()
     await assertTaskOwnerTx(tx, input.token, now)
+    await taskAggregateWrite.lockTaskAggregateRoot(tx, input.token.taskId)
     const {
       taskExecutionEffectAttempts,
       taskExecutionEffects,
@@ -891,7 +897,9 @@ export class DrizzleTaskExecutionEffectPersistence implements TaskExecutionEffec
     const now = input.now ?? Date.now()
     await withTaskExecutionSerializable(this.db, async (tx) => {
       await assertTaskOwnerTx(tx, input.token, now)
-      const { taskExecutionEffectAttempts, taskExecutionEffects, nodeRuns } = tablesOf(tx)
+      await taskAggregateWrite.lockTaskAggregateRoot(tx, input.token.taskId)
+      const { taskExecutionEffectAttempts, taskExecutionEffects } = tablesOf(tx)
+      const { nodeRuns } = tablesOf(tx)
       const attempts = await tx
         .select({
           state: taskExecutionEffectAttempts.state,
@@ -942,19 +950,28 @@ export class DrizzleTaskExecutionEffectPersistence implements TaskExecutionEffec
           ),
         )
         .returning({ id: taskExecutionEffectAttempts.id })
-      const projected = await tx
-        .update(nodeRuns)
-        .set({
+      const [projectionRun] = await tx
+        .select({ id: nodeRuns.id })
+        .from(nodeRuns)
+        .where(and(eq(nodeRuns.id, input.nodeRunId), eq(nodeRuns.taskId, input.token.taskId)))
+        .limit(1)
+      if (!projectionRun)
+        throw new TaskExecutionError(
+          'task-execution-stale-owner',
+          'process spawn projection CAS lost',
+        )
+      await writeNodeRunTablesInTx(tx, input.nodeRunId, {
+        runtime: {
           pid: input.pid,
           spawnBinaryPath: input.spawnBinaryPath,
           spawnLaunchNonce: input.launchNonce,
-          ...(input.runtimeParamsJson === undefined
-            ? {}
-            : { runtimeParamsJson: input.runtimeParamsJson }),
-        })
-        .where(and(eq(nodeRuns.id, input.nodeRunId), eq(nodeRuns.taskId, input.token.taskId)))
-        .returning({ id: nodeRuns.id })
-      if (updated[0] === undefined || projected[0] === undefined) {
+        },
+        config:
+          input.runtimeParamsJson === undefined
+            ? undefined
+            : { runtimeParamsJson: input.runtimeParamsJson },
+      })
+      if (updated[0] === undefined) {
         throw new TaskExecutionError(
           'task-execution-stale-owner',
           'process spawn projection CAS lost',

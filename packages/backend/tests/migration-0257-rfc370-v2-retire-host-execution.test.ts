@@ -3,20 +3,20 @@
 // the host write contexts and the memory distill execution receipts. Upgrading
 // from 0256 must drop exactly those two tables and keep every business row; the
 // PostgreSQL step 0033 must drop the same two tables and nothing else.
+import { FROZEN_POSTGRESQL_MIGRATIONS } from './migration-freeze'
+import { migrateFrozenSqlite as migrate, freezeAt, FROZEN_MIGRATIONS } from './migration-freeze'
 import { describe, expect, test } from 'bun:test'
 import { Database } from 'bun:sqlite'
 import { readFileSync, rmSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { drizzle } from 'drizzle-orm/bun-sqlite'
-import { migrate } from 'drizzle-orm/bun-sqlite/migrator'
-import { freezeAt } from './migration-freeze'
 
 const RETIRED = ['memory_distill_execution_receipts', 'system_host_execution_write_contexts']
 const THROUGH_0256 = 255
 const THROUGH_0257 = 256
 
 function statements(file: string): string[] {
-  return readFileSync(resolve(import.meta.dir, '../db/migrations', file), 'utf8')
+  return readFileSync(resolve(FROZEN_MIGRATIONS, file), 'utf8')
     .split('--> statement-breakpoint')
     .map((statement) => statement.trim())
     .filter((statement) => statement !== '')
@@ -72,10 +72,7 @@ describe('migration 0257 — RFC-370 v2 retires the host execution tables', () =
 
   test('PostgreSQL 0033 drops the same two tables and creates nothing', () => {
     const sql = readFileSync(
-      resolve(
-        import.meta.dir,
-        '../db/postgresql-migrations/0033_rfc370_v2_retire_host_execution.sql',
-      ),
+      resolve(FROZEN_POSTGRESQL_MIGRATIONS, '0033_rfc370_v2_retire_host_execution.sql'),
       'utf8',
     )
     const dropped = [...sql.matchAll(/^DROP TABLE "agent_workflow"\."([a-z_]+)";$/gm)].map(

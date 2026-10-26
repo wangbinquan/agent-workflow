@@ -26,9 +26,9 @@
 //   If this file goes RED again, that is a SIGNAL to re-audit §6.1, not a
 //   licence to edit the expectations.
 
-import { type PersistenceTables } from '@/platform/persistence/sessionTables'
+import type { FrozenPersistenceTables as PersistenceTables } from '@/platform/persistence/migration/epoch1/tables'
 import { describe, expect, test } from 'bun:test'
-import { isFresherNodeRun } from '../src/services/scheduler'
+import { isFresherNodeRun } from '@/modules/task-execution/infrastructure/migration/oracle/legacyPickers'
 // `isFresherNodeRun` now reads only `id` (the clarifyIteration column was
 // dropped in PR-C). The equivalence pickers below still simulate the RETIRED
 // comparator, so the synthetic row carries a local `clarifyIteration` field

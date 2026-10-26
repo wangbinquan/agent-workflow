@@ -16,7 +16,7 @@
 //   * `gate` 三个布尔折成 `state.gateStatus`（中立侧是单一状态机，见
 //     `WORKGROUP_TURN_GATE_TRANSITIONS`）。
 
-import { projectWorkgroupRunSelections } from '@/modules/task-execution/infrastructure/runSelection/workgroupProjection'
+import { projectWorkgroupRunSelections } from './workgroupSelectionFixture'
 import type {
   WorkgroupAssignment,
   WorkgroupMessage,

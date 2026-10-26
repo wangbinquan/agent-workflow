@@ -21,7 +21,7 @@ import {
 
 function makeRun(over: Partial<NodeRun>): NodeRun {
   return {
-    seq: null,
+    seq: 0,
     id: 'r1',
     taskId: 't1',
     nodeId: 'n1',

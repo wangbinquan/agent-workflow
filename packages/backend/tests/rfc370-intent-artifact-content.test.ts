@@ -1,15 +1,22 @@
+import { reencodeIntentApplyArtifacts } from '@/modules/intent/infrastructure/migration/applyJournalRule'
+import { intentApplyArtifactCodecs } from '@/modules/intent/infrastructure/intentApplyArtifactCodec'
+import { contentRefColumns } from '@/platform/content/contentStore'
+import { sql, eq } from 'drizzle-orm'
+import { legacyContentRef } from '@/platform/content/contentRef'
+import { contentRowColumns } from '@/platform/content/infrastructure/contentStore'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 // RFC-370: selected content must drive real Intent apply and recovery without
 // replacing AW's resource transaction, durable journal or old-format replay.
 import { createAtomicApplyRecovery } from '@/platform/atomic-apply/convergence'
 import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+
 import { first } from '@/platform/persistence/queryHelpers'
 import { afterEach, expect, test } from 'bun:test'
 import { createHash } from 'node:crypto'
 import { existsSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { eq } from 'drizzle-orm'
+
 import { ulid } from 'ulid'
 import { canonicalIntentJson, parseIntentChangeset } from '@agent-workflow/shared'
 import { buildActor } from '@/auth/actor'
@@ -26,7 +33,7 @@ import { composeIntentMaintenanceCommandsForDatabase } from './helpers/atomicApp
 import {
   encodeIntentJournalArtifacts,
   type IntentJournalArtifactV1,
-} from '@/modules/intent/infrastructure/intentApplyLegacyCodec'
+} from '@/modules/intent/infrastructure/migration/intentApplyLegacyCodec'
 import type { IntentApplyArtifact } from '@/modules/resource-catalog/public/types'
 import type {
   IntentPluginArtifactOwner,
@@ -62,8 +69,8 @@ describeEachProvider('RFC-370 selected Intent artifact content', (harness) => {
     const directory = mkdtempSync(join(tmpdir(), 'aw-intent-content-'))
     directories.push(directory)
     const appHome = join(directory, 'absent-home')
-    const { users, skills, skillVersions, intentSessions, intentDrafts, intentApplyJournal } =
-      tablesOf(harness.db)
+    const { users, intentSessions, intentDrafts } = tablesOf(harness.db)
+    const { skills, skillVersions, intentApplyJournal } = tablesOf(harness.db)
     await insertOne(harness.db, users, { ...actor.user, createdAt: 1, updatedAt: 1 })
     const authority = composeIdentityAccess(harness.db).contexts.fromAuthenticatedPrincipal(
       { userId: ownerId, source: 'session' },
@@ -77,7 +84,7 @@ describeEachProvider('RFC-370 selected Intent artifact content', (harness) => {
         id: existingSkillId,
         name: 'intent-storage',
         description: '',
-        managedPath: 'object-ref:skill-live',
+        ...contentRowColumns(legacyContentRef('skill-path', 'local-file', 'object-ref:skill-live')),
         ownerUserId: ownerId,
         visibility: 'private',
         reservationState: 'ready',
@@ -91,7 +98,7 @@ describeEachProvider('RFC-370 selected Intent artifact content', (harness) => {
         id: ulid(),
         skillId: existingSkillId,
         versionIndex: 1,
-        filesPath: 'object-ref:skill-v1',
+        ...contentRowColumns(legacyContentRef('skill-path', 'local-file', 'object-ref:skill-v1')),
         source: 'initial',
         summary: 'Initial',
         contentHash: hash,
@@ -298,7 +305,11 @@ describeEachProvider('RFC-370 selected Intent artifact content', (harness) => {
         async stage(artifact) {
           const row = await f.journal()
           expect(row.state).toBe('prepared')
-          expect(JSON.parse(row.preparedArtifactsJson)).toEqual([artifact])
+          expect(JSON.parse(row.preparedArtifactsJson)).toEqual({
+            scene: 'intent',
+            version: 3,
+            artifacts: [artifact],
+          })
           calls.push('stage')
           entered.release()
           await stage.pending
@@ -359,7 +370,8 @@ describeEachProvider('RFC-370 selected Intent artifact content', (harness) => {
             throw new Error('stage not reached')
           }),
         ])
-        const { skills, plugins } = tablesOf(harness.db)
+        const { plugins } = tablesOf(harness.db)
+        const { skills } = tablesOf(harness.db)
         expect(await harness.db.select().from(kind === 'skill' ? skills : plugins)).toHaveLength(0)
         expect(settled).toBe(false)
         stage.release()
@@ -429,7 +441,9 @@ describeEachProvider('RFC-370 selected Intent artifact content', (harness) => {
     expect(
       await harness.db
         .select({
-          managedPath: skills.managedPath,
+          managedPath: sql<string>`${skills.contentRefJson}`.mapWith(
+            (raw: string) => contentRefColumns.decode(raw, null)?.location.value as string,
+          ),
           contentVersion: skills.contentVersion,
           metaRevision: skills.metaRevision,
         })
@@ -437,7 +451,12 @@ describeEachProvider('RFC-370 selected Intent artifact content', (harness) => {
     ).toEqual([{ managedPath: 'object-ref:skill-live', contentVersion: 2, metaRevision: 0 }])
     expect(
       await harness.db
-        .select({ filesPath: skillVersions.filesPath, contentHash: skillVersions.contentHash })
+        .select({
+          filesPath: sql<string>`${skillVersions.contentRefJson}`.mapWith(
+            (raw: string) => contentRefColumns.decode(raw, null)?.location.value as string,
+          ),
+          contentHash: skillVersions.contentHash,
+        })
         .from(skillVersions)
         .where(eq(skillVersions.versionIndex, 2)),
     ).toEqual([{ filesPath: 'object-ref:skill-v2', contentHash: hash }])
@@ -625,7 +644,7 @@ describeEachProvider('RFC-370 selected Intent artifact content', (harness) => {
       id: ulid(),
       skillId: f.existingSkillId,
       versionIndex: 1,
-      filesPath: 'object-ref:archive',
+      ...contentRowColumns(legacyContentRef('skill-path', 'local-file', 'object-ref:archive')),
       source: 'initial',
       contentHash: hash,
       createdAt: 1,
@@ -648,7 +667,7 @@ describeEachProvider('RFC-370 selected Intent artifact content', (harness) => {
     expect(existsSync(f.appHome)).toBe(false)
   })
 
-  test('deleted legacy skill discards its staged version without publication', async () => {
+  test('converted deleted skill discards its staged version without publication', async () => {
     const f = await fixture('skill')
     const artifact: IntentJournalArtifactV1 = {
       kind: 'skill-version-stage',
@@ -670,7 +689,7 @@ describeEachProvider('RFC-370 selected Intent artifact content', (harness) => {
       db: harness.db,
       appHome: f.appHome,
       content: content({
-        discardLegacy: (value) => {
+        discardSkill: (value) => {
           discarded.push(value)
         },
         publishSkill: () => {
@@ -679,8 +698,11 @@ describeEachProvider('RFC-370 selected Intent artifact content', (harness) => {
       }),
     })
     // RFC-395 II-a A6：已删除技能完成处置，暂存内容仍交给 storage owner 丢弃。
-    expect(await lifecycle.rollForward([artifact], log)).toBe(true)
-    expect(discarded).toEqual([artifact])
+    const converted = intentApplyArtifactCodecs.decode(
+      reencodeIntentApplyArtifacts(encodeIntentJournalArtifacts([artifact])),
+    )
+    expect(await lifecycle.rollForward(converted, log)).toBe(true)
+    expect(discarded).toEqual([{ artifact: converted[0], version: 2 }])
     expect(existsSync(f.appHome)).toBe(false)
   })
 
@@ -689,13 +711,13 @@ describeEachProvider('RFC-370 selected Intent artifact content', (harness) => {
       entered = barrier(),
       release = barrier()
     // RFC-395 II-a A6：已删除技能现在丢弃暂存；此例显式种行以继续锁定 legacy 整批发布。
-    const { skills } = tablesOf(harness.db)
+    const { skills, skillVersions } = tablesOf(harness.db)
     for (const id of ['first', 'second'])
       await insertOne(harness.db, skills, {
         id,
         name: id,
         description: '',
-        managedPath: `object-ref:${id}-live`,
+        ...contentRowColumns(legacyContentRef('skill-path', 'local-file', `object-ref:${id}-live`)),
         contentVersion: 2,
         ownerUserId: ownerId,
         visibility: 'private',
@@ -703,6 +725,16 @@ describeEachProvider('RFC-370 selected Intent artifact content', (harness) => {
         versionState: 'snapshot-authoritative',
         createdAt: 1,
         updatedAt: 1,
+      })
+    for (const id of ['first', 'second'])
+      await insertOne(harness.db, skillVersions, {
+        id: `${id}-version-2`,
+        skillId: id,
+        versionIndex: 2,
+        source: 'initial',
+        contentHash: hash,
+        ...contentRowColumns(legacyContentRef('skill-path', 'local-file', `object-ref:${id}-v2`)),
+        createdAt: 1,
       })
     const artifacts: IntentJournalArtifactV1[] = ['first', 'second'].map((skillId) => ({
       kind: 'skill-version-stage',
@@ -727,7 +759,7 @@ describeEachProvider('RFC-370 selected Intent artifact content', (harness) => {
       draftId: 'draft',
       draftHash: 'hash',
       state: 'committed',
-      preparedArtifactsJson: encodeIntentJournalArtifacts(artifacts),
+      preparedArtifactsJson: reencodeIntentApplyArtifacts(encodeIntentJournalArtifacts(artifacts)),
       createdAt: 1,
       updatedAt: 1,
       error: 'retryable',
@@ -801,7 +833,7 @@ describeEachProvider('RFC-370 selected Intent artifact content', (harness) => {
     }
   })
 
-  test('boot maintenance forwards selected recovery and waits for native/legacy cleanup without touching active journals', async () => {
+  test('boot maintenance awaits native cleanup, retains converted published roots, and leaves active journals untouched', async () => {
     const f = await fixture('skill'),
       entered = barrier(),
       release = barrier()
@@ -818,9 +850,9 @@ describeEachProvider('RFC-370 selected Intent artifact content', (harness) => {
       skillDir: 'object-ref:legacy-stage',
     }
     for (const [id, preparedArtifactsJson] of [
-      ['native', JSON.stringify([native])],
-      ['legacy', encodeIntentJournalArtifacts([legacy])],
-      ['active', JSON.stringify([native])],
+      ['native', intentApplyArtifactCodecs.encode([native])],
+      ['legacy', reencodeIntentApplyArtifacts(encodeIntentJournalArtifacts([legacy]))],
+      ['active', intentApplyArtifactCodecs.encode([native])],
     ] as const) {
       const { intentApplyJournal } = tablesOf(harness.db)
       await insertOne(harness.db, intentApplyJournal, {
@@ -884,7 +916,7 @@ describeEachProvider('RFC-370 selected Intent artifact content', (harness) => {
       ).toBe(true)
       release.release()
       expect(await pending).toMatchObject({ failed: 2, rolledForward: 0 })
-      expect([...calls].sort()).toEqual(['legacy', 'native'])
+      expect(calls).toEqual(['native'])
       expect(
         (
           await first(

@@ -1,3 +1,4 @@
+import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 // RFC-167 T13 — generate→confirm→execute END TO END over the real engine
 // stack (real runTask dispatch, real iso worktrees on a scratch git repo, real
 // runNode spawning the mock-opencode fixture — no real LLM/opencode). Locks:
@@ -19,7 +20,6 @@ import {
   workflowFixture,
   readNodeRunFixtures,
 } from './helpers/model'
-import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, describe, expect, test } from 'bun:test'
 import { mkdtempSync, rmSync } from 'node:fs'
@@ -54,7 +54,6 @@ import { runTestGit } from './helpers/testCommand'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
 const OPENCODE_CMD = ['bun', 'run', MOCK_OPENCODE]
 const GIT_TIMEOUT_MS = 10_000
@@ -119,7 +118,7 @@ const GENERATED = {
 describe('RFC-167 T13 — dynamic workflow end to end (mock opencode)', () => {
   test('generate → confirm → execute: one task crosses all three phases to done', async () => {
     const appHome = mkdtempSync(join(tmpdir(), 'aw-rfc167-e2e-'))
-    const db = createInMemoryDb(MIGRATIONS)
+    const db = createInMemoryDb()
     await seedTestDefaultOpencodeRuntime(db)
     try {
       const plannerId = await seedPlannerAgent(db)
@@ -220,6 +219,7 @@ describe('RFC-167 T13 — dynamic workflow end to end (mock opencode)', () => {
             db,
             task.id,
             {
+              historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
               db,
               taskRecoveryOperations: taskRecoveryOperations(db),
               schedulerDriver: createTaskExecutionTestTopology({ db, driver: 'real' })
@@ -265,8 +265,8 @@ describe('RFC-167 T13 — dynamic workflow end to end (mock opencode)', () => {
 
   test('daemon-restart recovery: an interrupted EXECUTING dynamic task auto-resumes through runScope to done', async () => {
     const appHome = mkdtempSync(join(tmpdir(), 'aw-rfc167-e2e-rec-'))
-    const repo = mkdtempSync(join(tmpdir(), 'aw-rfc167-e2e-repo-'))
-    const db = createInMemoryDb(MIGRATIONS)
+    const repo = mkdtempSync(join(appHome, 'repo-'))
+    const db = createInMemoryDb()
     await seedTestDefaultOpencodeRuntime(db)
     try {
       const plannerId = await seedPlannerAgent(db)
@@ -348,12 +348,14 @@ describe('RFC-167 T13 — dynamic workflow end to end (mock opencode)', () => {
       })
       // RFC-217 T2 — the dispatch oracle reads the phase from
       // workgroup_task_state; the fixture seeds it like startTaskImpl would.
-      await insertOne(db, workgroupTaskState, {
-        taskId,
-        gateStatus: 'idle',
-        dwStateJson: JSON.stringify({ ...initialDwState(), phase: 'executing' }),
-        updatedAt: Date.now(),
-      })
+      await db
+        .update(workgroupTaskState)
+        .set({
+          gateStatus: 'idle',
+          dwStateJson: JSON.stringify({ ...initialDwState(), phase: 'executing' }),
+          updatedAt: Date.now(),
+        })
+        .where(eq(workgroupTaskState.taskId, taskId))
 
       const res = await withActiveTaskDeadline(() =>
         withEnv({ MOCK_OPENCODE_OUTPUTS: JSON.stringify({ plan: '恢复后完成' }) }, () =>

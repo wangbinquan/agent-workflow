@@ -1,3 +1,4 @@
+import { liveSqlitePath } from './storage'
 // RFC-319 —— 记忆融合（fusion）的**用户面**：记忆页「融合」页签 + 融合详情页的
 // 运行中 / 驳回 / 取消 / 失败四态 + 发起前的本地校验 + 待审徽章计数。
 // 覆盖 INTENT-50 / INTENT-51 / INTENT-52 / INTENT-55 / INTENT-56 / INTENT-57 / INTENT-X9。
@@ -48,7 +49,6 @@
 //   packages/system-mocks/src/runtime/mode-fusion.ts                    唯一能推到待审批的 stub
 
 import { expect, test, type Page } from '@playwright/test'
-import { join } from 'node:path'
 
 import { querySqlite, runSqlite } from './command'
 import { startDaemon, type DaemonHandle } from './harness'
@@ -653,7 +653,7 @@ test('RFC-319 INTENT-57: 融合失败时把失败原因摆在页面上，且不�
 test('RFC-319 MEM-X3: 提交中的融合取消不掉——界面上那一下被服务端顶回来，状态一个字节都不动 @nightly', async ({
   page,
 }) => {
-  const dbFile = join(daemon.home, 'db.sqlite')
+  const dbFile = liveSqlitePath(daemon.home)
   const fusionCId = (
     await api<{ id: string }>('/api/fusions', {
       method: 'POST',

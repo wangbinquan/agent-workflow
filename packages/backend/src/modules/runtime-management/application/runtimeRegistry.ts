@@ -28,12 +28,10 @@ import { createLogger } from '@/util/log'
 import type {
   RuntimeRegistryOperations,
   RuntimeRegistryPersistence,
+  RuntimeRegistrySeedConfiguration,
   RuntimeUpdateRecord,
 } from './ports/runtimeRegistry'
-import type {
-  RuntimeRegistryEffects,
-  RuntimeLegacyConfigurationPort,
-} from './ports/runtimeRegistryEffects'
+import type { RuntimeRegistryEffects } from './ports/runtimeRegistryEffects'
 
 /** The only registry application; effects are supplied by composition. */
 export function createRuntimeRegistryApplication(effects: RuntimeRegistryEffects) {
@@ -564,117 +562,24 @@ export function createRuntimeRegistryApplication(effects: RuntimeRegistryEffects
    * They are ordinary editable + deletable rows now — the built-in read-only flag
    * is gone. Once the table has ANY row (including the case where an admin deleted a
    * preseeded row and kept a custom one) we never re-insert, so a deletion sticks
-   * across restarts. Fresh install → both rows created with NULL binary/params (the
-   * config binary backfill fills binary next; model stays NULL = opencode's own
-   * default). Idempotent via the empty-table guard.
+   * across restarts. Fresh rows take binary paths from the live creation-time
+   * configuration; later boots never backfill or overwrite existing rows.
    */
-  async function seedBuiltinRuntimes(persistence: RuntimeRegistryPersistence): Promise<void> {
+  async function seedBuiltinRuntimes(
+    persistence: RuntimeRegistryPersistence,
+    configuration: RuntimeRegistrySeedConfiguration = {},
+  ): Promise<void> {
+    const binaryPaths: Readonly<Record<string, string | undefined>> = {
+      opencode: configuration.opencodePath,
+      'claude-code': configuration.claudeCodePath,
+    }
     await persistence.seedBuiltinRuntimes(
-      BUILTIN_RUNTIMES.map((builtin) => ({ id: ulid(), ...builtin })),
+      BUILTIN_RUNTIMES.map((builtin) => ({
+        id: ulid(),
+        ...builtin,
+        binaryPath: binaryPaths[builtin.protocol]?.trim() || null,
+      })),
     )
-  }
-
-  // --- RFC-113 one-time startup migrations ------------------------------------
-
-  /** RFC-113 §3.1 / RFC-115: backfill the preseeded runtimes' binary paths from
-   *  config — NULL `binary_path` ONLY, so it's idempotent + never clobbers an
-   *  admin-edited row. RFC-115 dropped the dead generation-param backfill
-   *  (defaultModel / variant / temperature / steps / maxSteps / defaultClaudeModel
-   *  are gone from config); generation params now live solely on the runtime
-   *  profile rows, edited via the Settings runtime list. RFC-153 F2: names are
-   *  reusable now, so match on PROTOCOL too — never write a config binary path into
-   *  a user row that merely reused 'opencode' / 'claude-code' under a mismatched
-   *  protocol. */
-  async function migrateConfigIntoBuiltins(
-    persistence: RuntimeRegistryPersistence,
-    config: {
-      opencodePath?: string | null
-      claudeCodePath?: string | null
-    },
-  ): Promise<void> {
-    const backfillBinary = async (
-      name: string,
-      protocol: RuntimeProtocol,
-      binaryPath: string | null | undefined,
-    ) => {
-      if (binaryPath == null) return
-      await persistence.backfillBuiltinBinary({
-        name,
-        protocol,
-        binaryPath,
-        updatedAt: Date.now(),
-      })
-    }
-    await backfillBinary('opencode', 'opencode', config.opencodePath)
-    await backfillBinary('claude-code', 'claude-code', config.claudeCodePath)
-  }
-
-  /**
-   * RFC-115 (Codex impl-gate F-high): fail-loud guard for the CONFIG-only
-   * skip-upgrade path — the symmetric counterpart of migration 0057's agents
-   * guard. The 6 generation-default config keys (defaultModel / defaultVariant /
-   * defaultTemperature / defaultSteps / defaultMaxSteps / defaultClaudeModel) were
-   * dropped from ConfigSchema, so `loadConfig()` (Zod) strips them silently.
-   * RFC-113 had backfilled them into the built-in runtime rows' profile. A DB that
-   * jumps pre-RFC-113 → here still has those keys on disk but never ran that
-   * backfill, so silently dropping them would change every inherited runtime's
-   * default model (and the next config save permanently deletes them from disk).
-   * We read the RAW config (Zod can't see the stripped keys) and ABORT if legacy
-   * defaults are present while EVERY built-in runtime profile is still NULL
-   * (un-migrated). Already-migrated DBs (a built-in profile is non-NULL) and fresh
-   * installs (no legacy keys / no config file) pass through untouched.
-   */
-  async function assertConfigDefaultsMigrated(
-    persistence: RuntimeRegistryPersistence,
-    configuration: RuntimeLegacyConfigurationPort,
-  ): Promise<void> {
-    let raw: Record<string, unknown>
-    try {
-      raw = JSON.parse(await configuration.readText()) as Record<string, unknown>
-    } catch {
-      return // no / unreadable config = fresh install, nothing to migrate or lose
-    }
-    const LEGACY = [
-      'defaultModel',
-      'defaultVariant',
-      'defaultTemperature',
-      'defaultSteps',
-      'defaultMaxSteps',
-      'defaultClaudeModel',
-    ] as const
-    const present = LEGACY.filter((k) => raw[k] !== undefined && raw[k] !== null)
-    if (present.length === 0) return
-    // RFC-153 F3: `builtin` is gone + names are reusable, so only the CANONICAL
-    // protocol-default rows (name === protocol, protocol immutable) prove the
-    // RFC-113 backfill ran — a user row that merely reused 'opencode' must not
-    // count. (In the pre-RFC-113 first-upgrade case this guard serves, the table is
-    // freshly seeded this boot, so there is no user row to confuse it with.)
-    const preseeded = (await persistence.listBuiltinProfiles([...BUILTIN_NAMES])).filter(
-      (row) => row.protocol === row.name,
-    )
-    const anyProfileSet = preseeded.some(
-      (r) =>
-        r.model !== null ||
-        r.variant !== null ||
-        r.temperature !== null ||
-        r.steps !== null ||
-        r.maxSteps !== null,
-    )
-    // F4 (Codex gate): abort whether the built-ins are MISSING (seed failed) or all
-    // their profiles are NULL (RFC-113 backfill never ran) — both mean no runtime
-    // profile preserves these defaults, so loadConfig having stripped them + the
-    // next config save would permanently lose them. Name both causes so the message
-    // isn't misleading when the real cause is a failed seed (empty built-ins make
-    // `anyProfileSet` false, which lands here exactly as the all-NULL case does).
-    if (!anyProfileSet) {
-      throw new Error(
-        `RFC-115: config.json still has un-migrated generation defaults (${present.join(', ')}) ` +
-          `but no built-in runtime profile carries them (built-in rows are missing or all-NULL). ` +
-          `Either the built-in runtime seed failed or RFC-113's config→runtime backfill never ran — ` +
-          `ensure the runtimes are seeded and start the RFC-113 build once to migrate them, ` +
-          `or remove these keys from config.json before upgrading.`,
-      )
-    }
   }
 
   /**
@@ -713,13 +618,8 @@ export function createRuntimeRegistryApplication(effects: RuntimeRegistryEffects
       ) => setRuntimeEnabled(persistence, name, enabled, defaultRuntimeName),
       deleteRuntime: (name: string, refs: RuntimeRefConfig) =>
         deleteRuntime(persistence, name, refs),
-      seedBuiltinRuntimes: () => seedBuiltinRuntimes(persistence),
-      migrateConfigIntoBuiltins: (config: {
-        readonly opencodePath?: string | null
-        readonly claudeCodePath?: string | null
-      }) => migrateConfigIntoBuiltins(persistence, config),
-      assertConfigDefaultsMigrated: (configuration: RuntimeLegacyConfigurationPort) =>
-        assertConfigDefaultsMigrated(persistence, configuration),
+      seedBuiltinRuntimes: (configuration?: RuntimeRegistrySeedConfiguration) =>
+        seedBuiltinRuntimes(persistence, configuration),
     })
   }
   return Object.freeze({
@@ -741,8 +641,6 @@ export function createRuntimeRegistryApplication(effects: RuntimeRegistryEffects
     setRuntimeEnabled,
     deleteRuntime,
     seedBuiltinRuntimes,
-    migrateConfigIntoBuiltins,
-    assertConfigDefaultsMigrated,
     composeRuntimeRegistryOperations,
   })
 }

@@ -1,3 +1,4 @@
+import { epoch2RuntimeTestPorts } from './epoch2RuntimePorts'
 import { o2Ports } from './o2Closure'
 // RFC-386: direct engine fixtures compose the same drive factory as the daemon.
 import { createSqliteMemoryDistillEnqueuer } from './memoryDistill'
@@ -23,6 +24,7 @@ export function testDriveFactory(
     runConfiguration,
     lifecycle,
     gateContinuationPreDrive: composeGateContinuationPreDrive({
+      historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
       db,
       memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
     }),
@@ -31,6 +33,7 @@ export function testDriveFactory(
       throw new Error('direct fixture must select its scheduler in the drive profile')
     },
     failures: createTaskExecutionPersistence(db, {
+      historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
       recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
     }),
     log: createLogger('rfc386-test'),

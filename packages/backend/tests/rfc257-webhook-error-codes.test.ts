@@ -6,7 +6,7 @@ import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { rawExec } from '@/platform/persistence/queryHelpers'
 import { registerProviderHttpApplicationLifetime } from './helpers/providerHttpApplication'
-import { describe, expect, test } from 'bun:test'
+import { describe, expect, test, spyOn } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { sql } from 'drizzle-orm'
@@ -27,7 +27,6 @@ import type { WebhookDispatcher } from '../src/services/webhook/dispatcherTypes'
 
 const openTestApplication = registerProviderHttpApplicationLifetime()
 
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const box = createSecretBoxFromKey(Buffer.alloc(32, 11))
 
 // RFC-359 AC-6 —— 迁到共用双引擎作用域。三处需要动脑的：
@@ -86,11 +85,17 @@ async function scopedHarness(scope: ProviderHttpApplicationScope) {
       },
       ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
     })
-  return { db, app: opened.app, call, workflowId }
+  return {
+    db,
+    app: opened.app,
+    call,
+    workflowId,
+    endpoints: opened.modules.integration.webhookDeliveryRuntime.endpoints,
+  }
 }
 
 async function harness(opts?: { unsupportedDispatcher?: boolean }) {
-  const db = createInMemoryDb(MIGRATIONS)
+  const db = createInMemoryDb()
   const admin = await createUser(db, {
     username: 'root',
     displayName: 'root',
@@ -431,12 +436,27 @@ describeEachProviderHttpApplication(
       expect(await codeOf(await h.call('POST', `/api/webhook-deliveries/${orphan}/replay`))).toBe(
         'webhook-endpoint-not-found',
       )
-      // provider 列被手改成注册表外的值（raw SQL 绕过 enum 类型）→ provider-unknown
-      await rawExec(h.db, sql`UPDATE webhook_endpoints SET provider = 'gitea' WHERE id = 'ep-1'`)
-      const strange = await seedDelivery(h.db)
-      expect(await codeOf(await h.call('POST', `/api/webhook-deliveries/${strange}/replay`))).toBe(
-        'webhook-provider-unknown',
-      )
+      // The epoch-2 database rejects an invalid provider. Exercise the defensive
+      // replay branch by returning corrupt historical data at the endpoint read port.
+      await expect(
+        Promise.resolve().then(() =>
+          rawExec(h.db, sql`UPDATE webhook_endpoints SET provider = 'gitea' WHERE id = 'ep-1'`),
+        ),
+      ).rejects.toThrow()
+      const endpoint = await h.endpoints.get('ep-1')
+      if (endpoint === null) throw new Error('endpoint fixture missing')
+      const corrupt = spyOn(h.endpoints, 'get').mockResolvedValue({
+        ...endpoint,
+        provider: 'gitea' as typeof endpoint.provider,
+      })
+      try {
+        const strange = await seedDelivery(h.db)
+        expect(
+          await codeOf(await h.call('POST', `/api/webhook-deliveries/${strange}/replay`)),
+        ).toBe('webhook-provider-unknown')
+      } finally {
+        corrupt.mockRestore()
+      }
     })
   },
 )

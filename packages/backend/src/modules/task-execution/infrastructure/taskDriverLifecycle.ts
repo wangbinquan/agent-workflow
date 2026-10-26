@@ -1,15 +1,18 @@
+import type { HistoryRestrictionPort } from '@/platform/contracts/historyRestriction'
+import type { WorkspacePresenceQueries } from '@/modules/source-control/public/queries'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { tablesOf } from '@/platform/persistence/sessionTables'
+import { withTaskReviewMutationLock } from '@/services/reviewMutationCoordinator'
 import type { TaskStatus } from '@agent-workflow/shared'
 import { eq } from 'drizzle-orm'
-import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { withTaskReviewMutationLock } from '@/services/reviewMutationCoordinator'
-import type { TaskExecutionTopologyLogger } from '../application/ports/taskExecutionTopology'
 import type {
   TaskDriveAttachOutcome,
   TaskDriverLifecyclePort,
 } from '../application/drive/taskDriveCoordinator'
+import type { TaskExecutionPersistence } from '../application/ports/taskExecutionPersistence'
+import type { TaskExecutionTopologyLogger } from '../application/ports/taskExecutionTopology'
 import { createTaskExecutionContext } from '../application/taskExecutionContext'
-import { createTaskExecutionPersistence } from '../composition/taskExecutionPersistence'
+import { TaskExecutionError } from '../application/taskExecutionError'
 import {
   DEFAULT_OWNERSHIP_HEARTBEAT_MS,
   DEFAULT_OWNERSHIP_LEASE_MS,
@@ -17,10 +20,8 @@ import {
   type ClaimedTaskExecution,
   type TaskExecutionModule,
 } from '../composition'
-import type { TaskExecutionPersistence } from '../application/ports/taskExecutionPersistence'
-import type { WorkspacePresenceQueries } from '@/modules/source-control/public/queries'
+import { createTaskExecutionPersistence } from '../composition/taskExecutionPersistence'
 import { ownershipTokenKey, type OwnershipToken } from '../domain/ownership'
-import { TaskExecutionError } from '../application/taskExecutionError'
 import {
   releaseTaskDriverAndFinalize,
   type TaskDriverReleaseDependencies,
@@ -229,6 +230,7 @@ export function createTaskDriverLifecyclePort(
  * 它手上只有一个 `db`，拿不到模块实例。退役之后这个便利构造也一并消失。
  */
 export function createDatabaseTaskDriverLifecyclePort(options: {
+  readonly historyRestrictions: HistoryRestrictionPort
   readonly db: PersistenceDb
   readonly persistence?: TaskExecutionPersistence
   readonly workspacePresence?: WorkspacePresenceQueries
@@ -239,9 +241,7 @@ export function createDatabaseTaskDriverLifecyclePort(options: {
     db: options.db,
     module: taskExecutionModule,
     claim: (intentId) => taskExecutionModule.claim({ db: options.db, intentId }),
-    persistence:
-      options.persistence ??
-      createTaskExecutionPersistence(options.db, { workspacePresence: options.workspacePresence }),
+    persistence: options.persistence ?? createTaskExecutionPersistence(options.db, options),
     log: options.log,
     finalizeWorkspace: options.finalizeWorkspace,
     legacyConnection: options.db,

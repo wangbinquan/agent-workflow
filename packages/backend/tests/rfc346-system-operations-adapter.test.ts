@@ -1,7 +1,7 @@
 // RFC-346 — verifies the compatibility adapter preserves the established
 // backup/stage/status/cold-restore effect order without moving RFC-213 mechanics.
 
-import { buildLogicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { afterEach, describe, expect, test } from 'bun:test'
 import { existsSync, mkdtempSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -13,7 +13,6 @@ import {
   createRestoreArtifactIngress,
 } from '../src/modules/system-operations/infrastructure/restoreArtifactIngress'
 import { removeTempDirSync } from './fixtures/tempDir'
-import { SQLITE_POST_RESTORE_RECOVERY } from './helpers/sqlitePostRestoreRecovery'
 
 const tmps: string[] = []
 function tmp(): string {
@@ -29,9 +28,8 @@ function createTestLegacyPlatformRecoveryAdapter(
   >,
 ) {
   return createLegacyPlatformRecoveryAdapter({
-    contract: buildLogicalSchemaContract(),
+    contract: logicalSchemaContract,
     ...deps,
-    postOpenRecovery: SQLITE_POST_RESTORE_RECOVERY,
   })
 }
 

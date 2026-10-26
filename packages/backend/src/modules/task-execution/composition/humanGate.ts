@@ -45,6 +45,7 @@ export async function parkPreparedHumanGate(
     new DatabaseHumanGateTaskLifecyclePersistence(
       input.db,
       createTaskRuntimeLifecyclePersistence(input.db, input),
+      { historyRestrictions: input.historyRestrictions },
     ),
     {
       prepared: input.prepared,
@@ -69,6 +70,7 @@ export async function settleManualQuestionParkObligations(
     new DatabaseHumanGateTaskLifecyclePersistence(
       input.db,
       createTaskRuntimeLifecyclePersistence(input.db, input),
+      { historyRestrictions: input.historyRestrictions },
     ),
     {
       taskId: input.taskId,

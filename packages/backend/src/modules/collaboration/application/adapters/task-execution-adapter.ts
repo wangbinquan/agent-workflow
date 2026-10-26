@@ -3,16 +3,12 @@ import type {
   TaskRecoveryHumanGateFactsPort,
   TaskNodeRunClarifyNavPort,
 } from '@/modules/task-execution/composition/required-ports'
-import type {
-  ArchiveCollaborationSections,
-  RecoveryHumanGateFacts,
-  NodeRunClarifyNav,
-} from '../ports/taskCollaborationReads'
+import type { RecoveryHumanGateFacts, NodeRunClarifyNav } from '../ports/taskCollaborationReads'
 
 export function composeTaskArchiveCollaborationSectionsPort(
-  source: ArchiveCollaborationSections,
+  source: TaskArchiveCollaborationSectionsPort,
 ): TaskArchiveCollaborationSectionsPort {
-  return { sections: source.sections, load: (taskIds) => source.load(taskIds) }
+  return { load: (tx, taskIds) => source.load(tx, taskIds) }
 }
 
 export function composeTaskRecoveryHumanGateFactsPort(

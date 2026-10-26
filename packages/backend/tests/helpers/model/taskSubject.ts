@@ -2,26 +2,27 @@
 import { sql } from 'drizzle-orm'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { rawRows } from '@/platform/persistence/queryHelpers'
-import { tablesOf } from '@/platform/persistence/sessionTables'
 import {
   nonViewCondition,
   parseTaskOperationsQuery,
 } from '@/modules/task-execution/infrastructure/taskListPage/filters'
 import {
+  taskReadColumns,
+  taskReadSql,
   taskSubjectKindSql,
   taskSubjectSqlColumns,
-} from '@/modules/task-execution/infrastructure/taskSubjectSql'
+} from '@/modules/task-execution/infrastructure/taskRepositorySql'
 
 export async function readTaskSubjectSqlFixtures(db: PersistenceDb) {
   return rawRows<{ id: string; kind: string }>(
     db,
-    sql`SELECT t.id, ${taskSubjectKindSql(taskSubjectSqlColumns('t'))} AS kind FROM tasks t`,
+    sql`SELECT t.id, ${taskSubjectKindSql(taskSubjectSqlColumns('t'))} AS kind FROM ${taskReadSql(db, 't')}`,
   )
 }
 
 /** The former-wiring workgroup query keeps its shape while projecting the new subject inputs. */
 export function taskSubjectFixtureColumns(db: object) {
-  const { tasks } = tablesOf(db)
+  const tasks = taskReadColumns(db)
   return {
     workflowId: tasks.workflowId,
     codeRoundId: tasks.codeRoundId,
@@ -39,6 +40,6 @@ export async function readTaskSubjectFacetFixtures(
   const parsed = parseTaskOperationsQuery(viewer, { subject, scope: 'all' })
   return rawRows<{ id: string }>(
     db,
-    sql`SELECT t.id FROM tasks t WHERE ${nonViewCondition(db, viewer, parsed.filters, 't')}`,
+    sql`SELECT t.id FROM ${taskReadSql(db, 't')} WHERE ${nonViewCondition(db, viewer, parsed.filters, 't')}`,
   )
 }

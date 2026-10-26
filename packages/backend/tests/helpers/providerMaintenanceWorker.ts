@@ -47,7 +47,7 @@ export function openProviderMaintenanceWorkerDatabase(
   const dbPath = join(appHome, 'db.sqlite')
   const db = openDb({
     path: dbPath,
-    migrationsFolder: MIGRATIONS,
+
     skipIntegrityCheck: true,
     slowQueryMs: 0,
   })

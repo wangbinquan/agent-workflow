@@ -1,11 +1,11 @@
+import { tablesOf } from '@/platform/persistence/sessionTables'
 // RFC-395 II-b O3 — the shared owner of /health and Doctor task counts.
-import { count, eq } from 'drizzle-orm'
 import { unhandledDatabaseProvider } from '@/platform/persistence/databaseProviders'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+import { count, eq } from 'drizzle-orm'
 import type {
-  TaskStatusCountQueries,
   TaskLifecycleCounts,
+  TaskStatusCountQueries,
 } from '../application/ports/taskStatusCounts'
 
 export function createTaskStatusCounts(db: PersistenceDb): TaskStatusCountQueries {

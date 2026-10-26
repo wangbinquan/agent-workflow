@@ -1,3 +1,5 @@
+import { nodeRunFixtureColumns } from './helpers/model/nodeRun'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { withO2Closure } from './helpers/o2Closure'
 // RFC-131 验收 #4 组合 e2e — deferred self-clarify → done+output → review REJECT → 新 rerun，
 // 经 runTask 端到端驱动。锁「reject 重做的 prompt 组合行为」两半都成立：
@@ -25,7 +27,7 @@ import {
   workflowFixture,
   readNodeRunFixtures,
 } from './helpers/model'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -44,7 +46,7 @@ import { reenterScheduler } from './reenter-scheduler'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 
 const ulid = monotonicFactory()
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
+
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
 const actor = { userId: 'u1', role: 'owner' as const }
 const P = 'P' // the agent/designer node under review
@@ -93,7 +95,7 @@ async function buildHarness(): Promise<Harness> {
     await runGit(p, ['add', '.'])
     await runGit(p, ['commit', '-m', 'init'])
   }
-  const db = createInMemoryDb(MIGRATIONS)
+  const db = createInMemoryDb()
   return {
     db,
     appHome,
@@ -282,7 +284,7 @@ async function driveToRejectRerun(h: Harness, taskId: string) {
 
   const reviewRun = (
     await h.db
-      .select()
+      .select(nodeRunFixtureColumns(h.db))
       .from(nodeRuns)
       .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, REV)))
   ).find((r) => r.status === 'awaiting_review')
@@ -306,7 +308,7 @@ async function driveToRejectRerun(h: Harness, taskId: string) {
   await withEnv({ MOCK_OPENCODE_OUTPUTS: JSON.stringify({ doc: DOC_V2 }) }, () => run(h, taskId))
 
   const pRuns = await h.db
-    .select()
+    .select(nodeRunFixtureColumns(h.db))
     .from(nodeRuns)
     .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.nodeId, P)))
   const rejectRerun = pRuns.find((r) => r.rerunCause === 'review-reject')
@@ -354,7 +356,12 @@ describe('RFC-131 验收#4 组合 — deferred self-clarify → review REJECT �
     // --- aging ANCHOR: P's first done+output run is now a review-reject supersede (canceled).
     //     THIS is why RFC-131 aging is lost on reject — the only output-bearing run is no
     //     longer `status='done'`, so isTargetNodeConsumed (needs status==='done') returns false.
-    const anchor = (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, pDoneOutputId)))[0]
+    const anchor = (
+      await h.db
+        .select(nodeRunFixtureColumns(h.db))
+        .from(nodeRuns)
+        .where(eq(nodeRuns.id, pDoneOutputId))
+    )[0]
     expect(anchor?.status).toBe('canceled')
     expect(anchor?.errorMessage ?? '').toContain('superseded-by-review-rejected')
 

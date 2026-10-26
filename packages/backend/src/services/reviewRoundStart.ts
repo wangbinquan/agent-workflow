@@ -19,7 +19,7 @@
 //
 // PURE module: no DB / IO. Tested exhaustively in review-round-start.test.ts.
 
-import { compareNodeRunMintOrder } from '@agent-workflow/shared'
+import { requireRunSequence } from '@/modules/task-execution/public/queries'
 import type { DocVersionDecision } from '@agent-workflow/shared'
 
 /** The per-version facts this module needs (a projection of a doc_versions row). */
@@ -99,5 +99,5 @@ export function compareNodeRunsForTimeline(
   const ka = a.reviewRoundStartedAt ?? a.startedAt ?? 0
   const kb = b.reviewRoundStartedAt ?? b.startedAt ?? 0
   if (ka !== kb) return ka - kb
-  return compareNodeRunMintOrder(a, b)
+  return requireRunSequence(a) - requireRunSequence(b)
 }

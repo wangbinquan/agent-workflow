@@ -1,3 +1,10 @@
+import {
+  reencodeBundleApplyArtifacts,
+  reencodeBundleApplyReceipt,
+} from '@/modules/resource-catalog/infrastructure/migration/bundleAppliesRule'
+import { legacyContentRef } from '@/platform/content/contentRef'
+import { contentRowColumns } from '@/platform/content/infrastructure/contentStore'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 // RFC-359 W9 —— 资源包崩溃恢复里「**这个技能代际还该不该落盘**」的双引擎对拍。
 //
 // # 场景（纯用户可见）
@@ -44,7 +51,7 @@
 // （`resourcePackageSkillRecoveryDisposition`），两个引擎调同一份。
 
 import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
+
 import { afterEach, expect, test } from 'bun:test'
 import {
   existsSync,
@@ -63,7 +70,7 @@ import { eq } from 'drizzle-orm'
 import type { DbClient } from '@/db/client'
 import type { ResourcePackageApplyArtifactRecoveryPort } from '@/modules/resource-catalog/application/resourcePackageMaintenance'
 import { createPostgresqlResourcePackageApplyArtifactRecovery } from '@/modules/resource-catalog/infrastructure/postgresqlResourcePackageMaintenance'
-import { createLegacyResourcePackageApplyArtifactRecovery } from '@/modules/resource-catalog/infrastructure/resourcePackageLegacyRecovery'
+import { createResourcePackageOperationArtifactRecovery } from '@/modules/resource-catalog/infrastructure/resourcePackageOperationRecovery'
 import { hashRegularFileTree } from '@/modules/resource-catalog/infrastructure/legacy/skillHash'
 import { opStagedDir } from '@/modules/resource-catalog/infrastructure/legacy/skillFsPublish'
 import {
@@ -121,7 +128,7 @@ describeEachProvider(
       return root
     }
 
-    /** 本引擎自己的那套落盘工件。两套格式的差异只出现在这一处。 */
+    /** Frozen provider-specific inputs; crashScene converts them before runtime recovery. */
     function artifactsJson(appHome: string): string {
       const liveDirectory = skillFilesAbs(appHome, SKILL_ID)
       const versionDirectory = skillVersionAbs(appHome, SKILL_ID, ARTIFACT_VERSION)
@@ -191,7 +198,7 @@ describeEachProvider(
     function recoveryFor(appHome: string): ResourcePackageApplyArtifactRecoveryPort {
       const pluginsDir = join(appHome, 'plugins')
       return sqliteSide()
-        ? createLegacyResourcePackageApplyArtifactRecovery({
+        ? createResourcePackageOperationArtifactRecovery({
             db: harness.db as unknown as DbClient,
             appHome,
             pluginsDir,
@@ -223,7 +230,9 @@ describeEachProvider(
           id: SKILL_ID,
           name: 'w9-recovery',
           description: '',
-          managedPath: `skills/${SKILL_ID}/files`,
+          ...contentRowColumns(
+            legacyContentRef('skill-path', 'local-file', `skills/${SKILL_ID}/files`),
+          ),
           ownerUserId: null,
           visibility: 'public',
           schemaVersion: 1,
@@ -235,15 +244,21 @@ describeEachProvider(
           createdAt: NOW,
           updatedAt: NOW,
         })
-        // PostgreSQL 的 roll-forward 还要读 `skill_versions` 的快照（filesPath + contentHash）。
-        if (!sqliteSide()) {
+        // Both engines recover the same immutable snapshot.
+        {
           const versionDirectory = skillVersionAbs(appHome, SKILL_ID, ARTIFACT_VERSION)
           writeTree(versionDirectory, STAGED_TREE)
           await insertOne(harness.db, skillVersions, {
             id: `${SKILL_ID}-v${ARTIFACT_VERSION}`,
             skillId: SKILL_ID,
             versionIndex: ARTIFACT_VERSION,
-            filesPath: skillVersionRelPath(SKILL_ID, ARTIFACT_VERSION),
+            ...contentRowColumns(
+              legacyContentRef(
+                'skill-path',
+                'local-file',
+                skillVersionRelPath(SKILL_ID, ARTIFACT_VERSION),
+              ),
+            ),
             source: 'import',
             summary: null,
             fusionId: null,
@@ -262,8 +277,11 @@ describeEachProvider(
         key: `key-${JOURNAL_ID}`,
         actorUserId: 'w9-actor',
         state: 'committed',
-        preparedArtifactsJson: artifactsJson(appHome),
-        receiptJson: receiptJson(),
+        preparedArtifactsJson: reencodeBundleApplyArtifacts(
+          artifactsJson(appHome),
+          reencodeBundleApplyReceipt(receiptJson()),
+        ),
+        receiptJson: reencodeBundleApplyReceipt(receiptJson()),
         error: null,
         createdAt: NOW,
         updatedAt: NOW,
@@ -296,8 +314,10 @@ describeEachProvider(
 
     /** appHome 是每个用例的临时目录，从工件里的绝对路径反解出来。 */
     function appHomeOf(preparedArtifactsJson: string): string {
-      const parsed = JSON.parse(preparedArtifactsJson) as ReadonlyArray<Record<string, unknown>>
-      const first = parsed[0]!
+      const parsed = JSON.parse(preparedArtifactsJson) as {
+        artifacts: ReadonlyArray<Record<string, unknown>>
+      }
+      const first = parsed.artifacts[0]!
       const dir =
         'staged' in first
           ? String((first['staged'] as Record<string, unknown>)['filesDir'])

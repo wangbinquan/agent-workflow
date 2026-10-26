@@ -15,7 +15,7 @@ import {
 } from '@/modules/task-execution/public/queries'
 
 import { type PersistenceTables } from '@/platform/persistence/sessionTables'
-import { nodeRunOrderAnchor, type RunLineageView } from '@agent-workflow/shared'
+import { type RunLineageView } from '@agent-workflow/shared'
 
 // RFC-311：本 ledger 消费的运行行列合同（dispatch 侧的四处 per-task 查询按此
 // 投影，不再携带 prompt_text / iso JSON 大列;新消费列先在此登记）。
@@ -309,11 +309,14 @@ export async function isTargetNodeConsumed(
   outputRunIds: ReadonlySet<string>,
 ): Promise<boolean> {
   if (sinceRunId === null) return false
-  const anchor = nodeRunOrderAnchor(runs, sinceRunId)
+  const anchor = runs.find((row) => row.id === sinceRunId)
   const history = await createRunHistorySnapshot('', runs).familyHistory(
     '',
     { nodeId: targetNodeId, iteration },
-    { topLevelOnly: true, from: anchor },
+    {
+      topLevelOnly: true,
+      ...(anchor === undefined || anchor.seq === null ? {} : { from: anchor }),
+    },
   )
   return history.some(
     (r) =>

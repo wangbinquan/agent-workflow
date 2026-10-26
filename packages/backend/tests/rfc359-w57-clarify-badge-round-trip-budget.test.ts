@@ -1,3 +1,4 @@
+import { initializeClarifyHistory } from '@/modules/collaboration/composition/clarifyHistory'
 // RFC-359 AC-11 —— 反问徽标计数的**往返数预算**（双引擎，只降不升）。
 //
 // 与 `rfc359-w56-badge-round-trip-budget.test.ts` 同一条判据、同一个理由，钉的是另一个
@@ -128,6 +129,7 @@ async function seed(db: PersistenceDb): Promise<void> {
 describeEachProvider('RFC-359 AC-11 —— 反问徽标计数的往返数预算', (h) => {
   test('countAwaitingClarifyRounds 恒发一条语句，且由 SQL 计数（四种 actor 形态）', async () => {
     await seed(h.db)
+    await initializeClarifyHistory(h.db)
 
     for (const [label, who] of [
       ['admin（tasks:read:all）', actorOf('admin', 'admin')],

@@ -1,3 +1,5 @@
+import type { HistoryRestrictionPort } from '@/platform/contracts/historyRestriction'
+import type { ContentStore } from '@/platform/content/contentStore'
 import type { HumanGateTaskLockPort } from '../../composition/required-ports'
 // RFC-217 / RFC-349 — SQLite unified clarify persistence (self + cross).
 //
@@ -39,10 +41,14 @@ import type { HumanGateTaskLockPort } from '../../composition/required-ports'
 //   - terminatedAs (T9): DTO-level discriminator normalizing the self
 //     'canceled' / cross 'abandoned' terminal statuses.
 
-import { createTaskGateQueries } from '@/modules/task-execution/public/queries'
-import { decodeLegacyClarifyArray, decodeLegacyClarifyAnswerColumns } from '../clarifyAnswerCodec'
-import { createNodeRunQueries } from '@/modules/task-execution/public/queries'
-import { type NodeRunFactSnapshot } from '@/modules/task-execution/public/queries'
+import {
+  createTaskGateQueries,
+  createNodeRunQueries,
+  type NodeRunFactSnapshot,
+} from '@/modules/task-execution/public/queries'
+import { decodeLegacyClarifyArray } from '../clarifyAnswerCodec'
+import { readClarifyAnswerProjection } from '../clarifyAnswerQueries'
+
 import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import {
   validateClarifyMindmap,
@@ -128,7 +134,10 @@ export interface ClarifyRoundDto {
 }
 
 /** The ONE row→DTO mapper (replaces the 3+4 pair-copied self/cross mappers). */
-export function rowToRound(r: PersistenceTables['clarifyRounds']['$inferSelect']): ClarifyRoundDto {
+export function rowToRound(
+  r: PersistenceTables['clarifyRounds']['$inferSelect'],
+  projection: Awaited<ReturnType<typeof readClarifyAnswerProjection>>,
+): ClarifyRoundDto {
   const out: ClarifyRoundDto = {
     id: r.id,
     taskId: r.taskId,
@@ -151,7 +160,7 @@ export function rowToRound(r: PersistenceTables['clarifyRounds']['$inferSelect']
     abandonedAt: r.abandonedAt,
     terminatedAs: terminatedAsForStatus(r.status as ClarifyRoundStatus),
   }
-  const answers = decodeLegacyClarifyAnswerColumns(r).optionalAnswers
+  const answers = projection.optionalAnswers
   if (answers !== undefined) out.answers = answers
   const warnings = decodeLegacyClarifyArray<ClarifyTruncationWarning>(r.truncationWarningsJson)
   if (warnings !== undefined && warnings.length > 0) out.truncationWarnings = warnings
@@ -175,6 +184,8 @@ const frameIs = (db: object, containerRunId: string | null) => {
 // ---------------------------------------------------------------------------
 
 interface CreateRoundCommon {
+  historyRestrictions: HistoryRestrictionPort
+  content?: ContentStore
   taskLock: HumanGateTaskLockPort
   db: PersistenceDb
   taskId: string
@@ -366,6 +377,8 @@ export async function createClarifyRound(
   const prepared = await prepareClarifyGateOpen(
     humanGateComposition.createCollaborationCommandContext({
       db: args.db,
+      historyRestrictions: args.historyRestrictions,
+      content: args.content,
       taskLock: args.taskLock,
     }),
     {
@@ -408,6 +421,8 @@ export async function createClarifyRound(
     const executionContext = args.executionContext ?? currentTaskExecutionContext(args.taskId)
     await humanGateComposition.parkPreparedHumanGate({
       db: args.db,
+      historyRestrictions: args.historyRestrictions,
+      content: args.content,
       prepared: prepared.prepared,
       ...(executionContext === undefined ? {} : { executionContext }),
       now: createdAt,
@@ -423,7 +438,7 @@ export async function createClarifyRound(
   if (storedRound === undefined) {
     throw new Error('clarify-open-committed-round-projection-missing')
   }
-  const round = rowToRound(storedRound)
+  const round = rowToRound(storedRound, await readClarifyAnswerProjection(args.db, storedRound))
   const intermediaryNodeRunId = prepared.nodeRunId
   if (args.kind === 'cross' && args.truncationWarnings && args.truncationWarnings.length > 0) {
     log.warn('cross-clarify envelope truncated to limits', {
@@ -574,7 +589,10 @@ export async function evaluateDesignerRerunReadiness(
       )
       .orderBy(desc(clarifyRounds.iteration))
       .limit(1)
-    const latest = rawRows[0] === undefined ? undefined : rowToRound(rawRows[0])
+    const latest =
+      rawRows[0] === undefined
+        ? undefined
+        : rowToRound(rawRows[0], await readClarifyAnswerProjection(args.db, rawRows[0]))
     if (latest === undefined) {
       pending.push(nodeId)
       continue

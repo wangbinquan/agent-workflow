@@ -1,3 +1,5 @@
+import { taskReadColumns } from '@/modules/task-execution/infrastructure/taskRepositorySql'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 // RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-257/RFC-310 全链路端到端：HTTP POST → EventRecord → per-rule Delivery
 // → source-neutral WorkStart → 真 dispatcher，只在最终 launch 处注入 fake。
@@ -7,47 +9,47 @@
 // 夹具只把库句柄换成 harness 现建的那一个。唯一仍是两份实现的是「任务源终止参与者」，
 // 按 `harness.capabilities.isolation` 取生产上同一侧的那份（同
 // `rfc359-w8-source-termination-conformance` 的姿势），否则 PG 上跑的是 SQLite 那台机器。
-import { patchTaskFixture, readTaskFixtures, taskFixture, workflowFixture } from './helpers/model'
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
-import { afterEach, describe, expect, test } from 'bun:test'
-import { createHmac } from 'node:crypto'
-import { Hono } from 'hono'
-import { and, eq } from 'drizzle-orm'
-import { ulid } from 'ulid'
 
-import { createSecretBoxFromKey } from '../src/auth/secretBox'
-import { createUser } from './helpers/userFixture'
+import { insertOne } from '@/platform/persistence/singleInsert'
+import { afterEach, describe, expect, test } from 'bun:test'
+import { and, eq } from 'drizzle-orm'
+import { Hono } from 'hono'
+import { createHmac } from 'node:crypto'
+import { ulid } from 'ulid'
+import { patchTaskFixture, readTaskFixtures, taskFixture, workflowFixture } from './helpers/model'
+
 import { composeWebhookIngressTransport } from '@/modules/integration/composition/webhookIngress'
-import {
-  createWebhookDispatcher,
-  renderedLaunchPayload,
-} from '../src/services/webhook/webhookDispatch'
+import { createSecretBoxFromKey } from '../src/auth/secretBox'
 import { createIdentityAccessRuntime } from '../src/modules/identity-access/composition'
+import {
+  createCodeHostWebhookDeliveryConsumer,
+  createCodeHostWebhookRoutingDirectory,
+} from '../src/modules/integration/composition'
 import { composeWebhookDispatchCore } from '../src/modules/integration/composition/webhookDispatch'
 import { composeWebhookIngressPersistenceFor } from '../src/modules/integration/composition/webhookIngress'
-import {
-  integrationTriggerWebhookAuthorityDependencies,
-  scheduledTaskRuntime,
-} from './helpers/integrationTriggerResourceBinding'
 import { composeMrTerminalControlWithPorts } from '../src/modules/integration/composition/webhookTerminalControl'
 import {
   createMrLaunchGuardPersistence,
   createMrTerminalEffectPersistence,
 } from '../src/modules/integration/infrastructure/mrTerminalControlPersistence'
-import { composeTaskSourceTermination } from '../src/modules/task-execution/composition/sourceTermination'
-import type { MrTerminalControl } from '../src/modules/integration/public/mrTerminalControl'
-import { composeEventCenter } from './helpers/eventCenter'
-import {
-  createCodeHostWebhookDeliveryConsumer,
-  createCodeHostWebhookRoutingDirectory,
-} from '../src/modules/integration/composition'
 import {
   codeHostEventCatalogJson,
   codeHostEventTypeRef,
 } from '../src/modules/integration/public/events'
+import type { MrTerminalControl } from '../src/modules/integration/public/mrTerminalControl'
+import { composeTaskSourceTermination } from '../src/modules/task-execution/composition/sourceTermination'
 import { mountWebhookIngressRoutes } from '../src/routes/webhooks'
+import {
+  createWebhookDispatcher,
+  renderedLaunchPayload,
+} from '../src/services/webhook/webhookDispatch'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
+import { composeEventCenter } from './helpers/eventCenter'
+import {
+  integrationTriggerWebhookAuthorityDependencies,
+  scheduledTaskRuntime,
+} from './helpers/integrationTriggerResourceBinding'
+import { createUser } from './helpers/userFixture'
 
 const box = createSecretBoxFromKey(Buffer.alloc(32, 3))
 const SECRET = 'e2e-secret'
@@ -434,9 +436,8 @@ describeEachProvider('RFC-257 T14 · Webhook 全链路（双引擎）', (harness
 
     test('RFC-303 protected MR open launches once; close is control-only and durably cancels it', async () => {
       const h = await seedFixture(harness)
-      const { webhookTriggers, webhookMrControlEffects, webhookTriggerFires, tasks } = tablesOf(
-        h.db,
-      )
+      const { webhookTriggers, webhookMrControlEffects, webhookTriggerFires } = tablesOf(h.db)
+      const { tasks } = tablesOf(h.db)
       await h.db
         .update(webhookTriggers)
         .set({
@@ -462,7 +463,13 @@ describeEachProvider('RFC-257 T14 · Webhook 全链路（双引擎）', (harness
         )[0]
         if (fire?.taskId === null || fire?.taskId === undefined) return null
         return (
-          (await h.db.select().from(tasks).where(eq(tasks.id, fire.taskId)).limit(1))[0] ?? null
+          (
+            await h.db
+              .select(taskReadColumns(h.db))
+              .from(tasks)
+              .where(eq(tasks.id, fire.taskId))
+              .limit(1)
+          )[0] ?? null
         )
       })
       expect(task.sourceTerminationBinding).not.toBeNull()
@@ -476,7 +483,9 @@ describeEachProvider('RFC-257 T14 · Webhook 全链路（双引擎）', (harness
       expect(closeResponse.status).toBe(200)
       const closeDeliveryId = ((await closeResponse.json()) as { deliveryId: string }).deliveryId
       const canceled = await waitFor(async () => {
-        const row = (await h.db.select().from(tasks).where(eq(tasks.id, task.id)).limit(1))[0]
+        const row = (
+          await h.db.select(taskReadColumns(h.db)).from(tasks).where(eq(tasks.id, task.id)).limit(1)
+        )[0]
         return row?.status === 'canceled' ? row : null
       })
       expect(canceled.sourceTerminationFence).toBe('closed')
@@ -503,13 +512,9 @@ describeEachProvider('RFC-257 T14 · Webhook 全链路（双引擎）', (harness
 
     test('RFC-303 GitHub protected PR open launches once; merged close is control-only', async () => {
       const h = await seedFixture(harness)
-      const {
-        webhookEndpoints,
-        webhookTriggers,
-        webhookMrControlEffects,
-        webhookTriggerFires,
-        tasks,
-      } = tablesOf(h.db)
+      const { webhookEndpoints, webhookTriggers, webhookMrControlEffects, webhookTriggerFires } =
+        tablesOf(h.db)
+      const { tasks } = tablesOf(h.db)
       await h.db
         .update(webhookEndpoints)
         .set({ provider: 'github' })
@@ -540,7 +545,13 @@ describeEachProvider('RFC-257 T14 · Webhook 全链路（双引擎）', (harness
         )[0]
         if (fire?.taskId === null || fire?.taskId === undefined) return null
         return (
-          (await h.db.select().from(tasks).where(eq(tasks.id, fire.taskId)).limit(1))[0] ?? null
+          (
+            await h.db
+              .select(taskReadColumns(h.db))
+              .from(tasks)
+              .where(eq(tasks.id, fire.taskId))
+              .limit(1)
+          )[0] ?? null
         )
       })
       expect(task.sourceTerminationBinding).toStartWith('st1:')
@@ -554,7 +565,9 @@ describeEachProvider('RFC-257 T14 · Webhook 全链路（双引擎）', (harness
       expect(mergedResponse.status).toBe(200)
       const mergedDeliveryId = ((await mergedResponse.json()) as { deliveryId: string }).deliveryId
       const canceled = await waitFor(async () => {
-        const row = (await h.db.select().from(tasks).where(eq(tasks.id, task.id)).limit(1))[0]
+        const row = (
+          await h.db.select(taskReadColumns(h.db)).from(tasks).where(eq(tasks.id, task.id)).limit(1)
+        )[0]
         return row?.status === 'canceled' ? row : null
       })
       expect(canceled.sourceTerminationFence).toBe('merged')

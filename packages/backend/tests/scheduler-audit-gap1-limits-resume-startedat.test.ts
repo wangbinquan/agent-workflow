@@ -1,3 +1,4 @@
+import { runGit } from '@/util/git'
 // CURRENT-BEHAVIOR LOCK — design/scheduler-audit-2026-06-10.md §⑥ 缺口1 (limits 墙钟把暂停时长计入)
 //
 // 当前缺陷行为（已对照源码核实）：
@@ -32,7 +33,7 @@ import {
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { monotonicFactory } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { enforceLimits } from './helpers/resourceLimits'
@@ -40,7 +41,6 @@ import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopo
 import { createResumeEngine } from './helpers/resumeEngine'
 
 const ulid = monotonicFactory()
-const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 
 const DAY_MS = 24 * 60 * 60 * 1000
 const ONE_HOUR_MS = 60 * 60 * 1000
@@ -53,7 +53,7 @@ interface Harness {
 
 function buildHarness(): Harness {
   const appHome = mkdtempSync(join(tmpdir(), 'aw-gap1-limits-'))
-  const db = createInMemoryDb(MIGRATIONS)
+  const db = createInMemoryDb()
   return { db, appHome, cleanup: () => rmSync(appHome, { recursive: true, force: true }) }
 }
 
@@ -143,10 +143,13 @@ describe('gap1 — pause time counts toward maxDurationMs wall clock (current-be
       status: 'interrupted',
       startedAt: STALE,
       finishedAt: Date.now() - 5 * DAY_MS,
+      repoPath: h.appHome,
+      worktreePath: h.appHome,
       errorSummary: 'daemon-restart',
       errorMessage: 'daemon restarted while this task was running; please resume',
     })
 
+    await runGit(h.appHome, ['init', '-q', '-b', 'main'])
     const returned = await createResumeEngine(h.db, {
       appHome: h.appHome,
       schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })

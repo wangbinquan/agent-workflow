@@ -1,5 +1,7 @@
 // RFC-370 H6: selected delete/reserve storage must finish before the existing
 // durable operation can advance or release its lock, including restart recovery.
+// RFC-370 H6: selected delete/reserve storage must finish before the existing
+// durable operation can advance or release its lock, including restart recovery.
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
@@ -323,7 +325,7 @@ describeEachProvider('RFC-370 skill deletion content', (harness) => {
         },
       },
     })
-    const pending = boot.runIdentityMigrationBarrier()
+    const pending = boot.recoverOperations()
     try {
       await reached(entered, pending)
       expect(await getActiveOp(harness.db, skillId)).toMatchObject({ active: 1 })
@@ -331,7 +333,7 @@ describeEachProvider('RFC-370 skill deletion content', (harness) => {
     } finally {
       ready.release()
     }
-    expect(await pending).toMatchObject({ recoveredOperations: 1 })
+    expect(await pending).toMatchObject({ total: 1, rolledForward: 1 })
     expect(await getActiveOp(harness.db, skillId)).toBeNull()
     expect(existsSync(staged.backupRef)).toBe(false)
   })

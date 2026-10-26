@@ -1,21 +1,20 @@
+import { convertedAgentFixture } from './helpers/model/frozenAgent'
+import { agentFixtureReferences, type AgentFixtureRow } from './helpers/model/agent'
 // RFC-359 AC1: preserve both established Agent row-decoding contracts while
 // removing the duplicate projection. These cases ran against both old entry
 // points before extraction; database rows remain real on each selected provider.
 
-import { agentFixture, readAgentFixtures } from './helpers/model'
+import { readAgentFixtures } from './helpers/model'
 import { expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import ts from 'typescript'
 import type { Agent } from '@agent-workflow/shared'
-import {
-  agentFromPersistenceRow,
-  type AgentPersistenceRow,
-} from '@/modules/resource-catalog/infrastructure/agentPersistence'
+import { agentFromPersistenceRow } from '@/modules/resource-catalog/infrastructure/agentPersistence'
 import { rowToAgent } from '@/modules/resource-catalog/infrastructure/legacy/agent'
 import { describeEachProvider } from './helpers/eachProvider'
 
 const T0 = 1_700_000_000_000
-const baseRow: AgentPersistenceRow = {
+const baseRow: AgentFixtureRow = {
   id: 'agent-codec',
   name: 'agent-codec',
   description: 'stored description',
@@ -63,12 +62,18 @@ const baseAgent: Agent = {
 const decoders = [agentFromPersistenceRow, rowToAgent]
 
 describeEachProvider('RFC-359 Agent row codec preservation', (harness) => {
-  async function persisted(patch: Partial<AgentPersistenceRow> = {}) {
+  async function persisted(patch: Partial<AgentFixtureRow> = {}) {
     const row = { ...baseRow, ...patch }
-    await agentFixture(harness.db, row)
+    await convertedAgentFixture(harness.db, row)
     const loaded = (await readAgentFixtures(harness.db, { id: row.id }))[0]
     if (loaded === undefined) throw new Error('agent codec fixture row disappeared')
-    expect(loaded).toEqual(row)
+    expect(loaded).toMatchObject(
+      Object.fromEntries(
+        Object.entries(row).filter(
+          ([key]) => !['skills', 'dependsOn', 'mcp', 'plugins'].includes(key),
+        ),
+      ),
+    )
     return Object.freeze(loaded)
   }
 
@@ -108,7 +113,8 @@ describeEachProvider('RFC-359 Agent row codec preservation', (harness) => {
       outputWrapperPortNames: { report: 'final' },
       branchPorts: ['done'],
     }
-    for (const decode of decoders) expect(decode(row)).toEqual(expected)
+    for (const decode of decoders)
+      expect(decode(row, agentFixtureReferences(row))).toEqual(expected)
     expect((await readAgentFixtures(harness.db, { id: row.id }))[0]).toEqual(row)
   })
 
@@ -116,7 +122,7 @@ describeEachProvider('RFC-359 Agent row codec preservation', (harness) => {
     test(`runtime ${JSON.stringify(runtime)} retains its value or stays absent`, async () => {
       const row = await persisted({ runtime })
       for (const decode of decoders) {
-        const agent = decode(row)
+        const agent = decode(row, agentFixtureReferences(row))
         if (runtime === null || runtime === '') {
           expect(agent).toEqual(baseAgent)
           expect(Object.hasOwn(agent, 'runtime')).toBe(false)
@@ -138,11 +144,11 @@ describeEachProvider('RFC-359 Agent row codec preservation', (harness) => {
       }),
     })
     for (const decode of decoders) {
-      const agent = decode(row)
+      const agent = decode(row, agentFixtureReferences(row))
       expect(agent).toEqual({ ...baseAgent, frontmatterExtra: { kept: 1 } })
       for (const key of ['outputKinds', 'role', 'outputWrapperPortNames', 'branchPorts']) {
         expect(Object.hasOwn(agent, key)).toBe(false)
-        expect(Object.hasOwn(decode(baseRow), key)).toBe(false)
+        expect(Object.hasOwn(decode(baseRow, agentFixtureReferences(baseRow)), key)).toBe(false)
       }
     }
   })
@@ -158,7 +164,7 @@ describeEachProvider('RFC-359 Agent row codec preservation', (harness) => {
       }),
     })
     for (const decode of decoders) {
-      expect(decode(row)).toEqual({
+      expect(decode(row, agentFixtureReferences(row))).toEqual({
         ...baseAgent,
         frontmatterExtra: { kept: ['x'] },
         outputKinds: { report: 'path<md>' },
@@ -177,7 +183,8 @@ describeEachProvider('RFC-359 Agent row codec preservation', (harness) => {
           branchPorts: value,
         }),
       })
-      for (const decode of decoders) expect(decode(row)).toEqual(baseAgent)
+      for (const decode of decoders)
+        expect(decode(row, agentFixtureReferences(row))).toEqual(baseAgent)
     })
   }
 
@@ -189,13 +196,13 @@ describeEachProvider('RFC-359 Agent row codec preservation', (harness) => {
         outputWrapperPortNames: ['first', false, 'last'],
       }),
     })
-    expect(rowToAgent(row)).toEqual({
+    expect(rowToAgent(row, agentFixtureReferences(row))).toEqual({
       ...baseAgent,
       frontmatterExtra: { kept: true },
       outputKinds: { '0': 'path<md>', '2': 'signal' },
       outputWrapperPortNames: { '0': 'first', '2': 'last' },
     })
-    expect(agentFromPersistenceRow(row)).toEqual({
+    expect(agentFromPersistenceRow(row, agentFixtureReferences(row))).toEqual({
       ...baseAgent,
       frontmatterExtra: { kept: true },
     })
@@ -207,7 +214,7 @@ describeEachProvider('RFC-359 Agent row codec preservation', (harness) => {
         '[{"name":"same","ignored":1},{"name":"same","kind":"markdown","required":false,"description":"kept"}]',
     })
     for (const decode of decoders) {
-      expect(decode(row).inputs).toEqual([
+      expect(decode(row, agentFixtureReferences(row)).inputs).toEqual([
         { name: 'same', kind: 'string' },
         { name: 'same', kind: 'markdown', required: false, description: 'kept' },
       ])
@@ -217,7 +224,8 @@ describeEachProvider('RFC-359 Agent row codec preservation', (harness) => {
   for (const inputs of ['', 'not-json', 'null', '{}', '[42]', '[{"name":"x"},{"name":""}]']) {
     test(`invalid inputs ${JSON.stringify(inputs)} become an empty list`, async () => {
       const row = await persisted({ inputs })
-      for (const decode of decoders) expect(decode(row).inputs).toEqual([])
+      for (const decode of decoders)
+        expect(decode(row, agentFixtureReferences(row)).inputs).toEqual([])
     })
   }
 
@@ -227,7 +235,7 @@ describeEachProvider('RFC-359 Agent row codec preservation', (harness) => {
         '[{"kind":"managed","skillId":"skill-id","ignored":true},{"kind":"project","name":"notes"},null,"old-name",{"kind":"managed","skillId":""},{"kind":"unknown"},{"kind":"project","name":"notes"}]',
     })
     for (const decode of decoders) {
-      expect(decode(row).skills).toEqual([
+      expect(decode(row, agentFixtureReferences(row)).skills).toEqual([
         { kind: 'managed', skillId: 'skill-id' },
         { kind: 'project', name: 'notes' },
         { kind: 'project', name: 'notes' },
@@ -239,7 +247,7 @@ describeEachProvider('RFC-359 Agent row codec preservation', (harness) => {
     test(`invalid reference columns ${JSON.stringify(raw)} become empty lists`, async () => {
       const row = await persisted({ skills: raw, dependsOn: raw, mcp: raw, plugins: raw })
       for (const decode of decoders) {
-        const agent = decode(row)
+        const agent = decode(row, agentFixtureReferences(row))
         expect([agent.skills, agent.dependsOn, agent.mcp, agent.plugins]).toEqual([[], [], [], []])
       }
     })
@@ -249,7 +257,7 @@ describeEachProvider('RFC-359 Agent row codec preservation', (harness) => {
     const raw = '["first",42,null,"","first"]'
     const row = await persisted({ dependsOn: raw, mcp: raw, plugins: raw })
     for (const decode of decoders) {
-      const agent = decode(row)
+      const agent = decode(row, agentFixtureReferences(row))
       expect([agent.dependsOn, agent.mcp, agent.plugins]).toEqual([
         ['first', '', 'first'],
         ['first', '', 'first'],
@@ -261,23 +269,27 @@ describeEachProvider('RFC-359 Agent row codec preservation', (harness) => {
   test('outputs retain stored JSON values on the old entry and strings on the normalized entry', async () => {
     const outputs = '["report",42,null,"","report"]'
     const row = await persisted({ outputs })
-    expect(JSON.stringify(rowToAgent(row).outputs)).toBe(outputs)
-    expect(agentFromPersistenceRow(row).outputs).toEqual(['report', '', 'report'])
+    expect(JSON.stringify(rowToAgent(row, agentFixtureReferences(row)).outputs)).toBe(outputs)
+    expect(agentFromPersistenceRow(row, agentFixtureReferences(row)).outputs).toEqual([
+      'report',
+      '',
+      'report',
+    ])
   })
 
   for (const outputs of ['null', '{}', 'false', '42', '"stored-text"']) {
     test(`non-array outputs ${outputs} preserve the two existing JSON contracts`, async () => {
       const row = await persisted({ outputs })
-      expect(JSON.stringify(rowToAgent(row).outputs)).toBe(outputs)
-      expect(agentFromPersistenceRow(row).outputs).toEqual([])
+      expect(JSON.stringify(rowToAgent(row, agentFixtureReferences(row)).outputs)).toBe(outputs)
+      expect(agentFromPersistenceRow(row, agentFixtureReferences(row)).outputs).toEqual([])
     })
   }
 
   for (const outputs of ['', 'not-json']) {
     test(`malformed outputs ${JSON.stringify(outputs)} preserve SyntaxError versus empty list`, async () => {
       const row = await persisted({ outputs })
-      expect(() => rowToAgent(row)).toThrow(SyntaxError)
-      expect(agentFromPersistenceRow(row).outputs).toEqual([])
+      expect(() => rowToAgent(row, agentFixtureReferences(row))).toThrow(SyntaxError)
+      expect(agentFromPersistenceRow(row, agentFixtureReferences(row)).outputs).toEqual([])
     })
   }
 
@@ -293,29 +305,34 @@ describeEachProvider('RFC-359 Agent row codec preservation', (harness) => {
   for (const value of frontmatterValues) {
     test(`non-record frontmatter ${value.raw} preserves stored spread versus normalized empty record`, async () => {
       const row = await persisted({ frontmatterExtra: value.raw })
-      expect(rowToAgent(row).frontmatterExtra).toEqual(value.storedExtra)
-      expect(agentFromPersistenceRow(row).frontmatterExtra).toEqual({})
+      expect(rowToAgent(row, agentFixtureReferences(row)).frontmatterExtra).toEqual(
+        value.storedExtra,
+      )
+      expect(agentFromPersistenceRow(row, agentFixtureReferences(row)).frontmatterExtra).toEqual({})
     })
   }
 
   for (const frontmatterExtra of ['', 'not-json']) {
     test(`malformed frontmatter ${JSON.stringify(frontmatterExtra)} preserves SyntaxError versus empty record`, async () => {
       const row = await persisted({ frontmatterExtra })
-      expect(() => rowToAgent(row)).toThrow(SyntaxError)
-      expect(agentFromPersistenceRow(row)).toEqual(baseAgent)
+      expect(() => rowToAgent(row, agentFixtureReferences(row))).toThrow(SyntaxError)
+      expect(agentFromPersistenceRow(row, agentFixtureReferences(row))).toEqual(baseAgent)
     })
   }
 
   test('JSON null frontmatter preserves the stored-entry TypeError', async () => {
     const row = await persisted({ frontmatterExtra: 'null' })
-    expect(() => rowToAgent(row)).toThrow(TypeError)
-    expect(agentFromPersistenceRow(row)).toEqual(baseAgent)
+    expect(() => rowToAgent(row, agentFixtureReferences(row))).toThrow(TypeError)
+    expect(agentFromPersistenceRow(row, agentFixtureReferences(row))).toEqual(baseAgent)
   })
 
   test('frontmatter is decoded before outputs when both columns would fail', async () => {
     const row = await persisted({ frontmatterExtra: 'null', outputs: 'not-json' })
-    expect(() => rowToAgent(row)).toThrow(TypeError)
-    expect(agentFromPersistenceRow(row)).toEqual({ ...baseAgent, outputs: [] })
+    expect(() => rowToAgent(row, agentFixtureReferences(row))).toThrow(TypeError)
+    expect(agentFromPersistenceRow(row, agentFixtureReferences(row))).toEqual({
+      ...baseAgent,
+      outputs: [],
+    })
   })
 })
 
@@ -373,15 +390,15 @@ test('both Agent row entries use one projection and the obsolete decoders are re
   ).toEqual([])
   expect(delegatedCall(legacy, 'rowToAgent')).toEqual({
     name: 'agentFromStoredJsonRow',
-    arguments: ['row'],
+    arguments: ['row', 'references'],
   })
   expect(delegatedCall(common, 'agentFromPersistenceRow')).toEqual({
     name: 'decodeAgentPersistenceRow',
-    arguments: ['row', "'normalized'"],
+    arguments: ['row', 'references', "'normalized'"],
   })
   expect(delegatedCall(common, 'agentFromStoredJsonRow')).toEqual({
     name: 'decodeAgentPersistenceRow',
-    arguments: ['row', "'stored-json'"],
+    arguments: ['row', 'references', "'stored-json'"],
   })
   expect(
     declaration(common, 'decodeAgentPersistenceRow').statements.filter(

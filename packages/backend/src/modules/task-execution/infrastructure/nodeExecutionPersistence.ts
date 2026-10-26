@@ -1,81 +1,64 @@
+import { ulid } from 'ulid'
+import { decodePrompt } from '@/platform/content/locations/prompt'
+import { type ContentStore, contentRefColumns } from '@/platform/content/contentStore'
+
+import {
+  databaseContentColumnsInTx,
+  readDatabaseContent,
+  releaseContentRowsInTx,
+} from '@/platform/content/infrastructure/contentStore'
 // RFC-359 W4-B1 批 2f —— node run 执行投影（快照 / 输出 / 事件）：一份实现，两个 provider 共用。
 // 写路径是产品里最热的（agent 每吐一行就 appendEvents 一次）：统一写事务 + owner 围栏 + 聚合根行锁。
 
-import { runHistoryOrder } from '@/platform/persistence/runHistoryOrder'
 import { tablesOf } from '@/platform/persistence/sessionTables'
-import { alias } from '@/platform/persistence/tableAlias'
 import { queryWrite } from '@/platform/persistence/queryHelpers'
-import {
-  and,
-  asc,
-  count,
-  eq,
-  exists,
-  getTableColumns,
-  inArray,
-  isNotNull,
-  isNull,
-  not,
-  notLike,
-  sql,
-} from 'drizzle-orm'
+import { and, asc, count, eq, inArray, isNotNull, isNull, notLike, sql } from 'drizzle-orm'
 
-import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
+import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
 import { insertInBatches, lastPerKey } from '@/platform/persistence/batchInsert'
-import { engineOf } from '@/platform/persistence/databaseTransaction'
+import {
+  databaseSessionFor,
+  databaseTransactionIsActive,
+  engineOf,
+} from '@/platform/persistence/databaseTransaction'
 import type {
   NodeExecutionPersistence,
   NodeExecutionQuery,
   NodeExecutionSnapshot,
+  NodeExecutionReadSnapshot,
 } from '../application/ports/nodeExecutionPersistence'
 import type { TaskExecutionContextRef } from '../application/ports/taskExecutionTopology'
-import { encodePendingSubResolves } from './taskCheckpointCodec'
-import { projectNodeRunSnapshot } from './nodeRunSnapshot'
-import { nodeRunProjectionWriteColumns } from './nodeRunWriteProtocol'
-import { taskCheckpointMountPaths } from './taskCheckpointPersistence'
-import { structurallySupersededCondition } from './runSelection/oracle/supersessionSql'
-import { createRunSelectionParticipantInTx } from './runSelection/oracle/participant'
+import { readNodeRunSnapshot, projectNodeRunSnapshot } from './nodeRunSnapshot'
+import { lockNodeRunTaskRootInTx, writeNodeRunProjectionInTx } from './nodeRunWriteProtocol'
+import { readNodeRunRows, projectNodeRunFacts } from './nodeRunQueries'
+import { createRunSelectionReader } from './runSelection/table/reader'
+import { createRunSelectionParticipantInTx } from './runSelection/table/selectionWrite'
 import {
   fenceTaskWrite,
   type TaskExecutionTransaction,
   withTaskExecutionWrite,
 } from './ownedTaskExecution'
 
-function snapshotColumns(db: PersistenceDb) {
-  const { nodeRuns } = tablesOf(db)
-  const child = alias(nodeRuns, 'nr_container_child')
-  return {
-    ...getTableColumns(nodeRuns),
-    hasContainerChildren: exists(
-      db
-        .select({ one: sql`1` })
-        .from(child)
-        .where(and(eq(child.taskId, nodeRuns.taskId), eq(child.containerRunId, nodeRuns.id))),
-    ).mapWith(Boolean),
-  }
-}
-
 function whereQuery(db: PersistenceDb, input: NodeExecutionQuery) {
-  const { nodeRuns } = tablesOf(db)
-  const conditions = [eq(nodeRuns.taskId, input.taskId)]
+  const { nodeRuns, nodeRunRuntimeStates } = tablesOf(db)
+  const conditions = [eq(nodeRuns.taskId, input.taskId), eq(nodeRuns.recordMode, 'executable')]
   if (input.nodeId !== undefined) conditions.push(eq(nodeRuns.nodeId, input.nodeId))
   if (input.iteration !== undefined) conditions.push(eq(nodeRuns.iteration, input.iteration))
   if (input.status !== undefined) conditions.push(eq(nodeRuns.status, input.status))
-  if (input.mergeState === null) conditions.push(isNull(nodeRuns.mergeState))
+  if (input.mergeState === null) conditions.push(isNull(nodeRunRuntimeStates.mergeState))
   else if (input.mergeState !== undefined) {
-    conditions.push(eq(nodeRuns.mergeState, input.mergeState))
+    conditions.push(eq(nodeRunRuntimeStates.mergeState, input.mergeState))
   }
-  if (input.childOnly === true) conditions.push(isNotNull(nodeRuns.parentNodeRunId))
-  if (input.parentNodeRunId === null) conditions.push(isNull(nodeRuns.parentNodeRunId))
+  if (input.childOnly === true) conditions.push(isNotNull(nodeRuns.historicalParentId))
+  if (input.parentNodeRunId === null) conditions.push(isNull(nodeRuns.historicalParentId))
   else if (input.parentNodeRunId !== undefined) {
-    conditions.push(eq(nodeRuns.parentNodeRunId, input.parentNodeRunId))
+    conditions.push(eq(nodeRuns.historicalParentId, input.parentNodeRunId))
   }
   // RFC-354 — one frame: null = the top scope, a run id = that wrapper generation's body.
   if (input.containerRunId === null) conditions.push(isNull(nodeRuns.containerRunId))
   else if (input.containerRunId !== undefined) {
     conditions.push(eq(nodeRuns.containerRunId, input.containerRunId))
   }
-  if (input.excludeSuperseded === true) conditions.push(not(structurallySupersededCondition(db)))
   return and(...conditions)
 }
 
@@ -99,47 +82,100 @@ async function fencedTaskId(
   // 跑 READ COMMITTED（实测见 `postgresqlTaskLifecycleTransaction.ts` 的 aggregate 说明），同一个
   // node run 的并发写手靠这把锁串起来。**必须在 owner fence 之后**：其余 owned 写手都是先 fence 再动
   // `node_runs`，反序取锁会和它们死锁。
+  await lockNodeRunTaskRootInTx(tx, nodeRunId)
   await engineOf(tx).lockAggregateRoot(tx, nodeRuns, nodeRuns.id, nodeRunId)
   return taskId
 }
 
 export class DrizzleNodeExecutionPersistence implements NodeExecutionPersistence {
-  constructor(private readonly db: PersistenceDb) {}
+  get selection() {
+    return createRunSelectionReader(this.db)
+  }
+  constructor(
+    private readonly db: PersistenceDb,
+    private readonly content: Pick<ContentStore, 'read'> = {
+      read: (ref) => readDatabaseContent(db, ref),
+    },
+  ) {}
 
-  async read(nodeRunId: string): Promise<NodeExecutionSnapshot | null> {
-    const { nodeRuns } = tablesOf(this.db)
-    const rows = await this.db
-      .select(snapshotColumns(this.db))
-      .from(nodeRuns)
-      .where(eq(nodeRuns.id, nodeRunId))
-      .limit(1)
-    const row = rows[0]
-    if (row === undefined) return null
-    return projectNodeRunSnapshot(
-      row,
-      await taskCheckpointMountPaths(this.db, row.taskId),
-      row.hasContainerChildren,
+  async snapshotRead<T>(read: (snapshot: NodeExecutionReadSnapshot) => Promise<T>): Promise<T> {
+    if (databaseTransactionIsActive(this.db)) return read(this)
+    return databaseSessionFor(this.db).snapshotRead((tx) =>
+      read(new DrizzleNodeExecutionPersistence(tx, this.content)),
     )
   }
 
-  async list(input: NodeExecutionQuery): Promise<readonly NodeExecutionSnapshot[]> {
+  async read(nodeRunId: string): Promise<NodeExecutionSnapshot | null> {
     const { nodeRuns } = tablesOf(this.db)
-    const mounts = await taskCheckpointMountPaths(this.db, input.taskId)
-    const rows = await this.db
-      .select(snapshotColumns(this.db))
+    const [row] = await this.db
+      .select({ recordMode: nodeRuns.recordMode })
       .from(nodeRuns)
-      .where(whereQuery(this.db, input))
-      .orderBy(...runHistoryOrder(this.db, nodeRuns))
-    return rows.map((row) => projectNodeRunSnapshot(row, mounts, row.hasContainerChildren))
+      .where(eq(nodeRuns.id, nodeRunId))
+      .limit(1)
+    return row?.recordMode === 'executable'
+      ? readNodeRunSnapshot(this.db, nodeRunId, this.content)
+      : null
+  }
+
+  async list(input: NodeExecutionQuery): Promise<readonly NodeExecutionSnapshot[]> {
+    const load = async (tx: PersistenceDb) => {
+      const { nodeRuns, nodeRunRuntimeStates } = tablesOf(tx)
+      const rows = await tx
+        .select({ id: nodeRuns.id })
+        .from(nodeRuns)
+        .leftJoin(nodeRunRuntimeStates, eq(nodeRunRuntimeStates.nodeRunId, nodeRuns.id))
+        .where(whereQuery(tx, input))
+        .orderBy(asc(nodeRuns.seq))
+      const history =
+        input.excludeSuperseded === true
+          ? await createRunSelectionReader(tx).familyHistory(
+              input.taskId,
+              {
+                ...(input.nodeId === undefined ? {} : { nodeId: input.nodeId }),
+                ...(input.iteration === undefined ? {} : { iteration: input.iteration }),
+              },
+              { excludeSuperseded: true },
+            )
+          : null
+      const allowed = history === null ? null : new Set(history.map((row) => row.id))
+      const snapshots: NodeExecutionSnapshot[] = []
+      const ids = rows.filter((row) => allowed === null || allowed.has(row.id)).map((row) => row.id)
+      const byId = new Map<string, Awaited<ReturnType<typeof readNodeRunRows>>[number]>()
+      for (let offset = 0; offset < ids.length; offset += 400) {
+        for (const row of await readNodeRunRows(tx, {
+          runIds: ids.slice(offset, offset + 400),
+          executableOnly: true,
+        }))
+          byId.set(row.run.id, row)
+      }
+      for (const id of ids) {
+        const row = byId.get(id)
+        if (!row) continue
+        const facts = await projectNodeRunFacts(row, this.content)
+        snapshots.push(projectNodeRunSnapshot(row, facts.promptText))
+      }
+      return snapshots
+    }
+    return databaseTransactionIsActive(this.db)
+      ? load(this.db)
+      : databaseSessionFor(this.db).snapshotRead(load)
   }
 
   async listOutputs(nodeRunId: string) {
     const { nodeRunOutputs } = tablesOf(this.db)
-    return await this.db
+    const rows = await this.db
       .select()
       .from(nodeRunOutputs)
       .where(eq(nodeRunOutputs.nodeRunId, nodeRunId))
       .orderBy(asc(nodeRunOutputs.portName))
+    return Promise.all(
+      rows.map(async ({ contentRefJson, contentInlineBytes, ...row }) => ({
+        ...row,
+        content: new TextDecoder('utf-8', { ignoreBOM: true }).decode(
+          await this.content.read(contentRefColumns.decode(contentRefJson, contentInlineBytes)!),
+        ),
+      })),
+    )
   }
 
   async countAgentTextEvents(nodeRunId: string, frameworkPrefix: string): Promise<number> {
@@ -169,7 +205,14 @@ export class DrizzleNodeExecutionPersistence implements NodeExecutionPersistence
   }
 
   async patch(input: Parameters<NodeExecutionPersistence['patch']>[0]): Promise<boolean> {
-    return await withTaskExecutionWrite(this.db, async (tx) => {
+    const config = input.values.config
+    const promptRequested = config?.promptText !== undefined || config?.promptPath !== undefined
+    const promptBytes = !promptRequested
+      ? undefined
+      : config?.promptText != null
+        ? new TextEncoder().encode(config.promptText)
+        : null
+    return withTaskExecutionWrite(this.db, async (tx) => {
       const taskId = await fencedTaskId(
         tx,
         input.nodeRunId,
@@ -177,42 +220,48 @@ export class DrizzleNodeExecutionPersistence implements NodeExecutionPersistence
         input.now ?? Date.now(),
       )
       if (taskId === null) return false
-      const { nodeRuns } = tablesOf(tx)
-      const pendingSubResolves = input.values.checkpoint?.pendingSubResolves
-      const values = nodeRunProjectionWriteColumns(
-        input.values,
-        input.values.checkpoint?.checkpoints === undefined
-          ? []
-          : await taskCheckpointMountPaths(tx, taskId),
-      )
-      if (pendingSubResolves !== undefined) {
-        const [row] = await tx
+      if (promptRequested) {
+        const { nodeRunConfigs } = tablesOf(tx)
+        const previous = await tx
           .select({
-            isoSubmodulesJson: nodeRuns.isoSubmodulesJson,
-            isoSubmodulesReposJson: nodeRuns.isoSubmodulesReposJson,
+            contentRefJson: nodeRunConfigs.promptRefJson,
+            contentInlineBytes: nodeRunConfigs.promptInlineBytes,
           })
-          .from(nodeRuns)
-          .where(eq(nodeRuns.id, input.nodeRunId))
-          .limit(1)
-        if (row === undefined) return false
-        Object.assign(
-          values,
-          encodePendingSubResolves(
-            row,
-            pendingSubResolves.map((repo) => repo.mountPath),
-            pendingSubResolves,
-          ),
-        )
+          .from(nodeRunConfigs)
+          .where(eq(nodeRunConfigs.nodeRunId, input.nodeRunId))
+        await releaseContentRowsInTx(tx, 'node-run-prompt', previous, input.now ?? Date.now())
       }
-      const rows = await tx
-        .update(nodeRuns)
-        .set(values)
-        .where(eq(nodeRuns.id, input.nodeRunId))
-        .returning({ id: nodeRuns.id })
-      if (rows.length === 1 && input.selection !== undefined) {
-        await createRunSelectionParticipantInTx().apply(tx, [input.selection])
+      const prompt =
+        promptBytes === undefined
+          ? undefined
+          : promptBytes === null
+            ? null
+            : await databaseContentColumnsInTx(
+                tx,
+                'node-run-prompt',
+                JSON.stringify([input.nodeRunId, ulid()]),
+                promptBytes,
+                taskId,
+              )
+      await writeNodeRunProjectionInTx(
+        tx,
+        input.nodeRunId,
+        input.values,
+        promptRequested && config?.promptText == null && config?.promptPath != null
+          ? decodePrompt({ promptText: null, promptPath: config.promptPath })
+          : prompt === undefined || prompt === null
+            ? prompt
+            : contentRefColumns.decode(prompt.contentRefJson, prompt.contentInlineBytes),
+      )
+      if (input.selection !== undefined) {
+        const selection = input.selection
+        const expectedRevision =
+          selection.expectedRevision === 'current'
+            ? await createRunSelectionReader(tx).revision(selection.taskId, selection.slot)
+            : selection.expectedRevision
+        await createRunSelectionParticipantInTx().apply(tx, [{ ...selection, expectedRevision }])
       }
-      return rows.length === 1
+      return true
     })
   }
 
@@ -232,17 +281,34 @@ export class DrizzleNodeExecutionPersistence implements NodeExecutionPersistence
       // 一条语句里每行要更新成**自己那行**的值，只有 excluded 伪表能表达（两个引擎同一关键字）。
       // 同批重复端口名先按「后写覆盖先写」压平——逐行写本来就是这个语义，而 PG 对同一冲突行在
       // 一条语句里被改两次会直接抛。
-      const rows = lastPerKey(
-        input.outputs.map((output) => ({
+      const rows = []
+      for (const output of lastPerKey(input.outputs, (output) => output.portName)) {
+        const { nodeRunOutputs } = tablesOf(tx)
+        const previous = await tx
+          .select()
+          .from(nodeRunOutputs)
+          .where(
+            and(
+              eq(nodeRunOutputs.nodeRunId, input.nodeRunId),
+              eq(nodeRunOutputs.portName, output.portName),
+            ),
+          )
+        await releaseContentRowsInTx(tx, 'node-run-output', previous, input.now ?? Date.now())
+        rows.push({
           nodeRunId: input.nodeRunId,
           portName: output.portName,
-          content: output.content,
+          ...(await databaseContentColumnsInTx(
+            tx,
+            'node-run-output',
+            JSON.stringify([input.nodeRunId, output.portName, ulid()]),
+            new TextEncoder().encode(output.content),
+            taskId,
+          )),
           kind: output.kind ?? null,
           archiveJson: output.archiveJson ?? null,
           active: output.active ?? true,
-        })),
-        (row) => row.portName,
-      )
+        })
+      }
       const { nodeRunOutputs } = tablesOf(tx)
       await insertInBatches(tx, nodeRunOutputs, rows, (batch) => {
         return queryWrite(
@@ -252,7 +318,8 @@ export class DrizzleNodeExecutionPersistence implements NodeExecutionPersistence
             .onConflictDoUpdate({
               target: [nodeRunOutputs.nodeRunId, nodeRunOutputs.portName],
               set: {
-                content: sql`excluded.${sql.identifier(nodeRunOutputs.content.name)}`,
+                contentRefJson: sql`excluded.${sql.identifier(nodeRunOutputs.contentRefJson.name)}`,
+                contentInlineBytes: sql`excluded.${sql.identifier(nodeRunOutputs.contentInlineBytes.name)}`,
                 kind: sql`excluded.${sql.identifier(nodeRunOutputs.kind.name)}`,
                 archiveJson: sql`excluded.${sql.identifier(nodeRunOutputs.archiveJson.name)}`,
                 active: sql`excluded.${sql.identifier(nodeRunOutputs.active.name)}`,
@@ -275,18 +342,27 @@ export class DrizzleNodeExecutionPersistence implements NodeExecutionPersistence
       )
       if (taskId === null) return
       const { nodeRunOutputs } = tablesOf(tx)
+      const previous = await tx
+        .select()
+        .from(nodeRunOutputs)
+        .where(eq(nodeRunOutputs.nodeRunId, input.nodeRunId))
+      await releaseContentRowsInTx(tx, 'node-run-output', previous, input.now ?? Date.now())
       await tx.delete(nodeRunOutputs).where(eq(nodeRunOutputs.nodeRunId, input.nodeRunId))
-      if (input.outputs.length > 0) {
-        await tx.insert(nodeRunOutputs).values(
-          input.outputs.map((output) => ({
-            nodeRunId: input.nodeRunId,
-            portName: output.portName,
-            content: output.content,
-            kind: output.kind ?? null,
-            archiveJson: output.archiveJson ?? null,
-            active: output.active ?? true,
-          })),
-        )
+      for (const output of input.outputs) {
+        await tx.insert(nodeRunOutputs).values({
+          nodeRunId: input.nodeRunId,
+          portName: output.portName,
+          ...(await databaseContentColumnsInTx(
+            tx,
+            'node-run-output',
+            JSON.stringify([input.nodeRunId, output.portName, ulid()]),
+            new TextEncoder().encode(output.content),
+            taskId,
+          )),
+          kind: output.kind ?? null,
+          archiveJson: output.archiveJson ?? null,
+          active: output.active ?? true,
+        })
       }
     })
   }
@@ -382,4 +458,48 @@ export class DrizzleNodeExecutionPersistence implements NodeExecutionPersistence
         )
     })
   }
+}
+
+/** Caller holds owner fence and Task root. Preserve unspecified output metadata on replacement. */
+export async function writeNodeRunOutputInTx(
+  tx: PersistenceTx,
+  nodeRunId: string,
+  output: {
+    readonly portName: string
+    readonly content: string
+    readonly kind?: string | null
+    readonly archiveJson?: string | null
+    readonly active?: boolean
+  },
+  now = Date.now(),
+): Promise<void> {
+  const { nodeRuns, nodeRunOutputs } = tablesOf(tx)
+  const [run] = await tx
+    .select({ taskId: nodeRuns.taskId })
+    .from(nodeRuns)
+    .where(eq(nodeRuns.id, nodeRunId))
+    .limit(1)
+  if (!run) throw new Error('node-run-output-owner-missing')
+  const previous = await tx
+    .select()
+    .from(nodeRunOutputs)
+    .where(
+      and(eq(nodeRunOutputs.nodeRunId, nodeRunId), eq(nodeRunOutputs.portName, output.portName)),
+    )
+  await releaseContentRowsInTx(tx, 'node-run-output', previous, now)
+  const { content, ...metadata } = output
+  const columns = await databaseContentColumnsInTx(
+    tx,
+    'node-run-output',
+    JSON.stringify([nodeRunId, output.portName, ulid()]),
+    new TextEncoder().encode(content),
+    run.taskId,
+  )
+  await tx
+    .insert(nodeRunOutputs)
+    .values({ nodeRunId, ...metadata, ...columns })
+    .onConflictDoUpdate({
+      target: [nodeRunOutputs.nodeRunId, nodeRunOutputs.portName],
+      set: { ...metadata, ...columns },
+    })
 }

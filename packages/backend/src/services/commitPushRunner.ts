@@ -13,7 +13,7 @@
 // the commit row). git is never asked to force-push. A push that can't be
 // honored never loses the agent's work — the local commit always lands first.
 
-import { deriveNodeRunRole } from '@/modules/task-execution/public/types'
+import { nodeRunMintIdentityForSlot } from '@/modules/task-execution/public/types'
 import { repositoryPublicationOrdinal } from '@/modules/task-execution/public/queries'
 import type {
   CommitPushMeta,
@@ -191,7 +191,18 @@ export async function runCommitPush(
   // triggering agent run, so it never enters deriveFrontier's in-flight set.
   // The provider-selected lifecycle adapter enforces that invariant.
   const nodeRunId = await deps.nodeRuns.mint({
-    ...deriveNodeRunRole({ nodeId: nodeId, rerunCause: 'commit-push' }),
+    ...nodeRunMintIdentityForSlot(
+      {
+        kind: 'synthetic',
+        syntheticKind: 'commit-push',
+        owner:
+          params.parentNodeRunId === null
+            ? { kind: 'task', id: params.taskId }
+            : { kind: 'attempt', id: params.parentNodeRunId },
+        discriminator: nodeId,
+      },
+      { kind: 'current' },
+    ),
     taskId: params.taskId,
     nodeId,
     status: 'running',

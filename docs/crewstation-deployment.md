@@ -75,6 +75,58 @@ CS_TOKEN=<平台会话> CS_GITLAB_TOKEN=<项目仓库令牌> \
 
 每次发布只改上次发布的 AW 源码与本次的差异（分支头提交说明 `agent-workflow <sha>` 记录来源），仓库里不是 AW 发布的文件被改动时拒绝覆盖。新建项目的仓库里还是 CS 模板时，第一次发布须加 `--adopt-existing`：以模板的现有文件为基线，AW 快照替换同名文件并删除其余模板文件；之后的发布照常增量。
 
+## epoch-2 发布的数据库切换
+
+已有 epoch-1 托管安装通过独立 epoch-switch 操作升级；普通 release 的只增 migration 与切槽
+不能替代它。AW 交付应用侧 Job 与 versioned control adapter，平台必须实际提供以下输入和
+接口后才能切换；应用 typecheck 或 Job 成功输出不代表平台已经切流。
+
+| 平台输入                                          | 用途                                                                                     |
+| ------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| `CS_DATABASE_MIGRATION_OPERATION_ID`              | 所有 Job 复用的 `dbm_e2_...` 操作 ID，绑定 journal 和 artifacts                          |
+| `CS_DATABASE_MIGRATION_ACTION`                    | `plan`（缺省）、`run`、`new-run`、`verify`、`rollback`、`restore`、`discard`、`complete` |
+| `CS_DATABASE_MIGRATION_SOURCE_GENERATION`         | 源 generation 身份；每次 Job 均需提供                                                    |
+| `CS_DATABASE_MIGRATION_SOURCE_URL`                | plan/run/new-run 的源数据库；备份恢复时由 restore reference 提供源                       |
+| `CS_DATABASE_MIGRATION_TARGET_URL`                | 专用目标数据库；首次必须为空，与源独立；重启同操作继续原目标                             |
+| `CS_DATABASE_MIGRATION_APPROVE`                   | 审阅后批准的材料 `approvalDigest`，不能填 plan 文档 digest                               |
+| `CS_DATABASE_MIGRATION_FREEZE_REFERENCE`          | run / rollback 需要的平台冻结回执；证明旧服务、Worker 和任务 writer 均已停写             |
+| `CS_DATABASE_MIGRATION_CONTROL_URL`               | 必须实现下述 versioned control API；缺失即拒绝 Job                                       |
+| `CS_DATABASE_MIGRATION_SOURCE_KEY`                | 源 key 的 base64，供旧内容 / URL 转换，不能换成新安装 key                                |
+| `CS_DATABASE_MIGRATION_SCRATCH_URL`               | 旧 PG 源需要离线升级时的独立 scratch 数据库                                              |
+| `CS_DATABASE_MIGRATION_SCRATCH_ROOT`              | Job 临时文件目录；缺省 `/tmp/agent-workflow-epoch-migration`，持久证据另存               |
+| `CS_DATABASE_MIGRATION_NEXT_TARGET_URL_ENV`       | new-run 所用环境变量的**名字**；该变量指向另一个空目标，不复用旧 target                  |
+| `CS_DATABASE_MIGRATION_SOURCE_BORN_ON_POSTGRESQL` | 确属 PostgreSQL 原生安装时为 `1`；仍由源 catalog 事实核对                                |
+| `CS_DATABASE_RESTORE_REFERENCE`                   | 旧 epoch 托管备份引用；restore 动作必需                                                  |
+| `CS_DATABASE_MIGRATION_CONFIRM`                   | discard 必须恰为 `discard`                                                               |
+| `CS_PLATFORM_API_URL` / `CS_PLATFORM_API_TOKEN`   | 对象内容读取及现有平台 API 上下文                                                        |
+
+control adapter 在 `/v1/operations/<operation-id>` 下读写 `artifacts`（字节、digest、requestKey），
+调用 `freeze/verify`、`prepared`、`activation`、`rollback`、`backup`。平台持久化 artifacts，
+使全新 Job 在本地 scratch 丢失后仍能重建冻结源和回执。`prepared` 必须接收完整 target
+location 与 receipt digest；`activation` 返回源/目标的实际配置权威，不能只回传 Job 状态。
+实现入口为 `packages/backend/src/bootstrap/epochMigrationHostedEntry.ts:15`。
+
+执行顺序：
+
+1. 同一候选 build 运行 `agent-workflow migrate`，action=plan。保存输出
+   `CS_DATABASE_MIGRATION_PLAN=<JSON>`；它包含完整 plan view。审阅 fingerprint、blocks、
+   restrictions、operator decisions 和 effects，完成实例批准。不可确认的 block 必须先处理。
+2. 平台进入维护，停止全部旧 writer 并出具 freeze reference；用同一 operation、目标和
+   批准摘要重跑 migrate，action=run。若返回新的 PLAN（可能是 approval request 而非完整 view），
+   保持维护并取得新计划；不能把正常退出码当成切换成功。
+3. `CS_DATABASE_MIGRATION_RECEIPT=<JSON>` 的 activation receipt 证明目标已准备。
+   **Job 不执行平台配置切换，也不打开 admission**。平台核对 receipt，切换数据库配置，
+   让服务槽、maintenance Worker、任务镜像助手重建到同一 generation；旧连接全部关闭。
+4. 独立 Job 执行 `agent-workflow verify-database-migration`，同 operation / source generation /
+   target / control URL。它要求平台 observation 已指目标，保存 verification receipt；失败仍保持维护。
+5. 按演练模板完成首写前撤回演练；重新批准正式切换后开放目标准入。daemon 启动即可产生
+   首次业务写入，之后只能前滚或恢复目标备份。验收后 action=complete 运行 migrate，记录
+   completion receipt 和 retention。complete 本身也关闭 rollback 窗口。
+
+需要撤回时 action=rollback 的 migrate Job 先 retirement 围栏，再请求平台回退配置；已首写
+必须拒绝。每次 Job 重建都沿原 operation/receipt 继续，不新派发已完成 effect。平台 control
+API、全部 writer 同代切换、freeze 和 admission 的真实联调是 T18-hosted / T19 必需证据。
+
 ## 事件入站
 
 代码平台事件只经 CS 进入 AW（托管下没有直连 webhook 入口）：
@@ -95,7 +147,8 @@ CS_TOKEN=<平台会话> CS_GITLAB_TOKEN=<项目仓库令牌> \
 
 ## 回退
 
-- 切回另一个槽即回退服务版本；迁移只增，新版服务接受只增的较新 schema。
+- 同 epoch 仅在完整后继链标为 expand-only 且 native admission 通过时，才允许旧版本服务较新 schema。
+  epoch-2 switch 不能只切回 epoch-1 槽；首写前使用上述 rollback，首写后前滚或目标备份恢复。
 - 切流（含回退）后，新的生产实例要等原实例失去执行权、自己取得执行权才执行任务（2026-10-19 本机回退演练约 1 分钟）：其间页面与读接口照常，发起任务返回 503「本实例暂不执行任务」，稍后重试即可；原实例失权后以 1 退出并作为待命槽重启。
 - M0（v0.5.0 及更早）的服务启动时要求 schema 与自身完全一致：库迁移到 v3 之后，这些旧版本重启即拒绝启动。升级越过 M0 之后，只回退到 v3 及以后的版本。
 - 一旦新版本开始写入数据，不支持退回单机；需要退回时先停写，再走经过验收的导出 / 恢复。
@@ -103,7 +156,13 @@ CS_TOKEN=<平台会话> CS_GITLAB_TOKEN=<项目仓库令牌> \
 ## 备份与恢复
 
 - **备份**：AW 设置页的「备份」（托管）或 `POST /api/backup`（`includeWorktrees: false`）。归档是单机 PostgreSQL 逻辑备份格式，存为 CS 对象，可在同页校验。托管备份不包含工作树（能力影响 C10）。
-- **恢复**：在 CS 发布页发起数据库恢复（CS RFC-042）：选择备份引用 → 平台建空的新数据库世代 → 恢复 Job 以 `CS_DATABASE_RESTORE_REFERENCE` 运行 `agent-workflow migrate`（下载校验、导入、恢复后归一）→ 独立校验 Job 运行 `agent-workflow verify-database-restore` → 显式进入维护并切换；原库保留。恢复后非终态任务标为 `auto_recovery_suspended`，未结算的执行绑定按 `restored` 取消结算，进行中的平台恢复请求以失败结束。
+- **epoch-2 恢复**：在 CS 发布页发起数据库恢复（CS RFC-042）：选择备份引用 → 平台建空的新数据库世代 → 恢复 Job 以 `CS_DATABASE_RESTORE_REFERENCE` 运行 `agent-workflow migrate`（校验 native contract、导入业务行和 `epoch2-metadata.json`、恢复后归一）→ 独立校验 Job 运行 `agent-workflow verify-database-restore` → 显式进入维护并切换；原库保留。恢复后非终态任务标为 `auto_recovery_suspended`，未结算的执行绑定按 `restored` 取消结算，进行中的平台恢复请求以失败结束。
+
+- **epoch-1 备份**：同时提供 migration operation ID 与 restore reference，使 migrate 进入
+  `restore-backup` converter 并输出 PLAN；批准后 action=run，再用独立
+  `verify-database-migration` 校验。这一路与 epoch-2 的 `verify-database-restore` 不可混用。
+- **保留**：epoch switch 的源、目标、备份、内容清单和回执不自动删除；完整保存 source key、
+  build、generation 与对象引用。metadata sidecar 保留 archive bytes、history restrictions 和 lineage。
 
 ## 平台恢复动作
 

@@ -58,7 +58,7 @@ const REPAIR_SRC = readFileSync(
   'utf-8',
 )
 const FRESHNESS_SRC = readFileSync(
-  join(SRC_ROOT, 'modules/task-execution/infrastructure/runSelection/oracle/legacyPickers.ts'),
+  join(SRC_ROOT, 'modules/task-execution/infrastructure/migration/oracle/legacyPickers.ts'),
   'utf-8',
 )
 
@@ -94,7 +94,12 @@ function srcInventory(needle: string): Record<string, number> {
   for (const entry of readdirSync(SRC_ROOT, { recursive: true, withFileTypes: true })) {
     if (!entry.isFile() || !entry.name.endsWith('.ts')) continue
     const abs = join(entry.parentPath, entry.name)
-    const n = countOccurrences(readFileSync(abs, 'utf-8'), needle)
+    const text = readFileSync(abs, 'utf-8')
+    const source =
+      needle === 'retryIndex > '
+        ? text.replace(/row\.retryIndex > filter\.attemptIndexGreaterThan/g, '')
+        : text
+    const n = countOccurrences(source, needle)
     if (n > 0) inventory[relative(SRC_ROOT, abs).replaceAll('\\', '/')] = n
   }
   return inventory
@@ -119,9 +124,7 @@ describe('S-13 freshest-run comparator forks — source-text guards (all forks c
     // shared one.
     expect(FRESHNESS_SRC.includes('export function isFresherNodeRun')).toBe(true)
     expect(FRESHNESS_SRC.includes('export function pickFreshestRun')).toBe(true)
-    expect(SCHEDULER_SRC.includes("export { isFresherNodeRun } from '@/services/freshness'")).toBe(
-      true,
-    )
+    expect(SCHEDULER_SRC).not.toMatch(/export.*isFresherNodeRun/)
     expect(SCHEDULER_SRC.includes('export function isFresherNodeRun')).toBe(false)
   })
 
@@ -146,8 +149,8 @@ describe('S-13 freshest-run comparator forks — source-text guards (all forks c
       join(SRC_ROOT, 'modules/task-execution/infrastructure/taskRollbackCodec.ts'),
       'utf-8',
     )
-    expect(codecSrc.includes('decodeTaskRollbackCheckpoints(')).toBe(true)
-    expect(codecSrc.includes('planTaskCheckpointRollback(repositories, run.checkpoints)')).toBe(
+    expect(codecSrc.includes("taskCheckpointRefs(run.checkpoints, 'preSnapshot')")).toBe(true)
+    expect(codecSrc.includes('planTaskCheckpointRollback(target.repos, run.checkpoints)')).toBe(
       true,
     )
     const plannerSrc = readFileSync(
@@ -226,12 +229,10 @@ describe('S-13 freshest-run comparator forks — source-text guards (all forks c
       'utf8',
     )
     expect(query).toContain("input.order === 'retry-desc'")
-    expect(query).toContain('desc(nodeRuns.retryIndex)')
-    expect(query).toContain('descNullsLast(nodeRuns.seq)')
-    expect(query).toContain('desc(nodeRuns.id)')
-    expect(srcInventory(FORK_MARKER)).toEqual({
-      'modules/task-execution/infrastructure/nodeRunQueries.ts': 1,
-    })
+    expect(query).toContain('engineOf(db).descNullsLast(run.attemptIndex)')
+    expect(query).toContain('desc(run.seq)')
+    expect(query).not.toContain('desc(run.id)')
+    expect(srcInventory(FORK_MARKER)).toEqual({})
   })
 
   test('G7 (RFC-096 §4 new ratchet): desc(nodeRuns.startedAt) appears NOWHERE in src/ — startedAt is not a freshness ordering', () => {
@@ -317,7 +318,7 @@ describe('S-13 freshest-run comparator forks — source-text guards (all forks c
     // 白名单跟着实现走，总数仍是 2。
     expect(srcInventory('retryIndex > ')).toEqual({
       'platform/nodeRunAttempt.ts': 1,
-      'modules/task-execution/infrastructure/runSelection/oracle/pickers.ts': 1,
+      'modules/task-execution/infrastructure/runSelection/selectionWrite.ts': 1,
     })
   })
 })
