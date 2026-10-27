@@ -1,4 +1,4 @@
-import { expect, test } from 'bun:test'
+import { setDefaultTimeout, expect, test } from 'bun:test'
 import { appendFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describeV2Providers } from './helpers/rfc395V2Harness'
@@ -21,6 +21,9 @@ import {
   canonicalValue,
 } from '@/platform/persistence/migration/conversion/migrationKey'
 import type { SourceRow } from '@/platform/persistence/migration/conversion/types'
+
+// Slowest case took 4.25 s on CI run 40433510287 including hooks; allow 20 s.
+setDefaultTimeout(20_000)
 
 test('history package codec retains typed integer, NULL, bytes and exact JSON text', () => {
   const key = [canonicalValue('id')]

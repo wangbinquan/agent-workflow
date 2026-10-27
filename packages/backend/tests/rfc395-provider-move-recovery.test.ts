@@ -1,6 +1,6 @@
 // BF-D2: boot never resumes a parked/failed/cancelled move merely because it
 // shares the live source. Only a healthy pointer binding or active cutover wins.
-import { afterEach, expect, test } from 'bun:test'
+import { setDefaultTimeout, afterEach, expect, test } from 'bun:test'
 import { mkdtempSync, readFileSync, rmSync, existsSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -21,6 +21,9 @@ import {
   DATABASE_MIGRATION_PHASES,
   type DatabaseMigrationPhase,
 } from '@/modules/system-operations/domain/databaseMigration'
+
+// Slowest case took 3.08 s on CI run 40433510287 including hooks; allow 20 s.
+setDefaultTimeout(20_000)
 
 const roots: string[] = []
 afterEach(() => {

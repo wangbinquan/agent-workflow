@@ -1,4 +1,4 @@
-import { expect, test } from 'bun:test'
+import { setDefaultTimeout, expect, test } from 'bun:test'
 import { TASK_DEFINITION_HOSTS, canonicalJson } from '@agent-workflow/shared'
 import { describeV2Providers } from './helpers/rfc395V2Harness'
 import {
@@ -11,6 +11,9 @@ import {
 } from './helpers/rfc395V2/taskFixtures'
 import destinations from '@/bootstrap/targetColumnDestinations.json'
 import type { DecodedSourceRow } from '@/platform/persistence/migration/sourceTypes'
+
+// Slowest case took 3.09 s on CI run 40433510287 including hooks; allow 20 s.
+setDefaultTimeout(20_000)
 
 describeV2Providers('RFC-395 V2-T subject and definition', (h) => {
   test('TASK_FACTS classifies every D4 status once and supplies startedAt without any run', async () => {

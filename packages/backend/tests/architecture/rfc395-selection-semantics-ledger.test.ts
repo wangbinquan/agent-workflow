@@ -1,10 +1,13 @@
 // RFC-395 II-a A3：所有 familyHistory 站点与帧语义账本双向锁定，防止漏记或遗留无效例外。
 // RFC-395 II-a A3: branchTrace now gets the same history snapshot through its injected reader.
-import { describe, expect, test } from 'bun:test'
+import { setDefaultTimeout, describe, expect, test } from 'bun:test'
 import { readFileSync, readdirSync } from 'node:fs'
 import { join, relative, resolve } from 'node:path'
 import ledger from '../fixtures/rfc395-selection-semantics-ledger.json'
 import { familyHistorySites, selectionSemanticsViolations } from '../helpers/selectionSemantics'
+
+// Slowest case took 3.30 s on CI run 40433510287 including hooks (2.12 s before RFC-395 II-b); allow 20 s.
+setDefaultTimeout(20_000)
 
 const backend = resolve(import.meta.dir, '../..')
 function sources(directory: string): string[] {

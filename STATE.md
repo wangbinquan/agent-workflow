@@ -10,7 +10,8 @@
   - 测试：重型用例提速约一半并拆文件；47 个文件写明理由的超时；epoch-2 对拍归一化；PG 夹具每例复位 209 → 108 ms。
   - CI：Ubuntu 后端分片 24 → 36（用户裁决）。
 - 本机按 CI 跑法复验（6 分片、两条泳道同进程、默认超时、随机顺序）：后端全量 31,376 / 0；迁移相关 e2e 42 / 0。详见 [RFC plan §6.13「CI 第一轮与修复轮」](design/RFC-395-database-target-schema-rebuild/plan.md)。
-- 不属本次、保留证据、未改：Windows e2e 第 3 分片的两条 RFC-396 用例；e2e-full 夜间的 RFC-319 账本差异（RFC-396 的 e2e 已命中 `POST /api/code/verification-profiles/:id/publish`，账本没有缩小）。
+- CI 第二轮（`b8b1272c1`，运行 40433510287）：后端 36 片中 35 片通过，唯一失败是 RFC-346 的语料扫描用例 5.41 秒超时（II-b 前 4.40 秒，随语料增长）。按这次 CI 的实测，把 34 个测试文件改为 20 秒预算：它们在默认 5 秒下已用到 60% 以上，且属于本 RFC，或随 II-b 明显变慢。改动前后耗时相同的不动。
+- 不属本次、保留证据、未改：Windows e2e 第 3 分片的 RFC-396 用例，以及 Windows 上本地 git 夹具克隆慢（6～8 秒）导致的 `task-lifecycle-states` 等待超时（II-b 前同样出现）；e2e-full 夜间的 RFC-319 账本差异（RFC-396 的 e2e 已命中 `POST /api/code/verification-profiles/:id/publish`，账本没有缩小）。
 
 **T18 集中验证**：
 - 后端测试首次全量执行：SQLite 全量（2,668 个文件，随机顺序）22,510 / 0；PostgreSQL 全量（1,192 个带 PG 变体的文件）9,917 / 0。两种 provider 是分开跑的，CI 第一轮因此暴露了上述问题。

@@ -1,4 +1,4 @@
-import { expect, test } from 'bun:test'
+import { setDefaultTimeout, expect, test } from 'bun:test'
 import { describeV2Providers } from './helpers/rfc395V2Harness'
 import { V2MemorySink } from './helpers/rfc395V2MemorySink'
 import { frozenValues, historyLookups } from './helpers/rfc395V2/contentFixtures'
@@ -8,6 +8,9 @@ import { runConversion } from '@/platform/persistence/migration/conversion/engin
 import { historyAdoptionsLookup } from '@/platform/persistence/migration/archives/adoptions'
 import { columnLookup, idSetLookup } from '@/platform/persistence/migration/conversion/lookups'
 import type { DecodedSourceRow } from '@/platform/persistence/migration/sourceTypes'
+
+// Slowest case took 5.23 s on CI run 40433510287 including hooks; allow 20 s.
+setDefaultTimeout(20_000)
 
 // X-1/X-2: delivery progress and open findings are history, not work predicates.
 const completed: Readonly<Record<string, DecodedSourceRow>> = {

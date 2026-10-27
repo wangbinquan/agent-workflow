@@ -4,9 +4,12 @@
 import { createHash } from 'node:crypto'
 import { readFileSync, readdirSync } from 'node:fs'
 import { join, relative, resolve } from 'node:path'
-import { describe, expect, test } from 'bun:test'
+import { setDefaultTimeout, describe, expect, test } from 'bun:test'
 import ts from 'typescript'
 import ledger from '../fixtures/rfc395-run-selection-boundary-ledger.json'
+
+// Slowest case took 3.15 s on CI run 40433510287 including hooks (2.31 s before RFC-395 II-b); allow 20 s.
+setDefaultTimeout(20_000)
 
 const backend = resolve(import.meta.dir, '../..')
 const oracle = 'src/modules/task-execution/infrastructure/migration/oracle/'

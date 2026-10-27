@@ -1,6 +1,6 @@
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 // RFC-395 C: v2 open manifests, content publication and history-only replay fences.
-import { expect, test } from 'bun:test'
+import { setDefaultTimeout, expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
 import { mkdtemp, writeFile, rm } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -67,6 +67,9 @@ import {
   gateOperationsRule,
   gateOperationsValidator,
 } from '@/modules/collaboration/infrastructure/migration/gateOperationsRule'
+
+// Slowest case took 3.83 s on CI run 40433510287 including hooks; allow 20 s.
+setDefaultTimeout(20_000)
 
 const allowed = { check: async () => ({ allowed: true as const }) }
 

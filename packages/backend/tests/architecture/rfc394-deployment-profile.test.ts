@@ -1,8 +1,11 @@
 // RFC-394: lock the single deployment contract, its neutral consumers and exhaustive forwarding.
-import { expect, test } from 'bun:test'
+import { setDefaultTimeout, expect, test } from 'bun:test'
 import ts from 'typescript'
 import { resolve } from 'node:path'
 import { backendUnits, sourceUnit, type SourceUnit } from './census'
+
+// Slowest case took 3.49 s on CI run 40433510287 including hooks (1.99 s before RFC-395 II-b); allow 20 s.
+setDefaultTimeout(20_000)
 
 const PREFIX = 'packages/backend/src/'
 const PROFILE = PREFIX + 'bootstrap/deploymentProfile.ts'

@@ -1,5 +1,5 @@
 // RFC-395 T18 PGF: reference DDL batches retain the exact sequential catalog and rollback scope.
-import { expect, test } from 'bun:test'
+import { setDefaultTimeout, expect, test } from 'bun:test'
 import type {
   PostgresqlReservedConnection,
   SqlRows,
@@ -11,6 +11,9 @@ import { collectEpoch1PostgresqlCatalog } from '@/platform/persistence/migration
 import { postgresqlHistoryConnection } from '@/platform/persistence/schema/history/connection'
 import { describeEachProvider, resolveTestProviders } from './helpers/eachProvider'
 import { withR2TargetHarness } from './helpers/rfc395R2Harness'
+
+// Slowest case took 4.65 s on CI run 40433510287 including hooks; allow 20 s.
+setDefaultTimeout(20_000)
 
 test('reference compilation has bounded batches and preserves statement order and literal bytes', async () => {
   const statements = Array.from({ length: 257 }, (_, index) => `SELECT ${index}`)

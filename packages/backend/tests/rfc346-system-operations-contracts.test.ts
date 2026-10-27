@@ -1,7 +1,7 @@
 // RFC-346 — locks the System Operations application boundary independently of
 // HTTP/catalog wiring, so Cohort A can develop while RFC-344 closes out.
 
-import { describe, expect, test } from 'bun:test'
+import { setDefaultTimeout, describe, expect, test } from 'bun:test'
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import ts from 'typescript'
@@ -25,6 +25,9 @@ import {
 } from '../src/modules/system-operations/public/operations'
 import { backendUnits, sourceUnit, type SourceUnit } from './architecture/census'
 import { createGateCorpus } from './architecture/rfc294Gates'
+
+// Slowest case took 5.41 s on CI run 40433510287 including hooks (4.40 s before RFC-395 II-b); allow 20 s.
+setDefaultTimeout(20_000)
 
 const SOURCE_ROOT = join(import.meta.dirname, '../src')
 const REPO_ROOT = join(import.meta.dirname, '../../..')

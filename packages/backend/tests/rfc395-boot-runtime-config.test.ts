@@ -1,5 +1,5 @@
 // RFC-395 B-5: preserve explicit runtime choices and block unproven legacy defaults.
-import { expect, test } from 'bun:test'
+import { setDefaultTimeout, expect, test } from 'bun:test'
 import {
   conversion,
   runtimeConfigEnvironment,
@@ -16,6 +16,9 @@ import { describeV2Providers, emptyV2Content } from './helpers/rfc395V2Harness'
 import { frozenValues } from './helpers/rfc395V2/contentFixtures'
 import { V2MemorySink } from './helpers/rfc395V2MemorySink'
 import type { BootUpgradeCaptureInput } from '@/platform/persistence/migration/freeze/bootUpgradeEnvironment'
+
+// Slowest case took 3.52 s on CI run 40433510287 including hooks; allow 20 s.
+setDefaultTimeout(20_000)
 
 const config: RuntimeConfigFact = {
   state: 'present',

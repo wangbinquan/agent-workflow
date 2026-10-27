@@ -1,7 +1,7 @@
 import type { TaskCreationInput } from '@/modules/task-execution/application/ports/taskCreation'
 import { createTaskCreationParticipantInTx } from '@/modules/task-execution/infrastructure/taskCreationParticipant'
 import { tablesOf } from '@/platform/persistence/sessionTables'
-import { expect, test } from 'bun:test'
+import { setDefaultTimeout, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { describeEachProvider } from './helpers/eachProvider'
 
@@ -309,6 +309,9 @@ import { DrizzleSchedulerCompletionPersistence } from '@/modules/task-execution/
 import { encodeCanonicalRunSlot } from '@/modules/task-execution/domain/runSelection/slotKey'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { createTaskDetailQueries } from '@/modules/task-execution/infrastructure/taskDetailQueries'
+
+// Slowest case took 3.23 s on CI run 40433510287 including hooks; allow 20 s.
+setDefaultTimeout(20_000)
 
 describeEachProvider(
   'RFC-395 W1 borrowed workspace and stored directory regressions',

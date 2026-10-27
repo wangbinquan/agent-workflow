@@ -1,4 +1,4 @@
-import { expect, test } from 'bun:test'
+import { setDefaultTimeout, expect, test } from 'bun:test'
 import { describeV2Providers } from './helpers/rfc395V2Harness'
 import { V2MemorySink } from './helpers/rfc395V2MemorySink'
 import {
@@ -18,6 +18,9 @@ import { legacyLocationToContentRef } from '@/platform/persistence/migration/con
 import { decodeContentRefColumns } from '@/platform/content/contentRefCodec'
 import { runConversion } from '@/platform/persistence/migration/conversion/engine'
 import type { ConversionRule } from '@/platform/persistence/migration/conversion/rule'
+
+// Slowest case took 3.19 s on CI run 40433510287 including hooks; allow 20 s.
+setDefaultTimeout(20_000)
 
 describeV2Providers('RFC-395 V2-X content references', (h) => {
   test('X-owned real source shapes preserve bytes, NULLs, location and untouched columns', async () => {

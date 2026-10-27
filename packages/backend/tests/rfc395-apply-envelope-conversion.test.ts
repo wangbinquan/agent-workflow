@@ -1,5 +1,5 @@
 // RFC-395 P: every readable source journal becomes a target envelope; source bytes stay archived.
-import { expect, test } from 'bun:test'
+import { setDefaultTimeout, expect, test } from 'bun:test'
 import { describeV2Providers } from './helpers/rfc395V2Harness'
 import { convertFixtures, readFixtureRows } from './helpers/rfc395V2/collabFixtures'
 import { decodeStagedValue } from '@/platform/persistence/migration/conversion/staging'
@@ -18,6 +18,9 @@ import { resourcePackageArtifactCodecs } from '@/modules/resource-catalog/infras
 import { readOnlyProbes as intentProbes } from '@/modules/intent/composition/conversion'
 import { readOnlyProbes as resourceProbes } from '@/modules/resource-catalog/infrastructure/migration/probes'
 import { collectReadOnlyProbes } from '@/platform/persistence/migration/run/probes'
+
+// Slowest case took 3.37 s on CI run 40433510287 including hooks; allow 20 s.
+setDefaultTimeout(20_000)
 
 const plugin = {
   kind: 'plugin-install',

@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'bun:test'
+import { setDefaultTimeout, describe, expect, test } from 'bun:test'
 import { describeV2Providers, fixtureLookup } from './helpers/rfc395V2Harness'
 import { overrideSourceValues } from './helpers/rfc395V2/sourceOverride'
 import {
@@ -17,6 +17,9 @@ import type {
   ConversionContribution,
   ConversionRule,
 } from '@/platform/persistence/migration/conversion/rule'
+
+// Slowest case took 3.24 s on CI run 40433510287 including hooks; allow 20 s.
+setDefaultTimeout(20_000)
 
 describe('RFC-395 V2-T name alignment', () => {
   test('0021 fallback counts Unicode characters like SQLite substr and preserves nonempty names', () => {

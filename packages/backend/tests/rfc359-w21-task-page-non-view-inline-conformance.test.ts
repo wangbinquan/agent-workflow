@@ -6,7 +6,7 @@ import { patchTaskFixture, taskFixture, workflowFixture, readTaskFixtures } from
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { rawRows } from '@/platform/persistence/queryHelpers'
-import { expect, test } from 'bun:test'
+import { setDefaultTimeout, expect, test } from 'bun:test'
 import { sql, SQL, StringChunk } from 'drizzle-orm'
 
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
@@ -24,6 +24,9 @@ import {
   type PostgresqlPool,
 } from '@/platform/persistence/postgresqlRuntime'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
+
+// Slowest case took 3.03 s on CI run 40433510287 including hooks (1.01 s before RFC-395 II-b); allow 20 s.
+setDefaultTimeout(20_000)
 
 const VIEWER: TaskListViewer = { userId: 'w21-owner', canReadAllTasks: true }
 const OPTIONS = { catalogVisibility: 'public' } as const

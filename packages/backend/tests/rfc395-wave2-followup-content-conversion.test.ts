@@ -1,7 +1,7 @@
 // RFC-395 C-F2: conversion must preserve the committed reader's staged fallback
 // without admitting missing or mismatched bytes, or rejecting a completed rename.
 // FX-2 checks document outcomes independently of the artifact's own staged slot.
-import { expect, test } from 'bun:test'
+import { setDefaultTimeout, expect, test } from 'bun:test'
 import { conversion } from '@/platform/content/migration'
 import { runConversion } from '@/platform/persistence/migration/conversion/engine'
 import { parameters } from '@/platform/persistence/schema/history/connection'
@@ -17,6 +17,9 @@ import {
   contentBytes,
   contentDigest,
 } from './helpers/rfc395V2/contentFixtures'
+
+// Slowest case took 3.16 s on CI run 40433510287 including hooks; allow 20 s.
+setDefaultTimeout(20_000)
 
 const final = { codec: 'review-body', value: 'runs/task/review/doc.md' }
 const staged = { codec: 'review-body', value: 'runs/.staging/doc.md' }

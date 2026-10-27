@@ -1,5 +1,5 @@
 // RFC-395 V3-R: authored for T18; offline target receipts never activate runtime wiring.
-import { expect, test } from 'bun:test'
+import { setDefaultTimeout, expect, test } from 'bun:test'
 import { describeV3Providers, type V3Harness } from './helpers/rfc395V3Harness'
 import { seedRequiredRows } from './helpers/rfc395V2/integrationFixtures'
 import { persistenceSchema } from '@/bootstrap/persistenceSchema'
@@ -20,6 +20,9 @@ import { createTargetLoader } from '@/platform/persistence/migration/target/load
 import { createMigrationMetaStore } from '@/modules/system-operations/infrastructure/epochSwitch/metaStore'
 import { createTargetConversionSink } from '@/modules/system-operations/infrastructure/epochSwitch/conversionSink'
 import { createMigrationTraceQuery } from '@/modules/system-operations/application/epochSwitch/trace'
+
+// Slowest case took 4.45 s on CI run 40433510287 including hooks; allow 20 s.
+setDefaultTimeout(20_000)
 
 function sealUnit(output: UnitOutput): UnitOutput {
   const { digest: _digest, ...receipt } = output.receipt

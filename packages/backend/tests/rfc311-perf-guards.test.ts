@@ -68,7 +68,7 @@ import {
 } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 
-import { afterAll, describe, expect, test } from 'bun:test'
+import { setDefaultTimeout, afterAll, describe, expect, test } from 'bun:test'
 import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
 import { mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -95,6 +95,9 @@ import {
 import { runProductionOverview } from './helpers/productionOverview'
 import { listTaskOperationsPage } from './helpers/taskListPage'
 import type { RecordedStatement } from './helpers/statementRecorder'
+
+// Slowest case took 4.28 s on CI run 40433510287 including hooks (3.48 s before RFC-395 II-b); allow 20 s.
+setDefaultTimeout(20_000)
 
 const T0 = 1_700_000_000_000
 const LEGACY_TERMINAL_STATUSES = [

@@ -1,4 +1,4 @@
-import { expect, test } from 'bun:test'
+import { setDefaultTimeout, expect, test } from 'bun:test'
 import { describeV2Providers } from './helpers/rfc395V2Harness'
 import { V2MemorySink } from './helpers/rfc395V2MemorySink'
 import {
@@ -17,6 +17,9 @@ import {
   encodeMigrationKey,
 } from '@/platform/persistence/migration/conversion/migrationKey'
 import type { SourceRow } from '@/platform/persistence/migration/conversion/types'
+
+// Slowest case took 3.60 s on CI run 40433510287 including hooks; allow 20 s.
+setDefaultTimeout(20_000)
 
 test('skill decoder keeps BOM, invalid UTF-8 and empty bytes; UTF-8 and base64 agree', () => {
   for (const text of ['', '\ufeff技能\r\n', 'text\0tail']) {

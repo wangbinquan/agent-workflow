@@ -1,6 +1,6 @@
 import { initializeClarifyHistory } from '@/modules/collaboration/composition/clarifyHistory'
 import { readClarifyHistory } from '@/modules/collaboration/infrastructure/clarifyHistoryProjection'
-import { expect, test } from 'bun:test'
+import { setDefaultTimeout, expect, test } from 'bun:test'
 import { eq, sql } from 'drizzle-orm'
 import { describeEachProvider } from './helpers/eachProvider'
 import {
@@ -35,6 +35,9 @@ import {
 import { createCollaborationTaskAccessPort } from '@/modules/collaboration/infrastructure/collaborationTaskAccess'
 import { buildActor } from '@/auth/actor'
 import { ClarifyRoundSchema } from '@agent-workflow/shared'
+
+// Slowest case took 3.38 s on CI run 40433510287 including hooks; allow 20 s.
+setDefaultTimeout(20_000)
 
 const definition = '{"$schema_version":6,"inputs":[],"nodes":[],"edges":[]}'
 const answers =

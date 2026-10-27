@@ -2,7 +2,7 @@ import { createFileSkillContentBinding } from '@/modules/resource-catalog/infras
 import { conversion as contentConversion } from '@/platform/content/migration'
 import { contentLookups, frozenValues } from './helpers/rfc395V2/contentFixtures'
 // RFC-395 X: native bytes, explicit tree locations and ordinary operation recovery survive the switch.
-import { afterEach, expect, test } from 'bun:test'
+import { setDefaultTimeout, afterEach, expect, test } from 'bun:test'
 import { mkdtempSync, rmSync, mkdirSync, writeFileSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
@@ -267,6 +267,9 @@ import { describeV2Providers, emptyV2Content } from './helpers/rfc395V2Harness'
 import { V2MemorySink } from './helpers/rfc395V2MemorySink'
 import { createTestDb } from './helpers/testDatabase'
 import type { BootUpgradeCaptureInput } from '@/platform/persistence/migration/freeze/bootUpgradeEnvironment'
+
+// Slowest case took 4.50 s on CI run 40433510287 including hooks; allow 20 s.
+setDefaultTimeout(20_000)
 
 const frozenConverter: SkillBootContentConverter = convertFrozenSkillContent
 

@@ -1,8 +1,11 @@
 // RFC-380 / RFC-381 / RFC-382 / RFC-383 / RFC-384 / RFC-376 hard gate: bundles are session-scoped, and the application graph constructs each bundle once.
-import { describe, expect, test } from 'bun:test'
+import { setDefaultTimeout, describe, expect, test } from 'bun:test'
 import ts from 'typescript'
 import { resolve } from 'node:path'
 import { backendUnits, sourceUnit, type SourceUnit } from './census'
+
+// Slowest case took 3.40 s on CI run 40433510287 including hooks (2.08 s before RFC-395 II-b); allow 20 s.
+setDefaultTimeout(20_000)
 
 const PREFIX = 'packages/backend/src/'
 const BUNDLES = [

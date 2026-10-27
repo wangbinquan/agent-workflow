@@ -17,7 +17,7 @@ import { composeRepositoryBackupPreparation } from '@/bootstrap/repositoryBackup
 
 import { workflowFixture } from './helpers/model'
 import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'
-import { afterEach, describe, expect, test } from 'bun:test'
+import { setDefaultTimeout, afterEach, describe, expect, test } from 'bun:test'
 import { removeTempDirSync } from './fixtures/tempDir'
 import { Database } from 'bun:sqlite'
 import { existsSync, mkdirSync, mkdtempSync, unlinkSync, writeFileSync } from 'node:fs'
@@ -46,6 +46,9 @@ import { quickCheckDbFile } from '../src/db/integrity'
 import { readFileSync } from 'node:fs'
 import { restoreCommand } from '../src/cli/restore'
 import { composeLocalSystemOperations } from '../src/modules/system-operations/composition'
+
+// Slowest case took 4.16 s on CI run 40433510287 including hooks (1.46 s before RFC-395 II-b); allow 20 s.
+setDefaultTimeout(20_000)
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 

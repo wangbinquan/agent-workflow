@@ -1,5 +1,5 @@
 // RFC-395 U-4: epoch-1 identity/backfill proofs run at B's frozen converter boundary.
-import { expect, test } from 'bun:test'
+import { setDefaultTimeout, expect, test } from 'bun:test'
 import {
   mkdirSync,
   mkdtempSync,
@@ -29,6 +29,9 @@ import { frozenValues } from './helpers/rfc395V2/contentFixtures'
 import { V2MemorySink } from './helpers/rfc395V2MemorySink'
 import type { BootUpgradeCaptureInput } from '@/platform/persistence/migration/freeze/bootUpgradeEnvironment'
 import { digestSortedTree } from '@/modules/resource-catalog/infrastructure/legacy/skillHash'
+
+// Slowest case took 3.14 s on CI run 40433510287 including hooks (0.57 s before RFC-395 II-b); allow 20 s.
+setDefaultTimeout(20_000)
 
 const modes: readonly string[] = [
   'absolute-restore',

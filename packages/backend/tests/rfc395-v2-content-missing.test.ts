@@ -1,4 +1,4 @@
-import { expect, test } from 'bun:test'
+import { setDefaultTimeout, expect, test } from 'bun:test'
 import { describeV2Providers } from './helpers/rfc395V2Harness'
 import { V2MemorySink } from './helpers/rfc395V2MemorySink'
 import {
@@ -11,6 +11,9 @@ import {
 } from './helpers/rfc395V2/contentFixtures'
 import { conversion } from '@/platform/content/migration'
 import { runConversion } from '@/platform/persistence/migration/conversion/engine'
+
+// Slowest case took 3.15 s on CI run 40433510287 including hooks; allow 20 s.
+setDefaultTimeout(20_000)
 
 const location = { codec: 'review-body', value: 'runs/task/review/doc.md' }
 describeV2Providers('RFC-395 V2-X missing content', (h) => {

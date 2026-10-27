@@ -1,4 +1,4 @@
-import { expect, test } from 'bun:test'
+import { setDefaultTimeout, expect, test } from 'bun:test'
 import { describeV2Providers } from './helpers/rfc395V2Harness'
 import {
   taskRow,
@@ -9,6 +9,9 @@ import {
   assertTaskHistoryProjection,
 } from './helpers/rfc395V2/taskFixtures'
 import { decodeRequestedSourceJson } from '@/modules/task-execution/domain/requestedSourceCodec'
+
+// Slowest case took 4.36 s on CI run 40433510287 including hooks; allow 20 s.
+setDefaultTimeout(20_000)
 
 describeV2Providers('RFC-395 V2-T workspace', (h) => {
   test('equal mirrors, deterministic repo keys and all frozen mount columns survive', async () => {

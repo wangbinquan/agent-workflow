@@ -1,4 +1,4 @@
-import { expect, test } from 'bun:test'
+import { setDefaultTimeout, expect, test } from 'bun:test'
 import { describeV2Providers } from './helpers/rfc395V2Harness'
 import { V2MemorySink } from './helpers/rfc395V2MemorySink'
 import {
@@ -13,6 +13,9 @@ import {
 import { conversion } from '@/platform/content/migration'
 import { runConversion } from '@/platform/persistence/migration/conversion/engine'
 import { sha256Hex } from '@/util/hash'
+
+// Slowest case took 3.93 s on CI run 40433510287 including hooks; allow 20 s.
+setDefaultTimeout(20_000)
 
 describeV2Providers('RFC-395 V2-X publications and ordered archive parts', (h) => {
   test('each publication state preserves its recovery fields and shares the original object location', async () => {

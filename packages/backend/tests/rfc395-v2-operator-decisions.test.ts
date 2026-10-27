@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'bun:test'
+import { setDefaultTimeout, describe, expect, test } from 'bun:test'
 import { describeV2Providers } from './helpers/rfc395V2Harness'
 import { V2MemorySink } from './helpers/rfc395V2MemorySink'
 import { frozenValues, historyLookups, readFrozenRows } from './helpers/rfc395V2/contentFixtures'
@@ -19,6 +19,9 @@ import {
 } from '@/platform/persistence/migration/conversion/migrationKey'
 import { bytesDigest } from '@/platform/persistence/migration/conversion/digest'
 import type { DecodedSourceRow } from '@/platform/persistence/migration/sourceTypes'
+
+// Slowest case took 3.64 s on CI run 40433510287 including hooks; allow 20 s.
+setDefaultTimeout(20_000)
 
 function acknowledgement(row: SourceRow): OperatorDecision {
   return {

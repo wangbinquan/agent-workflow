@@ -2,7 +2,7 @@
 // tables, six archive-only omissions, native provider types/defaults, and no
 // replay of SQLite migration SQL.
 
-import { describe, expect, test } from 'bun:test'
+import { setDefaultTimeout, describe, expect, test } from 'bun:test'
 import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
@@ -16,6 +16,9 @@ import {
   RFC349_ARCHIVE_THEN_OMIT_TABLES,
 } from '@/platform/persistence/schemaContract'
 import { buildFrozenEpoch1LogicalSchemaContract as buildLogicalSchemaContract } from '@/platform/persistence/migration/epoch1/contract'
+
+// Slowest case took 3.38 s on CI run 40433510287 including hooks (2.80 s before RFC-395 II-b); allow 20 s.
+setDefaultTimeout(20_000)
 
 describe('RFC-349 PostgreSQL schema projection', () => {
   test('projects the exact active parity set', () => {

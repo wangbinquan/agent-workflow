@@ -414,8 +414,9 @@ RFC-395 II-b 的 T18 在本机把后端跑全了：SQLite 全量 22,510 / 0，Po
 
 ## PostgreSQL 夹具的每例开销算在每条用例的 5 秒里（2026-10-26 实测，RFC-395 激活后 PG 用例整体慢约一半）
 
-bun 报出的用例时长包含 `beforeEach` / `afterEach`（实测：700ms 的 beforeEach 加 300ms 的 afterEach，空用例报 1001ms），`setDefaultTimeout`
-同时约束 hook。`describeEachProvider` 的 PostgreSQL 泳道每例都要整库 `TRUNCATE` 再回种快照行，这部分成本落在每一条 PG 用例上。
+bun 报出的用例时长包含 `beforeEach` / `afterEach`（实测：700ms 的 beforeEach 加 300ms 的 afterEach，空用例报 1001ms），但单条超时只约束
+测试体，每个 hook 各有各的预算（实测：3 秒 beforeEach + 3 秒测试体 + 1.5 秒 afterEach 报 7.5 秒，在默认 5 秒下照样通过）；`setDefaultTimeout`
+同时改测试体和 hook 的缺省预算。所以按报出的时长看余量是偏严的估计。`describeEachProvider` 的 PostgreSQL 泳道每例都要整库 `TRUNCATE` 再回种快照行，这部分成本落在每一条 PG 用例上。
 
 - RFC-395 激活后，epoch-2 的 `agent_workflow_meta.schema_history` 带一行约 4.2MB 的目录工件，回种它要 ~100ms，单次复位从 91ms 涨到
   209ms；应用装配的语句也从 380 条涨到 737 条（约 +150ms）。CI 上同名 PG 用例的中位耗时因此变为 1.5 倍（合计 1964 → 2986 秒），

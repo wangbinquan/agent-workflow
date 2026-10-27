@@ -1,9 +1,12 @@
 import { TASK_AGGREGATE_LOCK_ORDER } from '@/modules/task-execution/application/ports/taskAggregateWrite'
 // RFC-395 II-a A2: definition mutations and workgroup config reads stay behind their ports.
-import { expect, test } from 'bun:test'
+import { setDefaultTimeout, expect, test } from 'bun:test'
 import { readFileSync, readdirSync } from 'node:fs'
 import { join, relative, resolve } from 'node:path'
 import ts from 'typescript'
+
+// Slowest case took 3.66 s on CI run 40433510287 including hooks (1.92 s before RFC-395 II-b); allow 20 s.
+setDefaultTimeout(20_000)
 
 const root = resolve(import.meta.dir, '../../src')
 const writer = 'modules/task-execution/infrastructure/taskDefinitionWriteParticipant.ts'

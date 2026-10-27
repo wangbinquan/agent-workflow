@@ -893,6 +893,7 @@ Q-3 同期完成：plan §3 的 18 行拆成 137 个覆盖项，另列 44 个切
 | DTO 对拍（`154fe7652` 的 epoch-1 二进制对本次最终二进制） | plan → run → verify → complete 后比较 10 个 HTTP 面：SQLite 与 PostgreSQL 目标各 7 / 0 |
 | 静态检查 | 三个包的 typecheck、lint、格式、依赖分层、合同历史检查全部通过；`architecture/counts.json` 无上调 |
 | CI（`b6df370b7`，运行 40298205725） | 失败，见下节「CI 第一轮与修复轮」 |
+| CI（`b8b1272c1`，运行 40433510287） | 后端 35 / 36 片通过，余下见下节「CI 第二轮」 |
 
 #### CI 第一轮与修复轮（2026-10-26）
 
@@ -924,6 +925,8 @@ Q-3 同期完成：plan §3 的 18 行拆成 137 个覆盖项，另列 44 个切
   - soak 脚本迁到 epoch 2，并加数据集回归；P0-11 改指 `recoverOperations`；两条架构报告测试按语料增长放宽预算。
 - CI：Ubuntu 后端分片 24 → 36（用户裁决），三个拓扑测试同步。
 - 本机复验改按 CI 的跑法（6 分片、两条泳道同进程、默认超时、随机顺序）：后端全量 31,376 / 0（57 条按条件跳过），无加载级错误；修复轮中途用同一跑法时为 31,366 通过、7 失败、4 个连带错误。相近负载下 PG 用例合计耗时降 13%，单条中位耗时降到 0.75 倍。迁移相关的 5 个 e2e spec（含 epoch-2 切换回滚旅程）在本次二进制上 42 / 0；typecheck、lint、格式、依赖分层、合同历史检查与 `tests/architecture/`（1,207 / 0）通过。
+
+**CI 第二轮**（`b8b1272c1`，运行 40433510287）：后端 36 片中 35 片通过，真实 PostgreSQL 与链接检查通过。唯一的后端失败是 `rfc346-system-operations-contracts` 的语料扫描用例 5.41 秒超时：它逐文件解析整个后端，II-b 前在 CI 上已是 4.40 / 5 秒，后端源文件增长约 12% 后越过预算。按这次 CI 的实测再做一次清点：凡在默认 5 秒预算下已用到 60% 以上、且属于本 RFC，或比 II-b 前明显变慢（语料扫描、PG 开销、恢复路径）的测试文件，统一改为 20 秒并写明实测耗时，共 34 个；改动前后耗时相同的（如 `rfc311-task-page-filtered-fastpath`、`scheduler-wrapper-scope-dependencies`）不动。bun 的单条超时只约束测试体，报告的耗时含 beforeEach / afterEach，清点按含 hook 的耗时从严计。Windows e2e 第 3 分片仍失败：`e2e/rfc396-graph-care-repair.spec.ts:402`（RFC-396，每轮都失败），以及 `e2e/task-lifecycle-states.spec.ts:587` 等待任务进入 running 超时。后者的日志显示本地 git 夹具在 Windows 上重克隆用了约 8 秒，II-b 前（运行 40165321489）同一机制以 6 秒克隆让 443 行失败过，属既有问题，未改。
 
 #### 休眠包与共享账本
 
