@@ -1,3 +1,4 @@
+import type { MigrationProgressCallback } from '@/platform/persistence/migration/run/progress'
 import { existsSync, mkdirSync, readdirSync, statSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { z } from 'zod'
@@ -59,11 +60,13 @@ export function contentManifestDigest(payload: Omit<FreezeContentManifest, 'dige
 }
 
 export async function captureContentManifest(input: {
+  readonly progress?: MigrationProgressCallback
   readonly root: ContentRootSpec
   readonly source: FrozenSourceHandle
   readonly objects?: Pick<InventoryObjectReader, 'stat'>
   readonly destination: string
 }): Promise<FreezeContentManifest> {
+  input.progress?.({ phase: 'content-capture', detail: 'start', boundary: true })
   const root = resolve(input.root.root)
   const index = await readInventorySource(input.source, input.root, dirname(input.destination))
   const directories = new Set<string>([root])
@@ -89,8 +92,15 @@ export async function captureContentManifest(input: {
         if (directories.has(path) && path !== root) return
         directories.add(path)
         for (const name of readdirSync(path).sort()) visit(join(path, name))
-      } else if (info.isFile())
+      } else if (info.isFile()) {
         files.set(relative, { path: relative, size: info.size, mtimeMs: Math.trunc(info.mtimeMs) })
+        input.progress?.({
+          phase: 'content-capture',
+          detail: 'inventory',
+          completed: files.size,
+          unit: 'files',
+        })
+      }
     } catch (error) {
       if (!live || (error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
     }
@@ -137,5 +147,12 @@ export async function captureContentManifest(input: {
   await input.source.reader.assertUnchanged(input.source.preflight)
   mkdirSync(dirname(input.destination), { recursive: true })
   writeFileSync(input.destination, canonicalSchemaJson(manifest))
+  input.progress?.({
+    phase: 'content-capture',
+    detail: 'complete',
+    completed: files.size,
+    unit: 'files',
+    boundary: true,
+  })
   return manifest
 }

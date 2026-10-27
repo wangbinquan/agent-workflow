@@ -29,6 +29,7 @@ export function buildEpochPlan(input: {
   journal: EpochSwitchJournal
   source: FrozenSourceHandle
   manifest: FreezeContentManifest
+  contentManifestPath?: string
   summary: ConversionSummary
   bootUpgradeFacts?: BootUpgradeFacts
   targetPlanDigest: string
@@ -87,6 +88,7 @@ export function buildEpochPlan(input: {
     converterVersion: summary.plan.converterVersion,
     sourceBackupId: input.backup?.id ?? null,
     contentManifestDigest: input.manifest.digest,
+    ...(input.contentManifestPath ? { contentManifestPath: input.contentManifestPath } : {}),
     bootUpgradeEffects: bootUpgradeEffectsFromRecords(summary.records),
     bootUpgradeEnvironmentDigest:
       input.bootUpgradeFacts?.environmentDigest ??

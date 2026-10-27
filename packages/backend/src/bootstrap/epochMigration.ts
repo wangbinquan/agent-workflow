@@ -1,8 +1,10 @@
+import { measureMigrationCapacity } from '@/platform/persistence/migration/freeze/capacity'
+import type { MigrationProgressCallback } from '@/platform/persistence/migration/run/progress'
 import { persistenceDialect } from '@/platform/persistence/nativeDialect'
 import { createExternalTargetPreflight } from '@/platform/persistence/migration/target/preflightAdapter'
 import { epochMigrationKeys } from './epochMigrationKeys'
 // RFC-395 V3-S: offline composition only; package A owns dispatch and startup wiring.
-import { existsSync, statSync, readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { Database } from 'bun:sqlite'
 import type { Config } from '@agent-workflow/shared'
@@ -34,7 +36,6 @@ import {
   unpackOldEpochBackup,
   materializeOldEpochBackup,
 } from '@/platform/persistence/migration/freeze/oldEpochBackup'
-import { availableDiskBytes } from '@/platform/persistence/migration/freeze/diskBudget'
 import { openConversionTarget } from '@/platform/persistence/migration/target/connection'
 import type {
   ConversionRunRequest,
@@ -60,6 +61,7 @@ import {
   type EpochSwitchJournal,
 } from '@/modules/system-operations/composition/epochMigration'
 import { createFileEpochSwitchJournal } from '@/modules/system-operations/composition/epochMigration'
+import { pruneEpochPlanContent } from '@/modules/system-operations/composition/epochMigration'
 import { createEpochSourceAdapter } from '@/modules/system-operations/composition/epochMigration'
 import { createEpochBackupAdapter } from '@/modules/system-operations/composition/epochMigration'
 import { createContentInventoryAdapter } from '@/modules/system-operations/composition/epochMigration'
@@ -88,6 +90,7 @@ import { persistenceSchema } from './persistenceSchema'
 
 export type EpochMigrationEnv = Readonly<Record<string, string | undefined>>
 export interface LocalEpochSwitchOptions {
+  readonly progress?: MigrationProgressCallback
   appHome: string
   config: Config
   env: EpochMigrationEnv
@@ -335,7 +338,12 @@ export function composeLocalEpochSwitchDependencies(
 ): EpochSwitchDependencies {
   const { appHome, env, head, faults } = options
   const pointerPath = join(appHome, 'database-generation.json')
-  const journal = createFileEpochSwitchJournal({ root: join(appHome, 'database-migrations') })
+  const journal = createFileEpochSwitchJournal({
+    root: join(appHome, 'database-migrations'),
+    async prunePlanContent(root, references) {
+      pruneEpochPlanContent(root, references)
+    },
+  })
   const config = options.config.database
   const sourceLocation: EpochSourceLocation =
     'urlEnv' in config
@@ -572,8 +580,17 @@ export function composeLocalEpochSwitchDependencies(
       bootUpgradeEnvironment: composeBootUpgradeEnvironment(epochMigrationKeys(undefined, appHome)),
       async dryRun(request) {
         const sink = createDryRunSink()
-        await runConversion(epochConversionInput(request), sink)
-        return sink.result
+        let stagingPeakBytes = 0
+        await runConversion(
+          {
+            ...epochConversionInput(request),
+            onStagingPeak: (bytes) => {
+              stagingPeakBytes = bytes
+            },
+          },
+          sink,
+        )
+        return { ...sink.result, stagingPeakBytes }
       },
       run: (request, sink) => runConversion(epochConversionInput(request), sink),
     },
@@ -607,6 +624,7 @@ export function composeLocalEpochSwitchDependencies(
     probes: options.probes ?? conversionReadOnlyProbes,
     acceptanceProbes: options.acceptanceProbes,
     faults,
+    progress: options.progress,
     async unpackBackup(artifact, destination, artifacts) {
       const unpacked = await unpackOldEpochBackup({ artifact, destination, artifacts })
       return {
@@ -619,9 +637,18 @@ export function composeLocalEpochSwitchDependencies(
     materializeBackup: (digest, artifacts) => materializeOldEpochBackup({ digest, artifacts }),
     restoreFiles: createEpochRestoreFiles({ appHome, faults }),
     async measureCapacity(source, operationRoot) {
-      const sourceBytes =
-        source.kind === 'sqlite-file' && existsSync(source.path) ? statSync(source.path).size : null
-      return { sourceBytes, availableBytes: availableDiskBytes(operationRoot) }
+      return measureMigrationCapacity(source, operationRoot, async () => {
+        if (source.kind !== 'postgresql-database') throw new Error('postgresql-source-required')
+        const runtime = runtimeFor(source.profileRef)
+        try {
+          const rows = await runtime
+            .providerPool('migration')
+            .unsafe('SELECT pg_database_size(current_database()) AS bytes')
+          return Number(rows[0]!.bytes)
+        } finally {
+          await runtime.close()
+        }
+      })
     },
     async resolveEmptyTables({ source, decisions, operationRoot }) {
       if (!decisions.length) return []

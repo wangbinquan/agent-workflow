@@ -1,3 +1,4 @@
+import type { MigrationProgressCallback } from '../run/progress'
 import type { DecodedSourceRow } from '../sourceTypes'
 import type { StagedReader, StagingStore } from './staging'
 import { encodeStagedValue } from './staging'
@@ -93,6 +94,7 @@ export function restrictLookups(
 export async function buildLookups(
   builders: readonly LookupBuilder<unknown>[],
   staged: StagingStore,
+  progress?: MigrationProgressCallback,
 ): Promise<LookupResolver> {
   const versions = new Map<string, LookupVersion>()
   const resolve: LookupResolver = <V>(key: LookupKey<V>): LookupReader<V> => {
@@ -116,6 +118,7 @@ export async function buildLookups(
     }
   }
   for (const builder of orderLookupBuilders(builders)) {
+    let completed = 0
     const id = lookupIdentity(builder.key)
     const allowed = new Set(builder.sources)
     const check = (table: string, phase?: SourcePhase): void => {
@@ -155,6 +158,12 @@ export async function buildLookups(
         if (staged.lookup(id, key) !== undefined)
           throw new ConversionContractError('v2-duplicate-lookup-key', `${id}/${key}`)
         staged.putLookup(id, key, { value, ...(sourceStatus ? { sourceStatus } : {}) })
+        progress?.({
+          phase: 'conversion',
+          detail: `lookup ${id}`,
+          completed: ++completed,
+          unit: 'entries',
+        })
       },
       restrictLookups(resolve, builder.dependsOn ?? []),
     )

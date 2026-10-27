@@ -14,6 +14,7 @@ export {
   type EpochSwitchJournal,
 } from '../domain/epochSwitch/model'
 export { createFileEpochSwitchJournal } from '../infrastructure/epochSwitch/fileJournal'
+export { pruneEpochPlanContent } from '../infrastructure/epochSwitch/planContent'
 export { createEpochSourceAdapter } from '../infrastructure/epochSwitch/sourceAdapter'
 export { createEpochBackupAdapter } from '../infrastructure/epochSwitch/backupAdapter'
 export { createContentInventoryAdapter } from '../infrastructure/epochSwitch/contentInventoryAdapter'

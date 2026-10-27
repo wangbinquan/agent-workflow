@@ -1,3 +1,4 @@
+import { measureMigrationCapacity } from '@/platform/persistence/migration/freeze/capacity'
 import { epochMigrationKeys } from './epochMigrationKeys'
 import { composeBootUpgradeEnvironment, conversionReadOnlyProbes } from './conversionRules'
 // The platform supplies persistent artifacts, freeze confirmation and switch observation.
@@ -113,6 +114,7 @@ export interface HostedEpochJobEntryDependencies {
 }
 export interface HostedEpochCompositionOptions extends Pick<
   LocalEpochSwitchOptions,
+  | 'progress'
   | 'head'
   | 'catalogArtifacts'
   | 'probes'
@@ -373,6 +375,15 @@ export async function composeHostedEpochSwitch(
             bornOnPostgresql: options.sourceBornOnPostgresql === true,
           })),
       content,
+      progress: options.progress,
+      measureCapacity: (source, root) =>
+        measureMigrationCapacity(source, root, async () => {
+          if (!sourceRuntime) throw new Error('postgresql-source-required')
+          const rows = await sourceRuntime
+            .providerPool('migration')
+            .unsafe('SELECT pg_database_size(current_database()) AS bytes')
+          return Number(rows[0]!.bytes)
+        }),
       conversionPlan: (request) => planConversion(epochConversionInput(request)),
       conversion: {
         bootUpgradeEnvironment: composeBootUpgradeEnvironment(
@@ -384,8 +395,17 @@ export async function composeHostedEpochSwitch(
         ),
         async dryRun(request) {
           const sink = createDryRunSink()
-          await runConversion(epochConversionInput(request), sink)
-          return sink.result
+          let stagingPeakBytes = 0
+          await runConversion(
+            {
+              ...epochConversionInput(request),
+              onStagingPeak: (bytes) => {
+                stagingPeakBytes = bytes
+              },
+            },
+            sink,
+          )
+          return { ...sink.result, stagingPeakBytes }
         },
         run: (request, sink) => runConversion(epochConversionInput(request), sink),
       },

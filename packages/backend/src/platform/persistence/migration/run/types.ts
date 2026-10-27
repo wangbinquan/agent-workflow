@@ -1,3 +1,4 @@
+import type { MigrationProgressCallback } from '@/platform/persistence/migration/run/progress'
 // RFC-395 V3: injected offline mechanisms; no module or runtime assembly dependencies.
 import type { DatabaseProvider } from '../../databaseProviders'
 import type { HistoryConnection } from '../../schema/history/connection'
@@ -72,6 +73,8 @@ export interface ContentRootSpec {
 export interface EpochSwitchArtifactPort {
   /** Durable before return; equal name/digest is a no-op. Retain earlier digests of a name. */
   put(name: string, bytes: Uint8Array | AsyncIterable<Uint8Array>): Promise<string>
+  /** Optional local clone-or-copy fast path, with the same digest and durable layout. */
+  putFile?(name: string, path: string): Promise<string>
   /** Verify the exact digest, materialise under this Job's operation root, return its local path.
    * Missing or mismatched bytes fail; an existing equal file is reused. Names are relative to
    * the operation root. Standalone stores the same bytes there; hosted storage outlives Jobs.
@@ -254,6 +257,7 @@ export interface QuiesceReceipt {
   readonly digest: string
 }
 export interface ConversionRunRequest {
+  readonly progress?: MigrationProgressCallback
   readonly source: FrozenSourceHandle
   readonly content: VerifiableContentInventory
   readonly scratchRoot: string
@@ -267,6 +271,7 @@ export interface ConversionRunRequest {
   readonly operatorDecisions: readonly OperatorDecision[]
 }
 export interface DryRunResult {
+  readonly stagingPeakBytes?: number
   readonly summary: ConversionSummary
   readonly units: number
   readonly rowsWritten: number

@@ -1,3 +1,4 @@
+import type { MigrationProgressCallback } from '@/platform/persistence/migration/run/progress'
 import type { VersionedSourceReader, SourcePreflight } from '../sourceTypes'
 import type { SchemaRegistry } from '../../schema/registry'
 import { compileContract } from '../../schema/contract'
@@ -28,6 +29,8 @@ export interface TargetRosterEntry {
   readonly sources: readonly string[]
 }
 export interface ConversionInput {
+  readonly progress?: MigrationProgressCallback
+  readonly onStagingPeak?: (bytes: number) => void
   readonly source: VersionedSourceReader
   readonly preflight: SourcePreflight
   readonly preUpgradeSource?: VersionedSourceReader

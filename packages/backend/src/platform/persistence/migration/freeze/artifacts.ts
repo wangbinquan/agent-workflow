@@ -76,8 +76,12 @@ export async function persistSourceDirectory(
   files.sort(
     (a, b) => Number(a.path.endsWith('binding.json')) - Number(b.path.endsWith('binding.json')),
   )
-  for (const file of files)
-    await port.put(`${name}/payload/${file.path}`, createReadStream(join(root, file.path)))
+  for (const file of files) {
+    const key = `${name}/payload/${file.path}`
+    const path = join(root, file.path)
+    if (port.putFile) await port.putFile(key, path)
+    else await port.put(key, createReadStream(path))
+  }
   await port.put(
     `${name}/inventory.json`,
     new TextEncoder().encode(canonicalSchemaJson({ directories, files })),

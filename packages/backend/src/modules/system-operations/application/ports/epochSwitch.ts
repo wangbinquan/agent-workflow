@@ -1,3 +1,4 @@
+import type { MigrationProgressCallback } from '@/platform/persistence/migration/run/progress'
 import type { DatabaseProvider } from '@/platform/persistence/databaseProviders'
 import type { GenerationPointerV2Payload } from '@/platform/persistence/generationPointerV2'
 import type { EmptyTableDecision } from '@/platform/persistence/migration/sourceDispositions'
@@ -91,12 +92,17 @@ export interface EpochSwitchJournalPort {
   /** Equal bytes are a no-op; conflicting bytes are a receipt conflict. */
   writeOnce(operationId: string, name: string, bytes: Uint8Array): Promise<ReceiptExport>
   readArtifact(operationId: string, name: string): Promise<Uint8Array | null>
+  prunePlanContent?(
+    operationId: string,
+    references: readonly { path?: string; digest: string }[],
+  ): Promise<void>
   operationRoot(operationId: string): string
   lockOperation(operationId: string): Promise<{ release(): void | Promise<void> }>
   /** All operation documents and F evidence share this operation-scoped durable store. */
   artifacts?(operationId: string): EpochSwitchArtifactPort
 }
 export interface SourceSnapshotRequest {
+  readonly progress?: MigrationProgressCallback
   readonly postgresqlArchive?: (source: FrozenSourceHandle) => Promise<SourceArchiveInput>
   readonly scratchOwner?: string
   readonly scratchProfileRef?: string
@@ -137,6 +143,7 @@ export interface QuiescePort {
 }
 export interface ContentInventoryPort {
   capture(input: {
+    readonly progress?: MigrationProgressCallback
     readonly source: FrozenSourceHandle
     readonly root: ContentRootSpec
     readonly destination: string

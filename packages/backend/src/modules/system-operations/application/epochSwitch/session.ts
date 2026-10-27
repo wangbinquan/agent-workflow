@@ -1,3 +1,4 @@
+import type { MigrationProgressCallback } from '@/platform/persistence/migration/run/progress'
 import { canonicalSchemaJson } from '@/platform/persistence/schema/canonical'
 import { relocateEpochPath } from '@/platform/persistence/migration/run/paths'
 export { relocateEpochPath } from '@/platform/persistence/migration/run/paths'
@@ -73,6 +74,7 @@ export interface EpochRestoreFiles {
   rollback(changes: readonly RestoreFileChange[]): Promise<void>
 }
 export interface EpochSwitchDependencies {
+  readonly progress?: MigrationProgressCallback
   journal: EpochSwitchJournalPort
   source: EpochSourcePort
   sourceFor?(journal: EpochSwitchJournal): EpochSourcePort
@@ -118,7 +120,7 @@ export interface EpochSwitchDependencies {
   measureCapacity?(
     source: EpochSourceLocation,
     operationRoot: string,
-  ): Promise<{ sourceBytes: number | null; availableBytes: number | null }>
+  ): Promise<{ sourceBytes: number | null; availableBytes: number | null; operationBytes?: number }>
   unpackBackup?(
     artifact: string,
     destination: string,
@@ -174,6 +176,7 @@ export function sourcePort(session: EpochSwitchSession): EpochSourcePort {
 export function sourceRequest(session: EpochSwitchSession) {
   const p = session.journal.payload
   return {
+    progress: session.deps.progress,
     scratchOwner: p.operationId,
     ...(p.source.location.kind === 'postgresql-database'
       ? {
@@ -207,6 +210,9 @@ export function epochRunArtifacts(
   const prefix = `runs/${journal.payload.run.runId}/`
   return {
     put: (name, bytes) => port.put(prefix + name, bytes),
+    ...(port.putFile
+      ? { putFile: (name: string, path: string) => port.putFile!(prefix + name, path) }
+      : {}),
     get: (name, digest) => port.get(prefix + name, digest),
   }
 }
@@ -330,17 +336,23 @@ export async function withEpochOperation<T>(
       artifacts() {
         const port = deps.journal.artifacts?.(operationId)
         if (!port) return undefined
+        const record = async (name: string, digest: string) => {
+          const references = session!.journal.payload.artifacts ?? []
+          if (!references.some((ref) => ref.name === name && ref.digest === digest))
+            await session!.save({
+              artifacts: [...references.filter((ref) => ref.name !== name), { name, digest }],
+            })
+          return digest
+        }
         return {
           get: (name, digest) => port.get(name, digest),
-          async put(name, bytes) {
-            const digest = await port.put(name, bytes)
-            const references = session!.journal.payload.artifacts ?? []
-            if (!references.some((ref) => ref.name === name && ref.digest === digest))
-              await session!.save({
-                artifacts: [...references.filter((ref) => ref.name !== name), { name, digest }],
-              })
-            return digest
-          },
+          put: async (name, bytes) => record(name, await port.put(name, bytes)),
+          ...(port.putFile
+            ? {
+                putFile: async (name: string, path: string) =>
+                  record(name, await port.putFile!(name, path)),
+              }
+            : {}),
         }
       },
       write: (name, value) =>

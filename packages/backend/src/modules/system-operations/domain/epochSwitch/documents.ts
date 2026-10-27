@@ -278,6 +278,7 @@ export const MigrationPlanDocumentPayloadSchema = z.strictObject({
   converterVersion: text,
   sourceBackupId: text.nullable(),
   contentManifestDigest: EpochDigestSchema,
+  contentManifestPath: text.optional(),
   bootUpgradeEffects: z.array(BootUpgradeEffectSchema).readonly(),
   bootUpgradeEnvironmentDigest: EpochDigestSchema,
   bootUpgradeFactsDigest: EpochDigestSchema,
@@ -296,6 +297,15 @@ export const MigrationPlanDocumentPayloadSchema = z.strictObject({
     availableBytes: count.nullable(),
     rehearsalMs: count.nullable(),
     maintenanceMs: count.nullable(),
+    components: z
+      .strictObject({
+        operationBytes: count.nullable(),
+        runBackupBytes: count.nullable(),
+        switchBackupBytes: count.nullable(),
+        artifactMirrorBytes: count.nullable(),
+        targetFilesystemBytes: count.nullable(),
+      })
+      .optional(),
   }),
   backup: z.strictObject({
     destination: text.nullable(),

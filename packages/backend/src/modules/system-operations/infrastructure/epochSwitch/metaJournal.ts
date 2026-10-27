@@ -1,3 +1,4 @@
+import { pruneEpochPlanContent } from './planContent'
 import { createReadStream } from 'node:fs'
 import { bytesDigest } from '@/platform/persistence/migration/conversion/digest'
 import { createLocalEpochArtifacts, writeEpochFile } from './fileJournal'
@@ -41,6 +42,9 @@ export function createMetaEpochSwitchJournal(input: {
   }
   return {
     operationRoot: (op) => join(input.scratchRoot, op),
+    async prunePlanContent(op, references) {
+      pruneEpochPlanContent(join(input.scratchRoot, op), references)
+    },
     read,
     async list() {
       const rows = await c.execute(
@@ -141,27 +145,27 @@ export function createHostedEpochArtifactPort(input: {
 }): EpochSwitchArtifactPort {
   const local = createLocalEpochArtifacts(input.root)
   const key = (name: string, digest: string) => `.artifacts/${name}/${digest.slice(7)}`
+  const upload = async (name: string, digest: string) => {
+    const path = await local.get(name, digest)
+    const chunks: { name: string; digest: string }[] = []
+    for await (const chunk of createReadStream(path, { highWaterMark: 4 * 1024 * 1024 })) {
+      const bytes = Buffer.from(chunk)
+      const chunkDigest = bytesDigest(bytes)
+      const chunkName = `${key(name, digest)}/${chunks.length}`
+      const receipt = await input.store.writeOnce(input.operationId, chunkName, bytes)
+      if (receipt.digest !== chunkDigest) throw new EpochSwitchError('v3-artifact-digest-mismatch')
+      chunks.push({ name: chunkName, digest: chunkDigest })
+    }
+    await input.store.writeOnce(
+      input.operationId,
+      `${key(name, digest)}/manifest.json`,
+      Buffer.from(JSON.stringify({ name, digest, chunks })),
+    )
+    return digest
+  }
   return {
-    async put(name, bytes) {
-      const digest = await local.put(name, bytes)
-      const path = await local.get(name, digest)
-      const chunks: { name: string; digest: string }[] = []
-      for await (const chunk of createReadStream(path, { highWaterMark: 4 * 1024 * 1024 })) {
-        const bytes = Buffer.from(chunk)
-        const chunkDigest = bytesDigest(bytes)
-        const chunkName = `${key(name, digest)}/${chunks.length}`
-        const receipt = await input.store.writeOnce(input.operationId, chunkName, bytes)
-        if (receipt.digest !== chunkDigest)
-          throw new EpochSwitchError('v3-artifact-digest-mismatch')
-        chunks.push({ name: chunkName, digest: chunkDigest })
-      }
-      await input.store.writeOnce(
-        input.operationId,
-        `${key(name, digest)}/manifest.json`,
-        Buffer.from(JSON.stringify({ name, digest, chunks })),
-      )
-      return digest
-    },
+    put: async (name, bytes) => upload(name, await local.put(name, bytes)),
+    putFile: async (name, path) => upload(name, await local.putFile!(name, path)),
     async get(name, digest) {
       const bytes = await input.store.read(input.operationId, `${key(name, digest)}/manifest.json`)
       if (!bytes)

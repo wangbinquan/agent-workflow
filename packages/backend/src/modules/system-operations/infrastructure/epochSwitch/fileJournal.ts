@@ -2,6 +2,7 @@ import {
   closeSync,
   createReadStream,
   copyFileSync,
+  constants,
   writeSync,
   existsSync,
   fsyncSync,
@@ -67,13 +68,19 @@ export function writeEpochFile(path: string, bytes: Uint8Array, once: boolean): 
   }
 }
 
-export function createFileEpochSwitchJournal(input: { root: string }): EpochSwitchJournalPort {
+export function createFileEpochSwitchJournal(input: {
+  root: string
+  prunePlanContent?: EpochSwitchJournalPort['prunePlanContent']
+}): EpochSwitchJournalPort {
   const operationRoot = (op: string) => join(input.root, EpochOperationIdSchema.parse(op))
   const path = (op: string) => join(operationRoot(op), 'epoch-switch.json')
   const read = async (op: string): Promise<EpochSwitchJournal | null> =>
     existsSync(path(op)) ? parseEpochSwitchJournal(readFileSync(path(op), 'utf8')) : null
   return {
     operationRoot,
+    prunePlanContent: input.prunePlanContent
+      ? (op, references) => input.prunePlanContent!(operationRoot(op), references)
+      : undefined,
     artifacts: (op) => createLocalEpochArtifacts(operationRoot(op)),
     read,
     async create(journal) {
@@ -137,7 +144,38 @@ export function createFileEpochSwitchJournal(input: { root: string }): EpochSwit
 /** Content-addressed versions survive a later put under the same artifact name. */
 export function createLocalEpochArtifacts(root: string): EpochSwitchArtifactPort {
   const stored = (name: string, digest: string) => join(root, '.artifacts', digest.slice(7), name)
+  const publish = (temporary: string, name: string, digest: string) => {
+    const destination = stored(name, digest)
+    mkdirSync(dirname(destination), { recursive: true })
+    try {
+      linkSync(temporary, destination)
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error
+    } finally {
+      unlinkSync(temporary)
+    }
+    syncEpochDirectory(dirname(destination))
+    return digest
+  }
   return {
+    async putFile(name, path) {
+      mkdirSync(join(root, '.artifacts'), { recursive: true })
+      const temporary = join(root, '.artifacts', `${crypto.randomUUID()}.tmp`)
+      try {
+        copyFileSync(path, temporary, constants.COPYFILE_FICLONE)
+        const hash = createSha256DigestBuilder()
+        for await (const chunk of createReadStream(temporary)) hash.update(chunk)
+        const fd = openSync(temporary, 'r')
+        try {
+          fsyncSync(fd)
+        } finally {
+          closeSync(fd)
+        }
+        return publish(temporary, name, `sha256:${hash.digestHex()}`)
+      } finally {
+        if (existsSync(temporary)) unlinkSync(temporary)
+      }
+    },
     async put(name, input) {
       mkdirSync(join(root, '.artifacts'), { recursive: true })
       const temporary = join(root, '.artifacts', `${crypto.randomUUID()}.tmp`)
@@ -154,17 +192,7 @@ export function createLocalEpochArtifacts(root: string): EpochSwitchArtifactPort
         closeSync(fd)
       }
       const digest = `sha256:${hash.digestHex()}`
-      const destination = stored(name, digest)
-      mkdirSync(dirname(destination), { recursive: true })
-      try {
-        linkSync(temporary, destination)
-      } catch (error) {
-        if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error
-      } finally {
-        unlinkSync(temporary)
-      }
-      syncEpochDirectory(dirname(destination))
-      return digest
+      return publish(temporary, name, digest)
     },
     async get(name, digest) {
       const source = stored(name, digest)
@@ -175,7 +203,7 @@ export function createLocalEpochArtifacts(root: string): EpochSwitchArtifactPort
       const destination = join(root, name)
       mkdirSync(dirname(destination), { recursive: true })
       const temporary = `${destination}.${crypto.randomUUID()}.tmp`
-      copyFileSync(source, temporary)
+      copyFileSync(source, temporary, constants.COPYFILE_FICLONE)
       const fd = openSync(temporary, 'r')
       try {
         fsyncSync(fd)

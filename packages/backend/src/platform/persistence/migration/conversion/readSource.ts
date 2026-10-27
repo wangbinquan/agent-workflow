@@ -1,3 +1,4 @@
+import type { MigrationProgressCallback } from '@/platform/persistence/migration/run/progress'
 import {
   LogicalDatabaseCodecError,
   decodeLogicalValue,
@@ -110,6 +111,7 @@ export function isSourceCodecFailure(error: unknown): boolean {
   )
 }
 export async function stageSourceTable(input: {
+  readonly progress?: MigrationProgressCallback
   readonly source: VersionedSourceReader
   readonly preflight: SourcePreflight
   readonly table: string
@@ -120,6 +122,17 @@ export async function stageSourceTable(input: {
   readonly codecTakeovers?: readonly string[]
 }): Promise<void> {
   const { source, preflight, table, phase, limit, staged } = input
+  let completed = 0
+  const report = (rows: number) => {
+    completed += rows
+    input.progress?.({
+      phase: 'conversion',
+      detail: `staging ${phase}/${table}`,
+      completed,
+      total: preflight.tables.find((entry) => entry.table === table)?.rows,
+      unit: 'rows',
+    })
+  }
   const contract = preflight.contract?.tables.find((entry) => entry.id === table)
   const raw = async (): Promise<void> => {
     let after: readonly CanonicalLogicalValue[] | null = null
@@ -133,6 +146,7 @@ export async function stageSourceTable(input: {
           fromRaw(table, phase, row, input.raw ? undefined : contract, input.codecTakeovers),
         ),
       )
+      report(chunk.rows.length)
       after = chunk.lastKey
     }
   }
@@ -169,12 +183,14 @@ export async function stageSourceTable(input: {
           }
         }),
       )
+      report(chunk.rows.length)
       after = chunk.lastKey
     }
   } catch (error) {
     if (!isSourceCodecFailure(error)) throw error
     // Raw cursors are rowid/ordinal, not logical keys. Restage the admitted table,
     // then form deterministic logical key ranges; never pass a logical key to raw.
+    completed = 0
     staged.clear(table, phase)
     await raw()
   }

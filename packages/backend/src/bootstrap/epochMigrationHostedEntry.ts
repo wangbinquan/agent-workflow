@@ -1,3 +1,5 @@
+import { createMigrationProgressReporter } from '@/platform/persistence/migration/run/progress'
+import { writeSync } from 'node:fs'
 import { createCrewStationObjectReader } from '@/platform/crewstation/objectStorage'
 import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -25,6 +27,9 @@ export function composeHostedEpochJobEntry(
       const path = `/v1/operations/${encodeURIComponent(contract.operationId)}`
       return composeHostedEpochSwitch(contract, {
         head: persistenceHead(),
+        progress: createMigrationProgressReporter((line) => {
+          writeSync(2, line)
+        }),
         catalogArtifacts: persistencePostgresqlCatalogs(),
         sourceBornOnPostgresql: env.CS_DATABASE_MIGRATION_SOURCE_BORN_ON_POSTGRESQL === '1',
         objects: createCrewStationObjectReader({

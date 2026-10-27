@@ -11,6 +11,7 @@ export async function verifyEpochSwitch(session: EpochSwitchSession) {
   )
     throw new EpochSwitchError('v3-verify-requires-activation')
   if (p.phase === 'completed') return epochSwitchStatus(session.deps, session.journal)
+  session.deps.progress?.({ phase: 'validation', detail: 'verify target', boundary: true })
   const observation = await session.deps.activation.observe(p.operationId)
   if (observation.pointsAt !== 'target')
     throw new EpochSwitchError('v3-verify-requires-target-authority', {
@@ -56,6 +57,7 @@ export async function verifyEpochSwitch(session: EpochSwitchSession) {
     await target.writeSwitchReceipt(receipt)
     session.deps.faults?.('after-switch-receipt')
     await session.save({ phase: 'verified', status: 'running', failure: null, firstLiveWriteAt })
+    session.deps.progress?.({ phase: 'validation', detail: 'verified', boundary: true })
   } finally {
     await target.close()
   }

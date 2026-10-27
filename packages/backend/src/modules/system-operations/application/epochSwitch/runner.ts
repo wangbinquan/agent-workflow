@@ -124,6 +124,7 @@ async function createBackup(
   const existing = await session.artifact<SwitchBackupReceipt>(name)
   if (existing) return existing
   const p = session.journal.payload
+  session.deps.progress?.({ phase: 'backup', detail: `${stage} backup`, boundary: true })
   const receipt = await session.deps.backup.create({
     operationId: p.operationId,
     source,
@@ -139,6 +140,7 @@ async function createBackup(
         ? await session.deps.postgresqlArchive?.(source, session.journal)
         : undefined,
   })
+  session.deps.progress?.({ phase: 'backup', detail: `${stage} backup complete`, boundary: true })
   await session.write(name, receipt)
   session.deps.faults?.(stage === 'live' ? 'after-backup-file' : 'after-final-backup')
   return receipt
@@ -318,6 +320,7 @@ export async function runEpochSwitch(
     try {
       const p = session.journal.payload
       const manifest = await deps.content.capture({
+        progress: deps.progress,
         source,
         root: epochContentRoot(session),
         destination: epochArtifactPath(
@@ -343,6 +346,7 @@ export async function runEpochSwitch(
   }
   const quiesceName = runArtifact(session.journal, 'quiesce.json')
   const priorQuiesce = await session.artifact<QuiesceReceipt>(quiesceName)
+  deps.progress?.({ phase: 'freeze', detail: 'quiesce writers', boundary: true })
   const quiesce = await deps.quiesce.quiesce({
     operationId: input.operationId,
     drainTimeoutMs: input.drainTimeoutMs ?? 30_000,
@@ -415,6 +419,7 @@ export async function runEpochSwitch(
       let manifest = await session.artifact<FreezeContentManifest>(manifestName)
       if (!manifest) {
         manifest = await deps.content.capture({
+          progress: deps.progress,
           source,
           root: epochContentRoot(session),
           destination: epochArtifactPath(
@@ -574,6 +579,8 @@ export async function runEpochSwitch(
         runArtifact(session.journal, 'summary.json'),
       )
       if (!summary) {
+        let loadedUnits = 0
+        deps.progress?.({ phase: 'load', detail: 'start', boundary: true })
         summary = await deps.conversion.run(request, {
           async open(binding) {
             const result = await sink.open(binding)
@@ -581,8 +588,23 @@ export async function runEpochSwitch(
             deps.faults?.('after-run-open')
             return result
           },
-          commitUnit: (output) => sink.commitUnit(output),
+          async commitUnit(output) {
+            await sink.commitUnit(output)
+            deps.progress?.({
+              phase: 'load',
+              detail: output.receipt.rule.id,
+              completed: ++loadedUnits,
+              unit: 'units',
+            })
+          },
           finish: (result) => sink.finish(result),
+        })
+        deps.progress?.({
+          phase: 'load',
+          detail: 'complete',
+          completed: loadedUnits,
+          unit: 'units',
+          boundary: true,
         })
         await session.write(runArtifact(session.journal, 'summary.json'), summary)
       }
@@ -596,6 +618,7 @@ export async function runEpochSwitch(
         throw new EpochSwitchError('v3-conversion-blocked', { category: 'conversion-blocked' })
       if ((await sink.loadBlocks()).length)
         throw new EpochSwitchError('v3-load-blocked', { category: 'load-blocked' })
+      deps.progress?.({ phase: 'validation', detail: 'constraints and content', boundary: true })
       const finalized = await target.finalize({ runId: p.run!.runId })
       if (
         !finalized.deferredConstraintsApplied ||
@@ -620,6 +643,7 @@ export async function runEpochSwitch(
             probes: deps.probes ?? [],
           })
       assertValidation(validation)
+      deps.progress?.({ phase: 'validation', detail: 'complete', boundary: true })
       deps.faults?.('after-validation')
       const exported = await target.exportReceipts({
         runId: p.run!.runId,
@@ -719,6 +743,7 @@ export async function runEpochSwitch(
     }
     assertApproved(session.journal)
     await mirrorApprovals(session, target)
+    deps.progress?.({ phase: 'activation', detail: 'prepare', boundary: true })
     const receipt = await prepareActivation(session, target)
     if (session.journal.payload.phase === 'validated') {
       await target.prepareActivation(
@@ -777,6 +802,7 @@ export async function runEpochSwitch(
         activatedAt: receipt.payload.preparedAt,
       },
     })
+    deps.progress?.({ phase: 'activation', detail: 'activated', boundary: true })
     deps.faults?.('after-activated-journal')
     return epochSwitchStatus(deps, session.journal)
   } finally {

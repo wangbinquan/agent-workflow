@@ -1,3 +1,5 @@
+import { createMigrationProgressReporter } from '@/platform/persistence/migration/run/progress'
+import { writeSync } from 'node:fs'
 import { recordedLiveLogicalContract } from '@/platform/persistence/schema/history/logicalHistory'
 import { loadFrozenEpoch1History } from '@/platform/persistence/migration/epoch1/bundle'
 import { RestoreDowngradeError } from '@/platform/persistence/sqlite/systemProviderRestore'
@@ -18,6 +20,9 @@ import { settleEpochSwitchBeforePointerReplacement } from '@/modules/system-oper
 export function composeEpochMigrationCommand() {
   const application = composeLocalEpochSwitch({
     appHome: Paths.root,
+    progress: createMigrationProgressReporter((line) => {
+      writeSync(2, line)
+    }),
     config: loadConfig(Paths.config),
     env: process.env,
     head: persistenceHead(),

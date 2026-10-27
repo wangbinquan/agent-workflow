@@ -1,3 +1,4 @@
+import type { MigrationProgressCallback } from '@/platform/persistence/migration/run/progress'
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync } from 'node:fs'
 import { join, resolve, basename } from 'node:path'
 import type { PostgresqlDatabaseRuntime } from '../../postgresqlRuntime'
@@ -49,6 +50,7 @@ import {
 } from './artifacts'
 
 export interface SourceAccessInput {
+  readonly progress?: MigrationProgressCallback
   /** Stable across new runs of the same operation; never across operations. */
   readonly scratchOwner?: string
   readonly location: EpochSourceLocation
@@ -169,6 +171,7 @@ async function access(
     }
   }
   try {
+    input.progress?.({ phase: 'freeze', detail: `${mode} source snapshot`, boundary: true })
     mkdirSync(workRoot, { recursive: true })
     // S holds the operation lock for discover/run/trace. These are disposable copies.
     for (const directory of [
@@ -265,6 +268,11 @@ async function access(
       throw new Error('postgresql-scratch-required: offline upgrade needs a scratch database')
     // Live discovery returns the original preflight so S can render the scratch block first.
     if (originalPreflight.requiresOfflineUpgrade && !pendingScratch) {
+      input.progress?.({
+        phase: 'offline-upgrade',
+        detail: 'prepare or reuse offline copy',
+        boundary: true,
+      })
       if (expected && expected.preUpgradeWatermark !== originalPreflight.watermark)
         throw new Error('source-changed: pre-upgrade source differs from the previous run')
       const artifactName = 'source-access/upgrade'
@@ -377,6 +385,7 @@ async function access(
         let scratchFingerprint: string | null = null
         if (sqlite) {
           const upgraded = await upgradeEpoch1Copy({
+            progress: input.progress,
             source: sqlite,
             expected: await sqlite.preflight(),
             manifest: input.manifest,
@@ -401,6 +410,7 @@ async function access(
         } else {
           const openScratch = input.reopenScratchPostgresql ?? input.createScratchPostgresql!
           const upgraded = await upgradeEpoch1Copy({
+            progress: input.progress,
             source: original,
             manifest: input.manifest,
             operationRoot: workRoot,
@@ -459,6 +469,7 @@ async function access(
       const evidence = openDispositionEvidenceSource(evidenceRoot)
       releases.push(() => evidence.close())
       preUpgrade = { reader: evidence, preflight: await evidence.preflight() }
+      input.progress?.({ phase: 'offline-upgrade', detail: 'complete', boundary: true })
     }
     const physicalCurrent = await reader.preflight()
     const current: SourcePreflight = {
@@ -557,6 +568,7 @@ async function access(
           preUpgrade: preUpgrade?.preflight ?? null,
         }),
       )
+    input.progress?.({ phase: 'freeze', detail: 'source ready', boundary: true })
     return handle
   } catch (error) {
     await close()

@@ -136,12 +136,14 @@ export async function executeConversion(
   sink: ConversionSink,
   observer?: ConversionObserver,
 ): Promise<ConversionSummary> {
+  input.progress?.({ phase: 'conversion', detail: 'start', boundary: true })
+  let completedUnits = 0
   const resolved = resolveContributions(input)
   const plan = buildConversionPlan(input, resolved)
   const rules = resolved.rules.filter((rule) =>
     plan.tables.some((table) => table.rule === rule.ref.id),
   )
-  const staged = createStagingStore(input.scratchRoot)
+  const staged = createStagingStore(input.scratchRoot, input.progress)
   const assertSource = async (): Promise<void> => {
     await input.source.assertUnchanged(input.preflight)
     if (input.preUpgradeSource && input.preUpgradePreflight)
@@ -188,6 +190,7 @@ export async function executeConversion(
         limit: plan.chunkLimit,
         staged,
         codecTakeovers,
+        progress: input.progress,
       })
       if (staged.count(entry.table, entry.phase) !== declaration.rows)
         blocks.push({
@@ -223,7 +226,7 @@ export async function executeConversion(
           decision.blockCode === blockCode &&
           decision.rowDigest === operatorDecisionRowDigest(row),
       )
-    const lookup = await buildLookups(resolved.lookups, staged)
+    const lookup = await buildLookups(resolved.lookups, staged, input.progress)
     const stagingDigest = staged.digest()
     const opened = await sink.open({
       ...(input.preflight.contract === null ? {} : { sourceContract: input.preflight.contract }),
@@ -361,6 +364,13 @@ export async function executeConversion(
         const output = collector.finish({ unit: planned.ref, unitId, lookups: versions })
         // Replay committed units through the idempotent sink to verify the payload digest too.
         await sink.commitUnit(output)
+        completedUnits++
+        input.progress?.({
+          phase: 'conversion',
+          detail: rule.ref.id,
+          completed: completedUnits,
+          unit: 'units',
+        })
         pendingCommitted.delete(unitId)
         observer?.unit(output, rows, (row) => collector.links(row))
         blocks.push(...output.blocks)
@@ -488,8 +498,16 @@ export async function executeConversion(
     }
     await assertSource()
     await sink.finish(summary)
+    input.progress?.({
+      phase: 'conversion',
+      detail: 'complete',
+      completed: completedUnits,
+      unit: 'units',
+      boundary: true,
+    })
     return summary
   } finally {
+    input.onStagingPeak?.(staged.peakBytes)
     staged.close()
   }
 }

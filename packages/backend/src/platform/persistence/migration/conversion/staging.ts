@@ -1,6 +1,7 @@
+import type { MigrationProgressCallback } from '../run/progress'
 import { atomicScratch } from '../../sqlite/atomicScratch'
 import { Database } from 'bun:sqlite'
-import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, readdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { canonicalSchemaJson } from '../../schema/canonical'
 import { decodeLogicalValue } from '../legacy/logicalDatabaseArtifact'
@@ -81,6 +82,7 @@ export interface StagedGroupColumn {
 }
 export interface StagingStore extends StagedReader {
   readonly path: string
+  readonly peakBytes: number
   indexedColumns(): readonly StagedGroupColumn[]
   put(row: SourceRow): void
   putMany(rows: readonly SourceRow[]): void
@@ -91,7 +93,10 @@ export interface StagingStore extends StagedReader {
   digest(): string
   close(): void
 }
-export function createStagingStore(scratchRoot: string): StagingStore {
+export function createStagingStore(
+  scratchRoot: string,
+  progress?: MigrationProgressCallback,
+): StagingStore {
   mkdirSync(scratchRoot, { recursive: true })
   const directory = mkdtempSync(join(scratchRoot, 'conversion-'))
   const path = join(directory, 'staging.sqlite')
@@ -111,6 +116,16 @@ export function createStagingStore(scratchRoot: string): StagingStore {
       .all(options.phase ?? 'current', table, options.afterKey ?? '', limit)
       .map((row) => decodeStagedValue<SourceRow>(row.payload))
   }
+  let peakBytes = 0
+  const measure = () => {
+    if (!closed)
+      peakBytes = Math.max(
+        peakBytes,
+        readdirSync(directory).reduce((sum, name) => sum + statSync(join(directory, name)).size, 0),
+      )
+    return peakBytes
+  }
+  let closed = false
   const indexes = new Map<string, StagedGroupColumn>()
   const indexValue = (row: SourceRow, column: string): void => {
     if (Object.hasOwn(row.values, column))
@@ -124,6 +139,7 @@ export function createStagingStore(scratchRoot: string): StagingStore {
     // Unit specs and lookup group queries declare their columns on first use.
     atomicScratch(database, () => {
       for (const row of store.rows(table, phase)) indexValue(row, column)
+      measure()
     })
     indexes.set(key, { table, column, phase })
   }
@@ -136,17 +152,28 @@ export function createStagingStore(scratchRoot: string): StagingStore {
   }
   const store: StagingStore = {
     path,
+    get peakBytes() {
+      return measure()
+    },
     indexedColumns: () =>
       [...indexes.entries()]
         .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
         .map(([, entry]) => entry),
     read,
     *rows(table, phase = 'current') {
+      let completed = 0
       let afterKey: string | null = null
       for (;;) {
         const rows = read(table, { phase, afterKey, limit: 1000 })
         if (!rows.length) return
         yield* rows
+        completed += rows.length
+        progress?.({
+          phase: 'conversion',
+          detail: `scan ${phase}/${table}`,
+          completed,
+          unit: 'rows',
+        })
         afterKey = rows.at(-1)!.encodedKey
       }
     },
@@ -194,12 +221,16 @@ export function createStagingStore(scratchRoot: string): StagingStore {
         .get(phase, table)!.count
     },
     put(row) {
-      atomicScratch(database, () => putRow(row))
+      atomicScratch(database, () => {
+        putRow(row)
+        measure()
+      })
     },
     putMany(rows) {
       // A bounded source page is one atomic scratch edit, not one disk commit per row.
       atomicScratch(database, () => {
         for (const row of rows) putRow(row)
+        measure()
       })
     },
     clear(table, phase = 'current') {
@@ -236,17 +267,23 @@ export function createStagingStore(scratchRoot: string): StagingStore {
     },
     digest() {
       function* fragments(): Iterable<string> {
+        let completed = 0
         for (const row of database
           .query<
             { phase: string; tab: string; key: string; payload: string },
             []
           >('SELECT phase,tab,key,payload FROM staged ORDER BY phase COLLATE BINARY,tab COLLATE BINARY,key COLLATE BINARY')
-          .iterate())
+          .iterate()) {
           yield canonicalSchemaJson(row)
+          if (++completed % 1000 === 0)
+            progress?.({ phase: 'conversion', detail: 'staging digest', completed, unit: 'rows' })
+        }
       }
       return orderedDigest(fragments())
     },
     close() {
+      measure()
+      closed = true
       database.close()
       rmSync(directory, { recursive: true, force: true })
     },

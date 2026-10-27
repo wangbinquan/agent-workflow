@@ -1,3 +1,4 @@
+import { estimateEpochCapacity } from '../../domain/epochSwitch/capacity'
 import { epochDeploymentCapabilities } from '@/modules/system-operations/domain/epochSwitch/deploymentCapabilities'
 import { persistenceDialect } from '@/platform/persistence/nativeDialect'
 import { epochArtifactPath } from '@/platform/persistence/migration/run/paths'
@@ -45,7 +46,11 @@ import {
   renderEpochPlan,
   epochPlanGuidance,
 } from '../../domain/epochSwitch/planDocument'
-import type { MigrationPlanDocument, RestoreFileChange } from '../../domain/epochSwitch/documents'
+import {
+  parseMigrationPlanDocument,
+  type MigrationPlanDocument,
+  type RestoreFileChange,
+} from '../../domain/epochSwitch/documents'
 import {
   pointerEvidence,
   readEpochPlan,
@@ -258,6 +263,7 @@ export function conversionRequest(
   return {
     source,
     content,
+    progress: session.deps.progress,
     scratchRoot: epochArtifactPath(
       session.deps.journal.operationRoot(p.operationId),
       runArtifact(session.journal, 'scratch'),
@@ -402,6 +408,24 @@ export async function persistEpochPlan(
     status: approved ? 'running' : 'awaiting-approval',
     failure: null,
   })
+  if (session.deps.journal.prunePlanContent) {
+    const protectedPlans = new Set([
+      plan.digest,
+      ...(session.journal.payload.approvals ?? []).map((approval) => approval.payload.planDigest),
+    ])
+    const references: { path?: string; digest: string }[] = []
+    for (const digest of protectedPlans) {
+      const bytes = await session.deps.journal.readArtifact(op, `plans/${digest}.json`)
+      // Incomplete retained evidence is not a reason to delete a manifest.
+      if (!bytes) return planView(session.journal, plan, session.deps.journal.operationRoot(op))
+      const retained = parseMigrationPlanDocument(Buffer.from(bytes).toString('utf8'))
+      references.push({
+        path: retained.payload.contentManifestPath,
+        digest: retained.payload.contentManifestDigest,
+      })
+    }
+    await session.deps.journal.prunePlanContent(op, references)
+  }
   return planView(session.journal, plan, session.deps.journal.operationRoot(op))
 }
 
@@ -444,7 +468,8 @@ export async function planEpochOperation(
     })
     p = session.journal.payload
   }
-  const source = await sourcePort(session).discover(sourceRequest(session))
+  const sourceInput = sourceRequest(session)
+  const source = await sourcePort(session).discover(sourceInput)
   try {
     const provider = source.preflight.fingerprint.provider
     assertEpochSwitchSupported({
@@ -479,18 +504,11 @@ export async function planEpochOperation(
       !p.inputs.scratchProfileRef
     )
       extraBlocks.push(globalBlock('v3-scratch-required'))
-    const measured = await session.deps.measureCapacity?.(
-      p.source.location,
-      session.deps.journal.operationRoot(p.operationId),
-    )
-    const sourceBytes = measured?.sourceBytes ?? null
-    const requiredBytes = sourceBytes === null ? null : sourceBytes * 4
-    const availableBytes = measured?.availableBytes ?? target.availableBytes
-    if (requiredBytes !== null && availableBytes !== null && availableBytes < requiredBytes)
-      extraBlocks.push(globalBlock('v3-capacity', { requiredBytes, availableBytes }))
     const started = session.now()
     let manifest: FreezeContentManifest
     let summary: ConversionSummary
+    let stagingPeakBytes: number | null = null
+    let contentManifestPath: string | undefined
     let bootUpgradeFacts = createBootUpgradeFacts([])
     if (source.preflight.requiresOfflineUpgrade) {
       const payload = {
@@ -503,12 +521,14 @@ export async function planEpochOperation(
       manifest = { ...payload, digest: contentManifestDigest(payload) }
       summary = pendingUpgradeSummary(session, source, manifest.digest, started)
     } else {
+      contentManifestPath = runArtifact(session.journal, `plan-content/${started}.json`)
       manifest = await session.deps.content.capture({
+        progress: session.deps.progress,
         source,
         root: epochContentRoot(session),
         destination: epochArtifactPath(
           session.deps.journal.operationRoot(p.operationId),
-          runArtifact(session.journal, `plan-content/${started}.json`),
+          contentManifestPath,
         ),
       })
       const content = await session.deps.content.open({
@@ -526,13 +546,40 @@ export async function planEpochOperation(
         null,
         bootUpgradeFacts,
       )
-      summary = (await session.deps.conversion.dryRun(request)).summary
+      const rehearsal = await session.deps.conversion.dryRun(request)
+      summary = rehearsal.summary
+      stagingPeakBytes = rehearsal.stagingPeakBytes ?? null
     }
+    const measured = await session.deps.measureCapacity?.(
+      sourceInput.location,
+      session.deps.journal.operationRoot(p.operationId),
+    )
+    const capacity = estimateEpochCapacity({
+      sourceBytes: measured?.sourceBytes ?? null,
+      operationBytes: measured?.operationBytes ?? null,
+      stagingPeakBytes,
+      availableBytes: measured?.availableBytes ?? target.availableBytes,
+      targetOnOperationFilesystem: p.target.location.kind === 'sqlite-file',
+      // Hosted artifacts also maintain a local cache; budget ordinary copies in both entries.
+      localArtifactMirrors: session.deps.journal.artifacts !== undefined,
+    })
+    if (
+      capacity.requiredBytes !== null &&
+      capacity.availableBytes !== null &&
+      capacity.availableBytes < capacity.requiredBytes
+    )
+      extraBlocks.push(
+        globalBlock('v3-capacity', {
+          requiredBytes: capacity.requiredBytes,
+          availableBytes: capacity.availableBytes,
+        }),
+      )
     const elapsed = Math.max(0, session.now() - started)
     const plan = buildEpochPlan({
       journal: session.journal,
       source,
       manifest,
+      contentManifestPath,
       summary,
       bootUpgradeFacts,
       targetPlanDigest: session.deps.targetPlanDigest(p.target.provider),
@@ -542,12 +589,7 @@ export async function planEpochOperation(
         `backup/${p.run?.ordinal ?? 0}`,
       ),
       estimates: {
-        sourceBytes,
-        targetBytes: null,
-        backupBytes: sourceBytes,
-        stagingBytes: null,
-        requiredBytes,
-        availableBytes,
+        ...capacity,
         rehearsalMs: elapsed,
         maintenanceMs: input.rehearse ? elapsed : null,
       },

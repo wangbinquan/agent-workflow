@@ -1,3 +1,4 @@
+import type { MigrationProgressCallback } from './run/progress'
 // RFC-395 II-b V1: historical migrations run only in newly created offline copies.
 import { Database } from 'bun:sqlite'
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
@@ -39,6 +40,7 @@ async function upgradeFileCopy(input: {
   readonly expected: SourcePreflight
   readonly manifest: SupportedSourceManifest
   readonly operationRoot: string
+  readonly progress?: MigrationProgressCallback
   readonly emptyTables?: readonly EmptyTableDecision[]
 }): Promise<{
   readonly path: string
@@ -127,6 +129,7 @@ async function upgradeDatabaseCopy(input: {
   readonly source: VersionedSourceReader
   readonly manifest: SupportedSourceManifest
   readonly operationRoot: string
+  readonly progress?: MigrationProgressCallback
   readonly createEmptyDatabase: () => Promise<OfflinePostgresqlDatabase>
 }): Promise<
   OfflinePostgresqlDatabase & {
@@ -200,6 +203,12 @@ async function upgradeDatabaseCopy(input: {
             Date.now(),
           )
           rowCount += chunk.rows.length
+          input.progress?.({
+            phase: 'offline-upgrade',
+            detail: table.id,
+            completed: rowCount,
+            unit: 'rows',
+          })
           chunkCount += 1
           afterKey = chunk.lastKey
         }
