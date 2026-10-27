@@ -47,9 +47,13 @@ describe('RFC-396 Windows keeps owned spawns flat', () => {
   test('the negative-PGID reap only runs where a process group exists', () => {
     for (const rel of EXECUTORS) {
       const src = code(rel)
-      expect(src, rel).toMatch(/if \(timedOut && detachedProcessGroup\(\)\)\s*await reapDetachedGroup\(/)
+      expect(src, rel).toMatch(
+        /if \(timedOut && detachedProcessGroup\(\)\)\s*await reapDetachedGroup\(/,
+      )
       expect(src.match(/reapDetachedGroup\(/g), rel).toHaveLength(1)
     }
-    expect(code('util/process.ts')).toContain('if (detachedProcessGroup()) await reapDetachedGroup(')
+    expect(code('util/process.ts')).toContain(
+      'if (detachedProcessGroup()) await reapDetachedGroup(',
+    )
   })
 })

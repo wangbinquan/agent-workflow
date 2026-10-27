@@ -31,6 +31,7 @@ import { readTaskAgentSources } from './helpers/taskAgentSource'
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
+import { detachedProcessGroup } from '../src/util/process'
 
 const BACKEND_SRC = resolve(import.meta.dir, '..', 'src')
 
@@ -87,9 +88,13 @@ describe('S-15 guard: SIGTERM→SIGKILL escalation + group kill (managedProcess.
 
   test('spawn uses POSIX groups, keeps Windows flat, and delegates tree kill', () => {
     // POSIX needs a process-group leader for `-pid`; Windows has no such group
-    // and uses Job Object/taskkill. Keeping the predicate explicit also locks
-    // the Windows output fix shared with spawnVersionProbe.
-    expect(countNonCommentMatches(mpSrc, /detached: process\.platform !== 'win32'/g)).toBe(1)
+    // and uses Job Object/taskkill. The predicate is the shared
+    // detachedProcessGroup() (RFC-396), which also locks the Windows output fix
+    // shared with spawnVersionProbe and the verification/adapter executors.
+    expect(countNonCommentMatches(mpSrc, /detached: detachedProcessGroup\(\)/g)).toBe(1)
+    expect(detachedProcessGroup('win32')).toBe(false)
+    expect(detachedProcessGroup('linux')).toBe(true)
+    expect(detachedProcessGroup('darwin')).toBe(true)
     // killTree delegates the group signal to killProcessTree (util/process),
     // keeping the single-process `child.kill` fallback.
     expect(countNonCommentMatches(mpSrc, /killProcessTree\(pid, signal\)/g)).toBe(1)

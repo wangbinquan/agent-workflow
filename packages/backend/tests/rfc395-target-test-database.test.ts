@@ -1,6 +1,6 @@
 import { frozenTablesOf as frozenProviderTablesOf } from '@/platform/persistence/migration/epoch1/tables'
 // RFC-395 II-b M-a: target fixtures and frozen migration inputs keep separate schema identities.
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import { Database } from 'bun:sqlite'
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -35,6 +35,10 @@ import {
   frozenTableSets,
   readFrozenMigrationFiles,
 } from './migration-freeze'
+
+// Installing the target head and reseeding take 2.9–3.8 s per PostgreSQL case on CI, once 6.15 s (run
+// 40461800472); allow 20 s.
+setDefaultTimeout(20_000)
 
 const NOW = 1_792_800_000_000
 const tableRows = (db: PersistenceDb, table: string) =>
