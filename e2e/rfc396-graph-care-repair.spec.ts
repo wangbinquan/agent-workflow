@@ -28,7 +28,9 @@ async function retainProfileDiagnostic(name: string, data: { body: Buffer; conte
   await test.info().attach(name, { path, contentType: data.contentType })
 }
 
-test.setTimeout(300_000)
+// Windows CI ran the care journey for 5.4 min (first attempt) and 4.2 min (retry) in run 40461800472,
+// against a 300 s limit; the external-observation waits below also need room there.
+test.setTimeout(600_000)
 const typeRef = 'graph-development@2'
 const tag = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
 const projectPath = `rfc396/graph-care-${tag}`
@@ -764,8 +766,10 @@ test('RFC-396 graph care hydrates approved material, repairs a real Task and re-
     ],
   })
   await expect
+    // The daemon pulls the seeded pipeline on its own observation cadence; on Windows CI the first
+    // attempt of run 40461800472 missed a 60 s window and the retry passed.
     .poll(async () => (await caseProjection()).detail.delivery?.readyToMerge, {
-      timeout: 60_000,
+      timeout: 180_000,
       intervals: [1_000, 2_500, 5_000],
     })
     .toBe(true)
@@ -782,7 +786,8 @@ test('RFC-396 graph care hydrates approved material, repairs a real Task and re-
         state: (await caseProjection()).case.state,
         status: (await caseProjection()).detail.delivery?.status,
       }),
-      { timeout: 60_000, intervals: [1_000, 2_500, 5_000] },
+      // Same external-observation cadence as readyToMerge above.
+      { timeout: 180_000, intervals: [1_000, 2_500, 5_000] },
     )
     .toEqual({ state: 'terminal', status: 'closed' })
   const closedProject = (await mocks.snapshot()).codeHosts.find(
