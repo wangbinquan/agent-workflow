@@ -95,6 +95,34 @@ export function createRfc395FixtureRuntime(
       }
 
       cancellations.push(cancelQueries)
+      // Closing the client sockets does not wait for the server: a backend releases its session
+      // advisory locks only when it exits (CI 40439161080 shard 14 still saw the migrator lock
+      // right after close). Return only after this pool's sessions are gone.
+      let opened = false
+      const awaitSessionsExit = async () => {
+        if (!opened) return
+        const control = new SQL(options.url, { max: 1, idleTimeout: 0, connectionTimeout: 10 })
+        const sessions =
+          'FROM pg_stat_activity WHERE application_name=$1 AND pid <> pg_backend_pid()'
+        try {
+          for (let attempt = 1; attempt <= 250; attempt += 1) {
+            if ((await control.unsafe(`SELECT pid ${sessions}`, [applicationName])).length === 0)
+              return
+            if (attempt === 50)
+              await control.unsafe(`SELECT pg_terminate_backend(pid) ${sessions}`, [
+                applicationName,
+              ])
+            await new Promise((resolve) => setTimeout(resolve, 20))
+          }
+          throw new Error(`RFC-395 fixture sessions did not exit: ${applicationName}`)
+        } catch (error) {
+          // The database is already gone, and with it every session.
+          if ((error as { errno?: unknown }).errno === '3D000') return
+          throw error
+        } finally {
+          await control.close({ timeout: 1 })
+        }
+      }
       let closing: Promise<void> | undefined
       const assertOpen = () => {
         if (closing) throw new Error('RFC-395 fixture connection is closed')
@@ -124,10 +152,12 @@ export function createRfc395FixtureRuntime(
       return {
         unsafe(sql, values) {
           assertOpen()
+          opened = true
           return track(physical.unsafe(sql, values))
         },
         async reserve(options) {
           assertOpen()
+          opened = true
           const connection = await physical.reserve(options)
           if (closing) {
             await connection.close?.({ timeout: 1 })
@@ -182,6 +212,7 @@ export function createRfc395FixtureRuntime(
             )
             await physical.close({ timeout: 1 })
             await Promise.all(queries.values())
+            await awaitSessionsExit()
             const errors = results.flatMap((result) =>
               result.status === 'rejected' ? [result.reason as unknown] : [],
             )

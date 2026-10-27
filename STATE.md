@@ -11,6 +11,7 @@
   - CI：Ubuntu 后端分片 24 → 36（用户裁决）。
 - 本机按 CI 跑法复验（6 分片、两条泳道同进程、默认超时、随机顺序）：后端全量 31,376 / 0；迁移相关 e2e 42 / 0。详见 [RFC plan §6.13「CI 第一轮与修复轮」](design/RFC-395-database-target-schema-rebuild/plan.md)。
 - CI 第二轮（`b8b1272c1`，运行 40433510287）：后端 36 片中 35 片通过，唯一失败是 RFC-346 的语料扫描用例 5.41 秒超时（II-b 前 4.40 秒，随语料增长）。按这次 CI 的实测，把 34 个测试文件改为 20 秒预算：它们在默认 5 秒下已用到 60% 以上，且属于本 RFC，或随 II-b 明显变慢。改动前后耗时相同的不动。
+- CI 第三轮（`c49322912`，运行 40439161080）：后端 36 片中 35 片通过，唯一失败是 CIP-A 夹具 runtime 的关闭与服务端会话退出之间的竞态（`rfc395-ci-fixture-lifecycle`：close 返回后会话级 advisory 锁还在）。已改为关闭时等本池的服务端会话全部退出。
 - 不属本次、保留证据、未改：Windows e2e 第 3 分片的 RFC-396 用例，以及 Windows 上本地 git 夹具克隆慢（6～8 秒）导致的 `task-lifecycle-states` 等待超时（II-b 前同样出现）；e2e-full 夜间的 RFC-319 账本差异（RFC-396 的 e2e 已命中 `POST /api/code/verification-profiles/:id/publish`，账本没有缩小）。
 
 **T18 集中验证**：

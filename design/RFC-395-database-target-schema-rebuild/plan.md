@@ -894,6 +894,7 @@ Q-3 同期完成：plan §3 的 18 行拆成 137 个覆盖项，另列 44 个切
 | 静态检查 | 三个包的 typecheck、lint、格式、依赖分层、合同历史检查全部通过；`architecture/counts.json` 无上调 |
 | CI（`b6df370b7`，运行 40298205725） | 失败，见下节「CI 第一轮与修复轮」 |
 | CI（`b8b1272c1`，运行 40433510287） | 后端 35 / 36 片通过，余下见下节「CI 第二轮」 |
+| CI（`c49322912`，运行 40439161080） | 后端 35 / 36 片通过，余下见下节「CI 第三轮」 |
 
 #### CI 第一轮与修复轮（2026-10-26）
 
@@ -927,6 +928,8 @@ Q-3 同期完成：plan §3 的 18 行拆成 137 个覆盖项，另列 44 个切
 - 本机复验改按 CI 的跑法（6 分片、两条泳道同进程、默认超时、随机顺序）：后端全量 31,376 / 0（57 条按条件跳过），无加载级错误；修复轮中途用同一跑法时为 31,366 通过、7 失败、4 个连带错误。相近负载下 PG 用例合计耗时降 13%，单条中位耗时降到 0.75 倍。迁移相关的 5 个 e2e spec（含 epoch-2 切换回滚旅程）在本次二进制上 42 / 0；typecheck、lint、格式、依赖分层、合同历史检查与 `tests/architecture/`（1,207 / 0）通过。
 
 **CI 第二轮**（`b8b1272c1`，运行 40433510287）：后端 36 片中 35 片通过，真实 PostgreSQL 与链接检查通过。唯一的后端失败是 `rfc346-system-operations-contracts` 的语料扫描用例 5.41 秒超时：它逐文件解析整个后端，II-b 前在 CI 上已是 4.40 / 5 秒，后端源文件增长约 12% 后越过预算。按这次 CI 的实测再做一次清点：凡在默认 5 秒预算下已用到 60% 以上、且属于本 RFC，或比 II-b 前明显变慢（语料扫描、PG 开销、恢复路径）的测试文件，统一改为 20 秒并写明实测耗时，共 34 个；改动前后耗时相同的（如 `rfc311-task-page-filtered-fastpath`、`scheduler-wrapper-scope-dependencies`）不动。bun 的单条超时只约束测试体，报告的耗时含 beforeEach / afterEach，清点按含 hook 的耗时从严计。Windows e2e 第 3 分片仍失败：`e2e/rfc396-graph-care-repair.spec.ts:402`（RFC-396，每轮都失败），以及 `e2e/task-lifecycle-states.spec.ts:587` 等待任务进入 running 超时。后者的日志显示本地 git 夹具在 Windows 上重克隆用了约 8 秒，II-b 前（运行 40165321489）同一机制以 6 秒克隆让 443 行失败过，属既有问题，未改。
+
+**CI 第三轮**（`c49322912`，运行 40439161080）：后端 36 片中 35 片通过。唯一失败是 `rfc395-ci-fixture-lifecycle` 的 「cleanup … releases a reserved migrator lock before database DROP [postgresql]」：CIP-A 的夹具 runtime （`tests/helpers/rfc395FixturePostgresql.ts`）关闭时只断开客户端连接，而服务端 backend 要在退出时才释放会话级 advisory 锁，close 返回后立刻查 `pg_locks` 偶尔还看得到。修复：关闭时按本池唯一的 application_name 轮询 `pg_stat_activity`，等会话全部退出才返回（约 1 秒后 `pg_terminate_backend`，约 5 秒仍在则报错）。Windows e2e 第 3 分片这一轮只剩 RFC-396 的 `e2e/rfc396-graph-care-repair.spec.ts:402`。
 
 #### 休眠包与共享账本
 
@@ -995,3 +998,4 @@ Q-3 同期完成：plan §3 的 18 行拆成 137 个覆盖项，另列 44 个切
 - 2026-10-25 下午：复核与 BF 修复轮、Q-3 完成，开始 T18 集中验证。
 - 2026-10-26 凌晨：T18 完成，见「复核、BF 修复轮与 T18 集中验证」。全部换表代码以 `045abf20a` 一次提交（2,261 个路径），gitleaks 对冻结来源清单的三条误报以 `b6df370b7` 钉住指纹。CI 第一轮失败，修复见「CI 第一轮与修复轮」。下一步是 T19：真实实例迁移逐个取得用户批准，按 `rehearsal-template.md` 记录演练。
 - 2026-10-26 下午：CI 第一轮的修复轮完成并上库（产品修复：生产入口识别 PostgreSQL 源），见「CI 第一轮与修复轮」。
+- 2026-10-26 晚：CI 第二、三轮各剩一条测试侧问题（语料增长后的超时预算、夹具关闭与会话退出的竞态），均已修，见同节。
