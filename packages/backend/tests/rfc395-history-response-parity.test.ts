@@ -49,8 +49,9 @@ import { createCodeHistoryPackageReader } from '@/modules/code-capability/infras
 import type { CodeHistoryQueryTable } from '@/modules/code-capability/domain/codeHistoryPackage'
 import type { DecodedSourceRow } from '@/platform/persistence/migration/sourceTypes'
 
-// Conversion through the sink and all four HTTP endpoints take about 17 s per CI-scaled case; allow 50 s.
-setDefaultTimeout(50000)
+// Conversion through the sink and all four HTTP endpoints took 31.5 s on CI run 40433510287; a single
+// heavy case has spiked 2.7x on a CI runner (rfc359-w19, run 40449909314); allow 120 s.
+setDefaultTimeout(120_000)
 
 const NOW = 1_700_000_000_000
 const item = (id: string, createdAt = NOW) => ({

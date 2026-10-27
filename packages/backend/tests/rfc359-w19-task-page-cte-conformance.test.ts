@@ -31,7 +31,9 @@ import { describeEachProvider } from './helpers/eachProvider'
 
 const VIEWER: TaskListViewer = { userId: 'fixture-owner', canReadAllTasks: true }
 const OPTIONS = { catalogVisibility: 'public' } as const
-const MATRIX_TIMEOUT_MS = 30_000
+// The SQLite lane compiles about 1,600 statements averaging 8.7 KB (2.3 KB before RFC-395 II-b's
+// normalized task tables): 18–21 s on CI, once 49.8 s (run 40449909314); allow 120 s.
+const MATRIX_TIMEOUT_MS = 120_000
 const STATUSES = [
   'done',
   'running',
