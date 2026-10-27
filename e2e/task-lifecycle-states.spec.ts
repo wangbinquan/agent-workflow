@@ -339,6 +339,12 @@ async function getTaskStatus(daemon: DaemonHandle, taskId: string): Promise<stri
   return body.status
 }
 
+// Reaching `running` includes repository preparation. On Windows CI the cached repo's first clone from
+// the local git HTTP fixture takes 6–8 s (runs 40165321489, 40433510287, 40461800472, 40512067066), so a
+// 10 s wait failed one of these three cases in almost every run. The slow stub then keeps the task
+// running for 20 s, and the 200 ms poll still sees `running` as soon as it starts.
+const RUNNING_WAIT_MS = 45_000
+
 async function waitForStatus(
   daemon: DaemonHandle,
   taskId: string,
@@ -461,7 +467,7 @@ test('task lifecycle: running (slow stub + dispatch)', async ({ page }) => {
     const taskId = await launchTask(daemon, fixtures.workflowId, repo.repoDir)
 
     // API layer.
-    await waitForStatus(daemon, taskId, (s) => s === 'running', 10_000, 'running-api')
+    await waitForStatus(daemon, taskId, (s) => s === 'running', RUNNING_WAIT_MS, 'running-api')
     // WS layer.
     await waitForWsStatus(rec, taskId, 'running', 5_000)
     // UI layer.
@@ -559,7 +565,13 @@ test('task lifecycle: canceled (POST /api/tasks/:id/cancel mid-running)', async 
 
     const fixtures = await seedLinearWorkflow(daemon, { agentName: 'lifecycle-canceled' })
     const taskId = await launchTask(daemon, fixtures.workflowId, repo.repoDir)
-    await waitForStatus(daemon, taskId, (s) => s === 'running', 10_000, 'running-precancel')
+    await waitForStatus(
+      daemon,
+      taskId,
+      (s) => s === 'running',
+      RUNNING_WAIT_MS,
+      'running-precancel',
+    )
 
     const cancelRes = await fetch(`${daemon.baseUrl}/api/tasks/${taskId}/cancel`, {
       method: 'POST',
@@ -594,7 +606,7 @@ test('task lifecycle: interrupted (SIGKILL → restart → orphan reap)', async 
   try {
     const fixtures = await seedLinearWorkflow(daemonA, { agentName: 'lifecycle-interrupted' })
     const taskId = await launchTask(daemonA, fixtures.workflowId, repo.repoDir)
-    await waitForStatus(daemonA, taskId, (s) => s === 'running', 10_000, 'A-running-int')
+    await waitForStatus(daemonA, taskId, (s) => s === 'running', RUNNING_WAIT_MS, 'A-running-int')
 
     await daemonA.killChild('SIGKILL')
 

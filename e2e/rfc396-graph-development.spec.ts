@@ -10,7 +10,10 @@ import { clarifyQuestionSetKey, clarifyAnswerBasis } from '../packages/shared/sr
 import type { ClarifyAnswer, ClarifyQuestion } from '../packages/shared/src/schemas/clarify'
 import type { GraphDesignDocument } from '../packages/shared/src/schemas/graphDesign'
 
-test.setTimeout(300_000)
+// Windows CI runs these journeys several times slower than macOS: on candidate 8481557c9 the
+// notification journey took 29.8 s on a local macOS run and 3.0 min in the passing Windows retry of
+// run 40512067066. The two external-observation waits below and this limit leave room for that host.
+test.setTimeout(600_000)
 let daemon: DaemonHandle
 const daemonHandles: DaemonHandle[] = []
 let mocks: SystemMockClient
@@ -672,7 +675,9 @@ async function journey(
         const state = await caseProjection()
         return state.case.state === 'waiting' && state.detail.delivery?.status === 'active'
       },
-      { timeout: 90_000, intervals: [1_000, 2_500, 5_000] },
+      // Windows CI: the passing retry of run 40512067066 needed 58.9 s here; first attempts of runs
+      // 40165321489, 40177952820, 40178466173, 40202447951 and 40512067066 missed a 90 s window.
+      { timeout: 180_000, intervals: [1_000, 2_500, 5_000] },
     )
     .toBe(true)
   const published = await caseProjection()
@@ -786,7 +791,10 @@ async function journey(
           mrStatus: state.detail.delivery?.status,
         }
       },
-      { timeout: 90_000, intervals: [1_000, 2_500, 5_000] },
+      // The daemon finds the external merge/close on its 30 s code-host poll. Windows CI: the passing
+      // retry of run 40512067066 needed 74.0 s (after the restart); first attempts of runs 40298205725,
+      // 40433510287 and 40461800472 missed a 90 s window.
+      { timeout: 180_000, intervals: [1_000, 2_500, 5_000] },
     )
     .toEqual({
       caseId,
