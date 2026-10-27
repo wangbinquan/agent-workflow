@@ -59,6 +59,19 @@ export function isProcessAlive(pid: number, opts: ProcessLivenessOptions = {}): 
 }
 
 /**
+ * Whether a spawn that owns its descendants becomes a detached process-group
+ * leader. POSIX: yes, so `killProcessTree` / `reapDetachedGroup` reach every
+ * descendant through `-pid`. Windows: no. It has no POSIX process groups, its
+ * tree kill is owned by the Job Object / taskkill branch of `killProcessTree`,
+ * and Bun's detached Windows spawn loses the output of `.cmd` wrappers and
+ * compiled callers (RFC-254 version probe; RFC-396 verification profile, where
+ * Bun 1.4.3 kept 0 of 198 stdout bytes with `detached: true`).
+ */
+export function detachedProcessGroup(platform: NodeJS.Platform = process.platform): boolean {
+  return platform !== 'win32'
+}
+
+/**
  * Best-effort kill of `pid`'s WHOLE process tree. POSIX managed processes use
  * `detached: true` (`setsid()` → the child is its own group leader), so
  * `process.kill(-pid, sig)` reaches grandchildren too — the docker-MCP /
@@ -595,7 +608,7 @@ export async function spawnVersionProbe(
     stdout: 'pipe',
     stderr: 'pipe',
     ...(opts.maxBytes !== undefined ? { stdin: 'ignore' } : {}),
-    detached: process.platform !== 'win32',
+    detached: detachedProcessGroup(),
   })
   let timedOut = false
   const timer = setTimeout(() => {
@@ -624,6 +637,6 @@ export async function spawnVersionProbe(
     return { timedOut, exitCode, stdout, stderr: '' }
   } finally {
     clearTimeout(timer)
-    if (process.platform !== 'win32') await reapDetachedGroup(proc.pid, opts.awaitReapMs ?? 0)
+    if (detachedProcessGroup()) await reapDetachedGroup(proc.pid, opts.awaitReapMs ?? 0)
   }
 }

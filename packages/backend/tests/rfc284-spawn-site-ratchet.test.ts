@@ -52,12 +52,16 @@ const SPAWN_PATTERNS: readonly RegExp[] = [
  *
  *   · `kernel`        —— 杀链 / 受管进程内核本身。
  *   · `process-group` —— 自成进程组且整组杀。**有 AST 断言**：必须同时出现
- *                        `detached: true` 与一处组杀（`killProcessTree` 或
- *                        `process.kill(-pid)`）。
+ *                        `detached: true`（或平台判据 `detached: detachedProcessGroup()`：
+ *                        POSIX 自成进程组，Windows 由 Job Object / taskkill 树杀，见 RFC-396）
+ *                        与一处组杀（`killProcessTree` 或 `process.kill(-pid)`）。
  *   · `short-lived`   —— 不 fork、输出天然有界，无需组治理；why 必须说清为什么。
  *   · `not-a-spawn`   —— 命中的是同名相位钩子等，本身不起进程。
  */
 type SpawnGovernance = 'kernel' | 'process-group' | 'short-lived' | 'not-a-spawn'
+
+/** 自成进程组的两种合法写法：无条件，或经平台判据（Windows 不开 detached）。 */
+const PROCESS_GROUP_DETACHED = /detached:\s*(true|detachedProcessGroup\(\))/
 
 const ALLOWLIST: Record<string, { governance: SpawnGovernance; count: number; why: string }> = {
   'services/schedulerAssembly.ts': {
@@ -455,7 +459,7 @@ describe('RFC-317 T34（EK-01）—— 每个 spawn 站点的治理形态可断�
     for (const [rel, entry] of Object.entries(ALLOWLIST)) {
       if (entry.governance !== 'process-group') continue
       const src = read(rel)
-      const grouped = /detached:\s*true/.test(src)
+      const grouped = PROCESS_GROUP_DETACHED.test(src)
       const treeKill = /killProcessTree\s*\(/.test(src) || /process\.kill\(\s*-/.test(src)
       if (!grouped || !treeKill) {
         offenders.push(`${rel}（detached=${grouped} 组杀=${treeKill}）`)
@@ -471,7 +475,8 @@ describe('RFC-317 T34（EK-01）—— 每个 spawn 站点的治理形态可断�
   test('short-lived 站点确实没有在自称进程组（自相矛盾的声明先红）', () => {
     const contradictory = Object.entries(ALLOWLIST)
       .filter(
-        ([rel, entry]) => entry.governance === 'short-lived' && /detached:\s*true/.test(read(rel)),
+        ([rel, entry]) =>
+          entry.governance === 'short-lived' && PROCESS_GROUP_DETACHED.test(read(rel)),
       )
       .map(([rel]) => rel)
     expect(

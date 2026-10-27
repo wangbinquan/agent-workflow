@@ -2,7 +2,7 @@ import { existsSync, lstatSync, mkdtempSync, rmSync, writeFileSync } from 'node:
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { platformSpawnOptionsForHost } from '@/util/platformExec'
-import { killProcessTree, reapDetachedGroup } from '@/util/process'
+import { detachedProcessGroup, killProcessTree, reapDetachedGroup } from '@/util/process'
 import { runManagedProcess } from '@/platform/execution/local/managedProcess'
 import { readVerificationEnvironment } from './verificationEnvironment'
 import type { EvidenceArtifactPort } from '../../application/ports/evidenceArtifacts'
@@ -145,7 +145,12 @@ export function createLocalVerificationCommandEffects(deps: {
         // `rmSync(outDir)`、调用方紧接着丢弃 workspace——一个还在往里写文件的幸存孙进程，
         // 正是 managedProcess 里那句注释说的 "Without it a fork()ed grandchild survives
         // every kill we send"。
-        detached: true,
+        //
+        // RFC-396：Windows 不开 detached，与平台内核同一判据（detachedProcessGroup）。
+        // Windows/Bun 1.4.3 的编译调用器经 `.cmd` 跑 profile 时，detached 让 Bun.file 收到
+        // 0 字节 stdout（同一夹具不 detached 时完整收到 198 字节证明），回执于是只剩退出码；
+        // Windows 的整树清理本来就走 killProcessTree 的 Job Object / taskkill 分支。
+        detached: detachedProcessGroup(),
       })
       let timedOut = false
       const killer = setTimeout(() => {
@@ -159,7 +164,8 @@ export function createLocalVerificationCommandEffects(deps: {
       clearTimeout(killer)
       // 有界收尸：超时路径上组里可能还有孙进程没死透，等一个有上限的窗口再往下走——
       // 否则 rmSync(outDir) 会和它们的写入赛跑。
-      if (timedOut) await reapDetachedGroup(proc.pid, VERIFICATION_REAP_WINDOW_MS)
+      if (timedOut && detachedProcessGroup())
+        await reapDetachedGroup(proc.pid, VERIFICATION_REAP_WINDOW_MS)
 
       let outputTailRef: string | null = null
       try {

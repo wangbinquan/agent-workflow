@@ -1,3 +1,21 @@
+## 2026-10-26 RFC-396 In Progress：本会话接手；Windows 验证执行器改为不 detached
+
+**交接**：用户 2026-10-26 将 RFC-396 交本会话接手，并说明 agent-workflow 与 CrewStation 两个仓库目前只有本会话在工作。此前因执行器代码归属其他会话而搁置的修复，现按 RFC-396 范围直接处理。
+
+**Windows care 修复**：
+- 原因：验证执行器（`verificationCommandEffects.ts`）与外部适配器执行器（`developmentAdapterProgram.ts`）都无条件 `detached: true`。Windows/Bun 1.4.3 的编译调用器经 `.cmd` 跑 profile 时，stdout 因此全部丢失（A/B 对照：0 字节 / 198 字节），care 旅程每轮都停在首次 profile 证明。
+- 修法：
+  - 平台内核与版本探针早已是「POSIX 自成进程组、Windows 不 detached」。现在四处共用 `util/process.ts` 的 `detachedProcessGroup()`。
+  - Windows 的超时树杀沿用 `killProcessTree`（Job Object / taskkill）；`-pid` 收尸只在 POSIX 做。
+  - spawn 治理守卫同步接受这种写法；回归用例见 `tests/rfc396-windows-flat-process-group.test.ts`。
+- 真实接受仍以 CI 上 Windows 的 care e2e 为准。
+
+**RFC-319 账本**：RFC-396 的 care 旅程已真实命中 `POST /api/code/verification-profiles/:id/publish`。按 e2e-full 夜间（运行 40321405234）的对账，从未覆盖清单中销账（80 → 79）。
+
+**仍开放**，都要先修环境：
+- graph@2 真实企业 MR/CI：本地 GitLab 项目接口返回 500。
+- 新版托管执行与默认恢复：本地 CrewStation 节点磁盘满、服务 503、任务仍是旧镜像。
+
 ## 2026-10-26 RFC-395 In Progress：II-b 激活上库，CI 第一轮的修复轮完成，下一步 T19
 
 **上库**：全部换表代码以 `045abf20a` 一次提交（2,261 个路径）：后端从 epoch-1 schema 切换到 epoch-2 目标 schema，附离线转换器、`db migration` 切换与回滚、合同历史与全部运行时适配。gitleaks 对冻结来源清单 `epoch1/provenance.json` 的三条误报（文件名里的 auth / credentials / sentry 让摘要被当成密钥）以 `b6df370b7` 钉住精确指纹。

@@ -18,7 +18,12 @@ import type {
 } from '../../application/ports/developmentAdapterEffects'
 import type { DevelopmentAdapterOperation } from '../../application/developmentAdapterOperation'
 import { platformSpawnOptionsForHost } from '@/util/platformExec'
-import { killProcessTree, readStreamCapped, reapDetachedGroup } from '@/util/process'
+import {
+  detachedProcessGroup,
+  killProcessTree,
+  readStreamCapped,
+  reapDetachedGroup,
+} from '@/util/process'
 
 const STDOUT_LIMIT = 256 * 1024
 /** TERM 之后给整组的宽限。 */
@@ -296,7 +301,9 @@ export function createLocalDevelopmentAdapterEffects(deps: {
         stderr: 'pipe',
         // RFC-317 T35（EK-01）—— 自成进程组：这里跑的是**外部适配器可执行文件**，
         // 它 fork 什么完全不受本仓控制。不 detached 时下面的杀链只能杀到直接子进程。
-        detached: true,
+        // Windows 例外，与平台内核同一判据：没有 POSIX 进程组，整树清理走 Job Object /
+        // taskkill；detached 还会让 Bun 丢掉 `.cmd` 包装器的管道输出（RFC-254 / RFC-396）。
+        detached: detachedProcessGroup(),
       })
     } catch {
       return { kind: 'unavailable' }
@@ -320,7 +327,8 @@ export function createLocalDevelopmentAdapterEffects(deps: {
     ])
     clearTimeout(timer)
     // 有界收尸：超时路径上组里可能还有孙进程没死透。
-    if (timedOut) await reapDetachedGroup(proc.pid, ADAPTER_REAP_WINDOW_MS)
+    if (timedOut && detachedProcessGroup())
+      await reapDetachedGroup(proc.pid, ADAPTER_REAP_WINDOW_MS)
 
     return timedOut ? { kind: 'expired' } : { kind: 'completed', stdout, exitCode }
   }

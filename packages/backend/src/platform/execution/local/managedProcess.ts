@@ -13,6 +13,7 @@ import { closeSync, openSync, readSync } from 'node:fs'
 import {
   adoptSpawnedProcessTree,
   awaitProcessTreeQuiesced,
+  detachedProcessGroup,
   killProcessTree,
   releaseProcessTreeOwnership,
 } from '@/util/process'
@@ -506,7 +507,7 @@ export async function runManagedProcess(req: ManagedProcessRequest): Promise<Man
       // descendant. Windows has no POSIX process groups and its tree kill is
       // already owned by Job Object/taskkill; Bun's detached Windows spawn can
       // lose compiled-child output, so keep that host flat.
-      detached: process.platform !== 'win32',
+      detached: detachedProcessGroup(),
     })
   } catch (err) {
     cleanupWindowsOutputSpool(outputSpool)

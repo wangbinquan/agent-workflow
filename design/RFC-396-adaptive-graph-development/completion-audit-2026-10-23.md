@@ -4,6 +4,8 @@
 
 **2026-10-24 06:55 UTC后继更新：** 取证候选 `ac5c96bf760472d78b7cbc93ac3a00b30fd5f878` 的主CI终态46成功/3失败。本会话新增诊断的Node守卫和首次附件保存问题均已取得准确CI实际接受。Windows/Bun1.4.3对照已确认：两个变体都真实完成，detached=true丢失stdout，false保留完整198字节业务证明；实际生产回执同样缺日志。历史执行器补丁尚待范围授权，生产修复和完整Windows care未接受。详见[结构化实证](./windows-profile-acceptance-2026-10-24.json)。已有共享main的并发提交不撤销这份准确候选证据，也不由此取得整合后版本的全仓接受。
 
+**2026-10-26 接手后更新：** 本会话接手本 RFC 后应用了 §3 第 1 条搁置的补丁：验证执行器与外部适配器执行器在 Windows 上不再 detached，与平台内核、版本探针共用 `detachedProcessGroup()`；超时树杀在 Windows 走 Job Object / taskkill。回归用例与守卫已更新，完整 Windows care 待该准确 SHA 的 CI 实际接受，届时再改本条状态。
+
 **裁决：RFC保持In Progress。** 准确主CI终态46成功/3失败；Windows新增care用例两次缺少首次profile日志证明，尚未进入CI修复段。Ubuntu/macOS各五个图用例首轮通过。完整graph@2真实GitLab MR/CI、新版托管执行及默认恢复仍无直接接受证据，不能由graph@1或受控外部系统代签。当前结构化证据见[care接受](./graph-care-repair-acceptance-2026-10-23.json)和[准确CI](./r23-ci-acceptance-2026-10-23.json)。
 
 ## 1. 逐项完成度

@@ -51,6 +51,8 @@
 
 2026-10-23 图交互收口：修复 `2e562fb54` 已发布，组件10/0及准确artifact的四类真实SVG交互1/0通过。有限大图的多视图/深依赖/320px场景均已完成，依赖场景保留测量脚本失败与只补跑该场景的修后证据，见[运行验收](./graph-runtime-acceptance-2026-10-23.json)。T20剩余真实企业MR/CI与新版托管接受；T21继续消费当前准确SHA的CI，不将其他会话的失败或环境前提冒签通过。
 
+2026-10-26 接手与 Windows 修复：用户将本 RFC 交给 RFC-395 所在会话接手，两个仓库目前只有这一个会话在工作。completion-audit §3 第 1 条的「历史三文件补丁」按本 RFC 范围应用：验证执行器与外部适配器执行器改用平台判据 `detachedProcessGroup()`（Windows 不 detached，树杀走 Job Object / taskkill），平台内核与版本探针共用同一判据，spawn 治理守卫同步；回归用例 `tests/rfc396-windows-flat-process-group.test.ts`。RFC-319 端点账本按 e2e-full 夜间对账，销掉已被 care 旅程命中的 `POST /api/code/verification-profiles/:id/publish`。Windows care 的完整接受等准确 SHA 的 CI；真实企业 MR/CI 与新版托管仍受环境阻塞。
+
 ## 3. 原型和设计确认内容
 
 - 场景一：预约流程 → 新增并发冲突 → 新增优先级规则，验证图组合能改变和收敛。
