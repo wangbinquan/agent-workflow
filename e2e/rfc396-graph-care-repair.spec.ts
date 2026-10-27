@@ -661,7 +661,10 @@ test('RFC-396 graph care hydrates approved material, repairs a real Task and re-
           ? delivery.headSha
           : ''
       },
-      { timeout: 90_000, intervals: [1_000, 2_500, 5_000] },
+      // The 30 s code-host poll, collection, classification, the repair Task, profile re-verification
+      // and the push all sit inside this wait. Windows CI: both attempts of run 40521324441 missed a
+      // 90 s window here (the first attempt of run 40514130589 passed).
+      { timeout: 180_000, intervals: [1_000, 2_500, 5_000] },
     )
     .toMatch(/^[a-f0-9]{40}$/)
   const repaired = await caseProjection()

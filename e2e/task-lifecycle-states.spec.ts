@@ -339,11 +339,12 @@ async function getTaskStatus(daemon: DaemonHandle, taskId: string): Promise<stri
   return body.status
 }
 
-// Reaching `running` includes repository preparation. On Windows CI the cached repo's first clone from
-// the local git HTTP fixture takes 6–8 s (runs 40165321489, 40433510287, 40461800472, 40512067066), so a
-// 10 s wait failed one of these three cases in almost every run. The slow stub then keeps the task
-// running for 20 s, and the 200 ms poll still sees `running` as soon as it starts.
-const RUNNING_WAIT_MS = 45_000
+// Every status reached from launch includes repository preparation. On Windows CI the cached repo's first
+// clone from the local git HTTP fixture takes 6–8 s (runs 40165321489, 40433510287, 40461800472,
+// 40512067066), so a 10 s wait for `running` failed one case in almost every run, and a 20 s wait for
+// `awaiting_review` failed in run 40514130589. The slow stub then keeps the task running for 20 s, and the
+// 200 ms poll still sees `running` as soon as it starts.
+const FROM_LAUNCH_WAIT_MS = 45_000
 
 async function waitForStatus(
   daemon: DaemonHandle,
@@ -467,7 +468,7 @@ test('task lifecycle: running (slow stub + dispatch)', async ({ page }) => {
     const taskId = await launchTask(daemon, fixtures.workflowId, repo.repoDir)
 
     // API layer.
-    await waitForStatus(daemon, taskId, (s) => s === 'running', RUNNING_WAIT_MS, 'running-api')
+    await waitForStatus(daemon, taskId, (s) => s === 'running', FROM_LAUNCH_WAIT_MS, 'running-api')
     // WS layer.
     await waitForWsStatus(rec, taskId, 'running', 5_000)
     // UI layer.
@@ -499,7 +500,7 @@ test('task lifecycle: done (fast stub happy path)', async ({ page }) => {
     const fixtures = await seedLinearWorkflow(daemon, { agentName: 'lifecycle-done' })
     const taskId = await launchTask(daemon, fixtures.workflowId, repo.repoDir)
 
-    await waitForStatus(daemon, taskId, (s) => s === 'done', 30_000, 'done-api')
+    await waitForStatus(daemon, taskId, (s) => s === 'done', FROM_LAUNCH_WAIT_MS, 'done-api')
     await waitForWsStatus(rec, taskId, 'done', 5_000)
     await page.goto(`${daemon.baseUrl}/tasks/${taskId}`)
     await expect(page.locator('.status-chip', { hasText: /^done$/i }).first()).toBeVisible({
@@ -569,7 +570,7 @@ test('task lifecycle: canceled (POST /api/tasks/:id/cancel mid-running)', async 
       daemon,
       taskId,
       (s) => s === 'running',
-      RUNNING_WAIT_MS,
+      FROM_LAUNCH_WAIT_MS,
       'running-precancel',
     )
 
@@ -606,7 +607,13 @@ test('task lifecycle: interrupted (SIGKILL → restart → orphan reap)', async 
   try {
     const fixtures = await seedLinearWorkflow(daemonA, { agentName: 'lifecycle-interrupted' })
     const taskId = await launchTask(daemonA, fixtures.workflowId, repo.repoDir)
-    await waitForStatus(daemonA, taskId, (s) => s === 'running', RUNNING_WAIT_MS, 'A-running-int')
+    await waitForStatus(
+      daemonA,
+      taskId,
+      (s) => s === 'running',
+      FROM_LAUNCH_WAIT_MS,
+      'A-running-int',
+    )
 
     await daemonA.killChild('SIGKILL')
 
@@ -658,7 +665,7 @@ test('task lifecycle: awaiting_review (agent → review node)', async ({ page })
       daemon,
       taskId,
       (s) => s === 'awaiting_review',
-      20_000,
+      FROM_LAUNCH_WAIT_MS,
       'awaiting_review-api',
     )
     await waitForWsStatus(rec, taskId, 'awaiting_review', 5_000)
@@ -691,7 +698,13 @@ test('task lifecycle: awaiting_human (clarify stub asks question)', async ({ pag
     const fixtures = await seedClarifyWorkflow(daemon)
     const taskId = await launchTask(daemon, fixtures.workflowId, repo.repoDir)
 
-    await waitForStatus(daemon, taskId, (s) => s === 'awaiting_human', 20_000, 'awaiting_human-api')
+    await waitForStatus(
+      daemon,
+      taskId,
+      (s) => s === 'awaiting_human',
+      FROM_LAUNCH_WAIT_MS,
+      'awaiting_human-api',
+    )
     await waitForWsStatus(rec, taskId, 'awaiting_human', 5_000)
     await page.goto(`${daemon.baseUrl}/tasks/${taskId}`)
     // i18n en-US task status chip for awaiting_human = "Awaiting input"
