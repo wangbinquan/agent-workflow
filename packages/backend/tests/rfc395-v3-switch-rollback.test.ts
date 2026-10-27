@@ -5,7 +5,7 @@ import {
   digestGenerationPayload,
   parseDatabaseGenerationText,
 } from '@/platform/persistence/generationValidation'
-import { makeSwitchFixture, plannedFixture, fixtureDigest } from './rfc395-v3-switch-domain.test'
+import { makeSwitchFixture, plannedFixture, fixtureDigest } from './helpers/rfc395V3SwitchFixture'
 
 for (const hasPointer of [true, false])
   test(`rollback restores exact previous pointer bytes: ${hasPointer}`, async () => {

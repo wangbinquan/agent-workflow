@@ -4,7 +4,7 @@ import {
   encodeMigrationKey,
 } from '@/platform/persistence/migration/conversion/migrationKey'
 import { createEpochSwitchApplication } from '@/modules/system-operations/application/epochSwitch/application'
-import { plannedFixture, makeSwitchFixture, fixtureDigest } from './rfc395-v3-switch-domain.test'
+import { plannedFixture, makeSwitchFixture, fixtureDigest } from './helpers/rfc395V3SwitchFixture'
 
 test('run requires the material approval digest and numeric drift keeps approval', async () => {
   const f = await plannedFixture()

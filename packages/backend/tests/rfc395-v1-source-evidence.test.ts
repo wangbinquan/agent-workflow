@@ -1,5 +1,5 @@
 // RFC-395 V1: complete prefix coverage, physical evidence, content facts and restart semantics.
-import { expect, test } from 'bun:test'
+import { setDefaultTimeout, expect, test } from 'bun:test'
 import type { Database } from 'bun:sqlite'
 import { cpSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -26,6 +26,9 @@ import { tableCatalogDigest } from '@/platform/persistence/migration/sourceDispo
 import { SourceBlockedError, type SourceKind } from '@/platform/persistence/migration/sourceTypes'
 import { assertSqliteIntegrity } from '@/platform/persistence/migration/rawSourceReader'
 import { vacuumSqliteInto } from '@/platform/persistence/migration/legacy/sqliteSnapshot'
+
+// Complete source backups and immutable identity evidence take about 12 s per CI-scaled case; allow 40 s.
+setDefaultTimeout(40000)
 
 // Independent reconstruction of the released RFC-278 regression fixture.
 async function installObserved0141(database: Database): Promise<void> {
@@ -110,7 +113,7 @@ describeV1Providers('RFC-395 V1 source evidence', (h) => {
             : 'not-inventoried',
       )
     }
-  }, 240_000)
+  })
   test('identity high-water survives an empty table and repeat preflight, and invalidates the watermark when changed', async () => {
     await h.install()
     const table = 'intent_turn_events'
@@ -148,7 +151,7 @@ describeV1Providers('RFC-395 V1 source evidence', (h) => {
     } finally {
       await source.close()
     }
-  }, 240_000)
+  })
   test('preflight is retryable after a previously unknown empty table is removed', async () => {
     await h.install()
     await h.native.execute(`CREATE TABLE ${h.table('v1_retry')} (id text PRIMARY KEY)`)
@@ -162,7 +165,7 @@ describeV1Providers('RFC-395 V1 source evidence', (h) => {
     } finally {
       await source.close()
     }
-  }, 240_000)
+  })
   if (h.provider === 'sqlite') {
     test('RFC-115 rebuilds explicitly disable cascades, then check all foreign keys', () => {
       createFrozenSqliteJournal(h.sqlite)
@@ -201,7 +204,7 @@ describeV1Providers('RFC-395 V1 source evidence', (h) => {
         expect(source.sqliteThrough).toBe(index + 1)
         expect(source.readMode).toBe(source.contract ? 'frozen-codec' : 'upgrade-only')
       }
-    }, 300_000)
+    })
     test('BF-D28 admits only the explicit observed 0141 catalog at its frozen journal prefix', async () => {
       await installObserved0141(h.sqlite)
       const manifest = await h.manifest()
@@ -231,7 +234,7 @@ describeV1Providers('RFC-395 V1 source evidence', (h) => {
       expect(identifySource({ fingerprint: await h.fingerprint(), manifest }).source.id).toBe(
         identified.source.id,
       )
-    }, 240_000)
+    })
     test('BF-D28 rejects near-variants of the observed 0141 shape and journal', async () => {
       await installObserved0141(h.sqlite)
       const manifest = await h.manifest()
@@ -261,7 +264,7 @@ describeV1Providers('RFC-395 V1 source evidence', (h) => {
       expect(() => identifySource({ fingerprint: laterPrefix, manifest })).toThrow(
         SourceBlockedError,
       )
-    }, 240_000)
+    })
     for (const [tag, aliases] of Object.entries(LEGACY_MIGRATION_HASHES))
       test(`BF-D20 legacy alias ${tag}: accepts the exact receipt; rejects mutation, wrong tag and timestamp`, async () => {
         await h.install()
@@ -304,7 +307,7 @@ describeV1Providers('RFC-395 V1 source evidence', (h) => {
         expect(() => identifySource({ fingerprint: wrongTag, manifest })).toThrow(
           SourceBlockedError,
         )
-      }, 240_000)
+      })
     test('BF-D20 the frozen alias roster contains all nine published tags with distinct live hashes', async () => {
       const history = await loadFrozenEpoch1History()
       expect(Object.keys(LEGACY_MIGRATION_HASHES)).toHaveLength(9)
@@ -350,7 +353,7 @@ describeV1Providers('RFC-395 V1 source evidence', (h) => {
         } finally {
           await reader.close()
         }
-      }, 240_000)
+      })
     for (const appVersion of ['0.18.18', '0.18.19'])
       test(`manifest-v2 v${appVersion} reads raw db.sqlite despite the obsolete logical contract`, async () => {
         await installFrozenSqlite(h.sqlite, 223)
@@ -396,7 +399,7 @@ describeV1Providers('RFC-395 V1 source evidence', (h) => {
         } finally {
           await reader.close()
         }
-      }, 240_000)
+      })
     test('watermark survives connection restart, file relocation and a separate process', async () => {
       await h.install()
       await h.seed()
@@ -424,7 +427,7 @@ describeV1Providers('RFC-395 V1 source evidence', (h) => {
       } finally {
         await second.close()
       }
-    }, 300_000)
+    })
     test('audit capture preserves full native evidence but never authorizes the unknown sample', async () => {
       await h.install()
       h.sqlite.exec('CREATE TABLE draft_audit (id INTEGER PRIMARY KEY AUTOINCREMENT,payload BLOB)')
@@ -468,7 +471,7 @@ describeV1Providers('RFC-395 V1 source evidence', (h) => {
       const manifest = await h.manifest()
       const fingerprint = await h.fingerprint()
       expect(() => identifySource({ fingerprint, manifest })).toThrow(SourceBlockedError)
-    }, 240_000)
+    })
   }
   if (h.provider === 'postgresql') {
     test('unknown PostgreSQL tables block before export; an empty identity table needs its owned-sequence decision', async () => {
@@ -511,7 +514,7 @@ describeV1Providers('RFC-395 V1 source evidence', (h) => {
       expect(() =>
         identifySource({ fingerprint: populated, manifest, emptyTables: [decision] }),
       ).toThrow(SourceBlockedError)
-    }, 240_000)
+    })
     test('bound export carries physical fingerprint, generation and sequence high-water into the artifact reader', async () => {
       const version = await h.install()
       await h.seed()
@@ -552,6 +555,6 @@ describeV1Providers('RFC-395 V1 source evidence', (h) => {
         await reader.close()
         backup.close()
       }
-    }, 240_000)
+    })
   }
 })

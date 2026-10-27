@@ -1,5 +1,5 @@
 // RFC-395 V3-R: authored for T18; offline target receipts never activate runtime wiring.
-import { expect, test } from 'bun:test'
+import { setDefaultTimeout, expect, test } from 'bun:test'
 import {
   describeV3Providers,
   describeV3CrossProvider,
@@ -31,6 +31,9 @@ import { openConversionTarget } from '@/platform/persistence/migration/target/co
 import type { EpochSwitchFaults } from '@/modules/system-operations/domain/epochSwitch/model'
 import { existsSync, mkdirSync, renameSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
+
+// Native target installation and conversion commit take about 17 s per CI-scaled case; allow 50 s.
+setDefaultTimeout(50000)
 
 function sealUnit(output: UnitOutput): UnitOutput {
   const { digest: _digest, ...receipt } = output.receipt
@@ -374,7 +377,7 @@ describeV3Providers('RFC-395 V3 atomic sink', (h) => {
       )
       expect(Number(rows[0]!.n)).toBe(count.rows)
     }
-  }, 180000)
+  })
 })
 
 describeV3CrossProvider('RFC-395 V3 SQLite to PostgreSQL target', (h) => {
@@ -403,5 +406,5 @@ describeV3CrossProvider('RFC-395 V3 SQLite to PostgreSQL target', (h) => {
         ),
       ).toBe(expected.rows(table).length)
     }
-  }, 180000)
+  })
 })

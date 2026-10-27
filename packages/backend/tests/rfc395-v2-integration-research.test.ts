@@ -1,5 +1,5 @@
 // research.md's 89 non-terminal tasks are a synthetic recovery population, not copied user data.
-import { expect, test } from 'bun:test'
+import { setDefaultTimeout, expect, test } from 'bun:test'
 import { describeV2Providers } from './helpers/rfc395V2Harness'
 import {
   integrationInput,
@@ -12,6 +12,9 @@ import {
 import { seedRequiredRows, seedSimpleTask, nodeSlot } from './helpers/rfc395V2/integrationFixtures'
 import { runValues } from './helpers/rfc395V2/runFixtures'
 import { question, answer, roundRow } from './helpers/rfc395V2/collabFixtures'
+
+// Full frozen-source conversion and restart take about 8 s per CI-scaled case; allow 25 s.
+setDefaultTimeout(25000)
 
 describeV2Providers('RFC-395 V2 research recovery population', (h) => {
   test('21 awaiting_human + 8 awaiting_review + 60 interrupted retain histories, DTOs and selections', async () => {
@@ -120,5 +123,5 @@ describeV2Providers('RFC-395 V2 research recovery population', (h) => {
     } finally {
       await input.source.close()
     }
-  }, 300_000)
+  })
 })

@@ -1,5 +1,5 @@
 // RFC-395 II-b V1: all four reader kinds use frozen codecs, deterministic chunks and change watermarks.
-import { expect, test } from 'bun:test'
+import { setDefaultTimeout, expect, test } from 'bun:test'
 import { appendFileSync, readFileSync, unlinkSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { exportEpoch1PostgresqlSource } from '@/platform/persistence/migration/postgresqlSourceExport'
@@ -20,6 +20,9 @@ import {
   logicalArtifactFileDigest,
   verifyLogicalArtifactManifest,
 } from '@/platform/persistence/migration/legacy/logicalDatabaseArtifact'
+
+// Frozen readers export and verify all backup bytes take about 12 s per CI-scaled case; allow 40 s.
+setDefaultTimeout(40000)
 
 describeV1Providers('RFC-395 V1 source readers', (h) => {
   test('original logical-copy artifact is readable without a later backup envelope', async () => {
@@ -46,7 +49,7 @@ describeV1Providers('RFC-395 V1 source readers', (h) => {
       await reader.close()
       backup.close()
     }
-  }, 180_000)
+  })
   const kinds =
     h.provider === 'sqlite'
       ? (['file', 'backup', 'logical', 'hosted'] as const)
@@ -141,7 +144,7 @@ describeV1Providers('RFC-395 V1 source readers', (h) => {
         await replay.close()
         backup?.close()
       }
-    }, 180_000)
+    })
   test('a backup from a published older epoch-1 version retains its version and requires offline upgrade', async () => {
     const version = await h.install('pre-seq')
     await h.seed()
@@ -160,7 +163,7 @@ describeV1Providers('RFC-395 V1 source readers', (h) => {
       await reader.close()
       backup.close()
     }
-  }, 180_000)
+  })
   if (h.provider === 'postgresql')
     for (const mutate of [false, true])
       test(`physical export uses one snapshot and bounded full checks; concurrent mutation=${mutate}`, async () => {
@@ -231,7 +234,7 @@ describeV1Providers('RFC-395 V1 source readers', (h) => {
         } finally {
           await source.close()
         }
-      }, 120_000)
+      })
   if (h.provider === 'sqlite') {
     test('VACUUM snapshot includes committed WAL rows while excluding the live uncommitted transaction', async () => {
       await h.install()
@@ -254,7 +257,7 @@ describeV1Providers('RFC-395 V1 source readers', (h) => {
         if (h.sqlite.inTransaction) h.sqlite.exec('ROLLBACK')
         await reader.close()
       }
-    }, 180_000)
+    })
     test('manifest-v2 backup with a different raw SQLite payload is rejected before row conversion', async () => {
       const version = await h.install()
       await h.seed()
@@ -274,6 +277,6 @@ describeV1Providers('RFC-395 V1 source readers', (h) => {
         await reader.close()
         backup.close()
       }
-    }, 180_000)
+    })
   }
 })

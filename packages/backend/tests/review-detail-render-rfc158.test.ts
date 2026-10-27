@@ -23,7 +23,7 @@ import {
 import { insertOne } from '@/platform/persistence/singleInsert'
 
 import { queryWrite } from '@/platform/persistence/queryHelpers'
-import { afterEach, beforeEach, expect, test } from 'bun:test'
+import { setDefaultTimeout, afterEach, beforeEach, expect, test } from 'bun:test'
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
@@ -33,6 +33,9 @@ import { insertInBatches } from '../src/platform/persistence/batchInsert'
 import { getReviewDetail, listReviewSummaries } from '@/modules/collaboration/infrastructure/review'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import { describeEachProvider } from './helpers/eachProvider'
+
+// Seeding all 600 unrelated reviews with required run identities take about 6 s per CI-scaled case; allow 20 s.
+setDefaultTimeout(20000)
 
 async function seedTaskAndWorkflow(db: PersistenceDb): Promise<{ taskId: string }> {
   const wfId = ulid()
@@ -131,11 +134,11 @@ describeEachProvider(
       resetBroadcastersForTests()
       db = harness.db
       appHome = mkdtempSync(join(tmpdir(), 'aw-rfc158-detail-'))
-    })
+    }, 5_000)
     afterEach(() => {
       resetBroadcastersForTests()
       rmSync(appHome, { recursive: true, force: true })
-    })
+    }, 5_000)
 
     test('R2b: a review whose versions fall outside the global newest-500 window still renders', async () => {
       const { taskId } = await seedTaskAndWorkflow(db)

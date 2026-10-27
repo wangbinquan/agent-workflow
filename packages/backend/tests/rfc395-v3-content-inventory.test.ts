@@ -1,5 +1,5 @@
 // RFC-395 V3-F: original absence, freeze drift and byte identity across content codecs.
-import { afterEach, beforeEach, expect, test } from 'bun:test'
+import { setDefaultTimeout, afterEach, beforeEach, expect, test } from 'bun:test'
 import {
   mkdirSync,
   mkdtempSync,
@@ -52,14 +52,17 @@ import { frozenEpoch1Contract } from '@/platform/persistence/migration/epoch1/co
 import { openLiveSnapshotSource } from '@/platform/persistence/migration/freeze/sourceAccess'
 import { createContentInventoryAdapter } from '@/modules/system-operations/infrastructure/epochSwitch/contentInventoryAdapter'
 
+// The complete 65,537-row inventory and content verification take about 9 s per CI-scaled case; allow 30 s.
+setDefaultTimeout(30000)
+
 let directory: string
 let root: ContentRootSpec
 beforeEach(() => {
   directory = mkdtempSync(join(tmpdir(), 'v3-content-'))
   root = { kind: 'app-home', root: join(directory, 'home'), runsSupplied: true, objects: 'none' }
   mkdirSync(root.root)
-})
-afterEach(() => rmSync(directory, { recursive: true, force: true }))
+}, 5_000)
+afterEach(() => rmSync(directory, { recursive: true, force: true }), 5_000)
 const file = (path: string, bytes: string | Uint8Array) => {
   const absolute = join(root.root, path)
   mkdirSync(join(absolute, '..'), { recursive: true })
@@ -419,7 +422,7 @@ describeV2Providers('RFC-395 V3 inventory from frozen database rows', (h) => {
     } finally {
       await source.close()
     }
-  }, 300_000)
+  })
   test('a shared database sentinel does not choose an arbitrary skill identity', async () => {
     await h.install()
     await h.write('skills', [
@@ -459,7 +462,7 @@ describeV2Providers('RFC-395 V3 inventory from frozen database rows', (h) => {
     } finally {
       await source.close()
     }
-  }, 300_000)
+  })
 })
 
 test('restore --content-root replaces run content while skills stay bound to the backup', async () => {
@@ -618,7 +621,7 @@ test('more than 65,536 inline rows stream into operation-local staging without r
   expect(await readInventorySource(source, root, scratch)).toBe(index)
   expect(reads).toBe(before)
   expect(readdirSync(join(scratch, 'inventory'))).toEqual([])
-}, 300_000)
+})
 
 describeV2Providers('RFC-395 V3-F fix round content integration', (h) => {
   test('real V2-N inline/file prompts and V2-X inline output/database bytes verify without false drift', async () => {
@@ -689,7 +692,7 @@ describeV2Providers('RFC-395 V3-F fix round content integration', (h) => {
     } finally {
       await source.close()
     }
-  }, 300_000)
+  })
   test('malformed content rows produce per-row facts and V2 blocks while a neighboring valid output converts', async () => {
     await h.install()
     await seedContentParents(h)
@@ -735,7 +738,7 @@ describeV2Providers('RFC-395 V3-F fix round content integration', (h) => {
     } finally {
       await source.close()
     }
-  }, 300_000)
+  })
   test('two skills with live and version trees share the sentinel but keep six exact inventory identities', async () => {
     await h.install()
     for (const id of ['a', 'b']) {
@@ -799,7 +802,7 @@ describeV2Providers('RFC-395 V3-F fix round content integration', (h) => {
     } finally {
       await source.close()
     }
-  }, 300_000)
+  })
   test('live plan content races use present observations while frozen manifests retain strict drift classification', async () => {
     await h.install()
     const source = await openLiveSnapshotSource({
@@ -869,5 +872,5 @@ describeV2Providers('RFC-395 V3-F fix round content integration', (h) => {
     } finally {
       await source.close()
     }
-  }, 300_000)
+  })
 })

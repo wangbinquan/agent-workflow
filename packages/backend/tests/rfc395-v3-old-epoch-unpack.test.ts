@@ -1,5 +1,5 @@
 // RFC-395 V3-F: unpack retains portable assets and detects the actual epoch-1 envelope.
-import { expect, test } from 'bun:test'
+import { setDefaultTimeout, expect, test } from 'bun:test'
 import { existsSync, mkdirSync, rmSync, writeFileSync, readFileSync, cpSync } from 'node:fs'
 import { join } from 'node:path'
 import { describeV1Providers } from './helpers/rfc395V1Harness'
@@ -13,6 +13,9 @@ import { createLocalEpochArtifacts as createLocalSourceArtifacts } from '@/modul
 import { atomicSourceFile } from '@/platform/persistence/migration/freeze/artifacts'
 import type { EpochSwitchArtifactPort } from '@/platform/persistence/migration/run/types'
 import { openFrozenSource } from '@/platform/persistence/migration/freeze/sourceAccess'
+
+// Unpacking and verifying a real frozen backup take about 7 s per CI-scaled case; allow 25 s.
+setDefaultTimeout(25000)
 
 describeV1Providers('RFC-395 V3 old epoch unpack', (h) => {
   test('tar and directory have equal extracted digest, retain skills/config, and reopen as portable sources', async () => {
@@ -50,7 +53,7 @@ describeV1Providers('RFC-395 V3 old epoch unpack', (h) => {
     } finally {
       backup.close()
     }
-  }, 300_000)
+  })
   test('single-wrapper directory compares the outer tree before selecting its inner backup root', async () => {
     const backup = await h.backup(await h.install())
     try {
@@ -70,7 +73,7 @@ describeV1Providers('RFC-395 V3 old epoch unpack', (h) => {
     } finally {
       backup.close()
     }
-  }, 300_000)
+  })
   test('unpacked backups outlive the original Job and incomplete extraction directories are reclaimed', async () => {
     const backup = await h.backup(await h.install())
     const durable = createLocalSourceArtifacts(join(h.operationRoot, 'durable'))
@@ -112,7 +115,7 @@ describeV1Providers('RFC-395 V3 old epoch unpack', (h) => {
     } finally {
       backup.close()
     }
-  }, 300_000)
+  })
   test('hosted archives are detected from their header; unsupported and incomplete formats are rejected', async () => {
     const backup = await h.backup(await h.install())
     try {
@@ -131,5 +134,5 @@ describeV1Providers('RFC-395 V3 old epoch unpack', (h) => {
     } finally {
       backup.close()
     }
-  }, 300_000)
+  })
 })

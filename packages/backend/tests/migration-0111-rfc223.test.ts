@@ -20,7 +20,16 @@ import {
   createFrozenEpoch1Db,
   FROZEN_MIGRATIONS,
 } from './migration-freeze'
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from 'bun:test'
+import {
+  setDefaultTimeout,
+  afterAll,
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  test,
+} from 'bun:test'
 import { Database } from 'bun:sqlite'
 import { drizzle } from 'drizzle-orm/bun-sqlite'
 import { createHash } from 'node:crypto'
@@ -37,6 +46,9 @@ import {
   loadSupportedSourceManifest,
 } from '@/platform/persistence/migration/supportedSources'
 import { SourceBlockedError } from '@/platform/persistence/migration/sourceTypes'
+
+// Identifying canonical and shipped receipts builds the full frozen prefix catalog (~11 s on CI); allow 35 s.
+setDefaultTimeout(35000)
 
 const MIGRATIONS = resolve(FROZEN_MIGRATIONS)
 const TAG = '0111_rfc223_agent_refs_to_id'
@@ -78,11 +90,11 @@ describe('migration 0111 (RFC-223) — name→id backfill (frozen at 0110)', () 
     sqlite.exec('PRAGMA foreign_keys = OFF') // match openFrozenEpoch1Db: 12-step migrations
     migrate(drizzle(sqlite), { migrationsFolder: tmp })
     raw = sqlite
-  })
+  }, 5_000)
   afterEach(() => {
     sqlite?.close()
     rmSync(tmp, { recursive: true, force: true })
-  })
+  }, 5_000)
 
   function apply0111() {
     const sql = readFileSync(CANONICAL_SQL, 'utf-8')
@@ -207,8 +219,8 @@ describe('migration 0111 (RFC-223) — databases that ran the shipped bytes stil
     }
     journal.entries = journal.entries.filter((entry) => entry.idx <= 109)
     writeFileSync(journalPath, JSON.stringify(journal))
-  })
-  afterAll(() => rmSync(tmp, { recursive: true, force: true }))
+  }, 5_000)
+  afterAll(() => rmSync(tmp, { recursive: true, force: true }), 5_000)
 
   /** True on SQLite >= 3.44, where the shipped `json_group_array(x ORDER BY y)` parses. */
   function supportsAggregateOrderBy(): boolean {
@@ -297,5 +309,5 @@ describe('migration 0111 (RFC-223) — databases that ran the shipped bytes stil
     admit(sha256(SHIPPED_SQL))
     admit(sha256(CANONICAL_SQL))
     expect(() => admit(`${'0'.repeat(63)}1`)).toThrow(SourceBlockedError)
-  }, 180_000)
+  })
 })

@@ -18,7 +18,7 @@ import {
   MigrationPlanDocumentPayloadSchema,
 } from '@/modules/system-operations/domain/epochSwitch/documents'
 import { renderEpochPlan } from '@/modules/system-operations/domain/epochSwitch/planDocument'
-import { makeSwitchFixture, plannedFixture } from './rfc395-v3-switch-domain.test'
+import { makeSwitchFixture, plannedFixture } from './helpers/rfc395V3SwitchFixture'
 
 const effect: BootUpgradeEffect = {
   version: 1,

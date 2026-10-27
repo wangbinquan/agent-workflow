@@ -99,6 +99,7 @@ export interface EpochSwitchJournalPort {
 export interface SourceSnapshotRequest {
   readonly postgresqlArchive?: (source: FrozenSourceHandle) => Promise<SourceArchiveInput>
   readonly scratchOwner?: string
+  readonly scratchProfileRef?: string
   readonly location: EpochSourceLocation
   readonly emptyTables: readonly EmptyTableDecision[]
   readonly operationRoot: string

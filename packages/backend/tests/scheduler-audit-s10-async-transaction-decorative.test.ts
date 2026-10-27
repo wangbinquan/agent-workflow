@@ -23,13 +23,16 @@
 // review 三步序列红绿对照）见 rfc093-db-tx-sync.test.ts。
 
 import { insertOne } from '@/platform/persistence/singleInsert'
-import { describe, expect, test } from 'bun:test'
+import { setDefaultTimeout, describe, expect, test } from 'bun:test'
 import { Database } from 'bun:sqlite'
 import { drizzle } from 'drizzle-orm/bun-sqlite'
 import { integer, sqliteTable, text } from 'drizzle-orm/sqlite-core'
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { join, relative, resolve, sep } from 'node:path'
 import ts from 'typescript'
+
+// Building the cached whole-source TypeScript semantic graph take about 7 s per CI-scaled case; allow 30 s.
+setDefaultTimeout(30000)
 
 // ---------------------------------------------------------------------------
 // 行为证明层

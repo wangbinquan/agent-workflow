@@ -1,28 +1,29 @@
 import { postgresqlHistorySession } from '@/platform/persistence/postgresql/historySession'
 import { sqliteHistorySession } from '@/platform/persistence/sqlite/historySession'
-// RFC-395 II-b R2: native empty-engine fixtures; the existing epoch-1 harness is untouched.
-import { afterAll, afterEach, beforeEach, describe } from 'bun:test'
-import { SQL } from 'bun'
-import { migrationPostgresqlRuntime } from '@/platform/persistence/migration/freeze/postgresqlDatabases'
-import { Database } from 'bun:sqlite'
+// RFC-395: native fixtures do not install an unused application database around every generation.
+import { afterAll, afterEach, beforeAll, beforeEach, describe } from 'bun:test'
+import type { Database } from 'bun:sqlite'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
-  describeEachProvider,
+  resolveTestProviders,
   resolvePostgresqlTestUrlEnv,
-  createPostgresqlFileDatabase,
   closePostgresqlFixtureDatabases,
   type ProviderHarness,
 } from './eachProvider'
-import type { DatabaseProvider } from '@/platform/persistence/databaseProviders'
+import { Rfc395FixtureGeneration } from './rfc395FixtureGeneration'
 import {
-  createPostgresqlDatabaseRuntime,
-  type PostgresqlPool,
-  type PostgresqlDatabaseRuntime,
+  createRfc395FixtureDatabase,
+  createRfc395FixtureRuntime,
+  type FixtureDatabase,
+} from './rfc395FixturePostgresql'
+import type { DatabaseProvider } from '@/platform/persistence/databaseProviders'
+import type {
+  PostgresqlPool,
+  PostgresqlDatabaseRuntime,
 } from '@/platform/persistence/postgresqlRuntime'
 import {
-  sqliteHistoryConnection,
   postgresqlHistoryConnection,
   type HistoryConnection,
 } from '@/platform/persistence/schema/history/connection'
@@ -55,6 +56,9 @@ export interface R2Harness {
   transaction<T>(body: (connection: HistoryConnection) => Promise<T>): Promise<T>
 }
 export interface R2TargetHarness extends R2Harness {
+  readonly referencePool: PostgresqlPool
+  installFixture(key: string, install: () => Promise<void>): Promise<void>
+  afterTest(cleanup: () => Promise<void>): void
   catalog(version: HistoryVersion): Promise<PostgresqlCatalogArtifact>
   installHead(
     version: HistoryVersion,
@@ -62,93 +66,110 @@ export interface R2TargetHarness extends R2Harness {
   ): Promise<void>
 }
 export function describeR2Providers(name: string, body: (harness: R2TargetHarness) => void): void {
-  describeEachProvider(name, (harness) => withR2TargetHarness(harness, body))
+  for (const provider of resolveTestProviders(process.env))
+    describe(`${name} [${provider}]`, () =>
+      describe('empty target generation', () => body(createR2TargetHarness(provider))))
 }
 
-/** Canonical harness owns provider selection; these native generations exercise DDL before admission. */
+/** Existing application/target parity tests still own their application harness. */
 export function withR2TargetHarness(
   harness: ProviderHarness,
   body: (target: R2TargetHarness) => void,
 ): void {
-  // Child cleanup closes the admin connection before the canonical parent drops its own database.
-  describe('empty target generation', () => body(createR2TargetHarness(harness)))
+  describe('empty target generation', () =>
+    body(createR2TargetHarness(() => harness.capabilities.provider)))
 }
 
-function createR2TargetHarness(harness: ProviderHarness): R2TargetHarness {
-  let provider: DatabaseProvider
-  let database: Database | undefined
+function createR2TargetHarness(
+  selection: DatabaseProvider | (() => DatabaseProvider),
+): R2TargetHarness {
+  let provider: DatabaseProvider = typeof selection === 'string' ? selection : undefined!
   let root: string
-  let runtime: PostgresqlDatabaseRuntime
-  let reference: SQL
+  let generation: Rfc395FixtureGeneration
+  let referenceDatabase: FixtureDatabase | undefined
+  let reference: ReturnType<typeof createRfc395FixtureRuntime> | undefined
   const urlEnv = resolvePostgresqlTestUrlEnv(process.env)
   const sourceUrl = urlEnv ? process.env[urlEnv] : undefined
-  const databases: Awaited<ReturnType<typeof createPostgresqlFileDatabase>>[] = []
-  let native: HistoryConnection
   let cache: HistoryCatalogCache
-  let artifacts: PostgresqlCatalogArtifact[] = []
-  const catalog = async (version: HistoryVersion): Promise<PostgresqlCatalogArtifact> => {
-    const existing = artifacts.find((artifact) => artifact.planDigest === version.postgresql.digest)
-    if (existing) return existing
-    const connection = await (reference as unknown as PostgresqlPool).reserve()
-    try {
-      const artifact = await compilePostgresqlHistoryCatalog(connection, version.postgresql)
-      artifacts.push(artifact)
-      return artifact
-    } finally {
-      connection.release()
-    }
-  }
-  beforeEach(async () => {
-    provider = harness.capabilities.provider
+  // Artifacts are immutable plan-digest values, not part of a test's mutable database state.
+  const artifacts: PostgresqlCatalogArtifact[] = []
+  const pendingCatalogs = new Map<string, Promise<PostgresqlCatalogArtifact>>()
+  const cleanups: (() => Promise<void>)[] = []
+  let initialization: Promise<void> | undefined
+  const initializeGeneration = async () => {
+    provider = typeof selection === 'string' ? selection : selection()
     root ??= mkdtempSync(join(tmpdir(), 'aw-rfc395-r2-'))
-    if (provider === 'postgresql' && !runtime) {
+    generation ??= new Rfc395FixtureGeneration(provider, root, sourceUrl)
+    if (provider === 'postgresql' && !reference) {
       if (!sourceUrl)
         throw new Error('R2 PostgreSQL tests require AW_TEST_POSTGRESQL_URL or RFC357_DATABASE_URL')
-      // Administrative connections use the captured base URL and close after each operation.
-      // A child DROP must never leave a session attached to the parent harness's database.
-      for (let index = 0; index < 2; index += 1)
-        databases.push(await createPostgresqlFileDatabase(sourceUrl))
-      runtime = migrationPostgresqlRuntime(
-        createPostgresqlDatabaseRuntime({
-          generationId: 'dbg_rfc395_r2_engine',
-          config: {
-            provider: 'postgresql',
-            urlEnv: 'R2_ENGINE_URL',
-            poolMax: 2,
-            connectTimeoutMs: 10_000,
-            statementTimeoutMs: 30_000,
-            idleTimeoutMs: 30_000,
-          },
-          env: { R2_ENGINE_URL: databases[0]!.url! },
-        }),
-      )
-      reference = new SQL(databases[1]!.url!, { max: 1 })
+      referenceDatabase ??= await createRfc395FixtureDatabase(sourceUrl)
+      reference = createRfc395FixtureRuntime({
+        generationId: 'dbg_rfc395_reference',
+        config: {
+          provider: 'postgresql',
+          urlEnv: 'R2_REFERENCE_URL',
+          poolMax: 1,
+          connectTimeoutMs: 10_000,
+          statementTimeoutMs: 30_000,
+          idleTimeoutMs: 30_000,
+        },
+        env: { R2_REFERENCE_URL: referenceDatabase.url },
+      })
     }
-    if (provider === 'sqlite') {
-      // History/old-binary admission needs an empty, reopenable generation file, not the epoch-1 fixture.
-      database = new Database(join(root, `db-${crypto.randomUUID()}.sqlite`))
-      database.exec('PRAGMA foreign_keys = ON')
-      native = sqliteHistoryConnection(database)
-    } else {
-      const pool = runtime.providerPool()
-      await pool.unsafe('DROP SCHEMA IF EXISTS agent_workflow CASCADE')
-      await pool.unsafe('DROP SCHEMA IF EXISTS agent_workflow_meta CASCADE')
-      native = postgresqlHistoryConnection(pool)
-    }
-    artifacts = []
+  }
+  const initialize = () =>
+    (initialization ??= initializeGeneration().finally(() => {
+      initialization = undefined
+    }))
+  const catalog = (version: HistoryVersion): Promise<PostgresqlCatalogArtifact> => {
+    const key = version.postgresql.digest
+    const existing = artifacts.find((artifact) => artifact.planDigest === key)
+    if (existing) return Promise.resolve(existing)
+    const pending = pendingCatalogs.get(key)
+    if (pending) return pending
+    const compiling = (async () => {
+      const connection = await reference!.providerPool('migration').reserve()
+      try {
+        const artifact = await compilePostgresqlHistoryCatalog(connection, version.postgresql)
+        artifacts.push(artifact)
+        return artifact
+      } finally {
+        connection.release()
+      }
+    })().finally(() => pendingCatalogs.delete(key))
+    pendingCatalogs.set(key, compiling)
+    return compiling
+  }
+  // V1 can compile its immutable manifest before the first default-5s test starts.
+  beforeAll(async () => {
+    if (typeof selection === 'string') await initialize()
+  }, 60_000)
+  beforeEach(async () => {
+    await initialize()
+    await generation.reset()
     cache = new HistoryCatalogCache(postgresqlCatalogLoader(artifacts))
   }, 60_000)
-  afterEach(() => {
-    database?.close()
-    database = undefined
-  })
+  afterEach(async () => {
+    const cancelled = await Promise.allSettled([
+      generation?.cancelQueries(),
+      reference?.cancelQueries(),
+    ])
+    const readers = await Promise.allSettled(cleanups.map((cleanup) => cleanup()))
+    const closed = await Promise.allSettled([generation?.closeCurrent(), reference?.close()])
+    reference = undefined
+    const errors = [...cancelled, ...readers, ...closed].flatMap((result) =>
+      result.status === 'rejected' ? [result.reason as unknown] : [],
+    )
+    if (errors.length) throw new AggregateError(errors, 'R2 fixture cleanup')
+  }, 30_000)
   afterAll(async () => {
+    await initialization?.catch(() => undefined)
     try {
-      if (provider === 'postgresql')
-        await closePostgresqlFixtureDatabases(
-          [runtime, reference].filter((pool) => pool !== undefined),
-          databases,
-        )
+      await closePostgresqlFixtureDatabases(
+        [generation, reference].filter((value) => value !== undefined),
+        referenceDatabase ? [referenceDatabase] : [],
+      )
     } finally {
       if (root) rmSync(root, { recursive: true, force: true })
     }
@@ -158,24 +179,29 @@ function createR2TargetHarness(harness: ProviderHarness): R2TargetHarness {
       return provider
     },
     get native() {
-      return native
+      return generation.native
     },
     get sqlite() {
-      if (!database) throw new Error('R2 fixture is not a live SQLite generation')
-      return database
+      return generation.sqlite
     },
     get sqlitePath() {
-      if (!database) throw new Error('R2 fixture is not a live SQLite generation')
-      return database.filename
+      return generation.sqlite.filename
     },
     get runtime() {
-      return runtime
+      return generation.runtime
     },
     get pool() {
-      return runtime.providerPool()
+      return generation.runtime.providerPool()
+    },
+    get referencePool() {
+      return reference!.providerPool('migration')
     },
     get cache() {
       return cache
+    },
+    installFixture: (key, install) => generation.install(key, install),
+    afterTest: (cleanup) => {
+      cleanups.push(cleanup)
     },
     table: (name) => (provider === 'sqlite' ? `"${name}"` : `"agent_workflow"."${name}"`),
     catalog,
@@ -188,39 +214,43 @@ function createR2TargetHarness(harness: ProviderHarness): R2TargetHarness {
         ...options,
         version,
       }
-      if (provider === 'sqlite') await installHistoryHead(sqliteHistorySession(database!), input)
-      else await installHistoryHead(postgresqlHistorySession(runtime.providerPool()), input)
+      if (provider === 'sqlite')
+        await installHistoryHead(sqliteHistorySession(generation.sqlite), input)
+      else
+        await installHistoryHead(postgresqlHistorySession(generation.runtime.providerPool()), input)
     },
     apply: async (version, options = {}) => {
       if (provider === 'postgresql')
         version = { ...version, postgresqlCatalog: await catalog(version) }
       return await (provider === 'sqlite'
-        ? applyHistoryVersion(sqliteHistorySession(database!), { ...options, version })
-        : applyHistoryVersion(postgresqlHistorySession(runtime.providerPool()), {
+        ? applyHistoryVersion(sqliteHistorySession(generation.sqlite), { ...options, version })
+        : applyHistoryVersion(postgresqlHistorySession(generation.runtime.providerPool()), {
             ...options,
             version,
           }))
     },
     admit: (binary) =>
       provider === 'sqlite'
-        ? admitHistory(sqliteHistorySession(database!), { binary, catalogCache: cache })
-        : admitHistory(postgresqlHistorySession(runtime.providerPool()), {
+        ? admitHistory(sqliteHistorySession(generation.sqlite), { binary, catalogCache: cache })
+        : admitHistory(postgresqlHistorySession(generation.runtime.providerPool()), {
             binary,
             catalogCache: cache,
           }),
     async transaction(body) {
+      const native = generation.native
       if (provider === 'sqlite') {
-        database!.exec('BEGIN')
+        const database = generation.sqlite
+        database.exec('BEGIN')
         try {
           const value = await body(native)
-          database!.exec('COMMIT')
+          database.exec('COMMIT')
           return value
         } catch (error) {
-          database!.exec('ROLLBACK')
+          database.exec('ROLLBACK')
           throw error
         }
       }
-      const connection = await runtime.providerPool().reserve()
+      const connection = await generation.runtime.providerPool().reserve()
       try {
         return await connection.begin((transaction) =>
           body(postgresqlHistoryConnection(transaction)),

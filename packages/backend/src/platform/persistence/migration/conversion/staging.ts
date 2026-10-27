@@ -83,6 +83,7 @@ export interface StagingStore extends StagedReader {
   readonly path: string
   indexedColumns(): readonly StagedGroupColumn[]
   put(row: SourceRow): void
+  putMany(rows: readonly SourceRow[]): void
   clear(table: string, phase?: SourcePhase): void
   putLookup(id: string, key: string, value: unknown): void
   lookup<V>(id: string, key: string): V | undefined
@@ -125,6 +126,13 @@ export function createStagingStore(scratchRoot: string): StagingStore {
       for (const row of store.rows(table, phase)) indexValue(row, column)
     })
     indexes.set(key, { table, column, phase })
+  }
+  const putRow = (row: SourceRow): void => {
+    database
+      .query('INSERT INTO staged VALUES (?,?,?,?)')
+      .run(row.phase, row.table, row.encodedKey, encodeStagedValue(row))
+    for (const entry of indexes.values())
+      if (entry.table === row.table && entry.phase === row.phase) indexValue(row, entry.column)
   }
   const store: StagingStore = {
     path,
@@ -186,12 +194,12 @@ export function createStagingStore(scratchRoot: string): StagingStore {
         .get(phase, table)!.count
     },
     put(row) {
+      atomicScratch(database, () => putRow(row))
+    },
+    putMany(rows) {
+      // A bounded source page is one atomic scratch edit, not one disk commit per row.
       atomicScratch(database, () => {
-        database
-          .query('INSERT INTO staged VALUES (?,?,?,?)')
-          .run(row.phase, row.table, row.encodedKey, encodeStagedValue(row))
-        for (const entry of indexes.values())
-          if (entry.table === row.table && entry.phase === row.phase) indexValue(row, entry.column)
+        for (const row of rows) putRow(row)
       })
     },
     clear(table, phase = 'current') {

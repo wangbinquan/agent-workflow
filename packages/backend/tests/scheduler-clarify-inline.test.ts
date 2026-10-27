@@ -18,7 +18,7 @@ import { agentFixture, taskFixture, workflowFixture, readNodeRunFixtures } from 
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { createSqliteMemoryDistillEnqueuer } from './helpers/memoryDistill'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -37,6 +37,10 @@ import {
 } from './helpers/providerTaskExecutionTestTopology'
 import { runGit } from '../src/util/git'
 import { reenterScheduler } from './reenter-scheduler'
+
+// Multi-round runTask with mock-opencode and real git took about 1.7 s per PostgreSQL case on CI before
+// RFC-395 II-b; epoch-2 overhead pushed a CI-equivalent local run to 6541.03 ms. Allow 15 s.
+setDefaultTimeout(15_000)
 
 const actor = { userId: 'u1', role: 'owner' as const }
 

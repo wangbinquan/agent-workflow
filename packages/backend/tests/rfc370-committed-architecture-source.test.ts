@@ -6,7 +6,9 @@ import { resolve } from 'node:path'
 import { readCommittedArchitectureSource } from '../../../scripts/lib/committed-architecture-source'
 import { buildArchitectureReport, readReportSource } from './architecture/architectureReport'
 
-setDefaultTimeout(60_000)
+// The report scales with the committed corpus. After RFC-395 II-b (2026-10-26) one build took 50 s on
+// Ubuntu CI (29 s before) and 83 s on the macOS nightly (48 s before); allow 150 s.
+setDefaultTimeout(150_000)
 test('the explicit committed corpus and extra inputs come from the exact Git revision', () => {
   const root = resolve(import.meta.dir, '../../..')
   const selected = readCommittedArchitectureSource(root, 'HEAD')

@@ -398,6 +398,10 @@ describeEachProvider(
       )
     }, 15000)
 
+    // Same 15s budget as the two siblings: 10 iterations of 10-15 events each.
+    // RFC-395 II-b's epoch-2 PostgreSQL schema raised per-iteration cost; CI run
+    // 40298205725 measured 3.14s here (1.62s before the activation), and a
+    // CI-equivalent local run timed out at 5362.97ms / 5000ms default.
     test('after long sequences (10-15 events), invariants still hold', async () => {
       await fc.assert(
         fc.asyncProperty(
@@ -420,7 +424,7 @@ describeEachProvider(
         ),
         { numRuns: 10 },
       )
-    })
+    }, 15000)
 
     test('stress: approve-iterate-approve cycles never leave R1 violated', async () => {
       // Targeted property: any interleaving of approve/iterate operations

@@ -1,5 +1,5 @@
 // RFC-395 V3-F: backups bind an identified snapshot and never omit committed WAL.
-import { expect, test } from 'bun:test'
+import { setDefaultTimeout, expect, test } from 'bun:test'
 import { existsSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { describeV1Providers } from './helpers/rfc395V1Harness'
@@ -26,6 +26,9 @@ import { createEpochBackupAdapter } from '@/modules/system-operations/infrastruc
 import { captureContentManifest } from '@/platform/content/inventory/manifest'
 import { sourceFilesDigest } from '@/platform/persistence/migration/sourceReader'
 import { readManifest } from '@/platform/persistence/migration/legacy/backupManifest'
+
+// A real backup and native switch or rollback take about 4 s per CI-scaled case; allow 15 s.
+setDefaultTimeout(15000)
 
 describeV1Providers('RFC-395 V3 switch backup', (h) => {
   const input = async (): Promise<SourceAccessInput> => ({
@@ -110,7 +113,7 @@ describeV1Providers('RFC-395 V3 switch backup', (h) => {
     } finally {
       await newer.close()
     }
-  }, 300_000)
+  })
 
   test('restoring a backup records immutable-backup-source and hosted retention requires a verifier', async () => {
     const version = await h.install()
@@ -154,7 +157,7 @@ describeV1Providers('RFC-395 V3 switch backup', (h) => {
       await source.close()
       portable.close()
     }
-  }, 300_000)
+  })
 
   test('backup payload re-materialises on a fresh Job and an incomplete backup copy is cleaned', async () => {
     await h.install()
@@ -217,7 +220,7 @@ describeV1Providers('RFC-395 V3 switch backup', (h) => {
     } finally {
       await source.close()
     }
-  }, 300_000)
+  })
 
   if (h.provider === 'postgresql')
     test('typed PostgreSQL archive inputs verify retained bytes and all six never-installed catalog facts', async () => {
@@ -284,7 +287,7 @@ describeV1Providers('RFC-395 V3 switch backup', (h) => {
         await source.close()
         backup.close()
       }
-    }, 300_000)
+    })
 
   if (h.provider === 'sqlite')
     test('backup includes skills/config plus the content listing and refuses content changed after capture', async () => {
@@ -342,5 +345,5 @@ describeV1Providers('RFC-395 V3 switch backup', (h) => {
       } finally {
         await source.close()
       }
-    }, 300_000)
+    })
 })

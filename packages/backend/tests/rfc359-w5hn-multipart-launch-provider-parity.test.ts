@@ -13,7 +13,8 @@ import { beforeEach, expect, test } from 'bun:test'
 import type { Hono } from 'hono'
 import { ulid } from 'ulid'
 
-import { comparableTaskRow, earlyLifecycleViolation } from './helpers/taskRowParity'
+import { earlyLifecycleViolation } from './helpers/taskRowParity'
+import { comparableEpoch2TaskRow as comparableTaskRow } from './fixtures/rfc395TaskRowParity'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 

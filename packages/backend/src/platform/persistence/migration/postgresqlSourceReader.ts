@@ -58,6 +58,9 @@ export async function postgresqlSourceContentDigest(
   frame({ fingerprint, identities })
   for (const table of Object.keys(fingerprint.tableRows).sort()) {
     frame(table)
+    // The fingerprint counts were read in this same repeatable-read transaction.
+    // Empty tables still contribute their frame, but need no DECLARE/FETCH/CLOSE round trips.
+    if (fingerprint.tableRows[table] === 0) continue
     // Keep the original text order/framing, with one scan in the caller's read-only transaction.
     await connection.unsafe(
       `DECLARE rfc395_source_digest NO SCROLL CURSOR FOR SELECT to_jsonb(t)::text AS value FROM ${qualified(table)} t ORDER BY to_jsonb(t)::text COLLATE "C", ctid`,

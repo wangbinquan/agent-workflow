@@ -45,7 +45,12 @@ export function pinnedSnapshotReader(
       return preflight
     },
     async assertUnchanged(expected) {
-      if (canonicalSchemaJson(expected) !== canonicalSchemaJson(preflight))
+      // Export checks every table/chunk against this exact pinned object. Comparing
+      // it with itself must not encode the entire catalog and contract twice per chunk.
+      if (
+        expected !== preflight &&
+        canonicalSchemaJson(expected) !== canonicalSchemaJson(preflight)
+      )
         throw new Error('source-changed: snapshot binding differs')
     },
     readChunk: (...args) => reader.readChunk(...args),

@@ -182,13 +182,14 @@ export class HistoryCatalogCache {
 }
 export function assertHistoryCatalog(expected: HistoryCatalog, actual: HistoryCatalog): void {
   if (canonicalSchemaJson(expected) !== canonicalSchemaJson(actual)) {
+    // Drift diagnosis must not serialize the full catalog quadratically on rejection.
+    const expectedKeys = expected.map((row) => canonicalSchemaJson(row))
+    const actualKeys = actual.map((row) => canonicalSchemaJson(row))
+    const expectedSet = new Set(expectedKeys)
+    const actualSet = new Set(actualKeys)
     const first =
-      actual.find(
-        (row) => !expected.some((other) => canonicalSchemaJson(row) === canonicalSchemaJson(other)),
-      ) ??
-      expected.find(
-        (row) => !actual.some((other) => canonicalSchemaJson(row) === canonicalSchemaJson(other)),
-      )
+      actual.find((_row, index) => !expectedSet.has(actualKeys[index]!)) ??
+      expected.find((_row, index) => !actualSet.has(expectedKeys[index]!))
     throw new SchemaHistoryError(
       'physical-drift',
       first

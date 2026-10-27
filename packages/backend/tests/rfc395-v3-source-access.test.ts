@@ -2,9 +2,13 @@ import { epochSourceArchiveInput } from '@/bootstrap/epochMigration'
 import { SQL } from 'bun'
 import type { PostgresqlPool } from '@/platform/persistence/postgresqlRuntime'
 import { loadFrozenEpoch1History } from '@/platform/persistence/migration/epoch1/bundle'
+import {
+  compileEpoch1PostgresqlCatalog,
+  loadSupportedSourceManifest,
+} from '@/platform/persistence/migration/supportedSources'
 import { LEGACY_MIGRATION_HASHES } from '@/platform/persistence/migration/epoch1/journalAliases'
 // RFC-395 V3-F: source snapshots, retained upgrade evidence and restart bindings.
-import { expect, test } from 'bun:test'
+import { setDefaultTimeout, expect, test } from 'bun:test'
 import { existsSync, mkdirSync, readFileSync, writeFileSync, rmSync, readdirSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { describeV1Providers, installFrozenSqlite } from './helpers/rfc395V1Harness'
@@ -21,6 +25,9 @@ import { atomicSourceFile } from '@/platform/persistence/migration/freeze/artifa
 import type { EpochSwitchArtifactPort } from '@/platform/persistence/migration/run/types'
 import { sourceFilesDigest } from '@/platform/persistence/migration/sourceReader'
 import { createEpochSourceAdapter } from '@/modules/system-operations/infrastructure/epochSwitch/sourceAdapter'
+
+// Source freeze, offline upgrade and reopen take about 27 s per CI-scaled case; allow 90 s.
+setDefaultTimeout(90_000)
 
 describeV1Providers('RFC-395 V3 source access', (h) => {
   const input = async (): Promise<SourceAccessInput> => ({
@@ -74,7 +81,7 @@ describeV1Providers('RFC-395 V3 source access', (h) => {
     await expect(adapter.freeze({ ...request, expected })).rejects.toMatchObject({
       category: 'source-changed',
     })
-  }, 300_000)
+  })
 
   test('portable, logical-artifact and hosted readers use the immutable backup digest', async () => {
     const version = await h.install()
@@ -117,7 +124,7 @@ describeV1Providers('RFC-395 V3 source access', (h) => {
     } finally {
       backup.close()
     }
-  }, 300_000)
+  })
 
   test('live planning keeps one snapshot while the live source advances', async () => {
     await h.install()
@@ -135,7 +142,7 @@ describeV1Providers('RFC-395 V3 source access', (h) => {
     } finally {
       await source.close()
     }
-  }, 300_000)
+  })
 
   if (h.provider === 'postgresql')
     test('source composition validates never-installed evidence before admitting absent history', async () => {
@@ -168,7 +175,7 @@ describeV1Providers('RFC-395 V3 source access', (h) => {
           mode === 'live' ? openLiveSnapshotSource(forged) : openFrozenSource(forged),
         ).rejects.toThrow('postgresql-never-installed-evidence-mismatch')
       }
-    }, 120_000)
+    })
 
   if (h.provider === 'sqlite') {
     test('BF-D20 the observed 0141 shape upgrades offline with recovery rows and retired evidence intact', async () => {
@@ -307,7 +314,7 @@ describeV1Providers('RFC-395 V3 source access', (h) => {
         await source.close()
       }
       expect(readFileSync(h.sqlitePath)).toEqual(original)
-    }, 300_000)
+    })
 
     for (const through of [1, 120])
       test(`SQLite prefix ${through} upgrades offline and keeps paired pre-upgrade evidence`, async () => {
@@ -338,7 +345,7 @@ describeV1Providers('RFC-395 V3 source access', (h) => {
         const again = await openFrozenSource({ ...request, expected })
         expect(again.preUpgrade!.preflight).toEqual(before)
         await again.close()
-      }, 300_000)
+      })
 
     test('pointer-less live/frozen sources keep the epoch-1 generation while numeric content advances', async () => {
       await h.install()
@@ -358,7 +365,7 @@ describeV1Providers('RFC-395 V3 source access', (h) => {
       } finally {
         await frozen.close()
       }
-    }, 300_000)
+    })
     test('owned crash copies and torn pre-binding temp files are removed; committed evidence is retained', async () => {
       await installFrozenSqlite(h.sqlite, 1)
       const request = await input()
@@ -382,7 +389,7 @@ describeV1Providers('RFC-395 V3 source access', (h) => {
       const binding = JSON.parse(readFileSync(join(work, 'upgrade/binding.json'), 'utf8'))
       expect(binding.directory.startsWith('copy-')).toBe(true)
       expect(binding.sqlitePath.startsWith('/')).toBe(false)
-    }, 300_000)
+    })
     test('upgrade binding and pre-upgrade evidence re-materialise under a fresh Job root', async () => {
       await installFrozenSqlite(h.sqlite, 1)
       const request = await input()
@@ -431,7 +438,7 @@ describeV1Providers('RFC-395 V3 source access', (h) => {
       } finally {
         await second.close()
       }
-    }, 300_000)
+    })
     test('discovery snapshot remains readable while another process commits WAL writes', async () => {
       await h.install()
       await h.seed()
@@ -458,7 +465,7 @@ describeV1Providers('RFC-395 V3 source access', (h) => {
         writer.kill()
         await writer.exited
       }
-    }, 300_000)
+    })
 
     test('restart in a subprocess sees the same watermark and removes only leftover reader copies', async () => {
       await h.install()
@@ -498,7 +505,7 @@ describeV1Providers('RFC-395 V3 source access', (h) => {
       expect(stdout.trim()).toBe(expected.watermark)
       expect(existsSync(leftover)).toBe(false)
       expect(existsSync(retained)).toBe(true)
-    }, 300_000)
+    })
   }
 })
 
@@ -622,7 +629,7 @@ describeV3Providers('RFC-395 V3 PostgreSQL scratch upgrade', (h) => {
       await runtime.close()
       await pool.unsafe('DROP TABLE IF EXISTS public.aw_epoch1_upgrade_scratch')
     }
-  }, 300_000)
+  })
   test('upgrading a logical backup preserves its source kind and provider in the exposed preflight', async () => {
     const version = await h.source.install('pre-seq')
     const backup = await h.source.sourceHarness.backup(version)
@@ -654,7 +661,7 @@ describeV3Providers('RFC-395 V3 PostgreSQL scratch upgrade', (h) => {
       backup.close()
       await h.runtime.providerPool().unsafe('DROP TABLE IF EXISTS public.aw_epoch1_upgrade_scratch')
     }
-  }, 300_000)
+  })
   test('an older PostgreSQL source requires scratch, retains original evidence and reopens the same upgrade', async () => {
     await h.source.install('pre-seq')
     await h.source.sourceHarness.seed()
@@ -706,7 +713,7 @@ describeV3Providers('RFC-395 V3 PostgreSQL scratch upgrade', (h) => {
     } finally {
       await h.runtime.providerPool().unsafe('DROP TABLE IF EXISTS public.aw_epoch1_upgrade_scratch')
     }
-  }, 300_000)
+  })
 })
 
 for (const [message, category] of [
@@ -737,7 +744,20 @@ describeV3CrossProvider('RFC-395 V3 upgraded SQLite-origin logical artifact', (h
     const backup = await h.source.sourceHarness.backup(version)
     const scratch = async () => ({ runtime: h.runtime, async close() {} })
     try {
-      const source = await openFrozenSource({
+      // This fixture starts on SQLite but upgrades a logical copy on PostgreSQL.
+      // Its admission manifest must describe both physical engines. Compile the
+      // frozen PG plans while the owned scratch is still empty (DDL rolls back).
+      const manifest = await loadSupportedSourceManifest({
+        async postgresqlCatalog(version) {
+          const reference = await h.runtime.providerPool().reserve()
+          try {
+            return await compileEpoch1PostgresqlCatalog(reference, version)
+          } finally {
+            reference.release()
+          }
+        },
+      })
+      const request: SourceAccessInput = {
         location: {
           kind: 'backup',
           sourceKind: 'logical-artifact',
@@ -746,10 +766,16 @@ describeV3CrossProvider('RFC-395 V3 upgraded SQLite-origin logical artifact', (h
         },
         operationRoot: h.operationRoot,
         emptyTables: [],
-        manifest: await h.source.sourceHarness.manifest(),
+        manifest,
         createScratchPostgresql: scratch,
         reopenScratchPostgresql: scratch,
-      })
+      }
+      const source = await openFrozenSource(request)
+      const expected = {
+        watermark: source.watermark,
+        preUpgradeWatermark: source.preUpgrade!.preflight.watermark,
+        sourceGenerationId: source.preflight.sourceGenerationId,
+      }
       try {
         expect(source.reader.kind).toBe('logical-artifact')
         expect(source.preflight.kind).toBe('logical-artifact')
@@ -759,9 +785,18 @@ describeV3CrossProvider('RFC-395 V3 upgraded SQLite-origin logical artifact', (h
       } finally {
         await source.close()
       }
+      const reopened = await openFrozenSource({ ...request, expected })
+      try {
+        expect(reopened.preflight.kind).toBe('logical-artifact')
+        expect(reopened.preflight.fingerprint.provider).toBe('sqlite')
+        expect(reopened.watermark).toBe(expected.watermark)
+        await reopened.reader.assertUnchanged(reopened.preflight)
+      } finally {
+        await reopened.close()
+      }
     } finally {
       backup.close()
       await h.runtime.providerPool().unsafe('DROP TABLE IF EXISTS public.aw_epoch1_upgrade_scratch')
     }
-  }, 300_000)
+  })
 })

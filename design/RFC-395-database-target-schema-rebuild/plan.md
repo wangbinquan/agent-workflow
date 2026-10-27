@@ -826,6 +826,105 @@ V3（迁移运行与切换）拆为一个合同包与三个并行包，文件互
 
 另外，M-c 曾把约 5,500 行已退役的 epoch-1 运行时代码复制进测试辅助目录，用来维持 14 个旧测试。修复轮把这些测试分别迁到 epoch 2 的后继机制，或在没有后继时删除，并写明由哪条转换测试覆盖旧版本来源。只保留一个固定参考副本，用于证明已发布的 epoch-1 代码会拒绝 epoch-2 产物。
 
+#### 复核、BF 修复轮与 T18 集中验证（2026-10-25～26）
+
+**复核与 BF 修复轮**：对 AF 修复轮、Q-1 与 M-c 做了三组复核，定出 BF-D1～D29，分五个任务修完（只实现、写用例与静态检查，不运行测试）。原则仍是 P-1：没有 RFC 决定却丢失的 epoch-1 行为一律恢复。主要修复：
+- 激活失败时能回到原 pointer：先留存旧 pointer 再激活，失败即恢复并重开 SQLite；
+- 启动只接管绑定 pointer 的迁移操作；绑定 pointer 的失败或取消操作拒绝启动，并提示先处理迁移；
+- daemon 锁只在安装、升级或恢复时获取，daemon 运行中 `backup` / `user` / `auth` / `package` 照常可用（与 epoch 1 一致）；
+- 完整性检查提前到备份判定与合同历史读取之前，损坏的库给出 RFC-213 指引并保留原始副本；
+- 迁往 PostgreSQL 的收尾恢复 15 条业务不变量与 identity 序列校验；自动 complete 按真实验证结果记录；
+- 版本更新的 epoch-2 备份按降级拒绝；无 pointer 时 doctor 按 epoch-1 方式报告且不建库；
+- 生产实测的 0141 形态登记为只可升级的变体。
+
+Q-3 同期完成：plan §3 的 18 行拆成 137 个覆盖项，另列 44 个切换 / 恢复故障边界（双 provider 共 88 个实例）；新增 6 个测试文件；更新升级回滚、灾备、CrewStation、code-host 四份运维文档，新增 `rehearsal-template.md`。
+
+**T18 的做法**：
+- 后端测试首次全量执行。SQLite 全量跑了六轮（约 2,670 个文件，4～6 分片、随机顺序）。PostgreSQL 先跑 198 个文件的冒烟子集，修复后扩大到全部 1,192 个带 PG 变体的测试文件；两种 provider 的全量最终由 CI 的 24 个分片执行。
+- 另跑 shared、前端、system-mocks 全量，编译二进制的 Playwright e2e（Chromium）全量，以及新旧二进制的 DTO 对拍。
+- 静态检查：三个包的 typecheck、lint（含 promises 规则）、格式、依赖分层与合同历史检查。
+- 失败按领域分给修复任务，每个任务只复跑受影响的文件：X1、J-C、SO、TE、PLAT、P3-A、P3-B 处理产品与测试，Q-2、Q-2b、FIN 处理守卫与账本，E2E、PAR、PGF 处理 e2e、对拍与 PostgreSQL；PostgreSQL 全量暴露的问题由 PGX-A～E 处理，e2e 暴露的工作组回归由 WGF 处理，其余由 lead 收尾。
+
+**T18 发现并修复的主要产品缺陷**：
+- 历史限制端口的 provider 改由 daemon 根解析后下传；门禁产物改用所选 ContentStore，评审 run 能正常生成；
+- 转换：备份行数核对只看版本合同内的表；源行全被阻断的单元不再调用转换器；完成阶段可重复执行 complete / verify；
+- 切换与恢复：只写一次的产物改用规范 JSON，崩溃重入时字节一致；没有 pointer 的安装也进入恢复检查；目标库收尾拒绝名册外的回执，只做一次普查；
+- 任务执行：脚本内容根使用本次所选的 appHome；对 history-only 节点重试不再误报 not-found；重试的倒序改为 NULLS LAST；工作组判别读冻结的 subject；
+- 平台：MCP 替换会话时在同一事务里先删 lease；仓库准备不再丢失 `assertCurrent`；本地技能恢复单文件读取与版本目录复制；
+- 合同历史：SQLite 重建表时修正 CHECK 中的表名限定与自引用外键；备份合同校验按 `columnOrder` 逆投影；
+- 运维：维护 worker 接受空的迁移目录；`/health` 的 `dbVersion` 取当前合同历史头；OPS-019 的拒绝文案与恢复命令的用法提示复原；
+- 架构：跨模块直读改走端口；抽出 `catalogModel.ts` 消除值依赖环；不可达文件从 35 个回到 27 个；
+- PostgreSQL：
+  - 迁移用的长时连接（转换目标、冻结源、恢复、迁库锁）改用不受 Bun 客户端空闲回收的专用连接池。此前切换中保留的连接空闲超过 30 秒就会被关掉，单进程也能复现；
+  - PG 源读取按源列与字节序排序。此前 `ORDER BY` 解析到 `::text` 输出别名，整数键被当成文本排序，转换被判为「迁移键顺序不确定」；
+  - PG 源的 RFC-349 保留归档（6 张已退役 code-work 表的历史）接入 V3 转换：逻辑工件预检不再用物理表清单覆盖工件自身的清单，plan 与最终冻结都解析并组合保留归档，缺失归档时拒绝，不会生成空的历史包（U-5）；
+  - 逻辑工件的 raw chunk 绑定 reader 自己的源版本，此前预升级处置证据会被判为不一致；
+  - 导出 PG 源时整个导出共用一个可重复读快照，导出前后各做一次完整检查。此前每读一个 chunk 都重算整库 watermark，权限文本备份的用例因此超时；
+  - hosted 恢复遇到正在服务的目标库时，在打开目标库之前就以 `hosted-restore-target-not-empty` 拒绝（与 epoch 1 一致）；归一化前先释放复制连接，不再因连接池占满而等待；
+  - 同任务不同槽位的并发铸造不再被 SSI 误判冲突而整笔重放（RFC-369 AC-2）：被 L-1 根锁串行化的单任务写事务改用 READ COMMITTED，保留 40001 / 40P01 整笔重试；工作组轮次写入补上跨客户端的任务锁，评审有三个分支补上写前根锁。
+- 任务列表：分页先在精简列上遍历和筛选，只为页内的行读取展示字段。此前会对全部任务行求值，两万任务时 PostgreSQL 上分页从 16.4 秒降到 3.1 秒。
+- 工作组：leader 发起的澄清在「封存已提交、续跑尚未派发」的交接期间保持停靠。此前驱动会在这个窗口里误启动普通的下一轮，导致 leader 被重复铸造、续跑丢失问答，e2e 约 20%～40% 失败；epoch-1 二进制跑同一 spec 为 12 / 12。这段代码与 epoch 1 逐字相同，epoch 2 在澄清服务里多了一次异步读取，把窗口拉大了。
+- 收尾：
+  - `scripts/perf-seed.ts` 的导入改为相对路径，此前 4 个性能测试文件加载即失败；
+  - SQLite 打开前钩子移回 epoch 1 的位置（取升级锁之后）；
+  - 切换收尾补上漏掉的 `await lock.release()`；
+  - 测试侧：PG 上的 SQL 形态断言允许 schema 前缀；RFC-109 的清理不再与任务自行结束竞争；任务分页的三条源码哈希守卫在确认差异只来自本次投影拆分后重定基线。
+
+**本阶段新增的 lead 决定**：
+- 因补回 `idx_tasks_list_facets_cover`，用正式生成器重新生成 epoch-2 合同历史资产（合同、两种 plan、PostgreSQL 17 catalog）。内嵌头与 registry 摘要一致，冻结的 epoch-1 资产不变。
+- 中立方言与事务机制下沉到 `platform/persistence`；合同历史的 apply 与 admission 共用一个 session 接口；删除运行时的 `postgresqlMigrator`。
+- 切换合同并入既有的 `public/commands` 与 `types`，删除 `public/epochSwitch.ts`。
+- 账本只降不升：`architecture/counts.json` 共下调 11 项；`guard-manifest` 由 248 条增至 256 条，不新增豁免；18 个不可达文件按精确路径与 SHA 登记为非运行时角色，其余作为产品缺陷修掉。
+- 产品口径不变：旧 Mission HTTP 启动仍然退役（返回 409）；OPS-015 改由 epoch-2 切换回滚的两条 e2e 旅程覆盖。
+- 本机 PostgreSQL 改用 tmpfs 数据目录的一次性容器：绑定宿主目录的容器在并行建库、删库时会卡住数分钟，在它上面跑出的结果不作为证据。
+- PostgreSQL 源夹具必须像真实 epoch-1 安装一样带有 SQLite 迁移写入的种子行（单机经 RFC-349 逻辑复制、托管经安装种子复制都会带上）；只装 PG DDL 得到的源不真实，由此报出的 `v2-writer-state-missing`、`required-seeds` 是夹具缺陷，转换规则不放宽。
+- epoch 2 在两种 provider 上都声明 `tasks_owner_user_fk`（ON DELETE SET NULL，与 SQLite 迁移 0020 一致），转换器对 epoch-1 PG 源中的悬空 owner 硬阻断；相应测试改为验证「删除用户后任务保留、归属清空」。
+- 运行中的 schema 漂移统一报 `physical-drift`（启动与 migrate 打印 RFC-275 指引），不再有 epoch-1 PG 迁移器的 `postgresql-schema-drift`。
+- PostgreSQL 上，被 L-1 根锁串行化的单任务写入改用 READ COMMITTED。理由：SERIALIZABLE 下等锁一方的快照必然过时，SSI 的页级谓词锁和外键读会把同任务不同槽位的铸造判为冲突，重新引入 RFC-369 消除的互相中止。每条依赖的不变量都由根锁或约束覆盖（逐条见 PGX-E 报告）；跨任务或未被锁覆盖的判据仍用 SERIALIZABLE；SQLite 不变。
+
+**结果**：
+
+| 项目 | 结果 |
+|---|---|
+| 后端 SQLite 全量（2,668 个文件，随机顺序） | 最终一轮 22,510 / 0，无加载级错误 |
+| 后端 PostgreSQL 全量（1,192 个带 PG 变体的文件，tmpfs 上的 17.11） | 9,917 / 0；`rfc311-perf-guards` 与路由面守卫只有两种 provider 同跑才有对照，另以双 provider 跑 27 / 0 |
+| shared / 前端 / system-mocks | 2,358 / 7,342 / 103 条通过，0 失败 |
+| e2e Chromium 全量（最终二进制） | 1,091 条中 1,090 通过；唯一失败（工作组 leader-worker 偶发回归）修复后，工作组与澄清相关的 83 个 spec 复跑 473 / 0，leader-worker 连跑 8 轮 16 / 0 |
+| DTO 对拍（`154fe7652` 的 epoch-1 二进制对本次最终二进制） | plan → run → verify → complete 后比较 10 个 HTTP 面：SQLite 与 PostgreSQL 目标各 7 / 0 |
+| 静态检查 | 三个包的 typecheck、lint、格式、依赖分层、合同历史检查全部通过；`architecture/counts.json` 无上调 |
+| CI（`b6df370b7`，运行 40298205725） | 失败，见下节「CI 第一轮与修复轮」 |
+
+#### CI 第一轮与修复轮（2026-10-26）
+
+`b6df370b7` 的主 CI（运行 40298205725）失败：Ubuntu 后端 24 片中 12 片失败、9 片撞上 15 分钟的 job 预算被取消；另有真实 PostgreSQL 与 Markdown 链接检查两个 job 失败。同一 HEAD 上的夜间工作流中，backend-macos-nightly 12 片有 7 片失败、2 片被取消，maintenance-soak-nightly 失败。
+
+**归因**：
+- T18 在本机分开跑两种 provider，又放宽了单条超时；CI 的跑法是两条泳道同进程、默认 5 秒、随机顺序。由此暴露三类问题：
+  - 超时：后端 140 条独立失败中 68 条是 5 秒超时，其余大多是超时后测试体继续运行引起的连带错误（schema 准备锁、`cache lookup failed`、死锁）；
+  - 对拍：跨 provider 的落库行对拍只在两条泳道同进程时执行。epoch 2 的任务行多出四格本次启动的值（`workspaceRootRef`、`requestedSource` 里的路径与基线提交、`sourceId`、`repos[].repoKey`），旧的归一化没有覆盖；
+  - PostgreSQL 用例整体变慢：同名 PG 用例的中位耗时是激活前的 1.5 倍（合计 1,964 → 2,986 秒）。夹具每例回种 `schema_history` 里约 4.2 MB 的目录工件，约 100 ms；epoch 2 的规范化子表与每事务的代次围栏，又让应用装配的语句从 380 条增至 737 条。
+- 产品缺陷一项：生产的本地与托管 `db migration` 入口只装了 SQLite 来源清单，真实的 epoch-1 PostgreSQL 源（包括全部 CrewStation 托管实例）会在计划阶段被判为未知来源，T19 会被它挡住。测试注入的清单自带 PG catalog，所以之前没有暴露。
+- 其它：maintenance soak 脚本仍在查已经移走的 `node_runs.pid`；P0 变异 `p0-11-barrier` 存活，原因是守卫指向的函数已经改名；两处设计文档链接指向 II-b 删除的文件；macOS 夜间的失败与 Ubuntu 同源，另有两条随语料增长的架构报告测试超出预算（`rfc370-committed-architecture-source` 83 / 60 秒，`rfc376-report` 165.5 / 120 秒）。
+- 不属本次、未改动、保留证据：
+  - Windows e2e 第 3 分片被取消，其中失败的两条 RFC-396 用例（`e2e/rfc396-graph-care-repair.spec.ts:402`、`e2e/task-lifecycle-states.spec.ts:549`）与之前的提交一致；
+  - e2e-full-nightly 的 RFC-319 账本对账：RFC-396 的 `e2e/rfc396-graph-care-repair.spec.ts:392` 已经命中 `POST /api/code/verification-profiles/:id/publish`，账本仍把它列为未覆盖（此前全量 e2e 分片一直没全绿，对账没有跑过）；
+  - e2e-webkit-nightly 有一个 macOS 作业在 15 分钟内没分到 runner，被取消。
+
+**修复**（CIP-A、CIP-B、CIX-C 三个修复任务与 lead 本人）：
+- 产品：
+  - 生产的本地与托管入口用本次操作的 PG scratch 编译冻结 catalog，按操作工件缓存；plan、最终冻结、旧备份恢复与托管 Job 读同一份清单（本地 `--scratch-url-env`，托管 `CS_DATABASE_MIGRATION_SCRATCH_URL`），新增 `migration/freeze/sourceManifest.ts`；
+  - 迁移侧提速：源目录计数批量化，catalog 模型、PG 源读取与实时快照提速，staging 与源读取按页提交；
+  - `nativeDialect` 的 jsonDoc 绑定改为 `::text::jsonb`（目前没有真实列用到）。
+- 测试：
+  - 重型用例本机合计提速约 49%：Q-3 拆成 11 个阶段文件，switch 旅程拆成 4 个文件，新增共享夹具（不可变夹具模板、PG fixture 库、Q-3 阶段边界、V3 switch 夹具）；
+  - 按 CI 实测给 47 个文件写明理由的 `setDefaultTimeout`，删掉原来 60～300 秒的逐条覆盖；
+  - 对拍改用 epoch-2 的归一化（`tests/fixtures/rfc395TaskRowParity.ts`）：被归一化的值先断言属于本次启动，再比其余整行；
+  - 夹具复位对没有变化的大种子表不截不种，PG 每例复位从 209 ms 降到 108 ms（`rfc395-harness-stable-seed-reset`）；
+  - 夹具 `TRUNCATE` 的死锁重试从 4 次放宽到 10 次：前一条用例经 HTTP 启动的任务，在应用 dispose 后还会读写约 3.4 秒；
+  - soak 脚本迁到 epoch 2，并加数据集回归；P0-11 改指 `recoverOperations`；两条架构报告测试按语料增长放宽预算。
+- CI：Ubuntu 后端分片 24 → 36（用户裁决），三个拓扑测试同步。
+- 本机复验改按 CI 的跑法（6 分片、两条泳道同进程、默认超时、随机顺序）：后端全量 31,376 / 0（57 条按条件跳过），无加载级错误；修复轮中途用同一跑法时为 31,366 通过、7 失败、4 个连带错误。相近负载下 PG 用例合计耗时降 13%，单条中位耗时降到 0.75 倍。迁移相关的 5 个 e2e spec（含 epoch-2 切换回滚旅程）在本次二进制上 42 / 0；typecheck、lint、格式、依赖分层、合同历史检查与 `tests/architecture/`（1,207 / 0）通过。
+
 #### 休眠包与共享账本
 
 休眠包（R1、R2、V1 及后续各包）不修改共享账本：`architecture/counts.json`、`architecture/guard-manifest.json`、provider 分叉、同文件孪生、T18 / T19d / T19f、RFC-376 基线，以及被审消费方清单。这些文件常被其他会话整文件提交，未提交的条目会指向不存在的文件。各包在报告中列出所需条目，由 T18 统一登记；休眠文件的「不可达」由 A 接线消解，不登记。
@@ -890,3 +989,6 @@ V3（迁移运行与切换）拆为一个合同包与三个并行包，文件互
 - 2026-10-24 夜：X2 完成，第一波结束。四组静态功能审查之后完成修复轮，结果与决定见「第一波审查与修复轮」。第二波 N-b、P、M-b 与一个后续项任务已并行开工。
 - 2026-10-25 凌晨：第二波与修复轮完成，见「第二波审查与修复轮」。激活按「激活分解」开始，A-1 进行中。各包留给 A、M-c、Q 与 T18 的事项已补入 `switch-window-handoff.md`。
 - 2026-10-25 上午：A-1、A-2+A-4、A-3、M-c、Q-1 完成；三组审查与修复轮 AF-1、AF-2 完成，后端、shared、前端 typecheck 全部通过。见「激活实施、审查与修复」。Q-3（必写测试矩阵、故障注入、运维手册与演练模板）与对修复轮、Q-1、M-c 的复核进行中，之后是 T18。全部换表代码仍未提交。
+- 2026-10-25 下午：复核与 BF 修复轮、Q-3 完成，开始 T18 集中验证。
+- 2026-10-26 凌晨：T18 完成，见「复核、BF 修复轮与 T18 集中验证」。全部换表代码以 `045abf20a` 一次提交（2,261 个路径），gitleaks 对冻结来源清单的三条误报以 `b6df370b7` 钉住指纹。CI 第一轮失败，修复见「CI 第一轮与修复轮」。下一步是 T19：真实实例迁移逐个取得用户批准，按 `rehearsal-template.md` 记录演练。
+- 2026-10-26 下午：CI 第一轮的修复轮完成并上库（产品修复：生产入口识别 PostgreSQL 源），见「CI 第一轮与修复轮」。

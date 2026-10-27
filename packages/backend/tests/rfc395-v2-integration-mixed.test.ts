@@ -1,7 +1,7 @@
 import { canonicalSchemaJson } from '@/platform/persistence/schema/canonical'
 import { integrationInput, convertIntegration } from './helpers/model/mixedIntegration'
 // RFC-395 V2-core C: full dormant assembly over a mixed real frozen database, both providers.
-import { expect, test } from 'bun:test'
+import { setDefaultTimeout, expect, test } from 'bun:test'
 import { SPACE_KINDS } from '@agent-workflow/shared'
 import { describeV2Providers } from './helpers/rfc395V2Harness'
 import {
@@ -15,6 +15,9 @@ import { contentBytes, contentDigest } from './helpers/rfc395V2/contentFixtures'
 import { contentSourceTables } from '@/platform/content/migration/specs'
 import { historySourceTables } from '@/platform/persistence/migration/archives/codeHistory'
 import { bytesDigest } from '@/platform/persistence/migration/conversion/digest'
+
+// Full frozen-source conversion and restart take about 6 s per CI-scaled case; allow 20 s.
+setDefaultTimeout(20000)
 
 describeV2Providers('RFC-395 V2 full mixed-instance integration', (h) => {
   test('all packages, all subjects/spaces, 227, nested frames, persisted writers, content and archives agree', async () => {
@@ -256,5 +259,5 @@ describeV2Providers('RFC-395 V2 full mixed-instance integration', (h) => {
     } finally {
       await input.source.close()
     }
-  }, 300_000)
+  })
 })

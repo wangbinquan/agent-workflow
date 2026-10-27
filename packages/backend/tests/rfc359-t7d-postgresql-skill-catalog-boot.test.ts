@@ -139,7 +139,10 @@ describeEachProvider('RFC-359 T7d —— 技能启动屏障在两个引擎上各
       const boot = composeSkillCatalogBoot({ db, appHome })
       await boot.recoverOperations()
       // Observe actual persistence, independent of the barrier's receipt.
-      expect((await listActiveOps(db)).map((op) => op.phase)).toEqual([])
+      expect(
+        (await listActiveOps(db)).map((op) => op.phase),
+        'P0-11 recoverOperations must settle the crashed reservation',
+      ).toEqual([])
       const { skillOperationLocks } = tablesOf(db),
         { skills } = tablesOf(db)
       expect(

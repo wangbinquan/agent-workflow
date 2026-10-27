@@ -34,7 +34,7 @@ import {
   planView,
   unfinishedTasks,
 } from '@/modules/system-operations/application/epochSwitch/planner'
-import { makeSwitchFixture, plannedFixture, fixtureDigest } from './rfc395-v3-switch-domain.test'
+import { makeSwitchFixture, plannedFixture, fixtureDigest } from './helpers/rfc395V3SwitchFixture'
 import { emptyV2Content } from './helpers/rfc395V2Harness'
 import { runSource, sourceRow, taskFacts } from './helpers/rfc395V2/runFixtures'
 import { taskRow } from './helpers/rfc395V2/taskFixtures'

@@ -29,7 +29,7 @@ import { tablesOf } from '@/platform/persistence/sessionTables'
 //     后两条证明本条确实有预言力，不是「因为都没跑到所以都绿」。
 
 import { insertOne } from '@/platform/persistence/singleInsert'
-import { afterEach, expect, test } from 'bun:test'
+import { afterEach, expect, setDefaultTimeout, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -56,6 +56,10 @@ import {
 import { describeEachProvider } from './helpers/eachProvider'
 import { createEachProviderTaskExecution } from './helpers/eachProviderTaskExecution'
 import { minimalNodeOfKind } from './helpers/nodeKindFixtures'
+
+// 逐 NodeKind 的双引擎矩阵在 RFC-395 II-b 的 epoch-2 PostgreSQL 上 CI 实测约 2.8s（运行 40298205725；
+// 激活前约 1.1s），CI 等价的本机全量跑到 5373.91ms 超时；给 10s。
+setDefaultTimeout(10_000)
 
 /** 良构但**任何对象库里都不存在**的 sha——被 gc 剪掉的快照的确定性替身。 */
 const PRUNED_SNAPSHOT = 'deadbeef'.repeat(5)

@@ -350,3 +350,10 @@ stay out of execution decisions, but every DTO, WS payload, observation attempt 
 values, read from its `execution_legacy_evidence` content (`node-run-evidence@2` `sourceValues`) when the target column is NULL.
 `NodeRunHistoryDisplaySchema` and the union in `TaskNodeRunsSchema` are removed; the shared contracts keep `retryIndex` / `scopePath`
 non-null. Owner: Q-1. The 13 frontend diagnostics go away with it.
+
+## 2026-10-26 closure (T18)
+
+Every request in this file was taken up by the activation (A-1, A-2+A-4, A-3), M-c, Q-1–Q-3, the AF / BF fix rounds and the T18 fix jobs,
+and shipped in `045abf20a`. The "Ledger entries for T18" were registered by Q-2 / Q-2b (`architecture/counts.json` only lowered,
+`guard-manifest` 248 → 256 entries, no new exemptions) and by the later T18 jobs, each with its exact delta in its report; nothing in this
+file remains open. Results and decisions: plan §6.13 「复核、BF 修复轮与 T18 集中验证」.

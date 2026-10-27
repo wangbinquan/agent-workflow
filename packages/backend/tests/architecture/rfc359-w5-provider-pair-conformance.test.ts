@@ -166,7 +166,8 @@ export const PROVIDER_PAIR_CONFORMANCE_LEDGER: readonly string[] = [
   // ——每张声明的表、每一列都问各自引擎的目录表（`PRAGMA table_info` / `information_schema.columns`），
   // 少一表或少一列都红。
   // RFC-395: retired Migrator is replaced by the real frozen-source reader pair; 3 pairs, 0 unverified.
-  'platform/persistence/migration/SourceReader: sqlite + postgresql — verified by helpers/rfc395V1Harness.ts, rfc395-history-response-parity.test.ts',
+  // RFC-395 CI round 1: the V1 harness no longer installs an unused application database, so it is no longer a witness.
+  'platform/persistence/migration/SourceReader: sqlite + postgresql — verified by rfc395-history-response-parity.test.ts',
   // RFC-395 I-a: DDL syntax is provider-specific; one harness compares both compiled catalogs with immutable history.
   'platform/persistence/schema/Plan: sqlite + postgresql — verified by rfc395-r1-engine-parity.test.ts, rfc395-r1-target-behavior.test.ts, rfc395-r2-target-history.test.ts',
 ]

@@ -8,9 +8,16 @@
 //
 // 处置是有界重试，而重试最容易退化成「重跑就过了」。所以判据写在**纯函数**上，逐条钉死：
 // 非序列化错一次都不重试、预算耗尽照样抛、重试次数有上限。改宽任何一条都会在这里红。
+//
+// 2026-10-26（RFC-395 II-b 的 CI 等价复跑）又撞到更长的一类：前一条用例经 HTTP 启动的任务，
+// 应用 dispose 后驱动还在读写约 3.4s，4 次尝试全被判死锁。尝试次数因此放宽，上下界见最后一条。
 import { describe, expect, test } from 'bun:test'
 
-import { retryOnPostgresqlSerializationFailure } from './helpers/eachProvider'
+import {
+  HARNESS_TRUNCATE_ATTEMPTS,
+  POSTGRESQL_DATABASE_RESET_TIMEOUT_MS,
+  retryOnPostgresqlSerializationFailure,
+} from './helpers/eachProvider'
 
 /** Bun.SQL 的 `PostgresError` 形状：SQLSTATE 在 `errno`，`code` 恒为通用值。 */
 function postgresError(sqlState: string): Error {
@@ -110,5 +117,17 @@ describe('RFC-359 W8 —— 夹具 TRUNCATE 的序列化失败重试', () => {
       ),
     ).rejects.toBe(boom)
     expect(calls).toBe(4)
+  })
+
+  test('夹具的尝试次数等得过残留的任务驱动，最坏情况仍在复位预算之内', () => {
+    // 每次 40P01 要等 PostgreSQL 的 deadlock_timeout（缺省 1000ms）才判出。
+    const deadlockTimeoutMs = 1_000
+    let worstCaseMs = 0
+    for (let attempt = 1; attempt <= HARNESS_TRUNCATE_ATTEMPTS; attempt += 1) {
+      worstCaseMs += deadlockTimeoutMs + (attempt < HARNESS_TRUNCATE_ATTEMPTS ? 25 * attempt : 0)
+    }
+    // 2026-10-26 实测残留驱动约 3.4s 后才被自己的写围栏终止；至少留一倍余量。
+    expect(HARNESS_TRUNCATE_ATTEMPTS * deadlockTimeoutMs).toBeGreaterThanOrEqual(2 * 3_400)
+    expect(worstCaseMs).toBeLessThan(POSTGRESQL_DATABASE_RESET_TIMEOUT_MS)
   })
 })

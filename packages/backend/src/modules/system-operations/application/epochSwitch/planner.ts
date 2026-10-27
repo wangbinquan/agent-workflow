@@ -129,6 +129,10 @@ export async function discoverEpochOperation(
     let sourceProvider = installation.facts.provider
     if (restore) {
       const handle = await deps.source.discover({
+        scratchOwner: operationId,
+        scratchProfileRef: input.scratchUrlEnv
+          ? environmentProfile(input.scratchUrlEnv)
+          : undefined,
         location:
           source.kind === 'backup' && deps.defaultContentRoot.objects !== 'none'
             ? {

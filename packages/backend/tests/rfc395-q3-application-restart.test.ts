@@ -7,7 +7,7 @@ import { createProviderHttpApplication } from './helpers/providerHttpApplication
 import { taskFixture, nodeRunFixture } from './helpers/model'
 import { rawRows } from '@/platform/persistence/queryHelpers'
 import { metaTableName } from '@/platform/persistence/schema/history/meta'
-import { plannedFixture } from './rfc395-v3-switch-domain.test'
+import { plannedFixture } from './helpers/rfc395V3SwitchFixture'
 
 describeEachProvider('Q-3 application restart after committed first business write', (h) => {
   test('recomposed routes preserve task/run ids, frozen deleted-source facts and the rollback fence', async () => {

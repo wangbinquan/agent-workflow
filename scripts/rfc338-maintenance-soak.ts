@@ -18,6 +18,7 @@ import {
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
+import { liveSqliteGeneration } from '../e2e/storage'
 
 import {
   HEAVY_MAINTENANCE_JOB_KEYS,
@@ -251,7 +252,7 @@ function datasetCounts(dbPath: string): DatasetCounts {
   }
 }
 
-function prepareSoakDataset(dbPath: string): DatasetPreparation {
+export function prepareSoakDataset(dbPath: string): DatasetPreparation {
   // RFC-311's capacity fixture deliberately leaves 2/7 rows pending/running.
   // Reaping ~857k synthetic runs one by one is a separate cold-recovery
   // benchmark and can consume minutes before HTTP binds. Terminalize only that
@@ -261,13 +262,20 @@ function prepareSoakDataset(dbPath: string): DatasetPreparation {
   const startedAt = performance.now()
   try {
     raw.exec('PRAGMA journal_mode = WAL; PRAGMA synchronous = OFF; BEGIN IMMEDIATE;')
+    // Epoch 2 keeps process identity in the runtime companion. Clear only the
+    // same synthetic active population, before changing its node_runs status.
+    raw
+      .query(
+        `UPDATE node_run_runtime_states SET pid = NULL
+          WHERE node_run_id IN (SELECT id FROM node_runs WHERE status IN ('running', 'pending'))`,
+      )
+      .run()
     const nodeRuns = raw
       .query(
         `UPDATE node_runs
             SET status = 'done',
                 finished_at = coalesce(finished_at, started_at, ?),
-                exit_code = coalesce(exit_code, 0),
-                pid = NULL
+                exit_code = coalesce(exit_code, 0)
           WHERE status IN ('running', 'pending')`,
       )
       .run(Date.now())
@@ -892,7 +900,6 @@ async function main(): Promise<void> {
   const targetSha = currentSha()
   const root = mkdtempSync(join(tmpdir(), 'aw-rfc338-soak-'))
   const home = join(root, 'home')
-  const dbPath = join(home, 'db.sqlite')
   const now = new Date(Date.now() + 12 * 60 * 60_000)
   const dailyAt = `${String(now.getUTCHours()).padStart(2, '0')}:${String(now.getUTCMinutes()).padStart(2, '0')}`
   const configOverrides = {
@@ -924,6 +931,7 @@ async function main(): Promise<void> {
     await daemon.stop()
     daemon = null
 
+    const { path: dbPath, generationId } = liveSqliteGeneration(home)
     await runSeed(dbPath, args.scale)
     const preparation = prepareSoakDataset(dbPath)
     const before = datasetCounts(dbPath)
@@ -951,6 +959,7 @@ async function main(): Promise<void> {
 
     probeDb = openDb({
       path: dbPath,
+      generationId,
       migrationsFolder: MIGRATIONS,
       skipMigrations: true,
       skipIntegrityCheck: true,

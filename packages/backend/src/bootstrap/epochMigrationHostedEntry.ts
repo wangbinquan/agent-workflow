@@ -2,7 +2,6 @@ import { createCrewStationObjectReader } from '@/platform/crewstation/objectStor
 import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { createCrewStationPlatformApi } from '@/platform/crewstation/platformApi'
-import { loadSupportedSourceManifest } from '@/platform/persistence/migration/supportedSources'
 import { persistenceHead, persistencePostgresqlCatalogs } from './persistenceHead'
 import {
   composeHostedEpochSwitch,
@@ -27,7 +26,6 @@ export function composeHostedEpochJobEntry(
       return composeHostedEpochSwitch(contract, {
         head: persistenceHead(),
         catalogArtifacts: persistencePostgresqlCatalogs(),
-        sourceManifest: loadSupportedSourceManifest,
         sourceBornOnPostgresql: env.CS_DATABASE_MIGRATION_SOURCE_BORN_ON_POSTGRESQL === '1',
         objects: createCrewStationObjectReader({
           baseUrl: env.CS_PLATFORM_API_URL ?? url,

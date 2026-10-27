@@ -128,10 +128,11 @@ export async function stageSourceTable(input: {
       if (!chunk.rows.length) return
       if (!chunk.lastKey || JSON.stringify(chunk.lastKey) === JSON.stringify(after))
         throw new ConversionContractError('v2-source-cursor', table)
-      for (const row of chunk.rows)
-        staged.put(
+      staged.putMany(
+        chunk.rows.map((row) =>
           fromRaw(table, phase, row, input.raw ? undefined : contract, input.codecTakeovers),
-        )
+        ),
+      )
       after = chunk.lastKey
     }
   }
@@ -148,24 +149,26 @@ export async function stageSourceTable(input: {
         throw new ConversionContractError('v2-source-row-count', table)
       if (!chunk.lastKey || JSON.stringify(chunk.lastKey) === JSON.stringify(after))
         throw new ConversionContractError('v2-source-cursor', table)
-      for (const [index, canonical] of chunk.rows.entries()) {
-        const values = chunk.decodedRows[index]!
-        // Frozen V1 normalizes -0 in its canonical real cell; keep the decoded value where available.
-        const normalized = {
-          ...canonical,
-          values: canonical.values.map((cell, i) =>
-            Object.is(values[contract.columns[i]!.name], -0) ? canonicalValue(-0) : cell,
-          ),
-        }
-        staged.put({
-          table,
-          phase,
-          key: canonical.key,
-          encodedKey: encodeMigrationKey(table, canonical.key),
-          canonical: normalized,
-          values,
-        })
-      }
+      staged.putMany(
+        chunk.rows.map((canonical, index) => {
+          const values = chunk.decodedRows[index]!
+          // Frozen V1 normalizes -0 in its canonical real cell; keep the decoded value where available.
+          const normalized = {
+            ...canonical,
+            values: canonical.values.map((cell, i) =>
+              Object.is(values[contract.columns[i]!.name], -0) ? canonicalValue(-0) : cell,
+            ),
+          }
+          return {
+            table,
+            phase,
+            key: canonical.key,
+            encodedKey: encodeMigrationKey(table, canonical.key),
+            canonical: normalized,
+            values,
+          }
+        }),
+      )
       after = chunk.lastKey
     }
   } catch (error) {

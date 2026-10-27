@@ -37,9 +37,9 @@ import { openConversionTarget } from '@/platform/persistence/migration/target/co
 import {
   resolvePostgresqlTestUrlEnv,
   resolveTestProviders,
-  createPostgresqlFileDatabase,
   closePostgresqlFixtureDatabases,
 } from './eachProvider'
+import { createRfc395FixtureDatabase, createRfc395FixtureRuntime } from './rfc395FixturePostgresql'
 
 export interface V3Harness {
   readonly source: V2Harness
@@ -123,7 +123,7 @@ function withV3Target(
   let reference: PostgresqlDatabaseRuntime | undefined
   const urlEnv = resolvePostgresqlTestUrlEnv(process.env)
   const sourceUrl = urlEnv ? process.env[urlEnv] : undefined
-  const databases: Awaited<ReturnType<typeof createPostgresqlFileDatabase>>[] = []
+  const databases: Awaited<ReturnType<typeof createRfc395FixtureDatabase>>[] = []
   let target: ConversionTargetConnection
   let cache: HistoryCatalogCache
   let artifact: PostgresqlCatalogArtifact | undefined
@@ -179,7 +179,7 @@ function withV3Target(
             'V3 PostgreSQL tests require AW_TEST_POSTGRESQL_URL or RFC357_DATABASE_URL',
           )
         for (let index = 0; index < 2; index += 1)
-          databases.push(await createPostgresqlFileDatabase(sourceUrl))
+          databases.push(await createRfc395FixtureDatabase(sourceUrl))
       }
       const open = (index: number) => {
         const input: Parameters<typeof createPostgresqlDatabaseRuntime>[0] = {
@@ -195,7 +195,7 @@ function withV3Target(
           env: { V3_TARGET_URL: databases[index]!.url! },
         }
         if (index === 0) targetRuntimeInput = input
-        return migrationPostgresqlRuntime(createPostgresqlDatabaseRuntime(input))
+        return migrationPostgresqlRuntime(createRfc395FixtureRuntime(input))
       }
       // Tests that exercise owned-runtime closure must not poison the next test.
       runtime = open(0)
@@ -204,16 +204,25 @@ function withV3Target(
       await pool.unsafe('DROP SCHEMA IF EXISTS agent_workflow CASCADE')
       await pool.unsafe('DROP SCHEMA IF EXISTS agent_workflow_meta CASCADE')
       target = openConversionTarget({ runtime })
+      // Own asynchronous reservation/setup even when the test only inspects a pure plan.
+      await target.execute('SELECT 1')
     }
     cache = new HistoryCatalogCache(async () => catalog())
   }, 90000)
   afterEach(async () => {
-    for (const reader of readers) await reader.close()
+    // A timed-out queued target operation must not prevent its physical pool from closing.
+    const results = await Promise.allSettled([
+      ...[...readers].map((reader) => reader.close()),
+      ...[target, runtime, reference].map((resource) => resource?.close()),
+    ])
     readers.clear()
-    await target?.close()
-    await runtime?.close()
     runtime = undefined
+    reference = undefined
     if (appHome) rmSync(appHome, { recursive: true, force: true })
+    const errors = results.flatMap((result) =>
+      result.status === 'rejected' ? [result.reason as unknown] : [],
+    )
+    if (errors.length) throw new AggregateError(errors, 'V3 fixture cleanup')
   }, 60000)
   afterAll(async () => {
     await closePostgresqlFixtureDatabases(

@@ -103,6 +103,10 @@ jobs:
     # macOS 后端 12 片整体移到 `backend-macos-nightly.yml`，原先 19 个 macOS job 挤 5 个槽
     # 是整次 run 的关键路径。
     #
+    # 2026-10-26 RFC-395 激活：后端测试量约翻倍（run 40298205725：15 片失败、10 片撞 15 分钟预算
+    # 被取消）。重型用例提速、拆文件之后全套仍约 243 runner-分钟，24 片的最长片估计 14.6~17.2 分钟。
+    # 用户裁决 Ubuntu 24 → 36 片：最长片约 10 分钟（预算 ~68%）；job 预算与单条用例超时不变。
+    #
     # 以下 macOS 分片历史留档（现由 nightly 承接，片数与预算原样）：
     # RFC-359 W57：macOS 从四片加到**六片**。实测三轮 exact SHA 的四片耗时分别是
     # 11.7 / 7.0 / 11.5 / 13.3、12.4 / 12.8 / 6.0 / 11.6、15.3 / 6.5 / 7.1 / 11.2 分钟
@@ -126,8 +130,45 @@ jobs:
       matrix:
         os: [ubuntu-latest]
         shard:
-          [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24]
-        shards: [24]
+          [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15,
+            16,
+            17,
+            18,
+            19,
+            20,
+            21,
+            22,
+            23,
+            24,
+            25,
+            26,
+            27,
+            28,
+            29,
+            30,
+            31,
+            32,
+            33,
+            34,
+            35,
+            36,
+          ]
+        shards: [36]
     runs-on: ${{ matrix.os }}
     # A sync child-process stall once left a backend shard silent for 17+ minutes.
     # Keep that same job budget as the provider workload grows; add runners

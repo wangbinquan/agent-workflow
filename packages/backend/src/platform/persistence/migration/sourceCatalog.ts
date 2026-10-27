@@ -1,5 +1,6 @@
 // RFC-395 II-b V1: inspect actual engines, including constraints, indexes and triggers.
 import type { Database } from 'bun:sqlite'
+import { sortHistoryCatalog } from '../schema/history/catalogModel'
 import { canonicalSchemaJson, digestSchemaContract } from '../schema/canonical'
 import {
   collectSqliteHistoryCatalog,
@@ -58,15 +59,30 @@ async function collectDatabaseFingerprint(
 ): Promise<SourceFingerprint> {
   const catalog = await collectEpoch1PostgresqlCatalog(connection)
   const tableRows: Record<string, number> = {}
-  for (const table of catalog.filter(
+  const tables = catalog.filter(
     (row) => row.kind === 'relation' && ['r', 'p'].includes(row.definition),
-  )) {
-    const name = table.relation.split('.').map(quoteSourceIdentifier).join('.')
-    const rows = await connection.execute(`SELECT count(*) AS n FROM ${name}`)
-    const count = Number(rows[0]?.n)
-    if (!Number.isSafeInteger(count))
-      throw new Error(`source row count exceeds safe integer: ${name}`)
-    tableRows[table.relation] = count
+  )
+  // Counts share the caller's snapshot. Bound SQL size while avoiding one network trip per table.
+  for (let offset = 0; offset < tables.length; offset += 64) {
+    const batch = tables.slice(offset, offset + 64)
+    const rows = await connection.execute(
+      batch
+        .map((table, index) => {
+          const name = table.relation.split('.').map(quoteSourceIdentifier).join('.')
+          return `SELECT $${index + 1}::text AS relation, count(*) AS n FROM ${name}`
+        })
+        .join(' UNION ALL '),
+      batch.map((table) => table.relation),
+    )
+    const counts = new Map(rows.map((row) => [String(row.relation), row.n]))
+    for (const table of batch) {
+      const count = Number(counts.get(table.relation))
+      if (!Number.isSafeInteger(count))
+        throw new Error(
+          `source row count exceeds safe integer: ${table.relation.split('.').map(quoteSourceIdentifier).join('.')}`,
+        )
+      tableRows[table.relation] = count
+    }
   }
   const journal = Object.hasOwn(tableRows, 'agent_workflow_meta.schema_migrations')
     ? (
@@ -131,7 +147,7 @@ export async function collectEpoch1PostgresqlCatalog(
     JOIN pg_class tab ON tab.oid=dep.refobjid JOIN pg_namespace nt ON nt.oid=tab.relnamespace
     JOIN pg_attribute att ON att.attrelid=tab.oid AND att.attnum=dep.refobjsubid
     WHERE seq.relkind='S' AND ns.nspname IN ('agent_workflow','agent_workflow_meta')`)
-  return [
+  return sortHistoryCatalog([
     ...catalog,
     ...owners.map((row) => ({
       kind: 'sequence-owner',
@@ -139,5 +155,5 @@ export async function collectEpoch1PostgresqlCatalog(
       name: String(row.sequence),
       definition: String(row.owner),
     })),
-  ].sort((a, b) => canonicalSchemaJson(a).localeCompare(canonicalSchemaJson(b)))
+  ])
 }

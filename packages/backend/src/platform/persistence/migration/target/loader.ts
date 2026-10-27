@@ -22,7 +22,7 @@ export function encodeTargetValue(
   if (column.codec === 'bigint') return dialect.bigInteger(value as string | number | bigint)
   if (column.codec === 'bytes') return Buffer.from(value as Uint8Array)
   if (column.codec === 'real') return dialect.real(value as number)
-  // jsonDoc is already JSON text in V2; an explicit ::jsonb cast avoids driver JSON string wrapping.
+  // jsonDoc is already JSON text in V2; the dialect binds it as text and casts ::text::jsonb (see nativeDialect).
   return value
 }
 export function targetRowKey(table: TableDefinition, row: TargetRow) {

@@ -17,7 +17,7 @@ import { metaTableName } from '@/platform/persistence/schema/history/meta'
 import { seedRequiredRows, seedSimpleTask } from './rfc395V2/integrationFixtures'
 import { frozenValues } from './rfc395V2/contentFixtures'
 import type { V3Harness } from './rfc395V3Harness'
-import { makeSwitchFixture, fixtureDigest } from '../rfc395-v3-switch-domain.test'
+import { makeSwitchFixture, fixtureDigest } from './rfc395V3SwitchFixture'
 
 export async function q3SwitchFixture(h: V3Harness, restore = false) {
   await h.source.install()

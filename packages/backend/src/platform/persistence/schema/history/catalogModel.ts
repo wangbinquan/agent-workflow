@@ -20,5 +20,6 @@ export interface PostgresqlCatalogArtifact {
 }
 
 export function sortHistoryCatalog(rows: CatalogEntry[]): HistoryCatalog {
-  return rows.sort((a, b) => canonicalSchemaJson(a).localeCompare(canonicalSchemaJson(b)))
+  const keys = new Map(rows.map((row) => [row, canonicalSchemaJson(row)]))
+  return rows.sort((a, b) => keys.get(a)!.localeCompare(keys.get(b)!))
 }

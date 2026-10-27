@@ -1,6 +1,6 @@
 import { postgresqlHistorySession } from '@/platform/persistence/postgresql/historySession'
 // RFC-395 II-b R2: real R1 registry edges, direct head installs and generated PostgreSQL artifacts close review gaps.
-import { expect, test, afterEach } from 'bun:test'
+import { setDefaultTimeout, expect, test, afterEach } from 'bun:test'
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
@@ -41,10 +41,13 @@ import { compilePostgresqlPlan } from '@/platform/persistence/schema/postgresqlP
 import { rebindSqliteTableReferences } from '@/platform/persistence/schema/sqliteReferences'
 import { r2Registry, itemTable, parentTable } from './helpers/rfc395R2Schema'
 
+// Real target history replay and catalog compilation take about 12 s per CI-scaled case; allow 40 s.
+setDefaultTimeout(40_000)
+
 const roots: string[] = []
 afterEach(() => {
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true })
-})
+}, 5_000)
 function replace(registry: SchemaRegistry, definition: TableDefinition): SchemaRegistry {
   return createSchemaRegistry(
     registry.contributions.map((entry) => ({
@@ -176,7 +179,7 @@ describeEachProvider('RFC-395 II-b R2 real registry and install', (harness) => {
       ).toEqual([{ parent_id: null }])
       expect(await h.native.execute(`SELECT id FROM ${h.table(child.id)}`)).toEqual([])
       await h.admit(next)
-    }, 60_000)
+    })
     test('real target baseline, add-column and expand-only chain work; common constraint edges admit on both engines', async () => {
       let registry: SchemaRegistry = persistenceSchema
       const baseline = createHistoryVersion({ registry, slug: 'target' })
@@ -335,7 +338,7 @@ describeEachProvider('RFC-395 II-b R2 real registry and install', (harness) => {
       })
       await h.apply(retired)
       expect((await h.admit(retired)).contract.digest).toBe(retired.contract.digest)
-    }, 240_000)
+    })
 
     test('head install executes only the head plan and current seeds in the history transaction', async () => {
       const base = createHistoryVersion({ registry: seeded('old'), slug: 'baseline' })
@@ -493,7 +496,7 @@ describeEachProvider('RFC-395 II-b R2 real registry and install', (harness) => {
       await expect(
         generatePostgresqlCatalogArtifacts({ directory: root, check: true, compile }),
       ).rejects.toThrow('catalog-artifact-digest')
-    }, 60_000)
+    })
   })
 })
 

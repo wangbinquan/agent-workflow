@@ -31,19 +31,18 @@ export const syntheticSlot = (
 })
 
 export async function seedRequiredRows(h: V2Harness): Promise<void> {
-  const source = await h.sourceHarness.source()
   const missing: string[] = []
-  try {
-    await source.preflight()
-    for (const [table, id] of [
-      ['users', '__system__'],
-      ['auth_login_policy', 'global'],
-      ['employee_os_writer_state', 'global'],
-    ] as const)
-      if (!(await source.readChunk(table, null, 1000)).decodedRows.some((row) => row.id === id))
-        missing.push(table)
-  } finally {
-    await source.close()
+  for (const [table, id] of [
+    ['users', '__system__'],
+    ['auth_login_policy', 'global'],
+    ['employee_os_writer_state', 'global'],
+  ] as const) {
+    const marker = h.sourceHarness.provider === 'sqlite' ? '?' : '$1'
+    const rows = await h.sourceHarness.native.execute(
+      `SELECT id FROM ${h.sourceHarness.table(table)} WHERE id = ${marker}`,
+      [id],
+    )
+    if (rows.length === 0) missing.push(table)
   }
   for (const table of missing)
     await h.write(table, [

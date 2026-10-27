@@ -6,7 +6,7 @@ import { withNativeTransactions } from './helpers/nativeTransactions'
 import { buildFrozenEpoch1LogicalSchemaContract } from '@/platform/persistence/migration/epoch1/contract'
 import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { persistenceHead } from '@/bootstrap/persistenceHead'
-import { describe, expect, test } from 'bun:test'
+import { setDefaultTimeout, describe, expect, test } from 'bun:test'
 import { PostgresqlDatabaseConfigSchema } from '@agent-workflow/shared'
 import { createPostgresqlDatabaseRuntime } from '@/platform/persistence/postgresqlRuntime'
 import { describeV3Providers, type V3Harness } from './helpers/rfc395V3Harness'
@@ -33,6 +33,9 @@ import { buildPostgresqlSchemaPlan } from '@/platform/persistence/postgresqlSche
 import type { PostgresqlSchemaPlan as FrozenPostgresqlSchemaPlan } from '@/platform/persistence/migration/legacy/postgresqlSchema'
 import { OBSERVATION_SOURCE_REVISION } from '@/platform/persistence/observationSourceRevisionSchema'
 import { loadPostgresqlMigrationHistory } from '@/platform/persistence/migration/legacy/postgresqlMigrationHistory'
+
+// Native target installation and logical-copy finalization take about 5 s per CI-scaled case; allow 20 s.
+setDefaultTimeout(20000)
 
 /**
  * RFC-371 v2 retired every native observation statement from the current plan. The

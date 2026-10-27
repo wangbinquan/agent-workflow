@@ -76,7 +76,7 @@ const POSTGRESQL_DATABASE_CLEANUP_TIMEOUT_MS = 90_000
  * 2026-09-11 的 real-PostgreSQL 泳道就是这么红的（`rfc359-w14-legacy-mission-execution`）。
  * 判据不变（超时仍然会失败），变的只是预算与它实际要做的事相称。
  */
-const POSTGRESQL_DATABASE_RESET_TIMEOUT_MS = 30_000
+export const POSTGRESQL_DATABASE_RESET_TIMEOUT_MS = 30_000
 /**
  * SQLite 泳道每个用例前的建库预算。**同样必须显式给**——上面那段注释只把 PG 泳道的
  * 5s 默认值修掉了，SQLite 这一侧一直吃默认值，于是同一类红在 2026-09-18 的
@@ -554,6 +554,31 @@ interface PostgresqlSeed {
   readonly schema: string
   /** 迁移刚种下的行，json 数组文本；每个用例前原样种回。 */
   readonly rowsJson: string
+  /**
+   * 大种子表上次种下之后的行身份（`ctid:xmin` 列表）。复位时身份没变就整表留着、不截不种，
+   * 见 `STABLE_SEED_MIN_BYTES`。只有 `snapshotSchema` 判定合格的表才有这一格。
+   */
+  stableIdentity?: string
+}
+
+/**
+ * RFC-395 II-b：epoch-2 的 `agent_workflow_meta.schema_history` 带一行约 4.2MB 的目录工件，
+ * 每个用例前截掉再经 `json_populate_recordset` 种回要 ~100ms（本机 tmpfs 实测：复位 91ms →
+ * 209ms；CI 上 PostgreSQL 用例因此整体慢约一半）。这么大的种子表在复位时先比行身份：
+ * 任何 UPDATE / DELETE / INSERT / TRUNCATE 都会换掉 `ctid:xmin`，身份相同即内容未动，
+ * 留着不截不种；变了就照旧整表截掉重种。只给没有出向外键（否则会被别的表 CASCADE 截空）、
+ * 也不拥有序列（否则 `restart identity` 漏复位）的表。判据在
+ * `tests/rfc395-harness-stable-seed-reset.test.ts`。
+ */
+const STABLE_SEED_MIN_BYTES = 64 * 1024
+
+async function seedIdentity(raw: RawQuery, seed: PostgresqlSeed): Promise<string> {
+  const [row] = await rows(
+    raw,
+    `select coalesce(string_agg(ctid::text || ':' || xmin::text, ',' order by ctid), '') ` +
+      `as identity from "${seed.schema}"."${seed.table}"`,
+  )
+  return String(row?.['identity'] ?? '')
 }
 
 interface PostgresqlSchemaSnapshot {
@@ -617,6 +642,33 @@ async function snapshotSchema(raw: RawQuery): Promise<PostgresqlSchemaSnapshot> 
       pending.delete(key)
     }
   }
+  const sequenceOwners = new Set(
+    (
+      await rows(
+        raw,
+        `select owner_ns.nspname as owner_schema, owner.relname as owner_table
+           from pg_depend dependency
+           join pg_class sequence on sequence.oid = dependency.objid and sequence.relkind = 'S'
+           join pg_class owner on owner.oid = dependency.refobjid
+           join pg_namespace owner_ns on owner_ns.oid = owner.relnamespace
+          where dependency.deptype in ('a', 'i')
+            and owner_ns.nspname in ('agent_workflow', 'agent_workflow_meta')`,
+      )
+    ).map((row) => keyOf(String(row['owner_schema']), String(row['owner_table']))),
+  )
+  for (const seed of orderedSeeds) {
+    const key = keyOf(seed.schema, seed.table)
+    const referencesAnotherTable = foreignKeys.some(
+      (foreignKey) =>
+        keyOf(String(foreignKey.child_schema), String(foreignKey.child_table)) === key,
+    )
+    if (
+      seed.rowsJson.length >= STABLE_SEED_MIN_BYTES &&
+      !referencesAnotherTable &&
+      !sequenceOwners.has(key)
+    )
+      seed.stableIdentity = await seedIdentity(raw, seed)
+  }
   return {
     tables: tables.map(({ schema, table }) => `"${schema}"."${table}"`),
     seeds: orderedSeeds,
@@ -641,7 +693,7 @@ async function snapshotSchema(raw: RawQuery): Promise<PostgresqlSchemaSnapshot> 
  * 次数用尽仍然原样抛出，红照样是红；非 40001/40P01 的错**一次都不重试**。
  *
  * 判据在 `tests/rfc359-w8-harness-truncate-retry.test.ts`（纯函数四条：一次成功 / 重试后成功 /
- * 非序列化错立即抛 / 预算耗尽照抛）。
+ * 非序列化错立即抛 / 预算耗尽照抛；另有一条锁尝试次数的上下界）。
  */
 export async function retryOnPostgresqlSerializationFailure<T>(
   run: () => Promise<T>,
@@ -660,7 +712,15 @@ export async function retryOnPostgresqlSerializationFailure<T>(
   }
 }
 
-const HARNESS_TRUNCATE_ATTEMPTS = 4
+/**
+ * 尝试次数。每次 40P01 要等 PostgreSQL 的 `deadlock_timeout`（缺省 1s）才判出，所以次数
+ * 约等于「能等多少秒」。4 次只够等后台读者的单条语句；2026-10-26 本机 CI 等价复跑实撞更长的一类：
+ * `rfc359-w5hn-workflow-route-launch-provider-parity` 前一条用例经 HTTP 启动的任务，应用
+ * dispose 之后它的驱动还在读写，直到约 3.4s 后被自己的写围栏终止；4 次尝试在约 3.2s 内
+ * 全被判死锁，下一条用例的 beforeEach 因此失败。改为 10 次（最坏约 11s），仍在下面的
+ * `POSTGRESQL_DATABASE_RESET_TIMEOUT_MS` 之内；上下界由 `rfc359-w8-harness-truncate-retry` 锁住。
+ */
+export const HARNESS_TRUNCATE_ATTEMPTS = 10
 
 async function truncateAll(raw: RawQuery, tables: readonly string[]): Promise<void> {
   const statement = `truncate table ${tables.join(', ')} ` + `restart identity cascade`
@@ -676,8 +736,21 @@ async function resetToSnapshot(
   options: DescribeEachProviderOptions,
 ): Promise<void> {
   if (snapshot.tables.length === 0) return
-  await truncateAll(raw, snapshot.tables)
+  const kept = new Set<PostgresqlSeed>()
   for (const seed of snapshot.seeds) {
+    if (
+      seed.stableIdentity !== undefined &&
+      (await seedIdentity(raw, seed)) === seed.stableIdentity
+    )
+      kept.add(seed)
+  }
+  const keptTables = new Set([...kept].map((seed) => `"${seed.schema}"."${seed.table}"`))
+  await truncateAll(
+    raw,
+    snapshot.tables.filter((table) => !keptTables.has(table)),
+  )
+  for (const seed of snapshot.seeds) {
+    if (kept.has(seed)) continue
     // 不走绑定参数：Bun.SQL 会把字符串参数按 json 类型二次序列化成 JSON 标量（"[...]"），
     // json_populate_recordset 收到的就不是数组。用带唯一标签的美元引号把数组文本内联进去。
     if (seed.rowsJson.includes('$aw_seed$')) {
@@ -688,6 +761,7 @@ async function resetToSnapshot(
         `select * from json_populate_recordset(null::"${seed.schema}"."${seed.table}", ` +
         `$aw_seed$${seed.rowsJson}$aw_seed$::json)`,
     )
+    if (seed.stableIdentity !== undefined) seed.stableIdentity = await seedIdentity(raw, seed)
   }
   if (options.bootstrap !== 'required' && snapshot.hasLoginPolicy) {
     await raw(

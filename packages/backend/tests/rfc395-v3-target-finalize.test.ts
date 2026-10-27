@@ -1,5 +1,5 @@
 // RFC-395 V3-R: authored for T18; offline target receipts never activate runtime wiring.
-import { expect, test } from 'bun:test'
+import { setDefaultTimeout, expect, test } from 'bun:test'
 import { describeV3Providers, type V3Harness } from './helpers/rfc395V3Harness'
 import { seedRequiredRows } from './helpers/rfc395V2/integrationFixtures'
 import { persistenceSchema } from '@/bootstrap/persistenceSchema'
@@ -23,6 +23,9 @@ import { metaTableName } from '@/platform/persistence/schema/history/meta'
 import { column, retention } from '@/platform/persistence/schema/dsl'
 import { createHistoryVersion } from '@/platform/persistence/schema/history/compiler'
 import { r2Owner, r2Registry, parentTable, itemTable } from './helpers/rfc395R2Schema'
+
+// Native target installation, admission and finalization take about 13 s per CI-scaled case; allow 40 s.
+setDefaultTimeout(40000)
 
 async function fixture(h: V3Harness) {
   await h.source.install()
@@ -213,7 +216,7 @@ describeV3Providers('RFC-395 V3 final constraints', (h) => {
             `SELECT baseline_id FROM ${metaTableName(h.targetProvider, 'schema_migrations')}`,
           )
     expect(Object.values(sentinel[0]!)).toContain(EPOCH2_SENTINEL)
-  }, 180000)
+  })
   test('max-fold and empty identity set next allocation to high water plus one', async () => {
     const table = r2Owner.table({
       id: 'v3_identity',

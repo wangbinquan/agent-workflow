@@ -95,18 +95,16 @@ describe('RFC-395 V1 PostgreSQL digest cursor', () => {
           `{ "big": 9007199254740993, "text": "值-é-${Math.floor(index / 2)}", "enabled": true }`,
       )
       const source = fingerprint({ 'agent_workflow.rows': count, 'agent_workflow.empty': 0 })
-      const steps: Step[] = [
-        { sql: declaration('empty') },
-        { sql: fetch },
-        { sql: close },
-        { sql: declaration('rows') },
-      ]
-      for (let offset = 0; ; offset += 1000) {
-        const rows = values.slice(offset, offset + 1000).map((value) => ({ value }))
-        steps.push({ sql: fetch, rows })
-        if (rows.length < 1000) break
+      const steps: Step[] = []
+      if (count > 0) {
+        steps.push({ sql: declaration('rows') })
+        for (let offset = 0; ; offset += 1000) {
+          const rows = values.slice(offset, offset + 1000).map((value) => ({ value }))
+          steps.push({ sql: fetch, rows })
+          if (rows.length < 1000) break
+        }
+        steps.push({ sql: close })
       }
-      steps.push({ sql: close })
       const session = scriptedConnection(steps)
       expect(await postgresqlSourceContentDigest(session.connection, source, identities)).toBe(
         legacyDigest(source, { 'agent_workflow.rows': values, 'agent_workflow.empty': [] }),
@@ -147,13 +145,13 @@ describe('RFC-395 V1 PostgreSQL digest cursor', () => {
     const failure = new Error('close failed')
     const session = scriptedConnection([
       { sql: declaration('rows') },
-      { sql: fetch },
+      { sql: fetch, rows: [{ value: 'original' }] },
       { sql: close, error: failure },
     ])
     await expect(
       postgresqlSourceContentDigest(
         session.connection,
-        fingerprint({ 'agent_workflow.rows': 0 }),
+        fingerprint({ 'agent_workflow.rows': 1 }),
         identities,
       ),
     ).rejects.toBe(failure)

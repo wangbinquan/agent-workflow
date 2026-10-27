@@ -12,7 +12,7 @@ import { createEpochInstallationProbe } from '@/modules/system-operations/infras
 import { createEpochSwitchJournal } from '@/modules/system-operations/domain/epochSwitch/model'
 import { parseGenerationPointerV2 } from '@/platform/persistence/generationPointerV2'
 import { join } from 'node:path'
-import { fixtureDigest, plannedFixture } from './rfc395-v3-switch-domain.test'
+import { fixtureDigest, plannedFixture } from './helpers/rfc395V3SwitchFixture'
 
 test('fresh and epoch-1 installations give the appropriate migration or RFC-349 guidance', () => {
   const base: InstallationFacts = {

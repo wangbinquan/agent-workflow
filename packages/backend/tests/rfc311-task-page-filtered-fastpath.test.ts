@@ -24,7 +24,7 @@ import { tablesOf } from '@/platform/persistence/sessionTables'
 
 import { insertOne } from '@/platform/persistence/singleInsert'
 import type { TaskOperationsListItem } from '@agent-workflow/shared'
-import { expect, test } from 'bun:test'
+import { afterAll, describe, expect, test } from 'bun:test'
 import { taskFixture, taskRepoFixture, workflowFixture } from './helpers/model'
 
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
@@ -232,28 +232,43 @@ const FILTER_MATRIX: Array<Record<string, string>> = [
 ]
 
 describeEachProvider('RFC-311 G1 — filtered fast path === exhaustive pipeline', (harness) => {
-  test('every filter combination matches page-for-page, for every actor', async () => {
-    const db = harness.db
-    await seedBase(db)
-    await insertForest(db, buildForest(70))
+  describe('every filter combination matches page-for-page, for every actor', () => {
+    // Keep the complete 70-row forest and every page comparison. Give each
+    // actor/filter group its own default test budget instead of timing the
+    // entire matrix as one unit (the slowest actor alone approached 5 s).
+    const groups = Array.from({ length: Math.ceil(FILTER_MATRIX.length / 9) }, (_, index) =>
+      FILTER_MATRIX.slice(index * 9, (index + 1) * 9),
+    )
+    const nonEmptyByGroup = new Map<string, number>()
+    afterAll(() => {
+      expect(nonEmptyByGroup.size).toBe(3 * groups.length)
+      // Preserve the original whole-matrix negative control, independent of order.
+      expect(
+        [...nonEmptyByGroup.values()].reduce((total, count) => total + count, 0),
+      ).toBeGreaterThan(FILTER_MATRIX.length)
+    })
+    for (const who of [actor('admin', 'admin'), actor('alice'), actor('bob')])
+      for (const [index, group] of groups.entries())
+        test(`filters ${index + 1} for ${who.user.id}`, async () => {
+          const db = harness.db
+          await seedBase(db)
+          await insertForest(db, buildForest(70))
 
-    let nonEmpty = 0
-    for (const who of [actor('admin', 'admin'), actor('alice'), actor('bob')]) {
-      for (const filters of FILTER_MATRIX) {
-        const fast = await collectPages(db, who, filters, 4, 'auto')
-        const slow = await collectPages(db, who, filters, 4, 'exhaustive')
-        const label = `${who.user.id} ${JSON.stringify(filters)}`
-        expect(
-          fast.items.map((i) => i.id),
-          label,
-        ).toEqual(slow.items.map((i) => i.id))
-        expect(fast.items, label).toEqual(slow.items)
-        expect(fast.facets, label).toEqual(slow.facets)
-        if (fast.items.length > 0) nonEmpty += 1
-      }
-    }
-    // 防「矩阵全空 ⇒ 恒等」的空洞绿:多数组合必须真的返回了行。
-    expect(nonEmpty).toBeGreaterThan(FILTER_MATRIX.length)
+          let nonEmpty = 0
+          for (const filters of group) {
+            const fast = await collectPages(db, who, filters, 4, 'auto')
+            const slow = await collectPages(db, who, filters, 4, 'exhaustive')
+            const label = `${who.user.id} ${JSON.stringify(filters)}`
+            expect(
+              fast.items.map((i) => i.id),
+              label,
+            ).toEqual(slow.items.map((i) => i.id))
+            expect(fast.items, label).toEqual(slow.items)
+            expect(fast.facets, label).toEqual(slow.facets)
+            if (fast.items.length > 0) nonEmpty += 1
+          }
+          nonEmptyByGroup.set(`${who.user.id}:${index}`, nonEmpty)
+        })
   })
 
   test('context ancestors and branch aggregates survive the rewrite', async () => {

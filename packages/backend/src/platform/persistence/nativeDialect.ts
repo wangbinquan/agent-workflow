@@ -72,7 +72,8 @@ const dialects: Readonly<Record<DatabaseProvider, PersistenceDialect>> = {
     readOnly: 'SET TRANSACTION READ ONLY',
     endReadOnly: [],
     enforceForeignKeys: [],
-    parameter: (index, codec) => `$${index}${codec === 'jsonDoc' ? '::jsonb' : ''}`,
+    // Bind JSON text as text, then parse it: a bare `$n::jsonb` makes Bun encode the string as a JSON string scalar.
+    parameter: (index, codec) => `$${index}${codec === 'jsonDoc' ? '::text::jsonb' : ''}`,
     boolean: (value) => value,
     integer: (value) => (typeof value === 'bigint' ? String(value) : value),
     target: (_generationId, profileRef) => ({ kind: 'postgresql-target', profileRef }),

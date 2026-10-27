@@ -5,13 +5,13 @@ import { join } from 'node:path'
 import { existsSync } from 'node:fs'
 import { DEFAULT_CONFIG } from '@agent-workflow/shared'
 import { createEpochSwitchApplication } from '@/modules/system-operations/composition/epochMigration'
-import { type EpochSwitchDependencies } from '@/modules/system-operations/composition/epochMigration'
 import { environmentProfile } from '@/modules/system-operations/composition/epochMigration'
 import { phaseIndex } from '@/modules/system-operations/composition/epochMigration'
 import type { EpochSwitchApplication } from '@/modules/system-operations/public/commands'
 import {
   EpochOperationIdSchema,
   EpochSwitchError,
+  type EpochSwitchJournal,
 } from '@/modules/system-operations/composition/epochMigration'
 import {
   createMetaEpochSwitchJournal,
@@ -47,7 +47,11 @@ import { openConversionTarget } from '@/platform/persistence/migration/target/co
 import { runConversion } from '@/platform/persistence/migration/conversion/engine'
 import { planConversion } from '@/platform/persistence/migration/conversion/plan'
 import type { InventoryObjectReader } from '@/platform/content/inventory/objects'
-import type { SupportedSourceManifest } from '@/platform/persistence/migration/supportedSources'
+import {
+  loadSupportedSourceManifest,
+  type SupportedSourceManifest,
+} from '@/platform/persistence/migration/supportedSources'
+import { loadOperationSourceManifest } from '@/platform/persistence/migration/freeze/sourceManifest'
 import {
   epochConversionInput,
   epochSourceArchiveInput,
@@ -119,7 +123,7 @@ export interface HostedEpochCompositionOptions extends Pick<
   | 'postgresqlArchive'
 > {
   artifacts: HostedEpochArtifacts
-  sourceManifest(): Promise<SupportedSourceManifest>
+  sourceManifest?(): Promise<SupportedSourceManifest>
   objects?: InventoryObjectReader
   verifyFreeze(ack: HostedFreezeAcknowledgement): Promise<boolean>
   control: HostedEpochSwitchControl
@@ -239,10 +243,31 @@ export async function composeHostedEpochSwitch(
         return lock
       },
     })
-    const sourceFor: NonNullable<EpochSwitchDependencies['sourceFor']> = (journal) =>
+    const sourceFor = (operation?: EpochSwitchJournal) =>
       createEpochSourceAdapter({
-        async resolve() {
-          const scratch = journal.payload.inputs.scratchProfileRef
+        async resolve(request) {
+          const scratch = operation?.payload.inputs.scratchProfileRef ?? request.scratchProfileRef
+          const operationId = operation?.payload.operationId ?? request.scratchOwner
+          if (
+            !options.sourceManifest &&
+            request.location.kind === 'postgresql-database' &&
+            !scratch
+          )
+            throw new EpochSwitchError('v3-scratch-required', { category: 'scratch-required' })
+          const manifest = options.sourceManifest
+            ? await options.sourceManifest()
+            : scratch && operationId
+              ? await loadOperationSourceManifest({
+                  runtime: runtime(scratch),
+                  profileRef: scratch,
+                  sourceFingerprint,
+                  supportedMajors: options.catalogArtifacts.map((a) => a.postgresqlMajor),
+                  cache: {
+                    read: (name) => journal.readArtifact(operationId, name),
+                    writeOnce: (name, bytes) => journal.writeOnce(operationId, name, bytes),
+                  },
+                })
+              : await loadSupportedSourceManifest()
           const openScratch = (requireEmpty: boolean) => {
             if (!scratch)
               throw new EpochSwitchError('v3-scratch-required', { category: 'scratch-required' })
@@ -255,9 +280,9 @@ export async function composeHostedEpochSwitch(
             })
           }
           return {
-            manifest: await options.sourceManifest(),
+            manifest,
             ...(sourceRuntime ? { postgresql: () => sourceRuntime } : {}),
-            ...(scratch
+            ...(operation?.payload.inputs.scratchProfileRef
               ? {
                   createScratchPostgresql: () => openScratch(true),
                   reopenScratchPostgresql: () => openScratch(false),
@@ -266,14 +291,7 @@ export async function composeHostedEpochSwitch(
           }
         },
       })
-    const source = createEpochSourceAdapter({
-      async resolve() {
-        return {
-          manifest: await options.sourceManifest(),
-          ...(sourceRuntime ? { postgresql: () => sourceRuntime } : {}),
-        }
-      },
-    })
+    const source = sourceFor()
     const cache = new HistoryCatalogCache(async (plan) => {
       const selected = openTarget(catalogProfile)
       let major: number

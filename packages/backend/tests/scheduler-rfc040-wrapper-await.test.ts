@@ -39,7 +39,7 @@ import { catchUpLegacySequenceTask } from './helpers/rfc374Fixtures'
 
 import { createSqliteMemoryDistillEnqueuer } from './helpers/memoryDistill'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import { and, eq } from 'drizzle-orm'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -55,6 +55,10 @@ import { autoDispatchClarifyRound } from '@/modules/collaboration/infrastructure
 import { decodeWrapperProgress } from '../src/modules/task-execution/domain/wrapperProgress'
 import { runGit } from '../src/util/git'
 import { reenterScheduler } from './reenter-scheduler'
+
+// Clarify resume through loop and git wrappers took about 1.9 s per PostgreSQL case on CI before
+// RFC-395 II-b; epoch-2 overhead pushed a CI-equivalent local run to 6167.23 ms. Allow 15 s.
+setDefaultTimeout(15_000)
 
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
 const DESIGNER_AGENT_ID = '00000000000000000000000001'

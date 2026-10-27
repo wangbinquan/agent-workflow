@@ -274,16 +274,18 @@ async function restoreMissingSkillBootCall(call: 'barrier' | 'reverify'): Promis
   // 01e4b1b7b: cli/postgresqlDaemonApplication.ts:436 proceeds from restore
   // without constructing/calling skill boot; there is no skillCatalogBoot token
   // anywhere in that root. Restore the two omitted calls independently at the
-  // real composer boundary. No empty receipt is invented: skipped calls return
+  // real composer boundary. RFC-395 U-4 moved legacy upgrades to conversion;
+  // crash recovery remains the live recoverOperations call. No empty receipt is invented: skipped calls return
   // void, and the nonempty tests inspect actual operations/locks/snapshot state.
   mock.module(target, () => ({
     ...original,
-    composeSkillCatalogBoot: (input: Parameters<typeof composeOriginal>[0]) => ({
-      ...composeOriginal(input),
-      ...(call === 'barrier'
-        ? { runIdentityMigrationBarrier: async () => {} }
-        : { reverifySnapshots: async () => {} }),
-    }),
+    composeSkillCatalogBoot: (input: Parameters<typeof composeOriginal>[0]) => {
+      const boot = composeOriginal(input)
+      const method = call === 'barrier' ? 'recoverOperations' : 'reverifySnapshots'
+      if (typeof boot[method] !== 'function')
+        throw new Error(`P0-11 mutation site drifted: ${method}`)
+      return { ...boot, [method]: async () => {} }
+    },
   }))
 }
 

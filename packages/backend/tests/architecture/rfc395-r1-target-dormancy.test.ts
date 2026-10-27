@@ -9,7 +9,7 @@ import { persistenceSchema } from '@/bootstrap/persistenceSchema'
 import { frozenEpoch1Registry } from '@/platform/persistence/migration/epoch1/definitions'
 import { canonicalSchemaJson } from '@/platform/persistence/schema/canonical'
 import type { TableDefinition } from '@/platform/persistence/schema/contribution'
-import { packageSrcUnits, sourceUnit, type SourceUnit } from './census'
+import { sourceUnit, type SourceUnit } from './census'
 
 const ROOT = resolve(import.meta.dir, '../../../..')
 const retiredNames = new Set([
@@ -26,7 +26,7 @@ const retiredNames = new Set([
   'TargetNativeTableSets',
   'TargetSchemaBinding',
 ])
-function activationViolations(unit: SourceUnit): string[] {
+function activationViolations(unit: Pick<SourceUnit, 'path' | 'text'>): string[] {
   const path = unit.path.replace(/^packages\/backend\/src\//, '')
   const violations = new Set<string>()
   const checkPath = (specifier: string) => {
@@ -47,6 +47,10 @@ function activationViolations(unit: SourceUnit): string[] {
       violations.add('retired schema entry')
   }
   checkPath(path)
+  // Every retired spelling contains target/Target. Read every file, but only
+  // build an AST when it can contain one; any escape (identifiers, strings,
+  // including hex escapes and line continuations) still needs parsing.
+  if (!/target|Target|\\/.test(unit.text)) return [...violations].sort()
   const visit = (node: ts.Node): void => {
     if (ts.isIdentifier(node) && retiredNames.has(node.text)) violations.add('retired live symbol')
     if (
@@ -71,7 +75,7 @@ function activationViolations(unit: SourceUnit): string[] {
       violations.add('retired live symbol')
     ts.forEachChild(node, visit)
   }
-  visit(unit.source)
+  visit(sourceUnit(unit.path, unit.text).source)
   return [...violations].sort()
 }
 function rosterViolations(
@@ -154,31 +158,33 @@ function destinationViolations(
   }
   return violations
 }
-function activationCorpus(): SourceUnit[] {
-  const units = packageSrcUnits(ROOT, 'backend')
+function activationCorpus(): Pick<SourceUnit, 'path' | 'text'>[] {
+  const units: Pick<SourceUnit, 'path' | 'text'>[] = []
   const walk = (directory: string): void => {
     for (const entry of readdirSync(directory, { withFileTypes: true })) {
       const path = resolve(directory, entry.name)
       if (entry.isDirectory()) walk(path)
       else if (/\.[cm]?tsx?$/.test(entry.name))
-        units.push(
-          sourceUnit(relative(ROOT, path).replaceAll('\\', '/'), readFileSync(path, 'utf8')),
-        )
+        units.push({
+          path: relative(ROOT, path).replaceAll('\\', '/'),
+          text: readFileSync(path, 'utf8'),
+        })
     }
   }
-  for (const directory of ['packages/backend/tests', 'packages/backend/scripts', 'scripts', 'e2e'])
+  for (const directory of [
+    'packages/backend/src',
+    'packages/backend/tests',
+    'packages/backend/scripts',
+    'scripts',
+    'e2e',
+  ])
     walk(resolve(ROOT, directory))
   return units
 }
 describe('RFC-395 II-b R1 activated schema boundary', () => {
+  const units = activationCorpus()
   test('the complete source, test and script corpus has one live registry and no retired accessor or registry', () => {
-    const units = activationCorpus()
     expect(units.length).toBeGreaterThan(1000)
-    expect(
-      units.flatMap((unit) =>
-        activationViolations(unit).map((reason) => `${unit.path}: ${reason}`),
-      ),
-    ).toEqual([])
     expect(
       units.find((unit) => unit.path.endsWith('/bootstrap/persistenceSchema.ts')),
     ).toBeDefined()
@@ -192,6 +198,18 @@ describe('RFC-395 II-b R1 activated schema boundary', () => {
       units.find((unit) => unit.path.endsWith('/platform/persistence/schema/targetTables.ts')),
     ).toBeUndefined()
   })
+  // The corpus grows with the repository. Check every file while keeping each
+  // AST walk within the default test deadline, including on coverage CI runners.
+  for (let start = 0; start < units.length; start += 250) {
+    const group = units.slice(start, start + 250)
+    test(`no retired live registry or accessor in corpus files ${start + 1}-${start + group.length}`, () => {
+      expect(
+        group.flatMap((unit) =>
+          activationViolations(unit).map((reason) => `${unit.path}: ${reason}`),
+        ),
+      ).toEqual([])
+    })
+  }
   test('negative controls reject aliases, relative/dynamic imports, re-exports and retired accessors', () => {
     for (const [path, relative] of [
       ['packages/backend/src/modules/example/store.ts', '../../bootstrap/targetPersistenceSchema'],
@@ -217,6 +235,9 @@ describe('RFC-395 II-b R1 activated schema boundary', () => {
         "import type { TargetPersistenceTables } from '@/platform/persistence/sessionTables'",
         "import * as session from '@/platform/persistence/sessionTables'; session.targetTablesOf(db)",
         "session['targetTablesOf'](db)",
+        'session.t\\u0061rgetTablesOf(db)',
+        "session['\\x74argetTablesOf'](db)",
+        "session['t\\argetTablesOf'](db)",
       ])
         expect(activationViolations(sourceUnit(path, source))).toEqual(['retired live symbol'])
       expect(

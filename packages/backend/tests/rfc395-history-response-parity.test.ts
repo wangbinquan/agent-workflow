@@ -1,5 +1,5 @@
 // RFC-395 U-5: frozen /code response examples, not archive record-order expectations.
-import { afterEach, beforeEach, expect, test } from 'bun:test'
+import { setDefaultTimeout, afterEach, beforeEach, expect, test } from 'bun:test'
 import { Hono, type Context } from 'hono'
 import { buildActor } from '@/auth/actor'
 import { errorHandler } from '@/util/errors'
@@ -49,6 +49,9 @@ import { createCodeHistoryPackageReader } from '@/modules/code-capability/infras
 import type { CodeHistoryQueryTable } from '@/modules/code-capability/domain/codeHistoryPackage'
 import type { DecodedSourceRow } from '@/platform/persistence/migration/sourceTypes'
 
+// Conversion through the sink and all four HTTP endpoints take about 17 s per CI-scaled case; allow 50 s.
+setDefaultTimeout(50000)
+
 const NOW = 1_700_000_000_000
 const item = (id: string, createdAt = NOW) => ({
   id,
@@ -95,8 +98,8 @@ describeEachProvider('RFC-395 history response parity', (h) => {
   beforeEach(async () => {
     resetRouteMetaRegistry()
     await seedEmptyCodeHistory(h.db)
-  })
-  afterEach(() => resetRouteMetaRegistry())
+  }, 5_000)
+  afterEach(() => resetRouteMetaRegistry(), 5_000)
   const app = () => historyApp(queries())
   test('work-item DTO preserves every field, null and stage/round order, including hidden rounds', async () => {
     await seedCodeHistoryRows(h.db, 'code_work_items', item('item'))
@@ -540,7 +543,7 @@ describeEachProvider('RFC-395 history response parity', (h) => {
 // The target receives sink rows verbatim: this must detect producer key/boolean/byte drift.
 describeEachProvider('RFC-395 converter to HTTP epoch-1 parity', (target) => {
   withR2TargetHarness(target, (source) => {
-    afterEach(() => resetRouteMetaRegistry())
+    afterEach(() => resetRouteMetaRegistry(), 5_000)
     test('historyRule → runConversion → sink rows → package reader → all four endpoints', async () => {
       resetRouteMetaRegistry()
       const root = mkdtempSync(join(tmpdir(), 'aw-h-history-roundtrip-'))
@@ -764,6 +767,6 @@ describeEachProvider('RFC-395 converter to HTTP epoch-1 parity', (target) => {
       } finally {
         rmSync(root, { recursive: true, force: true })
       }
-    }, 60_000)
+    })
   })
 })

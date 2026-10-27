@@ -1,5 +1,5 @@
 // RFC-395 C-1: enumerate actual launch selectors; history text never keeps a placeholder alive.
-import { expect, test } from 'bun:test'
+import { setDefaultTimeout, expect, test } from 'bun:test'
 import { TASK_DEFINITION_HOSTS } from '@agent-workflow/shared'
 import { describeV2Providers } from './helpers/rfc395V2Harness'
 import { convertFixtures, readFixtureRows, seedCollabTask } from './helpers/rfc395V2/collabFixtures'
@@ -10,6 +10,9 @@ import {
   referencedWorkflowIds,
 } from '@/modules/resource-catalog/infrastructure/migration/lookups'
 import type { TaskFacts } from '@/platform/persistence/migration/conversion/lookups/keys'
+
+// Complete resource conversion and catalog references take about 5 s per CI-scaled case; allow 20 s.
+setDefaultTimeout(20000)
 
 const conversion = {
   rules: [workflowsRule, resourceGrantsRule],
@@ -98,7 +101,7 @@ describeV2Providers('RFC-395 V2-C catalog reference positions', (h) => {
     )
     expect(sink.rows('workflows')).toEqual([])
     expect(sink.rows('resource_grants')).toEqual([])
-  }, 180_000)
+  })
 
   test('other target kinds, nested text and malformed schedule payloads do not refer to workflows', async () => {
     await h.install()
@@ -157,7 +160,7 @@ describeV2Providers('RFC-395 V2-C catalog reference positions', (h) => {
     expect(
       dispositions.filter((disposition) => disposition.kind === 'deleted-placeholder'),
     ).toHaveLength(1)
-  }, 180_000)
+  })
 
   test('all history task subjects, launch receipts, memory scopes and definition text are not catalog references', async () => {
     await h.install()
@@ -281,5 +284,5 @@ describeV2Providers('RFC-395 V2-C catalog reference positions', (h) => {
       dispositions.filter((disposition) => disposition.kind === 'deleted-placeholder'),
     ).toHaveLength(1)
     expect(await Promise.all(tables.map((table) => readFixtureRows(h, table)))).toEqual(before)
-  }, 180_000)
+  })
 })

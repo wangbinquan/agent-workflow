@@ -1,4 +1,4 @@
-import { expect, test } from 'bun:test'
+import { setDefaultTimeout, expect, test } from 'bun:test'
 import { describeV2Providers } from './helpers/rfc395V2Harness'
 import { V2MemorySink } from './helpers/rfc395V2MemorySink'
 import { integrationInput, convertIntegration } from './helpers/model/mixedIntegration'
@@ -7,6 +7,9 @@ import { seedMixedInstance } from './helpers/rfc395V2/integrationFixtures'
 import { runConversion } from '@/platform/persistence/migration/conversion/engine'
 import type { UnitOutput } from '@/platform/persistence/migration/conversion/types'
 import { SourceBlockedError } from '@/platform/persistence/migration/sourceTypes'
+
+// Full frozen-source conversion and restart take about 10 s per CI-scaled case; allow 35 s.
+setDefaultTimeout(35000)
 
 class LoseSeventhAcknowledgement extends V2MemorySink {
   private armed = true
@@ -76,5 +79,5 @@ describeV2Providers('RFC-395 V2 full-assembly restart binding', (h) => {
     } finally {
       await changed.source.close()
     }
-  }, 300_000)
+  })
 })

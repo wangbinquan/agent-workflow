@@ -333,7 +333,8 @@ describe('repository test entrypoint', () => {
       // Thirty-two independent runners retain both providers and every original test.
       // 2026-10-14 CI 提速：32 → 24 片。实测单片 5~7 分钟，主要开销在排队与每片 ~1.5 分钟
       // 的固定开销；24 片单片 ~8~10 分钟，仍在预算 ~67% 以内。
-      ['ubuntu-latest', 24],
+      // 2026-10-26 RFC-395 激活使后端测试量约翻倍：用户裁决 24 → 36 片，最长片约 10 分钟。
+      ['ubuntu-latest', 36],
       // RFC-359 W57：macOS 从四片加到六片——四片时最长的一片长期在 15 分钟预算的 75%~90%，
       // 实测有一次跑到 15 分 16 秒被超时杀掉（GitHub 把超时报成 `cancelled`，聚合 job 随之判红）。
       // 处置照 ci.yml 自己立的规矩：加 runner，不动预算、不改单条用例超时。

@@ -631,6 +631,11 @@ describe('RFC-054 W1-6 — rolling upgrade from old home reaches HEAD + runs toy
   })
 
   for (const target of FREEZE_TARGETS) {
+    // This is one end-to-end upgrade: frozen replay, plan, conversion, activation,
+    // verification and a real runtime child. CI's 5 s unit budget expired during
+    // conversion; afterEach then removed its journal while the async run was
+    // still writing, causing misleading stale-revision errors in later cases.
+    // Keep the complete journey and its cleanup together under a scoped budget.
     test(`from journal idx ${target.idx} (${target.tag}): partial apply + upgrade + toy task`, async () => {
       label = `idx${target.idx}`
       const dbPath = join(h.home, 'db.sqlite')
@@ -750,7 +755,7 @@ describe('RFC-054 W1-6 — rolling upgrade from old home reaches HEAD + runs toy
         db?.$client.close()
         source.$client.close()
       }
-    })
+    }, 120_000)
   }
 })
 

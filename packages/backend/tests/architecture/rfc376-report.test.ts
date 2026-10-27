@@ -345,7 +345,9 @@ describe('RFC-376 committed report contract', () => {
         .map((item) => item.path)
         .sort(),
     ).toEqual(paths)
-  }, 120_000)
+    // Two builds over the committed corpus. After RFC-395 II-b (2026-10-26) they took 101.5 s on Ubuntu
+    // CI (51 s before) and 165.5 s on the macOS nightly (75 s before); allow 300 s.
+  }, 300_000)
   test('report modules import neither production modules nor the retired generator/depcheck executable', () => {
     const files = [
       'architectureReport.ts',

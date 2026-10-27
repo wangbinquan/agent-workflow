@@ -1,4 +1,4 @@
-import { expect, test } from 'bun:test'
+import { setDefaultTimeout, expect, test } from 'bun:test'
 import { SQL } from 'bun'
 import { mkdtempSync, readFileSync, rmSync, existsSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -27,7 +27,10 @@ import { createMetaEpochSwitchJournal } from '@/modules/system-operations/infras
 import { describeV3Providers } from './helpers/rfc395V3Harness'
 import { takeOverEpochSwitch } from '@/modules/system-operations/domain/epochSwitch/transitions'
 import { createEpochSwitchJournal } from '@/modules/system-operations/domain/epochSwitch/model'
-import { plannedFixture } from './rfc395-v3-switch-domain.test'
+import { plannedFixture } from './helpers/rfc395V3SwitchFixture'
+
+// The hosted migration job and complete frozen backup take about 23 s per CI-scaled case; allow 70 s.
+setDefaultTimeout(70000)
 
 const env = {
   CS_DATABASE_MIGRATION_OPERATION_ID: 'dbm_e2_hosted_fixture',
@@ -305,7 +308,7 @@ describeV3Providers('real hosted composition', (h) => {
     } finally {
       await h.target.execute('DROP TABLE public.v3_composition_existing')
     }
-  }, 120000)
+  })
 
   test('hosted new-run keeps its journal and retired target while selecting another empty database', async () => {
     await h.source.install()
@@ -410,7 +413,7 @@ describeV3Providers('real hosted composition', (h) => {
       await admin.unsafe(`DROP DATABASE "${name}" WITH (FORCE)`)
       await admin.close()
     }
-  }, 120000)
+  })
 
   test('a new Job rematerializes frozen artifacts and completes the real provider journey', async () => {
     await h.source.install()
@@ -477,5 +480,5 @@ describeV3Providers('real hosted composition', (h) => {
       deps,
     )
     expect(JSON.parse(completed.slice(completed.indexOf('=') + 1)).payload.kind).toBe('completed')
-  }, 120000)
+  })
 })

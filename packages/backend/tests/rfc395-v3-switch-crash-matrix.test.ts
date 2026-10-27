@@ -8,7 +8,7 @@ import {
 import { parseGenerationPointerV2 } from '@/platform/persistence/generationPointerV2'
 import { digestGenerationPayload } from '@/platform/persistence/generationValidation'
 import { createEpochSwitchApplication } from '@/modules/system-operations/application/epochSwitch/application'
-import { plannedFixture, makeSwitchFixture, fixtureDigest } from './rfc395-v3-switch-domain.test'
+import { plannedFixture, makeSwitchFixture, fixtureDigest } from './helpers/rfc395V3SwitchFixture'
 
 const later = new Set<EpochSwitchFaultPoint>([
   'after-switch-receipt',

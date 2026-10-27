@@ -1,6 +1,6 @@
 import type { SchemaContribution } from '@/platform/persistence/schema/contribution'
 // RFC-395 V3-R: authored for T18; offline target receipts never activate runtime wiring.
-import { expect, test } from 'bun:test'
+import { setDefaultTimeout, expect, test } from 'bun:test'
 import { describeV3Providers, type V3Harness } from './helpers/rfc395V3Harness'
 import { seedRequiredRows } from './helpers/rfc395V2/integrationFixtures'
 import { seedFrozenPostgresqlSource } from './helpers/rfc395V3/sourceSeeds'
@@ -48,6 +48,9 @@ import {
 import { openConversionTarget } from '@/platform/persistence/migration/target/connection'
 import { markFirstLiveWrite } from '@/platform/persistence/schema/history/markers'
 import { validateConversionRun } from '@/modules/system-operations/infrastructure/epochSwitch/validation'
+
+// Native loading, catalog validation and integrity checks take about 11 s per CI-scaled case; allow 35 s.
+setDefaultTimeout(35000)
 
 async function fixture(h: V3Harness, acknowledged = false) {
   await h.source.install()
@@ -162,7 +165,7 @@ describeV3Providers('RFC-395 V3 activation validation', (h) => {
         (row) => Number(row.epoch) === 77 && row.change_ref === 'retained-source-route',
       ),
     ).toBe(true)
-  }, 180000)
+  })
   test('latest approval and three shuffled acknowledgements activate through the native handle', async () => {
     const f = await fixture(h, true)
     await runConversion(f.input, f.sink)
@@ -410,7 +413,7 @@ describeV3Providers('RFC-395 V3 activation validation', (h) => {
     expect((await f.meta.select('generations', { generationId: h.generationId }))[0]?.state).toBe(
       'active',
     )
-  }, 180000)
+  })
   test('unwritten prepared targets retire idempotently and never mark a business write', async () => {
     const f = await fixture(h)
     await h.target.transaction((tx) =>
@@ -566,7 +569,7 @@ describeV3Providers('RFC-395 V3 activation validation', (h) => {
         (await f.meta.blocks({ runId: f.row.runId })).filter((row) => row.origin === 'validation'),
       ).toEqual([])
     }
-  }, 180000)
+  })
   for (const check of cases)
     test(`${check} failure blocks validation and receipt export`, async () => {
       const f = await fixture(h)

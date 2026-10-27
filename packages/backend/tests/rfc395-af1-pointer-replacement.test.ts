@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test'
 import { mkdirSync, writeFileSync, readFileSync, existsSync } from 'node:fs'
 import { dirname, join } from 'node:path'
-import { plannedFixture } from './rfc395-v3-switch-domain.test'
+import { plannedFixture } from './helpers/rfc395V3SwitchFixture'
 import { createSqliteBaseline } from '@/bootstrap/persistenceBaseline'
 import { openDb } from '@/db/client'
 import { persistenceHead } from '@/bootstrap/persistenceHead'

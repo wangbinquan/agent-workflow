@@ -30,7 +30,7 @@ import {
   createBootUpgradeEnvironment,
   type BootUpgradeCaptureInput,
 } from '@/platform/persistence/migration/freeze/bootUpgradeEnvironment'
-import { makeSwitchFixture } from './rfc395-v3-switch-domain.test'
+import { makeSwitchFixture } from './helpers/rfc395V3SwitchFixture'
 import { emptyV2Content } from './helpers/rfc395V2Harness'
 import { valueDigest } from '@/platform/persistence/migration/conversion/digest'
 

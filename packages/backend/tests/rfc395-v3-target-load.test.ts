@@ -1,5 +1,5 @@
 // RFC-395 V3-R: authored for T18; offline target receipts never activate runtime wiring.
-import { expect, test } from 'bun:test'
+import { expect, setDefaultTimeout, test } from 'bun:test'
 import {
   describeV3Providers,
   describeV3CrossProvider,
@@ -31,6 +31,10 @@ import { column, retention } from '@/platform/persistence/schema/dsl'
 import { createHistoryVersion } from '@/platform/persistence/schema/history/compiler'
 import { r2Owner, r2Registry } from './helpers/rfc395R2Schema'
 import { CODECS } from '@/platform/persistence/schema/codecs'
+
+// The first case in a process installs the source and target fixtures: 26.0 s on Ubuntu CI and 24.3 s on
+// the macOS nightly before the shared fixture templates, about 2 s locally after them; allow 30 s.
+setDefaultTimeout(30_000)
 
 function sealUnit(output: UnitOutput): UnitOutput {
   const { digest: _digest, ...receipt } = output.receipt

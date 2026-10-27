@@ -3,7 +3,7 @@ import { frozenEpoch1Contract } from '@/platform/persistence/migration/epoch1/co
 import { migratePostgresqlSchema } from '@/platform/persistence/migration/legacy/postgresqlMigrator'
 import { installFrozenSqlite } from './helpers/rfc395V1Harness'
 // AF-D21: live epoch-2 backup/restore, plus a released epoch-1 artifact as converter input.
-import { expect, test } from 'bun:test'
+import { setDefaultTimeout, expect, test } from 'bun:test'
 import { mkdtempSync, rmSync, mkdirSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -29,6 +29,9 @@ import { buildPostgresqlSchemaPlan } from '@/platform/persistence/postgresqlSche
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { openDb } from '@/db/client'
+
+// Frozen backup conversion and reopen take about 18 s per CI-scaled case; allow 60 s.
+setDefaultTimeout(60_000)
 
 const permission = 'users:presence'
 describeEachProvider(
@@ -161,6 +164,10 @@ describeV3Providers('AF-D21 permission-text epoch-1 artifact conversion', (v3) =
   }
   for (const format of ['text', 'v8-json'] as const)
     test(`BF-D20 converts a real released ${format} permission backup with its stored text unchanged`, async () => {
+      // The physical PG reference must still be empty. The v8 fixture installs
+      // its version directly, so random order must not rely on the text case
+      // having warmed the manifest through h.install() first.
+      await h.sourceHarness.manifest()
       const history = await loadFrozenEpoch1History()
       const version =
         format === 'text'
@@ -256,5 +263,5 @@ describeV3Providers('AF-D21 permission-text epoch-1 artifact conversion', (v3) =
             .providerPool()
             .unsafe('DROP TABLE IF EXISTS public.aw_epoch1_upgrade_scratch')
       }
-    }, 120_000)
+    })
 })

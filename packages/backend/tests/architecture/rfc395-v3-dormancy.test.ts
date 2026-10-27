@@ -3,11 +3,15 @@ import {
   EPOCH2_RUNTIME_ENTRIES,
 } from '../helpers/epochMigrationReachability'
 // RFC-395 AD-7/BF-D2: conversion stays offline; boot recovery uses only durable pointer/journal mechanics.
-import { describe, expect, test } from 'bun:test'
+import { describe, expect, setDefaultTimeout, test } from 'bun:test'
 import { resolve } from 'node:path'
 import ts from 'typescript'
 import { packageSrcUnits, sourceUnit, type SourceUnit } from './census'
 import { BACKEND_PREFIX } from './rfc294Gates'
+
+// Converter and recovery reachability walk the whole backend import graph: up to 4.5 s on Ubuntu CI
+// (run 40298205725) and 3.9 s on the macOS nightly; allow 20 s.
+setDefaultTimeout(20_000)
 
 const runtimeRecovery = new Set(
   ['fileJournal', 'pointerReplacement', 'sourceRetention', 'bootAdmission'].map(

@@ -179,8 +179,9 @@ describe('RFC-349 hosted external PostgreSQL evidence contract', () => {
     // in this workflow or reject the stronger expanded leg.
     const matrix = parse(owners['ci.yml']).jobs['test-backend'].strategy.matrix
     expect(matrix.os).toEqual(['ubuntu-latest'])
-    expect(matrix.shard).toEqual(Array.from({ length: 24 }, (_, index) => index + 1))
-    expect(matrix.shards).toEqual([24])
+    // 2026-10-26 RFC-395 激活使后端测试量约翻倍：用户裁决 Ubuntu 24 → 36 片。
+    expect(matrix.shard).toEqual(Array.from({ length: 36 }, (_, index) => index + 1))
+    expect(matrix.shards).toEqual([36])
     expect(matrix.include).toBeUndefined()
     expect(matrix.exclude).toBeUndefined()
     const macosMatrix = parse(

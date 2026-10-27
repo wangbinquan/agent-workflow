@@ -1,4 +1,5 @@
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
+import { normalizeEpoch2TaskFacts } from './fixtures/rfc395TaskRowParity'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { o2Ports } from './helpers/o2Closure'
 // RFC-359 W8-A —— `ChildExecutionLaunchOperations` 的**双引擎对拍**。
@@ -504,7 +505,8 @@ const VOLATILE_CHILD_COLUMNS = new Set([
 ])
 
 function comparableRows(rows: readonly Record<string, unknown>[]): unknown[] {
-  return rows.map((row) => {
+  return rows.map((stored) => {
+    const row = normalizeEpoch2TaskFacts(stored, VOLATILE_CHILD_COLUMNS)
     const comparable: Record<string, unknown> = {}
     for (const key of Object.keys(row).sort()) {
       if (VOLATILE_CHILD_COLUMNS.has(key)) continue

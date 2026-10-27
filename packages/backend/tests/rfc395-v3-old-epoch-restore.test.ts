@@ -7,7 +7,7 @@ import {
   writeGenerationPointerV2,
   parseGenerationPointerV2,
 } from '@/platform/persistence/generationPointerV2'
-import { makeSwitchFixture, fixtureDigest } from './rfc395-v3-switch-domain.test'
+import { makeSwitchFixture, fixtureDigest } from './helpers/rfc395V3SwitchFixture'
 
 for (const sourceKind of ['sqlite-backup', 'logical-backup', 'hosted-backup'] as const)
   test(`${sourceKind} becomes a restored generation with the current v2 pointer as predecessor`, async () => {

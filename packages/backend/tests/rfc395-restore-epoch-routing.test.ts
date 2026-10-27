@@ -1,5 +1,5 @@
 import { restoreArtifactRegistry } from './helpers/rfc395V3/successor'
-import { expect, test } from 'bun:test'
+import { setDefaultTimeout, expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync, existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -27,6 +27,9 @@ import { parseRestoreArguments } from '@/cli/restore'
 import { resolveDatabaseProviderRuntimeForRestore } from '@/platform/persistence/databaseProviderRuntime'
 import { readGenerationPointerV2 } from '@/platform/persistence/generationPointerV2'
 import { removeTempDirSync } from './fixtures/tempDir'
+
+// Unpacking, identifying and planning a frozen epoch-1 restore take about 9 s per CI-scaled case; allow 30 s.
+setDefaultTimeout(30000)
 
 // T18 E2E: an ordinary tarball must never be routed into epoch-1 conversion.
 test('non-backup archives retain the restore and stage refusal before epoch routing', async () => {

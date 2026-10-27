@@ -104,8 +104,9 @@ error: expect(received).toEqual(expected)
       at <anonymous> (/repo/packages/backend/tests/rfc359-w14-legacy-mission-execution.test.ts:422:28)`,
   ),
   'p0-11-barrier': [
-    `108 |       expect((await listActiveOps(db)).map((op) => op.phase)).toEqual([])
-error: expect(received).toEqual(expected)
+    `108 |       expect((await listActiveOps(db)).map((op) => op.phase),
+109 |         'P0-11 recoverOperations must settle the crashed reservation').toEqual([])
+error: P0-11 recoverOperations must settle the crashed reservation
 - []
 + [
 +   "intent",

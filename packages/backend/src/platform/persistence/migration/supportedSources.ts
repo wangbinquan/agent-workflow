@@ -1,5 +1,6 @@
 // RFC-395 II-b V1: one frozen SQLite replay, every prefix, exact physical identification.
 import { Database } from 'bun:sqlite'
+import { sortHistoryCatalog } from '../schema/history/catalogModel'
 import type { DatabaseProvider } from '../databaseProviders'
 import { canonicalSchemaJson } from '../schema/canonical'
 import {
@@ -128,9 +129,10 @@ function observed0141Catalog(prefix: HistoryCatalog): HistoryCatalog {
     `)
     const observed = collectSqliteHistoryCatalog(reference)
     const tables = new Set(observed.map((entry) => entry.relation))
-    return [...prefix.filter((entry) => !tables.has(entry.relation)), ...observed].sort((a, b) =>
-      canonicalSchemaJson(a).localeCompare(canonicalSchemaJson(b)),
-    )
+    return sortHistoryCatalog([
+      ...prefix.filter((entry) => !tables.has(entry.relation)),
+      ...observed,
+    ])
   } finally {
     reference.close()
   }

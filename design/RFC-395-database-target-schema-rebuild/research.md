@@ -59,7 +59,7 @@ SQL 文件数只统计目录下 `*.sql`，不把 metadata / JSON 快照文件算
 
 | 问题 | 证据 | 设计裁决 |
 | --- | --- | --- |
-| 非 Workflow 任务需要假宿主 | [schema.ts](../../packages/backend/src/db/schema.ts) `tasks`（约 1099）；workgroup/launch.ts（`packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/launch.ts`） `ensureWorkgroupHostWorkflow`（151）；[taskRouteLaunchOperations.ts](../../packages/backend/src/modules/task-execution/infrastructure/taskRouteLaunchOperations.ts) Agent / Workgroup launch | 是 NOT NULL 和旧执行表示的问题；`workflow_id` 当前不是实际 FK，不误诊成外键限制 |
+| 非 Workflow 任务需要假宿主 | `packages/backend/src/db/schema.ts` `tasks`（约 1099）；workgroup/launch.ts（`packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/launch.ts`） `ensureWorkgroupHostWorkflow`（151）；[taskRouteLaunchOperations.ts](../../packages/backend/src/modules/task-execution/infrastructure/taskRouteLaunchOperations.ts) Agent / Workgroup launch | 是 NOT NULL 和旧执行表示的问题；`workflow_id` 当前不是实际 FK，不误诊成外键限制 |
 | 主仓镜像与目录双身份 | schema `task_repos`（约 2024）；`worktree_dir_name` 注释；`tasks` 主仓字段 | 单一挂载权威，API 投影保兼容 |
 | 回滚双形态 | [nodeRollback.ts](../../packages/backend/src/services/nodeRollback.ts) `planNodeRunRollbackTargets` | 统一 per-repo checkpoint，保留无快照的真实语义 |
 | 排序回退与角色多义 | [nodeRunOrder.ts](../../packages/shared/src/nodeRunOrder.ts)；[buildNodeRunMintRecord.ts](../../packages/backend/src/modules/task-execution/application/buildNodeRunMintRecord.ts)；[nodeRunMintParticipant.ts](../../packages/backend/src/modules/task-execution/infrastructure/nodeRunMintParticipant.ts) | 保留 seq allocator；补齐 role / generation / selected / provenance 后退出运行时回退 |

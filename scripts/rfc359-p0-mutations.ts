@@ -317,8 +317,7 @@ export const PHASES: readonly Phase[] = [
       {
         test: skillBootRecovery,
         diagnostics: [
-          /expect\(\(await listActiveOps\(db\)\)\.map\(\(op\) => op\.phase\)\)\.toEqual\(\[\]\)/,
-          /error: expect\(received\)\.toEqual\(expected\)/,
+          /P0-11 recoverOperations must settle the crashed reservation/,
           /^- \[\]$/m,
           /^\+\s+"intent",?$/m,
           /rfc359-t7d-postgresql-skill-catalog-boot\.test\.ts:\d+:\d+/,

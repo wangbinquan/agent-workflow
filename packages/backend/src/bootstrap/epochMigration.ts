@@ -71,6 +71,7 @@ import { createEpochRestoreFiles } from '@/modules/system-operations/composition
 import { verifyDatabaseMigrationManifest } from '@/modules/system-operations/composition/epochMigration'
 import { parseDatabaseGenerationText } from '@/platform/persistence/generationValidation'
 import { frozenSourceDetails } from '@/platform/persistence/migration/freeze/sourceAccess'
+import { loadOperationSourceManifest } from '@/platform/persistence/migration/freeze/sourceManifest'
 import {
   createEpochInstallationProbe,
   readEpochTargetEvidence,
@@ -347,12 +348,10 @@ export function composeLocalEpochSwitchDependencies(
       generationId,
       env,
     })
-  const supported = options.sourceManifest ?? (() => loadSupportedSourceManifest())
   const sourceFor = (operation?: EpochSwitchJournal) => {
     const runtimes: ReturnType<typeof runtimeFor>[] = []
     const adapter = createEpochSourceAdapter({
       async resolve(request) {
-        const manifest = await supported()
         const location = request.location
         const sourceRuntime =
           location.kind === 'postgresql-database' ? runtimeFor(location.profileRef) : null
@@ -360,7 +359,24 @@ export function composeLocalEpochSwitchDependencies(
         const sourceFingerprint = sourceRuntime
           ? (await sourceRuntime.readiness()).databaseFingerprint
           : null
-        const scratch = operation?.payload.inputs.scratchProfileRef
+        const scratch = operation?.payload.inputs.scratchProfileRef ?? request.scratchProfileRef
+        const operationId = operation?.payload.operationId ?? request.scratchOwner
+        const manifest = options.sourceManifest
+          ? await options.sourceManifest()
+          : scratch && operationId
+            ? await loadOperationSourceManifest({
+                runtime: runtimeFor(scratch),
+                profileRef: scratch,
+                sourceFingerprint,
+                supportedMajors: options.catalogArtifacts.map((a) => a.postgresqlMajor),
+                cache: {
+                  read: (name) => journal.readArtifact(operationId, name),
+                  writeOnce: (name, bytes) => journal.writeOnce(operationId, name, bytes),
+                },
+              })
+            : await loadSupportedSourceManifest()
+        if (!options.sourceManifest && sourceRuntime && !scratch)
+          throw new EpochSwitchError('v3-scratch-required', { category: 'scratch-required' })
         const openScratch = (requireEmpty: boolean) => {
           if (!scratch)
             throw new EpochSwitchError('v3-scratch-required', { category: 'scratch-required' })
@@ -375,7 +391,7 @@ export function composeLocalEpochSwitchDependencies(
         return {
           manifest,
           ...(sourceRuntime ? { postgresql: () => sourceRuntime } : {}),
-          ...(scratch
+          ...(operation?.payload.inputs.scratchProfileRef
             ? {
                 createScratchPostgresql: () => openScratch(true),
                 reopenScratchPostgresql: () => openScratch(false),

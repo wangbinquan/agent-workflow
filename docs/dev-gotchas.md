@@ -393,6 +393,50 @@ MR 源终止必须使用该 provider 会话的 `taskExecutionProvider.executionM
 - 判断本地全量结果时，从每个 `shard-N.log` 汇总 `(fail)` 行，不要只看总日志。
 - 修复后的复验要覆盖完整失败清单，而不是总日志里看得到的那一部分。
 
+## 本机集中验证必须按 CI 的跑法：两种 provider 同进程、默认 5 秒超时（2026-10-26 实撞，RFC-395 激活上库后 25 个后端 job 红）
+
+RFC-395 II-b 的 T18 在本机把后端跑全了：SQLite 全量 22,510 / 0，PostgreSQL 全量 9,917 / 0，然后上库。CI 随即红了 15 个后端分片、
+另有 10 个分片被 15 分钟的 job 预算取消，本机两种跑法都没暴露这些问题：
+
+- **分开跑两种 provider，跨 provider 的对拍断言根本不执行**。`describeEachProvider` 的 afterAll 只有在同一进程里两条泳道都跑过时才
+  比较两边落库的行（RFC-359 AC-1），只开一种 provider 时直接跳过。CI 的分片设置了 `AW_TEST_POSTGRESQL_URL`、不设
+  `AW_TEST_PROVIDERS`，两条泳道在同一进程里都跑。
+- **本机加了 `--timeout 30000` / `120000`**（为了躲本机负载），把「单条十几秒」的新用例全放过了。CI 用 bun 默认的 5 秒；而且 bun
+  按文件分片，一个文件 870 秒（`rfc395-q3-phase-boundaries`）就能独自撑爆一个 15 分钟的分片，加分片也救不了。
+
+处置：
+
+- 集中验证的命令与 CI 对齐：设 `AW_TEST_POSTGRESQL_URL`、不设 `AW_TEST_PROVIDERS`、不加 `--timeout`、`--randomize`；量时间时加
+  `--coverage`（CI 开着覆盖率）。本机负载高时宁可少开分片，也不要靠放宽超时躲。
+- 新增的重型用例先压掉浪费（每条用例重装整个 schema、重编 catalog 等），再按实测用 `setDefaultTimeout` 写明理由；单个文件要能放进
+  一个分片的预算，超过约 150 秒就拆文件。
+- 上库前按文件统计一次耗时（CI 日志里每条 `(pass)` / `(fail)` 后的时长求和），和分片预算对账，见下一条。
+
+## PostgreSQL 夹具的每例开销算在每条用例的 5 秒里（2026-10-26 实测，RFC-395 激活后 PG 用例整体慢约一半）
+
+bun 报出的用例时长包含 `beforeEach` / `afterEach`（实测：700ms 的 beforeEach 加 300ms 的 afterEach，空用例报 1001ms），`setDefaultTimeout`
+同时约束 hook。`describeEachProvider` 的 PostgreSQL 泳道每例都要整库 `TRUNCATE` 再回种快照行，这部分成本落在每一条 PG 用例上。
+
+- RFC-395 激活后，epoch-2 的 `agent_workflow_meta.schema_history` 带一行约 4.2MB 的目录工件，回种它要 ~100ms，单次复位从 91ms 涨到
+  209ms；应用装配的语句也从 380 条涨到 737 条（约 +150ms）。CI 上同名 PG 用例的中位耗时因此变为 1.5 倍（合计 1964 → 2986 秒），
+  一批原本 2 秒上下的用例逼近 5 秒。
+- 处置：复位时大种子表先比行身份（`ctid:xmin`），没变就不截不种，复位回到 ~108ms，见
+  `packages/backend/tests/rfc395-harness-stable-seed-reset.test.ts`。往夹具快照里加大行、往每例装配里加语句之前，先算一下乘以
+  八九千条 PG 用例是多少。
+- 经 HTTP 启动真任务的用例结束后，测试组合的 dispose 不会中止已发起的任务驱动；它会继续读写，直到约 3.4 秒后被自己的写围栏终止。
+  这期间下一条用例的整库 `TRUNCATE` 与它锁序相反，每次要等 `deadlock_timeout`（1 秒）才判 40P01，原来 4 次重试在约 3.2 秒内用尽。
+  夹具的重试次数已放宽到 10 次（最坏约 11 秒，在 30 秒复位预算之内），上下界由 `rfc359-w8-harness-truncate-retry` 锁住；新写这类
+  用例时，最好在用例末尾取消或等完它启动的任务。
+
+## 大提交要同步核对「随语料增长」的测试预算，并看次日的 macOS 夜间（2026-10-26 实撞）
+
+- `rfc370-committed-architecture-source`、`rfc376-report` 从 git 对象构建架构报告，耗时随语料超线性增长。RFC-395 II-b 让后端源文件
+  多了约 12%，报告构建本机慢 28%，CI 开覆盖率时约慢 70%；macOS 夜间从 47.7 / 75 秒涨到 83 / 165.5 秒，越过了 60 / 120 秒预算。
+- `backend-macos-nightly`（12 片、只跑 SQLite、15 分钟预算）不在主 CI 的门里，红了要到次日才看得到。macOS 并不普遍更慢（同一提交
+  上 SQLite 用例的耗时中位是 Ubuntu 的 0.9 倍），但同一文件里第一条跑到的用例要付一次性夹具成本（RFC-395 V3 各文件 14–28 秒），
+  随机顺序下由哪一条付并不固定：只看某条用例在 Ubuntu 上的常见耗时定预算，换个顺序就超时。按文件里最慢的那一次定预算。
+- 大提交上库后，去看次日的 macOS 夜间和其它 nightly，按失败归因处理。
+
 ## 主 CI 的墙钟受**并发配额**约束，不受单个 job 时长约束：加分片可能让它更慢（2026-10-14 实测）
 
 本仓是公开仓 + 个人免费账号：整个账号**同时最多 20 个 job，其中 macOS 最多 5 个**；同时触发的 nightly 也占这 20 个槽。2026-10-14 的主 CI 有 72 个 job、合计约 383 runner-分钟，单 job 只有 5–10 分钟，整次 run 却要 28–48 分钟，因为大部分时间在**排队**：19 个 macOS job 挤 5 个槽，macOS e2e 排了 22–38 分钟才开始。
@@ -401,6 +445,9 @@ MR 源终止必须使用该 provider 会话的 `taskExecutionProvider.executionM
 - 固定开销要按 job 数乘起来算：后端 checkout 用 `fetch-depth: 0` 时每片要约 60 秒，现在加了 `filter: blob:none`（历史提交与树照常全量拉取，blob 按需取，provenance 守卫的 `git show <sha>:<path>` 不受影响）。Windows 恢复 bun cache 要 78–90 秒，所以 Windows 腿一律跳过这个 cache。
 - 处置（2026-10-14 用户裁决）：Ubuntu 后端分片 32→24；macOS 后端 12 片移到 `backend-macos-nightly.yml`（命令、片数、预算都不变）；去掉 macOS 前端 vitest。拓扑由 `root-test-entrypoint` / `rfc349-postgresql-hosted-evidence` / `rfc359-w8-ci-dual-engine-wiring` 三个测试钉住。
 - 手动触发多条 nightly 时，**不要和推 main 撞在同一时间**，它们会和主 CI 抢同一组 20 个槽。
+- **2026-10-26 补充**：RFC-395 激活让后端测试量约翻倍（重型用例提速、拆文件之后全套仍约 243 runner-分钟），24 片的最长片估计
+  14.6~17.2 分钟，超过预算。用户裁决 Ubuntu 后端 24 → 36 片（最长片约 10 分钟，预算的 ~68%），job 预算与单条用例超时不变；
+  上面三个拓扑测试同步改为 36。
 
 ## 单引擎测试迁双引擎：先搜 `.run()`，它是唯一编译器帮不上忙的那一种（2026-09-14 连撞三批）
 

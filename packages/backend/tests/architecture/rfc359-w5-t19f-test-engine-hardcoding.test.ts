@@ -93,8 +93,8 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   'helpers/nativeQueryFixture.ts: 1', // real-file-database
   'helpers/rfc349PostgresqlHostedEvidence.ts: 2', // real-file-database
   'helpers/rfc370SqliteAffectedRowsCases.ts: 1', // sqlite-only-primitive
+  'helpers/rfc395FixtureGeneration.ts: 1', // real-file-database; moved from rfc395R2Harness.ts (CI round 1 fixture snapshots)
   'helpers/rfc395Q1Parity/fixture.ts: 1', // real-file-database
-  'helpers/rfc395R2Harness.ts: 1', // real-file-database
   'helpers/rfc395V3/sourceSeeds.ts: 1', // real-file-database; PGX-B frozen SQLite seed oracle for real PostgreSQL installs
   'helpers/rfc395V3Harness.ts: 1', // real-file-database
   'helpers/schemaFixture.ts: 1', // real-file-database

@@ -1,6 +1,6 @@
 // RFC-395 A3 K8: independent frozen HEAD SQL and dispatch branches. Do not import
 // executable oracle helpers into an expectation, including its legacyPickers.
-import { expect, test } from 'bun:test'
+import { expect, setDefaultTimeout, test } from 'bun:test'
 import { createRunSelectionOracleSnapshot } from '@/modules/task-execution/infrastructure/migration/oracle/snapshot'
 import { createRunSelectionReader } from '@/modules/task-execution/infrastructure/migration/oracle/reader'
 import { createNodeRunQueries } from '@/modules/task-execution/infrastructure/nodeRunQueries'
@@ -21,6 +21,10 @@ import {
 } from './helpers/model/frozenSelection/fanout'
 import { compareNodeRunMintOrder } from './helpers/model/frozenSelection/order'
 import { pickFreshestRun, parseConsumedJson } from './helpers/model/frozenSelection/pickers'
+
+// Seeded PostgreSQL rankings after sequence materialization take about 2.7 s on CI (run 40298205725)
+// and timed out at 5448.71 ms in a CI-equivalent local run; allow 10 s.
+setDefaultTimeout(10_000)
 
 async function expectFanout(
   rows: readonly OracleRunRow[],

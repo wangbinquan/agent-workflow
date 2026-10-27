@@ -1,3 +1,31 @@
+## 2026-10-26 RFC-395 In Progress：II-b 激活上库，CI 第一轮的修复轮完成，下一步 T19
+
+**上库**：全部换表代码以 `045abf20a` 一次提交（2,261 个路径）：后端从 epoch-1 schema 切换到 epoch-2 目标 schema，附离线转换器、`db migration` 切换与回滚、合同历史与全部运行时适配。gitleaks 对冻结来源清单 `epoch1/provenance.json` 的三条误报（文件名里的 auth / credentials / sentry 让摘要被当成密钥）以 `b6df370b7` 钉住精确指纹。
+
+**CI 第一轮（`b6df370b7`，运行 40298205725）失败与修复**：
+- 失败面：Ubuntu 后端 24 片中 12 片失败、9 片超出 15 分钟预算被取消，真实 PostgreSQL 与 Markdown 链接检查两个 job 失败；同一 HEAD 的 macOS 后端夜间 12 片中 7 片失败、2 片被取消，maintenance soak 夜间失败。
+- 根因：T18 在本机分开跑两种 provider，又放宽了单条超时，没有按 CI 的跑法（两条泳道同进程、默认 5 秒、随机顺序）验证。另查出一个产品缺陷：生产的本地与托管迁移入口识别不了真实的 epoch-1 PostgreSQL 源，会挡住 T19。
+- 修复轮（CIP-A / CIP-B / CIX-C 与 lead）：
+  - 产品：生产入口用本次操作的 PG scratch 编译冻结 catalog（托管需 `CS_DATABASE_MIGRATION_SCRATCH_URL`）；迁移侧提速。
+  - 测试：重型用例提速约一半并拆文件；47 个文件写明理由的超时；epoch-2 对拍归一化；PG 夹具每例复位 209 → 108 ms。
+  - CI：Ubuntu 后端分片 24 → 36（用户裁决）。
+- 本机按 CI 跑法复验（6 分片、两条泳道同进程、默认超时、随机顺序）：后端全量 31,376 / 0；迁移相关 e2e 42 / 0。详见 [RFC plan §6.13「CI 第一轮与修复轮」](design/RFC-395-database-target-schema-rebuild/plan.md)。
+- 不属本次、保留证据、未改：Windows e2e 第 3 分片的两条 RFC-396 用例；e2e-full 夜间的 RFC-319 账本差异（RFC-396 的 e2e 已命中 `POST /api/code/verification-profiles/:id/publish`，账本没有缩小）。
+
+**T18 集中验证**：
+- 后端测试首次全量执行：SQLite 全量（2,668 个文件，随机顺序）22,510 / 0；PostgreSQL 全量（1,192 个带 PG 变体的文件）9,917 / 0。两种 provider 是分开跑的，CI 第一轮因此暴露了上述问题。
+- shared、前端、system-mocks 全量通过；e2e Chromium 全量 1,091 条中 1,090 通过，唯一失败的工作组回归修复后，相关 83 个 spec 复跑 473 / 0。
+- 新旧二进制 DTO 对拍两种 provider 各 7 / 0；静态检查全部通过。
+- 验证中查出并修复了一批产品缺陷，包括：迁移长连接被客户端空闲回收、PG 源读取排序错误、RFC-349 保留归档未接入 V3 转换、同任务并发铸造被 SSI 误判而重放（被 L-1 根锁串行化的单任务写入在 PG 上改用 READ COMMITTED）、任务分页对全部行求值、工作组澄清交接期间重复铸造 leader。
+- 复核与 BF 修复轮、T18 各修复任务与 lead 决定见 [RFC plan §6.13「复核、BF 修复轮与 T18 集中验证」](design/RFC-395-database-target-schema-rebuild/plan.md)。
+
+**本机环境**：本机 PostgreSQL 验证改用 tmpfs 数据目录的一次性容器；绑定宿主目录的容器在并行建库、删库时会卡死，在其上的结果不作为证据。集中验证一律按 CI 的跑法，见 `docs/dev-gotchas.md`「本机集中验证必须按 CI 的跑法」。
+
+**下一步**：
+- 跟踪修复提交的 CI，以及次日 04:00 UTC 的 macOS 后端夜间：看 12 片能否放进 15 分钟预算，放不下再请用户裁决 macOS 分片数。
+- T19 真实实例迁移，每个实例单独取得用户批准，演练按 `design/RFC-395-database-target-schema-rebuild/rehearsal-template.md` 记录。托管实例的 PostgreSQL 源需要配置 `CS_DATABASE_MIGRATION_SCRATCH_URL`。
+- RFC-294 S2c 的三项后续排在 II-b 之后。
+
 ## 2026-10-25 RFC-395 In Progress：II-b 第二波与修复轮完成，激活开工
 
 **第二波完成**（未提交）：N-b（分两次交付）、P、M-b、后续项与 X4 完成，三组静态功能审查共 3 个阻断、15 个主要问题，修复轮四个任务修完，新定原则「执行判断只读可执行行，展示与历史读取保留 history-only 与身份未知的行」（plan §6.13「第二波审查与修复轮」）。后端 typecheck 剩 30 条诊断，全部在激活接线范围内；前端 13 条归 Q-1。

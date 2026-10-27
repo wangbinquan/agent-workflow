@@ -3,10 +3,14 @@ import {
   EPOCH2_RUNTIME_ENTRIES,
 } from '../helpers/epochMigrationReachability'
 // RFC-395 V2: module-free mechanisms and unreachable offline conversion assembly.
-import { describe, expect, test } from 'bun:test'
+import { describe, expect, setDefaultTimeout, test } from 'bun:test'
 import { resolve } from 'node:path'
 import { packageSrcUnits, sourceUnit, type SourceUnit } from './census'
 import { BACKEND_PREFIX } from './rfc294Gates'
+
+// Converter and runtime reachability walk the whole backend import graph: 3.5 s on Ubuntu CI and
+// 5.5 s on the macOS nightly (run 40302273687, timed out at the 5 s default); allow 20 s.
+setDefaultTimeout(20_000)
 
 function isV2(path: string): boolean {
   return (
