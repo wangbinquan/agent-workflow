@@ -1084,3 +1084,155 @@ test('retry after a lost action reply retains its idempotency key', async () => 
   await waitFor(() => expect(api.post).toHaveBeenCalledTimes(2))
   expect(vi.mocked(api.post).mock.calls[1]).toEqual(vi.mocked(api.post).mock.calls[0])
 })
+
+// H5: real hosted acceptance 2026-10-28, Case 01M5ZZCVCM0S9Y9JNQRQRPVW1V.
+function feedbackProposal(kind = 'code-feedback', status = 'proposed') {
+  const proposal = {
+    id: 'code-feedback:build',
+    kind,
+    status,
+    invocationRef: 'build',
+    readSet: [],
+    plan: null,
+    explanation: '实现报告限制',
+    document: structuredClone(data.document),
+  }
+  proposal.document.concerns.push(
+    ...['平台校验尚未执行', '明确排除的需求未实现'].map((statement, index) => ({
+      id: `implementation-gap:build:${index}`,
+      revision: 1,
+      statement,
+      purpose: 'implement' as const,
+      priority: 'required' as const,
+      disposition: 'open' as const,
+      sourceIds: [],
+      resolutionIds: [],
+    })),
+  )
+  data.proposals = [{ id: proposal.id, status, createdAt: 1 }]
+  const original = vi.mocked(api.get).getMockImplementation()!
+  vi.mocked(api.get).mockImplementation((async (path: string, ...args: unknown[]) =>
+    path.includes('/proposals/') ? proposal : original(path, ...(args as []))) as typeof api.get)
+  return proposal
+}
+
+test('H5: the proposed code-feedback dialog requires a reason, sends one command and refreshes queries', async () => {
+  feedbackProposal()
+  open()
+  fireEvent.click(await screen.findByRole('button', { name: /查看提案差异/ }))
+  fireEvent.click(await screen.findByRole('button', { name: '判定不构成缺口' }))
+  const dialog = screen.getByRole('dialog', { name: '判定不构成缺口' })
+  expect(
+    within(dialog)
+      .getAllByRole('listitem')
+      .map((item) => item.textContent),
+  ).toEqual(['平台校验尚未执行', '明确排除的需求未实现'])
+  const reason = within(dialog).getByRole('textbox', { name: /判定理由/ })
+  const save = within(dialog).getByRole('button', { name: '保存判定' }) as HTMLButtonElement
+  expect(save.disabled).toBe(true)
+  fireEvent.change(reason, { target: { value: '  ' } })
+  expect(save.disabled).toBe(true)
+  fireEvent.change(reason, { target: { value: '这两项分别属于验证安排和明确排除范围。' } })
+  const previousReads = vi
+    .mocked(api.get)
+    .mock.calls.filter(([path]) => path === '/api/development-designs/design').length
+  let complete!: (value: unknown) => void
+  vi.mocked(api.post).mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        complete = resolve
+      }),
+  )
+  fireEvent.click(save)
+  await waitFor(() => expect(save.disabled).toBe(true))
+  expect((reason as HTMLTextAreaElement).disabled).toBe(true)
+  expect(api.post).toHaveBeenCalledWith(
+    '/api/development-designs/design/proposals/code-feedback%3Abuild/limitation-review',
+    {
+      requestId: expect.any(String),
+      comment: '这两项分别属于验证安排和明确排除范围。',
+    },
+  )
+  complete({ id: 'limitation-review:human' })
+  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+  await waitFor(() =>
+    expect(
+      vi.mocked(api.get).mock.calls.filter(([path]) => path === '/api/development-designs/design')
+        .length,
+    ).toBeGreaterThan(previousReads),
+  )
+})
+
+for (const [kind, status] of [
+  ['semantic-change', 'proposed'],
+  ['code-feedback', 'rejected'],
+  ['code-feedback', 'accepted'],
+  ['code-feedback', 'stale'],
+])
+  test(`H5: ${kind}/${status} has no limitation judgment action`, async () => {
+    feedbackProposal(kind, status)
+    open()
+    fireEvent.click(await screen.findByRole('button', { name: /查看提案差异/ }))
+    await screen.findByText('实现报告限制')
+    expect(screen.queryByRole('button', { name: '判定不构成缺口' })).toBeNull()
+  })
+
+test('H5: an observer sees the proposal but cannot record a judgment', async () => {
+  feedbackProposal()
+  open(false)
+  fireEvent.click(await screen.findByRole('button', { name: /查看提案差异/ }))
+  expect(
+    ((await screen.findByRole('button', { name: '判定不构成缺口' })) as HTMLButtonElement).disabled,
+  ).toBe(true)
+})
+
+test('H5: errors remain in the judgment dialog and retry preserves the requestId', async () => {
+  feedbackProposal()
+  vi.mocked(api.post)
+    .mockRejectedValueOnce(new Error('judgment response lost'))
+    .mockResolvedValueOnce({})
+  open()
+  fireEvent.click(await screen.findByRole('button', { name: /查看提案差异/ }))
+  fireEvent.click(await screen.findByRole('button', { name: '判定不构成缺口' }))
+  const dialog = screen.getByRole('dialog', { name: '判定不构成缺口' })
+  fireEvent.change(within(dialog).getByRole('textbox', { name: /判定理由/ }), {
+    target: { value: '人工确认这不是缺口。' },
+  })
+  const save = within(dialog).getByRole('button', { name: '保存判定' }) as HTMLButtonElement
+  fireEvent.click(save)
+  await within(dialog).findByText('judgment response lost')
+  expect(save.disabled).toBe(false)
+  fireEvent.click(save)
+  await waitFor(() => expect(api.post).toHaveBeenCalledTimes(2))
+  expect(vi.mocked(api.post).mock.calls[1]).toEqual(vi.mocked(api.post).mock.calls[0])
+  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+})
+
+test('H5: limitation review has its own evidence label', async () => {
+  const original = vi.mocked(api.get).getMockImplementation()!
+  vi.mocked(api.get).mockImplementation((async (path: string, ...args: unknown[]) =>
+    path.endsWith('/evidence')
+      ? {
+          evidence: [
+            {
+              evidence: {
+                id: 'limitation-review:human',
+                kind: 'limitation-review',
+                summary: '人工确认不构成缺口',
+                result: 'passed',
+                limitations: ['平台校验尚未执行'],
+                obligationIds: [],
+                artifactRef: null,
+              },
+              freshness: 'current',
+              reasons: [],
+            },
+          ],
+          traces: [],
+          obligations: [],
+        }
+      : original(path, ...(args as []))) as typeof api.get)
+  open()
+  expect(await screen.findByRole('heading', { name: '实现限制人工判定' })).toBeTruthy()
+  expect(await screen.findByText('人工确认不构成缺口')).toBeTruthy()
+})

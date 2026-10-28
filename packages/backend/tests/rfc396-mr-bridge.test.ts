@@ -1192,6 +1192,68 @@ describeEachProvider('RFC-396 MR candidate bridge', (harness) => {
     30_000,
   )
 
+  // H6, hosted acceptance 2026-10-28: an explicit report-only implementation keeps the published tree.
+  caseTest(
+    'H6 unchanged re-implementation on the same basis preserves MR handoff and delivery replay',
+    async () => {
+      const f = await publishedHandoffFixture()
+      const platform = createGraphPlatformWorkItems({
+        ...f,
+        workspace: { initialize: async () => f.workspace, state: async () => f.workspace },
+        candidates: {
+          ...f.candidates,
+          async commit() {
+            throw new Error('unchanged re-implementation must retain the published commit')
+          },
+          async push() {
+            throw new Error('unchanged re-implementation must not republish')
+          },
+        },
+        mergeRequestDelivery: f.bridge,
+      })
+      const first = JSON.parse(
+        await platform.execute(
+          platformPlan(f.work, 'deliver-result', 'first-delivery', f.publishedDelivery),
+        ),
+      ).result
+      await f.store.insertLink({
+        designId: 'design-a',
+        id: 'implementation:report-again',
+        kind: 'execution',
+        payloadJson: canonicalJson({
+          basisId: f.frozen.basis.id,
+          basisDigest: f.frozen.basis.digest,
+          roundRef: 'report-again',
+          result: f.implementation,
+        }),
+        createdAt: Date.now(),
+      })
+      const checked = JSON.parse(
+        await platform.execute(
+          platformPlan(f.work, 'verify-change', 'report-checks', f.publishedDelivery),
+        ),
+      ).result
+      expect(checked.passed).toBe(true)
+      expect(checked.candidateTreeOid).toBe(f.verified.candidateTreeOid)
+      const plan = platformPlan(f.work, 'deliver-result', 'report-delivery', f.publishedDelivery)
+      const delivered = JSON.parse(await platform.execute(plan)).result
+      expect(delivered.commitSha).toBe(first.commitSha)
+      expect(delivered.artifactRefs).not.toEqual(first.artifactRefs)
+      expect(JSON.parse(await platform.execute(plan)).result).toEqual(delivered)
+      const links = (await f.store.links('design-a')).filter((link) =>
+        link.id.startsWith('delivery:'),
+      )
+      expect(links).toHaveLength(2)
+      expect(
+        links.map((link) => JSON.parse(link.payloadJson).implementationRoundRef).sort(),
+      ).toEqual(['build', 'report-again'])
+      const receipt = JSON.parse(
+        (await f.store.record('design-a', 'verification:report-checks'))!.payloadJson,
+      )
+      expect(receipt.implementationRoundRef).toBe('report-again')
+    },
+  )
+
   caseTest(
     'a newly approved basis refreshes handoff and care materials without republishing identical code',
     async () => {

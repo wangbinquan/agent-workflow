@@ -1,4 +1,4 @@
-import { ClarifyDecisionSchema } from '@agent-workflow/shared'
+import { ClarifyDecisionSchema, GraphLimitationReviewRequestSchema } from '@agent-workflow/shared'
 // RFC-247 §4.2 — the MCP tool set.
 //
 // One declarative table. A tool names the permission points it needs, and
@@ -1399,6 +1399,28 @@ const GATE_TOOLS: ReadonlyArray<McpToolDef> = [
             docVersionId: String(args.docVersionId),
           },
           body: { selection: args.selection },
+        }),
+      ),
+  },
+  {
+    name: 'review_graph_limitations',
+    title: 'Record a limitation judgment',
+    description:
+      'Record a person’s explicit judgment that a proposed code-feedback report does not describe implementation gaps. ' +
+      'Supply their reason and reuse requestId when retrying. This rejects the proposal and records evidence for the current implementation round; ' +
+      'it does not satisfy execution checks or manual acceptance obligations.',
+    permissions: ['development-missions:interact'],
+    inputSchema: {
+      id: z.string().min(1).describe('Graph design id'),
+      proposalId: z.string().min(1).describe('Proposed code-feedback proposal id'),
+      ...GraphLimitationReviewRequestSchema.shape,
+    },
+    audit: (args) => ({ kind: 'development-design', id: String(args.id) }),
+    handler: async (args, ctx) =>
+      unwrap(
+        await ctx.operations.graphLimitationReview({
+          params: { id: String(args.id), proposalId: String(args.proposalId) },
+          body: { requestId: args.requestId, comment: args.comment },
         }),
       ),
   },

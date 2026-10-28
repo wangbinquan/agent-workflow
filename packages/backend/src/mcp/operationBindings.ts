@@ -179,6 +179,11 @@ export const MCP_OPERATIONS = Object.freeze({
     'PATCH',
     '/api/reviews/:nodeRunId/documents/:docVersionId/selection',
   ),
+  graphLimitationReview: command(
+    'development-automation.review-graph-limitations.v1',
+    'POST',
+    '/api/development-designs/:id/proposals/:proposalId/limitation-review',
+  ),
   reviewSubmit: command(
     'collaboration.submit-review.v1',
     'POST',
@@ -453,6 +458,10 @@ export const MCP_TOOL_BINDINGS = Object.freeze({
     MCP_OPERATIONS.reviewSelectionSet,
   ),
   submit_review: directBinding('submit_review', MCP_OPERATIONS.reviewSubmit),
+  review_graph_limitations: directBinding(
+    'review_graph_limitations',
+    MCP_OPERATIONS.graphLimitationReview,
+  ),
   resource_read: parameterizedBinding('resource_read', resourceCases(['list', 'facets', 'get'])),
   resource_write: parameterizedBinding(
     'resource_write',

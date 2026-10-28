@@ -157,7 +157,9 @@ export function GraphDesignEvidence({
             ? '图的结构检查、设计批准、代码执行和人工验收分别记录。测试引用已核对只代表能定位到候选内容。'
             : 'Structure, design approval, code execution and human acceptance are separate. A checked test reference only confirms its presence in the candidate.'}
         </NoticeBanner>
-        {(['structure', 'design-review', 'execution', 'acceptance'] as const).map((kind) => (
+        {(
+          ['structure', 'design-review', 'execution', 'acceptance', 'limitation-review'] as const
+        ).map((kind) => (
           <section key={kind}>
             <h4>
               {
@@ -166,6 +168,7 @@ export function GraphDesignEvidence({
                   'design-review': zh ? '设计审核' : 'Design review',
                   execution: zh ? '代码执行' : 'Code execution',
                   acceptance: zh ? '人工验收' : 'Human acceptance',
+                  'limitation-review': zh ? '实现限制人工判定' : 'Limitation review',
                 }[kind]
               }
             </h4>

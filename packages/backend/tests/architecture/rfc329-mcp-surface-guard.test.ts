@@ -116,6 +116,7 @@ const PH = 'RFC329PH'
 
 const ARGS: Readonly<Record<string, unknown>> = {
   id: PH,
+  proposalId: PH,
   nodeRunId: PH,
   docVersionId: PH,
   commentId: PH,

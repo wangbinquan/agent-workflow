@@ -5463,3 +5463,62 @@ shard 5/12 红（run `35814805097`，提交 `356bb594d` 只挪了一个与工作
 
 **后继证据**：包含 `64dd81e8d` 的后继提交 `a1a37759e`（RFC-393）上，windows-platform `39681863726` 与 maintenance-soak
 `39681863659` 均 success，同一条 Windows 用例这次没有超时。余量偏薄这一点仍然成立。
+
+## RFC-370 托管：`development:shared` 父任务沿用创建时那个发布的 Agent 档位注册，后续发布改档位到不了它（2026-10-28，RFC-396 托管验收实撞，未处置）
+
+新建托管项目 `rfc396-graph2-hosted` 首次发布时，`agentProfiles` 指向一个未通过原生探针 v2 的公开算力档位；随后的发布改成具备
+`nativeConfigVersion` 的档位并切流。之后所有图研发 Case 的设计节点都在提交 Agent 子任务时被平台拒绝：
+`requires reconciliation: submission rejected: 档位不支持 nativeConfigVersion`，新建的 Case 也一样，节点按重试预算反复失败。
+
+- 平台准入只按父任务所属的**不可变发布**判定能力（CrewStation `modules/business-task/domain/businessMaterials.ts:6-14`，
+  「较新的注册不能给旧任务授权」）。
+- AW 的 `development:shared` 是耐久共享 owner：换发布只把父任务的任务镜像升级到新版本（`workspaceImageUpgrade.ts`、
+  `workspaceOwnership.ts`），只有「卷建成之前就失败」才替换父任务（`taskWorkspace.ts:576-592`）。所以创建父任务时那个发布的
+  Agent 注册会一直沿用。
+- AW 的预检读的是**当前发布**上报的能力（`crewstationExecution.ts:142-166` → `crewstationAgentInvocation.ts:120-155`），
+  于是放行提交，再被平台拒绝；用户看到的是设计节点反复重试，看不出要换共享工作区。
+
+影响：发布里修改 `AW_AGENT_PROFILES` 或 `agentProfiles` 的算力档位以后，所有开发类 Case 里需要原生配置的 Agent（graph@2
+的设计、实现等）都跑不起来，新建 Case 也不行。可选处置（未立项）：AW 预检改按父任务所属发布的能力判定，并给出明确的「需要替换
+共享工作区」错误；或提供受控替换 `development:shared` 父任务的操作（卷内容随之丢弃，需提示）；或由平台支持在 repin 时连同发布
+注册一起更新。本次验收的绕行做法：另建项目 `rfc396-graph2-hosted-b`，从首次发布起就映射到具备原生配置的档位。
+
+同一次验收还看到：Agent 子任务容器的资源取自算力档位里配置的任务档位（CrewStation
+`modules/business-task/application/execution/agentDispatch.ts:69-71`）。本机唯一通过原生探针 v2 的 deepseek 档位用的是
+100m CPU，真实模型的设计节点在最后一步（输出完整设计 JSON）停了 20 多分钟，被 30 分钟的节点超时取消。验收时把托管实例的
+节点超时调到 2 小时；生产部署应给 Agent 用的算力档位配足 CPU，或相应调大节点超时。
+在同样 100m CPU 的 Agent 子任务上，AW 取消设计任务后平台侧子任务长时间停在 cancelling（`01a17ffb-6e84-7000-99ac-17c371c8d08c`，
+CrewStation 侧行为，只记录）；AW 的 Case 恢复不依赖它结束，新一轮设计照常派发。AW 侧对应任务 `01M5ZZJGHR6W6ZKHT56EGVRZA1` 的 driver
+也一直没有释放：01:28 取消时 owner 心跳被 fence，控制器随即中止，但心跳定时器只在释放序列里清除
+（`modules/task-execution/infrastructure/taskDriverLifecycle.ts:127-153`），于是之后每 15 秒记一条
+`durable task owner heartbeat was fenced`，到 02:50 已有 326 条。被 fence 的心跳不可能再成功，可在首次 fence 时停掉定时器
+（临时性错误仍保留续租，避免停机途中租约过期被别处认领）。
+
+## RFC-396：真实设计员会把只能在交付后核对的条件写成实现依据里的人工义务，验证门因此卡死（2026-10-28，企业与托管验收各撞一次，未处置）
+
+graph@2 的 `verify-change` 要求实现依据里的每条义务在**交付前**通过（`application/graph-development/platformWorkItems.ts:174-205`，
+未通过时 Case 停在「候选存在失败或未完成的验收项。」）。而真实设计员两次都把交付后的步骤写进了义务：
+
+- 企业验收（GitLab 571）：首次 CI 失败、看护修复、证据留存、合入决定都成了人工义务。操作者只能另冻结一份只含交付前义务的依据
+  （`enterprise-mr-ci-acceptance-2026-10-28.json` 的 F4）。
+- 托管验收（`rfc396-graph2-hosted-b`）：OBL-DELIVERY 把「候选只新增三个文件」和「只有一个 MR、由操作者在 GitLab 合入或关闭」写在同一条
+  人工义务里，又挂在必选的 REQ-CONTRACT 上，按元素排除也去不掉。操作者通过「编辑设计与验证安排」把它拆成交付前的文件范围检查和
+  挂在可排除元素上的 OBL-MR-DECISION，才得以交付。
+
+交付后的事（CI、评审、修复、合入或关闭）本来由 MR 看护负责，不该成为实现依据的义务。设计员的语义规则
+（`application/graph-development/toolContracts.ts:9-20` 的 `GRAPH_DESIGN_AUTHORING_RULES`）没有说明义务必须能在候选上于交付前核对；
+人工义务的 `when` 是自由文本，平台也无从判断。可选处置（未立项）：在语义规则里写明义务的时点边界，并在设计导入时拒绝时点在交付之后的
+人工义务；或给义务增加显式阶段，`verify-change` 只要求交付前阶段，交付后阶段转交 MR 看护记账。当前的绕行做法写在
+`design/RFC-396-adaptive-graph-development/usage.md`。
+
+## RFC-396 托管：证据产物偶发读不到时，证据页把已记录的验收显示为「未知」（2026-10-28，托管验收实撞，未处置）
+
+证据查询每次都并发读取全部证据的产物，任一读取抛错就把该条标成 `unknown` / `evidence-artifact-unreadable`
+（`application/graph-development/designQueries.ts:195-217`，`catch` 不区分原因）。托管验收中先后四次查询同一组证据：
+第一次读不到刚提交的人工验收和一条结构证据，随后两次读不到另一条结构证据，第四次全部可读。同一时段 CrewStation 的共享 PostgreSQL 已到
+`max_connections=100` 上限，托管实例日志有 `remaining connection slots are reserved for roles with the SUPERUSER attribute`。
+
+这次只影响了查询显示：两轮候选验证都把该验收计入了 `evidenceIds`。但候选验证确认人工验收时用的是同样的判断
+（`application/graph-development/verification.ts:130-141` 的 `hasReadableArtifact`，读失败即记「待人工验收」，同文件
+`:539-545`），遇到同样的临时失败会把整轮验证判为不通过，操作者看不出验收其实已经记录。可选处置（未立项）：读取产物时区分
+「不存在 / 摘要不符」与临时错误，临时错误有限重试；或在阻塞原因与证据页写明是读取失败、可重试。

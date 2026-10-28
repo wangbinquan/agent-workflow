@@ -64,7 +64,7 @@ function normalizeJsonSchema(value: unknown): unknown {
 }
 
 describe('Zod 4 API and schema contracts', () => {
-  test('all 75 resource, graph and tool schemas retain the pre-upgrade normalized contracts', () => {
+  test('resource, graph and tool schemas retain their recorded normalized contracts', () => {
     const schemas: Record<string, unknown> = {}
     for (const kind of KINDS_WITH_BODY_SCHEMAS) {
       for (const [operation, schema] of Object.entries(bodySchemasFor(kind)))
@@ -85,7 +85,12 @@ describe('Zod 4 API and schema contracts', () => {
           .digest('hex'),
       ]),
     )
-    expect(actual).toEqual(zod3SchemaDigests)
+    expect(actual).toEqual({
+      ...zod3SchemaDigests,
+      // RFC-396 H5 adds this tool after the Zod migration; all 75 historical digests stay intact.
+      'tool/review_graph_limitations':
+        '29772ea84af016441b4347043d9e816b4bbb4215e6e11516800e46cedfb38026',
+    })
     expect(JSON.stringify(schemas)).not.toContain('"format":"starts_with"')
   })
 

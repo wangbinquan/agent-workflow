@@ -265,7 +265,7 @@ const OVERLAY_CALLSITES = {
   },
   'features/development-automation/graph-development/GraphDesignWorkspace.tsx': {
     family: 'graph-development',
-    count: 4,
+    count: 5,
   },
   // RFC-323: the lane-scoped Adapter resource/binding editor is a compact
   // shared Dialog with its own rendered behavior coverage.

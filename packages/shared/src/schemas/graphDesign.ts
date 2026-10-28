@@ -419,10 +419,15 @@ export const GraphTraceLinkSchema = z
   .strict()
 export type GraphTraceLink = z.infer<typeof GraphTraceLinkSchema>
 
+export const GraphLimitationReviewRequestSchema = z
+  .object({ requestId: id, comment: text.refine((value) => value.trim().length > 0) })
+  .strict()
+export type GraphLimitationReviewRequest = z.infer<typeof GraphLimitationReviewRequestSchema>
+
 export const GraphEvidenceBindingSchema = z
   .object({
     id,
-    kind: z.enum(['structure', 'design-review', 'execution', 'acceptance']),
+    kind: z.enum(['structure', 'design-review', 'execution', 'acceptance', 'limitation-review']),
     basisDigest: digest,
     obligationIds: ids,
     readSet: z.array(GraphContentRefSchema),

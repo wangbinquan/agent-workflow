@@ -25,6 +25,7 @@ import {
 } from '../application/graph-development/viewPlanning'
 import { createGraphExecutionConsumption } from '../application/graph-development/executionConsumption'
 import { createGraphVerification } from '../application/graph-development/verification'
+import { createGraphLimitationReview } from '../application/graph-development/limitationReview'
 import { createGraphPlatformWorkItems } from '../application/graph-development/platformWorkItems'
 import type {
   GraphDesignCasePort,
@@ -226,6 +227,7 @@ export function composeGraphDevelopment(input: {
       ? (JSON.parse(record.payloadJson) as {
           basisId: string
           basisDigest: string
+          implementationRoundRef: string
           candidate: { treeOid: string }
           environmentDigest: string
           profileDigests: Record<string, string>
@@ -374,6 +376,15 @@ export function composeGraphDevelopment(input: {
           }),
       )
     },
+    reviewLimitations: createGraphLimitationReview({
+      store,
+      artifacts,
+      commands,
+      queries,
+      latestVerification,
+      currentEvidenceTarget,
+      changed: input.changed,
+    }),
     async accept(
       id: string,
       request: {

@@ -344,6 +344,7 @@ export const ENDPOINTS: EndpointSpec[] = [
   { method: 'POST', path: '/api/development-designs/:id/actions/:requestId/cancel' },
   { method: 'POST', path: '/api/development-designs/:id/actions/:requestId/retry' },
   { method: 'POST', path: '/api/development-designs/:id/proposals/:proposalId/apply' },
+  { method: 'POST', path: '/api/development-designs/:id/proposals/:proposalId/limitation-review' },
   { method: 'POST', path: '/api/development-designs/:id/baseline-previews' },
   { method: 'POST', path: '/api/development-designs/:id/review-requests' },
   { method: 'POST', path: '/api/development-designs/:id/implementation-requests' },

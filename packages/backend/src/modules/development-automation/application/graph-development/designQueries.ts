@@ -83,6 +83,7 @@ export function createGraphDesignQueries(
               'clarification',
               'verification',
               'acceptance',
+              'limitation-review',
             ].includes(row.kind),
           )
           .map((row) => ({

@@ -78,6 +78,8 @@ export function GraphDesignWorkspace({
   const [instruction, setInstruction] = useState('')
   const [withdrawReview, setWithdrawReview] = useState(false)
   const [proposalId, setProposalId] = useState<string | null>(null)
+  const [limitationReviewOpen, setLimitationReviewOpen] = useState(false)
+  const [limitationReason, setLimitationReason] = useState('')
   const [basisId, setBasisId] = useState<string | null>(null)
   const [scopeOpen, setScopeOpen] = useState(false)
   const [scopeIds, setScopeIds] = useState<string[]>([])
@@ -1158,33 +1160,49 @@ export function GraphDesignWorkspace({
         {command.error && <ErrorBanner error={command.error} />}
       </Dialog>
       <Dialog
-        open={proposalId !== null}
+        open={proposalId !== null && !limitationReviewOpen}
         onClose={() => setProposalId(null)}
         title={zh ? '比较设计提案' : 'Compare design proposal'}
         size="lg"
         footer={
-          <button
-            type="button"
-            className="btn btn--primary"
-            disabled={!canEdit || busy || proposal.data?.status !== 'proposed'}
-            onClick={() =>
-              void perform(async () => {
-                const result = await postRequest<{ status: string }>(
-                  `${base}/proposals/${encodeURIComponent(proposalId!)}/apply`,
-                  {},
-                )
-                if (result.status === 'accepted') setProposalId(null)
-                else
-                  setNotice(
-                    zh
-                      ? '提案依据已变化，请重新生成。'
-                      : 'The proposal is stale; request a new one.',
+          <>
+            {proposal.data?.kind === 'code-feedback' && proposal.data.status === 'proposed' && (
+              <button
+                type="button"
+                className="btn"
+                disabled={!canEdit || busy}
+                onClick={() => {
+                  setLimitationReason('')
+                  command.reset()
+                  setLimitationReviewOpen(true)
+                }}
+              >
+                {zh ? '判定不构成缺口' : 'Not a gap'}
+              </button>
+            )}
+            <button
+              type="button"
+              className="btn btn--primary"
+              disabled={!canEdit || busy || proposal.data?.status !== 'proposed'}
+              onClick={() =>
+                void perform(async () => {
+                  const result = await postRequest<{ status: string }>(
+                    `${base}/proposals/${encodeURIComponent(proposalId!)}/apply`,
+                    {},
                   )
-              })
-            }
-          >
-            {zh ? '应用此提案' : 'Apply proposal'}
-          </button>
+                  if (result.status === 'accepted') setProposalId(null)
+                  else
+                    setNotice(
+                      zh
+                        ? '提案依据已变化，请重新生成。'
+                        : 'The proposal is stale; request a new one.',
+                    )
+                })
+              }
+            >
+              {zh ? '应用此提案' : 'Apply proposal'}
+            </button>
+          </>
         }
       >
         <div className="graph-design">
@@ -1232,6 +1250,72 @@ export function GraphDesignWorkspace({
               ))}
             </>
           )}
+          {command.error && <ErrorBanner error={command.error} />}
+        </div>
+      </Dialog>
+      <Dialog
+        open={limitationReviewOpen}
+        onClose={() => {
+          if (!busy) setLimitationReviewOpen(false)
+        }}
+        title={zh ? '判定不构成缺口' : 'Not a gap'}
+        footer={
+          <>
+            <button
+              type="button"
+              className="btn"
+              disabled={busy}
+              onClick={() => setLimitationReviewOpen(false)}
+            >
+              {zh ? '取消' : 'Cancel'}
+            </button>
+            <button
+              type="button"
+              className="btn btn--primary"
+              disabled={
+                !canEdit ||
+                busy ||
+                !limitationReason.trim() ||
+                limitationReason.length > 20_000 ||
+                proposal.data?.status !== 'proposed'
+              }
+              onClick={() =>
+                void perform(async () => {
+                  await postRequest(
+                    `${base}/proposals/${encodeURIComponent(proposalId!)}/limitation-review`,
+                    {
+                      comment: limitationReason,
+                    },
+                  )
+                  setLimitationReviewOpen(false)
+                  setProposalId(null)
+                })
+              }
+            >
+              {zh ? '保存判定' : 'Save judgment'}
+            </button>
+          </>
+        }
+      >
+        <div className="graph-design__stack">
+          <ol>
+            {proposal.data?.document.concerns
+              .filter((concern) =>
+                concern.id.startsWith(`implementation-gap:${proposal.data!.invocationRef}:`),
+              )
+              .map((concern) => (
+                <li key={concern.id}>{concern.statement}</li>
+              ))}
+          </ol>
+          <Field label={zh ? '判定理由' : 'Reason'} required>
+            <TextArea
+              value={limitationReason}
+              onChange={setLimitationReason}
+              disabled={busy}
+              maxLength={20_000}
+              required
+            />
+          </Field>
           {command.error && <ErrorBanner error={command.error} />}
         </div>
       </Dialog>

@@ -339,14 +339,30 @@ export function createGraphEmployeeWorkspace(deps: {
           errorDetail: result.error.message.slice(0, 4000),
         }
       const writing = plan.workItemRef === 'implement-change'
+      const reimplementation =
+        writing &&
+        (await deps.store.links(work.designId)).some(
+          (link) =>
+            link.kind === 'execution' &&
+            link.id.startsWith('implementation:') &&
+            link.id !== `implementation:${input.roundRef}`,
+        )
+      const preBusinessTree = new Map(snapshot.business)
+      const currentBusiness = reimplementation
+        ? await businessTreeSnapshot(workspace.workspacePath, factory)
+        : null
+      const unchanged =
+        currentBusiness !== null &&
+        currentBusiness.size === preBusinessTree.size &&
+        [...preBusinessTree].every(([path, signature]) => currentBusiness.get(path) === signature)
       const checked = await validateWorkspaceOutcome(
         {
           workspacePath: workspace.workspacePath,
           preProtected: reviveProtectedRootSnapshot(snapshot.protected),
           protectedRoots: roots(workspace.workspacePath),
           protectedSkipPrefixesByRoot: skips,
-          preBusinessTree: new Map(snapshot.business),
-          outcome: writing ? 'changed' : 'no-change',
+          preBusinessTree,
+          outcome: writing && !unchanged ? 'changed' : 'no-change',
           workspaceMode: writing ? 'edit-business-files' : 'read-only',
           writablePrefixes: [],
           preservePaths: [],

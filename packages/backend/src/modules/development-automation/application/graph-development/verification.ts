@@ -13,6 +13,7 @@ import type {
 import type { RepositoryRevisionContentFactory } from '@/modules/source-control/public/participants'
 import { sha1Hex, sha256Hex } from '@/util/hash'
 import { graphDigest, validateGraphDocument } from '../../domain/graph-development/model'
+import { projectGraphEvidence } from '../../domain/graph-development/evidence'
 import { graphResultSchemas } from './toolContracts'
 import { verificationProfileContentSchema } from '../../domain/verificationProfile'
 import { runVerificationProfileWithEffects } from '../verificationRunner'
@@ -139,11 +140,35 @@ export function createGraphVerification(deps: {
           return false
         }
       }
+      const currentDocument = await deps.commands.document(input.designId)
+      const limitationReview = (await deps.store.links(input.designId))
+        .filter((link) => link.kind === 'evidence')
+        .map((link) => GraphEvidenceBindingSchema.parse(JSON.parse(link.payloadJson)))
+        .filter(
+          (evidence) =>
+            evidence.kind === 'limitation-review' &&
+            evidence.result === 'passed' &&
+            evidence.executionRef === implementation.roundRef &&
+            graphDigest(evidence.limitations) === graphDigest(result.limitations) &&
+            projectGraphEvidence(evidence, {
+              document: currentDocument,
+              basisDigest: basis.digest,
+              candidateTreeOid: candidate.treeOid,
+              profileDigests: {},
+              environmentDigest: null,
+              commitSha: null,
+            }).freshness === 'current',
+        )
+        .sort((a, b) => b.recordedAt - a.recordedAt || b.id.localeCompare(a.id))[0]
+      const reviewed = limitationReview && (await hasReadableArtifact(limitationReview))
+      const implementationLimitations = reviewed ? [] : result.limitations
       if (record.status === 'completed') {
         const saved = JSON.parse(record.payloadJson) as {
           result: unknown
           environmentDigest: string | null
           profileDigests: Record<string, string>
+          checksPassed?: boolean
+          verificationLimitations?: string[]
         }
         const previous = graphResultSchemas['verify-change'].parse(saved.result)
         const unavailable: string[] = []
@@ -169,21 +194,63 @@ export function createGraphVerification(deps: {
             unavailable.push(`冻结的校验版本暂不可用：${ref.id}@${ref.revision}`)
         }
         const links = await deps.store.links(input.designId)
+        const retained: GraphEvidenceBinding[] = []
         for (const evidenceId of previous.evidenceIds) {
           const link = links.find((item) => item.kind === 'evidence' && item.id === evidenceId)
           const evidence = link
             ? GraphEvidenceBindingSchema.parse(JSON.parse(link.payloadJson))
             : null
+          if (evidence?.kind === 'limitation-review') continue
+          if (evidence) retained.push(evidence)
           if (!(await hasReadableArtifact(evidence)))
             unavailable.push(`原始校验证据暂不可读：${evidenceId}`)
         }
-        return unavailable.length
-          ? { ...previous, passed: false, limitations: [...previous.limitations, ...unavailable] }
-          : previous
+        // Older receipts stored model limitations as the exact prefix. Preserve
+        // every other failure, including structure failures with no summary text.
+        const verificationLimitations =
+          saved.verificationLimitations ??
+          (graphDigest(previous.limitations.slice(0, result.limitations.length)) ===
+          graphDigest(result.limitations)
+            ? previous.limitations.slice(result.limitations.length)
+            : previous.limitations)
+        const checksPassed =
+          saved.checksPassed ??
+          (previous.passed ||
+            (result.limitations.length > 0 &&
+              verificationLimitations.length === 0 &&
+              retained.some((evidence) => evidence.kind === 'structure') &&
+              retained.every((evidence) => evidence.result === 'passed')))
+        const value = {
+          ...previous,
+          passed:
+            checksPassed && implementationLimitations.length === 0 && unavailable.length === 0,
+          evidenceIds: previous.evidenceIds.filter(
+            (id) =>
+              id === (reviewed ? limitationReview.id : null) ||
+              !links.some(
+                (link) =>
+                  link.id === id &&
+                  link.kind === 'evidence' &&
+                  GraphEvidenceBindingSchema.parse(JSON.parse(link.payloadJson)).kind ===
+                    'limitation-review',
+              ),
+          ),
+          limitations: [...implementationLimitations, ...verificationLimitations, ...unavailable],
+        }
+        if (reviewed && !value.evidenceIds.includes(limitationReview.id))
+          value.evidenceIds.push(limitationReview.id)
+        if (graphDigest(value) !== graphDigest(previous))
+          await deps.commands.finishRecord(record, 'completed', {
+            ...saved,
+            checksPassed,
+            verificationLimitations,
+            result: value,
+          })
+        return value
       }
-      const evidenceIds: string[] = [],
-        limitations = [...result.limitations]
-      let passed = environment !== null && result.limitations.length === 0
+      const evidenceIds: string[] = reviewed ? [limitationReview.id] : [],
+        limitations: string[] = []
+      let passed = environment !== null
       if (!environment) limitations.push('执行端未提供环境快照，证据不完整。')
       async function evidence(
         value: Omit<
@@ -550,8 +617,8 @@ export function createGraphVerification(deps: {
           candidateRef: candidate.candidateRef,
           candidateTreeOid: candidate.treeOid,
           evidenceIds,
-          passed,
-          limitations,
+          passed: passed && implementationLimitations.length === 0,
+          limitations: [...implementationLimitations, ...limitations],
         }
         await deps.commands.finishRecord(record, 'completed', {
           candidate,
@@ -560,6 +627,8 @@ export function createGraphVerification(deps: {
           implementationRoundRef: implementation.roundRef,
           environmentDigest: environment?.digest ?? null,
           profileDigests,
+          checksPassed: passed,
+          verificationLimitations: limitations,
           result: value,
         })
         return value

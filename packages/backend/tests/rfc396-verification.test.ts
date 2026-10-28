@@ -1,5 +1,5 @@
 // RFC-396: actual Git candidate + executable profile, and evidence never trusts agent claims.
-import { afterEach, expect, test } from 'bun:test'
+import { afterEach, expect, spyOn, test } from 'bun:test'
 import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -19,6 +19,7 @@ import {
 import { EvidenceStore } from '@/modules/development-automation/infrastructure/evidenceStore'
 import { describeEachProvider } from './helpers/eachProvider'
 import { graphFixture } from './helpers/graphDesign'
+import { codeFeedbackProposal, limitationReviewCommand } from './helpers/graphLimitationReview'
 import { createGraphPlatformWorkItems } from '@/modules/development-automation/application/graph-development/platformWorkItems'
 import { graphEmployeeRuntimeCodec } from '@/modules/development-automation/application/graph-development/employeeCodec'
 import { createGraphDesignArtifacts } from '@/modules/development-automation/infrastructure/graph-development/designArtifacts'
@@ -36,7 +37,12 @@ function git(cwd: string, ...args: string[]) {
 describeEachProvider('RFC-396 candidate verification', (harness) => {
   async function fixture(
     mode: 'passed' | 'failed' | 'timeout' | 'missing-trace' | 'manual' | 'limited' | 'report-only',
-    references: { obligation?: string; trace?: string | null; declared?: readonly string[] } = {},
+    references: {
+      obligation?: string
+      trace?: string | null
+      declared?: readonly string[]
+      limitations?: string[]
+    } = {},
   ) {
     const root = mkdtempSync(join(tmpdir(), 'rfc396-verify-'))
     homes.push(root)
@@ -163,7 +169,9 @@ describeEachProvider('RFC-396 candidate verification', (harness) => {
         },
       ],
       testRefs: references.declared ?? ['verify.js#booking-test'],
-      limitations: mode === 'limited' ? ['Concurrency behavior remains unimplemented'] : [],
+      limitations:
+        references.limitations ??
+        (mode === 'limited' ? ['Concurrency behavior remains unimplemented'] : []),
       deliveryContent: {
         commitMessage: 'Implement reservation',
         title: 'Reservation',
@@ -197,6 +205,7 @@ describeEachProvider('RFC-396 candidate verification', (harness) => {
       profiles,
       verification,
       verificationDependencies,
+      implementationResult: result,
       workspace: { workspacePath: ws, baselineRepoPath: repo, baseline },
     }
   }
@@ -556,5 +565,279 @@ describeEachProvider('RFC-396 candidate verification', (harness) => {
       ).toBe(false)
     },
     30_000,
+  )
+  // H5/H6: real hosted acceptance 2026-10-28, Case 01M5ZZCVCM0S9Y9JNQRQRPVW1V.
+  async function reviewFixture(mode: Parameters<typeof fixture>[0] = 'limited') {
+    const f = await fixture(mode, {
+      limitations: ['Platform execution is pending', 'Excluded requirements were not implemented'],
+    })
+    await codeFeedbackProposal(f, f.basis, 'build', f.implementationResult.limitations)
+    const review = limitationReviewCommand(f)
+    const input = { designId: 'design-a', roundRef: 'h5-checks', workspace: f.workspace }
+    const before = await f.verification.run(input)
+    const evidence = await review(
+      'design-a',
+      'code-feedback:build',
+      { requestId: 'h5', comment: 'These statements describe verification and excluded scope.' },
+      'human',
+    )
+    return { ...f, review, input, before, evidence }
+  }
+  test.skipIf(process.platform === 'win32')(
+    'H5: judgment unblocks both completed verification replay and a fresh verification',
+    async () => {
+      const f = await reviewFixture()
+      expect(f.before.passed).toBe(false)
+      expect(f.before.limitations).toEqual(f.implementationResult.limitations)
+      const after = await f.verification.run(f.input)
+      expect(after.passed).toBe(true)
+      expect(after.limitations).toEqual([])
+      expect(after.evidenceIds).toContain(f.evidence.id)
+      expect(
+        JSON.parse((await f.store.record('design-a', 'verification:h5-checks'))!.payloadJson)
+          .result,
+      ).toEqual(after)
+      const fresh = await f.verification.run({ ...f.input, roundRef: 'h5-fresh' })
+      expect(fresh.passed).toBe(true)
+      expect(fresh.evidenceIds).toContain(f.evidence.id)
+      expect(fresh.limitations).toEqual([])
+      expect(await f.verification.run({ ...f.input, roundRef: 'h5-fresh' })).toEqual(fresh)
+    },
+  )
+  test.skipIf(process.platform === 'win32')(
+    'H5: a repaired candidate of the same implementation round keeps the judgment',
+    async () => {
+      const f = await reviewFixture()
+      const judged = await f.verification.run(f.input)
+      expect(judged.passed).toBe(true)
+      // MR care repairs the code without a new implementation report; the
+      // rejected proposal offers no second judgment, so the first must hold.
+      writeFileSync(join(f.workspace.workspacePath, 'CARE-NOTES.md'), 'care repair\n')
+      const repaired = await f.verification.run({ ...f.input, roundRef: 'h5-repaired' })
+      expect(repaired.candidateTreeOid).not.toBe(judged.candidateTreeOid)
+      expect(repaired.passed).toBe(true)
+      expect(repaired.limitations).toEqual([])
+      expect(repaired.evidenceIds).toContain(f.evidence.id)
+    },
+  )
+  test.skipIf(process.platform === 'win32')(
+    'H5: pre-upgrade completed receipts can be rechecked without losing structural failures',
+    async () => {
+      const f = await reviewFixture()
+      const record = (await f.store.record('design-a', 'verification:h5-checks'))!
+      const payload = JSON.parse(record.payloadJson)
+      delete payload.checksPassed
+      delete payload.verificationLimitations
+      await f.store.updateRecord(
+        { ...record, payloadJson: canonicalJson(payload), version: record.version + 1 },
+        record.version,
+      )
+      const links = f.store.links.bind(f.store)
+      const failedStructure = spyOn(f.store, 'links').mockImplementation(async (id) =>
+        (await links(id)).map((link) =>
+          link.id === 'structure:h5-checks'
+            ? {
+                ...link,
+                payloadJson: canonicalJson({ ...JSON.parse(link.payloadJson), result: 'failed' }),
+              }
+            : link,
+        ),
+      )
+      try {
+        expect((await f.verification.run(f.input)).passed).toBe(false)
+      } finally {
+        failedStructure.mockRestore()
+      }
+      // Restore the historical receipt, not a new execution or a changed candidate.
+      const updated = (await f.store.record('design-a', 'verification:h5-checks'))!
+      await f.store.updateRecord(
+        { ...updated, payloadJson: canonicalJson(payload), version: updated.version + 1 },
+        updated.version,
+      )
+      expect((await f.verification.run(f.input)).passed).toBe(true)
+    },
+  )
+  test.skipIf(process.platform === 'win32')(
+    'H5: unreadable judgment blocks fresh and completed checks until its original artifact is readable',
+    async () => {
+      const f = await reviewFixture()
+      expect((await f.verification.run(f.input)).passed).toBe(true)
+      const files = f.artifacts.files.bind(f.artifacts)
+      const unreadable = spyOn(f.artifacts, 'files').mockImplementation(async (reference) => {
+        if (reference.artifactRef === f.evidence.artifactRef)
+          throw new Error('judgment-artifact-unavailable')
+        return files(reference)
+      })
+      try {
+        for (const roundRef of ['h5-checks', 'h5-unreadable']) {
+          const blocked = await f.verification.run({ ...f.input, roundRef })
+          expect(blocked.passed).toBe(false)
+          expect(blocked.limitations).toEqual(f.implementationResult.limitations)
+          expect(blocked.evidenceIds).not.toContain(f.evidence.id)
+        }
+      } finally {
+        unreadable.mockRestore()
+      }
+      expect((await f.verification.run(f.input)).passed).toBe(true)
+    },
+  )
+  for (const mismatch of ['basis', 'round', 'texts', 'order', 'reads'] as const)
+    test.skipIf(process.platform === 'win32')(
+      `H5: a judgment with different ${mismatch} cannot clear limitations`,
+      async () => {
+        const f = await reviewFixture()
+        const links = f.store.links.bind(f.store)
+        const mismatched = spyOn(f.store, 'links').mockImplementation(async (id) =>
+          (await links(id)).map((link) => {
+            if (link.id !== f.evidence.id) return link
+            const evidence = { ...f.evidence }
+            if (mismatch === 'basis') evidence.basisDigest = 'f'.repeat(64)
+            if (mismatch === 'round') evidence.executionRef = 'older-build'
+            if (mismatch === 'texts') evidence.limitations = ['different limitation']
+            if (mismatch === 'order') evidence.limitations = [...evidence.limitations].reverse()
+            if (mismatch === 'reads')
+              evidence.readSet = evidence.readSet.map((ref) => ({ ...ref, digest: 'f'.repeat(64) }))
+            return { ...link, payloadJson: canonicalJson(evidence) }
+          }),
+        )
+        try {
+          for (const roundRef of ['h5-checks', 'h5-mismatch']) {
+            const result = await f.verification.run({ ...f.input, roundRef })
+            expect(result.passed).toBe(false)
+            expect(result.evidenceIds).not.toContain(f.evidence.id)
+            expect(result.limitations).toEqual(f.implementationResult.limitations)
+          }
+        } finally {
+          mismatched.mockRestore()
+        }
+      },
+    )
+  for (const mode of ['failed', 'missing-trace', 'manual'] as const)
+    test.skipIf(process.platform === 'win32')(
+      `H5: a judgment preserves ${mode} verification failures`,
+      async () => {
+        const f = await reviewFixture(mode)
+        for (const roundRef of ['h5-checks', 'h5-fresh']) {
+          const result = await f.verification.run({ ...f.input, roundRef })
+          expect(result.passed).toBe(false)
+          expect(result.limitations.length).toBeGreaterThan(0)
+          for (const text of f.implementationResult.limitations)
+            expect(result.limitations).not.toContain(text)
+        }
+      },
+    )
+  test.skipIf(process.platform === 'win32')(
+    'H5: a judgment does not bypass environment or pinned-profile checks on completed verification',
+    async () => {
+      const f = await reviewFixture()
+      const withoutEnvironment = createGraphVerification({
+        ...f.verificationDependencies,
+        verification: { create: f.verificationDependencies.verification.create },
+      })
+      expect((await withoutEnvironment.run(f.input)).passed).toBe(false)
+      const revision = spyOn(f.profiles, 'getRevision').mockResolvedValue(null)
+      try {
+        expect((await f.verification.run(f.input)).passed).toBe(false)
+      } finally {
+        revision.mockRestore()
+      }
+      expect((await f.verification.run(f.input)).passed).toBe(true)
+    },
+  )
+  test.skipIf(process.platform === 'win32')(
+    'H5/H6: a new report on the same tree needs its own judgment and retains a separate delivery replay',
+    async () => {
+      const f = await reviewFixture()
+      const first = await f.verification.run(f.input)
+      const initial = JSON.parse(
+        graphEmployeeRuntimeCodec.buildInitialCaseJson(
+          canonicalJson({
+            caseRef: 'case-a',
+            employeeRef: { id: 'employee', revision: 1 },
+            workScopeJson: '{"kind":"task"}',
+            intake: {
+              target: { repositoryId: 'repo-a' },
+              kind: 'body',
+              body: 'booking',
+              uploads: [],
+            },
+          }),
+        ),
+      )
+      const work = { ...JSON.parse(initial.primaryContextJson), designId: 'design-a' }
+      const plan = {
+        roundRef: 'deliver',
+        executionNonce: 'nonce',
+        caseRef: { id: 'case-a' },
+        employeeTypeRef: { typeId: 'graph-development', revision: 2 },
+        workItemRef: 'deliver-result',
+        inputEnvelopeJson: canonicalJson({
+          contextsJson: canonicalJson([
+            {
+              id: 'context',
+              revision: 1,
+              typeId: 'graph-development.design-context',
+              stateJson: canonicalJson(work),
+            },
+          ]),
+        }),
+      }
+      const platform = createGraphPlatformWorkItems({
+        ...f,
+        candidates: bindCandidateDeliveryParticipant(),
+        workspace: { initialize: async () => f.workspace, state: async () => f.workspace },
+      })
+      const delivered = JSON.parse(await platform.execute(plan)).result
+      const implementationResult = {
+        ...f.implementationResult,
+        deliveryContent: {
+          commitMessage: 'Corrected report',
+          title: 'Corrected report',
+          description: '',
+        },
+      }
+      await f.store.insertLink({
+        designId: 'design-a',
+        id: 'implementation:build-again',
+        kind: 'execution',
+        createdAt: 21,
+        payloadJson: canonicalJson({
+          basisId: f.basis.id,
+          basisDigest: f.basis.digest,
+          roundRef: 'build-again',
+          result: implementationResult,
+        }),
+      })
+      await codeFeedbackProposal(f, f.basis, 'build-again', implementationResult.limitations)
+      const secondInput = { ...f.input, roundRef: 'verify-again' }
+      const blocked = await f.verification.run(secondInput)
+      expect(blocked.candidateTreeOid).toBe(first.candidateTreeOid)
+      expect(blocked.candidateRef).not.toBe(first.candidateRef)
+      expect(blocked.passed).toBe(false)
+      expect(blocked.evidenceIds).not.toContain(f.evidence.id)
+      const judgment = await f.review(
+        'design-a',
+        'code-feedback:build-again',
+        { requestId: 'h5-again', comment: 'Reviewed this new report explicitly.' },
+        'human',
+      )
+      const second = await f.verification.run(secondInput)
+      expect(second.passed).toBe(true)
+      expect(second.evidenceIds).toContain(judgment.id)
+      const nextDelivery = JSON.parse(
+        await platform.execute({ ...plan, roundRef: 'deliver-again' }),
+      ).result
+      expect(nextDelivery.artifactRefs).not.toEqual(delivered.artifactRefs)
+      expect(
+        JSON.parse(await platform.execute({ ...plan, roundRef: 'deliver-replay' })).result,
+      ).toEqual(nextDelivery)
+      const links = (await f.store.links('design-a')).filter((link) =>
+        link.id.startsWith('delivery:'),
+      )
+      expect(links).toHaveLength(2)
+      expect(
+        links.map((link) => JSON.parse(link.payloadJson).implementationRoundRef).sort(),
+      ).toEqual(['build', 'build-again'])
+    },
   )
 })

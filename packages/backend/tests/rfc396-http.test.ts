@@ -3,7 +3,14 @@
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
-import { canonicalJson, GraphEvidenceBindingSchema } from '@agent-workflow/shared'
+import {
+  canonicalJson,
+  GraphEvidenceBindingSchema,
+  type GraphImplementationBasis,
+} from '@agent-workflow/shared'
+import { mkdirSync, writeFileSync } from 'node:fs'
+import { join } from 'node:path'
+import { graphDigest } from '@/modules/development-automation/domain/graph-development/model'
 import { createUser } from './helpers/userFixture'
 import { createGraphDesignStore } from '@/modules/development-automation/infrastructure/graph-development/designStore'
 import { createGraphDesignArtifacts } from '@/modules/development-automation/infrastructure/graph-development/designArtifacts'
@@ -197,7 +204,7 @@ describeEachProviderHttpApplication(
         { requestId: 'basis', expectedRevision: 2, includedElementIds: ['booking'] },
       )
       expect(preview.status, await preview.clone().text()).toBe(200)
-      const basis = (await preview.json()) as { basis: { id: string } }
+      const basis = (await preview.json()) as { basis: GraphImplementationBasis }
       const exported = await request(
         observer.token,
         `/api/development-designs/design-a/bases/${encodeURIComponent(basis.basis.id)}/export`,
@@ -208,6 +215,163 @@ describeEachProviderHttpApplication(
           (file: { path: string }) => file.path === 'manifest.json',
         ),
       ).toBe(true)
+
+      // H5: the production route uses the proposal's implementation report and the request actor.
+      const repo = join(f.appHome, 'h5-repository')
+      mkdirSync(repo)
+      const git = (...args: string[]) => {
+        const result = Bun.spawnSync(['git', ...args], { cwd: repo })
+        if (result.exitCode) throw new Error(result.stderr.toString())
+        return result.stdout.toString().trim()
+      }
+      git('init', '-q', '-b', 'main')
+      writeFileSync(join(repo, 'README.md'), 'implemented candidate')
+      git('add', 'README.md')
+      git(
+        '-c',
+        'user.name=Fixture',
+        '-c',
+        'user.email=f@example.test',
+        'commit',
+        '-qm',
+        'candidate',
+      )
+      const candidateTreeOid = git('rev-parse', 'HEAD^{tree}')
+      const now = Date.now()
+      const texts = ['Platform verification has not run yet.']
+      for (const row of [
+        {
+          id: 'workspace',
+          kind: 'workspace',
+          status: 'ready',
+          payload: {
+            workspacePath: repo,
+            baselineRepoPath: repo,
+            targetBranch: 'main',
+            remoteHeadSha: git('rev-parse', 'HEAD'),
+            baseline: {
+              kind: 'commit',
+              commitSha: git('rev-parse', 'HEAD'),
+              treeOid: candidateTreeOid,
+            },
+          },
+        },
+        {
+          id: 'verification:h5-http',
+          kind: 'verification',
+          status: 'completed',
+          payload: {
+            basisId: basis.basis.id,
+            basisDigest: basis.basis.digest,
+            implementationRoundRef: 'http-build',
+            candidate: { treeOid: candidateTreeOid },
+          },
+        },
+      ])
+        await store.insertRecord({
+          designId: document.id,
+          id: row.id,
+          kind: row.kind,
+          requestDigest: graphDigest(row),
+          status: row.status,
+          version: 1,
+          payloadJson: canonicalJson(row.payload),
+          createdAt: now,
+          updatedAt: now,
+        })
+      await store.insertLink({
+        designId: document.id,
+        id: 'implementation:http-build',
+        kind: 'execution',
+        createdAt: now,
+        payloadJson: canonicalJson({
+          basisId: basis.basis.id,
+          basisDigest: basis.basis.digest,
+          roundRef: 'http-build',
+          result: {
+            traceProposals: [],
+            testRefs: [],
+            limitations: texts,
+            deliveryContent: { commitMessage: 'booking', title: 'booking', description: '' },
+          },
+        }),
+      })
+      const proposalId = 'code-feedback:http-build'
+      const proposalArtifact = await artifacts.put([
+        {
+          path: 'proposal.json',
+          content: canonicalJson({
+            schemaVersion: 1,
+            id: proposalId,
+            requestId: proposalId,
+            designId: document.id,
+            kind: 'code-feedback',
+            status: 'proposed',
+            readSet: basis.basis.readSet,
+            invocationRef: 'http-build',
+            document: basis.basis.document,
+            plan: null,
+            explanation: 'Implementation limitation report',
+            createdAt: now,
+          }),
+        },
+      ])
+      await store.insertRecord({
+        designId: document.id,
+        id: `proposal:${proposalId}`,
+        kind: 'proposal',
+        requestDigest: graphDigest(proposalArtifact),
+        status: 'proposed',
+        version: 1,
+        payloadJson: canonicalJson(proposalArtifact),
+        createdAt: now,
+        updatedAt: now,
+      })
+      const endpoint = `/api/development-designs/design-a/proposals/${encodeURIComponent(proposalId)}/limitation-review`
+      const reviewBody = {
+        requestId: 'http-judgment',
+        comment: 'Verification is a separate platform step, not missing implementation.',
+      }
+      expect((await request(observer.token, endpoint, reviewBody)).status).toBe(403)
+      const empty = await request(collaborator.token, endpoint, { ...reviewBody, comment: '  ' })
+      expect(empty.status).toBe(422)
+      expect(await empty.json()).toMatchObject({ code: 'graph-request-invalid' })
+      const judgment = await request(collaborator.token, endpoint, reviewBody)
+      expect(judgment.status, await judgment.clone().text()).toBe(200)
+      const evidence = GraphEvidenceBindingSchema.parse(await judgment.json())
+      expect(evidence).toMatchObject({
+        kind: 'limitation-review',
+        limitations: texts,
+        executionRef: 'http-build',
+        candidateTreeOid: null,
+      })
+      const rawJudgment = await artifacts.read(
+        { artifactRef: evidence.artifactRef!, digest: evidence.artifactDigest! },
+        'limitation-review.json',
+      )
+      expect(JSON.parse(rawJudgment!)).toMatchObject({
+        actorUserId: collaborator.id,
+        candidateTreeOid,
+        ...reviewBody,
+      })
+      expect(await (await request(collaborator.token, endpoint, reviewBody)).json()).toEqual(
+        evidence,
+      )
+      const conflict = await request(collaborator.token, endpoint, {
+        ...reviewBody,
+        comment: 'Changed reason',
+      })
+      expect(conflict.status).toBe(409)
+      expect(await conflict.json()).toMatchObject({
+        code: 'graph-request-reused-with-different-input',
+      })
+      const rejected = await request(
+        owner.token,
+        `/api/development-designs/design-a/proposals/${encodeURIComponent(proposalId)}/apply`,
+        { requestId: 'apply-judged' },
+      )
+      expect(rejected.status).toBe(409)
+      expect(await rejected.json()).toMatchObject({ code: 'graph-proposal-already-decided' })
     }, 30_000)
   },
 )

@@ -6,6 +6,7 @@ import {
   GraphDesignDocumentSchema,
   GraphAnchorSchema,
   GraphPresentationSchema,
+  GraphLimitationReviewRequestSchema,
 } from '@agent-workflow/shared'
 import { actorOf, type Actor } from '@/auth/actor'
 import { registerRoute } from '@/routes/registry'
@@ -331,6 +332,25 @@ export function mountGraphDesignRoutes(
         ),
       )
     },
+  )
+  registerRoute(
+    app,
+    {
+      method: 'POST',
+      path: '/api/development-designs/:id/proposals/:proposalId/limitation-review',
+      permissions: ['development-missions:interact'],
+      tokenAccess: 'allow',
+      summary: 'Record a human judgment that implementation limitations are not gaps',
+    },
+    async (context) =>
+      context.json(
+        await graph.reviewLimitations(
+          await authorize(context, true),
+          context.req.param('proposalId'),
+          await body(context, GraphLimitationReviewRequestSchema),
+          actorOf(context).user.id,
+        ),
+      ),
   )
   registerRoute(
     app,
