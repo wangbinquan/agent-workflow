@@ -1,3 +1,23 @@
+## 2026-10-28 RFC-396 Done；RFC-395 T19 本机实例完成，托管实例待 CrewStation RFC-044
+
+- **RFC-396 Done**：四项退出条件都有直接证据，见 [完成度审计](design/RFC-396-adaptive-graph-development/completion-audit-2026-10-28.md)。
+  - 最终候选 `30ee09bb3`，CI 40649724461 为 61/61 成功。五项 RFC-396 E2E 在 Ubuntu / macOS / Windows 首轮通过。
+  - 真实企业 MR/CI（GitLab 571 MR !1）：真实流水线失败 → 默认分类与修复 → 同一 MR 新 head → 流水线通过 → 外部合入。暴露的 F1 已在 `c431dac3a` 修复。
+  - 新版托管（项目 `rfc396-graph2-hosted-b`，全新安装 epoch 2）：原生审核、托管 profile、人工验收、MR !1（GitLab 573）。之后经历三类恢复：平台数据库重启、升级交接（v0.1.3）、同版本交接（v0.1.4），最后由新实例观察到外部关闭，Case closed。证据见 [托管验收](design/RFC-396-adaptive-graph-development/hosted-graph2-acceptance-2026-10-28.json)。
+  - 托管旅程暴露并修复两项（`15f4e65dc`，用户批准 H5）：
+    - H5：新增「判定不构成缺口」，实现报告里的非缺口 limitations 可由人工判定后放行；
+    - H6：再次实现允许不产生新改动。
+  - `30ee09bb3` 修正了跳过用例台账（CI 40646358721 只有这一项红）。
+  - 其余发现登记在 `docs/audit-backlog.md`，均未立项：F4、RFC-370 共享父任务档位注册、100m CPU、取消后的 fence 心跳日志、托管证据偶发读不到。
+- **RFC-395 T19**：
+  - 本机实例按用户决定归档后全新安装，见 [记录](design/RFC-395-database-target-schema-rebuild/t19-local-instance-2026-10-28.md)。旧目录改名为 `~/.agent-workflow.epoch1-archive-20261028`。
+  - 托管实例 `agent-workflow`（v0.6.30，epoch 1，40 MB）需要 CrewStation 平台侧的迁移操作。10-24 已定在 CrewStation 落地，但一直没有实现。已写 CrewStation RFC-044 并获用户批准（`5ef7ebfc`），实现进行中。之后按用户已批准的方式迁移：plan 无阻断即切换。
+- **本机 CrewStation 环境**（用户批准）：
+  - 平台 PostgreSQL `max_connections` 100 → 300。
+  - 重建 pod 后内存上限按模板回落到 1 GiB，被 OOM 4 次，已原地恢复为 2 GiB（模板仍是 1 GiB）。
+  - 那段时间托管 AW 重启 3 次，Case 保留。
+  - 闲置验收项目无法用缩副本停掉（平台会立即恢复副本数），只各重启了一次；RFC-372 遗留 daemon 已停止。
+
 ## 2026-10-27 RFC-395 / RFC-396 In Progress：T19 前置修复上库，本地环境恢复
 
 - **RFC-395 T19 前置**：复测 `plan --rehearse` 发现三个问题并已修复，详见 RFC plan §6.13「T19 前置」。

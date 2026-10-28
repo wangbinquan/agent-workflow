@@ -1,0 +1,237 @@
+{
+ "schemaVersion": 1,
+ "rfc": "RFC-396",
+ "criterion": "graph@2 new hosted service, actual task version, execution and default recovery (AC13/AC14 hosted part)",
+ "result": "passed",
+ "observedAt": "2026-10-28T07:24:40Z",
+ "candidates": {
+  "initial": {
+   "sourceSha": "8481557c9cd5ee944cadf63a63335f99f8eac041",
+   "ciRun": 40514130589,
+   "ciConclusion": "success",
+   "usedFor": "release v0.1.1: design, native review, both implementation rounds, the first four verifications"
+  },
+  "final": {
+   "sourceSha": "15f4e65dc6d78cd0434cc9f2140bd9c942640446",
+   "usedFor": "releases v0.1.3 and v0.1.4: limitation review, passing verification, MR delivery, default recovery, external close",
+   "ci": "run 40646358721: every job green except backend shard 22/36 (skip ledger not updated for the eight new H5 cases); fixed in 30ee09bb3"
+  }
+ },
+ "platform": {
+  "crewStation": "local CrewStation (docker-desktop kind single node); shared PostgreSQL 17.11",
+  "projectSlug": "rfc396-graph2-hosted-b",
+  "projectId": "01a17fea-ac23-7000-9134-d72c9622e998",
+  "serviceId": "01a17fea-ac23-7001-9443-c428f6e9877c",
+  "namespace": "cs-rfc396-graph2-hosted-b",
+  "sourceRepository": "GitLab 574 crewstation/rfc396-graph2-hosted-b",
+  "businessRepository": "GitLab 573 crewstation/rfc396-graph2-hosted-business (main 5dbef960a1f49e80bbbf5e9dea0fe571106022e3, README.md only)",
+  "agentProfile": "01a17feb-c286-70c1-b023-053e71f78d49 -> compute profile 01a14489-d4f8-7000-bbac-f691878394df (opencode, opencode-go/deepseek-v4.1-flash, native probe v2, agent subtasks 100m CPU)",
+  "taskImage": {
+   "sourceCommit": "8481557c9cd5ee944cadf63a63335f99f8eac041",
+   "digest": "sha256:1aff54d930e381997cefe7c2a91b3201d3b938b7393552b13f6af55cbfcb539e",
+   "runtimeImageVersionId": "01a17feb-e509-7000-9df5-f51ab8ae8275",
+   "validation": "passed (worker-uid 10001, aw-task-tools ready)",
+   "note": "unchanged across releases; H5/H6 change only the service"
+  },
+  "configuration": {
+   "repositoryId": "01M5ZZCB14PHJDBAHJBMJDDR0B",
+   "profile": {
+    "id": "01M5ZZCEF8NY73Q2ZR1Y3HCQ2E",
+    "revision": 1,
+    "digest": "91684d60fc079c2eca6bc48b8b73405924b0a4bf29032e8455ed090a8a917a52"
+   },
+   "employeeId": "01M5ZZCEJC2JGTCGSPPN7NP9NK",
+   "job": "platform:graph-development:job:mr-v1",
+   "nodeTimeoutMs": 7200000
+  }
+ },
+ "releases": [
+  {
+   "tag": "v0.1.1",
+   "id": "01a17ff1-7b9c-7000-89e4-a21ae25e9842",
+   "sourceCommit": "b2d6cf312a94963826f2d29d47c6d4539ef40be8 (AW 8481557c9)",
+   "serviceImage": "sha256:68c7ab3e4a33c4b780f15586d79debb94624bfc49bdf23d2b14b22cdd5da68aa",
+   "stagesSeconds": {
+    "queued": 7.3,
+    "build": 120.5,
+    "migration": 15.2,
+    "deploy": 24.5
+   },
+   "migration": "fresh PostgreSQL install, epoch 2",
+   "switch": "first production release, verified and switched 00:41"
+  },
+  {
+   "tag": "v0.1.2",
+   "id": "01a18148-b47a-7000-8a7e-2c246f8bb789",
+   "sourceCommit": "d7bc02d1e71ae76370e44d21da9cea0902101eac (AW 15f4e65dc)",
+   "result": "failed at migration: the platform PostgreSQL was being OOM-killed (Failed to connect)"
+  },
+  {
+   "tag": "v0.1.3",
+   "id": "01a18150-ed07-7000-b1a0-98ec70d82ffe",
+   "sourceCommit": "d7bc02d1e71ae76370e44d21da9cea0902101eac (AW 15f4e65dc)",
+   "serviceImage": "sha256:5a0a7e2b2e65643868e3aebab6b0461256787d486382599214c7f6ce85397a6d",
+   "stagesSeconds": {
+    "queued": 4.1,
+    "build": 31.1,
+    "migration": 13.7,
+    "deploy": 14.0,
+    "launch": 48.4,
+    "freeze": 6.4,
+    "handoff-prepare": 5.1,
+    "route": 30.9,
+    "activate": 4.0
+   },
+   "switch": "upgrade of the in-flight Case (blocked at verify-change), 07:03:36-07:04:25"
+  },
+  {
+   "tag": "v0.1.4",
+   "id": "01a18161-40b0-7000-9459-169c11cebe3f",
+   "sourceCommit": "d7bc02d1e71ae76370e44d21da9cea0902101eac (same commit)",
+   "serviceImage": "sha256:5a0a7e2b2e65643868e3aebab6b0461256787d486382599214c7f6ce85397a6d",
+   "stagesSeconds": {
+    "queued": 6.3,
+    "build": 26.3,
+    "migration": 14.8,
+    "deploy": 25.2,
+    "launch": 57.2,
+    "freeze": 7.4,
+    "handoff-prepare": 4.5,
+    "route": 36.3,
+    "activate": 6.3
+   },
+   "switch": "default recovery while the Case observed MR !1, 07:21:39-07:22:38"
+  }
+ ],
+ "case": {
+  "id": "01M5ZZCVCM0S9Y9JNQRQRPVW1V",
+  "terminal": "closed",
+  "designRevisions": 4,
+  "basis": {
+   "id": "basis:rfc396-r24b:preview-1",
+   "digest": "8a64f1b3a530c2071aab416927d2222c4b136c6a0d8cec871d6d91aa16535284",
+   "obligations": [
+    "OBL-RULES",
+    "OBL-DELIVERY"
+   ],
+   "excludedElements": [
+    "REQ-HUMAN-FLOW",
+    "BEH-MR",
+    "BEH-EXTERNAL"
+   ]
+  },
+  "consumedTotalTokens": 6475171,
+  "consumedDurationMs": 8431689
+ },
+ "journey": [
+  "00:43 Case created with publication branch rfc396/hosted-b-8481557c9-r24; understand-request",
+  "design-and-clarify on a 100m CPU agent subtask: the first designer round hit the 30-minute node timeout at its final step; operator cancelled the task, raised the node timeout to 2 h and resumed (01:28)",
+  "01:59 design revision 3; operator edited the design (revision 4): OBL-DELIVERY keeps only the pre-delivery file-scope check, new OBL-MR-DECISION on the excluded MR elements (finding F4 recurred)",
+  "02:01 basis preview-1 (OBL-RULES, OBL-DELIVERY); native review 01M604YBDCNZFW3QMTM8DXSD58, review body byte-identical to the frozen basis (24,834 bytes, sha256 2e105c57...); approved 02:21, receipt 01M604ZV0NTNYRXHX878QYGGB2",
+  "02:27-02:37 implement-1 (task 01M60537G9HKMCK4VFZWKA3C7G): src/leap-year.cjs, tests/leap-year.test.cjs, executable verify; candidate tree 2ea1474424ff97887823b7ffffd305d16359a082",
+  "02:37-02:57 three verifications: profile repo:verify executed in the hosted task environment and passed each time; blocked by five non-gap model limitations (H5) and, before acceptance, pending OBL-DELIVERY",
+  "02:46 operator acceptance of OBL-DELIVERY on 2ea14744 after checking the task diff against 5dbef960 and replaying the tests locally",
+  "03:00 explicit re-implementation (implement-2): attempt 1 failed graph-workspace-outcome-workspace-mismatch because the complete candidate needed no change (H6); attempt 2 passed only by rewriting the three files (tree bc1e06757453940ce396a5e60af7ee7527d8a582) and still reported one non-gap limitation",
+  "06:51-07:00 platform PostgreSQL restarted to raise max_connections (user approved); the recreated pod fell back to a 1 GiB memory limit and was OOM-killed four times; the hosted AW service restarted three times and re-acquired the execution lease (epoch 6, 07:00:44) with the Case intact; v0.1.2 failed at migration; memory restored to 2 GiB in place (user approved)",
+  "07:03-07:04 release v0.1.3 (AW 15f4e65dc with H5/H6) verified and switched: old instance lost the lease 07:03:42 and exited; new instance active with epoch 8 at 07:04:22; Case unchanged",
+  "07:06 on v0.1.3: OBL-DELIVERY acceptance for bc1e0675 and limitation-review on code-feedback:01M6077GC0SMSBMR00H4PFFANT (the platform profile had run verify with Node v20.19.2: TAP ok 1 - leap-year-rules, 1 pass, 0 fail)",
+  "07:08-07:13 verification 01M60NE4VXXRHS7D8NMFG6RT78 passed with evidence limitation-review, structure, execution and acceptance; no limitations",
+  "07:13-07:19 deliver-result and publish-mr with the MR publication check; MR !1 rfc396/hosted-b-8481557c9-r24 -> main, head b6f4e80a809c8e14e62c6ff4a0c47b59ab7c9350, three added files, commit and MR text from implement-2; Case waiting",
+  "07:20-07:22 default recovery: release v0.1.4 of the same commit verified and switched; v0.1.3 instance lost the lease 07:21:50 and exited; v0.1.4 instance active with epoch 10 at 07:22:34",
+  "07:24:15 operator closed MR !1 on GitLab; 07:24:40 the v0.1.4 instance observed it and the Case became terminal closed; no merge, no second MR, main unchanged"
+ ],
+ "receipts": {
+  "nativeReview": {
+   "reviewId": "01M604YBDCNZFW3QMTM8DXSD58",
+   "receipt": "01M604ZV0NTNYRXHX878QYGGB2",
+   "bodyBytes": 24834
+  },
+  "acceptances": [
+   "acceptance:rfc396-r24b:accept-delivery-1 (tree 2ea14744)",
+   "acceptance:rfc396-r24b:accept-delivery-2 (tree bc1e0675)"
+  ],
+  "limitationReview": "limitation-review:rfc396-r24b:limitation-review-1 (round 01M6077GC0SMSBMR00H4PFFANT)",
+  "passingVerification": "verification:01M60NE4VXXRHS7D8NMFG6RT78",
+  "mergeRequest": {
+   "project": 573,
+   "iid": 1,
+   "sourceBranch": "rfc396/hosted-b-8481557c9-r24",
+   "targetBranch": "main",
+   "head": "b6f4e80a809c8e14e62c6ff4a0c47b59ab7c9350",
+   "createdAt": "2026-10-28T07:18:47Z",
+   "closedAt": "2026-10-28T07:24:15Z",
+   "merged": false
+  },
+  "executionLeases": [
+   {
+    "release": "v0.1.1",
+    "epoch": 3,
+    "activeAt": "00:41:55"
+   },
+   {
+    "release": "v0.1.1 after the database restarts",
+    "epoch": 6,
+    "activeAt": "07:00:44"
+   },
+   {
+    "release": "v0.1.3",
+    "epoch": 8,
+    "activeAt": "07:04:22",
+    "previousLostAt": "07:03:42"
+   },
+   {
+    "release": "v0.1.4",
+    "epoch": 10,
+    "activeAt": "07:22:34",
+    "previousLostAt": "07:21:50"
+   }
+  ]
+ },
+ "obligationsOutsideBasis": "OBL-HUMAN-REVIEW and OBL-MR-DECISION stay pending in the design because they belong to excluded elements; their facts are the native review receipt above and the operator's close on GitLab",
+ "findings": [
+  {
+   "id": "H1",
+   "kind": "product gap (RFC-370)",
+   "summary": "development:shared parent keeps the agent-profile registration of the release that created it; after a release changed the compute profile the designer's agent subtasks were refused (first project rfc396-graph2-hosted). Recorded in docs/audit-backlog.md."
+  },
+  {
+   "id": "H2",
+   "kind": "deployment configuration",
+   "summary": "The only native-probe-v2 compute profile gives agent subtasks 100m CPU; a real designer round exceeded the 30-minute node timeout. Recorded with H1."
+  },
+  {
+   "id": "H3",
+   "kind": "platform behaviour and AW log noise",
+   "summary": "The cancelled agent subtask stayed in cancelling for hours; the AW driver of the cancelled task logged a fenced heartbeat every 15 s. Recorded with H1."
+  },
+  {
+   "id": "H4",
+   "kind": "product gap",
+   "summary": "Evidence artifact reads fail intermittently under load; the evidence page shows recorded evidence as unknown and verification uses the same check. Recorded in docs/audit-backlog.md."
+  },
+  {
+   "id": "H5",
+   "kind": "product change (user approved), fixed in 15f4e65dc",
+   "summary": "Non-gap implementation limitations blocked delivery with no operator path; added the limitation-review judgment."
+  },
+  {
+   "id": "H6",
+   "kind": "product defect, fixed in 15f4e65dc",
+   "summary": "An explicit re-implementation of a complete candidate failed graph-workspace-outcome-workspace-mismatch; re-implementation may now finish without changes."
+  },
+  {
+   "id": "F4",
+   "kind": "product gap (recurrence of the enterprise finding)",
+   "summary": "The designer mixed pre- and post-delivery checks in one manual obligation on a required element; the operator split it. Recorded in docs/audit-backlog.md."
+  }
+ ],
+ "environmentRepairs": [
+  "re-imported node-local cs-builder:dev after the node image prune",
+  "re-tagged the task-runtime images in the CRI cache (import-2026-10-16/17/18) without restarting containerd",
+  "raised the Local Garage object-storage backend budget twice by 256 MiB",
+  "opened compute profile 01a14489 in both acceptance projects' compute policies",
+  "raised the hosted node timeout to 2 h",
+  "platform PostgreSQL: max_connections 100 -> 300 and memory limit restored to 2 GiB in place (both user approved)"
+ ],
+ "localEvidence": "/private/tmp/rfc396-enterprise/evidence-hosted-r24b (case, design, evidence, task diffs, profile output, release journeys, handover logs, GitLab final state, operator actions)"
+}

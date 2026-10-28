@@ -5522,3 +5522,14 @@ graph@2 的 `verify-change` 要求实现依据里的每条义务在**交付前**
 （`application/graph-development/verification.ts:130-141` 的 `hasReadableArtifact`，读失败即记「待人工验收」，同文件
 `:539-545`），遇到同样的临时失败会把整轮验证判为不通过，操作者看不出验收其实已经记录。可选处置（未立项）：读取产物时区分
 「不存在 / 摘要不符」与临时错误，临时错误有限重试；或在阻塞原因与证据页写明是读取失败、可重试。
+
+## Windows e2e：SIGKILL 后立刻重启，偶发「another daemon is already running」（2026-10-28，CI 偶发，未处置）
+
+`e2e/task-lifecycle-states.spec.ts:600`（interrupted：SIGKILL → restart → orphan reap）在运行 40649724461 的 Windows e2e
+第 3/4 片首轮失败、重试通过：daemonA 被 `killChild('SIGKILL')` 后，harness 已等到子进程 `close`，daemonB 用同一 home 启动时
+仍报 `another daemon is already running pid=7448`。单实例锁是 PID 文件加存活检查（`packages/backend/src/util/lock.ts:46-96`，
+`isProcessAlive(stalePid)` 为真时拒绝），看起来是 Windows 上刚被 TerminateProcess 的进程仍被判为存活。同一文件此前的 Windows
+首轮失败（运行 40514130589 的 `:631`，等待 running 超时）是另一类原因，已在 `db7b6746f` / `f427b61ce` 放宽。
+
+没有 Windows 环境复现之前不改：需要先确认 Bun 在 Windows 上对已终止进程的 `process.kill(pid, 0)` 返回什么，再决定是修存活判断
+（例如结合进程启动时间）还是只在测试里等锁释放。若是前者，用户崩溃后立刻重启也会遇到同样的拒绝。
