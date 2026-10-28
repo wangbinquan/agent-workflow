@@ -1,5 +1,5 @@
 import { pruneEpochPlanContent } from './planContent'
-import { createReadStream } from 'node:fs'
+import { createReadStream, readFileSync } from 'node:fs'
 import { bytesDigest } from '@/platform/persistence/migration/conversion/digest'
 import { createLocalEpochArtifacts, writeEpochFile } from './fileJournal'
 import { join } from 'node:path'
@@ -18,6 +18,11 @@ import {
 } from '../../domain/epochSwitch/model'
 import { assertJournalSuccessor } from '../../domain/epochSwitch/transitions'
 
+/** The hosted journal always keeps operation evidence in the chunked artifact port. */
+export type HostedEpochSwitchJournal = EpochSwitchJournalPort & {
+  artifacts(operationId: string): EpochSwitchArtifactPort
+}
+
 /** Hosted artifacts outlive a Job's scratch directory; equal-byte/write-once semantics are required. */
 export interface HostedEpochArtifacts {
   writeOnce(operationId: string, name: string, bytes: Uint8Array): Promise<ReceiptExport>
@@ -29,7 +34,7 @@ export function createMetaEpochSwitchJournal(input: {
   artifacts: HostedEpochArtifacts
   scratchRoot: string
   acquireOperationLock(operationId: string): Promise<{ release(): void | Promise<void> }>
-}): EpochSwitchJournalPort {
+}): HostedEpochSwitchJournal {
   const c = input.connection
   const table = metaTableName(c.provider, 'migration_operations')
   const marks = (n: number) => parameters(c, n).split(', ')
@@ -190,4 +195,55 @@ export function createHostedEpochArtifactPort(input: {
       return local.get(name, digest)
     },
   }
+}
+
+/**
+ * By-name reference data larger than one platform request — the epoch-1 PostgreSQL reference
+ * catalogs are about 37 MiB, while CrewStation accepts at most 32 MiB of base64 JSON per callback —
+ * keeps its bytes in the chunked artifact port; the name holds only a small pointer to their digest.
+ * The bytes use their own name because the port materialises them at `<operation root>/<name>`,
+ * where the journal keeps the pointer document.
+ */
+export function createHostedReferenceCache(
+  journal: Pick<HostedEpochSwitchJournal, 'artifacts' | 'readArtifact' | 'writeOnce'>,
+  operationId: string,
+): {
+  read(name: string): Promise<Uint8Array | null>
+  writeOnce(name: string, bytes: Uint8Array): Promise<void>
+} {
+  const artifacts = journal.artifacts(operationId)
+  const content = (name: string) => `${name}.content`
+  return {
+    async read(name) {
+      const pointer = await journal.readArtifact(operationId, name)
+      if (!pointer) return null
+      return readFileSync(await artifacts.get(content(name), referencePointerDigest(pointer)))
+    },
+    async writeOnce(name, bytes) {
+      const digest = await artifacts.put(content(name), bytes)
+      await journal.writeOnce(
+        operationId,
+        name,
+        Buffer.from(JSON.stringify({ version: 1, digest })),
+      )
+    },
+  }
+}
+
+interface ReferencePointer {
+  readonly version?: unknown
+  readonly digest?: unknown
+}
+
+function referencePointerDigest(bytes: Uint8Array): string {
+  let pointer: ReferencePointer | null
+  try {
+    pointer = JSON.parse(Buffer.from(bytes).toString('utf8')) as ReferencePointer | null
+  } catch {
+    pointer = null
+  }
+  const digest = pointer?.digest
+  if (pointer?.version !== 1 || typeof digest !== 'string' || !/^sha256:[0-9a-f]{64}$/.test(digest))
+    throw new EpochSwitchError('v3-artifact-digest-mismatch')
+  return digest
 }

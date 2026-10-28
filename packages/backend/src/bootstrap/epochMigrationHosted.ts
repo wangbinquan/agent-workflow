@@ -15,6 +15,7 @@ import {
   type EpochSwitchJournal,
 } from '@/modules/system-operations/composition/epochMigration'
 import {
+  createHostedReferenceCache,
   createMetaEpochSwitchJournal,
   type HostedEpochArtifacts,
 } from '@/modules/system-operations/composition/epochMigration'
@@ -264,10 +265,7 @@ export async function composeHostedEpochSwitch(
                   profileRef: scratch,
                   sourceFingerprint,
                   supportedMajors: options.catalogArtifacts.map((a) => a.postgresqlMajor),
-                  cache: {
-                    read: (name) => journal.readArtifact(operationId, name),
-                    writeOnce: (name, bytes) => journal.writeOnce(operationId, name, bytes),
-                  },
+                  cache: createHostedReferenceCache(journal, operationId),
                 })
               : await loadSupportedSourceManifest()
           const openScratch = (requireEmpty: boolean) => {

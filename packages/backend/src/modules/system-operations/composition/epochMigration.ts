@@ -32,6 +32,7 @@ export { createLocalEpochQuiesce } from '../infrastructure/local/epochSwitchQuie
 export { environmentProfile } from '../domain/epochSwitch/supportMatrix'
 export { phaseIndex } from '../domain/epochSwitch/transitions'
 export {
+  createHostedReferenceCache,
   createMetaEpochSwitchJournal,
   type HostedEpochArtifacts,
 } from '../infrastructure/epochSwitch/metaJournal'

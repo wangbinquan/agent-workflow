@@ -185,7 +185,17 @@ describeV3Providers('production epoch-1 PostgreSQL source manifest', (h) => {
         if (url.pathname.endsWith('/artifacts')) {
           if (request.method === 'GET')
             return Response.json(artifacts.get(url.searchParams.get('name')!) ?? null)
-          const body = (await request.json()) as { name: string; bytes: string; digest: string }
+          // CrewStation refuses callback bodies above 32 MiB (CrewStation repository,
+          // modules/release/http/databaseMigrationCallbacks.ts:9). The reference catalogs alone are
+          // about 37 MiB; written as one document they failed the first hosted plan on CrewStation
+          // (RFC-395 T19 / CS RFC-044 T9 acceptance, 2026-10-28).
+          const text = await request.text()
+          if (Buffer.byteLength(text) > 32 * 1024 * 1024)
+            return Response.json(
+              { error: 'validation', message: '迁移回调请求超过 32 MiB', details: {} },
+              { status: 413 },
+            )
+          const body = JSON.parse(text) as { name: string; bytes: string; digest: string }
           const previous = artifacts.get(body.name)
           if (previous && previous.digest !== body.digest)
             return Response.json({ error: 'write-once-conflict' }, { status: 409 })
@@ -228,6 +238,18 @@ describeV3Providers('production epoch-1 PostgreSQL source manifest', (h) => {
       )
       expect(catalogNames).toHaveLength(1)
       const originalCatalog = artifacts.get(catalogNames[0]!)
+      // The name holds a small pointer; the catalogs are chunked in the artifact port.
+      const pointer = JSON.parse(
+        Buffer.from(originalCatalog!.bytes, 'base64').toString('utf8'),
+      ) as {
+        digest: string
+      }
+      const chunks = [...artifacts.entries()].filter(([name]) =>
+        name.startsWith(`.artifacts/${catalogNames[0]}.content/${pointer.digest.slice(7)}/`),
+      )
+      expect(chunks.length).toBeGreaterThan(2)
+      for (const [, chunk] of chunks)
+        expect(Buffer.from(chunk.bytes, 'base64').byteLength).toBeLessThanOrEqual(4 * 1024 * 1024)
       const upgraded = new SQL(scratch.url, { max: 1 })
       try {
         expect(
