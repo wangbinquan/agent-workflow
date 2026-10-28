@@ -106,6 +106,8 @@ control adapter 在 `/v1/operations/<operation-id>` 下读写 `artifacts`（字�
 location 与 receipt digest；`activation` 返回源/目标的实际配置权威，不能只回传 Job 状态。
 实现入口为 `packages/backend/src/bootstrap/epochMigrationHostedEntry.ts:15`。
 
+迁移 Job 的资源：平台按 Manifest `databaseMigration.servicePlanId` 指定的套餐运行全部迁移 Job，未指定时用服务自己的套餐（CrewStation RFC-044）。转换比服务本身吃内存得多，CrewStation 验收中 512Mi 的服务套餐让 run Job 一直顶在上限、反复 GC。发布档案的 `migrationServicePlanId` 会渲染进这一字段；候选槽本身仍用 `servicePlanId`。
+
 执行顺序：
 
 1. 同一候选 build 运行 `agent-workflow migrate`，action=plan。保存输出

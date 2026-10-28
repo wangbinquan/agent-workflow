@@ -15,6 +15,9 @@ export interface CrewStationDeploymentProfile {
   readonly gitCredentialsDefinitionId?: string
   /** Optional `AW_DATABASE_POOL_MAX` configuration (1–256); absent or empty keeps the hosted default. */
   readonly databasePoolMaxDefinitionId?: string
+  /** Optional CrewStation service plan for the epoch-migration Jobs (RFC-044 `databaseMigration.servicePlanId`);
+   * absent keeps the service plan, which a conversion can outgrow (512Mi was too small in the T9 acceptance). */
+  readonly migrationServicePlanId?: string
   readonly eventTypeIds?: readonly string[]
   readonly agentProfilesDefinitionId: string
   readonly taskProfileId: string
@@ -170,6 +173,12 @@ export function parseDeploymentProfile(raw: unknown): CrewStationDeploymentProfi
     (typeof databasePoolMaxDefinitionId !== 'string' || !UUID.test(databasePoolMaxDefinitionId))
   )
     throw new Error('profile.databasePoolMaxDefinitionId must be a resource UUID')
+  const migrationServicePlanId = record.migrationServicePlanId
+  if (
+    migrationServicePlanId !== undefined &&
+    (typeof migrationServicePlanId !== 'string' || !UUID.test(migrationServicePlanId))
+  )
+    throw new Error('profile.migrationServicePlanId must be a resource UUID')
   return {
     ...profile,
     agentProfiles,
@@ -177,6 +186,7 @@ export function parseDeploymentProfile(raw: unknown): CrewStationDeploymentProfi
     ...(typeof eventSourcesDefinitionId === 'string' ? { eventSourcesDefinitionId } : {}),
     ...(typeof gitCredentialsDefinitionId === 'string' ? { gitCredentialsDefinitionId } : {}),
     ...(typeof databasePoolMaxDefinitionId === 'string' ? { databasePoolMaxDefinitionId } : {}),
+    ...(typeof migrationServicePlanId === 'string' ? { migrationServicePlanId } : {}),
   }
 }
 
@@ -198,6 +208,20 @@ export function renderCrewStationManifest(
           : ['agent-workflow', 'start'],
       )
     if (name === 'AGENT_PROFILES_JSON') return JSON.stringify(profile.agentProfiles)
+    if (name === 'DATABASE_MIGRATION_DECLARATION')
+      // CrewStation RFC-044: the epoch-1 -> epoch-2 switch runs these commands as migration Jobs and
+      // hands AW_SECRET_KEY over as the source key; the Jobs use their own plan when one is given.
+      return (
+        'databaseMigration: ' +
+        JSON.stringify({
+          command: ['agent-workflow', 'migrate'],
+          verifyCommand: ['agent-workflow', 'verify-database-migration'],
+          sourceKeyConfig: 'AW_SECRET_KEY',
+          ...(profile.migrationServicePlanId === undefined
+            ? {}
+            : { servicePlanId: profile.migrationServicePlanId }),
+        })
+      )
     if (name === 'RECOVERY_DECLARATION')
       // RFC-370 §9.2 V4: parent-level actions only; node retry/resume is AW's
       // own task command and a fresh volume is AW's ordinary "rerun task".

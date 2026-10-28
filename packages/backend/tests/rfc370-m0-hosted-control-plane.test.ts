@@ -541,6 +541,30 @@ test('the Manifest is rendered from a validated deployment profile', () => {
   expect(() => parseDeploymentProfile({ ...profile, databasePoolMaxDefinitionId: '2' })).toThrow(
     'resource UUID',
   )
+  // CrewStation RFC-044 T9 acceptance (2026-10-28): migration Jobs on the service plan (250m/512Mi)
+  // spent the run in GC at the memory limit; a profile may give them their own plan.
+  const migrationPlan = '01a0bf5d-8f4b-7100-8000-00000000000a'
+  expect(
+    parseYaml(
+      renderCrewStationManifest(
+        '{{DATABASE_MIGRATION_DECLARATION}}',
+        parseDeploymentProfile({ ...profile, migrationServicePlanId: migrationPlan }),
+      ),
+    ),
+  ).toEqual({
+    databaseMigration: {
+      command: ['agent-workflow', 'migrate'],
+      verifyCommand: ['agent-workflow', 'verify-database-migration'],
+      sourceKeyConfig: 'AW_SECRET_KEY',
+      servicePlanId: migrationPlan,
+    },
+  })
+  expect(renderCrewStationManifest('{{DATABASE_MIGRATION_DECLARATION}}', profile)).not.toContain(
+    'servicePlanId',
+  )
+  expect(() => parseDeploymentProfile({ ...profile, migrationServicePlanId: 'large' })).toThrow(
+    'resource UUID',
+  )
   expect(crewStationDatabaseConfig({ AW_DATABASE_POOL_MAX: '' })).toMatchObject({ poolMax: 8 })
   expect(() =>
     parseDeploymentProfile({ ...profile, restoreObjectDefinitionId: 'arbitrary-url' }),
