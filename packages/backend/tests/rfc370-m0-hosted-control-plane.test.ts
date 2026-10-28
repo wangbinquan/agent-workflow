@@ -591,6 +591,7 @@ test('the shipped Manifest template and image start the hosted control plane', (
       service: {
         command: string[]
         port: number
+        databaseMigration: { command: string[]; verifyCommand: string[]; sourceKeyConfig: string }
         probes: Record<
           string,
           { path: string; periodSeconds: number; timeoutSeconds: number; failureThreshold: number }
@@ -617,6 +618,13 @@ test('the shipped Manifest template and image start the hosted control plane', (
   const startup = manifest.spec.service.probes.startup!
   expect(startup.periodSeconds * startup.failureThreshold).toBeGreaterThanOrEqual(300)
   expect(manifest.spec.release.migrationCommand).toEqual(['agent-workflow', 'migrate'])
+  // RFC-395 T19 runs through CrewStation RFC-044's migration operation: the platform starts these
+  // commands with CS_DATABASE_MIGRATION_* and hands the named config value over as the source key.
+  expect(manifest.spec.service.databaseMigration).toEqual({
+    command: ['agent-workflow', 'migrate'],
+    verifyCommand: ['agent-workflow', 'verify-database-migration'],
+    sourceKeyConfig: 'AW_SECRET_KEY',
+  })
   expect(manifest.spec.env).toEqual(
     expect.arrayContaining([
       expect.objectContaining({ name: 'AW_SECRET_KEY', from: 'secret' }),

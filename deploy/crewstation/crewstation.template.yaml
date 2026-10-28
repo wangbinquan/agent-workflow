@@ -13,6 +13,12 @@ spec:
     databaseRestore:
       command: [agent-workflow, migrate]
       verifyCommand: [agent-workflow, verify-database-restore]
+    # RFC-395 T19 / CrewStation RFC-044: the epoch-1 -> epoch-2 switch runs as a platform migration
+    # operation (plan, approval, freeze, run, verify, rollback before first write, complete).
+    databaseMigration:
+      command: [agent-workflow, migrate]
+      verifyCommand: [agent-workflow, verify-database-migration]
+      sourceKeyConfig: AW_SECRET_KEY
     probes:
       startup: { path: /ready, periodSeconds: 3, timeoutSeconds: 3, failureThreshold: 100 }
       readiness: { path: /ready, periodSeconds: 5, timeoutSeconds: 3, failureThreshold: 3 }
