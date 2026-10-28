@@ -1,4 +1,8 @@
-import { canonicalJson, repositoryMaterializationCommit } from '@agent-workflow/shared'
+import {
+  canonicalJson,
+  repositoryMaterializationCommit,
+  utf16MaxLength,
+} from '@agent-workflow/shared'
 import { z } from 'zod'
 import type { CandidateDeliveryParticipant } from '@/modules/source-control/public/types'
 import { graphDigest } from '../../domain/graph-development/model'
@@ -27,11 +31,44 @@ interface GraphDeliveryResult {
   candidateState: unknown
   artifactRefs: readonly string[]
 }
-function publishedContext(inputEnvelopeJson: string) {
+function inputContexts(inputEnvelopeJson: string) {
   const envelope = z.object({ contextsJson: z.string() }).parse(JSON.parse(inputEnvelopeJson))
-  const contexts = z
+  return z
     .array(z.object({ typeId: z.string(), stateJson: z.string() }))
     .parse(JSON.parse(envelope.contextsJson))
+}
+function issueDeliveryContent(inputEnvelopeJson: string) {
+  const issue = inputContexts(inputEnvelopeJson).find(
+    (context) => context.typeId === 'development.issue-handling',
+  )
+  if (!issue) return null
+  let state: unknown
+  try {
+    state = JSON.parse(issue.stateJson)
+  } catch {
+    return null
+  }
+  const parsed = z
+    .object({
+      deliveryContent: z
+        .object({
+          commitMessage: z.string().trim().min(1).check(utf16MaxLength(5_000)),
+          mergeRequestTitle: z.string().trim().min(1).check(utf16MaxLength(240)),
+          mergeRequestDescription: z.string().trim().min(1).check(utf16MaxLength(32_000)),
+        })
+        .strict(),
+    })
+    .safeParse(state)
+  if (!parsed.success) return null
+  const content = parsed.data.deliveryContent
+  return {
+    commitMessage: content.commitMessage,
+    title: content.mergeRequestTitle,
+    description: content.mergeRequestDescription,
+  }
+}
+function publishedContext(inputEnvelopeJson: string) {
+  const contexts = inputContexts(inputEnvelopeJson)
   const state = (typeId: string) => {
     const value = contexts.find((context) => context.typeId === typeId)
     return value ? (JSON.parse(value.stateJson) as unknown) : null
@@ -153,7 +190,8 @@ export function createGraphPlatformWorkItems(deps: {
           ? '候选校验已通过。'
           : '候选存在失败或未完成的验收项。'
       } else if (plan.workItemRef === 'deliver-result') {
-        const verification = (await deps.store.records(work.designId))
+        const records = await deps.store.records(work.designId)
+        const verification = records
           .filter((row) => row.kind === 'verification' && row.status === 'completed')
           .sort((a, b) => b.createdAt - a.createdAt)[0]
         if (!verification) throw new Error('graph-delivery-verification-missing')
@@ -186,13 +224,48 @@ export function createGraphPlatformWorkItems(deps: {
         const output = graphResultSchemas['implement-change'].parse(
           (JSON.parse(implementation.payloadJson) as { result: unknown }).result,
         )
+        let deliveryContent = output.deliveryContent
+        if (work.request.deliveryMode === 'merge-request') {
+          const redelivery = records.some((row) => {
+            if (row.kind !== 'mr-handoff' || row.status !== 'completed') return false
+            const { handoff } = JSON.parse(row.payloadJson) as {
+              handoff: { implementationRoundRef: string; candidateRef: string }
+            }
+            return (
+              handoff.implementationRoundRef === value.implementationRoundRef &&
+              handoff.candidateRef !== value.candidate.candidateRef
+            )
+          })
+          if (redelivery)
+            deliveryContent = issueDeliveryContent(plan.inputEnvelopeJson) ?? deliveryContent
+          // A retry keeps the content selected for this exact verification, even
+          // if care has since advanced its issue context or omitted it on replay.
+          const saved = (await deps.store.links(work.designId))
+            .filter((link) => link.kind === 'execution' && link.id.startsWith('delivery:'))
+            .map(
+              (link) =>
+                JSON.parse(link.payloadJson) as {
+                  verificationRef?: string
+                  implementationRoundRef?: string
+                  candidate?: { candidateRef: string }
+                  deliveryContent?: GraphDeliveryInput['deliveryContent']
+                },
+            )
+            .find(
+              (link) =>
+                link.verificationRef === verification.id &&
+                link.implementationRoundRef === value.implementationRoundRef &&
+                link.candidate?.candidateRef === value.candidate.candidateRef,
+            )
+          deliveryContent = saved?.deliveryContent ?? deliveryContent
+        }
         const workspace = await deps.workspace.state(work.designId)
         const deliveryInput: GraphDeliveryInput = {
           work,
           roundRef: plan.roundRef,
           workspace,
           verification: value,
-          deliveryContent: output.deliveryContent,
+          deliveryContent,
         }
         const reused =
           work.request.deliveryMode === 'merge-request'
@@ -227,7 +300,7 @@ export function createGraphPlatformWorkItems(deps: {
             candidate: value.candidate,
             verification: verification.id,
             request: work.request,
-            deliveryContent: output.deliveryContent,
+            deliveryContent,
             targetBranch: workspace.targetBranch ?? null,
             uploadPlan: workspace.uploadPlan ?? null,
           })}`
@@ -276,7 +349,7 @@ export function createGraphPlatformWorkItems(deps: {
               uploadPlan: workspace.uploadPlan,
               expectedTreeOid: value.candidate.treeOid,
               missionId: `graph-${work.caseId}-${value.basisDigest.slice(0, 12)}`,
-              summarySource: output.deliveryContent.commitMessage,
+              summarySource: deliveryContent.commitMessage,
             })
         if (!commit.ok) throw new Error(`${commit.code}: ${commit.detail}`)
         let publication: {
@@ -314,12 +387,8 @@ export function createGraphPlatformWorkItems(deps: {
             ? await (() => {
                 if (!deps.mergeRequestDelivery) throw new Error('graph-mr-delivery-binding-missing')
                 return deps.mergeRequestDelivery.prepareHandoff({
-                  work,
-                  roundRef: plan.roundRef,
-                  workspace,
-                  verification: value,
+                  ...deliveryInput,
                   commitSha: commit.commitSha,
-                  deliveryContent: output.deliveryContent,
                 })
               })()
             : null)
@@ -375,6 +444,9 @@ export function createGraphPlatformWorkItems(deps: {
             kind: 'delivery',
             commitSha: commit.commitSha,
             candidate: value.candidate,
+            implementationRoundRef: value.implementationRoundRef,
+            verificationRef: verification.id,
+            deliveryContent,
             artifact,
             publication,
             result,

@@ -309,6 +309,27 @@ export function createGraphDeliveryBridge(deps: {
         result: GraphMrHandoffResult
         publicationIdentity?: string
       }
+      let issueState: unknown
+      try {
+        issueState = JSON.parse(input.published.issueStateJson)
+      } catch {
+        return null
+      }
+      const parsedIssue = issueHandlingContextSchema.safeParse(issueState)
+      if (!parsedIssue.success || !parsedIssue.data.deliveryContent) return null
+      const currentIssue = parsedIssue.data
+      // Care may have published a repaired candidate since the last graph
+      // handoff. Its delivery content belongs to that publication of this round.
+      const publishedIdentity =
+        saved.handoff.implementationRoundRef === input.verification.implementationRoundRef &&
+        saved.result.candidateState.candidateRef !== input.published.candidateRef
+          ? publicationIdentity(saved.handoff, {
+              issueState: {
+                ...saved.result.issueState,
+                deliveryContent: parsedIssue.data.deliveryContent,
+              },
+            })
+          : (saved.publicationIdentity ?? publicationIdentity(saved.handoff, saved.result))
       const intendedPublicationIdentity = publicationIdentity(
         {
           ...saved.handoff,
@@ -324,8 +345,7 @@ export function createGraphDeliveryBridge(deps: {
       )
       if (
         currentCandidate?.treeOid === input.verification.candidate.treeOid &&
-        (intendedPublicationIdentity !==
-          (saved.publicationIdentity ?? publicationIdentity(saved.handoff, saved.result)) ||
+        (intendedPublicationIdentity !== publishedIdentity ||
           (input.work.request.targetBranch !== null &&
             input.work.request.targetBranch !== (input.workspace.targetBranch ?? 'main')))
       )
@@ -374,9 +394,6 @@ export function createGraphDeliveryBridge(deps: {
         (input.workspace.targetBranch ?? 'main') !== current.row.targetBranch
       )
         return null
-      const currentIssue = issueHandlingContextSchema.parse(
-        JSON.parse(input.published.issueStateJson),
-      )
       if (
         currentIssue.status !== 'active' ||
         currentIssue.repositoryRef !== input.work.repositoryId ||
@@ -385,13 +402,10 @@ export function createGraphDeliveryBridge(deps: {
         graphDigest(currentIssue.request) !== graphDigest(delivery.issueState.request)
       )
         return null
-      // Preserve care's published title/message after repairs. The graph's
-      // requested publication identity is stored separately from that care state.
       delivery = {
         ...delivery,
         issueState: {
           ...delivery.issueState,
-          deliveryContent: currentIssue.deliveryContent,
           materialArtifactRefs: [
             ...new Set([
               ...currentIssue.materialArtifactRefs,

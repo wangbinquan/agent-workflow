@@ -1,0 +1,119 @@
+{
+ "schemaVersion": 1,
+ "rfc": "RFC-396",
+ "criterion": "graph@2 real enterprise MR/CI direct journey (real model, native review, real GitLab MR and CI, default classifier and repair, same MR new head, external merge)",
+ "result": "passed",
+ "observedAt": "2026-10-28T00:23:00Z",
+ "candidate": {
+  "sourceSha": "8481557c9cd5ee944cadf63a63335f99f8eac041",
+  "ciRun": 40514130589,
+  "ciConclusion": "success",
+  "artifact": {
+   "id": 12739511843,
+   "name": "agent-workflow-e2e-macos-latest",
+   "digest": "sha256:0bd4cabb5a72cf0abbc4624094a4cb60550f6e347ec7c92c0c73d1f2e5beddc8",
+   "binary": "agent-workflow-e2e-macos-arm64",
+   "binarySha256": "af5355ffb85b5735faef14f3faa1692990aa9b5d037ad29b85f7dc808b9ce62e"
+  },
+  "database": "fresh home, SQLite epoch 2"
+ },
+ "environment": {
+  "model": "/opt/homebrew/bin/opencode 1.19.0 + opencode-go/deepseek-v4.1-flash (runtimeMode live)",
+  "gitlab": "local GitLab project 571 crewstation/rfc396-hosted-fixture, fixture main ca31e64357ff94497834367815ce69ecfa08f391",
+  "runner": "project runner 2 (gitlab-runner 19.2.0, shell, tag rfc396-graph-enterprise), started only for the CI window",
+  "collector": "collect-only adapter, contract dfc098c33 (aw-adapter@1 unchanged at the candidate apart from UTF-16 length checks), binary ec39be83c9f005f3792cc0bb9a3444aaf1e93f7217d2d30c3cbad988f9cba88a",
+  "employee": "job platform:graph-development:job:mr-ci-v1 copied unchanged except the care-pipeline collect adapter binding"
+ },
+ "case": {
+  "id": "01M5YVKRTGN2DR2DHGKCBA28A5",
+  "terminal": "merged",
+  "rounds": 36,
+  "consumedTotalTokens": 17842824,
+  "consumedDurationMs": 4427937,
+  "designRevisions": 5
+ },
+ "journey": [
+  "understand-request → design-and-clarify (real model, revision 2–3: decision table + CI repair flow; two required decisions left open)",
+  "operator clarification (who reviews, who merges/closes, who repairs CI) → round 3 output referenced elements it did not add; platform blocked graph-design-invalid (missing-reference ×3); operator resumed",
+  "two designer attempts exceeded the acceptance harness's 8-minute node timeout; operator restored the product default 30 minutes; round 4 produced revision 5 with both decisions addressed",
+  "basis 1 (all 42 elements) → native review approved (review body byte-identical to the frozen implementation.md, 53,768 bytes) → implementation → profile repo:verify passed both execution obligations; seven manual obligations pending, five of them only checkable after delivery (CI failure, repair, evidence, merge decision)",
+  "operator re-scoped basis 2 to the 24 pre-delivery elements and 4 obligations → native review approved (byte-identical, 45,999 bytes) → implementation attempt 1 ran git fsck --lost-found (protected git-meta write) → platform blocked graph-workspace-protected-root-write; operator removed .git/lost-found and requested implementation again (resume alone refused: graph-explicit-work-request-missing)",
+  "implementation → profile passed → operator checked the candidate tree read-only and recorded ob-verify-script / ob-phase1-scope acceptance → re-verification → deliver-result → MR !1 (rfc396/enterprise-8481557c9-fxsy6l → main, head a416e1b5, three added files)",
+  "real GitLab pipeline 326 job 1387: business tests pass 1 / fail 0, then RFC396_CI_REPAIR_REQUIRED and exit 1 (planned fault injection)",
+  "collect-pipeline (real GitLab via collect adapter) → default classifier → default repair Task added ci/verified-release.json {schemaVersion 1, entry src/clamp.cjs, sourceSha256 2428c373… = actual file hash}; nothing else changed",
+  "graph verification of the repaired candidate (execution obligations passed by the automatic profile; manual acceptances re-recorded for the new tree a8abbfd4) → same MR new head 975a0a29",
+  "real GitLab pipeline 327 job 1388: business tests and exact manifest passed (RFC396_CI_REPAIRED) → evaluate-ready readyToMerge true → wait-merge",
+  "operator merged MR !1 on GitLab (merge commit 8df5c63f, 00:21:02Z) → observer recorded the external merge → Case terminal merged (00:21:24Z)"
+ ],
+ "receipts": {
+  "nativeReviews": [
+   {
+    "nodeRunId": "01M5YZEQX5FH4GCFB7F3VHYYCJ",
+    "basis": "basis:rfc396-r24-enterprise:preview-1",
+    "bodySha256": "80c955c627c4acafbe6e411e4e90527d64b7b60d5924a29038c9bd7ec4e9dbc9",
+    "receipt": "01M5YZGD77621F4M20XF7M0ANH"
+   },
+   {
+    "nodeRunId": "01M5YZSMWGNB5N5F47AV9VMDAS",
+    "basis": "basis:rfc396-r24-enterprise:preview-2",
+    "bodySha256": "1154c0edf79b4ca81197fa690d8267ea07e4e9495ce31a912ae7e174df2a3fa6",
+    "receipt": "01M5YZTDDRCMMX7HTZPZVVJ9ZN"
+   }
+  ],
+  "mergeRequest": {
+   "project": 571,
+   "iid": 1,
+   "sourceBranch": "rfc396/enterprise-8481557c9-fxsy6l",
+   "targetBranch": "main",
+   "heads": [
+    "a416e1b5596ca09e225edc430e17bb19f9544a9e",
+    "975a0a299c1a2a0fd627b28be64141d475277a96"
+   ],
+   "mergeCommit": "8df5c63f8feea44d617c3aa4f468c230ceb1efd2"
+  },
+  "pipelines": [
+   {
+    "id": 326,
+    "status": "failed",
+    "job": 1387,
+    "logSha256": "69a0aa0e43c4f804…"
+   },
+   {
+    "id": 327,
+    "status": "success",
+    "job": 1388,
+    "logSha256": "ef6d7460da092cec…"
+   }
+  ],
+  "repairTask": "01M5ZXGXYWYSCA7Y84PRX5CKW6"
+ },
+ "findings": [
+  {
+   "id": "F1",
+   "kind": "product defect (fixed in the commit that adds this record)",
+   "summary": "graph deliver-result reused the implementation's deliveryContent for the repaired redelivery, so repair commit 975a0a29 was titled 'feat: add RFC396 finite clamp implementation and tests' instead of the repair tool's 'fix: add ci/verified-release.json with exact src/clamp.cjs SHA-256'.",
+   "fix": "graph deliver-result: a redelivery of an already delivered implementation round with a different candidate takes the validated development.issue-handling deliveryContent (latest repair); first deliveries and new implementation rounds keep the implementation content; replays keep the saved content (platformWorkItems.ts, graphDeliveryBridge.ts; regression tests in tests/rfc396-mr-bridge.test.ts)."
+  },
+  {
+   "id": "F2",
+   "kind": "model behavior, platform correct",
+   "summary": "Designer round 3 referenced three element ids it did not define; validation blocked the import and the Case until the operator resumed."
+  },
+  {
+   "id": "F3",
+   "kind": "model behavior, platform correct",
+   "summary": "Implementer ran git fsck --lost-found, writing into the protected git metadata root; the guard blocked the round."
+  },
+  {
+   "id": "F4",
+   "kind": "usage guidance",
+   "summary": "The real designer attached post-delivery checks (first CI failure, care repair, evidence, merge decision) to the implementation basis as manual obligations, which can never pass before delivery; the operator must freeze a basis of pre-delivery obligations. Post-delivery steps are owned by MR care, not by graph obligations."
+  },
+  {
+   "id": "F5",
+   "kind": "acceptance configuration",
+   "summary": "The harness's 8-minute node timeout was too short for real designer rounds with clarification; the product default is 30 minutes."
+  }
+ ],
+ "localEvidence": "/private/tmp/rfc396-enterprise/evidence-r24 (case, design, evidence, GitLab MR/pipelines, both job logs, operator actions)"
+}

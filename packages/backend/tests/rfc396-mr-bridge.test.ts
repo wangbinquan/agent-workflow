@@ -1,5 +1,7 @@
 // RFC-396 MR parity: the verified tree enters the existing care workspace, and every repair
 // (including a separate conflict scene) must execute the approved graph checks again.
+// R24: repaired redelivery must commit and hand off the repair's delivery content,
+// without leaking it into a new implementation round or changing a saved replay.
 // Run the real repository check through Bun explicitly so every assertion also
 // runs on native Windows; this suite does not require POSIX shebang/chmod semantics.
 import { afterEach, expect, test } from 'bun:test'
@@ -27,7 +29,10 @@ import {
 import { createGraphPlatformWorkItems } from '@/modules/development-automation/application/graph-development/platformWorkItems'
 import { graphDigest } from '@/modules/development-automation/domain/graph-development/model'
 import { issueHandlingContextSchema } from '@/modules/development-automation/composition/employeeTypePackage'
-import { createGraphVerification } from '@/modules/development-automation/application/graph-development/verification'
+import {
+  createGraphVerification,
+  type GraphVerificationWorkspace,
+} from '@/modules/development-automation/application/graph-development/verification'
 import type { GraphEmployeeContext } from '@/modules/development-automation/application/graph-development/employeeCodec'
 import type { GraphMrBeforePublishInput } from '@/modules/development-automation/application/graph-development/mrCare'
 import type { EmployeeCaseWorkspaceRow } from '@/modules/development-automation/application/ports/employeeWorkspacePersistence'
@@ -540,7 +545,243 @@ describeEachProvider('RFC-396 MR candidate bridge', (harness) => {
 
   const caseTest = test
 
-  async function publishedFixture() {
+  const repairContent = {
+    commitMessage: 'fix: add ci/verified-release.json with exact src/clamp.cjs SHA-256',
+    mergeRequestTitle: 'Repair the verified release pipeline',
+    mergeRequestDescription: 'Record the exact verified source digest for the existing MR.',
+  }
+  function deliveryPlan(work: GraphEmployeeContext, roundRef: string, issueState?: unknown) {
+    const plan = platformPlan(work, 'deliver-result', roundRef)
+    const envelope = JSON.parse(plan.inputEnvelopeJson)
+    const contexts = JSON.parse(envelope.contextsJson)
+    if (issueState !== undefined)
+      contexts.push({
+        id: 'issue',
+        typeId: 'development.issue-handling',
+        revision: 1,
+        stateJson: canonicalJson(issueState),
+      })
+    return { ...plan, inputEnvelopeJson: canonicalJson({ contextsJson: canonicalJson(contexts) }) }
+  }
+  function deliveryPlatform(f: Awaited<ReturnType<typeof fixture>>) {
+    const work = {
+      ...f.work,
+      request: { ...f.work.request, deliveryMode: 'merge-request' as const },
+    }
+    const workspace = async (): Promise<GraphVerificationWorkspace> =>
+      (await f.bridge.continuationWorkspace(work.designId)) ?? f.handoff.workspace
+    const messages: string[] = []
+    const handoffs: Parameters<typeof f.bridge.prepareHandoff>[0][] = []
+    const compose = () =>
+      createGraphPlatformWorkItems({
+        ...f,
+        workspace: { initialize: workspace, state: workspace },
+        candidates: {
+          ...f.candidates,
+          async commit(input) {
+            messages.push(input.summarySource)
+            return await f.candidates.commit(input)
+          },
+        },
+        mergeRequestDelivery: {
+          ...f.bridge,
+          async prepareHandoff(input) {
+            handoffs.push(input)
+            return await f.bridge.prepareHandoff(input)
+          },
+        },
+      })
+    return { work, workspace, messages, handoffs, compose }
+  }
+
+  caseTest(
+    'R24 first delivery keeps implementation content despite stale issue content',
+    async () => {
+      const f = await fixture()
+      const p = deliveryPlatform(f)
+      const plan = deliveryPlan(p.work, 'first-delivery', { deliveryContent: repairContent })
+      const delivered = JSON.parse(await p.compose().execute(plan)).result
+      expect(p.messages).toEqual([f.implementation.deliveryContent.commitMessage])
+      expect(p.handoffs[0]!.deliveryContent).toEqual(f.implementation.deliveryContent)
+      expect(git(f.repo, 'log', '-1', '--format=%s', delivered.commitSha)).toBe(
+        `aw: ${f.implementation.deliveryContent.commitMessage}`,
+      )
+      expect(JSON.parse(await p.compose().execute(plan)).result).toEqual(delivered)
+      expect(p.messages).toHaveLength(1)
+      expect(p.handoffs).toHaveLength(1)
+    },
+  )
+
+  async function repairedDeliveryFixture() {
+    const f = await publishedHandoffFixture()
+    const p = deliveryPlatform(f)
+    writeFileSync(
+      join((await p.workspace()).workspacePath, 'booking.js'),
+      'export const reserve = () => "预约";\n// repaired pipeline\n',
+    )
+    expect(
+      JSON.parse(await p.compose().execute(platformPlan(p.work, 'verify-change', 'repair-checks')))
+        .result.passed,
+    ).toBe(true)
+    const plan = platformPlan(p.work, 'deliver-result', 'repair-delivery', {
+      ...f.publishedDelivery,
+      issueState: { ...f.publishedDelivery.issueState, deliveryContent: repairContent },
+    })
+    const delivered = JSON.parse(await p.compose().execute(plan)).result
+    return {
+      f,
+      p,
+      plan,
+      delivered,
+      issueState: JSON.parse(delivered.mergeRequestDelivery.issueStateJson),
+      candidateState: JSON.parse(delivered.mergeRequestDelivery.candidateStateJson),
+    }
+  }
+
+  caseTest(
+    'R24 repaired redelivery and its replay use the repair content and delivery identity',
+    async () => {
+      const { f, p, plan, delivered, issueState, candidateState } = await repairedDeliveryFixture()
+      const selected = {
+        commitMessage: repairContent.commitMessage,
+        title: repairContent.mergeRequestTitle,
+        description: repairContent.mergeRequestDescription,
+      }
+      expect(p.messages).toEqual([repairContent.commitMessage])
+      expect(p.handoffs[0]!.deliveryContent).toEqual(selected)
+      expect(git(f.repo, 'log', '-1', '--format=%s', delivered.commitSha)).toBe(
+        `aw: ${repairContent.commitMessage}`,
+      )
+      expect(git(f.repo, 'rev-parse', `${delivered.commitSha}^`)).toBe(f.committed.commitSha)
+      expect(issueState.deliveryContent).toEqual(repairContent)
+      expect(candidateState.summarySource).toBe(repairContent.commitMessage)
+      const verification = (await f.store.record('design-a', 'verification:repair-checks'))!
+      const value = JSON.parse(verification.payloadJson)
+      const workspace = await p.workspace()
+      const deliveryId = `delivery:${graphDigest({
+        basis: value.basisDigest,
+        candidate: value.candidate,
+        verification: verification.id,
+        request: p.work.request,
+        deliveryContent: selected,
+        targetBranch: workspace.targetBranch ?? null,
+        uploadPlan: workspace.uploadPlan ?? null,
+      })}`
+      expect((await f.store.links('design-a')).find((link) => link.id === deliveryId)).toBeDefined()
+      expect(JSON.parse(await p.compose().execute(plan)).result).toEqual(delivered)
+      expect(
+        JSON.parse(await p.compose().execute(deliveryPlan(p.work, 'repair-replay-without-issue')))
+          .result,
+      ).toEqual(delivered)
+      expect(
+        JSON.parse(
+          await p.compose().execute(
+            deliveryPlan(p.work, 'repair-replay-new-context', {
+              deliveryContent: { ...repairContent, commitMessage: 'A later repair intent' },
+            }),
+          ),
+        ).result,
+      ).toEqual(delivered)
+      expect(p.messages).toHaveLength(1)
+      expect(p.handoffs).toHaveLength(1)
+    },
+  )
+
+  caseTest(
+    'R24 a new implementation round after a repair delivers its own content on the same MR',
+    async () => {
+      const { f, p, delivered, issueState, candidateState } = await repairedDeliveryFixture()
+      f.setWorkspace({
+        ...f.getWorkspace()!,
+        baselineSha: delivered.commitSha,
+        remoteHeadSha: delivered.commitSha,
+        state: 'published',
+      })
+      f.candidateRows.set(candidateState.candidateRef, {
+        ...f.candidateRows.get(candidateState.candidateRef)!,
+        state: 'published',
+      })
+      const nextContent = {
+        commitMessage: 'feat: implement the clarified booking requirement',
+        title: 'Clarified booking implementation',
+        description: 'Implements the next approved clarification.',
+      }
+      await f.store.insertLink({
+        designId: 'design-a',
+        id: 'implementation:after-clarification',
+        kind: 'execution',
+        payloadJson: canonicalJson({
+          basisId: f.frozen.basis.id,
+          basisDigest: f.frozen.basis.digest,
+          roundRef: 'after-clarification',
+          result: { ...f.implementation, deliveryContent: nextContent },
+        }),
+        createdAt: Date.now(),
+      })
+      writeFileSync(
+        join((await p.workspace()).workspacePath, 'booking.js'),
+        'export const reserve = () => "预约";\n// clarified implementation\n',
+      )
+      expect(
+        JSON.parse(
+          await p.compose().execute(platformPlan(p.work, 'verify-change', 'clarification-checks')),
+        ).result.passed,
+      ).toBe(true)
+      const next = JSON.parse(
+        await p.compose().execute(deliveryPlan(p.work, 'clarification-delivery', issueState)),
+      ).result
+      expect(p.messages).toEqual([repairContent.commitMessage, nextContent.commitMessage])
+      expect(p.handoffs[1]!.deliveryContent).toEqual(nextContent)
+      expect(git(f.repo, 'log', '-1', '--format=%s', next.commitSha)).toBe(
+        `aw: ${nextContent.commitMessage}`,
+      )
+      expect(git(f.repo, 'rev-parse', `${next.commitSha}^`)).toBe(delivered.commitSha)
+      expect(JSON.parse(next.mergeRequestDelivery.issueStateJson).deliveryContent).toEqual({
+        commitMessage: nextContent.commitMessage,
+        mergeRequestTitle: nextContent.title,
+        mergeRequestDescription: nextContent.description,
+      })
+    },
+  )
+
+  caseTest.each([
+    ['missing context', undefined],
+    ['missing content', {}],
+    ['null content', { deliveryContent: null }],
+    ['invalid issue state', null],
+    ['incomplete content', { deliveryContent: { commitMessage: 'Repair only' } }],
+    ['blank message', { deliveryContent: { ...repairContent, commitMessage: '   ' } }],
+    ['invalid title', { deliveryContent: { ...repairContent, mergeRequestTitle: 42 } }],
+    [
+      'oversized title',
+      { deliveryContent: { ...repairContent, mergeRequestTitle: 'x'.repeat(241) } },
+    ],
+    ['blank description', { deliveryContent: { ...repairContent, mergeRequestDescription: '' } }],
+  ])('R24 redelivery falls back to implementation content for %s', async (_label, issueState) => {
+    const f = await publishedHandoffFixture()
+    const p = deliveryPlatform(f)
+    writeFileSync(
+      join((await p.workspace()).workspacePath, 'booking.js'),
+      'export const reserve = () => "预约";\n// repair without delivery content\n',
+    )
+    expect(
+      JSON.parse(
+        await p.compose().execute(platformPlan(p.work, 'verify-change', 'fallback-checks')),
+      ).result.passed,
+    ).toBe(true)
+    const plan = deliveryPlan(p.work, 'fallback-delivery', issueState)
+    const delivered = JSON.parse(await p.compose().execute(plan)).result
+    expect(p.messages).toEqual([f.implementation.deliveryContent.commitMessage])
+    expect(p.handoffs[0]!.deliveryContent).toEqual(f.implementation.deliveryContent)
+    expect(git(f.repo, 'log', '-1', '--format=%s', delivered.commitSha)).toBe(
+      `aw: ${f.implementation.deliveryContent.commitMessage}`,
+    )
+    expect(JSON.parse(await p.compose().execute(plan)).result).toEqual(delivered)
+    expect(p.messages).toHaveLength(1)
+    expect(p.handoffs).toHaveLength(1)
+  })
+
+  async function publishedHandoffFixture() {
     const f = await fixture()
     const initial = await f.bridge.prepareHandoff(f.handoff)
     f.setWorkspace({
@@ -570,6 +811,12 @@ describeEachProvider('RFC-396 MR candidate bridge', (harness) => {
       targetBranch: 'main',
       issueStateJson: canonicalJson(publishedDelivery.issueState),
     }
+    return { ...f, work, publishedDelivery, published, workspace }
+  }
+
+  async function publishedFixture() {
+    const f = await publishedHandoffFixture()
+    const { work, workspace, published } = f
     const verificationWorkspace = await f.bridge.verificationWorkspace({
       work,
       workspace,
@@ -583,10 +830,6 @@ describeEachProvider('RFC-396 MR candidate bridge', (harness) => {
     expect(checked.passed).toBe(true)
     return {
       ...f,
-      work,
-      publishedDelivery,
-      published,
-      workspace,
       verificationWorkspace,
       reuse: {
         ...f.handoff,
@@ -1338,6 +1581,8 @@ describeEachProvider('RFC-396 MR candidate bridge', (harness) => {
           deliveryContent: {
             ...publication.issueState.deliveryContent,
             commitMessage: 'Fix booking review',
+            mergeRequestTitle: 'Booking review repaired',
+            mergeRequestDescription: 'Preserve the approved behavior after the review repair.',
           },
         },
         candidateState: {
@@ -1369,9 +1614,11 @@ describeEachProvider('RFC-396 MR candidate bridge', (harness) => {
         repair.receipt.candidateRef,
       )
       expect(
-        JSON.parse(repairDelivery.mergeRequestDelivery.issueStateJson).deliveryContent
-          .commitMessage,
-      ).toBe('Fix booking review')
+        JSON.parse(repairDelivery.mergeRequestDelivery.issueStateJson).deliveryContent,
+      ).toEqual(publication.issueState.deliveryContent)
+      expect(git(f.repo, 'log', '-1', '--format=%s', repairDelivery.commitSha)).toBe(
+        'aw: Fix booking review',
+      )
       expect(JSON.parse(await platform().execute(repairDeliveryPlan)).result).toEqual(
         repairDelivery,
       )
