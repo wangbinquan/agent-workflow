@@ -70,7 +70,9 @@ const ALLOWED_SKIP_COUNTS: Record<string, number> = {
   // including the Linux hosted operation host. Native Windows cannot execute those
   // fixtures; Linux/macOS run the real scripts, while platform-neutral contracts run everywhere.
   'packages/backend/tests/rfc396-behavior-execution.test.ts#skipIf': 1,
-  'packages/backend/tests/rfc396-verification.test.ts#skipIf': 7,
+  // The eight H5 limitation-review cases (2026-10-28) run on the same executable
+  // verification fixture as the original seven.
+  'packages/backend/tests/rfc396-verification.test.ts#skipIf': 15,
   'packages/backend/tests/rfc396-verification-environment.test.ts#skipIf': 1,
   'packages/backend/tests/architecture/rfc319-endpoint-coverage.test.ts#skipIf': 1,
   'packages/backend/tests/architecture/rfc319-route-coverage.test.ts#skipIf': 1,
