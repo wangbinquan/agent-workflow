@@ -1194,7 +1194,9 @@ describe('RFC-376 counts speed bump', () => {
     const result = checkCounts(measured, limits.counts)
     expect(result.errors).toEqual([])
     for (const decrease of result.decreases) console.info(`[RFC-376 counts] ${decrease}`)
-  })
+    // Every gate set over the full corpus: 2.4-6.4 s on the macOS nightly after the RFC-395
+    // corpus (runs 40859820668, 40909866975; the default 5 s timed out); allow 20 s.
+  }, 20_000)
   test('equal maxima pass and lower measurements only report decreases', () => {
     expect(
       checkCounts({ probe: 2 }, { probe: { max: 2, reason: 'max=2: RFC-376 fixture' } }),

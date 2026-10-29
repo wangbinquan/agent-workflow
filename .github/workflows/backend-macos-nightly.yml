@@ -10,8 +10,12 @@
 #     `workflow_dispatch` gives pre-merge feedback when a change touches
 #     darwin-specific process / filesystem / git behaviour.
 #
-# The shard count, job budget, seed derivation and test command are exactly
-# what ci.yml's macOS legs used (see the history in ci.yml `test-backend`).
+# The job budget, seed derivation and test command are exactly what ci.yml's
+# macOS legs used (see the history in ci.yml `test-backend`). The shard count
+# follows the same rule as Ubuntu — add runners, keep the budget: 12 → 18 on
+# 2026-10-29, after the RFC-395 corpus put 9-15 min on each of the twelve
+# shards and run 40909866975 cancelled shard 8/12 at the 15-minute budget
+# (its RFC-376 report contract test alone took 215 s).
 
 name: backend-macos-nightly
 
@@ -31,8 +35,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
-        shards: [12]
+        shard: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18]
+        shards: [18]
     runs-on: macos-latest
     timeout-minutes: 15
     env:

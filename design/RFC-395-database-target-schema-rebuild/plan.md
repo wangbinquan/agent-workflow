@@ -1020,6 +1020,9 @@ Q-3 同期完成：plan §3 的 18 行拆成 137 个覆盖项，另列 44 个切
 - CI 依赖审计：根 `overrides` 的 `seroval` 由 1.6.3 升到 1.6.12，锁文件只变这一项。
 - e2e-full-nightly：RFC-396 的端点 `POST /api/development-designs/:id/proposals/:proposalId/limitation-review`（`15f4e65dc`）没有任何 e2e 走到，按 RFC-319 的规则登记进未覆盖账本，写明原因与销账条件（运行 40872361956）。
 - backend-macos-nightly：两个 RFC-395 全源守卫在 macOS 上分别用了 5.32、5.52 秒，超过默认 5 秒（运行 40859820668），按实测写明 20 秒预算。
+- backend-macos-nightly 复跑（运行 40909866975，`f83ec825f`）又红两处，都是 RFC-395 撑大语料后的时间预算：
+  - 8/12 的测试全部通过，job 却在 15 分钟预算处被取消：RFC-376 报告合同一条用了 215 秒（10-28 为 78 秒，II-b 之前约 75 秒），12 片各跑 9～15 分钟。照仓内规矩加 runner、不动预算，macOS 由 12 片扩到 18 片（与 Ubuntu 24 → 36 同为 1.5 倍），两处钉住矩阵的守卫随之更新。
+  - 9/12 的 RFC-376 counts 守卫在全语料上算全部门禁集合，用了 6.4 秒（此前 2.4～4.0 秒），超过默认 5 秒，同样写明 20 秒预算。
 - e2e-webkit-nightly：RFC-396 的 `e2e/rfc396-graph-care-repair.spec.ts:404` 只在 Ubuntu WebKit 上超时（运行 40700896223、40888202808 两次尝试都没等到修复推送；同一提交上 Chromium 全量 1.4 分钟、macOS WebKit 2.7 分钟通过）。浏览器在审批之后到设计页检查之前一直闲着，却停在任务页持续轮询和渲染；改为审批落库后跳到 `about:blank`，并把等修复推送的窗口由 180 秒放宽到 240 秒（整条仍在 10 分钟内），本机 WebKit 1.5 分钟通过。
 - e2e-webkit-nightly 的另一条：RFC-319 的 INTENT-X4（`e2e/rfc319-intent-timeline-and-turns.spec.ts:1196`）在 Ubuntu WebKit 上间歇失败（运行 40508998208、40700896223 第一次失败、重试通过；`f69130169` 的运行 40898004906 两次都失败）。原因在产品：「回到最新」无条件平滑滚动，用户偏好减少动效时 WebKit 仍会做滚动动画，动画中途的 scroll 事件把时间线的贴底标记清掉，下一轮到达时既不跟随、按钮也重新出现。改为按动效偏好决定滚动方式，减少动效时直接跳到最新一轮（`packages/frontend/src/lib/reduced-motion.ts`，用例 `packages/frontend/tests/lib-reduced-motion.test.ts`）。
 - postgresql-evidence（每周日运行，RFC-395 激活后第一次运行就是 2026-10-29 手动触发的运行 40888244790）有三个 job 失败，都是 RFC-395 引入的：

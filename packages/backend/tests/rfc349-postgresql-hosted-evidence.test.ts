@@ -187,8 +187,9 @@ describe('RFC-349 hosted external PostgreSQL evidence contract', () => {
     const macosMatrix = parse(
       readFileSync(resolve(ROOT, '.github', 'workflows', 'backend-macos-nightly.yml'), 'utf8'),
     ).jobs['test-backend-macos'].strategy.matrix
-    expect(macosMatrix.shard).toEqual(Array.from({ length: 12 }, (_, index) => index + 1))
-    expect(macosMatrix.shards).toEqual([12])
+    // 2026-10-29：RFC-395 语料让 macOS 12 片各跑 9~15 分钟、8/12 撞上预算，加 runner 到 18 片。
+    expect(macosMatrix.shard).toEqual(Array.from({ length: 18 }, (_, index) => index + 1))
+    expect(macosMatrix.shards).toEqual([18])
     // 全量 e2e 腿不得重新加上 PR 档的过滤，否则 `@nightly` 会全域失守：删掉的那 9 条
     // lane 里的 e2e 正是靠「不过滤」才和它等价。只看真正执行的 `run:` 行——这份 YAML 的
     // 注释里就写着 PR 档用 `--grep-invert '@nightly'`，全文匹配会把注释也算进去。

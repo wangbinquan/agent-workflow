@@ -341,7 +341,9 @@ describe('repository test entrypoint', () => {
       // 2026-10-06: two complete 6/6 runs hit the same job budget while tests advanced.
       // Twelve independent runners retain the complete discovery set and all original budgets.
       // 2026-10-14：这 12 片整体移到 backend-macos-nightly.yml。
-      ['macos-latest', 12],
+      // 2026-10-29：RFC-395 语料让 12 片各跑 9~15 分钟，run 40909866975 的 8/12 在 15 分钟预算处
+      // 被取消（其中 RFC-376 报告合同一条就用了 215 秒）。照同一规矩加 runner：12 → 18 片。
+      ['macos-latest', 18],
     ] as const) {
       // Every N/M occurs once, so native Bun sharding partitions the complete
       // unfiltered discovery set. No extra include can duplicate a shard.
