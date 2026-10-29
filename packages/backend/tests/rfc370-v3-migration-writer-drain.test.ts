@@ -14,6 +14,14 @@
 //   with keys derived from the freeze;
 // - it leaves paused / closed / failed parents alone and writes nothing to the
 //   (write-frozen) database.
+//
+// CrewStation RFC-044 T10 (2026-10-29): the formal instance's migration waited
+// in `freezing` on its `system:shared` parent. AW had finalized that parent
+// nine days earlier, but the platform's finalization waited for the app to
+// cancel an agent subtask that was never dispatched, so the container kept
+// running. The drain skipped the parent because the platform reported it
+// `finalizing`. A parent the platform is releasing now has its stranded
+// subtasks cancelled and counts as remaining until it is released.
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
@@ -178,7 +186,7 @@ describeEachProvider('RFC-370 V7 migration writer drain', (harness) => {
     } satisfies CrewStationBusinessExecution
     const register = async (
       owner: string,
-      state: 'creating' | 'ready' | 'closed',
+      state: 'creating' | 'ready' | 'closing' | 'closed',
       task: Partial<BusinessTask>,
     ) => {
       const businessTaskId = `cs-${owner}`
@@ -279,6 +287,42 @@ describeEachProvider('RFC-370 V7 migration writer drain', (harness) => {
     await f.drain(stop, new AbortController().signal)
     expect(f.pauses.map((pause) => pause.taskId)).toEqual([starting])
   })
+
+  for (const state of ['finalizing', 'closing'])
+    test(`a ${state} parent has its stranded subtasks cancelled and is counted until the platform releases it`, async () => {
+      const f = await setup()
+      const parent = await f.register('system:shared', 'closing', { state })
+      f.subtasks.set(parent, [
+        f.subtask('agent-pending', 'pending'),
+        f.subtask('agent-stopping', 'cancelling'),
+        f.subtask('agent-done', 'succeeded'),
+      ])
+      const signal = new AbortController().signal
+      expect(await f.drain(stop, signal)).toEqual({ remaining: 1 })
+      expect(f.cancels).toEqual([
+        {
+          taskId: parent,
+          subtaskId: 'agent-pending',
+          request: {
+            requestKey:
+              'aw-task:installation:system:shared:migration:database-restore-1:cancel:agent-pending:1',
+            stopAuthority: stop,
+            expectedAttempt: 1,
+          },
+        },
+      ])
+      f.subtasks.set(parent, [
+        f.subtask('agent-pending', 'cancelled'),
+        f.subtask('agent-stopping', 'cancelled'),
+        f.subtask('agent-done', 'succeeded'),
+      ])
+      // The platform stops a parent it is releasing; it is never paused.
+      expect(await f.drain(stop, signal)).toEqual({ remaining: 1 })
+      expect(f.pauses).toEqual([])
+      expect(f.cancels).toHaveLength(1)
+      f.tasks.set(parent, { ...f.tasks.get(parent)!, state: 'closed' })
+      expect(await f.drain(stop, signal)).toEqual({ remaining: 0 })
+    })
 
   test('a lifecycle race is left to the next pass and does not stop the others', async () => {
     const f = await setup()

@@ -268,6 +268,10 @@ export type HostedMigrationDrain = (
  * subtask's attempt) and the next pass simply repeats it. Parents that are
  * paused, closed or failed hold no running container and are left alone; an
  * active owner's next use resumes a paused parent (`HostedTaskWorkspaces`).
+ * A parent the platform is releasing (`finalizing` / `closing`) still runs its
+ * container until its executions end: its stranded subtasks are cancelled and
+ * it counts until the platform releases it, never paused (CrewStation RFC-044
+ * T10, 2026-10-29: such a parent held the formal instance's migration freeze).
  */
 export function createHostedMigrationDrain(input: {
   readonly db: PersistenceDb
@@ -308,7 +312,8 @@ export function createHostedMigrationDrain(input: {
       try {
         const task = await input.api.getTask(row.businessTaskId!)
         if (task.id !== row.businessTaskId) throw new Error('hosted-workspace-receipt-mismatch')
-        if (task.state !== 'running' && task.state !== 'creating') continue
+        const releasing = task.state === 'finalizing' || task.state === 'closing'
+        if (task.state !== 'running' && task.state !== 'creating' && !releasing) continue
         remaining += 1
         // A container that is still starting is paused once it runs.
         if (task.state === 'creating') continue
@@ -327,8 +332,9 @@ export function createHostedMigrationDrain(input: {
             if (!isLifecycleRace(error)) throw error
           }
         }
-        // The platform pauses a parent only once its subtasks have results.
-        if (active.length > 0) continue
+        // The platform pauses a parent only once its subtasks have results, and
+        // stops one it is releasing by itself.
+        if (active.length > 0 || releasing) continue
         await input.api.pauseTask(task.id, {
           requestKey: key(row.requestKey, 'pause', stop, task.generation),
           stopAuthority: stop,

@@ -26,6 +26,13 @@
 // the parent busy. A superseded parent now keeps serving only while the
 // platform still runs subtasks in it; with nothing in flight the running
 // release gets its own parent at once.
+//
+// CrewStation RFC-044 T10 (2026-10-29): the formal instance's retired
+// `system:shared` parent stayed in finalization for nine days. The platform
+// waited for the app to cancel an agent subtask that was never dispatched, and
+// AW only kept asking whether the parent was released; the running container
+// then held a database migration's freeze. A close the platform accepted now
+// cancels what is still stranded in the parent.
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
@@ -58,7 +65,8 @@ describeEachProvider('RFC-370 scratch parents follow the running release', (harn
     const created: string[] = []
     const closedParents: string[] = []
     const finalized: string[] = []
-    const running = new Map<string, readonly { id: string; state: string }[]>()
+    const cancels: { taskId: string; subtaskId: string; request: unknown }[] = []
+    const running = new Map<string, readonly { id: string; state: string; attempt: number }[]>()
     let beforeGetTask: ((id: string) => Promise<void>) | null = null
     const api: CrewStationBusinessExecution = {
       createTask: async (request) => {
@@ -116,7 +124,9 @@ describeEachProvider('RFC-370 scratch parents follow the running release', (harn
       createMaterial: unused,
       submitSubtask: unused,
       getSubtask: unused,
-      cancelSubtask: unused,
+      cancelSubtask: async (taskId, subtaskId, request) => {
+        cancels.push({ taskId, subtaskId, request })
+      },
       events: unused,
       streamEvents: () => {
         throw new Error('unexpected event stream')
@@ -153,6 +163,7 @@ describeEachProvider('RFC-370 scratch parents follow the running release', (harn
       created,
       closedParents,
       finalized,
+      cancels,
       row,
       elapsed: () => clock - 1_000_000,
       holdGetTask: (hook: ((id: string) => Promise<void>) | null) => {
@@ -167,7 +178,7 @@ describeEachProvider('RFC-370 scratch parents follow the running release', (harn
       setSubtasks: (id: string, states: readonly string[]) => {
         running.set(
           id,
-          states.map((state, index) => ({ id: `subtask-${index}`, state })),
+          states.map((state, index) => ({ id: `subtask-${index}`, state, attempt: 1 })),
         )
       },
     }
@@ -311,6 +322,32 @@ describeEachProvider('RFC-370 scratch parents follow the running release', (harn
       state: 'ready',
     })
     expect((await f.row('system:shared')).requestKey.endsWith(releaseTag('release-2'))).toBe(true)
+  })
+
+  test('a close waiting on a stranded subtask cancels it under the lease and completes once released', async () => {
+    const f = await setup({ completionPolicy: 'archive-and-delete' })
+    const parent = (await f.workspaces.ensure('system:shared')).businessTaskId
+    const requestKey = (await f.row('system:shared')).requestKey
+    f.setSubtasks(parent, ['succeeded', 'pending', 'cancelling'])
+    expect(await f.workspaces.close('system:shared')).toBe(false)
+    expect(f.finalized).toEqual([parent])
+    expect(f.cancels).toEqual([
+      {
+        taskId: parent,
+        subtaskId: 'subtask-1',
+        request: {
+          requestKey: `${requestKey}:cancel:subtask-1:1`,
+          fence: lease,
+          expectedAttempt: 1,
+        },
+      },
+    ])
+    expect(await f.row('system:shared')).toMatchObject({ state: 'closing' })
+    f.setSubtasks(parent, ['succeeded', 'cancelled', 'cancelled'])
+    f.setParent(parent, { state: 'closed', resourceState: 'released' })
+    expect(await f.workspaces.close('system:shared')).toBe(true)
+    expect(f.cancels).toHaveLength(1)
+    expect(await f.row('system:shared')).toMatchObject({ state: 'closed' })
   })
 
   test('a concurrent use that re-armed the owner first keeps its new parent', async () => {

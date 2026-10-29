@@ -87,7 +87,8 @@ describeEachProvider('RFC-370 the parent of a never-admitted launch is released'
       closeTask: unused,
       resumeTask: unused,
       pauseTask: unused,
-      listSubtasks: unused,
+      // A close waiting for release looks for stranded subtasks; these parents have none.
+      listSubtasks: async () => [],
       createMaterial: unused,
       submitSubtask: unused,
       getSubtask: unused,

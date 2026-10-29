@@ -260,6 +260,28 @@ export function createHostedTaskWorkspaces(input: {
     if (task.id !== businessTaskId) throw new Error('hosted-workspace-receipt-mismatch')
     return task
   }
+  /** A close the platform accepted waits for the parent's executions to end
+   * ("等待所属应用取消活动执行"). A parent is closed only once nothing of this
+   * installation uses it, so whatever still runs or waits in it is stranded:
+   * cancel it under the lease (CrewStation RFC-044 T10, 2026-10-29: an agent
+   * subtask that was never dispatched kept a retired `system:shared` parent in
+   * finalization for nine days, and its container held a database migration's
+   * freeze). */
+  const cancelStranded = async (row: Row, businessTaskId: string): Promise<void> => {
+    for (const subtask of await input.api.listSubtasks(businessTaskId)) {
+      if (TERMINAL_SUBTASK_STATES.has(subtask.state) || subtask.state === 'cancelling') continue
+      const key = `${row.requestKey}:cancel:${subtask.id}:${subtask.attempt}`
+      try {
+        await input.api.cancelSubtask(businessTaskId, subtask.id, {
+          requestKey: key.length <= REQUEST_KEY_MAX ? key : `aw-task-op:${sha256Hex(key)}`,
+          fence: input.fence.current(),
+          expectedAttempt: subtask.attempt,
+        })
+      } catch (error) {
+        if (!isLifecycleRace(error)) throw error
+      }
+    }
+  }
   /** A full quota (`429 quota_exceeded`) refuses the resume, and the platform
    * admits that same request once a slot frees ("请使用同一 requestKey 重试"). The
    * refused request is returned so the next poll replays it. A key built from
@@ -479,7 +501,11 @@ export function createHostedTaskWorkspaces(input: {
     // the platform confirms the resources actually disappeared.
     if (businessTaskId !== 'none') {
       const released = await observe(businessTaskId)
-      if (released.state !== 'closed' || released.resourceState !== 'released') return false
+      if (released.state !== 'closed' || released.resourceState !== 'released') {
+        if (released.state === 'finalizing' || released.state === 'closing')
+          await cancelStranded(row, businessTaskId)
+        return false
+      }
     }
     await write(async (tx) => {
       const { hostedTaskWorkspaces } = tablesOf(tx)
