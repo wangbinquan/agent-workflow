@@ -107,22 +107,38 @@ export function createDaemonProviderListenerTraffic(): DaemonProviderListenerTra
   })
 }
 
+/**
+ * Read-only migration observation the outgoing composition keeps answering while the target is
+ * composed: the `/api/database*` control plane, health and maintenance status. RFC-349 requires
+ * migration status to stay live through the cutover, and the epoch-2 PostgreSQL composition build
+ * grows with the dataset (4.9 s on the weekly evidence corpus, postgresql-evidence run
+ * 40893688180). Since RFC-395 I-b binds tables to the session handle, the outgoing composition
+ * still agrees with its own client; it has served exactly these requests through every earlier
+ * frozen phase. Writes still wait, so a mid-switch rollback or cancel cannot race the switch.
+ */
+export function servesDuringProviderHandover(request: Request): boolean {
+  if (request.method !== 'GET' && request.method !== 'HEAD') return false
+  const path = new URL(request.url).pathname
+  return (
+    path === '/api/database' ||
+    path.startsWith('/api/database/') ||
+    path === '/api/health' ||
+    path === '/api/maintenance/status'
+  )
+}
+
 export function createDaemonProviderRuntimeRouter<WebSocket = DaemonProviderListenerWebSocket>(
   controller: DaemonProviderRuntimeRouterController<WebSocket>,
   traffic: DaemonProviderListenerTraffic = createDaemonProviderListenerTraffic(),
 ): DaemonProviderRuntimeRouter<WebSocket> {
   return Object.freeze({
     async fetch(request: Request) {
-      // Composing a provider moves process-wide provider state, so the outgoing
-      // composition cannot serve anything once a switch has started — its
-      // client and the shared table projection no longer agree. Requests that
-      // are exempt from the migration maintenance gate (health, the
-      // `/api/database*` control plane the operator is watching the migration
-      // with) would otherwise fail with an opaque driver error for the whole
-      // composition build. Wait for the handover instead and answer from
-      // whichever composition ends up owning the listener.
+      // A switch fences new requests until the target composition is built and
+      // answers them from whichever composition ends up owning the listener.
+      // Read-only migration observation is the exception: the outgoing
+      // composition answers it at once (see `servesDuringProviderHandover`).
       const handover = controller.handover()
-      if (handover !== null) await handover
+      if (handover !== null && !servesDuringProviderHandover(request)) await handover
       const leave = traffic.enter()
       try {
         return await controller.current().runtime.fetch(request)
@@ -131,12 +147,12 @@ export function createDaemonProviderRuntimeRouter<WebSocket = DaemonProviderList
       }
     },
     async tryUpgrade(request: Request, server: DaemonProviderUpgradeServer) {
-      // Same fence as `fetch`: a WebSocket upgrade authenticates, and doing that
-      // against the outgoing composition mid-switch fails on provider-shaped SQL
-      // (`upgrade-token-resolve-threw`), which the client only ever sees as a
-      // transport error before hello.
+      // Same fence as `fetch`: a WebSocket upgrade authenticates against the
+      // composition that will own the socket. The listener asks every request
+      // here first, so read-only migration observation (never a `/ws/` path)
+      // passes the fence too, or `fetch` would never see it before the handover.
       const handover = controller.handover()
-      if (handover !== null) await handover
+      if (handover !== null && !servesDuringProviderHandover(request)) await handover
       const leave = traffic.enter()
       try {
         return await controller.current().runtime.tryUpgrade(request, server)

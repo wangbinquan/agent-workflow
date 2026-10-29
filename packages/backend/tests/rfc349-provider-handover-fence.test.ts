@@ -8,7 +8,12 @@
 // `no such table: agent_workflow.user_sessions`。
 //
 // 三条性质：
-//   1. 换 composition 期间 `fetch` 挂起，换完由**接手的那份**回答，不 500；
+//   1. 换 composition 期间，写请求、业务请求与 WebSocket 升级挂起，换完由**接手的那份**回答，
+//      不 500。只读的迁移观察（`GET /api/database*`、健康检查、维护状态）不等：RFC-395 I-b
+//      起表随会话句柄绑定，送出的那份与自己的 client 一致；而 epoch 2 组装 PostgreSQL 的耗时
+//      随数据量增长，周取证语料上状态轮询被这道栅栏卡了 4.9 秒（运行 40893688180，超过
+//      2.5 秒的门；本机 small 语料实测栅栏 664 毫秒、状态最慢 657 毫秒），违背 RFC-349
+//      「割接期间迁移状态保持可读」；
 //   2. 换完（成功或失败）都要把 provider 选择钉回真正在服务的那份，否则割接
 //      失败后源 session 恢复服务、投影却留在 PostgreSQL，整个 daemon 全炸；
 //      （RFC-395 I-b 起表随会话句柄绑定、进程级投影已删除，这条现在只锁 controller
@@ -69,7 +74,7 @@ async function testSession(
 }
 
 describe('RFC-349 provider handover fence', () => {
-  test('a request that arrives mid-switch waits and is answered by the incoming composition', async () => {
+  test('mid-switch writes, business reads and upgrades wait for the incoming composition; migration observation does not', async () => {
     const sqlite = await testSession('sqlite', 'sqlite-1')
     const postgresql = await testSession('postgresql', 'pg-1')
     let releaseCompose: () => void = () => {}
@@ -99,14 +104,27 @@ describe('RFC-349 provider handover fence', () => {
     })
     expect(controller.handover()).not.toBeNull()
 
-    // Issued while the target is still being composed. The outgoing session is
-    // still `current`, but answering from it is exactly the bug.
+    // Read-only migration observation is answered right away by the outgoing session,
+    // which keeps running the operation until the target is composed. The listener asks
+    // `tryUpgrade` before `fetch` for every request, so both must pass it (the evidence run
+    // stalled in `tryUpgrade` while only `fetch` let it through).
+    for (const path of ['/api/database/migrations/dbm_1', '/api/database', '/api/health']) {
+      const request = new Request(`http://localhost${path}`)
+      expect(await router.tryUpgrade(request, { upgrade: () => true } as never)).toBe(false)
+      expect(await (await router.fetch(request)).text()).toBe('sqlite:fetch')
+    }
+
+    // Issued while the target is still being composed: a write to the migration control
+    // plane and a business read both wait and are answered by the incoming composition.
     let settled = false
-    const inFlight = Promise.resolve(
-      router.fetch(new Request('http://localhost/api/database/migrations/dbm_1')),
-    ).then((response) => {
+    const inFlight = Promise.all([
+      router.fetch(
+        new Request('http://localhost/api/database/migrations/dbm_1/rollback', { method: 'POST' }),
+      ),
+      router.fetch(new Request('http://localhost/api/tasks')),
+    ]).then((responses) => {
       settled = true
-      return response
+      return responses
     })
     await Bun.sleep(20)
     expect(settled).toBe(false)
@@ -126,7 +144,10 @@ describe('RFC-349 provider handover fence', () => {
 
     releaseCompose()
     await switching
-    expect(await (await inFlight).text()).toBe('postgresql:fetch')
+    expect(await Promise.all((await inFlight).map((response) => response.text()))).toEqual([
+      'postgresql:fetch',
+      'postgresql:fetch',
+    ])
     expect(await upgrade).toBe(false)
     expect(controller.handover()).toBeNull()
   })

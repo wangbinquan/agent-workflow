@@ -43,6 +43,7 @@ import { UserPicker } from '@/components/UserPicker'
 import { UnsavedChangesGuard } from '@/components/split/UnsavedChangesGuard'
 import { INTENT_QUERY_KEYS, useIntentSessionsWs } from '@/hooks/useIntentSessionsWs'
 import { intentFailureDiagnostic } from '@/lib/intent-failure-diagnostic'
+import { scrollBehaviorForMotionPreference } from '@/lib/reduced-motion'
 import { useExecutionAvailability } from '@/hooks/useExecutionAvailability'
 import { Route as RootRoute } from './__root'
 
@@ -541,7 +542,10 @@ function IntentSessionDetailPage() {
                 const element = conversationRef.current
                 if (element === null) return
                 conversationPinnedRef.current = true
-                element.scrollTo({ top: element.scrollHeight, behavior: 'smooth' })
+                element.scrollTo({
+                  top: element.scrollHeight,
+                  behavior: scrollBehaviorForMotionPreference(),
+                })
                 setShowLatest(false)
               }}
             >
