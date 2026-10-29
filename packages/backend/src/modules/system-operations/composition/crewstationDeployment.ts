@@ -1,5 +1,9 @@
 import type { CrewStationMutationFence } from '@/platform/crewstation/mutationFence'
-import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
+import {
+  createPostgresqlDatabaseClient,
+  type PostgresqlDatabaseClient,
+} from '@/platform/persistence/postgresqlDatabaseClient'
+import type { PostgresqlDatabaseRuntime } from '@/platform/persistence/postgresqlRuntime'
 import {
   createHostedDatabaseWriteBarrier,
   type HostedDatabaseWriteBarrier,
@@ -279,6 +283,17 @@ export function composeCrewStationMigrationInstallation(
   })
 }
 
+/**
+ * The client that writes the execution-control row. That row is written outside the window it
+ * governs and is coordination state, not a live write: an epoch-2 candidate reporting the freeze
+ * must not close the switch's rollback window (CrewStation RFC-044 T9).
+ */
+export function crewStationControlClient(
+  runtime: PostgresqlDatabaseRuntime,
+): PostgresqlDatabaseClient {
+  return createPostgresqlDatabaseClient(runtime, { countsAsLiveWrite: () => false })
+}
+
 export interface CrewStationSystemSelections {
   readonly database: PersistenceDb
   readonly applicationConfiguration: ApplicationConfigurationBinding
@@ -305,7 +320,7 @@ export async function composeCrewStationSystemSelections(input: {
   readonly prepared: PreparedPostgresqlProviderSchema
 }): Promise<CrewStationSystemSelections> {
   const barrier = createHostedDatabaseWriteBarrier({ enforcing: false })
-  const raw = input.prepared.openBootstrapClient()
+  const raw = crewStationControlClient(input.prepared.runtime.runtime)
   const db = createPostgresqlDatabaseClient(input.prepared.runtime.runtime, {
     beforeWrite: barrier.beforeWrite,
     countsAsLiveWrite: barrier.isEnforcing,
@@ -316,7 +331,6 @@ export async function composeCrewStationSystemSelections(input: {
     openBootstrapClient: () => db,
   }
   const platform = createCrewStationPlatformApi({ baseUrl: input.environment.platformApiUrl })
-  // The control row is written outside the window it governs.
   const control = createDatabaseHostedExecutionControl({ db: raw })
   const authority = createCrewStationExecutionAuthority({
     platform,

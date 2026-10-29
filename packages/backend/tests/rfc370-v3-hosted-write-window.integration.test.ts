@@ -20,7 +20,10 @@ import { expect, test } from 'bun:test'
 import { Hono } from 'hono'
 import { PostgresqlDatabaseConfigSchema } from '@agent-workflow/shared'
 import { migrateForDeployment } from '@/bootstrap/deployment'
-import { prepareCrewStationDatabase } from '@/modules/system-operations/composition/crewstationDeployment'
+import {
+  crewStationControlClient,
+  prepareCrewStationDatabase,
+} from '@/modules/system-operations/composition/crewstationDeployment'
 import { createHostedDatabaseWriteBarrier } from '@/modules/system-operations/infrastructure/crewstation/databaseWriteBarrier'
 import { createDatabaseHostedExecutionControl } from '@/modules/system-operations/infrastructure/hostedExecutionControl'
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
@@ -233,9 +236,10 @@ if (resolveTestProviders(process.env).includes('postgresql')) {
 
   // CrewStation RFC-044 T9 acceptance (2026-10-29): the epoch-2 migration candidate boots on the target
   // generation while the platform keeps the operation unopened. Its boot convergence set the first-write
-  // marker, and rollback before opening was refused with reverse-migration-required. Only writes made
-  // once the instance enforces the write window count as the generation's first live write.
-  test('boot convergence before the window is enforced does not count as the first live write', async () => {
+  // marker, and rollback before opening was refused with reverse-migration-required. Neither boot
+  // convergence nor the execution-control row it reports the freeze through counts; only writes made
+  // once the instance enforces the write window are the generation's first live write.
+  test('boot convergence and the freeze report do not count as the first live write; enforced writes do', async () => {
     const { prepared } = await install()
     const barrier = createHostedDatabaseWriteBarrier({ enforcing: false })
     const db = createPostgresqlDatabaseClient(prepared.runtime.runtime, {
@@ -255,6 +259,28 @@ if (resolveTestProviders(process.env).includes('postgresql')) {
         workflowFixture(tx, { id: 'converged-at-boot', name: 'Boot', definition: '{}' }),
       )
       expect(barrier.isEnforcing()).toBe(false)
+      expect(await marker()).toBeNull()
+      await createDatabaseHostedExecutionControl({
+        db: crewStationControlClient(prepared.runtime.runtime),
+      }).write({
+        epoch: 1,
+        owner: null,
+        phase: 'frozen',
+        leaseId: null,
+        expiresAt: null,
+        migrationOperationId: 'dbm_e2_write_window_freeze',
+      })
+      expect(await marker()).toBeNull()
+      // Opening: the platform hands execution to the instance at a newer epoch.
+      await createDatabaseHostedExecutionControl({
+        db: crewStationControlClient(prepared.runtime.runtime),
+      }).write({
+        epoch: 2,
+        owner: 'next',
+        leaseId: 'next-lease',
+        phase: 'preparing',
+        expiresAt: Date.now() + 60_000,
+      })
       expect(await marker()).toBeNull()
       barrier.enforce()
       await databaseSessionFor(db).transaction((tx) =>
