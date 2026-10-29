@@ -24,7 +24,7 @@ import { tablesOf } from '@/platform/persistence/sessionTables'
 
 import { insertOne } from '@/platform/persistence/singleInsert'
 import type { TaskOperationsListItem } from '@agent-workflow/shared'
-import { afterAll, describe, expect, test } from 'bun:test'
+import { afterAll, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import { taskFixture, taskRepoFixture, workflowFixture } from './helpers/model'
 
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
@@ -38,6 +38,10 @@ import {
 import { describeEachProvider } from './helpers/eachProvider'
 import { computeForestBackfill } from './helpers/taskForestBackfill'
 import { listTaskOperationsPage } from './helpers/taskListPage'
+
+// Slowest case took 5.17 s and timed out on CI run 40797439867 (PostgreSQL, filters 3 for bob);
+// passing runs 40790250549 / 40796655662 took 1.6–4.4 s per case. allow 20 s.
+setDefaultTimeout(20_000)
 
 type Db = PersistenceDb
 
