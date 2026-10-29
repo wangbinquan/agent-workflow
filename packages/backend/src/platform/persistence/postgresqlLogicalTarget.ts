@@ -15,6 +15,7 @@ import {
   encodeLogicalRow,
   type LogicalTableChunk,
 } from './logicalDatabaseArtifact'
+import { createPostgresqlCapabilities } from './capabilities'
 import type { PostgresqlDatabaseRuntime } from './postgresqlRuntime'
 import type { PostgresqlSchemaPlan } from './postgresqlSchema'
 import type { LogicalTargetTableVerification } from './logicalDatabaseRestore'
@@ -179,22 +180,69 @@ export async function openPostgresqlLogicalTarget(input: {
       [run, canonicalSchemaJson(value), digestSchemaContract(value)],
     )
   }
-  const assertRows = async (table: LogicalTableContract, chunk: LogicalTableChunk) => {
-    for (const row of chunk.payload.rows) {
-      const decoded = decodeLogicalRow(table, row)
-      const rows = await connection.unsafe(
-        `SELECT ${table.columns.map((c) => quote(c.name)).join(',')} FROM ${tableName(table.providerTables.postgresql!)} WHERE ${table.migrationKey.map((key, i) => `${quote(key)}=$${i + 1}`).join(' AND ')}`,
-        table.migrationKey.map((key) => decoded[key]),
+  // A chunk is written and read back in batches, never row by row: every statement is a network
+  // round trip. Per-row statements took the weekly provider move from 255-359 s (epoch 1) to 708 s
+  // and then past its 30 min deadline (postgresql-evidence runs 40893688180, 40909853901). Batches
+  // follow the engine's multi-row budget for the columns each row binds.
+  const batches = <T>(rows: readonly T[], columnsPerRow: number): T[][] => {
+    const size = createPostgresqlCapabilities().batchInsertMax(columnsPerRow)
+    const result: T[][] = []
+    for (let offset = 0; offset < rows.length; offset += size)
+      result.push(rows.slice(offset, offset + size))
+    return result
+  }
+  const insertRows = async (table: LogicalTableContract, chunk: LogicalTableChunk) => {
+    for (const batch of batches(chunk.payload.rows, table.columns.length)) {
+      const parameters: unknown[] = []
+      const values = batch.map((row) => {
+        const decoded = decodeLogicalRow(table, row)
+        return `(${table.columns
+          .map((c) => {
+            parameters.push(decoded[c.name])
+            return `$${parameters.length}`
+          })
+          .join(',')})`
+      })
+      await connection.unsafe(
+        `INSERT INTO ${tableName(table.providerTables.postgresql!)} (${table.columns.map((c) => quote(c.name)).join(',')}) VALUES ${values.join(',')}`,
+        parameters,
       )
-      if (
-        rows.length !== 1 ||
-        canonicalSchemaJson(encodeLogicalRow(table, rows[0]!)) !== canonicalSchemaJson(row)
-      )
-        throw new PostgresqlLogicalTargetError(
-          'postgresql-target-chunk-mismatch',
-          `${table.id}/${chunk.payload.chunkIndex}`,
-        )
     }
+  }
+  const assertRows = async (table: LogicalTableContract, chunk: LogicalTableChunk) => {
+    const mismatch = () =>
+      new PostgresqlLogicalTargetError(
+        'postgresql-target-chunk-mismatch',
+        `${table.id}/${chunk.payload.chunkIndex}`,
+      )
+    const expected = new Map(
+      chunk.payload.rows.map((row) => [canonicalSchemaJson(row.key), canonicalSchemaJson(row)]),
+    )
+    const matched = new Set<string>()
+    for (const batch of batches(chunk.payload.rows, table.migrationKey.length)) {
+      const parameters: unknown[] = []
+      const predicates = batch.map((row) => {
+        const decoded = decodeLogicalRow(table, row)
+        return `(${table.migrationKey
+          .map((key) => {
+            parameters.push(decoded[key])
+            return `${quote(key)}=$${parameters.length}`
+          })
+          .join(' AND ')})`
+      })
+      const rows = await connection.unsafe(
+        `SELECT ${table.columns.map((c) => quote(c.name)).join(',')} FROM ${tableName(table.providerTables.postgresql!)} WHERE ${predicates.join(' OR ')}`,
+        parameters,
+      )
+      // Each source row must come back exactly once and unchanged.
+      for (const target of rows) {
+        const encoded = encodeLogicalRow(table, target)
+        const key = canonicalSchemaJson(encoded.key)
+        if (matched.has(key) || expected.get(key) !== canonicalSchemaJson(encoded)) throw mismatch()
+        matched.add(key)
+      }
+    }
+    if (matched.size !== chunk.payload.rows.length) throw mismatch()
   }
   const target: PostgresqlLogicalTarget = {
     provider: 'postgresql',
@@ -266,13 +314,7 @@ export async function openPostgresqlLogicalTarget(input: {
           await assertRows(table, chunk)
           return
         }
-        for (const row of chunk.payload.rows) {
-          const decoded = decodeLogicalRow(table, row)
-          await connection.unsafe(
-            `INSERT INTO ${tableName(table.providerTables.postgresql!)} (${table.columns.map((c) => quote(c.name)).join(',')}) VALUES (${table.columns.map((_, i) => `$${i + 1}`).join(',')})`,
-            table.columns.map((c) => decoded[c.name]),
-          )
-        }
+        await insertRows(table, chunk)
         await assertRows(table, chunk)
         await connection.unsafe(
           `INSERT INTO ${meta('migration_units')} (run_id,unit_id,rule_id,rule_version,unit_json,receipt_json,receipt_digest,outcome,rows_written,committed_at) VALUES ($1,$2,'epoch2/logical-copy',1,$3,$4,$5,'committed',$6,$7)`,
