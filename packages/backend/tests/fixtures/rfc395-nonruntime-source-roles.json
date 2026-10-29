@@ -35,7 +35,7 @@
     {
       "path": "packages/backend/src/modules/task-execution/infrastructure/migration/oracle/handlerHistory.ts",
       "role": "frozen-epoch1",
-      "sha256": "2a11fb898ded39411a57c4078794aa3b5ae0ffb311d6ee3c0e8103b13f0fb118",
+      "sha256": "afff5ca350e4f8d7f673af2fc4c5e5fb8d8d6f1fe078deaceeaeb39cf8b97524",
       "evidence": "Frozen NULL-seq/anchor handler oracle: source lines 9-32 preserve epoch-1 boundaries. It has no current test importer; this classifies frozen source, not executed coverage. The V1 runtime boundary prohibits migration/oracle imports."
     },
     {
@@ -53,7 +53,7 @@
     {
       "path": "packages/backend/src/modules/task-execution/infrastructure/migration/oracle/reader.ts",
       "role": "frozen-epoch1",
-      "sha256": "853a205354c5bf44321270bbec2f9be72052be5498bc5721020a12383bf1e79a",
+      "sha256": "a2473c54cf7ec9073f4dc5c0308c1b88fa16efb877f36f73e5552598a475327d",
       "evidence": "Reads frozenTablesOf(db), not the live registry; tests/rfc395-run-selection-oracle.test.ts:22 imports this independent epoch-1 SQL oracle."
     },
     {

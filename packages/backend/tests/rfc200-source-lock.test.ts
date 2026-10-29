@@ -75,7 +75,8 @@ describe('RFC-200 source wiring locks', () => {
       'const aggRun = await state.opts.persistence.nodeExecution.read(aggRunId)',
     )
 
-    expect(wrapperMechanics).toContain("aggRun?.envelopeNonce ?? ''")
+    // RFC-395 D4: the aggregator row is required (its seq anchors the prior-output walk).
+    expect(wrapperMechanics).toContain("aggRun.envelopeNonce ?? ''")
 
     const memory = read('packages/backend/src/modules/memory/domain/injectionRendering.ts')
     // RFC-317 T39（CC-13）—— 围栏的 nonce 现在来自**必传的判别式**而不是默认参数：

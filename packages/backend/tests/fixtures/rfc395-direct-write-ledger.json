@@ -95,6 +95,7 @@
     "rfc395-af2-daemon-wiring.test.ts": "target-model-contract",
     "rfc395-checkpoint-target.test.ts": "target-model-contract",
     "rfc395-clarify-target-concurrency.test.ts": "target-model-contract",
+    "rfc395-d13-node-run-write-columns.test.ts": "target-model-contract",
     "rfc395-q1-surface-projection.test.ts": "target-model-contract",
     "rfc395-r1-target-behavior.test.ts": "target-model-contract",
     "rfc395-reference-target-relations.test.ts": "target-model-contract",

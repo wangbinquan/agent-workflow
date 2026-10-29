@@ -28,9 +28,9 @@
       "path": "src/modules/collaboration/infrastructure/clarify/rerunLedger.ts",
       "symbol": "isTargetNodeConsumed",
       "ordinal": 1,
-      "source": "createRunHistorySnapshot('', runs).familyHistory( '', { nodeId: targetNodeId, iteration }, { topLevelOnly: true, ...(anchor === undefined || anchor.seq === null ? {} : { from: anchor }), }, )",
+      "source": "createRunHistorySnapshot('', runs).familyHistory( '', { nodeId: targetNodeId, iteration }, { topLevelOnly: true, ...(anchor === undefined ? {} : { from: anchor }), }, )",
       "reference": "G4 #63",
-      "today": "同节点、iteration、顶层；锚点存在且 seq 非空时包含锚点及以后，否则不加 from 下界，保留 P-1。",
+      "today": "同节点、iteration、顶层；锚点存在时包含锚点及以后，否则不加 from 下界，保留 P-1。RFC-395 D4 之后 seq 恒非空，不再有「seq 为空即不加下界」的分支。",
       "whyFrameless": "旧 ledger 老化没有 shard/container 上界，不改为单 frame。"
     },
     {

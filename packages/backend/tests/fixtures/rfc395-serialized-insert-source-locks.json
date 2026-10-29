@@ -37,7 +37,7 @@
         },
         {
           "path": "modules/task-execution/infrastructure/nodeRunWriteProtocol.ts",
-          "sha256": "29fb5217fa68405a2ed107f65e188e884bc27450aae593e1bd09d82f9e7a05f0"
+          "sha256": "54c5b56e6dad5c3510de8e757c07a015c6ac5f508c51577cf4a263ba8b429fb4"
         }
       ],
       "sites": [
