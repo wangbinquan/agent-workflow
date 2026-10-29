@@ -53,6 +53,9 @@ export interface HostedDatabaseWriteBarrier {
   beforeWrite(tx: PersistenceDb): Promise<void>
   /** Govern every later write transaction (idempotent). */
   enforce(): void
+  /** Whether later writes are governed yet; boot convergence before `enforce()` is not, and it
+   * does not count as the generation's first live write either. */
+  isEnforcing(): boolean
   /** Follow this instance's own execution lease: refuse writes once it is
    * lost, and while it is held whenever the control row names another holder. */
   follow(authority: {
@@ -71,6 +74,7 @@ export function createHostedDatabaseWriteBarrier(
     enforce() {
       enforcing = true
     },
+    isEnforcing: () => enforcing,
     follow(next: Parameters<HostedDatabaseWriteBarrier['follow']>[0]) {
       if (authority !== undefined) throw new Error('the write barrier already follows a lease')
       authority = next

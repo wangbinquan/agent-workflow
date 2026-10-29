@@ -231,6 +231,41 @@ if (resolveTestProviders(process.env).includes('postgresql')) {
     }
   }, 180_000)
 
+  // CrewStation RFC-044 T9 acceptance (2026-10-29): the epoch-2 migration candidate boots on the target
+  // generation while the platform keeps the operation unopened. Its boot convergence set the first-write
+  // marker, and rollback before opening was refused with reverse-migration-required. Only writes made
+  // once the instance enforces the write window count as the generation's first live write.
+  test('boot convergence before the window is enforced does not count as the first live write', async () => {
+    const { prepared } = await install()
+    const barrier = createHostedDatabaseWriteBarrier({ enforcing: false })
+    const db = createPostgresqlDatabaseClient(prepared.runtime.runtime, {
+      beforeWrite: barrier.beforeWrite,
+      countsAsLiveWrite: barrier.isEnforcing,
+    })
+    const marker = async () =>
+      (
+        await raw(
+          'SELECT first_live_write_at FROM agent_workflow_meta.first_write WHERE generation_id = $1',
+          [prepared.runtime.runtime.generationId],
+        )
+      )[0]?.first_live_write_at ?? null
+    try {
+      expect(await marker()).toBeNull()
+      await databaseSessionFor(db).transaction((tx) =>
+        workflowFixture(tx, { id: 'converged-at-boot', name: 'Boot', definition: '{}' }),
+      )
+      expect(barrier.isEnforcing()).toBe(false)
+      expect(await marker()).toBeNull()
+      barrier.enforce()
+      await databaseSessionFor(db).transaction((tx) =>
+        workflowFixture(tx, { id: 'first-live-write', name: 'Live', definition: '{}' }),
+      )
+      expect(await marker()).not.toBeNull()
+    } finally {
+      await prepared.runtime.close()
+    }
+  }, 180_000)
+
   test('the write guard runs once per transaction, and per implicit transaction otherwise', async () => {
     const { prepared } = await install()
     let guards = 0

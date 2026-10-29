@@ -308,6 +308,7 @@ export async function composeCrewStationSystemSelections(input: {
   const raw = input.prepared.openBootstrapClient()
   const db = createPostgresqlDatabaseClient(input.prepared.runtime.runtime, {
     beforeWrite: barrier.beforeWrite,
+    countsAsLiveWrite: barrier.isEnforcing,
   })
   const prepared: PreparedPostgresqlProviderSchema = {
     ...input.prepared,

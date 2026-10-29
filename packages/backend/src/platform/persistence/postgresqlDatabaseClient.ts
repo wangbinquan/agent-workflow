@@ -32,6 +32,13 @@ export type PostgresqlDatabaseClient = BunSQLDatabase<NativeTableSets['postgresq
 /** 部署写闸在同一条预留连接上、每笔事务首次写之前调用一次。 */
 export interface PostgresqlDatabaseClientOptions {
   readonly beforeWrite?: (tx: PersistenceDb) => Promise<void>
+  /**
+   * Whether a write transaction counts as the generation's first live write (absent: every write
+   * does). A hosted instance's boot convergence runs before it enforces the write window; those
+   * idempotent rows must not close the rollback-before-first-write window of an epoch switch
+   * whose candidate boots before the platform opens it (CrewStation RFC-044 T9).
+   */
+  readonly countsAsLiveWrite?: () => boolean
 }
 type SqlClient = Pick<PostgresqlPool, 'unsafe'>
 interface NativeClient extends SqlClient {
@@ -126,7 +133,8 @@ export function createPostgresqlDatabaseClient(
     bind(drizzle(client as unknown as BunSQL, { schema }))
   const beforeMutation = async (connection: SqlClient, state: WriteState): Promise<void> => {
     await assertActiveGeneration(connection, runtime)
-    await markFirstGenerationWrite(connection, runtime, state)
+    if (options.countsAsLiveWrite?.() ?? true)
+      await markFirstGenerationWrite(connection, runtime, state)
     if (options.beforeWrite !== undefined) {
       state.beforeWrite ??= options.beforeWrite(nativeDatabase(connection))
       await state.beforeWrite
