@@ -1,5 +1,5 @@
 // RFC-395 II-b V1: freeze parity until activation and prohibit runtime imports; includes negative controls.
-import { describe, expect, test } from 'bun:test'
+import { describe, expect, setDefaultTimeout, test } from 'bun:test'
 import { readFileSync, writeFileSync, cpSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { resolve, posix, join } from 'node:path'
@@ -30,6 +30,10 @@ import { LEGACY_MIGRATION_HASHES as frozenAliases } from '@/platform/persistence
 import { LEGACY_MIGRATION_HASHES as liveAliases } from '@/db/schemaAdmission'
 import { sha256Hex } from '@/util/hash'
 import { packageSrcUnits, sourceUnit, type SourceUnit } from './census'
+
+// Parsing every backend source took 5.52 s and timed out at the 5 s default on
+// backend-macos-nightly run 40859820668 (shard 6/12, 2026-10-29). allow 20 s.
+setDefaultTimeout(20_000)
 
 const root = resolve(import.meta.dir, '../../../..')
 const migration = 'platform/persistence/migration/'

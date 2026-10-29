@@ -167,7 +167,7 @@ export async function deriveFrontier(
             )
             .reduce<
               FrontierRunRow | undefined
-            >((latest, row) => (latest === undefined || (row.seq !== null && (latest.seq === null || row.seq > latest.seq)) ? row : latest), undefined))
+            >((latest, row) => (latest === undefined || row.seq > latest.seq ? row : latest), undefined))
     if (row !== undefined) latestPerNode.set(nodeId, row)
   }
   const freshestSettled = await buildFreshestSettledPerNode(rows, scopeIds, frame)

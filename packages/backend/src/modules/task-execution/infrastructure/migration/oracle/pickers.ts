@@ -1,4 +1,4 @@
-import { compareNodeRunMintOrder } from '@agent-workflow/shared'
+import { compareLegacyNodeRunMintOrder } from './legacyOrder'
 import { pickFreshestRun, pickLatestRunInFrame } from './legacyPickers'
 import { isStructurallySuperseded } from './supersession'
 import { requireSupersessionScope, requireTaskLabelScope } from './scope'
@@ -7,6 +7,7 @@ import type {
   FamilyRef,
   Frame,
   HistoryFilter,
+  LegacyRunSeq,
   RunSlot,
 } from '../../../application/ports/runSelection'
 import { oracleRunRole, oracleRunSlot, type OracleRunRow } from './rows'
@@ -67,7 +68,7 @@ export function oracleCurrentInFrame(
 ): ReadonlyMap<string, OracleRunRow> {
   const selected = new Map<string, OracleRunRow>()
   for (const row of rows) void row.seq
-  for (const row of [...rows].sort(compareNodeRunMintOrder)) {
+  for (const row of [...rows].sort(compareLegacyNodeRunMintOrder)) {
     if (
       row.parentNodeRunId !== null ||
       row.containerRunId !== frame.containerRunId ||
@@ -75,7 +76,7 @@ export function oracleCurrentInFrame(
     )
       continue
     const previous = selected.get(row.nodeId)
-    if (previous === undefined || compareNodeRunMintOrder(row, previous) > 0)
+    if (previous === undefined || compareLegacyNodeRunMintOrder(row, previous) > 0)
       selected.set(row.nodeId, row)
   }
   return selected
@@ -105,7 +106,7 @@ export function oracleFamilyRows(
 export function oracleHistory(
   candidates: readonly OracleRunRow[],
   allRows: readonly OracleRunRow[],
-  filter: HistoryFilter = {},
+  filter: HistoryFilter<LegacyRunSeq> = {},
 ): readonly OracleRunRow[] {
   if (filter.excludeSuperseded === true)
     for (const row of candidates) requireSupersessionScope(row, allRows)
@@ -120,10 +121,10 @@ export function oracleHistory(
       (filter.consumedOnly !== true || row.consumedUpstreamRunsJson !== null) &&
       (filter.childTaskOnly !== true || row.childTaskId !== null) &&
       (filter.rerunCause === undefined || row.rerunCause === filter.rerunCause) &&
-      (filter.through === undefined || compareNodeRunMintOrder(row, filter.through) <= 0) &&
-      (filter.from === undefined || compareNodeRunMintOrder(row, filter.from) >= 0) &&
-      (filter.before === undefined || compareNodeRunMintOrder(row, filter.before) < 0) &&
-      (filter.after === undefined || compareNodeRunMintOrder(row, filter.after) > 0) &&
+      (filter.through === undefined || compareLegacyNodeRunMintOrder(row, filter.through) <= 0) &&
+      (filter.from === undefined || compareLegacyNodeRunMintOrder(row, filter.from) >= 0) &&
+      (filter.before === undefined || compareLegacyNodeRunMintOrder(row, filter.before) < 0) &&
+      (filter.after === undefined || compareLegacyNodeRunMintOrder(row, filter.after) > 0) &&
       (filter.excludeSuperseded !== true || !isStructurallySuperseded(row, allRows)),
   )
   return rows.sort((a, b) => {
@@ -153,6 +154,8 @@ export function oracleHistory(
         priority = Number(a.status === 'running') - Number(b.status === 'running')
         break
     }
-    return (priority || compareNodeRunMintOrder(a, b)) * (filter.direction === 'desc' ? -1 : 1)
+    return (
+      (priority || compareLegacyNodeRunMintOrder(a, b)) * (filter.direction === 'desc' ? -1 : 1)
+    )
   })
 }

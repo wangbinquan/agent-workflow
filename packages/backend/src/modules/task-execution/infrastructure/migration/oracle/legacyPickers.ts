@@ -1,12 +1,12 @@
 // RFC-395 II-a A3：旧选择规则仅由 oracle 持有；包括 NULL seq 与 ID 回退。
-import { isNewerNodeRun, type NodeRunOrderKey } from '@agent-workflow/shared'
+import { isNewerLegacyNodeRun, type LegacyNodeRunOrderKey } from './legacyOrder'
 
 /** RFC-374: shared seq-first mint order; NULL legacy rows retain their ID order. */
-export function isFresherNodeRun<R extends NodeRunOrderKey>(
+export function isFresherNodeRun<R extends LegacyNodeRunOrderKey>(
   candidate: R,
   incumbent: R | undefined,
 ): boolean {
-  return isNewerNodeRun(candidate, incumbent)
+  return isNewerLegacyNodeRun(candidate, incumbent)
 }
 
 // RFC-354 retired `pickUpstreamSourceRun` / `pickVisibleUpstreamRun` — the
@@ -25,7 +25,7 @@ export function isFresherNodeRun<R extends NodeRunOrderKey>(
  * Everything inside a task reads by frame (`pickFrameSourceRun`).
  */
 export function pickLatestSettledRun<
-  R extends NodeRunOrderKey & { id: string; parentNodeRunId: string | null; status: string },
+  R extends LegacyNodeRunOrderKey & { id: string; parentNodeRunId: string | null; status: string },
 >(rows: readonly R[]): R | undefined {
   let run: R | undefined
   for (const r of rows) {
@@ -43,7 +43,7 @@ export function pickLatestSettledRun<
  * is not done, instead of silently reading an older done row).
  */
 export function pickLatestRunInFrame<
-  R extends NodeRunOrderKey & {
+  R extends LegacyNodeRunOrderKey & {
     id: string
     iteration: number
     parentNodeRunId: string | null
@@ -77,7 +77,7 @@ export function pickLatestRunInFrame<
  * moved to frames.
  */
 export function pickFrameSourceRun<
-  R extends NodeRunOrderKey & {
+  R extends LegacyNodeRunOrderKey & {
     id: string
     iteration: number
     parentNodeRunId: string | null
@@ -142,7 +142,7 @@ export function isSettledRunStatus(row: { status: string }): boolean {
  *     (isFresherNodeRun).
  */
 export function pickReusableShardRun<
-  R extends NodeRunOrderKey & {
+  R extends LegacyNodeRunOrderKey & {
     id: string
     status: string
     shardKey: string | null
@@ -173,7 +173,7 @@ export function pickReusableShardRun<
  * selected; mark-running rewrites startedAt and made the order drift).
  */
 export function pickFreshestRun<
-  R extends NodeRunOrderKey & { id: string; parentNodeRunId: string | null; status: string },
+  R extends LegacyNodeRunOrderKey & { id: string; parentNodeRunId: string | null; status: string },
 >(
   rows: readonly R[],
   opts: { topLevelOnly?: boolean; statusIn?: readonly string[] } = {},

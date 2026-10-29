@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "note": "RFC-319 R1：跑完默认全量 e2e 后，allRouteMeta() 声明的端点里一次都没被打到的那些。只减不增；采集端 e2e/route-journal.ts，聚合端 packages/backend/tests/architecture/routeHitLedger.ts。 RFC-349 的 12 条 /api/database* 在这里：浏览器腿的 rfc349-database-migration-settings.spec.ts 用 page.route('**/api/database**') 把它们全部在浏览器里以夹具应答——那是刻意的，它要在没有真 PostgreSQL 的情况下逐相位驱动 UI（一键、重载续跑、割接关掉回滚、回执可下载）。这些端点的**真实**覆盖在 postgresql-evidence 那条腿上（真 daemon + 真外置 PostgreSQL，跑 preflight/start/status/artifacts/legacy/resume/cancel/rollback 全链），journal 采集不到它，因为采集端只读被测 daemon 的 req 日志。要把这 12 条从账本里减掉，就得让浏览器腿真打服务端。 RFC-370 v2 P1 删除了阶段 A 的四个原始执行恢复端点（execution / intent turn / MCP 运行测试会话 / 记忆蒸馏任务的 recover），随端点一并销账。 RFC-396 的 graph care 旅程（e2e/rfc396-graph-care-repair.spec.ts）真实打到 POST /api/code/verification-profiles/:id/publish，2026-10-26 e2e-full 夜间（运行 40321405234）对账后销账。",
+  "note": "RFC-319 R1：跑完默认全量 e2e 后，allRouteMeta() 声明的端点里一次都没被打到的那些。只减不增；采集端 e2e/route-journal.ts，聚合端 packages/backend/tests/architecture/routeHitLedger.ts。 RFC-349 的 12 条 /api/database* 在这里：浏览器腿的 rfc349-database-migration-settings.spec.ts 用 page.route('**/api/database**') 把它们全部在浏览器里以夹具应答——那是刻意的，它要在没有真 PostgreSQL 的情况下逐相位驱动 UI（一键、重载续跑、割接关掉回滚、回执可下载）。这些端点的**真实**覆盖在 postgresql-evidence 那条腿上（真 daemon + 真外置 PostgreSQL，跑 preflight/start/status/artifacts/legacy/resume/cancel/rollback 全链），journal 采集不到它，因为采集端只读被测 daemon 的 req 日志。要把这 12 条从账本里减掉，就得让浏览器腿真打服务端。 RFC-370 v2 P1 删除了阶段 A 的四个原始执行恢复端点（execution / intent turn / MCP 运行测试会话 / 记忆蒸馏任务的 recover），随端点一并销账。 RFC-396 的 graph care 旅程（e2e/rfc396-graph-care-repair.spec.ts）真实打到 POST /api/code/verification-profiles/:id/publish，2026-10-26 e2e-full 夜间（运行 40321405234）对账后销账。 RFC-396 的实现限制人工判定（POST /api/development-designs/:id/proposals/:proposalId/limitation-review，15f4e65dc）只对 code-feedback 提案开放，而现有 e2e 没有任何一条旅程造出 code-feedback 提案，2026-10-29 e2e-full 夜间（运行 40872361956）对账后登记；补上从实现反馈到人工判定的旅程后销账。",
   "recordedAtSha": "b6df370b7e04305183fc317fff8aefdc0f6a23a0",
   "declaredTotal": 495,
   "uncovered": [
@@ -64,6 +64,7 @@
     "POST /api/database/migrations/:id/resume",
     "POST /api/database/migrations/:id/rollback",
     "POST /api/database/migrations/preflight",
+    "POST /api/development-designs/:id/proposals/:proposalId/limitation-review",
     "POST /api/digital-employee-types/:typeRef/work-items/:workItemRef/tools/:toolId/validate",
     "POST /api/employee-cases/:id/policy-upgrade-preview",
     "POST /api/employee-cases/policy-upgrade-apply",

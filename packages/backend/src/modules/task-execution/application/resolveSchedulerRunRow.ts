@@ -10,7 +10,7 @@ import type { TaskExecutionContextRef } from './ports/taskExecutionTopology'
 
 export interface SchedulerRunRowCandidate {
   readonly id: string
-  readonly seq: number | null
+  readonly seq: number
   readonly generationSeq: number
   readonly status: NodeRunStatus
   readonly retryIndex: number

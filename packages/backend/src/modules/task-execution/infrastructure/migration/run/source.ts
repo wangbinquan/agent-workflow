@@ -1,6 +1,6 @@
 import type { NodeRunStatus } from '@agent-workflow/shared'
 import type { SourceRow, TargetValue } from '@/platform/persistence/migration/conversion/types'
-import type { OracleRunRow } from '../../migration/oracle/rows'
+import type { SequencedOracleRunRow } from '../../migration/oracle/rows'
 import type { RunFrame } from '@/platform/persistence/migration/conversion/lookups/keys'
 
 export function text(row: SourceRow, column: string): string {
@@ -34,7 +34,7 @@ export function columns(row: SourceRow, names: readonly string[]): Record<string
     }),
   )
 }
-export function oracleRow(row: SourceRow, seq: number, frame: RunFrame): OracleRunRow {
+export function oracleRow(row: SourceRow, seq: number, frame: RunFrame): SequencedOracleRunRow {
   return {
     id: text(row, 'id'),
     taskId: text(row, 'task_id'),

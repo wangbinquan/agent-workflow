@@ -1,4 +1,4 @@
-import { compareNodeRunMintOrder } from '@agent-workflow/shared'
+import { compareLegacyNodeRunMintOrder } from '../oracle/legacyOrder'
 import { childScopePath } from '../../../domain/environmentChain'
 
 export interface FrameRow {
@@ -22,7 +22,7 @@ export function backfillLegacyFrames(input: {
   readonly rows: readonly FrameRow[]
 }): { updates: readonly FrameUpdate[]; unresolved: readonly string[] } {
   const wrapperIds = new Set(input.parentOf.values())
-  const rows = [...input.rows].sort(compareNodeRunMintOrder)
+  const rows = [...input.rows].sort(compareLegacyNodeRunMintOrder)
   const settledById = new Map<string, FrameRow>()
   const latestRowOfNode = new Map<string, FrameRow>()
   const updates: FrameUpdate[] = []

@@ -2,7 +2,14 @@ import type { NodeRunStatus } from '@agent-workflow/shared'
 import { deriveNodeRunRole } from '../../../domain/nodeRunRole'
 import { isStructurallySuperseded } from './supersession'
 import { requireSupersessionScope, requireTaskLabelScope } from './scope'
-import type { RunRef, RunSlot, SelectedRun } from '../../../application/ports/runSelection'
+import type {
+  LegacyRunSeq,
+  RunRef,
+  RunSlot,
+  SelectedRun,
+} from '../../../application/ports/runSelection'
+
+type LegacyRunRef = RunRef<LegacyRunSeq>
 
 /** 旧 schema 的窄投影；不加载 prompt、inventory 或 checkpoint 大列。 */
 export interface OracleRunRow {
@@ -27,6 +34,9 @@ export interface OracleRunRow {
   readonly mergeState: string | null
   readonly supersededByReview: string | null
 }
+
+/** A source row after the converter numbered it (legacy-derived seq); reads as an epoch-2 ref. */
+export type SequencedOracleRunRow = OracleRunRow & { readonly seq: number }
 
 const labelIndexes = new WeakMap<
   readonly OracleRunRow[],
@@ -98,7 +108,7 @@ export function oracleRunSlot(row: OracleRunRow, rows: readonly OracleRunRow[]):
 }
 
 const refSources = new WeakMap<
-  RunRef,
+  LegacyRunRef,
   {
     row: OracleRunRow
     rows: readonly OracleRunRow[]
@@ -132,7 +142,7 @@ const refDescriptors: PropertyDescriptorMap = {
       field,
       {
         enumerable: true,
-        get(this: RunRef) {
+        get(this: LegacyRunRef) {
           return refSources.get(this)!.row[field]
         },
       },
@@ -140,21 +150,21 @@ const refDescriptors: PropertyDescriptorMap = {
   ),
   role: {
     enumerable: true,
-    get(this: RunRef) {
+    get(this: LegacyRunRef) {
       const { row, rows } = refSources.get(this)!
       return oracleRunRole(row, rows).role
     },
   },
   syntheticKind: {
     enumerable: true,
-    get(this: RunRef) {
+    get(this: LegacyRunRef) {
       const { row, rows } = refSources.get(this)!
       return oracleRunRole(row, rows).syntheticKind
     },
   },
   slot: {
     enumerable: true,
-    get(this: RunRef) {
+    get(this: LegacyRunRef) {
       const { row, rows, slot } = refSources.get(this)!
       requireTaskLabelScope(rows, 'slot')
       return slot ?? oracleRunSlot(row, rows)
@@ -162,7 +172,7 @@ const refDescriptors: PropertyDescriptorMap = {
   },
   structurallySuperseded: {
     enumerable: true,
-    get(this: RunRef) {
+    get(this: LegacyRunRef) {
       const { row, rows } = refSources.get(this)!
       requireSupersessionScope(row, rows)
       return isStructurallySuperseded(row, rows)
@@ -174,8 +184,8 @@ export function oracleRunRef(
   row: OracleRunRow,
   rows: readonly OracleRunRow[],
   slot?: RunSlot,
-): RunRef {
-  const ref = Object.defineProperties({}, refDescriptors) as RunRef
+): LegacyRunRef {
+  const ref = Object.defineProperties({}, refDescriptors) as LegacyRunRef
   refSources.set(ref, { row, rows, slot })
   return ref
 }
@@ -184,7 +194,7 @@ export function oracleSelectedRun(
   row: OracleRunRow,
   rows: readonly OracleRunRow[],
   slot?: RunSlot,
-): SelectedRun {
+): SelectedRun<LegacyRunSeq> {
   return Object.assign(oracleRunRef(row, rows, slot), {
     revision: null,
     // wrapper.findResumable 先取最新，再判终态；canceled/interrupted 沿用旧可续跑口径。

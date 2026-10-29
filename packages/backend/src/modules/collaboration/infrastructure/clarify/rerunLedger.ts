@@ -315,7 +315,7 @@ export async function isTargetNodeConsumed(
     { nodeId: targetNodeId, iteration },
     {
       topLevelOnly: true,
-      ...(anchor === undefined || anchor.seq === null ? {} : { from: anchor }),
+      ...(anchor === undefined ? {} : { from: anchor }),
     },
   )
   return history.some(

@@ -1049,6 +1049,18 @@
       "assertsAbsence": true,
       "classified": true,
       "corpusScanner": true,
+      "file": "packages/backend/tests/architecture/rfc395-d4-mint-order-boundary.test.ts",
+      "id": "rfc395-d4-mint-order-boundary",
+      "lines": 107,
+      "mechanism": "ast",
+      "minCorpusFiles": 3000,
+      "negativeFixture": true,
+      "runner": "bun"
+    },
+    {
+      "assertsAbsence": true,
+      "classified": true,
+      "corpusScanner": true,
       "file": "packages/backend/tests/architecture/rfc395-explicit-schema-contributions.test.ts",
       "id": "rfc395-explicit-schema-contributions",
       "lines": 213,

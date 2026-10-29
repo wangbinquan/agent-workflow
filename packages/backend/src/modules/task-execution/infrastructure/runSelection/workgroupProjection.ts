@@ -5,7 +5,7 @@ import type { RunSlot } from '../../application/ports/runSelection'
 
 interface HostRunFacts {
   readonly id: string
-  readonly seq: number | null
+  readonly seq: number
   readonly nodeId: string
   readonly shardKey: string | null
   readonly status: string

@@ -5473,7 +5473,7 @@ export async function freshestPriorRunWithOutput(
     iteration: number
     shardKey: string | null
     id: string
-    seq: number | null
+    seq: number
   },
 ): Promise<NodeExecutionSnapshot | undefined> {
   return persistence.snapshotRead(async (snapshot) => {
@@ -5523,7 +5523,7 @@ async function lineageCausesNewestFirst(
     iteration: number
     shardKey: string | null
     id: string
-    seq: number | null
+    seq: number
   },
 ): Promise<Array<string | null>> {
   return persistence.snapshotRead(async (snapshot) => {
@@ -5566,7 +5566,7 @@ async function priorDoneGenerationsForRun(
     iteration: number
     shardKey: string | null
     id: string
-    seq: number | null
+    seq: number
   },
 ): Promise<readonly NodeExecutionSnapshot[]> {
   return persistence.snapshotRead(async (snapshot) => {

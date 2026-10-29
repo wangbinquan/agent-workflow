@@ -7,7 +7,7 @@ import { compareRunSequence } from '../../../domain/runSelection/ordering'
 import type { RunSlot } from '../../../domain/runSelection/slots'
 import { selectResumeRollbackTargets } from '../../../application/resumeRollbackTargets'
 import { createRunSelectionOracleSnapshot } from '../../migration/oracle/snapshot'
-import type { OracleRunRow } from '../../migration/oracle/rows'
+import type { SequencedOracleRunRow } from '../../migration/oracle/rows'
 
 export interface SelectionMismatch {
   readonly runId: string
@@ -17,7 +17,7 @@ export interface SelectionMismatch {
 }
 export async function computeLegacySelections(input: {
   readonly task: TaskFacts
-  readonly rows: readonly OracleRunRow[]
+  readonly rows: readonly SequencedOracleRunRow[]
   readonly identities: ReadonlyMap<string, LegacyNodeRunIdentity>
   readonly historyOnly: ReadonlySet<string>
 }): Promise<{
@@ -26,12 +26,10 @@ export async function computeLegacySelections(input: {
   executionUsed: ReadonlySet<string>
 }> {
   const oracle = createRunSelectionOracleSnapshot(input.rows)
-  const slots = new Map<string, { slot: RunSlot; rows: OracleRunRow[] }>()
+  const slots = new Map<string, { slot: RunSlot; rows: SequencedOracleRunRow[] }>()
   const mismatches: SelectionMismatch[] = []
-  const newest = (rows: readonly OracleRunRow[]) =>
-    [...rows]
-      .sort((a, b) => compareRunSequence({ ...a, seq: a.seq! }, { ...b, seq: b.seq! }))
-      .at(-1)
+  const newest = (rows: readonly SequencedOracleRunRow[]) =>
+    [...rows].sort(compareRunSequence).at(-1)
   for (const row of input.rows) {
     const identity = input.identities.get(row.id)
     if (!identity?.slot) continue

@@ -27,12 +27,13 @@ import { ClarifyNode } from '../src/components/canvas/nodes/ClarifyNode'
 import { CrossClarifyNode } from '../src/components/canvas/nodes/CrossClarifyNode'
 import type { CanvasNodeData } from '../src/components/canvas/nodes/types'
 import { __testToFlowNodes as toFlowNodes } from '../src/components/canvas/WorkflowCanvas'
+import { seqFromId } from './node-run-seq.helpers'
 
 // --- group 1: deriveClarifyNodeNav (pure freshest-run) ---------------------
 
 function run(over: Partial<NodeRun> & Pick<NodeRun, 'id'>): NodeRun {
   return {
-    seq: 0,
+    seq: seqFromId(over.id),
     nodeId: 'clr',
     parentNodeRunId: null,
     clarifyNavKind: null,

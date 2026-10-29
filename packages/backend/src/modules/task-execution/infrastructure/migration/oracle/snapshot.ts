@@ -1,4 +1,4 @@
-import type { RunSelectionReader } from '../../../application/ports/runSelection'
+import type { LegacyRunSeq, RunSelectionReader } from '../../../application/ports/runSelection'
 import { decodeConsumedEdges } from './consumed'
 import {
   oracleCurrent,
@@ -32,16 +32,28 @@ export interface OracleSnapshotRow extends Pick<OracleRunRow, 'id' | 'nodeId' | 
   readonly supersededByReview?: OracleRunRow['supersededByReview']
 }
 
-export function createRunSelectionOracleSnapshot(input: readonly OracleRunRow[]): RunSelectionReader
+/** Rows the converter already numbered (legacy-derived seq) read as epoch-2 refs. */
+type Sequenced<R> = R & { readonly seq: number }
+
+export function createRunSelectionOracleSnapshot(
+  input: readonly Sequenced<OracleRunRow>[],
+): RunSelectionReader
+export function createRunSelectionOracleSnapshot(
+  input: readonly OracleRunRow[],
+): RunSelectionReader<LegacyRunSeq>
+export function createRunSelectionOracleSnapshot(
+  input: readonly Sequenced<OracleSnapshotRow>[],
+  options: { readonly scope: OracleSnapshotScope },
+): RunSelectionReader
 export function createRunSelectionOracleSnapshot(
   input: readonly OracleSnapshotRow[],
   options: { readonly scope: OracleSnapshotScope },
-): RunSelectionReader
+): RunSelectionReader<LegacyRunSeq>
 /** Full task snapshots validate all columns eagerly. Scoped projections fail on missing access. */
 export function createRunSelectionOracleSnapshot(
   input: readonly OracleSnapshotRow[],
   options?: { readonly scope: OracleSnapshotScope },
-): RunSelectionReader {
+): RunSelectionReader<LegacyRunSeq> {
   const scope = options?.scope ?? { kind: 'task' }
   const snapshot = input.map((row) =>
     bindOracleRow(row as Partial<OracleRunRow>, options === undefined),

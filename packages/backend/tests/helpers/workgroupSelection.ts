@@ -2,8 +2,10 @@
 import { projectWorkgroupRunSelections } from './workgroupSelectionFixture'
 import * as room from '@/modules/resource-catalog/application/workgroups/workgroupRoomProjection'
 
-export type HostRunLite = Omit<room.HostRunLite, 'selection'>
-export type RoundLedgerRow = Omit<room.RoundLedgerRow, 'selection'>
+/** Fixture rows may leave seq out; the selection fixture derives it from ID order. */
+type FixtureSeq = { readonly seq: number | null }
+export type HostRunLite = Omit<room.HostRunLite, 'selection' | 'seq'> & FixtureSeq
+export type RoundLedgerRow = Omit<room.RoundLedgerRow, 'selection' | 'seq'> & FixtureSeq
 export type {
   MemberLite,
   RoundedWorkgroupMode,

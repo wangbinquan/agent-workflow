@@ -12,7 +12,7 @@ export interface NodeRunIdentitySnapshot {
   readonly syntheticKind: NodeRunSyntheticKind | null
   /** 当前 retry_index 的值，不承担时间排序。 */
   readonly attemptIndex: number
-  readonly seq: number | null
+  readonly seq: number
   readonly id: string
   readonly taskId: string
   readonly nodeId: string

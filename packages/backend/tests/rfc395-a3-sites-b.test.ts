@@ -2,10 +2,8 @@ import { o2Ports } from './helpers/o2Closure'
 import { withO2Closure } from './helpers/o2Closure'
 // RFC-395 II-a A3：双 provider 固定 G3–G7/G9/G12 的旧决定，尤其是 frame-less 与 framed 不同的历史。
 import { expect, test } from 'bun:test'
-import {
-  resolveHandlerRun as legacyHandler,
-  type ResolveHandlerInput,
-} from '@agent-workflow/shared'
+import type { ResolveHandlerInput } from '@agent-workflow/shared'
+import { resolveHandlerRun as legacyHandler } from '@/modules/task-execution/infrastructure/migration/oracle/handlerHistory'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   createNodeRunQueries,
@@ -179,7 +177,7 @@ describeEachProvider('RFC-395 II-a A3 sites-b legacy decisions', (harness) => {
     for (const triggerRunId of [id('trigger'), id('retry'), id('missing'), null])
       for (const shardKey of [undefined, null, 'other']) {
         const candidate = { ...input, triggerRunId, shardKey }
-        expect(await resolveHandlerRun(candidate)).toEqual(legacyHandler(candidate))
+        expect(await resolveHandlerRun(candidate)).toEqual(await legacyHandler(candidate))
       }
     expect(
       await isTargetNodeConsumed('agent', 0, id('trigger'), facts, new Set([id('retry')])),

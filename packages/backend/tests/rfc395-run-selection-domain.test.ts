@@ -26,6 +26,7 @@ import {
   type SelectionState,
 } from '@/modules/task-execution/domain/runSelection/changes'
 import { createRunSelectionParticipantInTx } from '@/modules/task-execution/infrastructure/migration/oracle/participant'
+import { compareLegacyNodeRunMintOrder } from '@/modules/task-execution/infrastructure/migration/oracle/legacyOrder'
 
 const slots: readonly RunSlot[] = [
   { kind: 'node', nodeId: 'n|["汉字"]', frame: { containerRunId: null, iteration: 0 } },
@@ -109,7 +110,7 @@ describe('RFC-395 II-a A3 rs1 / ordering', () => {
     expect(() => compareRunSequence({ seq: null as unknown as number }, b)).toThrow(
       'run-sequence-required',
     )
-    expect(compareNodeRunMintOrder({ id: 'z', seq: null }, b)).toBe(-1)
+    expect(compareLegacyNodeRunMintOrder({ id: 'z', seq: null }, b)).toBe(-1)
   })
 })
 

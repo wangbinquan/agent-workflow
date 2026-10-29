@@ -22,7 +22,6 @@
 //
 // 设计与决策见 design/RFC-120-task-question-list/{proposal,design}.md。
 
-import { compareNodeRunMintOrder, nodeRunOrderAnchor, type NodeRunOrderKey } from './nodeRunOrder'
 import type { ClarifyQuestion } from './schemas/clarify'
 import type { NodeRunStatus, RerunCause } from './schemas/task'
 
@@ -271,7 +270,7 @@ export function isClarifyRerunCause(cause: string | null | undefined): boolean {
 /** 一条 node_run 在 lineage 解析时需要的最小视图（service 从 node_runs 投影）。 */
 export interface RunLineageView {
   id: string
-  seq: number | null // RFC-374 mint order
+  seq: number // RFC-374 mint order; RFC-395 D4: always allocated
   nodeId: string
   iteration: number
   loopIter: number
@@ -299,51 +298,4 @@ export interface ResolveHandlerInput {
    *  id 更大的 sibling shard done run 会被误当本条目的承接 run（假消费）。`undefined`（每个既有
    *  调用方）= shard 盲，`sameNode` 逐字节等价今日（golden-lock）。内存比较，无 SQL eq(col,null) 坑。 */
   shardKey?: string | null
-}
-
-/** RFC-120 Codex F1：按**精确 lineage**取本条目的承接 run（非裸 freshest≥anchor）。
- *
- *  框窗规则：在「有效承接节点 + 同 iteration/loopIter」的 runs 里，以 triggerRunId
- *  为下界、以**下一条 NEW_CLARIFY_TRIGGER_CAUSES rerun**（id>anchor）为上界，取窗内
- *  freshest 的 **top-level**（parentNodeRunId===null）run。这样：
- *    - 后续不相关反问轮在同节点的新 rerun（带 clarify cause、id 更大）成为上界、被排除
- *      → 不会把本条目从 awaiting_confirm 误拉回 processing；
- *    - 窗内的 process-retry（cause='process-retry'）/级联仍计入（它们续的是本次承接）；
- *    - fanout：取 top-level 父 run 作代表（shard 子 run 不被误当承接代表）。
- *  v1 已知限制：多进程承接节点的子 run 聚合态以父 run 自身状态近似（design §6 注）。 */
-export function resolveHandlerRun(input: ResolveHandlerInput): HandlerRunView | null {
-  if (input.effectiveTargetNodeId === null || input.triggerRunId === null) return null
-  const anchor = nodeRunOrderAnchor(input.runs, input.triggerRunId)
-  const triggerCauses = new Set<string>(NEW_CLARIFY_TRIGGER_CAUSES)
-  const sameNode = input.runs.filter(
-    (r) =>
-      r.nodeId === input.effectiveTargetNodeId &&
-      r.iteration === input.iteration &&
-      r.loopIter === input.loopIter &&
-      // RFC-172b（T2）：shardKey===undefined → 恒真 → 与今日逐字节一致（golden-lock）。传值时
-      // 只保留本 shard 的 run（sibling 的 done 不进 lineage 窗口 → 不误判承接/消费）。
-      (input.shardKey === undefined || r.shardKey === input.shardKey),
-  )
-  // 上界 = 下一条「新反问触发」rerun 的 id（id 严格大于 anchor），否则 +∞。
-  let upperBound: NodeRunOrderKey | null = null
-  for (const r of sameNode) {
-    if (
-      compareNodeRunMintOrder(r, anchor) > 0 &&
-      r.rerunCause !== null &&
-      triggerCauses.has(r.rerunCause)
-    ) {
-      if (upperBound === null || compareNodeRunMintOrder(r, upperBound) < 0) upperBound = r
-    }
-  }
-  // 窗内 = [anchor, upperBound) 的 top-level run。
-  const lineage = sameNode.filter(
-    (r) =>
-      r.parentNodeRunId === null &&
-      compareNodeRunMintOrder(r, anchor) >= 0 &&
-      (upperBound === null || compareNodeRunMintOrder(r, upperBound) < 0),
-  )
-  if (lineage.length === 0) return null
-  // lineage is non-empty (guarded above) → reduce without seed returns an element.
-  const freshest = lineage.reduce((a, b) => (compareNodeRunMintOrder(b, a) > 0 ? b : a))
-  return { status: freshest.status, startedAt: freshest.startedAt, hasOutput: freshest.hasOutput }
 }

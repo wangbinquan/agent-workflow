@@ -524,7 +524,7 @@ test('target mint ordering uses seq alone and rejects missing sequence instead o
   expect(compareRunSequence(fresh, old)).toBeGreaterThan(0)
   expect(compareRunSequence(old, fresh)).toBeLessThan(0)
   expect(compareRunSequence({ id: 'other-id', seq: 2 } as typeof fresh, fresh)).toBe(0)
-  expect(() => requireRunSequence({ id: 'legacy', seq: null })).toThrow(
+  expect(() => requireRunSequence({ id: 'legacy', seq: null as unknown as number })).toThrow(
     'run-sequence-required:legacy',
   )
 })

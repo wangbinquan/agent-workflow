@@ -23,12 +23,13 @@ import { deriveReviewNodeNav } from '../src/lib/review-node-nav'
 import { ReviewNode } from '../src/components/canvas/nodes/ReviewNode'
 import type { CanvasNodeData } from '../src/components/canvas/nodes/types'
 import { __testToFlowNodes as toFlowNodes } from '../src/components/canvas/WorkflowCanvas'
+import { seqFromId } from './node-run-seq.helpers'
 
 // --- group 1: deriveReviewNodeNav ------------------------------------------
 
 function run(over: Partial<NodeRun> & Pick<NodeRun, 'id'>): NodeRun {
   return {
-    seq: 0,
+    seq: seqFromId(over.id),
     nodeId: 'rev',
     parentNodeRunId: null,
     reviewNavKind: null,

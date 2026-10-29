@@ -5,12 +5,18 @@ import type { SelectionChange, SelectionRevision } from '../../domain/runSelecti
 export type { Frame, RunSlot } from '../../domain/runSelection/slots'
 export type { SelectionChange, SelectionRevision } from '../../domain/runSelection/changes'
 
-/** II-a 仍能读到旧 NULL seq；目标排序函数不接受它。 */
-export interface RunRef {
+/**
+ * RFC-395 D4: epoch-2 rows always carry their allocated seq. Only the epoch-1 migration
+ * oracle reads rows minted before RFC-374, so only it instantiates these views with
+ * `LegacyRunSeq`.
+ */
+export type LegacyRunSeq = number | null
+
+export interface RunRef<Seq extends LegacyRunSeq = number> {
   readonly id: string
   readonly taskId: string
   readonly nodeId: string
-  readonly seq: number | null
+  readonly seq: Seq
   readonly slot: RunSlot
   readonly role: DerivedNodeRunRole['role']
   readonly syntheticKind: DerivedNodeRunRole['syntheticKind']
@@ -32,16 +38,21 @@ export interface RunRef {
 }
 
 /** Converted unresolved identity is available to history readers only. */
-export interface UnresolvedRunHistoryRef extends Omit<RunRef, 'slot' | 'role' | 'retryIndex'> {
+export interface UnresolvedRunHistoryRef<Seq extends LegacyRunSeq = number> extends Omit<
+  RunRef<Seq>,
+  'slot' | 'role' | 'retryIndex'
+> {
   readonly identity: 'unknown'
   readonly recordMode: 'history-only'
   readonly slot: RunSlot | null
   readonly role: RunRef['role'] | null
   readonly retryIndex: number | null
 }
-export type RunHistoryRef = RunRef | UnresolvedRunHistoryRef
+export type RunHistoryRef<Seq extends LegacyRunSeq = number> =
+  | RunRef<Seq>
+  | UnresolvedRunHistoryRef<Seq>
 
-export interface SelectedRun extends RunRef {
+export interface SelectedRun<Seq extends LegacyRunSeq = number> extends RunRef<Seq> {
   /** Epoch-2 selections carry a durable revision; only frozen epoch-1 evidence can be null. */
   readonly revision: number | null
   readonly resumable: boolean
@@ -67,7 +78,7 @@ export interface FamilyRef {
   readonly runIds?: readonly string[]
 }
 
-export interface HistoryFilter {
+export interface HistoryFilter<Seq extends LegacyRunSeq = number> {
   readonly executableOnly?: boolean
   readonly attemptIndexGreaterThan?: number
   readonly statusIn?: readonly NodeRunStatus[]
@@ -86,10 +97,10 @@ export interface HistoryFilter {
     | 'iteration'
     | 'running-first'
   readonly direction?: 'asc' | 'desc'
-  readonly through?: { readonly id: string; readonly seq: number | null }
-  readonly from?: { readonly id: string; readonly seq: number | null }
-  readonly before?: { readonly id: string; readonly seq: number | null }
-  readonly after?: { readonly id: string; readonly seq: number | null }
+  readonly through?: { readonly id: string; readonly seq: Seq }
+  readonly from?: { readonly id: string; readonly seq: Seq }
+  readonly before?: { readonly id: string; readonly seq: Seq }
+  readonly after?: { readonly id: string; readonly seq: Seq }
 }
 
 export interface ShardRequest {
@@ -108,19 +119,19 @@ export interface WrapperSlotRef {
   readonly processRetryIndex?: number
 }
 
-export interface ShardSelectionView {
+export interface ShardSelectionView<Seq extends LegacyRunSeq = number> {
   readonly slot: Extract<RunSlot, { kind: 'shard' }>
-  readonly current: SelectedRun | null
-  readonly reusable: RunRef | null
+  readonly current: SelectedRun<Seq> | null
+  readonly reusable: RunRef<Seq> | null
   readonly replayable: boolean
   readonly rerunInPlace: boolean
-  readonly singleMergedCandidate: RunRef | null
+  readonly singleMergedCandidate: RunRef<Seq> | null
 }
 
-export interface ShardSetView {
-  readonly shards: readonly ShardSelectionView[]
-  readonly aggregator: SelectedRun | null
-  readonly participating: readonly RunRef[]
+export interface ShardSetView<Seq extends LegacyRunSeq = number> {
+  readonly shards: readonly ShardSelectionView<Seq>[]
+  readonly aggregator: SelectedRun<Seq> | null
+  readonly participating: readonly RunRef<Seq>[]
   readonly aggregatorInputs: readonly ConsumedEdge[]
   /** 旧聚合器不写 shard 输入集合；不能把参与候选冒充已记录的消费事实。 */
   readonly aggregatorInputEvidence: 'source-node' | 'aggregator-shard' | 'unrecorded'
@@ -129,22 +140,22 @@ export interface ShardSetView {
   readonly aggregatorRerunInPlace: boolean
 }
 
-export interface RunSelectionReader {
+export interface RunSelectionReader<Seq extends LegacyRunSeq = number> {
   /** Zero means no slot row; a clear retains the tombstone revision. */
   revision(taskId: string, slot: RunSlot): Promise<number>
-  current(taskId: string, slot: RunSlot): Promise<SelectedRun | null>
-  currentInFrame(taskId: string, frame: Frame): Promise<ReadonlyMap<string, SelectedRun>>
-  shardSet(taskId: string, wrapper: WrapperSlotRef): Promise<ShardSetView>
+  current(taskId: string, slot: RunSlot): Promise<SelectedRun<Seq> | null>
+  currentInFrame(taskId: string, frame: Frame): Promise<ReadonlyMap<string, SelectedRun<Seq>>>
+  shardSet(taskId: string, wrapper: WrapperSlotRef): Promise<ShardSetView<Seq>>
   slotHistory(
     taskId: string,
     slot: RunSlot,
-    filter?: HistoryFilter,
-  ): Promise<readonly RunHistoryRef[]>
+    filter?: HistoryFilter<Seq>,
+  ): Promise<readonly RunHistoryRef<Seq>[]>
   familyHistory(
     taskId: string,
     family: FamilyRef,
-    filter?: HistoryFilter,
-  ): Promise<readonly RunHistoryRef[]>
+    filter?: HistoryFilter<Seq>,
+  ): Promise<readonly RunHistoryRef<Seq>[]>
   consumed(runId: string): Promise<readonly ConsumedEdge[]>
 }
 

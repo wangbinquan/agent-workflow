@@ -104,7 +104,9 @@ export function detectNodeRunIdOrder(
       if (
         ts.isFunctionDeclaration(current) &&
         current.name &&
-        /^(?:isFresherNodeRun|compareNodeRunMintOrder|isNewerNodeRun)$/.test(current.name.text)
+        /^(?:isFresherNodeRun|compareNodeRunMintOrder|compareLegacyNodeRunMintOrder|isNewerNodeRun)$/.test(
+          current.name.text,
+        )
       )
         return true
     }
@@ -240,9 +242,10 @@ export const NODE_RUN_ORDER_EXCEPTIONS: Readonly<Record<string, NodeRunOrderExce
     count: 1,
     reason: 'Message/run interleaving is a cross-entity legacy display boundary.',
   },
-  'packages/shared/src/nodeRunOrder.ts': {
+  'packages/backend/src/modules/task-execution/infrastructure/migration/oracle/legacyOrder.ts': {
     count: 2,
-    reason: 'Legacy NULL/NULL order and theoretical seq ties; S1b removes the ID fallback.',
+    reason:
+      'RFC-395 D4: epoch-1 NULL/NULL order and theoretical seq ties, kept for the conversion oracle only.',
   },
 }
 

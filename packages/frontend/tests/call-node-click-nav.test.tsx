@@ -39,6 +39,7 @@ import { CallWorkgroupNode } from '../src/components/canvas/nodes/CallWorkgroupN
 import type { CanvasNodeData } from '../src/components/canvas/nodes/types'
 import { __testToFlowNodes as toFlowNodes } from '../src/components/canvas/WorkflowCanvas'
 import { deriveCanvasNodeStatuses, isCallNodeKind } from '../src/routes/tasks.detail'
+import { seqFromId } from './node-run-seq.helpers'
 
 afterEach(() => {
   document.body.innerHTML = ''
@@ -48,7 +49,7 @@ afterEach(() => {
 
 function run(over: Partial<NodeRun> & Pick<NodeRun, 'id'>): NodeRun {
   return {
-    seq: 0,
+    seq: seqFromId(over.id),
     nodeId: 'call1',
     parentNodeRunId: null,
     childTaskId: null,

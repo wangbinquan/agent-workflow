@@ -1,6 +1,12 @@
-import { compareNodeRunMintOrder, isMergeStateSettled } from '@agent-workflow/shared'
+import { isMergeStateSettled } from '@agent-workflow/shared'
+import { compareLegacyNodeRunMintOrder } from './legacyOrder'
 import { pickFreshestRun, pickReusableShardRun } from './legacyPickers'
-import type { RunRef, ShardSetView, WrapperSlotRef } from '../../../application/ports/runSelection'
+import type {
+  LegacyRunSeq,
+  RunRef,
+  ShardSetView,
+  WrapperSlotRef,
+} from '../../../application/ports/runSelection'
 import { decodeConsumedEdges } from './consumed'
 import { oracleSlotRows } from './pickers'
 import { oracleRunRef, oracleSelectedRun, type OracleRunRow } from './rows'
@@ -8,10 +14,10 @@ import { oracleRunRef, oracleSelectedRun, type OracleRunRow } from './rows'
 export function oracleShardSet(
   rows: readonly OracleRunRow[],
   wrapper: WrapperSlotRef,
-): ShardSetView {
+): ShardSetView<LegacyRunSeq> {
   for (const row of rows) void row.seq
   const forced = wrapper.processRetryIndex !== undefined
-  const participating: RunRef[] = []
+  const participating: RunRef<LegacyRunSeq>[] = []
   const shards = wrapper.shards.map((request) => {
     const slot = {
       kind: 'shard' as const,
@@ -56,7 +62,7 @@ export function oracleShardSet(
       : pickFreshestRun(oracleSlotRows(rows, slot), { topLevelOnly: false })
   const newer =
     aggregator !== undefined &&
-    participating.every((row) => compareNodeRunMintOrder(aggregator, row) > 0)
+    participating.every((row) => compareLegacyNodeRunMintOrder(aggregator, row) > 0)
   return {
     shards,
     participating,

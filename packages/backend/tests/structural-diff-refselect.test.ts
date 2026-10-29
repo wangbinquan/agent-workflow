@@ -11,10 +11,10 @@ import {
 } from '../src/services/structuralDiff/refSelect'
 
 const runs: NodeRunRef[] = [
-  { seq: null, id: 'a', snapshotRef: 'snapA', startedAt: 1 },
-  { seq: null, id: 'r', snapshotRef: null, startedAt: 2 }, // readonly node (no snapshot)
-  { seq: null, id: 'b', snapshotRef: 'snapB', startedAt: 3 },
-  { seq: null, id: 'c', snapshotRef: 'snapC', startedAt: 4 }, // last writer
+  { seq: 1, id: 'a', snapshotRef: 'snapA', startedAt: 1 },
+  { seq: 2, id: 'r', snapshotRef: null, startedAt: 2 }, // readonly node (no snapshot)
+  { seq: 3, id: 'b', snapshotRef: 'snapB', startedAt: 3 },
+  { seq: 4, id: 'c', snapshotRef: 'snapC', startedAt: 4 }, // last writer
 ]
 
 describe('resolveNodeScope', () => {
@@ -55,7 +55,7 @@ describe('resolveNodeScope', () => {
 describe('perRepoNodeRuns', () => {
   const mrows = [
     {
-      seq: null,
+      seq: 1,
       id: 'a',
       startedAt: 1,
       checkpoints: Object.entries({ 'repo-x': 'xA', 'repo-y': 'yA' }).map(
@@ -63,7 +63,7 @@ describe('perRepoNodeRuns', () => {
       ),
     },
     {
-      seq: null,
+      seq: 2,
       id: 'b',
       startedAt: 2,
       checkpoints: Object.entries({ 'repo-x': 'xB' }).map(([mountPath, preSnapshot]) => ({
@@ -71,9 +71,9 @@ describe('perRepoNodeRuns', () => {
         preSnapshot,
       })),
     }, // wrote repo-x only
-    { seq: null, id: 'c', startedAt: 3, checkpoints: [] }, // no map at all
+    { seq: 3, id: 'c', startedAt: 3, checkpoints: [] }, // no map at all
     {
-      seq: null,
+      seq: 4,
       id: 'd',
       startedAt: 4,
       checkpoints: decodeTaskCheckpoints({ preSnapshotReposJson: '{not json' }, [
@@ -85,10 +85,10 @@ describe('perRepoNodeRuns', () => {
 
   test('projects the per-repo sha; missing/null/malformed → null preSnapshot', () => {
     expect(perRepoNodeRuns(mrows, 'repo-x')).toEqual([
-      { seq: null, id: 'a', snapshotRef: 'xA', startedAt: 1 },
-      { seq: null, id: 'b', snapshotRef: 'xB', startedAt: 2 },
-      { seq: null, id: 'c', snapshotRef: null, startedAt: 3 },
-      { seq: null, id: 'd', snapshotRef: null, startedAt: 4 },
+      { seq: 1, id: 'a', snapshotRef: 'xA', startedAt: 1 },
+      { seq: 2, id: 'b', snapshotRef: 'xB', startedAt: 2 },
+      { seq: 3, id: 'c', snapshotRef: null, startedAt: 3 },
+      { seq: 4, id: 'd', snapshotRef: null, startedAt: 4 },
     ])
     expect(perRepoNodeRuns(mrows, 'repo-y').map((r) => r.snapshotRef)).toEqual([
       'yA',

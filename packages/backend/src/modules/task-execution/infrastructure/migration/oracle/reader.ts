@@ -1,13 +1,13 @@
 import { eq } from 'drizzle-orm'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { frozenTablesOf } from '@/platform/persistence/migration/epoch1/tables'
-import type { RunSelectionReader } from '../../../application/ports/runSelection'
+import type { LegacyRunSeq, RunSelectionReader } from '../../../application/ports/runSelection'
 import { decodeConsumedEdges } from './consumed'
 import { createRunSelectionOracleSnapshot } from './snapshot'
 
 /** 两 provider 共用现有 node_runs；正常读没有缓存，事务快照由绑定句柄拥有。 */
-export function createRunSelectionReader(db: PersistenceDb): RunSelectionReader {
-  async function snapshot(taskId: string): Promise<RunSelectionReader> {
+export function createRunSelectionReader(db: PersistenceDb): RunSelectionReader<LegacyRunSeq> {
+  async function snapshot(taskId: string): Promise<RunSelectionReader<LegacyRunSeq>> {
     const { nodeRuns: r } = frozenTablesOf(db)
     const rows = await db
       .select({

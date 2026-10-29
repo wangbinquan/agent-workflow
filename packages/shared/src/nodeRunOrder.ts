@@ -1,15 +1,13 @@
 // RFC-374: one mint order for every task-local NodeRun consumer.
+// RFC-395 D4: every epoch-2 row carries its allocated seq (converted history is backfilled
+// once); the legacy NULL-first / ID fallback lives only in the epoch-1 migration oracle.
 export interface NodeRunOrderKey {
   readonly id: string
-  readonly seq: number | null
+  readonly seq: number
 }
 
-/** Legacy NULL rows precede allocated rows. IDs only break legacy/theoretical ties. */
 export function compareNodeRunMintOrder(a: NodeRunOrderKey, b: NodeRunOrderKey): number {
-  if (a.seq !== null && b.seq !== null && a.seq !== b.seq) return a.seq < b.seq ? -1 : 1
-  if (a.seq === null && b.seq !== null) return -1
-  if (a.seq !== null && b.seq === null) return 1
-  return a.id < b.id ? -1 : a.id > b.id ? 1 : 0
+  return a.seq < b.seq ? -1 : a.seq > b.seq ? 1 : 0
 }
 
 export function isNewerNodeRun<T extends NodeRunOrderKey>(
@@ -23,9 +21,4 @@ export function newestNodeRun<T extends NodeRunOrderKey>(rows: readonly T[]): T 
   let newest: T | undefined
   for (const row of rows) if (isNewerNodeRun(row, newest)) newest = row
   return newest
-}
-
-/** Resolve ID-only lineage anchors before comparing; absent historical anchors retain the ID fallback. */
-export function nodeRunOrderAnchor(rows: readonly NodeRunOrderKey[], id: string): NodeRunOrderKey {
-  return rows.find((row) => row.id === id) ?? { id, seq: null }
 }

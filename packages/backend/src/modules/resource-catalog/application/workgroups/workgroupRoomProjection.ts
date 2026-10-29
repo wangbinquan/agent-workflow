@@ -22,7 +22,7 @@ import { resolveMessageTurnTriggerId } from './workgroupTurnContext'
 /** Minimal host-run snapshot consumed by the room projection. */
 export interface WorkgroupRoomHostRun {
   readonly selection: WorkgroupRunSelectionProjection
-  readonly seq: number | null
+  readonly seq: number
   readonly id: string
   readonly nodeId: string
   readonly shardKey: string | null
@@ -269,7 +269,7 @@ export function deriveMemberCurrentRuns(
 /** Minimal host-ledger row consumed by the round-budget projection. */
 export interface RoundLedgerRow {
   readonly selection: WorkgroupRunSelectionProjection
-  readonly seq: number | null
+  readonly seq: number
   readonly id: string
   readonly nodeId: string
   readonly shardKey: string | null

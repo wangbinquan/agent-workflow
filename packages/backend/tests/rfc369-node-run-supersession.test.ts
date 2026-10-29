@@ -669,7 +669,7 @@ function candidate(
 ): FakeRow {
   return {
     generationSeq: 0,
-    seq: null,
+    seq: n,
     id: mkId(n),
     nodeId: 'n',
     status,

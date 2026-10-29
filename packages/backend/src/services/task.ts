@@ -541,7 +541,7 @@ function requireTaskRecoveryOperations(deps: TaskContinuationDependencies): Task
 export function selectResumeRollbackTargets<
   R extends {
     id: string
-    seq: number | null
+    seq: number
     nodeId: string
     parentNodeRunId: string | null
     status: string
@@ -577,7 +577,7 @@ export function selectResumeRollbackTargets<
 export async function selectSyncRollbackTargets<
   R extends {
     id: string
-    seq: number | null
+    seq: number
     nodeId: string
     parentNodeRunId: string | null
     status: string

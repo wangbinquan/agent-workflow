@@ -4,6 +4,13 @@
 // the freeze ready (and never crashes when the platform will not accept it from
 // this instance), and the platform's renewal is adopted before the database
 // mirror, so a slow database write cannot run the held lease out.
+// RFC-395 T19-H11 (2026-10-29): the formal hosted instance restarted twice
+// (09:18:34Z, 10:57:33Z) on `execution-frozen-by-platform` although the
+// platform never froze it (control epoch 209 active, handoff complete). Every
+// 4xx renewal refusal read as a freeze, including the ones the platform marks
+// retryable while the lease stays this instance's (the pod failed a readiness
+// probe, the service's execution control was briefly locked), and the loss
+// line carried no status or code, so which one hit could not be told.
 import { expect, test } from 'bun:test'
 import { createCrewStationExecutionAuthority } from '@/modules/system-operations/infrastructure/crewstation/crewStationExecutionAuthority'
 import {
@@ -14,7 +21,7 @@ import {
   CrewStationApiError,
   type CrewStationPlatformApi,
 } from '@/platform/crewstation/platformApi'
-import { createLogger } from '@/util/log'
+import { createLogger, type Logger } from '@/util/log'
 import { selectExecutionInitialization } from '@/bootstrap/executionInitialization'
 import {
   assertExecutionAvailable,
@@ -37,6 +44,23 @@ async function until(condition: () => boolean, timeoutMs = 2_000): Promise<void>
     await Bun.sleep(2)
   }
 }
+interface LogEntry {
+  readonly msg: string
+  readonly fields?: Record<string, unknown>
+}
+function recordingLogger(entries: LogEntry[]): Logger {
+  const record = (msg: string, fields?: Record<string, unknown>): void => {
+    entries.push({ msg, ...(fields === undefined ? {} : { fields }) })
+  }
+  const logger: Logger = {
+    debug: record,
+    info: record,
+    warn: record,
+    error: record,
+    child: () => logger,
+  }
+  return logger
+}
 function fixture(
   options: {
     expiresMs?: number
@@ -44,6 +68,7 @@ function fixture(
     migration?: string
     renewMs?: number
     now?: () => number
+    log?: Logger
     beforeWrite?: (record: HostedExecutionControlRecord) => Promise<void>
     beforePost?: (path: string) => Promise<void>
   } = {},
@@ -98,7 +123,7 @@ function fixture(
       },
     },
     acceptedTaskContractVersions: ['aw-task-v1'],
-    log: createLogger('rfc370-authority-test'),
+    log: options.log ?? createLogger('rfc370-authority-test'),
   })
   return {
     authority,
@@ -382,6 +407,168 @@ test('a rate-limited or timed-out renewal keeps the lease and retries before its
     await until(() => refusals === 2 && f.writes.filter((w) => w.phase === 'active').length >= 2)
     expect(losses).toBe(0)
     expect(f.authority.current().kind).toBe('active')
+  } finally {
+    await f.authority.close()
+  }
+})
+
+// RFC-395 T19-H11: refusals the platform answers while the lease it records
+// stays this instance's (CrewStation `assertControlSource` on a pod that just
+// failed a readiness probe; `executionTransaction` / `keyedLock` contention).
+const RETRYABLE_REFUSALS = [
+  { status: 412, kind: 'precondition', code: 'source_not_ready', message: '来源服务 Pod 尚未就绪' },
+  {
+    status: 409,
+    kind: 'conflict',
+    code: 'execution_control_busy',
+    message: '执行控制正在变更，请重试',
+  },
+  { status: 409, kind: 'conflict', code: 'coordination_busy', message: '权限正在更新，请稍后重试' },
+] as const
+
+for (const refusal of RETRYABLE_REFUSALS) {
+  test(`a renewal refused with the platform's retryable ${refusal.code} keeps the lease and retries`, async () => {
+    const entries: LogEntry[] = []
+    let armed = false
+    let refusals = 0
+    let losses = 0
+    const f = fixture({
+      log: recordingLogger(entries),
+      beforePost: async (path) => {
+        if (!armed || !path.endsWith('/renew') || refusals >= 2) return
+        refusals += 1
+        throw new CrewStationApiError(refusal.status, refusal.kind, refusal.message, {
+          code: refusal.code,
+        })
+      },
+    })
+    f.authority.onLost(() => {
+      losses += 1
+    })
+    try {
+      f.authority.start()
+      await f.authority.whenActive()
+      const renewedMirrors = () => f.writes.filter((write) => write.phase === 'active').length
+      const activated = renewedMirrors()
+      armed = true
+      await until(() => refusals === 2 && renewedMirrors() > activated)
+      expect(losses).toBe(0)
+      expect(f.authority.current().kind).toBe('active')
+      expect(
+        entries.find(
+          (entry) => entry.msg === 'crewstation execution lease renewal failed; retrying',
+        )?.fields,
+      ).toMatchObject({ status: refusal.status, code: refusal.code, error: refusal.message })
+    } finally {
+      await f.authority.close()
+    }
+  })
+}
+
+test('a retryable refusal that outlasts the lease loses it as unreachable, not as a platform freeze', async () => {
+  let clock = 1_000_000
+  let armed = false
+  let refusals = 0
+  const lost = deferred<void>()
+  const f = fixture({
+    now: () => clock,
+    expiresMs: 30_000,
+    renewMs: 10_000,
+    beforePost: async (path) => {
+      if (!armed || !path.endsWith('/renew')) return
+      refusals += 1
+      throw new CrewStationApiError(412, 'precondition', '来源服务 Pod 尚未就绪', {
+        code: 'source_not_ready',
+      })
+    },
+  })
+  f.authority.onLost(() => lost.resolve())
+  try {
+    f.authority.start()
+    await f.authority.whenActive()
+    armed = true
+    // The renewal is due after 10s; the lease (activation + 30s) still holds.
+    clock += 10_000
+    await until(() => refusals >= 2)
+    expect(f.authority.current().kind).toBe('active')
+    // Past the activation expiry with every renewal still refused.
+    clock += 25_000
+    await lost.promise
+    expect(f.authority.current()).toEqual({ kind: 'standby', reason: 'platform-unreachable' })
+  } finally {
+    await f.authority.close()
+  }
+})
+
+for (const refusal of [
+  {
+    status: 409,
+    kind: 'conflict',
+    code: 'stale_generation',
+    message: '执行权已变化，请重新读取控制状态',
+  },
+  { status: 403, kind: 'forbidden', code: undefined, message: '此发布不拥有执行权' },
+] as const) {
+  test(`a ${refusal.status} ${refusal.code ?? refusal.kind} refusal still loses at once, and the loss names what the platform answered`, async () => {
+    const entries: LogEntry[] = []
+    let armed = false
+    const lost = deferred<void>()
+    const f = fixture({
+      log: recordingLogger(entries),
+      beforePost: async (path) => {
+        if (!armed || !path.endsWith('/renew')) return
+        throw new CrewStationApiError(
+          refusal.status,
+          refusal.kind,
+          refusal.message,
+          refusal.code === undefined ? {} : { code: refusal.code },
+        )
+      },
+    })
+    f.authority.onLost(() => lost.resolve())
+    try {
+      f.authority.start()
+      await f.authority.whenActive()
+      armed = true
+      await lost.promise
+      expect(f.authority.current()).toEqual({
+        kind: 'frozen',
+        reason: 'execution-frozen-by-platform',
+      })
+      expect(
+        entries.find((entry) => entry.msg === 'crewstation execution lease lost')?.fields,
+      ).toEqual({
+        reason: 'execution-frozen-by-platform',
+        status: refusal.status,
+        kind: refusal.kind,
+        ...(refusal.code === undefined ? {} : { code: refusal.code }),
+        error: refusal.message,
+      })
+    } finally {
+      await f.authority.close()
+    }
+  })
+}
+
+test('a platform record that no longer shows this lease loses it and logs what was observed', async () => {
+  const entries: LogEntry[] = []
+  const lost = deferred<void>()
+  const f = fixture({ log: recordingLogger(entries) })
+  f.authority.onLost(() => lost.resolve())
+  try {
+    f.authority.start()
+    await f.authority.whenActive()
+    f.freeze()
+    await lost.promise
+    expect(
+      entries.find((entry) => entry.msg === 'crewstation execution lease lost')?.fields,
+    ).toEqual({
+      reason: 'execution-frozen-by-platform',
+      observedPhase: 'frozen',
+      observedEpoch: 1,
+      heldEpoch: 1,
+      leaseOwnerMatches: true,
+    })
   } finally {
     await f.authority.close()
   }

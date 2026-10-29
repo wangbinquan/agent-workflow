@@ -33,10 +33,11 @@ import {
   parseScopePath,
   sameFrame,
 } from '../src/lib/node-history'
+import { seqFromId } from './node-run-seq.helpers'
 
 function makeRun(partial: Partial<NodeRun> & { id: string }): NodeRun {
   return {
-    seq: 0,
+    seq: partial.seq ?? seqFromId(partial.id),
     id: partial.id,
     taskId: 't1',
     nodeId: partial.nodeId ?? 'n1',

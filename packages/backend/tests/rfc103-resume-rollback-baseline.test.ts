@@ -10,7 +10,7 @@ import { describe, expect, test } from 'bun:test'
 import { selectResumeRollbackTargets } from '../src/services/task'
 
 type Row = {
-  seq: number | null
+  seq: number
   id: string
   nodeId: string
   parentNodeRunId: string | null

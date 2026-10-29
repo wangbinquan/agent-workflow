@@ -1,7 +1,7 @@
 import type { TaskExecutionContextRef } from './taskExecutionTopology'
 
 export interface SchedulerDoneNodeRun {
-  readonly seq: number | null
+  readonly seq: number
   readonly id: string
   readonly parentNodeRunId: string | null
   readonly status: string

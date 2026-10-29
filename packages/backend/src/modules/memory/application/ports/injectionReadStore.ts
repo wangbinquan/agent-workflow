@@ -22,7 +22,7 @@ export interface MemoryInjectionTaskContext {
 }
 
 export interface MemoryInjectionRunRecord {
-  readonly seq: number | null
+  readonly seq: number
   readonly id: string
   readonly status: NodeRunStatus
   readonly injectedMemoriesJson: string | null

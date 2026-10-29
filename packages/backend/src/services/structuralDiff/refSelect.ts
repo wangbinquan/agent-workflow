@@ -12,7 +12,7 @@ import { compareNodeRunsForTimeline } from '../reviewRoundStart'
 
 export interface NodeRunRef {
   id: string
-  seq: number | null
+  seq: number
   snapshotRef: string | null
   startedAt: number | null
 }
@@ -44,7 +44,7 @@ export function resolveNodeScope(runs: NodeRunRef[], nodeRunId: string): NodeSco
 export function perRepoNodeRuns(
   rows: ReadonlyArray<{
     id: string
-    seq: number | null
+    seq: number
     startedAt: number | null
     checkpoints: readonly TaskRepositoryCheckpoint[]
   }>,

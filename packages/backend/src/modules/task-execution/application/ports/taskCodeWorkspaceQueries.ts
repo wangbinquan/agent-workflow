@@ -22,7 +22,7 @@ export interface CodeWorkspaceTask {
 
 export interface CodeNodeRunSnapshot {
   readonly id: string
-  readonly seq: number | null
+  readonly seq: number
   readonly checkpoints: readonly TaskRepositoryCheckpoint[]
   readonly startedAt: number | null
   readonly wrapperProgressJson: string | null

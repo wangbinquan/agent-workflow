@@ -24,6 +24,7 @@ import { I18nextProvider } from 'react-i18next'
 import type { NodeRun, SessionViewResponse } from '@agent-workflow/shared'
 import i18n from '../src/i18n'
 import { NodeDetailDrawer } from '../src/components/NodeDetailDrawer'
+import { seqFromId } from './node-run-seq.helpers'
 
 function openCombobox() {
   const trigger = screen.getByRole('combobox', { name: /attempt/i })
@@ -33,7 +34,7 @@ function openCombobox() {
 
 function run(partial: Partial<NodeRun> & { id: string }): NodeRun {
   return {
-    seq: 0,
+    seq: partial.seq ?? seqFromId(partial.id),
     id: partial.id,
     taskId: 't1',
     nodeId: partial.nodeId ?? 'agent_1',

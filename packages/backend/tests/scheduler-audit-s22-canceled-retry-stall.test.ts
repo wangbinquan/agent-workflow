@@ -1,5 +1,5 @@
 import { runGit } from '@/util/git'
-import type { OracleRunRow } from '@/modules/task-execution/infrastructure/migration/oracle/rows'
+import type { SequencedOracleRunRow } from '@/modules/task-execution/infrastructure/migration/oracle/rows'
 import type { TaskReadRow } from '@/modules/task-execution/infrastructure/taskRepositorySql'
 
 // RFC-095 SEMANTICS LOCK — design/scheduler-audit-2026-06-10.md S-22 (WP-2)
@@ -63,7 +63,7 @@ afterAll(() => {
 // 纯函数面：canceled latest 行 = 复活信号 → ready（不再无桶黑洞）
 // ---------------------------------------------------------------------------
 
-type Row = OracleRunRow
+type Row = SequencedOracleRunRow
 type WorkflowNode = WorkflowDefinition['nodes'][number]
 const NONE: ReadonlySet<string> = new Set()
 
@@ -75,7 +75,7 @@ function row(nodeId: string, status: string, over: Partial<Row> = {}): Row {
     supersededByReview: null,
     mergeState: null,
 
-    seq: null,
+    seq,
     containerRunId: null,
     id: `01R${String(seq).padStart(4, '0')}`,
     nodeId,

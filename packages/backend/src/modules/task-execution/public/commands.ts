@@ -156,7 +156,7 @@ export const WORKGROUP_TURN_MEMBER_NODE_ID = '__wg_member__'
 
 export interface WorkgroupHostLedgerRun {
   readonly selection: WorkgroupRunSelectionProjection
-  readonly seq: number | null
+  readonly seq: number
   readonly id: string
   readonly nodeId: string
   readonly shardKey: string | null
@@ -262,7 +262,7 @@ export interface WorkgroupTaskRoomTaskSnapshot {
 
 export interface WorkgroupTaskRoomHostRunSnapshot {
   readonly selection: WorkgroupRunSelectionProjection
-  readonly seq: number | null
+  readonly seq: number
   readonly id: string
   readonly nodeId: string
   readonly shardKey: string | null

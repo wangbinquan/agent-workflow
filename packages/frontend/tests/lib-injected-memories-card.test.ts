@@ -10,6 +10,7 @@ import {
   previewOf,
   SCOPE_ORDER,
 } from '@/lib/injected-memories-card'
+import { seqFromId } from './node-run-seq.helpers'
 
 function snap(overrides: Partial<InjectedMemorySnapshot> = {}): InjectedMemorySnapshot {
   return {
@@ -28,7 +29,7 @@ function snap(overrides: Partial<InjectedMemorySnapshot> = {}): InjectedMemorySn
 
 function run(overrides: Partial<NodeRun> = {}): NodeRun {
   return {
-    seq: 0,
+    seq: seqFromId(overrides.id ?? 'r1'),
     id: 'r1',
     taskId: 't1',
     nodeId: 'n1',

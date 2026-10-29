@@ -1,9 +1,13 @@
 // RFC-395 II-a A2: one repository projection and one unbound predicate, with the old storage facts confined to adapters.
-import { expect, test } from 'bun:test'
+import { expect, setDefaultTimeout, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import ts from 'typescript'
 import { packageSrcUnits, sourceUnit, type SourceUnit } from './census'
+
+// Parsing every backend source took 5.32 s and timed out at the 5 s default on
+// backend-macos-nightly run 40859820668 (shard 1/12, 2026-10-29). allow 20 s.
+setDefaultTimeout(20_000)
 
 const root = resolve(import.meta.dir, '../../../..')
 const source = (path: string) => readFileSync(resolve(root, 'packages/backend/src', path), 'utf8')

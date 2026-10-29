@@ -57,7 +57,7 @@ export type OutcomeTaskRow = {
 
 export type OutcomeRunRow = {
   id: string
-  seq: number | null
+  seq: number
   nodeId: string
   iteration: number
   parentNodeRunId: string | null

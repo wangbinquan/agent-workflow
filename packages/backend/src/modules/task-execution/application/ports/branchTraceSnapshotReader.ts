@@ -2,7 +2,7 @@ import type { NodeRunStatus } from '@agent-workflow/shared'
 import type { RunHistoryReader } from '../runHistory'
 
 export interface BranchTraceRunSnapshot {
-  readonly seq: number | null
+  readonly seq: number
   readonly id: string
   readonly nodeId: string
   readonly status: NodeRunStatus

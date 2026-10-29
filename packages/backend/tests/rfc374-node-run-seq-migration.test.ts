@@ -6,7 +6,7 @@ import { afterAll, expect, test } from 'bun:test'
 import { Database } from 'bun:sqlite'
 import { rmSync } from 'node:fs'
 import { eq, sql } from 'drizzle-orm'
-import { compareNodeRunMintOrder } from '@agent-workflow/shared'
+import { compareLegacyNodeRunMintOrder } from '@/modules/task-execution/infrastructure/migration/oracle/legacyOrder'
 import { migrateSqlite } from '@/platform/persistence/sqliteMigrator'
 import { migratePostgresqlSchema } from '@/platform/persistence/migration/legacy/postgresqlMigrator'
 import { loadPostgresqlMigrationHistory } from '@/platform/persistence/migration/legacy/postgresqlMigrationHistory'
@@ -73,7 +73,9 @@ describeEachProvider(
           expect((await db.select().from(nodeRuns)).every((row) => row.seq === null)).toBe(true)
           await backfillNodeRunSequences(createNodeRunSeqBackfillStore(db))
           expect(
-            (await db.select().from(nodeRuns)).sort(compareNodeRunMintOrder).map((row) => row.id),
+            (await db.select().from(nodeRuns))
+              .sort(compareLegacyNodeRunMintOrder)
+              .map((row) => row.id),
           ).toEqual(['a-legacy', 'z-legacy'])
         } finally {
           sqlite.close()
@@ -120,7 +122,7 @@ describeEachProvider(
         await backfillNodeRunSequences(createNodeRunSeqBackfillStore(harness.db))
         expect(
           (await harness.db.select().from(nodeRuns))
-            .sort(compareNodeRunMintOrder)
+            .sort(compareLegacyNodeRunMintOrder)
             .map((row) => row.id),
         ).toEqual(['a-legacy', 'z-legacy'])
       }

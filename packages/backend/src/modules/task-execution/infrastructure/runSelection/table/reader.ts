@@ -16,6 +16,7 @@ import {
   decodeCanonicalRunSlot,
   encodeCanonicalRunSlot,
 } from '../../../domain/runSelection/slotKey'
+import { requireRunSequence } from '../../../domain/runSequence'
 
 async function loadRows(db: PersistenceDb, taskId: string, scope?: SQL) {
   const {
@@ -208,7 +209,7 @@ function history(
   filter: HistoryFilter = {},
 ): RunHistoryRef[] {
   for (const boundary of [filter.through, filter.from, filter.before, filter.after])
-    if (boundary && boundary.seq === null) throw new Error('run-sequence-required')
+    if (boundary) requireRunSequence(boundary)
   return rows
     .filter(
       (row) =>
@@ -221,10 +222,10 @@ function history(
         (filter.consumedOnly !== true || row.inputsRecorded) &&
         (filter.childTaskOnly !== true || row.childTaskId !== null) &&
         (filter.rerunCause === undefined || row.rerunCause === filter.rerunCause) &&
-        (filter.through === undefined || row.seq <= filter.through.seq!) &&
-        (filter.from === undefined || row.seq >= filter.from.seq!) &&
-        (filter.before === undefined || row.seq < filter.before.seq!) &&
-        (filter.after === undefined || row.seq > filter.after.seq!) &&
+        (filter.through === undefined || row.seq <= filter.through.seq) &&
+        (filter.from === undefined || row.seq >= filter.from.seq) &&
+        (filter.before === undefined || row.seq < filter.before.seq) &&
+        (filter.after === undefined || row.seq > filter.after.seq) &&
         (filter.excludeSuperseded !== true || !superseded.has(row.id)),
     )
     .sort((a, b) => {

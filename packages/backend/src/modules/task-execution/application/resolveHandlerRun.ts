@@ -13,7 +13,7 @@ export async function resolveHandlerRunHistory(
 ): Promise<HandlerRunView | null> {
   if (input.effectiveTargetNodeId === null || input.triggerRunId === null) return null
   const anchor = input.runs.find((row) => row.id === input.triggerRunId)
-  if (anchor === undefined || anchor.seq === null) return null
+  if (anchor === undefined) return null
   const family = {
     nodeId: input.effectiveTargetNodeId,
     iteration: input.iteration,

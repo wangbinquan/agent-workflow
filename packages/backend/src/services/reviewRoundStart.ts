@@ -85,13 +85,13 @@ export function deriveReviewRoundTiming(
 export function compareNodeRunsForTimeline(
   a: {
     id: string
-    seq: number | null
+    seq: number
     startedAt: number | null
     reviewRoundStartedAt?: number | null
   },
   b: {
     id: string
-    seq: number | null
+    seq: number
     startedAt: number | null
     reviewRoundStartedAt?: number | null
   },

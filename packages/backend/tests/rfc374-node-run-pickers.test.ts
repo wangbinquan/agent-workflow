@@ -57,7 +57,7 @@ import { seedSequenceTask, mintSequenceRun } from './helpers/rfc374Fixtures'
 const frame = { containerRunId: null, iteration: 0 }
 function row(
   id: string,
-  seq: number | null,
+  seq: number,
   extra: Partial<NodeRunRow> = {},
 ): NodeRunRow & { shardValueHash: null; scopePath: string } {
   return {
@@ -151,7 +151,10 @@ describe('RFC-374 pure selection', () => {
       rows = [fresh, old]
     // Epoch-2 execution never orders an unresolved history row by its ID.
     await expect(
-      createRunHistorySnapshot('', [old, row('zz', null)]).familyHistory('', {}),
+      createRunHistorySnapshot('', [old, row('zz', null as unknown as number)]).familyHistory(
+        '',
+        {},
+      ),
     ).rejects.toThrow('run-sequence-required:zz')
     for (const pick of [pickFreshestRun, pickLatestSettledRun])
       expect(pick(rows)?.id).toBe(fresh.id)

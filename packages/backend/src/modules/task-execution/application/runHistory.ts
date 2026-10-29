@@ -4,7 +4,7 @@ import type { FamilyRef, HistoryFilter } from './ports/runSelection'
 
 export interface RunHistoryFacts {
   readonly id: string
-  readonly seq: number | null
+  readonly seq: number
   readonly nodeId: string
   readonly status?: string
   readonly taskId?: string

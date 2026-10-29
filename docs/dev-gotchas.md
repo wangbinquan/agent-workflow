@@ -3921,7 +3921,7 @@ git show HEAD:architecture/ledger-baselines.json | grep -c '"allowGrowth"'   # �
 
 ## RFC-374：NodeRun 的 seq、种子夹具与 V8 加列
 
-`seq` 是同事务铸造分配的顺序；手工种子行没有 `seq` 时，比较器把它视为比任何非 NULL 行更旧，两行都为 NULL 才按 id 回退。测试需要代表较新一代时，应经 mint 工厂铸造；直接 `insert(nodeRuns)` 的夹具用 `tests/helpers/rfc374Fixtures.ts` 的 `allocateNodeRunSeq` 从 identity 表取号（与 mint 同源；手写的 `seq` 数值可能高于分配表，启动追平会以 `node-run-seq-allocator-behind` 拒绝启动），不要依靠更大的 ULID。SQL 升序写 `engineOf(db).ascNullsFirst(nodeRuns.seq), asc(nodeRuns.id)`；降序写 `engineOf(db).descNullsLast(nodeRuns.seq), desc(nodeRuns.id)`。已有的 `retryIndex` / `startedAt` 主排序键保留，seq 替换原 id 平局位置。
+`seq` 是同事务铸造分配的顺序。RFC-395 D4（2026-10-29）之后，epoch-2 的每一行都有 seq，共享的 `compareNodeRunMintOrder` 只比 seq：seq 相等就算相等，不再按 id 回退，也没有 NULL 在前的规则（旧规则只留在 `migration/oracle/legacyOrder.ts`，供转换器复刻 epoch-1）。所以夹具要给每行不同的 seq，不能全写 `seq: 0` 再靠 ULID 区分新旧；前端用例可用 `packages/frontend/tests/node-run-seq.helpers.ts` 的 `seqFromId` 按 id 的字典序生成。测试需要代表较新一代时，应经 mint 工厂铸造；直接 `insert(nodeRuns)` 的夹具用 `tests/helpers/rfc374Fixtures.ts` 的 `allocateNodeRunSeq` 从 identity 表取号（与 mint 同源；手写的 `seq` 数值可能高于分配表，启动追平会以 `node-run-seq-allocator-behind` 拒绝启动），不要依靠更大的 ULID。SQL 升序写 `engineOf(db).ascNullsFirst(nodeRuns.seq), asc(nodeRuns.id)`；降序写 `engineOf(db).descNullsLast(nodeRuns.seq), desc(nodeRuns.id)`。已有的 `retryIndex` / `startedAt` 主排序键保留，seq 替换原 id 平局位置。
 
 epoch-2 给已有表加列时，在 owner contribution 中追加可空列或字面量默认值，再用 `bun run scripts/schema-history.ts --append add-column <slug> --postgresql-url-env <变量名>` 生成不可变 history。边编译器拒绝歧义变更、PostgreSQL 列重排及不满足严格 expand-only 条件的旧 binary 准入。冻结 epoch-1 迁移测试使用 frozen 表集；历史迁移不可改写。
 

@@ -1,5 +1,5 @@
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
-import type { OracleRunRow } from '@/modules/task-execution/infrastructure/migration/oracle/rows'
+import type { SequencedOracleRunRow } from '@/modules/task-execution/infrastructure/migration/oracle/rows'
 import { nodeRunFixtureColumns } from './helpers/model/nodeRun'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { withO2Closure, o2Ports } from './helpers/o2Closure'
@@ -403,7 +403,7 @@ describeEachProvider(
 // B — PARK gate (pure deriveFrontier).
 // ---------------------------------------------------------------------------
 describe('RFC-120 T9 — frontier park gate', () => {
-  type Row = OracleRunRow
+  type Row = SequencedOracleRunRow
   let seq = 0
   function row(nodeId: string, status: string): Row {
     seq += 1
@@ -414,7 +414,7 @@ describe('RFC-120 T9 — frontier park gate', () => {
       wrapperProgressJson: null,
       mergeState: null,
 
-      seq: null,
+      seq,
       containerRunId: null,
       id: `01R${String(seq).padStart(4, '0')}`,
       nodeId,

@@ -1,6 +1,8 @@
 import { projectWorkgroupRunSelections as project } from '@/modules/task-execution/infrastructure/runSelection/workgroupProjection'
 type Host = Parameters<typeof project>[0][number]
-export function projectWorkgroupRunSelections<R extends Host>(input: readonly R[]) {
+/** Fixtures may leave seq out; like the converter's legacy-derived seq it follows ID order. */
+type FixtureHost = Omit<Host, 'seq'> & { readonly seq: number | null }
+export function projectWorkgroupRunSelections<R extends FixtureHost>(input: readonly R[]) {
   const ids = [...new Set(input.map((row) => row.id))].sort()
   const rows = input.map((row) => ({ ...row, seq: row.seq ?? ids.indexOf(row.id) + 1 }))
   return project(

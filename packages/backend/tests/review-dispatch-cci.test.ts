@@ -1,4 +1,4 @@
-import type { OracleRunRow } from '@/modules/task-execution/infrastructure/migration/oracle/rows'
+import type { SequencedOracleRunRow } from '@/modules/task-execution/infrastructure/migration/oracle/rows'
 import type { TaskReadRow } from '@/modules/task-execution/infrastructure/taskRepositorySql'
 import { nodeRunFixtureColumns } from './helpers/model/nodeRun'
 import { tablesOf } from '@/platform/persistence/sessionTables'
@@ -82,11 +82,11 @@ const PATCH_MD_PATH = resolve(
 // ---------------------------------------------------------------------------
 
 function row(
-  partial: Partial<OracleRunRow> & {
+  partial: Partial<SequencedOracleRunRow> & {
     id: string
     status: string
   },
-): OracleRunRow {
+): SequencedOracleRunRow {
   return {
     parentNodeRunId: null,
     containerRunId: null,
@@ -118,7 +118,7 @@ function row(
     taskId: 't',
     nodeId: 'review',
     ...partial,
-  } as unknown as OracleRunRow
+  } as unknown as SequencedOracleRunRow
 }
 
 beforeEach(() => {

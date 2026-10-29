@@ -7,8 +7,11 @@
 // lease, renews it, records `preparing` in the application database (the
 // application barrier — older holders' transactions now fail), reports a
 // pending handoff ready, activates, and records `active`. Once active it renews
-// every `renewMs`; a rejected renewal, a freeze, or failures past the platform
-// expiry mean the lease is lost. The instance never returns to active: it
+// every `renewMs`; a refused lease, a freeze, or failures past the platform
+// expiry mean the lease is lost. A refusal the platform marks retryable while
+// its record still holds this lease (the pod failed one readiness probe, the
+// execution control was briefly locked) is retried like an unreachable
+// platform (RFC-395 T19-H11). The instance never returns to active: it
 // reports the loss once and the daemon exits through its graceful shutdown
 // (crash-only, §3.2); the platform restarts it as a standby.
 //
@@ -95,6 +98,44 @@ function standbyReasonOf(error: unknown): string {
   return CREWSTATION_STANDBY_REASONS.rejected
 }
 
+/**
+ * Codes the platform refuses one request with while its record still holds
+ * this lease: the pod failed a readiness probe at that moment (CS
+ * `assertControlSource`), or another platform write held the service's
+ * execution control (CS `executionTransaction` / `keyedLock`, both "retry").
+ */
+const RETRYABLE_REFUSAL_CODES: ReadonlySet<string> = new Set([
+  'source_not_ready',
+  'execution_control_busy',
+  'coordination_busy',
+])
+
+/** The platform refused this lease (stale generation, frozen, revoked), not just one request. */
+function refusedLease(error: unknown): boolean {
+  return (
+    isCrewStationApiError(error) &&
+    error.status >= 400 &&
+    error.status < 500 &&
+    // Rate limiting and request timeouts are transient: keep the lease
+    // and retry until its deadline, like an unreachable platform.
+    error.status !== 408 &&
+    error.status !== 429 &&
+    !(error.code !== undefined && RETRYABLE_REFUSAL_CODES.has(error.code))
+  )
+}
+
+/** What the platform answered, for the loss and retry log lines. */
+function platformAnswer(error: unknown): Record<string, unknown> {
+  if (!isCrewStationApiError(error))
+    return { error: error instanceof Error ? error.message : String(error) }
+  return {
+    status: error.status,
+    kind: error.kind,
+    ...(error.code === undefined ? {} : { code: error.code }),
+    error: error.message,
+  }
+}
+
 /** Stops this installation's platform writers under a freeze's stop authority;
  * `remaining` counts the ones that still run after the pass. */
 export type MigrationWriterDrain = (
@@ -179,7 +220,11 @@ export function createCrewStationExecutionAuthority(input: {
       })
   }
 
-  const lose = (next: ExecutionAuthorityState): void => {
+  /** `detail` records what the platform answered or showed, so a loss can be told apart afterwards. */
+  const lose = (
+    next: ExecutionAuthorityState,
+    detail: Readonly<Record<string, unknown>> = {},
+  ): void => {
     state = next
     held = undefined
     if (expiryTimer !== undefined) clearTimeout(expiryTimer)
@@ -187,6 +232,7 @@ export function createCrewStationExecutionAuthority(input: {
     lost = true
     log.warn('crewstation execution lease lost', {
       reason: next.kind === 'active' ? null : next.reason,
+      ...detail,
     })
     for (const listener of [...lostListeners]) {
       try {
@@ -360,7 +406,15 @@ export function createCrewStationExecutionAuthority(input: {
         observed.epoch !== current.epoch ||
         observed.leaseOwner !== instanceId
       ) {
-        lose({ kind: 'frozen', reason: CREWSTATION_STANDBY_REASONS.frozen })
+        lose(
+          { kind: 'frozen', reason: CREWSTATION_STANDBY_REASONS.frozen },
+          {
+            observedPhase: observed.phase,
+            observedEpoch: observed.epoch,
+            heldEpoch: current.epoch,
+            leaseOwnerMatches: observed.leaseOwner === instanceId,
+          },
+        )
         await input.control.write({
           epoch: current.epoch,
           owner: instanceId,
@@ -383,7 +437,16 @@ export function createCrewStationExecutionAuthority(input: {
         control.leaseOwner !== instanceId ||
         control.leaseId !== current.leaseId
       ) {
-        lose({ kind: 'frozen', reason: CREWSTATION_STANDBY_REASONS.frozen })
+        lose(
+          { kind: 'frozen', reason: CREWSTATION_STANDBY_REASONS.frozen },
+          {
+            observedPhase: control.phase,
+            observedEpoch: control.epoch,
+            heldEpoch: current.epoch,
+            leaseOwnerMatches: control.leaseOwner === instanceId,
+            leaseIdMatches: control.leaseId === current.leaseId,
+          },
+        )
         return
       }
       const expiresAt = Date.parse(control.leaseExpiresAt ?? '')
@@ -406,30 +469,22 @@ export function createCrewStationExecutionAuthority(input: {
         })
       } catch (error) {
         if (!supersededInDatabase(error)) throw error
-        lose({ kind: 'frozen', reason: CREWSTATION_STANDBY_REASONS.frozen })
+        lose({ kind: 'frozen', reason: CREWSTATION_STANDBY_REASONS.frozen }, platformAnswer(error))
       }
     } catch (error) {
-      if (
-        isCrewStationApiError(error) &&
-        error.status >= 400 &&
-        error.status < 500 &&
-        // Rate limiting and request timeouts are transient: keep the lease
-        // and retry until its deadline, like an unreachable platform.
-        error.status !== 408 &&
-        error.status !== 429
-      ) {
-        // The platform refused this lease (stale generation, frozen, revoked).
-        lose({ kind: 'frozen', reason: CREWSTATION_STANDBY_REASONS.frozen })
+      if (refusedLease(error)) {
+        lose({ kind: 'frozen', reason: CREWSTATION_STANDBY_REASONS.frozen }, platformAnswer(error))
         return
       }
       const deadline = held?.expiresAt ?? current.expiresAt
       if (now() >= deadline) {
-        lose({ kind: 'standby', reason: CREWSTATION_STANDBY_REASONS.unreachable })
+        lose(
+          { kind: 'standby', reason: CREWSTATION_STANDBY_REASONS.unreachable },
+          platformAnswer(error),
+        )
         return
       }
-      log.warn('crewstation execution lease renewal failed; retrying', {
-        error: error instanceof Error ? error.message : String(error),
-      })
+      log.warn('crewstation execution lease renewal failed; retrying', platformAnswer(error))
     }
   }
 

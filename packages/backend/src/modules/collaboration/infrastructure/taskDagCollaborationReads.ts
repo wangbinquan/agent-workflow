@@ -10,7 +10,7 @@ export interface TaskDagParkEntry {
 
 export interface TaskDagNodeRun {
   readonly id: string
-  readonly seq: number | null
+  readonly seq: number
   readonly nodeId: string
   readonly iteration: number
   readonly rerunCause: string | null

@@ -1,5 +1,5 @@
 // RFC-395 II-a A3：旧 schema 的 supersession oracle；II-b 供转换器复刻历史。
-import { compareNodeRunMintOrder } from '@agent-workflow/shared'
+import { compareLegacyNodeRunMintOrder } from './legacyOrder'
 
 export interface SupersessionRow {
   readonly id: string
@@ -23,7 +23,7 @@ export function supersededRunIds(rows: readonly SupersessionRow[]): ReadonlySet<
   for (const row of rows) {
     const slot = key(row, row.shardKey)
     const prior = newest.get(slot)
-    if (prior === undefined || compareNodeRunMintOrder(row, prior) > 0) newest.set(slot, row)
+    if (prior === undefined || compareLegacyNodeRunMintOrder(row, prior) > 0) newest.set(slot, row)
   }
   const topLevel = new Set<string>()
   for (const row of rows) {
@@ -31,8 +31,8 @@ export function supersededRunIds(rows: readonly SupersessionRow[]): ReadonlySet<
     const sameShard = newest.get(key(row, row.shardKey))
     const shardless = newest.get(key(row, null))
     if (
-      (sameShard !== undefined && compareNodeRunMintOrder(sameShard, row) > 0) ||
-      (shardless !== undefined && compareNodeRunMintOrder(shardless, row) > 0)
+      (sameShard !== undefined && compareLegacyNodeRunMintOrder(sameShard, row) > 0) ||
+      (shardless !== undefined && compareLegacyNodeRunMintOrder(shardless, row) > 0)
     )
       topLevel.add(row.id)
   }

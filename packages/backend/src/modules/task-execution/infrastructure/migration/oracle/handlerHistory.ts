@@ -1,19 +1,25 @@
 import {
   NEW_CLARIFY_TRIGGER_CAUSES,
-  nodeRunOrderAnchor,
-  type ResolveHandlerInput,
   type HandlerRunView,
+  type ResolveHandlerInput,
+  type RunLineageView,
 } from '@agent-workflow/shared'
-import type { RunSelectionReader } from '../../../application/ports/runSelection'
+import type { LegacyRunSeq, RunSelectionReader } from '../../../application/ports/runSelection'
+import { legacyNodeRunOrderAnchor } from './legacyOrder'
+
+/** Epoch-1 lineage rows: rows minted before RFC-374 have no seq. */
+export interface LegacyResolveHandlerInput extends Omit<ResolveHandlerInput, 'runs'> {
+  readonly runs: readonly (Omit<RunLineageView, 'seq'> & { readonly seq: LegacyRunSeq })[]
+}
 
 /** 澄清窗口跨帧，保留缺失 anchor 的旧 NULL-seq 回退和下次 clarify cause 上界。 */
 export async function resolveHandlerRunHistory(
-  selection: RunSelectionReader,
+  selection: RunSelectionReader<LegacyRunSeq>,
   taskId: string,
-  input: ResolveHandlerInput,
+  input: LegacyResolveHandlerInput,
 ): Promise<HandlerRunView | null> {
   if (input.effectiveTargetNodeId === null || input.triggerRunId === null) return null
-  const anchor = nodeRunOrderAnchor(input.runs, input.triggerRunId)
+  const anchor = legacyNodeRunOrderAnchor(input.runs, input.triggerRunId)
   const family = {
     nodeId: input.effectiveTargetNodeId,
     iteration: input.iteration,
@@ -37,6 +43,6 @@ export async function resolveHandlerRunHistory(
 }
 
 import { createRunHistorySnapshot } from './historySnapshot'
-export function resolveHandlerRun(input: ResolveHandlerInput) {
+export function resolveHandlerRun(input: LegacyResolveHandlerInput) {
   return resolveHandlerRunHistory(createRunHistorySnapshot('', input.runs), '', input)
 }

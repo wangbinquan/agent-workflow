@@ -81,10 +81,10 @@ T1 输出是实现细化，不能推翻本文的领域边界、兼容承诺或�
 - [ ] 独立功能设计门（接手会话按惯例免，可推翻；见 §6）
 - [x] 用户批准生产实现（2026-10-21 交接手会话分解并指挥 Codex 实施；不含 T19 真实实例操作）
 
-### 5.2 实现与运行（2026-10-29 核对：除 D4 与 D13 余项外完成）
+### 5.2 实现与运行（2026-10-29 收尾后核对）
 
-- [ ] T1～T17 全部开发与测试用例编写完成（换表代码 `045abf20a` 上库；T16 的 D4 余项未完成，见下）
-- [ ] AC-1～AC-10 逐项证据；D1～D13 删除清单逐项销账（销账核对见下；AC 逐项账本未单独成表，证据分散在 §6.13 T18、CI 各轮与「T19 托管实例」）
+- [x] T1～T17 全部开发与测试用例编写完成（换表代码 `045abf20a` 上库；D4 余项与 D13 判定在 2026-10-29 收尾完成，见「收尾：D4、D13、T19-H11 与流水线」）
+- [x] AC-1～AC-10 逐项证据；D1～D13 删除清单逐项销账（销账核对见下；AC 逐项账本见「收尾」一节的表）
 - [x] SQLite targeted / full evidence、PostgreSQL real-engine evidence 分别记录（§6.13「复核、BF 修复轮与 T18 集中验证」结果表）
 - [x] 用户完整旅程、性能、故障恢复、备份恢复及二进制证据（同上：e2e 全量、新旧二进制 DTO 对拍、p95 对拍、44 个切换 / 恢复故障边界）
 - [ ] 功能实现门 + 必需 hosted exact-SHA CI（实现门按 §6 惯例免；exact-SHA CI 见 §6.13 各轮，T19 两次修复的运行只有依赖审计一步失败，属外部原因）
@@ -93,15 +93,8 @@ T1 输出是实现细化，不能推翻本文的领域边界、兼容承诺或�
 **D1～D13 销账核对**（2026-10-29，HEAD `134e3a882`，只读核对）：
 
 - D1–D3、D5–D12 已销账，各有守卫。例如 D1 `packages/backend/tests/rfc349-execution-peripheral-provider.test.ts:97`、D9 `packages/backend/tests/architecture/rfc395-a6-atomic-apply.test.ts:73`、D11 `packages/backend/tests/rfc395-retired-runtime-shapes.test.ts:179`。
-- **D4 未销账**：
-  - 后端已完成：旧选择器只在 `packages/backend/src/modules/task-execution/infrastructure/migration/oracle/legacyPickers.ts`，seq 回填只在同目录的 `migration/run/legacySequencePlan.ts`，`services/freshness.ts` 已删。
-  - 共享层 `packages/shared/src/nodeRunOrder.ts:10-12,29` 仍有 NULL / ID 回退和 `nodeRunOrderAnchor`。前端展示仍在用（如 `packages/frontend/src/lib/node-history.ts:34`），`packages/shared/src/task-questions.ts:316` 的 `resolveHandlerRun` 也仍依赖它。
-  - `NodeRunRow.seq` 仍声明为可空（`packages/backend/src/modules/task-execution/application/runProvenance.ts:26`）。
-  - 选择边界守卫只扫后端（`packages/backend/tests/architecture/rfc395-run-selection-boundary.test.ts:237`）。
-- **D13 基本销账、余一项判定**：
-  - 已完成：v1 clarify-open / review-open 清单被拒（`packages/backend/src/modules/collaboration/domain/humanGateOperation.ts:206`），准备回执必须是 v2 并校验（`packages/backend/src/modules/source-control/infrastructure/workspaceMaterializer.ts:1246`）。
-  - 待判定：「不把非字面量对象直接写入被重塑表」只对 `tasks` 有结构守卫。`packages/backend/src/modules/task-execution/infrastructure/nodeRunWriteProtocol.ts:197-209` 把带类型的对象直接写入 config / runtime / result 表，design §10 允许「精确的类型化构造」，需要判定是否满足。
-  - 托管清理路径仍接受 v1 plan、对回执做未校验的类型断言（`packages/backend/src/modules/source-control/infrastructure/crewstation/repositoryPreparation.ts:117,162`）。这条路径只驱动清理，不写被重塑表。
+- **D4 已销账**（2026-10-29 收尾）：共享层不再有 NULL / ID 回退与 `nodeRunOrderAnchor`，旧排序只在 `migration/oracle/legacyOrder.ts`；`NodeRunRow.seq` 等新执行读取的 seq 全部非空；选择边界由 `packages/backend/tests/architecture/rfc395-d4-mint-order-boundary.test.ts` 扩展到共享层与前端。
+- **D13 已销账**（2026-10-29 收尾）：v1 clarify-open / review-open 清单被拒（`packages/backend/src/modules/collaboration/domain/humanGateOperation.ts:206`），准备回执必须是 v2 并校验（`packages/backend/src/modules/source-control/infrastructure/workspaceMaterializer.ts:1246`）。`nodeRunWriteProtocol.ts` 的展开构造判定为不满足「精确的类型化构造」，改为在协议出口按表列拒绝未知字段（`packages/backend/tests/rfc395-d13-node-run-write-columns.test.ts`）。托管清理路径（`repositoryPreparation.ts:117,162`）只驱动清理、不写被重塑表，不在 D13 范围。
 
 文档完成、设计获批、实现完成、真实搬迁、线上验收是五个不同状态。不得用本节第一组复选框将 RFC 置 Done。
 
@@ -1004,7 +997,43 @@ Q-3 同期完成：plan §3 的 18 行拆成 137 个覆盖项，另列 44 个切
   - op3（候选 `3b938d41a`）：2026-10-29 08:11 切换，run 6 分钟，08:21:51 待开放，开放后 08:24:14 完成，维护约 12 分钟。计划无阻断，1 条行级限制：done 任务 `01M56RRG6A0F7KP5N1JXJ9FNNF` 的一个运行只保留为历史，不能续跑或重试。
   - 完成后：数据指纹与切换前一致（Agent 20、技能 3、工作流 20、MCP 4、任务 19），源世代保留，原 v0.6.30 在 preview 槽作为回退目标。
 - CI：`3b938d41a` 运行 40832354551、`134e3a882` 运行 40844374148，均只有依赖审计一步失败（外部原因，未处理），其余 59 个 job 成功。
-- 正式实例现运行 `3b938d41a`。H10 的修复 `134e3a882` 要随下一次正常发布上线；迁移完成后，原 v0.6.30 会在 preview 槽保留 72 小时作为回退目标；新版本发布同样部署到这个槽，所以发布前要先确认是否还需要这个回退目标。
+- 正式实例现运行 `3b938d41a`。H10 的修复 `134e3a882` 与 H11 的修复（见「收尾」）要随下一次正常发布上线；迁移完成后，原 v0.6.30 会在 preview 槽保留 72 小时作为回退目标；新版本发布同样部署到这个槽，所以发布前要先确认是否还需要这个回退目标。
+
+#### 收尾：D4、D13、T19-H11 与流水线（2026-10-29）
+
+**D4 销账**：
+- 共享层：`packages/shared/src/nodeRunOrder.ts` 的 `NodeRunOrderKey.seq` 改为非空，`compareNodeRunMintOrder` 只比 seq（seq 相等即相等，不再按 ID 兜底），删除 `nodeRunOrderAnchor`；`packages/shared/src/task-questions.ts` 的 `RunLineageView.seq` 改为非空，删除没有生产调用方的共享 `resolveHandlerRun`（后端实现是 `packages/backend/src/modules/task-execution/application/resolveHandlerRun.ts`）。
+- 旧排序（NULL 在前、ID 兜底、缺失锚点回退为 ID 键）只留在转换 oracle：新增 `packages/backend/src/modules/task-execution/infrastructure/migration/oracle/legacyOrder.ts`，oracle 各文件与转换器的帧回填 `migration/run/frames.ts` 改用它。
+- 运行选择端口 `application/ports/runSelection.ts` 的 `RunRef`、`SelectedRun`、`HistoryFilter`、`ShardSetView`、`RunSelectionReader` 按 seq 类型参数化，默认非空，只有 oracle 以 `LegacyRunSeq` 实例化。转换器给源行编号后的 `SequencedOracleRunRow` 得到目标类型的读者，可以直接交给 `selectResumeRollbackTargets`。
+- 后端新执行读取里的可空 seq 全部改为非空，删掉对应的空值分支：`NodeRunRow`（`application/runProvenance.ts`）、各端口与投影、记忆注入、澄清台账、DAG 前沿、工作组房间投影、恢复与回滚目标。`requireRunSequence` 保留为运行时校验（seq 必须是安全整数）。聚合器读取先前输出时，聚合行缺失即报错，不再把空 seq 传下去。
+- 测试：共享层的排序用例只锁目标语义；旧语义移到 `packages/backend/tests/rfc395-d4-legacy-mint-order.test.ts`；RFC-120 的承接 lineage 用例移到 `packages/backend/tests/rfc395-d4-handler-lineage.test.ts`，改为针对后端实现；`rfc395-a3-sites-b` 的旧对拍改取 oracle 的实现；后端夹具里的空 seq 按原来 ID 隐含的顺序编号。前端 7 个用例文件的夹具原先全写 `seq: 0`、靠 ID 兜底区分新旧，改用 `packages/frontend/tests/node-run-seq.helpers.ts` 的 `seqFromId` 按 ID 的字典序生成。
+- 守卫：新增 `packages/backend/tests/architecture/rfc395-d4-mint-order-boundary.test.ts`，扫描后端（迁移目录除外）、共享层和前端，有三条规则：不得引用旧排序名，NodeRun 视图不得有可空 seq，不得有 `seq === null` 一类判断。唯一例外是 `domain/runSelection/legacyFacts.ts`（转换器给源行编号前读取的冻结行）。RFC-374 的 ID 排序守卫把两处 ID 比较的例外从共享层改登记到 oracle；运行选择守卫中 `frames.ts` 的例外随之退役，例外由 5 条减为 4 条。
+
+**D13 判定与收口**：
+- `packages/backend/src/modules/task-execution/infrastructure/nodeRunWriteProtocol.ts` 的 config / runtime / result 写入：类型取自目标表，但 `nodeRunTableWrite` 用展开构造，`result` 直接透传。非字面量对象带着多余字段时，TypeScript 不报错，drizzle 会静默丢列，不满足「精确的类型化构造」。改为在协议唯一的出口 `prepare` 按表的列校验，遇到未知字段报 `node-run-write-unknown-column:<部分>.<字段>` 并拒绝整次写入。端口字段经 `nodeRunTableWrite` 改名后都在表内，正常写入不受影响。回归用例：`packages/backend/tests/rfc395-d13-node-run-write-columns.test.ts`（双 provider）。
+- 托管清理路径 `source-control/infrastructure/crewstation/repositoryPreparation.ts:117,162` 仍接受 v1 计划，但它只驱动清理，不写被重塑表，不在 D13 范围内。
+
+**T19-H11 正式实例续租被拒即退出**：迁移完成后，正式实例的绿槽 Pod 在 09:18:34 和 10:57:33 各重启一次，日志都是 `execution-frozen-by-platform`，平台却没有冻结服务（执行控制 epoch 209、active、交接已完成）。AW 续租时，平台返回 4xx（408 / 429 除外）一律判为冻结，daemon 随即退出；平台对续租有几种按协议应当重试的拒绝：Pod 某一刻未就绪（`source_not_ready`）、服务的执行控制锁被别的写入短暂占用（`execution_control_busy`、`coordination_busy`）。两次重启具体是哪一种，现有日志还原不出来（AW 没有记录平台应答，CrewStation 不记 4xx）。修复（`packages/backend/src/modules/system-operations/infrastructure/crewstation/crewStationExecutionAuthority.ts`）：上述三种拒绝像平台不可达一样，保留租约重试到租约期限；其余 4xx 照旧立即失去租约；失去租约与重试的日志带上平台应答的 status、kind、code 和 message，以及对不上时看到的 phase、epoch 与归属。用例在 `packages/backend/tests/rfc370-m1-execution-authority.test.ts`（新增 7 条）。
+
+**流水线**：
+- CI 依赖审计：根 `overrides` 的 `seroval` 由 1.6.3 升到 1.6.12，锁文件只变这一项。
+- e2e-full-nightly：RFC-396 的端点 `POST /api/development-designs/:id/proposals/:proposalId/limitation-review`（`15f4e65dc`）没有任何 e2e 走到，按 RFC-319 的规则登记进未覆盖账本，写明原因与销账条件（运行 40872361956）。
+- backend-macos-nightly：两个 RFC-395 全源守卫在 macOS 上分别用了 5.32、5.52 秒，超过默认 5 秒（运行 40859820668），按实测写明 20 秒预算。
+
+**AC 逐项证据**（测试文件均在 `packages/backend/tests/`）：
+
+| AC | 证据 |
+| --- | --- |
+| AC-1 覆盖与守恒 | `table-mapping.md` 逐表处置；冻结的 epoch-1 共 222 张表（保留 178、转换 31、归档 13，见「进度」V1）。转换守恒与追踪：`rfc395-v2-core-engine`、`rfc395-v2-integration-mixed`、`rfc395-v3-trace`。真实源：本机试算 0 个阻断、920 条限制（「T19 前置」）；托管 op3 计划无阻断、1 条行级限制（「T19 托管实例」） |
+| AC-2 主体与工作区 | D1～D3 销账，D1 守卫 `rfc349-execution-peripheral-provider.test.ts:97`；`rfc395-a2-task-subject`、`rfc395-a2-repository-surface`、`rfc395-task-mount-projection`、`rfc395-checkpoint-target` |
+| AC-3 执行身份 | D4、D5 销账；`rfc395-run-mint-identities`、`rfc395-q3-multiprocess-mint`、`rfc395-v2-run-sequence`（历史负序号）；oracle 与表实现逐槽位对拍 `rfc395-n-oracle-equivalence`、`rfc395-selection-table-equivalence`；本次的 `rfc395-d4-handler-lineage`、`rfc395-d4-legacy-mint-order` 与 `architecture/rfc395-d4-mint-order-boundary` |
+| AC-4 协作与引用 | D6、D7 销账；`rfc395-clarify-target-concurrency`、`rfc395-a4-clarify-journeys`、`rfc395-reference-target-relations`、`rfc395-workflow-index-target`、`rfc395-v2-resources-workflows` |
+| AC-5 内容与机制 | D8、D9 销账；`rfc395-a4-skill-bytes`、`rfc395-w0-content-contracts`、`rfc395-content-target-runtime`、`rfc395-a6-atomic-apply-scenes`、`architecture/rfc395-a6-atomic-apply` |
+| AC-6 schema 与 provider | D10 销账；`rfc395-r1-engine-parity`、`rfc395-schema-equivalence`、`rfc395-provider-catalog-equivalence`、`architecture/rfc395-explicit-schema-contributions`；T18 PostgreSQL 全量 9,917 / 0 |
+| AC-7 一次切换 | 44 个切换 / 恢复故障边界、双 provider 共 88 个实例（`rfc395-q3-phase-*`、`rfc395-v3-switch-crash-matrix`、`rfc395-v3-switch-rollback-providers`、`rfc395-v3-old-epoch-restore`）；真实演练：本机实例（`t19-local-instance-2026-10-28.md`）与托管 T9 / T9b / T10 |
+| AC-8 兼容退出 | D1～D13 全部销账（§5.2）；`rfc395-retired-runtime-shapes`、`architecture/rfc395-v2-dormancy`、`architecture/rfc395-v3-dormancy` |
+| AC-9 用户旅程 | T18：e2e Chromium 全量 1,090 / 1,091，修复后工作组与澄清相关 spec 复跑 473 / 0；新旧二进制 DTO 对拍 SQLite / PostgreSQL 各 7 / 0（`rfc395-q1-dto-parity`、`rfc395-history-response-parity`）；托管验收服务的启动、撤回与完成旅程（「T19 托管实例」） |
+| AC-10 交付证据 | 集中验证见 T18；exact-SHA CI 见 §6.13 各轮与本节；设计门与实现门按 §6 惯例免；真实搬迁回执见两节 T19 与 CrewStation `proposal/rfc/RFC-044-service-database-epoch-migration/acceptance.md` |
 
 #### 休眠包与共享账本
 
@@ -1079,3 +1108,4 @@ Q-3 同期完成：plan §3 的 18 行拆成 137 个覆盖项，另列 44 个切
   - 本机实例：用户选择归档后全新安装（分叉开发库无法转换），已完成，见 [t19-local-instance-2026-10-28.md](./t19-local-instance-2026-10-28.md)。
   - 托管实例 `agent-workflow`：用户批准「plan 无阻断即切换」。但托管 Job 要求的平台侧（迁移操作、冻结引用、`/v1/operations` 回调、配置切换与回退）在 CrewStation 尚未实现，即 10-24 用户决定第 2 条。已写 CrewStation RFC-044 并获批准，实现与联调完成后执行。
 - 2026-10-29：T19 托管实例完成。CrewStation RFC-044 实现与联调完成后，正式实例 `agent-workflow` 迁移到 epoch 2（08:24:14 completed），见「T19 托管实例」。
+- 2026-10-29 收尾：D4 余项与 D13 判定完成，修复正式实例续租被拒即退出（T19-H11），流水线的依赖审计、RFC-319 账本对账与 macOS 超时一并修好，见「收尾：D4、D13、T19-H11 与流水线」。

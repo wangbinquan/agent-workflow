@@ -29,13 +29,6 @@
       "source": "tx .select({ id: nodeRuns.id }) .from(nodeRuns) .leftJoin(nodeRunRuntimeStates, eq(nodeRunRuntimeStates.nodeRunId, nodeRuns.id)) .where(whereQuery(tx, input)) .orderBy(asc(nodeRuns.seq))",
       "why": "II-b replaces the reviewed owner/display ordering with non-null target seq; no NULL/ID fallback. The owner query preserves its caller filters and executable/history boundary.",
       "removeBy": "owner-query-retirement"
-    },
-    {
-      "path": "src/modules/task-execution/infrastructure/migration/run/frames.ts",
-      "rule": "legacy-selection",
-      "source": "[...input.rows].sort(compareNodeRunMintOrder)",
-      "why": "V2 reconstructs frozen epoch-1 frame input using the isolated oracle comparator; this is conversion input ordering, never an executable runtime picker.",
-      "removeBy": "epoch-1-conversion-retirement"
     }
   ]
 }

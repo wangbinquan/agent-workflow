@@ -100,21 +100,21 @@ describe('RFC-078 compareNodeRunsForTimeline', () => {
   test('review row sorts by its round anchor, not its pinned started_at', () => {
     // The review's started_at (100) is the earliest, but its content round
     // anchor (9000) is the latest — it must sort LAST, after the agent run.
-    const review = { seq: null, id: 'rev', startedAt: 100, reviewRoundStartedAt: 9000 }
-    const agent = { seq: null, id: 'agent', startedAt: 5000, reviewRoundStartedAt: null }
+    const review = { seq: 1, id: 'rev', startedAt: 100, reviewRoundStartedAt: 9000 }
+    const agent = { seq: 2, id: 'agent', startedAt: 5000, reviewRoundStartedAt: null }
     expect(sortIds([review, agent])).toEqual(['agent', 'rev'])
   })
 
   test('non-review rows fall back to started_at; sequence breaks ties', () => {
     const a = { seq: 2, id: 'aaa', startedAt: 5000 }
     const b = { seq: 1, id: 'bbb', startedAt: 5000 }
-    const c = { seq: null, id: 'ccc', startedAt: 1000 }
+    const c = { seq: 3, id: 'ccc', startedAt: 1000 }
     expect(sortIds([a, b, c])).toEqual(['ccc', 'bbb', 'aaa'])
   })
 
   test('null anchors sort as 0 (NULL-first, matching old asc(started_at))', () => {
-    const started = { seq: null, id: 'z', startedAt: 10 }
-    const neverStarted = { seq: null, id: 'a', startedAt: null }
+    const started = { seq: 2, id: 'z', startedAt: 10 }
+    const neverStarted = { seq: 1, id: 'a', startedAt: null }
     expect(sortIds([started, neverStarted])).toEqual(['a', 'z'])
   })
 })

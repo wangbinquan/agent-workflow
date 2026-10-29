@@ -292,7 +292,7 @@ export async function loadInjectedSnapshotFromFirstAttempt(
   // Walk the in-scope top-level rows up to the runId anchor in mint order; the anchor is the
   // LATEST generation start (first row, or a row whose predecessor was `done`).
   const anchorKey = candidates.find((row) => row.id === ctx.runId)
-  if (anchorKey === undefined || anchorKey.seq === null) return null
+  if (anchorKey === undefined) return null
   const history = await createRunHistorySnapshot(
     ctx.taskId,
     candidates.map((row) => ({

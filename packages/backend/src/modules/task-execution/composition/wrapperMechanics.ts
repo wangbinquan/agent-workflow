@@ -1343,13 +1343,15 @@ async function dispatchFanoutAggregatorAttempt(
   // an unchanged slice replays without a spawn, and a CHANGED slice's prior
   // output would mis-anchor the agent to stale content.
   const aggRun = await state.opts.persistence.nodeExecution.read(aggRunId)
+  // The row was just selected or minted above; its seq anchors the prior-output walk.
+  if (aggRun === null) throw new Error(`aggregator-run-missing:${aggRunId}`)
   const aggPriorRun = await freshestPriorRunWithOutput(state.opts.persistence.nodeExecution, {
     taskId,
     nodeId: aggNode.id,
     iteration,
     shardKey: null,
     id: aggRunId,
-    seq: aggRun?.seq ?? null,
+    seq: aggRun.seq,
   })
   let aggPriorOutputUpdate: { block: string } | undefined
   if (aggPriorRun !== undefined) {
@@ -1358,7 +1360,7 @@ async function dispatchFanoutAggregatorAttempt(
       aggPriorRun.id,
       injection.spec.agent.outputs ?? [],
       undefined,
-      aggRun?.envelopeNonce ?? '',
+      aggRun.envelopeNonce ?? '',
     )
     if (block.length > 0) aggPriorOutputUpdate = { block }
   }

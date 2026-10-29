@@ -24,7 +24,7 @@ import type { RunHistoryReader } from './runHistory'
 export async function selectResumeRollbackTargets<
   R extends {
     id: string
-    seq: number | null
+    seq: number
     nodeId: string
     parentNodeRunId: string | null
     status: string

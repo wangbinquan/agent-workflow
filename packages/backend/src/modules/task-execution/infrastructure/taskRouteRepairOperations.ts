@@ -108,7 +108,7 @@ interface RepairTask extends TaskDefinitionSubject {
 }
 
 interface RepairNodeRun {
-  readonly seq: number | null
+  readonly seq: number
   readonly id: string
   readonly taskId: string
   readonly nodeId: string

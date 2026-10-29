@@ -42,7 +42,8 @@ const digest = (hit: Hit) => createHash('sha256').update(key(hit)).digest('hex')
 // RFC-395 II-b: exact successors of the reviewed owner/display sites plus frozen frame conversion.
 // Eleven epoch-1 entries retire; five target entries remain. T18 P3B makes the two
 // owner retry-order clauses explicitly NULLS LAST; only their exact hashes change.
-// Private runtime pickers are not allowed.
+// Private runtime pickers are not allowed. RFC-395 D4 (2026-10-29) moved the converter frame backfill
+// (migration/run/frames.ts) to the oracle legacy comparator, retiring its entry; four remain.
 const initialExceptions = new Set<string>([
   '3650a7d35c8bc5bc13c6e748caa16b17578eec2568f733bcfa2bafb593cb18a3',
   '4c1127f2284e9c1b61f3707b81b5a868cd1f34be90ddbcc9d5aa109dc2e0beeb',

@@ -1,5 +1,5 @@
 import type { RecordedNodeRunInput } from '../domain/consumedInputs'
-import { and, eq, isNull, type SQL } from 'drizzle-orm'
+import { and, eq, getTableColumns, isNull, type SQL } from 'drizzle-orm'
 import type { MergeStateOrNull } from '@agent-workflow/shared'
 import type { PersistenceTx } from '@/platform/persistence/persistenceDb'
 import { engineOf } from '@/platform/persistence/databaseTransaction'
@@ -214,7 +214,28 @@ async function companions(
   if (write.inputs !== undefined) await replaceInputs(tx, run, write.inputs)
 }
 
+/**
+ * RFC-395 D13: a reshaped companion table takes only its own columns. Drizzle drops unknown keys
+ * without an error, so a wider payload (a legacy row, a DTO field that moved tables) would lose
+ * its value silently; reject it before any statement runs.
+ */
+function requireOwnColumns(tx: PersistenceTx, write: NodeRunTableWrite): void {
+  const tables = tablesOf(tx)
+  for (const [part, table, values] of [
+    ['config', tables.nodeRunConfigs, write.config],
+    ['runtime', tables.nodeRunRuntimeStates, write.runtime],
+    ['result', tables.nodeRunResults, write.result],
+  ] as const) {
+    if (values === undefined) continue
+    const columns = getTableColumns(table)
+    for (const key of Object.keys(values))
+      if (!Object.hasOwn(columns, key))
+        throw new Error(`node-run-write-unknown-column:${part}.${key}`)
+  }
+}
+
 async function prepare(tx: PersistenceTx, nodeRunId: string, write: NodeRunTableWrite) {
+  requireOwnColumns(tx, write)
   const { nodeRuns } = tablesOf(tx)
   const [located] = await tx
     .select({ taskId: nodeRuns.taskId })
