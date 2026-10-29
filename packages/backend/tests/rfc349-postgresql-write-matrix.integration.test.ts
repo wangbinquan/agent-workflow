@@ -41,6 +41,12 @@ const GENERATION_ID = 'dbg_write_matrix_01'
 
 /** 合成值不满足业务约束 —— 与「这条 SQL 能不能在 PostgreSQL 上跑」无关。 */
 const EXPECTED_SQLSTATES = new Set(['23503', '23514', '22003', '22P02'])
+/**
+ * RFC-395 epoch 2 installs seed rows (e.g. `committed_event_family_cutovers`), and a synthetic key
+ * can collide with one of them (23505). That is data, not rendering, so it is excused only on a
+ * table that already held rows before the INSERT — the only place a single-row INSERT can raise it.
+ */
+const SEEDED_COLLISION_SQLSTATE = '23505'
 
 /** 读回来时每种逻辑 codec 该有的 JS 运行时类型（null 一律放行）。 */
 const RUNTIME_TYPE: Record<string, (value: unknown) => boolean> = {
@@ -181,6 +187,12 @@ describe('RFC-349 every logical table accepts a real INSERT on real PostgreSQL',
             defects.push(`${table.sourceTable}: contract 里的表在 schema 导出中找不到`)
             continue
           }
+          const seeded =
+            (
+              await pool.unsafe(
+                `SELECT EXISTS (SELECT 1 FROM agent_workflow."${table.providerTables.postgresql}") AS seeded`,
+              )
+            )[0]?.seeded === true
           try {
             await db.transaction(async (tx) => {
               await insertOne(
@@ -217,6 +229,7 @@ describe('RFC-349 every logical table accepts a real INSERT on real PostgreSQL',
             }
             const codes = sqlStates(error)
             if (codes.some((code) => EXPECTED_SQLSTATES.has(code))) continue
+            if (seeded && codes.includes(SEEDED_COLLISION_SQLSTATE)) continue
             defects.push(
               `${table.sourceTable}: [${codes.join(',')}] ${message(error).slice(0, 200)}`,
             )

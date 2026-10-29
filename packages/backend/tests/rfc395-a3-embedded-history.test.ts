@@ -26,6 +26,7 @@ import {
   verifyPostgresqlCatalogArtifact,
 } from '@/platform/persistence/schema/history/catalog'
 import { HISTORY_META_TABLES } from '@/platform/persistence/schema/history/meta'
+import { SUPPORTED_POSTGRESQL_MAJORS } from '@/platform/persistence/postgresqlPreflight'
 import { r2Registry } from './helpers/rfc395R2Schema'
 
 const root = resolve(import.meta.dir, '../../..')
@@ -40,6 +41,15 @@ describe('RFC-395 A-3 activated schema artifacts', () => {
     expect(persistenceHead()).toBe(head)
     const broken = { ...head, sqlite: { ...head.sqlite, head: [] } }
     expect(() => verifySchemaHistory([broken], persistenceSchema)).toThrow('digest-mismatch')
+  })
+  // RFC-395 follow-up (2026-10-29, postgresql-evidence run 40888244790): only a PostgreSQL 17
+  // catalog was embedded while the RFC-349 preflight admits 15–18, so a stock Ubuntu 24.04
+  // PostgreSQL 16 target took the whole copy and then failed final admission. A history append
+  // that skips one admitted major's catalog turns this red instead of narrowing support silently.
+  test('every PostgreSQL major the preflight admits has an embedded catalog on every history version', () => {
+    expect(persistencePostgresqlMajors()).toEqual([...SUPPORTED_POSTGRESQL_MAJORS])
+    for (const major of SUPPORTED_POSTGRESQL_MAJORS)
+      expect(persistenceHead(major).postgresqlCatalog?.postgresqlMajor).toBe(major)
   })
   test('PG 17 catalog binds the plan, all 21 meta tables, and the native catalog', async () => {
     const head = persistenceHead(17)

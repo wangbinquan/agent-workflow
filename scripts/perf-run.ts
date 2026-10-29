@@ -152,6 +152,11 @@ async function prepareTemplate(input: RunInput): Promise<void> {
         sourceGenerationId: SOURCE_GENERATION,
         source: {
           provider: 'sqlite',
+          // RFC-395 epoch 2: the artifact carries the installation metadata, as backups do.
+          readMetadata: () => {
+            if (!source.readMetadata) throw new Error('epoch2-metadata-source-required')
+            return source.readMetadata()
+          },
           assertUnchanged: () => source.assertUnchanged(snapshot),
           readChunk: (table, key, limit) => source.readChunk(table, key, limit),
         },

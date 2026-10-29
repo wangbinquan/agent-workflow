@@ -43,6 +43,13 @@ async function rollback(connection: PostgresqlReservedConnection): Promise<void>
   }
 }
 
+/**
+ * External PostgreSQL majors a target may run. RFC-395 epoch 2 embeds a catalog for every one of
+ * them on every schema-history version (`bootstrap/persistenceHead.ts`), so a target admitted here
+ * is never rejected after its data has been copied.
+ */
+export const SUPPORTED_POSTGRESQL_MAJORS: readonly number[] = [15, 16, 17, 18]
+
 export async function preflightPostgresqlTarget(input: {
   readonly runtime: PostgresqlDatabaseRuntime
   readonly operationId: string
@@ -62,7 +69,10 @@ export async function preflightPostgresqlTarget(input: {
     const environment = environmentRows[0]
     const serverVersionNum = Number(environment?.server_version_num)
     const serverMajor = Math.floor(serverVersionNum / 10_000)
-    if (!Number.isSafeInteger(serverVersionNum) || serverMajor < 15 || serverMajor > 18) {
+    if (
+      !Number.isSafeInteger(serverVersionNum) ||
+      !SUPPORTED_POSTGRESQL_MAJORS.includes(serverMajor)
+    ) {
       throw new PostgresqlPreflightError(
         'postgresql-version-unsupported',
         'PostgreSQL target must run a supported major version (15 through 18)',

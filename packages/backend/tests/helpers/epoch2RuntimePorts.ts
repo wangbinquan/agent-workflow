@@ -17,9 +17,17 @@ function build(db: PersistenceDb) {
     historyRestrictions: createActiveHistoryRestrictionProvider(),
   }
 }
-afterAll(() => {
+function removeHomes(): void {
   for (const home of homes.splice(0)) rmSync(home, { recursive: true, force: true })
-})
+}
+// `bun test` removes the homes after each file. Scripts that reuse these ports outside the test
+// runner (scripts/perf-run.ts through productionPerformanceApplication) cannot register
+// `afterAll` — Bun throws at import — so they remove the homes when the process exits.
+try {
+  afterAll(removeHomes)
+} catch {
+  process.once('exit', removeHomes)
+}
 /** Real epoch-2 metadata provider, including failures for absent installation evidence. */
 export function epoch2RuntimeTestPorts(db: PersistenceDb) {
   let ports = bindings.get(db)

@@ -36,9 +36,12 @@ export async function captureRequestCpu<T>(operation: () => Promise<T>) {
 
 // Diagnostic classification only: a WITH may contain an UPDATE even when its
 // final operation is SELECT. Keep those plans, but do not request ANALYZE.
+// A row-locking read (RFC-395's generation fence ends in FOR SHARE) cannot be
+// analysed inside the READ ONLY explain transaction either; a plain EXPLAIN can.
 // Quoted text and comments must not turn an ordinary read into an estimate.
 function statementPlanMode(statement: string): ProfileExplainMode | null {
   let first: string | undefined
+  let previous: string | undefined
   let modifies = false
   let index = 0
   while (index < statement.length) {
@@ -88,6 +91,9 @@ function statementPlanMode(statement: string): ProfileExplainMode | null {
       const word = token.toUpperCase()
       first ??= word
       if (['INSERT', 'UPDATE', 'DELETE', 'MERGE'].includes(word)) modifies = true
+      // FOR UPDATE / FOR NO KEY UPDATE / FOR SHARE / FOR KEY SHARE; `FOR <n>` stays a read.
+      if (previous === 'FOR' && ['UPDATE', 'NO', 'SHARE', 'KEY'].includes(word)) modifies = true
+      previous = word
       index += token.length
     } else index += 1
   }

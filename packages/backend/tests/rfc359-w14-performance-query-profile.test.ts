@@ -119,6 +119,40 @@ describe('RFC-359 query diagnosis after completed HTTP measurement', () => {
     expect(JSON.stringify(report)).toBe(snapshot)
   })
 
+  test('a row-locking read gets an estimated plan: READ ONLY cannot analyse FOR SHARE', async () => {
+    // RFC-395 epoch 2 opens every PostgreSQL transaction with this generation fence. The
+    // postgresql-evidence run 40888244790 failed because EXPLAIN ANALYZE of a locking read is
+    // rejected in the profiler's READ ONLY transaction; a plain EXPLAIN is accepted.
+    const fence = `SELECT generation_id FROM "agent_workflow_meta"."generations" WHERE generation_id = $1 AND state = 'active' for share`
+    const locking = ['FOR UPDATE', 'FOR NO KEY UPDATE', 'FOR KEY SHARE'].map(
+      (clause) => `SELECT id FROM tasks WHERE id = $1 ${clause}`,
+    )
+    const plain = `SELECT substring(name FROM 1 FOR 3), 'for share' AS note FROM tasks`
+    const capture = createQueryCapture()
+    const seen = new Map<string, string | undefined>()
+    const result = await profilePerformanceQueries({
+      report: { ...measuredReport(), provider: 'postgresql' as const },
+      token: 'unit',
+      capture,
+      app: {
+        request() {
+          for (const sql of [fence, ...locking, plain]) capture.start(sql, [])(1)
+          return new Response('ok')
+        },
+      },
+      explain: async (statement, mode?: string) => {
+        seen.set(statement.sql, mode)
+        return [{ node: 'LockRows' }]
+      },
+    })
+    expect(result.complete).toBe(true)
+    expect(Object.fromEntries(seen)).toEqual({
+      [fence]: 'plan-only',
+      ...Object.fromEntries(locking.map((sql) => [sql, 'plan-only'])),
+      [plain]: 'analyze',
+    })
+  })
+
   test('native SQLite preserves bindings, getters, results and restoration', async () => {
     const { sqlite, profile } = sqliteFixture()
     const query = sqlite.query('SELECT ? AS n UNION ALL SELECT ? AS n')
