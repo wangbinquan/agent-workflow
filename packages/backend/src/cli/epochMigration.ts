@@ -15,7 +15,6 @@ const booleanFlags = new Set([
   '--replay',
   '--confirm',
   '--restore-config',
-  '--all-unfinished-legacy-code-work',
 ])
 const allowed: Record<string, readonly string[]> = {
   plan: [
@@ -27,7 +26,7 @@ const allowed: Record<string, readonly string[]> = {
     '--chunk-rows',
     '--json',
   ],
-  acknowledge: ['--item', '--all-unfinished-legacy-code-work', '--reason', '--by', '--json'],
+  acknowledge: ['--item', '--reason', '--by', '--json'],
   'withdraw-acknowledgement': ['--decision', '--all', '--json'],
   run: ['--approve', '--new-run', '--drain-timeout-ms', '--json'],
   status: ['--json'],
@@ -136,16 +135,15 @@ export async function epochMigrationCommand(
       }
       case 'acknowledge': {
         p.arity(1)
+        // RFC-395 user ruling: every stranded legacy item is confirmed explicitly by its id; there
+        // is no select-all.
         const items = p.flags.get('--item')
-        const all = p.has('--all-unfinished-legacy-code-work')
         const reason = p.flag('--reason')
-        if ((!items?.length && !all) || (items?.length && all) || !reason?.trim())
-          throw new UsageError(
-            'acknowledge requires --item ID (repeatable) or --all-unfinished-legacy-code-work, and --reason TEXT',
-          )
+        if (!items?.length || !reason?.trim())
+          throw new UsageError('acknowledge requires --item ID (once per item) and --reason TEXT')
         result = await app.acknowledge({
           operationId: op,
-          items: all ? 'all-unfinished-legacy-code-work' : items!,
+          items,
           reason,
           by:
             p.flag('--by') ??

@@ -67,7 +67,8 @@ agent-workflow db migration receipt <op> plan --json
 
 ```bash
 agent-workflow db migration acknowledge <op> --item <item-id> --reason '<reason>' --by '<operator>' --json
-# 同类事项确实全部获准时才使用 --all-unfinished-legacy-code-work 代替 --item。
+# 每个确认项各写一个 --item（可重复）。按用户裁决须逐项确认，不提供全选。
+# 命令中断后用相同的 --item / --reason / --by 重跑即可继续；撤销确认同样按原参数重跑。
 agent-workflow db migration plan <op> --json
 # 需要撤销确认时：
 agent-workflow db migration withdraw-acknowledgement <op> --decision <decision-digest> --json

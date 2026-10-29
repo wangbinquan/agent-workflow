@@ -3,6 +3,7 @@ import {
   canonicalValue,
   encodeMigrationKey,
 } from '@/platform/persistence/migration/conversion/migrationKey'
+import { valueDigest } from '@/platform/persistence/migration/conversion/digest'
 import { createEpochSwitchApplication } from '@/modules/system-operations/application/epochSwitch/application'
 import { plannedFixture, makeSwitchFixture, fixtureDigest } from './helpers/rfc395V3SwitchFixture'
 
@@ -216,10 +217,12 @@ test('obsolete acknowledgements can be withdrawn before running and revoke prior
         acknowledgeable: true,
       },
     ]
-    await f.app.plan({})
+    const planned = await f.app.plan({})
     const acknowledged = await f.app.acknowledge({
       operationId: f.operationId,
-      items: 'all-unfinished-legacy-code-work',
+      items: planned.plan.payload.blocks
+        .filter((item) => item.remediation.action === 'acknowledge')
+        .map((item) => item.id),
       reason: 'Archive retired work',
       by: 'operator',
     })
@@ -235,6 +238,216 @@ test('obsolete acknowledgements can be withdrawn before running and revoke prior
     await expect(
       f.app.withdrawAcknowledgements({ operationId: f.operationId, decisions: 'all' }),
     ).rejects.toThrow('requires-new-run')
+  } finally {
+    f.close()
+  }
+})
+
+// RFC-395 design gate round 2 N1: a decision change was saved with `plan: null` before the
+// replacement plan was built. Interrupted in between, a retry with the same input failed
+// (v3-plan-missing for acknowledge, item-not-found for withdraw), so a hosted Job could not resume
+// on its operation. The request now records what it resolved before the journal changes.
+const unfinishedWork = (key: string, rowDigest = fixtureDigest) => ({
+  code: 'v2-code-history-unfinished',
+  scope: 'row' as const,
+  sourceTable: 'code_work_items',
+  sourceKey: encodeMigrationKey('code_work_items', [canonicalValue(key)]),
+  sourcePhase: 'current' as const,
+  taskId: null,
+  runId: null,
+  missingFields: [],
+  detail: { rowDigest },
+  acknowledgeable: true,
+})
+
+test('an interrupted acknowledgement resumes when the same input is retried', async () => {
+  const f = makeSwitchFixture()
+  try {
+    f.control.planBlocks = [unfinishedWork('work')]
+    const plan = await f.app.plan({})
+    const input = {
+      operationId: f.operationId,
+      items: [plan.acknowledgeable[0]!.id],
+      reason: 'Retired work remains readable as history.',
+      by: 'operator',
+    }
+    const dryRun = f.deps.conversion.dryRun
+    f.deps.conversion.dryRun = async () => {
+      throw new Error('job killed before the replacement plan')
+    }
+    await expect(f.app.acknowledge(input)).rejects.toThrow('job killed')
+    const interrupted = (await f.deps.journal.read(f.operationId))!.payload
+    expect(interrupted.plan).toBeNull()
+    expect(interrupted.inputs.operatorDecisions).toHaveLength(1)
+
+    let dryRuns = 0
+    f.deps.conversion.dryRun = async (request) => {
+      dryRuns++
+      return dryRun(request)
+    }
+    f.control.clock += 1000
+    const resumed = await f.app.acknowledge(input)
+    expect(resumed.plan.payload.operatorDecisions).toEqual(interrupted.inputs.operatorDecisions)
+    expect(resumed.plan.payload.operatorDecisions[0]!.acknowledgedAt).toBe(123)
+    expect(resumed.plan.payload.blocks).toEqual([])
+    expect(resumed.requiresApproval).toBe(true)
+    expect(dryRuns).toBe(1)
+
+    // A retry after success returns the same plan without converting again.
+    const again = await f.app.acknowledge(input)
+    expect(again.plan.digest).toBe(resumed.plan.digest)
+    expect(dryRuns).toBe(1)
+    await expect(f.app.acknowledge({ ...input, reason: 'another request' })).rejects.toThrow(
+      'item-not-found',
+    )
+  } finally {
+    f.close()
+  }
+})
+
+// Round 3: a failure after the replacement plan was saved left the operation `failed`; the
+// retry returned the plan but status kept reporting the failure and offered no approval.
+test('a retry after a failure that followed the saved plan leaves the plan awaiting approval', async () => {
+  const f = makeSwitchFixture()
+  try {
+    f.control.planBlocks = [unfinishedWork('work')]
+    const plan = await f.app.plan({})
+    const input = {
+      operationId: f.operationId,
+      items: [plan.acknowledgeable[0]!.id],
+      reason: 'Retired work remains readable as history.',
+      by: 'operator',
+    }
+    f.deps.journal.prunePlanContent = async () => {
+      throw new Error('artifact store unavailable')
+    }
+    await expect(f.app.acknowledge(input)).rejects.toThrow('artifact store unavailable')
+    const failed = (await f.deps.journal.read(f.operationId))!.payload
+    expect(failed.status).toBe('failed')
+    expect(failed.plan).not.toBeNull()
+
+    f.deps.journal.prunePlanContent = undefined
+    const resumed = await f.app.acknowledge(input)
+    expect(resumed.plan.payload.operatorDecisions).toEqual(failed.inputs.operatorDecisions)
+    const journal = (await f.deps.journal.read(f.operationId))!.payload
+    expect(journal.status).toBe('awaiting-approval')
+    expect(journal.failure).toBeNull()
+    expect(journal.plan!.approvalDigest).toBe(resumed.plan.approvalDigest)
+  } finally {
+    f.close()
+  }
+})
+
+// Round 3: a replayed record was merged by row, so an old request overrode the newer decision
+// for the same row and blocked the plan again with a stale decision.
+test('replaying an old acknowledgement cannot override a newer decision for the same row', async () => {
+  const f = makeSwitchFixture()
+  try {
+    f.control.planBlocks = [unfinishedWork('work')]
+    const first = await f.app.plan({})
+    const old = {
+      operationId: f.operationId,
+      items: [first.acknowledgeable[0]!.id],
+      reason: 'first review',
+      by: 'operator',
+    }
+    const acknowledged = await f.app.acknowledge(old)
+    // The row changes: the old decision is withdrawn and the new version is acknowledged.
+    f.control.planBlocks = [unfinishedWork('work', `sha256:${'b'.repeat(64)}`)]
+    const changed = await f.app.withdrawAcknowledgements({
+      operationId: f.operationId,
+      decisions: [valueDigest(acknowledged.plan.payload.operatorDecisions[0]!)],
+    })
+    const newer = await f.app.acknowledge({
+      operationId: f.operationId,
+      items: [changed.acknowledgeable[0]!.id],
+      reason: 'second review',
+      by: 'operator',
+    })
+    expect(newer.plan.payload.operatorDecisions).toMatchObject([
+      { rowDigest: `sha256:${'b'.repeat(64)}`, reason: 'second review' },
+    ])
+
+    await expect(f.app.acknowledge(old)).rejects.toThrow('item-not-found')
+    expect((await f.deps.journal.read(f.operationId))!.payload.inputs.operatorDecisions).toEqual(
+      newer.plan.payload.operatorDecisions,
+    )
+  } finally {
+    f.close()
+  }
+})
+
+// Round 4: the rebuild for an unchanged request after a failure dropped an approval that was still
+// valid, so an approved run that failed at its backup needed approving again after a replay.
+test('an unchanged replay after a failed approved run keeps the approval', async () => {
+  const f = makeSwitchFixture()
+  try {
+    f.control.planBlocks = [unfinishedWork('work')]
+    const plan = await f.app.plan({})
+    const input = {
+      operationId: f.operationId,
+      items: [plan.acknowledgeable[0]!.id],
+      reason: 'Retired work remains readable as history.',
+      by: 'operator',
+    }
+    const acknowledged = await f.app.acknowledge(input)
+    f.control.inject = (point) => {
+      if (point === 'after-backup-file') throw new Error('backup interrupted')
+    }
+    await expect(
+      f.app.run({ operationId: f.operationId, approve: acknowledged.plan.approvalDigest }),
+    ).rejects.toThrow('backup interrupted')
+    const failed = (await f.deps.journal.read(f.operationId))!.payload
+    expect([failed.phase, failed.status]).toEqual(['planned', 'failed'])
+    expect(failed.plan!.approvedDigest).toBe(acknowledged.plan.approvalDigest)
+
+    f.control.inject = undefined
+    const replayed = await f.app.acknowledge(input)
+    expect(replayed.plan.approvalDigest).toBe(acknowledged.plan.approvalDigest)
+    expect(replayed.requiresApproval).toBe(false)
+    expect((await f.deps.journal.read(f.operationId))!.payload.failure).toBeNull()
+    expect((await f.app.run({ operationId: f.operationId })).phase).toBe('activated')
+  } finally {
+    f.close()
+  }
+})
+
+test('an interrupted withdrawal resumes when the same decisions are retried', async () => {
+  const f = makeSwitchFixture()
+  try {
+    f.control.planBlocks = [unfinishedWork('removed')]
+    const planned = await f.app.plan({})
+    const acknowledged = await f.app.acknowledge({
+      operationId: f.operationId,
+      items: [planned.acknowledgeable[0]!.id],
+      reason: 'Archive retired work',
+      by: 'operator',
+    })
+    const decisions = [valueDigest(acknowledged.plan.payload.operatorDecisions[0]!)]
+    f.control.planBlocks = []
+    const dryRun = f.deps.conversion.dryRun
+    f.deps.conversion.dryRun = async () => {
+      throw new Error('job killed before the replacement plan')
+    }
+    await expect(
+      f.app.withdrawAcknowledgements({ operationId: f.operationId, decisions }),
+    ).rejects.toThrow('job killed')
+    const interrupted = (await f.deps.journal.read(f.operationId))!.payload
+    expect(interrupted.plan).toBeNull()
+    expect(interrupted.inputs.operatorDecisions).toEqual([])
+
+    f.deps.conversion.dryRun = dryRun
+    const resumed = await f.app.withdrawAcknowledgements({ operationId: f.operationId, decisions })
+    expect(resumed.plan.payload.operatorDecisions).toEqual([])
+    expect(resumed.requiresApproval).toBe(true)
+    const again = await f.app.withdrawAcknowledgements({ operationId: f.operationId, decisions })
+    expect(again.plan.digest).toBe(resumed.plan.digest)
+    await expect(
+      f.app.withdrawAcknowledgements({
+        operationId: f.operationId,
+        decisions: [fixtureDigest],
+      }),
+    ).rejects.toThrow('item-not-found')
   } finally {
     f.close()
   }

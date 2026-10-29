@@ -64,8 +64,22 @@ import {
 
 export interface HostedEpochJobContract {
   operationId: string
-  action: 'plan' | 'run' | 'new-run' | 'verify' | 'rollback' | 'restore' | 'discard' | 'complete'
+  action:
+    | 'plan'
+    | 'acknowledge'
+    | 'run'
+    | 'new-run'
+    | 'verify'
+    | 'rollback'
+    | 'restore'
+    | 'discard'
+    | 'complete'
   approve: string | undefined
+  /**
+   * RFC-395 user ruling: stranded legacy code work is archived only after an operator confirms
+   * each item explicitly. The hosted Job takes the same input as the standalone CLI.
+   */
+  acknowledgement: { items: readonly string[]; by: string; reason: string } | undefined
   sourceGenerationId: string
   freezeReference: string | undefined
   restoreReference: string | undefined
@@ -83,22 +97,49 @@ export function parseHostedEpochJob(
   }
   const selected = action ?? env.CS_DATABASE_MIGRATION_ACTION ?? 'plan'
   if (
-    !['plan', 'run', 'new-run', 'verify', 'rollback', 'restore', 'discard', 'complete'].includes(
-      selected,
-    )
+    ![
+      'plan',
+      'acknowledge',
+      'run',
+      'new-run',
+      'verify',
+      'rollback',
+      'restore',
+      'discard',
+      'complete',
+    ].includes(selected)
   )
     throw new EpochSwitchError('v3-hosted-action-invalid')
   requireValue('CS_DATABASE_MIGRATION_TARGET_URL')
-  if (['plan', 'run', 'new-run'].includes(selected) && !env.CS_DATABASE_RESTORE_REFERENCE)
+  // acknowledge replaces the plan, which reads the source again.
+  if (
+    ['plan', 'acknowledge', 'run', 'new-run'].includes(selected) &&
+    !env.CS_DATABASE_RESTORE_REFERENCE
+  )
     requireValue('CS_DATABASE_MIGRATION_SOURCE_URL')
   if (['run', 'rollback'].includes(selected)) requireValue('CS_DATABASE_MIGRATION_FREEZE_REFERENCE')
   if (selected === 'restore') requireValue('CS_DATABASE_RESTORE_REFERENCE')
   if (selected === 'discard' && env.CS_DATABASE_MIGRATION_CONFIRM !== 'discard')
     throw new EpochSwitchError('v3-hosted-discard-confirm-required')
+  // One plan item id per line or comma; every acknowledged item is named, never selected in bulk.
+  const acknowledgedItems = (env.CS_DATABASE_MIGRATION_ACKNOWLEDGE_ITEMS ?? '')
+    .split(/[\n,]/)
+    .map((item) => item.trim())
+    .filter((item) => item.length > 0)
+  if (selected === 'acknowledge' && acknowledgedItems.length === 0)
+    throw new EpochSwitchError('v3-hosted-env-required:CS_DATABASE_MIGRATION_ACKNOWLEDGE_ITEMS')
   return {
     operationId: EpochOperationIdSchema.parse(requireValue('CS_DATABASE_MIGRATION_OPERATION_ID')),
     action: selected as HostedEpochJobContract['action'],
     approve: env.CS_DATABASE_MIGRATION_APPROVE,
+    acknowledgement:
+      selected === 'acknowledge'
+        ? {
+            items: acknowledgedItems,
+            by: requireValue('CS_DATABASE_MIGRATION_ACKNOWLEDGE_BY'),
+            reason: requireValue('CS_DATABASE_MIGRATION_ACKNOWLEDGE_REASON'),
+          }
+        : undefined,
     sourceGenerationId: requireValue('CS_DATABASE_MIGRATION_SOURCE_GENERATION'),
     freezeReference: env.CS_DATABASE_MIGRATION_FREEZE_REFERENCE,
     restoreReference: env.CS_DATABASE_RESTORE_REFERENCE,
@@ -503,6 +544,14 @@ async function executeHostedJob(
         scratchUrlEnv: contract.env.CS_DATABASE_MIGRATION_SCRATCH_URL
           ? 'CS_DATABASE_MIGRATION_SCRATCH_URL'
           : undefined,
+      })
+      return `CS_DATABASE_MIGRATION_PLAN=${JSON.stringify(plan)}`
+    }
+    if (contract.action === 'acknowledge') {
+      // Returns the replacement plan; the operator approves its new approval digest with `run`.
+      const plan = await app.acknowledge({
+        operationId: contract.operationId,
+        ...contract.acknowledgement!,
       })
       return `CS_DATABASE_MIGRATION_PLAN=${JSON.stringify(plan)}`
     }

@@ -9,9 +9,13 @@
   - macOS 时间预算（RFC-395 撑大了语料）：两条 RFC-395 全源守卫写明 20 秒（`e738f38f8`）；照「加 runner、不动预算」把 macOS nightly 由 12 片扩到 18 片，counts 守卫写明 20 秒（`f9e23a17e`）；新用例牵动的两本 RFC-359 账本（`dfaf582d3`）。
   - 不是 RFC-395 引入的几项：依赖审计（seroval 升级）与 RFC-396 新端点未进 RFC-319 覆盖账本（`e738f38f8`）；RFC-319 INTENT-X4 的滚动（`f83ec825f`，改为按减少动效偏好跳转）；RFC-396 graph-care e2e 偶发卡死（见下条）。RFC-396 已 Done、没有在制会话，按用户「把流水线修绿」的目标一并处理。
   - RFC-396 graph-care e2e 卡死：`f69130169` 当时归因成 WebKit 浏览器负载，是错的；Chromium 同样偶发（首次失败、重试通过）。真正的原因是 MR 发布约 5 秒后平台就采集流水线，system-mock 流水线工具对「head 还没有流水线」以退出码 4（business failure）结束，case 被永久 block；慢机器上更容易抢在用例注入之前。mock 改为退出 6（stale-input，平台回到观察），撤回 `f69130169` 的 about:blank 与 240 秒等待窗。本机让注入晚 40 秒可稳定复现，修复后通过。
-- **流水线结果**：在 Done 提交 `67acb29b8` 上把 10 条定时流水线全部手动触发一遍，CI 61 / 61，9 条定时流水线成功（含 macOS 18 / 18、postgresql-evidence weekly 26 / 26），WebKit 卡在上面的 graph-care 用例；修复提交上再全量复跑，运行号见交接。逐条见 RFC-395 plan 的流水线结果表。
-- **设计门 / 实现门**：按接手会话惯例免，用户未推翻。
-- **待用户决定**：正式实例仍运行 `3b938d41a`。T19-H10（`134e3a882`）、H11 与本次修复要随下一次发布上线；发布会占用 preview 槽，放弃其中保留到约 11-01 08:24Z 的 v0.6.30 回退目标。
+  - RFC-294 / RFC-333 人工门重启 e2e 在 Windows 上偶发失败（audit-backlog 2026-09-12 起未决）：e2e 崩溃屏障写完标记后只挂住请求，daemon 自己的续跑 worker 照常认领续跑、起下一个节点，SIGKILL 晚到就成了「节点运行中崩溃」，任务被正确地标为 interrupted。屏障改为 `Atomics.wait` 冻结整个线程；本机推迟 1.8 秒再杀可稳定复现（5 / 5 失败），修复后 5 / 5 通过。
+- **流水线结果**：Done 提交 `67acb29b8` 上 10 条定时流水线全部手动触发，9 条成功，WebKit 卡在 graph-care；修复提交 `0244e0e24` 上再全量复跑，10 条全部成功，CI 第 2 次尝试 61 / 61（第 1 次尝试红在上面的 Windows 人工门用例）。门检视修复所在提交的全量复跑见交接。逐条见 RFC-395 plan 的两张流水线结果表。
+- **设计门 / 实现门**：2026-10-29 以 Codex 补跑（只审功能）。实现门 pass with findings：3 条 P2 证据缺口，补了旧 epoch 备份经生产入口的整链用例（SQLite）、给出 AC-9 旅程的双 provider 分段证据、闭合账本；PostgreSQL 逻辑备份整链与单条双 provider 连续旅程登记在 audit-backlog。设计门第一轮 fail：2 条 P1（托管缺逐项确认归档入口、CLI 的全选违背逐项确认裁决）与 5 条 P2 文档问题，均已修。第二轮 fail：新补的托管 `acknowledge` 还有 2 条 P2（中断后用相同输入重试会报 `v3-plan-missing`；解析不要求重新读源所需的源连接），均已修：确认 / 撤销确认在改 journal 前先写只写一次的请求记录，重试沿用；解析在无 restore reference 时要求 `CS_DATABASE_MIGRATION_SOURCE_URL`。第三轮 fail：N1 还剩「替代计划已保存后出错、重试仍显示失败」一处，另有新问题 N3（重放旧记录会覆盖同一行较新的决定），均已修：未变化的决定在上次失败时也重新生成计划；记录里的条目只有原决定仍有效时才算已完成，否则必须仍在计划里。第四轮 fail：N1 余项的修法带出 N4（失败状态下重放未变化的请求会清掉仍有效的批准），已修：重新生成的计划沿用材料未变的批准。第五轮 pass，无新问题。详见 RFC-395 plan「实现门与设计门」。
+- **待用户决定**：
+  - CrewStation 平台侧要能让操作者发起托管迁移 Job 的 `acknowledge` 动作（带 `CS_DATABASE_MIGRATION_ACKNOWLEDGE_ITEMS` / `_BY` / `_REASON`），AW 侧已就绪，CrewStation 仓库未改。
+  - macOS nightly 由 12 片扩到 18 片：仓库约定加分片由用户裁决，这次按「把流水线修绿」的目标直接做了，可以推翻（public 仓库，runner 不额外收费）。
+  - 正式实例仍运行 `3b938d41a`。T19-H10（`134e3a882`）、H11 与本次修复要随下一次发布上线；发布会占用 preview 槽，放弃其中保留到约 11-01 08:24Z 的 v0.6.30 回退目标。
 
 ## 2026-10-29 RFC-395 T19 托管实例完成：正式 `agent-workflow` 迁到 epoch 2
 

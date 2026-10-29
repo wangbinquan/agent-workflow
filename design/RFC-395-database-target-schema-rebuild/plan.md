@@ -4,7 +4,7 @@
 
 - 本次交付：RFC 六份设计文档、217 表处置清单、RFC 索引与 STATE 登记。
 - **状态：Done（2026-10-29）**。落档时为 Draft，当时用户批准的只是调研与落档；2026-10-21 用户把本 RFC 交接手会话做任务分解并指挥 Codex 实施，视为批准生产实现，真实数据操作按实例逐次批准（见 §6）。T1～T19 完成，D1～D13 全部销账；AC 逐项证据与流水线结果见 §6.13「收尾：D4、D13、T19-H11 与流水线」。
-- 设计门：落档会话无可调用 `openai-codex` review 工具，未运行独立 Codex 设计门；接手会话按本会话惯例免设计门与实现门（可推翻，见 §6）。收尾时用户未推翻，两门都记为免。
+- 设计门：落档会话无可调用 `openai-codex` review 工具，未运行独立 Codex 设计门；接手会话按本会话惯例免设计门与实现门（可推翻，见 §6）。2026-10-29 收尾时两门都以 Codex 补跑（只审功能），发现均已处置，见 §6.13「实现门与设计门」。
 - 进入实施前记录功能设计门结论、用户批准、最新 source contract 与 RFC-394 等并发变更的已提交装配合同。
 - 当前设计不预留实现中自行选择的缩减范围；若做不到某个终态，显式修订 RFC，不把未完成项换成永久 fallback。
 
@@ -78,7 +78,7 @@ T1 输出是实现细化，不能推翻本文的领域边界、兼容承诺或�
 - [x] 核心 Task / NodeRun 字段去向、双 provider 原则、一次切换和首写回退边界
 - [x] 文档静态检查：217 表无漏项 / 重复；Task 70 列、NodeRun 62 列恰好各有一个去向；32 个本地 Markdown 链接有效；共享索引原内容完整保留；`git diff --check` 通过
 - [x] RFC 索引与 STATE 登记；具体文档 commit / push 证据以 Git 历史和本次交接为准
-- [x] 独立功能设计门：免（§6 惯例，用户未推翻）
+- [x] 独立功能设计门：2026-10-29 实现后补跑（Codex，只审功能），第一轮 2 条 P1、5 条 P2 均已处置，见 §6.13「实现门与设计门」
 - [x] 用户批准生产实现（2026-10-21 交接手会话分解并指挥 Codex 实施；不含 T19 真实实例操作）
 
 ### 5.2 实现与运行（2026-10-29 收尾后核对）
@@ -87,7 +87,7 @@ T1 输出是实现细化，不能推翻本文的领域边界、兼容承诺或�
 - [x] AC-1～AC-10 逐项证据；D1～D13 删除清单逐项销账（销账核对见下；AC 逐项账本见「收尾」一节的表）
 - [x] SQLite targeted / full evidence、PostgreSQL real-engine evidence 分别记录（§6.13「复核、BF 修复轮与 T18 集中验证」结果表）
 - [x] 用户完整旅程、性能、故障恢复、备份恢复及二进制证据（同上：e2e 全量、新旧二进制 DTO 对拍、p95 对拍、44 个切换 / 恢复故障边界）
-- [x] 功能实现门：免（§6 惯例，用户未推翻）。必需 hosted exact-SHA CI 与定时流水线：Done 提交 `67acb29b8` 上的全量复跑见「收尾」一节的流水线结果表，其中 WebKit 的 graph-care 卡死已在后继提交修复，修复提交上的全量复跑见交接
+- [x] 功能实现门：2026-10-29 补跑（Codex，只审功能），pass with findings，三条 P2 的处置见 §6.13「实现门与设计门」。必需 hosted exact-SHA CI 与定时流水线：`67acb29b8` 与 `0244e0e24` 两轮全量复跑见「收尾」一节的两张表；门检视修复所在提交的全量复跑见交接
 - [x] 真实实例 MigrationPlan、操作批准、切换回执和切换后验收（本机实例 2026-10-28 归档后全新安装；托管实例 2026-10-29 迁移完成，见「T19 托管实例」）
 
 **D1～D13 销账核对**（2026-10-29，HEAD `134e3a882`，只读核对）：
@@ -621,7 +621,7 @@ V3（迁移运行与切换）拆为一个合同包与三个并行包，文件互
 | V3-F 冻结源、备份与内容 | 各类源的打开（含离线升级与旧 epoch 备份）、切换备份、冻结时的内容清单与 `ContentInventory`、PostgreSQL 目标 / 临时库预检 | `platform/persistence/migration/freeze/`、`platform/content/inventory/` |
 | V3-S 切换与入口 | 状态机运行器、计划与批准、静默与冻结、激活 / 撤回 / 完成、CLI、bootstrap 装配、托管 Job 入口、启动分类、旧 epoch 备份恢复 | `modules/system-operations/…/epochSwitch/`、`bootstrap/epochMigration*.ts`、`cli/epochMigration.ts` |
 
-顺序：V3-K → V3-R ∥ V3-F ∥ V3-S。单机切换的唯一提交点是原子替换 pointer v2；首次业务写入之前可按激活回执撤回，之后拒绝撤回（migration §7）。
+顺序：V3-K → V3-R ∥ V3-F ∥ V3-S。单机切换的唯一提交点是原子替换 pointer v2；首次业务写入之前、且 `complete` 尚未开始时可按激活回执撤回，两者任一发生后拒绝撤回（migration §7；`complete` 这一条是 2026-10-24 V3 修复轮的后续决定，见「进度」2026-10-24 V3 一条）。
 
 **用户决定（2026-10-24，均按推荐）**：
 
@@ -814,7 +814,7 @@ V3（迁移运行与切换）拆为一个合同包与三个并行包，文件互
 
 **本阶段新增的 lead 决定**：
 - 运行时的逻辑合同只由唯一 registry 派生一次。备份、epoch-2 恢复、迁往 PostgreSQL、压缩与诊断都用它；epoch-1 来源一律经转换器读取。epoch-1 的 PostgreSQL 迁移链退出运行时，epoch-2 的 PostgreSQL 经合同历史安装和升级。
-- PostgreSQL catalog 产物只生成 17 版。CI、CrewStation 与本地部署都用 17，以后增加一个大版本只需再跑一次生成器。
+- PostgreSQL catalog 产物只生成 17 版。CI、CrewStation 与本地部署都用 17，以后增加一个大版本只需再跑一次生成器。**已被 2026-10-29 的决定取代**：恢复对外承诺的 15～18，四个大版本都有 catalog（见「收尾：D4、D13、T19-H11 与流水线」的 postgresql-evidence 一条）。
 
 **审查与修复**：对 A 做了三组静态功能审查，共发现 6 个阻断、9 个主要、约 12 个次要问题。修复轮分 AF-1、AF-2 两个任务修完，修复后三个包的 typecheck 全部通过。主要修复：
 - PostgreSQL 的 generation 检查改在首个写语句之前，`SET TRANSACTION` 不再失败；首写标记按 runtime 缓存，单行插入保持一次往返；
@@ -1055,7 +1055,48 @@ Q-3 同期完成：plan §3 的 18 行拆成 137 个覆盖项，另列 44 个切
 | integration-opencode | 40940206338 | 成功 |
 | maintenance-soak-nightly | 40940194172 | 成功 |
 
-graph-care 的修复提交（即记录本段的提交）上，CI 与 10 条定时流水线会再全部跑一遍，运行号见交接。更早各提交上的运行（如 `dfaf582d3` 的 CI 40927465154、`b3df19465` 的 postgresql-evidence 40920150663）保留在上文各条。
+graph-care 的修复提交 `0244e0e24` 上，CI 与 10 条定时流水线又全部跑了一遍：
+
+| 流水线 | 运行 | 结果 |
+| --- | --- | --- |
+| CI | 40950592110 | 第 2 次尝试 61 / 61；第 1 次尝试 Windows e2e 2/4 的人工门重启用例两次都失败，根因与修复见下 |
+| backend-macos-nightly | 40950663175 | 18 / 18 |
+| postgresql-evidence | 40950657444 | 全部成功；weekly 26 / 26 崩溃点，大迁移 489.2 秒，状态最慢 201.4 毫秒 |
+| e2e-full-nightly | 40950668504 | 成功 |
+| e2e-webkit-nightly | 40950673165 | 8 / 8（graph-care 在 Ubuntu WebKit 首轮通过，2.0 分钟） |
+| visual-regression-nightly | 40950592364 | 成功 |
+| windows-platform | 40950592122 | 成功 |
+| evidence-soak-nightly | 40950684061 | 成功 |
+| git-protocols-e2e | 40950694660 | 成功 |
+| integration-opencode | 40950689770 | 成功 |
+| maintenance-soak-nightly | 40950679334 | 成功 |
+
+- 人工门重启 e2e（`e2e/rfc294-human-gate-restart.spec.ts` 的「clarify and review continuations recover when SIGKILL lands after commit but before wake」）在 Windows 上偶发失败，audit-backlog 自 2026-09-12 起记为未决。这次查清：e2e 崩溃屏障 `packages/backend/src/services/humanGateDecisionE2eBarrier.ts` 写完标记后只让这一个请求等一个永不兑现的 promise，事件循环照转，daemon 自己的人工门续跑 worker（1 秒一拍）会认领刚提交的续跑、起下一个节点；SIGKILL 晚到一点，测的就成了「节点运行中崩溃」，daemon B 正确地把任务标为 `interrupted`，评审门自然不出现。本机把 SIGKILL 推迟 1.8 秒，5 次全挂。改为写完标记后用 `Atomics.wait` 冻结整个线程，三处调用点（澄清、评审、反问）共用；`rfc359-human-gate-barrier-publication` 新增子进程用例（屏障后 5 毫秒定时器必须停住，旧实现计数从 17 涨到 86 而失败）。修复后推迟 1.8 秒的同一用例 5 / 5 通过，整份 spec 连跑两遍 6 / 6。用例失败时的报错改为带上任务状态。这项属 RFC-333 / RFC-341 的测试设施，不是 RFC-395 引入的，按用户「把流水线修绿」的目标一并处理。
+
+**实现门与设计门（2026-10-29 补跑，Codex，只审功能）**：两门此前按 §6 惯例免，收尾时补跑。
+
+- 实现门（基准 `0244e0e24`）：pass with findings。未发现 P0 / P1；D1～D13 全部确认已退出，只剩计划列明的例外；收尾各提交与差异之外的消费方（前端历史排序、澄清 lineage、NodeRun 写入调用方、迁移状态读取、流水线结果消费链）没有发现。三条 P2 证据缺口及处置：
+  1. AC-7：旧 epoch 备份恢复没有经生产接线的整链断言。新增 `rfc395-restore-epoch-routing` 的「AC-7 an epoch-1 SQLite backup restores through the production entry over an installed generation」：真实 epoch-1 SQLite 备份包经生产装配 `restoreBackup → run（批准）→ verify → complete`，新代次只含备份里的工作流，指针为 `restored`，前驱是原安装代次；若恢复误用当前库，读到的会是当前工作流而失败（本机 14.5 秒）。PostgreSQL 逻辑备份经生产入口的单条整链没有写：解包读者由 `rfc395-v3-source-access`（真实的逻辑备份与托管备份读者，双 provider）覆盖，转换与激活由 `rfc395-v3-switch-providers`（真实源 → 原生 PostgreSQL 目标）与托管 T19 覆盖；作为剩余项登记在 `docs/audit-backlog.md`。
+  2. AC-9：没有一条双 provider 的连续旅程测试。按门给出的第二种处置，逐段定位走真实链路的双 provider 用例并补跑：启动 → 执行 → 完成 `rfc359-w5-t21b-execution-chain`（真实子进程）；执行 → 等待人工 `scheduler-clarify-dispatch`；作答 → 续跑 `rfc333-human-gate-continuation-recovery`、`rfc341-human-gate-continuation-worker`；回滚 / 重试 `rfc359-w9-retry-rollback-parity`；历史查询 `rfc395-history-response-parity`；导出 `rfc271-roundtrip`、`rfc271-export-package`。本机两种 provider 共 142 / 0，junit 显示每组在 SQLite 与 PostgreSQL 上用例数相同。连续旅程由编译后二进制上的 e2e 承担（`e2e/rfc294-human-gate-restart.spec.ts`：启动 → 澄清 → 作答 → 评审 → 批准 → 完成，跨两次 daemon 崩溃；`e2e/rfc244-task-operations.spec.ts`：失败节点重试），托管形态由 T19 托管验收承担。单条双 provider 连续旅程测试没有写，登记在 `docs/audit-backlog.md`。
+  3. AC-10：账本没闭合到 `0244e0e24`。上面的表补上了该提交的 CI 与 10 条定时流水线。
+- 设计门（按实现后的代码审设计，基准 `0244e0e24`）：第一轮 fail，2 条 P1、5 条 P2，均已处置：
+  1. F1（P1）托管迁移没有用户已批准的「逐项确认归档」入口：`epochMigrationHosted.ts` 的动作集合里没有 `acknowledge`，含可确认项的托管计划只能一直 `v3-plan-blocked`。补上 `acknowledge` 动作，用 `CS_DATABASE_MIGRATION_ACKNOWLEDGE_ITEMS`（逐项列出 plan item id）、`_BY`、`_REASON` 三个输入调用现有的确认逻辑，输出替代计划供重新批准；用例在 `rfc395-v3-hosted-job`，`docs/crewstation-deployment.md` 补了输入与步骤。CrewStation 平台侧让操作者发起这个 Job 属于另一个仓库，未改动，记在 STATE 待用户决定。
+  2. F2（P1）单机 CLI 的 `--all-unfinished-legacy-code-work` 一次全选，违背「逐项显式确认」的用户裁决。去掉全选：CLI 只接受 `--item ID`（可重复），应用层输入只收显式 id 列表；`rfc395-v3-cli` 锁住两种旧写法都是用法错误，`rfc395-v3-plan-approval` 改为按 item id 确认，`docs/release-upgrade-rollback.md` 删去全选说明。
+  3. F3（P2）回退边界只写了「首次业务写入」，漏了「`complete` 开始后写检查点、此后拒绝撤回」：migration §7 与本文件 V3 顺序一行补上并指向后续决定。
+  4. F4（P2）proposal 的完成说明写成「两处真实实例的迁移完成」，实际本机是按用户裁决归档后全新安装：改为分别说明。
+  5. F5（P2）design §6.2 的关系键没写 occurrence：补上并指向 §6.11 保留重复引用的裁决。
+  6. F6（P2）table-mapping 漏了 `clarify_answer_attributions`：两处补上。
+  7. F7（P2）「只生成 17 版」的旧段落没有指向后来恢复 15～18 的决定：就地标注已取代。
+  第二轮复核（同一基准加上述修复）：fail。F2～F7 确认已修；F1 补上的托管 `acknowledge` 还有两处问题，均已处置：
+  1. N1（P2）确认先把决定连同 `plan: null` 存进 journal，再生成替代计划。两步之间中断后用相同输入重试，会报 `v3-plan-missing`，托管 Job 无法沿原 operation 继续。改为：每个指名条目的请求在改 journal 之前，先写一份只写一次的记录（`acknowledgements/<摘要>.json`，按条目、确认人、理由寻址；撤销确认为 `acknowledgement-withdrawals/<摘要>.json`）。重试读到记录就沿用原决定（包括原确认时间）；决定没有变化时返回现有计划，计划缺失时重新生成。`rfc395-v3-plan-approval` 新增两条用例：中断落在保存决定之后、替代计划之前，用相同输入重试得到原决定和新计划；成功后再重试返回同一计划，不再转换。撤销确认同样处理；`--all` 本身幂等，不需要记录。
+  2. N2（P2）`acknowledge` 要重新读源来生成替代计划，解析时却不要求 `CS_DATABASE_MIGRATION_SOURCE_URL`。省略时 Job 先清空原计划，再以 `postgresql-source-runtime-required` 失败。解析改为与 plan / run / new-run 一致：没有 restore reference 时必须提供源连接。用例在 `rfc395-v3-hosted-job`，部署文档的输入表与步骤 1 同步更新。
+  第三轮复核：fail。N2 确认已修；N1 还剩一个窗口，另有一条新问题，均已处置：
+  1. N1 余项（P2）替代计划已经保存、随后的清理步骤出错时，操作被记为 `failed`。用相同输入重试会直接返回已有计划，状态仍是失败，也给不出批准请求。改为：决定没有变化、但上次尝试以失败结束时，也重新生成计划，结束后状态回到 awaiting-approval。新增用例「a retry after a failure that followed the saved plan leaves the plan awaiting approval」。
+  2. N3（P2）重试时把记录里的旧决定按行合并，会覆盖同一行后来的新决定（行内容变化后重新确认的那条），计划又被旧决定阻断。改为：记录里的条目只有在原决定仍在当前决定集合里时才算已完成；否则该条目必须仍在当前计划里，不在就报 `item-not-found`。新增用例「replaying an old acknowledgement cannot override a newer decision for the same row」。
+  第四轮复核：fail。N1 余项、N2、N3 确认已修；N1 余项的修法带出一条新问题，已处置：
+  1. N4（P2）操作处于失败状态时，重放没有变化的确认或撤销会重新生成计划，而生成时一律清掉批准，即使批准材料没变。例如已批准的 run 在备份处失败后重放原确认，再 run 就要求重新批准。改为：决定没有变化时，重新生成的计划沿用材料未变的批准，与 run 内部重新规划的做法一致；材料变了仍须重新批准。新增用例「an unchanged replay after a failed approved run keeps the approval」：已批准的 run 在备份后失败，重放原确认后批准仍在，不带 `--approve` 的 run 直接走到 activated。
+  第五轮复核：pass，无新问题；N1～N4 与 N2 全部确认已修，`planEpochOperation` 的其他调用方（plan 命令、restore、run 的 new-run 与 discovered 路径）行为不变。
+  集中验证（本机，最终代码）：后端 tsc 通过；146 个文件（架构守卫全部、`rfc395-v3-*` 全部、`rfc395-restore-epoch-routing`、runbook 守卫等）双 provider 1644 pass / 4 skip / 0 fail。新增的回归用例逐一放到修复前的代码上跑过：HEAD 版 planner 上中断重试两条与「计划保存后失败」一条失败，第二轮版本上「计划保存后失败」与「旧记录重放」两条失败，第三轮版本上「失败后保留批准」一条失败，修复后全部通过。
 
 **AC 逐项证据**（测试文件均在 `packages/backend/tests/`）：
 
@@ -1067,10 +1108,10 @@ graph-care 的修复提交（即记录本段的提交）上，CI 与 10 条定�
 | AC-4 协作与引用 | D6、D7 销账；`rfc395-clarify-target-concurrency`、`rfc395-a4-clarify-journeys`、`rfc395-reference-target-relations`、`rfc395-workflow-index-target`、`rfc395-v2-resources-workflows` |
 | AC-5 内容与机制 | D8、D9 销账；`rfc395-a4-skill-bytes`、`rfc395-w0-content-contracts`、`rfc395-content-target-runtime`、`rfc395-a6-atomic-apply-scenes`、`architecture/rfc395-a6-atomic-apply` |
 | AC-6 schema 与 provider | D10 销账；`rfc395-r1-engine-parity`、`rfc395-schema-equivalence`、`rfc395-provider-catalog-equivalence`、`architecture/rfc395-explicit-schema-contributions`；T18 PostgreSQL 全量 9,917 / 0 |
-| AC-7 一次切换 | 44 个切换 / 恢复故障边界、双 provider 共 88 个实例（`rfc395-q3-phase-*`、`rfc395-v3-switch-crash-matrix`、`rfc395-v3-switch-rollback-providers`、`rfc395-v3-old-epoch-restore`）；真实演练：本机实例（`t19-local-instance-2026-10-28.md`）与托管 T9 / T9b / T10 |
+| AC-7 一次切换 | 44 个切换 / 恢复故障边界、双 provider 共 88 个实例（`rfc395-q3-phase-*`、`rfc395-v3-switch-crash-matrix`、`rfc395-v3-switch-rollback-providers`、`rfc395-v3-old-epoch-restore`）；旧 epoch 备份经生产入口整链恢复：`rfc395-restore-epoch-routing` 的 AC-7 用例（SQLite），PostgreSQL 逻辑备份为分段证据、单条整链列入 audit-backlog；真实演练：托管 T9 / T9b / T10（本机实例按用户裁决归档后全新安装，不是转换演练，见 `t19-local-instance-2026-10-28.md`） |
 | AC-8 兼容退出 | D1～D13 全部销账（§5.2）；`rfc395-retired-runtime-shapes`、`architecture/rfc395-v2-dormancy`、`architecture/rfc395-v3-dormancy` |
-| AC-9 用户旅程 | T18：e2e Chromium 全量 1,090 / 1,091，修复后工作组与澄清相关 spec 复跑 473 / 0；新旧二进制 DTO 对拍 SQLite / PostgreSQL 各 7 / 0（`rfc395-q1-dto-parity`、`rfc395-history-response-parity`）；托管验收服务的启动、撤回与完成旅程（「T19 托管实例」） |
-| AC-10 交付证据 | 集中验证见 T18；exact-SHA CI 见 §6.13 各轮与本节；设计门与实现门按 §6 惯例免；真实搬迁回执见两节 T19 与 CrewStation `proposal/rfc/RFC-044-service-database-epoch-migration/acceptance.md` |
+| AC-9 用户旅程 | T18：e2e Chromium 全量 1,090 / 1,091，修复后工作组与澄清相关 spec 复跑 473 / 0；新旧二进制 DTO 对拍 SQLite / PostgreSQL 各 7 / 0（`rfc395-q1-dto-parity`、`rfc395-history-response-parity`）；托管验收服务的启动、撤回与完成旅程（「T19 托管实例」）；旅程各段的双 provider 真实链路用例见「实现门与设计门」第 2 条（本机 142 / 0），单条双 provider 连续旅程列入 audit-backlog |
+| AC-10 交付证据 | 集中验证见 T18；exact-SHA CI 见 §6.13 各轮与本节；设计门与实现门 2026-10-29 补跑并处置（见「实现门与设计门」）；真实搬迁回执见两节 T19 与 CrewStation `proposal/rfc/RFC-044-service-database-epoch-migration/acceptance.md` |
 
 #### 休眠包与共享账本
 
@@ -1146,4 +1187,4 @@ graph-care 的修复提交（即记录本段的提交）上，CI 与 10 条定�
   - 托管实例 `agent-workflow`：用户批准「plan 无阻断即切换」。但托管 Job 要求的平台侧（迁移操作、冻结引用、`/v1/operations` 回调、配置切换与回退）在 CrewStation 尚未实现，即 10-24 用户决定第 2 条。已写 CrewStation RFC-044 并获批准，实现与联调完成后执行。
 - 2026-10-29：T19 托管实例完成。CrewStation RFC-044 实现与联调完成后，正式实例 `agent-workflow` 迁移到 epoch 2（08:24:14 completed），见「T19 托管实例」。
 - 2026-10-29 收尾：D4 余项与 D13 判定完成，修复正式实例续租被拒即退出（T19-H11），流水线的依赖审计、RFC-319 账本对账与 macOS 超时一并修好，见「收尾：D4、D13、T19-H11 与流水线」。
-- 2026-10-29：**Done**。收尾中又修了 postgresql-evidence 暴露的三处（PostgreSQL 15 / 16 / 18 的 catalog、切换栅栏挡住迁移状态、epoch 2 目标端逐行复制）、WebKit 的两条用例与 macOS 的时间预算。在 Done 提交上把 10 条定时流水线全部手动触发一遍，9 条成功；WebKit 的 RFC-396 graph-care 用例卡死，查明是 system-mock 流水线工具把「head 还没有流水线」报成 business failure，修复后再全量复跑（见「收尾」一节）。设计门与实现门按 §6 惯例免，用户未推翻。正式实例仍运行 `3b938d41a`，T19-H10 / H11 与本次修复随下一次发布上线，发布时机由用户决定。
+- 2026-10-29：**Done**。收尾中又修了 postgresql-evidence 暴露的三处（PostgreSQL 15 / 16 / 18 的 catalog、切换栅栏挡住迁移状态、epoch 2 目标端逐行复制）、WebKit 的两条用例与 macOS 的时间预算。在 Done 提交上把 10 条定时流水线全部手动触发一遍，9 条成功；WebKit 的 RFC-396 graph-care 用例卡死，查明是 system-mock 流水线工具把「head 还没有流水线」报成 business failure，修复后再全量复跑（见「收尾」一节）。之后在 `0244e0e24` 上再全量复跑：10 条定时流水线全部成功，CI 第 2 次尝试 61 / 61；第 1 次尝试 Windows 的人工门重启 e2e 失败，查清是 e2e 崩溃屏障只挂住请求、不冻结进程，已修。两道门 2026-10-29 以 Codex 补跑：实现门 pass with findings（3 条 P2），设计门第一轮 fail（2 条 P1、5 条 P2），全部处置，见「实现门与设计门」。正式实例仍运行 `3b938d41a`，T19-H10 / H11 与本次修复随下一次发布上线，发布时机由用户决定。

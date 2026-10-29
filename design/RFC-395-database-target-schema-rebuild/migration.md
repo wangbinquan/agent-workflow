@@ -192,7 +192,7 @@ discovered → planned → backed-up → quiescing → frozen → converting
 | --- | --- |
 | 冻结前 | 源继续正常业务；失败的计划 / 演练标记失败，不切配置 |
 | 冻结后、激活前 | 源仍是权威；可重启转换或恢复旧 writer；丢弃目标须另有明确操作，源不动 |
-| 配置已切、尚无目标业务写入 | 关闭目标全部连接，依据 activation receipt 恢复源指针 / build，再启用旧 writer；验证没有目标业务提交 |
+| 配置已切、尚无目标业务写入，且 `complete` 尚未开始 | 关闭目标全部连接，依据 activation receipt 恢复源指针 / build，再启用旧 writer；验证没有目标业务提交。`complete` 开始时先写检查点，此后同样拒绝撤回（2026-10-24 V3 修复轮的决定，见 plan §6.13「进度」2026-10-24 V3 一条） |
 | 目标已产生业务写入 | 不允许直接切回旧快照，否则会丢新事实；优先修复前滚，或从目标一致性备份恢复。回退到旧 schema 需要额外反向转换方案和明确批准，不在本 RFC 假定可用 |
 | 外部内容发布一半 | 复用 publication journal 继续发布 / 释放；已引用 bytes 不删除，未引用对象可由既有回收协议收敛 |
 | 激活时进程崩溃 | 启动读取 durable activation receipt 决定唯一允许写入的 generation；恢复确认前维持维护状态 |

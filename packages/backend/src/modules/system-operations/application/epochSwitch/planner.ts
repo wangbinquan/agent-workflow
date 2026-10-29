@@ -432,6 +432,7 @@ export async function persistEpochPlan(
 export async function planEpochOperation(
   session: EpochSwitchSession,
   input: EpochSwitchPlanInput = {},
+  preserveApproval = false,
 ): Promise<EpochSwitchPlanView> {
   let p = session.journal.payload
   if (phaseIndex(p.phase) > phaseIndex('planned'))
@@ -598,7 +599,7 @@ export async function planEpochOperation(
       blocks: extraBlocks,
       now: started,
     })
-    return await persistEpochPlan(session, plan, 'planned', false)
+    return await persistEpochPlan(session, plan, 'planned', preserveApproval)
   } finally {
     await source.close()
   }
@@ -672,60 +673,109 @@ export function globalBlock(
   }
 }
 
+/**
+ * A decision change is saved with `plan: null` before the replacement plan is built. Unchanged
+ * decisions return the current plan, or rebuild it when it is missing or the last attempt failed,
+ * so a retried request never leaves the operation failed. The rebuilt plan keeps an approval whose
+ * material is unchanged, as a re-plan inside `run` does.
+ */
+async function replanWithDecisions(
+  session: EpochSwitchSession,
+  decisions: readonly OperatorDecision[],
+): Promise<EpochSwitchPlanView> {
+  const p = session.journal.payload
+  const next = canonicalOperatorDecisions(decisions)
+  if (valueDigest(canonicalOperatorDecisions(p.inputs.operatorDecisions)) !== valueDigest(next)) {
+    await session.save({ inputs: { ...p.inputs, operatorDecisions: next }, plan: null })
+    return planEpochOperation(session)
+  }
+  if (p.plan && p.status !== 'failed')
+    return planView(
+      session.journal,
+      await readEpochPlan(session),
+      session.deps.journal.operationRoot(p.operationId),
+    )
+  return planEpochOperation(session, {}, true)
+}
+
+function acknowledgementDecision(
+  block: ConversionBlock,
+  input: { by: string; reason: string },
+  acknowledgedAt: number,
+): OperatorDecision {
+  if (
+    block.code !== 'v2-code-history-unfinished' ||
+    !block.acknowledgeable ||
+    !block.sourceTable ||
+    !block.sourceKey
+  )
+    throw new EpochSwitchError('v3-item-not-acknowledgeable')
+  const detail = block.detail as { rowDigest?: unknown } | null
+  return OperatorDecisionSchema.parse({
+    kind: 'acknowledge-unfinished-legacy-work',
+    sourceTable: block.sourceTable,
+    sourceKey: block.sourceKey,
+    sourcePhase: block.sourcePhase ?? 'current',
+    rowDigest: detail?.rowDigest,
+    blockCode: 'v2-code-history-unfinished',
+    acknowledgedBy: input.by,
+    acknowledgedAt,
+    reason: input.reason,
+  })
+}
+
+/**
+ * Before the journal changes, a request records the decision it made for each item, keyed by its
+ * items, operator and reason. A retry with the same input resumes from that record: an item counts
+ * as done only while its recorded decision is still current, and any other item must still be in
+ * the plan. A late replay therefore cannot override a newer decision for the same row.
+ */
 export async function acknowledgeEpochPlan(
   session: EpochSwitchSession,
   input: Parameters<EpochSwitchApplication['acknowledge']>[0],
 ): Promise<EpochSwitchPlanView> {
   if (phaseIndex(session.journal.payload.phase) > phaseIndex('planned'))
     throw new EpochSwitchError('v3-acknowledge-requires-new-run')
-  const plan = await readEpochPlan(session)
-  const items =
-    input.items === 'all-unfinished-legacy-code-work'
-      ? plan.payload.blocks.filter((item) => item.remediation.action === 'acknowledge')
-      : input.items.map((id) => {
-          const item = plan.payload.blocks.find((item) => item.id === id)
-          if (!item) throw new EpochSwitchError('v3-acknowledgement-item-not-found')
-          return item
-        })
+  const items = [...new Set(input.items)].sort()
   if (items.length === 0) throw new EpochSwitchError('v3-acknowledgement-empty')
-  const decisions: OperatorDecision[] = items.map(({ block }) => {
-    if (
-      block.code !== 'v2-code-history-unfinished' ||
-      !block.acknowledgeable ||
-      !block.sourceTable ||
-      !block.sourceKey
-    )
-      throw new EpochSwitchError('v3-item-not-acknowledgeable')
-    const detail = block.detail as { rowDigest?: unknown } | null
-    return OperatorDecisionSchema.parse({
-      kind: 'acknowledge-unfinished-legacy-work',
-      sourceTable: block.sourceTable,
-      sourceKey: block.sourceKey,
-      sourcePhase: block.sourcePhase ?? 'current',
-      rowDigest: detail?.rowDigest,
-      blockCode: 'v2-code-history-unfinished',
-      acknowledgedBy: input.by,
-      acknowledgedAt: session.now(),
-      reason: input.reason,
+  const name = `acknowledgements/${valueDigest({ items, by: input.by, reason: input.reason })}.json`
+  const record = await session.artifact<{ decisions: { item: string; decision: unknown }[] }>(name)
+  const recorded = new Map(
+    (record?.decisions ?? []).map((entry) => [
+      entry.item,
+      OperatorDecisionSchema.parse(entry.decision),
+    ]),
+  )
+  const current = session.journal.payload.inputs.operatorDecisions
+  const pending = items.filter((item) => {
+    const decision = recorded.get(item)
+    return !decision || !current.some((d) => valueDigest(d) === valueDigest(decision))
+  })
+  const decisions = new Map<string, OperatorDecision>()
+  if (pending.length) {
+    const plan = session.journal.payload.plan
+      ? await readEpochPlan(session)
+      : (await planEpochOperation(session)).plan
+    for (const item of pending) {
+      const block = plan.payload.blocks.find((entry) => entry.id === item)?.block
+      if (!block) throw new EpochSwitchError('v3-acknowledgement-item-not-found')
+      decisions.set(
+        item,
+        recorded.get(item) ?? acknowledgementDecision(block, input, session.now()),
+      )
+    }
+  }
+  if (!record)
+    await session.write(name, {
+      decisions: items.map((item) => ({ item, decision: decisions.get(item) })),
     })
-  })
-  const prior = session.journal.payload.inputs.operatorDecisions
-  const merged = [
-    ...new Map(
-      [...prior, ...decisions].map((d) => [
-        valueDigest({ table: d.sourceTable, key: d.sourceKey, phase: d.sourcePhase }),
-        d,
-      ]),
-    ).values(),
-  ]
-  await session.save({
-    inputs: {
-      ...session.journal.payload.inputs,
-      operatorDecisions: canonicalOperatorDecisions(merged),
-    },
-    plan: null,
-  })
-  return planEpochOperation(session)
+  const merged = new Map(
+    [...session.journal.payload.inputs.operatorDecisions, ...decisions.values()].map((d) => [
+      valueDigest({ table: d.sourceTable, key: d.sourceKey, phase: d.sourcePhase }),
+      d,
+    ]),
+  )
+  return replanWithDecisions(session, [...merged.values()])
 }
 
 export async function withdrawEpochAcknowledgements(
@@ -735,17 +785,18 @@ export async function withdrawEpochAcknowledgements(
   if (phaseIndex(session.journal.payload.phase) > phaseIndex('planned'))
     throw new EpochSwitchError('v3-acknowledge-requires-new-run')
   const prior = session.journal.payload.inputs.operatorDecisions
-  if (
-    input.decisions !== 'all' &&
-    (!input.decisions.length ||
-      input.decisions.some((id) => !prior.some((d) => valueDigest(d) === id)))
+  // `all` is idempotent without a record, and a record keyed by it would capture an older set.
+  if (input.decisions === 'all') return replanWithDecisions(session, [])
+  if (!input.decisions.length) throw new EpochSwitchError('v3-acknowledgement-item-not-found')
+  // Recorded before the journal changes, so a retry no longer needs the decisions to be present.
+  const record = `acknowledgement-withdrawals/${valueDigest([...new Set(input.decisions)].sort())}.json`
+  if (!(await session.artifact(record))) {
+    if (input.decisions.some((id) => !prior.some((d) => valueDigest(d) === id)))
+      throw new EpochSwitchError('v3-acknowledgement-item-not-found')
+    await session.write(record, { decisions: input.decisions })
+  }
+  return replanWithDecisions(
+    session,
+    prior.filter((d) => !input.decisions.includes(valueDigest(d))),
   )
-    throw new EpochSwitchError('v3-acknowledgement-item-not-found')
-  const remaining =
-    input.decisions === 'all' ? [] : prior.filter((d) => !input.decisions.includes(valueDigest(d)))
-  await session.save({
-    inputs: { ...session.journal.payload.inputs, operatorDecisions: remaining },
-    plan: null,
-  })
-  return planEpochOperation(session)
 }

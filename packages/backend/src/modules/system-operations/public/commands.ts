@@ -142,7 +142,8 @@ export interface EpochSwitchApplication {
   plan(input: EpochSwitchPlanInput): Promise<EpochSwitchPlanView>
   acknowledge(input: {
     readonly operationId: string
-    readonly items: readonly string[] | 'all-unfinished-legacy-code-work'
+    /** Explicit plan item ids, one per acknowledged item (RFC-395: per-item operator confirmation). */
+    readonly items: readonly string[]
     readonly reason: string
     readonly by: string
   }): Promise<EpochSwitchPlanView>

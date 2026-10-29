@@ -4982,7 +4982,7 @@ drizzle 把 PG 错误包成 `Failed query: <整条 SQL> params: …`，**真正�
 
 **不要用「重跑就过了」结案**（本仓明令）。在 1. 做完之前，再次遇到也只能记录、不能归因。
 
-## Windows e2e `rfc294-human-gate-restart` 偶发：daemon 重启起不来（2026-09-12 首次观察，未决）
+## Windows e2e `rfc294-human-gate-restart` 偶发：daemon 重启起不来（2026-09-12 首次观察，未决）；重启后不续跑的另一种形态已于 2026-10-29 查清修复
 
 **症状**：`Playwright e2e (windows-latest shard 2/4)` 红：
 
@@ -5012,6 +5012,21 @@ Error: e2e/harness: daemon closed with code 1 signal null before printing ready 
 **待办**：拿 Windows 上那次 daemon 的 stderr（目前 `stderrTail` 是空的——这本身就是线索：
 进程以 code 1 退出却没往 stderr 写东西，说明可能死在很早的启动阶段或被平台机制杀掉）。
 先让 harness 在这条路径上把子进程的完整输出落盘，再谈归因。本机有 Windows ARM64 验收 VM 可用。
+
+### 2026-10-29：另一种形态「daemon 起来了，却不续跑」——已查清并修复
+
+- **现象**：CI 运行 40950592110（`0244e0e24`）的 Windows e2e 2/4，`clarify and review continuations recover when SIGKILL
+  lands after commit but before wake` 两次尝试都报同一句 `review gate did not reappear … last=undefined`，但这次 daemon B
+  **已就绪**（`exitCode: null`），就绪后 30 秒的 stdout 只有一行不变量扫描，没有任何调度。与上面 09-12 的「起不来」不是一回事。
+- **根因在 e2e 崩溃屏障**（`packages/backend/src/services/humanGateDecisionE2eBarrier.ts`）：它写完标记后只是让这一个请求等一个永不
+  兑现的 promise，进程的事件循环照常转。daemon 自己的人工门续跑 worker 每 1 秒对账一次，会认领刚提交的续跑并起下一个节点（设计代理）；
+  SIGKILL 若晚于这一步才落下（Windows 上杀进程慢），场景就成了「节点运行中崩溃」。产品对此的处理是对的：daemon B 把任务标为
+  `interrupted`（「daemon restarted while this task was running; please resume」），不会自动续跑，于是评审门不会出现。
+- **复现**：本机把 SIGKILL 推迟 1.8 秒，5 次全挂，任务状态正是 `interrupted`；推迟 2.5 秒时，若代理先跑完则通过，所以 CI 上是偶发。
+- **修复**：屏障写完标记后用 `Atomics.wait` 冻结整个线程，等 harness 来杀，进程里不再执行任何代码，真实对应「提交之后、唤醒之前崩溃」。
+  三处调用点（澄清、评审、反问）共用这一个函数。`rfc359-human-gate-barrier-publication` 新增子进程用例：屏障之后定时器必须停住，
+  旧实现下计数从 17 涨到 86 而失败。修复后推迟 1.8 秒的同一用例 5 次全过。用例失败时的报错改为带上任务的 `status` 与 `errorMessage`。
+- 上面 09-12 那种「daemon 重启起不来」仍未归因，待办不变。
 
 ## 主干抖动率：最近 16 次 run 里 **6 次红，其中 3 次与提交者无关**（2026-09-12 统计）
 
@@ -5573,3 +5588,15 @@ graph@2 的 `verify-change` 要求实现依据里的每条义务在**交付前**
   用时 5.17 秒，超过默认 5 秒。`6be743011` 已写明 20 秒预算，之后的运行 40807196425 后端各片全部通过。
 
 第一条暂不改：不清楚是 runner 上的 PostgreSQL 连接被挂住，还是查询本身变慢。再次出现时先看同片 PostgreSQL 服务容器的状态和这条查询的耗时。
+
+## RFC-395 实现门留下的两条测试剩余项（2026-10-29，Codex 实现门 P2，未决）
+
+实现门（基准 `0244e0e24`，见 RFC-395 plan「实现门与设计门」）三条 P2 证据缺口里，下面两条只做了部分处置：
+
+- **PostgreSQL 旧 epoch 逻辑备份经生产入口的单条整链**：SQLite 已有整链用例（`rfc395-restore-epoch-routing` 的 AC-7）。PostgreSQL 目前分段覆盖：
+  真实逻辑备份 / 托管备份读者在 `rfc395-v3-source-access`，转换与激活在 `rfc395-v3-switch-providers`，真实实例在托管 T19。
+  待补：在 PostgreSQL 上装冻结 epoch-1 schema 并写入业务行，用冻结的逻辑导出器产出备份；当前安装另放不同的行；经 `composeLocalEpochSwitch`
+  （目标与 scratch 走 URL 环境变量）`restoreBackup → run → verify → complete` 后，从新代次读出备份里的行。
+- **单条双 provider 连续用户旅程**（AC-9）：各段都有双 provider 的真实链路用例（清单见 RFC-395 plan），连续旅程由编译后二进制上的 e2e（SQLite）承担。
+  待补：用确定性执行器在同一任务上走完 启动 → 执行 → 等待人工 → 作答 → 完成 → 回滚 / 重试 → 历史查询 → 导出，断言任务状态、run 身份与 seq、
+  人工答案、重试结果和导出内容；用 `describeEachProvider` 在 SQLite 与 PostgreSQL 上各跑一遍，并在独立与托管装配下复用。

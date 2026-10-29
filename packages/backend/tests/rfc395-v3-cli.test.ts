@@ -135,6 +135,9 @@ test('usage errors never dispatch, and application failures retain the CLI error
     ['trace', 'op', 'table', '[]'],
     ['trace', 'op', 'table', '["untagged"]'],
     ['acknowledge', 'op', '--item', 'a', '--all-unfinished-legacy-code-work', '--reason', 'x'],
+    // RFC-395 design gate F2: the user ruled per-item confirmation, so there is no select-all.
+    ['acknowledge', 'op', '--all-unfinished-legacy-code-work', '--reason', 'x'],
+    ['acknowledge', 'op', '--reason', 'x'],
   ])
     expect((await epochMigrationCommand(argv, { application })).status).toBe('usage-error')
   expect(calls).toBe(0)

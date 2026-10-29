@@ -25,7 +25,7 @@
 | `automation_policy_revisions` | resource-catalog / KEEP；6 | development-automation | 保留 | `automation_policy_revisions`；配置身份与不可变 revision 成对保留；不因旧名称与 OS 定义合并。 |
 | `cached_repos` | source-control / KEEP；12 | source-control | 保留 | `cached_repos`；来源、冻结快照、缓存、分组、准备和托管命令各自保留；preparation 可早于 Task。 |
 | `capability_templates` | resource-catalog / KEEP；22 | code-capability | 保留 | `capability_templates`；保留能力模板与仓库绑定，校正合同 owner；不迁入通用资源 CRUD。 |
-| `clarify_rounds` | collaboration / KEEP；25 | collaboration | 拆分 | `clarify_rounds + clarify_answers + clarify_answer_drafts`；问题快照留 round；最终答案/草稿/归属按 question_id 更新，封口原子。 |
+| `clarify_rounds` | collaboration / KEEP；25 | collaboration | 拆分 | `clarify_rounds + clarify_answers + clarify_answer_drafts + clarify_answer_attributions`；问题快照留 round；最终答案/草稿按 question_id + occurrence 更新，归属独立成表（封口删草稿、清空答案时都保留），封口原子。 |
 | `code_ai_attempts` | integration / DEFER；12 | code-capability/history | 历史化 | `versioned code-history archive + ID index`；历史读者保留；未完工作阻塞预检并逐项转换/收敛；不因 DEFER 直接丢弃。 |
 | `code_artifacts` | integration / ARCHIVE_THEN_OMIT；13 | code-capability/history | 归档 | `versioned code-history archive`；现合同已 ARCHIVE_THEN_OMIT；双 provider 均归档原 ID/字节/关系，目标在线无表。 |
 | `code_findings` | integration / DEFER；23 | code-capability/history | 历史化 | `versioned code-history archive + ID index`；历史读者保留；未完工作阻塞预检并逐项转换/收敛；不因 DEFER 直接丢弃。 |
@@ -245,7 +245,7 @@
 | Task 分层 | `task_definitions`、`task_launch_contexts`、`task_workspaces` | task-execution；design §3 |
 | 仓库与 checkpoint | `task_repository_mounts`、`node_run_repo_checkpoints` | task-execution；design §4 |
 | Run 身份与数据分层 | `task_execution_generations`、`node_run_selections`、`node_run_inputs`、`node_run_configs`、`node_run_runtime_states`、`node_run_results`、`execution_legacy_evidence` | task-execution；design §5 |
-| 独立协作编辑单元 | `clarify_answers`、`clarify_answer_drafts` | collaboration；design §6.1 |
+| 独立协作编辑单元 | `clarify_answers`、`clarify_answer_drafts`、`clarify_answer_attributions` | collaboration；design §6.1 |
 | 资源依赖 | `agent_skill_refs`、`agent_mcp_refs`、`agent_plugin_refs`、`agent_dependencies`、`workflow_dependency_index` | resource-catalog；design §6.2 |
 | 内容机制 | `content_objects`、`content_bytes`、`content_publications`（替代现有 publication 表） | platform/content 提供机制，system-operations 维护其持久生命周期；design §7 |
 | 迁移元数据 | `migration_runs`、`migration_chunk_receipts`、`migration_table_receipts`、`migration_row_dispositions`、`migration_artifact_receipts`、`activation_receipts`（由 logical-copy 与 generation 元数据泛化） | system-operations；migration §3；复用现有 logical-copy 与 generation 概念，扩展到 transform 而不是另建第二套激活事实 |

@@ -84,9 +84,9 @@ CS_TOKEN=<平台会话> CS_GITLAB_TOKEN=<项目仓库令牌> \
 | 平台输入                                          | 用途                                                                                     |
 | ------------------------------------------------- | ---------------------------------------------------------------------------------------- |
 | `CS_DATABASE_MIGRATION_OPERATION_ID`              | 所有 Job 复用的 `dbm_e2_...` 操作 ID，绑定 journal 和 artifacts                          |
-| `CS_DATABASE_MIGRATION_ACTION`                    | `plan`（缺省）、`run`、`new-run`、`verify`、`rollback`、`restore`、`discard`、`complete` |
+| `CS_DATABASE_MIGRATION_ACTION`                    | `plan`（缺省）、`acknowledge`、`run`、`new-run`、`verify`、`rollback`、`restore`、`discard`、`complete` |
 | `CS_DATABASE_MIGRATION_SOURCE_GENERATION`         | 源 generation 身份；每次 Job 均需提供                                                    |
-| `CS_DATABASE_MIGRATION_SOURCE_URL`                | plan/run/new-run 的源数据库；备份恢复时由 restore reference 提供源                       |
+| `CS_DATABASE_MIGRATION_SOURCE_URL`                | plan/acknowledge/run/new-run 的源数据库；备份恢复时由 restore reference 提供源           |
 | `CS_DATABASE_MIGRATION_TARGET_URL`                | 专用目标数据库；首次必须为空，与源独立；重启同操作继续原目标                             |
 | `CS_DATABASE_MIGRATION_APPROVE`                   | 审阅后批准的材料 `approvalDigest`，不能填 plan 文档 digest                               |
 | `CS_DATABASE_MIGRATION_FREEZE_REFERENCE`          | run / rollback 需要的平台冻结回执；证明旧服务、Worker 和任务 writer 均已停写             |
@@ -98,6 +98,8 @@ CS_TOKEN=<平台会话> CS_GITLAB_TOKEN=<项目仓库令牌> \
 | `CS_DATABASE_MIGRATION_SOURCE_BORN_ON_POSTGRESQL` | 确属 PostgreSQL 原生安装时为 `1`；仍由源 catalog 事实核对                                |
 | `CS_DATABASE_RESTORE_REFERENCE`                   | 旧 epoch 托管备份引用；restore 动作必需                                                  |
 | `CS_DATABASE_MIGRATION_CONFIRM`                   | discard 必须恰为 `discard`                                                               |
+| `CS_DATABASE_MIGRATION_ACKNOWLEDGE_ITEMS`         | acknowledge 必需：逐项列出要确认归档的 plan item id（逗号或换行分隔），不提供全选         |
+| `CS_DATABASE_MIGRATION_ACKNOWLEDGE_BY` / `_REASON` | acknowledge 必需：确认人与理由，写入 operator decision 与回执                            |
 | `CS_PLATFORM_API_URL` / `CS_PLATFORM_API_TOKEN`   | 对象内容读取及现有平台 API 上下文                                                        |
 
 control adapter 在 `/v1/operations/<operation-id>` 下读写 `artifacts`（字节、digest、requestKey），
@@ -113,6 +115,10 @@ location 与 receipt digest；`activation` 返回源/目标的实际配置权威
 1. 同一候选 build 运行 `agent-workflow migrate`，action=plan。保存输出
    `CS_DATABASE_MIGRATION_PLAN=<JSON>`；它包含完整 plan view。审阅 fingerprint、blocks、
    restrictions、operator decisions 和 effects，完成实例批准。不可确认的 block 必须先处理。
+   可确认的 block（无法再推进的旧代码工作）由操作者逐项确认：action=acknowledge，带上上表的
+   三个输入。输出是替代后的 `CS_DATABASE_MIGRATION_PLAN`，按它新的 `approvalDigest` 批准。
+   acknowledge 会重新读取源来生成替代计划，所以同样需要源连接；Job 中断后用相同的三个输入
+   重跑即可继续，已记录的确认沿用原记录，不会重复生成。
 2. 平台进入维护，停止全部旧 writer 并出具 freeze reference；用同一 operation、目标和
    批准摘要重跑 migrate，action=run。若返回新的 PLAN（可能是 approval request 而非完整 view），
    保持维护并取得新计划；不能把正常退出码当成切换成功。

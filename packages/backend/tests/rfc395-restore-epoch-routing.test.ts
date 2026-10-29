@@ -115,6 +115,102 @@ test('an aliased epoch-1 SQLite backup is frozen conversion input and cannot ent
   }
 })
 
+// RFC-395 implementation gate (AC-7): the cases above stop at the restore plan, and the switch
+// matrix replaces the unpacked backup with a fixture. This one runs the production composition
+// from a real epoch-1 tarball through approval, conversion, activation and completion, then reads
+// the restored generation: it must hold the backup's rows, not the installation it replaced.
+test('AC-7 an epoch-1 SQLite backup restores through the production entry over an installed generation', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'rfc395-old-restore-complete-'))
+  const appHome = join(root, 'home')
+  const pointerPath = join(appHome, 'database-generation.json')
+  const definition = '{"$schema_version":3,"inputs":[],"nodes":[],"edges":[]}'
+  try {
+    // The installation being restored over: a native epoch-2 generation with its own workflow.
+    const installedHome = join(root, 'installed-source')
+    const installedSource = openDb({ path: join(installedHome, 'db.sqlite') })
+    await workflowFixture(installedSource, { id: 'current-workflow', name: 'current', definition })
+    const installedBackup = await createBackup({
+      contract: logicalSchemaContract,
+      db: installedSource,
+      appHome: installedHome,
+    })
+    installedSource.$client.close()
+    const selected = resolveDatabaseProviderRuntimeForRestore({
+      config: { provider: 'sqlite' },
+      contract: logicalSchemaContract,
+      sqlitePath: join(appHome, 'db.sqlite'),
+      generationPointerPath: pointerPath,
+      operationsRoot: join(appHome, 'database-migrations'),
+    })
+    try {
+      if (selected.provider !== 'sqlite') throw new Error('fixture')
+      await restoreBackup(installedBackup.path, {
+        appHome,
+        dbPath: selected.sqlitePath,
+        contract: logicalSchemaContract,
+        noSafetyBackup: true,
+      })
+    } finally {
+      await selected.close()
+    }
+    const installedPointer = readGenerationPointerV2(pointerPath)
+
+    // The old-epoch backup: a frozen epoch-1 database holding a different workflow.
+    const artifact = join(root, 'artifact')
+    mkdirSync(artifact)
+    const sourcePath = join(artifact, 'db.sqlite')
+    const source = openFrozenEpoch1Db({ path: sourcePath, migrationsFolder: FROZEN_MIGRATIONS })
+    source.$client
+      .query('INSERT INTO workflows (id, name, definition) VALUES (?, ?, ?)')
+      .run('backup-workflow', 'backup', definition)
+    source.$client.exec('PRAGMA wal_checkpoint(TRUNCATE)')
+    source.$client.close()
+    writeManifest(artifact, {
+      manifestVersion: 1,
+      kind: 'manual',
+      createdAt: 1,
+      appVersion: 'frozen-epoch-1',
+      includesWorktrees: false,
+      migration: readDbMigrationIdentity(sourcePath)!,
+    })
+    const tarball = join(root, 'old.tar.gz')
+    await tarGz(artifact, tarball)
+
+    const application = composeLocalEpochSwitch({
+      appHome,
+      config: resolveConfigurationValue({}),
+      env: process.env,
+      head: persistenceHead(),
+      catalogArtifacts: persistencePostgresqlCatalogs(),
+    })
+    const planned = await application.restoreBackup({ artifact: tarball })
+    expect(planned.plan.payload.blocks).toEqual([])
+    await application.run({
+      operationId: planned.operationId,
+      approve: planned.plan.approvalDigest,
+    })
+    await application.verify({ operationId: planned.operationId })
+    await application.complete({ operationId: planned.operationId })
+
+    const pointer = readGenerationPointerV2(pointerPath)
+    expect(pointer.payload.role).toBe('restored')
+    expect(pointer.payload.generationId).not.toBe(installedPointer.payload.generationId)
+    expect(pointer.payload.previous?.generationId).toBe(installedPointer.payload.generationId)
+    if (pointer.payload.database.kind !== 'sqlite-file') throw new Error('fixture')
+    const restored = openDb({ path: join(appHome, pointer.payload.database.relativePath) })
+    try {
+      expect((await readWorkflowFixtures(restored)).map((row) => row.id)).toEqual([
+        'backup-workflow',
+      ])
+    } finally {
+      restored.$client.close()
+    }
+  } finally {
+    removeTempDirSync(root)
+  }
+  // Conversion, activation, verification and completion of a frozen epoch-1 backup: 14.5 s locally.
+}, 90_000)
+
 test('an epoch-2 native backup is selected for native restore and retains business rows', async () => {
   const root = mkdtempSync(join(tmpdir(), 'rfc395-native-restore-routing-'))
   const dbPath = join(root, 'db.sqlite')

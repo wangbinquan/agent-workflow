@@ -264,6 +264,83 @@ test('hosted parser exposes new-run, discard and complete with explicit discard 
   ).toBe('discard')
 })
 
+// RFC-395 design gate F1: the hosted Job had no way to make the per-item acknowledgement the user
+// approved for stranded legacy code work, so a hosted plan holding such an item stayed blocked.
+test('hosted acknowledge names every item, its operator and reason, and returns the replacement plan', async () => {
+  const ack = {
+    ...env,
+    CS_DATABASE_MIGRATION_ACTION: 'acknowledge',
+    CS_DATABASE_MIGRATION_ACKNOWLEDGE_ITEMS: 'item-a, item-b\nitem-c',
+    CS_DATABASE_MIGRATION_ACKNOWLEDGE_BY: 'operator',
+    CS_DATABASE_MIGRATION_ACKNOWLEDGE_REASON: 'archive retired work',
+  }
+  expect(parseHostedEpochJob(ack).acknowledgement).toEqual({
+    items: ['item-a', 'item-b', 'item-c'],
+    by: 'operator',
+    reason: 'archive retired work',
+  })
+  expect(() =>
+    parseHostedEpochJob({ ...ack, CS_DATABASE_MIGRATION_ACKNOWLEDGE_ITEMS: ' , ' }),
+  ).toThrow('CS_DATABASE_MIGRATION_ACKNOWLEDGE_ITEMS')
+  for (const name of [
+    'CS_DATABASE_MIGRATION_ACKNOWLEDGE_BY',
+    'CS_DATABASE_MIGRATION_ACKNOWLEDGE_REASON',
+  ] as const)
+    expect(() => parseHostedEpochJob({ ...ack, [name]: undefined })).toThrow(name)
+  expect(parseHostedEpochJob(env).acknowledgement).toBeUndefined()
+  // Round 2 N2: the replacement plan reads the source again, so the source is a required input;
+  // an old-epoch backup operation reads it from the restore reference instead.
+  expect(() =>
+    parseHostedEpochJob({ ...ack, CS_DATABASE_MIGRATION_SOURCE_URL: undefined }),
+  ).toThrow('v3-hosted-env-required:CS_DATABASE_MIGRATION_SOURCE_URL')
+  expect(
+    parseHostedEpochJob({
+      ...ack,
+      CS_DATABASE_MIGRATION_SOURCE_URL: undefined,
+      CS_DATABASE_RESTORE_REFERENCE: 'epoch1-archive',
+    }).action,
+  ).toBe('acknowledge')
+
+  const f = await plannedFixture()
+  try {
+    const calls: unknown[] = []
+    let closed = 0
+    const deps: HostedEpochJobEntryDependencies = {
+      async compose() {
+        return {
+          application: {
+            ...f.app,
+            async acknowledge(input) {
+              calls.push(input)
+              return f.plan
+            },
+          },
+          async close() {
+            closed++
+          },
+        }
+      },
+    }
+    expect(
+      await runHostedEpochSwitchJob(
+        { ...ack, CS_DATABASE_MIGRATION_OPERATION_ID: f.operationId },
+        deps,
+      ),
+    ).toBe(`CS_DATABASE_MIGRATION_PLAN=${JSON.stringify(f.plan)}`)
+    expect(calls).toEqual([
+      {
+        operationId: f.operationId,
+        items: ['item-a', 'item-b', 'item-c'],
+        by: 'operator',
+        reason: 'archive retired work',
+      },
+    ])
+    expect(closed).toBe(1)
+  } finally {
+    f.close()
+  }
+})
+
 describeV3Providers('real hosted composition', (h) => {
   if (h.targetProvider !== 'postgresql') return
   const jobEnv = async () => {

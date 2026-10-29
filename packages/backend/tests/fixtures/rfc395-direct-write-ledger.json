@@ -99,6 +99,7 @@
     "rfc395-q1-surface-projection.test.ts": "target-model-contract",
     "rfc395-r1-target-behavior.test.ts": "target-model-contract",
     "rfc395-reference-target-relations.test.ts": "target-model-contract",
+    "rfc395-restore-epoch-routing.test.ts": "historical-schema",
     "rfc395-run-mint-identities.test.ts": "target-model-contract",
     "rfc395-run-restrictions.test.ts": "target-model-contract",
     "rfc395-run-write-atomicity.test.ts": "target-model-contract",
