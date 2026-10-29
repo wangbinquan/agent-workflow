@@ -5547,3 +5547,29 @@ graph@2 的 `verify-change` 要求实现依据里的每条义务在**交付前**
 
 暂不改：先看后续 CI 能否在偏慢的 macOS runner 上复现。复现时从 job 日志找出是哪一步的等待超时，再决定是放宽这一步的等待，还是去查
 产品时序。
+
+## 删除任务不收尾工作区准备记录（2026-10-29，CrewStation RFC-044 T10 正式实例迁移实撞，删除路径未处置）
+
+正式实例的 epoch 迁移计划被一条 `task_workspace_preparations` 行阻断：lane `repository-preparation`，state `preparing`，
+`admitted_task_id` 指向的任务已在 2026-10-18 删除（维护 claim `delete` 已完成，hosted 工作区已关闭）。
+
+- 准入在插入任务的同一事务里写 `admitted_task_id`（v0.6.30 的
+  `packages/backend/src/modules/task-execution/infrastructure/durableRepositoryPreparation.ts:44-62`）。删除任务时没有任何路径收尾或删除
+  这一行；准备记录的维护只补偿未绑定的 pre-materialized 行（`composition/workspacePreparationMaintenance.ts:36-46`）。
+- 转换器已处理（RFC-395 T19）：绑定了任务、任务却不存在的准备行按历史归档，记 `v2-task-workspace-preparation-orphan`，行原样带入新库
+  （`infrastructure/migration/task/validators.ts`）。
+- 仍有的影响：hosted 对象清扫把 `preparing` / `prepared` / `admitted` / `compensating` 的准备行当作任务仍在
+  （`infrastructure/crewstation/hostedObjectSweep.ts:23,47-66`，按准备行 id 匹配任务 id），所以这类已删任务的托管产物、物料和事件归档
+  不会被清扫。迁移前就是这样，不是迁移引入的。
+
+可选处置（未立项）：删除任务时把绑定的准备行转到终态，并对存量行做一次收尾；或清扫判断任务是否存活时只看任务行。
+
+## RFC-311 两条 PostgreSQL 用例在 CI 上偶发超时（2026-10-28～29，一条已放宽预算，一条未处置）
+
+- 运行 40708040380（`a3b4920ed`）后端第 12/36 片：`rfc311-perf-guards.test.ts` 的「task-operations catalog — 过滤视图（G1 快路径）」
+  [postgresql] 用时 90.8 秒后失败，错误是任务目录查询上的 `PostgresError: Idle timeout reached after 30s`（`ERR_POSTGRES_IDLE_TIMEOUT`）。
+  该提交只改了 hosted 参考目录的产物写入，不涉及任务目录查询。
+- 运行 40797439867（`1187547bb`）后端第 21/36 片：`rfc311-task-page-filtered-fastpath.test.ts` 的「filters 3 for bob」[postgresql]
+  用时 5.17 秒，超过默认 5 秒。`6be743011` 已写明 20 秒预算，之后的运行 40807196425 后端各片全部通过。
+
+第一条暂不改：不清楚是 runner 上的 PostgreSQL 连接被挂住，还是查询本身变慢。再次出现时先看同片 PostgreSQL 服务容器的状态和这条查询的耗时。

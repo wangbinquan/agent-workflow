@@ -56,6 +56,19 @@ describeV2Providers('RFC-395 V2 full-assembly block and history contracts', (h) 
         },
       ])
     }
+    // CrewStation RFC-044 T10: a preparation left behind by a Task delete is history, not a block.
+    await h.write('task_workspace_preparations', [
+      {
+        id: 'orphan-prep',
+        admission_key: 'orphan-admission',
+        request_digest: 'digest',
+        lane: 'repository-preparation',
+        state: 'preparing',
+        admitted_task_id: 'deleted-task',
+        created_at: 1,
+        updated_at: 2,
+      },
+    ])
     const input = await integrationInput(h)
     try {
       const result = await convertIntegration(input)
@@ -122,6 +135,14 @@ describeV2Providers('RFC-395 V2 full-assembly block and history contracts', (h) 
           (row) => row.kind === 'decision' && row.code === 'v2-task-workspace-preparation-history',
         ),
       ).toHaveLength(3)
+      expect(
+        result.summary.records.filter(
+          (row) => row.kind === 'decision' && row.code === 'v2-task-workspace-preparation-orphan',
+        ),
+      ).toMatchObject([{ payload: { taskId: 'deleted-task', state: 'preparing' } }])
+      expect(
+        result.sink.rows('task_workspace_preparations').find((row) => row.id === 'orphan-prep'),
+      ).toMatchObject({ admitted_task_id: 'deleted-task', state: 'preparing' })
       expect(
         result.sink
           .rows('node_run_selections')

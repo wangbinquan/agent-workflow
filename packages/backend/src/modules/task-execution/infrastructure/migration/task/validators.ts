@@ -4,7 +4,7 @@ import type { RowValidator } from '@/platform/persistence/migration/conversion/r
 import { canonicalSchemaJson } from '@/platform/persistence/schema/canonical'
 
 export const taskWorkspacePreparationValidator: RowValidator = {
-  ref: { id: 'task-execution/unsettled-workspace-preparation', version: 3 },
+  ref: { id: 'task-execution/unsettled-workspace-preparation', version: 4 },
   table: 'task_workspace_preparations',
   lookups: [TASK_FACTS],
   validate(row, ctx) {
@@ -12,7 +12,9 @@ export const taskWorkspacePreparationValidator: RowValidator = {
     const taskId =
       typeof row.values.admitted_task_id === 'string' ? row.values.admitted_task_id : null
     const task = taskId === null ? undefined : ctx.lookup(TASK_FACTS).get(taskId)
-    if (task && task.execution !== 'executable') {
+    // Admission binds admitted_task_id in the transaction that inserts the Task, so a bound
+    // preparation without its Task was left behind by a later Task delete, not in flight.
+    if (taskId !== null && (task === undefined || task.execution !== 'executable')) {
       const archive = ctx.out.archive({
         kind: 'source-journal',
         sourceTable: row.table,
@@ -20,12 +22,19 @@ export const taskWorkspacePreparationValidator: RowValidator = {
         bytes: Buffer.from(canonicalSchemaJson(row.canonical)),
         rows: 1,
       })
+      const state = String(row.values.state)
       ctx.out.record(
-        {
-          kind: 'decision',
-          code: 'v2-task-workspace-preparation-history',
-          payload: { taskId, state: String(row.values.state), execution: task.execution, archive },
-        },
+        task === undefined
+          ? {
+              kind: 'decision',
+              code: 'v2-task-workspace-preparation-orphan',
+              payload: { taskId, state, archive },
+            }
+          : {
+              kind: 'decision',
+              code: 'v2-task-workspace-preparation-history',
+              payload: { taskId, state, execution: task.execution, archive },
+            },
         row,
       )
       return []

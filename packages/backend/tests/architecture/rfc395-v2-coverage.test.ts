@@ -337,7 +337,7 @@ test('activation registers final B, P, X and T rules and dependencies', () => {
     validators.find(
       (validator) => validator.ref.id === 'task-execution/unsettled-workspace-preparation',
     )?.ref.version,
-  ).toBe(3)
+  ).toBe(4)
   const catalog = lookups.find((lookup) => lookup.key.id === 'content/catalog')
   expect(catalog?.key.version).toBe(4)
   expect(JSON.stringify(catalog)).toContain('collaboration_gate_operations')

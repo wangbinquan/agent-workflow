@@ -1,4 +1,6 @@
 // RFC-395 phase 2 T/N: exercise the real TaskFacts/mounts producers with NodeRun conversion.
+// The deleted-Task preparation cases lock the T19 fix for the CrewStation RFC-044 T10 formal plan,
+// which blocked on a `preparing` row whose Task a later delete had removed.
 import { expect, test } from 'bun:test'
 import { TASK_DEFINITION_HOSTS } from '@agent-workflow/shared'
 import { conversion as runs } from '@/modules/task-execution/infrastructure/migration/run'
@@ -203,6 +205,57 @@ describeV2Providers('RFC-395 phase 2 T/N real cross-rule facts', (h) => {
           expect(result.sink.rows('task_workspace_preparations')[0]!.state).toBe(state)
         }
       }, 180_000)
+
+  // Admission binds admitted_task_id in the transaction that inserts the Task, and nothing settles
+  // the preparation when the Task is deleted later. Such a row is history; an unbound row is not.
+  for (const state of ['preparing', 'prepared', 'compensating'])
+    test(`${state}: a preparation bound to a deleted Task is archived history, an unbound one still blocks`, async () => {
+      await h.install()
+      await h.write('task_workspace_preparations', [
+        {
+          id: 'orphan',
+          admission_key: 'orphan-admission',
+          request_digest: 'digest',
+          lane: 'repository-preparation',
+          state,
+          admitted_task_id: 'deleted',
+          created_at: 1,
+          updated_at: 2,
+        },
+        {
+          id: 'unbound',
+          admission_key: 'unbound-admission',
+          request_digest: 'digest',
+          lane: 'repository-preparation',
+          state,
+          created_at: 1,
+          updated_at: 2,
+        },
+      ])
+      const result = await convertTaskFixtures(h, { extra: [preparations] })
+      expect(result.summary.blocks.map((row) => [row.code, row.sourceTable, row.taskId])).toEqual([
+        ['v2-task-workspace-preparation-in-flight', 'task_workspace_preparations', null],
+      ])
+      const decisions = result.summary.records.filter(
+        (row) =>
+          row.kind === 'decision' &&
+          [
+            'v2-task-workspace-preparation-orphan',
+            'v2-task-workspace-preparation-history',
+          ].includes(row.code),
+      )
+      expect(decisions).toHaveLength(1)
+      expect(decisions[0]).toMatchObject({
+        code: 'v2-task-workspace-preparation-orphan',
+        payload: { taskId: 'deleted', state },
+      })
+      expect([...result.sink.units.values()].flatMap((unit) => unit.archives)).toHaveLength(1)
+      expect(
+        result.sink
+          .rows('task_workspace_preparations')
+          .map((row) => [row.admitted_task_id, row.state]),
+      ).toEqual([['deleted', state]])
+    }, 180_000)
 
   test('pre-journal repo-prep has structural proof without an invented ledger', async () => {
     await h.install()
