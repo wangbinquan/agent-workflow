@@ -132,9 +132,20 @@ async function pendingReview(
     }
     await new Promise((resolveWait) => setTimeout(resolveWait, 250))
   }
+  // The task row tells a missed wake (still parked) from a crash during a running node
+  // (`interrupted`), which is what Windows CI 40950592110 turned out to be.
+  const task = await fetch(`${daemon.baseUrl}/api/tasks/${taskId}`, {
+    headers: { Authorization: `Bearer ${daemon.token}` },
+  })
+    .then(async (response) => {
+      const row = (await response.json()) as { status?: string; errorMessage?: string | null }
+      return `${row.status ?? 'unknown'} (${row.errorMessage ?? 'no message'})`
+    })
+    .catch((error: unknown) => String(error))
   throw new Error(
     `review gate did not reappear for ${taskId}; last=${JSON.stringify(last)}; ` +
-      `lastReadError=${lastReadError ?? 'none'}; daemon=${JSON.stringify(daemon.diagnostics())}`,
+      `lastReadError=${lastReadError ?? 'none'}; task=${task}; ` +
+      `daemon=${JSON.stringify(daemon.diagnostics())}`,
   )
 }
 

@@ -491,9 +491,11 @@ export async function sealRoundQuestions(
       }
     })
     // RFC-341: this call must be the first operation after the transaction commits.
-    // The compiled E2E callback writes its marker synchronously before returning a pending promise,
+    // The compiled E2E callback writes its marker synchronously and then freezes the whole thread,
     // so neither the continuous event dispatcher nor the continuation worker can claim the durable
-    // intent before the harness SIGKILLs the daemon. Production builds return from the seam at once.
+    // intent before the harness SIGKILLs the daemon (a promise that only parked this request let the
+    // worker wake the task first; see humanGateDecisionE2eBarrier.ts). Production builds return from
+    // the seam at once.
     await args.afterCommit?.()
     return committed
   }
