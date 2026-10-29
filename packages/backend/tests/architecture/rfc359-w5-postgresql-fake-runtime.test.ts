@@ -130,6 +130,10 @@ export const FAKE_POSTGRESQL_RUNTIME_LITERALS: readonly string[] = [
   // RFC-395 I-b: existing controlled ACK/error transaction probes now use the native driver protocol.
   'rfc370-workgroup-commit-queue.test.ts: 1',
   'rfc370-workgroup-read-snapshot.test.ts: 1',
+  // RFC-395 batched epoch-2 copy — the legitimate kind: the observation is how many statements a
+  // chunk sends, which a real pool does not report. The recorder wraps the real harness pool, so
+  // every statement still runs on PostgreSQL (the read-back and trigger cases need that).
+  'rfc395-epoch2-copy-batched-chunks.test.ts: 1',
 ]
 
 function walk(root: string, dir: string, out: string[]): string[] {

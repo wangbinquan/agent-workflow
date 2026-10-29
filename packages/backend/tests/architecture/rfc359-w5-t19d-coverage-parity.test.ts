@@ -291,7 +291,9 @@ export const COVERAGE_PARITY_LEDGER: readonly string[] = [
   'platform/persistence/migration/SourceReader: sqlite 10/9, postgresql 3/3',
   // RFC-395 relocates the existing PostgreSQL DDL compiler (and its old references)
   // alongside the new SQLite compiler; equivalence tests drive both explicit plans.
-  'platform/persistence/schema/Plan: sqlite 8/7, postgresql 32/7',
+  // RFC-395 batched epoch-2 copy (+1 PostgreSQL ref): the regression for the
+  // PostgreSQL-only logical target builds its plan as input; no new plan criterion.
+  'platform/persistence/schema/Plan: sqlite 8/7, postgresql 33/7',
 ]
 
 /** plan §5 T19d 的「阈值」：两侧 ref 差到这个数就算倒挂，要么补测试、要么进下面的观察名单。 */
@@ -339,7 +341,8 @@ export const INVERTED_PAIRS: readonly string[] = [
   'platform/persistence/LogicalSource: 12 vs 9',
   // 同上：原文件落位使这一既有引用差首次进入观察名单，阈值保持不变。
   'platform/persistence/migration/SourceReader: 10 vs 3',
-  'platform/persistence/schema/Plan: 8 vs 32',
+  // RFC-395 batched epoch-2 copy: 8 vs 32 → 8 vs 33, source noted on the ledger line.
+  'platform/persistence/schema/Plan: 8 vs 33',
 ]
 
 interface Side {
