@@ -449,6 +449,16 @@ bun 报出的用例时长包含 `beforeEach` / `afterEach`（实测：700ms 的 
   加片 / 改为按耗时分片。
 - 本次处置：四个文件合并为 `rfc395-t19-migration-prep.test.ts`，估算最重一片约 573 秒。
 
+## PostgreSQL 的大批量写路径别逐行发语句：吞吐随往返延迟线性变化，慢 runner 会把它放大成超时（2026-10-29 实撞，RFC-395）
+
+- RFC-395 激活时新写的 epoch 2 逻辑复制目标端（`platform/persistence/postgresqlLogicalTarget.ts`）每个 chunk 逐行 INSERT、再逐行回读校验，
+  250 行一块要约 500 次往返。周取证的大迁移从 epoch 1 的 255～359 秒变成 708 秒，下一轮分到慢 runner，过了 30 分钟期限还在拷。按
+  `createPostgresqlCapabilities().batchInsertMax(每行绑定的列数)` 分批（每批一条多行 INSERT、一条按键回读）后，同样慢的 runner 上是 544 秒。
+- 排查：每 100 毫秒采样一次目标库 `pg_stat_activity` 的活动语句。逐行语句排在前面、`wait_event` 多为 `ClientRead`，就是在等客户端往返。
+- 这类路径的回归用例要数语句条数。记录器包着真连接池，会进 `rfc359-w5-postgresql-fake-runtime` 的账本（属守卫所说的正当一类，提交说明里
+  写明）；用例里提到 `buildPostgresqlSchemaPlan` 这类符号，还会改动 `rfc359-w5-t19d` 的引用数。两本账都在 `tests/architecture/` 下，推之前
+  本地把这个目录跑一遍。
+
 ## 主 CI 的墙钟受**并发配额**约束，不受单个 job 时长约束：加分片可能让它更慢（2026-10-14 实测）
 
 本仓是公开仓 + 个人免费账号：整个账号**同时最多 20 个 job，其中 macOS 最多 5 个**；同时触发的 nightly 也占这 20 个槽。2026-10-14 的主 CI 有 72 个 job、合计约 383 runner-分钟，单 job 只有 5–10 分钟，整次 run 却要 28–48 分钟，因为大部分时间在**排队**：19 个 macOS job 挤 5 个槽，macOS e2e 排了 22–38 分钟才开始。
