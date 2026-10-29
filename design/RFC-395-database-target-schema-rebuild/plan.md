@@ -81,14 +81,27 @@ T1 输出是实现细化，不能推翻本文的领域边界、兼容承诺或�
 - [ ] 独立功能设计门（接手会话按惯例免，可推翻；见 §6）
 - [x] 用户批准生产实现（2026-10-21 交接手会话分解并指挥 Codex 实施；不含 T19 真实实例操作）
 
-### 5.2 实现与运行（未开始）
+### 5.2 实现与运行（2026-10-29 核对：除 D4 与 D13 余项外完成）
 
-- [ ] T1～T17 全部开发与测试用例编写完成
-- [ ] AC-1～AC-10 逐项证据；D1～D13 删除清单逐项销账
-- [ ] SQLite targeted / full evidence、PostgreSQL real-engine evidence 分别记录
-- [ ] 用户完整旅程、性能、故障恢复、备份恢复及二进制证据
-- [ ] 功能实现门 + 必需 hosted exact-SHA CI
-- [ ] 真实实例 MigrationPlan、操作批准、切换回执和切换后验收
+- [ ] T1～T17 全部开发与测试用例编写完成（换表代码 `045abf20a` 上库；T16 的 D4 余项未完成，见下）
+- [ ] AC-1～AC-10 逐项证据；D1～D13 删除清单逐项销账（销账核对见下；AC 逐项账本未单独成表，证据分散在 §6.13 T18、CI 各轮与「T19 托管实例」）
+- [x] SQLite targeted / full evidence、PostgreSQL real-engine evidence 分别记录（§6.13「复核、BF 修复轮与 T18 集中验证」结果表）
+- [x] 用户完整旅程、性能、故障恢复、备份恢复及二进制证据（同上：e2e 全量、新旧二进制 DTO 对拍、p95 对拍、44 个切换 / 恢复故障边界）
+- [ ] 功能实现门 + 必需 hosted exact-SHA CI（实现门按 §6 惯例免；exact-SHA CI 见 §6.13 各轮，T19 两次修复的运行只有依赖审计一步失败，属外部原因）
+- [x] 真实实例 MigrationPlan、操作批准、切换回执和切换后验收（本机实例 2026-10-28 归档后全新安装；托管实例 2026-10-29 迁移完成，见「T19 托管实例」）
+
+**D1～D13 销账核对**（2026-10-29，HEAD `134e3a882`，只读核对）：
+
+- D1–D3、D5–D12 已销账，各有守卫。例如 D1 `packages/backend/tests/rfc349-execution-peripheral-provider.test.ts:97`、D9 `packages/backend/tests/architecture/rfc395-a6-atomic-apply.test.ts:73`、D11 `packages/backend/tests/rfc395-retired-runtime-shapes.test.ts:179`。
+- **D4 未销账**：
+  - 后端已完成：旧选择器只在 `packages/backend/src/modules/task-execution/infrastructure/migration/oracle/legacyPickers.ts`，seq 回填只在同目录的 `migration/run/legacySequencePlan.ts`，`services/freshness.ts` 已删。
+  - 共享层 `packages/shared/src/nodeRunOrder.ts:10-12,29` 仍有 NULL / ID 回退和 `nodeRunOrderAnchor`。前端展示仍在用（如 `packages/frontend/src/lib/node-history.ts:34`），`packages/shared/src/task-questions.ts:316` 的 `resolveHandlerRun` 也仍依赖它。
+  - `NodeRunRow.seq` 仍声明为可空（`packages/backend/src/modules/task-execution/application/runProvenance.ts:26`）。
+  - 选择边界守卫只扫后端（`packages/backend/tests/architecture/rfc395-run-selection-boundary.test.ts:237`）。
+- **D13 基本销账、余一项判定**：
+  - 已完成：v1 clarify-open / review-open 清单被拒（`packages/backend/src/modules/collaboration/domain/humanGateOperation.ts:206`），准备回执必须是 v2 并校验（`packages/backend/src/modules/source-control/infrastructure/workspaceMaterializer.ts:1246`）。
+  - 待判定：「不把非字面量对象直接写入被重塑表」只对 `tasks` 有结构守卫。`packages/backend/src/modules/task-execution/infrastructure/nodeRunWriteProtocol.ts:197-209` 把带类型的对象直接写入 config / runtime / result 表，design §10 允许「精确的类型化构造」，需要判定是否满足。
+  - 托管清理路径仍接受 v1 plan、对回执做未校验的类型断言（`packages/backend/src/modules/source-control/infrastructure/crewstation/repositoryPreparation.ts:117,162`）。这条路径只驱动清理，不写被重塑表。
 
 文档完成、设计获批、实现完成、真实搬迁、线上验收是五个不同状态。不得用本节第一组复选框将 RFC 置 Done。
 
@@ -961,6 +974,38 @@ Q-3 同期完成：plan §3 的 18 行拆成 137 个覆盖项，另列 44 个切
 - 手动触发的 macOS 后端夜间（运行 40462224399）12 片各 6–12 分钟，都在 15 分钟预算内，唯一失败是已在 `709b753a0` 修复的 S-15 守卫。
 - 本地 Docker 虚拟机磁盘写满，CrewStation 平台 PostgreSQL 因此反复崩溃、GitLab 不可用。经用户批准，清除了节点上没有任何容器引用的镜像和宿主构建缓存，磁盘由 100% 降到 75%，GitLab 恢复。
 
+#### T19 托管实例（2026-10-28～29）
+
+托管实例的切换由 CrewStation RFC-044（服务数据库 epoch 迁移，用户 2026-10-28 批准「按推荐实现」）提供平台侧：迁移操作、计划审批、冻结与停写证明、回调接口、世代切换、首写前撤回与完成。AW 侧只需在托管 Manifest 声明 `databaseMigration`（`f1cd7c625`，RFC-044 T7）。
+
+**联调（CrewStation RFC-044 T9，独立验收服务 `rfc044-aw-migration`）**：epoch-1 源与正式实例相同（AW `8e5c57a2`）。联调暴露的问题逐项修复，每项先写能复现的用例：
+
+| 编号 | 归属 | 现象 | 修复 |
+| ---- | ---- | ---- | ---- |
+| T19-H1 | CrewStation | 候选镜像标签含 `+`，推送被仓库拒绝 | CrewStation `f622b5aa` |
+| T19-H2 | AW | plan Job 退出：「迁移回调请求超过 32 MiB」。hosted 模式把约 37 MiB 的 epoch-1 PostgreSQL 参考目录（39 个冻结版本，实测 39,080,185 字节）作为一个产物整块写入 | `a3b4920ed`：参考目录改经 4 MiB 分块的产物端口保存，名称下只留摘要指针；内容另用 `<name>.content`，因为端口会把内容物化到同名本地路径 |
+| T19-H3 | CrewStation | 回调与进度循环争用操作锁时返回 409，AW 视为终局 | CrewStation `e349c64a`：改为可重试的 503 |
+| T19-H4 | CrewStation | Bun 1.3.13 上 base64 分组正则拒绝合法的 4 MiB 分块 | CrewStation `dd02302e` |
+| T19-H5 | CrewStation | 原生来源观测期间的对象变化被当作阻塞错误，运行中的 Job 失去回调资格 | CrewStation `6fa0b6bb` |
+| T19-H6 | 两侧 | 迁移 Job 沿用服务套餐（250m/512Mi），run 在内存上限反复 GC | 用户批准「迁移 Job 单独指定套餐」：CrewStation `c86ddb97` 增加 `databaseMigration.servicePlanId`；AW `ceec41fe3` 发布档案增加 `migrationServicePlanId`；平台新建套餐 `aw-epoch-migration`（500m/3Gi） |
+| T19-H7 | AW | 激活后撤回被 AW 拒绝：`reverse-migration-required`。候选在 `activating` 阶段启动时，hosted 启动收敛和执行控制行的写入被算作首次写入，目标库被打上首写标记，verify 又把它记进 journal 和切换回执；此时服务仍在维护，没有用户写入 | `8024fe5ad`：PG 客户端增加 `countsAsLiveWrite`，hosted 部署把它绑到写闸的 `isEnforcing()`，写闸生效前的写入（hosted 启动收敛）不算首写；`1187547bb`：`crewStationControlClient` 写执行控制行不算 |
+| T19-H8 | CrewStation | 撤回 Job 失败后操作停在 `rolling-back`，`retry` 只会重复同样的拒绝 | 用户批准新增动作：CrewStation `e936dcb9` 增加 `cancel-rollback`，回到 `ready-to-open` 后可正常开放 |
+| T19-H9 | AW | 正式实例（T10）的计划被 `v2-task-workspace-preparation-in-flight` 阻断：一条 `preparing` 准备行绑定的任务已在 2026-10-18 删除。准入在插入任务的同一事务里写 `admitted_task_id`，删除任务时没有路径收尾这一行 | 用户选择「修转换器后重来」：`3b938d41a` 校验器 3 → 4，绑定了任务、任务却不存在的准备行按历史归档，记 `v2-task-workspace-preparation-orphan`，行原样保留；删除路径不收尾准备行记入 audit-backlog |
+| T19-H10 | AW | 正式实例（T10）冻结一直等待 `system:shared` 父任务停下。该父任务 2026-10-20 已被 AW 结束，平台终结一直在等应用取消一个从未派发的 agent 子任务；v0.6.30 的停写排空看到 `finalizing` 就跳过 | `134e3a882`：关闭已受理、未释放时在租约下取消遗留子任务；停写排空对正在释放的父任务也取消遗留子任务，并在释放前计为未停。正式实例这一次由人工在 AW Pod 内以应用身份、带冻结停写授权取消该子任务后撤回，再重新迁移完成 |
+
+环境（用户批准）：共享 PostgreSQL 在 run 期间第 5 次 OOM（上限 2Gi），原地扩到 4Gi，StatefulSet 模板仍是 1Gi；平台新建迁移套餐；对象存储预算加 256 MiB；T9b 镜像验证缺 CPU 时结束了一个闲置的开发会话。
+
+**结论**（证据见 CrewStation `proposal/rfc/RFC-044-service-database-epoch-migration/acceptance.md`）：
+
+- T9 独立验收服务 `rfc044-aw-migration`：重新批准、冻结中撤回、完成三条路径通过；T9b `rfc044-aw-migration-b`：候选激活并通过 verify 后撤回成功，目标库没有首写标记，撤回后源库可写。
+- T10 正式实例 `agent-workflow`（v0.6.30，epoch 1）：
+  - op1：计划被 H9 阻断，修复后放弃。
+  - op2：计划无阻断，按用户已批准的方式切换；冻结被 H10 挡住，用户选择撤回，人工处理后撤回完成，服务恢复。
+  - op3（候选 `3b938d41a`）：2026-10-29 08:11 切换，run 6 分钟，08:21:51 待开放，开放后 08:24:14 完成，维护约 12 分钟。计划无阻断，1 条行级限制：done 任务 `01M56RRG6A0F7KP5N1JXJ9FNNF` 的一个运行只保留为历史，不能续跑或重试。
+  - 完成后：数据指纹与切换前一致（Agent 20、技能 3、工作流 20、MCP 4、任务 19），源世代保留，原 v0.6.30 在 preview 槽作为回退目标。
+- CI：`3b938d41a` 运行 40832354551、`134e3a882` 运行 40844374148，均只有依赖审计一步失败（外部原因，未处理），其余 59 个 job 成功。
+- 正式实例现运行 `3b938d41a`。H10 的修复 `134e3a882` 要随下一次正常发布上线；迁移完成后，原 v0.6.30 会在 preview 槽保留 72 小时作为回退目标；新版本发布同样部署到这个槽，所以发布前要先确认是否还需要这个回退目标。
+
 #### 休眠包与共享账本
 
 休眠包（R1、R2、V1 及后续各包）不修改共享账本：`architecture/counts.json`、`architecture/guard-manifest.json`、provider 分叉、同文件孪生、T18 / T19d / T19f、RFC-376 基线，以及被审消费方清单。这些文件常被其他会话整文件提交，未提交的条目会指向不存在的文件。各包在报告中列出所需条目，由 T18 统一登记；休眠文件的「不可达」由 A 接线消解，不登记。
@@ -1033,3 +1078,4 @@ Q-3 同期完成：plan §3 的 18 行拆成 137 个覆盖项，另列 44 个切
 - 2026-10-28：T19 逐实例批准。
   - 本机实例：用户选择归档后全新安装（分叉开发库无法转换），已完成，见 [t19-local-instance-2026-10-28.md](./t19-local-instance-2026-10-28.md)。
   - 托管实例 `agent-workflow`：用户批准「plan 无阻断即切换」。但托管 Job 要求的平台侧（迁移操作、冻结引用、`/v1/operations` 回调、配置切换与回退）在 CrewStation 尚未实现，即 10-24 用户决定第 2 条。已写 CrewStation RFC-044 并获批准，实现与联调完成后执行。
+- 2026-10-29：T19 托管实例完成。CrewStation RFC-044 实现与联调完成后，正式实例 `agent-workflow` 迁移到 epoch 2（08:24:14 completed），见「T19 托管实例」。
