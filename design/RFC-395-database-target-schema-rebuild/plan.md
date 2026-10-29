@@ -87,7 +87,7 @@ T1 输出是实现细化，不能推翻本文的领域边界、兼容承诺或�
 - [x] AC-1～AC-10 逐项证据；D1～D13 删除清单逐项销账（销账核对见下；AC 逐项账本见「收尾」一节的表）
 - [x] SQLite targeted / full evidence、PostgreSQL real-engine evidence 分别记录（§6.13「复核、BF 修复轮与 T18 集中验证」结果表）
 - [x] 用户完整旅程、性能、故障恢复、备份恢复及二进制证据（同上：e2e 全量、新旧二进制 DTO 对拍、p95 对拍、44 个切换 / 恢复故障边界）
-- [x] 功能实现门：免（§6 惯例，用户未推翻）。必需 hosted exact-SHA CI：最后一个代码提交 `dfaf582d3` 的 CI 运行 40927465154 全部成功；各定时流水线的最近一次运行见「收尾」一节的流水线结果表
+- [x] 功能实现门：免（§6 惯例，用户未推翻）。必需 hosted exact-SHA CI 与定时流水线：Done 提交 `67acb29b8` 上的全量复跑见「收尾」一节的流水线结果表，其中 WebKit 的 graph-care 卡死已在后继提交修复，修复提交上的全量复跑见交接
 - [x] 真实实例 MigrationPlan、操作批准、切换回执和切换后验收（本机实例 2026-10-28 归档后全新安装；托管实例 2026-10-29 迁移完成，见「T19 托管实例」）
 
 **D1～D13 销账核对**（2026-10-29，HEAD `134e3a882`，只读核对）：
@@ -1023,7 +1023,7 @@ Q-3 同期完成：plan §3 的 18 行拆成 137 个覆盖项，另列 44 个切
 - backend-macos-nightly 复跑（运行 40909866975，`f83ec825f`）又红两处，都是 RFC-395 撑大语料后的时间预算：
   - 8/12 的测试全部通过，job 却在 15 分钟预算处被取消：RFC-376 报告合同一条用了 215 秒（10-28 为 78 秒，II-b 之前约 75 秒），12 片各跑 9～15 分钟。照仓内规矩加 runner、不动预算，macOS 由 12 片扩到 18 片（与 Ubuntu 24 → 36 同为 1.5 倍），两处钉住矩阵的守卫随之更新。
   - 9/12 的 RFC-376 counts 守卫在全语料上算全部门禁集合，用了 6.4 秒（此前 2.4～4.0 秒），超过默认 5 秒，同样写明 20 秒预算。
-- e2e-webkit-nightly：RFC-396 的 `e2e/rfc396-graph-care-repair.spec.ts:404` 只在 Ubuntu WebKit 上超时（运行 40700896223、40888202808 两次尝试都没等到修复推送；同一提交上 Chromium 全量 1.4 分钟、macOS WebKit 2.7 分钟通过）。浏览器在审批之后到设计页检查之前一直闲着，却停在任务页持续轮询和渲染；改为审批落库后跳到 `about:blank`，并把等修复推送的窗口由 180 秒放宽到 240 秒（整条仍在 10 分钟内），本机 WebKit 1.5 分钟通过。
+- e2e-webkit-nightly：RFC-396 的 `e2e/rfc396-graph-care-repair.spec.ts:404` 在 Ubuntu WebKit 上等不到修复推送（运行 40700896223、40888202808 两次尝试都失败）。第一次归因错了：当时以为是浏览器停在任务页持续轮询、渲染拖慢了修复循环，`f69130169` 改为审批后跳到 `about:blank` 并把等待窗放宽到 240 秒；之后 `f83ec825f` 的运行 40909860557 首次仍失败、靠重试才过，`67acb29b8` 的运行 40940188664 两次都失败。Chromium 也一样：e2e-full 的运行 40909874238、40898011460 都是首次失败、重试通过。所以这不是 WebKit 慢，而是两种结局：要么 1.4～1.5 分钟跑完，要么修复循环整轮卡死。真正的原因：MR 发布约 5 秒后平台就做第一次流水线采集，用例要再过几秒才注入红色流水线；system-mock 的流水线工具对「这个 head 还没有流水线」以退出码 4 结束，平台按协议把 4 当作 business failure，`collect-pipeline` 判 blocked，case 永久停住。慢机器上用例更晚注入，所以 CI 常常卡、本机几乎不卡。本机让用例晚 40 秒注入即可稳定复现：采集轮次输出 `adapter-exit-4`，case 停在 `blocked`，注入后两分钟没有新轮次。CI 是 push 之后异步建流水线的，没有流水线的 head 属于过期快照；RFC-310 design §4.8.3 把 stale-input 定为「先刷新」，平台对 6 的处理正是回到观察（`rfc323-platform-pipeline-collection` 已锁住）。修复在 mock：`packages/system-mocks/src/development/pipeline-adapter-cli.ts` 对 404 改为退出 6，回归用例 `packages/system-mocks/tests/rfc396-pipeline-tool-cli.test.ts` 换回 4 时失败；`f69130169` 基于错误判断加的 `about:blank` 撤回，等待窗回到 180 秒，注释改为真实原因。本机晚 40 秒注入的同一用例 2.5 分钟通过，正常流程 Chromium 1.5 分钟、WebKit 1.6 分钟通过。
 - e2e-webkit-nightly 的另一条：RFC-319 的 INTENT-X4（`e2e/rfc319-intent-timeline-and-turns.spec.ts:1196`）在 Ubuntu WebKit 上间歇失败（运行 40508998208、40700896223 第一次失败、重试通过；`f69130169` 的运行 40898004906 两次都失败）。原因在产品：「回到最新」无条件平滑滚动，用户偏好减少动效时 WebKit 仍会做滚动动画，动画中途的 scroll 事件把时间线的贴底标记清掉，下一轮到达时既不跟随、按钮也重新出现。改为按动效偏好决定滚动方式，减少动效时直接跳到最新一轮（`packages/frontend/src/lib/reduced-motion.ts`，用例 `packages/frontend/tests/lib-reduced-motion.test.ts`）。
 - postgresql-evidence（每周日运行，RFC-395 激活后第一次运行就是 2026-10-29 手动触发的运行 40888244790）有三个 job 失败，都是 RFC-395 引入的：
   - 编译后二进制在 Ubuntu 24.04 自带的 PostgreSQL 16 上执行 `db migrate --to postgresql`，数据搬完后在最终准入失败。原因：epoch 2 只内嵌了 17 的 catalog（激活阶段 lead 决定「只生成 17 版」），而 RFC-349 的预检仍承认 15～18。处理：恢复对外承诺的范围，为 15、16、18 生成 catalog（`packages/backend/db/schema-history/epoch2/0000_rfc395_target_baseline.postgresql-{15,16,18}-catalog.json`；15、16 与 17 只差大版本号与摘要，18 因为 NOT NULL 约束进了 `pg_constraint` 而更大）。预检的版本范围改为导出常量 `SUPPORTED_POSTGRESQL_MAJORS`，`packages/backend/tests/rfc395-a3-embedded-history.test.ts` 要求每个承认的大版本在每个历史版本上都有 catalog，以后追加历史漏生成会直接变红。
@@ -1039,23 +1039,23 @@ Q-3 同期完成：plan §3 的 18 行拆成 137 个覆盖项，另列 44 个切
   - 手搓 PostgreSQL 运行时：加一行，属守卫所说的正当一类。要观测的是每个 chunk 发出的语句条数，真连接池不报告这个；记录器包着真 harness 的连接池，每条语句仍在 PostgreSQL 上执行。
 - 扩到 18 片的 macOS nightly（运行 40922758151，`f9e23a17e`）最长一片 11.4 分钟，约为 15 分钟预算的 76%。
 
-**流水线结果**（收尾时各流水线的最近一次运行；之后的提交只改文档）：
+**流水线结果**（Done 提交 `67acb29b8` 上把 10 条定时流水线全部手动触发一遍，参数与定时运行相同）：
 
-| 流水线 | 运行 | 提交 | 结果 |
-| --- | --- | --- | --- |
-| CI | 40927465154 | `dfaf582d3` | 全部成功（61 / 61） |
-| backend-macos-nightly | 40929170588 | `dfaf582d3` | 全部成功（18 / 18，最长一片 11.4 分钟） |
-| postgresql-evidence | 40920150663 | `b3df19465` | 全部成功（weekly，26 / 26 崩溃点） |
-| windows-platform | 40922712746 | `f9e23a17e` | 成功 |
-| e2e-full-nightly | 40909874238 | `f83ec825f` | 成功 |
-| e2e-webkit-nightly | 40909860557 | `f83ec825f` | 成功 |
-| visual-regression-nightly | 40909816629 | `f83ec825f` | 成功 |
-| evidence-soak-nightly | 40901611065 | `f69130169` | 成功（定时） |
-| git-protocols-e2e | 40895777332 | `ebea38f89` | 成功（定时） |
-| integration-opencode | 40892747714 | `e738f38f8` | 成功（定时） |
-| maintenance-soak-nightly | 40888229216 | `e738f38f8` | 成功 |
+| 流水线 | 运行 | 结果 |
+| --- | --- | --- |
+| CI | 40935503432 | 全部成功（61 / 61） |
+| backend-macos-nightly | 40940177407 | 全部成功（18 / 18，最长一片 12 分钟） |
+| postgresql-evidence | 40940171874 | 全部成功；weekly 规模 26 / 26 崩溃点，大迁移 364.8 秒，状态最慢 357.8 毫秒 |
+| e2e-full-nightly | 40940182944 | 成功 |
+| e2e-webkit-nightly | 40940188664 | Ubuntu 第 4 片失败（graph-care 卡死，原因与修复见上文），其余 7 个 job 成功 |
+| visual-regression-nightly | 40940219684 | 成功 |
+| windows-platform | 40940227612 | 成功 |
+| evidence-soak-nightly | 40940199895 | 成功 |
+| git-protocols-e2e | 40940213323 | 成功 |
+| integration-opencode | 40940206338 | 成功 |
+| maintenance-soak-nightly | 40940194172 | 成功 |
 
-表中较早的运行之后又有这些提交：`ebea38f89`（PostgreSQL catalog、预检与取证脚本）、`f83ec825f`（切换栅栏期间的只读迁移观察、意图时间线按动效偏好滚动）、`b3df19465`（epoch 2 目标端按批复制）、`f9e23a17e` 与 `dfaf582d3`（CI 矩阵与测试账本）。表中较早的几条流水线都不连 PostgreSQL，也不经过 provider 切换；唯一涉及迁移的 e2e `e2e/rfc349-database-migration-settings.spec.ts` 用的是模拟接口。今晚的定时运行会落在当时的 HEAD 上。
+graph-care 的修复提交（即记录本段的提交）上，CI 与 10 条定时流水线会再全部跑一遍，运行号见交接。更早各提交上的运行（如 `dfaf582d3` 的 CI 40927465154、`b3df19465` 的 postgresql-evidence 40920150663）保留在上文各条。
 
 **AC 逐项证据**（测试文件均在 `packages/backend/tests/`）：
 
@@ -1146,4 +1146,4 @@ Q-3 同期完成：plan §3 的 18 行拆成 137 个覆盖项，另列 44 个切
   - 托管实例 `agent-workflow`：用户批准「plan 无阻断即切换」。但托管 Job 要求的平台侧（迁移操作、冻结引用、`/v1/operations` 回调、配置切换与回退）在 CrewStation 尚未实现，即 10-24 用户决定第 2 条。已写 CrewStation RFC-044 并获批准，实现与联调完成后执行。
 - 2026-10-29：T19 托管实例完成。CrewStation RFC-044 实现与联调完成后，正式实例 `agent-workflow` 迁移到 epoch 2（08:24:14 completed），见「T19 托管实例」。
 - 2026-10-29 收尾：D4 余项与 D13 判定完成，修复正式实例续租被拒即退出（T19-H11），流水线的依赖审计、RFC-319 账本对账与 macOS 超时一并修好，见「收尾：D4、D13、T19-H11 与流水线」。
-- 2026-10-29：**Done**。收尾中又修了 postgresql-evidence 暴露的三处（PostgreSQL 15 / 16 / 18 的 catalog、切换栅栏挡住迁移状态、epoch 2 目标端逐行复制）、WebKit 的两条用例与 macOS 的时间预算。CI 与各定时流水线的最近一次运行全部为绿，见「收尾」一节的流水线结果表。设计门与实现门按 §6 惯例免，用户未推翻。正式实例仍运行 `3b938d41a`，T19-H10 / H11 与本次修复随下一次发布上线，发布时机由用户决定。
+- 2026-10-29：**Done**。收尾中又修了 postgresql-evidence 暴露的三处（PostgreSQL 15 / 16 / 18 的 catalog、切换栅栏挡住迁移状态、epoch 2 目标端逐行复制）、WebKit 的两条用例与 macOS 的时间预算。在 Done 提交上把 10 条定时流水线全部手动触发一遍，9 条成功；WebKit 的 RFC-396 graph-care 用例卡死，查明是 system-mock 流水线工具把「head 还没有流水线」报成 business failure，修复后再全量复跑（见「收尾」一节）。设计门与实现门按 §6 惯例免，用户未推翻。正式实例仍运行 `3b938d41a`，T19-H10 / H11 与本次修复随下一次发布上线，发布时机由用户决定。

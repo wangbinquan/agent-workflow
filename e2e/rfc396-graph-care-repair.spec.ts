@@ -542,10 +542,6 @@ test('RFC-396 graph care hydrates approved material, repairs a real Task and re-
       { timeout: 60_000 },
     )
     .toBe(true)
-  // The browser is idle until the design tab check below. Leaving the task page stops its
-  // polling and rendering while the daemon runs the long care loop: on Ubuntu WebKit that
-  // load made the loop miss the wait below (runs 40700896223 and 40888202808).
-  await page.goto('about:blank')
   const reviewReceipt = (await workspace()).executionLinks.find(
     (link) => link.receipt?.decision === 'approved',
   )!.receipt!
@@ -667,10 +663,13 @@ test('RFC-396 graph care hydrates approved material, repairs a real Task and re-
       },
       // The 30 s code-host poll, collection, classification, the repair Task, profile re-verification
       // and the push all sit inside this wait. Windows CI: both attempts of run 40521324441 missed a
-      // 90 s window here (the first attempt of run 40514130589 passed). The whole test took 1.4 min on
-      // Chromium (run 40888196835) and 2.7 min on macOS WebKit, while Ubuntu WebKit missed 180 s in
-      // both attempts of runs 40700896223 and 40888202808; 240 s keeps the test inside its 10 min.
-      { timeout: 240_000, intervals: [1_000, 2_500, 5_000] },
+      // 90 s window here (the first attempt of run 40514130589 passed). The misses on every platform
+      // (Ubuntu WebKit 40700896223 / 40888202808 / 40940188664, Chromium first attempts 40909874238 /
+      // 40898011460) were not a slow loop: the platform collected the published head before the seed
+      // above, the system-mock pipeline tool answered "no pipeline" with exit 4 and the case blocked
+      // for good. The tool now reports that as stale input (exit 6) and the employee keeps
+      // monitoring; a seed 40 s late passes locally.
+      { timeout: 180_000, intervals: [1_000, 2_500, 5_000] },
     )
     .toMatch(/^[a-f0-9]{40}$/)
   const repaired = await caseProjection()
@@ -776,7 +775,8 @@ test('RFC-396 graph care hydrates approved material, repairs a real Task and re-
   })
   await expect
     // The daemon pulls the seeded pipeline on its own observation cadence; on Windows CI the first
-    // attempt of run 40461800472 missed a 60 s window and the retry passed.
+    // attempt of run 40461800472 missed a 60 s window and the retry passed. The repaired head has
+    // no pipeline until this seed either, so the stale-input answer above keeps this wait live too.
     .poll(async () => (await caseProjection()).detail.delivery?.readyToMerge, {
       timeout: 180_000,
       intervals: [1_000, 2_500, 5_000],

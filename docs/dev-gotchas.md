@@ -459,6 +459,15 @@ bun 报出的用例时长包含 `beforeEach` / `afterEach`（实测：700ms 的 
   写明）；用例里提到 `buildPostgresqlSchemaPlan` 这类符号，还会改动 `rfc359-w5-t19d` 的引用数。两本账都在 `tests/architecture/` 下，推之前
   本地把这个目录跑一遍。
 
+## system-mock 适配器的退出码要按平台的失败分类写：「provider 暂时还没有结果」是 stale-input（6），不是 business failure（4）（2026-10-29 实撞，RFC-396 graph-care e2e）
+
+- 平台的适配器运行器把退出码 2 / 5 / 6 / 其它映射为 configuration / transient（同输入重试，次数受执行策略限制，默认一两次）/ stale-input
+  （先刷新）/ business failure（不重试）。`collect-pipeline` 遇到 business failure 判 blocked，case 永久停住；遇到 stale-input 回到观察。
+- system-mock 流水线工具曾对「这个 head 还没有流水线」退出 4。平台在 MR 发布约 5 秒后就采集，用例要过几秒才注入流水线，慢机器上常抢在前面，
+  于是 e2e 偶发卡死：Chromium 和 WebKit 都出现过，一度被误判为 WebKit 浏览器负载（`f69130169`，已撤回）。
+- 区分「慢」和「卡住」：看同一条用例在多次运行里的耗时，若只有两种结局（这里是 1.5 分钟跑完，或整个等待窗耗尽），就是卡住，放宽等待窗没用。
+  复现时故意让注入晚一些；诊断时可只读打开 e2e daemon 的 SQLite，看 `employee_reaction_rounds` 的轮次输出。
+
 ## 主 CI 的墙钟受**并发配额**约束，不受单个 job 时长约束：加分片可能让它更慢（2026-10-14 实测）
 
 本仓是公开仓 + 个人免费账号：整个账号**同时最多 20 个 job，其中 macOS 最多 5 个**；同时触发的 nightly 也占这 20 个槽。2026-10-14 的主 CI 有 72 个 job、合计约 383 runner-分钟，单 job 只有 5–10 分钟，整次 run 却要 28–48 分钟，因为大部分时间在**排队**：19 个 macOS job 挤 5 个槽，macOS e2e 排了 22–38 分钟才开始。

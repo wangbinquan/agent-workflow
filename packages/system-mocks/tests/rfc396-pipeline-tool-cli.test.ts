@@ -154,3 +154,65 @@ test('RFC-396 tool CLI collects real pipeline logs and preserves trigger/rerun r
     rmSync(sink, { recursive: true, force: true })
   }
 }, 60_000)
+
+// The RFC-396 graph care e2e stuck in about half its runs (e2e-webkit-nightly 40940188664,
+// e2e-full-nightly 40909874238 / 40898011460): the platform collected the just-published head
+// before the test seeded its pipeline, this tool exited 4 (business failure) and the platform
+// blocked the case for good. CI creates pipelines asynchronously, so a head without one is a stale
+// snapshot: exit 6 (stale-input, after-refresh) keeps the employee monitoring.
+test('RFC-396 tool CLI reports a head without a pipeline as stale input, then collects it once seeded', async () => {
+  const provider = await startPipelineProviderMock()
+  const sink = mkdtempSync(join(tmpdir(), 'rfc396-pipeline-missing-'))
+  const head = 'c'.repeat(40)
+  const target = 'd'.repeat(40)
+  const collect = () =>
+    runProcess(
+      process.execPath,
+      [resolve(import.meta.dir, '..', 'src', 'tool.ts'), '--collect-pipeline', head],
+      {
+        cwd: sink,
+        env: {
+          PATH: process.env.PATH ?? '',
+          HOME: process.env.HOME ?? '',
+          TMPDIR: tmpdir(),
+          AW_ADAPTER_SINK: sink,
+          AW_PIPELINE_MOCK_URL: provider.url,
+          AW_PIPELINE_TARGET: target,
+        },
+        timeoutMs: 10_000,
+      },
+    )
+  try {
+    const missing = await collect()
+    expect(missing.exitCode).toBe(6)
+    expect(missing.stdout.toString('utf8')).toBe('')
+    expect(missing.stderr.toString('utf8')).toContain(`pipeline not found: ${head}`)
+
+    provider.mock.seed({
+      headSha: head,
+      targetSha: target,
+      gates: [
+        {
+          gateKey: 'unit',
+          required: true,
+          status: 'running',
+          runRef: 'late-unit',
+          attempt: 1,
+          retryability: 'safe',
+          failureCategories: [],
+          logs: [],
+        },
+      ],
+    })
+    const seeded = await collect()
+    expect(seeded.exitCode, seeded.stderr.toString('utf8')).toBe(0)
+    expect(JSON.parse(seeded.stdout.toString('utf8').trim())).toMatchObject({
+      operation: 'pipeline.collect',
+      providerHeadSha: head,
+      gates: [{ gateKey: 'unit', status: 'running', runRef: 'late-unit' }],
+    })
+  } finally {
+    await provider.close()
+    rmSync(sink, { recursive: true, force: true })
+  }
+}, 60_000)

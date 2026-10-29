@@ -79,8 +79,13 @@ async function collectPipeline(headSha: string): Promise<number> {
   } else {
     const res = await fetch(`${mockUrl}/pipelines/${headSha}`)
     if (res.status === 404) {
+      // A head the provider has no pipeline for yet is a stale snapshot, not a business failure:
+      // CI creates pipelines asynchronously after a push. Exit 6 (stale-input, after-refresh) keeps
+      // the employee monitoring, and a later collection sees the pipeline. Exit 4 made the platform
+      // block the case for good whenever its first collection beat the pipeline (RFC-396 graph care
+      // e2e: e2e-webkit-nightly 40940188664, e2e-full-nightly 40909874238 / 40898011460).
       console.error(`pipeline not found: ${headSha}`)
-      return 4
+      return 6
     }
     if (res.status !== 200) {
       console.error(`pipeline fetch failed: ${res.status}`)
