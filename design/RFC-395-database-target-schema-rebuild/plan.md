@@ -1020,6 +1020,7 @@ Q-3 同期完成：plan §3 的 18 行拆成 137 个覆盖项，另列 44 个切
 - CI 依赖审计：根 `overrides` 的 `seroval` 由 1.6.3 升到 1.6.12，锁文件只变这一项。
 - e2e-full-nightly：RFC-396 的端点 `POST /api/development-designs/:id/proposals/:proposalId/limitation-review`（`15f4e65dc`）没有任何 e2e 走到，按 RFC-319 的规则登记进未覆盖账本，写明原因与销账条件（运行 40872361956）。
 - backend-macos-nightly：两个 RFC-395 全源守卫在 macOS 上分别用了 5.32、5.52 秒，超过默认 5 秒（运行 40859820668），按实测写明 20 秒预算。
+- e2e-webkit-nightly：RFC-396 的 `e2e/rfc396-graph-care-repair.spec.ts:404` 只在 Ubuntu WebKit 上超时（运行 40700896223、40888202808 两次尝试都没等到修复推送；同一提交上 Chromium 全量 1.4 分钟、macOS WebKit 2.7 分钟通过）。浏览器在审批之后到设计页检查之前一直闲着，却停在任务页持续轮询和渲染；改为审批落库后跳到 `about:blank`，并把等修复推送的窗口由 180 秒放宽到 240 秒（整条仍在 10 分钟内），本机 WebKit 1.5 分钟通过。
 - postgresql-evidence（每周日运行，RFC-395 激活后第一次运行就是 2026-10-29 手动触发的运行 40888244790）有三个 job 失败，都是 RFC-395 引入的：
   - 编译后二进制在 Ubuntu 24.04 自带的 PostgreSQL 16 上执行 `db migrate --to postgresql`，数据搬完后在最终准入失败。原因：epoch 2 只内嵌了 17 的 catalog（激活阶段 lead 决定「只生成 17 版」），而 RFC-349 的预检仍承认 15～18。处理：恢复对外承诺的范围，为 15、16、18 生成 catalog（`packages/backend/db/schema-history/epoch2/0000_rfc395_target_baseline.postgresql-{15,16,18}-catalog.json`；15、16 与 17 只差大版本号与摘要，18 因为 NOT NULL 约束进了 `pg_constraint` 而更大）。预检的版本范围改为导出常量 `SUPPORTED_POSTGRESQL_MAJORS`，`packages/backend/tests/rfc395-a3-embedded-history.test.ts` 要求每个承认的大版本在每个历史版本上都有 catalog，以后追加历史漏生成会直接变红。
   - `rfc349-postgresql-write-matrix` 的合成行与 epoch 2 安装的种子行主键冲突（`committed_event_family_cutovers`，23505）。只在插入前表里已有行时把 23505 视为数据冲突，其他情况仍算渲染缺陷。

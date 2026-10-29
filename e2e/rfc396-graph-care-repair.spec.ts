@@ -542,6 +542,10 @@ test('RFC-396 graph care hydrates approved material, repairs a real Task and re-
       { timeout: 60_000 },
     )
     .toBe(true)
+  // The browser is idle until the design tab check below. Leaving the task page stops its
+  // polling and rendering while the daemon runs the long care loop: on Ubuntu WebKit that
+  // load made the loop miss the wait below (runs 40700896223 and 40888202808).
+  await page.goto('about:blank')
   const reviewReceipt = (await workspace()).executionLinks.find(
     (link) => link.receipt?.decision === 'approved',
   )!.receipt!
@@ -663,8 +667,10 @@ test('RFC-396 graph care hydrates approved material, repairs a real Task and re-
       },
       // The 30 s code-host poll, collection, classification, the repair Task, profile re-verification
       // and the push all sit inside this wait. Windows CI: both attempts of run 40521324441 missed a
-      // 90 s window here (the first attempt of run 40514130589 passed).
-      { timeout: 180_000, intervals: [1_000, 2_500, 5_000] },
+      // 90 s window here (the first attempt of run 40514130589 passed). The whole test took 1.4 min on
+      // Chromium (run 40888196835) and 2.7 min on macOS WebKit, while Ubuntu WebKit missed 180 s in
+      // both attempts of runs 40700896223 and 40888202808; 240 s keeps the test inside its 10 min.
+      { timeout: 240_000, intervals: [1_000, 2_500, 5_000] },
     )
     .toMatch(/^[a-f0-9]{40}$/)
   const repaired = await caseProjection()
