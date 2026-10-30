@@ -1,3 +1,10 @@
+## 2026-10-30 runtime-scenario-matrix 的取消用例：等运行时起来的预算对齐到 45 秒，没等到就导出现场
+
+- **现象**：`19181f0dc`（v0.19.3 候选）主 CI 60/62，唯一的红是 Windows Playwright 分片 3/4 的 `deterministic runtime parity: claude-code › cancel terminates the in-flight runtime…`（run 41020561352），两轮都是「scenario trace … did not reach 1 entries」：启动任务后 15 秒内桩进程没写出第一条 trace。WF-24 这次一轮通过。同一签名两轮都红的还有另一 session 的两个纯文档提交 `2d13fd5b2`（41012381194）、`ec6e30cdb`（41014515558）；`eee046e6f` 一轮红；10-24 起另有五次一轮红、重试通过。
+- **归因**：与发布改动无关（候选 diff 只动前端选择器、WF-24 与文档），本机 macOS 同一二进制 1.7 秒通过，Linux 约 1 秒。逐次排耗时：这条用例在 Windows 上原本 2~5 秒，从 10-30 05:33 起变成 11 秒或超过 15 秒，首轮红的几次都和同分片的 `task lifecycle: interrupted`（两次 daemon 冷启动，那几次从 9~27 秒涨到 24~96 秒）重叠；别的 Windows 分片耗时没变。排除了 `e9e1a8187` 的写入栅栏改动：CI 用的 Bun 1.4.3 上 `query()` 不经过被覆盖的 `prepare`，成功路径前后逐步相同。诊断提交 `af27212f5` 的 run 41046785190 实测：Windows 上不重叠时启动到 trace 6.5 秒；超时用例两轮在 8.5~8.8 秒收尾、两条 trace 都在，TERM 即 Job Object terminate，不存在 10 秒宽限。结论：屏障预算（15 秒）对 Windows 并发负载下的派发时延太紧，不是运行时卡死。
+- **修复**（用户 2026-10-30 授权本 session 接手，责任 session 不明）：`waitForTrace` 预算对齐同文件任务等待的 45 秒；没等到时报错里带任务与节点行、桩进程进度（scope / call 文件、最后几条 trace）、该任务的 daemon.log 行和 daemon 名下的进程树（Windows 走 PowerShell CIM）。超时、取消两条用例各打一行 `[runtime-scenario-timing]`，取消那行拆出 `repoPrepMs` / `launchToSpawnMs` / `spawnToTraceMs`。踩坑记录在 `docs/dev-gotchas.md`「测试 / CI」。
+- **验证**：本机整份 spec 16/16；临时副本强制 5 秒没等到，报错带齐上述现场。
+
 ## 2026-10-30 节点选择器在代理列表晚到时不再丢掉已输入的搜索词；WF-24 等目标选项高亮再按 Enter
 
 - **现象**：`228dd9d28`（v0.19.3 候选）主 CI 唯一的红是 Windows Playwright 分片 3/4 的 WF-24（run 41009133333）。首轮：起始模板对话框里搜 `rfc319-edit-alpha` 后按 Enter，审计代理却成了 `[demo] reviewer`；重试：节点选择器里同一个代理同时出现在「推荐」和「代理」两组，点击命中两个元素。它不是新问题：10-15 起失败的主 CI 里，WF-24 至少 8 个 job 有一轮红（Windows 7、macOS 1），其中 3 个两轮都红；例如 10-27 的 `9ac4f0172`（run 40449909314，首轮同一签名，重试通过，记为 flaky）。

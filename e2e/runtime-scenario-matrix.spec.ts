@@ -374,37 +374,32 @@ for (const protocol of ['opencode', 'claude-code'] as const) {
         .filter((trace) => trace.task === taskId)
     }
 
-    // 2026-10-30: on Windows CI the claude-code cancel case failed both attempts
-    // in runs 41012381194, 41014515558 and 41020561352 with nothing but "scenario
-    // trace … did not reach N entries"; the hosted run keeps no daemon state, and
-    // the same binary passes in under two seconds on macOS and Linux. A missing
-    // trace therefore reports where the run stood at the deadline (task and
-    // node-run rows with their events, how far the stub got in its state
-    // directory, the daemon log lines for this task, the processes still under
-    // the daemon), then keeps watching so the failure says whether the trace
-    // arrived late or never. It still fails either way.
-    async function waitForTrace(taskId: string, count: number): Promise<ScenarioTrace[]> {
-      const waitStartedAt = Date.now()
-      const deadline = waitStartedAt + 15_000
+    // The trace line is this spec's proof that the runtime process started. On
+    // Windows, getting there takes a repository fetch, a worktree, the compiled
+    // launcher and then the compiled runtime: 6.5s on a quiet hosted runner, and
+    // past the old 15s deadline while heavier specs (two daemon cold starts, the
+    // RFC-396 journeys) ran beside it. On 2026-10-30 the claude-code cancel case
+    // failed both attempts that way in runs 41012381194, 41014515558 and
+    // 41020561352 and passed at ~11s in others; Linux takes about 1s. The wait
+    // now has the same 45s budget as every task-state wait in this file, and a
+    // miss reports where the run stood: task and node-run rows with their
+    // events, how far the stub got in its state directory, this task's daemon
+    // log lines and the processes still under the daemon.
+    async function waitForTrace(
+      taskId: string,
+      count: number,
+      timeoutMs = 45_000,
+    ): Promise<ScenarioTrace[]> {
+      const deadline = Date.now() + timeoutMs
       while (Date.now() < deadline) {
         const traces = tracesFor(taskId)
         if (traces.length >= count) return traces
         await new Promise((resolve) => setTimeout(resolve, 50))
       }
-      const atDeadline = await runDiagnostics(taskId)
-      const watchUntil = Date.now() + 45_000
-      let arrivedAfterMs: number | null = null
-      while (arrivedAfterMs === null && Date.now() < watchUntil) {
-        if (tracesFor(taskId).length >= count) arrivedAfterMs = Date.now() - waitStartedAt
-        else await new Promise((resolve) => setTimeout(resolve, 100))
-      }
-      const atEnd = arrivedAfterMs === null ? await runDiagnostics(taskId) : null
       throw new Error(
-        `scenario trace ${taskId} did not reach ${count} entries within 15s: ${JSON.stringify({
-          arrivedAfterMs,
-          atDeadline,
-          atEnd,
-        })}`,
+        `scenario trace ${taskId} did not reach ${count} entries in ${timeoutMs}ms: ${JSON.stringify(
+          await runDiagnostics(taskId),
+        )}`,
       )
     }
 
@@ -519,6 +514,18 @@ for (const protocol of ['opencode', 'claude-code'] as const) {
       } catch (error) {
         return [String(error)]
       }
+    }
+
+    // When the daemon logged handing this node run to the runtime launcher.
+    function spawnLoggedAt(nodeRunId: string | undefined): number | null {
+      if (nodeRunId === undefined) return null
+      const line = daemonLog().find(
+        (candidate) =>
+          candidate.includes('spawning agent runtime') &&
+          candidate.includes(`nodeRunId=${nodeRunId}`),
+      )
+      const at = line === undefined ? NaN : Date.parse(/^\[([^\]]+)\]/.exec(line)?.[1] ?? '')
+      return Number.isNaN(at) ? null : at
     }
 
     function daemonLogLines(needles: readonly string[]): string[] {
@@ -917,12 +924,20 @@ for (const protocol of ['opencode', 'claude-code'] as const) {
       expect((await waitForTask(task.id, (row) => row.status === 'canceled')).status).toBe(
         'canceled',
       )
+      const canceledAt = Date.now()
       const data = await nodeRuns(task.id)
+      const launched = launchedAt.get(task.id)!
+      const prep = data.runs.find((run) => run.nodeId === '__repo_prep__')
+      const spawnedAt = spawnLoggedAt(agentRuns(data)[0]?.id)
       reportTiming('cancel', {
-        traceMs: tracedAt - launchedAt.get(task.id)!,
-        canceledMs: Date.now() - tracedAt,
-        killEscalations: daemonLog().filter((line) => line.includes('escalating to SIGKILL'))
-          .length,
+        traceMs: tracedAt - launched,
+        repoPrepMs:
+          prep?.startedAt != null && prep.finishedAt != null
+            ? prep.finishedAt - prep.startedAt
+            : null,
+        launchToSpawnMs: spawnedAt === null ? null : spawnedAt - launched,
+        spawnToTraceMs: spawnedAt === null ? null : tracedAt - spawnedAt,
+        canceledMs: canceledAt - tracedAt,
       })
       expect(agentRuns(data).map((run) => run.status)).toEqual(['canceled'])
       expect(data.outputs.filter((candidate) => candidate.port === 'answer')).toEqual([])
