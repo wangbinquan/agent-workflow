@@ -177,8 +177,10 @@ RFC-328 design.md:394 写明「live-effect unique 与 watermark revision CAS 共
    契约就应报 `task-execution-stale-owner`）：
    - SQL 顺序：owner 行 `FOR UPDATE` → 任务根 `FOR UPDATE` → 排序后的 family advisory 锁 → 首次 attempt / effect UPDATE；
      `resolveQuiescedCodeHostMutations` 先读取并校验全部 resolution 的 attempt / effect、收齐键再取锁，不边遍历边取；
-   - 用测试专用触发器在首个 attempt UPDATE 上抛一次 `40P01`：入口整笔重放成功，派发记录可见两次 `BEGIN`，失败尝试不留下部分结算、
-     产出或 owner 变更；
+   - 用测试专用触发器注入一次 `40P01`，两个注入点：首个 attempt UPDATE（验证入口接上整笔重放，派发记录可见两次 `BEGIN`）；以及
+     一次结算两个 effect 时的**第二个** attempt UPDATE——此时第一个 effect 的 attempt、fence 释放、watermark 与（code-host 入口的）
+     产出投影已经写下，断言失败尝试的这些写入全部撤销、成功重放只推进一次业务 revision。「只注入一次」由触发器读取一个在被测事务外
+     建好的测试 sequence 实现（`nextval` 不随回滚复原；普通表里的标记会随回滚复原，导致每次重放都再报错）；
    - 用一个持有同一 family 锁的事务阻塞 EQ（阻塞点 = advisory 锁等待），释放后 EQ 完成且只开一次事务。
 2. **交错 i**：竞争方 = `patch` 建运行态行；被测 = `claimNew`。断言成功且运行态行的会话被更新，无 `owner-conflict`。
 3. **交错 ii**：竞争方 = 运行结束状态迁移；被测 = `preclaimResume`。断言 `run-not-claimable`。
@@ -196,8 +198,9 @@ RFC-328 design.md:394 写明「live-effect unique 与 watermark revision CAS 共
    - `preclaimResume`：SQL 捕获断言最终 UPDATE 的谓词含 `task_id`、`node_id`、`reset_pending = false`（根锁已排除对应窗口，这里验证
      的是写入契约）。
    - 托管 `recordSpawnReceipt`：保留「attempt 初始即非 `acting` 被前置读取拒绝」的用例；另加「前置读取通过、UPDATE 命中 0 行」——用
-     测试专用触发器让该 attempt 的 UPDATE 不生效（`BEFORE UPDATE … RETURN NULL`），断言整笔回滚（owner revision、receipt、node run
-     投影都不变）；UPDATE 的 `state` / `epoch` 谓词另作 SQL 契约断言。
+     测试专用触发器让该 attempt 的 UPDATE 不生效、不报数据库错误而只影响 0 行——PostgreSQL 用针对该 attempt 的
+     `BEFORE UPDATE FOR EACH ROW … RETURN NULL`，SQLite 用 `BEFORE UPDATE … WHEN … BEGIN SELECT RAISE(IGNORE); END`；由应用层的
+     行数检查抛错，断言整笔回滚（owner revision、receipt、node run 投影都不变）；UPDATE 的 `state` / `epoch` 谓词另作 SQL 契约断言。
 6. **错误映射**：真正的租约主键冲突仍为 `owner-conflict`；其它约束错误保留原错误（两种 provider）。
 7. **隔离级别**：SQL 捕获断言转换后的事务不发出 `set transaction isolation level serializable`；SQLite 仍为 `BEGIN IMMEDIATE`。
 
@@ -247,6 +250,9 @@ RFC-328 design.md:394 写明「live-effect unique 与 watermark revision CAS 共
 - 第 3 轮（v3）FAIL，方向确认可行：EQ 四个入口改为整笔重放并补任务根锁、family 锁按完整键排序且在首次修改前取得（§3.2）；确定性回归改为 barrier 协议与「围栏只发一次」判据（§4.1）；租约负对照改为去掉加固即失败的交错，family 用例补全分支（§4.4–§4.5）；同任务写手的保护按不变量列出例外、重放时间戳与心跳的描述更正（§2）；SQLite 与错误映射的表述收窄（§3.1、§3.4）；保留原语契约与外层 SERIALIZABLE 覆盖用例（§4）。
 
 - 第 4 轮（v3.1）FAIL，生产设计各项确认已解决；剩余为验收设计：SQL 记录器漏计失败语句——改为派发时记录（含 SQLSTATE 与 `BEGIN`）并以「一次 `BEGIN`、一次围栏、无失败」为判据（§4 开头、§4.1）；EQ 不套用围栏 UPDATE 判据，单列加锁读取契约、触发器注入 40P01 与 advisory 阻塞点（§4.1a）；family 用例改在 advisory / fence 阻塞点设 barrier（§4.4）；托管零行 CAS 改用触发器制造「前置读取通过、UPDATE 命中 0 行」（§4.5）；§1.2、§2.3、§2.4 的事实按实际事务边界更正。
+
+- 第 5 轮（v3.2）PASS WITH CHANGES：上一轮四项均已解决；两处 minor 已并入——EQ 的 40P01 增加「第一个 effect 已写下后在第二个
+  attempt UPDATE 注入」以证明写后回滚，一次性注入用事务外 sequence（§4.1a）；托管零行 CAS 给出 SQLite 的 `RAISE(IGNORE)` 写法（§4.5）。
 
 ## 8. 调研中另见、不在本 RFC 内
 
