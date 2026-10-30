@@ -44,14 +44,16 @@ SQLite 不受影响：`BEGIN IMMEDIATE` 全库独占。
 1. 以 owner 围栏开场的 SERIALIZABLE **数据写入**改为 READ COMMITTED + 整笔重放（`withTaskExecutionAggregateWrite`）：
    - 运行时会话租约 7 个事务（`runtimeSessionLeaseOperations.ts`）；
    - effect 准备、结算一族（四个入口）、进程登记（`taskExecutionEffectPersistence.ts`）；
-   - 托管进程登记（`crewstation/processEffectProjection.ts`）。
+   - 托管进程登记（`crewstation/processEffectProjection.ts`）；
+   - effect 静默结算的四个入口（`effectQuiescence.ts`，今天是不重试的 READ COMMITTED）：因新增 family 锁可能成为死锁牺牲方，
+     一并换原语并补任务根锁。
 2. 每个事务的「先读后写」不变量都由 owner 行锁、任务根锁、行锁或唯一约束保护（design §3 逐项）；唯一的跨任务共享数据
    （父子任务共用 lineage 下的 effect family：effect 唯一槽、watermark、重放决定）由新增的 **family advisory 锁**串行，
    effect 静默收尾（`effectQuiescence.ts`，本已 READ COMMITTED）同样取这把锁。
 3. 会话租约补四处加固（谓词收紧、锁下重读、精确删除计数、提前返回改用围栏后读），冲突错误只把租约主键冲突映射为
    `owner-conflict`。
 4. PostgreSQL 上，扇出写分片与并行节点不再因同任务的数据写入耗尽 40001 重试而失败；也不出现旧快照判定。
-5. SQLite 行为不变。
+5. SQLite 的事务模式与单写者边界不变；租约加固与错误映射收窄在两种 provider 上同样生效。
 
 ## 3. 非目标
 
@@ -66,18 +68,23 @@ SQLite 不受影响：`BEGIN IMMEDIATE` 全库独占。
   让任务失败。
 - **错误映射**：会话租约只把租约主键冲突报为 `runtime-session-conflict / owner-conflict`；父子任务争同一 effect family 时，
   败方得到与今天相同的类型化冲突（由 family 锁保证读到胜方结果），不再可能是裸 `23505`。
-- SQLite 单机：不变。无 API、配置或数据迁移变化。
+- **SQLite 单机**：事务模式不变；租约加固与错误映射收窄同样适用。
+- **错误详情**：租约适配器的非主键约束错误不再被改写为 `owner-conflict`，原错误会进入运行结果与持久化的错误信息；上层的失败分类
+  与恢复路径不变。
+- 无 API、配置或数据迁移变化。
 
 ## 5. 验收标准
 
 1. 转换后的事务在 PostgreSQL 上以 READ COMMITTED 运行（SQL 形状断言），SQLite 仍为 `BEGIN IMMEDIATE`。
-2. **原故障的确定性回归**：同任务另一写手持续持有并交替提交 owner 行时，转换后的事务**首次尝试**即完成；变异检查——换回
-   SERIALIZABLE，同一用例以 40001 耗尽重试失败。
+2. **原故障的确定性回归**（barrier 协议：竞争写手持锁 → 确认被测事务的 owner 围栏处于锁等待 → 竞争写手提交）：被测事务完成，
+   且 owner 围栏 UPDATE 只发出一次；变异检查——换回 SERIALIZABLE，首次尝试以 40001 失败并重发围栏，断言失败。
 3. 第 2 轮设计门的两个交错：`patch` 先建运行态行 → `claimNew` 走更新分支成功；运行结束状态先提交 → `preclaimResume` 得到
    `run-not-claimable`。
-4. 父子任务争同一 effect family（准备 / 结算 / 静默收尾两两并发）：败方得到类型化冲突或在胜方之后正确推进，watermark 单调、
-   无裸 `23505`、无死锁挂起。
-5. 会话租约四处加固各有负对照；非租约主键的约束错误不再报为 `owner-conflict`。
+4. 父子任务争同一 effect family（准备 / 结算 / 静默收尾四入口两两并发，含跨 family 共用 fence 键、多 family 反序、
+   `retry-authorized` 分支）：败方得到类型化冲突或在胜方之后正确推进，watermark 单调，无裸 `23505`、无挂起；静默收尾入口被选为
+   死锁牺牲方时整笔重放成功，失败尝试不留下部分结算。
+5. 会话租约加固各有「去掉即失败」的交错负对照；真正的租约主键冲突仍为 `owner-conflict`，其它约束错误保留原错误；托管登记的
+   attempt CAS 命中 0 行时整笔回滚。
 6. 本机 8×8 并行压测扇出写分片用例：0 次失败；服务端 40001 计数记入 design §4。
 7. 钉住隔离级别、SQL 形状或「仍为 SERIALIZABLE」注释的既有用例、源码锁与账本按新语义逐条更新并说明；主 CI 全绿。
 
