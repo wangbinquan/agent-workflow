@@ -1,3 +1,10 @@
+## 2026-10-30 进行中 RFC：RFC-397 热路径写入改用共享 owner 围栏（Draft，`design/RFC-397-hot-path-owner-share-fence/`）
+
+- **来由**：v0.19.3 候选 `b430c7754` 的主 CI（41052627131）红在后端 ubuntu 分片 33/36 的 `scheduler-boundary-fanout-concurrency.test.ts` [postgresql]「B: RFC-130 writer shards…」：第三个写分片准备隔离工作区时，owner 围栏 UPDATE 失败，任务 `failed`。约 150 次主 CI 里第一次出现。用户 2026-10-30 授权本 session 接手，并决定先走 RFC 根治、再发 v0.19.3。
+- **根因**（本机一次性 PostgreSQL 17 复现，8 路 × 8 次：4/64 失败，服务端 2316 次 `40001 could not serialize access due to concurrent update`，0 次死锁）：运行时事件追加每冲刷一批就把 owner 行 `revision + 1`；同任务上以同一围栏开场的 SERIALIZABLE 写入（effect 准备 / 结算、会话租约）因此不断得到 40001，10 次重试（退避 ≤16ms）被耗尽。只影响 PostgreSQL，v0.19.2 不含这些代码。临时把重试上限改为 30 时 0/64（实验，未提交；用户选择根治，不调预算）。
+- **方案**：只给只追加的两处写入（运行时事件、会话回捕）换共享围栏：`SELECT … FOR SHARE`（能力矩阵 `stableReadLockClause`）校验同一 owner 条件，不改写 owner 行；接管 / 撤权 / 释放仍等在途追加提交（探针实测）。唯一放宽：停止证明不再被事件追加作废（design §2.4，待用户确认）。
+- **下一步**：设计门（只审功能）→ 用户批准 → 实现与集中验证（plan T1–T5）→ 主 CI 全绿 → 发 v0.19.3。
+
 ## 2026-10-30 runtime-scenario-matrix 的取消用例：等运行时起来的预算对齐到 45 秒，没等到就导出现场
 
 - **现象**：`19181f0dc`（v0.19.3 候选）主 CI 60/62，唯一的红是 Windows Playwright 分片 3/4 的 `deterministic runtime parity: claude-code › cancel terminates the in-flight runtime…`（run 41020561352），两轮都是「scenario trace … did not reach 1 entries」：启动任务后 15 秒内桩进程没写出第一条 trace。WF-24 这次一轮通过。同一签名两轮都红的还有另一 session 的两个纯文档提交 `2d13fd5b2`（41012381194）、`ec6e30cdb`（41014515558）；`eee046e6f` 一轮红；10-24 起另有五次一轮红、重试通过。
