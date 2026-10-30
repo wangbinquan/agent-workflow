@@ -4,6 +4,7 @@ import path from 'node:path'
 import { readFileSync, existsSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { fileURLToPath } from 'node:url'
+import { daemonProxy } from './devProxy'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
 const appHome = process.env.AGENT_WORKFLOW_HOME ?? path.join(homedir(), '.agent-workflow')
@@ -87,9 +88,6 @@ export default defineConfig({
   server: {
     port: 5174,
     strictPort: true,
-    proxy: {
-      '/api': daemonTarget,
-      '/ws': { target: daemonTarget, ws: true, changeOrigin: true },
-    },
+    proxy: daemonProxy(daemonTarget),
   },
 })

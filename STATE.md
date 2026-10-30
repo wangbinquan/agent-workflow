@@ -1,3 +1,9 @@
+## 2026-10-29 `bun dev` 登录页的单点登录回到 daemon 端口：Vite 代理转发浏览器所在的 host
+
+- **现象**：开发态在 5174 点登录页「身份提供方」，选完身份后落在 daemon 端口，显示 `no route for /tasks`。dev-auth 一键登录页（7460）不受影响。
+- **根因**：Vite 的 `'/api': target` 简写等于 `changeOrigin: true`，且不转发 `X-Forwarded-*`；没有 `publicBaseUrl` 时 daemon 用 `Host` 推算 `redirect_uri`，得到的是它自己的端口。
+- **修复**：代理表移到 `packages/frontend/devProxy.ts`，`/api` 加 `xfwd: true`；回归用例 `packages/frontend/tests/dev-proxy.test.ts`。在运行中的 `bun dev` 上从 5174 走完整流程：回调回到 5174，登录后 `/api/whoami` 返回 dev-admin；一键登录照常可用。
+
 ## 2026-10-29 `bun dev` 在 Bun 1.3.13 上起不来：启动器检查 Bun 版本，写入栅栏不再重入
 
 - **现象**：本机 bun 为 1.3.13 时，`bun dev` 的后端停在启动步骤 `transport-projections`，报 `SQLiteError: cannot rollback - no transaction is active`。

@@ -5192,6 +5192,20 @@ verified`——而同一份代码首次运行完全正常。
   一旦「密钥随进程重生成、标识符却写死」，对端只要缓存了密钥集就会进入这种「重启才好」的
   伪灵异状态。看到「首次通、重启必挂、重启对端又好了」，先查两边的 key id 与缓存生命周期。
 
+## Vite 的代理简写改掉 `Host`、又不转发 `X-Forwarded-*`：开发态单点登录回到 daemon 端口（2026-10-29 实撞）
+
+`'/api': target` 在 Vite 里等于 `{ target, changeOrigin: true }`（`vite/dist/node/chunks/dep-*.js`
+的 proxy 中间件）：daemon 收到的 `Host` 是它自己的地址，也没有 `X-Forwarded-Host`。没配
+`publicBaseUrl` 时，daemon 按「config → X-Forwarded-* → Host」推算对外地址（`routes/publicOrigin.ts`），
+于是登录页「身份提供方」按钮发出的 `redirect_uri` 指向 daemon 端口。开发模式下 daemon 不提供页面，
+登录完落在 `{"code":"route-not-found","message":"no route for /tasks"}`。dev-auth 一键登录页（7460）
+不受影响：它在服务端走完授权，再把回调改写到 Vite 上。
+
+- 现在代理表在 `packages/frontend/devProxy.ts`，`/api` 带 `xfwd: true`；回归用例
+  `packages/frontend/tests/dev-proxy.test.ts`。
+- 按转发头推算对外地址的功能（OIDC 回调、`/.well-known/mcp`、文档里的示例地址）在开发态都靠这一点。
+  新增这类功能时，从 5174 实际走一遍，别只从 daemon 端口测。
+
 ## 给 `bun dev` 加常驻子进程：Ctrl-C 会带走它，父进程被强杀不会（2026-08-22 实测）
 
 `bun run --filter '*' dev` 把各包的 dev 进程放在**同一个前台进程组**里，所以终端 Ctrl-C
