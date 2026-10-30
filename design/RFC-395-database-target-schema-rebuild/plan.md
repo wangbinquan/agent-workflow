@@ -1143,6 +1143,8 @@ graph-care 的修复提交 `0244e0e24` 上，CI 与 10 条定时流水线又全�
 - `e2e/rfc246-operations-surfaces.spec.ts` 无障碍扫描（WebKit Ubuntu 1/4）：Repos 列表是虚拟列表，行挂上之前容器已可滚动却没有可聚焦内容。用例改为等行出现后再扫，本机 WebKit 与 Chromium 各 2 次通过。
 - `e2e/rfc319-agent-and-resource-config.spec.ts` RES-X2（WebKit macOS 2/4）：选了继承人后确认按钮一直禁用。疑似 `AclPanel` 在查询后台重取时忽略这次选择，属产品时序，未改，登记在 audit-backlog，用例加注释指向它。
 
+**修复提交上的复跑**：`f324bd790`（上面三条用例与夹具的修复）上 e2e-full-nightly 40991901383 成功且没有重试，e2e-webkit-nightly 40991904663 8 / 8，visual-regression-nightly 40991907790 成功。它的 CI 40991870730 红在 RFC-359 W5-T19f 守卫：我给锁竞争用例加的第二个持锁脚本多了一处 `new Database(`，超过该文件的高水位 5（那次只跑了夹具相关用例，没有跑架构守卫）。`a658c0b9c` 改为复用原持锁脚本，本机架构守卫全量 1299 pass / 0 fail，CI 40995092376 62 / 62，backend-macos-nightly 40995114414 18 / 18；`f324bd790` 上的 CI 与 backend-macos 已取消。其余六条定时流水线（postgresql-evidence、evidence-soak、maintenance-soak、git-protocols-e2e、integration-opencode、windows-platform）以 `6c169a931` 上的成功为准：之后两笔只改了 e2e 用例、夹具、一个后端用例和文档，不在它们运行的范围里。这一轮又有三条首轮失败、重试通过（RFC-372 两条在 WebKit，workflow-editor 一条在 Windows），与改动无关，登记在 audit-backlog，用例加了注释。
+
 **AC 逐项证据**（测试文件均在 `packages/backend/tests/`）：
 
 | AC | 证据 |

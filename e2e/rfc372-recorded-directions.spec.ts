@@ -82,6 +82,8 @@ for (const recording of [directionsRecording, hierarchyRecording]) {
         await daemon?.stop()
         if (state) rmSync(state, { recursive: true, force: true })
       })
+      // WebKit nightly 40991904663 (Ubuntu): a follow-up was accepted (202) but its question did not
+      // land within 30 s, then the retry passed. Open in docs/audit-backlog.md (2026-10-30).
       test('real recorded directions: category peers, question child, root category, modal recovery and final document', async ({
         page,
       }, testInfo) => {

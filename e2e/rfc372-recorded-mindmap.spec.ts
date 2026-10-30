@@ -149,6 +149,8 @@ test.afterAll(async () => {
   if (state) rmSync(state, { recursive: true, force: true })
 })
 
+// WebKit nightly 40991904663 (macOS): the first attempt timed out in `deepen` waiting for the
+// POST …/followup response, then passed on retry. Open in docs/audit-backlog.md (2026-10-30).
 test('recorded real-model task: preset directions, deep hierarchy, rich reading, confirmation and final document', async ({
   page,
 }, testInfo) => {

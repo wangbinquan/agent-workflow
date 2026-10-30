@@ -381,6 +381,8 @@ test.describe('RFC-054 W2-3 — workflow editor interactions', () => {
       browserName === 'webkit',
       'xyflow Shift+click multi-select not stable on Playwright webkit',
     )
+    // CI 40995092376 (Windows): node 0 lacked `selected` after the Shift+click below, then the
+    // retry passed. Open in docs/audit-backlog.md (2026-10-30).
     await openEditor(page)
     const nodes = page.locator('.react-flow__node')
     await nodes.nth(0).click()
