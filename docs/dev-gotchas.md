@@ -492,6 +492,8 @@ bun 报出的用例时长包含 `beforeEach` / `afterEach`（实测：700ms 的 
   `repoPrepMs` / `launchToSpawnMs` / `spawnToTraceMs`。
 - 归因时按 exact SHA 把同一条用例的历次耗时排出来，比只看红绿快：这条在变红之前已经从 2~5 秒涨到 11 秒，首轮红的几次都和
   `interrupted` 重叠。
+- 导出现场要起子进程（`ps` / PowerShell）时走 `e2e/command.ts` 的 `runCommandResult`：spec 源码里出现 `child_process`
+  会被 `root-test-entrypoint.test.ts` 拦下（`af27212f5` 实撞）。它的输出缓冲是默认的 1MB，Windows 上只列映像名，别取命令行。
 
 ## 主 CI 的墙钟受**并发配额**约束，不受单个 job 时长约束：加分片可能让它更慢（2026-10-14 实测）
 

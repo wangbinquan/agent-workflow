@@ -6,12 +6,11 @@
 // external CLI/model is replaced by the same data-driven scenario binary.
 
 import { expect, test } from '@playwright/test'
-import { execFileSync, spawnSync } from 'node:child_process'
 import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { initGitRepo, repoRemoteUrl } from './command'
+import { initGitRepo, repoRemoteUrl, runCommandResult } from './command'
 import { startDaemon, type DaemonHandle } from './harness'
 
 type Protocol = 'opencode' | 'claude-code'
@@ -396,9 +395,16 @@ for (const protocol of ['opencode', 'claude-code'] as const) {
         if (traces.length >= count) return traces
         await new Promise((resolve) => setTimeout(resolve, 50))
       }
+      // A fault while collecting the report must not replace the failure itself.
+      let diagnostics: unknown
+      try {
+        diagnostics = await runDiagnostics(taskId)
+      } catch (error) {
+        diagnostics = `diagnostics failed: ${String(error)}`
+      }
       throw new Error(
         `scenario trace ${taskId} did not reach ${count} entries in ${timeoutMs}ms: ${JSON.stringify(
-          await runDiagnostics(taskId),
+          diagnostics,
         )}`,
       )
     }
@@ -540,12 +546,8 @@ for (const protocol of ['opencode', 'claude-code'] as const) {
 
     // The daemon's live descendants: launcher, runtime and git processes.
     function daemonProcesses(): unknown {
-      let rows: ProcessRow[]
-      try {
-        rows = process.platform === 'win32' ? windowsProcesses() : posixProcesses()
-      } catch (error) {
-        return clip(String(error), 600)
-      }
+      const rows = process.platform === 'win32' ? windowsProcesses() : posixProcesses()
+      if (typeof rows === 'string') return rows
       const children = new Map<number, ProcessRow[]>()
       for (const row of rows) children.set(row.ppid, [...(children.get(row.ppid) ?? []), row])
       const tree: ProcessRow[] = []
@@ -559,44 +561,44 @@ for (const protocol of ['opencode', 'claude-code'] as const) {
       return tree
     }
 
-    function windowsProcesses(): ProcessRow[] {
-      // A process that exits mid-listing leaves a non-terminating error and a
-      // non-zero exit code; the JSON on stdout is still complete.
-      const listing = spawnSync(
-        'powershell.exe',
-        [
-          '-NoProfile',
-          '-NonInteractive',
-          '-Command',
-          "Get-CimInstance Win32_Process | Select-Object ProcessId,ParentProcessId,@{n='Started';e={if ($_.CreationDate) { $_.CreationDate.ToString('o') } else { '' }}},CommandLine | ConvertTo-Json -Compress",
-        ],
-        { encoding: 'utf8', timeout: 20_000, maxBuffer: 64 * 1024 * 1024 },
-      )
-      if (listing.stdout.trim().length === 0) {
-        throw new Error(`process listing failed: ${listing.error ?? listing.stderr}`)
+    // Image names, not command lines: a hosted runner's browser processes carry
+    // command lines long enough to overflow the command boundary's output buffer.
+    // A process exiting mid-listing is a non-terminating error, silenced so the
+    // JSON line stays the only output.
+    function windowsProcesses(): ProcessRow[] | string {
+      const listing = runCommandResult('powershell.exe', [
+        '-NoProfile',
+        '-NonInteractive',
+        '-Command',
+        "$ErrorActionPreference = 'SilentlyContinue'; Get-CimInstance Win32_Process | Select-Object ProcessId,ParentProcessId,Name,@{n='Started';e={if ($_.CreationDate) { $_.CreationDate.ToString('o') } else { '' }}} | ConvertTo-Json -Compress",
+      ])
+      const json = listing.output.split('\n').find((line) => /^\s*[[{]/.test(line))
+      let parsed: unknown
+      try {
+        parsed = JSON.parse(json ?? '')
+      } catch {
+        return clip(`process listing failed (exit ${listing.status}): ${listing.output}`, 600)
       }
-      const parsed = JSON.parse(listing.stdout) as unknown
       const list = (Array.isArray(parsed) ? parsed : [parsed]) as Array<{
         ProcessId: number
         ParentProcessId: number
+        Name: string | null
         Started: string | null
-        CommandLine: string | null
       }>
       return list.map((row) => ({
         pid: row.ProcessId,
         ppid: row.ParentProcessId,
         started: row.Started ?? '',
-        command: row.CommandLine ?? '',
+        command: row.Name ?? '',
       }))
     }
 
-    function posixProcesses(): ProcessRow[] {
-      const output = execFileSync('ps', ['-eo', 'pid=,ppid=,etime=,args='], {
-        encoding: 'utf8',
-        timeout: 20_000,
-        maxBuffer: 16 * 1024 * 1024,
-      })
-      return output.split('\n').flatMap((line) => {
+    function posixProcesses(): ProcessRow[] | string {
+      const listing = runCommandResult('ps', ['-eo', 'pid=,ppid=,etime=,args='])
+      if (listing.status !== 0) {
+        return clip(`process listing failed (exit ${listing.status}): ${listing.output}`, 600)
+      }
+      return listing.output.split('\n').flatMap((line) => {
         const match = /^\s*(\d+)\s+(\d+)\s+(\S+)\s+(.*)$/.exec(line)
         return match === null
           ? []

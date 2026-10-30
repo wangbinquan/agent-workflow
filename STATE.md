@@ -4,6 +4,8 @@
 - **归因**：与发布改动无关（候选 diff 只动前端选择器、WF-24 与文档），本机 macOS 同一二进制 1.7 秒通过，Linux 约 1 秒。逐次排耗时：这条用例在 Windows 上原本 2~5 秒，从 10-30 05:33 起变成 11 秒或超过 15 秒，首轮红的几次都和同分片的 `task lifecycle: interrupted`（两次 daemon 冷启动，那几次从 9~27 秒涨到 24~96 秒）重叠；别的 Windows 分片耗时没变。排除了 `e9e1a8187` 的写入栅栏改动：CI 用的 Bun 1.4.3 上 `query()` 不经过被覆盖的 `prepare`，成功路径前后逐步相同。诊断提交 `af27212f5` 的 run 41046785190 实测：Windows 上不重叠时启动到 trace 6.5 秒；超时用例两轮在 8.5~8.8 秒收尾、两条 trace 都在，TERM 即 Job Object terminate，不存在 10 秒宽限。结论：屏障预算（15 秒）对 Windows 并发负载下的派发时延太紧，不是运行时卡死。
 - **修复**（用户 2026-10-30 授权本 session 接手，责任 session 不明）：`waitForTrace` 预算对齐同文件任务等待的 45 秒；没等到时报错里带任务与节点行、桩进程进度（scope / call 文件、最后几条 trace）、该任务的 daemon.log 行和 daemon 名下的进程树（Windows 走 PowerShell CIM）。超时、取消两条用例各打一行 `[runtime-scenario-timing]`，取消那行拆出 `repoPrepMs` / `launchToSpawnMs` / `spawnToTraceMs`。踩坑记录在 `docs/dev-gotchas.md`「测试 / CI」。
 - **验证**：本机整份 spec 16/16；临时副本强制 5 秒没等到，报错带齐上述现场。
+- **本 session 自己推红的一格**：诊断提交 `af27212f5` 在 spec 里直接 import 了 `node:child_process`，被 `packages/backend/tests/root-test-entrypoint.test.ts` 的「e2e 子进程一律走 `e2e/command.ts` 有界边界」守卫拦下（run 41046785190，后端 ubuntu 分片 21/36）；`5b008b502` 仍带着它。随后的提交改走 `runCommandResult`（Windows 只列映像名：托管 runner 上浏览器进程的命令行会撑爆该边界的输出缓冲），现场采集本身出错时不覆盖原失败；守卫 24/24、强制没等到的探针在 POSIX 上列出了 daemon → 启动器 → 桩进程。
+- **同期别处的红，未接手**：`19181f0dc` 的定时 `backend-macos-nightly`（41042836411）红在 `rfc349-target-coverage-linear-grouping.test.ts` 的单轮上限（80000 分片 7191ms，上限 4000ms）；测的是 PostgreSQL 逻辑目标的 `finalizeSchema`（假连接池，不经 SQLite 写入栅栏），`228dd9d28..19181f0dc` 无后端改动，同一 nightly 在 `228dd9d28` 上是绿的。
 
 ## 2026-10-30 节点选择器在代理列表晚到时不再丢掉已输入的搜索词；WF-24 等目标选项高亮再按 Enter
 
