@@ -1,14 +1,22 @@
 // Regression coverage for the 2026-10-12 slow bun dev startup: dependent
 // services must follow actual backend readiness, and shutdown must collect them.
+// Also the 2026-10-29 startup on Bun 1.3.13: a Bun outside `engines.bun` is
+// refused before anything starts, and the package scripts the launcher starts
+// resolve `bun` to the launcher's own Bun rather than whichever PATH names first.
 
 import { afterEach, describe, expect, test } from 'bun:test'
 import { mkdtempSync, readFileSync, writeFileSync, mkdirSync, existsSync, rmSync } from 'node:fs'
 import { createServer, type RequestListener, type Server } from 'node:http'
 import { tmpdir } from 'node:os'
 import { createConnection } from 'node:net'
-import { join } from 'node:path'
+import { delimiter, join } from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
-import { runDev, type DevService } from '../../../scripts/dev'
+import {
+  runDev,
+  serviceEnvironment,
+  unsupportedBunVersion,
+  type DevService,
+} from '../../../scripts/dev'
 import { waitForDaemon, type DaemonInfo, type WaitForDaemonOptions } from '../src/dev-auth/daemon'
 
 function deferred<T>() {
@@ -284,6 +292,17 @@ describe('development service lifecycle', () => {
     const root = home()
     const appHome = join(root, 'app')
     mkdirSync(appHome)
+    if (process.platform !== 'win32') {
+      // Another `bun` first on PATH: the launcher's Bun must still run every script.
+      const decoy = join(root, 'decoy-bin')
+      mkdirSync(decoy)
+      writeFileSync(join(decoy, 'bun'), '#!/bin/sh\nexit 97\n', { mode: 0o755 })
+      const originalPath = process.env.PATH
+      process.env.PATH = `${decoy}${delimiter}${originalPath ?? ''}`
+      cleanups.push(() => {
+        process.env.PATH = originalPath
+      })
+    }
     const backendFile = join(root, 'backend.json')
     const frontendFile = join(root, 'frontend.json')
     const loginFile = join(root, 'system-mocks.json')
@@ -304,7 +323,7 @@ const server = Bun.serve({hostname: '127.0.0.1', port: 0, fetch() {
   if (service === 'backend') writeFileSync(${JSON.stringify(join(root, 'probed'))}, 'yes');
   return Response.json({ok}, {status: ok ? 200 : 503});
 }});
-const info = {pid: process.pid, url: server.url.toString(), startedAt: new Date().toISOString()};
+const info = {pid: process.pid, url: server.url.toString(), startedAt: new Date().toISOString(), runtime: process.execPath};
 writeFileSync(${JSON.stringify(join(root, service + '.json'))}, JSON.stringify(info));
 if (service === 'backend') writeFileSync(${JSON.stringify(join(appHome, '.daemon.info'))}, JSON.stringify(info));
 `,
@@ -332,11 +351,13 @@ if (service === 'backend') writeFileSync(${JSON.stringify(join(appHome, '.daemon
       writeFileSync(readyFile, 'yes')
       await until(() => existsSync(frontendFile) && existsSync(loginFile))
       const records = [backendFile, frontendFile, loginFile].map(
-        (path) => JSON.parse(readFileSync(path, 'utf8')) as { pid: number; url: string },
+        (path) =>
+          JSON.parse(readFileSync(path, 'utf8')) as { pid: number; url: string; runtime: string },
       )
       controller.abort()
       expect(await running).toBe(0)
       for (const record of records) {
+        expect(record.runtime).toBe(process.execPath)
         expect(() => process.kill(record.pid, 0)).toThrow()
         // A configured HTTP proxy can return a status page for a closed port. Check
         // the actual TCP listener rather than interpreting that HTTP response.
@@ -356,4 +377,98 @@ if (service === 'backend') writeFileSync(${JSON.stringify(join(appHome, '.daemon
       await running
     }
   }, 20_000)
+})
+
+describe('Bun runtime requirement', () => {
+  function checkout(manifest: object): string {
+    const root = home()
+    writeFileSync(join(root, 'package.json'), JSON.stringify(manifest))
+    return root
+  }
+
+  test('a Bun outside engines.bun is refused before any service starts', async () => {
+    const launched: DevService[] = []
+    const logs: string[] = []
+    const code = await runDev({
+      root: checkout({ engines: { bun: '>=1.4.3' } }),
+      home: home(),
+      bunVersion: '1.3.13',
+      log: (message) => logs.push(message),
+      launch(service) {
+        launched.push(service)
+        return child(service)
+      },
+      waitUntilReady: async () => daemon,
+    })
+    expect(code).toBe(1)
+    expect(launched).toEqual([])
+    expect(logs).toHaveLength(1)
+    expect(logs[0]).toContain('Bun 1.3.13 does not satisfy engines.bun ">=1.4.3"')
+  })
+
+  test('a matching Bun, or a checkout without engines.bun, starts the backend', async () => {
+    const cases = [
+      ['1.4.3', { engines: { bun: '>=1.4.3' } }],
+      ['1.3.13', {}],
+    ] as const
+    for (const [bunVersion, manifest] of cases) {
+      const controller = new AbortController()
+      const launched: DevService[] = []
+      const running = runDev({
+        root: checkout(manifest),
+        home: home(),
+        bunVersion,
+        signal: controller.signal,
+        log: () => undefined,
+        launch(service) {
+          launched.push(service)
+          return child(service)
+        },
+        waitUntilReady(_home, options) {
+          return new Promise<DaemonInfo>((_done, reject) => {
+            options.signal?.addEventListener('abort', () => reject(new Error('stopped')), {
+              once: true,
+            })
+          })
+        },
+      })
+      expect(launched).toEqual(['backend'])
+      controller.abort()
+      expect(await running).toBe(0)
+    }
+  })
+
+  test('the requirement is a semver range', () => {
+    expect(unsupportedBunVersion('1.4.3', '>=1.4.3')).toBeUndefined()
+    expect(unsupportedBunVersion('1.5.0', '>=1.4.3')).toBeUndefined()
+    expect(unsupportedBunVersion('1.3.13', '>=1.4.3')).toContain('install a matching Bun')
+    expect(unsupportedBunVersion('1.3.13', undefined)).toBeUndefined()
+  })
+})
+
+describe('service environment', () => {
+  const runtime = join(tmpdir(), 'aw-dev-runtime', 'bin')
+
+  test('package scripts find the launcher Bun before anything else on PATH', () => {
+    const env = serviceEnvironment(
+      { PATH: ['/usr/local/bin', '/usr/bin'].join(delimiter), HOME: '/home/dev' },
+      join(runtime, 'bun'),
+    )
+    expect(env).toEqual({
+      PATH: [runtime, '/usr/local/bin', '/usr/bin'].join(delimiter),
+      HOME: '/home/dev',
+    })
+  })
+
+  test('an environment already led by the launcher Bun is passed through unchanged', () => {
+    const env = { PATH: [runtime, '/usr/bin'].join(delimiter) }
+    expect(serviceEnvironment(env, join(runtime, 'bun'))).toBe(env)
+  })
+
+  test('the existing spelling of the variable is kept, and a missing one is created', () => {
+    expect(serviceEnvironment({ Path: 'C:\\Windows' }, join(runtime, 'bun.exe'))).toEqual({
+      Path: [runtime, 'C:\\Windows'].join(delimiter),
+    })
+    expect(serviceEnvironment({}, join(runtime, 'bun'))).toEqual({ PATH: runtime })
+  })
 })

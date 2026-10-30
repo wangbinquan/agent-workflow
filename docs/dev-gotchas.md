@@ -1663,6 +1663,23 @@ bun-v<ver>/bun-darwin-aarch64.zip`），不必动本机工具链。
 - 编译产物同理：`bun run build:binary:e2e` 用的是**当前** bun，本机版本不对 = 你测的不是
   CI 会跑的那个二进制。
 
+**第二次（2026-10-29）：`bun dev` 直接起不来。** `engines.bun` 已是 `>=1.4.3`，本机默认 bun
+仍是 1.3.13。开发后端停在启动步骤 `transport-projections`，报 `SQLiteError: cannot rollback -
+no transaction is active`，前面是约 4000 条嵌套的 `[db-slow] SELECT first_live_write_at …`。
+根因是 Bun 1.3.x 的 `Database.query()` 内部调用实例上的 `this.prepare`（1.4.3 不会，两版各跑一段
+不 import 本仓的探针即可确认）：RFC-395 的写入栅栏（`sqliteGenerationFence.ts`）读标记的那条查询
+经它自己的读包装器回到 `observeCommit()`，递归到栈溢出；溢出发生在 COMMIT 之后，catch 里的
+`ROLLBACK` 再把真错误换成「没有事务」。10-26 栅栏落地前，1.3.13 只是碰巧还能跑。
+
+- 现在 `scripts/dev.ts` 启动前对照 `engines.bun`，不满足就拒绝并写明版本；它拉起的包脚本把启动器
+  所在目录放在 PATH 最前，脚本里的 `bun` 与启动器是同一个。栅栏改为先清标记再读、提交后的观察不进
+  回滚路径、事务已经结束时不再 ROLLBACK。
+- **只换二进制不够**：`/path/to/bun-1.4.3 run <脚本>` 时，`package.json` 脚本里的 `bun` 仍按 PATH
+  解析（实测落回 1.3.13）。绕开 `scripts/dev.ts`、直接在 `packages/*` 下 `bun run dev` 时，要让正确
+  版本排在 PATH 最前。
+- 在 `Database` 的 `prepare` / `query` 上叠包装器时，别假设二者互不调用：包装器的行为要在 1.3 与
+  1.4 两种形态下都成立（回归用例 `sqlite-generation-fence-reentry.test.ts` 把 1.3 的形态模拟出来）。
+
 ## 临时探针在工作树里时不要跑 census（RFC-349 实测，2026-09-02）
 
 > 历史（RFC-376 起不再适用）：本节旧 census / 投影 / 增长许可流程已退役；共享改动保留原则仍有效。

@@ -1,3 +1,10 @@
+## 2026-10-29 `bun dev` 在 Bun 1.3.13 上起不来：启动器检查 Bun 版本，写入栅栏不再重入
+
+- **现象**：本机 bun 为 1.3.13 时，`bun dev` 的后端停在启动步骤 `transport-projections`，报 `SQLiteError: cannot rollback - no transaction is active`。
+- **根因**：Bun 1.3.x 的 `Database.query()` 内部走实例上被覆盖的 `prepare`。RFC-395 写入栅栏读标记的查询经它自己的读包装器回到 `observeCommit()`，递归到栈溢出；溢出发生在 COMMIT 之后，catch 里的 ROLLBACK 把原错误换掉。仓库自 10-14 起要求 Bun `>=1.4.3`，10-26 栅栏落地前 1.3.13 碰巧还能跑。CI 用 1.4.3，不受影响。
+- **修复**：`scripts/dev.ts` 启动前对照 `engines.bun`，不满足就拒绝并写明版本；拉起的包脚本固定用启动器自己的 Bun（PATH 最前放启动器目录）。`sqliteGenerationFence.ts` 先清标记再读、提交后的观察移出回滚路径、事务已结束时不再 ROLLBACK。
+- **回归用例**：`packages/backend/tests/sqlite-generation-fence-reentry.test.ts`（模拟 1.3 的 query 形态，以及 `RAISE(ROLLBACK)` / `RAISE(ABORT)` 两种结束方式）；`packages/system-mocks/tests/dev-startup.test.ts`（版本拒绝，以及 PATH 上先有另一个 `bun` 时子服务仍跑启动器的 Bun）。踩坑记录补在 `docs/dev-gotchas.md`「本机 bun 低于 engines.bun」一节。
+
 ## 2026-10-29 RFC-395 Done：D4 / D13 收尾、T19-H11，CI 与定时流水线修绿
 
 - **收尾内容**（详见 RFC-395 plan §6.13「收尾：D4、D13、T19-H11 与流水线」）：

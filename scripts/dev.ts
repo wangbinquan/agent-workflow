@@ -2,8 +2,9 @@
 // Start dependent development services only after this backend is serving.
 // The original package scripts remain responsible for their own configuration.
 
+import { readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { delimiter, dirname, join, resolve } from 'node:path'
 import {
   waitForDaemon,
   type DaemonInfo,
@@ -24,15 +25,51 @@ export interface DevOptions {
   readonly authEnabled?: boolean
   readonly signal?: AbortSignal
   readonly shutdownGraceMs?: number
+  /** Version of the Bun running the launcher; nested package scripts inherit that Bun. */
+  readonly bunVersion?: string
   readonly launch?: (service: DevService, root: string) => DevChild
   readonly waitUntilReady?: (home: string, options: WaitForDaemonOptions) => Promise<DaemonInfo>
   readonly log?: (message: string) => void
 }
 
+/** `engines.bun` of the checkout; a missing or unreadable manifest states no requirement. */
+function requiredBun(root: string): string | undefined {
+  try {
+    const manifest = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')) as {
+      engines?: { bun?: unknown }
+    }
+    return typeof manifest.engines?.bun === 'string' ? manifest.engines.bun : undefined
+  } catch {
+    return undefined
+  }
+}
+
+/**
+ * An older Bun fails far from its cause: on 1.3.13 the backend stopped in a
+ * startup step with "cannot rollback - no transaction is active" (2026-10-29).
+ */
+export function unsupportedBunVersion(
+  version: string,
+  required: string | undefined,
+): string | undefined {
+  if (required === undefined || Bun.semver.satisfies(version, required)) return undefined
+  return `Bun ${version} does not satisfy engines.bun "${required}" in package.json; install a matching Bun and run bun dev again`
+}
+
+/** Package scripts resolve `bun` through PATH, so the launcher's Bun goes first. */
+export function serviceEnvironment(env: NodeJS.ProcessEnv, execPath: string): NodeJS.ProcessEnv {
+  // Windows spells the variable `Path`; a second spelling would be a second variable.
+  const key = Object.keys(env).find((name) => name.toUpperCase() === 'PATH') ?? 'PATH'
+  const runtime = dirname(execPath)
+  const current = env[key]
+  if (current?.split(delimiter)[0] === runtime) return env
+  return { ...env, [key]: current ? `${runtime}${delimiter}${current}` : runtime }
+}
+
 function launchService(service: DevService, root: string): DevChild {
   const child = Bun.spawn([process.execPath, 'run', 'dev'], {
     cwd: join(root, 'packages', service),
-    env: process.env,
+    env: serviceEnvironment(process.env, process.execPath),
     stdin: 'inherit',
     stdout: 'inherit',
     stderr: 'inherit',
@@ -84,6 +121,11 @@ export async function runDev(options: DevOptions = {}): Promise<number> {
   const launch = options.launch ?? launchService
   const waitUntilReady = options.waitUntilReady ?? waitForDaemon
   const log = options.log ?? ((message) => console.log(`[dev] ${message}`))
+  const unsupported = unsupportedBunVersion(options.bunVersion ?? Bun.version, requiredBun(root))
+  if (unsupported !== undefined) {
+    log(`startup refused: ${unsupported} (running ${process.execPath})`)
+    return 1
+  }
   const controller = new AbortController()
   const children: DevChild[] = []
   let code = 0

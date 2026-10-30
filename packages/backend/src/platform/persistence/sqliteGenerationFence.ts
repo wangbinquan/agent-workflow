@@ -31,15 +31,16 @@ export function guardSqliteGenerationWrites(
   guarded.set(database, reset)
   const observeCommit = () => {
     if (marked || !pendingMark || database.inTransaction) return
+    // Cleared first: where `query` prepares through the overridden `prepare`
+    // (Bun 1.3.x), this read returns through the read wrapper below.
+    pendingMark = false
     const row = query(
       'SELECT first_live_write_at FROM aw_meta_first_write WHERE generation_id = ?',
     ).get(generationId) as { first_live_write_at: number | null } | null
     marked = row?.first_live_write_at != null
-    pendingMark = false
   }
   let depth = 0
-  const write = <T>(body: () => T): T => {
-    if (depth) return body()
+  const fenced = <T>(body: () => T): T => {
     depth++
     const nested = database.inTransaction
     let begun = false
@@ -65,10 +66,11 @@ export function guardSqliteGenerationWrites(
       }
       const result = body()
       exec(nested ? 'RELEASE aw_generation_write' : 'COMMIT')
-      observeCommit()
       return result
     } catch (error) {
-      if (begun) {
+      // A statement can end the transaction itself (RAISE(ROLLBACK), SQLITE_FULL);
+      // rolling back again would replace its error with "no transaction is active".
+      if (begun && database.inTransaction) {
         if (nested) {
           exec('ROLLBACK TO aw_generation_write')
           exec('RELEASE aw_generation_write')
@@ -78,6 +80,13 @@ export function guardSqliteGenerationWrites(
     } finally {
       depth--
     }
+  }
+  const write = <T>(body: () => T): T => {
+    if (depth) return body()
+    const result = fenced(body)
+    // Outside the rollback path: nothing after COMMIT can try to undo it.
+    observeCommit()
+    return result
   }
   const writes = (statement: string) =>
     postgresqlStatementOperation(statement) === 'write' || /^\s*REPLACE\b/i.test(statement)
