@@ -76,8 +76,9 @@ SQLite 不受影响：`BEGIN IMMEDIATE` 全库独占。
 ## 5. 验收标准
 
 1. 转换后的事务在 PostgreSQL 上以 READ COMMITTED 运行（SQL 形状断言），SQLite 仍为 `BEGIN IMMEDIATE`。
-2. **原故障的确定性回归**（barrier 协议：竞争写手持锁 → 确认被测事务的 owner 围栏处于锁等待 → 竞争写手提交）：被测事务完成，
-   且 owner 围栏 UPDATE 只发出一次；变异检查——换回 SERIALIZABLE，首次尝试以 40001 失败并重发围栏，断言失败。
+2. **原故障的确定性回归**（barrier 协议：竞争写手持锁 → 确认被测事务的 owner 围栏处于锁等待 → 竞争写手提交；派发时记录含失败
+   语句）：被测事务完成，只发出一次 `BEGIN` 与一次 owner 围栏、无失败语句；变异检查——换回 SERIALIZABLE，记录可见首次围栏以 40001
+   失败及第二次 `BEGIN`，断言失败。静默收尾四入口单独验证其加锁读取契约、取锁顺序与 40P01 整笔重放。
 3. 第 2 轮设计门的两个交错：`patch` 先建运行态行 → `claimNew` 走更新分支成功；运行结束状态先提交 → `preclaimResume` 得到
    `run-not-claimable`。
 4. 父子任务争同一 effect family（准备 / 结算 / 静默收尾四入口两两并发，含跨 family 共用 fence 键、多 family 反序、
