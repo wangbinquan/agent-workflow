@@ -277,12 +277,14 @@ describe('repository test entrypoint', () => {
         shards: '[1, 2, 3]',
         total: 3,
       },
+      // 2026-10-30: three → four. The slowest macOS leg sat at 14–19 of its 20 minutes,
+      // and run 40976668372 hit the deadline on a slower runner. Add a runner, keep the deadline.
       {
         job: 'e2e-macos',
         build: 'build-binary-macos',
         os: 'macos-latest',
-        shards: '[1, 2, 3]',
-        total: 3,
+        shards: '[1, 2, 3, 4]',
+        total: 4,
       },
       {
         job: 'e2e-windows',

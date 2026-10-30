@@ -970,12 +970,16 @@ jobs:
     name: Playwright e2e (${{ matrix.os }} shard ${{ matrix.shard }}/${{ matrix.shards }})
     needs: build-binary-macos
     if: ${{ !cancelled() }}
+    # 2026-10-30: with three shards the slowest macOS leg took 14–19 of its 20
+    # minutes in eight green main runs, and run 40976668372 hit the deadline on
+    # a runner 1.5x slower across all 151 shared tests. One more runner, same
+    # deadline.
     strategy:
       fail-fast: false
       matrix:
         os: [macos-latest]
-        shard: [1, 2, 3]
-        shards: [3]
+        shard: [1, 2, 3, 4]
+        shards: [4]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     env:

@@ -1098,6 +1098,28 @@ graph-care 的修复提交 `0244e0e24` 上，CI 与 10 条定时流水线又全�
   第五轮复核：pass，无新问题；N1～N4 与 N2 全部确认已修，`planEpochOperation` 的其他调用方（plan 命令、restore、run 的 new-run 与 discovered 路径）行为不变。
   集中验证（本机，最终代码）：后端 tsc 通过；146 个文件（架构守卫全部、`rfc395-v3-*` 全部、`rfc395-restore-epoch-routing`、runbook 守卫等）双 provider 1644 pass / 4 skip / 0 fail。新增的回归用例逐一放到修复前的代码上跑过：HEAD 版 planner 上中断重试两条与「计划保存后失败」一条失败，第二轮版本上「计划保存后失败」与「旧记录重放」两条失败，第三轮版本上「失败后保留批准」一条失败，修复后全部通过。
 
+**门检视修复提交上的流水线**：`75e6772e8`（人工门屏障）与 `c6a0248ad`（门检视修复）一起推送，CI 随推送触发，10 条定时流水线手动触发：
+
+| 流水线 | 运行 | 结果 |
+| --- | --- | --- |
+| CI | 40976668372 | 已取消：macOS e2e 第 2 / 3 片在 20 分钟期限处被取消（见下），之后被 `98bb15ee2` 的 CI 取代 |
+| postgresql-evidence | 40976715791 | 成功 |
+| backend-macos-nightly | 40976719472 | 18 / 18 |
+| e2e-full-nightly | 40976723390 | 成功 |
+| e2e-webkit-nightly | 40976727163 | 8 / 8 |
+| visual-regression-nightly | 40976731196 | 成功 |
+| windows-platform | 40976735449 | 失败：真实自定义观察器超时（见下），`98bb15ee2` 上的 40978275151 成功 |
+| evidence-soak-nightly | 40976738960 | 成功 |
+| git-protocols-e2e | 40976742342 | 成功 |
+| integration-opencode | 40976746021 | 成功 |
+| maintenance-soak-nightly | 40976749864 | 失败：维护窗口单次写入 1151 ms（见下） |
+
+三处红都先按日志归因，均不是这两笔提交引入的：
+
+- windows-platform：`rfc310-event-center.test.ts` 的真实自定义观察器在第一次 validate 报 `timeout/1`。RFC-370 留下的结算诊断这次有了记录：node.exe 已创建（pid 7104），10.6 秒内 stdout、stderr 都是 0 字符，脚本第一条语句没有执行；同一 job 其余用例耗时正常。用例给单次程序的 10 秒只有产品默认（30 秒）的三分之一，量到的是 runner 启动进程的尾延迟。`98bb15ee2` 把用例改为产品默认 30 秒、整段 130 秒，四次真实执行与全部断言不变；记录追加在 RFC-370 的诊断文档，停顿原因未查明，登记在 audit-backlog。
+- CI 的 macOS e2e：这台 macOS runner 整体慢 1.5 倍（与 `67acb29b8` 的同一片相比，151 条共同用例耗时的中位比 1.50，人工门三条也在 1.46～1.58，与屏障改动无关），第 2 / 3 片跑到 20 分钟期限被取消。近 8 次绿 run 里 macOS 最慢一片已用到期限的 14～19 分钟，照「加 runner、不动预算」把 macOS e2e 由 3 片加到 4 片（`root-test-entrypoint` 守卫同步）。
+- maintenance-soak：维护窗口里 `PUT /api/tasks/:taskId/members` 一次 1151.3 ms，超过 1000 ms 的整站冻结门槛；错误为 0，SQLite 语句最大 136.8 ms、事务最大 33.9 ms，对照窗口 p95 168 ms（`0244e0e24` 上是 81 ms），runner 偏慢。近 8 次通过的运行维护窗口最大 195～925 ms。照 RFC-392 的先例不改门槛、不重跑同一提交，以后继提交上的运行为证据，登记在 audit-backlog。
+
 **AC 逐项证据**（测试文件均在 `packages/backend/tests/`）：
 
 | AC | 证据 |
