@@ -1,3 +1,10 @@
+## 2026-10-30 节点选择器在代理列表晚到时不再丢掉已输入的搜索词；WF-24 等目标选项高亮再按 Enter
+
+- **现象**：`228dd9d28`（v0.19.3 候选）主 CI 唯一的红是 Windows Playwright 分片 3/4 的 WF-24（run 41009133333）。首轮：起始模板对话框里搜 `rfc319-edit-alpha` 后按 Enter，审计代理却成了 `[demo] reviewer`；重试：节点选择器里同一个代理同时出现在「推荐」和「代理」两组，点击命中两个元素。它不是新问题：10-15 起失败的主 CI 里，WF-24 至少 8 个 job 有一轮红（Windows 7、macOS 1），其中 3 个两轮都红；例如 10-27 的 `9ac4f0172`（run 40449909314，首轮同一签名，重试通过，记为 flaky）。
+- **根因**：①用例时序（`7e07bad4c`，08-28）：Enter 早于对话框的代理列表返回，什么都没选；列表到了以后 `suggestedRoleMapping` 自己填了推荐值。②产品缺陷，两处：节点选择器的 Body 每来一个新的 `agents` 数组就清空搜索词（RFC-199 `21c2ab8ac` 起）；`WorkflowNodePickerCatalog` 按「有没有代理带 owner」切换父组件类型（`f4b7e3527`，07-23），列表一到就整棵重挂载，焦点也丢。画布在列表加载完之前传 `agents ?? []`，所以用户先输入、列表后到时搜索词必丢；搜索一清空，「推荐」组回来，同一个代理出现两次。编辑器侧栏用的是同一个 Body，后台 refetch 也会清掉它的搜索词。以上都早于本次发布窗口，经用户同意由本 session 认领修复。
+- **修复**：去掉按 `agents` 清空搜索词的 effect（对话框关闭时本来就卸载 Body）；owner 查询移到不渲染内容的兄弟组件，用 `useLayoutEffect` 把解析出的名字交回父组件，Body 固定在同一类型和位置。WF-24 等目标选项带上 `select__option--active` 再按 Enter。
+- **回归用例**：`packages/frontend/tests/workflow-node-picker-late-agent-list.test.tsx`（列表晚到、列表失去 owner 两个方向都断言是同一个 input，值和焦点都在；只换数组不翻 owner 的一条单独锁清空问题；owner 名字仍然标在代理上）。踩坑记录补在 `docs/dev-gotchas.md`「前端」一节。
+
 ## 2026-10-29 `bun dev` 登录页的单点登录回到 daemon 端口：Vite 代理转发浏览器所在的 host
 
 - **现象**：开发态在 5174 点登录页「身份提供方」，选完身份后落在 daemon 端口，显示 `no route for /tasks`。dev-auth 一键登录页（7460）不受影响。

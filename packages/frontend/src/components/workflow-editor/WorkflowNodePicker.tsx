@@ -1,6 +1,7 @@
 import {
   useEffect,
   useId,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -92,29 +93,64 @@ function writeRecentIdentity(identity: string, previous: readonly string[]): str
   return next
 }
 
+type OwnerLabel = (ownerUserId: string | null | undefined) => string | undefined
+
 type WorkflowNodePickerCatalogBodyProps = WorkflowNodePickerCatalogProps & {
-  ownerLabel?: (ownerUserId: string | null | undefined) => string | undefined
+  ownerLabel?: OwnerLabel
 }
+
+const NO_OWNER_NAMES: ReadonlyMap<string, string> = new Map()
 
 export function WorkflowNodePickerCatalog(props: WorkflowNodePickerCatalogProps) {
   const hasOwners = props.agents.some(
     (agent) => agent.ownerUserId !== null && agent.ownerUserId !== undefined,
   )
-  return hasOwners ? (
-    <OwnerAwareWorkflowNodePickerCatalog {...props} />
-  ) : (
-    <WorkflowNodePickerCatalogBody {...props} />
+  const [ownerNames, setOwnerNames] = useState(NO_OWNER_NAMES)
+  const ownerLabel = useMemo<OwnerLabel | undefined>(
+    () =>
+      hasOwners
+        ? (ownerUserId) =>
+            (ownerUserId ? ownerNames.get(ownerUserId) : undefined) ?? ownerUserId ?? undefined
+        : undefined,
+    [hasOwners, ownerNames],
+  )
+  // The body must keep one identity while the picker is open. The canvas
+  // passes `agents ?? []` until the agent list loads, so `hasOwners` flips
+  // under a user who is already typing; picking the body's parent by it
+  // remounted the body and threw away the search text and focus (CI run
+  // 41009133333, WF-24). Only the owner lookup is conditional, so it sits
+  // beside the body and renders nothing.
+  return (
+    <>
+      {hasOwners && <AgentOwnerNames agents={props.agents} onResolve={setOwnerNames} />}
+      <WorkflowNodePickerCatalogBody {...props} ownerLabel={ownerLabel} />
+    </>
   )
 }
 
-function OwnerAwareWorkflowNodePickerCatalog(props: WorkflowNodePickerCatalogProps) {
-  const owners = useUserLookup(props.agents.map((agent) => agent.ownerUserId))
-  return (
-    <WorkflowNodePickerCatalogBody
-      {...props}
-      ownerLabel={(ownerUserId) => owners.get(ownerUserId)?.displayName ?? ownerUserId ?? undefined}
-    />
-  )
+function AgentOwnerNames({
+  agents,
+  onResolve,
+}: {
+  agents: readonly Agent[]
+  onResolve: (names: ReadonlyMap<string, string>) => void
+}) {
+  const ownerIds = agents.map((agent) => agent.ownerUserId)
+  const owners = useUserLookup(ownerIds)
+  const resolved: Array<[string, string]> = []
+  for (const id of new Set(ownerIds)) {
+    if (typeof id !== 'string') continue
+    const name = owners.get(id)?.displayName
+    if (name !== undefined) resolved.push([id, name])
+  }
+  // `owners` is a new object on every render; the resolved pairs are what
+  // actually change when the lookup lands. A layout effect hands them up
+  // before paint, so labels never flash raw owner ids for a frame.
+  const signature = JSON.stringify(resolved.sort(([a], [b]) => a.localeCompare(b)))
+  useLayoutEffect(() => {
+    onResolve(new Map(JSON.parse(signature) as Array<[string, string]>))
+  }, [onResolve, signature])
+  return null
 }
 
 function WorkflowNodePickerCatalogBody({
@@ -226,9 +262,10 @@ function WorkflowNodePickerCatalogBody({
   )
   itemRefs.current.length = flattened.length
 
-  useEffect(() => {
-    setQuery('')
-  }, [agents])
+  // The query is the user's own input, so a new agent list never clears it:
+  // the list routinely lands after the picker opens and background refetches
+  // replace the array. The dialog unmounts this body on close, so reopening
+  // still starts empty.
 
   useEffect(() => {
     if (managedLiveRegion === null) return

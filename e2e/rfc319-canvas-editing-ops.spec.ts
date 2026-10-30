@@ -906,6 +906,16 @@ test('WF-24 空画布引导：「添加第一个节点」落下第一步，「�
   await auditorSelect.click()
   const auditorSearch = page.getByTestId('workflow-starter-role-auditor-search')
   await auditorSearch.fill('rfc319-edit-alpha')
+  // The dialog's agent list can still be loading here (Windows CI run
+  // 41009133333): an Enter pressed before the option exists selects nothing,
+  // and when the list lands the dialog fills in its own suggestion,
+  // `[demo] reviewer`. Being visible is not enough either — the highlight
+  // moves to the filtered row one effect later — so wait for the active row.
+  await expect(
+    page
+      .locator('ul[role="listbox"].select__listbox--portal')
+      .getByRole('option', { name: /rfc319-edit-alpha/ }),
+  ).toHaveClass(/select__option--active/)
   await auditorSearch.press('Enter')
   await expect(auditorSelect).toContainText('rfc319-edit-alpha')
   await expect(
