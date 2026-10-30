@@ -69,11 +69,11 @@ const HOLD_MS = 1_500
 const HOLDER_SOURCE = `import { Database } from 'bun:sqlite'
 import { writeFileSync } from 'node:fs'
 
-const [dbPath, readyPath, holdMs] = Bun.argv.slice(2)
+const [dbPath, readyPath, holdMs, sql] = Bun.argv.slice(2)
 const db = new Database(dbPath)
 db.exec('PRAGMA busy_timeout = 5000;')
 db.exec('BEGIN IMMEDIATE;')
-db.exec("INSERT INTO fixture_rows (id) VALUES ('holder');")
+if (sql) db.exec(sql)
 writeFileSync(readyPath, 'ready')
 await Bun.sleep(Number(holdMs))
 db.exec('COMMIT;')
@@ -116,11 +116,17 @@ describe('e2e sqlite fixture boundary under lock contention', () => {
     setup.exec('CREATE TABLE fixture_rows (id TEXT PRIMARY KEY);')
     setup.close()
 
-    const holder = Bun.spawn([process.execPath, holderPath, dbPath, readyPath, String(HOLD_MS)], {
-      cwd: REPO_ROOT,
-      stderr: 'pipe',
-      stdout: 'pipe',
-    })
+    const holder = Bun.spawn(
+      [
+        process.execPath,
+        holderPath,
+        dbPath,
+        readyPath,
+        String(HOLD_MS),
+        "INSERT INTO fixture_rows (id) VALUES ('holder');",
+      ],
+      { cwd: REPO_ROOT, stderr: 'pipe', stdout: 'pipe' },
+    )
 
     try {
       await waitForFile(readyPath, 10_000)
@@ -229,26 +235,14 @@ test('fixture queries preserve complete schema-history-sized JSON output', () =>
 // the selected ids into a temp table, so its UPDATE had to upgrade a read snapshot to a write.
 // Inside a transaction SQLite does not busy-wait for that upgrade, and a daemon write in between
 // failed the fixture with SQLITE_BUSY_SNAPSHOT. Here another process holds the write lock while
-// the patch runs: before the fix the UPDATE fails at once, now the patch waits and lands.
-const LOCK_HOLDER_SOURCE = `import { Database } from 'bun:sqlite'
-import { writeFileSync } from 'node:fs'
-
-const [dbPath, readyPath, holdMs] = Bun.argv.slice(2)
-const db = new Database(dbPath)
-db.exec('PRAGMA busy_timeout = 5000;')
-db.exec('BEGIN IMMEDIATE;')
-writeFileSync(readyPath, 'ready')
-await Bun.sleep(Number(holdMs))
-db.exec('COMMIT;')
-db.close()
-`
-
+// the patch runs: before the fix the UPDATE fails at once, now the patch waits and lands. It reuses
+// HOLDER_SOURCE with no statement, so the lock is all the holder takes.
 test('an aggregate patch waits for a concurrent writer instead of failing its savepoint', async () => {
   const dir = tmpWorkspace()
   const dbPath = join(dir, 'db.sqlite')
   const readyPath = join(dir, 'holder.ready')
   const holderPath = join(dir, 'holder.ts')
-  writeFileSync(holderPath, LOCK_HOLDER_SOURCE)
+  writeFileSync(holderPath, HOLDER_SOURCE)
   const task: TaskFixtureSpec = {
     id: 'busy-task',
     workflowId: 'wf',
