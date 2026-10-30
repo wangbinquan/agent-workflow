@@ -1,0 +1,199 @@
+# RFC-397 设计：以 owner 围栏开场的 SERIALIZABLE 数据写入降为 READ COMMITTED
+
+`file:line` 以 `e9021ee29` 为准，路径相对 `packages/backend/src/`（另注明者除外）。缩写：`OTE` = `modules/task-execution/infrastructure/ownedTaskExecution.ts`，
+`TEP` = `…/taskExecutionEffectPersistence.ts`，`LEASE` = `…/runtimeSessionLeaseOperations.ts`，`NRW` = `…/nodeRunWriteProtocol.ts`，
+`EQ` = `…/effectQuiescence.ts`，`PEP` = `…/crewstation/processEffectProjection.ts`，`SCH` = `…/persistence/schema.ts`。
+
+## 1. 现状
+
+### 1.1 事务原语
+
+| 原语                                                                                                                                  | PostgreSQL     | SQLite            | 重放                               |
+| ------------------------------------------------------------------------------------------------------------------------------------- | -------------- | ----------------- | ---------------------------------- |
+| `withTaskExecutionWrite`（OTE:29-34）                                                                                                 | READ COMMITTED | `BEGIN IMMEDIATE` | 无                                 |
+| `withTaskExecutionAggregateWrite` = `retryingWriteTransaction`（OTE:45-50，`platform/persistence/retryingWriteTransaction.ts:12-26`） | READ COMMITTED | `BEGIN IMMEDIATE` | 40001 / 40P01 整笔重放，只在最外层 |
+| `withTaskExecutionSerializable`（OTE:59-64）                                                                                          | SERIALIZABLE   | `BEGIN IMMEDIATE` | 40001 / 40P01 整笔重放，只在最外层 |
+
+嵌套调用复用外层事务帧、不升级隔离、不在内层重放（`platform/persistence/databaseTransaction.ts:260-297`）。本 RFC 涉及的入口
+在生产代码里都不在外层帧中被调用（调研逐一核对了调用方：都包着 git / 文件 / 进程 / 网络等外部 I/O）。
+
+### 1.2 本 RFC 涉及的事务
+
+| 事务                                                                                                                | 位置                                   | 每次运行的频率       |
+| ------------------------------------------------------------------------------------------------------------------- | -------------------------------------- | -------------------- |
+| 租约 `claimNew` / `preclaimResume` / `confirmResume` / `rotate` / `markResetPending` / `discard` / `release`        | LEASE:70, 128, 192, 218, 346, 386, 420 | 每个运行时会话数次   |
+| effect `prepareAndAcquire`                                                                                          | TEP:338-613                            | 每个外部 effect 一次 |
+| effect 结算 `settleTx` 及入口 `settle` / `settleGateRollback` / `settleCodeHostNode` / `settleWorkspacePreparation` | TEP:615-823, 825, 850, 879, 888        | 每个外部 effect 一次 |
+| effect `recordProcessSpawn`                                                                                         | TEP:894-981                            | 每个进程一次         |
+| 托管 `recordSpawnReceipt`                                                                                           | PEP:40-83                              | 每个托管进程一次     |
+
+它们都以 owner 围栏（OTE:67-96 的条件 UPDATE；租约经 LEASE:45-48 的 `fence()` = `fenceTaskWrite` + 任务根锁）开场，跑在
+SERIALIZABLE。同任务的其它写手（铸造、状态迁移、运行态、产出、事件追加、心跳）都改写 owner 行，于是这些事务在快照之后遇到
+被改写的 owner 行就得到 40001（proposal §1.2）。
+
+### 1.3 v2 被否决的原因（实测）
+
+独立探针（PostgreSQL 17，不经仓库代码；SERIALIZABLE 先取快照，READ COMMITTED 写手随后提交）：
+
+| 场景                                  | 写手改写 owner 行（现状） | 写手只对 owner 行加锁（v2） |
+| ------------------------------------- | ------------------------- | --------------------------- |
+| 同键插入（写手已插入并提交）          | 40001，重放后走更新分支   | **23505**，不重放           |
+| 过围栏后读运行状态（写手已改为 done） | 40001，重放后读到 done    | **读到 running 并提交**     |
+
+## 2. 设计总则
+
+1. 上表事务改用 `withTaskExecutionAggregateWrite`：owner 围栏仍是第一条写，READ COMMITTED 下它等在途写手提交后按最新版本重判条件，
+   之后整个事务持有 owner 行排他锁；其后每条语句看到的都是最新提交的数据。同任务的所有写手都先过 owner 围栏，所以事务内读到的
+   本任务数据在提交前不会被别人改动。
+2. 跨任务的读后写不受 owner 行保护，逐项落到唯一约束或新增的 family advisory 锁（§3.2）。
+3. 体内只有数据库操作，整笔可重放；`ulid()` 与时间戳在重放时重新生成，只影响新行 id 与时间戳。
+4. 所有权变更事务（claim、心跳、撤权、取消撤权、源终止、停止后释放、恢复后释放）不变：它们本就以 owner 行 CAS 为准，低频，40001
+   由现有重试吸收。
+
+## 3. 逐事务分析
+
+### 3.1 运行时会话租约（LEASE）
+
+共同事实：
+
+- `fence()`（LEASE:45-48）= `fenceTaskWrite`（有环境上下文时改写 owner 行，无上下文时只读校验）+ 任务根 `FOR UPDATE`。
+- 租约行以 `(protocol, session_id)` 为主键（SCH:2778），是唯一可能与别的任务共享的行；其余读写都在本任务内。
+- 会话写入协议 `compareAndWriteRunSessionInTx`（NRW:340-386）先 `lockRun`（`node_runs … FOR UPDATE`，NRW:74）再读写
+  `node_run_runtime_states`；该表的全部生产写手（NRW:201-206、305-335、372、376）都先 `lockRun`。
+
+| 事务                                   | 读后写不变量                                         | READ COMMITTED 下的保护                                             | 本 RFC 的改动                                                                                               |
+| -------------------------------------- | ---------------------------------------------------- | ------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `claimNew`（LEASE:70-126）             | 一个会话一份租约；运行为 running、无会话             | 租约主键（23505 → `owner-conflict`）；运行条件在 `lockRun` 之后重读 | 仅换原语                                                                                                    |
+| `preclaimResume`（LEASE:128-190）      | 租约空闲且属本任务本节点；运行为 running、无会话     | 围栏 + 根锁之后的读即最新；租约 UPDATE 是单行 CAS                   | UPDATE 谓词加 `task_id`、`node_id`、`reset_pending = false`（防同一会话 id 在两条语句之间被他任务删后重建） |
+| `confirmResume`（LEASE:192-216）       | 租约仍由该 token 持有                                | 运行侧由 `lockRun` 保护                                             | 围栏 + 根锁之后按 token 重读租约（`FOR UPDATE`），不在则 `lease-mismatch`                                   |
+| `rotate`（LEASE:218-344）              | 旧租约处于 reset-pending 且由 token 持有；新会话无主 | 新会话由主键保护；运行与历史重标由根锁保护                          | 删除旧租约改为 `DELETE … RETURNING`，谓词加 `reset_pending = true AND leased_at IS NOT NULL`，要求恰好 1 行 |
+| `markResetPending`（LEASE:346-384）    | 租约由 token 持有且未 reset                          | 单行 CAS（计数已检查）                                              | 提前返回（LEASE:367）改用围栏之后的读                                                                       |
+| `discard` / `release`（LEASE:386-453） | 按 token 删除 / 释放                                 | 单行 CAS（计数已检查）                                              | 仅换原语                                                                                                    |
+
+错误映射：`constraintViolation`（LEASE:36-42）今天把任何表的 23505（以及 PostgreSQL 报文里带表名的 FK / CHECK 违例）都映射为
+`owner-conflict`。改为只匹配租约主键约束 `runtime_session_leases_pkey`（PostgreSQL 按约束名，SQLite 按报文中的表与列），其余约束
+错误原样抛出。
+
+第 2 轮设计门的两个交错：
+
+- `patch` 建运行态行 vs `claimNew`：两者都先过 owner 围栏、任务根、`lockRun`，READ COMMITTED 下后到者看到已建的行，走更新分支，
+  不再撞主键。
+- 运行结束状态 vs `preclaimResume`：状态迁移先过 owner 与根（`nodeRunLifecyclePersistence.ts:38-48`），READ COMMITTED 下
+  `preclaimResume` 在围栏之后的读看到 done，返回 `run-not-claimable`；若 `preclaimResume` 先提交，运行随后结束时由运行器的释放 /
+  修复路径收回租约（与今天相同）。
+
+### 3.2 effect 账本（TEP、EQ）
+
+跨任务共享的数据：子任务继承父任务的 execution lineage（`modules/task-execution/domain/taskCreation.ts:77-78`），重新铸造的运行沿用
+continuation slot（`application/buildNodeRunMintRecord.ts:20-28`），因此父子 / 前后两代子任务可能落在同一 `(lineage, family)`：
+
+- effect 全局唯一槽 `(lineage, family, generation)`（SCH:507-511）；
+- watermark：每个 family 一行，单调推进，`record_revision` CAS（SCH:733-743；写入在 TEP:754-820 与 EQ:277-353）；
+- 重放决定行（SCH:744-754；写入在 EQ:640-680，被 TEP:442-516 读取与消费）；
+- fence 键（`workspace:…`、`code-host:…`）以 `fence_key WHERE released_at IS NULL` 唯一（SCH:395-398），冲突已映射为
+  `task-execution-resource-conflict`（TEP:576-585）并由等待循环重试。
+
+RFC-328 design.md:394 写明「live-effect unique 与 watermark revision CAS 共同保证旧 child 与新 child 不能并发创建或在 hard delete 后
+复用同 generation」——今天这一保证在 PostgreSQL 上还依赖 SERIALIZABLE 的重放把败方带到胜方之后。
+
+**family advisory 锁**：键为 `task-execution-effect-family:${lineage}:${family}`，经能力矩阵 `engineOf(tx).advisoryLock(tx, key)`
+（`platform/persistence/capabilities.ts:146, 360, 477-489`；PostgreSQL `pg_advisory_xact_lock`，SQLite no-op）取得，事务结束释放。
+
+| 事务                                                                 | 取锁位置                                                                                     | 理由                                                                                                                        |
+| -------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `prepareAndAcquire`（TEP:338-613）                                   | owner 围栏与任务根之后（TEP:346 之后），读 effect / watermark / 决定之前                     | 败方等胜方提交后读到胜方的 effect 或 watermark，走今天的类型化分支（`task-continuation-conflict` / `-stale`），不再撞唯一槽 |
+| `settleTx`（TEP:615-823）                                            | 读到 attempt 与 effect 并校验归属之后（约 TEP:645），**任何 fence 释放（TEP:685、733）之前** | watermark 的插入与 CAS 不再与他任务 / 静默收尾竞争；fence 释放前取锁避免与持锁插入 fence 的 `prepareAndAcquire` 形成环      |
+| EQ 的三个结算事务（EQ:493、619、1045 所在事务，本已 READ COMMITTED） | 收集本事务涉及的全部 family，去重排序后一次取齐，**第一次 fence 释放之前**                   | 同上；多 family 按字典序取，避免两两成环                                                                                    |
+
+锁序：owner 行 → 任务根 → family 锁（排序）→ effect / attempt / fence / watermark / 决定行 → node run → 下级行，与
+`TASK_AGGREGATE_LOCK_ORDER`（`application/ports/taskAggregateWrite.ts:9-15`）一致。跨任务的等待只发生在 family 锁、fence 键与
+租约主键上，之后不会再取别的任务的 owner 或根，所以不构成环；advisory 锁是重量级锁，若仍有环会被 PostgreSQL 检测为 40P01，
+由整笔重放吸收，不会挂起。
+
+其余：
+
+- `recordProcessSpawn`（TEP:894-981）：读写全在本任务内（attempt CAS、node run 与下级行），换原语即可。
+- `prepareAndAcquire` 的「generation 恰为下一代」读在两条语句（TEP:411、422）里；family 锁让它们在同一临界区内，消除了第 1 份调研指出
+  的两次快照之间的窗口。
+- 结算一族里 `settleCodeHostNode`、`settleWorkspacePreparation` 按投影输入锁根（TEP:98、123），实现时补「投影任务 = token 任务」
+  的校验，避免越序锁到别的根。
+
+### 3.3 托管 `recordSpawnReceipt`（PEP:40-83）
+
+读写都在本任务内，换原语即可。同时把 attempt UPDATE（PEP:68-74，今天只按 id 且不检查结果）补成按 `state = 'acting' AND epoch`
+的 CAS 并检查行数，与 TEP:945-979 一致。
+
+### 3.4 不变的部分
+
+- owner 围栏、`revision` 与 `updated_at` 的推进、所有权变更事务、心跳。
+- `withTaskExecutionSerializable` 原语保留（所有权变更与跨任务路径仍用；`packages/backend/tests/rfc359-w4-d24-adapters.test.ts:183-185` 钉住）。
+- SQLite：三种原语都是 `BEGIN IMMEDIATE`，行为不变。
+
+## 4. 测试策略
+
+新增 `packages/backend/tests/rfc397-owner-fenced-writes-read-committed.test.ts`，文件头写明来由（CI run 41052627131、proposal §1.2 的归因、
+§1.3 的探针）。功能用例两种 provider 都跑（`describeEachProvider`），并发用例只在 PostgreSQL 上跑：
+
+1. **原故障的确定性回归**（PostgreSQL）：另一连接以真实数据写手（如 node run `patch`）持有 owner 行，转换后的写手（代表：`claimNew`、
+   `prepareAndAcquire`、`settle`）开始后排队；持有者提交并立刻由下一个写手再次持有，循环 12 次。断言转换后的写手完成且其事务体只执行
+   一次（经计数包装）。变异检查：换回 `withTaskExecutionSerializable`，该用例以 40001 耗尽重试失败。
+2. **交错 i**：`patch` 在外层事务帧中建运行态行后挂起；`claimNew` 开始排队；`patch` 提交后 `claimNew` 成功且运行态行的会话被更新。
+3. **交错 ii**：运行结束状态迁移挂起；`preclaimResume` 排队；迁移提交后 `preclaimResume` 得到 `run-not-claimable`。
+4. **family 竞争**（PostgreSQL）：两个任务共享 lineage 与 family——
+   - 两个 `prepareAndAcquire` 并发：一方成功，另一方得到今天的类型化冲突，无 `23505`；
+   - `settle` 与 EQ 结算对同一 family 并发：watermark 单调、`record_revision` 连续，无裸错误、无挂起；
+   - 一方持有 family 锁并插入 fence、另一方释放同一 fence 键：不挂起（死锁则以 40P01 重放成功）。
+5. **租约加固**：每处各一负对照——`preclaimResume` 对他任务同会话 id 的行拒绝；`confirmResume` 在租约被释放后 `lease-mismatch`；
+   `rotate` 对非 reset-pending 的租约拒绝且不误删；`markResetPending` 的提前返回基于围栏后的读。
+6. **错误映射**：非租约主键的约束错误不再报为 `owner-conflict`。
+7. **隔离级别**：SQL 捕获断言转换后的事务不发出 `set transaction isolation level serializable`；SQLite 仍为 `BEGIN IMMEDIATE`。
+
+既有用例与账本（按新语义逐条更新，改动处注明 RFC-397）：
+
+- 钉住租约为 SERIALIZABLE：`rfc349-runtime-session-lease-provider.test.ts:75-77, 84-85`；`rfc359-w4-d24-adapters.test.ts:167-169`
+  （源码锁，`:183-185` 关于原语存在的部分保留）。
+- 在 SERIALIZABLE 外层里跑或钉 SQL 形状：`rfc395-run-write-atomicity.test.ts:482-506, 566-660, 704-737`。
+- `NRW:340-341` 的注释「callers retain SERIALIZABLE」改为 READ COMMITTED + 根锁 + `lockRun` 的事实。
+- effect 一致性：`rfc359-w8-effect-persistence-conformance.test.ts`（revision +1 等断言不变，确认仍绿）。
+- 架构守卫：`architecture/rfc359-w8-t29-unnormalized-unique-insert.test.ts`（其 :567-570 以「TEP 在 SERIALIZABLE」解释安全、:482-484
+  的 EQ 说明已过时）按新事实更新；`architecture/rfc359-w6-t28-read-modify-write.test.ts:159-169`、
+  `architecture/rfc359-converged-twins.test.ts:226-235`、`architecture/rfc328TaskExecutionLedger.ts:234-244, 603-614`、
+  `rfc359-t7b-driver-release-settles-effects.test.ts:552-553`、`rfc349-task-aggregate-transaction.test.ts:153-161` 逐个核对。
+- 变异夹具 `fixtures/rfc359-p0-mutations.ts`：P0-2 锚点（TEP 中 `await assertTaskOwnerTx(tx, input.token, now)` 的出现次数）随改动核对。
+- 源码账本 `fixtures/rfc395-serialized-insert-source-locks.json`：若改动 `nodeRunWriteProtocol.ts`（注释），重新审阅后更新其 sha256。
+- 未列出的受影响用例在集中验证时逐个归因后处理。
+
+压测证据（本机一次性 PostgreSQL 容器，8 路 × 8 次只跑用例 B）：基线 4/64、2316 次 40001；实现后重测，数字写回本节。
+
+## 5. 与 RFC-294 目标架构的对齐
+
+- **落位**：`task-execution` 限界上下文 infrastructure 层（租约、effect、托管投影的持久化适配器）；复用 `platform/persistence` 已有的
+  `retryingWriteTransaction` 与能力矩阵 `advisoryLock`，platform 不新增 API、不依赖模块。
+- **演进**：把单任务写入统一到 RFC-359 / RFC-395 已定的默认（READ COMMITTED + 聚合根锁 + 重放），跨任务部分用显式锁表达，而不是
+  依赖隔离级别的副作用。
+- **G7**：两种 provider 同一算法。**偏离项**：无。
+
+## 6. 风险
+
+1. **跨任务锁**：family 锁是新的跨任务锁；按 §3.2 的位置与排序取得，残余环由 40P01 重放兜底。用例 §4.4 覆盖。
+2. **effect 账本的正确性**：恰好一次语义依赖 CAS、唯一槽与 watermark；本 RFC 不改这些判据，只改它们在并发下的保护方式；一致性用例全量
+   回归。
+3. **错误码变化**：租约的非主键约束错误不再被吞成 `owner-conflict`，可能在日志里出现此前被掩盖的错误；这是暴露而非新增。
+4. **所有权变更事务仍会遇到 40001**：低频，现有重试吸收；压测数字验证。
+
+## 7. 设计门处置
+
+- 第 1 轮（v1：两处事件追加改共享锁）FAIL：归因未证实——语句日志证明事件追加只占约 3%（proposal §1.2）。
+- 第 2 轮（v2：数据写围栏只加锁）FAIL：SERIALIZABLE 写手在锁后仍用旧快照，探针证实（§1.3）；另指出的 RFC-349 SQL 断言与响应夹具、
+  双 provider 的 SQL 形状差异、回滚探针、工作组主持账本归类、锁模式表述等，随方向改变不再适用或已在 §4 清单中处理（工作组主持账本
+  实为 `retryingWriteTransaction`，`modules/resource-catalog/infrastructure/workgroupTurnsOperations.ts:549`，已不在本 RFC 范围）。
+
+## 8. 调研中另见、不在本 RFC 内
+
+- 本机压测另见两种低频失败：一次任务 `failed` 而无 WARN；一次任务 `done` 后在 EQ:298 抛 `recovered generation regressed below
+retained watermark`。需另行归因。
+- 关停标记不检查 UPDATE 结果（`taskExecutionShutdownOperations.ts:89-121`）；源终止先锁任务根再撤 owner，与规定锁序相反
+  （`taskDefinitionWriteParticipant.ts:166`、`sourceTerminationTarget.ts:154`）。
+- `childExecutionLaunchOperations.ts:357-369` 在锁祖先根之前读父运行状态。
+- `repairAfterOrphanReap`（LEASE:455-496）在事务外读后决定释放还是丢弃。
+- 失败日志只含 Drizzle 的「Failed query」、不含 SQLSTATE（`describeEffectError` 只取最外层 message），改法另议。
