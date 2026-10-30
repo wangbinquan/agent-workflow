@@ -5589,6 +5589,12 @@ graph@2 的 `verify-change` 要求实现依据里的每条义务在**交付前**
 
 第一条暂不改：不清楚是 runner 上的 PostgreSQL 连接被挂住，还是查询本身变慢。再次出现时先看同片 PostgreSQL 服务容器的状态和这条查询的耗时。
 
+## Windows：单个 node.exe 启动偶发停顿 10 秒以上（2026-10-29，测试预算已与产品默认对齐，停顿原因未查明）
+
+- windows-platform 运行 40976735449（`c6a0248ad`）：`rfc310-event-center.test.ts` 的真实自定义观察器在第一次 validate 超时。结算记录显示 node.exe 已创建（pid 7104），10.6 秒内 stdout、stderr 都没有输出，连脚本第一条语句写的 stderr 标记也没有；同一 job 其余用例的耗时正常。10 月 11 日、13 日的 Windows 运行出现过同样的 `timeout/1`（见 `design/RFC-370-crewstation-hosted-deployment/ci-custom-observer-native-timeout-diagnostics.md`）。
+- 已处置：用例的单次程序预算由 10 秒改为产品默认 30 秒，整段预算 130 秒。
+- 未处置：停顿发生在 node.exe 执行脚本之前，原因没有查明（宿主上的进程启动或文件扫描都有可能）。对产品的影响是：Windows 上把自定义观察器超时设得很短（例如 10 秒）的用户，偶尔会遇到同样的超时。再次出现时先看结算记录里的 spawn 到 reap 时长和 stderr 是否为空。
+
 ## RFC-395 实现门留下的两条测试剩余项（2026-10-29，Codex 实现门 P2，未决）
 
 实现门（基准 `0244e0e24`，见 RFC-395 plan「实现门与设计门」）三条 P2 证据缺口里，下面两条只做了部分处置：

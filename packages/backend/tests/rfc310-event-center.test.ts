@@ -1271,7 +1271,12 @@ describeEachProvider('RFC-310 shared Event Center', (harness) => {
       program: {
         language: 'node' as const,
         templateManaged: true,
-        timeoutMs: 10_000,
+        // Windows (windows-platform 40976735449): node.exe got a real pid and then wrote nothing
+        // for 10.6 s, not even the first stderr marker below, while every other case in that job
+        // ran at its usual speed. The stall comes before any script code runs, so a 10 s budget
+        // measured the runner's tail latency. This uses the editor's default of 30 s; the case
+        // budget is four serial programs at this budget plus 10 s for teardown.
+        timeoutMs: 30_000,
         source: `import { readFileSync } from 'node:fs'
 console.error('RFC-370 native observer started', JSON.stringify({ pid: process.pid, execPath: process.execPath, version: process.version }))
 const input = JSON.parse(readFileSync(process.env.AW_EVENT_INPUT_FILE, 'utf8'))
@@ -1382,5 +1387,5 @@ console.error('RFC-370 native observer completed')`,
         subscriber: { kind: 'system', subscriberRef: 'workflow-runtime-2' },
       }),
     ).rejects.toThrow('event source is retired')
-  }, 50_000)
+  }, 130_000)
 })

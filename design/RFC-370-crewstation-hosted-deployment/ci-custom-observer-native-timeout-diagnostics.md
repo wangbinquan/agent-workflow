@@ -35,3 +35,11 @@
 诊断已以 `171aaad529a1a768f9f9c5ce9bcdcac0475e0381` 精确发布三个路径，推送前后 fetch、提交全文/路径/三份 blob、标准 Codex co-author 与 `main`／`origin/main` 0/0 均核对，共享 index 为空。该 SHA 的默认完整 Windows run `38291400427`、job `114952109506` 已终态 failure：1492 pass、3 skip、14 fail。原真实自定义源用例在原始行 592 实际 pass／7697.71ms，本会话 SQLite 的二十六项回归也全部通过；本轮没有失败结算诊断记录，不能从这次通过解释此前超时的根因。完整日志 569829 bytes，SHA256 `62823a155c7bfc669c2975fbec8426b0bd4c15f1b2361cf35790306a399a7c2c`；完整 Windows 仍失败，后续 skipped 不代签。
 
 主 CI `38291400452` 尚未终态；当前已完成格式作业 `114952110494` 原始行 171–176 仍只报三个观测源码文件，日志 14633 bytes，SHA256 `2d5cd1e0368ad3d92be7af32ee0b37c44fefb5916d9dcbfa5a08bb5e9bd1e521`。另外，上一 SHA 的新账本失败有明确独立来源：备份提交 `1d380944b` 只在原清单新增 `rfc213-raw-snapshot.test.ts: 4` 一条及两条说明，去除该新增便逐字恢复 `861833a65` 全部清单；其 job `114940426660` 行 1262／1279 实际报源码 346／基线 345。本会话原登记和退役没有被改动，按当前 AGENTS 第四条保留证据等待该条修改的责任会话修复，不代改或发跨 session 信息。以上原失败历史均保留；总绿门槛、RFC 剩余实现与 CS 部署状态不变。
+
+## 2026-10-29 单次程序预算与产品默认对齐
+
+`c6a0248ad` 的 windows-platform run `40976735449`、job `123806527467` 失败在同一用例的第一次 validate：`observer script failed: timeout/1`，用例耗时 15377.75ms。前面加的结算诊断这次有了记录：`C:\Program Files\nodejs\node.exe`、pid 7104，从 spawn 到 reap 10675ms，stdout 与 stderr 都是 0 字符。脚本的第一条语句就是向 stderr 写 started 标记；它只要执行过，这几十个字节就会留在管道里，在 drain 时读到。所以子进程已经创建，但 10.6 秒里没有执行到脚本的第一条语句。
+
+启动路径上没有能挂住子进程的环节：`Bun.spawn` 正常创建进程（不是挂起后再恢复），随后 `adoptSpawnedProcessTree` 把已在运行的进程放进 Job Object，Job 只设 `KILL_ON_JOB_CLOSE`，没有 CPU 或优先级限制；退出码 1 来自超时后的 `TerminateJobObject(handle, 1)`。同一 job 里与 `0244e0e24` 的通过运行（`40950592122`）共有的 779 个用例总耗时 117.1 秒对 115.2 秒，RFC-363 的真实进程用例反而更快；慢只出在这一次 node.exe 启动。近期通过的运行里，这个用例（四次真实执行合计）用时 2.9～7.6 秒。
+
+停顿发生在任何脚本代码之前，10 秒的单次程序预算量到的是 Windows runner 启动进程的尾延迟。产品编辑器给自定义观察器的默认超时是 30 秒（`packages/frontend/src/routes/events.tsx` 的 `timeoutSeconds: 30`）。用例的单次程序预算改为 30 秒，整段预算按本文与 `custom-observer-program-ci-repair.md` 的同一算法改为 4 × 30 + 10 = 130 秒。四次真实执行、全部断言与两处诊断都不变；子进程真的卡死时在 30 秒处照样失败，并带出同样的结算记录。
