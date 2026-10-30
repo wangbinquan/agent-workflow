@@ -6,7 +6,8 @@
 // external CLI/model is replaced by the same data-driven scenario binary.
 
 import { expect, test } from '@playwright/test'
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { execFileSync, spawnSync } from 'node:child_process'
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -40,6 +41,16 @@ interface NodeRunRow {
   errorMessage: string | null
   failureCode: string | null
   opencodeSessionId: string | null
+  pid?: number | null
+  startedAt?: number | null
+  finishedAt?: number | null
+}
+
+interface ProcessRow {
+  pid: number
+  ppid: number
+  started: string
+  command: string
 }
 
 interface NodeRunsResponse {
@@ -87,6 +98,7 @@ for (const protocol of ['opencode', 'claude-code'] as const) {
     let repoDir: string
     let stateDir: string
     const agents = new Map<string, AgentRow>()
+    const launchedAt = new Map<string, number>()
     let taskSequence = 0
 
     function apiFetch(path: string, init: RequestInit = {}): Promise<Response> {
@@ -204,7 +216,9 @@ for (const protocol of ['opencode', 'claude-code'] as const) {
         }),
       })
       await expectHttp(response, 201, `launch ${scenario} task`)
-      return (await response.json()) as TaskRow
+      const task = (await response.json()) as TaskRow
+      launchedAt.set(task.id, Date.now())
+      return task
     }
 
     async function waitForTask(
@@ -360,14 +374,242 @@ for (const protocol of ['opencode', 'claude-code'] as const) {
         .filter((trace) => trace.task === taskId)
     }
 
+    // 2026-10-30: on Windows CI the claude-code cancel case failed both attempts
+    // in runs 41012381194, 41014515558 and 41020561352 with nothing but "scenario
+    // trace … did not reach N entries"; the hosted run keeps no daemon state, and
+    // the same binary passes in under two seconds on macOS and Linux. A missing
+    // trace therefore reports where the run stood at the deadline (task and
+    // node-run rows with their events, how far the stub got in its state
+    // directory, the daemon log lines for this task, the processes still under
+    // the daemon), then keeps watching so the failure says whether the trace
+    // arrived late or never. It still fails either way.
     async function waitForTrace(taskId: string, count: number): Promise<ScenarioTrace[]> {
-      const deadline = Date.now() + 15_000
+      const waitStartedAt = Date.now()
+      const deadline = waitStartedAt + 15_000
       while (Date.now() < deadline) {
         const traces = tracesFor(taskId)
         if (traces.length >= count) return traces
         await new Promise((resolve) => setTimeout(resolve, 50))
       }
-      throw new Error(`scenario trace ${taskId} did not reach ${count} entries`)
+      const atDeadline = await runDiagnostics(taskId)
+      const watchUntil = Date.now() + 45_000
+      let arrivedAfterMs: number | null = null
+      while (arrivedAfterMs === null && Date.now() < watchUntil) {
+        if (tracesFor(taskId).length >= count) arrivedAfterMs = Date.now() - waitStartedAt
+        else await new Promise((resolve) => setTimeout(resolve, 100))
+      }
+      const atEnd = arrivedAfterMs === null ? await runDiagnostics(taskId) : null
+      throw new Error(
+        `scenario trace ${taskId} did not reach ${count} entries within 15s: ${JSON.stringify({
+          arrivedAfterMs,
+          atDeadline,
+          atEnd,
+        })}`,
+      )
+    }
+
+    function clip(text: string, limit: number): string {
+      return text.length <= limit ? text : `${text.slice(0, limit)}…(${text.length - limit} more)`
+    }
+
+    async function readBody(path: string): Promise<unknown> {
+      try {
+        const response = await apiFetch(path)
+        return response.ok ? await response.json() : `${response.status}: ${await response.text()}`
+      } catch (error) {
+        return String(error)
+      }
+    }
+
+    async function runDiagnostics(taskId: string): Promise<Record<string, unknown>> {
+      const launched = launchedAt.get(taskId)
+      const sinceLaunchMs = launched === undefined ? null : Date.now() - launched
+      const task = (await readBody(`/api/tasks/${taskId}`)) as Partial<TaskRow> | string
+      const runsBody = (await readBody(`/api/tasks/${taskId}/node-runs`)) as
+        | Partial<NodeRunsResponse>
+        | string
+      const runs = typeof runsBody === 'string' ? [] : (runsBody.runs ?? [])
+      const events = await Promise.all(
+        runs.map(async (run) => ({
+          runId: run.id,
+          events: clip(
+            JSON.stringify(await readBody(`/api/tasks/${taskId}/node-runs/${run.id}/events`)),
+            4_000,
+          ),
+        })),
+      )
+      const diagnostics = daemon.diagnostics()
+      return {
+        sinceLaunchMs,
+        task: typeof task === 'string' ? task : { status: task.status, error: task.errorMessage },
+        runs: runs.map((run) => ({
+          id: run.id,
+          nodeId: run.nodeId,
+          retryIndex: run.retryIndex,
+          status: run.status,
+          pid: run.pid,
+          startedAt: run.startedAt,
+          finishedAt: run.finishedAt,
+          failureCode: run.failureCode,
+          errorMessage: run.errorMessage,
+        })),
+        runsError: typeof runsBody === 'string' ? runsBody : undefined,
+        events,
+        stub: stubProgress(taskId),
+        daemonLog: daemonLogLines([taskId, ...runs.map((run) => run.id)]),
+        processes: daemonProcesses(),
+        daemon: {
+          exitCode: diagnostics.exitCode,
+          signalCode: diagnostics.signalCode,
+          stderrTail: clip(diagnostics.stderrTail.slice(-2_000), 2_000),
+        },
+      }
+    }
+
+    // How far the stub got for this task: it writes its scope file, then claims a
+    // call index, then appends the trace line.
+    function stubProgress(taskId: string): Record<string, unknown> {
+      let names: string[]
+      try {
+        names = readdirSync(stateDir)
+      } catch (error) {
+        return { error: String(error) }
+      }
+      const scopes = names
+        .filter((name) => name.startsWith('scope-'))
+        .flatMap((name) => {
+          try {
+            const scope = JSON.parse(readFileSync(join(stateDir, name), 'utf8')) as {
+              key: string
+              task: string
+              node: string
+            }
+            return scope.task === taskId ? [scope] : []
+          } catch {
+            return []
+          }
+        })
+      let lastTraces: unknown[] = []
+      try {
+        lastTraces = readFileSync(join(stateDir, 'trace.jsonl'), 'utf8')
+          .trim()
+          .split('\n')
+          .filter((line) => line.length > 0)
+          .slice(-4)
+          .map((line) => {
+            const trace = JSON.parse(line) as ScenarioTrace
+            return { task: trace.task, node: trace.node, agent: trace.agent, call: trace.callIndex }
+          })
+      } catch {
+        // No trace file yet.
+      }
+      return {
+        files: names.length,
+        scopes,
+        calls: names.filter((name) =>
+          scopes.some((scope) => name.startsWith(`call-${scope.key}-`)),
+        ),
+        lastTraces,
+      }
+    }
+
+    function daemonLog(): string[] {
+      try {
+        return readFileSync(join(daemon.home, 'logs', 'daemon.log'), 'utf8').split('\n')
+      } catch (error) {
+        return [String(error)]
+      }
+    }
+
+    function daemonLogLines(needles: readonly string[]): string[] {
+      return daemonLog()
+        .filter(
+          (line) =>
+            needles.some((needle) => line.includes(needle)) || /\b(WARN|ERROR)\b/.test(line),
+        )
+        .slice(-80)
+        .map((line) => clip(line, 600))
+    }
+
+    // The daemon's live descendants: launcher, runtime and git processes.
+    function daemonProcesses(): unknown {
+      let rows: ProcessRow[]
+      try {
+        rows = process.platform === 'win32' ? windowsProcesses() : posixProcesses()
+      } catch (error) {
+        return clip(String(error), 600)
+      }
+      const children = new Map<number, ProcessRow[]>()
+      for (const row of rows) children.set(row.ppid, [...(children.get(row.ppid) ?? []), row])
+      const tree: ProcessRow[] = []
+      const pending = [daemon.pid]
+      while (pending.length > 0) {
+        for (const child of children.get(pending.pop()!) ?? []) {
+          tree.push({ ...child, command: clip(child.command, 300) })
+          pending.push(child.pid)
+        }
+      }
+      return tree
+    }
+
+    function windowsProcesses(): ProcessRow[] {
+      // A process that exits mid-listing leaves a non-terminating error and a
+      // non-zero exit code; the JSON on stdout is still complete.
+      const listing = spawnSync(
+        'powershell.exe',
+        [
+          '-NoProfile',
+          '-NonInteractive',
+          '-Command',
+          "Get-CimInstance Win32_Process | Select-Object ProcessId,ParentProcessId,@{n='Started';e={if ($_.CreationDate) { $_.CreationDate.ToString('o') } else { '' }}},CommandLine | ConvertTo-Json -Compress",
+        ],
+        { encoding: 'utf8', timeout: 20_000, maxBuffer: 64 * 1024 * 1024 },
+      )
+      if (listing.stdout.trim().length === 0) {
+        throw new Error(`process listing failed: ${listing.error ?? listing.stderr}`)
+      }
+      const parsed = JSON.parse(listing.stdout) as unknown
+      const list = (Array.isArray(parsed) ? parsed : [parsed]) as Array<{
+        ProcessId: number
+        ParentProcessId: number
+        Started: string | null
+        CommandLine: string | null
+      }>
+      return list.map((row) => ({
+        pid: row.ProcessId,
+        ppid: row.ParentProcessId,
+        started: row.Started ?? '',
+        command: row.CommandLine ?? '',
+      }))
+    }
+
+    function posixProcesses(): ProcessRow[] {
+      const output = execFileSync('ps', ['-eo', 'pid=,ppid=,etime=,args='], {
+        encoding: 'utf8',
+        timeout: 20_000,
+        maxBuffer: 16 * 1024 * 1024,
+      })
+      return output.split('\n').flatMap((line) => {
+        const match = /^\s*(\d+)\s+(\d+)\s+(\S+)\s+(.*)$/.exec(line)
+        return match === null
+          ? []
+          : [
+              {
+                pid: Number(match[1]),
+                ppid: Number(match[2]),
+                started: match[3]!,
+                command: match[4]!,
+              },
+            ]
+      })
+    }
+
+    // One line per run of the time-sensitive cases, so a passing hosted run
+    // still shows how long the runtime took to start and to stop.
+    function reportTiming(scenario: string, details: Record<string, unknown>): void {
+      process.stdout.write(
+        `[runtime-scenario-timing] ${JSON.stringify({ protocol, scenario, ...details })}\n`,
+      )
     }
 
     test.beforeAll(async () => {
@@ -657,18 +899,31 @@ for (const protocol of ['opencode', 'claude-code'] as const) {
       expect(runs.every((run) => run.status === 'failed')).toBe(true)
       expect(runs.every((run) => run.errorMessage?.includes('node-timeout') === true)).toBe(true)
       expect(data.outputs.filter((candidate) => candidate.port === 'answer')).toEqual([])
+      reportTiming('timeout', {
+        terminalMs: Date.now() - launchedAt.get(task.id)!,
+        attemptMs: runs.map((run) =>
+          run.startedAt != null && run.finishedAt != null ? run.finishedAt - run.startedAt : null,
+        ),
+      })
       expect((await waitForTrace(task.id, 2)).map((trace) => trace.callIndex)).toEqual([0, 1])
     })
 
     test('cancel terminates the in-flight runtime and never projects output', async () => {
       const task = await launch('cancel')
       await waitForTrace(task.id, 1)
+      const tracedAt = Date.now()
       const cancelResponse = await apiFetch(`/api/tasks/${task.id}/cancel`, { method: 'POST' })
       await expectHttp(cancelResponse, 200, 'cancel task')
       expect((await waitForTask(task.id, (row) => row.status === 'canceled')).status).toBe(
         'canceled',
       )
       const data = await nodeRuns(task.id)
+      reportTiming('cancel', {
+        traceMs: tracedAt - launchedAt.get(task.id)!,
+        canceledMs: Date.now() - tracedAt,
+        killEscalations: daemonLog().filter((line) => line.includes('escalating to SIGKILL'))
+          .length,
+      })
       expect(agentRuns(data).map((run) => run.status)).toEqual(['canceled'])
       expect(data.outputs.filter((candidate) => candidate.port === 'answer')).toEqual([])
     })
