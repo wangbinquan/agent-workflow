@@ -495,6 +495,27 @@ bun 报出的用例时长包含 `beforeEach` / `afterEach`（实测：700ms 的 
 - 导出现场要起子进程（`ps` / PowerShell）时走 `e2e/command.ts` 的 `runCommandResult`：spec 源码里出现 `child_process`
   会被 `root-test-entrypoint.test.ts` 拦下（`af27212f5` 实撞）。它的输出缓冲是默认的 1MB，Windows 上只列映像名，别取命令行。
 
+## PostgreSQL：被同任务写手不断改写的行 + SERIALIZABLE = 40001 风暴；只加锁也救不了旧快照（2026-10-30 实撞，RFC-397）
+
+- 现象：扇出写分片偶发 `iso-setup-failed`，日志只有 Drizzle 的 `Failed query: update "task_execution_owners" …`。每笔数据写入都以 owner 行
+  条件 UPDATE（`revision + 1`）开场；以同一围栏开场的 SERIALIZABLE 事务（effect、会话租约）在快照之后遇到被改写并提交的 owner 行就报
+  40001，10 次重试耗尽后原样抛出。本机 8 路压测 4/64 失败、服务端 2316 次 40001、0 次死锁。
+- 三条 PostgreSQL 事实（独立探针在 PostgreSQL 17 上实测）：
+  - REPEATABLE READ / SERIALIZABLE 下，别的事务**改写**（不只是加锁）并在本事务快照之后提交的行，本事务再 UPDATE 或加锁都报 40001；
+    对方只 `FOR SHARE` / `FOR UPDATE` 加锁不会触发。
+  - 等行锁**不刷新** SERIALIZABLE 快照：等到锁之后读到的仍是等锁前的数据。所以「把围栏改成只加锁」会让 SERIALIZABLE 事务按旧快照判定——
+    同键插入得 `23505`（不在 40001 / 40P01 重放之列），已结束的运行仍读作 `running` 并提交。旧围栏是靠改写行强制 40001、重放到新数据
+    才「碰巧正确」的。
+  - SSI 只在 SERIALIZABLE 事务之间判冲突，READ COMMITTED 写手对它不可见。
+- 定式：单任务写入用 READ COMMITTED + 围栏 / 根锁 + 整笔重放（`withTaskExecutionAggregateWrite`）——等锁后按最新版本重判，之后每条
+  语句都读到最新提交；SERIALIZABLE 只留给锁和约束都覆盖不到的跨行判据；跨任务共享的行用固定顺序的显式 advisory 锁。
+- 归因 40001 风暴：给一次性 PostgreSQL 开 `log_statement = 'mod'`、`log_line_prefix = '%m [%p] v=%v x=%x '`，按（pid, 虚拟事务号）分组，
+  看每个改写热点行的事务还写了哪些表；40001 全落在事务第一条语句上，就是「快照先于锁」。别凭直觉认定是最热的那条写路径——这次事件
+  追加只占改写的约 3%。
+- 测试里的三个坑：只记成功语句的 SQL 记录器看不见首次以 40001 失败的语句，要在派发时记录（含 SQLSTATE 与 `BEGIN`）；一次性故障注入的
+  计数要用事务外建的 sequence（`nextval` 不随回滚复原，普通表标记会随回滚复原、导致每次重放都再报错）；「UPDATE 命中 0 行」的触发器
+  PostgreSQL 写 `BEFORE UPDATE … RETURN NULL`，SQLite 写 `BEFORE UPDATE … BEGIN SELECT RAISE(IGNORE); END`。
+
 ## 主 CI 的墙钟受**并发配额**约束，不受单个 job 时长约束：加分片可能让它更慢（2026-10-14 实测）
 
 本仓是公开仓 + 个人免费账号：整个账号**同时最多 20 个 job，其中 macOS 最多 5 个**；同时触发的 nightly 也占这 20 个槽。2026-10-14 的主 CI 有 72 个 job、合计约 383 runner-分钟，单 job 只有 5–10 分钟，整次 run 却要 28–48 分钟，因为大部分时间在**排队**：19 个 macOS job 挤 5 个槽，macOS e2e 排了 22–38 分钟才开始。

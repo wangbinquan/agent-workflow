@@ -6,7 +6,8 @@
 - **v3 方案**（用户 2026-10-30 选定）：保留 RFC-328 围栏与 revision 语义；把以 owner 围栏开场的 SERIALIZABLE 数据写入（会话租约 7 个、effect 准备 / 结算 / 进程登记、托管进程登记）改为 `withTaskExecutionAggregateWrite`（READ COMMITTED + 整笔重放）；父子任务共享的 effect family 用新增 advisory 锁串行，静默收尾同取；租约补四处加固、冲突映射收窄。用户同时决定：RFC-397 完成、主 CI 全绿后再发 v0.19.3（`2cb6f20e6` 主 CI 已全绿，但不以此发版）。
 - **第 3 轮设计门**：FAIL，但确认 v3 方向可行；意见（EQ 四个入口须整笔重放并补任务根锁、确定性回归改为 barrier 协议、租约负对照须「去掉即失败」、若干事实与表述）已在 v3.1 修订。
 - **设计门第 5 轮**：PASS WITH CHANGES，两处 minor 已并入（v3.3）。
-- **下一步**：用户批准 → 实现与集中验证（plan T1–T7）→ 主 CI 全绿 → 发 v0.19.3。
+- **进度**：用户 2026-10-30 批准 v3.3，进入实施（plan T1–T5 由 Codex 按 RFC 实现、本 session 审核；T6 文档已补 `docs/dev-gotchas.md`）。
+- **下一步**：集中验证（两种 provider 的受影响用例、8×8 压测、变异检查、Codex 实现门）→ 主 CI 全绿 → 发 v0.19.3。
 
 ## 2026-10-30 runtime-scenario-matrix 的取消用例：等运行时起来的预算对齐到 45 秒，没等到就导出现场
 
