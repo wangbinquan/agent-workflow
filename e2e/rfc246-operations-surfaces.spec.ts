@@ -172,11 +172,18 @@ test('390×844 and 390×568 keep both operation surfaces usable without page scr
 
 test('populated Scheduled and Repos have no serious accessibility findings', async ({ page }) => {
   await openPage(page, '/scheduled')
-  for (const path of ['/scheduled', '/repos'] as const) {
+  // Scan only once the rows are there. The repos list is virtualized: before its rows mount, the
+  // container is already scrollable with nothing focusable inside, and axe reports
+  // scrollable-region-focusable (WebKit nightly 40983789677, passed on retry).
+  for (const [path, row] of [
+    ['/scheduled', 'scheduled-row-scheduled-ux-02'],
+    ['/repos', 'repos-row-repo-ux-02'],
+  ] as const) {
     if (!page.url().endsWith(path)) {
       await page.goto(`${requireDaemon().baseUrl}${path}`)
       await expect(page.locator('.operations-surface')).toBeVisible()
     }
+    await expect(page.getByTestId(row)).toBeVisible()
     const results = await new AxeBuilder({ page }).analyze()
     expect(
       results.violations.filter(

@@ -1120,6 +1120,29 @@ graph-care 的修复提交 `0244e0e24` 上，CI 与 10 条定时流水线又全�
 - CI 的 macOS e2e：这台 macOS runner 整体慢 1.5 倍（与 `67acb29b8` 的同一片相比，151 条共同用例耗时的中位比 1.50，人工门三条也在 1.46～1.58，与屏障改动无关），第 2 / 3 片跑到 20 分钟期限被取消。近 8 次绿 run 里 macOS 最慢一片已用到期限的 14～19 分钟，照「加 runner、不动预算」把 macOS e2e 由 3 片加到 4 片（`root-test-entrypoint` 守卫同步）。
 - maintenance-soak：维护窗口里 `PUT /api/tasks/:taskId/members` 一次 1151.3 ms，超过 1000 ms 的整站冻结门槛；错误为 0，SQLite 语句最大 136.8 ms、事务最大 33.9 ms，对照窗口 p95 168 ms（`0244e0e24` 上是 81 ms），runner 偏慢。近 8 次通过的运行维护窗口最大 195～925 ms。照 RFC-392 的先例不改门槛、不重跑同一提交，以后继提交上的运行为证据，登记在 audit-backlog。
 
+**最终一轮（`6c169a931`，包含以上全部修复）**：CI 与 10 条定时流水线全部成功。
+
+| 流水线 | 运行 | 结果 |
+| --- | --- | --- |
+| CI | 40983740544 | 62 / 62（macOS e2e 4 片：5.8 / 8.2 / 14.7 / 5.8 分钟） |
+| postgresql-evidence | 40983776893 | 成功（状态 p95 44.5 ms，最慢 471.5 ms） |
+| backend-macos-nightly | 40983780771 | 18 / 18 |
+| e2e-full-nightly | 40983784064 | 成功 |
+| e2e-webkit-nightly | 40983789677 | 8 / 8 |
+| visual-regression-nightly | 40983793764 | 成功 |
+| windows-platform | 40983797229 | 成功 |
+| evidence-soak-nightly | 40983801369 | 成功 |
+| git-protocols-e2e | 40983804682 | 成功 |
+| integration-opencode | 40983809239 | 成功 |
+| maintenance-soak-nightly | 40983813212 | 成功（维护窗口最大 823.4 ms，是 `c6a0248ad` 那次的后继证据） |
+
+这一轮的绿色运行里有 4 条用例首轮失败、重试通过，逐条归因，都不是这几笔提交的生产改动引起的：
+
+- `e2e/rfc396-graph-development.spec.ts` 预约旅程（CI macOS 3/4）：截图落在页面拿到新文档版本、画布重新加载的窗口里。用例改为先等页面显示应用后的视图组合，本机连跑 3 次通过；audit-backlog 2026-10-28 那条随之查清。
+- `e2e/diagnose-repair.spec.ts` R1（CI macOS 1/4）：夹具 `patchAggregate` 的 SAVEPOINT 先读后写，daemon 同时写库时升级失败（`SQLITE_BUSY_SNAPSHOT`）。这是 RFC-395 改写夹具时引入的；改为先拿写锁，回归用例在 `e2e-sqlite-fixture-lock-contention`（去掉修复即红），本机 diagnose-repair 4 / 4。
+- `e2e/rfc246-operations-surfaces.spec.ts` 无障碍扫描（WebKit Ubuntu 1/4）：Repos 列表是虚拟列表，行挂上之前容器已可滚动却没有可聚焦内容。用例改为等行出现后再扫，本机 WebKit 与 Chromium 各 2 次通过。
+- `e2e/rfc319-agent-and-resource-config.spec.ts` RES-X2（WebKit macOS 2/4）：选了继承人后确认按钮一直禁用。疑似 `AclPanel` 在查询后台重取时忽略这次选择，属产品时序，未改，登记在 audit-backlog，用例加注释指向它。
+
 **AC 逐项证据**（测试文件均在 `packages/backend/tests/`）：
 
 | AC | 证据 |

@@ -553,6 +553,17 @@ async function journey(
     )
     .toBe(2)
   if (booking) {
+    // The backend applies the proposal before the page's 5-second workspace poll sees it. Until
+    // the page shows the new combination, that poll can change the document revision under the
+    // canvas: the view query reloads and the region unmounts. CI 40983740544 (macOS) hit that in
+    // the middle of the screenshot below ("Node is either not visible or not an HTMLElement").
+    await expect(
+      page
+        .locator('.card', {
+          has: page.getByRole('heading', { name: 'Current view combination', exact: true }),
+        })
+        .getByRole('button', { name: /^Exception rules( · Pinned)?$/ }),
+    ).toBeVisible({ timeout: 30_000 })
     await page.getByRole('button', { name: 'Business flow', exact: true }).first().click()
     const graph = page.getByRole('region', { name: 'flow', exact: true })
     await expect(graph.locator('svg')).toBeVisible()

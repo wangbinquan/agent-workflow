@@ -1144,6 +1144,9 @@ test('RFC-319 RES-X2: 技能 / MCP / 插件各自转让一次 —— 只有被�
       const input = aliceSide.page.getByTestId('acl-transfer-input')
       await expect(input).toBeVisible()
       await input.fill(heir.username)
+      // WebKit nightly 40983789677 (macOS): once the confirm below stayed disabled for 15 s after
+      // this click, then passed on retry. Suspected product race, open in docs/audit-backlog.md:
+      // AclPanel ignores a picker change while its actor or ACL query is refetching.
       await aliceSide.page.getByTestId(`acl-transfer-option-${heir.username}`).click()
       await aliceSide.page.getByTestId('acl-transfer-confirm').click()
       await expect(

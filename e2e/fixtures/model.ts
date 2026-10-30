@@ -681,7 +681,11 @@ function patchAggregate(
     return `UPDATE ${target} SET ${assignments} WHERE ${key} IN (SELECT id FROM ${temporary})${target === 'task_repository_mounts' ? ' AND ordinal=0' : ''};`
   })
   return [
-    `SAVEPOINT rfc395_patch; CREATE TEMP TABLE ${temporary}(id TEXT PRIMARY KEY); INSERT INTO ${temporary} SELECT id FROM ${table} WHERE ${predicate(table, where)};`,
+    // The first statement writes (no row matches) so the savepoint holds the write lock before
+    // it reads the selected ids. Reading first left a read snapshot open, and inside a
+    // transaction SQLite does not busy-wait for the upgrade: a live daemon write in between
+    // failed the UPDATE with SQLITE_BUSY_SNAPSHOT (CI 40983740544, diagnose-repair on macOS).
+    `SAVEPOINT rfc395_patch; DELETE FROM ${table} WHERE 0; CREATE TEMP TABLE ${temporary}(id TEXT PRIMARY KEY); INSERT INTO ${temporary} SELECT id FROM ${table} WHERE ${predicate(table, where)};`,
     ...statements,
     participants?.('SELECT id FROM ' + temporary) ?? '',
     `DROP TABLE ${temporary}; RELEASE rfc395_patch;`,

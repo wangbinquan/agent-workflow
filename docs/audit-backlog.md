@@ -5549,7 +5549,7 @@ graph@2 的 `verify-change` 要求实现依据里的每条义务在**交付前**
 没有 Windows 环境复现之前不改：需要先确认 Bun 在 Windows 上对已终止进程的 `process.kill(pid, 0)` 返回什么，再决定是修存活判断
 （例如结合进程启动时间）还是只在测试里等锁释放。若是前者，用户崩溃后立刻重启也会遇到同样的拒绝。
 
-## macOS e2e：RFC-396 预约旅程在偏慢的 runner 上首轮失败，失败细节缺失（2026-10-28，CI 偶发，未处置）
+## macOS e2e：RFC-396 预约旅程在偏慢的 runner 上首轮失败（2026-10-28，CI 偶发；2026-10-30 查清并修复用例）
 
 `e2e/rfc396-graph-development.spec.ts:844`（预约旅程）在运行 40696050061 第 1 次尝试的 macOS e2e 第 2/3 片首轮失败，用时 1.7 分钟。
 这次运行对应 `f1cd7c625`，只改了 CrewStation 模板和一条 M0 用例。该片随后在 20 分钟时限处被取消（job 122844447314），Playwright
@@ -5562,6 +5562,13 @@ graph@2 的 `verify-change` 要求实现依据里的每条义务在**交付前**
 
 暂不改：先看后续 CI 能否在偏慢的 macOS runner 上复现。复现时从 job 日志找出是哪一步的等待超时，再决定是放宽这一步的等待，还是去查
 产品时序。
+
+2026-10-30 复现：运行 40983740544（`6c169a931`）的 macOS e2e 第 3/4 片，这条用例首轮 1.0 分钟失败、重试通过。这次有了失败汇总：
+`e2e/rfc396-graph-development.spec.ts:561` 的 `graph.screenshot()` 报 `Node is either not visible or not an HTMLElement`，紧接在
+`graph.locator('svg')` 可见的断言之后。原因：用例按后端轮询判断提案已应用，页面的工作区查询每 5 秒轮询一次，还停在旧版本；页面下一次轮询拿到
+新的文档版本时，视图查询的 key 含 `document.revision`，没有占位数据，画布先卸载成加载态再重新渲染，截图正好落在这个窗口。已修用例：截图前先等
+页面「Current view combination」里出现应用后的「Exception rules」视图。本机连跑 3 次通过。文档版本变化时画布会闪一下加载态（视图查询不保留
+上一版数据），这是产品上的小问题，未改。
 
 ## 删除任务不收尾工作区准备记录（2026-10-29，CrewStation RFC-044 T10 正式实例迁移实撞，删除路径未处置）
 
@@ -5601,6 +5608,16 @@ graph@2 的 `verify-change` 要求实现依据里的每条义务在**交付前**
 - 这台 runner 整体偏慢：对照窗口 API p95 168 ms，`0244e0e24` 的运行是 81 ms。近 8 次通过的运行里维护窗口最大值在 195～925 ms，两次 925 ms 都出现在同样偏慢的 runner 上（对照窗口 p95 约 183 ms）。
 - 该提交与其父提交之间的两笔改动（人工门 e2e 屏障、epoch 切换的确认流程）都不在 daemon 的请求、写入或维护路径上。
 - 没有动手：没有改 1000 ms 门槛（RFC-338 的产品判据），也没有重跑同一提交；后继证据为之后提交上的运行（见 RFC-395 plan §6.13）。门槛在慢 runner 上余量偏薄：维护窗口里写入比对照窗口慢约 1.8 倍（p95 301 → 539 ms）。再次出现时先查是哪类维护作业在与写入争用。
+
+## WebKit e2e：转让资源所有者时选中的人偶尔没生效（2026-10-30，CI 偶发，疑似产品时序，未处置）
+
+- e2e-webkit-nightly 运行 40983789677（`6c169a931`）macOS 第 2/4 片：`e2e/rfc319-agent-and-resource-config.spec.ts:1113`（RES-X2）在点了
+  `acl-transfer-option-<继承人>` 之后，`acl-transfer-confirm` 一直是禁用状态，15 秒后超时；重试通过。
+- 疑似原因（未证实）：`packages/frontend/src/components/AclPanel.tsx` 的 `hasCurrentManageAuthority` 要求当前用户查询与 ACL 查询都处在
+  `fetchStatus === 'idle'`。点选项时如果其中一个正在后台重取，`sessionIsCurrent()` 为假，picker 的 `onChange` 被直接忽略；选项列表已经关闭，
+  界面上什么也没选中，确认按钮也就一直不可用。确认按钮的 `onClick` 有同样的判断。
+- 没有动手：这牵涉 ACL 编辑会话在权限变化时的边界（`acl-manage-loss.test.tsx` 锁着的行为），属于产品决定。再次出现时先用 trace 确认点击那一刻
+  两个查询的状态。用例里已加注释指向本条。
 
 ## RFC-395 实现门留下的两条测试剩余项（2026-10-29，Codex 实现门 P2，未决）
 

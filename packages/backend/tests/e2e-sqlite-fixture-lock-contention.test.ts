@@ -48,6 +48,13 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 
 import { querySqlite, runSqlite } from '../../../e2e/command'
+import {
+  patchTaskFixtureSql,
+  taskFixtureSql,
+  workflowFixtureSql,
+} from '../../../e2e/fixtures/model'
+import { createTestDb } from './helpers/testDatabase'
+import type { TaskFixtureSpec } from './helpers/model'
 
 const REPO_ROOT = resolve(import.meta.dir, '..', '..', '..')
 
@@ -217,3 +224,73 @@ test('fixture queries preserve complete schema-history-sized JSON output', () =>
     { artifact_json: artifact },
   ])
 })
+
+// CI 40983740544 (macOS, diagnose-repair R1): `patchTaskFixtureSql` opened its savepoint by reading
+// the selected ids into a temp table, so its UPDATE had to upgrade a read snapshot to a write.
+// Inside a transaction SQLite does not busy-wait for that upgrade, and a daemon write in between
+// failed the fixture with SQLITE_BUSY_SNAPSHOT. Here another process holds the write lock while
+// the patch runs: before the fix the UPDATE fails at once, now the patch waits and lands.
+const LOCK_HOLDER_SOURCE = `import { Database } from 'bun:sqlite'
+import { writeFileSync } from 'node:fs'
+
+const [dbPath, readyPath, holdMs] = Bun.argv.slice(2)
+const db = new Database(dbPath)
+db.exec('PRAGMA busy_timeout = 5000;')
+db.exec('BEGIN IMMEDIATE;')
+writeFileSync(readyPath, 'ready')
+await Bun.sleep(Number(holdMs))
+db.exec('COMMIT;')
+db.close()
+`
+
+test('an aggregate patch waits for a concurrent writer instead of failing its savepoint', async () => {
+  const dir = tmpWorkspace()
+  const dbPath = join(dir, 'db.sqlite')
+  const readyPath = join(dir, 'holder.ready')
+  const holderPath = join(dir, 'holder.ts')
+  writeFileSync(holderPath, LOCK_HOLDER_SOURCE)
+  const task: TaskFixtureSpec = {
+    id: 'busy-task',
+    workflowId: 'wf',
+    workflowSnapshot: { nodes: [], edges: [] },
+    repoPath: '/repo',
+    worktreePath: '/work',
+    baseBranch: 'main',
+    branch: 'fixture',
+    status: 'done',
+    inputs: {},
+    startedAt: 10,
+  }
+  const fixture = await createTestDb({ provider: 'sqlite', filename: dbPath })
+  const raw: unknown = Reflect.get(fixture.db, '$client')
+  if (!(raw instanceof Database)) throw new Error('expected SQLite fixture')
+  try {
+    raw.exec('PRAGMA journal_mode = WAL;')
+    executeSqliteFixtureSql(
+      raw,
+      workflowFixtureSql({ id: 'wf', name: 'busy-wf', definition: { nodes: [], edges: [] } }) +
+        taskFixtureSql(task),
+    )
+  } finally {
+    await fixture.close()
+  }
+
+  const holder = Bun.spawn([process.execPath, holderPath, dbPath, readyPath, String(HOLD_MS)], {
+    cwd: REPO_ROOT,
+    stderr: 'pipe',
+    stdout: 'pipe',
+  })
+  try {
+    await waitForFile(readyPath, 10_000)
+    const startedAt = Date.now()
+    runSqlite(dbPath, patchTaskFixtureSql({ id: 'busy-task' }, { status: 'running' }))
+    // The lock was still held, so a pass cannot come from the holder releasing early.
+    expect(Date.now() - startedAt).toBeGreaterThan(200)
+  } finally {
+    await holder.exited
+  }
+  expect(holder.exitCode).toBe(0)
+  expect(querySqlite(dbPath, "SELECT status FROM tasks WHERE id = 'busy-task'")).toEqual([
+    { status: 'running' },
+  ])
+}, 30_000)
