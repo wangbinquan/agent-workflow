@@ -1,3 +1,12 @@
+## 2026-10-31 RFC-294 W7 余项核销（纯文档；`design/RFC-294-backend-layered-target-architecture/w7-closure-2026-10-31.md`）
+
+- **结论**：三条退出门（producer 可解释、freshness 不依赖 id 或 nullable parent、两种 provider 迁移）与另列三项（prompt 外置双读、
+  DevelopmentMission→NodeRun 引用链、RFC-306 skipped / consumed）逐条满足，不需要生产改动；身份模型由 RFC-395 交付。
+- **口径**：`historical_parent_id IS NULL` 仍是 RFC-369 结构取代与顶层筛选的判据；parent 现为每个铸造点显式写入的归属事实，按归档
+  原文「删除 nullable-parent freshness 推断」判定满足。本会话依用户授权判定，可推翻；推翻时另立新号 RFC。
+- **更正**：review-2026-10-30 原写「本机与托管实例均已迁到 epoch 2」，实际本机实例是归档后全新安装（RFC-395 proposal 第 99 行），已改。
+- 可选的测试侧补强（随机种子不含 skipped、无引用链用例、无 parent-null 谓词守卫、过期注释）列在记录 §3，不阻塞。
+
 ## 2026-10-31 RFC-399 恢复 context 值级 DAG 与 platform 单向依赖（In Progress；`design/RFC-399-context-dag-platform-one-way/`）
 
 - **来由**：用户 2026-10-30「你继续推进RFC294，你可以使用codex进行调研和实现，过程中按你的判断来推进，不用询问我」。按 RFC-294
