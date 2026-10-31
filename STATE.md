@@ -35,7 +35,7 @@
   CI `41198759095` 全绿。偏差见 proposal §6 第 13 条，验证见 plan「集中验证」。
 - **后继**：S5 第二步 [RFC-400](design/RFC-400-collaboration-task-participants-actor/proposal.md)。
 
-## 2026-10-30 RFC-398 跨版本升级保障（Draft，待用户批准；`design/RFC-398-cross-version-upgrade-guarantee/`）
+## 2026-10-30 RFC-398 跨版本升级保障（In Progress，2026-10-31 用户批准 v6；`design/RFC-398-cross-version-upgrade-guarantee/`）
 
 - **来由**：用户报告生产（单二进制 + PostgreSQL）v0.19.2 → v0.19.3 升级失败：数据库没有自动迁移、`start` 直接拒绝。要求在用例里固化跨版本数据迁移能力。
   用户裁决：启动时自动迁移（无阻塞项自动执行）；用例两层（每个 PR 的冻结链发布版矩阵 + 发版门 / 夜间的真实旧二进制验证）；实现可交 Codex 执行。
@@ -49,7 +49,8 @@
 - **v0.19.3**：GitHub Release 页面已不存在（tag 仍在）。修复版发布时机由用户决定。
 - **设计门**（Codex，只审功能）：r1 FAIL（12 条）→ r2 FAIL（9 条）→ r3 FAIL（4 P1 + 1 P2）→ r4 FAIL（2 P1）→ r5 FAIL（1 P1 + 2 P2）→ r6 **PASS**（2026-10-31），
   定稿 v6，逐条处置见 design §10。
-- **下一步**：用户批准（含 proposal §5 C1～C12 逐项确认、豁免清单在 T8 提交）→ 按 plan T1～T13 实施（Codex 执行、本会话审核）。
+- **批准**（2026-10-31）：v6 获批，C1～C12 逐项确认（C4 自动建库、C11 纳入桥接、C12 留存 v0.19.3 产物）；Draft 提交 `5c66f05e7` 主 CI 41180889194 全绿。
+- **下一步**：按 plan T1～T13 实施（Codex 执行、本会话审核）；豁免清单在 T8 提交用户确认；全部实现与用例写完后集中验证。
 
 ## 2026-10-30 RFC 状态对账：索引登记修正与 RFC-294 剩余范围（纯文档）
 
