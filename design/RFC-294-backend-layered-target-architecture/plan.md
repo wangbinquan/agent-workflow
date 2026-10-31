@@ -5,9 +5,10 @@
 > 各波任务清单、历次 SHA 与 hosted 证据、账本重分桶记录）见 `archive-20261016-plan.md`。当前指标见 dated review 或按需报告；命令见 [status.md](./status.md)。
 > **2026-10-30 进度对账**：S1、S2a、S2b、S2c 前两步与 RFC-395 关闭后的剩余范围见 [review-2026-10-30](./review-2026-10-30.md)；§1.1、§1.2、§3、§4、§8 已按其更新。
 > **2026-10-31 W7 余项核销**：逐条核对记录见 [w7-closure-2026-10-31](./w7-closure-2026-10-31.md)；§1.1、§4.5、§8 已按其更新。
+> **2026-10-31 S5 第一步**：[RFC-399](../RFC-399-context-dag-platform-one-way/proposal.md) 达成 S5 三条退出门规则；S5 范围余下三项由 [RFC-400](../RFC-400-collaboration-task-participants-actor/proposal.md) 承担；§1.2、§3 S5、§8 已更新。
 
 - 目标架构状态：Approved（D1～D8 沿用；D9 修订、D10～D13 新增，见 proposal §9）。本文刷新不授权任何未立项的后继。
-- 迁移状态：In Progress（长期推进）。P0、W2、W3、W4-A/C/E0/E2/E3/E4a/E4b/E6/E7 已关闭；后继 S1（RFC-374）、S2a（RFC-379）、S2b（RFC-380～392）、S3（RFC-375）、S4（RFC-376）、S8（RFC-377）已关闭，S2c 完成前两步（RFC-393 / 394）；RFC-395 承接 S1b、S5 两步、S7 状态机合一与 W7 身份模型；W7 余项 2026-10-31 核销。其余见 §1.1（2026-10-30 对账）。
+- 迁移状态：In Progress（长期推进）。P0、W2、W3、W4-A/C/E0/E2/E3/E4a/E4b/E6/E7 已关闭；后继 S1（RFC-374）、S2a（RFC-379）、S2b（RFC-380～392）、S3（RFC-375）、S4（RFC-376）、S8（RFC-377）已关闭，S2c 完成前两步（RFC-393 / 394）；RFC-395 承接 S1b、S5 两步、S7 状态机合一与 W7 身份模型；W7 余项 2026-10-31 核销；S5 第一步由 RFC-399 完成，第二步 RFC-400 进行中。其余见 §1.1（2026-10-30 对账）。
 - 规划单位：已关闭波次（保留结论）+ 立即整改后继 S1～S8 + 余下波次（W4 余项、W5、W7 余项、W9-C/D/E，W8 可选）。
 
 ## 0. 批准边界与实施纪律
@@ -87,6 +88,7 @@
 | S2c 第一步 | [RFC-393](../RFC-393-cli-bootstrap-separation/proposal.md) | `cli/` 与 `bootstrap/` 分离 |
 | S2c 第二步 | [RFC-394](../RFC-394-typed-deployment-profile/proposal.md) | 类型化部署 profile |
 | S1b、S5 两步、S7 状态机、W7 身份 | [RFC-395](../RFC-395-database-target-schema-rebuild/proposal.md) | 数据库目标模型与一次迁移；不代表 RFC-294 全部退出 |
+| S5 第一步 | [RFC-399](../RFC-399-context-dag-platform-one-way/proposal.md) | context 值级 DAG（SCC 2 → 0、越界值级对 9 → 0）、`platform` → `modules` 19 → 0、删除 drizzle 再导出桶 |
 
 各后继的 exact-SHA 与 hosted 证据以其自身三件套为准；本总纲的历史汇总见 `archive-20261016-plan.md` §1、§3.2。
 
@@ -191,6 +193,11 @@ Facade 只许 re-export 或参数形状适配；不得含 DB 查询、状态、�
 - **2026-10-30 对账**：退出门未成立——context 值级 SCC 仍为 2（同上两组）、off-DAG 9 对；`platform` → `modules` 19 个文件对；
   `legacySqliteTransportMechanisms.ts` 与 `services/humanGateComposition.ts` 仍在；9 个模块 `public/` 文件仍 import legacy `Actor`。
   见 [review-2026-10-30](./review-2026-10-30.md) §3。
+- **2026-10-31 第一步（[RFC-399](../RFC-399-context-dag-platform-one-way/proposal.md)，Done）**：退出门三条规则成立——context 值级 SCC 2 → 0、
+  越出 DAG 的值级 context 对 9 → 0、`platform` → `modules` 19 → 0、`legacySqliteTransportMechanisms.ts` 删除；新增 17 条 required-SPI 虚线。
+- **第二步（[RFC-400](../RFC-400-collaboration-task-participants-actor/proposal.md)，In Progress）**：范围余下三项——collaboration 对 task-execution
+  内部的 17 个文件对改经 TE 自有参与者、`services/humanGateComposition.ts` 退役、模块 public 合同去 legacy `Actor`（8 个 public 文件 +
+  5 个经 public 转出的声明源）。完成后 S5 Done。
 
 ### S6 task-execution 执行机制归位
 
@@ -364,7 +371,7 @@ S3、S4、S8 互不依赖，可与其他后继并行，但各自避让正在被�
 
 - [ ] proposal AC-1～AC-11 全部兑现；
 - [x] 所有 P0 后继 Done；RFC-287 Done；RFC-288/289 保持 CLOSED；W2、W3 Done；
-- [ ] S1～S8 Done（2026-10-30：S1 / S3 / S4 / S8 Done，S2 余 S2c，S5 / S6 / S7 未完成）；
+- [ ] S1～S8 Done（2026-10-31：S1 / S3 / S4 / S8 Done，S2 余 S2c，S5 第一步 Done、第二步 RFC-400 进行中，S6 / S7 未完成）；
 - [ ] W4 余项、W5 余项、W7 余项（2026-10-31 核销）、W9-C/E/D Done；W8 仅在新能力 RFC 获批时要求；
 - [ ] design §14 的终局判据全部成立；
 - [ ] 在途 task、历史行、API / MCP / WS 兼容与完整 E2E 有证据；

@@ -38,8 +38,8 @@
 
 ## 验收清单
 
-- [ ] proposal AC-1～AC-4
-- [ ] 推送后 exact SHA 的 CI 全绿（AC-5）
+- [x] proposal AC-1～AC-4
+- [x] 推送后 exact SHA 的 CI 全绿（AC-5）：`2112b40fc` CI `41198759095`
 
 ## 实施记录（2026-10-31）
 

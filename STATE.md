@@ -1,3 +1,15 @@
+## 2026-10-31 RFC-400 collaboration 经 task 自有参与者写任务、人工门装配归位、public 合同去 legacy Actor（In Progress；`design/RFC-400-collaboration-task-participants-actor/`）
+
+- **来由**：用户 2026-10-30「你继续推进RFC294，你可以使用codex进行调研和实现，过程中按你的判断来推进，不用询问我」。RFC-399 完成 S5
+  三条退出门规则后，S5 范围余下三项归本 RFC，完成后 S5 Done。
+- **范围**：collaboration 对 task-execution 内部的 17 个文件对改经 TE `public/participants` 的 tx 参与者合同（沿现有 COL→TE 实线，
+  不新增 DAG 边；带事务句柄的构造入口只经 TE composition 交给 bootstrap 注入）；删除 `services/humanGateComposition.ts`，command
+  context 拆到 collaboration application / infrastructure；8 个 public 文件与 5 个经 public 转出的声明源把 legacy `Actor` 换成 identity-access
+  的 `AuthenticatedAuthoritySnapshot`（字段等价，只换类型）。纯结构重构。
+- **做法**：Codex 只读研究（线程 `01a191b6-41cd-7630-95da-cb784aad7350`），本会话复核关键论断后定稿。设计门免，实现门一轮（只审功能）。
+- **进度**：Part A（T1～T3）已由 Codex 实施（线程 `01a191d4-4c7a-7b70-b8ad-7485af335a4f`，未提交）；Part B（T4～T8）实施中。
+  之后本会话集中验证（T9，跑后端全量）→ 提交 → 按 exact SHA 跟 CI。
+
 ## 2026-10-31 RFC-294 W7 余项核销（纯文档；`design/RFC-294-backend-layered-target-architecture/w7-closure-2026-10-31.md`）
 
 - **结论**：三条退出门（producer 可解释、freshness 不依赖 id 或 nullable parent、两种 provider 迁移）与另列三项（prompt 外置双读、
@@ -7,7 +19,7 @@
 - **更正**：review-2026-10-30 原写「本机与托管实例均已迁到 epoch 2」，实际本机实例是归档后全新安装（RFC-395 proposal 第 99 行），已改。
 - 可选的测试侧补强（随机种子不含 skipped、无引用链用例、无 parent-null 谓词守卫、过期注释）列在记录 §3，不阻塞。
 
-## 2026-10-31 RFC-399 恢复 context 值级 DAG 与 platform 单向依赖（In Progress；`design/RFC-399-context-dag-platform-one-way/`）
+## 2026-10-31 RFC-399 恢复 context 值级 DAG 与 platform 单向依赖（Done 2026-10-31；`design/RFC-399-context-dag-platform-one-way/`）
 
 - **来由**：用户 2026-10-30「你继续推进RFC294，你可以使用codex进行调研和实现，过程中按你的判断来推进，不用询问我」。按 RFC-294
   review-2026-10-30 §5 的顺序，S2c 余项与 RFC-398 的改动面（`main.ts`、启动迁移）重叠，先做 S5。
@@ -16,7 +28,12 @@
   public 合同里的 legacy `Actor`）留给 S5 第二步。纯结构重构。
 - **做法**：Codex 只读研究逐处给出修法（无需行为变化、无需改 DAG 实线边），本会话复核后定稿；两处收窄：托管 MCP 诊断只换依赖
   方向不搬文件，`repoRelForcedPaths` 放 platform 而非 shared。设计门免，实现门一轮（只审功能）。
-- **下一步**：派发 Codex 实施 Part A（T1～T6）→ Part B（T7～T12）→ 本会话集中验证（T13）→ 提交 → 按 exact SHA 跟 CI。
+- **结果**：提交 `950f5900b`（约 420 个路径，Codex 实施、本会话审核与集中验证）。门禁：context 值级 SCC 2 → 0、越出 DAG 的值级 context
+  对 9 → 0、`platform` → `modules` 19 → 0、再导出桶删除；跨 context 内部文件对 88 → 73、越出 DAG 的 offered 61 → 54、`export *` 桶 23 → 21。
+  集中验证查出 11 个根目录守卫按搬迁前路径锚定（Codex 只跑了 `tests/architecture/`），已修；PostgreSQL 泳道的超时在串行重跑下全过。
+  CI：`950f5900b` 只红 `rfc310-architecture-lock` 一处（修复时把维护作业处理器出口改经 composition 带出的消费者清单），`2112b40fc` 补登记后
+  CI `41198759095` 全绿。偏差见 proposal §6 第 13 条，验证见 plan「集中验证」。
+- **后继**：S5 第二步 [RFC-400](design/RFC-400-collaboration-task-participants-actor/proposal.md)。
 
 ## 2026-10-30 RFC-398 跨版本升级保障（Draft，待用户批准；`design/RFC-398-cross-version-upgrade-guarantee/`）
 
