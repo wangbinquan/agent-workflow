@@ -1,3 +1,16 @@
+## 2026-10-31 RFC-401 资源写入栈合一与 AtomicApply 持久租约（Draft，待用户确认；`design/RFC-401-single-resource-write-stack/`）
+
+- **来由**：RFC-294 S7 余项。用户 2026-10-30「你继续推进RFC294 … 按你的判断来推进，不用询问我」。S7 含用户可见的错误码收敛，
+  RFC-294 plan 写明须列入口与错误码呈批。本会话完成了研究与设计，proposal §5 的 12 项行为变化逐项给出推荐，待用户确认后实施。
+- **研究结论**（Codex 只读线程 `01a192ec-bdee-70e2-9736-f4a9c598a110`，本会话抽查关键论断）：
+  - 写入不止两份：Intent、资源包、普通 CRUD、技能 operation 生命周期、种子 / 模板入口各有编排。
+  - 同一非法输入在三条入口得到不同错误；资源包内 agent 循环会落成 `internal-error`。
+  - 收敛只有一个作业，但 apply 没有持久 lease / fencing。
+  - fusion approve 与 skill restore 适合接入；fusion 存在「资源已提交、fusion 记为 failed」的状态分歧。
+- **分两部分**：Part A（写入栈合一与错误收敛，无 schema 变化）；Part B（lease、技能 / fusion / restore 接入、旧生命周期退役，含 schema
+  变化，排在 RFC-398 之后）。
+- **当前**：等待确认期间，本会话转做纯结构、无用户可见变化的 S6。
+
 ## 2026-10-31 RFC-400 collaboration 经 task 自有参与者写任务、人工门装配归位、public 合同去 legacy Actor（Done 2026-10-31；`design/RFC-400-collaboration-task-participants-actor/`）
 
 - **来由**：用户 2026-10-30「你继续推进RFC294，你可以使用codex进行调研和实现，过程中按你的判断来推进，不用询问我」。RFC-399 完成 S5
