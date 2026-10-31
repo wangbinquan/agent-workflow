@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './taskExecutionParticipantBindings'
 import { composeRepositoryPreparationLookup } from '@/modules/source-control/composition'
 import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import { epoch2RuntimeTestPorts } from './epoch2RuntimePorts'
@@ -60,7 +61,7 @@ import type { WorktreeCleanupProvenance } from '@/util/git'
 
 export interface TestTaskLaunchOptions extends Omit<
   TaskContinuationDependencies,
-  'historyRestrictions'
+  'historyRestrictions' | 'taskExecutionParticipants'
 > {
   readonly sourceTerminationLaunchSignal?: AbortSignal
   readonly actor?: Actor
@@ -264,6 +265,7 @@ export async function launchTestTask(
     const call = options.callLaunch
     if (options.materializedSpace === undefined) throw new Error('child fixture workspace missing')
     const factory = composeTestTaskDriveFactory({
+      taskExecutionParticipants,
       humanGateOpen,
       deps: options,
       appHome,

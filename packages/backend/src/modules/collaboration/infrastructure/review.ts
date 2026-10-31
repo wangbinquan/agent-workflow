@@ -1,3 +1,23 @@
+import type { TaskExecutionParticipantBindings } from './taskExecutionParticipantBindings'
+import { nextRetryIndex } from '@/modules/task-execution/public/queries'
+import {
+  canonicalHumanGateRequestHash,
+  canonicalHumanGateValueJson,
+  deriveHumanGateCompatibilityKey,
+} from '@/modules/collaboration/domain/canonicalGateRequest'
+import { createCollaborationCommandContext } from '@/modules/collaboration/infrastructure/collaborationCommandContext'
+import {
+  decodeReviewDecisionManifest,
+  decodeReviewDecisionReceipt,
+  encodeReviewDecisionManifest,
+  encodeReviewDecisionReceipt,
+  type ReviewDecisionManifest,
+  type ReviewDecisionReceiptEnvelope,
+} from '@/modules/collaboration/domain/reviewDecision'
+import { gateDecisionReceipt } from '@/modules/collaboration/domain/gateReceipt'
+import { parkPreparedHumanGate } from '@/modules/task-execution/public/commands'
+import { prepareWorkspaceRollbackPlan } from '@/modules/collaboration/infrastructure/prepareWorkspaceRollbackPlan'
+import { type ValidatedWorkspaceRollbackPlan } from '@/modules/collaboration/domain/workspaceRollbackPlan'
 import { createHumanGateOpenParticipantScope } from './humanGateOpenFactory'
 import type { CollaborationTaskRolePolicy } from '../application/ports/collaborationTaskRolePolicy'
 import type { ContentStore } from '@/platform/content/contentStore'
@@ -164,12 +184,6 @@ import {
   prepareReviewGateOpen,
 } from '@/modules/collaboration/public/commands'
 import {
-  humanGateComposition,
-  type ReviewDecisionManifestBridge as ReviewDecisionManifest,
-  type ReviewDecisionReceiptEnvelopeBridge as ReviewDecisionReceiptEnvelope,
-  type ValidatedWorkspaceRollbackPlanBridge as ValidatedWorkspaceRollbackPlan,
-} from '@/services/humanGateComposition'
-import {
   buildReviewAnchorDocument,
   createReviewAnchorBudget,
   resolveReviewAnchor,
@@ -186,12 +200,7 @@ import { chunkedAll } from '@/util/sqlChunk'
 import { assertNodeRunSourceTerminationAdmission } from '@/services/lifecycle'
 // RFC-359 W1-T2c 起决定事务里的 node_run 状态 CAS 走两引擎共用的中立内核；W4-D28b 起评审门开启
 // （dispatchReviewNodeUnlocked）也走它——同步的 `withTaskExecutionTransaction` 网关已整体退役。
-import {
-  setNodeRunStatusTx,
-  transitionNodeRunStatusTx,
-} from '@/modules/task-execution/infrastructure/nodeRunLifecycleTransition'
 import type { HumanGateTaskLockPort, ReviewUpstreamAgentPort } from '../composition/required-ports'
-import { nextRetryIndex } from '@/modules/task-execution/application/nextRetryIndex'
 import { loadRollbackTarget, planNodeRunRollbackTargets } from '@/services/nodeRollback'
 import {
   currentTaskExecutionContext,
@@ -210,14 +219,6 @@ import {
   NotFoundError,
   ValidationError,
 } from '@/util/errors'
-import { DrizzleNodeRunLifecyclePersistence } from '@/modules/task-execution/infrastructure/nodeRunLifecyclePersistence'
-import { createNodeRunMintParticipantInTx } from '@/modules/task-execution/infrastructure/nodeRunMintParticipant'
-import { transitionHumanGateTask } from '@/modules/task-execution/infrastructure/humanGateTaskTransition'
-import { acceptHumanGateDecisionTx } from '@/modules/task-execution/infrastructure/taskDecisionParticipant'
-import {
-  createTaskAuthorizationParticipantInTx,
-  createTaskAuthorizationQueries,
-} from '@/modules/task-execution/infrastructure/taskAuthorization'
 import { resolveTaskRole } from '@/services/resourceAcl'
 import { createLogger } from '@/util/log'
 import { sha256Hex } from '@/util/hash'
@@ -233,17 +234,6 @@ import {
 } from './humanGateOperationJournal'
 import { publishCommittedEventsAfterCommit } from '@/platform/events/committed/runtime'
 import { waitAtHumanGateDecisionCommitBarrier } from '@/services/humanGateDecisionE2eBarrier'
-
-const {
-  canonicalHumanGateRequestHash,
-  canonicalHumanGateValueJson,
-  decodeReviewDecisionManifest,
-  decodeReviewDecisionReceipt,
-  deriveHumanGateCompatibilityKey,
-  encodeReviewDecisionManifest,
-  encodeReviewDecisionReceipt,
-  gateDecisionReceipt,
-} = humanGateComposition
 
 /** RFC-145: human-readable supersede breadcrumb prefix (message builder only —
  *  the machine contract is the superseded_by_review / rolled_back columns). */
@@ -582,6 +572,7 @@ async function upstreamPortArchiveJson(
 }
 
 export interface DispatchReviewArgs {
+  readonly taskExecutionParticipants: TaskExecutionParticipantBindings
   taskRolePolicy: CollaborationTaskRolePolicy
   taskLock: HumanGateTaskLockPort
   historyRestrictions: HistoryRestrictionPort
@@ -1060,44 +1051,47 @@ async function dispatchReviewNodeUnlocked(args: DispatchReviewArgs): Promise<Dis
             legacyJson: consumedJson,
           })
         } else if (reuse?.status === 'pending') {
-          await transitionNodeRunStatusTx({
-            tx,
-            nodeRunId: reuse.id,
-            event: { kind: 'park-review' },
-            extra: {
-              identity: {
-                startedAt: reuse.startedAt ?? decidedAt,
+          await args.taskExecutionParticipants
+            .createHumanGateNodeRunStateParticipantInTx(tx)
+            .transitionNodeRunStatus({
+              nodeRunId: reuse.id,
+              event: { kind: 'park-review' },
+              extra: {
+                identity: {
+                  startedAt: reuse.startedAt ?? decidedAt,
+                },
+                inputs: {
+                  consumedUpstreamRunsJson: consumedJson,
+                },
               },
-              inputs: {
-                consumedUpstreamRunsJson: consumedJson,
-              },
-            },
-          })
+            })
         } else {
-          reviewNodeRunId = await createNodeRunMintParticipantInTx(tx).mint({
-            ...nodeRunMintIdentityForSlot(
-              {
-                kind: 'node',
-                nodeId: node.id,
-                frame: { containerRunId: containerRunId, iteration: iteration },
+          reviewNodeRunId = await args.taskExecutionParticipants
+            .createHumanGateNodeRunMintParticipantInTx(tx)
+            .mint({
+              ...nodeRunMintIdentityForSlot(
+                {
+                  kind: 'node',
+                  nodeId: node.id,
+                  frame: { containerRunId: containerRunId, iteration: iteration },
+                },
+                { kind: 'current' },
+              ),
+              taskId,
+              nodeId: node.id,
+              status: 'awaiting_review',
+              cause: 'review-park',
+              containerRunId,
+              iteration,
+              overrides: {
+                identity: {
+                  reviewIteration,
+                },
+                inputs: {
+                  consumedUpstreamRunsJson: consumedJson,
+                },
               },
-              { kind: 'current' },
-            ),
-            taskId,
-            nodeId: node.id,
-            status: 'awaiting_review',
-            cause: 'review-park',
-            containerRunId,
-            iteration,
-            overrides: {
-              identity: {
-                reviewIteration,
-              },
-              inputs: {
-                consumedUpstreamRunsJson: consumedJson,
-              },
-            },
-          })
+            })
         }
         const taskHumanGate = createHumanGatePersistenceParticipantInTx(tx)
         await taskHumanGate.writeReviewOutput({
@@ -1112,23 +1106,26 @@ async function dispatchReviewNodeUnlocked(args: DispatchReviewArgs): Promise<Dis
           portName: REVIEW_APPROVAL_META_PORT,
           content: meta,
         })
-        await transitionNodeRunStatusTx({
-          tx,
-          nodeRunId: reviewNodeRunId,
-          event: { kind: 'approve-review' },
-          extra: {
-            identity: {
-              finishedAt: decidedAt,
+        await args.taskExecutionParticipants
+          .createHumanGateNodeRunStateParticipantInTx(tx)
+          .transitionNodeRunStatus({
+            nodeRunId: reviewNodeRunId,
+            event: { kind: 'approve-review' },
+            extra: {
+              identity: {
+                finishedAt: decidedAt,
+              },
             },
-          },
-        })
-        if (refreshAwaitingReview && taskRow.status === 'awaiting_review') {
-          await transitionHumanGateTask(tx, {
-            taskId,
-            expectedTaskRevision: taskRow.lifecycleEventRevision,
-            transition: 'release-review',
-            now: decidedAt,
           })
+        if (refreshAwaitingReview && taskRow.status === 'awaiting_review') {
+          await args.taskExecutionParticipants
+            .createHumanGateTaskTransitionParticipantInTx(tx)
+            .transition({
+              taskId,
+              expectedTaskRevision: taskRow.lifecycleEventRevision,
+              transition: 'release-review',
+              now: decidedAt,
+            })
         }
         await taskHumanGate.appendTextEvent({
           nodeRunId: reviewNodeRunId,
@@ -1165,7 +1162,7 @@ async function dispatchReviewNodeUnlocked(args: DispatchReviewArgs): Promise<Dis
         })),
       }),
     )
-    const collaboration = humanGateComposition.createCollaborationCommandContext({
+    const collaboration = createCollaborationCommandContext({
       db,
       taskRolePolicy: args.taskRolePolicy,
       taskLock: args.taskLock,
@@ -1197,7 +1194,7 @@ async function dispatchReviewNodeUnlocked(args: DispatchReviewArgs): Promise<Dis
       documents: drafts,
     })
     if (prepared.kind === 'prepared') {
-      await humanGateComposition.parkPreparedHumanGate({
+      await parkPreparedHumanGate({
         humanGateOpen: createHumanGateOpenParticipantScope,
         db,
         prepared: prepared.prepared,
@@ -1258,16 +1255,17 @@ async function dispatchReviewNodeUnlocked(args: DispatchReviewArgs): Promise<Dis
     await withTaskExecutionWrite(db, async (tx) => {
       await fenceTaskWrite(tx, { taskId, context: executionContext })
       await createHumanGatePersistenceParticipantInTx(tx).lockTask(taskId)
-      await transitionNodeRunStatusTx({
-        tx,
-        nodeRunId: reviewNodeRunId,
-        event: { kind: 'park-review' },
-        extra: {
-          identity: {
-            startedAt: reuse.startedAt ?? Date.now(),
+      await args.taskExecutionParticipants
+        .createHumanGateNodeRunStateParticipantInTx(tx)
+        .transitionNodeRunStatus({
+          nodeRunId: reviewNodeRunId,
+          event: { kind: 'park-review' },
+          extra: {
+            identity: {
+              startedAt: reuse.startedAt ?? Date.now(),
+            },
           },
-        },
-      })
+        })
       await createConsumedInputsParticipantInTx().record(tx, reviewNodeRunId, {
         legacyJson: consumedJson,
       })
@@ -1278,31 +1276,33 @@ async function dispatchReviewNodeUnlocked(args: DispatchReviewArgs): Promise<Dis
     // reject / iterate). Mint a fresh awaiting_review row carrying the prior
     // reviewIteration — same review round, re-evaluated on the new content.
     reviewIteration = reuse?.reviewIteration ?? 0
-    reviewNodeRunId = await new DrizzleNodeRunLifecyclePersistence(db).mint({
-      ...nodeRunMintIdentityForSlot(
-        {
-          kind: 'node',
-          nodeId: node.id,
-          frame: { containerRunId: containerRunId, iteration: iteration },
+    reviewNodeRunId = await args.taskExecutionParticipants
+      .createHumanGateNodeRunMintOperations(db)
+      .mint({
+        ...nodeRunMintIdentityForSlot(
+          {
+            kind: 'node',
+            nodeId: node.id,
+            frame: { containerRunId: containerRunId, iteration: iteration },
+          },
+          { kind: 'current' },
+        ),
+        taskId,
+        nodeId: node.id,
+        status: 'awaiting_review',
+        cause: 'review-park',
+        containerRunId,
+        iteration,
+        overrides: {
+          identity: {
+            reviewIteration,
+          },
+          inputs: {
+            consumedUpstreamRunsJson: consumedJson,
+          },
         },
-        { kind: 'current' },
-      ),
-      taskId,
-      nodeId: node.id,
-      status: 'awaiting_review',
-      cause: 'review-park',
-      containerRunId,
-      iteration,
-      overrides: {
-        identity: {
-          reviewIteration,
-        },
-        inputs: {
-          consumedUpstreamRunsJson: consumedJson,
-        },
-      },
-      ...(executionContext === undefined ? {} : { executionContext }),
-    })
+        ...(executionContext === undefined ? {} : { executionContext }),
+      })
   }
 
   // Find any pending doc_version on this run/port. If one exists already,
@@ -1448,16 +1448,17 @@ async function dispatchReviewNodeUnlocked(args: DispatchReviewArgs): Promise<Dis
           portName: REVIEW_APPROVAL_META_PORT,
           content: meta,
         })
-        await transitionNodeRunStatusTx({
-          tx,
-          nodeRunId: reviewNodeRunId,
-          event: { kind: 'approve-review' },
-          extra: {
-            identity: {
-              finishedAt: decidedAt,
+        await args.taskExecutionParticipants
+          .createHumanGateNodeRunStateParticipantInTx(tx)
+          .transitionNodeRunStatus({
+            nodeRunId: reviewNodeRunId,
+            event: { kind: 'approve-review' },
+            extra: {
+              identity: {
+                finishedAt: decidedAt,
+              },
             },
-          },
-        })
+          })
         // Persistent, user-visible audit record (node drawer "events" tab) —
         // the dispatch summary string is discarded by runScope and node_runs
         // has no summary column, so this event is the durable trace.
@@ -1732,7 +1733,7 @@ async function loadPriorRound(
     if (cur === undefined || r.id > cur.id) byIndex.set(idx, r)
   }
   const members: PriorRoundMember[] = []
-  const collaboration = humanGateComposition.createCollaborationCommandContext({
+  const collaboration = createCollaborationCommandContext({
     db,
     taskRolePolicy: args.taskRolePolicy,
     taskLock: args.taskLock,
@@ -3088,6 +3089,7 @@ export const REVIEW_DECISION_POLICY = {
 } as const satisfies { [K in ReviewDecisionKind]: ReviewDecisionPolicyOf<K> }
 
 export interface SubmitReviewDecisionArgs {
+  readonly taskExecutionParticipants: TaskExecutionParticipantBindings
   upstreamAgents: ReviewUpstreamAgentPort
   taskRolePolicy: CollaborationTaskRolePolicy
   taskLock: HumanGateTaskLockPort
@@ -3513,7 +3515,7 @@ async function submitReviewDecisionUnlocked(
   const memberBefore =
     args.actor === undefined
       ? false
-      : await createTaskAuthorizationQueries(db).canActOnTask({
+      : await args.taskExecutionParticipants.createTaskAuthorizationQueries(db).canActOnTask({
           taskId: run.taskId,
           userId: args.actor.user.id,
         })
@@ -3679,7 +3681,7 @@ async function submitReviewDecisionUnlocked(
       targets: planNodeRunRollbackTargets(rerun!.rollbackTarget!, up.latest.rollback),
     }))
     if (candidates.some((candidate) => candidate.targets.length > 0)) {
-      workspaceRollbackPlan = await humanGateComposition.prepareWorkspaceRollbackPlan({
+      workspaceRollbackPlan = await prepareWorkspaceRollbackPlan({
         inspector: args.rollbackSnapshots,
         taskId: taskRow.id,
         candidates,
@@ -3765,10 +3767,12 @@ async function submitReviewDecisionUnlocked(
     const memberNow =
       args.actor === undefined
         ? false
-        : await createTaskAuthorizationParticipantInTx(tx).canActOnTask({
-            taskId: run.taskId,
-            userId: args.actor.user.id,
-          })
+        : await args.taskExecutionParticipants
+            .createTaskAuthorizationParticipantInTx(tx)
+            .canActOnTask({
+              taskId: run.taskId,
+              userId: args.actor.user.id,
+            })
     const freshRole = assertDecisionAdmissible(args, liveRun, liveTask, memberNow, targetSelfStatus)
     // The role written to every row of this decision: the one just re-resolved
     // when an actor is known, the caller's snapshot otherwise (internal paths).
@@ -3992,16 +3996,17 @@ async function submitReviewDecisionUnlocked(
         })
       }
       // RFC-053: approve-review enforces awaiting_review → done at the helper.
-      await transitionNodeRunStatusTx({
-        tx,
-        nodeRunId: args.nodeRunId,
-        event: { kind: returnDecision ? 'return-review-decision' : policy.lifecycleEvent },
-        extra: {
-          identity: {
-            finishedAt: decidedAt,
+      await args.taskExecutionParticipants
+        .createHumanGateNodeRunStateParticipantInTx(tx)
+        .transitionNodeRunStatus({
+          nodeRunId: args.nodeRunId,
+          event: { kind: returnDecision ? 'return-review-decision' : policy.lifecycleEvent },
+          extra: {
+            identity: {
+              finishedAt: decidedAt,
+            },
           },
-        },
-      })
+        })
     } else if (rerun !== null) {
       // 4b. reject / iterate — retire the superseded upstream rows, mint their
       //     re-runs, cascade to sibling reviews, and re-open this review row.
@@ -4014,31 +4019,32 @@ async function submitReviewDecisionUnlocked(
         // RFC-053: supersede must be able to cancel BOTH live rows AND a `done`
         // row (typical — the agent finished before the decision). allowTerminal
         // documents the intentional terminal-rewrite.
-        await setNodeRunStatusTx({
-          tx,
-          nodeRunId: up.latest.id,
-          to: 'canceled',
-          allowedFrom: ['pending', 'running', 'awaiting_review', 'awaiting_human', 'done'],
-          allowTerminal: true,
-          reason: supersedeMarker,
-          extra: {
-            identity: {
-              finishedAt: up.latest.finishedAt ?? Date.now(),
-              errorMessage: `${supersedeMarker}: Replaced by retry_index ${up.nextRetry} due to review ${rerun.rerunPolicy.supersededByReview} of ${dv.reviewNodeId}`,
+        await args.taskExecutionParticipants
+          .createHumanGateNodeRunStateParticipantInTx(tx)
+          .setNodeRunStatus({
+            nodeRunId: up.latest.id,
+            to: 'canceled',
+            allowedFrom: ['pending', 'running', 'awaiting_review', 'awaiting_human', 'done'],
+            allowTerminal: true,
+            reason: supersedeMarker,
+            extra: {
+              identity: {
+                finishedAt: up.latest.finishedAt ?? Date.now(),
+                errorMessage: `${supersedeMarker}: Replaced by retry_index ${up.nextRetry} due to review ${rerun.rerunPolicy.supersededByReview} of ${dv.reviewNodeId}`,
+              },
+              result: {
+                supersededByReview: rerun.rerunPolicy.supersededByReview,
+                rolledBack: up.rolledBack,
+              },
             },
-            result: {
-              supersededByReview: rerun.rerunPolicy.supersededByReview,
-              rolledBack: up.rolledBack,
-            },
-          },
-        })
+          })
         // RFC-011: a fresh node_run row at retry_index+1 keeps the old row's
         // promptText / outputs for the Prompt tab attempts switcher. No
         // inheritFrom: only preSnapshot is carried, plus an explicit top-level
         // parent; startedAt null = "no timing until it actually runs"
         // (RFC-074 PR-C: no clarifyIteration inherit, see
         // review-iterate-inherits-clarify-iteration.test.ts).
-        await createNodeRunMintParticipantInTx(tx).mint({
+        await args.taskExecutionParticipants.createHumanGateNodeRunMintParticipantInTx(tx).mint({
           ...nodeRunMintIdentityForSlot(up.latest.slot, {
             kind: 'operation',
             cause: 'review-rerun',
@@ -4078,34 +4084,36 @@ async function submitReviewDecisionUnlocked(
             })
             .where(eq(docVersions.id, pendingId))
         }
-        await setNodeRunStatusTx({
-          tx,
-          nodeRunId: sibling.runId,
-          to: 'pending',
-          allowedFrom: ['pending', 'running', 'awaiting_review', 'awaiting_human', 'done'],
-          allowTerminal: true,
-          reason: 'review-sibling-cascade',
-          extra: {
-            identity: {
-              reviewIteration: sibling.reviewIteration + 1,
+        await args.taskExecutionParticipants
+          .createHumanGateNodeRunStateParticipantInTx(tx)
+          .setNodeRunStatus({
+            nodeRunId: sibling.runId,
+            to: 'pending',
+            allowedFrom: ['pending', 'running', 'awaiting_review', 'awaiting_human', 'done'],
+            allowTerminal: true,
+            reason: 'review-sibling-cascade',
+            extra: {
+              identity: {
+                reviewIteration: sibling.reviewIteration + 1,
+              },
             },
-          },
-        })
+          })
         await reselectRunInTx(tx, sibling.run, 'review-sibling-cascade')
       }
       // Bump this review's reviewIteration + status=pending so the scheduler
       // re-runs it (RFC-053: iterate-review / reject-review enforce
       // awaiting_review → pending).
-      await transitionNodeRunStatusTx({
-        tx,
-        nodeRunId: args.nodeRunId,
-        event: { kind: policy.lifecycleEvent },
-        extra: {
-          identity: {
-            reviewIteration: nextIter,
+      await args.taskExecutionParticipants
+        .createHumanGateNodeRunStateParticipantInTx(tx)
+        .transitionNodeRunStatus({
+          nodeRunId: args.nodeRunId,
+          event: { kind: policy.lifecycleEvent },
+          extra: {
+            identity: {
+              reviewIteration: nextIter,
+            },
           },
-        },
-      })
+        })
       await reselectRunInTx(tx, run, policy.lifecycleEvent)
     }
 
@@ -4113,31 +4121,33 @@ async function submitReviewDecisionUnlocked(
     const projectionRows =
       lineageIds.length === 0 ? [] : await createNodeRunQueries(tx).humanGateProjection(lineageIds)
     const expectedNodeProjection = humanGateNodeProjectionFence(projectionRows)
-    const accepted = await acceptHumanGateDecisionTx(tx, {
-      taskId: taskRow.id,
-      gate: { kind: 'review', ref: gateRef },
-      expectedTaskRevision: capturedTaskRevision,
-      expectedNodeProjection,
-      continuationLineage: { sourceNodeRunIds, rerunNodeRunIds },
-      ...(workspaceRollbackPlan === null
-        ? {}
-        : {
-            workspaceRollbackPlan: {
-              operationId: begun.operation.id,
-              planDigest: workspaceRollbackPlan.digest,
-            },
-          }),
-      operationId: begun.operation.id,
-      now: decidedAt,
-      nodeChanges: [
-        {
-          nodeRunId: args.nodeRunId,
-          nodeId: run.nodeId,
-          status: targetSelfStatus,
-          cause: `review-${args.decision}`,
-        },
-      ],
-    })
+    const accepted = await args.taskExecutionParticipants
+      .createTaskDecisionParticipantInTx(tx)
+      .acceptGateDecisionTx({
+        taskId: taskRow.id,
+        gate: { kind: 'review', ref: gateRef },
+        expectedTaskRevision: capturedTaskRevision,
+        expectedNodeProjection,
+        continuationLineage: { sourceNodeRunIds, rerunNodeRunIds },
+        ...(workspaceRollbackPlan === null
+          ? {}
+          : {
+              workspaceRollbackPlan: {
+                operationId: begun.operation.id,
+                planDigest: workspaceRollbackPlan.digest,
+              },
+            }),
+        operationId: begun.operation.id,
+        now: decidedAt,
+        nodeChanges: [
+          {
+            nodeRunId: args.nodeRunId,
+            nodeId: run.nodeId,
+            status: targetSelfStatus,
+            cause: `review-${args.decision}`,
+          },
+        ],
+      })
     const receipt: ReviewDecisionReceiptEnvelope = {
       schemaVersion: 1,
       kind: 'review-decision',

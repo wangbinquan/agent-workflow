@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 import { nodeRunFixtureColumns } from './helpers/model/nodeRun'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 // RFC-092 §5-7 — S-1 端到端验收（修复后正确语义锁定）。
@@ -355,6 +356,7 @@ describe('RFC-092 S-1 端到端 — mid-run clarify 答题由活调度循环自�
 
       // 真实入口提交答案（内部自带 RFC-058 clarify_rounds 双表镜像 + rerun 铸行）。
       const res = await autoDispatchClarifyRound({
+        taskExecutionParticipants,
         db: h.db,
         memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(h.db),
         originNodeRunId: session.intermediaryNodeRunId,

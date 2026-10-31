@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 import type { TaskReadRow } from '@/modules/task-execution/infrastructure/taskRepositorySql'
 import { legacyContentRef } from '@/platform/content/contentRef'
 import { contentRowColumns } from '@/platform/content/infrastructure/contentStore'
@@ -61,7 +62,10 @@ describeEachProvider('RFC-202 T1 — empty-list review auto-approve', (harness) 
   async function dispatchWithRootCheck(input: Parameters<typeof dispatchReviewNode>[0]) {
     const recording = harness.recordStatements()
     try {
-      return await dispatchReviewNode(input)
+      return await dispatchReviewNode({
+        ...input,
+        taskExecutionParticipants,
+      })
     } finally {
       recording.stop()
       if (harness.capabilities.isolation !== 'exclusive') {

@@ -5,7 +5,7 @@ import { describe, expect, test } from 'bun:test'
 import { and, eq } from 'drizzle-orm'
 
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { createCollaborationCommandContext } from '@/modules/collaboration/composition/commandContext'
+import { createCollaborationCommandContext } from '@/modules/collaboration/infrastructure/collaborationCommandContext'
 import {
   collaborationCommittedEventCodec,
   createCollaborationDurableConsumerDefinitions,

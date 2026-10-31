@@ -176,6 +176,7 @@ export function composeDaemonTaskExecutionModules<P extends DatabaseProvider>(
     taskExecutionReadModels: persistence.reads,
     reviewArtifacts: selection.reviewArtifacts,
     reviewDecisions: createReviewDecisionCommand({
+      taskExecutionParticipants: closure.taskExecutionParticipants,
       content: input.content,
       historyRestrictions: input.historyRestrictions,
       taskRolePolicy: closure.taskRolePolicy,
@@ -187,13 +188,17 @@ export function composeDaemonTaskExecutionModules<P extends DatabaseProvider>(
       rollbackSnapshots: selection.reviewRollbackSnapshots,
     }),
     questionDispatches: createQuestionDispatchCommand(db, closure.taskLock, {
+      taskExecutionParticipants: closure.taskExecutionParticipants,
       historyRestrictions: input.historyRestrictions,
     }),
     clarifyDecisions: createClarifyDecisionCommand(
       db,
       memory.memoryOperations.distillCommands,
       closure.taskLock,
-      { historyRestrictions: input.historyRestrictions },
+      {
+        taskExecutionParticipants: closure.taskExecutionParticipants,
+        historyRestrictions: input.historyRestrictions,
+      },
     ),
   })
   const validationContext = composeDynamicWorkflowValidationContext(db)
@@ -251,6 +256,7 @@ export function composeDaemonTaskExecutionModules<P extends DatabaseProvider>(
     gateContinuationPreDrive: composeGateContinuationPreDrive({
       persistence,
       ...composeGateContinuationSupport({
+        taskExecutionParticipants: closure.taskExecutionParticipants,
         db,
         taskLock: closure.taskLock,
         historyRestrictions: input.historyRestrictions,
@@ -303,8 +309,12 @@ export function composeDaemonTaskExecutionModules<P extends DatabaseProvider>(
       runtimeSessionLeases: observation.runtimeSessionLeases,
       runtimeRegistry: core.runtimeRegistry,
       nodeRunRuntime: composeNodeRunRuntimePersistence(db, composeRuntimeSelectionParticipantInTx),
-      taskDagCollaboration: createTaskDagCollaborationOperations(db),
+      taskDagCollaboration: createTaskDagCollaborationOperations(
+        db,
+        closure.taskExecutionParticipants,
+      ),
       collaborationRuntime: createCollaborationRuntimeMechanics(db, {
+        taskExecutionParticipants: closure.taskExecutionParticipants,
         content: input.content,
         historyRestrictions: input.historyRestrictions,
         taskRolePolicy: closure.taskRolePolicy,

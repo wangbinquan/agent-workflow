@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './taskExecutionParticipantBindings'
 import { composeCollaborationTaskRolePolicy } from '@/modules/resource-catalog/composition'
 import { composeTaskMemorySnapshotPort } from '@/modules/memory/composition'
 import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
@@ -127,7 +128,7 @@ export function singleProcessDeploymentPorts(db: DbClient) {
   const log = createLogger('task')
   return {
     workspacePresence: createFileWorkspacePresenceQueries(),
-    taskDagCollaboration: createTaskDagCollaborationOperations(db),
+    taskDagCollaboration: createTaskDagCollaborationOperations(db, taskExecutionParticipants),
     processConcurrencyScope: db,
     log,
     coordinatorFactory: testDriveFactory(
@@ -182,6 +183,7 @@ export function composeTaskExecutionTestRuntime(
       observationInvocations: composeRunObservationCalls(db),
       memoryInjectionQueries: sqliteMemoryInjectionQueries(db),
       collaborationRuntime: createCollaborationRuntimeMechanics(db, {
+        taskExecutionParticipants,
         taskRolePolicy: composeCollaborationTaskRolePolicy(),
         ...epoch2RuntimeTestPorts(db),
         taskLock: o2Ports(db).taskLock,
@@ -367,6 +369,7 @@ export function runTaskWithRealTestTopology(
       memoryInjectionQueries,
       observationInvocations,
       collaborationRuntime: createCollaborationRuntimeMechanics(options.db, {
+        taskExecutionParticipants,
         taskRolePolicy: composeCollaborationTaskRolePolicy(),
         ...epoch2RuntimeTestPorts(options.db),
         taskLock: o2Ports(options.db).taskLock,
@@ -411,10 +414,12 @@ export function runTaskWithRealTestTopology(
       runtimeRegistry,
       nodeRunRuntime,
       taskDagCollaboration:
-        options.taskDagCollaboration ?? createTaskDagCollaborationOperations(options.db),
+        options.taskDagCollaboration ??
+        createTaskDagCollaborationOperations(options.db, taskExecutionParticipants),
       collaborationRuntime:
         options.collaborationRuntime ??
         createCollaborationRuntimeMechanics(options.db, {
+          taskExecutionParticipants,
           taskRolePolicy: composeCollaborationTaskRolePolicy(),
           ...epoch2RuntimeTestPorts(options.db),
           taskLock: o2Ports(options.db).taskLock,

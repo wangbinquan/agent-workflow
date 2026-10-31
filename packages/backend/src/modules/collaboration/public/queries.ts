@@ -6,7 +6,7 @@ import {
   requireCollaborationTaskAccess,
   requireReviewTaskAccess,
   requireTaskFeedbackStore,
-} from '../composition/commandContext'
+} from '../application/commandContext'
 import type { CollaborationCommandContext, ReviewActor } from './types'
 import type { ReviewNodeReviewerConfig, ReviewSummary, TaskFeedback } from '@agent-workflow/shared'
 import type { ClarifyDirective } from '@agent-workflow/shared'

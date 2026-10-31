@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 // RFC-167 T13 — generate→confirm→execute END TO END over the real engine
@@ -220,6 +221,7 @@ describe('RFC-167 T13 — dynamic workflow end to end (mock opencode)', () => {
             db,
             task.id,
             {
+              taskExecutionParticipants,
               humanGateOpen: composeHumanGateOpenParticipantFactory(),
               historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
               db,

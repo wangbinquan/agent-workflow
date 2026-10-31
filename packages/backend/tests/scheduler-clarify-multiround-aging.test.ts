@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 // RFC-131 T5 — deferred self-clarify 多轮 scheduler e2e:runTask 端到端驱动
 // round1(agent 问)→答→round2(agent 再问)→答(stop)→产出 doc。锁死 01KWDKBS:最终产出
 // rerun 的 prompt 同时含 round1+round2 答案(旧 window 判据会丢 round1、导致最终 doc 丢首轮决策)。
@@ -241,6 +242,7 @@ function registerProviderCases1(provider: ProviderHarness) {
       await h.db.select().from(clarifyRounds).where(eq(clarifyRounds.taskId, taskId))
     )[0]!
     await sealRoundQuestions({
+      taskExecutionParticipants,
       db: h.db,
       originNodeRunId: r1sess.intermediaryNodeRunId,
       answers: [ans('r1q', 0, 'R1_ANS_REACT')],
@@ -250,6 +252,7 @@ function registerProviderCases1(provider: ProviderHarness) {
     })
     await dispatchTaskQuestions(
       h.db,
+      taskExecutionParticipants,
       taskId,
       [await selfEntryId(h, taskId, r1sess.intermediaryNodeRunId)],
       actor,
@@ -264,6 +267,7 @@ function registerProviderCases1(provider: ProviderHarness) {
       await h.db.select().from(clarifyRounds).where(eq(clarifyRounds.taskId, taskId))
     ).find((s) => s.iteration === 1)!
     await sealRoundQuestions({
+      taskExecutionParticipants,
       db: h.db,
       originNodeRunId: r2sess.intermediaryNodeRunId,
       answers: [ans('r2q', 0, 'R2_ANS_TYPESCRIPT')],
@@ -273,6 +277,7 @@ function registerProviderCases1(provider: ProviderHarness) {
     })
     const d2 = await dispatchTaskQuestions(
       h.db,
+      taskExecutionParticipants,
       taskId,
       [await selfEntryId(h, taskId, r2sess.intermediaryNodeRunId)],
       actor,

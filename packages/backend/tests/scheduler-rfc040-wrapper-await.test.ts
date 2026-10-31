@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 import { nodeRunFixtureColumns } from './helpers/model/nodeRun'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 // RFC-374 AC-7 also exercises this real continuation after legacy sequence catch-up.
@@ -362,6 +363,7 @@ function registerLoopCases(provider: ProviderHarness) {
 
     // User answers clarify (unified driver: seal + auto-dispatch mints the rerun).
     await autoDispatchClarifyRound({
+      taskExecutionParticipants,
       db: h.db,
       memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(h.db),
       originNodeRunId: clarifyRunId,
@@ -612,6 +614,7 @@ function registerGitCases(provider: ProviderHarness) {
     expect(sessions.length).toBe(1)
 
     await autoDispatchClarifyRound({
+      taskExecutionParticipants,
       db: h.db,
       memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(h.db),
       originNodeRunId: sessions[0]!.intermediaryNodeRunId,

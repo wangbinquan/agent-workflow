@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 import { nodeRunFixture, readTaskFixtures, taskFixture, workflowFixture } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { readDaemonGraphSource } from './helpers/daemonGraphSource'
@@ -127,6 +128,7 @@ describeEachProvider(
     test('after a successful finalize, exactly one feedback-source-job row exists with the matching debounce key', async () => {
       const fx = await seedFixture(db)
       await autoDispatchClarifyRound({
+        taskExecutionParticipants,
         db,
         memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
         originNodeRunId: fx.intermediaryNodeRunId,
@@ -154,6 +156,7 @@ describeEachProvider(
     test('clarify session row reflects the answered status (independent of the enqueue side-effect)', async () => {
       const fx = await seedFixture(db)
       await autoDispatchClarifyRound({
+        taskExecutionParticipants,
         db,
         memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
         originNodeRunId: fx.intermediaryNodeRunId,

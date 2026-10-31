@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 import { withO2Closure } from './helpers/o2Closure'
 // RFC-098 B1 REGRESSION LOCK — per-task write-lock registry (audit S-9 / ⑥-10,
 // design/RFC-098-scheduler-closeout/design.md §B1 + 对抗检视修订 #1).
@@ -350,6 +351,7 @@ describeEachProvider(
         // unhandled rejection during the sleep below).
         const probe: { outcome: { ok: true } | { err: unknown } | null } = { outcome: null }
         const submitP = autoDispatchClarifyRound({
+          taskExecutionParticipants,
           db,
           memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
           originNodeRunId: seeded.clarifyNodeRunId,
@@ -452,6 +454,7 @@ describeEachProvider(
         })
 
         await autoDispatchClarifyRound({
+          taskExecutionParticipants,
           db,
           memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
           originNodeRunId: seeded.clarifyNodeRunId,

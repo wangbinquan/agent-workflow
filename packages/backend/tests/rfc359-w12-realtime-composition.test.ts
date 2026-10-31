@@ -13,11 +13,11 @@ import type { TaskWsMessage } from '@agent-workflow/shared'
 import type { DbClient } from '@/db/client'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { WebSocketAuthenticationParticipant } from '@/modules/identity-access/public/participants'
-import { composeRealtimeRuntimeFor } from '@/modules/runtime-management/composition'
-import type {
-  RealtimeCompositionPolicy,
-  RealtimeRuntime,
-} from '@/modules/runtime-management/public/participants'
+import {
+  composeRealtimeRuntimeFor,
+  type RealtimeCompositionPolicy,
+} from '@/modules/runtime-management/composition'
+import type { RealtimeRuntime } from '@/modules/runtime-management/public/participants'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 

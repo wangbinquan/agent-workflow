@@ -82,4 +82,26 @@ RFC-294 plan §3 S5 的范围里，RFC-399 完成了三条退出门规则（cont
 7. **knowledge-evolution 的 fusion 合同保留在 public，只换类型**：它们被 bootstrap 与路由经 public operations 使用；只搬出 public
    属于未完成清理。runtime-management 的 `RealtimeCompositionPolicy` 只给装配用，移到 `application/ports`，经 RM `composition.ts` 交出。
 8. **一个 RFC 两部分**（A：17 对与装配桥；B：Actor 与账本收口），分两次派发 Codex 实施，全部实现与用例完成后集中验证一次。
-9. **偏离项**：落档时无；实施中接受的偏差逐条记在 plan「实施记录」与本条之后。
+9. **偏离项**：落档时无；实施中接受的偏差见下条。
+10. **实施中接受的偏差**（2026-10-31，本会话审核后决定）：
+    - TE 新参与者合同的成员用方法签名，不用函数类型属性：后者会被 W0-R 公共面规则记成 `unsafe/open type FunctionType`
+      （Part A 初稿实测多出 6 条，已改）。readonly 要求由 readonly 的 brand 成员满足。
+    - `bootstrap/crossContextClosure.ts` 不显式标注 COL `TaskExecutionParticipantBindings` 返回类型，由冻结对象推断：显式 import COL
+      infrastructure 会新增一条 RFC-317 R1；COL 消费处仍按装配合同检查类型。
+    - `bootstrap/daemonRealtimePolicy.ts` 用既有 `DaemonProviderCoreCommonInput['realtimePolicy']` 标注，不新增对 RM composition 的 import
+      （否则多一条 R1）。
+    - 接线贯穿 legacy `services/task.ts` 的测试驱动构造入口及其续跑调用方，使既有构造链显式满足新依赖；不新增 `services/` facade，
+      RFC-317 R2 不变。
+    - 新结构锁「TE 带事务的构造入口不进 public」覆盖本批 E/S/D/M/H/L/A 工厂与底层 mint / lifecycle 构造器；与本 RFC 无关的既有
+      TE public 事务 API 仍按 RFC-294 债务管理，不扩大范围。
+    - `rfc305-architecture-lock` 的 identity-access 精确消费者清单新增 10 条 type-only AAS 消费路径（清单同步，不是债务）。
+    - 集中验证中改定（2026-10-31）：S 参与者成员由 `set` / `transition` 改名为 `setNodeRunStatus` / `transitionNodeRunStatus`。
+      RFC-317 转移表预言按被调函数名识别 CAS 站点，通用名 `set` 让 collaboration 的 4 个站点（含 3 条表外边）从语料里消失；
+      与内核同名后站点与偏离账本原样回到语料，不放宽扫描器。另有两处随搬迁同步的守卫清单：RFC-371 观测边界的外部
+      import 白名单加入 identity-access public participants（type-only），RFC-395 串行化插入源码锁按复核结果更新 `clarify/seal.ts` 的指纹。
+    - 集中验证中修复（2026-10-31）：managed-process launcher 的两个 `if (import.meta.main)` 入口块
+      （`platform/execution/local/managedProcessLauncher.ts` 与 `services/execution/managedProcessLauncher.ts`）不再使用 top-level await，
+      改成 promise 链（退出码与异常时退出 1 的行为不变）。这处 top-level await 让 launcher 以及经 task-execution、collaboration 引入它的
+      所有模块都成为异步 ES 模块。删除旧桥后，`clarify/autoDispatch.ts` 的初始化落在入口块顶层并要等两个异步模块，Bun 1.4.3 打包器为此
+      生成 `await __promiseAll([...])`，却没有输出这个 helper，编译后的维护 worker 加载即报 `ReferenceError`。改后依赖图里不再有异步模块；
+      新增守卫 `rfc400-top-level-await-guard` 锁定「被 import 的生产模块不得有 top-level await」。

@@ -404,7 +404,6 @@ const LEGACY_BACKEND_FILE_OWNERS: Readonly<Record<string, TargetOwner>> = {
   'packages/backend/src/services/gitRepoCache.ts': 'source-control',
   'packages/backend/src/services/gitSubmodule.ts': 'source-control',
   'packages/backend/src/services/gitVersion.ts': 'source-control',
-  'packages/backend/src/services/humanGateComposition.ts': 'collaboration',
   'packages/backend/src/services/humanGateContinuationEffects.ts': 'collaboration',
   'packages/backend/src/services/humanGateContinuationRecovery.ts': 'collaboration',
   'packages/backend/src/services/humanGateDecisionE2eBarrier.ts': 'collaboration',

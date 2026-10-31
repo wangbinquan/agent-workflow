@@ -1,3 +1,23 @@
+import type { NodeRunStatus } from '@agent-workflow/shared'
+import type {
+  HumanGateNodeRunMintRequest,
+  HumanGateNodeRunSetRequest,
+  HumanGateNodeRunTransitionRequest,
+  HumanGateTaskNodeStatusesRequest,
+  HumanGateTaskTransitionRequest,
+  HumanGateTaskTransitionResult,
+} from '../application/ports/humanGateTaskParticipants'
+import type { TaskExecutionPostCommitEventRef } from '../domain/postCommitEventRef'
+export type {
+  HumanGateNodeRunMintRequest,
+  HumanGateNodeRunSetRequest,
+  HumanGateNodeRunTransitionRequest,
+  HumanGateTaskNodeStatusesRequest,
+  HumanGateTaskTransitionRequest,
+  HumanGateTaskTransitionResult,
+} from '../application/ports/humanGateTaskParticipants'
+export type { TaskExecutionPostCommitEventRef } from '../domain/postCommitEventRef'
+
 export { selectNodeRunPromptOperations } from '../composition/nodeRunPrompts'
 export {
   selectPortArtifactOperations,
@@ -206,8 +226,48 @@ export type {
   TaskRecoveryOperations,
 } from '../application/ports/taskRecoveryOperations'
 
+declare const taskNodeStatusEventsParticipantBrand: unique symbol
+declare const humanGateNodeRunStateParticipantBrand: unique symbol
+declare const taskDecisionParticipantBrand: unique symbol
+declare const humanGateNodeRunMintParticipantBrand: unique symbol
+declare const humanGateTaskTransitionParticipantBrand: unique symbol
+
+export interface TaskNodeStatusEventsParticipantInTx {
+  readonly [taskNodeStatusEventsParticipantBrand]: true
+  append(input: HumanGateTaskNodeStatusesRequest): Promise<TaskExecutionPostCommitEventRef | null>
+}
+
+// Member names match the task-execution node-run CAS kernel (`setNodeRunStatusTx` /
+// `transitionNodeRunStatusTx`): the RFC-317 transition-table oracle recognises CAS
+// sites by callee name, so a generic `set` would hide collaboration's sites from it.
+export interface HumanGateNodeRunStateParticipantInTx {
+  readonly [humanGateNodeRunStateParticipantBrand]: true
+  setNodeRunStatus(
+    input: HumanGateNodeRunSetRequest,
+  ): Promise<{ readonly from: NodeRunStatus; readonly to: NodeRunStatus }>
+  transitionNodeRunStatus(
+    input: HumanGateNodeRunTransitionRequest,
+  ): Promise<{ readonly from: NodeRunStatus; readonly to: NodeRunStatus }>
+}
+
 export interface TaskDecisionParticipantInTx {
-  acceptGateDecisionTx(input: AcceptHumanGateDecisionInput): AcceptedHumanGateDecision
+  readonly [taskDecisionParticipantBrand]: true
+  acceptGateDecisionTx(input: AcceptHumanGateDecisionInput): Promise<AcceptedHumanGateDecision>
+}
+
+export interface HumanGateNodeRunMintParticipantInTx {
+  readonly [humanGateNodeRunMintParticipantBrand]: true
+  mint(input: HumanGateNodeRunMintRequest): Promise<string>
+}
+
+export interface HumanGateTaskTransitionParticipantInTx {
+  readonly [humanGateTaskTransitionParticipantBrand]: true
+  transition(input: HumanGateTaskTransitionRequest): Promise<HumanGateTaskTransitionResult>
+}
+
+/** This operation owns its write transaction; it is never an InTx participant. */
+export interface HumanGateNodeRunMintOperations {
+  mint(input: HumanGateNodeRunMintRequest): Promise<string>
 }
 
 export type CodeHostSendAttemptHandle = CodeHostEffectObserverHandle

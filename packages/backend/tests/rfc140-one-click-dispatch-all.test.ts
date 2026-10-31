@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 // RFC-140 (design/RFC-140-one-click-dispatch-all) — 批量下发一次点击全下发。
 //
 // Live trigger (task 01KWFZRQFPZFQQEM8JTCHQMGP5 "QMGP5", 2026-07-03 16:21): a batch dispatch of
@@ -315,7 +316,13 @@ describeEachProvider('RFC-140 W2 deferred 登记 + 自动补发', (harness) => {
     const taskId = `t_${ulid()}`
     const { selfIds, designerIds } = await seedMixedBatch(db, taskId)
 
-    const res = await dispatchTaskQuestions(db, taskId, [...selfIds, ...designerIds], actor)
+    const res = await dispatchTaskQuestions(
+      db,
+      taskExecutionParticipants,
+      taskId,
+      [...selfIds, ...designerIds],
+      actor,
+    )
     expect(res.dispatchedEntryIds).toEqual(selfIds) // self cause won (older staged)
     expect(res.deferred.map((d) => d.entryId).sort()).toEqual([...designerIds].sort())
     for (const id of designerIds) {
@@ -324,7 +331,7 @@ describeEachProvider('RFC-140 W2 deferred 登记 + 自动补发', (harness) => {
       expect(row.dispatchedAt).toBeNull()
     }
     // the minted self continuation is still pending → in-flight gate blocks the redispatch.
-    await autoDispatchDeferredQuestions(db, taskId)
+    await autoDispatchDeferredQuestions(db, taskExecutionParticipants, taskId)
     expect((await entryById(db, designerIds[0]!))!.dispatchedAt).toBeNull()
     expect((await entryById(db, designerIds[0]!))!.autoDispatchDeferredAt).not.toBeNull() // retryable → kept
     const { nodeRuns, taskQuestions } = tablesOf(db)
@@ -338,7 +345,7 @@ describeEachProvider('RFC-140 W2 deferred 登记 + 自动补发', (harness) => {
       .set({ triggerRunId: pending.id })
       .where(inArray(taskQuestions.id, selfIds))
     await patchNodeRunFixture(db, { id: pending.id }, { status: 'done' })
-    await autoDispatchDeferredQuestions(db, taskId)
+    await autoDispatchDeferredQuestions(db, taskExecutionParticipants, taskId)
     for (const id of designerIds) {
       const row = (await entryById(db, id))!
       expect(row.dispatchedAt).not.toBeNull()
@@ -364,7 +371,7 @@ describeEachProvider('RFC-140 W2 deferred 登记 + 自动补发', (harness) => {
       defaultTargetNodeId: DESIGNER,
       stagedAt: Date.now(), // staged but the user never clicked batch dispatch
     })
-    await autoDispatchDeferredQuestions(db, taskId)
+    await autoDispatchDeferredQuestions(db, taskExecutionParticipants, taskId)
     expect((await entryById(db, id))!.dispatchedAt).toBeNull()
   })
 
@@ -375,7 +382,13 @@ describeEachProvider('RFC-140 W2 deferred 登记 + 自动补发', (harness) => {
     const selfIds = (await allEntries(db, taskId))
       .filter((r) => r.roleKind === 'self')
       .map((r) => r.id)
-    await dispatchTaskQuestions(db, taskId, [...selfIds, ...designerIds], actor)
+    await dispatchTaskQuestions(
+      db,
+      taskExecutionParticipants,
+      taskId,
+      [...selfIds, ...designerIds],
+      actor,
+    )
     expect((await entryById(db, designerIds[0]!))!.autoDispatchDeferredAt).not.toBeNull()
     // withdraw: unstage one deferred card → per-question cascade clears the marker.
     await stageTaskQuestion(db, designerIds[0]!, false, actor)
@@ -396,7 +409,7 @@ describeEachProvider('RFC-140 W2 deferred 登记 + 自动补发', (harness) => {
       .set({ triggerRunId: pending.id })
       .where(inArray(taskQuestions.id, selfIds))
     await patchNodeRunFixture(db, { id: pending.id }, { status: 'done' })
-    await autoDispatchDeferredQuestions(db, taskId)
+    await autoDispatchDeferredQuestions(db, taskExecutionParticipants, taskId)
     expect((await entryById(db, designerIds[0]!))!.dispatchedAt).toBeNull() // withdrawn → untouched
     expect((await entryById(db, designerIds[1]!))!.dispatchedAt).not.toBeNull() // sibling fired
   })
@@ -405,10 +418,16 @@ describeEachProvider('RFC-140 W2 deferred 登记 + 自动补发', (harness) => {
     const db = harness.db
     const taskId = `t_${ulid()}`
     const { selfIds, designerIds } = await seedMixedBatch(db, taskId)
-    await dispatchTaskQuestions(db, taskId, [...selfIds, ...designerIds], actor)
+    await dispatchTaskQuestions(
+      db,
+      taskExecutionParticipants,
+      taskId,
+      [...selfIds, ...designerIds],
+      actor,
+    )
     expect((await entryById(db, designerIds[0]!))!.autoDispatchDeferredAt).not.toBeNull()
     await patchTaskFixture(db, { id: taskId }, { status: 'done' })
-    await autoDispatchDeferredQuestions(db, taskId) // task-terminal — NOT in the retryable set
+    await autoDispatchDeferredQuestions(db, taskExecutionParticipants, taskId) // task-terminal — NOT in the retryable set
     for (const id of designerIds) {
       const row = (await entryById(db, id))!
       expect(row.autoDispatchDeferredAt).toBeNull() // cleared

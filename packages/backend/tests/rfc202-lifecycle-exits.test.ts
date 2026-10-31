@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 import { legacyContentRef } from '@/platform/content/contentRef'
 import { contentRowColumns } from '@/platform/content/infrastructure/contentStore'
 import { nodeRunFixtureColumns } from './helpers/model/nodeRun'
@@ -142,7 +143,7 @@ describeEachProvider('RFC-202 T2 — terminal sweep', (provider) => {
     await seedClarifyRound(db, taskId, 'self', selfRun)
     await seedClarifyRound(db, taskId, 'cross', crossRun)
 
-    const sweep = createHumanGateTerminalSweepCommand(db)
+    const sweep = createHumanGateTerminalSweepCommand(db, taskExecutionParticipants)
     const result = await sweep.run({ taskId, cause: 'task-canceled' })
     expect(result.sealedSelfRounds).toBe(1)
     expect(result.abandonedCrossRounds).toBe(1)
@@ -229,7 +230,7 @@ describeEachProvider('RFC-202 T3 — cancel from awaiting_*', (provider) => {
     uninstallAfterCommitPump = installTaskLifecycleAfterCommitTestPump(db, {
       onTerminalTask(hookDb, taskId) {
         terminalSweeps.push(
-          createHumanGateTerminalSweepCommand(hookDb).run({
+          createHumanGateTerminalSweepCommand(hookDb, taskExecutionParticipants).run({
             taskId,
             cause: 'task-canceled',
           }),
@@ -289,6 +290,7 @@ describeEachProvider('RFC-202 T2-4 — write-path terminal guards', (provider) =
     await seedClarifyRound(db, taskId, 'self', run)
     await expect(
       sealRoundQuestions({
+        taskExecutionParticipants,
         db,
         originNodeRunId: run,
         answers: [

@@ -1,4 +1,4 @@
-import type { Actor } from '@/auth/actor'
+import type { AuthenticatedAuthoritySnapshot } from '@/modules/identity-access/public/participants'
 import type { ResourceRequestContext } from '@/modules/resource-catalog/public/participants'
 
 export interface IntentApplyDecision {
@@ -31,7 +31,7 @@ export interface IntentApplyReceipt {
 /** Provider-neutral command seam consumed by HTTP/CLI transports. */
 export interface IntentApplyOperations {
   apply(input: {
-    readonly actor: Actor
+    readonly actor: AuthenticatedAuthoritySnapshot
     readonly authority: ResourceRequestContext
     readonly command: IntentApplyInput
   }): Promise<IntentApplyReceipt>

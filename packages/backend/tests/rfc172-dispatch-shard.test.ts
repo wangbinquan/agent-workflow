@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 import { composeCollaborationTaskRolePolicy } from '@/modules/resource-catalog/composition'
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import type { projectNodeRunReadFacts } from '@/modules/task-execution/infrastructure/nodeRunSnapshot'
@@ -389,7 +390,13 @@ describeEachProvider(
         sealed: true,
       })
 
-      const res = await dispatchTaskQuestions(db, taskId, [entryA.id, entryB.id], actor)
+      const res = await dispatchTaskQuestions(
+        db,
+        taskExecutionParticipants,
+        taskId,
+        [entryA.id, entryB.id],
+        actor,
+      )
 
       // TWO reruns minted — one per shard, NOT one collapsed rerun for the shared node.
       expect(res.reruns.length).toBe(2)
@@ -516,7 +523,7 @@ describeEachProvider(
       })
       let threw: unknown = null
       try {
-        await dispatchTaskQuestions(db, taskId, [manual.id], actor)
+        await dispatchTaskQuestions(db, taskExecutionParticipants, taskId, [manual.id], actor)
       } catch (e) {
         threw = e
       }
@@ -616,7 +623,13 @@ describeEachProvider(
 
       // the (target, shard) SKIP excludes member A (shard A ∉ mint {B}) — deterministic, independent
       // of run topology — so B dispatches through the sibling's in-flight rerun.
-      const res = await dispatchTaskQuestions(db, taskId, [entryB.id], actor)
+      const res = await dispatchTaskQuestions(
+        db,
+        taskExecutionParticipants,
+        taskId,
+        [entryB.id],
+        actor,
+      )
       expect(res.reruns.length).toBe(1)
       const { nodeRuns } = tablesOf(db)
       const run = (
@@ -636,7 +649,7 @@ describeEachProvider(
 
       let threw: unknown = null
       try {
-        await dispatchTaskQuestions(db, taskId, [entryA2.id], actor)
+        await dispatchTaskQuestions(db, taskExecutionParticipants, taskId, [entryA2.id], actor)
       } catch (e) {
         threw = e
       }
@@ -841,7 +854,7 @@ describeEachProvider(
 
       let threw: unknown = null
       try {
-        await dispatchTaskQuestions(db, taskId, [entryB.id], actor)
+        await dispatchTaskQuestions(db, taskExecutionParticipants, taskId, [entryB.id], actor)
       } catch (e) {
         threw = e
       }
@@ -884,7 +897,7 @@ describeEachProvider(
 
       let threw: unknown = null
       try {
-        await dispatchTaskQuestions(db, taskId, [entryA.id], actor)
+        await dispatchTaskQuestions(db, taskExecutionParticipants, taskId, [entryA.id], actor)
       } catch (e) {
         threw = e
       }
@@ -920,7 +933,13 @@ describeEachProvider(
       })
 
       // no run obligation on the host → the done legacy ledger is consumed → B dispatches (releases).
-      const res = await dispatchTaskQuestions(db, taskId, [entryB.id], actor)
+      const res = await dispatchTaskQuestions(
+        db,
+        taskExecutionParticipants,
+        taskId,
+        [entryB.id],
+        actor,
+      )
       expect(res.reruns.length).toBe(1)
       const { nodeRuns } = tablesOf(db)
       const run = (
@@ -959,7 +978,13 @@ describeEachProvider(
 
       // every shard's FRESHEST generation is done → no live obligation → the done legacy ledger is
       // consumed → member C dispatches (a superseded failed row cannot deadlock the upgraded task).
-      const res = await dispatchTaskQuestions(db, taskId, [entryC.id], actor)
+      const res = await dispatchTaskQuestions(
+        db,
+        taskExecutionParticipants,
+        taskId,
+        [entryC.id],
+        actor,
+      )
       expect(res.reruns.length).toBe(1)
       const { nodeRuns } = tablesOf(db)
       const run = (
@@ -1001,7 +1026,7 @@ describeEachProvider(
 
       let threw: unknown = null
       try {
-        await dispatchTaskQuestions(db, taskId, [entryC.id], actor)
+        await dispatchTaskQuestions(db, taskExecutionParticipants, taskId, [entryC.id], actor)
       } catch (e) {
         threw = e
       }

@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './taskExecutionParticipantBindings'
 import { composeRepositoryPreparationLookup } from '@/modules/source-control/composition'
 import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import { epoch2RuntimeTestPorts } from './epoch2RuntimePorts'
@@ -67,7 +68,10 @@ export interface RetryEngineOptions {
    *     `task-execution-owner-conflict`。裸引擎入口没有这个前置。
    * 与 `resume` 二选一；两个都给时 `resume` 优先。
    */
-  readonly resumeWith?: Omit<TaskContinuationDependencies, 'historyRestrictions'> &
+  readonly resumeWith?: Omit<
+    TaskContinuationDependencies,
+    'historyRestrictions' | 'taskExecutionParticipants'
+  > &
     Partial<Pick<TaskContinuationDependencies, 'historyRestrictions'>>
   /** 级联取消一个子任务。缺省是空操作；并发用例在这里注入搅动。 */
   readonly cancelChildTaskForCascade?: (childTaskId: string, parentTaskId: string) => Promise<void>
@@ -177,6 +181,7 @@ export function createRetryEngine(
                   {
                     historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
                     ...options.resumeWith,
+                    taskExecutionParticipants,
                     repositoryPreparation:
                       options.resumeWith.repositoryPreparation ??
                       composeRepositoryPreparation(

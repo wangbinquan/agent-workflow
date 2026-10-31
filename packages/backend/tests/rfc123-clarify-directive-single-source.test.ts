@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 import { withO2Closure } from './helpers/o2Closure'
 // RFC-123 — 反问 directive 双向单一事实源（RFC-122 修订）.
 //
@@ -192,6 +193,7 @@ async function seedSelfStopAnswered(
     }),
   )
   await autoDispatchClarifyRound({
+    taskExecutionParticipants,
     db,
     memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
     originNodeRunId: clarifyNodeRunId,
@@ -239,6 +241,7 @@ async function seedCrossStopAnswered(
     }),
   )
   await autoDispatchClarifyRound({
+    taskExecutionParticipants,
     db,
     memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
     originNodeRunId: crossClarifyNodeRunId,
@@ -339,6 +342,7 @@ describeEachProvider(
         })
         const { nodeRuns } = tablesOf(db)
         const ret = await dispatchCrossClarifyNode({
+          taskExecutionParticipants,
           db,
           taskId,
           crossClarifyNodeId: 'cross1',

@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 import { composeCollaborationTaskRolePolicy } from '@/modules/resource-catalog/composition'
 import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import { composeTaskMemorySnapshotPort } from '@/modules/memory/composition'
@@ -184,6 +185,7 @@ function sharedInput(
     runtimeRegistry: composeRuntimeRegistryOperations(db),
     nodeRunRuntime: composeNodeRunRuntimePersistence(db),
     collaborationRuntime: createCollaborationRuntimeMechanics(db, {
+      taskExecutionParticipants,
       taskRolePolicy: composeCollaborationTaskRolePolicy(),
       ...epoch2RuntimeTestPorts(db),
       taskLock: o2Ports(db).taskLock,
@@ -235,7 +237,7 @@ function postgresqlParticipants(db: PersistenceDb): TaskExecutionRuntimeParticip
   }
   return createTaskExecutionRuntimeParticipants({
     ...input,
-    taskDagCollaboration: createTaskDagCollaborationOperations(db),
+    taskDagCollaboration: createTaskDagCollaborationOperations(db, taskExecutionParticipants),
     processConcurrencyScope: {},
     log: passthrough('log'),
     ...ports,

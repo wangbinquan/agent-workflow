@@ -37,11 +37,11 @@ import { ulid } from 'ulid'
 import type { Actor } from '@/auth/actor'
 import { buildActor } from '@/auth/actor'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
+import { createCollaborationCommandContext } from '@/modules/collaboration/infrastructure/collaborationCommandContext'
 import {
-  createCollaborationCommandContext,
   requireReviewTaskAccess,
   resolveCollaborationCommandContext,
-} from '@/modules/collaboration/composition/commandContext'
+} from '@/modules/collaboration/application/commandContext'
 import { reviewNodeReviewerDependencies } from '@/modules/collaboration/composition/reviewNodeReviewerDependencies'
 import type { TaskExecutionReadModels } from '@/modules/task-execution/public/types'
 import { describeEachProvider } from './helpers/eachProvider'

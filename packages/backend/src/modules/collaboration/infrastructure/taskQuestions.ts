@@ -1,3 +1,4 @@
+import { createCollaborationCommandContext } from '@/modules/collaboration/infrastructure/collaborationCommandContext'
 import type { CollaborationTaskRolePolicy } from '../application/ports/collaborationTaskRolePolicy'
 import type { HistoryRestrictionPort } from '@/platform/contracts/historyRestriction'
 import type { HumanGateTaskLockPort } from '../composition/required-ports'
@@ -37,7 +38,6 @@ import { and, eq, inArray, isNotNull, isNull, ne, sql } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { getTaskQuestionWriteSem } from '@/services/taskWriteLocks'
 import { createManualQuestionOpen } from '@/modules/collaboration/public/commands'
-import { humanGateComposition } from '@/services/humanGateComposition'
 
 import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
 import { insertInBatches, lastPerKey } from '@/platform/persistence/batchInsert'
@@ -1407,7 +1407,7 @@ export async function createManualTaskQuestion(
     )
   }
   const created = await createManualQuestionOpen(
-    humanGateComposition.createCollaborationCommandContext({
+    createCollaborationCommandContext({
       db,
       taskLock,
       historyRestrictions,

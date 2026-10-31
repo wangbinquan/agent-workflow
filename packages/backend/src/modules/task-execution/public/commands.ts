@@ -15,8 +15,10 @@ import type {
   TriggerContext,
 } from '@agent-workflow/shared'
 import type { CommittedEventRef } from '@/platform/events/committed/types'
-import type { Actor } from '@/auth/actor'
-import type { DirectAuthenticatedAuthority } from '@/modules/identity-access/public/participants'
+import type {
+  AuthenticatedAuthoritySnapshot,
+  DirectAuthenticatedAuthority,
+} from '@/modules/identity-access/public/participants'
 
 import { parkPreparedHumanGate as parkPreparedHumanGateInternal } from '../composition/humanGate'
 import type { SchedulerDriverPort } from '../application/ports/taskExecutionTopology'
@@ -409,9 +411,9 @@ export interface TaskRouteMultipartFilePart {
 /** TaskExecution-owned launch boundary consumed by the Agent route. */
 export interface AgentRouteTaskLaunchOperations {
   uploadLimits(): TaskRouteUploadLimits | Promise<TaskRouteUploadLimits>
-  assertReplayVisible(actor: Actor, sourceTaskId: string): Promise<void>
+  assertReplayVisible(actor: AuthenticatedAuthoritySnapshot, sourceTaskId: string): Promise<void>
   launch(
-    actor: Actor,
+    actor: AuthenticatedAuthoritySnapshot,
     input: Readonly<{
       agentId: string
       payload: StartAgentTask
@@ -425,9 +427,9 @@ export interface AgentRouteTaskLaunchOperations {
 
 /** TaskExecution-owned launch boundary consumed by the Workgroup route. */
 export interface WorkgroupRouteTaskLaunchOperations {
-  assertReplayVisible(actor: Actor, sourceTaskId: string): Promise<void>
+  assertReplayVisible(actor: AuthenticatedAuthoritySnapshot, sourceTaskId: string): Promise<void>
   launch(
-    actor: Actor,
+    actor: AuthenticatedAuthoritySnapshot,
     input: Readonly<{ workgroupId: string; payload: StartWorkgroupTask }>,
   ): Promise<Task>
 }

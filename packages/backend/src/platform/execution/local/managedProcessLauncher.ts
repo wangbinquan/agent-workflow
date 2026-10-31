@@ -596,6 +596,16 @@ export async function runManagedProcessLauncher(
   }
 }
 
+// No top-level await: it would make this module, and every module that imports it (task
+// execution, collaboration), an async ES module. Bun 1.4.3's bundler can then emit
+// `await __promiseAll([...])` without defining the helper; the compiled maintenance Worker
+// failed to load that way after RFC-400. Locked by rfc400-top-level-await-guard.
 if (import.meta.main) {
-  process.exit(await runManagedProcessLauncher(Bun.argv))
+  void runManagedProcessLauncher(Bun.argv).then(
+    (exitCode) => process.exit(exitCode),
+    (error: unknown) => {
+      console.error(error)
+      process.exit(1)
+    },
+  )
 }

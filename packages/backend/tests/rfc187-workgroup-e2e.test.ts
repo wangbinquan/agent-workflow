@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 import { nodeRunFixtureColumns } from './helpers/model/nodeRun'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 // RFC-187 PR-1 — real-subprocess e2e locking the THREE live-probe findings (audit
@@ -237,6 +238,7 @@ describe('RFC-187 F3 — non-autonomous leader clarify parks (does not spin to m
 
       // answer the clarify → resume → leader continues → dispatch → worker → done.
       await autoDispatchClarifyRound({
+        taskExecutionParticipants,
         db: h.db,
         memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(h.db),
         originNodeRunId: clar!.intermediaryNodeRunId,

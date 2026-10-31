@@ -2,9 +2,13 @@
 
 import type { TaskWsMessage } from '@agent-workflow/shared'
 
-import { SYSTEM_USER_ID, type Actor, type ActorSource } from '@/auth/actor'
-import type { DirectRequestAuthority } from '@/modules/identity-access/public/participants'
-import type { RealtimeChannelAccess, RealtimeCompositionPolicy } from '../public/participants'
+import { SYSTEM_USER_ID } from '@/auth/actor'
+import type {
+  AuthenticatedAuthoritySnapshot,
+  DirectRequestAuthority,
+} from '@/modules/identity-access/public/participants'
+import type { RealtimeChannelAccess } from '../public/participants'
+import type { RealtimeCompositionPolicy } from './ports/realtimeCompositionPolicy'
 import type {
   RealtimeAclResourceType,
   RealtimeMemoryScope,
@@ -23,7 +27,10 @@ export function createRealtimeChannelAccess(
   store: RealtimeStore,
   policy: RealtimeCompositionPolicy,
 ): RealtimeChannelAccess {
-  async function canViewTask(actor: Actor, taskId: string): Promise<boolean> {
+  async function canViewTask(
+    actor: AuthenticatedAuthoritySnapshot,
+    taskId: string,
+  ): Promise<boolean> {
     const audience = await store.findTaskAudience(taskId, actor.user.id)
     if (audience === null) return false
     if (actor.permissions.has('tasks:read:all')) return true
@@ -34,24 +41,36 @@ export function createRealtimeChannelAccess(
 
   const access: RealtimeChannelAccess = {
     canViewTask,
-    async canViewResource(actor: Actor, type: RealtimeAclResourceType, resourceId: string) {
+    async canViewResource(
+      actor: AuthenticatedAuthoritySnapshot,
+      type: RealtimeAclResourceType,
+      resourceId: string,
+    ) {
       const row = await store.findResource(type, resourceId)
       return row !== null && (await policy.resourceVisibility.canViewResource(actor, type, row))
     },
     async canViewMemory(
       authority: DirectRequestAuthority,
-      actor: Actor,
+      actor: AuthenticatedAuthoritySnapshot,
       scope: RealtimeMemoryScope,
     ) {
       return await policy.memoryVisibility.canViewMemory(authority, actor, scope)
     },
-    async canViewStoredMemory(authority: DirectRequestAuthority, actor: Actor, memoryId: string) {
+    async canViewStoredMemory(
+      authority: DirectRequestAuthority,
+      actor: AuthenticatedAuthoritySnapshot,
+      memoryId: string,
+    ) {
       const scope = await store.findMemoryScope(memoryId)
       return (
         scope !== null && (await policy.memoryVisibility.canViewMemory(authority, actor, scope))
       )
     },
-    async replayTaskEvents(actorSource: ActorSource, taskId: string, since: number) {
+    async replayTaskEvents(
+      actorSource: AuthenticatedAuthoritySnapshot['source'],
+      taskId: string,
+      since: number,
+    ) {
       const rows = await store.listTaskEvents(taskId, since)
       return rows.map(
         (row): TaskWsMessage => ({

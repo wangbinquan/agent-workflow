@@ -306,3 +306,16 @@ export function composeSystemOperationsTaskPorts() {
 
 // RFC-399 B1: bootstrap's maintenance job table takes these handlers via composition.
 export { createTaskExecutionMaintenanceJobHandlers } from './application/maintenanceJobs'
+
+export {
+  createTaskNodeStatusEventsParticipantInTx,
+  createHumanGateNodeRunStateParticipantInTx,
+  createTaskDecisionParticipantInTx,
+  createHumanGateNodeRunMintParticipantInTx,
+  createHumanGateTaskTransitionParticipantInTx,
+  createHumanGateNodeRunMintOperations,
+} from './infrastructure/humanGateTaskParticipants'
+export {
+  createTaskAuthorizationQueries,
+  createTaskAuthorizationParticipantInTx,
+} from './infrastructure/taskAuthorization'

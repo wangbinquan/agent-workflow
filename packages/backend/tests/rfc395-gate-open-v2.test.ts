@@ -24,10 +24,8 @@ import {
   createConsumedInputsParticipantInTx,
   createHumanGatePersistenceParticipantInTx,
 } from '@/modules/task-execution/public/participants'
-import {
-  createCollaborationCommandContext,
-  resolveCollaborationCommandContext,
-} from '@/modules/collaboration/composition/commandContext'
+import { createCollaborationCommandContext } from '@/modules/collaboration/infrastructure/collaborationCommandContext'
+import { resolveCollaborationCommandContext } from '@/modules/collaboration/application/commandContext'
 import { contentRefColumns } from '@/platform/content/contentStore'
 import { sha256Hex } from '@/util/hash'
 import { createCommittedHumanInputQueries } from '@/modules/collaboration/infrastructure/committedHumanInputQueries'

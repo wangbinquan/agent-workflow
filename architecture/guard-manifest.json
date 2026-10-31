@@ -1322,6 +1322,30 @@
       "runner": "bun"
     },
     {
+      "assertsAbsence": true,
+      "classified": true,
+      "corpusScanner": true,
+      "file": "packages/backend/tests/architecture/rfc400-collaboration-task-participants.test.ts",
+      "id": "rfc400-collaboration-task-participants",
+      "lines": 418,
+      "mechanism": "ast",
+      "minCorpusFiles": 2000,
+      "negativeFixture": true,
+      "runner": "bun"
+    },
+    {
+      "assertsAbsence": true,
+      "classified": true,
+      "corpusScanner": true,
+      "file": "packages/backend/tests/architecture/rfc400-top-level-await-guard.test.ts",
+      "id": "rfc400-top-level-await-guard",
+      "lines": 116,
+      "mechanism": "ast",
+      "minCorpusFiles": 2000,
+      "negativeFixture": true,
+      "runner": "bun"
+    },
+    {
       "id": "source-path-reads",
       "file": "packages/backend/tests/architecture/source-path-reads.test.ts",
       "runner": "bun",

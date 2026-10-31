@@ -8,8 +8,8 @@ import type {
   MemoryPatchRequest,
   MemorySummary,
 } from '@agent-workflow/shared'
-import type { Actor } from '@/auth/actor'
 import type {
+  AuthenticatedAuthoritySnapshot,
   CommandContext,
   RequestAuthority,
 } from '@/modules/identity-access/public/participants'
@@ -36,7 +36,7 @@ export interface MemoryScopeRef {
 
 export interface MemoryScopeAuthority {
   readonly authority: RequestAuthority
-  readonly actor: Actor
+  readonly actor: AuthenticatedAuthoritySnapshot
 }
 
 /**

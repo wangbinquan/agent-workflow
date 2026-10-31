@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './taskExecutionParticipantBindings'
 import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import { epoch2RuntimeTestPorts } from './epoch2RuntimePorts'
 // RFC-395 II-pre：生产启动 / 延续依赖及工作区租约改接线，保留既有断言。
@@ -22,7 +23,10 @@ import { createLogger } from '@/util/log'
 import { Paths } from '@/util/paths'
 
 export function createTestTaskDriveCoordinator(
-  input: Omit<Parameters<typeof composeTestTaskDriveFactory>[0], 'historyRestrictions'> & {
+  input: Omit<
+    Parameters<typeof composeTestTaskDriveFactory>[0],
+    'historyRestrictions' | 'taskExecutionParticipants'
+  > & {
     readonly historyRestrictions?: Parameters<
       typeof composeTestTaskDriveFactory
     >[0]['historyRestrictions']
@@ -32,6 +36,7 @@ export function createTestTaskDriveCoordinator(
   },
 ) {
   return composeTestTaskDriveFactory({
+    taskExecutionParticipants,
     ...input,
     historyRestrictions:
       input.historyRestrictions ?? epoch2RuntimeTestPorts(input.deps.db).historyRestrictions,

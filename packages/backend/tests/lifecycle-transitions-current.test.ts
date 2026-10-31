@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 import { legacyContentRef } from '@/platform/content/contentRef'
 import { contentRowColumns } from '@/platform/content/infrastructure/contentStore'
 import { nodeRunFixtureColumns } from './helpers/model/nodeRun'
@@ -822,6 +823,7 @@ describeEachProvider(
           createdAt: Date.now() - 30,
         })
         await autoDispatchClarifyRound({
+          taskExecutionParticipants,
           db: h.db,
           memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(h.db),
           originNodeRunId: clarifyRunId,

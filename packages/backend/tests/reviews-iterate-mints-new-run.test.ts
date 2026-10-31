@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 import { composeCollaborationTaskRolePolicy } from '@/modules/resource-catalog/composition'
 import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
@@ -264,13 +265,19 @@ async function submitAndSettleReviewDecision(
   h: Harness,
   input: Omit<
     Parameters<typeof submitReviewDecision>[0],
-    'db' | 'appHome' | 'taskLock' | 'upstreamAgents' | 'historyRestrictions'
+    | 'db'
+    | 'appHome'
+    | 'taskLock'
+    | 'upstreamAgents'
+    | 'historyRestrictions'
+    | 'taskExecutionParticipants'
   >,
 ): Promise<Awaited<ReturnType<typeof submitReviewDecision>>> {
   const result = await submitReviewDecision(
     withO2Closure({ ...input, db: h.db, appHome: h.appHome }),
   )
   await wakeHumanGateContinuation(result.taskId, result.continuationRef, {
+    taskExecutionParticipants,
     humanGateOpen: composeHumanGateOpenParticipantFactory(),
     historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
     db: h.db,

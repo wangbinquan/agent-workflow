@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import { composeGateContinuationSupport } from '@/modules/collaboration/composition'
 import { composeHumanGateTaskLockPort } from '@/modules/task-execution/composition'
@@ -233,6 +234,7 @@ describeEachProvider('RFC-359 W4-B1 批 2d —— 人工门 continuation pre-dri
         humanGateOpen: composeHumanGateOpenParticipantFactory(),
       }),
       ...composeGateContinuationSupport({
+        taskExecutionParticipants,
         db: db,
         historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
         taskLock: composeHumanGateTaskLockPort,

@@ -246,7 +246,7 @@ test('源码锁：手工提问写面只剩一份，同步 gate 操作 store 已�
   // **判据要锁的东西没有变**：手工提问写面只有一份实现（下面两条 `not.toContain`
   // 才是这条判据的主语——不许再冒出 `Sqlite…` / `Postgresql…` 的品牌写面）。
   // 数字从 2 变 1 是「装配路径少了一条」，不是「写面多了一份」。
-  const context = read('modules/collaboration/composition/commandContext.ts')
+  const context = read('modules/collaboration/infrastructure/collaborationCommandContext.ts')
   expect(context.match(/new DatabaseManualQuestionOpenWriter\(/g)).toHaveLength(1)
   expect(context).not.toContain('SqliteManualQuestionOpenWriter')
   expect(context).not.toContain('PostgresqlManualQuestionOpenWriter')

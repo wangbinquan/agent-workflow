@@ -60,7 +60,7 @@ export { resolveHandlerRun } from '../application/resolveHandlerRun'
 export { createRunHistorySnapshot, createRunHistoryBatchSnapshot } from '../application/runHistory'
 export type { RunHistoryFacts } from '../application/runHistory'
 export { createRunSelectionReader } from '../infrastructure/runSelection/table/reader'
-import type { Actor } from '@/auth/actor'
+import type { AuthenticatedAuthoritySnapshot } from '@/modules/identity-access/public/participants'
 import type { WorktreeTreeEntry } from '@agent-workflow/shared'
 import { parseLoopExitCondition, type OverviewTasks } from '@agent-workflow/shared'
 import { decodeWrapperProgress } from '../domain/wrapperProgress'
@@ -98,7 +98,10 @@ export {
  * exposes a provider row or client to the aggregate.
  */
 export interface TaskOverviewQuery {
-  load(input: { readonly actor: Actor; readonly since: number }): Promise<OverviewTasks>
+  load(input: {
+    readonly actor: AuthenticatedAuthoritySnapshot
+    readonly since: number
+  }): Promise<OverviewTasks>
 }
 
 /**
@@ -240,3 +243,5 @@ export {
 } from '../application/runProvenance'
 
 export type { NodeRunRow } from '../application/runProvenance'
+
+export { nextRetryIndex } from '../application/nextRetryIndex'

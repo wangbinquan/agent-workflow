@@ -22,16 +22,16 @@ TaskExecutionError: task 't7_01M20746EQP6RMXG9PVEAYH351' mutation was fenced
   ],
   'p0-8-command-omission': [
     `error: collaboration question dispatch command is not composed
-      at requireQuestionDispatchCommand (rfc359-p0-mutation:collaboration-command-omission:90:11)
-      at dispatchTaskQuestions (/repo/packages/backend/src/modules/collaboration/public/commands.ts:207:10)
+      at requireQuestionDispatchCommand (/repo/packages/backend/src/modules/collaboration/application/commandContext.ts:112:11)
+      at dispatchTaskQuestions (/repo/packages/backend/src/modules/collaboration/public/commands.ts:200:10)
       at <anonymous> (/repo/packages/backend/tests/rfc359-t2-question-dispatch-command.test.ts:49:25)`,
     `error: collaboration clarify decision command is not composed
-      at requireClarifyDecisionCommand (rfc359-p0-mutation:collaboration-command-omission:96:11)
-      at submitClarifyDecision (/repo/packages/backend/src/modules/collaboration/public/commands.ts:215:10)
+      at requireClarifyDecisionCommand (/repo/packages/backend/src/modules/collaboration/application/commandContext.ts:121:11)
+      at submitClarifyDecision (/repo/packages/backend/src/modules/collaboration/public/commands.ts:208:10)
       at <anonymous> (/repo/packages/backend/tests/rfc359-t2b-clarify-decision.test.ts:109:26)`,
     `error: collaboration review decision command is not composed
-      at requireReviewDecisionCommand (rfc359-p0-mutation:collaboration-command-omission:84:11)
-      at submitReviewDecision (/repo/packages/backend/src/modules/collaboration/public/commands.ts:199:10)
+      at requireReviewDecisionCommand (/repo/packages/backend/src/modules/collaboration/application/commandContext.ts:103:11)
+      at submitReviewDecision (/repo/packages/backend/src/modules/collaboration/public/commands.ts:192:10)
       at <anonymous> (/repo/packages/backend/tests/rfc359-t2c-review-decision.test.ts:94:26)`,
   ],
   'p0-1-ambient-context': [
@@ -270,7 +270,7 @@ describe('RFC-359 AC7 historical mutation verdict', () => {
       for (const replacement of [
         diagnostics[id]![(index + 1) % 3]!,
         diagnostic.replace('error: collaboration', 'error: unrelated'),
-        diagnostic.replace('rfc359-p0-mutation:collaboration-command-omission:', 'unrelated.ts:'),
+        diagnostic.replace('collaboration/application/commandContext.ts:', 'unrelated.ts:'),
         diagnostic.replace(/at require\w+ \(/, 'at unrelatedSetup ('),
         diagnostic.replace(
           /at (dispatchTaskQuestions|submitClarifyDecision|submitReviewDecision) \(/,

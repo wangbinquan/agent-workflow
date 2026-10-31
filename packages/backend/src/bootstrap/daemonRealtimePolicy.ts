@@ -3,11 +3,11 @@
 // step that one provider could forget. Snapshot methods with their original
 // receivers so each daemon retains its own complete policy.
 
-import type { RealtimeCompositionPolicy } from '@/modules/runtime-management/public/participants'
+import type { DaemonProviderCoreCommonInput } from './daemonModules/providerCore'
 
 export function composeDaemonRealtimePolicy(
-  policy: RealtimeCompositionPolicy,
-): RealtimeCompositionPolicy {
+  policy: DaemonProviderCoreCommonInput['realtimePolicy'],
+): DaemonProviderCoreCommonInput['realtimePolicy'] {
   const canViewResource = policy.resourceVisibility.canViewResource.bind(policy.resourceVisibility)
   const canViewMemory = policy.memoryVisibility.canViewMemory.bind(policy.memoryVisibility)
   const repoImportOwnerUserId = policy.repoImportOwnerUserId.bind(policy)

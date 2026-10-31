@@ -449,6 +449,8 @@ export const PHASES: readonly Phase[] = [
     ],
   },
   {
+    // RFC-400 T3: the mutated adapter registers contexts without the three commands; the real resolvers
+    // now live in collaboration/application/commandContext.ts, so the throw frame is that file.
     id: 'p0-8-command-omission',
     mutation: 'p0-8-command-omission',
     passes: [collaborationDraft],
@@ -457,7 +459,7 @@ export const PHASES: readonly Phase[] = [
         test: questionDecision,
         diagnostics: [
           /^error: collaboration question dispatch command is not composed$/m,
-          /at requireQuestionDispatchCommand \(rfc359-p0-mutation:collaboration-command-omission:\d+:\d+\)/,
+          /at requireQuestionDispatchCommand \([^\n]*collaboration\/application\/commandContext\.ts:\d+:\d+\)/,
           /at dispatchTaskQuestions \([^\n]*collaboration\/public\/commands\.ts:\d+:\d+\)/,
           /rfc359-t2-question-dispatch-command\.test\.ts:\d+:\d+/,
         ],
@@ -466,7 +468,7 @@ export const PHASES: readonly Phase[] = [
         test: finalize,
         diagnostics: [
           /^error: collaboration clarify decision command is not composed$/m,
-          /at requireClarifyDecisionCommand \(rfc359-p0-mutation:collaboration-command-omission:\d+:\d+\)/,
+          /at requireClarifyDecisionCommand \([^\n]*collaboration\/application\/commandContext\.ts:\d+:\d+\)/,
           /at submitClarifyDecision \([^\n]*collaboration\/public\/commands\.ts:\d+:\d+\)/,
           /rfc359-t2b-clarify-decision\.test\.ts:\d+:\d+/,
         ],
@@ -475,7 +477,7 @@ export const PHASES: readonly Phase[] = [
         test: reviewDecision,
         diagnostics: [
           /^error: collaboration review decision command is not composed$/m,
-          /at requireReviewDecisionCommand \(rfc359-p0-mutation:collaboration-command-omission:\d+:\d+\)/,
+          /at requireReviewDecisionCommand \([^\n]*collaboration\/application\/commandContext\.ts:\d+:\d+\)/,
           /at submitReviewDecision \([^\n]*collaboration\/public\/commands\.ts:\d+:\d+\)/,
           /rfc359-t2c-review-decision\.test\.ts:\d+:\d+/,
         ],
@@ -668,7 +670,9 @@ export const sourceFiles = [
   'packages/backend/src/modules/resource-catalog/infrastructure/skillCatalogBootAdapter.ts',
   'packages/backend/src/modules/resource-catalog/infrastructure/legacy/skillBootVerify.ts',
   'packages/backend/src/modules/task-execution/domain/executionEffect.ts',
-  'packages/backend/src/modules/collaboration/composition/commandContext.ts',
+  // RFC-400 T3: the command context split into the application registry/resolvers and the adapter.
+  'packages/backend/src/modules/collaboration/application/commandContext.ts',
+  'packages/backend/src/modules/collaboration/infrastructure/collaborationCommandContext.ts',
   'packages/backend/src/modules/collaboration/composition/collaborationRouteOperations.ts',
   'packages/backend/src/modules/collaboration/public/commands.ts',
   'packages/backend/src/modules/collaboration/infrastructure/questionDispatchCommand.ts',

@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import type { SequencedOracleRunRow } from '@/modules/task-execution/infrastructure/migration/oracle/rows'
 import { nodeRunFixtureColumns } from './helpers/model/nodeRun'
@@ -351,6 +352,7 @@ describeEachProvider(
       const db = harness.db
       const { taskId, intermediaryNodeRunId } = await seedTask(db, { deferred: true })
       const sealed = await sealRoundQuestions({
+        taskExecutionParticipants,
         db,
         originNodeRunId: intermediaryNodeRunId,
         answers: [ans('q1')],
@@ -384,6 +386,7 @@ describeEachProvider(
       const db = harness.db
       const { taskId, intermediaryNodeRunId } = await seedTask(db, { deferred: true })
       const ret = await autoDispatchClarifyRound({
+        taskExecutionParticipants,
         db,
         memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
         originNodeRunId: intermediaryNodeRunId,
@@ -493,6 +496,7 @@ describeEachProvider(
       const db = harness.db
       const { taskId, intermediaryNodeRunId } = await seedTask(db, { deferred: true })
       await sealRoundQuestions({
+        taskExecutionParticipants,
         db,
         originNodeRunId: intermediaryNodeRunId,
         answers: [ans('q1')],
@@ -521,6 +525,7 @@ describeEachProvider(
       const { taskId, intermediaryNodeRunId } = await seedTask(db, { deferred: false })
       // The unified quick channel dispatches everything (designer + questioner) → no park.
       await autoDispatchClarifyRound({
+        taskExecutionParticipants,
         db,
         memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
         originNodeRunId: intermediaryNodeRunId,
@@ -547,6 +552,7 @@ describeEachProvider(
       const db = harness.db
       const { taskId, intermediaryNodeRunId } = await seedTask(db, { deferred: true })
       await sealRoundQuestions({
+        taskExecutionParticipants,
         db,
         originNodeRunId: intermediaryNodeRunId,
         answers: [ans('q1')],
@@ -583,6 +589,7 @@ describeEachProvider('RFC-120 T9 — dispatchTaskQuestions', (harness) => {
   async function seedDeferredAnswered(db: PersistenceDb) {
     const { taskId, intermediaryNodeRunId } = await seedTask(db, { deferred: true })
     await sealRoundQuestions({
+      taskExecutionParticipants,
       db,
       originNodeRunId: intermediaryNodeRunId,
       answers: [ans('q1')],
@@ -606,7 +613,13 @@ describeEachProvider('RFC-120 T9 — dispatchTaskQuestions', (harness) => {
     const db = harness.db
     const { taskId, entryId } = await seedDeferredAnswered(db)
 
-    const result = await dispatchTaskQuestions(db, taskId, [entryId], actor)
+    const result = await dispatchTaskQuestions(
+      db,
+      taskExecutionParticipants,
+      taskId,
+      [entryId],
+      actor,
+    )
     expect(result.reruns.length).toBe(1)
     expect(result.reruns[0]?.targetNodeId).toBe(DESIGNER)
     expect(result.dispatchedEntryIds).toEqual([entryId])
@@ -638,9 +651,21 @@ describeEachProvider('RFC-120 T9 — dispatchTaskQuestions', (harness) => {
     const db = harness.db
     const { taskId, entryId } = await seedDeferredAnswered(db)
 
-    const first = await dispatchTaskQuestions(db, taskId, [entryId], actor)
+    const first = await dispatchTaskQuestions(
+      db,
+      taskExecutionParticipants,
+      taskId,
+      [entryId],
+      actor,
+    )
     expect(first.reruns.length).toBe(1)
-    const second = await dispatchTaskQuestions(db, taskId, [entryId], actor)
+    const second = await dispatchTaskQuestions(
+      db,
+      taskExecutionParticipants,
+      taskId,
+      [entryId],
+      actor,
+    )
     expect(second.reruns.length).toBe(0) // already claimed → no-op
 
     const { nodeRuns } = tablesOf(db)
@@ -664,6 +689,7 @@ describeEachProvider('RFC-120 T9 — dispatchTaskQuestions', (harness) => {
 
     const decided = await dispatchTaskQuestionsWithDecision(
       command.db,
+      taskExecutionParticipants,
       command.taskId,
       command.entryIds,
       command.actor,
@@ -697,6 +723,7 @@ describeEachProvider('RFC-120 T9 — dispatchTaskQuestions', (harness) => {
 
     const replay = await dispatchTaskQuestionsWithDecision(
       command.db,
+      taskExecutionParticipants,
       command.taskId,
       command.entryIds,
       command.actor,
@@ -713,6 +740,7 @@ describeEachProvider('RFC-120 T9 — dispatchTaskQuestions', (harness) => {
     await expect(
       dispatchTaskQuestionsWithDecision(
         db,
+        taskExecutionParticipants,
         taskId,
         [entryId],
         actor,
@@ -766,6 +794,7 @@ describeEachProvider('RFC-120 T9 — dispatchTaskQuestions', (harness) => {
         () =>
           dispatchTaskQuestionsWithDecision(
             db,
+            taskExecutionParticipants,
             taskId,
             [entryId],
             actor,
@@ -831,6 +860,7 @@ describeEachProvider('RFC-120 T9 — dispatch correctness (Codex impl-gate H1/H2
       questions: [mkQ('q1', 'first?'), mkQ('q2', 'second?')],
     })
     await sealRoundQuestions({
+      taskExecutionParticipants,
       db,
       originNodeRunId: intermediaryNodeRunId,
       answers: [ans('q1'), ans('q2')],
@@ -844,7 +874,13 @@ describeEachProvider('RFC-120 T9 — dispatch correctness (Codex impl-gate H1/H2
 
     // dispatch both → affected = {DESIGNER}, frontier = {DESIGNER} → exactly ONE rerun
     // (NOT one-per-question), both entries committed.
-    const result = await dispatchTaskQuestions(db, taskId, [entries[0]!.id, entries[1]!.id], actor)
+    const result = await dispatchTaskQuestions(
+      db,
+      taskExecutionParticipants,
+      taskId,
+      [entries[0]!.id, entries[1]!.id],
+      actor,
+    )
     expect(result.reruns.length).toBe(1)
     expect(result.reruns[0]?.entryIds.length).toBe(2) // both routed to the one frontier node
 
@@ -867,6 +903,7 @@ describeEachProvider('RFC-120 T9 — dispatch correctness (Codex impl-gate H1/H2
       questions: [mkQ('q1', 'first?'), mkQ('q2', 'second?')],
     })
     await sealRoundQuestions({
+      taskExecutionParticipants,
       db,
       originNodeRunId: intermediaryNodeRunId,
       answers: [ans('q1'), ans('q2')],
@@ -876,7 +913,13 @@ describeEachProvider('RFC-120 T9 — dispatch correctness (Codex impl-gate H1/H2
     await seedDesignerEntries(db, taskId, DESIGNER, actor)
     const entries = await designerEntries(db, taskId)
     // dispatch ONLY q1 (both → same handler DESIGNER, so the per-origin guard allows it).
-    const result = await dispatchTaskQuestions(db, taskId, [entries[0]!.id], actor)
+    const result = await dispatchTaskQuestions(
+      db,
+      taskExecutionParticipants,
+      taskId,
+      [entries[0]!.id],
+      actor,
+    )
     expect(result.dispatchedEntryIds).toEqual([entries[0]!.id])
     const runId = result.reruns[0]!.nodeRunId
     const after = await designerEntries(db, taskId)
@@ -906,6 +949,7 @@ describeEachProvider('RFC-120 T9 — dispatch correctness (Codex impl-gate H1/H2
       questions: [mkQ('q1', 'first?'), mkQ('q2', 'second?')],
     })
     await sealRoundQuestions({
+      taskExecutionParticipants,
       db,
       originNodeRunId: intermediaryNodeRunId,
       answers: [ans('q1'), ans('q2')],
@@ -914,7 +958,7 @@ describeEachProvider('RFC-120 T9 — dispatch correctness (Codex impl-gate H1/H2
     // RFC-162: add a designer handler per question via reassign (both q1 + q2 → DESIGNER).
     await seedDesignerEntries(db, taskId, DESIGNER, actor)
     const entries = await designerEntries(db, taskId)
-    await dispatchTaskQuestions(db, taskId, [entries[0]!.id], actor) // dispatch q1 only
+    await dispatchTaskQuestions(db, taskExecutionParticipants, taskId, [entries[0]!.id], actor) // dispatch q1 only
 
     // The park set excludes DESIGNER (in-flight q1) → deriveFrontier does NOT bucket it into
     // awaitingHuman; its pending rerun is dispatchable (not stranded).
@@ -946,6 +990,7 @@ describeEachProvider('RFC-120 T9 — dispatch correctness (Codex impl-gate H1/H2
       questions: [mkQ('q1', 'first?'), mkQ('q2', 'second?')],
     })
     await sealRoundQuestions({
+      taskExecutionParticipants,
       db,
       originNodeRunId: intermediaryNodeRunId,
       answers: [ans('q1'), ans('q2')],
@@ -955,7 +1000,13 @@ describeEachProvider('RFC-120 T9 — dispatch correctness (Codex impl-gate H1/H2
     await seedDesignerEntries(db, taskId, DESIGNER, actor)
     const entries = await designerEntries(db, taskId)
     // q1 + q2 to the same node in ONE dispatch → byTarget groups them → exactly ONE rerun.
-    const result = await dispatchTaskQuestions(db, taskId, [entries[0]!.id, entries[1]!.id], actor)
+    const result = await dispatchTaskQuestions(
+      db,
+      taskExecutionParticipants,
+      taskId,
+      [entries[0]!.id, entries[1]!.id],
+      actor,
+    )
     expect(result.reruns.length).toBe(1)
     expect(result.reruns[0]?.entryIds.length).toBe(2)
     const { nodeRuns } = tablesOf(db)
@@ -979,6 +1030,7 @@ describeEachProvider('RFC-120 T9 — dispatch correctness (Codex impl-gate H1/H2
       questions: [mkQ('q1', 'first?'), mkQ('q2', 'second?')],
     })
     await sealRoundQuestions({
+      taskExecutionParticipants,
       db,
       originNodeRunId: intermediaryNodeRunId,
       answers: [ans('q1'), ans('q2')],
@@ -991,12 +1043,12 @@ describeEachProvider('RFC-120 T9 — dispatch correctness (Codex impl-gate H1/H2
     const q2 = entries.find((e) => e.questionId === 'q2')!
 
     // Dispatch q1 → DESIGNER's cross-clarify-answer rerun is pending (in-flight).
-    await dispatchTaskQuestions(db, taskId, [q1.id], actor)
+    await dispatchTaskQuestions(db, taskExecutionParticipants, taskId, [q1.id], actor)
     // A SECOND, separate dispatch of q2 to the same (busy) node is rejected — minting a
     // second rerun on the same (node, iteration) would conflict with the selected generation.
     let threw: unknown = null
     try {
-      await dispatchTaskQuestions(db, taskId, [q2.id], actor)
+      await dispatchTaskQuestions(db, taskExecutionParticipants, taskId, [q2.id], actor)
     } catch (e) {
       threw = e
     }
@@ -1024,6 +1076,7 @@ describeEachProvider('RFC-120 T9 — dispatch correctness (Codex impl-gate H1/H2
       questions: [mkQ('q1', 'first?'), mkQ('q2', 'second?')],
     })
     await sealRoundQuestions({
+      taskExecutionParticipants,
       db,
       originNodeRunId: intermediaryNodeRunId,
       answers: [ans('q1'), ans('q2')],
@@ -1036,7 +1089,7 @@ describeEachProvider('RFC-120 T9 — dispatch correctness (Codex impl-gate H1/H2
     const q2 = entries.find((e) => e.questionId === 'q2')!
 
     // q1 dispatched → P; P renders/binds q1 then finishes done+output (no longer in-flight).
-    const d1 = await dispatchTaskQuestions(db, taskId, [q1.id], actor)
+    const d1 = await dispatchTaskQuestions(db, taskExecutionParticipants, taskId, [q1.id], actor)
     const P = d1.reruns[0]!.nodeRunId
     await bindTriggerRun(db, [q1.id], P)
     const { nodeRuns } = tablesOf(db)
@@ -1044,7 +1097,7 @@ describeEachProvider('RFC-120 T9 — dispatch correctness (Codex impl-gate H1/H2
     await nodeRunOutputFixture(db, { nodeRunId: P, portName: 'result', content: 'x' })
 
     // Now the node is free → dispatching q2 mints a FRESH rerun P2 (no conflict).
-    const d2 = await dispatchTaskQuestions(db, taskId, [q2.id], actor)
+    const d2 = await dispatchTaskQuestions(db, taskExecutionParticipants, taskId, [q2.id], actor)
     const P2 = d2.reruns[0]!.nodeRunId
     await bindTriggerRun(db, [q2.id], P2)
     expect(P2).not.toBe(P)
@@ -1063,6 +1116,7 @@ describeEachProvider('RFC-120 T9 — dispatch correctness (Codex impl-gate H1/H2
       questions: [mkQ('q1', 'first?'), mkQ('q2', 'second?')],
     })
     await sealRoundQuestions({
+      taskExecutionParticipants,
       db,
       originNodeRunId: intermediaryNodeRunId,
       answers: [ans('q1'), ans('q2')],
@@ -1075,7 +1129,7 @@ describeEachProvider('RFC-120 T9 — dispatch correctness (Codex impl-gate H1/H2
     const q2 = entries.find((e) => e.questionId === 'q2')!
 
     // q1 dispatched → P; P binds q1; P FAILS with no output → q1 is UNCONSUMED (not done+output).
-    const d1 = await dispatchTaskQuestions(db, taskId, [q1.id], actor)
+    const d1 = await dispatchTaskQuestions(db, taskExecutionParticipants, taskId, [q1.id], actor)
     const P = d1.reruns[0]!.nodeRunId
     await bindTriggerRun(db, [q1.id], P)
     expect((await designerEntries(db, taskId)).find((e) => e.id === q1.id)?.triggerRunId).toBe(P)
@@ -1087,7 +1141,7 @@ describeEachProvider('RFC-120 T9 — dispatch correctness (Codex impl-gate H1/H2
     // retry of P would never re-render q1's feedback (stuck processing). So we block it.
     let threw: unknown = null
     try {
-      await dispatchTaskQuestions(db, taskId, [q2.id], actor)
+      await dispatchTaskQuestions(db, taskExecutionParticipants, taskId, [q2.id], actor)
     } catch (e) {
       threw = e
     }
@@ -1110,7 +1164,7 @@ describeEachProvider('RFC-120 T9 — dispatch correctness (Codex impl-gate H1/H2
     // Once P's revival reaches done+output (q1 consumed), dispatching q2 SUCCEEDS (test c).
     await patchNodeRunFixture(db, { id: P }, { status: 'done' })
     await nodeRunOutputFixture(db, { nodeRunId: P, portName: 'result', content: 'x' })
-    const d2 = await dispatchTaskQuestions(db, taskId, [q2.id], actor)
+    const d2 = await dispatchTaskQuestions(db, taskExecutionParticipants, taskId, [q2.id], actor)
     expect(d2.reruns.length).toBe(1)
     expect(d2.reruns[0]?.nodeRunId).not.toBe(P)
   })
@@ -1130,6 +1184,7 @@ describeEachProvider('RFC-120 T9 — dispatch correctness (Codex impl-gate H1/H2
       startedAt: Date.now() - 500,
     })
     await sealRoundQuestions({
+      taskExecutionParticipants,
       db,
       originNodeRunId: intermediaryNodeRunId,
       answers: [ans('q1')],
@@ -1175,7 +1230,7 @@ describeEachProvider('RFC-120 T9 — dispatch correctness (Codex impl-gate H1/H2
 
     let threw: unknown = null
     try {
-      await dispatchTaskQuestions(racingDb, taskId, [entry.id], actor)
+      await dispatchTaskQuestions(racingDb, taskExecutionParticipants, taskId, [entry.id], actor)
     } catch (e) {
       threw = e
     }
@@ -1195,7 +1250,13 @@ describeEachProvider('RFC-120 T9 — dispatch correctness (Codex impl-gate H1/H2
     // RFC-131 T4 去借壳: after the reassign, effectiveTarget=OTHER — the rerun is minted ON OTHER
     // (which has a prior run seeded above), running its OWN agent (agentOverrideName null, no borrow).
     // The race rollback mechanism (task-question-target-changed) is unchanged — only the mint target.
-    const result = await dispatchTaskQuestions(db, taskId, [entry.id], actor)
+    const result = await dispatchTaskQuestions(
+      db,
+      taskExecutionParticipants,
+      taskId,
+      [entry.id],
+      actor,
+    )
     expect(result.reruns.length).toBe(1)
     expect(result.reruns[0]?.targetNodeId).toBe(OTHER)
     const minted = (await readNodeRunFixtures(db, { id: result.reruns[0]!.nodeRunId }))[0]
@@ -1207,6 +1268,7 @@ describeEachProvider('RFC-120 T9 — dispatch correctness (Codex impl-gate H1/H2
     const db = harness.db
     const { taskId, intermediaryNodeRunId } = await seedTask(db, { deferred: true })
     await sealRoundQuestions({
+      taskExecutionParticipants,
       db,
       originNodeRunId: intermediaryNodeRunId,
       answers: [ans('q1')],
@@ -1215,7 +1277,13 @@ describeEachProvider('RFC-120 T9 — dispatch correctness (Codex impl-gate H1/H2
     // RFC-162: reconcile no longer derives a designer entry from scope — add one via reassign.
     await seedDesignerEntries(db, taskId, DESIGNER, actor)
     const entries = await designerEntries(db, taskId)
-    const result = await dispatchTaskQuestions(db, taskId, [entries[0]!.id], actor)
+    const result = await dispatchTaskQuestions(
+      db,
+      taskExecutionParticipants,
+      taskId,
+      [entries[0]!.id],
+      actor,
+    )
     expect(result.reruns.length).toBe(1)
     const rerunId = result.reruns[0]!.nodeRunId
     const { nodeRuns } = tablesOf(db)
@@ -1250,6 +1318,7 @@ describeEachProvider('RFC-120 T9 — dispatch correctness (Codex impl-gate H1/H2
       startedAt: Date.now() - 500,
     })
     await sealRoundQuestions({
+      taskExecutionParticipants,
       db,
       originNodeRunId: intermediaryNodeRunId,
       answers: [{ ...ans('q1'), selectedOptionLabels: ['A'] }],
@@ -1262,7 +1331,13 @@ describeEachProvider('RFC-120 T9 — dispatch correctness (Codex impl-gate H1/H2
 
     // RFC-131 T4 去借壳: effectiveTarget=OTHER → dispatch mints OTHER itself (NOT DESIGNER), running
     // OTHER's OWN agent (no agent_override_name). OTHER is the frontier (it has a prior run).
-    const result = await dispatchTaskQuestions(db, taskId, [entries[0]!.id], actor)
+    const result = await dispatchTaskQuestions(
+      db,
+      taskExecutionParticipants,
+      taskId,
+      [entries[0]!.id],
+      actor,
+    )
     expect(result.reruns.length).toBe(1)
     expect(result.reruns[0]?.targetNodeId).toBe(OTHER) // frontier is the effective target
     const runId = result.reruns[0]!.nodeRunId
@@ -1292,6 +1367,7 @@ describeEachProvider('RFC-120 T9 — dispatch correctness (Codex impl-gate H1/H2
     const { taskId, intermediaryNodeRunId } = await seedTask(db, { deferred: true })
     // OTHER has NO prior node_run.
     await sealRoundQuestions({
+      taskExecutionParticipants,
       db,
       originNodeRunId: intermediaryNodeRunId,
       answers: [{ ...ans('q1'), selectedOptionLabels: ['A'] }],
@@ -1309,7 +1385,7 @@ describeEachProvider('RFC-120 T9 — dispatch correctness (Codex impl-gate H1/H2
     // never-run frontier target is the deferred F3 layer). Nothing stamped, nothing minted.
     let threw: unknown = null
     try {
-      await dispatchTaskQuestions(db, taskId, [entries[0]!.id], actor)
+      await dispatchTaskQuestions(db, taskExecutionParticipants, taskId, [entries[0]!.id], actor)
     } catch (e) {
       threw = e
     }
@@ -1336,6 +1412,7 @@ describeEachProvider('RFC-120 T9 — dispatch correctness (Codex impl-gate H1/H2
       startedAt: Date.now() - 500,
     })
     await sealRoundQuestions({
+      taskExecutionParticipants,
       db,
       originNodeRunId: intermediaryNodeRunId,
       answers: [{ ...ans('q1'), selectedOptionLabels: ['A'] }],
@@ -1345,7 +1422,13 @@ describeEachProvider('RFC-120 T9 — dispatch correctness (Codex impl-gate H1/H2
     await seedDesignerEntries(db, taskId, DESIGNER, actor)
     const entries = await designerEntries(db, taskId)
     await reassignTaskQuestion(db, entries[0]!.id, OTHER, actor)
-    const result = await dispatchTaskQuestions(db, taskId, [entries[0]!.id], actor)
+    const result = await dispatchTaskQuestions(
+      db,
+      taskExecutionParticipants,
+      taskId,
+      [entries[0]!.id],
+      actor,
+    )
     // RFC-131 T4 去借壳: effectiveTarget=OTHER is the frontier — mint OTHER running its OWN agent.
     expect(result.reruns[0]?.targetNodeId).toBe(OTHER)
     const targetRunId = result.reruns[0]!.nodeRunId
@@ -1409,6 +1492,7 @@ describeEachProviderHttpApplication(
         startedAt: Date.now() - 500,
       })
       await sealRoundQuestions({
+        taskExecutionParticipants,
         db,
         originNodeRunId: intermediaryNodeRunId,
         answers: [ans('q1'), ans('q2')],
@@ -1439,7 +1523,7 @@ describeEachProviderHttpApplication(
       // round targeting a different handler node, even though q2 is outside the requested group.
       let threw: unknown = null
       try {
-        await dispatchTaskQuestions(db, taskId, [q1Entry.id], actor)
+        await dispatchTaskQuestions(db, taskExecutionParticipants, taskId, [q1Entry.id], actor)
       } catch (e) {
         threw = e
       }
@@ -1467,6 +1551,7 @@ describeEachProviderHttpApplication(
         startedAt: Date.now() - 500,
       })
       await sealRoundQuestions({
+        taskExecutionParticipants,
         db,
         originNodeRunId: intermediaryNodeRunId,
         answers: [{ ...ans('q1'), selectedOptionLabels: ['A'] }],
@@ -1478,7 +1563,13 @@ describeEachProviderHttpApplication(
       await reassignTaskQuestion(db, entry.id, OTHER, actor)
       // RFC-131 T4 去借壳: the rerun is minted ON the target OTHER. (RFC-141 removed the run-scoped
       // Update-Directive suppression this used to drive — OTHER now also sees its own prior output.)
-      const result = await dispatchTaskQuestions(db, taskId, [entry.id], actor)
+      const result = await dispatchTaskQuestions(
+        db,
+        taskExecutionParticipants,
+        taskId,
+        [entry.id],
+        actor,
+      )
       expect(result.reruns[0]?.targetNodeId).toBe(OTHER)
     })
 
@@ -1513,6 +1604,7 @@ describeEachProviderHttpApplication(
       })
       // designer-scoped control seal → parked (entry created, no rerun); simulate the park.
       const sealed = await sealRoundQuestions({
+        taskExecutionParticipants,
         db,
         originNodeRunId: intermediaryNodeRunId,
         answers: [ans('q1')],
@@ -1584,6 +1676,7 @@ describeEachProviderHttpApplication(
       // The unified quick channel seals + auto-dispatches the QUESTIONER (autoDispatch never
       // auto-dispatches designers — they ride the board's 批量下发, RFC-162 reconcile derives none).
       await autoDispatchClarifyRound({
+        taskExecutionParticipants,
         db,
         memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
         originNodeRunId: intermediaryNodeRunId,
@@ -1595,7 +1688,7 @@ describeEachProviderHttpApplication(
       // unified dispatchTaskQuestions the board uses — exactly one rerun, no double-mint.
       await seedDesignerEntries(db, taskId, DESIGNER, actor)
       const entry = (await designerEntries(db, taskId))[0]!
-      await dispatchTaskQuestions(db, taskId, [entry.id], actor)
+      await dispatchTaskQuestions(db, taskExecutionParticipants, taskId, [entry.id], actor)
       // the designer entry is dispatched (stamped) → the designer rerun minted EXACTLY once.
       expect((await designerEntries(db, taskId))[0]?.dispatchedAt).not.toBeNull()
       const { nodeRuns } = tablesOf(db)
@@ -1615,7 +1708,7 @@ describeEachProviderHttpApplication(
       const before = (
         await db.select(nodeRunFixtureColumns(db)).from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
       ).length
-      await dispatchTaskQuestions(db, taskId, [entry.id], actor)
+      await dispatchTaskQuestions(db, taskExecutionParticipants, taskId, [entry.id], actor)
       const after = (
         await db.select(nodeRunFixtureColumns(db)).from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
       ).length
@@ -1626,6 +1719,7 @@ describeEachProviderHttpApplication(
       const db = scope.harness.db
       const { taskId, intermediaryNodeRunId } = await seedTask(db, { deferred: true })
       await sealRoundQuestions({
+        taskExecutionParticipants,
         db,
         originNodeRunId: intermediaryNodeRunId,
         answers: [{ ...ans('q1'), selectedOptionLabels: ['A'] }],
@@ -1643,7 +1737,13 @@ describeEachProviderHttpApplication(
       expect(await phaseOf()).toBe('staged')
 
       // Dispatch → dispatched_at set, trigger_run_id still NULL (queued) → processing.
-      const result = await dispatchTaskQuestions(db, taskId, [entry.id], actor)
+      const result = await dispatchTaskQuestions(
+        db,
+        taskExecutionParticipants,
+        taskId,
+        [entry.id],
+        actor,
+      )
       const runId = result.reruns[0]!.nodeRunId
       expect(await phaseOf()).toBe('processing')
 
@@ -1670,6 +1770,7 @@ describeEachProviderHttpApplication(
         startedAt: Date.now() - 500,
       })
       await sealRoundQuestions({
+        taskExecutionParticipants,
         db,
         originNodeRunId: intermediaryNodeRunId,
         answers: [ans('q1')],
@@ -1685,7 +1786,7 @@ describeEachProviderHttpApplication(
       expect((await designerEntries(db, taskId))[0]?.defaultTargetNodeId).toBe(OTHER)
 
       // dispatch stamps trigger_run_id.
-      await dispatchTaskQuestions(db, taskId, [entry.id], actor)
+      await dispatchTaskQuestions(db, taskExecutionParticipants, taskId, [entry.id], actor)
 
       // post-dispatch → reassign rejected (reopen is the post-dispatch path).
       let threw: unknown = null
@@ -1701,6 +1802,7 @@ describeEachProviderHttpApplication(
       const db = scope.harness.db
       const { taskId, intermediaryNodeRunId } = await seedTask(db, { deferred: true })
       await sealRoundQuestions({
+        taskExecutionParticipants,
         db,
         originNodeRunId: intermediaryNodeRunId,
         answers: [{ ...ans('q1'), selectedOptionLabels: ['A'] }],
@@ -1709,7 +1811,13 @@ describeEachProviderHttpApplication(
       // RFC-162: reconcile no longer derives a designer entry from scope — add one via reassign.
       await seedDesignerEntries(db, taskId, DESIGNER, actor)
       const entry = (await designerEntries(db, taskId))[0]!
-      const result = await dispatchTaskQuestions(db, taskId, [entry.id], actor)
+      const result = await dispatchTaskQuestions(
+        db,
+        taskExecutionParticipants,
+        taskId,
+        [entry.id],
+        actor,
+      )
       const anchorRunId = result.reruns[0]!.nodeRunId
       const { nodeRuns } = tablesOf(db)
       const anchorRow = (
@@ -1756,6 +1864,7 @@ describeEachProviderHttpApplication(
       const db = scope.harness.db
       const { taskId, intermediaryNodeRunId } = await seedTask(db, { deferred: true })
       await sealRoundQuestions({
+        taskExecutionParticipants,
         db,
         originNodeRunId: intermediaryNodeRunId,
         answers: [{ ...ans('q1'), selectedOptionLabels: ['A'] }],
@@ -1764,7 +1873,13 @@ describeEachProviderHttpApplication(
       // RFC-162: reconcile no longer derives a designer entry from scope — add one via reassign.
       await seedDesignerEntries(db, taskId, DESIGNER, actor)
       const entry = (await designerEntries(db, taskId))[0]!
-      const result = await dispatchTaskQuestions(db, taskId, [entry.id], actor)
+      const result = await dispatchTaskQuestions(
+        db,
+        taskExecutionParticipants,
+        taskId,
+        [entry.id],
+        actor,
+      )
       const attempt1 = result.reruns[0]!.nodeRunId
       const { nodeRuns } = tablesOf(db)
       const a1Row = (
@@ -1901,12 +2016,14 @@ describeEachProviderHttpApplication(
 
       // Answer cc_a (→ D default entry) and cc_c (→ E default entry). cc_b is NOT answered.
       await sealRoundQuestions({
+        taskExecutionParticipants,
         db,
         originNodeRunId: ccA,
         answers: [ans('a1')],
         directive: 'continue',
       })
       await sealRoundQuestions({
+        taskExecutionParticipants,
         db,
         originNodeRunId: ccC,
         answers: [ans('c1')],
@@ -1925,7 +2042,13 @@ describeEachProviderHttpApplication(
       // {entryA, entryC} still gates on cc_b (D's unresolved sibling cross-clarify round).
       let threw: unknown = null
       try {
-        await dispatchTaskQuestions(db, taskId, [entryA.id, entryC.id], actor)
+        await dispatchTaskQuestions(
+          db,
+          taskExecutionParticipants,
+          taskId,
+          [entryA.id, entryC.id],
+          actor,
+        )
       } catch (e) {
         threw = e
       }
@@ -2055,12 +2178,14 @@ describeEachProviderHttpApplication(
 
       // Answer cc_a (→ A entry) and cc_b1 (→ B entry). cc_b2 is left unresolved.
       await sealRoundQuestions({
+        taskExecutionParticipants,
         db,
         originNodeRunId: ccA,
         answers: [ans('a1')],
         directive: 'continue',
       })
       await sealRoundQuestions({
+        taskExecutionParticipants,
         db,
         originNodeRunId: ccB1,
         answers: [ans('b1')],
@@ -2078,7 +2203,13 @@ describeEachProviderHttpApplication(
       // dispatch is rejected before stamping anything.
       let threw: unknown = null
       try {
-        await dispatchTaskQuestions(db, taskId, [entryA.id, entryB.id], actor)
+        await dispatchTaskQuestions(
+          db,
+          taskExecutionParticipants,
+          taskId,
+          [entryA.id, entryB.id],
+          actor,
+        )
       } catch (e) {
         threw = e
       }
@@ -2100,6 +2231,7 @@ describeEachProviderHttpApplication(
           )
       )[0]!.intermediaryNodeRunId
       await sealRoundQuestions({
+        taskExecutionParticipants,
         db,
         originNodeRunId: ccB2Run,
         answers: [ans('b2')],
@@ -2107,7 +2239,13 @@ describeEachProviderHttpApplication(
       })
       // Now both of B's siblings are resolved → the same dispatch succeeds (A frontier; B left
       // for the scheduler cascade). entryA/entryB ids are stable (reconcile is idempotent).
-      const result = await dispatchTaskQuestions(db, taskId, [entryA.id, entryB.id], actor)
+      const result = await dispatchTaskQuestions(
+        db,
+        taskExecutionParticipants,
+        taskId,
+        [entryA.id, entryB.id],
+        actor,
+      )
       expect(result.reruns.length).toBe(1)
       expect(result.reruns[0]?.targetNodeId).toBe(A) // only the frontier minted
     })
@@ -2116,6 +2254,7 @@ describeEachProviderHttpApplication(
       const db = scope.harness.db
       const { taskId, intermediaryNodeRunId } = await seedTask(db, { deferred: true })
       await sealRoundQuestions({
+        taskExecutionParticipants,
         db,
         originNodeRunId: intermediaryNodeRunId,
         answers: [ans('q1')],
@@ -2151,6 +2290,7 @@ describeEachProviderHttpApplication(
 
       // Answer source A (designer-scoped, control seal) → parked. B is still awaiting_human.
       const subA = await sealRoundQuestions({
+        taskExecutionParticipants,
         db,
         originNodeRunId: ccA,
         answers: [ans('a1')],
@@ -2165,7 +2305,7 @@ describeEachProviderHttpApplication(
       // Dispatch A's designer entry → rejected: sibling B unresolved → partial rerun risk.
       let threw: unknown = null
       try {
-        await dispatchTaskQuestions(db, taskId, [entryA.id], actor)
+        await dispatchTaskQuestions(db, taskExecutionParticipants, taskId, [entryA.id], actor)
       } catch (e) {
         threw = e
       }
@@ -2174,13 +2314,20 @@ describeEachProviderHttpApplication(
 
       // Answer source B → now all siblings resolved.
       await sealRoundQuestions({
+        taskExecutionParticipants,
         db,
         originNodeRunId: ccB,
         answers: [ans('b1')],
         directive: 'continue',
       })
       // Dispatch now succeeds (one designer rerun for the full batch).
-      const result = await dispatchTaskQuestions(db, taskId, [entryA.id], actor)
+      const result = await dispatchTaskQuestions(
+        db,
+        taskExecutionParticipants,
+        taskId,
+        [entryA.id],
+        actor,
+      )
       expect(result.reruns.length).toBe(1)
       expect(result.reruns[0]?.targetNodeId).toBe(DESIGNER)
     })
@@ -2284,12 +2431,14 @@ describeEachProviderHttpApplication(
       const ccA = await open('q_a', 'cc_a', D1, 'a1')
       const ccB = await open('q_b', 'cc_b', D2, 'b1')
       await sealRoundQuestions({
+        taskExecutionParticipants,
         db,
         originNodeRunId: ccA,
         answers: [{ ...ans('a1'), selectedOptionLabels: ['AAA'] }],
         directive: 'continue',
       })
       await sealRoundQuestions({
+        taskExecutionParticipants,
         db,
         originNodeRunId: ccB,
         answers: [{ ...ans('b1'), selectedOptionLabels: ['BBB'] }],
@@ -2302,8 +2451,20 @@ describeEachProviderHttpApplication(
       const entryB = (await designerEntries(db, taskId)).find((e) => e.originNodeRunId === ccB)!
 
       // Two distinct graph designers → two homes → two independent frontier mints (no borrow).
-      const dispA = await dispatchTaskQuestions(db, taskId, [entryA.id], actor)
-      const dispB = await dispatchTaskQuestions(db, taskId, [entryB.id], actor)
+      const dispA = await dispatchTaskQuestions(
+        db,
+        taskExecutionParticipants,
+        taskId,
+        [entryA.id],
+        actor,
+      )
+      const dispB = await dispatchTaskQuestions(
+        db,
+        taskExecutionParticipants,
+        taskId,
+        [entryB.id],
+        actor,
+      )
       expect(dispA.reruns[0]?.targetNodeId).toBe(D1)
       expect(dispB.reruns[0]?.targetNodeId).toBe(D2)
 
@@ -2317,6 +2478,7 @@ describeEachProviderHttpApplication(
       // A REJECT (directive='stop') round — intentionally skips the designer rerun; the unified
       // quick channel still reruns the QUESTIONER (stop) via dispatch.
       const submit = await autoDispatchClarifyRound({
+        taskExecutionParticipants,
         db,
         memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
         originNodeRunId: intermediaryNodeRunId,
@@ -2491,12 +2653,14 @@ describeEachProvider('RFC-120 §18 — frontier mint + per-node queue + consumpt
   async function answerAndDispatch(db: PersistenceDb) {
     const seed = await seedFrontierChain(db)
     await sealRoundQuestions({
+      taskExecutionParticipants,
       db,
       originNodeRunId: seed.ccA,
       answers: [{ ...ans('a1'), selectedOptionLabels: ['AAA'] }],
       directive: 'continue',
     })
     await sealRoundQuestions({
+      taskExecutionParticipants,
       db,
       originNodeRunId: seed.ccB,
       answers: [{ ...ans('b1'), selectedOptionLabels: ['BBB'] }],
@@ -2512,7 +2676,13 @@ describeEachProvider('RFC-120 §18 — frontier mint + per-node queue + consumpt
     const entryB = (await designerEntries(db, seed.taskId)).find(
       (e) => e.originNodeRunId === seed.ccB,
     )!
-    const result = await dispatchTaskQuestions(db, seed.taskId, [entryA.id, entryB.id], actor)
+    const result = await dispatchTaskQuestions(
+      db,
+      taskExecutionParticipants,
+      seed.taskId,
+      [entryA.id, entryB.id],
+      actor,
+    )
     return { seed, entryA, entryB, result }
   }
 
@@ -2710,6 +2880,7 @@ describeEachProvider(
         startedAt: Date.now() - 500,
       })
       await sealRoundQuestions({
+        taskExecutionParticipants,
         db,
         originNodeRunId: intermediaryNodeRunId,
         answers: [{ ...ans('q1'), selectedOptionLabels: ['A'] }],
@@ -2719,7 +2890,13 @@ describeEachProvider(
       await seedDesignerEntries(db, taskId, DESIGNER, actor)
       const entry = (await designerEntries(db, taskId))[0]!
       await reassignTaskQuestion(db, entry.id, OTHER, actor) // default DESIGNER, reassigned to OTHER (run moves)
-      const result = await dispatchTaskQuestions(db, taskId, [entry.id], actor)
+      const result = await dispatchTaskQuestions(
+        db,
+        taskExecutionParticipants,
+        taskId,
+        [entry.id],
+        actor,
+      )
       expect(result.reruns[0]?.targetNodeId).toBe(OTHER) // 去借壳: run minted ON the target OTHER
       // Production dispatches a SEALED designer entry (stage gate) — reflect that so the unified queue
       // injector selects it.
@@ -2746,6 +2923,7 @@ describeEachProvider(
       const db = harness.db
       const { taskId, intermediaryNodeRunId } = await seedTask(db, { deferred: true })
       await sealRoundQuestions({
+        taskExecutionParticipants,
         db,
         originNodeRunId: intermediaryNodeRunId,
         answers: [{ ...ans('q1'), selectedOptionLabels: ['A'] }],
@@ -2754,7 +2932,13 @@ describeEachProvider(
       // RFC-162: reconcile no longer derives a designer entry from scope — add one via reassign.
       await seedDesignerEntries(db, taskId, DESIGNER, actor)
       const entry = (await designerEntries(db, taskId))[0]!
-      const result = await dispatchTaskQuestions(db, taskId, [entry.id], actor)
+      const result = await dispatchTaskQuestions(
+        db,
+        taskExecutionParticipants,
+        taskId,
+        [entry.id],
+        actor,
+      )
       const { taskQuestions } = tablesOf(db)
       // Production dispatches a SEALED designer entry (stage gate). A genuine graph designer used to
       // be the suppressPriorOutput=false shape; RFC-141 removed the member for BOTH shapes.

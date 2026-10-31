@@ -7,7 +7,7 @@ import { describe, expect, test } from 'bun:test'
 import { buildActor } from '../src/auth/actor'
 import { composeDaemonRealtimePolicy } from '../src/bootstrap/daemonRealtimePolicy'
 import type { DirectRequestAuthority } from '../src/modules/identity-access/public/participants'
-import type { RealtimeCompositionPolicy } from '../src/modules/runtime-management/public/participants'
+import type { RealtimeCompositionPolicy } from '../src/modules/runtime-management/composition'
 
 const actor = buildActor({
   user: {

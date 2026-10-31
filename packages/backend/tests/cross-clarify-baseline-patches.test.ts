@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 import { withO2Closure } from './helpers/o2Closure'
 // RFC-058 PR-A baseline (T4): byte-level lock of RFC-056 patch chain 2026-05-22
 // through 2026-05-25 invariants. These tests are intentionally focused on the
@@ -58,7 +59,7 @@ async function reassignThenDispatchDesigner(
     (e) => e.roleKind === 'designer' && e.originNodeRunId === crossClarifyNodeRunId,
   )
   if (!designer) throw new Error(`no designer entry after reassign for ${crossClarifyNodeRunId}`)
-  return dispatchTaskQuestions(db, taskId, [designer.id], actor)
+  return dispatchTaskQuestions(db, taskExecutionParticipants, taskId, [designer.id], actor)
 }
 
 async function seedTriad(
@@ -188,6 +189,7 @@ describeEachProvider('RFC-359 cross-clarify-baseline-patches database behavior',
       // RFC-162: the designer rerun comes from reassigning the answered round to the graph
       // designer node + dispatching that designer entry (the legacy scope/direct trigger is gone).
       await autoDispatchClarifyRound({
+        taskExecutionParticipants,
         db,
         memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
         originNodeRunId: crossClarifyNodeRunId,
@@ -285,6 +287,7 @@ describeEachProvider('RFC-359 cross-clarify-baseline-patches database behavior',
         }),
       )
       await autoDispatchClarifyRound({
+        taskExecutionParticipants,
         db,
         memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
         originNodeRunId: crossClarifyNodeRunId,
@@ -336,6 +339,7 @@ describeEachProvider('RFC-359 cross-clarify-baseline-patches database behavior',
         }),
       )
       await autoDispatchClarifyRound({
+        taskExecutionParticipants,
         db,
         memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
         originNodeRunId: crossClarifyNodeRunId,
@@ -395,6 +399,7 @@ describeEachProvider('RFC-359 cross-clarify-baseline-patches database behavior',
         }),
       )
       await autoDispatchClarifyRound({
+        taskExecutionParticipants,
         db,
         memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
         originNodeRunId: crossClarifyNodeRunId,

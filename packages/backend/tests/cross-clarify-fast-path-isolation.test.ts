@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 import { withO2Closure } from './helpers/o2Closure'
 // RFC-059 C4 (slimmed by RFC-132, migrated by RFC-162) — a RESOLVED sibling that
 // produced no designer entry must not block (or feed) the designer.
@@ -48,7 +49,7 @@ async function reassignThenDispatchDesigner(
     (e) => e.roleKind === 'designer' && e.originNodeRunId === crossClarifyNodeRunId,
   )
   if (!designer) throw new Error(`no designer entry after reassign for ${crossClarifyNodeRunId}`)
-  return dispatchTaskQuestions(db, taskId, [designer.id], actor)
+  return dispatchTaskQuestions(db, taskExecutionParticipants, taskId, [designer.id], actor)
 }
 
 async function seedTwoSource(
@@ -214,6 +215,7 @@ describeEachProvider(
       // Peer A answers and is left as a questioner-only continuation (RFC-162: NOT reassigned to
       // the designer → NO designer entry). The designer must NOT rerun on A's answer.
       const aResult = await autoDispatchClarifyRound({
+        taskExecutionParticipants,
         db,
         memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
         originNodeRunId: aRunId,
@@ -242,6 +244,7 @@ describeEachProvider(
       // (answered) in the readiness scan, so B's dispatch alone fires the designer — exactly one
       // rerun, carrying only B's designer entry (A never produced one).
       await autoDispatchClarifyRound({
+        taskExecutionParticipants,
         db,
         memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
         originNodeRunId: bRunId,

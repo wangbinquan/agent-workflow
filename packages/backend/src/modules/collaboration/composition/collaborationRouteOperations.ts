@@ -1,7 +1,8 @@
+import type { TaskExecutionParticipantBindings } from '../infrastructure/taskExecutionParticipantBindings'
 import type { CollaborationTaskRolePolicy } from '../application/ports/collaborationTaskRolePolicy'
 import type { HistoryRestrictionPort } from '@/platform/contracts/historyRestriction'
 import type { HumanGateTaskLockPort } from './required-ports'
-import { requireCommittedReviewArtifactReader } from './commandContext'
+import { requireCommittedReviewArtifactReader } from '../application/commandContext'
 import { createClarifyFollowupOperations } from '../application/clarifyFollowup'
 import { clarifyFollowupActivity } from '../infrastructure/clarifyFollowupActivity'
 import { createClarifyFollowupStore } from '../infrastructure/clarifyFollowupStore'
@@ -65,6 +66,7 @@ function bindCollaborationRouteContext(
 // RFC-359 W7：路由持久化面已合一（`infrastructure/collaborationRouteOperations.ts`），两个
 // 装配入口只是名字不同的同一条线；名字暂留，等 bootstrap 侧的 provider 命名一并收敛。
 export function composeCollaborationRouteOperations(input: {
+  readonly taskExecutionParticipants: TaskExecutionParticipantBindings
   readonly taskRolePolicy: CollaborationTaskRolePolicy
   readonly historyRestrictions: HistoryRestrictionPort
   readonly taskLock: HumanGateTaskLockPort
@@ -74,6 +76,7 @@ export function composeCollaborationRouteOperations(input: {
 }): CollaborationRouteOperations {
   const events = createCollaborationClarifyDraftEventPublisher()
   const persistence = createCollaborationRouteOperations({
+    taskExecutionParticipants: input.taskExecutionParticipants,
     taskRolePolicy: input.taskRolePolicy,
     historyRestrictions: input.historyRestrictions,
     db: input.db,

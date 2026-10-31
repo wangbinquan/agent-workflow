@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 import {
   databaseContentText,
   contentRowColumns,
@@ -221,7 +222,7 @@ async function seedHarness<Database extends PersistenceDb>(
 
   const uninstallAfterCommitPump = installTaskLifecycleAfterCommitTestPump(db, {
     onTerminalTask(hookDb, hookTaskId, to) {
-      return createHumanGateTerminalSweepCommand(hookDb).run({
+      return createHumanGateTerminalSweepCommand(hookDb, taskExecutionParticipants).run({
         taskId: hookTaskId,
         cause: `task-${to}`,
       })

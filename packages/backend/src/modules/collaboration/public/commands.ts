@@ -24,7 +24,7 @@ import {
   requireReviewTaskAccess,
   requireTaskFeedbackStore,
   resolveCollaborationCommandContext,
-} from '../composition/commandContext'
+} from '../application/commandContext'
 import type {
   SubmitReviewDecisionCommandInput,
   SubmitReviewDecisionCommandResult,

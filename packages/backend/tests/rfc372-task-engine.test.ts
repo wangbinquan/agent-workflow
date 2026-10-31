@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 // RFC-372: actual scheduler and native mock CLIs; no alternate Task host or continuation.
 import { agentFixture, readTaskFixtures, taskFixture, workflowFixture } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
@@ -244,6 +245,7 @@ describe('RFC-372 mindmap uses the original TaskEngine continuation', () => {
             return { ...value, confirmedBasis: clarifyAnswerBasis(question, value) }
           })
           await autoDispatchClarifyRound({
+            taskExecutionParticipants,
             db: h.db,
             memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(h.db),
             originNodeRunId: round.intermediaryNodeRunId,

@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 import { composeCollaborationTaskRolePolicy } from '@/modules/resource-catalog/composition'
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { schemaFixtureDb } from './helpers/schemaFixture'
@@ -12,7 +13,7 @@ import type { DbClient } from '@/db/client'
 import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
 import type { HistoryRestrictionPort } from '@/platform/contracts/historyRestriction'
 import type { ContentStore } from '@/platform/content/contentStore'
-import type { CollaborationCommandContextInput } from '@/modules/collaboration/composition/commandContext'
+import type { CollaborationCommandContextInput } from '@/modules/collaboration/infrastructure/collaborationCommandContext'
 import type { HumanGateTaskLockPort } from '@/modules/collaboration/composition/required-ports'
 import type { ClarifyDecisionCommandPort } from '@/modules/collaboration/application/ports/clarifyDecisionCommand'
 import type { ReviewArtifactSelection } from '@/modules/collaboration/application/ports/reviewArtifactSelection'
@@ -54,7 +55,7 @@ test('clarify factory and context bridge forward the same restriction provider i
   const commands = factory<typeof ClarifyCommands>(
     'modules/collaboration/infrastructure/clarifyDecisionCommand.ts',
     {
-      '../composition/commandContext': {
+      './collaborationCommandContext': {
         createCollaborationCommandContext: (input: CollaborationCommandContextInput) => {
           contexts.push(input)
           return {}
@@ -87,11 +88,13 @@ test('clarify factory and context bridge forward the same restriction provider i
   await expect(
     commands
       .createClarifyDecisionCommand(db, memoryDistillEnqueuer, taskLock, {
+        taskExecutionParticipants,
         historyRestrictions: restrictions,
       })
       .submit(input),
   ).rejects.toBe(denied)
   commands.createClarifyDecisionCommandContext({
+    taskExecutionParticipants,
     taskRolePolicy: composeCollaborationTaskRolePolicy(),
     db,
     actor,
@@ -103,8 +106,12 @@ test('clarify factory and context bridge forward the same restriction provider i
   expect(contexts[0]!.historyRestrictions).toBe(restrictions)
   await expect(contexts[0]!.clarifyDecisions!.submit(input)).rejects.toBe(denied)
   await expect(
-    // @ts-expect-error Verify runtime refusal for an untyped caller without a provider.
-    commands.createClarifyDecisionCommand(db, memoryDistillEnqueuer, taskLock).submit(input),
+    commands
+      // @ts-expect-error Verify runtime refusal for an untyped caller without a provider.
+      .createClarifyDecisionCommand(db, memoryDistillEnqueuer, taskLock, {
+        taskExecutionParticipants,
+      })
+      .submit(input),
   ).rejects.toThrow('gate-history-restriction-provider-required')
   expect(seen).toEqual([restrictions, restrictions, undefined])
 })
@@ -115,7 +122,7 @@ test('question dispatch factory and context bridge forward restriction options w
   const commands = factory<typeof QuestionCommands>(
     'modules/collaboration/infrastructure/questionDispatchCommand.ts',
     {
-      '../composition/commandContext': {
+      './collaborationCommandContext': {
         createCollaborationCommandContext: (input: CollaborationCommandContextInput) => {
           contexts.push(input)
           return {}
@@ -123,9 +130,10 @@ test('question dispatch factory and context bridge forward restriction options w
       },
       './taskQuestionDispatch': {
         async dispatchTaskQuestionsWithDecision(...args: unknown[]) {
-          const options = args[6] as { historyRestrictions?: HistoryRestrictionPort }
+          const options = args[7] as { historyRestrictions?: HistoryRestrictionPort }
           seen.push(options.historyRestrictions)
-          expect(args[5]).toBe(taskLock)
+          expect(args[6]).toBe(taskLock)
+          expect(args[1]).toBe(taskExecutionParticipants)
           if (!options.historyRestrictions)
             throw new Error('gate-history-restriction-provider-required')
           return options.historyRestrictions.check(db, {
@@ -141,10 +149,14 @@ test('question dispatch factory and context bridge forward restriction options w
   const input = { actor, actorRole: 'owner' as const, taskId: 'task', entryIds: ['entry'] }
   await expect(
     commands
-      .createQuestionDispatchCommand(db, taskLock, { historyRestrictions: restrictions })
+      .createQuestionDispatchCommand(db, taskLock, {
+        taskExecutionParticipants,
+        historyRestrictions: restrictions,
+      })
       .dispatch(input),
   ).rejects.toBe(denied)
   commands.createQuestionDispatchCommandContext({
+    taskExecutionParticipants,
     taskRolePolicy: composeCollaborationTaskRolePolicy(),
     db,
     actor,
@@ -155,8 +167,10 @@ test('question dispatch factory and context bridge forward restriction options w
   expect(contexts[0]!.historyRestrictions).toBe(restrictions)
   await expect(contexts[0]!.questionDispatches!.dispatch(input)).rejects.toBe(denied)
   await expect(
-    // @ts-expect-error Verify runtime refusal for an untyped caller without a provider.
-    commands.createQuestionDispatchCommand(db, taskLock).dispatch(input),
+    commands
+      // @ts-expect-error Verify runtime refusal for an untyped caller without a provider.
+      .createQuestionDispatchCommand(db, taskLock, { taskExecutionParticipants })
+      .dispatch(input),
   ).rejects.toThrow('gate-history-restriction-provider-required')
   expect(seen).toEqual([restrictions, restrictions, undefined])
 })
@@ -192,7 +206,7 @@ test('review factory and context bridge share the selected content reader and re
   const commands = factory<typeof ReviewCommands>(
     'modules/collaboration/infrastructure/reviewDecisionCommand.ts',
     {
-      '../composition/commandContext': {
+      './collaborationCommandContext': {
         createCollaborationCommandContext: (input: CollaborationCommandContextInput) => {
           contexts.push(input)
           return {}
@@ -240,6 +254,7 @@ test('review factory and context bridge share the selected content reader and re
     },
   )
   const options = {
+    taskExecutionParticipants,
     taskRolePolicy: composeCollaborationTaskRolePolicy(),
     db,
     appHome: '/unused-profile-home',
@@ -268,8 +283,11 @@ test('review factory and context bridge share the selected content reader and re
   await expect(contexts[0]!.reviewDecisions!.submit(input)).rejects.toBe(denied)
   await expect(
     commands
-      // @ts-expect-error Verify runtime refusal for an untyped caller without a provider.
-      .createReviewDecisionCommand({ ...options, historyRestrictions: undefined })
+      .createReviewDecisionCommand({
+        ...options,
+        // @ts-expect-error Verify runtime refusal for an untyped caller without a provider.
+        historyRestrictions: undefined,
+      })
       .submit(input),
   ).rejects.toThrow('gate-history-restriction-provider-required')
   expect(seen).toEqual([restrictions, restrictions, undefined])

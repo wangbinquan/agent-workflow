@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { o2Ports, withO2Closure } from './helpers/o2Closure'
 // RFC-359 W1-T2a（F-H2-1 之一）—— 问题派发命令端口在两个引擎上各跑一遍。
@@ -11,7 +12,7 @@ import { beforeEach, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 
 import { createQuestionDispatchCommand } from '@/modules/collaboration/infrastructure/questionDispatchCommand'
-import { createCollaborationCommandContext } from '@/modules/collaboration/composition/commandContext'
+import { createCollaborationCommandContext } from '@/modules/collaboration/infrastructure/collaborationCommandContext'
 import { dispatchTaskQuestions } from '@/modules/collaboration/public/commands'
 import { resetBroadcastersForTests } from '@/ws/broadcaster'
 import { describeEachProvider } from './helpers/eachProvider'
@@ -47,6 +48,7 @@ describeEachProvider('RFC-359 T2a —— 问题派发命令端口', (harness) =>
       stagedAt: Date.now(),
     })
     const command = createQuestionDispatchCommand(db, o2Ports(db).taskLock, {
+      taskExecutionParticipants,
       historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
     })
     const context = createCollaborationCommandContext(

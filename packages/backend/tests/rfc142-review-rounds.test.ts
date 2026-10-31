@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import { epoch2ReviewReader } from './helpers/epoch2RuntimePorts'
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
@@ -384,6 +385,7 @@ describe('RFC-142 — listReviewRounds / getReviewDetail 混代（集成）', ()
       }),
     )
     await wakeHumanGateContinuation(firstDecision.taskId, firstDecision.continuationRef, {
+      taskExecutionParticipants,
       humanGateOpen: composeHumanGateOpenParticipantFactory(),
       historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
       db,

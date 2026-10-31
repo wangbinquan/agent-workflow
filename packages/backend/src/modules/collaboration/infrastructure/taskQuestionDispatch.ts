@@ -1,3 +1,20 @@
+import { nextRetryIndex } from '@/modules/task-execution/public/queries'
+import type { HumanGateNodeRunMintRequest } from '@/modules/task-execution/public/participants'
+import type { TaskExecutionParticipantBindings } from './taskExecutionParticipantBindings'
+import {
+  canonicalHumanGateRequestHash,
+  canonicalHumanGateValueJson,
+  deriveHumanGateCompatibilityKey,
+} from '@/modules/collaboration/domain/canonicalGateRequest'
+import {
+  decodeQuestionDispatchManifest,
+  decodeQuestionDispatchReceipt,
+  encodeQuestionDispatchManifest,
+  encodeQuestionDispatchReceipt,
+  type QuestionDispatchManifest,
+  type QuestionDispatchReceiptEnvelope,
+} from '@/modules/collaboration/domain/questionDispatchDecision'
+import { gateDecisionReceipt } from '@/modules/collaboration/domain/gateReceipt'
 import {
   createRunSelectionReader,
   createNodeOutputQueries,
@@ -71,11 +88,6 @@ import {
   isDispatchedEntryConsumed,
 } from '@/services/clarifyRerunLedger'
 import { evaluateDesignerRerunReadiness } from '@/services/clarify/service'
-import { nextRetryIndex } from '@/modules/task-execution/application/nextRetryIndex'
-import type { NodeRunMintInput } from '@/modules/task-execution/application/ports/nodeRunLifecyclePersistence'
-import { createNodeRunMintParticipantInTx } from '@/modules/task-execution/infrastructure/nodeRunMintParticipant'
-import { acceptHumanGateDecisionTx } from '@/modules/task-execution/infrastructure/taskDecisionParticipant'
-import { appendTaskNodeStatusesCommittedEvent } from '@/modules/task-execution/infrastructure/taskLifecycleCommittedEvents'
 import { WG_LEADER_NODE_ID, WG_MEMBER_NODE_ID } from '@/services/workgroup/constants'
 import {
   assertTaskAcceptsQuestions,
@@ -89,11 +101,6 @@ import { TASK_QUESTION_CONFLICT } from '@/services/taskQuestionConflicts'
 import type { CanonicalHumanGateRequest } from '@/modules/collaboration/domain/canonicalGateRequest'
 import type { GateDecisionReceipt } from '@/modules/collaboration/public/types'
 
-import {
-  humanGateComposition,
-  type QuestionDispatchManifestBridge as QuestionDispatchManifest,
-  type QuestionDispatchReceiptEnvelopeBridge as QuestionDispatchReceiptEnvelope,
-} from '@/services/humanGateComposition'
 import {
   appendHumanGateDecisionCommittedEvent,
   appendQuestionDispatchCommittedEvent,
@@ -114,17 +121,6 @@ import {
 import { runIdsWithOutput } from './nodeRunOutputPresence'
 
 const log = createLogger('task-questions.dispatch')
-
-const {
-  canonicalHumanGateRequestHash,
-  canonicalHumanGateValueJson,
-  decodeQuestionDispatchManifest,
-  decodeQuestionDispatchReceipt,
-  deriveHumanGateCompatibilityKey,
-  encodeQuestionDispatchManifest,
-  encodeQuestionDispatchReceipt,
-  gateDecisionReceipt,
-} = humanGateComposition
 
 /** Audit-only actor identity. NEVER enters a prompt (RFC-099 prompt-isolation). */
 export interface DispatchTaskQuestionsActor {
@@ -543,6 +539,7 @@ function computeUpstreamFrontier(
  */
 export async function dispatchTaskQuestions(
   db: PersistenceDb,
+  taskExecutionParticipants: TaskExecutionParticipantBindings,
   taskId: string,
   entryIds: string[],
   actor: DispatchTaskQuestionsActor,
@@ -557,7 +554,15 @@ export async function dispatchTaskQuestions(
   // unstage+re-stage collides). Lock discipline: callers MUST NOT hold lock B when calling this
   // (the semaphore is non-reentrant); stageTaskQuestion takes the same lock (RFC-140).
   return await getTaskQuestionWriteSem(taskId).run(() =>
-    dispatchTaskQuestionsLocked(db, taskId, entryIds, actor, undefined, committedEventIdentity),
+    dispatchTaskQuestionsLocked(
+      db,
+      taskExecutionParticipants,
+      taskId,
+      entryIds,
+      actor,
+      undefined,
+      committedEventIdentity,
+    ),
   )
 }
 
@@ -566,6 +571,7 @@ export async function dispatchTaskQuestions(
  * the same transaction. The returned continuation ref is composition-only. */
 export async function dispatchTaskQuestionsWithDecision(
   db: PersistenceDb,
+  taskExecutionParticipants: TaskExecutionParticipantBindings,
   taskId: string,
   entryIds: string[],
   actor: DispatchTaskQuestionsActor,
@@ -584,7 +590,7 @@ export async function dispatchTaskQuestionsWithDecision(
 
   const capture: PreparedQuestionDispatchDecision['capture'] = {}
   await getTaskQuestionWriteSem(taskId).run(() =>
-    dispatchTaskQuestionsLocked(db, taskId, entryIds, actor, {
+    dispatchTaskQuestionsLocked(db, taskExecutionParticipants, taskId, entryIds, actor, {
       args: decision,
       capture,
       taskLock,
@@ -608,6 +614,7 @@ export async function dispatchTaskQuestionsWithDecision(
  *  work. Returns EMPTY_RESULT when nothing is queued. */
 export async function dispatchDeferredTaskQuestions(
   db: PersistenceDb,
+  taskExecutionParticipants: TaskExecutionParticipantBindings,
   taskId: string,
   actor: DispatchTaskQuestionsActor,
   opts?: {
@@ -634,7 +641,7 @@ export async function dispatchDeferredTaskQuestions(
     if (deferred.length === 0) return EMPTY_RESULT
     const ids = deferred.map((d) => d.id)
     try {
-      return await dispatchTaskQuestionsLocked(db, taskId, ids, actor)
+      return await dispatchTaskQuestionsLocked(db, taskExecutionParticipants, taskId, ids, actor)
     } catch (err) {
       if (
         err instanceof ConflictError &&
@@ -853,6 +860,7 @@ async function planDispatchFrontier(
 
 async function dispatchTaskQuestionsLocked(
   db: PersistenceDb,
+  taskExecutionParticipants: TaskExecutionParticipantBindings,
   taskId: string,
   entryIds: string[],
   actor: DispatchTaskQuestionsActor,
@@ -928,6 +936,7 @@ async function dispatchTaskQuestionsLocked(
     })
     return commitDispatchPlan(
       db,
+      taskExecutionParticipants,
       taskId,
       actor,
       {
@@ -1048,6 +1057,7 @@ async function dispatchTaskQuestionsLocked(
     })
     return commitDispatchPlan(
       db,
+      taskExecutionParticipants,
       taskId,
       actor,
       {
@@ -1084,6 +1094,7 @@ async function dispatchTaskQuestionsLocked(
         })
   return commitDispatchPlan(
     db,
+    taskExecutionParticipants,
     taskId,
     actor,
     {
@@ -1169,6 +1180,7 @@ async function prepareQuestionDispatchDecision(input: {
  *  with question-write lock B held by the dispatchTaskQuestions entry. */
 async function commitDispatchPlan(
   db: PersistenceDb,
+  taskExecutionParticipants: TaskExecutionParticipantBindings,
   taskId: string,
   actor: DispatchTaskQuestionsActor,
   plan: {
@@ -1451,7 +1463,7 @@ async function commitDispatchPlan(
               ),
             )
         }
-        const nodeRunMint = createNodeRunMintParticipantInTx(tx)
+        const nodeRunMint = taskExecutionParticipants.createHumanGateNodeRunMintParticipantInTx(tx)
         for (const p of mintPlans) {
           await nodeRunMint.mint({
             ...p.input,
@@ -1486,19 +1498,21 @@ async function commitDispatchPlan(
             rerunNodeRunIds.length === 0
               ? []
               : await createNodeRunQueries(tx).humanGateProjection(rerunNodeRunIds)
-          const accepted = await acceptHumanGateDecisionTx(tx, {
-            taskId,
-            // Task-execution owns only the two runtime park kinds. Question
-            // dispatch releases the clarify park while collaboration keeps
-            // its finer `questions` audit identity.
-            gate: { kind: 'clarify', ref: decision.gateRef },
-            expectedTaskRevision: decision.request.expectedTaskRevision,
-            expectedNodeProjection: humanGateNodeProjectionFence(projectionRows),
-            continuationLineage: { sourceNodeRunIds: [], rerunNodeRunIds },
-            operationId: begun.operation.id,
-            now,
-            nodeChanges: pendingProjectionNodeChanges,
-          })
+          const accepted = await taskExecutionParticipants
+            .createTaskDecisionParticipantInTx(tx)
+            .acceptGateDecisionTx({
+              taskId,
+              // Task-execution owns only the two runtime park kinds. Question
+              // dispatch releases the clarify park while collaboration keeps
+              // its finer `questions` audit identity.
+              gate: { kind: 'clarify', ref: decision.gateRef },
+              expectedTaskRevision: decision.request.expectedTaskRevision,
+              expectedNodeProjection: humanGateNodeProjectionFence(projectionRows),
+              continuationLineage: { sourceNodeRunIds: [], rerunNodeRunIds },
+              operationId: begun.operation.id,
+              now,
+              nodeChanges: pendingProjectionNodeChanges,
+            })
           const envelope: QuestionDispatchReceiptEnvelope = {
             schemaVersion: 1,
             kind: 'question-dispatch',
@@ -1593,18 +1607,20 @@ async function commitDispatchPlan(
           const taskEventRef =
             pendingProjectionNodeChanges.length === 0
               ? null
-              : await appendTaskNodeStatusesCommittedEvent(tx, {
-                  taskId,
-                  reason: 'human-gate',
-                  nodeChanges: pendingProjectionNodeChanges,
-                  occurredAt: now,
-                  identity: {
-                    operationRef,
-                    eventGroupId,
-                    eventGroupOrdinal: taskEventOrdinal,
-                    correlationRef: `human-gate-node-run:${gateNodeRunId}`,
-                  },
-                })
+              : await taskExecutionParticipants
+                  .createTaskNodeStatusEventsParticipantInTx(tx)
+                  .append({
+                    taskId,
+                    reason: 'human-gate',
+                    nodeChanges: pendingProjectionNodeChanges,
+                    occurredAt: now,
+                    identity: {
+                      operationRef,
+                      eventGroupId,
+                      eventGroupOrdinal: taskEventOrdinal,
+                      correlationRef: `human-gate-node-run:${gateNodeRunId}`,
+                    },
+                  })
           const questionEventRef = await appendQuestionDispatchCommittedEvent(tx, {
             gate: {
               taskId,
@@ -2357,7 +2373,7 @@ interface FrontierMintPlan {
   /** RFC-172 (route 2, S3): the fan-out shard this rerun serves (null for every non-workgroup
    *  path). Used to filter which dispatched entries map to this rerun (reruns[].entryIds). */
   shardKey: string | null
-  input: NodeRunMintInput
+  input: HumanGateNodeRunMintRequest
 }
 
 /**
@@ -2416,7 +2432,7 @@ export async function buildFrontierMintPlan(
     borrowOverrideNodeId === null ? null : resolveNodeAgentName(definition, borrowOverrideNodeId)
   const agentOverrideId =
     borrowOverrideNodeId === null ? null : resolveNodeAgentId(definition, borrowOverrideNodeId)
-  const input: NodeRunMintInput = {
+  const input: HumanGateNodeRunMintRequest = {
     ...nodeRunMintIdentityForSlot(
       last.slot.kind === 'shard' || last.slot.kind === 'workgroup-host'
         ? { ...last.slot, shardKey: shardKey === undefined ? last.shardKey : shardKey }

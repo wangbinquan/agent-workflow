@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 import { composeCollaborationTaskRolePolicy } from '@/modules/resource-catalog/composition'
 import { composeTaskMemorySnapshotPort } from '@/modules/memory/composition'
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
@@ -319,6 +320,7 @@ describeEachProvider('RFC-370 real port artifact consumers', (harness) => {
     const operations = composePortArtifactOperations(content, h.root),
       selectedHomes: string[] = []
     const collaboration = createCollaborationRuntimeMechanics(db, {
+      taskExecutionParticipants,
       taskRolePolicy: composeCollaborationTaskRolePolicy(),
       ...epoch2RuntimeTestPorts(db),
       taskLock: o2Ports(db).taskLock,

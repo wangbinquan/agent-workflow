@@ -65,7 +65,7 @@ describe('RFC-349 collaboration route operations', () => {
     expect(factory).not.toMatch(
       /\bPostgresqlDatabaseClient\b|\bDbClient\b|\$provider|'postgresql'|'sqlite'/,
     )
-    // 惰性 import 是为了断开 `services/humanGateComposition` 绕回 composition barrel 的值环。
+    // 保留命令调用时才载入业务实现的惰性时机。
     expect(factory).toContain("() => import('./review')")
     expect(() =>
       source('src/modules/collaboration/infrastructure/postgresqlCollaborationRouteOperations.ts'),
@@ -123,7 +123,7 @@ describe('RFC-349 collaboration route operations', () => {
       'src/modules/collaboration/infrastructure/clarifyDecisionCommand.ts',
     ]) {
       const text = source(path)
-      expect(text, path).toContain('../composition/commandContext')
+      expect(text, path).toContain('./collaborationCommandContext')
       expect(text, path).not.toContain('@/services/humanGateComposition')
       expect(text, path).toContain('await import(')
     }

@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 // RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
@@ -644,6 +645,7 @@ describe('RFC-223 AC16 — two-owner same-name dynamic members stay id-canonical
             db,
             taskId,
             {
+              taskExecutionParticipants,
               humanGateOpen: composeHumanGateOpenParticipantFactory(),
               historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
               db,

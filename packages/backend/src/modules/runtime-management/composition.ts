@@ -5,9 +5,10 @@ import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { WebSocketAuthenticationParticipant } from '@/modules/identity-access/public/participants'
 import { createRealtimeChannelAccess } from './application/realtimeChannelAccess'
 import { DrizzleRealtimeStore } from './infrastructure/realtimeStore'
-import type { RealtimeCompositionPolicy, RealtimeRuntime } from './public/participants'
+import type { RealtimeRuntime } from './public/participants'
+import type { RealtimeCompositionPolicy } from './application/ports/realtimeCompositionPolicy'
 
-export type { RealtimeCompositionPolicy } from './public/participants'
+export type { RealtimeCompositionPolicy } from './application/ports/realtimeCompositionPolicy'
 
 function composeRealtimeRuntime(input: {
   readonly credentials: WebSocketAuthenticationParticipant

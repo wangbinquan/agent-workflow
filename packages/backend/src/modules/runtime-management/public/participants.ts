@@ -6,9 +6,13 @@ export type {
 } from '../application/ports/taskAgentRuntimeBindings'
 
 import type { TaskWsMessage } from '@agent-workflow/shared'
-
-import type { Actor, ActorSource } from '@/auth/actor'
 import type {
+  RealtimeAclResourceType,
+  RealtimeMemoryScope,
+} from '../application/ports/realtimeStore'
+
+import type {
+  AuthenticatedAuthoritySnapshot,
   DirectAuthorityAdmission,
   WebSocketAuthenticationParticipant,
   DirectRequestAuthority,
@@ -23,60 +27,26 @@ export type {
   WebSocketAuthenticationParticipant as RealtimeCredentialAccess,
 } from '@/modules/identity-access/public/participants'
 
-type RealtimeAclResourceType = 'workflow' | 'workgroup'
-
-interface RealtimeMemoryScope {
-  readonly scopeType: 'agent' | 'workflow' | 'repo' | 'repo_group' | 'global'
-  readonly scopeId: string | null
-}
-
-/** Closed resource projection shared by provider stores and visibility policy. */
-interface RealtimeResourceProjection {
-  readonly id: string
-  readonly ownerUserId: string | null
-  readonly visibility: 'public' | 'private'
-}
-
-interface RealtimeResourceVisibility {
-  canViewResource(
-    actor: Actor,
-    type: RealtimeAclResourceType,
-    resource: RealtimeResourceProjection,
-  ): Promise<boolean>
-}
-
-interface RealtimeMemoryVisibility {
-  canViewMemory(
-    authority: DirectRequestAuthority,
-    actor: Actor,
-    scope: RealtimeMemoryScope,
-  ): Promise<boolean>
-}
-
-/** Cross-owner policy consumed by runtime-management provider composition. */
-export interface RealtimeCompositionPolicy {
-  readonly resourceVisibility: RealtimeResourceVisibility
-  readonly memoryVisibility: RealtimeMemoryVisibility
-  readonly repoImportOwnerUserId: (batchId: string) => string | null
-  readonly redactTaskEventPayload: (payload: unknown, actorSource: ActorSource) => unknown
-}
-
 /** All provider-backed channel decisions are closed behind this async participant. */
 export interface RealtimeChannelAccess {
-  canViewTask(actor: Actor, taskId: string): Promise<boolean>
-  canViewResource(actor: Actor, type: RealtimeAclResourceType, resourceId: string): Promise<boolean>
+  canViewTask(actor: AuthenticatedAuthoritySnapshot, taskId: string): Promise<boolean>
+  canViewResource(
+    actor: AuthenticatedAuthoritySnapshot,
+    type: RealtimeAclResourceType,
+    resourceId: string,
+  ): Promise<boolean>
   canViewMemory(
     authority: DirectRequestAuthority,
-    actor: Actor,
+    actor: AuthenticatedAuthoritySnapshot,
     scope: RealtimeMemoryScope,
   ): Promise<boolean>
   canViewStoredMemory(
     authority: DirectRequestAuthority,
-    actor: Actor,
+    actor: AuthenticatedAuthoritySnapshot,
     memoryId: string,
   ): Promise<boolean>
   replayTaskEvents(
-    actorSource: ActorSource,
+    actorSource: AuthenticatedAuthoritySnapshot['source'],
     taskId: string,
     since: number,
   ): Promise<readonly TaskWsMessage[]>

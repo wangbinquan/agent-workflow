@@ -15,7 +15,7 @@ import { readFileSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-import type * as CollaborationContext from '../../src/modules/collaboration/composition/commandContext'
+import type * as CollaborationContext from '../../src/modules/collaboration/infrastructure/collaborationCommandContext'
 import type * as TaskEffectPersistence from '../../src/modules/task-execution/infrastructure/taskExecutionEffectPersistence'
 import type * as ClarifySeal from '../../src/modules/collaboration/infrastructure/clarify/seal'
 import type * as TaskDagCollaboration from '../../src/modules/collaboration/infrastructure/taskDagCollaborationOperations'
@@ -216,10 +216,10 @@ async function restoreUnboundDeferredDispatcher(): Promise<void> {
   const createOriginal = original.createTaskDagCollaborationOperations
   mock.module(target, () => ({
     ...original,
-    createTaskDagCollaborationOperations: (db: Parameters<typeof createOriginal>[0]) => {
+    createTaskDagCollaborationOperations: (...args: Parameters<typeof createOriginal>) => {
       const deferredQuestions = new DeferredTaskQuestionDispatcherBinding()
       return Object.freeze({
-        ...createOriginal(db),
+        ...createOriginal(...args),
         autoDispatchDeferredQuestions: (taskId: string) =>
           deferredQuestions.autoDispatchDeferredQuestions(taskId),
       })
@@ -496,7 +496,7 @@ ${historical}`
 }
 
 async function restoreMissingCollaborationCommands(): Promise<void> {
-  const target = sourcePath('modules/collaboration/composition/commandContext.ts')
+  const target = sourcePath('modules/collaboration/infrastructure/collaborationCommandContext.ts')
   const source = readFileSync(target, 'utf8')
   const current = `return createCollaborationCommandContextFromPersistence({
     ...input,`
@@ -510,8 +510,8 @@ async function restoreMissingCollaborationCommands(): Promise<void> {
   // command dependencies. Restore that omission at the current DB factory
   // boundary; the real constructor/persistence and public require functions
   // still execute. This models the historical root call, not old function bytes
-  // or a complete daemon startup. Keep all exports in the same real module so
-  // constructed contexts and their resolver retain the same dependency map.
+  // or a complete daemon startup. The mutated adapter imports the unchanged application registry so
+  // constructed contexts and public resolvers retain the same dependency map.
   const changed = source.replaceAll(
     current,
     `${current}

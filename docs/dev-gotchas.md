@@ -82,6 +82,21 @@ context 值级 DAG 与 `platform` 不 import `modules` 已由结构门锁死（`
   清单都按文件路径钉死，要同批改；原来藏在 platform / composition 里的 `services/` 依赖搬进模块 `application/` 后会在 R2 里现形，
   优先改成由 bootstrap 注入，不要加账本。
 
+## 被 import 的模块不要写 top-level await：Bun 1.4.3 打包器会漏输出 `__promiseAll`（2026-10-31 RFC-400 实撞）
+
+- 一个模块里只要有 top-level await，它和所有静态值 import 它的模块就都会变成异步 ES 模块。即使这个 await 写在
+  `if (import.meta.main) { process.exit(await main()) }` 里、打包时被折叠成 `if (false) {}`，也一样。
+- Bun 1.4.3 打包时，如果入口块顶层的某个模块要同时等两个异步模块初始化，会生成 `await __promiseAll([...])`。在部分构建形态下
+  （例如两入口的 `--compile` 测试构建）不会输出这个 helper，产物一加载就报 `ReferenceError: __promiseAll is not defined`。
+  源码模式的 `bun test` 不经过打包，看不出问题，只有跑编译产物的用例会红。
+- RFC-400 删除旧桥 `services/humanGateComposition.ts` 后，维护 worker 的依赖图换了形状，`rfc370-maintenance-worker-real-effects`
+  的编译版用例从此超时：worker 线程加载失败，supervisor 一个事件都不报。异步链的唯一源头是 managed-process launcher 的
+  `process.exit(await …)` 入口块。
+- 规矩：会被 import 的模块，入口块写成 `void main().then((code) => process.exit(code), (error) => { console.error(error); process.exit(1) })`；
+  只作脚本入口、没有任何模块 import 的文件可以继续用 top-level await。守卫 `rfc400-top-level-await-guard` 锁定这一条。
+- 排查：编译产物里的 worker 或子进程「静默不动」时，在探针里给 `new Worker(...)` 挂 `error` 监听，拿到真实异常；用
+  `Bun.build({ outdir })` 打出产物后 grep `__esm(async`，能看出哪些模块变成了异步。
+
 ## 测试 / CI
 
 - **改了共享 union / schema / 导出类型之后，本地自查必须覆盖「爆炸半径」而不是「我改的那几个文件」**（2026-09-21 实撞两次，RFC-366 + RFC-367 各中一次，方向相反）：两次都是「绿」的口径比改动的影响面窄，于是人declare done 之后才由对方查出来。
@@ -3723,6 +3738,12 @@ W8 把 `setNodeRunStatusTx` 改名成 `setNodeRunStatusInTransaction`，而
 **规矩**：改任何被守卫点名的符号名 / 文件名时，`grep -rn '<旧名>' packages/backend/tests/architecture/`
 一遍，把命中的语料清单一起改。评审改名类 diff 时也照此查一遍——
 **守卫没红不是证据**，它可能只是不再看那些代码了。
+
+**同一族的另一种触发：把调用包进新端口 / 参与者**（2026-10-31 RFC-400 实撞）。collaboration 原来直接调
+`setNodeRunStatusTx({ to, allowedFrom })`，改走 task-execution 的 tx 参与者后写成 `participant.set({ to, allowedFrom })`：
+没有任何符号改名，被调名却从内核名变成了通用的 `set`，`rfc317-transition-table-oracle` 的 4 个站点（含 3 条表外边）随之掉出语料，
+靠「语料下限」和偏离账本逐条相等两条断言报红才发现。新端口的成员名要么沿用守卫认得的内核名（本次改为
+`setNodeRunStatus` / `transitionNodeRunStatus`），要么同步扩展守卫；不要为了 `set`、`run` 这类通用名去放宽扫描器。
 
 ## 用 `db.transaction` 下毒的测试，会在生产路径迁到中立原语时**停止下毒**（同上）
 

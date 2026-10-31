@@ -885,7 +885,7 @@ describe('RFC-144 源码锁 — mint 收口点的原子接线形态', () => {
     )
     // RFC-359：派发事务跑在 DatabaseSession 上（两引擎一份），铸造参与者是中立的 createNodeRunMintParticipantInTx。
     const txAt = src.indexOf('databaseSessionFor(db).transaction(async (tx) => {')
-    const participantAt = src.indexOf('createNodeRunMintParticipantInTx(tx)', txAt)
+    const participantAt = src.indexOf('createHumanGateNodeRunMintParticipantInTx(tx)', txAt)
     const mintAt = src.indexOf('nodeRunMint.mint({', participantAt)
     expect(txAt).toBeGreaterThan(-1)
     expect(participantAt).toBeGreaterThan(txAt)

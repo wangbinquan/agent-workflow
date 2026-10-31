@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 import { withO2Closure } from './helpers/o2Closure'
 // RFC-056 patch 2026-05-25 — questioner cascade must not skip a clarify-only row.
 //
@@ -95,7 +96,7 @@ async function reassignThenDispatchDesigner(
     (e) => e.roleKind === 'designer' && e.originNodeRunId === intermediaryNodeRunId,
   )
   if (!designer) throw new Error(`no designer entry after reassign for ${intermediaryNodeRunId}`)
-  return dispatchTaskQuestions(db, taskId, [designer.id], actor)
+  return dispatchTaskQuestions(db, taskExecutionParticipants, taskId, [designer.id], actor)
 }
 
 function makeQ(id: string): ClarifyQuestion {
@@ -388,6 +389,7 @@ describeEachProvider(
 
       // User continues.
       await autoDispatchClarifyRound({
+        taskExecutionParticipants,
         db,
         memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
         originNodeRunId: sess.intermediaryNodeRunId,
@@ -466,6 +468,7 @@ describeEachProvider(
       )
 
       await autoDispatchClarifyRound({
+        taskExecutionParticipants,
         db,
         memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
         originNodeRunId: sess.intermediaryNodeRunId,
@@ -534,6 +537,7 @@ describeEachProvider(
       )
 
       await autoDispatchClarifyRound({
+        taskExecutionParticipants,
         db,
         memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
         originNodeRunId: sess.intermediaryNodeRunId,

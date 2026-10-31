@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import { epoch2ReviewReader } from './helpers/epoch2RuntimePorts'
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
@@ -123,6 +124,7 @@ async function runTask(options: Parameters<typeof runTaskBase>[0]): Promise<void
   }
   if (pendingGateIntent !== undefined) {
     await wakeHumanGateContinuation(options.taskId, pendingGateIntent.id, {
+      taskExecutionParticipants,
       humanGateOpen: composeHumanGateOpenParticipantFactory(),
       ...runOptions,
       schedulerDriver: createTaskExecutionTestTopology({ db: options.db, driver: 'real' })
@@ -578,6 +580,7 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
     // RFC-100: the designer asks first (round 0); answer with stop → it outputs v1.
     expect(await taskStatus(c.db, task.id)).toBe('awaiting_human')
     await autoDispatchClarifyRound({
+      taskExecutionParticipants,
       db: c.db,
       memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(c.db),
       originNodeRunId: await openClarifyRunId(c.db, task.id),
@@ -631,6 +634,7 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
 
     // answer clarify #1 → designer reruns, asks clarify #2
     await autoDispatchClarifyRound({
+      taskExecutionParticipants,
       db: c.db,
       memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(c.db),
       originNodeRunId: await openClarifyRunId(c.db, task.id),
@@ -664,6 +668,7 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
 
     // answer clarify #2 → designer reruns, emits output v2 → review awaiting v2
     await autoDispatchClarifyRound({
+      taskExecutionParticipants,
       db: c.db,
       memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(c.db),
       originNodeRunId: await openClarifyRunId(c.db, task.id),
@@ -767,6 +772,7 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
     )
     expect(await taskStatus(c.db, task.id)).toBe('awaiting_human')
     await autoDispatchClarifyRound({
+      taskExecutionParticipants,
       db: c.db,
       memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(c.db),
       originNodeRunId: await openClarifyRunId(c.db, task.id),
@@ -991,6 +997,7 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
     // RFC-100: the designer asks first (round 0); answer with stop → it outputs v1.
     expect(await taskStatus(c.db, task.id)).toBe('awaiting_human')
     await autoDispatchClarifyRound({
+      taskExecutionParticipants,
       db: c.db,
       memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(c.db),
       originNodeRunId: await openClarifyRunId(c.db, task.id),
@@ -1021,6 +1028,7 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
     await runTask({ taskId: task.id, db: c.db, appHome: c.appHome, binaryOverride: opencodeCmd() })
     expect(await taskStatus(c.db, task.id)).toBe('awaiting_human') // designer asked clarify
     await autoDispatchClarifyRound({
+      taskExecutionParticipants,
       db: c.db,
       memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(c.db),
       originNodeRunId: await openClarifyRunId(c.db, task.id),
@@ -1133,6 +1141,7 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
     )
     expect(await taskStatus(c.db, task.id)).toBe('awaiting_human')
     await autoDispatchClarifyRound({
+      taskExecutionParticipants,
       db: c.db,
       memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(c.db),
       originNodeRunId: await openClarifyRunId(c.db, task.id),
@@ -1252,6 +1261,7 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
     // builder now asks clarify
     expect(await taskStatus(c.db, task.id)).toBe('awaiting_human')
     await autoDispatchClarifyRound({
+      taskExecutionParticipants,
       db: c.db,
       memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(c.db),
       originNodeRunId: await openClarifyRunId(c.db, task.id),
@@ -1351,6 +1361,7 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
     )
     expect(await taskStatus(c.db, task.id)).toBe('awaiting_human')
     await autoDispatchClarifyRound({
+      taskExecutionParticipants,
       db: c.db,
       memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(c.db),
       originNodeRunId: await openClarifyRunId(c.db, task.id),
@@ -1564,6 +1575,7 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
     )
     // answer A's clarify
     await autoDispatchClarifyRound({
+      taskExecutionParticipants,
       db: c.db,
       memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(c.db),
       originNodeRunId: await openClarifyRunId(c.db, task.id),
@@ -1577,6 +1589,7 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
     // answer B's clarify
     expect(await taskStatus(c.db, task.id)).toBe('awaiting_human')
     await autoDispatchClarifyRound({
+      taskExecutionParticipants,
       db: c.db,
       memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(c.db),
       originNodeRunId: await openClarifyRunId(c.db, task.id),
@@ -1695,6 +1708,7 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
       },
     )
     await autoDispatchClarifyRound({
+      taskExecutionParticipants,
       db: c.db,
       memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(c.db),
       originNodeRunId: await openClarifyRunId(c.db, task.id),
@@ -1817,6 +1831,7 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
     )
     expect(await taskStatus(c.db, task.id)).toBe('awaiting_human')
     await autoDispatchClarifyRound({
+      taskExecutionParticipants,
       db: c.db,
       memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(c.db),
       originNodeRunId: await openClarifyRunId(c.db, task.id),
@@ -1974,6 +1989,7 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
       .where(and(eq(clarifyRounds.taskId, task.id), eq(clarifyRounds.status, 'awaiting_human')))
     expect(ccRows.length).toBe(1)
     await autoDispatchClarifyRound({
+      taskExecutionParticipants,
       db: c.db,
       memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(c.db),
       originNodeRunId: ccRows[0]!.intermediaryNodeRunId,
@@ -2340,6 +2356,7 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
     )
     // A asked clarify; B should already be awaiting_review.
     await autoDispatchClarifyRound({
+      taskExecutionParticipants,
       db: c.db,
       memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(c.db),
       originNodeRunId: await openClarifyRunId(c.db, task.id),

@@ -1,3 +1,4 @@
+import type { TaskExecutionParticipantBindings } from './taskExecutionParticipantBindings'
 import {
   createTaskGateQueries,
   createNodeRunQueries,
@@ -18,7 +19,6 @@ import { and, eq, inArray } from 'drizzle-orm'
 
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
-import { setNodeRunStatusTx } from '@/modules/task-execution/infrastructure/nodeRunLifecycleTransition'
 import { TASK_CHANNEL, taskBroadcaster } from '@/ws/broadcaster'
 import type {
   CollaborationAutonomousDismissalInput,
@@ -92,6 +92,7 @@ export async function isTaskClarifySuppressed(
  */
 export async function dismissOpenClarifyParksForAutonomous(
   db: PersistenceDb,
+  taskExecutionParticipants: TaskExecutionParticipantBindings,
   input: CollaborationAutonomousDismissalInput,
 ): Promise<CollaborationAutonomousDismissalResult> {
   const resolvedMode =
@@ -132,19 +133,20 @@ export async function dismissOpenClarifyParksForAutonomous(
       dismissedSessionCount += 1
       const parked = await createNodeRunQueries(tx).readFields(round.nodeRunId, ['status'])
       if (parked?.status === 'awaiting_human') {
-        await setNodeRunStatusTx({
-          tx,
-          nodeRunId: round.nodeRunId,
-          to: 'canceled',
-          allowedFrom: ['awaiting_human'],
-          extra: {
-            identity: {
-              finishedAt: Date.now(),
-              errorMessage: 'wg-clarify-disabled',
+        await taskExecutionParticipants
+          .createHumanGateNodeRunStateParticipantInTx(tx)
+          .setNodeRunStatus({
+            nodeRunId: round.nodeRunId,
+            to: 'canceled',
+            allowedFrom: ['awaiting_human'],
+            extra: {
+              identity: {
+                finishedAt: Date.now(),
+                errorMessage: 'wg-clarify-disabled',
+              },
             },
-          },
-          reason: 'wg-clarify-disabled',
-        })
+            reason: 'wg-clarify-disabled',
+          })
         dismissedSessions.push({ nodeRunId: round.nodeRunId, nodeId: round.nodeId })
       }
       await createClarifyAnswerWritePort(db).transition(

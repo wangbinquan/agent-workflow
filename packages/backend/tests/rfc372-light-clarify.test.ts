@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 import { withO2Closure } from './helpers/o2Closure'
 import {
   nodeRunFixture,
@@ -333,6 +334,7 @@ describeEachProvider('RFC-372 original round and branch follow-up', (h) => {
       expect(await readNodeRunFixtures(h.db, { taskId: fixture.taskId })).toEqual(beforeRuns)
       await expect(
         sealRoundQuestions({
+          taskExecutionParticipants,
           db: h.db,
           originNodeRunId: fixture.nodeRunId,
           wholeRound: true,
@@ -342,6 +344,7 @@ describeEachProvider('RFC-372 original round and branch follow-up', (h) => {
       ).rejects.toThrow('Questions changed')
       await expect(
         sealRoundQuestions({
+          taskExecutionParticipants,
           db: h.db,
           originNodeRunId: fixture.nodeRunId,
           wholeRound: true,
@@ -350,6 +353,7 @@ describeEachProvider('RFC-372 original round and branch follow-up', (h) => {
         }),
       ).rejects.toThrow('confirm')
       const sealed = await sealRoundQuestions({
+        taskExecutionParticipants,
         db: h.db,
         originNodeRunId: fixture.nodeRunId,
         wholeRound: true,
@@ -411,6 +415,7 @@ describeEachProvider('RFC-372 original round and branch follow-up', (h) => {
         // The centralized/deferred route calls the same seal without wholeRound.
         await expect(
           sealRoundQuestions({
+            taskExecutionParticipants,
             db: h.db,
             originNodeRunId: fixture.nodeRunId,
             answers: fixture.questions.map(answer),
@@ -418,6 +423,7 @@ describeEachProvider('RFC-372 original round and branch follow-up', (h) => {
         ).rejects.toThrow('cancel')
         await expect(
           sealRoundQuestions({
+            taskExecutionParticipants,
             db: h.db,
             originNodeRunId: fixture.nodeRunId,
             wholeRound: true,
@@ -427,6 +433,7 @@ describeEachProvider('RFC-372 original round and branch follow-up', (h) => {
         ).rejects.toThrow('cancel')
         await ops.cancel(fixture.nodeRunId, request.requestId)
         await sealRoundQuestions({
+          taskExecutionParticipants,
           db: h.db,
           originNodeRunId: fixture.nodeRunId,
           wholeRound: true,
@@ -471,7 +478,12 @@ describeEachProvider('RFC-372 original round and branch follow-up', (h) => {
       editor,
       draftEvents: events,
     })
-    await sealRoundQuestions({ db: h.db, originNodeRunId: fixture.nodeRunId, answers: [final] })
+    await sealRoundQuestions({
+      taskExecutionParticipants,
+      db: h.db,
+      originNodeRunId: fixture.nodeRunId,
+      answers: [final],
+    })
     const store = createClarifyFollowupStore(h.db, events)
     const snapshot = await store.read(fixture.nodeRunId, 'b')
     expect(snapshot.canAppend).toBe(true)
@@ -509,6 +521,7 @@ describeEachProvider('RFC-372 original round and branch follow-up', (h) => {
     expect(
       (
         await sealRoundQuestions({
+          taskExecutionParticipants,
           db: h.db,
           originNodeRunId: plain.nodeRunId,
           answers: plain.questions.map((question) => ({
@@ -520,6 +533,7 @@ describeEachProvider('RFC-372 original round and branch follow-up', (h) => {
     ).toBe(true)
     const map = await seed(h)
     await sealRoundQuestions({
+      taskExecutionParticipants,
       db: h.db,
       originNodeRunId: map.nodeRunId,
       answers: [answer(map.questions[0]!)],
@@ -530,6 +544,7 @@ describeEachProvider('RFC-372 original round and branch follow-up', (h) => {
     expect(
       (
         await sealRoundQuestions({
+          taskExecutionParticipants,
           db: h.db,
           originNodeRunId: map.nodeRunId,
           wholeRound: true,
@@ -626,6 +641,7 @@ describeEachProvider(
       const fixture = await seed(h)
       const store = createClarifyFollowupStore(h.db, events)
       await sealRoundQuestions({
+        taskExecutionParticipants,
         db: h.db,
         originNodeRunId: fixture.nodeRunId,
         answers: [answer(fixture.questions[0]!)],
@@ -678,6 +694,7 @@ describeEachProvider(
         expect(JSON.parse((await fixture.read()).questions)).toHaveLength(2)
       }
       await sealRoundQuestions({
+        taskExecutionParticipants,
         db: h.db,
         originNodeRunId: fixture.nodeRunId,
         answers: [answer(fixture.questions[1]!)],
@@ -727,6 +744,7 @@ describeEachProvider('RFC-378 decision persistence on the original round', (h) =
       const store = createClarifyFollowupStore(h.db, events)
       expect((await store.read(fixture.nodeRunId, 'b')).drafts.a?.decision).toEqual(decision)
       await sealRoundQuestions({
+        taskExecutionParticipants,
         db: h.db,
         originNodeRunId: fixture.nodeRunId,
         answers: [values[0]!],
@@ -735,6 +753,7 @@ describeEachProvider('RFC-378 decision persistence on the original round', (h) =
       const edited = { ...values[1]!, decision: { ...decision, tradeoff: 'New accepted cost' } }
       await expect(
         sealRoundQuestions({
+          taskExecutionParticipants,
           db: h.db,
           originNodeRunId: fixture.nodeRunId,
           wholeRound: true,
@@ -744,6 +763,7 @@ describeEachProvider('RFC-378 decision persistence on the original round', (h) =
       ).rejects.toThrow('confirm')
       const final = { ...edited, confirmedBasis: clarifyAnswerBasis(fixture.questions[1]!, edited) }
       await sealRoundQuestions({
+        taskExecutionParticipants,
         db: h.db,
         originNodeRunId: fixture.nodeRunId,
         wholeRound: true,

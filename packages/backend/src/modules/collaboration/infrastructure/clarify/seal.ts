@@ -1,3 +1,4 @@
+import type { TaskExecutionParticipantBindings } from '../taskExecutionParticipantBindings'
 import { createHumanGatePersistenceParticipantInTx } from '@/modules/task-execution/public/participants'
 
 import { createTaskGateQueries } from '@/modules/task-execution/public/queries'
@@ -67,12 +68,12 @@ import {
   type TaskActorRole,
 } from '@agent-workflow/shared'
 import { ulid } from 'ulid'
-import { appendTaskNodeStatusesCommittedEvent } from '@/modules/task-execution/infrastructure/taskLifecycleCommittedEvents'
 import { appendHumanGateDecisionCommittedEvent } from '../collaborationCommittedEvents'
 import { committedEventGroupId, type CommittedEventRef } from '@/platform/events/committed/types'
 import { publishCommittedEventsAfterCommit } from '@/platform/events/committed/runtime'
 
 export interface SealRoundQuestionsArgs {
+  readonly taskExecutionParticipants: TaskExecutionParticipantBindings
   questionSetKey?: string
   wholeRound?: boolean
   db: PersistenceDb
@@ -426,25 +427,27 @@ export async function sealRoundQuestions(
       if (flipNow && args.decisionParticipant === undefined) {
         const operationRef = `clarify-seal:${round.id}:${ulid(ts)}`
         const eventGroupId = committedEventGroupId('collaboration', operationRef)
-        const taskEventRef = await appendTaskNodeStatusesCommittedEvent(tx, {
-          taskId: round.taskId,
-          reason: 'human-gate',
-          nodeChanges: [
-            {
-              nodeRunId: args.originNodeRunId,
-              nodeId: round.intermediaryNodeId,
-              status: 'done',
-              cause: 'clarify-deferred-answer',
+        const taskEventRef = await args.taskExecutionParticipants
+          .createTaskNodeStatusEventsParticipantInTx(tx)
+          .append({
+            taskId: round.taskId,
+            reason: 'human-gate',
+            nodeChanges: [
+              {
+                nodeRunId: args.originNodeRunId,
+                nodeId: round.intermediaryNodeId,
+                status: 'done',
+                cause: 'clarify-deferred-answer',
+              },
+            ],
+            occurredAt: ts,
+            identity: {
+              operationRef,
+              eventGroupId,
+              eventGroupOrdinal: 0,
+              correlationRef: `human-gate-node-run:${args.originNodeRunId}`,
             },
-          ],
-          occurredAt: ts,
-          identity: {
-            operationRef,
-            eventGroupId,
-            eventGroupOrdinal: 0,
-            correlationRef: `human-gate-node-run:${args.originNodeRunId}`,
-          },
-        })
+          })
         if (taskEventRef !== null) eventRefs.push(taskEventRef)
         const collaborationEventRef = await appendHumanGateDecisionCommittedEvent(tx, {
           family: 'clarify',

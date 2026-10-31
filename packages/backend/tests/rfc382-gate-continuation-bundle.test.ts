@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 import { withO2Closure } from './helpers/o2Closure'
 // RFC-382: reproduce the former PostgreSQL session wiring, then prove real gate work precedes drive once.
 
@@ -135,6 +136,7 @@ describeEachProvider('RFC-382 gate pre-drive baseline and session regression', (
         )
         await expect(
           autoDispatchClarifyRound({
+            taskExecutionParticipants,
             db,
             memoryDistillEnqueuer: fixture.input.memory.memoryOperations.distillCommands,
             originNodeRunId: round.intermediaryNodeRunId,
@@ -184,6 +186,7 @@ describeEachProvider('RFC-382 gate pre-drive baseline and session regression', (
         if (!baseline) {
           const runs = await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
           await finishCommittedClarifyAutoDispatch({
+            taskExecutionParticipants,
             db,
             memoryDistillEnqueuer: fixture.input.memory.memoryOperations.distillCommands,
             operationId: prepared.operationId,

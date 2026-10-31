@@ -1,3 +1,4 @@
+import type { TaskExecutionParticipantBindings } from './taskExecutionParticipantBindings'
 import type { CollaborationTaskRolePolicy } from '../application/ports/collaborationTaskRolePolicy'
 import type { HistoryRestrictionPort } from '@/platform/contracts/historyRestriction'
 import type { ContentStore } from '@/platform/content/contentStore'
@@ -19,8 +20,7 @@ import type { PortArtifactReader } from '@/modules/task-execution/public/queries
 // 合一顺带抹平的实测差异（2026-09-07 双引擎对拍）：PG 那份把 cross-clarify 短路的诊断标签写成
 // `'cross-clarify-stop'`，SQLite 侧是 `'cross-clarify-persistent-stop'`；统一取后者。
 //
-// 保留惰性 import：评审 / 澄清域经 `services/humanGateComposition` 绕回 collaboration 的
-// composition barrel，静态 import 会形成值环。
+// 保留惰性 import：评审 / 澄清实现仍在原运行期调用点才载入。
 
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { CollaborationRuntimeMechanics } from '../application/ports/collaborationRuntimeMechanics'
@@ -32,6 +32,7 @@ import {
 export function createCollaborationRuntimeMechanics(
   db: PersistenceDb,
   dependencies: Readonly<{
+    taskExecutionParticipants: TaskExecutionParticipantBindings
     historyRestrictions: HistoryRestrictionPort
     content: ContentStore
     taskRolePolicy: CollaborationTaskRolePolicy
@@ -45,6 +46,7 @@ export function createCollaborationRuntimeMechanics(
     async dispatchReviewNode(input) {
       const { dispatchReviewNode } = await import('./review')
       return dispatchReviewNode({
+        taskExecutionParticipants: dependencies.taskExecutionParticipants,
         db,
         upstreamAgents: dependencies.upstreamAgents,
         taskRolePolicy: dependencies.taskRolePolicy,
@@ -60,7 +62,11 @@ export function createCollaborationRuntimeMechanics(
     },
     async inspectCrossClarify(input) {
       const { dispatchCrossClarifyNode } = await import('./clarify/service')
-      return dispatchCrossClarifyNode({ db, ...input })
+      return dispatchCrossClarifyNode({
+        taskExecutionParticipants: dependencies.taskExecutionParticipants,
+        db,
+        ...input,
+      })
     },
     async openAgentClarify(input) {
       const { createClarifyRound } = await import('./clarify/service')
@@ -129,6 +135,6 @@ export function createCollaborationRuntimeMechanics(
     },
     isTaskClarifySuppressed: (input) => isTaskClarifySuppressed(db, input),
     dismissOpenClarifyParksForAutonomous: (input) =>
-      dismissOpenClarifyParksForAutonomous(db, input),
+      dismissOpenClarifyParksForAutonomous(db, dependencies.taskExecutionParticipants, input),
   } satisfies CollaborationRuntimeMechanics)
 }

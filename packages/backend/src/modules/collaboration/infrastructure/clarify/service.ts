@@ -1,3 +1,6 @@
+import type { TaskExecutionParticipantBindings } from '../taskExecutionParticipantBindings'
+import { createCollaborationCommandContext } from '@/modules/collaboration/infrastructure/collaborationCommandContext'
+import { parkPreparedHumanGate } from '@/modules/task-execution/public/commands'
 import { createHumanGateOpenParticipantScope } from '../humanGateOpenFactory'
 import type { CollaborationTaskRolePolicy } from '../../application/ports/collaborationTaskRolePolicy'
 import type { HistoryRestrictionPort } from '@/platform/contracts/historyRestriction'
@@ -84,8 +87,6 @@ import { and, asc, desc, eq, isNull } from 'drizzle-orm'
 
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { prepareClarifyGateOpen } from '@/modules/collaboration/public/commands'
-import { humanGateComposition } from '@/services/humanGateComposition'
-import { setNodeRunStatusTx } from '@/modules/task-execution/infrastructure/nodeRunLifecycleTransition'
 import type { TaskExecutionContextRef } from '@/modules/task-execution/public/commands'
 import {
   currentTaskExecutionContext,
@@ -378,7 +379,7 @@ export async function createClarifyRound(
     }),
   )
   const prepared = await prepareClarifyGateOpen(
-    humanGateComposition.createCollaborationCommandContext({
+    createCollaborationCommandContext({
       db: args.db,
       historyRestrictions: args.historyRestrictions,
       content: args.content,
@@ -423,7 +424,7 @@ export async function createClarifyRound(
   const committedHere = prepared.kind === 'prepared'
   if (committedHere) {
     const executionContext = args.executionContext ?? currentTaskExecutionContext(args.taskId)
-    await humanGateComposition.parkPreparedHumanGate({
+    await parkPreparedHumanGate({
       humanGateOpen: createHumanGateOpenParticipantScope,
       db: args.db,
       historyRestrictions: args.historyRestrictions,
@@ -659,6 +660,7 @@ export interface DispatchCrossClarifyResult {
  * transition + reason string.
  */
 export async function dispatchCrossClarifyNode(args: {
+  readonly taskExecutionParticipants: TaskExecutionParticipantBindings
   db: PersistenceDb
   taskId: string
   crossClarifyNodeId: string
@@ -687,18 +689,19 @@ export async function dispatchCrossClarifyNode(args: {
         ...(args.executionContext === undefined ? {} : { context: args.executionContext }),
         now,
       })
-      await setNodeRunStatusTx({
-        tx,
-        nodeRunId: args.nodeRunId,
-        to: 'done',
-        allowedFrom: ['pending'],
-        reason: 'cross-clarify-persistent-stop',
-        extra: {
-          identity: {
-            finishedAt: now,
+      await args.taskExecutionParticipants
+        .createHumanGateNodeRunStateParticipantInTx(tx)
+        .setNodeRunStatus({
+          nodeRunId: args.nodeRunId,
+          to: 'done',
+          allowedFrom: ['pending'],
+          reason: 'cross-clarify-persistent-stop',
+          extra: {
+            identity: {
+              finishedAt: now,
+            },
           },
-        },
-      })
+        })
     })
     return { kind: 'short-circuit-stop' }
   }

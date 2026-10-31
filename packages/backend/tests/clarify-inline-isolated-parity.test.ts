@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 // RFC-026 regression — strict isolated-mode parity.
 //
 // Hard contract from proposal §C1 / §A1: ANY ClarifyNode authored WITHOUT
@@ -194,6 +195,7 @@ describe('RFC-026 regression — isolated mode never resumes', () => {
         await h.db.select().from(clarifyRounds).where(eq(clarifyRounds.taskId, taskId))
       )[0]
       await autoDispatchClarifyRound({
+        taskExecutionParticipants,
         db: h.db,
         memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(h.db),
         originNodeRunId: sessionRow!.intermediaryNodeRunId,

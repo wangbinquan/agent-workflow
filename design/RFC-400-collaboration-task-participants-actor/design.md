@@ -80,7 +80,7 @@ TE `public/commands#parkPreparedHumanGate`，以及七个 `*Bridge` 类型别名
 | 代号 | TE public 合同 | TE 工厂（唯一 owner 工厂） | 委托 |
 | --- | --- | --- | --- |
 | E | `TaskNodeStatusEventsParticipantInTx` | `createTaskNodeStatusEventsParticipantInTx(tx)` | `appendTaskNodeStatusesCommittedEvent`；结果用既有 TE `TaskExecutionPostCommitEventRef`，不公开 platform `CommittedEventRef` |
-| S | `HumanGateNodeRunStateParticipantInTx` | `createHumanGateNodeRunStateParticipantInTx(tx)` | `setNodeRunStatusTx`、`transitionNodeRunStatusTx`（保留 `allowTerminal` 与错误文本） |
+| S | `HumanGateNodeRunStateParticipantInTx`（成员 `setNodeRunStatus` / `transitionNodeRunStatus`，与内核同名：RFC-317 转移表预言按被调名识别 CAS 站点） | `createHumanGateNodeRunStateParticipantInTx(tx)` | `setNodeRunStatusTx`、`transitionNodeRunStatusTx`（保留 `allowTerminal` 与错误文本） |
 | D | `TaskDecisionParticipantInTx`（既有，改为 `Promise<AcceptedHumanGateDecision>`，补 brand / readonly / 工厂） | `createTaskDecisionParticipantInTx(tx)` | `acceptHumanGateDecisionTx` |
 | M | `HumanGateNodeRunMintParticipantInTx` | `createHumanGateNodeRunMintParticipantInTx(tx)` | `createNodeRunMintParticipantInTx` |
 | H | `HumanGateTaskTransitionParticipantInTx` | `createHumanGateTaskTransitionParticipantInTx(tx)` | `transitionHumanGateTask` |

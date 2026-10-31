@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 // RFC-395 II-pre：改接生产启动 / 读取路径，保留原断言意图。
 // Regression — live incident 01KWDKBS9K22KB6HH4KNR3XMX6 (2026-07-09 会话):
@@ -289,6 +290,7 @@ test('multi-round clarify: the round-0 question un-strands to 已处理待确认
   // Answer qa with CONTINUE → designer reruns; per plan it asks qb (round 1).
   // That rerun is the qa handler and exits done WITHOUT output (clarify-ask ending).
   await autoDispatchClarifyRound({
+    taskExecutionParticipants,
     db,
     memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
     originNodeRunId: await openClarifyRunId(task.id),
@@ -314,6 +316,7 @@ test('multi-round clarify: the round-0 question un-strands to 已处理待确认
   // (stop) → designer emits v1 → review parks. qa STAYS 已处理待确认 (its window is
   // capped by qb's answer rerun; the v1 output run never enters it).
   await autoDispatchClarifyRound({
+    taskExecutionParticipants,
     db,
     memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
     originNodeRunId: await openClarifyRunId(task.id),

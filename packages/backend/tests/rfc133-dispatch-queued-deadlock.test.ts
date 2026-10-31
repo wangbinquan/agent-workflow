@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 import { withO2Closure } from './helpers/o2Closure'
 // RFC-133 (design/RFC-133-dispatch-queued-run-obligation) — GATE integration for the queued
 // 「run 义务」contract. Locks the live QMGP5 deadlock repro (task 01KWFZRQFPZFQQEM8JTCHQMGP5,
@@ -254,7 +255,13 @@ describeEachProvider('RFC-359 rfc133-dispatch-queued-deadlock database behavior'
         stagedAt: Date.now(),
       })
 
-      const result = await dispatchTaskQuestions(db, taskId, [powerup, native], actor)
+      const result = await dispatchTaskQuestions(
+        db,
+        taskExecutionParticipants,
+        taskId,
+        [powerup, native],
+        actor,
+      )
 
       // Frontier-only mint: ONE clarify-answer rerun on ASKER, NOTHING on DOWN.
       expect(result.reruns.length).toBe(1)
@@ -294,7 +301,13 @@ describeEachProvider('RFC-359 rfc133-dispatch-queued-deadlock database behavior'
         defaultTargetNodeId: ASKER,
         stagedAt: Date.now(),
       })
-      const result = await dispatchTaskQuestions(db, taskId, [fresh], actor)
+      const result = await dispatchTaskQuestions(
+        db,
+        taskExecutionParticipants,
+        taskId,
+        [fresh],
+        actor,
+      )
       expect(result.reruns.length).toBe(1)
       expect(result.reruns[0]!.targetNodeId).toBe(ASKER)
       expect((await entryRow(db, fresh))[0]!.dispatchedAt).not.toBeNull()
@@ -326,7 +339,7 @@ describeEachProvider('RFC-359 rfc133-dispatch-queued-deadlock database behavior'
       const runsBefore = (await taskRuns(db, taskId)).length
       let caught: unknown
       try {
-        await dispatchTaskQuestions(db, taskId, [selfEntry], actor)
+        await dispatchTaskQuestions(db, taskExecutionParticipants, taskId, [selfEntry], actor)
       } catch (e) {
         caught = e
       }
@@ -368,7 +381,7 @@ describeEachProvider('RFC-359 rfc133-dispatch-queued-deadlock database behavior'
       })
       let caught: unknown
       try {
-        await dispatchTaskQuestions(db, taskId, [nextEntry], actor)
+        await dispatchTaskQuestions(db, taskExecutionParticipants, taskId, [nextEntry], actor)
       } catch (e) {
         caught = e
       }
@@ -412,6 +425,7 @@ describeEachProvider('RFC-359 rfc133-dispatch-queued-deadlock database behavior'
         dispatchedAt: Date.now() - 1000,
       })
       const ret = await autoDispatchClarifyRound({
+        taskExecutionParticipants,
         db,
         memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
         originNodeRunId: clarifyNodeRunId,
@@ -458,6 +472,7 @@ describeEachProvider('RFC-359 rfc133-dispatch-queued-deadlock database behavior'
       // answer is saved + the dispatch PARKS (dispatchDeferredReason) instead of the legacy pre-seal
       // ConflictError — the mint is still blocked: no rerun, no new node_run.
       const ret = await autoDispatchClarifyRound({
+        taskExecutionParticipants,
         db,
         memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
         originNodeRunId: clarifyNodeRunId,
@@ -500,6 +515,7 @@ describeEachProvider('RFC-359 rfc133-dispatch-queued-deadlock database behavior'
       })
       // cross answer + continue → mints the questioner cascade rerun on DOWN (RFC-162: scope deleted).
       const ret = await autoDispatchClarifyRound({
+        taskExecutionParticipants,
         db,
         memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
         originNodeRunId: crossClarifyNodeRunId,

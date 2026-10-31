@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './taskExecutionParticipantBindings'
 import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import { composeGateContinuationSupport } from '@/modules/collaboration/composition'
 import { composeHumanGateTaskLockPort } from '@/modules/task-execution/composition'
@@ -32,6 +33,7 @@ export function testDriveFactory(
         humanGateOpen: composeHumanGateOpenParticipantFactory(),
       }),
       ...composeGateContinuationSupport({
+        taskExecutionParticipants,
         db: db,
         historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
         taskLock: composeHumanGateTaskLockPort,

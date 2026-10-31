@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 import { nodeRunFixtureColumns } from './helpers/model/nodeRun'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { withO2Closure } from './helpers/o2Closure'
@@ -77,7 +78,7 @@ async function reassignThenDispatchDesigner(
     (e) => e.roleKind === 'designer' && e.originNodeRunId === intermediaryNodeRunId,
   )
   if (!designer) throw new Error(`no designer entry after reassign for ${intermediaryNodeRunId}`)
-  return dispatchTaskQuestions(db, taskId, [designer.id], actor)
+  return dispatchTaskQuestions(db, taskExecutionParticipants, taskId, [designer.id], actor)
 }
 
 interface Harness {
@@ -541,6 +542,7 @@ function registerProviderCases1(provider: ProviderHarness) {
     // session), mints the questioner stop-rerun via dispatch, and persists the node-level STOP
     // directive. We don't run scheduler again, just verify state.
     await autoDispatchClarifyRound({
+      taskExecutionParticipants,
       db: h.db,
       memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(h.db),
       originNodeRunId: crossNodeRunId,
@@ -570,6 +572,7 @@ function registerProviderCases1(provider: ProviderHarness) {
       iteration: 0,
     })
     const out = await dispatchCrossClarifyNode({
+      taskExecutionParticipants,
       db: h.db,
       taskId,
       crossClarifyNodeId: 'cross1',
@@ -666,6 +669,7 @@ function registerProviderCases1(provider: ProviderHarness) {
     // pending rerun is an out-of-scope orphan the scheduler never runs (same proven-safe ghost-row
     // shape as rfc096-port-read-done-only) — the test's subject is the DESIGNER rerun prompt.
     await autoDispatchClarifyRound({
+      taskExecutionParticipants,
       db: h.db,
       memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(h.db),
       originNodeRunId: session.intermediaryNodeRunId,
@@ -793,6 +797,7 @@ function registerProviderCases1(provider: ProviderHarness) {
     // than the old lazy freshness demote, but the behavioral lock is unchanged: whichever fresh
     // questioner run results, its prompt must carry the prior cross Q&A so it does not re-ask.
     await autoDispatchClarifyRound({
+      taskExecutionParticipants,
       db: h.db,
       memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(h.db),
       originNodeRunId: session.intermediaryNodeRunId,
@@ -1000,6 +1005,7 @@ function registerProviderCases2(provider: ProviderHarness) {
     // Answer with stop → questioner stop-rerun (cross-clarify-questioner-rerun) via the unified
     // dispatch (stop suppresses designer entries; only the questioner rerun mints).
     await autoDispatchClarifyRound({
+      taskExecutionParticipants,
       db: h.db,
       memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(h.db),
       originNodeRunId: sess.intermediaryNodeRunId,

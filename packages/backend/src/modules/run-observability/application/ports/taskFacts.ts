@@ -1,5 +1,5 @@
 import type { TaskStatus } from '@agent-workflow/shared'
-import type { Actor } from '@/auth/actor'
+import type { AuthenticatedAuthoritySnapshot } from '@/modules/identity-access/public/participants'
 
 // Required from task-execution (RFC-294: run-observability never imports
 // task-execution; the composition root binds task-execution's offered query).
@@ -21,12 +21,15 @@ export interface ObservedAttemptFact {
 
 export interface ObservationTaskFactsPort {
   /** The subset of `ids` (≤500) the actor may read. */
-  visibleTaskIds(actor: Actor, ids: readonly string[]): Promise<readonly string[]>
+  visibleTaskIds(
+    actor: AuthenticatedAuthoritySnapshot,
+    ids: readonly string[],
+  ): Promise<readonly string[]>
   /** Display facts of existing tasks among `ids` (≤500); callers pass visible ids. */
   summaries(ids: readonly string[]): Promise<readonly ObservedTaskFact[]>
   /** Visible catalog tasks started in [from, to), newest first, keyset paged. */
   page(
-    actor: Actor,
+    actor: AuthenticatedAuthoritySnapshot,
     query: {
       readonly from: number
       readonly to: number
@@ -38,7 +41,7 @@ export interface ObservationTaskFactsPort {
   ): Promise<{ readonly items: readonly ObservedTaskFact[]; readonly nextCursor: string | null }>
   /** Status counts and finished wall-clock durations (ascending) of visible catalog tasks started in [from, to). */
   counts(
-    actor: Actor,
+    actor: AuthenticatedAuthoritySnapshot,
     window: { readonly from: number; readonly to: number },
   ): Promise<{
     readonly statuses: Readonly<Record<string, number>>

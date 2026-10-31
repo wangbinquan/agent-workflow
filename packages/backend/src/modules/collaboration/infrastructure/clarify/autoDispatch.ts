@@ -1,3 +1,11 @@
+import type { TaskExecutionParticipantBindings } from '../taskExecutionParticipantBindings'
+import { canonicalHumanGateRequestHash } from '@/modules/collaboration/domain/canonicalGateRequest'
+import {
+  decodeClarifyDecisionManifest,
+  decodeClarifyDecisionReceipt,
+} from '@/modules/collaboration/domain/clarifyDecision'
+import { decodeCollaborationCommittedEvent } from '@/modules/collaboration/domain/collaborationCommittedEvent'
+import { gateDecisionReceipt } from '@/modules/collaboration/domain/gateReceipt'
 import type { HumanGateTaskLockPort } from '../../composition/required-ports'
 import type { HistoryRestrictionPort } from '@/platform/contracts/historyRestriction'
 // RFC-128 / RFC-349 — SQLite quick-channel seal + AUTODISPATCH.
@@ -72,7 +80,6 @@ import {
 } from '@/services/clarifyDecision'
 import type { GateDecisionReceipt } from '@/modules/collaboration/public/types'
 import type { MemoryDistillEnqueuer } from '@/modules/memory/public/participants'
-import { humanGateComposition } from '@/services/humanGateComposition'
 import { publishCommittedEventsAfterCommit } from '@/platform/events/committed/runtime'
 import { waitAtHumanGateDecisionCommitBarrier } from '@/services/humanGateDecisionE2eBarrier'
 import { loadRollbackTarget, rollbackNodeRunWorktrees } from '@/services/nodeRollback'
@@ -87,8 +94,6 @@ import { getTaskQuestionWriteSem, getTaskWriteSem } from '@/services/taskWriteLo
 import { ConflictError, NotFoundError } from '@/util/errors'
 import { createLogger } from '@/util/log'
 import { TASK_QUESTION_CONFLICT } from '@/services/taskQuestionConflicts'
-
-const { gateDecisionReceipt } = humanGateComposition
 
 const log = createLogger('clarify-auto-dispatch')
 
@@ -255,6 +260,7 @@ async function selfHomeHasOpenLedger(
 }
 
 export interface AutoDispatchClarifyRoundArgs {
+  readonly taskExecutionParticipants: TaskExecutionParticipantBindings
   db: PersistenceDb
   /** Provider-selected, bootstrap-owned post-commit memory participant. */
   memoryDistillEnqueuer: MemoryDistillEnqueuer
@@ -363,6 +369,7 @@ async function sealRoundAsWholeFinalize(
         },
     )
   const sealResult = await sealRoundQuestions({
+    taskExecutionParticipants: args.taskExecutionParticipants,
     db,
     originNodeRunId,
     answers: sealAnswers,
@@ -515,6 +522,7 @@ async function dispatchSealedDesignerEntries(
         try {
           designerDispatch = await dispatchTaskQuestions(
             db,
+            args.taskExecutionParticipants,
             round.taskId,
             designerEntryIds,
             args.actor,
@@ -544,9 +552,7 @@ async function dispatchSealedDesignerEntries(
 
 function mergeDurableDispatchResult(
   local: DispatchTaskQuestionsResult,
-  durableEvents: readonly ReturnType<
-    typeof humanGateComposition.decodeCollaborationCommittedEvent
-  >[],
+  durableEvents: readonly ReturnType<typeof decodeCollaborationCommittedEvent>[],
   entries: readonly Pick<
     PersistenceTables['taskQuestions']['$inferSelect'],
     'id' | 'defaultTargetNodeId' | 'overrideTargetNodeId' | 'dispatchedAt'
@@ -630,9 +636,7 @@ async function rebuildCommittedClarifyDispatch(
         eq(committedEvents.eventType, 'collaboration.question-dispatch-committed.v1'),
       ),
     )
-  const events = rows.map((row) =>
-    humanGateComposition.decodeCollaborationCommittedEvent(JSON.parse(row.payloadJson)),
-  )
+  const events = rows.map((row) => decodeCollaborationCommittedEvent(JSON.parse(row.payloadJson)))
   const questionIds = [
     ...new Set(
       events.flatMap((event) =>
@@ -658,6 +662,7 @@ async function rebuildCommittedClarifyDispatch(
 }
 
 export async function finishCommittedClarifyAutoDispatch(input: {
+  readonly taskExecutionParticipants: TaskExecutionParticipantBindings
   readonly db: PersistenceDb
   readonly memoryDistillEnqueuer: MemoryDistillEnqueuer
   readonly operationId: string
@@ -687,8 +692,8 @@ export async function finishCommittedClarifyAutoDispatch(input: {
       `clarify operation '${input.operationId}' is not a completed durable decision`,
     )
   }
-  const manifest = humanGateComposition.decodeClarifyDecisionManifest(operation.manifestJson)
-  const receipt = humanGateComposition.decodeClarifyDecisionReceipt(operation.receiptJson)
+  const manifest = decodeClarifyDecisionManifest(operation.manifestJson)
+  const receipt = decodeClarifyDecisionReceipt(operation.receiptJson)
   const sourceNodeRunIds = [...manifest.sourceNodeRunIds]
   const actorRole =
     manifest.request.payload.kind === 'clarify-decision'
@@ -698,8 +703,7 @@ export async function finishCommittedClarifyAutoDispatch(input: {
   if (
     sourceNodeRunIds.length !== 1 ||
     originNodeRunId === undefined ||
-    humanGateComposition.canonicalHumanGateRequestHash(manifest.request) !==
-      operation.requestHash ||
+    canonicalHumanGateRequestHash(manifest.request) !== operation.requestHash ||
     manifest.request.taskId !== operation.taskId ||
     manifest.request.gateRef !== operation.gateRef ||
     manifest.request.expectedTaskRevision !== operation.expectedTaskRevision ||
@@ -770,6 +774,7 @@ export async function finishCommittedClarifyAutoDispatch(input: {
   }
 
   return await autoDispatchClarifyRound({
+    taskExecutionParticipants: input.taskExecutionParticipants,
     db: input.db,
     memoryDistillEnqueuer: input.memoryDistillEnqueuer,
     originNodeRunId,
@@ -837,6 +842,7 @@ export async function autoDispatchClarifyRoundWithDecision(
   })
   if (replay !== null) {
     const converged = await finishCommittedClarifyAutoDispatch({
+      taskExecutionParticipants: args.taskExecutionParticipants,
       db: args.db,
       memoryDistillEnqueuer: args.memoryDistillEnqueuer,
       operationId: replay.decision.operationId,
@@ -854,6 +860,7 @@ export async function autoDispatchClarifyRoundWithDecision(
   }
 
   const prepared = await prepareClarifyDecision({
+    taskExecutionParticipants: args.taskExecutionParticipants,
     db: args.db,
     taskLock: args.taskLock,
     historyRestrictions: args.historyRestrictions,
@@ -1006,6 +1013,7 @@ export async function autoDispatchClarifyRound(
         }
   if (args.committedConvergence === undefined && args.committedOperationId !== undefined) {
     return await finishCommittedClarifyAutoDispatch({
+      taskExecutionParticipants: args.taskExecutionParticipants,
       db,
       memoryDistillEnqueuer: args.memoryDistillEnqueuer,
       operationId: args.committedOperationId,
@@ -1107,7 +1115,14 @@ export async function autoDispatchClarifyRound(
               operationRef: args.committedConvergence.operationId,
               eventGroupOrdinal: 2,
             }
-      return await dispatchTaskQuestions(db, round.taskId, entryIds, args.actor, committedIdentity)
+      return await dispatchTaskQuestions(
+        db,
+        args.taskExecutionParticipants,
+        round.taskId,
+        entryIds,
+        args.actor,
+        committedIdentity,
+      )
     } catch (err) {
       if (err instanceof ConflictError && RECOVERABLE_DISPATCH_CONFLICTS.has(err.code)) {
         dispatchDeferredReason = err.code
@@ -1257,6 +1272,7 @@ export async function autoDispatchClarifyRound(
  *  in-flight rerun just completed) redispatches on the very tick that completion triggers. */
 export async function autoDispatchDeferredQuestions(
   db: PersistenceDb,
+  taskExecutionParticipants: TaskExecutionParticipantBindings,
   taskId: string,
 ): Promise<void> {
   // Codex impl-gate P2: TASK_QUESTION_CONFLICT.targetChanged resolves by RE-PLANNING, not by waiting —
@@ -1268,11 +1284,17 @@ export async function autoDispatchDeferredQuestions(
       // Selection happens INSIDE the dispatch's lock-B holding (Codex impl-gate P1 — a
       // pre-selected id list would race a concurrent unstage: dispatch filters on neither the
       // marker nor staged, so a withdrawn entry's stale id would still dispatch).
-      const res = await dispatchDeferredTaskQuestions(db, taskId, SYSTEM_DISPATCH_ACTOR, {
-        // Non-recoverable → clear THIS attempt's markers inside the dispatch's own lock holding
-        // (post-hoc task-wide clearing would race a queued user dispatch's fresh markers).
-        clearMarkersOn: (code) => !DESIGNER_DEFERRABLE_CONFLICTS.has(code),
-      })
+      const res = await dispatchDeferredTaskQuestions(
+        db,
+        taskExecutionParticipants,
+        taskId,
+        SYSTEM_DISPATCH_ACTOR,
+        {
+          // Non-recoverable → clear THIS attempt's markers inside the dispatch's own lock holding
+          // (post-hoc task-wide clearing would race a queued user dispatch's fresh markers).
+          clearMarkersOn: (code) => !DESIGNER_DEFERRABLE_CONFLICTS.has(code),
+        },
+      )
       if (res.dispatchedEntryIds.length > 0 || res.reruns.length > 0) {
         log.info('auto-redispatched deferred task questions', {
           taskId,

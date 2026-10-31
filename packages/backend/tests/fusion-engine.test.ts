@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 import { nodeRunFixtureColumns } from './helpers/model/nodeRun'
 import { legacyContentRef } from '@/platform/content/contentRef'
 import { contentRowColumns } from '@/platform/content/infrastructure/contentStore'
@@ -1169,7 +1170,7 @@ describe('RFC-170 T6 F12 — cancel is generation-safe + covers parked tasks', (
     })
     const uninstallAfterCommitPump = installTaskLifecycleAfterCommitTestPump(h.db, {
       onTerminalTask(hookDb, hookTaskId, to) {
-        return createHumanGateTerminalSweepCommand(hookDb).run({
+        return createHumanGateTerminalSweepCommand(hookDb, taskExecutionParticipants).run({
           taskId: hookTaskId,
           cause: `task-${to}`,
         })

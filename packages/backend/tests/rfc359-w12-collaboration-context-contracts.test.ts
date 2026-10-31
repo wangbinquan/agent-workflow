@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { withO2Closure, o2Ports } from './helpers/o2Closure'
 import { readTaskFixtures } from './helpers/model'
@@ -18,16 +19,18 @@ import { eq } from 'drizzle-orm'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   createCollaborationCommandContext,
+  type CollaborationCommandContextInput,
+  type PostgresqlCollaborationCommandContextInput,
+} from '@/modules/collaboration/infrastructure/collaborationCommandContext'
+import {
   createCollaborationCommandContextFromPersistence,
   requireClarifyDecisionCommand,
   requireCollaborationTaskExecutionReadModels,
   requireQuestionDispatchCommand,
   requireReviewDecisionCommand,
   resolveCollaborationCommandContext,
-  type CollaborationCommandContextInput,
   type CollaborationCommandDependencies,
-  type PostgresqlCollaborationCommandContextInput,
-} from '@/modules/collaboration/composition/commandContext'
+} from '@/modules/collaboration/application/commandContext'
 import type { composeCollaborationRouteOperations } from '@/modules/collaboration/composition/collaborationRouteOperations'
 import {
   createClarifyDecisionCommand,
@@ -81,13 +84,17 @@ function composeCapabilities(db: PersistenceDb, appHome: string) {
   return {
     reviewDecisions: createReviewDecisionCommand(withO2Closure({ db, appHome })),
     questionDispatches: createQuestionDispatchCommand(db, o2Ports(db).taskLock, {
+      taskExecutionParticipants,
       historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
     }),
     clarifyDecisions: createClarifyDecisionCommand(
       db,
       memory.distillCommands,
       o2Ports(db).taskLock,
-      { historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions },
+      {
+        taskExecutionParticipants,
+        historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
+      },
     ),
     taskExecutionReadModels: createTaskExecutionReadModels(db),
   }
@@ -548,6 +555,7 @@ describeEachProvider('RFC-359 W12 collaboration context capabilities', (harness)
       capabilities.taskExecutionReadModels,
     )
     input.questionDispatches = createQuestionDispatchCommand(db, o2Ports(db).taskLock, {
+      taskExecutionParticipants,
       historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
     })
     expect(requireQuestionDispatchCommand(context)).toBe(capabilities.questionDispatches)

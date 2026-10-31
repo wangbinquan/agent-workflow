@@ -8,7 +8,7 @@
       "dependencies": [
         {
           "path": "modules/collaboration/infrastructure/clarify/seal.ts",
-          "sha256": "ad7a925483cf0c8ad3acc07de53bc5f199df7f55b09198a7bee8fd19d368d7ca"
+          "sha256": "b5950a2ae74cb20c43c143e9981e141dbd7f9ddd9a93aa6b9d5c3ee4ee4c337b"
         }
       ],
       "sites": [
@@ -25,7 +25,7 @@
           "line": 192
         }
       ],
-      "why": "READ COMMITTED saveDraft takes a question-key advisory lock before checking draft/attribution, plus a round ordinal lock before MAX+1. seal takes the exclusive round lock before reading answers; clarify/seal.ts opens the caller transaction. Regressions: rfc395-clarify-target-concurrency.test.ts."
+      "why": "READ COMMITTED saveDraft takes a question-key advisory lock before checking draft/attribution, plus a round ordinal lock before MAX+1. seal takes the exclusive round lock before reading answers; clarify/seal.ts opens the caller transaction. Regressions: rfc395-clarify-target-concurrency.test.ts. RFC-400: reviewed the seal.ts change (the task node-status event is appended through the injected task-execution participant on the same tx); the round lock, the caller transaction and the answer insert order remain unchanged."
     },
     {
       "path": "modules/task-execution/infrastructure/nodeExecutionPersistence.ts",

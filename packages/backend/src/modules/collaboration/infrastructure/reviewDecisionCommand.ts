@@ -1,3 +1,4 @@
+import type { TaskExecutionParticipantBindings } from './taskExecutionParticipantBindings'
 import type { CollaborationTaskRolePolicy } from '../application/ports/collaborationTaskRolePolicy'
 import type { HumanGateTaskLockPort, ReviewUpstreamAgentPort } from '../composition/required-ports'
 import type { HistoryRestrictionPort } from '@/platform/contracts/historyRestriction'
@@ -13,8 +14,7 @@ import { createFileReviewArtifactContent } from './local/fileReviewArtifactConte
 // （`review.ts#submitReviewDecisionUnlocked`）现在跑在 `DatabaseSession` 上，
 // 评论 / 选择 / 决定的五个事务体两个 provider 共用。
 //
-// 保留动态 import：命令端口由 bootstrap 一次性组合，静态 import 评审域会经
-// `services/humanGateComposition` 绕回 collaboration 的 composition barrel，形成值环。
+// 保留动态 import：命令端口在 bootstrap 装配，业务实现仍在调用时才载入。
 
 import type { Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
@@ -22,9 +22,10 @@ import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { TaskActorRole } from '@agent-workflow/shared'
 import type { CollaborationCommandContext } from '@/modules/collaboration/public/types'
 import type { ReviewDecisionCommandPort } from '@/modules/collaboration/application/ports/reviewDecisionCommand'
-import { createCollaborationCommandContext } from '../composition/commandContext'
+import { createCollaborationCommandContext } from './collaborationCommandContext'
 
 export function createReviewDecisionCommand(input: {
+  readonly taskExecutionParticipants: TaskExecutionParticipantBindings
   readonly taskRolePolicy: CollaborationTaskRolePolicy
   readonly taskLock: HumanGateTaskLockPort
   readonly historyRestrictions: HistoryRestrictionPort
@@ -39,6 +40,7 @@ export function createReviewDecisionCommand(input: {
     async submit(command) {
       const { submitReviewDecision } = await import('./review')
       const decided = await submitReviewDecision({
+        taskExecutionParticipants: input.taskExecutionParticipants,
         db: input.db,
         taskRolePolicy: input.taskRolePolicy,
         taskLock: input.taskLock,
@@ -85,6 +87,7 @@ export function createReviewDecisionCommand(input: {
 
 /** Legacy test bridge; production routes use the bootstrap-owned context. */
 export function createReviewDecisionCommandContext(input: {
+  readonly taskExecutionParticipants: TaskExecutionParticipantBindings
   readonly taskRolePolicy: CollaborationTaskRolePolicy
   readonly taskLock: HumanGateTaskLockPort
   readonly historyRestrictions: HistoryRestrictionPort
@@ -105,6 +108,7 @@ export function createReviewDecisionCommandContext(input: {
     db: input.db,
     appHome: input.appHome,
     reviewDecisions: createReviewDecisionCommand({
+      taskExecutionParticipants: input.taskExecutionParticipants,
       db: input.db,
       appHome: input.appHome,
       taskRolePolicy: input.taskRolePolicy,

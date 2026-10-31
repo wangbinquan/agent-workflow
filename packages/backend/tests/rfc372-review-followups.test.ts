@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 import { withO2Closure } from './helpers/o2Closure'
 import {
   nodeRunFixture,
@@ -308,6 +309,7 @@ describeEachProvider('RFC-372 review O4: canonical keys across property order', 
       return { ...value, confirmedBasis: clarifyAnswerBasis(question, value) }
     })
     const sealed = await sealRoundQuestions({
+      taskExecutionParticipants,
       db: h.db,
       originNodeRunId: fixture.nodeRunId,
       wholeRound: true,

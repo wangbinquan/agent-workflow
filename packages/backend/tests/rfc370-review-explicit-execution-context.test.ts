@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 import { composeCollaborationTaskRolePolicy } from '@/modules/resource-catalog/composition'
 import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
@@ -171,6 +172,7 @@ describeEachProvider(
     test('the owner context passed by the scheduler parks the gate without an ambient context', async () => {
       const seeded = await seedClaimedReviewTask(harness.db)
       const mechanics = createCollaborationRuntimeMechanics(harness.db, {
+        taskExecutionParticipants,
         taskRolePolicy: composeCollaborationTaskRolePolicy(),
         ...epoch2RuntimeTestPorts(harness.db),
         taskLock: o2Ports(harness.db).taskLock,
@@ -204,6 +206,7 @@ describeEachProvider(
       const seeded = await seedClaimedReviewTask(harness.db)
       expect(seeded.context.legacyConnection).toBeUndefined()
       const mechanics = createCollaborationRuntimeMechanics(harness.db, {
+        taskExecutionParticipants,
         taskRolePolicy: composeCollaborationTaskRolePolicy(),
         ...epoch2RuntimeTestPorts(harness.db),
         taskLock: o2Ports(harness.db).taskLock,
@@ -233,6 +236,7 @@ describeEachProvider(
     test('without any context the claimed owner still refuses the ownerless write', async () => {
       const seeded = await seedClaimedReviewTask(harness.db)
       const mechanics = createCollaborationRuntimeMechanics(harness.db, {
+        taskExecutionParticipants,
         taskRolePolicy: composeCollaborationTaskRolePolicy(),
         ...epoch2RuntimeTestPorts(harness.db),
         taskLock: o2Ports(harness.db).taskLock,

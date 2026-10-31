@@ -1,3 +1,4 @@
+import type { TaskExecutionParticipantBindings } from './taskExecutionParticipantBindings'
 // RFC-359 W4-B3 —— 任务终态时的人工门清扫（澄清轮次封存 / 作废 + 挂起 run 取消 + node-statuses committed event）：
 // 一份实现，两个 provider 共用。SQLite 此前经 dbTxSync + 同步 committed-event 参与者，PG 经 SERIALIZABLE；现在同走统一写事务。
 
@@ -7,7 +8,6 @@ import { tablesOf } from '@/platform/persistence/sessionTables'
 import { and, eq } from 'drizzle-orm'
 
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
-import { appendTaskNodeStatusesCommittedEvent } from '@/modules/task-execution/infrastructure/taskLifecycleCommittedEvents'
 import { publishCommittedEventsAfterCommit } from '@/platform/events/committed/runtime'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type {
@@ -17,6 +17,7 @@ import type {
 
 export function createHumanGateTerminalSweepCommand(
   db: PersistenceDb,
+  taskExecutionParticipants: TaskExecutionParticipantBindings,
 ): HumanGateTerminalSweepCommand {
   return {
     async run(input) {
@@ -73,19 +74,21 @@ export function createHumanGateTerminalSweepCommand(
           })),
         )
         if (result.canceledRuns.length === 0) return null
-        return await appendTaskNodeStatusesCommittedEvent(tx, {
-          taskId: input.taskId,
-          nodeChanges: result.canceledRuns.map((run) => ({
-            nodeRunId: run.nodeRunId,
-            nodeId: run.nodeId,
-            status: 'canceled',
-            cause: input.cause,
-          })),
-          occurredAt: now,
-          identity: {
-            operationRef: `terminal-sweep:${input.taskId}:${input.cause}`,
-          },
-        })
+        return await taskExecutionParticipants
+          .createTaskNodeStatusEventsParticipantInTx(tx)
+          .append({
+            taskId: input.taskId,
+            nodeChanges: result.canceledRuns.map((run) => ({
+              nodeRunId: run.nodeRunId,
+              nodeId: run.nodeId,
+              status: 'canceled',
+              cause: input.cause,
+            })),
+            occurredAt: now,
+            identity: {
+              operationRef: `terminal-sweep:${input.taskId}:${input.cause}`,
+            },
+          })
       })
       await publishCommittedEventsAfterCommit(eventRef === null ? [] : [eventRef])
       return result satisfies HumanGateTerminalSweepResult

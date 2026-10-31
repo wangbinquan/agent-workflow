@@ -1,6 +1,6 @@
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 
-import type { Actor } from '@/auth/actor'
+import type { AuthenticatedAuthoritySnapshot } from '@/modules/identity-access/public/participants'
 import type { ResourceRequestContext } from '@/modules/resource-catalog/public/participants'
 import type {
   FrozenTaskExecutionResourceSnapshot,
@@ -10,7 +10,7 @@ import type {
 /** Exact authority captured when a task launch or execution is admitted. */
 export interface TaskExecutionResourceAuthorityPair {
   readonly authority: ResourceRequestContext
-  readonly actor: Actor
+  readonly actor: AuthenticatedAuthoritySnapshot
 }
 
 export interface TaskExecutionCallClosureRoot {

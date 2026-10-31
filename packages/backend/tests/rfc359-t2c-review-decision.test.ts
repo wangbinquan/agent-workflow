@@ -20,7 +20,7 @@ import {
   updateReviewCommentText,
 } from '@/modules/collaboration/infrastructure/review'
 import { createReviewDecisionCommand } from '@/modules/collaboration/infrastructure/reviewDecisionCommand'
-import { createCollaborationCommandContext } from '@/modules/collaboration/composition/commandContext'
+import { createCollaborationCommandContext } from '@/modules/collaboration/infrastructure/collaborationCommandContext'
 import { submitReviewDecision } from '@/modules/collaboration/public/commands'
 import type { ReviewDecisionCommandPort } from '@/modules/collaboration/application/ports/reviewDecisionCommand'
 import { ConflictError } from '@/util/errors'

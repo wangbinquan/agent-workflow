@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 import { withO2Closure } from './helpers/o2Closure'
 // RFC-127 T5 / RFC-131 T4 «借壳» (borrow-the-shell) — RETIRED by RFC-162.
 //
@@ -185,6 +186,7 @@ describeEachProvider('RFC-359 rfc127-designer-borrow-dispatch database behavior'
       const { taskId, crossClarifyNodeRunId } = await seedTask(db)
       // Control-channel seal → answered round + ONE questioner entry (RFC-162: no designer by default).
       await sealRoundQuestions({
+        taskExecutionParticipants,
         db,
         originNodeRunId: crossClarifyNodeRunId,
         answers: [ans('q1')],

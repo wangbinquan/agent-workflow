@@ -10,7 +10,7 @@
 // 两种半截状态同时存在。
 
 import type { FusionStatus, TaskStatus } from '@agent-workflow/shared'
-import type { Actor } from '@/auth/actor'
+import type { AuthenticatedAuthoritySnapshot } from '@/modules/identity-access/public/participants'
 
 import type { MemoryCatalogOperations } from '../../memory/public/catalog'
 import type { SkillTreeVersionOperations } from '../../resource-catalog/public/participants'
@@ -32,7 +32,10 @@ export interface FusionPersistence {
   seedResources(seed: FusionResourceSeed): Promise<void>
   loadBuiltinWorkflowId(seed: FusionBuiltinWorkflowSeed, ownerUserId: string): Promise<string>
 
-  loadSkillAccess(actor: Actor, skillId: string): Promise<FusionSkillAccess | null>
+  loadSkillAccess(
+    actor: AuthenticatedAuthoritySnapshot,
+    skillId: string,
+  ): Promise<FusionSkillAccess | null>
   loadSkillIdentity(skillId: string): Promise<FusionSkillIdentity | null>
 
   create(record: FusionPersistenceRecord): Promise<void>
@@ -48,7 +51,7 @@ export interface FusionPersistence {
   claimDecision(command: FusionDecisionClaimInput): Promise<boolean>
   claimCancellation(input: {
     readonly id: string
-    readonly actor: Actor
+    readonly actor: AuthenticatedAuthoritySnapshot
     readonly now: number
   }): Promise<{ readonly ok: false } | { readonly ok: true; readonly taskId: string | null }>
   apply(command: FusionApplyCommand): Promise<{ readonly versionIndex: number }>
@@ -105,8 +108,8 @@ export interface FusionOperations {
 // RFC-353 T5 —— fusion 的**命令载荷**形状。
 //
 // 它们是入参 DTO（谁在改、从什么状态改到什么状态、这次提交带什么），不是 participant。
-// 它们与 `FusionPersistence` 的方法签名绑定，所以住在 participants 面；`public/types` 不允许
-// 出现 `Actor`（硬规则），而这里的 Actor 依赖是 RFC-294 已登记的存量债。
+// 它们与 `FusionPersistence` 的方法签名绑定，所以保留在 participants 面；
+// RFC-400：调用方身份直接使用 Identity Access 的 AuthenticatedAuthoritySnapshot。
 //
 // `FusionDecisionClaimInput` 原名 `FusionDecisionClaimInput`：capability-forge 守卫按**名字后缀**
 // 判敏感类型（`…Claim` 视为需要 brand + 唯一工厂 + 私有注册表的能力对象）。它其实只是入参 DTO，
@@ -115,7 +118,7 @@ export interface FusionOperations {
 
 export interface FusionDecisionClaimInput {
   readonly id: string
-  readonly actor: Actor
+  readonly actor: AuthenticatedAuthoritySnapshot
   readonly from: FusionStatus
   readonly to: FusionStatus
   readonly patch?: FusionPersistencePatch
@@ -131,7 +134,7 @@ export interface FusionStatusCas {
 
 export interface FusionApplyCommand {
   readonly fusionId: string
-  readonly actor: Actor
+  readonly actor: AuthenticatedAuthoritySnapshot
   /** The proposed skill tree that becomes the next version. */
   readonly proposal: readonly FusionTreeFile[]
   readonly incorporatedMemoryIds: readonly string[]

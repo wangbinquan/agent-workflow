@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 import { nodeRunFixtureColumns } from './helpers/model/nodeRun'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { withO2Closure } from './helpers/o2Closure'
@@ -257,6 +258,7 @@ async function driveToRejectRerun(h: Harness, taskId: string) {
   )[0]!
   // Answer with directive STOP → the 承接 rerun finalizes with <workflow-output> (not another clarify).
   await sealRoundQuestions({
+    taskExecutionParticipants,
     db: h.db,
     originNodeRunId: r1sess.intermediaryNodeRunId,
     answers: [ans('r1q', 0, CLARIFY_ANS)],
@@ -266,6 +268,7 @@ async function driveToRejectRerun(h: Harness, taskId: string) {
   })
   await dispatchTaskQuestions(
     h.db,
+    taskExecutionParticipants,
     taskId,
     [await selfEntryId(h, taskId, r1sess.intermediaryNodeRunId)],
     actor,

@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 import { withO2Closure } from './helpers/o2Closure'
 // RFC-056 PR-D C5 — wrapper-loop partial persistence 守门.
 //
@@ -214,6 +215,7 @@ describeEachProvider('RFC-056 C5 — wrapper-loop partial persistence', (harness
       }),
     )
     await autoDispatchClarifyRound({
+      taskExecutionParticipants,
       db,
       memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
       originNodeRunId: a.intermediaryNodeRunId,
@@ -245,6 +247,7 @@ describeEachProvider('RFC-056 C5 — wrapper-loop partial persistence', (harness
     )
     // Iter 0 user submitted continue — designer reran already in iter 0.
     await autoDispatchClarifyRound({
+      taskExecutionParticipants,
       db,
       memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
       originNodeRunId: iter0Session.intermediaryNodeRunId,
@@ -287,6 +290,7 @@ describeEachProvider('RFC-056 C5 — wrapper-loop partial persistence', (harness
       }),
     )
     await autoDispatchClarifyRound({
+      taskExecutionParticipants,
       db,
       memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
       originNodeRunId: a.intermediaryNodeRunId,
@@ -306,6 +310,7 @@ describeEachProvider('RFC-056 C5 — wrapper-loop partial persistence', (harness
       iteration: 1,
     })
     const ret = await dispatchCrossClarifyNode({
+      taskExecutionParticipants,
       db,
       taskId,
       crossClarifyNodeId: 'cross1',
@@ -347,6 +352,7 @@ describeEachProvider('RFC-056 C5 — wrapper-loop partial persistence', (harness
       }),
     )
     await autoDispatchClarifyRound({
+      taskExecutionParticipants,
       db,
       memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
       originNodeRunId: a.intermediaryNodeRunId,

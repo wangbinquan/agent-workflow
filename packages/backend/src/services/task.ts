@@ -288,6 +288,9 @@ export async function shutdownActiveTaskExecutions(
 // 由 `services/shutdown.ts` 经 `dependencies.operations` 调用），这一份自那以后生产侧零调用方。
 
 export interface TaskContinuationDependencies {
+  readonly taskExecutionParticipants: Parameters<
+    typeof composeGateContinuationSupport
+  >[0]['taskExecutionParticipants']
   readonly humanGateOpen: HumanGateOpenParticipantFactory
   readonly historyRestrictions: HistoryRestrictionPort
   /** Frozen commit identity used when resuming repository preparation. */
@@ -763,6 +766,9 @@ export type TaskDriveCoordinatorDependencies = Parameters<typeof runtimeConfigOp
 
 /** RFC-387: test-only assembly for the legacy entry points; removed in W4. */
 export function composeTestTaskDriveFactory(input: {
+  readonly taskExecutionParticipants: Parameters<
+    typeof composeGateContinuationSupport
+  >[0]['taskExecutionParticipants']
   readonly humanGateOpen: HumanGateOpenParticipantFactory
   readonly historyRestrictions: HistoryRestrictionPort
   readonly deps: TaskDriveCoordinatorDependencies
@@ -832,6 +838,7 @@ export function composeTestTaskDriveFactory(input: {
       composeGateContinuationPreDrive({
         persistence,
         ...composeGateContinuationSupport({
+          taskExecutionParticipants: input.taskExecutionParticipants,
           historyRestrictions: input.historyRestrictions,
           db: input.deps.db,
           taskLock: composeHumanGateTaskLockPort,
@@ -1310,6 +1317,7 @@ export async function wakeHumanGateContinuation(
   if (deps.awaitScheduler === true) await awaitTaskDriverIdle(taskId)
   else if (isTaskDriverActive(taskId)) return
   await composeTestTaskDriveFactory({
+    taskExecutionParticipants: deps.taskExecutionParticipants,
     humanGateOpen: deps.humanGateOpen,
     deps,
     historyRestrictions: deps.historyRestrictions,
@@ -1600,6 +1608,7 @@ async function resumeKick(
     },
   }
   const coordinator = composeTestTaskDriveFactory({
+    taskExecutionParticipants: deps.taskExecutionParticipants,
     humanGateOpen: deps.humanGateOpen,
     historyRestrictions: deps.historyRestrictions,
     deps,
@@ -1995,6 +2004,7 @@ export async function retryRepositoryPreparation(
 ): Promise<Task> {
   const appHome = deps.appHome ?? Paths.root
   const factory = composeTestTaskDriveFactory({
+    taskExecutionParticipants: deps.taskExecutionParticipants,
     humanGateOpen: deps.humanGateOpen,
     historyRestrictions: deps.historyRestrictions,
     deps: { ...deps, db },

@@ -23,8 +23,8 @@
       "reason": "max=0: RFC-399 removes context value cycles, off-DAG values and platform reverse edges; exact working-tree census 2 -> 0."
     },
     "cross-context-internal-file-pairs": {
-      "max": 73,
-      "reason": "max=73: RFC-399 removes context value cycles, off-DAG values and platform reverse edges; exact working-tree census 88 -> 73."
+      "max": 56,
+      "reason": "max=56: RFC-400 complete-candidate structural census 73 -> 56; participant injection and human-gate bridge retirement; no growth authorized."
     },
     "depcheck-known-violations": {
       "max": 0,
@@ -43,12 +43,12 @@
       "reason": "max=21: RFC-399 removes context value cycles, off-DAG values and platform reverse edges; exact working-tree census 23 -> 21."
     },
     "legacy-horizontal-files": {
-      "max": 390,
-      "reason": "max=390: RFC-399 working-tree census after shared contracts and facade retirement: 391 -> 390."
+      "max": 389,
+      "reason": "max=389: RFC-400 complete-candidate structural census 390 -> 389; participant injection and human-gate bridge retirement; no growth authorized."
     },
     "legacy-service-implementations": {
-      "max": 219,
-      "reason": "max=219: RFC-399 working-tree census after shared contracts and facade retirement: 220 -> 219."
+      "max": 218,
+      "reason": "max=218: RFC-400 complete-candidate structural census 219 -> 218; participant injection and human-gate bridge retirement; no growth authorized."
     },
     "legacy-thin-facades": {
       "max": 44,

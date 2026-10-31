@@ -1,6 +1,7 @@
 import type { OwnerIdentity, ResourceGrantLevel, UserPublic } from '@agent-workflow/shared'
 
 import type { Actor } from '@/auth/actor'
+import type { AuthenticatedAuthoritySnapshot } from '@/modules/identity-access/public/participants'
 import type { ResourceRequestContext } from '@/modules/resource-catalog/public/participants'
 import type {
   FrozenIntegrationTriggerResourceSnapshot,
@@ -143,7 +144,7 @@ export interface ScheduledTaskPersistencePort {
 }
 
 export interface IntegrationOverviewQueries {
-  countScheduled(actor: Actor): Promise<number | null>
+  countScheduled(actor: AuthenticatedAuthoritySnapshot): Promise<number | null>
 }
 
 /** Required async snapshot seam used outside an owning persistence transaction. */

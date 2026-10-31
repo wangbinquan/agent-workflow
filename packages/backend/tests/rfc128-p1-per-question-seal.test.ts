@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 import { withO2Closure } from './helpers/o2Closure'
 // RFC-128 P1 — per-question seal 落库地基（先红后绿）。
 //
@@ -211,7 +212,12 @@ describeEachProvider('RFC-128 per-question seal providers', (harness) => {
       const db = harness.db
       const { taskId, originNodeRunId } = await seedSelfRound(db, [makeQ('q1'), makeQ('q2')])
 
-      const res = await sealRoundQuestions({ db, originNodeRunId, answers: [makeAns('q1', 1)] })
+      const res = await sealRoundQuestions({
+        taskExecutionParticipants,
+        db,
+        originNodeRunId,
+        answers: [makeAns('q1', 1)],
+      })
       expect(res.sealedQuestionIds).toEqual(['q1'])
       expect(res.roundFullySealed).toBe(false)
 
@@ -226,8 +232,18 @@ describeEachProvider('RFC-128 per-question seal providers', (harness) => {
       const db = harness.db
       const { taskId, originNodeRunId } = await seedSelfRound(db, [makeQ('q1'), makeQ('q2')])
 
-      await sealRoundQuestions({ db, originNodeRunId, answers: [makeAns('q1', 0)] })
-      const res2 = await sealRoundQuestions({ db, originNodeRunId, answers: [makeAns('q2', 1)] })
+      await sealRoundQuestions({
+        taskExecutionParticipants,
+        db,
+        originNodeRunId,
+        answers: [makeAns('q1', 0)],
+      })
+      const res2 = await sealRoundQuestions({
+        taskExecutionParticipants,
+        db,
+        originNodeRunId,
+        answers: [makeAns('q2', 1)],
+      })
 
       // 第二题 seal 后全题已 seal → 轮翻 answered。
       expect(res2.roundFullySealed).toBe(true)
@@ -248,9 +264,20 @@ describeEachProvider('RFC-128 per-question seal providers', (harness) => {
       const db = harness.db
       const { originNodeRunId } = await seedSelfRound(db, [makeQ('q1'), makeQ('q2')])
       // autoStage: seal 即进 待下发（staged_at 非空）——重 seal 必须仍被拒。
-      await sealRoundQuestions({ db, originNodeRunId, answers: [makeAns('q1')], autoStage: true })
+      await sealRoundQuestions({
+        taskExecutionParticipants,
+        db,
+        originNodeRunId,
+        answers: [makeAns('q1')],
+        autoStage: true,
+      })
       await expect(
-        sealRoundQuestions({ db, originNodeRunId, answers: [makeAns('q1')] }),
+        sealRoundQuestions({
+          taskExecutionParticipants,
+          db,
+          originNodeRunId,
+          answers: [makeAns('q1')],
+        }),
       ).rejects.toThrow('already sealed')
     })
   })
@@ -267,12 +294,27 @@ describeEachProvider('RFC-128 per-question seal providers', (harness) => {
         makeQ('q2'),
         makeQ('q3'),
       ])
-      await sealRoundQuestions({ db, originNodeRunId, answers: [makeAns('q1')] })
+      await sealRoundQuestions({
+        taskExecutionParticipants,
+        db,
+        originNodeRunId,
+        answers: [makeAns('q1')],
+      })
       expect((await roundOf(db, taskId))[0]?.status).toBe('awaiting_human')
-      await sealRoundQuestions({ db, originNodeRunId, answers: [makeAns('q2')] })
+      await sealRoundQuestions({
+        taskExecutionParticipants,
+        db,
+        originNodeRunId,
+        answers: [makeAns('q2')],
+      })
       expect((await roundOf(db, taskId))[0]?.status).toBe('awaiting_human')
 
-      const res3 = await sealRoundQuestions({ db, originNodeRunId, answers: [makeAns('q3')] })
+      const res3 = await sealRoundQuestions({
+        taskExecutionParticipants,
+        db,
+        originNodeRunId,
+        answers: [makeAns('q3')],
+      })
       expect(res3.roundFullySealed).toBe(true)
       const [round] = await roundOf(db, taskId)
       expect(round?.status).toBe('answered')
@@ -298,7 +340,12 @@ describeEachProvider('RFC-128 per-question seal providers', (harness) => {
       const db = harness.db
       const { taskId, originNodeRunId } = await seedCrossRound(db, [makeQ('q1'), makeQ('q2')])
 
-      const res = await sealRoundQuestions({ db, originNodeRunId, answers: [makeAns('q1')] })
+      const res = await sealRoundQuestions({
+        taskExecutionParticipants,
+        db,
+        originNodeRunId,
+        answers: [makeAns('q1')],
+      })
       expect(res.roundFullySealed).toBe(false)
 
       const dtos = await listTaskQuestions(db, taskId)
@@ -325,6 +372,7 @@ describeEachProvider('RFC-128 per-question seal providers', (harness) => {
       ])
 
       await sealRoundQuestions({
+        taskExecutionParticipants,
         db,
         originNodeRunId,
         answers: [
@@ -351,7 +399,12 @@ describeEachProvider('RFC-128 per-question seal providers', (harness) => {
     test('全题 seal（轮 answered）：所有题 sealed=true（无 sealed_at 回填也成立——派生自轮 status）', async () => {
       const db = harness.db
       const { taskId, originNodeRunId } = await seedSelfRound(db, [makeQ('q1'), makeQ('q2')])
-      await sealRoundQuestions({ db, originNodeRunId, answers: [makeAns('q1'), makeAns('q2')] })
+      await sealRoundQuestions({
+        taskExecutionParticipants,
+        db,
+        originNodeRunId,
+        answers: [makeAns('q1'), makeAns('q2')],
+      })
       const dtos = await listTaskQuestions(db, taskId)
       expect(dtos.length).toBeGreaterThan(0)
       expect(dtos.every((d) => d.sealed)).toBe(true)
@@ -377,8 +430,18 @@ describeEachProvider('RFC-128 per-question seal providers', (harness) => {
       // completion atomically — the SECOND observes the first's committed answers_json, so
       // neither answer is lost (pre-P2-1 the two interleaved read-merge-writes lost one).
       await Promise.all([
-        sealRoundQuestions({ db, originNodeRunId, answers: [makeAns('q1', 0)] }),
-        sealRoundQuestions({ db, originNodeRunId, answers: [makeAns('q2', 1)] }),
+        sealRoundQuestions({
+          taskExecutionParticipants,
+          db,
+          originNodeRunId,
+          answers: [makeAns('q1', 0)],
+        }),
+        sealRoundQuestions({
+          taskExecutionParticipants,
+          db,
+          originNodeRunId,
+          answers: [makeAns('q2', 1)],
+        }),
       ])
 
       const [round] = await roundOf(db, taskId)
@@ -394,7 +457,12 @@ describeEachProvider('RFC-128 per-question seal providers', (harness) => {
       // Force the round terminal so the in-tx guard throws AFTER nothing has committed.
       await patchClarifyRoundFixture(db, { taskId }, { status: 'canceled' })
       await expect(
-        sealRoundQuestions({ db, originNodeRunId, answers: [makeAns('q1')] }),
+        sealRoundQuestions({
+          taskExecutionParticipants,
+          db,
+          originNodeRunId,
+          answers: [makeAns('q1')],
+        }),
       ).rejects.toThrow('cannot seal')
       const [round] = await roundOf(db, taskId)
       expect(round?.answers ?? null).toBeNull() // nothing written
@@ -411,11 +479,17 @@ describeEachProvider('RFC-128 per-question seal providers', (harness) => {
       const { taskId, originNodeRunId } = await seedSelfRound(db, [makeQ('q1'), makeQ('q2')])
 
       // Control channel seals q1 with index 0 (round stays awaiting_human).
-      await sealRoundQuestions({ db, originNodeRunId, answers: [makeAns('q1', 0)] })
+      await sealRoundQuestions({
+        taskExecutionParticipants,
+        db,
+        originNodeRunId,
+        answers: [makeAns('q1', 0)],
+      })
 
       // Quick channel finalize (autoDispatchClarifyRound) posts ALL questions, trying to CHANGE
       // q1 → index 1.
       await autoDispatchClarifyRound({
+        taskExecutionParticipants,
         db,
         memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
         originNodeRunId,
@@ -435,6 +509,7 @@ describeEachProvider('RFC-128 per-question seal providers', (harness) => {
       const db = harness.db
       const { taskId, originNodeRunId } = await seedSelfRound(db, [makeQ('q1'), makeQ('q2')])
       await autoDispatchClarifyRound({
+        taskExecutionParticipants,
         db,
         memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
         originNodeRunId,
@@ -471,7 +546,13 @@ describeEachProvider('RFC-128 per-question seal providers', (harness) => {
       const db = harness.db
       const { taskId, originNodeRunId } = await seedSelfRound(db, [makeQ('q1'), makeQ('q2')])
 
-      await sealRoundQuestions({ db, originNodeRunId, answers: [makeAns('q1')], autoStage: true })
+      await sealRoundQuestions({
+        taskExecutionParticipants,
+        db,
+        originNodeRunId,
+        answers: [makeAns('q1')],
+        autoStage: true,
+      })
 
       const list = await listTaskQuestions(db, taskId)
       const q1 = list.find((d) => d.questionId === 'q1')!
@@ -490,7 +571,12 @@ describeEachProvider('RFC-128 per-question seal providers', (harness) => {
       const db = harness.db
       const { taskId, originNodeRunId } = await seedSelfRound(db, [makeQ('q1'), makeQ('q2')])
 
-      await sealRoundQuestions({ db, originNodeRunId, answers: [makeAns('q1')] })
+      await sealRoundQuestions({
+        taskExecutionParticipants,
+        db,
+        originNodeRunId,
+        answers: [makeAns('q1')],
+      })
 
       const q1 = (await listTaskQuestions(db, taskId)).find((d) => d.questionId === 'q1')!
       expect(q1.sealed).toBe(true)
@@ -502,9 +588,20 @@ describeEachProvider('RFC-128 per-question seal providers', (harness) => {
       const db = harness.db
       const { taskId, originNodeRunId } = await seedSelfRound(db, [makeQ('q1'), makeQ('q2')])
 
-      await sealRoundQuestions({ db, originNodeRunId, answers: [makeAns('q1')], autoStage: true })
+      await sealRoundQuestions({
+        taskExecutionParticipants,
+        db,
+        originNodeRunId,
+        answers: [makeAns('q1')],
+        autoStage: true,
+      })
       // Second seal opts OUT of autoStage; it also fully seals the round (both questions sealed).
-      await sealRoundQuestions({ db, originNodeRunId, answers: [makeAns('q2')] })
+      await sealRoundQuestions({
+        taskExecutionParticipants,
+        db,
+        originNodeRunId,
+        answers: [makeAns('q2')],
+      })
 
       const list = await listTaskQuestions(db, taskId)
       expect(list.find((d) => d.questionId === 'q1')!.staged).toBe(true) // preserved from call 1

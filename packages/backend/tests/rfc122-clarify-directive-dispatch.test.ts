@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 // RFC-395 II-pre：改接生产启动 / 读取路径，保留原断言意图。
 // RFC-122 — integration: a self-clarify node with a 'stop' override dispatches
@@ -351,6 +352,7 @@ describe('RFC-122 dispatch — stop override suppresses the ask-back protocol', 
     // answers "keep clarifying" — the toggle must win.
     await setNodeClarifyDirective(c.db, task.id, 'designer', 'stop', 'u-tester')
     await autoDispatchClarifyRound({
+      taskExecutionParticipants,
       db: c.db,
       memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(c.db),
       originNodeRunId: await openClarifyRunId(c.db, task.id),

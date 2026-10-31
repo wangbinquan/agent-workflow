@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import { epoch2ReviewReader } from './helpers/epoch2RuntimePorts'
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
@@ -278,6 +279,7 @@ describe('RFC-310 human-reviewed digital employee TaskEngine system mock E2E', (
       // `wakeHumanGateContinuation`（人审放行的继续驱动）仍是 legacy 启动面的 API，
       // 还吃 `TaskContinuationDependencies`——退役它是 plan §5hn 的活，不在本刀范围内。
       const startDeps = {
+        taskExecutionParticipants,
         humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
         db,

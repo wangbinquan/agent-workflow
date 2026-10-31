@@ -19,7 +19,7 @@ import type {
   WorkflowSyncPreview,
 } from '@agent-workflow/shared'
 
-import type { Actor } from '@/auth/actor'
+import type { AuthenticatedAuthoritySnapshot } from '@/modules/identity-access/public/participants'
 import type { NodeRunPromptOperations, TaskArchivedEventsReader } from './types'
 
 /** Provider-neutral filters accepted by the classic task-list HTTP surface. */
@@ -64,27 +64,37 @@ export interface TaskRouteOperations {
   listItems(filters: TaskRouteListFilters): Promise<readonly TaskListItem[]>
   get(taskId: string): Promise<Task | null>
 
-  assertVisible(actor: Actor, taskId: string): Promise<void>
-  requireOperator(actor: Actor, taskId: string): Promise<void>
-  assertReplayVisible(actor: Actor, sourceTaskId: string): Promise<void>
+  assertVisible(actor: AuthenticatedAuthoritySnapshot, taskId: string): Promise<void>
+  requireOperator(actor: AuthenticatedAuthoritySnapshot, taskId: string): Promise<void>
+  assertReplayVisible(actor: AuthenticatedAuthoritySnapshot, sourceTaskId: string): Promise<void>
 
-  getMembers(actor: Actor, taskId: string): Promise<TaskMembers>
-  replaceMembers(actor: Actor, taskId: string, body: UpdateTaskMembersBody): Promise<TaskMembers>
+  getMembers(actor: AuthenticatedAuthoritySnapshot, taskId: string): Promise<TaskMembers>
+  replaceMembers(
+    actor: AuthenticatedAuthoritySnapshot,
+    taskId: string,
+    body: UpdateTaskMembersBody,
+  ): Promise<TaskMembers>
 
-  getReviewers(actor: Actor, taskId: string): Promise<ReviewNodeReviewerConfig>
+  getReviewers(
+    actor: AuthenticatedAuthoritySnapshot,
+    taskId: string,
+  ): Promise<ReviewNodeReviewerConfig>
   replaceReviewers(
-    actor: Actor,
+    actor: AuthenticatedAuthoritySnapshot,
     taskId: string,
     body: ReplaceReviewNodeReviewersBody,
   ): Promise<ReviewNodeReviewerConfig>
 
-  launchWorkflow(actor: Actor, task: StartTask): Promise<Task>
-  launchMultipart(request: Request, actor: Actor): Promise<Task>
+  launchWorkflow(actor: AuthenticatedAuthoritySnapshot, task: StartTask): Promise<Task>
+  launchMultipart(request: Request, actor: AuthenticatedAuthoritySnapshot): Promise<Task>
   cancel(taskId: string): Promise<Task>
   delete(taskId: string): Promise<TaskRouteDeleteResult>
-  resume(input: { readonly actor: Actor; readonly taskId: string }): Promise<Task>
+  resume(input: {
+    readonly actor: AuthenticatedAuthoritySnapshot
+    readonly taskId: string
+  }): Promise<Task>
   retry(input: {
-    readonly actor: Actor
+    readonly actor: AuthenticatedAuthoritySnapshot
     readonly taskId: string
     readonly nodeRunId: string
     readonly cascade: boolean
@@ -103,21 +113,24 @@ export interface TaskRouteOperations {
     options: Readonly<{ since?: number; limit?: number }>,
   ): Promise<NodeRunEventsResponse>
 
-  assertManualExecutionAllowed(actor: Actor, taskId: string): Promise<void>
-  workflowSyncPreview(actor: Actor, taskId: string): Promise<WorkflowSyncPreview>
+  assertManualExecutionAllowed(actor: AuthenticatedAuthoritySnapshot, taskId: string): Promise<void>
+  workflowSyncPreview(
+    actor: AuthenticatedAuthoritySnapshot,
+    taskId: string,
+  ): Promise<WorkflowSyncPreview>
   syncWorkflow(input: {
-    readonly actor: Actor
+    readonly actor: AuthenticatedAuthoritySnapshot
     readonly taskId: string
     readonly expectedVersion: number
   }): Promise<Task>
 
   repairOptions(input: {
-    readonly actor: Actor
+    readonly actor: AuthenticatedAuthoritySnapshot
     readonly taskId: string
     readonly alertId: string
   }): Promise<RepairOptionsResponse>
   applyRepair(input: {
-    readonly actor: Actor
+    readonly actor: AuthenticatedAuthoritySnapshot
     readonly taskId: string
     readonly alertId: string
     readonly optionId: string

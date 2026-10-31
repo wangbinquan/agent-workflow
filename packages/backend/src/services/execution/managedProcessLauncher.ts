@@ -22,6 +22,13 @@ export {
   type WindowsOutputSpool,
 } from '@/platform/execution/local/managedProcessLauncher'
 
+// No top-level await (see the platform launcher): importers must stay synchronous modules.
 if (import.meta.main) {
-  process.exit(await runManagedProcessLauncher(Bun.argv))
+  void runManagedProcessLauncher(Bun.argv).then(
+    (exitCode) => process.exit(exitCode),
+    (error: unknown) => {
+      console.error(error)
+      process.exit(1)
+    },
+  )
 }

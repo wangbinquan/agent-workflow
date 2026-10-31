@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './taskExecutionParticipantBindings'
 import { composeTaskMemorySnapshotPort } from '@/modules/memory/composition'
 import { composeCollaborationTaskRolePolicy } from '@/modules/resource-catalog/composition'
 import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
@@ -207,6 +208,7 @@ export async function createEachProviderTaskExecution(
   const appHome = runConfig.appHome
   const configPath = join(appHome, 'config.json')
   const collaborationRuntime = createCollaborationRuntimeMechanics(db, {
+    taskExecutionParticipants,
     taskRolePolicy: composeCollaborationTaskRolePolicy(),
     ...epoch2RuntimeTestPorts(db),
     taskLock: o2Ports(db).taskLock,
@@ -308,7 +310,7 @@ export async function createEachProviderTaskExecution(
         ),
         runtime: {
           memorySnapshots: composeTaskMemorySnapshotPort(),
-          taskDagCollaboration: createTaskDagCollaborationOperations(db),
+          taskDagCollaboration: createTaskDagCollaborationOperations(db, taskExecutionParticipants),
           processConcurrencyScope: sqlite,
           ...runBinding,
           workspaceExcludeProfilesFor,
@@ -491,7 +493,7 @@ export async function createEachProviderTaskExecution(
         nodeRunRuntime: composeNodeRunRuntimePersistence(db),
         runtimeSessionLeases: createRuntimeSessionLeaseOperations(db),
         memoryInjectionQueries: sqliteMemoryInjectionQueries(db),
-        taskDagCollaboration: createTaskDagCollaborationOperations(db),
+        taskDagCollaboration: createTaskDagCollaborationOperations(db, taskExecutionParticipants),
         collaborationRuntime,
         workgroupTurns,
         dynamicWorkflow,

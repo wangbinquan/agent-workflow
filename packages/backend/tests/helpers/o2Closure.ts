@@ -15,6 +15,7 @@ export function withO2Closure<T extends { readonly db: PersistenceDb }>(input: T
     taskMembership: ports.taskMembership,
     memorySnapshots: composeTaskMemorySnapshotPort(),
     taskLock: ports.taskLock,
+    taskExecutionParticipants: ports.taskExecutionParticipants,
     upstreamAgents: ports.upstreamAgents,
     clarifyNav: ports.collaborationReads.clarifyNav,
     archiveCollaboration: ports.collaborationReads.archive,

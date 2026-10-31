@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 import { withO2Closure } from './helpers/o2Closure'
 // RFC-056 PR-D C3 — multi-source wait 守门.
 //
@@ -61,7 +62,7 @@ async function reassignAllThenDispatchDesigner(
   const designerIds = (await listTaskQuestions(db, taskId))
     .filter((e) => e.roleKind === 'designer' && crossClarifyNodeRunIds.includes(e.originNodeRunId!))
     .map((e) => e.id)
-  return dispatchTaskQuestions(db, taskId, designerIds, actor)
+  return dispatchTaskQuestions(db, taskExecutionParticipants, taskId, designerIds, actor)
 }
 
 function makeQ(id: string): ClarifyQuestion {
@@ -285,6 +286,7 @@ describeEachProvider('RFC-056 C3 — multi-source wait', (harness) => {
   test('1/3 answered → designer PARKS (no designer rerun); readiness lists the OTHER two pending', async () => {
     const { db, taskId, sec } = await buildHarness(harness.db)
     const ret = await autoDispatchClarifyRound({
+      taskExecutionParticipants,
       db,
       memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
       originNodeRunId: sec,
@@ -310,6 +312,7 @@ describeEachProvider('RFC-056 C3 — multi-source wait', (harness) => {
   test('2/3 answered → designer still parked; readiness lists the LAST one pending', async () => {
     const { db, taskId, sec, ux } = await buildHarness(harness.db)
     await autoDispatchClarifyRound({
+      taskExecutionParticipants,
       db,
       memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
       originNodeRunId: sec,
@@ -317,6 +320,7 @@ describeEachProvider('RFC-056 C3 — multi-source wait', (harness) => {
       actor,
     })
     const ret = await autoDispatchClarifyRound({
+      taskExecutionParticipants,
       db,
       memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
       originNodeRunId: ux,
@@ -338,6 +342,7 @@ describeEachProvider('RFC-056 C3 — multi-source wait', (harness) => {
   test('partial answer does NOT create a new pending designer node_run', async () => {
     const { db, taskId, sec, ux } = await buildHarness(harness.db)
     await autoDispatchClarifyRound({
+      taskExecutionParticipants,
       db,
       memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
       originNodeRunId: sec,
@@ -345,6 +350,7 @@ describeEachProvider('RFC-056 C3 — multi-source wait', (harness) => {
       actor,
     })
     await autoDispatchClarifyRound({
+      taskExecutionParticipants,
       db,
       memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
       originNodeRunId: ux,
@@ -363,6 +369,7 @@ describeEachProvider('RFC-056 C3 — multi-source wait', (harness) => {
   test('3/3 answered → dispatching the designer entries mints ONE rerun aggregating all 3 sources', async () => {
     const { db, taskId, sec, ux, perf } = await buildHarness(harness.db)
     await autoDispatchClarifyRound({
+      taskExecutionParticipants,
       db,
       memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
       originNodeRunId: sec,
@@ -370,6 +377,7 @@ describeEachProvider('RFC-056 C3 — multi-source wait', (harness) => {
       actor,
     })
     await autoDispatchClarifyRound({
+      taskExecutionParticipants,
       db,
       memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
       originNodeRunId: ux,
@@ -377,6 +385,7 @@ describeEachProvider('RFC-056 C3 — multi-source wait', (harness) => {
       actor,
     })
     await autoDispatchClarifyRound({
+      taskExecutionParticipants,
       db,
       memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
       originNodeRunId: perf,
@@ -395,6 +404,7 @@ describeEachProvider('RFC-056 C3 — multi-source wait', (harness) => {
   test('final answer creates exactly ONE elevated designer node_run + consumes ALL 3 rounds', async () => {
     const { db, taskId, sec, ux, perf } = await buildHarness(harness.db)
     await autoDispatchClarifyRound({
+      taskExecutionParticipants,
       db,
       memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
       originNodeRunId: sec,
@@ -402,6 +412,7 @@ describeEachProvider('RFC-056 C3 — multi-source wait', (harness) => {
       actor,
     })
     await autoDispatchClarifyRound({
+      taskExecutionParticipants,
       db,
       memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
       originNodeRunId: ux,
@@ -409,6 +420,7 @@ describeEachProvider('RFC-056 C3 — multi-source wait', (harness) => {
       actor,
     })
     await autoDispatchClarifyRound({
+      taskExecutionParticipants,
       db,
       memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
       originNodeRunId: perf,

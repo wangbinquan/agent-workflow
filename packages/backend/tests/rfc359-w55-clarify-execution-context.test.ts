@@ -1,3 +1,4 @@
+import type { TaskExecutionParticipantBindings } from '@/modules/collaboration/infrastructure/taskExecutionParticipantBindings'
 import { expect, test } from 'bun:test'
 import { composeHumanGateTaskLockPort } from '@/modules/task-execution/composition'
 import { readFileSync } from 'node:fs'
@@ -6,6 +7,21 @@ import ts from 'typescript'
 
 type RecordValue = Record<string, unknown>
 type Open = (input: RecordValue) => Promise<RecordValue>
+
+// These entry cases only open a gate; unrelated write participants must stay unused.
+function unusedParticipant(): never {
+  throw new Error('unexpected task participant construction while opening clarify')
+}
+const taskExecutionParticipants: TaskExecutionParticipantBindings = {
+  createTaskNodeStatusEventsParticipantInTx: unusedParticipant,
+  createHumanGateNodeRunStateParticipantInTx: unusedParticipant,
+  createTaskDecisionParticipantInTx: unusedParticipant,
+  createHumanGateNodeRunMintParticipantInTx: unusedParticipant,
+  createHumanGateTaskTransitionParticipantInTx: unusedParticipant,
+  createHumanGateNodeRunMintOperations: unusedParticipant,
+  createTaskAuthorizationQueries: unusedParticipant,
+  createTaskAuthorizationParticipantInTx: unusedParticipant,
+}
 
 // Execute the complete production entry functions with explicit fake ports.
 // Loading their modules would initialize real application/DB dependencies.
@@ -98,17 +114,15 @@ function fixture(ambient: object | undefined, parkFailure?: Error) {
         return ambient
       },
       createHumanGateOpenParticipantScope: humanGateOpenScope,
-      humanGateComposition: {
-        createCollaborationCommandContext: (input: RecordValue) => {
-          expect(input.db).toBe(db)
-          expect(input.taskLock).toBe(composeHumanGateTaskLockPort)
-          return {}
-        },
-        async parkPreparedHumanGate(input: RecordValue) {
-          expect(input.humanGateOpen).toBe(humanGateOpenScope)
-          parks.push(input)
-          if (parkFailure !== undefined) throw parkFailure
-        },
+      createCollaborationCommandContext: (input: RecordValue) => {
+        expect(input.db).toBe(db)
+        expect(input.taskLock).toBe(composeHumanGateTaskLockPort)
+        return {}
+      },
+      async parkPreparedHumanGate(input: RecordValue) {
+        expect(input.humanGateOpen).toBe(humanGateOpenScope)
+        parks.push(input)
+        if (parkFailure !== undefined) throw parkFailure
       },
       prepareClarifyGateOpen: async (_context: unknown, input: RecordValue) => {
         prepared.push(input)
@@ -127,7 +141,10 @@ function fixture(ambient: object | undefined, parkFailure?: Error) {
   const compose = extract<
     (
       database: object,
-      dependencies: { taskLock: typeof composeHumanGateTaskLockPort },
+      dependencies: {
+        taskLock: typeof composeHumanGateTaskLockPort
+        taskExecutionParticipants: TaskExecutionParticipantBindings
+      },
     ) => {
       openAgentClarify: Open
     }
@@ -147,7 +164,8 @@ function fixture(ambient: object | undefined, parkFailure?: Error) {
   )
   return {
     // RFC-395 O2: use the same required-port factory as crossContextClosure.ts.
-    open: compose(db, { taskLock: composeHumanGateTaskLockPort }).openAgentClarify,
+    open: compose(db, { taskLock: composeHumanGateTaskLockPort, taskExecutionParticipants })
+      .openAgentClarify,
     parks,
     prepared,
     received,

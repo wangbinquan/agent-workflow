@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { nodeRunFixtureColumns } from './helpers/model/nodeRun'
@@ -118,7 +119,7 @@ async function reassignThenDispatchDesigner(
     (e) => e.roleKind === 'designer' && e.originNodeRunId === crossClarifyNodeRunId,
   )
   if (!designer) throw new Error(`no designer entry after reassign for ${crossClarifyNodeRunId}`)
-  return dispatchTaskQuestions(db, taskId, [designer.id], helperActor)
+  return dispatchTaskQuestions(db, taskExecutionParticipants, taskId, [designer.id], helperActor)
 }
 
 function defaultDef(): WorkflowDefinition {
@@ -375,6 +376,7 @@ describeEachProvider(
         }),
       )
       await autoDispatchClarifyRound({
+        taskExecutionParticipants,
         db,
         memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
         originNodeRunId: crossClarifyNodeRunId,
@@ -501,6 +503,7 @@ describeEachProvider(
       // Answer only crossUx; crossSec still awaiting → the designer dispatch parks
       // (no designer rerun) and the readiness scan lists crossSec pending.
       const ret = await autoDispatchClarifyRound({
+        taskExecutionParticipants,
         db,
         memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
         originNodeRunId: ux.intermediaryNodeRunId,
@@ -589,6 +592,7 @@ describeEachProvider(
       // Reject sec first (does NOT trigger designer; a stop round produces no
       // designer entries at all).
       await autoDispatchClarifyRound({
+        taskExecutionParticipants,
         db,
         memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
         originNodeRunId: sec.intermediaryNodeRunId,
@@ -601,6 +605,7 @@ describeEachProvider(
       // passes (sec answered-stop = resolved, not pending) and the designer rerun mints carrying
       // ONLY ux's designer entry (the legacy sources=[ux only] / sourceCount=1).
       await autoDispatchClarifyRound({
+        taskExecutionParticipants,
         db,
         memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
         originNodeRunId: ux.intermediaryNodeRunId,
@@ -639,6 +644,7 @@ describeEachProvider(
         iteration: 0,
       })
       const out = await dispatchCrossClarifyNode({
+        taskExecutionParticipants,
         db,
         taskId,
         crossClarifyNodeId: 'cross1',
@@ -695,6 +701,7 @@ describeEachProvider(
       // Human answers; directive=continue dispatches the designer rerun, but it never
       // completes-with-output (the task fails) → the round stays answered+UNCONSUMED.
       await autoDispatchClarifyRound({
+        taskExecutionParticipants,
         db,
         memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
         originNodeRunId: crossClarifyNodeRunId,
@@ -764,6 +771,7 @@ describeEachProvider('RFC-128 P5-BC §5.2.14 questioner mixed-path write-flow', 
     // RFC-162: cross rounds unify with self — the questioner continuation is the default (scope
     // deleted); its entries are materialized, sealed and consumed by the unified dispatch.
     await autoDispatchClarifyRound({
+      taskExecutionParticipants,
       db,
       memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
       originNodeRunId: crossClarifyNodeRunId,
@@ -787,6 +795,7 @@ describeEachProvider('RFC-128 P5-BC §5.2.14 questioner mixed-path write-flow', 
     // Not re-dispatchable (dispatch skips already-dispatched entries) → no duplicate.
     const redispatch = await dispatchTaskQuestions(
       db,
+      taskExecutionParticipants,
       taskId,
       qEntries.map((e) => e.id),
       actor,
@@ -821,6 +830,7 @@ describeEachProvider('RFC-128 P5-BC §5.2.14 questioner mixed-path write-flow', 
     )
     const results = await Promise.allSettled([
       autoDispatchClarifyRound({
+        taskExecutionParticipants,
         db,
         memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
         originNodeRunId: crossClarifyNodeRunId,
@@ -828,6 +838,7 @@ describeEachProvider('RFC-128 P5-BC §5.2.14 questioner mixed-path write-flow', 
         actor,
       }),
       autoDispatchClarifyRound({
+        taskExecutionParticipants,
         db,
         memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
         originNodeRunId: crossClarifyNodeRunId,
@@ -910,6 +921,7 @@ describeEachProvider('RFC-128 P5-BC §5.2.14 questioner mixed-path write-flow', 
       await db.select(nodeRunFixtureColumns(db)).from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
     ).length
     const res = await autoDispatchClarifyRound({
+      taskExecutionParticipants,
       db,
       memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
       originNodeRunId: crossClarifyNodeRunId,

@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 import { composeCollaborationTaskRolePolicy } from '@/modules/resource-catalog/composition'
 import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
@@ -170,6 +171,7 @@ async function settleDecisionContinuation(
   result: Awaited<ReturnType<typeof submitReviewDecision>>,
 ): Promise<void> {
   await wakeHumanGateContinuation(result.taskId, result.continuationRef, {
+    taskExecutionParticipants,
     humanGateOpen: composeHumanGateOpenParticipantFactory(),
     historyRestrictions: epoch2RuntimeTestPorts(f.db).historyRestrictions,
     db: f.db,

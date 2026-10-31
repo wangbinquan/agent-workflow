@@ -1,3 +1,4 @@
+import type { TaskExecutionParticipantBindings } from './taskExecutionParticipantBindings'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { MemoryDistillEnqueuer } from '@/modules/memory/public/participants'
 import { finishCommittedClarifyAutoDispatch } from '@/services/clarify/autoDispatch'
@@ -18,12 +19,14 @@ import type {
  * RFC-359 W12：实现与调用方统一改为中立名称。
  */
 export function createClarifyContinuationConvergence(input: {
+  readonly taskExecutionParticipants: TaskExecutionParticipantBindings
   readonly db: PersistenceDb
   readonly memoryDistillEnqueuer: MemoryDistillEnqueuer
 }): ClarifyContinuationConvergence {
   return Object.freeze({
     async finish(request: ClarifyContinuationConvergenceRequest) {
       await finishCommittedClarifyAutoDispatch({
+        taskExecutionParticipants: input.taskExecutionParticipants,
         db: input.db,
         memoryDistillEnqueuer: input.memoryDistillEnqueuer,
         ...request,

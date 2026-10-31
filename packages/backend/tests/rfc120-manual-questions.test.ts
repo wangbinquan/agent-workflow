@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 import { composeCollaborationTaskRolePolicy } from '@/modules/resource-catalog/composition'
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { o2Ports, withO2Closure } from './helpers/o2Closure'
@@ -209,7 +210,7 @@ describeEachProvider('RFC-359 rfc120-manual-questions database behavior', (harne
       expect(dto?.phase).toBe('staged')
 
       // dispatch via the §18 per-node-queue (UNCHANGED) → frontier mint on FIXER.
-      const result = await dispatchTaskQuestions(db, taskId, [id], actor)
+      const result = await dispatchTaskQuestions(db, taskExecutionParticipants, taskId, [id], actor)
       expect(result.reruns.length).toBe(1)
       expect(result.reruns[0]?.targetNodeId).toBe(FIXER)
       const runId = result.reruns[0]!.nodeRunId
@@ -311,7 +312,7 @@ describeEachProvider('RFC-359 rfc120-manual-questions database behavior', (harne
         epoch2RuntimeTestPorts(db).historyRestrictions,
         composeCollaborationTaskRolePolicy(),
       )
-      await dispatchTaskQuestions(db, taskId, [id], actor)
+      await dispatchTaskQuestions(db, taskExecutionParticipants, taskId, [id], actor)
       const list = await listTaskQuestions(db, taskId)
       const dto = list.find((e) => e.id === id)
       expect(dto).toBeDefined() // would be undefined under the old origin→round skip (H4 bug)
@@ -356,7 +357,7 @@ describeEachProvider('RFC-359 rfc120-manual-questions database behavior', (harne
         epoch2RuntimeTestPorts(db).historyRestrictions,
         composeCollaborationTaskRolePolicy(),
       )
-      const result = await dispatchTaskQuestions(db, taskId, [id], actor)
+      const result = await dispatchTaskQuestions(db, taskExecutionParticipants, taskId, [id], actor)
       expect(result.reruns.length).toBe(1)
       expect(result.reruns[0]?.targetNodeId).toBe(FIXER)
     })
@@ -394,7 +395,13 @@ describeEachProvider('RFC-359 rfc120-manual-questions database behavior', (harne
       )
       // Each manual row is its own (synthetic) origin → the per-origin single-target guard
       // never trips even though the two go to different handlers.
-      const result = await dispatchTaskQuestions(db, taskId, [a.id, b.id], actor)
+      const result = await dispatchTaskQuestions(
+        db,
+        taskExecutionParticipants,
+        taskId,
+        [a.id, b.id],
+        actor,
+      )
       expect(result.reruns.map((r) => r.targetNodeId).sort()).toEqual([DESIGNER, FIXER].sort())
     })
 
@@ -523,7 +530,7 @@ describeEachProvider('RFC-359 rfc120-manual-questions database behavior', (harne
       const { taskQuestions } = tablesOf(db)
       const row = (await db.select().from(taskQuestions).where(eq(taskQuestions.id, id)))[0]
       expect(row?.manualCreatedBy).toBe('SECRET-AUTHOR-ID') // recorded for audit
-      const result = await dispatchTaskQuestions(db, taskId, [id], actor)
+      const result = await dispatchTaskQuestions(db, taskExecutionParticipants, taskId, [id], actor)
       const ctx = await buildClarifyQueueContext({
         db,
         definition: liveDef(),
@@ -559,7 +566,7 @@ describeEachProvider('RFC-359 rfc120-manual-questions database behavior', (harne
       // undispatched manual WITH a handler → parks FIXER (was INVISIBLE before the H1 fix:
       // the synthetic origin has no clarify round so the INNER JOIN dropped it).
       expect((await loadUndispatchedDesignerTargets(db, taskId)).has(FIXER)).toBe(true)
-      await dispatchTaskQuestions(db, taskId, [id], actor)
+      await dispatchTaskQuestions(db, taskExecutionParticipants, taskId, [id], actor)
       // dispatched → leaves the undispatched set (gate released).
       expect((await loadUndispatchedDesignerTargets(db, taskId)).has(FIXER)).toBe(false)
     })
@@ -603,7 +610,7 @@ describeEachProvider('RFC-359 rfc120-manual-questions database behavior', (harne
       expect(fBefore.completed.has(FIXER)).toBe(false)
 
       // AFTER dispatch: FIXER leaves the set → deriveFrontier no longer parks it (its rerun runs).
-      await dispatchTaskQuestions(db, taskId, [id], actor)
+      await dispatchTaskQuestions(db, taskExecutionParticipants, taskId, [id], actor)
       const rows2 = await new DrizzleNodeExecutionPersistence(db).list({ taskId })
       const deferredAfter = await loadUndispatchedDesignerTargets(db, taskId)
       expect(deferredAfter.has(FIXER)).toBe(false)
@@ -714,7 +721,7 @@ describeEachProvider('RFC-359 rfc120-manual-questions database behavior', (harne
         await patchTaskFixture(db, { id: taskId }, { status })
         let threw: unknown = null
         try {
-          await dispatchTaskQuestions(db, taskId, [id], actor)
+          await dispatchTaskQuestions(db, taskExecutionParticipants, taskId, [id], actor)
         } catch (e) {
           threw = e
         }
@@ -742,7 +749,7 @@ describeEachProvider('RFC-359 rfc120-manual-questions database behavior', (harne
         epoch2RuntimeTestPorts(db).historyRestrictions,
         composeCollaborationTaskRolePolicy(),
       )
-      const result = await dispatchTaskQuestions(db, taskId, [id], actor)
+      const result = await dispatchTaskQuestions(db, taskExecutionParticipants, taskId, [id], actor)
       expect(result.reruns.length).toBe(1)
       expect(result.reruns[0]?.targetNodeId).toBe(FIXER)
     })
@@ -794,6 +801,7 @@ describeEachProvider('RFC-359 rfc120-manual-questions database behavior', (harne
       // sealed_at (round answered) so the queue injector (selectAgentQueue requires sealed_at || manual)
       // selects it without manual stamping.
       await autoDispatchClarifyRound({
+        taskExecutionParticipants,
         db,
         memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
         originNodeRunId: crossClarifyNodeRunId,
@@ -821,7 +829,13 @@ describeEachProvider('RFC-359 rfc120-manual-questions database behavior', (harne
           .from(taskQuestions)
           .where(and(eq(taskQuestions.taskId, taskId), eq(taskQuestions.roleKind, 'designer')))
       ).find((e) => e.sourceKind === 'cross')!.id
-      const disp = await dispatchTaskQuestions(db, taskId, [designerEntryId], actor)
+      const disp = await dispatchTaskQuestions(
+        db,
+        taskExecutionParticipants,
+        taskId,
+        [designerEntryId],
+        actor,
+      )
       const designer = (
         await db
           .select()
@@ -969,7 +983,7 @@ describeEachProvider('RFC-359 rfc120-manual-questions database behavior', (harne
       const racingDb = flipStatusOnFirstNodeRunsRead(db, taskId, 'canceled')
       let threw: unknown = null
       try {
-        await dispatchTaskQuestions(racingDb, taskId, [id], actor)
+        await dispatchTaskQuestions(racingDb, taskExecutionParticipants, taskId, [id], actor)
       } catch (e) {
         threw = e
       }

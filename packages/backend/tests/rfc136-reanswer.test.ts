@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 import { withO2Closure } from './helpers/o2Closure'
 // RFC-136 — 待指派问题重答（用户 2026-07-02 拍板：仅待指派 / 面板纳入已答题 / 直接覆盖）。
 //
@@ -211,6 +212,7 @@ async function sealThenUnstage(
   now = 1_000,
 ) {
   await sealRoundQuestions({
+    taskExecutionParticipants,
     db,
     originNodeRunId,
     answers: [ans],
@@ -239,6 +241,7 @@ describeEachProvider('RFC-136 reseal providers', (harness) => {
       )
 
       const res = await sealRoundQuestions({
+        taskExecutionParticipants,
         db,
         originNodeRunId,
         answers: [makeAns('q1', 1, 'NEW-MARKER')],
@@ -274,6 +277,7 @@ describeEachProvider('RFC-136 reseal providers', (harness) => {
       expect(before?.answeredAt).toBe(1_000)
 
       await sealRoundQuestions({
+        taskExecutionParticipants,
         db,
         originNodeRunId,
         answers: [makeAns('q1', 1)],
@@ -292,6 +296,7 @@ describeEachProvider('RFC-136 reseal providers', (harness) => {
       const db = harness.db
       const { taskId, originNodeRunId } = await seedCrossRound(db, [makeQ('q1')])
       await sealRoundQuestions({
+        taskExecutionParticipants,
         db,
         originNodeRunId,
         answers: [makeAns('q1', 0)],
@@ -311,6 +316,7 @@ describeEachProvider('RFC-136 reseal providers', (harness) => {
       const dtos = await listTaskQuestions(db, taskId)
       for (const e of dtos.filter((x) => x.staged)) await stageTaskQuestion(db, e.id, false, actor)
       await sealRoundQuestions({
+        taskExecutionParticipants,
         db,
         originNodeRunId,
         answers: [makeAns('q1', 1)],
@@ -335,6 +341,7 @@ describeEachProvider('RFC-136 reseal providers', (harness) => {
       expect((await roundRow(db, taskId))?.status).toBe('awaiting_human')
 
       const res = await sealRoundQuestions({
+        taskExecutionParticipants,
         db,
         originNodeRunId,
         answers: [makeAns('q1', 1, 'NEW'), makeAns('q2', 0, 'FRESH')],
@@ -372,6 +379,7 @@ describeEachProvider('RFC-136 reseal providers', (harness) => {
         1_000,
       )
       await sealRoundQuestions({
+        taskExecutionParticipants,
         db,
         originNodeRunId,
         answers: [makeAns('q1', 1, 'NEW-MARKER')],
@@ -421,6 +429,7 @@ describeEachProvider('RFC-136 reseal providers', (harness) => {
       const db = harness.db
       const { originNodeRunId } = await seedSelfRound(db, [makeQ('q1')])
       await sealRoundQuestions({
+        taskExecutionParticipants,
         db,
         originNodeRunId,
         answers: [makeAns('q1', 0)],
@@ -429,6 +438,7 @@ describeEachProvider('RFC-136 reseal providers', (harness) => {
       })
       await expect(
         sealRoundQuestions({
+          taskExecutionParticipants,
           db,
           originNodeRunId,
           answers: [makeAns('q1', 1)],
@@ -448,6 +458,7 @@ describeEachProvider('RFC-136 reseal providers', (harness) => {
         .where(eq(taskQuestions.originNodeRunId, originNodeRunId))
       await expect(
         sealRoundQuestions({
+          taskExecutionParticipants,
           db,
           originNodeRunId,
           answers: [makeAns('q1', 1)],
@@ -465,6 +476,7 @@ describeEachProvider('RFC-136 reseal providers', (harness) => {
       const [questioner] = await listTaskQuestions(db, taskId)
       await reassignTaskQuestion(db, questioner!.id, 'designer', actor)
       await sealRoundQuestions({
+        taskExecutionParticipants,
         db,
         originNodeRunId,
         answers: [makeAns('q1', 0)],
@@ -483,6 +495,7 @@ describeEachProvider('RFC-136 reseal providers', (harness) => {
         .where(eq(taskQuestions.id, stagedEntries[0]!.id))
       await expect(
         sealRoundQuestions({
+          taskExecutionParticipants,
           db,
           originNodeRunId,
           answers: [makeAns('q1', 1)],
@@ -502,6 +515,7 @@ describeEachProvider('RFC-136 reseal providers', (harness) => {
       const [questioner] = await listTaskQuestions(db, taskId)
       await reassignTaskQuestion(db, questioner!.id, 'designer', actor)
       await sealRoundQuestions({
+        taskExecutionParticipants,
         db,
         originNodeRunId,
         answers: [makeAns('q1', 0, 'OLD')],
@@ -519,6 +533,7 @@ describeEachProvider('RFC-136 reseal providers', (harness) => {
       ).toBeGreaterThan(1)
       // 整题回到待指派后，重答放行。
       const res = await sealRoundQuestions({
+        taskExecutionParticipants,
         db,
         originNodeRunId,
         answers: [makeAns('q1', 1, 'NEW')],
@@ -533,6 +548,7 @@ describeEachProvider('RFC-136 reseal providers', (harness) => {
       const db = harness.db
       const { originNodeRunId } = await seedSelfRound(db, [makeQ('q1'), makeQ('q2')])
       const res = await sealRoundQuestions({
+        taskExecutionParticipants,
         db,
         originNodeRunId,
         answers: [makeAns('q1', 0)],
@@ -554,11 +570,17 @@ describeEachProvider('RFC-136 reseal providers', (harness) => {
       await sealThenUnstage(db, taskId, originNodeRunId, 'q1', makeAns('q1', 0), 1_000)
       // 完全未声明（quick 通道形态）。
       await expect(
-        sealRoundQuestions({ db, originNodeRunId, answers: [makeAns('q1', 1)] }),
+        sealRoundQuestions({
+          taskExecutionParticipants,
+          db,
+          originNodeRunId,
+          answers: [makeAns('q1', 1)],
+        }),
       ).rejects.toThrow('already sealed')
       // 声明了别的题（跨通道窗口形态：面板以为 q1 是新题、只声明了自己已知的重答题）。
       await expect(
         sealRoundQuestions({
+          taskExecutionParticipants,
           db,
           originNodeRunId,
           answers: [makeAns('q1', 1)],

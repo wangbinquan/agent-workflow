@@ -1,3 +1,4 @@
+import type { TaskExecutionParticipantBindings } from './taskExecutionParticipantBindings'
 import type { CollaborationTaskRolePolicy } from '../application/ports/collaborationTaskRolePolicy'
 import type { HistoryRestrictionPort } from '@/platform/contracts/historyRestriction'
 import type { HumanGateTaskLockPort } from '../composition/required-ports'
@@ -28,14 +29,14 @@ import type {
   CollaborationRoutePersistenceOperations,
 } from '../application/ports/collaborationRouteOperations'
 
-// 决定 / 评审域的实现经 `services/humanGateComposition` 绕回 collaboration 的 composition
-// barrel，静态 import 会形成值环——与合一前的 SQLite 工厂同样保留惰性 import。
+// 保留原路由调用时才载入决定 / 评审实现的惰性时机。
 const loadReviewOperations = () => import('./review')
 const loadQuestionOperations = () => import('./taskQuestions')
 const loadClarifyOperations = () => import('./clarifyRounds')
 const loadClarifySeal = () => import('./clarify/seal')
 
 export interface CreateCollaborationRouteOperationsInput {
+  readonly taskExecutionParticipants: TaskExecutionParticipantBindings
   readonly taskRolePolicy: CollaborationTaskRolePolicy
   readonly historyRestrictions: HistoryRestrictionPort
   readonly taskLock: HumanGateTaskLockPort
@@ -153,6 +154,7 @@ export function createCollaborationRouteOperations(
       await (
         await loadClarifySeal()
       ).sealRoundQuestions({
+        taskExecutionParticipants: input.taskExecutionParticipants,
         db,
         originNodeRunId: request.originNodeRunId,
         answers: [...request.answers],

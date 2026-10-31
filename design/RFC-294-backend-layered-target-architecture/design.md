@@ -238,7 +238,9 @@ DAG 中。所有含 command / query 的 context 还对 `identity-access/public/t
 
 **现状偏差（2026-10-31）**：RFC-399 已消除原有的两个 context 值级环
 （{collaboration, memory, resource-catalog, task-execution} 与 {development-automation, integration}）及越 DAG 的值级依赖对。
-仅剩 type-only 越 DAG offered 边与跨 context 内部文件对，作为 S5/S6 待清偿债；本表与生成器常量是唯一的目标边集。
+RFC-400 进一步把 collaboration → task-execution 的 17 个内部文件对改为 TE 自有参与者，删除人工门装配桥，
+并将 public 合同中的 legacy Actor / ActorSource 改为 Identity Access 的 AuthenticatedAuthoritySnapshot。
+其余 type-only 越 DAG offered 边与跨 context 内部文件对仍作为 S5/S6 待清偿债；本表与生成器常量是唯一的目标边集。
 
 ### 3.2 受控 public entrypoints
 

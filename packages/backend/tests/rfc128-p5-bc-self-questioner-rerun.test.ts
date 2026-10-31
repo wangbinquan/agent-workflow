@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 import { nodeRunFixtureColumns } from './helpers/model/nodeRun'
 import { withO2Closure } from './helpers/o2Closure'
 // RFC-128 P5-BC — self/questioner per-question rerun (深度重构核心；最高风险段)。
@@ -402,7 +403,7 @@ describeEachProvider('RFC-359 rfc128-p5-bc-self-questioner-rerun database behavi
       })
       let caught: unknown
       try {
-        await dispatchTaskQuestions(db, taskId, [eid], actor)
+        await dispatchTaskQuestions(db, taskExecutionParticipants, taskId, [eid], actor)
       } catch (e) {
         caught = e
       }
@@ -429,7 +430,13 @@ describeEachProvider('RFC-359 rfc128-p5-bc-self-questioner-rerun database behavi
         defaultTargetNodeId: P,
         sealed: true,
       })
-      const selfRes = await dispatchTaskQuestions(db, taskId, [selfEid], actor)
+      const selfRes = await dispatchTaskQuestions(
+        db,
+        taskExecutionParticipants,
+        taskId,
+        [selfEid],
+        actor,
+      )
       expect((await runRow(db, selfRes.reruns[0]!.nodeRunId))[0]?.rerunCause).toBe('clarify-answer')
 
       // questioner on Q
@@ -446,7 +453,7 @@ describeEachProvider('RFC-359 rfc128-p5-bc-self-questioner-rerun database behavi
         defaultTargetNodeId: Q,
         sealed: true,
       })
-      const qRes = await dispatchTaskQuestions(db, taskId, [qEid], actor)
+      const qRes = await dispatchTaskQuestions(db, taskExecutionParticipants, taskId, [qEid], actor)
       expect((await runRow(db, qRes.reruns[0]!.nodeRunId))[0]?.rerunCause).toBe(
         'cross-clarify-questioner-rerun',
       )
@@ -484,7 +491,13 @@ describeEachProvider('RFC-359 rfc128-p5-bc-self-questioner-rerun database behavi
         sealed: true,
       })
 
-      const res = await dispatchTaskQuestions(db, taskId, [selfEid, desEid], actor)
+      const res = await dispatchTaskQuestions(
+        db,
+        taskExecutionParticipants,
+        taskId,
+        [selfEid, desEid],
+        actor,
+      )
       // self dispatched (priority 0), designer deferred (priority 2).
       expect(res.dispatchedEntryIds).toContain(selfEid)
       expect(res.dispatchedEntryIds).not.toContain(desEid)
@@ -531,7 +544,13 @@ describeEachProvider('RFC-359 rfc128-p5-bc-self-questioner-rerun database behavi
         stagedAt: 9_000_000, // staged just now (newcomer)
       })
 
-      const res = await dispatchTaskQuestions(db, taskId, [selfEid, desEid], actor)
+      const res = await dispatchTaskQuestions(
+        db,
+        taskExecutionParticipants,
+        taskId,
+        [selfEid, desEid],
+        actor,
+      )
       // Aging beats the §0 self/q-first default: the OLDER designer is dispatched, the NEWER self is
       // deferred — so the designer cannot be starved by a stream of fresh self questions.
       expect(res.dispatchedEntryIds).toContain(desEid)
@@ -584,7 +603,7 @@ describeEachProvider('RFC-359 rfc128-p5-bc-self-questioner-rerun database behavi
       })
       let caught: unknown
       try {
-        await dispatchTaskQuestions(db, taskId, [desEid], actor)
+        await dispatchTaskQuestions(db, taskExecutionParticipants, taskId, [desEid], actor)
       } catch (e) {
         caught = e
       }
@@ -618,7 +637,13 @@ describeEachProvider('RFC-359 rfc128-p5-bc-self-questioner-rerun database behavi
         defaultTargetNodeId: D,
         sealed: true,
       })
-      const res = await dispatchTaskQuestions(db, taskId, [qEid, dEid], actor)
+      const res = await dispatchTaskQuestions(
+        db,
+        taskExecutionParticipants,
+        taskId,
+        [qEid, dEid],
+        actor,
+      )
       expect(res.dispatchedEntryIds).toContain(qEid)
       expect(res.dispatchedEntryIds).toContain(dEid)
       expect(res.deferred.length).toBe(0)
@@ -666,7 +691,7 @@ describeEachProvider('RFC-359 rfc128-p5-bc-self-questioner-rerun database behavi
         sealed: true,
       })
       // Pure questioner dispatch → succeeds (NOT blocked by the split designer entries).
-      const res = await dispatchTaskQuestions(db, taskId, [qEid], actor)
+      const res = await dispatchTaskQuestions(db, taskExecutionParticipants, taskId, [qEid], actor)
       expect(res.dispatchedEntryIds).toContain(qEid)
       expect((await runRow(db, res.reruns[0]!.nodeRunId))[0]?.rerunCause).toBe(
         'cross-clarify-questioner-rerun',
@@ -871,6 +896,7 @@ describeEachProvider('RFC-359 rfc128-p5-bc-self-questioner-rerun database behavi
       )
       // Virgin: no listTaskQuestions / no seal before the quick finalize.
       await autoDispatchClarifyRound({
+        taskExecutionParticipants,
         db,
         memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
         originNodeRunId: clarifyNodeRunId,
@@ -904,6 +930,7 @@ describeEachProvider('RFC-359 rfc128-p5-bc-self-questioner-rerun database behavi
       // Not re-dispatchable (dispatch CAS skips already-dispatched) → no duplicate mint.
       const redispatch = await dispatchTaskQuestions(
         db,
+        taskExecutionParticipants,
         taskId,
         afterReconcile.map((e) => e.id),
         actor,
@@ -935,6 +962,7 @@ describeEachProvider('RFC-359 rfc128-p5-bc-self-questioner-rerun database behavi
         }),
       )
       const res = await autoDispatchClarifyRound({
+        taskExecutionParticipants,
         db,
         memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
         originNodeRunId: clarifyNodeRunId,
@@ -995,6 +1023,7 @@ describeEachProvider('RFC-359 rfc128-p5-bc-self-questioner-rerun database behavi
       )
       const results = await Promise.allSettled([
         autoDispatchClarifyRound({
+          taskExecutionParticipants,
           db,
           memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
           originNodeRunId: clarifyNodeRunId,
@@ -1002,6 +1031,7 @@ describeEachProvider('RFC-359 rfc128-p5-bc-self-questioner-rerun database behavi
           actor,
         }),
         autoDispatchClarifyRound({
+          taskExecutionParticipants,
           db,
           memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
           originNodeRunId: clarifyNodeRunId,
@@ -1052,7 +1082,12 @@ describeEachProvider('RFC-359 rfc128-p5-bc-self-questioner-rerun database behavi
         }),
       )
       // q1 control-sealed-undispatched → dispatchable; the round is still awaiting (quick-finalizable).
-      await sealRoundQuestions({ db, originNodeRunId: clarifyNodeRunId, answers: [ans('q1')] })
+      await sealRoundQuestions({
+        taskExecutionParticipants,
+        db,
+        originNodeRunId: clarifyNodeRunId,
+        answers: [ans('q1')],
+      })
       const { taskQuestions } = tablesOf(db)
       const { nodeRuns } = tablesOf(db)
       const q1 = (
@@ -1065,8 +1100,9 @@ describeEachProvider('RFC-359 rfc128-p5-bc-self-questioner-rerun database behavi
       // Fire both concurrently — the question-write lock serializes them. Whichever wins B first,
       // the loser CAS-skips the already-dispatched q1 / parks on the same-home in-flight conflict.
       await Promise.allSettled([
-        dispatchTaskQuestions(db, taskId, [q1!.id], actor),
+        dispatchTaskQuestions(db, taskExecutionParticipants, taskId, [q1!.id], actor),
         autoDispatchClarifyRound({
+          taskExecutionParticipants,
           db,
           memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
           originNodeRunId: clarifyNodeRunId,
@@ -1114,9 +1150,15 @@ describeEachProvider('RFC-359 rfc128-p5-bc-self-questioner-rerun database behavi
         }),
       )
       // control-seal q1 = option A.
-      await sealRoundQuestions({ db, originNodeRunId: clarifyNodeRunId, answers: [ans('q1')] })
+      await sealRoundQuestions({
+        taskExecutionParticipants,
+        db,
+        originNodeRunId: clarifyNodeRunId,
+        answers: [ans('q1')],
+      })
       // quick-finalize (unified autodispatch), posting a DIFFERENT q1 (option B) + q2 (option A).
       await autoDispatchClarifyRound({
+        taskExecutionParticipants,
         db,
         memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
         originNodeRunId: clarifyNodeRunId,

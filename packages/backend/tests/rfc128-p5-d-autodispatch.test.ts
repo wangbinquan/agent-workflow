@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import { composeGateContinuationSupport } from '@/modules/collaboration/composition'
@@ -115,6 +116,7 @@ async function commitClarifyDecisionThenInterrupt(input: {
   )
 
   await autoDispatchClarifyRound({
+    taskExecutionParticipants,
     db: input.db,
     memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(input.db),
     originNodeRunId: input.originNodeRunId,
@@ -323,6 +325,7 @@ describeEachProvider('RFC-333 clarify decision transaction', (harness) => {
         humanGateOpen: composeHumanGateOpenParticipantFactory(),
       }),
       ...composeGateContinuationSupport({
+        taskExecutionParticipants,
         db: db,
         historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
         taskLock: composeHumanGateTaskLockPort,
@@ -340,6 +343,7 @@ describeEachProvider('RFC-333 clarify decision transaction', (harness) => {
     ).toBe(firstRunCount)
 
     const finished = await finishCommittedClarifyAutoDispatch({
+      taskExecutionParticipants,
       db,
       memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
       operationId: operation.id,
@@ -393,6 +397,7 @@ describeEachProvider('RFC-333 clarify decision transaction', (harness) => {
         humanGateOpen: composeHumanGateOpenParticipantFactory(),
       }),
       ...composeGateContinuationSupport({
+        taskExecutionParticipants,
         db: db,
         historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
         taskLock: composeHumanGateTaskLockPort,
@@ -680,6 +685,7 @@ describeEachProvider(
       ])
 
       const res = await autoDispatchClarifyRound({
+        taskExecutionParticipants,
         db,
         memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
         originNodeRunId: clarifyNodeRunId,
@@ -738,6 +744,7 @@ describeEachProvider(
       })
 
       const res = await autoDispatchClarifyRound({
+        taskExecutionParticipants,
         db,
         memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
         originNodeRunId: clarifyNodeRunId,
@@ -766,6 +773,7 @@ describeEachProvider(
       const { crossNodeRunId } = await seedSealableCrossRound(db, taskId, [mkQ('q1', 't')])
 
       const res = await autoDispatchClarifyRound({
+        taskExecutionParticipants,
         db,
         memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
         originNodeRunId: crossNodeRunId,
@@ -805,6 +813,7 @@ describeEachProvider(
       })
 
       const res = await autoDispatchClarifyRound({
+        taskExecutionParticipants,
         db,
         memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
         originNodeRunId: crossNodeRunId,
@@ -856,6 +865,7 @@ describeEachProvider(
       })
 
       await autoDispatchClarifyRound({
+        taskExecutionParticipants,
         db,
         memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
         originNodeRunId: crossNodeRunId,
@@ -875,6 +885,7 @@ describeEachProvider(
       const { crossNodeRunId } = await seedSealableCrossRound(db, taskId, [mkQ('q1', 't')])
 
       const res = await autoDispatchClarifyRound({
+        taskExecutionParticipants,
         db,
         memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
         originNodeRunId: crossNodeRunId,
@@ -909,6 +920,7 @@ describeEachProvider(
       await seedTask(dbA, taskA, true)
       const a = await seedSealableSelfRound(dbA, taskA, [mkQ('q1', 't')])
       const resA = await autoDispatchClarifyRound({
+        taskExecutionParticipants,
         db: dbA,
         memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(dbA),
         originNodeRunId: a.intermediaryNodeRunId,
@@ -928,6 +940,7 @@ describeEachProvider(
       ])
       // The unified path seals + auto-dispatches on every task now (no 'task-not-deferred-dispatch').
       const result = await autoDispatchClarifyRound({
+        taskExecutionParticipants,
         db,
         memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
         originNodeRunId: clarifyNodeRunId,
@@ -950,6 +963,7 @@ describeEachProvider(
       let caught: unknown
       try {
         await autoDispatchClarifyRound({
+          taskExecutionParticipants,
           db,
           memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
           originNodeRunId: clarifyNodeRunId,
@@ -965,6 +979,7 @@ describeEachProvider(
       expect((await roundByOrigin(db, clarifyNodeRunId))[0]?.status).toBe('awaiting_human') // untouched
       // The matching iteration succeeds.
       const ok = await autoDispatchClarifyRound({
+        taskExecutionParticipants,
         db,
         memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
         originNodeRunId: clarifyNodeRunId,
@@ -988,6 +1003,7 @@ describeEachProvider(
       ])
       // Only q1 supplied (a stale / malformed quick submit).
       const res = await autoDispatchClarifyRound({
+        taskExecutionParticipants,
         db,
         memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
         originNodeRunId: clarifyNodeRunId,
@@ -1022,6 +1038,7 @@ describeEachProvider(
       // Control channel: FULLY seal the round (defer=true equivalent), leaving it staged for MANUAL
       // dispatch (no autodispatch).
       const sealed = await sealRoundQuestions({
+        taskExecutionParticipants,
         db,
         originNodeRunId: clarifyNodeRunId,
         answers: [ans('q1')],
@@ -1039,6 +1056,7 @@ describeEachProvider(
       let caught: unknown
       try {
         await autoDispatchClarifyRound({
+          taskExecutionParticipants,
           db,
           memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
           originNodeRunId: clarifyNodeRunId,
@@ -1079,6 +1097,7 @@ describeEachProvider(
         mkQ('q1', 't'),
       ])
       const res = await autoDispatchClarifyRound({
+        taskExecutionParticipants,
         db,
         memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
         originNodeRunId: clarifyNodeRunId,
@@ -1097,7 +1116,13 @@ describeEachProvider(
 
       // A redundant MANUAL board dispatch of the same entry → CAS skips it (already dispatched) → no
       // second rerun. Auto + manual share the ONE dispatchTaskQuestions mechanism; per-round single path.
-      const manual = await dispatchTaskQuestions(db, taskId, [selfEntry.id], actor)
+      const manual = await dispatchTaskQuestions(
+        db,
+        taskExecutionParticipants,
+        taskId,
+        [selfEntry.id],
+        actor,
+      )
       expect(manual.reruns).toHaveLength(0)
       const rerunsAfter = (
         await db.select(nodeRunFixtureColumns(db)).from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
@@ -1114,6 +1139,7 @@ describeEachProvider(
         mkQ('q1', 't'),
       ])
       await autoDispatchClarifyRound({
+        taskExecutionParticipants,
         db,
         memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
         originNodeRunId: clarifyNodeRunId,
@@ -1132,6 +1158,7 @@ describeEachProvider(
       ])
       // Control channel: seal ONLY q1 (defer=true equivalent) — partial, round stays awaiting_human.
       const partial = await sealRoundQuestions({
+        taskExecutionParticipants,
         db,
         originNodeRunId: clarifyNodeRunId,
         answers: [ans('q1')],
@@ -1141,6 +1168,7 @@ describeEachProvider(
 
       // Quick channel autodispatch (the whole-round answers include the already-sealed q1).
       const res = await autoDispatchClarifyRound({
+        taskExecutionParticipants,
         db,
         memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
         originNodeRunId: clarifyNodeRunId,
@@ -1184,6 +1212,7 @@ describeEachProvider('RFC-128 P5-D P5-0 guard relationship', (harness) => {
     await seedTask(dbDef, taskDef, true)
     const def = await seedSealableSelfRound(dbDef, taskDef, [mkQ('q1', 't')])
     const okSeal = await sealRoundQuestions({
+      taskExecutionParticipants,
       db: dbDef,
       originNodeRunId: def.intermediaryNodeRunId,
       answers: [ans('q1')],
@@ -1198,6 +1227,7 @@ describeEachProvider('RFC-128 P5-D P5-0 guard relationship', (harness) => {
     await seedTask(dbNon, taskNon, false)
     const non = await seedSealableSelfRound(dbNon, taskNon, [mkQ('q1', 't')])
     const nonSeal = await sealRoundQuestions({
+      taskExecutionParticipants,
       db: dbNon,
       originNodeRunId: non.intermediaryNodeRunId,
       answers: [ans('q1')],
@@ -1221,6 +1251,7 @@ describeEachProvider('RFC-128 P5-D lock-B non-reentry', (harness) => {
     // own getTaskQuestionWriteSem(taskId).run would queue forever → this await never resolves.
     const res = await Promise.race([
       autoDispatchClarifyRound({
+        taskExecutionParticipants,
         db,
         memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
         originNodeRunId: clarifyNodeRunId,
@@ -1394,6 +1425,7 @@ describeEachProvider(
         writeFileSync(join(repo, 'stray.txt'), 'stray\n')
 
         const res = await autoDispatchClarifyRound({
+          taskExecutionParticipants,
           db,
           memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
           originNodeRunId: clarifyNodeRunId,
@@ -1442,6 +1474,7 @@ describeEachProvider(
         writeFileSync(join(repo, 'data.txt'), 'DIRTY\n')
 
         await autoDispatchClarifyRound({
+          taskExecutionParticipants,
           db,
           memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
           originNodeRunId: crossNodeRunId,
@@ -1484,6 +1517,7 @@ describeEachProvider(
         mkQ('q1', 't'),
       ])
       const res = await autoDispatchClarifyRound({
+        taskExecutionParticipants,
         db,
         memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
         originNodeRunId: clarifyNodeRunId,
@@ -1512,6 +1546,7 @@ describeEachProvider(
         mkQ('q1', 't'),
       ])
       const res = await autoDispatchClarifyRound({
+        taskExecutionParticipants,
         db,
         memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
         originNodeRunId: clarifyNodeRunId,
@@ -1689,6 +1724,7 @@ describeEachProvider(
         writeFileSync(join(repo, 'data.txt'), 'DIRTY\n')
 
         const res = await autoDispatchClarifyRound({
+          taskExecutionParticipants,
           db,
           memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
           originNodeRunId: clarifyNodeRunId,

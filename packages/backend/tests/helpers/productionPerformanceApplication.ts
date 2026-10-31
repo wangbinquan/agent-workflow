@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './taskExecutionParticipantBindings'
 import { epoch2RuntimeTestPorts } from './epoch2RuntimePorts'
 import { withO2Closure, o2Ports } from './o2Closure'
 import { composeSourceControlTaskPorts } from '@/modules/task-execution/composition'
@@ -17,7 +18,7 @@ import { ALWAYS_WRITABLE_DATABASE_SOURCE } from '@/auth/application/authPersiste
 import { createAuthRuntimeFor, createTokenCallAudit } from '@/auth/composition'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { composeCollaborationRouteOperations } from '@/modules/collaboration/composition/collaborationRouteOperations'
-import { createCollaborationCommandContext } from '@/modules/collaboration/composition/commandContext'
+import { createCollaborationCommandContext } from '@/modules/collaboration/infrastructure/collaborationCommandContext'
 import {
   createClarifyDecisionCommand,
   createQuestionDispatchCommand,
@@ -150,13 +151,17 @@ export async function createProductionPerformanceApplication(
       taskExecutionReadModels: createTaskExecutionReadModels(db),
       reviewDecisions: createReviewDecisionCommand(withO2Closure({ db, appHome })),
       questionDispatches: createQuestionDispatchCommand(db, o2Ports(db).taskLock, {
+        taskExecutionParticipants,
         historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
       }),
       clarifyDecisions: createClarifyDecisionCommand(
         db,
         memoryOperations.distillCommands,
         o2Ports(db).taskLock,
-        { historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions },
+        {
+          taskExecutionParticipants,
+          historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
+        },
       ),
     }),
   )

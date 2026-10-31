@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 import { nodeRunFixtureColumns } from './helpers/model/nodeRun'
 import { legacyContentRef } from '@/platform/content/contentRef'
 import { contentRowColumns } from '@/platform/content/infrastructure/contentStore'
@@ -192,6 +193,7 @@ describeEachProvider('clarify activity does not perturb in-flight reviews', (har
     expect(dvMid?.reviewIteration).toBe(2)
 
     const res = await autoDispatchClarifyRound({
+      taskExecutionParticipants,
       db,
       memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
       originNodeRunId: clarifyNodeRunId,

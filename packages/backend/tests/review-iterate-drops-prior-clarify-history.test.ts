@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import { epoch2ReviewReader } from './helpers/epoch2RuntimePorts'
 import { nodeRunFixtureColumns } from './helpers/model/nodeRun'
@@ -270,6 +271,7 @@ async function buildHarness(): Promise<Harness> {
   const clarifyNodeRunId = sessionRows[0]?.intermediaryNodeRunId
   if (clarifyNodeRunId === undefined) throw new Error('clarify session not created on first run')
   await autoDispatchClarifyRound({
+    taskExecutionParticipants,
     db,
     memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
     originNodeRunId: clarifyNodeRunId,

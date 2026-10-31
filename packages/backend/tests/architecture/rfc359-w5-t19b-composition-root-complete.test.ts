@@ -110,7 +110,7 @@ export const COMPOSITION_ROOT_PLACEHOLDER_DEBT: readonly string[] = [
   // not composed`。必填之后缺口在类型层不可表达（实测：删掉工厂里那行 ⇒ TS2345「not assignable to
   // parameter of type 'CollaborationCommandDependencies'」），两句兜底与那份副本一起删除。
   // 行为判据见 `tests/rfc359-w5-t19b-collaboration-composed-review-access.test.ts`（双引擎 + 变异表）。
-  'modules/collaboration/composition/commandContext.ts: marker=0, prose=5, holder=0',
+  'modules/collaboration/application/commandContext.ts: marker=0, prose=5, holder=0',
   // RFC-359 W11 销账：`modules/development-automation/composition/activityOperations.ts:
   // marker=1, holder=1` 整行消失 —— `createDevelopmentActivityWorkerBinding()`（先造 `operations`
   // 交给下游、再补一句 `.bind(worker)`、`operations` 进门 `if (worker === null) throw
@@ -184,6 +184,9 @@ const PROSE =
  */
 const NAMED_ROOTS: ReadonlySet<string> = new Set([
   'server.ts',
+  // RFC-400: follow both halves of the original command-context composition.
+  'modules/collaboration/application/commandContext.ts',
+  'modules/collaboration/infrastructure/collaborationCommandContext.ts',
   'bootstrap/daemonModules/adapters.ts',
   'bootstrap/daemonModules/developmentAutomation.ts',
   'bootstrap/daemonModules/digitalEmployee.ts',

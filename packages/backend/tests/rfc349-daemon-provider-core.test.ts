@@ -14,7 +14,7 @@ import { join, resolve } from 'node:path'
 
 import { createSecretBoxFromKey } from '@/auth/secretBox'
 import { createInMemoryDb } from '@/db/client'
-import type { RealtimeCompositionPolicy } from '@/modules/runtime-management/public/participants'
+import type { RealtimeCompositionPolicy } from '@/modules/runtime-management/composition'
 import type { LocalSystemOperationContext } from '@/modules/system-operations/public/types'
 import {
   composeDaemonProviderCore,

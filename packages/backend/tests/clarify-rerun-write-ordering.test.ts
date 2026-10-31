@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 import { withO2Closure } from './helpers/o2Closure'
 // RFC-076 PR-0 (T0) — clarify rerun continuation, torn-read safety (functional lock).
 //
@@ -177,6 +178,7 @@ describeEachProvider('RFC-076 PR-0 — clarify rerun write-ordering', (harness) 
     )
 
     await autoDispatchClarifyRound({
+      taskExecutionParticipants,
       db,
       memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
       originNodeRunId: sess.intermediaryNodeRunId,

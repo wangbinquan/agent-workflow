@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 import { decomposeClarifyRound } from '@/modules/collaboration/infrastructure/migration/clarifyRule'
 import type { SourceRow } from '@/platform/persistence/migration/conversion/types'
 import {
@@ -255,6 +256,7 @@ describeEachProvider('RFC-395 II-a A4 clarify write port', (h) => {
     })
     expect(attrs.b.userId).toBe(editorB.userId)
     const partial = await sealRoundQuestions({
+      taskExecutionParticipants,
       db: h.db,
       originNodeRunId: f.origin,
       answers: [answer(f.questions[1]!)],
@@ -273,6 +275,7 @@ describeEachProvider('RFC-395 II-a A4 clarify write port', (h) => {
     expect(board.find((row) => row.questionId === 'b')?.answerSummary).toBe('A')
     expect(board.find((row) => row.questionId === 'a')?.answerSummary).toBeNull()
     const full = await sealRoundQuestions({
+      taskExecutionParticipants,
       db: h.db,
       originNodeRunId: f.origin,
       answers: [answer(f.questions[0]!, 'proxy edit')],
@@ -304,6 +307,7 @@ describeEachProvider('RFC-395 II-a A4 clarify write port', (h) => {
   test('re-answer keeps final attribution / submit facts; reopen preserves drafts and sealed ledger markers', async () => {
     const f = await seed(h.db)
     await sealRoundQuestions({
+      taskExecutionParticipants,
       db: h.db,
       originNodeRunId: f.origin,
       answers: f.questions.map((q) => answer(q)),
@@ -314,6 +318,7 @@ describeEachProvider('RFC-395 II-a A4 clarify write port', (h) => {
     })
     const before = await f.read()
     const reseal = await sealRoundQuestions({
+      taskExecutionParticipants,
       db: h.db,
       originNodeRunId: f.origin,
       answers: [answer(f.questions[0]!, 'new')],
@@ -365,7 +370,7 @@ describeEachProvider('RFC-395 II-a A4 clarify write port', (h) => {
       const f = await seed(h.db, kind)
       await f.save(f.questions[0]!)
       const before = await f.read()
-      await createHumanGateTerminalSweepCommand(h.db).run({
+      await createHumanGateTerminalSweepCommand(h.db, taskExecutionParticipants).run({
         taskId: f.taskId,
         cause: 'task-done',
         now: 50,
@@ -411,6 +416,7 @@ describeEachProvider('RFC-395 II-a A4 clarify write port', (h) => {
     expect((await f.read()).questions).toBe(row.questions)
     await expect(
       sealRoundQuestions({
+        taskExecutionParticipants,
         db: h.db,
         originNodeRunId: f.origin,
         wholeRound: true,
@@ -423,6 +429,7 @@ describeEachProvider('RFC-395 II-a A4 clarify write port', (h) => {
     expect(
       (
         await sealRoundQuestions({
+          taskExecutionParticipants,
           db: h.db,
           originNodeRunId: f.origin,
           wholeRound: true,

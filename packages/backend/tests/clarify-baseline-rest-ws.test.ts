@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 import { withO2Closure } from './helpers/o2Closure'
 // RFC-058 PR-A baseline (T6): byte-level lock of REST list / detail wire
 // shapes + WS event payloads. Tests are written against the service-layer
@@ -162,7 +163,7 @@ async function reassignThenDispatchDesigner(
     (e) => e.roleKind === 'designer' && e.originNodeRunId === crossClarifyNodeRunId,
   )
   if (!designer) throw new Error(`no designer entry after reassign for ${crossClarifyNodeRunId}`)
-  return dispatchTaskQuestions(db, taskId, [designer.id], actor)
+  return dispatchTaskQuestions(db, taskExecutionParticipants, taskId, [designer.id], actor)
 }
 
 let uninstallProjection = (): void => {}

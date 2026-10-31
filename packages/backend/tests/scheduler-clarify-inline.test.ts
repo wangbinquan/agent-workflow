@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 // RFC-026 T7 — scheduler integration for clarify inline-session mode.
 //
 // Drives runTask end-to-end against mock-opencode and asserts the scheduler:
@@ -299,6 +300,7 @@ function registerCases(provider: ProviderHarness) {
     )[0]
     expect(sessionRow).toBeDefined()
     await autoDispatchClarifyRound({
+      taskExecutionParticipants,
       db: h.db,
       memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(h.db),
       originNodeRunId: sessionRow!.intermediaryNodeRunId,
@@ -400,6 +402,7 @@ function registerCases(provider: ProviderHarness) {
     ).find((round) => round.iteration === 0)
     expect(firstRound).toBeDefined()
     await autoDispatchClarifyRound({
+      taskExecutionParticipants,
       db: h.db,
       memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(h.db),
       originNodeRunId: firstRound!.intermediaryNodeRunId,
@@ -435,6 +438,7 @@ function registerCases(provider: ProviderHarness) {
     ).find((round) => round.iteration === 1)
     expect(secondRound).toBeDefined()
     await autoDispatchClarifyRound({
+      taskExecutionParticipants,
       db: h.db,
       memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(h.db),
       originNodeRunId: secondRound!.intermediaryNodeRunId,
@@ -506,6 +510,7 @@ function registerCases(provider: ProviderHarness) {
       await h.db.select().from(clarifyRounds).where(eq(clarifyRounds.taskId, taskId))
     )[0]
     await autoDispatchClarifyRound({
+      taskExecutionParticipants,
       db: h.db,
       memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(h.db),
       originNodeRunId: sessionRow!.intermediaryNodeRunId,
@@ -578,6 +583,7 @@ function registerCases(provider: ProviderHarness) {
     )[0]
     expect(sessionRow).toBeDefined()
     await autoDispatchClarifyRound({
+      taskExecutionParticipants,
       db: h.db,
       memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(h.db),
       originNodeRunId: sessionRow!.intermediaryNodeRunId,

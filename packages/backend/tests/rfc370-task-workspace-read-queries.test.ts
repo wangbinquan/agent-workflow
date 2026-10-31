@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 import { composeCollaborationTaskRolePolicy } from '@/modules/resource-catalog/composition'
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { o2Ports } from './helpers/o2Closure'
@@ -528,6 +529,7 @@ describeEachProvider('RFC-370 S1 repair selected isolation reader handoff', (pro
     const appHome = temp(),
       dispatched: string[] = []
     const native = createCollaborationRuntimeMechanics(provider.db, {
+      taskExecutionParticipants,
       taskRolePolicy: composeCollaborationTaskRolePolicy(),
       ...epoch2RuntimeTestPorts(provider.db),
       taskLock: o2Ports(provider.db).taskLock,

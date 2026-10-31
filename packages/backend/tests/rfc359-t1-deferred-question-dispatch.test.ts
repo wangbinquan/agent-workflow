@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 // RFC-359 W1-T1（P0-7）—— 延迟提问的自动派发在两个引擎上各跑一遍。
 //
 // 这是 dual-provider-parity-audit-2026-09-04 里第一条被真机实证的 P0：PostgreSQL 上每个调度 tick
@@ -34,9 +35,15 @@ describeEachProvider('RFC-359 T1 —— 延迟提问自动派发（P0-7）', (ha
     const db = harness.db
     const taskId = freshTaskId()
     const { selfIds, designerIds } = await seedMixedBatch(db, taskId)
-    const ops = createTaskDagCollaborationOperations(db)
+    const ops = createTaskDagCollaborationOperations(db, taskExecutionParticipants)
 
-    const res = await dispatchTaskQuestions(db, taskId, [...selfIds, ...designerIds], actor)
+    const res = await dispatchTaskQuestions(
+      db,
+      taskExecutionParticipants,
+      taskId,
+      [...selfIds, ...designerIds],
+      actor,
+    )
     expect(res.dispatchedEntryIds).toEqual(selfIds)
     expect(res.deferred.map((d) => d.entryId).sort()).toEqual([...designerIds].sort())
     for (const id of designerIds) {
@@ -85,7 +92,10 @@ describeEachProvider('RFC-359 T1 —— 延迟提问自动派发（P0-7）', (ha
       defaultTargetNodeId: DESIGNER,
       stagedAt: Date.now(),
     })
-    await createTaskDagCollaborationOperations(db).autoDispatchDeferredQuestions(taskId)
+    await createTaskDagCollaborationOperations(
+      db,
+      taskExecutionParticipants,
+    ).autoDispatchDeferredQuestions(taskId)
     expect((await entryById(db, id))!.dispatchedAt).toBeNull()
   })
 
@@ -93,10 +103,19 @@ describeEachProvider('RFC-359 T1 —— 延迟提问自动派发（P0-7）', (ha
     const db = harness.db
     const taskId = freshTaskId()
     const { selfIds, designerIds } = await seedMixedBatch(db, taskId)
-    await dispatchTaskQuestions(db, taskId, [...selfIds, ...designerIds], actor)
+    await dispatchTaskQuestions(
+      db,
+      taskExecutionParticipants,
+      taskId,
+      [...selfIds, ...designerIds],
+      actor,
+    )
     expect((await entryById(db, designerIds[0]!))!.autoDispatchDeferredAt).not.toBeNull()
     await patchTaskFixture(db, { id: taskId }, { status: 'done' })
-    await createTaskDagCollaborationOperations(db).autoDispatchDeferredQuestions(taskId)
+    await createTaskDagCollaborationOperations(
+      db,
+      taskExecutionParticipants,
+    ).autoDispatchDeferredQuestions(taskId)
     for (const id of designerIds) {
       const row = (await entryById(db, id))!
       expect(row.autoDispatchDeferredAt).toBeNull()
@@ -118,9 +137,9 @@ describeEachProvider('RFC-359 T1 —— 延迟提问自动派发（P0-7）', (ha
       defaultTargetNodeId: DESIGNER,
       stagedAt: Date.now(),
     })
-    const ops = createTaskDagCollaborationOperations(db)
+    const ops = createTaskDagCollaborationOperations(db, taskExecutionParticipants)
     expect(await ops.loadUndispatchedParkTargets(taskId)).toEqual(new Set([DESIGNER]))
-    await dispatchTaskQuestions(db, taskId, [id], actor)
+    await dispatchTaskQuestions(db, taskExecutionParticipants, taskId, [id], actor)
     expect(await ops.loadUndispatchedParkTargets(taskId)).toEqual(new Set())
   })
 })

@@ -2,7 +2,7 @@ import { composeRealtimeResourceAcl } from '@/modules/resource-catalog/compositi
 import { composeRealtimeTaskFacts } from '@/modules/task-execution/composition'
 import { composeLocalWebSocketAuthentication } from '../../src/modules/identity-access/composition/authentication'
 import type { WsCredentialWithExpiry } from '../../src/auth/session'
-import type { ActorSource } from '../../src/auth/actor'
+import type { AuthenticatedAuthoritySnapshot } from '@/modules/identity-access/public/participants'
 import { createAuthRuntimeFor } from '../../src/auth/composition'
 import type { DbClient } from '../../src/db/client'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
@@ -61,7 +61,10 @@ export function composeTestSqliteRealtimeRuntime(input: {
   readonly db: DbClient
   readonly identityAccess: IdentityAccessRuntime
   readonly repoImportOwnerUserId?: (batchId: string) => string | null
-  readonly redactTaskEventPayload?: (payload: unknown, source: ActorSource) => unknown
+  readonly redactTaskEventPayload?: (
+    payload: unknown,
+    source: AuthenticatedAuthoritySnapshot['source'],
+  ) => unknown
 }): RealtimeRuntime {
   const resourceCatalog = composeResourceCatalogFor({ db: input.db })
   return composeRealtimeRuntimeFor({
@@ -107,7 +110,10 @@ export function composeTestProviderRealtimeRuntime(input: {
   readonly neutralDb: PersistenceDb
   readonly identityAccess: IdentityAccessRuntime
   readonly repoImportOwnerUserId?: (batchId: string) => string | null
-  readonly redactTaskEventPayload?: (payload: unknown, source: ActorSource) => unknown
+  readonly redactTaskEventPayload?: (
+    payload: unknown,
+    source: AuthenticatedAuthoritySnapshot['source'],
+  ) => unknown
 }): RealtimeRuntime {
   const { binding, neutralDb } = input
   const policy: RealtimeCompositionPolicy = {

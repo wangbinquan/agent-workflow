@@ -2,7 +2,7 @@ import type { ReviewNodeReviewerDependencies } from '../application/reviewNodeRe
 import {
   requireCollaborationTaskExecutionReadModels,
   resolveCollaborationCommandContext,
-} from './commandContext'
+} from '../application/commandContext'
 import type { CollaborationCommandContext } from '../public/types'
 
 export function reviewNodeReviewerDependencies(

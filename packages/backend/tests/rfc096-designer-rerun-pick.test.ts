@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 // LOCKS: RFC-096 (audit S-13 / 附录 C #7) — designer-rerun anchor row selection,
 // re-homed onto the LIVE mint path by RFC-132 PR-E2.
 //
@@ -229,7 +230,13 @@ describeEachProvider(
       await reassignTaskQuestion(db, questioner.id, D, actor)
       const designer = (await listTaskQuestions(db, taskId)).find((e) => e.roleKind === 'designer')!
 
-      const res = await dispatchTaskQuestions(db, taskId, [designer.id], actor)
+      const res = await dispatchTaskQuestions(
+        db,
+        taskExecutionParticipants,
+        taskId,
+        [designer.id],
+        actor,
+      )
 
       const designerRerunId = res.reruns.find((r) => r.targetNodeId === D)?.nodeRunId
       expect(designerRerunId).toBeDefined()

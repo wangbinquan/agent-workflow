@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 import { composeCollaborationTaskRolePolicy } from '@/modules/resource-catalog/composition'
 // RFC-359 W4-B3 批 a —— collaboration 六对只差客户端类型 / 事务原语的适配器合一，两个引擎各跑一遍：
 // 任务反馈存储、评审人存储（替换走统一事务）、协作侧任务可见性 / 角色、评审侧任务关系、
@@ -202,7 +203,7 @@ describeEachProvider('RFC-359 W4-B3a —— continuation 恢复与终态清扫',
       { id: parked, taskId, nodeId: 'gate', status: 'awaiting_human', retryIndex: 0, iteration: 0 },
       { id: done, taskId, nodeId: 'x', status: 'done', retryIndex: 0, iteration: 0 },
     ])
-    const sweep = createHumanGateTerminalSweepCommand(db)
+    const sweep = createHumanGateTerminalSweepCommand(db, taskExecutionParticipants)
     const result = await sweep.run({ taskId, cause: 'task-canceled', now: 9 })
     expect(result.canceledRuns).toEqual([{ nodeRunId: parked, nodeId: 'gate' }])
     expect(result.sealedSelfRounds).toBe(0)

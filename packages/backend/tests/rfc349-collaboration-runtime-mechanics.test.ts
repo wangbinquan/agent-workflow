@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 import { composeCollaborationTaskRolePolicy } from '@/modules/resource-catalog/composition'
 // RFC-395 BF-D27: AF-D1 leaves reads unfenced, fences every mutation and caches the
 // first-write marker per runtime. SQL keyword case follows the capability renderer.
@@ -143,6 +144,7 @@ describe('RFC-349 collaboration runtime mechanics', () => {
     test('SQLite composition owns live suppression and closes orphaned clarify rounds', async () => {
       const taskId = await seedTask(db, { members: [{ memberType: 'agent' }] })
       const runtime = createCollaborationRuntimeMechanics(db, {
+        taskExecutionParticipants,
         taskRolePolicy: composeCollaborationTaskRolePolicy(),
         ...epoch2RuntimeTestPorts(db),
         taskLock: o2Ports(db).taskLock,

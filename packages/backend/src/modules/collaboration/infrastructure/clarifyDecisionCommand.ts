@@ -1,3 +1,4 @@
+import type { TaskExecutionParticipantBindings } from './taskExecutionParticipantBindings'
 import type { CollaborationTaskRolePolicy } from '../application/ports/collaborationTaskRolePolicy'
 import type { HistoryRestrictionPort } from '@/platform/contracts/historyRestriction'
 import type { HumanGateTaskLockPort } from '../composition/required-ports'
@@ -8,8 +9,7 @@ import type { HumanGateTaskLockPort } from '../composition/required-ports'
 // （seal → clarify decision participant → autoDispatch）现在跑在 `DatabaseSession` 上，
 // 这里对两个 provider 是同一段代码。
 //
-// 保留动态 import：命令端口由 bootstrap 一次性组合，静态 import autoDispatch 会经
-// `services/humanGateComposition` 绕回 collaboration 的 composition barrel，形成值环。
+// 保留动态 import：命令端口在 bootstrap 装配，业务实现仍在调用时才载入。
 
 import type { Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
@@ -18,18 +18,22 @@ import type { ClarifyDecisionCommandPort } from '@/modules/collaboration/applica
 import type { CollaborationCommandContext } from '@/modules/collaboration/public/types'
 import type { MemoryDistillEnqueuer } from '@/modules/memory/public/participants'
 import type { TaskActorRole } from '@agent-workflow/shared'
-import { createCollaborationCommandContext } from '../composition/commandContext'
+import { createCollaborationCommandContext } from './collaborationCommandContext'
 
 export function createClarifyDecisionCommand(
   db: PersistenceDb,
   memoryDistillEnqueuer: MemoryDistillEnqueuer,
   taskLock: HumanGateTaskLockPort,
-  options: { readonly historyRestrictions: HistoryRestrictionPort },
+  options: {
+    readonly historyRestrictions: HistoryRestrictionPort
+    readonly taskExecutionParticipants: TaskExecutionParticipantBindings
+  },
 ): ClarifyDecisionCommandPort {
   return {
     async submit(command) {
       const { autoDispatchClarifyRoundWithDecision } = await import('./clarify/autoDispatch')
       const decided = await autoDispatchClarifyRoundWithDecision({
+        taskExecutionParticipants: options.taskExecutionParticipants,
         db,
         taskLock,
         historyRestrictions: options?.historyRestrictions,
@@ -73,6 +77,7 @@ export function createClarifyDecisionCommand(
 
 /** Legacy test bridge; production routes use the bootstrap-owned context. */
 export function createClarifyDecisionCommandContext(input: {
+  readonly taskExecutionParticipants: TaskExecutionParticipantBindings
   readonly taskRolePolicy: CollaborationTaskRolePolicy
   readonly taskLock: HumanGateTaskLockPort
   readonly historyRestrictions: HistoryRestrictionPort
@@ -90,7 +95,10 @@ export function createClarifyDecisionCommandContext(input: {
       input.db,
       input.memoryDistillEnqueuer,
       input.taskLock,
-      { historyRestrictions: input.historyRestrictions },
+      {
+        taskExecutionParticipants: input.taskExecutionParticipants,
+        historyRestrictions: input.historyRestrictions,
+      },
     ),
   })
 }

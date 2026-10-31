@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 import { withO2Closure } from './helpers/o2Closure'
 // RFC-132 PR-B UPDATE: the P5-0 stranding guard is REMOVED (universal deferred model). A
 // self/questioner FULL seal no longer strands — every task has the park + control-channel dispatch
@@ -228,7 +229,12 @@ async function sealGuarded(
   answers: ClarifyAnswer[],
 ): Promise<{ error?: unknown; result?: Awaited<ReturnType<typeof sealRoundQuestions>> }> {
   try {
-    const result = await sealRoundQuestions({ db, originNodeRunId, answers })
+    const result = await sealRoundQuestions({
+      taskExecutionParticipants,
+      db,
+      originNodeRunId,
+      answers,
+    })
     return { result }
   } catch (error) {
     return { error }
@@ -364,6 +370,7 @@ describeEachProvider('RFC-128 full-seal behavior providers', (harness) => {
       const { taskId, originNodeRunId } = await seedCrossRound(db, [makeQ('q1')])
 
       const result = await sealRoundQuestions({
+        taskExecutionParticipants,
         db,
         originNodeRunId,
         answers: [makeAns('q1')],
@@ -381,6 +388,7 @@ describeEachProvider('RFC-128 full-seal behavior providers', (harness) => {
       const { taskId, originNodeRunId } = await seedCrossRound(db, [makeQ('q1')])
 
       const result = await sealRoundQuestions({
+        taskExecutionParticipants,
         db,
         originNodeRunId,
         answers: [makeAns('q1')],
@@ -407,6 +415,7 @@ describeEachProvider('RFC-128 full-seal behavior providers', (harness) => {
       const { taskId, originNodeRunId } = await seedSelfRound(db, [makeQ('q1'), makeQ('q2')])
 
       const result = await sealRoundQuestions({
+        taskExecutionParticipants,
         db,
         originNodeRunId,
         answers: [makeAns('q1'), makeAns('q2')],

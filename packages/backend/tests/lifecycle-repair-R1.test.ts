@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 import { nodeRunFixtureColumns } from './helpers/model/nodeRun'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 // LOCKS: RFC-057 — R1 repair options (approved doc_version but review run not done).
@@ -406,7 +407,10 @@ describeEachProvider('RFC-057 — R1 writers vs task cancellation linearization'
       h = seeded.h
       uninstallAfterCommitPump = installTaskLifecycleAfterCommitTestPump(h.db, {
         onTerminalTask(db, taskId, to) {
-          return createHumanGateTerminalSweepCommand(db).run({ taskId, cause: `task-${to}` })
+          return createHumanGateTerminalSweepCommand(db, taskExecutionParticipants).run({
+            taskId,
+            cause: `task-${to}`,
+          })
         },
       })
       // 运维那一侧真实发生的次序：别人刚把任务取消掉，诊断面板上的那个按钮还在，点下去。
@@ -452,7 +456,10 @@ describeEachProvider('RFC-057 — R1 writers vs task cancellation linearization'
       h = seeded.h
       uninstallAfterCommitPump = installTaskLifecycleAfterCommitTestPump(h.db, {
         onTerminalTask(db, taskId, to) {
-          return createHumanGateTerminalSweepCommand(db).run({ taskId, cause: `task-${to}` })
+          return createHumanGateTerminalSweepCommand(db, taskExecutionParticipants).run({
+            taskId,
+            cause: `task-${to}`,
+          })
         },
       })
       // 反过来的次序：修复先落库，随后任务被取消——取消的清扫不该把修复刚写下的事实抹掉。

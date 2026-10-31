@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 import { composeGateContinuationSupport } from '@/modules/collaboration/composition'
 import { composeHumanGateTaskLockPort } from '@/modules/task-execution/composition'
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
@@ -781,6 +782,7 @@ describeEachProvider('RFC-386 coordinator factory', (harness) => {
             gateContinuationPreDrive: composeGateContinuationPreDrive({
               persistence: bundle.persistence,
               ...composeGateContinuationSupport({
+                taskExecutionParticipants,
                 db: harness.db,
                 historyRestrictions: epoch2RuntimeTestPorts(harness.db).historyRestrictions,
                 taskLock: composeHumanGateTaskLockPort,

@@ -15,10 +15,12 @@
 // `application/ports/*`——inbound 是自家的投递适配器，**不经自己的 public**（同 RFC-353 T12
 // 给 knowledge-evolution 立下的口径）。
 
-import type { Actor } from '@/auth/actor'
+import type { AuthenticatedAuthoritySnapshot } from '@/modules/identity-access/public/participants'
 
 /** Intent owns its audit visibility policy; Resource Catalog has no role in it. */
-export function canAuditIntentSessions(actor: Actor): boolean {
+export function canAuditIntentSessions(
+  actor: Pick<AuthenticatedAuthoritySnapshot, 'permissions'>,
+): boolean {
   return actor.permissions.has('intent:audit')
 }
 

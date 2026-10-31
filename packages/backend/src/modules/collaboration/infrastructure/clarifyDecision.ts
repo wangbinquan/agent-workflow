@@ -1,3 +1,4 @@
+import type { TaskExecutionParticipantBindings } from './taskExecutionParticipantBindings'
 import type { HumanGateTaskLockPort } from '../composition/required-ports'
 import type { HistoryRestrictionPort } from '@/platform/contracts/historyRestriction'
 // RFC-333 / RFC-349 / RFC-359 — collaboration clarify decision transaction participant.
@@ -16,7 +17,6 @@ import { ulid } from 'ulid'
 
 import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
 import type { CanonicalHumanGateRequest } from '@/modules/collaboration/domain/canonicalGateRequest'
-import { acceptHumanGateDecisionTx } from '@/modules/task-execution/infrastructure/taskDecisionParticipant'
 import { humanGateNodeProjectionFence } from '@/modules/task-execution/public/participants'
 import type { ClarifySealDecisionParticipantInTx } from '../application/ports/clarifySealDecisionParticipant'
 import { ConflictError } from '@/util/errors'
@@ -217,6 +217,7 @@ export async function replayCommittedClarifyDecision(input: {
 }
 
 export async function prepareClarifyDecision(input: {
+  readonly taskExecutionParticipants: TaskExecutionParticipantBindings
   taskLock: HumanGateTaskLockPort
   historyRestrictions: HistoryRestrictionPort
   db: PersistenceDb
@@ -329,24 +330,26 @@ export async function prepareClarifyDecision(input: {
       const sourceRows = await createNodeRunQueries(sealed.tx).humanGateProjection([
         input.originNodeRunId,
       ])
-      const accepted = await acceptHumanGateDecisionTx(sealed.tx, {
-        taskId: input.taskId,
-        gate: { kind: 'clarify', ref: gateRef },
-        expectedTaskRevision: request.expectedTaskRevision,
-        expectedNodeProjection: humanGateNodeProjectionFence(sourceRows),
-        continuationLineage: {
-          sourceNodeRunIds: [input.originNodeRunId],
-          rerunNodeRunIds: [],
-        },
-        operationId: begun.operation.id,
-        now: sealed.now,
-        nodeChanges: sourceRows.map((row) => ({
-          nodeRunId: row.id,
-          nodeId: row.nodeId,
-          status: 'done' as const,
-          cause: 'clarify-answered',
-        })),
-      })
+      const accepted = await input.taskExecutionParticipants
+        .createTaskDecisionParticipantInTx(sealed.tx)
+        .acceptGateDecisionTx({
+          taskId: input.taskId,
+          gate: { kind: 'clarify', ref: gateRef },
+          expectedTaskRevision: request.expectedTaskRevision,
+          expectedNodeProjection: humanGateNodeProjectionFence(sourceRows),
+          continuationLineage: {
+            sourceNodeRunIds: [input.originNodeRunId],
+            rerunNodeRunIds: [],
+          },
+          operationId: begun.operation.id,
+          now: sealed.now,
+          nodeChanges: sourceRows.map((row) => ({
+            nodeRunId: row.id,
+            nodeId: row.nodeId,
+            status: 'done' as const,
+            cause: 'clarify-answered',
+          })),
+        })
       const envelope: ClarifyDecisionReceiptEnvelope = {
         schemaVersion: 1,
         kind: 'clarify-decision',

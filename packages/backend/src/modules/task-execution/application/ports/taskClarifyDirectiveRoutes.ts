@@ -1,9 +1,12 @@
-import type { Actor } from '@/auth/actor'
+import type { AuthenticatedAuthoritySnapshot } from '@/modules/identity-access/public/participants'
 import type { TaskActorRole, ClarifyDirective } from '@agent-workflow/shared'
 
 /** Closed transport boundary for the task-scoped clarify directive route. */
 export interface TaskClarifyDirectiveRouteOperations {
-  resolveAccess(input: { readonly actor: Actor; readonly taskId: string }): Promise<Readonly<{
+  resolveAccess(input: {
+    readonly actor: AuthenticatedAuthoritySnapshot
+    readonly taskId: string
+  }): Promise<Readonly<{
     readonly workflowSnapshot: string
     readonly actorRole: TaskActorRole | null
   }> | null>

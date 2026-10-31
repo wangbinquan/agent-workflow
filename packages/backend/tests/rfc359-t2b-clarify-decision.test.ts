@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { withO2Closure, o2Ports } from './helpers/o2Closure'
 // RFC-359 W1-T2b（F-H2-1 之二）—— 快速澄清决定命令在两个引擎上各跑一遍。
@@ -14,7 +15,7 @@ import { beforeEach, expect, test } from 'bun:test'
 import { and, eq } from 'drizzle-orm'
 
 import { createClarifyDecisionCommand } from '@/modules/collaboration/infrastructure/clarifyDecisionCommand'
-import { createCollaborationCommandContext } from '@/modules/collaboration/composition/commandContext'
+import { createCollaborationCommandContext } from '@/modules/collaboration/infrastructure/collaborationCommandContext'
 import { submitClarifyDecision } from '@/modules/collaboration/public/commands'
 import { sealRoundQuestions } from '@/modules/collaboration/infrastructure/clarify/seal'
 import { listNodeClarifyDirectives } from '@/modules/collaboration/infrastructure/taskClarifyDirective'
@@ -113,6 +114,7 @@ describeEachProvider('RFC-359 T2b —— 快速澄清决定命令（clarifyDecis
       withO2Closure({
         db,
         clarifyDecisions: createClarifyDecisionCommand(db, enqueuer, o2Ports(db).taskLock, {
+          taskExecutionParticipants,
           historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
         }),
       }),
@@ -176,6 +178,7 @@ describeEachProvider('RFC-359 T2b —— 快速澄清决定命令（clarifyDecis
     const round = await seedOpenSelfRound(db, taskId)
     const enqueuer = recordingEnqueuer()
     const command = createClarifyDecisionCommand(db, enqueuer, o2Ports(db).taskLock, {
+      taskExecutionParticipants,
       historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
     })
     const submit = (idempotencyKey: string) =>
@@ -209,6 +212,7 @@ describeEachProvider('RFC-359 T2b —— 快速澄清决定命令（clarifyDecis
     let error: unknown
     try {
       await createClarifyDecisionCommand(db, enqueuer, o2Ports(db).taskLock, {
+        taskExecutionParticipants,
         historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
       }).submit({
         actor,
@@ -239,7 +243,10 @@ describeEachProvider('RFC-359 T2b —— 快速澄清决定命令（clarifyDecis
       db,
       recordingEnqueuer(),
       o2Ports(db).taskLock,
-      { historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions },
+      {
+        taskExecutionParticipants,
+        historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
+      },
     ).submit({
       actor,
       actorRole: 'owner',
@@ -257,6 +264,7 @@ describeEachProvider('RFC-359 T2b —— 快速澄清决定命令（clarifyDecis
     const taskId = freshTaskId()
     const round = await seedOpenSelfRound(db, taskId)
     const partial = await sealRoundQuestions({
+      taskExecutionParticipants,
       db,
       originNodeRunId: round.origin,
       answers: [ans('q1')],
@@ -279,10 +287,16 @@ describeEachProvider('RFC-359 T2b —— 快速澄清决定命令（clarifyDecis
 
     // 已 seal 且已 staged 的题不声明重答就再 seal → 409（RFC-136 exactly-once）。
     await expect(
-      sealRoundQuestions({ db, originNodeRunId: round.origin, answers: [ans('q1')] }),
+      sealRoundQuestions({
+        taskExecutionParticipants,
+        db,
+        originNodeRunId: round.origin,
+        answers: [ans('q1')],
+      }),
     ).rejects.toMatchObject({ code: 'clarify-question-already-sealed' })
 
     const full = await sealRoundQuestions({
+      taskExecutionParticipants,
       db,
       originNodeRunId: round.origin,
       answers: [ans('q2')],
@@ -313,6 +327,7 @@ describeEachProvider('RFC-359 T2b —— 快速澄清决定命令（clarifyDecis
       { status: 'failed', finishedAt: Date.now() },
     )
     const full = await sealRoundQuestions({
+      taskExecutionParticipants,
       db,
       originNodeRunId: round.origin,
       answers: [ans('q1'), ans('q2')],

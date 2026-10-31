@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 import { nodeRunFixtureColumns } from './helpers/model/nodeRun'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { withO2Closure } from './helpers/o2Closure'
@@ -742,6 +743,7 @@ describeEachProvider(
         .where(eq(clarifyRounds.intermediaryNodeId, 'cc_alpha'))
       const cnrA = ccAlphaRunRows[0]!.intermediaryNodeRunId
       await autoDispatchClarifyRound({
+        taskExecutionParticipants,
         db,
         memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
         originNodeRunId: cnrA!,
@@ -811,6 +813,7 @@ describeEachProvider(
       // RFC-132: the stop answer (unified quick channel) writes the questioner's node-level
       // directive; resolveCrossNodeStopped reads it (RFC-132 T7 single source).
       await autoDispatchClarifyRound({
+        taskExecutionParticipants,
         db,
         memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
         originNodeRunId: cnrStop,

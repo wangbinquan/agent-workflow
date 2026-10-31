@@ -26,7 +26,7 @@ import type { TaskExecutionPersistenceDependencies } from './taskExecutionPersis
 
 // RFC-359：同步的决定接受参与者（`bindTaskDecisionParticipantInTx` →
 // `LegacyHumanGateTaskLifecycle` → `transitionHumanGateTaskTx` → `writeTaskStatusTx`）整条链退役。
-// 它生产侧一直零消费者——`humanGateComposition` 上那个同名包装也没人调；决定接受走的是中立的
+// 它生产侧一直零消费者；决定接受走的是中立的
 // `acceptHumanGateDecisionTx`（`infrastructure/taskDecisionParticipant.ts`）。
 export async function parkPreparedHumanGate(
   input: {

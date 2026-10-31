@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import { epoch2ReviewReader } from './helpers/epoch2RuntimePorts'
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
@@ -333,6 +334,7 @@ describe('RFC-092 S-1 端到端 — mid-run review iterate 由活调度循环自
       driver: 'real',
     }).schedulerDriver
     const runPromise = wakeHumanGateContinuation(taskId, launchIntentId, {
+      taskExecutionParticipants,
       humanGateOpen: composeHumanGateOpenParticipantFactory(),
       historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
       db: h.db,
@@ -395,6 +397,7 @@ describe('RFC-092 S-1 端到端 — mid-run review iterate 由活调度循环自
         iterateDecision.taskId,
         iterateDecision.continuationRef,
         {
+          taskExecutionParticipants,
           humanGateOpen: composeHumanGateOpenParticipantFactory(),
           historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
           db: h.db,
@@ -492,6 +495,7 @@ describe('RFC-092 S-1 端到端 — mid-run review iterate 由活调度循环自
       }),
     )
     await wakeHumanGateContinuation(approval.taskId, approval.continuationRef, {
+      taskExecutionParticipants,
       humanGateOpen: composeHumanGateOpenParticipantFactory(),
       historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
       db: h.db,

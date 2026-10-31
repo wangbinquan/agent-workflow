@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './taskExecutionParticipantBindings'
 import { composeCollaborationTaskRolePolicy } from '@/modules/resource-catalog/composition'
 import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import { epoch2RuntimeTestPorts } from './epoch2RuntimePorts'
@@ -123,6 +124,7 @@ export function createRepairEngine(
     collaborationRuntime:
       options.collaborationRuntime ??
       createCollaborationRuntimeMechanics(db, {
+        taskExecutionParticipants,
         taskRolePolicy: composeCollaborationTaskRolePolicy(),
         ...epoch2RuntimeTestPorts(db),
         taskLock: o2Ports(db).taskLock,

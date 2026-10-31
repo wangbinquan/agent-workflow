@@ -5,7 +5,6 @@ import type {
   HostedBackupVerification,
   HostedBackupId,
 } from '@agent-workflow/shared'
-import type { Actor } from '@/auth/actor'
 import type {
   DatabaseMigrationArtifactInput,
   DatabaseMigrationArtifactView,
@@ -22,10 +21,14 @@ import type {
   RecoveryStatusView,
   RestorePlanView,
 } from './types'
-import type { QueryContext, RequestAuthority } from '@/modules/identity-access/public/participants'
+import type {
+  AuthenticatedAuthoritySnapshot,
+  QueryContext,
+  RequestAuthority,
+} from '@/modules/identity-access/public/participants'
 
 export interface SystemOverviewAuthority {
-  readonly actor: Actor
+  readonly actor: AuthenticatedAuthoritySnapshot
   readonly authority: RequestAuthority
 }
 

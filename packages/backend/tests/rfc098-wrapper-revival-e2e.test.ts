@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 import { withO2Closure } from './helpers/o2Closure'
 // RFC-098 B3（audit S-3 + RFC-092 已知限制解除）端到端验收 — 修复后正确语义锁定。
 //
@@ -514,6 +515,7 @@ describe('RFC-098 B3 — RFC-092 已知限制解除：wrapper 内 clarify mid-ru
       expect(await taskStatus(h.db, taskId)).toBe('awaiting_human')
 
       await autoDispatchClarifyRound({
+        taskExecutionParticipants,
         db: h.db,
         memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(h.db),
         originNodeRunId: session.intermediaryNodeRunId,

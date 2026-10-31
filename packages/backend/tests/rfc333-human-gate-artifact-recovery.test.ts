@@ -12,10 +12,8 @@ import { composeHumanGateTaskLockPort } from '@/modules/task-execution/compositi
 import { taskFixture } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { first } from '@/platform/persistence/queryHelpers'
-import {
-  createCollaborationCommandContext,
-  resolveCollaborationCommandContext,
-} from '@/modules/collaboration/composition/commandContext'
+import { createCollaborationCommandContext } from '@/modules/collaboration/infrastructure/collaborationCommandContext'
+import { resolveCollaborationCommandContext } from '@/modules/collaboration/application/commandContext'
 import { createFileReviewArtifactContent } from '@/modules/collaboration/infrastructure/local/fileReviewArtifactContent'
 import { ReviewGateOpenPreparation } from '@/modules/collaboration/application/prepareReviewGateOpen'
 import { CommittedHumanGateFinalizer } from '@/modules/collaboration/application/finalizeCommittedHumanGate'

@@ -1,3 +1,4 @@
+import { composeTaskExecutionParticipantBindings } from './crossContextClosure'
 import type { HistoryRestrictionPort } from '@/platform/contracts/historyRestriction'
 import type { CodeHistoryReader as ImportedCodeHistoryReader } from '@/modules/code-capability/composition/historyQueries'
 import { composeHumanGateTaskLockPort } from '@/modules/task-execution/composition'
@@ -292,6 +293,7 @@ export function composeProviderAppComposition<P extends DatabaseProvider>(
       createFileWorkspaceContentEffects(workspaceRef),
   })
   const collaborationRouteOperations = composeCollaborationRouteOperations({
+    taskExecutionParticipants: composeTaskExecutionParticipantBindings(),
     taskRolePolicy: taskExecutionProvider.taskRolePolicy,
     historyRestrictions: input.historyRestrictions,
     taskLock: composeHumanGateTaskLockPort,

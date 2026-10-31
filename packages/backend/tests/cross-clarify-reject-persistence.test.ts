@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 import { withO2Closure } from './helpers/o2Closure'
 // RFC-056 PR-D C4 — reject persistence cross-cascade 守门.
 //
@@ -208,6 +209,7 @@ describeEachProvider('RFC-056 C4 — reject persistence cross-cascade', (harness
       }),
     )
     await autoDispatchClarifyRound({
+      taskExecutionParticipants,
       db,
       memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
       originNodeRunId: sess.intermediaryNodeRunId,
@@ -240,6 +242,7 @@ describeEachProvider('RFC-056 C4 — reject persistence cross-cascade', (harness
       }),
     )
     await autoDispatchClarifyRound({
+      taskExecutionParticipants,
       db,
       memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
       originNodeRunId: a.intermediaryNodeRunId,
@@ -262,6 +265,7 @@ describeEachProvider('RFC-056 C4 — reject persistence cross-cascade', (harness
       }),
     )
     await autoDispatchClarifyRound({
+      taskExecutionParticipants,
       db,
       memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
       originNodeRunId: b.intermediaryNodeRunId,
@@ -290,6 +294,7 @@ describeEachProvider('RFC-056 C4 — reject persistence cross-cascade', (harness
       }),
     )
     await autoDispatchClarifyRound({
+      taskExecutionParticipants,
       db,
       memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
       originNodeRunId: a.intermediaryNodeRunId,
@@ -344,6 +349,7 @@ describeEachProvider('RFC-056 C4 — reject persistence cross-cascade', (harness
       }),
     )
     await autoDispatchClarifyRound({
+      taskExecutionParticipants,
       db,
       memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
       originNodeRunId: a.intermediaryNodeRunId,
@@ -374,6 +380,7 @@ describeEachProvider('RFC-056 C4 — reject persistence cross-cascade', (harness
       }),
     )
     await autoDispatchClarifyRound({
+      taskExecutionParticipants,
       db,
       memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
       originNodeRunId: a.intermediaryNodeRunId,
@@ -395,6 +402,7 @@ describeEachProvider('RFC-056 C4 — reject persistence cross-cascade', (harness
       iteration: 0,
     })
     const ret = await dispatchCrossClarifyNode({
+      taskExecutionParticipants,
       db,
       taskId,
       crossClarifyNodeId: 'cross1',

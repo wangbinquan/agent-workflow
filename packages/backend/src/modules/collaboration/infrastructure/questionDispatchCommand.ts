@@ -1,3 +1,4 @@
+import type { TaskExecutionParticipantBindings } from './taskExecutionParticipantBindings'
 import type { CollaborationTaskRolePolicy } from '../application/ports/collaborationTaskRolePolicy'
 import type { HistoryRestrictionPort } from '@/platform/contracts/historyRestriction'
 import type { HumanGateTaskLockPort } from '../composition/required-ports'
@@ -7,8 +8,7 @@ import type { HumanGateTaskLockPort } from '../composition/required-ports'
 // 路由一到 `requireQuestionDispatchCommand` 就 500。派发管线（`taskQuestionDispatch.ts`）
 // 已跑在 `DatabaseSession` 上，这里对两个 provider 都是同一段代码。
 //
-// 保留动态 import：命令端口由 bootstrap 一次性组合，静态 import 派发管线会经
-// `services/humanGateComposition` 绕回 collaboration 的 composition barrel，形成值环。
+// 保留动态 import：命令端口在 bootstrap 装配，业务实现仍在调用时才载入。
 
 import type { Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
@@ -16,18 +16,22 @@ import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { CollaborationCommandContext } from '@/modules/collaboration/public/types'
 import type { QuestionDispatchCommandPort } from '@/modules/collaboration/application/ports/questionDispatchCommand'
 import type { TaskActorRole } from '@agent-workflow/shared'
-import { createCollaborationCommandContext } from '../composition/commandContext'
+import { createCollaborationCommandContext } from './collaborationCommandContext'
 
 export function createQuestionDispatchCommand(
   db: PersistenceDb,
   taskLock: HumanGateTaskLockPort,
-  options: { readonly historyRestrictions: HistoryRestrictionPort },
+  options: {
+    readonly historyRestrictions: HistoryRestrictionPort
+    readonly taskExecutionParticipants: TaskExecutionParticipantBindings
+  },
 ): QuestionDispatchCommandPort {
   return {
     async dispatch(command) {
       const { dispatchTaskQuestionsWithDecision } = await import('./taskQuestionDispatch')
       const dispatched = await dispatchTaskQuestionsWithDecision(
         db,
+        options.taskExecutionParticipants,
         command.taskId,
         [...command.entryIds],
         { userId: command.actor.user.id, role: command.actorRole },
@@ -58,6 +62,7 @@ export function createQuestionDispatchCommand(
 
 /** Legacy test bridge; production routes use the bootstrap-owned context. */
 export function createQuestionDispatchCommandContext(input: {
+  readonly taskExecutionParticipants: TaskExecutionParticipantBindings
   readonly taskRolePolicy: CollaborationTaskRolePolicy
   readonly taskLock: HumanGateTaskLockPort
   readonly historyRestrictions: HistoryRestrictionPort
@@ -71,6 +76,7 @@ export function createQuestionDispatchCommandContext(input: {
     historyRestrictions: input.historyRestrictions,
     db: input.db,
     questionDispatches: createQuestionDispatchCommand(input.db, input.taskLock, {
+      taskExecutionParticipants: input.taskExecutionParticipants,
       historyRestrictions: input.historyRestrictions,
     }),
   })

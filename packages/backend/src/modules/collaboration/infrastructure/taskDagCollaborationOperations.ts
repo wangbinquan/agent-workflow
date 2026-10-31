@@ -1,3 +1,4 @@
+import type { TaskExecutionParticipantBindings } from './taskExecutionParticipantBindings'
 // RFC-359 W1-T1（P0-7）—— task-DAG 调度器消费的 collaboration 投影：一份实现，两个引擎。
 //
 // 此前 `sqliteTaskDagCollaborationOperations.ts` 与 `postgresqlTaskDagCollaborationOperations.ts`
@@ -129,13 +130,13 @@ async function loadUndispatchedParkTargets(
 
 export function createTaskDagCollaborationOperations(
   db: PersistenceDb,
+  taskExecutionParticipants: TaskExecutionParticipantBindings,
 ): TaskDagCollaborationOperations {
   return Object.freeze({
-    // 动态 import：本文件从 collaboration 的 composition barrel 导出，而派发管线经
-    // services/humanGateComposition 绕回同一个 barrel——静态 import 会形成值环（TDZ）。
+    // 派发管线仍在 tick 调用时才载入，保留原动态 import 时机。
     autoDispatchDeferredQuestions: async (taskId: string) => {
       const { autoDispatchDeferredQuestions } = await import('./clarify/autoDispatch')
-      await autoDispatchDeferredQuestions(db, taskId)
+      await autoDispatchDeferredQuestions(db, taskExecutionParticipants, taskId)
     },
     loadOpenClarifyEvidence: (taskId: string) => loadOpenClarifyEvidence(db, taskId),
     loadUndispatchedParkTargets: (taskId: string) => loadUndispatchedParkTargets(db, taskId),

@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 import { composeCollaborationTaskRolePolicy } from '@/modules/resource-catalog/composition'
 // RFC-395 II-b T18 WGF: a task is already awaiting_human while its asking
 // host/turn driver is still unwinding. Seal and dispatch are separate commits.
@@ -211,6 +212,7 @@ describeEachProvider('RFC-395 WGF leader answer continuation', (h) => {
       const [parked] = await readTaskFixtures(h.db, { id: f.taskId })
       expect(parked?.status).toBe('awaiting_human')
       const prepared = await prepareClarifyDecision({
+        taskExecutionParticipants,
         db: h.db,
         taskLock: createHumanGatePersistenceParticipantInTx,
         historyRestrictions: f.historyRestrictions,
@@ -225,6 +227,7 @@ describeEachProvider('RFC-395 WGF leader answer continuation', (h) => {
         decision: {},
       })
       const dispatch = await autoDispatchClarifyRound({
+        taskExecutionParticipants,
         db: h.db,
         memoryDistillEnqueuer,
         originNodeRunId: round.intermediaryNodeRunId,
@@ -289,6 +292,7 @@ describeEachProvider('RFC-395 WGF leader answer continuation', (h) => {
       // Recovery/HTTP replay may log the same origin twice. Its durable receipt
       // must replay the existing dispatch, never mint another continuation.
       const replay = await autoDispatchClarifyRoundWithDecision({
+        taskExecutionParticipants,
         db: h.db,
         taskLock: createHumanGatePersistenceParticipantInTx,
         historyRestrictions: f.historyRestrictions,

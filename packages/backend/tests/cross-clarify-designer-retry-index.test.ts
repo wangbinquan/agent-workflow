@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 import { withO2Closure } from './helpers/o2Closure'
 // RFC-056 patch 2026-05-23 — designer's own pending row uses max(existing)+1.
 //
@@ -68,7 +69,7 @@ async function reassignThenDispatchDesigner(
     (e) => e.roleKind === 'designer' && e.originNodeRunId === crossClarifyNodeRunId,
   )
   if (!designer) throw new Error(`no designer entry after reassign for ${crossClarifyNodeRunId}`)
-  return dispatchTaskQuestions(db, taskId, [designer.id], actor)
+  return dispatchTaskQuestions(db, taskExecutionParticipants, taskId, [designer.id], actor)
 }
 
 function makeQ(id: string): ClarifyQuestion {
@@ -262,6 +263,7 @@ describeEachProvider('RFC-056 patch 2026-05-23 — designer rerun retry_index bu
     )
 
     await autoDispatchClarifyRound({
+      taskExecutionParticipants,
       db,
       memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
       originNodeRunId: sess.intermediaryNodeRunId,
@@ -311,6 +313,7 @@ describeEachProvider('RFC-056 patch 2026-05-23 — designer rerun retry_index bu
       }),
     )
     await autoDispatchClarifyRound({
+      taskExecutionParticipants,
       db,
       memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
       originNodeRunId: sess.intermediaryNodeRunId,
@@ -363,6 +366,7 @@ describeEachProvider('RFC-056 patch 2026-05-23 — designer rerun retry_index bu
       }),
     )
     await autoDispatchClarifyRound({
+      taskExecutionParticipants,
       db,
       memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
       originNodeRunId: sess.intermediaryNodeRunId,

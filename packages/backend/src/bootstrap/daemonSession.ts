@@ -1,3 +1,4 @@
+import { composeTaskExecutionParticipantBindings } from './crossContextClosure'
 import { selectedSqlitePath } from '@/platform/persistence/databaseProviderRuntime'
 // RFC-391 — the sole daemon session graph and lifecycle composition.
 import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'
@@ -394,7 +395,10 @@ export async function composeDaemonSession(
   ]
   const committedEventProjectionLedger = createCommittedEventProjectionLedger()
   const committedEventPersistence = createCommittedEventDeliveryPersistence(db)
-  const terminalSweep = createHumanGateTerminalSweepCommand(db)
+  const terminalSweep = createHumanGateTerminalSweepCommand(
+    db,
+    composeTaskExecutionParticipantBindings(),
+  )
   const committedEventDispatcher = createCommittedEventDispatcher({
     persistence: committedEventPersistence,
     workerId: `committed-events-${DAEMON_GENERATION}`,

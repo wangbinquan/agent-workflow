@@ -1,3 +1,4 @@
+import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import { epoch2ReviewReader } from './helpers/epoch2RuntimePorts'
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
@@ -645,6 +646,7 @@ describe('RFC-005 review state machine — dispatch + decisions', () => {
       }),
     )
     await wakeHumanGateContinuation(first.taskId, first.continuationRef, {
+      taskExecutionParticipants,
       humanGateOpen: composeHumanGateOpenParticipantFactory(),
       historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
       db: h.db,
