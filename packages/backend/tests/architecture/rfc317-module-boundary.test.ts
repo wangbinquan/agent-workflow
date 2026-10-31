@@ -375,14 +375,6 @@ const OPEN_RECORD_SITES: readonly OpenRecordSite[] = [
     why: 'triggerParameters —— 用户在触发器上自定义的参数袋，键集合按定义就是开放的。',
   },
   {
-    site: 'modules/execution-contract/public/commands.ts: Record<string, T>',
-    why: '泛型 merge 助手（patched / existing / 返回值三处同形），对任意 frontmatter 形状工作。',
-  },
-  {
-    site: 'modules/execution-contract/public/commands.ts: Record<string, unknown>',
-    why: 'frontmatterExtra —— agent.md frontmatter 的附加字段，任意 YAML，键集合无法闭合。',
-  },
-  {
     site: 'modules/identity-access/public/types.ts: Record<string, unknown>',
     why: '错误 details 包，随错误类型而变，闭合它等于把每种错误的字段集写进公共类型。',
   },

@@ -1182,3 +1182,8 @@ export function createEmployeeAutomationWorkStartProvider(
 }
 
 export { schemaContribution } from './composition/schema'
+
+export { composeDigitalEmployeeBuiltinToolCatalog } from './application/builtinToolCatalog'
+
+// RFC-399 B1: bootstrap's maintenance job table takes these handlers via composition.
+export { createDigitalEmployeeMaintenanceJobHandlers } from './application/maintenanceJobs'

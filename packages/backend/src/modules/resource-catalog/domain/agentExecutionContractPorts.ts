@@ -1,6 +1,6 @@
 import type { Agent, CreateAgent, UpdateAgent } from '@agent-workflow/shared'
 
-import { EXECUTION_CONTRACT_RESULT_PORT } from '../domain/model'
+import { EXECUTION_CONTRACT_RESULT_PORT } from '@agent-workflow/shared'
 
 interface ManagedContractPort {
   readonly name: string

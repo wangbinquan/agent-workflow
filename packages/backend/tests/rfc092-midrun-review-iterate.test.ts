@@ -1,3 +1,4 @@
+import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import { epoch2ReviewReader } from './helpers/epoch2RuntimePorts'
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { readReviewFixture } from './helpers/model/content'
@@ -312,6 +313,7 @@ describe('RFC-092 S-1 端到端 — mid-run review iterate 由活调度循环自
     const launchIntentId = ulid()
     await submitTaskContinuation(
       createTaskExecutionPersistence(h.db, {
+        humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
         recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
       }).intents,
@@ -331,6 +333,7 @@ describe('RFC-092 S-1 端到端 — mid-run review iterate 由活调度循环自
       driver: 'real',
     }).schedulerDriver
     const runPromise = wakeHumanGateContinuation(taskId, launchIntentId, {
+      humanGateOpen: composeHumanGateOpenParticipantFactory(),
       historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
       db: h.db,
       appHome: h.appHome,
@@ -392,6 +395,7 @@ describe('RFC-092 S-1 端到端 — mid-run review iterate 由活调度循环自
         iterateDecision.taskId,
         iterateDecision.continuationRef,
         {
+          humanGateOpen: composeHumanGateOpenParticipantFactory(),
           historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
           db: h.db,
           appHome: h.appHome,
@@ -488,6 +492,7 @@ describe('RFC-092 S-1 端到端 — mid-run review iterate 由活调度循环自
       }),
     )
     await wakeHumanGateContinuation(approval.taskId, approval.continuationRef, {
+      humanGateOpen: composeHumanGateOpenParticipantFactory(),
       historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
       db: h.db,
       appHome: h.appHome,

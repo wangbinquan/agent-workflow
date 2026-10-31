@@ -1,3 +1,4 @@
+import type { CollaborationTaskRolePolicy } from '../application/ports/collaborationTaskRolePolicy'
 import type { HumanGateTaskLockPort } from './required-ports'
 import type { HistoryRestrictionPort } from '@/platform/contracts/historyRestriction'
 import type { ContentStore } from '@/platform/content/contentStore'
@@ -55,7 +56,7 @@ export interface CollaborationCommandDependencies {
   readonly clarifyDecisions?: ClarifyDecisionCommandPort
   readonly taskExecutionReadModels?: TaskExecutionReadModels
   // RFC-359 W5-T19b：评审任务访问端口**不是**装配选项——两个工厂都从同一个 `db` 现造
-  // （`createReviewTaskAccessPort(input.db)`），全仓从来没有第二个来源、也没有任何调用方
+  // （`createReviewTaskAccessPort(input.db, input.taskRolePolicy)`），全仓从来没有第二个来源、也没有任何调用方
   // 传过它。留成 `?:` 只是让「没装配」在类型层仍然可表达，代价是两处 `is not composed`
   // 的运行期兜底（其中一处还在 `reviewNodeReviewerDependencies.ts` 里被逐字抄了一遍）。
   // 改必填后缺口无处可表达，那两句兜底随之删除。
@@ -83,6 +84,7 @@ export type CollaborationCommandContextInput = Omit<
   'persistence' | 'artifacts' | 'taskAccess' | 'reviewTaskAccess'
 > & {
   readonly db: PersistenceDb
+  readonly taskRolePolicy: CollaborationTaskRolePolicy
   readonly taskLock: HumanGateTaskLockPort
   readonly historyRestrictions: HistoryRestrictionPort
   readonly content?: ContentStore
@@ -121,8 +123,8 @@ export function createCollaborationCommandContext(
         }))
   return createCollaborationCommandContextFromPersistence({
     ...input,
-    taskAccess: createCollaborationTaskAccessPort(input.db),
-    reviewTaskAccess: createReviewTaskAccessPort(input.db),
+    taskAccess: createCollaborationTaskAccessPort(input.db, input.taskRolePolicy),
+    reviewTaskAccess: createReviewTaskAccessPort(input.db, input.taskRolePolicy),
     persistence: {
       operations: new DatabaseHumanGateOperationPersistence(
         databaseSessionFor(input.db),

@@ -112,6 +112,24 @@ export const REQUIRED_CONTEXT_EDGES: ReadonlyArray<
   ['integration', 'event-center', 'event-source-routing-spi'],
   ['resource-catalog', 'execution-contract', 'contract-resource-projection-spi'],
   ['task-execution', 'execution-contract', 'contract-fixture-spi'],
+  // RFC-399: consumer-owned ports implemented through type-only adapters.
+  ['resource-catalog', 'collaboration', 'CollaborationTaskRolePolicy'],
+  ['collaboration', 'task-execution', 'TaskMembershipOperationsPort'],
+  ['resource-catalog', 'integration', 'IntegrationTriggerSnapshotFactory'],
+  ['task-execution', 'resource-catalog', 'McpDiagnosticExecution'],
+  ['task-execution', 'resource-catalog', 'McpDiagnosticExecutionFactory'],
+  ['collaboration', 'task-execution', 'GateWorkspaceRollbackExecutor'],
+  ['collaboration', 'task-execution', 'TaskClarifyContinuationPort'],
+  ['collaboration', 'task-execution', 'CollaborationRepairPorts'],
+  ['collaboration', 'task-execution', 'TaskClarifyRepairPort'],
+  ['collaboration', 'task-execution', 'TaskReviewRepairPort'],
+  ['collaboration', 'task-execution', 'TaskClarifyDirectiveRouteOperations'],
+  ['collaboration', 'task-execution', 'TaskReviewersPort'],
+  ['collaboration', 'task-execution', 'HumanGateOpenParticipantFactory'],
+  ['collaboration', 'task-execution', 'HumanGateOpenParticipantScope'],
+  ['collaboration', 'task-execution', 'HumanGateOpenParticipantInTx'],
+  ['memory', 'task-execution', 'TaskMemorySnapshotPort'],
+  ['source-control', 'task-execution', 'RepositoryPreparationLookup'],
 ]
 
 const AUTHORITY_CONTEXTS = TARGET_PUBLIC_CONTEXTS.filter((context) => context !== 'identity-access')

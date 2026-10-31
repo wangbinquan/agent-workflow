@@ -1,3 +1,4 @@
+import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { o2Ports } from './helpers/o2Closure'
 // LOCKS: RFC-057 — stuckTaskDetector embeds `repairHint` in S1/S2/S3 detail.
@@ -89,6 +90,7 @@ describeEachProvider('RFC-057 — stuckTaskDetector.repairHint', (harness) => {
     const runId = await addRun(db, taskId, 'rev_1', 'interrupted')
     const r = await runStuckTaskDetector({
       operations: createTaskExecutionPersistence(db, {
+        humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
         recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
       }).recoveryAdministration,
@@ -110,6 +112,7 @@ describeEachProvider('RFC-057 — stuckTaskDetector.repairHint', (harness) => {
     const runId = await addRun(db, taskId, 'clarify_1', 'interrupted')
     const r = await runStuckTaskDetector({
       operations: createTaskExecutionPersistence(db, {
+        humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
         recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
       }).recoveryAdministration,
@@ -131,6 +134,7 @@ describeEachProvider('RFC-057 — stuckTaskDetector.repairHint', (harness) => {
     // No doc_versions → S1 violates.
     const r = await runStuckTaskDetector({
       operations: createTaskExecutionPersistence(db, {
+        humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
         recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
       }).recoveryAdministration,
@@ -152,6 +156,7 @@ describeEachProvider('RFC-057 — stuckTaskDetector.repairHint', (harness) => {
     const runId = await addRun(db, taskId, 'clarify_1', 'awaiting_human')
     const r = await runStuckTaskDetector({
       operations: createTaskExecutionPersistence(db, {
+        humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
         recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
       }).recoveryAdministration,
@@ -172,6 +177,7 @@ describeEachProvider('RFC-057 — stuckTaskDetector.repairHint', (harness) => {
     })
     const r = await runStuckTaskDetector({
       operations: createTaskExecutionPersistence(db, {
+        humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
         recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
       }).recoveryAdministration,
@@ -192,6 +198,7 @@ describeEachProvider('RFC-057 — stuckTaskDetector.repairHint', (harness) => {
     await addRun(db, taskId, 'out_1', 'done')
     const r = await runStuckTaskDetector({
       operations: createTaskExecutionPersistence(db, {
+        humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
         recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
       }).recoveryAdministration,

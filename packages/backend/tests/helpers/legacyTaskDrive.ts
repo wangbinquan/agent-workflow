@@ -1,3 +1,4 @@
+import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import { epoch2RuntimeTestPorts } from './epoch2RuntimePorts'
 // RFC-395 II-pre：生产启动 / 延续依赖及工作区租约改接线，保留既有断言。
 // RFC-387: retained fixture admission composes the same application factory; W4 removes this adapter.
@@ -56,7 +57,11 @@ export function composeTestRoomContinuation(input: {
     }),
     gateContinuation: createGateContinuationDriver({
       isDriving: isTaskDriverActive,
-      coordinator: createTestTaskDriveCoordinator({ deps: input, appHome: Paths.root }),
+      coordinator: createTestTaskDriveCoordinator({
+        humanGateOpen: composeHumanGateOpenParticipantFactory(),
+        deps: input,
+        appHome: Paths.root,
+      }),
     }),
     log: createLogger('rfc387-room-test'),
   })

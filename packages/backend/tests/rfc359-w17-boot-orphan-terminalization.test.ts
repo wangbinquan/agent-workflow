@@ -1,3 +1,4 @@
+import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { o2Ports } from './helpers/o2Closure'
 // RFC-359 W17 / AC-10: boot-orphan 的真实装配，两个引擎逐字同一条。
@@ -233,6 +234,7 @@ describeEachProvider(
         const clock = spyOn(Date, 'now').mockReturnValue(WALL_NOW)
         try {
           const won = await createTaskExecutionPersistence(harness.db, {
+            humanGateOpen: composeHumanGateOpenParticipantFactory(),
             historyRestrictions: epoch2RuntimeTestPorts(harness.db).historyRestrictions,
             recoveryHumanGates: o2Ports(harness.db).collaborationReads.recovery,
           }).recoveryAdministration.interruptBootOrphanTask(bootInput)
@@ -287,6 +289,7 @@ describeEachProvider(
       })
       expect(
         await createTaskExecutionPersistence(harness.db, {
+          humanGateOpen: composeHumanGateOpenParticipantFactory(),
           historyRestrictions: epoch2RuntimeTestPorts(harness.db).historyRestrictions,
           recoveryHumanGates: o2Ports(harness.db).collaborationReads.recovery,
         }).recoveryAdministration.interruptBootOrphanTask({ ...bootInput, from: 'pending' }),
@@ -305,6 +308,7 @@ describeEachProvider(
         await withWriteTrigger(harness, mode, async () => {
           await expect(
             createTaskExecutionPersistence(harness.db, {
+              humanGateOpen: composeHumanGateOpenParticipantFactory(),
               historyRestrictions: epoch2RuntimeTestPorts(harness.db).historyRestrictions,
               recoveryHumanGates: o2Ports(harness.db).collaborationReads.recovery,
             }).recoveryAdministration.interruptBootOrphanTask(bootInput),

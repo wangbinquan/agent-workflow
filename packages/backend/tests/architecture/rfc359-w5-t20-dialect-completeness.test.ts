@@ -417,7 +417,7 @@ const RAW_DIALECT_DEBT: readonly DialectDebtRow[] = [
   //
   // **没有一并做的事**（留债，别读成已完成）：两个 retention 文件的**游标 / 相位 / 四条谓词**仍是
   // 各写一份（`rfc359-w8-retention-parity.test.ts` 是它们的对拍）。合一它们要动
-  // `platform/background/maintenanceSystemOperations.ts` 的中立调用点，不在本刀的路径域内。
+  // `modules/system-operations/infrastructure/maintenanceSystemOperations.ts` 的中立调用点，不在本刀的路径域内。
   // ──────────────────────────────────────────────────────────────────────────
   // RFC-359 W11 销账：`platform/persistence/postgresqlNullOrdering.ts: nulls-ordering ×2` ——
   // 矩阵早已收编这条资产，缺的只是把最后一个调用方改指过去然后删掉原件。核过之后全仓只有

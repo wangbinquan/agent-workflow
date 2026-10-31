@@ -1,3 +1,7 @@
+import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
+import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
+import { composeGateContinuationSupport } from '@/modules/collaboration/composition'
+import { composeHumanGateTaskLockPort } from '@/modules/task-execution/composition'
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { nodeRunFixtureColumns } from './helpers/model/nodeRun'
 import { tablesOf } from '@/platform/persistence/sessionTables'
@@ -304,6 +308,7 @@ describeEachProvider('RFC-333 clarify decision transaction', (harness) => {
       taskId,
       intentKind: claimed.intentKind,
       execution: createTaskExecutionContext({
+        humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
         intentId: intent.id,
         token: claimed.token,
@@ -313,9 +318,16 @@ describeEachProvider('RFC-333 clarify decision transaction', (harness) => {
       runtime: resolveTaskDriveConfig({ appHome: '/tmp/rfc341-clarify-convergence' }),
     }
     const step = createGateContinuationPreDriveStep({
-      historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
-      db,
-      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
+      persistence: createTaskExecutionPersistence(db, {
+        historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
+        humanGateOpen: composeHumanGateOpenParticipantFactory(),
+      }),
+      ...composeGateContinuationSupport({
+        db: db,
+        historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
+        taskLock: composeHumanGateTaskLockPort,
+        memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
+      }),
     })
     await expect(step.run(context)).resolves.toEqual({ kind: 'ready' })
     const firstRunCount = (
@@ -376,15 +388,23 @@ describeEachProvider('RFC-333 clarify decision transaction', (harness) => {
     const claimed = await module.claim({ db, intentId: intent.id })
     module.claimGate.leave(claimed.permit)
     const step = createGateContinuationPreDriveStep({
-      historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
-      db,
-      memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
+      persistence: createTaskExecutionPersistence(db, {
+        historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
+        humanGateOpen: composeHumanGateOpenParticipantFactory(),
+      }),
+      ...composeGateContinuationSupport({
+        db: db,
+        historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
+        taskLock: composeHumanGateTaskLockPort,
+        memoryDistillEnqueuer: createSqliteMemoryDistillEnqueuer(db),
+      }),
     })
     await expect(
       step.run({
         taskId,
         intentKind: claimed.intentKind,
         execution: createTaskExecutionContext({
+          humanGateOpen: composeHumanGateOpenParticipantFactory(),
           historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
           intentId: intent.id,
           token: claimed.token,

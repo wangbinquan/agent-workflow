@@ -11,7 +11,7 @@ import { SYSTEM_USER_ID } from '@/auth/systemIdentity'
 import {
   reconcileCreatedAgentExecutionContractPorts,
   reconcileUpdatedAgentExecutionContractPorts,
-} from '@/modules/execution-contract/public/commands'
+} from '@/modules/resource-catalog/domain/agentExecutionContractPorts'
 import { ConflictError, NotFoundError } from '@/util/errors'
 
 export interface DigitalEmployeeAgentTemplateFence {

@@ -1,3 +1,4 @@
+import type { HumanGateOpenParticipantFactory } from '../application/ports/humanGateOpenFactory'
 import type { HistoryRestrictionPort } from '@/platform/contracts/historyRestriction'
 // RFC-359 AC-1（第 11 刀下半）—— 取消的**唯一**生产装配点。
 //
@@ -32,10 +33,11 @@ export interface TaskCancellation {
 export function composeTaskCancellation(
   db: PersistenceDb,
   historyRestrictions: HistoryRestrictionPort,
+  humanGateOpen: HumanGateOpenParticipantFactory,
 ): TaskCancellation {
   const dependencies = {
     db,
-    persistence: createTaskExecutionPersistence(db, { historyRestrictions }),
+    persistence: createTaskExecutionPersistence(db, { historyRestrictions, humanGateOpen }),
     stop: taskExecutionModule.runtimeRegistry,
     log,
   }

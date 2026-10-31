@@ -1,3 +1,4 @@
+import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { o2Ports } from './helpers/o2Closure'
 // RFC-359 W7 —— digital-employee / resource-catalog 维护面 / task-execution 动作执行器的 provider
@@ -196,6 +197,7 @@ describeEachProvider('RFC-359 W7 —— 数字员工动作执行器组合根', (
   test('agent / script 两个执行器：缺 executionRef 是 not-found，终态任务读出 exited 快照', async () => {
     const actor = await seedActor(harness.db)
     const persistence = createTaskExecutionPersistence(asSqlite(harness.db), {
+      humanGateOpen: composeHumanGateOpenParticipantFactory(),
       historyRestrictions: epoch2RuntimeTestPorts(asSqlite(harness.db)).historyRestrictions,
       recoveryHumanGates: o2Ports(asSqlite(harness.db)).collaborationReads.recovery,
     })

@@ -1,3 +1,4 @@
+import { composeCollaborationTaskRolePolicy } from '@/modules/resource-catalog/composition'
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { o2Ports } from './helpers/o2Closure'
 // RFC-370 A4: actual Task diff and S1 repair must await the selected workspace readers.
@@ -527,6 +528,7 @@ describeEachProvider('RFC-370 S1 repair selected isolation reader handoff', (pro
     const appHome = temp(),
       dispatched: string[] = []
     const native = createCollaborationRuntimeMechanics(provider.db, {
+      taskRolePolicy: composeCollaborationTaskRolePolicy(),
       ...epoch2RuntimeTestPorts(provider.db),
       taskLock: o2Ports(provider.db).taskLock,
       ...{ upstreamAgents: o2Ports(provider.db).upstreamAgents },

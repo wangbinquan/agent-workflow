@@ -21,7 +21,7 @@ import {
   type ProviderHttpApplicationScope,
 } from './helpers/providerHttpApplicationScope'
 import { createUser } from './helpers/userFixture'
-import { runWebhookDeliveryMaintenanceJob } from '@/platform/background/maintenanceJobRunner'
+import { runWebhookDeliveryMaintenanceJob } from '@/modules/integration/application/maintenanceJobs'
 import { composeIntegrationMaintenanceCommands } from '@/modules/integration/composition/maintenance'
 import { createSession } from './helpers/auth/sessionStore'
 import { createPat } from './helpers/auth/patStore'

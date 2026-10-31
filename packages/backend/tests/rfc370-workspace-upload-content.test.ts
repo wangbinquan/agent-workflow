@@ -9,7 +9,7 @@ import type { WorkspaceUploadPlan } from '@/modules/task-execution/public/types'
 import { selectWorkspaceUploadContentFactory } from '@/modules/source-control/public/participants'
 import type { WorkspaceUploadContentFactory } from '@/modules/source-control/public/types'
 import { applyUploadsToWorktree, resolveUniqueName } from '@/services/upload'
-import { applyUploadsToWorktree as nativeUpload } from '@/platform/content/local/workspaceUploads'
+import { applyUploadsToWorktree as nativeUpload } from '@/modules/task-execution/infrastructure/local/nativeWorkspaceUploads'
 import { held, callablePromise } from './helpers/portArtifactContent'
 import {
   MemoryWorkspaceUploadContent,

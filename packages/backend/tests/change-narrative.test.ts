@@ -1,3 +1,4 @@
+import { composeCollaborationTaskRolePolicy } from '@/modules/resource-catalog/composition'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 // RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-239 §3.2 — the change-narrative service. Locks:
@@ -52,7 +53,7 @@ import {
   type SystemAgentRunResult,
 } from '../src/services/systemAgentRun'
 import { getTask } from '../src/services/task'
-import { requireTaskMember } from '../src/services/taskCollab'
+import { requireTaskMember } from '@/modules/collaboration/infrastructure/taskCollab'
 import { parseNumstatZ, runGit } from '../src/util/git'
 import {
   triggerChangeNarrative,
@@ -296,7 +297,7 @@ describeEachProvider('triggerChangeNarrative', (harness) => {
           .limit(1)
         const row = rows[0]
         if (row === undefined) throw new Error(`task '${taskId}' not found`)
-        await requireTaskMember(db, actor, row)
+        await requireTaskMember(db, composeCollaborationTaskRolePolicy(), actor, row)
       },
       resolveRuntime: (input) => resolveInternalAgentRuntime(runtimes, input),
     }

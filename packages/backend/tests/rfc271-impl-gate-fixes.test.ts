@@ -1,3 +1,5 @@
+import { createIntentMaintenanceJobHandlers } from '@/modules/intent/composition'
+import type { MaintenanceJobHandlers } from '@/platform/contracts/maintenanceJob'
 // RFC-271 —— 锁住**实现门**（Codex，2026-08-08）那一轮 13 条 findings 的修复。
 //
 // 集中在一个文件是有意的：这 13 条来自同一次评审，读的人需要一眼看到「哪些洞被堵上
@@ -13,10 +15,8 @@
 
 import { createAtomicApplyRecovery } from '@/platform/atomic-apply/convergence'
 import type { AtomicApplyRecoveryScene, AtomicApplyRow } from '@/platform/contracts/atomicApply'
-import {
-  runMaintenanceJob,
-  type MaintenanceOwnerCommands,
-} from '@/platform/background/maintenanceJobRunner'
+import { runMaintenanceJob } from '@/platform/background/maintenanceJobRunner'
+import { type MaintenanceOwnerCommands } from '@/bootstrap/maintenanceJobBindings'
 import { maintenanceJobSpec } from '@/platform/background/maintenanceCatalog'
 import { HOUR_MS } from '@/services/daemonCadence'
 import { describe, expect, test } from 'bun:test'
@@ -192,7 +192,10 @@ describe('P1-5 · 收敛器必须真的被生产代码调用', () => {
     }) as MaintenanceOwnerCommands
     const pending = runMaintenanceJob({
       appHome: '/unused',
-      ownerCommands: owners,
+      handlers: createIntentMaintenanceJobHandlers(
+        owners.intent,
+        owners.atomicApply,
+      ) as MaintenanceJobHandlers,
       job: 'intentRecovery',
       payload: {
         recoverTurnIds: ['turn'],

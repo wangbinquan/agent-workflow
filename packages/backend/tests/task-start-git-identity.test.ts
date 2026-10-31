@@ -1,3 +1,4 @@
+import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import { nodeRunFixture, patchTaskFixture, readTaskFixtures } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
@@ -209,6 +210,7 @@ function launchWithoutEnv(h: Harness, name: string, actorUserId?: string) {
       inputs: { topic: name },
     },
     {
+      humanGateOpen: composeHumanGateOpenParticipantFactory(),
       db: h.db,
       schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
         .schedulerDriver,
@@ -399,6 +401,7 @@ describe('RFC-320 task Git identity snapshot', () => {
     await launchTestTask(
       { workflowId: h.workflowId, name: 'child identity', inputs: parent.inputs },
       {
+        humanGateOpen: composeHumanGateOpenParticipantFactory(),
         db: h.db,
         appHome: h.appHome,
         actorUserId: 'alice',

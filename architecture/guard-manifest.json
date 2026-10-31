@@ -1310,6 +1310,18 @@
       "negativeFixture": true
     },
     {
+      "assertsAbsence": true,
+      "classified": true,
+      "corpusScanner": true,
+      "file": "packages/backend/tests/architecture/rfc399-context-dag-platform.test.ts",
+      "id": "rfc399-context-dag-platform",
+      "lines": 110,
+      "mechanism": "ast",
+      "minCorpusFiles": 2000,
+      "negativeFixture": true,
+      "runner": "bun"
+    },
+    {
       "id": "source-path-reads",
       "file": "packages/backend/tests/architecture/source-path-reads.test.ts",
       "runner": "bun",

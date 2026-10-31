@@ -1,4 +1,7 @@
-import { createCrewStationMcpDiagnosticRunner } from '@/modules/task-execution/composition/crewstationMcpDiagnosticRunner'
+import type { McpDiagnosticExecutionFactory } from '../application/ports/mcpDiagnosticExecution'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
+import type { CrewStationMutationFence } from '@/platform/crewstation/mutationFence'
+import type { WorkspaceHelper } from '@/platform/crewstation/workspaceProtocol'
 import { DEFAULT_CONFIG_DIR_PROFILE } from '@agent-workflow/shared'
 import type { HostedRuntimeCapabilities } from '@/modules/runtime-management/public/types'
 import { verifyStartup } from '@/services/execution/startupVerification'
@@ -23,7 +26,17 @@ import {
 import { composeMcpRuntimeTestProvider } from './mcpRuntimeTestPersistence'
 import { createHostedMcpProbe } from '../infrastructure/crewstation/mcpProbe'
 
-type HostedInput = Parameters<typeof createCrewStationMcpDiagnosticRunner>[0] & {
+type HostedInput = {
+  readonly createExecution: McpDiagnosticExecutionFactory
+  readonly db: PersistenceDb
+  readonly fence: CrewStationMutationFence
+  readonly helper: WorkspaceHelper
+  readonly profiles: readonly {
+    readonly protocol: ResolvedTestRuntime['row']['protocol']
+    readonly model: string | null
+    readonly agentProfileId: string
+  }[]
+  readonly startupInventoryAvailable?: (id: string) => Promise<boolean>
   readonly capabilities: () => Promise<HostedRuntimeCapabilities>
   readonly locate: (reference: string) => { readonly taskId: string; readonly path: string }
 }
@@ -78,8 +91,7 @@ export function createCrewStationMcpDiagnosticsEffects(
     >
   },
 ): McpDiagnosticsEffects {
-  const runner = createCrewStationMcpDiagnosticRunner({
-    ...input,
+  const runner = input.createExecution({
     startupInventoryAvailable:
       input.startupInventoryAvailable ??
       (async (id) =>

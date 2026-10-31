@@ -38,7 +38,7 @@ import {
   type IsoRepo,
   type MergeBackConflict,
 } from '@/services/nodeIsolation'
-import { repoRelForcedPaths } from '@/modules/source-control/public/queries'
+import { repoRelForcedPaths } from '@/platform/workspace/forcedWorkspacePaths'
 import type { Logger } from '@/util/log'
 import { sha256Hex } from '@/util/hash'
 import type { TaskExecutionPersistence } from '@/modules/task-execution/application/ports/taskExecutionPersistence'

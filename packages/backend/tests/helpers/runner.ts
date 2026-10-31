@@ -1,3 +1,4 @@
+import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import { epoch2RuntimeTestPorts } from './epoch2RuntimePorts'
 import { o2Ports } from './o2Closure'
 import { composeRunObservationCalls } from '@/modules/run-observability/composition/runObservation'
@@ -47,6 +48,7 @@ export async function runNode(options: RunNodeOptions) {
     persistence:
       options.persistence ??
       createTaskExecutionPersistence(db, {
+        humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
         recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
       }),

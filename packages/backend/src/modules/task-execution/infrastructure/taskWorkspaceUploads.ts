@@ -1,5 +1,8 @@
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import type { UploadPlan, UploadResult } from '@/platform/content/local/workspaceUploads'
+import type {
+  UploadPlan,
+  UploadResult,
+} from '@/modules/task-execution/infrastructure/local/nativeWorkspaceUploads'
 import type { WorkspaceUploadContentFactory } from '@/modules/source-control/public/types'
 import type { WorkspaceUploadResult } from '../application/ports/workspaceUploads'
 import { applyWorkspaceUploads } from '../composition/workspaceUploads'

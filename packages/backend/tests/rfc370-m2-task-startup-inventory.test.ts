@@ -1,3 +1,5 @@
+import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
+import { composeTaskMemorySnapshotPort } from '@/modules/memory/composition'
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { o2Ports } from './helpers/o2Closure'
 // The real Task core persists transported runtime facts while still running;
@@ -217,6 +219,7 @@ describeEachProvider('RFC-370 Task startup inventory stream', (harness) => {
         }
         const result = await runSelectedTaskAgent(
           {
+            memorySnapshots: composeTaskMemorySnapshotPort(),
             taskId,
             nodeRunId,
             nodeId: 'n1',
@@ -225,6 +228,7 @@ describeEachProvider('RFC-370 Task startup inventory stream', (harness) => {
             templateMeta: { taskId, repoPath: 'repo:declared', baseBranch: 'main' },
             runtime,
             persistence: createTaskExecutionPersistence(db, {
+              humanGateOpen: composeHumanGateOpenParticipantFactory(),
               historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
               recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
             }),

@@ -1,3 +1,4 @@
+import { composeCollaborationTaskRolePolicy } from '@/modules/resource-catalog/composition'
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import type { projectNodeRunReadFacts } from '@/modules/task-execution/infrastructure/nodeRunSnapshot'
 import { taskAggregateWrite } from '@/modules/task-execution/infrastructure/taskDefinitionWriteParticipant'
@@ -437,6 +438,7 @@ describeEachProvider(
           actor,
           o2Ports(db).taskLock,
           epoch2RuntimeTestPorts(db).historyRestrictions,
+          composeCollaborationTaskRolePolicy(),
         )
       } catch (e) {
         threw = e
@@ -460,6 +462,7 @@ describeEachProvider(
         actor,
         o2Ports(db).taskLock,
         epoch2RuntimeTestPorts(db).historyRestrictions,
+        composeCollaborationTaskRolePolicy(),
       )
       const { taskQuestions } = tablesOf(db)
       const row = (await db.select().from(taskQuestions).where(eq(taskQuestions.id, id)))[0]
@@ -481,6 +484,7 @@ describeEachProvider(
         actor,
         o2Ports(db).taskLock,
         epoch2RuntimeTestPorts(db).historyRestrictions,
+        composeCollaborationTaskRolePolicy(),
       )
       // …then MOVED onto the shared member node → the R2-T5 reassign guard rejects.
       let threw: unknown = null

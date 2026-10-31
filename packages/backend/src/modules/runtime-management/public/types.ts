@@ -45,7 +45,6 @@ export interface RuntimeSmokeResult {
 }
 
 /** Durable marker emitted when a distillation runtime transcript cannot be captured. */
-export const DISTILL_CAPTURE_FAILED_KIND = 'rfc043/distill-capture-failed'
 
 export type RuntimeProtocol = RuntimeKind
 

@@ -58,11 +58,8 @@ const REGISTERED_PREEXISTING_DEEP_IMPORTS = new Set([
   'packages/backend/src/services/task.ts:@/modules/task-execution/application/resumeRollbackTargets',
   'packages/backend/src/services/task.ts:@/modules/task-execution/application/ports/runtimeSessionLeaseOperations',
   'packages/backend/src/services/task.ts:@/modules/task-execution/application/ports/taskRecoveryOperations',
-  'packages/backend/src/services/task.ts:@/modules/task-execution/infrastructure/legacySqliteTransportMechanisms',
-  // RFC-359 AC-6：`TaskContinuationDependencies.db` 从 `LegacySqliteTaskDatabase` 放宽到
-  // `LegacyProviderNeutralDatabase`（被测的 `buildStartTaskDeps` 只把句柄原样透传），
-  // 类型来源随之换到同目录的 `legacySqliteTransportMechanisms`。边还是那条边，随 legacy
-  // 启动面一起消失；只是目标模块换了，本判据逐条相等所以要同步改。
+  // RFC-399 B6: repository preparation lookup is a required Task port.
+  'packages/backend/src/services/task.ts:@/modules/task-execution/application/ports/repositoryPreparationLookup',
   // RFC-359 W8：`assertFrozenTaskTriggerPreflight` 的两份 provider 副本合一后落在 owner 的
   // infrastructure（`services/execution/triggerPreflight.ts` 那个更省边的落位被
   // `rfc349-provider-cutover` 的 databaseMechanismDependencies 判据按住：`services/` 面禁持

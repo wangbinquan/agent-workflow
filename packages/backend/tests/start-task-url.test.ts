@@ -1,3 +1,4 @@
+import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 // RFC-395 II-pre：改接生产启动 / 读取路径，保留原断言意图。
 // RFC-024 T4 — locks the URL-mode branch of launchTestTask:
 //   1. Cold path: clones the URL into the cache, materializes a worktree
@@ -172,6 +173,7 @@ describe('launchTestTask URL mode (RFC-024)', () => {
     const task = await launchTestTask(
       { workflowId: wf.id, name: 'fixture-task', repoUrl: remoteUrl, inputs: { topic: 'orders' } },
       {
+        humanGateOpen: composeHumanGateOpenParticipantFactory(),
         db,
         schedulerDriver: createTaskExecutionTestTopology({ db, driver: 'real' }).schedulerDriver,
         appHome,
@@ -204,6 +206,7 @@ describe('launchTestTask URL mode (RFC-024)', () => {
           expectedWorkflowVersion: wf.version + 999,
         },
         {
+          humanGateOpen: composeHumanGateOpenParticipantFactory(),
           db,
           schedulerDriver: createTaskExecutionTestTopology({ db, driver: 'real' }).schedulerDriver,
           appHome,
@@ -220,6 +223,7 @@ describe('launchTestTask URL mode (RFC-024)', () => {
     const t1 = await launchTestTask(
       { workflowId: wf.id, name: 'fixture-task', repoUrl: remoteUrl, inputs: { topic: 'a' } },
       {
+        humanGateOpen: composeHumanGateOpenParticipantFactory(),
         db,
         schedulerDriver: createTaskExecutionTestTopology({ db, driver: 'real' }).schedulerDriver,
         appHome,
@@ -230,6 +234,7 @@ describe('launchTestTask URL mode (RFC-024)', () => {
     const t2 = await launchTestTask(
       { workflowId: wf.id, name: 'fixture-task', repoUrl: remoteUrl, inputs: { topic: 'b' } },
       {
+        humanGateOpen: composeHumanGateOpenParticipantFactory(),
         db,
         schedulerDriver: createTaskExecutionTestTopology({ db, driver: 'real' }).schedulerDriver,
         appHome,
@@ -255,6 +260,7 @@ describe('launchTestTask URL mode (RFC-024)', () => {
           inputs: { topic: 'orders' },
         },
         {
+          humanGateOpen: composeHumanGateOpenParticipantFactory(),
           db,
           schedulerDriver: createTaskExecutionTestTopology({ db, driver: 'real' }).schedulerDriver,
           appHome,

@@ -12,3 +12,6 @@ export {
 } from './infrastructure/persistence/schema'
 
 export { createIntentTurnEventRetentionPhase } from './infrastructure/retentionPhase'
+
+// RFC-399 B1: bootstrap's maintenance job table takes these handlers via composition.
+export { createIntentMaintenanceJobHandlers } from './application/maintenanceJobs'

@@ -13,7 +13,7 @@ const readBackend = (path: string): string => readFileSync(resolve(BACKEND, path
 interface Sources {
   worker: string
   service: string
-  runner: string
+  boundedHandlers: readonly string[]
   eventArchive: string
   store: string
   migration: string
@@ -31,7 +31,10 @@ interface Sources {
 const original: Sources = {
   worker: readBackend('src/platform/background/maintenanceWorkerRuntime.ts'),
   service: readBackend('src/platform/background/maintenanceService.ts'),
-  runner: readBackend('src/platform/background/maintenanceJobRunner.ts'),
+  // RFC-399: mutate the real owner bodies after the runner became a dispatcher.
+  boundedHandlers: ['integration', 'development-automation', 'digital-employee'].map((owner) =>
+    readBackend(`src/modules/${owner}/application/maintenanceJobs.ts`),
+  ),
   eventArchive: readBackend('src/platform/background/eventsArchiveMaintenance.ts'),
   store: readBackend('src/platform/persistence/maintenanceRunStore.ts'),
   migration: readFileSync(
@@ -51,8 +54,11 @@ function issues(source: Sources): string[] {
   }
   if (source.service.includes('runMaintenanceJob(')) out.push('main-timer-body')
   if (
-    !source.runner.includes('const DB_WRITE_SLICE_ROWS = 1_000') ||
-    !source.runner.includes('DB_WRITE_SLICE_ROWS') ||
+    source.boundedHandlers.some(
+      (handler) =>
+        !handler.includes('const DB_WRITE_SLICE_ROWS = 1_000') ||
+        !handler.includes('DB_WRITE_SLICE_ROWS'),
+    ) ||
     !source.eventArchive.includes('const EVENT_ARCHIVE_SLICE_ROWS = 1_000') ||
     !source.eventArchive.includes('const EVENT_ARCHIVE_COUNT_WINDOW_IDS = 250_000') ||
     !source.eventArchive.includes('EVENT_ARCHIVE_SLICE_ROWS') ||
@@ -136,9 +142,11 @@ describe('RFC-338 mutation receipts', () => {
       receipt: 'bounded-batch',
       mutate: (source) => ({
         ...source,
-        runner: source.runner.replace(
-          'const DB_WRITE_SLICE_ROWS = 1_000',
-          'const DB_WRITE_SLICE_ROWS = Infinity',
+        boundedHandlers: source.boundedHandlers.map((handler) =>
+          handler.replace(
+            'const DB_WRITE_SLICE_ROWS = 1_000',
+            'const DB_WRITE_SLICE_ROWS = Infinity',
+          ),
         ),
         eventArchive: source.eventArchive.replace(
           'const EVENT_ARCHIVE_SLICE_ROWS = 1_000',
@@ -221,6 +229,25 @@ describe('RFC-338 mutation receipts', () => {
       }),
     },
   ]
+
+  for (const [index, owner] of [
+    'integration',
+    'development-automation',
+    'digital-employee',
+  ].entries()) {
+    test(`RFC-399 ${owner} row budget mutation alone is killed`, () => {
+      const boundedHandlers = original.boundedHandlers.map((handler, i) =>
+        i === index
+          ? handler.replace(
+              'const DB_WRITE_SLICE_ROWS = 1_000',
+              'const DB_WRITE_SLICE_ROWS = Infinity',
+            )
+          : handler,
+      )
+      expect(boundedHandlers[index]).not.toBe(original.boundedHandlers[index])
+      expect(issues({ ...original, boundedHandlers })).toContain('bounded-batch')
+    })
+  }
 
   for (const mutation of mutations) {
     test(`${mutation.name} is killed by ${mutation.receipt}`, () => {

@@ -77,3 +77,75 @@ export function composeTaskCollaborationReads(db: PersistenceDb) {
     clarifyNav: composeTaskNodeRunClarifyNavPort(createTaskNodeRunClarifyNav(db)),
   }
 }
+
+import type { CollaborationTaskRolePolicy } from './application/ports/collaborationTaskRolePolicy'
+import { composeTaskMembershipOperationsPort } from './application/adapters/task-execution-adapter'
+import {
+  canViewTask,
+  getTaskMembers,
+  requireTaskOperator,
+  updateTaskMembers,
+  assertCanReplaySourceTask,
+} from './infrastructure/taskCollab'
+
+export function composeTaskMembershipOperations(
+  db: PersistenceDb,
+  policy: CollaborationTaskRolePolicy,
+) {
+  return composeTaskMembershipOperationsPort({
+    canViewTask: (actor, task) => canViewTask(db, actor, task),
+    getTaskMembers: (actor, task) => getTaskMembers(db, policy, actor, task),
+    requireTaskOperator: (actor, task) => requireTaskOperator(db, policy, actor, task),
+    updateTaskMembers: (actor, task, body) => updateTaskMembers(db, policy, actor, task, body),
+    assertCanReplaySourceTask: (actor, sourceTaskId) =>
+      assertCanReplaySourceTask(db, actor, sourceTaskId),
+  })
+}
+
+export { composeTaskClarifyDirectiveRouteOperations } from './application/adapters/task-execution-adapter'
+
+import {
+  composeCollaborationRepairPorts as bindCollaborationRepairPorts,
+  composeTaskGateContinuationSupport,
+  composeHumanGateOpenParticipantFactory as bindHumanGateOpenParticipantFactory,
+} from './application/adapters/task-execution-adapter'
+import { createClarifyRepairParticipant } from './infrastructure/clarifyRepairParticipant'
+import { createReviewRepairParticipant } from './infrastructure/reviewRepairParticipant'
+import { GateWorkspaceRollbackExecutorAdapter } from './infrastructure/gateWorkspaceRollbackExecutor'
+import { DatabaseHumanGateOperationPersistence } from './infrastructure/humanGateOperationPersistence'
+import { createHumanGateOpenParticipantScope } from './infrastructure/humanGateOpenFactory'
+import { createClarifyContinuationConvergence } from './infrastructure/clarifyContinuationConvergence'
+import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
+import type { HistoryRestrictionPort } from '@/platform/contracts/historyRestriction'
+import type { HumanGateTaskLockPort } from './composition/required-ports'
+
+export function composeCollaborationRepairPorts(db: PersistenceDb) {
+  return bindCollaborationRepairPorts(
+    createClarifyRepairParticipant(db),
+    createReviewRepairParticipant(db),
+  )
+}
+
+export function composeGateContinuationSupport(
+  input: Parameters<typeof createClarifyContinuationConvergence>[0] & {
+    readonly taskLock: HumanGateTaskLockPort
+    readonly historyRestrictions: HistoryRestrictionPort
+  },
+) {
+  const operations = new DatabaseHumanGateOperationPersistence(
+    databaseSessionFor(input.db),
+    input.taskLock,
+    { historyRestrictions: input.historyRestrictions },
+  )
+  const clarifyConvergence = createClarifyContinuationConvergence(input)
+  return composeTaskGateContinuationSupport(
+    new GateWorkspaceRollbackExecutorAdapter(operations),
+    clarifyConvergence,
+  )
+}
+
+export { composeTaskReviewersPort } from './application/adapters/task-execution-adapter'
+
+export function composeHumanGateOpenParticipantFactory() {
+  return bindHumanGateOpenParticipantFactory(createHumanGateOpenParticipantScope)
+}

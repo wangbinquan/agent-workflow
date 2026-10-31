@@ -1,3 +1,4 @@
+import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { o2Ports } from './helpers/o2Closure'
 // A human-gate successor must cross every nested wrapper without publishing
@@ -562,6 +563,7 @@ describeEachProvider('RFC-370 wrapper handoff durable generation', (harness) => 
       taskId,
       opts: {
         persistence: createTaskExecutionPersistence(harness.db, {
+          humanGateOpen: composeHumanGateOpenParticipantFactory(),
           historyRestrictions: epoch2RuntimeTestPorts(harness.db).historyRestrictions,
           recoveryHumanGates: o2Ports(harness.db).collaborationReads.recovery,
         }),

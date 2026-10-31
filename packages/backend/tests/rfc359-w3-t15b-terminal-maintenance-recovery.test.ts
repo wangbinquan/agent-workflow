@@ -1,3 +1,4 @@
+import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { o2Ports } from './helpers/o2Closure'
 import { withWorkspaceMaintenancePorts } from './helpers/sourceControlTaskPorts'
@@ -125,6 +126,7 @@ describeEachProvider('RFC-359 W3-T15-B —— 归档恢复（archive.recover）'
       const taskId = `t15b_${ulid()}`
       await seedTask(db, taskId)
       const maintenance = createTaskExecutionPersistence(db, {
+        humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
         recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
       }).terminalMaintenance
@@ -176,6 +178,7 @@ describeEachProvider(
           db,
           appHome,
           terminalMaintenance: createTaskExecutionPersistence(db, {
+            humanGateOpen: composeHumanGateOpenParticipantFactory(),
             historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
             recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
           }).terminalMaintenance,

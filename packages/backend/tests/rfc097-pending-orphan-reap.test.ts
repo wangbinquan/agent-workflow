@@ -1,3 +1,4 @@
+import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import type { TaskReadRow } from '@/modules/task-execution/infrastructure/taskRepositorySql'
 import { nodeRunFixtureColumns } from './helpers/model/nodeRun'
 import { tablesOf } from '@/platform/persistence/sessionTables'
@@ -255,6 +256,7 @@ describe('RFC-097 — pending 孤儿任务收割 → interrupted → resume 自�
         inputs: {},
       },
       {
+        humanGateOpen: composeHumanGateOpenParticipantFactory(),
         db: h.db,
         schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
           .schedulerDriver,

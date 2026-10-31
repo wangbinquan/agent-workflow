@@ -1,3 +1,4 @@
+import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 // Real-model acceptance found a designer result masking the later clarified result.
 // Exercise the production read model and execution core, including persisted generations.
@@ -91,6 +92,7 @@ describeEachProvider('RFC-396 workflow result belongs to the task output', (harn
         ...composeDatabaseDigitalEmployeeExecutionPorts(
           harness.db,
           epoch2RuntimeTestPorts(harness.db).historyRestrictions,
+          composeHumanGateOpenParticipantFactory(),
         ),
         workspace: {
           async validate(input) {

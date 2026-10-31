@@ -1,3 +1,4 @@
+import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import { deleteWorkflow } from './helpers/resourceCatalogDeletion'
 import { withSourceControlTaskPorts } from './helpers/sourceControlTaskPorts'
 import { composeSourceControlTaskPorts } from '@/modules/task-execution/composition'
@@ -97,6 +98,7 @@ const seedWorkflow = (db: DbClient, name: string) =>
 
 function launch(harness: Harness, request: StartTask) {
   return launchTestTask(request, {
+    humanGateOpen: composeHumanGateOpenParticipantFactory(),
     db: harness.db,
     appHome: harness.appHome,
     schedulerDriver: { async drive() {} },
@@ -497,6 +499,7 @@ describe('RFC-199 production materialization cleanup', () => {
         inputs: {},
       },
       {
+        humanGateOpen: composeHumanGateOpenParticipantFactory(),
         db: harness.db,
         appHome: harness.appHome,
         schedulerDriver: { async drive() {} },
@@ -586,6 +589,7 @@ describe('RFC-199 production materialization cleanup', () => {
           repoGroupId: group.id,
         } as unknown as StartTask,
         {
+          humanGateOpen: composeHumanGateOpenParticipantFactory(),
           db: harness.db,
           schedulerDriver: createTaskExecutionTestTopology({ db: harness.db, driver: 'real' })
             .schedulerDriver,

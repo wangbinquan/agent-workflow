@@ -1,3 +1,4 @@
+import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { describe, expect, test } from 'bun:test'
 import { ulid } from 'ulid'
@@ -57,6 +58,7 @@ function applicationFixture(input?: {
         attachment: {
           intentKind: 'launch',
           execution: createTaskExecutionContext({
+            humanGateOpen: composeHumanGateOpenParticipantFactory(),
             historyRestrictions: epoch2RuntimeTestPorts(schemaFixtureDb()).historyRestrictions,
             intentId: request.intentId,
             token,

@@ -35,7 +35,7 @@ import { openDb } from '../src/db/client'
 import {
   cleanupRetiredStores,
   reportDiskReclaimable,
-} from '@/platform/persistence/sqlite/systemMaintenanceDisk'
+} from '@/modules/system-operations/infrastructure/local/systemMaintenanceDisk'
 
 function seedRetiredStores(home: string): void {
   const dir = join(home, 'opencode-stores', 'abcdef', 'storage')

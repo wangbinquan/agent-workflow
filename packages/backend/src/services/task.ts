@@ -1,3 +1,6 @@
+import { composeHumanGateTaskLockPort } from '@/modules/task-execution/composition'
+import { composeGateContinuationSupport } from '@/modules/collaboration/composition'
+import type { HumanGateOpenParticipantFactory } from '@/modules/task-execution/composition/required-ports'
 import type { HistoryRestrictionPort } from '@/platform/contracts/historyRestriction'
 import {
   createRunHistorySnapshot,
@@ -30,24 +33,19 @@ import {
   createTaskTriggerQueries,
 } from '@/modules/task-execution/public/queries'
 import { nodeRunMintIdentityForSlot } from '@/modules/task-execution/public/types'
-import { tablesOf } from '@/platform/persistence/sessionTables'
 import { decodeRequestedSource } from '@/platform/persistence/taskRepositorySurface'
 import { isTaskWorkspaceUnbound } from '@agent-workflow/shared'
 // Task service — continuation and retained read projections.
 // Cancel/resume/retry land in P-1-15 + M3 (P-3-08, P-3-09).
 
-import {
-  eq,
-  type LegacyProviderNeutralDatabase,
-  type LegacySqliteTaskDatabase,
-} from '@/modules/task-execution/infrastructure/legacySqliteTransportMechanisms'
+import type { RepositoryPreparationLookup } from '@/modules/task-execution/application/ports/repositoryPreparationLookup'
 import { assertWorktreePresentForResume } from '@/modules/task-execution/public/participants'
 import {
   resolveTaskLaunchRuntimeConfiguration,
   resolveTaskSubagentLiveCapture,
   type TaskLaunchConfigurationQueries,
 } from '@/modules/task-execution/public/queries'
-import type { PersistenceTx } from '@/platform/persistence/persistenceDb'
+import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
 import type {
   DwState,
   FailureCode,
@@ -290,6 +288,7 @@ export async function shutdownActiveTaskExecutions(
 // 由 `services/shutdown.ts` 经 `dependencies.operations` 调用），这一份自那以后生产侧零调用方。
 
 export interface TaskContinuationDependencies {
+  readonly humanGateOpen: HumanGateOpenParticipantFactory
   readonly historyRestrictions: HistoryRestrictionPort
   /** Frozen commit identity used when resuming repository preparation. */
   gitCommitIdentity?: GitCommitIdentity | null
@@ -310,7 +309,7 @@ export interface TaskContinuationDependencies {
    * IS sealed and this is missing, the launch fails closed rather than guessing.
    */
   secretBox?: SecretBox
-  db: LegacyProviderNeutralDatabase
+  db: PersistenceDb
   /**
    * RFC-349 provider-selected post-commit memory participant. Bootstrap must
    * bind this for production launches; the optional shape keeps legacy tests
@@ -494,7 +493,7 @@ export interface DeferredRepositoryPreparationDependencies extends Pick<
   | 'gitCommitIdentity'
 > {
   readonly repositoryPreparation?: taskDriveComposition.TaskRepositoryPreparationBinding
-  readonly db: LegacyProviderNeutralDatabase
+  readonly db: PersistenceDb
   /** Only legacy direct-service callers without an injected root binding. */
   readonly repositoryWorkspace?: RepositoryWorkspaceStore
   /**
@@ -502,6 +501,7 @@ export interface DeferredRepositoryPreparationDependencies extends Pick<
    * PostgreSQL 那份在 `taskRouteWorkspaceParticipant.ts` 里是中立异步——
    * 两份都已存在，让装配方交自己那一份，这一步就不必认识任何一个引擎。
    */
+  readonly repositoryPreparationLookup: RepositoryPreparationLookup
   readonly loadFrozenSpaceLayout: (sourceTaskId: string) => Promise<PlannedSpaceLayout>
 }
 
@@ -753,16 +753,17 @@ export type TaskDriveCoordinatorDependencies = Parameters<typeof runtimeConfigOp
   > & {
     /**
      * RFC-359 AC-1（plan §5hm）：收成中立句柄。此前这一格是从 `TaskContinuationDependencies` Pick 来的
-     * `LegacySqliteTaskDatabase`——**不是因为协调器真要 SQLite**，而是它装的驱动生命周期端口
+     * `PersistenceDb`——**不是因为协调器真要 SQLite**，而是它装的驱动生命周期端口
      * 当年只有 SQLite 一份（要 `DbClient`）。端口合一之后那个约束没了：
      * 协调器这一路上读 `db` 的三处（生命周期端口、闸门继续前置、工作区清理）全是中立实现。
      * `TaskContinuationDependencies` 仍然满足这个更宽的类型，所以本文件内既有构造点一个字都不用改。
      */
-    readonly db: LegacyProviderNeutralDatabase
+    readonly db: PersistenceDb
   }
 
 /** RFC-387: test-only assembly for the legacy entry points; removed in W4. */
 export function composeTestTaskDriveFactory(input: {
+  readonly humanGateOpen: HumanGateOpenParticipantFactory
   readonly historyRestrictions: HistoryRestrictionPort
   readonly deps: TaskDriveCoordinatorDependencies
   readonly appHome: string
@@ -777,6 +778,7 @@ export function composeTestTaskDriveFactory(input: {
   const persistence =
     input.persistence ??
     createTaskExecutionPersistence(input.deps.db, {
+      humanGateOpen: input.humanGateOpen,
       historyRestrictions: input.historyRestrictions,
       workspacePresence: input.deps.workspacePresence,
     })
@@ -817,6 +819,7 @@ export function composeTestTaskDriveFactory(input: {
       }
     },
     lifecycle: createDatabaseTaskDriverLifecyclePort({
+      humanGateOpen: input.humanGateOpen,
       historyRestrictions: input.historyRestrictions,
       db: input.deps.db,
       persistence,
@@ -827,10 +830,13 @@ export function composeTestTaskDriveFactory(input: {
     gateContinuationPreDrive:
       input.gateContinuationPreDrive ??
       composeGateContinuationPreDrive({
-        historyRestrictions: input.historyRestrictions,
-        db: input.deps.db,
         persistence,
-        memoryDistillEnqueuer: input.deps.memoryDistillEnqueuer ?? missingMemoryDistillEnqueuer,
+        ...composeGateContinuationSupport({
+          historyRestrictions: input.historyRestrictions,
+          db: input.deps.db,
+          taskLock: composeHumanGateTaskLockPort,
+          memoryDistillEnqueuer: input.deps.memoryDistillEnqueuer ?? missingMemoryDistillEnqueuer,
+        }),
       }),
     repositoryPreparation: input.repositoryPreparation ?? skipRepositoryPreparation,
     engine: () => input.deps.schedulerDriver,
@@ -926,7 +932,12 @@ function createPersistedRepositoryPreparationStep(input: {
             now: fenceNow,
           })
         })
-        await reclaimStalePrepArtifacts(input.deps.db, input.appHome, task)
+        await reclaimStalePrepArtifacts(
+          input.deps.db,
+          input.deps.repositoryPreparationLookup,
+          input.appHome,
+          task,
+        )
       }
       const preparationInput = {
         workflowId: descriptor.workflowId,
@@ -982,7 +993,7 @@ function createPersistedRepositoryPreparationStep(input: {
 // 都是普通 drizzle 查询，零方言；钉在 bun:sqlite 上的只有那两个 `.all()` 同步终结子。
 // 三个调用点本来就在 `async (sourceTaskId) => …` 里，加一个 await 即可。
 async function loadFrozenSpaceLayout(
-  db: LegacyProviderNeutralDatabase,
+  db: PersistenceDb,
   sourceTaskId: string,
 ): Promise<PlannedSpaceLayout> {
   return createTaskPreparationQueries(db).frozenLayout(sourceTaskId)
@@ -1096,7 +1107,7 @@ function taskRepoRowsFor(
  * the old comment here misdescribed).
  */
 async function rollbackNodeRunForResume(
-  db: LegacyProviderNeutralDatabase,
+  db: PersistenceDb,
   task: Task,
   run: RollbackRunRow,
   log: ReturnType<typeof createLogger>,
@@ -1130,7 +1141,7 @@ async function rollbackNodeRunForResume(
  * Returns `never`; throws ConflictError after the CAS.
  */
 async function escalateSnapshotLost(
-  db: LegacyProviderNeutralDatabase,
+  db: PersistenceDb,
   recovery: TaskRecoveryOperations,
   taskId: string,
   run: { id: string; nodeId: string },
@@ -1179,7 +1190,7 @@ async function escalateSnapshotLost(
  * Mirrors escalateSnapshotLost's contract. Returns `never`.
  */
 async function escalateLiveChildSurvived(
-  db: LegacyProviderNeutralDatabase,
+  db: PersistenceDb,
   recovery: TaskRecoveryOperations,
   taskId: string,
   run: { id: string; nodeId: string; pid: number | null },
@@ -1214,7 +1225,7 @@ async function escalateLiveChildSurvived(
 }
 
 async function reapRunBeforeWorktreeReset(
-  db: LegacyProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   run: {
     id: string
@@ -1259,7 +1270,7 @@ async function reapRunBeforeWorktreeReset(
 }
 
 async function reapHeldRuntimeSessionOwnersForTask(
-  db: LegacyProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   reason: 'resumeTask' | 'retryNode' | 'syncTaskWorkflow',
   deps: TaskContinuationDependencies,
@@ -1299,6 +1310,7 @@ export async function wakeHumanGateContinuation(
   if (deps.awaitScheduler === true) await awaitTaskDriverIdle(taskId)
   else if (isTaskDriverActive(taskId)) return
   await composeTestTaskDriveFactory({
+    humanGateOpen: deps.humanGateOpen,
     deps,
     historyRestrictions: deps.historyRestrictions,
     appHome: deps.appHome ?? Paths.root,
@@ -1322,7 +1334,7 @@ export async function wakeHumanGateContinuation(
  * `resumeKick`, mirroring syncTaskWorkflow.
  */
 export async function resumeDynamicWorkflowExecution(
-  db: LegacySqliteTaskDatabase,
+  db: PersistenceDb,
   id: string,
   deps: TaskContinuationDependencies,
   swap: { workflowSnapshot?: string; dw: DwState },
@@ -1361,7 +1373,7 @@ export async function resumeDynamicWorkflowExecution(
  * intent; only its durable owner claim authorizes subsequent execution effects.
  */
 async function resumeKick(
-  db: LegacyProviderNeutralDatabase,
+  db: PersistenceDb,
   id: string,
   deps: TaskContinuationDependencies,
   opts: {
@@ -1588,6 +1600,7 @@ async function resumeKick(
     },
   }
   const coordinator = composeTestTaskDriveFactory({
+    humanGateOpen: deps.humanGateOpen,
     historyRestrictions: deps.historyRestrictions,
     deps,
     appHome: deps.appHome ?? Paths.root,
@@ -1691,7 +1704,7 @@ export function buildSyncRunSummary(
  * definition currently fails static validation.
  */
 export async function computeWorkflowSyncPreview(
-  db: LegacyProviderNeutralDatabase,
+  db: PersistenceDb,
   task: Task,
   workflow: Workflow,
   resourceAuthority: TaskExecutionResourceAuthority,
@@ -1822,7 +1835,7 @@ export async function computeWorkflowSyncPreview(
  * call row (dirty data) fails open to the pre-RFC-243 behavior.
  */
 async function assertChildTaskDrivable(
-  db: LegacyProviderNeutralDatabase,
+  db: PersistenceDb,
   task: { id: string; parentTaskId?: string | null; parentNodeRunId?: string | null },
   verb: string,
 ): Promise<void> {
@@ -1853,7 +1866,8 @@ async function assertChildTaskDrivable(
  * 选了这条)。全部失败都只记 warn:清理是尽力而为,真正的判据是紧随其后的建树本身。
  */
 async function reclaimStalePrepArtifacts(
-  db: LegacyProviderNeutralDatabase,
+  db: PersistenceDb,
+  lookup: RepositoryPreparationLookup,
   appHome: string,
   task: Task,
 ): Promise<void> {
@@ -1922,18 +1936,14 @@ async function reclaimStalePrepArtifacts(
 
   // ③ 再在每个候选镜像里 prune 注册项 + 删掉按 taskId 派生的隔离分支。
   for (const id of mirrorIds) {
-    const { cachedRepos } = tablesOf(db)
-    // RFC-359 AC-1（plan §5ft 同一条）：中立读法——`.all()` 是 bun:sqlite 专属的同步终结符。
-    const row = (await db.select().from(cachedRepos).where(eq(cachedRepos.id, id)).limit(1))[0]
-    if (row === undefined || !existsSync(row.localPath)) continue
+    const localPath = await lookup.findLocalPath(id)
+    if (localPath === null || !existsSync(localPath)) continue
     try {
       // `prune` 与 `add` / `remove` 一样会改 common-dir registry，必须走同一把
       // registry 锁（五轮门 Codex F6）：不持锁时，另一个任务正在同一镜像上
       // `worktree add` 的半初始化注册项会被本次 prune 观察到并删掉，让对方的 add
       // 失败或留下不完整 registry——`util/git.ts` 的锁注释里记着这类真实事故。
-      await withWorktreeRegistryLock(row.localPath, () =>
-        runGit(row.localPath, ['worktree', 'prune']),
-      )
+      await withWorktreeRegistryLock(localPath, () => runGit(localPath, ['worktree', 'prune']))
       // 分支名不止 `agent-workflow/{taskId}`：同一镜像在仓库组里可被挂载多次，
       // 第 2 份起是 `agent-workflow/{taskId}-2`、`-3`…（repoGroupLayout 的去重后缀）。
       // 只删不带后缀那条，会让第二仓的建树永远撞 "branch already exists"、每次重试
@@ -1944,7 +1954,7 @@ async function reclaimStalePrepArtifacts(
       // 同形（残留物挡住重建、且无自愈路径）。锁挡住的 ref 未必存在，所以 for-each-ref
       // 看不到它，必须按前缀直接扫锁文件。只删 60s 之前落的锁，不抢活着的 git。
       const locksCleared = await reclaimStaleRefLocks({
-        repoPath: row.localPath,
+        repoPath: localPath,
         branchRef: `agent-workflow/${task.id}*`,
         log,
       })
@@ -1954,7 +1964,7 @@ async function reclaimStalePrepArtifacts(
           count: locksCleared,
         })
       }
-      const listed = await runGit(row.localPath, [
+      const listed = await runGit(localPath, [
         'for-each-ref',
         '--format=%(refname)',
         `refs/heads/agent-workflow/${task.id}`,
@@ -1964,7 +1974,7 @@ async function reclaimStalePrepArtifacts(
         .split('\n')
         .map((s) => s.trim())
         .filter(Boolean)) {
-        await runGit(row.localPath, ['update-ref', '-d', ref])
+        await runGit(localPath, ['update-ref', '-d', ref])
         log.info('reclaimed a stale prep branch before retry', { taskId: task.id, ref })
       }
     } catch (err) {
@@ -1978,12 +1988,14 @@ async function reclaimStalePrepArtifacts(
 
 /** RFC-387: test-only repository retry over the factory; removed in W4. */
 export async function retryRepositoryPreparation(
-  db: LegacySqliteTaskDatabase,
+  db: PersistenceDb,
   taskId: string,
   deps: TaskContinuationDependencies,
+  repositoryPreparationLookup: RepositoryPreparationLookup,
 ): Promise<Task> {
   const appHome = deps.appHome ?? Paths.root
   const factory = composeTestTaskDriveFactory({
+    humanGateOpen: deps.humanGateOpen,
     historyRestrictions: deps.historyRestrictions,
     deps: { ...deps, db },
     appHome,
@@ -1991,6 +2003,7 @@ export async function retryRepositoryPreparation(
       deps: {
         ...deps,
         db,
+        repositoryPreparationLookup,
         repositoryWorkspace: repositoryWorkspaceFor({ ...deps, db }),
         loadFrozenSpaceLayout: (sourceTaskId) => loadFrozenSpaceLayout(db, sourceTaskId),
       },
@@ -2562,7 +2575,7 @@ async function runDeferredRepoPreparation(args: {
   return { ok: true, preparedTask: (await getTask(deps.db, taskId)) as Task }
 }
 
-export async function getTask(db: LegacyProviderNeutralDatabase, id: string): Promise<Task | null> {
+export async function getTask(db: PersistenceDb, id: string): Promise<Task | null> {
   const detail = await createTaskDetailQueries(db).read(id)
   if (detail === null) return null
   const task = {
@@ -2594,7 +2607,7 @@ export async function getTask(db: LegacyProviderNeutralDatabase, id: string): Pr
  * 一次查询（那是本 RFC 要消灭的 N+1 之一）。`DbClient` 仍可赋值给它，既有调用点零改动。
  */
 export async function loadTaskFailureCodes(
-  db: LegacyProviderNeutralDatabase,
+  db: PersistenceDb,
   rows: ReadonlyArray<{ id: string; status: string; failedNodeId: string | null }>,
 ): Promise<Map<string, FailureCode | null>> {
   const out = new Map<string, FailureCode | null>()

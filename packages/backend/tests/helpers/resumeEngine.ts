@@ -1,3 +1,4 @@
+import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import { epoch2RuntimeTestPorts } from './epoch2RuntimePorts'
 import { o2Ports } from './o2Closure'
 // RFC-395 II-pre：GC 改接生产 workspaceMaintenance，断言其回执及实际目录 / 行状态。
@@ -68,6 +69,7 @@ export function createResumeEngine(db: PersistenceDb, options: ResumeEngineOptio
           db,
           workspacePresence: options.workspacePresence ?? createFileWorkspacePresenceQueries(),
           persistence: createTaskExecutionPersistence(db, {
+            humanGateOpen: composeHumanGateOpenParticipantFactory(),
             historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
             recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
           }),
@@ -84,6 +86,7 @@ export function createResumeEngine(db: PersistenceDb, options: ResumeEngineOptio
           coordinatorFactory: testDriveFactory(
             db,
             createDatabaseTaskDriverLifecyclePort({
+              humanGateOpen: composeHumanGateOpenParticipantFactory(),
               historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
               db,
               log,

@@ -1,3 +1,4 @@
+import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { withTargetMintIdentity } from './helpers/rfc395Mint'
 import { o2Ports } from './helpers/o2Closure'
@@ -119,6 +120,7 @@ async function seedClaimedOwner(
     intentId: `intent_${ulid()}`,
     token,
     persistence: createTaskExecutionPersistence(db, {
+      humanGateOpen: composeHumanGateOpenParticipantFactory(),
       historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
       recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
     }),

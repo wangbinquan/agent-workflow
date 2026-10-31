@@ -1,3 +1,4 @@
+import { composeCollaborationTaskRolePolicy } from '@/modules/resource-catalog/composition'
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { o2Ports, withO2Closure } from './helpers/o2Closure'
 // RFC-120 §15 — manual questions (自主新增/复制). A manual question = a human authors a
@@ -187,6 +188,7 @@ describeEachProvider('RFC-359 rfc120-manual-questions database behavior', (harne
         actor,
         o2Ports(db).taskLock,
         epoch2RuntimeTestPorts(db).historyRestrictions,
+        composeCollaborationTaskRolePolicy(),
       )
       let dto = await listOne(db, taskId)
       expect(dto).toBeDefined()
@@ -253,6 +255,7 @@ describeEachProvider('RFC-359 rfc120-manual-questions database behavior', (harne
         actor,
         o2Ports(db).taskLock,
         epoch2RuntimeTestPorts(db).historyRestrictions,
+        composeCollaborationTaskRolePolicy(),
       )
       const dto = await listOne(db, taskId)
       expect(dto?.phase).toBe('staged')
@@ -275,6 +278,7 @@ describeEachProvider('RFC-359 rfc120-manual-questions database behavior', (harne
         actor,
         o2Ports(db).taskLock,
         epoch2RuntimeTestPorts(db).historyRestrictions,
+        composeCollaborationTaskRolePolicy(),
       )
       const b = await createManualTaskQuestion(
         db,
@@ -283,6 +287,7 @@ describeEachProvider('RFC-359 rfc120-manual-questions database behavior', (harne
         actor,
         o2Ports(db).taskLock,
         epoch2RuntimeTestPorts(db).historyRestrictions,
+        composeCollaborationTaskRolePolicy(),
       )
       expect(a.id).not.toBe(b.id)
       const { taskQuestions } = tablesOf(db)
@@ -304,6 +309,7 @@ describeEachProvider('RFC-359 rfc120-manual-questions database behavior', (harne
         actor,
         o2Ports(db).taskLock,
         epoch2RuntimeTestPorts(db).historyRestrictions,
+        composeCollaborationTaskRolePolicy(),
       )
       await dispatchTaskQuestions(db, taskId, [id], actor)
       const list = await listTaskQuestions(db, taskId)
@@ -322,6 +328,7 @@ describeEachProvider('RFC-359 rfc120-manual-questions database behavior', (harne
         actor,
         o2Ports(db).taskLock,
         epoch2RuntimeTestPorts(db).historyRestrictions,
+        composeCollaborationTaskRolePolicy(),
       )
       const filtered = await listTaskQuestions(db, taskId, { sourceNodeId: FIXER })
       expect(filtered.length).toBe(0)
@@ -347,6 +354,7 @@ describeEachProvider('RFC-359 rfc120-manual-questions database behavior', (harne
         actor,
         o2Ports(db).taskLock,
         epoch2RuntimeTestPorts(db).historyRestrictions,
+        composeCollaborationTaskRolePolicy(),
       )
       const result = await dispatchTaskQuestions(db, taskId, [id], actor)
       expect(result.reruns.length).toBe(1)
@@ -373,6 +381,7 @@ describeEachProvider('RFC-359 rfc120-manual-questions database behavior', (harne
         actor,
         o2Ports(db).taskLock,
         epoch2RuntimeTestPorts(db).historyRestrictions,
+        composeCollaborationTaskRolePolicy(),
       )
       const b = await createManualTaskQuestion(
         db,
@@ -381,6 +390,7 @@ describeEachProvider('RFC-359 rfc120-manual-questions database behavior', (harne
         actor,
         o2Ports(db).taskLock,
         epoch2RuntimeTestPorts(db).historyRestrictions,
+        composeCollaborationTaskRolePolicy(),
       )
       // Each manual row is its own (synthetic) origin → the per-origin single-target guard
       // never trips even though the two go to different handlers.
@@ -403,6 +413,7 @@ describeEachProvider('RFC-359 rfc120-manual-questions database behavior', (harne
           actor,
           o2Ports(db).taskLock,
           epoch2RuntimeTestPorts(db).historyRestrictions,
+          composeCollaborationTaskRolePolicy(),
         )
       } catch (e) {
         threw = e
@@ -429,6 +440,7 @@ describeEachProvider('RFC-359 rfc120-manual-questions database behavior', (harne
           actor,
           o2Ports(db).taskLock,
           epoch2RuntimeTestPorts(db).historyRestrictions,
+          composeCollaborationTaskRolePolicy(),
         ),
       ).rejects.toThrow()
       await expect(
@@ -439,6 +451,7 @@ describeEachProvider('RFC-359 rfc120-manual-questions database behavior', (harne
           actor,
           o2Ports(db).taskLock,
           epoch2RuntimeTestPorts(db).historyRestrictions,
+          composeCollaborationTaskRolePolicy(),
         ),
       ).rejects.toThrow()
     })
@@ -455,6 +468,7 @@ describeEachProvider('RFC-359 rfc120-manual-questions database behavior', (harne
           actor,
           o2Ports(db).taskLock,
           epoch2RuntimeTestPorts(db).historyRestrictions,
+          composeCollaborationTaskRolePolicy(),
         )
       } catch (e) {
         threw = e
@@ -477,6 +491,7 @@ describeEachProvider('RFC-359 rfc120-manual-questions database behavior', (harne
           actor,
           o2Ports(db).taskLock,
           epoch2RuntimeTestPorts(db).historyRestrictions,
+          composeCollaborationTaskRolePolicy(),
         ),
       ).rejects.toThrow()
       await expect(
@@ -487,6 +502,7 @@ describeEachProvider('RFC-359 rfc120-manual-questions database behavior', (harne
           actor,
           o2Ports(db).taskLock,
           epoch2RuntimeTestPorts(db).historyRestrictions,
+          composeCollaborationTaskRolePolicy(),
         ),
       ).rejects.toThrow()
     })
@@ -502,6 +518,7 @@ describeEachProvider('RFC-359 rfc120-manual-questions database behavior', (harne
         secretActor,
         o2Ports(db).taskLock,
         epoch2RuntimeTestPorts(db).historyRestrictions,
+        composeCollaborationTaskRolePolicy(),
       )
       const { taskQuestions } = tablesOf(db)
       const row = (await db.select().from(taskQuestions).where(eq(taskQuestions.id, id)))[0]
@@ -537,6 +554,7 @@ describeEachProvider('RFC-359 rfc120-manual-questions database behavior', (harne
         actor,
         o2Ports(db).taskLock,
         epoch2RuntimeTestPorts(db).historyRestrictions,
+        composeCollaborationTaskRolePolicy(),
       )
       // undispatched manual WITH a handler → parks FIXER (was INVISIBLE before the H1 fix:
       // the synthetic origin has no clarify round so the INNER JOIN dropped it).
@@ -556,6 +574,7 @@ describeEachProvider('RFC-359 rfc120-manual-questions database behavior', (harne
         actor,
         o2Ports(db).taskLock,
         epoch2RuntimeTestPorts(db).historyRestrictions,
+        composeCollaborationTaskRolePolicy(),
       )
       const scopeNodes = liveDef().nodes as unknown as WorkflowNode[]
       const scopeIds = new Set(scopeNodes.map((n) => n.id))
@@ -622,6 +641,7 @@ describeEachProvider('RFC-359 rfc120-manual-questions database behavior', (harne
         actor,
         o2Ports(db).taskLock,
         epoch2RuntimeTestPorts(db).historyRestrictions,
+        composeCollaborationTaskRolePolicy(),
       )
       expect(id).toBeTruthy()
       const { taskQuestions } = tablesOf(db)
@@ -639,6 +659,7 @@ describeEachProvider('RFC-359 rfc120-manual-questions database behavior', (harne
         actor,
         o2Ports(db).taskLock,
         epoch2RuntimeTestPorts(db).historyRestrictions,
+        composeCollaborationTaskRolePolicy(),
       )
       expect(id).toBeTruthy()
     })
@@ -664,6 +685,7 @@ describeEachProvider('RFC-359 rfc120-manual-questions database behavior', (harne
             actor,
             o2Ports(db).taskLock,
             epoch2RuntimeTestPorts(db).historyRestrictions,
+            composeCollaborationTaskRolePolicy(),
           )
         } catch (e) {
           threw = e
@@ -684,6 +706,7 @@ describeEachProvider('RFC-359 rfc120-manual-questions database behavior', (harne
           actor,
           o2Ports(db).taskLock,
           epoch2RuntimeTestPorts(db).historyRestrictions,
+          composeCollaborationTaskRolePolicy(),
         )
         const { nodeRuns, taskQuestions } = tablesOf(db)
         const runsBefore = (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId)))
@@ -717,6 +740,7 @@ describeEachProvider('RFC-359 rfc120-manual-questions database behavior', (harne
         actor,
         o2Ports(db).taskLock,
         epoch2RuntimeTestPorts(db).historyRestrictions,
+        composeCollaborationTaskRolePolicy(),
       )
       const result = await dispatchTaskQuestions(db, taskId, [id], actor)
       expect(result.reruns.length).toBe(1)
@@ -849,6 +873,7 @@ describeEachProvider('RFC-359 rfc120-manual-questions database behavior', (harne
         actor,
         o2Ports(db).taskLock,
         epoch2RuntimeTestPorts(db).historyRestrictions,
+        composeCollaborationTaskRolePolicy(),
       )
       // never-run QUESTIONER → rejected (no park-but-undispatchable).
       let threw: unknown = null
@@ -914,6 +939,7 @@ describeEachProvider('RFC-359 rfc120-manual-questions database behavior', (harne
           actor,
           o2Ports(racingDb).taskLock,
           epoch2RuntimeTestPorts(racingDb).historyRestrictions,
+          composeCollaborationTaskRolePolicy(),
         )
       } catch (e) {
         threw = e
@@ -935,6 +961,7 @@ describeEachProvider('RFC-359 rfc120-manual-questions database behavior', (harne
         actor,
         o2Ports(db).taskLock,
         epoch2RuntimeTestPorts(db).historyRestrictions,
+        composeCollaborationTaskRolePolicy(),
       )
       const { nodeRuns, taskQuestions } = tablesOf(db)
       const runsBefore = (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId)))

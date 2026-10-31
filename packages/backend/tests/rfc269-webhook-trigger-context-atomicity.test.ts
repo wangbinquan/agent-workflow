@@ -1,3 +1,4 @@
+import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import {
   type TaskReadRow,
   taskReadColumns,
@@ -64,8 +65,8 @@ type Harness = { db: DbClient; appHome: string; workflowId: string }
 function launchOptionsForInvoker(
   actor: Actor,
   invoker: ExecutionInvoker,
-): Partial<TestTaskLaunchOptions> {
-  return { actor, invoker }
+): Pick<TestTaskLaunchOptions, 'actor' | 'invoker' | 'humanGateOpen'> {
+  return { actor, invoker, humanGateOpen: composeHumanGateOpenParticipantFactory() }
 }
 
 function buildHarness(): Harness {

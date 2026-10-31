@@ -98,8 +98,10 @@ describeEachProviderHttpApplication(
     // RFC-359 W4-D9：PostgreSQL 的真实执行由 rfc359-w4-d9-adapters.test.ts 的双引擎用例覆盖（两个 provider 同一份实现）。
 
     test('maintenance invokes the selected AUTH participant without a DB fallback', () => {
-      const runner = source('src/platform/background/maintenanceJobRunner.ts')
-      expect(runner).toContain('ownerCommands.tokenAudit')
+      const runner = source('src/auth/application/maintenanceJobs.ts')
+      expect(source('src/bootstrap/maintenanceJobBindings.ts')).toContain(
+        'createTokenAuditMaintenanceJobHandlers(commands.tokenAudit)',
+      )
       expect(runner).toContain('tokenAudit.pruneSlice(payload.retentionDays, input.cursor)')
       expect(runner).not.toContain("from '@/services/tokenAudit'")
       expect(runner).not.toContain('pruneTokenAuditSlice(db')

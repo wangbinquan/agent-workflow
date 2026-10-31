@@ -1,3 +1,4 @@
+import { composeTaskMemorySnapshotPort } from '@/modules/memory/composition'
 import type { NodeRunFixtureRow } from './helpers/model/nodeRun'
 // RFC-111 PR-B — end-to-end runNode against the claude-code runtime via the
 // mock-claude harness (no real API). Locks the claude headless contract:
@@ -121,6 +122,7 @@ interface RunOpts {
 }
 function runClaude(o: RunOpts) {
   return runNode({
+    memorySnapshots: composeTaskMemorySnapshotPort(),
     taskId: o.h.taskId,
     nodeRunId: o.nodeRunId,
     nodeId: 'node1',
@@ -614,6 +616,7 @@ describeEachProvider('runNode — claude injection parity (RFC-111 PR-C)', (harn
       },
       () =>
         runNode({
+          memorySnapshots: composeTaskMemorySnapshotPort(),
           taskId: h.taskId,
           nodeRunId,
           nodeId: 'node1',
@@ -669,6 +672,7 @@ describeEachProvider('runNode — runtime spawn failure (RFC-111 Codex P1-2)', (
     // pending row; runNode marks it running, then the bad binary fails the spawn.
     const nodeRunId = await insertNodeRun(h.db, h.taskId)
     const result = await runNode({
+      memorySnapshots: composeTaskMemorySnapshotPort(),
       taskId: h.taskId,
       nodeRunId,
       nodeId: 'node1',

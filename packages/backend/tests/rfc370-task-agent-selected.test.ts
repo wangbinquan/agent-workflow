@@ -1,3 +1,5 @@
+import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
+import { composeTaskMemorySnapshotPort } from '@/modules/memory/composition'
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { nodeRunFixtureColumns } from './helpers/model/nodeRun'
 import { tablesOf } from '@/platform/persistence/sessionTables'
@@ -149,6 +151,7 @@ describeEachProvider('RFC-370 selected complete Task core', (harness) => {
         bindExecutionParticipants: noRead,
       }
       const policy: TaskAgentRunPolicy = {
+        memorySnapshots: composeTaskMemorySnapshotPort(),
         taskId,
         nodeRunId,
         nodeId: 'n1',
@@ -157,6 +160,7 @@ describeEachProvider('RFC-370 selected complete Task core', (harness) => {
         templateMeta: { taskId, repoPath: 'repo:declaration', baseBranch: 'main' },
         runtime: 'opencode',
         persistence: createTaskExecutionPersistence(db, {
+          humanGateOpen: composeHumanGateOpenParticipantFactory(),
           historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
           recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
         }),
@@ -412,6 +416,7 @@ describeEachProvider('RFC-370 selected complete Task core', (harness) => {
         },
       }
       const policy: TaskAgentRunPolicy = {
+        memorySnapshots: composeTaskMemorySnapshotPort(),
         taskId,
         nodeRunId,
         nodeId: 'n1',
@@ -420,6 +425,7 @@ describeEachProvider('RFC-370 selected complete Task core', (harness) => {
         templateMeta: { taskId, repoPath: 'repo:declaration', baseBranch: 'main' },
         runtime,
         persistence: createTaskExecutionPersistence(db, {
+          humanGateOpen: composeHumanGateOpenParticipantFactory(),
           historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
           recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
         }),

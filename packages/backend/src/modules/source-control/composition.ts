@@ -416,3 +416,14 @@ export {
 export { createGitTaskDeletionRepositoryEffects } from './infrastructure/local/gitTaskDeletionRepositoryEffects'
 
 export { schemaContribution } from './composition/schema'
+
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
+import { createRepositoryPreparationLookup } from './infrastructure/repositoryPreparationLookup'
+import { composeRepositoryPreparationLookup as bindRepositoryPreparationLookup } from './application/adapters/task-execution-adapter'
+
+export function composeRepositoryPreparationLookup(db: PersistenceDb) {
+  return bindRepositoryPreparationLookup(createRepositoryPreparationLookup(db))
+}
+
+// RFC-399 B1: bootstrap's maintenance job table takes these handlers via composition.
+export { createSourceControlMaintenanceJobHandlers } from './application/maintenanceJobs'

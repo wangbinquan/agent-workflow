@@ -1,3 +1,5 @@
+import { composeMaintenanceJobBindings } from '@/bootstrap/maintenanceJobBindings'
+import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { composeRetentionSweepPhases } from '@/bootstrap/retentionSweepPhases'
 import { o2Ports } from './helpers/o2Closure'
@@ -67,6 +69,7 @@ const unusedOwnerCommands = (db: DbClient, appHome = '/provider-owned/applicatio
   },
   integration: composeIntegrationMaintenanceCommands(createWebhookDeliveryPersistence(db)),
   taskRecovery: createTaskExecutionPersistence(db, {
+    humanGateOpen: composeHumanGateOpenParticipantFactory(),
     historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
     recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
   }).recoveryAdministration,
@@ -94,7 +97,7 @@ describe('RFC-338 bounded maintenance owner slices', () => {
     const ownerCommands = unusedOwnerCommands(db)
     const result = await runMaintenanceJob({
       appHome: '/provider-owned/application-home',
-      ownerCommands: {
+      handlers: composeMaintenanceJobBindings({
         ...ownerCommands,
         pluginGenerationGc: {
           executionFence: async () => 'busy',
@@ -105,7 +108,7 @@ describe('RFC-338 bounded maintenance owner slices', () => {
             },
           },
         },
-      },
+      }),
       job: 'pluginGenerationGc',
       payload: {},
     })
@@ -165,7 +168,7 @@ describe('RFC-338 bounded maintenance owner slices', () => {
 
       const first = await runMaintenanceJob({
         appHome,
-        ownerCommands: unusedOwnerCommands(db, appHome),
+        handlers: composeMaintenanceJobBindings(unusedOwnerCommands(db, appHome)),
         job: 'eventsArchive',
         payload,
       })
@@ -184,7 +187,7 @@ describe('RFC-338 bounded maintenance owner slices', () => {
 
       const second = await runMaintenanceJob({
         appHome,
-        ownerCommands: unusedOwnerCommands(db, appHome),
+        handlers: composeMaintenanceJobBindings(unusedOwnerCommands(db, appHome)),
         job: 'eventsArchive',
         payload,
         cursor: first.continuation!.cursor,

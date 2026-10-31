@@ -1,45 +1,10 @@
-import type { ContentStore as ImportedContentStore } from '@/platform/content/contentStore'
-import type { TaskArchiveContentBinding } from '@/modules/task-execution/public/types'
-import type { IntentArtifactContentPort, IntentScratchStore } from '@/modules/intent/public/types'
-import type { WorkspaceMaintenanceEffects } from '@/modules/source-control/public/types'
-import type { PostgresqlDatabaseClientOptions } from '@/platform/persistence/postgresqlDatabaseClient'
-import type { EventsArchiveContent } from './eventsArchiveContent'
-import type {
-  DatabaseBackupMaintenance,
-  HostedObjectPublicationMaintenance,
-} from '@/modules/system-operations/public/commands'
-import type {
-  PluginGenerationFilesystemGcPort,
-  ResourcePackageApplyArtifactRecoveryPort,
-  ResourcePackageRecoveryEffectsFactory,
-} from '@/modules/resource-catalog/public/types'
-
-export interface MaintenanceWorkerEffectsSelections {
-  readonly contentStore?: ImportedContentStore
-  /** RFC-370 v3 V6: the single hosted object recovery/GC job body. */
-  readonly objectPublications?: HostedObjectPublicationMaintenance
-  readonly databaseBackups?: DatabaseBackupMaintenance
-  readonly eventsArchive?: EventsArchiveContent
-  readonly databaseWrites?: {
-    readonly assertHeld: NonNullable<PostgresqlDatabaseClientOptions['beforeWrite']>
-  }
-  readonly taskArchive?: TaskArchiveContentBinding
-  readonly resourcePackageRecovery?: ResourcePackageApplyArtifactRecoveryPort
-  readonly resourcePackageRecoveryContent?: ResourcePackageRecoveryEffectsFactory
-  readonly pluginGenerationGc?: PluginGenerationFilesystemGcPort
-  readonly intentArtifactContent?: IntentArtifactContentPort
-  readonly intentScratch?: IntentScratchStore
-  readonly workspaceMaintenance?: WorkspaceMaintenanceEffects
-}
-
-export type MaintenanceWorkerEffectsCapability = keyof MaintenanceWorkerEffectsSelections
-
+// RFC-399 B2: neutral Worker effect-module lifetime; selection is injected.
 /** Cloneable assembly facts; functions and database connections remain Worker-owned. */
 export interface MaintenanceWorkerEffectsDescriptor {
   readonly moduleSpecifier: string
   readonly exportName: string
   readonly configurationJson: string
-  readonly capabilities: readonly MaintenanceWorkerEffectsCapability[]
+  readonly capabilities: readonly string[]
   /** RFC-370 §9.2 V9 — the deployment's Worker entry that registers
    * `moduleSpecifier`; absent, the ordinary platform Worker entry runs. */
   readonly workerEntry?: string
@@ -71,184 +36,48 @@ export interface MaintenanceWorkerEffectsContext {
   readonly configurationJson: string
 }
 
-export interface MaintenanceWorkerEffectsEnvironment extends MaintenanceWorkerEffectsSelections {
+export type MaintenanceWorkerEffectsEnvironment<Selection extends object> = Selection & {
   dispose(): void | Promise<void>
 }
 
-export type MaintenanceWorkerEffectsFactory = (
+export type MaintenanceWorkerEffectsFactory<Selection extends object> = (
   context: MaintenanceWorkerEffectsContext,
-) => MaintenanceWorkerEffectsEnvironment | Promise<MaintenanceWorkerEffectsEnvironment>
+) =>
+  | MaintenanceWorkerEffectsEnvironment<Selection>
+  | Promise<MaintenanceWorkerEffectsEnvironment<Selection>>
 
-export interface MaintenanceWorkerEffectsScope {
-  readonly ready: Promise<MaintenanceWorkerEffectsSelections>
+export interface MaintenanceWorkerEffectsScope<Selection extends object> {
+  readonly ready: Promise<Selection>
   /** Waits for construction and releases even when selection validation failed. */
   dispose(): Promise<void>
 }
 
-function recordOf(value: unknown): Record<string, unknown> | null {
+export function maintenanceWorkerEffectRecord(value: unknown): Record<string, unknown> | null {
   return value !== null && (typeof value === 'object' || typeof value === 'function')
     ? (value as Record<string, unknown>)
     : null
 }
 
-function completeMethods(value: unknown, methods: readonly string[], family: string): void {
-  const object = recordOf(value)
+export function assertMaintenanceWorkerEffectMethods(
+  value: unknown,
+  methods: readonly string[],
+  family: string,
+): void {
+  const object = maintenanceWorkerEffectRecord(value)
   if (object === null || methods.some((method) => typeof object[method] !== 'function'))
     throw new Error(`maintenance-worker-effects-incomplete:${family}`)
 }
 
-function selectEffects(
-  environment: MaintenanceWorkerEffectsEnvironment,
-  capabilities: readonly MaintenanceWorkerEffectsCapability[],
-): MaintenanceWorkerEffectsSelections {
-  completeMethods(environment, ['dispose'], 'environment')
-  if (
-    capabilities.length === 0 ||
-    new Set(capabilities).size !== capabilities.length ||
-    (capabilities.includes('resourcePackageRecovery') &&
-      capabilities.includes('resourcePackageRecoveryContent'))
-  )
-    throw new Error('maintenance-worker-effects-invalid-selection')
-  const selection: {
-    contentStore?: MaintenanceWorkerEffectsSelections['contentStore']
-    objectPublications?: HostedObjectPublicationMaintenance
-    databaseBackups?: DatabaseBackupMaintenance
-    eventsArchive?: EventsArchiveContent
-    databaseWrites?: MaintenanceWorkerEffectsSelections['databaseWrites']
-    taskArchive?: TaskArchiveContentBinding
-    resourcePackageRecovery?: ResourcePackageApplyArtifactRecoveryPort
-    resourcePackageRecoveryContent?: ResourcePackageRecoveryEffectsFactory
-    pluginGenerationGc?: PluginGenerationFilesystemGcPort
-    intentArtifactContent?: IntentArtifactContentPort
-    intentScratch?: IntentScratchStore
-    workspaceMaintenance?: WorkspaceMaintenanceEffects
-  } = {}
-  for (const family of capabilities) {
-    switch (family) {
-      case 'contentStore': {
-        completeMethods(environment.contentStore, ['put', 'read', 'release'], family)
-        selection.contentStore = environment.contentStore
-        break
-      }
-      case 'objectPublications': {
-        completeMethods(environment.objectPublications, ['run'], family)
-        selection.objectPublications = environment.objectPublications
-        break
-      }
-      case 'databaseBackups': {
-        completeMethods(environment.databaseBackups, ['prune'], family)
-        selection.databaseBackups = environment.databaseBackups
-        break
-      }
-      case 'eventsArchive': {
-        completeMethods(environment.eventsArchive, ['recover', 'archive'], family)
-        selection.eventsArchive = environment.eventsArchive
-        break
-      }
-      case 'databaseWrites': {
-        completeMethods(environment.databaseWrites, ['assertHeld'], family)
-        selection.databaseWrites = environment.databaseWrites
-        break
-      }
-      case 'workspaceMaintenance': {
-        const workspace = environment.workspaceMaintenance
-        completeMethods(workspace, ['filesystem'], family)
-        completeMethods(workspace?.preparation, ['create'], `${family}-preparation`)
-        completeMethods(workspace?.scratch, ['prepare', 'restore', 'cleanup'], `${family}-scratch`)
-        selection.workspaceMaintenance = workspace
-        break
-      }
-      case 'intentScratch': {
-        const scratch = environment.intentScratch
-        completeMethods(scratch, ['staleTurnIds', 'remove'], family)
-        selection.intentScratch = scratch
-        break
-      }
-      case 'intentArtifactContent': {
-        const content = environment.intentArtifactContent
-        completeMethods(
-          content,
-          ['pluginExists', 'discardPlugin', 'publishSkill', 'discardSkill', 'discardLegacy'],
-          family,
-        )
-        selection.intentArtifactContent = content
-        break
-      }
-      case 'taskArchive': {
-        const binding = environment.taskArchive
-        completeMethods(
-          binding?.content,
-          [
-            'resolve',
-            'exists',
-            'list',
-            'createDirectory',
-            'remove',
-            'move',
-            'appendText',
-            'writeText',
-            'restoreMovedDirectories',
-            'releaseTaskStorage',
-          ],
-          family,
-        )
-        const locations = binding?.locations
-        if (
-          locations === undefined ||
-          ['archiveDir', 'runsDir', 'logsDir'].some(
-            (name) => typeof recordOf(locations)?.[name] !== 'string',
-          )
-        )
-          throw new Error('maintenance-worker-effects-incomplete:taskArchive-locations')
-        selection.taskArchive = binding
-        break
-      }
-      case 'resourcePackageRecovery': {
-        const recovery = environment.resourcePackageRecovery
-        completeMethods(recovery, ['rollForward', 'compensate'], family)
-        selection.resourcePackageRecovery = recovery
-        break
-      }
-      case 'resourcePackageRecoveryContent': {
-        const recovery = environment.resourcePackageRecoveryContent
-        completeMethods(
-          recovery,
-          [
-            'root',
-            'live',
-            'version',
-            'staged',
-            'candidate',
-            'normalize',
-            'parent',
-            'storedReference',
-            'assertManaged',
-            'acquire',
-          ],
-          family,
-        )
-        selection.resourcePackageRecoveryContent = recovery
-        break
-      }
-      case 'pluginGenerationGc': {
-        const gc = environment.pluginGenerationGc
-        completeMethods(gc, ['hasCandidates', 'collect'], family)
-        selection.pluginGenerationGc = gc
-        break
-      }
-      default:
-        throw new Error(`maintenance-worker-effects-unknown-selection:${String(family)}`)
-    }
-  }
-  return Object.freeze(selection)
-}
-
 /** Establish the lifetime before import/factory ACK so an early drain can await it. */
-export function openMaintenanceWorkerEffectsScope(input: {
+export function openMaintenanceWorkerEffectsScope<Selection extends object>(input: {
+  readonly selectEffects: (
+    environment: MaintenanceWorkerEffectsEnvironment<Selection>,
+    capabilities: readonly string[],
+  ) => Selection
   readonly descriptor: MaintenanceWorkerEffectsDescriptor
   readonly context: Omit<MaintenanceWorkerEffectsContext, 'configurationJson'>
   readonly importModule?: (specifier: string) => Promise<Record<string, unknown>>
-}): MaintenanceWorkerEffectsScope {
+}): MaintenanceWorkerEffectsScope<Selection> {
   const descriptor = Object.freeze({
     moduleSpecifier: input.descriptor.moduleSpecifier,
     exportName: input.descriptor.exportName,
@@ -261,19 +90,19 @@ export function openMaintenanceWorkerEffectsScope(input: {
     configurationJson: descriptor.configurationJson,
   })
   const importer = input.importModule ?? importMaintenanceWorkerEffectModule
-  let environment: MaintenanceWorkerEffectsEnvironment | undefined
+  let environment: MaintenanceWorkerEffectsEnvironment<Selection> | undefined
   let disposal: Promise<void> | undefined
   let closing = false
   const constructed = (async () => {
     const module = await importer(descriptor.moduleSpecifier)
     const factory = module[descriptor.exportName]
     if (typeof factory !== 'function') throw new Error('maintenance-worker-effects-factory-missing')
-    environment = await (factory as MaintenanceWorkerEffectsFactory)(context)
+    environment = await (factory as MaintenanceWorkerEffectsFactory<Selection>)(context)
     return environment
   })()
   const ready = constructed.then((value) => {
     if (closing) throw new Error('maintenance-worker-effects-scope-disposing')
-    return selectEffects(value, descriptor.capabilities)
+    return input.selectEffects(value, descriptor.capabilities)
   })
   // The Worker immediately awaits readiness; disposal may also wait after a failure.
   void ready.catch(() => {})
@@ -284,7 +113,7 @@ export function openMaintenanceWorkerEffectsScope(input: {
       disposal ??= (async () => {
         await constructed.catch(() => undefined)
         if (environment !== undefined) {
-          completeMethods(environment, ['dispose'], 'environment')
+          assertMaintenanceWorkerEffectMethods(environment, ['dispose'], 'environment')
           await environment.dispose()
         }
       })()

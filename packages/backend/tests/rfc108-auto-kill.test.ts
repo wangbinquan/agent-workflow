@@ -1,3 +1,4 @@
+import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { o2Ports } from './helpers/o2Closure'
 // RFC-108 T20 (AR-05a) — heartbeat stalled-child auto-kill (default OFF).
@@ -67,6 +68,7 @@ describeEachProvider('RFC-108 T20 — heartbeat-kill loop', (harness) => {
     const taskId = await seedTask(db)
     const run = stalled(taskId)
     const operations = createTaskExecutionPersistence(db, {
+      humanGateOpen: composeHumanGateOpenParticipantFactory(),
       historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
       recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
     }).recoveryAdministration
@@ -88,6 +90,7 @@ describeEachProvider('RFC-108 T20 — heartbeat-kill loop', (harness) => {
   test('disabled → no-op (never queries or kills)', async () => {
     const db = harness.db
     const operations = createTaskExecutionPersistence(db, {
+      humanGateOpen: composeHumanGateOpenParticipantFactory(),
       historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
       recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
     }).recoveryAdministration
@@ -110,6 +113,7 @@ describeEachProvider('RFC-108 T20 — heartbeat-kill loop', (harness) => {
     const db = harness.db
     const taskId = await seedTask(db)
     const operations = createTaskExecutionPersistence(db, {
+      humanGateOpen: composeHumanGateOpenParticipantFactory(),
       historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
       recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
     }).recoveryAdministration
@@ -131,6 +135,7 @@ describeEachProvider('RFC-108 T20 — heartbeat-kill loop', (harness) => {
     const db = harness.db
     const taskId = await seedTask(db)
     const operations = createTaskExecutionPersistence(db, {
+      humanGateOpen: composeHumanGateOpenParticipantFactory(),
       historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
       recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
     }).recoveryAdministration
@@ -176,6 +181,7 @@ describeEachProvider('RFC-108 T20 — findStalledRunningChildren query', (harnes
 
     const found = await findStalledRunningChildren(
       createTaskExecutionPersistence(db, {
+        humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
         recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
       }).recoveryAdministration,

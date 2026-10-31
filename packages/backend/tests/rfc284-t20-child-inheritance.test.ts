@@ -45,6 +45,7 @@ const DISPOSITION = {
   identityAccess: 'dropped-registered',
   persistence: 'dropped-registered',
   memoryInjectionQueries: 'dropped-registered',
+  memorySnapshots: 'dropped-registered',
   // RFC-371: each child receives its selected accounting participant from bootstrap.
   observationInvocations: 'dropped-registered',
   runtimeSessionLeases: 'dropped-registered',
@@ -130,6 +131,8 @@ describe('RFC-284 T20 — 子任务继承面双向锁', () => {
         'identityAccess',
         'persistence',
         'memoryInjectionQueries',
+        // RFC-399 A10: the memory snapshot port is supplied by bootstrap like the injection queries.
+        'memorySnapshots',
         'observationInvocations',
         'runtimeSessionLeases',
         'runtimeRegistry',

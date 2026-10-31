@@ -1,3 +1,6 @@
+import { composeCollaborationTaskRolePolicy } from '@/modules/resource-catalog/composition'
+import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
+import { composeTaskMemorySnapshotPort } from '@/modules/memory/composition'
 import { runGit } from '@/util/git'
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { nodeRunFixtureColumns } from './helpers/model/nodeRun'
@@ -158,6 +161,7 @@ function sharedInput(
   'taskDagCollaboration' | 'processConcurrencyScope' | 'log'
 > {
   return {
+    memorySnapshots: composeTaskMemorySnapshotPort(),
     historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
     db,
     taskRunBinding: composeLegacyTaskRunDriveBinding({
@@ -170,6 +174,7 @@ function sharedInput(
     workspaceExcludeProfilesFor: composeTaskWorkspaceExcludeProfilesFor(),
     workspacePresence: createFileWorkspacePresenceQueries(),
     persistence: createTaskExecutionPersistence(db, {
+      humanGateOpen: composeHumanGateOpenParticipantFactory(),
       historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
       recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
     }),
@@ -179,6 +184,7 @@ function sharedInput(
     runtimeRegistry: composeRuntimeRegistryOperations(db),
     nodeRunRuntime: composeNodeRunRuntimePersistence(db),
     collaborationRuntime: createCollaborationRuntimeMechanics(db, {
+      taskRolePolicy: composeCollaborationTaskRolePolicy(),
       ...epoch2RuntimeTestPorts(db),
       taskLock: o2Ports(db).taskLock,
       ...{ upstreamAgents: o2Ports(db).upstreamAgents },

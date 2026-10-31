@@ -35,11 +35,15 @@ import {
 } from '@/modules/digital-employee/domain/model'
 import { employeeWorkIntakeSchema } from '@/modules/digital-employee/domain/runtimeModel'
 import { buildDigitalEmployeeFixedPrompt } from '@/modules/task-execution/composition/digitalEmployeeExecution'
-import { composeDigitalEmployeeBuiltinToolCatalog } from '@/modules/task-execution/composition/digitalEmployeeBuiltinToolCatalog'
+import { composeDigitalEmployeeBuiltinToolCatalog } from '@/modules/digital-employee/composition'
 import { composeDigitalEmployeeAgentTemplateCatalogFor } from '@/modules/resource-catalog/composition/digitalEmployeeAgentTemplateCatalog'
 import {
   ensureDigitalEmployeeAgentTemplates,
   listDigitalEmployeeAgentTemplates,
+  DIGITAL_EMPLOYEE_AGENT_TEMPLATE_IDS,
+  digitalEmployeeBuiltinAgentSuccessorId,
+  digitalEmployeeBuiltinToolConfiguration,
+  digitalEmployeeAgentToolPresentation,
 } from '@/services/digitalEmployeeAgentTemplates'
 import { listAgents } from '@/modules/resource-catalog/infrastructure/legacy/agent'
 import { createUser } from './helpers/userFixture'
@@ -820,6 +824,12 @@ describeEachProviderHttpApplication(
         // of the exact tool revision, while the built-in repair Agent explicitly
         // declares that it can solve every problem emitted by that classifier.
         const catalog = await composeDigitalEmployeeBuiltinToolCatalog({
+          templateHelpers: {
+            DIGITAL_EMPLOYEE_AGENT_TEMPLATE_IDS,
+            digitalEmployeeBuiltinAgentSuccessorId,
+            digitalEmployeeBuiltinToolConfiguration,
+            digitalEmployeeAgentToolPresentation,
+          },
           agentTemplates: composeDigitalEmployeeAgentTemplateCatalogFor(
             db,
             composeDigitalEmployeeAgentTemplateCatalogParticipant,

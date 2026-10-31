@@ -1,3 +1,5 @@
+import { composeTaskMemorySnapshotPort } from '@/modules/memory/composition'
+import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 // Released picker oracle; executable runtime selection is covered through RunSelectionReader.
 import {
   pickLatestSettledRun,
@@ -331,6 +333,7 @@ describeEachProvider('RFC-374 selected persistence consumers', (harness) => {
     await mintSequenceRun(db, taskId, { id: 'a' })
     const payload = await taskNodeRunsProjection(
       withO2Closure({
+        memorySnapshots: composeTaskMemorySnapshotPort(),
         clarifyNav: o2Ports(db).collaborationReads.clarifyNav,
         db,
         nodeRunPrompts: {
@@ -407,6 +410,7 @@ describeEachProvider('RFC-374 selected persistence consumers', (harness) => {
       ...composeDatabaseDigitalEmployeeExecutionPorts(
         db,
         epoch2RuntimeTestPorts(db).historyRestrictions,
+        composeHumanGateOpenParticipantFactory(),
       ),
       resolveActor: null as never,
       resourceAuthorityFor: null as never,
@@ -471,6 +475,7 @@ describeEachProvider('RFC-374 selected persistence consumers', (harness) => {
     })
     const rows = await readNodeRunFixtures(db, { taskId }),
       persistence = createTaskExecutionPersistence(db, {
+        humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
         recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
       })
@@ -510,6 +515,7 @@ describeEachProvider('RFC-374 selected persistence consumers', (harness) => {
     await mintSequenceRun(db, taskId, { id: 'a', nodeId: 'out', status: 'failed' })
     const result = await runLifecycleInvariants({
       operations: createTaskExecutionPersistence(db, {
+        humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
         recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
       }).recoveryAdministration,

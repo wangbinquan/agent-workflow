@@ -1,3 +1,4 @@
+import type { CollaborationTaskRolePolicy } from '../application/ports/collaborationTaskRolePolicy'
 import type { HumanGateTaskLockPort, ReviewUpstreamAgentPort } from '../composition/required-ports'
 import type { HistoryRestrictionPort } from '@/platform/contracts/historyRestriction'
 import type { ContentStore } from '@/platform/content/contentStore'
@@ -24,6 +25,7 @@ import type { ReviewDecisionCommandPort } from '@/modules/collaboration/applicat
 import { createCollaborationCommandContext } from '../composition/commandContext'
 
 export function createReviewDecisionCommand(input: {
+  readonly taskRolePolicy: CollaborationTaskRolePolicy
   readonly taskLock: HumanGateTaskLockPort
   readonly historyRestrictions: HistoryRestrictionPort
   readonly content?: ContentStore
@@ -38,6 +40,7 @@ export function createReviewDecisionCommand(input: {
       const { submitReviewDecision } = await import('./review')
       const decided = await submitReviewDecision({
         db: input.db,
+        taskRolePolicy: input.taskRolePolicy,
         taskLock: input.taskLock,
         historyRestrictions: input.historyRestrictions,
         upstreamAgents: input.upstreamAgents,
@@ -82,6 +85,7 @@ export function createReviewDecisionCommand(input: {
 
 /** Legacy test bridge; production routes use the bootstrap-owned context. */
 export function createReviewDecisionCommandContext(input: {
+  readonly taskRolePolicy: CollaborationTaskRolePolicy
   readonly taskLock: HumanGateTaskLockPort
   readonly historyRestrictions: HistoryRestrictionPort
   readonly content?: ContentStore
@@ -93,6 +97,7 @@ export function createReviewDecisionCommandContext(input: {
   readonly authorRole: TaskActorRole
 }): CollaborationCommandContext<'reviewDecisions'> {
   return createCollaborationCommandContext({
+    taskRolePolicy: input.taskRolePolicy,
     taskLock: input.taskLock,
     historyRestrictions: input.historyRestrictions,
     content: input.content,
@@ -102,6 +107,7 @@ export function createReviewDecisionCommandContext(input: {
     reviewDecisions: createReviewDecisionCommand({
       db: input.db,
       appHome: input.appHome,
+      taskRolePolicy: input.taskRolePolicy,
       taskLock: input.taskLock,
       historyRestrictions: input.historyRestrictions,
       content: input.content,

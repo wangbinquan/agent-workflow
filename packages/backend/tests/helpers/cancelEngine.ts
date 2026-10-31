@@ -1,3 +1,4 @@
+import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import { epoch2RuntimeTestPorts } from './epoch2RuntimePorts'
 import { o2Ports } from './o2Closure'
 // RFC-359 AC-1（第 11 刀）—— `cancel` 的**唯一**测试装配点。
@@ -42,6 +43,7 @@ export async function cancelViaEngine(
     {
       db,
       persistence: createTaskExecutionPersistence(db, {
+        humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
         recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
       }),

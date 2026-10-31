@@ -14,7 +14,7 @@ export interface RepositoryOverviewQueries {
   countCachedRepositories(): Promise<number>
 }
 
-export { repoRelForcedPaths } from '../domain/forcedWorkspacePaths'
+export { repoRelForcedPaths } from '@/platform/workspace/forcedWorkspacePaths'
 
 export {
   existingRepositoryIds,

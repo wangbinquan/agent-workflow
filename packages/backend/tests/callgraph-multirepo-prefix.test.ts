@@ -1,3 +1,4 @@
+import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 // RFC-395 II-pre：改接生产启动 / 读取路径，保留原断言意图。
 // RFC-089 P4 — supplementary coverage for multi-repo call-chain re-prefixing.
 // RFC-165: multi-repo/pre-created PATH bodies are the framework-internal face
@@ -117,6 +118,7 @@ async function twoRepoTask(h: Harness) {
       inputs: {},
     } as unknown as StartTask,
     {
+      humanGateOpen: composeHumanGateOpenParticipantFactory(),
       db: h.db,
       schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
         .schedulerDriver,

@@ -1,3 +1,5 @@
+import { composeTaskMemorySnapshotPort } from '@/modules/memory/composition'
+import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { nodeRunFixtureColumns } from './helpers/model/nodeRun'
 import { tablesOf } from '@/platform/persistence/sessionTables'
@@ -405,6 +407,7 @@ describeEachProvider('RFC-370 selected prompt consumer bindings', (harness) => {
       reviewIteration: 0,
     })
     const original = createTaskExecutionPersistence(db, {
+      humanGateOpen: composeHumanGateOpenParticipantFactory(),
       historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
       recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
     })
@@ -483,6 +486,7 @@ describeEachProvider('RFC-370 selected prompt consumer bindings', (harness) => {
       updatedAt: 1,
     } as Agent
     const pending = runNode({
+      memorySnapshots: composeTaskMemorySnapshotPort(),
       taskId,
       nodeRunId,
       nodeId: DESIGNER,

@@ -8,3 +8,8 @@ export interface SubjectTaskReferenceParticipant {
 }
 
 export type SubjectTaskReferencePort = (tx: PersistenceTx) => SubjectTaskReferenceParticipant
+
+export type {
+  McpDiagnosticExecution,
+  McpDiagnosticExecutionFactory,
+} from '../application/ports/mcpDiagnosticExecution'

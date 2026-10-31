@@ -1,3 +1,5 @@
+import { composeRepositoryPreparationLookup } from '@/modules/source-control/composition'
+import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import { withSourceControlTaskPorts } from './helpers/sourceControlTaskPorts'
 import { composeSourceControlTaskPorts } from '@/modules/task-execution/composition'
 // RFC-395 II-pre：GC 改接生产 workspaceMaintenance，断言其回执及实际目录 / 行状态。
@@ -155,6 +157,7 @@ const REPO_PREP_DEPS = (
   cloneTimeoutMs = 1_000,
 ): TestTaskLaunchOptions =>
   withRealSchedulerDriver({
+    humanGateOpen: composeHumanGateOpenParticipantFactory(),
     db,
     actorUserId,
     appHome: TEST_HOME,
@@ -1104,9 +1107,11 @@ describe('RFC-287 G7 —— 定时触发与手动启动同一套语义', () => {
             appHome: home,
           }),
           coordinator: createTestTaskDriveCoordinator({
+            humanGateOpen: composeHumanGateOpenParticipantFactory(),
             deps: { db: db2, schedulerDriver: schedulerDriver2, configPath: cfgPath },
             appHome: home,
             repositoryPreparation: composeDeferredRepositoryPreparation({
+              repositoryPreparationLookup: composeRepositoryPreparationLookup(db2),
               repositoryPreparation: composeRepositoryPreparation(
                 withSourceControlTaskPorts({
                   db: db2,
@@ -1209,6 +1214,7 @@ describe('RFC-287 G5×G7 —— 生产延后准备的地址拒绝', () => {
         inputs: {},
       },
       {
+        humanGateOpen: composeHumanGateOpenParticipantFactory(),
         db,
         actorUserId: seeded.userId,
         deferRepoPreparation: true,
@@ -1926,20 +1932,35 @@ describe('RFC-287 —— 半成品镜像目录的回收', () => {
   })
 
   test('已挂进每小时 GC（否则函数写了也没人调）', () => {
+    // RFC-399 B1：作业体从 platform 分派器迁到 owner（source-control application/maintenanceJobs.ts），
+    // bootstrap 装配表按作业键挂上；两处都要在，才算「挂进每小时 GC」。
+    const bindings = readSrc(
+      resolve(import.meta.dir, '..', 'src', 'bootstrap', 'maintenanceJobBindings.ts'),
+      'utf8',
+    )
+    expect(bindings).toContain('...createSourceControlMaintenanceJobHandlers(commands.workspace)')
     const src = readSrc(
-      resolve(import.meta.dir, '..', 'src', 'platform', 'background', 'maintenanceJobRunner.ts'),
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'source-control',
+        'application',
+        'maintenanceJobs.ts',
+      ),
       'utf8',
     )
     // 光有实现不算数——二轮门自查的老教训：判据算得对 ≠ 有人用。
-    const i = src.indexOf("case 'worktreeGc':")
+    const i = src.indexOf('async worktreeGc(input) {')
     expect(i, 'GC ticker 应存在').toBeGreaterThan(-1)
     const ticker = src.slice(i, i + 1600)
-    expect(ticker).toContain('ownerCommands.workspace.runGcPhase({')
+    expect(ticker).toContain('commands.runGcPhase({')
     // 两个参数都得接上：年龄阈值要随配置的克隆超时放大（否则长超时下会删掉仍在写的
     // partial），而删除必须 await（同步 rmSync 一个接近完整镜像体量的目录会把 Bun 的
     // 单事件循环冻住，取消请求与 timer 全排在它后面）。
     expect(ticker, '必须把 gitCloneTimeoutMs 传下去').toContain('gitCloneTimeoutMs:')
-    expect(ticker, '调用点要 await').toMatch(/await ownerCommands\.workspace\.runGcPhase\(/)
+    expect(ticker, '调用点要 await').toMatch(/await commands\.runGcPhase\(/)
     // ⚠️ 上面那条测的是**调用点**的 await，与「删除原语是不是同步的」完全两码事
     // ——五轮门自查实测：把函数体里的 `await rm` 改回 `rmSync`，用例全绿（函数是
     // async，rmSync 照样过 typecheck）。真正要防的是同步递归删除冻住 Bun 的单事件

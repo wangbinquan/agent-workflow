@@ -1,3 +1,4 @@
+import { composeTaskMemorySnapshotPort } from '@/modules/memory/composition'
 // RFC-048 — runner integration with the subagent live capture poller.
 //
 // Drives runNode against a mock opencode child whose lifetime is padded with
@@ -198,6 +199,7 @@ describe('runner subagent live capture (RFC-048)', () => {
       },
       () =>
         runNode({
+          memorySnapshots: composeTaskMemorySnapshotPort(),
           taskId: h.taskId,
           nodeRunId,
           nodeId: 'n1',
@@ -248,6 +250,7 @@ describe('runner subagent live capture (RFC-048)', () => {
       },
       () =>
         runNode({
+          memorySnapshots: composeTaskMemorySnapshotPort(),
           taskId: h.taskId,
           nodeRunId,
           nodeId: 'n1',
@@ -298,6 +301,7 @@ describe('runner subagent live capture (RFC-048)', () => {
       },
       () =>
         runNode({
+          memorySnapshots: composeTaskMemorySnapshotPort(),
           taskId: h.taskId,
           nodeRunId,
           nodeId: 'n1',

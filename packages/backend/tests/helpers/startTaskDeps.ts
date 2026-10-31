@@ -11,7 +11,7 @@ import { composeSourceControlTaskPorts } from '@/modules/task-execution/composit
 import { createFileTaskLaunchConfigurationQueries } from '@/modules/task-execution/composition/launchConfiguration'
 import { resolveTaskSubagentLiveCaptureFromReader } from '@/modules/task-execution/public/queries'
 import type { SecretBox } from '@/auth/secretBox'
-import type { LegacyProviderNeutralDatabase } from '@/modules/task-execution/infrastructure/legacySqliteTransportMechanisms'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { resolveLaunchRuntimeConfig } from './launchRuntimeConfig'
 import type { TestTaskLaunchOptions } from './productionTaskLaunch'
 import type { SchedulerDriverPort } from '@/modules/task-execution/public/commands'
@@ -37,7 +37,8 @@ export function resolveSubagentLiveCapture(
  * (multipart's `preCreatedWorktree` / `preResolvedSource`) spread them on top.
  */
 export function buildStartTaskDeps(
-  db: LegacyProviderNeutralDatabase,
+  db: PersistenceDb,
+  humanGateOpen: TestTaskLaunchOptions['humanGateOpen'],
   schedulerDriver: SchedulerDriverPort,
   configPath: string,
   actorUserId: string,
@@ -49,6 +50,7 @@ export function buildStartTaskDeps(
 ): TestTaskLaunchOptions {
   const subagentLiveCapture = resolveSubagentLiveCapture(configPath)
   return {
+    humanGateOpen,
     db,
     schedulerDriver,
     repositoryWorkspace:

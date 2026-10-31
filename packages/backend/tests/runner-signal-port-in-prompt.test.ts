@@ -1,3 +1,4 @@
+import { composeTaskMemorySnapshotPort } from '@/modules/memory/composition'
 // RFC-060 PR-D D.T7 — runner rejects signal-port references in promptTemplate.
 //
 // When opts.inputPortKinds[port] is the `signal` kind and the promptTemplate
@@ -102,6 +103,7 @@ describeEachProvider('D.T7 — runNode signal-port-in-prompt guard', (harness) =
     const agent = makeAgent()
     const nodeRunId = await insertPendingNodeRun(h.db, h.taskId)
     const result = await runNode({
+      memorySnapshots: composeTaskMemorySnapshotPort(),
       taskId: h.taskId,
       nodeRunId,
       nodeId: 'sample-agent',
@@ -134,6 +136,7 @@ describeEachProvider('D.T7 — runNode signal-port-in-prompt guard', (harness) =
     // failure comes from the spawn, NOT from signal-port-in-prompt. That's the
     // distinction we need to lock in.
     const result = await runNode({
+      memorySnapshots: composeTaskMemorySnapshotPort(),
       taskId: h.taskId,
       nodeRunId,
       nodeId: 'sample-agent',
@@ -158,6 +161,7 @@ describeEachProvider('D.T7 — runNode signal-port-in-prompt guard', (harness) =
     // a template happens to reference a port. Use bogus opencodeCmd so we
     // get a non-signal failure path.
     const result = await runNode({
+      memorySnapshots: composeTaskMemorySnapshotPort(),
       taskId: h.taskId,
       nodeRunId,
       nodeId: 'sample-agent',
@@ -178,6 +182,7 @@ describeEachProvider('D.T7 — runNode signal-port-in-prompt guard', (harness) =
     const agent = makeAgent()
     const nodeRunId = await insertPendingNodeRun(h.db, h.taskId)
     const result = await runNode({
+      memorySnapshots: composeTaskMemorySnapshotPort(),
       taskId: h.taskId,
       nodeRunId,
       nodeId: 'sample-agent',
@@ -201,6 +206,7 @@ describeEachProvider('D.T7 — runNode signal-port-in-prompt guard', (harness) =
     const agent = makeAgent()
     const nodeRunId = await insertPendingNodeRun(h.db, h.taskId)
     const result = await runNode({
+      memorySnapshots: composeTaskMemorySnapshotPort(),
       taskId: h.taskId,
       nodeRunId,
       nodeId: 'sample-agent',

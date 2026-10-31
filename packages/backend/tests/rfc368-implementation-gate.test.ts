@@ -1,3 +1,4 @@
+import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { readTaskFixtures, taskFixture, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
@@ -279,6 +280,7 @@ describe('RFC-368 实现门 findings', () => {
       await composeTaskCancellation(
         harness.db,
         epoch2RuntimeTestPorts(harness.db).historyRestrictions,
+        composeHumanGateOpenParticipantFactory(),
       ).cancel('task-reaped', {
         kind: 'resource-reaped',
         summary: 'task-time-limit-exceeded',
@@ -300,6 +302,7 @@ describe('RFC-368 实现门 findings', () => {
         ...composeDatabaseDigitalEmployeeExecutionPorts(
           harness.db,
           epoch2RuntimeTestPorts(harness.db).historyRestrictions,
+          composeHumanGateOpenParticipantFactory(),
         ),
       } as unknown as DigitalEmployeeExecutionDependencies)
       expect((await core.inspect('task-reaped')).kind).toBe('failed')

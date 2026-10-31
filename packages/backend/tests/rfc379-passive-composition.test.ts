@@ -3,11 +3,17 @@ import { expect, test, spyOn } from 'bun:test'
 import { DigitalEmployeeAuthoringService } from '../src/modules/digital-employee/application/authoringService'
 import { MrTerminalControlWorker } from '../src/modules/integration/application/mrTerminalControlWorker'
 import { mintSourceTerminationEffectCapability } from '../src/modules/task-execution/application/sourceTerminationCapability'
-import { composeDigitalEmployeeBuiltinToolCatalog } from '../src/modules/task-execution/composition/digitalEmployeeBuiltinToolCatalog'
+import { composeDigitalEmployeeBuiltinToolCatalog } from '../src/modules/digital-employee/composition'
 import { composeDigitalEmployeeAgentTemplateCatalogFor } from '../src/modules/resource-catalog/composition/digitalEmployeeAgentTemplateCatalog'
 import { composeDigitalEmployeeAgentTemplateCatalogParticipant } from '../src/modules/digital-employee/composition/agentTemplateCatalog'
 import { developmentEmployeeTypePackage } from '../src/modules/development-automation/composition/employeeTypePackage'
-import { ensureDigitalEmployeeAgentTemplates } from '../src/services/digitalEmployeeAgentTemplates'
+import {
+  ensureDigitalEmployeeAgentTemplates,
+  DIGITAL_EMPLOYEE_AGENT_TEMPLATE_IDS,
+  digitalEmployeeBuiltinAgentSuccessorId,
+  digitalEmployeeBuiltinToolConfiguration,
+  digitalEmployeeAgentToolPresentation,
+} from '../src/services/digitalEmployeeAgentTemplates'
 import { composeEventCenter } from '../src/modules/event-center/composition'
 import { describeEachProvider } from './helpers/eachProvider'
 import { lifecycleFixture } from './helpers/daemonLifecycle'
@@ -98,6 +104,12 @@ describeEachProvider('RFC-379 fresh catalog boot regression', (harness) => {
       composeDigitalEmployeeAgentTemplateCatalogParticipant,
     )
     const catalog = composeDigitalEmployeeBuiltinToolCatalog({
+      templateHelpers: {
+        DIGITAL_EMPLOYEE_AGENT_TEMPLATE_IDS,
+        digitalEmployeeBuiltinAgentSuccessorId,
+        digitalEmployeeBuiltinToolConfiguration,
+        digitalEmployeeAgentToolPresentation,
+      },
       agentTemplates: templates,
       typePackageDescriptorJsons: [developmentEmployeeTypePackage.descriptorJson],
     })

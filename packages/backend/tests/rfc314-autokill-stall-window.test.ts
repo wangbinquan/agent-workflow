@@ -1,3 +1,4 @@
+import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { o2Ports } from './helpers/o2Closure'
 // RFC-314 D1 —— autoKill 的「最后一次活动」判据：有界窗口取代全表 max(ts)。
@@ -101,6 +102,7 @@ describeEachProvider('RFC-314 D1 —— 窗口内的 ts 乱序必须被吸收', 
 
     const found = await findStalledRunningChildren(
       createTaskExecutionPersistence(db, {
+        humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
         recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
       }).recoveryAdministration,
@@ -118,6 +120,7 @@ describeEachProvider('RFC-314 D1 —— 窗口内的 ts 乱序必须被吸收', 
 
     const found = await findStalledRunningChildren(
       createTaskExecutionPersistence(db, {
+        humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
         recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
       }).recoveryAdministration,
@@ -134,6 +137,7 @@ describeEachProvider('RFC-314 D1 —— 窗口内的 ts 乱序必须被吸收', 
 
     const found = await findStalledRunningChildren(
       createTaskExecutionPersistence(db, {
+        humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
         recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
       }).recoveryAdministration,
@@ -159,6 +163,7 @@ describeEachProvider(
 
       const found = await findStalledRunningChildren(
         createTaskExecutionPersistence(db, {
+          humanGateOpen: composeHumanGateOpenParticipantFactory(),
           historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
           recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
         }).recoveryAdministration,
@@ -193,6 +198,7 @@ async function capture(
   try {
     await findStalledRunningChildren(
       createTaskExecutionPersistence(db, {
+        humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
         recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
       }).recoveryAdministration,

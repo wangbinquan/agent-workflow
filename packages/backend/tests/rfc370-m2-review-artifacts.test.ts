@@ -1,3 +1,4 @@
+import { composeCollaborationTaskRolePolicy } from '@/modules/resource-catalog/composition'
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import {
   createContentStore,
@@ -272,6 +273,7 @@ describeEachProvider('RFC-370 CS review journal content', (harness) => {
     })
     let failFinalization = true
     const mechanics = createCollaborationRuntimeMechanics(db, {
+      taskRolePolicy: composeCollaborationTaskRolePolicy(),
       ...epoch2RuntimeTestPorts(db),
       taskLock: o2Ports(db).taskLock,
       ...{

@@ -1,3 +1,4 @@
+import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { o2Ports } from './helpers/o2Closure'
 import { nodeRunFixture, patchNodeRunFixture, taskFixture, workflowFixture } from './helpers/model'
@@ -104,6 +105,7 @@ async function seedOwnedProcessEffect(
   const taskId = `t7b_${ulid()}`
   await seedTask(db, taskId)
   const persistence = createTaskExecutionPersistence(db, {
+    humanGateOpen: composeHumanGateOpenParticipantFactory(),
     historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
     recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
   })

@@ -1,3 +1,4 @@
+import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import { epoch2RuntimeTestPorts } from './epoch2RuntimePorts'
 import { o2Ports } from './o2Closure'
 import { withSourceControlTaskPorts } from './sourceControlTaskPorts'
@@ -89,11 +90,13 @@ export function createTestTaskExecutionLaunchParticipant(
     authorization: resourceCatalog.authorization,
   }).launch
   const persistence = createTaskExecutionPersistence(input.db, {
+    humanGateOpen: composeHumanGateOpenParticipantFactory(),
     historyRestrictions: epoch2RuntimeTestPorts(input.db).historyRestrictions,
     recoveryHumanGates: o2Ports(input.db).collaborationReads.recovery,
   })
   const completionMode = input.completionMode ?? 'await-settle'
   const drive = createTestTaskDriveCoordinator({
+    humanGateOpen: composeHumanGateOpenParticipantFactory(),
     deps: {
       db: input.db,
       schedulerDriver: input.schedulerDriver,

@@ -142,6 +142,9 @@ import {
 } from './public/operations'
 import type { PlanLocalRestoreQuery } from './public/queries'
 import type { LocalSystemOperationContext, RestoreArtifactRef } from './public/types'
+import type { MaintenanceSystemOperations } from './application/ports/maintenanceSystemOperations'
+import { createSystemOperationsMaintenanceJobHandlers as createSystemJobHandlers } from './application/maintenanceJobs'
+import { pruneLocalBackups } from './infrastructure/local/localBackupPrune'
 
 export { readDatabaseSchemaUpgradeGeneration } from './infrastructure/databaseMigrationCoordinator'
 export {
@@ -622,4 +625,15 @@ export async function applyLocalEpoch2PendingRestore(
   contract: LogicalSchemaContract,
 ): Promise<boolean> {
   return createFileDatabasePreOpenRecovery({ contract, migrationsFolder: '' }).applyStagedRestore()
+}
+
+export { composeMaintenanceSystemOperations } from './infrastructure/maintenanceSystemOperations'
+
+// RFC-399 B1: bootstrap's maintenance job table takes these handlers via composition; the
+// standalone backup-directory fallback is local infrastructure injected here.
+export type { MaintenanceSystemOperations } from './application/ports/maintenanceSystemOperations'
+export function createSystemOperationsMaintenanceJobHandlers(
+  system: MaintenanceSystemOperations,
+): ReturnType<typeof createSystemJobHandlers> {
+  return createSystemJobHandlers(system, { prune: pruneLocalBackups })
 }

@@ -1,3 +1,4 @@
+import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { normalizeEpoch2TaskFacts } from './fixtures/rfc395TaskRowParity'
 import { tablesOf } from '@/platform/persistence/sessionTables'
@@ -395,6 +396,7 @@ function operationsFor(
 ): LaunchTarget {
   const db = harness.db as unknown as PostgresqlDatabaseClient
   const persistence = createTaskExecutionPersistence(db, {
+    humanGateOpen: composeHumanGateOpenParticipantFactory(),
     historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
     recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
   })
@@ -408,6 +410,7 @@ function operationsFor(
         coordinatorFactory: testDriveFactory(
           db,
           createDatabaseTaskDriverLifecyclePort({
+            humanGateOpen: composeHumanGateOpenParticipantFactory(),
             historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
             db,
             log: logger(),

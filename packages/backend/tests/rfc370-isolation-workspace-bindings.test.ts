@@ -1,3 +1,4 @@
+import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { o2Ports } from './helpers/o2Closure'
 // RFC-370: selected scopes must reach real Task receipts, wrappers and replay.
@@ -104,6 +105,7 @@ async function fixture(db: PersistenceDb, mounts = ['']) {
     })),
   })
   const original = createTaskExecutionPersistence(db, {
+    humanGateOpen: composeHumanGateOpenParticipantFactory(),
     historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
     recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
   })

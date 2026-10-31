@@ -1,3 +1,4 @@
+import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import {
   type NodeRunFixtureSpec,
   nodeRunFixture,
@@ -216,6 +217,7 @@ describe('RFC-243 §4.3 — cancel cascade with durable marker', () => {
     try {
       await expect(
         launchTestTask({ workflowId: wf, name: 'late child', inputs: {} } as StartTask, {
+          humanGateOpen: composeHumanGateOpenParticipantFactory(),
           db,
           schedulerDriver: createTaskExecutionTestTopology({ db, driver: 'real' }).schedulerDriver,
           materializedSpace: space,

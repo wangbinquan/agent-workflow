@@ -15,8 +15,8 @@ describe('RFC-349 TaskExecution selected-provider runtime', () => {
       for (const id of ids) expect(source).toContain(`'${id}'`)
     }
     expect(source).toContain('createTaskRouteRepairOperations')
-    expect(source).toContain('ClarifyRepairParticipant')
-    expect(source).toContain('ReviewRepairParticipant')
+    expect(source).toContain('TaskClarifyRepairPort')
+    expect(source).toContain('TaskReviewRepairPort')
     expect(source).toContain('CollaborationRuntimeMechanics')
     expect(source).not.toContain("from '@/db/client'")
     expect(source).not.toContain('clarifyRounds')
@@ -41,8 +41,12 @@ describe('RFC-349 TaskExecution selected-provider runtime', () => {
 
     expect(provider).toContain('routes: (')
     expect(provider).toContain('TaskExecutionProviderRouteContext')
-    expect(provider).toContain('createClarifyRepairParticipant(db)')
-    expect(provider).toContain('createReviewRepairParticipant(db)')
+    const collaboration = read('modules/collaboration/composition.ts')
+    const bootstrap = read('bootstrap/daemonModules/taskExecution.ts')
+    expect(collaboration).toContain('createClarifyRepairParticipant(db)')
+    expect(collaboration).toContain('createReviewRepairParticipant(db)')
+    expect(bootstrap).toContain('collaborationRepair: composeCollaborationRepairPorts(db)')
+    expect(provider).toContain('...dependencies.collaborationRepair')
     expect(provider).toContain('composeTaskExecutionProviderBackground({')
 
     for (const loop of ['auto-repair', 'heartbeat-kill', 'orphan-reconcile', 'scheduled-task']) {

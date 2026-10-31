@@ -1,3 +1,4 @@
+import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { o2Ports } from './helpers/o2Closure'
 // RFC-359 W4-B1 批 2f —— 三对合一，两个引擎各跑一遍：node run 执行投影（产品里最热的写路径：统一写事务 +
@@ -133,6 +134,7 @@ async function seedClaimedOwner(
     intentId: `intent_${ulid()}`,
     token,
     persistence: createTaskExecutionPersistence(db, {
+      humanGateOpen: composeHumanGateOpenParticipantFactory(),
       historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
       recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
     }),

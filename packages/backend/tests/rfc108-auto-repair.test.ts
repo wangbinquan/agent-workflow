@@ -1,3 +1,4 @@
+import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { o2Ports } from './helpers/o2Closure'
 // RFC-108 T19 (AR-04) — closed detect→classify→auto-repair loop (default OFF).
@@ -81,6 +82,7 @@ describeEachProvider('RFC-108 T19 — auto-repair loop', (harness) => {
     const db = harness.db
     const taskId = await seedTaskWithAlert(db)
     const operations = createTaskExecutionPersistence(db, {
+      humanGateOpen: composeHumanGateOpenParticipantFactory(),
       historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
       recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
     }).recoveryAdministration
@@ -110,6 +112,7 @@ describeEachProvider('RFC-108 T19 — auto-repair loop', (harness) => {
     const db = harness.db
     await seedTaskWithAlert(db)
     const operations = createTaskExecutionPersistence(db, {
+      humanGateOpen: composeHumanGateOpenParticipantFactory(),
       historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
       recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
     }).recoveryAdministration
@@ -133,6 +136,7 @@ describeEachProvider('RFC-108 T19 — auto-repair loop', (harness) => {
     const db = harness.db
     await seedTaskWithAlert(db)
     const operations = createTaskExecutionPersistence(db, {
+      humanGateOpen: composeHumanGateOpenParticipantFactory(),
       historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
       recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
     }).recoveryAdministration
@@ -151,6 +155,7 @@ describeEachProvider('RFC-108 T19 — auto-repair loop', (harness) => {
     const db = harness.db
     const taskId = await seedTaskWithAlert(db)
     const operations = createTaskExecutionPersistence(db, {
+      humanGateOpen: composeHumanGateOpenParticipantFactory(),
       historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
       recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
     }).recoveryAdministration
@@ -172,6 +177,7 @@ describeEachProvider('RFC-108 T19 — auto-repair loop', (harness) => {
     const db = harness.db
     await seedTaskWithAlert(db)
     const operations = createTaskExecutionPersistence(db, {
+      humanGateOpen: composeHumanGateOpenParticipantFactory(),
       historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
       recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
     }).recoveryAdministration

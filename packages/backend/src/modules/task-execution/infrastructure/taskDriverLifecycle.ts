@@ -1,3 +1,4 @@
+import type { HumanGateOpenParticipantFactory } from '../application/ports/humanGateOpenFactory'
 import type { HistoryRestrictionPort } from '@/platform/contracts/historyRestriction'
 import type { WorkspacePresenceQueries } from '@/modules/source-control/public/queries'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
@@ -230,6 +231,7 @@ export function createTaskDriverLifecyclePort(
  * 它手上只有一个 `db`，拿不到模块实例。退役之后这个便利构造也一并消失。
  */
 export function createDatabaseTaskDriverLifecyclePort(options: {
+  readonly humanGateOpen: HumanGateOpenParticipantFactory
   readonly historyRestrictions: HistoryRestrictionPort
   readonly db: PersistenceDb
   readonly persistence?: TaskExecutionPersistence

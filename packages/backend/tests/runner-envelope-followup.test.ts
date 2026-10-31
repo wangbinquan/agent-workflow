@@ -1,3 +1,4 @@
+import { composeTaskMemorySnapshotPort } from '@/modules/memory/composition'
 // RFC-042 T3 — runner envelope-followup wiring (RFC-148: the scattered
 // envelopeFollowup* fields are now the `promptMode` followup arm).
 //
@@ -155,6 +156,7 @@ describeEachProvider('RFC-042 runner envelope followup (promptMode followup arm)
       },
       () =>
         runNode({
+          memorySnapshots: composeTaskMemorySnapshotPort(),
           taskId: h.taskId,
           nodeRunId,
           nodeId: 'n1',
@@ -188,6 +190,7 @@ describeEachProvider('RFC-042 runner envelope followup (promptMode followup arm)
     await seedReleasedSession(h.db, h.taskId, 'opc_followup_test_02')
     await withEnv({ MOCK_OPENCODE_OUTPUTS: JSON.stringify({ design: 'OK' }) }, () =>
       runNode({
+        memorySnapshots: composeTaskMemorySnapshotPort(),
         taskId: h.taskId,
         nodeRunId,
         nodeId: 'n1',
@@ -227,6 +230,7 @@ describeEachProvider('RFC-042 runner envelope followup (promptMode followup arm)
     // When followup is on, that file must NOT be created.
     await withEnv({ MOCK_OPENCODE_OUTPUTS: JSON.stringify({ design: 'OK' }) }, () =>
       runNode({
+        memorySnapshots: composeTaskMemorySnapshotPort(),
         taskId: h.taskId,
         nodeRunId,
         nodeId: 'n1',
@@ -272,6 +276,7 @@ describeEachProvider('RFC-042 runner envelope followup (promptMode followup arm)
       },
       () =>
         runNode({
+          memorySnapshots: composeTaskMemorySnapshotPort(),
           taskId: h.taskId,
           nodeRunId,
           nodeId: 'n1',

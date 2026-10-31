@@ -55,7 +55,7 @@ test('platform archive and retention retain only neutral ports and machinery', (
   for (const path of [
     'platform/persistence/sqlite/systemMaintenanceRetention.ts',
     'platform/persistence/sqlite/systemEventsArchive.ts',
-    'platform/background/maintenanceSystemOperations.ts',
+    'modules/system-operations/infrastructure/maintenanceSystemOperations.ts',
   ]) {
     const text = read(path)
     expect(references(path, text)).toEqual([])

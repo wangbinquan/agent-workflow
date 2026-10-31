@@ -15,10 +15,7 @@ import { join } from 'node:path'
 import { composeNodeRunPromptOperations } from './nodeRunPrompts'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { FusionEngineTaskOperations } from '@/modules/knowledge-evolution/public/participants'
-import {
-  createClarifyRepairParticipant,
-  createReviewRepairParticipant,
-} from '@/modules/collaboration/composition'
+import type { CollaborationRepairPorts } from '../application/ports/collaborationRepair'
 import type { BuildScheduleLaunch } from '@/services/scheduledTasks'
 import type { CommittedEventConsumerDefinition } from '@/platform/events/committed/types'
 import type { TaskExecutionModule } from '../composition'
@@ -82,7 +79,6 @@ import {
 import { createRepositoryPreparationRetryCommand } from '../infrastructure/repositoryPreparationRetryCommand'
 import { composeTaskExecutionRuntime, type TaskExecutionRuntime } from './runtimeAssembly'
 import { composeTaskAutoResumeCommand } from './taskAutoResume'
-import { composeTaskClarifyDirectiveRouteOperations } from './taskClarifyDirectiveRoutes'
 import {
   createBuildScheduleLaunch,
   createTaskExecutionTriggerParticipant,
@@ -191,6 +187,7 @@ export interface TaskExecutionProviderRuntimeDependencies<
   readonly historyRestrictions: HistoryRestrictionPort
   readonly persistence: TaskExecutionPersistence
   readonly execution: TaskExecutionBinding
+  readonly collaborationRepair: CollaborationRepairPorts
   readonly finalizeWorkspace: (taskId: string) => Promise<void>
   readonly log: TaskExecutionRuntimeParticipantsInput['log']
   readonly coordinatorFactory: TaskDriveCoordinatorFactory
@@ -221,6 +218,7 @@ export interface TaskExecutionProviderRuntimeDependencies<
     ProviderRouteOperationsAssembled
   > & {
     readonly collaboration: C
+    readonly clarifyDirective: TaskClarifyDirectiveRouteOperations
   }
   readonly lifecycleRepair: Omit<AutomaticTaskRepairOptions, 'resume'>
   readonly fusion: Omit<
@@ -336,8 +334,7 @@ export function composeTaskExecutionProviderRuntime<C extends RouteCollaboration
     launches,
     repair: {
       collaborationRuntime: dependencies.runtime.collaborationRuntime,
-      clarify: createClarifyRepairParticipant(db),
-      review: createReviewRepairParticipant(db),
+      ...dependencies.collaborationRepair,
     },
     ...routeDependencies,
     historyRestrictions: dependencies.historyRestrictions,
@@ -423,7 +420,7 @@ export function composeTaskExecutionProviderRuntime<C extends RouteCollaboration
     }),
     routes: Object.freeze({
       tasks: taskRoutes,
-      clarifyDirective: composeTaskClarifyDirectiveRouteOperations(routeDependencies.collaboration),
+      clarifyDirective: routeDependencies.clarifyDirective,
     }),
     workgroupTaskRoom: composeWorkgroupTaskRoomTaskParticipantFactory({
       collaboration: dependencies.workgroupTaskRoom.collaboration,

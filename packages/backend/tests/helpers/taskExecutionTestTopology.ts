@@ -1,3 +1,6 @@
+import { composeCollaborationTaskRolePolicy } from '@/modules/resource-catalog/composition'
+import { composeTaskMemorySnapshotPort } from '@/modules/memory/composition'
+import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import { epoch2RuntimeTestPorts } from './epoch2RuntimePorts'
 import { o2Ports } from './o2Closure'
 // RFC-395 II-pre：GC 改接生产 workspaceMaintenance，断言其回执及实际目录 / 行状态。
@@ -130,6 +133,7 @@ export function singleProcessDeploymentPorts(db: DbClient) {
     coordinatorFactory: testDriveFactory(
       db,
       createDatabaseTaskDriverLifecyclePort({
+        humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
         db,
         log,
@@ -154,12 +158,14 @@ export function composeTaskExecutionTestRuntime(
 ) {
   const identity = createTaskExecutionTestIdentity(db)
   const persistence = createTaskExecutionPersistence(db, {
+    humanGateOpen: composeHumanGateOpenParticipantFactory(),
     historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
     recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
   })
   return composeTaskExecutionRuntime({
     readModels: persistence.reads,
     participants: createTaskExecutionRuntimeParticipants({
+      memorySnapshots: composeTaskMemorySnapshotPort(),
       historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
       taskRunBinding: composeLegacyTaskRunDriveBinding({
         taskAgentRunsFor: composeLocalTaskAgentRunFamilyFor,
@@ -176,6 +182,7 @@ export function composeTaskExecutionTestRuntime(
       observationInvocations: composeRunObservationCalls(db),
       memoryInjectionQueries: sqliteMemoryInjectionQueries(db),
       collaborationRuntime: createCollaborationRuntimeMechanics(db, {
+        taskRolePolicy: composeCollaborationTaskRolePolicy(),
         ...epoch2RuntimeTestPorts(db),
         taskLock: o2Ports(db).taskLock,
         ...{ upstreamAgents: o2Ports(db).upstreamAgents },
@@ -300,6 +307,7 @@ export function runTaskWithRealTestTopology(
   const persistence =
     options.persistence ??
     createTaskExecutionPersistence(options.db, {
+      humanGateOpen: composeHumanGateOpenParticipantFactory(),
       historyRestrictions: epoch2RuntimeTestPorts(options.db).historyRestrictions,
       recoveryHumanGates: o2Ports(options.db).collaborationReads.recovery,
     })
@@ -341,6 +349,7 @@ export function runTaskWithRealTestTopology(
   const runtime = composeTaskExecutionRuntime({
     readModels: persistence.reads,
     participants: createTaskExecutionRuntimeParticipants({
+      memorySnapshots: composeTaskMemorySnapshotPort(),
       historyRestrictions: epoch2RuntimeTestPorts(options.db).historyRestrictions,
       taskRunBinding: composeLegacyTaskRunDriveBinding({
         taskAgentRunsFor: (binding) =>
@@ -358,6 +367,7 @@ export function runTaskWithRealTestTopology(
       memoryInjectionQueries,
       observationInvocations,
       collaborationRuntime: createCollaborationRuntimeMechanics(options.db, {
+        taskRolePolicy: composeCollaborationTaskRolePolicy(),
         ...epoch2RuntimeTestPorts(options.db),
         taskLock: o2Ports(options.db).taskLock,
         ...{
@@ -386,6 +396,7 @@ export function runTaskWithRealTestTopology(
   })
   return driveTaskEngineApplication(
     {
+      memorySnapshots: composeTaskMemorySnapshotPort(),
       ...options,
       nodeRunPrompts,
       portArtifacts,
@@ -404,6 +415,7 @@ export function runTaskWithRealTestTopology(
       collaborationRuntime:
         options.collaborationRuntime ??
         createCollaborationRuntimeMechanics(options.db, {
+          taskRolePolicy: composeCollaborationTaskRolePolicy(),
           ...epoch2RuntimeTestPorts(options.db),
           taskLock: o2Ports(options.db).taskLock,
           ...{
@@ -427,12 +439,14 @@ export function runTaskWithRealTestTopology(
         createChildExecutionLaunchOperations({
           db: options.db,
           persistence: createChildPersistence(options.db, {
+            humanGateOpen: composeHumanGateOpenParticipantFactory(),
             historyRestrictions: epoch2RuntimeTestPorts(options.db).historyRestrictions,
             recoveryHumanGates: o2Ports(options.db).collaborationReads.recovery,
           }),
           coordinatorFactory: testDriveFactory(
             options.db,
             createDatabaseTaskDriverLifecyclePort({
+              humanGateOpen: composeHumanGateOpenParticipantFactory(),
               historyRestrictions: epoch2RuntimeTestPorts(options.db).historyRestrictions,
               db: options.db,
               log: createLogger('task'),

@@ -1,3 +1,4 @@
+import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import {
   nodeRunFixture,
@@ -1090,6 +1091,7 @@ describeEachProvider('platform execution contracts — 数字员工执行端口'
       ...composeDatabaseDigitalEmployeeExecutionPorts(
         db,
         epoch2RuntimeTestPorts(db).historyRestrictions,
+        composeHumanGateOpenParticipantFactory(),
       ),
       executionContracts: null as never,
     })
@@ -1142,6 +1144,7 @@ describeEachProvider('platform execution contracts — 数字员工执行端口'
       ...composeDatabaseDigitalEmployeeExecutionPorts(
         db,
         epoch2RuntimeTestPorts(db).historyRestrictions,
+        composeHumanGateOpenParticipantFactory(),
       ),
       executionContracts: null as never,
     })

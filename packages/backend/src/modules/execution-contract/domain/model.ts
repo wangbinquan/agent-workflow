@@ -1,5 +1,9 @@
 import { z } from 'zod'
-import { utf16MaxLength, utf16MinLength } from '@agent-workflow/shared'
+import {
+  EXECUTION_CONTRACT_RESULT_PORT,
+  utf16MaxLength,
+  utf16MinLength,
+} from '@agent-workflow/shared'
 
 export interface LocalizedContractText {
   'zh-CN': string
@@ -565,7 +569,7 @@ export function validateExactContractOutput(input: {
   return JSON.stringify(record)
 }
 
-export const EXECUTION_CONTRACT_RESULT_PORT = 'agent-result'
+export { EXECUTION_CONTRACT_RESULT_PORT } from '@agent-workflow/shared'
 export const EXECUTION_CONTRACT_SCRIPT_INPUT_PORT = 'contract-input'
 export const EXECUTION_CONTRACT_SCRIPT_INPUT_ENV = 'AW_PORT_CONTRACT_INPUT'
 export const EXECUTION_CONTRACT_SCRIPT_INPUT_FILE_ENV = 'AW_PORT_FILE_CONTRACT_INPUT'

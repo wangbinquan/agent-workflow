@@ -87,6 +87,7 @@ type DriveOptions = Parameters<typeof driveTaskEngineApplication>[0]
 /** 九个由 bootstrap 交齐的依赖。少任何一个都不该是合法的 drive 参数。 */
 type ComposedDependencies = Pick<
   DriveOptions,
+  | 'memorySnapshots'
   | 'memoryInjectionQueries'
   | 'persistence'
   | 'runtimeSessionLeases'
@@ -112,6 +113,7 @@ type NoneMayBeAbsent = {
 
 const _noneMayBeAbsent: NoneMayBeAbsent = {
   memoryInjectionQueries: true,
+  memorySnapshots: true,
   persistence: true,
   runtimeSessionLeases: true,
   runtimeRegistry: true,

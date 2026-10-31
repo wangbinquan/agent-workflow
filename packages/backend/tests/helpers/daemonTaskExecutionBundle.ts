@@ -1,3 +1,4 @@
+import { composeTaskMemorySnapshotPort } from '@/modules/memory/composition'
 import { epoch2RuntimeTestPorts } from './epoch2RuntimePorts'
 import { composeSourceControlTaskPorts } from '@/modules/task-execution/composition'
 import { readTaskFixtures, taskFixture, workflowFixture } from './model'
@@ -121,6 +122,7 @@ export function taskBundleInput(
       owners: composeOwnerIdentityQueries(db),
     },
     memory: {
+      memorySnapshots: composeTaskMemorySnapshotPort(),
       memoryInjectionQueries: composeMemoryInjectionQueriesFor(db),
       memoryOperations: {
         distillCommands: {

@@ -1,3 +1,4 @@
+import { composeTaskMemorySnapshotPort } from '@/modules/memory/composition'
 // RFC-042 §A2 / §A6 / §5.5 — RFC-039 "Keep clarifying" strong-bias passthrough
 // to the same-session follow-up prompt.
 //
@@ -114,6 +115,7 @@ describeEachProvider('RFC-042 follow-up + RFC-039 directive bias passthrough', (
     const nodeRunId = await insertNodeRun(h.db, h.taskId)
     await withEnv({ MOCK_OPENCODE_OUTPUTS: JSON.stringify({ design: 'OK' }) }, () =>
       runNode({
+        memorySnapshots: composeTaskMemorySnapshotPort(),
         taskId: h.taskId,
         nodeRunId,
         nodeId: 'n',
@@ -145,6 +147,7 @@ describeEachProvider('RFC-042 follow-up + RFC-039 directive bias passthrough', (
     const nodeRunId = await insertNodeRun(h.db, h.taskId)
     await withEnv({ MOCK_OPENCODE_OUTPUTS: JSON.stringify({ design: 'OK' }) }, () =>
       runNode({
+        memorySnapshots: composeTaskMemorySnapshotPort(),
         taskId: h.taskId,
         nodeRunId,
         nodeId: 'n',

@@ -82,4 +82,20 @@ platform。2026-10-30 进度对账（RFC-294 [review-2026-10-30](../RFC-294-back
    不搬 1,972 行的 `isolation.ts`。（Codex 研究建议放 shared，本会话改放 platform：前端不用它。）
 10. **被移走的实现不在原位置留 facade**：facade 本身就会保留被禁止的依赖。
 11. **一个 RFC 两部分**（A：context DAG；B：platform 与再导出桶），分两次派发 Codex 实施，全部实现与用例完成后集中验证一次。
-12. **偏离项**：无。
+12. **偏离项**：落档时无；实施中接受的偏差见下条，逐条记录在 plan「实施记录」。
+13. **实施中接受的偏差**（2026-10-31，本会话审核后决定）：
+    - `services/taskCollab.ts` 删除而不是保留：A1 之后它已没有生产消费者，保留会让不可达文件 27 → 28；测试改为直接引用 collaboration。
+    - A10 端口的渲染返回 `string | null`：沿用 memory domain 对空快照返回 `null` 的现有行为。
+    - A7 的 RC 端口复用 runtime-management 的三个合同类型：这条类型依赖原在 RC composition 文件里，随端口迁入 `application/ports`，
+      越界 offered 精确清单因此新增一条（`W4-E` 清偿），总数仍由 61 降到 54。
+    - 维护作业体搬回 owner 后，TE / RC 作业体要用的三个 legacy 函数与 DE 内置工具目录的四个模板帮助改由 bootstrap 注入，
+      模块不新增对 `services/` 的引用（RFC-317 R2 账本不增）。
+    - `services/task.ts`、`services/upload.ts`、`services/humanGateContinuationEffects.ts` 新增 7 条 R1 记录：它们替换了同一 legacy
+      文件原先经 TE composition 或 platform 的间接依赖，变得可见；R1 净减 2 条，归 W9-D。
+    - DAG 新登记 17 条 required-SPI 虚线（工厂、作用域与子端口按实际类型名分别登记），多于落档时列出的 10 条。
+    - 门函数 `contextPairsOffDag` 增加只供负例使用的 `throughServices` 选项，默认口径不变。
+    - 维护作业处理器经各模块 `composition.ts` 交给 bootstrap，不走 design 原写的 `public/commands`：处理器签名带
+      `@/platform/contracts/maintenanceJob` 类型，`rfc294-architecture-preflight` 的 W0-R 公共面精确账本不允许 public 合同
+      出现 platform 类型，走 public 会新增 23 条偏差。只给 bootstrap 用的出口走 composition，与 `runDigitalEmployeeOsCycle` 同形。
+    - SO `backupPrune` 在没有数据库备份实现时清理本地 `backups/` 目录，这段搬到 `system-operations/infrastructure/local/localBackupPrune.ts`，
+      由 SO composition 注入作业体：`rfc346-system-operations-contracts` 禁止 SO application 层引用 `node:path`。

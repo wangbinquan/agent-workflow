@@ -1,3 +1,4 @@
+import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import { epoch2ReviewReader } from './helpers/epoch2RuntimePorts'
 import { nodeRunFixtureColumns } from './helpers/model/nodeRun'
 import { tablesOf } from '@/platform/persistence/sessionTables'
@@ -219,6 +220,7 @@ async function buildHarness(): Promise<Harness> {
       inputs: { topic: 'orders' },
     },
     {
+      humanGateOpen: composeHumanGateOpenParticipantFactory(),
       db,
       schedulerDriver: createTaskExecutionTestTopology({ db, driver: 'real' }).schedulerDriver,
       appHome,

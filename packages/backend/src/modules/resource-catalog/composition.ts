@@ -38,3 +38,14 @@ export function composeReviewUpstreamAgents(db: PersistenceDb) {
 }
 
 export { createMcpRuntimeTestEventRetentionPhase } from './infrastructure/retentionPhase'
+
+import { composeCollaborationTaskRolePolicy as bindCollaborationTaskRolePolicy } from './application/adapters/collaboration-adapter'
+import { resolveTaskRole } from './application/resourceDefaults'
+import { hasResourceAclBypass } from './domain/resourceAccess'
+
+export function composeCollaborationTaskRolePolicy() {
+  return bindCollaborationTaskRolePolicy({ resolveTaskRole, hasResourceAclBypass })
+}
+
+// RFC-399 B1: bootstrap's maintenance job table takes these handlers via composition.
+export { createResourceCatalogMaintenanceJobHandlers } from './application/maintenanceJobs'

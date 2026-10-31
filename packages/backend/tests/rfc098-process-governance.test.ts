@@ -1,3 +1,4 @@
+import { composeTaskMemorySnapshotPort } from '@/modules/memory/composition'
 // RFC-098 WP-8 — process-tree governance oracle (scheduler audit S-15).
 //
 // The cooperative mock-opencode dies on first SIGTERM, so it can never
@@ -260,6 +261,7 @@ describe('RFC-098 WP-8 — runner escalation against a stubborn child', () => {
     const t0 = Date.now()
     const result = await withEnv({ STUBBORN_OPENCODE_GRANDCHILD_PID_FILE: h.pidFile }, () =>
       runNode({
+        memorySnapshots: composeTaskMemorySnapshotPort(),
         taskId: h.taskId,
         nodeRunId,
         nodeId: 'node1',
@@ -303,6 +305,7 @@ describe('RFC-098 WP-8 — runner escalation against a stubborn child', () => {
     const controller = new AbortController()
     const runPromise = withEnv({ STUBBORN_OPENCODE_GRANDCHILD_PID_FILE: h.pidFile }, () =>
       runNode({
+        memorySnapshots: composeTaskMemorySnapshotPort(),
         taskId: h.taskId,
         nodeRunId,
         nodeId: 'node1',

@@ -1,3 +1,4 @@
+import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { legacyContentRef } from '@/platform/content/contentRef'
 import { contentRowColumns } from '@/platform/content/infrastructure/contentStore'
@@ -143,6 +144,7 @@ describeEachProvider(
       // Run only invariants. R1 should be inserted; S1 must NOT be resolved.
       await runLifecycleInvariants({
         operations: createTaskExecutionPersistence(env.db, {
+          humanGateOpen: composeHumanGateOpenParticipantFactory(),
           historyRestrictions: epoch2RuntimeTestPorts(env.db).historyRestrictions,
           recoveryHumanGates: o2Ports(env.db).collaborationReads.recovery,
         }).recoveryAdministration,
@@ -177,6 +179,7 @@ describeEachProvider(
 
       await runStuckTaskDetector({
         operations: createTaskExecutionPersistence(env.db, {
+          humanGateOpen: composeHumanGateOpenParticipantFactory(),
           historyRestrictions: epoch2RuntimeTestPorts(env.db).historyRestrictions,
           recoveryHumanGates: o2Ports(env.db).collaborationReads.recovery,
         }).recoveryAdministration,
@@ -291,6 +294,7 @@ describeEachProvider('RFC-053 — multi-task reconcile isolation', (harness) => 
 
     const result = await runLifecycleInvariants({
       operations: createTaskExecutionPersistence(env.db, {
+        humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(env.db).historyRestrictions,
         recoveryHumanGates: o2Ports(env.db).collaborationReads.recovery,
       }).recoveryAdministration,
@@ -364,6 +368,7 @@ describeEachProvider('RFC-053 — deleted task is invisible to both modules', (h
     })
     const r = await runLifecycleInvariants({
       operations: createTaskExecutionPersistence(env.db, {
+        humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(env.db).historyRestrictions,
         recoveryHumanGates: o2Ports(env.db).collaborationReads.recovery,
       }).recoveryAdministration,
@@ -382,6 +387,7 @@ describeEachProvider('RFC-053 — deleted task is invisible to both modules', (h
     })
     const r = await runStuckTaskDetector({
       operations: createTaskExecutionPersistence(env.db, {
+        humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(env.db).historyRestrictions,
         recoveryHumanGates: o2Ports(env.db).collaborationReads.recovery,
       }).recoveryAdministration,
@@ -402,6 +408,7 @@ describeEachProvider('RFC-053 — terminal task is invisible to stuck-detector',
     await seedTask(env.db, 'done', { startedAt: T0 - 24 * 60 * MIN_MS })
     const r = await runStuckTaskDetector({
       operations: createTaskExecutionPersistence(env.db, {
+        humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(env.db).historyRestrictions,
         recoveryHumanGates: o2Ports(env.db).collaborationReads.recovery,
       }).recoveryAdministration,
@@ -416,6 +423,7 @@ describeEachProvider('RFC-053 — terminal task is invisible to stuck-detector',
     await seedTask(env.db, 'canceled', { startedAt: T0 - 24 * 60 * MIN_MS })
     const r = await runStuckTaskDetector({
       operations: createTaskExecutionPersistence(env.db, {
+        humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(env.db).historyRestrictions,
         recoveryHumanGates: o2Ports(env.db).collaborationReads.recovery,
       }).recoveryAdministration,

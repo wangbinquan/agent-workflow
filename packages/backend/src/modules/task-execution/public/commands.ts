@@ -151,8 +151,10 @@ export interface WorkgroupTurnsOperations {
   }): Promise<WorkgroupTurnsOutcome>
 }
 
-export const WORKGROUP_TURN_LEADER_NODE_ID = '__wg_leader__'
-export const WORKGROUP_TURN_MEMBER_NODE_ID = '__wg_member__'
+export {
+  WORKGROUP_TURN_LEADER_NODE_ID,
+  WORKGROUP_TURN_MEMBER_NODE_ID,
+} from '@agent-workflow/shared'
 
 export interface WorkgroupHostLedgerRun {
   readonly selection: WorkgroupRunSelectionProjection

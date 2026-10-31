@@ -19,7 +19,7 @@ import {
 } from './helpers/providerHttpApplicationScope'
 import { createUser } from './helpers/userFixture'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
-import { DISTILL_CAPTURE_FAILED_KIND } from '../src/services/runtime'
+import { DISTILL_CAPTURE_FAILED_KIND } from '../src/modules/memory/domain/distillCapture'
 
 const DAEMON_TOKEN = 'a'.repeat(64)
 

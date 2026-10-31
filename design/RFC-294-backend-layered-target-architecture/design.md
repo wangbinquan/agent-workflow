@@ -197,6 +197,23 @@ flowchart LR
   INTEG -. "implements event-source-routing-spi" .-> EC
   RC -. "implements contract-resource-projection-spi" .-> XC
   TE -. "implements contract-fixture-spi" .-> XC
+  RC -. "implements CollaborationTaskRolePolicy" .-> COL
+  COL -. "implements TaskMembershipOperationsPort" .-> TE
+  RC -. "implements IntegrationTriggerSnapshotFactory" .-> INTEG
+  TE -. "implements McpDiagnosticExecution" .-> RC
+  TE -. "implements McpDiagnosticExecutionFactory" .-> RC
+  COL -. "implements GateWorkspaceRollbackExecutor" .-> TE
+  COL -. "implements TaskClarifyContinuationPort" .-> TE
+  COL -. "implements CollaborationRepairPorts" .-> TE
+  COL -. "implements TaskClarifyRepairPort" .-> TE
+  COL -. "implements TaskReviewRepairPort" .-> TE
+  COL -. "implements TaskClarifyDirectiveRouteOperations" .-> TE
+  COL -. "implements TaskReviewersPort" .-> TE
+  COL -. "implements HumanGateOpenParticipantFactory" .-> TE
+  COL -. "implements HumanGateOpenParticipantScope" .-> TE
+  COL -. "implements HumanGateOpenParticipantInTx" .-> TE
+  MEM -. "implements TaskMemorySnapshotPort" .-> TE
+  SC -. "implements RepositoryPreparationLookup" .-> TE
 ```
 
 虚线上的端口名是当时设计的称呼；代码中的实际类型名以实现它的后继 RFC 为准（例如 RFC-368 对 Reaction 两个端口的命名）。
@@ -219,9 +236,9 @@ DAG 中。所有含 command / query 的 context 还对 `identity-access/public/t
   不把业务顺序塞进 bootstrap。
 - DAG 外出现双向同步需要时，默认改为 port / event；确属遗漏的共同聚合须新 RFC 证明。
 
-**现状偏差（2026-10-16）**：值级 import 上存在两个 context 环——{collaboration, memory, resource-catalog, task-execution} 与
-{development-automation, integration}，以及若干逆 DAG 的 offered 边与跨 context 内部 import（review F3）。它们是待清偿的
-债（plan S5），不是目标形态；本表与生成器常量是唯一的目标边集。
+**现状偏差（2026-10-31）**：RFC-399 已消除原有的两个 context 值级环
+（{collaboration, memory, resource-catalog, task-execution} 与 {development-automation, integration}）及越 DAG 的值级依赖对。
+仅剩 type-only 越 DAG offered 边与跨 context 内部文件对，作为 S5/S6 待清偿债；本表与生成器常量是唯一的目标边集。
 
 ### 3.2 受控 public entrypoints
 

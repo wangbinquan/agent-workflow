@@ -1,3 +1,4 @@
+import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 // RFC-395 II-pre：生产启动 / 延续依赖及工作区租约改接线，保留既有断言。
 // RFC-097 — resume/retry 任务级互斥竞态 oracle（design/RFC-097-task-status-cas/design.md §3 / §7.3）。
 //
@@ -205,6 +206,7 @@ function deps(h: Harness, mockPath: string) {
   // through both resumeTask and retryNode so fail-mock stays one-shot — without
   // it the scheduler's default budget (3) would inflate the count-* oracles.
   return {
+    humanGateOpen: composeHumanGateOpenParticipantFactory(),
     db: h.db,
     schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' }).schedulerDriver,
     taskRecoveryOperations: taskRecoveryOperations(h.db),
@@ -298,11 +300,15 @@ describe('RFC-097 — resume/retry 任务级互斥（并发恰一胜 + 零污染
 
   test('真并发双 retry：恰一胜（409 task-still-running）；输者零占位行污染', async () => {
     const results = await Promise.allSettled([
-      createRetryEngine(h.db, { resumeWith: deps(h, h.doneMock) }).retry({
+      createRetryEngine(h.db, {
+        resumeWith: deps(h, h.doneMock),
+      }).retry({
         taskId: h.taskId,
         nodeRunId: h.failedRunId,
       }),
-      createRetryEngine(h.db, { resumeWith: deps(h, h.doneMock) }).retry({
+      createRetryEngine(h.db, {
+        resumeWith: deps(h, h.doneMock),
+      }).retry({
         taskId: h.taskId,
         nodeRunId: h.failedRunId,
       }),
@@ -360,7 +366,9 @@ describe('RFC-097 — resume/retry 任务级互斥（并发恰一胜 + 零污染
 
     let retryErr: { code?: string; message?: string } | undefined
     try {
-      await createRetryEngine(h.db, { resumeWith: deps(h, h.doneMock) }).retry({
+      await createRetryEngine(h.db, {
+        resumeWith: deps(h, h.doneMock),
+      }).retry({
         taskId: h.taskId,
         nodeRunId: h.failedRunId,
         cascade: true,

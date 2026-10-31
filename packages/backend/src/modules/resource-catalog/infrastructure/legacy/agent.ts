@@ -63,7 +63,7 @@ import { monotonicNow } from '@/util/time'
 import {
   reconcileCreatedAgentExecutionContractPorts,
   reconcileUpdatedAgentExecutionContractPorts,
-} from '@/modules/execution-contract/public/commands'
+} from '@/modules/resource-catalog/domain/agentExecutionContractPorts'
 
 import {
   agentContentPersistenceValues,

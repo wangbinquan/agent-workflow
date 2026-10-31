@@ -1,3 +1,4 @@
+import { composeTaskMemorySnapshotPort } from '@/modules/memory/composition'
 import { createTaskArchiveNodeRunSectionReader } from '@/modules/task-execution/infrastructure/taskArchiveContentCoordinator'
 import { seedNodeRunDisplayEvidence } from './helpers/rfc395Q1Evidence'
 import { buildActor } from '@/auth/actor'
@@ -518,7 +519,11 @@ describeEachProvider('RFC-395 N-b wave-2 functional regressions', (h) => {
     }
     const display = TaskNodeRunsSchema.parse(
       await taskNodeRunsProjection(
-        { db: h.db, clarifyNav: { latestRoundStatusByRun: async () => new Map() } },
+        {
+          memorySnapshots: composeTaskMemorySnapshotPort(),
+          db: h.db,
+          clarifyNav: { latestRoundStatusByRun: async () => new Map() },
+        },
         't',
       ),
     )

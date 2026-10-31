@@ -303,3 +303,6 @@ export { createTaskStatusCounts } from './infrastructure/taskStatusCounts'
 export function composeSystemOperationsTaskPorts() {
   return composeDoctorTaskLifecyclePort(createTaskLifecycleCounts())
 }
+
+// RFC-399 B1: bootstrap's maintenance job table takes these handlers via composition.
+export { createTaskExecutionMaintenanceJobHandlers } from './application/maintenanceJobs'

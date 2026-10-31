@@ -1,3 +1,4 @@
+import { composeTaskMemorySnapshotPort } from '@/modules/memory/composition'
 import { nodeRunFixture, taskFixture, workflowFixture } from './helpers/model'
 import { readTaskAgentSources } from './helpers/taskAgentSource'
 // RFC-123 follow-up — enforce STOP CLARIFYING against a disobedient agent.
@@ -164,6 +165,7 @@ const CLARIFY_BODY = JSON.stringify({
 function runStoppedNode(h: Harness, nodeRunId: string, opts: { stopped?: true }) {
   return withEnv({ MOCK_OPENCODE_CLARIFY_BODY: CLARIFY_BODY }, () =>
     runNode({
+      memorySnapshots: composeTaskMemorySnapshotPort(),
       taskId: h.taskId,
       nodeRunId,
       nodeId: 'asker',

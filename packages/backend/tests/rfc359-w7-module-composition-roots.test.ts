@@ -1,3 +1,4 @@
+import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { createTaskCodeWorkspaceQueries } from '@/modules/task-execution/composition'
 import { o2Ports } from './helpers/o2Closure'
@@ -322,6 +323,7 @@ describeEachProvider('RFC-359 W7 —— development-automation / source-control 
           db: harness.db,
           appHome,
           terminalMaintenance: createTaskExecutionPersistence(asSqlite(harness.db), {
+            humanGateOpen: composeHumanGateOpenParticipantFactory(),
             historyRestrictions: epoch2RuntimeTestPorts(asSqlite(harness.db)).historyRestrictions,
             recoveryHumanGates: o2Ports(asSqlite(harness.db)).collaborationReads.recovery,
           }).terminalMaintenance,

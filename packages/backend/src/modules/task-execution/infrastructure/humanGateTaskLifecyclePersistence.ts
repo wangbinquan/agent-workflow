@@ -1,3 +1,8 @@
+import type {
+  HumanGateOpenParticipantFactory,
+  HumanGateOpenParticipantScope,
+  HumanGateOpenParticipantInTx,
+} from '../application/ports/humanGateOpenFactory'
 import type { HistoryRestrictionPort } from '@/platform/contracts/historyRestriction'
 import { taskAggregateWrite } from './taskDefinitionWriteParticipant'
 import { tablesOf } from '@/platform/persistence/sessionTables'
@@ -19,8 +24,6 @@ import { createHumanGatePersistenceParticipantInTx } from './humanGatePersistenc
 
 import { eq } from 'drizzle-orm'
 
-import { DatabaseHumanGateOpenParticipantInTx } from '@/modules/collaboration/infrastructure/humanGateOpenParticipant'
-import { DatabaseHumanGateOperationJournal } from '@/modules/collaboration/infrastructure/humanGateOperationJournal'
 import { publishCommittedEventsAfterCommit } from '@/platform/events/committed/runtime'
 import { committedEventGroupId } from '@/platform/events/committed/types'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
@@ -86,28 +89,28 @@ async function parkRevision(
 }
 
 export class DatabaseHumanGateTaskLifecyclePersistence implements HumanGateTaskLifecycle {
-  private readonly journal: DatabaseHumanGateOperationJournal
+  private readonly gates: HumanGateOpenParticipantScope
 
   constructor(
     private readonly db: PersistenceDb,
     private readonly runtimeLifecycle: DrizzleTaskRuntimeLifecyclePersistence,
-    private readonly options: { readonly historyRestrictions: HistoryRestrictionPort },
+    options: {
+      readonly historyRestrictions: HistoryRestrictionPort
+      readonly humanGateOpen: HumanGateOpenParticipantFactory
+    },
   ) {
-    this.journal = new DatabaseHumanGateOperationJournal(
-      createHumanGatePersistenceParticipantInTx,
-      options?.historyRestrictions,
-    )
+    this.gates = options.humanGateOpen({
+      taskPersistenceInTransaction: createHumanGatePersistenceParticipantInTx,
+      historyRestrictions: options.historyRestrictions,
+    })
   }
 
-  private gatesIn(tx: TaskExecutionTransaction): DatabaseHumanGateOpenParticipantInTx {
-    return new DatabaseHumanGateOpenParticipantInTx(
-      tx,
-      this.journal,
-      createNodeRunMintParticipantInTx(tx),
-      createNodeRunLifecycleParticipantInTx(tx),
-      createConsumedInputsParticipantInTx(),
-      this.options?.historyRestrictions,
-    )
+  private gatesIn(tx: TaskExecutionTransaction): HumanGateOpenParticipantInTx {
+    return this.gates.inTransaction(tx, {
+      mint: createNodeRunMintParticipantInTx(tx),
+      lifecycle: createNodeRunLifecycleParticipantInTx(tx),
+      consumedInputs: createConsumedInputsParticipantInTx(),
+    })
   }
 
   async parkPrepared(

@@ -6,14 +6,14 @@ import { postgresqlSerializationFailureCode } from '@/platform/persistence/postg
 import { createLogger } from '@/util/log'
 import type { ClaimedMaintenanceRun, MaintenanceRunStore } from './maintenanceRunStorePort'
 import { MAINTENANCE_CATALOG_DIGEST } from './maintenanceCatalog'
-import { runMaintenanceJob, type MaintenanceOwnerCommands } from './maintenanceJobRunner'
+import { runMaintenanceJob } from './maintenanceJobRunner'
+import type { MaintenanceJobHandlers } from '@/platform/contracts/maintenanceJob'
 import { installMaintenanceWorkerErrorBoundary } from './maintenanceWorkerErrorBoundary'
 import { MAINTENANCE_PROTOCOL_VERSION, type MaintenanceWorkerEvent } from './maintenanceProtocol'
 import {
-  openMaintenanceWorkerEffectsScope,
+  type MaintenanceWorkerEffectsContext,
   type MaintenanceWorkerEffectsDescriptor,
   type MaintenanceWorkerEffectsScope,
-  type MaintenanceWorkerEffectsSelections,
 } from './maintenanceWorkerEffects'
 import { readMaintenanceWorkerEffectsFrame } from './maintenanceWorkerEffectsProtocol'
 import {
@@ -34,24 +34,29 @@ export interface MaintenanceWorkerObservers {
 
 export interface MaintenanceWorkerGraph {
   readonly store: MaintenanceRunStore
-  readonly ownerCommands: MaintenanceOwnerCommands
+  readonly handlers: MaintenanceJobHandlers
   readonly busyDeferralCounter: 'sqliteBusyDeferrals' | 'postgresqlTransientDeferrals'
   close(): Promise<void>
 }
 
-export type MaintenanceWorkerGraphFactory = (input: {
+export type MaintenanceWorkerGraphFactory<Selection extends object> = (input: {
   readonly request: MaintenanceWorkerInitRequest
   readonly appHome: string
-  readonly effects: MaintenanceWorkerEffectsSelections | undefined
+  readonly effects: Selection | undefined
   readonly observe: MaintenanceWorkerObservers
   /** Register immediately after open, so failed composition still closes after effects. */
   readonly registerConnectionClose: (close: () => Promise<void>) => void
 }) => Promise<MaintenanceWorkerGraph>
 
-export function runMaintenanceWorker({
+export function runMaintenanceWorker<Selection extends object>({
   composeGraph,
+  openEffectsScope,
 }: {
-  readonly composeGraph: MaintenanceWorkerGraphFactory
+  readonly composeGraph: MaintenanceWorkerGraphFactory<Selection>
+  readonly openEffectsScope: (input: {
+    readonly descriptor: MaintenanceWorkerEffectsDescriptor
+    readonly context: Omit<MaintenanceWorkerEffectsContext, 'configurationJson'>
+  }) => MaintenanceWorkerEffectsScope<Selection>
 }): void {
   const LEASE_MS = 60 * 60 * 1_000
   const IDLE_POLL_MS = 1_000
@@ -62,8 +67,8 @@ export function runMaintenanceWorker({
   let graph: MaintenanceWorkerGraph | null = null
   let connectionClose: (() => Promise<void>) | null = null
   let store: MaintenanceRunStore | null = null
-  let workerEffectsScope: MaintenanceWorkerEffectsScope | null = null
-  let workerEffects: MaintenanceWorkerEffectsSelections | null = null
+  let workerEffectsScope: MaintenanceWorkerEffectsScope<Selection> | null = null
+  let workerEffects: Selection | null = null
   let appHome = ''
   let processing = false
   let draining = false
@@ -334,7 +339,7 @@ export function runMaintenanceWorker({
           })
           const result = await runMaintenanceJob({
             appHome,
-            ownerCommands: currentGraph.ownerCommands,
+            handlers: currentGraph.handlers,
             job,
             payload,
             ...(cursor === undefined ? {} : { cursor }),
@@ -474,7 +479,7 @@ export function runMaintenanceWorker({
         throw new Error('maintenance-worker-effects-previous-environment-not-released')
       appHome = parsed.appHome
       if (effectsDescriptor !== undefined) {
-        const scope = openMaintenanceWorkerEffectsScope({
+        const scope = openEffectsScope({
           descriptor: effectsDescriptor,
           context: { appHome, instanceRef: `aw-maintenance-worker:${ulid()}` },
         })

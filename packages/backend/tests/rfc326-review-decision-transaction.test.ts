@@ -1,3 +1,5 @@
+import { composeCollaborationTaskRolePolicy } from '@/modules/resource-catalog/composition'
+import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { nodeRunFixtureColumns } from './helpers/model/nodeRun'
 import { legacyContentRef } from '@/platform/content/contentRef'
@@ -67,7 +69,10 @@ import {
 } from '@/modules/collaboration/infrastructure/review'
 import { wakeHumanGateContinuation } from '../src/services/task'
 import { __hasTaskReviewMutationQueueForTesting } from '../src/services/reviewMutationCoordinator'
-import { hasActingMembership, updateTaskMembers } from '../src/services/taskCollab'
+import {
+  hasActingMembership,
+  updateTaskMembers,
+} from '@/modules/collaboration/infrastructure/taskCollab'
 import { DomainError } from '../src/util/errors'
 import { runGit } from '../src/util/git'
 import { TASK_CHANNEL, taskBroadcaster } from '../src/ws/broadcaster'
@@ -165,6 +170,7 @@ async function settleDecisionContinuation(
   result: Awaited<ReturnType<typeof submitReviewDecision>>,
 ): Promise<void> {
   await wakeHumanGateContinuation(result.taskId, result.continuationRef, {
+    humanGateOpen: composeHumanGateOpenParticipantFactory(),
     historyRestrictions: epoch2RuntimeTestPorts(f.db).historyRestrictions,
     db: f.db,
     appHome: f.appHome,
@@ -679,6 +685,7 @@ describe('RFC-326 AC-20 — membership changes and rollback-bearing decisions', 
     // Both calls join the task's FIFO lock in call order.
     const revoke = updateTaskMembers(
       f.db,
+      composeCollaborationTaskRolePolicy(),
       actorFor(f.owner),
       { id: f.taskId, ownerUserId: f.owner },
       { members: [] },
@@ -705,6 +712,7 @@ describe('RFC-326 AC-20 — membership changes and rollback-bearing decisions', 
     )
     const revoke = updateTaskMembers(
       f.db,
+      composeCollaborationTaskRolePolicy(),
       actorFor(f.owner),
       { id: f.taskId, ownerUserId: f.owner },
       { members: [] },
@@ -755,12 +763,24 @@ describe('RFC-326 AC-20 — membership changes and rollback-bearing decisions', 
     const staleRow = { id: f.taskId, ownerUserId: f.owner }
     // First: the owner hands the task to `extraUser`. Second (queued with the
     // row the route loaded BEFORE the transfer): the former owner adds `stranger`.
-    const transfer = updateTaskMembers(f.db, actorFor(f.owner), staleRow, {
-      ownerUserId: f.extraUser,
-    })
-    const stale = updateTaskMembers(f.db, actorFor(f.owner), staleRow, {
-      members: [{ userId: f.stranger, role: 'collaborator' }],
-    })
+    const transfer = updateTaskMembers(
+      f.db,
+      composeCollaborationTaskRolePolicy(),
+      actorFor(f.owner),
+      staleRow,
+      {
+        ownerUserId: f.extraUser,
+      },
+    )
+    const stale = updateTaskMembers(
+      f.db,
+      composeCollaborationTaskRolePolicy(),
+      actorFor(f.owner),
+      staleRow,
+      {
+        members: [{ userId: f.stranger, role: 'collaborator' }],
+      },
+    )
     await transfer
     const err = await failureOf(() => stale)
     expect((err as DomainError).code).toBe('forbidden')
@@ -787,6 +807,7 @@ describe('RFC-326 AC-20 — membership changes and rollback-bearing decisions', 
     })
     await updateTaskMembers(
       f.db,
+      composeCollaborationTaskRolePolicy(),
       actorFor(f.owner),
       { id: f.taskId, ownerUserId: f.owner },
       {
@@ -933,6 +954,7 @@ describe('RFC-326 AC-20 (impl gate) — the role written at the commit point is 
     // lock first, leaving A a collaborator by the time the decision commits.
     const transfer = updateTaskMembers(
       f.db,
+      composeCollaborationTaskRolePolicy(),
       actorFor(f.owner),
       { id: f.taskId, ownerUserId: f.owner },
       { ownerUserId: f.extraUser },
@@ -983,6 +1005,7 @@ describe('RFC-326 AC-20 (impl gate) — the role written at the commit point is 
     // A → extraUser (owner); A stays as a collaborator.
     const first = updateTaskMembers(
       f.db,
+      composeCollaborationTaskRolePolicy(),
       actorFor(f.owner),
       { id: f.taskId, ownerUserId: f.owner },
       { ownerUserId: f.extraUser },
@@ -992,6 +1015,7 @@ describe('RFC-326 AC-20 (impl gate) — the role written at the commit point is 
     // the first request is still waiting on its revalidation.
     await updateTaskMembers(
       f.db,
+      composeCollaborationTaskRolePolicy(),
       actorFor(f.extraUser),
       { id: f.taskId, ownerUserId: f.extraUser },
       {

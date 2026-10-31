@@ -1,3 +1,4 @@
+import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 // RFC-397：租约顶层使用 READ COMMITTED；刻意建立的外层 SERIALIZABLE 覆盖继续保留。
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 // RFC-395 N-a: CAS and all subordinate writes share the owner's real transaction.
@@ -148,6 +149,7 @@ describeEachProvider('RFC-395 NodeRun multi-table atomicity', (h) => {
         ownerRevision: 1,
       }),
       persistence: createTaskExecutionPersistence(h.db, {
+        humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
         recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
       }),

@@ -1,3 +1,4 @@
+import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { nodeRunFixtureColumns } from './helpers/model/nodeRun'
 import { tablesOf } from '@/platform/persistence/sessionTables'
@@ -182,6 +183,7 @@ async function seedOwnedSiblingAskers(db: PersistenceDb, taskId: string) {
     token: claimed.token,
     // The scheduler hands gate opens the driver's registered execution context.
     executionContext: createTaskExecutionContext({
+      humanGateOpen: composeHumanGateOpenParticipantFactory(),
       historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
       intentId: intent.intentId,
       token: claimed.token,
@@ -231,7 +233,10 @@ function parker(db: PersistenceDb): DatabaseHumanGateTaskLifecyclePersistence {
   return new DatabaseHumanGateTaskLifecyclePersistence(
     db,
     createTaskRuntimeLifecyclePersistence(db),
-    { historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions },
+    {
+      humanGateOpen: composeHumanGateOpenParticipantFactory(),
+      historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
+    },
   )
 }
 

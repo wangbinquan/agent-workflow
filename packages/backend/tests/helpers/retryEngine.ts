@@ -1,3 +1,5 @@
+import { composeRepositoryPreparationLookup } from '@/modules/source-control/composition'
+import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import { epoch2RuntimeTestPorts } from './epoch2RuntimePorts'
 import { o2Ports } from './o2Closure'
 import { withSourceControlTaskPorts } from './sourceControlTaskPorts'
@@ -97,6 +99,7 @@ async function driveInBackground(
   now?: () => number,
 ): Promise<void> {
   const persistence = createTaskExecutionPersistence(db, {
+    humanGateOpen: composeHumanGateOpenParticipantFactory(),
     historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
     recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
   })
@@ -139,6 +142,7 @@ export function createRetryEngine(
 ): RetryEngine {
   const appHome = options.appHome ?? mkdtempSync(join(tmpdir(), 'aw-retry-engine-'))
   const persistence = createTaskExecutionPersistence(db, {
+    humanGateOpen: composeHumanGateOpenParticipantFactory(),
     historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
     recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
   })
@@ -184,6 +188,9 @@ export function createRetryEngine(
                         }),
                       ),
                   },
+                  composeRepositoryPreparationLookup(
+                    db as unknown as Parameters<typeof retryRepositoryPreparation>[0],
+                  ),
                 )
               }
             },

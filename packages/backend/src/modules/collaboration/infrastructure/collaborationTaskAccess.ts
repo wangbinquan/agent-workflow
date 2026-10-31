@@ -1,3 +1,4 @@
+import type { CollaborationTaskRolePolicy } from '../application/ports/collaborationTaskRolePolicy'
 // RFC-359 W4-B3 —— 协作侧的任务可见性 / 角色解析：一份实现，两个 provider 共用。
 
 import {
@@ -12,7 +13,6 @@ import { first } from '@/platform/persistence/queryHelpers'
 import { and, desc, eq } from 'drizzle-orm'
 
 import { SYSTEM_USER_ID } from '@/auth/actor'
-import { resolveTaskRole } from '@/modules/resource-catalog/application/resourceDefaults'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type {
   CollaborationTaskAccessDecision,
@@ -31,6 +31,7 @@ function snapshot(row: TaskGateDefinitionContext): CollaborationTaskSnapshot {
 
 async function resolve(
   db: PersistenceDb,
+  policy: CollaborationTaskRolePolicy,
   actor: ReviewActor,
   row: TaskGateDefinitionContext | undefined,
 ): Promise<CollaborationTaskAccessDecision> {
@@ -52,15 +53,18 @@ async function resolve(
   return {
     task: snapshot(row),
     visible,
-    actorRole: resolveTaskRole(actor, row.ownerUserId, actingMember),
+    actorRole: policy.resolveTaskRole(actor, row.ownerUserId, actingMember),
   }
 }
 
-export function createCollaborationTaskAccessPort(db: PersistenceDb): CollaborationTaskAccessPort {
+export function createCollaborationTaskAccessPort(
+  db: PersistenceDb,
+  policy: CollaborationTaskRolePolicy,
+): CollaborationTaskAccessPort {
   return {
     async resolveTask(actor, taskId) {
       const row = await first(createTaskGateQueries(db).listDefinitionContexts([taskId]))
-      return await resolve(db, actor, row)
+      return await resolve(db, policy, actor, row)
     },
     async resolveNodeRunTask(actor, nodeRunId) {
       const run = (await createNodeRunQueries(db).readFields(nodeRunId, ['taskId'])) ?? undefined

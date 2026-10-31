@@ -1,3 +1,4 @@
+import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 // RFC-395 II-pre：改接生产启动 / 读取路径，保留原断言意图。
 // LOCKS: RFC-066 PR-B — getTaskDiff multi-repo byte-budget + all-clean fall-through.
 // RFC-165: multi-repo/pre-created PATH bodies are the framework-internal face
@@ -107,6 +108,7 @@ describe('RFC-066 PR-B — getTaskDiff multi-repo truncation + all-clean fall-th
         inputs: {},
       } as unknown as StartTask,
       {
+        humanGateOpen: composeHumanGateOpenParticipantFactory(),
         db: h.db,
         schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
           .schedulerDriver,
@@ -141,6 +143,7 @@ describe('RFC-066 PR-B — getTaskDiff multi-repo truncation + all-clean fall-th
         inputs: {},
       } as unknown as StartTask,
       {
+        humanGateOpen: composeHumanGateOpenParticipantFactory(),
         db: h.db,
         schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
           .schedulerDriver,

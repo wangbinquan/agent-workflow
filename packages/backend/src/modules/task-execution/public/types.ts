@@ -23,8 +23,7 @@ export type { TaskArchiveContentBinding } from '../composition/taskArchiveMainte
 
 // RFC-303 exact public vocabulary. Cross-context callers may depend on these
 // types, never on task rows, activeTasks, scheduler, GC, or process internals.
-import type { Actor } from '@/auth/actor'
-import type { ClarifyDirective, TaskActorRole, TaskStatus } from '@agent-workflow/shared'
+import type { TaskStatus } from '@agent-workflow/shared'
 
 export type { TaskEngineTaskSnapshot } from '../application/ports/taskEngineApplicationPersistence'
 
@@ -72,23 +71,7 @@ export type TaskExecutionCommandResult =
       winnerIntentRef?: string
     }>
 
-/** Closed transport boundary for the task-scoped clarify directive route. */
-export interface TaskClarifyDirectiveRouteOperations {
-  resolveAccess(input: { readonly actor: Actor; readonly taskId: string }): Promise<Readonly<{
-    readonly workflowSnapshot: string
-    readonly actorRole: TaskActorRole | null
-  }> | null>
-  list(
-    taskId: string,
-  ): Promise<readonly Readonly<{ readonly nodeId: string; readonly directive: ClarifyDirective }>[]>
-  set(input: {
-    readonly taskId: string
-    readonly nodeId: string
-    readonly directive: ClarifyDirective
-    readonly setBy: string
-    readonly shardKey?: string
-  }): Promise<void>
-}
+export type { TaskClarifyDirectiveRouteOperations } from '../application/ports/taskClarifyDirectiveRoutes'
 
 export type { TaskScopeOutcome } from '../domain/taskEngine'
 

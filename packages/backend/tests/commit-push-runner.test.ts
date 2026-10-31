@@ -1,3 +1,4 @@
+import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { o2Ports } from './helpers/o2Closure'
 // RFC-075 T9/T10 — the commit&push executor against real git + a bare remote.
@@ -712,6 +713,7 @@ describeEachProvider('RFC-370 publication close precedes Task and effect success
       async () => {
         const f = await build(harness)
         const persistence = createTaskExecutionPersistence(f.db, {
+          humanGateOpen: composeHumanGateOpenParticipantFactory(),
           historyRestrictions: epoch2RuntimeTestPorts(f.db).historyRestrictions,
           recoveryHumanGates: o2Ports(f.db).collaborationReads.recovery,
         })

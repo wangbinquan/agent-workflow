@@ -1,3 +1,4 @@
+import { createDigitalEmployeeIntegrationTriggerParticipantIn } from '@/modules/digital-employee/composition'
 // RFC-359 W7 —— Integration bounded context 的 provider 组合根：**真的构造 + 真的驱动**。
 //
 // 为什么存在这个文件
@@ -53,7 +54,7 @@ import {
 } from '@/modules/integration/composition/webhookIngress'
 import { composeWebhookTriggerValidation } from '@/modules/integration/composition/webhookAdmission'
 import { composeMrTerminalControl } from '@/modules/integration/composition/webhookTerminalControl'
-import { composeIntegrationTriggerResourceSnapshotFactory } from '@/modules/resource-catalog/composition/integrationTrigger'
+import { composeIntegrationTriggerSnapshots } from '@/modules/resource-catalog/composition/integrationTrigger'
 import { composeTaskSourceTermination } from '@/modules/task-execution/composition/sourceTermination'
 import { assertNotBuiltin } from '@/services/systemResources'
 import { describeEachProvider } from './helpers/eachProvider'
@@ -320,7 +321,10 @@ describeEachProvider('RFC-359 W7 —— Integration 组合根：投递 / 分发 
     // 定时任务运行时同时是本轮要还的另一条债（scheduledTasks.ts#composeScheduledTaskRuntimeFor）。
     const scheduled = composeScheduledTaskRuntimeFor({
       db: asPostgresql(harness.db),
-      resourceSnapshots: composeIntegrationTriggerResourceSnapshotFactory({ assertNotBuiltin }),
+      resourceSnapshots: composeIntegrationTriggerSnapshots(
+        { assertNotBuiltin },
+        createDigitalEmployeeIntegrationTriggerParticipantIn,
+      ),
       validation: {
         assertWorkflowLaunchable: async () => {},
         assertAgentIntegrity: async () => {},
@@ -351,7 +355,10 @@ describeEachProvider('RFC-359 W7 —— Integration 组合根：投递 / 分发 
     const admin = await seedUser(harness.db, 'admin')
     const runtime = composeScheduledTaskRuntimeFor({
       db: asPostgresql(harness.db),
-      resourceSnapshots: composeIntegrationTriggerResourceSnapshotFactory({ assertNotBuiltin }),
+      resourceSnapshots: composeIntegrationTriggerSnapshots(
+        { assertNotBuiltin },
+        createDigitalEmployeeIntegrationTriggerParticipantIn,
+      ),
       validation: {
         assertWorkflowLaunchable: async () => {},
         assertAgentIntegrity: async () => {},
@@ -385,7 +392,10 @@ describeEachProvider('RFC-359 W7 —— Integration 组合根：投递 / 分发 
     // 跑同一组读，确认它们回同样的结果。
     const sqliteRuntime = composeScheduledTaskRuntimeFor({
       db: asSqlite(harness.db),
-      resourceSnapshots: composeIntegrationTriggerResourceSnapshotFactory({ assertNotBuiltin }),
+      resourceSnapshots: composeIntegrationTriggerSnapshots(
+        { assertNotBuiltin },
+        createDigitalEmployeeIntegrationTriggerParticipantIn,
+      ),
       validation: {
         assertWorkflowLaunchable: async () => {},
         assertAgentIntegrity: async () => {},

@@ -1,3 +1,4 @@
+import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { o2Ports } from './helpers/o2Closure'
 // RFC-374 AC-7 also exercises this real continuation after legacy sequence catch-up.
@@ -113,6 +114,7 @@ function canonRepos(worktreePath: string): CanonRepo[] {
 function isolatedRunBinding(db: PersistenceDb): IsolatedAgentRunBinding {
   return Object.freeze({
     persistence: createTaskExecutionPersistence(db, {
+      humanGateOpen: composeHumanGateOpenParticipantFactory(),
       historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
       recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
     }),

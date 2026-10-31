@@ -1,3 +1,4 @@
+import type { CollaborationTaskRolePolicy } from '../application/ports/collaborationTaskRolePolicy'
 import type { HistoryRestrictionPort } from '@/platform/contracts/historyRestriction'
 import type { HumanGateTaskLockPort } from '../composition/required-ports'
 // RFC-120 / RFC-349 — SQLite task-question persistence implementation.
@@ -1333,6 +1334,7 @@ export async function createManualTaskQuestion(
   actor: TaskQuestionActor,
   taskLock: HumanGateTaskLockPort,
   historyRestrictions: HistoryRestrictionPort,
+  taskRolePolicy: CollaborationTaskRolePolicy,
 ): Promise<{ id: string }> {
   // RFC-120 §15 — task status (re-gate). RFC-132 PR-D' 步骤1 (T8 flag 停读): 统一模型下所有
   // 任务都是 deferred-dispatch，manual 恒可创建（旧 deferred-only 门移除）。
@@ -1405,7 +1407,12 @@ export async function createManualTaskQuestion(
     )
   }
   const created = await createManualQuestionOpen(
-    humanGateComposition.createCollaborationCommandContext({ db, taskLock, historyRestrictions }),
+    humanGateComposition.createCollaborationCommandContext({
+      db,
+      taskLock,
+      historyRestrictions,
+      taskRolePolicy,
+    }),
     {
       taskId,
       title,

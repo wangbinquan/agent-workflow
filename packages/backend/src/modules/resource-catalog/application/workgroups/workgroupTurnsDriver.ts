@@ -1,5 +1,7 @@
 import { nodeRunAttemptIndex } from '@/platform/nodeRunAttempt'
 import {
+  WORKGROUP_TURN_LEADER_NODE_ID,
+  WORKGROUP_TURN_MEMBER_NODE_ID,
   DEFAULT_PROTOCOL_RETRY_BUDGET,
   fenceUntrusted,
   isTransientRuntimeFailure,
@@ -37,18 +39,16 @@ import {
   isClarifyRerunCause,
 } from '@agent-workflow/shared'
 import { monotonicFactory, ulid } from 'ulid'
-import {
-  WORKGROUP_TURN_LEADER_NODE_ID,
-  WORKGROUP_TURN_MEMBER_NODE_ID,
-  type WorkgroupHostLedgerFailRunOperation,
-  type WorkgroupHostLedgerMintOperation,
-  type WorkgroupHostLedgerMintReceipt,
-  type WorkgroupHostLedgerRun,
-  type WorkgroupHostLedgerStampOperation,
-  type WorkgroupTurnHostOperations,
-  type WorkgroupTurnHostResult,
-  type WorkgroupTurnLogger,
-  type WorkgroupTurnsOperations,
+import type {
+  WorkgroupHostLedgerFailRunOperation,
+  WorkgroupHostLedgerMintOperation,
+  WorkgroupHostLedgerMintReceipt,
+  WorkgroupHostLedgerRun,
+  WorkgroupHostLedgerStampOperation,
+  WorkgroupTurnHostOperations,
+  WorkgroupTurnHostResult,
+  WorkgroupTurnLogger,
+  WorkgroupTurnsOperations,
 } from '@/modules/task-execution/public/commands'
 import { renderWgProtocolBlock, wgHostRolePorts } from './workgroupProtocol'
 import { buildSystemMessage } from './workgroupSystemMessages'
@@ -70,7 +70,7 @@ const WORKGROUP_OPERATION_KEY_SEPARATOR = ':'
 export {
   WORKGROUP_TURN_LEADER_NODE_ID,
   WORKGROUP_TURN_MEMBER_NODE_ID,
-} from '@/modules/task-execution/public/commands'
+} from '@agent-workflow/shared'
 
 export const WORKGROUP_TURN_ASSIGNMENT_TRANSITIONS: Readonly<
   Record<WorkgroupAssignmentStatus, readonly WorkgroupAssignmentStatus[]>

@@ -1,3 +1,4 @@
+import { composeTaskMemorySnapshotPort } from '@/modules/memory/composition'
 import { withTargetMintIdentity } from './helpers/rfc395Mint'
 // RFC-200 production wire lock: a factory-minted run must use the SAME
 // persisted nonce for prompt emission and stdout parsing. The mock emits a
@@ -135,6 +136,7 @@ describeEachProvider('RFC-200 runner production wiring', (harness) => {
       },
       () =>
         runNode({
+          memorySnapshots: composeTaskMemorySnapshotPort(),
           taskId: h.taskId,
           nodeRunId,
           nodeId: 'audit',

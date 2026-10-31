@@ -1,3 +1,4 @@
+import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { o2Ports } from './helpers/o2Closure'
 import { withWorkspaceMaintenancePorts } from './helpers/sourceControlTaskPorts'
@@ -235,6 +236,7 @@ describeEachProvider('RFC-381 daemon integration bundles', (harness) => {
   test('MR close requests stop on the session registry and waits for released before succeeding', async () => {
     const taskId = await seed(harness.db)
     const persistence = createTaskExecutionPersistence(harness.db, {
+      humanGateOpen: composeHumanGateOpenParticipantFactory(),
       historyRestrictions: epoch2RuntimeTestPorts(harness.db).historyRestrictions,
       recoveryHumanGates: o2Ports(harness.db).collaborationReads.recovery,
     })
@@ -309,6 +311,7 @@ describeEachProvider('RFC-381 daemon integration bundles', (harness) => {
   test('cleanup failure keeps the claim, completes the MR job and lets the next same-stream effect run', async () => {
     const taskId = await seed(harness.db)
     const persistence = createTaskExecutionPersistence(harness.db, {
+      humanGateOpen: composeHumanGateOpenParticipantFactory(),
       historyRestrictions: epoch2RuntimeTestPorts(harness.db).historyRestrictions,
       recoveryHumanGates: o2Ports(harness.db).collaborationReads.recovery,
     })

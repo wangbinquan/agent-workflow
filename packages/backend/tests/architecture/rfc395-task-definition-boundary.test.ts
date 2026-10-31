@@ -582,16 +582,25 @@ test('human gate lifecycle owns an injected journal and forwards the same restri
     resolve(root, 'modules/task-execution/infrastructure/humanGateTaskLifecyclePersistence.ts'),
     'utf8',
   )
+  const factory = readFileSync(
+    resolve(root, 'modules/collaboration/infrastructure/humanGateOpenFactory.ts'),
+    'utf8',
+  )
+  // RFC-399 A8: the journal remains per lifecycle; the provider owns its construction.
   expect(source).not.toMatch(/^const journal =/m)
-  expect(source).toContain('this.journal = new DatabaseHumanGateOperationJournal(')
-  expect(source).toContain(
-    'private readonly options: { readonly historyRestrictions: HistoryRestrictionPort }',
-  )
+  expect(factory).not.toMatch(/^const journal =/m)
+  expect(source).toContain('this.gates = options.humanGateOpen({')
+  expect(source).toContain('readonly historyRestrictions: HistoryRestrictionPort')
   expect(source).toMatch(
-    /createHumanGatePersistenceParticipantInTx,\s*options\??\.historyRestrictions,/,
+    /taskPersistenceInTransaction: createHumanGatePersistenceParticipantInTx,\s*historyRestrictions: options\.historyRestrictions,/,
   )
-  expect(source).toMatch(
-    /createConsumedInputsParticipantInTx\(\),\s*this\.options\??\.historyRestrictions,/,
+  expect(factory).toMatch(
+    /const journal = new DatabaseHumanGateOperationJournal\(\s*input\.taskPersistenceInTransaction,\s*input\.historyRestrictions,/,
+  )
+  expect(source).toContain('consumedInputs: createConsumedInputsParticipantInTx()')
+  expect(source).toContain('this.gates.inTransaction(tx, {')
+  expect(factory).toMatch(
+    /new DatabaseHumanGateOpenParticipantInTx\(\s*tx,\s*journal,\s*participants\.mint,\s*participants\.lifecycle,\s*participants\.consumedInputs,\s*input\.historyRestrictions,/,
   )
   const fenceStart = source.indexOf('async function fence(')
   const fenceEnd = source.indexOf('async function parkRevision(')

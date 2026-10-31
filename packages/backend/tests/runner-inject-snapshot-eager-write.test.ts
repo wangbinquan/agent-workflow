@@ -1,3 +1,5 @@
+import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
+import { composeTaskMemorySnapshotPort } from '@/modules/memory/composition'
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { o2Ports } from './helpers/o2Closure'
 // RFC-047 — locks the runner's EAGER write path for
@@ -185,6 +187,7 @@ describeEachProvider(
         },
         () =>
           runNode({
+            memorySnapshots: composeTaskMemorySnapshotPort(),
             taskId: h.taskId,
             nodeRunId,
             nodeId: 'n1',
@@ -228,6 +231,7 @@ describeEachProvider(
         },
         () =>
           runNode({
+            memorySnapshots: composeTaskMemorySnapshotPort(),
             taskId: h.taskId,
             nodeRunId,
             nodeId: 'n1',
@@ -291,6 +295,7 @@ describeEachProvider(
         },
         () =>
           runNode({
+            memorySnapshots: composeTaskMemorySnapshotPort(),
             taskId: h.taskId,
             nodeRunId: followupId,
             nodeId: 'agent-x',
@@ -348,6 +353,7 @@ describeEachProvider(
       // 改成包一层 `TaskExecutionPersistence`：只让「载荷恰好只有
       // injectedMemoriesJson」的第一次 patch 抛，其余原样转发。两个引擎同一形状。
       const realPersistence = createTaskExecutionPersistence(h.db, {
+        humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
         recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
       })
@@ -386,6 +392,7 @@ describeEachProvider(
         },
         () =>
           runNode({
+            memorySnapshots: composeTaskMemorySnapshotPort(),
             taskId: h.taskId,
             nodeRunId,
             nodeId: 'n1',

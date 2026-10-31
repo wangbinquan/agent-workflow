@@ -1,3 +1,6 @@
+import { composeTaskMemorySnapshotPort } from '@/modules/memory/composition'
+import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
+import { composeTaskReviewersPort } from '@/modules/collaboration/composition'
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { legacyContentRef } from '@/platform/content/contentRef'
 import { contentRowColumns } from '@/platform/content/infrastructure/contentStore'
@@ -180,10 +183,13 @@ function operations(harness: ProviderHarness): TaskRouteOperations {
   const db = harness.db
   return createTaskRouteOperations(
     withO2Closure({
+      taskMembership: o2Ports(db).taskMembership,
+      memorySnapshots: composeTaskMemorySnapshotPort(),
       historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
       clarifyNav: o2Ports(db).collaborationReads.clarifyNav,
       db,
       collaboration: {} as never,
+      reviewers: composeTaskReviewersPort({} as never),
       owners: composeOwnerIdentityQueries(db),
       // RFC-359 AC-1（第 5 刀）：活跃度是**注入的参与者**了，于是 A19 终于能在两个引擎上
       // 把 `task-active` 那道门喂出来——合并前 SQLite 侧读模块全局，对拍驱不动。
@@ -196,6 +202,7 @@ function operations(harness: ProviderHarness): TaskRouteOperations {
       resourceAuthorityFor: resourceAuthorityFor(db),
       launches: { launch: async () => unusedDependency('launches.launch') } as never,
       persistence: createTaskExecutionPersistence(db, {
+        humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
         recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
       }),

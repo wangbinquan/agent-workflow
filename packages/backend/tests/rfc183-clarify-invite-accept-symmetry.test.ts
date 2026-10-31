@@ -1,3 +1,4 @@
+import { composeTaskMemorySnapshotPort } from '@/modules/memory/composition'
 import { nodeRunFixture, taskFixture, workflowFixture } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { readTaskAgentSources } from './helpers/taskAgentSource'
@@ -142,6 +143,7 @@ function runClarifyingNode(
 ) {
   return withEnv({ MOCK_OPENCODE_CLARIFY_BODY: CLARIFY_BODY }, () =>
     runNode({
+      memorySnapshots: composeTaskMemorySnapshotPort(),
       taskId: h.taskId,
       nodeRunId,
       nodeId: 'asker',

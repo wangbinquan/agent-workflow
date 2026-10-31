@@ -282,6 +282,7 @@ export async function maybeRunCommitPush(
             dependents: commitInjection.spec.dependents,
             mcps: commitInjection.spec.mcps,
 
+            memorySnapshots: state.opts.memorySnapshots,
             memoryInjectionQueries: state.opts.memoryInjectionQueries,
             runtimeSessionLeases: state.opts.runtimeSessionLeases,
             runtimeRegistry: state.opts.runtimeRegistry,

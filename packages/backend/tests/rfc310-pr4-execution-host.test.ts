@@ -1,3 +1,4 @@
+import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { o2Ports } from './helpers/o2Closure'
 // RFC-310 PR-4 T41/T43/T52 —— digital-employee host 执行链（真子进程）。
@@ -162,6 +163,7 @@ async function buildHarness(): Promise<Harness> {
     identityAccess,
     launchResources,
     persistence: createTaskExecutionPersistence(db, {
+      humanGateOpen: composeHumanGateOpenParticipantFactory(),
       historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
       recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
     }),
@@ -196,6 +198,7 @@ function runner(
     resolveActor: async () => h.actor,
     resourceAuthorityFor: () => h.launchResources,
     launch: createTestHostTaskLaunchKernel({
+      humanGateOpen: composeHumanGateOpenParticipantFactory(),
       db: h.db,
       appHome: h.appHome,
       gitCommitIdentity: h.identityAccess.getUserGitCommitIdentity,

@@ -1,3 +1,5 @@
+import { composeGateContinuationSupport } from '@/modules/collaboration/composition'
+import { composeHumanGateTaskLockPort } from '@/modules/task-execution/composition'
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 // RFC-386: real provider claims exercise shared profiles, live child settings and epoch-scoped failures.
 // Former wiring controls preserve missing settings/profiles; current epoch wiring and an unscoped
@@ -777,10 +779,13 @@ describeEachProvider('RFC-386 coordinator factory', (harness) => {
             runtime: resolveTaskDriveConfig(await bundle.runConfiguration()),
             lifecycle: bundle.driverLifecycle,
             gateContinuationPreDrive: composeGateContinuationPreDrive({
-              historyRestrictions: epoch2RuntimeTestPorts(harness.db).historyRestrictions,
-              db: harness.db,
               persistence: bundle.persistence,
-              memoryDistillEnqueuer: fixture.input.memory.memoryOperations.distillCommands,
+              ...composeGateContinuationSupport({
+                db: harness.db,
+                historyRestrictions: epoch2RuntimeTestPorts(harness.db).historyRestrictions,
+                taskLock: composeHumanGateTaskLockPort,
+                memoryDistillEnqueuer: fixture.input.memory.memoryOperations.distillCommands,
+              }),
             }),
             repositoryPreparation: skipRepositoryPreparation,
             // The former session had the gate pre-step but did not forward a profile rebuild flag.

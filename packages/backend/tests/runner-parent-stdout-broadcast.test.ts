@@ -1,3 +1,4 @@
+import { composeTaskMemorySnapshotPort } from '@/modules/memory/composition'
 // Regression test for the parent-stdout live broadcast gap that left the
 // SessionTab stuck mid-run for workflows whose worker never spawned a
 // subagent (so RFC-048's subagent live poller never fired). Once the runner
@@ -150,6 +151,7 @@ describeEachProvider('runner parent-stdout live broadcast', (harness) => {
         },
         () =>
           runNode({
+            memorySnapshots: composeTaskMemorySnapshotPort(),
             taskId: h.taskId,
             nodeRunId,
             nodeId: 'n1',

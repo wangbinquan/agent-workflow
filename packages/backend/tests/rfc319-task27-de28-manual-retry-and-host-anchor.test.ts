@@ -1,3 +1,4 @@
+import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import { epoch2ReviewReader } from './helpers/epoch2RuntimePorts'
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { legacyContentRef } from '@/platform/content/contentRef'
@@ -124,6 +125,7 @@ describeEachProvider('RFC-319 DE-28 / RFC-395 II-a A2 — hostless employee revi
     const ports = composeDatabaseDigitalEmployeeExecutionPorts(
       db,
       epoch2RuntimeTestPorts(db).historyRestrictions,
+      composeHumanGateOpenParticipantFactory(),
     )
     expect(ports).not.toHaveProperty('hostWorkflow')
     await taskFixture(db, {

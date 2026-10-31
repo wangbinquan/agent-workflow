@@ -1,3 +1,4 @@
+import { composeTaskMemorySnapshotPort } from '@/modules/memory/composition'
 // RFC-023 PR-B T10 — runner envelope-kind branching.
 //
 // Validates that runner.runNode pivots on detectEnvelopeKind:
@@ -138,6 +139,7 @@ describeEachProvider('runNode envelope branching (RFC-023)', (harness) => {
       },
       () =>
         runNode({
+          memorySnapshots: composeTaskMemorySnapshotPort(),
           taskId: h.taskId,
           nodeRunId,
           nodeId: 'asker',
@@ -188,6 +190,7 @@ describeEachProvider('runNode envelope branching (RFC-023)', (harness) => {
       },
       () =>
         runNode({
+          memorySnapshots: composeTaskMemorySnapshotPort(),
           taskId: h.taskId,
           nodeRunId,
           nodeId: 'asker',
@@ -224,6 +227,7 @@ describeEachProvider('runNode envelope branching (RFC-023)', (harness) => {
     })
     const result = await withEnv({ MOCK_OPENCODE_CLARIFY_BODY: clarifyBody }, () =>
       runNode({
+        memorySnapshots: composeTaskMemorySnapshotPort(),
         taskId: h.taskId,
         nodeRunId,
         nodeId: 'asker',
@@ -247,6 +251,7 @@ describeEachProvider('runNode envelope branching (RFC-023)', (harness) => {
     const nodeRunId = await insertPendingNodeRun(h.db, h.taskId)
     const result = await withEnv({ MOCK_OPENCODE_OUTPUTS: JSON.stringify({ summary: 'ok' }) }, () =>
       runNode({
+        memorySnapshots: composeTaskMemorySnapshotPort(),
         taskId: h.taskId,
         nodeRunId,
         nodeId: 'asker',
@@ -280,6 +285,7 @@ describeEachProvider('runNode envelope branching (RFC-023)', (harness) => {
     })
     const result = await withEnv({ MOCK_OPENCODE_CLARIFY_BODY: clarifyBody }, () =>
       runNode({
+        memorySnapshots: composeTaskMemorySnapshotPort(),
         taskId: h.taskId,
         nodeRunId,
         nodeId: 'asker',
@@ -315,6 +321,7 @@ describeEachProvider('runNode envelope branching (RFC-023)', (harness) => {
       { MOCK_OPENCODE_OUTPUTS: JSON.stringify({ summary: 'guessed' }) },
       () =>
         runNode({
+          memorySnapshots: composeTaskMemorySnapshotPort(),
           taskId: h.taskId,
           nodeRunId,
           nodeId: 'asker',
@@ -342,6 +349,7 @@ describeEachProvider('runNode envelope branching (RFC-023)', (harness) => {
       { MOCK_OPENCODE_OUTPUTS: JSON.stringify({ summary: 'guessed' }) },
       () =>
         runNode({
+          memorySnapshots: composeTaskMemorySnapshotPort(),
           taskId: h.taskId,
           nodeRunId,
           nodeId: 'asker',

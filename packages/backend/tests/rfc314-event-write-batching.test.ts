@@ -1,3 +1,4 @@
+import { composeTaskMemorySnapshotPort } from '@/modules/memory/composition'
 import { nodeRunFixture, taskFixture, workflowFixture } from './helpers/model'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { readTaskAgentSources } from './helpers/taskAgentSource'
@@ -206,6 +207,7 @@ describeEachProvider('RFC-314 D3 —— 端到端', (harness) => {
         },
         () =>
           runNode({
+            memorySnapshots: composeTaskMemorySnapshotPort(),
             taskId: h.taskId,
             nodeRunId,
             nodeId: 'node1',
@@ -275,6 +277,7 @@ describeEachProvider('RFC-314 D3 —— 端到端', (harness) => {
       },
       () =>
         runNode({
+          memorySnapshots: composeTaskMemorySnapshotPort(),
           taskId: h.taskId,
           nodeRunId,
           nodeId: 'node1',

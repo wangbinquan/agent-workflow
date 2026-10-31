@@ -1,3 +1,4 @@
+import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 // RFC-395 II-pre：生产启动 / 延续依赖及工作区租约改接线，保留既有断言。
 // RFC-159 T2 — buildStartTaskDeps reads LIVE config per-call.
 //
@@ -32,12 +33,24 @@ describeEachProvider('buildStartTaskDeps (RFC-159 T2)', (provider) => {
     configWith(cfgPath, { pollMs: 999, consecutiveFailureLimit: 7 })
 
     const driver = createNoopSchedulerDriver()
-    const withCmd = buildStartTaskDeps(db, driver, cfgPath, 'alice')
+    const withCmd = buildStartTaskDeps(
+      db,
+      composeHumanGateOpenParticipantFactory(),
+      driver,
+      cfgPath,
+      'alice',
+    )
     expect(withCmd.db).toBe(db)
     expect(withCmd.actorUserId).toBe('alice')
     expect(withCmd.configPath).toBe(cfgPath)
 
-    const noCmd = buildStartTaskDeps(db, driver, cfgPath, 'bob')
+    const noCmd = buildStartTaskDeps(
+      db,
+      composeHumanGateOpenParticipantFactory(),
+      driver,
+      cfgPath,
+      'bob',
+    )
     expect(noCmd.actorUserId).toBe('bob')
     expect('opencodeCmd' in noCmd).toBe(false) // conditional spread: absent when omitted
   })
@@ -49,14 +62,20 @@ describeEachProvider('buildStartTaskDeps (RFC-159 T2)', (provider) => {
 
     configWith(cfgPath, { pollMs: 999, consecutiveFailureLimit: 7 })
     const driver = createNoopSchedulerDriver()
-    expect(buildStartTaskDeps(db, driver, cfgPath, 'alice').subagentLiveCapture).toEqual({
+    expect(
+      buildStartTaskDeps(db, composeHumanGateOpenParticipantFactory(), driver, cfgPath, 'alice')
+        .subagentLiveCapture,
+    ).toEqual({
       pollMs: 999,
       consecutiveFailureLimit: 7,
     })
 
     // Edit the config → the very next build reflects it (no boot-time freeze).
     configWith(cfgPath, { pollMs: 111, consecutiveFailureLimit: 2 })
-    expect(buildStartTaskDeps(db, driver, cfgPath, 'alice').subagentLiveCapture).toEqual({
+    expect(
+      buildStartTaskDeps(db, composeHumanGateOpenParticipantFactory(), driver, cfgPath, 'alice')
+        .subagentLiveCapture,
+    ).toEqual({
       pollMs: 111,
       consecutiveFailureLimit: 2,
     })

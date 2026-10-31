@@ -1,3 +1,4 @@
+import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { o2Ports } from './helpers/o2Closure'
 // RFC-395 II-a A2: replay after the NULL scalar node-tree case now crosses list ports.
@@ -94,6 +95,7 @@ describeEachProvider('single non-root member isolation checkpoint regression', (
     })
     const binding: IsolatedAgentRunBinding = {
       persistence: createTaskExecutionPersistence(db, {
+        humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
         recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
       }),

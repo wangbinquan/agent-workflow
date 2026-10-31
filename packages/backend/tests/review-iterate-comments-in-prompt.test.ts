@@ -1,3 +1,4 @@
+import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import { epoch2ReviewReader } from './helpers/epoch2RuntimePorts'
 import { withO2Closure } from './helpers/o2Closure'
 // RFC-395 II-pre：改接生产启动 / 读取路径，保留原断言意图。
@@ -185,6 +186,7 @@ async function buildHarness(): Promise<Harness> {
       inputs: { topic: 'orders' },
     },
     {
+      humanGateOpen: composeHumanGateOpenParticipantFactory(),
       db,
       schedulerDriver: createTaskExecutionTestTopology({ db, driver: 'real' }).schedulerDriver,
       appHome,

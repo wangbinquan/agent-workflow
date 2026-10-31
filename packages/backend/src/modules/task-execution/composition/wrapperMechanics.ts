@@ -904,6 +904,8 @@ async function dispatchFanoutShardAttempt(args: DispatchShardArgs): Promise<Disp
             dependents: injection.spec.dependents,
             mcps: injection.spec.mcps,
 
+            memorySnapshots: opts.memorySnapshots,
+
             memoryInjectionQueries: opts.memoryInjectionQueries,
             runtimeSessionLeases: opts.runtimeSessionLeases,
 
@@ -1460,6 +1462,8 @@ async function dispatchFanoutAggregatorAttempt(
 
             dependents: injection.spec.dependents,
             mcps: injection.spec.mcps,
+
+            memorySnapshots: opts.memorySnapshots,
 
             memoryInjectionQueries: opts.memoryInjectionQueries,
             runtimeSessionLeases: opts.runtimeSessionLeases,

@@ -1,3 +1,4 @@
+import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { o2Ports } from './helpers/o2Closure'
 // RFC-370 hosted acceptance (2026-10-18) — the isolation cleanup receipt stays
@@ -98,6 +99,7 @@ async function seedClaimedTask(db: PersistenceDb) {
     iteration: 0,
   })
   const persistence = createTaskExecutionPersistence(db, {
+    humanGateOpen: composeHumanGateOpenParticipantFactory(),
     historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
     recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
   })
@@ -157,6 +159,7 @@ describeEachProvider(
     test('the SQLite daemon context still records the cleanup receipt', async () => {
       const seeded = await seedClaimedTask(harness.db)
       const context = createSqliteDaemonContext({
+        humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(harness.db).historyRestrictions,
         intentId: seeded.intentId,
         token: seeded.token,

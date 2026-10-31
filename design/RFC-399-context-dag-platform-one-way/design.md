@@ -177,7 +177,7 @@ MEM 新增 `application/adapters/task-execution-adapter.ts`，委托现有 `memo
   `MaintenanceJobExecutionResult`（计数、delta、续跑游标）；`platform/background/maintenanceJobRunner.ts` 只按作业键查表调用
   注入的处理器，表缺键时报与现状同义的错误。
 - 作业体（payload 解析、命令调用、计数 / 续跑换算）按 owner 迁到各模块的 `application/maintenanceJobs.ts`，经该模块
-  `public/commands` 的维护命令出口交给 bootstrap：
+  `public/commands` 的维护命令出口交给 bootstrap（实施时改经各模块 `composition.ts` 交出，理由见 proposal §6 第 13 条）：
   - SC：`worktreeGc`（五个阶段与游标）、`workspaceRecovery`；
   - INTEG：`webhookDeliveryGc`（游标 v1、两阶段）；
   - DA：`developmentUploadGc`、`developmentRetentionSweep`；DE：`employeeInputGc`；

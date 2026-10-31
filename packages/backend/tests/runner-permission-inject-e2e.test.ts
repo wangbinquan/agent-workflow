@@ -1,3 +1,4 @@
+import { composeTaskMemorySnapshotPort } from '@/modules/memory/composition'
 // RFC-073 T7 — integration: the deadlock-preventing global permission +
 // per-agent question strip ACTUALLY reach the spawned opencode subprocess
 // (buildInlineConfig → OPENCODE_CONFIG_CONTENT env-var → child), not just
@@ -127,6 +128,7 @@ async function captureSpawnedConfig(h: Harness, agent: Agent): Promise<string> {
     },
     () =>
       runNode({
+        memorySnapshots: composeTaskMemorySnapshotPort(),
         taskId: h.taskId,
         nodeRunId,
         nodeId: 'n1',

@@ -1,3 +1,4 @@
+import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 // RFC-397 — CI run 41052627131: proposal §1.2 traced exhausted 40001 retries to
 // SERIALIZABLE owner-fenced writers; §1.3 showed that removing the fence kept stale
 // snapshots. These tests retain the fence and prove fresh reads, family locking,
@@ -121,6 +122,7 @@ async function seed(db: PersistenceDb, taskId = 't', lineage = 'lineage') {
     updatedAt: 1,
   })
   const persistence = createTaskExecutionPersistence(db, {
+    humanGateOpen: composeHumanGateOpenParticipantFactory(),
     historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
     recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
   })

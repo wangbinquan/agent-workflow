@@ -1,3 +1,4 @@
+import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { createEpoch2PostgresqlMetadata } from './helpers/epoch2PostgresqlMetadata'
 import { o2Ports } from './helpers/o2Closure'
@@ -137,6 +138,7 @@ describe('RFC-349 task-execution provider adapters', () => {
       worktreePath: '/tmp/worktree',
     })
     const persistence = createTaskExecutionPersistence(db, {
+      humanGateOpen: composeHumanGateOpenParticipantFactory(),
       historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
       recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
     })
@@ -289,6 +291,7 @@ describe('RFC-349 task-execution provider adapters', () => {
       intentId: 'intent-1',
       token,
       persistence: createTaskExecutionPersistence(db, {
+        humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
         recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
       }),

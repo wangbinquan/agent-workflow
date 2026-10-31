@@ -1,3 +1,4 @@
+import type { HumanGateOpenParticipantFactory } from '../application/ports/humanGateOpenFactory'
 import type { HistoryRestrictionPort } from '@/platform/contracts/historyRestriction'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
@@ -24,6 +25,7 @@ export function createTaskExecutionContext(input: {
   readonly intentId: string
   readonly token: OwnershipToken
   readonly db: PersistenceDb
+  readonly humanGateOpen: HumanGateOpenParticipantFactory
   readonly historyRestrictions: HistoryRestrictionPort
 }): SqliteTaskExecutionContext {
   const context = createProviderTaskExecutionContext({

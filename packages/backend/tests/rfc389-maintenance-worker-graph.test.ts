@@ -7,11 +7,8 @@ import { join } from 'node:path'
 import { composeMaintenanceWorkerGraph } from '@/bootstrap/maintenanceWorkerGraph'
 import { MAINTENANCE_CATALOG_DIGEST } from '@/platform/background/maintenanceCatalog'
 import { MAINTENANCE_PROTOCOL_VERSION } from '@/platform/background/maintenanceProtocol'
-import type { MaintenanceWorkerEffectsSelections } from '@/platform/background/maintenanceWorkerEffects'
-import type {
-  MaintenanceWorkerGraph,
-  MaintenanceWorkerGraphFactory,
-} from '@/platform/background/maintenanceWorkerRuntime'
+import type { MaintenanceWorkerEffectsSelections } from '@/bootstrap/maintenanceWorkerEffects'
+import type { MaintenanceWorkerGraphFactory } from '@/platform/background/maintenanceWorkerRuntime'
 import { createMaintenanceRunStore } from '@/platform/persistence/maintenanceRunStore'
 import { describeEachProvider, type ProviderDatabaseHarness } from './helpers/eachProvider'
 import { openProviderMaintenanceWorkerDatabase } from './helpers/providerMaintenanceWorker'
@@ -24,7 +21,9 @@ import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { sha256Hex } from '@/util/hash'
 import { objectFixture } from './helpers/rfc370Objects'
 
-type GraphInput = Parameters<MaintenanceWorkerGraphFactory>[0]
+type MaintenanceWorkerGraph = Awaited<ReturnType<typeof composeMaintenanceWorkerGraph>>
+
+type GraphInput = Parameters<MaintenanceWorkerGraphFactory<MaintenanceWorkerEffectsSelections>>[0]
 async function fixture(
   harness: ProviderDatabaseHarness,
   body: (input: {

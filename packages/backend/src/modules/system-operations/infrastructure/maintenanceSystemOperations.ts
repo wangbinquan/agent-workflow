@@ -1,8 +1,8 @@
 // RFC-389 — one system-maintenance graph for both database providers.
-import type { RetentionSweepPhase } from './retentionSweepPhase'
+import type { RetentionSweepPhase } from '@/platform/background/retentionSweepPhase'
 import { runRetentionSweepSlice } from '@/platform/persistence/sqlite/systemMaintenanceRetention'
-import { createEventsArchiveMaintenanceCommand } from './eventsArchiveMaintenance'
-import type { MaintenanceSystemOperations } from './maintenanceJobRunner'
+import { createEventsArchiveMaintenanceCommand } from '@/platform/background/eventsArchiveMaintenance'
+import type { MaintenanceSystemOperations } from '../application/ports/maintenanceSystemOperations'
 
 const MAINTENANCE_RETENTION_SLICE_ROWS = 1_000
 const CLEANUP_COOLDOWN_MS = 25

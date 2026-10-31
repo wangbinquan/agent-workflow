@@ -1,3 +1,4 @@
+import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { o2Ports } from './helpers/o2Closure'
 import { readTaskFixtures, taskFixture, workflowFixture } from './helpers/model'
@@ -316,6 +317,7 @@ describeEachProvider('RFC-370 task deletion complete selected effects', (harness
     const pending = deleteTask(db, taskId, { activity, effects: chosen })
     await entered.promise
     const claims = await createTaskExecutionPersistence(db, {
+      humanGateOpen: composeHumanGateOpenParticipantFactory(),
       historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
       recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
     }).terminalMaintenance.listRecoverable({
@@ -364,6 +366,7 @@ describeEachProvider('RFC-370 task deletion complete selected effects', (harness
     await seed(db, taskId)
     await seed(db, childId, taskId)
     const persistence = createTaskExecutionPersistence(db, {
+        humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
         recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
       }),
@@ -417,6 +420,7 @@ describeEachProvider('RFC-370 task deletion complete selected effects', (harness
       }),
     ).toEqual({ taskId, cleanup: 'pending' })
     const persistence = createTaskExecutionPersistence(db, {
+        humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
         recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
       }),

@@ -1,3 +1,4 @@
+import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import { epoch2ReviewReader } from './helpers/epoch2RuntimePorts'
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { readReviewFixture } from './helpers/model/content'
@@ -217,6 +218,7 @@ async function buildHarness(): Promise<Harness> {
       inputs: { topic: 'orders' },
     },
     {
+      humanGateOpen: composeHumanGateOpenParticipantFactory(),
       db,
       schedulerDriver: createTaskExecutionTestTopology({ db, driver: 'real' }).schedulerDriver,
       appHome,
@@ -643,6 +645,7 @@ describe('RFC-005 review state machine — dispatch + decisions', () => {
       }),
     )
     await wakeHumanGateContinuation(first.taskId, first.continuationRef, {
+      humanGateOpen: composeHumanGateOpenParticipantFactory(),
       historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
       db: h.db,
       appHome: h.appHome,

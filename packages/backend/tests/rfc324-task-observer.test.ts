@@ -1,8 +1,9 @@
+import { composeCollaborationTaskRolePolicy } from '@/modules/resource-catalog/composition'
 // RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-324 —— 任务的第三档：观察者。
 //
 // RFC-099 之后，把人加进任务只有一个含义：他与 owner 同权——能 cancel / resume /
-// retry，也是评审与反问的回答权主体（`services/taskCollab.ts` 头注释白纸黑字）。
+// retry，也是评审与反问的回答权主体（`modules/collaboration/infrastructure/taskCollab.ts` 头注释白纸黑字）。
 // 于是「让他看得见任务进展，但别动」在产品上无法表达；用户要么把人加进来连同操作
 // 权一起给出去，要么让他什么也看不见。
 //
@@ -31,7 +32,7 @@ import {
   requireTaskMember,
   requireTaskOperator,
   updateTaskMembers,
-} from '../src/services/taskCollab'
+} from '@/modules/collaboration/infrastructure/taskCollab'
 import { ForbiddenError } from '../src/util/errors'
 
 const NOW = 1_700_000_000_000
@@ -125,15 +126,28 @@ describeEachProvider('RFC-324 —— 任务观察者档', (harness) => {
   })
 
   test('回答权（评审 / 反问）：observer 被拒，collaborator 照旧通过', async () => {
-    await expect(requireTaskMember(db, actorFor(observer), row())).rejects.toThrow(ForbiddenError)
-    expect(await requireTaskMember(db, actorFor(collaborator), row())).toBe('user')
-    expect(await requireTaskMember(db, actorFor(owner), row())).toBe('owner')
+    await expect(
+      requireTaskMember(db, composeCollaborationTaskRolePolicy(), actorFor(observer), row()),
+    ).rejects.toThrow(ForbiddenError)
+    expect(
+      await requireTaskMember(
+        db,
+        composeCollaborationTaskRolePolicy(),
+        actorFor(collaborator),
+        row(),
+      ),
+    ).toBe('user')
+    expect(
+      await requireTaskMember(db, composeCollaborationTaskRolePolicy(), actorFor(owner), row()),
+    ).toBe('owner')
   })
 
   test('操作权（cancel / resume / diagnose / retry）：observer 被拒且错误码可辨认', async () => {
-    await expect(requireTaskOperator(db, actorFor(observer), row())).rejects.toThrow(ForbiddenError)
+    await expect(
+      requireTaskOperator(db, composeCollaborationTaskRolePolicy(), actorFor(observer), row()),
+    ).rejects.toThrow(ForbiddenError)
     try {
-      await requireTaskOperator(db, actorFor(observer), row())
+      await requireTaskOperator(db, composeCollaborationTaskRolePolicy(), actorFor(observer), row())
       throw new Error('unreachable')
     } catch (error) {
       expect((error as { code?: string }).code, '前端据这个码禁用按钮并给出说人话的解释').toBe(
@@ -141,11 +155,21 @@ describeEachProvider('RFC-324 —— 任务观察者档', (harness) => {
       )
     }
     // 对照：同一个门对 collaborator 放行——否则上面的拒绝可能只是门坏了。
-    await requireTaskOperator(db, actorFor(collaborator), row())
+    await requireTaskOperator(
+      db,
+      composeCollaborationTaskRolePolicy(),
+      actorFor(collaborator),
+      row(),
+    )
   })
 
   test('成员面板：members 带档位，canOperate 对 observer 为假、对 collaborator 为真', async () => {
-    const asObserver = await getTaskMembers(db, actorFor(observer), row())
+    const asObserver = await getTaskMembers(
+      db,
+      composeCollaborationTaskRolePolicy(),
+      actorFor(observer),
+      row(),
+    )
     expect(asObserver.members.map((m) => [m.user.id, m.role]).sort()).toEqual(
       [
         [collaborator, 'collaborator'],
@@ -155,17 +179,27 @@ describeEachProvider('RFC-324 —— 任务观察者档', (harness) => {
     expect(asObserver.canOperate).toBe(false)
     expect(asObserver.canManage).toBe(false)
 
-    const asCollaborator = await getTaskMembers(db, actorFor(collaborator), row())
+    const asCollaborator = await getTaskMembers(
+      db,
+      composeCollaborationTaskRolePolicy(),
+      actorFor(collaborator),
+      row(),
+    )
     expect(asCollaborator.canOperate).toBe(true)
     expect(asCollaborator.canManage).toBe(false)
 
-    const asOwner = await getTaskMembers(db, actorFor(owner), row())
+    const asOwner = await getTaskMembers(
+      db,
+      composeCollaborationTaskRolePolicy(),
+      actorFor(owner),
+      row(),
+    )
     expect(asOwner.canOperate).toBe(true)
     expect(asOwner.canManage).toBe(true)
   })
 
   test('PUT members：档位是全量替换的一部分，降档立刻生效', async () => {
-    await updateTaskMembers(db, actorFor(owner), row(), {
+    await updateTaskMembers(db, composeCollaborationTaskRolePolicy(), actorFor(owner), row(), {
       members: [
         { userId: collaborator, role: 'observer' },
         { userId: observer, role: 'collaborator' },
@@ -174,14 +208,14 @@ describeEachProvider('RFC-324 —— 任务观察者档', (harness) => {
     // 两个人换了位置：原协作者现在只能看，原观察者可以动。
     expect(await hasActingMembership(db, taskId, collaborator)).toBe(false)
     expect(await hasActingMembership(db, taskId, observer)).toBe(true)
-    await expect(requireTaskOperator(db, actorFor(collaborator), row())).rejects.toThrow(
-      ForbiddenError,
-    )
-    await requireTaskOperator(db, actorFor(observer), row())
+    await expect(
+      requireTaskOperator(db, composeCollaborationTaskRolePolicy(), actorFor(collaborator), row()),
+    ).rejects.toThrow(ForbiddenError)
+    await requireTaskOperator(db, composeCollaborationTaskRolePolicy(), actorFor(observer), row())
   })
 
   test('同一用户只留一行：重复条目取最后一条，不产生两档并存', async () => {
-    await updateTaskMembers(db, actorFor(owner), row(), {
+    await updateTaskMembers(db, composeCollaborationTaskRolePolicy(), actorFor(owner), row(), {
       members: [
         { userId: observer, role: 'collaborator' },
         { userId: observer, role: 'observer' },
@@ -195,12 +229,29 @@ describeEachProvider('RFC-324 —— 任务观察者档', (harness) => {
   })
 
   test('存量语义不变：没有 observer 的任务，collaborator 与 owner 同权', async () => {
-    await updateTaskMembers(db, actorFor(owner), row(), {
+    await updateTaskMembers(db, composeCollaborationTaskRolePolicy(), actorFor(owner), row(), {
       members: [{ userId: collaborator, role: 'collaborator' }],
     })
-    const members = await getTaskMembers(db, actorFor(owner), row())
+    const members = await getTaskMembers(
+      db,
+      composeCollaborationTaskRolePolicy(),
+      actorFor(owner),
+      row(),
+    )
     expect(members.members.map((m) => m.role)).toEqual(['collaborator'])
-    await requireTaskOperator(db, actorFor(collaborator), row())
-    expect(await requireTaskMember(db, actorFor(collaborator), row())).toBe('user')
+    await requireTaskOperator(
+      db,
+      composeCollaborationTaskRolePolicy(),
+      actorFor(collaborator),
+      row(),
+    )
+    expect(
+      await requireTaskMember(
+        db,
+        composeCollaborationTaskRolePolicy(),
+        actorFor(collaborator),
+        row(),
+      ),
+    ).toBe('user')
   })
 })

@@ -1,3 +1,4 @@
+import { composeCollaborationTaskRolePolicy } from '@/modules/resource-catalog/composition'
 // RFC-395 II-b T18 WGF: a task is already awaiting_human while its asking
 // host/turn driver is still unwinding. Seal and dispatch are separate commits.
 // Force the old driver's next snapshot into that gap, with dispatch on either
@@ -174,6 +175,7 @@ describeEachProvider('RFC-395 WGF leader answer continuation', (h) => {
           await patchNodeRunFixture(h.db, { id: run.id }, { status: 'done' })
           if (calls.length === 1) {
             const round = await createClarifyRound({
+              taskRolePolicy: composeCollaborationTaskRolePolicy(),
               db: h.db,
               taskLock: createHumanGatePersistenceParticipantInTx,
               historyRestrictions: f.historyRestrictions,

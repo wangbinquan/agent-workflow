@@ -1,3 +1,5 @@
+import { composeRepositoryPreparationLookup } from '@/modules/source-control/composition'
+import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import { deleteAgent, deleteWorkgroup } from './helpers/resourceCatalogDeletion'
 import { withSourceControlTaskPorts } from './helpers/sourceControlTaskPorts'
 // RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
@@ -112,9 +114,11 @@ function buildRealScheduleLaunch(db: DbClient, appHome: string, configPath: stri
       appHome,
     }),
     coordinator: createTestTaskDriveCoordinator({
+      humanGateOpen: composeHumanGateOpenParticipantFactory(),
       deps: { db, schedulerDriver, configPath },
       appHome,
       repositoryPreparation: composeDeferredRepositoryPreparation({
+        repositoryPreparationLookup: composeRepositoryPreparationLookup(db),
         repositoryPreparation: composeRepositoryPreparation(
           withSourceControlTaskPorts({ db, appHome }),
         ),

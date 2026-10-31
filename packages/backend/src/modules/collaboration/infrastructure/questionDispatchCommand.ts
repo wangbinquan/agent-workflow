@@ -1,3 +1,4 @@
+import type { CollaborationTaskRolePolicy } from '../application/ports/collaborationTaskRolePolicy'
 import type { HistoryRestrictionPort } from '@/platform/contracts/historyRestriction'
 import type { HumanGateTaskLockPort } from '../composition/required-ports'
 // RFC-359 W1-T2a（F-H2-1 之一）—— collaboration 的问题派发命令端口：一份实现，两个引擎。
@@ -57,6 +58,7 @@ export function createQuestionDispatchCommand(
 
 /** Legacy test bridge; production routes use the bootstrap-owned context. */
 export function createQuestionDispatchCommandContext(input: {
+  readonly taskRolePolicy: CollaborationTaskRolePolicy
   readonly taskLock: HumanGateTaskLockPort
   readonly historyRestrictions: HistoryRestrictionPort
   readonly db: DbClient
@@ -64,6 +66,7 @@ export function createQuestionDispatchCommandContext(input: {
   readonly role: TaskActorRole
 }): CollaborationCommandContext<'questionDispatches'> {
   return createCollaborationCommandContext({
+    taskRolePolicy: input.taskRolePolicy,
     taskLock: input.taskLock,
     historyRestrictions: input.historyRestrictions,
     db: input.db,

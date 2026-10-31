@@ -1,3 +1,4 @@
+import type { MaintenanceWorkerEffectsFactory } from './maintenanceWorkerEffects'
 import {
   createContentStore,
   createObjectContentTransport,
@@ -32,10 +33,7 @@ import { composeCrewStationTaskArchive } from '@/modules/task-execution/composit
 import { composeCrewStationNodeEventArchive } from '@/modules/task-execution/composition/crewstationNodeEventArchive'
 import { composeCrewStationTaskObjectSweep } from '@/modules/task-execution/composition/crewstationObjectSweep'
 import { composeCrewStationIntentScratchRelease } from '@/modules/task-execution/composition/crewstationExecution'
-import type {
-  MaintenanceWorkerEffectsDescriptor,
-  MaintenanceWorkerEffectsFactory,
-} from '@/platform/background/maintenanceWorkerEffects'
+import type { MaintenanceWorkerEffectsDescriptor } from '@/platform/background/maintenanceWorkerEffects'
 import { createCrewStationBusinessExecution } from '@/platform/crewstation/businessExecution'
 import type { CrewStationMutationFence } from '@/platform/crewstation/mutationFence'
 import { createCrewStationObjectStorage } from '@/platform/crewstation/objectStorage'

@@ -42,7 +42,7 @@ import { transitionNodeRunStatus, transitionNodeRunStatusTx } from '../src/servi
 import { mintNodeRun, type MintNodeRunArgs } from '../src/services/nodeRunMint'
 import { createNodeRunMintParticipantInTx } from '@/modules/task-execution/infrastructure/nodeRunMintParticipant'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
-import { hasActingMembership } from '../src/services/taskCollab'
+import { hasActingMembership } from '@/modules/collaboration/infrastructure/taskCollab'
 import { derivedSupersededIds } from './helpers/nodeRunSupersession'
 import { DomainError } from '../src/util/errors'
 

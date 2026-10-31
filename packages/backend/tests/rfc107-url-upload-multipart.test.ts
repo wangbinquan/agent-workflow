@@ -1,3 +1,4 @@
+import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 // RFC-395 II-pre：改接生产启动 / 读取路径，保留原断言意图。
 // RFC-107 — URL-mode launches may now carry multipart file uploads.
 //
@@ -885,6 +886,7 @@ describe('RFC-107 — launchTestTask preResolvedSource (resolve-once + redaction
     const task = await launchTestTask(
       { workflowId: wf.id, name: 'unit', repoUrl: credentialedUrl, inputs: { topic: 'hi' } },
       {
+        humanGateOpen: composeHumanGateOpenParticipantFactory(),
         db,
         schedulerDriver: createTaskExecutionTestTopology({ db, driver: 'real' }).schedulerDriver,
         appHome,

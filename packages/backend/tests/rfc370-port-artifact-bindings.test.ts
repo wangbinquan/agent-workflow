@@ -1,3 +1,5 @@
+import { composeCollaborationTaskRolePolicy } from '@/modules/resource-catalog/composition'
+import { composeTaskMemorySnapshotPort } from '@/modules/memory/composition'
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { readReviewFixture } from './helpers/model/content'
 import { nodeRunFixtureColumns } from './helpers/model/nodeRun'
@@ -117,6 +119,7 @@ function invoke(
   content: Readonly<MemoryPortArtifactContent>,
 ) {
   return runNode({
+    memorySnapshots: composeTaskMemorySnapshotPort(),
     taskId: h.taskId,
     nodeRunId: h.nodeRunId,
     nodeId: DESIGNER,
@@ -316,6 +319,7 @@ describeEachProvider('RFC-370 real port artifact consumers', (harness) => {
     const operations = composePortArtifactOperations(content, h.root),
       selectedHomes: string[] = []
     const collaboration = createCollaborationRuntimeMechanics(db, {
+      taskRolePolicy: composeCollaborationTaskRolePolicy(),
       ...epoch2RuntimeTestPorts(db),
       taskLock: o2Ports(db).taskLock,
       ...{

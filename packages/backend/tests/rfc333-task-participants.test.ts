@@ -1,3 +1,4 @@
+import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { nodeRunFixtureColumns } from './helpers/model/nodeRun'
 import { tablesOf } from '@/platform/persistence/sessionTables'
@@ -261,7 +262,10 @@ describeEachProvider('RFC-333 T5 TaskParkTx', (harness) => {
     const parked = await new DatabaseHumanGateTaskLifecyclePersistence(
       db,
       createTaskRuntimeLifecyclePersistence(db),
-      { historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions },
+      {
+        humanGateOpen: composeHumanGateOpenParticipantFactory(),
+        historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
+      },
     ).parkPrepared({
       prepared,
       token: claimed.token,
@@ -351,7 +355,10 @@ describeEachProvider('RFC-333 T5 TaskParkTx', (harness) => {
         new DatabaseHumanGateTaskLifecyclePersistence(
           db,
           createTaskRuntimeLifecyclePersistence(db),
-          { historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions },
+          {
+            humanGateOpen: composeHumanGateOpenParticipantFactory(),
+            historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
+          },
         ).parkPrepared({
           prepared,
           token: claimed.token,
@@ -495,7 +502,10 @@ describeEachProvider('RFC-333 T7 manual-question durable park obligation', (harn
     const settled = await new DatabaseHumanGateTaskLifecyclePersistence(
       db,
       createTaskRuntimeLifecyclePersistence(db),
-      { historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions },
+      {
+        humanGateOpen: composeHumanGateOpenParticipantFactory(),
+        historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
+      },
     )
       .settleManualQuestionParks({ taskId, token: claimed.token, now: NOW + 20 })
       .then(settleShape)
@@ -528,7 +538,10 @@ describeEachProvider('RFC-333 T7 manual-question durable park obligation', (harn
     const settled = await new DatabaseHumanGateTaskLifecyclePersistence(
       db,
       createTaskRuntimeLifecyclePersistence(db),
-      { historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions },
+      {
+        humanGateOpen: composeHumanGateOpenParticipantFactory(),
+        historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
+      },
     )
       .settleManualQuestionParks({ taskId, now: NOW + 20 })
       .then(settleShape)
@@ -562,7 +575,10 @@ describeEachProvider('RFC-333 T7 manual-question durable park obligation', (harn
     const settled = await new DatabaseHumanGateTaskLifecyclePersistence(
       db,
       createTaskRuntimeLifecyclePersistence(db),
-      { historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions },
+      {
+        humanGateOpen: composeHumanGateOpenParticipantFactory(),
+        historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
+      },
     )
       .settleManualQuestionParks({ taskId, now: NOW + 20 })
       .then(settleShape)
@@ -595,7 +611,10 @@ describeEachProvider('RFC-333 T7 manual-question durable park obligation', (harn
     const settled = await new DatabaseHumanGateTaskLifecyclePersistence(
       db,
       createTaskRuntimeLifecyclePersistence(db),
-      { historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions },
+      {
+        humanGateOpen: composeHumanGateOpenParticipantFactory(),
+        historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
+      },
     )
       .settleManualQuestionParks({ taskId, now: NOW + 30 })
       .then(settleShape)
@@ -622,7 +641,10 @@ describeEachProvider('RFC-333 T7 manual-question durable park obligation', (harn
     const outcome = await new DatabaseHumanGateTaskLifecyclePersistence(
       db,
       createTaskRuntimeLifecyclePersistence(db),
-      { historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions },
+      {
+        humanGateOpen: composeHumanGateOpenParticipantFactory(),
+        historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
+      },
     ).trySetWhenNoManualQuestionParks({
       taskId,
       to: 'done',
@@ -899,6 +921,7 @@ describeEachProvider('RFC-333 T5 TaskDecisionParticipantInTx', (harness) => {
       executor,
     )
     const execution = createTaskExecutionContext({
+      humanGateOpen: composeHumanGateOpenParticipantFactory(),
       historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
       intentId: decision.continuationRef,
       token: claimed.token,
@@ -971,6 +994,7 @@ describeEachProvider('RFC-333 T5 TaskDecisionParticipantInTx', (harness) => {
       taskId,
       intentKind: claimed.intentKind,
       execution: createTaskExecutionContext({
+        humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
         intentId: submitted.intentId,
         token: claimed.token,

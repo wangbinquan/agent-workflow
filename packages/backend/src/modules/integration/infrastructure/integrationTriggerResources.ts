@@ -1,11 +1,10 @@
 // RFC-359 W4-D1 —— 集成触发器的资源快照加载：一份实现，两个 provider 共用。
-// Integration owns the transaction and the Digital Employee participant; Resource
+// Integration owns the transaction; Resource
 // Catalog owns classic-resource ACL/content reads. Both are bound to the same
 // transaction handle before any snapshot is loaded.
 
 import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
-import { createDigitalEmployeeIntegrationTriggerParticipantIn } from '@/modules/digital-employee/composition'
-import type { IntegrationTriggerResourceSnapshotFactory } from '@/modules/resource-catalog/composition/integrationTrigger'
+import type { IntegrationTriggerSnapshotFactory } from '../application/ports/integrationTriggerSnapshots'
 import type {
   FrozenIntegrationTriggerResourceSnapshot,
   IntegrationTriggerResourceRequest,
@@ -22,18 +21,14 @@ export type IntegrationTriggerResources = IntegrationTriggerResourceQueries &
 
 export function createIntegrationTriggerResources(
   db: PersistenceDb,
-  factory: IntegrationTriggerResourceSnapshotFactory,
+  factory: IntegrationTriggerSnapshotFactory,
 ): IntegrationTriggerResources {
   const loadInTransaction: IntegrationTriggerTransactionLoader['loadAuthorized'] = async (
     transaction,
     pair,
     requests,
   ) => {
-    const participant = factory.inTransaction(
-      transaction,
-      pair,
-      createDigitalEmployeeIntegrationTriggerParticipantIn(transaction),
-    )
+    const participant = factory.inTransaction(transaction, pair)
     return await participant.loadAuthorized(pair.authority, requests)
   }
 

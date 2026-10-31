@@ -5,7 +5,7 @@ import {
   cleanupRetiredStores,
   reportDiskReclaimable,
   reportRetiredRuntimeStores,
-} from '@/platform/persistence/sqlite/systemMaintenanceDisk'
+} from '@/modules/system-operations/infrastructure/local/systemMaintenanceDisk'
 import { Paths } from '@/util/paths'
 
 function nonNegativeInteger(value: unknown, detail: string): number {

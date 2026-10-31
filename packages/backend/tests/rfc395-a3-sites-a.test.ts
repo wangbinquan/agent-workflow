@@ -1,3 +1,4 @@
+import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { o2Ports } from './helpers/o2Closure'
 // RFC-395 II-a A3 sites-a：双 provider 锁定帧、消费新鲜度、跨代 fanout 与 call 收养的旧决策，避免简单 MAX(seq) 替换。
@@ -50,6 +51,7 @@ async function run(
 }
 function wrapperPorts(db: PersistenceDb, def = definition) {
   const persistence = createTaskExecutionPersistence(db, {
+    humanGateOpen: composeHumanGateOpenParticipantFactory(),
     historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
     recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
   })
@@ -92,6 +94,7 @@ describeEachProvider('RFC-395 II-a A3 sites-a decisions', (harness) => {
     await run(db, 'other-frame', 'source', { containerRunId: 'wrapper' })
     await run(db, 'child', 'source', { parentNodeRunId: 'wrapper', containerRunId: 'wrapper' })
     const persistence = createTaskExecutionPersistence(db, {
+      humanGateOpen: composeHumanGateOpenParticipantFactory(),
       historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
       recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
     })
@@ -117,6 +120,7 @@ describeEachProvider('RFC-395 II-a A3 sites-a decisions', (harness) => {
       { id: 'b', kind: 'agent-single' },
     ] as WorkflowNode[]
     const rows = await createTaskExecutionPersistence(db, {
+      humanGateOpen: composeHumanGateOpenParticipantFactory(),
       historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
       recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
     }).nodeExecution.list({ taskId: 'task' })
@@ -143,6 +147,7 @@ describeEachProvider('RFC-395 II-a A3 sites-a decisions', (harness) => {
       retryIndex: 20,
     })
     const persistence = createTaskExecutionPersistence(db, {
+      humanGateOpen: composeHumanGateOpenParticipantFactory(),
       historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
       recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
     })
@@ -169,6 +174,7 @@ describeEachProvider('RFC-395 II-a A3 sites-a decisions', (harness) => {
       containerRunId: 'w-new',
     })
     const rows = await createTaskExecutionPersistence(db, {
+      humanGateOpen: composeHumanGateOpenParticipantFactory(),
       historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
       recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
     }).nodeExecution.list({ taskId: 'task' })
@@ -303,6 +309,7 @@ describeEachProvider('RFC-395 II-a A3 sites-a decisions', (harness) => {
     ] as WorkflowNode[]
     const def = { ...definition, nodes }
     const persistence = createTaskExecutionPersistence(db, {
+      humanGateOpen: composeHumanGateOpenParticipantFactory(),
       historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
       recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
     })
@@ -355,6 +362,7 @@ describeEachProvider('RFC-395 II-a A3 sites-a decisions', (harness) => {
       containerRunId: 'selected-call',
     })
     const persistence = createTaskExecutionPersistence(db, {
+      humanGateOpen: composeHumanGateOpenParticipantFactory(),
       historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
       recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
     })

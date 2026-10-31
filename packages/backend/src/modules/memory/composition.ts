@@ -180,3 +180,5 @@ export {
 export { schemaContribution } from './composition/schema'
 
 export { createDistillEventRetentionPhase } from './infrastructure/retentionPhase'
+
+export { composeTaskMemorySnapshotPort } from './application/adapters/task-execution-adapter'

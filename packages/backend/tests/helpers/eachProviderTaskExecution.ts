@@ -1,3 +1,11 @@
+import { composeTaskMemorySnapshotPort } from '@/modules/memory/composition'
+import { composeCollaborationTaskRolePolicy } from '@/modules/resource-catalog/composition'
+import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
+import {
+  composeCollaborationRepairPorts,
+  composeTaskReviewersPort,
+  composeTaskClarifyDirectiveRouteOperations,
+} from '@/modules/collaboration/composition'
 import { epoch2RuntimeTestPorts } from './epoch2RuntimePorts'
 import { o2Ports, withO2Closure } from './o2Closure'
 import { withSourceControlTaskPorts } from './sourceControlTaskPorts'
@@ -190,6 +198,7 @@ export async function createEachProviderTaskExecution(
     resources,
   })
   const persistence = createTaskExecutionPersistence(db, {
+    humanGateOpen: composeHumanGateOpenParticipantFactory(),
     historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
     recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
     ...{ workspacePresence },
@@ -198,6 +207,7 @@ export async function createEachProviderTaskExecution(
   const appHome = runConfig.appHome
   const configPath = join(appHome, 'config.json')
   const collaborationRuntime = createCollaborationRuntimeMechanics(db, {
+    taskRolePolicy: composeCollaborationTaskRolePolicy(),
     ...epoch2RuntimeTestPorts(db),
     taskLock: o2Ports(db).taskLock,
     ...{ upstreamAgents: o2Ports(db).upstreamAgents },
@@ -276,6 +286,7 @@ export async function createEachProviderTaskExecution(
     const sqlite = db as unknown as DbClient
     const provider: SelectedTaskExecutionProviderRuntime = composeTaskExecutionProviderRuntime(
       withO2Closure({
+        collaborationRepair: composeCollaborationRepairPorts(db),
         archiveCollaboration: o2Ports(sqlite).collaborationReads.archive,
         clarifyNav: o2Ports(sqlite).collaborationReads.clarifyNav,
         db: sqlite,
@@ -296,6 +307,7 @@ export async function createEachProviderTaskExecution(
           () => ({ configPath, ...runConfig }),
         ),
         runtime: {
+          memorySnapshots: composeTaskMemorySnapshotPort(),
           taskDagCollaboration: createTaskDagCollaborationOperations(db),
           processConcurrencyScope: sqlite,
           ...runBinding,
@@ -344,6 +356,12 @@ export async function createEachProviderTaskExecution(
         // 最后一个要 legacy `TaskContinuationDependencies` 的路由动词，合一之后路由层不再持有它。
         routes: () => ({
           collaboration: unusedCapability('collaboration route'),
+          reviewers: composeTaskReviewersPort(unusedCapability('collaboration route')),
+          clarifyDirective: composeTaskClarifyDirectiveRouteOperations(
+            unusedCapability('collaboration route'),
+          ),
+          taskMembership: o2Ports(db).taskMembership,
+          memorySnapshots: composeTaskMemorySnapshotPort(),
           multipart: unusedCapability('multipart upload'),
           resourceAuthorityFor: () => launchResources,
           owners: composeOwnerIdentityQueries(db),
@@ -371,6 +389,7 @@ export async function createEachProviderTaskExecution(
           resolveActor: async () => actor,
           resourceAuthorityFor: () => launchResources,
           launch: createTestHostTaskLaunchKernel({
+            humanGateOpen: composeHumanGateOpenParticipantFactory(),
             db: sqlite,
             appHome,
             gitCommitIdentity: identityAccess.getUserGitCommitIdentity,
@@ -404,6 +423,7 @@ export async function createEachProviderTaskExecution(
         workspace: { readonly workspacePath: string; readonly baselineSha: string },
       ) {
         return await launchTestTask(task, {
+          humanGateOpen: composeHumanGateOpenParticipantFactory(),
           db: sqlite,
           ...runConfig,
           schedulerDriver: provider.runtime.schedulerDriver,
@@ -438,6 +458,7 @@ export async function createEachProviderTaskExecution(
   const log = createLogger('rfc359-execution-chain')
   const provider: SelectedTaskExecutionProviderRuntime = composeTaskExecutionProviderRuntime(
     withO2Closure({
+      collaborationRepair: composeCollaborationRepairPorts(db),
       archiveCollaboration: o2Ports(postgresql).collaborationReads.archive,
       clarifyNav: o2Ports(postgresql).collaborationReads.clarifyNav,
       db: postgresql,
@@ -458,6 +479,7 @@ export async function createEachProviderTaskExecution(
         () => ({ configPath, ...runConfig }),
       ),
       runtime: {
+        memorySnapshots: composeTaskMemorySnapshotPort(),
         ...runBinding,
         workspaceExcludeProfilesFor,
         ...(options.isolationWorkspaces === undefined
@@ -501,6 +523,12 @@ export async function createEachProviderTaskExecution(
       },
       routes: () => ({
         collaboration: unusedCapability('collaboration route'),
+        reviewers: composeTaskReviewersPort(unusedCapability('collaboration route')),
+        clarifyDirective: composeTaskClarifyDirectiveRouteOperations(
+          unusedCapability('collaboration route'),
+        ),
+        taskMembership: o2Ports(db).taskMembership,
+        memorySnapshots: composeTaskMemorySnapshotPort(),
         users: unusedCapability('task user directory'),
         owners: unusedCapability('task owner directory'),
         membershipEvents: unusedCapability('task member events'),

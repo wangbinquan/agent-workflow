@@ -1,3 +1,4 @@
+import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { withTargetMintIdentity } from './helpers/rfc395Mint'
 import { o2Ports } from './helpers/o2Closure'
@@ -238,6 +239,7 @@ emit(envelope)`,
     await createRetryEngine(h.db, {
       appHome: h.appHome,
       resumeWith: {
+        humanGateOpen: composeHumanGateOpenParticipantFactory(),
         db: h.db,
         schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
           .schedulerDriver,
@@ -302,6 +304,7 @@ emit(envelope)`,
     await createRetryEngine(h.db, {
       appHome: h.appHome,
       resumeWith: {
+        humanGateOpen: composeHumanGateOpenParticipantFactory(),
         db: h.db,
         schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
           .schedulerDriver,
@@ -459,6 +462,7 @@ describe('RFC-144 wrapper 同行复活的 iso 基（实现门 P2 第二半）', 
         appHome: h.appHome,
         isolationWorkspaces: selectIsolationWorkspaceFactory(),
         persistence: createTaskExecutionPersistence(h.db, {
+          humanGateOpen: composeHumanGateOpenParticipantFactory(),
           historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
           recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
         }),
@@ -510,6 +514,7 @@ describe('RFC-144 wrapper 同行复活的 iso 基（实现门 P2 第二半）', 
     const gen1Base = (gen1.checkpoints.find((checkpoint) => checkpoint.mountPath === '')
       ?.isolationBase ?? null)!
     const mergeStates = createTaskExecutionPersistence(h.db, {
+      humanGateOpen: composeHumanGateOpenParticipantFactory(),
       historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
       recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
     }).mergeStates
@@ -608,6 +613,7 @@ describe('RFC-144 wrapper 同行复活的 iso 基（实现门 P2 第二半）', 
     const gen1Base = (gen1.checkpoints.find((checkpoint) => checkpoint.mountPath === '')
       ?.isolationBase ?? null)!
     const mergeStates = createTaskExecutionPersistence(h.db, {
+      humanGateOpen: composeHumanGateOpenParticipantFactory(),
       historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
       recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
     }).mergeStates

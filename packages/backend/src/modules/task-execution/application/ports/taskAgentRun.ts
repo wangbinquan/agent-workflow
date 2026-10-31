@@ -1,3 +1,4 @@
+import type { TaskMemorySnapshotPort } from './taskMemorySnapshots'
 import type { ClarifyMindmapConfig } from '@agent-workflow/shared'
 // Runner: spawn ONE opencode subprocess for one node_run, stream its output
 // into the DB, persist the parsed envelope, and clean up.
@@ -408,6 +409,7 @@ export interface TaskAgentRunPolicy {
    */
   memoryInjectionBudget?: ScopeBudget
   /** Provider-neutral memory read participant selected by daemon composition. */
+  memorySnapshots: TaskMemorySnapshotPort
   memoryInjectionQueries: MemoryInjectionQueries
   /**
    * RFC-048: cadence + failure tolerance for the live subagent capture

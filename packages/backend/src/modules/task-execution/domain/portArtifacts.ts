@@ -3,7 +3,7 @@ import { decodePortArchive } from '@/platform/content/locations/portArchive'
 import type { PortArchive, PortArchiveItem } from '../application/ports/portArtifactContent'
 
 export { portSegment as encodePortSegment } from '@/platform/content/locations/portArchive'
-export { repoRelForcedPaths } from '@/modules/source-control/public/queries'
+export { repoRelForcedPaths } from '@/platform/workspace/forcedWorkspacePaths'
 
 export function parseArchiveJson(raw: string | null | undefined): PortArchive | null {
   return decodePortArchive(raw)?.archive ?? null

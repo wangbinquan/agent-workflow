@@ -128,7 +128,6 @@ export const PROVIDER_NAMED_FILE_DEBT: readonly string[] = [
   'modules/task-execution/composition/sqliteTaskExecutionContext.ts',
   'modules/task-execution/infrastructure/legacySqliteNodeRunOperations.ts',
   'modules/task-execution/infrastructure/legacySqliteTaskAuthorization.ts',
-  'modules/task-execution/infrastructure/legacySqliteTransportMechanisms.ts',
   // RFC-359 AC-1（第 11 刀之后的命名债收尾，§5hj）**第二批再销一条**：
   // `taskRouteRepairOperations` —— 它的依赖面注释早就写着「句柄是中立的……文件名与符号名里的
   // `postgresql` 仍是历史（naming debt §5hj）」，全文里 `PostgresqlDatabaseClient` 唯一一次出现

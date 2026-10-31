@@ -1,3 +1,4 @@
+import { composeCollaborationTaskRolePolicy } from '@/modules/resource-catalog/composition'
 import { initializeClarifyHistory } from '@/modules/collaboration/composition/clarifyHistory'
 import { readClarifyHistory } from '@/modules/collaboration/infrastructure/clarifyHistoryProjection'
 import { setDefaultTimeout, expect, test } from 'bun:test'
@@ -142,7 +143,10 @@ describeEachProvider('RFC-395 Q-1 disposition history projection', (h) => {
       source: 'session',
     })
     expect(
-      await createCollaborationTaskAccessPort(h.db).resolveClarifyRoundTask(actor, 'carrier'),
+      await createCollaborationTaskAccessPort(
+        h.db,
+        composeCollaborationTaskRolePolicy(),
+      ).resolveClarifyRoundTask(actor, 'carrier'),
     ).toMatchObject({ roundExists: true, taskId: 't', visible: true })
     const section = await h.session.snapshotRead((tx) =>
       createTaskArchiveCollaborationSectionReader().load(tx, ['t']),
@@ -340,7 +344,11 @@ describeEachProvider('RFC-395 Q-1 disposition history projection', (h) => {
       [
         'visibility',
         2,
-        () => createCollaborationTaskAccessPort(h.db).resolveClarifyRoundTask(actor, 'fresh-run'),
+        () =>
+          createCollaborationTaskAccessPort(
+            h.db,
+            composeCollaborationTaskRolePolicy(),
+          ).resolveClarifyRoundTask(actor, 'fresh-run'),
       ],
     ]
     for (let iteration = 0; iteration < 2; iteration++)

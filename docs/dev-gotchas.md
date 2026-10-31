@@ -64,6 +64,24 @@ MR 源终止必须使用该 provider 会话的 `taskExecutionProvider.executionM
 
 会话级任务协调器与实时 `runConfiguration()` 只在 `bootstrap/daemonModules/taskExecution.ts` 构造；HTTP、MCP、集成触发、宿主任务与根续跑复用该会话产物。续跑必须经 `runtimeConfigOpts` 投影（直接展开启动配置会丢提交推送与合并 Agent 设置），并携带记忆提炼入队器。会话引擎异常必须交给失败上报，置任务为 failed 并终结对应意图，不能只记日志。每次调用的旧协调器及房间续跑仍由后继 RFC-385 处理。
 
+## 跨 context 依赖走 consumer 自有端口；别拿 `services/` 消门（RFC-399）
+
+context 值级 DAG 与 `platform` 不 import `modules` 已由结构门锁死（`rfc376-structural-guards`、`rfc399-context-dag-platform`）。
+需要另一个 context 不在 RFC-294 design §3.1 DAG 上的能力时，形状固定：
+
+- 合同放 consumer 的 `application/ports/`，由 consumer 的 `composition/required-ports.ts` `export type` 转出；provider 在
+  `application/adapters/<consumer>-adapter.ts` 只 `import type` 这个合同并实现；bootstrap（`crossContextClosure.ts`、
+  `daemonModules/*`）构造后注入，测试构造入口同样显式注入，不留「没传就静态 import provider」的默认分支。新端口同批登记进
+  RFC-294 design §3.1 的虚线与 `rfc294Target.ts` 的 `REQUIRED_CONTEXT_EDGES`（`rfc294-design-parity` 两向比对）。
+- 常量、纯函数放错 owner 就迁到真正的 owner；两个 context 都要用、谁也不能依赖谁时进 `@agent-workflow/shared` 或 `platform/`。
+- 要按模块分派的 platform 机制（例如维护作业）：处理器放回 owner 模块，bootstrap 只装「键 → 处理器」表，platform 只按键调用。
+- 不算修好的做法：改走 `@/services/*` 的 `export *` facade（门不数 `services/`，依赖还在——RFC-399 实测经 `services/` 绕行的
+  越界 context 对仍有 18 对）、写一份同形的本地类型、在原位置留转导出、把 import 改成 `import type` 却仍在用对方的值。
+- 模块文件搬家或改依赖时，RFC-317 的 R1 / R2 精确账本（`architecture/commons-debt.json`）、`architecture/guard-manifest.json`、
+  RFC-395 横向表引用债务（`tests/fixtures/rfc395-horizontal-table-ownership-debt.json`）与 `rfc294-review-offered-edge-dag` 的例外
+  清单都按文件路径钉死，要同批改；原来藏在 platform / composition 里的 `services/` 依赖搬进模块 `application/` 后会在 R2 里现形，
+  优先改成由 bootstrap 注入，不要加账本。
+
 ## 测试 / CI
 
 - **改了共享 union / schema / 导出类型之后，本地自查必须覆盖「爆炸半径」而不是「我改的那几个文件」**（2026-09-21 实撞两次，RFC-366 + RFC-367 各中一次，方向相反）：两次都是「绿」的口径比改动的影响面窄，于是人declare done 之后才由对方查出来。

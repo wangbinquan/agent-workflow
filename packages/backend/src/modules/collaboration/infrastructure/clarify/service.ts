@@ -1,3 +1,5 @@
+import { createHumanGateOpenParticipantScope } from '../humanGateOpenFactory'
+import type { CollaborationTaskRolePolicy } from '../../application/ports/collaborationTaskRolePolicy'
 import type { HistoryRestrictionPort } from '@/platform/contracts/historyRestriction'
 import type { ContentStore } from '@/platform/content/contentStore'
 import type { HumanGateTaskLockPort } from '../../composition/required-ports'
@@ -186,6 +188,7 @@ const frameIs = (db: object, containerRunId: string | null) => {
 interface CreateRoundCommon {
   historyRestrictions: HistoryRestrictionPort
   content?: ContentStore
+  taskRolePolicy: CollaborationTaskRolePolicy
   taskLock: HumanGateTaskLockPort
   db: PersistenceDb
   taskId: string
@@ -379,6 +382,7 @@ export async function createClarifyRound(
       db: args.db,
       historyRestrictions: args.historyRestrictions,
       content: args.content,
+      taskRolePolicy: args.taskRolePolicy,
       taskLock: args.taskLock,
     }),
     {
@@ -420,6 +424,7 @@ export async function createClarifyRound(
   if (committedHere) {
     const executionContext = args.executionContext ?? currentTaskExecutionContext(args.taskId)
     await humanGateComposition.parkPreparedHumanGate({
+      humanGateOpen: createHumanGateOpenParticipantScope,
       db: args.db,
       historyRestrictions: args.historyRestrictions,
       content: args.content,

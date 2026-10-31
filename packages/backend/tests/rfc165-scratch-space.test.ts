@@ -1,3 +1,4 @@
+import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { readTaskFixtures, readTaskRepoFixtures, workflowFixture } from './helpers/model'
@@ -81,6 +82,7 @@ describe('RFC-165 T2a — scratch-space materialization', () => {
     const task = await launchTestTask(
       { ...BODY },
       {
+        humanGateOpen: composeHumanGateOpenParticipantFactory(),
         db: h.db,
         schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
           .schedulerDriver,
@@ -121,6 +123,7 @@ describe('RFC-165 T2a — scratch-space materialization', () => {
     const plain = await launchTestTask(
       { ...BODY },
       {
+        humanGateOpen: composeHumanGateOpenParticipantFactory(),
         db: h.db,
         schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
           .schedulerDriver,
@@ -151,6 +154,7 @@ describe('RFC-165 T2a — scratch-space materialization', () => {
     const withId = await launchTestTask(
       { ...BODY, name: 'scratch-task-2' },
       {
+        humanGateOpen: composeHumanGateOpenParticipantFactory(),
         db: h.db,
         schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
           .schedulerDriver,
@@ -172,6 +176,7 @@ describe('RFC-165 T2a — scratch-space materialization', () => {
     const task = await launchTestTask(
       { ...BODY },
       {
+        humanGateOpen: composeHumanGateOpenParticipantFactory(),
         db: h.db,
         schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
           .schedulerDriver,
@@ -197,6 +202,7 @@ describe('RFC-165 T2a — scratch-space materialization', () => {
     const task = await launchTestTask(
       { ...BODY },
       {
+        humanGateOpen: composeHumanGateOpenParticipantFactory(),
         db: h.db,
         schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
           .schedulerDriver,
@@ -233,6 +239,7 @@ describe('RFC-165 T2a — scratch-space materialization', () => {
       await materializeSpace(
         { ...BODY },
         {
+          humanGateOpen: composeHumanGateOpenParticipantFactory(),
           db: h.db,
           schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
             .schedulerDriver,
@@ -288,6 +295,7 @@ describe('RFC-165 T2a — scratch-space materialization', () => {
     const task = await launchTestTask(
       { ...BODY },
       {
+        humanGateOpen: composeHumanGateOpenParticipantFactory(),
         db: h.db,
         schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
           .schedulerDriver,
@@ -335,6 +343,7 @@ describe('RFC-165 T2a — scratch-space materialization', () => {
       launchTestTask(
         { ...BODY },
         {
+          humanGateOpen: composeHumanGateOpenParticipantFactory(),
           db: poisoned,
           schedulerDriver: createTaskExecutionTestTopology({ db: poisoned, driver: 'real' })
             .schedulerDriver,
@@ -358,6 +367,7 @@ describe('RFC-165 T2a — scratch-space materialization', () => {
     const space = await materializeSpace(
       { ...BODY },
       {
+        humanGateOpen: composeHumanGateOpenParticipantFactory(),
         db: h.db,
         schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
           .schedulerDriver,
@@ -376,6 +386,7 @@ describe('RFC-165 T2a — scratch-space materialization', () => {
     const task = await launchTestTask(
       { ...BODY },
       {
+        humanGateOpen: composeHumanGateOpenParticipantFactory(),
         db: h.db,
         schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
           .schedulerDriver,
@@ -397,6 +408,7 @@ describe('RFC-165 T2a — scratch-space materialization', () => {
     const space = await materializeSpace(
       { ...BODY },
       {
+        humanGateOpen: composeHumanGateOpenParticipantFactory(),
         db: h.db,
         schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
           .schedulerDriver,
@@ -409,6 +421,7 @@ describe('RFC-165 T2a — scratch-space materialization', () => {
     const task = await launchTestTask(
       { ...BODY },
       {
+        humanGateOpen: composeHumanGateOpenParticipantFactory(),
         db: h.db,
         schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
           .schedulerDriver,

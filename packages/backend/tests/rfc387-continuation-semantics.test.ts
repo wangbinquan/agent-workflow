@@ -1,3 +1,4 @@
+import { composeRepositoryPreparationLookup } from '@/modules/source-control/composition'
 import {
   withSourceControlTaskPorts,
   withWorkspaceMaintenancePorts,
@@ -339,6 +340,7 @@ describeEachProvider('RFC-387 session continuation semantics', (harness) => {
         throw new Error('fatal: rfc387 clone failed')
       }
       const preparation = composeDeferredRepositoryPreparation({
+        repositoryPreparationLookup: composeRepositoryPreparationLookup(harness.db),
         db: harness.db,
         appHome,
         gitBaselineSyncWindowMs: 0,

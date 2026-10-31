@@ -1,3 +1,4 @@
+import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { o2Ports } from './helpers/o2Closure'
 // RFC-359 W8 —— `transitionNodeRunStatus` / `setNodeRunStatus` 的「有执行上下文」分支从
@@ -114,6 +115,7 @@ async function seedClaimedTask(db: PersistenceDb, runStatus: 'pending' | 'done')
     iteration: 0,
   })
   const persistence = createTaskExecutionPersistence(db, {
+    humanGateOpen: composeHumanGateOpenParticipantFactory(),
     historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
     recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
   })

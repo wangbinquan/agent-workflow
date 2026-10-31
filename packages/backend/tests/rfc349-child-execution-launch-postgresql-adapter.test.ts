@@ -1,3 +1,4 @@
+import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { o2Ports } from './helpers/o2Closure'
 // RFC-349 — a node-launched child already owns an inherited workspace. This
@@ -185,6 +186,7 @@ describeEachProvider('RFC-349 child execution launch commit boundary', (harness)
         nudge() {},
       })
       const persistence = createTaskExecutionPersistence(fixture.db, {
+        humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(fixture.db).historyRestrictions,
         recoveryHumanGates: o2Ports(fixture.db).collaborationReads.recovery,
       })

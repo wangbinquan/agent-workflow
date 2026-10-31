@@ -1,3 +1,4 @@
+import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { o2Ports } from './helpers/o2Closure'
 // RFC-333/RFC-375 — pending continuations recover through the live managed worker.
@@ -99,6 +100,7 @@ describeEachProvider('RFC-333 pending human-gate continuation recovery', (harnes
     expect(
       await reapOrphanRuns(
         createTaskExecutionPersistence(db, {
+          humanGateOpen: composeHumanGateOpenParticipantFactory(),
           historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
           recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
         }).recoveryAdministration,
@@ -170,6 +172,7 @@ describeEachProvider('RFC-333 pending human-gate continuation recovery', (harnes
     expect(
       await reapOrphanRuns(
         createTaskExecutionPersistence(db, {
+          humanGateOpen: composeHumanGateOpenParticipantFactory(),
           historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
           recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
         }).recoveryAdministration,

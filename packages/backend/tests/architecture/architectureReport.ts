@@ -569,7 +569,6 @@ const LEGACY_BACKEND_FILE_OWNERS: Readonly<Record<string, TargetOwner>> = {
   'packages/backend/src/services/taskArchive.ts': 'task-execution',
   'packages/backend/src/services/taskAuthorization.ts': 'task-execution',
   'packages/backend/src/services/taskClarifyDirective.ts': 'collaboration',
-  'packages/backend/src/services/taskCollab.ts': 'collaboration',
   'packages/backend/src/services/taskDelete.ts': 'task-execution',
   'packages/backend/src/services/taskExecutionParticipants.ts': 'task-execution',
   'packages/backend/src/services/taskFanoutPools.ts': 'task-execution',

@@ -1,3 +1,4 @@
+import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 // LOCKS: RFC-096 (audit S-13 / 附录 C #2, design §3.2) — retryNode cascade
 // inheritance source + conservative nextRetry.
 //
@@ -154,6 +155,7 @@ async function waitForTerminalTask(db: DbClient, taskId: string): Promise<void> 
 }
 
 const DEPS = (h: Harness) => ({
+  humanGateOpen: composeHumanGateOpenParticipantFactory(),
   db: h.db,
   schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' }).schedulerDriver,
   taskRecoveryOperations: taskRecoveryOperations(h.db),
@@ -265,7 +267,9 @@ describe('RFC-096 §3.2 — retryNode cascade inheritance source (freshest TOP-L
     // ≥2ms gap: the production ulid() inside retryNode gets a strictly larger
     // time component than every seeded id (no same-ms random-order flake).
     await Bun.sleep(2)
-    await createRetryEngine(h.db, { resumeWith: DEPS(h) }).retry({
+    await createRetryEngine(h.db, {
+      resumeWith: DEPS(h),
+    }).retry({
       taskId,
       nodeRunId: upRunId,
       cascade: true,
@@ -355,7 +359,9 @@ describe('RFC-096 §3.2 — retryNode cascade inheritance source (freshest TOP-L
     })
 
     await Bun.sleep(2)
-    await createRetryEngine(h.db, { resumeWith: DEPS(h) }).retry({
+    await createRetryEngine(h.db, {
+      resumeWith: DEPS(h),
+    }).retry({
       taskId,
       nodeRunId: upRunId,
       cascade: true,
@@ -422,7 +428,9 @@ describe('RFC-096 §3.2 — retryNode cascade inheritance source (freshest TOP-L
     })
 
     await Bun.sleep(2)
-    await createRetryEngine(h.db, { resumeWith: DEPS(h) }).retry({
+    await createRetryEngine(h.db, {
+      resumeWith: DEPS(h),
+    }).retry({
       taskId,
       nodeRunId: upTopId,
       cascade: true,

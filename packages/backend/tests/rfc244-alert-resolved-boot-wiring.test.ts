@@ -11,8 +11,18 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 const START_SOURCE = readDaemonGraphSource()
+// RFC-399 B1: the lifecycle-invariant / stuck-task job bodies moved from the platform runner into
+// their owner, task-execution `application/maintenanceJobs.ts`; the worker dispatches to them.
 const WORKER_SOURCE = readFileSync(
-  resolve(import.meta.dir, '..', 'src', 'platform', 'background', 'maintenanceJobRunner.ts'),
+  resolve(
+    import.meta.dir,
+    '..',
+    'src',
+    'modules',
+    'task-execution',
+    'application',
+    'maintenanceJobs.ts',
+  ),
   'utf8',
 )
 const MAINTENANCE_SOURCE = readFileSync(

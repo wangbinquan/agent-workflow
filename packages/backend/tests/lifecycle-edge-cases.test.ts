@@ -1,3 +1,4 @@
+import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { legacyContentRef } from '@/platform/content/contentRef'
 import { contentRowColumns } from '@/platform/content/infrastructure/contentStore'
@@ -102,6 +103,7 @@ describeEachProvider('RFC-053 — `{ since }` scope filter', (harness) => {
     })
     const r = await runLifecycleInvariants({
       operations: createTaskExecutionPersistence(env.db, {
+        humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(env.db).historyRestrictions,
         recoveryHumanGates: o2Ports(env.db).collaborationReads.recovery,
       }).recoveryAdministration,
@@ -123,6 +125,7 @@ describeEachProvider('RFC-053 — `{ since }` scope filter', (harness) => {
     })
     const r = await runLifecycleInvariants({
       operations: createTaskExecutionPersistence(env.db, {
+        humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(env.db).historyRestrictions,
         recoveryHumanGates: o2Ports(env.db).collaborationReads.recovery,
       }).recoveryAdministration,
@@ -143,6 +146,7 @@ describeEachProvider('RFC-053 — `{ since }` scope filter', (harness) => {
     })
     const r = await runLifecycleInvariants({
       operations: createTaskExecutionPersistence(env.db, {
+        humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(env.db).historyRestrictions,
         recoveryHumanGates: o2Ports(env.db).collaborationReads.recovery,
       }).recoveryAdministration,
@@ -163,6 +167,7 @@ describeEachProvider('RFC-053 — `{ since }` scope filter', (harness) => {
     })
     const r = await runLifecycleInvariants({
       operations: createTaskExecutionPersistence(env.db, {
+        humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(env.db).historyRestrictions,
         recoveryHumanGates: o2Ports(env.db).collaborationReads.recovery,
       }).recoveryAdministration,
@@ -205,6 +210,7 @@ describeEachProvider('RFC-053 — workflow snapshot corrupt degrades gracefully'
 
     const r = await runLifecycleInvariants({
       operations: createTaskExecutionPersistence(env.db, {
+        humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(env.db).historyRestrictions,
         recoveryHumanGates: o2Ports(env.db).collaborationReads.recovery,
       }).recoveryAdministration,
@@ -228,6 +234,7 @@ describeEachProvider('RFC-053 — workflow snapshot corrupt degrades gracefully'
     })
     const r = await runLifecycleInvariants({
       operations: createTaskExecutionPersistence(env.db, {
+        humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(env.db).historyRestrictions,
         recoveryHumanGates: o2Ports(env.db).collaborationReads.recovery,
       }).recoveryAdministration,
@@ -268,6 +275,7 @@ describeEachProvider('RFC-053 — 24h grace boundary (severity warning → error
     })
     const r = await runLifecycleInvariants({
       operations: createTaskExecutionPersistence(env.db, {
+        humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(env.db).historyRestrictions,
         recoveryHumanGates: o2Ports(env.db).collaborationReads.recovery,
       }).recoveryAdministration,
@@ -299,6 +307,7 @@ describeEachProvider('RFC-053 — 24h grace boundary (severity warning → error
     })
     const r = await runLifecycleInvariants({
       operations: createTaskExecutionPersistence(env.db, {
+        humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(env.db).historyRestrictions,
         recoveryHumanGates: o2Ports(env.db).collaborationReads.recovery,
       }).recoveryAdministration,
@@ -329,6 +338,7 @@ describeEachProvider('RFC-053 — 24h grace boundary (severity warning → error
     })
     const r = await runLifecycleInvariants({
       operations: createTaskExecutionPersistence(env.db, {
+        humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(env.db).historyRestrictions,
         recoveryHumanGates: o2Ports(env.db).collaborationReads.recovery,
       }).recoveryAdministration,
@@ -399,6 +409,7 @@ describeEachProvider('RFC-053 — onAlert callback throw does not break reconcil
     try {
       await runLifecycleInvariants({
         operations: createTaskExecutionPersistence(env.db, {
+          humanGateOpen: composeHumanGateOpenParticipantFactory(),
           historyRestrictions: epoch2RuntimeTestPorts(env.db).historyRestrictions,
           recoveryHumanGates: o2Ports(env.db).collaborationReads.recovery,
         }).recoveryAdministration,
@@ -430,6 +441,7 @@ describeEachProvider('RFC-053 — onAlert callback throw does not break reconcil
     const calls: Array<{ rule: string; transition: 'new' | 'promoted' }> = []
     await reconcileLifecycleAlerts({
       operations: createTaskExecutionPersistence(env.db, {
+        humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(env.db).historyRestrictions,
         recoveryHumanGates: o2Ports(env.db).collaborationReads.recovery,
       }).recoveryAdministration,
@@ -456,6 +468,7 @@ describeEachProvider('RFC-053 — onAlert callback throw does not break reconcil
     })
     await reconcileLifecycleAlerts({
       operations: createTaskExecutionPersistence(env.db, {
+        humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(env.db).historyRestrictions,
         recoveryHumanGates: o2Ports(env.db).collaborationReads.recovery,
       }).recoveryAdministration,
@@ -470,6 +483,7 @@ describeEachProvider('RFC-053 — onAlert callback throw does not break reconcil
     const resolved: string[] = []
     const result = await reconcileLifecycleAlerts({
       operations: createTaskExecutionPersistence(env.db, {
+        humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(env.db).historyRestrictions,
         recoveryHumanGates: o2Ports(env.db).collaborationReads.recovery,
       }).recoveryAdministration,
@@ -513,6 +527,7 @@ describeEachProvider('RFC-053 — detail JSON round-trip with special characters
     }
     await reconcileLifecycleAlerts({
       operations: createTaskExecutionPersistence(env.db, {
+        humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(env.db).historyRestrictions,
         recoveryHumanGates: o2Ports(env.db).collaborationReads.recovery,
       }).recoveryAdministration,
@@ -544,6 +559,7 @@ describeEachProvider('RFC-053 — detail JSON round-trip with special characters
     }
     await reconcileLifecycleAlerts({
       operations: createTaskExecutionPersistence(env.db, {
+        humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(env.db).historyRestrictions,
         recoveryHumanGates: o2Ports(env.db).collaborationReads.recovery,
       }).recoveryAdministration,

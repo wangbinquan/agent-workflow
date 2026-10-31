@@ -1,3 +1,4 @@
+import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import type { TaskCreationInput } from '@/modules/task-execution/application/ports/taskCreation'
 import {
@@ -282,6 +283,7 @@ describeEachProvider('RFC-395 W1 owner fence and aggregate lock order', (harness
       intentId: 'race-intent',
       token,
       persistence: createTaskExecutionPersistence(harness.db, {
+        humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(harness.db).historyRestrictions,
       }),
     })
@@ -356,6 +358,7 @@ describeEachProvider('RFC-395 W1 Task gate restriction injection', (harness) => 
     const requests: { instance: string; request: HistoryRestrictionRequest }[] = []
     const lifecycle = (instance: string) =>
       new DatabaseHumanGateTaskLifecyclePersistence(harness.db, runtime, {
+        humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: {
           async check(_tx, request) {
             requests.push({ instance, request })
@@ -389,7 +392,9 @@ describeEachProvider('RFC-395 W1 Task gate restriction injection', (harness) => 
     ).toBe(true)
     await expect(
       // @ts-expect-error Deliberately exercise the runtime refusal for a missing provider.
-      new DatabaseHumanGateTaskLifecyclePersistence(harness.db, runtime).parkPrepared(input),
+      new DatabaseHumanGateTaskLifecyclePersistence(harness.db, runtime, {
+        humanGateOpen: composeHumanGateOpenParticipantFactory(),
+      }).parkPrepared(input),
     ).rejects.toThrow('gate-history-restriction-provider-required')
     expect((await harness.db.select().from(collaborationGateOperations))[0]!.state).toBe('prepared')
     const { tasks } = tablesOf(harness.db)

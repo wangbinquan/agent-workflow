@@ -1,3 +1,4 @@
+import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 // RFC-294 W4-E9 / E9-C 的回归锁 —— **一次 Reaction 不得启动出两个任务**。
 //
@@ -142,6 +143,7 @@ describe('RFC-294 E9-C —— 一次 Reaction 只起一个任务', () => {
       const tasksPort = composeDatabaseDigitalEmployeeExecutionPorts(
         db,
         epoch2RuntimeTestPorts(db).historyRestrictions,
+        composeHumanGateOpenParticipantFactory(),
       ).tasks
       const kernelLaunches: string[] = []
       let reachedCrash!: () => void

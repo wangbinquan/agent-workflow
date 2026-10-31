@@ -1,3 +1,10 @@
+import { composeRepositoryPreparationLookup } from '@/modules/source-control/composition'
+import {
+  composeCollaborationRepairPorts,
+  composeTaskClarifyDirectiveRouteOperations,
+  composeTaskReviewersPort,
+  composeGateContinuationSupport,
+} from '@/modules/collaboration/composition'
 import type { ContentStore } from '@/platform/content/contentStore'
 import type { HistoryRestrictionPort } from '@/platform/contracts/historyRestriction'
 import { composeCrossContextClosure } from '../crossContextClosure'
@@ -102,7 +109,7 @@ export interface DaemonTaskExecutionInput<P extends DatabaseProvider = DatabaseP
     DaemonRepositoryCredentials,
     'codeHostConnections' | 'repositoryPublicationTransport'
   >
-  readonly memory: Pick<DaemonMemoryModules, 'memoryInjectionQueries'> & {
+  readonly memory: Pick<DaemonMemoryModules, 'memoryInjectionQueries' | 'memorySnapshots'> & {
     readonly memoryOperations: {
       readonly distillCommands: Parameters<typeof createClarifyDecisionCommand>[1]
     }
@@ -155,6 +162,7 @@ export function composeDaemonTaskExecutionModules<P extends DatabaseProvider>(
   const persistence = createTaskExecutionPersistence(db, {
     content: input.content,
     historyRestrictions: input.historyRestrictions,
+    humanGateOpen: closure.humanGateOpen,
     recoveryHumanGates: closure.collaborationReads.recovery,
     workspacePresence: observation.workspacePresence,
   })
@@ -162,6 +170,7 @@ export function composeDaemonTaskExecutionModules<P extends DatabaseProvider>(
     content: input.content,
     historyRestrictions: input.historyRestrictions,
     db,
+    taskRolePolicy: closure.taskRolePolicy,
     taskLock: closure.taskLock,
     appHome,
     taskExecutionReadModels: persistence.reads,
@@ -169,6 +178,7 @@ export function composeDaemonTaskExecutionModules<P extends DatabaseProvider>(
     reviewDecisions: createReviewDecisionCommand({
       content: input.content,
       historyRestrictions: input.historyRestrictions,
+      taskRolePolicy: closure.taskRolePolicy,
       taskLock: closure.taskLock,
       upstreamAgents: closure.upstreamAgents,
       db,
@@ -217,6 +227,7 @@ export function composeDaemonTaskExecutionModules<P extends DatabaseProvider>(
       }),
     })
   }
+  const repositoryPreparationLookup = composeRepositoryPreparationLookup(db)
   const repositoryPreparation = composeRepositoryPreparation({
     taskPorts: composeSourceControlTaskPorts(db),
     db,
@@ -238,15 +249,19 @@ export function composeDaemonTaskExecutionModules<P extends DatabaseProvider>(
       releaseAndFinalize: (request) => provider.driverLifecycle.releaseAndFinalize(request),
     },
     gateContinuationPreDrive: composeGateContinuationPreDrive({
-      historyRestrictions: input.historyRestrictions,
-      db,
-      memoryDistillEnqueuer: memory.memoryOperations.distillCommands,
       persistence,
+      ...composeGateContinuationSupport({
+        db,
+        taskLock: closure.taskLock,
+        historyRestrictions: input.historyRestrictions,
+        memoryDistillEnqueuer: memory.memoryOperations.distillCommands,
+      }),
     }),
     repositoryPreparation: {
       async run(context) {
         const fresh = await runConfiguration()
         return composeDeferredRepositoryPreparation({
+          repositoryPreparationLookup,
           db,
           appHome,
           secretBox,
@@ -262,6 +277,7 @@ export function composeDaemonTaskExecutionModules<P extends DatabaseProvider>(
   })
   const coordinator = coordinatorFactory.session
   const provider = composeTaskExecutionProviderRuntime({
+    collaborationRepair: composeCollaborationRepairPorts(db),
     db,
     historyRestrictions: input.historyRestrictions,
     archiveCollaboration: closure.collaborationReads.archive,
@@ -282,6 +298,7 @@ export function composeDaemonTaskExecutionModules<P extends DatabaseProvider>(
       repositoryGitWorkspaces: selection.repositoryGitWorkspaces,
       workspacePresence: observation.workspacePresence,
       observationInvocations: observation.observationCalls,
+      memorySnapshots: memory.memorySnapshots,
       memoryInjectionQueries: memory.memoryInjectionQueries,
       runtimeSessionLeases: observation.runtimeSessionLeases,
       runtimeRegistry: core.runtimeRegistry,
@@ -290,6 +307,7 @@ export function composeDaemonTaskExecutionModules<P extends DatabaseProvider>(
       collaborationRuntime: createCollaborationRuntimeMechanics(db, {
         content: input.content,
         historyRestrictions: input.historyRestrictions,
+        taskRolePolicy: closure.taskRolePolicy,
         taskLock: closure.taskLock,
         upstreamAgents: closure.upstreamAgents,
         reviewArtifacts: selection.reviewArtifacts,
@@ -333,6 +351,10 @@ export function composeDaemonTaskExecutionModules<P extends DatabaseProvider>(
       effects: selection.effects,
       nodeRunPrompts: selection.nodeRunPrompts,
       collaboration,
+      clarifyDirective: composeTaskClarifyDirectiveRouteOperations(collaboration),
+      reviewers: composeTaskReviewersPort(collaboration),
+      taskMembership: closure.taskMembership,
+      memorySnapshots: memory.memorySnapshots,
       owners: input.resources.owners,
       appHome,
     }),
@@ -387,6 +409,7 @@ export function composeDaemonTaskExecutionModules<P extends DatabaseProvider>(
   })
   return Object.freeze({
     ...provider,
+    taskRolePolicy: closure.taskRolePolicy,
     processConcurrencyScope: input.adapters.processConcurrencyScope,
     hostTasks,
     collaboration,

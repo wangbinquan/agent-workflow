@@ -107,7 +107,9 @@ describe('RFC-395 II-a A6 one AtomicApply mechanism', () => {
       ),
     ).toEqual(['composeIntentApplyRecoveryScene', 'resourcePackageRecoveryScene'])
     expect(read('modules/intent/public/commands.ts')).not.toContain('activeBundleApplyIds')
-    expect(read('platform/background/maintenanceJobRunner.ts')).toContain("case 'intentRecovery'")
+    expect(read('modules/intent/application/maintenanceJobs.ts')).toContain(
+      'async intentRecovery(input)',
+    )
     const steps = DAEMON_BOOT_STEPS.map((step) => step.id)
     expect(steps.filter((id) => id === 'skill-operation-recovery')).toHaveLength(1)
     expect(steps.filter((id) => id === 'maintenance-boot-snapshot')).toHaveLength(1)

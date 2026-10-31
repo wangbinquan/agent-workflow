@@ -1,3 +1,4 @@
+import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 // RFC-368 T7 —— `ReactionExecutionPortV1` 的 TaskExecution 适配器与它背后的 typed 核心。
 //
@@ -337,6 +338,7 @@ describe('RFC-368 T7 —— 核心的 stopped 判据与人审六态（真库）'
         ...composeDatabaseDigitalEmployeeExecutionPorts(
           harness.db,
           epoch2RuntimeTestPorts(harness.db).historyRestrictions,
+          composeHumanGateOpenParticipantFactory(),
         ),
       } as unknown as DigitalEmployeeExecutionDependencies)
     }

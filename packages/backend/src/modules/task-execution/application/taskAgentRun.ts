@@ -124,7 +124,6 @@ import {
 /** SIGTERM → SIGKILL grace for a node's process group. */
 const KILL_ESCALATION_GRACE_MS = 10_000
 import { NOOP_HANDLE } from '@/services/runtime'
-import { formatMemoryBlockFromSnapshot, memoryFencingForNonce } from '@/modules/memory/public/types'
 
 import type { FailureCode, InjectedMemorySnapshot } from '@agent-workflow/shared'
 import { TASK_CHANNEL, taskBroadcaster } from '@/ws/broadcaster'
@@ -321,10 +320,7 @@ export async function runNode(
         // RFC-317 T39（CC-13）—— 这一支重建的是**历史 node_run** 的 persona 片段，
         // pre-RFC-200 的行没有 nonce，必须逐字复刻当年的拼法；用具名转换器把
         // 「空 nonce ⇒ 不加围栏」这个判断显式化，而不是靠公共函数的默认参数继承。
-        injectedMemoryBlock = formatMemoryBlockFromSnapshot(
-          injectedSnapshot,
-          memoryFencingForNonce(envelopeNonce),
-        )
+        injectedMemoryBlock = opts.memorySnapshots.renderSnapshot(injectedSnapshot, envelopeNonce)
       }
     } catch (err) {
       log.warn('memory-inject-followup-inherit-failed', {

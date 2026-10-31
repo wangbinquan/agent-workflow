@@ -1,3 +1,4 @@
+import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { o2Ports } from './helpers/o2Closure'
 // RFC-359 W4-B1 批 2a —— 五对只差客户端类型 / 同步异步形态的适配器合成一份实现，两个引擎各跑一遍：
@@ -185,6 +186,7 @@ describeEachProvider('RFC-359 W4-B1 批 2a —— 人工门 continuation 的 eff
     const db = harness.db
     const taskId = await seedTask(db)
     const persistence = createTaskExecutionPersistence(db, {
+      humanGateOpen: composeHumanGateOpenParticipantFactory(),
       historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
       recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
     })

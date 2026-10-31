@@ -1,3 +1,4 @@
+import { createDigitalEmployeeIntegrationTriggerParticipantIn } from '@/modules/digital-employee/composition'
 import { composeSourceControlTaskPorts } from '@/modules/task-execution/composition'
 // RFC-359 W12 / W57：性能用例按**生产入口**查询真库——现在两个 provider 是同一个入口。
 //
@@ -16,7 +17,7 @@ import {
 } from '../../src/modules/identity-access/composition'
 import { composeScheduledTaskRuntimeFor } from '../../src/modules/integration/composition/scheduledTasks'
 import { composeMemoryCatalogOperations } from '../../src/modules/memory/composition'
-import { composeIntegrationTriggerResourceSnapshotFactory } from '../../src/modules/resource-catalog/composition/integrationTrigger'
+import { composeIntegrationTriggerSnapshots } from '../../src/modules/resource-catalog/composition/integrationTrigger'
 import { composeResourceCatalogOverviewQuery } from '../../src/modules/resource-catalog/composition/resourceCatalogOverview'
 import {
   composeRepositoryWorkspaceOperations,
@@ -40,7 +41,10 @@ export function createProductionOverviewQuery(
 ): SystemOverviewQuery {
   const scheduledTaskRuntime = composeScheduledTaskRuntimeFor({
     db,
-    resourceSnapshots: composeIntegrationTriggerResourceSnapshotFactory({ assertNotBuiltin }),
+    resourceSnapshots: composeIntegrationTriggerSnapshots(
+      { assertNotBuiltin },
+      createDigitalEmployeeIntegrationTriggerParticipantIn,
+    ),
     validation: {
       assertWorkflowLaunchable: unusedCapability,
       assertAgentIntegrity: unusedCapability,

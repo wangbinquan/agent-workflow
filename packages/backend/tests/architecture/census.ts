@@ -114,6 +114,8 @@ export const BOOTSTRAP_FILES = [
   'packages/backend/src/bootstrap/maintenanceWorkerEntry.ts',
   'packages/backend/src/bootstrap/maintenanceWorker.ts',
   'packages/backend/src/bootstrap/maintenanceWorkerGraph.ts',
+  'packages/backend/src/bootstrap/maintenanceJobBindings.ts',
+  'packages/backend/src/bootstrap/maintenanceWorkerEffects.ts',
   'packages/backend/src/bootstrap/maintenanceWorkerEntries.ts',
   'packages/backend/src/bootstrap/executionInitialization.ts',
   'packages/backend/src/bootstrap/workspaceTaskImage.ts',

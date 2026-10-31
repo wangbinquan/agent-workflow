@@ -89,7 +89,6 @@ export { NOOP_HANDLE } from './opencode/subagentLiveCapture'
 // RFC-367: the constant outlived its old home (the retired post-run distill
 // SQLite walk). Its neutral definition lives in runtime-management's public
 // types; this re-export keeps existing importers working.
-export { DISTILL_CAPTURE_FAILED_KIND } from '@/modules/runtime-management/public/types'
 // Frozen plugin runtime specifier projection used by startup inventory.
 export { pluginFileSpec } from './opencode/pluginSpec'
 

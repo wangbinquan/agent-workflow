@@ -1,3 +1,4 @@
+import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import { runGit } from '@/util/git'
 import type { SequencedOracleRunRow } from '@/modules/task-execution/infrastructure/migration/oracle/rows'
 import type { TaskReadRow } from '@/modules/task-execution/infrastructure/taskRepositorySql'
@@ -315,6 +316,7 @@ describe('S-22（DB 面）— retryNode 对 canceled 任务放行，复活后任
         const next = await createRetryEngine(db, {
           appHome: APP_HOME,
           resumeWith: {
+            humanGateOpen: composeHumanGateOpenParticipantFactory(),
             db,
             taskRecoveryOperations: taskRecoveryOperations(db),
             schedulerDriver: createTaskExecutionTestTopology({ db, driver: 'real' })
@@ -363,6 +365,7 @@ describe('S-22（DB 面）— retryNode 对 canceled 任务放行，复活后任
       createRetryEngine(db, {
         appHome: APP_HOME,
         resumeWith: {
+          humanGateOpen: composeHumanGateOpenParticipantFactory(),
           db,
           taskRecoveryOperations: taskRecoveryOperations(db),
           schedulerDriver: createTaskExecutionTestTopology({ db, driver: 'real' }).schedulerDriver,

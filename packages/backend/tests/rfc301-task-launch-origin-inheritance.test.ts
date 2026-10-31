@@ -1,3 +1,4 @@
+import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 // RFC-395 II-pre：改接生产启动 / 读取路径，保留原断言意图。
 // RFC-301 — application-side task-tree launch-origin inheritance.
 //
@@ -171,6 +172,7 @@ describe('RFC-301 task launch-origin inheritance without the compatibility trigg
     await launchTestTask(
       { workflowId: h.workflowId, name: 'child', inputs: {} },
       {
+        humanGateOpen: composeHumanGateOpenParticipantFactory(),
         db: h.db,
         schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
           .schedulerDriver,
@@ -189,6 +191,7 @@ describe('RFC-301 task launch-origin inheritance without the compatibility trigg
     await launchTestTask(
       { workflowId: h.workflowId, name: 'grandchild', inputs: {} },
       {
+        humanGateOpen: composeHumanGateOpenParticipantFactory(),
         db: h.db,
         schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
           .schedulerDriver,
@@ -227,6 +230,7 @@ describe('RFC-301 task launch-origin inheritance without the compatibility trigg
         launchTestTask(
           { workflowId: h!.workflowId, name: `child-${id}`, inputs: {} },
           {
+            humanGateOpen: composeHumanGateOpenParticipantFactory(),
             db: h!.db,
             schedulerDriver: createTaskExecutionTestTopology({ db: h!.db, driver: 'real' })
               .schedulerDriver,

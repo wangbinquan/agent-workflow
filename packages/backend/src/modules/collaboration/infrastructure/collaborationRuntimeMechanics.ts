@@ -1,3 +1,4 @@
+import type { CollaborationTaskRolePolicy } from '../application/ports/collaborationTaskRolePolicy'
 import type { HistoryRestrictionPort } from '@/platform/contracts/historyRestriction'
 import type { ContentStore } from '@/platform/content/contentStore'
 import type { HumanGateTaskLockPort, ReviewUpstreamAgentPort } from '../composition/required-ports'
@@ -33,6 +34,7 @@ export function createCollaborationRuntimeMechanics(
   dependencies: Readonly<{
     historyRestrictions: HistoryRestrictionPort
     content: ContentStore
+    taskRolePolicy: CollaborationTaskRolePolicy
     taskLock: HumanGateTaskLockPort
     upstreamAgents: ReviewUpstreamAgentPort
     portArtifactReaderFor?: (appHome: string) => PortArtifactReader
@@ -45,6 +47,7 @@ export function createCollaborationRuntimeMechanics(
       return dispatchReviewNode({
         db,
         upstreamAgents: dependencies.upstreamAgents,
+        taskRolePolicy: dependencies.taskRolePolicy,
         taskLock: dependencies.taskLock,
         historyRestrictions: dependencies.historyRestrictions,
         content: dependencies.content,
@@ -63,6 +66,7 @@ export function createCollaborationRuntimeMechanics(
       const { createClarifyRound } = await import('./clarify/service')
       const common = {
         db,
+        taskRolePolicy: dependencies.taskRolePolicy,
         taskLock: dependencies.taskLock,
         historyRestrictions: dependencies.historyRestrictions,
         content: dependencies.content,

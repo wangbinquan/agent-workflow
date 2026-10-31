@@ -22,6 +22,7 @@ import { createTestTaskDriveCoordinator } from './legacyTaskDrive'
 import { type TaskDriveCoordinatorDependencies } from '@/services/task'
 
 export function createTestHostTaskLaunchKernel(input: {
+  readonly humanGateOpen: Parameters<typeof createTestTaskDriveCoordinator>[0]['humanGateOpen']
   readonly workspace?: RootTaskLaunchDependencies['workspace']
   readonly coordinator?: TaskDriveCoordinator
   readonly db: PersistenceDb
@@ -32,6 +33,7 @@ export function createTestHostTaskLaunchKernel(input: {
   readonly completionMode: TaskDriveCompletionMode
 }): RootTaskLaunchKernel {
   const drive = createTestTaskDriveCoordinator({
+    humanGateOpen: input.humanGateOpen,
     deps: input.coordinatorDeps,
     appHome: input.appHome,
     engineFailureMessage: 'host task drive threw',

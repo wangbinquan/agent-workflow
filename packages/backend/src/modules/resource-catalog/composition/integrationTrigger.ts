@@ -56,3 +56,17 @@ export function composeIntegrationTriggerResourceSnapshotFactory(
 
 export type PostgresqlIntegrationTriggerResourceSnapshotFactory =
   IntegrationTriggerResourceSnapshotFactory
+
+import { composeIntegrationTriggerSnapshotFactory } from '../application/adapters/integration-adapter'
+
+export function composeIntegrationTriggerSnapshots(
+  dependencies: IntegrationTriggerResourceDependencies,
+  digitalEmployeesInTransaction: (
+    tx: PersistenceTx,
+  ) => DigitalEmployeeIntegrationTriggerParticipant,
+) {
+  const factory = composeIntegrationTriggerResourceSnapshotFactory(dependencies)
+  return composeIntegrationTriggerSnapshotFactory({
+    inTransaction: (tx, pair) => factory.inTransaction(tx, pair, digitalEmployeesInTransaction(tx)),
+  })
+}

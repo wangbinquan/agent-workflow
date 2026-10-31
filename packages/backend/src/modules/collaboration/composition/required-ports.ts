@@ -13,3 +13,5 @@ export interface HumanGateTaskLockParticipant {
 }
 
 export type HumanGateTaskLockPort = (tx: PersistenceTx) => HumanGateTaskLockParticipant
+
+export type { CollaborationTaskRolePolicy } from '../application/ports/collaborationTaskRolePolicy'

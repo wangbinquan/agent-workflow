@@ -1,3 +1,4 @@
+import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { o2Ports } from './helpers/o2Closure'
 import { withWorkspaceMaintenancePorts } from './helpers/sourceControlTaskPorts'
@@ -261,6 +262,7 @@ describeEachProvider('single non-root member workspace regression', (harness) =>
         const handle = await createIsoUnderLock({
           binding: {
             persistence: createTaskExecutionPersistence(harness.db, {
+              humanGateOpen: composeHumanGateOpenParticipantFactory(),
               historyRestrictions: epoch2RuntimeTestPorts(harness.db).historyRestrictions,
               recoveryHumanGates: o2Ports(harness.db).collaborationReads.recovery,
             }),
@@ -407,6 +409,7 @@ describeEachProvider('single non-root member workspace regression', (harness) =>
           expect(task.worktreePath).toContain(join('worktrees', 'group'))
         const binding = {
           persistence: createTaskExecutionPersistence(harness.db, {
+            humanGateOpen: composeHumanGateOpenParticipantFactory(),
             historyRestrictions: epoch2RuntimeTestPorts(harness.db).historyRestrictions,
             recoveryHumanGates: o2Ports(harness.db).collaborationReads.recovery,
           }),
@@ -722,6 +725,7 @@ describeEachProvider('single non-root member workspace regression', (harness) =>
           historyRestrictions: epoch2RuntimeTestPorts(harness.db).historyRestrictions,
           db: harness.db,
           persistence: createTaskExecutionPersistence(harness.db, {
+            humanGateOpen: composeHumanGateOpenParticipantFactory(),
             historyRestrictions: epoch2RuntimeTestPorts(harness.db).historyRestrictions,
             recoveryHumanGates: o2Ports(harness.db).collaborationReads.recovery,
           }),

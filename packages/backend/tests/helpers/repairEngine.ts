@@ -1,3 +1,5 @@
+import { composeCollaborationTaskRolePolicy } from '@/modules/resource-catalog/composition'
+import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import { epoch2RuntimeTestPorts } from './epoch2RuntimePorts'
 import { o2Ports } from './o2Closure'
 // RFC-359 AC-1（第 8 刀）—— 修复引擎的**唯一**测试装配点。
@@ -100,6 +102,7 @@ export function createRepairEngine(
 ): RepairEngine {
   const appHome = options.appHome ?? mkdtempSync(join(tmpdir(), 'aw-repair-engine-'))
   const persistence = createTaskExecutionPersistence(db, {
+    humanGateOpen: composeHumanGateOpenParticipantFactory(),
     historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
     recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
   })
@@ -120,6 +123,7 @@ export function createRepairEngine(
     collaborationRuntime:
       options.collaborationRuntime ??
       createCollaborationRuntimeMechanics(db, {
+        taskRolePolicy: composeCollaborationTaskRolePolicy(),
         ...epoch2RuntimeTestPorts(db),
         taskLock: o2Ports(db).taskLock,
         ...{ upstreamAgents: o2Ports(db).upstreamAgents },

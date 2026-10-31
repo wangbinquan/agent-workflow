@@ -1,3 +1,4 @@
+import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { o2Ports } from './helpers/o2Closure'
 import {
@@ -399,6 +400,7 @@ describeEachProvider('RFC-328 归属与持久执行（双引擎）', (harness) =
       const claim = await module.claim({ db: database, intentId: intent.intentId })
       module.claimGate.leave(claim.permit)
       const context = createTaskExecutionContext({
+        humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(database).historyRestrictions,
         db: database,
         intentId: intent.intentId,

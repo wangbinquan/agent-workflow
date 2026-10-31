@@ -1,3 +1,4 @@
+import { composeTaskMemorySnapshotPort } from '@/modules/memory/composition'
 // Locks in: `buildCommand` always appends `--thinking` so opencode emits
 // `reasoning` events to stdout in `--format json` mode. Without this
 // flag opencode's run.ts:671 filters reasoning parts out, so the
@@ -30,8 +31,12 @@ const AGENT: Agent = {
   updatedAt: 0,
 }
 
-function baseOpts(overrides: Partial<RunNodeOptions> = {}): RunNodeOptions {
+function baseOpts(
+  memorySnapshots: RunNodeOptions['memorySnapshots'],
+  overrides: Partial<RunNodeOptions> = {},
+): RunNodeOptions {
   return {
+    memorySnapshots,
     taskId: 't',
     nodeRunId: 'nr',
     nodeId: 'n',
@@ -49,12 +54,15 @@ function baseOpts(overrides: Partial<RunNodeOptions> = {}): RunNodeOptions {
 
 describe('runner buildCommand — thinking flag', () => {
   test('always emits `--thinking` so reasoning events reach stdout', () => {
-    const cmd = buildCommand(baseOpts(), 'PROMPT')
+    const cmd = buildCommand(baseOpts(composeTaskMemorySnapshotPort()), 'PROMPT')
     expect(cmd).toContain('--thinking')
   })
 
   test('`--thinking` coexists with `--format json` and `--session <id>`', () => {
-    const cmd = buildCommand(baseOpts({ resumeSessionId: 'opc_abc' }), 'PROMPT')
+    const cmd = buildCommand(
+      baseOpts(composeTaskMemorySnapshotPort(), { resumeSessionId: 'opc_abc' }),
+      'PROMPT',
+    )
     expect(cmd).toContain('--thinking')
     expect(cmd).toContain('--format')
     expect(cmd[cmd.indexOf('--format') + 1]).toBe('json')

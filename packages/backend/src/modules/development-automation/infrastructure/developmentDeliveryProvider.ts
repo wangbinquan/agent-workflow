@@ -6,7 +6,7 @@ import { and, eq } from 'drizzle-orm'
 
 import type { SecretBox } from '@/auth/secretBox'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { matchRepoProvider } from '@/modules/integration/composition/codeHostEffects'
+import { matchRepoProvider } from '@/modules/development-automation/domain/repositoryProviderMatch'
 import type { SelectedPipelineEvidenceExecution } from '@/modules/integration/public/participants'
 import type { CodeHostConnectionsService } from '@/services/codeHost/connections'
 import { unsealRepoUrl } from '@/services/repoCredentials'

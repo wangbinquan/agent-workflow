@@ -12,15 +12,6 @@
       "removeWhen": "RFC-395 T11 auth/authPersistence 边界任务：将身份持久化收回 identity-access，由 auth 装配闭合端口。"
     },
     {
-      "table": "cachedRepos",
-      "owner": "source-control",
-      "file": "services/task.ts",
-      "tableId": "cached_repos",
-      "kind": "other",
-      "why": "仓库准备清理仍读取 source-control 的缓存镜像定位事实；本轮只迁移 Task/Run 持久化，保留该精确非重塑站点。",
-      "removeWhen": "RFC-395 T11 services/task cached-repo 清理场景：source-control 提供闭合镜像定位 query，替代完整缓存仓库行读取。"
-    },
-    {
       "table": "maintenanceRuns",
       "owner": "system-operations",
       "file": "platform/persistence/maintenanceRunStore.ts",

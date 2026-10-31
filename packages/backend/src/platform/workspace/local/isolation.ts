@@ -41,7 +41,7 @@ import {
   parseConflictManifest,
   type ResolvedPathState,
 } from '@/services/mergeAgent'
-import { repoRelForcedPaths } from '@/modules/source-control/public/queries'
+import { repoRelForcedPaths } from '@/platform/workspace/forcedWorkspacePaths'
 
 // RFC-210 / RFC-377: orchestration owns policy; git primitives stay in util/git.
 // Pass the cache service's settings/capability resolver at every entry point.

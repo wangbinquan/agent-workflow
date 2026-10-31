@@ -1,3 +1,4 @@
+import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 // RFC-380: construction is passive, session identities are shared, and a replacement gets its own graph.
 import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { composeDevelopmentPurposeRoot } from '@/bootstrap/developmentPurposeRoot'
@@ -192,8 +193,9 @@ describeEachProvider('RFC-380 passive module bundles', (harness) => {
             'developmentWorkspaceRepositoryPreparation',
           ].sort(),
         )
+        // RFC-399 A10: the memory bundle also carries the task memory snapshot port.
         expect(Object.keys(session.memoryModules).sort()).toEqual(
-          ['memoryOperations', 'memoryInjectionQueries', 'memoryCatalog'].sort(),
+          ['memoryOperations', 'memoryInjectionQueries', 'memoryCatalog', 'memorySnapshots'].sort(),
         )
         const observation = session.observationModules
         expect(Object.keys(observation).sort()).toEqual(
@@ -287,6 +289,7 @@ describeEachProvider('RFC-380 injected HTTP instances', (harness) => {
       }
       const startDeps = buildStartTaskDeps(
         binding.db,
+        composeHumanGateOpenParticipantFactory(),
         {
           drive: noTaskWork,
           cancelChild: noTaskWork,

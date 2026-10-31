@@ -1,3 +1,4 @@
+import type { CollaborationTaskRolePolicy } from '../application/ports/collaborationTaskRolePolicy'
 // RFC-036 / RFC-349 — SQLite task collaboration persistence. RFC-099 (D6/D10/D13) removed the
 // dormant node-level assignment helpers (node_assignments never had UI and
 // is dropped by migration 0046) and added member management: task membership
@@ -23,8 +24,6 @@ import { SYSTEM_USER_ID } from '@/auth/actor'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { NotFoundError } from '@/util/errors'
-import { resolveTaskRole } from '@/modules/resource-catalog/application/resourceDefaults'
-import { hasResourceAclBypass } from '@/modules/resource-catalog/domain/resourceAccess'
 import { ForbiddenError, ValidationError } from '@/util/errors'
 import { triggerRevalidationAndWait } from '@/ws/revalidationHook'
 import { TASKS_LIST_CHANNEL, tasksListBroadcaster } from '@/ws/broadcaster'
@@ -137,12 +136,13 @@ export async function listCollaborators(
  */
 export async function requireTaskMember(
   db: PersistenceDb,
+  policy: CollaborationTaskRolePolicy,
   actor: Actor,
   task: TaskRowForVisibility,
 ): Promise<TaskActorRole> {
   // RFC-324 —— observer 看得见任务，但不是回答权主体，所以这里问的是行动权成员。
   const member = await hasActingMembership(db, task.id, actor.user.id)
-  const role = resolveTaskRole(actor, task.ownerUserId ?? null, member)
+  const role = policy.resolveTaskRole(actor, task.ownerUserId ?? null, member)
   if (role !== null) return role
   throw new ForbiddenError(
     'not-task-member',
@@ -160,11 +160,12 @@ export async function requireTaskMember(
  */
 export async function requireTaskOperator(
   db: PersistenceDb,
+  policy: CollaborationTaskRolePolicy,
   actor: Actor,
   task: TaskRowForVisibility,
 ): Promise<void> {
   const member = await hasActingMembership(db, task.id, actor.user.id)
-  if (resolveTaskRole(actor, task.ownerUserId ?? null, member) !== null) return
+  if (policy.resolveTaskRole(actor, task.ownerUserId ?? null, member) !== null) return
   throw new ForbiddenError(
     'task-observer-read-only',
     'you are an observer on this task; cancelling, resuming and retrying are reserved for its members',
@@ -189,6 +190,7 @@ function toUserPublic(row: UserRow): UserPublic {
 
 export async function getTaskMembers(
   db: PersistenceDb,
+  policy: CollaborationTaskRolePolicy,
   actor: Actor,
   task: TaskRowForVisibility,
 ): Promise<TaskMembers> {
@@ -213,7 +215,7 @@ export async function getTaskMembers(
     )
     .map((m) => ({ user: toUserPublic(m.user), role: m.role }))
   const isOwner = task.ownerUserId != null && task.ownerUserId === actor.user.id
-  const canManage = hasResourceAclBypass(actor) || isOwner
+  const canManage = policy.hasResourceAclBypass(actor) || isOwner
   // RFC-324 —— 面板据此禁用 cancel / resume / 回答控件，而不是让点击撞上 403。
   const canOperate =
     canManage || memberRows.some((r) => r.role === 'collaborator' && r.userId === actor.user.id)
@@ -304,6 +306,7 @@ interface MembersCommit {
 
 export async function updateTaskMembers(
   db: PersistenceDb,
+  policy: CollaborationTaskRolePolicy,
   actor: Actor,
   task: TaskRowForVisibility,
   body: {
@@ -326,12 +329,12 @@ export async function updateTaskMembers(
     )[0]
     if (fresh === undefined)
       throw new NotFoundError('task-not-found', `task '${task.id}' not found`)
-    const committed = await updateTaskMembersLocked(db, actor, fresh, body)
+    const committed = await updateTaskMembersLocked(db, policy, actor, fresh, body)
     // The response is the state THIS commit produced, read while the lock still
     // excludes the next writer — composing it after the (lock-free) revalidation
     // wait from a fresh member query would pair this commit's owner with rows a
     // later commit wrote (RFC-326 impl-gate P2).
-    const members = await getTaskMembers(db, actor, {
+    const members = await getTaskMembers(db, policy, actor, {
       id: task.id,
       ownerUserId: committed.nextOwner,
     })
@@ -360,6 +363,7 @@ export async function updateTaskMembers(
 
 async function updateTaskMembersLocked(
   db: PersistenceDb,
+  policy: CollaborationTaskRolePolicy,
   actor: Actor,
   task: TaskRowForVisibility,
   body: {
@@ -368,7 +372,8 @@ async function updateTaskMembersLocked(
   },
 ): Promise<MembersCommit> {
   const canManage =
-    hasResourceAclBypass(actor) || (task.ownerUserId != null && task.ownerUserId === actor.user.id)
+    policy.hasResourceAclBypass(actor) ||
+    (task.ownerUserId != null && task.ownerUserId === actor.user.id)
   if (!canManage) {
     throw new ForbiddenError(
       'forbidden',

@@ -7,9 +7,9 @@ import type { ResourcePackageRecoveryEffectsFactory } from '@/modules/resource-c
 import {
   openMaintenanceWorkerEffectsScope,
   type MaintenanceWorkerEffectsCapability,
-  type MaintenanceWorkerEffectsDescriptor,
   type MaintenanceWorkerEffectsEnvironment,
-} from '@/platform/background/maintenanceWorkerEffects'
+} from '@/bootstrap/maintenanceWorkerEffects'
+import { type MaintenanceWorkerEffectsDescriptor } from '@/platform/background/maintenanceWorkerEffects'
 import {
   createMaintenanceWorkerEffectsInit,
   readMaintenanceWorkerEffectsFrame,

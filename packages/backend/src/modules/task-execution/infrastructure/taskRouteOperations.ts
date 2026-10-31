@@ -101,21 +101,12 @@ import type { Actor } from '@/auth/actor'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { AgentLaunchResourceOperations } from '../application/ports/agentLaunchResourceOperations'
 import type { TaskExecutionResourceAuthority } from '../application/ports/taskExecutionResourceSnapshots'
-// RFC-328：跨 context 走 facade，不直接 import 别人的 infrastructure
-//（`@/services/taskCollab` 就是 collaboration 那套成员 / 可见性判据的既有 facade，
-// SQLite 那一侧一直走的也是它）。
+import type { TaskMembershipOperationsPort } from '../application/ports/taskMembershipOperations'
+import type { CollaborationRuntimeMechanics } from '@/modules/collaboration/public/participants'
 import type {
-  ClarifyRepairParticipant,
-  CollaborationRuntimeMechanics,
-  ReviewRepairParticipant,
-} from '@/modules/collaboration/public/participants'
-import {
-  canViewTask,
-  getTaskMembers,
-  requireTaskOperator,
-  updateTaskMembers,
-  assertCanReplaySourceTask,
-} from '@/services/taskCollab'
+  TaskClarifyRepairPort,
+  TaskReviewRepairPort,
+} from '../application/ports/collaborationRepair'
 
 import type { CollaborationCommandContext } from '@/modules/collaboration/public/types'
 import type { OwnerIdentityQueries } from '@/modules/identity-access/public/operations'
@@ -158,9 +149,8 @@ import { withTaskExecutionAggregateWrite } from './ownedTaskExecution'
 import { parsePortValidationFailuresJson } from '@/services/envelope'
 import { parseMultipartLaunch } from '@/services/launchMultipart'
 
-import { replaceReviewNodeReviewers } from '@/modules/collaboration/public/commands'
-import { getReviewNodeReviewerConfig } from '@/modules/collaboration/public/queries'
-import { parseInjectedSnapshotJson } from '@/modules/memory/public/types'
+import type { TaskReviewersPort } from '../application/ports/taskReviewers'
+import type { TaskMemorySnapshotPort } from '../application/ports/taskMemorySnapshots'
 
 import {
   selectRepositoryWorkspaceReadQueries,
@@ -231,6 +221,9 @@ const RETRYABLE_TASK_STATUSES = [
  * PG 绑定的依赖面现在 `extends` 它、只把 `db` 收窄成 PG 客户端。
  */
 export interface TaskRouteOperationsDependencies {
+  readonly memorySnapshots: TaskMemorySnapshotPort
+  readonly reviewers: TaskReviewersPort
+  readonly taskMembership: TaskMembershipOperationsPort
   readonly historyRestrictions: HistoryRestrictionPort
   readonly clarifyNav: TaskNodeRunClarifyNavPort
   readonly archivedEvents?: TaskArchivedEventsReader
@@ -270,8 +263,8 @@ export interface TaskRouteOperationsDependencies {
   /** Closed Collaboration facts used by the TaskExecution-owned repair engine. */
   readonly repair: Readonly<{
     readonly collaborationRuntime: CollaborationRuntimeMechanics
-    readonly clarify: ClarifyRepairParticipant
-    readonly review: ReviewRepairParticipant
+    readonly clarify: TaskClarifyRepairPort
+    readonly review: TaskReviewRepairPort
   }>
   readonly appHome?: string
   readonly now?: () => number
@@ -798,12 +791,13 @@ async function taskAccessRow(
 /** 可见性门：全读权限直接放行；否则不存在与不可见同形（都 404）。 */
 export async function assertTaskVisibleProjection(
   db: PersistenceDb,
+  membership: TaskMembershipOperationsPort,
   actor: Actor,
   taskId: string,
 ): Promise<void> {
   if (actor.permissions.has('tasks:read:all')) return
   const task = await taskAccessRow(db, taskId)
-  if (!(await canViewTask(db, actor, task))) {
+  if (!(await membership.canViewTask(actor, task))) {
     throw new NotFoundError('task-not-found', `task '${taskId}' not found`)
   }
 }
@@ -811,29 +805,32 @@ export async function assertTaskVisibleProjection(
 /** 操作权门：owner / collaborator / bypass 放行，observer 拿 RFC-324 的只读文案。 */
 export async function requireTaskOperatorProjection(
   db: PersistenceDb,
+  membership: TaskMembershipOperationsPort,
   actor: Actor,
   taskId: string,
 ): Promise<void> {
-  await requireTaskOperator(db, actor, await taskAccessRow(db, taskId))
+  await membership.requireTaskOperator(actor, await taskAccessRow(db, taskId))
 }
 
 /** 成员面板的读投影。 */
 export async function taskMembersProjection(
   db: PersistenceDb,
+  membership: TaskMembershipOperationsPort,
   actor: Actor,
   taskId: string,
 ): Promise<TaskMembers> {
-  return await getTaskMembers(db, actor, await taskAccessRow(db, taskId))
+  return await membership.getTaskMembers(actor, await taskAccessRow(db, taskId))
 }
 
 /** 成员面板的全量替换。 */
 export async function replaceTaskMembersProjection(
   db: PersistenceDb,
+  membership: TaskMembershipOperationsPort,
   actor: Actor,
   taskId: string,
   body: Parameters<TaskRouteOperations['replaceMembers']>[2],
 ): Promise<TaskMembers> {
-  return await updateTaskMembers(db, actor, await taskAccessRow(db, taskId), body)
+  return await membership.updateTaskMembers(actor, await taskAccessRow(db, taskId), body)
 }
 
 function workflowLaunchSnapshot(snapshots: readonly FrozenTaskExecutionResourceSnapshot[]) {
@@ -939,6 +936,7 @@ export async function taskNodeRunsProjection(
   dependencies: Readonly<{
     db: PersistenceDb
     nodeRunPrompts?: NodeRunPromptOperations
+    memorySnapshots: TaskMemorySnapshotPort
     clarifyNav: TaskNodeRunClarifyNavPort
   }>,
   taskId: string,
@@ -1027,7 +1025,7 @@ export async function taskNodeRunsProjection(
         tokCacheCreate: row.tokCacheCreate,
         tokCacheRead: row.tokCacheRead,
         opencodeSessionId: row.opencodeSessionId,
-        injectedMemories: parseInjectedSnapshotJson(row.injectedMemoriesJson),
+        injectedMemories: dependencies.memorySnapshots.parseSnapshotJson(row.injectedMemoriesJson),
         portValidationFailures: parsePortValidationFailuresJson(row.portValidationFailuresJson),
         commitPush: commitPush(row.commitPushJson),
         reviewRoundStartedAt: timing?.roundStartedAt ?? null,
@@ -2487,18 +2485,24 @@ export function createTaskRouteOperations(
       listItems({ db: dependencies.db, owners: dependencies.owners }, filters),
     get: (taskId) => loadTask(dependencies.db, taskId),
     // 访问门 + 成员四件：存在性口径统一成「不存在即 404」。
-    assertVisible: (actor, taskId) => assertTaskVisibleProjection(dependencies.db, actor, taskId),
+    assertVisible: (actor, taskId) =>
+      assertTaskVisibleProjection(dependencies.db, dependencies.taskMembership, actor, taskId),
     requireOperator: (actor, taskId) =>
-      requireTaskOperatorProjection(dependencies.db, actor, taskId),
+      requireTaskOperatorProjection(dependencies.db, dependencies.taskMembership, actor, taskId),
     assertReplayVisible: (actor, sourceTaskId) =>
-      assertCanReplaySourceTask(dependencies.db, actor, sourceTaskId),
-    getMembers: (actor, taskId) => taskMembersProjection(dependencies.db, actor, taskId),
+      dependencies.taskMembership.assertCanReplaySourceTask(actor, sourceTaskId),
+    getMembers: (actor, taskId) =>
+      taskMembersProjection(dependencies.db, dependencies.taskMembership, actor, taskId),
     replaceMembers: (actor, taskId, body) =>
-      replaceTaskMembersProjection(dependencies.db, actor, taskId, body),
-    getReviewers: (actor, taskId) =>
-      getReviewNodeReviewerConfig(dependencies.collaboration, { actor, taskId }),
-    replaceReviewers: (actor, taskId, body) =>
-      replaceReviewNodeReviewers(dependencies.collaboration, { actor, taskId, body }),
+      replaceTaskMembersProjection(
+        dependencies.db,
+        dependencies.taskMembership,
+        actor,
+        taskId,
+        body,
+      ),
+    getReviewers: (actor, taskId) => dependencies.reviewers.get(actor, taskId),
+    replaceReviewers: (actor, taskId, body) => dependencies.reviewers.replace(actor, taskId, body),
     async launchWorkflow(actor, task) {
       // 参与者自己做冻结快照（`loadAuthorized` 里含 `assertNotBuiltin`）、版本围栏、带候选的
       // 静态校验与 payload 解析，终端是根启动内核。
@@ -2557,7 +2561,12 @@ export function createTaskRouteOperations(
       ),
     nodeRuns: (taskId) =>
       taskNodeRunsProjection(
-        { db: dependencies.db, nodeRunPrompts, clarifyNav: dependencies.clarifyNav },
+        {
+          db: dependencies.db,
+          nodeRunPrompts,
+          clarifyNav: dependencies.clarifyNav,
+          memorySnapshots: dependencies.memorySnapshots,
+        },
         taskId,
       ),
     diff: (taskId) => taskDiffProjection({ db: dependencies.db, workspaceReads }, taskId),

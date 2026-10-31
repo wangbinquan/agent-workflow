@@ -9,7 +9,7 @@ import type {
   WorkspaceUploadPlan,
   WorkspaceUploadResult,
 } from '@/modules/task-execution/public/types'
-import { entryExists } from './uploadPaths'
+import { entryExists } from '@/platform/content/local/uploadPaths'
 
 export interface UploadPlan {
   /** Task-owned recovery journal; absent preserves the original upload path. */

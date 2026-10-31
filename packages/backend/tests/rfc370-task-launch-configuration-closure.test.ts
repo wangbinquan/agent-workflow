@@ -1,3 +1,4 @@
+import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { o2Ports } from './helpers/o2Closure'
 import { withSourceControlTaskPorts } from './helpers/sourceControlTaskPorts'
@@ -297,6 +298,7 @@ describeEachProvider('RFC-370 selected task caller and repository budget closure
       launchConfigurationOverrides: { defaultNodeRetries: 0 },
     }
     const coordinator = createTestTaskDriveCoordinator({
+      humanGateOpen: composeHumanGateOpenParticipantFactory(),
       deps: { db: harness.db, schedulerDriver: { async drive() {} }, configPath: path, ...deps },
       appHome: home(),
       refreshLaunchConfig: () => {
@@ -442,6 +444,7 @@ describeEachProvider('RFC-370 selected task caller and repository budget closure
       startedAt: 1,
     })
     const persistence = createTaskExecutionPersistence(harness.db, {
+      humanGateOpen: composeHumanGateOpenParticipantFactory(),
       historyRestrictions: epoch2RuntimeTestPorts(harness.db).historyRestrictions,
       recoveryHumanGates: o2Ports(harness.db).collaborationReads.recovery,
     })

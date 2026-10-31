@@ -1,3 +1,4 @@
+import { composeTaskMemorySnapshotPort } from '@/modules/memory/composition'
 import { seedNodeRunDisplayEvidence } from './helpers/rfc395Q1Evidence'
 import { loadTaskFailureCodes } from '@/services/task'
 import { taskNodeRunsProjection } from '@/modules/task-execution/infrastructure/taskRouteOperations'
@@ -374,7 +375,11 @@ describeEachProvider('RFC-395 target run mint identities', (h) => {
       ]),
     ).toEqual([{ id: 'unknown', retryIndex: 7, promptText: null }])
     const display = await taskNodeRunsProjection(
-      { db: h.db, clarifyNav: { latestRoundStatusByRun: async () => new Map() } },
+      {
+        memorySnapshots: composeTaskMemorySnapshotPort(),
+        db: h.db,
+        clarifyNav: { latestRoundStatusByRun: async () => new Map() },
+      },
       't',
     )
     expect(display.runs).toMatchObject([

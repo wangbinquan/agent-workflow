@@ -1,3 +1,4 @@
+import { composeTaskMemorySnapshotPort } from '@/modules/memory/composition'
 import { o2Ports } from './helpers/o2Closure'
 import { withO2Closure } from './helpers/o2Closure'
 // RFC-395 II-a A3：双 provider 固定 G3–G7/G9/G12 的旧决定，尤其是 frame-less 与 framed 不同的历史。
@@ -437,6 +438,7 @@ describeEachProvider('RFC-395 II-a A3 sites-b legacy decisions', (harness) => {
     await patchLegacyRunSelectionFixture(db, id('legacy-null-seq'), { seq: null })
     const payload = await taskNodeRunsProjection(
       withO2Closure({
+        memorySnapshots: composeTaskMemorySnapshotPort(),
         clarifyNav: o2Ports(db).collaborationReads.clarifyNav,
         db,
         nodeRunPrompts: {

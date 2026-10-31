@@ -1,3 +1,4 @@
+import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 // P-5-12 — performance + stability sweep.
 //
 // Spins up an in-memory DB, seeds synthetic data, and measures end-to-end
@@ -260,6 +261,7 @@ async function scenarioConcurrentTasks(): Promise<void> {
       await startTask(
         { workflowId, name: 'perf-' + i, inputs: { topic: 'perf-' + i } },
         {
+          humanGateOpen: composeHumanGateOpenParticipantFactory(),
           db,
           appHome,
           binaryOverride: opencodeCmd,

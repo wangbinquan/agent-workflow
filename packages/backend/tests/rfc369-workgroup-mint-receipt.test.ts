@@ -1,3 +1,4 @@
+import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 // CI 36665459531: same-task fan-out lost a member before runHostNode while PG
 // repeatedly reported 40001 on the post-insert nonce read. Keep the real dual
 // provider mint/receipt/rollback contract and prevent that unnecessary predicate
@@ -187,6 +188,7 @@ describeEachProvider('RFC-369 workgroup mint receipts under sibling writes', (ha
         ownerRevision: 1,
       }),
       persistence: createTaskExecutionPersistence(db, {
+        humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
         recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
       }),

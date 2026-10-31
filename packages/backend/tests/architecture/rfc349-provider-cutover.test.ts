@@ -44,7 +44,7 @@ const PROVIDER_SPECIFIC_BUSINESS_DEPENDENCY_DEBT = [
   // RFC-359 AC-1（plan §5hn 批次二 ①②）：`services/scheduleLaunch.ts` 已删除，这条债随之销账。
   // RFC-359 AC-6：`TaskContinuationDependencies.db` 放宽到中立句柄（被测的 `buildStartTaskDeps` 只把它原样
   // 透传，用例自己就断言 `expect(withCmd.db).toBe(db)`），类型来源随之换成同目录的
-  // `legacySqliteTransportMechanisms`。这条债仍在——它随 legacy 启动面一起消失。
+  // RFC-399 B6 已删除旧 transport 桶；原查询经 RepositoryPreparationLookup 注入。
   'packages/backend/src/services/task.ts -> @/modules/source-control/composition :: composeSqliteRepositoryWorkspaceStore',
   // RFC-359 AC-1（plan §5hn 之后的盘点，第 2 / 3 刀）：纯读三件 + 列表三件合一，
   // `getTaskDiff` / `getNodeRunStdout` / `getNodeRunEvents` / `listTasks` / `listTaskItems`
@@ -52,15 +52,12 @@ const PROVIDER_SPECIFIC_BUSINESS_DEPENDENCY_DEBT = [
   // 一起从这条债里消失（债只降不升，这是连着两次收敛）。
   // RFC-359 AC-1（第 11 刀）：cancel 合一，`taskExecutionOwners` 随取消实现一起离开这条债
   //（回收任务持有者那一步现在只在共用的 `cancelTaskProjection` 里做）。债只降不升。
-  'packages/backend/src/services/task.ts -> @/modules/task-execution/infrastructure/legacySqliteTransportMechanisms :: LegacyProviderNeutralDatabase,LegacySqliteTaskDatabase,eq',
   'packages/backend/src/services/taskAuthorization.ts -> @/modules/task-execution/infrastructure/legacySqliteTaskAuthorization :: export:LegacySqliteTaskAuthorizationRef,export:LegacyTaskOwnershipScope',
   'packages/backend/src/services/taskAuthorization.ts -> @/modules/task-execution/infrastructure/legacySqliteTaskAuthorization :: legacySqliteDefaultTaskAuthorizationRef,legacySqliteTaskAuthorizationCondition,legacySqliteTaskOwnershipScopeCondition,legacySqliteVisibleTaskIdsOf',
   // RFC-359 AC-1（plan §5hn 之后的盘点，第 5 刀的前置）：`taskDelete.ts` 的库句柄从
   // bun:sqlite 专有的 `LegacySqliteTaskDatabase` 放宽到中立别名——卡住它的只有五处 `.get()`
   // （bun:sqlite 独有的同步终结符），改写成 `await … .limit(1)` 之后整份实现就是普通
   // drizzle 查询 + 中立事务原语了。**债的形状变了但没长**：换的是同一条边上的一个类型名。
-  'packages/backend/src/services/taskDelete.ts -> @/modules/task-execution/infrastructure/legacySqliteTransportMechanisms :: LegacyProviderNeutralDatabase',
-  'packages/backend/src/services/taskLaunchGate.ts -> @/modules/task-execution/infrastructure/legacySqliteTransportMechanisms :: LegacyProviderNeutralDatabase',
 ] as const
 
 /** Only these roots may resolve the durable provider generation. */

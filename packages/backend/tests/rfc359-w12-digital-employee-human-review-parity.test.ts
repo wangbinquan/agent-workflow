@@ -1,3 +1,4 @@
+import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 // RFC-359 —— 数字员工「计划人审」闸门：同一个 executionRef，两个引擎给出同一个状态。
 //
@@ -123,6 +124,7 @@ describeEachProvider('RFC-359 —— 计划人审闸门状态两个引擎一致'
     const ports = composeDatabaseDigitalEmployeeExecutionPorts(
       db,
       epoch2RuntimeTestPorts(db).historyRestrictions,
+      composeHumanGateOpenParticipantFactory(),
     )
     const execution = composeDigitalEmployeeExecutionCore({
       // 只看端口在不在 / 通不通——别的依赖一个都不碰，所以全给 never。

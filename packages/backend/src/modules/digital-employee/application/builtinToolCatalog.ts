@@ -7,12 +7,17 @@ import {
   type DigitalEmployeePlatformToolCatalogParticipant,
 } from '@/modules/digital-employee/public/types'
 import { sha256Hex } from '@/util/hash'
-import {
-  DIGITAL_EMPLOYEE_AGENT_TEMPLATE_IDS,
-  digitalEmployeeBuiltinAgentSuccessorId,
-  digitalEmployeeBuiltinToolConfiguration,
-  digitalEmployeeAgentToolPresentation,
-} from '@/services/digitalEmployeeAgentTemplates'
+interface DigitalEmployeeBuiltinTemplateHelpers {
+  readonly DIGITAL_EMPLOYEE_AGENT_TEMPLATE_IDS: readonly string[]
+  readonly digitalEmployeeBuiltinAgentSuccessorId: (agentId: string) => string | null
+  readonly digitalEmployeeBuiltinToolConfiguration: (
+    agentId: string,
+  ) => { readonly dispatchRouteDefinitions: unknown } | null
+  readonly digitalEmployeeAgentToolPresentation: (template: string) => {
+    readonly zh: string
+    readonly selection: 'selectable' | 'automatic'
+  } | null
+}
 
 const descriptorSchema = z
   .object({
@@ -89,6 +94,7 @@ function declaredDispatchRoutes(value: unknown) {
 }
 
 async function loadDigitalEmployeeBuiltinToolCatalog(input: {
+  readonly templateHelpers: DigitalEmployeeBuiltinTemplateHelpers
   readonly agentTemplates: DigitalEmployeeAgentTemplateCatalogParticipant
   readonly typePackageDescriptorJsons: readonly string[]
 }): Promise<DigitalEmployeePlatformToolCatalogParticipant> {
@@ -102,7 +108,7 @@ async function loadDigitalEmployeeBuiltinToolCatalog(input: {
   }
   const descriptors = [...descriptorsByTypeRef.values()]
   const builtinAgents = await Promise.all(
-    DIGITAL_EMPLOYEE_AGENT_TEMPLATE_IDS.map(async (agentId) => ({
+    input.templateHelpers.DIGITAL_EMPLOYEE_AGENT_TEMPLATE_IDS.map(async (agentId) => ({
       agentId,
       agent: await input.agentTemplates.get(agentId),
     })),
@@ -157,7 +163,8 @@ async function loadDigitalEmployeeBuiltinToolCatalog(input: {
           if (agent === null || agent.builtin !== true || agent.visibility !== 'public') return []
           const template = agent.frontmatterExtra.digitalEmployeeTemplate
           if (typeof template !== 'string') return []
-          const builtinConfiguration = digitalEmployeeBuiltinToolConfiguration(agentId)
+          const builtinConfiguration =
+            input.templateHelpers.digitalEmployeeBuiltinToolConfiguration(agentId)
           const dispatchRouteDefinitions = declaredDispatchRoutes(
             agent.frontmatterExtra.dispatchRouteDefinitions ??
               builtinConfiguration?.dispatchRouteDefinitions,
@@ -165,7 +172,7 @@ async function loadDigitalEmployeeBuiltinToolCatalog(input: {
           if (item.orderedDispatchAuthoring != null && dispatchRouteDefinitions === undefined) {
             return []
           }
-          const presentation = digitalEmployeeAgentToolPresentation(template)
+          const presentation = input.templateHelpers.digitalEmployeeAgentToolPresentation(template)
           if (presentation === null) return []
           const selection = presentation.selection
           const declared = declaredContracts(agent.frontmatterExtra.executionContracts)
@@ -293,9 +300,10 @@ async function loadDigitalEmployeeBuiltinToolCatalog(input: {
           candidate.workItemRef === workItemRef &&
           candidate.selection === 'selectable' &&
           candidate.content.implementation.kind === 'agent' &&
-          [identity.agentId, digitalEmployeeBuiltinAgentSuccessorId(identity.agentId)].includes(
-            candidate.content.implementation.agentRef.id,
-          ),
+          [
+            identity.agentId,
+            input.templateHelpers.digitalEmployeeBuiltinAgentSuccessorId(identity.agentId),
+          ].includes(candidate.content.implementation.agentRef.id),
       )
       if (record === undefined || record.publishedRevision === null) return null
       const ref = { id: record.id, revision: record.publishedRevision }
@@ -315,6 +323,7 @@ async function loadDigitalEmployeeBuiltinToolCatalog(input: {
 }
 
 interface BuiltinToolCatalogInput {
+  readonly templateHelpers: DigitalEmployeeBuiltinTemplateHelpers
   readonly agentTemplates: DigitalEmployeeAgentTemplateCatalogParticipant
   readonly typePackageDescriptorJsons: readonly string[] | (() => Promise<readonly string[]>)
 }
@@ -327,6 +336,7 @@ class LoadableBuiltinToolCatalog implements DigitalEmployeePlatformToolCatalogPa
   load(): Promise<void> {
     return (this.#loading ??= (async () => {
       this.#catalog = await loadDigitalEmployeeBuiltinToolCatalog({
+        templateHelpers: this.input.templateHelpers,
         agentTemplates: this.input.agentTemplates,
         typePackageDescriptorJsons:
           typeof this.input.typePackageDescriptorJsons === 'function'

@@ -15,16 +15,16 @@
       "reason": "max=21: RFC-376 阶段 B 已提交 HEAD 初值；新增例外由对应后继 RFC 明列并经用户确认"
     },
     "context-value-pairs-off-dag": {
-      "max": 9,
-      "reason": "max=9: RFC-395 II-b T18 source census decreases 15 -> 9; no growth authorized."
+      "max": 0,
+      "reason": "max=0: RFC-399 removes context value cycles, off-DAG values and platform reverse edges; exact working-tree census 9 -> 0."
     },
     "context-value-sccs": {
-      "max": 2,
-      "reason": "max=2: RFC-376 阶段 B 已提交 HEAD 初值；新增例外由对应后继 RFC 明列并经用户确认"
+      "max": 0,
+      "reason": "max=0: RFC-399 removes context value cycles, off-DAG values and platform reverse edges; exact working-tree census 2 -> 0."
     },
     "cross-context-internal-file-pairs": {
-      "max": 88,
-      "reason": "max=88: RFC-395 II-b T18 source census decreases 99 -> 88; no growth authorized."
+      "max": 73,
+      "reason": "max=73: RFC-399 removes context value cycles, off-DAG values and platform reverse edges; exact working-tree census 88 -> 73."
     },
     "depcheck-known-violations": {
       "max": 0,
@@ -39,20 +39,20 @@
       "reason": "max=14: RFC-395 II-b T18 source census decreases 15 -> 14; no growth authorized."
     },
     "export-star-barrels": {
-      "max": 23,
-      "reason": "max=23: RFC-395 II-b T18 source census decreases 25 -> 23; no growth authorized."
+      "max": 21,
+      "reason": "max=21: RFC-399 removes context value cycles, off-DAG values and platform reverse edges; exact working-tree census 23 -> 21."
     },
     "legacy-horizontal-files": {
-      "max": 391,
-      "reason": "max=391: RFC-395 II-b T18 source census decreases 395 -> 391; no growth authorized."
+      "max": 390,
+      "reason": "max=390: RFC-399 working-tree census after shared contracts and facade retirement: 391 -> 390."
     },
     "legacy-service-implementations": {
-      "max": 220,
-      "reason": "max=220: RFC-395 II-b T18 source census decreases 224 -> 220; no growth authorized."
+      "max": 219,
+      "reason": "max=219: RFC-399 working-tree census after shared contracts and facade retirement: 220 -> 219."
     },
     "legacy-thin-facades": {
-      "max": 45,
-      "reason": "max=45: RFC-395 II-b T18 source census decreases 47 -> 45; no growth authorized."
+      "max": 44,
+      "reason": "max=44: RFC-399 removes context value cycles, off-DAG values and platform reverse edges; exact working-tree census 45 -> 44."
     },
     "module-layer-violations": {
       "max": 1,
@@ -63,12 +63,12 @@
       "reason": "max=1: RFC-376 阶段 B 已提交 HEAD 初值；新增例外由对应后继 RFC 明列并经用户确认"
     },
     "off-dag-offered-file-context-pairs": {
-      "max": 61,
-      "reason": "max=61: RFC-395 II-b T18 Q-2b live census decreases 63 -> 61; no growth authorized."
+      "max": 54,
+      "reason": "max=54: RFC-399 removes context value cycles, off-DAG values and platform reverse edges; exact working-tree census 61 -> 54."
     },
     "platform-to-modules-file-pairs": {
-      "max": 19,
-      "reason": "max=19: RFC-395 II-b T18 source census decreases 30 -> 19; no growth authorized."
+      "max": 0,
+      "reason": "max=0: RFC-399 removes context value cycles, off-DAG values and platform reverse edges; exact working-tree census 19 -> 0."
     },
     "repo-value-scc": {
       "max": 0,

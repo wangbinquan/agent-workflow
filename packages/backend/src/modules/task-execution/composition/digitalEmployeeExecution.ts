@@ -1,3 +1,4 @@
+import type { HumanGateOpenParticipantFactory } from '../application/ports/humanGateOpenFactory'
 import type { HistoryRestrictionPort } from '@/platform/contracts/historyRestriction'
 import { createRunHistorySnapshot } from '@/modules/task-execution/public/queries'
 import type { Actor } from '@/auth/actor'
@@ -869,6 +870,7 @@ export function composeReactionExecutionProvider(
 export function composeDatabaseDigitalEmployeeExecutionPorts(
   db: PersistenceDb,
   historyRestrictions: HistoryRestrictionPort,
+  humanGateOpen: HumanGateOpenParticipantFactory,
 ): Pick<
   DigitalEmployeeExecutionDependencies,
   'tasks' | 'readModels' | 'resourceUsage' | 'executionMetadata' | 'humanReview'
@@ -877,7 +879,7 @@ export function composeDatabaseDigitalEmployeeExecutionPorts(
     tasks: {
       get: (taskId: string) => getTask(db, taskId),
       async cancel(taskId: string) {
-        await composeTaskCancellation(db, historyRestrictions).cancel(taskId)
+        await composeTaskCancellation(db, historyRestrictions, humanGateOpen).cancel(taskId)
         const task = await getTask(db, taskId)
         if (task === null) throw new NotFoundError('task-not-found', `task '${taskId}' not found`)
         return task

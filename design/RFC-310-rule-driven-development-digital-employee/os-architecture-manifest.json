@@ -20,8 +20,11 @@
         "bootstrap/daemonModules/integration.ts -> composition",
         "bootstrap/daemonModules/integration.ts -> public/events",
         "bootstrap/daemonModules/resourceCatalog.ts -> composition",
+        "bootstrap/daemonModules/scheduledTasks.ts -> composition",
         "bootstrap/daemonSession.ts -> composition",
         "bootstrap/deploymentProfile.ts -> composition",
+        "bootstrap/maintenanceJobBindings.ts -> composition",
+        "bootstrap/maintenanceJobBindings.ts -> public/commands",
         "bootstrap/maintenanceWorkerGraph.ts -> composition",
         "bootstrap/persistenceSchema.ts -> composition/schema",
         "modules/development-automation/application/graph-development/builtinCatalog.ts -> public/participants",
@@ -37,16 +40,12 @@
         "modules/development-automation/composition/graphDeliveryLifecycle.ts -> public/types",
         "modules/development-automation/composition/graphDevelopment.ts -> public/types",
         "modules/development-automation/infrastructure/graph-development/employeeWorkspace.ts -> public/types",
-        "modules/integration/infrastructure/integrationTriggerResources.ts -> composition",
         "modules/intent/composition/platformInventory.ts -> public/participants",
         "modules/resource-catalog/composition/digitalEmployeeAgentTemplateCatalog.ts -> public/participants",
         "modules/resource-catalog/composition/integrationTrigger.ts -> public/participants",
         "modules/resource-catalog/infrastructure/aggregateAdapters/integrationTriggerResourceSnapshots.ts -> public/participants",
         "modules/task-execution/application/adapters/reaction-admission-adapter.ts -> composition/required-ports",
         "modules/task-execution/application/adapters/reaction-execution-adapter.ts -> composition/required-ports",
-        "modules/task-execution/composition/digitalEmployeeBuiltinToolCatalog.ts -> public/participants",
-        "modules/task-execution/composition/digitalEmployeeBuiltinToolCatalog.ts -> public/types",
-        "platform/background/maintenanceJobRunner.ts -> public/commands",
         "routes/digitalEmployees.ts -> composition",
         "services/digitalEmployeeAgentTemplates.ts -> public/participants"
       ]
@@ -93,7 +92,7 @@
     "execution-contract": {
       "owner": "executor-neutral deterministic input and output guides, compatibility validation, fixture probes and exact output receipts",
       "topLevelEntries": ["application", "composition", "composition.ts", "domain", "public"],
-      "publicEntries": ["commands.ts", "types.ts"],
+      "publicEntries": ["types.ts"],
       "externalImports": [
         "bootstrap/daemonModules/digitalEmployee.ts -> composition",
         "modules/development-automation/application/graph-development/toolContracts.ts -> public/types",
@@ -103,10 +102,6 @@
         "modules/digital-employee/application/runtimeService.ts -> public/types",
         "modules/digital-employee/composition.ts -> public/types",
         "modules/resource-catalog/application/adapters/execution-contract-adapter.ts -> composition/required-ports",
-        "modules/resource-catalog/application/agents/digitalEmployeeAgentTemplateCatalog.ts -> public/commands",
-        "modules/resource-catalog/infrastructure/agentPersistenceSemantics.ts -> public/commands",
-        "modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlResourcePackageMutationArms.ts -> public/commands",
-        "modules/resource-catalog/infrastructure/legacy/agent.ts -> public/commands",
         "modules/task-execution/application/adapters/execution-contract-adapter.ts -> composition/required-ports",
         "modules/task-execution/composition/digitalEmployeeExecution.ts -> public/types",
         "routes/executionContracts.ts -> public/types"

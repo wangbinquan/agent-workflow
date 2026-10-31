@@ -1,3 +1,4 @@
+import { composeCollaborationTaskRolePolicy } from '@/modules/resource-catalog/composition'
 // RFC-359 W4-B3 批 a —— collaboration 六对只差客户端类型 / 事务原语的适配器合一，两个引擎各跑一遍：
 // 任务反馈存储、评审人存储（替换走统一事务）、协作侧任务可见性 / 角色、评审侧任务关系、
 // 人工门 continuation 恢复查询、任务终态清扫（挂起 run 取消 + node-statuses committed event）。
@@ -134,7 +135,7 @@ describeEachProvider('RFC-359 W4-B3a —— 任务可见性与关系解析', (ha
       retryIndex: 0,
       iteration: 0,
     })
-    const access = createCollaborationTaskAccessPort(db)
+    const access = createCollaborationTaskAccessPort(db, composeCollaborationTaskRolePolicy())
     expect((await access.resolveTask(actorFor(owner), taskId)).visible).toBe(true)
     expect((await access.resolveTask(actorFor(collaborator), taskId)).visible).toBe(true)
     expect((await access.resolveTask(actorFor(stranger), taskId)).visible).toBe(false)
@@ -154,7 +155,7 @@ describeEachProvider('RFC-359 W4-B3a —— 任务可见性与关系解析', (ha
     expect(await access.visibleTaskIds(actorFor(collaborator), [taskId])).toEqual(new Set([taskId]))
     expect(await access.questionTaskId('missing')).toBeNull()
 
-    const review = createReviewTaskAccessPort(db)
+    const review = createReviewTaskAccessPort(db, composeCollaborationTaskRolePolicy())
     expect(review.canManageReviewers(actorFor(owner), owner)).toBe(true)
     expect(review.canManageReviewers(actorFor(stranger), owner)).toBe(false)
     expect(await review.resolveRelationship(actorFor(collaborator), taskId, owner)).toMatchObject({

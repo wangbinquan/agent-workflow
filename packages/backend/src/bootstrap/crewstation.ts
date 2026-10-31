@@ -1,3 +1,4 @@
+import { createCrewStationMcpDiagnosticRunner } from '@/modules/task-execution/composition/crewstationMcpDiagnosticRunner'
 import { Paths } from '@/util/paths'
 import { createContentHumanGateArtifactStore } from '@/modules/collaboration/composition/contentArtifacts'
 import { createActiveHistoryRestrictionProvider } from '@/modules/system-operations/composition/epochInstallation'
@@ -290,7 +291,12 @@ export async function composeCrewStationProfile(
       // hosted Agent execution; bootstrap is the only place both meet.
       mcpDiagnostics: createCrewStationMcpDiagnostics({
         ...execution.hostedAgents,
-        workspaces: workspace.workspaces,
+        createExecution: (extra) =>
+          createCrewStationMcpDiagnosticRunner({
+            ...execution.hostedAgents,
+            workspaces: workspace.workspaces,
+            ...extra,
+          }),
         locate: workspace.locate,
       }),
       hostedBackgroundOwners: [

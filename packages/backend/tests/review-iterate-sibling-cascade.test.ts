@@ -1,3 +1,4 @@
+import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { nodeRunFixtureColumns } from './helpers/model/nodeRun'
 import { tablesOf } from '@/platform/persistence/sessionTables'
@@ -218,6 +219,7 @@ async function buildHarness(opts: HarnessOpts): Promise<Harness> {
       inputs: { topic: 'orders' },
     },
     {
+      humanGateOpen: composeHumanGateOpenParticipantFactory(),
       db,
       schedulerDriver: createTaskExecutionTestTopology({ db, driver: 'real' }).schedulerDriver,
       appHome,
@@ -341,6 +343,7 @@ describe('RFC-014 — iterate sibling cascade (multi-markdown upstream)', () => 
       }),
     )
     await wakeHumanGateContinuation(approval.taskId, approval.continuationRef, {
+      humanGateOpen: composeHumanGateOpenParticipantFactory(),
       historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
       db: h.db,
       appHome: h.appHome,

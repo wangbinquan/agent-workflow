@@ -1,3 +1,4 @@
+import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import { composeSourceControlTaskPorts } from '@/modules/task-execution/composition'
 // RFC-024 T3 — locks the cold-clone / warm-hit / fetch-on-reuse /
 // concurrent-same-URL behavior of services/gitRepoCache.ts. Uses a real
@@ -176,6 +177,7 @@ describe('gitRepoCache (RFC-024 T3)', () => {
           inputs: {},
         } as StartTask,
         {
+          humanGateOpen: composeHumanGateOpenParticipantFactory(),
           db,
           schedulerDriver: createTaskExecutionTestTopology({ db, driver: 'real' }).schedulerDriver,
           appHome,

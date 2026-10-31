@@ -1,3 +1,4 @@
+import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import type { HistoryRestrictionPort } from '@/platform/contracts/historyRestriction'
 import type { DigitalEmployeeWriterInstallation as ImportedDigitalEmployeeWriterInstallation } from '@/modules/digital-employee/composition'
 // RFC-383: one digital-employee module and its satellites per provider session.
@@ -21,7 +22,7 @@ import {
   composeReactionExecutionProvider,
   composeDatabaseDigitalEmployeeExecutionPorts,
 } from '@/modules/task-execution/composition/digitalEmployeeExecution'
-import { composeDigitalEmployeeBuiltinToolCatalog } from '@/modules/task-execution/composition/digitalEmployeeBuiltinToolCatalog'
+import { composeDigitalEmployeeBuiltinToolCatalog } from '@/modules/digital-employee/composition'
 import {
   developmentEmployeeTypePackage,
   developmentEmployeeRuntimeCodec,
@@ -39,7 +40,13 @@ import {
   bindCandidateDeliveryParticipant,
 } from '@/modules/source-control/composition'
 import { buildDevelopmentDeliveryDeps } from '@/services/developmentDeliveryDeps'
-import { ensureDigitalEmployeeAgentTemplates } from '@/services/digitalEmployeeAgentTemplates'
+import {
+  ensureDigitalEmployeeAgentTemplates,
+  DIGITAL_EMPLOYEE_AGENT_TEMPLATE_IDS,
+  digitalEmployeeBuiltinAgentSuccessorId,
+  digitalEmployeeBuiltinToolConfiguration,
+  digitalEmployeeAgentToolPresentation,
+} from '@/services/digitalEmployeeAgentTemplates'
 import { composeDevelopmentActivityOperations } from '@/modules/development-automation/composition/activityOperations'
 import { type DigitalEmployeeWorkStartPort } from '@/modules/integration/public/participants'
 import {
@@ -174,6 +181,12 @@ export function composeDaemonDigitalEmployeeModules(input: DaemonDigitalEmployee
     }),
   })
   const legacyPlatformTools = composeDigitalEmployeeBuiltinToolCatalog({
+    templateHelpers: {
+      DIGITAL_EMPLOYEE_AGENT_TEMPLATE_IDS,
+      digitalEmployeeBuiltinAgentSuccessorId,
+      digitalEmployeeBuiltinToolConfiguration,
+      digitalEmployeeAgentToolPresentation,
+    },
     agentTemplates: resources.digitalEmployeeAgentTemplates,
     typePackageDescriptorJsons: async () => [
       ...(await composeDigitalEmployeeBootstrapReadsFor(db).listTypePackageDescriptorJsons()),
@@ -297,7 +310,11 @@ export function composeDaemonDigitalEmployeeModules(input: DaemonDigitalEmployee
     graphDelivery: graph.care,
   })
   const reactionExecution = composeReactionExecutionProvider({
-    ...composeDatabaseDigitalEmployeeExecutionPorts(db, input.historyRestrictions),
+    ...composeDatabaseDigitalEmployeeExecutionPorts(
+      db,
+      input.historyRestrictions,
+      composeHumanGateOpenParticipantFactory(),
+    ),
     ...taskExecution.hostTasks,
     appHome,
     programs: programToolSource,

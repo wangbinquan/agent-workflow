@@ -40,3 +40,61 @@
 
 - [ ] proposal AC-1～AC-4
 - [ ] 推送后 exact SHA 的 CI 全绿（AC-5）
+
+## 实施记录（2026-10-31）
+
+**派发**：Part A（T1～T6）、Part B（T7～T11）与一轮账本修复在同一个 Codex 线程内完成（`01a190ea-7282-7f70-aba5-5f8727c3e22f`）；
+T12 由本会话写；派发之间本会话审读改动，不做功能验证。改动约 420 个路径：生产约 125 个（含 3 个 shared 文件），其余为测试、
+helper、账本与 RFC-294 design §3.1。
+
+**结构门（`d7c5d5462` → 候选）**：
+
+| 门 | 前 | 后 |
+| --- | ---: | ---: |
+| context 值级 SCC | 2 | 0 |
+| 越出 DAG 的值级 context 对 | 9 | 0 |
+| `platform` → `modules` 文件对 | 19 | 0 |
+| drizzle / schema 再导出桶 | 1 | 0 |
+| 跨 context 内部文件对 | 88 | 73 |
+| 越出 DAG 的 offered 文件对 | 61 | 54 |
+| `export *` 桶 | 23 | 21 |
+| legacy 薄 facade / 横向文件 / services 业务实现 | 45 / 391 / 220（上限） | 44 / 390 / 219 |
+| 不可达生产文件 | 27 | 27 |
+| RFC-317 R1 / R2 精确账本 | 231 / 41 | 229 / 41 |
+
+其余门不变。`architecture/counts.json` 的 9 个上限按实测压低。
+
+**新增 required SPI**（DAG 虚线，按实际类型名）：RC→COL `CollaborationTaskRolePolicy`；COL→TE `TaskMembershipOperationsPort`、
+`GateWorkspaceRollbackExecutor`、`TaskClarifyContinuationPort`、`CollaborationRepairPorts`、`TaskClarifyRepairPort`、`TaskReviewRepairPort`、
+`TaskClarifyDirectiveRouteOperations`、`TaskReviewersPort`、`HumanGateOpenParticipantFactory`、`HumanGateOpenParticipantScope`、
+`HumanGateOpenParticipantInTx`；RC→INTEG `IntegrationTriggerSnapshotFactory`；TE→RC `McpDiagnosticExecution`、
+`McpDiagnosticExecutionFactory`；MEM→TE `TaskMemorySnapshotPort`；SC→TE `RepositoryPreparationLookup`。
+
+**偏差**：见 proposal §6 第 13 条。
+
+**经 `services/` 绕行的越界依赖**（不计入门，W9-D 存量）：用新增的 `throughServices` 口径按传递关系量得 18 对 context
+（例如 COL→RC 经 `services/resourceAcl`、TE→COL 经 `services/*` facade），是上界估计；本 RFC 只保证不新增此类依赖。
+
+**集中验证**（T13，2026-10-31，本机，候选为未提交工作树）：
+
+- 静态：backend / shared / frontend typecheck、各包 lint（含 `lint:promises`）、depcheck、prettier 通过；shared 测试通过。
+- 实现门（Codex 只读，只审功能）：PASS，0 项发现。
+- 后端全量（6 分片，`--isolate --randomize`，SQLite + PostgreSQL 两条泳道，`RUN_GIT_NETWORK=1 RUN_CHAOS=1`）：约 3.2 万条用例。
+  跑的时候本机负载 24～34（大头是并存的 kind 集群），第 2 分片跑满 6000 秒被 alarm 终止，8 个文件没跑到，已补跑。
+  查出两类失败：
+  - **本 RFC 引入，已修**（11 个测试文件，都是按搬迁前路径写的源码锚点、精确账本或测试夹具，位于 `tests/architecture/` 之外；
+    Codex 只跑了 architecture 目录，没覆盖到）：
+    `rfc328-architecture-guards`（删去 4 条已消除的 TE→COL bridge）；
+    `rfc294-architecture-preflight` W0-R（删去 15 条已消除的跨 context 内部文件对；`TaskClarifyDirectiveRouteOperations` 的同一条 Actor 债
+    换到新声明位置；维护作业处理器与 `MaintenanceSystemOperations` 类型改经 composition 交出，公共面不新增偏差，见 proposal §6 第 13 条）；
+    `rfc346-system-operations-contracts`（SO 本地备份清理移出 application，见同条）；RFC-310 `os-architecture-manifest.json`；
+    `rfc254-platform-surface-guard`（例外随 `matchRepoProvider` 换文件）；`rfc244`、`rfc098`、`rfc287-t13` 的源码锚点跟到搬迁后的作业体与回滚执行器；
+    `rfc284-t20`、`rfc380` 登记 `memorySnapshots`；`rfc359-w55` 夹具绑定 `createHumanGateOpenParticipantScope` 并断言它被传入；
+    `tests/helpers/productionTaskLaunch.ts` 在夹具以 `as never` 省略 `humanGateOpen` 时取生产工厂（tsc 看不到这类漏传）；
+    修复时把处理器出口移出 public，`rfc261`、`rfc271` 的 import 随之改到新位置。另补一条回归用例：SO `backupPrune` 没有数据库备份实现时，
+    经注入的本地清理删除 `<appHome>/backups` 里的旧备份。
+  - **PostgreSQL 泳道超时**（31 个文件，5 秒或 15 秒上限，以及超时后的连带错误，如连接已关闭、`beforeEach` 之后才有库）：
+    对应的 SQLite 泳道同批用例通过。负载降下来后 4 并发重跑，失败从 31 个文件降到 6 个，且每次失败的子集不同；这 6 个文件单进程串行重跑
+    全部通过（130 条），判定为负载所致，不属本 RFC。
+- 修复后复验：上述 11 个文件、补跑的 8 个文件与维护作业相关用例全部通过；`tests/architecture/` 整目录（带 PostgreSQL）1209 通过、4 跳过、0 失败；
+  backend typecheck 通过；结构门计数与修复前候选一致（见上表）。以推送后 exact SHA 的 CI 为准（AC-5）。

@@ -1,3 +1,4 @@
+import { createDigitalEmployeeIntegrationTriggerParticipantIn } from '@/modules/digital-employee/composition'
 import { composeSourceControlTaskPorts } from '@/modules/task-execution/composition'
 // RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-190 — GET /api/overview (homepage capability portal aggregate).
@@ -33,7 +34,7 @@ import {
   composeRepositoryWorkspaceOperations,
   composeSqliteRepositoryWorkspaceStore,
 } from '../src/modules/source-control/composition'
-import { composeIntegrationTriggerResourceSnapshotFactory } from '../src/modules/resource-catalog/composition/integrationTrigger'
+import { composeIntegrationTriggerSnapshots } from '../src/modules/resource-catalog/composition/integrationTrigger'
 import { composeResourceCatalogOverviewQuery } from '../src/modules/resource-catalog/composition/resourceCatalogOverview'
 import { composeScheduledTaskRuntimeFor } from '../src/modules/integration/composition/scheduledTasks'
 import { composeSystemOverviewQuery } from '../src/modules/system-operations/application/overview'
@@ -60,7 +61,10 @@ function unusedCapability(): never {
 function buildOverview(db: PersistenceDb, actor: Actor, now?: () => number) {
   const scheduledTaskRuntime = composeScheduledTaskRuntimeFor({
     db,
-    resourceSnapshots: composeIntegrationTriggerResourceSnapshotFactory({ assertNotBuiltin }),
+    resourceSnapshots: composeIntegrationTriggerSnapshots(
+      { assertNotBuiltin },
+      createDigitalEmployeeIntegrationTriggerParticipantIn,
+    ),
     validation: {
       assertWorkflowLaunchable: unusedCapability,
       assertAgentIntegrity: unusedCapability,

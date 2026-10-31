@@ -1,3 +1,4 @@
+import { openMaintenanceWorkerEffectsScope } from '@/bootstrap/maintenanceWorkerEffects'
 // RFC-389 — graph composition failures must retain the original close/drain event ordering.
 // Execute the real runtime with a graph port; no Worker entry is imported on the main thread.
 import { expect, test } from 'bun:test'
@@ -71,6 +72,7 @@ test('an opened connection survives failed composition until close ACK, then deg
       closeAck = gate()
     let closed = 0
     runMaintenanceWorker({
+      openEffectsScope: openMaintenanceWorkerEffectsScope,
       composeGraph: async ({ registerConnectionClose }) => {
         registerConnectionClose(async () => {
           closed++
@@ -98,6 +100,7 @@ test('catalog mismatch rejects before opening a graph', async () => {
   await withWorker(async (worker) => {
     let constructed = 0
     runMaintenanceWorker({
+      openEffectsScope: openMaintenanceWorkerEffectsScope,
       composeGraph: async () => {
         constructed++
         throw new Error('must not compose')

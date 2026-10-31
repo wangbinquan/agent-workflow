@@ -1,3 +1,4 @@
+import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 // RFC-383: session identity, initialization and selected program reads, with former SQLite/PG controls.
 import { createProviderHttpCompositionFixture } from './helpers/providerHttpComposition'
@@ -281,6 +282,7 @@ describeEachProvider('RFC-383 employee and development session bundles', (harnes
           await composeTaskCancellation(
             harness.db,
             epoch2RuntimeTestPorts(harness.db).historyRestrictions,
+            composeHumanGateOpenParticipantFactory(),
           ).cancel(seeded.taskId)
         else if (former)
           await f.taskExecution.cancellation.cancel({

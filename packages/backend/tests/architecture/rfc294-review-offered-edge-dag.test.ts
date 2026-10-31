@@ -73,7 +73,6 @@ interface ExactRequiredSpiBinding {
   readonly edgeKind: 'type' | 'value'
   readonly syntax: 'export' | 'static-import'
   readonly role:
-    | 'contract-resource-projection-spi'
     | 'workgroup-host-ledger-provider'
     | 'workgroup-task-room-provider'
     | 'workgroup-turns-provider'
@@ -99,8 +98,6 @@ interface NamedModuleBinding {
 const EXACT_REQUIRED_SPI_BINDINGS: readonly ExactRequiredSpiBinding[] = [
   ...(
     [
-      ['WORKGROUP_TURN_LEADER_NODE_ID', 'value'],
-      ['WORKGROUP_TURN_MEMBER_NODE_ID', 'value'],
       // RFC-369 §4.4：内部错误路径上终结孤儿宿主 run 的账本操作，与 mint / stamp 同属宿主账本合同。
       ['WorkgroupHostLedgerFailRunOperation', 'type'],
       ['WorkgroupHostLedgerMintOperation', 'type'],
@@ -118,14 +115,6 @@ const EXACT_REQUIRED_SPI_BINDINGS: readonly ExactRequiredSpiBinding[] = [
     symbol,
     edgeKind,
     syntax: 'static-import' as const,
-    role: 'workgroup-turns-provider' as const,
-  })),
-  ...['WORKGROUP_TURN_LEADER_NODE_ID', 'WORKGROUP_TURN_MEMBER_NODE_ID'].map((symbol) => ({
-    from: 'packages/backend/src/modules/resource-catalog/application/workgroups/workgroupTurnsDriver.ts',
-    specifier: '@/modules/task-execution/public/commands',
-    symbol,
-    edgeKind: 'value' as const,
-    syntax: 'export' as const,
     role: 'workgroup-turns-provider' as const,
   })),
   ...[
@@ -159,23 +148,6 @@ const EXACT_REQUIRED_SPI_BINDINGS: readonly ExactRequiredSpiBinding[] = [
     syntax: 'static-import',
     role: 'workgroup-turns-provider',
   },
-  ...[
-    'packages/backend/src/modules/resource-catalog/application/agents/digitalEmployeeAgentTemplateCatalog.ts',
-    'packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlResourcePackageMutationArms.ts',
-    'packages/backend/src/modules/resource-catalog/infrastructure/legacy/agent.ts',
-  ].flatMap((from) =>
-    [
-      'reconcileCreatedAgentExecutionContractPorts',
-      'reconcileUpdatedAgentExecutionContractPorts',
-    ].map((symbol) => ({
-      from,
-      specifier: '@/modules/execution-contract/public/commands',
-      symbol,
-      edgeKind: 'value' as const,
-      syntax: 'static-import' as const,
-      role: 'contract-resource-projection-spi' as const,
-    })),
-  ),
 ]
 
 function requiredSpiBindingKey(binding: {
@@ -437,23 +409,10 @@ export const OFF_DAG_OFFERED_EDGE_DEBT: readonly OfferedEdgeDebt[] = [
     removeAfterWave: 'W4-E（RFC-294 provider-neutral bounded-context convergence）',
   },
   {
-    from: 'packages/backend/src/modules/memory/application/distillQueries.ts',
-    to: 'runtime-management',
-    why: 'RFC-349 provider cutover 新增了 owner-closed public participant 消费，但该 bounded-context 对尚未进入 design §3.1 目标 DAG；先逐文件精确锁定，待 ownership/DAG 正式收敛后销账。',
-    removeAfterWave: 'W4-E（RFC-294 provider-neutral bounded-context convergence）',
-  },
-  {
     from: 'packages/backend/src/modules/memory/application/ports/distillWorkStore.ts',
     to: 'runtime-management',
     why: 'RFC-349 provider cutover 新增了 owner-closed public participant 消费，但该 bounded-context 对尚未进入 design §3.1 目标 DAG；先逐文件精确锁定，待 ownership/DAG 正式收敛后销账。',
     removeAfterWave: 'W4-E（RFC-294 provider-neutral bounded-context convergence）',
-  },
-  {
-    from: 'packages/backend/src/modules/memory/infrastructure/memoryDistillSessionEventSink.ts',
-    to: 'runtime-management',
-    why: 'RFC-367 把蒸馏会话记录从「事后按 protocol 取 driver 走查 opencode SQLite」改成「实时事件 sink」，于是 memory 不再需要 runtime driver，只剩下一个常量依赖：capture-failed marker 行的 kind（`DISTILL_CAPTURE_FAILED_KIND`）。该常量的中立定义点在 runtime-management 的 public types，会话页投影 `distillQueries.ts` 一直从那里取，本文件写 marker 行时取同一个值以免两处字面量漂移。memory→runtime-management 不在 design §3.1 的 offered DAG 上，但这是一条纯常量的 public 依赖，比退回自带字面量更不容易坏。',
-    removeAfterWave:
-      'W4-C（system-agent 会话记录归位：marker kind 随会话捕获契约一并落到共用位置）',
   },
   {
     from: 'packages/backend/src/modules/resource-catalog/application/ports/taskAgentMaterialReferences.ts',
@@ -472,12 +431,6 @@ export const OFF_DAG_OFFERED_EDGE_DEBT: readonly OfferedEdgeDebt[] = [
     to: 'runtime-management',
     why: 'RFC-370 M2：托管 MCP 诊断与原生插件材料读取 runtime-management public 的托管能力快照与原生材料合同（与本地 Task family 读取 RM public 内容引用同形）；该实际 offered 边尚未进入目标 DAG，精确登记，在 A-T7 收敛归属。',
     removeAfterWave: 'W4-E（RFC-370 A-T7 public/composition 收敛）',
-  },
-  {
-    from: 'packages/backend/src/modules/resource-catalog/infrastructure/agentPersistenceSemantics.ts',
-    to: 'execution-contract',
-    why: 'RFC-349 provider cutover 新增了 owner-closed public participant 消费，但该 bounded-context 对尚未进入 design §3.1 目标 DAG；先逐文件精确锁定，待 ownership/DAG 正式收敛后销账。',
-    removeAfterWave: 'W4-E（RFC-294 provider-neutral bounded-context convergence）',
   },
   {
     from: 'packages/backend/src/modules/resource-catalog/infrastructure/crewstation/pluginGenerations.ts',
@@ -552,12 +505,6 @@ export const OFF_DAG_OFFERED_EDGE_DEBT: readonly OfferedEdgeDebt[] = [
     removeAfterWave: 'W4-E（RFC-294 provider-neutral bounded-context convergence）',
   },
   {
-    from: 'packages/backend/src/modules/task-execution/application/taskAgentRun.ts',
-    to: 'memory',
-    why: 'RFC-370 将原 Runner 完整业务合同、共同算法和 native options 迁入 Task owner，保留原 memory public 查询消费；逐文件登记真实迁移地址，不改变 offered 边分类或 DAG 判据。',
-    removeAfterWave: 'W4-E（RFC-294 provider-neutral bounded-context convergence）',
-  },
-  {
     from: 'packages/backend/src/modules/task-execution/composition/agentRunDistillObserver.ts',
     to: 'memory',
     why: 'RFC-366 给 task-execution 加了「agent 运行结束」这个中性事实的对外通知口（application/ports/agentRunSettledObserver），本文件是把它接到 memory exact public participant `MemoryDistillEnqueuer` 上的 adapter。TE→memory 不在 design §3.1 的 offered DAG 上，但同一对已有先例在账（taskRouteOperations.ts|memory、collaboration/application/taskFeedback.ts|memory）——本刀只是同一条未收敛的 context 对上多一个精确文件，形态没变。目标形态是 task-execution 经自己的 port 拿这份入队能力，属 TE 侧 adapter 收口。',
@@ -568,18 +515,6 @@ export const OFF_DAG_OFFERED_EDGE_DEBT: readonly OfferedEdgeDebt[] = [
     to: 'system-operations',
     why: 'RFC-370 v3 V6：托管对象只有一套中立发布日志（system-operations public participants 的 HostedObjectPublications），各 owner 在自己的事务里登记并保留自己的引用；该 owner→system-operations 的 offered 边尚未进入目标 DAG，精确登记，随对象发布下沉为平台内容端口时收敛。',
     removeAfterWave: 'W9-E（托管内容端口归位）',
-  },
-  {
-    from: 'packages/backend/src/modules/task-execution/composition/digitalEmployeeBuiltinToolCatalog.ts',
-    to: 'digital-employee',
-    why: 'task-execution 消费 digital-employee public 的 `WorkspaceFailureClass`/platform tool catalog participant；design §3.1 记为双向 contract/type debt，W4-E9 改为两套 DE-owned required SPI 后删除。',
-    removeAfterWave: 'W4-E9',
-  },
-  {
-    from: 'packages/backend/src/modules/task-execution/composition/gateContinuationPreDrive.ts',
-    to: 'memory',
-    why: 'RFC-349 provider cutover 新增了 owner-closed public participant 消费，但该 bounded-context 对尚未进入 design §3.1 目标 DAG；先逐文件精确锁定，待 ownership/DAG 正式收敛后销账。',
-    removeAfterWave: 'W4-E（RFC-294 provider-neutral bounded-context convergence）',
   },
   {
     from: 'packages/backend/src/modules/task-execution/composition/humanGate.ts',
@@ -604,12 +539,6 @@ export const OFF_DAG_OFFERED_EDGE_DEBT: readonly OfferedEdgeDebt[] = [
     to: 'knowledge-evolution',
     why: 'RFC-353 T5 把 fusion 的端口从 `modules/memory/public/fusion.ts` 迁到它真正的 owner knowledge-evolution（RFC-294 design §638：memory 的禁止清单第一条就是「fusion engine」）。这三个文件是 task-execution 实现 KE required `FusionEngineTaskOperations` 的 exact adapter——「消费者实现提供方的合同」本来就不在 design §3.1 的 offered DAG 上；迁移前它们指向 memory、同样在账；本刀只是把边的终点换成正确的 owner，形态与条数都没变。',
     removeAfterWave: 'W4-E1（task-execution vertical slice：fusion 启动 adapter 随 TE 收口）',
-  },
-  {
-    from: 'packages/backend/src/modules/task-execution/composition/taskClarifyDirectiveRoutes.ts',
-    to: 'collaboration',
-    why: 'RFC-349 provider cutover 新增了 owner-closed public participant 消费，但该 bounded-context 对尚未进入 design §3.1 目标 DAG；先逐文件精确锁定，待 ownership/DAG 正式收敛后销账。',
-    removeAfterWave: 'W4-E（RFC-294 provider-neutral bounded-context convergence）',
   },
   {
     from: 'packages/backend/src/modules/task-execution/composition/taskEngineRuntimeOptions.ts',
@@ -703,17 +632,16 @@ export const OFF_DAG_OFFERED_EDGE_DEBT: readonly OfferedEdgeDebt[] = [
     removeAfterWave: 'W4-E（RFC-294 provider-neutral bounded-context convergence）',
   },
   {
-    from: 'packages/backend/src/modules/task-execution/infrastructure/taskRouteOperations.ts',
-    to: 'memory',
-    why: 'RFC-352 T2 把 `node_runs.injected_memories_json` 的解码器从 legacy `services/memoryInject.ts` 迁进 memory 并经 public/types 提供，于是这条本来就存在的依赖第一次以 offered 边出现在图里（此前是 legacy→legacy，不计跨域）。目标形态是 task-execution 经自己的 TaskMemoryInjectionPort 拿这份编解码，属 TE 侧 adapter 收口。',
-    removeAfterWave:
-      'W4-E1（task-execution vertical slice：REST 投影改经 TaskMemoryInjectionPort）',
-  },
-  {
     from: 'packages/backend/src/modules/task-execution/infrastructure/taskRouteRepairOperations.ts',
     to: 'collaboration',
     why: 'RFC-349 provider cutover 新增了 owner-closed public participant 消费，但该 bounded-context 对尚未进入 design §3.1 目标 DAG；先逐文件精确锁定，待 ownership/DAG 正式收敛后销账。',
     removeAfterWave: 'W4-E（RFC-294 provider-neutral bounded-context convergence）',
+  },
+  {
+    from: 'packages/backend/src/modules/resource-catalog/application/ports/mcpDiagnosticExecution.ts',
+    to: 'runtime-management',
+    why: 'RFC-399 A7 将 resource-catalog/composition/crewstationMcpDiagnostics.ts 的 runtime-management 类型依赖移到 RC 自有的 mcpDiagnosticExecution 端口；复用原 material、event 与 usage 合同，执行值依赖已由 bootstrap 注入，类型边随 public/composition 收敛退役。',
+    removeAfterWave: 'W4-E（RFC-370 A-T7 public/composition 收敛）',
   },
 ]
 
@@ -749,7 +677,7 @@ describe('RFC-294 review §B1 —— observed offered 边 ⊆ design §3.1 DAG',
 })
 
 describe('RFC-294 review §B1 —— 负 fixture：判据自己咬得动', () => {
-  test('只把 exact RC→TE / RC→XC provider binding 分类为 required-SPI implementation', () => {
+  test('只把 exact RC→TE provider binding 分类为 required-SPI implementation', () => {
     expect(
       offDagOfferedEdges(
         [
@@ -757,7 +685,7 @@ describe('RFC-294 review §B1 —— 负 fixture：判据自己咬得动', () =>
             'packages/backend/src/modules/resource-catalog/application/workgroups/workgroupTurnsDriver.ts',
             `
               import {
-                WORKGROUP_TURN_LEADER_NODE_ID,
+                type WorkgroupHostLedgerMintOperation,
                 type WorkgroupTurnsOperations,
               } from '@/modules/task-execution/public/commands'
             `,
@@ -772,12 +700,12 @@ describe('RFC-294 review §B1 —— 负 fixture：判据自己咬得动', () =>
             `,
           ),
           sourceUnit(
-            'packages/backend/src/modules/resource-catalog/application/agents/digitalEmployeeAgentTemplateCatalog.ts',
+            'packages/backend/src/modules/resource-catalog/infrastructure/workgroupTaskRoom.ts',
             `
-              import {
-                reconcileCreatedAgentExecutionContractPorts,
-                reconcileUpdatedAgentExecutionContractPorts,
-              } from '@/modules/execution-contract/public/commands'
+              import type {
+                WorkgroupTaskRoomEventIdentity,
+                WorkgroupTaskRoomTaskParticipantInTx,
+              } from '@/modules/task-execution/public/commands'
             `,
           ),
         ],
@@ -822,8 +750,8 @@ describe('RFC-294 review §B1 —— 负 fixture：判据自己咬得动', () =>
         sourceUnit(
           'packages/backend/src/modules/resource-catalog/application/agents/agentApplication.ts',
           `
-            import { reconcileCreatedAgentExecutionContractPorts }
-              from '@/modules/execution-contract/public/commands'
+            import type { WorkgroupTurnsOperations }
+              from '@/modules/task-execution/public/commands'
           `,
         ),
       ],
@@ -831,7 +759,7 @@ describe('RFC-294 review §B1 —— 负 fixture：判据自己咬得动', () =>
     )
     expect(violations).toHaveLength(6)
     expect(violations.map((edge) => `${edge.from}|${edge.specifier}`)).toEqual([
-      'packages/backend/src/modules/resource-catalog/application/agents/agentApplication.ts|@/modules/execution-contract/public/commands',
+      'packages/backend/src/modules/resource-catalog/application/agents/agentApplication.ts|@/modules/task-execution/public/commands',
       'packages/backend/src/modules/resource-catalog/application/workgroups/workgroupRoomProjection.ts|@/modules/task-execution/public/commands',
       'packages/backend/src/modules/resource-catalog/composition/workgroupTurns.ts|@/modules/task-execution/public/commands',
       'packages/backend/src/modules/resource-catalog/composition/workgroupTurns.ts|@/modules/task-execution/public/commands',

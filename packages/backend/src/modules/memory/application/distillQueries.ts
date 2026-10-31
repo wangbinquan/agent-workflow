@@ -13,7 +13,7 @@ import {
   type ResolvedDistillScope,
 } from '@agent-workflow/shared'
 
-import { DISTILL_CAPTURE_FAILED_KIND } from '@/modules/runtime-management/public/types'
+import { DISTILL_CAPTURE_FAILED_KIND } from '@/modules/memory/domain/distillCapture'
 import { NotFoundError } from '@/util/errors'
 import { createLogger } from '@/util/log'
 import type {

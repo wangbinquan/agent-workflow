@@ -1,3 +1,4 @@
+import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { nodeRunFixtureColumns } from './helpers/model/nodeRun'
 import { tablesOf } from '@/platform/persistence/sessionTables'
@@ -708,6 +709,7 @@ describeEachProvider(
       await patchTaskFixture(db, { id: taskId }, { status: 'failed' })
       await runLifecycleInvariants({
         operations: createTaskExecutionPersistence(db, {
+          humanGateOpen: composeHumanGateOpenParticipantFactory(),
           historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
           recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
         }).recoveryAdministration,

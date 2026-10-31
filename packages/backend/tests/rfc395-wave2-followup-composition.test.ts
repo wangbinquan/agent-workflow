@@ -1,3 +1,4 @@
+import { composeCollaborationTaskRolePolicy } from '@/modules/resource-catalog/composition'
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { schemaFixtureDb } from './helpers/schemaFixture'
 // RFC-395 wave 2 follow-ups: exercise the actual factories with controlled
@@ -91,6 +92,7 @@ test('clarify factory and context bridge forward the same restriction provider i
       .submit(input),
   ).rejects.toBe(denied)
   commands.createClarifyDecisionCommandContext({
+    taskRolePolicy: composeCollaborationTaskRolePolicy(),
     db,
     actor,
     role: 'owner',
@@ -143,6 +145,7 @@ test('question dispatch factory and context bridge forward restriction options w
       .dispatch(input),
   ).rejects.toBe(denied)
   commands.createQuestionDispatchCommandContext({
+    taskRolePolicy: composeCollaborationTaskRolePolicy(),
     db,
     actor,
     role: 'owner',
@@ -237,6 +240,7 @@ test('review factory and context bridge share the selected content reader and re
     },
   )
   const options = {
+    taskRolePolicy: composeCollaborationTaskRolePolicy(),
     db,
     appHome: '/unused-profile-home',
     taskLock,
@@ -253,7 +257,11 @@ test('review factory and context bridge share the selected content reader and re
     expectedReviewIteration: 0,
   }
   await expect(commands.createReviewDecisionCommand(options).submit(input)).rejects.toBe(denied)
-  commands.createReviewDecisionCommandContext({ ...options, actor, authorRole: 'owner' })
+  commands.createReviewDecisionCommandContext({
+    ...options,
+    actor,
+    authorRole: 'owner',
+  })
   expect(contexts[0]!.content).toBe(content)
   expect(contexts[0]!.reviewArtifacts).toBe(reviewArtifacts)
   expect(contexts[0]!.historyRestrictions).toBe(restrictions)

@@ -512,6 +512,8 @@ export async function executeWorkgroupHostMechanics(
             dependents: injection.spec.dependents,
             mcps: injection.spec.mcps,
 
+            memorySnapshots: opts.memorySnapshots,
+
             memoryInjectionQueries: opts.memoryInjectionQueries,
             runtimeSessionLeases: opts.runtimeSessionLeases,
             runtimeRegistry: opts.runtimeRegistry,
@@ -1159,6 +1161,8 @@ export async function resolveMergeConflicts(
 
         dependents: mergeInjection.spec.dependents,
         mcps: mergeInjection.spec.mcps,
+
+        memorySnapshots: state.opts.memorySnapshots,
 
         memoryInjectionQueries: state.opts.memoryInjectionQueries,
         runtimeSessionLeases: state.opts.runtimeSessionLeases,
@@ -4745,6 +4749,8 @@ export async function runAgentSingleNode(
 
           dependents,
           mcps,
+
+          memorySnapshots: opts.memorySnapshots,
 
           memoryInjectionQueries: opts.memoryInjectionQueries,
           runtimeSessionLeases: opts.runtimeSessionLeases,

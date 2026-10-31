@@ -1,3 +1,4 @@
+import { createDigitalEmployeeIntegrationTriggerParticipantIn } from '@/modules/digital-employee/composition'
 // RFC-359 W4-D1 —— integration 触发器链的 dbTxSync 归零：定时任务持久化 + 触发器资源快照（resource-catalog 工厂 +
 // digital-employee 参与者）合一，两个引擎各跑一遍：写事务里加载已授权快照、私有资源对外人 404、CAS 认领、
 // 成功 / 失败记账与自动停用、ACL 原子替换与修订冲突、数字员工快照（归档 / 外人 → 404）。
@@ -13,7 +14,7 @@ import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { ScheduledTaskCreateRecord } from '@/modules/integration/application/ports/scheduledTaskPersistence'
 import { createIntegrationTriggerResources } from '@/modules/integration/infrastructure/integrationTriggerResources'
 import { createScheduledTaskPersistence } from '@/modules/integration/infrastructure/scheduledTaskPersistence'
-import { composeIntegrationTriggerResourceSnapshotFactory } from '@/modules/resource-catalog/composition/integrationTrigger'
+import { composeIntegrationTriggerSnapshots } from '@/modules/resource-catalog/composition/integrationTrigger'
 import type { ResourceRequestContext } from '@/modules/resource-catalog/public/participants'
 import { assertNotBuiltin } from '@/services/systemResources'
 import { ConflictError, NotFoundError } from '@/util/errors'
@@ -89,7 +90,10 @@ describeEachProvider('RFC-359 W4-D1 —— 定时任务持久化 + 触发器资�
     ])
     const resources = createIntegrationTriggerResources(
       db,
-      composeIntegrationTriggerResourceSnapshotFactory({ assertNotBuiltin }),
+      composeIntegrationTriggerSnapshots(
+        { assertNotBuiltin },
+        createDigitalEmployeeIntegrationTriggerParticipantIn,
+      ),
     )
     const persistence = createScheduledTaskPersistence(db, resources)
 
@@ -288,7 +292,10 @@ describeEachProvider('RFC-359 W4-D1 —— 定时任务持久化 + 触发器资�
     const stranger = await seedUser(db, 'u_d1_stranger')
     const resources = createIntegrationTriggerResources(
       db,
-      composeIntegrationTriggerResourceSnapshotFactory({ assertNotBuiltin }),
+      composeIntegrationTriggerSnapshots(
+        { assertNotBuiltin },
+        createDigitalEmployeeIntegrationTriggerParticipantIn,
+      ),
     )
     const { employeeTypePackages, employeeDefinitions, employeeDefinitionRevisions } = tablesOf(db)
     await agentFixture(db, {

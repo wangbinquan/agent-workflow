@@ -1,3 +1,4 @@
+import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 // RFC-395 II-pre：改接生产启动 / 读取路径，保留原断言意图。
 // RFC-294 W1/W2/P0-D refactor compatibility oracles.
 //
@@ -198,6 +199,7 @@ async function seedTask(
 
 function runtimeDeps(harness: Harness, mock: string) {
   return {
+    humanGateOpen: composeHumanGateOpenParticipantFactory(),
     db: harness.db,
     schedulerDriver: createTaskExecutionTestTopology({ db: harness.db, driver: 'real' })
       .schedulerDriver,
@@ -289,7 +291,9 @@ describe('RFC-294 task execution/lifecycle compatibility oracles', () => {
           .schedulerDriver,
         runConfig: { binaryOverride: [process.execPath, 'run', h.slowMock], defaultNodeRetries: 0 },
       }).resume(seeded.taskId),
-      createRetryEngine(h.db, { resumeWith: deps }).retry({
+      createRetryEngine(h.db, {
+        resumeWith: deps,
+      }).retry({
         taskId: seeded.taskId,
         nodeRunId: failedRunId,
         cascade: true,
@@ -424,6 +428,7 @@ describe('RFC-294 task execution/lifecycle compatibility oracles', () => {
         repoUrl: 'https://example.invalid/must-not-be-resolved.git',
       },
       {
+        humanGateOpen: composeHumanGateOpenParticipantFactory(),
         db: h.db,
         schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
           .schedulerDriver,

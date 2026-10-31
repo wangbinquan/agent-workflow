@@ -195,3 +195,9 @@ export * from './nodeRunOrder'
 export * from './schemas/repositoryContentBaseline'
 export * from './schemas/graphDesign'
 export * from './schemas/artifactElementAnchor'
+
+export { EXECUTION_CONTRACT_RESULT_PORT } from './executionContractPorts'
+export {
+  WORKGROUP_TURN_LEADER_NODE_ID,
+  WORKGROUP_TURN_MEMBER_NODE_ID,
+} from './workgroupHostIdentity'

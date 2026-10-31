@@ -1,3 +1,5 @@
+import { createHumanGateOpenParticipantScope } from './humanGateOpenFactory'
+import type { CollaborationTaskRolePolicy } from '../application/ports/collaborationTaskRolePolicy'
 import type { ContentStore } from '@/platform/content/contentStore'
 import {
   nodeOutputSlot,
@@ -580,6 +582,7 @@ async function upstreamPortArchiveJson(
 }
 
 export interface DispatchReviewArgs {
+  taskRolePolicy: CollaborationTaskRolePolicy
   taskLock: HumanGateTaskLockPort
   historyRestrictions: HistoryRestrictionPort
   content?: ContentStore
@@ -926,6 +929,7 @@ async function dispatchReviewNodeUnlocked(args: DispatchReviewArgs): Promise<Dis
     const drafts: ReviewGateOpenDocumentDraft[] = []
     if (isMultiDoc) {
       const prior = await loadPriorRound(db, appHome, {
+        taskRolePolicy: args.taskRolePolicy,
         taskLock: args.taskLock,
         historyRestrictions: args.historyRestrictions,
         content: args.content,
@@ -1163,6 +1167,7 @@ async function dispatchReviewNodeUnlocked(args: DispatchReviewArgs): Promise<Dis
     )
     const collaboration = humanGateComposition.createCollaborationCommandContext({
       db,
+      taskRolePolicy: args.taskRolePolicy,
       taskLock: args.taskLock,
       historyRestrictions: args.historyRestrictions,
       content: args.content,
@@ -1193,6 +1198,7 @@ async function dispatchReviewNodeUnlocked(args: DispatchReviewArgs): Promise<Dis
     })
     if (prepared.kind === 'prepared') {
       await humanGateComposition.parkPreparedHumanGate({
+        humanGateOpen: createHumanGateOpenParticipantScope,
         db,
         prepared: prepared.prepared,
         historyRestrictions: args.historyRestrictions,
@@ -1329,6 +1335,7 @@ async function dispatchReviewNodeUnlocked(args: DispatchReviewArgs): Promise<Dis
       // is the single injection point — iterate / reject / refresh / US-2 all
       // re-mint here (design §5). Empty on the first round → all unselected.
       const prior = await loadPriorRound(db, appHome, {
+        taskRolePolicy: args.taskRolePolicy,
         taskLock: args.taskLock,
         historyRestrictions: args.historyRestrictions,
         content: args.content,
@@ -1676,6 +1683,7 @@ async function loadPriorRound(
   db: PersistenceDb,
   appHome: string,
   args: {
+    taskRolePolicy: CollaborationTaskRolePolicy
     taskLock: HumanGateTaskLockPort
     historyRestrictions: HistoryRestrictionPort
     content?: ContentStore
@@ -1726,6 +1734,7 @@ async function loadPriorRound(
   const members: PriorRoundMember[] = []
   const collaboration = humanGateComposition.createCollaborationCommandContext({
     db,
+    taskRolePolicy: args.taskRolePolicy,
     taskLock: args.taskLock,
     historyRestrictions: args.historyRestrictions,
     content: args.content,
@@ -3080,6 +3089,7 @@ export const REVIEW_DECISION_POLICY = {
 
 export interface SubmitReviewDecisionArgs {
   upstreamAgents: ReviewUpstreamAgentPort
+  taskRolePolicy: CollaborationTaskRolePolicy
   taskLock: HumanGateTaskLockPort
   historyRestrictions: HistoryRestrictionPort
   content?: ContentStore

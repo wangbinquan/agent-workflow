@@ -1,3 +1,4 @@
+import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 // RFC-395 II-pre：改接生产启动 / 读取路径，保留原断言意图。
 // RFC-311 实现门 P1-6 / P2-3 —— `tasks.branch_started_at` 的维护面。
 //
@@ -143,6 +144,7 @@ describe('RFC-311 — branch_started_at is maintained by the real paths', () => 
       const started = await launchTestTask(
         { workflowId: wf, name: 'child', inputs: {} } as StartTask,
         {
+          humanGateOpen: composeHumanGateOpenParticipantFactory(),
           db,
           schedulerDriver: createTaskExecutionTestTopology({ db, driver: 'real' }).schedulerDriver,
           materializedSpace: spaceFor('placeholder', childRoot),
@@ -207,6 +209,7 @@ describe('RFC-311 — branch_started_at is maintained by the real paths', () => 
       // 顶层任务:根是自己。
       const rootId = ulid()
       const root = await launchTestTask({ workflowId: wf, name: 'root', inputs: {} } as StartTask, {
+        humanGateOpen: composeHumanGateOpenParticipantFactory(),
         db,
         schedulerDriver: createTaskExecutionTestTopology({ db, driver: 'real' }).schedulerDriver,
         coordinator: { submit: async ({ taskId }) => ({ kind: 'accepted', taskId }) },
@@ -238,6 +241,7 @@ describe('RFC-311 — branch_started_at is maintained by the real paths', () => 
       const child = await launchTestTask(
         { workflowId: wf, name: 'child', inputs: {} } as StartTask,
         {
+          humanGateOpen: composeHumanGateOpenParticipantFactory(),
           db,
           schedulerDriver: createTaskExecutionTestTopology({ db, driver: 'real' }).schedulerDriver,
           coordinator: { submit: async ({ taskId }) => ({ kind: 'accepted', taskId }) },
@@ -260,6 +264,7 @@ describe('RFC-311 — branch_started_at is maintained by the real paths', () => 
       const grandchild = await launchTestTask(
         { workflowId: wf, name: 'grandchild', inputs: {} } as StartTask,
         {
+          humanGateOpen: composeHumanGateOpenParticipantFactory(),
           db,
           schedulerDriver: createTaskExecutionTestTopology({ db, driver: 'real' }).schedulerDriver,
           coordinator: { submit: async ({ taskId }) => ({ kind: 'accepted', taskId }) },

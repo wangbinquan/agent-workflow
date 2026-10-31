@@ -254,10 +254,9 @@ const FACTORY_ALLOWLIST = new Map<string, ReadonlySet<string>>([
  * still fails both this exact inventory and the RFC-349 provider guard.
  */
 const CROSS_CONTEXT_PROVIDER_BRIDGE_DEBT = new Set([
-  'collaboration/infrastructure/humanGateOpenParticipant: packages/backend/src/modules/task-execution/infrastructure/humanGateTaskLifecyclePersistence.ts',
-  'collaboration/infrastructure/humanGateOperationJournal: packages/backend/src/modules/task-execution/infrastructure/humanGateTaskLifecyclePersistence.ts',
-  'collaboration/infrastructure/clarifyContinuationConvergence: packages/backend/src/modules/task-execution/composition/gateContinuationPreDrive.ts',
-  'collaboration/infrastructure/humanGateOperationPersistence: packages/backend/src/modules/task-execution/composition/gateContinuationPreDrive.ts',
+  // RFC-399 A8 retired the four task-execution -> collaboration bridges (human-gate open participant,
+  // operation journal, clarify continuation convergence, operation persistence): task-execution now owns
+  // the ports and bootstrap injects the collaboration implementations.
   // RFC-359 AC-1（第 12 刀）：运行时参与者合一之后，协作投影由**装配方**交进来——
   // 参与者自己不再 compose 别的 context。这条债因此从 infrastructure 挪到组合根，
   // 与 PostgreSQL 那一支同形（那边一直是 bootstrap 交）。

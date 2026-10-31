@@ -1,3 +1,5 @@
+import { composeCollaborationTaskRolePolicy } from '@/modules/resource-catalog/composition'
+import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { withO2Closure } from './helpers/o2Closure'
 // RFC-395 II-pre：改接生产启动 / 读取路径，保留原断言意图。
@@ -185,6 +187,7 @@ async function buildHarness(opts?: HarnessOpts): Promise<Harness> {
       inputs: { topic: 'orders' },
     },
     {
+      humanGateOpen: composeHumanGateOpenParticipantFactory(),
       db,
       schedulerDriver: createTaskExecutionTestTopology({ db, driver: 'real' }).schedulerDriver,
       appHome,
@@ -268,6 +271,7 @@ async function submitAndSettleReviewDecision(
     withO2Closure({ ...input, db: h.db, appHome: h.appHome }),
   )
   await wakeHumanGateContinuation(result.taskId, result.continuationRef, {
+    humanGateOpen: composeHumanGateOpenParticipantFactory(),
     historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
     db: h.db,
     appHome: h.appHome,
@@ -300,6 +304,7 @@ describe('RFC-011 review reject/iterate mints a fresh node_run', () => {
     expect(originalPrompt).not.toBeNull()
 
     await submitAndSettleReviewDecision(h, {
+      taskRolePolicy: composeCollaborationTaskRolePolicy(),
       nodeRunId: h.reviewNodeRunId,
       decision: 'iterated',
       expectedReviewIteration: 0,
@@ -328,6 +333,7 @@ describe('RFC-011 review reject/iterate mints a fresh node_run', () => {
       before.checkpoints.find((checkpoint) => checkpoint.mountPath === '')?.preSnapshot ?? null
 
     await submitAndSettleReviewDecision(h, {
+      taskRolePolicy: composeCollaborationTaskRolePolicy(),
       nodeRunId: h.reviewNodeRunId,
       decision: 'iterated',
       expectedReviewIteration: 0,
@@ -354,6 +360,7 @@ describe('RFC-011 review reject/iterate mints a fresh node_run', () => {
     expect(before.length).toBe(1)
 
     await submitAndSettleReviewDecision(h, {
+      taskRolePolicy: composeCollaborationTaskRolePolicy(),
       nodeRunId: h.reviewNodeRunId,
       decision: 'rejected',
       rejectReason: 'wrong direction',
@@ -400,6 +407,7 @@ describe('RFC-011 review reject/iterate mints a fresh node_run', () => {
     await seedDesignerPreSnapshot(h)
 
     await submitAndSettleReviewDecision(h, {
+      taskRolePolicy: composeCollaborationTaskRolePolicy(),
       nodeRunId: h.reviewNodeRunId,
       decision: 'iterated',
       expectedReviewIteration: 0,
@@ -417,6 +425,7 @@ describe('RFC-011 review reject/iterate mints a fresh node_run', () => {
     await seedDesignerPreSnapshot(h)
 
     await submitAndSettleReviewDecision(h, {
+      taskRolePolicy: composeCollaborationTaskRolePolicy(),
       nodeRunId: h.reviewNodeRunId,
       decision: 'iterated',
       expectedReviewIteration: 0,
@@ -434,6 +443,7 @@ describe('RFC-011 review reject/iterate mints a fresh node_run', () => {
     await seedDesignerPreSnapshot(h)
 
     await submitAndSettleReviewDecision(h, {
+      taskRolePolicy: composeCollaborationTaskRolePolicy(),
       nodeRunId: h.reviewNodeRunId,
       decision: 'rejected',
       rejectReason: 'wrong direction',
@@ -451,6 +461,7 @@ describe('RFC-011 review reject/iterate mints a fresh node_run', () => {
     await seedDesignerPreSnapshot(h)
 
     await submitAndSettleReviewDecision(h, {
+      taskRolePolicy: composeCollaborationTaskRolePolicy(),
       nodeRunId: h.reviewNodeRunId,
       decision: 'rejected',
       rejectReason: 'wrong direction',

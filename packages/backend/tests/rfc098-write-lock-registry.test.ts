@@ -132,9 +132,11 @@ describe('RFC-098 B1 — taskWriteLocks registry identity & gc', () => {
     // gate-continuation effect in humanGateContinuationEffects.ts. Both
     // current rollback executors use the same registry and must never gc.
     // RFC-284 T27 改锚：clarify 正体迁 services/clarify/（旧路径为 facade）。
+    // RFC-399 A8 改锚：评审回滚执行器从 services/humanGateContinuationEffects.ts 迁入
+    // collaboration infrastructure（gateWorkspaceRollbackExecutor.ts），由 bootstrap 注入 TE 端口。
     for (const f of [
       '../modules/collaboration/infrastructure/clarify/autoDispatch.ts',
-      'humanGateContinuationEffects.ts',
+      '../modules/collaboration/infrastructure/gateWorkspaceRollbackExecutor.ts',
     ]) {
       const src = readFileSync(SRC(f), 'utf-8')
       expect(src).toContain('getTaskWriteSem')

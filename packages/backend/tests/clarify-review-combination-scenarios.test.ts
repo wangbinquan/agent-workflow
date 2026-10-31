@@ -1,3 +1,4 @@
+import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import { epoch2ReviewReader } from './helpers/epoch2RuntimePorts'
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { nodeRunFixtureColumns } from './helpers/model/nodeRun'
@@ -122,6 +123,7 @@ async function runTask(options: Parameters<typeof runTaskBase>[0]): Promise<void
   }
   if (pendingGateIntent !== undefined) {
     await wakeHumanGateContinuation(options.taskId, pendingGateIntent.id, {
+      humanGateOpen: composeHumanGateOpenParticipantFactory(),
       ...runOptions,
       schedulerDriver: createTaskExecutionTestTopology({ db: options.db, driver: 'real' })
         .schedulerDriver,
@@ -344,6 +346,7 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
         inputs: { topic: 'x' },
       },
       {
+        humanGateOpen: composeHumanGateOpenParticipantFactory(),
         db: c.db,
         schedulerDriver: createTaskExecutionTestTopology({ db: c.db, driver: 'real' })
           .schedulerDriver,
@@ -420,6 +423,7 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
         inputs: { topic: 'x' },
       },
       {
+        humanGateOpen: composeHumanGateOpenParticipantFactory(),
         db: c.db,
         schedulerDriver: createTaskExecutionTestTopology({ db: c.db, driver: 'real' })
           .schedulerDriver,
@@ -562,6 +566,7 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
         inputs: { topic: 'x' },
       },
       {
+        humanGateOpen: composeHumanGateOpenParticipantFactory(),
         db: c.db,
         schedulerDriver: createTaskExecutionTestTopology({ db: c.db, driver: 'real' })
           .schedulerDriver,
@@ -751,6 +756,7 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
         inputs: { topic: 'x' },
       },
       {
+        humanGateOpen: composeHumanGateOpenParticipantFactory(),
         db: c.db,
         schedulerDriver: createTaskExecutionTestTopology({ db: c.db, driver: 'real' })
           .schedulerDriver,
@@ -847,6 +853,7 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
         inputs: { topic: 'x' },
       },
       {
+        humanGateOpen: composeHumanGateOpenParticipantFactory(),
         db: c.db,
         schedulerDriver: createTaskExecutionTestTopology({ db: c.db, driver: 'real' })
           .schedulerDriver,
@@ -972,6 +979,7 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
         inputs: { topic: 'x' },
       },
       {
+        humanGateOpen: composeHumanGateOpenParticipantFactory(),
         db: c.db,
         schedulerDriver: createTaskExecutionTestTopology({ db: c.db, driver: 'real' })
           .schedulerDriver,
@@ -1114,6 +1122,7 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
         inputs: { topic: 'x' },
       },
       {
+        humanGateOpen: composeHumanGateOpenParticipantFactory(),
         db: c.db,
         schedulerDriver: createTaskExecutionTestTopology({ db: c.db, driver: 'real' })
           .schedulerDriver,
@@ -1219,6 +1228,7 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
         inputs: { topic: 'x' },
       },
       {
+        humanGateOpen: composeHumanGateOpenParticipantFactory(),
         db: c.db,
         schedulerDriver: createTaskExecutionTestTopology({ db: c.db, driver: 'real' })
           .schedulerDriver,
@@ -1330,6 +1340,7 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
         inputs: { topic: 'x' },
       },
       {
+        humanGateOpen: composeHumanGateOpenParticipantFactory(),
         db: c.db,
         schedulerDriver: createTaskExecutionTestTopology({ db: c.db, driver: 'real' })
           .schedulerDriver,
@@ -1409,6 +1420,7 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
         inputs: { topic: 'x' },
       },
       {
+        humanGateOpen: composeHumanGateOpenParticipantFactory(),
         db: c.db,
         schedulerDriver: createTaskExecutionTestTopology({ db: c.db, driver: 'real' })
           .schedulerDriver,
@@ -1541,6 +1553,7 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
         inputs: { topic: 'x' },
       },
       {
+        humanGateOpen: composeHumanGateOpenParticipantFactory(),
         db: c.db,
         schedulerDriver: createTaskExecutionTestTopology({ db: c.db, driver: 'real' })
           .schedulerDriver,
@@ -1672,6 +1685,7 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
         inputs: { topic: 'x' },
       },
       {
+        humanGateOpen: composeHumanGateOpenParticipantFactory(),
         db: c.db,
         schedulerDriver: createTaskExecutionTestTopology({ db: c.db, driver: 'real' })
           .schedulerDriver,
@@ -1792,6 +1806,7 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
         inputs: { topic: 'x' },
       },
       {
+        humanGateOpen: composeHumanGateOpenParticipantFactory(),
         db: c.db,
         schedulerDriver: createTaskExecutionTestTopology({ db: c.db, driver: 'real' })
           .schedulerDriver,
@@ -1925,6 +1940,7 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
         inputs: { req: 'x' },
       },
       {
+        humanGateOpen: composeHumanGateOpenParticipantFactory(),
         db: c.db,
         schedulerDriver: createTaskExecutionTestTopology({ db: c.db, driver: 'real' })
           .schedulerDriver,
@@ -2077,6 +2093,7 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
         inputs: { topic: 'x' },
       },
       {
+        humanGateOpen: composeHumanGateOpenParticipantFactory(),
         db: c.db,
         schedulerDriver: createTaskExecutionTestTopology({ db: c.db, driver: 'real' })
           .schedulerDriver,
@@ -2198,6 +2215,7 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
         inputs: { topic: 'x' },
       },
       {
+        humanGateOpen: composeHumanGateOpenParticipantFactory(),
         db: c.db,
         schedulerDriver: createTaskExecutionTestTopology({ db: c.db, driver: 'real' })
           .schedulerDriver,
@@ -2311,6 +2329,7 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
         inputs: { topic: 'x' },
       },
       {
+        humanGateOpen: composeHumanGateOpenParticipantFactory(),
         db: c.db,
         schedulerDriver: createTaskExecutionTestTopology({ db: c.db, driver: 'real' })
           .schedulerDriver,
@@ -2488,6 +2507,7 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
         inputs: { docs: 'a.md\nb.md' },
       },
       {
+        humanGateOpen: composeHumanGateOpenParticipantFactory(),
         db: c.db,
         schedulerDriver: createTaskExecutionTestTopology({ db: c.db, driver: 'real' })
           .schedulerDriver,

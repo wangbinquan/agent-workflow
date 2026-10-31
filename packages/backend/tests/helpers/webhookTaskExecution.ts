@@ -1,3 +1,5 @@
+import { composeRepositoryPreparationLookup } from '@/modules/source-control/composition'
+import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import { epoch2RuntimeTestPorts } from './epoch2RuntimePorts'
 import { o2Ports } from './o2Closure'
 import { withSourceControlTaskPorts } from './sourceControlTaskPorts'
@@ -51,6 +53,7 @@ export function createSqliteWebhookTaskExecutionParticipant(input: {
     authorization: resourceCatalog.authorization,
   }).launch
   const persistence = createTaskExecutionPersistence(input.db, {
+    humanGateOpen: composeHumanGateOpenParticipantFactory(),
     historyRestrictions: epoch2RuntimeTestPorts(input.db).historyRestrictions,
     recoveryHumanGates: o2Ports(input.db).collaborationReads.recovery,
   })
@@ -86,6 +89,7 @@ export function createSqliteWebhookTaskExecutionParticipant(input: {
       secretBox: input.secretBox,
     }),
     coordinator: createTestTaskDriveCoordinator({
+      humanGateOpen: composeHumanGateOpenParticipantFactory(),
       // 运行期配置必须与生产取自同一处：`runtimeConfigOpts(deps)` 从 `deps` 上读十七个旋钮，
       // 只给 `{db, schedulerDriver, configPath}` 时它们全是 undefined（`20d4a6ce5` 的 e2e 红就是这么来的）。
       deps: {
@@ -123,6 +127,7 @@ export function createSqliteWebhookTaskExecutionParticipant(input: {
       },
       // RFC-287 G7：webhook 触发延后仓库准备，第 0 步由这台协调器推进。
       repositoryPreparation: composeDeferredRepositoryPreparation({
+        repositoryPreparationLookup: composeRepositoryPreparationLookup(input.db),
         repositoryPreparation: composeRepositoryPreparation(
           withSourceControlTaskPorts({
             db: input.db,

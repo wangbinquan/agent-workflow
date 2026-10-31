@@ -1,3 +1,4 @@
+import { createCrewStationMcpDiagnosticRunner } from '@/modules/task-execution/composition/crewstationMcpDiagnosticRunner'
 import { expect, test } from 'bun:test'
 import type { Mcp } from '@agent-workflow/shared'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
@@ -27,6 +28,20 @@ import {
   hostedWorkspaceReference,
   parseHostedWorkspaceReference,
 } from '@/modules/source-control/infrastructure/crewstation/workspaceReference'
+
+function withExecution(
+  input: Omit<Parameters<typeof createCrewStationMcpDiagnosticsEffects>[0], 'createExecution'> &
+    Parameters<typeof createCrewStationMcpDiagnosticRunner>[0],
+) {
+  return {
+    ...input,
+    createExecution: (
+      extra: Parameters<
+        Parameters<typeof createCrewStationMcpDiagnosticsEffects>[0]['createExecution']
+      >[0],
+    ) => createCrewStationMcpDiagnosticRunner({ ...input, ...extra }),
+  }
+}
 
 function fixture(protocol: 'opencode' | 'claude-code' = 'opencode') {
   const calls: string[] = []
@@ -176,7 +191,7 @@ function fixture(protocol: 'opencode' | 'claude-code' = 'opencode') {
     },
   }
   const effects = createCrewStationMcpDiagnosticsEffects(
-    {
+    withExecution({
       db: new Proxy({} as PersistenceDb, {
         get() {
           throw new Error('unexpected task effect')
@@ -228,7 +243,7 @@ function fixture(protocol: 'opencode' | 'claude-code' = 'opencode') {
           return released
         },
       },
-    },
+    }),
     {
       configuration: { read: () => ({ defaultRuntime: 'hosted' }) },
       loadRuntime: async () => row,

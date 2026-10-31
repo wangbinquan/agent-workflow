@@ -65,3 +65,24 @@ export interface TaskRecoveryHumanGateFactsPort {
 export interface TaskNodeRunClarifyNavPort {
   latestRoundStatusByRun(taskId: string): Promise<ReadonlyMap<string, ClarifyRoundStatus>>
 }
+
+export type { TaskMembershipOperationsPort } from '../application/ports/taskMembershipOperations'
+
+export type { TaskMemorySnapshotPort } from '../application/ports/taskMemorySnapshots'
+
+export type {
+  CollaborationRepairPorts,
+  TaskClarifyRepairPort,
+  TaskReviewRepairPort,
+} from '../application/ports/collaborationRepair'
+export type { TaskClarifyContinuationPort } from '../application/ports/gateContinuationSupport'
+export type { GateWorkspaceRollbackExecutor } from '../application/ports/gateWorkspaceRollback'
+export type { TaskReviewersPort } from '../application/ports/taskReviewers'
+export type { TaskClarifyDirectiveRouteOperations } from '../application/ports/taskClarifyDirectiveRoutes'
+export type {
+  HumanGateOpenParticipantFactory,
+  HumanGateOpenParticipantScope,
+  HumanGateOpenParticipantInTx,
+} from '../application/ports/humanGateOpenFactory'
+
+export type { RepositoryPreparationLookup } from '../application/ports/repositoryPreparationLookup'

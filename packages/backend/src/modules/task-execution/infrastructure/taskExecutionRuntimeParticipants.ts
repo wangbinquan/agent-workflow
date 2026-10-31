@@ -1,3 +1,4 @@
+import type { TaskMemorySnapshotPort } from '../application/ports/taskMemorySnapshots'
 import type { HistoryRestrictionPort } from '@/platform/contracts/historyRestriction'
 import type { WorkspaceExcludeProfileFactory } from '@/modules/source-control/public/participants'
 import type {
@@ -75,6 +76,7 @@ export interface TaskExecutionRuntimeParticipantsInput {
   readonly db: PersistenceDb
   readonly persistence: TaskExecutionPersistence
   readonly runtimeSessionLeases: RuntimeSessionLeaseOperations
+  readonly memorySnapshots: TaskMemorySnapshotPort
   readonly memoryInjectionQueries: MemoryInjectionQueries
   /** 运行时**档案**注册表（`getRuntime(name)`）——与下面的 `stop` 同名不同物。 */
   readonly runtimeRegistry: RuntimeExecutionQueries
@@ -139,6 +141,7 @@ export function createTaskExecutionRuntimeParticipants(
       const driveOptions = {
         ...request,
         observationInvocations: input.observationInvocations,
+        memorySnapshots: input.memorySnapshots,
         memoryInjectionQueries: input.memoryInjectionQueries,
         persistence: input.persistence,
         runtimeSessionLeases: input.runtimeSessionLeases,

@@ -1,5 +1,5 @@
 // RFC-330 D19/D20 —— 数字员工案例的归属与成员制，与编排任务完整同形
-// （`services/taskCollab.ts` 是它的镜像）：
+// （`modules/collaboration/infrastructure/taskCollab.ts` 是它的镜像）：
 //
 //   可见   = 发起人 ∪ 案例成员（observer / collaborator）∪ tasks:read:all ∪ bypass
 //   操作   = 发起人 ∪ collaborator ∪ bypass（resume / terminate / 策略升级）

@@ -43,7 +43,7 @@ const ROOT_ENTRY = 'bootstrap/maintenanceWorker.ts'
 const GRAPH = 'bootstrap/maintenanceWorkerGraph.ts'
 const RUNTIME = 'platform/background/maintenanceWorkerRuntime.ts'
 const ENTRIES = 'bootstrap/maintenanceWorkerEntries.ts'
-const SYSTEM = 'platform/background/maintenanceSystemOperations.ts'
+const SYSTEM = 'modules/system-operations/infrastructure/maintenanceSystemOperations.ts'
 const FACTORIES = [
   'createMaintenanceRunStore',
   'composeIntegrationMaintenanceCommands',
@@ -108,7 +108,12 @@ export function workerRootViolations(
         errors.push('main imports Worker root')
       if (
         [PREFIX + RUNTIME, PREFIX + SYSTEM].includes(unit.path) &&
-        target.startsWith(PREFIX + 'modules/')
+        target.startsWith(PREFIX + 'modules/') &&
+        !(
+          unit.path === PREFIX + SYSTEM &&
+          edge.kind === 'type' &&
+          target.startsWith(PREFIX + 'modules/system-operations/application/ports/')
+        )
       )
         errors.push('mechanism imports module')
       if (

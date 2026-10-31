@@ -1,3 +1,4 @@
+import { createDigitalEmployeeIntegrationTriggerParticipantIn } from '@/modules/digital-employee/composition'
 import { createEpoch2PostgresqlMetadata } from './helpers/epoch2PostgresqlMetadata'
 // RFC-349 — Integration provider adapters keep verified-ingress dedupe and
 // MR launch admission atomic while exposing one Promise application contract.
@@ -405,7 +406,8 @@ describeEachProvider('RFC-349 Integration provider adapters', (harness) => {
     ])
     let resourceCatalogTransaction: unknown
     const resources = createIntegrationTriggerResources(fake.db, {
-      inTransaction(transaction, pair, digitalEmployees) {
+      inTransaction(transaction, pair) {
+        const digitalEmployees = createDigitalEmployeeIntegrationTriggerParticipantIn(transaction)
         resourceCatalogTransaction = transaction
         return {
           async loadAuthorized(authority, requests) {

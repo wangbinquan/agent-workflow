@@ -1,3 +1,4 @@
+import { composeCollaborationTaskRolePolicy } from '@/modules/resource-catalog/composition'
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { withTargetMintIdentity } from './helpers/rfc395Mint'
 import { nodeRunFixtureColumns } from './helpers/model/nodeRun'
@@ -83,6 +84,7 @@ const isTaskClarifySuppressed = (
   shardKey?: string | null,
 ): Promise<boolean> =>
   createCollaborationRuntimeMechanics(db, {
+    taskRolePolicy: composeCollaborationTaskRolePolicy(),
     ...epoch2RuntimeTestPorts(db),
     taskLock: o2Ports(db).taskLock,
     ...{ upstreamAgents: o2Ports(db).upstreamAgents },
@@ -100,6 +102,7 @@ const dismissOpenClarifyParksForAutonomous = (
   ReturnType<typeof createCollaborationRuntimeMechanics>['dismissOpenClarifyParksForAutonomous']
 > =>
   createCollaborationRuntimeMechanics(db, {
+    taskRolePolicy: composeCollaborationTaskRolePolicy(),
     ...epoch2RuntimeTestPorts(db),
     taskLock: o2Ports(db).taskLock,
     ...{ upstreamAgents: o2Ports(db).upstreamAgents },

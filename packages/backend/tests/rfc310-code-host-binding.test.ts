@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 
-import { matchRepoProvider } from '@/modules/integration/composition/codeHostEffects'
+import { matchRepoProvider } from '@/modules/development-automation/domain/repositoryProviderMatch'
 
 const LOCAL_GITLAB = {
   provider: 'gitlab' as const,

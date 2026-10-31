@@ -17,7 +17,7 @@ import { and, eq, inArray } from 'drizzle-orm'
 import {
   reconcileCreatedAgentExecutionContractPorts,
   reconcileUpdatedAgentExecutionContractPorts,
-} from '@/modules/execution-contract/public/commands'
+} from '@/modules/resource-catalog/domain/agentExecutionContractPorts'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { ConflictError, ValidationError } from '@/util/errors'
 import { isAgentLaunching } from '@/services/agentLaunchReservation'

@@ -49,7 +49,7 @@ import { createTaskDeletionQueries } from '@/modules/task-execution/public/queri
 import { createTaskDeletionParticipantInTx } from '@/modules/task-execution/public/participants'
 import { createTaskDeletionCollaborationParticipantInTx } from '@/modules/collaboration/public/participants'
 import type { TaskDeletionEffects } from '@/modules/task-execution/public/types'
-import { type LegacyProviderNeutralDatabase } from '@/modules/task-execution/infrastructure/legacySqliteTransportMechanisms'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { isTerminalTaskStatus, type TaskStatus } from '@agent-workflow/shared'
 import { getTaskWriteSem } from '@/services/taskWriteLocks'
 import { TASKS_LIST_CHANNEL, tasksListBroadcaster } from '@/ws/broadcaster'
@@ -89,7 +89,7 @@ export interface DeleteTaskResult {
  *（`docs/dev-gotchas.md` 有这条），少接一格就等于这道门在那条路上不存在。
  */
 export async function deleteTask(
-  db: LegacyProviderNeutralDatabase,
+  db: PersistenceDb,
   taskId: string,
   options: Readonly<{ activity: ActiveTaskExecutionParticipant; effects?: TaskDeletionEffects }>,
 ): Promise<DeleteTaskResult> {

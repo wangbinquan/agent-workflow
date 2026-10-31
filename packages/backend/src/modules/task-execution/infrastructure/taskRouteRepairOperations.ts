@@ -35,11 +35,11 @@ import { and, asc, eq, inArray, isNull } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
 import type { Actor } from '@/auth/actor'
+import type { CollaborationRuntimeMechanics } from '@/modules/collaboration/public/participants'
 import type {
-  ClarifyRepairParticipant,
-  CollaborationRuntimeMechanics,
-  ReviewRepairParticipant,
-} from '@/modules/collaboration/public/participants'
+  TaskClarifyRepairPort,
+  TaskReviewRepairPort,
+} from '../application/ports/collaborationRepair'
 import {
   selectRepositoryWorkspaceReadQueries,
   type RepositoryWorkspaceReadQueries,
@@ -366,8 +366,8 @@ export interface TaskRouteRepairOperationsDependencies {
    */
   readonly resumeTaskAs: (actor: Actor, taskId: string) => Promise<void>
   readonly collaborationRuntime: CollaborationRuntimeMechanics
-  readonly clarify: ClarifyRepairParticipant
-  readonly review: ReviewRepairParticipant
+  readonly clarify: TaskClarifyRepairPort
+  readonly review: TaskReviewRepairPort
   readonly appHome: string
   readonly now?: () => number
   readonly id?: () => string

@@ -1,3 +1,4 @@
+import { createDigitalEmployeeIntegrationTriggerParticipantIn } from '@/modules/digital-employee/composition'
 import type { Actor } from '../../src/auth/actor'
 // RFC-359 AC-6：`db` 放宽到 `PersistenceDb`，装配也换成中立那一份
 // （`composeResourceCatalogFor` / `composeScheduledTaskRuntimeFor`——`composeSqlite*` 本来就只是
@@ -7,7 +8,7 @@ import {
   composeIdentityAccess,
   type IdentityAccessRuntime,
 } from '../../src/modules/identity-access/composition'
-import { composeIntegrationTriggerResourceSnapshotFactory } from '../../src/modules/resource-catalog/composition/integrationTrigger'
+import { composeIntegrationTriggerSnapshots } from '../../src/modules/resource-catalog/composition/integrationTrigger'
 import { composeTaskExecutionResourceBinding } from '../../src/modules/resource-catalog/composition/taskExecution'
 import { composeResourceCatalogFor } from '../../src/modules/resource-catalog/composition/providerResourceCatalog'
 import { composeDatabaseAgentResourceInventorySource } from '../../src/modules/resource-catalog/composition/agentResourceIntegrity'
@@ -33,7 +34,10 @@ import { assertAgentResourceIntegrity } from '../../src/modules/resource-catalog
 import { triggerRevalidation } from '../../src/ws/revalidationHook'
 
 export function integrationTriggerResourceBinding() {
-  return composeIntegrationTriggerResourceSnapshotFactory({ assertNotBuiltin })
+  return composeIntegrationTriggerSnapshots(
+    { assertNotBuiltin },
+    createDigitalEmployeeIntegrationTriggerParticipantIn,
+  )
 }
 
 export function taskExecutionResourceBinding(db: PersistenceDb) {

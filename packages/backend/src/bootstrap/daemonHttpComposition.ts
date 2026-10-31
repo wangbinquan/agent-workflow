@@ -227,7 +227,10 @@ export function composeProviderAppComposition<P extends DatabaseProvider>(
     workspace: createTaskCodeWorkspaceQueries(input.db),
   }
   const codeWorkspace = codeReads.workspace
-  const collaborationTaskAccess = createCollaborationTaskAccessPort(input.db)
+  const collaborationTaskAccess = createCollaborationTaskAccessPort(
+    input.db,
+    taskExecutionProvider.taskRolePolicy,
+  )
   const taskRoutes = Object.freeze({
     configuration,
     operations: taskExecutionProvider.routes.tasks,
@@ -289,6 +292,7 @@ export function composeProviderAppComposition<P extends DatabaseProvider>(
       createFileWorkspaceContentEffects(workspaceRef),
   })
   const collaborationRouteOperations = composeCollaborationRouteOperations({
+    taskRolePolicy: taskExecutionProvider.taskRolePolicy,
     historyRestrictions: input.historyRestrictions,
     taskLock: composeHumanGateTaskLockPort,
     followupGenerator: composeClarifyFollowupGenerator({

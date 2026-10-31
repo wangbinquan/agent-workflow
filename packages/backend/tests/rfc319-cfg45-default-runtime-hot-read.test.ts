@@ -1,3 +1,4 @@
+import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import { workflowFixture } from './helpers/model'
 import { inheritDatabaseHandle } from '@/platform/persistence/sessionTables'
 import { schemaFixtureDb } from './helpers/schemaFixture'
@@ -69,6 +70,7 @@ function coordinatorFor(input: {
   readonly refresh: boolean
 }) {
   return createTestTaskDriveCoordinator({
+    humanGateOpen: composeHumanGateOpenParticipantFactory(),
     deps: {
       db: inheritDatabaseHandle({}, schemaFixtureDb()) as unknown as DbClient,
       schedulerDriver: {

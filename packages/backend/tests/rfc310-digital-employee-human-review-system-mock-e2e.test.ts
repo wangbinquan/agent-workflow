@@ -1,3 +1,4 @@
+import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import { epoch2ReviewReader } from './helpers/epoch2RuntimePorts'
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { nodeRunFixtureColumns } from './helpers/model/nodeRun'
@@ -277,6 +278,7 @@ describe('RFC-310 human-reviewed digital employee TaskEngine system mock E2E', (
       // `wakeHumanGateContinuation`（人审放行的继续驱动）仍是 legacy 启动面的 API，
       // 还吃 `TaskContinuationDependencies`——退役它是 plan §5hn 的活，不在本刀范围内。
       const startDeps = {
+        humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
         db,
         schedulerDriver: createTaskExecutionTestTopology({ db, driver: 'real' }).schedulerDriver,
@@ -305,11 +307,13 @@ describe('RFC-310 human-reviewed digital employee TaskEngine system mock E2E', (
           ),
         }),
         launch: createTestHostTaskLaunchKernel({
+          humanGateOpen: composeHumanGateOpenParticipantFactory(),
           db,
           appHome,
           gitCommitIdentity: identityAccess.getUserGitCommitIdentity,
           coordinatorDeps: startDeps,
           persistence: createTaskExecutionPersistence(db, {
+            humanGateOpen: composeHumanGateOpenParticipantFactory(),
             historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
             recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
           }),
@@ -324,6 +328,7 @@ describe('RFC-310 human-reviewed digital employee TaskEngine system mock E2E', (
         ...composeDatabaseDigitalEmployeeExecutionPorts(
           db,
           epoch2RuntimeTestPorts(db).historyRestrictions,
+          composeHumanGateOpenParticipantFactory(),
         ),
         executionContracts,
       })

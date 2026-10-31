@@ -4,7 +4,7 @@
 
 import type { EventsArchiveStore } from './eventsArchiveStorePort'
 import type { EventsArchiveContent } from './eventsArchiveContent'
-import type { MaintenanceJobExecutionResult } from './maintenanceJobRunner'
+import type { MaintenanceJobExecutionResult } from '@/platform/contracts/maintenanceJob'
 import { archiveEventsWithStore } from '@/platform/persistence/sqlite/systemEventsArchive'
 
 // Keep the mixed FS/database body inside the RFC-338 wall budget on the

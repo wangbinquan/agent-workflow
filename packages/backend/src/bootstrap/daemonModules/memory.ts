@@ -4,6 +4,7 @@ import type {
   MemoryCatalogBinding,
 } from '@/modules/memory/composition'
 import {
+  composeTaskMemorySnapshotPort,
   composeMemoryInjectionQueriesFor,
   composeMemoryOperationsFor,
 } from '@/modules/memory/composition'
@@ -28,6 +29,11 @@ export function composeDaemonMemoryModules(
     },
   })
   const memoryCatalog = memoryOperations.catalog
-  return Object.freeze({ memoryOperations, memoryInjectionQueries, memoryCatalog })
+  return Object.freeze({
+    memoryOperations,
+    memoryInjectionQueries,
+    memoryCatalog,
+    memorySnapshots: composeTaskMemorySnapshotPort(),
+  })
 }
 export type DaemonMemoryModules = ReturnType<typeof composeDaemonMemoryModules>

@@ -1,3 +1,4 @@
+import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 // RFC-395 II-pre：改接生产启动 / 读取路径，保留原断言意图。
 // RFC-020 T3: launchTestTask now accepts a `preCreatedWorktree` so the multipart
 // RFC-165: multi-repo/pre-created PATH bodies are the framework-internal face
@@ -212,6 +213,7 @@ describe('launchTestTask with preCreatedWorktree (RFC-020)', () => {
         inputs: { topic: 'orders' },
       } as unknown as StartTask,
       {
+        humanGateOpen: composeHumanGateOpenParticipantFactory(),
         db,
         schedulerDriver: createTaskExecutionTestTopology({ db, driver: 'real' }).schedulerDriver,
         appHome,
@@ -250,6 +252,7 @@ describe('launchTestTask with preCreatedWorktree (RFC-020)', () => {
         inputs: { topic: 'orders' },
       } as unknown as StartTask,
       {
+        humanGateOpen: composeHumanGateOpenParticipantFactory(),
         db,
         schedulerDriver: createTaskExecutionTestTopology({ db, driver: 'real' }).schedulerDriver,
         appHome,
@@ -285,6 +288,7 @@ describe('launchTestTask with preCreatedWorktree (RFC-020)', () => {
           inputs: { topic: 'orders' },
         } as unknown as StartTask,
         {
+          humanGateOpen: composeHumanGateOpenParticipantFactory(),
           db,
           schedulerDriver: createTaskExecutionTestTopology({ db, driver: 'real' }).schedulerDriver,
           appHome,
@@ -316,6 +320,7 @@ describe('launchTestTask with preCreatedWorktree (RFC-020)', () => {
         inputs: { topic: 'orders' },
       } as unknown as StartTask,
       {
+        humanGateOpen: composeHumanGateOpenParticipantFactory(),
         db,
         schedulerDriver: createTaskExecutionTestTopology({ db, driver: 'real' }).schedulerDriver,
         appHome,

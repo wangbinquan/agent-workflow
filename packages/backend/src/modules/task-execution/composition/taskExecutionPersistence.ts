@@ -1,3 +1,4 @@
+import type { HumanGateOpenParticipantFactory } from '../application/ports/humanGateOpenFactory'
 import type { ContentStore } from '@/platform/content/contentStore'
 import type { HistoryRestrictionPort } from '@/platform/contracts/historyRestriction'
 import type { TaskRecoveryHumanGateFactsPort } from './required-ports'
@@ -133,6 +134,7 @@ function createRecoveryAdministration(
  * 第三个 provider 在这里什么都不用加。
  */
 export interface TaskExecutionPersistenceDependencies {
+  readonly humanGateOpen: HumanGateOpenParticipantFactory
   readonly historyRestrictions: HistoryRestrictionPort
   readonly content?: Pick<ContentStore, 'read'>
   readonly recoveryHumanGates?: TaskRecoveryHumanGateFactsPort
@@ -156,6 +158,7 @@ export function createTaskExecutionPersistence(
   const effects = new DrizzleTaskExecutionEffectPersistence(db)
   const runtimeLifecycle = createTaskRuntimeLifecyclePersistence(db, dependencies)
   const humanGateLifecycle = new DatabaseHumanGateTaskLifecyclePersistence(db, runtimeLifecycle, {
+    humanGateOpen: dependencies.humanGateOpen,
     historyRestrictions: dependencies.historyRestrictions,
   })
   return Object.freeze({

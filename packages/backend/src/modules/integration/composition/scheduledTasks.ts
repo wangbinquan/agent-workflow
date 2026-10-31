@@ -1,6 +1,6 @@
 import type { Actor } from '@/auth/actor'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import type { IntegrationTriggerResourceSnapshotFactory } from '@/modules/resource-catalog/composition/integrationTrigger'
+import type { IntegrationTriggerSnapshotFactory } from '../application/ports/integrationTriggerSnapshots'
 import type {
   IntegrationTriggerResourceBinding,
   IntegrationTriggerValidationRuntime,
@@ -44,7 +44,7 @@ export function composeScheduledTaskRuntime(input: {
 
 export interface ScheduledTaskRuntimeInput {
   readonly db: PersistenceDb
-  readonly resourceSnapshots: IntegrationTriggerResourceSnapshotFactory
+  readonly resourceSnapshots: IntegrationTriggerSnapshotFactory
   readonly validation: IntegrationTriggerValidationRuntime
   readonly resourceAclChanged: ScheduledTaskOperations['resourceAclChanged']
 }

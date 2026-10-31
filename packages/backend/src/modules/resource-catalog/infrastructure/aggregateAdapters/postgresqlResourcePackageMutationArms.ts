@@ -55,7 +55,7 @@ import { and, eq, inArray } from 'drizzle-orm'
 import {
   reconcileCreatedAgentExecutionContractPorts,
   reconcileUpdatedAgentExecutionContractPorts,
-} from '@/modules/execution-contract/public/commands'
+} from '@/modules/resource-catalog/domain/agentExecutionContractPorts'
 import { ConflictError, NotFoundError, ValidationError, staleConflictError } from '@/util/errors'
 import { monotonicNow } from '@/util/time'
 import type { McpTransactionLifecycle } from '../mcpRepository'

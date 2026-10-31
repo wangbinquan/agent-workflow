@@ -43,9 +43,7 @@ export function directNativeTableImports(path: string, text: string): readonly s
     const schemaModule =
       /^(?:db\/(?:schema|observation|graphDevelopment)|bootstrap\/persistenceSchema)$/.test(
         destination,
-      ) ||
-      /\/(?:composition|infrastructure\/persistence)\/schema$/.test(destination) ||
-      destination.endsWith('/legacySqliteTransportMechanisms')
+      ) || /\/(?:composition|infrastructure\/persistence)\/schema$/.test(destination)
     const names = clause.namedBindings
     if (ts.isNamespaceImport(names) && schemaModule) violations.push(names.name.text)
     if (ts.isNamedImports(names))

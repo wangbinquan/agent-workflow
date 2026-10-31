@@ -4,8 +4,14 @@ import { developmentEmployeeTypePackage } from '@/modules/development-automation
 import { readPersistedDigitalEmployeeTypePackageDescriptorJsons } from '@/modules/digital-employee/composition'
 import { composeDigitalEmployeeAgentTemplateCatalogParticipant } from '@/modules/digital-employee/composition/agentTemplateCatalog'
 import { composeDigitalEmployeeAgentTemplateCatalogFor } from '@/modules/resource-catalog/composition/digitalEmployeeAgentTemplateCatalog'
-import { composeDigitalEmployeeBuiltinToolCatalog } from '@/modules/task-execution/composition/digitalEmployeeBuiltinToolCatalog'
-import { ensureDigitalEmployeeAgentTemplates } from '@/services/digitalEmployeeAgentTemplates'
+import { composeDigitalEmployeeBuiltinToolCatalog } from '@/modules/digital-employee/composition'
+import {
+  ensureDigitalEmployeeAgentTemplates,
+  DIGITAL_EMPLOYEE_AGENT_TEMPLATE_IDS,
+  digitalEmployeeBuiltinAgentSuccessorId,
+  digitalEmployeeBuiltinToolConfiguration,
+  digitalEmployeeAgentToolPresentation,
+} from '@/services/digitalEmployeeAgentTemplates'
 import { describeEachProvider } from './helpers/eachProvider'
 
 describeEachProvider('digital employee builtin tool catalog boot snapshot', (harness) => {
@@ -37,6 +43,12 @@ describeEachProvider('digital employee builtin tool catalog boot snapshot', (har
       composeDigitalEmployeeAgentTemplateCatalogParticipant,
     )
     const catalog = await composeDigitalEmployeeBuiltinToolCatalog({
+      templateHelpers: {
+        DIGITAL_EMPLOYEE_AGENT_TEMPLATE_IDS,
+        digitalEmployeeBuiltinAgentSuccessorId,
+        digitalEmployeeBuiltinToolConfiguration,
+        digitalEmployeeAgentToolPresentation,
+      },
       agentTemplates,
       typePackageDescriptorJsons: [
         ...(await readPersistedDigitalEmployeeTypePackageDescriptorJsons(countedDb)),

@@ -1,3 +1,4 @@
+import { composeTaskMemorySnapshotPort } from '@/modules/memory/composition'
 // Integration tests for the opencode runner (P-1-13b).
 //
 // Strategy: opencode is replaced with a Bun-script mock fixture that the
@@ -206,6 +207,7 @@ describeEachProvider('runNode', (harness) => {
     }
     const invoke = () =>
       runNode({
+        memorySnapshots: composeTaskMemorySnapshotPort(),
         taskId: h.taskId,
         nodeRunId,
         nodeId: 'node1',
@@ -259,6 +261,7 @@ describeEachProvider('runNode', (harness) => {
     const finished: string[] = []
     const result = await withEnv({ MOCK_OPENCODE_CAPTURE_ENV_TO: marker }, () =>
       runNode({
+        memorySnapshots: composeTaskMemorySnapshotPort(),
         taskId: h.taskId,
         nodeRunId,
         nodeId: 'node1',
@@ -308,6 +311,7 @@ describeEachProvider('runNode', (harness) => {
       },
       () =>
         runNode({
+          memorySnapshots: composeTaskMemorySnapshotPort(),
           taskId: h.taskId,
           nodeRunId,
           nodeId: 'node1',
@@ -360,6 +364,7 @@ describeEachProvider('runNode', (harness) => {
       },
       () =>
         runNode({
+          memorySnapshots: composeTaskMemorySnapshotPort(),
           taskId: h.taskId,
           nodeRunId,
           nodeId: 'node1',
@@ -422,6 +427,7 @@ describeEachProvider('runNode', (harness) => {
       { MOCK_OPENCODE_OUTPUTS: JSON.stringify({ done_signal: 'must-not-carry-data' }) },
       () =>
         runNode({
+          memorySnapshots: composeTaskMemorySnapshotPort(),
           taskId: h.taskId,
           nodeRunId,
           nodeId: 'node1',
@@ -453,6 +459,7 @@ describeEachProvider('runNode', (harness) => {
     const nodeRunId = await insertNodeRun(h.db, h.taskId)
     const result = await withEnv({ MOCK_OPENCODE_SKIP_ENVELOPE: '1' }, () =>
       runNode({
+        memorySnapshots: composeTaskMemorySnapshotPort(),
         taskId: h.taskId,
         nodeRunId,
         nodeId: 'node1',
@@ -483,6 +490,7 @@ describeEachProvider('runNode', (harness) => {
       { MOCK_OPENCODE_EXIT_CODE: '7', MOCK_OPENCODE_SKIP_ENVELOPE: '1' },
       () =>
         runNode({
+          memorySnapshots: composeTaskMemorySnapshotPort(),
           taskId: h.taskId,
           nodeRunId,
           nodeId: 'node1',
@@ -517,6 +525,7 @@ describeEachProvider('runNode', (harness) => {
       },
       () =>
         runNode({
+          memorySnapshots: composeTaskMemorySnapshotPort(),
           taskId: h.taskId,
           nodeRunId,
           nodeId: 'node1',
@@ -547,6 +556,7 @@ describeEachProvider('runNode', (harness) => {
       },
       () =>
         runNode({
+          memorySnapshots: composeTaskMemorySnapshotPort(),
           taskId: h.taskId,
           nodeRunId,
           nodeId: 'node1',
@@ -574,6 +584,7 @@ describeEachProvider('runNode', (harness) => {
       },
       () =>
         runNode({
+          memorySnapshots: composeTaskMemorySnapshotPort(),
           taskId: h.taskId,
           nodeRunId,
           nodeId: 'node1',
@@ -633,6 +644,7 @@ describeEachProvider('runNode', (harness) => {
       },
       () =>
         runNode({
+          memorySnapshots: composeTaskMemorySnapshotPort(),
           taskId: h.taskId,
           nodeRunId,
           nodeId: 'node1',
@@ -690,6 +702,7 @@ describeEachProvider('runNode', (harness) => {
       },
       () =>
         runNode({
+          memorySnapshots: composeTaskMemorySnapshotPort(),
           taskId: h.taskId,
           nodeRunId,
           nodeId: 'node1',
@@ -746,6 +759,7 @@ describeEachProvider('runNode', (harness) => {
       },
       () =>
         runNode({
+          memorySnapshots: composeTaskMemorySnapshotPort(),
           taskId: h.taskId,
           nodeRunId,
           nodeId: 'node1',
@@ -796,6 +810,7 @@ describeEachProvider('runNode', (harness) => {
       },
       () =>
         runNode({
+          memorySnapshots: composeTaskMemorySnapshotPort(),
           taskId: h.taskId,
           nodeRunId,
           nodeId: 'node1',
@@ -851,6 +866,7 @@ describeEachProvider('runNode', (harness) => {
       },
       () =>
         runNode({
+          memorySnapshots: composeTaskMemorySnapshotPort(),
           taskId: h.taskId,
           nodeRunId,
           nodeId: 'node1',
@@ -889,6 +905,7 @@ describeEachProvider('runNode', (harness) => {
       },
       () =>
         runNode({
+          memorySnapshots: composeTaskMemorySnapshotPort(),
           taskId: h.taskId,
           nodeRunId,
           nodeId: 'node1',
@@ -920,6 +937,7 @@ describeEachProvider('runNode', (harness) => {
       },
       () =>
         runNode({
+          memorySnapshots: composeTaskMemorySnapshotPort(),
           taskId: h.taskId,
           nodeRunId,
           nodeId: 'node1',
@@ -954,6 +972,7 @@ describeEachProvider('runNode', (harness) => {
         },
         () =>
           runNode({
+            memorySnapshots: composeTaskMemorySnapshotPort(),
             taskId: h.taskId,
             nodeRunId,
             nodeId: 'node1',
@@ -990,6 +1009,7 @@ describeEachProvider('runNode', (harness) => {
       },
       () =>
         runNode({
+          memorySnapshots: composeTaskMemorySnapshotPort(),
           taskId: h.taskId,
           nodeRunId,
           nodeId: 'node1',
@@ -1024,6 +1044,7 @@ describeEachProvider('runNode', (harness) => {
     writeFileSync(join(h.worktreePath, 'marker.txt'), 'present')
     const result = await withEnv({ MOCK_OPENCODE_OUTPUTS: JSON.stringify({ summary: 'ok' }) }, () =>
       runNode({
+        memorySnapshots: composeTaskMemorySnapshotPort(),
         taskId: h.taskId,
         nodeRunId,
         nodeId: 'node1',

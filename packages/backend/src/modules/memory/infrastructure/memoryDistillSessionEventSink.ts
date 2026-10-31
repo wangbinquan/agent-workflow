@@ -9,7 +9,7 @@
 // 因此这里所有失败都只落日志 / marker 行，从不抛给调用方。
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { DISTILL_CAPTURE_FAILED_KIND } from '@/modules/runtime-management/public/types'
+import { DISTILL_CAPTURE_FAILED_KIND } from '@/modules/memory/domain/distillCapture'
 import type {
   SessionCaptureIncompleteReason,
   SessionCaptureTerminalState,

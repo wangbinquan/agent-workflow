@@ -1,3 +1,4 @@
+import type { TaskMemorySnapshotPort } from '../application/ports/taskMemorySnapshots'
 import type { PortArtifactOperations } from '../application/ports/portArtifactContent'
 import type {
   IsolationWorkspaceFactory,
@@ -39,6 +40,7 @@ export interface RunTaskOptions {
   /** RFC-349 bootstrap-selected provider-neutral memory injection reads.
    * Optional only at legacy direct-test construction sites; the TaskEngine
    * composition rejects a real drive before reading task state when absent. */
+  memorySnapshots?: TaskMemorySnapshotPort
   memoryInjectionQueries?: MemoryInjectionQueries
   /** RFC-349 bootstrap-selected task-execution persistence bundle. */
   persistence?: TaskExecutionPersistence
@@ -225,6 +227,7 @@ export interface RunTaskOptions {
 
 export type BoundRunTaskOptions = RunTaskOptions & {
   readonly observationInvocations: CallObservations
+  readonly memorySnapshots: TaskMemorySnapshotPort
   readonly memoryInjectionQueries: MemoryInjectionQueries
   readonly persistence: TaskExecutionPersistence
   readonly runtimeSessionLeases: RuntimeSessionLeaseOperations

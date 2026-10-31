@@ -1,3 +1,4 @@
+import { composeTaskMemorySnapshotPort } from '@/modules/memory/composition'
 // 损坏端口急修（2026-06-24）— runner 把「开了 <port> 但 </port> 闭合损坏」的信封
 // 判为可重试 failed，而非静默 done+空端口。
 //
@@ -153,6 +154,7 @@ describeEachProvider('runner malformed-port guard', (harness) => {
       },
       () =>
         runNode({
+          memorySnapshots: composeTaskMemorySnapshotPort(),
           taskId: h.taskId,
           nodeRunId,
           nodeId: 'n1',
@@ -195,6 +197,7 @@ describeEachProvider('runner malformed-port guard', (harness) => {
       },
       () =>
         runNode({
+          memorySnapshots: composeTaskMemorySnapshotPort(),
           taskId: h.taskId,
           nodeRunId,
           nodeId: 'n1',

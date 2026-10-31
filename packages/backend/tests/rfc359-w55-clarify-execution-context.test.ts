@@ -39,6 +39,8 @@ function fixture(ambient: object | undefined, parkFailure?: Error) {
   const received: RecordValue[] = []
   const ambientReads: unknown[] = []
   const queried: unknown[] = []
+  // RFC-399 A8: parking receives collaboration's human-gate open scope factory explicitly.
+  const humanGateOpenScope = () => ({})
   const db = {
     select() {
       let table: unknown
@@ -95,6 +97,7 @@ function fixture(ambient: object | undefined, parkFailure?: Error) {
         ambientReads.push(taskId)
         return ambient
       },
+      createHumanGateOpenParticipantScope: humanGateOpenScope,
       humanGateComposition: {
         createCollaborationCommandContext: (input: RecordValue) => {
           expect(input.db).toBe(db)
@@ -102,6 +105,7 @@ function fixture(ambient: object | undefined, parkFailure?: Error) {
           return {}
         },
         async parkPreparedHumanGate(input: RecordValue) {
+          expect(input.humanGateOpen).toBe(humanGateOpenScope)
           parks.push(input)
           if (parkFailure !== undefined) throw parkFailure
         },

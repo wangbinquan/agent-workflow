@@ -16,4 +16,4 @@ export {
   resolveUniqueName,
   type UploadPlan,
   type UploadResult,
-} from '@/platform/content/local/workspaceUploads'
+} from '@/modules/task-execution/infrastructure/local/nativeWorkspaceUploads'

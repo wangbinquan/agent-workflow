@@ -1,3 +1,5 @@
+import { composeRepositoryPreparationLookup } from '@/modules/source-control/composition'
+import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import { epoch2RuntimeTestPorts } from './epoch2RuntimePorts'
 import { o2Ports } from './o2Closure'
 import { withSourceControlTaskPorts } from './sourceControlTaskPorts'
@@ -250,7 +252,11 @@ export async function launchTestTask(
       composeTaskExecutionResourceBinding(taskExecutionResourceDependencies),
     ),
   }
+  // RFC-399 A8: production wiring passes the collaboration-owned gate factory explicitly; fixtures that
+  // build their options with `as never` get the same production factory here instead of `undefined`.
+  const humanGateOpen = options.humanGateOpen ?? composeHumanGateOpenParticipantFactory()
   const persistence = createTaskExecutionPersistence(db, {
+    humanGateOpen,
     historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
     recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
   })
@@ -258,6 +264,7 @@ export async function launchTestTask(
     const call = options.callLaunch
     if (options.materializedSpace === undefined) throw new Error('child fixture workspace missing')
     const factory = composeTestTaskDriveFactory({
+      humanGateOpen,
       deps: options,
       appHome,
       persistence,
@@ -324,6 +331,7 @@ export async function launchTestTask(
         })
   const preparation = composeDeferredRepositoryPreparationStep({
     deps: {
+      repositoryPreparationLookup: composeRepositoryPreparationLookup(db),
       ...options,
       repositoryPreparation,
       loadFrozenSpaceLayout: (id) => loadFrozenSpaceLayout(db, id),
@@ -331,6 +339,7 @@ export async function launchTestTask(
     appHome,
   })
   const drive = createTestTaskDriveCoordinator({
+    humanGateOpen,
     deps: options,
     appHome,
     persistence,
@@ -369,6 +378,7 @@ export async function launchTestTask(
     if (workflow === null)
       throw new NotFoundError('workflow-not-found', `workflow '${task.workflowId}' not found`)
     const kernel = createTestHostTaskLaunchKernel({
+      humanGateOpen,
       db,
       appHome,
       gitCommitIdentity: dependencies.gitCommitIdentity,

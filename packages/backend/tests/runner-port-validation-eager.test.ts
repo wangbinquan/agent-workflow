@@ -1,3 +1,4 @@
+import { composeTaskMemorySnapshotPort } from '@/modules/memory/composition'
 // RFC-049 — locks the runner's eager port-content validation path.
 //
 // Scenario: agent emits a `<workflow-output>` envelope whose markdown_file
@@ -149,6 +150,7 @@ describeEachProvider('RFC-049 runner eager port-validation', (harness) => {
       },
       () =>
         runNode({
+          memorySnapshots: composeTaskMemorySnapshotPort(),
           taskId: h.taskId,
           nodeRunId,
           nodeId: 'n1',
@@ -203,6 +205,7 @@ describeEachProvider('RFC-049 runner eager port-validation', (harness) => {
       },
       () =>
         runNode({
+          memorySnapshots: composeTaskMemorySnapshotPort(),
           taskId: h.taskId,
           nodeRunId,
           nodeId: 'n1',
@@ -242,6 +245,7 @@ describeEachProvider('RFC-049 runner eager port-validation', (harness) => {
       },
       () =>
         runNode({
+          memorySnapshots: composeTaskMemorySnapshotPort(),
           taskId: h.taskId,
           nodeRunId,
           nodeId: 'n1',
@@ -274,6 +278,7 @@ describeEachProvider('RFC-049 runner eager port-validation', (harness) => {
       },
       () =>
         runNode({
+          memorySnapshots: composeTaskMemorySnapshotPort(),
           taskId: h.taskId,
           nodeRunId,
           nodeId: 'n1',

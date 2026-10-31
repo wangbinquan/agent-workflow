@@ -1,3 +1,4 @@
+import type { RepositoryPreparationLookup } from '../application/ports/repositoryPreparationLookup'
 import type { TaskRepositoryPreparationBinding } from '../infrastructure/repositoryPreparationBinding'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { SecretBox } from '@/auth/secretBox'
@@ -18,6 +19,7 @@ import type { TaskLaunchConfigurationQueries } from '../application/ports/taskLa
  * `repositoryPreparation` 必填、`loadFrozenSpaceLayout` 由 Task 提供：这一步因此不认识任何引擎。
  */
 export function composeDeferredRepositoryPreparation(input: {
+  readonly repositoryPreparationLookup: RepositoryPreparationLookup
   readonly repositoryPreparation: TaskRepositoryPreparationBinding
   readonly db: PersistenceDb
   readonly appHome: string
@@ -31,6 +33,7 @@ export function composeDeferredRepositoryPreparation(input: {
     deps: {
       db: input.db,
       repositoryPreparation: input.repositoryPreparation,
+      repositoryPreparationLookup: input.repositoryPreparationLookup,
       loadFrozenSpaceLayout: (sourceTaskId) => loadFrozenSpaceLayout(input.db, sourceTaskId),
       ...(input.secretBox === undefined ? {} : { secretBox: input.secretBox }),
       ...(input.cloneTimeoutMs === undefined ? {} : { cloneTimeoutMs: input.cloneTimeoutMs }),

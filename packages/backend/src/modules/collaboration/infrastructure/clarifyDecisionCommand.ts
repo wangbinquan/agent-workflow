@@ -1,3 +1,4 @@
+import type { CollaborationTaskRolePolicy } from '../application/ports/collaborationTaskRolePolicy'
 import type { HistoryRestrictionPort } from '@/platform/contracts/historyRestriction'
 import type { HumanGateTaskLockPort } from '../composition/required-ports'
 // RFC-359 W1-T2b（F-H2-1 之二）—— collaboration 的快速澄清决定命令端口：一份实现，两个引擎。
@@ -72,6 +73,7 @@ export function createClarifyDecisionCommand(
 
 /** Legacy test bridge; production routes use the bootstrap-owned context. */
 export function createClarifyDecisionCommandContext(input: {
+  readonly taskRolePolicy: CollaborationTaskRolePolicy
   readonly taskLock: HumanGateTaskLockPort
   readonly historyRestrictions: HistoryRestrictionPort
   readonly db: DbClient
@@ -80,6 +82,7 @@ export function createClarifyDecisionCommandContext(input: {
   readonly memoryDistillEnqueuer: MemoryDistillEnqueuer
 }): CollaborationCommandContext<'clarifyDecisions'> {
   return createCollaborationCommandContext({
+    taskRolePolicy: input.taskRolePolicy,
     taskLock: input.taskLock,
     historyRestrictions: input.historyRestrictions,
     db: input.db,

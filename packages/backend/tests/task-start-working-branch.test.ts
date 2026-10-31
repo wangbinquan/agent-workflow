@@ -1,3 +1,4 @@
+import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 // RFC-395 II-pre：改接生产启动 / 读取路径，保留原断言意图。
 // RFC-075 T4/T5/T6 — launchTestTask wiring for the working branch.
 //   - workingBranch + autoCommitPush persist on `tasks` and `task_repos`,
@@ -172,6 +173,7 @@ describe('RFC-075 — launchTestTask working branch', () => {
         ...extra,
       },
       {
+        humanGateOpen: composeHumanGateOpenParticipantFactory(),
         db: h.db,
         schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
           .schedulerDriver,

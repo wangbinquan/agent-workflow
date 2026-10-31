@@ -1,3 +1,4 @@
+import { composeTaskMemorySnapshotPort } from '@/modules/memory/composition'
 import {
   type NodeRunFixtureSpec,
   nodeRunFixture,
@@ -171,6 +172,7 @@ describeEachProvider('RFC-046 — runner persists injected_memories_json', (harn
       },
       () =>
         runNode({
+          memorySnapshots: composeTaskMemorySnapshotPort(),
           taskId: h.taskId,
           nodeRunId,
           nodeId: 'n1',
@@ -206,6 +208,7 @@ describeEachProvider('RFC-046 — runner persists injected_memories_json', (harn
       },
       () =>
         runNode({
+          memorySnapshots: composeTaskMemorySnapshotPort(),
           taskId: h.taskId,
           nodeRunId,
           nodeId: 'n1',
@@ -267,6 +270,7 @@ describeEachProvider('RFC-046 — runner persists injected_memories_json', (harn
       },
       () =>
         runNode({
+          memorySnapshots: composeTaskMemorySnapshotPort(),
           taskId: h.taskId,
           nodeRunId: followupId,
           nodeId: 'agent-x',
@@ -326,6 +330,7 @@ describeEachProvider('RFC-046 — runner persists injected_memories_json', (harn
       },
       () =>
         runNode({
+          memorySnapshots: composeTaskMemorySnapshotPort(),
           taskId: h.taskId,
           nodeRunId: followupId,
           nodeId: 'agent-y',

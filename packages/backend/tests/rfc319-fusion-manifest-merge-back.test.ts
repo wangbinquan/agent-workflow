@@ -1,3 +1,4 @@
+import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { o2Ports } from './helpers/o2Closure'
 // RFC-319 B29 —— 融合的结果清单必须能穿过逐节点隔离边界。
@@ -229,6 +230,7 @@ describe('RFC-319 —— 融合结果清单穿越隔离边界', () => {
     expect(
       await forcedPortPathsForTask(
         createTaskExecutionPersistence(h.db, {
+          humanGateOpen: composeHumanGateOpenParticipantFactory(),
           historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
           recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
         }).artifactPaths,

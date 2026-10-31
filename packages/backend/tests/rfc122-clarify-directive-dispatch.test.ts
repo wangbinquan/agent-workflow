@@ -1,3 +1,4 @@
+import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 // RFC-395 II-pre：改接生产启动 / 读取路径，保留原断言意图。
 // RFC-122 — integration: a self-clarify node with a 'stop' override dispatches
 // WITHOUT the mandatory ask-back protocol (and WITH the STOP CLARIFYING trailer),
@@ -304,6 +305,7 @@ describe('RFC-122 dispatch — stop override suppresses the ask-back protocol', 
         inputs: { topic: 'x' },
       },
       {
+        humanGateOpen: composeHumanGateOpenParticipantFactory(),
         db: c.db,
         schedulerDriver: createTaskExecutionTestTopology({ db: c.db, driver: 'real' })
           .schedulerDriver,
@@ -334,6 +336,7 @@ describe('RFC-122 dispatch — stop override suppresses the ask-back protocol', 
         inputs: { topic: 'x' },
       },
       {
+        humanGateOpen: composeHumanGateOpenParticipantFactory(),
         db: c.db,
         schedulerDriver: createTaskExecutionTestTopology({ db: c.db, driver: 'real' })
           .schedulerDriver,
@@ -397,6 +400,7 @@ describe('RFC-122 H1 — process retry reads the LATEST directive per attempt', 
         inputs: { topic: 'x' },
       },
       {
+        humanGateOpen: composeHumanGateOpenParticipantFactory(),
         db: c.db,
         schedulerDriver: createTaskExecutionTestTopology({ db: c.db, driver: 'real' })
           .schedulerDriver,
@@ -471,6 +475,7 @@ describe('RFC-122 — STOP flip on a same-session FOLLOW-UP renders the full out
         inputs: { topic: 'x' },
       },
       {
+        humanGateOpen: composeHumanGateOpenParticipantFactory(),
         db: c.db,
         schedulerDriver: createTaskExecutionTestTopology({ db: c.db, driver: 'real' })
           .schedulerDriver,
@@ -530,6 +535,7 @@ describe('RFC-122 — STOP flip on a same-session FOLLOW-UP renders the full out
         inputs: { topic: 'x' },
       },
       {
+        humanGateOpen: composeHumanGateOpenParticipantFactory(),
         db: c.db,
         schedulerDriver: createTaskExecutionTestTopology({ db: c.db, driver: 'real' })
           .schedulerDriver,

@@ -1,3 +1,4 @@
+import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { eq } from 'drizzle-orm'
@@ -144,6 +145,7 @@ describeEachProvider('RFC-395 II-a A2 checkpoint list ports', (harness) => {
       await persistIsoNodeTree(
         {
           persistence: createTaskExecutionPersistence(harness.db, {
+            humanGateOpen: composeHumanGateOpenParticipantFactory(),
             historyRestrictions: epoch2RuntimeTestPorts(harness.db).historyRestrictions,
             recoveryHumanGates: o2Ports(harness.db).collaborationReads.recovery,
           }),

@@ -1,3 +1,4 @@
+import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { nodeRunFixtureColumns } from './helpers/model/nodeRun'
 import { taskReadColumns } from '@/modules/task-execution/infrastructure/taskRepositorySql'
@@ -102,7 +103,10 @@ describeEachProvider('RFC-359 W4-D25 —— human-gate 停靠原子', (harness) 
     const parked = await new DatabaseHumanGateTaskLifecyclePersistence(
       db,
       createTaskRuntimeLifecyclePersistence(db),
-      { historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions },
+      {
+        humanGateOpen: composeHumanGateOpenParticipantFactory(),
+        historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
+      },
     ).parkPrepared({
       prepared: opening.prepared,
       now: NOW + 2,
@@ -179,7 +183,10 @@ describeEachProvider('RFC-359 W4-D25 —— human-gate 停靠原子', (harness) 
       await new DatabaseHumanGateTaskLifecyclePersistence(
         db,
         createTaskRuntimeLifecyclePersistence(db),
-        { historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions },
+        {
+          humanGateOpen: composeHumanGateOpenParticipantFactory(),
+          historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
+        },
       ).parkPrepared({
         prepared: opening.prepared,
         now: NOW + 3,
@@ -214,7 +221,10 @@ describeEachProvider('RFC-359 W4-D25 —— human-gate 停靠原子', (harness) 
     const settled = await new DatabaseHumanGateTaskLifecyclePersistence(
       db,
       createTaskRuntimeLifecyclePersistence(db),
-      { historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions },
+      {
+        humanGateOpen: composeHumanGateOpenParticipantFactory(),
+        historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
+      },
     ).settleManualQuestionParks({ taskId, now: NOW + 4 })
 
     expect(settled).toEqual({ parked: false, taskRevision: 1, operationIds: [], eventRefs: [] })
@@ -233,7 +243,10 @@ describeEachProvider('RFC-359 W4-D25 —— human-gate 停靠原子', (harness) 
     const outcome = await new DatabaseHumanGateTaskLifecyclePersistence(
       db,
       createTaskRuntimeLifecyclePersistence(db),
-      { historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions },
+      {
+        humanGateOpen: composeHumanGateOpenParticipantFactory(),
+        historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
+      },
     ).trySetWhenNoManualQuestionParks({
       taskId,
       to: 'done',

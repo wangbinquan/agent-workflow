@@ -303,8 +303,35 @@ export function contextValueSccs(corpus: GateCorpus): string[] {
     contextValuePairs(corpus).map((pair) => pair.split('->') as [string, string]),
   ).map((members) => members.join('|'))
 }
-export function contextPairsOffDag(corpus: GateCorpus): string[] {
-  return contextValuePairs(corpus).filter((pair) => !OFFERED_CONTEXT_PAIRS.has(pair))
+export function contextPairsOffDag(
+  corpus: GateCorpus,
+  options: { readonly throughServices?: boolean } = {},
+): string[] {
+  const pairs = contextValuePairs(corpus)
+  // RFC-399's negative control also follows legacy facade detours. The S5
+  // census keeps its direct-edge denominator; retained W9-D debt is separate.
+  if (options.throughServices) {
+    for (const unit of corpus.backend) {
+      const from = gateModuleLocation(unit.path)
+      if (from === null) continue
+      const visited = new Set<string>()
+      const follow = (path: string, viaService: boolean): void => {
+        if (visited.has(path)) return
+        visited.add(path)
+        for (const edge of corpus.imports.get(path) ?? []) {
+          if (edge.kind !== 'value' || edge.workerUrl === true) continue
+          if (edge.target.startsWith(BACKEND_PREFIX + 'services/')) follow(edge.target, true)
+          else if (viaService) {
+            const to = gateModuleLocation(edge.target)
+            if (to !== null && from.context !== to.context)
+              pairs.push(`${from.context}->${to.context}`)
+          }
+        }
+      }
+      follow(unit.path, false)
+    }
+  }
+  return unique(pairs).filter((pair) => !OFFERED_CONTEXT_PAIRS.has(pair))
 }
 const EXACT_PUBLIC = /^public\/(?:commands|queries|events|participants|operations|types)$/
 const REQUIRED_PORTS = /^composition\/required-ports$/
@@ -332,7 +359,6 @@ interface ExactRequiredSpiBinding {
   readonly edgeKind: 'type' | 'value'
   readonly syntax: 'export' | 'static-import'
   readonly role:
-    | 'contract-resource-projection-spi'
     | 'workgroup-host-ledger-provider'
     | 'workgroup-task-room-provider'
     | 'workgroup-turns-provider'
@@ -358,8 +384,6 @@ interface NamedModuleBinding {
 const EXACT_REQUIRED_SPI_BINDINGS: readonly ExactRequiredSpiBinding[] = [
   ...(
     [
-      ['WORKGROUP_TURN_LEADER_NODE_ID', 'value'],
-      ['WORKGROUP_TURN_MEMBER_NODE_ID', 'value'],
       // RFC-369 §4.4：内部错误路径上终结孤儿宿主 run 的账本操作，与 mint / stamp 同属宿主账本合同。
       ['WorkgroupHostLedgerFailRunOperation', 'type'],
       ['WorkgroupHostLedgerMintOperation', 'type'],
@@ -377,14 +401,6 @@ const EXACT_REQUIRED_SPI_BINDINGS: readonly ExactRequiredSpiBinding[] = [
     symbol,
     edgeKind,
     syntax: 'static-import' as const,
-    role: 'workgroup-turns-provider' as const,
-  })),
-  ...['WORKGROUP_TURN_LEADER_NODE_ID', 'WORKGROUP_TURN_MEMBER_NODE_ID'].map((symbol) => ({
-    from: 'packages/backend/src/modules/resource-catalog/application/workgroups/workgroupTurnsDriver.ts',
-    specifier: '@/modules/task-execution/public/commands',
-    symbol,
-    edgeKind: 'value' as const,
-    syntax: 'export' as const,
     role: 'workgroup-turns-provider' as const,
   })),
   ...[
@@ -418,23 +434,6 @@ const EXACT_REQUIRED_SPI_BINDINGS: readonly ExactRequiredSpiBinding[] = [
     syntax: 'static-import',
     role: 'workgroup-turns-provider',
   },
-  ...[
-    'packages/backend/src/modules/resource-catalog/application/agents/digitalEmployeeAgentTemplateCatalog.ts',
-    'packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlResourcePackageMutationArms.ts',
-    'packages/backend/src/modules/resource-catalog/infrastructure/legacy/agent.ts',
-  ].flatMap((from) =>
-    [
-      'reconcileCreatedAgentExecutionContractPorts',
-      'reconcileUpdatedAgentExecutionContractPorts',
-    ].map((symbol) => ({
-      from,
-      specifier: '@/modules/execution-contract/public/commands',
-      symbol,
-      edgeKind: 'value' as const,
-      syntax: 'static-import' as const,
-      role: 'contract-resource-projection-spi' as const,
-    })),
-  ),
 ]
 
 function requiredSpiBindingKey(binding: {

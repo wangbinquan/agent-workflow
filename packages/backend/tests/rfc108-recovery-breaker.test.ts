@@ -1,3 +1,4 @@
+import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { o2Ports } from './helpers/o2Closure'
 // RFC-108 T11 (AR-09) — auto-recovery circuit-breaker / quarantine.
@@ -47,6 +48,7 @@ describeEachProvider('RFC-108 T11 — circuit-breaker / quarantine', (harness) =
     const db = harness.db
     const taskId = await seedTask(db)
     const operations = createTaskExecutionPersistence(db, {
+      humanGateOpen: composeHumanGateOpenParticipantFactory(),
       historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
       recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
     }).recoveryAdministration
@@ -79,6 +81,7 @@ describeEachProvider('RFC-108 T11 — circuit-breaker / quarantine', (harness) =
     const db = harness.db
     const taskId = await seedTask(db)
     const operations = createTaskExecutionPersistence(db, {
+      humanGateOpen: composeHumanGateOpenParticipantFactory(),
       historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
       recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
     }).recoveryAdministration

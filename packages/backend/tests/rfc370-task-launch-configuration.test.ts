@@ -1,3 +1,4 @@
+import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 // RFC-370: async launch settings retain the three independent live-read and
 // fallback boundaries. The coordinator must wait after attach and release its
@@ -236,7 +237,13 @@ describeEachProvider('RFC-370 launch configuration adapters', (harness) => {
     expect(resolveCommitPushConfig(configPath)?.lang).toBe('zh-CN')
     expect(resolveSubagentLiveCapture(configPath)).toEqual(current.subagentLiveCapture)
     expect(resolveUploadLimits(configPath)).toEqual(current.uploadLimits)
-    const deps = buildStartTaskDeps(harness.db, createNoopSchedulerDriver(), configPath, 'owner')
+    const deps = buildStartTaskDeps(
+      harness.db,
+      composeHumanGateOpenParticipantFactory(),
+      createNoopSchedulerDriver(),
+      configPath,
+      'owner',
+    )
     expect(deps.defaultRuntime).toBe('runtime-live')
     expect(deps.subagentLiveCapture).toEqual(current.subagentLiveCapture)
     writeFileSync(
@@ -270,6 +277,7 @@ describeEachProvider('RFC-370 launch configuration adapters', (harness) => {
       localReads = 0,
       settled = false
     const coordinator = createTestTaskDriveCoordinator({
+      humanGateOpen: composeHumanGateOpenParticipantFactory(),
       deps: { db: harness.db, schedulerDriver: { async drive() {} }, configPath },
       appHome: home,
       launchConfiguration: {
@@ -326,6 +334,7 @@ describeEachProvider('RFC-370 launch configuration adapters', (harness) => {
         subagentLiveCapture: undefined,
       }
       const coordinator = createTestTaskDriveCoordinator({
+        humanGateOpen: composeHumanGateOpenParticipantFactory(),
         deps: {
           db: harness.db,
           schedulerDriver: { async drive() {} },
@@ -409,6 +418,7 @@ describeEachProvider('RFC-370 launch configuration adapters', (harness) => {
               attachment: {
                 intentKind: 'launch',
                 execution: createTaskExecutionContext({
+                  humanGateOpen: composeHumanGateOpenParticipantFactory(),
                   historyRestrictions: epoch2RuntimeTestPorts(harness.db).historyRestrictions,
                   db: harness.db,
                   intentId: request.intentId,
@@ -513,6 +523,7 @@ describeEachProvider('RFC-370 launch configuration adapters', (harness) => {
             attachment: {
               intentKind: 'launch',
               execution: createTaskExecutionContext({
+                humanGateOpen: composeHumanGateOpenParticipantFactory(),
                 historyRestrictions: epoch2RuntimeTestPorts(harness.db).historyRestrictions,
                 db: harness.db,
                 intentId: request.intentId,

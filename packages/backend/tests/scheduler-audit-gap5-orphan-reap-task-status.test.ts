@@ -1,3 +1,4 @@
+import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { o2Ports } from './helpers/o2Closure'
 // design/scheduler-audit-2026-06-10.md §⑥ 缺口5 (orphans 收割与任务状态) — 半锁半修。
@@ -134,6 +135,7 @@ describeEachProvider(
 
       const r = await reapOrphanRuns(
         createTaskExecutionPersistence(h.db, {
+          humanGateOpen: composeHumanGateOpenParticipantFactory(),
           historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
           recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
         }).recoveryAdministration,
@@ -167,6 +169,7 @@ describeEachProvider(
 
       const r = await reapOrphanRuns(
         createTaskExecutionPersistence(h.db, {
+          humanGateOpen: composeHumanGateOpenParticipantFactory(),
           historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
           recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
         }).recoveryAdministration,

@@ -1,3 +1,8 @@
+import type { MaintenanceWorkerEffectsSelections } from './maintenanceWorkerEffects'
+import {
+  composeMaintenanceJobBindings,
+  type MaintenanceOwnerCommands,
+} from './maintenanceJobBindings'
 import {
   createContentMaintenance,
   createContentHolderQuery,
@@ -49,11 +54,11 @@ import type {
   MaintenanceWorkerGraph,
   MaintenanceWorkerGraphFactory,
 } from '@/platform/background/maintenanceWorkerRuntime'
-import type { MaintenanceSystemOperations } from '@/platform/background/maintenanceJobRunner'
+import type { MaintenanceSystemOperations } from '@/modules/system-operations/composition'
 import type { EventsArchiveStore } from '@/platform/background/eventsArchiveStorePort'
-import { composeMaintenanceSystemOperations } from '@/platform/background/maintenanceSystemOperations'
+import { composeMaintenanceSystemOperations } from '@/modules/system-operations/composition'
 
-type GraphInput = Parameters<MaintenanceWorkerGraphFactory>[0]
+type GraphInput = Parameters<MaintenanceWorkerGraphFactory<MaintenanceWorkerEffectsSelections>>[0]
 type Request = GraphInput['request']
 type AdapterInput<R extends Request> = Omit<GraphInput, 'request'> & { readonly request: R }
 interface MaintenanceWorkerAdapter {
@@ -193,7 +198,9 @@ function selectMaintenanceWorkerAdapter(input: GraphInput): MaintenanceWorkerAda
     : MAINTENANCE_WORKER_ADAPTERS.sqlite({ ...input, request })
 }
 
-export const composeMaintenanceWorkerGraph: MaintenanceWorkerGraphFactory = async (input) => {
+export const composeMaintenanceWorkerGraph = async (
+  input: GraphInput,
+): Promise<MaintenanceWorkerGraph & { readonly ownerCommands: MaintenanceOwnerCommands }> => {
   const adapter = selectMaintenanceWorkerAdapter(input)
   const { db: client, resourcePackageRecoveryScene } = adapter
   const closure = composeCrossContextClosure(client)
@@ -203,6 +210,7 @@ export const composeMaintenanceWorkerGraph: MaintenanceWorkerGraphFactory = asyn
     composeWebhookDeliveryPersistenceFor(client),
   )
   const taskExecution = createTaskExecutionPersistence(client, {
+    humanGateOpen: closure.humanGateOpen,
     content: workerEffects?.contentStore ?? createLocalRuntimeContent(client, appHome),
     historyRestrictions: createActiveHistoryRestrictionProvider(),
     recoveryHumanGates: closure.collaborationReads.recovery,
@@ -273,24 +281,26 @@ export const composeMaintenanceWorkerGraph: MaintenanceWorkerGraphFactory = asyn
     }),
     resourcePackageRecoveryScene,
   ])
+  const ownerCommands = Object.freeze({
+    workspace: workspaceMaintenanceCommand,
+    developmentAutomation: developmentAutomationMaintenance,
+    digitalEmployee: digitalEmployeeMaintenance,
+    intent: intentMaintenanceCommands,
+    atomicApply,
+    integration: integrationMaintenanceCommands,
+    taskRecovery: taskRecoveryOperations,
+    taskArchive: taskArchiveMaintenanceCommand,
+    tokenAudit: tokenCallAudit,
+    pluginGenerationGc: {
+      command: pluginGenerationGcCommand,
+      executionFence: maintenanceExecutionFence,
+    },
+    system: systemOperations,
+  })
   return Object.freeze({
     store,
-    ownerCommands: Object.freeze({
-      workspace: workspaceMaintenanceCommand,
-      developmentAutomation: developmentAutomationMaintenance,
-      digitalEmployee: digitalEmployeeMaintenance,
-      intent: intentMaintenanceCommands,
-      atomicApply,
-      integration: integrationMaintenanceCommands,
-      taskRecovery: taskRecoveryOperations,
-      taskArchive: taskArchiveMaintenanceCommand,
-      tokenAudit: tokenCallAudit,
-      pluginGenerationGc: {
-        command: pluginGenerationGcCommand,
-        executionFence: maintenanceExecutionFence,
-      },
-      system: systemOperations,
-    }),
+    ownerCommands,
+    handlers: composeMaintenanceJobBindings(ownerCommands),
     busyDeferralCounter: adapter.busyDeferralCounter,
     close: adapter.close,
   })

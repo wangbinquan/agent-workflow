@@ -1,3 +1,6 @@
+import { composeTaskMemorySnapshotPort } from '@/modules/memory/composition'
+import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
+import { composeTaskReviewersPort } from '@/modules/collaboration/composition'
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { nodeRunFixtureColumns } from './helpers/model/nodeRun'
 import { taskReadColumns } from '@/modules/task-execution/infrastructure/taskRepositorySql'
@@ -233,10 +236,13 @@ function operations(harness: ProviderHarness, calls: ChildCalls): TaskRouteOpera
   const db = harness.db
   return createTaskRouteOperations(
     withO2Closure({
+      taskMembership: o2Ports(db).taskMembership,
+      memorySnapshots: composeTaskMemorySnapshotPort(),
       historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
       clarifyNav: o2Ports(db).collaborationReads.clarifyNav,
       db,
       collaboration: {} as never,
+      reviewers: composeTaskReviewersPort({} as never),
       owners: composeOwnerIdentityQueries(db),
       // RFC-359 AC-1（第 5 刀）：本对拍不驱动活跃度，给一个恒空的参与者。
       activity: { isActive: () => false, awaitReleasedSettled: async () => {} },
@@ -245,6 +251,7 @@ function operations(harness: ProviderHarness, calls: ChildCalls): TaskRouteOpera
       // RFC-359 AC-1（plan §5hn 批次二 ④）：本对拍不驱动工作流 JSON 启动。
       launches: { launch: async () => ({}) } as never,
       persistence: createTaskExecutionPersistence(db, {
+        humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
         recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
       }),

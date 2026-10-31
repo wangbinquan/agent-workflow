@@ -1,3 +1,4 @@
+import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { bootDeclaration, bootImplementation, expectBootOrder } from './helpers/daemonProgramSource'
@@ -67,6 +68,7 @@ function plan(taskId: string, over: Partial<Record<'worktrees', unknown>> = {}):
 
 async function claimTree(db: PersistenceDb, rootTaskId: string, cleanupPlanJson: string) {
   const persistence = createTaskExecutionPersistence(db, {
+    humanGateOpen: composeHumanGateOpenParticipantFactory(),
     historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
     recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
   })

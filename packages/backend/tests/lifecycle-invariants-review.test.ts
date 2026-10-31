@@ -1,3 +1,4 @@
+import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { legacyContentRef } from '@/platform/content/contentRef'
 import { contentRowColumns } from '@/platform/content/infrastructure/contentStore'
@@ -164,6 +165,7 @@ describeEachProvider(
       })
       const result = await runLifecycleInvariants({
         operations: createTaskExecutionPersistence(h.db, {
+          humanGateOpen: composeHumanGateOpenParticipantFactory(),
           historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
           recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
         }).recoveryAdministration,
@@ -182,6 +184,7 @@ describeEachProvider(
       })
       const result = await runLifecycleInvariants({
         operations: createTaskExecutionPersistence(h.db, {
+          humanGateOpen: composeHumanGateOpenParticipantFactory(),
           historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
           recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
         }).recoveryAdministration,
@@ -213,6 +216,7 @@ describeEachProvider(
       // First scan: warning + 'new' callback
       const r1 = await runLifecycleInvariants({
         operations: createTaskExecutionPersistence(h.db, {
+          humanGateOpen: composeHumanGateOpenParticipantFactory(),
           historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
           recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
         }).recoveryAdministration,
@@ -230,6 +234,7 @@ describeEachProvider(
       calls = []
       const r2 = await runLifecycleInvariants({
         operations: createTaskExecutionPersistence(h.db, {
+          humanGateOpen: composeHumanGateOpenParticipantFactory(),
           historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
           recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
         }).recoveryAdministration,
@@ -246,6 +251,7 @@ describeEachProvider(
       calls = []
       const r3 = await runLifecycleInvariants({
         operations: createTaskExecutionPersistence(h.db, {
+          humanGateOpen: composeHumanGateOpenParticipantFactory(),
           historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
           recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
         }).recoveryAdministration,
@@ -263,6 +269,7 @@ describeEachProvider(
       calls = []
       const r4 = await runLifecycleInvariants({
         operations: createTaskExecutionPersistence(h.db, {
+          humanGateOpen: composeHumanGateOpenParticipantFactory(),
           historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
           recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
         }).recoveryAdministration,
@@ -285,6 +292,7 @@ describeEachProvider(
       // First scan: R1 violates (T1 also satisfied — there *is* an awaiting_review run).
       const r1 = await runLifecycleInvariants({
         operations: createTaskExecutionPersistence(h.db, {
+          humanGateOpen: composeHumanGateOpenParticipantFactory(),
           historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
           recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
         }).recoveryAdministration,
@@ -298,6 +306,7 @@ describeEachProvider(
       // Second scan: R1 row resolved; no new R1 inserted.
       const r2 = await runLifecycleInvariants({
         operations: createTaskExecutionPersistence(h.db, {
+          humanGateOpen: composeHumanGateOpenParticipantFactory(),
           historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
           recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
         }).recoveryAdministration,
@@ -332,6 +341,7 @@ describeEachProvider(
       })
       const result = await runLifecycleInvariants({
         operations: createTaskExecutionPersistence(h.db, {
+          humanGateOpen: composeHumanGateOpenParticipantFactory(),
           historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
           recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
         }).recoveryAdministration,
@@ -350,6 +360,7 @@ describeEachProvider(
       })
       const result = await runLifecycleInvariants({
         operations: createTaskExecutionPersistence(h.db, {
+          humanGateOpen: composeHumanGateOpenParticipantFactory(),
           historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
           recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
         }).recoveryAdministration,
@@ -365,6 +376,7 @@ describeEachProvider(
       await insertReviewRun(h.db, h.taskId, { status: 'done', finishedAt: Date.now() })
       const result = await runLifecycleInvariants({
         operations: createTaskExecutionPersistence(h.db, {
+          humanGateOpen: composeHumanGateOpenParticipantFactory(),
           historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
           recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
         }).recoveryAdministration,
@@ -379,6 +391,7 @@ describeEachProvider(
       // Two scans without fixing the violation: still 1 open row, no dup insert.
       const r1 = await runLifecycleInvariants({
         operations: createTaskExecutionPersistence(h.db, {
+          humanGateOpen: composeHumanGateOpenParticipantFactory(),
           historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
           recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
         }).recoveryAdministration,
@@ -387,6 +400,7 @@ describeEachProvider(
       expect(r1.newAlerts).toBe(1)
       const r2 = await runLifecycleInvariants({
         operations: createTaskExecutionPersistence(h.db, {
+          humanGateOpen: composeHumanGateOpenParticipantFactory(),
           historyRestrictions: epoch2RuntimeTestPorts(h.db).historyRestrictions,
           recoveryHumanGates: o2Ports(h.db).collaborationReads.recovery,
         }).recoveryAdministration,

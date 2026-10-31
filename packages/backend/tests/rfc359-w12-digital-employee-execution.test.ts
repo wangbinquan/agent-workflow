@@ -1,3 +1,4 @@
+import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { nodeRunFixtureColumns } from './helpers/model/nodeRun'
 import { tablesOf } from '@/platform/persistence/sessionTables'
@@ -221,6 +222,7 @@ describeEachProvider('RFC-359 W12 Digital Employee real execution', (harness) =>
               harness.applicationBinding.provider === 'postgresql'
                 ? provider.routeLaunch.workflow
                 : createTestHostTaskLaunchKernel({
+                    humanGateOpen: composeHumanGateOpenParticipantFactory(),
                     db: harness.db,
                     appHome,
                     gitCommitIdentity: identityAccess.getUserGitCommitIdentity,
@@ -237,6 +239,7 @@ describeEachProvider('RFC-359 W12 Digital Employee real execution', (harness) =>
             ...composeDatabaseDigitalEmployeeExecutionPorts(
               harness.db,
               epoch2RuntimeTestPorts(harness.db).historyRestrictions,
+              composeHumanGateOpenParticipantFactory(),
             ),
             tasks: provider.routes.tasks,
             readModels: provider.readModels,

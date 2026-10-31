@@ -1,3 +1,4 @@
+import { composeCollaborationTaskRolePolicy } from '@/modules/resource-catalog/composition'
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 // RFC-395 C: v2 open manifests, content publication and history-only replay fences.
 import { setDefaultTimeout, expect, test } from 'bun:test'
@@ -603,6 +604,7 @@ describeEachProvider('RFC-395 C open v2', (h) => {
     expect((await f.operations.listArtifacts(r.prepared.operation.id))[0]!.state).toBe('consumed')
     let contentReads = 0
     const context = createCollaborationCommandContext({
+      taskRolePolicy: composeCollaborationTaskRolePolicy(),
       db: h.db,
       taskLock: createHumanGatePersistenceParticipantInTx,
       historyRestrictions: allowed,
@@ -990,6 +992,7 @@ describeEachProvider('RFC-395 C open v2', (h) => {
       },
     }
     const context = createCollaborationCommandContext({
+      taskRolePolicy: composeCollaborationTaskRolePolicy(),
       content: epoch2RuntimeTestPorts(h.db).content,
       db: h.db,
       taskLock: createHumanGatePersistenceParticipantInTx,

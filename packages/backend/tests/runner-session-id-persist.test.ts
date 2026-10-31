@@ -1,3 +1,4 @@
+import { composeTaskMemorySnapshotPort } from '@/modules/memory/composition'
 // RFC-027 T3 — locks the runner's per-row session_id / parent_session_id
 // tagging for stdout-derived events. The Session view's session
 // bucketing assumes every stdout-derived row carries the captured root
@@ -129,6 +130,7 @@ describeEachProvider('runner stdout → node_run_events session tagging', (harne
       },
       () =>
         runNode({
+          memorySnapshots: composeTaskMemorySnapshotPort(),
           taskId: h.taskId,
           nodeRunId,
           nodeId: 'n1',
@@ -168,6 +170,7 @@ describeEachProvider('runner stdout → node_run_events session tagging', (harne
       },
       () =>
         runNode({
+          memorySnapshots: composeTaskMemorySnapshotPort(),
           taskId: h.taskId,
           nodeRunId,
           nodeId: 'n1',

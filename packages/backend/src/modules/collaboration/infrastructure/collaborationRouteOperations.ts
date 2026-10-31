@@ -1,3 +1,4 @@
+import type { CollaborationTaskRolePolicy } from '../application/ports/collaborationTaskRolePolicy'
 import type { HistoryRestrictionPort } from '@/platform/contracts/historyRestriction'
 import type { HumanGateTaskLockPort } from '../composition/required-ports'
 // RFC-359 W7 —— 协作路由持久化面（`CollaborationRoutePersistenceOperations`）：
@@ -35,6 +36,7 @@ const loadClarifyOperations = () => import('./clarifyRounds')
 const loadClarifySeal = () => import('./clarify/seal')
 
 export interface CreateCollaborationRouteOperationsInput {
+  readonly taskRolePolicy: CollaborationTaskRolePolicy
   readonly historyRestrictions: HistoryRestrictionPort
   readonly taskLock: HumanGateTaskLockPort
   readonly reviewReader?: CommittedReviewArtifactReader
@@ -125,6 +127,7 @@ export function createCollaborationRouteOperations(
         request.actor,
         input.taskLock,
         input.historyRestrictions,
+        input.taskRolePolicy,
       ),
     confirm: async (request) =>
       await (

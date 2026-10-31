@@ -539,3 +539,6 @@ export interface SelectedDevelopmentPurposeRoot {
 }
 
 export { schemaContribution } from './composition/schema'
+
+// RFC-399 B1: bootstrap's maintenance job table takes these handlers via composition.
+export { createDevelopmentAutomationMaintenanceJobHandlers } from './application/maintenanceJobs'

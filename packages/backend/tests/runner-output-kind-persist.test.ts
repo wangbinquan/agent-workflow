@@ -1,3 +1,4 @@
+import { composeTaskMemorySnapshotPort } from '@/modules/memory/composition'
 // RFC-072 — runNode persists the resolved output kind into node_run_outputs.kind.
 //
 // The runner already resolves agent.outputKinds[port] to validate file-path
@@ -144,6 +145,7 @@ function registerCases(provider: ProviderHarness) {
       { MOCK_OPENCODE_OUTPUTS: JSON.stringify({ report: 'report.md', note: 'just text' }) },
       () =>
         runNode({
+          memorySnapshots: composeTaskMemorySnapshotPort(),
           taskId: h.taskId,
           nodeRunId,
           nodeId: 'n1',

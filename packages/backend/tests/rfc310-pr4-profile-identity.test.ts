@@ -1,3 +1,4 @@
+import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 // RFC-395 II-pre：改接生产启动 / 读取路径，保留原断言意图。
 // RFC-310 PR-4 T44 —— 数字员工 profile 的零 Git identity / 零凭据（真子进程双向证）。
 //
@@ -144,6 +145,7 @@ describe('rfc310 pr4 — identity injection stays alive for RFC-067, absent for 
             inputs: { topic: 't' },
           },
           {
+            humanGateOpen: composeHumanGateOpenParticipantFactory(),
             db,
             schedulerDriver: createTaskExecutionTestTopology({ db, driver: 'real' })
               .schedulerDriver,

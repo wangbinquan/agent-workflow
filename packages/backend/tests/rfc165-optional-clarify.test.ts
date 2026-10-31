@@ -1,3 +1,4 @@
+import { composeTaskMemorySnapshotPort } from '@/modules/memory/composition'
 import { nodeRunFixture, taskFixture, workflowFixture } from './helpers/model'
 import { readTaskAgentSources } from './helpers/taskAgentSource'
 // LOCKS: RFC-165 T8b (F12) — the OPTIONAL clarify directive, end to end.
@@ -134,6 +135,7 @@ const CLARIFY_BODY = JSON.stringify({
 function runOptionalNode(h: Harness, nodeRunId: string, env: Record<string, string>) {
   return withEnv(env, () =>
     runNode({
+      memorySnapshots: composeTaskMemorySnapshotPort(),
       taskId: h.taskId,
       nodeRunId,
       nodeId: 'asker',

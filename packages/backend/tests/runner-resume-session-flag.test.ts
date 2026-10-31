@@ -1,3 +1,4 @@
+import { composeTaskMemorySnapshotPort } from '@/modules/memory/composition'
 // RFC-026 T4 — locks `buildCommand(opts, prompt)` argv assembly:
 //   - When `opts.resumeSessionId` is a non-empty string, the opencode CLI
 //     receives `--session <id>` in the parsed flag region (before the `--`
@@ -40,8 +41,12 @@ const AGENT: Agent = {
   updatedAt: 0,
 }
 
-function baseOpts(overrides: Partial<RunNodeOptions> = {}): RunNodeOptions {
+function baseOpts(
+  memorySnapshots: RunNodeOptions['memorySnapshots'],
+  overrides: Partial<RunNodeOptions> = {},
+): RunNodeOptions {
   return {
+    memorySnapshots,
     taskId: 't',
     nodeRunId: 'nr',
     nodeId: 'n',
@@ -60,7 +65,10 @@ function baseOpts(overrides: Partial<RunNodeOptions> = {}): RunNodeOptions {
 
 describe('RFC-026 runner buildCommand — resumeSessionId', () => {
   test('non-empty resumeSessionId appends `--session <id>` at the tail', () => {
-    const cmd = buildCommand(baseOpts({ resumeSessionId: 'opc_abc123' }), 'PROMPT')
+    const cmd = buildCommand(
+      baseOpts(composeTaskMemorySnapshotPort(), { resumeSessionId: 'opc_abc123' }),
+      'PROMPT',
+    )
     expect(cmd).toContain('--session')
     const flagIdx = cmd.indexOf('--session')
     expect(cmd[flagIdx + 1]).toBe('opc_abc123')
@@ -75,13 +83,16 @@ describe('RFC-026 runner buildCommand — resumeSessionId', () => {
   })
 
   test('undefined resumeSessionId does NOT emit `--session`', () => {
-    const cmd = buildCommand(baseOpts({}), 'PROMPT')
+    const cmd = buildCommand(baseOpts(composeTaskMemorySnapshotPort(), {}), 'PROMPT')
     expect(cmd).not.toContain('--session')
   })
 
   test('empty-string resumeSessionId is treated like undefined (no `--session`)', () => {
     // Defensive: scheduler should never pass '' but be liberal in what we accept.
-    const cmd = buildCommand(baseOpts({ resumeSessionId: '' }), 'PROMPT')
+    const cmd = buildCommand(
+      baseOpts(composeTaskMemorySnapshotPort(), { resumeSessionId: '' }),
+      'PROMPT',
+    )
     expect(cmd).not.toContain('--session')
   })
 

@@ -1,3 +1,4 @@
+import { createDigitalEmployeeIntegrationTriggerParticipantIn } from '@/modules/digital-employee/composition'
 // RFC-359 W7 —— Resource Catalog / Identity Access / Auth / Memory / System Operations 的 provider
 // 组合根：**真的构造 + 真的驱动**（口径与 `rfc359-w7-integration-composition-roots.test.ts` 同）。
 //
@@ -29,7 +30,7 @@ import {
 import { createIntegrationTriggerResources } from '@/modules/integration/infrastructure/integrationTriggerResources'
 import { composeMemoryCatalogOperations } from '@/modules/memory/composition'
 import { composeDemoResourceCatalogSeedParticipant } from '@/modules/resource-catalog/composition/demoResourceCatalogSeed'
-import { composeIntegrationTriggerResourceSnapshotFactory } from '@/modules/resource-catalog/composition/integrationTrigger'
+import { composeIntegrationTriggerSnapshots } from '@/modules/resource-catalog/composition/integrationTrigger'
 import {
   composePostgresqlSkillArtifactCompensation,
   composeLegacyIntentSkillArtifactCompat,
@@ -229,7 +230,10 @@ describeEachProvider('RFC-359 W7 —— Resource Catalog 组合根', (harness) =
     })
     const resources = createIntegrationTriggerResources(
       harness.db,
-      composeIntegrationTriggerResourceSnapshotFactory({ assertNotBuiltin }),
+      composeIntegrationTriggerSnapshots(
+        { assertNotBuiltin },
+        createDigitalEmployeeIntegrationTriggerParticipantIn,
+      ),
     )
     const snapshots = await resources.loadAuthorized(triggerPairOf(owner), [
       { kind: 'scheduled-workflow', workflowId },

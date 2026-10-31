@@ -1,3 +1,4 @@
+import { composeTaskMemorySnapshotPort } from '@/modules/memory/composition'
 import { nodeRunFixture, taskFixture, workflowFixture, readNodeRunFixtures } from './helpers/model'
 import { readTaskAgentSources } from './helpers/taskAgentSource'
 // RFC-029 T4 + T8 — runner.ts must:
@@ -150,6 +151,7 @@ describeEachProvider('runNode RFC-029 inventory snapshot', (harness) => {
       },
       () =>
         runNode({
+          memorySnapshots: composeTaskMemorySnapshotPort(),
           taskId: h.taskId,
           nodeRunId,
           nodeId: 'n1',
@@ -190,6 +192,7 @@ describeEachProvider('runNode RFC-029 inventory snapshot', (harness) => {
       },
       () =>
         runNode({
+          memorySnapshots: composeTaskMemorySnapshotPort(),
           taskId: h.taskId,
           nodeRunId,
           nodeId: 'n1',
@@ -228,6 +231,7 @@ describeEachProvider('runNode RFC-029 inventory snapshot', (harness) => {
       },
       () =>
         runNode({
+          memorySnapshots: composeTaskMemorySnapshotPort(),
           taskId: h.taskId,
           nodeRunId,
           nodeId: 'n1',
@@ -283,6 +287,7 @@ describeEachProvider('runNode RFC-029 inventory snapshot', (harness) => {
       },
       () =>
         runNode({
+          memorySnapshots: composeTaskMemorySnapshotPort(),
           taskId: h.taskId,
           nodeRunId,
           nodeId: 'n1',
@@ -331,6 +336,7 @@ describeEachProvider('runNode RFC-029 inventory snapshot', (harness) => {
       },
       () =>
         runNode({
+          memorySnapshots: composeTaskMemorySnapshotPort(),
           taskId: h.taskId,
           nodeRunId,
           nodeId: 'n1',

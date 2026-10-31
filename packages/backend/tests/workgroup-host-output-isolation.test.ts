@@ -1,3 +1,4 @@
+import { composeTaskMemorySnapshotPort } from '@/modules/memory/composition'
 // RFC-184 —— 工作组 host 轮输出隔离。
 //
 // 为什么这套测试存在：线上任务 01KXFE9668F0TJ7D2P720F42SE（全自动 leader_worker）
@@ -270,6 +271,7 @@ function runLeader(
     },
     () =>
       runNode({
+        memorySnapshots: composeTaskMemorySnapshotPort(),
         taskId: h.taskId,
         nodeRunId,
         nodeId: 'n1',

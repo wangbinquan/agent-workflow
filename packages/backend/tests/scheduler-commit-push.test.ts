@@ -1,3 +1,4 @@
+import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 // RFC-395 II-pre：改接生产启动 / 读取路径，保留原断言意图。
 // RFC-075 T11 — end-to-end scheduler trigger for auto commit&push.
 //
@@ -167,6 +168,7 @@ describe('RFC-075 scheduler auto commit&push', () => {
         autoCommitPush: true,
       },
       {
+        humanGateOpen: composeHumanGateOpenParticipantFactory(),
         db: h.db,
         schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
           .schedulerDriver,
@@ -221,6 +223,7 @@ describe('RFC-075 scheduler auto commit&push', () => {
         autoCommitPush: true,
       },
       {
+        humanGateOpen: composeHumanGateOpenParticipantFactory(),
         db: h.db,
         schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
           .schedulerDriver,
@@ -297,6 +300,7 @@ describe('RFC-075 scheduler auto commit&push', () => {
         inputs: { topic: 't' },
       },
       {
+        humanGateOpen: composeHumanGateOpenParticipantFactory(),
         db: h.db,
         schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
           .schedulerDriver,

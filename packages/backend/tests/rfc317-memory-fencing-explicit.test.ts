@@ -26,8 +26,8 @@ const KERNEL = 'packages/backend/src/modules/memory/domain/injectionRendering.ts
 const LEGACY_NONCE_CALLERS: Readonly<Record<string, string>> = {
   'modules/memory/application/injection/injectMemory.ts':
     'buildMemoryBlock 入口——deps.envelopeNonce 可能来自历史调用方（RFC-352 从 services/memoryInject.ts 平移过来）。',
-  'modules/task-execution/application/taskAgentRun.ts':
-    'RFC-042 同会话追问会重建首轮的注入片段；首轮若是 pre-RFC-200 的行则没有 nonce。',
+  'modules/memory/application/adapters/task-execution-adapter.ts':
+    'RFC-399 A10 将 RFC-042 同会话追问的快照重建放到 memory adapter；首轮若是 pre-RFC-200 的行则没有 nonce，字节行为保持。',
 }
 
 function sourceFiles(dir: string, out: string[] = []): string[] {
