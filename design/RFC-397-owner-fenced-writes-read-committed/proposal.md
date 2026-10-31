@@ -1,6 +1,6 @@
 # RFC-397 以 owner 围栏开场的 SERIALIZABLE 数据写入降为 READ COMMITTED
 
-- **状态**：实现完成，待主 CI（2026-10-30：用户批准 v3.3 后实现；集中验证与 Codex 实现门通过，见 design §4）。v1（两处事件追加改共享锁）与 v2（数据写围栏只加锁）分别在第 1、2 轮设计门 FAIL，
+- **状态**：Done（2026-10-31，随 v0.19.3 发布）：实现 `ee10efc6a`；发布提交 `d7b5d9da6` 主 CI 62/62（run 41157876045）；集中验证与 Codex 实现门见 design §4。v1（两处事件追加改共享锁）与 v2（数据写围栏只加锁）分别在第 1、2 轮设计门 FAIL，
   处置见 design §7；v3 按用户 2026-10-30 的选择重写，经第 3–5 轮设计门后获用户批准。
 - **来由**：v0.19.3 候选 `b430c7754` 的主 CI（run 41052627131，后端 ubuntu 分片 33/36，job 124052183671）红在
   `scheduler-boundary-fanout-concurrency.test.ts` 的 PostgreSQL 用例「B: RFC-130 — writer shards each run in their OWN iso

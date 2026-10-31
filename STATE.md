@@ -1,4 +1,13 @@
-## 2026-10-30 RFC-397 以 owner 围栏开场的 SERIALIZABLE 数据写入降为 READ COMMITTED（v3.3 已实现，待主 CI；`design/RFC-397-owner-fenced-writes-read-committed/`）
+## 2026-10-31 v0.19.3 已发布（tag `v0.19.3` → `d7b5d9da6`）
+
+- **发布**：[GitHub Release](https://github.com/wangbinquan/agent-workflow/releases/tag/v0.19.3)，发版工作流 run 41165513666 成功，四个平台单二进制
+  （macOS arm64、Linux x86_64 / arm64、Windows x86_64）齐全；中文说明在工作流结束后写入。
+- **验证**：同一提交主 CI run 41157876045 第 2 次尝试 62/62（第 1 次尝试的后端 ubuntu 30/36 红在 MCP 测试台并发用例，既有罕见竞态，与本版本
+  改动无关，已登记 `docs/audit-backlog.md`，只重跑了失败作业）；完整 E2E 41162775186、WebKit 41162778412、Windows 平台 41157876044、
+  视觉回归 41157876069、OpenCode 集成 41157876060 均成功。
+- **相对上一候选新增**：RFC-397（PostgreSQL 扇出写分片 40001 重试耗尽的根治）与 `d7b5d9da6`（workgroup-matrix 桩的 Claude 会话 ID 不再只靠 PID）。
+
+## 2026-10-30 RFC-397 以 owner 围栏开场的 SERIALIZABLE 数据写入降为 READ COMMITTED（Done 2026-10-31，随 v0.19.3 发布；`design/RFC-397-owner-fenced-writes-read-committed/`）
 
 - **来由**：v0.19.3 候选 `b430c7754` 的主 CI（41052627131）红在后端 ubuntu 分片 33/36 的 `scheduler-boundary-fanout-concurrency.test.ts` [postgresql]「B: RFC-130 writer shards…」：第三个写分片准备隔离工作区时，owner 围栏 UPDATE 失败，任务 `failed`。约 150 次主 CI 里第一次出现。用户 2026-10-30 授权本 session 接手，并决定先走 RFC 根治、再发 v0.19.3。
 - **根因**（本机一次性 PostgreSQL 17 复现，8 路 × 8 次：4/64 失败，服务端 2316 次 `40001 could not serialize access due to concurrent update`，0 次死锁）：每一笔普通数据写入都以 owner 行条件 UPDATE（`revision + 1`、改写 `updated_at`）开场；语句日志按事务归因，改写来自 node run 铸造与生命周期、effect、运行态、产出、任务级，事件追加只占约 3%。同任务以同一围栏开场的 SERIALIZABLE 写入（effect、会话租约、进程登记）因此不断得到 40001，10 次重试（退避 ≤16ms）被耗尽。机制自 v0.19.2 即存在（此前一版条目写「v0.19.2 不含」有误），这次是首次观察到。
@@ -19,7 +28,7 @@
   （两次尝试都是 leader 运行 6 次）。归因：不是 RFC-397 引入——2026-09-20 run 35512158270 有完全相同的签名；e2e 跑 SQLite，`claimNew`
   在 SQLite 上的行为未变；根因是桩用 PID 拼 Claude 会话 ID，Windows 复用 PID 后撞上保留的租约主键（详见 `docs/dev-gotchas.md`）。
   已修桩（会话 ID 加 `randomUUID()`）并补 system-mocks 回归用例，本机 `workgroup-matrix` 六条 e2e 全过。
-- **下一步**：修桩提交的主 CI 全绿 → RFC 标 Done → 发 v0.19.3。
+- **收尾**：修桩提交 `d7b5d9da6` 的主 CI（run 41157876045）第 2 次尝试 62/62，RFC 标 Done，随 v0.19.3 发布。
 
 ## 2026-10-30 runtime-scenario-matrix 的取消用例：等运行时起来的预算对齐到 45 秒，没等到就导出现场
 

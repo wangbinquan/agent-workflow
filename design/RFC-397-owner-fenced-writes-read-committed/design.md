@@ -246,6 +246,10 @@ RFC-328 design.md:394 写明「live-effect unique 与 watermark revision CAS 共
   （被测物是记录器的驱动边界，要按需让 BEGIN / COMMIT / SAVEPOINT / RELEASE 失败，真库做不到，按「正当」一类记入
   `rfc359-w5-postgresql-fake-runtime` 账本）。修正后守卫 1894 通过 / 0 失败，租约相关 27 个文件 SQLite 250/0、PostgreSQL 283/0，
   typecheck 通过，宽映射变异（M8）在两种 provider 上仍变红。
+- 主 CI：实现提交 `ee10efc6a`（run 41153577424）只红在 Windows e2e 的 `workgroup-matrix` claude-code 用例，归因为桩用 PID 拼会话 ID
+  的既有问题（2026-09-20 已有同签名失败），`d7b5d9da6` 修桩；`d7b5d9da6`（run 41157876045）第 1 次尝试红在 MCP 测试台的既有竞态
+  （与本 RFC 无关，见 `docs/audit-backlog.md`），只重跑失败作业后 62/62；完整 E2E、WebKit、Windows 平台、视觉回归与 OpenCode 集成在
+  同一提交上通过，随 v0.19.3 发布。
 
 ## 5. 与 RFC-294 目标架构的对齐
 

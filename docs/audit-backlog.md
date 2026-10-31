@@ -5629,6 +5629,22 @@ graph@2 的 `verify-change` 要求实现依据里的每条义务在**交付前**
 
 归因：这几次运行所在提交（`f324bd790`、`a658c0b9c`）只改了 e2e 夹具、几条用例与文档，RFC-372 两条用例不经过改过的夹具；e2e 崩溃屏障只在人工门重启用例里开启；同片 RFC-396 用例反而更快。此前 11 次 WebKit 夜跑里 RFC-372 这两条没有重试过。下次出现先从 trace 看：RFC-372 是追问请求没发出去、发出后没返回，还是生成慢；编辑器是第一下点击没选中，还是 Shift 没生效。
 
+## PostgreSQL：MCP 测试台两个标签页同时开会话，SSI 互判 pivot 直到重试耗尽、败方拿到 500（2026-10-31，CI 偶发，未处置）
+
+- 现象：主 CI run 41157876045（`d7b5d9da6`）第 1 次尝试的后端 ubuntu 30/36 红在
+  `rfc359-w8-t28-mcp-runtime-lost-update.test.ts`「两个标签页同时开测试台：输的一方拿到 409」[postgresql]：40 轮里有一轮败方拿到裸的
+  `Failed query: insert into "mcp_runtime_test_sessions" …`，不是 `ConflictError: mcp-test-session-exists`。只重跑失败作业一次后通过。
+- 机制（服务端日志）：同一轮的两笔 `create` 在约 0.5 秒内连续十几次 `40001 could not serialize access due to read/write dependencies
+  among transactions`（`Canceled on identification as a pivot, during write` / `during conflict in checking`），一方把
+  `retryPostgresqlSerialization` 的 10 次重试耗尽后原样抛出；外层 `runCatalogTransactionRetryingUniqueViolations` 只认唯一冲突，
+  不接 40001。退避虽是满抖动，但上限只有 16ms，远短于 CI 上一笔事务的耗时，两笔重来后仍然重叠、继续互撞，是对称竞争下的活锁。
+  用户可见后果：两个标签页同时打开同一 MCP 的测试台，偶尔一边 500 而不是 409。
+- 归因：与当时的 RFC-397 无关——`d7b5d9da6` 相对 `ee10efc6a` 只改了 system-mocks 桩与文档，同一份后端代码在 `ee10efc6a` 的主 CI 上该分片
+  通过；`createMcpRuntimeTestPersistence` 走 `runResourceCatalogTransaction`（SERIALIZABLE），不在 RFC-397 的改动面内。往前 118 次失败的
+  主 CI（约 12 天、165 个后端分片日志）里这条用例没有失败过，属罕见竞态。
+- 待办（需另立 RFC，资源目录的事务语义）：check-then-insert 先按 `(owner, mcp)` 取 advisory 锁让两笔排队，或改为 READ COMMITTED + 锁 +
+  唯一冲突重来（RFC-397 在 task-execution 用的同一套做法）；变异验证用 barrier 把两笔卡在同一时刻启动，证明不再耗尽重试。
+
 ## RFC-395 实现门留下的两条测试剩余项（2026-10-29，Codex 实现门 P2，未决）
 
 实现门（基准 `0244e0e24`，见 RFC-395 plan「实现门与设计门」）三条 P2 证据缺口里，下面两条只做了部分处置：
