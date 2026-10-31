@@ -1,3 +1,5 @@
+import { createTestIsolationBinding } from './helpers/executionKernel'
+import { bindIsolationCleanup } from '@/modules/task-execution/infrastructure/executionKernelBinding'
 import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { o2Ports } from './helpers/o2Closure'
@@ -50,8 +52,13 @@ import { buildNarrativeInput } from '@/services/changeNarrative'
 import { getCodeIntel } from '@/services/codeIntel/codeIntel'
 import { getTaskFileSymbols } from '@/services/codeIntel/fileSymbols'
 import type { TaskMechanicsState } from '@/services/execution/taskMechanicsState'
-import { createIsoUnderLock, persistIsoBase, persistIsoNodeTree } from '@/services/isolatedAgentRun'
-import { discardNodeIso, snapshotNodeIsoFinal } from '@/services/nodeIsolation'
+import {
+  createIsoUnderLock,
+  persistIsoBase,
+  persistIsoNodeTree,
+} from '@/modules/task-execution/engine/kernel/isolation'
+import { discardNodeIso } from '@/modules/task-execution/engine/kernel/isolationCleanup'
+import { snapshotNodeIsoFinal } from '@/platform/workspace/local/isolation'
 import {
   loadRollbackTarget,
   planNodeRunRollbackTargets,
@@ -64,7 +71,7 @@ import {
 } from '@/services/structuralDiff/callGraph/expandService'
 import { getTaskFileContent } from '@/services/worktreeFileContent'
 import { createLogger } from '@/util/log'
-import { Semaphore } from '@/util/semaphore'
+import { Semaphore } from '@/platform/contracts/semaphore'
 import { removeTempDirSync } from './fixtures/tempDir'
 import { describeEachProvider } from './helpers/eachProvider'
 import { startGitHttpRemote } from './helpers/gitHttpRemote'
@@ -260,20 +267,20 @@ describeEachProvider('single non-root member workspace regression', (harness) =>
           status: 'running',
         })
         const handle = await createIsoUnderLock({
-          binding: {
+          binding: createTestIsolationBinding({
             persistence: createTaskExecutionPersistence(harness.db, {
               humanGateOpen: composeHumanGateOpenParticipantFactory(),
               historyRestrictions: epoch2RuntimeTestPorts(harness.db).historyRestrictions,
               recoveryHumanGates: o2Ports(harness.db).collaborationReads.recovery,
             }),
-          },
+          }),
           writeSem: new Semaphore(1),
           appHome,
           taskId: task.id,
           isoKeyRunId: runId,
           canonRepos: task.repos,
         })
-        cleanup.push(() => discardNodeIso(handle))
+        cleanup.push(() => discardNodeIso(bindIsolationCleanup(), handle))
         const childId = ulid()
         const space = inheritedCallSpace({
           parentMounts: task.repos.map((repo) => repo.mountPath),
@@ -407,13 +414,13 @@ describeEachProvider('single non-root member workspace regression', (harness) =>
         }
         if ('subdir' in shape || 'directories' in shape)
           expect(task.worktreePath).toContain(join('worktrees', 'group'))
-        const binding = {
+        const binding = createTestIsolationBinding({
           persistence: createTaskExecutionPersistence(harness.db, {
             humanGateOpen: composeHumanGateOpenParticipantFactory(),
             historyRestrictions: epoch2RuntimeTestPorts(harness.db).historyRestrictions,
             recoveryHumanGates: o2Ports(harness.db).collaborationReads.recovery,
           }),
-        }
+        })
         const runId = ulid()
         await nodeRunFixture(harness.db, {
           id: runId,
@@ -430,7 +437,7 @@ describeEachProvider('single non-root member workspace regression', (harness) =>
           isoKeyRunId: runId,
           canonRepos: task.repos,
         })
-        cleanup.push(() => discardNodeIso(handle))
+        cleanup.push(() => discardNodeIso(bindIsolationCleanup(), handle))
         await persistIsoBase(binding, runId, handle)
         const trees = await snapshotNodeIsoFinal(handle)
         await persistIsoNodeTree(binding, runId, trees, handle)

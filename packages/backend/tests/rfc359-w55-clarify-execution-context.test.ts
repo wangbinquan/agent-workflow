@@ -1,3 +1,4 @@
+import { testExecutionPermits } from './helpers/executionPermits'
 import type { TaskExecutionParticipantBindings } from '@/modules/collaboration/infrastructure/taskExecutionParticipantBindings'
 import { expect, test } from 'bun:test'
 import { composeHumanGateTaskLockPort } from '@/modules/task-execution/composition'
@@ -13,6 +14,7 @@ function unusedParticipant(): never {
   throw new Error('unexpected task participant construction while opening clarify')
 }
 const taskExecutionParticipants: TaskExecutionParticipantBindings = {
+  executionPermits: testExecutionPermits,
   createTaskNodeStatusEventsParticipantInTx: unusedParticipant,
   createHumanGateNodeRunStateParticipantInTx: unusedParticipant,
   createTaskDecisionParticipantInTx: unusedParticipant,

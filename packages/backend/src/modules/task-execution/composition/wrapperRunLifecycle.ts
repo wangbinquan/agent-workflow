@@ -11,7 +11,8 @@ import {
 } from '../domain/wrapperExecution'
 import { wrapperExternalUpstreamSources } from '@/services/dispatchFrontier'
 import { createLogger } from '@/util/log'
-import { broadcastNodeStatus, type SchedulerState } from './nodeMechanics'
+import { type SchedulerState } from './nodeMechanics'
+import { broadcastNodeStatus } from '@/modules/task-execution/infrastructure/nodeStatusEvents'
 import { loadFrameChain } from '../application/frameChain'
 import { resolveSourceFrame } from '../domain/environmentChain'
 

@@ -1,3 +1,4 @@
+import type { TaskExecutionPermitRegistry } from '../application/ports/taskExecutionPermits'
 import type { TaskMemorySnapshotPort } from '../application/ports/taskMemorySnapshots'
 import type { HistoryRestrictionPort } from '@/platform/contracts/historyRestriction'
 import type { WorkspaceExcludeProfileFactory } from '@/modules/source-control/public/participants'
@@ -108,6 +109,7 @@ export interface TaskExecutionRuntimeParticipantsInput {
   /** 装配方选定的凭据读取面；参与者自己绝不回头重建一份。 */
   readonly codeHostConnections?: CodeHostConnectionsService
   /** 进程信号量共享用的守护进程级身份。 */
+  readonly executionPermits: TaskExecutionPermitRegistry
   readonly processConcurrencyScope: object
   readonly log: TaskExecutionTopologyLogger
 }
@@ -156,6 +158,7 @@ export function createTaskExecutionRuntimeParticipants(
         collaborationRuntime: input.collaborationRuntime,
         workgroupTurns: input.workgroupTurns,
         childLaunch,
+        executionPermits: input.executionPermits,
         processConcurrencyScope: input.processConcurrencyScope,
         identityAccess: input.identityAccess,
         ...(input.codeHostConnections === undefined

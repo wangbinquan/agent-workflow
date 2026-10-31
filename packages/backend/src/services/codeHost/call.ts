@@ -51,7 +51,7 @@ import {
   buildCodeHostRecoveryDescriptor,
   type CodeHostSendAttemptInfo,
   type CodeHostSendAttemptObserver,
-} from '@/services/taskExecutionParticipants'
+} from '@/modules/task-execution/public/participants'
 
 /** 节点定义里与执行相关的那一份（scheduler 从 WorkflowNode 读出后传进来）。 */
 export interface CodeHostCallSpec {

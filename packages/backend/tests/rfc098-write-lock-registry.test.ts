@@ -1,3 +1,5 @@
+import { testExecutionPermits } from './helpers/executionPermits'
+const { gcTaskWriteSem, getTaskWriteSem, taskWriteLockCount } = testExecutionPermits
 import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 import { withO2Closure } from './helpers/o2Closure'
 // RFC-098 B1 REGRESSION LOCK — per-task write-lock registry (audit S-9 / ⑥-10,
@@ -52,7 +54,6 @@ import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 import { createClarifyRound } from '../src/services/clarify/service'
 import { autoDispatchClarifyRound } from '@/modules/collaboration/infrastructure/clarify/autoDispatch'
-import { gcTaskWriteSem, getTaskWriteSem, taskWriteLockCount } from '../src/services/taskWriteLocks'
 import { runGit } from '../src/util/git'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 
@@ -156,12 +157,14 @@ describe('RFC-098 B1 — taskWriteLocks registry identity & gc', () => {
       'utf-8',
     )
     // The one-and-only delete point: the application drive's try/finally shell.
-    expect(application).toMatch(/finally\s*\{\s*gcTaskWriteSem\(opts\.taskId\)/)
+    expect(application).toMatch(
+      /finally\s*\{\s*opts\.executionPermits\.gcTaskWriteSem\(opts\.taskId\)/,
+    )
     // No second call site sneaks in (one import line + one call).
     const calls = application.match(/gcTaskWriteSem\(/g) ?? []
     expect(calls.length).toBe(1)
     // The task engine's mechanics state writer lock comes from the registry (S-9 wiring).
-    expect(application).toContain('writeSem: getTaskWriteSem(taskId)')
+    expect(application).toContain('writeSem: opts.executionPermits.getTaskWriteSem(taskId)')
   })
 })
 

@@ -1,3 +1,4 @@
+import { bindIsolationCleanup } from '@/modules/task-execution/infrastructure/executionKernelBinding'
 // Regression lock for the in-submodule merge agent (RFC-210 T25) in the
 // standalone isolation merge-back (`platform/workspace/local/isolation.ts`).
 //
@@ -21,13 +22,12 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
   createNodeIso,
-  discardNodeIso,
   mergeBackNodeIso,
   resolveConflictWithAgent,
   snapshotNodeIsoFinal,
-  type CanonRepo,
-  type MergeBackConflict,
-} from '@/services/nodeIsolation'
+} from '@/platform/workspace/local/isolation'
+import { discardNodeIso } from '@/modules/task-execution/engine/kernel/isolationCleanup'
+import { type CanonRepo, type MergeBackConflict } from '@/platform/contracts/isolationWorkspace'
 import { runGit } from '@/util/git'
 
 const appHome = mkdtempSync(join(tmpdir(), 'aw-v3-subagent-home-'))
@@ -145,8 +145,8 @@ test('the in-submodule merge agent sees submodule-relative conflicted paths and 
   // Before the fix this merge-back withheld the repo despite the resolution.
   expect(merged.clean).toBe(true)
   expect(readFileSync(join(canon, 'vendor', 'a.txt'), 'utf8')).toBe('l1-AB\nl2\nl3\n')
-  await discardNodeIso(a)
-  await discardNodeIso(b)
+  await discardNodeIso(bindIsolationCleanup(), a)
+  await discardNodeIso(bindIsolationCleanup(), b)
 }, 180_000)
 
 test('a hard submodule merge-tree error withholds the repo instead of throwing', async () => {
@@ -161,6 +161,6 @@ test('a hard submodule merge-tree error withholds the repo instead of throwing',
   })
   expect(merged.clean).toBe(false)
   expect(resolverCalls).toBe(0)
-  await discardNodeIso(a)
-  await discardNodeIso(b)
+  await discardNodeIso(bindIsolationCleanup(), a)
+  await discardNodeIso(bindIsolationCleanup(), b)
 }, 180_000)

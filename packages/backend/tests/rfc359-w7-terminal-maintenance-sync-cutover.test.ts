@@ -1,3 +1,5 @@
+import { testExecutionPermits } from './helpers/executionPermits'
+const { getTaskWriteSem } = testExecutionPermits
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { o2Ports } from './helpers/o2Closure'
 // RFC-395 II-pre：GC 改接生产 workspaceMaintenance，断言其回执及实际目录 / 行状态。
@@ -49,7 +51,6 @@ import { createDrizzleTaskArchiveMaintenanceCommand } from '@/modules/task-execu
 import { DrizzleTerminalMaintenancePersistence } from '@/modules/task-execution/infrastructure/terminalMaintenancePersistence'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { deleteTask } from '@/services/taskDelete'
-import { getTaskWriteSem } from '@/services/taskWriteLocks'
 import { describeEachProvider } from './helpers/eachProvider'
 import { workspaceMaintenanceForTest } from './helpers/workspaceMaintenance'
 
@@ -195,6 +196,7 @@ describeEachProvider('RFC-359 W7 —— 任务删除迁离 dbTxSync', (harness) 
     })
 
     const result = await deleteTask(legacy(db), childId, {
+      executionPermits: testExecutionPermits,
       activity: { isActive: () => false, awaitReleasedSettled: async () => {} },
     })
     expect(result).toEqual({ taskId: childId, cleanup: 'done' })
@@ -240,6 +242,7 @@ describeEachProvider('RFC-359 W7 —— 任务删除迁离 dbTxSync', (harness) 
     // 卡住每任务写锁：`deleteTask` 会先铸认领 + 推进到 io-complete，然后阻塞在这把锁上。
     const release = await getTaskWriteSem(taskId).acquire()
     const pending = deleteTask(legacy(db), taskId, {
+      executionPermits: testExecutionPermits,
       activity: { isActive: () => false, awaitReleasedSettled: async () => {} },
     })
     // 认领推进到 io-complete 之后，紧接着就是 acquire()——等到这一步再动任务行。

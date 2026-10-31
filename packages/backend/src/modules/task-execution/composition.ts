@@ -306,6 +306,9 @@ export function composeSystemOperationsTaskPorts() {
 
 // RFC-399 B1: bootstrap's maintenance job table takes these handlers via composition.
 export { createTaskExecutionMaintenanceJobHandlers } from './application/maintenanceJobs'
+// RFC-402: bootstrap builds exactly one permit registry per daemon scope (and one per maintenance Worker graph).
+export { createExecutionPermitRegistry } from './engine/kernel/permits'
+export type { TaskExecutionPermitRegistry } from './application/ports/taskExecutionPermits'
 
 export {
   createTaskNodeStatusEventsParticipantInTx,

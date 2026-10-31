@@ -1,3 +1,5 @@
+import { testExecutionPermits } from './helpers/executionPermits'
+const { getNodePoolSemaphore } = testExecutionPermits
 import { initializeTaskWorkspace } from './helpers/taskWorkspaceFixture'
 // RFC-266 —— 脚本节点跑在**独立**的 daemon 池里，不与 agent 互相排队。
 //
@@ -22,7 +24,6 @@ import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { runTaskWithRealTestTopology as runTask } from './helpers/taskExecutionTestTopology'
-import { getNodePoolSemaphore } from '../src/services/processNodeConcurrency'
 import { canonicalizeWorkflowAgentIds } from './helpers/canonicalWorkflowFixture'
 
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')

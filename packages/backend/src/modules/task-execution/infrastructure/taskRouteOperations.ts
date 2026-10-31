@@ -1,3 +1,4 @@
+import type { TaskExecutionPermitRegistry } from '../application/ports/taskExecutionPermits'
 import { projectTaskMountReadRow } from './taskRepositorySql'
 import {
   taskAggregateWrite,
@@ -221,6 +222,7 @@ const RETRYABLE_TASK_STATUSES = [
  * PG 绑定的依赖面现在 `extends` 它、只把 `db` 收窄成 PG 客户端。
  */
 export interface TaskRouteOperationsDependencies {
+  readonly executionPermits: TaskExecutionPermitRegistry
   readonly memorySnapshots: TaskMemorySnapshotPort
   readonly reviewers: TaskReviewersPort
   readonly taskMembership: TaskMembershipOperationsPort
@@ -2535,6 +2537,7 @@ export function createTaskRouteOperations(
     },
     delete: (taskId) =>
       deleteTask(dependencies.db, taskId, {
+        executionPermits: dependencies.executionPermits,
         activity: dependencies.activity,
         effects: dependencies.effects,
       }),

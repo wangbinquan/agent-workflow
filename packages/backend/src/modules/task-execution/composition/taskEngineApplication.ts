@@ -35,14 +35,11 @@ import { buildScopeUpstreams, findScopeCycle } from './taskDagGraph'
 import type { TaskMechanicsState } from '@/services/execution/taskMechanicsState'
 import { runDynamicWorkflowGenerate } from '@/services/dynamicWorkflowRunner'
 import { triggerPreflightIssue } from '@/services/execution/triggerPreflight'
-import { getNodePoolSemaphore } from '@/services/processNodeConcurrency'
-import { getTaskFanoutSem, gcTaskFanoutSem } from '@/services/taskFanoutPools'
 import {
   assertTaskExecutionContext,
-  exactOwnerMatches,
   runWithTaskExecutionContext,
-} from '@/services/taskExecutionParticipants'
-import { getTaskWriteSem, gcTaskWriteSem } from '@/services/taskWriteLocks'
+} from '../application/taskExecutionContext'
+import { exactOwnerMatches } from '../domain/ownership'
 import { DW_ORCHESTRATOR_NODE_ID } from '@/services/orchestratorAgent'
 import { createLogger } from '@/util/log'
 import type { SchedulerRuntimeTopology } from '../public/participants'
@@ -191,8 +188,8 @@ export async function driveTaskEngineApplication(
       )
     }
   } finally {
-    gcTaskWriteSem(opts.taskId)
-    gcTaskFanoutSem(opts.taskId)
+    opts.executionPermits.gcTaskWriteSem(opts.taskId)
+    opts.executionPermits.gcTaskFanoutSem(opts.taskId)
   }
 }
 
@@ -457,13 +454,13 @@ async function runTaskEngineOrchestratorInner(
     // behind agent runs). Both come from the daemon-scoped registry, which
     // resizes the SAME instance when the setting changes — so a settings save
     // applies to this run, not just to the next launch.
-    agentSem: getNodePoolSemaphore(
+    agentSem: opts.executionPermits.getNodePoolSemaphore(
       opts.processConcurrencyScope,
       'agent',
       opts.maxConcurrentNodes ?? 4,
       'seed-only',
     ),
-    scriptSem: getNodePoolSemaphore(
+    scriptSem: opts.executionPermits.getNodePoolSemaphore(
       opts.processConcurrencyScope,
       'script',
       opts.maxConcurrentScriptNodes ?? 4,
@@ -471,7 +468,7 @@ async function runTaskEngineOrchestratorInner(
     ),
     // RFC-269: the third pool — one outbound HTTP request is a second-scale
     // step and holds no subprocess, so it gets its own (larger) budget.
-    codeHostSem: getNodePoolSemaphore(
+    codeHostSem: opts.executionPermits.getNodePoolSemaphore(
       opts.processConcurrencyScope,
       'code-host',
       opts.maxConcurrentCodeHostCalls ?? 8,
@@ -481,11 +478,14 @@ async function runTaskEngineOrchestratorInner(
     // registry so HTTP rollback paths (clarify/review/cross-clarify) hold THE
     // SAME instance. gc happens in this function's finally only (see
     // taskWriteLocks.ts lifecycle doc).
-    writeSem: getTaskWriteSem(taskId),
+    writeSem: opts.executionPermits.getTaskWriteSem(taskId),
     // RFC-266: from the per-task registry (same lifecycle rule as writeSem) so
     // PUT /api/config can resize a RUNNING task's fan-out. Before RFC-266 this
     // was a local `new Semaphore(...)` fed by a value nothing ever threaded.
-    subprocessSem: getTaskFanoutSem(taskId, opts.multiProcessSubprocessConcurrency ?? 4),
+    subprocessSem: opts.executionPermits.getTaskFanoutSem(
+      taskId,
+      opts.multiProcessSubprocessConcurrency ?? 4,
+    ),
     containerOf,
     topLevelIds,
     wrapperScopes: Object.freeze({

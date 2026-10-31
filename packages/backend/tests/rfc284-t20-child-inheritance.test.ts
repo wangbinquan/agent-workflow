@@ -71,6 +71,7 @@ const DISPOSITION = {
   workgroupTurns: 'dropped-registered',
   childLaunch: 'dropped-registered',
   dynamicWorkflow: 'dropped-registered',
+  executionPermits: 'dropped-registered',
   processConcurrencyScope: 'dropped-registered',
   appHome: 'inherit',
   binaryOverride: 'inherit',
@@ -150,6 +151,7 @@ describe('RFC-284 T20 — 子任务继承面双向锁', () => {
         'workgroupTurns',
         'childLaunch',
         'dynamicWorkflow',
+        'executionPermits',
         'processConcurrencyScope',
         'codeHostConnections',
         'codeHostFetch',
@@ -239,10 +241,7 @@ describe('RFC-284 T20 — 子任务继承面双向锁', () => {
     )
     const workgroupLaunch = src.slice(
       src.indexOf('async function launchCallWorkgroupChild', start),
-      src.indexOf(
-        '// ---------------------------------------------------------------------------\n// RFC-253',
-        start,
-      ),
+      src.indexOf('async function runCodeHostCallNode(', start),
     )
     expect(workflowLaunch).toContain('runtime: buildChildRuntime(state)')
     expect(workgroupLaunch).toContain('runtime: buildChildRuntime(state)')

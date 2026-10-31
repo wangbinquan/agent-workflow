@@ -15,7 +15,7 @@ import {
   type AssemblySpec,
   type IsoLike,
   type PoolLike,
-} from '../src/services/schedulerAssembly'
+} from '../src/modules/task-execution/engine/kernel/assembly'
 
 const silentLog = { warn: () => {}, info: () => {}, error: () => {}, debug: () => {} } as never
 

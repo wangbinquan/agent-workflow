@@ -1,3 +1,4 @@
+import { testExecutionPermits } from './helpers/executionPermits'
 import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { tablesOf } from '@/platform/persistence/sessionTables'
@@ -110,7 +111,7 @@ describeEachProvider('RFC-359 T7c —— 删除认领崩溃恢复', (harness) =>
     const { persistence, claim } = await claimTree(db, root, plan(root))
     await persistence.terminalMaintenance.transition({ claim, to: 'io-complete', now: 51 })
 
-    expect(await recoverInterruptedTaskDeletes(db)).toEqual({
+    expect(await recoverInterruptedTaskDeletes(db, testExecutionPermits)).toEqual({
       completed: [root],
       cleanupPending: [],
       recoveryRequired: [],
@@ -136,7 +137,7 @@ describeEachProvider('RFC-359 T7c —— 删除认领崩溃恢复', (harness) =>
     const root = `t7c_${ulid()}`
     await seedTask(db, root)
     const { claim } = await claimTree(db, root, plan(root))
-    expect(await recoverInterruptedTaskDeletes(db)).toEqual({
+    expect(await recoverInterruptedTaskDeletes(db, testExecutionPermits)).toEqual({
       completed: [root],
       cleanupPending: [],
       recoveryRequired: [],
@@ -153,7 +154,7 @@ describeEachProvider('RFC-359 T7c —— 删除认领崩溃恢复', (harness) =>
     await persistence.terminalMaintenance.transition({ claim, to: 'recovery-required', now: 51 })
     const { tasks } = tablesOf(db)
     await db.delete(tasks).where(eq(tasks.id, root))
-    expect(await recoverInterruptedTaskDeletes(db)).toEqual({
+    expect(await recoverInterruptedTaskDeletes(db, testExecutionPermits)).toEqual({
       completed: [root],
       cleanupPending: [],
       recoveryRequired: [],
@@ -166,14 +167,16 @@ describeEachProvider('RFC-359 T7c —— 删除认领崩溃恢复', (harness) =>
     const root = `t7c_${ulid()}`
     await seedTask(db, root)
     const { claim } = await claimTree(db, root, '{"v":9}')
-    expect(await recoverInterruptedTaskDeletes(db)).toEqual({
+    expect(await recoverInterruptedTaskDeletes(db, testExecutionPermits)).toEqual({
       completed: [],
       cleanupPending: [],
       recoveryRequired: [root],
     })
     expect(await claimState(db, claim.claimId)).toBe('recovery-required')
     expect(await taskExists(db, root)).toBe(true)
-    expect((await recoverInterruptedTaskDeletes(db)).recoveryRequired).toEqual([root])
+    expect(
+      (await recoverInterruptedTaskDeletes(db, testExecutionPermits)).recoveryRequired,
+    ).toEqual([root])
     expect(await claimState(db, claim.claimId)).toBe('recovery-required')
   })
 
@@ -184,7 +187,7 @@ describeEachProvider('RFC-359 T7c —— 删除认领崩溃恢复', (harness) =>
     const { persistence, claim } = await claimTree(db, root, plan(root))
     await persistence.terminalMaintenance.transition({ claim, to: 'io-complete', now: 51 })
     await seedTask(db, `${root}_late`, { parentTaskId: root })
-    await expect(recoverInterruptedTaskDeletes(db)).rejects.toMatchObject({
+    await expect(recoverInterruptedTaskDeletes(db, testExecutionPermits)).rejects.toMatchObject({
       code: 'task-terminal-maintenance-conflict',
     })
     expect(await taskExists(db, root)).toBe(true)
@@ -203,7 +206,7 @@ describeEachProvider('RFC-359 T7c —— 删除认领崩溃恢复', (harness) =>
         worktrees: [{ repoPath: missingRepo, worktreePath: `${missingRepo}/wt` }],
       }),
     )
-    expect(await recoverInterruptedTaskDeletes(db)).toEqual({
+    expect(await recoverInterruptedTaskDeletes(db, testExecutionPermits)).toEqual({
       completed: [],
       cleanupPending: [root],
       recoveryRequired: [],
@@ -222,7 +225,7 @@ test('源码锁：PG daemon 在可用性闸之后、HTTP 之前续做 delete 认
     failure: 'best-effort',
   })
   expect(bootImplementation(daemon, 'task-delete-recovery')).toMatch(
-    /await recoverInterruptedTaskDeletes\(\s*input\.db,\s*undefined,\s*input\.taskDeletionEffects,?\s*\)/,
+    /await recoverInterruptedTaskDeletes\(\s*input\.db,\s*taskExecutionProvider\.executionPermits,\s*undefined,\s*input\.taskDeletionEffects,?\s*\)/,
   )
   const service = readFileSync(resolve(src, 'services', 'taskDelete.ts'), 'utf8')
   expect(service).toContain("from '@/modules/task-execution/infrastructure/taskDeleteRecovery'")

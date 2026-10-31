@@ -43,7 +43,7 @@ import { join, resolve } from 'node:path'
 import { monotonicFactory } from 'ulid'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
-import { resolveUpstreamInputs } from '../src/modules/task-execution/composition/nodeMechanics'
+import { resolveUpstreamInputs } from '@/modules/task-execution/application/nodeInputs'
 import { DrizzleNodeExecutionPersistence } from '../src/modules/task-execution/infrastructure/nodeExecutionPersistence'
 import {
   createProviderTaskExecutionTestTopology,

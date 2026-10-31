@@ -323,8 +323,9 @@ test('both provider recovery bindings follow skill gates and precede task deleti
     expect(bootImplementation(source, 'task-execution-recovery')).toContain(
       'await runTaskExecutionBootRecovery({',
     )
+    // RFC-402: delete recovery receives the daemon-scope permit registry the task engine uses.
     expect(bootImplementation(source, 'task-delete-recovery').replace(/\s/g, '')).toContain(
-      `awaitrecoverInterruptedTaskDeletes(${database},undefined,input.taskDeletionEffects,)`,
+      `awaitrecoverInterruptedTaskDeletes(${database},taskExecutionProvider.executionPermits,undefined,input.taskDeletionEffects,)`,
     )
     expect(source).not.toContain('createExclusiveDaemonLockProof(')
   }

@@ -1,3 +1,5 @@
+import type { ExecutionIsolationWorkspace } from '../application/ports/executionKernel'
+import { repoRelForcedPaths } from '@/platform/workspace/forcedWorkspacePaths'
 // Private compatibility views for the remaining Task mechanics, never persistence authority.
 import type {
   IsolationConflict,
@@ -5,19 +7,15 @@ import type {
   IsolationWorkspaceBinding,
   IsolationWorkspaceScope,
 } from '@/modules/source-control/public/types'
-import {
-  requireIsolationWorkspaceScope,
-  selectIsolationWorkspaceFactory,
-} from '@/modules/source-control/public/participants'
+import { requireIsolationWorkspaceScope } from '@/modules/source-control/public/participants'
 import {
   type completeHumanResolvedConflict,
   discardIsolationWorkspace,
   mergeBackNodeIso,
   resolveConflictWithAgent,
   snapshotNodeIsoFinal,
-  type IsoHandle,
-  type MergeBackConflict,
 } from '@/platform/workspace/local/isolation'
+import { type IsoHandle, type MergeBackConflict } from '@/platform/contracts/isolationWorkspace'
 import type { Logger } from '@/util/log'
 
 type ScopeAcquisition = () => IsolationWorkspaceScope | Promise<IsolationWorkspaceScope>
@@ -25,7 +23,6 @@ interface WorkspaceRecord {
   readonly scope: IsolationWorkspaceScope
   workspace: IsolationWorkspace
 }
-const bindings = new WeakMap<object, ScopeAcquisition>()
 const workspaces = new WeakMap<IsoHandle, WorkspaceRecord>()
 const conflicts = new WeakMap<
   MergeBackConflict,
@@ -35,26 +32,25 @@ const conflicts = new WeakMap<
   }
 >()
 
-export function bindIsolatedRunWorkspace<T extends object>(
-  binding: T,
-  acquire: ScopeAcquisition,
-): T {
-  bindings.set(binding, acquire)
-  return binding
-}
-
-/** Legacy direct callers select the whole native scope; Task supplies its scene acquisition. */
-export async function scopeForIsolatedRun(
-  binding: object,
-  nativeBinding: IsolationWorkspaceBinding,
-): Promise<IsolationWorkspaceScope> {
-  const acquire = bindings.get(binding)
-  const scope =
-    acquire === undefined
-      ? await selectIsolationWorkspaceFactory().bind(nativeBinding)
-      : await acquire()
-  requireIsolationWorkspaceScope(scope)
-  return scope
+/** The caller selects a session or factory explicitly; acquisition remains lazy. */
+export function createIsolationWorkspacePort(
+  acquire: (binding: IsolationWorkspaceBinding) => ReturnType<ScopeAcquisition>,
+): ExecutionIsolationWorkspace {
+  return {
+    async acquire(binding) {
+      const scope = await acquire(binding)
+      requireIsolationWorkspaceScope(scope)
+      return {
+        chooseGeneration: (key, log) => scope.chooseGeneration(key, log),
+        async create(input) {
+          return workspaceView(scope, await scope.create(input))
+        },
+      }
+    },
+    snapshotIsolatedWorkspace,
+    mergeIsolatedWorkspace,
+    repoRelForcedPaths,
+  }
 }
 
 export function workspaceView(

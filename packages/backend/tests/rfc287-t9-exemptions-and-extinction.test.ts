@@ -1,3 +1,8 @@
+import {
+  SCRIPT_NODE_SOURCE,
+  SCRIPT_ATTEMPT_SOURCE,
+  MERGE_CONFLICT_SOURCE,
+} from './helpers/executionMechanismSources'
 // RFC-287 T9（G3）—— **刻意豁免的显式化** + 装配散写的**终局灭绝锁**。
 //
 // 为什么这两件事必须一起锁：T3-T8 把五条装配线（L1 工作组主机 / L4 agent /
@@ -31,7 +36,14 @@ const EXECUTION_MERGE_RECOVERY = readFileSync(
   resolve(SRC, '..', 'modules', 'task-execution', 'composition', 'executionMergeRecovery.ts'),
   'utf8',
 )
-const MECHANICS_SOURCES = [SCHEDULER, NODE_MECHANICS, WRAPPER_MECHANICS] as const
+const MECHANICS_SOURCES = [
+  SCRIPT_NODE_SOURCE,
+  SCRIPT_ATTEMPT_SOURCE,
+  MERGE_CONFLICT_SOURCE,
+  SCHEDULER,
+  NODE_MECHANICS,
+  WRAPPER_MECHANICS,
+] as const
 
 /** 取某函数体（到下一个顶格 `}` 为止）。 */
 function bodyOf(signature: string): string {
@@ -61,8 +73,8 @@ describe('RFC-287 T9 ① — 四条刻意豁免各带理由锁', () => {
     expect(body).not.toMatch(/agentSem|scriptSem|\.acquire\(\)/)
     expect(body).not.toContain('runAssembly')
     // 理由必须写在源码里——后来者先撞到理由，而不是先撞到这条红。
-    expect(NODE_MECHANICS).toMatch(/deliberately does NOT acquire a node-pool slot/)
-    expect(NODE_MECHANICS).toMatch(/writeSem[↔<-]+pool/)
+    expect(MERGE_CONFLICT_SOURCE).toMatch(/deliberately does NOT acquire a node-pool slot/)
+    expect(MERGE_CONFLICT_SOURCE).toMatch(/writeSem[↔<-]+pool/)
   })
 
   test('L8 call 节点：整线不迁，且其「可取消的配额 hold」不是信号量池位', () => {
@@ -185,7 +197,10 @@ describe('RFC-287 T9 ② — 装配散写的终局灭绝锁（三处显式挖洞
   })
 
   test('装配骨架是唯一的窗口实现（没有第二份 finally 兜底）', () => {
-    const asm = readFileSync(resolve(SRC, 'schedulerAssembly.ts'), 'utf8')
+    const asm = readFileSync(
+      resolve(SRC, '../modules/task-execution/engine/kernel/assembly.ts'),
+      'utf8',
+    )
     // 骨架里恰好一个「释放许可 + 按 keep 清理」的 finally。
     expect(asm.split('} finally {').length - 1).toBe(1)
     expect(asm).toContain('for (const release of releases.reverse()) release()')

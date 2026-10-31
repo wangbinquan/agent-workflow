@@ -1,3 +1,4 @@
+import { testExecutionPermits } from './helpers/executionPermits'
 import { composeRepositoryPreparationLookup } from '@/modules/source-control/composition'
 import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import { withSourceControlTaskPorts } from './helpers/sourceControlTaskPorts'
@@ -2345,6 +2346,7 @@ describe('RFC-287 五轮门 —— 补齐零测试的两处', () => {
     let code = ''
     try {
       await deleteTask(db, task.id, {
+        executionPermits: testExecutionPermits,
         activity: { isActive: () => false, awaitReleasedSettled: async () => {} },
       })
     } catch (err) {

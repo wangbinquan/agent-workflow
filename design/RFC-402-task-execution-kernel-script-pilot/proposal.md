@@ -91,3 +91,17 @@ design §5.5 给出的前两步：
    隔离创建与持久 → 依赖安装 → running 写入与广播 → effect prepare → 进程 receipt / 激活 / 输出 → 输出 + NodeRun / effect 结算 →
    writable 合并 → assembly 结果 → 反向释放 → 清理」，本 RFC 不重排。
 8. **偏离项**：落档时无；实施中接受的偏差记在下一条。
+9. **实施中接受的偏差**（2026-10-31，本会话审核后决定）：
+   - `util/semaphore.ts` 原样移到 `platform/contracts/semaphore.ts`（kernel 的 import 白名单不含 `util/`；`platform/contracts` 已有
+     `retryAttemptCap`、`parseGitVersion` 这类纯实现先例），旧路径删除、消费者全部改指。
+   - 许可注册表的构造入口与完整类型经 TE `composition.ts` 交给 bootstrap（直接 import `engine/kernel/permits` 会新增 RFC-317 R1）；
+     public 只交出写锁的窄合同 `TaskExecutionPermits`。维护 worker 的 graph 另构造一个（对应原先 worker 线程里独立的模块状态）。
+   - 工作区会话仍按 mechanics state 在 TE composition 的旁表里选择（`composition/executionWorkspaceBinding.ts` 的 `workspaceSessionFor`），
+     与退役的 `isolationWorkspaceScene.ts` 语义相同（拷贝出的 state 有自己的会话）；没有做到 design §1.2「会话变成显式依赖」。原因：
+     把会话做成 services 侧 `TaskMechanicsState` 的字段需要把会话类型放进 TE public，而 W0-R 不允许 public 合同引用 platform contracts
+     （`IsoHandle`）。待后续 S6 步骤拆掉 `TaskMechanicsState` 时再显式化。
+   - 为满足显式端口边界，另有 `composition/executionMechanismBindings.ts`、`composition/mergeConflictResolution.ts`、
+     `composition/scriptNodeExecution.ts`、`infrastructure/executionKernelBinding.ts` 等装配文件，以及 `NodeRunIdentityFactory` 与 native 合并错误
+     构造适配，均调用原实现、保持原惰性调用位置。
+   - RFC-317 转移表预言：具名 ledger 方法让三组既有表外边（wrapper 恢复、host late-failure、call-adoption）第一次进入语料，逐条按原有
+     原因登记，状态转换逻辑不变；script 的五个静态写点都在表内，加了精确站点锁。

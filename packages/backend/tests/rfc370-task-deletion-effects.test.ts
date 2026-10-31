@@ -1,3 +1,4 @@
+import { testExecutionPermits } from './helpers/executionPermits'
 import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { o2Ports } from './helpers/o2Closure'
@@ -314,7 +315,11 @@ describeEachProvider('RFC-370 task deletion complete selected effects', (harness
         return release.promise
       }
     })
-    const pending = deleteTask(db, taskId, { activity, effects: chosen })
+    const pending = deleteTask(db, taskId, {
+      executionPermits: testExecutionPermits,
+      activity,
+      effects: chosen,
+    })
     await entered.promise
     const claims = await createTaskExecutionPersistence(db, {
       humanGateOpen: composeHumanGateOpenParticipantFactory(),
@@ -384,7 +389,12 @@ describeEachProvider('RFC-370 task deletion complete selected effects', (harness
         return release.promise
       }
     })
-    const pending = recoverInterruptedTaskDeletes(db, persistence.terminalMaintenance, chosen)
+    const pending = recoverInterruptedTaskDeletes(
+      db,
+      testExecutionPermits,
+      persistence.terminalMaintenance,
+      chosen,
+    )
     await entered.promise
     expect(await exists(db, taskId)).toBe(false)
     expect(await exists(db, childId)).toBe(false)
@@ -413,6 +423,7 @@ describeEachProvider('RFC-370 task deletion complete selected effects', (harness
     await seed(db, taskId)
     expect(
       await deleteTask(db, taskId, {
+        executionPermits: testExecutionPermits,
         activity,
         effects: effects(firstTrace, undefined, (name) => {
           if (name.startsWith('git:')) throw new Error('worktree unavailable')
@@ -431,9 +442,14 @@ describeEachProvider('RFC-370 task deletion complete selected effects', (harness
     expect(await exists(db, taskId)).toBe(false)
     const retryTrace: string[] = [],
       retry = effects(retryTrace)
-    expect(await recoverInterruptedTaskDeletes(db, persistence.terminalMaintenance, retry)).toEqual(
-      { completed: [taskId], cleanupPending: [], recoveryRequired: [] },
-    )
+    expect(
+      await recoverInterruptedTaskDeletes(
+        db,
+        testExecutionPermits,
+        persistence.terminalMaintenance,
+        retry,
+      ),
+    ).toEqual({ completed: [taskId], cleanupPending: [], recoveryRequired: [] })
     expect(retryTrace.some((x) => x.startsWith('directories:'))).toBe(false)
     expect(retryTrace.filter((x) => x.startsWith('remove:'))).toEqual([
       'remove:logical:runs/' + taskId,

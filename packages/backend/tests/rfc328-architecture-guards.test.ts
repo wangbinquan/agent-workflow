@@ -28,7 +28,7 @@ const WORKER_MUTATION_FILES = new Set([
 ])
 const WORKER_MUTATION_CALLABLES = new Map<string, ReadonlySet<string>>([
   [
-    'packages/backend/src/modules/task-execution/infrastructure/isolatedAgentRun.ts',
+    'packages/backend/src/modules/task-execution/engine/kernel/merge.ts',
     new Set(['persistPendingSubResolves']),
   ],
   ['packages/backend/src/services/commitPushRunner.ts', new Set(['persistMeta'])],
@@ -84,13 +84,18 @@ const TASK_EFFECT_BOUNDARIES = new Map<string, readonly TaskEffectBoundaryContra
     ],
   ],
   [
-    'packages/backend/src/modules/task-execution/infrastructure/isolatedAgentRun.ts',
+    'packages/backend/src/modules/task-execution/engine/kernel/isolation.ts',
     [
       {
         callable: 'createIsoUnderLock',
         actCallees: new Set(['create']),
         observerCallees: new Set(['createLocalEffectAttemptObserver']),
       },
+    ],
+  ],
+  [
+    'packages/backend/src/modules/task-execution/engine/kernel/merge.ts',
+    [
       {
         callable: 'mergeBackAndSettle',
         actCallees: new Set(['mergeIsolatedWorkspace', 'snapshotIsolatedWorkspace']),
@@ -99,7 +104,7 @@ const TASK_EFFECT_BOUNDARIES = new Map<string, readonly TaskEffectBoundaryContra
     ],
   ],
   [
-    'packages/backend/src/modules/task-execution/infrastructure/isolationCleanup.ts',
+    'packages/backend/src/modules/task-execution/engine/kernel/isolationCleanup.ts',
     [
       {
         callable: 'discardNodeIso',
@@ -157,11 +162,6 @@ const TASK_EFFECT_BOUNDARIES = new Map<string, readonly TaskEffectBoundaryContra
         actCallees: new Set(['executeCodeHostCall']),
         observerCallees: new Set(['createCodeHostEffectAttemptObserver']),
       },
-      {
-        callable: 'runOneScriptAttempt',
-        actCallees: new Set(['runScriptProcess']),
-        observerCallees: new Set(['createProcessEffectAttemptObserver']),
-      },
     ],
   ],
   [
@@ -176,6 +176,16 @@ const TASK_EFFECT_BOUNDARIES = new Map<string, readonly TaskEffectBoundaryContra
           'prepareLegacyDeferredWorkspace',
         ]),
         observerCallees: new Set(['createLocalEffectAttemptObserver']),
+      },
+    ],
+  ],
+  [
+    'packages/backend/src/modules/task-execution/engine/node/script/runOneScriptAttempt.ts',
+    [
+      {
+        callable: 'runOneScriptAttempt',
+        actCallees: new Set(['runScriptProcess']),
+        observerCallees: new Set(['createProcessEffectAttemptObserver']),
       },
     ],
   ],
@@ -761,6 +771,48 @@ describe('RFC-328 architecture guards', () => {
       }
       visit(source)
       expect(checked).toBe(1)
+    }
+  })
+
+  test('RFC-402 moved kernel boundaries still reject a removed observer or act', () => {
+    const units = backendUnits(REPO_ROOT)
+    for (const file of [
+      'kernel/isolation',
+      'kernel/merge',
+      'kernel/isolationCleanup',
+      'node/script/runOneScriptAttempt',
+    ]) {
+      const path = `packages/backend/src/modules/task-execution/engine/${file}.ts`
+      const unit = units.find((candidate) => candidate.path === path)
+      expect(unit, path).toBeDefined()
+      if (unit === undefined) throw new Error(`missing kernel corpus: ${path}`)
+      expect(taskEffectBoundaryViolations(unit)).toEqual([])
+      const mutate = (text: string): GuardUnit => ({
+        path,
+        text,
+        source: ts.createSourceFile(path, text, ts.ScriptTarget.Latest, true),
+      })
+      expect(
+        taskEffectBoundaryViolations(
+          mutate(
+            unit.text.replaceAll(
+              file.startsWith('node/')
+                ? 'createProcessEffectAttemptObserver'
+                : 'createLocalEffectAttemptObserver',
+              'missingObserver',
+            ),
+          ),
+        ).some((message) => message.startsWith('unregistered task effect boundary:')),
+      ).toBe(true)
+      for (const contract of TASK_EFFECT_BOUNDARIES.get(path) ?? []) {
+        for (const act of contract.actCallees) {
+          expect(
+            taskEffectBoundaryViolations(
+              mutate(unit.text.replaceAll(`${act}(`, 'missingAct(')),
+            ).some((message) => message.startsWith(`missing task effect act boundary ${act}:`)),
+          ).toBe(true)
+        }
+      }
     }
   })
 

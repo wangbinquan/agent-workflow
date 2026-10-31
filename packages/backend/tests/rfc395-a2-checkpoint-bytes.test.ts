@@ -5,7 +5,7 @@ import {
   isolationCreateRequest,
   isolationMergeRequest,
   isolationCleanupRequest,
-} from '@/modules/task-execution/infrastructure/isolationEffectRequest'
+} from '@/modules/task-execution/engine/kernel/isolationEffectRequest'
 import { humanGateNodeProjectionFence } from '@/modules/task-execution/domain/humanGateContinuation'
 import {
   humanGateCheckpointProjectionMember,

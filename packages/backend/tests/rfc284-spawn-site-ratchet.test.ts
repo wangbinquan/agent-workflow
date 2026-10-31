@@ -64,7 +64,7 @@ type SpawnGovernance = 'kernel' | 'process-group' | 'short-lived' | 'not-a-spawn
 const PROCESS_GROUP_DETACHED = /detached:\s*(true|detachedProcessGroup\(\))/
 
 const ALLOWLIST: Record<string, { governance: SpawnGovernance; count: number; why: string }> = {
-  'services/schedulerAssembly.ts': {
+  'modules/task-execution/engine/kernel/assembly.ts': {
     governance: 'not-a-spawn',
     count: 3,
     why:

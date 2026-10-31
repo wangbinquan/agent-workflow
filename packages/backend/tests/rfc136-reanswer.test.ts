@@ -1,3 +1,4 @@
+import { testExecutionPermits } from './helpers/executionPermits'
 import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 import { withO2Closure } from './helpers/o2Closure'
 // RFC-136 — 待指派问题重答（用户 2026-07-02 拍板：仅待指派 / 面板纳入已答题 / 直接覆盖）。
@@ -223,7 +224,7 @@ async function sealThenUnstage(
   const dtos = await listTaskQuestions(db, taskId)
   const staged = dtos.filter((e) => e.questionId === qid && e.staged)
   expect(staged.length).toBeGreaterThan(0)
-  for (const e of staged) await stageTaskQuestion(db, e.id, false, actor)
+  for (const e of staged) await stageTaskQuestion(db, testExecutionPermits, e.id, false, actor)
 }
 
 describeEachProvider('RFC-136 reseal providers', (harness) => {
@@ -314,7 +315,8 @@ describeEachProvider('RFC-136 reseal providers', (harness) => {
 
       // 移出待下发 → 重答（路由层 schema 会给 directive 默认 'continue'——防它冲掉 stop）。
       const dtos = await listTaskQuestions(db, taskId)
-      for (const e of dtos.filter((x) => x.staged)) await stageTaskQuestion(db, e.id, false, actor)
+      for (const e of dtos.filter((x) => x.staged))
+        await stageTaskQuestion(db, testExecutionPermits, e.id, false, actor)
       await sealRoundQuestions({
         taskExecutionParticipants,
         db,
@@ -525,7 +527,7 @@ describeEachProvider('RFC-136 reseal providers', (harness) => {
       const stagedEntries = (await listTaskQuestions(db, taskId)).filter((e) => e.staged)
       expect(stagedEntries.length).toBeGreaterThan(1)
       // 只对其中一张卡操作「移出待下发」——级联应让同题全部行回 pending。
-      await stageTaskQuestion(db, stagedEntries[0]!.id, false, actor)
+      await stageTaskQuestion(db, testExecutionPermits, stagedEntries[0]!.id, false, actor)
       const after = await listTaskQuestions(db, taskId)
       expect(after.filter((e) => e.questionId === 'q1' && e.staged)).toHaveLength(0)
       expect(

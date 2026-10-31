@@ -1,3 +1,6 @@
+import { workspaceSessionFor } from './executionWorkspaceBinding'
+import { bindMergeConflictPorts } from './mergeConflictResolution'
+import { bindIsolationCleanup } from '../infrastructure/executionKernelBinding'
 // RFC-339 — task-execution-owned pre-drive merge recovery mechanics.
 
 import { taskCheckpointRefs } from '../domain/taskCheckpoint'
@@ -11,27 +14,23 @@ import {
   // scope). Wrapper CREATE shares createIsoUnderLock with every AGENT site so
   // sibling `git worktree add` mutations cannot race in the common repository.
   discardNodeIso,
-} from '@/services/nodeIsolation'
+} from '@/modules/task-execution/engine/kernel/isolationCleanup'
 import type { IsolationWorkspaceScope } from '@/modules/source-control/public/types'
 import { completeIsolatedHumanConflict } from '../infrastructure/isolationWorkspaceView'
-import {
-  isolationScopeFor,
-  restoreTaskIsolation,
-  restoredSubmodules,
-} from './isolationWorkspaceScene'
+import { restoredSubmodules } from '../infrastructure/executionWorkspaceSession'
 // RFC-188: the shared assembly for isolated agent runs — iso lock-window,
 // iso-column persistence and the merge-back/settle block (formerly five
 // hand-copies in this file).
-import { markMergeFailed, mergeBackAndSettle } from '@/services/isolatedAgentRun'
+import { markMergeFailed, mergeBackAndSettle } from '@/modules/task-execution/engine/kernel/merge'
 import { describeEffectError } from '../domain/effectErrorDescription'
 import type { NodeExecutionSnapshot } from '../application/ports/nodeExecutionPersistence'
 // RFC-210 replay: submodule topology read-back + the fail-closed gate around it.
 import {
-  isolatedRunBinding,
   parseIsoSubmodules,
-  resolveMergeConflicts,
   type SchedulerState,
 } from '@/modules/task-execution/composition/nodeMechanics'
+import { isolatedRunBinding } from '@/modules/task-execution/composition/executionMechanismBindings'
+import { resolveMergeConflicts } from '@/modules/task-execution/engine/node/shared/resolveMergeConflicts'
 import type { ExecutionMergeRecovery } from '../application/recovery/executionMergeRecovery'
 
 async function replaySubmodulesMissing(
@@ -131,7 +130,7 @@ async function replayPendingMerge(
       `pending-merge replay: submodule topology missing for repo '${missingSub}' of run ${r.id}`,
     )
   }
-  const handle = await restoreTaskIsolation(state, {
+  const handle = await workspaceSessionFor(state).restore({
     // Round 6 P2: the PHYSICAL iso identity — a process-retry keeps the
     // worktree + ref namespace keyed by the ORIGINAL row id (D17) while
     // pending-merge lands on the retry row; rebuild from the persisted
@@ -159,7 +158,7 @@ async function replayPendingMerge(
     nodeTrees,
     via: 'replay',
     conflictResolver: (conflicts, containerPath) =>
-      resolveMergeConflicts(state, {
+      resolveMergeConflicts(bindMergeConflictPorts(state), {
         conflicts,
         containerPath,
         conflictNodeRunId: r.id,
@@ -174,7 +173,7 @@ async function replayPendingMerge(
     // site's discard — without this the node-scoped pool refs leak forever
     // and a NEW path's worktree anchor is never handed over. Best-effort:
     // the iso worktree is usually already gone (that is why we replayed).
-    await discardNodeIso(handle, log, state.writeSem)
+    await discardNodeIso(bindIsolationCleanup(), handle, log, state.writeSem)
   } else {
     log.warn('pending-merge replay conflict → conflict-human (merge agent could not resolve)', {
       nodeRunId: r.id,
@@ -206,7 +205,7 @@ async function completeInterruptedRun(
     if (Object.keys(baseSnapshots).length === 0) {
       throw new Error(`interrupted merge-back: iso base snapshot missing for run ${r.id}`)
     }
-    const handle = await restoreTaskIsolation(state, {
+    const handle = await workspaceSessionFor(state).restore({
       key: await scope.recoverKey(r.isoWorktreePath, r.id),
       dbNodeRunId: r.id,
       workspaceRef: r.isoWorktreePath,
@@ -224,7 +223,7 @@ async function completeInterruptedRun(
       nodeRunId: r.id,
       via: 'replay',
       conflictResolver: (conflicts, containerPath) =>
-        resolveMergeConflicts(state, {
+        resolveMergeConflicts(bindMergeConflictPorts(state), {
           conflicts,
           containerPath,
           conflictNodeRunId: r.id,
@@ -235,7 +234,7 @@ async function completeInterruptedRun(
     })
     if (merge.kind === 'merged') {
       log.info('interrupted merge-back completed', { nodeRunId: r.id })
-      await discardNodeIso(handle, log, state.writeSem)
+      await discardNodeIso(bindIsolationCleanup(), handle, log, state.writeSem)
     } else {
       log.warn('interrupted merge-back conflict → conflict-human (merge agent could not resolve)', {
         nodeRunId: r.id,
@@ -286,7 +285,7 @@ export async function completeFrameMerges(
     status: 'done',
   })
   if (pinned.length === 0 && interrupted.length === 0) return
-  const scope = await isolationScopeFor(state)
+  const scope = await workspaceSessionFor(state).scope()
   const taskBaseHeads = await scopeBaseHeads(state, scope)
   for (const r of pinned) await replayPendingMerge(state, scope, taskBaseHeads, r, log)
   for (const r of interrupted) await completeInterruptedRun(state, scope, taskBaseHeads, r, log)
@@ -299,7 +298,7 @@ export async function completeInterruptedMerge(
   r: NodeExecutionSnapshot,
   log: Logger,
 ): Promise<void> {
-  const scope = await isolationScopeFor(state)
+  const scope = await workspaceSessionFor(state).scope()
   const taskBaseHeads = await scopeBaseHeads(state, scope)
   if (r.mergeState === 'pending-merge') {
     await replayPendingMerge(state, scope, taskBaseHeads, r, log)
@@ -325,7 +324,7 @@ async function replayConflictHumanResolutions(state: SchedulerState, log: Logger
     excludeSuperseded: true,
   })
   if (rows.length === 0) return
-  const scope = await isolationScopeFor(state)
+  const scope = await workspaceSessionFor(state).scope()
   const taskBaseHeads: Record<string, string> = {}
   for (const repo of state.repos) {
     const h = await scope.head(repo.worktreePath)
@@ -334,7 +333,7 @@ async function replayConflictHumanResolutions(state: SchedulerState, log: Logger
   for (const r of rows) {
     const baseSnapshots = taskCheckpointRefs(r.checkpoints, 'isolationBase')
     const nodeTrees = taskCheckpointRefs(r.checkpoints, 'nodeTree')
-    const handle = await restoreTaskIsolation(state, {
+    const handle = await workspaceSessionFor(state).restore({
       // Round 6 P2 (same as replayPendingMerge): rebuild the PHYSICAL iso
       // identity from the persisted path — this is also what makes the
       // resolve-iso lookup inside completeHumanResolvedConflict hit the
@@ -364,7 +363,7 @@ async function replayConflictHumanResolutions(state: SchedulerState, log: Logger
       // RFC-210 (review round 5, P2): the park kept the iso for the human;
       // now that the resolution landed, close its lifecycle — anchor handoff
       // for NEW paths + node pool ref cleanup happen inside the discard.
-      await discardNodeIso(handle, log, state.writeSem)
+      await discardNodeIso(bindIsolationCleanup(), handle, log, state.writeSem)
     } else {
       log.info('conflict-human resume: still unresolved — staying parked', {
         nodeRunId: r.id,

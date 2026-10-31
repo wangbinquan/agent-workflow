@@ -90,7 +90,6 @@ import {
   type DispatchTaskQuestionsResult,
 } from '@/services/taskQuestionDispatch'
 import { loadSealedQuestionIds } from '@/services/taskQuestions'
-import { getTaskQuestionWriteSem, getTaskWriteSem } from '@/services/taskWriteLocks'
 import { ConflictError, NotFoundError } from '@/util/errors'
 import { createLogger } from '@/util/log'
 import { TASK_QUESTION_CONFLICT } from '@/services/taskQuestionConflicts'
@@ -1145,7 +1144,8 @@ export async function autoDispatchClarifyRound(
     dispatch = EMPTY_DISPATCH
   } else if (selfRollbackRun !== null) {
     const selfRun = selfRollbackRun
-    dispatch = await getTaskWriteSem(round.taskId).run(async () => {
+    const permits = args.taskExecutionParticipants.executionPermits
+    dispatch = await permits.getTaskWriteSem(round.taskId).run(async () => {
       // Codex round-8/9/10 (high) — PRE-ROLLBACK same-home open-ledger guard (mirrors the legacy
       // submit-side pre-rollback guard, clarify.ts). The DESTRUCTIVE rollback runs BEFORE tryDispatch,
       // which treats a same-home in-flight conflict (task-question-node-dispatch-in-flight) as
@@ -1164,7 +1164,7 @@ export async function autoDispatchClarifyRound(
       // non-reentrant Semaphore(1) would deadlock if B were still held). Lock order A ≻ B (A outer);
       // B is taken twice SEQUENTIALLY under A (preflight+rollback, then the dispatch), never nested.
       // This mirrors submitClarifyAnswers' A⊃B rollback critical section (RFC-098 B1 + §5.2.15).
-      const rolledBack = await getTaskQuestionWriteSem(round.taskId).run(async () => {
+      const rolledBack = await permits.getTaskQuestionWriteSem(round.taskId).run(async () => {
         const claimed = await db
           .select({ id: taskQuestions.id })
           .from(taskQuestions)

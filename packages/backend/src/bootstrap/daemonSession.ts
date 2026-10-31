@@ -397,7 +397,7 @@ export async function composeDaemonSession(
   const committedEventPersistence = createCommittedEventDeliveryPersistence(db)
   const terminalSweep = createHumanGateTerminalSweepCommand(
     db,
-    composeTaskExecutionParticipantBindings(),
+    composeTaskExecutionParticipantBindings(runtime.taskExecutionModules.executionPermits),
   )
   const committedEventDispatcher = createCommittedEventDispatcher({
     persistence: committedEventPersistence,

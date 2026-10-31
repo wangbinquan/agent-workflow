@@ -1,3 +1,8 @@
+import {
+  SCRIPT_NODE_SOURCE,
+  SCRIPT_ATTEMPT_SOURCE,
+  MERGE_CONFLICT_SOURCE,
+} from './helpers/executionMechanismSources'
 // RFC-208 PR-1 —— daemon 级 `globalSem` permit 永久泄漏 + 无界 git 清理。
 //
 // 源自用户 2026-07-20「整个系统都卡死了，只能重启解决」的后续审计。两处缺陷都不是
@@ -56,10 +61,10 @@ const nodeMechanicsSource = readFileSync(
   'utf8',
 )
 const assemblySource = readFileSync(
-  resolve(import.meta.dir, '..', 'src', 'services', 'schedulerAssembly.ts'),
+  resolve(import.meta.dir, '..', 'src', 'modules/task-execution/engine/kernel/assembly.ts'),
   'utf8',
 )
-const executionSource = `${wrapperMechanicsSource}\n${nodeMechanicsSource}`
+const executionSource = `${wrapperMechanicsSource}\n${nodeMechanicsSource}\n${SCRIPT_NODE_SOURCE}\n${SCRIPT_ATTEMPT_SOURCE}\n${MERGE_CONFLICT_SOURCE}`
 
 /** A git invocation that hangs deterministically, locally, with no network:
  *  a `!`-prefixed alias runs through the shell, so the child spawns a
@@ -186,7 +191,7 @@ describe('RFC-208 · node-pool permits must survive a wedged or throwing cleanup
   // general: once the permit is held, an await that can reject must be inside
   // the try whose finally releases it.
   //
-  // `*.acquire()` is deliberately exempt: `Semaphore.acquire` (util/semaphore.ts)
+  // `*.acquire()` is deliberately exempt: `Semaphore.acquire` (platform/contracts/semaphore.ts)
   // builds its promise with a resolve-only executor, so it can never reject and
   // therefore cannot leak the outer permit by throwing. Nesting one budget
   // inside another is an existing sanctioned shape (fanout shard / aggregator);
@@ -270,7 +275,7 @@ describe('RFC-208 · node-pool permits must survive a wedged or throwing cleanup
   // ---------------------------------------------------------------------------
   test('assembly skeleton: no await between pool acquire and the guarding try', () => {
     const asm = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'services', 'schedulerAssembly.ts'),
+      resolve(import.meta.dir, '..', 'src', 'modules/task-execution/engine/kernel/assembly.ts'),
       'utf8',
     )
     const acquireAt = asm.indexOf('for (const pool of spec.pools)')

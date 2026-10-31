@@ -10,7 +10,7 @@ import { composeWorkgroupTaskRoomClarifyParticipantFactory } from '@/modules/col
 import { createWorkgroupClarifyAskGate } from '@/modules/collaboration/public/participants'
 import { composeWorkgroupTurnsOperations } from '@/modules/resource-catalog/composition/workgroupTurns'
 import { composeWorkgroupHostLedgerParticipantFactory } from '@/modules/task-execution/composition/workgroupHostLedger'
-import { broadcastNodeStatus } from '@/modules/task-execution/composition/nodeMechanics'
+import { broadcastNodeStatus } from '@/modules/task-execution/infrastructure/nodeStatusEvents'
 import type { NodeRunStatus } from '@agent-workflow/shared'
 import type {
   WorkgroupTurnHostRequest,

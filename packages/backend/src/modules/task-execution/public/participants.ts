@@ -428,22 +428,7 @@ export interface TaskWorkspaceCommitParticipant {
  */
 export type { ActiveTaskExecutionParticipant } from '../application/ports/taskExecutionRuntimeParticipants'
 
-// Exact existing native cleanup compatibility; selected scene state stays private.
-export { discardNodeIso } from '../infrastructure/isolationCleanup'
-
-// Exact existing isolated-run assembly; factory and workspace views stay private.
-export {
-  createIsoUnderLock,
-  markMergeFailed,
-  mergeBackAndSettle,
-  persistIsoBase,
-  persistIsoNodeTree,
-} from '../infrastructure/isolatedAgentRun'
-export type {
-  IsolatedAgentRunBinding,
-  MergeSettleOutcome,
-  WriteSemLike,
-} from '../infrastructure/isolatedAgentRun'
+export type { TaskExecutionPermits } from '../application/ports/taskExecutionPermits'
 
 /** The execution demand owns the joint invocation consumed by system runs. */
 export type { AgentInvocationBinding } from '../application/ports/agentInvocation'

@@ -1,3 +1,4 @@
+import { bindIsolationCleanup } from '@/modules/task-execution/infrastructure/executionKernelBinding'
 // RFC-210 实现门 A3-fix — 运行中新增的 submodule 不再绕过对象池与合并，红→绿锁。
 //
 // Codex 实现门（design/RFC-210-recursive-submodule-isolation/codex-impl-gate-2026-07-22.md
@@ -27,11 +28,11 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
   createNodeIso,
-  discardNodeIso,
   mergeBackNodeIso,
   snapshotNodeIsoFinal,
-  type CanonRepo,
-} from '@/services/nodeIsolation'
+} from '@/platform/workspace/local/isolation'
+import { discardNodeIso } from '@/modules/task-execution/engine/kernel/isolationCleanup'
+import { type CanonRepo } from '@/platform/contracts/isolationWorkspace'
 import { listEffectiveSubmodules, subSlug, worktreeRefName } from '@/services/gitSubmodule'
 import { attachSubmoduleFromPool, runGit, snapshotFullState } from '@/util/git'
 
@@ -120,7 +121,7 @@ describe('RFC-210 — a submodule the node itself added', () => {
 
     const res = await mergeBackNodeIso(handle, trees)
     expect(res.clean).toBe(true)
-    await discardNodeIso(handle)
+    await discardNodeIso(bindIsolationCleanup(), handle)
 
     // Canonical must have the submodule ATTACHED and checked out at the node's
     // commit — before the fix the gitlink was silently skipped (empty dir).
@@ -159,7 +160,7 @@ describe('RFC-210 — a submodule the node itself added', () => {
     writeFileSync(join(iso2, 'README.md'), 'parent edited by node 2\n')
     const res2 = await mergeBackNodeIso(handle2, await snapshotNodeIsoFinal(handle2))
     expect(res2.clean).toBe(true)
-    await discardNodeIso(handle2)
+    await discardNodeIso(bindIsolationCleanup(), handle2)
 
     expect(readFileSync(join(canon, 'README.md'), 'utf8')).toBe('parent edited by node 2\n')
     expect((await runGit(join(canon, 'newsub'), ['rev-parse', 'HEAD'])).stdout.trim()).toBe(
@@ -206,7 +207,7 @@ describe('RFC-210 — a submodule the node itself added', () => {
     const pools = handle.repos[0]!.poolDirs
     expect(pools['added']).toBeDefined()
     expect(pools['added']).not.toBe(pools['existing'])
-    await discardNodeIso(handle)
+    await discardNodeIso(bindIsolationCleanup(), handle)
 
     expect((await runGit(join(canon, 'existing'), ['rev-parse', 'HEAD'])).stdout.trim()).toBe(
       existingSha,
@@ -245,7 +246,7 @@ describe('RFC-210 — a submodule the node itself added', () => {
     const res = await mergeBackNodeIso(handle, await snapshotNodeIsoFinal(handle))
     expect(res.clean).toBe(true)
     expect(handle.repos[0]!.poolDirs['vendor/inner']).toBeDefined()
-    await discardNodeIso(handle)
+    await discardNodeIso(bindIsolationCleanup(), handle)
 
     // vendor moved to the auto-commit that records inner; inner is attached and
     // checked out inside canonical's vendor.
@@ -406,7 +407,7 @@ describe('RFC-210 — review-round hardening', () => {
     expect(res.clean).toBe(true)
     expect((await runGit(pool, ['rev-parse', wtRef])).stdout.trim()).toBe(staleSha)
     // …the DISCARD hands the anchor over from canonical's landed state.
-    await discardNodeIso(handle)
+    await discardNodeIso(bindIsolationCleanup(), handle)
     expect((await runGit(pool, ['rev-parse', wtRef])).stdout.trim()).toBe(agentSha)
   }, 120_000)
 
@@ -465,7 +466,7 @@ describe('RFC-210 — review-round hardening', () => {
       await runGit(join(hA.repos[0]!.isoWorktreePath, 'both'), ['rev-parse', 'HEAD'])
     ).stdout.trim()
     expect((await mergeBackNodeIso(hA, await snapshotNodeIsoFinal(hA))).clean).toBe(true)
-    await discardNodeIso(hA)
+    await discardNodeIso(bindIsolationCleanup(), hA)
 
     const pool = hA.repos[0]!.poolDirs['both']!
     const wtRef = worktreeRefName('tns9', 'both')
@@ -479,7 +480,7 @@ describe('RFC-210 — review-round hardening', () => {
     expect((await runGit(join(canon, 'both'), ['rev-parse', 'HEAD'])).stdout.trim()).toBe(shaA)
     expect((await runGit(pool, ['rev-parse', wtRef])).stdout.trim()).toBe(shaA)
     // Even abandoning the loser (discard) re-reads canonical truth = shaA.
-    await discardNodeIso(hB)
+    await discardNodeIso(bindIsolationCleanup(), hB)
     expect((await runGit(pool, ['rev-parse', wtRef])).stdout.trim()).toBe(shaA)
     // The winner's commit survives an aggressive gc on the strength of it.
     await runGit(pool, ['gc', '--prune=now', '--quiet'])
@@ -515,7 +516,7 @@ describe('RFC-210 — review-round hardening', () => {
     writeFileSync(join(canon, 'newsub', 'user.txt'), 'user work\n')
     await commitIn(join(canon, 'newsub'), 'user advance')
 
-    await discardNodeIso(handle)
+    await discardNodeIso(bindIsolationCleanup(), handle)
     const pool = handle.repos[0]!.poolDirs['newsub']!
     // The node-scoped ref survives the discard (leak-not-lose)…
     const nodeRefs = await runGit(pool, [

@@ -1,3 +1,4 @@
+import { SCRIPT_NODE_SOURCE, SCRIPT_ATTEMPT_SOURCE } from './helpers/executionMechanismSources'
 // RFC-287 T1⑤ —— iso 清理失败的处置现状（C3b 的红→绿对基线）。
 //
 // 为什么存在：`discardNodeIso` **会抛**（nodeIsolation 里 deleteIsoRefs /
@@ -52,7 +53,7 @@ describe('RFC-287 T1⑤ — iso 清理失败的处置现状（C3b 基线）', ()
     // ——那个集合到此**归零**，所以断言翻面：scheduler.ts 里不得再有任何「在
     // finally 里清理 iso」的站点，清理与其失败处置单点收敛在骨架。
     // 反向锁（比原来的正向枚举更强）：新写一条线若自己起 finally 清 iso，这里立刻红。
-    const mechanics = `${SCHEDULER}\n${NODE_MECHANICS}\n${WRAPPER_MECHANICS}`
+    const mechanics = `${SCHEDULER}\n${NODE_MECHANICS}\n${WRAPPER_MECHANICS}\n${SCRIPT_NODE_SOURCE}\n${SCRIPT_ATTEMPT_SOURCE}`
     const finallyBlocks = [...mechanics.matchAll(/\bfinally\s*\{/g)].map((m) =>
       mechanics.slice(m.index ?? 0, (m.index ?? 0) + 900),
     )
@@ -69,7 +70,9 @@ describe('RFC-287 T1⑤ — iso 清理失败的处置现状（C3b 基线）', ()
     // 于是残留 worktree / ref 的清理失败全程静默，C3b 对这条线其实**没有**落地。
     // T14 实现门抓到后修掉本地那道吞法：五条线（L1/L4/L5/L6/L7）现在一致地把清理
     // 失败交给骨架单点处置，warn 真正可达。断言随之翻面。
-    const body = NODE_MECHANICS.slice(NODE_MECHANICS.indexOf('async function runScriptNode('))
+    const body = SCRIPT_NODE_SOURCE.slice(
+      SCRIPT_NODE_SOURCE.indexOf('async function runScriptNode('),
+    )
     const m = body.slice(0, 20000).match(/discardIso: async \(h: IsoLike\)[\s\S]{0,240}?\n {6}\}/)
     expect(m).not.toBeNull()
     expect(m![0]).toContain('discardNodeIso(')
@@ -77,7 +80,7 @@ describe('RFC-287 T1⑤ — iso 清理失败的处置现状（C3b 基线）', ()
     // 二轮门自查：只认 `.catch(` 的话，换成 `try { … } catch {}` 这种**同性质**吞法
     // 仍会全绿。agent 线与工作组线的同类锁本就带这一条，脚本线补齐。
     expect(m![0], '也不得用 try/catch 吞掉').not.toMatch(
-      /try \{[\s\S]{0,160}await discardNodeIso\(/,
+      /try \{[\s\S]{0,160}await (?:ports\.workspace\.)?discardNodeIso\(/,
     )
   })
 
@@ -90,8 +93,10 @@ describe('RFC-287 T1⑤ — iso 清理失败的处置现状（C3b 基线）', ()
     const end = NODE_MECHANICS.indexOf('\n}\n', start)
     expect(end).toBeGreaterThan(start)
     const body = NODE_MECHANICS.slice(start, end)
-    expect(body).toMatch(/discardIso: async \(h\) => \{[\s\S]{0,400}await discardNodeIso\(/)
-    expect(body).not.toMatch(/try \{[^}]{0,120}await discardNodeIso\(/)
+    expect(body).toMatch(
+      /discardIso: async \(h\) => \{[\s\S]{0,400}await (?:ports\.workspace\.)?discardNodeIso\(/,
+    )
+    expect(body).not.toMatch(/try \{[^}]{0,120}await (?:ports\.workspace\.)?discardNodeIso\(/)
   })
 
   test('工作组主机线（已迁骨架）：清理由骨架统一「吞掉并记 warn」', () => {
@@ -101,8 +106,10 @@ describe('RFC-287 T1⑤ — iso 清理失败的处置现状（C3b 基线）', ()
     const start = NODE_MECHANICS.indexOf('async function executeWorkgroupHostMechanics(')
     expect(start).toBeGreaterThan(-1)
     const body = NODE_MECHANICS.slice(start, start + 40000)
-    expect(body).toMatch(/discardIso: async \(h: IsoLike\) => \{\s*\n\s*await discardNodeIso\(/)
+    expect(body).toMatch(
+      /discardIso: async \(h: IsoLike\) => \{\s*\n\s*await (?:ports\.workspace\.)?discardNodeIso\(/,
+    )
     // 反向：本线不得再自己起 try/catch 兜清理（会把骨架的 warn 吃掉）。
-    expect(body).not.toMatch(/try \{[^}]{0,120}await discardNodeIso\(/)
+    expect(body).not.toMatch(/try \{[^}]{0,120}await (?:ports\.workspace\.)?discardNodeIso\(/)
   })
 })

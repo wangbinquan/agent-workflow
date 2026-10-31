@@ -22,7 +22,7 @@
 //   - 四个节点无边、同帧就绪，dispatch 顺序 = definition.nodes 顺序
 //     （deriveFrontier 按 scopeNodes 顺序压 ready；runScope 按 f.ready 顺序
 //     同步起 promise）。
-//   - Semaphore 是 FIFO（util/semaphore.ts），四个 runOneNode 在 acquire 前的
+//   - Semaphore 是 FIFO（platform/contracts/semaphore.ts），四个 runOneNode 在 acquire 前的
 //     await 链完全同构（全是 agent-single、零边、同形 DB 查询），按起跑顺序到达
 //     acquire ⇒ w1 取 writeSem + global 槽 1，w2/w3 睡在 writeSem 上（不占
 //     global 槽），readonly auditor 直接拿 global 槽 2 起跑。

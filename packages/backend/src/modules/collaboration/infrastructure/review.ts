@@ -207,7 +207,7 @@ import {
   fenceTaskWrite,
   humanGateNodeProjectionFence,
   withTaskExecutionWrite,
-} from '@/services/taskExecutionParticipants'
+} from '@/modules/task-execution/public/participants'
 import {
   withReviewNodeMutationLock,
   withTaskReviewMutationLock,

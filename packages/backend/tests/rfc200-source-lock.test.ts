@@ -68,9 +68,11 @@ describe('RFC-200 source wiring locks', () => {
       'packages/backend/src/modules/task-execution/composition/nodeMechanics.ts',
     )
     expect(wrapperMechanics).toContain('inputs: aggInputs')
-    expect(nodeMechanics).toContain("values.join('\\n\\n---\\n\\n')")
+    expect(read('packages/backend/src/modules/task-execution/application/nodeInputs.ts')).toContain(
+      "values.join('\\n\\n---\\n\\n')",
+    )
     expect(wrapperMechanics).toContain('composePriorOutputBlock(')
-    expect(nodeMechanics).toContain('state.opts.persistence.nodeRuns.loadEnvelopeNonce(nodeRunId)')
+    expect(nodeMechanics).toContain('nodeRunLedger(state).loadEnvelopeNonce(nodeRunId)')
     expect(wrapperMechanics).toContain(
       'const aggRun = await state.opts.persistence.nodeExecution.read(aggRunId)',
     )
@@ -116,11 +118,11 @@ describe('RFC-200 source wiring locks', () => {
     const wrapperMechanics = read(
       'packages/backend/src/modules/task-execution/composition/wrapperMechanics.ts',
     )
-    const nodeMechanics = read(
-      'packages/backend/src/modules/task-execution/composition/nodeMechanics.ts',
-    )
+
     expect(wrapperMechanics).toContain('aggInputs[edge.target.portName] = blocks.join')
-    expect(nodeMechanics).toContain('inputs[name] = values.length === 1')
+    expect(read('packages/backend/src/modules/task-execution/application/nodeInputs.ts')).toContain(
+      'inputs[name] = values.length === 1',
+    )
     // Both maps are ultimately passed as runNode.inputs and therefore fenced
     // by renderUserPrompt's generic input substitution/auto-append paths.
     expect(wrapperMechanics).toContain('inputs: aggInputs')

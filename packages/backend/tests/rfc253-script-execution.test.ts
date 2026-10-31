@@ -1,3 +1,4 @@
+import { SCRIPT_ATTEMPT_SOURCE } from './helpers/executionMechanismSources'
 // RFC-253 — script node execution invariants.
 //
 // Each block locks a decision the design gate forced:
@@ -16,7 +17,7 @@
 import { describe, expect, test } from 'bun:test'
 import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve, sep } from 'node:path'
+import { join, sep } from 'node:path'
 import type { WorkflowNode } from '@agent-workflow/shared'
 import { extractScriptPorts } from '@/services/scriptPorts'
 import { runManagedProcess } from '@/services/execution/managedProcess'
@@ -322,23 +323,12 @@ describe('T28 — plaintext at execution, masked in diagnostics', () => {
   // `stderrTail`, a strict suffix of the bytes the per-line stderr sink stores
   // in node_run_events — same secret, one table over, three read doors.
   describe('the scheduler masks the diagnostic channel and only that', () => {
-    const mechanics = readFileSync(
-      resolve(
-        import.meta.dir,
-        '..',
-        'src',
-        'modules',
-        'task-execution',
-        'composition',
-        'nodeMechanics.ts',
-      ),
-      'utf8',
-    )
+    const mechanics = SCRIPT_ATTEMPT_SOURCE
     // The script branch, delimited so a match from the agent branch cannot
     // stand in for one of these.
     const branch = mechanics.slice(
-      mechanics.indexOf('const outcome = await runScriptProcess(opts.taskScriptRuns, {'),
-      mechanics.indexOf('async function runAgentSingleNode('),
+      mechanics.indexOf('const outcome = await ports.process.runScriptProcess({'),
+      mechanics.length,
     )
 
     test('the persisted failure detail is masked', () => {

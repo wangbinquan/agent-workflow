@@ -43,16 +43,16 @@
       "reason": "max=21: RFC-399 removes context value cycles, off-DAG values and platform reverse edges; exact working-tree census 23 -> 21."
     },
     "legacy-horizontal-files": {
-      "max": 389,
-      "reason": "max=389: RFC-400 complete-candidate structural census 390 -> 389; participant injection and human-gate bridge retirement; no growth authorized."
+      "max": 381,
+      "reason": "max=381: RFC-402 complete-candidate structural census 389 -> 381; kernel extraction and obsolete service removal; no growth authorized."
     },
     "legacy-service-implementations": {
-      "max": 218,
-      "reason": "max=218: RFC-400 complete-candidate structural census 219 -> 218; participant injection and human-gate bridge retirement; no growth authorized."
+      "max": 213,
+      "reason": "max=213: RFC-402 complete-candidate structural census 218 -> 213; kernel extraction and obsolete service removal; no growth authorized."
     },
     "legacy-thin-facades": {
-      "max": 44,
-      "reason": "max=44: RFC-399 removes context value cycles, off-DAG values and platform reverse edges; exact working-tree census 45 -> 44."
+      "max": 42,
+      "reason": "max=42: RFC-402 complete-candidate structural census 44 -> 42; kernel extraction and obsolete service removal; no growth authorized."
     },
     "module-layer-violations": {
       "max": 1,

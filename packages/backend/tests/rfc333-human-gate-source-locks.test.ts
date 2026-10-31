@@ -315,13 +315,12 @@ describe('RFC-333 human-gate open/park cutover inventory', () => {
 describe('RFC-333 T2 canonical continuation authority lock', () => {
   test('the legacy resume helper already reaches the RFC-328 public participant and gate intent kind', () => {
     const task = read('packages/backend/src/services/task.ts')
-    const bridge = read('packages/backend/src/services/taskExecutionParticipants.ts')
     const participants = read('packages/backend/src/modules/task-execution/public/participants.ts')
     const submit = read(
       'packages/backend/src/modules/task-execution/application/submitTaskContinuation.ts',
     )
 
-    expect(bridge).toContain("export * from '@/modules/task-execution/public/participants'")
+    expect(task).toContain("from '@/modules/task-execution/public/participants'")
     // RFC-359：`setTaskStatus` 的写事务搬到中立的显式边界之后，resume 准入的 `onTransitionTx`
     // 回调拿到的是 `PersistenceTx`，因此走的是同一套判据的**异步孪生**
     // （`submitTaskContinuationInTransaction`）。本判据锁的东西没变——「legacy resume helper

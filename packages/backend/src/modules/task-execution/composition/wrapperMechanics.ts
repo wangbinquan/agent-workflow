@@ -1,3 +1,6 @@
+import { bindMergeConflictPorts } from './mergeConflictResolution'
+import { bindIsolationCleanup } from '../infrastructure/executionKernelBinding'
+import { workspaceSessionFor } from './executionWorkspaceBinding'
 // RFC-339 — task-execution-owned loop/git/fanout wrapper mechanics.
 
 import { copyPortArchive } from '@/platform/content/locations/portArchive'
@@ -44,46 +47,44 @@ import {
   // scope). Wrapper CREATE shares createIsoUnderLock with every AGENT site so
   // sibling `git worktree add` mutations cannot race in the common repository.
   discardNodeIso,
-  type IsoHandle,
-} from '@/services/nodeIsolation'
+} from '@/modules/task-execution/engine/kernel/isolationCleanup'
+import { type IsoHandle } from '@/platform/contracts/isolationWorkspace'
 import type { IsolationWorkspaceScope } from '@/modules/source-control/public/types'
 import {
   workspaceRecord,
   snapshotIsolatedWorkspace,
   mergeIsolatedWorkspace,
 } from '../infrastructure/isolationWorkspaceView'
-import {
-  isolationScopeFor,
-  restoreTaskIsolation,
-  restoredSubmodules,
-} from './isolationWorkspaceScene'
+import { restoredSubmodules } from '../infrastructure/executionWorkspaceSession'
 import { describeEffectError } from '../domain/effectErrorDescription'
 // RFC-188: the shared assembly for isolated agent runs — iso lock-window,
 // iso-column persistence and the merge-back/settle block (formerly five
 // hand-copies in this file).
 import {
   createIsoUnderLock,
-  markMergeFailed,
-  mergeBackAndSettle,
   persistIsoBase,
   persistIsoNodeTree,
-} from '@/services/isolatedAgentRun'
+} from '@/modules/task-execution/engine/kernel/isolation'
+import { markMergeFailed, mergeBackAndSettle } from '@/modules/task-execution/engine/kernel/merge'
 // RFC-210 replay: submodule topology read-back + the fail-closed gate around it.
 import {
-  broadcastNodeStatus,
   composePriorOutputBlock,
   freshestPriorRunWithOutput,
-  isolatedRunBinding,
   parseIsoSubmodules,
   pickString,
   readPortRowAtFrame,
-  resolveMergeConflicts,
-  resolveUpstreamInputs,
   shouldRetryNodeFailure,
   type OneNodeResult,
   type SchedulerState,
 } from '@/modules/task-execution/composition/nodeMechanics'
-import { runAssembly, type IsoLike } from '@/services/schedulerAssembly'
+import { broadcastNodeStatus } from '@/modules/task-execution/infrastructure/nodeStatusEvents'
+import {
+  isolatedRunBinding,
+  nodeRunLedger,
+} from '@/modules/task-execution/composition/executionMechanismBindings'
+import { resolveMergeConflicts } from '@/modules/task-execution/engine/node/shared/resolveMergeConflicts'
+import { resolveUpstreamInputs } from '@/modules/task-execution/application/nodeInputs'
+import { runAssembly, type IsoLike } from '@/modules/task-execution/engine/kernel/assembly'
 import { completeFrameMerges, completeInterruptedMerge } from './executionMergeRecovery'
 import { sha256Hex } from '@/util/hash'
 import type { WrapperDataPort } from '../application/ports/wrapperData'
@@ -654,15 +655,12 @@ async function dispatchFanoutShardAttempt(args: DispatchShardArgs): Promise<Disp
     // allowTerminal: a reaped child is 'interrupted' (terminal); reset to
     // pending so runNode's mark-running (pending → running) applies cleanly.
     shardRunId = freshest.id
-    await state.opts.persistence.nodeRuns.set({
+    await nodeRunLedger(state).setNodeRunStatus({
       nodeRunId: shardRunId,
       to: 'pending',
       allowedFrom: ['pending', 'running', 'interrupted', 'failed', 'canceled'],
       allowTerminal: true,
       reason: 'fanout-shard-resume',
-      ...(state.opts.executionContext === undefined
-        ? {}
-        : { executionContext: state.opts.executionContext }),
     })
     // The re-run consumes the CURRENT shard value — refresh the stored hash
     // so future reuse decisions compare against what actually ran.
@@ -682,7 +680,7 @@ async function dispatchFanoutShardAttempt(args: DispatchShardArgs): Promise<Disp
     // Branch 3 — mint a fresh row under this wrapper. The T14 replacement target
     // (priorShardUndo) was already derived above from the latest done+merged
     // candidate and is applied at merge-back.
-    shardRunId = await state.opts.persistence.nodeRuns.mint({
+    shardRunId = await nodeRunLedger(state).mintNodeRun({
       ...nodeRunMintIdentityForSlot(
         { kind: 'shard', nodeId: innerNode.id, iteration, shardKey: rowShardKey },
         { kind: 'current' },
@@ -703,9 +701,6 @@ async function dispatchFanoutShardAttempt(args: DispatchShardArgs): Promise<Disp
           shardValueHash: valueHash,
         },
       },
-      ...(state.opts.executionContext === undefined
-        ? {}
-        : { executionContext: state.opts.executionContext }),
     })
     shardRetryIndex = args.processRetryIndex ?? 0
   }
@@ -759,7 +754,7 @@ async function dispatchFanoutShardAttempt(args: DispatchShardArgs): Promise<Disp
 
   const injection = await state.taskExecutionResources.injection(innerAgent.id)
   if (injection.kind === 'failed') {
-    await state.opts.persistence.nodeRuns.set({
+    await nodeRunLedger(state).setNodeRunStatus({
       nodeRunId: shardRunId,
       to: 'failed',
       allowedFrom: ['pending'],
@@ -770,9 +765,6 @@ async function dispatchFanoutShardAttempt(args: DispatchShardArgs): Promise<Disp
           errorMessage: injection.message,
         },
       },
-      ...(state.opts.executionContext === undefined
-        ? {}
-        : { executionContext: state.opts.executionContext }),
     })
     broadcastNodeStatus(taskId, shardRunId, innerNode.id, 'failed')
     return { kind: 'failed', shardKey, outputs: {}, message: injection.message }
@@ -973,7 +965,7 @@ async function dispatchFanoutShardAttempt(args: DispatchShardArgs): Promise<Disp
               toContainerRelative(state.repos[0]?.mountPath ?? '', p),
             ),
             conflictResolver: (conflicts, containerPath) =>
-              resolveMergeConflicts(state, {
+              resolveMergeConflicts(bindMergeConflictPorts(state), {
                 conflicts,
                 containerPath,
                 conflictNodeRunId: shardRunId,
@@ -1041,7 +1033,8 @@ async function dispatchFanoutShardAttempt(args: DispatchShardArgs): Promise<Disp
           retry: { retryIndex: shardRetryIndex, failureCode: null },
         }
       },
-      discardIso: async (h: IsoLike) => discardNodeIso(h as IsoHandle, log, state.writeSem),
+      discardIso: async (h: IsoLike) =>
+        discardNodeIso(bindIsolationCleanup(), h as IsoHandle, log, state.writeSem),
       settle: async (_c, result) => ({
         kind: 'ok',
         shardKey,
@@ -1272,20 +1265,17 @@ async function dispatchFanoutAggregatorAttempt(
     // Re-run the same-generation residue in place (allowTerminal: a reaped
     // aggregator is 'interrupted'; reset to pending for runNode's mark-running).
     aggRunId = freshestAgg.id
-    await state.opts.persistence.nodeRuns.set({
+    await nodeRunLedger(state).setNodeRunStatus({
       nodeRunId: aggRunId,
       to: 'pending',
       allowedFrom: ['pending', 'running', 'interrupted', 'failed', 'canceled'],
       allowTerminal: true,
       reason: 'fanout-aggregator-resume',
       extra: { inputs: { recordedInputs } },
-      ...(state.opts.executionContext === undefined
-        ? {}
-        : { executionContext: state.opts.executionContext }),
     })
     aggRetryIndex = freshestAgg.retryIndex
   } else {
-    aggRunId = await state.opts.persistence.nodeRuns.mint({
+    aggRunId = await nodeRunLedger(state).mintNodeRun({
       ...nodeRunMintIdentityForSlot(
         { kind: 'aggregator', nodeId: aggNode.id, iteration },
         { kind: 'current' },
@@ -1303,9 +1293,6 @@ async function dispatchFanoutAggregatorAttempt(
           parentNodeRunId: wrapperRunId,
         },
       },
-      ...(state.opts.executionContext === undefined
-        ? {}
-        : { executionContext: state.opts.executionContext }),
     })
     aggRetryIndex = args.processRetryIndex ?? 0
   }
@@ -1313,7 +1300,7 @@ async function dispatchFanoutAggregatorAttempt(
 
   const injection = await state.taskExecutionResources.injection(aggAgent.id)
   if (injection.kind === 'failed') {
-    await state.opts.persistence.nodeRuns.set({
+    await nodeRunLedger(state).setNodeRunStatus({
       nodeRunId: aggRunId,
       to: 'failed',
       allowedFrom: ['pending'],
@@ -1324,9 +1311,6 @@ async function dispatchFanoutAggregatorAttempt(
           errorMessage: injection.message,
         },
       },
-      ...(state.opts.executionContext === undefined
-        ? {}
-        : { executionContext: state.opts.executionContext }),
     })
     broadcastNodeStatus(taskId, aggRunId, aggNode.id, 'failed')
     return { kind: 'failed', summary: injection.summary, message: injection.message, outputs: {} }
@@ -1535,7 +1519,7 @@ async function dispatchFanoutAggregatorAttempt(
               toContainerRelative(state.repos[0]?.mountPath ?? '', p),
             ),
             conflictResolver: (conflicts, containerPath) =>
-              resolveMergeConflicts(state, {
+              resolveMergeConflicts(bindMergeConflictPorts(state), {
                 conflicts,
                 containerPath,
                 conflictNodeRunId: aggRunId,
@@ -1595,7 +1579,8 @@ async function dispatchFanoutAggregatorAttempt(
           retry: { retryIndex: aggRetryIndex, failureCode: null },
         }
       },
-      discardIso: async (h: IsoLike) => discardNodeIso(h as IsoHandle, log, state.writeSem),
+      discardIso: async (h: IsoLike) =>
+        discardNodeIso(bindIsolationCleanup(), h as IsoHandle, log, state.writeSem),
       // Aggregator's outputs are already persisted by runner.ts (nodeRunOutputs
       // upsert at runner.ts §port-persist). The wrapper-row outlet copy is
       // handled by FanoutStrategy after this attempt returns.
@@ -1726,7 +1711,7 @@ export async function createOrRebuildWrapperIso(
   // ⚠️ **顺序约束**：必须用 CAS **之前**读到的 `cur`。下面 `merged` 再入分支的
   // reenter CAS 会显式把 `isoWorktreePath` 写成 null，之后再读就只剩 wrapperRunId
   // 可派生——那恰好是代际自愈已经放弃的那个阻塞目录。挪动这个读取点会静默失效。
-  const scope = await isolationScopeFor(state)
+  const scope = await workspaceSessionFor(state).scope()
   const wrapperIsoKey = await scope.recoverKey(cur?.isoWorktreePath ?? null, wrapperRunId)
   let effectiveExisting = existing
   if (cur !== null && (cur.mergeState === 'merged' || cur.mergeState === 'conflict-human')) {
@@ -1785,7 +1770,7 @@ export async function createOrRebuildWrapperIso(
       for (const repo of state.repos) {
         taskBaseHeads[repo.mountPath] = (await scope.head(repo.worktreePath)).stdout.trim()
       }
-      return await restoreTaskIsolation(state, {
+      return await workspaceSessionFor(state).restore({
         // 这个 handle **要拿去 merge-back**：指错路径不是少清一个目录，
         // 而是把不存在的树当成节点产物去合并，属硬故障。
         key: wrapperIsoKey,
@@ -1812,7 +1797,8 @@ export async function createOrRebuildWrapperIso(
     // rebuilt with empty snapshot maps cleans up regardless of what the crash
     // left behind. Tolerant: nothing there → warn-and-continue.
     await discardNodeIso(
-      await restoreTaskIsolation(state, {
+      bindIsolationCleanup(),
+      await workspaceSessionFor(state).restore({
         // 只做 discard，路径缺失可容忍（比 :1662 那处低一档风险）。
         key: wrapperIsoKey,
         dbNodeRunId: wrapperRunId,
@@ -1882,7 +1868,7 @@ async function mergeBackWrapperIso(
     const merge = await state.writeSem.run(async () => {
       const mr = await mergeIsolatedWorkspace(wrapperIso, nodeTrees, log)
       if (mr.clean) return { kind: 'merged' as const }
-      const res = await resolveMergeConflicts(state, {
+      const res = await resolveMergeConflicts(bindMergeConflictPorts(state), {
         conflicts: mr.conflicts,
         containerPath: wrapperIso.containerPath,
         conflictNodeRunId: wrapperRunId,
@@ -1913,7 +1899,7 @@ async function mergeBackWrapperIso(
         ? {}
         : { executionContext: state.opts.executionContext }),
     })
-    await discardNodeIso(wrapperIso, log, state.writeSem)
+    await discardNodeIso(bindIsolationCleanup(), wrapperIso, log, state.writeSem)
     return { kind: 'merged' }
   } catch (err) {
     const msg = describeEffectError(err)

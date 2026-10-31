@@ -1,3 +1,5 @@
+import { testExecutionPermits } from './helpers/executionPermits'
+const { getNodePoolSemaphore, resizeAllNodePools } = testExecutionPermits
 // RFC-287 T10（G4-C9）—— 三项配额的**即时生效**修复。
 //
 // 起因：并发/配额共 6 项，设置页此前只露 3 项。补齐前先修后端——第二轮设计门核实
@@ -11,7 +13,6 @@
 //      → 父任务在跑 → 派生一个子任务」这条日常路径上，用户的调整被静默撤销。
 
 import { describe, expect, test } from 'bun:test'
-import { getNodePoolSemaphore, resizeAllNodePools } from '../src/services/processNodeConcurrency'
 import { SETTINGS_NUMERIC_BOUNDS } from '@agent-workflow/shared'
 
 describe('RFC-287 T10 ① — 任务启动只播种、不改写 daemon 级池', () => {

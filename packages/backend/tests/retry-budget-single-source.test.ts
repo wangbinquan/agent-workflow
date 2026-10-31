@@ -25,6 +25,7 @@ describe('DEFAULT_PROTOCOL_RETRY_BUDGET 单源', () => {
     const sources = [
       SRC('modules/task-execution/composition/nodeMechanics.ts'),
       SRC('modules/task-execution/composition/wrapperMechanics.ts'),
+      SRC('modules/task-execution/engine/node/script/runScriptNode.ts'),
     ]
     expect(
       sources.reduce(

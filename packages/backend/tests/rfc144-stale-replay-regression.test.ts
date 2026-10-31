@@ -1,3 +1,4 @@
+import { bindIsolationCleanup } from '@/modules/task-execution/infrastructure/executionKernelBinding'
 import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { withTargetMintIdentity } from './helpers/rfc395Mint'
@@ -53,12 +54,9 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import {
-  createNodeIso,
-  discardNodeIso,
-  snapshotNodeIsoFinal,
-  type CanonRepo,
-} from '../src/services/nodeIsolation'
+import { createNodeIso, snapshotNodeIsoFinal } from '@/platform/workspace/local/isolation'
+import { discardNodeIso } from '@/modules/task-execution/engine/kernel/isolationCleanup'
+import { type CanonRepo } from '@/platform/contracts/isolationWorkspace'
 import { mintNodeRun } from '../src/services/nodeRunMint'
 import { createOrRebuildWrapperIso } from '../src/modules/task-execution/composition/wrapperMechanics'
 import { selectIsolationWorkspaceFactory } from '../src/modules/source-control/public/participants'
@@ -66,7 +64,7 @@ import { deriveFrontier } from './helpers/frontierSelection'
 import { createTaskExecutionPersistence } from '../src/modules/task-execution/composition/taskExecutionPersistence'
 import { createLogger } from '../src/util/log'
 import { runGit } from '../src/util/git'
-import { Semaphore } from '../src/util/semaphore'
+import { Semaphore } from '../src/platform/contracts/semaphore'
 import {
   createTaskExecutionTestTopology,
   runTaskWithRealTestTopology as runTask,
@@ -163,7 +161,7 @@ async function fabricateCrashWindowRow(h: Harness, taskId: string, runId: string
   const handle = await createNodeIso({ appHome: h.appHome, taskId, nodeRunId: runId, canonRepos })
   writeFileSync(join(handle.repos[0]!.isoWorktreePath, 'produced.txt'), 'stale generation\n')
   const nodeTrees = await snapshotNodeIsoFinal(handle)
-  await discardNodeIso(handle)
+  await discardNodeIso(bindIsolationCleanup(), handle)
   await nodeRunFixture(h.db, {
     id: runId,
     taskId,

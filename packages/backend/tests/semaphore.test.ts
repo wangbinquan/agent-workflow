@@ -1,7 +1,7 @@
 // FIFO counting semaphore primitive (P-3-05).
 
 import { describe, expect, test } from 'bun:test'
-import { Semaphore } from '../src/util/semaphore'
+import { Semaphore } from '../src/platform/contracts/semaphore'
 
 describe('Semaphore', () => {
   test('rejects non-positive capacity at construction', () => {

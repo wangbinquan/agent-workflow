@@ -16,10 +16,9 @@ import { join } from 'node:path'
 import { commitTree, mergeTreeInMemory, runGit, snapshotFullState } from '../src/util/git'
 import {
   completeHumanResolvedConflict,
-  type IsoHandle,
-  type MergeBackConflict,
   resolveConflictWithAgent,
-} from '../src/services/nodeIsolation'
+} from '@/platform/workspace/local/isolation'
+import { type IsoHandle, type MergeBackConflict } from '@/platform/contracts/isolationWorkspace'
 
 async function initRepo(seed: Record<string, string>): Promise<string> {
   const dir = mkdtempSync(join(tmpdir(), 'aw-rfc130-mr-'))

@@ -1,3 +1,5 @@
+import { testExecutionPermits } from './helpers/executionPermits'
+const { getTaskQuestionWriteSem, getTaskWriteSem } = testExecutionPermits
 import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 import { nodeRunFixtureColumns } from './helpers/model/nodeRun'
 import { withO2Closure } from './helpers/o2Closure'
@@ -43,7 +45,6 @@ import {
 import { createClarifyRound } from '../src/services/clarify/service'
 import { autoDispatchClarifyRound } from '@/modules/collaboration/infrastructure/clarify/autoDispatch'
 import { sealRoundQuestions } from '@/modules/collaboration/infrastructure/clarify/seal'
-import { getTaskQuestionWriteSem, getTaskWriteSem } from '../src/services/taskWriteLocks'
 import { ConflictError } from '../src/util/errors'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import type { ClarifyQuestion, WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'

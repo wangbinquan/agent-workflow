@@ -470,9 +470,12 @@
       "claimAudit": "Genuinely clean: the body contains zero node-kind, runtime or business-name branches — every divergence arrives through the spec. Guarded by rfc287-t9 (extinction lock) + rfc287-t1-release-before-discard. Residual: the kernel's IsoLike type and MergeSkipKind still spell workgroup-specific concepts (see EK-10).",
       "core": true,
       "files": [
-        "packages/backend/src/services/schedulerAssembly.ts"
+        "packages/backend/src/modules/task-execution/engine/kernel/assembly.ts"
       ],
-      "guards": [],
+      "guards": [
+        "packages/backend/tests/architecture/rfc402-task-execution-kernel.test.ts",
+        "packages/backend/tests/architecture/rfc334-node-executor-boundary.test.ts"
+      ],
       "id": "runassembly-assemblyspec",
       "layer": "engine",
       "owner": "task-execution",

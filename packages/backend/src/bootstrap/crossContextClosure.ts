@@ -1,3 +1,4 @@
+import type { TaskExecutionPermits } from '@/modules/task-execution/public/participants'
 import {
   createTaskNodeStatusEventsParticipantInTx,
   createHumanGateNodeRunStateParticipantInTx,
@@ -21,11 +22,14 @@ import {
 import { composeHumanGateTaskLockPort } from '@/modules/task-execution/composition'
 
 /** RFC-395 II-b O2: the selected session's owner adapters travel through explicit dependencies. */
-export function composeCrossContextClosure(db: PersistenceDb) {
+export function composeCrossContextClosure(
+  db: PersistenceDb,
+  executionPermits: TaskExecutionPermits,
+) {
   const taskRolePolicy = composeCollaborationTaskRolePolicy()
   return {
     taskRolePolicy,
-    taskExecutionParticipants: composeTaskExecutionParticipantBindings(),
+    taskExecutionParticipants: composeTaskExecutionParticipantBindings(executionPermits),
     humanGateOpen: composeHumanGateOpenParticipantFactory(),
     taskMembership: composeTaskMembershipOperations(db, taskRolePolicy),
     collaborationReads: composeTaskCollaborationReads(db),
@@ -35,8 +39,9 @@ export function composeCrossContextClosure(db: PersistenceDb) {
 }
 
 /** Factory references only: participants are constructed at the original call sites. */
-export function composeTaskExecutionParticipantBindings() {
+export function composeTaskExecutionParticipantBindings(executionPermits: TaskExecutionPermits) {
   return Object.freeze({
+    executionPermits,
     createTaskNodeStatusEventsParticipantInTx,
     createHumanGateNodeRunStateParticipantInTx,
     createTaskDecisionParticipantInTx,

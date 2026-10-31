@@ -1,3 +1,4 @@
+import { testExecutionPermits } from './executionPermits'
 import type { TaskExecutionParticipantBindings } from '@/modules/collaboration/infrastructure/taskExecutionParticipantBindings'
 import {
   createTaskNodeStatusEventsParticipantInTx,
@@ -11,6 +12,7 @@ import {
 } from '@/modules/task-execution/composition'
 
 export const taskExecutionParticipants: TaskExecutionParticipantBindings = Object.freeze({
+  executionPermits: testExecutionPermits,
   createTaskNodeStatusEventsParticipantInTx,
   createHumanGateNodeRunStateParticipantInTx,
   createTaskDecisionParticipantInTx,

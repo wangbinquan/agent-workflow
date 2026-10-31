@@ -1,3 +1,8 @@
+import {
+  SCRIPT_NODE_SOURCE,
+  SCRIPT_ATTEMPT_SOURCE,
+  MERGE_CONFLICT_SOURCE,
+} from './helpers/executionMechanismSources'
 // RFC-287 T1④ —— 各装配线的**状态广播序列**快照（拆分前 oracle）。
 //
 // 为什么存在：广播是用户在任务详情页上**直接看得到**的东西——节点在重试时会不会
@@ -44,7 +49,14 @@ const WRAPPER_MECHANICS = readFileSync(
   ),
   'utf8',
 )
-const MECHANICS_SOURCES = [SCHEDULER, NODE_MECHANICS, WRAPPER_MECHANICS] as const
+const MECHANICS_SOURCES = [
+  SCRIPT_NODE_SOURCE,
+  SCRIPT_ATTEMPT_SOURCE,
+  MERGE_CONFLICT_SOURCE,
+  SCHEDULER,
+  NODE_MECHANICS,
+  WRAPPER_MECHANICS,
+] as const
 
 function bodyOf(signature: string): string {
   const source = MECHANICS_SOURCES.find((candidate) => candidate.includes(signature))
@@ -117,6 +129,12 @@ const BASELINE: ReadonlyArray<readonly [string, readonly string[]]> = [
   ['async function runCrossClarifyNode(', ["'done'"]],
 ]
 
+function broadcastsBeforeWrite(source: string): boolean {
+  return /^broadcastNodeStatus\([^)]*\)\s*\n\s*await (?:(?:ports\.ledger|nodeRunLedger\(state\))\.)?(setNodeRunStatus|db\s*\n?\s*\.update)/.test(
+    source,
+  )
+}
+
 describe('RFC-287 T1④ — 广播序列快照', () => {
   for (const [sig, expected] of BASELINE) {
     test(`${sig.replace('async function ', '').replace('(', '')} 的广播序列不变`, () => {
@@ -136,15 +154,24 @@ describe('RFC-287 T1④ — 广播序列快照', () => {
       while ((m = re.exec(source)) !== null) {
         const after = source.slice(m.index, m.index + 260)
         // 反序形态：广播之后紧接着对同一 nodeRunId 的 await DB 写，中间无其它语句。
-        if (
-          /^broadcastNodeStatus\([^)]*\)\s*\n\s*await (setNodeRunStatus|db\s*\n?\s*\.update)/.test(
-            after,
-          )
-        ) {
+        if (broadcastsBeforeWrite(after)) {
           offenders.push(source.slice(Math.max(0, m.index - 60), m.index + 120))
         }
       }
     }
     expect(offenders).toEqual([])
   })
+})
+
+test('RFC-402: reverse write/broadcast order is detected for both ledger receivers', () => {
+  for (const receiver of ['ports.ledger', 'nodeRunLedger(state)']) {
+    expect(
+      broadcastsBeforeWrite(`broadcastNodeStatus(taskId, id, nodeId, 'running')
+await ${receiver}.setNodeRunStatus({ nodeRunId: id })`),
+    ).toBe(true)
+    expect(
+      broadcastsBeforeWrite(`await ${receiver}.setNodeRunStatus({ nodeRunId: id })
+broadcastNodeStatus(taskId, id, nodeId, 'running')`),
+    ).toBe(false)
+  }
 })

@@ -1105,6 +1105,7 @@ describe('RFC-376 counts speed bump', () => {
         .filter(([id]) => id !== 'architecture-directory-files')
         .map(([id, items]) => [id, items.length]),
     )
+    console.info('[RFC-376 measured counts]', JSON.stringify(measured))
     const result = checkCounts(measured, limits.counts)
     expect(result.errors).toEqual([])
     for (const decrease of result.decreases) console.info(`[RFC-376 counts] ${decrease}`)

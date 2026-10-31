@@ -103,8 +103,10 @@ test('both real boot recovery calls retain db and default store before the whole
     const source = load(path!),
       call = oneCall(source, 'recoverInterruptedTaskDeletes')
     expect(owner(call).name!.text).toBe(fn!)
+    // RFC-402: the permit registry is the daemon-scope instance shared with the task engine.
     expect(call.arguments.map((argument) => text(argument, source))).toEqual([
       db!,
+      'taskExecutionProvider.executionPermits',
       'undefined',
       'input.taskDeletionEffects',
     ])

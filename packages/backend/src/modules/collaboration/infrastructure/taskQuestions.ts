@@ -1,3 +1,4 @@
+import type { TaskExecutionPermits } from '@/modules/task-execution/public/participants'
 import { createCollaborationCommandContext } from '@/modules/collaboration/infrastructure/collaborationCommandContext'
 import type { CollaborationTaskRolePolicy } from '../application/ports/collaborationTaskRolePolicy'
 import type { HistoryRestrictionPort } from '@/platform/contracts/historyRestriction'
@@ -36,7 +37,6 @@ import { tablesOf, type PersistenceTables } from '@/platform/persistence/session
 import { queryWrite, affectedRows } from '@/platform/persistence/queryHelpers'
 import { and, eq, inArray, isNotNull, isNull, ne, sql } from 'drizzle-orm'
 import { ulid } from 'ulid'
-import { getTaskQuestionWriteSem } from '@/services/taskWriteLocks'
 import { createManualQuestionOpen } from '@/modules/collaboration/public/commands'
 
 import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
@@ -1215,6 +1215,7 @@ async function isEntrySealed(db: PersistenceDb, entry: TaskQuestionRow): Promise
  *  re-staged entry is back in the暂存 state and must be batch-dispatched again. */
 export async function stageTaskQuestion(
   db: PersistenceDb,
+  executionPermits: TaskExecutionPermits,
   entryId: string,
   staged: boolean,
   actor: TaskQuestionActor,
@@ -1230,7 +1231,7 @@ export async function stageTaskQuestion(
       `task question ${entryId} is not yet sealed; answer (seal) it before staging it for dispatch`,
     )
   }
-  await getTaskQuestionWriteSem(entry.taskId).run(async () => {
+  await executionPermits.getTaskQuestionWriteSem(entry.taskId).run(async () => {
     if (staged) {
       const { taskQuestions } = tablesOf(db)
       // RFC-134 D10（Codex R2-F4 + R3-F7 + 实现 gate fold）——已下发行不可 stage：dispatch 后

@@ -17,7 +17,8 @@
 
 import { describe, expect, test } from 'bun:test'
 import { IsoSubmodulesSchema } from '@agent-workflow/shared'
-import { rebuildIsoHandle, type CanonRepo } from '@/services/nodeIsolation'
+import { rebuildIsoHandle } from '@/platform/workspace/local/isolation'
+import { type CanonRepo } from '@/platform/contracts/isolationWorkspace'
 
 const canonRepos: CanonRepo[] = [
   { repoPath: '/r/a', worktreePath: '/wt/a', mountPath: 'a', baseBranch: 'main' },

@@ -1,3 +1,4 @@
+import type { TaskExecutionPermitRegistry } from '../application/ports/taskExecutionPermits'
 import type { TaskMemorySnapshotPort } from '../application/ports/taskMemorySnapshots'
 import type { PortArtifactOperations } from '../application/ports/portArtifactContent'
 import type {
@@ -78,6 +79,7 @@ export interface RunTaskOptions {
     validationContext: DynamicWorkflowValidationContextSource
   }>
   /** Provider runtime identity used only to share daemon-wide process pools. */
+  executionPermits?: TaskExecutionPermitRegistry
   processConcurrencyScope?: object
   /** RFC-347 bootstrap-owned delegated authority factory for child calls. */
   identityAccess?: Readonly<{
@@ -244,6 +246,7 @@ export type BoundRunTaskOptions = RunTaskOptions & {
   readonly collaborationRuntime: CollaborationRuntimeMechanics
   readonly workgroupTurns: WorkgroupTurnsOperations
   readonly childLaunch: ChildExecutionLaunchOperations
+  readonly executionPermits: TaskExecutionPermitRegistry
   readonly processConcurrencyScope: object
   readonly identityAccess: NonNullable<RunTaskOptions['identityAccess']>
   readonly dynamicWorkflow: NonNullable<RunTaskOptions['dynamicWorkflow']>

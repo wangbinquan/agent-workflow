@@ -1,3 +1,4 @@
+import { createExecutionPermitRegistry } from '@/modules/task-execution/composition'
 import { composeRepositoryPreparationLookup } from '@/modules/source-control/composition'
 import {
   composeCollaborationRepairPorts,
@@ -155,7 +156,8 @@ export function composeDaemonTaskExecutionModules<P extends DatabaseProvider>(
     observation,
     memory,
   } = input
-  const closure = composeCrossContextClosure(db)
+  const executionPermits = createExecutionPermitRegistry()
+  const closure = composeCrossContextClosure(db, executionPermits)
   const log = createLogger('task')
   const resourceSnapshots = composeTaskExecutionResourceBinding(taskExecutionResourceDependencies)
   const resources = createTaskExecutionResourceBinding(db, resourceSnapshots)
@@ -297,6 +299,7 @@ export function composeDaemonTaskExecutionModules<P extends DatabaseProvider>(
     workspaceReads: selection.workspaceReads,
     recoverySelection: selection.recoverySelection,
     runtime: {
+      executionPermits,
       processConcurrencyScope: input.adapters.processConcurrencyScope,
       taskRunBinding: selection.taskRunBinding,
       workspaceExcludeProfilesFor: selection.workspaceExcludeProfilesFor,
@@ -420,6 +423,7 @@ export function composeDaemonTaskExecutionModules<P extends DatabaseProvider>(
   return Object.freeze({
     ...provider,
     taskRolePolicy: closure.taskRolePolicy,
+    executionPermits,
     processConcurrencyScope: input.adapters.processConcurrencyScope,
     hostTasks,
     collaboration,

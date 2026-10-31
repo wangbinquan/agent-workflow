@@ -133,7 +133,10 @@ export function composeGateContinuationSupport(
   )
   const clarifyConvergence = createClarifyContinuationConvergence(input)
   return composeTaskGateContinuationSupport(
-    new GateWorkspaceRollbackExecutorAdapter(operations),
+    new GateWorkspaceRollbackExecutorAdapter(
+      operations,
+      input.taskExecutionParticipants.executionPermits,
+    ),
     clarifyConvergence,
   )
 }

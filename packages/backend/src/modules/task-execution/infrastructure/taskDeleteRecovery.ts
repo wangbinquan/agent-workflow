@@ -22,7 +22,7 @@ export { selectedTaskDeletionEffects } from '../composition/taskDeletionEffects'
 
 import { databaseSessionFor, engineOf } from '@/platform/persistence/databaseTransaction'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { getTaskWriteSem } from '@/services/taskWriteLocks'
+import type { TaskExecutionPermitRegistry } from '../application/ports/taskExecutionPermits'
 import { ConflictError } from '@/util/errors'
 import { createLogger } from '@/util/log'
 import { TASKS_LIST_CHANNEL, tasksListBroadcaster } from '@/ws/broadcaster'
@@ -285,6 +285,7 @@ async function finalizeDeleteRowsTx(input: {
 /** Resume exact RFC-328 delete claims left by a daemon/process crash. */
 export async function recoverInterruptedTaskDeletes(
   db: PersistenceDb,
+  executionPermits: TaskExecutionPermitRegistry,
   terminalMaintenance: TerminalMaintenanceStore = new DrizzleTerminalMaintenancePersistence(db),
   selected?: TaskDeletionEffects,
 ): Promise<DeleteRecoveryResult> {
@@ -319,7 +320,7 @@ export async function recoverInterruptedTaskDeletes(
 
     let audiences: readonly DeletedAudience[] = []
     if (state === 'io-complete') {
-      const release = await getTaskWriteSem(item.rootTaskId).acquire()
+      const release = await executionPermits.getTaskWriteSem(item.rootTaskId).acquire()
       try {
         const finalized = await finalizeDeleteRowsTx({
           db,

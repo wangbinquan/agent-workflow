@@ -4,14 +4,11 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import * as leaf from '@/platform/workspace/local/isolationReferences'
 import * as native from '@/platform/workspace/local/isolation'
-import * as legacy from '@/services/nodeIsolation'
 import { selectRepositoryWorkspaceReadQueries } from '@/modules/source-control/public/queries'
 
-test('native and legacy isolation addresses retain one shared leaf function identity', () => {
+test('native isolation addresses retain one shared leaf function identity', () => {
   expect(native.isoKeyOf).toBe(leaf.isoKeyOf)
-  expect(legacy.isoKeyOf).toBe(leaf.isoKeyOf)
   expect(native.isoWorktreePathFor).toBe(leaf.isoWorktreePathFor)
-  expect(legacy.isoWorktreePathFor).toBe(leaf.isoWorktreePathFor)
 })
 
 test('the real selected native reader preserves persisted generation and pre-column fallback references', async () => {

@@ -9,7 +9,7 @@ import type {
   WrapperExecutionScopeReadModel,
 } from '@/modules/task-execution/public/types'
 import type { Logger } from '@/util/log'
-import type { Semaphore } from '@/util/semaphore'
+import type { Semaphore } from '@/platform/contracts/semaphore'
 import type { BoundRunTaskOptions } from './taskEngineRuntimeOptions'
 import type { TaskAgentResourceSession } from './taskExecutionResources'
 

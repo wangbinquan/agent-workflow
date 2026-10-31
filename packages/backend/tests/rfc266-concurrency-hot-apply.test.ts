@@ -1,3 +1,4 @@
+import type { TaskExecutionPermitRegistry } from '@/modules/task-execution/application/ports/taskExecutionPermits'
 // RFC-266 —— 并发参数保存即生效（含运行中任务与排队中节点）。
 //
 // 为什么这些测试存在：用户报「最大并发节点数改了也不立即生效」。核实属实——
@@ -21,8 +22,6 @@ import {
   describeEachProviderHttpApplication,
   type ProviderHttpApplicationScope,
 } from './helpers/providerHttpApplicationScope'
-import { getNodePoolSemaphore } from '@/services/processNodeConcurrency'
-import { getTaskFanoutSem, gcTaskFanoutSem, taskFanoutPoolCount } from '@/services/taskFanoutPools'
 import { seedBuiltinRuntimes, updateRuntime } from './helpers/runtimeRegistryApplication'
 import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
 import { registerConfigAppliedListener } from '@/services/configAppliedListeners'
@@ -36,6 +35,7 @@ afterEach(() => {
 })
 
 interface Harness {
+  executionPermits: TaskExecutionPermitRegistry
   db: PersistenceDb
   /**
    * 池的 scope key **按 provider 不同**（SQLite 用 db，PG 用 provider runtime），所以判据不能
@@ -54,12 +54,13 @@ async function harness(scope: ProviderHttpApplicationScope, _slug: string): Prom
   await updateRuntime(runtimeRegistryPersistence(db), 'opencode', { model: 'openai/gpt-5' })
   // 判据要**回读配置文件**证明 PUT 真的落盘了，所以 configPath 必须是应用实际读写的那一个
   // ——作用域现建的那份，不是用例自建的。
-  const { app, appHome, processConcurrencyScope: poolScope } = await scope.open()
+  const { app, appHome, executionPermits, processConcurrencyScope: poolScope } = await scope.open()
   const configPath = join(appHome, 'config.json')
   loadConfig(configPath)
   return {
     db,
     poolScope,
+    executionPermits,
     configPath,
     put: async (patch) =>
       await app.request('/api/config', {
@@ -83,8 +84,8 @@ describeEachProviderHttpApplication(
     test('PUT /api/config resizes both daemon pools before responding', async () => {
       const h = await harness(scope, 'pools')
       // 模拟一个已在跑的 daemon：两把闸已按旧值建立。
-      const agent = getNodePoolSemaphore(h.poolScope, 'agent', 4)
-      const script = getNodePoolSemaphore(h.poolScope, 'script', 4)
+      const agent = h.executionPermits.getNodePoolSemaphore(h.poolScope, 'agent', 4)
+      const script = h.executionPermits.getNodePoolSemaphore(h.poolScope, 'script', 4)
 
       const res = await h.put({ maxConcurrentNodes: 9, maxConcurrentScriptNodes: 2 })
       expect(res.status).toBe(200)
@@ -92,14 +93,14 @@ describeEachProviderHttpApplication(
       // 响应可观测时即已生效，且是同一实例被 resize（换实例 = 预算分裂）。
       expect(agent.capacity).toBe(9)
       expect(script.capacity).toBe(2)
-      expect(getNodePoolSemaphore(h.poolScope, 'agent', 9)).toBe(agent)
-      expect(getNodePoolSemaphore(h.poolScope, 'script', 2)).toBe(script)
+      expect(h.executionPermits.getNodePoolSemaphore(h.poolScope, 'agent', 9)).toBe(agent)
+      expect(h.executionPermits.getNodePoolSemaphore(h.poolScope, 'script', 2)).toBe(script)
       expect(loadConfig(h.configPath).maxConcurrentScriptNodes).toBe(2)
     })
 
     test('growing releases nodes ALREADY QUEUED for a slot — no launch required', async () => {
       const h = await harness(scope, 'grow')
-      const agent = getNodePoolSemaphore(h.poolScope, 'agent', 1)
+      const agent = h.executionPermits.getNodePoolSemaphore(h.poolScope, 'agent', 1)
       const holder = await agent.acquire()
 
       let queuedEntered = false
@@ -121,7 +122,7 @@ describeEachProviderHttpApplication(
 
     test('shrinking never preempts an in-flight node and does not refill past the new cap', async () => {
       const h = await harness(scope, 'shrink')
-      const agent = getNodePoolSemaphore(h.poolScope, 'agent', 2)
+      const agent = h.executionPermits.getNodePoolSemaphore(h.poolScope, 'agent', 2)
       const r1 = await agent.acquire()
       const r2 = await agent.acquire()
 
@@ -146,25 +147,25 @@ describeEachProviderHttpApplication(
     test('a RUNNING task’s fan-out sub-pool is resized too', async () => {
       const h = await harness(scope, 'fanout')
       const taskId = 'rfc266-hot-apply-task'
-      const sem = getTaskFanoutSem(taskId, 4)
+      const sem = h.executionPermits.getTaskFanoutSem(taskId, 4)
 
       expect((await h.put({ multiProcessSubprocessConcurrency: 7 })).status).toBe(200)
       expect(sem.capacity).toBe(7)
-      expect(getTaskFanoutSem(taskId, 7)).toBe(sem)
+      expect(h.executionPermits.getTaskFanoutSem(taskId, 7)).toBe(sem)
 
       // 注册表是模块级 Map，同进程内跨测试文件共享 —— 断言「本条目已回收」而不是
       // 「全局计数归零」，否则别的测试文件留下的条目会让这条假红。
-      const before = taskFanoutPoolCount()
-      gcTaskFanoutSem(taskId)
-      expect(taskFanoutPoolCount()).toBe(before - 1)
-      expect(getTaskFanoutSem(taskId, 7)).not.toBe(sem)
-      gcTaskFanoutSem(taskId)
+      const before = h.executionPermits.taskFanoutPoolCount()
+      h.executionPermits.gcTaskFanoutSem(taskId)
+      expect(h.executionPermits.taskFanoutPoolCount()).toBe(before - 1)
+      expect(h.executionPermits.getTaskFanoutSem(taskId, 7)).not.toBe(sem)
+      h.executionPermits.gcTaskFanoutSem(taskId)
     })
 
     test('an unrelated patch leaves the pools at their configured capacities', async () => {
       const h = await harness(scope, 'unrelated')
-      const agent = getNodePoolSemaphore(h.poolScope, 'agent', 4)
-      const script = getNodePoolSemaphore(h.poolScope, 'script', 4)
+      const agent = h.executionPermits.getNodePoolSemaphore(h.poolScope, 'agent', 4)
+      const script = h.executionPermits.getNodePoolSemaphore(h.poolScope, 'script', 4)
       const lines: string[] = []
       setLoggerStdoutWriterForTest((line) => lines.push(line))
       expect((await h.put({ logLevel: 'debug' })).status).toBe(200)
@@ -222,7 +223,7 @@ describeEachProviderHttpApplication(
         'utf8',
       )
       expect(serverSrc).toMatch(
-        /composeConfigConcurrencyHotApply\(\s*taskExecutionProvider\.processConcurrencyScope,?\s*\)/,
+        /composeConfigConcurrencyHotApply\(\s*taskExecutionProvider\.processConcurrencyScope,\s*taskExecutionProvider\.executionPermits,?\s*\)/,
       )
       expect(serverSrc).toContain('resizeAllNodePools(daemonScope, {')
 

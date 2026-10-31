@@ -1,3 +1,12 @@
+import { workspaceSessionFor } from './executionWorkspaceBinding'
+import { resolveUpstreamInputs } from '../application/nodeInputs'
+import { broadcastNodeStatus, type NodeStatus } from '../infrastructure/nodeStatusEvents'
+import { describeIsoFailure } from '../infrastructure/executionDiagnostics'
+import { resolveMergeConflicts } from '../engine/node/shared/resolveMergeConflicts'
+import { bindMergeConflictPorts } from './mergeConflictResolution'
+import { isolatedRunBinding, nodeRunLedger } from './executionMechanismBindings'
+
+import { bindIsolationCleanup } from '../infrastructure/executionKernelBinding'
 import { nodeOutputSlot } from '../domain/runSelection/nodeOutputSlot'
 // RFC-334 W2-C — production node and workgroup-host mechanics.
 // Per-kind selection lives in the closed registry; wrapper bodies are owned by
@@ -12,7 +21,6 @@ import { taskCheckpointRefs, type TaskRepositoryCheckpoint } from '../domain/tas
 import { portFallbackMount } from '@/platform/content/locations/portArchive'
 import type { Actor } from '@/auth/actor'
 import type { CollaborationRuntimeMechanics } from '@/modules/collaboration/public/participants'
-import type { NodeRunLifecyclePersistence } from '@/modules/task-execution/application/ports/nodeRunLifecyclePersistence'
 import type {
   NodeExecutionPersistence,
   NodeExecutionSnapshot,
@@ -61,25 +69,17 @@ import { loadFrameChain } from '../application/frameChain'
 import { resolveSourceFrame, type FrameCoordinate } from '../domain/environmentChain'
 import {
   createIsoUnderLock,
+  persistIsoBase,
+} from '@/modules/task-execution/engine/kernel/isolation'
+import {
   markMergeFailed,
   mergeBackAndSettle,
-  persistIsoBase,
-  type IsolatedAgentRunBinding,
   type MergeSettleOutcome,
-} from '@/services/isolatedAgentRun'
-import {
-  buildMergeAgent,
-  buildMergeResolvePrompt,
-  mergeResolveNodeId,
-  type MergeConflictManifest,
-} from '@/services/mergeAgent'
-import {
-  discardNodeIso,
-  IsoWorkspaceBlockedError,
-  MergeAgentChildUnreapedError,
-  type IsoHandle,
-  type MergeBackConflict,
-} from '@/services/nodeIsolation'
+} from '@/modules/task-execution/engine/kernel/merge'
+
+import { discardNodeIso } from '@/modules/task-execution/engine/kernel/isolationCleanup'
+
+import { type IsoHandle } from '@/platform/contracts/isolationWorkspace'
 import { ORCHESTRATOR_AGENT_ID } from '@/services/orchestratorAgent'
 import { continuesClarifyLineage, isClarifyRerunCause } from '@/services/nodeRunMint'
 import { toContainerRelative } from '@/modules/task-execution/public/queries'
@@ -87,33 +87,23 @@ import { agentRefOfNode } from '@/services/ref/runtimeRef'
 import { runTaskAgentWithFamily as runNode } from './taskAgentRunFamily'
 import type { RunResult } from '../application/ports/taskAgentRun'
 import { getRuntimeDriver } from '@/services/runtime'
-import { runAssembly, type IsoLike } from '@/services/schedulerAssembly'
-import {
-  ScriptDepsInstallError,
-  type TaskScriptDependencyEnvironment,
-  type TaskScriptInterpreter,
-  type TaskScriptResult,
-  type TaskScriptStartReceipt,
-} from '../application/ports/taskScriptRunFamily'
-import {
-  createProcessEffectAttemptObserver,
-  type ProcessEffectAttemptObserver,
-} from '../application/processEffectObserver'
-import { runScriptWithFamily as runScriptProcess } from './taskScriptRunFamily'
-import { extractScriptPorts } from '@/services/scriptPorts'
+import { runAssembly, type IsoLike } from '@/modules/task-execution/engine/kernel/assembly'
+
 import {
   decideResumeSessionId,
   type ClarifyInlineFallbackReason,
 } from '@/services/sessionModeFallback'
+import { createCodeHostEffectAttemptObserver } from '../application/codeHostEffectObserver'
 import {
-  createCodeHostEffectAttemptObserver,
   decodeLineageSlotPath,
   encodeLineageSlotPath,
-  taskExecutionRequestHash as executionEffectRequestHash,
-  operationFamilyKey,
   type LineageSlot,
-  type TaskExecutionContext,
-} from '@/services/taskExecutionParticipants'
+} from '../domain/executionIntent'
+import {
+  requestHash as executionEffectRequestHash,
+  operationFamilyKey,
+} from '../domain/executionEffect'
+import { type TaskExecutionContext } from '../application/taskExecutionContext'
 import type {
   WorkgroupTurnHostOperations,
   WorkgroupTurnHostRequest,
@@ -121,27 +111,18 @@ import type {
 } from '../application/ports/workgroupTurnsOperations'
 import { ConflictError, DomainError, NotFoundError, ValidationError } from '@/util/errors'
 import { worktreeFilesChanged } from '@/util/git'
-import {
-  bindIsolatedRunWorkspace,
-  resolveIsolatedConflict,
-} from '../infrastructure/isolationWorkspaceView'
-import {
-  isolationScopeFor,
-  restoreTaskIsolation,
-  restoredSubmodules,
-} from './isolationWorkspaceScene'
+
+import { restoredSubmodules } from '../infrastructure/executionWorkspaceSession'
 import { describeEffectError } from '../domain/effectErrorDescription'
 import { sha256Hex } from '@/util/hash'
 import { type Logger } from '@/util/log'
-import { TASK_CHANNEL, taskBroadcaster } from '@/ws/broadcaster'
+
 import type {
   ClarifyCrossAgentNode,
   ClarifyNode,
   EnvelopeFollowupReason,
   FailureCode,
   TriggerContext,
-  WorkflowDefinition,
-  WorkflowEdge,
   WorkflowNode,
 } from '@agent-workflow/shared'
 import {
@@ -151,7 +132,6 @@ import {
   DAEMON_RESTART_ERROR_SUMMARY,
   isDaemonInterruptionAbortReason,
   DEFAULT_PROTOCOL_RETRY_BUDGET,
-  describeWrapperKind,
   findClarifyNodeForAgent,
   findCrossClarifyNodeForQuestioner,
   findDesignerNodeForCrossClarify,
@@ -160,23 +140,15 @@ import {
   isCodeHostAction,
   isSingleRootRepository,
   IsoSubmodulesSchema,
-  maskScriptEnvValues,
-  readScriptDependencies,
-  readScriptEnv,
-  readScriptLanguage,
   renderCallWorkgroupGoalTemplate,
   resolveClarifySessionMode,
   resolveCrossClarifySessionMode,
-  resolveScriptReadonly,
   resolveWorkflowSourceRef,
-  SCRIPT_PERMANENT_FAILURE_CODES,
-  scriptOutputMode,
   TERMINAL_TASK_STATUSES,
-  type ScriptLanguage,
   type Permission,
   type StartTask,
 } from '@agent-workflow/shared'
-import { processTreeOwnershipStatus } from '@/util/process'
+
 import { ulid } from 'ulid'
 
 /**
@@ -190,65 +162,8 @@ import { ulid } from 'ulid'
  * 同名字段的注释各自承载调度语义/路由接线两套契约、不宜合并——注册表 + Pick
  * 派生型给出同等单源与更强的双向锁，类型面零搬迁。
  */
-type NodeStatus =
-  | 'pending'
-  | 'running'
-  | 'done'
-  | 'failed'
-  | 'canceled'
-  | 'interrupted'
-  | 'skipped'
-  | 'exhausted'
-  | 'awaiting_review'
-  | 'awaiting_human'
 
 export type SchedulerState = TaskMechanicsState
-
-function executionContextInput(state: SchedulerState) {
-  return state.opts.executionContext === undefined
-    ? {}
-    : { executionContext: state.opts.executionContext }
-}
-
-export function isolatedRunBinding(state: SchedulerState): IsolatedAgentRunBinding {
-  return bindIsolatedRunWorkspace(
-    {
-      persistence: state.opts.persistence,
-      ...executionContextInput(state),
-    },
-    () => isolationScopeFor(state),
-  )
-}
-
-async function setRunStatus(
-  state: SchedulerState,
-  input: Omit<Parameters<NodeRunLifecyclePersistence['set']>[0], 'executionContext'>,
-) {
-  return await state.opts.persistence.nodeRuns.set({
-    ...input,
-    ...executionContextInput(state),
-  })
-}
-
-async function transitionRunStatus(
-  state: SchedulerState,
-  input: Omit<Parameters<NodeRunLifecyclePersistence['transition']>[0], 'executionContext'>,
-) {
-  return await state.opts.persistence.nodeRuns.transition({
-    ...input,
-    ...executionContextInput(state),
-  })
-}
-
-async function mintRun(
-  state: SchedulerState,
-  input: Omit<Parameters<NodeRunLifecyclePersistence['mint']>[0], 'executionContext'>,
-): Promise<string> {
-  return await state.opts.persistence.nodeRuns.mint({
-    ...input,
-    ...executionContextInput(state),
-  })
-}
 
 /** D6/Q5 compatibility: a historical NULL owner is deliberately not the
  * literal system account and therefore carries no permissions. */
@@ -309,7 +224,7 @@ export async function executeWorkgroupHostMechanics(
       ? resolveSyntheticTaskAgentInjection(req.agent, opts.taskAgentRuns.materialReferences)
       : await state.taskExecutionResources.injection(req.agent.id)
   if (injection.kind === 'failed') {
-    await setRunStatus(state, {
+    await nodeRunLedger(state).setNodeRunStatus({
       nodeRunId: req.nodeRunId,
       to: 'failed',
       allowedFrom: ['pending'],
@@ -555,7 +470,7 @@ export async function executeWorkgroupHostMechanics(
             const lateSuppress = async (): Promise<WorkgroupTurnHostResult> => {
               const dropped = result.clarify?.questions.length ?? 0
               const suppressedMsg = `${CLARIFY_FORBIDDEN_PREFIX}: ask-back disabled mid-run (autonomous); dropped ${dropped} question(s)`
-              await setRunStatus(state, {
+              await nodeRunLedger(state).setNodeRunStatus({
                 nodeRunId: req.nodeRunId,
                 to: 'failed',
                 allowedFrom: ['done'],
@@ -724,7 +639,7 @@ export async function executeWorkgroupHostMechanics(
                 await state.opts.persistence.mergeStates.tryTransition({
                   nodeRunId: req.nodeRunId,
                   event: { kind: 'abandon', reason: 'discard-writes' },
-                  ...executionContextInput(state),
+                  ...nodeRunLedger(state).executionContextInput(),
                 })
                 return { status: 'done' as const, outputs: s.projected }
               },
@@ -746,7 +661,7 @@ export async function executeWorkgroupHostMechanics(
               nodeRunId: req.nodeRunId,
               via: 'live',
               conflictResolver: (conflicts, containerPath) =>
-                resolveMergeConflicts(state, {
+                resolveMergeConflicts(bindMergeConflictPorts(state), {
                   conflicts,
                   containerPath,
                   conflictNodeRunId: req.nodeRunId,
@@ -768,7 +683,7 @@ export async function executeWorkgroupHostMechanics(
               await state.opts.persistence.mergeStates.tryTransition({
                 nodeRunId: req.nodeRunId,
                 event: { kind: 'abandon', reason: 'wg-merge-conflict-unresolved' },
-                ...executionContextInput(state),
+                ...nodeRunLedger(state).executionContextInput(),
               })
               return {
                 status: 'failed',
@@ -788,7 +703,7 @@ export async function executeWorkgroupHostMechanics(
         return { status: 'failed', outputs: {}, errorMessage: msg }
       },
       discardIso: async (h: IsoLike) => {
-        await discardNodeIso(h as IsoHandle, log, state.writeSem)
+        await discardNodeIso(bindIsolationCleanup(), h as IsoHandle, log, state.writeSem)
       },
       settle: async (_c, s) =>
         s.kind === 'ran'
@@ -991,29 +906,6 @@ export interface OneNodeArgs {
  * 「是哪个目录清不掉、谁可能锁着、本机有没有 Job Object」。**失败分类字符串不变**
  * （后端内部串，不在 FAILURE_CODES 里、前端也无分支消费），只是消息更详细。
  */
-export function describeIsoFailure(code: string, error: unknown): string {
-  const lines = [code]
-  try {
-    if (error instanceof IsoWorkspaceBlockedError) {
-      const d = error.detail
-      lines.push(`  无法回收残留的隔离工作树（已尝试 ${d.generationsTried} 代）`)
-      lines.push(`  残留: ${d.residualPath}`)
-      lines.push(`  最后错误: ${d.lastError}`)
-    } else {
-      lines.push(`  ${describeEffectError(error)}`)
-    }
-  } catch {
-    lines.length = 1
-    lines.push('  unavailable error description')
-  }
-  const ownership = processTreeOwnershipStatus()
-  lines.push(
-    ownership.available
-      ? '  进程树归属: 可用（杀树走 Job Object 原子终止）'
-      : `  进程树归属: 不可用（${ownership.reason}）—— 杀树降级为 taskkill 枚举，后代可能逃逸并继续持有工作树句柄`,
-  )
-  return lines.join('\n')
-}
 
 /**
  * RFC-210 — read a node_run's persisted submodule topology back for replay.
@@ -1050,171 +942,6 @@ export function parseIsoSubmodules(checkpoints: readonly TaskRepositoryCheckpoin
       }
   }
   return out
-}
-
-/**
- * RFC-130 §6.2 — attempt to auto-resolve merge-back conflict(s) with the built-in
- * merge agent. For each conflicted repo, spins a resolve-iso from the conflicted
- * merged tree and dispatches the merge agent there (as a child node_run under the
- * conflicting run, `cause='merge-resolve'`). The dispatch is a DIRECT `runNode`
- * call — it deliberately does NOT acquire a node-pool slot, because the caller
- * holds `writeSem` across §6.2 and a pool wait here would close the writeSem↔pool
- * cycle (§7 deadlock analysis). Framework self-checks the resolution (D6); on
- * success the resolution is materialized into the canonical worktree and the
- * resolve-iso discarded, on failure the resolve-iso is preserved for awaiting_human.
- *
- * Runtime: `resolveInternalAgentRuntime(mergeAgentRuntime → mergeAgentModel →
- * defaultRuntime)`. Threading `mergeAgentRuntime`/`mergeAgentModel` from config →
- * RunTaskOptions is a follow-up (mirrors commit&push Settings wiring); until then
- * the merge agent runs on the task's `defaultRuntime`.
- */
-export async function resolveMergeConflicts(
-  state: SchedulerState,
-  opts: {
-    conflicts: MergeBackConflict[]
-    containerPath: string
-    conflictNodeRunId: string
-    nodeId: string
-    iteration: number
-  },
-): Promise<{ allResolved: boolean; detail: string }> {
-  const { task, log } = state
-  const rt = await state.opts.taskAgentRuns.runtimeBindings.internal({
-    runtimeName: state.opts.mergeAgentRuntime,
-    deprecatedModel: state.opts.mergeAgentModel,
-    defaultRuntime: state.opts.defaultRuntime,
-  })
-  const mergeNodeId = mergeResolveNodeId(opts.nodeId, opts.iteration)
-  const runAgent = async (
-    _legacyPrompt: string,
-    cwd: string,
-    manifest: MergeConflictManifest,
-  ): Promise<void> => {
-    const sessionRunId = await mintRun(state, {
-      ...nodeRunMintIdentityForSlot(
-        {
-          kind: 'synthetic',
-          syntheticKind: 'merge-resolve',
-          owner: { kind: 'attempt', id: opts.conflictNodeRunId },
-          discriminator: mergeNodeId,
-        },
-        { kind: 'current' },
-      ),
-      taskId: task.id,
-      nodeId: mergeNodeId,
-      status: 'pending',
-      cause: 'merge-resolve',
-      iteration: opts.iteration,
-      overrides: {
-        identity: {
-          parentNodeRunId: opts.conflictNodeRunId,
-        },
-      },
-    })
-    const frozen = await state.opts.taskAgentRuns.runtimeBindings.resolve(
-      sessionRunId,
-      null,
-      null,
-      rt,
-      // Codex impl-gate P1-2: same config-head fold as the commit-session site.
-    )
-    const envelopeNonce = await state.opts.persistence.nodeRuns.loadEnvelopeNonce(sessionRunId)
-    const mergeAgent = buildMergeAgent()
-    // RFC-282 B2 — single-resolver derivation (writeSem held: signal threaded).
-    const mergeInjection = resolveSyntheticTaskAgentInjection(
-      mergeAgent,
-      state.opts.taskAgentRuns.materialReferences,
-    )
-    if (mergeInjection.kind === 'failed') {
-      throw new Error(`merge injection resolve failed: ${mergeInjection.message}`)
-    }
-    // DIRECT runNode — bypasses the node pool on purpose (§7 deadlock avoidance).
-    const mergeAgentResult = await runNode(
-      state.opts.taskAgentRuns,
-      {
-        taskId: task.id,
-        nodeRunId: sessionRunId,
-        nodeId: mergeNodeId,
-        agent: mergeAgent,
-        triggerContext: null,
-        expandPromptTemplate: false,
-        runtime: frozen.protocol,
-
-        runtimeParams: frozen.params,
-        runtimeConfigDir: frozen.configDir, // RFC-154: frozen config-dir profile
-        runtimeObservationIdentity: frozen.observationIdentity,
-        observationInvocations: state.opts.observationInvocations,
-        observationSystemKind: 'merge-resolve',
-        inputs: {},
-
-        promptTemplate: buildMergeResolvePrompt({ manifest, envelopeNonce }),
-        templateMeta: {
-          repoPath: cwd,
-          baseBranch: task.baseBranch,
-          taskId: task.id,
-          nodeId: mergeNodeId,
-          iteration: opts.iteration,
-          repos: state.repos,
-          ...(state.repoGroupName !== null ? { repoGroupName: state.repoGroupName } : {}),
-        },
-        // RFC-282 B2 — same single-resolver derivation as commit-push above.
-
-        dependents: mergeInjection.spec.dependents,
-        mcps: mergeInjection.spec.mcps,
-
-        memorySnapshots: state.opts.memorySnapshots,
-
-        memoryInjectionQueries: state.opts.memoryInjectionQueries,
-        runtimeSessionLeases: state.opts.runtimeSessionLeases,
-        runtimeRegistry: state.opts.runtimeRegistry,
-        persistence: state.opts.persistence,
-        log: log.child('merge'),
-        gitUserName: task.gitUserName,
-        gitUserEmail: task.gitUserEmail,
-
-        ...(state.opts.signal ? { signal: state.opts.signal } : {}),
-        // RFC-208: this was the ONLY runNode call site without a timeout, and it
-        // runs inside the per-task writeSem — so a merge agent that hangs blocks
-        // every other writer for that task (review decisions, clarify dispatch)
-        // with no SIGTERM→SIGKILL escalation ever armed. Same budget as every
-        // other node.
-        ...(state.opts.defaultPerNodeTimeoutMs !== undefined
-          ? { timeoutMs: state.opts.defaultPerNodeTimeoutMs }
-          : {}),
-      },
-      {
-        workspaceRef: cwd,
-        material: mergeInjection.spec.material,
-        runtimeBinding: frozen.runtimeBinding,
-      },
-    )
-    if (mergeAgentResult.processUnreaped === true) {
-      throw new MergeAgentChildUnreapedError()
-    }
-  }
-  let allResolved = true
-  const parts: string[] = []
-  for (const conflict of opts.conflicts) {
-    const outcome = await resolveIsolatedConflict(conflict, {
-      containerPath: opts.containerPath,
-      runAgent,
-      log,
-    })
-    if (!outcome.resolved) {
-      allResolved = false
-      // RFC-187 §4-2 — say what DID land: per-path salvage already
-      // materialized the clean paths, so the park note must not read as
-      // "the whole delta was dropped" (workgroup room note rides this).
-      const salvageNote =
-        conflict.salvagedPaths.length > 0
-          ? ` (${conflict.salvagedPaths.length} clean path(s) already landed)`
-          : ''
-      parts.push(
-        `${conflict.mountPath || '(repo)'}: ${outcome.unresolved.map((e) => e.path).join(', ')}${salvageNote}`,
-      )
-    }
-  }
-  return { allResolved, detail: parts.join('; ') }
 }
 
 // =============================================================================
@@ -1363,7 +1090,7 @@ export async function runCallWorkflowNode(
         // Wrapper-revive escape hatch (RFC-053/095 precedent): the parked /
         // reaped / shutdown-canceled call row RESUMES in place — never a fresh
         // mint (see header).
-        await setRunStatus(state, {
+        await nodeRunLedger(state).setNodeRunStatus({
           nodeRunId: latestExisting.id,
           to: 'running',
           allowedFrom: ['pending', 'interrupted', 'canceled'],
@@ -1383,7 +1110,10 @@ export async function runCallWorkflowNode(
   const nodeRunId = resolvedCallRow.nodeRunId
   const latestExisting = resolvedCallRow.latestExisting
   if (!resolvedCallRow.adopted) {
-    await transitionRunStatus(state, { nodeRunId, event: { kind: 'mark-running' } })
+    await nodeRunLedger(state).transitionNodeRunStatus({
+      nodeRunId,
+      event: { kind: 'mark-running' },
+    })
     broadcastNodeStatus(taskId, nodeRunId, node.id, 'running')
 
     // ---- gates BEFORE side effects: depth, then the global child budget
@@ -1477,7 +1207,7 @@ export async function runCallWorkflowNode(
           childTaskId: childId,
         },
       },
-      ...executionContextInput(state),
+      ...nodeRunLedger(state).executionContextInput(),
     })
     try {
       if (isWorkgroupCall) {
@@ -1517,9 +1247,9 @@ export async function runCallWorkflowNode(
             childTaskId: null,
           },
         },
-        ...executionContextInput(state),
+        ...nodeRunLedger(state).executionContextInput(),
       })
-      await discardNodeIso(liveIso, log, writeSem)
+      await discardNodeIso(bindIsolationCleanup(), liveIso, log, writeSem)
       const code =
         err instanceof ValidationError || err instanceof DomainError || err instanceof NotFoundError
           ? err.code
@@ -1560,7 +1290,7 @@ export async function runCallWorkflowNode(
             wrapperProgressJson: JSON.stringify(ledger),
           },
         },
-        ...executionContextInput(state),
+        ...nodeRunLedger(state).executionContextInput(),
       })
     } catch {
       // Best-effort progress telemetry; the child terminal observation remains authoritative.
@@ -1797,7 +1527,7 @@ export async function runCallWorkflowNode(
     : outcome.outputs
   await opts.persistence.nodeExecution.upsertOutputs({
     nodeRunId,
-    ...executionContextInput(state),
+    ...nodeRunLedger(state).executionContextInput(),
     outputs: Object.entries(projectedOutputs).map(([portName, value]) => ({
       portName,
       content: value.content,
@@ -1810,7 +1540,7 @@ export async function runCallWorkflowNode(
   // merge_state (deriveFrontier D15), so nothing dispatches early.
   const currentRow = await opts.persistence.nodeExecution.read(nodeRunId)
   if (currentRow !== null && currentRow.status !== 'done') {
-    await setRunStatus(state, {
+    await nodeRunLedger(state).setNodeRunStatus({
       nodeRunId,
       to: 'done',
       allowedFrom: ['running'],
@@ -1862,14 +1592,14 @@ export async function runCallWorkflowNode(
           message: 'merge-back-failed',
         }
       }
-      const scope = await isolationScopeFor(state)
+      const scope = await workspaceSessionFor(state).scope()
       const taskBaseHeads: Record<string, string> = {}
       for (const repo of state.repos) {
         const h = await scope.head(repo.worktreePath)
         taskBaseHeads[repo.mountPath] = h.stdout.trim()
       }
       const submodules = currentRow !== null ? parseIsoSubmodules(currentRow.checkpoints) : {}
-      handle = await restoreTaskIsolation(state, {
+      handle = await workspaceSessionFor(state).restore({
         key: await scope.recoverKey(currentRow?.isoWorktreePath ?? null, nodeRunId),
         dbNodeRunId: nodeRunId,
         workspaceRef: currentRow?.isoWorktreePath ?? null,
@@ -1888,7 +1618,7 @@ export async function runCallWorkflowNode(
           nodeRunId,
           via: 'live',
           conflictResolver: (conflicts, containerPath) =>
-            resolveMergeConflicts(state, {
+            resolveMergeConflicts(bindMergeConflictPorts(state), {
               conflicts,
               containerPath,
               conflictNodeRunId: nodeRunId,
@@ -1919,7 +1649,7 @@ export async function runCallWorkflowNode(
         }
       }
     }
-    await discardNodeIso(handle, log, writeSem)
+    await discardNodeIso(bindIsolationCleanup(), handle, log, writeSem)
   }
   return { kind: 'ok', summary: `child task ${childTaskId} done`, message: '' }
 }
@@ -1933,19 +1663,20 @@ async function failCallRow(
   errorMessage: string,
   to: 'failed' | 'canceled' = 'failed',
 ): Promise<void> {
-  const ok = await setRunStatus(state, {
-    nodeRunId,
-    to,
-    allowedFrom: ['pending', 'running'],
-    extra: {
-      identity: {
-        finishedAt: Date.now(),
-        errorMessage,
-        failureCode,
+  const ok = await nodeRunLedger(state)
+    .setNodeRunStatus({
+      nodeRunId,
+      to,
+      allowedFrom: ['pending', 'running'],
+      extra: {
+        identity: {
+          finishedAt: Date.now(),
+          errorMessage,
+          failureCode,
+        },
       },
-    },
-    reason: 'call-settle',
-  })
+      reason: 'call-settle',
+    })
     .then(() => true)
     .catch(() => false)
   if (ok) broadcastNodeStatus(state.taskId, nodeRunId, nodeId, to)
@@ -2272,18 +2003,6 @@ async function launchCallWorkgroupChild(
   })
 }
 
-// ---------------------------------------------------------------------------
-// RFC-253 — script node dispatch.
-//
-// Structurally parallel to the agent branch below, but it cannot SHARE that
-// code: the agent path's semaphore/iso/retry block sits after the
-// `kind !== 'agent-single'` guard, so a script node never reaches it
-// (design-gate F6). What IS shared are the primitives — the pool semaphore
-// (RFC-266: the script one), the RFC-130
-// isolation helpers, mintNodeRun, setNodeRunStatus, the envelope parser — which
-// is where the invariants actually live.
-// ---------------------------------------------------------------------------
-
 /**
  * RFC-269 — one outbound code-host API call.
  *
@@ -2366,7 +2085,7 @@ export async function runCodeHostCallNode(
     // RFC-369 实现门 P3-1：canceled 是真实终态（不像 pending 马上转 running），照常广播。
     broadcastCanceled: (id) => broadcastNodeStatus(taskId, id, node.id, 'canceled'),
   })
-  await setRunStatus(state, {
+  await nodeRunLedger(state).setNodeRunStatus({
     nodeRunId,
     to: 'running',
     allowedFrom: ['pending'],
@@ -2380,7 +2099,7 @@ export async function runCodeHostCallNode(
     reason: string,
     extra: { readonly errorMessage?: string | null; readonly failureCode?: string | null },
   ): Promise<void> => {
-    await setRunStatus(state, {
+    await nodeRunLedger(state).setNodeRunStatus({
       nodeRunId,
       to,
       allowedFrom: ['running'],
@@ -2610,7 +2329,7 @@ export async function runCodeHostCallNode(
     await opts.persistence.nodeExecution.upsertOutputs({
       nodeRunId,
       outputs,
-      ...executionContextInput(state),
+      ...nodeRunLedger(state).executionContextInput(),
     })
     await settle('done', 'code-host-call-done', {})
   }
@@ -2621,675 +2340,7 @@ export async function runCodeHostCallNode(
   }
 }
 
-export async function runScriptNode(
-  state: SchedulerState,
-  args: OneNodeArgs,
-): Promise<OneNodeResult> {
-  // RFC-266: the SCRIPT pool, not the agent pool — a second-scale script must
-  // not queue behind multi-minute agent runs (and cannot starve them either).
-  const { taskId, definition, opts, log, scriptSem, writeSem } = state
-  const { node, iteration } = args
-
-  const language = readScriptLanguage(node)
-  if (language === undefined) {
-    return { kind: 'failed', summary: `script node ${node.id} has no language`, message: 'invalid' }
-  }
-  const isReadonly = resolveScriptReadonly(node)
-
-  const { inputs: upstreamInputs, consumed: consumedUpstream } = await resolveUpstreamInputs(
-    state.opts.persistence.nodeExecution,
-    taskId,
-    definition.edges,
-    node.id,
-    { containerRunId: args.containerRunId, iteration },
-    log,
-    definition,
-    state.containerOf,
-  )
-  const consumedUpstreamJson = prepareConsumedInputs({
-    record: consumedUpstream,
-  }).consumedUpstreamRunsJson!
-
-  // Row selection mirrors the agent branch: adopt a pending row if one exists,
-  // otherwise mint the next retry index.
-  const sameNodeIterRuns = await opts.persistence.nodeExecution.list({
-    taskId,
-    nodeId: node.id,
-    iteration,
-  })
-  // RFC-287 T8：取行前奏收编（脚本线不继承 reviewIteration、不写 agentOverrideName
-  // ——它没有评审轮次也没有代理借用；其余四维与 agent 线同）。
-  const resolvedRow = await resolveSchedulerRunRow({
-    lifecycle: opts.persistence.nodeRuns,
-    projections: opts.persistence.nodeExecution,
-    ...(opts.executionContext === undefined ? {} : { executionContext: opts.executionContext }),
-    taskId,
-    nodeId: node.id,
-    containerRunId: args.containerRunId,
-    iteration,
-    consumedUpstreamJson,
-    rows: sameNodeIterRuns,
-    selection: state.opts.persistence.selection,
-    inheritReviewIteration: false,
-    clearAgentOverride: false,
-    trackRetryIndex: true,
-    broadcastPending: (id) => broadcastNodeStatus(taskId, id, node.id, 'pending'),
-    broadcastCanceled: (id) => broadcastNodeStatus(taskId, id, node.id, 'canceled'),
-  })
-  let nodeRunId = resolvedRow.nodeRunId
-  const retryIndex = resolvedRow.retryIndex
-
-  const interpreter = await opts.taskScriptRuns.resolveInterpreter(
-    language,
-    opts.scriptInterpreters ?? {},
-  )
-  if (interpreter === null) {
-    await setRunStatus(state, {
-      nodeRunId,
-      to: 'failed',
-      allowedFrom: ['pending'],
-      reason: 'script-interpreter-missing',
-      extra: {
-        identity: {
-          finishedAt: Date.now(),
-          // 带上解析链的逐环结果，而不是只报结论——四环（which / 推导 / 存在 / 探测）
-          // 失败时长得一模一样，光看结论排不了障（RFC-253 T41 的 Windows 首红实证）。
-          errorMessage:
-            `no ${language} interpreter available on this host: ` +
-            opts.taskScriptRuns.describeInterpreterResolution(
-              language,
-              opts.scriptInterpreters ?? {},
-            ),
-          failureCode: 'script-interpreter-missing',
-        },
-      },
-    })
-    broadcastNodeStatus(taskId, nodeRunId, node.id, 'failed')
-    return {
-      kind: 'failed',
-      summary: `script node ${node.id}: ${language} interpreter not found`,
-      message: 'script-interpreter-missing',
-    }
-  }
-
-  const maxRetries = opts.defaultNodeRetries ?? DEFAULT_PROTOCOL_RETRY_BUDGET
-
-  // RFC-287 T5c：本线改走 `runAssembly` 骨架的**模式 B**（跨 attempt 窗口）。
-  // 一次 scriptSem 许可 + 一棵 iso 的窗口内由 retryPolicy 驱动多次 attempt；
-  // 与 agent 线相反，脚本线**每次重试都换新树**（D24：否则上一次的文件写入会与
-  // 这一次叠加）。四处逐 attempt 语义逐字保住：信号取消早退、永久失败中断、
-  // 逐次铸行+广播+落基线、succeeded 驱动合并。
-  let isoHandle: IsoHandle | null = null
-  const isoKeyRunId = nodeRunId
-  let succeeded = false
-  let lastFailure: { code: string; message: string } | null = null
-  let canceledMsg: string | null = null
-
-  const createScriptIso = async (): Promise<IsoHandle> => {
-    isoHandle = await createIsoUnderLock({
-      writeSem,
-      appHome: opts.appHome,
-      taskId,
-      binding: isolatedRunBinding(state),
-      isoKeyRunId,
-      canonRepos: state.repos,
-      log,
-    })
-    return isoHandle
-  }
-
-  return await runAssembly<Record<string, never>, ScriptAttemptOutcome, OneNodeResult>(
-    {},
-    {
-      pools: [scriptSem],
-      iso: {
-        create: createScriptIso,
-        // 落基线在许可保护的主 try 内（与 agent 线同档；抛出经 finally 释放后继续
-        // 传播——design §10.10 的按线声明）。
-        persistBase: 'in-window',
-        persist: async () => {
-          if (isoHandle !== null)
-            await persistIsoBase(isolatedRunBinding(state), nodeRunId, isoHandle)
-        },
-      },
-      onIsoSetupFailure: (err) => {
-        log.warn('script iso worktree setup failed', {
-          nodeId: node.id,
-          error: describeEffectError(err),
-        })
-        return {
-          kind: 'failed',
-          // failure code 逐字保持——它是**对外**的失败分类，改名等于让既有按
-          // `iso-setup-failed` 归类的消费方静默失配（T14 实现门抓到的漂移）。
-          // RFC-356 G3 只把 summary 换成能自证的结构化诊断。
-          summary: describeIsoFailure('isolated worktree setup failed', err),
-          message: 'iso-setup-failed',
-        }
-      },
-      spawn: async (_c, attempt) => {
-        // **只有 attempt 0** 在这里短路。理由是它与迁移前逐字同位：那时循环顶的
-        // 取消检查发生在铸行**之前**，所以直接返回不会遗留任何未终结的行。
-        //
-        // attempt ≥ 1 绝不能在这里短路（二轮实现门 A-1）：那时 `onNextAttempt` 已经
-        // 铸出一条 pending 行并把它标成 isolating。迁移前的代码在换树/铸行之后是
-        // **无条件**进入 `runOneScriptAttempt` 的，由它把新行终结为 canceled；在这里
-        // 提前返回会跳过那一步，于是留下永不运行也永不终结的孤儿行——正是 preAttempt
-        // 想消灭的形态，只是触发点从「取消发生在轮顶之前」挪到了「取消发生在
-        // discardIso / iso.create / onNextAttempt 的某个 await 里」。preAttempt 只能
-        // 覆盖轮顶那一瞬，覆盖不了这段异步窗口，所以两者缺一不可。
-        if (attempt === 0 && opts.signal?.aborted === true) {
-          canceledMsg = 'signal aborted'
-          return { kind: 'canceled' as const, summary: 'task canceled', message: 'signal aborted' }
-        }
-        const outcome = await runOneScriptAttempt(state, {
-          node,
-          nodeRunId,
-          iteration,
-          retryIndex: nodeRunAttemptIndex({ kind: 'offset', base: retryIndex, offset: attempt }),
-          inputs: upstreamInputs,
-          interpreter,
-          isoHandle,
-          isReadonly,
-          language,
-        })
-        if (outcome.kind === 'done') succeeded = true
-        else if (outcome.kind === 'canceled') canceledMsg = outcome.message
-        else lastFailure = { code: outcome.message, message: outcome.summary }
-        return outcome
-      },
-      retryPolicy: {
-        shouldRetry: (outcome, attempt) => {
-          if (outcome.kind === 'done' || outcome.kind === 'canceled') return false
-          // Permanent failures gain nothing from another attempt.
-          if ((SCRIPT_PERMANENT_FAILURE_CODES as readonly string[]).includes(outcome.message)) {
-            return false
-          }
-          return attempt < maxRetries
-        },
-        // 换树 / 铸行 / 落基线之前先看取消——迁移前这一检查在循环最顶上，落进
-        // 骨架时只剩 spawn 入口一处，于是取消若落在换树窗口里会留下一条永不运行
-        // 的孤儿 pending 行（T14 实现门抓到的回归，见骨架 preAttempt 的注释）。
-        preAttempt: () => {
-          if (opts.signal?.aborted !== true) return null
-          canceledMsg = 'signal aborted'
-          return { kind: 'canceled' as const, summary: 'task canceled', message: 'signal aborted' }
-        },
-        // D24：每次重试换新树——这正是让重跑一个写文件的脚本变安全的原因。
-        isoOnRetry: 'always-recreate',
-        onIsoRecreateFailure: (err) => {
-          lastFailure = {
-            code: 'iso-recreate-failed',
-            message: describeIsoFailure('iso-recreate-failed', err),
-          }
-          return {
-            kind: 'failed',
-            summary: lastFailure.message,
-            message: lastFailure.code,
-          }
-        },
-        onNextAttempt: async (attempt) => {
-          nodeRunId = await mintRun(state, {
-            ...nodeRunMintIdentityForSlot(
-              {
-                kind: 'node',
-                nodeId: node.id,
-                frame: { containerRunId: args.containerRunId, iteration: iteration },
-              },
-              { kind: 'current' },
-            ),
-            taskId,
-            nodeId: node.id,
-            status: 'pending',
-            cause: 'process-retry',
-            retryIndex: nodeRunAttemptIndex({ kind: 'offset', base: retryIndex, offset: attempt }),
-            containerRunId: args.containerRunId,
-            iteration,
-            overrides: {
-              inputs: {
-                consumedUpstreamRunsJson: consumedUpstreamJson,
-              },
-            },
-          })
-          broadcastNodeStatus(taskId, nodeRunId, node.id, 'pending')
-          if (isoHandle !== null)
-            await persistIsoBase(isolatedRunBinding(state), nodeRunId, isoHandle)
-        },
-      },
-      mergePhase: (_c, outcome) => {
-        if (outcome.kind === 'canceled') {
-          return {
-            skip: 'not-done',
-            keep: false,
-            then: {
-              produce: async () => ({
-                kind: 'canceled' as const,
-                summary: 'task canceled',
-                message: canceledMsg ?? 'signal aborted',
-              }),
-            },
-          }
-        }
-        // readonly 的产物永不合回主干（一次性副本），且 settle 先于 done 写。
-        if (!succeeded || isReadonly) return { skip: 'not-done', keep: false, then: 'settle' }
-        if (isoHandle === null || isoHandle.passthrough) {
-          return { skip: 'passthrough', keep: false, then: 'settle' }
-        }
-        return 'merge'
-      },
-      mergeBack: {
-        run: async () => {
-          const iso = isoHandle as IsoHandle
-          const merge = await mergeBackAndSettle({
-            binding: isolatedRunBinding(state),
-            writeSem,
-            handle: iso,
-            nodeRunId,
-            via: 'live',
-            conflictResolver: (conflicts, containerPath) =>
-              resolveMergeConflicts(state, {
-                conflicts,
-                containerPath,
-                conflictNodeRunId: nodeRunId,
-                nodeId: node.id,
-                iteration,
-              }),
-            log,
-          })
-          return merge
-        },
-        disposition: {
-          onConflictHuman: (detail) => ({
-            // 显式保留（T5a 起不再依赖 finally 谓词碰巧为假）。
-            keep: true,
-            produce: async () => ({
-              kind: 'awaiting_human' as const,
-              summary: `merge conflict unresolved: ${detail}`,
-              message: 'merge-conflict',
-            }),
-          }),
-          onThrow: (err) => ({
-            keep: true,
-            then: {
-              produce: async () => {
-                const msg = describeEffectError(err)
-                await markMergeFailed(isolatedRunBinding(state), nodeRunId, msg, log)
-                return {
-                  kind: 'failed' as const,
-                  summary: `script node ${node.id} merge failed`,
-                  message: `merge-back-failed: ${msg}`,
-                }
-              },
-            },
-          }),
-        },
-      },
-      // 不要在这里 `.catch(() => {})`：骨架自己会 catch 并 `log.warn('iso discard
-      // failed')`，本地先吞掉等于把那条约定好的告警变成永不可达，残留工作树 / ref
-      // 的清理失败就彻底没了痕迹（T14 实现门）。
-      discardIso: async (h: IsoLike) => {
-        await discardNodeIso(h as IsoHandle, log, writeSem)
-      },
-      settle: async () => {
-        if (succeeded) return { kind: 'ok', summary: '', message: '' }
-        return {
-          kind: 'failed',
-          summary: lastFailure?.message ?? `script node ${node.id} failed`,
-          message: lastFailure?.code ?? 'script-nonzero-exit',
-        }
-      },
-      log,
-    },
-  )
-}
-
-interface ScriptAttemptArgs {
-  node: WorkflowNode
-  nodeRunId: string
-  iteration: number
-  retryIndex: number
-  inputs: Record<string, string>
-  interpreter: TaskScriptInterpreter
-  isoHandle: IsoHandle | null
-  isReadonly: boolean
-  language: ScriptLanguage
-}
-
-type ScriptAttemptOutcome =
-  | { kind: 'done' }
-  | { kind: 'failed'; summary: string; message: string }
-  | { kind: 'canceled'; message: string }
-
 /** One attempt: dependencies → spawn → ports → terminal row. */
-async function runOneScriptAttempt(
-  state: SchedulerState,
-  a: ScriptAttemptArgs,
-): Promise<ScriptAttemptOutcome> {
-  const { task, taskId, opts, log } = state
-  const runContent = opts.taskScriptRuns.prepareRunContent(taskId, a.nodeRunId)
-
-  // The iso handle is created before every attempt, including readonly. The
-  // scope-root fallback exists only for defensive compatibility with a
-  // passthrough handle implementation.
-  const worktreePath = a.isoHandle?.repos[0]?.isoWorktreePath ?? state.scopeRoot
-  // Every repo this attempt may touch — the boundary must match the paths
-  // `AW_REPOS_JSON` hands the script, not just the primary one.
-  //
-  // `name` is the RFC-248 canonical repo key (the mount path), not the legacy
-  // `worktreeDirName` — the latter loses the nesting for a repo-group member
-  // mounted at `a/b`.
-  const repoProjection =
-    a.isoHandle === null
-      ? state.repos.map((r) => ({ name: r.mountPath, path: r.worktreePath }))
-      : a.isoHandle.repos.map((r, i) => ({
-          name: state.repos[i]?.mountPath ?? r.mountPath,
-          path: r.isoWorktreePath,
-        }))
-  // Dependencies are deterministic and prebuilt-only, but otherwise run with
-  // the daemon's natural toolchain and network access.
-  let depsEnv: TaskScriptDependencyEnvironment | null = null
-  const specs = readScriptDependencies(a.node)
-  if (specs.length > 0) {
-    try {
-      depsEnv = await opts.taskScriptRuns.ensureDependencies({
-        contentHomeRef: opts.appHome,
-        language: a.language,
-        interpreter: opts.taskScriptRuns.dependencyInterpreter(a.interpreter),
-        specs,
-        timeoutMs: opts.scriptDepsInstallTimeoutMs ?? 10 * 60 * 1000,
-        ...(opts.signal === undefined ? {} : { signal: opts.signal }),
-        onLine: async (stream: 'stdout' | 'stderr', line: string) =>
-          await opts.persistence.nodeExecution.appendEvent({
-            nodeRunId: a.nodeRunId,
-            ts: Date.now(),
-            kind: stream === 'stderr' ? 'stderr' : 'text',
-            payload: JSON.stringify({ phase: 'deps-install', line }),
-            ...executionContextInput(state),
-          }),
-        log,
-      })
-    } catch (err) {
-      const detail = err instanceof ScriptDepsInstallError ? err.detail : String(err)
-      const message = err instanceof Error ? err.message : String(err)
-      await setRunStatus(state, {
-        nodeRunId: a.nodeRunId,
-        to: 'failed',
-        allowedFrom: ['pending', 'running'],
-        reason: 'script-deps-install-failed',
-        extra: {
-          identity: {
-            finishedAt: Date.now(),
-            errorMessage: `${message}\n${detail}`.slice(0, 4000),
-            failureCode: 'script-deps-install-failed',
-          },
-        },
-      })
-      broadcastNodeStatus(taskId, a.nodeRunId, a.node.id, 'failed')
-      return { kind: 'failed', summary: message, message: 'script-deps-install-failed' }
-    }
-  }
-
-  const envelopeNonce = await state.opts.persistence.nodeRuns.loadEnvelopeNonce(a.nodeRunId)
-
-  // RFC-253 T28 — resolved once and shared by every diagnostic sink below, so
-  // no sink can drift into persisting what another one masks.
-  const scriptEnv = readScriptEnv(a.node)
-
-  // DB first, then broadcast — a client must never observe `running` for a row
-  // the database still calls `pending`.
-  await setRunStatus(state, {
-    nodeRunId: a.nodeRunId,
-    to: 'running',
-    allowedFrom: ['pending'],
-    reason: 'script-dispatch',
-    extra: {
-      identity: {
-        startedAt: Date.now(),
-      },
-    },
-  })
-  broadcastNodeStatus(taskId, a.nodeRunId, a.node.id, 'running')
-
-  let processEffect:
-    | ProcessEffectAttemptObserver<TaskScriptStartReceipt, TaskScriptResult>
-    | undefined
-  const outcome = await runScriptProcess(opts.taskScriptRuns, {
-    node: a.node,
-    inputs: a.inputs,
-    runContent,
-    workspaceRef: worktreePath,
-    // 2026-08-04 audit: hand the script the paths it is actually allowed to
-    // touch. This used to be the CANONICAL worktree while a non-readonly node
-    // runs in its iso copy — so a script that followed the documented
-    // `AW_REPOS_JSON` contract wrote outside its isolation: EPERM on macOS,
-    // and on Linux a silent write into the appHome tmpfs that evaporated at
-    // exit. The agent path next door already resolves iso paths for the same
-    // reason (`{{__repos__}}` below).
-    repositories: repoProjection.map((r) => ({ name: r.name, reference: r.path })),
-    taskId,
-    nodeId: a.node.id,
-    nodeRunId: a.nodeRunId,
-    iteration: a.iteration,
-    retryIndex: a.retryIndex,
-    shardKey: null,
-    envelopeNonce,
-    interpreter: a.interpreter,
-    dependencies: depsEnv,
-    ...(opts.defaultPerNodeTimeoutMs === undefined
-      ? {}
-      : { timeoutMs: opts.defaultPerNodeTimeoutMs }),
-    ...(opts.signal === undefined ? {} : { signal: opts.signal }),
-    beforeStart: async (start) => {
-      const persistence = opts.persistence.effects
-      processEffect = createProcessEffectAttemptObserver({
-        persistence,
-        taskId,
-        nodeRunId: a.nodeRunId,
-        processKind: 'script',
-        resourceKeys: (description) => description.resourceKeys,
-        projection: start.project(
-          persistence,
-          a.isReadonly ? [] : { writerWorkspace: worktreePath },
-        ),
-      })
-      await processEffect?.beforeSpawn()
-    },
-    gitUserName: task.gitUserName,
-    gitUserEmail: task.gitUserEmail,
-    onStarted: async (receipt) => {
-      // Persist before reading a single byte of output: a daemon crash after
-      // this point leaves the boot reaper something to match (design-gate P0-3).
-      const runtimeParamsJson = opts.taskScriptRuns.runtimeParameters({
-        interpreter: a.interpreter,
-        dependencies: depsEnv,
-      })
-      if (processEffect === undefined) {
-        await opts.taskScriptRuns.recordUnownedStart({
-          persistence: opts.persistence.nodeExecution,
-          nodeRunId: a.nodeRunId,
-          receipt,
-          runtimeParamsJson,
-          executionContext: () => executionContextInput(state),
-        })
-      } else {
-        await processEffect.recordSpawnReceipt(receipt, runtimeParamsJson)
-      }
-    },
-    requireStartReceipt: true,
-    onStdoutLine: async (line, sourceKey) => {
-      // NOT masked, deliberately: stdout is the DATA channel. Its bytes become
-      // the port value verbatim (AC-27), so masking this mirror would show the
-      // operator something the downstream node never sees. A script that prints
-      // its own credential to stdout has published it as data.
-      await opts.persistence.nodeExecution.appendEvent({
-        ...(sourceKey === undefined ? {} : { sourceKey }),
-        nodeRunId: a.nodeRunId,
-        ts: Date.now(),
-        kind: 'text',
-        payload: JSON.stringify({ line }),
-        ...executionContextInput(state),
-      })
-    },
-    onStderrLine: async (line, sourceKey) => {
-      // RFC-253 T28 — stderr is the DIAGNOSTIC channel and these rows are a
-      // read surface (node-run events route, /session reconstruction, WS
-      // replay). Masking only the failure detail below was not enough: that
-      // value is `stderrTail`, a strict SUFFIX of the very bytes this sink
-      // stores, so the same secret stayed in the clear one table over.
-      await opts.persistence.nodeExecution.appendEvent({
-        ...(sourceKey === undefined ? {} : { sourceKey }),
-        nodeRunId: a.nodeRunId,
-        ts: Date.now(),
-        kind: 'stderr',
-        payload: JSON.stringify({ line: maskScriptEnvValues(line, scriptEnv) }),
-        ...executionContextInput(state),
-      })
-    },
-    log,
-  })
-
-  if (outcome.result.outcome === 'aborted') {
-    const daemonShutdown = isDaemonInterruptionAbortReason(opts.signal?.reason)
-    await setRunStatus(state, {
-      nodeRunId: a.nodeRunId,
-      to: daemonShutdown ? 'interrupted' : 'canceled',
-      allowedFrom: ['running'],
-      reason: 'script-aborted',
-      extra: {
-        identity: {
-          finishedAt: Date.now(),
-          exitCode: outcome.result.exitCode,
-        },
-      },
-    })
-    await processEffect?.settle(outcome.result)
-    broadcastNodeStatus(taskId, a.nodeRunId, a.node.id, daemonShutdown ? 'interrupted' : 'canceled')
-    return { kind: 'canceled', message: daemonShutdown ? 'daemon-shutdown' : 'canceled' }
-  }
-
-  if (outcome.result.truncated.stdout) {
-    await opts.persistence.nodeExecution.appendEvent({
-      nodeRunId: a.nodeRunId,
-      ts: Date.now(),
-      kind: 'error',
-      payload: JSON.stringify({ truncated: 'stdout' }),
-      ...executionContextInput(state),
-    })
-  }
-
-  let failureCode = outcome.failureCode
-  // impl-gate M5: single-port mode promises the port value IS stdout, byte for
-  // byte. The rolling tail keeps the END and discards the HEAD, so a truncated
-  // capture would hand downstream a value silently missing its beginning — a
-  // JSON or CSV payload turned into an illegal fragment — while the node
-  // reported success. Envelope mode already fails closed here (no opening tag
-  // ⇒ `script-envelope-missing`); single-port mode needs the same treatment
-  // rather than being the one place this product corrupts data quietly.
-  if (
-    failureCode === null &&
-    outcome.result.truncated.stdout &&
-    scriptOutputMode(a.node) === 'single'
-  ) {
-    failureCode = 'script-output-truncated'
-  }
-  // 2026-08-04 audit: `spawnError` had NO reader anywhere in the repo, and a
-  // spawn that never started has an empty stderr tail — so "the script process
-  // could not start" reached the user with a blank detail and nothing to act
-  // on. Prefer the spawn reason (already translated by `explainSpawnEnoent`,
-  // so a missing cwd is not reported as a missing bwrap) and fall back to the
-  // stderr tail for processes that did start.
-  let errorMessage: string | null =
-    failureCode === null
-      ? null
-      : (outcome.result.spawnError ?? outcome.result.stderrTail.slice(-2000))
-  const ports: Record<string, string> = {}
-  /** RFC-306: ports this script closed with `active="false"`. */
-  const inactivePorts = new Set<string>()
-
-  if (failureCode === null) {
-    const extraction = extractScriptPorts({
-      node: a.node,
-      rawStdout: outcome.result.rawStdout,
-      nonce: envelopeNonce,
-    })
-    if (extraction.kind === 'ok') {
-      Object.assign(ports, extraction.ports)
-      for (const p of extraction.inactivePorts) inactivePorts.add(p)
-    } else {
-      failureCode = extraction.code
-      errorMessage = extraction.detail
-    }
-  }
-
-  // RFC-253 T28 — the persisted failure detail is a read surface: stderr tails
-  // and envelope excerpts must not re-leak env values the workflow read path
-  // masks. Port values stay byte-exact; only diagnostics are masked.
-  if (errorMessage !== null) {
-    errorMessage = maskScriptEnvValues(errorMessage, scriptEnv)
-  }
-
-  if (failureCode !== null) {
-    await setRunStatus(state, {
-      nodeRunId: a.nodeRunId,
-      to: 'failed',
-      allowedFrom: ['running'],
-      reason: failureCode,
-      extra: {
-        identity: {
-          finishedAt: Date.now(),
-          exitCode: outcome.result.exitCode,
-          errorMessage,
-          failureCode,
-        },
-      },
-    })
-    await processEffect?.settle(outcome.result)
-    broadcastNodeStatus(taskId, a.nodeRunId, a.node.id, 'failed')
-    return {
-      kind: 'failed',
-      summary: errorMessage ?? `script exited ${String(outcome.result.exitCode)}`,
-      message: failureCode,
-    }
-  }
-
-  await opts.persistence.nodeExecution.upsertOutputs({
-    nodeRunId: a.nodeRunId,
-    outputs: Object.entries(ports).map(([portName, content]) => ({
-      portName,
-      content,
-      // RFC-306: a script closes a branch the same way an agent does.
-      active: !inactivePorts.has(portName),
-    })),
-    ...executionContextInput(state),
-  })
-  // RFC-276 regression fix: a readonly script's iso is discarded without a
-  // merge-back, but its 'isolating' stamp must still SETTLE — deriveFrontier's
-  // D15 gate only completes done rows whose merge_state is settled, so a
-  // done+isolating row wedges the scope forever ("scheduler stalled / no ready
-  // nodes in scope"; pre-RFC-276 readonly scripts ran in place and stayed NULL).
-  // Settled BEFORE the done write so no done+unsettled state is ever observable.
-  if (a.isReadonly && a.isoHandle !== null && !a.isoHandle.passthrough) {
-    await state.opts.persistence.mergeStates.transition({
-      nodeRunId: a.nodeRunId,
-      event: { kind: 'discard-readonly' },
-      ...executionContextInput(state),
-    })
-  }
-  await setRunStatus(state, {
-    nodeRunId: a.nodeRunId,
-    to: 'done',
-    allowedFrom: ['running'],
-    reason: 'script-done',
-    extra: {
-      identity: {
-        finishedAt: Date.now(),
-        exitCode: outcome.result.exitCode,
-      },
-    },
-  })
-  await processEffect?.settle(outcome.result)
-  broadcastNodeStatus(taskId, a.nodeRunId, a.node.id, 'done')
-  return { kind: 'done' }
-}
 
 // -----------------------------------------------------------------------------
 // RFC-306 — branch judgment + skip row (design §6.2)
@@ -3419,9 +2470,9 @@ async function recordSkippedRun(
           consumedUpstreamRunsJson: consumedJson,
         },
       },
-      ...executionContextInput(state),
+      ...nodeRunLedger(state).executionContextInput(),
     })
-    await transitionRunStatus(state, {
+    await nodeRunLedger(state).transitionNodeRunStatus({
       nodeRunId,
       event: { kind: 'mark-skipped', reason },
       extra: {
@@ -3432,7 +2483,7 @@ async function recordSkippedRun(
     })
   } else {
     if (latest?.status === 'awaiting_review' || latest?.status === 'awaiting_human') {
-      await transitionRunStatus(state, {
+      await nodeRunLedger(state).transitionNodeRunStatus({
         nodeRunId: latest.id,
         event: { kind: 'cancel-by-supersede', reason: 'branch-skipped' },
         extra: {
@@ -3443,7 +2494,7 @@ async function recordSkippedRun(
       })
       broadcastNodeStatus(taskId, latest.id, node.id, 'canceled')
     }
-    nodeRunId = await mintRun(state, {
+    nodeRunId = await nodeRunLedger(state).mintNodeRun({
       ...nodeRunMintIdentityForSlot(
         {
           kind: 'node',
@@ -3464,7 +2515,7 @@ async function recordSkippedRun(
         },
       },
     })
-    await transitionRunStatus(state, {
+    await nodeRunLedger(state).transitionNodeRunStatus({
       nodeRunId,
       event: { kind: 'mark-skipped', reason },
       extra: {
@@ -3588,7 +2639,7 @@ export async function runOutputNode(
     projected.push({ binding: b, row })
   }
   // RFC-359：born-done 的行与它的输出同一事务落库（端口 `outputs` 的注释说明了缝在哪）。
-  const nrId = await mintRun(state, {
+  const nrId = await nodeRunLedger(state).mintNodeRun({
     ...nodeRunMintIdentityForSlot(
       {
         kind: 'node',
@@ -3640,7 +2691,7 @@ export async function runInputNode(
   // RFC-004: an input node's single output port is named after its inputKey,
   // so edges authored on the canvas resolve to the visible handle label.
   // RFC-359：born-done 的行与它的输出同一事务落库（端口 `outputs` 的注释说明了缝在哪）。
-  const nrId = await mintRun(state, {
+  const nrId = await nodeRunLedger(state).mintNodeRun({
     ...nodeRunMintIdentityForSlot(
       {
         kind: 'node',
@@ -3723,7 +2774,7 @@ export async function runCrossClarifyNode(
   // Validator runtime defense: a node without a questioner means the
   // workflow is malformed — fail and let the user see it in the UI.
   if (findQuestionerNodeForCrossClarify(definition, node.id) === undefined) {
-    const failId = await mintRun(state, {
+    const failId = await nodeRunLedger(state).mintNodeRun({
       ...nodeRunMintIdentityForSlot(
         {
           kind: 'node',
@@ -3739,7 +2790,7 @@ export async function runCrossClarifyNode(
       containerRunId: args.containerRunId,
       iteration,
     })
-    await setRunStatus(state, {
+    await nodeRunLedger(state).setNodeRunStatus({
       nodeRunId: failId,
       to: 'failed',
       allowedFrom: ['pending'],
@@ -3772,7 +2823,7 @@ export async function runCrossClarifyNode(
       })) === 'stop'
     : false
   if (stopped) {
-    const stopRunId = await mintRun(state, {
+    const stopRunId = await nodeRunLedger(state).mintNodeRun({
       ...nodeRunMintIdentityForSlot(
         {
           kind: 'node',
@@ -3804,7 +2855,7 @@ export async function runCrossClarifyNode(
     // strand the pending row. Retire the speculative mint and fall through
     // to the common awaiting path (the runner mints its own row on emit).
     if (dispatched.kind !== 'short-circuit-stop') {
-      await setRunStatus(state, {
+      await nodeRunLedger(state).setNodeRunStatus({
         nodeRunId: stopRunId,
         to: 'canceled',
         allowedFrom: ['pending'],
@@ -3982,7 +3033,7 @@ export async function runAgentSingleNode(
   const inheritedReviewIteration = latestExisting?.reviewIteration ?? 0
   const inheritedShardKey = latestExisting?.shardKey ?? null
   const inheritedParentNodeRunId = latestExisting?.parentNodeRunId ?? null
-  let envelopeNonce = await state.opts.persistence.nodeRuns.loadEnvelopeNonce(nodeRunId)
+  let envelopeNonce = await nodeRunLedger(state).loadEnvelopeNonce(nodeRunId)
 
   // Lock order: writeSem ≺ (agentSem | scriptSem) ≺ subprocessSem (no cycles —
   // RFC-098 survey §wp5-4). RFC-266 split the old single `globalSem` into two
@@ -4136,7 +3187,7 @@ export async function runAgentSingleNode(
         // the answered Q&A via id-order generation derivation + the RFC-070
         // consumed-by stamps, not a carried clarifyIteration. shardKey /
         // parentNodeRunId still belong to this run-of-the-node and persist.
-        nodeRunId = await mintRun(state, {
+        nodeRunId = await nodeRunLedger(state).mintNodeRun({
           ...nodeRunMintIdentityForSlot(
             (await opts.persistence.nodeExecution.read(nodeRunId))!.slot,
             { kind: 'current' },
@@ -4160,7 +3211,7 @@ export async function runAgentSingleNode(
             },
           },
         })
-        envelopeNonce = await state.opts.persistence.nodeRuns.loadEnvelopeNonce(nodeRunId)
+        envelopeNonce = await nodeRunLedger(state).loadEnvelopeNonce(nodeRunId)
         broadcastNodeStatus(taskId, nodeRunId, node.id, 'pending')
         // RFC-130: carry the iso columns onto the freshly-minted retry row so a
         // crash mid-retry can still find the iso worktree (the physical iso is
@@ -4196,7 +3247,7 @@ export async function runAgentSingleNode(
                   subReason: f.subReason,
                   retryAttempt: attempt,
                 })}`,
-                ...executionContextInput(state),
+                ...nodeRunLedger(state).executionContextInput(),
               })
             }
           } else {
@@ -4210,7 +3261,7 @@ export async function runAgentSingleNode(
                 reason: followupReason,
                 retryAttempt: attempt,
               })}`,
-              ...executionContextInput(state),
+              ...nodeRunLedger(state).executionContextInput(),
             })
           }
         }
@@ -4231,7 +3282,7 @@ export async function runAgentSingleNode(
               restartsUsed: retryShapeState.restartsUsed,
               retryAttempt: attempt,
             })}`,
-            ...executionContextInput(state),
+            ...nodeRunLedger(state).executionContextInput(),
           })
         }
       }
@@ -4782,7 +3833,7 @@ export async function runAgentSingleNode(
               opencodeSessionId: persistedSessionId,
             },
           },
-          ...executionContextInput(state),
+          ...nodeRunLedger(state).executionContextInput(),
         })
       }
       // RFC-026: post-spawn fallback — opencode rejected the resume id we
@@ -4812,7 +3863,7 @@ export async function runAgentSingleNode(
       // abandoned each predecessor, while the final pending/isolating row was
       // redispatched and crashed on begin-isolation from an abandoned state.
       // Close the row before the retry policy observes the synthetic failure.
-      await transitionRunStatus(state, {
+      await nodeRunLedger(state).transitionNodeRunStatus({
         nodeRunId,
         event: { kind: 'mark-failed', reason: 'scheduler-node-threw' },
         extra: {
@@ -4982,7 +4033,7 @@ export async function runAgentSingleNode(
               toContainerRelative(portFallbackMount(state.repos.map((repo) => repo.mountPath)), p),
             ),
             conflictResolver: (conflicts, containerPath) =>
-              resolveMergeConflicts(state, {
+              resolveMergeConflicts(bindMergeConflictPorts(state), {
                 conflicts,
                 containerPath,
                 conflictNodeRunId: nodeRunId,
@@ -5042,7 +4093,7 @@ export async function runAgentSingleNode(
         // Discard the iso worktree on a terminal exit; keep it when the node is
         // parked (awaiting_human / merge conflict) so the resume path (D19) + the
         // future merge agent (PR-B) can reuse the exact same worktree state.
-        await discardNodeIso(h as IsoHandle, log, writeSem)
+        await discardNodeIso(bindIsolationCleanup(), h as IsoHandle, log, writeSem)
       },
       settle: async () => ({ kind: 'ran', result: lastResult }),
       log,
@@ -5176,21 +4227,6 @@ export async function runAgentSingleNode(
   return { kind: 'ok', summary: '', message: '' }
 }
 
-export function broadcastNodeStatus(
-  taskId: string,
-  nodeRunId: string,
-  nodeId: string,
-  status: NodeStatus,
-): void {
-  taskBroadcaster.broadcast(TASK_CHANNEL(taskId), {
-    id: -1,
-    type: 'node.status',
-    nodeRunId,
-    nodeId,
-    status,
-  })
-}
-
 /**
  * Resolve upstream port values for one node at a given iteration.
  *
@@ -5203,125 +4239,6 @@ export function broadcastNodeStatus(
 // unified the source-run picker with the freshness picker (done-only,
 // highest-iteration-then-isFresherNodeRun) and now returns `consumed`
 // provenance alongside the resolved inputs — see body + design §5.1 / D10.
-export async function resolveUpstreamInputs(
-  persistence: NodeExecutionPersistence,
-  taskId: string,
-  edges: WorkflowEdge[],
-  nodeId: string,
-  // RFC-354 — the consumer's FRAME (wrapper generation row + round). Every
-  // source is read in the frame the environment chain resolves it to: a local
-  // in this frame, a closure / parameter in an enclosing frame — never by a
-  // numeric iteration window.
-  frame: FrameCoordinate,
-  log: Logger,
-  definition?: WorkflowDefinition,
-  parents?: ReadonlyMap<string, string>,
-): Promise<{ inputs: Record<string, string>; consumed: Record<string, string> }> {
-  const grouped = new Map<string, string[]>()
-  // Fanout boundary edges are structural mirrors, and clarify/cross-clarify
-  // response edges are prompt-injected system channels — neither is ordinary
-  // row-to-row dataflow. Reading them here would either observe a still-running
-  // wrapper/channel row (and emit a false "missing upstream" warning) or, when
-  // an older channel output exists, inject it into a reserved agent input and
-  // record false consumed provenance. `agent.__clarify__ → <gate>` IS kept
-  // (RFC-354 D7): the asker is the gate's structural upstream for both gate
-  // kinds — the port table's `dataflow` flag decides, not the target's kind.
-  //
-  // RFC-306: the projection now lives in task-execution/domain/inboundEdges so
-  // the branch-activation judgment reads EXACTLY the same edge set — see that
-  // module's header for why a second hand-rolled copy would be a bug factory.
-  const incoming = collectDataflowInboundEdges(edges, nodeId)
-  // RFC-074 provenance: which upstream node_run each source edge actually read.
-  // Keyed by source nodeId — all edges from the same source resolve to the same
-  // picked run, so this stays consistent across multi-port fan-in.
-  const consumed: Record<string, string> = {}
-  // The generation rows between this frame and the top, loaded once; the
-  // pure frame walk below looks them up synchronously.
-  const chain = await loadFrameChain((id) => persistence.read(id), frame)
-
-  for (const edge of incoming) {
-    const resolved =
-      definition === undefined
-        ? { ok: true as const, source: edge.source, exitedWrapperIds: [] }
-        : resolveWorkflowSourceRef(definition, edge.source, nodeId, parents)
-    if (!resolved.ok) {
-      throw new Error(
-        `wrapper-output-boundary-missing: source '${edge.source.nodeId}.${edge.source.portName}' is not exposed by ${describeWrapperKind(resolved.wrapperKind)} '${resolved.wrapperId}'`,
-      )
-    }
-    const source = resolved.source
-    // RFC-354 — lexical environment lookup. The source lives either in this
-    // frame (a sibling in the same wrapper generation and round) or in an
-    // enclosing frame (a value captured from outside the body, or a wrapper
-    // parameter); the walk decides which, and a source that is not lexically
-    // visible is a definition error surfaced loudly, never an empty string.
-    // Without a definition (legacy fixtures) every source is read in the
-    // consumer's own frame.
-    const sourceFrame =
-      definition === undefined || parents === undefined
-        ? frame
-        : resolveSourceFrame({
-            sourceNodeId: source.nodeId,
-            targetNodeId: nodeId,
-            parents,
-            frame,
-            containerRowById: chain.lookup,
-          })
-    if (!('containerRunId' in sourceFrame) && !sourceFrame.ok) {
-      throw new Error(
-        `closure-binding-unresolved: source '${source.nodeId}.${source.portName}' is not lexically visible from '${nodeId}' (${sourceFrame.reason})`,
-      )
-    }
-    const readFrame = 'containerRunId' in sourceFrame ? sourceFrame : sourceFrame.frame
-    const run = await persistence.snapshotRead(async (snapshot) => {
-      const rows = await snapshot.list({ taskId, nodeId: source.nodeId })
-      const ids = new Set(rows.map((row) => row.id))
-      const selected = (
-        await snapshot.selection.slotHistory(
-          taskId,
-          nodeOutputSlot(
-            source.nodeId,
-            definition?.nodes.find((node) => node.id === source.nodeId)?.kind,
-            readFrame,
-          ),
-          { statusIn: ['done', 'skipped'] },
-        )
-      )
-        .filter((row) => ids.has(row.id))
-        .at(-1)
-      return rows.find((row) => row.id === selected?.id)
-    })
-    if (!run) {
-      log.warn('upstream node_run not found', { taskId, sourceNodeId: source.nodeId })
-      continue
-    }
-    consumed[source.nodeId] = run.id
-    const outRows = await persistence.listOutputs(run.id)
-    const port = outRows.find((o) => o.portName === source.portName)
-    // RFC-306: a closed branch contributes NOTHING to a downstream prompt.
-    //
-    //   * source row `skipped` ⇒ it produced no ports at all;
-    //   * port row `active === false` ⇒ its content is the author's REASON for
-    //     closing the branch. That text must never reach another agent: it is
-    //     one model's private justification, and injecting it as if it were data
-    //     invents an input the author never wired.
-    //
-    // Reaching this line at all means the node was judged ACTIVE — i.e. some
-    // OTHER inbound edge is live (joinMode 'any'), or the operator forced the
-    // node to run. Empty string is exactly the right value for the dead legs.
-    const inactive = run.status === 'skipped' || port?.active === false
-    const content = inactive ? '' : (port?.content ?? '')
-    const list = grouped.get(edge.target.portName) ?? []
-    list.push(content)
-    grouped.set(edge.target.portName, list)
-  }
-
-  const inputs: Record<string, string> = {}
-  for (const [name, values] of grouped) {
-    inputs[name] = values.length === 1 ? (values[0] ?? '') : values.join('\n\n---\n\n')
-  }
-  return { inputs, consumed }
-}
 
 // RFC-060 PR-E: pickLatestSourceRun + sumChildTokens were used only by the
 // agent-multi runFanOutNode path (now removed). Deleted alongside the fan-out

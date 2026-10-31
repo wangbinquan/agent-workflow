@@ -55,7 +55,13 @@ test('isolation, replay and wrapper mechanics do not inspect scalar/map columns 
     'composition/executionMergeRecovery.ts',
     'composition/wrapperMechanics.ts',
     'engine/wrapper/gitStrategy.ts',
-    'infrastructure/isolatedAgentRun.ts',
+    'engine/kernel/isolation.ts',
+    'engine/kernel/merge.ts',
+    'engine/kernel/nodeRunLedger.ts',
+    'engine/node/script/runScriptNode.ts',
+    'engine/node/script/runOneScriptAttempt.ts',
+    'composition/scriptNodeExecution.ts',
+    'composition/executionMechanismBindings.ts',
   ]) {
     const text = taskSource(path)
     expect(text).not.toMatch(
@@ -77,7 +83,9 @@ test('scheduler and workspace view, scene and local effects keep the checkpoint 
   for (const path of [
     'services/scheduler.ts',
     'modules/task-execution/infrastructure/isolationWorkspaceView.ts',
-    'modules/task-execution/composition/isolationWorkspaceScene.ts',
+    'modules/task-execution/infrastructure/executionWorkspaceSession.ts',
+    'modules/task-execution/composition/executionWorkspaceBinding.ts',
+    'modules/task-execution/engine/kernel/isolationCleanup.ts',
     'platform/workspace/local/isolation.ts',
     'platform/workspace/local/isolationReferences.ts',
   ]) {

@@ -1,3 +1,8 @@
+import {
+  SCRIPT_NODE_SOURCE,
+  SCRIPT_ATTEMPT_SOURCE,
+  MERGE_CONFLICT_SOURCE,
+} from './helpers/executionMechanismSources'
 // RFC-287 T1②③⑥ —— 五条装配线 × 三种合并结局的**处置矩阵**（拆分前 oracle）。
 //
 // 为什么存在：三轮设计门在同一处连续翻车三次——把「各线合并失败怎么收场」当成
@@ -46,9 +51,16 @@ const WRAPPER_MECHANICS = readFileSync(
   ),
   'utf8',
 )
-const MECHANICS_SOURCES = [SCHEDULER, NODE_MECHANICS, WRAPPER_MECHANICS] as const
+const MECHANICS_SOURCES = [
+  SCRIPT_NODE_SOURCE,
+  SCRIPT_ATTEMPT_SOURCE,
+  MERGE_CONFLICT_SOURCE,
+  SCHEDULER,
+  NODE_MECHANICS,
+  WRAPPER_MECHANICS,
+] as const
 const ASSEMBLY_SRC = readFileSync(
-  resolve(import.meta.dir, '..', 'src', 'services', 'schedulerAssembly.ts'),
+  resolve(import.meta.dir, '..', 'src', 'modules/task-execution/engine/kernel/assembly.ts'),
   'utf8',
 )
 

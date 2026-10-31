@@ -1,3 +1,4 @@
+import { testExecutionPermits } from './helpers/executionPermits'
 import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 // RFC-395 II-pre：改接生产启动 / 读取路径，保留原断言意图。
 // RFC-311 实现门 P1-6 / P2-3 —— `tasks.branch_started_at` 的维护面。
@@ -178,6 +179,7 @@ describe('RFC-311 — branch_started_at is maintained by the real paths', () => 
       await patchTaskFixture(db, { id: parentId }, { status: 'done', finishedAt: Date.now() })
       clearTaskDriverLifecycleForTesting()
       await deleteTask(db, childId, {
+        executionPermits: testExecutionPermits,
         activity: { isActive: () => false, awaitReleasedSettled: async () => {} },
       })
       expect(await branchStartedAt(db, parentId)).toBe(parentStartedAt)

@@ -18,7 +18,7 @@ import {
   retryAttemptCap,
   retryAttemptCapFromPolicy,
 } from '../src/platform/contracts/retryAttemptCap'
-import { ASSEMBLY_MAX_ATTEMPTS } from '../src/services/schedulerAssembly'
+import { ASSEMBLY_MAX_ATTEMPTS } from '../src/modules/task-execution/engine/kernel/assembly'
 
 const REPO_ROOT = resolve(import.meta.dir, '..', '..', '..')
 const read = (path: string): string => readFileSync(resolve(REPO_ROOT, path), 'utf8')

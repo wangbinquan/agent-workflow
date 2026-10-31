@@ -1,3 +1,4 @@
+import { testExecutionPermits } from './executionPermits'
 import { taskExecutionParticipants } from './taskExecutionParticipantBindings'
 import { composeTaskMemorySnapshotPort } from '@/modules/memory/composition'
 import { composeCollaborationTaskRolePolicy } from '@/modules/resource-catalog/composition'
@@ -311,6 +312,7 @@ export async function createEachProviderTaskExecution(
         runtime: {
           memorySnapshots: composeTaskMemorySnapshotPort(),
           taskDagCollaboration: createTaskDagCollaborationOperations(db, taskExecutionParticipants),
+          executionPermits: testExecutionPermits,
           processConcurrencyScope: sqlite,
           ...runBinding,
           workspaceExcludeProfilesFor,
@@ -500,6 +502,7 @@ export async function createEachProviderTaskExecution(
         identityAccess: runtimeIdentity,
         repositoryPublicationTransport: createTestRepositoryPublicationTransport(),
         codeHostConnections: unusedCapability('code-host connection'),
+        executionPermits: testExecutionPermits,
         processConcurrencyScope: {},
       },
       routeLaunch: {

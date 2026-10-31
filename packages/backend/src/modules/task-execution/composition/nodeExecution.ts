@@ -1,3 +1,4 @@
+import { createScriptNodeExecutionPorts } from './scriptNodeExecution'
 import type { WorkflowNode } from '@agent-workflow/shared'
 import type { TaskMechanicsState } from '@/services/execution/taskMechanicsState'
 import type { CollaborationRuntimeMechanics } from '@/modules/collaboration/public/participants'
@@ -14,7 +15,6 @@ import {
   runInputNode,
   runOutputNode,
   runReviewNode,
-  runScriptNode,
   type OneNodeArgs,
 } from './nodeMechanics'
 import type { WorkgroupTurnHostOperations } from '../application/ports/workgroupTurnsOperations'
@@ -39,7 +39,7 @@ import { NodeExecutionGateway } from '../engine/node/nodeExecutionGateway'
 import type { NodeExecutorMap } from '../engine/node/nodeExecutor'
 import { ClosedNodeExecutorRegistry } from '../engine/node/nodeExecutorRegistry'
 import { RetiredCodeRoundNodeExecutor } from '../engine/node/retiredCodeRoundNodeExecutor'
-import { ScriptNodeExecutor } from '../engine/node/scriptNodeExecutor'
+import { ScriptNodeExecutor } from '../engine/node/script/scriptNodeExecutor'
 import { InputNodeExecutor, OutputNodeExecutor } from '../engine/node/virtualIoNodeExecutors'
 import { createWrapperDelegatingNodeExecutors } from '../engine/node/wrapperDelegatingNodeExecutors'
 
@@ -130,9 +130,7 @@ function buildGateway(
     'clarify-cross-agent': new CrossClarifyNodeExecutor(collaboration),
     'call-workflow': new CallWorkflowNodeExecutor(childCalls),
     'call-workgroup': new CallWorkgroupNodeExecutor(childCalls),
-    script: new ScriptNodeExecutor({
-      executeScript: (request) => runScriptNode(state, legacyArgs(state, request)),
-    }),
+    script: new ScriptNodeExecutor(createScriptNodeExecutionPorts(state)),
     'code-host-call': new CodeHostCallNodeExecutor({
       executeCodeHostCall: (request) => runCodeHostCallNode(state, legacyArgs(state, request)),
     }),

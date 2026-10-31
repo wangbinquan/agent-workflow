@@ -1,3 +1,4 @@
+import { testExecutionPermits } from './helpers/executionPermits'
 import { composeTaskMemorySnapshotPort } from '@/modules/memory/composition'
 import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import { composeTaskReviewersPort } from '@/modules/collaboration/composition'
@@ -236,6 +237,7 @@ function operations(harness: ProviderHarness, calls: ChildCalls): TaskRouteOpera
   const db = harness.db
   return createTaskRouteOperations(
     withO2Closure({
+      executionPermits: testExecutionPermits,
       taskMembership: o2Ports(db).taskMembership,
       memorySnapshots: composeTaskMemorySnapshotPort(),
       historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,

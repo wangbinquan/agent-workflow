@@ -586,13 +586,17 @@ function fields(call: ts.CallExpression, sf: ts.SourceFile) {
 test('all three actual runner launch sites consume the family whose native root binds prompt operations next to appHome', () => {
   const sf = source('modules/task-execution/composition/nodeMechanics.ts'),
     found = calls(sf, sf, 'runNode')
-  expect(found).toHaveLength(3)
+  expect(found).toHaveLength(2)
   for (const call of found) {
     expect(call.arguments).toHaveLength(3)
     expect(['opts.taskAgentRuns', 'state.opts.taskAgentRuns']).toContain(
       call.arguments[0]!.getText(sf),
     )
   }
+  const merge = source('modules/task-execution/composition/mergeConflictResolution.ts')
+  const mergeCalls = calls(merge, merge, 'runTaskAgentWithFamily')
+  expect(mergeCalls).toHaveLength(1)
+  expect(mergeCalls[0]!.arguments[0]!.getText(merge)).toBe('state.opts.taskAgentRuns')
   const native = source('modules/task-execution/composition/localTaskAgentRunFamily.ts'),
     familyCall = onlyCall(native, native, 'composeLocalTaskAgentRunFamily'),
     values = fields(familyCall, native),

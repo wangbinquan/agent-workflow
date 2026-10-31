@@ -790,6 +790,7 @@ export async function composeDaemonApplication<P extends DatabaseProvider>(
     'task-delete-recovery': async () => {
       const deleteRecovery = await recoverInterruptedTaskDeletes(
         input.db,
+        taskExecutionProvider.executionPermits,
         undefined,
         input.taskDeletionEffects,
       )

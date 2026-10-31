@@ -29,7 +29,40 @@
 并发会话 RFC-398 的改动面（`main.ts`、`bootstrap/daemonStart.ts`、`bootstrap/epochMigration*`、`bootstrap/autoUpgradeChild.ts`、`platform/persistence/*`、
 `modules/system-operations/**`、`scripts/release-upgrade/**`、`cli/epochMigration.ts`）与本 RFC 没有必需的同文件交集；实施前与提交前按路径核对工作树。
 
+## 实施记录（2026-10-31）
+
+- **实施**：Codex 可写线程 `01a19322-fd28-7972-b9ae-4953d7b2c014` 两次派发完成 T1～T6（Part A 148 个路径、Part B 60 个文件）；本会话审核后修正
+  四条新增 RFC-317 R1 边（bootstrap 改经 TE `composition.ts` 取注册表构造入口），并把工作区会话从 `TaskMechanicsState` 字段改回
+  TE composition 旁表（原因与取舍见 proposal §6 第 9 条）。
+- **账本实测**：public 签名债 120→104；`legacy-service-implementations` 218→213，`legacy-thin-facades` 44→42，
+  `legacy-horizontal-files` 389→381；commons R2 41 不变；RFC-334 递归语料下限 32。
+
+## 集中验证（T7）
+
+- **静态**：后端 typecheck（含 tests，6 GiB heap）、eslint `--max-warnings=0`、prettier 通过。
+- **实现门**（只审功能，只读线程 `01a1936b-0ac0-7332-a0f9-5291ad0e61b8`）：PASS，无 findings；门后只改守卫与 CI 路径过滤，生产代码未再改动。
+- **P0 变异 lane**（SQLite + PostgreSQL）：passed，34 个阶段全部有效，源文件指纹不变。
+- **后端全量**：6 分片、`--isolate --randomize`、PostgreSQL 各用独立库，2713 个文件全部执行（31949 个用例：31783 pass、133 fail、33 skip），
+  72 个文件有失败、2 个只报 error。归因：
+  - **本 RFC 引入、已修**：
+    - 源码锁语料没有随搬迁扩到新文件：RFC-188 装配单源锁（加 `composition/scriptNodeExecution.ts`，并锁 script 主体对三个原语端口各调一次）、
+      RFC-292 trigger 锁与 RFC-345 T4a（加合并冲突解决的新位置）、RFC-359 W3-T4 与 RFC-370 删除恢复根绑定（删除恢复多了 daemon scope 的
+      许可注册表参数）；
+    - RFC-328 effect 账本认不出 kernel 经 binding 调用的 isolation create / merge 观察者，转发处又被记成未分类站点：账本改为把 kernel 调用
+      计为原站点，并只接受「原样转发 + persistence / context」的 infrastructure 转发；RFC-402 结构锁补对应负例（改写 kind、丢掉
+      request、附加字段、删 resourceKeys、删观察者调用）；
+    - RFC-317 新增的 script 站点用例按数字行号写了期望，而 `casSites` 按 `file:line` 字符串排序：用例内改为按行号排序；
+    - `windows-platform.yml` 的 push / pull_request `paths:` 仍指向已删除的三个 facade 与旧 `infrastructure/isolatedAgentRun.ts`
+      （`test-suite-policy` 报出）：改指 kernel 四个文件与 `infrastructure/executionKernelBinding.ts`，两份列表保持一致。
+  - **并发 RFC-398 未提交文件造成**（证据保留，不归本 RFC）：rfc317-module-boundary R1 多 5 条、rfc376（setInterval 15>14、不可达 28>27）、
+    rfc393、rfc284 spawn / env-flags / microhelpers、rfc254、rfc349 completeness / cutover、rfc359-w5（t17 / t19 / t19d / t19f）、
+    rfc395-nonruntime-source-roles，以及 8 个 `rfc398-*` 用例文件（不 import 本 RFC 改过的模块；串行复现的原因是 RFC-398 的配置 schema、
+    `schema_migrations` baseline 重复、缺 `psql`、建库权限与多进程 barrier）。
+  - **负载超时**：其余失败均为 PostgreSQL 5 s / 15 s 超时（全量期间机器负载 15～20）。低并发重跑（3 worker，167 个文件：失败文件、
+    error-only 文件、全部 `tests/architecture/` 与本轮改过的守卫）后只剩 4 个超时文件；这 4 个以 60 s 超时串行全部通过（排除挂死），
+    再按默认超时串行也全部通过。
+
 ## 验收清单
 
-- [ ] proposal AC-1～AC-5
+- [x] proposal AC-1～AC-5（本地集中验证，见上）
 - [ ] 推送后 exact SHA 的 CI 全绿（AC-6）

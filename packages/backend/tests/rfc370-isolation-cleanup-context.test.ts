@@ -1,3 +1,4 @@
+import { bindIsolationCleanup } from '@/modules/task-execution/infrastructure/executionKernelBinding'
 import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { o2Ports } from './helpers/o2Closure'
@@ -34,8 +35,8 @@ import {
   type CanonicalContinuationRequest,
   type LineageSlot,
 } from '@/modules/task-execution/domain/executionIntent'
-import { discardNodeIso } from '@/modules/task-execution/infrastructure/isolationCleanup'
-import type { IsoHandle } from '@/platform/workspace/local/isolation'
+import { discardNodeIso } from '@/modules/task-execution/engine/kernel/isolationCleanup'
+import type { IsoHandle } from '@/platform/contracts/isolationWorkspace'
 import { describeEachProvider } from './helpers/eachProvider'
 
 const ROOT = mkdtempSync(join(tmpdir(), 'aw-rfc370-iso-cleanup-'))
@@ -152,7 +153,9 @@ describeEachProvider(
         token: seeded.token,
         persistence: seeded.persistence,
       })
-      await runWithTaskExecutionContext(context, () => discardNodeIso(seeded.handle))
+      await runWithTaskExecutionContext(context, () =>
+        discardNodeIso(bindIsolationCleanup(), seeded.handle),
+      )
       expect(await cleanupEffects(harness.db, seeded.taskId)).toEqual([])
     })
 
@@ -165,8 +168,43 @@ describeEachProvider(
         token: seeded.token,
         db: harness.db,
       })
-      await runWithTaskExecutionContext(context, () => discardNodeIso(seeded.handle))
+      await runWithTaskExecutionContext(context, () =>
+        discardNodeIso(bindIsolationCleanup(), seeded.handle),
+      )
       expect(await cleanupEffects(harness.db, seeded.taskId)).toEqual([{ state: 'succeeded' }])
     })
   },
 )
+
+// RFC-402 keeps the no-context path lazy: even request construction was conditional before extraction.
+test('cleanup selects participation before evaluating the effect request', async () => {
+  const order: string[] = []
+  const handle: IsoHandle = {
+    taskId: 'no-context',
+    nodeRunId: 'physical-key',
+    dbNodeRunId: 'run',
+    containerPath: 'unused',
+    passthrough: false,
+    repos: [],
+  }
+  Object.defineProperty(handle, 'dbNodeRunId', {
+    get() {
+      throw new Error('a cleanup without a context must not build an effect request')
+    },
+  })
+  await discardNodeIso(
+    {
+      cleanupEffectFactory(taskId) {
+        expect(taskId).toBe(handle.taskId)
+        order.push('select')
+        return undefined
+      },
+      async discardIsolatedWorkspace(actual) {
+        expect(actual).toBe(handle)
+        order.push('discard')
+      },
+    },
+    handle,
+  )
+  expect(order).toEqual(['select', 'discard'])
+})

@@ -26,9 +26,8 @@ import {
 import {
   completeHumanResolvedConflict,
   mergeBackNodeIso,
-  type IsoHandle,
-  type IsoRepo,
-} from '../src/services/nodeIsolation'
+} from '@/platform/workspace/local/isolation'
+import { type IsoHandle, type IsoRepo } from '@/platform/contracts/isolationWorkspace'
 
 async function initRepo(seed: Record<string, string>): Promise<string> {
   const dir = mkdtempSync(join(tmpdir(), 'aw-rfc187-salvage-'))

@@ -886,6 +886,11 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
       'utf8',
     )
     const scheduler = readFileSync(resolve(sourceRoot, 'services/scheduler.ts'), 'utf8')
+    // RFC-402: the merge-conflict agent's injection is bound where the shared resolver is composed.
+    const mergeResolution = readFileSync(
+      resolve(sourceRoot, 'modules/task-execution/composition/mergeConflictResolution.ts'),
+      'utf8',
+    )
     const identity = readFileSync(
       resolve(sourceRoot, 'modules/identity-access/application/operationContext.ts'),
       'utf8',
@@ -947,7 +952,7 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     expect(webhook).toContain('const taskExecutionAuthority = Object.freeze({')
     expect(webhook).toContain('taskExecutionAuthority,')
 
-    const execution = `${node}\n${wrapper}\n${scheduler}`
+    const execution = `${node}\n${wrapper}\n${scheduler}\n${mergeResolution}`
     for (const legacyResourceImport of [
       "@/services/agent'",
       "@/services/mcp'",

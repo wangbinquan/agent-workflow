@@ -1,3 +1,4 @@
+import { bindIsolationCleanup } from '@/modules/task-execution/infrastructure/executionKernelBinding'
 import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { o2Ports } from './helpers/o2Closure'
@@ -29,17 +30,19 @@ import {
   runTaskLocalEffect,
 } from '@/modules/task-execution/application/localEffectObserver'
 import type { TaskMechanicsState } from '@/services/execution/taskMechanicsState'
-import {
-  isolatedRunBinding,
-  executeWorkgroupHostMechanics,
-} from '@/modules/task-execution/composition/nodeMechanics'
+import { executeWorkgroupHostMechanics } from '@/modules/task-execution/composition/nodeMechanics'
+import { isolatedRunBinding } from '@/modules/task-execution/composition/executionMechanismBindings'
 import { createWrapperMechanicsPorts } from '@/modules/task-execution/composition/wrapperMechanics'
 import {
   completeFrameMerges,
   composeExecutionMergeRecovery,
 } from '@/modules/task-execution/composition/executionMergeRecovery'
-import { createIsoUnderLock, persistIsoBase, mergeBackAndSettle } from '@/services/isolatedAgentRun'
-import { discardNodeIso } from '@/services/nodeIsolation'
+import {
+  createIsoUnderLock,
+  persistIsoBase,
+} from '@/modules/task-execution/engine/kernel/isolation'
+import { mergeBackAndSettle } from '@/modules/task-execution/engine/kernel/merge'
+import { discardNodeIso } from '@/modules/task-execution/engine/kernel/isolationCleanup'
 import {
   workspaceRecord,
   snapshotIsolatedWorkspace,
@@ -52,7 +55,7 @@ import { composeLocalTaskAgentRunFamily } from '@/modules/task-execution/composi
 import { composeRuntimeRegistryOperations } from './helpers/runtimeRegistryComposition'
 import type { CollaborationRuntimeMechanics } from '@/modules/collaboration/public/participants'
 import type { Logger } from '@/util/log'
-import { Semaphore } from '@/util/semaphore'
+import { Semaphore } from '@/platform/contracts/semaphore'
 import { describeEachProvider } from './helpers/eachProvider'
 import { held } from './helpers/portArtifactContent'
 import { composeNodeRunRuntimePersistence } from './helpers/nodeRunRuntime'
@@ -499,7 +502,12 @@ describeEachProvider('RFC-370 complete isolation scope in real Task mechanics', 
                   via: 'live',
                   conflictResolver: async () => ({ allResolved: true, detail: '' }),
                 })
-                await discardNodeIso(handle, innerState.log, innerState.writeSem)
+                await discardNodeIso(
+                  bindIsolationCleanup(),
+                  handle,
+                  innerState.log,
+                  innerState.writeSem,
+                )
               }
               return { kind: 'ok' as const }
             },
@@ -801,12 +809,15 @@ describeEachProvider('RFC-370 complete isolation scope in real Task mechanics', 
             if (call.method === 'discard') throw reason
           }
           let rejected = false
-          const pending = discardNodeIso(handle, f.state.log, f.state.writeSem).catch(
-            (error: unknown) => {
-              rejected = true
-              throw error
-            },
-          )
+          const pending = discardNodeIso(
+            bindIsolationCleanup(),
+            handle,
+            f.state.log,
+            f.state.writeSem,
+          ).catch((error: unknown) => {
+            rejected = true
+            throw error
+          })
           try {
             await entered.promise
             expect(rejected).toBe(false)

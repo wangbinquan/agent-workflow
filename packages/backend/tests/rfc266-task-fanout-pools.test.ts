@@ -1,3 +1,6 @@
+import { testExecutionPermits } from './helpers/executionPermits'
+const { getTaskFanoutSem, gcTaskFanoutSem, resizeAllTaskFanoutSems, taskFanoutPoolCount } =
+  testExecutionPermits
 // RFC-266 —— 每任务扇出子池注册表。
 //
 // 为什么这些测试存在：
@@ -14,12 +17,6 @@
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import {
-  getTaskFanoutSem,
-  gcTaskFanoutSem,
-  resizeAllTaskFanoutSems,
-  taskFanoutPoolCount,
-} from '../src/services/taskFanoutPools'
 
 const tid = (s: string): string => `rfc266-${s}-${taskFanoutPoolCount()}`
 
@@ -142,7 +139,9 @@ describe('RFC-266 task fan-out pool registry', () => {
       'utf8',
     )
     // 与 gcTaskWriteSem 同处、同一个 finally —— 唯一允许的 gc 点。
-    expect(application).toContain('gcTaskWriteSem(opts.taskId)\n    gcTaskFanoutSem(opts.taskId)')
+    expect(application).toContain(
+      'gcTaskWriteSem(opts.taskId)\n    opts.executionPermits.gcTaskFanoutSem(opts.taskId)',
+    )
     expect(application.match(/gcTaskFanoutSem\(/g)).toHaveLength(1)
     // HTTP 侧绝不允许 gc（会与调度器缓存的引用竞争 ⇒ 裂池）。
     const routes = readFileSync(

@@ -1,3 +1,4 @@
+import { createTestIsolationBinding } from './helpers/executionKernel'
 import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { tablesOf } from '@/platform/persistence/sessionTables'
@@ -23,7 +24,7 @@ import { DrizzleWrapperRunPersistence } from '@/modules/task-execution/infrastru
 import { DrizzleTaskEngineApplicationPersistence } from '@/modules/task-execution/infrastructure/taskEngineApplicationPersistence'
 import { createNodeRunMintParticipantInTx } from '@/modules/task-execution/infrastructure/nodeRunMintParticipant'
 import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
-import { persistIsoNodeTree } from '@/modules/task-execution/infrastructure/isolatedAgentRun'
+import { persistIsoNodeTree } from '@/modules/task-execution/engine/kernel/isolation'
 import type { TaskRepositoryCheckpoint } from '@/modules/task-execution/domain/taskCheckpoint'
 
 const layouts = [
@@ -143,13 +144,13 @@ describeEachProvider('RFC-395 II-a A2 checkpoint list ports', (harness) => {
       })
       const beforeEmpty = await readStoredCheckpointFixture(harness.db, emptyTreeRun)
       await persistIsoNodeTree(
-        {
+        createTestIsolationBinding({
           persistence: createTaskExecutionPersistence(harness.db, {
             humanGateOpen: composeHumanGateOpenParticipantFactory(),
             historyRestrictions: epoch2RuntimeTestPorts(harness.db).historyRestrictions,
             recoveryHumanGates: o2Ports(harness.db).collaborationReads.recovery,
           }),
-        },
+        }),
         emptyTreeRun,
         {},
       )

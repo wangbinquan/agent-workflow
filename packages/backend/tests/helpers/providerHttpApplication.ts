@@ -1,3 +1,4 @@
+import type { TaskExecutionPermitRegistry } from '@/modules/task-execution/application/ports/taskExecutionPermits'
 import { registerProviderFixtureCleanup } from './providerFixtureCleanup'
 // RFC-392: every HTTP fixture enters the same application graph and owns its finite lifetime.
 import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'
@@ -92,6 +93,7 @@ export interface ProviderHttpApplication extends Pick<
 > {
   readonly appHome: string
   readonly secretBox: SecretBox
+  readonly executionPermits: TaskExecutionPermitRegistry
   readonly processConcurrencyScope: object
   readonly repositoryWorkspaceStore: DaemonApplication['core']['repositoryWorkspaceStore']
   readonly taskExecutionReadModels: DaemonApplication['runtime']['taskExecution']['readModels']
@@ -328,6 +330,7 @@ export async function createProviderHttpApplicationFromBinding(
       modules: application.modules,
       operations: application.operations,
       lifecycleSteps: application.lifecycleSteps,
+      executionPermits: runtime.taskExecutionModules.executionPermits,
       processConcurrencyScope: runtime.taskExecutionModules.processConcurrencyScope,
       repositoryWorkspaceStore: core.repositoryWorkspaceStore,
       taskExecutionReadModels: runtime.taskExecution.readModels,

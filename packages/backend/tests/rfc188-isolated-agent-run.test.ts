@@ -1,3 +1,5 @@
+import { createTestIsolationBinding } from './helpers/executionKernel'
+import { bindIsolationCleanup } from '@/modules/task-execution/infrastructure/executionKernelBinding'
 import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { o2Ports } from './helpers/o2Closure'
@@ -37,14 +39,14 @@ import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 import {
   createIsoUnderLock,
-  markMergeFailed,
-  mergeBackAndSettle,
   persistIsoBase,
-} from '../src/services/isolatedAgentRun'
-import { discardNodeIso, type CanonRepo, type IsoHandle } from '../src/services/nodeIsolation'
+} from '@/modules/task-execution/engine/kernel/isolation'
+import { markMergeFailed, mergeBackAndSettle } from '@/modules/task-execution/engine/kernel/merge'
+import { discardNodeIso } from '@/modules/task-execution/engine/kernel/isolationCleanup'
+import { type CanonRepo, type IsoHandle } from '@/platform/contracts/isolationWorkspace'
 import { runGit, snapshotFullState } from '../src/util/git'
 import { createTaskExecutionPersistence } from '../src/modules/task-execution/composition/taskExecutionPersistence'
-import type { IsolatedAgentRunBinding } from '../src/services/isolatedAgentRun'
+import type { IsolatedAgentRunBinding } from '@/modules/task-execution/application/ports/executionKernel'
 
 async function initRepo(seed: Record<string, string>): Promise<string> {
   const dir = mkdtempSync(join(tmpdir(), 'aw-rfc188-'))
@@ -112,13 +114,15 @@ function canonRepos(worktreePath: string): CanonRepo[] {
 }
 
 function isolatedRunBinding(db: PersistenceDb): IsolatedAgentRunBinding {
-  return Object.freeze({
-    persistence: createTaskExecutionPersistence(db, {
-      humanGateOpen: composeHumanGateOpenParticipantFactory(),
-      historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
-      recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
+  return Object.freeze(
+    createTestIsolationBinding({
+      persistence: createTaskExecutionPersistence(db, {
+        humanGateOpen: composeHumanGateOpenParticipantFactory(),
+        historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
+        recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
+      }),
     }),
-  })
+  )
 }
 
 async function mintedRow(db: PersistenceDb, taskId: string): Promise<string> {
@@ -175,7 +179,7 @@ describeEachProvider(
       expect(
         row?.checkpoints.find((checkpoint) => checkpoint.mountPath === '')?.nodeTree ?? null,
       ).toBeTruthy()
-      await discardNodeIso(iso)
+      await discardNodeIso(bindIsolationCleanup(), iso)
       rmSync(repo, { recursive: true, force: true })
       rmSync(appHome, { recursive: true, force: true })
     })
@@ -225,7 +229,7 @@ describeEachProvider(
           expect(settle.detail).toContain('f.txt')
           expect(row?.mergeState).toBe('conflict-human')
         }
-        await discardNodeIso(iso)
+        await discardNodeIso(bindIsolationCleanup(), iso)
         // 复原 canonical，供下一轮。
         await runGit(repo, ['checkout', '--', '.'])
       }
@@ -260,7 +264,7 @@ describeEachProvider(
         { mergeState: 'pending-merge', checkpoints: [{ mountPath: '', nodeTree }] },
       )
       await catchUpLegacySequenceTask(db, taskId)
-      await discardNodeIso(iso)
+      await discardNodeIso(bindIsolationCleanup(), iso)
 
       const settle = await mergeBackAndSettle({
         binding,
@@ -335,7 +339,35 @@ describe('RFC-188 D — 装配单源锁（表级 allowlist）', () => {
         'nodeMechanics.ts',
       ),
       'utf8',
+    ) +
+    // RFC-402: the script node calls the shared primitives through its workspace port; the
+    // composition binding below is where each port method reaches the kernel primitive.
+    readFileSync(
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'task-execution',
+        'composition',
+        'scriptNodeExecution.ts',
+      ),
+      'utf8',
     )
+  const scriptBody = readFileSync(
+    resolve(
+      import.meta.dir,
+      '..',
+      'src',
+      'modules',
+      'task-execution',
+      'engine',
+      'node',
+      'script',
+      'runScriptNode.ts',
+    ),
+    'utf8',
+  )
   const count = (needle: string): number => src.split(needle).length - 1
 
   test('task execution mechanics 零裸 iso 创建；裸 merge 原语只剩 wrapper 路径各 1 处', () => {
@@ -374,5 +406,10 @@ describe('RFC-188 D — 装配单源锁（表级 allowlist）', () => {
     // catch，所以压根没有这处标记；收敛到与其余四线同处置后才有（C1 的直接产物）
     // + RFC-370 completeInterruptedRun：保留的 iso 补不了快照 / 合不回时与 live 合回抛错同处置。
     expect(count('markMergeFailed(')).toBe(7)
+    // RFC-402: the script body reaches each of its three bound primitives exactly once
+    // (one `createScriptIso` closure, one merge-back, one merge-failure marker).
+    for (const method of ['createIsoUnderLock(', 'mergeBackAndSettle(', 'markMergeFailed(']) {
+      expect(scriptBody.split(`ports.workspace.${method}`).length - 1).toBe(1)
+    }
   })
 })

@@ -1,3 +1,4 @@
+import { testExecutionPermits } from './helpers/executionPermits'
 import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import type { SequencedOracleRunRow } from '@/modules/task-execution/infrastructure/migration/oracle/rows'
@@ -1733,7 +1734,7 @@ describeEachProviderHttpApplication(
       // Pre-dispatch: NOT processing — the task is parked, the row is pending.
       expect(await phaseOf()).toBe('pending')
       const entry = (await designerEntries(db, taskId))[0]!
-      await stageTaskQuestion(db, entry.id, true, actor)
+      await stageTaskQuestion(db, testExecutionPermits, entry.id, true, actor)
       expect(await phaseOf()).toBe('staged')
 
       // Dispatch → dispatched_at set, trigger_run_id still NULL (queued) → processing.

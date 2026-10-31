@@ -51,7 +51,7 @@ import { createTaskDeletionCollaborationParticipantInTx } from '@/modules/collab
 import type { TaskDeletionEffects } from '@/modules/task-execution/public/types'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { isTerminalTaskStatus, type TaskStatus } from '@agent-workflow/shared'
-import { getTaskWriteSem } from '@/services/taskWriteLocks'
+import type { TaskExecutionPermits } from '@/modules/task-execution/public/participants'
 import { TASKS_LIST_CHANNEL, tasksListBroadcaster } from '@/ws/broadcaster'
 import type { ActiveTaskExecutionParticipant } from '@/modules/task-execution/public/participants'
 import { ConflictError, NotFoundError } from '@/util/errors'
@@ -60,7 +60,7 @@ import {
   assertTerminalMaintenanceClaimTx,
   createTerminalMaintenanceStore,
   transitionTerminalMaintenanceClaimTx,
-} from '@/services/taskExecutionParticipants'
+} from '@/modules/task-execution/public/participants'
 import {
   cleanupDeletedTaskResources,
   recoverInterruptedTaskDeletes,
@@ -91,7 +91,11 @@ export interface DeleteTaskResult {
 export async function deleteTask(
   db: PersistenceDb,
   taskId: string,
-  options: Readonly<{ activity: ActiveTaskExecutionParticipant; effects?: TaskDeletionEffects }>,
+  options: Readonly<{
+    executionPermits: TaskExecutionPermits
+    activity: ActiveTaskExecutionParticipant
+    effects?: TaskDeletionEffects
+  }>,
 ): Promise<DeleteTaskResult> {
   const effects = selectedTaskDeletionEffects(options.effects)
   const queries = createTaskDeletionQueries(db)
@@ -219,7 +223,7 @@ export async function deleteTask(
 
   // Serialize against in-flight writers, then re-check terminality and delete in
   // one transaction (closes the resume/retry TOCTOU — §6.2).
-  const release = await getTaskWriteSem(taskId).acquire()
+  const release = await options.executionPermits.getTaskWriteSem(taskId).acquire()
   let deletedAudiences: Array<{ taskId: string; visibleUserIds: ReadonlySet<string> }> = []
   // The claim this transaction fences is read from a `const`, never from the
   // mutable `maintenanceClaim`: the neutral primitive may replay the whole body

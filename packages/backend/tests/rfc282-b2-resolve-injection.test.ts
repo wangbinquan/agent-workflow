@@ -181,6 +181,10 @@ describe('RFC-282 B2 / RFC-345 T4a — all six TaskExecution entries use one res
       readFileSync(resolve(SRC, 'modules/task-execution/composition/wrapperMechanics.ts'), 'utf8'),
       readFileSync(resolve(SRC, 'modules/task-execution/composition/nodeMechanics.ts'), 'utf8'),
       readFileSync(resolve(SRC, 'services/scheduler.ts'), 'utf8'),
+      readFileSync(
+        resolve(SRC, 'modules/task-execution/engine/node/shared/resolveMergeConflicts.ts'),
+        'utf8',
+      ),
     ].join('\n')
     expect(text).not.toContain('await resolveInjection(')
     // RFC-354 (schema v6): the sixth read resolves a fan-out shard source's
@@ -202,7 +206,7 @@ describe('RFC-282 B2 / RFC-345 T4a — all six TaskExecution entries use one res
         agent: 'commitAgent',
       },
       {
-        path: 'modules/task-execution/composition/nodeMechanics.ts',
+        path: 'modules/task-execution/engine/node/shared/resolveMergeConflicts.ts',
         agent: 'mergeAgent',
       },
     ]
@@ -217,8 +221,11 @@ describe('RFC-282 B2 / RFC-345 T4a — all six TaskExecution entries use one res
       )
       const calls: ts.CallExpression[] = []
       const walk = (node: ts.Node) => {
-        if (ts.isCallExpression(node) && node.expression.getText(source) === 'runNode') {
-          const input = node.arguments[1]
+        if (
+          ts.isCallExpression(node) &&
+          ['runNode', 'ports.agent.runNode'].includes(node.expression.getText(source))
+        ) {
+          const input = node.arguments[agent === 'mergeAgent' ? 0 : 1]
           if (
             input &&
             ts.isObjectLiteralExpression(input) &&
@@ -235,7 +242,9 @@ describe('RFC-282 B2 / RFC-345 T4a — all six TaskExecution entries use one res
       }
       walk(source)
       expect(calls).toHaveLength(1)
-      expect(calls[0]!.getText(source)).toContain('signal: state.opts.signal')
+      expect(calls[0]!.getText(source)).toContain(
+        agent === 'mergeAgent' ? 'signal: ports.signal' : 'signal: state.opts.signal',
+      )
     }
   })
 })

@@ -1,3 +1,8 @@
+import {
+  SCRIPT_NODE_SOURCE,
+  SCRIPT_ATTEMPT_SOURCE,
+  MERGE_CONFLICT_SOURCE,
+} from './helpers/executionMechanismSources'
 // RFC-287 T5 / C1 —— 漂移 A 的红→绿对：脚本节点合并抛出不再楔死整个作用域。
 //
 // 现状（红）：脚本线的 `mergeBackAndSettle` 是**裸调用、无 try/catch**——而其余四条
@@ -49,7 +54,14 @@ const WRAPPER_MECHANICS = readFileSync(
   ),
   'utf8',
 )
-const MECHANICS_SOURCES = [NODE_MECHANICS, SCHEDULER, WRAPPER_MECHANICS] as const
+const MECHANICS_SOURCES = [
+  SCRIPT_NODE_SOURCE,
+  SCRIPT_ATTEMPT_SOURCE,
+  MERGE_CONFLICT_SOURCE,
+  NODE_MECHANICS,
+  SCHEDULER,
+  WRAPPER_MECHANICS,
+] as const
 
 function bodyOf(signature: string): string {
   const source = MECHANICS_SOURCES.find((candidate) => candidate.includes(signature))

@@ -1,3 +1,4 @@
+import { SCRIPT_NODE_SOURCE } from './helpers/executionMechanismSources'
 // RFC-287 T8（G2）—— 取行前奏的**单一实现**与四线×五项差异矩阵。
 //
 // 为什么存在：迁移前 L4 agent / L7 script / L8 call / L9 code-host 各手抄一份取行
@@ -29,11 +30,12 @@ const RUN_ROW_RESOLVER = readFileSync(
 
 /** 取某函数体（到下一个顶格 `}` 为止）。 */
 function bodyOf(signature: string): string {
-  const start = NODE_MECHANICS.indexOf(signature)
+  const source = signature.includes('runScriptNode') ? SCRIPT_NODE_SOURCE : NODE_MECHANICS
+  const start = source.indexOf(signature)
   expect(start, `未找到函数：${signature}`).toBeGreaterThan(-1)
-  const end = NODE_MECHANICS.indexOf('\n}\n', start)
+  const end = source.indexOf('\n}\n', start)
   expect(end).toBeGreaterThan(start)
-  return NODE_MECHANICS.slice(start, end)
+  return source.slice(start, end)
 }
 
 /** 四条消费线：签名 + 期望的五项表态。 */
@@ -85,7 +87,7 @@ const LINES = [
 describe('RFC-287 T8 — 取行前奏单一实现 + 四线×五项差异矩阵', () => {
   test('四条线都改调 resolveSchedulerRunRow', () => {
     for (const line of LINES) {
-      expect(bodyOf(line.sig), line.label).toContain('await resolveSchedulerRunRow({')
+      expect(bodyOf(line.sig), line.label).toContain('resolveSchedulerRunRow({')
     }
   })
 
@@ -93,8 +95,8 @@ describe('RFC-287 T8 — 取行前奏单一实现 + 四线×五项差异矩阵',
     for (const line of LINES) {
       const body = bodyOf(line.sig)
       const call = body.slice(
-        body.indexOf('await resolveSchedulerRunRow({'),
-        body.indexOf('await resolveSchedulerRunRow({') + 3000,
+        body.indexOf('resolveSchedulerRunRow({'),
+        body.indexOf('resolveSchedulerRunRow({') + 3000,
       )
       expect(call, `${line.label}: inheritReviewIteration`).toContain(
         `inheritReviewIteration: ${String(line.inheritReviewIteration)}`,
@@ -119,10 +121,12 @@ describe('RFC-287 T8 — 取行前奏单一实现 + 四线×五项差异矩阵',
     // 前奏的两个特征形状：①「找 pending 行并盖 consumed 戳」；②「按
     // schedulerMintCause 铸 pending 行」。两者在 scheduler.ts 里都必须归零
     // ——它们现在只存在于 nodeRunMint.ts 的收编函数里。
-    expect(`${SCHEDULER}\n${NODE_MECHANICS}`).not.toContain(
+    expect(`${SCHEDULER}\n${NODE_MECHANICS}\n${SCRIPT_NODE_SOURCE}`).not.toContain(
       "topLevelRows.find((row) => row.status === 'pending')",
     )
-    expect(`${SCHEDULER}\n${NODE_MECHANICS}`).not.toMatch(/cause: schedulerMintCause\(/)
+    expect(`${SCHEDULER}\n${NODE_MECHANICS}\n${SCRIPT_NODE_SOURCE}`).not.toMatch(
+      /cause: schedulerMintCause\(/,
+    )
     // 正向：收编函数里各有且仅有一处（RFC-369 起 pending 候选还要排除已被同帧更新一代取代的行）。
     expect(
       RUN_ROW_RESOLVER.match(
@@ -133,7 +137,9 @@ describe('RFC-287 T8 — 取行前奏单一实现 + 四线×五项差异矩阵',
     expect(RUN_ROW_RESOLVER).toContain(
       'snapshot.pending.filter((row) => row.structurallySuperseded)',
     )
-    expect(`${SCHEDULER}\n${NODE_MECHANICS}`).not.toContain('!superseded.has(row.id)')
+    expect(`${SCHEDULER}\n${NODE_MECHANICS}\n${SCRIPT_NODE_SOURCE}`).not.toContain(
+      '!superseded.has(row.id)',
+    )
     expect(RUN_ROW_RESOLVER.split('cause: schedulerMintCause(').length - 1).toBe(1)
   })
 

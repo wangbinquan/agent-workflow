@@ -1,3 +1,5 @@
+import { testExecutionPermits } from './helpers/executionPermits'
+const { getTaskWriteSem } = testExecutionPermits
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { o2Ports } from './helpers/o2Closure'
 // LOCKS: RFC-359 W6-T28 —— 事务内「读—改—写、中间不锁」丢更新的**用户可见后果**。
@@ -75,8 +77,7 @@ import {
 } from '@/modules/task-execution/infrastructure/taskRecoveryOperations'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { deleteTask } from '@/services/taskDelete'
-import { getTaskWriteSem } from '@/services/taskWriteLocks'
-import type { Semaphore } from '@/util/semaphore'
+import type { Semaphore } from '@/platform/contracts/semaphore'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 import { memoryCatalogOf } from './helpers/memoryCatalog'
 import type { StatementRecording } from './helpers/statementRecorder'
@@ -654,9 +655,11 @@ describeEachProvider('RFC-359 W6-T28 L6 —— 并发删兄弟任务后父行的
     const releaseFirst = await getTaskWriteSem(firstChild).acquire()
     const releaseSecond = await getTaskWriteSem(secondChild).acquire()
     const deletingFirst = deleteTask(legacy(db), firstChild, {
+      executionPermits: testExecutionPermits,
       activity: { isActive: () => false, awaitReleasedSettled: async () => {} },
     })
     const deletingSecond = deleteTask(legacy(db), secondChild, {
+      executionPermits: testExecutionPermits,
       activity: { isActive: () => false, awaitReleasedSettled: async () => {} },
     })
     // 两笔删除各自走完认领链之后会停在自己的每任务写锁上——等**那件事**发生，

@@ -1,3 +1,4 @@
+import { testExecutionPermits } from './helpers/executionPermits'
 // RFC-120 T3 — integration test for the read-side service (lazy reconcile +
 // handler resolution + list). Locks:
 //   * self answered round → 1 self entry; handler resolved from the round's
@@ -597,9 +598,9 @@ describeEachProvider('RFC-120 PR-B writes (confirm / reassign / stage)', (harnes
       .update(taskQuestions)
       .set({ sealedAt: Date.now() })
       .where(eq(taskQuestions.id, entry!.id))
-    await stageTaskQuestion(db, entry!.id, true, ACTOR)
+    await stageTaskQuestion(db, testExecutionPermits, entry!.id, true, ACTOR)
     expect((await listTaskQuestions(db, taskId))[0]!.phase).toBe('staged')
-    await stageTaskQuestion(db, entry!.id, false, ACTOR)
+    await stageTaskQuestion(db, testExecutionPermits, entry!.id, false, ACTOR)
     expect((await listTaskQuestions(db, taskId))[0]!.phase).toBe('pending')
   })
 })

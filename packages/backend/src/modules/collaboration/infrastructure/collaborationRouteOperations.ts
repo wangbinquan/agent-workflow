@@ -141,7 +141,13 @@ export function createCollaborationRouteOperations(
     stage: async (request) =>
       await (
         await loadQuestionOperations()
-      ).stageTaskQuestion(db, request.entryId, request.staged, request.actor),
+      ).stageTaskQuestion(
+        db,
+        input.taskExecutionParticipants.executionPermits,
+        request.entryId,
+        request.staged,
+        request.actor,
+      ),
   })
   const clarify: CollaborationRoutePersistenceOperations['clarify'] = Object.freeze({
     list: async (request) =>

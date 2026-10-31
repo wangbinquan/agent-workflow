@@ -1,3 +1,8 @@
+import {
+  SCRIPT_NODE_SOURCE,
+  SCRIPT_ATTEMPT_SOURCE,
+  MERGE_CONFLICT_SOURCE,
+} from './helpers/executionMechanismSources'
 // RFC-287 T1⑨ —— 五条装配线的「抛出结局」与 keep 分歧的**行为夹具**（拆分前 oracle）。
 //
 // 为什么存在：三轮设计门连续在同一处翻车——把「各线遇到异常怎么收场」当成了一致的，
@@ -50,7 +55,14 @@ const WRAPPER_MECHANICS = readFileSync(
   ),
   'utf8',
 )
-const MECHANICS_SOURCES = [SCHEDULER, NODE_MECHANICS, WRAPPER_MECHANICS] as const
+const MECHANICS_SOURCES = [
+  SCRIPT_NODE_SOURCE,
+  SCRIPT_ATTEMPT_SOURCE,
+  MERGE_CONFLICT_SOURCE,
+  SCHEDULER,
+  NODE_MECHANICS,
+  WRAPPER_MECHANICS,
+] as const
 
 /** 取某个函数体（自签名起到下一个顶层 `async function` 前）。 */
 function bodyOf(signature: string): string {

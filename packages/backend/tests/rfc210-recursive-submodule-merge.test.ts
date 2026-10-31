@@ -1,3 +1,4 @@
+import { bindIsolationCleanup } from '@/modules/task-execution/infrastructure/executionKernelBinding'
 // RFC-210 T23 — 子仓层递归三路合并（AC-5）。
 //
 // 为什么这些测试存在：
@@ -23,11 +24,11 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
   createNodeIso,
-  discardNodeIso,
   mergeBackNodeIso,
   snapshotNodeIsoFinal,
-  type CanonRepo,
-} from '@/services/nodeIsolation'
+} from '@/platform/workspace/local/isolation'
+import { discardNodeIso } from '@/modules/task-execution/engine/kernel/isolationCleanup'
+import { type CanonRepo } from '@/platform/contracts/isolationWorkspace'
 import { runGit } from '@/util/git'
 
 const appHome = mkdtempSync(join(tmpdir(), 'aw-rfc210-rec-home-'))
@@ -130,8 +131,8 @@ describe('RFC-210 per-submodule three-way merge', () => {
     expect((await mergeBackNodeIso(b, await snapshotNodeIsoFinal(b))).clean).toBe(true)
     expect(readFileSync(join(canonSub, 'a.txt'), 'utf8')).toBe('l1-A\nl2\nl3-B\n')
 
-    await discardNodeIso(a)
-    await discardNodeIso(b)
+    await discardNodeIso(bindIsolationCleanup(), a)
+    await discardNodeIso(bindIsolationCleanup(), b)
   }, 180_000)
 
   test('the merged submodule commit keeps ours as an ancestor (superproject invariant)', async () => {
@@ -165,8 +166,8 @@ describe('RFC-210 per-submodule three-way merge', () => {
     const isAncestor = await runGit(canonSub, ['merge-base', '--is-ancestor', afterA, afterB])
     expect(isAncestor.exitCode).toBe(0)
 
-    await discardNodeIso(a)
-    await discardNodeIso(b)
+    await discardNodeIso(bindIsolationCleanup(), a)
+    await discardNodeIso(bindIsolationCleanup(), b)
   }, 180_000)
 
   test('conflicting edits to the SAME line withhold the repo instead of picking a side', async () => {
@@ -201,7 +202,7 @@ describe('RFC-210 per-submodule three-way merge', () => {
     expect((await runGit(canonSub, ['rev-parse', 'HEAD'])).stdout.trim()).toBe(afterA)
     expect(readFileSync(join(canonSub, 'a.txt'), 'utf8')).toBe('A-version\n')
 
-    await discardNodeIso(a)
-    await discardNodeIso(b)
+    await discardNodeIso(bindIsolationCleanup(), a)
+    await discardNodeIso(bindIsolationCleanup(), b)
   }, 180_000)
 })

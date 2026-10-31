@@ -1,3 +1,4 @@
+import { testExecutionPermits } from './executionPermits'
 import { taskExecutionParticipants } from './taskExecutionParticipantBindings'
 import { composeCollaborationTaskRolePolicy } from '@/modules/resource-catalog/composition'
 import { composeTaskMemorySnapshotPort } from '@/modules/memory/composition'
@@ -129,6 +130,7 @@ export function singleProcessDeploymentPorts(db: DbClient) {
   return {
     workspacePresence: createFileWorkspacePresenceQueries(),
     taskDagCollaboration: createTaskDagCollaborationOperations(db, taskExecutionParticipants),
+    executionPermits: testExecutionPermits,
     processConcurrencyScope: db,
     log,
     coordinatorFactory: testDriveFactory(
@@ -474,6 +476,7 @@ export function runTaskWithRealTestTopology(
           workgroup: composeTestChildLaunchWorkgroup(options.db),
         }),
       dynamicWorkflow,
+      executionPermits: options.executionPermits ?? testExecutionPermits,
       processConcurrencyScope: options.processConcurrencyScope ?? options.db,
       repositoryPublicationTransport,
       isolationWorkspaces,

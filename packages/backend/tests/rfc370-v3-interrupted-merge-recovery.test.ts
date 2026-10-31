@@ -31,7 +31,8 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { monotonicFactory } from 'ulid'
-import { createNodeIso, type CanonRepo } from '../src/services/nodeIsolation'
+import { createNodeIso } from '@/platform/workspace/local/isolation'
+import { type CanonRepo } from '@/platform/contracts/isolationWorkspace'
 import { runGit } from '../src/util/git'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 import {

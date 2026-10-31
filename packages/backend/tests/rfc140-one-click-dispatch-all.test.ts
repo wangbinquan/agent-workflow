@@ -1,3 +1,4 @@
+import { testExecutionPermits } from './helpers/executionPermits'
 import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 // RFC-140 (design/RFC-140-one-click-dispatch-all) — 批量下发一次点击全下发。
 //
@@ -391,12 +392,12 @@ describeEachProvider('RFC-140 W2 deferred 登记 + 自动补发', (harness) => {
     )
     expect((await entryById(db, designerIds[0]!))!.autoDispatchDeferredAt).not.toBeNull()
     // withdraw: unstage one deferred card → per-question cascade clears the marker.
-    await stageTaskQuestion(db, designerIds[0]!, false, actor)
+    await stageTaskQuestion(db, testExecutionPermits, designerIds[0]!, false, actor)
     const withdrawn = (await entryById(db, designerIds[0]!))!
     expect(withdrawn.stagedAt).toBeNull()
     expect(withdrawn.autoDispatchDeferredAt).toBeNull()
     // re-stage: back to the staging area — the marker must NOT resurrect.
-    await stageTaskQuestion(db, designerIds[0]!, true, actor)
+    await stageTaskQuestion(db, testExecutionPermits, designerIds[0]!, true, actor)
     expect((await entryById(db, designerIds[0]!))!.autoDispatchDeferredAt).toBeNull()
     const { nodeRuns, taskQuestions } = tablesOf(db)
     // the continuation binds its self entries (as the real scheduler injection does) and
@@ -464,7 +465,7 @@ describeEachProvider('RFC-140 W2 deferred 登记 + 自动补发', (harness) => {
       dispatch.indexOf('export async function dispatchDeferredTaskQuestions'),
       dispatch.indexOf('async function dispatchTaskQuestionsLocked'),
     )
-    expect(deferredFn).toContain('getTaskQuestionWriteSem(taskId).run')
+    expect(deferredFn).toMatch(/getTaskQuestionWriteSem\(taskId\)\s*\.run/)
     expect(deferredFn.split('dispatchTaskQuestionsLocked(').length - 1).toBe(1)
   })
 
@@ -484,7 +485,7 @@ describeEachProvider('RFC-140 W2 deferred 登记 + 自动补发', (harness) => {
       src.indexOf('export async function dispatchTaskQuestions'),
       src.indexOf('async function dispatchTaskQuestionsLocked'),
     )
-    expect(wrapper).toContain('getTaskQuestionWriteSem(taskId).run')
+    expect(wrapper).toMatch(/getTaskQuestionWriteSem\(taskId\)\s*\.run/)
     expect(wrapper).not.toContain('.select()') // no reads before the lock
     const stageSrc = await Bun.file(
       fileURLToPath(
@@ -495,6 +496,6 @@ describeEachProvider('RFC-140 W2 deferred 登记 + 自动补发', (harness) => {
       stageSrc.indexOf('export async function stageTaskQuestion'),
       stageSrc.indexOf('const MANUAL_TITLE_MAX'),
     )
-    expect(stageFn).toContain('getTaskQuestionWriteSem(entry.taskId).run')
+    expect(stageFn).toMatch(/getTaskQuestionWriteSem\(entry\.taskId\)\s*\.run/)
   })
 })

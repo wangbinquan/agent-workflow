@@ -81,7 +81,6 @@ import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 // decode extended write-lock hold time. All four share this light projection;
 // the compiler flags any future consumer of a column missing here.
 type DispatchRunRow = NodeRunDispatchFacts
-import { getTaskQuestionWriteSem } from '@/services/taskWriteLocks'
 import {
   type CauseClass,
   causeClassForEntry,
@@ -553,17 +552,20 @@ export async function dispatchTaskQuestions(
   // withdrawn dispatch intent (a millisecond-timestamp CAS was rejected as the guard — same-ms
   // unstage+re-stage collides). Lock discipline: callers MUST NOT hold lock B when calling this
   // (the semaphore is non-reentrant); stageTaskQuestion takes the same lock (RFC-140).
-  return await getTaskQuestionWriteSem(taskId).run(() =>
-    dispatchTaskQuestionsLocked(
-      db,
-      taskExecutionParticipants,
-      taskId,
-      entryIds,
-      actor,
-      undefined,
-      committedEventIdentity,
-    ),
-  )
+  const permits = taskExecutionParticipants.executionPermits
+  return await permits
+    .getTaskQuestionWriteSem(taskId)
+    .run(() =>
+      dispatchTaskQuestionsLocked(
+        db,
+        taskExecutionParticipants,
+        taskId,
+        entryIds,
+        actor,
+        undefined,
+        committedEventIdentity,
+      ),
+    )
 }
 
 /** RFC-333 T9 — route/MCP decision entry. Domain stamping, rerun minting,
@@ -589,7 +591,7 @@ export async function dispatchTaskQuestionsWithDecision(
   if (replay !== null) return replay
 
   const capture: PreparedQuestionDispatchDecision['capture'] = {}
-  await getTaskQuestionWriteSem(taskId).run(() =>
+  await taskExecutionParticipants.executionPermits.getTaskQuestionWriteSem(taskId).run(() =>
     dispatchTaskQuestionsLocked(db, taskExecutionParticipants, taskId, entryIds, actor, {
       args: decision,
       capture,
@@ -625,7 +627,8 @@ export async function dispatchDeferredTaskQuestions(
     clearMarkersOn?: (conflictCode: string) => boolean
   },
 ): Promise<DispatchTaskQuestionsResult> {
-  return await getTaskQuestionWriteSem(taskId).run(async () => {
+  const permits = taskExecutionParticipants.executionPermits
+  return await permits.getTaskQuestionWriteSem(taskId).run(async () => {
     const { taskQuestions } = tablesOf(db)
     const deferred = await db
       .select({ id: taskQuestions.id })

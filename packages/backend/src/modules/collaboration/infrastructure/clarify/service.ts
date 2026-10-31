@@ -92,7 +92,7 @@ import {
   currentTaskExecutionContext,
   fenceTaskWrite,
   withTaskExecutionWrite,
-} from '@/services/taskExecutionParticipants'
+} from '@/modules/task-execution/public/participants'
 import { getNodeClarifyDirectiveRow } from '@/services/taskClarifyDirective'
 import { ValidationError } from '@/util/errors'
 import { sha256Hex } from '@/util/hash'

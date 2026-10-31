@@ -1,3 +1,5 @@
+import { createTestIsolationBinding } from './helpers/executionKernel'
+import { bindIsolationCleanup } from '@/modules/task-execution/infrastructure/executionKernelBinding'
 import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 import { o2Ports } from './helpers/o2Closure'
@@ -33,15 +35,17 @@ import { createTaskExecutionPersistence } from '@/modules/task-execution/composi
 import type { TaskMechanicsState } from '@/services/execution/taskMechanicsState'
 import {
   createIsoUnderLock,
-  mergeBackAndSettle,
   persistIsoBase,
   persistIsoNodeTree,
-  type IsolatedAgentRunBinding,
-} from '@/services/isolatedAgentRun'
-import { discardNodeIso, snapshotNodeIsoFinal, type IsoHandle } from '@/services/nodeIsolation'
+} from '@/modules/task-execution/engine/kernel/isolation'
+import { mergeBackAndSettle } from '@/modules/task-execution/engine/kernel/merge'
+import { type IsolatedAgentRunBinding } from '@/modules/task-execution/application/ports/executionKernel'
+import { discardNodeIso } from '@/modules/task-execution/engine/kernel/isolationCleanup'
+import { snapshotNodeIsoFinal } from '@/platform/workspace/local/isolation'
+import { type IsoHandle } from '@/platform/contracts/isolationWorkspace'
 import { runGit } from '@/util/git'
 import { createLogger } from '@/util/log'
-import { Semaphore } from '@/util/semaphore'
+import { Semaphore } from '@/platform/contracts/semaphore'
 import { removeTempDirSync } from './fixtures/tempDir'
 import { describeEachProvider } from './helpers/eachProvider'
 import { startGitHttpRemote } from './helpers/gitHttpRemote'
@@ -93,13 +97,13 @@ describeEachProvider('single non-root member isolation checkpoint regression', (
       mounts,
       cleanup,
     })
-    const binding: IsolatedAgentRunBinding = {
+    const binding = createTestIsolationBinding({
       persistence: createTaskExecutionPersistence(db, {
         humanGateOpen: composeHumanGateOpenParticipantFactory(),
         historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
         recoveryHumanGates: o2Ports(db).collaborationReads.recovery,
       }),
-    }
+    })
     const writeSem = new Semaphore(1)
     const state = {
       taskId: task.id,
@@ -257,7 +261,7 @@ describeEachProvider('single non-root member isolation checkpoint regression', (
         }
         await runtime(handle)
         const crash = new Error('injected crash after mark-pending-merge, before merge-back')
-        const crashBinding: IsolatedAgentRunBinding = {
+        const crashBinding: IsolatedAgentRunBinding = createTestIsolationBinding({
           persistence: {
             ...f.binding.persistence,
             mergeStates: {
@@ -269,7 +273,7 @@ describeEachProvider('single non-root member isolation checkpoint regression', (
               },
             },
           },
-        }
+        })
         await expect(
           mergeBackAndSettle({
             binding: crashBinding,
@@ -292,7 +296,7 @@ describeEachProvider('single non-root member isolation checkpoint regression', (
         )
         for (const repo of f.task.repos)
           expect(existsSync(join(repo.worktreePath, 'a.txt'))).toBe(false)
-        await discardNodeIso(handle)
+        await discardNodeIso(bindIsolationCleanup(), handle)
         // No in-memory tree/handle is supplied to the fresh execution topology.
         const recovery = await createProviderTaskExecutionTestTopology(harness, appHome)
         cleanup.push(() => recovery.dispose())

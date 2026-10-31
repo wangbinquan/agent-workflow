@@ -19,10 +19,9 @@ import {
   prepareConflictResolution,
   snapshotNodeIsoFinal,
   undoPriorShardDeltaInIso,
-  type IsoHandle,
-  type MergeBackConflict,
   type SubmoduleMergeResolutions,
 } from '@/platform/workspace/local/isolation'
+import { type IsoHandle, type MergeBackConflict } from '@/platform/contracts/isolationWorkspace'
 import { gitBlobHashes, gitChangedFiles, runGit } from '@/util/git'
 
 /** Task-image preparation uses precisely the same conflict interpretation. */

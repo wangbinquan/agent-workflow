@@ -271,6 +271,21 @@ interface OffTableDeviation {
  */
 const OFF_TABLE_DEVIATIONS: readonly OffTableDeviation[] = [
   {
+    site: 'modules/task-execution/composition/wrapperMechanics.ts:pending',
+    offTable: ['canceled', 'failed', 'interrupted', 'pending', 'running'],
+    why: 'RFC-402 将 shard / aggregator 的原 nodeRuns.set 调用接到具名 ledger 后显式可见：同一 wrapper generation 的残留行原地回到 pending 再次执行，原先已有这五个 allowedFrom 与 allowTerminal: true。这里只登记原恢复路径，不增加可恢复状态。',
+  },
+  {
+    site: 'modules/task-execution/composition/nodeMechanics.ts:failed',
+    offTable: ['done'],
+    why: 'RFC-402 具名 ledger 方法恢复了原 setRunStatus 包装器遮住的站点：wg-clarify-suppressed-late 把已经 done 的 host run 改判 failed，沿用既有 allowTerminal: true 与原始错误文本；本次只改变调用合同，不增加状态边。',
+  },
+  {
+    site: 'modules/task-execution/composition/nodeMechanics.ts:running',
+    offTable: ['canceled', 'interrupted'],
+    why: 'RFC-402 具名 ledger 方法恢复了原包装器遮住的 call-adoption 站点：接管仍在执行的子任务时把 canceled/interrupted 的父 call 行恢复 running，保留原 allowedFrom、allowTerminal 与接管顺序；本次不修改这条既有恢复策略。',
+  },
+  {
     site: 'modules/task-execution/infrastructure/taskRouteRepairOperations.ts:interrupted',
     offTable: ['done', 'failed'],
     why: '修复动作把已经走到终态的任务打回 interrupted 续跑：CR-1 从 failed（误判失败）、T3 / S3 从 done（误判完成）。表里 `interrupt` 只允许从 pending|running 出发——修复动作的存在前提正是「行已经走到了表说不该到的地方」。RFC-359 第 8 刀把两份修复实现合成一份，同一批边此前记在退役那一份的逐选项站点上。',
@@ -395,6 +410,17 @@ describe('RFC-317 T47 负向 fixture —— 预言与抽取判据真的会咬', 
     expect(sites[0]?.to).toBe('running')
   })
 
+  test('RFC-402 bound ledger methods remain visible to the transition oracle', () => {
+    const sites = casSites([
+      sourceUnit(
+        'packages/backend/src/x.ts',
+        "await nodeRunLedger(state).setNodeRunStatus({ nodeRunId, to: 'failed', allowedFrom: ['done'], allowTerminal: true })",
+      ),
+    ])
+    expect(sites).toHaveLength(1)
+    expect(offTableSources(sites[0]!)).toEqual(['done'])
+  })
+
   test('表内的边不报（pending → running 是 claim 事件）', () => {
     const [site] = casSites([
       sourceUnit(
@@ -437,4 +463,22 @@ describe('RFC-317 T47 负向 fixture —— 预言与抽取判据真的会咬', 
       ]),
     ).toEqual([])
   })
+})
+
+test('RFC-402 script ledger sites remain visible to the named-writer oracle after relocation', () => {
+  // casSites orders by the `file:line` string; list these in source order instead.
+  const sites = casSites(packageSrcUnits(REPO_ROOT, 'backend'))
+    .filter((site) => site.file.startsWith('modules/task-execution/engine/node/script/'))
+    .sort((left, right) => left.file.localeCompare(right.file) || left.line - right.line)
+  expect(sites.map((site) => [site.file.split('/').at(-1), site.to, site.allowedFrom])).toEqual([
+    ['runOneScriptAttempt.ts', 'failed', ['pending', 'running']],
+    ['runOneScriptAttempt.ts', 'running', ['pending']],
+    ['runOneScriptAttempt.ts', 'failed', ['running']],
+    ['runOneScriptAttempt.ts', 'done', ['running']],
+    ['runScriptNode.ts', 'failed', ['pending']],
+  ])
+  for (const site of sites)
+    expect(site.allowedFrom.filter((from) => !nodeOracle(site.to).has(from))).toEqual([])
+  // The conditional aborted target is still a named writer; .set() never joins the matcher.
+  expect(NODE_WRITERS.has('set')).toBe(false)
 })

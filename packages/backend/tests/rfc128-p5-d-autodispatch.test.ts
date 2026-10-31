@@ -1,3 +1,5 @@
+import { testExecutionPermits } from './helpers/executionPermits'
+const { getTaskQuestionWriteSem } = testExecutionPermits
 import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
@@ -65,7 +67,6 @@ import {
   loadUndispatchedSelfQuestionerTargets,
 } from '../src/services/taskQuestions'
 import { getNodeClarifyDirectiveRow } from '../src/services/taskClarifyDirective'
-import { getTaskQuestionWriteSem } from '../src/services/taskWriteLocks'
 import { ConflictError } from '../src/util/errors'
 import { resetBroadcastersForTests, taskBroadcaster, TASK_CHANNEL } from '../src/ws/broadcaster'
 import type { ClarifyQuestion, WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
@@ -1280,7 +1281,9 @@ describeEachProvider('RFC-128 P5-D lock-B non-reentry', (harness) => {
     const fn = src.slice(src.indexOf('export async function autoDispatchClarifyRound'))
     const aIdx = fn.indexOf('getTaskWriteSem(round.taskId).run') // worktree lock A OUTER
     // B is taken INNER and its .run RETURNS a `rolledBack` flag → B is RELEASED when the block returns.
-    const bIdx = fn.indexOf('const rolledBack = await getTaskQuestionWriteSem(round.taskId).run')
+    const bIdx = fn.indexOf(
+      'const rolledBack = await permits.getTaskQuestionWriteSem(round.taskId).run',
+    )
     const preflightIdx = fn.indexOf('selfHomeHasOpenLedger(db, round.taskId') // preflight under B
     const rollbackIdx = fn.indexOf('rollbackNodeRunWorktrees(') // rollback under B
     const releaseCheckIdx = fn.indexOf('if (!rolledBack)') // checked AFTER B returned (B released)

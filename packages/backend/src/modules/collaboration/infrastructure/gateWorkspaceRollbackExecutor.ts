@@ -8,7 +8,7 @@ import type {
 import type { HumanGateOperationStore } from '../application/ports/humanGateOperationStore'
 import type { ValidatedWorkspaceRollbackPlan } from '../domain/workspaceRollbackPlan'
 import { decodeReviewDecisionManifest } from '../domain/reviewDecision'
-import { getTaskWriteSem } from '@/services/taskWriteLocks'
+import type { TaskExecutionPermits } from '@/modules/task-execution/public/participants'
 import { rollbackToSnapshot } from '@/util/git'
 
 function clippedError(error: unknown): string {
@@ -18,7 +18,10 @@ function clippedError(error: unknown): string {
 export class GateWorkspaceRollbackExecutorAdapter implements GateWorkspaceRollbackExecutor {
   private readonly resolvedPlans = new WeakMap<object, ValidatedWorkspaceRollbackPlan>()
 
-  constructor(private readonly operations: Pick<HumanGateOperationStore, 'get'>) {}
+  constructor(
+    private readonly operations: Pick<HumanGateOperationStore, 'get'>,
+    private readonly executionPermits: TaskExecutionPermits,
+  ) {}
 
   async loadValidatedPlan(ref: GateWorkspaceRollbackRef): Promise<GateWorkspaceRollbackPlanView> {
     const operation = await this.operations.get(ref.operationId)
@@ -45,7 +48,7 @@ export class GateWorkspaceRollbackExecutorAdapter implements GateWorkspaceRollba
     const plan = this.resolvedPlans.get(view)
     if (plan === undefined)
       throw new Error('workspace rollback plan was not loaded by this executor')
-    return getTaskWriteSem(plan.taskId).run(async () => {
+    return this.executionPermits.getTaskWriteSem(plan.taskId).run(async () => {
       const targets: GateWorkspaceRollbackTargetReceipt[] = []
       for (const target of plan.targets) {
         try {

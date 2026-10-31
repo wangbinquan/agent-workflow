@@ -101,7 +101,7 @@ import {
   withTaskExecutionWrite,
   type TaskExecutionIntentKind,
   type TaskExecutionIntentSource,
-} from '@/services/taskExecutionParticipants'
+} from '@/modules/task-execution/public/participants'
 import { buildWorkflowValidationContext, validateWorkflowDef } from '@/services/workflow.validator'
 import type { StaleRunKillOutcome } from '@/util/process'
 import { killStaleRunProcessTree } from '@/util/process'

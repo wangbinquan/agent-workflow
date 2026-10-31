@@ -370,7 +370,7 @@ export function classifyTaskExecutionAuthority(input: {
       ['record', 'recordNodeRunInputsInTx'].includes(input.callable)) ||
     (input.file === `${MODULE_PREFIX}task-execution/infrastructure/taskPreparationParticipant.ts` &&
       input.callable === 'writeWorkspace') ||
-    /services\/(?:runner|scheduler|isolatedAgentRun|commitPushRunner|nodeRunMint|runtimeSessionLease)\.ts|modules\/task-execution\/composition\/(?:nodeMechanics|wrapperMechanics|wrapperRunLifecycle)\.ts|services\/runtime\/(?:opencode|claudeCode)\/(?:sessionCapture|subagentLiveCapture)\.ts|services\/review\.ts#dispatchReviewNodeUnlocked|modules\/collaboration\/infrastructure\/humanGateOpenParticipant\.ts#project(?:Review|Clarify)GateOpen|services\/workgroup\/rounds\.ts|services\/task\.ts#persistPreparedProjection/.test(
+    /modules\/task-execution\/engine\/node\/(?:script\/(?:runScriptNode|runOneScriptAttempt)|shared\/resolveMergeConflicts)\.ts|modules\/task-execution\/engine\/kernel\/(?:isolation|merge|isolationCleanup|nodeRunLedger)\.ts|services\/(?:runner|scheduler|commitPushRunner|nodeRunMint|runtimeSessionLease)\.ts|modules\/task-execution\/composition\/(?:nodeMechanics|wrapperMechanics|wrapperRunLifecycle)\.ts|services\/runtime\/(?:opencode|claudeCode)\/(?:sessionCapture|subagentLiveCapture)\.ts|services\/review\.ts#dispatchReviewNodeUnlocked|modules\/collaboration\/infrastructure\/humanGateOpenParticipant\.ts#project(?:Review|Clarify)GateOpen|services\/workgroup\/rounds\.ts|services\/task\.ts#persistPreparedProjection/.test(
       value,
     )
   ) {
@@ -858,6 +858,114 @@ function literalText(expression: ts.Expression | null): string | null {
   return expression !== null && ts.isStringLiteralLike(expression) ? expression.text : null
 }
 
+const SCRIPT_ATTEMPT_FILE = `${MODULE_PREFIX}task-execution/engine/node/script/runOneScriptAttempt.ts`
+const SCRIPT_EFFECT_BINDING_FILE = `${MODULE_PREFIX}task-execution/composition/scriptNodeExecution.ts`
+
+/** The script port owns the act-site policy; composition only forwards that policy to the
+ * existing observer. Check both halves before counting the port call as the original site. */
+function scriptEffectBindingValid(backend: readonly SourceUnit[]): boolean {
+  const unit = backend.find((candidate) => candidate.path === SCRIPT_EFFECT_BINDING_FILE)
+  if (unit === undefined) return false
+  const calls: ts.CallExpression[] = []
+  const visit = (node: ts.Node) => {
+    if (
+      ts.isCallExpression(node) &&
+      ts.isIdentifier(node.expression) &&
+      node.expression.text === 'createProcessEffectAttemptObserver'
+    )
+      calls.push(node)
+    ts.forEachChild(node, visit)
+  }
+  visit(unit.source)
+  if (calls.length !== 1) return false
+  const argument = calls[0]!.arguments[0]
+  if (argument === undefined || !ts.isObjectLiteralExpression(argument)) return false
+  const keys = objectProperty(argument, 'resourceKeys')
+  const projection = objectProperty(argument, 'projection')
+  if (
+    keys === null ||
+    !ts.isArrowFunction(keys) ||
+    keys.parameters.length !== 1 ||
+    !ts.isIdentifier(keys.parameters[0]!.name) ||
+    !ts.isPropertyAccessExpression(keys.body) ||
+    !ts.isIdentifier(keys.body.expression) ||
+    keys.body.expression.text !== keys.parameters[0]!.name.text ||
+    keys.body.name.text !== 'resourceKeys'
+  )
+    return false
+  return (
+    projection !== null &&
+    ts.isCallExpression(projection) &&
+    projection.expression.getText(unit.source) === 'input.start.project' &&
+    projection.arguments.length === 2 &&
+    projection.arguments[0]!.getText(unit.source) === 'persistence' &&
+    projection.arguments[1]!.getText(unit.source) === 'input.resources'
+  )
+}
+
+/** RFC-402: isolation create and merge moved into `engine/kernel`, which receives the existing
+ * local observer through its binding instead of importing it. The kernel call keeps the literal
+ * act-site policy (kind, resource keys) and is counted as the original site; the infrastructure
+ * binding may only forward that policy unchanged (see `kernelEffectForwarderValid`). */
+const KERNEL_EFFECT_PORT_CALLEES = new Map<string, string>([
+  [
+    `${MODULE_PREFIX}task-execution/engine/kernel/isolation.ts`,
+    'args.binding.createLocalEffectAttemptObserver',
+  ],
+  [
+    `${MODULE_PREFIX}task-execution/engine/kernel/merge.ts`,
+    'binding.createLocalEffectAttemptObserver',
+  ],
+])
+const KERNEL_EFFECT_BINDING_FILE = `${MODULE_PREFIX}task-execution/infrastructure/executionKernelBinding.ts`
+
+/** `(request) => createLocalEffectAttemptObserver({ ...request, persistence[, context] })` only:
+ * a forwarder that sets any act-site field itself (kind, resource keys, request) is not one. */
+function kernelEffectForwarderValid(call: ts.CallExpression): boolean {
+  const argument = call.arguments[0]
+  if (call.arguments.length !== 1 || argument === undefined) return false
+  if (!ts.isObjectLiteralExpression(argument)) return false
+  const arrow = call.parent
+  if (!ts.isArrowFunction(arrow) || arrow.body !== call || arrow.parameters.length !== 1)
+    return false
+  const parameter = arrow.parameters[0]!.name
+  if (!ts.isIdentifier(parameter)) return false
+  const [spread, ...rest] = argument.properties
+  if (
+    spread === undefined ||
+    !ts.isSpreadAssignment(spread) ||
+    !ts.isIdentifier(spread.expression) ||
+    spread.expression.text !== parameter.text
+  )
+    return false
+  const names = rest.map((property) =>
+    ts.isPropertyAssignment(property) || ts.isShorthandPropertyAssignment(property)
+      ? propertyName(property.name)
+      : null,
+  )
+  return (
+    names.includes('persistence') &&
+    names.every((name) => name === 'persistence' || name === 'context')
+  )
+}
+
+function kernelEffectBindingValid(backend: readonly SourceUnit[]): boolean {
+  const unit = backend.find((candidate) => candidate.path === KERNEL_EFFECT_BINDING_FILE)
+  if (unit === undefined) return false
+  const calls: ts.CallExpression[] = []
+  const visit = (node: ts.Node) => {
+    if (
+      ts.isCallExpression(node) &&
+      ts.isIdentifier(node.expression) &&
+      node.expression.text === 'createLocalEffectAttemptObserver'
+    )
+      calls.push(node)
+    ts.forEachChild(node, visit)
+  }
+  visit(unit.source)
+  return calls.length > 0 && calls.every(kernelEffectForwarderValid)
+}
+
 export function buildTaskOwnedEffectEntries(backend: readonly SourceUnit[]): {
   entries: TaskOwnedEffectEntry[]
   unknown: Array<{ file: string; line: number; reason: string }>
@@ -880,12 +988,27 @@ export function buildTaskOwnedEffectEntries(backend: readonly SourceUnit[]): {
       return `${key}#${ordinal}`
     }
     const visit = (node: ts.Node): void => {
+      const scriptPortCall =
+        unit.path === SCRIPT_ATTEMPT_FILE &&
+        ts.isCallExpression(node) &&
+        ts.isPropertyAccessExpression(node.expression) &&
+        node.expression.getText(unit.source) === 'ports.effect.createProcessEffectAttemptObserver'
+      const kernelPortCall =
+        ts.isCallExpression(node) &&
+        ts.isPropertyAccessExpression(node.expression) &&
+        KERNEL_EFFECT_PORT_CALLEES.get(unit.path) === node.expression.getText(unit.source)
       if (
         ts.isCallExpression(node) &&
-        ts.isIdentifier(node.expression) &&
-        TASK_EFFECT_OBSERVER_CALLEES.has(node.expression.text)
+        ((ts.isIdentifier(node.expression) &&
+          TASK_EFFECT_OBSERVER_CALLEES.has(node.expression.text)) ||
+          scriptPortCall ||
+          kernelPortCall)
       ) {
-        const callee = node.expression.text
+        const callee = ts.isIdentifier(node.expression)
+          ? node.expression.text
+          : kernelPortCall
+            ? 'createLocalEffectAttemptObserver'
+            : 'createProcessEffectAttemptObserver'
         const line = unit.source.getLineAndCharacterOfPosition(node.getStart()).line + 1
         const owner = enclosingTopLevelSymbol(unit, node)
         const symbol = owner?.name ?? '$file'
@@ -900,6 +1023,32 @@ export function buildTaskOwnedEffectEntries(backend: readonly SourceUnit[]): {
           return
         }
         const text = argument.getText(unit.source)
+        if (
+          unit.path === SCRIPT_EFFECT_BINDING_FILE &&
+          callee === 'createProcessEffectAttemptObserver'
+        ) {
+          if (!scriptEffectBindingValid(backend))
+            unknown.push({
+              file: unit.path,
+              line,
+              reason: 'script observer binding does not forward the resource policy',
+            })
+          ts.forEachChild(node, visit)
+          return
+        }
+        if (
+          unit.path === KERNEL_EFFECT_BINDING_FILE &&
+          callee === 'createLocalEffectAttemptObserver'
+        ) {
+          if (!kernelEffectForwarderValid(node))
+            unknown.push({
+              file: unit.path,
+              line,
+              reason: 'kernel observer binding does not forward the act-site policy unchanged',
+            })
+          ts.forEachChild(node, visit)
+          return
+        }
         let effectKind: string | null = null
         if (callee === 'createProcessEffectAttemptObserver') effectKind = 'process'
         else if (callee === 'createCodeHostEffectAttemptObserver') effectKind = 'code-host-mutation'
@@ -915,7 +1064,16 @@ export function buildTaskOwnedEffectEntries(backend: readonly SourceUnit[]): {
           ts.forEachChild(node, visit)
           return
         }
-        if (!/\bresourceKeys\s*:/.test(text)) {
+        const hasResourceResolver = scriptPortCall
+          ? objectProperty(argument, 'resources') !== null &&
+            argument.properties.some(
+              (property) =>
+                ts.isShorthandPropertyAssignment(property) && property.name.text === 'start',
+            ) &&
+            scriptEffectBindingValid(backend)
+          : /\bresourceKeys\s*:/.test(text) &&
+            (!kernelPortCall || kernelEffectBindingValid(backend))
+        if (!hasResourceResolver) {
           unknown.push({ file: unit.path, line, reason: `${callee} has no resource-key resolver` })
           ts.forEachChild(node, visit)
           return

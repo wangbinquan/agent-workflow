@@ -463,7 +463,7 @@ describeEachProvider('RFC-371 frozen observation identity', (harness) => {
 test('RFC-371 internal commit and merge launches carry the selected runtime attribution', () => {
   for (const path of [
     '../src/services/scheduler.ts',
-    '../src/modules/task-execution/composition/nodeMechanics.ts',
+    '../src/modules/task-execution/engine/node/shared/resolveMergeConflicts.ts',
   ]) {
     const source = ts.createSourceFile(
       path,
@@ -475,7 +475,9 @@ test('RFC-371 internal commit and merge launches carry the selected runtime attr
     const visit = (node: ts.Node) => {
       if (
         ts.isCallExpression(node) &&
-        node.expression.getText(source) === 'state.opts.taskAgentRuns.runtimeBindings.resolve'
+        ['state.opts.taskAgentRuns.runtimeBindings.resolve', 'ports.runtime.resolve'].includes(
+          node.expression.getText(source),
+        )
       ) {
         const value = node.arguments[3]
         if (value && ts.isIdentifier(value) && value.text === 'rt') inherited.push(value)

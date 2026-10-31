@@ -154,6 +154,7 @@ export interface TaskExecutionProviderRouteContext {
  * appHome 之类）。合并之前这份清单两支各写一份、还不一样长。
  */
 type ProviderRouteOperationsAssembled =
+  | 'executionPermits'
   | 'historyRestrictions'
   | 'clarifyNav'
   | 'workspaceReads'
@@ -314,6 +315,7 @@ export function composeTaskExecutionProviderRuntime<C extends RouteCollaboration
     recovery: persistence.recoveryAdministration,
   })
   const taskRoutes = createTaskRouteOperations({
+    executionPermits: dependencies.runtime.executionPermits,
     db,
     clarifyNav: dependencies.clarifyNav,
     persistence,

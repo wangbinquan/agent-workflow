@@ -1,3 +1,4 @@
+import { SCRIPT_NODE_SOURCE } from './helpers/executionMechanismSources'
 // RFC-287 T14 —— 实现门（双路 Codex 半场切）抓出的回归，逐条上锁。
 //
 // 这批的共同点是：它们都不是「功能没写」，而是**迁移时行为悄悄变了**——五条装配线
@@ -13,18 +14,7 @@ import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
-const nodeMechanicsSrc = readFileSync(
-  resolve(
-    import.meta.dir,
-    '..',
-    'src',
-    'modules',
-    'task-execution',
-    'composition',
-    'nodeMechanics.ts',
-  ),
-  'utf8',
-)
+const nodeMechanicsSrc = SCRIPT_NODE_SOURCE
 
 /** 截出脚本线 runScriptNode 的函数体——避免锚点误命中别的线（同名回调满天飞）。 */
 function scriptLineBody(): string {
@@ -37,7 +27,7 @@ function scriptLineBody(): string {
 }
 
 describe('RFC-287 T14 — 脚本线取消不再铸孤儿行', () => {
-  // 迁移前：每轮循环最顶上先 `if (opts.signal?.aborted) return canceled`，**先于**
+  // 迁移前：每轮循环最顶上先 `if (signal?.aborted) return canceled`，**先于**
   // 换树与铸行。迁进骨架后只剩 spawn 入口那一处，于是取消若落在换树窗口里，会先丢
   // 旧树、建新树、铸一条 pending 行并把它标成 isolating，spawn 才看见 abort 直接返回
   // 合成 canceled——那条行永远不会被运行也永远不会被终结。后续 retryNode 对它做
@@ -63,10 +53,10 @@ describe('RFC-287 T14 — 脚本线取消不再铸孤儿行', () => {
     const runAt = body.indexOf('await runOneScriptAttempt(', spawnAt)
     expect(runAt).toBeGreaterThan(spawnAt)
     const prelude = body.slice(spawnAt, runAt)
-    expect(prelude).toContain('opts.signal?.aborted')
+    expect(prelude).toContain('signal?.aborted')
     // 关键：短路条件里必须带 attempt 限定。不带的话，重试轮的取消会跳过行终结。
     expect(prelude, 'spawn 的取消短路不得对 attempt>=1 生效').toMatch(
-      /attempt === 0\s*&&\s*opts\.signal\?\.aborted/,
+      /attempt === 0\s*&&\s*signal\?\.aborted/,
     )
   })
 
@@ -75,7 +65,7 @@ describe('RFC-287 T14 — 脚本线取消不再铸孤儿行', () => {
     const m = body.match(/preAttempt:\s*\(\)\s*=>\s*\{([\s\S]{0,400}?)\n {8}\}/)
     expect(m).not.toBeNull()
     const hook = m![1]!
-    expect(hook).toContain('opts.signal?.aborted')
+    expect(hook).toContain('signal?.aborted')
     expect(hook).toContain("kind: 'canceled'")
   })
 })
@@ -108,13 +98,13 @@ describe('RFC-287 T14 — 两处对外契约的文本回归', () => {
     // 同文件里 agent 线与工作组线本就带 `try {` 反向锁，唯独真出过 bug 的脚本线没有。
     expect(m![0], '不得用 .catch 吞掉').not.toMatch(/\.catch\(/)
     expect(m![0], '也不得用 try/catch 吞掉').not.toMatch(
-      /try \{[\s\S]{0,160}await discardNodeIso\(/,
+      /try \{[\s\S]{0,160}await (?:ports\.workspace\.)?discardNodeIso\(/,
     )
   })
 
   test('骨架确实在 finally 里 catch 并 warn（上一条依赖它成立）', () => {
     const src = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'services', 'schedulerAssembly.ts'),
+      resolve(import.meta.dir, '..', 'src', 'modules/task-execution/engine/kernel/assembly.ts'),
       'utf8',
     )
     expect(src).toMatch(/spec\.discardIso\(handle\)\.catch\([\s\S]{0,160}iso discard failed/)

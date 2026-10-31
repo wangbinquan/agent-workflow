@@ -1,3 +1,7 @@
+import { SCRIPT_NODE_SOURCE } from './helpers/executionMechanismSources'
+import { createExecutionPermitRegistry } from '@/modules/task-execution/engine/kernel/permits'
+import { testExecutionPermits } from './helpers/executionPermits'
+const { getNodePoolSemaphore, resizeAllNodePools } = testExecutionPermits
 // 上线前加固（2026-07-18）— maxConcurrentNodes 必须是 daemon 级总预算。
 //
 // 旧 scheduler 在每次 runTask 内 new Semaphore(limit)，并发任务会把真实
@@ -12,21 +16,7 @@
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { getNodePoolSemaphore, resizeAllNodePools } from '../src/services/processNodeConcurrency'
 
-const nodeMechanicsSrc = (): string =>
-  readFileSync(
-    resolve(
-      import.meta.dir,
-      '..',
-      'src',
-      'modules',
-      'task-execution',
-      'composition',
-      'nodeMechanics.ts',
-    ),
-    'utf8',
-  )
 const taskEngineApplicationSrc = (): string =>
   readFileSync(
     resolve(
@@ -154,17 +144,17 @@ describe('process node concurrency', () => {
     expect(application).not.toContain('new Semaphore(opts.maxConcurrentScriptNodes ?? 4)')
     // RFC-266: 扇出子池也不再 per-task new（否则设置改动到不了运行中的任务）。
     expect(application).not.toContain('new Semaphore(opts.multiProcessSubprocessConcurrency ?? 4)')
-    expect(application).toContain(
-      'getTaskFanoutSem(taskId, opts.multiProcessSubprocessConcurrency ?? 4)',
+    expect(application).toMatch(
+      /getTaskFanoutSem\(\s*taskId,\s*opts\.multiProcessSubprocessConcurrency \?\? 4,?\s*\)/,
     )
   })
 
   // RFC-266 T-L —— 首次给「脚本节点取哪把闸」上锁。在此之前**没有任何测试**
   // 锁定它，所以 RFC-253 把脚本接在 agent 池上跑了整个生命周期都没人发现。
   test('the script branch acquires the script pool, never the agent pool', () => {
-    const nodeMechanics = nodeMechanicsSrc()
+    const nodeMechanics = SCRIPT_NODE_SOURCE
     const start = nodeMechanics.indexOf('async function runScriptNode(')
-    const end = nodeMechanics.indexOf('async function runOneScriptAttempt(')
+    const end = nodeMechanics.indexOf('\n}\n', start)
     expect(start).toBeGreaterThan(-1)
     expect(end).toBeGreaterThan(start)
     const body = nodeMechanics.slice(start, end)
@@ -177,4 +167,74 @@ describe('process node concurrency', () => {
     // 反向：本线任何形态都不得碰 agent 池。
     expect(body).not.toContain('agentSem')
   })
+})
+
+// RFC-402: the scope identity and task registries are private to one explicitly shared instance.
+test('registry instances isolate all pools while one instance retains each identity', async () => {
+  const first = createExecutionPermitRegistry()
+  const second = createExecutionPermitRegistry()
+  const scope = {}
+  for (const kind of ['agent', 'script', 'code-host'] as const) {
+    const pool = first.getNodePoolSemaphore(scope, kind, 2)
+    expect(first.getNodePoolSemaphore(scope, kind, 1, 'seed-only')).toBe(pool)
+    expect(pool.capacity).toBe(2)
+    expect(second.getNodePoolSemaphore(scope, kind, 2)).not.toBe(pool)
+  }
+  expect(first.getTaskWriteSem('task')).not.toBe(second.getTaskWriteSem('task'))
+  expect(first.getTaskQuestionWriteSem('task')).not.toBe(second.getTaskQuestionWriteSem('task'))
+  expect(first.getTaskFanoutSem('task', 2)).not.toBe(second.getTaskFanoutSem('task', 2))
+  const write = first.getTaskWriteSem('task')
+  const question = first.getTaskQuestionWriteSem('task')
+  const order: string[] = []
+  await write.run(async () => {
+    order.push('worktree')
+    await question.run(async () => {
+      expect(write.available).toBe(0)
+      order.push('question')
+      first.gcTaskWriteSem('task')
+      expect(first.getTaskWriteSem('task')).toBe(write)
+      expect(first.getTaskQuestionWriteSem('task')).toBe(question)
+    })
+    order.push('question-released')
+  })
+  order.push('worktree-released')
+  expect(order).toEqual(['worktree', 'question', 'question-released', 'worktree-released'])
+  first.gcTaskWriteSem('task')
+  expect(first.getTaskWriteSem('task')).not.toBe(write)
+  expect(first.getTaskQuestionWriteSem('task')).not.toBe(question)
+})
+
+test('one shared registry hot-applies in place without stale task seeds undoing node or fanout budgets', async () => {
+  const registry = createExecutionPermitRegistry()
+  const scope = {}
+  // Engine and hot-apply hold the same instance, as do sibling task consumers.
+  const engine = registry,
+    hotApply = registry
+  for (const kind of ['agent', 'script', 'code-host'] as const) {
+    const pool = engine.getNodePoolSemaphore(scope, kind, 1, 'seed-only')
+    const release = await pool.acquire()
+    const queued = pool.acquire()
+    expect(pool.queueLength).toBe(1)
+    expect(hotApply.getNodePoolSemaphore(scope, kind, 2, 'set')).toBe(pool)
+    const releaseQueued = await queued
+    expect(engine.getNodePoolSemaphore(scope, kind, 1, 'seed-only')).toBe(pool)
+    expect(pool.capacity).toBe(2)
+    releaseQueued()
+    release()
+  }
+  const fanout = engine.getTaskFanoutSem('task', 1)
+  const release = await fanout.acquire()
+  const queued = fanout.acquire()
+  engine.gcTaskFanoutSem('task')
+  expect(engine.getTaskFanoutSem('task', 1)).toBe(fanout)
+  hotApply.resizeAllTaskFanoutSems(2)
+  const releaseQueued = await queued
+  expect(engine.getTaskFanoutSem('task', 2)).toBe(fanout)
+  engine.gcTaskFanoutSem('task')
+  expect(engine.taskFanoutPoolCount()).toBe(1)
+  releaseQueued()
+  release()
+  engine.gcTaskFanoutSem('task')
+  expect(engine.taskFanoutPoolCount()).toBe(0)
+  expect(engine.getTaskFanoutSem('task', 2)).not.toBe(fanout)
 })

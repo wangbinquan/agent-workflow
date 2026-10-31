@@ -21,8 +21,8 @@ import {
   createNodeIso,
   mergeBackNodeIso,
   snapshotNodeIsoFinal,
-  type CanonRepo,
-} from '@/services/nodeIsolation'
+} from '@/platform/workspace/local/isolation'
+import { type CanonRepo } from '@/platform/contracts/isolationWorkspace'
 import { runGit } from '@/util/git'
 
 const appHome = mkdtempSync(join(tmpdir(), 'aw-rfc210-pf-home-'))
@@ -234,7 +234,7 @@ describe('RFC-210 — submodule publish failures fail the snapshot', () => {
     expect(agentStart).toBeGreaterThan(-1)
     const agentLine = nodeMechanics.slice(agentStart, nodeMechanics.indexOf('\n}\n', agentStart))
     const assemblySrc = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'services', 'schedulerAssembly.ts'),
+      resolve(import.meta.dir, '..', 'src', 'modules/task-execution/engine/kernel/assembly.ts'),
       'utf8',
     )
     expect(agentLine).toContain('markMergeFailed: async (msg) => {')
@@ -268,11 +268,11 @@ describe('RFC-210 — submodule publish failures fail the snapshot', () => {
     // too — without these, node pool refs leak forever and a new path's
     // worktree anchor is never handed over.
     const replayMerged = src.match(
-      /pending-merge replay merged[\s\S]{0,600}?discardNodeIso\(handle, log, state\.writeSem\)/,
+      /pending-merge replay merged[\s\S]{0,600}?discardNodeIso\(bindIsolationCleanup\(\), handle, log, state\.writeSem\)/,
     )
     expect(replayMerged).not.toBeNull()
     const humanResolved = src.match(
-      /human resolution merged back[\s\S]{0,600}?discardNodeIso\(handle, log, state\.writeSem\)/,
+      /human resolution merged back[\s\S]{0,600}?discardNodeIso\(bindIsolationCleanup\(\), handle, log, state\.writeSem\)/,
     )
     expect(humanResolved).not.toBeNull()
     // Round 5 (P1): the discard-time anchor handoff must be a CAS (expected-old
@@ -293,12 +293,17 @@ describe('RFC-210 — submodule publish failures fail the snapshot', () => {
     // 糊弄过去的方式（T1① 已把本文件登记为「必须换成行为夹具、不许改锚了事」）。
     // 扫两个文件的并集则对「代码搬到哪」免疫：新增 discard 站点仍必须自觉入账。
     const assembly = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'services', 'schedulerAssembly.ts'),
+      resolve(import.meta.dir, '..', 'src', 'modules/task-execution/engine/kernel/assembly.ts'),
+      'utf8',
+    )
+    const scriptBinding = readFileSync(
+      resolve(import.meta.dir, '../src/modules/task-execution/composition/scriptNodeExecution.ts'),
       'utf8',
     )
     const singleLine = [
-      ...(src.match(/discardNodeIso\([^\n)]*\)/g) ?? []),
-      ...(nodeMechanics.match(/discardNodeIso\([^\n)]*\)/g) ?? []),
+      ...(scriptBinding.match(/discardNodeIso\(bindIsolationCleanup\(\),[^\n)]*\)/g) ?? []),
+      ...(src.match(/discardNodeIso\(bindIsolationCleanup\(\),[^\n)]*\)/g) ?? []),
+      ...(nodeMechanics.match(/discardNodeIso\(bindIsolationCleanup\(\),[^\n)]*\)/g) ?? []),
       // 骨架里的清理走注入的 discardIso（其实参在各线 spec 上写明带 writeSem）。
       ...(assembly.match(/discardIso\([^\n)]*\)/g) ?? []),
     ]

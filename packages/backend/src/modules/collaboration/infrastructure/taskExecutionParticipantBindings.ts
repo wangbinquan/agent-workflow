@@ -1,3 +1,4 @@
+import type { TaskExecutionPermits } from '@/modules/task-execution/public/participants'
 import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
 import type {
   AsyncTaskAuthorizationParticipantInTx,
@@ -12,6 +13,7 @@ import type {
 
 /** Assembly input: bootstrap passes owner factory references, never prebuilt participants. */
 export interface TaskExecutionParticipantBindings {
+  readonly executionPermits: TaskExecutionPermits
   readonly createTaskNodeStatusEventsParticipantInTx: (
     tx: PersistenceTx,
   ) => TaskNodeStatusEventsParticipantInTx

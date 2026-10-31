@@ -16,7 +16,7 @@
 // 本模块**不得 import scheduler.ts**（模块环禁令 + 二进制构建事故先例），所需的
 // 协作方一律注入；类型也只收结构化最小切片（同 isolatedAgentRun 的 WriteSemLike）。
 
-import type { Logger } from '@/util/log'
+import type { Logger } from '../../application/ports/executionKernel'
 
 /**
  * 模式 B 重试循环的防御性硬上限。取值远高于任何真实重试预算（脚本线与 agent 线

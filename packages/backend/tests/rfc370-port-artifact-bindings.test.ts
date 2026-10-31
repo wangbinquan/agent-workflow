@@ -502,12 +502,15 @@ function objectFields(node: ts.Node, sf: ts.SourceFile) {
 test('all three actual runNode launch sites bind the same artifact operations as their runtime', () => {
   const sf = source('modules/task-execution/composition/nodeMechanics.ts'),
     found = calls(sf, sf, 'runNode')
-  expect(found).toHaveLength(3)
+  expect(found).toHaveLength(2)
   expect(found.map((call) => call.arguments[0]!.getText(sf))).toEqual([
     'opts.taskAgentRuns',
-    'state.opts.taskAgentRuns',
     'opts.taskAgentRuns',
   ])
+  const merge = source('modules/task-execution/composition/mergeConflictResolution.ts')
+  const mergeCalls = calls(merge, merge, 'runTaskAgentWithFamily')
+  expect(mergeCalls).toHaveLength(1)
+  expect(mergeCalls[0]!.arguments[0]!.getText(merge)).toBe('state.opts.taskAgentRuns')
 })
 
 test('both real fanout shard and aggregator runNode sites retain the same selected artifact operations', () => {

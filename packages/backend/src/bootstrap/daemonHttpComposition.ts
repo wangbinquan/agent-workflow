@@ -1,3 +1,4 @@
+import type { TaskExecutionPermitRegistry } from '@/modules/task-execution/composition'
 import { composeTaskExecutionParticipantBindings } from './crossContextClosure'
 import type { HistoryRestrictionPort } from '@/platform/contracts/historyRestriction'
 import type { CodeHistoryReader as ImportedCodeHistoryReader } from '@/modules/code-capability/composition/historyQueries'
@@ -80,8 +81,6 @@ import {
 } from '@/modules/resource-catalog/composition/postgresqlResourcePackageCatalog'
 import { createResourcePackageAtomicApplyOperations } from '@/modules/resource-catalog/composition/resourcePackageAtomicApply'
 import { createPostgresqlCapabilityTemplatePackageMutationOwner } from '@/modules/code-capability/composition/capabilityTemplateOperations'
-import { resizeAllNodePools } from '@/services/processNodeConcurrency'
-import { resizeAllTaskFanoutSems } from '@/services/taskFanoutPools'
 import { setChildTaskBudgetCapacity } from '@/services/execution/childBudget'
 import { SYSTEM_USER_ID } from '@/auth/systemIdentity'
 import { listDigitalEmployeeAgentTemplates } from '@/services/digitalEmployeeAgentTemplates'
@@ -293,7 +292,9 @@ export function composeProviderAppComposition<P extends DatabaseProvider>(
       createFileWorkspaceContentEffects(workspaceRef),
   })
   const collaborationRouteOperations = composeCollaborationRouteOperations({
-    taskExecutionParticipants: composeTaskExecutionParticipantBindings(),
+    taskExecutionParticipants: composeTaskExecutionParticipantBindings(
+      taskExecutionProvider.executionPermits,
+    ),
     taskRolePolicy: taskExecutionProvider.taskRolePolicy,
     historyRestrictions: input.historyRestrictions,
     taskLock: composeHumanGateTaskLockPort,
@@ -422,6 +423,7 @@ export function composeProviderAppComposition<P extends DatabaseProvider>(
           runtimeTests: mcpRuntimeTests.reconciliation,
           concurrencyHotApply: composeConfigConcurrencyHotApply(
             taskExecutionProvider.processConcurrencyScope,
+            taskExecutionProvider.executionPermits,
           ),
         }),
       }),
@@ -731,15 +733,18 @@ function composeResourcePackageBinding<P extends DatabaseProvider>(
   })
 }
 
-function composeConfigConcurrencyHotApply(daemonScope: object): ConfigConcurrencyHotApplyCommand {
+function composeConfigConcurrencyHotApply(
+  daemonScope: object,
+  executionPermits: TaskExecutionPermitRegistry,
+): ConfigConcurrencyHotApplyCommand {
   return Object.freeze({
     apply(input: Parameters<ConfigConcurrencyHotApplyCommand['apply']>[0]) {
-      resizeAllNodePools(daemonScope, {
+      executionPermits.resizeAllNodePools(daemonScope, {
         agent: input.maxConcurrentNodes,
         script: input.maxConcurrentScriptNodes,
         'code-host': input.maxConcurrentCodeHostCalls,
       })
-      resizeAllTaskFanoutSems(input.multiProcessSubprocessConcurrency)
+      executionPermits.resizeAllTaskFanoutSems(input.multiProcessSubprocessConcurrency)
       setChildTaskBudgetCapacity(input.maxActiveChildTasks)
     },
   })

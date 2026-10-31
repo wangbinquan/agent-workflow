@@ -1,3 +1,4 @@
+import { createExecutionPermitRegistry } from '@/modules/task-execution/composition'
 import type { MaintenanceWorkerEffectsSelections } from './maintenanceWorkerEffects'
 import {
   composeMaintenanceJobBindings,
@@ -203,7 +204,7 @@ export const composeMaintenanceWorkerGraph = async (
 ): Promise<MaintenanceWorkerGraph & { readonly ownerCommands: MaintenanceOwnerCommands }> => {
   const adapter = selectMaintenanceWorkerAdapter(input)
   const { db: client, resourcePackageRecoveryScene } = adapter
-  const closure = composeCrossContextClosure(client)
+  const closure = composeCrossContextClosure(client, createExecutionPermitRegistry())
   const { appHome, effects: workerEffects } = input
   const store = createMaintenanceRunStore(client)
   const integrationMaintenanceCommands = composeIntegrationMaintenanceCommands(

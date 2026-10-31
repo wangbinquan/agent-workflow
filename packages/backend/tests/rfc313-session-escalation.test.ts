@@ -34,7 +34,7 @@ import { countAgentTextEvents } from '../src/modules/task-execution/composition/
 import { DrizzleNodeExecutionPersistence } from '../src/modules/task-execution/infrastructure/nodeExecutionPersistence'
 import { runTaskWithRealTestTopology as runTask } from './helpers/taskExecutionTestTopology'
 import { mintNodeRun } from '../src/services/nodeRunMint'
-import { ASSEMBLY_MAX_ATTEMPTS } from '../src/services/schedulerAssembly'
+import { ASSEMBLY_MAX_ATTEMPTS } from '../src/modules/task-execution/engine/kernel/assembly'
 import { readNodeRunPrompt } from '@/modules/task-execution/public/queries'
 
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')

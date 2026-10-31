@@ -8,23 +8,37 @@ const read = (path: string): string => readFileSync(resolve(ROOT, path), 'utf8')
 function nodeEngineBoundaryViolations(source: string): string[] {
   return [
     source.includes('@/services/scheduler') ? 'legacy-scheduler-import' : null,
-    /\b(?:DbClient|SchedulerState|LegacyTaskMechanicsState|RunTaskOptions)\b/.test(source)
+    /(?:from\s*|import\s*\()\s*['"][^'"]*services\//.test(source) ? 'services-import' : null,
+    /(?:from\s*|import\s*\()\s*['"][^'"]*composition\//.test(source) ? 'composition-import' : null,
+    /\b(?:DbClient|SchedulerState|LegacyTaskMechanicsState|TaskMechanicsState|RunTaskOptions)\b/.test(
+      source,
+    )
       ? 'infrastructure-bag'
       : null,
     source.includes("from '@/db/schema'") ? 'raw-schema-import' : null,
   ].filter((value): value is string => value !== null)
 }
 
+function engineFiles(directory: string): string[] {
+  return readdirSync(resolve(ROOT, directory), { withFileTypes: true }).flatMap((entry) => {
+    const path = `${directory}/${entry.name}`
+    return entry.isDirectory() ? engineFiles(path) : entry.name.endsWith('.ts') ? [path] : []
+  })
+}
+
 describe('RFC-334 node-executor owner boundary', () => {
   test('domain and every node engine file avoid legacy scheduler and infrastructure bags', () => {
-    const engineDir = 'packages/backend/src/modules/task-execution/engine/node'
+    const engineDir = 'packages/backend/src/modules/task-execution/engine'
     const paths = [
       'packages/backend/src/modules/task-execution/domain/nodeExecution.ts',
-      ...readdirSync(resolve(ROOT, engineDir))
-        .filter((name) => name.endsWith('.ts'))
-        .map((name) => `${engineDir}/${name}`),
+      ...engineFiles(engineDir),
     ]
-    expect(paths.length).toBeGreaterThanOrEqual(12)
+    expect(paths.length).toBeGreaterThanOrEqual(32)
+    expect(paths).toContain(`${engineDir}/node/script/runScriptNode.ts`)
+    expect(paths).toContain(`${engineDir}/node/script/runOneScriptAttempt.ts`)
+    expect(paths).toContain(`${engineDir}/node/shared/resolveMergeConflicts.ts`)
+    expect(paths).toContain(`${engineDir}/kernel/assembly.ts`)
+    expect(paths).toContain(`${engineDir}/kernel/nodeRunLedger.ts`)
     for (const path of paths) {
       const source = read(path)
       expect(nodeEngineBoundaryViolations(source), path).toEqual([])
@@ -34,6 +48,18 @@ describe('RFC-334 node-executor owner boundary', () => {
   test('negative fixture: a legacy scheduler import is rejected by the same boundary matcher', () => {
     const fixture = "import { runOneNode } from '@/services/scheduler'"
     expect(nodeEngineBoundaryViolations(fixture)).toContain('legacy-scheduler-import')
+  })
+
+  test('nested engine sources reject services, composition and TaskMechanicsState', () => {
+    for (const [source, violation] of [
+      ["import { helper } from '@/services/helper'", 'services-import'],
+      ["import { helper } from '../../../composition/helper'", 'composition-import'],
+      ['function execute(state: TaskMechanicsState) {}', 'infrastructure-bag'],
+    ]) {
+      expect(nodeEngineBoundaryViolations(source!), 'engine/node/script/nested.ts').toContain(
+        violation!,
+      )
+    }
   })
 
   test('host request contains no workgroup assignment or strategy ownership', () => {

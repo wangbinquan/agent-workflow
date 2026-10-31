@@ -36,8 +36,8 @@ import { selectResumeRollbackTargets } from '@/modules/task-execution/applicatio
 import {
   freshestPriorRunWithOutput,
   readPortRowAtFrame,
-  resolveUpstreamInputs,
 } from '@/modules/task-execution/composition/nodeMechanics'
+import { resolveUpstreamInputs } from '@/modules/task-execution/application/nodeInputs'
 import { hasTaskRollbackCheckpoint } from '@/modules/task-execution/domain/taskCheckpointRollback'
 import { taskRollbackPlan } from '@/modules/task-execution/infrastructure/taskRollbackCodec'
 import { createWorkgroupHostLedgerParticipantInTx } from '@/modules/task-execution/infrastructure/workgroupHostLedgerParticipant'

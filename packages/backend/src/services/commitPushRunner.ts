@@ -21,7 +21,7 @@ import type {
   RepositoryPublicationReceipt,
   SubrepoPushResult,
 } from '@agent-workflow/shared'
-import { createLocalEffectAttemptObserver } from '@/services/taskExecutionParticipants'
+import { createLocalEffectAttemptObserver } from '@/modules/task-execution/public/participants'
 import type { TaskExecutionEffectPersistence } from '@/modules/task-execution/application/ports/taskExecutionEffectStore'
 import type { NodeRunLifecyclePersistence } from '@/modules/task-execution/application/ports/nodeRunLifecyclePersistence'
 import type { NodeExecutionPersistence } from '@/modules/task-execution/application/ports/nodeExecutionPersistence'

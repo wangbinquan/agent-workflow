@@ -26,7 +26,7 @@ import { describe, expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { CanonicalWorktreeMissingError, createNodeIso } from '../src/services/nodeIsolation'
+import { CanonicalWorktreeMissingError, createNodeIso } from '@/platform/workspace/local/isolation'
 
 function tempRoot(): string {
   return mkdtempSync(join(tmpdir(), 'aw-workspace-missing-'))

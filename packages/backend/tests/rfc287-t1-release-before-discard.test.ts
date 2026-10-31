@@ -20,7 +20,7 @@ const SRC = resolve(import.meta.dir, '..', 'src', 'services')
 /** 迁移时把 `schedulerAssembly.ts` 加进来即可（design §10.5 定的落位）。 */
 // RFC-287 T3：聚合线迁入后，骨架文件同样纳入扫描（这条锁本就设计成对
 // 「代码搬到哪个文件」免疫）。
-const FILES = ['scheduler.ts', 'schedulerAssembly.ts'] as const
+const FILES = ['scheduler.ts', '../modules/task-execution/engine/kernel/assembly.ts'] as const
 
 /** 三个池的释放句柄名（与 rfc208 oracle #1 的 POOL_RELEASE_NAMES 同源）。 */
 // RFC-287 T6 补缺：骨架把许可释放写成匿名的 `release()`、把清理写成 `spec.discardIso(`，
@@ -82,7 +82,9 @@ describe('RFC-287 T1⑧ — 许可释放先于 iso 清理（跨文件结构锁�
     // （改小这个数字不是「跟随迁移」，而是关掉这条锁——迁移已经结束了。）
     expect(checked).toBeGreaterThanOrEqual(1)
     // 骨架必须在被扫之列（上面的 checked 是总数，这里单独钉死骨架那一处）。
-    const asmBlocks = finallyBlocks(readFileSync(resolve(SRC, 'schedulerAssembly.ts'), 'utf8'))
+    const asmBlocks = finallyBlocks(
+      readFileSync(resolve(SRC, '../modules/task-execution/engine/kernel/assembly.ts'), 'utf8'),
+    )
     expect(
       asmBlocks.some((b) => b.includes('spec.discardIso(') && b.includes('release()')),
       '骨架的 finally 必须同时做「释放许可」与「清理 iso」——扫不到即这条锁已失效',

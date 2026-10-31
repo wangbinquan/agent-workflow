@@ -20,8 +20,8 @@ import {
   createNodeIso,
   mergeBackNodeIso,
   snapshotNodeIsoFinal,
-  type CanonRepo,
-} from '@/services/nodeIsolation'
+} from '@/platform/workspace/local/isolation'
+import { type CanonRepo } from '@/platform/contracts/isolationWorkspace'
 import { subSlug } from '@/services/gitSubmodule'
 import { runGit, snapshotFullState } from '@/util/git'
 

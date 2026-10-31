@@ -1,3 +1,4 @@
+import { testExecutionPermits } from './helpers/executionPermits'
 import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 import { composeCollaborationTaskRolePolicy } from '@/modules/resource-catalog/composition'
 import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
@@ -162,6 +163,7 @@ function sharedInput(
   'taskDagCollaboration' | 'processConcurrencyScope' | 'log'
 > {
   return {
+    executionPermits: testExecutionPermits,
     memorySnapshots: composeTaskMemorySnapshotPort(),
     historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
     db,

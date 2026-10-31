@@ -22,7 +22,7 @@ import {
   IsoWorkspaceBlockedError,
   MAX_ISO_KEY_GENERATIONS,
   rebuildIsoHandle,
-} from '../src/services/nodeIsolation'
+} from '@/platform/workspace/local/isolation'
 import { runGit } from '../src/util/git'
 import { removeTempDirSync } from './fixtures/tempDir'
 
@@ -272,7 +272,7 @@ describe('RFC-356 · 双身份 handle（设计门 P0-1）', () => {
         'src',
         'modules',
         'task-execution',
-        'infrastructure',
+        'engine/kernel',
         'isolationCleanup.ts',
       ),
       'utf8',
