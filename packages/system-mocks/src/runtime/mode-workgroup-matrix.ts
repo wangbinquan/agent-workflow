@@ -9,6 +9,7 @@
 // It joins the compiled dispatcher for the same reason the shell stubs did:
 // a `#!/usr/bin/env bun` shebang is not executable on Windows.
 
+import { randomUUID } from 'node:crypto'
 import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import process from 'node:process'
@@ -93,8 +94,12 @@ export async function run(argv: readonly string[]): Promise<void> {
     } else {
       // Independent member invocations may run concurrently. A Claude session
       // belongs to exactly one runtime process, so keep the readable agent
-      // correlation while making the lease unique per subprocess.
-      const sessionId = `stub-workgroup-${agent}-${process.pid}`
+      // correlation while making the lease unique per subprocess. The pid alone
+      // is not unique: Windows recycles pids within seconds and a released lease
+      // stays until its task ends, so a later round of the same agent collided
+      // on the lease key (runtime-session-conflict, then one extra protocol-retry
+      // leader run; CI runs 35512158270 and 41153577424).
+      const sessionId = `stub-workgroup-${agent}-${process.pid}-${randomUUID()}`
       const usage = { input_tokens: 13, output_tokens: 8 }
       process.stdout.write(
         `${JSON.stringify({

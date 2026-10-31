@@ -495,6 +495,17 @@ bun 报出的用例时长包含 `beforeEach` / `afterEach`（实测：700ms 的 
 - 导出现场要起子进程（`ps` / PowerShell）时走 `e2e/command.ts` 的 `runCommandResult`：spec 源码里出现 `child_process`
   会被 `root-test-entrypoint.test.ts` 拦下（`af27212f5` 实撞）。它的输出缓冲是默认的 1MB，Windows 上只列映像名，别取命令行。
 
+## 桩进程别拿 PID 当持久键的唯一部分：Windows 几秒内就复用 PID（2026-10-31 归因，workgroup-matrix claude-code）
+
+- 现象：Windows 主 CI 的 `workgroup-matrix.spec.ts`「leader-worker」claude-code 变体偶发两次尝试都红在「leader 运行 6 次、期望 5 次」
+  （2026-09-20 run 35512158270、2026-10-31 run 41153577424，后者出在 RFC-397 提交上，起初像回归）。9 月补的诊断显示多出来的那次是
+  `runtime-session-lease/claim: runtime-session-conflict` 之后的一次 `wg-protocol-retry`。
+- 根因：桩把 Claude 会话 ID 拼成 `stub-workgroup-<agent>-<pid>`；release 后的会话租约行为了续接会保留到任务结束，Windows 又几秒内复用
+  PID，于是同一任务里后一轮的同名 agent 撞上租约主键 `(protocol, session_id)`。opencode 分支不发会话 ID，所以只有 claude-code 变体红；
+  macOS / Linux 的 PID 单调递增，本机复现不出来。修法：会话 ID 加 `randomUUID()`（system-mocks 的回归用例锁住格式）。
+- 定式：任何会落进唯一键的桩标识（会话、租约、锁文件名）都要带每进程的随机部分，PID 只当可读的关联信息。归因这类「只有 Windows
+  红、同一 runner 原跑与重试一起红」的用例，先按用例标题翻同分片的历史日志，找有没有同签名的旧失败，再判断是不是本次提交引入的。
+
 ## PostgreSQL：被同任务写手不断改写的行 + SERIALIZABLE = 40001 风暴；只加锁也救不了旧快照（2026-10-30 实撞，RFC-397）
 
 - 现象：扇出写分片偶发 `iso-setup-failed`，日志只有 Drizzle 的 `Failed query: update "task_execution_owners" …`。每笔数据写入都以 owner 行

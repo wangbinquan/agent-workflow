@@ -15,7 +15,11 @@
   5 秒结算等待在负载约 27 时到期（单跑通过，换回改动前源码对照耗时相同，与本 RFC 无关，未改）；typecheck / eslint / prettier 通过；
   Codex 实现门 PASS、无 findings。全部架构 / 策略守卫首跑抓到本次引入的三处（provider 名分叉、伴随表直读、手搓假池），已按
   design §4 修正或按正当一类入账，复跑 1894/0。
-- **下一步**：实现提交的主 CI 全绿 → RFC 标 Done → 发 v0.19.3。
+- **主 CI**：实现提交 `ee10efc6a` 的 run 41153577424 红在 Windows Playwright 4/4 的 `workgroup-matrix` claude-code「leader-worker」
+  （两次尝试都是 leader 运行 6 次）。归因：不是 RFC-397 引入——2026-09-20 run 35512158270 有完全相同的签名；e2e 跑 SQLite，`claimNew`
+  在 SQLite 上的行为未变；根因是桩用 PID 拼 Claude 会话 ID，Windows 复用 PID 后撞上保留的租约主键（详见 `docs/dev-gotchas.md`）。
+  已修桩（会话 ID 加 `randomUUID()`）并补 system-mocks 回归用例，本机 `workgroup-matrix` 六条 e2e 全过。
+- **下一步**：修桩提交的主 CI 全绿 → RFC 标 Done → 发 v0.19.3。
 
 ## 2026-10-30 runtime-scenario-matrix 的取消用例：等运行时起来的预算对齐到 45 秒，没等到就导出现场
 
