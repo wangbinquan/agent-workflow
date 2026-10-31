@@ -3,9 +3,10 @@
 > **当前入口（2026-10-16 刷新）**：本 RFC 按用户要求作为长期架构重构总纲维护，整体迁移仍为 In Progress。
 > 本次全面审视见 [review-2026-10-16](./review-2026-10-16.md)；下一批后继见 §3。刷新前的完整实施记录（N1～N25 执行队列、
 > 各波任务清单、历次 SHA 与 hosted 证据、账本重分桶记录）见 `archive-20261016-plan.md`。当前指标见 dated review 或按需报告；命令见 [status.md](./status.md)。
+> **2026-10-30 进度对账**：S1、S2a、S2b、S2c 前两步与 RFC-395 关闭后的剩余范围见 [review-2026-10-30](./review-2026-10-30.md)；§1.1、§1.2、§3、§4、§8 已按其更新。
 
 - 目标架构状态：Approved（D1～D8 沿用；D9 修订、D10～D13 新增，见 proposal §9）。本文刷新不授权任何未立项的后继。
-- 迁移状态：In Progress（长期推进）。P0、W2、W3、W4-A/C/E0/E2/E3/E4a/E4b/E6/E7 已关闭；后继 S3（RFC-375）、S4（RFC-376）、S8（RFC-377）已关闭；其余见 §1.1。
+- 迁移状态：In Progress（长期推进）。P0、W2、W3、W4-A/C/E0/E2/E3/E4a/E4b/E6/E7 已关闭；后继 S1（RFC-374）、S2a（RFC-379）、S2b（RFC-380～392）、S3（RFC-375）、S4（RFC-376）、S8（RFC-377）已关闭，S2c 完成前两步（RFC-393 / 394）；RFC-395 承接 S1b、S5 两步、S7 状态机合一与 W7 身份模型。其余见 §1.1（2026-10-30 对账）。
 - 规划单位：已关闭波次（保留结论）+ 立即整改后继 S1～S8 + 余下波次（W4 余项、W5、W7 余项、W9-C/D/E，W8 可选）。
 
 ## 0. 批准边界与实施纪律
@@ -32,7 +33,7 @@
 `modules`”“每模块每进程构造一次”），而不是“某份账本的 exact id 计数降到某个数”。RFC-376 阶段 B 后由硬门与文件内精确清单执行；
 `counts.json` 允许 measured <= max，抬高 max 须同一提交写明原因，不设增长许可与下一笔退役。
 
-### 1.1 逐波判定（2026-10-16）
+### 1.1 逐波判定（2026-10-16；2026-10-30 对账更新）
 
 | 区域    | 判定                                                            | 已落 / 剩余                                                                                                                                                                                                                   |
 | ------- | --------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -41,12 +42,12 @@
 | W1      | 行为基线保持                                                    | RFC-287 的 assembly 与 G4～G7 行为；assembly 物理归位并入 S6                                                                                                                                                                  |
 | W2      | Done（协调器、三路引擎注册、14 类节点注册、WrapperRuntime）     | 引擎与执行器层的实现仍在 composition，由 S6 让各层成为真实层                                                                                                                                                                  |
 | W3      | Done（RFC-341）                                                 | 无                                                                                                                                                                                                                            |
-| W4      | A/C/E0/E2/E3/E4a/E4b/E6/E7 Done；E1/E9 部分；B/D/E5/E8/E10 开放 | 见 §4.1；B/D 的原计数已归零，退出门改为入站适配器不再深引 legacy 与模块内部                                                                                                                                                   |
-| W5      | 部分纵切                                                        | RFC-308/310/321/363 已落 source-control 纵切；`util/git` 环族与 7 条 KNOWN（RFC-370 `166e918bd` 改变环形状时已删一条）由 S8（[RFC-377](../RFC-377-util-git-leaf/proposal.md)）处理；repo / cache / worktree owner 余项见 §4.3 |
-| W6      | 开放                                                            | S7：唯一 AtomicApply 引擎 + 唯一资源写入栈 + 持久收敛 claim                                                                                                                                                                   |
-| W7      | 开放；**第一刀提为正确性修复**                                  | S1：每任务单调 `seq`；身份轴余项见 §4.5；不再依赖 W5                                                                                                                                                                          |
+| W4      | A/C/E0/E2/E3/E4a/E4b/E6/E7 Done；E1/E9 部分；B/D/E5/E8/E10 开放 | 见 §4.1；B/D 的原计数已归零，退出门改为入站适配器不再深引 legacy 与模块内部。2026-10-30：`routes/` 仍有 29 个文件 import `services/`、11 个深引模块内部（与 10-16 相同）；E9 的 Event observer 已进生命周期程序 |
+| W5      | 部分纵切                                                        | RFC-308/310/321/363 已落 source-control 纵切；`util/git` 环族与 7 条 KNOWN（RFC-370 `166e918bd` 改变环形状时已删一条）由 S8（[RFC-377](../RFC-377-util-git-leaf/proposal.md)）处理；repo / cache / worktree owner 余项见 §4.3。2026-10-30：指向 source-control 的跨 context 内部文件对 5 个，`util/git.ts` 仍在 `util/` |
+| W6      | 部分（2026-10-30）                                              | S7：唯一 AtomicApply 引擎 + 唯一资源写入栈 + 持久收敛 claim。RFC-395 T10 已合成 `platform/atomic-apply` 一套状态机、错误码分叉消失；资源写入栈仍两份 |
+| W7      | S1 Done；余项核心由 RFC-395 交付，待核销                        | S1：每任务单调 `seq`（RFC-374，S1b 并入 RFC-395 D4）；身份轴余项见 §4.5；不再依赖 W5 |
 | W8      | 可选、延后                                                      | 仅 W7 后新号 RFC 获批才进入                                                                                                                                                                                                   |
-| W9      | 开放；**A/B 提前**                                              | S2 承接 W9-A/B（唯一模块工厂图与生命周期程序）；W9-C/E/D 见 §4.6                                                                                                                                                              |
+| W9      | A/B 由 S2a / S2b 关闭；S2c 余项待立项；C/E/D 开放              | S2 承接 W9-A/B（唯一模块工厂图与生命周期程序）；W9-C/E/D 见 §4.6 |
 
 ### 1.2 已关闭后继索引
 
@@ -79,6 +80,12 @@
 | S3 | [RFC-375](../RFC-375-backend-dead-code-sweep/proposal.md) | 后端死代码清扫（66 个生产文件） |
 | S4（W0-R 模型修订） | [RFC-376](../RFC-376-architecture-hard-gates/proposal.md) | 硬结构门 + 按需报告 + counts.json；全量账本与投影提交退役 |
 | S8（W5 一部分） | [RFC-377](../RFC-377-util-git-leaf/proposal.md) | util/git 叶子化；KNOWN_VIOLATIONS 7 → 0 |
+| S1（W7-A） | [RFC-374](../RFC-374-node-run-sequence/proposal.md) | NodeRun 每任务单调 `seq`；S1b 并入 RFC-395 D4 |
+| S2a | [RFC-379](../RFC-379-daemon-lifecycle-program/proposal.md) | 唯一生命周期程序与 G12 |
+| S2b | [RFC-380](../RFC-380-daemon-module-bundles/proposal.md)～[RFC-392](../RFC-392-unified-test-entry/proposal.md) | 每模块每进程构造一次、中立应用图 / 会话图、统一测试入口（逐个见 §3 S2） |
+| S2c 第一步 | [RFC-393](../RFC-393-cli-bootstrap-separation/proposal.md) | `cli/` 与 `bootstrap/` 分离 |
+| S2c 第二步 | [RFC-394](../RFC-394-typed-deployment-profile/proposal.md) | 类型化部署 profile |
+| S1b、S5 两步、S7 状态机、W7 身份 | [RFC-395](../RFC-395-database-target-schema-rebuild/proposal.md) | 数据库目标模型与一次迁移；不代表 RFC-294 全部退出 |
 
 各后继的 exact-SHA 与 hosted 证据以其自身三件套为准；本总纲的历史汇总见 `archive-20261016-plan.md` §1、§3.2。
 
@@ -121,7 +128,7 @@ Facade 只许 re-export 或参数形状适配；不得含 DB 查询、状态、�
 
 ### S2 唯一模块工厂图与生命周期程序（W9-A/B 提前）
 
-> 后继：S2a → [RFC-379](../RFC-379-daemon-lifecycle-program/proposal.md)（Done，2026-10-20，`1faae97cd` + `24b91ba6e`；G12 由程序与 `rfc379-daemon-lifecycle-guard` 落实）。四路只读研究确认：两个 provider 的作业 id 集合相同而后台顺序不同；PostgreSQL 现行启动顺序有四个功能缺陷（MR 终止对账先于孤儿收割、内置工具目录先于模板、托管升级结算早于执行权、运行时注册表与定向续跑竞争）；关停 30 秒宽限从未生效。S2b 拆为七个 RFC 依次推进：[RFC-380](../RFC-380-daemon-module-bundles/proposal.md)（同构模块组每会话构造一次，Done，`99944c201`）→ [RFC-381](../RFC-381-daemon-integration-bundles/proposal.md)（集成、定时任务、融合，Done，`682018fd4`）→ [RFC-382](../RFC-382-daemon-task-execution-bundle/proposal.md)（任务执行组，每会话唯一的任务驱动协调器与实时运行配置，Done，`fddf8bf74`）→ [RFC-383](../RFC-383-daemon-employee-automation-bundles/proposal.md)（数字员工、开发自动化，Done，`e9fcfc58a`）→ [RFC-384](../RFC-384-daemon-intent-bundle/proposal.md)（意图，Done，`1f60faa5d`）→ [RFC-385](../RFC-385-daemon-execution-generation/proposal.md)（执行世代按进程划分，修单机 PostgreSQL 重启后的执行恢复，Done，`f495e8e76`）→ [RFC-386](../RFC-386-task-drive-coordinator-factory/proposal.md)（每次调用的协调器改经工厂：子任务启动与续跑、按意图类型重建工作区排除配置、统一按认领世代的失败上报、子任务沿用会话运行配置，Done，`3450e6872`）→ [RFC-387](../RFC-387-task-continuation-semantics/proposal.md)（门控唤醒、房间续跑、仓库准备重试、融合适配器语义统一，驱动释放收尾，`createTaskDriveCoordinator` 删除，Done，`684972dbb`）→ [RFC-388](../RFC-388-task-execution-runtime-merge/proposal.md)（两个 provider 运行时函数合一，纯重构，Done，`8186c9852`）→ [RFC-389](../RFC-389-maintenance-worker-root-bootstrap/proposal.md)（维护 Worker 根迁入 bootstrap，线程内一张中立图，Done，`2b2919cee`）→ [RFC-390](../RFC-390-neutral-http-binding/proposal.md)（中立 HTTP 绑定：SQLite 改走 `composeProviderAppDeps`，Done，`02dae8e7f`）→ [RFC-391](../RFC-391-neutral-daemon-graph/proposal.md)（中立应用图：`bootstrap/` 下一张应用图 + 一张会话图 + 适配表，Done，`b1799e6bc`）→ [RFC-392](../RFC-392-unified-test-entry/proposal.md)（统一测试入口：删除 `server.ts` 的 SQLite 测试路径与回退，HTTP 组合迁入 `bootstrap/`，Done，`64dd81e8d`）。S2b 完成；S2c 待立项。
+> 后继：S2a → [RFC-379](../RFC-379-daemon-lifecycle-program/proposal.md)（Done，2026-10-20，`1faae97cd` + `24b91ba6e`；G12 由程序与 `rfc379-daemon-lifecycle-guard` 落实）。四路只读研究确认：两个 provider 的作业 id 集合相同而后台顺序不同；PostgreSQL 现行启动顺序有四个功能缺陷（MR 终止对账先于孤儿收割、内置工具目录先于模板、托管升级结算早于执行权、运行时注册表与定向续跑竞争）；关停 30 秒宽限从未生效。S2b 拆为七个 RFC 依次推进：[RFC-380](../RFC-380-daemon-module-bundles/proposal.md)（同构模块组每会话构造一次，Done，`99944c201`）→ [RFC-381](../RFC-381-daemon-integration-bundles/proposal.md)（集成、定时任务、融合，Done，`682018fd4`）→ [RFC-382](../RFC-382-daemon-task-execution-bundle/proposal.md)（任务执行组，每会话唯一的任务驱动协调器与实时运行配置，Done，`fddf8bf74`）→ [RFC-383](../RFC-383-daemon-employee-automation-bundles/proposal.md)（数字员工、开发自动化，Done，`e9fcfc58a`）→ [RFC-384](../RFC-384-daemon-intent-bundle/proposal.md)（意图，Done，`1f60faa5d`）→ [RFC-385](../RFC-385-daemon-execution-generation/proposal.md)（执行世代按进程划分，修单机 PostgreSQL 重启后的执行恢复，Done，`f495e8e76`）→ [RFC-386](../RFC-386-task-drive-coordinator-factory/proposal.md)（每次调用的协调器改经工厂：子任务启动与续跑、按意图类型重建工作区排除配置、统一按认领世代的失败上报、子任务沿用会话运行配置，Done，`3450e6872`）→ [RFC-387](../RFC-387-task-continuation-semantics/proposal.md)（门控唤醒、房间续跑、仓库准备重试、融合适配器语义统一，驱动释放收尾，`createTaskDriveCoordinator` 删除，Done，`684972dbb`）→ [RFC-388](../RFC-388-task-execution-runtime-merge/proposal.md)（两个 provider 运行时函数合一，纯重构，Done，`8186c9852`）→ [RFC-389](../RFC-389-maintenance-worker-root-bootstrap/proposal.md)（维护 Worker 根迁入 bootstrap，线程内一张中立图，Done，`2b2919cee`）→ [RFC-390](../RFC-390-neutral-http-binding/proposal.md)（中立 HTTP 绑定：SQLite 改走 `composeProviderAppDeps`，Done，`02dae8e7f`）→ [RFC-391](../RFC-391-neutral-daemon-graph/proposal.md)（中立应用图：`bootstrap/` 下一张应用图 + 一张会话图 + 适配表，Done，`b1799e6bc`）→ [RFC-392](../RFC-392-unified-test-entry/proposal.md)（统一测试入口：删除 `server.ts` 的 SQLite 测试路径与回退，HTTP 组合迁入 `bootstrap/`，Done，`64dd81e8d`）。S2b 完成；S2c 进展见下方「S2c 部署 profile」条。
 
 - **目标**：止住装配根的复制与同进程重复构造（review F2、F4），并为托管 profile 提供唯一落点。
 - **建议拆分**：
@@ -134,6 +141,9 @@ Facade 只许 re-export 或参数形状适配；不得含 DB 查询、状态、�
   - **S2c 部署 profile**（后继：[RFC-393](../RFC-393-cli-bootstrap-separation/proposal.md) `cli/` 与 `bootstrap/` 分离，Done，`a1a37759e` + `d31298011`；[RFC-394](../RFC-394-typed-deployment-profile/proposal.md) 类型化部署 profile，Done，`b84ff545e`；
     `StartOptions` 实测已有 77 槽，后继 RFC 见 RFC-393 proposal §7）：以类型化的 profile 取代 55 槽 `StartOptions` 覆盖与各模块的 `select*` 助手；消除 `cli/` ↔
     `bootstrap/` 互相依赖；入口根不再按部署模式分支。
+    2026-10-21 起余项（单机默认值集中、执行权端口去部署字面量、入口根瘦身）因与 RFC-395 改动面冲突暂停；RFC-395 已于
+    2026-10-29 Done，阻塞解除，待立项（编号届时另取）。2026-10-30 现状：`ExecutionAuthorityPort.mode` 仍在，业务层部署分支 5 处，
+    `migrate` / `verify-database-restore` 仍是 `main.ts` 的命令分支。
 - **退出门**：每模块每进程构造一次；不存在 provider 专属或部署专属的装配函数；入口根只做参数解析与 profile 选择；
   后台作业全部经唯一生命周期程序且都有 stop；两种 provider 的作业清单一致。
 - **前置 / 冲突**：`server.ts`、`cli/start.ts`、`cli/postgresqlDaemonApplication.ts` 正在被 RFC-370 改动，S2 须在其当前在制品
@@ -177,6 +187,9 @@ Facade 只许 re-export 或参数形状适配；不得含 DB 查询、状态、�
 - **退出门**：context 值级依赖无环且 ⊆ design §3.1；`platform` → `modules` = 0；无 drizzle / schema 再导出桶。
 - **前置 / 冲突**：S2b 之后更便宜。**能力影响**：无。
 - **2026-10-23**：「工作区 GC 策略归 source-control / task-execution」与「任务生命周期写入序列迁回 task-execution」两步由 RFC-395 II-b 的跨域收口承担（RFC-395 plan §6.13、design §14）。
+- **2026-10-30 对账**：退出门未成立——context 值级 SCC 仍为 2（同上两组）、off-DAG 9 对；`platform` → `modules` 19 个文件对；
+  `legacySqliteTransportMechanisms.ts` 与 `services/humanGateComposition.ts` 仍在；9 个模块 `public/` 文件仍 import legacy `Actor`。
+  见 [review-2026-10-30](./review-2026-10-30.md) §3。
 
 ### S6 task-execution 执行机制归位
 
@@ -185,6 +198,8 @@ Facade 只许 re-export 或参数形状适配；不得含 DB 查询、状态、�
 - **退出门**：`nodeMechanics.ts` 删除、`legacyArgs` 消失、`TaskMechanicsState` 只出现在装配、engine 不 import `@/services`、
   `runAssembly` 不再位于 `services/`、协调器只在 bootstrap 构造；task-execution `composition/` 只剩装配。
 - **前置 / 冲突**：S2b 之后；与 S1 串行。**能力影响**：无；以现有执行矩阵与恢复 oracle 对拍。
+- **2026-10-30 对账**：前置已满足，退出门均未成立（`nodeMechanics.ts` 5,698 行、`runAssembly` 仍在 `services/schedulerAssembly.ts`、
+  `legacyArgs` 11 处）；已成立的只有 engine 不 import `@/services`，协调器构造已收敛到 `taskDriveCoordinatorFactory.ts` 一处。
 
 ### S7 唯一 AtomicApply 引擎（W6）
 
@@ -193,6 +208,9 @@ Facade 只许 re-export 或参数形状适配；不得含 DB 查询、状态、�
 - **退出门**：lifecycle 实现 1、资源写入栈 1、收敛循环 1；同一非法输入在 Intent、资源包与普通 CRUD 得到同一错误码；
   旧 nonterminal journal 归零后删除旧引擎。
 - **前置 / 冲突**：S2a 之后（收敛作业落在生命周期程序上）。**能力影响**：错误码收敛属用户可见变化，须列入口与错误码呈批。
+- **2026-10-30 对账**：RFC-395 T10 交付唯一状态机 `platform/atomic-apply`（Intent 与资源包为场景适配器，一个恢复作业挂两个场景），
+  两份进程内锁已删，10-16 记录的错误码分叉已消失（两条写入路径共用 `domain/agentDependencies.ts`）；仍不成立的是资源写入栈两份。
+  收敛持久 claim、fusion approve / skill restore 接入未核。
 
 ### S8 `util/git` 叶子化与剩余 KNOWN（W5 一部分）
 
@@ -224,6 +242,10 @@ Facade 只许 re-export 或参数形状适配；不得含 DB 查询、状态、�
 每个子波的退出门：该 context 的入站适配器与 consumer 不再深引 legacy / 内部；该 context 的 public 合同无投机符号；
 全局结构门不回退。
 
+2026-10-30 对账：入站适配器计数未变（`routes/` 59 个文件中 29 个 import `services/`、11 个深引模块内部）；E1 的 `services/task.ts`
+仍 2,617 行；E5、E8、E10 未开工；E9 的 Event observer 已进生命周期程序，三个 route 仍深引 DE / EC / XC 内部。逐项证据见
+[review-2026-10-30](./review-2026-10-30.md) §3。
+
 ### W4-A Operation catalog 与 adapter parity
 
 Done（RFC-344）：transport 中立的 operation descriptor、HTTP RouteMeta 与 MCP 工具引用同一 operation、API docs 从描述派生、
@@ -243,6 +265,8 @@ S8 之外的余项：repo / cache / group / worktree / submodule 收编到 sourc
 删除 composition 路径 binder；task 拥有 prune candidate / claim / final stamp，source-control 只执行物理删除并返回幂等回执；
 development-automation 的 candidate / delivery / conflict adapter 改用 opaque 引用。退出门：source-control 相关的跨 context
 内部 import = 0，绝对路径不穿 public 合同。
+2026-10-30：指向 source-control 的跨 context 内部文件对 5 个（均为 task-execution → `source-control/composition*`），
+`util/git.ts` 仍在 `util/`。
 
 ### 4.4 W8（可选）
 
@@ -254,6 +278,9 @@ S1 之后：`RunRole`、scope / container、`generationSeq`、`attemptIndex`、`
 回填 → shadow → 读者切换 → 删回退（design §6.3）；prompt 正文外置的版本化双读、DevelopmentMission→…→NodeRun 的 provenance
 矩阵与 RFC-306 `skipped` / consumed 语义纳入对拍。退出门：每个输入的 producer run 可解释；生产 freshness 不依赖 id 或
 nullable parent；两种 provider 迁移通过。前置：W2（已满足）、S1；与 S6 串行。
+2026-10-30：RFC-395 以离线转换 + 一次切换承接本节身份模型（角色、容器、逻辑代、尝试、selected run、实际消费边；其 AC-3），
+D4 销账后生产读取不再有 NULL / ID 回退。本节另列的 prompt 正文外置双读、DevelopmentMission→…→NodeRun provenance 矩阵与
+RFC-306 语义对拍未见对应记录；核销前逐条确认，见 [review-2026-10-30](./review-2026-10-30.md) §3。
 
 ### 4.6 W9 余项
 
@@ -264,6 +291,8 @@ nullable parent；两种 provider 迁移通过。前置：W2（已满足）、S1
   恢复与失败矩阵；托管 profile 的恢复路径由 RFC-370 承接的部分与之对齐。
 - **W9-D facade 清仓**：所有 facade 的生产与测试 consumer 归零后删除；`services/` 只剩到期删除的一跳 facade；更新 code map 与
   onboarding。前置：S2、W9-C、W9-E。
+- **2026-10-30**：W9-A / W9-B 已由 S2a / S2b 关闭；W9-C（domain / application 仍带 HTTP 状态、无 `OperationContext`）、
+  W9-E（`services/backup.ts` / `restore.ts` / `pendingRestore.ts` 仍在）、W9-D（facade 45、`services/` 业务实现 219）开放。
 
 ## 5. 依赖顺序
 
@@ -326,8 +355,8 @@ S3、S4、S8 互不依赖，可与其他后继并行，但各自避让正在被�
 
 - [ ] proposal AC-1～AC-11 全部兑现；
 - [x] 所有 P0 后继 Done；RFC-287 Done；RFC-288/289 保持 CLOSED；W2、W3 Done；
-- [ ] S1～S8 Done；
-- [ ] W4 余项、W5 余项、W7 余项、W9-C/E/D Done；W8 仅在新能力 RFC 获批时要求；
+- [ ] S1～S8 Done（2026-10-30：S1 / S3 / S4 / S8 Done，S2 余 S2c，S5 / S6 / S7 未完成）；
+- [ ] W4 余项、W5 余项、W7 余项（2026-10-30：待核销）、W9-C/E/D Done；W8 仅在新能力 RFC 获批时要求；
 - [ ] design §14 的终局判据全部成立；
 - [ ] 在途 task、历史行、API / MCP / WS 兼容与完整 E2E 有证据；
 - [ ] `STATE.md`、RFC 索引、code map 与终态源码一致。

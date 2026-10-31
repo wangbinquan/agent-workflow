@@ -1,3 +1,23 @@
+## 2026-10-30 RFC 状态对账：索引登记修正与 RFC-294 剩余范围（纯文档）
+
+- **来由**：用户问「当前所有 RFC 有哪些还没到终态」，随后要求把发现的问题都处理掉。以 `95ef089c4`（= `origin/main`）对账：
+  索引 393 行（含 RFC-172b）中 388 Done、2 Superseded（RFC-160 / 255）、2 CLOSED（RFC-288 / 289，用户裁定的终态）、
+  1 In Progress（RFC-294）。唯一未到终态的是 RFC-294 总纲。
+- **索引两行多出一列**：RFC-322 标题里 `jitter|Math.random()` 的 `|` 未转义；RFC-326 是 `90a1b3359` 想把括注并进前一格、
+  只留机器可读的 `Done`，结果多切出一列。GFM 会丢弃多出的列，页面上这两行的状态栏显示的是正文片段。已分别转义、合并
+  （并补注 PR-B 提交 `b7b4ae245`），393 行恢复为三列；RFC-326 的状态格仍是纯 `Done`，`rfc-index-status-drift` 守卫照旧读得到。
+- **编号 316**：2026-08-25 那次对账列编号空洞时漏了它，已在原段落补记（并发 session 的「数字员工类型包草稿 / 发布」，
+  三件套从未提交）。
+- **本机空目录**：`design/RFC-316-…`、`RFC-336-…task-detail-visibility`（实为 RFC-337）、`RFC-338-wrapper-runtime-cutover`
+  （实为 RFC-339）三个未跟踪的空目录已删除；git 不跟踪空目录，不影响其他 checkout。
+- **RFC-294 剩余范围**：新增 [review-2026-10-30](design/RFC-294-backend-layered-target-architecture/review-2026-10-30.md)，
+  按 plan 各项退出门对照 `95ef089c4` 源码与 `architecture:report --gates`；plan 头部、§1.1、§1.2、§3、§4、§8，proposal 头部与
+  索引行同步。已关闭 S1 / S2a / S2b / S3 / S4 / S8，S2c 完成前两步；开放 S2c 余项（阻塞已随 RFC-395 Done 解除）、
+  S5（context 值级环仍 2 个、`platform` → `modules` 19 个文件对）、S6、S7 余项（状态机已合一、错误码分叉消失，资源写入栈仍两份）、
+  W4 余项（入站适配器计数与 10-16 相同）、W5 余项与 W9-C / E / D；W7 余项核心由 RFC-395 交付、待核销。
+- **未处理**：约 180 份 RFC 的 proposal.md 文档头仍写 Draft、十几份写 In Progress / Approved，而索引已是 Done；
+  状态以索引为准，这批文档头没有回写。
+
 ## 2026-10-31 v0.19.3 已发布（tag `v0.19.3` → `d7b5d9da6`）
 
 - **发布**：[GitHub Release](https://github.com/wangbinquan/agent-workflow/releases/tag/v0.19.3)，发版工作流 run 41165513666 成功，四个平台单二进制
@@ -8452,6 +8472,10 @@ called before any query`。十九处判据统一补上 `errno`；守卫
 > 编号空洞 **RFC-061 / 084 / 265 / 296** 均非在途：061·084 当年被并行协作者占用（084 让位给 RFC-085）、
 > 265 已在表内注明「该编号不再排期、不复用」、296 只是一份 2026-08-13 被撤出工作树的原型
 > （教训留在 `docs/dev-gotchas.md:1092`），三件套从未存在。
+> 2026-10-30 补记：**RFC-316** 同为编号空洞，上面漏列——2026-08-22 前后被并发 session 用于「数字员工类型包草稿 / 发布」，
+> 三件套只在共享工作树里存在过、从未提交（RFC-317 `proposal.md:5`、`docs/dev-gotchas.md:6466` 记为当时的未提交在制品）；
+> 本机残留的空目录 `design/RFC-316-…` 与两个改号后留下的空目录（`RFC-336-…task-detail-visibility` → 实为 RFC-337、
+> `RFC-338-wrapper-runtime-cutover` → 实为 RFC-339）已于 2026-10-30 删除。
 
 > ✅ **已完成 RFC（Done，2026-08-20）：[RFC-312 用户在线状态（presence）](design/RFC-312-user-online-presence/proposal.md)**
 > —— 把「只有最后登录时间」补成「此刻在不在线」。判据是**活的 session WS 连接 + 60s 宽限期**（二态），
