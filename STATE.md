@@ -1,3 +1,14 @@
+## 2026-10-31 RFC-399 恢复 context 值级 DAG 与 platform 单向依赖（In Progress；`design/RFC-399-context-dag-platform-one-way/`）
+
+- **来由**：用户 2026-10-30「你继续推进RFC294，你可以使用codex进行调研和实现，过程中按你的判断来推进，不用询问我」。按 RFC-294
+  review-2026-10-30 §5 的顺序，S2c 余项与 RFC-398 的改动面（`main.ts`、启动迁移）重叠，先做 S5。
+- **范围**：S5 退出门的三条结构规则——context 值级 SCC 2 → 0、越出 DAG 的值级 context 对 9 → 0（28 处 import）；
+  `platform` → `modules` 19 → 0；删除 drizzle 再导出桶。S5 另三项（COL 对 TE 内部的 17 个文件对、`services/humanGateComposition.ts`、
+  public 合同里的 legacy `Actor`）留给 S5 第二步。纯结构重构。
+- **做法**：Codex 只读研究逐处给出修法（无需行为变化、无需改 DAG 实线边），本会话复核后定稿；两处收窄：托管 MCP 诊断只换依赖
+  方向不搬文件，`repoRelForcedPaths` 放 platform 而非 shared。设计门免，实现门一轮（只审功能）。
+- **下一步**：派发 Codex 实施 Part A（T1～T6）→ Part B（T7～T12）→ 本会话集中验证（T13）→ 提交 → 按 exact SHA 跟 CI。
+
 ## 2026-10-30 RFC-398 跨版本升级保障（Draft，待用户批准；`design/RFC-398-cross-version-upgrade-guarantee/`）
 
 - **来由**：用户报告生产（单二进制 + PostgreSQL）v0.19.2 → v0.19.3 升级失败：数据库没有自动迁移、`start` 直接拒绝。要求在用例里固化跨版本数据迁移能力。
