@@ -1,6 +1,6 @@
 # RFC-400 collaboration 经 task 自有参与者写任务、人工门装配归位、public 合同去 legacy Actor（RFC-294 S5 第二步）
 
-- **状态**：In Progress（2026-10-31 落档并开始实施。用户 2026-10-30「你继续推进RFC294，你可以使用codex进行调研和实现，过程中按你的判断来推进，
+- **状态**：Done（2026-10-31；提交 `8ebd3e1e9` + 修复 `01d3788e0`，CI `41220303849` 与 windows-platform `41220303833` 全绿。落档并实施于同日。用户 2026-10-30「你继续推进RFC294，你可以使用codex进行调研和实现，过程中按你的判断来推进，
   不用询问我」：由本会话设计、交 Codex 实施并审核，规则取舍由本会话按推荐决定，见 §6。设计门免：逐处只读研究由 Codex 完成，
   本会话对关键论断逐条对源码复核后定稿；实现门做一轮只审功能的 Codex 检视）
 - **母 RFC**：[RFC-294](../RFC-294-backend-layered-target-architecture/proposal.md) plan §3 S5；design §3.1

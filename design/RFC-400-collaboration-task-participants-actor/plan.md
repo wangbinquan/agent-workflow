@@ -35,8 +35,10 @@
 
 ## 验收清单
 
-- [ ] proposal AC-1～AC-4
-- [ ] 推送后 exact SHA 的 CI 全绿（AC-5）
+- [x] proposal AC-1～AC-4
+- [x] 推送后 exact SHA 的 CI 全绿（AC-5）：`01d3788e0` 的 CI `41220303849`（62 个 job 全部成功，含 36 个后端分片、三平台 e2e 与
+  单二进制冒烟）、windows-platform `41220303833`、integration-opencode、maintenance-soak-nightly、visual-regression-nightly 全绿。
+  `8ebd3e1e9` 的 CI `41216942194` 与 windows-platform `41216942062` 在 Windows 上红，归因与修复见「集中验证」。
 
 ## 实施记录（2026-10-31）
 
