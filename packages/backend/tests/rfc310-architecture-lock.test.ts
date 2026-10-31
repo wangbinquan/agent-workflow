@@ -52,6 +52,8 @@ const COMPOSITION_CONSUMERS: string[] = [
   'bootstrap/daemonModules/repositoryCredentials.ts',
   'bootstrap/deploymentProfile.ts',
   'bootstrap/developmentPurposeRoot.ts',
+  // RFC-399 B1: the maintenance job table takes the owner handlers through composition.
+  'bootstrap/maintenanceJobBindings.ts',
   'bootstrap/maintenanceWorkerGraph.ts',
 ]
 const REQUIRED_PORTS_CONSUMERS: string[] = []

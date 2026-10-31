@@ -98,3 +98,6 @@ helper、账本与 RFC-294 design §3.1。
     全部通过（130 条），判定为负载所致，不属本 RFC。
 - 修复后复验：上述 11 个文件、补跑的 8 个文件与维护作业相关用例全部通过；`tests/architecture/` 整目录（带 PostgreSQL）1209 通过、4 跳过、0 失败；
   backend typecheck 通过；结构门计数与修复前候选一致（见上表）。以推送后 exact SHA 的 CI 为准（AC-5）。
+- 推送 `950f5900b` 后 CI 只红一处：`rfc310-architecture-lock` 的 development-automation composition 消费者精确清单少了
+  `bootstrap/maintenanceJobBindings.ts`。这是 T13 修复时把处理器出口改经 composition 带出来的，本地复验漏跑了这个文件。已补登记；
+  并把所有带 `bootstrap/*.ts` 路径清单、消费者清单或源码锚点的根目录测试（135 个文件）本地全部重跑，全部通过。
