@@ -33,6 +33,10 @@ export const MANAGED_PROCESS_LAUNCH_ERROR_PREFIX = '\u001eAW_MANAGED_PROCESS_LAU
 export const MANAGED_PROCESS_LAUNCH_READY_PREFIX = '\u001eAW_MANAGED_PROCESS_LAUNCH_READY:'
 export const MANAGED_PROCESS_LAUNCH_OUTPUT_PREFIX = '\u001eMANAGED_PROCESS_LAUNCH_OUTPUT:'
 const BUN_BE_BUN_ENV = 'BUN_BE_BUN'
+// The script entry lives in its own file: its top-level await keeps the launcher alive while
+// it waits for the activation frame (Windows exits early without it), and a top-level await in
+// this imported module would make every importer an async ES module (RFC-400).
+const MANAGED_PROCESS_LAUNCHER_ENTRY_FILE = 'managedProcessLauncherEntry.ts'
 
 export interface WindowsManagedProcessOutputPaths {
   readonly stdoutPath: string
@@ -80,9 +84,14 @@ function selfInvocation(windowsOutputPaths?: WindowsManagedProcessOutputPaths): 
     return [process.execPath, MANAGED_PROCESS_LAUNCHER_SUBCOMMAND]
   }
   // Development/test launches do not need to import the daemon's complete CLI
-  // graph for every runtime attempt.  Invoke this deliberately small module
+  // graph for every runtime attempt.  Invoke the deliberately small sibling entry
   // directly; the embedded binary keeps using main.ts's hidden subcommand.
-  return [process.execPath, 'run', import.meta.path, MANAGED_PROCESS_LAUNCHER_SUBCOMMAND]
+  return [
+    process.execPath,
+    'run',
+    join(dirname(import.meta.path), MANAGED_PROCESS_LAUNCHER_ENTRY_FILE),
+    MANAGED_PROCESS_LAUNCHER_SUBCOMMAND,
+  ]
 }
 
 export function managedProcessLauncherArgv(input: {
@@ -594,18 +603,4 @@ export async function runManagedProcessLauncher(
   } finally {
     cleanupWindowsOutputSpool(outputSpool)
   }
-}
-
-// No top-level await: it would make this module, and every module that imports it (task
-// execution, collaboration), an async ES module. Bun 1.4.3's bundler can then emit
-// `await __promiseAll([...])` without defining the helper; the compiled maintenance Worker
-// failed to load that way after RFC-400. Locked by rfc400-top-level-await-guard.
-if (import.meta.main) {
-  void runManagedProcessLauncher(Bun.argv).then(
-    (exitCode) => process.exit(exitCode),
-    (error: unknown) => {
-      console.error(error)
-      process.exit(1)
-    },
-  )
 }

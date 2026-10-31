@@ -92,8 +92,10 @@ context 值级 DAG 与 `platform` 不 import `modules` 已由结构门锁死（`
 - RFC-400 删除旧桥 `services/humanGateComposition.ts` 后，维护 worker 的依赖图换了形状，`rfc370-maintenance-worker-real-effects`
   的编译版用例从此超时：worker 线程加载失败，supervisor 一个事件都不报。异步链的唯一源头是 managed-process launcher 的
   `process.exit(await …)` 入口块。
-- 规矩：会被 import 的模块，入口块写成 `void main().then((code) => process.exit(code), (error) => { console.error(error); process.exit(1) })`；
-  只作脚本入口、没有任何模块 import 的文件可以继续用 top-level await。守卫 `rfc400-top-level-await-guard` 锁定这一条。
+- 规矩：入口块的 top-level await 要原样保留，把它挪进一个没有任何模块 import 的纯入口文件（本次是
+  `platform/execution/local/managedProcessLauncherEntry.ts`），库文件里不留入口块。**不要**改成不 await 的 promise 链：
+  launcher 在 Windows 上靠这个 await 保持存活，第一版修法这么改了，launcher 在等激活帧时以 0 提前退出，Windows 的 launcher 用例与
+  e2e 全红（macOS 本机全绿，看不出来）。守卫 `rfc400-top-level-await-guard` 锁定「带 top-level await 的模块只能被二进制入口 import」。
 - 排查：编译产物里的 worker 或子进程「静默不动」时，在探针里给 `new Worker(...)` 挂 `error` 监听，拿到真实异常；用
   `Bun.build({ outdir })` 打出产物后 grep `__esm(async`，能看出哪些模块变成了异步。
 

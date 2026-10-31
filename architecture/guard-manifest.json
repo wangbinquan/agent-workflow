@@ -1339,7 +1339,7 @@
       "corpusScanner": true,
       "file": "packages/backend/tests/architecture/rfc400-top-level-await-guard.test.ts",
       "id": "rfc400-top-level-await-guard",
-      "lines": 116,
+      "lines": 138,
       "mechanism": "ast",
       "minCorpusFiles": 2000,
       "negativeFixture": true,

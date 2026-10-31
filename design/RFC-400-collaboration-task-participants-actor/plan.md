@@ -88,8 +88,9 @@ depcheck 通过（0 条存量违规，九环未重现）。RFC-310 两个锁零�
 - **PostgreSQL 超时文件串行重跑**（17 个文件，单 worker）：12 个通过，剩余 5 个归因如下。
   - **本 RFC 引入（第 4 处，已修）**：`rfc370-maintenance-worker-real-effects` 的编译版用例三次都超时，RFC-399 那轮是绿的。复现结果：
     编译后的维护 worker 在 `collaboration/infrastructure/clarify/autoDispatch.ts` 的初始化处报 `ReferenceError: __promiseAll is not defined`。
-    根因和修法见 proposal §6 第 10 条末项：launcher 的两个入口块去掉 top-level await，并新增守卫 `rfc400-top-level-await-guard`。
-    修复后编译版 worker 能正常加载，产物里异步初始化数为 0，该文件通过。
+    根因和修法见 proposal §6 第 10 条末项：launcher 入口块移到纯入口文件，并新增守卫 `rfc400-top-level-await-guard`。
+    修复后编译版 worker 能正常加载；发版构建的各入口产物（main、两个维护 worker 入口、备份 worker、逻辑源 worker）以及
+    内嵌 launcher 源码的异步初始化数都是 0；该文件通过。
   - **本机负载，不属本 RFC**：
     - `scheduler-clarify-dispatch`：PG 有 1 条用例 7.4 秒超时，同文件其余 PG 用例耗时 3～6 秒。
     - `lifecycle-property`：PG 超时后 harness 已拆除，属性迭代读库报错，不是不变量被违反。
@@ -97,13 +98,21 @@ depcheck 通过（0 条存量违规，九环未重现）。RFC-310 两个锁零�
     - `rfc359-w6-t26`：Heap Fetches > 0。
     - 以上都只在 PostgreSQL 侧出现，SQLite 变体全过。前三个在 RFC-399 的集中验证里（RFC-400 改动之前）也在负载下失败、重跑后通过；
       w6-t26 在 RFC-399 全量里同样失败、串行重跑通过。留给 CI 在干净 runner 上判定。
-- **launcher 修复后的复验**：
+- **第一版 launcher 修法的复验**（改成 promise 链，随 `8ebd3e1e9` 推送）：
+  - 本机（macOS）复验：typecheck、lint 通过；launcher、托管进程、维护 worker 相关的 21 个文件重跑通过（`rfc284-spawn-site-ratchet`
+    的差异来自 RFC-398 新加的 `bootstrap/autoUpgradeChild.ts`）；P0 变异 lane 再跑通过（两个 provider 共 34 个阶段全部有效）；
+    171 个行为文件重跑只剩 PostgreSQL 超时（负载 18～21，SQLite 变体零失败）。
+  - CI（`41216942194` / windows-platform `41216942062`）：Linux / macOS 后端分片全绿，Windows 红。windows-platform 的 RFC-328
+    pre-activation launcher 用例全部超时或失败（launcher 以 0 提前退出，没有产出），Playwright windows 分片 1、2 失败（运行时
+    子进程没有输出 envelope），3、4 被取消。归因：本 RFC 的 launcher 改动——Windows 上这处 top-level await 维持着进程存活。
+- **改正后的修法**（纯入口文件，保留 await 原样）复验：
   - typecheck 零错误；eslint、`lint:promises`、prettier 通过。
-  - launcher、托管进程、维护 worker 相关的 21 个文件重跑：只有 `rfc284-spawn-site-ratchet` 失败，原因是 RFC-398 新加的
-    `bootstrap/autoUpgradeChild.ts` 多出一个 spawn 点，其余全过。
-  - P0 变异 lane 再跑一次：passed，两个 provider 共 34 个阶段全部有效。
-  - 前述 281 个文件中的 171 个行为文件重跑（5 个 worker，负载 18～21）：14 个文件失败，全部是 PostgreSQL 超时
-    （含 w6-t26 的 600 秒整体超时），SQLite 变体零失败，没有新增任何非超时失败。
+  - 编译版 worker 探针正常加载；各发版入口产物与内嵌 launcher 源码的异步初始化数为 0；内嵌源码保留
+    `if (import.meta.main) process.exit(await …)`。
+  - launcher、托管进程、维护 worker、入口清单与架构账本相关的 33 个文件重跑：4 个失败（`rfc317-module-boundary`、
+    `rfc376-structural-guards`、`rfc393-cli-bootstrap-separation`、`rfc284-spawn-site-ratchet`），差异全部指向 RFC-398 的在制文件
+    （`daemonStart.ts`、`epochMigrationAuto.ts`、`epochMigrationLegacy.ts`、`cli/epochMigration.ts`、`autoUpgradeSessionLock.ts`、
+    `auditSourceEvidence.ts`、`autoUpgradeChild.ts`），其余全过。Windows 行为以 CI 为准。
 - **真实 P0 变异 lane**（`scripts/rfc359-p0-mutations.ts --providers sqlite,postgresql`）：passed。每个 provider 执行 89 个用例；
   16 个变异阶段都按预期失败，诊断吻合；变异前后两次基线都是绿的；源文件指纹前后一致。
 - **typecheck**：本 RFC 改动面零错误，剩余 5 处错误都在 RFC-398 的在制文件里。改动文件的 eslint 与 prettier 通过。

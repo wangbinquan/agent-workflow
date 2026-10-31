@@ -29,7 +29,7 @@ export const BINARY_ENTRIES = [
   'bootstrap/maintenanceWorker.ts',
   'bootstrap/maintenanceWorkerEntry.ts',
   'platform/persistence/sqliteLogicalSourceWorker.ts',
-  'platform/execution/local/managedProcessLauncher.ts',
+  'platform/execution/local/managedProcessLauncherEntry.ts',
   'util/gitCredentialHelper.ts',
 ].map((path) => BACKEND_PREFIX + path)
 

@@ -99,9 +99,13 @@ RFC-294 plan §3 S5 的范围里，RFC-399 完成了三条退出门规则（cont
       RFC-317 转移表预言按被调函数名识别 CAS 站点，通用名 `set` 让 collaboration 的 4 个站点（含 3 条表外边）从语料里消失；
       与内核同名后站点与偏离账本原样回到语料，不放宽扫描器。另有两处随搬迁同步的守卫清单：RFC-371 观测边界的外部
       import 白名单加入 identity-access public participants（type-only），RFC-395 串行化插入源码锁按复核结果更新 `clarify/seal.ts` 的指纹。
-    - 集中验证中修复（2026-10-31）：managed-process launcher 的两个 `if (import.meta.main)` 入口块
-      （`platform/execution/local/managedProcessLauncher.ts` 与 `services/execution/managedProcessLauncher.ts`）不再使用 top-level await，
-      改成 promise 链（退出码与异常时退出 1 的行为不变）。这处 top-level await 让 launcher 以及经 task-execution、collaboration 引入它的
-      所有模块都成为异步 ES 模块。删除旧桥后，`clarify/autoDispatch.ts` 的初始化落在入口块顶层并要等两个异步模块，Bun 1.4.3 打包器为此
-      生成 `await __promiseAll([...])`，却没有输出这个 helper，编译后的维护 worker 加载即报 `ReferenceError`。改后依赖图里不再有异步模块；
-      新增守卫 `rfc400-top-level-await-guard` 锁定「被 import 的生产模块不得有 top-level await」。
+    - 集中验证中修复（2026-10-31）：managed-process launcher 库文件 `platform/execution/local/managedProcessLauncher.ts` 的
+      `if (import.meta.main) { process.exit(await …) }` 入口块移到新的纯入口文件 `managedProcessLauncherEntry.ts`（没有任何模块 import 它）。
+      源码模式的自调用、build-binary 的内嵌 launcher 入口、`BINARY_ENTRIES` 与 `rfc370-native-process-location` 的 local 入口同步改指向它；
+      legacy CLI facade `services/execution/managedProcessLauncher.ts` 保持原样（只有 `main.ts` import 它）。
+      原因：库文件里的 top-level await 让它和经 task-execution、collaboration 引入它的所有模块都成为异步 ES 模块。删除旧桥后，
+      `clarify/autoDispatch.ts` 的初始化落在入口块顶层，要同时等两个异步模块；Bun 1.4.3 打包器为此生成 `await __promiseAll([...])`
+      却没有输出这个 helper，编译后的维护 worker 加载即报 `ReferenceError`。
+      新增守卫 `rfc400-top-level-await-guard`：带 top-level await 的模块只能被二进制入口 import。
+      第一版修法（`8ebd3e1e9`）把入口块改成不 await 的 promise 链，Windows CI 随即证明这个 await 有实际作用：它让 launcher 在等待
+      激活帧期间保持存活，去掉后 launcher 以 0 提前退出，Windows 上 RFC-328 launcher 用例与 e2e 全红。现在的做法保留 await 原样。

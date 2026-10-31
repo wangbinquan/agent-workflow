@@ -23,7 +23,8 @@ const entries = [
       'platform',
       'execution',
       'local',
-      'managedProcessLauncher.ts',
+      // RFC-400: the platform launcher's script entry is a sibling file that no module imports.
+      'managedProcessLauncherEntry.ts',
     ),
   },
 ] as const

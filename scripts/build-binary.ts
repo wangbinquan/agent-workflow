@@ -43,7 +43,7 @@ const managedProcessLauncherEntry = join(
   'platform',
   'execution',
   'local',
-  'managedProcessLauncher.ts',
+  'managedProcessLauncherEntry.ts',
 )
 const gitCredentialHelperEntry = join(backendSrc, 'util', 'gitCredentialHelper.ts')
 // RFC-311 实现门 P0-1:`new Worker(new URL('./x.ts', import.meta.url))` 不被
