@@ -9,7 +9,7 @@ import type {
 import { lockNodeRunTaskRootInTx, writeNodeRunTablesInTx } from '../nodeRunWriteProtocol'
 import { requestHash } from '../../domain/executionEffect'
 import { sha256Hex } from '../../domain/digest'
-import { assertTaskOwnerTx, withTaskExecutionSerializable } from '../ownedTaskExecution'
+import { assertTaskOwnerTx, withTaskExecutionAggregateWrite } from '../ownedTaskExecution'
 
 export interface HostedProcessReceipt {
   readonly executionId: string
@@ -39,7 +39,7 @@ export function createHostedProcessEffectProjection<Outcome extends ProcessEffec
     }),
     async recordSpawnReceipt(record) {
       const lease = input.fence.current()
-      await withTaskExecutionSerializable(input.db, async (tx) => {
+      await withTaskExecutionAggregateWrite(input.db, async (tx) => {
         await input.fence.assertHeld(tx, lease)
         await assertTaskOwnerTx(tx, record.token, record.now)
         const taskId = await lockNodeRunTaskRootInTx(tx, record.nodeRunId)
@@ -65,13 +65,21 @@ export function createHostedProcessEffectProjection<Outcome extends ProcessEffec
         )[0]
         if (attempt?.taskId !== record.token.taskId)
           throw new Error('hosted-execution-owner-receipt-fenced')
-        await tx
+        const updated = await tx
           .update(taskExecutionEffectAttempts)
           .set({
             receiptJson: JSON.stringify({ v: 1, phase: 'crewstation-accepted', ...record.receipt }),
             updatedAt: record.now,
           })
-          .where(eq(taskExecutionEffectAttempts.id, record.attemptId))
+          .where(
+            and(
+              eq(taskExecutionEffectAttempts.id, record.attemptId),
+              eq(taskExecutionEffectAttempts.state, 'acting'),
+              eq(taskExecutionEffectAttempts.epoch, record.token.epoch),
+            ),
+          )
+          .returning({ id: taskExecutionEffectAttempts.id })
+        if (updated.length !== 1) throw new Error('hosted-execution-owner-receipt-fenced')
         await writeNodeRunTablesInTx(tx, record.nodeRunId, {
           runtime: { pid: null, spawnBinaryPath: null, spawnLaunchNonce: null },
           config:

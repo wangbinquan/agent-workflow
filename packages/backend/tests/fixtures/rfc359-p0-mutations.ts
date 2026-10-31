@@ -1,3 +1,4 @@
+// RFC-397：P0-2 继续变异三个原文 owner 围栏调用；隔离级别改动不削弱该断言。
 // Process-local historical regressions for scripts/rfc359-p0-mutations.ts.
 // No production file is written. Each process replaces one real export, while
 // existing tests retain the real database, transaction and task driver.

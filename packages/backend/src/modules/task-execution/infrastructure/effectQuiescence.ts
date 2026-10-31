@@ -16,9 +16,8 @@ import { tablesOf, type PersistenceTables } from '@/platform/persistence/session
 // （exact-stop：本进程的 owner 拿着停机证明；successor-daemon：新一代 daemon 拿着独占锁证明）
 // 只差「允许的 owner 状态」与「证明如何对上 owner」，都在 `resolveQuiescenceAuthority` 里判完再进事务。
 //
-// 事务形状按 RFC-359 §5：READ COMMITTED + 聚合根行锁（owner 行 `FOR UPDATE`；SQLite 上
-// BEGIN IMMEDIATE 已独占，锁是 no-op）。不用 SERIALIZABLE——这些原子只在 runtime 已停 / 旧 daemon
-// 已撤销之后跑，没有并发 worker 要用谓词锁去挡。
+// RFC-397：READ COMMITTED + owner / 任务根行锁 + 排序的 family advisory 锁；40001 / 40P01
+// 整笔重放。runtime 已停仍可能与同 lineage 的其它任务竞争；SQLite BEGIN IMMEDIATE 已独占。
 
 import { insertOne } from '@/platform/persistence/singleInsert'
 
@@ -26,7 +25,9 @@ import { and, asc, eq, inArray, isNull, like } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
 import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
-import { databaseSessionFor, engineOf } from '@/platform/persistence/databaseTransaction'
+import { engineOf } from '@/platform/persistence/databaseTransaction'
+import { withTaskExecutionAggregateWrite } from './ownedTaskExecution'
+import { taskAggregateWrite } from './taskDefinitionWriteParticipant'
 import type {
   ManagedProcessQuiescenceAuthority,
   ManagedProcessQuiescenceInput,
@@ -67,6 +68,22 @@ export const UNRESOLVED_ATTEMPT_STATES = ['prepared', 'acting', 'recovery-requir
 type OwnerRow = PersistenceTables['taskExecutionOwners']['$inferSelect']
 type EffectRow = PersistenceTables['taskExecutionEffects']['$inferSelect']
 type AttemptRow = PersistenceTables['taskExecutionEffectAttempts']['$inferSelect']
+
+/** RFC-397：跨任务的 family 不受任务根保护；完整键去重排序后，在首次写入前一次取齐。 */
+export async function lockEffectFamiliesTx(
+  tx: PersistenceTx,
+  families: readonly Pick<EffectRow, 'executionLineageId' | 'operationFamilyKey'>[],
+): Promise<void> {
+  const keys = [
+    ...new Set(
+      families.map(
+        ({ executionLineageId, operationFamilyKey }) =>
+          `task-execution-effect-family:${executionLineageId}:${operationFamilyKey}`,
+      ),
+    ),
+  ].sort()
+  for (const key of keys) await engineOf(tx).advisoryLock(tx, key)
+}
 
 export interface ResolvedQuiescenceAuthority {
   readonly owner: OwnershipTuple
@@ -392,6 +409,10 @@ async function resolveManagedProcessesTx(input: {
 }): Promise<RecoveredManagedProcessResolution> {
   const { tx, owner, now } = input
   const rows = await loadUnresolvedAttemptsTx(tx, owner.taskId, 'process')
+  await lockEffectFamiliesTx(
+    tx,
+    rows.map(({ effect }) => effect),
+  )
   const countByEffect = new Map<string, number>()
   for (const row of rows) {
     countByEffect.set(row.effect.id, (countByEffect.get(row.effect.id) ?? 0) + 1)
@@ -534,7 +555,7 @@ export async function resolveQuiescedManagedProcesses(
   }
   const authority = resolveQuiescenceAuthority(input)
   const now = input.now ?? Date.now()
-  return await databaseSessionFor(db).transaction(async (tx) => {
+  return await withTaskExecutionAggregateWrite(db, async (tx) => {
     await lockAndAssertOwnerTx(
       tx,
       authority.owner,
@@ -542,6 +563,7 @@ export async function resolveQuiescedManagedProcesses(
       authority.allowedOwnerStates,
       `task '${authority.owner.taskId}' managed-process recovery was fenced`,
     )
+    await taskAggregateWrite.lockTaskAggregateRoot(tx, authority.owner.taskId)
     return await resolveManagedProcessesTx({
       tx,
       owner: authority.owner,
@@ -588,6 +610,10 @@ async function closeOutcomeUnknownAndReleaseTx(input: {
       'task-wide quiescence proof does not cover the exact unresolved effect set',
     )
   }
+  await lockEffectFamiliesTx(
+    tx,
+    unresolved.map(({ effect }) => effect),
+  )
   for (const { attempt, effect } of unresolved) {
     const failureCode = attempt.failureCode ?? 'outcome-unknown-after-quiescence'
     const {
@@ -733,7 +759,7 @@ export async function closeOutcomeUnknownAndRelease(
   }
   const allowedOwnerStates: readonly TaskOwnerState[] = ['claimed', 'revoked', 'recovery-required']
   const now = input.now ?? Date.now()
-  return await databaseSessionFor(db).transaction(async (tx) => {
+  return await withTaskExecutionAggregateWrite(db, async (tx) => {
     const owner = await lockAndAssertOwnerTx(
       tx,
       ownershipTuple(input.token),
@@ -741,6 +767,7 @@ export async function closeOutcomeUnknownAndRelease(
       allowedOwnerStates,
       `task '${input.token.taskId}' outcome-unknown closure was fenced`,
     )
+    await taskAggregateWrite.lockTaskAggregateRoot(tx, input.token.taskId)
     return await closeOutcomeUnknownAndReleaseTx({
       tx,
       owner,
@@ -774,7 +801,7 @@ export async function closeRecoveredOutcomeUnknownAndRelease(
   }
   const allowedOwnerStates: readonly TaskOwnerState[] = ['revoked', 'recovery-required']
   const now = input.now ?? Date.now()
-  return await databaseSessionFor(db).transaction(async (tx) => {
+  return await withTaskExecutionAggregateWrite(db, async (tx) => {
     const owner = await lockAndAssertOwnerTx(
       tx,
       input.owner,
@@ -782,6 +809,7 @@ export async function closeRecoveredOutcomeUnknownAndRelease(
       allowedOwnerStates,
       `task '${input.owner.taskId}' recovery was fenced`,
     )
+    await taskAggregateWrite.lockTaskAggregateRoot(tx, input.owner.taskId)
     return await closeOutcomeUnknownAndReleaseTx({
       tx,
       owner,
@@ -913,7 +941,7 @@ export async function resolveQuiescedCodeHostMutations(
   const now = input.now ?? Date.now()
   const allowedOwnerStates: readonly TaskOwnerState[] = ['revoked', 'recovery-required']
 
-  return await databaseSessionFor(db).transaction(async (tx) => {
+  return await withTaskExecutionAggregateWrite(db, async (tx) => {
     await lockAndAssertOwnerTx(
       tx,
       input.owner,
@@ -921,10 +949,18 @@ export async function resolveQuiescedCodeHostMutations(
       allowedOwnerStates,
       `task '${input.owner.taskId}' code-host recovery was fenced`,
     )
+    await taskAggregateWrite.lockTaskAggregateRoot(tx, input.owner.taskId)
     const appliedEffectIds: string[] = []
     const retryAuthorizedEffectIds: string[] = []
+    const validated: {
+      resolution: RecoveredCodeHostMutation
+      receiptJson: string
+      row: { attempt: AttemptRow; effect: EffectRow }
+      nextState: 'succeeded' | 'retry-authorized'
+      outcome: ReturnType<typeof aggregateEffectOutcome> | null
+    }[] = []
+    const { taskExecutionEffectAttempts, taskExecutionEffects } = tablesOf(tx)
     for (const { resolution, receiptJson } of normalized) {
-      const { taskExecutionEffectAttempts, taskExecutionEffects } = tablesOf(tx)
       const row = (
         await tx
           .select({ attempt: taskExecutionEffectAttempts, effect: taskExecutionEffects })
@@ -1015,6 +1051,13 @@ export async function resolveQuiescedCodeHostMutations(
         }
       }
 
+      validated.push({ resolution, receiptJson, row, nextState, outcome })
+    }
+    await lockEffectFamiliesTx(
+      tx,
+      validated.map(({ row }) => row.effect),
+    )
+    for (const { resolution, receiptJson, row, nextState, outcome } of validated) {
       const attemptUpdated = await tx
         .update(taskExecutionEffectAttempts)
         .set({

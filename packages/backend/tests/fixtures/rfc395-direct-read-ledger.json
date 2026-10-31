@@ -100,6 +100,7 @@
     "rfc395-v2-run-split.test.ts": "historical-schema",
     "rfc395-w2fix-nb-regressions.test.ts": "target-model-contract",
     "rfc395-workflow-index-target.test.ts": "target-model-contract",
+    "rfc397-owner-fenced-writes-read-committed.test.ts": "target-model-contract",
     "single-nonroot-member-workspace.test.ts": "target-model-contract",
     "wg-readonly-claim-and-pause-reason.test.ts": "target-runtime-state"
   },

@@ -37,14 +37,15 @@ import { taskReadColumns } from './taskRepositorySql'
 //     `DrizzleQueryError` 而不是 `task-execution-resource-conflict`。
 //   · receipt 边界：字节上限（PG 侧）+ JSON 合法性（SQLite 侧）两条都做，抛 `TaskExecutionError`。
 //
-// 事务形状沿用两侧原有的最强档：`withTaskExecutionSerializable`（PG = SERIALIZABLE + 40001 重放；
-// SQLite = BEGIN IMMEDIATE，本就全库独占）。事务体只 await 数据库操作。
+// RFC-397：READ COMMITTED + owner 围栏 + 任务根 + family advisory 锁；40001 / 40P01 整笔重放。
+// SQLite 仍为 BEGIN IMMEDIATE。事务体只 await 数据库操作。
 
 import { and, asc, desc, eq, inArray, max } from 'drizzle-orm'
 import { ulid } from 'ulid'
 
 import { engineOf } from '@/platform/persistence/databaseTransaction'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
+import { NotFoundError } from '@/util/errors'
 import type {
   CodeHostNodeSettlementProjection,
   GateRollbackSettlement,
@@ -62,6 +63,7 @@ import {
 } from '../domain/executionEffect'
 import {
   closeOutcomeUnknownAndRelease,
+  lockEffectFamiliesTx,
   readUnreapedProcessCode,
   readUnresolvedEffectIds,
   releaseAttemptFencesTx,
@@ -70,7 +72,7 @@ import {
 import { setNodeRunStatusTx } from './nodeRunLifecycleTransition'
 import {
   assertTaskOwnerTx,
-  withTaskExecutionSerializable,
+  withTaskExecutionAggregateWrite,
   type TaskExecutionTransaction,
 } from './ownedTaskExecution'
 
@@ -94,7 +96,19 @@ function bounded(value: string | null | undefined): string | null {
 async function applyCodeHostProjection(
   tx: TaskExecutionTransaction,
   projection: CodeHostNodeSettlementProjection,
+  taskId: string,
 ): Promise<void> {
+  const { nodeRuns } = tablesOf(tx)
+  const [run] = await tx
+    .select({ taskId: nodeRuns.taskId })
+    .from(nodeRuns)
+    .where(eq(nodeRuns.id, projection.nodeRunId))
+    .limit(1)
+  if (run === undefined)
+    throw new NotFoundError('node-run-not-found', `node_run ${projection.nodeRunId} not found`)
+  if (run.taskId !== taskId) {
+    throw new TaskExecutionError('task-execution-stale-owner', 'code-host projection task mismatch')
+  }
   await lockNodeRunTaskRootInTx(tx, projection.nodeRunId)
   for (const output of projection.outputs ?? []) {
     await writeNodeRunOutputInTx(tx, projection.nodeRunId, output)
@@ -119,7 +133,11 @@ async function applyCodeHostProjection(
 async function applyWorkspacePreparationProjection(
   tx: TaskExecutionTransaction,
   projection: WorkspacePreparationSettlementProjection,
+  taskId: string,
 ): Promise<void> {
+  if (projection.taskId !== taskId) {
+    throw new TaskExecutionError('task-execution-stale-owner', 'workspace projection task mismatch')
+  }
   await taskAggregateWrite.lockTaskAggregateRoot(tx, projection.taskId)
   await acceptDurableRepositoryWorkspace(tx, projection.taskId)
   const { taskWorkspaces } = tablesOf(tx)
@@ -341,9 +359,10 @@ export class DrizzleTaskExecutionEffectPersistence implements TaskExecutionEffec
     const now = input.now ?? Date.now()
     const resources = canonicalResourceKeySet(input.resourceKeys)
     const recoveryDescriptorJson = bounded(input.recoveryDescriptorJson)
-    return await withTaskExecutionSerializable(this.db, async (tx) => {
+    return await withTaskExecutionAggregateWrite(this.db, async (tx) => {
       await assertTaskOwnerTx(tx, input.token, now)
       await taskAggregateWrite.lockTaskAggregateRoot(tx, input.token.taskId)
+      await lockEffectFamiliesTx(tx, [input])
       const {
         taskExecutionIntents,
         taskExecutionEffects,
@@ -655,6 +674,7 @@ export class DrizzleTaskExecutionEffectPersistence implements TaskExecutionEffec
         `effect attempt '${input.attemptId}' is not owned by the current epoch`,
       )
     }
+    await lockEffectFamiliesTx(tx, [effect])
     assertAttemptTransition(attempt.state, input.state)
     const receiptJson = bounded(input.receiptJson)
     const changed = await tx
@@ -683,11 +703,13 @@ export class DrizzleTaskExecutionEffectPersistence implements TaskExecutionEffec
     if (input.state === 'retry-authorized') {
       // 授权放行的下一次发送不再需要这一 attempt 的 hold。
       await releaseAttemptFencesTx(tx, attempt.id, input.token.epoch, now)
-      if (projection !== undefined) await applyCodeHostProjection(tx, projection)
+      if (projection !== undefined)
+        await applyCodeHostProjection(tx, projection, input.token.taskId)
       return
     }
     if (input.state === 'recovery-required') {
-      if (projection !== undefined) await applyCodeHostProjection(tx, projection)
+      if (projection !== undefined)
+        await applyCodeHostProjection(tx, projection, input.token.taskId)
       return
     }
     const attempts = await tx
@@ -727,7 +749,8 @@ export class DrizzleTaskExecutionEffectPersistence implements TaskExecutionEffec
             eq(taskExecutionEffectAttempts.epoch, input.token.epoch),
           ),
         )
-      if (projection !== undefined) await applyCodeHostProjection(tx, projection)
+      if (projection !== undefined)
+        await applyCodeHostProjection(tx, projection, input.token.taskId)
       return
     }
     await releaseAttemptFencesTx(tx, attempt.id, input.token.epoch, now)
@@ -819,11 +842,11 @@ export class DrizzleTaskExecutionEffectPersistence implements TaskExecutionEffec
         throw new TaskExecutionError('task-execution-stale-owner', 'effect watermark CAS lost')
       }
     }
-    if (projection !== undefined) await applyCodeHostProjection(tx, projection)
+    if (projection !== undefined) await applyCodeHostProjection(tx, projection, input.token.taskId)
   }
 
   async settle(input: TaskEffectAttemptSettlement): Promise<void> {
-    await withTaskExecutionSerializable(this.db, async (tx) => await this.settleTx(tx, input))
+    await withTaskExecutionAggregateWrite(this.db, async (tx) => await this.settleTx(tx, input))
   }
 
   /** 用例专属原子：effect 结算与评审回滚投影共用一笔事务，刻意不进通用 effect 端口。 */
@@ -847,7 +870,7 @@ export class DrizzleTaskExecutionEffectPersistence implements TaskExecutionEffec
       return
     }
     const outcome = input.outcome
-    await withTaskExecutionSerializable(this.db, async (tx) => {
+    await withTaskExecutionAggregateWrite(this.db, async (tx) => {
       await this.settleTx(tx, {
         token: input.token,
         effectId: input.effectId,
@@ -876,7 +899,7 @@ export class DrizzleTaskExecutionEffectPersistence implements TaskExecutionEffec
   async settleCodeHostNode(
     input: Parameters<TaskExecutionEffectPersistence['settleCodeHostNode']>[0],
   ): Promise<void> {
-    await withTaskExecutionSerializable(
+    await withTaskExecutionAggregateWrite(
       this.db,
       async (tx) => await this.settleTx(tx, input.settlement, input.projection),
     )
@@ -885,9 +908,9 @@ export class DrizzleTaskExecutionEffectPersistence implements TaskExecutionEffec
   async settleWorkspacePreparation(
     input: Parameters<TaskExecutionEffectPersistence['settleWorkspacePreparation']>[0],
   ): Promise<void> {
-    await withTaskExecutionSerializable(this.db, async (tx) => {
+    await withTaskExecutionAggregateWrite(this.db, async (tx) => {
       await this.settleTx(tx, input.settlement)
-      await applyWorkspacePreparationProjection(tx, input.projection)
+      await applyWorkspacePreparationProjection(tx, input.projection, input.settlement.token.taskId)
     })
   }
 
@@ -895,7 +918,7 @@ export class DrizzleTaskExecutionEffectPersistence implements TaskExecutionEffec
     input: Parameters<TaskExecutionEffectPersistence['recordProcessSpawn']>[0],
   ): Promise<void> {
     const now = input.now ?? Date.now()
-    await withTaskExecutionSerializable(this.db, async (tx) => {
+    await withTaskExecutionAggregateWrite(this.db, async (tx) => {
       await assertTaskOwnerTx(tx, input.token, now)
       await taskAggregateWrite.lockTaskAggregateRoot(tx, input.token.taskId)
       const { taskExecutionEffectAttempts, taskExecutionEffects } = tablesOf(tx)

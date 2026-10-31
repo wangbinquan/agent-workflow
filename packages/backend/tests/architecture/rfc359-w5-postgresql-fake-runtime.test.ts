@@ -134,6 +134,10 @@ export const FAKE_POSTGRESQL_RUNTIME_LITERALS: readonly string[] = [
   // chunk sends, which a real pool does not report. The recorder wraps the real harness pool, so
   // every statement still runs on PostgreSQL (the read-back and trigger cases need that).
   'rfc395-epoch2-copy-batched-chunks.test.ts: 1',
+  // RFC-397 — the legitimate kind: the subject is the SQL recorder's driver boundary. The fake pool
+  // fails BEGIN / COMMIT / SAVEPOINT / RELEASE SAVEPOINT / values() on demand, which a real pool cannot
+  // do; every other RFC-397 case in that file runs on the real harness database.
+  'rfc397-owner-fenced-writes-read-committed.test.ts: 1',
 ]
 
 function walk(root: string, dir: string, out: string[]): string[] {

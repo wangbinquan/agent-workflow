@@ -37,7 +37,7 @@
         },
         {
           "path": "modules/task-execution/infrastructure/nodeRunWriteProtocol.ts",
-          "sha256": "54c5b56e6dad5c3510de8e757c07a015c6ac5f508c51577cf4a263ba8b429fb4"
+          "sha256": "533ad4290b6f9378f7d88e8a41f8ca77c619e1362a13232e1b398e85037ccf72"
         }
       ],
       "sites": [
@@ -46,7 +46,7 @@
           "line": 352
         }
       ],
-      "why": "replaceOutputs uses withTaskExecutionWrite (READ COMMITTED), then fencedTaskId: owner fence -> task root -> node-run lock, before reading/deleting/inserting outputs for that nodeRunId. Regressions: rfc395-run-write-atomicity.test.ts."
+      "why": "replaceOutputs uses withTaskExecutionWrite (READ COMMITTED), then fencedTaskId: owner fence -> task root -> node-run lock, before reading/deleting/inserting outputs for that nodeRunId. Regressions: rfc395-run-write-atomicity.test.ts. RFC-397: reviewed the session-helper comment change; owner/task/run lock protocol and output replacement remain unchanged."
     }
   ]
 }

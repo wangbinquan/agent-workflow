@@ -4,7 +4,7 @@ import { TERMINAL_NODE_RUN_STATUSES } from '@agent-workflow/shared'
 import { and, eq, inArray, isNotNull, isNull } from 'drizzle-orm'
 
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
+import { databaseSessionFor, engineOf } from '@/platform/persistence/databaseTransaction'
 import type { EngineCapabilities } from '@/platform/persistence/capabilities'
 import {
   type RuntimeSessionLeaseOperations,
@@ -14,7 +14,7 @@ import {
 
 import {
   fenceTaskWrite,
-  withTaskExecutionSerializable,
+  withTaskExecutionAggregateWrite,
   type TaskExecutionTransaction,
 } from './ownedTaskExecution'
 
@@ -29,15 +29,14 @@ function fail(reason: string): never {
 }
 
 /**
- * 租约表撞唯一键 / CHECK：`claimNew` 防重复认领靠的就是主键 `(protocol, session_id)` + 这一条映射，
- * 不是靠隔离级别。驱动错误的形状经能力矩阵归类（PG 的 23505/23514 与 SQLite 的 SQLITE_CONSTRAINT
- * 都归到 `unique-violation`），再按表名兜一层——两个引擎同一条判据。
+ * RFC-397：只有租约主键 `(protocol, session_id)` 冲突是重复认领；其它表的唯一键、FK、CHECK 错误原样传播。
+ * 冲突目标经能力矩阵取得（PG 给约束名 `runtime_session_leases_pkey`，SQLite 给列清单），一条正则两边都认。
  */
 function constraintViolation(engine: EngineCapabilities, error: unknown): boolean {
-  if (engine.classifyError(error) === 'unique-violation') return true
-  const message = error instanceof Error ? error.message : String(error)
-  return /runtime_session_leases|duplicate key|unique constraint|CHECK constraint failed/i.test(
-    message,
+  const target = engine.uniqueViolationTarget(error)
+  return (
+    target !== undefined &&
+    /^runtime_session_leases(?:_pkey|\.protocol, runtime_session_leases\.session_id)$/.test(target)
   )
 }
 
@@ -69,7 +68,7 @@ export function createRuntimeSessionLeaseOperations(
 
     async claimNew(input) {
       try {
-        return await withTaskExecutionSerializable(db, async (tx) => {
+        return await withTaskExecutionAggregateWrite(db, async (tx) => {
           await fence(tx, input.taskId, input.leasedAt)
           const { runtimeSessionLeases } = tablesOf(tx)
           const { nodeRuns, nodeRunRuntimeStates } = tablesOf(tx)
@@ -126,7 +125,7 @@ export function createRuntimeSessionLeaseOperations(
     },
 
     async preclaimResume(input) {
-      return await withTaskExecutionSerializable(db, async (tx) => {
+      return await withTaskExecutionAggregateWrite(db, async (tx) => {
         await fence(tx, input.taskId, input.leasedAt)
         const { runtimeSessionLeases } = tablesOf(tx)
         const { nodeRuns, nodeRunRuntimeStates } = tablesOf(tx)
@@ -173,6 +172,9 @@ export function createRuntimeSessionLeaseOperations(
             and(
               eq(runtimeSessionLeases.protocol, input.protocol),
               eq(runtimeSessionLeases.sessionId, input.sessionId),
+              eq(runtimeSessionLeases.taskId, input.taskId),
+              eq(runtimeSessionLeases.nodeId, input.nodeId),
+              eq(runtimeSessionLeases.resetPending, false),
               isNull(runtimeSessionLeases.leaseNodeRunId),
               isNull(runtimeSessionLeases.leaseNonceDigest),
               isNull(runtimeSessionLeases.leasedAt),
@@ -190,7 +192,7 @@ export function createRuntimeSessionLeaseOperations(
     },
 
     async confirmResume(token) {
-      return await withTaskExecutionSerializable(db, async (tx) => {
+      return await withTaskExecutionAggregateWrite(db, async (tx) => {
         const { runtimeSessionLeases } = tablesOf(tx)
         const owners = await tx
           .select({ taskId: runtimeSessionLeases.taskId, nodeId: runtimeSessionLeases.nodeId })
@@ -207,6 +209,26 @@ export function createRuntimeSessionLeaseOperations(
         const owner = owners[0]
         if (owner === undefined) fail('lease-mismatch')
         await fence(tx, owner.taskId, Date.now())
+        // RFC-397：排他锁后按完整 token 重读，不能沿用等待围栏之前的租约快照。
+        await engineOf(tx).lockAggregateRoot(
+          tx,
+          runtimeSessionLeases,
+          runtimeSessionLeases.sessionId,
+          token.sessionId,
+        )
+        const [held] = await tx
+          .select({ sessionId: runtimeSessionLeases.sessionId })
+          .from(runtimeSessionLeases)
+          .where(
+            and(
+              eq(runtimeSessionLeases.protocol, token.protocol),
+              eq(runtimeSessionLeases.sessionId, token.sessionId),
+              eq(runtimeSessionLeases.leaseNodeRunId, token.nodeRunId),
+              eq(runtimeSessionLeases.leaseNonceDigest, token.leaseNonceDigest),
+            ),
+          )
+          .limit(1)
+        if (held === undefined) fail('lease-mismatch')
         return compareAndWriteRunSessionInTx(tx, token.nodeRunId, null, token.sessionId, {
           taskId: owner.taskId,
           nodeId: owner.nodeId,
@@ -217,7 +239,7 @@ export function createRuntimeSessionLeaseOperations(
 
     async rotate(token, nextSessionId) {
       try {
-        return await withTaskExecutionSerializable(db, async (tx) => {
+        return await withTaskExecutionAggregateWrite(db, async (tx) => {
           const { runtimeSessionLeases, nodeRunEvents } = tablesOf(tx)
           const { nodeRuns, nodeRunRuntimeStates } = tablesOf(tx)
           const outgoingRows = await tx
@@ -266,7 +288,7 @@ export function createRuntimeSessionLeaseOperations(
             .limit(1)
           if (collisions[0] !== undefined) fail('owner-conflict')
 
-          await tx
+          const deleted = await tx
             .delete(runtimeSessionLeases)
             .where(
               and(
@@ -274,8 +296,12 @@ export function createRuntimeSessionLeaseOperations(
                 eq(runtimeSessionLeases.sessionId, token.sessionId),
                 eq(runtimeSessionLeases.leaseNodeRunId, token.nodeRunId),
                 eq(runtimeSessionLeases.leaseNonceDigest, token.leaseNonceDigest),
+                eq(runtimeSessionLeases.resetPending, true),
+                isNotNull(runtimeSessionLeases.leasedAt),
               ),
             )
+            .returning({ sessionId: runtimeSessionLeases.sessionId })
+          if (deleted.length !== 1) fail('lease-mismatch')
           await insertOne(tx, runtimeSessionLeases, {
             protocol: token.protocol,
             sessionId: nextSessionId,
@@ -344,7 +370,7 @@ export function createRuntimeSessionLeaseOperations(
     },
 
     async markResetPending(token) {
-      return await withTaskExecutionSerializable(db, async (tx) => {
+      return await withTaskExecutionAggregateWrite(db, async (tx) => {
         const { runtimeSessionLeases } = tablesOf(tx)
         const heldRows = await tx
           .select({
@@ -364,7 +390,20 @@ export function createRuntimeSessionLeaseOperations(
         const held = heldRows[0]
         if (held === undefined) fail('lease-mismatch')
         await fence(tx, held.taskId, Date.now())
-        if (held.resetPending) return true
+        const [current] = await tx
+          .select({ resetPending: runtimeSessionLeases.resetPending })
+          .from(runtimeSessionLeases)
+          .where(
+            and(
+              eq(runtimeSessionLeases.protocol, token.protocol),
+              eq(runtimeSessionLeases.sessionId, token.sessionId),
+              eq(runtimeSessionLeases.leaseNodeRunId, token.nodeRunId),
+              eq(runtimeSessionLeases.leaseNonceDigest, token.leaseNonceDigest),
+            ),
+          )
+          .limit(1)
+        if (current === undefined) fail('lease-mismatch')
+        if (current.resetPending) return true
         const fenced = await tx
           .update(runtimeSessionLeases)
           .set({ resetPending: true })
@@ -384,7 +423,7 @@ export function createRuntimeSessionLeaseOperations(
     },
 
     async discard(token) {
-      return await withTaskExecutionSerializable(db, async (tx) => {
+      return await withTaskExecutionAggregateWrite(db, async (tx) => {
         const { runtimeSessionLeases } = tablesOf(tx)
         const heldRows = await tx
           .select({ taskId: runtimeSessionLeases.taskId })
@@ -418,7 +457,7 @@ export function createRuntimeSessionLeaseOperations(
     },
 
     async release(token) {
-      return await withTaskExecutionSerializable(db, async (tx) => {
+      return await withTaskExecutionAggregateWrite(db, async (tx) => {
         const { runtimeSessionLeases } = tablesOf(tx)
         const heldRows = await tx
           .select({ taskId: runtimeSessionLeases.taskId })

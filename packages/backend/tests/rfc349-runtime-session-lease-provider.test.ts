@@ -1,3 +1,4 @@
+// RFC-397: lease writes now use READ COMMITTED + owner/root locks; SQLite stays IMMEDIATE.
 // RFC-349 — native runtime-session ownership is a provider-selected Promise
 // atom. SQLite locks the complete reset/resume behavior; the PostgreSQL oracle
 // proves the same claim is compiled against the real PostgreSQL projection.
@@ -73,7 +74,7 @@ describeEachProvider('RFC-349 runtime-session lease native transaction', (harnes
 
     const statements = recording.statements.map((execution) => execution.sql.toLowerCase())
     if (harness.capabilities.isolation === 'read-committed')
-      expect(statements).toContain('set transaction isolation level serializable')
+      expect(statements).not.toContain('set transaction isolation level serializable')
     else expect(statements).toContain('begin immediate')
     expect(statements.some((sql) => sql.includes('task_execution_owners'))).toBe(true)
     expect(

@@ -1,8 +1,9 @@
+// RFC-397：租约改用聚合写事务；所有权与跨聚合的 SERIALIZABLE 原语仍保留。
 // RFC-359 W4-D24 —— 运行时会话租约合一：此前 `sqliteRuntimeSessionLeaseOperations.ts` 与
 // `postgresqlRuntimeSessionLeaseOperations.ts` 各一份（归一化相似度 0.65），差别在事务原语、
 // owner 围栏与驱动错误形状三处。现在只剩一份实现。
 //
-// 合一**没有改隔离级别**：中立会话本来就有 `serializable`（PG 抬到 SERIALIZABLE 并按 40001 重放，
+// RFC-359 合一时**没有改隔离级别**（租约现按 RFC-397 降为 READ COMMITTED）：中立会话本来就有 `serializable`（PG 抬到 SERIALIZABLE 并按 40001 重放，
 // SQLite 的 BEGIN IMMEDIATE 本来就是全库独占），所以 `withTaskExecutionSerializable` 两边各取所需。
 //
 // 这套断言两个引擎各跑一遍租约的核心判据，重点是 plan.md 里点名要补的那一条：
@@ -164,9 +165,10 @@ test('源码锁：租约只剩一份实现，围栏与冲突映射都走中立�
   const read = (path: string): string => readFileSync(resolve(root, path), 'utf8')
 
   const leases = read('modules/task-execution/infrastructure/runtimeSessionLeaseOperations.ts')
-  expect(leases).toContain('withTaskExecutionSerializable(db, async (tx)')
+  expect(leases).toContain('withTaskExecutionAggregateWrite(db, async (tx)')
   expect(leases).toContain('fenceTaskWrite(tx, { taskId, now })')
-  expect(leases).toContain('engine.classifyError(error)')
+  // RFC-397：冲突映射只认租约主键，目标经能力矩阵的 uniqueViolationTarget 取得（不按 provider 名分叉）。
+  expect(leases).toContain('engine.uniqueViolationTarget(error)')
   // 只禁**客户端类型**与「按方言错误码分支」的代码；错误码出现在注释里是有意的
   // （注释要说清能力矩阵把哪些码归到 unique-violation）。
   expect(leases).not.toMatch(/PostgresqlDatabaseClient|\bDbClient\b/)

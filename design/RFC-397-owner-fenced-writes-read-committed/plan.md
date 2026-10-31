@@ -25,10 +25,10 @@ v0.19.3 在 T7 完成后发布（用户 2026-10-30 决定），不属于本 RFC 
 
 ## 验收清单
 
-- [ ] proposal §5.1：转换后的事务在 PostgreSQL 上为 READ COMMITTED，SQLite 为 `BEGIN IMMEDIATE`。
-- [ ] proposal §5.2：原故障确定性回归首次尝试完成；变异检查红。
-- [ ] proposal §5.3：两个交错的行为符合 design §3.1。
-- [ ] proposal §5.4：family 竞争无裸 `23505`、watermark 单调、无挂起。
-- [ ] proposal §5.5：租约四处加固各有负对照；错误映射收窄。
-- [ ] proposal §5.6：8×8 压测 0/64，40001 计数写入 design §4。
-- [ ] proposal §5.7：既有用例、守卫、夹具与账本已更新并说明；主 CI 全绿。
+- [x] proposal §5.1：转换后的事务在 PostgreSQL 上为 READ COMMITTED，SQLite 为 `BEGIN IMMEDIATE`。
+- [x] proposal §5.2：原故障确定性回归首次尝试完成；变异检查红。
+- [x] proposal §5.3：两个交错的行为符合 design §3.1。
+- [x] proposal §5.4：family 竞争无裸 `23505`、watermark 单调、无挂起。
+- [x] proposal §5.5：租约四处加固各有负对照；错误映射收窄。
+- [x] proposal §5.6：8×8 压测 0/64，40001 计数写入 design §4。
+- [ ] proposal §5.7：既有用例、守卫、夹具与账本已更新并说明（已完成）；主 CI 全绿（待实现提交的主 CI）。

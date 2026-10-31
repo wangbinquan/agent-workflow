@@ -1,6 +1,7 @@
 import { closeProviderFixtureApplications } from './providerFixtureCleanup'
 import { drainTaskLifecycleTestEffects } from './taskLifecycleCommittedEvents'
 // RFC-359 W5-T19e —— 双引擎测试 harness：**双引擎是缺省**（design.md §11.1）。
+// RFC-397：派发视图包含失败 SQLSTATE 与 BEGIN；成功语句视图仍用于既有形状守卫。
 //
 // `describeEachProvider(name, body)` 把 body 各跑一遍：SQLite 用内存库；PostgreSQL 用
 // `AW_TEST_POSTGRESQL_URL`（回退 `RFC357_DATABASE_URL`）指向的真库。PostgreSQL 缺 URL
@@ -54,6 +55,8 @@ import { createTestDb, createPostgresqlTestDatabase } from './testDatabase'
 import {
   recordStatements as recordSqliteStatements,
   type RecordedStatement,
+  type DispatchedStatement,
+  statementFailureCode,
   type StatementRecording,
 } from './statementRecorder'
 
@@ -838,25 +841,58 @@ async function postgresqlExplain(raw: RawQuery, statement: RecordedStatement): P
   }
 }
 
+type StatementSink = Pick<StatementRecording, 'statements' | 'dispatched'>
+
+function startRecording(sinks: Set<StatementSink>): StatementRecording {
+  const sink: StatementSink = { statements: [], dispatched: [] }
+  sinks.add(sink)
+  return {
+    ...sink,
+    selects: () => sink.statements.filter((statement) => /^[\s(]*select/i.test(statement.sql)),
+    stop: () => {
+      sinks.delete(sink)
+    },
+  }
+}
+
+/** RFC-397：独占客户端也用同一录制器，竞争方的语句不会混入首次尝试判据。 */
+export function recordPostgresqlStatements(runtime: InstrumentedPostgresqlDatabaseRuntime) {
+  const sinks = new Set<StatementSink>()
+  return { runtime: recordingRuntime(runtime, sinks), recording: startRecording(sinks) }
+}
+
 /**
  * 把 runtime 的连接池换成带录制的那一个。录制的是**连接**（池 + 预留连接）而不是 drizzle，
  * 所以 query builder 与裸 SQL 两条路都抓得到——与 SQLite 侧 `recordStatements` 同一层。
  */
 function recordingRuntime(
   runtime: InstrumentedPostgresqlDatabaseRuntime,
-  sinks: ReadonlySet<RecordedStatement[]>,
+  sinks: ReadonlySet<StatementSink>,
 ): InstrumentedPostgresqlDatabaseRuntime {
   const pool = runtime.providerPool()
+  const dispatch = (sql: string, values: readonly unknown[] = []) => {
+    const entry: DispatchedStatement = { sql, values }
+    for (const sink of sinks) sink.dispatched.push(entry)
+    return entry
+  }
+  const failed = (entry: DispatchedStatement, error: unknown): void => {
+    entry.failedWith = statementFailureCode(error) ?? 'unknown'
+  }
   const wrap =
     (original: (query: string, parameters?: readonly unknown[]) => never) =>
     (query: string, parameters?: readonly unknown[]) => {
       if (sinks.size === 0) return original(query, parameters)
-      const pending = original(query, parameters) as unknown as PromiseLike<unknown> & {
-        values(): Promise<readonly unknown[]>
+      const entry = dispatch(query, parameters)
+      let pending: PromiseLike<unknown> & { values(): Promise<readonly unknown[]> }
+      try {
+        pending = original(query, parameters)
+      } catch (error) {
+        failed(entry, error)
+        throw error
       }
       const push = (rows: number): void => {
         for (const sink of sinks) {
-          sink.push({
+          sink.statements.push({
             sql: query,
             params: parameters?.length ?? 0,
             rows,
@@ -866,33 +902,62 @@ function recordingRuntime(
       }
       return {
         then: (onOk: (value: unknown) => unknown, onError?: (error: unknown) => unknown) =>
-          pending.then((rows) => {
-            push(Array.isArray(rows) ? rows.length : 0)
-            return onOk(rows)
-          }, onError),
+          pending.then(
+            (rows) => {
+              push(Array.isArray(rows) ? rows.length : 0)
+              return onOk(rows)
+            },
+            (error) => {
+              failed(entry, error)
+              if (onError) return onError(error)
+              throw error
+            },
+          ),
         values: async () => {
-          const rows = await pending.values()
-          push(rows.length)
-          return rows
+          try {
+            const rows = await pending.values()
+            push(rows.length)
+            return rows
+          } catch (error) {
+            failed(entry, error)
+            throw error
+          }
         },
       } as never
     }
   const boundary = (statement: string): void => {
-    for (const sink of sinks) sink.push({ sql: statement, params: 0, rows: 0, values: [] })
+    for (const sink of sinks)
+      sink.statements.push({ sql: statement, params: 0, rows: 0, values: [] })
   }
   const wrapTransaction = (
     connection: PostgresqlTransactionConnection,
   ): PostgresqlTransactionConnection => ({
     unsafe: wrap(connection.unsafe.bind(connection) as never),
     async savepoint(body) {
+      const savepoint = dispatch('SAVEPOINT')
+      let entered = false
+      let release: DispatchedStatement | undefined
       try {
         const value = await connection.savepoint(async (nested) => {
+          entered = true
           boundary('SAVEPOINT')
-          return await body(wrapTransaction(nested))
+          try {
+            const result = await body(wrapTransaction(nested))
+            release = dispatch('RELEASE SAVEPOINT')
+            return result
+          } catch (error) {
+            dispatch('ROLLBACK TO SAVEPOINT')
+            throw error
+          }
         })
         boundary('RELEASE SAVEPOINT')
         return value
       } catch (error) {
+        if (!entered) failed(savepoint, error)
+        if (release !== undefined) {
+          failed(release, error)
+          dispatch('ROLLBACK TO SAVEPOINT')
+        }
         boundary('ROLLBACK TO SAVEPOINT')
         throw error
       }
@@ -905,14 +970,31 @@ function recordingRuntime(
     release: () => connection.release(),
     close: connection.close?.bind(connection),
     async begin(body) {
+      const begin = dispatch('BEGIN')
+      let entered = false
+      let commit: DispatchedStatement | undefined
       try {
         const value = await connection.begin(async (transaction) => {
+          entered = true
           boundary('BEGIN')
-          return await body(wrapTransaction(transaction))
+          try {
+            const result = await body(wrapTransaction(transaction))
+            // RFC-397：提交也可能报 40001；在交回驱动之前登记，失败不能落入成功视图。
+            commit = dispatch('COMMIT')
+            return result
+          } catch (error) {
+            dispatch('ROLLBACK')
+            throw error
+          }
         })
         boundary('COMMIT')
         return value
       } catch (error) {
+        if (!entered) failed(begin, error)
+        if (commit !== undefined) {
+          failed(commit, error)
+          dispatch('ROLLBACK')
+        }
         boundary('ROLLBACK')
         throw error
       }
@@ -1012,7 +1094,7 @@ interface PostgresqlHarnessDatabase {
   readonly client: PostgresqlDatabaseClient
   readonly raw: RawQuery
   readonly snapshot: PostgresqlSchemaSnapshot
-  readonly sinks: Set<RecordedStatement[]>
+  readonly sinks: Set<StatementSink>
   readonly dropObservation: PostgresqlDropObservation
   readonly createDropConnection: () => PostgresqlHarnessDropConnection
 }
@@ -1024,7 +1106,7 @@ async function createPostgresqlHarnessDatabase(
   phase?: ProviderHarnessLifecyclePhase,
   options: DescribeEachProviderOptions = {},
 ): Promise<PostgresqlHarnessDatabase> {
-  const sinks = new Set<RecordedStatement[]>()
+  const sinks = new Set<StatementSink>()
   const sourceUrl = (env ?? process.env)[urlEnv]
   const databaseConfig = {
     provider: 'postgresql',
@@ -1494,17 +1576,7 @@ function registerPostgresql(
             state.db = client
             state.applicationBinding = database.applicationBinding
             state.session = databaseSessionFor(client)
-            state.record = () => {
-              const statements: RecordedStatement[] = []
-              sinks.add(statements)
-              return {
-                statements,
-                // pg-core 给 union 的每个分支加括号：`(select …) union all (select …)` 也是读。
-                selects: () =>
-                  statements.filter((statement) => /^[\s(]*select/i.test(statement.sql)),
-                stop: () => sinks.delete(statements),
-              }
-            }
+            state.record = () => startRecording(sinks)
             state.explain = async (statement) => await postgresqlExplain(query, statement)
             state.fixtureDdl = async (statement) => {
               await query(statement)

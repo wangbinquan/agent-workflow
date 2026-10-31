@@ -1,3 +1,4 @@
+// RFC-397：租约顶层使用 READ COMMITTED；刻意建立的外层 SERIALIZABLE 覆盖继续保留。
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 // RFC-395 N-a: CAS and all subordinate writes share the owner's real transaction.
 import { expect, test } from 'bun:test'
@@ -725,6 +726,8 @@ describeEachProvider('RFC-395 NodeRun multi-table atomicity', (h) => {
         recording.stop()
       }
       const statements = recording.statements.map(({ sql }) => statementText(sql))
+      if (adapter === 'lease')
+        expect(statements).not.toContain('set transaction isolation level serializable')
       const owner = statements.findIndex((statement) =>
         statement.includes('update "task_execution_owners"'),
       )

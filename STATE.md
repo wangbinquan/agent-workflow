@@ -1,4 +1,4 @@
-## 2026-10-30 进行中 RFC：RFC-397 以 owner 围栏开场的 SERIALIZABLE 数据写入降为 READ COMMITTED（Draft v3，`design/RFC-397-owner-fenced-writes-read-committed/`）
+## 2026-10-30 RFC-397 以 owner 围栏开场的 SERIALIZABLE 数据写入降为 READ COMMITTED（v3.3 已实现，待主 CI；`design/RFC-397-owner-fenced-writes-read-committed/`）
 
 - **来由**：v0.19.3 候选 `b430c7754` 的主 CI（41052627131）红在后端 ubuntu 分片 33/36 的 `scheduler-boundary-fanout-concurrency.test.ts` [postgresql]「B: RFC-130 writer shards…」：第三个写分片准备隔离工作区时，owner 围栏 UPDATE 失败，任务 `failed`。约 150 次主 CI 里第一次出现。用户 2026-10-30 授权本 session 接手，并决定先走 RFC 根治、再发 v0.19.3。
 - **根因**（本机一次性 PostgreSQL 17 复现，8 路 × 8 次：4/64 失败，服务端 2316 次 `40001 could not serialize access due to concurrent update`，0 次死锁）：每一笔普通数据写入都以 owner 行条件 UPDATE（`revision + 1`、改写 `updated_at`）开场；语句日志按事务归因，改写来自 node run 铸造与生命周期、effect、运行态、产出、任务级，事件追加只占约 3%。同任务以同一围栏开场的 SERIALIZABLE 写入（effect、会话租约、进程登记）因此不断得到 40001，10 次重试（退避 ≤16ms）被耗尽。机制自 v0.19.2 即存在（此前一版条目写「v0.19.2 不含」有误），这次是首次观察到。
@@ -6,8 +6,16 @@
 - **v3 方案**（用户 2026-10-30 选定）：保留 RFC-328 围栏与 revision 语义；把以 owner 围栏开场的 SERIALIZABLE 数据写入（会话租约 7 个、effect 准备 / 结算 / 进程登记、托管进程登记）改为 `withTaskExecutionAggregateWrite`（READ COMMITTED + 整笔重放）；父子任务共享的 effect family 用新增 advisory 锁串行，静默收尾同取；租约补四处加固、冲突映射收窄。用户同时决定：RFC-397 完成、主 CI 全绿后再发 v0.19.3（`2cb6f20e6` 主 CI 已全绿，但不以此发版）。
 - **第 3 轮设计门**：FAIL，但确认 v3 方向可行；意见（EQ 四个入口须整笔重放并补任务根锁、确定性回归改为 barrier 协议、租约负对照须「去掉即失败」、若干事实与表述）已在 v3.1 修订。
 - **设计门第 5 轮**：PASS WITH CHANGES，两处 minor 已并入（v3.3）。
-- **进度**：用户 2026-10-30 批准 v3.3，进入实施（plan T1–T5 由 Codex 按 RFC 实现、本 session 审核；T6 文档已补 `docs/dev-gotchas.md`）。
-- **下一步**：集中验证（两种 provider 的受影响用例、8×8 压测、变异检查、Codex 实现门）→ 主 CI 全绿 → 发 v0.19.3。
+- **实现**（用户 2026-10-30 批准 v3.3；plan T1–T5 由 Codex 按 RFC 实现、本 session 审核）：租约 7 个、effect 6 个、托管登记 1 个与
+  静默收尾（EQ）4 个事务入口改用 `withTaskExecutionAggregateWrite`；family advisory 锁 helper `lockEffectFamiliesTx`（`effectQuiescence.ts`，
+  按完整键去重排序）；租约四处加固与主键映射收窄；托管登记 attempt CAS；投影任务校验。测试辅助的 SQL 记录器新增派发视图（`dispatched`，
+  含失败 SQLSTATE 与 `BEGIN`），新用例 `rfc397-owner-fenced-writes-read-committed.test.ts`。
+- **集中验证**（详见 design §4）：8×8 压测 0/64、服务端 0 次 40001（基线 4/64、2316 次）；新用例 PostgreSQL 63/63、SQLite 30/30；
+  16 组变异全部变红；受影响的 253 个文件 PostgreSQL 2014/1、SQLite 1982/1，唯一失败是 `rfc167-dynamic-workflow-engine.test.ts` 写死的
+  5 秒结算等待在负载约 27 时到期（单跑通过，换回改动前源码对照耗时相同，与本 RFC 无关，未改）；typecheck / eslint / prettier 通过；
+  Codex 实现门 PASS、无 findings。全部架构 / 策略守卫首跑抓到本次引入的三处（provider 名分叉、伴随表直读、手搓假池），已按
+  design §4 修正或按正当一类入账，复跑 1894/0。
+- **下一步**：实现提交的主 CI 全绿 → RFC 标 Done → 发 v0.19.3。
 
 ## 2026-10-30 runtime-scenario-matrix 的取消用例：等运行时起来的预算对齐到 45 秒，没等到就导出现场
 

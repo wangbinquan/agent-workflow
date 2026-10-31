@@ -222,7 +222,30 @@ RFC-328 design.md:394 写明「live-effect unique 与 watermark revision CAS 共
 - 源码账本 `fixtures/rfc395-serialized-insert-source-locks.json`：若改动 `nodeRunWriteProtocol.ts`（注释），重新审阅后更新其 sha256。
 - 未列出的受影响用例在集中验证时逐个归因后处理。
 
-压测证据（本机一次性 PostgreSQL 容器，8 路 × 8 次只跑用例 B）：基线 4/64、2316 次 40001；实现后重测，数字写回本节。
+压测证据（本机一次性 PostgreSQL 17 容器，8 路 × 8 次只跑用例 B）：基线 4/64 失败、服务端 2316 次 40001、0 次死锁；实现后
+（2026-10-30）**0/64 失败、0 次 40001、0 次死锁、服务端 0 条 ERROR**，单次运行 15.2–20.7 秒（中位 17.7 秒）。
+
+集中验证（2026-10-30，候选为实现提交前的工作树）：
+
+- 新用例：PostgreSQL 63/63，SQLite 30/30。
+- 变异检查 16 组（逐项撤掉一处改动后跑对应用例，跑完复原并核对 SHA-256），全部变红：换回 `withTaskExecutionSerializable`
+  （§4.1 四项都出现第二次 `BEGIN`）；`confirmResume` 不查重读结果、`rotate` 不查删除行数、`markResetPending` 用围栏前的读、
+  `preclaimResume` 去掉三个谓词（两种 provider）；`prepareAndAcquire`、`settleTx`、EQ 各自去掉 family 锁；`settleTx` 的 family 锁
+  挪到首次 attempt UPDATE 之后；EQ 换回不重试的事务；EQ 去掉任务根锁；code-host EQ 边遍历边取锁；托管登记去掉 CAS 与行数检查
+  （两种 provider）；恢复旧的宽错误映射（两种 provider）；去掉投影任务校验（两种 provider）；family 锁不排序。
+- 受影响用例（引用改动文件、SQL 记录器与任务执行拓扑辅助的 253 个文件，4 路并行；`rfc311-perf-guards` 另以双 provider 单跑
+  25/25）：PostgreSQL 2014 通过 / 1 失败，SQLite 1982 通过 / 1 失败。两边失败的都是 `rfc167-dynamic-workflow-engine.test.ts`
+  「approve: snapshot swap…」：它的结算等待写死 5 秒，4 路并行、负载约 27 时 planner 重试只做完 7 次（PostgreSQL）/ 5 次（SQLite）
+  就到期，单跑做满 8 次。单跑两种 provider 各 3/3 通过；换回改动前的源码同条件对照，单次尝试耗时相同（PostgreSQL 约 0.47 秒，
+  SQLite 8 次约 3.3 秒），与本 RFC 无关，未改该用例。
+- 静态检查：prettier、eslint（`--max-warnings=0`）、后端 typecheck 通过。
+- Codex 实现门（只审功能）：PASS，无 findings。
+- 全部架构 / 策略守卫（197 个文件）首跑暴露本次引入的三处，已修正：`constraintViolation` 按 `engine.provider` 分叉（改用能力矩阵
+  `uniqueViolationTarget` 加一条两边都认的正则，`rfc359-w4-d24-adapters` 的源码锁同步）；新用例直读 epoch 2 的运行态 / 配置伴随行
+  （它们是被测对象，记入 `rfc395-direct-read-ledger.json` 的 `target-model-contract`）；记录器驱动边界用例手搓了假 PostgreSQL 池
+  （被测物是记录器的驱动边界，要按需让 BEGIN / COMMIT / SAVEPOINT / RELEASE 失败，真库做不到，按「正当」一类记入
+  `rfc359-w5-postgresql-fake-runtime` 账本）。修正后守卫 1894 通过 / 0 失败，租约相关 27 个文件 SQLite 250/0、PostgreSQL 283/0，
+  typecheck 通过，宽映射变异（M8）在两种 provider 上仍变红。
 
 ## 5. 与 RFC-294 目标架构的对齐
 

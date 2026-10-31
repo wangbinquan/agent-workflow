@@ -1,3 +1,4 @@
+// RFC-397：effect 的跨任务唯一槽 / watermark 改由 family advisory 锁保护，原扫描判据不变。
 // RFC-395 II-pre：守卫改锁生产路径或删除后的精确存量，保留原扫描判据。
 // RFC-359 W8-T29 —— 「先查存在、再插入唯一键表，且本文件不归一唯一冲突」的高水位账本（只降不升）。
 //
@@ -480,8 +481,9 @@ const UNIQUE_TABLES = uniqueConstrainedTables(persistenceSchema.tables)
  *       同名组，两个引擎都是 `name-conflict` → 409；把那行 advisoryLock 删掉，PG 当场红成裸 23505。
  *     removeWhen —— 判据若改成「认得出读前串行化」，这条自动出账。
  *   modules/task-execution/infrastructure/effectQuiescence.ts: 1
- *     :312 taskExecutionLineageOperationRecords。why —— 接过句柄的助手；调用方是
- *       task-execution 的 SERIALIZABLE 事务面。removeWhen —— 调用方降级时重判。
+ *     taskExecutionLineageOperationRecords。why —— RFC-397 已复核：四个入口均为可重放的
+ *       READ COMMITTED，先锁 owner / 任务根，再按完整键排序取齐 family advisory 锁，之后
+ *       才写 attempt / fence / watermark。removeWhen —— helper 或取锁位置变化时重判。
  *   modules/task-execution/infrastructure/childExecutionLaunchOperations.ts: 1
  *     :579 tasks（`idx_tasks_event_delivery_unique`）。
  *     why —— opener 是 `withSerializableTaskExecution`。removeWhen —— 同上。
@@ -567,7 +569,8 @@ export const UNNORMALIZED_UNIQUE_INSERT_DEBT: readonly string[] = [
   // RFC-359 W8 销账：`sqliteTaskExecutionEffect.ts: 3 → 0` —— 那三处都在 `prepareAndAcquire` /
   // `settle` 里，两个方法连同它们的 `withOwnedTaskTx` 已整体删除（生产零调用方，见
   // `rfc359-sync-transaction-highwater` 同批注释）。中立实现 `taskExecutionEffectPersistence.ts`
-  // 的对应写法本来就在 SERIALIZABLE 里读改写，不落进本账本。
+  // 现按 RFC-397 在 READ COMMITTED 下先取 owner / 根 / family 锁；本文件仍有资源唯一冲突
+  // 归一，故不落进本账本（不是靠 SERIALIZABLE 解释安全）。
   'modules/task-execution/infrastructure/workspaceRollbackEffect.ts: 1',
   'platform/events/committed/appendProgram.ts: 2',
 ]

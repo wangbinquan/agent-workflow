@@ -337,7 +337,7 @@ export async function compareAndWriteMergeStateInTx(
   await companions(tx, run, { ...write, runtime: undefined }, mounts)
 }
 
-/** Session predicates span identity and runtime; callers retain SERIALIZABLE and the task root.
+/** RFC-397: session predicates use READ COMMITTED + owner fence + task root + lockRun.
  * Identity-free relabels also preserve the session lineage of history-only rows. */
 export async function compareAndWriteRunSessionInTx(
   tx: PersistenceTx,
