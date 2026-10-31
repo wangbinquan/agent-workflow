@@ -212,6 +212,8 @@ Facade 只许 re-export 或参数形状适配；不得含 DB 查询、状态、�
 - **前置 / 冲突**：S2b 之后；与 S1 串行。**能力影响**：无；以现有执行矩阵与恢复 oracle 对拍。
 - **2026-10-30 对账**：前置已满足，退出门均未成立（`nodeMechanics.ts` 5,698 行、`runAssembly` 仍在 `services/schedulerAssembly.ts`、
   `legacyArgs` 11 处）；已成立的只有 engine 不 import `@/services`，协调器构造已收敛到 `taskDriveCoordinatorFactory.ts` 一处。
+- **第一步（[RFC-402](../RFC-402-task-execution-kernel-script-pilot/proposal.md)，In Progress）**：design §5.5 第 1、2 步——执行机制库
+  `engine/kernel/`（assembly、隔离 / 合并 / 清理、许可、NodeRun ledger）、删除 `services/` 下七个文件、许可注册表显式实例化、script 节点试点。
 
 ### S7 唯一 AtomicApply 引擎（W6）
 

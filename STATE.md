@@ -1,3 +1,16 @@
+## 2026-10-31 RFC-402 task-execution 执行机制库与 script 节点试点（In Progress；`design/RFC-402-task-execution-kernel-script-pilot/`）
+
+- **来由**：用户 2026-10-30「你继续推进RFC294，你可以使用codex进行调研和实现，过程中按你的判断来推进，不用询问我」。S7 余项（RFC-401）
+  含用户可见变化、待确认，先做纯结构的 S6 第一步（RFC-294 design §5.5 第 1、2 步）。
+- **范围**：
+  - `runAssembly`、隔离 / 合并 / 清理、许可与 NodeRun ledger 迁入 `engine/kernel/`；
+  - 删除 `services/` 下七个文件（含三个回指自身的 facade）；
+  - 许可注册表改为 bootstrap 按 daemon scope 构造的显式实例；
+  - script 执行器与主体迁入 `engine/node/script/`，经显式端口执行。
+  纯结构重构。
+- **做法**：Codex 只读研究（线程 `01a19308-2b67-7a61-88c7-55603bbcd9ba`），本会话抽查后定稿；设计门免，实现门一轮（只审功能）。
+- **进度**：三件套落档；Part A（T1～T3）派发 Codex 实施。
+
 ## 2026-10-31 RFC-401 资源写入栈合一与 AtomicApply 持久租约（Draft，待用户确认；`design/RFC-401-single-resource-write-stack/`）
 
 - **来由**：RFC-294 S7 余项。用户 2026-10-30「你继续推进RFC294 … 按你的判断来推进，不用询问我」。S7 含用户可见的错误码收敛，
