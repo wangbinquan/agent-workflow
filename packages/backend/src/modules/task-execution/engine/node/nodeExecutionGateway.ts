@@ -30,7 +30,7 @@ export class NodeExecutionGateway {
     // RFC-354 D7: every kind is judged. A clarify gate's `__clarify__` inbound
     // edge is a real dependency, so a branch-skipped asker closes the gate
     // exactly like any other downstream node; an unwired gate has no inbound
-    // and is always active (it then settles idle, `runIdleClarifyNode`).
+    // and is always active (it then settles idle, `settleIdleClarify`).
     const decision = await this.branchActivation.judge(request)
     if (decision.kind === 'inactive') return decision.outcome
 

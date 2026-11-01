@@ -1,7 +1,7 @@
 // LOCKS: RFC-096 (audit S-13 / 附录 C #5, design §3.3) — port reads select the
 // newest visible DONE row only.
 //
-// `readPortRowAtFrame` (task-execution composition) is the single read point
+// `readPortRowAtFrame` (task-execution application) is the single read point
 // behind every projection of a produced value: wrapper return promotion, loop
 // exit conditions, output nodes and closure / parameter resolution. Before
 // RFC-096 the picker took the freshest row of (node, iteration) by pure id with
@@ -25,7 +25,7 @@ import { describeEachProvider } from './helpers/eachProvider'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { expect, test } from 'bun:test'
 import { ulid } from 'ulid'
-import { readPortRowAtFrame } from '../src/modules/task-execution/composition/nodeMechanics'
+import { readPortRowAtFrame } from '../src/modules/task-execution/application/nodeInputs'
 import { DrizzleNodeExecutionPersistence } from '../src/modules/task-execution/infrastructure/nodeExecutionPersistence'
 
 const TOP_FRAME = { containerRunId: null, iteration: 0 }

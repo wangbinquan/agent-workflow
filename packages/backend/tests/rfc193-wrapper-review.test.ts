@@ -431,14 +431,16 @@ describe('RFC-193 source locks (scopeRoot / review.ts)', () => {
     'composition',
     'wrapperMechanics.ts',
   )
-  const NODE_MECHANICS = resolve(
+  const REVIEW_NODE = resolve(
     import.meta.dir,
     '..',
     'src',
     'modules',
     'task-execution',
-    'composition',
-    'nodeMechanics.ts',
+    'engine',
+    'node',
+    'review',
+    'reviewNodeExecutor.ts',
   )
   const TASK_ENGINE_APPLICATION = resolve(
     import.meta.dir,
@@ -482,11 +484,19 @@ describe('RFC-193 source locks (scopeRoot / review.ts)', () => {
   test('task engine application wires top-level scopeRoot; wrapper and node mechanics wire innerStates', () => {
     const application = readFileSync(TASK_ENGINE_APPLICATION, 'utf8')
     const wrapperMechanics = readFileSync(WRAPPER_MECHANICS, 'utf8')
-    const nodeMechanics = readFileSync(NODE_MECHANICS, 'utf8')
+    const reviewNode = readFileSync(REVIEW_NODE, 'utf8')
+    const binding = readFileSync(
+      resolve(
+        import.meta.dir,
+        '../src/modules/task-execution/composition/humanGateNodeExecution.ts',
+      ),
+      'utf8',
+    )
     expect(application).toContain('scopeRoot: task.worktreePath')
     expect(wrapperMechanics).toContain('scopeRoot: handle.containerPath')
     expect(wrapperMechanics).toContain("kind === 'wrapper-loop'")
-    expect(nodeMechanics).toContain('scopeRoot: state.scopeRoot')
+    expect(reviewNode).toContain('scopeRoot: ports.scopeRoot')
+    expect(binding).toMatch(/get scopeRoot\(\)\s*\{\s*return state\.scopeRoot/)
   })
 
   test('S1 repair derives scopeRoot from wrapper lineage, not task.worktreePath directly (case 8d)', () => {

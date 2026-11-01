@@ -67,9 +67,36 @@ describe('TaskExecution ↔ runner clarify prompt wire-up (RFC-023 T12)', () => 
     expect(src).toContain('agentHasClarifyChannel')
   })
 
-  test('nodeExecution.ts wires the Collaboration clarify command into the agent execution path', () => {
-    const src = readFileSync(NODE_EXECUTION_SRC, 'utf8')
-    expect(src).toContain('await mechanics.openAgentClarify({')
+  // RFC-403: nodeExecution.ts used to build a CollaborationNodeGatePort object whose
+  // `openAgentClarify` re-wrapped `mechanics.openAgentClarify(...)` — that method had no
+  // caller (the review / clarify / cross executors only used the three human-gate methods,
+  // which moved to their own ports), so it was deleted. The command has always been issued
+  // by the agent / host bodies in nodeMechanics.ts on the Collaboration runtime. Anchor
+  // every hop instead: the gate port still declares the command, composition still binds
+  // the Collaboration runtime against that port, and the agent execution path calls it.
+  test('the Collaboration clarify command stays wired into the agent execution path', () => {
+    const port = readFileSync(
+      join(
+        __dirname,
+        '..',
+        'src',
+        'modules',
+        'task-execution',
+        'application',
+        'ports',
+        'collaborationNodeGate.ts',
+      ),
+      'utf8',
+    )
+    expect(port).toContain(
+      'openAgentClarify(request: AgentClarifyGateRequest): Promise<AgentClarifyGateReceipt>',
+    )
+    const execution = readFileSync(NODE_EXECUTION_SRC, 'utf8')
+    expect(execution).toContain(
+      'state.opts.collaborationRuntime satisfies CollaborationNodeGatePort',
+    )
+    const mechanics = readFileSync(NODE_MECHANICS_SRC, 'utf8')
+    expect(mechanics).toContain('await collaboration.openAgentClarify({')
   })
 
   test('runner.ts threads the clarifyChannel ADT into renderUserPrompt', () => {

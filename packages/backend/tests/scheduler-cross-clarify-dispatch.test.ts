@@ -1092,13 +1092,15 @@ describe('RFC-217 T9 跟修（Codex impl-gate P2-3）— 调度器尊重短路�
         'src',
         'modules',
         'task-execution',
-        'composition',
-        'nodeMechanics.ts',
+        'engine',
+        'node',
+        'clarify-cross-agent',
+        'runCrossClarifyNode.ts',
       ),
       'utf8',
     )
     const branch = src.slice(
-      src.indexOf('const dispatched = await collaboration.inspectCrossClarify({'),
+      src.indexOf('const dispatched = await ports.inspectCrossClarify({'),
       src.indexOf("message: 'cross-clarify-persistent-stop'"),
     )
     expect(branch).toContain("if (dispatched.kind !== 'short-circuit-stop')")

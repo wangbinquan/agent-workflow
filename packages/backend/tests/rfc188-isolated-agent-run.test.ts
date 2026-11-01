@@ -1,3 +1,4 @@
+import { SMALL_LEAF_SOURCES } from './helpers/executionMechanismSources'
 import { createTestIsolationBinding } from './helpers/executionKernel'
 import { bindIsolationCleanup } from '@/modules/task-execution/infrastructure/executionKernelBinding'
 import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
@@ -368,7 +369,8 @@ describe('RFC-188 D — 装配单源锁（表级 allowlist）', () => {
     ),
     'utf8',
   )
-  const count = (needle: string): number => src.split(needle).length - 1
+  const count = (needle: string): number =>
+    [src, ...SMALL_LEAF_SOURCES].join('\n').split(needle).length - 1
 
   test('task execution mechanics 零裸 iso 创建；裸 merge 原语只剩 wrapper 路径各 1 处', () => {
     // wrapper 新建也必须经过 createIsoUnderLock，否则与顶层 sibling 并发

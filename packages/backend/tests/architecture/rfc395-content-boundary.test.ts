@@ -180,3 +180,16 @@ test('target content adapters never reintroduce text-encoded skill bytes or the 
   )
   expect(versions).not.toMatch(/\bawait\s+ensureInitialSkillVersion\(/)
 })
+
+test('RFC-403 review keeps the platform fallback codec through its bound port', () => {
+  const path = 'modules/task-execution/engine/node/review/reviewNodeExecutor.ts'
+  const binding = 'modules/task-execution/composition/humanGateNodeExecution.ts'
+  const valid = (text: string) =>
+    text.includes('ports.portFallbackMount(ports.repoMounts)') && !/repoMounts\[0\]/.test(text)
+  expect(valid(readFileSync(resolve(import.meta.dir, '../../src', path), 'utf8'))).toBe(true)
+  expect(readFileSync(resolve(import.meta.dir, '../../src', binding), 'utf8')).toContain(
+    "import { portFallbackMount } from '@/platform/content/locations/portArchive'",
+  )
+  expect(valid('repoDirName: ports.repoMounts[0]')).toBe(false)
+  expect(valid('repoDirName: "repo"')).toBe(false)
+})

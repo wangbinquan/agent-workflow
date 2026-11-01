@@ -373,9 +373,13 @@ describe('RFC-321 repository publication architecture ratchet', () => {
     const endpointDiscovery = read(
       'packages/backend/src/modules/integration/application/repositoryEndpointDiscovery.ts',
     )
-    const nodeMechanics = read(
+    const nodeMechanics = [
       'packages/backend/src/modules/task-execution/composition/nodeMechanics.ts',
-    )
+      'packages/backend/src/modules/task-execution/engine/node/code-host-call/runCodeHostCallNode.ts',
+      'packages/backend/src/modules/task-execution/composition/codeHostNodeExecution.ts',
+    ]
+      .map(read)
+      .join('\n')
     const developmentRest = read('packages/backend/src/services/developmentDeliveryDeps.ts')
     const integrationRest = read(
       'packages/backend/src/modules/integration/composition/codeHostEffects.ts',

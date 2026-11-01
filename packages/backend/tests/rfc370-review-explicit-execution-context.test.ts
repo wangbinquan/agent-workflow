@@ -9,7 +9,7 @@ import { o2Ports } from './helpers/o2Closure'
 // WHY THIS FILE EXISTS (regression intent): on CrewStation (PostgreSQL) every
 // workflow reaching a review gate failed with "scheduler error": "ownerless
 // task mutation refused durable owner". The review module ignored the explicit
-// execution context the scheduler passes (`runReviewNode`, declared by the
+// execution context the scheduler passes (`ReviewNodeExecutor`, declared by the
 // port) and read the ambient one through the public participants, whose lookup
 // was the SQLite compatibility wrapper: it hides every context without a
 // legacy SQLite connection, i.e. every PostgreSQL daemon context. The park then
@@ -38,6 +38,8 @@ import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createCollaborationRuntimeMechanics } from '@/modules/collaboration/infrastructure/collaborationRuntimeMechanics'
 import { createProviderTaskExecutionModule } from '@/modules/task-execution/composition'
 import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
+import { createReviewNodeExecutionPorts } from '@/modules/task-execution/composition/humanGateNodeExecution'
+import { ReviewNodeExecutor } from '@/modules/task-execution/engine/node/review/reviewNodeExecutor'
 import {
   createTaskExecutionContext,
   runWithTaskExecutionContext,
@@ -178,10 +180,28 @@ describeEachProvider(
         taskLock: o2Ports(harness.db).taskLock,
         ...{ upstreamAgents: o2Ports(harness.db).upstreamAgents },
       })
+      const input = request(seeded.taskId)
+      const executor = new ReviewNodeExecutor(
+        createReviewNodeExecutionPorts({
+          taskId: seeded.taskId,
+          definition: input.definition,
+          scopeRoot: input.scopeRoot,
+          repos: [],
+          opts: {
+            appHome: APP_HOME,
+            collaborationRuntime: mechanics,
+            executionContext: seeded.context,
+          },
+        }),
+      )
       await expect(
-        mechanics.dispatchReviewNode({
-          ...request(seeded.taskId),
-          executionContext: seeded.context,
+        executor.execute({
+          node: { ...input.node, kind: 'review' },
+          task: { taskId: seeded.taskId },
+          scope: { scopeId: null },
+          containerRunId: null,
+          iteration: input.iteration,
+          execution: {},
         }),
       ).resolves.toMatchObject({ kind: 'awaiting_review', message: 'awaiting_review' })
       const { docVersions } = tablesOf(harness.db)

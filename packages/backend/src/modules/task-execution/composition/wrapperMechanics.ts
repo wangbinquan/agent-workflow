@@ -71,8 +71,6 @@ import {
   composePriorOutputBlock,
   freshestPriorRunWithOutput,
   parseIsoSubmodules,
-  pickString,
-  readPortRowAtFrame,
   shouldRetryNodeFailure,
   type OneNodeResult,
   type SchedulerState,
@@ -83,7 +81,11 @@ import {
   nodeRunLedger,
 } from '@/modules/task-execution/composition/executionMechanismBindings'
 import { resolveMergeConflicts } from '@/modules/task-execution/engine/node/shared/resolveMergeConflicts'
-import { resolveUpstreamInputs } from '@/modules/task-execution/application/nodeInputs'
+import {
+  resolveUpstreamInputs,
+  readPortRowAtFrame,
+} from '@/modules/task-execution/application/nodeInputs'
+import { pickString } from '../domain/nodeFields'
 import { runAssembly, type IsoLike } from '@/modules/task-execution/engine/kernel/assembly'
 import { completeFrameMerges, completeInterruptedMerge } from './executionMergeRecovery'
 import { sha256Hex } from '@/util/hash'

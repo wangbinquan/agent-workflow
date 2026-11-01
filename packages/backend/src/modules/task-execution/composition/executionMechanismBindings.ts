@@ -5,7 +5,12 @@ import { bindNodeRunLedger } from '../engine/kernel/nodeRunLedger'
 import { bindIsolationKernel } from '../infrastructure/executionKernelBinding'
 import { createIsolationWorkspacePort } from '../infrastructure/isolationWorkspaceView'
 
-export function nodeRunLedger(state: TaskMechanicsState) {
+export function nodeRunLedger(state: {
+  readonly opts: {
+    readonly persistence: Pick<TaskMechanicsState['opts']['persistence'], 'nodeRuns'>
+    readonly executionContext?: TaskMechanicsState['opts']['executionContext']
+  }
+}) {
   return bindNodeRunLedger(state.opts.persistence.nodeRuns, state.opts.executionContext)
 }
 

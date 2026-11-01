@@ -595,11 +595,13 @@ test('PG and HTTP roots share one selected service between runtime, review and t
 })
 
 test('ordinary scheduler and repair dispatch use the selected factory; body read stays inside the original lock', () => {
-  const scheduler = source('modules/task-execution/composition/nodeMechanics.ts'),
+  const scheduler = source('modules/task-execution/composition/humanGateNodeExecution.ts'),
     repair = source('modules/task-execution/infrastructure/taskRouteRepairOperations.ts'),
     factory = source('modules/collaboration/infrastructure/collaborationRuntimeMechanics.ts'),
     review = source('modules/collaboration/infrastructure/review.ts')
-  expect(calls(scheduler, scheduler, 'collaboration.dispatchReviewNode')).toHaveLength(1)
+  expect(
+    calls(scheduler, scheduler, 'state.opts.collaborationRuntime.dispatchReviewNode'),
+  ).toHaveLength(1)
   expect(
     calls(repair, repair, 'dependencies.collaborationRuntime.dispatchReviewNode'),
   ).toHaveLength(1)

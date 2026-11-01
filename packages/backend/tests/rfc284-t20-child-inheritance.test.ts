@@ -239,10 +239,11 @@ describe('RFC-284 T20 — 子任务继承面双向锁', () => {
       src.indexOf('async function launchCallChild', start),
       src.indexOf('function renderCallGoal', start),
     )
-    const workgroupLaunch = src.slice(
-      src.indexOf('async function launchCallWorkgroupChild', start),
-      src.indexOf('async function runCodeHostCallNode(', start),
-    )
+    const workgroupStart = src.indexOf('async function launchCallWorkgroupChild', start)
+    const workgroupEnd = src.indexOf('\n}\n', workgroupStart)
+    expect(workgroupStart).toBeGreaterThan(start)
+    expect(workgroupEnd).toBeGreaterThan(workgroupStart)
+    const workgroupLaunch = src.slice(workgroupStart, workgroupEnd)
     expect(workflowLaunch).toContain('runtime: buildChildRuntime(state)')
     expect(workgroupLaunch).toContain('runtime: buildChildRuntime(state)')
     for (const key of INHERITABLE_RUN_CONFIG_KEYS) {

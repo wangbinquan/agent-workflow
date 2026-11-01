@@ -1,20 +1,24 @@
+import { createCodeHostNodeExecutionPorts } from './codeHostNodeExecution'
+import {
+  createInputNodeExecutionPorts,
+  createOutputNodeExecutionPorts,
+} from './virtualIoNodeExecution'
+import {
+  createReviewNodeExecutionPorts,
+  createClarifyNodeExecutionPorts,
+  createCrossClarifyNodeExecutionPorts,
+} from './humanGateNodeExecution'
+import { createNodeBranchActivationPorts } from './nodeBranchActivation'
+import { judgeBranchActivation } from '../application/nodeBranchActivation'
 import { createScriptNodeExecutionPorts } from './scriptNodeExecution'
 import type { WorkflowNode } from '@agent-workflow/shared'
 import type { TaskMechanicsState } from '@/services/execution/taskMechanicsState'
-import type { CollaborationRuntimeMechanics } from '@/modules/collaboration/public/participants'
 import type { WrapperRuntimeFactory } from './taskExecutionComponents'
 import {
   buildWorkgroupEngineSupport,
   executeWorkgroupHostMechanics,
-  judgeBranchActivation,
   runAgentSingleNode,
   runCallWorkflowNode,
-  runCodeHostCallNode,
-  runCrossClarifyNode,
-  runIdleClarifyNode,
-  runInputNode,
-  runOutputNode,
-  runReviewNode,
   type OneNodeArgs,
 } from './nodeMechanics'
 import type { WorkgroupTurnHostOperations } from '../application/ports/workgroupTurnsOperations'
@@ -29,18 +33,17 @@ import {
   CallWorkflowNodeExecutor,
   CallWorkgroupNodeExecutor,
 } from '../engine/node/childCallNodeExecutors'
-import { CodeHostCallNodeExecutor } from '../engine/node/codeHostCallNodeExecutor'
-import {
-  ClarifyNodeExecutor,
-  CrossClarifyNodeExecutor,
-  ReviewNodeExecutor,
-} from '../engine/node/humanGateNodeExecutors'
+import { CodeHostCallNodeExecutor } from '../engine/node/code-host-call/codeHostCallNodeExecutor'
+import { ClarifyNodeExecutor } from '../engine/node/clarify/clarifyNodeExecutor'
+import { CrossClarifyNodeExecutor } from '../engine/node/clarify-cross-agent/crossClarifyNodeExecutor'
+import { ReviewNodeExecutor } from '../engine/node/review/reviewNodeExecutor'
 import { NodeExecutionGateway } from '../engine/node/nodeExecutionGateway'
 import type { NodeExecutorMap } from '../engine/node/nodeExecutor'
 import { ClosedNodeExecutorRegistry } from '../engine/node/nodeExecutorRegistry'
 import { RetiredCodeRoundNodeExecutor } from '../engine/node/retiredCodeRoundNodeExecutor'
 import { ScriptNodeExecutor } from '../engine/node/script/scriptNodeExecutor'
-import { InputNodeExecutor, OutputNodeExecutor } from '../engine/node/virtualIoNodeExecutors'
+import { InputNodeExecutor } from '../engine/node/input/inputNodeExecutor'
+import { OutputNodeExecutor } from '../engine/node/output/outputNodeExecutor'
 import { createWrapperDelegatingNodeExecutors } from '../engine/node/wrapperDelegatingNodeExecutors'
 
 const gateways = new WeakMap<TaskMechanicsState, NodeExecutionGateway>()
@@ -59,7 +62,7 @@ function legacyArgs(
 
 function legacyHostPort(
   state: TaskMechanicsState,
-  collaboration: CollaborationRuntimeMechanics,
+  collaboration: TaskMechanicsState['opts']['collaborationRuntime'],
 ): WorkgroupHostExecutionPort {
   return {
     async executeHost(request: WorkgroupHostExecutionRequest) {
@@ -76,39 +79,13 @@ function legacyHostPort(
   }
 }
 
-function collaborationPort(state: TaskMechanicsState): CollaborationNodeGatePort {
-  const mechanics: CollaborationRuntimeMechanics = state.opts.collaborationRuntime
-  return {
-    requestReview: (request) => runReviewNode(state, legacyArgs(state, request), mechanics),
-    settleIdleClarify: (request) => runIdleClarifyNode(state, legacyArgs(state, request)),
-    inspectCrossClarify: (request) =>
-      runCrossClarifyNode(state, legacyArgs(state, request), mechanics),
-    async openAgentClarify(request) {
-      const result = await mechanics.openAgentClarify({
-        ...request,
-        ...(state.opts.executionContext === undefined
-          ? {}
-          : { executionContext: state.opts.executionContext }),
-      })
-      return { intermediaryNodeRunId: result.intermediaryNodeRunId }
-    },
-  }
-}
-
 function buildGateway(
   state: TaskMechanicsState,
   wrapperRuntimeFactory: WrapperRuntimeFactory,
 ): NodeExecutionGateway {
-  const mechanics = state.opts.collaborationRuntime
-  const collaboration = collaborationPort(state)
+  const mechanics = state.opts.collaborationRuntime satisfies CollaborationNodeGatePort
   const wrapperRuntime = wrapperRuntimeFactory(state)
   const wrappers = createWrapperDelegatingNodeExecutors(wrapperRuntime, state.wrapperScopes)
-  const virtualIo = {
-    executeInput: (request: NodeStepRequest<'input'>) =>
-      runInputNode(state, legacyArgs(state, request)),
-    executeOutput: (request: NodeStepRequest<'output'>) =>
-      runOutputNode(state, legacyArgs(state, request)),
-  }
   const childCalls = {
     executeWorkflow: (request: NodeStepRequest<'call-workflow'>) =>
       runCallWorkflowNode(state, legacyArgs(state, request)),
@@ -122,25 +99,26 @@ function buildGateway(
       },
       legacyHostPort(state, mechanics),
     ),
-    input: new InputNodeExecutor(virtualIo),
-    output: new OutputNodeExecutor(virtualIo),
+    input: new InputNodeExecutor(createInputNodeExecutionPorts(state)),
+    output: new OutputNodeExecutor(createOutputNodeExecutionPorts(state)),
     ...wrappers,
-    review: new ReviewNodeExecutor(collaboration),
-    clarify: new ClarifyNodeExecutor(collaboration),
-    'clarify-cross-agent': new CrossClarifyNodeExecutor(collaboration),
+    review: new ReviewNodeExecutor(createReviewNodeExecutionPorts(state)),
+    clarify: new ClarifyNodeExecutor(createClarifyNodeExecutionPorts(state)),
+    'clarify-cross-agent': new CrossClarifyNodeExecutor(
+      createCrossClarifyNodeExecutionPorts(state),
+    ),
     'call-workflow': new CallWorkflowNodeExecutor(childCalls),
     'call-workgroup': new CallWorkgroupNodeExecutor(childCalls),
     script: new ScriptNodeExecutor(createScriptNodeExecutionPorts(state)),
-    'code-host-call': new CodeHostCallNodeExecutor({
-      executeCodeHostCall: (request) => runCodeHostCallNode(state, legacyArgs(state, request)),
-    }),
+    'code-host-call': new CodeHostCallNodeExecutor(createCodeHostNodeExecutionPorts(state)),
     'code-round': new RetiredCodeRoundNodeExecutor(),
   } satisfies NodeExecutorMap
 
+  const branch = createNodeBranchActivationPorts(state)
   return new NodeExecutionGateway(new ClosedNodeExecutorRegistry(executors), {
     async judge(request) {
       const outcome = await judgeBranchActivation(
-        state,
+        branch,
         request.node,
         request.iteration,
         request.containerRunId,

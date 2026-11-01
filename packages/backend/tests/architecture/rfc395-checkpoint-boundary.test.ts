@@ -61,6 +61,18 @@ test('isolation, replay and wrapper mechanics do not inspect scalar/map columns 
     'engine/node/script/runScriptNode.ts',
     'engine/node/script/runOneScriptAttempt.ts',
     'composition/scriptNodeExecution.ts',
+    'engine/node/code-host-call/runCodeHostCallNode.ts',
+    'engine/node/input/runInputNode.ts',
+    'engine/node/output/runOutputNode.ts',
+    'engine/node/review/reviewNodeExecutor.ts',
+    'engine/node/clarify/settleIdleClarify.ts',
+    'engine/node/clarify-cross-agent/runCrossClarifyNode.ts',
+    'application/nodeInputs.ts',
+    'application/nodeBranchActivation.ts',
+    'composition/codeHostNodeExecution.ts',
+    'composition/virtualIoNodeExecution.ts',
+    'composition/humanGateNodeExecution.ts',
+    'composition/nodeBranchActivation.ts',
     'composition/executionMechanismBindings.ts',
   ]) {
     const text = taskSource(path)

@@ -1,5 +1,4 @@
 import type { ClarifyQuestion, ClarifyTruncationWarning } from '@agent-workflow/shared'
-import type { NodeStepOutcome, NodeStepRequest } from '../../domain/nodeExecution'
 
 interface AgentClarifyGateRequestBase {
   readonly taskId: string
@@ -41,12 +40,5 @@ export interface AgentClarifyGateReceipt {
 }
 
 export interface CollaborationNodeGatePort {
-  requestReview(request: NodeStepRequest<'review'>): Promise<NodeStepOutcome>
-  /**
-   * RFC-354 D7 — a self-clarify gate visited by the graph: no open round means
-   * nobody asked, so the node settles as a `skipped` row in its frame.
-   */
-  settleIdleClarify(request: NodeStepRequest<'clarify'>): Promise<NodeStepOutcome>
-  inspectCrossClarify(request: NodeStepRequest<'clarify-cross-agent'>): Promise<NodeStepOutcome>
   openAgentClarify(request: AgentClarifyGateRequest): Promise<AgentClarifyGateReceipt>
 }

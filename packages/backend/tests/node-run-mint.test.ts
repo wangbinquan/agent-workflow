@@ -389,6 +389,7 @@ describe('RFC-284 T21 — nextRetryIndex 口径矩阵', () => {
       'modules/collaboration/infrastructure/taskQuestionDispatch.ts',
       'modules/task-execution/composition/nodeMechanics.ts',
       'modules/task-execution/engine/node/script/runScriptNode.ts',
+      'modules/task-execution/engine/node/code-host-call/runCodeHostCallNode.ts',
     ]
     for (const f of files) {
       const src = readFileSync(resolvePath(import.meta.dir, '..', 'src', f), 'utf8')

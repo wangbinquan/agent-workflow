@@ -1,3 +1,4 @@
+import { SMALL_LEAF_SOURCES } from './helpers/executionMechanismSources'
 import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 // RFC-345 — executable drift locks for canonical rosters, exact public
 // 覆盖验收条款：AC-B4b（写入会话带事务钩子——统一 apply 引擎里是
@@ -952,7 +953,7 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     expect(webhook).toContain('const taskExecutionAuthority = Object.freeze({')
     expect(webhook).toContain('taskExecutionAuthority,')
 
-    const execution = `${node}\n${wrapper}\n${scheduler}\n${mergeResolution}`
+    const execution = `${node}\n${wrapper}\n${scheduler}\n${mergeResolution}\n${SMALL_LEAF_SOURCES.join('\n')}`
     for (const legacyResourceImport of [
       "@/services/agent'",
       "@/services/mcp'",

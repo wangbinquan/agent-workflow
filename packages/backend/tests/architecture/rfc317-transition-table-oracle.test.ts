@@ -482,3 +482,30 @@ test('RFC-402 script ledger sites remain visible to the named-writer oracle afte
   // The conditional aborted target is still a named writer; .set() never joins the matcher.
   expect(NODE_WRITERS.has('set')).toBe(false)
 })
+
+test('RFC-403 code-host and cross-clarify literal CAS sites remain visible in their real owners', () => {
+  const all = casSites(packageSrcUnits(REPO_ROOT, 'backend'))
+  for (const [file, expected] of [
+    ['code-host-call/runCodeHostCallNode.ts', ['running']],
+    ['clarify-cross-agent/runCrossClarifyNode.ts', ['failed', 'canceled']],
+  ] as const) {
+    const sites = all
+      .filter((site) => site.file === 'modules/task-execution/engine/node/' + file)
+      .sort((a, b) => a.line - b.line)
+    expect(sites.map((site) => site.to)).toEqual([...expected])
+    for (const site of sites) {
+      expect(site.writer).toBe('setNodeRunStatus')
+      expect(site.allowedFrom).toEqual(['pending'])
+      expect(offTableSources(site)).toEqual([])
+    }
+  }
+  // A generic .set() must not masquerade as the named node lifecycle port.
+  expect(
+    casSites([
+      sourceUnit(
+        'packages/backend/src/fixture.ts',
+        "ports.ledger.set({ to: 'running', allowedFrom: ['pending'] })",
+      ),
+    ]),
+  ).toEqual([])
+})

@@ -33,7 +33,16 @@ describe('RFC-334 node-executor owner boundary', () => {
       'packages/backend/src/modules/task-execution/domain/nodeExecution.ts',
       ...engineFiles(engineDir),
     ]
-    expect(paths.length).toBeGreaterThanOrEqual(32)
+    expect(paths.length).toBeGreaterThanOrEqual(40)
+    for (const path of [
+      'code-host-call/runCodeHostCallNode',
+      'input/runInputNode',
+      'output/runOutputNode',
+      'review/reviewNodeExecutor',
+      'clarify/settleIdleClarify',
+      'clarify-cross-agent/runCrossClarifyNode',
+    ])
+      expect(paths).toContain(`${engineDir}/node/${path}.ts`)
     expect(paths).toContain(`${engineDir}/node/script/runScriptNode.ts`)
     expect(paths).toContain(`${engineDir}/node/script/runOneScriptAttempt.ts`)
     expect(paths).toContain(`${engineDir}/node/shared/resolveMergeConflicts.ts`)
@@ -83,7 +92,12 @@ describe('RFC-334 node-executor owner boundary', () => {
       'packages/backend/src/modules/task-execution/composition/nodeMechanics.ts',
     )
     expect(port).toContain('openAgentClarify')
-    expect(composition).toContain('openAgentClarify(request)')
+    expect(composition).toContain(
+      'state.opts.collaborationRuntime satisfies CollaborationNodeGatePort',
+    )
+    expect(composition).toContain(
+      'runAgentSingleNode(state, legacyArgs(state, request), mechanics)',
+    )
     expect(mechanics.match(/collaboration\.openAgentClarify\(/g)).toHaveLength(3)
     expect(mechanics).not.toMatch(/await\s+createClarifyRound\s*\(/)
   })

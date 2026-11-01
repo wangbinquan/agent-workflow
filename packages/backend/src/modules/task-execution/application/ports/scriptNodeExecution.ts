@@ -1,9 +1,5 @@
-import type {
-  NodeRunStatus,
-  ScriptFailureCode,
-  ScriptLanguage,
-  WorkflowNode,
-} from '@agent-workflow/shared'
+import type { NodeStatusEvents, ExecutionDiagnostics } from './nodeExecutionSupport'
+import type { ScriptFailureCode, ScriptLanguage, WorkflowNode } from '@agent-workflow/shared'
 import type { IsoHandle, MergeBackConflict } from '@/platform/contracts/isolationWorkspace'
 import type { NodeExecutionPersistence, NodeExecutionSnapshot } from './nodeExecutionPersistence'
 import type {
@@ -121,17 +117,6 @@ export interface ScriptOutputPort {
   }):
     | { kind: 'ok'; ports: Record<string, string>; inactivePorts: string[] }
     | { kind: 'failed'; code: ScriptFailureCode; detail: string }
-}
-export interface NodeStatusEvents {
-  broadcastNodeStatus(
-    taskId: string,
-    nodeRunId: string,
-    nodeId: string,
-    status: NodeRunStatus,
-  ): void
-}
-export interface ExecutionDiagnostics {
-  describeIsoFailure(code: string, error: unknown): string
 }
 export interface ScriptNodeExecutionPorts {
   readonly policy: ScriptExecutionPolicy

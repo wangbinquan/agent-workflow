@@ -188,8 +188,10 @@ describeEachProvider('RFC-056 scheduler — no runaway pending cross-clarify row
       'src',
       'modules',
       'task-execution',
-      'composition',
-      'nodeMechanics.ts',
+      'engine',
+      'node',
+      'clarify-cross-agent',
+      'runCrossClarifyNode.ts',
     )
     const src = readFileSync(NODE_MECHANICS_TS, 'utf-8')
     const branchIdx = src.indexOf('export async function runCrossClarifyNode(')
@@ -201,8 +203,8 @@ describeEachProvider('RFC-056 scheduler — no runaway pending cross-clarify row
     // Three locks: live-row probe, persistent-stop fallback, and the
     // common path explicitly returning without minting a row.
     expect(body).toContain('cross-clarify-live-row-exists')
-    expect(body).toContain('collaboration.getNodeClarifyDirective({')
-    expect(body).toContain('collaboration.inspectCrossClarify({')
+    expect(body).toContain('ports.getNodeClarifyDirective({')
+    expect(body).toContain('ports.inspectCrossClarify({')
     expect(body).toContain('// Common path: no live row, no persistent stop')
 
     // Pre-existing row still in DB unchanged.
@@ -232,8 +234,10 @@ describeEachProvider('RFC-056 scheduler — no runaway pending cross-clarify row
       'src',
       'modules',
       'task-execution',
-      'composition',
-      'nodeMechanics.ts',
+      'engine',
+      'node',
+      'clarify-cross-agent',
+      'runCrossClarifyNode.ts',
     )
     const src = readFileSync(NODE_MECHANICS_TS, 'utf-8')
     expect(src).toContain('runner will create the node_run')

@@ -1,3 +1,4 @@
+import { SMALL_LEAF_SOURCES } from './helpers/executionMechanismSources'
 import { legacyContentRef } from '@/platform/content/contentRef'
 import { contentRowColumns } from '@/platform/content/infrastructure/contentStore'
 // RFC-282 B2 / RFC-345 T4a — the legacy resolver keeps its focused behavior
@@ -178,6 +179,7 @@ describeEachProvider(
 describe('RFC-282 B2 / RFC-345 T4a — all six TaskExecution entries use one resource session', () => {
   test('TaskExecution has six managed session reads plus three explicit synthetic resolutions', () => {
     const text = [
+      ...SMALL_LEAF_SOURCES,
       readFileSync(resolve(SRC, 'modules/task-execution/composition/wrapperMechanics.ts'), 'utf8'),
       readFileSync(resolve(SRC, 'modules/task-execution/composition/nodeMechanics.ts'), 'utf8'),
       readFileSync(resolve(SRC, 'services/scheduler.ts'), 'utf8'),

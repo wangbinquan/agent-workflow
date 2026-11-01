@@ -155,7 +155,7 @@ const TASK_EFFECT_BOUNDARIES = new Map<string, readonly TaskEffectBoundaryContra
     ],
   ],
   [
-    'packages/backend/src/modules/task-execution/composition/nodeMechanics.ts',
+    'packages/backend/src/modules/task-execution/engine/node/code-host-call/runCodeHostCallNode.ts',
     [
       {
         callable: 'runCodeHostCallNode',
@@ -774,13 +774,14 @@ describe('RFC-328 architecture guards', () => {
     }
   })
 
-  test('RFC-402 moved kernel boundaries still reject a removed observer or act', () => {
+  test('RFC-402/403 moved kernel and leaf boundaries still reject a removed observer or act', () => {
     const units = backendUnits(REPO_ROOT)
     for (const file of [
       'kernel/isolation',
       'kernel/merge',
       'kernel/isolationCleanup',
       'node/script/runOneScriptAttempt',
+      'node/code-host-call/runCodeHostCallNode',
     ]) {
       const path = `packages/backend/src/modules/task-execution/engine/${file}.ts`
       const unit = units.find((candidate) => candidate.path === path)
@@ -796,9 +797,11 @@ describe('RFC-328 architecture guards', () => {
         taskEffectBoundaryViolations(
           mutate(
             unit.text.replaceAll(
-              file.startsWith('node/')
-                ? 'createProcessEffectAttemptObserver'
-                : 'createLocalEffectAttemptObserver',
+              file.startsWith('node/code-host-call/')
+                ? 'createCodeHostEffectAttemptObserver'
+                : file.startsWith('node/')
+                  ? 'createProcessEffectAttemptObserver'
+                  : 'createLocalEffectAttemptObserver',
               'missingObserver',
             ),
           ),

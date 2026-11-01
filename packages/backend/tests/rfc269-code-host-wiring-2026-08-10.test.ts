@@ -144,8 +144,10 @@ describeEachProvider('code-host 凭据接线（双引擎）', (harness) => {
           'src',
           'modules',
           'task-execution',
-          'composition',
-          'nodeMechanics.ts',
+          'engine',
+          'node',
+          'code-host-call',
+          'runCodeHostCallNode.ts',
         ),
       ).text()
       expect(src).toContain('const connections = opts.codeHostConnections')

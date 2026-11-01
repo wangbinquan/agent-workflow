@@ -126,3 +126,65 @@ export async function resolveUpstreamInputs(
   }
   return { inputs, consumed }
 }
+
+/**
+ * RFC-193 D16 — row-returning variant: derived-output projections (output
+ * virtual nodes, wrapper outlet promotion) must copy `kind` + `archive_json`
+ * alongside `content`, or the projected row 404s on the port-artifacts API
+ * and goes dark after worktree GC (Codex design-gate P1).
+ */
+export async function readPortRowAtFrame(
+  persistence: NodeExecutionPersistence,
+  taskId: string,
+  nodeId: string,
+  portName: string,
+  // RFC-354 — the FRAME the producing node is read in (the caller resolves
+  // it through the environment chain when the source sits in an enclosing
+  // scope); rows of any other frame are invisible here.
+  frame: FrameCoordinate,
+  nodeKind?: string,
+): Promise<{
+  runId: string | null
+  content: string
+  kind: string | null
+  archiveJson: string | null
+  /**
+   * RFC-306: false when this port is NOT carrying a value this round — either
+   * the producer marked it `active="false"`, or the producing run was itself
+   * skipped. Every projection built on this read (output nodes, wrapper outlet
+   * promotion, loop exit conditions) has to propagate it, or a closed branch
+   * silently re-opens one layer up.
+   */
+  active: boolean
+}> {
+  const chosen = await persistence.snapshotRead(async (snapshot) => {
+    const rows = await snapshot.list({ taskId, nodeId })
+    const ids = new Set(rows.map((row) => row.id))
+    const selected = (
+      await snapshot.selection.slotHistory(taskId, nodeOutputSlot(nodeId, nodeKind, frame), {
+        statusIn: ['done', 'skipped'],
+      })
+    )
+      .filter((row) => ids.has(row.id))
+      .at(-1)
+    return rows.find((row) => row.id === selected?.id)
+  })
+  if (chosen === undefined) {
+    // No settled run at all. `active: true` (not false) on purpose: "nothing has
+    // run yet" is not a branch decision, and reporting it as inactive would let
+    // a bookkeeping gap masquerade as a deliberate skip.
+    return { runId: null, content: '', kind: null, archiveJson: null, active: true }
+  }
+  const out = (await persistence.listOutputs(chosen.id)).filter((row) => row.portName === portName)
+  // A skipped producing run has no port rows at all, so the port-row check alone
+  // would read it as "absent ⇒ active" (the compatibility default). The run
+  // status has to be consulted too.
+  const active = chosen.status !== 'skipped' && out[0]?.active !== false
+  return {
+    runId: chosen.id,
+    content: active ? (out[0]?.content ?? '') : '',
+    kind: out[0]?.kind ?? null,
+    archiveJson: out[0]?.archiveJson ?? null,
+    active,
+  }
+}

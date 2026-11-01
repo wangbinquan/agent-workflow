@@ -14,3 +14,44 @@ export const MERGE_CONFLICT_SOURCE = readFileSync(
   resolve(root, 'engine/node/shared/resolveMergeConflicts.ts'),
   'utf8',
 )
+
+// RFC-403: fixed source corpora include each moved body once, with explicit owners.
+export const CODE_HOST_NODE_SOURCE = readFileSync(
+  resolve(root, 'engine/node/code-host-call/runCodeHostCallNode.ts'),
+  'utf8',
+)
+export const INPUT_NODE_SOURCE = readFileSync(
+  resolve(root, 'engine/node/input/runInputNode.ts'),
+  'utf8',
+)
+export const OUTPUT_NODE_SOURCE = readFileSync(
+  resolve(root, 'engine/node/output/runOutputNode.ts'),
+  'utf8',
+)
+export const REVIEW_NODE_SOURCE = readFileSync(
+  resolve(root, 'engine/node/review/reviewNodeExecutor.ts'),
+  'utf8',
+)
+export const IDLE_CLARIFY_SOURCE = readFileSync(
+  resolve(root, 'engine/node/clarify/settleIdleClarify.ts'),
+  'utf8',
+)
+export const CROSS_CLARIFY_SOURCE = readFileSync(
+  resolve(root, 'engine/node/clarify-cross-agent/runCrossClarifyNode.ts'),
+  'utf8',
+)
+export const NODE_BRANCH_SOURCE = readFileSync(
+  resolve(root, 'application/nodeBranchActivation.ts'),
+  'utf8',
+)
+export const NODE_INPUTS_SOURCE = readFileSync(resolve(root, 'application/nodeInputs.ts'), 'utf8')
+export const SMALL_LEAF_SOURCES = [
+  CODE_HOST_NODE_SOURCE,
+  INPUT_NODE_SOURCE,
+  OUTPUT_NODE_SOURCE,
+  REVIEW_NODE_SOURCE,
+  IDLE_CLARIFY_SOURCE,
+  CROSS_CLARIFY_SOURCE,
+  NODE_BRANCH_SOURCE,
+  NODE_INPUTS_SOURCE,
+] as const

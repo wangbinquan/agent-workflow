@@ -523,9 +523,9 @@ export const OFF_DAG_OFFERED_EDGE_DEBT: readonly OfferedEdgeDebt[] = [
     removeAfterWave: 'W4',
   },
   {
-    from: 'packages/backend/src/modules/task-execution/composition/nodeExecution.ts',
+    from: 'packages/backend/src/modules/task-execution/application/ports/humanGateNodeExecution.ts',
     to: 'collaboration',
-    why: 'RFC-349 provider cutover 新增了 owner-closed public participant 消费，但该 bounded-context 对尚未进入 design §3.1 目标 DAG；先逐文件精确锁定，待 ownership/DAG 正式收敛后销账。',
+    why: 'RFC-403 将原 nodeExecution.ts 的 COL exact participant 类型消费迁到唯一 human-gate 消费端口；offered 文件边实测仍为 54，不新增 context value 边或债务。沿用 RFC-349 存量 ownership/DAG 收敛波次。',
     removeAfterWave: 'W4-E（RFC-294 provider-neutral bounded-context convergence）',
   },
   {

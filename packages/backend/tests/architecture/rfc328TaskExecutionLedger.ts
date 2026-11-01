@@ -370,7 +370,7 @@ export function classifyTaskExecutionAuthority(input: {
       ['record', 'recordNodeRunInputsInTx'].includes(input.callable)) ||
     (input.file === `${MODULE_PREFIX}task-execution/infrastructure/taskPreparationParticipant.ts` &&
       input.callable === 'writeWorkspace') ||
-    /modules\/task-execution\/engine\/node\/(?:script\/(?:runScriptNode|runOneScriptAttempt)|shared\/resolveMergeConflicts)\.ts|modules\/task-execution\/engine\/kernel\/(?:isolation|merge|isolationCleanup|nodeRunLedger)\.ts|services\/(?:runner|scheduler|commitPushRunner|nodeRunMint|runtimeSessionLease)\.ts|modules\/task-execution\/composition\/(?:nodeMechanics|wrapperMechanics|wrapperRunLifecycle)\.ts|services\/runtime\/(?:opencode|claudeCode)\/(?:sessionCapture|subagentLiveCapture)\.ts|services\/review\.ts#dispatchReviewNodeUnlocked|modules\/collaboration\/infrastructure\/humanGateOpenParticipant\.ts#project(?:Review|Clarify)GateOpen|services\/workgroup\/rounds\.ts|services\/task\.ts#persistPreparedProjection/.test(
+    /modules\/task-execution\/engine\/node\/(?:script\/(?:runScriptNode|runOneScriptAttempt)|code-host-call\/(?:runCodeHostCallNode|codeHostCallNodeExecutor)|input\/(?:runInputNode|inputNodeExecutor)|output\/(?:runOutputNode|outputNodeExecutor)|review\/reviewNodeExecutor|clarify\/(?:clarifyNodeExecutor|settleIdleClarify)|clarify-cross-agent\/(?:runCrossClarifyNode|crossClarifyNodeExecutor)|shared\/resolveMergeConflicts)\.ts|modules\/task-execution\/engine\/kernel\/(?:isolation|merge|isolationCleanup|nodeRunLedger)\.ts|services\/(?:runner|scheduler|commitPushRunner|nodeRunMint|runtimeSessionLease)\.ts|modules\/task-execution\/composition\/(?:nodeMechanics|wrapperMechanics|wrapperRunLifecycle|codeHostNodeExecution|virtualIoNodeExecution|humanGateNodeExecution|nodeBranchActivation)\.ts|modules\/task-execution\/application\/nodeBranchActivation\.ts|services\/runtime\/(?:opencode|claudeCode)\/(?:sessionCapture|subagentLiveCapture)\.ts|services\/review\.ts#dispatchReviewNodeUnlocked|modules\/collaboration\/infrastructure\/humanGateOpenParticipant\.ts#project(?:Review|Clarify)GateOpen|services\/workgroup\/rounds\.ts|services\/task\.ts#persistPreparedProjection/.test(
       value,
     )
   ) {
@@ -966,6 +966,81 @@ function kernelEffectBindingValid(backend: readonly SourceUnit[]): boolean {
   return calls.length > 0 && calls.every(kernelEffectForwarderValid)
 }
 
+const CODE_HOST_NODE_FILE = `${MODULE_PREFIX}task-execution/engine/node/code-host-call/runCodeHostCallNode.ts`
+const CODE_HOST_EFFECT_BINDING_FILE = `${MODULE_PREFIX}task-execution/composition/codeHostNodeExecution.ts`
+
+/** RFC-403: one act-site policy, forwarded verbatim with only persistence and context added. */
+function codeHostEffectForwarderValid(call: ts.CallExpression): boolean {
+  if (!kernelEffectForwarderValid(call)) return false
+  const argument = call.arguments[0]!
+  if (!ts.isObjectLiteralExpression(argument)) return false
+  const names = argument.properties
+    .slice(1)
+    .map((property) =>
+      ts.isPropertyAssignment(property) || ts.isShorthandPropertyAssignment(property)
+        ? propertyName(property.name)
+        : null,
+    )
+    .sort()
+  return names.length === 2 && names[0] === 'context' && names[1] === 'persistence'
+}
+
+function codeHostEffectBindingValid(backend: readonly SourceUnit[]): boolean {
+  const unit = backend.find((candidate) => candidate.path === CODE_HOST_EFFECT_BINDING_FILE)
+  if (unit === undefined) return false
+  const calls: ts.CallExpression[] = []
+  const visit = (node: ts.Node) => {
+    if (
+      ts.isCallExpression(node) &&
+      ts.isIdentifier(node.expression) &&
+      node.expression.text === 'createCodeHostEffectAttemptObserver'
+    )
+      calls.push(node)
+    ts.forEachChild(node, visit)
+  }
+  visit(unit.source)
+  return calls.length === 1 && codeHostEffectForwarderValid(calls[0]!)
+}
+
+function codeHostActPolicyValid(unit: SourceUnit, call: ts.CallExpression): boolean {
+  const policy = call.arguments[0]
+  if (policy === undefined || !ts.isObjectLiteralExpression(policy)) return false
+  const names = policy.properties
+    .map((property) =>
+      ts.isPropertyAssignment(property) || ts.isShorthandPropertyAssignment(property)
+        ? propertyName(property.name)
+        : null,
+    )
+    .sort()
+  if (names.join(',') !== 'action,identity,initialRetryAuthority,nodeRunId') return false
+  const identity = objectProperty(policy, 'identity')
+  if (identity === null || !ts.isObjectLiteralExpression(identity)) return false
+  if (
+    identity.properties
+      .map((property) =>
+        ts.isPropertyAssignment(property) || ts.isShorthandPropertyAssignment(property)
+          ? propertyName(property.name)
+          : null,
+      )
+      .sort()
+      .join(',') !==
+    'executionLineageId,operationFamilyKey,operationGeneration,operationKey,requestHash,resourceKeys,slotPathDigest,slotPathJson'
+  )
+    return false
+  let acts = 0
+  const visit = (node: ts.Node) => {
+    if (
+      ts.isCallExpression(node) &&
+      node.expression.getText(unit.source) === 'ports.requests.executeCodeHostCall' &&
+      enclosingTopLevelSymbol(unit, node)?.name === 'runCodeHostCallNode'
+    )
+      acts += 1
+    ts.forEachChild(node, visit)
+  }
+  visit(unit.source)
+  return acts === 1
+}
+
 export function buildTaskOwnedEffectEntries(backend: readonly SourceUnit[]): {
   entries: TaskOwnedEffectEntry[]
   unknown: Array<{ file: string; line: number; reason: string }>
@@ -993,6 +1068,11 @@ export function buildTaskOwnedEffectEntries(backend: readonly SourceUnit[]): {
         ts.isCallExpression(node) &&
         ts.isPropertyAccessExpression(node.expression) &&
         node.expression.getText(unit.source) === 'ports.effect.createProcessEffectAttemptObserver'
+      const codeHostPortCall =
+        unit.path === CODE_HOST_NODE_FILE &&
+        ts.isCallExpression(node) &&
+        ts.isPropertyAccessExpression(node.expression) &&
+        node.expression.getText(unit.source) === 'ports.effects.createCodeHostEffectAttemptObserver'
       const kernelPortCall =
         ts.isCallExpression(node) &&
         ts.isPropertyAccessExpression(node.expression) &&
@@ -1002,13 +1082,16 @@ export function buildTaskOwnedEffectEntries(backend: readonly SourceUnit[]): {
         ((ts.isIdentifier(node.expression) &&
           TASK_EFFECT_OBSERVER_CALLEES.has(node.expression.text)) ||
           scriptPortCall ||
+          codeHostPortCall ||
           kernelPortCall)
       ) {
         const callee = ts.isIdentifier(node.expression)
           ? node.expression.text
-          : kernelPortCall
-            ? 'createLocalEffectAttemptObserver'
-            : 'createProcessEffectAttemptObserver'
+          : codeHostPortCall
+            ? 'createCodeHostEffectAttemptObserver'
+            : kernelPortCall
+              ? 'createLocalEffectAttemptObserver'
+              : 'createProcessEffectAttemptObserver'
         const line = unit.source.getLineAndCharacterOfPosition(node.getStart()).line + 1
         const owner = enclosingTopLevelSymbol(unit, node)
         const symbol = owner?.name ?? '$file'
@@ -1046,6 +1129,31 @@ export function buildTaskOwnedEffectEntries(backend: readonly SourceUnit[]): {
               line,
               reason: 'kernel observer binding does not forward the act-site policy unchanged',
             })
+          ts.forEachChild(node, visit)
+          return
+        }
+        if (
+          unit.path === CODE_HOST_EFFECT_BINDING_FILE &&
+          callee === 'createCodeHostEffectAttemptObserver'
+        ) {
+          if (!codeHostEffectForwarderValid(node))
+            unknown.push({
+              file: unit.path,
+              line,
+              reason: 'code-host observer binding rewrites the act-site policy',
+            })
+          ts.forEachChild(node, visit)
+          return
+        }
+        if (
+          codeHostPortCall &&
+          (!codeHostEffectBindingValid(backend) || !codeHostActPolicyValid(unit, node))
+        ) {
+          unknown.push({
+            file: unit.path,
+            line,
+            reason: 'code-host act or verbatim observer binding missing',
+          })
           ts.forEachChild(node, visit)
           return
         }

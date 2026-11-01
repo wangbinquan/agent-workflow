@@ -1,3 +1,4 @@
+import { CROSS_CLARIFY_SOURCE } from './helpers/executionMechanismSources'
 import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 import { withO2Closure } from './helpers/o2Closure'
 // RFC-123 — 反问 directive 双向单一事实源（RFC-122 修订）.
@@ -496,8 +497,8 @@ describe('RFC-123 D: 源码 wiring 守卫', () => {
     // RFC-132 T7: node mechanics 传 questioner 节点（reenableQuestionerNodeId），非 cross node.id；
     // resolveCrossNodeStopped 收敛为只读 questioner 节点的 node 级 directive（node last-write-wins
     // 天然等价 RFC-123 recency gate）。旧 recency 闸（latestPersistentStopAt + stopAt 比较）已删。
-    expect(norm(nodeMechanicsSrc)).toContain(
-      "await collaboration.getNodeClarifyDirective({ taskId, nodeId: reenableQuestionerNodeId, })) === 'stop'",
+    expect(norm(CROSS_CLARIFY_SOURCE)).toContain(
+      "await ports.getNodeClarifyDirective({ taskId, nodeId: reenableQuestionerNodeId, })) === 'stop'",
     )
     expect(crossSrc).toContain('export async function resolveCrossNodeStopped')
     expect(norm(crossSrc)).toContain(

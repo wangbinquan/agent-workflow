@@ -6,8 +6,13 @@
   状态事件 / 诊断合同从 script 专属端口提到中立端口；review / clarify 只构造 task 侧请求，人工门策略仍在 collaboration。纯结构重构。
 - **拆分**：design §5.5 第 3 步按生命周期拆成四个 RFC：本 RFC；calls（两种 kind 共享 669 行主体）、agent-single（1347 行）、
   workgroup host（500 行）各一个，落档时编号。
-- **做法**：Codex 只读研究（线程 `01a193fb-7314-7963-8143-ed00042795e2`），本会话抽查后定稿；设计门免，实现门一轮（只审功能）。
-- **进度**：三件套落档；T1～T6 派发 Codex 实施。
+- **做法**：Codex 只读研究（线程 `01a193fb-7314-7963-8143-ed00042795e2`），本会话抽查后定稿；设计门免。Codex 可写线程
+  `01a19499-5f46-7180-a30f-fb95c61a3077` 一次派发完成实现，本会话审核；实现门（只读线程 `01a194bb-f92d-71a2-ab8d-752a58d42b68`，只审功能）
+  FAIL 1 项 P1，已修。用户 2026-10-31 指示后续工作不再用 Codex，此后的复核与集中验证由本会话完成。
+- **进度**：T1～T7 完成，随实现提交入库，待 exact SHA 的 CI（AC-6）。`nodeMechanics.ts` 4621 → 3656 行；`counts.json`、
+  `commons-debt.json` 不变，`guard-manifest.json` 只更新本 RFC 的 11 个条目。集中验证查出本 RFC 引入的两处测试锁问题（实现门 P1 的
+  `taskDagGraph` 路径；`clarify-prompt-wire-up` 仍锁着已删的包装），均已修；P0 变异 lane 通过；并发 RFC-398 未提交文件造成的守卫红与负载
+  超时保留证据，不归本 RFC。详见 plan「集中验证（T7）」。
 
 ## 2026-10-31 RFC-402 task-execution 执行机制库与 script 节点试点（Done 2026-10-31；`design/RFC-402-task-execution-kernel-script-pilot/`）
 
@@ -33,7 +38,8 @@
 - **CI**：`da5ad65b8` 的 integration-opencode、git-protocols-e2e、windows-platform、maintenance-soak-nightly 全部 success。主 CI `41246022629`
   第 1 次尝试只有 macOS e2e 一条失败：`business-workflow-scenarios.spec.ts:451` 在 60 s 任务状态等待处超时，任务仍在运行。归因 runner
   变慢（同一 job 用例中位耗时约 1.55 倍，纯 UI 用例最多 3.3 倍）；同一提交第 2 次尝试该用例 23.3 s 通过、整体 success。不以重跑为据：
-  `0612e50d2` 修测试，任务状态等待预算只在 Linux 保持 60 s，macOS 与 Windows 同为 120 s，断言不动。其 CI 在下次提交时补记。
+  `0612e50d2` 修测试，任务状态等待预算只在 Linux 保持 60 s，macOS 与 Windows 同为 120 s，断言不动。它随收尾文档 `8776be00a` 推送，
+  主 CI `41258472513`（62 个 job，含三平台 e2e）全部 success。
 - **本机验证的局限**：全量期间机器负载 15～20，PostgreSQL 超时类失败经低并发与串行重跑全部通过；并发 RFC-398 未提交文件造成的守卫红
   保留证据，不归本 RFC。详见 plan「集中验证」。
 - **后继**：RFC-403（design §5.5 第 3 步之一）。

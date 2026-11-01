@@ -1,3 +1,4 @@
+import { SMALL_LEAF_SOURCES, CODE_HOST_NODE_SOURCE } from './helpers/executionMechanismSources'
 // RFC-395 II-pre：守卫改锁生产路径或删除后的精确存量，保留原扫描判据。
 // RFC-292 architecture ratchets: the canonical trigger namespace must not
 // fork back into code-host-only helpers, runtime dispatch must keep authored
@@ -49,6 +50,7 @@ describe('RFC-292 trigger namespace source locks', () => {
 
   test('scheduler passes one frozen context to every authored runtime sink', () => {
     const source = [
+      ...SMALL_LEAF_SOURCES,
       readFileSync(resolve(BACKEND_SRC, 'services/scheduler.ts'), 'utf8'),
       readFileSync(
         resolve(BACKEND_SRC, 'modules', 'task-execution', 'composition', 'nodeMechanics.ts'),
@@ -81,7 +83,14 @@ describe('RFC-292 trigger namespace source locks', () => {
     expect(
       source.match(/agent: injection\.spec\.agent,\n\s+triggerContext: state\.triggerContext/g),
     ).toHaveLength(2)
-    expect(source).toContain('ctx: { ports: upstreamInputs, triggerContext: state.triggerContext }')
+    expect(CODE_HOST_NODE_SOURCE).toContain(
+      'ctx: { ports: upstreamInputs, triggerContext: task.triggerContext }',
+    )
+    const codeHostBinding = readFileSync(
+      resolve(BACKEND_SRC, 'modules/task-execution/composition/codeHostNodeExecution.ts'),
+      'utf8',
+    )
+    expect(codeHostBinding).toMatch(/get triggerContext\(\)\s*\{\s*return state\.triggerContext/)
     expect(source).toContain('{ triggerContext: state.triggerContext }')
     expect(source).toContain('renderCallGoal(goalTemplate, inputs, state.triggerContext')
 

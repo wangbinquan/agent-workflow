@@ -33,11 +33,11 @@ import { resolveSchedulerRunRow } from '@/modules/task-execution/application/res
 import { resolveNodeActivationForDispatch } from '@/modules/task-execution/application/resolveNodeActivation'
 import { buildFreshestSettledPerNode } from '@/modules/task-execution/application/runProvenance'
 import { selectResumeRollbackTargets } from '@/modules/task-execution/application/resumeRollbackTargets'
+import { freshestPriorRunWithOutput } from '@/modules/task-execution/composition/nodeMechanics'
 import {
-  freshestPriorRunWithOutput,
+  resolveUpstreamInputs,
   readPortRowAtFrame,
-} from '@/modules/task-execution/composition/nodeMechanics'
-import { resolveUpstreamInputs } from '@/modules/task-execution/application/nodeInputs'
+} from '@/modules/task-execution/application/nodeInputs'
 import { hasTaskRollbackCheckpoint } from '@/modules/task-execution/domain/taskCheckpointRollback'
 import { taskRollbackPlan } from '@/modules/task-execution/infrastructure/taskRollbackCodec'
 import { createWorkgroupHostLedgerParticipantInTx } from '@/modules/task-execution/infrastructure/workgroupHostLedgerParticipant'
