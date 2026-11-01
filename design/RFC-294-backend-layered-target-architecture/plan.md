@@ -212,8 +212,13 @@ Facade 只许 re-export 或参数形状适配；不得含 DB 查询、状态、�
 - **前置 / 冲突**：S2b 之后；与 S1 串行。**能力影响**：无；以现有执行矩阵与恢复 oracle 对拍。
 - **2026-10-30 对账**：前置已满足，退出门均未成立（`nodeMechanics.ts` 5,698 行、`runAssembly` 仍在 `services/schedulerAssembly.ts`、
   `legacyArgs` 11 处）；已成立的只有 engine 不 import `@/services`，协调器构造已收敛到 `taskDriveCoordinatorFactory.ts` 一处。
-- **第一步（[RFC-402](../RFC-402-task-execution-kernel-script-pilot/proposal.md)，In Progress）**：design §5.5 第 1、2 步——执行机制库
+- **第一步（[RFC-402](../RFC-402-task-execution-kernel-script-pilot/proposal.md)，Done 2026-10-31，`da5ad65b8`）**：design §5.5 第 1、2 步——执行机制库
   `engine/kernel/`（assembly、隔离 / 合并 / 清理、许可、NodeRun ledger）、删除 `services/` 下七个文件、许可注册表显式实例化、script 节点试点。
+  退出门中「`runAssembly` 不再位于 `services/`」成立；`nodeMechanics.ts` 4,621 行，其余退出门未成立。
+- **design §5.5 第 3 步（按生命周期拆为四个 RFC）**：
+  - [RFC-403](../RFC-403-task-execution-small-leaf-executors/proposal.md)（In Progress）：code-host-call、input、output、review、clarify、
+    clarify-cross-agent 迁入 `engine/node/<kind>/`，分支判定 / 跳过与端口读取归 `application/`；
+  - 后续：call-workflow / call-workgroup（共享主体）、agent-single、workgroup host 各一个 RFC，落档时编号。
 
 ### S7 唯一 AtomicApply 引擎（W6）
 
@@ -382,7 +387,7 @@ S3、S4、S8 互不依赖，可与其他后继并行，但各自避让正在被�
 
 - [ ] proposal AC-1～AC-11 全部兑现；
 - [x] 所有 P0 后继 Done；RFC-287 Done；RFC-288/289 保持 CLOSED；W2、W3 Done；
-- [ ] S1～S8 Done（2026-10-31：S1 / S3 / S4 / S5 / S8 Done，S2 余 S2c，S6 / S7 未完成）；
+- [ ] S1～S8 Done（2026-10-31：S1 / S3 / S4 / S5 / S8 Done，S2 余 S2c，S6 第一步 Done、其余未完成，S7 未完成）；
 - [ ] W4 余项、W5 余项、W7 余项（2026-10-31 核销）、W9-C/E/D Done；W8 仅在新能力 RFC 获批时要求；
 - [ ] design §14 的终局判据全部成立；
 - [ ] 在途 task、历史行、API / MCP / WS 兼容与完整 E2E 有证据；

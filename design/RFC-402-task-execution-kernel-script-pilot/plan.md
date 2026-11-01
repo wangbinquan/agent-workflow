@@ -62,7 +62,20 @@
     error-only 文件、全部 `tests/architecture/` 与本轮改过的守卫）后只剩 4 个超时文件；这 4 个以 60 s 超时串行全部通过（排除挂死），
     再按默认超时串行也全部通过。
 
+## CI（`da5ad65b8`）
+
+- integration-opencode `41246022634`、git-protocols-e2e `41246022680`、windows-platform `41246022648`、maintenance-soak-nightly
+  `41246022630`：success。
+- 主 CI `41246022629`：第 1 次尝试唯一的失败是 Playwright e2e（macos-latest shard 1/4，job `124670092149`）的
+  `e2e/business-workflow-scenarios.spec.ts:451`，首跑与重试都在 60 s 任务状态等待处超时，任务仍在运行（第 0 轮全部 done、第 1 轮刚开始），
+  没有报错。归因于 runner 变慢，不归本 RFC：
+  - 同一 job 内用例中位耗时约为前两次的 1.55 倍，纯 UI 用例最多慢 3.3 倍；
+  - 该用例本次 ubuntu 20.7 s、windows 42.2 s，都在各自历史区间内（ubuntu 20.4～28.2 s、windows 39.4～60 s），macOS 历史 11.1～35.2 s；
+  - 同一提交第 2 次尝试（job `124679185128`）该用例 23.3 s 通过，主 CI 整体 success。
+- 重跑通过不作为通过依据：`0612e50d2` 修测试，任务状态等待预算只在 Linux 保持 60 s / 180 s，macOS 与 Windows 用同一的 120 s / 300 s，
+  断言不动；随本收尾文档一起推送，CI 结果记在 `STATE.md` RFC-402 一节。
+
 ## 验收清单
 
 - [x] proposal AC-1～AC-5（本地集中验证，见上）
-- [ ] 推送后 exact SHA 的 CI 全绿（AC-6）
+- [x] 推送后 exact SHA 的 CI 全绿（AC-6）：见上节「CI」
