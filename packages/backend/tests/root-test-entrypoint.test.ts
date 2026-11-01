@@ -236,6 +236,28 @@ describe('repository test entrypoint', () => {
     expect(ciWorkflow).toContain(
       `run: ${hardenedBunCommand} --seed="$BUN_TEST_SEED" --shard=\${{ matrix.shard }}/\${{ matrix.shards }} --coverage --coverage-reporter=lcov`,
     )
+    // RFC-398: the ubuntu shards are balanced by recorded per-file duration (round-robin by name
+    // clustered the long upgrade suites and three shards hit the 15-minute budget, run 41293473768).
+    // The file must stay Bun's v1 shape and keep weights for the heavy suites that caused it.
+    expect(ciWorkflow).toContain(
+      '--coverage-reporter=lcov --timings=.github/backend-test-timings.json',
+    )
+    const timings = JSON.parse(
+      readFileSync(resolve(root, '.github', 'backend-test-timings.json'), 'utf8'),
+    ) as { version: number; files: Record<string, number> }
+    expect(timings.version).toBe(1)
+    for (const path of [
+      'packages/backend/tests/release-upgrade-matrix-51-v0_18_18-postgresql.test.ts',
+      'packages/backend/tests/rfc398-auto-upgrade-resume-postgresql-phase-frozen.test.ts',
+      'packages/backend/tests/rfc398-postgresql-bridge-v0_18_18.test.ts',
+    ])
+      expect(timings.files[path]).toBeGreaterThan(30_000)
+    expect(
+      Object.entries(timings.files).every(
+        ([path, ms]) =>
+          path.startsWith('packages/backend/tests/') && Number.isInteger(ms) && ms >= 0,
+      ),
+    ).toBe(true)
     expect(macosBackendNightly).toContain(
       `run: ${hardenedBunCommand} --seed="$BUN_TEST_SEED" --shard=\${{ matrix.shard }}/\${{ matrix.shards }}\n`,
     )

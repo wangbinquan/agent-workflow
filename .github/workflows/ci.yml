@@ -261,8 +261,14 @@ jobs:
         # Codecov consumes lcov. The redundant text table is large enough to
         # make Bun's stdout writer fail with WriteFailed on otherwise-green
         # shards, so keep the machine-readable report only.
+        # --timings balances the shards by recorded per-file duration instead of
+        # round-robin by file name: RFC-398's long process / PostgreSQL suites
+        # clustered on a few shards and three hit the 15-minute budget (run
+        # 41293473768) while the median shard ran 10 minutes. Files missing from
+        # the file get Bun's default weight; refresh it as described in
+        # docs/dev-gotchas.md (RFC-398 section).
         shell: bash
-        run: bun test --isolate --randomize --seed="$BUN_TEST_SEED" --shard=${{ matrix.shard }}/${{ matrix.shards }} --coverage --coverage-reporter=lcov
+        run: bun test --isolate --randomize --seed="$BUN_TEST_SEED" --shard=${{ matrix.shard }}/${{ matrix.shards }} --coverage --coverage-reporter=lcov --timings=.github/backend-test-timings.json
         env:
           # RFC-359 §11.1：双引擎用例的 PostgreSQL 半边。每个测试文件自己 drop + 迁移 schema，
           # 分片内文件串行（--isolate），一个库够用。
