@@ -238,10 +238,19 @@ describe('repository test entrypoint', () => {
     )
     // RFC-398: the ubuntu shards are balanced by recorded per-file duration (round-robin by name
     // clustered the long upgrade suites and three shards hit the 15-minute budget, run 41293473768).
-    // The file must stay Bun's v1 shape and keep weights for the heavy suites that caused it.
+    // Bun reads the committed file second and writes this shard's measured durations to the
+    // fresh first file, which every finished shard uploads for the next refresh.
     expect(ciWorkflow).toContain(
-      '--coverage-reporter=lcov --timings=.github/backend-test-timings.json',
+      '--coverage-reporter=lcov --timings="$RUNNER_TEMP/backend-test-timings.json" ' +
+        '--timings=.github/backend-test-timings.json --update-timings',
     )
+    const uploadTimings = ciWorkflow.slice(
+      ciWorkflow.indexOf('- name: Upload measured backend test timings (ubuntu shards)'),
+    )
+    expect(uploadTimings).toContain("if: (success() || failure()) && matrix.os == 'ubuntu-latest'")
+    expect(uploadTimings).toContain('name: backend-test-timings-${{ matrix.shard }}')
+    expect(uploadTimings).toContain('path: ${{ runner.temp }}/backend-test-timings.json')
+    // The file must stay Bun's v1 shape and keep weights for the heavy suites that caused it.
     const timings = JSON.parse(
       readFileSync(resolve(root, '.github', 'backend-test-timings.json'), 'utf8'),
     ) as { version: number; files: Record<string, number> }
@@ -252,6 +261,11 @@ describe('repository test entrypoint', () => {
       'packages/backend/tests/rfc398-postgresql-bridge-v0_18_18.test.ts',
     ])
       expect(timings.files[path]).toBeGreaterThan(30_000)
+    // Durations are whole-file wall clock (module load, hooks and tests). The first file summed
+    // per-test times instead: this suite's tests take 1.7 s but its setup about 27 s, so the
+    // RFC-395 suites looked short, packed onto shards 23-25 and all three were cancelled at the
+    // 15-minute budget (run 41301089649).
+    expect(timings.files['packages/backend/tests/rfc395-v1-golden.test.ts']).toBeGreaterThan(10_000)
     expect(
       Object.entries(timings.files).every(
         ([path, ms]) =>
@@ -358,7 +372,9 @@ describe('repository test entrypoint', () => {
       // 2026-10-14 CI 提速：32 → 24 片。实测单片 5~7 分钟，主要开销在排队与每片 ~1.5 分钟
       // 的固定开销；24 片单片 ~8~10 分钟，仍在预算 ~67% 以内。
       // 2026-10-26 RFC-395 激活使后端测试量约翻倍：用户裁决 24 → 36 片，最长片约 10 分钟。
-      ['ubuntu-latest', 36],
+      // 2026-11-01 RFC-398 后全套按文件墙钟约 360 分钟，36 片均衡后最长仍约 11.5 分钟；
+      // 照同一规矩加 runner 到 44 片，最长片回到约 10 分钟。
+      ['ubuntu-latest', 44],
       // RFC-359 W57：macOS 从四片加到六片——四片时最长的一片长期在 15 分钟预算的 75%~90%，
       // 实测有一次跑到 15 分 16 秒被超时杀掉（GitHub 把超时报成 `cancelled`，聚合 job 随之判红）。
       // 处置照 ci.yml 自己立的规矩：加 runner，不动预算、不改单条用例超时。

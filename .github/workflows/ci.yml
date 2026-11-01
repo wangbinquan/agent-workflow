@@ -107,6 +107,11 @@ jobs:
     # 被取消）。重型用例提速、拆文件之后全套仍约 243 runner-分钟，24 片的最长片估计 14.6~17.2 分钟。
     # 用户裁决 Ubuntu 24 → 36 片：最长片约 10 分钟（预算 ~68%）；job 预算与单条用例超时不变。
     #
+    # 2026-11-01 RFC-398 再加约 105 runner-分钟：按文件实测墙钟（模块加载 + 钩子 + 用例）全套
+    # 约 360 分钟，36 片即使均衡也是均值 10 分钟、最长约 11.5 分钟，两次 run 间同一片的速度差
+    # 达 0.73～1.29 倍。照同一规矩加 runner：36 → 44 片，均值约 8.2 分钟、最长约 9.5 分钟，
+    # 回到上面「最长片约 10 分钟」的目标（run 41293473768 / 41301089649 的分片日志实测）。
+    #
     # 以下 macOS 分片历史留档（现由 nightly 承接，片数与预算原样）：
     # RFC-359 W57：macOS 从四片加到**六片**。实测三轮 exact SHA 的四片耗时分别是
     # 11.7 / 7.0 / 11.5 / 13.3、12.4 / 12.8 / 6.0 / 11.6、15.3 / 6.5 / 7.1 / 11.2 分钟
@@ -167,8 +172,16 @@ jobs:
             34,
             35,
             36,
+            37,
+            38,
+            39,
+            40,
+            41,
+            42,
+            43,
+            44,
           ]
-        shards: [36]
+        shards: [44]
     runs-on: ${{ matrix.os }}
     # A sync child-process stall once left a backend shard silent for 17+ minutes.
     # Keep that same job budget as the provider workload grows; add runners
@@ -261,14 +274,17 @@ jobs:
         # Codecov consumes lcov. The redundant text table is large enough to
         # make Bun's stdout writer fail with WriteFailed on otherwise-green
         # shards, so keep the machine-readable report only.
-        # --timings balances the shards by recorded per-file duration instead of
-        # round-robin by file name: RFC-398's long process / PostgreSQL suites
-        # clustered on a few shards and three hit the 15-minute budget (run
-        # 41293473768) while the median shard ran 10 minutes. Files missing from
-        # the file get Bun's default weight; refresh it as described in
-        # docs/dev-gotchas.md (RFC-398 section).
+        # Bun keeps the files in path order and gives each shard a contiguous
+        # run of roughly equal total time from the --timings files; without them
+        # the long RFC-395/398 suites cluster and shards hit the 15-minute budget
+        # (runs 41293473768, 41301089649). The committed file must hold whole-file
+        # wall-clock durations; summed per-test times omit module load and hooks
+        # and caused 41301089649's three cancelled shards. --update-timings writes
+        # this shard's measured durations to the first --timings file (a fresh
+        # one under runner.temp), uploaded below; refresh the committed file from
+        # a green run's artifacts as described in docs/dev-gotchas.md (RFC-398).
         shell: bash
-        run: bun test --isolate --randomize --seed="$BUN_TEST_SEED" --shard=${{ matrix.shard }}/${{ matrix.shards }} --coverage --coverage-reporter=lcov --timings=.github/backend-test-timings.json
+        run: bun test --isolate --randomize --seed="$BUN_TEST_SEED" --shard=${{ matrix.shard }}/${{ matrix.shards }} --coverage --coverage-reporter=lcov --timings="$RUNNER_TEMP/backend-test-timings.json" --timings=.github/backend-test-timings.json --update-timings
         env:
           # RFC-359 §11.1：双引擎用例的 PostgreSQL 半边。每个测试文件自己 drop + 迁移 schema，
           # 分片内文件串行（--isolate），一个库够用。
@@ -295,6 +311,21 @@ jobs:
           name: backend-coverage-shard-${{ matrix.shard }}
           fail_ci_if_error: false
           disable_search: true
+
+      - name: Upload measured backend test timings (ubuntu shards)
+        # Only this shard's files, as Bun measured them. A cancelled (timed-out)
+        # shard writes nothing, so a refresh never mixes in a partial file.
+        # Auxiliary evidence: an upload problem must not turn a shard red, and a
+        # re-run attempt replaces the earlier attempt's artifact of the same name.
+        if: (success() || failure()) && matrix.os == 'ubuntu-latest'
+        continue-on-error: true
+        uses: actions/upload-artifact@v6
+        with:
+          name: backend-test-timings-${{ matrix.shard }}
+          path: ${{ runner.temp }}/backend-test-timings.json
+          if-no-files-found: warn
+          overwrite: true
+          retention-days: 14
 
       - name: Stop PostgreSQL (ubuntu shards)
         if: always() && matrix.os == 'ubuntu-latest' && steps.postgres.outcome != '' && steps.postgres.outcome != 'skipped'
