@@ -25,7 +25,13 @@ import type { PreparedScenario, ScenarioVariant } from './scenario'
 
 export const NEGATIVE_SIGNATURES = {
   sqlite: 'This is an epoch-1 installation',
-  'sqlite-no-sidecar': 'unable to open database file',
+  // Bun on macOS links the system SQLite, which refuses a read-only WAL database without sidecars
+  // (S4). Bun's bundled SQLite on Linux and Windows opens it (creating -wal/-shm), so v0.19.3
+  // reaches the same epoch-1 refusal as the plain SQLite variant there.
+  'sqlite-no-sidecar':
+    process.platform === 'darwin'
+      ? 'unable to open database file'
+      : 'This is an epoch-1 installation',
   postgresql: 'Finish or roll back RFC-349 operation',
 } as const
 

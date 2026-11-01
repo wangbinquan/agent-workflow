@@ -160,7 +160,14 @@
   负载约 10～30）唯一的确定性失败是上面漏登记的环境变量（已补），其余 19 条为 bun 默认 5 s 的用例超时，所在 9 个文件逐个串行复跑全部通过；RFC-321 发布棘轮只在单提交导出树上失败
   （要求完整可达历史），真实仓库通过。
   L2 工具链首次端到端执行修了旧二进制兼容问题（沙箱环境清洗、关停连接重置、旧版自身 PG 缺陷按精确签名记录），候选侧断言不放宽。
-- **下一步**：推送后按 SHA 跟踪主 CI；手动触发一次 `release-upgrade-nightly`；全绿后标 Done。
+- **提交**：`cc81d09c4`（609 个路径；RFC-403 已由并发 session 先行提交，本提交在其上，`STATE.md` 与 `guard-manifest.json` 只含本 RFC 的部分）。
+- **CI 第一轮**（`cc81d09c4`，主 CI 41287820486）红在本 RFC，四类，均已修（design §11 末行）：①PG L1 v0.18.19 / v0.19.0 撞 PostgreSQL 默认
+  `max_connections=100`（53300）——Bun.SQL 的池首次查询即建满 `max`，迁移 runtime 每库占 `2 × poolMax`，升级本身约 60 条；**产品修复**：迁移 runtime 池上限
+  `min(poolMax, 4)`、启动探测单连接，夹具用完即关（本机 100 连接库上 6 个 PG 例全过，去掉上限的变异使新用例在真实库上测到 32 条而红）；②WAL 负对照只在 macOS 成立
+  （系统 SQLite 拒绝；Linux／Windows 内置 SQLite 能读但留下 sidecar），用例与 v0.19.3 反证签名改为按平台；③gitleaks 把种子的合成十六进制占位值判为密钥，按指纹豁免；
+  ④resume / start / 桥接三个长文件撞 15 分钟分片上限，按中断点 / 场景 / 发布版拆文件，`rfc398-split-test-coverage` 守住覆盖不减。
+  集中验证用的 PostgreSQL 测试库改为默认 `max_connections`（教训进 `docs/dev-gotchas.md`）。
+- **下一步**：推送修复后按 SHA 跟踪主 CI；`release-upgrade-nightly` 41287876705 跑在 `cc81d09c4` 上（L2 不受上述用例问题影响，结果单独看）；全绿后标 Done。
 
 ## 2026-10-30 RFC 状态对账：索引登记修正与 RFC-294 剩余范围（纯文档）
 

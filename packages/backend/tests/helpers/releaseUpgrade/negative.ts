@@ -58,27 +58,36 @@ export async function missingBridgeProof(built: BuiltRelease): Promise<void> {
     return
   const pg = built.pg!,
     reference = await pg.create()
-  const compiler = await pg.runtime(reference.database).providerPool().reserve()
+  // Both runtimes close before the upgrade starts: Bun.SQL fills each pool to poolMax on first
+  // use, and two idle 16-connection pools pushed the v0.18.19 case past CI's default
+  // max_connections=100 (53300 "too many clients", CI run 41287820486 shard 12).
+  const referenceRuntime = pg.runtime(reference.database)
+  const sourceRuntime = pg.runtime(built.database!.database)
   try {
-    const manifest = await loadSupportedSourceManifest({
-      postgresqlCatalog: (version) => compileEpoch1PostgresqlCatalog(compiler, version),
-    })
-    const connection = await pg.runtime(built.database!.database).providerPool().reserve()
+    const compiler = await referenceRuntime.providerPool().reserve()
     try {
-      const fingerprint = await collectSourceFingerprint(postgresqlHistoryConnection(connection))
-      identifySource({ fingerprint, manifest })
-      const copy = {
-        ...manifest,
-        sources: manifest.sources.filter((source) => source.readMode !== 'logical-bridge'),
+      const manifest = await loadSupportedSourceManifest({
+        postgresqlCatalog: (version) => compileEpoch1PostgresqlCatalog(compiler, version),
+      })
+      const connection = await sourceRuntime.providerPool().reserve()
+      try {
+        const fingerprint = await collectSourceFingerprint(postgresqlHistoryConnection(connection))
+        identifySource({ fingerprint, manifest })
+        const copy = {
+          ...manifest,
+          sources: manifest.sources.filter((source) => source.readMode !== 'logical-bridge'),
+        }
+        rejected(
+          () => identifySource({ fingerprint, manifest: copy }),
+          `${built.release.tag}: missing released PG bridges`,
+        )
+      } finally {
+        connection.release()
       }
-      rejected(
-        () => identifySource({ fingerprint, manifest: copy }),
-        `${built.release.tag}: missing released PG bridges`,
-      )
     } finally {
-      connection.release()
+      compiler.release()
     }
   } finally {
-    compiler.release()
+    await Promise.all([referenceRuntime.close(), sourceRuntime.close()])
   }
 }

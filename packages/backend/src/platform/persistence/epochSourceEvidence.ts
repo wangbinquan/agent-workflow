@@ -6,6 +6,8 @@ import { createPostgresqlDatabaseRuntime } from './postgresqlRuntime'
 export async function probeConfiguredEpochSource(input: {
   readonly database: DatabaseConfig
   readonly env?: Readonly<Record<string, string | undefined>>
+  /** Test seam; production uses Bun.SQL. */
+  readonly poolFactory?: Parameters<typeof createPostgresqlDatabaseRuntime>[0]['poolFactory']
 }): Promise<boolean | undefined> {
   switch (input.database.provider) {
     case 'sqlite':
@@ -16,9 +18,12 @@ export async function probeConfiguredEpochSource(input: {
       return unhandledDatabaseProvider(input.database)
   }
   const runtime = createPostgresqlDatabaseRuntime({
-    config: input.database,
+    // One catalog query. Bun.SQL opens a pool's full `max` on first use, so the configured
+    // online poolMax would open that many connections for it.
+    config: { ...input.database, poolMax: 1 },
     env: input.env,
     generationId: 'dbg_epoch_boot_probe',
+    poolFactory: input.poolFactory,
   })
   try {
     const rows = await runtime

@@ -1,4 +1,7 @@
 // RFC-398 §3.8/§7.6: original release catalogs and live PostgreSQL rows, not epoch-1-head substitutes.
+// Each released PostgreSQL source registers from its own test file
+// (rfc398-postgresql-bridge-<tag>.test.ts): both releases together ran about 4.6 CI minutes, most
+// of a 15-minute backend shard. rfc398-split-test-coverage.test.ts requires one file per release.
 import { expect, test } from 'bun:test'
 import { Database, type SQLQueryBindings } from 'bun:sqlite'
 import { readFileSync, readdirSync } from 'node:fs'
@@ -51,11 +54,11 @@ import type {
   MigrationRunInit,
   FrozenSourceHandle,
 } from '@/platform/persistence/migration/run/types'
-import { FakeContentInventory, frozenValues } from './helpers/rfc395V2/contentFixtures'
-import { taskRow } from './helpers/rfc395V2/taskFixtures'
-import { ordinaryDefinition, runValues } from './helpers/rfc395V2/runFixtures'
-import { makeSwitchFixture } from './helpers/rfc395V3SwitchFixture'
-import { describeRfc398Postgresql, rfc398Postgresql, pgQuote } from './helpers/rfc398Postgresql'
+import { FakeContentInventory, frozenValues } from './rfc395V2/contentFixtures'
+import { taskRow } from './rfc395V2/taskFixtures'
+import { ordinaryDefinition, runValues } from './rfc395V2/runFixtures'
+import { makeSwitchFixture } from './rfc395V3SwitchFixture'
+import { describeRfc398Postgresql, rfc398Postgresql, pgQuote } from './rfc398Postgresql'
 
 async function fixture(release: ReleasedPostgresqlSource, invalid = false) {
   const f = await rfc398Postgresql()
@@ -319,8 +322,13 @@ async function conversionInput(source: FrozenSourceHandle, root: string) {
   })
 }
 
-describeRfc398Postgresql('RFC-398 original PostgreSQL logical bridge', () => {
-  for (const release of releasedPostgresqlSources) {
+export const BRIDGE_RELEASE_TAGS: readonly string[] = releasedPostgresqlSources.map((r) => r.tag)
+
+/** Registers the bridge cases for one released PostgreSQL source. */
+export function registerBridgeRelease(tag: string): void {
+  const release = releasedPostgresqlSources.find((r) => r.tag === tag)
+  if (!release) throw new Error(`unknown released PostgreSQL source ${tag}`)
+  describeRfc398Postgresql('RFC-398 original PostgreSQL logical bridge', () => {
     test(`${release.tag}: exact catalog/receipts, retained archive, NULL lineage, conversion and trace --replay`, async () => {
       const f = await fixture(release)
       let frozen: FrozenSourceHandle | undefined
@@ -585,5 +593,5 @@ describeRfc398Postgresql('RFC-398 original PostgreSQL logical bridge', () => {
         await f.close()
       }
     }, 180_000)
-  }
-})
+  })
+}

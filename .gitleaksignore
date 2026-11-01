@@ -119,3 +119,12 @@ f3ab372d9e42604b3041759e91470bffb5a20f36:packages/system-mocks/src/runtime/fixtu
 045abf20ae1d36c71f9d0cc0eb138e5664b496ff:packages/backend/src/platform/persistence/migration/epoch1/provenance.json:sentry-access-token:25
 045abf20ae1d36c71f9d0cc0eb138e5664b496ff:packages/backend/src/platform/persistence/migration/epoch1/provenance.json:generic-api-key:133
 045abf20ae1d36c71f9d0cc0eb138e5664b496ff:packages/backend/src/platform/persistence/migration/epoch1/provenance.json:generic-api-key:231
+# RFC-398 — the release-upgrade seed fixtures give the users / sessions rows, the RFC-304
+# concurrency lease and their epoch-2 copies one fixed synthetic 64-hex placeholder. It is
+# migration-matrix test data, not a credential. JSON cannot carry an inline allow, so exempt
+# only these five fingerprints of the RFC-398 commit.
+cc81d09c4931b85cd3151e97684ef76e8d8b835b:packages/backend/tests/fixtures/release-upgrade/seeds/epoch1/0018_rfc036_users.json:generic-api-key:31
+cc81d09c4931b85cd3151e97684ef76e8d8b835b:packages/backend/tests/fixtures/release-upgrade/seeds/epoch1/0018_rfc036_users.json:generic-api-key:43
+cc81d09c4931b85cd3151e97684ef76e8d8b835b:packages/backend/tests/fixtures/release-upgrade/seeds/epoch1/0160_rfc304_concurrency.json:generic-api-key:18
+cc81d09c4931b85cd3151e97684ef76e8d8b835b:packages/backend/tests/fixtures/release-upgrade/seeds/epoch2/0000.json:generic-api-key:4179
+cc81d09c4931b85cd3151e97684ef76e8d8b835b:packages/backend/tests/fixtures/release-upgrade/seeds/epoch2/0000.json:generic-api-key:4216

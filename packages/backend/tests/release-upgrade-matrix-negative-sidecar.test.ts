@@ -1,6 +1,7 @@
-// RFC-398 T9 / §7.5 negative proof 2: a copied helper forced to readonly cannot read the no-sidecar release build.
+// RFC-398 T9 / §7.5 negative proof 2: a copied helper forced to readonly is observably wrong on the
+// no-sidecar release build (macOS: cannot read it; Linux / Windows: leaves sidecars behind).
 import { expect, setDefaultTimeout, test } from 'bun:test'
-import { readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import type * as OpenForReadModule from '@/platform/persistence/sqlite/openForRead'
@@ -26,15 +27,30 @@ test('plain readonly negative and production helper positive on the same WAL byt
     const path = join(built.home, 'plain-readonly.ts')
     writeFileSync(path, mutated)
     const copy = (await import(pathToFileURL(path).href)) as typeof OpenForReadModule
-    expect(() => {
+    let refused: unknown = null
+    try {
       const db = copy.openSqliteForRead(built.sourcePath)
       try {
         db.query('SELECT count(*) FROM tasks').get()
       } finally {
         db.close()
       }
-    }).toThrow()
+    } catch (error) {
+      refused = error
+    }
+    // Bun on macOS links the system SQLite, which refuses a read-only WAL database without
+    // sidecars (the S4 defect). Bun's bundled SQLite on Linux and Windows reads it but leaves
+    // -wal/-shm behind the read-only handle (CI run 41287820486, ubuntu shard 25), which the
+    // production helper does not: either way the readonly mutation is observable.
+    const sidecars = () =>
+      existsSync(`${built.sourcePath}-wal`) || existsSync(`${built.sourcePath}-shm`)
+    if (process.platform === 'darwin')
+      expect(String(refused)).toContain('unable to open database file')
+    else expect(sidecars()).toBe(refused === null)
     equal(readFileSync(built.sourcePath), bytes, 'negative does not change source bytes')
+    // The positive half starts from the same sidecar-less state.
+    rmSync(`${built.sourcePath}-wal`, { force: true })
+    rmSync(`${built.sourcePath}-shm`, { force: true })
     const db = openSqliteForRead(built.sourcePath)
     try {
       equal(

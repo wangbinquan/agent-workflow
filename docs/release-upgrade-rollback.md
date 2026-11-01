@@ -78,11 +78,14 @@ Windows shutdown 通道时，记录 termination，再对保留的完整 WAL 做 
 候选（`retained-asset`），以 v0.19.2 造数。只有造数成功、候选实际启动且非零退出，并分别命中
 以下签名才算反证成功；下载失败、超时、被杀或错误发生在旧版阶段都失败：
 
-| 变体                              | 必须出现的候选失败签名                  |
-| --------------------------------- | --------------------------------------- |
-| SQLite 常规（保留干净 sidecar）   | `This is an epoch-1 installation`       |
-| SQLite 无 sidecar                 | `unable to open database file`          |
-| PG 一键迁移未 finalize + 再写一轮 | `Finish or roll back RFC-349 operation` |
+| 变体                              | 必须出现的候选失败签名                                                                   |
+| --------------------------------- | ---------------------------------------------------------------------------------------- |
+| SQLite 常规（保留干净 sidecar）   | `This is an epoch-1 installation`                                                        |
+| SQLite 无 sidecar                 | macOS：`unable to open database file`；Linux／Windows：`This is an epoch-1 installation` |
+| PG 一键迁移未 finalize + 再写一轮 | `Finish or roll back RFC-349 operation`                                                  |
+
+macOS 版 Bun 使用系统 SQLite，只读打开缺 sidecar 的 WAL 库直接失败（S4）；Linux／Windows 版
+Bun 内置的 SQLite 能打开（并在旁边建出 `-wal/-shm`），v0.19.3 于是走到与常规变体相同的 epoch-1 拒绝。
 
 v0.17.0–v0.17.11、v0.18.0、v0.18.1 的 L2 `unsupported` 排除已由用户于 2026-10-31 批准；
 仍留在夜间映射中输出带原因的 skip，L1 覆盖要求不变。运行记录应区分 `passed`、

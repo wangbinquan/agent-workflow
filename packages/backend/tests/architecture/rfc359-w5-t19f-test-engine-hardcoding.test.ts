@@ -103,6 +103,12 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   'helpers/rfc395V3Harness.ts: 1', // real-file-database
   // RFC-398 design §2.2 / §7.6: persistent epoch-1 WAL home shared with killed/restarted child processes; the paired PG process fixture is separate.
   'helpers/rfc398AutoUpgrade.ts: 1', // real-file-database
+  // RFC-398 design §7.6: mutate the persistent source file while the child is frozen at the reapproval barrier; the PG resume lane uses its
+  // server fixture. Moved from rfc398-auto-upgrade-resume.test.ts when the matrix was split one point per file (CI shard budget).
+  'helpers/rfc398AutoUpgradeResume.ts: 1', // real-file-database
+  // RFC-398 design §3.8 / §7.6: original SQLite@0223 and private bridge snapshots are compared with real released PG sources in the same
+  // transcript. Moved from rfc398-postgresql-bridge.test.ts when the releases were split one per file (CI shard budget).
+  'helpers/rfc398PostgresqlBridge.ts: 2', // real-file-database
   'helpers/schemaFixture.ts: 1', // real-file-database
   'input-port-contract.test.ts: 1', // sqlite-execution-engine
   'integration-chaos/chaos-scenarios.integration.test.ts: 2', // real-file-database
@@ -342,10 +348,6 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   'rfc395-v1-offline-upgrade.test.ts: 1', // real-file-database
   'rfc395-v1-source-readers.test.ts: 1', // real-file-database
   'rfc395-v3-source-access.test.ts: 1', // real-file-database
-  // RFC-398 design §7.6: mutate the persistent source file while the child is frozen at the reapproval barrier; the PG resume lane uses its server fixture.
-  'rfc398-auto-upgrade-resume.test.ts: 1', // real-file-database
-  // RFC-398 design §3.8 / §7.6: original SQLite@0223 and private bridge snapshots are compared with real released PG sources in the same transcript.
-  'rfc398-postgresql-bridge.test.ts: 2', // real-file-database
   // RFC-398 design §5 / §7.5: WAL sidecars, native strict-open negative control, and byte-preserving snapshots are SQLite-only mechanisms
   // (six real files: two epoch-1 templates with and without WAL, the epoch-2 template, the strict-open control, the writer and the offline snapshot).
   'rfc398-wal-sidecar-open.test.ts: 6', // real-file-database

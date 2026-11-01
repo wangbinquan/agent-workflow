@@ -370,6 +370,9 @@ async function loadPostgresqlBaseline(built: BuiltRelease): Promise<void> {
     )
   } finally {
     db.close()
+    // Bun.SQL fills a pool to `max` on first use; an idle builder pool would otherwise hold
+    // poolMax connections through the upgrade (CI's PostgreSQL keeps the default 100).
+    await runtime.close()
   }
 }
 
@@ -470,6 +473,7 @@ async function installNative(built: BuiltRelease): Promise<void> {
     })
   } finally {
     db?.close()
+    await runtime?.close()
   }
 }
 

@@ -1,8 +1,9 @@
-// RFC-398 §2.2/7.6: real daemon/child lifetime, including the stale pre-read race in both orders.
+// RFC-398 §2.2/7.6: real daemon/child lifetime. The `start` cases are split across
+// rfc398-start-auto-upgrade{,-barriers,-takeover,-signals,-retry}.test.ts so each file fits a
+// backend CI shard (the combined file ran about 6.5 minutes; CI run 41287820486, shard 36/36).
 import { expect, test } from 'bun:test'
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { readPidFromLock } from '@/util/lock'
 import { autoUpgradeFixture, businessRoundTrip } from './helpers/rfc398AutoUpgrade'
 import { describeRfc398Postgresql, rfc398Postgresql } from './helpers/rfc398Postgresql'
 
@@ -76,138 +77,6 @@ for (const manual of [true, false])
       expect(existsSync(join(f.home, 'database-generation.json'))).toBe(false)
       expect(process.error).toContain(manual ? 'db migration plan' : 'acknowledge')
       expect(f.sessions()).toHaveLength(manual ? 0 : 1)
-    } finally {
-      await f.close()
-    }
-  }, 180_000)
-
-for (const barrier of [
-  'parent-gone',
-  'takeover-before-rename',
-  'lock-released-before-active-remove',
-])
-  test(`start waits while ${barrier}, including the absent/stale/complete lock windows`, async () => {
-    const f = await autoUpgradeFixture()
-    try {
-      f.barriers(['run-returned', barrier])
-      const parent = f.start()
-      const event = await f.reached('run-returned')
-      f.kill(parent.process.pid)
-      await parent.exited
-      if (barrier === 'lock-released-before-active-remove') f.release('run-returned')
-      await f.reached(barrier, event.pid)
-      const next = f.start()
-      await f.reached('startup-waiting-upgrade', next.process.pid)
-      expect(f.events().filter((e) => e.point === 'delegated')).toHaveLength(1)
-      expect(existsSync(join(f.home, '.daemon.info'))).toBe(false)
-      expect(readPidFromLock(join(f.home, '.daemon.lock'))).not.toBe(next.process.pid)
-      f.release(barrier)
-      f.release('run-returned')
-      await f.ready()
-      expect(f.sessions()).toHaveLength(1)
-      expect(f.sessions()[0]!.outcome).toBe('completed')
-    } finally {
-      await f.close()
-    }
-  }, 240_000)
-
-for (const order of ['before', 'after'] as const)
-  test(`N read no active; C registers; P dies; N acquires ${order} takeover`, async () => {
-    const f = await autoUpgradeFixture()
-    try {
-      f.barriers(['startup-before-lock'])
-      const newcomer = f.start()
-      await f.reached('startup-before-lock', newcomer.process.pid)
-      f.barriers([
-        `startup-before-lock@${newcomer.process.pid}`,
-        'delegated',
-        'parent-gone',
-        'takeover-acquired',
-        'run-returned',
-      ])
-      const parent = f.start()
-      const child = await f.reached('delegated')
-      // Delegation has been validated. Child is paused before its parent watcher starts.
-      f.kill(parent.process.pid)
-      await parent.exited
-      f.release('delegated')
-      await f.reached('parent-gone', child.pid)
-      if (order === 'after') {
-        f.release('parent-gone')
-        await f.reached('takeover-acquired', child.pid)
-      }
-      f.release('startup-before-lock')
-      await f.reached('startup-waiting-upgrade', newcomer.process.pid)
-      expect(readPidFromLock(join(f.home, '.daemon.lock'))).not.toBe(newcomer.process.pid)
-      expect(f.events().filter((e) => e.point === 'delegated')).toHaveLength(1)
-      f.release('parent-gone')
-      f.release('takeover-acquired')
-      f.release('run-returned')
-      await f.ready()
-      expect(f.sessions()).toHaveLength(1)
-    } finally {
-      await f.close()
-    }
-  }, 240_000)
-
-test('takeover between run return and verify still verifies and writes the receipt', async () => {
-  const f = await autoUpgradeFixture()
-  try {
-    f.barriers(['run-returned', 'takeover-acquired'])
-    const p = f.start()
-    const c = await f.reached('run-returned')
-    f.kill(p.process.pid)
-    await p.exited
-    await f.reached('takeover-acquired', c.pid)
-    expect(f.events().some((e) => e.point === 'verify-called')).toBe(false)
-    f.release('takeover-acquired')
-    f.release('run-returned')
-    await f.wait(() => (f.sessions()[0]?.outcome === 'completed' ? true : null))
-    expect(f.events().filter((e) => e.point === 'verify-called')).toHaveLength(1)
-    expect(f.journals()[0]!.payload.phase).toBe('verified')
-  } finally {
-    await f.close()
-  }
-}, 240_000)
-
-test('verification failure rolls back, start refuses another attempt, explicit retry opens a new session', async () => {
-  const f = await autoUpgradeFixture()
-  try {
-    const original = readFileSync(join(f.home, 'db.sqlite'))
-    f.flag('negative-health')
-    expect(await f.start().exited).toBe(1)
-    expect(f.sessions()[0]!.outcome).toBe('failed')
-    expect(f.journals()[0]!.payload.status).toBe('rolled-back')
-    expect(readFileSync(join(f.home, 'db.sqlite'))).toEqual(original)
-    f.flag('negative-health', false)
-    const refused = f.start()
-    expect(await refused.exited).toBe(1)
-    expect(refused.error).toContain('--retry')
-    expect(f.sessions()).toHaveLength(1)
-    const retry = f.spawn(['db', 'migration', 'auto', '--retry', '--json'])
-    expect(await retry.exited).toBe(0)
-    expect(f.sessions().map((s) => s.outcome)).toEqual(['failed', 'completed'])
-    expect(f.journals()).toHaveLength(2)
-    f.start()
-    await f.ready()
-  } finally {
-    await f.close()
-  }
-}, 240_000)
-
-for (const signal of ['SIGINT', 'SIGTERM'] as const)
-  test(`start forwards ${signal} and waits for child exit`, async () => {
-    const f = await autoUpgradeFixture()
-    try {
-      f.barriers(['intent'])
-      const p = f.start()
-      await f.reached('intent')
-      p.process.kill(signal)
-      expect(await p.exited).not.toBe(0)
-      f.release('intent')
-      f.start()
-      await f.ready()
-      expect(f.sessions()).toHaveLength(1)
     } finally {
       await f.close()
     }

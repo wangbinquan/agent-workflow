@@ -33,7 +33,10 @@ import {
   type PostgresqlPool,
   type PostgresqlPoolOptions,
 } from '@/platform/persistence/postgresqlRuntime'
-import { postgresqlRuntimeFor } from '@/platform/persistence/migration/freeze/postgresqlDatabases'
+import {
+  EPOCH_MIGRATION_POOL_MAX,
+  postgresqlRuntimeFor,
+} from '@/platform/persistence/migration/freeze/postgresqlDatabases'
 import { describeRfc398Postgresql } from './helpers/rfc398Postgresql'
 import { postgresqlAutoUpgradeFixture } from './helpers/rfc398AutoUpgradePostgresql'
 import { businessRoundTrip } from './helpers/rfc398AutoUpgrade'
@@ -251,7 +254,14 @@ test('generation pointers and migration runtimes override only the database path
       assertUrl(options.url, databaseName)
       expect(options.database).toBe(databaseName)
     }
-    expect(capture.options.map((options) => options.max)).toEqual([7, 7, 7, 7])
+    // Creation order: daemon online, migration online + migration (eager wrapper), daemon
+    // migration. The daemon keeps the configured poolMax; epoch-migration runtimes are capped.
+    expect(capture.options.map((options) => options.max)).toEqual([
+      7,
+      EPOCH_MIGRATION_POOL_MAX,
+      EPOCH_MIGRATION_POOL_MAX,
+      7,
+    ])
     expect(env.SOURCE_URL).toContain('/original?')
   } finally {
     await runtime.close()

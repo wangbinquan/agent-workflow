@@ -168,16 +168,31 @@ afterAll(() => {
 
 describe('WAL open semantics', () => {
   test('helper reads a WAL database without sidecars; the old strict open is the negative control', () => {
-    const f = fixture()
-    expect(() => {
-      const old = new Database(f.path, { readonly: true })
+    // The negative control gets its own copy. Bun on macOS links the system SQLite, which refuses
+    // a read-only WAL database without sidecars (`unable to open database file`, the §5 defect);
+    // Bun's bundled SQLite on Linux and Windows opens it but materializes -wal/-shm beside the
+    // read-only handle (CI run 41287820486, ubuntu shard 1). Either outcome shows the fixture is
+    // the sidecar-less WAL state; the helper below must read it on every platform.
+    const control = fixture()
+    let refused: unknown = null
+    try {
+      const old = new Database(control.path, { readonly: true })
       try {
         old.query('SELECT count(*) FROM maintenance_state').get()
       } finally {
         old.close()
       }
-    }).toThrow()
-    f.unchanged()
+    } catch (error) {
+      refused = error
+    }
+    if (process.platform === 'darwin')
+      expect(String(refused)).toContain('unable to open database file')
+    else
+      expect(existsSync(`${control.path}-wal`) || existsSync(`${control.path}-shm`)).toBe(
+        refused === null,
+      )
+    control.unchanged()
+    const f = fixture()
     const db = openSqliteForRead(f.path)
     try {
       expect(db.query("SELECT value FROM maintenance_state WHERE key='rfc398'").get()).toEqual({

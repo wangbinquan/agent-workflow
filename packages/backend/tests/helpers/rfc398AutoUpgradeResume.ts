@@ -1,4 +1,10 @@
-// RFC-398 §7.6: every durable boundary uses real start -> auto children and SIGKILL.
+// RFC-398 §7.6 / AC-4 (design §10 `rfc398-auto-upgrade-resume`): every durable boundary uses real
+// start -> auto children and SIGKILL of the child, the parent or both, then `start` again.
+//
+// Each interruption point registers from its own test file. The whole matrix needs about 26 CI
+// minutes, beyond one 15-minute backend shard (CI run 41287820486: shard 24/36 was cancelled while
+// the single combined file was still running). Bun shards by file, so one point per file spreads
+// the cases. `rfc398-split-test-coverage.test.ts` requires every point exactly once.
 import { expect, test } from 'bun:test'
 import { Database, type SQLQueryBindings } from 'bun:sqlite'
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
@@ -8,10 +14,10 @@ import {
   autoUpgradeFixture,
   acknowledgeFixture,
   type AutoUpgradeFixture,
-} from './helpers/rfc398AutoUpgrade'
-import { postgresqlAutoUpgradeFixture } from './helpers/rfc398AutoUpgradePostgresql'
-import { describeRfc398Postgresql } from './helpers/rfc398Postgresql'
-import { frozenValues } from './helpers/rfc395V2/contentFixtures'
+} from './rfc398AutoUpgrade'
+import { postgresqlAutoUpgradeFixture } from './rfc398AutoUpgradePostgresql'
+import { describeRfc398Postgresql } from './rfc398Postgresql'
+import { frozenValues } from './rfc395V2/contentFixtures'
 
 const ordinary = [
   'intent',
@@ -25,14 +31,24 @@ const ordinary = [
   'phase-activated',
   'phase-verified',
   'failure-source-changed',
-]
-const committed = [
+] as const
+const committed: readonly string[] = [
   'acceptance-published',
   'acceptance-referenced',
   'acceptance-journal-failed',
   'verify-failed',
   'rollback-retired',
   'rollback-pointer-restored',
+]
+export const RESUME_POINTS: readonly string[] = [
+  ...ordinary,
+  'acceptance-unpublished',
+  ...committed,
+]
+export const POSTGRESQL_RESUME_POINTS: readonly string[] = [
+  'phase-frozen',
+  'run-returned',
+  'acceptance-published',
 ]
 const victims = ['child', 'parent', 'both'] as const
 
@@ -97,41 +113,9 @@ async function atPoint(f: AutoUpgradeFixture, point: string) {
   return { parent, child: reached.pid }
 }
 
-describeRfc398Postgresql('PostgreSQL interrupted sessions retain allocations', () => {
-  for (const point of ['phase-frozen', 'run-returned', 'acceptance-published'])
-    for (const victim of victims)
-      test(`${point}: kill ${victim}; same operation/run never creates another database`, async () => {
-        const f = await postgresqlAutoUpgradeFixture()
-        try {
-          if (point === 'acceptance-published') f.flag('negative-health')
-          f.barriers([point])
-          const parent = f.start()
-          const child = await f.reached(point)
-          const allocations = f.allocations()
-          expect(allocations).toHaveLength(2)
-          if (victim !== 'parent') f.kill(child.pid)
-          if (victim !== 'child') f.kill(parent.process.pid)
-          await parent.exited
-          f.flag('negative-health', false)
-          f.release(point)
-          const next = f.start()
-          if (point === 'acceptance-published') {
-            expect(await next.exited).toBe(1)
-            expect(f.sessions()[0]!.outcome).toBe('failed')
-            expect(f.journals()[0]!.payload.status).toBe('rolled-back')
-          } else {
-            await f.ready()
-            expect(f.sessions()[0]!.outcome).toBe('completed')
-          }
-          expect(f.allocations()).toEqual(allocations)
-          expect(f.journals()).toHaveLength(1)
-        } finally {
-          await f.close()
-        }
-      }, 300_000)
-})
-
-for (const point of [...ordinary, 'acceptance-unpublished', ...committed])
+/** SQLite: SIGKILL child / parent / both at `point`, then `start` again. */
+export function registerResumePoint(point: string): void {
+  if (!RESUME_POINTS.includes(point)) throw new Error(`unknown RFC-398 resume point ${point}`)
   for (const victim of victims) {
     test(`${point}: SIGKILL ${victim} preserves one operation and the durable acceptance decision`, async () => {
       const f = await autoUpgradeFixture({ blocked: point === 'refused' })
@@ -198,3 +182,42 @@ for (const point of [...ordinary, 'acceptance-unpublished', ...committed])
       }
     }, 240_000)
   }
+}
+
+/** PostgreSQL: the same interruption keeps the session's database allocations. */
+export function registerPostgresqlResumePoint(point: string): void {
+  if (!POSTGRESQL_RESUME_POINTS.includes(point))
+    throw new Error(`unknown RFC-398 PostgreSQL resume point ${point}`)
+  describeRfc398Postgresql('PostgreSQL interrupted sessions retain allocations', () => {
+    for (const victim of victims)
+      test(`${point}: kill ${victim}; same operation/run never creates another database`, async () => {
+        const f = await postgresqlAutoUpgradeFixture()
+        try {
+          if (point === 'acceptance-published') f.flag('negative-health')
+          f.barriers([point])
+          const parent = f.start()
+          const child = await f.reached(point)
+          const allocations = f.allocations()
+          expect(allocations).toHaveLength(2)
+          if (victim !== 'parent') f.kill(child.pid)
+          if (victim !== 'child') f.kill(parent.process.pid)
+          await parent.exited
+          f.flag('negative-health', false)
+          f.release(point)
+          const next = f.start()
+          if (point === 'acceptance-published') {
+            expect(await next.exited).toBe(1)
+            expect(f.sessions()[0]!.outcome).toBe('failed')
+            expect(f.journals()[0]!.payload.status).toBe('rolled-back')
+          } else {
+            await f.ready()
+            expect(f.sessions()[0]!.outcome).toBe('completed')
+          }
+          expect(f.allocations()).toEqual(allocations)
+          expect(f.journals()).toHaveLength(1)
+        } finally {
+          await f.close()
+        }
+      }, 300_000)
+  })
+}

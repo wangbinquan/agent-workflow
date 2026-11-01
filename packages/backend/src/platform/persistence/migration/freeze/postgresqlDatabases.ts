@@ -12,6 +12,15 @@ import type { TargetPreflight } from '../run/types'
 import type { ConversionBlock } from '../conversion/types'
 import type { OfflinePostgresqlDatabase } from '../offlineSourceUpgrade'
 
+/**
+ * RFC-398: epoch-migration work runs one session at a time per database (every migration query
+ * reserves and releases; the L1 reservation trace never saw two at once). Bun.SQL opens a pool's
+ * full `max` on first use, so the online `poolMax` (16 by default) made each source, target and
+ * scratch runtime hold up to twice that many idle server connections while the planner keeps
+ * several open together — about 60 of a default PostgreSQL server's 100 for the upgrade alone.
+ */
+export const EPOCH_MIGRATION_POOL_MAX = 4
+
 export function postgresqlRuntimeFor(input: {
   readonly profileRef: string
   readonly base: DatabaseConfig | null
@@ -21,14 +30,15 @@ export function postgresqlRuntimeFor(input: {
 }): PostgresqlDatabaseRuntime {
   const profile = parsePostgresqlProfileRef(input.profileRef)
   if (profile?.kind !== 'env') throw new Error('postgresql-profile-reference-invalid')
+  const config = PostgresqlDatabaseConfigSchema.parse({
+    ...PostgresqlDatabaseConfigSchema.safeParse(input.base).data,
+    provider: 'postgresql',
+    urlEnv: profile.urlEnv,
+    databaseName: profile.databaseName,
+  })
   return migrationPostgresqlRuntime(
     createPostgresqlDatabaseRuntime({
-      config: PostgresqlDatabaseConfigSchema.parse({
-        ...PostgresqlDatabaseConfigSchema.safeParse(input.base).data,
-        provider: 'postgresql',
-        urlEnv: profile.urlEnv,
-        databaseName: profile.databaseName,
-      }),
+      config: { ...config, poolMax: Math.min(config.poolMax, EPOCH_MIGRATION_POOL_MAX) },
       generationId: input.generationId,
       env: input.env,
       poolFactory: input.poolFactory,
