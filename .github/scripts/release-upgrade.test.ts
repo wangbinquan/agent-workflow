@@ -391,3 +391,62 @@ test('release re-runs have no public asset mutation before all upgrade gates pas
   const publish = JSON.stringify(workflow.jobs.publish.steps)
   expect(publish.indexOf('gh release upload')).toBeLessThan(publish.indexOf('--draft=false'))
 })
+
+// Release-upgrade nightly 41287876705: v0.15.0 / v0.15.1 stub runs exited 3 ("prompt is missing the
+// RFC-200 envelope nonce"). Those releases mint a run nonce but render bare prompts; the runner
+// passes the nonce into the prompt only from v0.16.0. Pending gates follow the stored nonce
+// (RFC-395 v2-run-null-nonce), the runtime shim's transport follows the prompt.
+test('run nonce and prompt nonce are registered separately; the shim follows the prompt', () => {
+  const caps = new Map(readRegistry().releases.map((r) => [r.tag, r.runtime.capabilities]))
+  const pick = (tag: string) => {
+    const c = caps.get(tag)!
+    return { nonce: c.nonce, promptNonce: c.promptNonce }
+  }
+  expect(pick('v0.14.1')).toEqual({ nonce: false, promptNonce: false })
+  expect(pick('v0.15.0')).toEqual({ nonce: true, promptNonce: false })
+  expect(pick('v0.15.1')).toEqual({ nonce: true, promptNonce: false })
+  expect(pick('v0.16.0')).toEqual({ nonce: true, promptNonce: true })
+  for (const [tag, c] of caps)
+    if (c.promptNonce) expect({ tag, nonce: c.nonce }).toEqual({ tag, nonce: true })
+  const daemon = readFileSync(
+    new URL('../../scripts/release-upgrade/lib/daemon.ts', import.meta.url),
+    'utf8',
+  )
+  expect(daemon).toContain(
+    "AW_RELEASE_LEGACY_ENVELOPE: options.release.runtime.capabilities.promptNonce ? '0' : '1'",
+  )
+})
+
+// Release-upgrade nightly 41287876705 (Windows): under Git Bash `tar` is MSYS GNU tar, which cannot
+// use a native `C:\…` path as `-C`; extraction runs in the archive directory instead.
+test('tag-build extraction passes no native path to tar', () => {
+  const binaries = readFileSync(
+    new URL('../../scripts/release-upgrade/lib/binaries.ts', import.meta.url),
+    'utf8',
+  )
+  expect(binaries).toContain("command(['tar', '-xf', '-'], { input: archive, cwd: scratch })")
+  expect(binaries).not.toMatch(/\['tar',[^\]]*'-C'/)
+})
+
+// User decision 2026-11-01: only the nightly verify job may read the draft release holding the
+// retained v0.19.3 assets (GitHub lists drafts only to write-capable tokens); it never publishes.
+test('nightly verify can read the retained draft assets and publishes nothing', () => {
+  const nightly = parse(
+    readFileSync(new URL('../workflows/release-upgrade-nightly.yml', import.meta.url), 'utf8'),
+  )
+  expect(nightly.permissions).toEqual({ contents: 'read', actions: 'read' })
+  expect(nightly.jobs.verify.permissions).toEqual({ contents: 'write', actions: 'read' })
+  for (const [name, job] of Object.entries(
+    nightly.jobs as Record<string, { permissions?: unknown }>,
+  ))
+    if (name !== 'verify')
+      expect({ name, permissions: job.permissions }).toEqual({ name, permissions: undefined })
+  const steps = JSON.stringify(nightly.jobs.verify.steps)
+  for (const mutation of [
+    'gh release upload',
+    'gh release create',
+    'gh release edit',
+    '--draft=false',
+  ])
+    expect(steps).not.toContain(mutation)
+})

@@ -45,6 +45,13 @@ and logged as individual WARN lines. Source databases and pre-switch backups rem
 available. After the daemon's first business write, returning to the old version
 requires the pre-switch backup and old binary, losing subsequent writes.
 
+Installations from releases before v0.5.0 have no `secret.key`. When such a home
+holds repository URLs, the upgrade creates `secret.key` in the app home the way the
+daemon's first v0.5.0+ boot would, seals the URLs with it, and logs a WARN line
+(`created secret.key for legacy repository URLs`). Include it in app-home backups
+from then on. A home whose URLs are already sealed but whose key is missing still
+refuses with `v2-boot-url-key-missing`: restore the original `secret.key`.
+
 A failed acceptance check commits the session to rollback before its first business
 write. Restart finishes that rollback and refuses another automatic attempt. After
 repairing the cause, run `agent-workflow db migration auto --retry`; this creates a

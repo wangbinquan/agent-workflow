@@ -77,6 +77,12 @@ function runtimeFor(source: TagSource): ReleaseEntry['runtime'] {
         file.endsWith('.ts'),
     )
     .some((file) => /nonce=|RFC-200/.test(source.text(file)))
+  // v0.15.x mint a run nonce (db/schema.ts, nodeRunMint.ts) and teach the envelope parser and the
+  // shared prompt builder about it, but the runner passes it into the prompt only from v0.16.0;
+  // their stub runs failed "prompt is missing the RFC-200 envelope nonce" (nightly 41287876705).
+  const promptNonce = source
+    .grepFiles('envelopeNonce', 'packages/backend/src')
+    .some((file) => !/(?:^|\/)db\/schema\.ts$|[Mm]int[^/]*\.ts$/.test(file))
   const capabilities: ReleaseEntry['runtime']['capabilities'] = {
     auth: auth.includes('/api/auth/bootstrap/admin')
       ? 'bootstrap'
@@ -95,6 +101,7 @@ function runtimeFor(source: TagSource): ReleaseEntry['runtime'] {
     ),
     clarify: /['"]clarify['"]/.test(workflow),
     nonce,
+    promptNonce,
     agentId: /agentId:/.test(workflow),
     skillId: route('skills').includes('/api/skills/:id'),
     workgroupId: route('workgroups').includes('/api/workgroups/:id'),

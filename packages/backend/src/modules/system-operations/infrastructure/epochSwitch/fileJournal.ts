@@ -29,6 +29,32 @@ import {
 } from '../../domain/epochSwitch/model'
 import { assertJournalSuccessor } from '../../domain/epochSwitch/transitions'
 
+/**
+ * RFC-398: FlushFileBuffers on Windows needs a write-capable handle, so a read-only handle fails
+ * fsync with EPERM there (release-upgrade nightly 41287876705). POSIX keeps the read-only
+ * descriptor. A Windows copy that cannot be opened for writing (read-only attribute carried over
+ * by the copy) cannot be flushed; the rename that publishes it remains the authority.
+ */
+export function flushEpochFile(
+  path: string,
+  platform: NodeJS.Platform = process.platform,
+  openFile: (path: string, flags: 'r' | 'r+') => number = openSync,
+): void {
+  let fd: number
+  try {
+    fd = openFile(path, platform === 'win32' ? 'r+' : 'r')
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code
+    if (platform === 'win32' && (code === 'EPERM' || code === 'EACCES')) return
+    throw error
+  }
+  try {
+    fsyncSync(fd)
+  } finally {
+    closeSync(fd)
+  }
+}
+
 export function syncEpochDirectory(path: string): void {
   let fd: number | undefined
   try {
@@ -165,12 +191,7 @@ export function createLocalEpochArtifacts(root: string): EpochSwitchArtifactPort
         copyFileSync(path, temporary, constants.COPYFILE_FICLONE)
         const hash = createSha256DigestBuilder()
         for await (const chunk of createReadStream(temporary)) hash.update(chunk)
-        const fd = openSync(temporary, 'r')
-        try {
-          fsyncSync(fd)
-        } finally {
-          closeSync(fd)
-        }
+        flushEpochFile(temporary)
         return publish(temporary, name, `sha256:${hash.digestHex()}`)
       } finally {
         if (existsSync(temporary)) unlinkSync(temporary)
@@ -204,12 +225,7 @@ export function createLocalEpochArtifacts(root: string): EpochSwitchArtifactPort
       mkdirSync(dirname(destination), { recursive: true })
       const temporary = `${destination}.${crypto.randomUUID()}.tmp`
       copyFileSync(source, temporary, constants.COPYFILE_FICLONE)
-      const fd = openSync(temporary, 'r')
-      try {
-        fsyncSync(fd)
-      } finally {
-        closeSync(fd)
-      }
+      flushEpochFile(temporary)
       renameSync(temporary, destination)
       syncEpochDirectory(dirname(destination))
       return destination

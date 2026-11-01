@@ -99,7 +99,8 @@ export async function daemonEnvironment(options: DaemonOptions): Promise<NodeJS.
   const shimSettings = {
     AW_RELEASE_STUB_EXECUTABLE: resolve(stub),
     AW_RELEASE_OPENCODE_VERSION: options.release.runtime.probeVersion,
-    AW_RELEASE_LEGACY_ENVELOPE: options.release.runtime.capabilities.nonce ? '0' : '1',
+    // The transport follows what the prompt carries, not whether runs store a nonce (v0.15.x).
+    AW_RELEASE_LEGACY_ENVELOPE: options.release.runtime.capabilities.promptNonce ? '0' : '1',
     BUSINESS_WORKFLOW_STATE_DIR: join(shimDirectory, 'business'),
     CLARIFY_STUB_STATE: join(shimDirectory, 'clarify'),
   }

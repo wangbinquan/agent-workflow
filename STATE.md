@@ -201,7 +201,13 @@
   （系统 SQLite 拒绝；Linux／Windows 内置 SQLite 能读但留下 sidecar），用例与 v0.19.3 反证签名改为按平台；③gitleaks 把种子的合成十六进制占位值判为密钥，按指纹豁免；
   ④resume / start / 桥接三个长文件撞 15 分钟分片上限，按中断点 / 场景 / 发布版拆文件，`rfc398-split-test-coverage` 守住覆盖不减。
   集中验证用的 PostgreSQL 测试库改为默认 `max_connections`（教训进 `docs/dev-gotchas.md`）。
-- **下一步**：推送修复后按 SHA 跟踪主 CI；`release-upgrade-nightly` 41287876705 跑在 `cc81d09c4` 上（L2 不受上述用例问题影响，结果单独看）；全绿后标 Done。
+- **CI 第二轮**（`109ca2f81`，41293473768）：上述问题全部消失，只剩三片撞 15 分钟上限——本 RFC 让后端测试多出约 105 runner-分钟，Bun 按文件名轮转分片使长套件扎堆。
+  `fe076d714` 改为 `--timings` 按逐文件耗时均衡（分片数与预算不变，见 design §11）。
+- **首次真实夜间**（`cc81d09c4`，41287876705）查出六类问题（design §11）：①**Windows 上任何 SQLite 自动升级都失败**——只读句柄 fsync 在 Windows 上 `EPERM`
+  （`syncSourceDirectory` 与 epoch-switch 文件仓库），已修；②**v0.2.0 带缓存仓库的安装无法升级**（没有 `secret.key`，`v2-boot-url-key-missing`），
+  **用户 2026-11-01 裁决**：迁移按 daemon 首次启动的方式建密钥（只限活的 app home 且全部已编码 URL 为遗留托管形态），已实现；③v0.15.x 提示词不带 nonce，登记表拆出
+  `promptNonce`；④Windows 按 tag 构建的 `tar -C` 路径；⑤v0.19.3 草稿产物对只读 token 不可见，**用户裁决**只给夜间 `verify` 作业 `contents: write`；⑥L1 `start` 的 PG 例与 CI 第一轮①同因，已由连接池上限修复。
+- **下一步**：推送夜间修复后按 SHA 跟踪主 CI，并重跑一次 `release-upgrade-nightly`（Windows 修复只能由它验证）；全绿后标 Done。
 
 ## 2026-10-30 RFC 状态对账：索引登记修正与 RFC-294 剩余范围（纯文档）
 

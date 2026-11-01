@@ -32,6 +32,20 @@ export class TagSource {
   text(path: string): string {
     return this.has(path) ? this.read(path).toString('utf8') : ''
   }
+  /** Paths under `pathspec` whose content contains `needle` (one `git grep`, no blob reads). */
+  grepFiles(needle: string, pathspec: string): string[] {
+    const result = spawnSync('git', ['grep', '-l', '-F', needle, this.tag, '--', pathspec], {
+      cwd: REPO_ROOT,
+      maxBuffer: 32 * 1024 * 1024,
+    })
+    if (result.status === 1) return []
+    if (result.status !== 0) throw new Error(`git grep failed: ${result.stderr.toString()}`)
+    return result.stdout
+      .toString()
+      .trim()
+      .split('\n')
+      .map((line) => line.slice(this.tag.length + 1))
+  }
   json<T>(path: string): T {
     return JSON.parse(this.read(path).toString('utf8')) as T
   }

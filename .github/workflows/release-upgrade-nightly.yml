@@ -180,6 +180,14 @@ jobs:
     name: Verify ${{ matrix.id }}
     needs: [plan, candidate]
     timeout-minutes: 30
+    # User decision 2026-11-01: the retained v0.19.3 assets (old version and negative-control
+    # candidate) live in the draft release `upgrade-fixture-binaries`; GitHub lists draft releases
+    # only to tokens with write access, so the read-only token got "release not found" (nightly
+    # 41287876705, macOS v0.19.3). release.yml runs its upgrade gate with the same permission.
+    # Nothing in this job publishes or uploads.
+    permissions:
+      contents: write
+      actions: read
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}

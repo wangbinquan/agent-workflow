@@ -107,18 +107,38 @@ export async function materializedSourceDirectory(
   return root
 }
 
+/**
+ * RFC-398: FlushFileBuffers on Windows needs a write-capable handle, so fsync of a read-only
+ * handle fails with EPERM there (every Windows SQLite automatic upgrade stopped at the offline
+ * copy, release-upgrade nightly 41287876705). POSIX fsync works on a read-only descriptor and
+ * must not require write permission on captured files. A Windows file that cannot be opened for
+ * writing (read-only attribute) cannot be flushed at all; its atomic rename remains the authority.
+ */
+export async function flushSourceFile(
+  path: string,
+  platform: NodeJS.Platform = process.platform,
+  openFile: (path: string, flags: 'r' | 'r+') => ReturnType<typeof open> = open,
+): Promise<void> {
+  let file: Awaited<ReturnType<typeof open>>
+  try {
+    file = await openFile(path, platform === 'win32' ? 'r+' : 'r')
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code
+    if (platform === 'win32' && (code === 'EPERM' || code === 'EACCES')) return
+    throw error
+  }
+  try {
+    await file.sync()
+  } finally {
+    await file.close()
+  }
+}
+
 export async function syncSourceDirectory(root: string): Promise<void> {
   for (const name of readdirSync(root)) {
     const path = join(root, name)
     if (statSync(path).isDirectory()) await syncSourceDirectory(path)
-    else {
-      const file = await open(path, 'r')
-      try {
-        await file.sync()
-      } finally {
-        await file.close()
-      }
-    }
+    else await flushSourceFile(path)
   }
   if (process.platform !== 'win32') {
     const directory = await open(root, 'r')

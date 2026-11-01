@@ -143,7 +143,10 @@ async function buildTag(
   const scratch = mkdtempSync(join(buildDir, 'archive-'))
   try {
     const archive = await command(['git', 'archive', '--format=tar', release.tag])
-    await command(['tar', '-xf', '-', '-C', scratch], { input: archive })
+    // Extract in the archive directory instead of passing it to `-C`: under the Windows runner's
+    // Git Bash, `tar` is MSYS GNU tar, which cannot use a native `C:\…` path there ("Cannot
+    // open: No such file or directory", release-upgrade nightly 41287876705).
+    await command(['tar', '-xf', '-'], { input: archive, cwd: scratch })
     // No .git directory, branch, clone or worktree is created. Source writes made
     // by historical build scripts stay inside this disposable archive directory.
     const env = {

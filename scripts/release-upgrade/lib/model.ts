@@ -48,7 +48,13 @@ export interface ReleaseCapabilities {
   workgroups: boolean
   memories: boolean
   clarify: boolean
+  /** Runs carry an RFC-200 envelope nonce (minted from v0.15.0); RFC-395 refuses pending gates without it. */
   nonce: boolean
+  /**
+   * Prompts render that nonce (the runner passes it from v0.16.0). v0.15.x mint a nonce but send
+   * bare prompts, so the runtime shim must use the legacy transport for them.
+   */
+  promptNonce: boolean
   agentId: boolean
   skillId: boolean
   workgroupId: boolean
