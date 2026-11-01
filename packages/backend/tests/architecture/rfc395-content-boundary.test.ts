@@ -53,7 +53,8 @@ const sites = [
     /STAGING_REFERENCE/,
   ],
   [
-    'modules/task-execution/composition/nodeMechanics.ts',
+    // RFC-405: the agent-single port-file forcing moved with its binding out of nodeMechanics.ts.
+    'modules/task-execution/composition/agentNodeExecution.ts',
     'portFallbackMount',
     /state\.repos\[0\]\?\.mountPath \?\? ''/,
   ],
@@ -192,4 +193,15 @@ test('RFC-403 review keeps the platform fallback codec through its bound port', 
   )
   expect(valid('repoDirName: ports.repoMounts[0]')).toBe(false)
   expect(valid('repoDirName: "repo"')).toBe(false)
+})
+
+test('RFC-405 the agent body reaches the fallback codec only through its workspace port', () => {
+  const path = 'modules/task-execution/engine/node/agent-single/runAgentSingleNode.ts'
+  const valid = (text: string) =>
+    text.includes('workspace.portFileContainerPaths(') &&
+    !text.includes('portFallbackMount') &&
+    !/repos\[0\]\?\.mountPath/.test(text)
+  expect(valid(readFileSync(resolve(import.meta.dir, '../../src', path), 'utf8'))).toBe(true)
+  expect(valid("toContainerRelative(state.repos[0]?.mountPath ?? '', p)")).toBe(false)
+  expect(valid('workspace.portFileContainerPaths(paths); portFallbackMount(mounts)')).toBe(false)
 })

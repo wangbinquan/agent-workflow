@@ -1,3 +1,16 @@
+## 2026-11-01 RFC-405 task-execution agent-single 节点迁入 engine/node（In Progress；`design/RFC-405-task-execution-agent-single-executor/`）
+
+- **来由**：RFC-294 S6，design §5.5 第 3 步之三；用户授权同 RFC-402，本会话调研、设计、实施与集中验证，不派 Codex。
+- **范围**：agent-single 执行主体（`nodeMechanics.ts` 的 `runAgentSingleNode`，约 1350 行）迁入 `engine/node/agent-single/`，经
+  task-execution 自有的显式端口执行；重试 / 续跑判定归 domain，八个运行历史读取与借壳拒绝判定归 application，`legacyArgs` 删除；执行器直接调
+  主体，工作组主机线仍转交（RFC-406）。纯结构重构。
+- **做法**：设计门免；实现门由本会话按路径限定自审（只审功能），PASS。
+- **进度**：T1～T6 完成，随实现提交入库，待 exact SHA 的 CI（AC-6）。`nodeMechanics.ts` 2496 → 598 行，只剩工作组主机线；RFC-294 S6 退出门中
+  「`legacyArgs` 消失」成立。集中验证查出本 RFC 引入的两类问题，均已修：首版端口从 COL 合同与 `services/` 取类型，新增 1 条 off-DAG 文件边与
+  8 条 R2 边（改为 task-execution 自有的结构类型，由绑定在编译期对齐）；两份源码锁改读语料常量后被负 fixture 判据误判（改为就地读 owner
+  文件）。其余失败只是负载超时，复跑通过；P0 变异 lane 通过（34 个阶段、源文件指纹不变）。详见 plan「集中验证（T6）」。
+- **后继**：RFC-406（workgroup host）。
+
 ## 2026-11-01 RFC-404 task-execution 子任务调用节点迁入 engine/node（In Progress；`design/RFC-404-task-execution-child-call-executors/`）
 
 - **来由**：RFC-294 S6，design §5.5 第 3 步之二；用户授权同 RFC-402。用户 2026-10-31「后面的工作你可以不用启动codex来做，你自己完成」：
@@ -6,10 +19,16 @@
   `engine/node/shared/child-call/`，两个执行器各在 registry key 目录，经显式端口执行；子任务 runtime、scheduler driver 与委托 actor 由绑定
   补齐；`parseIsoSubmodules` 归 domain，人工等待台账编解码合一，发起错误分类归 application。纯结构重构。
 - **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。
-- **进度**：T1～T6 完成（实现、守卫与集中验证），随实现提交入库，待 exact SHA 的 CI（AC-6）。`nodeMechanics.ts` 3656 → 2496 行。
+- **进度**：T1～T6 完成（实现、守卫与集中验证），随实现提交 `88d4c088f` 入库，待 AC-6。`nodeMechanics.ts` 3656 → 2496 行。
   集中验证查出本 RFC 引入的 5 处按旧 owner 钉住的账本 / 源码锁（防空扫语料、allowTerminal 账本、`.forCall(` 消费方、result 折叠锁）与
   3 处本 RFC 用例写法问题，均已修；P0 变异 lane 通过。本机全量因 Docker 虚拟机常驻占约 6 核跑不完，改跑 355 个文件的针对性验证集并复跑
   全部失败文件，详见 plan「集中验证（T6）」。
+- **CI**（`88d4c088f`）：windows-platform success；主 CI `41288921900` 52 success / 6 failure / 3 cancelled。红格都属父提交 `cc81d09c4`
+  （并发 RFC-398）在其 STATE 节记下的四类：gitleaks 把种子的合成占位值判为密钥；WAL 负对照只在 macOS 成立（shard 2、26）；PostgreSQL 发布版
+  用例撞 `max_connections`（shard 11、15、17）；它的长升级文件把 shard 1 / 20 / 25 撑过 15 分钟上限被取消。本 RFC 无失败。被取消分片里有 54 个
+  文件没跑到（按 bun 的步进分片从排序后的文件表算出，含本 RFC 改过的 `rfc284-t20-child-inheritance`）；除 RFC-398 自己的
+  `rfc398-auto-upgrade-resume` 外的 53 个（其中 `helpers/model/workflow.spec.ts` 不含用例）在 RFC-405 的集中验证里本机复跑通过。CI 证据待
+  RFC-398 修复后的后继 run 补齐，AC-6 暂不关。
 
 ## 2026-10-31 RFC-403 task-execution 小型叶子节点迁入 engine/node（Done 2026-11-01；`design/RFC-403-task-execution-small-leaf-executors/`）
 

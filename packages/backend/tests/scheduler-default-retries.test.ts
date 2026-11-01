@@ -26,6 +26,7 @@ import {
   createProviderTaskExecutionTestTopology,
   type ProviderTaskExecutionTestTopology,
 } from './helpers/providerTaskExecutionTestTopology'
+import { AGENT_MECHANICS_SOURCE } from './helpers/executionMechanismSources'
 
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
 
@@ -181,18 +182,7 @@ describe('RFC-042 default retries fallback = 3', () => {
   afterEach(() => h.cleanup())
 
   test('a pre-spawn exception catch terminalizes its node_run before retry dispatch', () => {
-    const source = readFileSync(
-      resolve(
-        import.meta.dir,
-        '..',
-        'src',
-        'modules',
-        'task-execution',
-        'composition',
-        'nodeMechanics.ts',
-      ),
-      'utf8',
-    )
+    const source = AGENT_MECHANICS_SOURCE
     const thrownResult = source.indexOf('const errorMessage = `node ${node.id} threw: ${msg}`')
     expect(thrownResult).toBeGreaterThan(0)
     const catchStart = source.lastIndexOf('} catch (err) {', thrownResult)

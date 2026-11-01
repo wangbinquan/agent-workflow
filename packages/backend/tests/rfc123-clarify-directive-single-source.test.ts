@@ -1,4 +1,4 @@
-import { CROSS_CLARIFY_SOURCE } from './helpers/executionMechanismSources'
+import { CROSS_CLARIFY_SOURCE, AGENT_MECHANICS_SOURCE } from './helpers/executionMechanismSources'
 import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 import { withO2Closure } from './helpers/o2Closure'
 // RFC-123 — 反问 directive 双向单一事实源（RFC-122 修订）.
@@ -440,18 +440,7 @@ describeEachProvider(
 // D. 源码 wiring 守卫 — 锁定单一事实源接线，防 refactor 漂移
 // ---------------------------------------------------------------------------
 describe('RFC-123 D: 源码 wiring 守卫', () => {
-  const nodeMechanicsSrc = readFileSync(
-    resolve(
-      import.meta.dir,
-      '..',
-      'src',
-      'modules',
-      'task-execution',
-      'composition',
-      'nodeMechanics.ts',
-    ),
-    'utf8',
-  )
+  const nodeMechanicsSrc = AGENT_MECHANICS_SOURCE
   const sealSrc = readFileSync(
     resolve(
       import.meta.dir,

@@ -502,9 +502,11 @@ function objectFields(node: ts.Node, sf: ts.SourceFile) {
 test('all three actual runNode launch sites bind the same artifact operations as their runtime', () => {
   const sf = source('modules/task-execution/composition/nodeMechanics.ts'),
     found = calls(sf, sf, 'runNode')
-  expect(found).toHaveLength(2)
-  expect(found.map((call) => call.arguments[0]!.getText(sf))).toEqual([
-    'opts.taskAgentRuns',
+  expect(found.map((call) => call.arguments[0]!.getText(sf))).toEqual(['opts.taskAgentRuns'])
+  // RFC-405: the agent-single launch moved into the agent binding.
+  const agent = source('modules/task-execution/composition/agentNodeExecution.ts'),
+    agentCalls = calls(agent, agent, 'runTaskAgentWithFamily')
+  expect(agentCalls.map((call) => call.arguments[0]!.getText(agent))).toEqual([
     'opts.taskAgentRuns',
   ])
   const merge = source('modules/task-execution/composition/mergeConflictResolution.ts')

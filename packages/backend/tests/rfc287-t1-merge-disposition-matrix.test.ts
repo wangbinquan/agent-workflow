@@ -1,4 +1,5 @@
 import {
+  AGENT_NODE_SOURCE,
   SCRIPT_NODE_SOURCE,
   SCRIPT_ATTEMPT_SOURCE,
   MERGE_CONFLICT_SOURCE,
@@ -51,7 +52,9 @@ const WRAPPER_MECHANICS = readFileSync(
   ),
   'utf8',
 )
+// RFC-405: the agent-single body left nodeMechanics.ts for engine/node/agent-single/.
 const MECHANICS_SOURCES = [
+  AGENT_NODE_SOURCE,
   SCRIPT_NODE_SOURCE,
   SCRIPT_ATTEMPT_SOURCE,
   MERGE_CONFLICT_SOURCE,

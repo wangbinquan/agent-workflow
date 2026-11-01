@@ -41,6 +41,7 @@ import { describeEachProvider } from './helpers/eachProvider'
 import { resolveEffectiveClarifyChannel } from '../src/services/clarifyRounds'
 import { continuesClarifyLineage } from '../src/services/nodeRunMint'
 import { runNode } from './helpers/runner'
+import { AGENT_MECHANICS_SOURCE } from './helpers/executionMechanismSources'
 
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
 
@@ -332,18 +333,7 @@ describe('RFC-183 E: 穷举分类器与注入⟺接受同源锁', () => {
     }
   })
 
-  const nodeMechanicsSrc = readFileSync(
-    resolve(
-      import.meta.dir,
-      '..',
-      'src',
-      'modules',
-      'task-execution',
-      'composition',
-      'nodeMechanics.ts',
-    ),
-    'utf8',
-  )
+  const nodeMechanicsSrc = AGENT_MECHANICS_SOURCE
   const runnerSrc = readTaskAgentSources()
   const promptSrc = readFileSync(
     resolve(import.meta.dir, '..', '..', 'shared', 'src', 'prompt.ts'),

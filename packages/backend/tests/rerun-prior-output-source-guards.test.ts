@@ -18,18 +18,12 @@ import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
-const NODE_MECHANICS_SRC = readFileSync(
-  resolve(
-    import.meta.dir,
-    '..',
-    'src',
-    'modules',
-    'task-execution',
-    'composition',
-    'nodeMechanics.ts',
-  ),
-  'utf8',
-)
+// RFC-405: the agent body and the run-history reads it calls left nodeMechanics.ts.
+const TE_SRC = resolve(import.meta.dir, '..', 'src', 'modules', 'task-execution')
+const NODE_MECHANICS_SRC = [
+  readFileSync(resolve(TE_SRC, 'engine', 'node', 'agent-single', 'runAgentSingleNode.ts'), 'utf8'),
+  readFileSync(resolve(TE_SRC, 'application', 'agentRunHistory.ts'), 'utf8'),
+].join('\n')
 
 describe('RFC-119 — node mechanics source guards', () => {
   test('the broad selector exists and is exported', () => {

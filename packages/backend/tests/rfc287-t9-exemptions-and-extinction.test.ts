@@ -190,8 +190,9 @@ describe('RFC-287 T9 ② — 装配散写的终局灭绝锁（三处显式挖洞
       const body = bodyOf(sig)
       // 允许出现 `pools: [agentSem]` 这种**声明**；不允许 `await xxxSem.acquire()`
       // 这种直线取许可，也不允许手写 release。
+      // RFC-405：agent 线经 `ports.agentSem` 取池，接收者一并纳入射程。
       expect(body, `${label}: 不得直线取许可`).not.toMatch(
-        /=\s*await\s+(?:state\.)?\w*Sem\.acquire\(\)/,
+        /=\s*await\s+(?:state\.|ports\.)?\w*Sem\.acquire\(\)/,
       )
       expect(body, `${label}: 不得手写 releaseGlobal/releaseScript`).not.toMatch(
         /release(?:Global|Script|Sub|Host)\(\)/,

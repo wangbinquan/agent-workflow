@@ -39,6 +39,7 @@ import {
   VALIDATE_CALL_POLICY,
   type RefCallPolicy,
 } from '@agent-workflow/shared'
+import { AGENT_MECHANICS_SOURCE, AGENT_BINDING_SOURCE } from './helpers/executionMechanismSources'
 
 const SRC = (...p: string[]) => join(import.meta.dir, '..', 'src', ...p)
 
@@ -57,10 +58,8 @@ const fanoutStrategy = readFileSync(
   SRC('modules', 'task-execution', 'engine', 'wrapper', 'fanoutStrategy.ts'),
   'utf8',
 )
-const nodeMechanics = readFileSync(
-  SRC('modules', 'task-execution', 'composition', 'nodeMechanics.ts'),
-  'utf8',
-)
+// RFC-405: the agent-single body (and its binding) moved out of nodeMechanics.ts.
+const nodeMechanics = AGENT_MECHANICS_SOURCE
 
 /** 递归收集一棵源码树里的 `.ts`。 */
 function collectTs(dir: string, out: string[] = []): string[] {
@@ -123,15 +122,16 @@ describe('调用级三属性 —— active legacy closure policies 必须真的�
     // 同一 task resource session 返回 closed typed failure，调用点只决定归属。
     expect(nodeMechanics).not.toContain('DISPATCH_CALL_POLICY')
     expect(wrapperMechanics).not.toContain('FANOUT_HYDRATE_CALL_POLICY')
-    expect(nodeMechanics).toContain('state.taskExecutionResources.injection(agentRef.id)')
+    expect(nodeMechanics).toContain('await ports.resources.injection(agentRef.id)')
+    expect(AGENT_BINDING_SOURCE).toContain('state.taskExecutionResources.injection(agentId)')
     expect(wrapperMechanics).toContain('state.taskExecutionResources.injection(agentId)')
   })
 })
 
 describe('四处失败归属：调用点各用各的策略，且映射逐条不变', () => {
   test('① 主派发用 catalog session，两个错误码分开（missing ≠ 查不到行）', () => {
-    expect(nodeMechanics).toContain('const agentRef = agentRefOfNode(node)')
-    expect(nodeMechanics).toContain('state.taskExecutionResources.injection(agentRef.id)')
+    expect(nodeMechanics).toContain('const agentRef = rules.agentRefOfNode(node)')
+    expect(nodeMechanics).toContain('await ports.resources.injection(agentRef.id)')
     // 两个分支必须都在，且缺 canonical id 的那支先判——合并会让两个码塌成一个。
     expect(nodeMechanics).toMatch(
       /agentRef === null[\s\S]{0,240}agent-identity-missing[\s\S]{0,240}agentRef\.k !== 'id'[\s\S]{0,160}agent-not-found/,

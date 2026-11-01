@@ -1,4 +1,5 @@
 import {
+  AGENT_NODE_SOURCE,
   LEAF_NODE_SOURCES,
   SCRIPT_NODE_SOURCE,
   SCRIPT_ATTEMPT_SOURCE,
@@ -93,16 +94,17 @@ describe('RFC-287 T1⑤ — iso 清理失败的处置现状（C3b 基线）', ()
   test('agent 线（已迁骨架，T7 最后一条）：清理由骨架统一「吞掉并记 warn」', () => {
     // 迁移前本线是三条「完全没兜」之一：finally 抛出会吃掉 return 值，表现成
     // 「节点明明跑完了却报了个清理错」。骨架的 `.catch(+warn)` 落地了 C3b。
-    const start = NODE_MECHANICS.indexOf('async function runAgentSingleNode(')
+    // RFC-405: the body moved to engine/node/agent-single/ and reaches the workspace port directly.
+    const start = AGENT_NODE_SOURCE.indexOf('async function runAgentSingleNode(')
     expect(start).toBeGreaterThan(-1)
     // 窗口要够到函数尾：runOneNode 有 1400 行，取到下一个顶格 `}`。
-    const end = NODE_MECHANICS.indexOf('\n}\n', start)
+    const end = AGENT_NODE_SOURCE.indexOf('\n}\n', start)
     expect(end).toBeGreaterThan(start)
-    const body = NODE_MECHANICS.slice(start, end)
+    const body = AGENT_NODE_SOURCE.slice(start, end)
     expect(body).toMatch(
-      /discardIso: async \(h\) => \{[\s\S]{0,400}await (?:ports\.workspace\.)?discardNodeIso\(/,
+      /discardIso: async \(h\) => \{[\s\S]{0,400}await (?:(?:ports\.)?workspace\.)?discardNodeIso\(/,
     )
-    expect(body).not.toMatch(/try \{[^}]{0,120}await (?:ports\.workspace\.)?discardNodeIso\(/)
+    expect(body).not.toMatch(/try \{[^}]{0,120}await (?:(?:ports\.)?workspace\.)?discardNodeIso\(/)
   })
 
   test('工作组主机线（已迁骨架）：清理由骨架统一「吞掉并记 warn」', () => {

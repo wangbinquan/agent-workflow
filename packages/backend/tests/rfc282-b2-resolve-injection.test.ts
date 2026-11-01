@@ -1,4 +1,4 @@
-import { LEAF_NODE_SOURCES } from './helpers/executionMechanismSources'
+import { AGENT_BINDING_SOURCE, LEAF_NODE_SOURCES } from './helpers/executionMechanismSources'
 import { legacyContentRef } from '@/platform/content/contentRef'
 import { contentRowColumns } from '@/platform/content/infrastructure/contentStore'
 // RFC-282 B2 / RFC-345 T4a — the legacy resolver keeps its focused behavior
@@ -180,6 +180,8 @@ describe('RFC-282 B2 / RFC-345 T4a — all six TaskExecution entries use one res
   test('TaskExecution has six managed session reads plus three explicit synthetic resolutions', () => {
     const text = [
       ...LEAF_NODE_SOURCES,
+      // RFC-405: the agent body reads its injection through the agent binding.
+      AGENT_BINDING_SOURCE,
       readFileSync(resolve(SRC, 'modules/task-execution/composition/wrapperMechanics.ts'), 'utf8'),
       readFileSync(resolve(SRC, 'modules/task-execution/composition/nodeMechanics.ts'), 'utf8'),
       readFileSync(resolve(SRC, 'services/scheduler.ts'), 'utf8'),

@@ -11,6 +11,7 @@ import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import type { ClarifyInlineFallbackReason } from '../src/services/sessionModeFallback'
+import { AGENT_MECHANICS_SOURCE } from './helpers/executionMechanismSources'
 
 const ENUM_REASONS = [
   'missing-session-id',
@@ -25,18 +26,7 @@ describe('RFC-026 fallback reason enum coverage', () => {
     // know how to record it, the operator will get a silently degraded
     // inline path with no telemetry. Forcing a grep here makes it impossible
     // to "ship the enum, forget the recorder".
-    const nodeMechanicsSrc = readFileSync(
-      resolve(
-        import.meta.dir,
-        '..',
-        'src',
-        'modules',
-        'task-execution',
-        'composition',
-        'nodeMechanics.ts',
-      ),
-      'utf8',
-    )
+    const nodeMechanicsSrc = AGENT_MECHANICS_SOURCE
     for (const reason of ENUM_REASONS) {
       // Each reason must appear at least once — either inline in the
       // recorder, or as a comment that locks the contract. We don't care

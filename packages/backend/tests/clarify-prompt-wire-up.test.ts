@@ -27,18 +27,12 @@
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { AGENT_MECHANICS_SOURCE } from './helpers/executionMechanismSources'
 
 const BACKEND_SRC = join(__dirname, '..', 'src', 'services')
 const SHARED_SRC = join(__dirname, '..', '..', 'shared', 'src')
-const NODE_MECHANICS_SRC = join(
-  __dirname,
-  '..',
-  'src',
-  'modules',
-  'task-execution',
-  'composition',
-  'nodeMechanics.ts',
-)
+// RFC-405: the agent-single body moved out of nodeMechanics.ts; its clarify wiring is read from the
+// combined agent mechanics corpus.
 const NODE_EXECUTION_SRC = join(
   __dirname,
   '..',
@@ -51,7 +45,7 @@ const NODE_EXECUTION_SRC = join(
 
 describe('TaskExecution ↔ runner clarify prompt wire-up (RFC-023 T12)', () => {
   test('nodeMechanics.ts wires the unified buildClarifyQueueContext injector (RFC-132 PR-C)', () => {
-    const src = readFileSync(NODE_MECHANICS_SRC, 'utf8')
+    const src = AGENT_MECHANICS_SOURCE
     // RFC-132 (PR-C): one flat injector replaces the former self/questioner + designer split.
     // selectAgentQueue queries every role in one shot, so there is no per-role consumerKind SELECT
     // fork and no round-grouped buildPromptContext call in node mechanics anymore.
@@ -62,7 +56,7 @@ describe('TaskExecution ↔ runner clarify prompt wire-up (RFC-023 T12)', () => 
   })
 
   test('nodeMechanics.ts wires findClarifyNodeForAgent + agentHasClarifyChannel', () => {
-    const src = readFileSync(NODE_MECHANICS_SRC, 'utf8')
+    const src = AGENT_MECHANICS_SOURCE
     expect(src).toContain('findClarifyNodeForAgent')
     expect(src).toContain('agentHasClarifyChannel')
   })
@@ -95,7 +89,7 @@ describe('TaskExecution ↔ runner clarify prompt wire-up (RFC-023 T12)', () => 
     expect(execution).toContain(
       'state.opts.collaborationRuntime satisfies CollaborationNodeGatePort',
     )
-    const mechanics = readFileSync(NODE_MECHANICS_SRC, 'utf8')
+    const mechanics = AGENT_MECHANICS_SOURCE
     expect(mechanics).toContain('await collaboration.openAgentClarify({')
   })
 
@@ -158,7 +152,7 @@ describe('TaskExecution ↔ runner clarify prompt wire-up (RFC-023 T12)', () => 
   // the cheapest way to lock the contract without spinning up a full
   // scheduler integration test.
   test('nodeMechanics.ts gates effectiveHasClarifyChannel on the per-node clarify state (RFC-132 PR-C)', () => {
-    const src = readFileSync(NODE_MECHANICS_SRC, 'utf8')
+    const src = AGENT_MECHANICS_SOURCE
     // RFC-132 (PR-C §7): the standing continue/stop directive is the per-node clarify state — the
     // node mechanics feeds `nodeDirective` into resolveEffectiveClarifyChannel (the flat context carries
     // no directive). Assert the wiring here AND the gate itself in the oracle.
@@ -193,7 +187,7 @@ describe('TaskExecution ↔ runner clarify prompt wire-up (RFC-023 T12)', () => 
   // directive while addressing fresh reviewer comments. See
   // clarify-stop-directive-scoped-to-clarify-rerun.test.ts.
   test('nodeMechanics.ts reads the standing directive from the per-node clarify state (RFC-132 PR-C)', () => {
-    const src = readFileSync(NODE_MECHANICS_SRC, 'utf8')
+    const src = AGENT_MECHANICS_SOURCE
     // RFC-132 (PR-C §7): the per-round directive plumbing (applyLatestDirective) is gone; the
     // directive is nodeDirective (getNodeClarifyDirectiveRow) + nodeStopOverride.
     expect(src).not.toContain('applyLatestDirective')

@@ -1,4 +1,6 @@
 import {
+  AGENT_BINDING_SOURCE,
+  AGENT_NODE_SOURCE,
   LEAF_NODE_SOURCES,
   CODE_HOST_NODE_SOURCE,
   CHILD_CALL_LAUNCH_SOURCE,
@@ -81,7 +83,12 @@ describe('RFC-292 trigger namespace source locks', () => {
     // RFC-287 moved the main-agent call into an assembly callback. Lock the
     // adjacency and exact frozen-context identity without coupling RFC-292 to
     // that callback's indentation depth.
-    expect(source).toMatch(/\bagent,\n\s+triggerContext: state\.triggerContext/)
+    // RFC-405: the agent body reads the context through its task facts; the binding's getter
+    // returns the task's one frozen value.
+    expect(AGENT_NODE_SOURCE).toMatch(/\bagent,\n\s+triggerContext: task\.triggerContext/)
+    expect(AGENT_BINDING_SOURCE).toMatch(
+      /get triggerContext\(\)\s*\{\s*return state\.triggerContext/,
+    )
     // RFC-345 T4a freezes the resolved agent inside the injection snapshot;
     // both wrapper arms must pass that exact snapshot value to the runtime.
     expect(

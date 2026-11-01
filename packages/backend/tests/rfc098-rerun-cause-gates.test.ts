@@ -38,19 +38,9 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { RERUN_CAUSES, type RerunCause } from '@agent-workflow/shared'
 import { isClarifyRerunCause } from '../src/services/nodeRunMint'
+import { AGENT_MECHANICS_SOURCE } from './helpers/executionMechanismSources'
 
-const NODE_MECHANICS_SRC = readFileSync(
-  resolve(
-    import.meta.dir,
-    '..',
-    'src',
-    'modules',
-    'task-execution',
-    'composition',
-    'nodeMechanics.ts',
-  ),
-  'utf8',
-)
+const NODE_MECHANICS_SRC = AGENT_MECHANICS_SOURCE
 
 // ---------------------------------------------------------------------------
 // gate-2 truth table — exhaustive over the enum.
@@ -120,7 +110,8 @@ describe('RFC-098 WP-10 — gate-2 (isClarifyRerun) × cause truth table', () =>
 describe('RFC-098 WP-10 — TaskExecution gate wiring', () => {
   test('gate-2 reads the dispatched row cause (NOT the retryIndex proxy)', () => {
     expect(NODE_MECHANICS_SRC).toContain(
-      'const isClarifyRerun = isClarifyRerunCause(currentRunRow?.rerunCause)',
+      // RFC-405: the agent body reaches the services rule through its explicit `rules` port.
+      'const isClarifyRerun = rules.isClarifyRerunCause(currentRunRow?.rerunCause)',
     )
     // The old proxy expression must be gone from nodeMechanics.ts entirely —
     // comments included (a comment re-teaching the proxy is how it comes back).

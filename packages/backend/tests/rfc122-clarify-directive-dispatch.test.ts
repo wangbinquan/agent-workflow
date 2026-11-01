@@ -56,6 +56,7 @@ import {
   createTaskExecutionTestTopology,
   runTaskWithRealTestTopology as runTaskBase,
 } from './helpers/taskExecutionTestTopology'
+import { AGENT_MECHANICS_SOURCE } from './helpers/executionMechanismSources'
 
 const SCENARIO_STUB = resolve(import.meta.dir, 'fixtures', 'scenario-opencode.ts')
 const GIT_TIMEOUT_MS = 10_000
@@ -602,18 +603,7 @@ describe('RFC-122 store round-trip + scheduler wiring lock', () => {
   })
 
   test('scheduler reads the override at dispatch and threads it (source-level lock)', () => {
-    const src = readFileSync(
-      resolve(
-        import.meta.dir,
-        '..',
-        'src',
-        'modules',
-        'task-execution',
-        'composition',
-        'nodeMechanics.ts',
-      ),
-      'utf8',
-    )
+    const src = AGENT_MECHANICS_SOURCE
     // Dispatch read (parallel to hasPersistentStop) gated on hasClarifyChannel.
     expect(src).toContain('collaboration.getNodeClarifyDirective({ taskId, nodeId: node.id })')
     expect(src).toContain('const nodeStopOverride =')
@@ -629,18 +619,7 @@ describe('RFC-122 store round-trip + scheduler wiring lock', () => {
   })
 
   test('H1: the override is read INSIDE the retry loop (per attempt), not cached before it', () => {
-    const src = readFileSync(
-      resolve(
-        import.meta.dir,
-        '..',
-        'src',
-        'modules',
-        'task-execution',
-        'composition',
-        'nodeMechanics.ts',
-      ),
-      'utf8',
-    )
+    const src = AGENT_MECHANICS_SOURCE
     // The getNodeClarifyDirective read must happen ONCE PER ATTEMPT so each
     // attempt's freshly-minted process-retry row re-reads the latest toggle. A
     // refactor that hoists it above the per-attempt boundary (stale cache) → red.
@@ -686,18 +665,7 @@ describe('RFC-122 store round-trip + scheduler wiring lock', () => {
   })
 
   test('same-session follow-up is bypassed when the STOP toggle flips the mode', () => {
-    const src = readFileSync(
-      resolve(
-        import.meta.dir,
-        '..',
-        'src',
-        'modules',
-        'task-execution',
-        'composition',
-        'nodeMechanics.ts',
-      ),
-      'utf8',
-    )
+    const src = AGENT_MECHANICS_SOURCE
     // The clarifyModeFlip guard + the gated envelopeFollowup arg. Without the
     // `&& !clarifyModeFlip` the runner would re-anchor on a protocol the resumed
     // clarify-only session never emitted.
@@ -707,18 +675,7 @@ describe('RFC-122 store round-trip + scheduler wiring lock', () => {
   })
 
   test('mode-flip session-clear: effectiveResumeSessionId also gates on !clarifyModeFlip', () => {
-    const src = readFileSync(
-      resolve(
-        import.meta.dir,
-        '..',
-        'src',
-        'modules',
-        'task-execution',
-        'composition',
-        'nodeMechanics.ts',
-      ),
-      'utf8',
-    )
+    const src = AGENT_MECHANICS_SOURCE
     // A mode-flip retry must NOT resume the prior (wrong-mode) session — the
     // resume id also drops to the isolated/fresh path on a flip.
     // (RFC-132 ③: the RFC-127 `isBorrowed ?` special case is gone with the borrow

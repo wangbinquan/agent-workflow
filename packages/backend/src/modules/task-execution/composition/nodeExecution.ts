@@ -1,3 +1,4 @@
+import { createAgentNodeExecutionPorts } from './agentNodeExecution'
 import { createCodeHostNodeExecutionPorts } from './codeHostNodeExecution'
 import { createChildCallNodeExecutionPorts } from './childCallNodeExecution'
 import {
@@ -14,21 +15,16 @@ import { judgeBranchActivation } from '../application/nodeBranchActivation'
 import { createScriptNodeExecutionPorts } from './scriptNodeExecution'
 import type { WorkflowNode } from '@agent-workflow/shared'
 import type { TaskMechanicsState } from '@/services/execution/taskMechanicsState'
+import type { Logger } from '@/util/log'
 import type { WrapperRuntimeFactory } from './taskExecutionComponents'
-import {
-  buildWorkgroupEngineSupport,
-  executeWorkgroupHostMechanics,
-  runAgentSingleNode,
-  type OneNodeArgs,
-} from './nodeMechanics'
+import { buildWorkgroupEngineSupport, executeWorkgroupHostMechanics } from './nodeMechanics'
 import type { WorkgroupTurnHostOperations } from '../application/ports/workgroupTurnsOperations'
 import type { CollaborationNodeGatePort } from '../application/ports/collaborationNodeGate'
 import type {
   WorkgroupHostExecutionPort,
   WorkgroupHostExecutionRequest,
 } from '../application/ports/workgroupHostExecution'
-import type { NodeStepRequest } from '../domain/nodeExecution'
-import { AgentSingleNodeExecutor } from '../engine/node/agentNodeExecutor'
+import { AgentSingleNodeExecutor } from '../engine/node/agent-single/agentSingleNodeExecutor'
 import { CallWorkflowNodeExecutor } from '../engine/node/call-workflow/callWorkflowNodeExecutor'
 import { CallWorkgroupNodeExecutor } from '../engine/node/call-workgroup/callWorkgroupNodeExecutor'
 import { CodeHostCallNodeExecutor } from '../engine/node/code-host-call/codeHostCallNodeExecutor'
@@ -46,16 +42,16 @@ import { createWrapperDelegatingNodeExecutors } from '../engine/node/wrapperDele
 
 const gateways = new WeakMap<TaskMechanicsState, NodeExecutionGateway>()
 
-function legacyArgs(
-  state: TaskMechanicsState,
-  request: Pick<NodeStepRequest, 'node' | 'iteration' | 'containerRunId'>,
-): OneNodeArgs {
-  return {
-    node: request.node as WorkflowNode,
-    containerRunId: request.containerRunId,
-    iteration: request.iteration,
-    log: state.log,
-  }
+/**
+ * The scope interpreter's dispatch arguments for one ready node (RFC-405: moved here from
+ * nodeMechanics.ts with its last consumer, `executeNode`).
+ */
+export interface OneNodeArgs {
+  node: WorkflowNode
+  /** RFC-354 — the frame (wrapper generation row) the node is dispatched in; null at the top scope. */
+  containerRunId: string | null
+  iteration: number
+  log: Logger
 }
 
 function legacyHostPort(
@@ -86,9 +82,7 @@ function buildGateway(
   const wrappers = createWrapperDelegatingNodeExecutors(wrapperRuntime, state.wrapperScopes)
   const executors = {
     'agent-single': new AgentSingleNodeExecutor(
-      {
-        executeAgent: (request) => runAgentSingleNode(state, legacyArgs(state, request), mechanics),
-      },
+      createAgentNodeExecutionPorts(state),
       legacyHostPort(state, mechanics),
     ),
     input: new InputNodeExecutor(createInputNodeExecutionPorts(state)),

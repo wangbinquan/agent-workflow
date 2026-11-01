@@ -84,8 +84,8 @@
       "whyFrameless": "记忆注入代际沿旧 seq 边界，不新增 container 维度。"
     },
     {
-      "site": "src/modules/task-execution/composition/nodeMechanics.ts#freshestPriorRunWithOutput:1",
-      "path": "src/modules/task-execution/composition/nodeMechanics.ts",
+      "site": "src/modules/task-execution/application/agentRunHistory.ts#freshestPriorRunWithOutput:1",
+      "path": "src/modules/task-execution/application/agentRunHistory.ts",
       "symbol": "freshestPriorRunWithOutput",
       "ordinal": 1,
       "source": "snapshot.selection.familyHistory( run.taskId, { nodeId: run.nodeId, iteration: run.iteration, shardKey: run.shardKey ?? null, runIds: rows.map((row) => row.id), }, { before: run, direction: 'desc' }, )",
@@ -94,8 +94,8 @@
       "whyFrameless": "旧输出回填包含 child 与其他 container。"
     },
     {
-      "site": "src/modules/task-execution/composition/nodeMechanics.ts#lineageCausesNewestFirst:1",
-      "path": "src/modules/task-execution/composition/nodeMechanics.ts",
+      "site": "src/modules/task-execution/application/agentRunHistory.ts#lineageCausesNewestFirst:1",
+      "path": "src/modules/task-execution/application/agentRunHistory.ts",
       "symbol": "lineageCausesNewestFirst",
       "ordinal": 1,
       "source": "snapshot.selection.familyHistory( run.taskId, { nodeId: run.nodeId, iteration: run.iteration, shardKey: run.shardKey ?? null, runIds: rows.map((row) => row.id), }, { topLevelOnly: true, through: run, direction: 'desc' }, )",
@@ -104,8 +104,8 @@
       "whyFrameless": "旧 lineage 没有 container 条件。"
     },
     {
-      "site": "src/modules/task-execution/composition/nodeMechanics.ts#priorDoneGenerationsForRun:1",
-      "path": "src/modules/task-execution/composition/nodeMechanics.ts",
+      "site": "src/modules/task-execution/application/agentRunHistory.ts#priorDoneGenerationsForRun:1",
+      "path": "src/modules/task-execution/application/agentRunHistory.ts",
       "symbol": "priorDoneGenerationsForRun",
       "ordinal": 1,
       "source": "snapshot.selection.familyHistory( run.taskId, { nodeId: run.nodeId, iteration: run.iteration, shardKey: run.shardKey ?? null, runIds: rows.map((row) => row.id), }, { topLevelOnly: true, statusIn: ['done'], before: run }, )",
@@ -114,8 +114,8 @@
       "whyFrameless": "旧 done 代际未按 container 分组。"
     },
     {
-      "site": "src/modules/task-execution/composition/nodeMechanics.ts#readPriorAgentSessionId:1",
-      "path": "src/modules/task-execution/composition/nodeMechanics.ts",
+      "site": "src/modules/task-execution/application/agentRunHistory.ts#readPriorAgentSessionId:1",
+      "path": "src/modules/task-execution/application/agentRunHistory.ts",
       "symbol": "readPriorAgentSessionId",
       "ordinal": 1,
       "source": "snapshot.selection.familyHistory( args.taskId, { nodeId: args.agentNodeId, iteration: args.iteration, shardKey: args.shardKey, runIds: rows.map((row) => row.id), }, { topLevelOnly: true, statusIn: ['done'], before: args.before, direction: 'desc' }, )",

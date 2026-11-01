@@ -387,7 +387,8 @@ describe('RFC-284 T21 — nextRetryIndex 口径矩阵', () => {
       'services/task.ts',
       'modules/collaboration/infrastructure/review.ts',
       'modules/collaboration/infrastructure/taskQuestionDispatch.ts',
-      'modules/task-execution/composition/nodeMechanics.ts',
+      // RFC-405: the agent-single run row moved out of nodeMechanics.ts with its body.
+      'modules/task-execution/engine/node/agent-single/runAgentSingleNode.ts',
       'modules/task-execution/engine/node/script/runScriptNode.ts',
       'modules/task-execution/engine/node/code-host-call/runCodeHostCallNode.ts',
       // RFC-404: the call-workflow / call-workgroup run row moved out of nodeMechanics.ts.
@@ -406,6 +407,18 @@ describe('RFC-284 T21 — nextRetryIndex 口径矩阵', () => {
       expect(/length === 0 \? 0 :.*retryIndex/.test(src)).toBe(false)
       expect(/retryIndex: \w+\.retryIndex \+ 1/.test(src)).toBe(false)
     }
+    // RFC-405: nodeMechanics.ts (now the workgroup host only) mints no row and must not regrow one.
+    const mechanics = readFileSync(
+      resolvePath(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules/task-execution/composition/nodeMechanics.ts',
+      ),
+      'utf8',
+    )
+    expect(/Math\.max\([^)]*retryIndex/.test(mechanics)).toBe(false)
+    expect(/length === 0 \? 0 :.*retryIndex/.test(mechanics)).toBe(false)
     expect(
       readFileSync(
         resolvePath(

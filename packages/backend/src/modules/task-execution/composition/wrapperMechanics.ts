@@ -71,9 +71,11 @@ import { parseIsoSubmodules } from '@/modules/task-execution/domain/isoSubmodule
 import {
   composePriorOutputBlock,
   freshestPriorRunWithOutput,
-  shouldRetryNodeFailure,
-  type OneNodeResult,
-  type SchedulerState,
+} from '@/modules/task-execution/application/agentRunHistory'
+import { shouldRetryNodeFailure } from '@/modules/task-execution/domain/envelopeRetryPolicy'
+import type {
+  OneNodeResult,
+  SchedulerState,
 } from '@/modules/task-execution/composition/nodeMechanics'
 import { broadcastNodeStatus } from '@/modules/task-execution/infrastructure/nodeStatusEvents'
 import {

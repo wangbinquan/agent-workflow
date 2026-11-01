@@ -33,7 +33,7 @@ import { resolveSchedulerRunRow } from '@/modules/task-execution/application/res
 import { resolveNodeActivationForDispatch } from '@/modules/task-execution/application/resolveNodeActivation'
 import { buildFreshestSettledPerNode } from '@/modules/task-execution/application/runProvenance'
 import { selectResumeRollbackTargets } from '@/modules/task-execution/application/resumeRollbackTargets'
-import { freshestPriorRunWithOutput } from '@/modules/task-execution/composition/nodeMechanics'
+import { freshestPriorRunWithOutput } from '@/modules/task-execution/application/agentRunHistory'
 import {
   resolveUpstreamInputs,
   readPortRowAtFrame,

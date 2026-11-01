@@ -132,7 +132,8 @@ const BASELINE: ReadonlyArray<readonly [string, readonly string[]]> = [
 ]
 
 function broadcastsBeforeWrite(source: string): boolean {
-  return /^broadcastNodeStatus\([^)]*\)\s*\n\s*await (?:(?:ports\.ledger|nodeRunLedger\(state\))\.)?(setNodeRunStatus|db\s*\n?\s*\.update)/.test(
+  // RFC-405: the agent-single body writes through its destructured `ledger` port.
+  return /^broadcastNodeStatus\([^)]*\)\s*\n\s*await (?:(?:ports\.ledger|ledger|nodeRunLedger\(state\))\.)?(setNodeRunStatus|transitionNodeRunStatus|db\s*\n?\s*\.update)/.test(
     source,
   )
 }
@@ -176,4 +177,15 @@ await ${receiver}.setNodeRunStatus({ nodeRunId: id })`),
 broadcastNodeStatus(taskId, id, nodeId, 'running')`),
     ).toBe(false)
   }
+})
+
+test('RFC-405: the agent body ledger.transitionNodeRunStatus write is inside the reverse-order scan', () => {
+  expect(
+    broadcastsBeforeWrite(`broadcastNodeStatus(taskId, nodeRunId, node.id, lastResult.status)
+await ledger.transitionNodeRunStatus({ nodeRunId })`),
+  ).toBe(true)
+  expect(
+    broadcastsBeforeWrite(`await ledger.transitionNodeRunStatus({ nodeRunId })
+broadcastNodeStatus(taskId, nodeRunId, node.id, lastResult.status)`),
+  ).toBe(false)
 })

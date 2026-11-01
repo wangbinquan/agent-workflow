@@ -9,8 +9,7 @@
 // resolveEffectiveClarifyChannel + shouldInjectStopNotice, preserving the cci-rerun stop-scoping.
 
 import { describe, expect, test } from 'bun:test'
-import { readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
+import { AGENT_MECHANICS_SOURCE } from './helpers/executionMechanismSources'
 
 describe('TaskExecution wiring: cross-questioner clarify state', () => {
   test('nodeMechanics.ts reads the per-node clarify state, not a per-round applyLatestDirective (RFC-132 PR-C)', () => {
@@ -20,18 +19,7 @@ describe('TaskExecution wiring: cross-questioner clarify state', () => {
     // role in one shot, and the standing continue/stop directive is the per-node clarify state
     // (nodeStopOverride, from getNodeClarifyDirectiveRow). The cci-rerun stop-scoping is preserved
     // via nodeStopOverride flowing into resolveEffectiveClarifyChannel + shouldInjectStopNotice.
-    const source = readFileSync(
-      resolve(
-        import.meta.dir,
-        '..',
-        'src',
-        'modules',
-        'task-execution',
-        'composition',
-        'nodeMechanics.ts',
-      ),
-      'utf8',
-    )
+    const source = AGENT_MECHANICS_SOURCE
     expect(source).not.toContain('applyLatestDirective')
     expect(source).not.toContain("consumerKind: 'cross-questioner'")
     expect(source).toContain('await collaboration.buildClarifyQueueContext({')

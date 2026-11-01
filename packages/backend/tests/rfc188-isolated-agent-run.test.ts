@@ -1,4 +1,4 @@
-import { LEAF_NODE_SOURCES } from './helpers/executionMechanismSources'
+import { AGENT_NODE_SOURCE, LEAF_NODE_SOURCES } from './helpers/executionMechanismSources'
 import { createTestIsolationBinding } from './helpers/executionKernel'
 import { bindIsolationCleanup } from '@/modules/task-execution/infrastructure/executionKernelBinding'
 import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
@@ -412,6 +412,8 @@ describe('RFC-188 D — 装配单源锁（表级 allowlist）', () => {
     // (one `createScriptIso` closure, one merge-back, one merge-failure marker).
     for (const method of ['createIsoUnderLock(', 'mergeBackAndSettle(', 'markMergeFailed(']) {
       expect(scriptBody.split(`ports.workspace.${method}`).length - 1).toBe(1)
+      // RFC-405: the agent body likewise reaches each primitive once through its workspace port.
+      expect(AGENT_NODE_SOURCE.split(`workspace.${method}`).length - 1).toBe(1)
     }
   })
 })

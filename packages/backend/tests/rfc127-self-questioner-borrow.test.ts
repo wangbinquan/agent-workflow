@@ -34,6 +34,8 @@ import { monotonicFactory } from 'ulid'
 
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { resolveBorrowForNode } from '../src/services/taskQuestionDispatch'
+import { borrowDuplicateExecutionRejection } from '../src/modules/task-execution/application/agentNodeErrors'
+import { ConflictError } from '../src/util/errors'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import type { ClarifyQuestion, WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 import { describeEachProvider } from './helpers/eachProvider'
@@ -276,6 +278,8 @@ describeEachProvider(
 // the whole scope tick → runTask fails the entire task).
 describe('RFC-127 borrow conflict — scheduler node-level failure (source lock)', () => {
   test('runOneNode catches ConflictError from resolveBorrowForNode → kind:failed', () => {
+    // RFC-405: the agent body moved to engine/node/agent-single/ (which may not import
+    // @/util/errors); the ConflictError decision is application/agentNodeErrors.ts.
     const src = readFileSync(
       resolve(
         import.meta.dir,
@@ -283,11 +287,38 @@ describe('RFC-127 borrow conflict — scheduler node-level failure (source lock)
         'src',
         'modules',
         'task-execution',
-        'composition',
-        'nodeMechanics.ts',
+        'engine',
+        'node',
+        'agent-single',
+        'runAgentSingleNode.ts',
       ),
       'utf8',
     )
-    expect(src).toMatch(/catch[\s\S]{0,200}ConflictError[\s\S]{0,80}kind: 'failed'/)
+    expect(src).toMatch(
+      /resolveBorrowForNode\([\s\S]{0,120}catch \(err\) \{\s*const rejection = borrowDuplicateExecutionRejection\(err\)[\s\S]{0,80}kind: 'failed'/,
+    )
+    const errors = readFileSync(
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'task-execution',
+        'application',
+        'agentNodeErrors.ts',
+      ),
+      'utf8',
+    )
+    expect(errors).toContain('error instanceof ConflictError ?')
+  })
+
+  test('RFC-405: the borrow reject keeps the conflict code and message; other errors pass through', () => {
+    const conflict = new ConflictError('borrow-duplicate-execution', 'node already dispatched')
+    expect(borrowDuplicateExecutionRejection(conflict)).toEqual({
+      code: 'borrow-duplicate-execution',
+      summary: 'node already dispatched',
+    })
+    expect(borrowDuplicateExecutionRejection(new Error('boom'))).toBeNull()
+    expect(borrowDuplicateExecutionRejection('not an error')).toBeNull()
   })
 })

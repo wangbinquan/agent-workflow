@@ -12,22 +12,14 @@
 //      入队失败把已经成功的 agent 运行改判成失败。
 
 import { describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
 import type { EnqueueMemoryDistillJobInput } from '../src/modules/memory/public/commands'
 import type { MemoryDistillEnqueuer } from '../src/modules/memory/public/participants'
 import { composeAgentRunDistillObserver } from '../src/modules/task-execution/composition/agentRunDistillObserver'
 import { NOOP_AGENT_RUN_SETTLED_OBSERVER } from '../src/modules/task-execution/application/ports/agentRunSettledObserver'
 import { runtimeConfigOpts } from '../src/services/task'
+import { AGENT_NODE_SOURCE } from './helpers/executionMechanismSources'
 
-const NODE_MECHANICS = resolve(
-  import.meta.dir,
-  '..',
-  'src',
-  'modules',
-  'task-execution',
-  'composition',
-  'nodeMechanics.ts',
-)
+// RFC-405: the agent-run settle hook lives in the agent-single body, which left nodeMechanics.ts.
 
 function recordingEnqueuer(): {
   calls: EnqueueMemoryDistillJobInput[]
@@ -103,13 +95,13 @@ describe('RFC-366 agent-run observer — 选项漏斗', () => {
 
 describe('RFC-366 agent-run 挂点 — 源码层守卫', () => {
   test('终态过滤留在引擎侧：只有 done / failed 通知下游', async () => {
-    const src = await Bun.file(NODE_MECHANICS).text()
+    const src = AGENT_NODE_SOURCE
     expect(src).toContain("if (lastResult.status === 'done' || lastResult.status === 'failed') {")
     expect(src).toContain('.onAgentRunSettled({')
   })
 
   test('best-effort：通知挂了不能改变节点结算结果', async () => {
-    const src = await Bun.file(NODE_MECHANICS).text()
+    const src = AGENT_NODE_SOURCE
     const at = src.indexOf('.onAgentRunSettled({')
     expect(at).toBeGreaterThan(0)
     // 调用之后必须紧跟 .catch —— 没有它，一次蒸馏入队错误就会把一次成功的 agent
@@ -118,7 +110,7 @@ describe('RFC-366 agent-run 挂点 — 源码层守卫', () => {
   })
 
   test('挂点在重试循环体内：每次 attempt 各通知一次（D1）', async () => {
-    const src = await Bun.file(NODE_MECHANICS).text()
+    const src = AGENT_NODE_SOURCE
     const broadcastAt = src.indexOf(
       'broadcastNodeStatus(taskId, nodeRunId, node.id, lastResult.status)',
     )

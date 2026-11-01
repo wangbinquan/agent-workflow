@@ -56,7 +56,39 @@ export const CHILD_CALL_LAUNCH_SOURCE = readFileSync(
   'utf8',
 )
 
-/** Every leaf body moved out of nodeMechanics.ts (RFC-403, RFC-404), so corpora stay complete. */
+// RFC-405: the agent-single body.
+export const AGENT_NODE_SOURCE = readFileSync(
+  resolve(root, 'engine/node/agent-single/runAgentSingleNode.ts'),
+  'utf8',
+)
+
+export const AGENT_BINDING_SOURCE = readFileSync(
+  resolve(root, 'composition/agentNodeExecution.ts'),
+  'utf8',
+)
+export const AGENT_RUN_HISTORY_SOURCE = readFileSync(
+  resolve(root, 'application/agentRunHistory.ts'),
+  'utf8',
+)
+export const ENVELOPE_RETRY_POLICY_SOURCE = readFileSync(
+  resolve(root, 'domain/envelopeRetryPolicy.ts'),
+  'utf8',
+)
+/**
+ * RFC-405: what used to be the single `nodeMechanics.ts` text for agent-path source locks — the
+ * agent body, its binding, the run-history reads and retry decisions it moved into, and the file
+ * itself (still the workgroup host). Presence / absence locks and cross-owner counts keep their
+ * meaning; exact owners are locked by `architecture/rfc405-agent-single-executor.test.ts`.
+ */
+export const AGENT_MECHANICS_SOURCE = [
+  AGENT_NODE_SOURCE,
+  AGENT_BINDING_SOURCE,
+  AGENT_RUN_HISTORY_SOURCE,
+  ENVELOPE_RETRY_POLICY_SOURCE,
+  readFileSync(resolve(root, 'composition/nodeMechanics.ts'), 'utf8'),
+].join('\n')
+
+/** Every leaf body moved out of nodeMechanics.ts (RFC-403～405), so corpora stay complete. */
 export const LEAF_NODE_SOURCES = [
   CODE_HOST_NODE_SOURCE,
   INPUT_NODE_SOURCE,
@@ -68,4 +100,5 @@ export const LEAF_NODE_SOURCES = [
   NODE_INPUTS_SOURCE,
   CHILD_CALL_NODE_SOURCE,
   CHILD_CALL_LAUNCH_SOURCE,
+  AGENT_NODE_SOURCE,
 ] as const

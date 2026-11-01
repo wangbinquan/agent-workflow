@@ -33,7 +33,7 @@ import {
 } from './helpers/workgroupSelection'
 import { runLifecycleInvariants } from '@/services/lifecycleInvariants'
 import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
-import { freshestPriorRunWithOutput } from '@/modules/task-execution/composition/nodeMechanics'
+import { freshestPriorRunWithOutput } from '@/modules/task-execution/application/agentRunHistory'
 import { DrizzleNodeExecutionPersistence } from '@/modules/task-execution/infrastructure/nodeExecutionPersistence'
 import { resolveSchedulerRunRow } from '@/modules/task-execution/application/resolveSchedulerRunRow'
 import { taskNodeRunsProjection } from '@/modules/task-execution/infrastructure/taskRouteOperations'

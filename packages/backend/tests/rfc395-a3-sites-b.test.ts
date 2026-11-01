@@ -19,7 +19,7 @@ import { DrizzleNodeExecutionPersistence } from '@/modules/task-execution/infras
 import { DrizzleSchedulerCompletionPersistence } from '@/modules/task-execution/infrastructure/schedulerCompletionPersistence'
 import { createTaskCodeWorkspaceQueries } from '@/modules/task-execution/infrastructure/taskCodeWorkspaceQueries'
 import { taskNodeRunsProjection } from '@/modules/task-execution/infrastructure/taskRouteOperations'
-import { freshestPriorRunWithOutput } from '@/modules/task-execution/composition/nodeMechanics'
+import { freshestPriorRunWithOutput } from '@/modules/task-execution/application/agentRunHistory'
 import { pickFreshestReviewRun } from '@/modules/collaboration/infrastructure/review'
 import { findSelfGateRunForShard } from '@/modules/collaboration/infrastructure/clarify/service'
 import { isTargetNodeConsumed } from '@/modules/collaboration/infrastructure/clarify/rerunLedger'

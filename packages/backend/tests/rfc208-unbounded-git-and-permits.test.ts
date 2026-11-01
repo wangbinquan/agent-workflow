@@ -207,10 +207,11 @@ describe('RFC-208 · node-pool permits must survive a wedged or throwing cleanup
     // 迁移中的中间态（两条线一种形态、一条线另一种）因此仍是全覆盖；等 agent 线
     // 也迁完，形态①会自然清零而覆盖不减。
     for (const pool of ['agentSem', 'scriptSem']) {
-      const straightLine = new RegExp(`=\\s*await\\s+(?:state\\.)?${pool}\\.acquire\\(\\)`).test(
-        executionSource,
-      )
-      const viaSkeleton = new RegExp(`pools:\\s*\\[(?:state\\.)?${pool}[,\\]]`).test(
+      const straightLine = new RegExp(
+        `=\\s*await\\s+(?:state\\.|ports\\.)?${pool}\\.acquire\\(\\)`,
+      ).test(executionSource)
+      // RFC-405: the agent body declares its pool through its ports (`pools: [ports.agentSem]`).
+      const viaSkeleton = new RegExp(`pools:\\s*\\[(?:state\\.|ports\\.)?${pool}[,\\]]`).test(
         executionSource,
       )
       expect(

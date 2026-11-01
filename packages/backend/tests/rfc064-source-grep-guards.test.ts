@@ -25,6 +25,7 @@ import { execFileSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { nonInteractiveGitEnv } from '../src/util/git'
+import { AGENT_MECHANICS_SOURCE } from './helpers/executionMechanismSources'
 
 const REPO_ROOT = resolve(import.meta.dir, '..', '..', '..')
 const GIT_TIMEOUT_MS = 10_000
@@ -95,13 +96,8 @@ describe('RFC-064 C3 — cross-clarify counter absent from live source code', ()
 
 describe('RFC-064 C9 / RFC-132 PR-C — applyLatestDirective plumbing removed (directive = per-node state)', () => {
   test('nodeMechanics.ts no longer carries the per-round applyLatestDirective local', () => {
-    const src = readFileSync(
-      resolve(
-        REPO_ROOT,
-        'packages/backend/src/modules/task-execution/composition/nodeMechanics.ts',
-      ),
-      'utf8',
-    )
+    // RFC-405: the agent-single body moved out of nodeMechanics.ts.
+    const src = AGENT_MECHANICS_SOURCE
     // RFC-132 (PR-C §7): the round-grouped injectors + their per-round directive plumbing are gone.
     // The standing continue/stop directive is now the per-node clarify state (nodeDirective /
     // nodeStopOverride), so there is no shared applyLatestDirective local anymore.

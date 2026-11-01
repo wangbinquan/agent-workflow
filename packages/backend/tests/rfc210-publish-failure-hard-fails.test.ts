@@ -24,6 +24,7 @@ import {
 } from '@/platform/workspace/local/isolation'
 import { type CanonRepo } from '@/platform/contracts/isolationWorkspace'
 import { runGit } from '@/util/git'
+import { AGENT_MECHANICS_SOURCE } from './helpers/executionMechanismSources'
 
 const appHome = mkdtempSync(join(tmpdir(), 'aw-rfc210-pf-home-'))
 const created: string[] = []
@@ -210,18 +211,7 @@ describe('RFC-210 — submodule publish failures fail the snapshot', () => {
       'utf8',
     )
     const src = `${wrapperMechanics}\n${recovery}`
-    const nodeMechanics = readFileSync(
-      resolve(
-        import.meta.dir,
-        '..',
-        'src',
-        'modules',
-        'task-execution',
-        'composition',
-        'nodeMechanics.ts',
-      ),
-      'utf8',
-    )
+    const nodeMechanics = AGENT_MECHANICS_SOURCE
     // Mainline DAG (agent 线): RFC-287 T7 起本线也迁入装配骨架。合并抛出的 keep
     // 不再是 catch 里的 `keepIso = true`，而是**骨架默认处置**（`keep = true` +
     // `spec.markMergeFailed`）——本线不覆写 onThrow，因此吃的就是那条默认。

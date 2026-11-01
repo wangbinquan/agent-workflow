@@ -28,13 +28,14 @@ import {
   SubmitClarifyAnswersSchema,
 } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { readFileSync, mkdtempSync, mkdirSync, rmSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 import { runNode } from './helpers/runner'
+import { AGENT_MECHANICS_SOURCE } from './helpers/executionMechanismSources'
 
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
 
@@ -193,18 +194,7 @@ describeEachProvider('RFC-165 O1 — runner accepts either envelope under option
 })
 
 describe('RFC-165 O2 — node mechanics composition + R3-5 compat (source locks)', () => {
-  const nodeMechanicsSrc = readFileSync(
-    resolve(
-      import.meta.dir,
-      '..',
-      'src',
-      'modules',
-      'task-execution',
-      'composition',
-      'nodeMechanics.ts',
-    ),
-    'utf8',
-  )
+  const nodeMechanicsSrc = AGENT_MECHANICS_SOURCE
   const norm = (x: string) => x.replace(/\s+/g, ' ')
 
   test('optional derives from the wired self-clarify node clarifyMode (static field, every rerun)', () => {

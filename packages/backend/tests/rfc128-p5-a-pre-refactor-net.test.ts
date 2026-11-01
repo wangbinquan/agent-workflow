@@ -1,3 +1,4 @@
+import { AGENT_MECHANICS_SOURCE } from './helpers/executionMechanismSources'
 // RFC-128 P5-A — pre-refactor 锁网（纯测试，零生产改动）。
 //
 // P5 深度重构（self/questioner 逐题重跑）将动 4 处「整轮」机制（design.md §5.2 + STATE.md
@@ -32,8 +33,6 @@ import { tablesOf } from '@/platform/persistence/sessionTables'
 import { describeEachProvider } from './helpers/eachProvider'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { afterAll, beforeEach, describe, expect, test } from 'bun:test'
-import { readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { monotonicFactory } from 'ulid'
 import { loadUndispatchedDesignerTargets } from '../src/services/taskQuestions'
@@ -42,15 +41,6 @@ import type { ClarifyQuestion, WorkflowDefinition, WorkflowNode } from '@agent-w
 
 // Monotonic ulids so a later-seeded run always sorts freshest (asking run + rerun back-to-back).
 const ulid = monotonicFactory()
-const NODE_MECHANICS_SRC = resolve(
-  import.meta.dir,
-  '..',
-  'src',
-  'modules',
-  'task-execution',
-  'composition',
-  'nodeMechanics.ts',
-)
 
 beforeEach(() => {
   resetBroadcastersForTests()
@@ -197,7 +187,8 @@ async function seedAnsweredRound(
 
 describe('RFC-128 P5-A #1 → RFC-132 PR-C — self/q 注入收敛为统一平铺注入器: node mechanics 源码文本锁', () => {
   test('nodeMechanics.ts 用 buildClarifyQueueContext 统一注入 self/q/designer（整轮 buildPromptContext + consumerKind 接线已删）', () => {
-    const src = readFileSync(NODE_MECHANICS_SRC, 'utf8')
+    // RFC-405: the agent body left nodeMechanics.ts; the composite keeps the workgroup host too.
+    const src = AGENT_MECHANICS_SOURCE
     // RFC-132 (PR-C):整轮 buildPromptContext + per-role consumerKind 调度器接线被单一平铺注入器
     // buildClarifyQueueContext 取代(selectAgentQueue 一次查全 self/questioner/designer)。
     expect(src).toContain('await collaboration.buildClarifyQueueContext(')

@@ -12,6 +12,7 @@ import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { DEFAULT_PROTOCOL_RETRY_BUDGET } from '@agent-workflow/shared'
+import { AGENT_MECHANICS_SOURCE } from './helpers/executionMechanismSources'
 
 const SRC = (rel: string): string =>
   readFileSync(resolve(import.meta.dir, '..', 'src', rel), 'utf8')
@@ -23,7 +24,8 @@ describe('DEFAULT_PROTOCOL_RETRY_BUDGET 单源', () => {
 
   test('task-execution mechanics：defaultNodeRetries 兜底走共享常量', () => {
     const sources = [
-      SRC('modules/task-execution/composition/nodeMechanics.ts'),
+      // RFC-405: the agent-single body moved out of nodeMechanics.ts.
+      AGENT_MECHANICS_SOURCE,
       SRC('modules/task-execution/composition/wrapperMechanics.ts'),
       SRC('modules/task-execution/engine/node/script/runScriptNode.ts'),
     ]

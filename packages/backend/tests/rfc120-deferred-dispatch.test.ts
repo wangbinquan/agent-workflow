@@ -1,3 +1,4 @@
+import { AGENT_MECHANICS_SOURCE } from './helpers/executionMechanismSources'
 import { testExecutionPermits } from './helpers/executionPermits'
 import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
 import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
@@ -1579,18 +1580,8 @@ describeEachProviderHttpApplication(
       // lock at the source so a revert that re-adds the RFC-120 §18 gate goes red.
       // RFC-141 (user ruling): an override target sees its own prior output as background — the
       // reassigned Q&A rides `## Clarify Q&A`, and the directive's "feedback above" points at it.
-      const src = readFileSync(
-        join(
-          import.meta.dir,
-          '..',
-          'src',
-          'modules',
-          'task-execution',
-          'composition',
-          'nodeMechanics.ts',
-        ),
-        'utf8',
-      )
+      // RFC-405: the agent-single body (and the run-history reads it calls) left nodeMechanics.ts.
+      const src = AGENT_MECHANICS_SOURCE
       expect(src).not.toContain('clarifyQueue?.suppressPriorOutput')
       expect(src).not.toContain('!suppressPriorOutput')
     })
@@ -2974,18 +2965,8 @@ describeEachProvider(
     })
 
     test('source lock: the scheduler no longer gates prior-output on ANY ownership signal (RFC-141)', () => {
-      const src = readFileSync(
-        join(
-          import.meta.dir,
-          '..',
-          'src',
-          'modules',
-          'task-execution',
-          'composition',
-          'nodeMechanics.ts',
-        ),
-        'utf8',
-      )
+      // RFC-405: the agent-single body (and the run-history reads it calls) left nodeMechanics.ts.
+      const src = AGENT_MECHANICS_SOURCE
       // RFC-132 (PR-C) replaced the cross-clarify graphOwned attach gate with the flat queue's
       // suppressPriorOutput; RFC-141 removed that too. Negative locks so neither gate re-grows.
       expect(src).not.toContain('crossClarifyContext?.graphOwned')

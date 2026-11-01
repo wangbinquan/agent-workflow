@@ -17,6 +17,7 @@ import { resolve } from 'node:path'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 import { mintNodeRun } from '../src/services/nodeRunMint'
+import { AGENT_MECHANICS_SOURCE } from './helpers/executionMechanismSources'
 
 describeEachProvider(
   'RFC-127 node_runs.agent_override_name persistence (migration 0067)',
@@ -83,18 +84,7 @@ describeEachProvider(
 // override 恒 null。锁定 buildBorrowedAgent 与 borrow 应用分支不复活。
 describe('RFC-132 ③ — TaskExecution 无 borrow 应用(source-level lock)', () => {
   test('node mechanics 不再 buildBorrowedAgent / isBorrowed;retry 行 override 恒 null', () => {
-    const src = readFileSync(
-      resolve(
-        import.meta.dir,
-        '..',
-        'src',
-        'modules',
-        'task-execution',
-        'composition',
-        'nodeMechanics.ts',
-      ),
-      'utf8',
-    )
+    const src = AGENT_MECHANICS_SOURCE
     expect(src).not.toContain('buildBorrowedAgent')
     expect(src).not.toContain('isBorrowed')
     // RFC-287 T8：取行前奏（含「retry/revival 行的 agentOverrideName 恒 null」这条）

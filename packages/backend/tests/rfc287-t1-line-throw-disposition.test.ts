@@ -1,4 +1,5 @@
 import {
+  AGENT_NODE_SOURCE,
   SCRIPT_NODE_SOURCE,
   SCRIPT_ATTEMPT_SOURCE,
   MERGE_CONFLICT_SOURCE,
@@ -25,7 +26,7 @@ import {
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { shouldRetryNodeFailure } from '../src/modules/task-execution/composition/nodeMechanics'
+import { shouldRetryNodeFailure } from '../src/modules/task-execution/domain/envelopeRetryPolicy'
 
 const SCHEDULER = readFileSync(
   resolve(import.meta.dir, '..', 'src', 'services', 'scheduler.ts'),
@@ -55,7 +56,9 @@ const WRAPPER_MECHANICS = readFileSync(
   ),
   'utf8',
 )
+// RFC-405: the agent-single body left nodeMechanics.ts for engine/node/agent-single/.
 const MECHANICS_SOURCES = [
+  AGENT_NODE_SOURCE,
   SCRIPT_NODE_SOURCE,
   SCRIPT_ATTEMPT_SOURCE,
   MERGE_CONFLICT_SOURCE,

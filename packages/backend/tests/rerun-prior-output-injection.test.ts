@@ -31,7 +31,7 @@ import { monotonicFactory } from 'ulid'
 import {
   composePriorOutputBlock,
   freshestPriorRunWithOutput,
-} from '../src/modules/task-execution/composition/nodeMechanics'
+} from '../src/modules/task-execution/application/agentRunHistory'
 import { DrizzleNodeExecutionPersistence } from '../src/modules/task-execution/infrastructure/nodeExecutionPersistence'
 import {
   ASKBACK_PRIOR_OUTPUT_BLOCK_TITLE,

@@ -1,4 +1,5 @@
 import {
+  AGENT_NODE_SOURCE,
   SCRIPT_NODE_SOURCE,
   CODE_HOST_NODE_SOURCE,
   CHILD_CALL_NODE_SOURCE,
@@ -34,13 +35,16 @@ const RUN_ROW_RESOLVER = readFileSync(
 
 /** 取某函数体（到下一个顶格 `}` 为止）。 */
 function bodyOf(signature: string): string {
-  const source = signature.includes('runScriptNode')
-    ? SCRIPT_NODE_SOURCE
-    : signature.includes('runCodeHostCallNode')
-      ? CODE_HOST_NODE_SOURCE
-      : signature.includes('runChildCallNode')
-        ? CHILD_CALL_NODE_SOURCE
-        : NODE_MECHANICS
+  // RFC-405: the agent-single body now lives in engine/node/agent-single/.
+  const source = signature.includes('runAgentSingleNode')
+    ? AGENT_NODE_SOURCE
+    : signature.includes('runScriptNode')
+      ? SCRIPT_NODE_SOURCE
+      : signature.includes('runCodeHostCallNode')
+        ? CODE_HOST_NODE_SOURCE
+        : signature.includes('runChildCallNode')
+          ? CHILD_CALL_NODE_SOURCE
+          : NODE_MECHANICS
   const start = source.indexOf(signature)
   expect(start, `未找到函数：${signature}`).toBeGreaterThan(-1)
   const end = source.indexOf('\n}\n', start)
@@ -129,7 +133,7 @@ describe('RFC-287 T8 — 取行前奏单一实现 + 四线×五项差异矩阵',
   })
 
   test('单一实现：没有任何线再自己手写这段前奏', () => {
-    const PRELUDE_CORPUS = `${SCHEDULER}\n${NODE_MECHANICS}\n${SCRIPT_NODE_SOURCE}\n${CODE_HOST_NODE_SOURCE}\n${CHILD_CALL_NODE_SOURCE}`
+    const PRELUDE_CORPUS = `${SCHEDULER}\n${NODE_MECHANICS}\n${AGENT_NODE_SOURCE}\n${SCRIPT_NODE_SOURCE}\n${CODE_HOST_NODE_SOURCE}\n${CHILD_CALL_NODE_SOURCE}`
     // 前奏的两个特征形状：①「找 pending 行并盖 consumed 戳」；②「按
     // schedulerMintCause 铸 pending 行」。两者在 scheduler.ts 里都必须归零
     // ——它们现在只存在于 nodeRunMint.ts 的收编函数里。
@@ -157,5 +161,6 @@ describe('RFC-287 T8 — 取行前奏单一实现 + 四线×五项差异矩阵',
     expect(end).toBeGreaterThan(begin)
     expect(CHILD_CALL_NODE_SOURCE.slice(begin, end)).not.toContain('mintNodeRun(')
     expect(NODE_MECHANICS).not.toContain('RFC-243-LOCK')
+    expect(AGENT_NODE_SOURCE).not.toContain('RFC-243-LOCK')
   })
 })

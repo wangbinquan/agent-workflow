@@ -7,6 +7,7 @@ import { readTaskAgentSources } from './helpers/taskAgentSource'
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
+import { AGENT_NODE_SOURCE } from './helpers/executionMechanismSources'
 
 const ROOT = resolve(import.meta.dir, '..', '..', '..')
 const read = (path: string): string => readFileSync(resolve(ROOT, path), 'utf8')
@@ -64,15 +65,14 @@ describe('RFC-200 source wiring locks', () => {
     const wrapperMechanics = read(
       'packages/backend/src/modules/task-execution/composition/wrapperMechanics.ts',
     )
-    const nodeMechanics = read(
-      'packages/backend/src/modules/task-execution/composition/nodeMechanics.ts',
-    )
+    // RFC-405: the agent-single body moved out of nodeMechanics.ts.
+    const nodeMechanics = AGENT_NODE_SOURCE
     expect(wrapperMechanics).toContain('inputs: aggInputs')
     expect(read('packages/backend/src/modules/task-execution/application/nodeInputs.ts')).toContain(
       "values.join('\\n\\n---\\n\\n')",
     )
     expect(wrapperMechanics).toContain('composePriorOutputBlock(')
-    expect(nodeMechanics).toContain('nodeRunLedger(state).loadEnvelopeNonce(nodeRunId)')
+    expect(nodeMechanics).toContain('await ledger.loadEnvelopeNonce(nodeRunId)')
     expect(wrapperMechanics).toContain(
       'const aggRun = await state.opts.persistence.nodeExecution.read(aggRunId)',
     )

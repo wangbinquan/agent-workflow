@@ -18,7 +18,7 @@ import { describe, expect, test } from 'bun:test'
 import {
   decideEnvelopeFollowup,
   type PreviousAttemptShape,
-} from '@/modules/task-execution/composition/nodeMechanics'
+} from '@/modules/task-execution/domain/envelopeRetryPolicy'
 
 const BASE: PreviousAttemptShape = {
   status: 'failed',

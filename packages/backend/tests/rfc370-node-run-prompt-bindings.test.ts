@@ -584,13 +584,20 @@ function fields(call: ts.CallExpression, sf: ts.SourceFile) {
 }
 
 test('all three actual runner launch sites consume the family whose native root binds prompt operations next to appHome', () => {
+  // RFC-405: the agent-single launch moved into the agent binding; the workgroup host keeps its own.
   const sf = source('modules/task-execution/composition/nodeMechanics.ts'),
     found = calls(sf, sf, 'runNode')
-  expect(found).toHaveLength(2)
-  for (const call of found) {
+  expect(found).toHaveLength(1)
+  const agent = source('modules/task-execution/composition/agentNodeExecution.ts'),
+    agentCalls = calls(agent, agent, 'runTaskAgentWithFamily')
+  expect(agentCalls).toHaveLength(1)
+  for (const [call, file] of [
+    ...found.map((item) => [item, sf] as const),
+    ...agentCalls.map((item) => [item, agent] as const),
+  ]) {
     expect(call.arguments).toHaveLength(3)
     expect(['opts.taskAgentRuns', 'state.opts.taskAgentRuns']).toContain(
-      call.arguments[0]!.getText(sf),
+      call.arguments[0]!.getText(file),
     )
   }
   const merge = source('modules/task-execution/composition/mergeConflictResolution.ts')

@@ -47,6 +47,9 @@ describe('RFC-334 node-executor owner boundary', () => {
       'shared/child-call/runChildCallNode',
       'shared/child-call/launchChildCall',
       'shared/child-call/childCallWatch',
+      // RFC-405: the agent-single executor and its body.
+      'agent-single/agentSingleNodeExecutor',
+      'agent-single/runAgentSingleNode',
     ])
       expect(paths).toContain(`${engineDir}/node/${path}.ts`)
     expect(paths).toContain(`${engineDir}/node/script/runScriptNode.ts`)
@@ -97,15 +100,26 @@ describe('RFC-334 node-executor owner boundary', () => {
     const mechanics = read(
       'packages/backend/src/modules/task-execution/composition/nodeMechanics.ts',
     )
+    // RFC-405: the DAG agent body opens its self / cross rounds through its own collaboration port;
+    // the binding forwards to the same runtime the workgroup host still receives.
+    const agentNode = read(
+      'packages/backend/src/modules/task-execution/engine/node/agent-single/runAgentSingleNode.ts',
+    )
+    const agentBinding = read(
+      'packages/backend/src/modules/task-execution/composition/agentNodeExecution.ts',
+    )
     expect(port).toContain('openAgentClarify')
     expect(composition).toContain(
       'state.opts.collaborationRuntime satisfies CollaborationNodeGatePort',
     )
-    expect(composition).toContain(
-      'runAgentSingleNode(state, legacyArgs(state, request), mechanics)',
+    expect(composition).toMatch(
+      /new AgentSingleNodeExecutor\(\s*createAgentNodeExecutionPorts\(state\),\s*legacyHostPort\(state, mechanics\),\s*\)/,
     )
-    expect(mechanics.match(/collaboration\.openAgentClarify\(/g)).toHaveLength(3)
-    expect(mechanics).not.toMatch(/await\s+createClarifyRound\s*\(/)
+    expect(mechanics.match(/collaboration\.openAgentClarify\(/g)).toHaveLength(1)
+    expect(agentNode.match(/collaboration\.openAgentClarify\(/g)).toHaveLength(2)
+    expect(agentBinding.match(/collaboration\(\)\.openAgentClarify\(/g)).toHaveLength(1)
+    for (const source of [mechanics, agentNode, agentBinding])
+      expect(source).not.toMatch(/await\s+createClarifyRound\s*\(/)
   })
 
   test('the production DAG imports the gateway and the legacy selector symbol is extinct', () => {

@@ -36,7 +36,8 @@ import { runNode } from './helpers/runner'
 import {
   decideEnvelopeFollowup,
   type PreviousAttemptShape,
-} from '../src/modules/task-execution/composition/nodeMechanics'
+} from '../src/modules/task-execution/domain/envelopeRetryPolicy'
+import { AGENT_MECHANICS_SOURCE } from './helpers/executionMechanismSources'
 
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
 
@@ -221,18 +222,7 @@ describeEachProvider(
 // --- D. source wiring guards ------------------------------------------------
 
 describe('RFC-123 D: stop-enforcement wiring guards', () => {
-  const nodeMechanicsSrc = readFileSync(
-    resolve(
-      import.meta.dir,
-      '..',
-      'src',
-      'modules',
-      'task-execution',
-      'composition',
-      'nodeMechanics.ts',
-    ),
-    'utf8',
-  )
+  const nodeMechanicsSrc = AGENT_MECHANICS_SOURCE
   const runnerSrc = readTaskAgentSources()
   const norm = (s: string) => s.replace(/\s+/g, ' ')
 

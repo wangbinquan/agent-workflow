@@ -1,4 +1,4 @@
-import { LEAF_NODE_SOURCES } from './helpers/executionMechanismSources'
+import { AGENT_BINDING_SOURCE, LEAF_NODE_SOURCES } from './helpers/executionMechanismSources'
 import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 // RFC-345 — executable drift locks for canonical rosters, exact public
 // 覆盖验收条款：AC-B4b（写入会话带事务钩子——统一 apply 引擎里是
@@ -953,7 +953,8 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     expect(webhook).toContain('const taskExecutionAuthority = Object.freeze({')
     expect(webhook).toContain('taskExecutionAuthority,')
 
-    const execution = `${node}\n${wrapper}\n${scheduler}\n${mergeResolution}\n${LEAF_NODE_SOURCES.join('\n')}`
+    // RFC-405: the agent body reads its injection through the agent binding.
+    const execution = `${node}\n${wrapper}\n${scheduler}\n${mergeResolution}\n${LEAF_NODE_SOURCES.join('\n')}\n${AGENT_BINDING_SOURCE}`
     for (const legacyResourceImport of [
       "@/services/agent'",
       "@/services/mcp'",

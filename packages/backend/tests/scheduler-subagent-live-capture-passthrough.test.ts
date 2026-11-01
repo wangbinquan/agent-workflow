@@ -30,10 +30,12 @@ describe('RFC-048 subagentLiveCapture passthrough', () => {
   })
 
   test('scheduler forwards opts.subagentLiveCapture into runNode (every call site)', () => {
+    // RFC-405: the agent-single run's task-level fields are added by the agent binding.
     const src =
       read('packages/backend/src/services/scheduler.ts') +
       read('packages/backend/src/modules/task-execution/composition/wrapperMechanics.ts') +
-      read('packages/backend/src/modules/task-execution/composition/nodeMechanics.ts')
+      read('packages/backend/src/modules/task-execution/composition/nodeMechanics.ts') +
+      read('packages/backend/src/modules/task-execution/composition/agentNodeExecution.ts')
     const topology = read(
       'packages/backend/src/modules/task-execution/application/ports/taskExecutionTopology.ts',
     )

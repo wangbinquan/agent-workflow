@@ -62,14 +62,15 @@ describe('RFC-334 neutral retry-attempt-cap contract', () => {
   })
 
   test('the only production consumers are TaskExecution and DigitalEmployee', () => {
-    const nodeMechanics = read(
-      'packages/backend/src/modules/task-execution/composition/nodeMechanics.ts',
+    // RFC-405: TaskExecution's consumer is the agent-single body in engine/node/agent-single/.
+    const agentNode = read(
+      'packages/backend/src/modules/task-execution/engine/node/agent-single/runAgentSingleNode.ts',
     )
     const employee = read(
       'packages/backend/src/modules/digital-employee/application/runtimeService.ts',
     )
     const shared = read('packages/shared/src/prompt.ts')
-    expect(nodeMechanics).toContain("from '@/platform/contracts/retryAttemptCap'")
+    expect(agentNode).toContain("from '@/platform/contracts/retryAttemptCap'")
     expect(employee).toContain("from '@/platform/contracts/retryAttemptCap'")
     expect(shared).not.toContain('export function retryAttemptCap')
     expect(shared).not.toContain('export const RETRY_ATTEMPT_CAP_CEILING')

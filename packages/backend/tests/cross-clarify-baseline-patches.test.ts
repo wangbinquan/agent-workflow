@@ -1,4 +1,5 @@
 import { taskExecutionParticipants } from './helpers/taskExecutionParticipantBindings'
+import { AGENT_MECHANICS_SOURCE } from './helpers/executionMechanismSources'
 import { withO2Closure } from './helpers/o2Closure'
 // RFC-058 PR-A baseline (T4): byte-level lock of RFC-056 patch chain 2026-05-22
 // through 2026-05-25 invariants. These tests are intentionally focused on the
@@ -419,18 +420,9 @@ describeEachProvider('RFC-359 cross-clarify-baseline-patches database behavior',
 })
 
 describe('RFC-074 PR-C baseline T4 — clarify generation is derived, not inherited', () => {
-  test('source-text grep: scheduler derives the generation by id-order, no cci inheritance var', async () => {
-    const fs = await import('node:fs/promises')
-    const txt = await fs.readFile(
-      resolve(
-        import.meta.dir,
-        '..',
-        '..',
-        '..',
-        'packages/backend/src/modules/task-execution/composition/nodeMechanics.ts',
-      ),
-      'utf8',
-    )
+  test('source-text grep: scheduler derives the generation by id-order, no cci inheritance var', () => {
+    // RFC-405: the agent-single body (and the run-history read it calls) left nodeMechanics.ts.
+    const txt = AGENT_MECHANICS_SOURCE
     // RFC-074 PR-C: the `inheritedClarifyIteration` wiring (patch-2026-05-25's
     // "inheritance survives RFC-042 retry" intent) is gone. The clarify
     // generation is DERIVED from prior-done id-order at dispatch time, so a

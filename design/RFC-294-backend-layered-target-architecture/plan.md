@@ -221,7 +221,9 @@ Facade 只许 re-export 或参数形状适配；不得含 DB 查询、状态、�
     `nodeMechanics.ts` 4,621 → 3,656 行；
   - [RFC-404](../RFC-404-task-execution-child-call-executors/proposal.md)（In Progress）：call-workflow / call-workgroup 的共享主体迁入
     `engine/node/shared/child-call/`，两个执行器各在 registry key 目录；
-  - 后续：agent-single、workgroup host 各一个 RFC，落档时编号。
+  - [RFC-405](../RFC-405-task-execution-agent-single-executor/proposal.md)（In Progress）：agent-single 主体迁入 `engine/node/agent-single/`，
+    经 task-execution 自有端口执行，`legacyArgs` 消失；`nodeMechanics.ts` 2,496 → 598 行，只剩工作组主机线；
+  - 后续：workgroup host 一个 RFC（RFC-406），落档时立项。
 
 ### S7 唯一 AtomicApply 引擎（W6）
 
