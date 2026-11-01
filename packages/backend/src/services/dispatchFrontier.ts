@@ -131,7 +131,7 @@ export function wrapperInnerDescendants(
  *     validator rejects them but the scheduler honors them — see
  *     scheduler-audit-s04's wg1→wg2 sequencing edge).
  *
- * Edge filtering is the SAME registry projection taskDagGraph.buildScopeUpstreams
+ * Edge filtering is the SAME registry projection dagGraph.buildScopeUpstreams
  * uses — `channelEdgeDataflowSkip` (RFC-147), including the
  * carve-out that `questioner.__clarify__ → clarify-cross-agent` is a REAL
  * dataflow dep (kept) — plus review/output implicit dependencies.

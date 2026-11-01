@@ -992,18 +992,19 @@ describeEachProvider('RFC-164 engine — stuck detector S1/S2 workgroup exemptio
 describe('RFC-164 engine — source locks', () => {
   // RFC-406: the workgroup host body moved from nodeMechanics.ts to engine/node/agent-single/.
   const NODE_MECHANICS_SRC = WORKGROUP_HOST_SOURCE
-  const TASK_ENGINE_APPLICATION_SRC = readFileSync(
-    resolve(
-      import.meta.dir,
-      '..',
-      'src',
-      'modules',
-      'task-execution',
-      'composition',
-      'taskEngineApplication.ts',
-    ),
-    'utf8',
-  )
+  // RFC-408: engine selection moved with the task control plane to engine/task/runTask.ts; the
+  // composition binds the engine bodies.
+  const TASK_ENGINE_APPLICATION_SRC = [
+    ['composition', 'taskEngineApplication.ts'],
+    ['engine', 'task', 'runTask.ts'],
+  ]
+    .map((path) =>
+      readFileSync(
+        resolve(import.meta.dir, '..', 'src', 'modules', 'task-execution', ...path),
+        'utf8',
+      ),
+    )
+    .join('\n')
   const PROMPT_SRC = readFileSync(
     resolve(import.meta.dir, '..', '..', 'shared', 'src', 'prompt.ts'),
     'utf8',

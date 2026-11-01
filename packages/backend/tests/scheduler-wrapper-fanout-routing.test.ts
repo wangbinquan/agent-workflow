@@ -33,6 +33,7 @@ import { describe, expect, test } from 'bun:test'
 // engine/node/agent-single/; the composite keeps the old wrapper text for presence / absence checks.
 const wrapperMechanicsSrc = WRAPPER_MECHANICS_SOURCE
 const runnerSrc = readTaskAgentSources()
+// RFC-408: node-kind admission moved with the task control plane to engine/task/runTask.ts.
 const taskEngineApplicationSrc = readFileSync(
   resolve(
     import.meta.dirname,
@@ -40,8 +41,9 @@ const taskEngineApplicationSrc = readFileSync(
     'src',
     'modules',
     'task-execution',
-    'composition',
-    'taskEngineApplication.ts',
+    'engine',
+    'task',
+    'runTask.ts',
   ),
   'utf8',
 )

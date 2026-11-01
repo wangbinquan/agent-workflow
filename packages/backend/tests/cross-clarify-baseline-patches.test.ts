@@ -441,7 +441,8 @@ describe('RFC-074 PR-C baseline T4 — clarify generation is derived, not inheri
         '..',
         '..',
         '..',
-        'packages/backend/src/modules/task-execution/composition/taskDagGraph.ts',
+        // RFC-408: the DAG structural graph moved to engine/scope/.
+        'packages/backend/src/modules/task-execution/engine/scope/dagGraph.ts',
       ),
       'utf8',
     )

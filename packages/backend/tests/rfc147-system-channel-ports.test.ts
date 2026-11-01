@@ -181,7 +181,8 @@ describe('RFC-147 ratchet — 六处私有拷贝消亡防回潮', () => {
 
   test('taskDagGraph / dispatchFrontier 手抄对收敛为 channelEdgeDataflowSkip', () => {
     const taskDagGraph = read(
-      'packages/backend/src/modules/task-execution/composition/taskDagGraph.ts',
+      // RFC-408: the DAG structural graph moved to engine/scope/.
+      'packages/backend/src/modules/task-execution/engine/scope/dagGraph.ts',
     )
     const frontier = read('packages/backend/src/services/dispatchFrontier.ts')
     for (const src of [taskDagGraph, frontier]) {

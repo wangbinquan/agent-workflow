@@ -834,25 +834,29 @@ describe('RFC-167 — dynamic launch + runTask dispatch', () => {
 
   test('source locks: task orchestrator consumes the task-execution engine registry', () => {
     const nodeMechanics = WORKGROUP_HOST_SOURCE
-    const orchestrator = readFileSync(
-      resolve(
-        import.meta.dir,
-        '..',
-        'src',
-        'modules',
-        'task-execution',
-        'composition',
-        'taskEngineApplication.ts',
-      ),
-      'utf8',
-    )
+    // RFC-408: the task control plane moved to engine/task/runTask.ts; the composition binds the
+    // engine bodies and the dynamic-workflow persistence it reads.
+    const orchestrator = [
+      ['composition', 'taskEngineApplication.ts'],
+      ['engine', 'task', 'runTask.ts'],
+    ]
+      .map((path) =>
+        readFileSync(
+          resolve(import.meta.dir, '..', 'src', 'modules', 'task-execution', ...path),
+          'utf8',
+        ),
+      )
+      .join('\n')
     expect(orchestrator).toContain("task.subject.kind === 'workgroup'") // RFC-164 lock stays (RFC-217 G4: oracle form)
     // RFC-332 T10: the three-way oracle now belongs to the task-execution
     // registry. The scheduler mechanics bridge consumes the selected engine;
     // it must not regain an inline workgroup/dynamic dispatch truth table.
     expect(orchestrator).toContain('resolveTaskEngineSelection(')
-    expect(orchestrator).toContain('await opts.dynamicWorkflow.persistence.loadTask(taskId)')
-    expect(orchestrator).toContain("engine === 'dw-generate'")
+    expect(orchestrator).toContain('await ports.dynamicWorkflow.loadTask(taskId)')
+    expect(orchestrator).toContain('return opts.dynamicWorkflow?.persistence')
+    // The ownerless seam calls the selected engine body; the bodies are bound in composition.
+    expect(orchestrator).toContain('result = await drive.bodies[engine]()')
+    expect(orchestrator).toMatch(/'dw-generate': \(\) =>\s*runDynamicWorkflowGenerate\(\{/)
     expect(orchestrator).toContain("wgDispatch === 'dw-execute'")
     expect(orchestrator).toContain('runDynamicWorkflowGenerate({')
     expect(orchestrator).toContain("'dw-phase-invariant'")

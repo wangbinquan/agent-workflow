@@ -139,11 +139,18 @@ describe('RFC-334 node-executor owner boundary', () => {
       'packages/backend/src/modules/task-execution/composition/taskEngineApplication.ts',
     )
     const scheduler = read('packages/backend/src/services/scheduler.ts')
+    // RFC-408: the registry engines and the ownerless seam share one body per engine (the control
+    // plane in engine/task/runTask.ts calls `drive.bodies` on both paths), so the four construction
+    // sites became the two bodies.
     expect(
       application.match(
         /buildNodeExecutionWorkgroupHooks\(\s*state,\s*runtimeComponents\.wrapperRuntimeFactory/g,
       ),
-    ).toHaveLength(4)
+    ).toHaveLength(2)
+    const controlPlane = read('packages/backend/src/modules/task-execution/engine/task/runTask.ts')
+    expect(controlPlane).toContain("await drive.bodies['workgroup-turns']()")
+    expect(controlPlane).toContain("await drive.bodies['dw-generate']()")
+    expect(controlPlane).toContain('result = await drive.bodies[engine]()')
     expect(application).not.toContain('buildWorkgroupHooks')
     expect(scheduler).not.toMatch(/export function buildWorkgroupHooks\b/)
     expect(scheduler).not.toMatch(/\bfunction runHostNode\b/)

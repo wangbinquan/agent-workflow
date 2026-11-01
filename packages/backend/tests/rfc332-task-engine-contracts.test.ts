@@ -240,11 +240,17 @@ describe('RFC-332 T10-T13 — single-consumer production cutover', () => {
 
   test('legacy scheduler has no task-level drive, scope, or frontier body', () => {
     const scheduler = source('packages/backend/src/services/scheduler.ts')
+    // RFC-408: the task-level drive (the former orchestrator body) is the task control plane in
+    // engine/task/runTask.ts; the composition only binds its ports.
     const orchestrator = source(
+      'packages/backend/src/modules/task-execution/engine/task/runTask.ts',
+    )
+    const binding = source(
       'packages/backend/src/modules/task-execution/composition/taskEngineApplication.ts',
     )
     const scope = source('packages/backend/src/modules/task-execution/composition/taskDagScope.ts')
-    const graph = source('packages/backend/src/modules/task-execution/composition/taskDagGraph.ts')
+    // RFC-408: the DAG structural graph moved to engine/scope/.
+    const graph = source('packages/backend/src/modules/task-execution/engine/scope/dagGraph.ts')
     const frontier = source(
       'packages/backend/src/modules/task-execution/composition/dagFrontier.ts',
     )
@@ -253,7 +259,9 @@ describe('RFC-332 T10-T13 — single-consumer production cutover', () => {
     expect(scheduler).not.toMatch(/\bfunction\s+runScope\b/)
     expect(scheduler).not.toMatch(/\bfunction\s+deriveFrontier\b/)
     expect(scheduler).not.toMatch(/\bfunction\s+(?:buildScopeUpstreams|findScopeCycle)\b/)
-    expect(orchestrator).toContain('function runTaskEngineOrchestratorInner(')
+    expect(orchestrator).toContain('export async function runTask<Admission>(')
+    expect(binding).not.toMatch(/\bfunction\s+runTaskEngineOrchestratorInner\b/)
+    expect(binding).toContain('runTask(createTaskRunPorts(opts, topology, runtimeComponents))')
     expect(scope).toContain('function runScope(')
     expect(graph).toContain('function buildScopeUpstreams(')
     expect(graph).toContain('function findScopeCycle(')

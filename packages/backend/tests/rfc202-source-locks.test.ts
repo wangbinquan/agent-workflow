@@ -19,24 +19,26 @@ const read = (rel: string): string =>
 
 describe('RFC-202 source locks', () => {
   test('task engine abort checkpoints thread signal.reason into the provider-neutral lifecycle', () => {
+    // RFC-408: the task control plane's terminal writes and outcome settlement moved to
+    // engine/task/taskSettlement.ts (`cancelRuntimeTask` is `cancelTaskRun` on the control-plane ports).
     const application = read(
-      'packages/backend/src/modules/task-execution/composition/taskEngineApplication.ts',
+      'packages/backend/src/modules/task-execution/engine/task/taskSettlement.ts',
     )
     // All four checkpoints must pass the abort reason — dropping it silently
     // reverts daemon shutdowns to "canceled by user" (audit P1 F-13). RFC-331
     // now owns that decision behind the runtime lifecycle port.
-    const threaded = application.match(/cancelRuntimeTask\([^)]*opts\.signal\??\.reason\)/g)
+    const threaded = application.match(/cancelTaskRun\([^)]*ports\.signal\??\.reason\)/g)
     expect(threaded?.length ?? 0).toBeGreaterThanOrEqual(4)
     const helper = application.slice(
-      application.indexOf('async function cancelRuntimeTask('),
+      application.indexOf('export async function cancelTaskRun('),
       application.indexOf(
-        '\nasync function runTaskEngineOrchestratorInner(',
-        application.indexOf('async function cancelRuntimeTask('),
+        '\nexport async function settleTaskScopeOutcome(',
+        application.indexOf('export async function cancelTaskRun('),
       ),
     )
     // RFC-359 W3-T14：关机 / 会话暂停 / 会话关闭三种 daemon 层中断由同一个判据识别（isDaemonInterruptionAbortReason）。
     expect(helper).toContain('isDaemonInterruptionAbortReason(abortReason)')
-    expect(helper).toContain('opts.persistence.runtimeLifecycle.trySet({')
+    expect(helper).toContain('ports.persistence.runtimeLifecycle.trySet({')
     expect(helper).toContain("to: 'interrupted'")
     expect(helper).toContain('DAEMON_RESTART_ERROR_SUMMARY')
   })

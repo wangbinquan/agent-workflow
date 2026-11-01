@@ -229,7 +229,10 @@ Facade 只许 re-export 或参数形状适配；不得含 DB 查询、状态、�
   - [RFC-407](../RFC-407-task-execution-fanout-assembly-lines/proposal.md)（In Progress）：`wrapperMechanics.ts` 的 fanout 分片 / 聚合装配线迁入
     `engine/node/agent-single/`，与 agent 线共用端口，`FanoutAttemptPort` 的实现在 engine；`wrapperMechanics.ts` 1,954 → 730 行，只剩 wrapper
     的 data / scopeDriver / workspace 绑定与 git wrapper 的工作区 helper；
-  - `taskEngineApplication.ts` 的引擎编排：待立 RFC。
+  - [RFC-408](../RFC-408-task-execution-task-control-plane/proposal.md)（In Progress）：`taskEngineApplication.ts` 的任务控制面迁入
+    `engine/task/runTask.ts` 与 `taskSettlement.ts`，composition 只剩端口绑定与执行状态装配；DAG 结构图迁为 `engine/scope/dagGraph.ts`
+    （scope 解释器层的第一个文件）。三个引擎类仍委托给 composition 绑定的主体：DAG scope 解释器迁入 `engine/scope/`、workgroup 轮次与
+    动态工作流引擎迁入 task-execution 各待立 RFC。
 
 ### S7 唯一 AtomicApply 引擎（W6）
 

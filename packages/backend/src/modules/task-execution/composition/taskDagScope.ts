@@ -1,7 +1,7 @@
 import { decideScopeOutcome } from '@/services/dispatchFrontier'
 import { maybeRunCommitPush } from '@/services/scheduler'
 import { deriveFrontier } from './dagFrontier'
-import { buildScopeUpstreams, findScopeCycle } from './taskDagGraph'
+import { buildScopeUpstreams, findScopeCycle } from '../engine/scope/dagGraph'
 import { TaskScopeHandoffSignal, type TaskScopeOutcome } from '../domain/taskEngine'
 import type {
   NodeMechanicsResult,

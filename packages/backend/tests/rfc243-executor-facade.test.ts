@@ -130,9 +130,12 @@ describe('RFC-243 T2 — launch call faces route through the executor (source lo
   })
 
   test('task orchestrator consumes the engine registry (no inline dispatch left)', () => {
-    const text = srcText('modules/task-execution/composition/taskEngineApplication.ts')
+    // RFC-408: the task control plane (engine selection included) moved to engine/task/runTask.ts.
+    const text = srcText('modules/task-execution/engine/task/runTask.ts')
     expect(text).toContain('resolveTaskEngine')
     expect(/\bderiveWorkgroupDispatch\(/.test(text)).toBe(false)
+    const application = srcText('modules/task-execution/composition/taskEngineApplication.ts')
+    expect(/\bderiveWorkgroupDispatch\(|resolveTaskEngineSelection\(/.test(application)).toBe(false)
   })
 })
 

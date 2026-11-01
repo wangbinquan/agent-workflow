@@ -1,4 +1,6 @@
 // RFC-332 — DAG structural dependency and cycle owner.
+// RFC-408: moved verbatim from composition/taskDagGraph.ts; the scope interpreter layer (design §5.2)
+// and the task control plane share it.
 
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 import {

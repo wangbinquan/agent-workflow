@@ -498,9 +498,10 @@ describe('RFC-339 WrapperRuntime cutover', () => {
       'packages/backend/src/modules/task-execution/composition/runtimeAssembly.ts',
       'packages/backend/src/modules/task-execution/infrastructure/taskExecutionRuntimeParticipants.ts',
     ])
+    // RFC-408: the task control plane builds the scope index in engine/task/runTask.ts.
     expect(containing('createExecutionScopeIndex(')).toEqual([
-      'packages/backend/src/modules/task-execution/composition/taskEngineApplication.ts',
       'packages/backend/src/modules/task-execution/domain/executionScope.ts',
+      'packages/backend/src/modules/task-execution/engine/task/runTask.ts',
     ])
     expect(containing('createLegacyTaskExecutionTopology')).toEqual([])
   })

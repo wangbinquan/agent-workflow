@@ -292,7 +292,14 @@ describe('RFC-359 W5-T19b —— 组合根占位拆除后的运行期残迹', ()
   })
 
   test('四处占位的错误码 / 文案在源码里已无残迹（账本数计数，这里点名）', () => {
-    const engine = code('modules/task-execution/composition/taskEngineApplication.ts')
+    // RFC-408: the drive's control plane moved to engine/task/; the markers stay absent there too.
+    const engine = [
+      'modules/task-execution/composition/taskEngineApplication.ts',
+      'modules/task-execution/engine/task/runTask.ts',
+      'modules/task-execution/engine/task/taskSettlement.ts',
+    ]
+      .map(code)
+      .join('\n')
     for (const marker of [
       'memory-injection-queries-not-composed',
       'task-execution-persistence-not-composed',

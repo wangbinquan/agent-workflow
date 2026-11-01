@@ -87,6 +87,7 @@ describe('RFC-146: task engine 三处表接线形态锁', () => {
     ),
     'utf8',
   )
+  // RFC-408: the task control plane (node-kind admission included) moved to engine/task/runTask.ts.
   const applicationSrc = readFileSync(
     resolve(
       import.meta.dir,
@@ -94,8 +95,9 @@ describe('RFC-146: task engine 三处表接线形态锁', () => {
       'src',
       'modules',
       'task-execution',
-      'composition',
-      'taskEngineApplication.ts',
+      'engine',
+      'task',
+      'runTask.ts',
     ),
     'utf8',
   )

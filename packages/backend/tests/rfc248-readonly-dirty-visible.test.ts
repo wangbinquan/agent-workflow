@@ -108,24 +108,23 @@ describe('AC-19 —— 语义边界', () => {
     // 搭在 `maybeRunCommitPush` 里的话，只有 `autoCommitPush=true` 且顶层节点
     // 成功的任务才会被检查——默认配置的任务、失败 / 取消的任务全都漏掉，
     // `readonly_dirty_count` 永远是 NULL、详情页永远没有提示。
-    const application = await Bun.file(
-      resolve(
-        import.meta.dir,
-        '..',
-        'src',
-        'modules',
-        'task-execution',
-        'composition',
-        'taskEngineApplication.ts',
-      ),
-    ).text()
+    // RFC-408：任务控制面迁到 engine/task/——调用点在 runTask.ts，终态分派在 taskSettlement.ts 的
+    // settleTaskScopeOutcome，绑定把调用接到 services/scheduler 的 inspectReadonlyRepos。
+    const taskEngine = (...path: string[]) =>
+      Bun.file(resolve(import.meta.dir, '..', 'src', 'modules', 'task-execution', ...path)).text()
+    const application = await taskEngine('engine', 'task', 'runTask.ts')
+    const settlement = await taskEngine('engine', 'task', 'taskSettlement.ts')
+    const binding = await taskEngine('composition', 'taskEngineApplication.ts')
     const scheduler = await Bun.file(
       resolve(import.meta.dir, '..', 'src', 'services', 'scheduler.ts'),
     ).text()
-    const callIdx = application.indexOf('await inspectReadonlyRepos(state, log)')
+    const callIdx = application.indexOf('await drive.inspectReadonlyRepos()')
     expect(callIdx).toBeGreaterThan(0)
-    // 调用点在终态分派**之前**（failed / canceled / awaiting_* / done 都在它后面）。
-    expect(callIdx).toBeLessThan(application.indexOf("if (result.kind === 'failed'"))
+    expect(binding).toContain('inspectReadonlyRepos: () => inspectReadonlyRepos(state, log)')
+    // 调用点在终态分派**之前**（failed / canceled / awaiting_* / done 都在 settle 里）。
+    expect(callIdx).toBeLessThan(application.indexOf('await settleTaskScopeOutcome(ports, result)'))
+    expect(settlement).toContain("if (result.kind === 'failed'")
+    expect(application).not.toContain("if (result.kind === 'failed'")
     // 而且不在 maybeRunCommitPush 体内。
     const cpIdx = scheduler.indexOf('export async function maybeRunCommitPush(')
     const cpBody = scheduler.slice(cpIdx, scheduler.indexOf('\n}\n', cpIdx))

@@ -131,8 +131,10 @@ describeEachProvider('RFC-056 scheduler — no runaway pending cross-clarify row
       'src',
       'modules',
       'task-execution',
-      'composition',
-      'taskDagGraph.ts',
+      // RFC-408: the DAG structural graph moved to engine/scope/.
+      'engine',
+      'scope',
+      'dagGraph.ts',
     )
     const src = readFileSync(DAG_GRAPH_TS, 'utf-8')
     // We don't try to lex the full predicate — just lock that the

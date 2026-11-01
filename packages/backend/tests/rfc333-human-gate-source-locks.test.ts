@@ -293,11 +293,17 @@ describe('RFC-333 human-gate open/park cutover inventory', () => {
     expect(creation).toContain('insertOne(tx, taskQuestions, question)')
     expect(creation).toContain('this.journal.markPreparedTx({')
 
-    const engine = read(
-      'packages/backend/src/modules/task-execution/composition/taskEngineApplication.ts',
-    )
-    expect(engine.match(/humanGateLifecycle\.settleManualQuestionParks\(\{/g)).toHaveLength(4)
-    expect(engine.match(/humanGateLifecycle\.trySetWhenNoManualQuestionParks\(\{/g)).toHaveLength(4)
+    // RFC-408: the task control plane moved to engine/task/ — the claim-time settle is in runTask.ts,
+    // the post-drive settlement in taskSettlement.ts.
+    const engine = [
+      read('packages/backend/src/modules/task-execution/engine/task/runTask.ts'),
+      read('packages/backend/src/modules/task-execution/engine/task/taskSettlement.ts'),
+    ].join('\n')
+    // Whitespace-tolerant: prettier wraps the longer `ports.persistence.…` receivers differently.
+    expect(engine.match(/humanGateLifecycle\.settleManualQuestionParks\(\s*\{/g)).toHaveLength(4)
+    expect(
+      engine.match(/humanGateLifecycle\.trySetWhenNoManualQuestionParks\(\s*\{/g),
+    ).toHaveLength(4)
     expect(engine).toContain("if (statusBeforeReviewPark === 'awaiting_human')")
     expect(engine).toContain("reason: 'active-clarify-released-before-review'")
     expect(engine).toContain('task review outcome yielded to a durable manual question')

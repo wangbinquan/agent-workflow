@@ -1,3 +1,14 @@
+## 2026-11-01 RFC-408 task-execution 任务控制面迁入 engine/task（In Progress；`design/RFC-408-task-execution-task-control-plane/`）
+
+- **来由**：RFC-294 S6，design §5.5 第 4 步之二；用户授权同 RFC-402，本会话调研、设计、实施与集中验证，不派 Codex。
+- **范围**：`taskEngineApplication.ts`（898 行）里的任务控制面——载入与归属校验、执行授权、工作区排除配置、快照解析与触发器预检、认领、
+  节点 kind / id / 容器 / 环校验、引擎选择与驱动、只读巡检、终态结算——迁入 `engine/task/runTask.ts` 与 `taskSettlement.ts`，经 task-execution
+  自有端口执行；composition 只剩端口绑定与执行状态装配（经 `prepare`）；`taskDagGraph.ts` 迁为 `engine/scope/dagGraph.ts`。纯结构重构。
+- **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。
+- **进度**：T1～T5 完成，随实现提交入库，待 exact SHA 的 CI（AC-6）。`taskEngineApplication.ts` 898 → 298 行，只剩端口绑定与执行状态
+  装配。集中验证 906 + 13 + 7 个文件：没有本 RFC 引入的失败，负载超时在安静机器上候选与基线同样通过；P0 变异 lane 通过。详见 plan「集中验证（T5）」。
+- **后继**：DAG scope 解释器（`runScope` / `deriveFrontier`）迁入 `engine/scope/`；workgroup 轮次、动态工作流引擎迁入 task-execution。
+
 ## 2026-11-01 RFC-407 task-execution fanout 分片与聚合装配线迁入 engine/node（In Progress；`design/RFC-407-task-execution-fanout-assembly-lines/`）
 
 - **来由**：RFC-294 S6，design §5.5 第 4 步之一；用户授权同 RFC-402，本会话调研、设计、实施与集中验证，不派 Codex。
