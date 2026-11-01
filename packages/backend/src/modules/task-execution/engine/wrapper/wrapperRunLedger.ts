@@ -1,28 +1,30 @@
-import { prepareConsumedInputs } from '../infrastructure/consumedInputsParticipant'
-import { nodeRunMintIdentityForSlot } from '../application/nodeRunMintIdentity'
-import type { WrapperRunLedgerPort } from '../application/ports/wrapperRunLedger'
-import type { WrapperStatusPublisherPort } from '../application/ports/wrapperStatusPublisher'
+// RFC-413 — the durable wrapper-row lifecycle behind WrapperRuntime (RFC-339): find and re-enter a resumable
+// generation in its frame (RFC-354), capture the body's closure, mint the container row, and settle park /
+// interrupt / terminal states, yielding to an external terminal state (RFC-230). Moved verbatim from
+// composition/wrapperRunLifecycle.ts onto the ledger's persistence ports.
+import { nodeRunMintIdentityForSlot } from '../../application/nodeRunMintIdentity'
+import type {
+  WrapperRunLedgerPort,
+  WrapperRunLedgerPorts,
+} from '../../application/ports/wrapperRunLedger'
 import {
   WrapperSupersededSignal,
   type OpenWrapperGeneration,
   type WrapperExecutionRequest,
   type WrapperNodeKind,
   type WrapperSettlement,
-} from '../domain/wrapperExecution'
-import { wrapperExternalUpstreamSources } from '../domain/wrapperGraph'
-import { createLogger } from '@/util/log'
-import type { TaskMechanicsState } from './taskMechanicsState'
-import { broadcastNodeStatus } from '@/modules/task-execution/infrastructure/nodeStatusEvents'
-import { loadFrameChain } from '../application/frameChain'
-import { resolveSourceFrame } from '../domain/environmentChain'
+} from '../../domain/wrapperExecution'
+import { wrapperExternalUpstreamSources } from '../../domain/wrapperGraph'
+import { loadFrameChain } from '../../application/frameChain'
+import { resolveSourceFrame } from '../../domain/environmentChain'
 
 function isSupersedableTransitionError(error: unknown): boolean {
   const code = (error as { code?: unknown } | null)?.code
   return code === 'illegal-node-run-transition' || code === 'concurrent-node-run-transition'
 }
 
-async function supersedingWrapperOutcome(state: TaskMechanicsState, wrapperRunId: string) {
-  const current = await state.opts.persistence.wrapperRuns.readStatus(wrapperRunId)
+async function supersedingWrapperOutcome(ports: WrapperRunLedgerPorts, wrapperRunId: string) {
+  const current = await ports.persistence.wrapperRuns.readStatus(wrapperRunId)
   if (current === 'canceled') {
     return {
       kind: 'canceled' as const,
@@ -41,24 +43,22 @@ async function supersedingWrapperOutcome(state: TaskMechanicsState, wrapperRunId
 }
 
 async function clearWrapperReuseDisabled(
-  state: TaskMechanicsState,
+  ports: WrapperRunLedgerPorts,
   wrapperRunId: string,
 ): Promise<void> {
-  await state.opts.persistence.wrapperRuns.clearReuseDisabled({
+  await ports.persistence.wrapperRuns.clearReuseDisabled({
     nodeRunId: wrapperRunId,
-    ...(state.opts.executionContext === undefined
-      ? {}
-      : { executionContext: state.opts.executionContext }),
+    ...(ports.execution === undefined ? {} : { executionContext: ports.execution }),
   })
 }
 
 async function settleTerminal(
-  state: TaskMechanicsState,
+  ports: WrapperRunLedgerPorts,
   wrapperRunId: string,
   settlement: Exclude<WrapperSettlement, { rowStatus: 'interrupted' }>,
 ): Promise<void> {
   try {
-    await state.opts.persistence.nodeRuns.set({
+    await ports.persistence.nodeRuns.set({
       nodeRunId: wrapperRunId,
       to: settlement.rowStatus as 'done' | 'failed' | 'canceled' | 'exhausted',
       allowedFrom: ['running', 'awaiting_review', 'awaiting_human'],
@@ -71,26 +71,24 @@ async function settleTerminal(
             : { errorMessage: settlement.errorMessage }),
         },
       },
-      ...(state.opts.executionContext === undefined
-        ? {}
-        : { executionContext: state.opts.executionContext }),
+      ...(ports.execution === undefined ? {} : { executionContext: ports.execution }),
     })
   } catch (error) {
     if (!isSupersedableTransitionError(error)) throw error
-    const outcome = await supersedingWrapperOutcome(state, wrapperRunId)
+    const outcome = await supersedingWrapperOutcome(ports, wrapperRunId)
     if (outcome === null) throw error
-    await clearWrapperReuseDisabled(state, wrapperRunId)
-    createLogger('scheduler').info('wrapper finalize superseded by external terminal state', {
+    await clearWrapperReuseDisabled(ports, wrapperRunId)
+    ports.log.info('wrapper finalize superseded by external terminal state', {
       wrapperRunId,
       attempted: settlement.rowStatus,
       outcome: outcome.message,
     })
     throw new WrapperSupersededSignal(outcome)
   }
-  await clearWrapperReuseDisabled(state, wrapperRunId)
+  await clearWrapperReuseDisabled(ports, wrapperRunId)
 }
 
-export function createWrapperRunLedger(state: TaskMechanicsState): WrapperRunLedgerPort {
+export function createWrapperRunLedger(ports: WrapperRunLedgerPorts): WrapperRunLedgerPort {
   return {
     async openGeneration<K extends WrapperNodeKind>(
       kind: K,
@@ -100,8 +98,8 @@ export function createWrapperRunLedger(state: TaskMechanicsState): WrapperRunLed
       // (`request.containerRunId`, null at the top) plus the round inside it —
       // a nested loop re-entered on the outer loop's 2nd round finds no
       // resumable row and mints a fresh generation instead of reusing round 1.
-      const existing = await state.opts.persistence.wrapperRuns.findResumable({
-        taskId: state.taskId,
+      const existing = await ports.persistence.wrapperRuns.findResumable({
+        taskId: ports.taskId,
         nodeId: request.node.id,
         containerRunId: request.containerRunId,
         iteration: request.iteration,
@@ -109,7 +107,7 @@ export function createWrapperRunLedger(state: TaskMechanicsState): WrapperRunLed
       if (existing !== null) {
         const enteredRunning = existing.status !== 'running'
         if (enteredRunning) {
-          await state.opts.persistence.nodeRuns.set({
+          await ports.persistence.nodeRuns.set({
             nodeRunId: existing.id,
             to: 'running',
             allowedFrom: [
@@ -121,9 +119,7 @@ export function createWrapperRunLedger(state: TaskMechanicsState): WrapperRunLed
             ],
             allowTerminal: true,
             reason: kind === 'wrapper-fanout' ? 'wrapper-fanout-resume' : 'wrapper-resume',
-            ...(state.opts.executionContext === undefined
-              ? {}
-              : { executionContext: state.opts.executionContext }),
+            ...(ports.execution === undefined ? {} : { executionContext: ports.execution }),
           })
         }
         return {
@@ -143,33 +139,33 @@ export function createWrapperRunLedger(state: TaskMechanicsState): WrapperRunLed
       if (kind !== 'wrapper-fanout') {
         const frame = { containerRunId: request.containerRunId, iteration: request.iteration }
         const chain = await loadFrameChain(
-          (id: string) => state.opts.persistence.nodeExecution.read(id),
+          (id: string) => ports.persistence.nodeExecution.read(id),
           frame,
         )
         const sources: Array<{ nodeId: string; nodeKind?: string; frame: typeof frame }> = []
         for (const sourceNodeId of [
-          ...wrapperExternalUpstreamSources(request.node.id, state.definition),
+          ...wrapperExternalUpstreamSources(request.node.id, ports.definition),
         ].sort()) {
           const resolved = resolveSourceFrame({
             sourceNodeId,
             targetNodeId: request.node.id,
-            parents: state.containerOf,
+            parents: ports.containerOf,
             frame,
             containerRowById: chain.lookup,
           })
           if (resolved.ok)
             sources.push({
               nodeId: sourceNodeId,
-              nodeKind: state.definition.nodes.find((node) => node.id === sourceNodeId)?.kind,
+              nodeKind: ports.definition.nodes.find((node) => node.id === sourceNodeId)?.kind,
               frame: resolved.frame,
             })
         }
-        consumed = await state.opts.persistence.wrapperRuns.resolveConsumed({
-          taskId: state.taskId,
+        consumed = await ports.persistence.wrapperRuns.resolveConsumed({
+          taskId: ports.taskId,
           sources,
         })
       }
-      const runId = await state.opts.persistence.nodeRuns.mint({
+      const runId = await ports.persistence.nodeRuns.mint({
         ...nodeRunMintIdentityForSlot(
           {
             kind: 'container',
@@ -178,7 +174,7 @@ export function createWrapperRunLedger(state: TaskMechanicsState): WrapperRunLed
           },
           { kind: 'current' },
         ),
-        taskId: state.taskId,
+        taskId: ports.taskId,
         nodeId: request.node.id,
         status: 'pending',
         cause: 'wrapper-init',
@@ -189,20 +185,16 @@ export function createWrapperRunLedger(state: TaskMechanicsState): WrapperRunLed
           : {
               overrides: {
                 inputs: {
-                  ...prepareConsumedInputs({ record: consumed }),
+                  ...ports.consumedInputs(consumed),
                 },
               },
             }),
-        ...(state.opts.executionContext === undefined
-          ? {}
-          : { executionContext: state.opts.executionContext }),
+        ...(ports.execution === undefined ? {} : { executionContext: ports.execution }),
       })
-      await state.opts.persistence.nodeRuns.transition({
+      await ports.persistence.nodeRuns.transition({
         nodeRunId: runId,
         event: { kind: 'mark-running' },
-        ...(state.opts.executionContext === undefined
-          ? {}
-          : { executionContext: state.opts.executionContext }),
+        ...(ports.execution === undefined ? {} : { executionContext: ports.execution }),
       })
       return { kind, runId, resumed: false, enteredRunning: true, previous: null }
     },
@@ -212,37 +204,25 @@ export function createWrapperRunLedger(state: TaskMechanicsState): WrapperRunLed
       settlement: WrapperSettlement,
     ): Promise<void> {
       if (settlement.rowStatus === 'interrupted') {
-        await state.opts.persistence.nodeRuns.transition({
+        await ports.persistence.nodeRuns.transition({
           nodeRunId: generation.runId,
           event: { kind: 'mark-interrupted' },
-          ...(state.opts.executionContext === undefined
-            ? {}
-            : { executionContext: state.opts.executionContext }),
+          ...(ports.execution === undefined ? {} : { executionContext: ports.execution }),
         })
         return
       }
       if (settlement.rowStatus === 'awaiting_human' || settlement.rowStatus === 'awaiting_review') {
-        await state.opts.persistence.nodeRuns.transition({
+        await ports.persistence.nodeRuns.transition({
           nodeRunId: generation.runId,
           event:
             settlement.rowStatus === 'awaiting_human'
               ? { kind: 'park-human' }
               : { kind: 'park-review' },
-          ...(state.opts.executionContext === undefined
-            ? {}
-            : { executionContext: state.opts.executionContext }),
+          ...(ports.execution === undefined ? {} : { executionContext: ports.execution }),
         })
         return
       }
-      await settleTerminal(state, generation.runId, settlement)
-    },
-  }
-}
-
-export function createWrapperStatusPublisher(): WrapperStatusPublisherPort {
-  return {
-    publish(receipt) {
-      broadcastNodeStatus(receipt.taskId, receipt.nodeRunId, receipt.nodeId, receipt.status)
+      await settleTerminal(ports, generation.runId, settlement)
     },
   }
 }

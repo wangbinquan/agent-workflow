@@ -30,12 +30,14 @@ const SCHEDULER = readFileSync(
   'utf8',
 )
 // RFC-406: nodeMechanics.ts is gone; its last body (the workgroup host) is WORKGROUP_HOST_SOURCE.
+// RFC-413: the wrapper iso create / merge-back left wrapperMechanics.ts for engine/kernel/wrapperIsolation.ts,
+// and the pre-drive merge recovery left composition/executionMergeRecovery.ts for engine/kernel/mergeRecovery.ts.
 const WRAPPER_MECHANICS = readFileSync(
-  resolve(SRC, '..', 'modules', 'task-execution', 'composition', 'wrapperMechanics.ts'),
+  resolve(SRC, '..', 'modules', 'task-execution', 'engine', 'kernel', 'wrapperIsolation.ts'),
   'utf8',
 )
 const EXECUTION_MERGE_RECOVERY = readFileSync(
-  resolve(SRC, '..', 'modules', 'task-execution', 'composition', 'executionMergeRecovery.ts'),
+  resolve(SRC, '..', 'modules', 'task-execution', 'engine', 'kernel', 'mergeRecovery.ts'),
   'utf8',
 )
 const MECHANICS_SOURCES = [

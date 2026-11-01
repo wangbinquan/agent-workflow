@@ -1,7 +1,12 @@
 import type { WorkflowNode } from '@agent-workflow/shared'
+import type { IsoHandle } from '@/platform/contracts/isolationWorkspace'
 import type { OpenWrapperGeneration, WrapperNodeKind } from '../../domain/wrapperExecution'
+import type { IsolationMechanicsPorts, IsolationScope } from './isolationMechanics'
 
-/** Opaque handle: only the composition adapter can resolve it to physical worktrees. */
+/**
+ * Opaque handle: only the engine's wrapper workspace (RFC-413, `engine/wrapper/wrapperWorkspace.ts`) resolves it to
+ * physical worktrees; the composition's scope driver asks it through {@link WrapperWorkspaceScenes.resolve}.
+ */
 export interface WrapperWorkspaceScene {
   readonly key: symbol
   readonly kind: WrapperNodeKind
@@ -41,4 +46,23 @@ export interface WrapperWorkspacePort {
     readonly node: WorkflowNode
     readonly iteration: number
   }): Promise<WrapperWorkspaceMergeResult>
+}
+
+/** RFC-413 — the git surface of the scope a wrapper's isolated worktree was opened in. */
+export type WrapperGitScope = Pick<IsolationScope, 'head' | 'changedFiles' | 'blobHashes'>
+
+/** RFC-413 — what the engine's wrapper workspace runs on. */
+export interface WrapperWorkspaceEnginePorts {
+  readonly isolation: IsolationMechanicsPorts
+  /** The scope the handle was opened in. */
+  scopeOf(handle: IsoHandle): WrapperGitScope
+}
+
+/** RFC-413 — the workspace port and the resolver of its opened scenes. */
+export interface WrapperWorkspaceScenes {
+  readonly port: WrapperWorkspacePort
+  resolve(scene: WrapperWorkspaceScene): {
+    readonly handle: IsoHandle
+    readonly kind: WrapperNodeKind
+  }
 }

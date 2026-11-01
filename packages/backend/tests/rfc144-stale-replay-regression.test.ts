@@ -58,7 +58,10 @@ import { createNodeIso, snapshotNodeIsoFinal } from '@/platform/workspace/local/
 import { discardNodeIso } from '@/modules/task-execution/engine/kernel/isolationCleanup'
 import { type CanonRepo } from '@/platform/contracts/isolationWorkspace'
 import { mintNodeRun } from '../src/services/nodeRunMint'
-import { createOrRebuildWrapperIso } from '../src/modules/task-execution/composition/wrapperMechanics'
+// RFC-413: the wrapper iso helper moved into engine/kernel/wrapperIsolation.ts on the isolation mechanics ports;
+// the cases drive it through the real binding over the fake execution state.
+import { createOrRebuildWrapperIso } from '../src/modules/task-execution/engine/kernel/wrapperIsolation'
+import { createIsolationMechanicsPorts } from '../src/modules/task-execution/composition/isolationMechanicsBinding'
 import { selectIsolationWorkspaceFactory } from '../src/modules/source-control/public/participants'
 import { deriveFrontier } from './helpers/frontierSelection'
 import { createTaskExecutionPersistence } from '../src/modules/task-execution/composition/taskExecutionPersistence'
@@ -443,7 +446,13 @@ describe('RFC-144 wrapper 同行复活的 iso 基（实现门 P2 第二半）', 
   })
   afterEach(() => h.cleanup())
 
-  function fakeSchedulerState(taskId: string): Parameters<typeof createOrRebuildWrapperIso>[0] {
+  type FakeState = Parameters<typeof createIsolationMechanicsPorts>[0]
+  const rebuild = (
+    state: FakeState,
+    ...rest: Parameters<typeof createOrRebuildWrapperIso> extends [unknown, ...infer R] ? R : never
+  ) => createOrRebuildWrapperIso(createIsolationMechanicsPorts(state), ...rest)
+
+  function fakeSchedulerState(taskId: string): FakeState {
     return {
       db: h.db,
       taskId,
@@ -467,7 +476,7 @@ describe('RFC-144 wrapper 同行复活的 iso 基（实现门 P2 第二半）', 
       },
       log: createLogger('rfc144-test'),
       writeSem: new Semaphore(1),
-    } as unknown as Parameters<typeof createOrRebuildWrapperIso>[0]
+    } as unknown as FakeState
   }
 
   async function seedWrapperTaskRow(): Promise<{ taskId: string; runId: string }> {
@@ -491,7 +500,7 @@ describe('RFC-144 wrapper 同行复活的 iso 基（实现门 P2 第二半）', 
     // 先占住任务写锁，再启动 wrapper 创建。正确接线会在
     // createIsoUnderLock 排队；修复前的裸 createNodeIso 会绕过锁并完成。
     const release = await state.writeSem.acquire()
-    const creation = createOrRebuildWrapperIso(state, runId, null)
+    const creation = rebuild(state, runId, null)
     for (let i = 0; i < 100 && state.writeSem.queueLength === 0; i += 1) {
       await Bun.sleep(5)
     }
@@ -506,7 +515,7 @@ describe('RFC-144 wrapper 同行复活的 iso 基（实现门 P2 第二半）', 
     const { taskId, runId } = await seedWrapperTaskRow()
     const state = fakeSchedulerState(taskId)
     // gen-1：创建 iso（NULL→isolating + 盖 base 列），随后走完整代到 merged。
-    await createOrRebuildWrapperIso(state, runId, null)
+    await rebuild(state, runId, null)
     const gen1 = (await readNodeRunFixtures(h.db, { id: runId }))[0]!
     expect(gen1.mergeState).toBe('isolating')
     const gen1Base = (gen1.checkpoints.find((checkpoint) => checkpoint.mountPath === '')
@@ -536,7 +545,7 @@ describe('RFC-144 wrapper 同行复活的 iso 基（实现门 P2 第二半）', 
     await runGit(h.worktreePath, ['add', '.'])
     await runGit(h.worktreePath, ['commit', '-q', '-m', 'gen1 merged'])
     // 同行复活：merged 再入必须换新 base。
-    const handle = await createOrRebuildWrapperIso(state, runId, {
+    const handle = await rebuild(state, runId, {
       checkpoints: [{ mountPath: '', isolationBase: gen1Base }],
     })
     const after = (await readNodeRunFixtures(h.db, { id: runId }))[0]!
@@ -557,7 +566,7 @@ describe('RFC-144 wrapper 同行复活的 iso 基（实现门 P2 第二半）', 
     const { taskId, runId } = await seedWrapperTaskRow()
     const state = fakeSchedulerState(taskId)
     // gen-1 建 iso（目录真实落盘）。
-    const gen1Handle = await createOrRebuildWrapperIso(state, runId, null)
+    const gen1Handle = await rebuild(state, runId, null)
     expect(existsSync(gen1Handle.repos[0]!.isoWorktreePath)).toBe(true)
     // 伪造「reenter CAS 已提交（列/progress 原子清空）、清理/重建前崩溃」的现场：
     // 行 isolating + 基列空 + 旧 iso 目录仍在派生路径上。
@@ -574,7 +583,7 @@ describe('RFC-144 wrapper 同行复活的 iso 基（实现门 P2 第二半）', 
     expect(crashed.mergeState).toBe('isolating')
     // 下次 resume：`git worktree add` 对既存目录硬失败——helper 必须先按派生
     // 路径容忍清理再重建（修复前：iso-worktree-add-failed → 任务每次 resume 都 wedge）。
-    const handle = await createOrRebuildWrapperIso(state, runId, crashed)
+    const handle = await rebuild(state, runId, crashed)
     expect(handle.passthrough).toBe(false)
     expect(existsSync(handle.repos[0]!.isoWorktreePath)).toBe(true)
     const after = (await readNodeRunFixtures(h.db, { id: runId }))[0]!
@@ -589,11 +598,11 @@ describe('RFC-144 wrapper 同行复活的 iso 基（实现门 P2 第二半）', 
 
   test('源码顺序锁：merged 再入的 reenter CAS（夺权）先于任何销毁性清理', () => {
     const src = readFileSync(
-      join(BACKEND_SRC, 'modules', 'task-execution', 'composition', 'wrapperMechanics.ts'),
+      join(BACKEND_SRC, 'modules', 'task-execution', 'engine', 'kernel', 'wrapperIsolation.ts'),
       'utf-8',
     )
     const fnStart = src.indexOf('export async function createOrRebuildWrapperIso(')
-    const fnEnd = src.indexOf('async function mergeBackWrapperIso(', fnStart)
+    const fnEnd = src.indexOf('export async function mergeBackWrapperIso(', fnStart)
     const body = src.slice(fnStart, fnEnd)
     const casAt = body.indexOf("event: { kind: 'reenter-isolation' }")
     const discardAt = body.indexOf('discardNodeIso(')
@@ -606,7 +615,7 @@ describe('RFC-144 wrapper 同行复活的 iso 基（实现门 P2 第二半）', 
   test('conflict-human 再入：delta 未进 canon，保持旧 base rebuild（列不动）', async () => {
     const { taskId, runId } = await seedWrapperTaskRow()
     const state = fakeSchedulerState(taskId)
-    await createOrRebuildWrapperIso(state, runId, null)
+    await rebuild(state, runId, null)
     const gen1 = (await readNodeRunFixtures(h.db, { id: runId }))[0]!
     const gen1Base = (gen1.checkpoints.find((checkpoint) => checkpoint.mountPath === '')
       ?.isolationBase ?? null)!
@@ -617,7 +626,7 @@ describe('RFC-144 wrapper 同行复活的 iso 基（实现门 P2 第二半）', 
     }).mergeStates
     await mergeStates.transition({ nodeRunId: runId, event: { kind: 'mark-pending-merge' } })
     await mergeStates.transition({ nodeRunId: runId, event: { kind: 'park-conflict-human' } })
-    const handle = await createOrRebuildWrapperIso(state, runId, {
+    const handle = await rebuild(state, runId, {
       checkpoints: [{ mountPath: '', isolationBase: gen1Base }],
     })
     const after = (await readNodeRunFixtures(h.db, { id: runId }))[0]!

@@ -43,7 +43,10 @@ import { assertWorktreePresentForResume } from '@/modules/task-execution/applica
 import { composePortArtifactOperations } from '@/modules/task-execution/composition/portArtifacts'
 import { inheritedCallSpace } from '@/modules/task-execution/engine/node/shared/child-call/launchChildCall'
 import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
-import { createOrRebuildWrapperIso } from '@/modules/task-execution/composition/wrapperMechanics'
+// RFC-413: the wrapper iso rebuild moved into engine/kernel/wrapperIsolation.ts; it runs on the isolation
+// mechanics ports the composition binds over the execution state.
+import { createOrRebuildWrapperIso } from '@/modules/task-execution/engine/kernel/wrapperIsolation'
+import { createIsolationMechanicsPorts } from '@/modules/task-execution/composition/isolationMechanicsBinding'
 import { prepareResumeTaskProjection } from '@/modules/task-execution/infrastructure/childTaskLifecycleParticipant'
 import { createTaskExecutionReadModels } from '@/modules/task-execution/infrastructure/taskExecutionReadModels'
 import { taskDiffProjection } from '@/modules/task-execution/infrastructure/taskRouteOperations'
@@ -463,7 +466,11 @@ describeEachProvider('single non-root member workspace regression', (harness) =>
           log,
           writeSem,
         } as unknown as TaskMechanicsState
-        const rebuilt = await createOrRebuildWrapperIso(state, runId, row)
+        const rebuilt = await createOrRebuildWrapperIso(
+          createIsolationMechanicsPorts(state),
+          runId,
+          row,
+        )
         expect(rebuilt.repos.map((r) => r.baseSnapshot)).toEqual(
           handle.repos.map((r) => r.baseSnapshot),
         )

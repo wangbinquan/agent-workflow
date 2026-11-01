@@ -5,6 +5,8 @@ import {
   SCRIPT_NODE_SOURCE,
   SCRIPT_ATTEMPT_SOURCE,
   MERGE_CONFLICT_SOURCE,
+  WRAPPER_WORKSPACE_SOURCE,
+  WRAPPER_ISOLATION_SOURCE,
 } from './helpers/executionMechanismSources'
 // RFC-287 T5 / C1 —— 漂移 A 的红→绿对：脚本节点合并抛出不再楔死整个作用域。
 //
@@ -44,18 +46,24 @@ const SCHEDULER = readFileSync(
   ),
   'utf8',
 )
-const WRAPPER_MECHANICS = readFileSync(
-  resolve(
-    import.meta.dir,
-    '..',
-    'src',
-    'modules',
-    'task-execution',
-    'composition',
-    'wrapperMechanics.ts',
+// RFC-413: the wrapper workspace and the wrapper iso create / merge-back left wrapperMechanics.ts for
+// engine/wrapper/ and engine/kernel/; the scan keeps the same corpus.
+const WRAPPER_MECHANICS = [
+  readFileSync(
+    resolve(
+      import.meta.dir,
+      '..',
+      'src',
+      'modules',
+      'task-execution',
+      'composition',
+      'wrapperMechanics.ts',
+    ),
+    'utf8',
   ),
-  'utf8',
-)
+  WRAPPER_WORKSPACE_SOURCE,
+  WRAPPER_ISOLATION_SOURCE,
+].join('\n')
 const MECHANICS_SOURCES = [
   SCRIPT_NODE_SOURCE,
   SCRIPT_ATTEMPT_SOURCE,

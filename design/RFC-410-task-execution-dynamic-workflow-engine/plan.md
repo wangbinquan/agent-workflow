@@ -64,7 +64,15 @@ engine 与 domain 的 import 层级，均带纯伪造输入的负例）；端口
 
 实施前与提交前按路径核对工作树，尤其是并发会话可能触及的共享守卫文件。
 
+## CI（AC-6）
+
+- **`6bf98a67c`**：windows-platform `41325244492` success。主 CI `41325244491`：68 success；Markdown link check (design/) 失败——
+  `design/RFC-370-crewstation-hosted-deployment/host-authority-task-dynamic-state.md` 第 7 行链到本 RFC 删除的 `services/dynamicWorkflowRunner.ts`
+  （属本 RFC 引入：改名半径没有扫 `design/` 的相对链接），已由 `15cca7442` 改指迁移后的生成引擎，link check 在其主 CI `41340001369` 上通过；
+  `CI required` 随之失败。
+- **后继证据**：`0ae7901c8`（本 RFC 提交是它的祖先；其后对本 RFC 代码文件的改动只来自本会话的后继提交，内容保留）的主 CI `41342269352` 70 个 job 全部 success；windows-platform 在包含本 RFC 的 `76a8db35d` 上 `41334034610` success。AC-6 关闭。
+
 ## 验收清单
 
 - [x] proposal AC-1～AC-5（本地集中验证，见上）
-- [ ] 推送后 exact SHA 的 CI 全绿（AC-6）
+- [x] 推送后 CI 全绿（AC-6，以后继证据关闭，见「CI（AC-6）」）

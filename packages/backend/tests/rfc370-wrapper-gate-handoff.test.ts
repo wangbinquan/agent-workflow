@@ -12,7 +12,9 @@ import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 import { createTaskExecutionPersistence } from '../src/modules/task-execution/composition/taskExecutionPersistence'
 // RFC-409: the composition's driveDagScope keeps the former runScope(state, args, factory) entry.
 import { driveDagScope as runScope } from '../src/modules/task-execution/composition/taskDagScope'
-import { createWrapperRunLedger } from '../src/modules/task-execution/composition/wrapperRunLifecycle'
+// RFC-413: the wrapper run ledger moved into engine/wrapper/wrapperRunLedger.ts; the composition binds its ports.
+import { createWrapperRunLedger } from '../src/modules/task-execution/engine/wrapper/wrapperRunLedger'
+import { createWrapperRunLedgerPorts } from '../src/modules/task-execution/composition/wrapperRuntime'
 import type { WrapperDataPort } from '../src/modules/task-execution/application/ports/wrapperData'
 import type { WrapperRunLedgerPort } from '../src/modules/task-execution/application/ports/wrapperRunLedger'
 import type { WrapperScopeDriverPort } from '../src/modules/task-execution/application/ports/wrapperScopeDriver'
@@ -570,7 +572,7 @@ describeEachProvider('RFC-370 wrapper handoff durable generation', (harness) => 
         }),
       },
     } as unknown as TaskMechanicsState
-    const value = createWrapperRunLedger(state)
+    const value = createWrapperRunLedger(createWrapperRunLedgerPorts(state))
     await value.settle(
       { kind: 'wrapper-loop', runId, resumed: false, enteredRunning: true, previous: null },
       {

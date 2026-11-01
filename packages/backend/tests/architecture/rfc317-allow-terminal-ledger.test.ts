@@ -60,7 +60,8 @@ const ALLOW_TERMINAL_LEDGER: readonly AllowTerminalLedgerEntry[] = [
       '*→pending 的 fanout aggregator 同代残留重跑（allowedFrom 含 interrupted/failed/canceled）。',
   },
   {
-    file: 'packages/backend/src/modules/task-execution/composition/wrapperRunLifecycle.ts',
+    // RFC-413 把 wrapper 运行账本从 composition/wrapperRunLifecycle.ts 迁到 engine（原文件删除），全仓总数不变。
+    file: 'packages/backend/src/modules/task-execution/engine/wrapper/wrapperRunLedger.ts',
     count: 1,
     rewrites:
       'pending|awaiting_review|awaiting_human|interrupted|canceled→running 的 wrapper generation 重新认领；同一站点覆盖 git/loop/fanout 三种 wrapper。',

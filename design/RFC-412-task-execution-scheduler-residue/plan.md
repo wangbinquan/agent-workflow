@@ -55,7 +55,16 @@ guard-manifest 新增一条、同步七个守卫行数。
   `TE/engine/task/readonlyInspection.ts`、`TE/application/ports/{commitPush,readonlyInspection}.ts`、`TE/infrastructure/taskRouteRepairOperations.ts`；
 - 守卫与账本：见 design §5。
 
+## CI（AC-6）
+
+- **`76a8db35d`**：windows-platform `41334034610` success。主 CI `41334034519`：66 success；失败四格——继承自 RFC-410 的 Markdown link check
+  （`15cca7442` 已修）；backend 分片 12/44（`rfc187-zero-delta-done` 读本 RFC 删除的 `services/execution/taskMechanicsState.ts`，ENOENT）与
+  44/44（test-suite-policy「every source path a test reads at module scope still exists」列出同一条），属本 RFC 引入——该用例按路径段
+  `'services', 'execution', 'taskMechanicsState.ts'` 读源码，改名半径漏扫，已由 `0ae7901c8` 改读 `composition/taskMechanicsState.ts`；
+  `CI required` 随之失败。
+- **后继证据**：`0ae7901c8`（本 RFC 提交是它的祖先；其后对本 RFC 代码文件的改动只来自本会话的后继提交，内容保留）的主 CI `41342269352` 70 个 job 全部 success；windows-platform 在包含本 RFC 的 `76a8db35d` 上 `41334034610` success。AC-6 关闭。
+
 ## 验收清单
 
 - [x] proposal AC-1～AC-5（本地集中验证，见上）
-- [ ] 推送后 exact SHA 的 CI 全绿（AC-6）
+- [x] 推送后 CI 全绿（AC-6，以后继证据关闭，见「CI（AC-6）」）

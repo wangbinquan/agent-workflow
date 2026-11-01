@@ -45,7 +45,12 @@ export interface ExecutionIsolationScope {
 }
 export interface ExecutionIsolationWorkspace {
   acquire(binding: IsolationWorkspaceBinding): Promise<ExecutionIsolationScope>
-  snapshotIsolatedWorkspace(handle: IsoHandle, log?: Logger): Promise<Record<string, string>>
+  /** RFC-413: `forcedPaths` is the wrapper-final re-aggregated roster (the implementation always accepted it). */
+  snapshotIsolatedWorkspace(
+    handle: IsoHandle,
+    log?: Logger,
+    forcedPaths?: string[],
+  ): Promise<Record<string, string>>
   mergeIsolatedWorkspace(
     handle: IsoHandle,
     trees: Record<string, string>,

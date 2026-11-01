@@ -81,17 +81,39 @@ export const FANOUT_AGGREGATOR_SOURCE = readFileSync(
   resolve(root, 'engine/node/agent-single/runFanoutAggregator.ts'),
   'utf8',
 )
+// RFC-413: the wrapper workspace (scenes, git entry snapshot, changed-file subtraction) and the wrapper iso
+// create / merge-back left wrapperMechanics.ts for engine/wrapper/ and engine/kernel/.
+export const WRAPPER_WORKSPACE_SOURCE = readFileSync(
+  resolve(root, 'engine/wrapper/wrapperWorkspace.ts'),
+  'utf8',
+)
+export const WRAPPER_ISOLATION_SOURCE = readFileSync(
+  resolve(root, 'engine/kernel/wrapperIsolation.ts'),
+  'utf8',
+)
+export const MERGE_RECOVERY_SOURCE = readFileSync(
+  resolve(root, 'engine/kernel/mergeRecovery.ts'),
+  'utf8',
+)
+export const WRAPPER_RUN_LEDGER_SOURCE = readFileSync(
+  resolve(root, 'engine/wrapper/wrapperRunLedger.ts'),
+  'utf8',
+)
+
 /**
  * RFC-407: what used to be the single `wrapperMechanics.ts` text — the file itself (wrapper data,
  * scope driver and workspace bindings), both fan-out lines and the attempt port they implement. The
  * source-port-kind read the data binding shares with the fan-out shard line is `sourcePortKindOf` in
- * the agent binding (`AGENT_BINDING_SOURCE`).
+ * the agent binding (`AGENT_BINDING_SOURCE`). RFC-413: plus the wrapper workspace and the wrapper iso
+ * create / merge-back that moved into engine/.
  */
 export const WRAPPER_MECHANICS_SOURCE = [
   readFileSync(resolve(root, 'composition/wrapperMechanics.ts'), 'utf8'),
   FANOUT_SHARD_SOURCE,
   FANOUT_AGGREGATOR_SOURCE,
   readFileSync(resolve(root, 'engine/node/agent-single/fanoutAttempts.ts'), 'utf8'),
+  WRAPPER_WORKSPACE_SOURCE,
+  WRAPPER_ISOLATION_SOURCE,
 ].join('\n')
 
 export const AGENT_BINDING_SOURCE = readFileSync(

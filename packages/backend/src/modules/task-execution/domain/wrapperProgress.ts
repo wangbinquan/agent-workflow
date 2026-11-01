@@ -73,8 +73,8 @@ export const WrapperProgressSchema = z
      * EMPTY set (= the pre-fix cumulative behavior: over-report, never
      * drop real changes) and NEVER re-captures (the inner scope's own writes
      * are already in the worktree by then). Capped at capture time (4096
-     * entries / 256KB JSON → degrade to empty set, see wrapperMechanics.ts
-     * captureGitPreDirty).
+     * entries / 256KB JSON → degrade to empty set, see
+     * engine/wrapper/wrapperWorkspace.ts captureGitPreDirty).
      */
     preDirty: z.record(z.string(), z.string()).optional(),
     /**

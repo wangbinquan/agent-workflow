@@ -146,9 +146,10 @@ test('adoptedExecution and undoShard read the retained workspace record of the h
 })
 
 test('the moved line delegates keep their kernel calls and fall back to the task log', () => {
-  // The interrupted-merge completion runs the recovery owner on the current task state.
+  // The interrupted-merge completion runs the recovery owner on the current task state (RFC-413: through the
+  // isolation mechanics ports bound over that state).
   expect(AGENT_BINDING_SOURCE).toContain(
-    'completeInterruptedMerge: (run, log) => completeInterruptedMerge(state, run, log),',
+    'completeInterruptedMerge: (run, log) =>\n        completeInterruptedMerge(createIsolationMechanicsPorts(state), run, log),',
   )
   // Each line passes its own child log; without one the task log is used, as before.
   for (const delegate of [

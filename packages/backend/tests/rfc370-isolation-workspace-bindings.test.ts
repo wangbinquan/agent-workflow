@@ -34,10 +34,17 @@ import { createAgentNodeExecutionPorts } from '@/modules/task-execution/composit
 import { runWorkgroupHost } from '@/modules/task-execution/engine/node/agent-single/runWorkgroupHost'
 import { isolatedRunBinding } from '@/modules/task-execution/composition/executionMechanismBindings'
 import { createWrapperMechanicsPorts } from '@/modules/task-execution/composition/wrapperMechanics'
+// RFC-413: the merge recovery moved into engine/kernel/mergeRecovery.ts on the isolation mechanics ports; the
+// composition binding builds the ports over a frame's execution state.
+import { completeFrameMerges as completeFrameMergesOnPorts } from '@/modules/task-execution/engine/kernel/mergeRecovery'
 import {
-  completeFrameMerges,
   composeExecutionMergeRecovery,
-} from '@/modules/task-execution/composition/executionMergeRecovery'
+  createIsolationMechanicsPorts,
+} from '@/modules/task-execution/composition/isolationMechanicsBinding'
+const completeFrameMerges = (
+  state: Parameters<typeof createIsolationMechanicsPorts>[0],
+  ...rest: Parameters<typeof completeFrameMergesOnPorts> extends [unknown, ...infer R] ? R : never
+) => completeFrameMergesOnPorts(createIsolationMechanicsPorts(state), ...rest)
 import {
   createIsoUnderLock,
   persistIsoBase,

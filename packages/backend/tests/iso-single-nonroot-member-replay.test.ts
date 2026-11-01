@@ -30,7 +30,10 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { ulid } from 'ulid'
 import { selectIsolationWorkspaceFactory } from '@/modules/source-control/public/participants'
-import { createOrRebuildWrapperIso } from '@/modules/task-execution/composition/wrapperMechanics'
+// RFC-413: the wrapper iso rebuild moved into engine/kernel/wrapperIsolation.ts; it runs on the isolation
+// mechanics ports the composition binds over the execution state.
+import { createOrRebuildWrapperIso } from '@/modules/task-execution/engine/kernel/wrapperIsolation'
+import { createIsolationMechanicsPorts } from '@/modules/task-execution/composition/isolationMechanicsBinding'
 import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import type { TaskMechanicsState } from '@/modules/task-execution/composition/taskMechanicsState'
 import {
@@ -221,7 +224,7 @@ describeEachProvider('single non-root member isolation checkpoint regression', (
         }
         await persistIsoBase(f.binding, runId, handle)
         const rebuilt = await createOrRebuildWrapperIso(
-          f.state,
+          createIsolationMechanicsPorts(f.state),
           runId,
           await f.binding.persistence.nodeExecution.read(runId),
         )

@@ -34,14 +34,16 @@ import { transitionNodeRunStatus } from '../src/services/lifecycle'
 import { runTaskWithRealTestTopology as runTask } from './helpers/taskExecutionTestTopology'
 
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
+// RFC-413: the wrapper run ledger moved from composition/wrapperRunLifecycle.ts into the engine.
 const WRAPPER_LIFECYCLE_SRC = resolve(
   import.meta.dir,
   '..',
   'src',
   'modules',
   'task-execution',
-  'composition',
-  'wrapperRunLifecycle.ts',
+  'engine',
+  'wrapper',
+  'wrapperRunLedger.ts',
 )
 
 interface Harness {

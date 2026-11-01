@@ -72,9 +72,12 @@ T1～T5 完成（本会话实施）。与落档设计的偏差与实施中的取
 - **`ea07e2aec`**：windows-platform `41321761090` 失败：shared 腿 `packages/shared/tests/wrapper-kind-single-source.test.ts` 的文件清单含本 RFC
   删除的 `services/dispatchFrontier.ts`（ENOENT）。属本 RFC 引入（同一个改名半径遗漏），已由 `a06fcae26` 换成承接它的
   `engine/scope/frontierRules.ts` 与 `domain/wrapperGraph.ts`；该 job 在这一步即停止，本 RFC 的 Windows suite 由后继 run 补跑。
-- AC-6 待后继 run 补齐。
+- 同一 SHA 的主 CI `41321761017`：66 success；Lint + Typecheck + Format + Shared 腿失败于同一个 shared 用例的 ENOENT（本 RFC，`a06fcae26` 已修），
+  Frontend 分片 1/3（ubuntu、windows）失败于 RFC-408 的 `composition/taskDagGraph.ts` ENOENT（同由 `a06fcae26` 修），`CI required` 随之失败。
+  本 RFC 的 Windows suite 在包含它的 `6bf98a67c` 上补跑 success（`41325244492`）。
+- **后继证据**：`0ae7901c8`（本 RFC 提交是它的祖先；其后对本 RFC 代码文件的改动只来自本会话的后继提交，内容保留）的主 CI `41342269352` 70 个 job 全部 success；windows-platform 在包含本 RFC 的 `76a8db35d` 上 `41334034610` success。AC-6 关闭。
 
 ## 验收清单
 
 - [x] proposal AC-1～AC-5（本地集中验证，见上）
-- [ ] 推送后 exact SHA 的 CI 全绿（AC-6）
+- [x] 推送后 CI 全绿（AC-6，以后继证据关闭，见「CI（AC-6）」）

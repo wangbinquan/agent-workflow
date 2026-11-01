@@ -3,7 +3,7 @@ import type { TaskExecutionRuntimeParticipants } from '../application/ports/task
 import type { SchedulerDriverPort } from '../application/ports/taskExecutionTopology'
 import type { SchedulerRuntimeTopology } from '../public/participants'
 import type { TaskExecutionReadModels } from '../public/types'
-import { composeExecutionMergeRecovery } from './executionMergeRecovery'
+import { composeExecutionMergeRecovery } from './isolationMechanicsBinding'
 import type { TaskExecutionRuntimeComponents } from './taskExecutionComponents'
 import { composeWrapperRuntime } from './wrapperRuntime'
 

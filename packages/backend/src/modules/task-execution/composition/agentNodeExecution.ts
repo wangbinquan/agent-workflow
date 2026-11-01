@@ -36,7 +36,8 @@ import { workspaceRecord } from '../infrastructure/isolationWorkspaceView'
 import { bindIsolationCleanup } from '../infrastructure/executionKernelBinding'
 import { broadcastNodeStatus } from '../infrastructure/nodeStatusEvents'
 import { isolatedRunBinding, nodeRunLedger } from './executionMechanismBindings'
-import { completeInterruptedMerge } from './executionMergeRecovery'
+import { completeInterruptedMerge } from '../engine/kernel/mergeRecovery'
+import { createIsolationMechanicsPorts } from './isolationMechanicsBinding'
 import { bindMergeConflictPorts } from './mergeConflictResolution'
 import { runTaskAgentWithFamily } from './taskAgentRunFamily'
 
@@ -291,7 +292,8 @@ export function createAgentNodeExecutionPorts(state: TaskMechanicsState): AgentN
         }),
       discardNodeIso: (handle, log) =>
         discardNodeIso(bindIsolationCleanup(), handle, log ?? state.log, state.writeSem),
-      completeInterruptedMerge: (run, log) => completeInterruptedMerge(state, run, log),
+      completeInterruptedMerge: (run, log) =>
+        completeInterruptedMerge(createIsolationMechanicsPorts(state), run, log),
       adoptedExecution: (handle) => workspaceRecord(handle).workspace.adoptedExecution === true,
       undoShard: (handle, input) => workspaceRecord(handle).scope.undoShard(input),
       portFileContainerPaths: (portFilePaths) =>

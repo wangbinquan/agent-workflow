@@ -35,7 +35,7 @@ import type { TaskExecutionPersistence } from '../application/ports/taskExecutio
 import type { TaskOperationConfigurationQueries } from '../application/ports/taskOperationConfiguration'
 import type { TaskExecutionTopologyLogger } from '../application/ports/taskExecutionTopology'
 import type { WorkgroupTurnsOperations } from '../application/ports/workgroupTurnsOperations'
-import { composeExecutionMergeRecovery } from '../composition/executionMergeRecovery'
+import { composeExecutionMergeRecovery } from '../composition/isolationMechanicsBinding'
 import { driveTaskEngineApplication } from '../composition/taskEngineApplication'
 import { composeWrapperRuntime } from '../composition/wrapperRuntime'
 import {

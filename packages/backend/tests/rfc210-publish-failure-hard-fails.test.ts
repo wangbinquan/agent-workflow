@@ -27,6 +27,7 @@ import { runGit } from '@/util/git'
 import {
   WRAPPER_MECHANICS_SOURCE,
   AGENT_MECHANICS_SOURCE,
+  MERGE_RECOVERY_SOURCE,
 } from './helpers/executionMechanismSources'
 
 const appHome = mkdtempSync(join(tmpdir(), 'aw-rfc210-pf-home-'))
@@ -191,19 +192,10 @@ describe('RFC-210 — submodule publish failures fail the snapshot', () => {
     // workgroup hook, fanout shard and aggregator discard in `finally` too.
     // RFC-407: the fan-out shard / aggregator lines moved to engine/node/agent-single/; the composite
     // keeps them in this scan (their iso discard reaches the binding's writeSem call through the port).
+    // RFC-413: the wrapper iso create / merge-back (in the composite) and the pre-drive merge recovery moved into
+    // engine/kernel/ on the isolation mechanics ports: the discards pass `ports.cleanup` + `ports.writeSem`.
     const wrapperMechanics = WRAPPER_MECHANICS_SOURCE
-    const recovery = readFileSync(
-      resolve(
-        import.meta.dir,
-        '..',
-        'src',
-        'modules',
-        'task-execution',
-        'composition',
-        'executionMergeRecovery.ts',
-      ),
-      'utf8',
-    )
+    const recovery = MERGE_RECOVERY_SOURCE
     const src = `${wrapperMechanics}\n${recovery}`
     const nodeMechanics = AGENT_MECHANICS_SOURCE
     // Mainline DAG (agent 线): RFC-287 T7 起本线也迁入装配骨架。合并抛出的 keep
@@ -252,11 +244,11 @@ describe('RFC-210 — submodule publish failures fail the snapshot', () => {
     // too — without these, node pool refs leak forever and a new path's
     // worktree anchor is never handed over.
     const replayMerged = src.match(
-      /pending-merge replay merged[\s\S]{0,600}?discardNodeIso\(bindIsolationCleanup\(\), handle, log, state\.writeSem\)/,
+      /pending-merge replay merged[\s\S]{0,600}?discardNodeIso\(ports\.cleanup, handle, log, ports\.writeSem\)/,
     )
     expect(replayMerged).not.toBeNull()
     const humanResolved = src.match(
-      /human resolution merged back[\s\S]{0,600}?discardNodeIso\(bindIsolationCleanup\(\), handle, log, state\.writeSem\)/,
+      /human resolution merged back[\s\S]{0,600}?discardNodeIso\(ports\.cleanup, handle, log, ports\.writeSem\)/,
     )
     expect(humanResolved).not.toBeNull()
     // Round 5 (P1): the discard-time anchor handoff must be a CAS (expected-old
@@ -286,7 +278,8 @@ describe('RFC-210 — submodule publish failures fail the snapshot', () => {
     )
     const singleLine = [
       ...(scriptBinding.match(/discardNodeIso\(bindIsolationCleanup\(\),[^\n)]*\)/g) ?? []),
-      ...(src.match(/discardNodeIso\(bindIsolationCleanup\(\),[^\n)]*\)/g) ?? []),
+      ...(src.match(/discardNodeIso\((?:bindIsolationCleanup\(\)|ports\.cleanup),[^\n)]*\)/g) ??
+        []),
       ...(nodeMechanics.match(/discardNodeIso\(bindIsolationCleanup\(\),[^\n)]*\)/g) ?? []),
       // 骨架里的清理走注入的 discardIso（其实参在各线 spec 上写明带 writeSem）。
       ...(assembly.match(/discardIso\([^\n)]*\)/g) ?? []),
@@ -298,7 +291,7 @@ describe('RFC-210 — submodule publish failures fail the snapshot', () => {
       // 侧的直调仍带锁。
       if (call.startsWith('discardNodeIso(')) expect(call).toContain('writeSem')
     }
-    expect(src).toContain('state.log,\n      state.writeSem,\n    )')
+    expect(src).toContain('ports.log,\n      ports.writeSem,\n    )')
     // Round 6 (P2): replay rebuilds must address the PHYSICAL iso identity.
     const native = readFileSync(
       resolve(

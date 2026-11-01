@@ -1,6 +1,6 @@
 # RFC-406 task-execution workgroup host 迁入 engine/node 并删除 nodeMechanics.ts（RFC-294 S6，design §5.5 第 3 步之四）
 
-- **状态**：Done（2026-11-01；AC-6 以后继 CI 证据关闭，见 plan「CI（AC-6）」）」）。用户 2026-10-30「你继续推进RFC294，……过程中按你的判断来推进，不用询问我」；2026-10-31「后面的工作你
+- **状态**：Done（2026-11-01；AC-6 以后继 CI 证据关闭，见 plan「CI（AC-6）」）。用户 2026-10-30「你继续推进RFC294，……过程中按你的判断来推进，不用询问我」；2026-10-31「后面的工作你
   可以不用启动codex来做，你自己完成」：本会话调研、设计、实施与集中验证，不派 Codex；取舍由本会话按推荐决定（见 §6，可推翻）。纯结构重构，
   无用户可见变化。设计门免；实现门由本会话按路径限定、只审功能地自审。RFC-405 落库后转 In Progress 开始实施（两者都改 agent-single 执行器与端口）。
 - **母 RFC**：[RFC-294](../RFC-294-backend-layered-target-architecture/proposal.md) plan §3 S6；design §5.2、§5.5 第 3 步与第 5 步

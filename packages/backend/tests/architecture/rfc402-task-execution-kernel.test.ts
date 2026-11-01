@@ -99,7 +99,8 @@ function permitViolations(units: readonly SourceUnit[]): string[] {
 
 test('live corpus: deleted services are absent, kernel imports stay inward, script owns its execution', () => {
   expect(UNITS.length).toBeGreaterThanOrEqual(2000)
-  expect(UNITS.filter((unit) => unit.path.startsWith(KERNEL))).toHaveLength(7)
+  // RFC-413: + mergeRecovery.ts and wrapperIsolation.ts (pre-drive merge recovery, wrapper iso create / merge-back).
+  expect(UNITS.filter((unit) => unit.path.startsWith(KERNEL))).toHaveLength(9)
   expect(UNITS.filter((unit) => unit.path.startsWith(SCRIPT))).toHaveLength(4)
   for (const path of DELETED) expect(existsSync(resolve(ROOT, path)), path).toBe(false)
   expect(boundaryViolations(UNITS)).toEqual([])

@@ -1,57 +1,70 @@
-## 2026-11-01 RFC-412 task-execution 提交推送尾链与只读巡检迁入 engine，删除 services/scheduler.ts（In Progress；`design/RFC-412-task-execution-scheduler-residue/`）
+## 2026-11-01 RFC-413 task-execution wrapper 工作区、wrapper 运行账本与续跑前合并恢复迁入 engine（In Progress；`design/RFC-413-task-execution-wrapper-workspace-merge-recovery/`）
+
+- **来由**：RFC-294 S6 退出门「task-execution `composition/` 只剩装配」的第一步；用户授权同 RFC-402，本会话调研、设计、实施与集中验证，不派 Codex。
+- **范围**：续跑前合并恢复（原 `composition/executionMergeRecovery.ts`）与 wrapper 隔离工作区的建立 / 重建 / 合回迁入 `engine/kernel/`
+  （`mergeRecovery.ts`、`wrapperIsolation.ts`），`WrapperWorkspacePort` 的实现（场景表、git 入口快照与 preDirty 上限、改动文件扣减）与
+  wrapper 运行账本（原 `composition/wrapperRunLifecycle.ts`）迁入 `engine/wrapper/`，经新端口 `IsolationMechanicsPorts` /
+  `WrapperWorkspaceEnginePorts` / `WrapperRunLedgerPorts` 执行；composition 只剩绑定，`wrapperMechanics.ts` 730 → 约 295 行。纯结构重构。
+- **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。
+- **进度**：T1～T5 完成，随实现提交入库，待 exact SHA 的 CI（AC-6）。两个 composition 文件删除；RFC-402 kernel 文件数 7 → 9。集中验证
+  631 + 10 + 2 个文件：无本 RFC 引入的失败，PG 负载超时在候选与基线上同样通过；P0 变异 lane 通过（34 个阶段、源文件指纹不变）。详见 plan「集中验证（T5）」。
+  同提交以后继证据（`0ae7901c8` 主 CI 70/70）收尾 RFC-408～412。
+- **后继**：composition 其余非装配逻辑（数字员工执行核心、托管代理调用准备、动作执行运行器、provider 后台循环等）逐个核对后另立 RFC。
+
+## 2026-11-01 RFC-412 task-execution 提交推送尾链与只读巡检迁入 engine，删除 services/scheduler.ts（Done；`design/RFC-412-task-execution-scheduler-residue/`）
 
 - **来由**：RFC-294 S6 退出门「`TaskMechanicsState` 只出现在装配」；用户授权同 RFC-402，本会话调研、设计、实施与集中验证，不派 Codex。
 - **范围**：`services/scheduler.ts` 的自动提交推送迁入 `engine/node/commit-push/`、只读成员巡检迁入 `engine/task/`，经自有端口执行；
   `buildContainerMap` 调用方改用 shared；`TaskMechanicsState` 迁入 composition；scheduler 删除。纯结构重构。
 - **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。
-- **进度**：T1～T5 完成，随实现提交入库，待 exact SHA 的 CI（AC-6）。`services/scheduler.ts` 与 `services/execution/taskMechanicsState.ts`
+- **进度**：T1～T5 完成，随实现提交入库；AC-6 以后继证据关闭（`0ae7901c8` 主 CI `41342269352` 70 个 job 全部 success），Done。`services/scheduler.ts` 与 `services/execution/taskMechanicsState.ts`
   删除，S6 退出门「`TaskMechanicsState` 只出现在装配」成立；commons-debt R1 216 → 215。集中验证 439 + 16 个文件：本 RFC 引入的 6 个锚点失败
   已修，其余负载超时复跑通过；P0 变异 lane 通过。详见 plan「集中验证（T5）」。
 - **后继**：S6 其余退出门（composition 只剩装配、协调器只在 bootstrap 构造）。
 
-## 2026-11-01 RFC-411 workgroup 轮次引擎迁入 task-execution（In Progress；`design/RFC-411-task-execution-workgroup-turns-engine/`）
+## 2026-11-01 RFC-411 workgroup 轮次引擎迁入 task-execution（Done；`design/RFC-411-task-execution-workgroup-turns-engine/`）
 
 - **来由**：RFC-294 S6（design §5.2「workgroup 引擎迁出 resource-catalog，归 task-execution」）；用户授权同 RFC-402，本会话调研、设计、实施与集中验证，不派 Codex。
 - **范围**：resource-catalog 的轮次驱动与提示词 / 协议 / 系统消息 / 轮次上下文迁入 task-execution（engine / domain / ports）；轮次持久化适配器与
   提交队列随表回到 task-execution `infrastructure/`，成员代理经 resource-catalog public 读取；装配归 task-execution composition，两类 SPI 退役。纯结构重构。
 - **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。
-- **进度**：T1～T5 完成，随实现提交入库，待 exact SHA 的 CI（AC-6）。resource-catalog 下 8 个轮次文件删除，两类 SPI binding 退役，RFC-395
+- **进度**：T1～T5 完成，随实现提交入库；AC-6 以后继证据关闭（`0ae7901c8` 主 CI `41342269352` 70 个 job 全部 success），Done。resource-catalog 下 8 个轮次文件删除，两类 SPI binding 退役，RFC-395
   模块表归属债 −4。集中验证 674 + 9 + 2 个文件：本 RFC 引入的 2 个锚点失败已修，其余负载超时在候选与基线上同样通过；P0 变异 lane 通过。
   详见 plan「集中验证（T5）」。
 - **后继**：S6 退出门核对（`TaskMechanicsState` 只在装配、协调器只在 bootstrap 构造、composition 只剩装配）。
 
-## 2026-11-01 RFC-410 task-execution 动态工作流生成引擎迁入 engine/task（In Progress；`design/RFC-410-task-execution-dynamic-workflow-engine/`）
+## 2026-11-01 RFC-410 task-execution 动态工作流生成引擎迁入 engine/task（Done；`design/RFC-410-task-execution-dynamic-workflow-engine/`）
 
 - **来由**：RFC-294 S6（design §5.2「动态工作流引擎迁出 `services/`，归 task-execution」）；用户授权同 RFC-402，本会话调研、设计、实施与集中验证，不派 Codex。
 - **范围**：`services/dynamicWorkflowRunner.ts`（492 行）的生成 pass 迁入 `engine/task/dynamicWorkflowGenerate.ts`，经自有端口执行；
   `services/orchestratorAgent.ts` 的编排代理 / 快照 / 提示词与生成判定迁入 `domain/`，第二层 v1 约束校验迁入 shared（resource-catalog 的
   确认前复核共用）；第一层校验改由参与者交入「载入校验函数」端口（resource-catalog composition 构造）。两个 services 文件删除。纯结构重构。
 - **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。
-- **进度**：T1～T5 完成，随实现提交入库，待 exact SHA 的 CI（AC-6）。两个 services 文件删除，commons-debt R1 220 → 216。集中验证 511 + 8 + 4
+- **进度**：T1～T5 完成，随实现提交入库；AC-6 以后继证据关闭（`0ae7901c8` 主 CI `41342269352` 70 个 job 全部 success），Done。两个 services 文件删除，commons-debt R1 220 → 216。集中验证 511 + 8 + 4
   个文件：本 RFC 引入的 1 个守卫失败（RFC-359 W5-T19f 单引擎用例）已修，其余负载超时在候选与基线上同样通过；P0 变异 lane 通过。
   详见 plan「集中验证（T5）」。
 - **后继**：workgroup 轮次引擎迁入 task-execution。
 
-## 2026-11-01 RFC-409 task-execution DAG scope 解释器迁入 engine/scope（In Progress；`design/RFC-409-task-execution-dag-scope-interpreter/`）
+## 2026-11-01 RFC-409 task-execution DAG scope 解释器迁入 engine/scope（Done；`design/RFC-409-task-execution-dag-scope-interpreter/`）
 
 - **来由**：RFC-294 S6（design §5.2 scope 解释器层）；用户授权同 RFC-402，本会话调研、设计、实施与集中验证，不派 Codex。
 - **范围**：`runScope`（405 行）迁入 `engine/scope/runScope.ts`，经 task-execution 自有端口执行；`deriveFrontier` 迁入 `engine/scope/dagFrontier.ts`；
   `services/dispatchFrontier.ts` 删除——frontier 判定进 `engine/scope/frontierRules.ts`，wrapper 定义图纯函数进 `domain/wrapperGraph.ts`
   （`services/runLiveness.ts` 经 `public/queries` 取用）；composition 的 `taskDagScope.ts` 只剩端口绑定与 `driveDagScope`。纯结构重构。
 - **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。
-- **进度**：T1～T5 完成，随实现提交入库，待 exact SHA 的 CI（AC-6）。`services/dispatchFrontier.ts` 删除，`composition/taskDagScope.ts`
+- **进度**：T1～T5 完成，随实现提交入库；AC-6 以后继证据关闭（`0ae7901c8` 主 CI `41342269352` 70 个 job 全部 success），Done。`services/dispatchFrontier.ts` 删除，`composition/taskDagScope.ts`
   405 → 73 行，只剩端口绑定。集中验证 954 + 21 + 7 + 2 个文件：本 RFC 引入的 2 个守卫失败（RFC-339、RFC-294 preflight）已修，其余负载
   超时在候选与 RFC-408 基线上表现一致；P0 变异 lane 通过。详见 plan「集中验证（T5）」。
 - **后继**：动态工作流生成引擎、workgroup 轮次引擎迁入 task-execution（各立 RFC）。
 
-## 2026-11-01 RFC-408 task-execution 任务控制面迁入 engine/task（In Progress；`design/RFC-408-task-execution-task-control-plane/`）
+## 2026-11-01 RFC-408 task-execution 任务控制面迁入 engine/task（Done；`design/RFC-408-task-execution-task-control-plane/`）
 
 - **来由**：RFC-294 S6，design §5.5 第 4 步之二；用户授权同 RFC-402，本会话调研、设计、实施与集中验证，不派 Codex。
 - **范围**：`taskEngineApplication.ts`（898 行）里的任务控制面——载入与归属校验、执行授权、工作区排除配置、快照解析与触发器预检、认领、
   节点 kind / id / 容器 / 环校验、引擎选择与驱动、只读巡检、终态结算——迁入 `engine/task/runTask.ts` 与 `taskSettlement.ts`，经 task-execution
   自有端口执行；composition 只剩端口绑定与执行状态装配（经 `prepare`）；`taskDagGraph.ts` 迁为 `engine/scope/dagGraph.ts`。纯结构重构。
 - **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。
-- **进度**：T1～T5 完成，随实现提交入库，待 exact SHA 的 CI（AC-6）。`taskEngineApplication.ts` 898 → 298 行，只剩端口绑定与执行状态
+- **进度**：T1～T5 完成，随实现提交入库；AC-6 以后继证据关闭（`0ae7901c8` 主 CI `41342269352` 70 个 job 全部 success），Done。`taskEngineApplication.ts` 898 → 298 行，只剩端口绑定与执行状态
   装配。集中验证 906 + 13 + 7 个文件：没有本 RFC 引入的失败，负载超时在安静机器上候选与基线同样通过；P0 变异 lane 通过。详见 plan「集中验证（T5）」。
 - **后继**：DAG scope 解释器（`runScope` / `deriveFrontier`）迁入 `engine/scope/`；workgroup 轮次、动态工作流引擎迁入 task-execution。
 

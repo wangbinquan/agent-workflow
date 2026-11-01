@@ -83,6 +83,7 @@ const wrapperRuntimeCompositionSrc = readFileSync(
   ),
   'utf8',
 )
+// RFC-413: the wrapper run ledger moved from composition/wrapperRunLifecycle.ts into the engine.
 const wrapperLifecycleSrc = readFileSync(
   resolve(
     import.meta.dirname,
@@ -90,8 +91,9 @@ const wrapperLifecycleSrc = readFileSync(
     'src',
     'modules',
     'task-execution',
-    'composition',
-    'wrapperRunLifecycle.ts',
+    'engine',
+    'wrapper',
+    'wrapperRunLedger.ts',
   ),
   'utf8',
 )
@@ -265,11 +267,13 @@ describe('D.T8 — RFC-053 wrapper lifecycle compatibility', () => {
     expect(fanoutStrategySrc).toContain("return wrapperSettlement('done'")
     expect(fanoutStrategySrc).toMatch(/wrapperSettlement\(\s*'failed'/)
     expect(wrapperLifecycleSrc).toContain("reason: 'wrapper-finalize'")
-    expect(wrapperRuntimeCompositionSrc).toContain('createWrapperRunLedger(state)')
+    expect(wrapperRuntimeCompositionSrc).toContain(
+      'createWrapperRunLedger(createWrapperRunLedgerPorts(state))',
+    )
   })
 
   test('wrapper lifecycle handles resumable fanout generations', () => {
-    expect(wrapperLifecycleSrc).toContain('state.opts.persistence.wrapperRuns.findResumable({')
+    expect(wrapperLifecycleSrc).toContain('ports.persistence.wrapperRuns.findResumable({')
     expect(wrapperLifecycleSrc).toContain('nodeId: request.node.id')
     expect(wrapperLifecycleSrc).toContain('iteration: request.iteration')
     expect(wrapperLifecycleSrc).toContain("'wrapper-fanout-resume'")

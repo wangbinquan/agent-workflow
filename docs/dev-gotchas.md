@@ -1842,6 +1842,14 @@ grep -rn "\b$old\b" packages/backend/tests            # ③ 只提文件名、�
 ②③ 正是本次漏掉的两类。同类高危文件：任何「语料非空 / 扫描确实覆盖到源码」的哨兵断言——
 它们**故意**点名一个具体文件来证明扫描没扫空，因此每次文件搬家都会踩。
 
+**grep 之外再加一道自动兜底（RFC-412 实撞，2026-11-01）**：移动 / 删除源文件的 RFC，集中验证集里必须有
+`packages/backend/tests/test-suite-policy.test.ts`。它静态解析每个测试按路径读取的源文件、以及 workflow 与
+`scripts/` 里的字面仓库路径，「every source path a test reads at module scope still exists」与「every literal
+repository path in workflows and scripts still exists」两条会直接点名残留的旧路径。RFC-412 删除
+`services/execution/taskMechanicsState.ts` 时漏掉了 `rfc187-zero-delta-done` 的
+`resolve(…, 'services', 'execution', 'taskMechanicsState.ts')`（文件名不含 scheduler，也不在按主题挑的验证集里），
+CI 上一格 ENOENT、一格正是这条策略用例；RFC-413 落地前本地跑这条就当场点出了还没改的 rfc287-t9 与 Windows workflow 路径。
+
 ## 把文件搬进 `modules/` 会让它第一次进架构守卫的扫描面（RFC-355 T7 实撞，2026-09-04）
 
 搬家的另一半风险与上一条相反：不是断言找不到文件，而是**文件第一次被某个扫描器看见**。

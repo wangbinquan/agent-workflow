@@ -322,6 +322,25 @@ describe('RFC-188 D — 装配单源锁（表级 allowlist）', () => {
       ),
       'utf8',
     ) +
+    // RFC-413: the wrapper iso create / merge-back and the pre-drive merge recovery moved into engine/kernel/
+    // (wrapperIsolation.ts, mergeRecovery.ts); the wrapper workspace port into engine/wrapper/wrapperWorkspace.ts.
+    ['wrapperIsolation.ts', 'mergeRecovery.ts']
+      .map((file) =>
+        readFileSync(
+          resolve(
+            import.meta.dir,
+            '..',
+            'src',
+            'modules',
+            'task-execution',
+            'engine',
+            'kernel',
+            file,
+          ),
+          'utf8',
+        ),
+      )
+      .join('\n') +
     readFileSync(
       resolve(
         import.meta.dir,
@@ -329,8 +348,9 @@ describe('RFC-188 D — 装配单源锁（表级 allowlist）', () => {
         'src',
         'modules',
         'task-execution',
-        'composition',
-        'executionMergeRecovery.ts',
+        'engine',
+        'wrapper',
+        'wrapperWorkspace.ts',
       ),
       'utf8',
     ) +

@@ -65,7 +65,13 @@ test('isolation, replay and wrapper mechanics do not inspect scalar/map columns 
     // RFC-405 / RFC-406: what nodeMechanics.ts held — both agent-executor lanes, their binding and the
     // run-history reads — is scanned at its owners.
     ...AGENT_EXECUTOR_FILES,
-    'composition/executionMergeRecovery.ts',
+    // RFC-413: the merge recovery, the wrapper iso create / merge-back, the wrapper workspace and the wrapper run
+    // ledger left composition/ for engine/kernel/ and engine/wrapper/; what remains in wrapperMechanics.ts is binding.
+    'engine/kernel/mergeRecovery.ts',
+    'engine/kernel/wrapperIsolation.ts',
+    'engine/wrapper/wrapperWorkspace.ts',
+    'engine/wrapper/wrapperRunLedger.ts',
+    'composition/isolationMechanicsBinding.ts',
     'composition/wrapperMechanics.ts',
     'engine/wrapper/gitStrategy.ts',
     'engine/kernel/isolation.ts',

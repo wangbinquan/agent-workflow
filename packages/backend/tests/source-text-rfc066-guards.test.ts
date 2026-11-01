@@ -117,6 +117,9 @@ describe('RFC-066 PR-A — source guards', () => {
       'src/modules/task-execution/engine/node/commit-push/runCommitPush.ts',
       'src/modules/task-execution/composition/commitPushBinding.ts',
       'src/modules/task-execution/composition/wrapperMechanics.ts',
+      // RFC-413: the wrapper workspace and the wrapper iso create / merge-back left wrapperMechanics.ts.
+      'src/modules/task-execution/engine/wrapper/wrapperWorkspace.ts',
+      'src/modules/task-execution/engine/kernel/wrapperIsolation.ts',
     ]) {
       const src = readFileSync(resolve(import.meta.dir, '..', rel), 'utf8')
       expect(src.includes("'multi-repo-wrapper-git-unsupported'")).toBe(false)

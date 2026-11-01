@@ -229,21 +229,26 @@ Facade 只许 re-export 或参数形状适配；不得含 DB 查询、状态、�
   - [RFC-407](../RFC-407-task-execution-fanout-assembly-lines/proposal.md)（Done）：`wrapperMechanics.ts` 的 fanout 分片 / 聚合装配线迁入
     `engine/node/agent-single/`，与 agent 线共用端口，`FanoutAttemptPort` 的实现在 engine；`wrapperMechanics.ts` 1,954 → 730 行，只剩 wrapper
     的 data / scopeDriver / workspace 绑定与 git wrapper 的工作区 helper；
-  - [RFC-408](../RFC-408-task-execution-task-control-plane/proposal.md)（In Progress）：`taskEngineApplication.ts` 的任务控制面迁入
+  - [RFC-408](../RFC-408-task-execution-task-control-plane/proposal.md)（Done）：`taskEngineApplication.ts` 的任务控制面迁入
     `engine/task/runTask.ts` 与 `taskSettlement.ts`，composition 只剩端口绑定与执行状态装配；DAG 结构图迁为 `engine/scope/dagGraph.ts`
     （scope 解释器层的第一个文件）。三个引擎类仍委托给 composition 绑定的主体：DAG scope 解释器迁入 `engine/scope/`、workgroup 轮次与
     动态工作流引擎迁入 task-execution 各待立 RFC。
-- **scope 解释器**：[RFC-409](../RFC-409-task-execution-dag-scope-interpreter/proposal.md)（In Progress）：`runScope` 与 `deriveFrontier` 迁入
+- **scope 解释器**：[RFC-409](../RFC-409-task-execution-dag-scope-interpreter/proposal.md)（Done）：`runScope` 与 `deriveFrontier` 迁入
   `engine/scope/`，`services/dispatchFrontier.ts` 删除（frontier 判定进 `engine/scope/`，wrapper 定义图进 `domain/`）；composition 的
   `taskDagScope.ts` 只剩端口绑定。workgroup 轮次与动态工作流引擎迁入 task-execution 仍待立 RFC。
-- **动态工作流生成引擎**：[RFC-410](../RFC-410-task-execution-dynamic-workflow-engine/proposal.md)（In Progress）：生成 pass 迁入
+- **动态工作流生成引擎**：[RFC-410](../RFC-410-task-execution-dynamic-workflow-engine/proposal.md)（Done）：生成 pass 迁入
   `engine/task/dynamicWorkflowGenerate.ts`，编排代理与生成判定迁入 `domain/`，第二层校验迁入 shared，第一层校验经端口注入；删除
   `services/dynamicWorkflowRunner.ts` 与 `services/orchestratorAgent.ts`。workgroup 轮次引擎迁入 task-execution 仍待立 RFC。
-- **workgroup 轮次引擎**：[RFC-411](../RFC-411-task-execution-workgroup-turns-engine/proposal.md)（In Progress）：轮次驱动迁入
+- **workgroup 轮次引擎**：[RFC-411](../RFC-411-task-execution-workgroup-turns-engine/proposal.md)（Done）：轮次驱动迁入
   `engine/task/workgroup/`，端口进 `application/ports/`，纯函数进 `domain/workgroup/`，持久化适配器随表回到 task-execution `infrastructure/`；
   resource-catalog 下的轮次文件删除，两类 SPI 退役。
-- **scheduler 残余**：[RFC-412](../RFC-412-task-execution-scheduler-residue/proposal.md)（In Progress）：自动提交推送迁入
+- **scheduler 残余**：[RFC-412](../RFC-412-task-execution-scheduler-residue/proposal.md)（Done）：自动提交推送迁入
   `engine/node/commit-push/`、只读巡检迁入 `engine/task/`，`TaskMechanicsState` 迁入 composition，删除 `services/scheduler.ts`。
+- **composition 只剩装配（第一步）**：[RFC-413](../RFC-413-task-execution-wrapper-workspace-merge-recovery/proposal.md)（In Progress）：
+  续跑前合并恢复与 wrapper 隔离工作区的建立 / 重建 / 合回迁入 `engine/kernel/`，wrapper 工作区端口实现与 wrapper 运行账本迁入
+  `engine/wrapper/`；composition 的 `executionMergeRecovery.ts` / `wrapperRunLifecycle.ts` 删除，`wrapperMechanics.ts` 只剩绑定。
+  协调器构造核对：生产只在 bootstrap 构造（RFC-386 / 387 守卫），`services/task.ts` 的测试专用装配随 W4 E1 退役。composition 其余
+  非装配逻辑（数字员工执行核心、托管代理调用准备、动作执行运行器、provider 后台循环等）逐个核对后另立 RFC。
 
 ### S7 唯一 AtomicApply 引擎（W6）
 
@@ -412,9 +417,9 @@ S3、S4、S8 互不依赖，可与其他后继并行，但各自避让正在被�
 
 - [ ] proposal AC-1～AC-11 全部兑现；
 - [x] 所有 P0 后继 Done；RFC-287 Done；RFC-288/289 保持 CLOSED；W2、W3 Done；
-- [ ] S1～S8 Done（2026-11-01：S1 / S3 / S4 / S5 / S8 Done，S2 余 S2c，S6 第一步（RFC-402）、第 3 步（RFC-403～406）与第 4 步之一（RFC-407）Done，
-  第 4 步之二（RFC-408）、scope 解释器（RFC-409）与动态工作流生成引擎（RFC-410）已实施待 CI，workgroup 轮次引擎迁入与第 5 步其余退出门未完成，
-  S7 未完成）；
+- [ ] S1～S8 Done（2026-11-01：S1 / S3 / S4 / S5 / S8 Done，S2 余 S2c，S6 第一步（RFC-402）、第 3 步（RFC-403～406）、第 4 步（RFC-407 / 408）、
+  scope 解释器（RFC-409）、动态工作流生成引擎（RFC-410）、workgroup 轮次引擎（RFC-411）与 scheduler 残余（RFC-412）Done；S6 退出门只剩
+  「task-execution `composition/` 只剩装配」（RFC-413 起逐步收口；协调器构造生产上只在 bootstrap，测试专用装配随 W4 E1 退役），S7 未完成）；
 - [ ] W4 余项、W5 余项、W7 余项（2026-10-31 核销）、W9-C/E/D Done；W8 仅在新能力 RFC 获批时要求；
 - [ ] design §14 的终局判据全部成立；
 - [ ] 在途 task、历史行、API / MCP / WS 兼容与完整 E2E 有证据；

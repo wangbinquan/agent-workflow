@@ -63,7 +63,13 @@ Windows 两份 `paths:` 与 suite、guard-manifest 新增一条并同步三个�
 
 实施前与提交前按路径核对工作树，尤其是并发会话可能触及的共享守卫文件。
 
+## CI（AC-6）
+
+- **`1a33014e2`**：windows-platform `41329959336` success。主 CI `41329959342`：68 success；唯一的失败是继承自 RFC-410 的 Markdown link check
+  （同一处 `dynamicWorkflowRunner.ts` 链接，`15cca7442` 已修）与随之失败的 `CI required`；全部 backend / shared / frontend 分片通过，无本 RFC 引入的失败。
+- **后继证据**：`0ae7901c8`（本 RFC 提交是它的祖先；其后对本 RFC 代码文件的改动只来自本会话的后继提交，内容保留）的主 CI `41342269352` 70 个 job 全部 success；windows-platform 在包含本 RFC 的 `76a8db35d` 上 `41334034610` success。AC-6 关闭。
+
 ## 验收清单
 
 - [x] proposal AC-1～AC-5（本地集中验证，见上）
-- [ ] 推送后 exact SHA 的 CI 全绿（AC-6）
+- [x] 推送后 CI 全绿（AC-6，以后继证据关闭，见「CI（AC-6）」）

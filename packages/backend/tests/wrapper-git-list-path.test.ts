@@ -89,14 +89,17 @@ describe('RFC-060 PR-E — gitChangedFiles helper', () => {
 })
 
 describe('RFC-060 PR-E — wrapper finalize uses gitChangedFiles, not gitDiffSnapshot', () => {
+  // RFC-413: the wrapper workspace (changed-file subtraction per repository) moved from
+  // composition/wrapperMechanics.ts into engine/wrapper/wrapperWorkspace.ts.
   const WRAPPER_MECHANICS_PATH = resolve(
     import.meta.dirname,
     '..',
     'src',
     'modules',
     'task-execution',
-    'composition',
-    'wrapperMechanics.ts',
+    'engine',
+    'wrapper',
+    'wrapperWorkspace.ts',
   )
   const src = readFileSync(WRAPPER_MECHANICS_PATH, 'utf-8')
   const strategy = readFileSync(
@@ -135,7 +138,7 @@ describe('RFC-060 PR-E — wrapper finalize uses gitChangedFiles, not gitDiffSna
       'utf8',
     )
     expect(src).toContain('scope.changedFiles(repo.path')
-    expect(src).toContain('workspaceRecord(sceneRecord(scene).handle).scope')
+    expect(src).toContain('ports.scopeOf(sceneRecord(scene).handle)')
     expect(native).toContain('changedFiles: gitChangedFiles,')
     expect(src).toContain('for (const repo of diffableRepos(scene))')
     // 反向锁：不得退回完整 patch。

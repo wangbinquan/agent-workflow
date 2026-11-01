@@ -1,6 +1,16 @@
 import { IsoSubmodulesSchema } from '@agent-workflow/shared'
 import type { TaskRepositoryCheckpoint } from './taskCheckpoint'
 
+/** RFC-413: the persisted submodule topology per mount, as replay and the wrapper rebuild read it back. */
+export type IsoSubmoduleTopology = Record<
+  string,
+  {
+    subBases: Record<string, string>
+    poolDirs: Record<string, string>
+    pendingSubResolves: string[]
+  }
+>
+
 /**
  * RFC-210 — read a node_run's persisted submodule topology back for replay.
  *
@@ -12,22 +22,10 @@ import type { TaskRepositoryCheckpoint } from './taskCheckpoint'
  *
  * RFC-404: one owner for the call-node adoption rebuild, wrapper iso rebuild and merge replay.
  */
-export function parseIsoSubmodules(checkpoints: readonly TaskRepositoryCheckpoint[]): Record<
-  string,
-  {
-    subBases: Record<string, string>
-    poolDirs: Record<string, string>
-    pendingSubResolves: string[]
-  }
-> {
-  const out: Record<
-    string,
-    {
-      subBases: Record<string, string>
-      poolDirs: Record<string, string>
-      pendingSubResolves: string[]
-    }
-  > = {}
+export function parseIsoSubmodules(
+  checkpoints: readonly TaskRepositoryCheckpoint[],
+): IsoSubmoduleTopology {
+  const out: IsoSubmoduleTopology = {}
   for (const checkpoint of checkpoints) {
     const one = IsoSubmodulesSchema.safeParse(checkpoint.submodules)
     if (one.success)

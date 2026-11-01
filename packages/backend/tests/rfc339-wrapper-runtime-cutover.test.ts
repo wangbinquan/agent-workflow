@@ -501,8 +501,9 @@ describe('RFC-339 WrapperRuntime cutover', () => {
       'packages/backend/src/modules/task-execution/composition/wrapperRuntime.ts',
       'packages/backend/src/modules/task-execution/infrastructure/taskExecutionRuntimeParticipants.ts',
     ])
+    // RFC-413: the binding moved with the recovery's ports into composition/isolationMechanicsBinding.ts.
     expect(containing('composeExecutionMergeRecovery')).toEqual([
-      'packages/backend/src/modules/task-execution/composition/executionMergeRecovery.ts',
+      'packages/backend/src/modules/task-execution/composition/isolationMechanicsBinding.ts',
       'packages/backend/src/modules/task-execution/composition/runtimeAssembly.ts',
       'packages/backend/src/modules/task-execution/infrastructure/taskExecutionRuntimeParticipants.ts',
     ])
@@ -515,14 +516,20 @@ describe('RFC-339 WrapperRuntime cutover', () => {
   })
 
   test('recovery order and immutable wrapper membership stay single-owner', () => {
+    // RFC-413: the pre-drive recovery is engine/kernel/mergeRecovery.ts; the top frame's merges (RFC-370's
+    // completeFrameMerges, formerly replayPendingMerges) still complete before the human-conflict replay.
     const recovery = read(
-      'packages/backend/src/modules/task-execution/composition/executionMergeRecovery.ts',
+      'packages/backend/src/modules/task-execution/engine/kernel/mergeRecovery.ts',
     )
     const taskEnginePorts = read(
       'packages/backend/src/modules/task-execution/application/ports/taskEngine.ts',
     )
-    expect(recovery.indexOf('await replayPendingMerges(state, log)')).toBeLessThan(
-      recovery.indexOf('await replayConflictHumanResolutions(state, log)'),
+    const topFrameMerges = recovery.indexOf(
+      'await completeFrameMerges(ports, { containerRunId: null, iteration: 0 }, log)',
+    )
+    expect(topFrameMerges).toBeGreaterThan(-1)
+    expect(topFrameMerges).toBeLessThan(
+      recovery.indexOf('await replayConflictHumanResolutions(ports, log)'),
     )
     expect(taskEnginePorts).not.toContain('TaskPreDriveReplayPort')
     expect(taskEnginePorts).not.toContain('TaskReplayRequest')
@@ -531,7 +538,13 @@ describe('RFC-339 WrapperRuntime cutover', () => {
     const mechanics = read(
       'packages/backend/src/modules/task-execution/composition/wrapperMechanics.ts',
     )
-    const mergeHelper = mechanics.slice(mechanics.indexOf('async function mergeBackWrapperIso('))
+    // RFC-413: the wrapper merge-back moved into engine/kernel/wrapperIsolation.ts.
+    const wrapperIsolation = read(
+      'packages/backend/src/modules/task-execution/engine/kernel/wrapperIsolation.ts',
+    )
+    const mergeHelperAt = wrapperIsolation.indexOf('export async function mergeBackWrapperIso(')
+    expect(mergeHelperAt).toBeGreaterThan(-1)
+    const mergeHelper = wrapperIsolation.slice(mergeHelperAt)
     expect(mergeHelper).toContain("event: { kind: 'park-conflict-human', via: 'live' }")
     expect(mergeHelper).not.toContain('transitionNodeRunStatus(')
     expect(mergeHelper).not.toContain('broadcastNodeStatus(')

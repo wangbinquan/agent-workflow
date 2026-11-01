@@ -4,6 +4,8 @@ import {
   LEAF_NODE_SOURCES,
   SCRIPT_NODE_SOURCE,
   SCRIPT_ATTEMPT_SOURCE,
+  WRAPPER_WORKSPACE_SOURCE,
+  WRAPPER_ISOLATION_SOURCE,
 } from './helpers/executionMechanismSources'
 // RFC-287 T1⑤ —— iso 清理失败的处置现状（C3b 的红→绿对基线）。
 //
@@ -36,18 +38,24 @@ const SCHEDULER = readFileSync(
   'utf8',
 )
 // RFC-406: nodeMechanics.ts is gone; its last body (the workgroup host) is WORKGROUP_HOST_SOURCE.
-const WRAPPER_MECHANICS = readFileSync(
-  resolve(
-    import.meta.dir,
-    '..',
-    'src',
-    'modules',
-    'task-execution',
-    'composition',
-    'wrapperMechanics.ts',
+// RFC-413: the wrapper workspace and the wrapper iso create / merge-back left wrapperMechanics.ts for
+// engine/wrapper/ and engine/kernel/; the scan keeps the same corpus.
+const WRAPPER_MECHANICS = [
+  readFileSync(
+    resolve(
+      import.meta.dir,
+      '..',
+      'src',
+      'modules',
+      'task-execution',
+      'composition',
+      'wrapperMechanics.ts',
+    ),
+    'utf8',
   ),
-  'utf8',
-)
+  WRAPPER_WORKSPACE_SOURCE,
+  WRAPPER_ISOLATION_SOURCE,
+].join('\n')
 
 // RFC-287 T7：五条线全部迁入骨架后，「逐函数看 finally 里那次 discard 的保护形态」
 // 这个探针没有消费者了（scheduler.ts 里已无 finally-discard）——连同它的 Guard 类型

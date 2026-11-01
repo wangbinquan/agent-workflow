@@ -1,38 +1,24 @@
-import { workspaceSessionFor } from './executionWorkspaceBinding'
-import { bindMergeConflictPorts } from './mergeConflictResolution'
-import { bindIsolationCleanup } from '../infrastructure/executionKernelBinding'
-// RFC-339 — task-execution-owned pre-drive merge recovery mechanics.
-
-import { taskCheckpointRefs } from '../domain/taskCheckpoint'
-import { type Logger } from '@/util/log'
-// RFC-060 PR-E: splitDiff* imports removed — they were used only by the
-// agent-multi fan-out path (now deleted). wrapper-fanout consumes a `list<T>`
-// shardSource instead of slicing a string diff.
-import {
-  // snapshotNodeIsoFinal / mergeBackNodeIso remain imported for the WRAPPER
-  // merge path only (mergeBackWrapperIso — outside RFC-188's agent-site
-  // scope). Wrapper CREATE shares createIsoUnderLock with every AGENT site so
-  // sibling `git worktree add` mutations cannot race in the common repository.
-  discardNodeIso,
-} from '@/modules/task-execution/engine/kernel/isolationCleanup'
-import type { IsolationWorkspaceScope } from '@/modules/source-control/public/types'
-import { completeIsolatedHumanConflict } from '../infrastructure/isolationWorkspaceView'
-import { restoredSubmodules } from '../infrastructure/executionWorkspaceSession'
+// RFC-413 — the pre-drive merge recovery (RFC-130 / 144 / 210 / 369 / 370), moved verbatim from
+// composition/executionMergeRecovery.ts onto the isolation mechanics ports. The composition binds the ports over the
+// frame's own execution state (the task's at task entry, a wrapper's when the wrapper drives its body).
+import { taskCheckpointRefs } from '../../domain/taskCheckpoint'
+import { discardNodeIso } from './isolationCleanup'
 // RFC-188: the shared assembly for isolated agent runs — iso lock-window,
 // iso-column persistence and the merge-back/settle block (formerly five
 // hand-copies in this file).
-import { markMergeFailed, mergeBackAndSettle } from '@/modules/task-execution/engine/kernel/merge'
-import { describeEffectError } from '../domain/effectErrorDescription'
-import type { NodeExecutionSnapshot } from '../application/ports/nodeExecutionPersistence'
+import { markMergeFailed, mergeBackAndSettle } from './merge'
+import { describeEffectError } from '../../domain/effectErrorDescription'
+import type { NodeExecutionSnapshot } from '../../application/ports/nodeExecutionPersistence'
 // RFC-210 replay: submodule topology read-back + the fail-closed gate around it.
-import { parseIsoSubmodules } from '../domain/isoSubmodules'
-import type { TaskMechanicsState } from './taskMechanicsState'
-import { isolatedRunBinding } from '@/modules/task-execution/composition/executionMechanismBindings'
-import { resolveMergeConflicts } from '@/modules/task-execution/engine/node/shared/resolveMergeConflicts'
-import type { ExecutionMergeRecovery } from '../application/recovery/executionMergeRecovery'
+import { parseIsoSubmodules } from '../../domain/isoSubmodules'
+import type { Logger } from '../../application/ports/executionKernel'
+import type {
+  IsolationMechanicsPorts,
+  IsolationScope,
+} from '../../application/ports/isolationMechanics'
 
 async function replaySubmodulesMissing(
-  scope: IsolationWorkspaceScope,
+  scope: IsolationScope,
   repos: ReadonlyArray<{ worktreePath: string; mountPath: string }>,
   persisted: Record<string, { subBases: Record<string, string> }>,
 ): Promise<string | null> {
@@ -51,19 +37,19 @@ async function replaySubmodulesMissing(
  * 收尾失败只记日志：重放本身已经按 `excludeSuperseded` 排除了它们，结果不依赖这一步。
  */
 async function abandonSupersededRuns(
-  state: TaskMechanicsState,
+  ports: IsolationMechanicsPorts,
   mergeState: 'pending-merge' | 'conflict-human',
   log: Logger,
 ): Promise<void> {
-  const all = await state.opts.persistence.nodeExecution.list({
-    taskId: state.taskId,
+  const all = await ports.persistence.nodeExecution.list({
+    taskId: ports.taskId,
     mergeState,
   })
   if (all.length === 0) return
   const live = new Set(
     (
-      await state.opts.persistence.nodeExecution.list({
-        taskId: state.taskId,
+      await ports.persistence.nodeExecution.list({
+        taskId: ports.taskId,
         mergeState,
         excludeSuperseded: true,
       })
@@ -71,12 +57,10 @@ async function abandonSupersededRuns(
   )
   for (const row of all) {
     if (live.has(row.id)) continue
-    const abandoned = await state.opts.persistence.mergeStates.tryTransition({
+    const abandoned = await ports.persistence.mergeStates.tryTransition({
       nodeRunId: row.id,
       event: { kind: 'abandon', reason: 'superseded-by-newer-generation' },
-      ...(state.opts.executionContext === undefined
-        ? {}
-        : { executionContext: state.opts.executionContext }),
+      ...(ports.execution === undefined ? {} : { executionContext: ports.execution }),
     })
     log.info('superseded merge row retired on replay', {
       nodeRunId: row.id,
@@ -87,11 +71,11 @@ async function abandonSupersededRuns(
 }
 
 async function scopeBaseHeads(
-  state: TaskMechanicsState,
-  scope: IsolationWorkspaceScope,
+  ports: IsolationMechanicsPorts,
+  scope: IsolationScope,
 ): Promise<Record<string, string>> {
   const taskBaseHeads: Record<string, string> = {}
-  for (const repo of state.repos) {
+  for (const repo of ports.repos) {
     const h = await scope.head(repo.worktreePath)
     taskBaseHeads[repo.mountPath] = h.stdout.trim()
   }
@@ -109,26 +93,26 @@ async function scopeBaseHeads(
  * the caller fails the task loudly (PR-B upgrades the conflict path to the merge agent).
  */
 async function replayPendingMerge(
-  state: TaskMechanicsState,
-  scope: IsolationWorkspaceScope,
+  ports: IsolationMechanicsPorts,
+  scope: IsolationScope,
   taskBaseHeads: Record<string, string>,
   r: NodeExecutionSnapshot,
   log: Logger,
 ): Promise<void> {
-  const { taskId } = state
+  const { taskId } = ports
   const baseSnapshots = taskCheckpointRefs(r.checkpoints, 'isolationBase')
   const nodeTrees = taskCheckpointRefs(r.checkpoints, 'nodeTree')
   if (Object.keys(nodeTrees).length === 0) {
     throw new Error(`pending-merge replay: node_tree missing for run ${r.id}`)
   }
   const submodules = parseIsoSubmodules(r.checkpoints)
-  const missingSub = await replaySubmodulesMissing(scope, state.repos, submodules)
+  const missingSub = await replaySubmodulesMissing(scope, ports.repos, submodules)
   if (missingSub !== null) {
     throw new Error(
       `pending-merge replay: submodule topology missing for repo '${missingSub}' of run ${r.id}`,
     )
   }
-  const handle = await workspaceSessionFor(state).restore({
+  const handle = await ports.workspace.restore({
     // Round 6 P2: the PHYSICAL iso identity — a process-retry keeps the
     // worktree + ref namespace keyed by the ORIGINAL row id (D17) while
     // pending-merge lands on the retry row; rebuild from the persisted
@@ -138,10 +122,10 @@ async function replayPendingMerge(
     workspaceRef: r.isoWorktreePath,
     baseSnapshots,
     taskBaseHeads,
-    submodules: restoredSubmodules(submodules),
+    submodules,
     // RFC-193 K1: the replay's merge-back re-snapshots canonical (ours) —
     // it must keep force-including the task's gitignored port files.
-    forcedContainerPaths: [...(await state.opts.persistence.artifactPaths.forcedPaths(taskId))],
+    forcedContainerPaths: [...(await ports.persistence.artifactPaths.forcedPaths(taskId))],
   })
   // RFC-188: the ONE merge-back assembly — replay passes the PERSISTED node
   // trees (the iso worktree may be gone; the agent is never re-run) so the
@@ -149,14 +133,14 @@ async function replayPendingMerge(
   // that now conflicts goes through the SAME merge agent as a live dispatch;
   // unresolved → conflict-human (resume replay #2 completes the human fix).
   const merge = await mergeBackAndSettle({
-    binding: isolatedRunBinding(state),
-    writeSem: state.writeSem,
+    binding: ports.binding,
+    writeSem: ports.writeSem,
     handle,
     nodeRunId: r.id,
     nodeTrees,
     via: 'replay',
     conflictResolver: (conflicts, containerPath) =>
-      resolveMergeConflicts(bindMergeConflictPorts(state), {
+      ports.conflicts.resolveMergeConflicts({
         conflicts,
         containerPath,
         conflictNodeRunId: r.id,
@@ -171,7 +155,7 @@ async function replayPendingMerge(
     // site's discard — without this the node-scoped pool refs leak forever
     // and a NEW path's worktree anchor is never handed over. Best-effort:
     // the iso worktree is usually already gone (that is why we replayed).
-    await discardNodeIso(bindIsolationCleanup(), handle, log, state.writeSem)
+    await discardNodeIso(ports.cleanup, handle, log, ports.writeSem)
   } else {
     log.warn('pending-merge replay conflict → conflict-human (merge agent could not resolve)', {
       nodeRunId: r.id,
@@ -191,37 +175,37 @@ async function replayPendingMerge(
  * snapshot fails the node like a live merge-back throw.
  */
 async function completeInterruptedRun(
-  state: TaskMechanicsState,
-  scope: IsolationWorkspaceScope,
+  ports: IsolationMechanicsPorts,
+  scope: IsolationScope,
   taskBaseHeads: Record<string, string>,
   r: NodeExecutionSnapshot,
   log: Logger,
 ): Promise<void> {
-  const { taskId } = state
+  const { taskId } = ports
   const baseSnapshots = taskCheckpointRefs(r.checkpoints, 'isolationBase')
   try {
     if (Object.keys(baseSnapshots).length === 0) {
       throw new Error(`interrupted merge-back: iso base snapshot missing for run ${r.id}`)
     }
-    const handle = await workspaceSessionFor(state).restore({
+    const handle = await ports.workspace.restore({
       key: await scope.recoverKey(r.isoWorktreePath, r.id),
       dbNodeRunId: r.id,
       workspaceRef: r.isoWorktreePath,
       baseSnapshots,
       taskBaseHeads,
-      submodules: restoredSubmodules(parseIsoSubmodules(r.checkpoints)),
-      forcedContainerPaths: [...(await state.opts.persistence.artifactPaths.forcedPaths(taskId))],
+      submodules: parseIsoSubmodules(r.checkpoints),
+      forcedContainerPaths: [...(await ports.persistence.artifactPaths.forcedPaths(taskId))],
     })
     // No node trees supplied: the assembly snapshots the kept iso, pins the
     // trees (isolating → pending-merge) and merges under the write lock.
     const merge = await mergeBackAndSettle({
-      binding: isolatedRunBinding(state),
-      writeSem: state.writeSem,
+      binding: ports.binding,
+      writeSem: ports.writeSem,
       handle,
       nodeRunId: r.id,
       via: 'replay',
       conflictResolver: (conflicts, containerPath) =>
-        resolveMergeConflicts(bindMergeConflictPorts(state), {
+        ports.conflicts.resolveMergeConflicts({
           conflicts,
           containerPath,
           conflictNodeRunId: r.id,
@@ -232,7 +216,7 @@ async function completeInterruptedRun(
     })
     if (merge.kind === 'merged') {
       log.info('interrupted merge-back completed', { nodeRunId: r.id })
-      await discardNodeIso(bindIsolationCleanup(), handle, log, state.writeSem)
+      await discardNodeIso(ports.cleanup, handle, log, ports.writeSem)
     } else {
       log.warn('interrupted merge-back conflict → conflict-human (merge agent could not resolve)', {
         nodeRunId: r.id,
@@ -245,7 +229,7 @@ async function completeInterruptedRun(
       nodeRunId: r.id,
       error: message,
     })
-    await markMergeFailed(isolatedRunBinding(state), r.id, message, log)
+    await markMergeFailed(ports.binding, r.id, message, log)
   }
 }
 
@@ -262,46 +246,46 @@ async function completeInterruptedRun(
  * their dispatch weighs reusing them.
  */
 export async function completeFrameMerges(
-  state: TaskMechanicsState,
+  ports: IsolationMechanicsPorts,
   frame: { readonly containerRunId: string | null; readonly iteration: number },
   log: Logger,
 ): Promise<void> {
   const inFrame = {
-    taskId: state.taskId,
+    taskId: ports.taskId,
     containerRunId: frame.containerRunId,
     ...(frame.containerRunId === null ? {} : { iteration: frame.iteration }),
     // RFC-369 —— 被同帧更新一代取代的旧代不重放（它过期的 delta 不得进 canonical，RFC-144）。
     excludeSuperseded: true,
   } as const
-  const pinned = await state.opts.persistence.nodeExecution.list({
+  const pinned = await ports.persistence.nodeExecution.list({
     ...inFrame,
     mergeState: 'pending-merge',
   })
-  const interrupted = await state.opts.persistence.nodeExecution.list({
+  const interrupted = await ports.persistence.nodeExecution.list({
     ...inFrame,
     mergeState: 'isolating',
     status: 'done',
   })
   if (pinned.length === 0 && interrupted.length === 0) return
-  const scope = await workspaceSessionFor(state).scope()
-  const taskBaseHeads = await scopeBaseHeads(state, scope)
-  for (const r of pinned) await replayPendingMerge(state, scope, taskBaseHeads, r, log)
-  for (const r of interrupted) await completeInterruptedRun(state, scope, taskBaseHeads, r, log)
+  const scope = await ports.workspace.scope()
+  const taskBaseHeads = await scopeBaseHeads(ports, scope)
+  for (const r of pinned) await replayPendingMerge(ports, scope, taskBaseHeads, r, log)
+  for (const r of interrupted) await completeInterruptedRun(ports, scope, taskBaseHeads, r, log)
 }
 
 /** RFC-370 — complete one done fan-out child's interrupted merge-back in the
  * dispatching scope (its merge target) before its reuse is decided. */
 export async function completeInterruptedMerge(
-  state: TaskMechanicsState,
+  ports: IsolationMechanicsPorts,
   r: NodeExecutionSnapshot,
   log: Logger,
 ): Promise<void> {
-  const scope = await workspaceSessionFor(state).scope()
-  const taskBaseHeads = await scopeBaseHeads(state, scope)
+  const scope = await ports.workspace.scope()
+  const taskBaseHeads = await scopeBaseHeads(ports, scope)
   if (r.mergeState === 'pending-merge') {
-    await replayPendingMerge(state, scope, taskBaseHeads, r, log)
+    await replayPendingMerge(ports, scope, taskBaseHeads, r, log)
   } else {
-    await completeInterruptedRun(state, scope, taskBaseHeads, r, log)
+    await completeInterruptedRun(ports, scope, taskBaseHeads, r, log)
   }
 }
 
@@ -314,27 +298,27 @@ export async function completeInterruptedMerge(
  * resume entry (before the scope loop), right after the top frame's merges complete.
  */
 async function replayConflictHumanResolutions(
-  state: TaskMechanicsState,
+  ports: IsolationMechanicsPorts,
   log: Logger,
 ): Promise<void> {
-  const { taskId } = state
-  await abandonSupersededRuns(state, 'conflict-human', log)
-  const rows = await state.opts.persistence.nodeExecution.list({
+  const { taskId } = ports
+  await abandonSupersededRuns(ports, 'conflict-human', log)
+  const rows = await ports.persistence.nodeExecution.list({
     taskId,
     mergeState: 'conflict-human',
     excludeSuperseded: true,
   })
   if (rows.length === 0) return
-  const scope = await workspaceSessionFor(state).scope()
+  const scope = await ports.workspace.scope()
   const taskBaseHeads: Record<string, string> = {}
-  for (const repo of state.repos) {
+  for (const repo of ports.repos) {
     const h = await scope.head(repo.worktreePath)
     taskBaseHeads[repo.mountPath] = h.stdout.trim()
   }
   for (const r of rows) {
     const baseSnapshots = taskCheckpointRefs(r.checkpoints, 'isolationBase')
     const nodeTrees = taskCheckpointRefs(r.checkpoints, 'nodeTree')
-    const handle = await workspaceSessionFor(state).restore({
+    const handle = await ports.workspace.restore({
       // Round 6 P2 (same as replayPendingMerge): rebuild the PHYSICAL iso
       // identity from the persisted path — this is also what makes the
       // resolve-iso lookup inside completeHumanResolvedConflict hit the
@@ -344,27 +328,25 @@ async function replayConflictHumanResolutions(
       workspaceRef: r.isoWorktreePath,
       baseSnapshots,
       taskBaseHeads,
-      forcedContainerPaths: [...(await state.opts.persistence.artifactPaths.forcedPaths(taskId))],
+      forcedContainerPaths: [...(await ports.persistence.artifactPaths.forcedPaths(taskId))],
       // RFC-210: the human-resolve completion re-merges, so it needs the same
       // per-submodule bases the original merge-back had.
-      submodules: restoredSubmodules(parseIsoSubmodules(r.checkpoints)),
+      submodules: parseIsoSubmodules(r.checkpoints),
     })
-    const outcome = await state.writeSem.run(() =>
-      completeIsolatedHumanConflict(handle, nodeTrees, log),
+    const outcome = await ports.writeSem.run(() =>
+      ports.completeHumanConflict(handle, nodeTrees, log),
     )
     if (outcome.allResolved) {
-      await state.opts.persistence.mergeStates.transition({
+      await ports.persistence.mergeStates.transition({
         nodeRunId: r.id,
         event: { kind: 'complete-human-resolution' },
-        ...(state.opts.executionContext === undefined
-          ? {}
-          : { executionContext: state.opts.executionContext }),
+        ...(ports.execution === undefined ? {} : { executionContext: ports.execution }),
       })
       log.info('conflict-human resume: human resolution merged back', { nodeRunId: r.id })
       // RFC-210 (review round 5, P2): the park kept the iso for the human;
       // now that the resolution landed, close its lifecycle — anchor handoff
       // for NEW paths + node pool ref cleanup happen inside the discard.
-      await discardNodeIso(bindIsolationCleanup(), handle, log, state.writeSem)
+      await discardNodeIso(ports.cleanup, handle, log, ports.writeSem)
     } else {
       log.info('conflict-human resume: still unresolved — staying parked', {
         nodeRunId: r.id,
@@ -374,17 +356,14 @@ async function replayConflictHumanResolutions(
   }
 }
 
-export function composeExecutionMergeRecovery(
-  state: TaskMechanicsState,
+/** The task-entry recovery: every frame's superseded generations, the top frame's merges, then human conflicts. */
+export async function recoverMergesBeforeScope(
+  ports: IsolationMechanicsPorts,
   log: Logger,
-): ExecutionMergeRecovery {
-  return {
-    async recoverBeforeScope() {
-      // RFC-369 —— 被同帧更新一代取代的旧代（任一帧）先收成 abandoned；旧代作废原先在铸造事务里同事务
-      // 落库，现在由读侧推导。
-      await abandonSupersededRuns(state, 'pending-merge', log)
-      await completeFrameMerges(state, { containerRunId: null, iteration: 0 }, log)
-      await replayConflictHumanResolutions(state, log)
-    },
-  }
+): Promise<void> {
+  // RFC-369 —— 被同帧更新一代取代的旧代（任一帧）先收成 abandoned；旧代作废原先在铸造事务里同事务
+  // 落库，现在由读侧推导。
+  await abandonSupersededRuns(ports, 'pending-merge', log)
+  await completeFrameMerges(ports, { containerRunId: null, iteration: 0 }, log)
+  await replayConflictHumanResolutions(ports, log)
 }

@@ -34,18 +34,21 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, test } from 'bun:test'
 
-const WRAPPER_MECHANICS_SRC = readFileSync(
-  resolve(
-    import.meta.dir,
-    '..',
-    'src',
-    'modules',
-    'task-execution',
-    'composition',
-    'wrapperMechanics.ts',
-  ),
-  'utf-8',
-)
+// RFC-413: the wrapper workspace (per-repository changed files) and the wrapper iso create moved from
+// composition/wrapperMechanics.ts into engine/wrapper/wrapperWorkspace.ts and engine/kernel/wrapperIsolation.ts;
+// the scan covers the binding and both owners.
+const WRAPPER_MECHANICS_SRC = [
+  ['composition', 'wrapperMechanics.ts'],
+  ['engine', 'wrapper', 'wrapperWorkspace.ts'],
+  ['engine', 'kernel', 'wrapperIsolation.ts'],
+]
+  .map((segments) =>
+    readFileSync(
+      resolve(import.meta.dir, '..', 'src', 'modules', 'task-execution', ...segments),
+      'utf-8',
+    ),
+  )
+  .join('\n')
 // RFC-405 / RFC-406: both agent-executor lanes (and their binding) left nodeMechanics.ts.
 const NODE_MECHANICS_SRC = AGENT_MECHANICS_SOURCE
 const RUNNER_SRC = readTaskAgentSources()
@@ -91,7 +94,9 @@ describe('RFC-066 PR-B — source guards', () => {
     // RFC-405 / RFC-407: the three dispatch lines now build their iso through the agent binding's one
     // `createIsoUnderLock`, so the snapshot threads at the binding (plus the wrapper iso's own site);
     // each line is pinned to that port below.
-    const canonMatches = executionSource.match(/canonRepos: state\.repos/g) ?? []
+    // RFC-413: the wrapper iso's own site reads the same snapshot through its isolation ports
+    // (`canonRepos: ports.repos`, bound to `state.repos`).
+    const canonMatches = executionSource.match(/canonRepos: (?:state|ports)\.repos/g) ?? []
     expect(canonMatches.length).toBeGreaterThanOrEqual(2)
     expect(AGENT_BINDING_SOURCE).toMatch(
       /createIsoUnderLock: \(isoKeyRunId, log\) =>\s*createIsoUnderLock\(\{[\s\S]{0,300}canonRepos: state\.repos,/,
