@@ -43,7 +43,12 @@ import { composeNodeRunRuntimePersistence } from './nodeRunRuntime'
 // The caller owns the temporary Git directory. Both launchers borrow it using
 // the same production lease used by development-automation host tasks.
 
-import { WorkflowDefinitionSchema, type StartTask } from '@agent-workflow/shared'
+import {
+  WorkflowDefinitionSchema,
+  type StartTask,
+  type WorkflowDefinition,
+} from '@agent-workflow/shared'
+import { validateWorkflowDef } from '@/modules/resource-catalog/infrastructure/legacy/workflow.validator'
 import { composeAgentLaunchResourceOperations } from '@/modules/task-execution/composition/agentLaunchResources'
 import { composeOwnerIdentityQueries } from '@/modules/identity-access/composition/providerOperations'
 import { eq } from 'drizzle-orm'
@@ -101,27 +106,33 @@ import { sqliteMemoryInjectionQueries } from './memoryInjection'
 import { createFileFusionWorkspaceEffects } from '@/modules/source-control/composition'
 
 /** Real catalog rows and owner decoders supply the validation inventory on either DB. */
+export async function loadTestDynamicWorkflowInventory(db: PersistenceDb) {
+  const plugins = createPluginRepository({ db }).repository
+  const { mcps } = tablesOf(db)
+  const [agentRows, skills, mcpRows, pluginRows] = await Promise.all([
+    loadAgentPersistenceRows(db, (tx) => readAgentFixtures(tx)),
+    listSkills(db),
+    db.select().from(mcps),
+    plugins.list(),
+  ])
+  return {
+    agents: agentRows,
+    skills,
+    mcps: mcpRows.map(mcpFromPersistenceRow),
+    plugins: [...pluginRows],
+  }
+}
+
+/** RFC-410: the generation engine receives the generic validator over this inventory (one load per pass). */
 export function createTestDynamicWorkflowOperations(
   db: PersistenceDb,
 ): BoundRunTaskOptions['dynamicWorkflow'] {
-  const plugins = createPluginRepository({ db }).repository
   return Object.freeze({
     persistence: composeDynamicWorkflowPersistence(db),
-    validationContext: Object.freeze({
+    validation: Object.freeze({
       async load() {
-        const { mcps } = tablesOf(db)
-        const [agentRows, skills, mcpRows, pluginRows] = await Promise.all([
-          loadAgentPersistenceRows(db, (tx) => readAgentFixtures(tx)),
-          listSkills(db),
-          db.select().from(mcps),
-          plugins.list(),
-        ])
-        return {
-          agents: agentRows,
-          skills,
-          mcps: mcpRows.map(mcpFromPersistenceRow),
-          plugins: [...pluginRows],
-        }
+        const inventory = await loadTestDynamicWorkflowInventory(db)
+        return (definition: WorkflowDefinition) => validateWorkflowDef(definition, inventory)
       },
     }),
   })

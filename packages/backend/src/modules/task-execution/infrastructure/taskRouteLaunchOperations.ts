@@ -63,7 +63,7 @@ import {
   collectUploadInputDefs,
   resolveUploadLimits,
 } from '@/services/launchMultipart'
-import { buildDynamicWorkflowGenerateSnapshot } from '@/services/orchestratorAgent'
+import { buildDynamicWorkflowGenerateSnapshot } from '../domain/dynamicWorkflowOrchestrator'
 import { assertNotBuiltin } from '@/services/systemResources'
 import { layoutBuiltinWorkflowSnapshot } from '@/services/task'
 import { assertWorkflowLaunchInputs } from '@/services/workflowLaunchInputs'

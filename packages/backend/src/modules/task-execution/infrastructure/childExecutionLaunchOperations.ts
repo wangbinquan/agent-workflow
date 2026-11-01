@@ -32,7 +32,7 @@ import {
   assertTriggerPreflight,
   triggerSourceFromContext,
 } from '@/services/execution/triggerPreflight'
-import { buildDynamicWorkflowGenerateSnapshot } from '@/services/orchestratorAgent'
+import { buildDynamicWorkflowGenerateSnapshot } from '../domain/dynamicWorkflowOrchestrator'
 import { assertWorkflowLaunchInputs } from '@/services/workflowLaunchInputs'
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
 import {

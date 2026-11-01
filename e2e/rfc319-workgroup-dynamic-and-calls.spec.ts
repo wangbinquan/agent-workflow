@@ -43,7 +43,7 @@
 //         若根本不挂在父行下，用户没有任何入口找到 call 节点起出来的那条子任务。
 //
 // 判据取自源码单一事实源（纯文本引用，勿改成外链；读的时候按 file:line 复核）：
-//   packages/backend/src/services/dynamicWorkflowRunner.ts:436-447  —— 生成成功 ⇒ phase=awaiting_confirm + 开闸
+//   packages/backend/src/modules/task-execution/engine/task/dynamicWorkflowGenerate.ts:350-361  —— 生成成功 ⇒ phase=awaiting_confirm + 开闸
 //   packages/backend/src/services/workgroup/dwActions.ts:99-170     —— approve：两层复核 + 把生成图换进快照后 resume
 //   packages/backend/src/services/workgroup/dwActions.ts:173-238    —— reject：评论必填、phase 回 generating、反馈进下一轮提示词
 //   packages/backend/src/services/workgroup/dwActions.ts:241-276    —— dw-save-as-workflow：落成普通 workflow 资源

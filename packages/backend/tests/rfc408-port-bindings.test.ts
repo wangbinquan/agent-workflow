@@ -11,7 +11,6 @@ import { createExecutionScopeIndex } from '@/modules/task-execution/domain/execu
 import type { SchedulerRuntimeTopology } from '@/modules/task-execution/public/participants'
 import type { BoundRunTaskOptions } from '@/services/execution/taskEngineRuntimeOptions'
 import { triggerPreflightIssue } from '@/services/execution/triggerPreflight'
-import { DW_ORCHESTRATOR_NODE_ID } from '@/services/orchestratorAgent'
 
 type Calls = Record<string, unknown[]>
 
@@ -176,10 +175,11 @@ test('workspace, rules, dynamic-workflow persistence and the review lock forward
   expect(projected).not.toBe(mounts)
 
   expect(ports.rules.triggerPreflightIssue).toBe(triggerPreflightIssue)
-  expect(ports.rules.dynamicWorkflowOrchestratorNodeId).toBe(DW_ORCHESTRATOR_NODE_ID)
+  // RFC-410: the orchestrator node id is a task-execution domain constant, no longer a port.
+  expect(Object.keys(ports.rules)).toEqual(['triggerPreflightIssue'])
   expect(ports.dynamicWorkflow).toBeUndefined()
   const dynamicPersistence = { loadTask: recorder(calls, 'loadTask', null) }
-  raw.dynamicWorkflow = { persistence: dynamicPersistence, validationContext: {} }
+  raw.dynamicWorkflow = { persistence: dynamicPersistence, validation: {} }
   expect(ports.dynamicWorkflow).toBe(dynamicPersistence as never)
   expect(await ports.reviewMutation.run(async () => 'locked')).toBe('locked')
 })

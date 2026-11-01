@@ -98,7 +98,9 @@ describe('RFC-200 source wiring locks', () => {
     expect(driver).toContain('composeMemberPrompt(input.snapshot, input.memberId, cards, nonce)')
     expect(driver).toContain('composeMemberPrompt(input.snapshot, input.memberId, null, nonce)')
 
-    const dynamic = read('packages/backend/src/services/dynamicWorkflowRunner.ts')
+    const dynamic = read(
+      'packages/backend/src/modules/task-execution/engine/task/dynamicWorkflowGenerate.ts',
+    )
     expect(dynamic).toContain('const envelopeNonce = await nodeRuns.loadEnvelopeNonce(runId)')
     expect(dynamic).toContain('buildOrchestratorPrompt({')
     expect(dynamic).toContain('envelopeNonce,')

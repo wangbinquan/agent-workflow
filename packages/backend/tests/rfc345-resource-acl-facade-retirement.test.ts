@@ -454,13 +454,6 @@ const EXACT_COMPATIBILITY_DEBT: readonly ObservedCompatibilityDebt[] = [
   ),
   edge(
     'services/workflow.validator.ts',
-    'services/dynamicWorkflowRunner.ts',
-    ['validateWorkflowDef'],
-    'dynamic Workflow validation',
-    REMOVE_OWNERS.workflowValidation,
-  ),
-  edge(
-    'services/workflow.validator.ts',
     'services/task.ts',
     ['buildWorkflowValidationContext', 'validateWorkflowDef'],
     'task Workflow validation',

@@ -21,7 +21,7 @@ import { join } from 'node:path'
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import { dwCallNodeRejections } from '../src/services/dynamicWorkflowRunner'
+import { dwCallNodeRejections } from '../src/modules/task-execution/domain/dynamicWorkflowGeneration'
 import {
   loadWorkflowValidationContext,
   validateWorkflowDef,
@@ -420,12 +420,21 @@ describe('RFC-243 §5.4(7) — dw generated definitions reject call nodes', () =
     // be exercised through evaluateGeneratedWorkflow's inputs — pin it at the
     // source level instead (same doctrine as other unreachable-by-input
     // guards; see CLAUDE.md test rules).
+    // RFC-410: the evaluation moved to the task-execution domain; the layer-one validator is injected.
     const src = readFileSync(
-      join(import.meta.dir, '..', 'src', 'services', 'dynamicWorkflowRunner.ts'),
+      join(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'task-execution',
+        'domain',
+        'dynamicWorkflowGeneration.ts',
+      ),
       'utf8',
     )
     const callSite = src.indexOf('dwCallNodeRejections(def)')
-    const layer1Site = src.indexOf('validateWorkflowDef(def, layer1Ctx)')
+    const layer1Site = src.indexOf('validateLayerOne(def)')
     expect(callSite).toBeGreaterThan(-1)
     expect(layer1Site).toBeGreaterThan(-1)
     expect(callSite).toBeLessThan(layer1Site)

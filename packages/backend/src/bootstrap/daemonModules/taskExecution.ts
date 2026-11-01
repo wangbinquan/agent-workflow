@@ -21,7 +21,10 @@ import { runtimeConfigOpts } from '@/services/task'
 import { DAEMON_GENERATION } from '@/services/daemonGeneration'
 import { taskExecutionResourceDependencies } from '@/services/execution/taskExecutionResourceDependencies'
 import { composeTaskExecutionResourceBinding } from '@/modules/resource-catalog/composition/taskExecution'
-import { composeDynamicWorkflowValidationContext } from '@/modules/resource-catalog/composition/workflowOperations'
+import {
+  composeDynamicWorkflowLayerOneValidation,
+  composeDynamicWorkflowValidationContext,
+} from '@/modules/resource-catalog/composition/workflowOperations'
 import { composeWorkgroupTurnsOperations } from '@/modules/resource-catalog/composition/workgroupTurns'
 import { composeRuntimeSelectionParticipantInTx } from '@/modules/runtime-management/composition/runtimeSelection'
 import { composeRepositoryPreparation } from '@/modules/source-control/composition/repositoryPreparation'
@@ -335,7 +338,10 @@ export function composeDaemonTaskExecutionModules<P extends DatabaseProvider>(
         delegatedRequests: core.identityAccess.delegatedRequests,
         taskExecutionResources: resources,
       },
-      dynamicWorkflow: { persistence: composeDynamicWorkflowPersistence(db), validationContext },
+      dynamicWorkflow: {
+        persistence: composeDynamicWorkflowPersistence(db),
+        validation: composeDynamicWorkflowLayerOneValidation(db),
+      },
       codeHostConnections: input.repository.codeHostConnections,
       repositoryPublicationTransport: input.repository.repositoryPublicationTransport,
     },

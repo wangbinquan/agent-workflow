@@ -37,6 +37,8 @@ import {
   WORKFLOW_SCHEMA_VERSION,
   type WorkflowDefinition,
   type WorkflowEdge,
+  type WorkflowValidationIssue,
+  type WorkflowValidationResult,
 } from './schemas/workflow'
 import type { WorkgroupMode } from './schemas/workgroup'
 
@@ -242,4 +244,87 @@ export function dwGeneratedToWorkflowDef(
     def: { $schema_version: WORKFLOW_SCHEMA_VERSION, inputs: [], nodes, edges },
     unknownTokens: [...unknown],
   }
+}
+
+/** Read a passthrough string field off a workflow node without an `any` cast. */
+function readNodeString(node: Record<string, unknown>, key: string): string | undefined {
+  const v = node[key]
+  return typeof v === 'string' ? v : undefined
+}
+
+/**
+ * RFC-167 §4 layer-two validation: the v1 constraints, run AFTER the generic
+ * `validateWorkflowDef` (which owns agent-not-found / cycles / port wiring).
+ * Returns the same {ok, issues} shape; error-severity issues are merged into the
+ * orchestrator's regeneration prompt (like the workgroup malformed-envelope retry).
+ *
+ * RFC-223 (PR-3b): pool membership is decided BY the frozen canonical `agentId`
+ * (`poolAgentIds`), not the display name — the generated def is already
+ * id-canonical (single conversion point), so this same check re-validates a
+ * stored proposal against the CURRENT pool at approve time (a member removed
+ * mid-run → `dw-agent-outside-pool`). A node with no `agentId` (an unknown
+ * token that slipped past the conversion) also trips it — never a name compare.
+ *
+ * RFC-410: moved from the backend orchestrator module so the generation engine (task-execution) and the
+ * pre-confirm re-validation (resource catalog) read one copy without a reverse context edge.
+ */
+export function validateDynamicWorkflowDef(
+  def: WorkflowDefinition,
+  poolAgentIds: readonly string[],
+): WorkflowValidationResult {
+  const issues: WorkflowValidationIssue[] = []
+  const nodes = def.nodes ?? []
+  const poolSet = new Set(poolAgentIds)
+
+  const agentSingleCount = nodes.filter((n) => n.kind === 'agent-single').length
+  if (agentSingleCount === 0) {
+    issues.push({
+      code: DW_VALIDATION_CODES.empty,
+      message: 'a dynamic workflow needs at least one agent-single node',
+      severity: 'error',
+    })
+  }
+
+  for (const n of nodes) {
+    if (n.kind !== 'agent-single') {
+      issues.push({
+        code: DW_VALIDATION_CODES.nodeKindForbidden,
+        message: `v1 only supports agent-single nodes; node '${n.id}' is '${n.kind}'`,
+        pointer: n.id,
+        severity: 'error',
+      })
+      continue
+    }
+    const agentId = readNodeString(n as unknown as Record<string, unknown>, 'agentId')
+    if (agentId === undefined || !poolSet.has(agentId)) {
+      issues.push({
+        code: DW_VALIDATION_CODES.agentOutsidePool,
+        message: `node '${n.id}' does not resolve to an agent in the workgroup's pool`,
+        pointer: n.id,
+        severity: 'error',
+      })
+    }
+  }
+
+  // Orphan check: with ≥2 nodes, every node must touch at least one edge (a
+  // lone island can't participate in the DAG). Single-node workflows are fine.
+  if (nodes.length >= 2) {
+    const connected = new Set<string>()
+    for (const e of def.edges ?? []) {
+      connected.add(e.source.nodeId)
+      connected.add(e.target.nodeId)
+    }
+    for (const n of nodes) {
+      if (!connected.has(n.id)) {
+        issues.push({
+          code: DW_VALIDATION_CODES.orphanNode,
+          message: `node '${n.id}' is not connected to any other node`,
+          pointer: n.id,
+          severity: 'error',
+        })
+      }
+    }
+  }
+
+  return { ok: !issues.some((i) => (i.severity ?? 'error') === 'error'), issues }
 }

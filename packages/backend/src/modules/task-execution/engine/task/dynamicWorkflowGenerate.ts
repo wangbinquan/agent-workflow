@@ -17,34 +17,35 @@
 // runScope — this engine never executes the generated graph itself.
 //
 // Mechanics reuse: all process-level work (frozen runtime, iso worktree,
-// runNode, merge-back) rides the SAME WorkgroupEngineHooks the round engine
-// uses (buildWorkgroupHooks in scheduler.ts) — this module never imports
-// scheduler.ts (module-cycle ban) and tests drive it with fake hooks.
+// runNode, merge-back) rides the SAME workgroup host hooks the round engine
+// uses (`ports.host`, bound in composition) — tests drive it with fake hooks.
+//
+// RFC-410: moved from services/dynamicWorkflowRunner.ts into the task control
+// plane; the generation rules are domain/dynamicWorkflowGeneration.ts, the
+// orchestrator agent and prompt domain/dynamicWorkflowOrchestrator.ts.
 
 import {
-  nodeRunMintIdentityForSlot,
-  nodeRunAttemptIndex,
-} from '@/modules/task-execution/public/types'
-import {
-  DEFAULT_PROTOCOL_RETRY_BUDGET,
-  DW_VALIDATION_CODES,
-  DwGeneratedWorkflowSchema,
-  DwStateSchema,
-  dwGeneratedToWorkflowDef,
   fenceUntrusted,
   parseTriggerContextJson,
   triggerContextContract,
+  DwStateSchema,
   type Agent,
   type DwState,
-  type DwTokenMap,
-  type WorkflowDefinition,
-  type WorkgroupRuntimeConfig,
   type ParsedTriggerContext,
+  type WorkgroupRuntimeConfig,
 } from '@agent-workflow/shared'
-import type { DynamicWorkflowPersistence } from '@/modules/task-execution/application/ports/dynamicWorkflowPersistence'
-import type { NodeRunLifecyclePersistence } from '@/modules/task-execution/application/ports/nodeRunLifecyclePersistence'
-import type { WorkgroupTurnHostOperations } from '@/modules/task-execution/application/ports/workgroupTurnsOperations'
-import type { TaskScopeOutcome } from '@/modules/task-execution/domain/taskEngine'
+import type {
+  DynamicWorkflowGenerateArgs,
+  DynamicWorkflowGeneratePorts,
+} from '../../application/ports/dynamicWorkflowGenerate'
+import type { DynamicWorkflowPersistence } from '../../application/ports/dynamicWorkflowPersistence'
+import type { NodeRunLifecyclePersistence } from '../../application/ports/nodeRunLifecyclePersistence'
+import {
+  DW_GATE_CAUSE,
+  DW_GENERATE_CAUSE,
+  DW_MAX_GENERATE_ATTEMPTS,
+  evaluateGeneratedWorkflow,
+} from '../../domain/dynamicWorkflowGeneration'
 import {
   buildDwPoolMembers,
   buildOrchestratorAgent,
@@ -52,38 +53,10 @@ import {
   DW_ORCHESTRATOR_NODE_ID,
   dwPoolTokenMap,
   ORCHESTRATOR_WORKFLOW_PORT,
-  validateDynamicWorkflowDef,
-} from '@/services/orchestratorAgent'
-import { validateWorkflowDef } from '@/services/workflow.validator'
-import { triggerPreflightIssue } from '@/services/execution/triggerPreflight'
-import type { Logger } from '@/util/log'
-
-/** Total generation attempts per pass (bad JSON / schema / validation all count).
- *  Rides the cross-engine DEFAULT_PROTOCOL_RETRY_BUDGET (here read as TOTAL
- *  attempts, not retries-after-first). */
-export const DW_MAX_GENERATE_ATTEMPTS = DEFAULT_PROTOCOL_RETRY_BUDGET
-/** Hard cap on human reject→regenerate rounds (design §8 — no infinite loop). */
-export const DW_MAX_REJECT_ROUNDS = 10
-/** node_runs.rerun_cause of orchestrator generation runs. */
-export const DW_GENERATE_CAUSE = 'dw-generate'
-/** node_runs.rerun_cause of the confirm-gate holder run (lifecycle invariant:
- *  task awaiting_review ⟹ ∃ awaiting_review node_run; wg-gate precedent). */
-export const DW_GATE_CAUSE = 'dw-gate'
-
-export interface DynamicWorkflowEngineArgs {
-  persistence: DynamicWorkflowPersistence
-  nodeRuns: NodeRunLifecyclePersistence
-  validationContext: DynamicWorkflowValidationContextSource
-  taskId: string
-  log: Logger
-  signal?: AbortSignal
-  hooks: WorkgroupTurnHostOperations
-}
-
-/** Resource Catalog owns the provider-specific inventory projection. */
-export interface DynamicWorkflowValidationContextSource {
-  load(): Promise<Parameters<typeof validateWorkflowDef>[1]>
-}
+} from '../../domain/dynamicWorkflowOrchestrator'
+import { nodeRunMintIdentityForSlot } from '../../application/nodeRunMintIdentity'
+import { nodeRunAttemptIndex } from '../../domain/nodeRunAttempt'
+import type { TaskScopeOutcome } from '../../domain/taskEngine'
 
 interface DwDbState {
   config: WorkgroupRuntimeConfig
@@ -110,96 +83,6 @@ async function loadDwDbState(
     return null
   }
   return { config, dw, triggerSource: parseTriggerContextJson(row.triggerContextJson) }
-}
-
-/**
- * Strip an optional markdown code fence around the orchestrator's JSON payload.
- * LLMs routinely wrap JSON in ```json fences even when told not to; the
- * envelope port text is otherwise verbatim. Pure.
- */
-export function extractJsonPayload(text: string): string {
-  const trimmed = text.trim()
-  const fence = /^```[a-zA-Z]*\s*\n([\s\S]*?)\n?```$/.exec(trimmed)
-  return fence?.[1] ?? trimmed
-}
-
-/**
- * RFC-243 §5.4(7): a workgroup is a closure LEAF — a generated definition may
- * never contain call nodes (either kind), or execution would bypass the launch-time
- * frozen reference closure and the cross-definition cycle gate. Today's token
- * schema cannot even express one (`dwGeneratedToWorkflowDef` stamps every node
- * `agent-single`), so this is a belt-and-braces admission guard that survives
- * any future loosening of the generated-node schema or of layer-2's kind
- * allowlist. Pure; exported for the RFC-243 regression lock.
- */
-export function dwCallNodeRejections(def: WorkflowDefinition): string[] {
-  return def.nodes
-    .filter((n) => n.kind === 'call-workflow' || n.kind === 'call-workgroup')
-    .map(
-      (n) =>
-        `${DW_VALIDATION_CODES.nodeKindForbidden}: node '${n.id}' is a call node — a generated workflow cannot call other workflows or workgroups; use only the member#N agents listed in the pool`,
-    )
-}
-
-/**
- * Parse + convert + two-layer-validate one orchestrator `workflow` port
- * payload. RFC-223 (PR-3b): the payload references pool members by opaque
- * `member#N` TOKENS; `dwGeneratedToWorkflowDef` is the single conversion point
- * that resolves each token to its frozen canonical `agentId` (via `tokenMap`).
- * An unknown token is surfaced as a `dw-agent-outside-pool` error referencing
- * the TOKEN (never a name/id). Returns the id-canonical validated definition or
- * the error lines to inject into the retry prompt. Pure except for the layer-1
- * context (caller supplies it).
- */
-export function evaluateGeneratedWorkflow(
-  rawPort: string | undefined,
-  tokenMap: DwTokenMap,
-  layer1Ctx: Parameters<typeof validateWorkflowDef>[1],
-): { ok: true; def: WorkflowDefinition } | { ok: false; errors: string[] } {
-  if (rawPort === undefined || rawPort.trim().length === 0) {
-    return { ok: false, errors: [`missing required port '${ORCHESTRATOR_WORKFLOW_PORT}'`] }
-  }
-  let parsed: unknown
-  try {
-    parsed = JSON.parse(extractJsonPayload(rawPort))
-  } catch (err) {
-    return { ok: false, errors: [`invalid JSON: ${(err as Error).message}`] }
-  }
-  const gen = DwGeneratedWorkflowSchema.safeParse(parsed)
-  if (!gen.success) {
-    return {
-      ok: false,
-      errors: gen.error.issues.map((i) => `schema: ${i.path.join('.')} — ${i.message}`),
-    }
-  }
-  const { def, unknownTokens } = dwGeneratedToWorkflowDef(gen.data, tokenMap)
-  // Unknown token = the LLM referenced a member outside the pool. Report the
-  // TOKEN (opaque) so the retry prompt speaks the same language the LLM does,
-  // and never leak a real name/id (R4-2). Short-circuit: an id-less node would
-  // otherwise also raise a confusing layer-1 agent-not-found.
-  if (unknownTokens.length > 0) {
-    return {
-      ok: false,
-      errors: unknownTokens.map(
-        (t) =>
-          `${DW_VALIDATION_CODES.agentOutsidePool}: unknown member '${t}' — reference only the member#N tokens listed in the pool`,
-      ),
-    }
-  }
-  // RFC-243 §5.4(7): reject call nodes ahead of the generic layers so the
-  // closure-leaf rule cannot be lost to a future kind-allowlist loosening.
-  const callNodeErrors = dwCallNodeRejections(def)
-  if (callNodeErrors.length > 0) {
-    return { ok: false, errors: callNodeErrors }
-  }
-  const poolAgentIds = [...new Set([...tokenMap.values()].map((b) => b.agentId))]
-  const layer1 = validateWorkflowDef(def, layer1Ctx)
-  const layer2 = validateDynamicWorkflowDef(def, poolAgentIds)
-  const errors = [...layer1.issues, ...layer2.issues]
-    .filter((i) => (i.severity ?? 'error') === 'error')
-    .map((i) => `${i.code}: ${i.message}`)
-  if (errors.length > 0) return { ok: false, errors }
-  return { ok: true, def }
 }
 
 /**
@@ -263,9 +146,11 @@ const AWAITING_CONFIRM_RESULT: TaskScopeOutcome = {
  * bare resume re-reads it and continues (attempts never reset mid-pass).
  */
 export async function runDynamicWorkflowGenerate(
-  args: DynamicWorkflowEngineArgs,
+  ports: DynamicWorkflowGeneratePorts,
+  args: DynamicWorkflowGenerateArgs,
 ): Promise<TaskScopeOutcome> {
-  const { persistence, nodeRuns, taskId, log, hooks } = args
+  const { persistence, nodeRuns, host } = ports
+  const { taskId, log } = args
 
   const state = await loadDwDbState(persistence, taskId)
   if (state === null) {
@@ -328,7 +213,7 @@ export async function runDynamicWorkflowGenerate(
   // returned token is converted back to a canonical agentId.
   const members = buildDwPoolMembers(pool)
   const tokenMap = dwPoolTokenMap(members)
-  const layer1Ctx = await args.validationContext.load()
+  const validateLayerOne = await ports.validation.load()
   const orchestrator = buildOrchestratorAgent()
 
   // Codex impl-gate P2 (re-review): a task that failed 'dw-generate-exhausted'
@@ -403,7 +288,7 @@ export async function runDynamicWorkflowGenerate(
           )}\n\nRe-emit a CORRECTED workflow-output envelope with the FULL workflow JSON and the exact required nonce.`
         : '')
 
-    const result = await hooks.runHost({
+    const result = await host.runHost({
       nodeRunId: runId,
       nodeId: DW_ORCHESTRATOR_NODE_ID,
       agent: orchestrator,
@@ -441,10 +326,14 @@ export async function runDynamicWorkflowGenerate(
         : null
     let evaluated = failure
       ? null
-      : evaluateGeneratedWorkflow(result.outputs[ORCHESTRATOR_WORKFLOW_PORT], tokenMap, layer1Ctx)
+      : evaluateGeneratedWorkflow(
+          result.outputs[ORCHESTRATOR_WORKFLOW_PORT],
+          tokenMap,
+          validateLayerOne,
+        )
 
     if (evaluated !== null && evaluated.ok) {
-      const triggerIssue = triggerPreflightIssue({
+      const triggerIssue = ports.rules.triggerPreflightIssue({
         root: evaluated.def,
         closureJson: null,
         source: state.triggerSource,

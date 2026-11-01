@@ -1147,7 +1147,7 @@ export const RERUN_CAUSES = [
    *  of ONE logical round are excluded from `countRoundsUsed` and don't inflate
    *  max_rounds (the RFC-186 retries 1→3 bump made a fumbled round cost up to 4). */
   'wg-protocol-retry',
-  /** RFC-167 dynamic-workflow orchestrator generation run (dynamicWorkflowRunner). */
+  /** RFC-167 dynamic-workflow orchestrator generation run (task-execution engine/task/dynamicWorkflowGenerate). */
   'dw-generate',
   /** RFC-167 dynamic-workflow confirm-gate holder run (design §3.1). */
   'dw-gate',

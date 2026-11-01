@@ -1,3 +1,15 @@
+## 2026-11-01 RFC-410 task-execution 动态工作流生成引擎迁入 engine/task（In Progress；`design/RFC-410-task-execution-dynamic-workflow-engine/`）
+
+- **来由**：RFC-294 S6（design §5.2「动态工作流引擎迁出 `services/`，归 task-execution」）；用户授权同 RFC-402，本会话调研、设计、实施与集中验证，不派 Codex。
+- **范围**：`services/dynamicWorkflowRunner.ts`（492 行）的生成 pass 迁入 `engine/task/dynamicWorkflowGenerate.ts`，经自有端口执行；
+  `services/orchestratorAgent.ts` 的编排代理 / 快照 / 提示词与生成判定迁入 `domain/`，第二层 v1 约束校验迁入 shared（resource-catalog 的
+  确认前复核共用）；第一层校验改由参与者交入「载入校验函数」端口（resource-catalog composition 构造）。两个 services 文件删除。纯结构重构。
+- **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。
+- **进度**：T1～T5 完成，随实现提交入库，待 exact SHA 的 CI（AC-6）。两个 services 文件删除，commons-debt R1 220 → 216。集中验证 511 + 8 + 4
+  个文件：本 RFC 引入的 1 个守卫失败（RFC-359 W5-T19f 单引擎用例）已修，其余负载超时在候选与基线上同样通过；P0 变异 lane 通过。
+  详见 plan「集中验证（T5）」。
+- **后继**：workgroup 轮次引擎迁入 task-execution。
+
 ## 2026-11-01 RFC-409 task-execution DAG scope 解释器迁入 engine/scope（In Progress；`design/RFC-409-task-execution-dag-scope-interpreter/`）
 
 - **来由**：RFC-294 S6（design §5.2 scope 解释器层）；用户授权同 RFC-402，本会话调研、设计、实施与集中验证，不派 Codex。

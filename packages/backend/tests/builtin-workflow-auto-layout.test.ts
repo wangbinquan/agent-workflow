@@ -23,7 +23,7 @@ import { composeFusionPersistenceFor } from '@/modules/knowledge-evolution/compo
 import { buildAgentHostSnapshot } from '@/services/agentLaunch'
 import { synthesizeCodeRoundSnapshot } from '@/services/codeRoundContract'
 import { seedFusionResources } from '@/modules/knowledge-evolution/application/fusionOrchestration'
-import { buildDynamicWorkflowGenerateSnapshot } from '@/services/orchestratorAgent'
+import { buildDynamicWorkflowGenerateSnapshot } from '@/modules/task-execution/domain/dynamicWorkflowOrchestrator'
 import { layoutBuiltinWorkflowSnapshotJson, projectWorkflowSnapshotForRead } from '@/services/task'
 // RFC-395 II-a: exercise the surviving production builders and constant leaf.
 import { buildWorkgroupHostSnapshot } from '@/modules/task-execution/infrastructure/workgroupRuntimeConfig'

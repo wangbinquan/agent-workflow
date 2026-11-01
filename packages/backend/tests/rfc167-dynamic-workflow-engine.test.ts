@@ -71,18 +71,21 @@ import {
   DW_MAX_GENERATE_ATTEMPTS,
   DW_MAX_REJECT_ROUNDS,
   extractJsonPayload,
-  runDynamicWorkflowGenerate as runDynamicWorkflowGenerateWithProvider,
-  type DynamicWorkflowEngineArgs,
-} from '../src/services/dynamicWorkflowRunner'
+} from '../src/modules/task-execution/domain/dynamicWorkflowGeneration'
+import { runDynamicWorkflowGenerate as runDynamicWorkflowGenerateWithPorts } from '../src/modules/task-execution/engine/task/dynamicWorkflowGenerate'
+import type { DynamicWorkflowGenerateArgs } from '../src/modules/task-execution/application/ports/dynamicWorkflowGenerate'
+import { composeDynamicWorkflowLayerOneValidation } from '../src/modules/resource-catalog/composition/workflowOperations'
+import { triggerPreflightIssue } from '../src/services/execution/triggerPreflight'
 import { composeDynamicWorkflowPersistence } from '../src/modules/task-execution/composition/dynamicWorkflowPersistence'
 import { DrizzleNodeRunLifecyclePersistence } from '../src/modules/task-execution/infrastructure/nodeRunLifecyclePersistence'
-import { buildWorkflowValidationContext } from '../src/services/workflow.validator'
 import {
   DW_ORCHESTRATOR_NODE_ID,
+  ORCHESTRATOR_WORKFLOW_PORT,
+} from '../src/modules/task-execution/domain/dynamicWorkflowOrchestrator'
+import {
   ORCHESTRATOR_AGENT_ID,
   ORCHESTRATOR_AGENT_NAME,
-  ORCHESTRATOR_WORKFLOW_PORT,
-} from '../src/services/orchestratorAgent'
+} from '../src/modules/task-execution/public/queries'
 import { createUser } from './helpers/userFixture'
 import { createWorkgroup } from '../src/services/workgroups'
 import {
@@ -107,18 +110,21 @@ const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
 const OPENCODE_CMD = ['bun', 'run', MOCK_OPENCODE]
 const log = createLogger('rfc167-dw-engine-test')
 
+// RFC-410: the engine runs on ports; this wrapper binds them over one test database.
 const runDynamicWorkflowGenerate = (
-  args: Omit<DynamicWorkflowEngineArgs, 'persistence' | 'nodeRuns' | 'validationContext'> & {
-    db: DbClient
-  },
+  args: DynamicWorkflowGenerateArgs & { db: DbClient; hooks: WorkgroupTurnHostOperations },
 ) => {
-  const { db, ...rest } = args
-  return runDynamicWorkflowGenerateWithProvider({
-    ...rest,
-    persistence: composeDynamicWorkflowPersistence(db),
-    nodeRuns: new DrizzleNodeRunLifecyclePersistence(db),
-    validationContext: { load: () => buildWorkflowValidationContext(db) },
-  })
+  const { db, hooks, ...rest } = args
+  return runDynamicWorkflowGenerateWithPorts(
+    {
+      persistence: composeDynamicWorkflowPersistence(db),
+      nodeRuns: new DrizzleNodeRunLifecyclePersistence(db),
+      validation: composeDynamicWorkflowLayerOneValidation(db),
+      rules: { triggerPreflightIssue },
+      host: hooks,
+    },
+    rest,
+  )
 }
 
 // ---------------------------------------------------------------------------
@@ -856,9 +862,11 @@ describe('RFC-167 — dynamic launch + runTask dispatch', () => {
     expect(orchestrator).toContain('return opts.dynamicWorkflow?.persistence')
     // The ownerless seam calls the selected engine body; the bodies are bound in composition.
     expect(orchestrator).toContain('result = await drive.bodies[engine]()')
-    expect(orchestrator).toMatch(/'dw-generate': \(\) =>\s*runDynamicWorkflowGenerate\(\{/)
+    expect(orchestrator).toMatch(
+      /'dw-generate': \(\) =>\s*runDynamicWorkflowGenerate\(dynamicWorkflowPorts\(\), \{/,
+    )
     expect(orchestrator).toContain("wgDispatch === 'dw-execute'")
-    expect(orchestrator).toContain('runDynamicWorkflowGenerate({')
+    expect(orchestrator).toContain('runDynamicWorkflowGenerate(dynamicWorkflowPorts(), {')
     expect(orchestrator).toContain("'dw-phase-invariant'")
     const enginesSrc = readFileSync(
       resolve(

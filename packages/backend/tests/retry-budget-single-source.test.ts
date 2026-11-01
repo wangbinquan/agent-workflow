@@ -66,8 +66,9 @@ describe('DEFAULT_PROTOCOL_RETRY_BUDGET 单源', () => {
     expect(driver).toContain('transientRetriesUsed < DEFAULT_PROTOCOL_RETRY_BUDGET')
   })
 
-  test('dynamicWorkflowRunner：生成尝试上限走共享常量', () => {
-    const s = SRC('services/dynamicWorkflowRunner.ts')
+  test('dynamicWorkflowGeneration：生成尝试上限走共享常量', () => {
+    // RFC-410: the generation budget moved with the rules into the task-execution domain.
+    const s = SRC('modules/task-execution/domain/dynamicWorkflowGeneration.ts')
     expect(s).toContain('const DW_MAX_GENERATE_ATTEMPTS = DEFAULT_PROTOCOL_RETRY_BUDGET')
     expect(s).not.toContain('DW_MAX_GENERATE_ATTEMPTS = 3')
   })

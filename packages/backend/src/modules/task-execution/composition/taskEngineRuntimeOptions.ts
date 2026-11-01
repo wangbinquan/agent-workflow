@@ -24,7 +24,7 @@ import type { TaskExecutionPersistence } from '@/modules/task-execution/applicat
 import type { RuntimeSessionLeaseOperations } from '@/modules/task-execution/application/ports/runtimeSessionLeaseOperations'
 import type { RuntimeExecutionQueries } from '@/modules/runtime-management/public/queries'
 import type { DynamicWorkflowPersistence } from '@/modules/task-execution/application/ports/dynamicWorkflowPersistence'
-import type { DynamicWorkflowValidationContextSource } from '@/services/dynamicWorkflowRunner'
+import type { DynamicWorkflowLayerOneValidation } from '../application/ports/dynamicWorkflowGenerate'
 import type { WorkgroupTurnsOperations } from '../application/ports/workgroupTurnsOperations'
 import type { ChildExecutionLaunchOperations } from '../application/ports/childExecutionLaunchOperations'
 import type { TaskOperationConfigurationQueries } from '../application/ports/taskOperationConfiguration'
@@ -76,7 +76,7 @@ export interface RunTaskOptions {
    * dynamic-workflow generation engine; that engine fails closed if absent. */
   dynamicWorkflow?: Readonly<{
     persistence: DynamicWorkflowPersistence
-    validationContext: DynamicWorkflowValidationContextSource
+    validation: DynamicWorkflowLayerOneValidation
   }>
   /** Provider runtime identity used only to share daemon-wide process pools. */
   executionPermits?: TaskExecutionPermitRegistry

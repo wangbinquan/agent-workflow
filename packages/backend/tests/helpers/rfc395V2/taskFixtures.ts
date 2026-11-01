@@ -1,5 +1,5 @@
 import { buildWorkgroupHostSnapshot } from '@/modules/task-execution/infrastructure/workgroupRuntimeConfig'
-import { buildDynamicWorkflowGenerateSnapshot } from '@/services/orchestratorAgent'
+import { buildDynamicWorkflowGenerateSnapshot } from '@/modules/task-execution/domain/dynamicWorkflowOrchestrator'
 import {
   decodeLogicalValue,
   type CanonicalLogicalRow,

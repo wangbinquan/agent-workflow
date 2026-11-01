@@ -14,14 +14,18 @@ import { describeEachProvider } from './helpers/eachProvider'
 
 describe('RFC-349 execution-peripheral provider boundary', () => {
   test('keeps database mechanisms out of peripheral orchestration services', () => {
-    const services = ['agentLaunch.ts', 'commitPushRunner.ts', 'dynamicWorkflowRunner.ts']
+    const services = ['agentLaunch.ts', 'commitPushRunner.ts']
 
     // RFC-353 T5：`fusion.ts` 已迁出 `services/`，成为
     // `modules/knowledge-evolution/application/fusionOrchestration.ts`。它不再是
     // 「外围编排服务」，但这条不变式（编排里不许有数据库机制）对它同样成立且更强
     // ——application 层本来就不该碰 DbClient / drizzle。所以**保留断言、只换落点**，
     // 而不是把它从清单里删掉：删掉等于在搬家的同时悄悄少了一条守卫。
-    const modules = ['../src/modules/knowledge-evolution/application/fusionOrchestration.ts']
+    // RFC-410：动态工作流生成引擎迁入 task-execution 的 engine/task，同理保留断言、只换落点。
+    const modules = [
+      '../src/modules/knowledge-evolution/application/fusionOrchestration.ts',
+      '../src/modules/task-execution/engine/task/dynamicWorkflowGenerate.ts',
+    ]
 
     for (const service of [...services.map((s) => `../src/services/${s}`), ...modules]) {
       const source = readFileSync(resolve(import.meta.dir, service), 'utf8')

@@ -1,5 +1,5 @@
 import type { SubjectTaskReferencePort } from './required-ports'
-import type { Workflow } from '@agent-workflow/shared'
+import type { Workflow, WorkflowDefinition, WorkflowValidationResult } from '@agent-workflow/shared'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { WORKFLOWS_CHANNEL, workflowsBroadcaster } from '@/ws/broadcaster'
 import { composeProviderResourceAclOperationApplication } from './resourceAcl'
@@ -17,6 +17,7 @@ import type {
 } from '../application/workflows/ports'
 import {
   loadWorkflowValidationContext,
+  validateWorkflowDef,
   type ValidatorContext,
 } from '../infrastructure/legacy/workflow.validator'
 import {
@@ -213,5 +214,21 @@ export function composeDynamicWorkflowValidationContext(db: PersistenceDb): Read
 }> {
   return Object.freeze({
     load: () => loadWorkflowValidationContext(db),
+  })
+}
+
+/**
+ * RFC-410 — the dynamic-workflow generation engine's layer-one validation (task-execution's
+ * `DynamicWorkflowLayerOneValidation` port): one inventory load per generation pass, then the generic
+ * validator over that inventory. The engine sees the validator only, never the inventory type.
+ */
+export function composeDynamicWorkflowLayerOneValidation(db: PersistenceDb): Readonly<{
+  load(): Promise<(definition: WorkflowDefinition) => WorkflowValidationResult>
+}> {
+  return Object.freeze({
+    async load() {
+      const context = await loadWorkflowValidationContext(db)
+      return (definition: WorkflowDefinition) => validateWorkflowDef(definition, context)
+    },
   })
 }

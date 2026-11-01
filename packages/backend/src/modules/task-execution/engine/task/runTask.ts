@@ -14,6 +14,7 @@ import {
   InvalidExecutionScopeError,
   type ExecutionScopeIndex,
 } from '../../domain/executionScope'
+import { DW_ORCHESTRATOR_NODE_ID } from '../../domain/dynamicWorkflowOrchestrator'
 import { exactOwnerMatches } from '../../domain/ownership'
 import { taskEngineOutcomeFromScope, type TaskScopeOutcome } from '../../domain/taskEngine'
 import { buildScopeUpstreams, findScopeCycle } from '../scope/dagGraph'
@@ -305,7 +306,7 @@ export async function runTask<Admission>(ports: TaskRunPorts<Admission>): Promis
     const { engine, wgDispatch } = resolveTaskEngineSelection(task, dynamicWorkflowPhase)
     if (
       wgDispatch === 'dw-execute' &&
-      definition.nodes.some((n) => n.id === ports.rules.dynamicWorkflowOrchestratorNodeId)
+      definition.nodes.some((n) => n.id === DW_ORCHESTRATOR_NODE_ID)
     ) {
       // Fail-fast invariant (design §3): phase='executing' promises the
       // snapshot is the confirmed generated DAG. Running the generation host

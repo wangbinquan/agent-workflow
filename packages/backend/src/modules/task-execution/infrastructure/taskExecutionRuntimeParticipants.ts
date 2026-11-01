@@ -22,7 +22,7 @@ import type { MemoryInjectionQueries } from '@/modules/memory/public/queries'
 import type { WorkspacePresenceQueries } from '@/modules/source-control/public/queries'
 import type { RepositoryPublicationTransport } from '@/modules/source-control/public/types'
 import type { CodeHostConnectionsService } from '@/services/codeHost/connections'
-import type { DynamicWorkflowValidationContextSource } from '@/services/dynamicWorkflowRunner'
+import type { DynamicWorkflowLayerOneValidation } from '../application/ports/dynamicWorkflowGenerate'
 import type { TaskExecutionResourceBinding } from '@/services/execution/taskExecutionResources'
 import type { RuntimeExecutionQueries } from '@/modules/runtime-management/public/queries'
 import type { DynamicWorkflowPersistence } from '../application/ports/dynamicWorkflowPersistence'
@@ -99,7 +99,7 @@ export interface TaskExecutionRuntimeParticipantsInput {
   readonly childLaunchWorkgroup: ChildWorkgroupLaunchResources
   readonly dynamicWorkflow: Readonly<{
     readonly persistence: DynamicWorkflowPersistence
-    readonly validationContext: DynamicWorkflowValidationContextSource
+    readonly validation: DynamicWorkflowLayerOneValidation
   }>
   readonly identityAccess: Readonly<{
     readonly delegatedRequests: DelegatedRequestAuthorityFactory

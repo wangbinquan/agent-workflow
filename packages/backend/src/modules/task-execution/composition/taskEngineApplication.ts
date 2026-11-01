@@ -14,10 +14,10 @@ import { driveDagScope } from './taskDagScope'
 import { buildNodeExecutionWorkgroupHooks } from './nodeExecution'
 import type { TaskExecutionRuntimeComponents } from './taskExecutionComponents'
 import type { TaskMechanicsState } from '@/services/execution/taskMechanicsState'
-import { runDynamicWorkflowGenerate } from '@/services/dynamicWorkflowRunner'
+import { runDynamicWorkflowGenerate } from '../engine/task/dynamicWorkflowGenerate'
+import type { DynamicWorkflowGeneratePorts } from '../application/ports/dynamicWorkflowGenerate'
 import { triggerPreflightIssue } from '@/services/execution/triggerPreflight'
 import { runWithTaskExecutionContext } from '../application/taskExecutionContext'
-import { DW_ORCHESTRATOR_NODE_ID } from '@/services/orchestratorAgent'
 import { createLogger, type Logger } from '@/util/log'
 import type { SchedulerRuntimeTopology } from '../public/participants'
 import {
@@ -90,7 +90,6 @@ export function createTaskRunPorts(
     },
     rules: {
       triggerPreflightIssue,
-      dynamicWorkflowOrchestratorNodeId: DW_ORCHESTRATOR_NODE_ID,
     },
     get dynamicWorkflow() {
       return opts.dynamicWorkflow?.persistence
@@ -195,7 +194,8 @@ function prepareTaskDrive(
     // RFC-193 D9: top-level scope canonical = the task worktree container.
     scopeRoot: task.worktreePath,
   }
-  const dynamicWorkflowArgs = () => {
+  // RFC-410: the dynamic-workflow generation engine's ports (engine/task/dynamicWorkflowGenerate.ts).
+  const dynamicWorkflowPorts = (): DynamicWorkflowGeneratePorts => {
     const dynamicWorkflow = opts.dynamicWorkflow
     if (dynamicWorkflow === undefined) {
       throw new Error('dynamic-workflow-operations-not-composed')
@@ -203,7 +203,9 @@ function prepareTaskDrive(
     return {
       persistence: dynamicWorkflow.persistence,
       nodeRuns: opts.persistence.nodeRuns,
-      validationContext: dynamicWorkflow.validationContext,
+      validation: dynamicWorkflow.validation,
+      rules: { triggerPreflightIssue },
+      host: buildNodeExecutionWorkgroupHooks(state, runtimeComponents.wrapperRuntimeFactory),
     }
   }
   return {
@@ -230,12 +232,10 @@ function prepareTaskDrive(
           host: buildNodeExecutionWorkgroupHooks(state, runtimeComponents.wrapperRuntimeFactory),
         }),
       'dw-generate': () =>
-        runDynamicWorkflowGenerate({
-          ...dynamicWorkflowArgs(),
+        runDynamicWorkflowGenerate(dynamicWorkflowPorts(), {
           taskId,
           log,
           ...(opts.signal ? { signal: opts.signal } : {}),
-          hooks: buildNodeExecutionWorkgroupHooks(state, runtimeComponents.wrapperRuntimeFactory),
         }),
     }),
     runtimeConfig: () => {

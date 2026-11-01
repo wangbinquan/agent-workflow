@@ -64,7 +64,7 @@ import { composeDatabaseAgentResourceIntegrity } from '../../src/modules/resourc
 import { createLogger } from '../../src/util/log'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { composeDynamicWorkflowPersistence } from '../../src/modules/task-execution/composition/dynamicWorkflowPersistence'
-import { buildWorkflowValidationContext } from '../../src/services/workflow.validator'
+import { composeDynamicWorkflowLayerOneValidation } from '../../src/modules/resource-catalog/composition/workflowOperations'
 import type { CodeHostConnectionsService } from '../../src/services/codeHost/connections'
 
 type TaskDriveRequest = Parameters<SchedulerDriverPort['drive']>[0]
@@ -204,7 +204,7 @@ export function composeTaskExecutionTestRuntime(
       nodeRunRuntime: composeNodeRunRuntimePersistence(db),
       dynamicWorkflow: {
         persistence: composeDynamicWorkflowPersistence(db),
-        validationContext: { load: () => buildWorkflowValidationContext(db) },
+        validation: composeDynamicWorkflowLayerOneValidation(db),
       },
       ...(options.codeHostConnections === undefined
         ? {}
@@ -348,7 +348,7 @@ export function runTaskWithRealTestTopology(
     options.dynamicWorkflow ??
     Object.freeze({
       persistence: composeDynamicWorkflowPersistence(options.db),
-      validationContext: { load: () => buildWorkflowValidationContext(options.db) },
+      validation: composeDynamicWorkflowLayerOneValidation(options.db),
     })
   const runtime = composeTaskExecutionRuntime({
     readModels: persistence.reads,

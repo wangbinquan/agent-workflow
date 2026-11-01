@@ -107,8 +107,9 @@ import { sqliteMemoryInjectionQueries } from './helpers/memoryInjection'
 import {
   createEachProviderTaskExecution,
   createTestDynamicWorkflowOperations,
+  loadTestDynamicWorkflowInventory,
 } from './helpers/eachProviderTaskExecution'
-import { DW_ORCHESTRATOR_NODE_ID } from '@/services/orchestratorAgent'
+import { DW_ORCHESTRATOR_NODE_ID } from '@/modules/task-execution/domain/dynamicWorkflowOrchestrator'
 
 const INFRASTRUCTURE = resolve(
   import.meta.dir,
@@ -314,7 +315,8 @@ describeEachProvider('RFC-359 W8 —— runtime 参与者双引擎对拍', (harn
       optionsJson: JSON.stringify({ label: 'selected database' }),
     })
 
-    const inventory = await operations.validationContext.load()
+    // RFC-410: the participants hand the engine a loaded validator; the inventory behind it is read here.
+    const inventory = await loadTestDynamicWorkflowInventory(db)
     expect(inventory.agents.find((row) => row.id === agentId)).toMatchObject({
       id: agentId,
       bodyMd: 'Read the selected catalog.',
@@ -329,9 +331,21 @@ describeEachProvider('RFC-359 W8 —— runtime 参与者双引擎对拍', (harn
       options: { label: 'selected database' },
     })
     expect((await operations.persistence.loadAgent(agentId))?.id).toBe(agentId)
+    // The validator the engine receives judges against the same live inventory.
+    const definition = (id: string) => ({
+      $schema_version: WORKFLOW_SCHEMA_VERSION,
+      inputs: [],
+      nodes: [{ id: 'n1', kind: 'agent-single' as const, agentId: id, agentName: `dynamic-${id}` }],
+      edges: [],
+    })
+    const validate = await operations.validation.load()
+    const codes = (id: string) =>
+      validate(definition(id) as never).issues.map((issue) => issue.code)
+    expect(codes(agentId)).not.toContain('agent-not-found')
+    expect(codes(ulid())).toContain('agent-not-found')
     await patchAgentFixture(db, { id: agentId }, { bodyMd: 'A later catalog revision.' })
     expect(
-      (await operations.validationContext.load()).agents.find((row) => row.id === agentId),
+      (await loadTestDynamicWorkflowInventory(db)).agents.find((row) => row.id === agentId),
     ).toMatchObject({ bodyMd: 'A later catalog revision.' })
   })
 

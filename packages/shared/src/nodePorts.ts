@@ -533,8 +533,8 @@ export function promptInjectedPortNames(): ReadonlySet<string> {
 }
 
 /**
- * Dataflow-dependency skip for dispatch-gating graph walks (taskDagGraph /
- * inboundEdges / dispatchFrontier). Returns true when the edge must be
+ * Dataflow-dependency skip for dispatch-gating graph walks (engine/scope/dagGraph /
+ * inboundEdges / engine/scope/frontierRules). Returns true when the edge must be
  * SKIPPED (it is not a dataflow dependency): a channel port declared
  * `dataflow: 'never'` on its own side. The port table alone decides — the
  * target node's kind no longer matters (RFC-354 D7).

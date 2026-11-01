@@ -136,7 +136,11 @@ describe('RFC-292 trigger namespace source locks', () => {
     ]
       .map((file) => readFileSync(file, 'utf8'))
       .join('\n')
-    const orchestrator = readFileSync(resolve(BACKEND_SRC, 'services/orchestratorAgent.ts'), 'utf8')
+    // RFC-410: the orchestrator agent and prompt moved into the task-execution domain.
+    const orchestrator = readFileSync(
+      resolve(BACKEND_SRC, 'modules/task-execution/domain/dynamicWorkflowOrchestrator.ts'),
+      'utf8',
+    )
     expect(intent).toContain('WEBHOOK_TEMPLATE_VARS.map(webhookTriggerToken)')
     expect(intent).toContain('$schema_version:${WORKFLOW_SCHEMA_VERSION}')
     expect(intent).toContain('Trigger values are execution context, NOT workflow inputs')

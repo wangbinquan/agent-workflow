@@ -45,6 +45,7 @@ import {
   dwGeneratedToWorkflowDef,
   dwMemberToken,
   initialDwState,
+  validateDynamicWorkflowDef,
   WorkflowDefinitionSchema,
   type DwState,
   type WorkgroupRuntimeConfig,
@@ -52,14 +53,13 @@ import {
 import { createSession } from './helpers/auth/sessionStore'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { createAgent } from '../src/modules/resource-catalog/infrastructure/legacy/agent'
-import {
-  DW_GATE_CAUSE,
-  runDynamicWorkflowGenerate as runDynamicWorkflowGenerateWithProvider,
-  type DynamicWorkflowEngineArgs,
-} from '../src/services/dynamicWorkflowRunner'
+import { DW_GATE_CAUSE } from '../src/modules/task-execution/domain/dynamicWorkflowGeneration'
+import { runDynamicWorkflowGenerate as runDynamicWorkflowGenerateWithPorts } from '../src/modules/task-execution/engine/task/dynamicWorkflowGenerate'
+import type { DynamicWorkflowGenerateArgs } from '../src/modules/task-execution/application/ports/dynamicWorkflowGenerate'
+import { composeDynamicWorkflowLayerOneValidation } from '../src/modules/resource-catalog/composition/workflowOperations'
+import { triggerPreflightIssue } from '../src/services/execution/triggerPreflight'
 import { composeDynamicWorkflowPersistence } from '../src/modules/task-execution/composition/dynamicWorkflowPersistence'
 import { DrizzleNodeRunLifecyclePersistence } from '../src/modules/task-execution/infrastructure/nodeRunLifecyclePersistence'
-import { buildWorkflowValidationContext } from '../src/services/workflow.validator'
 import { setNodeRunStatus } from '../src/services/lifecycle'
 import {
   buildDwPoolMembers,
@@ -67,8 +67,7 @@ import {
   DW_ORCHESTRATOR_NODE_ID,
   dwPoolTokenMap,
   ORCHESTRATOR_WORKFLOW_PORT,
-  validateDynamicWorkflowDef,
-} from '../src/services/orchestratorAgent'
+} from '../src/modules/task-execution/domain/dynamicWorkflowOrchestrator'
 import { abortAllActiveTasks, resumeDynamicWorkflowExecution } from '../src/services/task'
 import { loadWorkgroupTaskState } from '../src/services/workgroup/state'
 import { createUser } from './helpers/userFixture'
@@ -88,18 +87,21 @@ const openTestApplication = registerProviderHttpApplicationLifetime()
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
 const log = createLogger('rfc223-pr3b-test')
 
+// RFC-410: the engine runs on ports; this wrapper binds them over one test database.
 const runDynamicWorkflowGenerate = (
-  args: Omit<DynamicWorkflowEngineArgs, 'persistence' | 'nodeRuns' | 'validationContext'> & {
-    db: DbClient
-  },
+  args: DynamicWorkflowGenerateArgs & { db: DbClient; hooks: WorkgroupTurnHostOperations },
 ) => {
-  const { db, ...rest } = args
-  return runDynamicWorkflowGenerateWithProvider({
-    ...rest,
-    persistence: composeDynamicWorkflowPersistence(db),
-    nodeRuns: new DrizzleNodeRunLifecyclePersistence(db),
-    validationContext: { load: () => buildWorkflowValidationContext(db) },
-  })
+  const { db, hooks, ...rest } = args
+  return runDynamicWorkflowGenerateWithPorts(
+    {
+      persistence: composeDynamicWorkflowPersistence(db),
+      nodeRuns: new DrizzleNodeRunLifecyclePersistence(db),
+      validation: composeDynamicWorkflowLayerOneValidation(db),
+      rules: { triggerPreflightIssue },
+      host: hooks,
+    },
+    rest,
+  )
 }
 
 // Distinctive names that ALSO appear inside each agent's own free-text

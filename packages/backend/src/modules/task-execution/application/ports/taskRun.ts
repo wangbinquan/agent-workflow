@@ -92,7 +92,6 @@ export interface TaskRunPorts<Admission> {
       closureJson: string | null
       source: TriggerDependencySource
     }): TriggerDependencyIssue | null
-    readonly dynamicWorkflowOrchestratorNodeId: string
   }
   /** Absent when dynamic-workflow operations are not composed. */
   readonly dynamicWorkflow: Pick<DynamicWorkflowPersistence, 'loadTask'> | undefined

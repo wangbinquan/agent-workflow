@@ -14,9 +14,11 @@
 import { describe, expect, test } from 'bun:test'
 import type { Agent, DwTokenMap, WorkflowDefinition } from '@agent-workflow/shared'
 import {
+  DW_PHASES,
   DW_VALIDATION_CODES,
   WORKFLOW_SCHEMA_VERSION,
   dwGeneratedToWorkflowDef,
+  validateDynamicWorkflowDef,
 } from '@agent-workflow/shared'
 import {
   buildDwPoolMembers,
@@ -24,13 +26,13 @@ import {
   buildOrchestratorAgent,
   buildOrchestratorPrompt,
   DW_ORCHESTRATOR_NODE_ID,
-  DW_PHASES,
   dwPoolTokenMap,
+  ORCHESTRATOR_WORKFLOW_PORT,
+} from '../src/modules/task-execution/domain/dynamicWorkflowOrchestrator'
+import {
   ORCHESTRATOR_AGENT_ID,
   ORCHESTRATOR_AGENT_NAME,
-  ORCHESTRATOR_WORKFLOW_PORT,
-  validateDynamicWorkflowDef,
-} from '../src/services/orchestratorAgent'
+} from '../src/modules/task-execution/public/queries'
 
 function mkAgent(
   name: string,

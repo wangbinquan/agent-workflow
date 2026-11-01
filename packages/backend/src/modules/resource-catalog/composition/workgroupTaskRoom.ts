@@ -1,6 +1,9 @@
-import { parseTriggerContextJson, type WorkflowDefinition } from '@agent-workflow/shared'
+import {
+  parseTriggerContextJson,
+  validateDynamicWorkflowDef,
+  type WorkflowDefinition,
+} from '@agent-workflow/shared'
 import { assertTriggerPreflight } from '@/services/execution/triggerPreflight'
-import { validateDynamicWorkflowDef } from '@/services/orchestratorAgent'
 import { ConflictError } from '@/util/errors'
 import { createWorkgroupTaskRoomApplication } from '../application/workgroups/workgroupTaskRoom'
 import {

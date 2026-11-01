@@ -345,7 +345,10 @@ test('each reader uses its launch or runtime side', () => {
     ['modules/task-execution/infrastructure/taskDetailQueries.ts', '.launch.workgroupName'],
     ['modules/task-execution/infrastructure/taskDetailQueries.ts', '.launch.goal'],
     ['services/execution/outcome.ts', 'workgroupLaunchMode(task.workgroupConfig?.launch)'],
-    ['services/dynamicWorkflowRunner.ts', 'row.workgroupConfig?.runtime.config'],
+    [
+      'modules/task-execution/engine/task/dynamicWorkflowGenerate.ts',
+      'row.workgroupConfig?.runtime.config',
+    ],
     [
       'modules/task-execution/engine/task/taskEngineRegistry.ts',
       'workgroupLaunchMode(task.workgroupConfig?.launch)',
