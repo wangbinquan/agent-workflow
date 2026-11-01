@@ -89,6 +89,49 @@ function boundaryViolations(units: readonly SourceUnit[]): string[] {
   return violations.sort()
 }
 
+// One AST walk per unit, cached by unit identity. The negative fixtures re-run ownershipViolations
+// dozens of times over the same live corpus (only replaced or added units are new objects); walking
+// every task-execution file once per helper per run took 6.1 s on the Windows runner (windows-platform
+// 41279488331), over bun's 5 s default. Counts keep the original semantics: a second declaration of a
+// helper in the same file, and every re-export statement naming it, are each reported.
+interface HelperScan {
+  readonly declared: ReadonlyMap<string, number>
+  readonly reexported: ReadonlyMap<string, number>
+}
+const helperScans = new WeakMap<SourceUnit, HelperScan>()
+
+function scanHelpers(unit: SourceUnit): HelperScan {
+  const cached = helperScans.get(unit)
+  if (cached !== undefined) return cached
+  const declared = new Map<string, number>()
+  const reexported = new Map<string, number>()
+  const bump = (counts: Map<string, number>, name: string) =>
+    counts.set(name, (counts.get(name) ?? 0) + 1)
+  const visit = (node: ts.Node) => {
+    if (
+      (ts.isFunctionDeclaration(node) ||
+        ts.isInterfaceDeclaration(node) ||
+        ts.isTypeAliasDeclaration(node) ||
+        ts.isVariableDeclaration(node)) &&
+      node.name !== undefined &&
+      ts.isIdentifier(node.name) &&
+      HELPERS.has(node.name.text)
+    )
+      bump(declared, node.name.text)
+    if (ts.isExportDeclaration(node) && node.exportClause && ts.isNamedExports(node.exportClause)) {
+      const elements = node.exportClause.elements
+      for (const name of HELPERS.keys())
+        if (elements.some((entry) => entry.name.text === name || entry.propertyName?.text === name))
+          bump(reexported, name)
+    }
+    ts.forEachChild(node, visit)
+  }
+  visit(unit.source)
+  const scan = { declared, reexported }
+  helperScans.set(unit, scan)
+  return scan
+}
+
 function ownershipViolations(units: readonly SourceUnit[]): string[] {
   const violations: string[] = []
   const byPath = new Map(units.map((unit) => [unit.path, unit]))
@@ -115,34 +158,18 @@ function ownershipViolations(units: readonly SourceUnit[]): string[] {
     if (!composition.includes(`new${stem}NodeExecutor(create${binding}NodeExecutionPorts(state))`))
       violations.push('explicit-binding:' + key)
   }
+  const found = new Map<string, string[]>([...HELPERS.keys()].map((name) => [name, []]))
+  for (const unit of units) {
+    if (!unit.path.startsWith(TE)) continue
+    const scan = scanHelpers(unit)
+    for (const [name, count] of scan.declared)
+      for (let index = 0; index < count; index += 1) found.get(name)!.push(unit.path)
+    for (const [name, count] of scan.reexported)
+      for (let index = 0; index < count; index += 1) violations.push('helper-reexport:' + name)
+  }
   for (const [name, owner] of HELPERS) {
-    const found: string[] = []
-    for (const unit of units.filter((candidate) => candidate.path.startsWith(TE))) {
-      const visit = (node: ts.Node) => {
-        if (
-          (ts.isFunctionDeclaration(node) ||
-            ts.isInterfaceDeclaration(node) ||
-            ts.isTypeAliasDeclaration(node) ||
-            ts.isVariableDeclaration(node)) &&
-          node.name !== undefined &&
-          ts.isIdentifier(node.name) &&
-          node.name.text === name
-        )
-          found.push(unit.path)
-        if (
-          ts.isExportDeclaration(node) &&
-          node.exportClause &&
-          ts.isNamedExports(node.exportClause) &&
-          node.exportClause.elements.some(
-            (entry) => entry.name.text === name || entry.propertyName?.text === name,
-          )
-        )
-          violations.push('helper-reexport:' + name)
-        ts.forEachChild(node, visit)
-      }
-      visit(unit.source)
-    }
-    if (found.length !== 1 || found[0] !== owner) violations.push('helper-owner:' + name)
+    const owners = found.get(name)!
+    if (owners.length !== 1 || owners[0] !== owner) violations.push('helper-owner:' + name)
   }
   return violations.sort()
 }
