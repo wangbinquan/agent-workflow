@@ -63,8 +63,8 @@
 - **CI**：`2874dd182` 的 windows-platform 与主 CI 都红在本 RFC 新结构锁的两个负例上（Windows 6.1 s、ubuntu shard 27 6.3 s / 7.7 s，超过
   bun 默认 5 s，本机 3 s 内没有暴露）；`d18850d35` 改为每个文件一次 AST 遍历并缓存，降到 25 ms / 16 ms。主 CI 另有 shard 6/36 撞 15 分钟
   上限被取消（分片随 run 号重新分配，几个 RFC-395 的重 PostgreSQL 文件凑进同一分片，与本 RFC 无关）。`d18850d35`（直接子提交、只改该测试）
-  的主 CI `41280013616`（62 个 job，含三平台 e2e）与 windows-platform `41280013705` 全部 success，作为 AC-6 的后继证据。两条教训待并发
-  RFC-398 的 `docs/dev-gotchas.md` 段落落库后补入。
+  的主 CI `41280013616`（62 个 job，含三平台 e2e）与 windows-platform `41280013705` 全部 success，作为 AC-6 的后继证据。两条教训已于
+  2026-11-01 补入 `docs/dev-gotchas.md`。
 - **后继**：RFC-404（call-workflow / call-workgroup）。
 
 ## 2026-10-31 RFC-402 task-execution 执行机制库与 script 节点试点（Done 2026-10-31；`design/RFC-402-task-execution-kernel-script-pilot/`）
@@ -87,7 +87,7 @@
   - RFC-328 effect 账本把 kernel 经 binding 的观察者调用计为原站点，转发层只接受原样转发（负例同步补齐）；
   - RFC-317 新用例按数字行号排序（`casSites` 按 `file:line` 字符串排序）；
   - `windows-platform.yml` 两份 `paths:` 改指 kernel；`guard-manifest.json` 的 `lines` 参考值与 `commons-manifest.json` 原格式。
-  教训记在 plan「集中验证」与 RFC-403 proposal §6 第 7 条；`docs/dev-gotchas.md` 现有并发 RFC-398 未提交的段落，待其落库后补入。
+  教训记在 plan「集中验证」与 RFC-403 proposal §6 第 7 条，2026-11-01 补入 `docs/dev-gotchas.md`（测试 / CI 节「退役一份实现时」之后）。
 - **CI**：`da5ad65b8` 的 integration-opencode、git-protocols-e2e、windows-platform、maintenance-soak-nightly 全部 success。主 CI `41246022629`
   第 1 次尝试只有 macOS e2e 一条失败：`business-workflow-scenarios.spec.ts:451` 在 60 s 任务状态等待处超时，任务仍在运行。归因 runner
   变慢（同一 job 用例中位耗时约 1.55 倍，纯 UI 用例最多 3.3 倍）；同一提交第 2 次尝试该用例 23.3 s 通过、整体 success。不以重跑为据：
