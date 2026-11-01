@@ -42,6 +42,8 @@ export interface BinarySource {
 export interface ReleaseCapabilities {
   auth: 'token' | 'session' | 'bootstrap'
   profile: boolean
+  /** The profile PATCH accepts `gitName` (v0.18.16+); earlier strict schemas reject unknown keys. */
+  profileGitName: boolean
   mcps: boolean
   schedules: boolean
   scheduleEnvelope: boolean

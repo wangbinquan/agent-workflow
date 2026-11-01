@@ -151,7 +151,7 @@ function retainCleanSqliteSidecars(home: string): void {
  * different error still fails the scenario. The pre-migration SQLite round keeps every task state,
  * so pending review/question rows still cross the migration.
  */
-const OLD_POSTGRESQL_TASK_DEFECTS: Readonly<
+export const OLD_POSTGRESQL_TASK_DEFECTS: Readonly<
   Record<string, { readonly signature: string; readonly reason: string }>
 > = {
   'v0.18.18': {
@@ -162,10 +162,28 @@ const OLD_POSTGRESQL_TASK_DEFECTS: Readonly<
     signature: 'foreign-legacy-actor-projection',
     reason: 'v0.18.19 on PostgreSQL cannot launch tasks after its one-click migration',
   },
+  // v0.19.0 / v0.19.1: the same refusal as v0.19.2, observed in release-upgrade nightly 41287876705.
+  'v0.19.0': {
+    signature: 'ownerless task mutation refused durable owner',
+    reason:
+      'v0.19.0 on PostgreSQL refuses its own human-gate task writes after one-click migration',
+  },
+  'v0.19.1': {
+    signature: 'ownerless task mutation refused durable owner',
+    reason:
+      'v0.19.1 on PostgreSQL refuses its own human-gate task writes after one-click migration',
+  },
   'v0.19.2': {
     signature: 'ownerless task mutation refused durable owner',
     reason:
       'v0.19.2 on PostgreSQL refuses its own human-gate task writes after one-click migration',
+  },
+  // v0.19.3 keeps v0.19.2's code path (the signature is in its source); its PG round was hidden by
+  // the retained-asset download failure in that nightly.
+  'v0.19.3': {
+    signature: 'ownerless task mutation refused durable owner',
+    reason:
+      'v0.19.3 on PostgreSQL refuses its own human-gate task writes after one-click migration',
   },
 }
 

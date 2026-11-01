@@ -88,6 +88,7 @@
         "capabilities": {
           "auth": "token",
           "profile": false,
+          "profileGitName": false,
           "mcps": false,
           "schedules": false,
           "scheduleEnvelope": false,
@@ -253,6 +254,7 @@
         "capabilities": {
           "auth": "token",
           "profile": false,
+          "profileGitName": false,
           "mcps": true,
           "schedules": false,
           "scheduleEnvelope": false,
@@ -433,6 +435,7 @@
         "capabilities": {
           "auth": "session",
           "profile": false,
+          "profileGitName": false,
           "mcps": true,
           "schedules": false,
           "scheduleEnvelope": false,
@@ -643,6 +646,7 @@
         "capabilities": {
           "auth": "session",
           "profile": false,
+          "profileGitName": false,
           "mcps": true,
           "schedules": false,
           "scheduleEnvelope": false,
@@ -858,6 +862,7 @@
         "capabilities": {
           "auth": "session",
           "profile": false,
+          "profileGitName": false,
           "mcps": true,
           "schedules": false,
           "scheduleEnvelope": false,
@@ -1073,6 +1078,7 @@
         "capabilities": {
           "auth": "session",
           "profile": false,
+          "profileGitName": false,
           "mcps": true,
           "schedules": false,
           "scheduleEnvelope": false,
@@ -1288,6 +1294,7 @@
         "capabilities": {
           "auth": "session",
           "profile": false,
+          "profileGitName": false,
           "mcps": true,
           "schedules": false,
           "scheduleEnvelope": false,
@@ -1508,6 +1515,7 @@
         "capabilities": {
           "auth": "session",
           "profile": false,
+          "profileGitName": false,
           "mcps": true,
           "schedules": false,
           "scheduleEnvelope": false,
@@ -1733,6 +1741,7 @@
         "capabilities": {
           "auth": "session",
           "profile": false,
+          "profileGitName": false,
           "mcps": true,
           "schedules": false,
           "scheduleEnvelope": false,
@@ -1973,6 +1982,7 @@
         "capabilities": {
           "auth": "session",
           "profile": false,
+          "profileGitName": false,
           "mcps": true,
           "schedules": false,
           "scheduleEnvelope": false,
@@ -2228,6 +2238,7 @@
         "capabilities": {
           "auth": "session",
           "profile": false,
+          "profileGitName": false,
           "mcps": true,
           "schedules": false,
           "scheduleEnvelope": false,
@@ -2488,6 +2499,7 @@
         "capabilities": {
           "auth": "session",
           "profile": false,
+          "profileGitName": false,
           "mcps": true,
           "schedules": false,
           "scheduleEnvelope": false,
@@ -2758,6 +2770,7 @@
         "capabilities": {
           "auth": "session",
           "profile": false,
+          "profileGitName": false,
           "mcps": true,
           "schedules": false,
           "scheduleEnvelope": false,
@@ -3028,6 +3041,7 @@
         "capabilities": {
           "auth": "session",
           "profile": false,
+          "profileGitName": false,
           "mcps": true,
           "schedules": false,
           "scheduleEnvelope": false,
@@ -3313,6 +3327,7 @@
         "capabilities": {
           "auth": "session",
           "profile": false,
+          "profileGitName": false,
           "mcps": true,
           "schedules": false,
           "scheduleEnvelope": false,
@@ -3603,6 +3618,7 @@
         "capabilities": {
           "auth": "session",
           "profile": false,
+          "profileGitName": false,
           "mcps": true,
           "schedules": false,
           "scheduleEnvelope": false,
@@ -3893,6 +3909,7 @@
         "capabilities": {
           "auth": "session",
           "profile": false,
+          "profileGitName": false,
           "mcps": true,
           "schedules": false,
           "scheduleEnvelope": false,
@@ -4203,6 +4220,7 @@
         "capabilities": {
           "auth": "session",
           "profile": false,
+          "profileGitName": false,
           "mcps": true,
           "schedules": false,
           "scheduleEnvelope": false,
@@ -4513,6 +4531,7 @@
         "capabilities": {
           "auth": "session",
           "profile": false,
+          "profileGitName": false,
           "mcps": true,
           "schedules": false,
           "scheduleEnvelope": false,
@@ -4823,6 +4842,7 @@
         "capabilities": {
           "auth": "session",
           "profile": false,
+          "profileGitName": false,
           "mcps": true,
           "schedules": false,
           "scheduleEnvelope": false,
@@ -5133,6 +5153,7 @@
         "capabilities": {
           "auth": "session",
           "profile": false,
+          "profileGitName": false,
           "mcps": true,
           "schedules": false,
           "scheduleEnvelope": false,
@@ -5453,6 +5474,7 @@
         "capabilities": {
           "auth": "session",
           "profile": false,
+          "profileGitName": false,
           "mcps": true,
           "schedules": false,
           "scheduleEnvelope": false,
@@ -5773,6 +5795,7 @@
         "capabilities": {
           "auth": "session",
           "profile": false,
+          "profileGitName": false,
           "mcps": true,
           "schedules": false,
           "scheduleEnvelope": false,
@@ -6093,6 +6116,7 @@
         "capabilities": {
           "auth": "session",
           "profile": false,
+          "profileGitName": false,
           "mcps": true,
           "schedules": false,
           "scheduleEnvelope": false,
@@ -6418,6 +6442,7 @@
         "capabilities": {
           "auth": "session",
           "profile": false,
+          "profileGitName": false,
           "mcps": true,
           "schedules": false,
           "scheduleEnvelope": false,
@@ -6743,6 +6768,7 @@
         "capabilities": {
           "auth": "session",
           "profile": false,
+          "profileGitName": false,
           "mcps": true,
           "schedules": false,
           "scheduleEnvelope": false,
@@ -7068,6 +7094,7 @@
         "capabilities": {
           "auth": "session",
           "profile": false,
+          "profileGitName": false,
           "mcps": true,
           "schedules": false,
           "scheduleEnvelope": false,
@@ -7393,6 +7420,7 @@
         "capabilities": {
           "auth": "session",
           "profile": false,
+          "profileGitName": false,
           "mcps": true,
           "schedules": false,
           "scheduleEnvelope": false,
@@ -7838,6 +7866,7 @@
         "capabilities": {
           "auth": "session",
           "profile": false,
+          "profileGitName": false,
           "mcps": true,
           "schedules": false,
           "scheduleEnvelope": false,
@@ -8283,6 +8312,7 @@
         "capabilities": {
           "auth": "session",
           "profile": false,
+          "profileGitName": false,
           "mcps": true,
           "schedules": false,
           "scheduleEnvelope": false,
@@ -8728,6 +8758,7 @@
         "capabilities": {
           "auth": "session",
           "profile": false,
+          "profileGitName": false,
           "mcps": true,
           "schedules": false,
           "scheduleEnvelope": false,
@@ -9173,6 +9204,7 @@
         "capabilities": {
           "auth": "session",
           "profile": false,
+          "profileGitName": false,
           "mcps": true,
           "schedules": false,
           "scheduleEnvelope": false,
@@ -9623,6 +9655,7 @@
         "capabilities": {
           "auth": "session",
           "profile": false,
+          "profileGitName": false,
           "mcps": true,
           "schedules": false,
           "scheduleEnvelope": false,
@@ -10083,6 +10116,7 @@
         "capabilities": {
           "auth": "session",
           "profile": false,
+          "profileGitName": false,
           "mcps": true,
           "schedules": false,
           "scheduleEnvelope": false,
@@ -10558,6 +10592,7 @@
         "capabilities": {
           "auth": "session",
           "profile": false,
+          "profileGitName": false,
           "mcps": true,
           "schedules": false,
           "scheduleEnvelope": false,
@@ -11033,6 +11068,7 @@
         "capabilities": {
           "auth": "session",
           "profile": false,
+          "profileGitName": false,
           "mcps": true,
           "schedules": false,
           "scheduleEnvelope": false,
@@ -11578,6 +11614,7 @@
         "capabilities": {
           "auth": "session",
           "profile": false,
+          "profileGitName": false,
           "mcps": true,
           "schedules": true,
           "scheduleEnvelope": true,
@@ -12142,6 +12179,7 @@
         "capabilities": {
           "auth": "session",
           "profile": false,
+          "profileGitName": false,
           "mcps": true,
           "schedules": true,
           "scheduleEnvelope": true,
@@ -12716,6 +12754,7 @@
         "capabilities": {
           "auth": "session",
           "profile": false,
+          "profileGitName": false,
           "mcps": true,
           "schedules": true,
           "scheduleEnvelope": true,
@@ -13290,6 +13329,7 @@
         "capabilities": {
           "auth": "session",
           "profile": false,
+          "profileGitName": false,
           "mcps": true,
           "schedules": true,
           "scheduleEnvelope": true,
@@ -13890,6 +13930,7 @@
         "capabilities": {
           "auth": "session",
           "profile": false,
+          "profileGitName": false,
           "mcps": true,
           "schedules": true,
           "scheduleEnvelope": true,
@@ -14495,6 +14536,7 @@
         "capabilities": {
           "auth": "session",
           "profile": false,
+          "profileGitName": false,
           "mcps": true,
           "schedules": true,
           "scheduleEnvelope": true,
@@ -15115,6 +15157,7 @@
         "capabilities": {
           "auth": "session",
           "profile": false,
+          "profileGitName": false,
           "mcps": true,
           "schedules": true,
           "scheduleEnvelope": true,
@@ -15740,6 +15783,7 @@
         "capabilities": {
           "auth": "session",
           "profile": false,
+          "profileGitName": false,
           "mcps": true,
           "schedules": true,
           "scheduleEnvelope": true,
@@ -16429,6 +16473,7 @@
         "capabilities": {
           "auth": "bootstrap",
           "profile": false,
+          "profileGitName": false,
           "mcps": true,
           "schedules": true,
           "scheduleEnvelope": true,
@@ -17133,6 +17178,7 @@
         "capabilities": {
           "auth": "bootstrap",
           "profile": false,
+          "profileGitName": false,
           "mcps": true,
           "schedules": true,
           "scheduleEnvelope": true,
@@ -17837,6 +17883,7 @@
         "capabilities": {
           "auth": "bootstrap",
           "profile": false,
+          "profileGitName": false,
           "mcps": true,
           "schedules": true,
           "scheduleEnvelope": true,
@@ -18546,6 +18593,7 @@
         "capabilities": {
           "auth": "bootstrap",
           "profile": false,
+          "profileGitName": false,
           "mcps": true,
           "schedules": true,
           "scheduleEnvelope": true,
@@ -19260,6 +19308,7 @@
         "capabilities": {
           "auth": "bootstrap",
           "profile": false,
+          "profileGitName": false,
           "mcps": true,
           "schedules": true,
           "scheduleEnvelope": true,
@@ -19974,6 +20023,7 @@
         "capabilities": {
           "auth": "bootstrap",
           "profile": false,
+          "profileGitName": false,
           "mcps": true,
           "schedules": true,
           "scheduleEnvelope": true,
@@ -20693,6 +20743,7 @@
         "capabilities": {
           "auth": "bootstrap",
           "profile": false,
+          "profileGitName": false,
           "mcps": true,
           "schedules": true,
           "scheduleEnvelope": true,
@@ -21462,6 +21513,7 @@
         "capabilities": {
           "auth": "bootstrap",
           "profile": false,
+          "profileGitName": false,
           "mcps": true,
           "schedules": true,
           "scheduleEnvelope": true,
@@ -22236,6 +22288,7 @@
         "capabilities": {
           "auth": "bootstrap",
           "profile": false,
+          "profileGitName": false,
           "mcps": true,
           "schedules": true,
           "scheduleEnvelope": true,
@@ -23010,6 +23063,7 @@
         "capabilities": {
           "auth": "bootstrap",
           "profile": false,
+          "profileGitName": false,
           "mcps": true,
           "schedules": true,
           "scheduleEnvelope": true,
@@ -23784,6 +23838,7 @@
         "capabilities": {
           "auth": "bootstrap",
           "profile": false,
+          "profileGitName": false,
           "mcps": true,
           "schedules": true,
           "scheduleEnvelope": true,
@@ -24576,6 +24631,7 @@
         "capabilities": {
           "auth": "bootstrap",
           "profile": false,
+          "profileGitName": false,
           "mcps": true,
           "schedules": true,
           "scheduleEnvelope": true,
@@ -25373,6 +25429,7 @@
         "capabilities": {
           "auth": "bootstrap",
           "profile": false,
+          "profileGitName": false,
           "mcps": true,
           "schedules": true,
           "scheduleEnvelope": true,
@@ -26180,6 +26237,7 @@
         "capabilities": {
           "auth": "bootstrap",
           "profile": false,
+          "profileGitName": false,
           "mcps": true,
           "schedules": true,
           "scheduleEnvelope": true,
@@ -27007,6 +27065,7 @@
         "capabilities": {
           "auth": "bootstrap",
           "profile": false,
+          "profileGitName": false,
           "mcps": true,
           "schedules": true,
           "scheduleEnvelope": true,
@@ -27839,6 +27898,7 @@
         "capabilities": {
           "auth": "bootstrap",
           "profile": false,
+          "profileGitName": false,
           "mcps": true,
           "schedules": true,
           "scheduleEnvelope": true,
@@ -28676,6 +28736,7 @@
         "capabilities": {
           "auth": "bootstrap",
           "profile": false,
+          "profileGitName": false,
           "mcps": true,
           "schedules": true,
           "scheduleEnvelope": true,
@@ -29533,6 +29594,7 @@
         "capabilities": {
           "auth": "bootstrap",
           "profile": false,
+          "profileGitName": false,
           "mcps": true,
           "schedules": true,
           "scheduleEnvelope": true,
@@ -30400,6 +30462,7 @@
         "capabilities": {
           "auth": "bootstrap",
           "profile": false,
+          "profileGitName": false,
           "mcps": true,
           "schedules": true,
           "scheduleEnvelope": true,
@@ -31282,6 +31345,7 @@
         "capabilities": {
           "auth": "bootstrap",
           "profile": false,
+          "profileGitName": false,
           "mcps": true,
           "schedules": true,
           "scheduleEnvelope": true,
@@ -32164,6 +32228,7 @@
         "capabilities": {
           "auth": "bootstrap",
           "profile": false,
+          "profileGitName": false,
           "mcps": true,
           "schedules": true,
           "scheduleEnvelope": true,
@@ -33121,6 +33186,7 @@
         "capabilities": {
           "auth": "bootstrap",
           "profile": false,
+          "profileGitName": false,
           "mcps": true,
           "schedules": true,
           "scheduleEnvelope": true,
@@ -34078,6 +34144,7 @@
         "capabilities": {
           "auth": "bootstrap",
           "profile": false,
+          "profileGitName": false,
           "mcps": true,
           "schedules": true,
           "scheduleEnvelope": true,
@@ -35130,6 +35197,7 @@
         "capabilities": {
           "auth": "bootstrap",
           "profile": false,
+          "profileGitName": false,
           "mcps": true,
           "schedules": true,
           "scheduleEnvelope": true,
@@ -36257,6 +36325,7 @@
         "capabilities": {
           "auth": "bootstrap",
           "profile": false,
+          "profileGitName": false,
           "mcps": true,
           "schedules": true,
           "scheduleEnvelope": true,
@@ -37399,6 +37468,7 @@
         "capabilities": {
           "auth": "bootstrap",
           "profile": true,
+          "profileGitName": false,
           "mcps": true,
           "schedules": true,
           "scheduleEnvelope": true,
@@ -38551,6 +38621,7 @@
         "capabilities": {
           "auth": "bootstrap",
           "profile": true,
+          "profileGitName": false,
           "mcps": true,
           "schedules": true,
           "scheduleEnvelope": true,
@@ -39713,6 +39784,7 @@
         "capabilities": {
           "auth": "bootstrap",
           "profile": true,
+          "profileGitName": false,
           "mcps": true,
           "schedules": true,
           "scheduleEnvelope": true,
@@ -40885,6 +40957,7 @@
         "capabilities": {
           "auth": "bootstrap",
           "profile": true,
+          "profileGitName": true,
           "mcps": true,
           "schedules": true,
           "scheduleEnvelope": true,
@@ -42092,6 +42165,7 @@
         "capabilities": {
           "auth": "bootstrap",
           "profile": true,
+          "profileGitName": true,
           "mcps": true,
           "schedules": true,
           "scheduleEnvelope": true,
@@ -43318,6 +43392,7 @@
         "capabilities": {
           "auth": "bootstrap",
           "profile": true,
+          "profileGitName": true,
           "mcps": true,
           "schedules": true,
           "scheduleEnvelope": true,
@@ -44544,6 +44619,7 @@
         "capabilities": {
           "auth": "bootstrap",
           "profile": true,
+          "profileGitName": true,
           "mcps": true,
           "schedules": true,
           "scheduleEnvelope": true,
@@ -45790,6 +45866,7 @@
         "capabilities": {
           "auth": "bootstrap",
           "profile": true,
+          "profileGitName": true,
           "mcps": true,
           "schedules": true,
           "scheduleEnvelope": true,
@@ -47072,6 +47149,7 @@
         "capabilities": {
           "auth": "bootstrap",
           "profile": true,
+          "profileGitName": true,
           "mcps": true,
           "schedules": true,
           "scheduleEnvelope": true,
@@ -48702,6 +48780,7 @@
         "capabilities": {
           "auth": "bootstrap",
           "profile": true,
+          "profileGitName": true,
           "mcps": true,
           "schedules": true,
           "scheduleEnvelope": true,
@@ -48796,6 +48875,7 @@
         "capabilities": {
           "auth": "bootstrap",
           "profile": true,
+          "profileGitName": true,
           "mcps": true,
           "schedules": true,
           "scheduleEnvelope": true,

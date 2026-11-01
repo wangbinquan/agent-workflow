@@ -106,7 +106,9 @@ export class ReleaseClient {
     if (capabilities.profile && options.updateProfile !== false)
       await this.request('/api/auth/me/profile', 'PATCH', {
         displayName: 'Release Upgrade Fixture',
-        gitName: 'Release Upgrade Fixture',
+        // v0.18.13–v0.18.15 have the route but a strict schema without gitName (HTTP 422,
+        // release-upgrade nightly 41287876705).
+        ...(capabilities.profileGitName ? { gitName: 'Release Upgrade Fixture' } : {}),
         email: 'release-upgrade@example.invalid',
       })
   }

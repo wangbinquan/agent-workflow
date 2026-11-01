@@ -90,6 +90,7 @@ function runtimeFor(source: TagSource): ReleaseEntry['runtime'] {
         ? 'session'
         : 'token',
     profile: auth.includes('/api/auth/me/profile'),
+    profileGitName: /\bgitName:/.test(shared('user')),
     mcps: source.has('packages/backend/src/routes/mcps.ts'),
     schedules:
       source.has('packages/backend/src/routes/scheduled-tasks.ts') ||

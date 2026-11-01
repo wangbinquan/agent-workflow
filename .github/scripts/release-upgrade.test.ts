@@ -11,6 +11,8 @@ import {
   NEGATIVE_SIGNATURES,
   selectReleases,
 } from '../../scripts/release-upgrade/verify'
+import { spawnSync } from 'node:child_process'
+import { OLD_POSTGRESQL_TASK_DEFECTS } from '../../scripts/release-upgrade/scenario'
 import { DaemonStartError } from '../../scripts/release-upgrade/lib/daemon'
 import { printedDatabaseStatements } from '../../scripts/release-upgrade/lib/postgresql'
 import { FIXTURES, readRegistry } from '../../scripts/release-upgrade/lib/io'
@@ -449,4 +451,44 @@ test('nightly verify can read the retained draft assets and publishes nothing', 
     '--draft=false',
   ])
     expect(steps).not.toContain(mutation)
+})
+
+// Release-upgrade nightly 41287876705: v0.18.13–v0.18.15 have the profile route but a strict schema
+// without gitName (HTTP 422 unrecognized_keys); the field arrived in v0.18.16.
+test('the profile PATCH sends gitName only to releases whose schema accepts it', () => {
+  const caps = new Map(readRegistry().releases.map((r) => [r.tag, r.runtime.capabilities]))
+  expect([caps.get('v0.18.15')!.profileGitName, caps.get('v0.18.16')!.profileGitName]).toEqual([
+    false,
+    true,
+  ])
+  for (const [tag, c] of caps)
+    if (c.profileGitName) expect({ tag, profile: c.profile }).toEqual({ tag, profile: true })
+  const client = readFileSync(
+    new URL('../../scripts/release-upgrade/lib/client.ts', import.meta.url),
+    'utf8',
+  )
+  expect(client).toContain(
+    "...(capabilities.profileGitName ? { gitName: 'Release Upgrade Fixture' } : {})",
+  )
+  expect(client).not.toMatch(/^\s+gitName: 'Release Upgrade Fixture',$/m)
+})
+
+// Old PostgreSQL releases may fail their own task writes after their one-click migration; the
+// scenario tolerates only the recorded exact message, and each one must exist in that release.
+test('recorded old PostgreSQL task defects are exact messages from each release source', () => {
+  const tags = Object.keys(OLD_POSTGRESQL_TASK_DEFECTS)
+  expect(tags).toEqual(['v0.18.18', 'v0.18.19', 'v0.19.0', 'v0.19.1', 'v0.19.2', 'v0.19.3'])
+  for (const [tag, defect] of Object.entries(OLD_POSTGRESQL_TASK_DEFECTS)) {
+    const grep = spawnSync(
+      'git',
+      ['grep', '-l', '-F', defect.signature, tag, '--', 'packages/backend/src'],
+      {
+        cwd: new URL('../..', import.meta.url).pathname,
+      },
+    )
+    expect({ tag, found: grep.status === 0 && grep.stdout.toString().trim().length > 0 }).toEqual({
+      tag,
+      found: true,
+    })
+  }
 })

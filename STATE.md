@@ -207,6 +207,8 @@
   （`syncSourceDirectory` 与 epoch-switch 文件仓库），已修；②**v0.2.0 带缓存仓库的安装无法升级**（没有 `secret.key`，`v2-boot-url-key-missing`），
   **用户 2026-11-01 裁决**：迁移按 daemon 首次启动的方式建密钥（只限活的 app home 且全部已编码 URL 为遗留托管形态），已实现；③v0.15.x 提示词不带 nonce，登记表拆出
   `promptNonce`；④Windows 按 tag 构建的 `tar -C` 路径；⑤v0.19.3 草稿产物对只读 token 不可见，**用户裁决**只给夜间 `verify` 作业 `contents: write`；⑥L1 `start` 的 PG 例与 CI 第一轮①同因，已由连接池上限修复。
+  该夜间跑完后另有两类旧版适配（工具侧，候选断言不变）：v0.18.13–v0.18.15 的资料接口不收 `gitName`（登记 `profileGitName`）；v0.19.0 / v0.19.1 的 PG 实况轮
+  报与 v0.19.2 相同的 `ownerless task mutation refused durable owner`（按精确签名记录）。
 - **下一步**：推送夜间修复后按 SHA 跟踪主 CI，并重跑一次 `release-upgrade-nightly`（Windows 修复只能由它验证）；全绿后标 Done。
 
 ## 2026-10-30 RFC 状态对账：索引登记修正与 RFC-294 剩余范围（纯文档）
