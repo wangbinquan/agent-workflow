@@ -36,7 +36,9 @@ describe('WRAPPER_NODE_KINDS 单源（flag-audit W0）', () => {
     // 与刻意的 git/loop 二连（fanout 语义不同的规则）不在此锁范围。
     const files = [
       'packages/shared/src/workflow-sync-diff.ts',
-      'packages/backend/src/services/dispatchFrontier.ts',
+      // RFC-409 split services/dispatchFrontier.ts into the frontier rules and the wrapper graph.
+      'packages/backend/src/modules/task-execution/engine/scope/frontierRules.ts',
+      'packages/backend/src/modules/task-execution/domain/wrapperGraph.ts',
       'packages/backend/src/services/scheduler.ts',
       'packages/backend/src/modules/task-execution/domain/wrapperExecution.ts',
       'packages/backend/src/modules/task-execution/engine/wrapper/wrapperRuntime.ts',

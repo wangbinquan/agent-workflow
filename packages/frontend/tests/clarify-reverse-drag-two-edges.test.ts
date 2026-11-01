@@ -16,6 +16,7 @@ import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { buildClarifyEdges } from '../src/components/canvas/clarifyDragHelper'
 
+// RFC-408 moved the DAG structure graph from composition/taskDagGraph.ts to engine/scope/dagGraph.ts.
 const TASK_DAG_GRAPH_PATH = join(
   __dirname,
   '..',
@@ -24,8 +25,9 @@ const TASK_DAG_GRAPH_PATH = join(
   'src',
   'modules',
   'task-execution',
-  'composition',
-  'taskDagGraph.ts',
+  'engine',
+  'scope',
+  'dagGraph.ts',
 )
 
 describe('clarify reverse-drag two-edge invariant (RFC-023 C6)', () => {
