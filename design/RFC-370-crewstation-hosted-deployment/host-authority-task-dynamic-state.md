@@ -4,7 +4,7 @@
 
 ## 三个实际动作
 
-原 [dynamicWorkflowRunner.ts](../../packages/backend/src/services/dynamicWorkflowRunner.ts) 只有三处 `persistence.saveState(taskId, dw)` 调用；按调用前已经发生的动作分类，不按方法名或 phase 分类。
+原 `services/dynamicWorkflowRunner.ts`（RFC-410 起迁入 [dynamicWorkflowGenerate.ts](../../packages/backend/src/modules/task-execution/engine/task/dynamicWorkflowGenerate.ts)，下表行号指迁移前的原文件）只有三处 `persistence.saveState(taskId, dw)` 调用；按调用前已经发生的动作分类，不按方法名或 phase 分类。
 
 | 原位置 | 原动作                                                                                                | 目的          | 保持的后续行为                                                             |
 | ------ | ----------------------------------------------------------------------------------------------------- | ------------- | -------------------------------------------------------------------------- |
