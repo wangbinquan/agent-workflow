@@ -118,8 +118,17 @@ describe('RFC-187 §4 — source locks', () => {
     expect(nodeMechanics).toContain('worktreeFilesChanged(r.worktreePath, r.baseCommit as string)')
     expect(nodeMechanics).not.toContain('worktreeFilesChanged(task.worktreePath, task.baseCommit)')
     // and SchedulerState.repos carries the per-repo base that makes it possible.
+    // RFC-412: the execution state type moved into task-execution composition (assembly only).
     const mechanicsState = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'services', 'execution', 'taskMechanicsState.ts'),
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'task-execution',
+        'composition',
+        'taskMechanicsState.ts',
+      ),
       'utf8',
     )
     // RFC-395 II-a A2: per-repository base comes from the shared TaskRepo contract.
