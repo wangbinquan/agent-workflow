@@ -1,0 +1,22 @@
+{
+  "formatVersion": 1,
+  "epoch": 1,
+  "after": "0239_rfc371_native_first_store",
+  "provenance": {
+    "kind": "curated",
+    "sources": [
+      "packages/backend/db/migrations/0239_rfc371_native_first_store.sql"
+    ],
+    "note": "Small deterministic historical records; terminal execution and delivery states; original SQL performs its own backfills."
+  },
+  "rows": [
+    {
+      "table": "task_execution_native_usage_store_bindings",
+      "values": {
+        "invocation_id": "upgrade-task_execution-invocation",
+        "before_owner_receipt_id": "upgrade-task_execution-owner",
+        "source_generation": "upgrade-generation"
+      }
+    }
+  ]
+}

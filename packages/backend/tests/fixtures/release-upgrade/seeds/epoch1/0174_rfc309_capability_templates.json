@@ -1,0 +1,51 @@
+{
+  "formatVersion": 1,
+  "epoch": 1,
+  "after": "0174_rfc309_capability_templates",
+  "provenance": {
+    "kind": "curated",
+    "sources": [
+      "packages/backend/db/migrations/0174_rfc309_capability_templates.sql"
+    ],
+    "note": "Small deterministic historical records; terminal execution and delivery states; original SQL performs its own backfills."
+  },
+  "rows": [],
+  "migrationEffects": [
+    {
+      "table": "capability_templates",
+      "operation": "backfill",
+      "rule": "Original migration inserts rows from prior ledger data or installs its declared singleton/configuration rows; do not duplicate them.",
+      "source": "packages/backend/db/migrations/0174_rfc309_capability_templates.sql"
+    },
+    {
+      "table": "capability_bindings",
+      "operation": "remove",
+      "rule": "The released SQL retires this physical table; its pre-upgrade rows remain source evidence for RFC-395.",
+      "source": "packages/backend/db/migrations/0174_rfc309_capability_templates.sql"
+    },
+    {
+      "table": "capability_frameworks",
+      "operation": "remove",
+      "rule": "The released SQL retires this physical table; its pre-upgrade rows remain source evidence for RFC-395.",
+      "source": "packages/backend/db/migrations/0174_rfc309_capability_templates.sql"
+    },
+    {
+      "table": "code_findings",
+      "operation": "alter",
+      "rule": "Apply the released SQL to existing seeded rows, retaining its explicit defaults, rewrites and backfills.",
+      "source": "packages/backend/db/migrations/0174_rfc309_capability_templates.sql"
+    },
+    {
+      "table": "code_work_items",
+      "operation": "alter",
+      "rule": "Apply the released SQL to existing seeded rows, retaining its explicit defaults, rewrites and backfills.",
+      "source": "packages/backend/db/migrations/0174_rfc309_capability_templates.sql"
+    },
+    {
+      "table": "repo_capability_config",
+      "operation": "alter",
+      "rule": "Apply the released SQL to existing seeded rows, retaining its explicit defaults, rewrites and backfills.",
+      "source": "packages/backend/db/migrations/0174_rfc309_capability_templates.sql"
+    }
+  ]
+}

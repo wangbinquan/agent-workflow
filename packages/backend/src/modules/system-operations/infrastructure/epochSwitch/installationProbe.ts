@@ -85,7 +85,7 @@ export function createEpochInstallationProbe(input: {
 }
 
 export async function readEpochTargetEvidence(
-  connection: ConversionTargetConnection,
+  connection: Pick<ConversionTargetConnection, 'execute' | 'provider'>,
   generationId: string,
 ): Promise<{
   state: 'prepared' | 'active' | 'retired'

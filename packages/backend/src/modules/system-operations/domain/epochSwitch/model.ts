@@ -196,7 +196,9 @@ export const EpochSourceLocationSchema = z.discriminatedUnion('kind', [
   }),
   z.strictObject({
     kind: z.literal('postgresql-database'),
-    profileRef: z.string().regex(/^(env:[A-Za-z_][A-Za-z0-9_]*|crewstation:source)$/),
+    profileRef: z
+      .string()
+      .refine((value) => persistenceDialect('postgresql').isProfileRef(value, 'source')),
   }),
   z.strictObject({
     kind: z.literal('backup'),
@@ -209,7 +211,9 @@ export const EpochTargetLocationSchema = z.discriminatedUnion('kind', [
   z.strictObject({ kind: z.literal('sqlite-file'), relativePath: z.string().min(1) }),
   z.strictObject({
     kind: z.literal('postgresql-target'),
-    profileRef: z.string().regex(/^(env:[A-Za-z_][A-Za-z0-9_]*|crewstation:target)$/),
+    profileRef: z
+      .string()
+      .refine((value) => persistenceDialect('postgresql').isProfileRef(value, 'target')),
   }),
 ])
 export const EmptyTableDecisionSchema = z.strictObject({
@@ -232,7 +236,7 @@ export const EpochSwitchInputsSchema = z.strictObject({
   chunkLimit: z.number().int().min(1).max(10000),
   scratchProfileRef: z
     .string()
-    .regex(/^env:[A-Za-z_][A-Za-z0-9_]*$/)
+    .refine((value) => persistenceDialect('postgresql').isProfileRef(value))
     .nullable(),
   contentRoot: ContentRootSpecSchema.nullable(),
   restoreConfig: z.boolean(),

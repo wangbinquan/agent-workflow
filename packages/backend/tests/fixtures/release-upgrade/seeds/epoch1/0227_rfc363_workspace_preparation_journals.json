@@ -1,0 +1,66 @@
+{
+  "formatVersion": 1,
+  "epoch": 1,
+  "after": "0227_rfc363_workspace_preparation_journals",
+  "provenance": {
+    "kind": "curated",
+    "sources": [
+      "packages/backend/db/migrations/0227_rfc363_workspace_preparation_journals.sql"
+    ],
+    "note": "Small deterministic historical records; terminal execution and delivery states; original SQL performs its own backfills."
+  },
+  "rows": [
+    {
+      "table": "sc_preparation_operations",
+      "values": {
+        "id": "01K3980000D642B3DF4F49B745",
+        "snapshot_ref": "01K3980000068F883D29F6BA53",
+        "state": "cleaned",
+        "version": 1,
+        "resolved_json": "{\"path\":\"<AW_HOME>/worktrees/upgrade-example/01K3980000085154084C742759\"}",
+        "receipt_ref": "upgrade-workspace",
+        "receipt_json": "{\"version\":1,\"worktreePath\":\"<AW_HOME>/worktrees/upgrade-example/01K3980000085154084C742759\"}",
+        "created_at": 1778459500000,
+        "updated_at": 1778459500000
+      }
+    },
+    {
+      "table": "sc_repository_snapshots",
+      "values": {
+        "id": "01K3980000068F883D29F6BA53",
+        "source_ref": "01K3980000A09F3A976196CBB3",
+        "revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "facts_json": "{\"commit\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"branch\":\"main\"}",
+        "created_at": 1778459500000
+      }
+    },
+    {
+      "table": "sc_repository_sources",
+      "values": {
+        "id": "01K3980000A09F3A976196CBB3",
+        "request_key": "upgrade-repository",
+        "request_digest": "aa2741053c59de0f8a3d9e8ea7200495492cc6dd8e0bbe2d4b240284c60d99d8",
+        "kind": "repository",
+        "facts_json": "{\"repoId\":\"01K39800006904DCBDB1794059\",\"url\":\"https://example.invalid/upgrade.git\"}",
+        "created_at": 1778459500000
+      }
+    },
+    {
+      "table": "task_workspace_preparations",
+      "values": {
+        "id": "01K3980000538DF74992CBEAB0",
+        "admission_key": "upgrade-workspace",
+        "request_digest": "aa2741053c59de0f8a3d9e8ea7200495492cc6dd8e0bbe2d4b240284c60d99d8",
+        "lane": "repository-preparation",
+        "operation_ref": "01K3980000D642B3DF4F49B745",
+        "artifact_json": "{\"version\":1,\"worktreePath\":\"<AW_HOME>/worktrees/upgrade-example/01K3980000085154084C742759\"}",
+        "admitted_task_id": "01K3980000085154084C742759",
+        "state": "admitted",
+        "owner_fence": 1,
+        "version": 1,
+        "created_at": 1778459500000,
+        "updated_at": 1778459500000
+      }
+    }
+  ]
+}

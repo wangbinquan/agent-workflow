@@ -1,0 +1,73 @@
+{
+  "formatVersion": 1,
+  "epoch": 1,
+  "after": "0023_rfc041_memories",
+  "provenance": {
+    "kind": "curated",
+    "sources": [
+      "packages/backend/db/migrations/0023_rfc041_memories.sql"
+    ],
+    "note": "Small deterministic historical records; terminal execution and delivery states; original SQL performs its own backfills."
+  },
+  "rows": [
+    {
+      "table": "memories",
+      "values": {
+        "id": "01K398000075C374CB4CF3CB2D",
+        "scope_type": "global",
+        "scope_id": null,
+        "title": "Keep upgrade receipts",
+        "body_md": "Retain the original review document and its decision.",
+        "tags": "[\"upgrade\"]",
+        "status": "approved",
+        "source_kind": "manual",
+        "approved_by_user_id": "01K39800007DFB4CF67742CB06",
+        "approved_at": 1778459560000,
+        "created_at": 1778459500000,
+        "version": 1
+      },
+      "expect": {
+        "api": [
+          {
+            "path": "/api/memories/01K398000075C374CB4CF3CB2D",
+            "at": "/memory",
+            "equals": {
+              "/id": "01K398000075C374CB4CF3CB2D",
+              "/title": "Keep upgrade receipts",
+              "/status": "approved"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "table": "memory_distill_jobs",
+      "values": {
+        "id": "01K39800007C1CFF75EDD47936",
+        "debounce_key": "upgrade-feedback",
+        "source_kind": "feedback",
+        "source_event_id": "01K3980000C0A49CF8CB69E3D3",
+        "task_id": "01K3980000085154084C742759",
+        "scope_resolved_json": "{\"scopeType\":\"global\",\"scopeId\":null}",
+        "status": "done",
+        "attempts": 1,
+        "next_run_at": 1778459500000,
+        "created_at": 1778459500000,
+        "started_at": 1778459500000,
+        "finished_at": 1778459560000
+      }
+    },
+    {
+      "table": "task_feedback",
+      "values": {
+        "id": "01K3980000C0A49CF8CB69E3D3",
+        "task_id": "01K3980000085154084C742759",
+        "author_user_id": "01K39800007DFB4CF67742CB06",
+        "body_md": "The historical document is useful.",
+        "created_at": 1778459500000,
+        "distilled": 1,
+        "distill_job_id": "01K39800007C1CFF75EDD47936"
+      }
+    }
+  ]
+}

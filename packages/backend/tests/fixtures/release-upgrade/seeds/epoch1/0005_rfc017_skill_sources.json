@@ -1,0 +1,35 @@
+{
+  "formatVersion": 1,
+  "epoch": 1,
+  "after": "0005_rfc017_skill_sources",
+  "provenance": {
+    "kind": "curated",
+    "sources": [
+      "packages/backend/db/migrations/0005_rfc017_skill_sources.sql"
+    ],
+    "note": "Small deterministic historical records; terminal execution and delivery states; original SQL performs its own backfills."
+  },
+  "rows": [
+    {
+      "table": "skill_sources",
+      "values": {
+        "id": "01K39800003FDC6A962AB4EAEA",
+        "path": "<AW_HOME>/imported-skills",
+        "label": "Historical imported skills",
+        "enabled": 0,
+        "last_scanned_at": 1778459500000,
+        "schema_version": 1,
+        "created_at": 1778459500000,
+        "updated_at": 1778459500000
+      }
+    }
+  ],
+  "migrationEffects": [
+    {
+      "table": "skills",
+      "operation": "alter",
+      "rule": "Apply the released SQL to existing seeded rows, retaining its explicit defaults, rewrites and backfills.",
+      "source": "packages/backend/db/migrations/0005_rfc017_skill_sources.sql"
+    }
+  ]
+}

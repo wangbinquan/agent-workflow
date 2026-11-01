@@ -1,0 +1,9 @@
+{
+  "tag": "v0.18.19",
+  "commit": "e87492e0c95980dd9725948c1c1b04f3e48885f2",
+  "sqlSha256": "a3a86c155378768cabbc8c4656c4de162d1a843aed795a0434d90bd737d9a4cd",
+  "journalSha256": "9bbfd71f50f198794eb14931b76b1f20d23594eedad9c84807d2afef9f327252",
+  "contractDigest": "sha256:3ee9be23a3e0f46c002f76b382b33d137c6a9ef4ef78a3ee71e212e5247c72d7",
+  "planDigest": "sha256:faba80bbbba0777c04f4af1c6f750ae952fa208aea1eaefd2b020f12eeb5fb02",
+  "sqliteThrough": 223
+}

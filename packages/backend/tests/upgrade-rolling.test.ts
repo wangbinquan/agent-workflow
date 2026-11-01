@@ -42,6 +42,7 @@ import { runGit } from '@/util/git'
 import { openFrozenEpoch1Db, migrateFrozenSqlite } from './migration-freeze'
 import { openDb } from '@/db/client'
 import { composeLocalEpochSwitch } from '@/bootstrap/epochMigration'
+import { runAutomaticEpochUpgrade } from '@/bootstrap/epochMigrationAuto'
 import { persistenceHead, persistencePostgresqlCatalogs } from '@/bootstrap/persistenceHead'
 import { resolveConfigurationValue } from '@/platform/configuration/configurationValues'
 import { readGenerationPointerV2 } from '@/platform/persistence/generationPointerV2'
@@ -673,22 +674,34 @@ describe('RFC-054 W1-6 — rolling upgrade from old home reaches HEAD + runs toy
           head: persistenceHead(),
           catalogArtifacts: persistencePostgresqlCatalogs(),
         })
-        const plan = await migration.plan({})
-        expect(plan.plan.payload.blocks).toEqual([])
-        const switched = await migration.run({
-          operationId: plan.operationId,
-          approve: plan.plan.approvalDigest,
+        // RFC-398: the same CLI composition owns approval, activation, verify and
+        // the automatic receipt. Freeze points and offline replay above stay fixed.
+        const automatic = await runAutomaticEpochUpgrade({ appHome: h.home, env: process.env })
+        expect(automatic, JSON.stringify(automatic)).toMatchObject({
+          mode: 'auto',
+          outcome: 'done',
+          exitCode: 0,
         })
-        expect(switched.phase).toBe('activated')
-        expect((await migration.verify({ operationId: plan.operationId })).phase).toBe('verified')
-        expect((await migration.complete({ operationId: plan.operationId })).phase).toBe(
-          'completed',
-        )
+        const operationId = automatic.operationId!
+        expect(operationId).toBeTruthy()
+        const status = await migration.status({ operationId })
+        if (!('phase' in status)) throw new Error('Expected the automatic operation status')
+        expect(status.phase).toBe('verified')
+        expect(
+          existsSync(
+            join(h.home, 'database-migrations/auto-upgrade/sessions', operationId, 'receipt.json'),
+          ),
+        ).toBe(true)
+        expect(
+          (await runAutomaticEpochUpgrade({ appHome: h.home, env: process.env })).outcome,
+        ).toBe('noop')
+        // Retention registration remains explicit, after successful automatic verification.
+        expect((await migration.complete({ operationId })).phase).toBe('completed')
         const pointer = readGenerationPointerV2(join(h.home, 'database-generation.json')).payload
         expect(pointer).toMatchObject({
           schemaEpoch: 2,
           role: 'converted',
-          operationId: plan.operationId,
+          operationId,
         })
         expect(
           classifyEpochInstallation(readEpochBootFacts({ appHome: h.home, provider: 'sqlite' }))

@@ -1,0 +1,560 @@
+{
+  "formatVersion": 1,
+  "epoch": 1,
+  "after": "0256_rfc371_observation_v2",
+  "provenance": {
+    "kind": "curated",
+    "sources": [
+      "packages/backend/db/migrations/0256_rfc371_observation_v2.sql"
+    ],
+    "note": "Small deterministic historical records; terminal execution and delivery states; original SQL performs its own backfills."
+  },
+  "rows": [
+    {
+      "table": "observation_call_models",
+      "values": {
+        "call_id": "01K39800007089230B07B6B028",
+        "model": "upgrade-fixture-model",
+        "input_tokens": 12,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0,
+        "output_tokens": 8,
+        "reasoning_tokens": 0,
+        "price_id": "01K39800000788D2438D6B8DBC",
+        "cost_nano": 28000,
+        "cost_state": "priced"
+      }
+    },
+    {
+      "table": "observation_calls",
+      "values": {
+        "id": "01K39800007089230B07B6B028",
+        "purpose": "task",
+        "task_id": "01K3980000085154084C742759",
+        "node_run_id": "01K3980000D3D6DE02630EDFDE",
+        "owner_user_id": "01K39800007DFB4CF67742CB06",
+        "agent_id": "01K39800008C70B25CBBBE8E79",
+        "agent_name": "upgrade-writer",
+        "runtime_id": "01K39800008166E7DDECF56BC9",
+        "runtime_name": "upgrade-opencode",
+        "protocol": "opencode",
+        "status": "done",
+        "started_at": 1778459500000,
+        "ended_at": 1778459560000,
+        "usage_state": "complete",
+        "input_tokens": 12,
+        "cache_read_tokens": 0,
+        "cache_write_tokens": 0,
+        "output_tokens": 8,
+        "reasoning_tokens": 0,
+        "cost_nano": 28000,
+        "cost_state": "priced",
+        "updated_at": 1778459500000
+      }
+    },
+    {
+      "table": "observation_prices",
+      "values": {
+        "id": "01K39800000788D2438D6B8DBC",
+        "runtime_id": "01K39800008166E7DDECF56BC9",
+        "model": "upgrade-fixture-model",
+        "input_micro": 1000000,
+        "cache_read_micro": 0,
+        "cache_write_micro": 0,
+        "output_micro": 2000000,
+        "effective_from": 1778459500000,
+        "created_at": 1778459500000,
+        "created_by": "01K39800007DFB4CF67742CB06",
+        "note": "Fixed fixture pricing"
+      }
+    }
+  ],
+  "migrationEffects": [
+    {
+      "table": "observation_anomaly_history",
+      "operation": "remove",
+      "rule": "The released SQL retires this physical table; its pre-upgrade rows remain source evidence for RFC-395.",
+      "source": "packages/backend/db/migrations/0256_rfc371_observation_v2.sql"
+    },
+    {
+      "table": "observation_anomaly_states",
+      "operation": "remove",
+      "rule": "The released SQL retires this physical table; its pre-upgrade rows remain source evidence for RFC-395.",
+      "source": "packages/backend/db/migrations/0256_rfc371_observation_v2.sql"
+    },
+    {
+      "table": "observation_calculation_rows",
+      "operation": "remove",
+      "rule": "The released SQL retires this physical table; its pre-upgrade rows remain source evidence for RFC-395.",
+      "source": "packages/backend/db/migrations/0256_rfc371_observation_v2.sql"
+    },
+    {
+      "table": "observation_calculation_versions",
+      "operation": "remove",
+      "rule": "The released SQL retires this physical table; its pre-upgrade rows remain source evidence for RFC-395.",
+      "source": "packages/backend/db/migrations/0256_rfc371_observation_v2.sql"
+    },
+    {
+      "table": "observation_invocation_price_audit",
+      "operation": "remove",
+      "rule": "The released SQL retires this physical table; its pre-upgrade rows remain source evidence for RFC-395.",
+      "source": "packages/backend/db/migrations/0256_rfc371_observation_v2.sql"
+    },
+    {
+      "table": "observation_invocation_price_policies",
+      "operation": "remove",
+      "rule": "The released SQL retires this physical table; its pre-upgrade rows remain source evidence for RFC-395.",
+      "source": "packages/backend/db/migrations/0256_rfc371_observation_v2.sql"
+    },
+    {
+      "table": "observation_invocation_price_records",
+      "operation": "remove",
+      "rule": "The released SQL retires this physical table; its pre-upgrade rows remain source evidence for RFC-395.",
+      "source": "packages/backend/db/migrations/0256_rfc371_observation_v2.sql"
+    },
+    {
+      "table": "observation_invocations",
+      "operation": "remove",
+      "rule": "The released SQL retires this physical table; its pre-upgrade rows remain source evidence for RFC-395.",
+      "source": "packages/backend/db/migrations/0256_rfc371_observation_v2.sql"
+    },
+    {
+      "table": "observation_maintenance_members",
+      "operation": "remove",
+      "rule": "The released SQL retires this physical table; its pre-upgrade rows remain source evidence for RFC-395.",
+      "source": "packages/backend/db/migrations/0256_rfc371_observation_v2.sql"
+    },
+    {
+      "table": "observation_maintenance_operations",
+      "operation": "remove",
+      "rule": "The released SQL retires this physical table; its pre-upgrade rows remain source evidence for RFC-395.",
+      "source": "packages/backend/db/migrations/0256_rfc371_observation_v2.sql"
+    },
+    {
+      "table": "observation_native_fact_pages",
+      "operation": "remove",
+      "rule": "The released SQL retires this physical table; its pre-upgrade rows remain source evidence for RFC-395.",
+      "source": "packages/backend/db/migrations/0256_rfc371_observation_v2.sql"
+    },
+    {
+      "table": "observation_native_fact_roots",
+      "operation": "remove",
+      "rule": "The released SQL retires this physical table; its pre-upgrade rows remain source evidence for RFC-395.",
+      "source": "packages/backend/db/migrations/0256_rfc371_observation_v2.sql"
+    },
+    {
+      "table": "observation_platform_records",
+      "operation": "remove",
+      "rule": "The released SQL retires this physical table; its pre-upgrade rows remain source evidence for RFC-395.",
+      "source": "packages/backend/db/migrations/0256_rfc371_observation_v2.sql"
+    },
+    {
+      "table": "observation_platform_sources",
+      "operation": "remove",
+      "rule": "The released SQL retires this physical table; its pre-upgrade rows remain source evidence for RFC-395.",
+      "source": "packages/backend/db/migrations/0256_rfc371_observation_v2.sql"
+    },
+    {
+      "table": "observation_price_heads",
+      "operation": "remove",
+      "rule": "The released SQL retires this physical table; its pre-upgrade rows remain source evidence for RFC-395.",
+      "source": "packages/backend/db/migrations/0256_rfc371_observation_v2.sql"
+    },
+    {
+      "table": "observation_price_versions",
+      "operation": "remove",
+      "rule": "The released SQL retires this physical table; its pre-upgrade rows remain source evidence for RFC-395.",
+      "source": "packages/backend/db/migrations/0256_rfc371_observation_v2.sql"
+    },
+    {
+      "table": "observation_projection_bindings",
+      "operation": "remove",
+      "rule": "The released SQL retires this physical table; its pre-upgrade rows remain source evidence for RFC-395.",
+      "source": "packages/backend/db/migrations/0256_rfc371_observation_v2.sql"
+    },
+    {
+      "table": "observation_projection_bootstrap",
+      "operation": "remove",
+      "rule": "The released SQL retires this physical table; its pre-upgrade rows remain source evidence for RFC-395.",
+      "source": "packages/backend/db/migrations/0256_rfc371_observation_v2.sql"
+    },
+    {
+      "table": "observation_projection_changes",
+      "operation": "remove",
+      "rule": "The released SQL retires this physical table; its pre-upgrade rows remain source evidence for RFC-395.",
+      "source": "packages/backend/db/migrations/0256_rfc371_observation_v2.sql"
+    },
+    {
+      "table": "observation_projection_components",
+      "operation": "remove",
+      "rule": "The released SQL retires this physical table; its pre-upgrade rows remain source evidence for RFC-395.",
+      "source": "packages/backend/db/migrations/0256_rfc371_observation_v2.sql"
+    },
+    {
+      "table": "observation_projection_current",
+      "operation": "remove",
+      "rule": "The released SQL retires this physical table; its pre-upgrade rows remain source evidence for RFC-395.",
+      "source": "packages/backend/db/migrations/0256_rfc371_observation_v2.sql"
+    },
+    {
+      "table": "observation_projection_dependencies",
+      "operation": "remove",
+      "rule": "The released SQL retires this physical table; its pre-upgrade rows remain source evidence for RFC-395.",
+      "source": "packages/backend/db/migrations/0256_rfc371_observation_v2.sql"
+    },
+    {
+      "table": "observation_projection_descriptors",
+      "operation": "remove",
+      "rule": "The released SQL retires this physical table; its pre-upgrade rows remain source evidence for RFC-395.",
+      "source": "packages/backend/db/migrations/0256_rfc371_observation_v2.sql"
+    },
+    {
+      "table": "observation_projection_heads",
+      "operation": "remove",
+      "rule": "The released SQL retires this physical table; its pre-upgrade rows remain source evidence for RFC-395.",
+      "source": "packages/backend/db/migrations/0256_rfc371_observation_v2.sql"
+    },
+    {
+      "table": "observation_projection_history",
+      "operation": "remove",
+      "rule": "The released SQL retires this physical table; its pre-upgrade rows remain source evidence for RFC-395.",
+      "source": "packages/backend/db/migrations/0256_rfc371_observation_v2.sql"
+    },
+    {
+      "table": "observation_projection_indexed_versions",
+      "operation": "remove",
+      "rule": "The released SQL retires this physical table; its pre-upgrade rows remain source evidence for RFC-395.",
+      "source": "packages/backend/db/migrations/0256_rfc371_observation_v2.sql"
+    },
+    {
+      "table": "observation_projection_memberships",
+      "operation": "remove",
+      "rule": "The released SQL retires this physical table; its pre-upgrade rows remain source evidence for RFC-395.",
+      "source": "packages/backend/db/migrations/0256_rfc371_observation_v2.sql"
+    },
+    {
+      "table": "observation_projection_prepared",
+      "operation": "remove",
+      "rule": "The released SQL retires this physical table; its pre-upgrade rows remain source evidence for RFC-395.",
+      "source": "packages/backend/db/migrations/0256_rfc371_observation_v2.sql"
+    },
+    {
+      "table": "observation_projection_query_scope_members",
+      "operation": "remove",
+      "rule": "The released SQL retires this physical table; its pre-upgrade rows remain source evidence for RFC-395.",
+      "source": "packages/backend/db/migrations/0256_rfc371_observation_v2.sql"
+    },
+    {
+      "table": "observation_projection_query_scopes",
+      "operation": "remove",
+      "rule": "The released SQL retires this physical table; its pre-upgrade rows remain source evidence for RFC-395.",
+      "source": "packages/backend/db/migrations/0256_rfc371_observation_v2.sql"
+    },
+    {
+      "table": "observation_projection_versions",
+      "operation": "remove",
+      "rule": "The released SQL retires this physical table; its pre-upgrade rows remain source evidence for RFC-395.",
+      "source": "packages/backend/db/migrations/0256_rfc371_observation_v2.sql"
+    },
+    {
+      "table": "observation_projection_views",
+      "operation": "remove",
+      "rule": "The released SQL retires this physical table; its pre-upgrade rows remain source evidence for RFC-395.",
+      "source": "packages/backend/db/migrations/0256_rfc371_observation_v2.sql"
+    },
+    {
+      "table": "observation_projection_work",
+      "operation": "remove",
+      "rule": "The released SQL retires this physical table; its pre-upgrade rows remain source evidence for RFC-395.",
+      "source": "packages/backend/db/migrations/0256_rfc371_observation_v2.sql"
+    },
+    {
+      "table": "observation_projection_work_components",
+      "operation": "remove",
+      "rule": "The released SQL retires this physical table; its pre-upgrade rows remain source evidence for RFC-395.",
+      "source": "packages/backend/db/migrations/0256_rfc371_observation_v2.sql"
+    },
+    {
+      "table": "observation_report_counts",
+      "operation": "remove",
+      "rule": "The released SQL retires this physical table; its pre-upgrade rows remain source evidence for RFC-395.",
+      "source": "packages/backend/db/migrations/0256_rfc371_observation_v2.sql"
+    },
+    {
+      "table": "observation_report_leases",
+      "operation": "remove",
+      "rule": "The released SQL retires this physical table; its pre-upgrade rows remain source evidence for RFC-395.",
+      "source": "packages/backend/db/migrations/0256_rfc371_observation_v2.sql"
+    },
+    {
+      "table": "observation_report_pages",
+      "operation": "remove",
+      "rule": "The released SQL retires this physical table; its pre-upgrade rows remain source evidence for RFC-395.",
+      "source": "packages/backend/db/migrations/0256_rfc371_observation_v2.sql"
+    },
+    {
+      "table": "observation_report_receipts",
+      "operation": "remove",
+      "rule": "The released SQL retires this physical table; its pre-upgrade rows remain source evidence for RFC-395.",
+      "source": "packages/backend/db/migrations/0256_rfc371_observation_v2.sql"
+    },
+    {
+      "table": "observation_report_retained_revisions",
+      "operation": "remove",
+      "rule": "The released SQL retires this physical table; its pre-upgrade rows remain source evidence for RFC-395.",
+      "source": "packages/backend/db/migrations/0256_rfc371_observation_v2.sql"
+    },
+    {
+      "table": "observation_report_rows",
+      "operation": "remove",
+      "rule": "The released SQL retires this physical table; its pre-upgrade rows remain source evidence for RFC-395.",
+      "source": "packages/backend/db/migrations/0256_rfc371_observation_v2.sql"
+    },
+    {
+      "table": "observation_reports",
+      "operation": "remove",
+      "rule": "The released SQL retires this physical table; its pre-upgrade rows remain source evidence for RFC-395.",
+      "source": "packages/backend/db/migrations/0256_rfc371_observation_v2.sql"
+    },
+    {
+      "table": "observation_scope_refs",
+      "operation": "remove",
+      "rule": "The released SQL retires this physical table; its pre-upgrade rows remain source evidence for RFC-395.",
+      "source": "packages/backend/db/migrations/0256_rfc371_observation_v2.sql"
+    },
+    {
+      "table": "observation_source_revisions",
+      "operation": "remove",
+      "rule": "The released SQL retires this physical table; its pre-upgrade rows remain source evidence for RFC-395.",
+      "source": "packages/backend/db/migrations/0256_rfc371_observation_v2.sql"
+    },
+    {
+      "table": "observation_storage_samples",
+      "operation": "remove",
+      "rule": "The released SQL retires this physical table; its pre-upgrade rows remain source evidence for RFC-395.",
+      "source": "packages/backend/db/migrations/0256_rfc371_observation_v2.sql"
+    },
+    {
+      "table": "observation_storage_state",
+      "operation": "remove",
+      "rule": "The released SQL retires this physical table; its pre-upgrade rows remain source evidence for RFC-395.",
+      "source": "packages/backend/db/migrations/0256_rfc371_observation_v2.sql"
+    },
+    {
+      "table": "observation_usage_captures",
+      "operation": "remove",
+      "rule": "The released SQL retires this physical table; its pre-upgrade rows remain source evidence for RFC-395.",
+      "source": "packages/backend/db/migrations/0256_rfc371_observation_v2.sql"
+    },
+    {
+      "table": "observation_usage_current",
+      "operation": "remove",
+      "rule": "The released SQL retires this physical table; its pre-upgrade rows remain source evidence for RFC-395.",
+      "source": "packages/backend/db/migrations/0256_rfc371_observation_v2.sql"
+    },
+    {
+      "table": "observation_usage_events",
+      "operation": "remove",
+      "rule": "The released SQL retires this physical table; its pre-upgrade rows remain source evidence for RFC-395.",
+      "source": "packages/backend/db/migrations/0256_rfc371_observation_v2.sql"
+    },
+    {
+      "table": "observation_usage_native_records",
+      "operation": "remove",
+      "rule": "The released SQL retires this physical table; its pre-upgrade rows remain source evidence for RFC-395.",
+      "source": "packages/backend/db/migrations/0256_rfc371_observation_v2.sql"
+    },
+    {
+      "table": "observation_usage_sources",
+      "operation": "remove",
+      "rule": "The released SQL retires this physical table; its pre-upgrade rows remain source evidence for RFC-395.",
+      "source": "packages/backend/db/migrations/0256_rfc371_observation_v2.sql"
+    },
+    {
+      "table": "observation_work_retention",
+      "operation": "remove",
+      "rule": "The released SQL retires this physical table; its pre-upgrade rows remain source evidence for RFC-395.",
+      "source": "packages/backend/db/migrations/0256_rfc371_observation_v2.sql"
+    },
+    {
+      "table": "system_agent_native_usage_emissions",
+      "operation": "remove",
+      "rule": "The released SQL retires this physical table; its pre-upgrade rows remain source evidence for RFC-395.",
+      "source": "packages/backend/db/migrations/0256_rfc371_observation_v2.sql"
+    },
+    {
+      "table": "system_agent_native_usage_pass_heads",
+      "operation": "remove",
+      "rule": "The released SQL retires this physical table; its pre-upgrade rows remain source evidence for RFC-395.",
+      "source": "packages/backend/db/migrations/0256_rfc371_observation_v2.sql"
+    },
+    {
+      "table": "system_agent_native_usage_pass_pages",
+      "operation": "remove",
+      "rule": "The released SQL retires this physical table; its pre-upgrade rows remain source evidence for RFC-395.",
+      "source": "packages/backend/db/migrations/0256_rfc371_observation_v2.sql"
+    },
+    {
+      "table": "system_agent_native_usage_passes",
+      "operation": "remove",
+      "rule": "The released SQL retires this physical table; its pre-upgrade rows remain source evidence for RFC-395.",
+      "source": "packages/backend/db/migrations/0256_rfc371_observation_v2.sql"
+    },
+    {
+      "table": "system_agent_native_usage_preparations",
+      "operation": "remove",
+      "rule": "The released SQL retires this physical table; its pre-upgrade rows remain source evidence for RFC-395.",
+      "source": "packages/backend/db/migrations/0256_rfc371_observation_v2.sql"
+    },
+    {
+      "table": "system_agent_native_usage_revision_heads",
+      "operation": "remove",
+      "rule": "The released SQL retires this physical table; its pre-upgrade rows remain source evidence for RFC-395.",
+      "source": "packages/backend/db/migrations/0256_rfc371_observation_v2.sql"
+    },
+    {
+      "table": "system_agent_native_usage_root_heads",
+      "operation": "remove",
+      "rule": "The released SQL retires this physical table; its pre-upgrade rows remain source evidence for RFC-395.",
+      "source": "packages/backend/db/migrations/0256_rfc371_observation_v2.sql"
+    },
+    {
+      "table": "system_agent_native_usage_root_results",
+      "operation": "remove",
+      "rule": "The released SQL retires this physical table; its pre-upgrade rows remain source evidence for RFC-395.",
+      "source": "packages/backend/db/migrations/0256_rfc371_observation_v2.sql"
+    },
+    {
+      "table": "system_agent_native_usage_root_sets",
+      "operation": "remove",
+      "rule": "The released SQL retires this physical table; its pre-upgrade rows remain source evidence for RFC-395.",
+      "source": "packages/backend/db/migrations/0256_rfc371_observation_v2.sql"
+    },
+    {
+      "table": "system_agent_native_usage_root_transitions",
+      "operation": "remove",
+      "rule": "The released SQL retires this physical table; its pre-upgrade rows remain source evidence for RFC-395.",
+      "source": "packages/backend/db/migrations/0256_rfc371_observation_v2.sql"
+    },
+    {
+      "table": "system_agent_native_usage_session_parents",
+      "operation": "remove",
+      "rule": "The released SQL retires this physical table; its pre-upgrade rows remain source evidence for RFC-395.",
+      "source": "packages/backend/db/migrations/0256_rfc371_observation_v2.sql"
+    },
+    {
+      "table": "system_agent_native_usage_step_members",
+      "operation": "remove",
+      "rule": "The released SQL retires this physical table; its pre-upgrade rows remain source evidence for RFC-395.",
+      "source": "packages/backend/db/migrations/0256_rfc371_observation_v2.sql"
+    },
+    {
+      "table": "system_agent_native_usage_store_bindings",
+      "operation": "remove",
+      "rule": "The released SQL retires this physical table; its pre-upgrade rows remain source evidence for RFC-395.",
+      "source": "packages/backend/db/migrations/0256_rfc371_observation_v2.sql"
+    },
+    {
+      "table": "system_agent_observation_groups",
+      "operation": "remove",
+      "rule": "The released SQL retires this physical table; its pre-upgrade rows remain source evidence for RFC-395.",
+      "source": "packages/backend/db/migrations/0256_rfc371_observation_v2.sql"
+    },
+    {
+      "table": "system_agent_observation_owners",
+      "operation": "remove",
+      "rule": "The released SQL retires this physical table; its pre-upgrade rows remain source evidence for RFC-395.",
+      "source": "packages/backend/db/migrations/0256_rfc371_observation_v2.sql"
+    },
+    {
+      "table": "system_agent_observation_sources",
+      "operation": "remove",
+      "rule": "The released SQL retires this physical table; its pre-upgrade rows remain source evidence for RFC-395.",
+      "source": "packages/backend/db/migrations/0256_rfc371_observation_v2.sql"
+    },
+    {
+      "table": "task_execution_native_usage_emissions",
+      "operation": "remove",
+      "rule": "The released SQL retires this physical table; its pre-upgrade rows remain source evidence for RFC-395.",
+      "source": "packages/backend/db/migrations/0256_rfc371_observation_v2.sql"
+    },
+    {
+      "table": "task_execution_native_usage_pass_heads",
+      "operation": "remove",
+      "rule": "The released SQL retires this physical table; its pre-upgrade rows remain source evidence for RFC-395.",
+      "source": "packages/backend/db/migrations/0256_rfc371_observation_v2.sql"
+    },
+    {
+      "table": "task_execution_native_usage_pass_pages",
+      "operation": "remove",
+      "rule": "The released SQL retires this physical table; its pre-upgrade rows remain source evidence for RFC-395.",
+      "source": "packages/backend/db/migrations/0256_rfc371_observation_v2.sql"
+    },
+    {
+      "table": "task_execution_native_usage_passes",
+      "operation": "remove",
+      "rule": "The released SQL retires this physical table; its pre-upgrade rows remain source evidence for RFC-395.",
+      "source": "packages/backend/db/migrations/0256_rfc371_observation_v2.sql"
+    },
+    {
+      "table": "task_execution_native_usage_preparations",
+      "operation": "remove",
+      "rule": "The released SQL retires this physical table; its pre-upgrade rows remain source evidence for RFC-395.",
+      "source": "packages/backend/db/migrations/0256_rfc371_observation_v2.sql"
+    },
+    {
+      "table": "task_execution_native_usage_revision_heads",
+      "operation": "remove",
+      "rule": "The released SQL retires this physical table; its pre-upgrade rows remain source evidence for RFC-395.",
+      "source": "packages/backend/db/migrations/0256_rfc371_observation_v2.sql"
+    },
+    {
+      "table": "task_execution_native_usage_root_heads",
+      "operation": "remove",
+      "rule": "The released SQL retires this physical table; its pre-upgrade rows remain source evidence for RFC-395.",
+      "source": "packages/backend/db/migrations/0256_rfc371_observation_v2.sql"
+    },
+    {
+      "table": "task_execution_native_usage_root_results",
+      "operation": "remove",
+      "rule": "The released SQL retires this physical table; its pre-upgrade rows remain source evidence for RFC-395.",
+      "source": "packages/backend/db/migrations/0256_rfc371_observation_v2.sql"
+    },
+    {
+      "table": "task_execution_native_usage_root_sets",
+      "operation": "remove",
+      "rule": "The released SQL retires this physical table; its pre-upgrade rows remain source evidence for RFC-395.",
+      "source": "packages/backend/db/migrations/0256_rfc371_observation_v2.sql"
+    },
+    {
+      "table": "task_execution_native_usage_root_transitions",
+      "operation": "remove",
+      "rule": "The released SQL retires this physical table; its pre-upgrade rows remain source evidence for RFC-395.",
+      "source": "packages/backend/db/migrations/0256_rfc371_observation_v2.sql"
+    },
+    {
+      "table": "task_execution_native_usage_session_parents",
+      "operation": "remove",
+      "rule": "The released SQL retires this physical table; its pre-upgrade rows remain source evidence for RFC-395.",
+      "source": "packages/backend/db/migrations/0256_rfc371_observation_v2.sql"
+    },
+    {
+      "table": "task_execution_native_usage_step_members",
+      "operation": "remove",
+      "rule": "The released SQL retires this physical table; its pre-upgrade rows remain source evidence for RFC-395.",
+      "source": "packages/backend/db/migrations/0256_rfc371_observation_v2.sql"
+    },
+    {
+      "table": "task_execution_native_usage_store_bindings",
+      "operation": "remove",
+      "rule": "The released SQL retires this physical table; its pre-upgrade rows remain source evidence for RFC-395.",
+      "source": "packages/backend/db/migrations/0256_rfc371_observation_v2.sql"
+    },
+    {
+      "table": "task_execution_observation_sources",
+      "operation": "remove",
+      "rule": "The released SQL retires this physical table; its pre-upgrade rows remain source evidence for RFC-395.",
+      "source": "packages/backend/db/migrations/0256_rfc371_observation_v2.sql"
+    }
+  ]
+}

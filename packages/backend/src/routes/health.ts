@@ -2,6 +2,7 @@
 // Schema per design.md §4.2.2 row 1.
 
 import type { Hono } from 'hono'
+import type { DatabaseConfig } from '@agent-workflow/shared'
 import { registerRoute } from '@/routes/registry'
 import type { TaskStatusCountQueries } from '@/modules/task-execution/public/types'
 import { recoveryCountersSnapshot } from '@/services/recovery'
@@ -9,6 +10,10 @@ import { recoveryCountersSnapshot } from '@/services/recovery'
 export interface HealthRouteDependencies {
   readonly opencodeVersion: string | null
   readonly dbVersion: number
+  readonly databaseIdentity: () => Promise<{
+    provider: DatabaseConfig['provider']
+    databaseName: string | null
+  }>
 }
 
 export interface IdentityAccessHealthDiagnostics {
@@ -31,6 +36,9 @@ export function mountHealthRoutes(
   identityAccess: IdentityAccessHealthDiagnostics,
   database: TaskStatusCountQueries,
 ): void {
+  // RFC-398 §2.7: the database identity is reported on the existing `/health` probe only.
+  // `/api/health` is not a separate route: legacy operation ids strip `/api/`, so mounting
+  // both would register the same operation twice.
   registerRoute(
     app,
     {
@@ -57,6 +65,9 @@ export function mountHealthRoutes(
         dbVersion: deps.dbVersion,
         uptime: Math.round(process.uptime()),
         runningTasks,
+        // Only provider and actual database name; never connection URLs or credentials.
+        // Liveness remains available if the connection temporarily stops answering.
+        database: await deps.databaseIdentity().catch(() => null),
         // RFC-108 T3 (AR-11): since-boot counters of system recovery actions, so a
         // daemon that silently reaps orphans every restart is no longer invisible.
         recovery: recoveryCountersSnapshot(),

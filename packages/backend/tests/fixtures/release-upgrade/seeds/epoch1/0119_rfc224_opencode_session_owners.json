@@ -1,0 +1,29 @@
+{
+  "formatVersion": 1,
+  "epoch": 1,
+  "after": "0119_rfc224_opencode_session_owners",
+  "provenance": {
+    "kind": "curated",
+    "sources": [
+      "packages/backend/db/migrations/0119_rfc224_opencode_session_owners.sql"
+    ],
+    "note": "Small deterministic historical records; terminal execution and delivery states; original SQL performs its own backfills."
+  },
+  "rows": [
+    {
+      "table": "opencode_session_owners",
+      "values": {
+        "session_id": "upgrade-historical-session",
+        "task_id": "01K3980000085154084C742759",
+        "node_id": "worker",
+        "created_node_run_id": "01K3980000D3D6DE02630EDFDE",
+        "identity_digest": "aa2741053c59de0f8a3d9e8ea7200495492cc6dd8e0bbe2d4b240284c60d99d8",
+        "official_build_digest": "aa2741053c59de0f8a3d9e8ea7200495492cc6dd8e0bbe2d4b240284c60d99d8",
+        "session_contract_digest": "aa2741053c59de0f8a3d9e8ea7200495492cc6dd8e0bbe2d4b240284c60d99d8",
+        "session_store_key": "upgrade-session-store",
+        "project_id": "upgrade-project",
+        "opencode_version": "1.3.5"
+      }
+    }
+  ]
+}

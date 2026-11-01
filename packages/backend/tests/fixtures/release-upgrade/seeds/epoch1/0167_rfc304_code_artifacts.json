@@ -1,0 +1,32 @@
+{
+  "formatVersion": 1,
+  "epoch": 1,
+  "after": "0167_rfc304_code_artifacts",
+  "provenance": {
+    "kind": "curated",
+    "sources": [
+      "packages/backend/db/migrations/0167_rfc304_code_artifacts.sql"
+    ],
+    "note": "Small deterministic historical records; terminal execution and delivery states; original SQL performs its own backfills."
+  },
+  "rows": [
+    {
+      "table": "code_artifacts",
+      "values": {
+        "id": "01K3980000287FA479506CCA9A",
+        "repo_path": "<AW_HOME>/repositories/upgrade-example",
+        "commit_sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "base_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "digest": "ae2960f103228419306b2dbf5e2b9f6fd6cc27cfd3e09e43df3cb1a4c727d9ff",
+        "keep_ref": "refs/aw/upgrade",
+        "round_id": "01K3980000D25D5DEF6EFDEEBF",
+        "work_item_id": "01K3980000BF31929DD24F5787",
+        "generation": 1,
+        "ref_count": 0,
+        "state": "released",
+        "created_at": 1778459500000,
+        "released_at": 1778459560000
+      }
+    }
+  ]
+}

@@ -1,0 +1,27 @@
+{
+  "formatVersion": 1,
+  "epoch": 1,
+  "after": "0257_rfc370_v2_retire_host_execution",
+  "provenance": {
+    "kind": "curated",
+    "sources": [
+      "packages/backend/db/migrations/0257_rfc370_v2_retire_host_execution.sql"
+    ],
+    "note": "Small deterministic historical records; terminal execution and delivery states; original SQL performs its own backfills."
+  },
+  "rows": [],
+  "migrationEffects": [
+    {
+      "table": "memory_distill_execution_receipts",
+      "operation": "remove",
+      "rule": "The released SQL retires this physical table; its pre-upgrade rows remain source evidence for RFC-395.",
+      "source": "packages/backend/db/migrations/0257_rfc370_v2_retire_host_execution.sql"
+    },
+    {
+      "table": "system_host_execution_write_contexts",
+      "operation": "remove",
+      "rule": "The released SQL retires this physical table; its pre-upgrade rows remain source evidence for RFC-395.",
+      "source": "packages/backend/db/migrations/0257_rfc370_v2_retire_host_execution.sql"
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "formatVersion": 1,
+  "epoch": 1,
+  "after": "0128_rfc244_task_list_indexes",
+  "provenance": {
+    "kind": "curated",
+    "sources": [
+      "packages/backend/db/migrations/0128_rfc244_task_list_indexes.sql"
+    ],
+    "note": "Small deterministic historical records; terminal execution and delivery states; original SQL performs its own backfills."
+  },
+  "rows": []
+}

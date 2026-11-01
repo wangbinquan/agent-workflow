@@ -2,6 +2,9 @@ import { acquireLock, adoptCurrentProcessLock, DaemonLockHeldError, type Lock } 
 import { readControlFile, requestShutdown } from '@/services/controlListener'
 import { sha256Hex } from '@/util/hash'
 import type { DaemonStartupLeasePort } from '../../application/ports/daemonStartupLease'
+import { dirname } from 'node:path'
+import { liveAutoUpgrade } from './autoUpgradeState'
+import { autoUpgradeTestCheckpoint } from './autoUpgradeTestHooks'
 
 export interface NativeDaemonStartupLeaseOptions {
   readonly lockPath: string
@@ -24,16 +27,42 @@ async function acquireStartLock(
   const deadline = Date.now() + maxWaitMs
   let announced = false
   let shutdownRequested = false
+  const appHome = dirname(lockPath)
+  const waitUpgrade = async () => {
+    const active = liveAutoUpgrade(appHome)
+    if (!active || active.pid === process.pid) return false
+    options.log.info('数据库升级进行中', { pid: active.pid, operation: active.operationId })
+    await autoUpgradeTestCheckpoint('startup-waiting-upgrade')
+    await Bun.sleep(2000)
+    return true
+  }
   for (;;) {
+    if (await waitUpgrade()) continue
+    await autoUpgradeTestCheckpoint('startup-before-lock')
     try {
-      return acquireLock(lockPath)
+      const lock = acquireLock(lockPath)
+      // RFC-398: an earlier absence check cannot authorize this newly acquired lease.
+      const active = liveAutoUpgrade(appHome)
+      if (active && active.pid !== process.pid) {
+        lock.release() // release checks that the file still holds our PID.
+        await waitUpgrade()
+        continue
+      }
+      return lock
     } catch (error) {
+      if (error instanceof DaemonLockHeldError && (await waitUpgrade())) continue
       const remaining = deadline - Date.now()
       if (!(error instanceof DaemonLockHeldError) || maxWaitMs === 0 || remaining <= 0) {
         throw error
       }
       if (error.pid === process.pid) {
         const adopted = adoptCurrentProcessLock(lockPath)
+        const active = liveAutoUpgrade(appHome)
+        if (active && active.pid !== process.pid) {
+          adopted.release()
+          await waitUpgrade()
+          continue
+        }
         onSameProcessAdopted(error)
         return adopted
       }

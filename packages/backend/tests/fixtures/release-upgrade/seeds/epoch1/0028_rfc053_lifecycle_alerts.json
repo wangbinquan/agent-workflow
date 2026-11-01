@@ -1,0 +1,26 @@
+{
+  "formatVersion": 1,
+  "epoch": 1,
+  "after": "0028_rfc053_lifecycle_alerts",
+  "provenance": {
+    "kind": "curated",
+    "sources": [
+      "packages/backend/db/migrations/0028_rfc053_lifecycle_alerts.sql"
+    ],
+    "note": "Small deterministic historical records; terminal execution and delivery states; original SQL performs its own backfills."
+  },
+  "rows": [
+    {
+      "table": "lifecycle_alerts",
+      "values": {
+        "id": "01K39800008D7ED84D75C867F0",
+        "task_id": "01K3980000085154084C742759",
+        "rule": "node-running-task-terminal",
+        "severity": "warning",
+        "detail": "{\"nodeRunId\":\"01K3980000D3D6DE02630EDFDE\"}",
+        "detected_at": 1778459560000,
+        "resolved_at": 1778459560001
+      }
+    }
+  ]
+}

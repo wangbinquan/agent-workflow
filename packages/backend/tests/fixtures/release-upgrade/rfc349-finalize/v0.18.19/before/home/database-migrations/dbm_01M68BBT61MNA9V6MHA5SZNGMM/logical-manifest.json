@@ -1,0 +1,2289 @@
+{
+  "digest": "sha256:67307d7387820a95b62035f383a648ef91e6fd3f8ca89426bfd91d1d87bc206e",
+  "payload": {
+    "activeTableCount": 178,
+    "archiveOnlyTableCount": 6,
+    "contractVersion": 2,
+    "createdAt": 1793429203647,
+    "format": "agent-workflow-logical-database-v1",
+    "operationId": "dbm_01M68BBT61MNA9V6MHA5SZNGMM",
+    "schemaDigest": "sha256:3ee9be23a3e0f46c002f76b382b33d137c6a9ef4ef78a3ee71e212e5247c72d7",
+    "sourceGenerationId": "dbg_legacy_sqlite",
+    "sourceProvider": "sqlite",
+    "tables": [
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:dce8b6be1ff9116c23d979c6b3d0cb9bf338c160e750f721f1bf22b31d25b9b6",
+        "rowCount": 0,
+        "table": "action_template_revisions"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:619c8c1adaeb6765c0a34316577bca839c7dac45b6cc31322d40464f32841fcf",
+        "rowCount": 0,
+        "table": "action_templates"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 1,
+        "chunkDigests": [
+          "sha256:98d0d47cc5760f4e3cfb51fc89d96409e9d89a5c9799b2ed5e9b96824c5915ca"
+        ],
+        "disposition": "KEEP",
+        "firstKey": [
+          {
+            "type": "text",
+            "value": "00000000000000000000000001"
+          }
+        ],
+        "lastKey": [
+          {
+            "type": "text",
+            "value": "aw-demo-reviewer"
+          }
+        ],
+        "rootDigest": "sha256:6d18805c500c574e277217626e61a49ad228f922da2e173e95d93c292015ae99",
+        "rowCount": 18,
+        "table": "agents"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 1,
+        "chunkDigests": [
+          "sha256:00a8ded295d15011fccec53a6ae53fef1eff951e5cd85e3a37dd4e6c71b05687"
+        ],
+        "disposition": "KEEP",
+        "firstKey": [
+          {
+            "type": "text",
+            "value": "global"
+          }
+        ],
+        "lastKey": [
+          {
+            "type": "text",
+            "value": "global"
+          }
+        ],
+        "rootDigest": "sha256:5bc7517996cae44898cdbaded15d76f4287932b03fe02d2632a09a41c74b090f",
+        "rowCount": 1,
+        "table": "auth_login_policy"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:df706475fa705c8bfda9027b3d6f18c2f0a0d20f96e065c38d546758ee005673",
+        "rowCount": 0,
+        "table": "automation_policies"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:e39c4a3b0b0964f45fff29289472b19660a624ecd13c2b8b904a1d1429bcf4e6",
+        "rowCount": 0,
+        "table": "automation_policy_revisions"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:325d6845ef22afc85441ec66578f91ae4ec2a8ccd38c5994aed03ba3144b858e",
+        "rowCount": 0,
+        "table": "cached_repos"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 1,
+        "chunkDigests": [
+          "sha256:5f57f1952e3e6a979da38c570d06f3016cd640a5644e80ba90cee44cc22aec86"
+        ],
+        "disposition": "KEEP",
+        "firstKey": [
+          {
+            "type": "text",
+            "value": "aw-demo-template-mr-review"
+          }
+        ],
+        "lastKey": [
+          {
+            "type": "text",
+            "value": "aw-demo-template-mr-review"
+          }
+        ],
+        "rootDigest": "sha256:528ca1ab45fbc152c38751567eeb17b3283fd96c264ba6ae32ca8d6be0f5d185",
+        "rowCount": 1,
+        "table": "capability_templates"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:1a932b45b4bb6384e1ec14dc150180106996d4b335096c51ce942296d6b915d6",
+        "rowCount": 0,
+        "table": "clarify_rounds"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "DEFER",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:6ab7408c52228cf296165787b3efd2e6e71718b2f298766f51ffac4539f850c3",
+        "rowCount": 0,
+        "table": "code_ai_attempts"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "ARCHIVE_THEN_OMIT",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:705a02d47a1ab826e280f89a975a6cf9af264f90a710bce9d838841e1350ba8d",
+        "rowCount": 0,
+        "table": "code_artifacts"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "DEFER",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:d16362af62c0e4f225ccb5f205f7ea41b63d9a594f093c2e37182623c10763a4",
+        "rowCount": 0,
+        "table": "code_findings"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "ARCHIVE_THEN_OMIT",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:6f694bce78e5b5b3894de2bf0288e06fb2fa51fb195444873f67c941dc7c1b66",
+        "rowCount": 0,
+        "table": "code_fix_attempts"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:3fabed8320fd1ead451c6658952858ce45fd41cccab5b6c4e9be88f8f2aa53ca",
+        "rowCount": 0,
+        "table": "code_host_connections"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "ARCHIVE_THEN_OMIT",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:866d5e315103ec5a42716855d2ba3566dd0094db39b808971219a0a7743d8efe",
+        "rowCount": 0,
+        "table": "code_mr_leases"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "ARCHIVE_THEN_OMIT",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:52665e7035b359fa8e33e2e3eebe1c1e8ec2902fd0bc6fb115bf2d3a3900b041",
+        "rowCount": 0,
+        "table": "code_produced_mrs"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "ARCHIVE_THEN_OMIT",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:27ebd935b39458bf438d4d3bb99fad8e1f022d7ff40ee2ca82a36c2785d78f64",
+        "rowCount": 0,
+        "table": "code_publish_intents"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 1,
+        "chunkDigests": [
+          "sha256:ea0415f037829c5d902f57335879ee4b06cfc80b6adf9364ec481a0f3750a13c"
+        ],
+        "disposition": "DEFER",
+        "firstKey": [
+          {
+            "type": "text",
+            "value": "aw-demo-round-0"
+          }
+        ],
+        "lastKey": [
+          {
+            "type": "text",
+            "value": "aw-demo-round-9"
+          }
+        ],
+        "rootDigest": "sha256:f1fc13fbff440802354e0691bd58e95dcd03ff61f1b3311bc0ca631f0d24e321",
+        "rowCount": 13,
+        "table": "code_round_stages"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "DEFER",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:51963513dc61d72f6fa063d43ba768938908bc0890721fa1d2aa909973cd125a",
+        "rowCount": 0,
+        "table": "code_trigger_deliveries"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 1,
+        "chunkDigests": [
+          "sha256:ffd66beb045705f25a5f0c8fc539368dc048fdb1b75d3fe0074d205c540ad5bb"
+        ],
+        "disposition": "DEFER",
+        "firstKey": [
+          {
+            "type": "text",
+            "value": "aw-demo-work-item"
+          }
+        ],
+        "lastKey": [
+          {
+            "type": "text",
+            "value": "aw-demo-work-item"
+          }
+        ],
+        "rootDigest": "sha256:65cd3cace5b069e855a69f0e61e23e32edc84d609ebb6d47b4039225cf2c2559",
+        "rowCount": 1,
+        "table": "code_work_items"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "ARCHIVE_THEN_OMIT",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:af303eadd10d3d075ed66506b029d3c140cad679798fdc8b2d7cda804e800ab8",
+        "rowCount": 0,
+        "table": "code_work_observations"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 1,
+        "chunkDigests": [
+          "sha256:3a8ed0b2c29c151275f8ecde8d804f5234f87b6e8a441c0122e742fe5949664b"
+        ],
+        "disposition": "DEFER",
+        "firstKey": [
+          {
+            "type": "text",
+            "value": "aw-demo-round"
+          }
+        ],
+        "lastKey": [
+          {
+            "type": "text",
+            "value": "aw-demo-round"
+          }
+        ],
+        "rootDigest": "sha256:cad3dff4919e4e0207d4166b42bd23aa796b9ba044efc38f08bbcb6950a58911",
+        "rowCount": 1,
+        "table": "code_work_rounds"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:2eeb2373d58914997b50c514b5e28bc861ad137e43bc3125f0941d34d5ba0319",
+        "rowCount": 0,
+        "table": "collaboration_gate_artifacts"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:ac08e2e463047441388e7341f6d79e3f889279cadc05efcdfab8ebba15e51d37",
+        "rowCount": 0,
+        "table": "collaboration_gate_operations"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:fd951a2e549df36f3e05e36e9dd5d7c8184a8b5709045a52094433a307332e14",
+        "rowCount": 0,
+        "table": "committed_event_aggregate_heads"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:dd19a82fcc1849fc057f0cadf352759ba65b8959f5e0cfb26c36c5b58a43f5a3",
+        "rowCount": 0,
+        "table": "committed_event_deliveries"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 1,
+        "chunkDigests": [
+          "sha256:5784918c3783b0c3d805adda87eecdbd7ab8cbb1eaaf7e490228349a94629175"
+        ],
+        "disposition": "DEFER",
+        "firstKey": [
+          {
+            "type": "text",
+            "value": "collaboration"
+          },
+          {
+            "type": "text",
+            "value": "clarify"
+          }
+        ],
+        "lastKey": [
+          {
+            "type": "text",
+            "value": "task-execution"
+          },
+          {
+            "type": "text",
+            "value": "task-lifecycle"
+          }
+        ],
+        "rootDigest": "sha256:d56da7469efc15ad014f580d8262fc1926be6e7cb4c2431cb91d45300515faef",
+        "rowCount": 4,
+        "table": "committed_event_family_cutovers"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:0839ba26b19c00ca1c41b128338619026fe426d65387d9b49615591eb861aea8",
+        "rowCount": 0,
+        "table": "committed_events"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:95f8b945a2710907b44dc2e5d077e785614c518f40e15485d33afdbb18ac9f84",
+        "rowCount": 0,
+        "table": "custom_event_source_definitions"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:5da2141b44f01265b2aac585c2e78fc9cc4276e0c5cb91f95c29c116d69247a2",
+        "rowCount": 0,
+        "table": "custom_event_source_revisions"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:22913721406082e6ac6c55e4e9046841ffbec1f6e444546461a1e2bcdd981eeb",
+        "rowCount": 0,
+        "table": "development_action_runs"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:c8998b25c54836ed9df0e7ae1b59a2c8a5c89edcce08417e597b957d4b41a86d",
+        "rowCount": 0,
+        "table": "development_adapter_definition_revisions"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:1d9781203cec29edffcb4509ccc8c77a3d974068897e2c52486d78f75216a0f1",
+        "rowCount": 0,
+        "table": "development_adapter_definitions"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:9103a04a7c713f29e2c675cce2a235863bb78a15f0d0d208ed019fd772a41a4d",
+        "rowCount": 0,
+        "table": "development_agent_attempts"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:8734e0bf0d3ea8e204ab3a59fc9702056701e986549452dedd8397fb4f31421f",
+        "rowCount": 0,
+        "table": "development_approval_sagas"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:71148e30e417e8a4dd09c7627db68a5018b50c7e3cdaec832d714ee17d938b3d",
+        "rowCount": 0,
+        "table": "development_bundle_refs"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:3ff896846e45eb580f70fb557927324044d5203b2e7627004d9d391ef10a40fb",
+        "rowCount": 0,
+        "table": "development_decisions"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:c18064bea438fb96e3c26667951d2b0b0af33ec57631898e959a00a938637d29",
+        "rowCount": 0,
+        "table": "development_deferred_wakes"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:bed9b16e4ab29e33747aa25bf8e68e1eb7241374410371a94fb556854998bc55",
+        "rowCount": 0,
+        "table": "development_effects"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:fc9af5794d87c9c44f0c08970adc303b9c64ef6d1a05f4269dc532b8b7888563",
+        "rowCount": 0,
+        "table": "development_fact_snapshots"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:c0469cb6b0bca3240fc24c69f16af87c6b2ac0fe739ffb97933e42e6b47d0b4e",
+        "rowCount": 0,
+        "table": "development_feedback_ledger"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:4f9b4671aa487272ef4794047dfc9a301ca6f590318a0224e17d46e38e0c48da",
+        "rowCount": 0,
+        "table": "development_mission_links"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:526f4780e89a23b0b0da40580fa984eb3ccd13a6d478ed5541b659517788887a",
+        "rowCount": 0,
+        "table": "development_mission_sources"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:27621ec832c86be9076c650a5360e99f3dd2412f4b7e1531876f0bd448146e5d",
+        "rowCount": 0,
+        "table": "development_missions"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:e7af0c3543315a74d497aa979e36f681cc0980466ea77e9b298aa72972b64502",
+        "rowCount": 0,
+        "table": "development_mr_claims"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:27984462c1f1833c82eaefab2b5cd228d5e27a9d6f2d555c8131ef23dbd8ea9a",
+        "rowCount": 0,
+        "table": "development_repository_upload_plan_entries"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:dc37aaf926c015bfc3c8e2d93fcb9e6aeddd8cf87c95e443dc7b91cabc1e98e2",
+        "rowCount": 0,
+        "table": "development_repository_upload_plans"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:5ae0496ad27b5771b8e22b72d7e15cb62b39ee53a7b0cfdef81fb755f0fe496c",
+        "rowCount": 0,
+        "table": "development_repository_upload_receipts"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:1a2c3fb39bec43497b7850377841d75f1e06c32803acabc7d346983da751d1c0",
+        "rowCount": 0,
+        "table": "development_step_joins"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:d3c39231ca0f13914cd79eb1b33a48a42a49ac91f324f82ec8213f7a7c9d8fad",
+        "rowCount": 0,
+        "table": "development_step_runs"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:17033175613bcabac3c1384fee4b4231c18582a887ab17cbc6b6be3c76599a0a",
+        "rowCount": 0,
+        "table": "development_wake_hints"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:f3d4025f83aee558f0b44291fdec7b66c7ec8b9b36f2a5d319854ea183f385bb",
+        "rowCount": 0,
+        "table": "digital_employee_revisions"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:3db7044527c8b69e482c671c130fadb3e7a3063a28572a4381df3f1bb54bf81f",
+        "rowCount": 0,
+        "table": "digital_employees"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:805658794ffe4cdc1c5fb3f12bb630a7f32a88276b8e0a7fc447589eb054df3d",
+        "rowCount": 0,
+        "table": "doc_versions"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:7a58fca6f3b1392c1224bf2a7fc66bfd496fb27c8507873f3fbe095a9b908253",
+        "rowCount": 0,
+        "table": "employee_approval_sagas"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:6a39663b92ad729d63d6f9f89c0794ce8e664ad9b6a2b372ca305bed24684a3f",
+        "rowCount": 0,
+        "table": "employee_attention_bindings"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:7773ed0f1ca82d7f18d2825eea465a6b2bb1688e55cbd78ed0b3798cecc565d7",
+        "rowCount": 0,
+        "table": "employee_case_event_origins"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:db9602043d27e754bdf77d6d24de2a8bd42a327615f09da4a78a5bb4db16955a",
+        "rowCount": 0,
+        "table": "employee_case_inbox"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:53477a19ef442a4c63894f26a5d6b69a991f15ba899c6f3ca8c0f658fa3ecca2",
+        "rowCount": 0,
+        "table": "employee_case_members"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:3882a998544f8cb6270bb7c065a43eb067390edc8ee7b62666b36014d40fd69d",
+        "rowCount": 0,
+        "table": "employee_case_metering_receipts"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:d9df672b34b832d69132ccaf4f5e227b473d1e2d6202568a48becfd2c612bbe1",
+        "rowCount": 0,
+        "table": "employee_case_workspaces"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:74fc8b7638c84b768eb9054611a8c659424456aca9a6ad5bda68ef7e6474b00c",
+        "rowCount": 0,
+        "table": "employee_cases"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:17c665a634348b59821a03096cbb1e4feefffed27d15ecb7937f2d88919da291",
+        "rowCount": 0,
+        "table": "employee_change_candidates"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:2bb0c6accb44859fa6d4381069b5f2b24e3795c8b4a5654fcd5e61bb1988c17b",
+        "rowCount": 0,
+        "table": "employee_channel_results"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:6dc060a3dc0dbf18264b381a28cfd2579cbbac10bd72ee337d85d271ee457124",
+        "rowCount": 0,
+        "table": "employee_channels"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:55b94ea96dec28eff0f878c63f9f3366a1bf231ba87c897102c87840e03209de",
+        "rowCount": 0,
+        "table": "employee_context_links"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:a86525354caeaaa7e549875b81ddfd2f85d6f2518a503684930ebbf0556c2f75",
+        "rowCount": 0,
+        "table": "employee_context_records"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:19fdd4cc56e0079da5a8ca28a304827561e10077f4717e353c5d6383b8155227",
+        "rowCount": 0,
+        "table": "employee_context_revisions"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:f1a92d0bee411bc74a0903305c9c895d3602181e212562986f5e26c3b55f3043",
+        "rowCount": 0,
+        "table": "employee_definition_revisions"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:eddce15ede74faf30122b767302b79d696c5d977195ddc185468b15305e13322",
+        "rowCount": 0,
+        "table": "employee_definitions"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 1,
+        "chunkDigests": [
+          "sha256:34e584c86b4e4b72d9db87f70e40f342eec797f7ede36eebb1a74b76bf98d209"
+        ],
+        "disposition": "KEEP",
+        "firstKey": [
+          {
+            "type": "integer",
+            "value": "1"
+          }
+        ],
+        "lastKey": [
+          {
+            "type": "integer",
+            "value": "1"
+          }
+        ],
+        "rootDigest": "sha256:e3ee48d7b4fdc144c70e8bcb697cdb6a5d668c589bc7be9c93dadb9ed17453c8",
+        "rowCount": 1,
+        "table": "employee_execution_policy_revisions"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:eb8ece78c5ec32f3a26c46e353f8fc11e1865cc23009c48a7641080ab674991d",
+        "rowCount": 0,
+        "table": "employee_external_context_bindings"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:eeb01d13dec686e87a9bd350a73e9e274906fd485351655574fb5ecb25dc603d",
+        "rowCount": 0,
+        "table": "employee_input_uploads"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:9ce0e34c9553509d742a83e10f7c12a1c8312c2db0bcf0fe0a3fc5ba261e2a97",
+        "rowCount": 0,
+        "table": "employee_invocations"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:751037c5b1fb6f55ae5b9bc8ba321d8332c1d4a3fd32fb3526bae3453690d53d",
+        "rowCount": 0,
+        "table": "employee_job_template_revisions"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:8b13a50b70181120bcbc58015fd795aa1b71c3f884564a1ea9643d53bc55e6d3",
+        "rowCount": 0,
+        "table": "employee_job_templates"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:5e17a4a2529136da43add63d2c29fac62c69e2e5650ff976c28ad6ddd1aa505d",
+        "rowCount": 0,
+        "table": "employee_os_outbox"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 1,
+        "chunkDigests": [
+          "sha256:1c9277551a0d8686b53770fb8633e554ea57a63ff9f0f64794e30763651b39e7"
+        ],
+        "disposition": "KEEP",
+        "firstKey": [
+          {
+            "type": "text",
+            "value": "global"
+          }
+        ],
+        "lastKey": [
+          {
+            "type": "text",
+            "value": "global"
+          }
+        ],
+        "rootDigest": "sha256:89ba86459dbe2b339dc86192b3856f462727b4944543ac3bfbd9c19f81126b0c",
+        "rowCount": 1,
+        "table": "employee_os_settings"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 1,
+        "chunkDigests": [
+          "sha256:c8ba693e0acc2d92dbe90ea5064ca98693bd66affeaaa8be18ba6d13b1827e3c"
+        ],
+        "disposition": "DEFER",
+        "firstKey": [
+          {
+            "type": "text",
+            "value": "global"
+          }
+        ],
+        "lastKey": [
+          {
+            "type": "text",
+            "value": "global"
+          }
+        ],
+        "rootDigest": "sha256:b313ebe32c1eefa5e6faae5cdaf94fd112ce2a10bf99191c72ea6653e5da5526",
+        "rowCount": 1,
+        "table": "employee_os_writer_state"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:575bec9c5c69d13cc3765961d06a9dd068f598258e303d88c0275fd93a418cf7",
+        "rowCount": 0,
+        "table": "employee_reaction_rounds"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:e9fa979b7ba3569ddd6000bd45c007afae2c163686c1076f63dba6bc87f1c8a2",
+        "rowCount": 0,
+        "table": "employee_round_workspace_states"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:b7da394c1c76f0e592cf269316b61bf04e1a626ed9172d68901d0e138b384298",
+        "rowCount": 0,
+        "table": "employee_tool_registration_revisions"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:895d0916f8d14fe8dddfc0a55cd7041136bef97b0f75b8f7bff680dad697b329",
+        "rowCount": 0,
+        "table": "employee_tool_registrations"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 1,
+        "chunkDigests": [
+          "sha256:9622a2e8b0a0c8db2477aa9ca9f7be335fe2d539fdba405b7040435ff9f686a0"
+        ],
+        "disposition": "KEEP",
+        "firstKey": [
+          {
+            "type": "text",
+            "value": "development"
+          },
+          {
+            "type": "integer",
+            "value": "10"
+          }
+        ],
+        "lastKey": [
+          {
+            "type": "text",
+            "value": "development"
+          },
+          {
+            "type": "integer",
+            "value": "10"
+          }
+        ],
+        "rootDigest": "sha256:e540c56ebeec9826023289986e607555a2ceff19dd928532c1003cabc233e285",
+        "rowCount": 1,
+        "table": "employee_type_packages"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:b8b0961cb8392a7b95173631220d725eaae5d6135caeaf28f0139c4abac7ac21",
+        "rowCount": 0,
+        "table": "employee_work_scope_revisions"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:b7209f39d2597872a67cf06de61099c291dd3015d2432e6fd16fd5ada16358b4",
+        "rowCount": 0,
+        "table": "event_deliveries"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:cd77e08d67b07951a093e97a1fe1b3ca58068ddb0082e4b7b3b1558116486efd",
+        "rowCount": 0,
+        "table": "event_observer_runs"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:bbf87d4aac23007e3b36fca13890eb41ceb3675411f6fdf1fe033644f1c1d809",
+        "rowCount": 0,
+        "table": "event_records"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:afa65dd4f3cbe1c1fe6841699026673263075f1ecebff284d491646798d48571",
+        "rowCount": 0,
+        "table": "event_response_rules"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 1,
+        "chunkDigests": [
+          "sha256:ac50d0225c58cdcf7127d09c0c206afad08027c5c2e814d3fe22d66edd59c7ef"
+        ],
+        "disposition": "KEEP",
+        "firstKey": [
+          {
+            "type": "text",
+            "value": "code-host.activity"
+          },
+          {
+            "type": "integer",
+            "value": "1"
+          }
+        ],
+        "lastKey": [
+          {
+            "type": "text",
+            "value": "platform.task-lifecycle"
+          },
+          {
+            "type": "integer",
+            "value": "1"
+          }
+        ],
+        "rootDigest": "sha256:278fe6ce49362dd98ff8e379eed3af7e400c7542441ba3f64fd221a99df10ceb",
+        "rowCount": 6,
+        "table": "event_sources"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:089d4ac1c8fe71a7fc26857d9eda26512e1f0272527213c44fbba5807f6d3acf",
+        "rowCount": 0,
+        "table": "event_subscriptions"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 1,
+        "chunkDigests": [
+          "sha256:99f460333fb23a4eea7b6efcf7f3fb7011264adfea19bb0bd8359b4e7e737b86"
+        ],
+        "disposition": "KEEP",
+        "firstKey": [
+          {
+            "type": "text",
+            "value": "approval.status.changed"
+          },
+          {
+            "type": "integer",
+            "value": "1"
+          }
+        ],
+        "lastKey": [
+          {
+            "type": "text",
+            "value": "platform.task.status-changed"
+          },
+          {
+            "type": "integer",
+            "value": "1"
+          }
+        ],
+        "rootDigest": "sha256:61a4a426537f13ba2e45aa2506da486cbe9896c333a54cd2cbac820290b7840c",
+        "rowCount": 33,
+        "table": "event_type_catalog"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:33db6a5c6bd8bed9612c1a93f52d95a2e975f008f6c1a6b4125e46791a0cf5a4",
+        "rowCount": 0,
+        "table": "fusions"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:27fb6bf6687194b73e410a1f0de8a9085c119414f8da56ba7d216af7531a41ef",
+        "rowCount": 0,
+        "table": "intent_apply_journal"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:f6708e4d1d4bccbda15551b3e0993bff87d2c8460c1895c36f70937b3e1b06e0",
+        "rowCount": 0,
+        "table": "intent_draft_resolutions"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:739d94b1425d68ef9b4db8627b70540c17abe878b794589ece5ccf5de4232d2d",
+        "rowCount": 0,
+        "table": "intent_drafts"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:3f83c269761f9800724e205068e7d395980486caae27793c0dfe47aab7366289",
+        "rowCount": 0,
+        "table": "intent_provenance"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:e3ded20c4bf8644bdda76230c1af6bbdf3e73730b66bcc7a1bb2af344143b023",
+        "rowCount": 0,
+        "table": "intent_sessions"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:e90af58f5ba0a0b0f255b122ef597928470c49dc8d69a6004ee7b2c4f5d2423c",
+        "rowCount": 0,
+        "table": "intent_turn_events"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:98be3207ba4992dfff71e5c3fd6d647374803f95d2ba86ce30cb6c37564c7136",
+        "rowCount": 0,
+        "table": "intent_turns"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:ebc85cec47fa58d0458a42e7925ec08c0b3bdf61e9a86e3a0049b51127a8d769",
+        "rowCount": 0,
+        "table": "intent_working_set_changes"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "DEFER",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:a93df0db8d54fc297af05ada84e6cfa40e8ef2aa51c2889b2e55ed6bf0e643fb",
+        "rowCount": 0,
+        "table": "legacy_code_work_item_links"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:f786c227a8a67285a4c00ef1dede1d06cdcbfd3dcc0829b83e1dab11055e85d6",
+        "rowCount": 0,
+        "table": "lifecycle_alerts"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:8ce0b79c5fa2ae21b5666992d1ecd7fde845e9863ac3fc98d592521ab78e1d01",
+        "rowCount": 0,
+        "table": "lifecycle_repair_audit"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 1,
+        "chunkDigests": [
+          "sha256:a6a794c499386aa6922e3cf6236727eac0bc68d78920184739267076d821ffc1"
+        ],
+        "disposition": "KEEP",
+        "firstKey": [
+          {
+            "type": "text",
+            "value": "01M68BBR84B3YJ2BQ8YQPXDNXS"
+          }
+        ],
+        "lastKey": [
+          {
+            "type": "text",
+            "value": "01M68BBR84B3YJ2BQ8YQPXDNXS"
+          }
+        ],
+        "rootDigest": "sha256:ebaecd357f415c62a6f35682b6eda803594b22e3c9c49fc2d6aefad115c1d9ce",
+        "rowCount": 1,
+        "table": "maintenance_runs"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 1,
+        "chunkDigests": [
+          "sha256:65c1c9ee46eabefb10b716f091fd04d7455d44b60d8e191d77d53bf32868da79"
+        ],
+        "disposition": "KEEP",
+        "firstKey": [
+          {
+            "type": "text",
+            "value": "rfc354.frame-backfill.v1"
+          }
+        ],
+        "lastKey": [
+          {
+            "type": "text",
+            "value": "rfc354.frame-backfill.v1"
+          }
+        ],
+        "rootDigest": "sha256:56f5adc4929dbe2be4bc55e411ff7590ebffc437bea8793ffbd609ff34adac3b",
+        "rowCount": 1,
+        "table": "maintenance_state"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:07f52c59e60e4cfe4bad301bb8efd9d98fbf467a0538e5ca161244a3a13741fd",
+        "rowCount": 0,
+        "table": "mcp_probes"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:a754ebd96228a1215433a75371421852fcb88a909e7b08b2608fdd7b7540a4e8",
+        "rowCount": 0,
+        "table": "mcp_runtime_test_create_receipts"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:b07fdf7bbcf8bf4d38f34188c35d2d3769ac4a425e18a2486b24a185565b56d8",
+        "rowCount": 0,
+        "table": "mcp_runtime_test_events"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:d6f900fa7090987050b3038814ce4fdbc35f0afee0f4be78b0c8b1b4a5dfd239",
+        "rowCount": 0,
+        "table": "mcp_runtime_test_session_leases"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:42684182fe8d0239fee19a533129087696315f5fb26c0ee50466feafa4537f10",
+        "rowCount": 0,
+        "table": "mcp_runtime_test_sessions"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:019a2a5c086f5aec99bf8d59d817c36c2bbce1753807f2e4b5b52ad47465fce7",
+        "rowCount": 0,
+        "table": "mcp_runtime_test_turns"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:a66b0430b0037b16d04425a53f279f7d95107d0a299ee799d4ce40681741d1a1",
+        "rowCount": 0,
+        "table": "mcps"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:a77940b1ea12932b736f1647f9fa4897ff3c951100f5ad0a62c4aba6bc12821b",
+        "rowCount": 0,
+        "table": "memories"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:5bb20f48e9a25994f9f1a61b1119260e1c8a3647aa6a9b3e70aaa122c8331d5f",
+        "rowCount": 0,
+        "table": "memory_distill_events"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:fef6e110b74ed5aa568158c24097264472010257e4cbf4bdde3d684d2bd338b4",
+        "rowCount": 0,
+        "table": "memory_distill_jobs"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:f2c871114a91d750e0859770878e65c664978d4b4f061468a7b187c63d1f4184",
+        "rowCount": 0,
+        "table": "memory_scope_move_events"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:f9ec815a7c17ab416d07b2b6f64f7a21d0bc6033a4250db0d47b80d8a4e4191d",
+        "rowCount": 0,
+        "table": "mission_input_uploads"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:02048e076978e6e8e93d98ef7fbf0857290dd3cb17110b4344c2634084f7ec17",
+        "rowCount": 0,
+        "table": "node_run_events"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:b16f574df805b961caaa226a9afa73ddf35e064107651d6256a9e549aa582c35",
+        "rowCount": 0,
+        "table": "node_run_outputs"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:faa81d84d270284334c78a23a28f6310652daba29ab68bbe58bdde12ca6fb081",
+        "rowCount": 0,
+        "table": "node_runs"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:bbf61d4b369cc7277e54a0b29c164472f8dacae11217029220c43939b1d5f8d7",
+        "rowCount": 0,
+        "table": "observer_activations"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:e537b7451af38eedc288969d452844319018a09d0043af5b555fb5a81ae1cd1f",
+        "rowCount": 0,
+        "table": "oidc_providers"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:cea91053e4501f541376adab4ce2af2d4a10466aca09b26cf3b07d3f34fee7ee",
+        "rowCount": 0,
+        "table": "plugins"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:7df7d1413a476793b1d7bcd7513bf01299d896263825a0bae6b1ae265929eded",
+        "rowCount": 0,
+        "table": "recovery_events"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:4fed878e7b153c76006af81ac281dc304af62bd4245dc98ab081876d17410267",
+        "rowCount": 0,
+        "table": "repo_capability_config"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:69badaec8ef166ed7b9c67d63ba42766bf04eab2dc40969ad99ca360e4537e5c",
+        "rowCount": 0,
+        "table": "repo_group_nodes"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:c3b573a4f82138367a4707b66e71a0ece491d4b5e299f4d3d5f82d00a5904763",
+        "rowCount": 0,
+        "table": "repo_groups"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:0f635be46d77bf4cdd872458d41f6a41e3336208efa181484e44c74a50ed7178",
+        "rowCount": 0,
+        "table": "repository_employee_assignments"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:9a3e2e1bff7bca05ca1f301d2b53219dc53493449fae78f7fd1cec2d04183fd0",
+        "rowCount": 0,
+        "table": "repository_transport_connections"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:e013fd49911677f97be568ae7c25c9aa9f8cd9508de7f4829a4eb7e3dfe6c965",
+        "rowCount": 0,
+        "table": "resource_bundle_applies"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:1a91cfe3ed26931a186462d07f565f69f513e98e73a4c07c54e89696626d651a",
+        "rowCount": 0,
+        "table": "resource_grants"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:e30dedd18313d501a396a478faffeb9d2d9cfd3e1bb480de4a309fb6436895a5",
+        "rowCount": 0,
+        "table": "review_comments"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:c3b29b8524dca58d3a6097cc38e67a23de82b19c82cba673be72535e18be7758",
+        "rowCount": 0,
+        "table": "review_node_reviewers"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:8eceb4910c3e5d610752fe17e4a1eef83936c6a8111cc5ee3b66772220f34158",
+        "rowCount": 0,
+        "table": "runtime_session_leases"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 1,
+        "chunkDigests": [
+          "sha256:6076030eceba8d7e0d387deb9ceb84023343cabcfc9725577201f8d9eb41f5a7"
+        ],
+        "disposition": "KEEP",
+        "firstKey": [
+          {
+            "type": "text",
+            "value": "01M68BBQZW6C5DTY5HQ37YG6MS"
+          }
+        ],
+        "lastKey": [
+          {
+            "type": "text",
+            "value": "01M68BBQZWCNZ6HHVZ9FMCBJZR"
+          }
+        ],
+        "rootDigest": "sha256:ef3d2517a9f24ce8ac0971861d08404ba9e609c58f6d8161fedc7d03e13fe01a",
+        "rowCount": 2,
+        "table": "runtimes"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:665d4f97f4e61094ca039fd3bf9fa04c40d8b18bece863e0684bf32c54cbaa73",
+        "rowCount": 0,
+        "table": "scheduled_tasks"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:0463711832a31e5d96301f5859506e01676debd80201b5ab1c428817d6345cbf",
+        "rowCount": 0,
+        "table": "skill_operation_locks"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:4b8d026ef5d53f88dd5b421753ba7a6307e33ebda38efbdc5c722e9eb34cae4b",
+        "rowCount": 0,
+        "table": "skill_operations"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:d78983118b011f5661fa7b8f9a9d4ddadf937faadd1f5fc2b6fbf5625e8e1692",
+        "rowCount": 0,
+        "table": "skill_versions"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:5ee0f42655b33424811be4ee8d5f42a497ffaf44e032ffdff9f6406d9783772b",
+        "rowCount": 0,
+        "table": "skills"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:92ff3d8e5b8f6a052e5121436b5fccb6da21ee3cb9770ee8e36a7610b846208d",
+        "rowCount": 0,
+        "table": "task_archive_audit"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:5fe7c34cd74f0871f7b22ba4758aecb9ae3973c54c3dd7dea6c0e4159aa673b8",
+        "rowCount": 0,
+        "table": "task_collaborators"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:a7fdaf18fc2f6cc4ccf8483a1d1ddf88e9b6e5d60f2e205b5fea627d3b67c1e2",
+        "rowCount": 0,
+        "table": "task_execution_effect_attempts"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:22b45e077543ae7c4c5b4095d4634de06096b33555ab7e160c1f2cf41c7c346f",
+        "rowCount": 0,
+        "table": "task_execution_effect_fences"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:9b1124eb18f3f50b3fa22de94b2195a63903ce9aa3a803074e495c5678200ea4",
+        "rowCount": 0,
+        "table": "task_execution_effects"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:5cccc73dc00de613a87b2507fedfc13288bae06e6971bcf428f334d49030394c",
+        "rowCount": 0,
+        "table": "task_execution_intents"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:66914bd84435d7863238978bde2795c9b7073b6e2d466727e7b92eed1ffe7e76",
+        "rowCount": 0,
+        "table": "task_execution_lineage_operation_records"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:237ca9196ba70fc16bf7dc592033b07061ca5d1ca3f83731825a73533eacba4e",
+        "rowCount": 0,
+        "table": "task_execution_maintenance_claims"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:3bf02da07ed68006c4cd0752762eae6d81e560088d626c8b6d4b8bf07b3182da",
+        "rowCount": 0,
+        "table": "task_execution_maintenance_members"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:f129ff99817ad3993cb2217391755ed0d7a8dddb8210da444743fcd0a13b0a12",
+        "rowCount": 0,
+        "table": "task_execution_owners"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:5b1b60f1f1b35d4f939ab9910169bd611b894bafe2a9b5926d3087f24be70bf4",
+        "rowCount": 0,
+        "table": "task_feedback"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:b59b69cafa435ee3e5d5000843863067457241f2b29a0b74e5d230d3d076b868",
+        "rowCount": 0,
+        "table": "task_node_clarify_directives"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:e598c523f0b008b792be990b91428ff4d22ae15180cdf4d62858eb68b6e4f673",
+        "rowCount": 0,
+        "table": "task_questions"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:24eb5b6de900111427777bfd390081a3eaa1de795097d8e97fec8959eabc250d",
+        "rowCount": 0,
+        "table": "task_repos"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:55f04a053d5471aaf99c81827edeefc2330086a19a91ecb274baeb3b232d2549",
+        "rowCount": 0,
+        "table": "task_space_nodes"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:3bd503d7fae15968c9bcb28efd1b8f84fed49328ec8d05eb87e248a75dd62178",
+        "rowCount": 0,
+        "table": "tasks"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:cd2e7709ca620764a88d97365a99522da0e0975ffc081ebc45ccbb9beffd4807",
+        "rowCount": 0,
+        "table": "token_audit"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:ef9f3ec5ee925805171f718b27e5401370b4b87351e87f0d6104ca7066486ae6",
+        "rowCount": 0,
+        "table": "token_delete_snapshot"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:f2221e5ea1905b6f365f675a6949a94791ff4126d252135268e6e98884ee396f",
+        "rowCount": 0,
+        "table": "user_access_audit"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:fa635e719574e47525fc9bb81612cd15d62c714db42d0cec581430cc4186bbfb",
+        "rowCount": 0,
+        "table": "user_identities"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:6a85b66aef0d8f399e130d10dc17ca075ce417d08473d883c6dae77806c4f3c3",
+        "rowCount": 0,
+        "table": "user_pats"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:a28d6f9023f03d2d122c0d02148e3d787e0e7f5a4cae804f23f084ad6ad9b95c",
+        "rowCount": 0,
+        "table": "user_permission_grants"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:edcff9bfee50e370926f36a063dd47e255e100a22e638f55aec360ad45b6e626",
+        "rowCount": 0,
+        "table": "user_repository_transport_credentials"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:1d6b4573967b6c278af0fb496c2da1e29b3ef9a203d3465bf6b40bdd25166ce1",
+        "rowCount": 0,
+        "table": "user_sessions"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 1,
+        "chunkDigests": [
+          "sha256:f2fdaa09d5743758a0ac91885c99461d4f06c029e29907202840c80a6f1faa3c"
+        ],
+        "disposition": "KEEP",
+        "firstKey": [
+          {
+            "type": "text",
+            "value": "__system__"
+          }
+        ],
+        "lastKey": [
+          {
+            "type": "text",
+            "value": "__system__"
+          }
+        ],
+        "rootDigest": "sha256:015482e00c342aef5000ba88df3d039d19f69016d71f379be96092ddca30fc50",
+        "rowCount": 1,
+        "table": "users"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:04cf89591cc22fa556616fa32b93fdc53150e2a4d56c43a670a0afcd7ae8ed47",
+        "rowCount": 0,
+        "table": "verification_profile_revisions"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:2a61a30982aa649f82c468f2db71c606a67f402dda3e0cfb4888de96171886ea",
+        "rowCount": 0,
+        "table": "verification_profiles"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:65c7d93ef8d9891c1f870ec1f7203abd3acadffea963ce967e134a916c9dad46",
+        "rowCount": 0,
+        "table": "webhook_deliveries"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:3804dd521d6d3196e678020c6c7baf91f820b8dfc0e47e25e6218d350283be10",
+        "rowCount": 0,
+        "table": "webhook_endpoints"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:f048640f5bdf813f34f13e9f126a97ee7eb66ded3f8e0a55183a9d9ce8d6ffc2",
+        "rowCount": 0,
+        "table": "webhook_mr_control_effects"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:f34c849a406f74db4f6dfe92aea5393d6247e662573a713f38d34773ca13c174",
+        "rowCount": 0,
+        "table": "webhook_mr_control_targets"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:51cbd4635ae8b0d586d00bb2dbd39fca8de042a319bfa9424159ad399bfcd353",
+        "rowCount": 0,
+        "table": "webhook_mr_launch_guards"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:1cab6c9248cd64af398a20c7a88d9d679c7af9de20d65d8949ad36703e0d1fba",
+        "rowCount": 0,
+        "table": "webhook_mr_stream_states"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:043859f43e5cbed01a98b1d0b1e8a95f881e7d0d0ae9f304aa48b1e66f4cdcc1",
+        "rowCount": 0,
+        "table": "webhook_trigger_fires"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:bbf277397b55e2e5c4514c39bfdec4533852276931ed0e13f8eedec889cb5883",
+        "rowCount": 0,
+        "table": "webhook_trigger_streams"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:6a19dea4a5464359b4a5787890c77bc9f4a350456a095c3de44bbccf1bbc2345",
+        "rowCount": 0,
+        "table": "webhook_triggers"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 1,
+        "chunkDigests": [
+          "sha256:3655712bb3168aacdb9d6cafd50735df67c958424ce9dd7abea0e90ff9186ad2"
+        ],
+        "disposition": "KEEP",
+        "firstKey": [
+          {
+            "type": "text",
+            "value": "00000000000000000000000002"
+          }
+        ],
+        "lastKey": [
+          {
+            "type": "text",
+            "value": "aw-demo-workflow-review"
+          }
+        ],
+        "rootDigest": "sha256:ed0e4db18fdce245c56125e380dc38052a7373adefc149584d61a8edc05ffb61",
+        "rowCount": 3,
+        "table": "workflows"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:78556e697b6cba4b19ebcce576628b12da65d1255e36046d89b5f8d0269069a0",
+        "rowCount": 0,
+        "table": "workgroup_assignments"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:12fdbeb99b78d4e3e72c6e00b889009c821b2b7095b3194ee4e3e77b5d075dad",
+        "rowCount": 0,
+        "table": "workgroup_member_cursors"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:cd75f581303f690384e437cd1a841e562a17c601f3ab0a436122b19aed239f8d",
+        "rowCount": 0,
+        "table": "workgroup_members"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:82c284f5a249f3000af1883a5911751ed969093abb9082636208a5f1a99394b3",
+        "rowCount": 0,
+        "table": "workgroup_messages"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:69205c64449a8eb6b41373a3d0a075f09ead5de1e1c7fcf50c93b37f3995bb74",
+        "rowCount": 0,
+        "table": "workgroup_task_state"
+      },
+      {
+        "blobBytes": 0,
+        "chunkCount": 0,
+        "chunkDigests": [],
+        "disposition": "KEEP",
+        "firstKey": null,
+        "lastKey": null,
+        "rootDigest": "sha256:b592dbe16c25c44b19191299d1f717a27cb9d97cc40de9b350b84f290ed163d8",
+        "rowCount": 0,
+        "table": "workgroups"
+      }
+    ],
+    "version": 1
+  }
+}

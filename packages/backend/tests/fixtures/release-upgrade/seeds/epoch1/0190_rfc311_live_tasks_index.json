@@ -1,0 +1,13 @@
+{
+  "formatVersion": 1,
+  "epoch": 1,
+  "after": "0190_rfc311_live_tasks_index",
+  "provenance": {
+    "kind": "curated",
+    "sources": [
+      "packages/backend/db/migrations/0190_rfc311_live_tasks_index.sql"
+    ],
+    "note": "Small deterministic historical records; terminal execution and delivery states; original SQL performs its own backfills."
+  },
+  "rows": []
+}

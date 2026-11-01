@@ -1,0 +1,1233 @@
+{
+  "digest": "sha256:65678064042d590dc04f697debd208bfc1fda266c8a4c9d2971acd2649b8eb39",
+  "payload": {
+    "cancellationRequestedAt": null,
+    "cancelledAt": null,
+    "checkpoints": [
+      {
+        "committedAt": 1793498368518,
+        "digest": "sha256:765737414b9e8d98a40eb1cae2b2c4231d2a64009f9f33a4bec89130028f8528",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:preflighted:v1",
+        "phase": "preflighted"
+      },
+      {
+        "committedAt": 1793498368527,
+        "digest": "sha256:518c1efb366ec4f46246e74a15c8a986892cc901b3b098600769619430de7612",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:source-frozen:v1",
+        "phase": "source-frozen"
+      },
+      {
+        "committedAt": 1793498368596,
+        "digest": "sha256:9212f25413ca7fd18cb7866db12c2fa43aca53d94ebd763de8c0d381f70a5e8d",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:backed-up:v1",
+        "phase": "backed-up"
+      },
+      {
+        "committedAt": 1793498369147,
+        "digest": "sha256:e40519bbf8e9b234003457a674f8a733b0aae16b2e943108c13b554b1cdf8434",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:target-prepared:v1",
+        "phase": "target-prepared"
+      },
+      {
+        "committedAt": 1793498369149,
+        "digest": "sha256:4e7cc3d7542cd2e4945204752fcb5aced52f0268932acb968be1e3d53c6c784c",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copying:v1",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498369153,
+        "digest": "sha256:bac48ca7a18c92105aa85fe458aee19a909af2d0a5bf66e47d9ea63626361088",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:action_template_revisions",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498369156,
+        "digest": "sha256:1192d52c22367b30c2f08d83092c890149bd2ae286306ba7c45545077f3ee9f2",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:action_templates",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498369195,
+        "digest": "sha256:226d7ebdce09fa7393938aababb9bf9d6678b34e52823a2a93084707ca497af2",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:agents",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498369217,
+        "digest": "sha256:8a17e432ae419f6d6757cb16c82988f4250bf17abcd7d66aece51c0522ef9a84",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:auth_login_policy",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498369222,
+        "digest": "sha256:ca0d81576f3bd0fdc95e14ef67fd86201283db01721f4a304ddffa84d5234d77",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:automation_policies",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498369225,
+        "digest": "sha256:ad7d782a5a97da51ec6ad05e1a8390aae5ec83b541ffdaf6cbc8fa8cfe4b1935",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:automation_policy_revisions",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498369261,
+        "digest": "sha256:1d82de0835e286edf4ad193836b03485972c1039f672f0b6f0c69e8ca639aeae",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:cached_repos",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498369297,
+        "digest": "sha256:212a921f151baeec9a387465c862b111a346b41dd75b750ef81e050370c5dd2e",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:capability_templates",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498369325,
+        "digest": "sha256:552702ecc282f1d0362b63c1c60ed76a64337d62929498359d188dbdbf88f7a7",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:clarify_rounds",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498369329,
+        "digest": "sha256:bb7242b7bded778f3bbcfaeb0cd760f8c718551fa9f0b9ecbace5358ab4286de",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:code_ai_attempts",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498369333,
+        "digest": "sha256:0414e5e37db00f10a53161aa5fa2e81e181e9e0f14110313b66a2c56ad9dcb5a",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:code_artifacts",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498369337,
+        "digest": "sha256:6c2dd9e6bd1e096c93fe6d848be4f62b13b06cf6b5479a5fa3a4a60d13dcc106",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:code_findings",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498369340,
+        "digest": "sha256:e82e1eec36b8c409ebb16ac0beba50d9e8037713f61a1f3572c549285637763f",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:code_fix_attempts",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498369348,
+        "digest": "sha256:701a025dd24d54b9ff3c06a9c8328d0d77a6b20b37d077b8caa6b5a3a621fdd9",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:code_host_connections",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498369360,
+        "digest": "sha256:c91ae60775db816084f7b98f1a2c27daae2c80e58d3fcc1af8d14c5828935e2d",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:code_mr_leases",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498369371,
+        "digest": "sha256:67baee93a58159f774d34982640679474ab63ce333aaef408a10937e1eeed948",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:code_produced_mrs",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498369375,
+        "digest": "sha256:e96fb04e2b7bf194af8a339bc19d1545f69d6d295c8d9af318c41bdbb93befb9",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:code_publish_intents",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498369409,
+        "digest": "sha256:533e575c1e145dd582c3aacea19fabd0f8cb5c0badf214a75ef83165cc04baa1",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:code_round_stages",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498369413,
+        "digest": "sha256:67a38f43f0e714e32f5550be5c607e5b9d7f55112d493fc769d87c309455f730",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:code_trigger_deliveries",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498369484,
+        "digest": "sha256:8341187f11d683e0871802d0a8e5f7edf5e5eb9b21ef8f55491bb752000c2721",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:code_work_items",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498369488,
+        "digest": "sha256:19fbe7e6e34dbe391953fa687fd1fc6725a4be2367ea7c883b2f2b3e7b904592",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:code_work_observations",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498369521,
+        "digest": "sha256:15b2462317cba0b5ba8a50baadf02e6c3fba4e26bcb31fbc1336b65f1fee4576",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:code_work_rounds",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498369543,
+        "digest": "sha256:356cf852b2383d01661f615384632ec4fc5551facfabffa18f37d9be660318d4",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:collaboration_gate_artifacts",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498369576,
+        "digest": "sha256:e3cd1c5bb012a93cb15d1381dbd923d0fb542077c8f9c2d156143b1036416e53",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:collaboration_gate_operations",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498369609,
+        "digest": "sha256:e744d545c9e84e83da857936a968b2cc58941d07b126758e4c561fbdd37a3908",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:committed_event_aggregate_heads",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498369652,
+        "digest": "sha256:7c849b4df03d70c427b9502cd77f8f8f621d6235692b0adcf667e226de7f5d75",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:committed_event_deliveries",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498369672,
+        "digest": "sha256:19770fd5b197158f18dc93250c9ada82708b61edb4b22190f8f7394b16462be5",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:committed_event_family_cutovers",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498369696,
+        "digest": "sha256:7f272c57f023a396a99434f066a07e6e99cfac5439d30eee1c9e0f2bc7689ce8",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:committed_events",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498369701,
+        "digest": "sha256:7cd28de579e002dfa7846c3d083f959fb8b6015f0e21e88f283c8ce72e0166ee",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:custom_event_source_definitions",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498369705,
+        "digest": "sha256:175289635c65b720f09b8ae17e4d642eb6a3eb9e7c42f7dc5adbec046906441e",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:custom_event_source_revisions",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498369708,
+        "digest": "sha256:0d6bf81e78f5e5a2688a0d8884824671df0edb4dbaa5a9736a6fb159603f5530",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:development_action_runs",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498369712,
+        "digest": "sha256:f553bea9cc9f1bf12e77c5f57eff9a260e105077e094e35c40e6b30468dbeff0",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:development_adapter_definition_revisions",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498369717,
+        "digest": "sha256:986c58d15d30da555d2891623e8b7cb4f4013ee24a1c75bcf783178c11890919",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:development_adapter_definitions",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498369720,
+        "digest": "sha256:4d261022e50a7b7618d2a7936875bfcec128448bd65185104b411cae66fb2bd1",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:development_agent_attempts",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498369724,
+        "digest": "sha256:5a055a215f2328852a7e123be068f38a35f9fb4a69832a10d036bed8cf784a44",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:development_approval_sagas",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498369727,
+        "digest": "sha256:9c080a8431cc518484e227310bfe2eb874f34640350f7280a5b693785a10d4a8",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:development_bundle_refs",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498369729,
+        "digest": "sha256:d3d3db2dc7bc62bb207fdf654e5c4c123c2b4304e933c144ada324c751a260b1",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:development_decisions",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498369732,
+        "digest": "sha256:4aa89d817027118e2595ae86dbe454d97426c58d3c1e1b22c680d454148d465a",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:development_deferred_wakes",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498369734,
+        "digest": "sha256:91bf6fd1603607409fba908b40dbbfc7925b57a29547249a5dca2ab6f3b2e80a",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:development_effects",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498369737,
+        "digest": "sha256:221646a446278f86af1ea019757a76e08dbdeecc6fed83adacdcb27e1a5eb624",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:development_fact_snapshots",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498369740,
+        "digest": "sha256:01c4f6e2fe2e649be95bbeb908250bd43e21160f75c71d681cd33060045a5e3c",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:development_feedback_ledger",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498369743,
+        "digest": "sha256:a9c69b3495960e11f22fb365c8ec49b8bc863536b40e1d6c82add2ff0b9db79f",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:development_mission_links",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498369746,
+        "digest": "sha256:c9ca9464f28f8a6303d584ac02857d8ac062298d5d960cea935979efb6b51f2b",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:development_mission_sources",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498369749,
+        "digest": "sha256:59e1d1014b39f7a294324a05b45f1cd5f73894e359c50b8cf15d8f890de4c249",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:development_missions",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498369751,
+        "digest": "sha256:1a73e46da7a6dc4dd9fb0c33a52107283c92fbfd6af80a54731b12f4d5f1752c",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:development_mr_claims",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498369755,
+        "digest": "sha256:098f57b8b20935e29c34f30e2483b22e22d11362250df9d802acc6ee2b9d0804",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:development_repository_upload_plan_entries",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498369759,
+        "digest": "sha256:5c9a5baa916eb57f991e8f3f70091ed8bcf24a5be06b1a894d3e07944c3cbe16",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:development_repository_upload_plans",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498369763,
+        "digest": "sha256:af5d4bb465dca01234deb7386df08eb088f112dcb3e8e055196607df466795b8",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:development_repository_upload_receipts",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498369766,
+        "digest": "sha256:e1376ad79952948337f0a2f5d77ce9b788ef9032facfa904c6c70a8e5fa9a382",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:development_step_joins",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498369769,
+        "digest": "sha256:716dd037d760713c6eb3bbbf13650d1e4d75d8751b07b81ac188a23b4e57d98f",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:development_step_runs",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498369773,
+        "digest": "sha256:9b1de2f86936ca1ca8c04603822ceff913974d8d574913446edf90a721a221a2",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:development_wake_hints",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498369776,
+        "digest": "sha256:71681fe14300a88b9d730b4baec9a954f3a8446bad6cf0cccf150ffa0e0a13d9",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:digital_employee_revisions",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498369780,
+        "digest": "sha256:182d925995b6920b78790eea0850173ad5aac15f5d6a38620256b0b6030cce32",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:digital_employees",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498369794,
+        "digest": "sha256:d073389e2f501e99c9d8fd4aae333eb015a3b4bcdf0080b526a95eaa8986e12a",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:doc_versions",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498369797,
+        "digest": "sha256:a379e69674a8c82aeaca5c1b799c616cf7c41a6ffb58c945f10f1d1d231cafc4",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:employee_approval_sagas",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498369800,
+        "digest": "sha256:199767f84e306561221d63b178933e214af58703f8d40764af5ba8a49fae35cb",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:employee_attention_bindings",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498369803,
+        "digest": "sha256:73e9d907d8cc97fff87c129c2e2d5edbf99707756d6ddcdd385e4a9b6ba4b301",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:employee_case_event_origins",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498369806,
+        "digest": "sha256:df1688ea5aa0a55ac26bed1e1cacc12d5eb795dec8916de31b61ccc0ee3f9389",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:employee_case_inbox",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498369809,
+        "digest": "sha256:3eb7f1cd44a9df6900539d97d5523575039a320044e0fd93368e2fffa0db71ca",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:employee_case_members",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498369812,
+        "digest": "sha256:622b3d72ea42453096d6c5291fb3c922c0e1cc6046e2b81897056c4383ac20b0",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:employee_case_metering_receipts",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498369815,
+        "digest": "sha256:bbeaca66b27625f7f05a51331cdda29596ee7960685015f49b810d19129cd7f6",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:employee_case_workspaces",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498369818,
+        "digest": "sha256:008879a82e2c10de367fceb25d1e907980d7090359f657ef7b137b321b827b29",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:employee_cases",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498369821,
+        "digest": "sha256:b0093843dcc0d45a508836b06cf48ad8f73df8e5370d9e4d59c75621950461d3",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:employee_change_candidates",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498369824,
+        "digest": "sha256:0cce0ef3784926e73cfa6fd798416ab53e810d926c95fdd8547ff69b8995e9e8",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:employee_channel_results",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498369827,
+        "digest": "sha256:8e632a67b28bff4cc67d9a8f2626761135d37a47de9cf155479839f2ee7f0eb5",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:employee_channels",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498369830,
+        "digest": "sha256:20bcb6de1c6d5fe780518b0c589feb850239d62c6aef06d9b07d356865e671ae",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:employee_context_links",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498369834,
+        "digest": "sha256:70eb7243d1ad9cef4d08d2ea3630f7b0dae884f5a3218a7b998036ba6c88feba",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:employee_context_records",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498369838,
+        "digest": "sha256:d6da86e80e1bfab9bacd15e22efcd0b578508bff2ec938c700cc36ceb233adf3",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:employee_context_revisions",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498369841,
+        "digest": "sha256:4c99e6ec6f028e864bf374a2ccf7c09337c1d175a2a3b20757e0a98868126304",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:employee_definition_revisions",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498369844,
+        "digest": "sha256:8702db936b5350a3598566b0ddae3b761a5a60a7b70ff2c7272662fe01814091",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:employee_definitions",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498369862,
+        "digest": "sha256:ec4b817ac9b1cfab94387292d7793f42e074e3d253c992c837ebc7a79431ec97",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:employee_execution_policy_revisions",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498369865,
+        "digest": "sha256:39361e86fb9d28848071343b3a4436416016a732b2c3d9abb55c70943c01a254",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:employee_external_context_bindings",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498369868,
+        "digest": "sha256:9dbd0a3e6be1a4c0e75a5e5199a503a36f6a14633260863e6f2c43a663bec190",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:employee_input_uploads",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498369871,
+        "digest": "sha256:cd35ab989cd6279929e8b9847912421ca800c2dc9194c0e8bbb2d848466128fd",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:employee_invocations",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498369876,
+        "digest": "sha256:d872fc5a5f55a35295a9a6025acf046fee70970f5f6efca24db6ef4451641a1b",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:employee_job_template_revisions",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498369881,
+        "digest": "sha256:d4055ae39dc38782b2763fe0839746a1d7112519ef4f50a18ac47237ace6557a",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:employee_job_templates",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498369885,
+        "digest": "sha256:909c9a2586eb867763ac645b085cb6c0882a15068933240cf840a9ed53d89d8b",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:employee_os_outbox",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498369905,
+        "digest": "sha256:73b37569c9247f80744244115b6675df52a48798a6413a54d50e225adfc19c19",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:employee_os_settings",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498369926,
+        "digest": "sha256:05ea009e20078549238e92c034c1a8c49ff65a5ee1939b3bca1000d0cbacd66b",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:employee_os_writer_state",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498369931,
+        "digest": "sha256:dae9402b50e65874832c489177a3d38da16b4ccf1f8949933422b3a58b77304d",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:employee_reaction_rounds",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498369935,
+        "digest": "sha256:7012ac4d2b591de6a1101eadac5f82195b2cc229aaccccf44e629f7e2cb514e7",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:employee_round_workspace_states",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498369940,
+        "digest": "sha256:0fa4a6c1574a50be5e13c740ad4138b9279e8939b365ea1dc7abf03ba533b1bc",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:employee_tool_registration_revisions",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498369945,
+        "digest": "sha256:2e1d9320982d39d6e66af59a7dc0f5f2f0023b13140a729667cf4a441d5683e7",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:employee_tool_registrations",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498369967,
+        "digest": "sha256:a7bd5553be19262d03872dada6a66c43696d9fe77cadda66711330f153f59b05",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:employee_type_packages",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498369972,
+        "digest": "sha256:a292f07c9fb8e5c50fba3eaaad91f494030aa297d55c3f00091be49f4a706dc8",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:employee_work_scope_revisions",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498369977,
+        "digest": "sha256:a9cabd6bd4e1fec3d7bba54b4868aba8952e16c91e0b17f340701d0e07b6e89c",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:event_deliveries",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498369982,
+        "digest": "sha256:1ca9f164007243fbb88b7c7930b89aba0440929c92c14dad14ae1eddf0c54b15",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:event_observer_runs",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498370004,
+        "digest": "sha256:a9845c2c1a48cceb904c07d10da648eb696bc4030a44d1bb5700d54af35db9c2",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:event_records",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498370007,
+        "digest": "sha256:fec7086190b9ddac1863195035a1a17af28a5b2f0bf9334af9da7224d3cc17de",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:event_response_rules",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498370022,
+        "digest": "sha256:348de9eb4a294342bcfbbe986e03c5b80b749deaae82524bf316d52fc9e61e01",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:event_sources",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498370026,
+        "digest": "sha256:8d96fbb8c3b868c6736d0b1e9010a1200c13f90b37136e28d6711aa3ba5473c7",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:event_subscriptions",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498370045,
+        "digest": "sha256:e14bf436a364e3d6cc9a6b56ecb1b6eeb1b9b5a403af25b170f71b3a6c11bbed",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:event_type_catalog",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498370048,
+        "digest": "sha256:9d27bac8b43c44b0bf50131116c8dcf65223f995bef14d41fd282360b28ffe31",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:fusions",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498370052,
+        "digest": "sha256:e67a56086ae139db222e711a4b111b05ad9f0dc2a130d8e5b6e629e7b219e404",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:intent_apply_journal",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498370059,
+        "digest": "sha256:e57b3e129f4050341d1aa233b2dd243835a1c5b44d79307029c61c6434ad4642",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:intent_draft_resolutions",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498370064,
+        "digest": "sha256:4db937e1af4d4bd9b08e766a826b9334b3bf3ad58c33b4be6982c239cd138f3e",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:intent_drafts",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498370073,
+        "digest": "sha256:0b8d6474f891d8557fcac9e3b6528a87e45db29c123bfa50a94ae857ed6279d2",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:intent_provenance",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498370081,
+        "digest": "sha256:70985644a31a64b1b58bf18372af41fb66577c5102484d678f710208b655087f",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:intent_sessions",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498370087,
+        "digest": "sha256:4cc9a796115b2dc1b70988d6892248a2073b7bb5a75d48ccd80d8cb474792b1e",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:intent_turn_events",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498370091,
+        "digest": "sha256:e0687beb6d8ff478b8e4bea521f899b2d3227cb2e18d2efe04340c6f3099f18a",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:intent_turns",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498370095,
+        "digest": "sha256:4291aab0835953b528ac28ad8f035e2b037adf62cc17b17898e3901b50cae427",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:intent_working_set_changes",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498370099,
+        "digest": "sha256:8034bbce614abe8e9c2d5d9d9473bd25b1d4a2753e735a4994e5449c1214f5e5",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:legacy_code_work_item_links",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498370102,
+        "digest": "sha256:3687dc327fedfd5829560cb7c4c0ec943bcf0dc0812cd0b0105679fa92792c44",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:lifecycle_alerts",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498370105,
+        "digest": "sha256:23fa1b96cbfb247372b75e7efe56bcffe3eb12324d0b2a8e73fe90d9929dc4dd",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:lifecycle_repair_audit",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498370120,
+        "digest": "sha256:f59a23beccd1d96d1731d436c1e9714d963640b5dd29d8d770b1877199e1a9cf",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:maintenance_runs",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498370140,
+        "digest": "sha256:4f3bc6b818d5a89b1f9488caa51cdd6bb4864059005b67fd2634b30d787a493a",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:maintenance_state",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498370144,
+        "digest": "sha256:82d1c0d90b83fa28af5c4cce74f7b0a0bbb0dff4ffa581d49c7d82481fdd11b5",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:mcp_probes",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498370148,
+        "digest": "sha256:f66cc4b5670ec5056ea7666b75436e2ef88340747dd6dbd3284eb51844bdbf5b",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:mcp_runtime_test_create_receipts",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498370151,
+        "digest": "sha256:f506d8343f0029a8cb1238e5b7e5804b03d63c2f3fbd37723ac08eddd75302e7",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:mcp_runtime_test_events",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498370154,
+        "digest": "sha256:eefaf6183f24870c5fb2ab5a8a7a65bef5d41ea721490788687a175c8ce3d382",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:mcp_runtime_test_session_leases",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498370161,
+        "digest": "sha256:535f1964f5d6113afeda145ee00c05de2247565e6667aa609de6d18a2e09de09",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:mcp_runtime_test_sessions",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498370164,
+        "digest": "sha256:928e9592c6c2417916abd74cf2c747bf5e8447b39430d33a8d2a0114cc69dd12",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:mcp_runtime_test_turns",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498370177,
+        "digest": "sha256:b9900964b0da388df08a08f2ea2e588e2b6b3d3fef1e7f8ea181fb7fd8b4a9bf",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:mcps",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498370215,
+        "digest": "sha256:2eeb3bd57c8403ae4b70a69b95442c05747ed193525541e7a5e2e908f527b134",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:memories",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498370221,
+        "digest": "sha256:83c4649fdbe2631916a34f93fb2d300151eb9183c109e098f1ac4f3502afe604",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:memory_distill_events",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498370226,
+        "digest": "sha256:d27eacb70440b97cf9c001661e5ffb3a57881f7b9124ceaa7a533b8f27885e6d",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:memory_distill_jobs",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498370232,
+        "digest": "sha256:8e5c6b7c9664e7a5a65e315cba704b56f1cf81cfdbc85175b7edb7e03a6bbe0f",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:memory_scope_move_events",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498370236,
+        "digest": "sha256:875f0d3a995d4fbb18eb85526d6d60a3693a8035c912d61e0269108ea38fd6fe",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:mission_input_uploads",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498370255,
+        "digest": "sha256:eb25165745691eb37e2aaf7afbc9faa40d2b793da893058db5ffbb1a975d61bc",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:node_run_events",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498370275,
+        "digest": "sha256:8964e60b902204a7969f4a979faaa54e2057afd9d31075fdd0f7e70f83f9040d",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:node_run_outputs",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498370305,
+        "digest": "sha256:0ab047ba710308f1e83a59b3ac6ca5a1ef8abb06dc8936014cb00ecb4fd90382",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:node_runs",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498370313,
+        "digest": "sha256:98047cd4fe85912f4c6de38ef2258966f73d64c7e5674100d2e0e6866588c43d",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:observer_activations",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498370321,
+        "digest": "sha256:e213ccb702f6e68c09295a7a0c4a97b91ec9c8a993adfbdc49ef362a1790da01",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:oidc_providers",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498370328,
+        "digest": "sha256:ac0f1c06ff61ba02df0e875fcd436d70f65e250846c467a48f08e6f79dd4afe5",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:plugins",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498370334,
+        "digest": "sha256:442ba85c90bd232e7a389c35b261d168e4409351b62651f9ca2cabda2aaf6d98",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:recovery_events",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498370340,
+        "digest": "sha256:0f6c3f31a46a5fe54b154bc50f67222586d2fa222f61ac06bfb5820ade29c57b",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:repo_capability_config",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498370346,
+        "digest": "sha256:7e285c98d4f7662d29419662e961d219b6e2565d4d784bfc793f391cc6bcacf4",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:repo_group_nodes",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498370351,
+        "digest": "sha256:d9778d94dfbf3b79e6122ef4e5f6549f83fe37d11c8cfa4c9127ad425792de62",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:repo_groups",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498370357,
+        "digest": "sha256:b97f707e0b81dbda131bced316e03e234fd25f9e234e8f57cb553832a82b5fc9",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:repository_employee_assignments",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498370363,
+        "digest": "sha256:df55fa0cb1598bf2fc8d0a035f294ad0726d8300b5bcb31dd69d6f986567a652",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:repository_transport_connections",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498370368,
+        "digest": "sha256:636f74e8878a432ada3766f7f937b7e3aa9e3724426f1219602a0d893fb71d27",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:resource_bundle_applies",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498370377,
+        "digest": "sha256:2bbf51a0fe56fcfcb81a0391954098b4f73a4f9fe44154f21c3e3c500216d483",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:resource_grants",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498370383,
+        "digest": "sha256:ce15207ea79ca2abb66488d8e5d8c8014a232df7bad340d0204e24be7bdc4748",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:review_comments",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498370390,
+        "digest": "sha256:75e32b95dc8dd1e68572f785c897c005ddee4d66a54fcf5a903992f47f3d4b3f",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:review_node_reviewers",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498370395,
+        "digest": "sha256:14306ed09157cfc84637cfbdd2b9a5aa2319ebc7a1f6372419296da141664341",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:runtime_session_leases",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498370422,
+        "digest": "sha256:aeae156819260ccf16135542e2659dfbe211052ca82b19a3d331256e1ba77e2f",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:runtimes",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498370445,
+        "digest": "sha256:50d94a73afc05e8eadc0b33d25cb4e5e189fae01319c66c5f41299557c7f4699",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:scheduled_tasks",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498370452,
+        "digest": "sha256:57bda20492263d5e62caca0a31a8bb4d51995d0c24b9b45d5e7abc5609fb6230",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:skill_operation_locks",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498370475,
+        "digest": "sha256:68d0e6a07a848d9ce753a0bf5d374bab025a3e5643855c8e82ea71413d725425",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:skill_operations",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498370496,
+        "digest": "sha256:e5be2a9fcc94a661cdfbc261c2ac54cc8406ba08c415e995148a226d3d36e9a9",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:skill_versions",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498370516,
+        "digest": "sha256:3a21f912cd4fb8cbd77c56fff95fb611205dd7dfe41b6f54b3f6624699a29eaf",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:skills",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498370521,
+        "digest": "sha256:16dc0022274c1eee437b7707fab2e9a69865528965f3c01d8d3762c056ccf231",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:task_archive_audit",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498370541,
+        "digest": "sha256:8359dae76df5ce1985c8072091c324a84ddbf0f7da77fff0cec459c61a3439cb",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:task_collaborators",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498370564,
+        "digest": "sha256:769b3a23847e99c6e7a45cf61411a428e2191fe5da00cfbbc27503f16bffe2a5",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:task_execution_effect_attempts",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498370603,
+        "digest": "sha256:b29b4b8634555f5d4638432343175eb8cf863eb5f25271d5bd530c09e2189f15",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:task_execution_effect_fences",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498370653,
+        "digest": "sha256:43885b62978ca29168de45875c87841a0015af0b2c44a3c9b9549332b8c99f76",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:task_execution_effects",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498370671,
+        "digest": "sha256:77542d7360bfa11438676e88b57b1fa8ed6195002543171dfc34363d8d1ddc09",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:task_execution_intents",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498370691,
+        "digest": "sha256:c9fbb84420b2a189b8eaf8c5141378ba5d7ff1cb315df4386169926c06048ce3",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:task_execution_lineage_operation_records",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498370696,
+        "digest": "sha256:3f89d2a43872720cad978c118648fe8f7c4a5ef6c09cc08fe887be81e50ba59f",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:task_execution_maintenance_claims",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498370703,
+        "digest": "sha256:735ce9b05d41ad65040cf9265e29072da23d0036b1e419c483aeab5bd4c9d739",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:task_execution_maintenance_members",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498370725,
+        "digest": "sha256:8662a3b20e337ac32302796dc19544a3138faf11d17dac080cbf7823cba9d9b9",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:task_execution_owners",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498370731,
+        "digest": "sha256:4c50c942c0242cfc9eec93b6e319902c78c8888465cb7c74ce47a8dcecdecfd2",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:task_feedback",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498370736,
+        "digest": "sha256:80256636b9b730a9be397a7145bbdc67ed938b02d7864b13e1c8ebbd3530094a",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:task_node_clarify_directives",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498370759,
+        "digest": "sha256:602344a7591dfdc1650e50c47beba9e34780e5b596de6955f1f88449d528e438",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:task_questions",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498370790,
+        "digest": "sha256:d0064431a944dc3b38609ddcd8d0b5962bc71cbc95133de7e11d867adca9a03b",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:task_repos",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498370796,
+        "digest": "sha256:d29e1961f174251e5f16ed18f85cc52f2f43aec4307bbc1571565acb587b946a",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:task_space_nodes",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498370821,
+        "digest": "sha256:2d65e8a2bda246ca31d65bd118bd6203f9125d9b7b34d838b302e37de7bad673",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:tasks",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498370826,
+        "digest": "sha256:04fd278349f94186f4790dfc5eeab8c1bfc38b96c9a05e0a2d0aefa207e34444",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:token_audit",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498370832,
+        "digest": "sha256:edc2dadcbc6c26015a76cd1d13009fb26f910e1057e78c607f922e498dd8be47",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:token_delete_snapshot",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498370859,
+        "digest": "sha256:3184f8f0d6417544d8bb05eae0b4f56405aaf2d86cad1bdb38bd9421ea0f9b76",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:user_access_audit",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498370864,
+        "digest": "sha256:2f2c0dbe5ac1cf51d7b316edd7f93b9ca1fb10f6659227c258cc81df95654623",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:user_identities",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498370870,
+        "digest": "sha256:82217f154a68373d3469a8371ce48030f16d06b98cf1947b389557fbb1b8fe4b",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:user_pats",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498370877,
+        "digest": "sha256:383ddb33a67659963c4010dab18951803b3c88e41e0a2be043d62d46b05f8548",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:user_permission_grants",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498370886,
+        "digest": "sha256:15c52ba2dd8a9709c517c200e004239332dd3c9112f0e602d073446059cec0d4",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:user_repository_transport_credentials",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498370911,
+        "digest": "sha256:440a5e5cecdb53c4ff48480eea4f26bf51c44efe8dc11690fa0e651a6d16b0ca",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:user_sessions",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498370932,
+        "digest": "sha256:f73c033ceeee92eaa5b8f40bbb3a95db540bbf13f2287155e29ffcde97bec8e5",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:users",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498370937,
+        "digest": "sha256:8329543eeb25096ec8c3aa374ea0e2b06b9b2c0bf5bae244969b8d9022339f52",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:verification_profile_revisions",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498370944,
+        "digest": "sha256:ff65850a9eb025c15fec4ecfb48ff2a415383e33ccc82760f155f464a63a9bcf",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:verification_profiles",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498370953,
+        "digest": "sha256:0db0ce5db393e50ec2f4cb3e4db7818c2df5e32bf59a48da55c8978f86a037c2",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:webhook_deliveries",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498370962,
+        "digest": "sha256:1acc427dd8eb7f04839648f31b36be16e7bf5fcffee95b3a15581fcc843fefc8",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:webhook_endpoints",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498370970,
+        "digest": "sha256:b485669288a47bd62fb389438ecdf6da7f241347e72857cd7924f6d0f70a2f90",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:webhook_mr_control_effects",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498370975,
+        "digest": "sha256:e127e4644b7122491cf0ca6fbd0b09d66bc2182994b841048b4d60a46a84809a",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:webhook_mr_control_targets",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498370980,
+        "digest": "sha256:cffae6361afb2ec481eb12a3b60f4819c56400e35aa6c5bad1312a5579d211f4",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:webhook_mr_launch_guards",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498370987,
+        "digest": "sha256:d03a0486ee7eb8c5b19fb52805f08313a962e19f7d1fa55a75bec094e6201509",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:webhook_mr_stream_states",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498370992,
+        "digest": "sha256:dfe93f4b9a71fa8f7deddb291e995c9a263d7383594754dcd818b4c8e9ff776e",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:webhook_trigger_fires",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498370996,
+        "digest": "sha256:3afa15efd98a4e003c7ff0956fe60d0afe1bdabd8b34df07fc9e529e21eb6cf1",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:webhook_trigger_streams",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498371002,
+        "digest": "sha256:24832f0a0374d15eb4f258db079290eeb194e86329478a7742e8a8e7edae3007",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:webhook_triggers",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498371039,
+        "digest": "sha256:23f3be2285dba00db7474a3cd177f4e1a0776361a9eb09bfa51bac12556a57ad",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:workflows",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498371044,
+        "digest": "sha256:6ec4f2e2fc18ecb8285ab30b71f4977ca071aff3e380e0342dfba8aed56e3743",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:workgroup_assignments",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498371051,
+        "digest": "sha256:5eedaa7ef9c3c87300d729933e1dbd1daf9360598234bf3291a50f8af170fc1f",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:workgroup_member_cursors",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498371071,
+        "digest": "sha256:e12784704a9d4f7d88cb71cc2baed2c5681f14f9c10bf6680a0807a337d0b418",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:workgroup_members",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498371076,
+        "digest": "sha256:62f6cf1a0af892b43b80071b3fe02eb97386732f7d600f66ebf63638278799a3",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:workgroup_messages",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498371080,
+        "digest": "sha256:8be68478564b72c55498ec489a749f6b027c124005daf149ff1311434f5a92d0",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:workgroup_task_state",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498371097,
+        "digest": "sha256:00c1dd1a246bc03a2a654ef4b245b1d57763cc46fdcc0e1c218c3c5824544559",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:copy:workgroups",
+        "phase": "copying"
+      },
+      {
+        "committedAt": 1793498371105,
+        "digest": "sha256:086e2269aee4ddf8ad7b2c4d9e5303d5f385f5d6f52a07f4d5fdfe9c35339c01",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:verifying:v1",
+        "phase": "verifying"
+      },
+      {
+        "committedAt": 1793498373513,
+        "digest": "sha256:fe39dcf4e8e090829246e27438084244fc534b9c324e4d4705f9497c2eacf626",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:cutover-prepared:v1",
+        "phase": "cutover-prepared"
+      },
+      {
+        "committedAt": 1793498373517,
+        "digest": "sha256:a08a1e015a21ae5ebe306fde4e62e9bfd6371c1b5dd1b9597c6117bb8e5445e3",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:switched:v1",
+        "phase": "switched"
+      },
+      {
+        "committedAt": 1793498373547,
+        "digest": "sha256:66ff0709596bfe740b57eb34adfe32ea463f22302dfd1f83e9f3b950a2a672d7",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:health-checked:v1",
+        "phase": "health-checked"
+      },
+      {
+        "committedAt": 1793498373557,
+        "digest": "sha256:ba9e1d18aada7da53694e47040a7ccd80004be60b6440780334698236fbe920d",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:accepting-writes:v1",
+        "phase": "accepting-writes"
+      },
+      {
+        "committedAt": 1793498374597,
+        "digest": "sha256:2aa7d542e4166230a19f77dc2071d8129a2f85176c34380df2108bac28995c60",
+        "idempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:finalized:v1",
+        "phase": "finalized"
+      }
+    ],
+    "createdAt": 1793498368333,
+    "failure": null,
+    "firstLiveWriteAt": null,
+    "idempotencyKey": "database-migration:v1:3d18217ac20a591d95636a6ad159735aa0ca8902fd720a5207406c2be281e024",
+    "lastIdempotencyKey": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9:finalized:v1",
+    "legacyArchiveDigest": "sha256:2fd61edce172bef920316041ba27a55ff1b4f912fc5f7860cb15658777490b4c",
+    "logicalBackupDigest": "sha256:00a77d5bc2c197cd3e1247ba0b3a2d85c1bfa74802701abe51e4f29fd3a0709b",
+    "operationId": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9",
+    "owner": {
+      "fence": 1,
+      "id": "dbo_01M6ADAJAD2Y50RJ67SZRDNSJJ",
+      "leaseExpiresAt": 1793498431097
+    },
+    "phase": "finalized",
+    "previousDigest": "sha256:edad91a856753f79e614777cdbbe4335b12981277a66e63bfd5cc53306714044",
+    "progress": {
+      "bytesCopied": 962892,
+      "chunk": 1,
+      "lastMigrationKey": [
+        "{\"type\":\"text\",\"value\":\"01M6ADAHEA17BMQDSGG299M6K0\"}"
+      ],
+      "rowsCopied": 370,
+      "table": "workgroups",
+      "tablesCompleted": 184,
+      "tablesTotal": 184
+    },
+    "receiptDigest": "sha256:a9f0d6d254a09cb256e15f651d1149b435dbca1ce8a30b313aceaa1f304253b0",
+    "revision": 195,
+    "rollbackReceiptDigest": null,
+    "rolledBackAt": null,
+    "source": {
+      "databaseFingerprint": "sqlite:9306bcd280a1a2c6d10726a3",
+      "generationId": "dbg_legacy_sqlite",
+      "provider": "sqlite",
+      "schemaDigest": "sha256:3ee9be23a3e0f46c002f76b382b33d137c6a9ef4ef78a3ee71e212e5247c72d7"
+    },
+    "sourceBackupDigest": "sha256:fc5ee7c754abe15eae7636f5d48490c1e21c96d58c9b8cb07b019d78dc582d07",
+    "tableCounts": {
+      "active": 178,
+      "archiveOnly": 6,
+      "source": 184
+    },
+    "target": {
+      "connectTimeoutMs": 10000,
+      "databaseFingerprint": "pg:e28db899222d38668c9a52cd",
+      "idleTimeoutMs": 30000,
+      "poolMax": 16,
+      "provider": "postgresql",
+      "statementTimeoutMs": 60000,
+      "urlEnv": "AW_PG_URL"
+    },
+    "updatedAt": 1793498374597,
+    "verificationDigest": "sha256:57581b8238b712cf2f9b189e8e76a286cad3ff4c87ac2cf03b790b731babce56",
+    "version": 2
+  }
+}

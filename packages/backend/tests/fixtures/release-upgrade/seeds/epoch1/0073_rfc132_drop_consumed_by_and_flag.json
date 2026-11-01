@@ -1,0 +1,39 @@
+{
+  "formatVersion": 1,
+  "epoch": 1,
+  "after": "0073_rfc132_drop_consumed_by_and_flag",
+  "provenance": {
+    "kind": "curated",
+    "sources": [
+      "packages/backend/db/migrations/0073_rfc132_drop_consumed_by_and_flag.sql"
+    ],
+    "note": "Small deterministic historical records; terminal execution and delivery states; original SQL performs its own backfills."
+  },
+  "rows": [],
+  "migrationEffects": [
+    {
+      "table": "clarify_rounds",
+      "operation": "alter",
+      "rule": "Apply the released SQL to existing seeded rows, retaining its explicit defaults, rewrites and backfills.",
+      "source": "packages/backend/db/migrations/0073_rfc132_drop_consumed_by_and_flag.sql"
+    },
+    {
+      "table": "clarify_sessions",
+      "operation": "alter",
+      "rule": "Apply the released SQL to existing seeded rows, retaining its explicit defaults, rewrites and backfills.",
+      "source": "packages/backend/db/migrations/0073_rfc132_drop_consumed_by_and_flag.sql"
+    },
+    {
+      "table": "cross_clarify_sessions",
+      "operation": "alter",
+      "rule": "Apply the released SQL to existing seeded rows, retaining its explicit defaults, rewrites and backfills.",
+      "source": "packages/backend/db/migrations/0073_rfc132_drop_consumed_by_and_flag.sql"
+    },
+    {
+      "table": "tasks",
+      "operation": "alter",
+      "rule": "Apply the released SQL to existing seeded rows, retaining its explicit defaults, rewrites and backfills.",
+      "source": "packages/backend/db/migrations/0073_rfc132_drop_consumed_by_and_flag.sql"
+    }
+  ]
+}

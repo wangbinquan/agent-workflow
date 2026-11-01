@@ -896,7 +896,7 @@ function switchView(home: string, args: string[]): SwitchView {
   return JSON.parse(result.out.slice(result.out.lastIndexOf('\n{') + 1)) as SwitchView
 }
 
-function activateEpoch2(home: string): { operationId: string; sourceHash: string } {
+function seedEpoch1Home(home: string, manual: boolean): void {
   const seeded = runCommandResult(
     process.env.AGENT_WORKFLOW_E2E_BUN ?? 'bun',
     [
@@ -904,10 +904,16 @@ function activateEpoch2(home: string): { operationId: string; sourceHash: string
       join(process.cwd(), 'packages/backend/tsconfig.json'),
       join(process.cwd(), 'e2e/fixtures/epoch1-switch-home.ts'),
       home,
+      ...(manual ? ['--manual'] : []),
     ],
     { timeoutMs: 60_000 },
   )
   expect(seeded.status, seeded.output).toBe(0)
+}
+
+function activateEpoch2(home: string): { operationId: string; sourceHash: string } {
+  seedEpoch1Home(home, true)
+  expect(JSON.parse(readFileSync(join(home, 'config.json'), 'utf8')).autoEpochMigration).toBe(false)
   const sourceHash = sha256Of(join(home, 'db.sqlite'))
   const plan = switchView(home, ['plan'])
   expect(plan.plan!.payload.blocks).toEqual([])
@@ -955,7 +961,7 @@ test('RFC-319 OPS-015: epoch-2 switch rollback refuses after business writes and
   let daemon: DaemonHandle | undefined
   try {
     const { operationId } = activateEpoch2(home)
-    daemon = await startDaemon({ home })
+    daemon = await startDaemon({ home, configOverrides: { autoEpochMigration: false } })
     const created = await fetch(`${daemon.baseUrl}/api/workflows`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${daemon.token}`, 'Content-Type': 'application/json' },
@@ -984,6 +990,53 @@ test('RFC-319 OPS-015: epoch-2 switch rollback refuses after business writes and
     const bypass = switchCommand(home, ['rollback', operationId, '--force'])
     expect(bypass.code).toBe(2)
     expect(bypass.out).toContain('unknown option: --force')
+  } finally {
+    await daemon?.stop()
+    rmSync(home, { recursive: true, force: true })
+  }
+})
+
+// ---------------------------------------------------------------------------
+// RFC-398: ordinary start is the entire automatic upgrade command surface.
+test('RFC-398 OPS-015: epoch-1 data survives plain start in automatic mode @nightly', async () => {
+  test.setTimeout(OPS_TEST_TIMEOUT_MS)
+  const home = freshDir('epoch-auto-start')
+  let daemon: DaemonHandle | undefined
+  try {
+    seedEpoch1Home(home, false)
+    expect(existsSync(join(home, 'database-generation.json'))).toBe(false)
+    expect(
+      querySqlite(
+        join(home, 'db.sqlite'),
+        "SELECT name,body_md FROM agents WHERE id='rfc398-e2e-agent'",
+      ),
+    ).toEqual([{ name: 'epoch-one-agent', body_md: '# Preserve this agent\n' }])
+    daemon = await startDaemon({ home, readyTimeoutMs: OPS_TEST_TIMEOUT_MS - 30_000 })
+    const headers = { Authorization: `Bearer ${daemon.token}` }
+    // RFC-398 §2.7: the database identity is on the existing `/health` probe; there is no `/api/health`.
+    const health = await fetch(`${daemon.baseUrl}/health`, { headers })
+    expect(health.status).toBe(200)
+    expect(await health.json()).toMatchObject({
+      ok: true,
+      database: { provider: 'sqlite', databaseName: null },
+    })
+    const agent = await fetch(`${daemon.baseUrl}/api/agents/rfc398-e2e-agent`, { headers })
+    expect(agent.status).toBe(200)
+    expect(await agent.json()).toMatchObject({
+      id: 'rfc398-e2e-agent',
+      name: 'epoch-one-agent',
+      bodyMd: '# Preserve this agent\n',
+    })
+    const pointer = JSON.parse(readFileSync(join(home, 'database-generation.json'), 'utf8')).payload
+    expect(pointer).toMatchObject({ schemaEpoch: 2, role: 'converted' })
+    const sessions = join(home, 'database-migrations/auto-upgrade/sessions')
+    expect(readdirSync(sessions)).toEqual([pointer.operationId])
+    expect(
+      readdirSync(join(sessions, pointer.operationId)).some((name) =>
+        name.endsWith('-completed.json'),
+      ),
+    ).toBe(true)
+    expect(existsSync(join(sessions, pointer.operationId, 'receipt.json'))).toBe(true)
   } finally {
     await daemon?.stop()
     rmSync(home, { recursive: true, force: true })

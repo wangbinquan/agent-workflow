@@ -1,0 +1,39 @@
+{
+  "formatVersion": 1,
+  "epoch": 1,
+  "after": "0031_rfc058_clarify_rounds_unify",
+  "provenance": {
+    "kind": "curated",
+    "sources": [
+      "packages/backend/db/migrations/0031_rfc058_clarify_rounds_unify.sql"
+    ],
+    "note": "Small deterministic historical records; terminal execution and delivery states; original SQL performs its own backfills."
+  },
+  "rows": [],
+  "migrationEffects": [
+    {
+      "table": "clarify_rounds",
+      "operation": "backfill",
+      "rule": "Original migration inserts rows from prior ledger data or installs its declared singleton/configuration rows; do not duplicate them.",
+      "source": "packages/backend/db/migrations/0031_rfc058_clarify_rounds_unify.sql",
+      "projection": {
+        "sourceTables": [
+          "clarify_sessions",
+          "cross_clarify_sessions"
+        ],
+        "keyColumns": [
+          "id"
+        ],
+        "cardinality": "UNION ALL of both prior tables; keep each original id",
+        "values": {
+          "id": "source.id",
+          "kind": "clarify_sessions -> self; cross_clarify_sessions -> cross",
+          "task_id": "source.task_id",
+          "questions_json": "source.questions_json (exact text)",
+          "answers_json": "source.answers_json (exact text)",
+          "status": "source.status"
+        }
+      }
+    }
+  ]
+}

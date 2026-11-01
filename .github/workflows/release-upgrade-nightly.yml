@@ -1,0 +1,257 @@
+name: Release upgrade nightly
+
+# RFC-398 L1/L2: main is the default candidate. Linux uses the registry's complete
+# nightlyShards; macOS/Windows use its gate set. No job publishes a release.
+on:
+  schedule:
+    - cron: '23 7 * * *'
+  workflow_dispatch:
+    inputs:
+      candidate_ref:
+        description: Candidate Git ref to build (empty uses the pinned main commit)
+        type: string
+        default: ''
+      candidate_artifact_run_id:
+        description: Existing workflow run containing per-OS candidate artifacts (empty builds)
+        type: string
+        default: ''
+      candidate_artifact_prefix:
+        description: Artifact name prefix, followed by -ubuntu-latest, -macos-latest, -windows-latest
+        type: string
+        default: release-binary
+      negative_control:
+        description: Use retained v0.19.3 candidate; require the three historical startup failures
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  actions: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.matrix.outputs.matrix }}
+      tools-ref: ${{ steps.ref.outputs.sha }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: main
+          fetch-depth: 0
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.4.3'
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+      - name: Pin verifier and registry
+        id: ref
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+      - name: Check verifier policies
+        run: bun test ./.github/scripts/release-upgrade.test.ts
+      - name: Check upgrade tooling style
+        run: |
+          bunx prettier --check .github/workflows/release.yml .github/workflows/release-upgrade-nightly.yml .github/scripts/release-upgrade*.ts scripts/release-upgrade/verify.ts scripts/release-upgrade/scenario.ts scripts/release-upgrade/lib/{binaries,client,daemon,postgresql}.ts
+          bunx eslint .github/scripts/release-upgrade*.ts scripts/release-upgrade/verify.ts scripts/release-upgrade/scenario.ts scripts/release-upgrade/lib/{binaries,client,daemon,postgresql}.ts --max-warnings=0
+      - name: Plan registry shards
+        id: matrix
+        env:
+          NEGATIVE_CONTROL: ${{ inputs.negative_control }}
+          CANDIDATE_REF: ${{ inputs.candidate_ref }}
+          ARTIFACT_RUN: ${{ inputs.candidate_artifact_run_id }}
+        run: |
+          set -euo pipefail
+          if [[ -n "$CANDIDATE_REF" && -n "$ARTIFACT_RUN" ]]; then
+            echo 'Choose a candidate ref or an existing artifact run, not both.' >&2
+            exit 1
+          fi
+          args=()
+          if [[ "$NEGATIVE_CONTROL" == true ]]; then
+            test -z "$CANDIDATE_REF"
+            test -z "$ARTIFACT_RUN"
+            args+=(--negative-control)
+          fi
+          bun .github/scripts/release-upgrade.ts matrix "${args[@]}"
+
+  l1-start:
+    name: L1 start entry (SQLite and PostgreSQL)
+    needs: plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.plan.outputs.tools-ref }}
+          fetch-depth: 0
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.4.3'
+      - name: Cache bun package downloads
+        uses: actions/cache@v6
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: ${{ runner.os }}-bun-
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+      - name: Start PostgreSQL
+        id: postgres
+        run: bash .github/scripts/ci-postgresql-service.sh start awtest
+      # Both providers are the describeEachProvider default; the runner also pins them per child.
+      - name: Run every L1 build/provider through start (three files at a time)
+        env:
+          AW_TEST_POSTGRESQL_URL: postgresql://postgres:postgres@127.0.0.1:5432/awtest
+          AW_RELEASE_UPGRADE_MODE: start
+        run: bun .github/scripts/release-upgrade.ts l1-start
+      - name: Upload L1 per-file results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-upgrade-l1-start
+          path: release-upgrade-l1-logs
+          if-no-files-found: error
+          retention-days: 30
+      - name: Stop PostgreSQL
+        if: always() && steps.postgres.outcome != '' && steps.postgres.outcome != 'skipped'
+        run: bash .github/scripts/ci-postgresql-service.sh stop
+
+  candidate:
+    name: Candidate ${{ matrix.os }}
+    needs: plan
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.candidate_ref || needs.plan.outputs.tools-ref }}
+          fetch-depth: 0
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.4.3'
+      - name: Install dependencies
+        shell: bash
+        run: bun install --frozen-lockfile
+      - name: Build candidate from selected ref
+        if: ${{ !inputs.negative_control && inputs.candidate_artifact_run_id == '' }}
+        shell: bash
+        run: bun run build:binary
+      - name: Download existing candidate artifact
+        if: ${{ !inputs.negative_control && inputs.candidate_artifact_run_id != '' }}
+        uses: actions/download-artifact@v5
+        with:
+          name: ${{ inputs.candidate_artifact_prefix || 'release-binary' }}-${{ matrix.os }}
+          run-id: ${{ inputs.candidate_artifact_run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: dist
+      - name: Record candidate provenance
+        shell: bash
+        env:
+          ARTIFACT_RUN: ${{ inputs.candidate_artifact_run_id }}
+          NEGATIVE_CONTROL: ${{ inputs.negative_control }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          if [[ -n "$ARTIFACT_RUN" ]]; then
+            gh api "repos/$GITHUB_REPOSITORY/actions/runs/$ARTIFACT_RUN" --jq .head_sha > dist/candidate-source-ref.txt
+          elif [[ "$NEGATIVE_CONTROL" == true ]]; then
+            git rev-parse 'v0.19.3^{commit}' > dist/candidate-source-ref.txt
+          else
+            git rev-parse HEAD > dist/candidate-source-ref.txt
+          fi
+          bun -e 'await Bun.write("dist/candidate-origin.json", JSON.stringify({sourceRef:(await Bun.file("dist/candidate-source-ref.txt").text()).trim(), artifactRun:process.env.ARTIFACT_RUN || null, retained:process.env.NEGATIVE_CONTROL === "true" ? "v0.19.3" : null}, null, 2))'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: upgrade-candidate-${{ matrix.os }}
+          path: |
+            dist/agent-workflow-*
+            dist/candidate-*
+          if-no-files-found: error
+          retention-days: 14
+
+  verify:
+    name: Verify ${{ matrix.id }}
+    needs: [plan, candidate]
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    runs-on: ${{ matrix.os }}
+    services:
+      postgres:
+        image: ${{ matrix.os == 'ubuntu-latest' && 'postgres:16' || '' }}
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s --health-timeout 5s --health-retries 10
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      AW_UPGRADE_ADMIN_URL: postgresql://postgres:postgres@127.0.0.1:5432/postgres
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.plan.outputs.tools-ref }}
+          fetch-depth: 0
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.4.3'
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+      - uses: actions/download-artifact@v5
+        with:
+          name: upgrade-candidate-${{ matrix.os }}
+          path: dist
+      # Compile the fixture from the pinned verifier commit, independent of the
+      # candidate ref/artifact. Retained v0.19.3 is checksum-checked by verify.ts;
+      # an unavailable retained asset must fail the negative control.
+      - name: Compile verification runtime stub
+        run: |
+          set -euo pipefail
+          stub=$(bun .github/scripts/release-upgrade.ts stub-path)
+          bun build --compile packages/system-mocks/src/runtime/dispatch.ts --outfile "$stub"
+      - name: Run release upgrade matrix
+        env:
+          NEGATIVE_CONTROL: ${{ inputs.negative_control }}
+          SELECTION: ${{ matrix.selection }}
+          SHARD: ${{ matrix.shard }}
+          OLD_TAGS: ${{ matrix.tags }}
+          VARIANTS: ${{ matrix.variants }}
+        run: |
+          set -euo pipefail
+          stub=$(bun .github/scripts/release-upgrade.ts stub-path)
+          chmod +x "$stub"
+          args=(--selection "$SELECTION" --variants "$VARIANTS" --stub "$stub"
+            --postgresql-admin-url-env AW_UPGRADE_ADMIN_URL --summary release-upgrade-summary.json)
+          if [[ "$RUNNER_OS" != Windows || "$NEGATIVE_CONTROL" == true ]]; then args+=(--no-tag-build); fi
+          if [[ -n "$SHARD" ]]; then args+=(--shard "$SHARD"); fi
+          if [[ -n "$OLD_TAGS" ]]; then args+=(--tags "$OLD_TAGS"); fi
+          if [[ "$NEGATIVE_CONTROL" == true ]]; then
+            args+=(--candidate-release v0.19.3 --expect-failure)
+          else
+            candidate=$(bun .github/scripts/release-upgrade.ts candidate-path)
+            chmod +x "$candidate"
+            args+=(--candidate "$candidate" --candidate-ref "$(cat dist/candidate-source-ref.txt)")
+          fi
+          bun scripts/release-upgrade/verify.ts "${args[@]}"
+      - name: Upload verification summary
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-upgrade-${{ matrix.id }}
+          path: |
+            release-upgrade-summary.json
+            dist/candidate-origin.json
+          if-no-files-found: warn
+          retention-days: 30

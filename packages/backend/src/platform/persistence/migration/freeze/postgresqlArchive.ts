@@ -7,7 +7,7 @@ import {
   logicalArtifactFileDigest,
   verifyLogicalArtifactManifest,
 } from '../legacy/logicalDatabaseArtifact'
-import { loadFrozenEpoch1History } from '../epoch1/bundle'
+import { resolveEpoch1PostgresqlVersion } from '../epoch1/releasedPostgresql'
 import type { FrozenSourceDetails } from './sourceAccess'
 
 export type PostgresqlBackupArchive = Pick<
@@ -27,10 +27,7 @@ export async function resolvePostgresqlSourceArchive(
     const manifest = verifyLogicalArtifactManifest(
       JSON.parse(readFileSync(join(archive.path, 'logical-manifest.json'), 'utf8')),
     )
-    const history = await loadFrozenEpoch1History()
-    const contract = history.postgresql.versions.find(
-      (version) => version.contract.digest === manifest.payload.schemaDigest,
-    )?.contract
+    const contract = (await resolveEpoch1PostgresqlVersion(manifest.payload.schemaDigest))?.contract
     if (!contract) throw new Error('postgresql-archive-contract-unsupported')
     return {
       preservedArchive: openVerifiedLogicalDatabaseArtifactSource({

@@ -161,7 +161,7 @@ H. 写回执（§2.7），追加 completed，删除 active.json，退出 0。
 
 `completed` 附带回执文件 `receipt.json`：源 fingerprint、目标位置（PG 含实际库名）、restrictions、RFC-349 收尾、建库与保留、
 各阶段耗时、切换前备份位置与回到旧版本的方法。启动日志打印同样的摘要（有 restrictions 时逐条 WARN）；`db migration status`
-显示 `mode: auto`；`doctor` 与 `/api/health` 的数据库信息包含实际 PG 库名。`complete`（保留期登记）仍由运维在验收后执行，
+显示 `mode: auto`；`doctor` 与存活探针 `/health` 的数据库信息包含实际 PG 库名（实现期更正：仓内没有 `/api/health` 路由，legacy 操作 ID 会去掉 `/api/` 前缀，两者不能并存）。`complete`（保留期登记）仍由运维在验收后执行，
 不属于自动收尾的完成判据。
 
 ## 3. PostgreSQL 目标与 scratch
@@ -476,3 +476,64 @@ L1 矩阵按发布版区间分片，单分片 ≤ 4 分钟；超出时增加分�
 | r5 R5-2（P2） | 取锁抛错路径不进升级等待 | §2.2 取锁失败时先读 `active.json`；§7.6 屏障拆成接管前 / 后 |
 | r5 R5-3（P2） | §7.6 预期把正常恢复也写成撤回 | §7.6 三组预期 |
 | r6 | 确认轮 | **PASS**：R5-1～R5-3 resolved，无新意见（2026-10-31） |
+
+## 11. 集中验证发现与处置（T13，2026-10-31）
+
+集中验证首次以真实旧二进制（L2）和全部 L1 矩阵执行本 RFC 的用例。下表只列**改变了生产行为**或**改变了用例判据**的发现；纯夹具修正见各用例文件顶部注释。
+
+| 来源 | 发现 | 处置 |
+| --- | --- | --- |
+| L2 v0.19.2 SQLite（真实旧二进制造数） | **任何带文件系统技能的真实安装都在校验阶段被拒**（`v3-validation-failed`，`skills.managed_path` / `skill_versions.files_path` 报 `size-changed`）。转换回执记录旧 `path\0bytes\0` 哈希与文件大小之和，而内容清点把技能目录观测为 `skill-tree-manifest@1` 清单字节，二者永不相等。RFC-395 的用例只覆盖数据库存储的技能，未经真实冻结清点 | 生产修复：`platform/content/migration/skillContent.ts` 的技能树回执改为携带清单字节的大小与摘要（与 `freezeInventory` 的 `directory-tree` / `database-tree` 观测同一定义）；回归 `rfc395-v3-content-inventory.test.ts`「filesystem skill trees …」经真实转换器与真实冻结清点，已验证去掉修复即红 |
+| PG 用例 | 受限角色建库被拒时抛裸 `PostgresError`（Bun.SQL 的 SQLSTATE 在 `errno`，代码比较的是 `code`），拿不到给 DBA 的两条建库语句；`42P04` 并发建库、`3D000` 统计已删库同样失效 | 生产修复：`postgresqlProvisioning.ts` 统一经 `platform/persistence/capabilities.ts` 导出的 `postgresqlSqlState` 判定；纯函数回归 + 源码断言 |
+| L2 v0.19.2 PostgreSQL（真实一键迁移后的 PG 源） | **任何有普通用户的 v0.18.18–v0.19.2 安装都无法升级**：这些版本给每个新普通用户写入 `users:presence` 授权，而其合同（PG 0038 / SQLite 0262 之前）把 `user_permission_grants.permission` 标为 `json-text`；候选按该历史标签解码源行，读源与 PG 离线副本回读校验都报 `logical database codec rejected invalid JSON`。`73d7e1f04` 只修了 epoch-1 启动路径 | 生产修复：`SupportedSourceManifest.codecCorrections` 取自冻结历史的 V9 `logicalCodecs`（不硬编码），`withLogicalCodecCorrections` 只在读取 / 离线副本校验时改用更正后的 codec，合同与摘要不变；PG / SQLite 读源与 `offlineSourceUpgrade` 三处接入。回归 `rfc398-epoch1-codec-corrections.test.ts`（双引擎，含离线副本），已验证去掉修复即红 |
+| L1 矩阵（v0.x 已提交的技能删除） | 启动恢复拒绝已提交的旧名删除操作（`skill-legacy-upgrade-requires-conversion`），升级后的实例起不来 | 生产修复：`skillCatalogBootAdapter.ts` 只对 `delete` + `rollforward` 放行旧名身份，仍校验库中技能不存在、旧根 / 规范根均不存在、回收站路径绑定操作；其他旧名操作照旧拒绝。回归 `rfc398-skill-delete-recovery.test.ts` |
+| L2 投影核对 | 定时任务 `launchPayload.repoUrl` 在 epoch 2 由 `integration/scheduled-payload` 规则改写为 `cachedRepoId`（`StartTask` 合同本就接受二选一），URL 落在缓存仓库行；逐字段比较把它误判为数据丢失 | 判据修正：`verify.ts` `applyDocumentedConversions` 经候选 `/api/cached-repos` 证明 `cachedRepoId` 解析到同一 URL 后才以新形态比较，解析不到或字段被丢仍按数据丢失失败；单测覆盖三种情形 |
+| L2 造数工具 | 记忆创建接口在所有版本都回 `{ memory }`，造数在第一个版本就失败——L2 工具链此前从未端到端执行 | 工具修复 `lib/client.ts` |
+| `rfc398-auto-upgrade-resume`「等待重新批准时」 | 冻结前插一行普通业务数据不改变 `approvalDigest`，用例永远等不到 `awaiting-approval` | 判据修正：改为改变批准摘要绑定的启动升级效果（内置 runtime 行继承的二进制路径），三种 SIGKILL 均验证续做完成 |
+| 合成 epoch-1 PG 源 | 缺少 daemon 启动时写入的 RFC-341 家族切换四行，校验 required seeds 失败；`schema_migrations` 每个冻结版本插一行与主键冲突（真实安装只有一行） | 夹具修正：启动行取自已捕获的真实 v0.19.2 安装 dump；`schema_migrations` 只写安装版本一行 |
+| RFC-349 finalize 等价 | 夹具恢复依赖本机 `psql`（开发机与 CI 应用通道都不保证存在） | 夹具修正：进程内解码 `COPY` 文本格式重放 |
+| `/health` 数据库身份 e2e | OPS-015 请求不存在的 `/api/health` | 用例修正为 `/health`（§2.7） |
+| L2 工具（旧二进制自身缺陷与既有产品政策） | v0.18.18–v0.19.2 的一键迁移以只读方式打开 SQLite，无 sidecar 时失败（S4 同族）；它们写入的 `users:presence` 又被自己的一键迁移拒绝；v0.18.18 / v0.18.19 在 PG 上建任务报 `foreign-legacy-actor-projection`，v0.19.2 在 PG 上对自己的人工门任务报 `ownerless task mutation refused durable owner`；v0.16.x 的 seatbelt 沙箱清洗 runtime 环境并拒绝读取整个 app home；v0.18.10 在 control shutdown 时直接断开连接；pre-RFC-200 版本的挂起门按 RFC-395 必然被 `v2-run-null-nonce` 拒绝；pre-v0.17.0 任务快照的代理引用按 RFC-223 隔离，回答反问后无法重跑代理 | 场景工具只为旧二进制补齐空闲连接留下的干净 sidecar、把普通用户放到 PG 实况轮创建、按精确错误签名记录旧版 PG 任务缺陷（其他错误照旧失败）、shim 及其设置与桩状态放到 app home 之外、接受关停时的连接断开（仍以进程优雅退出为准）、无 nonce 版本不留挂起门、pre-v0.17.0 不留挂起反问，每项都以具体原因记入 `unavailable`，候选侧断言不放宽 |
+| L2 投影（已发布的转换效果） | 旧版工作流定义 `$schema_version` 4 / 6 在候选上为 7；0188（RFC-312）为存量 user / manager 补 `users:presence` | `applyDocumentedConversions`：定义经公开的纯函数格式迁移后逐字比较；presence 仅对早于 0188 的源且只接受这一个键；单测覆盖接受与拒绝 |
+| L2 v0.18.19 PostgreSQL（真实旧二进制在 PG 上原生建的反问任务） | **v0.18.18 / v0.18.19 在 PG 上原生创建的任务，升级后任何续做 / 重试都失败**（`iso-setup-failed`）。这两版的 PG 没有 SQLite 0210 触发器，`node_runs.lineage_slot_path_json` 恒为 NULL（RFC-359 W6 自 v0.19.0 起才为新行补齐，见 `buildNodeRunMintRecord.ts` `nodeRunLineageColumns` 注释），旧 runtime 经 `run ?? intent ?? task` 回落，把任务路径记在该续做槽的每个 effect 上。候选的重跑行继承上一行的 lineage，继承到 NULL 时才派生节点路径——于是开出新的 operation family、generation 从 0 起，与旧 effect 撞 `(task_id, operation_key, operation_generation)` 唯一键 | 生产修复（转换侧，只改 legacy 行）：`task-execution/infrastructure/migration/run/legacyLineage.ts` 新增按 `(任务, 续做槽)` 收集 effect 路径的 lookup；源 lineage 为 NULL 且该槽 effect 只记录了一个路径时，目标 `lineage_slot_path_json` 取该路径（即旧 runtime 实际使用的路径），并在 run 证据里记 `v2-run-legacy-lineage-materialized`；无 effect 或路径不一致时保持 NULL。映射预言把该列由「逐字保留」改为声明的投影，S3 在 `runProjection` 中独立实现同一规则。调度器、反问与任务重试的重跑本就继承上一行的 lineage；唯一不继承的评审 reject / iterate 重跑改为沿用被替换行的续做槽与 lineage（实现门 r2～r4，最终处置见 §12.3）。回归 `rfc398-legacy-run-lineage.test.ts` 取真实 v0.18.19 捕获的行：经真实 `buildNodeRunMintRecord` / `nodeRunLineageColumns` / `operationFamilyKey` 证明转换后重跑落回旧 family（两种 effect 的 family 逐字相等），并经真实评审决定、effect 观察者与账本（双引擎）证明 reject 后的重跑沿用转换后的路径、隔离 effect 落在同一 family 的第 1 代；去掉任一修复即红。L2 v0.18.19 PG 复跑：迁移来的两个挂起反问与两个挂起评审均续做至 `done` |
+| PG L1 矩阵（首次端到端跑到预言） | 构建器逐字执行已发布 PG 迁移的 `.sql` 文本：0024（RFC-372 light clarify）按逻辑名删除外键，而 0022 建的是 63 字节内的物理名；0030 的 `json_valid(...)` CHECK 依赖 runtime 连接的 `search_path`。已发布 migrator 本就按前一版计划解析退休外键的物理名（`postgresqlUpgradeStatementSql`，与 v0.19.2 逐字相同）且连接带 `search_path=agent_workflow,public` | 夹具修正：构建器先证明步骤语句渲染后与已发布 `.sql` 字节相等，再按已发布 migrator 的方式逐条执行（同一解析函数、同一 `search_path`、核对 contract 行推进） |
+| PG L1 矩阵 | 种子 0246 的 `clarify_mindmap_sessions.round_id` 指向不存在的反问轮次；SQLite 种子构建只在发布版最终快照查外键，而 0248 删表掩盖了它 | 种子修正：改指 0031 回填、贯穿全部版本存在的轮次及其所属任务；覆盖账本重新生成 |
+| PG L1 矩阵 | 构建器把 0219 未重放的任务聚合头（只有头、没有事件）在恢复后直接写入 PG。v0.18.18–v0.19.2 的一键迁移都以同一条 `committed-event-head` 不变式拒绝这种形状，真实 PG 源不可能含有它；候选的离线副本同样拒绝 | 夹具修正：PG 构建不再写入这些头；PG 期望快照取自构建结果，预言与源一致 |
+| PG L1 矩阵 | PG 目标快照的 BIGINT 以字符串、BOOLEAN 以 true/false 返回，而 S2/S3 预言按 SQLite 物理形态比较（`keyCell` 会把整数串编码成 text） | 判据修正：PG 目标快照（以及原生 epoch-2 构建的 before 快照）按目录类型转成 SQLite 物理形态（BIGINT→整数、BOOLEAN→0/1）；epoch-1 源快照保持原样，供源检查比对 PG 文本渲染 |
+| §7.8 预算 | 本机负载 35–85 时 PG L1 单例 213–324 s，超过 240 s 预算 | 不放宽预算；本机以放大预算的临时包装确认功能结果（6 个 PG 例全过），预算以 CI 计时为准 |
+
+## 12. 实现门处置（r1，2026-10-31）
+
+| 编号 | 发现 | 处置 |
+| --- | --- | --- |
+| P1-1 | PG 新 run 先退休旧目标再替换 journal，中间进程死亡后自动续做先为旧 run 准备已退休目标，永久拒绝 | `autoUpgrade.ts` D 段：journal 已持久化 `source-changed` 时跳过当前 run 的准备，直接进入 new-run（`nextTargetLocation` 为下一 run 准备）；`retireIfUnwritten` 本身幂等。回归见 `rfc398-auto-upgrade-policy.test.ts`，去掉修复即红 |
+| P1-2 | 发布门只信覆盖账本本身，缺表或种子被删而账本未更新都能通过 | preflight 对前一发布版的构建用当前种子实际重建（枚举该版 schema 全部表），提交账本须与重建结果逐表相等，再要求每表有行或已批准豁免；单测覆盖整表条目缺失、种子删除账本未改、缺行、未批准豁免，并对最新登记版做一次真实重建 |
+| P1-3 | S3 保值预言取自生产 reader 的解码结果 | `captureSource()` 的保值 / 投影 / 归档期望改取独立重建的种子行（reader 只提供顺序）；仅「待执行的已发布迁移所生成」的时间戳与随机值按 `sqlNormalization.ts` 的显式规则归一（时间落在构建 / 升级区间、随机值格式精确），种子值与已应用迁移的值逐字比较；新增负对照 `release-upgrade-matrix-negative-values.test.ts`：reader 与目标同步损坏一个保值字段、键与行数不变时 S3 必红 |
+| P2-4 | 派生目标被占后设置显式目标变量无效 | `allocate()`：尚无 provisioned 回执的派生分配在显式变量出现时追加新的显式分配（旧名留账不复用），已 provisioned 的位置不迁移；PG 回归覆盖被占 → 设变量 → 续做 → 绑定后换库被拒 |
+| P2-5 | 夜间没有经 `start` 的 L1 入口模式 | `AW_RELEASE_UPGRADE_MODE=start` 时每个 L1 build/provider 经真实 `start` 拉起 `db migration auto` 子进程完成升级（核对子进程委托、会话完成、journal verified），在 daemon 首次业务写入前跑同一套 S1–S3 / E1–E2，再做 API 验收；默认模式不变。`release-upgrade-nightly.yml` 新增 `l1-start` 作业（57 SQLite + 6 PostgreSQL，经既有 PG 服务脚本），工作流形状断言随之扩展；本机 57 个 SQLite 文件两种模式均通过 |
+| P2-6 | `status` 不列保留库 | 自动操作的 status 视图增加 `retainedDatabases`（库名、大小、用途、run），CLI 与自动组合均接线；真实 PG 整链用例断言 `status --json` |
+| P2-7 | 同会话多 run 时 doctor 报第一个旧目标 | 诊断按 journal 当前 run 选目标、否则取该会话最新分配；PG 单测覆盖两目标共存 |
+| P2-8 | finalize 等价缺「迁移后未首写」状态 | 用 v0.19.2、v0.18.19 官方二进制补录 `-unwritten` before/after（`record.ts import-finalize --state unwritten`），等价与中断重放用例覆盖两种状态 |
+| P3-9 | README 指向不存在的 `/api/health` | 改为 `/health` |
+
+### 12.1 实现门 r2（2026-10-31）
+
+r1 的 9 项逐项复核为 FIXED。r2 新增 1 项：
+
+| 编号 | 发现 | 处置 |
+| --- | --- | --- |
+| r2-P1 | §11 的 legacy lineage 只覆盖「继承上一行」的重跑；评审 reject / iterate（`collaboration/infrastructure/review.ts` 的铸行）不传 `inheritFrom`，新行仍按任务路径 + 节点帧派生，开出新 family、generation 0，与旧 effect 撞唯一键 | 先后试过铸行边界复用与 effect 代际地板，均与既有约束冲突；最终处置为评审重跑沿用被替换行的续做槽与 lineage，见 §12.3 |
+
+### 12.2 实现门 r3（2026-10-31，只审 r2 处置）
+
+r3 确认唯一插入点成立、回归能识别修复被移除，另报：
+
+| 编号 | 发现 | 处置 |
+| --- | --- | --- |
+| r3-P1 | 首版按 `(任务, 续做槽)` 取最近一行的 lineage；续做槽键可被显式交给别的节点，普通任务的重跑会借到另一节点的 lineage | 铸行边界方案整体撤回，见 §12.3 |
+
+### 12.3 实现门 r4（2026-10-31）与最终处置
+
+r4 指出铸行边界的第二版仍有 3 项 P1（workflow 同步后普通数据沿用旧 revision、synthetic / wrapper 帧的行混入、用例覆盖不到 iteration / shard）。按「只认裸任务路径」收窄后（用户此时要求不再派 Codex，由本会话自审），全量后端用例又暴露两条既有设计约束：RFC-369 AC-1 / RFC-144 源码锁要求铸行 program **只 insert、不读同帧旧行**（`rfc144-stale-replay-regression`、`rfc369-workgroup-mint-receipt` 按 SQL 锁定），任何铸行边界读取都与之冲突；而在 effect 账本上抬代际地板也不可行——`prepareAndAcquire` 要求每个 family 的代际连续（新 family 必须从 0 起），同一 operation key 下根本容不下第二个 family。
+
+**最终处置**：铸行 program 保持原样（只 insert）。重跑语义统一到既有约定——调度器、反问重跑与任务重试 API 都经 `inheritFrom` 沿用上一行的续做槽与 lineage；唯一不这样做的评审 reject / iterate 重跑（`collaboration/infrastructure/review.ts`）现在通过身份覆写沿用被替换行的 `continuationSlotKey` 与 `lineageSlotPathJson`（其余字段的「不继承」不变；人工门铸行请求 `HumanGateNodeRunMintRequest` 的身份覆写类型随之补上这两个可选字段，底层铸行本就接受）。于是转换物化后的 v0.18.x 行在所有重跑路径上都落回旧 family；普通数据被替换行记录的正是同一续做槽的派生值。双引擎回归经真实 `submitReviewDecision('rejected')`、本地 effect 观察者与账本：转换行 reject 后重跑沿用裸任务路径、隔离 effect 落在同一 family 的第 0 / 1 代；普通数据重跑沿用被替换行的派生路径。去掉 review.ts 的改动即红（重跑拿到节点路径）。

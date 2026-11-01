@@ -1,0 +1,40 @@
+{
+  "formatVersion": 1,
+  "epoch": 1,
+  "after": "0019_rfc036_oidc_providers",
+  "provenance": {
+    "kind": "curated",
+    "sources": [
+      "packages/backend/db/migrations/0019_rfc036_oidc_providers.sql"
+    ],
+    "note": "Small deterministic historical records; terminal execution and delivery states; original SQL performs its own backfills."
+  },
+  "rows": [
+    {
+      "table": "oidc_providers",
+      "values": {
+        "id": "01K3980000950688EC490EDE19",
+        "slug": "upgrade-idp",
+        "display_name": "Upgrade identity provider",
+        "issuer_url": "https://example.invalid/oidc",
+        "client_id": "upgrade-client",
+        "client_secret_enc": "fixture-unconfigured",
+        "scopes": "openid profile email",
+        "provisioning": "invite",
+        "allowed_email_domains_json": "[]",
+        "enabled": 0,
+        "created_at": 1778459500000,
+        "updated_at": 1778459500000,
+        "schema_version": 1
+      }
+    }
+  ],
+  "migrationEffects": [
+    {
+      "table": "user_identities",
+      "operation": "alter",
+      "rule": "Apply the released SQL to existing seeded rows, retaining its explicit defaults, rewrites and backfills.",
+      "source": "packages/backend/db/migrations/0019_rfc036_oidc_providers.sql"
+    }
+  ]
+}

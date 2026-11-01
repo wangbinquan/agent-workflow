@@ -1,0 +1,13 @@
+{
+  "formatVersion": 1,
+  "epoch": 1,
+  "after": "0199_rfc310_legacy_webhook_catalog_retire",
+  "provenance": {
+    "kind": "curated",
+    "sources": [
+      "packages/backend/db/migrations/0199_rfc310_legacy_webhook_catalog_retire.sql"
+    ],
+    "note": "Small deterministic historical records; terminal execution and delivery states; original SQL performs its own backfills."
+  },
+  "rows": []
+}

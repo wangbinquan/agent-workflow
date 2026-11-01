@@ -1,0 +1,13 @@
+{
+  "formatVersion": 1,
+  "epoch": 1,
+  "after": "0255_rfc371_committed_source_clocks",
+  "provenance": {
+    "kind": "curated",
+    "sources": [
+      "packages/backend/db/migrations/0255_rfc371_committed_source_clocks.sql"
+    ],
+    "note": "Small deterministic historical records; terminal execution and delivery states; original SQL performs its own backfills."
+  },
+  "rows": []
+}

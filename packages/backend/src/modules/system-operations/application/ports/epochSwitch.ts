@@ -1,3 +1,4 @@
+import type { DatabaseProvisioning } from '@/platform/persistence/migration/databaseProvisioning'
 import type { MigrationProgressCallback } from '@/platform/persistence/migration/run/progress'
 import type { DatabaseProvider } from '@/platform/persistence/databaseProviders'
 import type { GenerationPointerV2Payload } from '@/platform/persistence/generationPointerV2'
@@ -52,6 +53,34 @@ import type {
   VerifiableContentInventory,
 } from '@/platform/persistence/migration/run/types'
 import type { EpochSwitchFaults, EpochSwitchJournal } from '../../domain/epochSwitch/model'
+import type { DatabaseMigrationStatusView } from '../databaseMigrationControlPlane'
+import type {
+  AutoUpgradeAcceptanceEvidence,
+  AutoUpgradeRecord,
+  AutoUpgradeRecordKind,
+  AutoUpgradeSession,
+} from '../../domain/epochSwitch/autoUpgrade'
+
+export interface AutoUpgradeRecordPort {
+  list(): Promise<readonly AutoUpgradeSession[]>
+  append(
+    operationId: string,
+    kind: AutoUpgradeRecordKind,
+    data: Readonly<Record<string, unknown>>,
+  ): Promise<AutoUpgradeRecord>
+  receipt(
+    operationId: string,
+    value: Readonly<Record<string, unknown>>,
+  ): Promise<Readonly<Record<string, unknown>>>
+  acceptance(operationId: string, runId: string): Promise<readonly AutoUpgradeAcceptanceEvidence[]>
+}
+export interface SessionLockPort {
+  acquire(): Promise<void>
+  bind(operationId: string): Promise<void>
+  assertHeld(): Promise<void>
+  /** Releases a self-held daemon lock before removing active.json; a live parent keeps its lock. */
+  release(): Promise<void>
+}
 import type {
   ActivationReceipt,
   RollbackReceipt,
@@ -100,6 +129,17 @@ export interface EpochSwitchJournalPort {
   lockOperation(operationId: string): Promise<{ release(): void | Promise<void> }>
   /** All operation documents and F evidence share this operation-scoped durable store. */
   artifacts?(operationId: string): EpochSwitchArtifactPort
+}
+
+export interface EpochTargetProvisioningPort extends DatabaseProvisioning {
+  nextTargetLocation(
+    previous: EpochSwitchJournal,
+    next: EpochSwitchJournal,
+  ): Promise<EpochTargetLocation>
+}
+export interface LegacyMigrationFinalizePort {
+  status(operationId: string): Promise<DatabaseMigrationStatusView>
+  finalize(operationId: string): Promise<DatabaseMigrationStatusView>
 }
 export interface SourceSnapshotRequest {
   readonly progress?: MigrationProgressCallback

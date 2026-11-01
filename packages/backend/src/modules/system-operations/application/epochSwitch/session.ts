@@ -35,6 +35,9 @@ import type {
   QuiescePort,
   SourceRetentionPort,
   TargetGenerationPort,
+  SessionLockPort,
+  AutoUpgradeRecordPort,
+  EpochTargetProvisioningPort,
 } from '../ports/epochSwitch'
 import {
   EpochSwitchError,
@@ -42,7 +45,11 @@ import {
   type EpochSwitchJournalPayload,
   type EpochSwitchFaults,
 } from '../../domain/epochSwitch/model'
-import { reviseEpochSwitch, takeOverEpochSwitch } from '../../domain/epochSwitch/transitions'
+import {
+  phaseIndex,
+  reviseEpochSwitch,
+  takeOverEpochSwitch,
+} from '../../domain/epochSwitch/transitions'
 import type { InstallationFacts } from '../../domain/epochSwitch/classification'
 import {
   parseMigrationPlanDocument,
@@ -74,6 +81,11 @@ export interface EpochRestoreFiles {
   rollback(changes: readonly RestoreFileChange[]): Promise<void>
 }
 export interface EpochSwitchDependencies {
+  readonly sessionLock?: SessionLockPort
+  readonly autoUpgradeRecords?: AutoUpgradeRecordPort
+  /** RFC-398 §3.5: databases allocated by automatic PostgreSQL sessions (status lists them). */
+  readonly retainedDatabases?: EpochTargetProvisioningPort['retained']
+  readonly autoUpgradeCheckpoint?: (point: string) => Promise<void>
   readonly progress?: MigrationProgressCallback
   journal: EpochSwitchJournalPort
   source: EpochSourcePort
@@ -309,6 +321,14 @@ export async function withEpochOperation<T>(
         next,
       )
       deps.faults?.('after-journal-cas')
+      if (next.payload.phase !== old.payload.phase)
+        await deps.autoUpgradeCheckpoint?.(`phase-${next.payload.phase}`)
+      if (
+        phaseIndex(next.payload.phase) > phaseIndex('planned') &&
+        next.payload.status === 'awaiting-approval' &&
+        old.payload.status !== 'awaiting-approval'
+      )
+        await deps.autoUpgradeCheckpoint?.('awaiting-approval')
       return session.journal
     }
     session = {
@@ -346,7 +366,15 @@ export async function withEpochOperation<T>(
         }
         return {
           get: (name, digest) => port.get(name, digest),
-          put: async (name, bytes) => record(name, await port.put(name, bytes)),
+          put: async (name, bytes) => {
+            const digest = await port.put(name, bytes)
+            if (/^acceptance-health-/.test(name))
+              await deps.autoUpgradeCheckpoint?.('acceptance-published')
+            await record(name, digest)
+            if (/^acceptance-health-/.test(name))
+              await deps.autoUpgradeCheckpoint?.('acceptance-referenced')
+            return digest
+          },
           ...(port.putFile
             ? {
                 putFile: async (name: string, path: string) =>
@@ -383,11 +411,16 @@ export async function withEpochOperation<T>(
         failedAt: now(),
       }
       await session.save({ status: 'failed', failure })
+      await deps.autoUpgradeCheckpoint?.(
+        failure.category === 'health-failed'
+          ? 'acceptance-journal-failed'
+          : `failure-${failure.category}`,
+      )
     }
     throw error
   } finally {
     try {
-      await deps.quiesce.release(operationId)
+      if (!deps.sessionLock) await deps.quiesce.release(operationId)
     } finally {
       await lock.release()
     }

@@ -23,6 +23,7 @@ export function captureEpoch1SqliteEvidence(input: {
   try {
     const path = join(directory, 'evidence.sqlite')
     vacuumSqliteInto({ dbPath: input.sourcePath, dest: path })
+    // RFC-398 allow-list: this call just produced a non-WAL VACUUM INTO copy.
     database = new Database(path, { readonly: true })
     const schema = database
       .query('SELECT type,name,tbl_name,rootpage,sql FROM sqlite_schema ORDER BY type,name')

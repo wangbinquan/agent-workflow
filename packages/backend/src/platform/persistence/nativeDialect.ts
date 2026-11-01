@@ -1,8 +1,12 @@
+import { environmentPostgresqlProfileRef, isPostgresqlProfileRef } from './postgresqlProfileRef'
 import { quoteSchemaIdentifier as quote } from './schema/expressions'
 import type { DatabaseProvider } from './databaseProviders'
 
 /** Native SQL and storage capabilities shared by live persistence and offline conversion. */
 interface PersistenceDialect {
+  /** RFC-398 design §3.6: profile syntax is supplied by the persistence dialect. */
+  isProfileRef(value: string, hostedRole?: 'source' | 'target'): boolean
+  environmentProfileRef(name: string, databaseName?: string): string
   readonly sourceLocationKind: 'sqlite-file' | 'postgresql-database'
   readonly targetLocationKind: 'sqlite-file' | 'postgresql-target'
   readonly switchBackupKind: 'sqlite-vacuum' | 'postgresql-logical'
@@ -31,6 +35,10 @@ interface PersistenceDialect {
 }
 const dialects: Readonly<Record<DatabaseProvider, PersistenceDialect>> = {
   sqlite: {
+    isProfileRef: () => false,
+    environmentProfileRef: () => {
+      throw new Error('sqlite-profile-reference-unsupported')
+    },
     tableName: quote,
     bigInteger: (value) => BigInt(value),
     real: (value) => value,
@@ -56,6 +64,8 @@ const dialects: Readonly<Record<DatabaseProvider, PersistenceDialect>> = {
     }),
   },
   postgresql: {
+    isProfileRef: isPostgresqlProfileRef,
+    environmentProfileRef: environmentPostgresqlProfileRef,
     tableName: (table) => `${quote('agent_workflow')}.${quote(table)}`,
     bigInteger: (value) => String(value),
     real: (value) => (Object.is(value, -0) ? '-0' : value),

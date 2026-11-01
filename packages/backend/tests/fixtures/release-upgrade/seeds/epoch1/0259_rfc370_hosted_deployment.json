@@ -1,0 +1,266 @@
+{
+  "formatVersion": 1,
+  "epoch": 1,
+  "after": "0259_rfc370_hosted_deployment",
+  "provenance": {
+    "kind": "curated",
+    "sources": [
+      "packages/backend/db/migrations/0259_rfc370_hosted_deployment.sql"
+    ],
+    "note": "Small deterministic historical records; terminal execution and delivery states; original SQL performs its own backfills."
+  },
+  "rows": [
+    {
+      "table": "cs_event_inbox",
+      "values": {
+        "installation_id": "upgrade-installation",
+        "delivery_id": "upgrade-hosted-delivery",
+        "logical_id": "upgrade-logical",
+        "event_id": "upgrade-report-reviewed",
+        "producer_id": "upgrade-source",
+        "event_type_id": "upgrade.report-reviewed",
+        "payload_digest": "aa2741053c59de0f8a3d9e8ea7200495492cc6dd8e0bbe2d4b240284c60d99d8",
+        "payload_json": "{}",
+        "received_at": 1778459500000,
+        "last_attempt": 1,
+        "conflicts": 0
+      }
+    },
+    {
+      "table": "cs_event_routes",
+      "values": {
+        "id": "01K3980000B06454ADC1DDC37D",
+        "installation_id": "upgrade-installation",
+        "producer_id": "upgrade-source",
+        "event_id": "upgrade-report-reviewed",
+        "payload_digest": "aa2741053c59de0f8a3d9e8ea7200495492cc6dd8e0bbe2d4b240284c60d99d8",
+        "envelope_json": "{}",
+        "source_json": "{}",
+        "source_revision": 1,
+        "result": "ignored",
+        "created_at": 1778459500000,
+        "conflicts": 0
+      }
+    },
+    {
+      "table": "cs_event_targets",
+      "values": {
+        "id": "01K3980000100FBD8C0EF1B429",
+        "logical_id": "upgrade-logical",
+        "endpoint_id": "01K3980000BBDD864AB0F66C6E",
+        "binding_revision": 1,
+        "mode": "shadow",
+        "stage": "completed",
+        "published_json": "{}",
+        "next_attempt_at": 1778459560000,
+        "attempts": 0,
+        "created_at": 1778459500000,
+        "updated_at": 1778459500000
+      }
+    },
+    {
+      "table": "cs_webhook_verifications",
+      "values": {
+        "delivery_id": "01K39800007547B285A0738E24",
+        "transport_receipt_ref": "upgrade-transport-receipt"
+      }
+    },
+    {
+      "table": "development_object_artifacts",
+      "values": {
+        "reference": "aw-object:v2:development-evidence:11111111-3980-4000-8000-000000000001:65:ae2960f103228419306b2dbf5e2b9f6fd6cc27cfd3e09e43df3cb1a4c727d9ff",
+        "object_id": "11111111-3980-4000-8000-000000000001",
+        "digest": "ae2960f103228419306b2dbf5e2b9f6fd6cc27cfd3e09e43df3cb1a4c727d9ff",
+        "size": 65,
+        "created_at": 1778459500000
+      }
+    },
+    {
+      "table": "hosted_database_backups",
+      "values": {
+        "id": "01K39800003F1BE8C40E2AB2B4",
+        "epoch": 1,
+        "kind": "manual",
+        "state": "released",
+        "created_at": 1778459500000,
+        "updated_at": 1778459560000
+      }
+    },
+    {
+      "table": "hosted_execution_bindings",
+      "values": {
+        "execution_id": "upgrade-hosted-execution",
+        "task_id": "01K3980000085154084C742759",
+        "node_run_id": "01K3980000D3D6DE02630EDFDE",
+        "kind": "agent",
+        "business_task_id": "01K3980000085154084C742759",
+        "request_key": "upgrade-hosted-request",
+        "request_json": "{\"version\":1}",
+        "result_json": "{\"exitCode\":0}",
+        "cancel_requested": 0,
+        "state": "settled",
+        "epoch": 1,
+        "created_at": 1778459500000,
+        "updated_at": 1778459500000
+      }
+    },
+    {
+      "table": "hosted_execution_control",
+      "values": {
+        "id": "global",
+        "epoch": 1,
+        "phase": "frozen",
+        "updated_at": 1778459500000
+      }
+    },
+    {
+      "table": "hosted_execution_events",
+      "values": {
+        "id": 1,
+        "execution_id": "upgrade-hosted-execution",
+        "cursor": "1",
+        "event_json": "{\"kind\":\"completed\",\"exitCode\":0}"
+      }
+    },
+    {
+      "table": "hosted_node_event_archives",
+      "values": {
+        "id": "01K3980000836B373F1ACEE85B",
+        "task_id": "01K3980000085154084C742759",
+        "node_run_id": "01K3980000D3D6DE02630EDFDE",
+        "first_id": 1,
+        "last_id": 1,
+        "row_count": 1,
+        "digest": "317052a9dc73e4d1c68b9362669dd20f058e4ab2662e3b4f0f5ce8624355568c",
+        "size": 181,
+        "state": "ready",
+        "object_id": "33333333-3980-4000-8000-000000000003",
+        "created_at": 1778459500000
+      }
+    },
+    {
+      "table": "hosted_object_publications",
+      "values": {
+        "id": "01K3980000F3492C9ED45A2441",
+        "owner": "task-artifact",
+        "logical_key": "aw-object:v2:task-artifact:22222222-3980-4000-8000-000000000002:65:ae2960f103228419306b2dbf5e2b9f6fd6cc27cfd3e09e43df3cb1a4c727d9ff",
+        "attempt": "1",
+        "state": "ready",
+        "sha256": "ae2960f103228419306b2dbf5e2b9f6fd6cc27cfd3e09e43df3cb1a4c727d9ff",
+        "size": 65,
+        "object_id": "22222222-3980-4000-8000-000000000002",
+        "epoch": 1,
+        "attempts": 0,
+        "next_attempt_at": 1778459500000,
+        "created_at": 1778459500000,
+        "released_at": null,
+        "updated_at": 1778459500000,
+        "source_sealed": null,
+        "scope": "01K3980000085154084C742759"
+      }
+    },
+    {
+      "table": "hosted_recovery_requests",
+      "values": {
+        "request_id": "upgrade-recovery",
+        "request_json": "{\"taskId\":\"01K3980000085154084C742759\"}",
+        "business_task_id": "01K3980000085154084C742759",
+        "task_id": "01K3980000085154084C742759",
+        "actor_user_id": "01K39800007DFB4CF67742CB06",
+        "state": "succeeded",
+        "receipt_json": "{\"completedAt\":1778459560000}",
+        "epoch": 1,
+        "created_at": 1778459500000,
+        "updated_at": 1778459500000
+      }
+    },
+    {
+      "table": "hosted_task_archive_entries",
+      "values": {
+        "path": "upgrade-history/",
+        "kind": "directory",
+        "parts_json": "[]",
+        "created_at": 1778459500000,
+        "updated_at": 1778459500000
+      }
+    },
+    {
+      "table": "hosted_task_artifacts",
+      "values": {
+        "reference": "aw-object:v2:task-artifact:22222222-3980-4000-8000-000000000002:65:ae2960f103228419306b2dbf5e2b9f6fd6cc27cfd3e09e43df3cb1a4c727d9ff",
+        "task_id": "01K3980000085154084C742759",
+        "object_id": "22222222-3980-4000-8000-000000000002",
+        "digest": "ae2960f103228419306b2dbf5e2b9f6fd6cc27cfd3e09e43df3cb1a4c727d9ff",
+        "size": 65,
+        "created_at": 1778459500000
+      }
+    },
+    {
+      "table": "hosted_task_workspaces",
+      "values": {
+        "task_id": "01K3980000085154084C742759",
+        "request_key": "upgrade-hosted-workspace",
+        "business_task_id": "01K3980000085154084C742759",
+        "state": "closed",
+        "created_at": 1778459500000,
+        "updated_at": 1778459500000
+      }
+    },
+    {
+      "table": "hosted_workspace_commands",
+      "values": {
+        "execution_id": "upgrade-hosted-command",
+        "task_id": "01K3980000085154084C742759",
+        "business_task_id": "01K3980000085154084C742759",
+        "operation": "inspect",
+        "request_key": "upgrade-hosted-command",
+        "request_json": "{\"version\":1}",
+        "outcome_json": "{\"exitCode\":0}",
+        "state": "settled",
+        "epoch": 1,
+        "created_at": 1778459500000,
+        "updated_at": 1778459500000
+      }
+    },
+    {
+      "table": "node_execution_event_sources",
+      "values": {
+        "source_key": "upgrade-event-source",
+        "node_run_id": "01K3980000D3D6DE02630EDFDE"
+      }
+    },
+    {
+      "table": "plugin_artifact_generations",
+      "values": {
+        "reference": "upgrade-plugin-generation",
+        "plugin_id": "01K398000092CD10E6B8B068A9",
+        "generation_id": "upgrade-generation",
+        "spec": "file:<AW_HOME>/plugins/upgrade-plugin",
+        "state": "retired",
+        "epoch": 1,
+        "created_at": 1778459500000,
+        "updated_at": 1778459500000
+      }
+    }
+  ],
+  "content": [
+    {
+      "path": "fixture-objects/11111111-3980-4000-8000-000000000001",
+      "objectId": "11111111-3980-4000-8000-000000000001",
+      "utf8": "# Upgrade report\n\nThe release ledger keeps this review document.\n",
+      "sha256": "ae2960f103228419306b2dbf5e2b9f6fd6cc27cfd3e09e43df3cb1a4c727d9ff"
+    },
+    {
+      "path": "fixture-objects/33333333-3980-4000-8000-000000000003",
+      "objectId": "33333333-3980-4000-8000-000000000003",
+      "utf8": "{\"id\":1,\"ts\":1778459560000,\"kind\":\"text\",\"payload\":\"{\\\"text\\\":\\\"# Upgrade report\\\\n\\\\nThe release ledger keeps this review document.\\\\n\\\"}\",\"sessionId\":null,\"parentSessionId\":null}\n",
+      "sha256": "317052a9dc73e4d1c68b9362669dd20f058e4ab2662e3b4f0f5ce8624355568c"
+    },
+    {
+      "path": "fixture-objects/22222222-3980-4000-8000-000000000002",
+      "objectId": "22222222-3980-4000-8000-000000000002",
+      "utf8": "# Upgrade report\n\nThe release ledger keeps this review document.\n",
+      "sha256": "ae2960f103228419306b2dbf5e2b9f6fd6cc27cfd3e09e43df3cb1a4c727d9ff"
+    }
+  ]
+}

@@ -2,7 +2,7 @@ import { epochArtifactPath } from '@/platform/persistence/migration/run/paths'
 import type { EpochSwitchApplication } from '../../public/commands'
 import type { EpochSwitchArtifactReference } from '@/platform/persistence/migration/run/types'
 import { EpochSwitchError } from '../../domain/epochSwitch/model'
-import { environmentProfile } from '../../domain/epochSwitch/supportMatrix'
+import { environmentProfile, resolveEpochProfile } from '../../domain/epochSwitch/supportMatrix'
 import { discoverEpochOperation, planEpochOperation, planView } from './planner'
 import { withEpochOperation, readEpochPlan, type EpochSwitchDependencies } from './session'
 
@@ -10,6 +10,7 @@ export async function restoreEpochBackup(
   deps: EpochSwitchDependencies,
   input: Parameters<EpochSwitchApplication['restoreBackup']>[0],
 ) {
+  const targetProfile = resolveEpochProfile(input.target ?? {}, 'target')
   if (!deps.unpackBackup) throw new EpochSwitchError('v3-backup-unpacker-required')
   const operationId = deps.newOperationId?.() ?? `dbm_e2_${crypto.randomUUID().replaceAll('-', '')}`
   const prior = await deps.journal.read(operationId)
@@ -22,9 +23,9 @@ export async function restoreEpochBackup(
       p.inputs.restoreConfig !== (input.restoreConfig ?? false) ||
       p.inputs.contentRoot?.runContentRoot !== input.contentRoot ||
       (input.target && p.target.provider !== input.target.provider) ||
-      (input.target?.urlEnv &&
+      (targetProfile !== undefined &&
         (p.target.location?.kind !== 'postgresql-target' ||
-          p.target.location.profileRef !== environmentProfile(input.target.urlEnv))) ||
+          p.target.location.profileRef !== targetProfile)) ||
       (input.scratchUrlEnv &&
         p.inputs.scratchProfileRef !== environmentProfile(input.scratchUrlEnv))
     )

@@ -1,0 +1,28 @@
+{
+  "formatVersion": 1,
+  "epoch": 1,
+  "after": "0141_rfc271_resource_bundle_applies",
+  "provenance": {
+    "kind": "curated",
+    "sources": [
+      "packages/backend/db/migrations/0141_rfc271_resource_bundle_applies.sql"
+    ],
+    "note": "Small deterministic historical records; terminal execution and delivery states; original SQL performs its own backfills."
+  },
+  "rows": [
+    {
+      "table": "resource_bundle_applies",
+      "values": {
+        "id": "01K39800006667AA37DB7CCF5E",
+        "scope": "user:01K39800007DFB4CF67742CB06",
+        "key": "upgrade-bundle",
+        "actor_user_id": "01K39800007DFB4CF67742CB06",
+        "state": "committed",
+        "prepared_artifacts_json": "[]",
+        "receipt_json": "{\"journalId\":\"01K39800006667AA37DB7CCF5E\",\"applied\":[]}",
+        "created_at": 1778459500000,
+        "updated_at": 1778459500000
+      }
+    }
+  ]
+}

@@ -1,0 +1,48 @@
+{
+  "formatVersion": 1,
+  "epoch": 1,
+  "after": "0129_rfc247_pat_purpose_and_audit",
+  "provenance": {
+    "kind": "curated",
+    "sources": [
+      "packages/backend/db/migrations/0129_rfc247_pat_purpose_and_audit.sql"
+    ],
+    "note": "Small deterministic historical records; terminal execution and delivery states; original SQL performs its own backfills."
+  },
+  "rows": [
+    {
+      "table": "token_audit",
+      "values": {
+        "id": "01K398000084883C0215BEDCE1",
+        "pat_id": "01K39800009BC251E97EF045BF",
+        "user_id": "01K39800007DFB4CF67742CB06",
+        "channel": "http",
+        "method": "GET",
+        "path": "/api/workflows",
+        "resource_kind": "workflow",
+        "resource_id": "01K398000045B34F16DB605A06",
+        "status_code": 200,
+        "created_at": 1778459500000
+      }
+    },
+    {
+      "table": "token_delete_snapshot",
+      "values": {
+        "id": "01K3980000FD4A4C9E43BD0440",
+        "audit_id": "01K398000084883C0215BEDCE1",
+        "resource_kind": "workflow",
+        "resource_id": "01K39800003980CFF494AD2650",
+        "snapshot_json": "{\"id\":\"01K39800003980CFF494AD2650\",\"name\":\"Retired draft\"}",
+        "created_at": 1778459500000
+      }
+    }
+  ],
+  "migrationEffects": [
+    {
+      "table": "user_pats",
+      "operation": "alter",
+      "rule": "Apply the released SQL to existing seeded rows, retaining its explicit defaults, rewrites and backfills.",
+      "source": "packages/backend/db/migrations/0129_rfc247_pat_purpose_and_audit.sql"
+    }
+  ]
+}

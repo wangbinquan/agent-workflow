@@ -4040,8 +4040,8 @@ async function submitReviewDecisionUnlocked(
           })
         // RFC-011: a fresh node_run row at retry_index+1 keeps the old row's
         // promptText / outputs for the Prompt tab attempts switcher. No
-        // inheritFrom: only preSnapshot is carried, plus an explicit top-level
-        // parent; startedAt null = "no timing until it actually runs"
+        // inheritFrom: only preSnapshot and the slot lineage are carried, plus an explicit
+        // top-level parent; startedAt null = "no timing until it actually runs"
         // (RFC-074 PR-C: no clarifyIteration inherit, see
         // review-iterate-inherits-clarify-iteration.test.ts).
         await args.taskExecutionParticipants.createHumanGateNodeRunMintParticipantInTx(tx).mint({
@@ -4063,6 +4063,13 @@ async function submitReviewDecisionUnlocked(
             identity: {
               parentNodeRunId: null,
               startedAt: null,
+              // RFC-398 §11: like every other rerun (scheduler, clarify and retry inherit it),
+              // the replacement keeps the replaced run's continuation slot and lineage, so its
+              // effects continue that run's operation family. A converted v0.18.x PostgreSQL
+              // run carries the bare task path its effects recorded; deriving a node path here
+              // opened a second family whose generation 0 collided with them.
+              continuationSlotKey: up.latest.continuationSlotKey,
+              lineageSlotPathJson: up.latest.lineageSlotPathJson,
             },
             checkpoint: {
               checkpoints: up.latest.checkpointInheritance,

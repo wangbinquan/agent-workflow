@@ -1,0 +1,21 @@
+{
+  "formatVersion": 1,
+  "epoch": 1,
+  "after": "0220_rfc341_committed_delivery_fk_repair",
+  "provenance": {
+    "kind": "curated",
+    "sources": [
+      "packages/backend/db/migrations/0220_rfc341_committed_delivery_fk_repair.sql"
+    ],
+    "note": "Small deterministic historical records; terminal execution and delivery states; original SQL performs its own backfills."
+  },
+  "rows": [],
+  "migrationEffects": [
+    {
+      "table": "committed_event_deliveries",
+      "operation": "alter",
+      "rule": "Apply the released SQL to existing seeded rows, retaining its explicit defaults, rewrites and backfills.",
+      "source": "packages/backend/db/migrations/0220_rfc341_committed_delivery_fk_repair.sql"
+    }
+  ]
+}

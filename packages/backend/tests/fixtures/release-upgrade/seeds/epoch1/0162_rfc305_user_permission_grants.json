@@ -1,0 +1,47 @@
+{
+  "formatVersion": 1,
+  "epoch": 1,
+  "after": "0162_rfc305_user_permission_grants",
+  "provenance": {
+    "kind": "curated",
+    "sources": [
+      "packages/backend/db/migrations/0162_rfc305_user_permission_grants.sql"
+    ],
+    "note": "Small deterministic historical records; terminal execution and delivery states; original SQL performs its own backfills."
+  },
+  "rows": [
+    {
+      "table": "user_access_audit",
+      "values": {
+        "id": "01K3980000DBCEAAA56115DE4D",
+        "target_user_id": "01K39800007DFB4CF67742CB06",
+        "actor_user_id": "01K39800007DFB4CF67742CB06",
+        "actor_kind": "session",
+        "operation_id": "upgrade-access",
+        "before_role": "user",
+        "after_role": "admin",
+        "added_permissions_json": "[]",
+        "removed_permissions_json": "[]",
+        "access_revision": 1,
+        "created_at": 1778459500000
+      }
+    },
+    {
+      "table": "user_permission_grants",
+      "values": {
+        "user_id": "01K39800007DFB4CF67742CB06",
+        "permission": "tasks:read",
+        "granted_by_user_id": "01K39800007DFB4CF67742CB06",
+        "granted_at": 1778459500000
+      }
+    }
+  ],
+  "migrationEffects": [
+    {
+      "table": "users",
+      "operation": "alter",
+      "rule": "Apply the released SQL to existing seeded rows, retaining its explicit defaults, rewrites and backfills.",
+      "source": "packages/backend/db/migrations/0162_rfc305_user_permission_grants.sql"
+    }
+  ]
+}

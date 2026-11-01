@@ -2,6 +2,7 @@ import { canonicalSchemaJson, digestSchemaContract } from '../../schema/canonica
 import { readPostgresqlMajor } from '../../schema/history/catalog'
 import { postgresqlHistoryConnection } from '../../schema/history/connection'
 import { loadFrozenEpoch1History } from '../epoch1/bundle'
+import { releasedPostgresqlSources } from '../epoch1/releasedPostgresql'
 import {
   compileEpoch1PostgresqlCatalog,
   loadSupportedSourceManifest,
@@ -29,8 +30,13 @@ export async function loadOperationSourceManifest(
   const { runtime, cache } = input
   try {
     const history = await loadFrozenEpoch1History()
+    const versions = [...history.postgresql.versions, ...releasedPostgresqlSources]
+    const chainDigest = digestSchemaContract({
+      frozen: history.chainDigest,
+      released: releasedPostgresqlSources.map((source) => source.plan.digest),
+    })
     const major = await readPostgresqlMajor(postgresqlHistoryConnection(runtime.providerPool()))
-    const name = `source-catalogs/${history.chainDigest.replace('sha256:', '')}-pg${major}.json`
+    const name = `source-catalogs/${chainDigest.replace('sha256:', '')}-pg${major}.json`
     const bytes = await cache.read(name)
     let payload: ReferenceCatalogs
     if (bytes) {
@@ -42,13 +48,12 @@ export async function loadOperationSourceManifest(
       if (
         stored.digest !== digestSchemaContract(payload) ||
         payload.version !== 1 ||
-        payload.chainDigest !== history.chainDigest ||
+        payload.chainDigest !== chainDigest ||
         payload.postgresqlMajor !== major ||
-        payload.catalogs.length !== history.postgresql.versions.length ||
+        payload.catalogs.length !== versions.length ||
         payload.catalogs.some(
           (entry, index) =>
-            entry.postgresqlMajor !== major ||
-            entry.planDigest !== history.postgresql.versions[index]!.plan.digest,
+            entry.postgresqlMajor !== major || entry.planDigest !== versions[index]!.plan.digest,
         )
       )
         throw new Error(
@@ -59,7 +64,7 @@ export async function loadOperationSourceManifest(
       const connection = await runtime.providerPool().reserve()
       const catalogs: ReferenceCatalogs['catalogs'][number][] = []
       try {
-        for (const version of history.postgresql.versions)
+        for (const version of versions)
           catalogs.push({
             ...(await compileEpoch1PostgresqlCatalog(connection, version)),
             planDigest: version.plan.digest,
@@ -67,7 +72,7 @@ export async function loadOperationSourceManifest(
       } finally {
         connection.release()
       }
-      payload = { version: 1, chainDigest: history.chainDigest, postgresqlMajor: major, catalogs }
+      payload = { version: 1, chainDigest, postgresqlMajor: major, catalogs }
       await cache.writeOnce(
         name,
         Buffer.from(canonicalSchemaJson({ payload, digest: digestSchemaContract(payload) })),

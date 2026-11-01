@@ -1,0 +1,244 @@
+{
+  "formatVersion": 1,
+  "epoch": 1,
+  "after": "0177_rfc310_development_missions",
+  "provenance": {
+    "kind": "curated",
+    "sources": [
+      "packages/backend/db/migrations/0177_rfc310_development_missions.sql",
+      "v0.19.2:packages/backend/src/modules/development-automation/application/cutover.ts:175-187"
+    ],
+    "note": "Small deterministic historical records; terminal execution and delivery states; original SQL performs its own backfills. The legacy link uses the released adoption receipt for a closed MR and existing mission/item/round."
+  },
+  "rows": [
+    {
+      "table": "development_action_runs",
+      "values": {
+        "id": "01K39800005E0204042CE0938E",
+        "mission_id": "01K3980000FDFAB0F168DF2879",
+        "mission_revision": 1,
+        "decision_id": "01K39800007242EC770EDE82D5",
+        "capability_id": "change.review",
+        "capability_contract_version": 1,
+        "input_fact_digest": "aa2741053c59de0f8a3d9e8ea7200495492cc6dd8e0bbe2d4b240284c60d99d8",
+        "writable": 0,
+        "status": "completed",
+        "created_at": 1778459500000,
+        "settled_at": 1778459560000
+      }
+    },
+    {
+      "table": "development_agent_attempts",
+      "values": {
+        "id": "01K39800003B3FC6C697FCFF5D",
+        "action_run_id": "01K39800005E0204042CE0938E",
+        "rerun_seq": 0,
+        "attempt_seq": 0,
+        "baseline_ref": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "nonce_digest": "aa2741053c59de0f8a3d9e8ea7200495492cc6dd8e0bbe2d4b240284c60d99d8",
+        "input_digest": "aa2741053c59de0f8a3d9e8ea7200495492cc6dd8e0bbe2d4b240284c60d99d8",
+        "status": "completed",
+        "created_at": 1778459500000,
+        "settled_at": 1778459560000
+      }
+    },
+    {
+      "table": "development_bundle_refs",
+      "values": {
+        "id": "01K3980000CF452ABF4B33888D",
+        "mission_id": "01K3980000FDFAB0F168DF2879",
+        "purpose": "requirements",
+        "evidence_ref": "upgrade-report",
+        "manifest_digest": "ae2960f103228419306b2dbf5e2b9f6fd6cc27cfd3e09e43df3cb1a4c727d9ff",
+        "file_count": 1,
+        "total_bytes": 65,
+        "retention_state": "released",
+        "created_at": 1778459500000
+      }
+    },
+    {
+      "table": "development_decisions",
+      "values": {
+        "id": "01K39800007242EC770EDE82D5",
+        "mission_id": "01K3980000FDFAB0F168DF2879",
+        "mission_revision": 1,
+        "fact_snapshot_id": "01K39800008397AB9970C4B9B5",
+        "fact_digest": "aa2741053c59de0f8a3d9e8ea7200495492cc6dd8e0bbe2d4b240284c60d99d8",
+        "guard_trace_json": "[]",
+        "rule_trace_json": "[]",
+        "selected_json": "[]",
+        "canonical_digest": "aa2741053c59de0f8a3d9e8ea7200495492cc6dd8e0bbe2d4b240284c60d99d8",
+        "decision_input_digest": "aa2741053c59de0f8a3d9e8ea7200495492cc6dd8e0bbe2d4b240284c60d99d8",
+        "decided_at": 1778459500000
+      }
+    },
+    {
+      "table": "development_deferred_wakes",
+      "values": {
+        "id": "01K3980000570B701BCF423B3D",
+        "mission_id": "01K3980000FDFAB0F168DF2879",
+        "decision_id": "01K39800007242EC770EDE82D5",
+        "reason": "historical-review",
+        "wake_sources_json": "[]",
+        "attempt_ordinal": 0,
+        "state": "settled",
+        "created_at": 1778459500000,
+        "settled_at": 1778459560000
+      }
+    },
+    {
+      "table": "development_effects",
+      "values": {
+        "id": "01K3980000D7F8F8AA9A745F2F",
+        "mission_id": "01K3980000FDFAB0F168DF2879",
+        "action_run_id": "01K39800005E0204042CE0938E",
+        "effect_kind": "publish",
+        "intent_digest": "aa2741053c59de0f8a3d9e8ea7200495492cc6dd8e0bbe2d4b240284c60d99d8",
+        "idempotency_key": "upgrade-publish",
+        "epoch": 1,
+        "state": "settled",
+        "receipt_ref": "upgrade-publication",
+        "created_at": 1778459500000,
+        "settled_at": 1778459560000
+      }
+    },
+    {
+      "table": "development_fact_snapshots",
+      "values": {
+        "id": "01K39800008397AB9970C4B9B5",
+        "mission_id": "01K3980000FDFAB0F168DF2879",
+        "mission_revision": 1,
+        "captured_at": "2026-05-11T00:31:40.000Z",
+        "cells_json": "{}",
+        "refs_json": "[]",
+        "digest": "aa2741053c59de0f8a3d9e8ea7200495492cc6dd8e0bbe2d4b240284c60d99d8",
+        "created_at": 1778459500000
+      }
+    },
+    {
+      "table": "development_feedback_ledger",
+      "values": {
+        "id": "01K3980000F706A9EC1B2BD35E",
+        "mission_id": "01K3980000FDFAB0F168DF2879",
+        "thread_ref": "gitlab:1:1:discussion",
+        "revision": "1",
+        "head_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "fingerprint": "aa2741053c59de0f8a3d9e8ea7200495492cc6dd8e0bbe2d4b240284c60d99d8",
+        "author_class": "human",
+        "state": "settled",
+        "created_at": 1778459500000,
+        "updated_at": 1778459500000
+      }
+    },
+    {
+      "table": "development_mission_sources",
+      "values": {
+        "id": "01K39800008880017B7AF846DA",
+        "mission_id": "01K3980000FDFAB0F168DF2879",
+        "generation": 1,
+        "source_kind": "manual",
+        "external_id": "upgrade-request",
+        "state": "retired",
+        "created_at": 1778459500000
+      }
+    },
+    {
+      "table": "development_missions",
+      "values": {
+        "id": "01K3980000FDFAB0F168DF2879",
+        "revision": 0,
+        "epoch": 0,
+        "status": "done",
+        "automation_mode": "active",
+        "transition_fence": "none",
+        "repository_id": "01K39800006904DCBDB1794059",
+        "source_kind": "manual",
+        "delivery_kind": "branch",
+        "delivery_target_ref": "main",
+        "delivery_source_branch": "task/upgrade-history",
+        "terminal_kind": "completed",
+        "terminal_at": 1778459560000,
+        "created_by": "01K39800007DFB4CF67742CB06",
+        "created_at": 1778459500000,
+        "updated_at": 1778459500000
+      }
+    },
+    {
+      "table": "development_mr_claims",
+      "values": {
+        "id": "01K3980000EED1DC3EC97C3489",
+        "code_host_endpoint_ref": "01K3980000BBDD864AB0F66C6E",
+        "stable_project_ref": "1",
+        "mr_iid": "1",
+        "mission_id": "01K3980000FDFAB0F168DF2879",
+        "epoch": 1,
+        "head_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "state": "released",
+        "created_at": 1778459500000,
+        "released_at": 1778459560000
+      }
+    },
+    {
+      "table": "development_repository_upload_plan_entries",
+      "values": {
+        "plan_id": "01K39800002BB8758A44B02461",
+        "ordinal": 0,
+        "file_id": "01K3980000C5453C38565E5BB7",
+        "upload_blob_ref": "upgrade-report",
+        "upload_sha256": "ae2960f103228419306b2dbf5e2b9f6fd6cc27cfd3e09e43df3cb1a4c727d9ff",
+        "repository_target_path": "UPGRADE.md",
+        "content_policy": "replace",
+        "target_file_mode": "100644",
+        "expected_target_kind": "absent"
+      }
+    },
+    {
+      "table": "development_repository_upload_plans",
+      "values": {
+        "id": "01K39800002BB8758A44B02461",
+        "mission_id": "01K3980000FDFAB0F168DF2879",
+        "mission_revision": 1,
+        "repository_id": "01K39800006904DCBDB1794059",
+        "baseline_snapshot_ref": "upgrade-baseline",
+        "baseline_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "plan_digest": "aa2741053c59de0f8a3d9e8ea7200495492cc6dd8e0bbe2d4b240284c60d99d8",
+        "created_at": 1778459500000
+      }
+    },
+    {
+      "table": "development_repository_upload_receipts",
+      "values": {
+        "id": "01K39800009685BF94BB8BBDB0",
+        "plan_id": "01K39800002BB8758A44B02461",
+        "baseline_snapshot_ref": "upgrade-baseline",
+        "receipt_kind": "fulfilled",
+        "fulfillment_kind": "committed",
+        "commit_sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "entries_json": "[]",
+        "created_at": 1778459500000
+      }
+    },
+    {
+      "table": "development_wake_hints",
+      "values": {
+        "id": "01K3980000C5EEDAB718085F3B",
+        "mission_id": "01K3980000FDFAB0F168DF2879",
+        "source": "manual",
+        "delivery_key": "upgrade-wake",
+        "observed_at": 1778459500000,
+        "consumed_at": 1778459560000
+      }
+    },
+    {
+      "table": "legacy_code_work_item_links",
+      "values": {
+        "id": "01K3980000AF013CDD03DFD192",
+        "mission_id": "01K3980000FDFAB0F168DF2879",
+        "legacy_work_item_id": "01K3980000BF31929DD24F5787",
+        "legacy_round_id": "01K3980000D25D5DEF6EFDEEBF",
+        "cutover_receipt_json": "{\"observedState\":\"closed\",\"headSha\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"targetBranch\":\"main\",\"adoptedAt\":1778459500000}",
+        "created_at": 1778459500000
+      }
+    }
+  ]
+}

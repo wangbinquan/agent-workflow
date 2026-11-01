@@ -1,0 +1,98 @@
+{
+  "formatVersion": 1,
+  "epoch": 1,
+  "after": "0138_rfc257_webhook_triggers",
+  "provenance": {
+    "kind": "curated",
+    "sources": [
+      "packages/backend/db/migrations/0138_rfc257_webhook_triggers.sql"
+    ],
+    "note": "Small deterministic historical records; terminal execution and delivery states; original SQL performs its own backfills."
+  },
+  "rows": [
+    {
+      "table": "webhook_deliveries",
+      "values": {
+        "id": "01K39800007547B285A0738E24",
+        "endpoint_id": "01K3980000BBDD864AB0F66C6E",
+        "event_uuid": "upgrade-mr-1",
+        "attempt_count": 1,
+        "gitlab_event_header": "Merge Request Hook",
+        "object_kind": "merge_request",
+        "event_type": "mr_merged",
+        "repo_path": "upgrade/repository",
+        "stream_hint": "mr:1",
+        "status": "matched",
+        "body_json": "{\"object_kind\":\"merge_request\",\"object_attributes\":{\"iid\":1,\"state\":\"merged\"}}",
+        "received_at": 1778459500000
+      }
+    },
+    {
+      "table": "webhook_endpoints",
+      "values": {
+        "id": "01K3980000BBDD864AB0F66C6E",
+        "name": "Disabled upgrade webhook",
+        "provider": "gitlab",
+        "url_token": "upgrade-webhook",
+        "secret_enc": "fixture-unconfigured",
+        "enabled": 0,
+        "preferred_clone_protocol": "http",
+        "created_at": 1778459500000,
+        "updated_at": 1778459500000
+      }
+    },
+    {
+      "table": "webhook_trigger_fires",
+      "values": {
+        "id": "01K39800005F960E75CDD2C111",
+        "delivery_id": "01K39800007547B285A0738E24",
+        "trigger_id": "01K398000061040A0A11451169",
+        "stream_key": "mr:1",
+        "outcome": "launched",
+        "task_id": "01K3980000085154084C742759",
+        "fired_at": 1778459500000
+      }
+    },
+    {
+      "table": "webhook_trigger_streams",
+      "values": {
+        "trigger_id": "01K398000061040A0A11451169",
+        "stream_key": "mr:1",
+        "consecutive_fires": 1,
+        "last_fire_at": 1778459500000
+      }
+    },
+    {
+      "table": "webhook_triggers",
+      "values": {
+        "id": "01K398000061040A0A11451169",
+        "name": "Disabled report trigger",
+        "endpoint_id": "01K3980000BBDD864AB0F66C6E",
+        "owner_user_id": "01K39800007DFB4CF67742CB06",
+        "enabled": 0,
+        "repo_scope": "upgrade/repository",
+        "event_types": "[\"mr_merged\"]",
+        "ignore_usernames": "[]",
+        "launch_kind": "workflow",
+        "launch_ref_id": "01K398000045B34F16DB605A06",
+        "launch_payload": "{\"workflowId\":\"01K398000045B34F16DB605A06\",\"inputs\":{}}",
+        "max_consecutive_fires": 3,
+        "auto_register_repos": 1,
+        "last_fired_at": 1778459500000,
+        "last_status": "launched",
+        "last_task_id": "01K3980000085154084C742759",
+        "consecutive_failures": 0,
+        "created_at": 1778459500000,
+        "updated_at": 1778459500000
+      }
+    }
+  ],
+  "migrationEffects": [
+    {
+      "table": "tasks",
+      "operation": "alter",
+      "rule": "Apply the released SQL to existing seeded rows, retaining its explicit defaults, rewrites and backfills.",
+      "source": "packages/backend/db/migrations/0138_rfc257_webhook_triggers.sql"
+    }
+  ]
+}

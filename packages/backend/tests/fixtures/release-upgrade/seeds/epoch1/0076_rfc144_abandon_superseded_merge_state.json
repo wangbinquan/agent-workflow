@@ -1,0 +1,13 @@
+{
+  "formatVersion": 1,
+  "epoch": 1,
+  "after": "0076_rfc144_abandon_superseded_merge_state",
+  "provenance": {
+    "kind": "curated",
+    "sources": [
+      "packages/backend/db/migrations/0076_rfc144_abandon_superseded_merge_state.sql"
+    ],
+    "note": "Small deterministic historical records; terminal execution and delivery states; original SQL performs its own backfills."
+  },
+  "rows": []
+}

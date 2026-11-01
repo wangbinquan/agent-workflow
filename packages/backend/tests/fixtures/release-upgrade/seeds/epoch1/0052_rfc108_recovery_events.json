@@ -1,0 +1,28 @@
+{
+  "formatVersion": 1,
+  "epoch": 1,
+  "after": "0052_rfc108_recovery_events",
+  "provenance": {
+    "kind": "curated",
+    "sources": [
+      "packages/backend/db/migrations/0052_rfc108_recovery_events.sql"
+    ],
+    "note": "Small deterministic historical records; terminal execution and delivery states; original SQL performs its own backfills."
+  },
+  "rows": [
+    {
+      "table": "recovery_events",
+      "values": {
+        "id": "01K398000013BEBF60A384C7D5",
+        "task_id": "01K3980000085154084C742759",
+        "node_run_id": "01K3980000D3D6DE02630EDFDE",
+        "actor": "system",
+        "kind": "node-recovered",
+        "reason": "Historical process already stopped.",
+        "before_json": "{\"status\":\"running\"}",
+        "after_json": "{\"status\":\"done\"}",
+        "created_at": 1778459500000
+      }
+    }
+  ]
+}

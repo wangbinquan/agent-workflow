@@ -1,0 +1,21 @@
+{
+  "formatVersion": 1,
+  "epoch": 1,
+  "after": "0101_rfc207_directive_shard",
+  "provenance": {
+    "kind": "curated",
+    "sources": [
+      "packages/backend/db/migrations/0101_rfc207_directive_shard.sql"
+    ],
+    "note": "Small deterministic historical records; terminal execution and delivery states; original SQL performs its own backfills."
+  },
+  "rows": [],
+  "migrationEffects": [
+    {
+      "table": "task_node_clarify_directives",
+      "operation": "alter",
+      "rule": "Apply the released SQL to existing seeded rows, retaining its explicit defaults, rewrites and backfills.",
+      "source": "packages/backend/db/migrations/0101_rfc207_directive_shard.sql"
+    }
+  ]
+}

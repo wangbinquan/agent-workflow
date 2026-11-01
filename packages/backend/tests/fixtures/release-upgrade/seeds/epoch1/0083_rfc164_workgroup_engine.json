@@ -1,0 +1,137 @@
+{
+  "formatVersion": 1,
+  "epoch": 1,
+  "after": "0083_rfc164_workgroup_engine",
+  "provenance": {
+    "kind": "curated",
+    "sources": [
+      "packages/backend/db/migrations/0083_rfc164_workgroup_engine.sql"
+    ],
+    "note": "Small deterministic historical records; terminal execution and delivery states; original SQL performs its own backfills."
+  },
+  "rows": [
+    {
+      "table": "workflows",
+      "values": {
+        "id": "01K3980000AE869F9A62324349",
+        "name": "upgrade-6acf9c23",
+        "description": "Completed historical document review",
+        "definition": "{\"$schema_version\":7,\"edges\":[{\"id\":\"e___wg_leader_____wg_clarify___clarify\",\"source\":{\"nodeId\":\"__wg_leader__\",\"portName\":\"__clarify__\"},\"target\":{\"nodeId\":\"__wg_clarify__\",\"portName\":\"questions\"}},{\"id\":\"e___wg_leader_____wg_clarify___answers\",\"source\":{\"nodeId\":\"__wg_clarify__\",\"portName\":\"answers\"},\"target\":{\"nodeId\":\"__wg_leader__\",\"portName\":\"__clarify_response__\"}},{\"id\":\"e___wg_member_____wg_clarify___clarify\",\"source\":{\"nodeId\":\"__wg_member__\",\"portName\":\"__clarify__\"},\"target\":{\"nodeId\":\"__wg_clarify__\",\"portName\":\"questions\"}},{\"id\":\"e___wg_member_____wg_clarify___answers\",\"source\":{\"nodeId\":\"__wg_clarify__\",\"portName\":\"answers\"},\"target\":{\"nodeId\":\"__wg_member__\",\"portName\":\"__clarify_response__\"}}],\"inputs\":[],\"nodes\":[{\"agentName\":\"upgrade-writer\",\"id\":\"__wg_leader__\",\"kind\":\"agent-single\"},{\"agentName\":\"upgrade-writer\",\"id\":\"__wg_member__\",\"kind\":\"agent-single\"},{\"id\":\"__wg_clarify__\",\"kind\":\"clarify\",\"sessionMode\":\"isolated\"}]}",
+        "version": 1,
+        "schema_version": 1,
+        "created_at": 1778459500000,
+        "updated_at": 1778459500000,
+        "owner_user_id": "01K39800007DFB4CF67742CB06",
+        "visibility": "public",
+        "builtin": 0
+      },
+      "expect": {
+        "api": [
+          {
+            "path": "/api/workflows/01K3980000AE869F9A62324349",
+            "at": "",
+            "equals": {
+              "/id": "01K3980000AE869F9A62324349",
+              "/name": "upgrade-6acf9c23"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "table": "tasks",
+      "values": {
+        "id": "01K398000056156B246ACF9C23",
+        "workflow_id": "01K3980000AE869F9A62324349",
+        "workflow_snapshot": "{\"$schema_version\":7,\"inputs\":[],\"nodes\":[],\"edges\":[]}",
+        "repo_path": "<AW_HOME>/repositories/upgrade-example",
+        "worktree_path": "<AW_HOME>/worktrees/upgrade-example/01K398000056156B246ACF9C23",
+        "base_branch": "main",
+        "branch": "task/upgrade-history",
+        "status": "done",
+        "inputs": "{}",
+        "started_at": 1778459500000,
+        "finished_at": 1778459560000,
+        "schema_version": 1,
+        "base_commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "repo_url": null,
+        "owner_user_id": "01K39800007DFB4CF67742CB06",
+        "name": "Historical 6ACF9C23",
+        "repo_count": 1,
+        "auto_commit_push": 0,
+        "workflow_version": 1,
+        "auto_recovery_attempts": 0,
+        "auto_recovery_suspended": 0
+      },
+      "expect": {
+        "api": [
+          {
+            "path": "/api/tasks/01K398000056156B246ACF9C23",
+            "at": "",
+            "equals": {
+              "/id": "01K398000056156B246ACF9C23",
+              "/status": "done"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "table": "task_repos",
+      "values": {
+        "task_id": "01K398000056156B246ACF9C23",
+        "repo_index": 0,
+        "repo_path": "<AW_HOME>/repositories/upgrade-example",
+        "repo_url": null,
+        "base_branch": "main",
+        "branch": "task/upgrade-history",
+        "base_commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "worktree_path": "<AW_HOME>/worktrees/upgrade-example/01K398000056156B246ACF9C23",
+        "worktree_dir_name": "",
+        "schema_version": 1
+      }
+    },
+    {
+      "table": "workgroup_assignments",
+      "values": {
+        "id": "01K398000082D32FD1999E0B03",
+        "task_id": "01K398000056156B246ACF9C23",
+        "round": 0,
+        "source": "human",
+        "created_by_user_id": "01K39800007DFB4CF67742CB06",
+        "assignee_member_id": "01K39800004B18C8303D6057FB",
+        "title": "Review upgrade record",
+        "brief_md": "Confirm retained history.",
+        "status": "done",
+        "result_message_id": "01K39800003B9E4F99B2AAB5BF",
+        "created_at": 1778459500000,
+        "updated_at": 1778459500000
+      }
+    },
+    {
+      "table": "workgroup_member_cursors",
+      "values": {
+        "task_id": "01K398000056156B246ACF9C23",
+        "member_id": "01K39800004B18C8303D6057FB",
+        "last_consumed_message_id": "01K39800003B9E4F99B2AAB5BF",
+        "updated_at": 1778459500000
+      }
+    },
+    {
+      "table": "workgroup_messages",
+      "values": {
+        "id": "01K39800003B9E4F99B2AAB5BF",
+        "task_id": "01K398000056156B246ACF9C23",
+        "round": 0,
+        "author_kind": "member",
+        "author_user_id": null,
+        "kind": "result",
+        "body_md": "History reviewed.",
+        "mentions_json": "[]",
+        "assignment_id": "01K398000082D32FD1999E0B03",
+        "created_at": 1778459500000,
+        "author_member_id": "01K39800004B18C8303D6057FB"
+      }
+    }
+  ]
+}

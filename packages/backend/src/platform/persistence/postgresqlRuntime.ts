@@ -35,6 +35,7 @@ export interface PostgresqlPool {
 
 export interface PostgresqlPoolOptions {
   readonly url: string
+  readonly database?: string
   readonly max: number
   readonly idleTimeout: number
   readonly connectionTimeout: number
@@ -176,6 +177,10 @@ function safeUrl(
   try {
     const parsed = new URL(value)
     if (parsed.protocol !== 'postgres:' && parsed.protocol !== 'postgresql:') throw new Error()
+    if (config.databaseName !== undefined) {
+      parsed.pathname = `/${encodeURIComponent(config.databaseName)}`
+      return parsed.toString()
+    }
   } catch {
     throw new PostgresqlRuntimeError(
       'postgresql-url-invalid',
@@ -188,6 +193,7 @@ function safeUrl(
 function defaultPoolFactory(options: PostgresqlPoolOptions): PostgresqlPool {
   return new SQL({
     url: options.url,
+    ...(options.database === undefined ? {} : { database: options.database }),
     max: options.max,
     idleTimeout: options.idleTimeout,
     connectionTimeout: options.connectionTimeout,
@@ -279,6 +285,9 @@ export function createPostgresqlDatabaseRuntime(input: {
     // owns its connections until runtime.close(), independently of online idle eviction.
     const physical = factory({
       url: urlWithServerTimeouts(url, input.config, purpose),
+      // Valid PostgreSQL names "." and ".." are normalized away by URL path
+      // parsing. Keep the pointer-derived name authoritative for the driver.
+      ...(input.config.databaseName === undefined ? {} : { database: input.config.databaseName }),
       max: input.config.poolMax,
       idleTimeout: purpose === 'migration' ? 0 : seconds(input.config.idleTimeoutMs),
       connectionTimeout: seconds(input.config.connectTimeoutMs),

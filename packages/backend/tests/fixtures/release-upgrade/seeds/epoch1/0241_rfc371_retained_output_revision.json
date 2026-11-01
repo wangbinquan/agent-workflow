@@ -1,0 +1,21 @@
+{
+  "formatVersion": 1,
+  "epoch": 1,
+  "after": "0241_rfc371_retained_output_revision",
+  "provenance": {
+    "kind": "curated",
+    "sources": [
+      "packages/backend/db/migrations/0241_rfc371_retained_output_revision.sql"
+    ],
+    "note": "Small deterministic historical records; terminal execution and delivery states; original SQL performs its own backfills."
+  },
+  "rows": [
+    {
+      "table": "observation_report_retained_revisions",
+      "values": {
+        "report_id": "01K39800002A2FA7E0E83B5310",
+        "revision": "1"
+      }
+    }
+  ]
+}

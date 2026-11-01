@@ -1,0 +1,85 @@
+{
+  "formatVersion": 1,
+  "epoch": 1,
+  "after": "0247_rfc372_task_clarify",
+  "provenance": {
+    "kind": "curated",
+    "sources": [
+      "packages/backend/db/migrations/0247_rfc372_task_clarify.sql"
+    ],
+    "note": "Small deterministic historical records; terminal execution and delivery states; original SQL performs its own backfills."
+  },
+  "rows": [
+    {
+      "table": "task_clarify_channels",
+      "values": {
+        "id": "01K3980000E620B8A746FC1D30",
+        "task_id": "01K3980000085154084C742759",
+        "logical_key": "upgrade-logical-key",
+        "asking_node_id": "upgrade-asking-node-id",
+        "clarify_node_id": "upgrade-clarify-node-id",
+        "binding_digest": "aa2741053c59de0f8a3d9e8ea7200495492cc6dd8e0bbe2d4b240284c60d99d8",
+        "host_json": "{}",
+        "entry_revision": 0,
+        "created_at": 1778459500000,
+        "updated_at": 1778459500000
+      }
+    },
+    {
+      "table": "task_clarify_consumptions",
+      "values": {
+        "node_run_id": "01K3980000D3D6DE02630EDFDE",
+        "task_id": "01K3980000085154084C742759",
+        "material_id": "01K3980000BA2B757E82529C0C",
+        "acceptance_ref": "upgrade-acceptance-ref",
+        "source_context_digest": "aa2741053c59de0f8a3d9e8ea7200495492cc6dd8e0bbe2d4b240284c60d99d8",
+        "snapshot_set_digest": "aa2741053c59de0f8a3d9e8ea7200495492cc6dd8e0bbe2d4b240284c60d99d8",
+        "finalized_prompt_digest": "aa2741053c59de0f8a3d9e8ea7200495492cc6dd8e0bbe2d4b240284c60d99d8",
+        "accepted_at": 1
+      }
+    },
+    {
+      "table": "task_clarify_entries",
+      "values": {
+        "id": "01K3980000B51C7382ED110943",
+        "channel_id": "01K3980000E620B8A746FC1D30",
+        "entry_revision": 1,
+        "host_entry_key": "upgrade-host-entry-key",
+        "host_json": "{}",
+        "source_asking_run_id": "upgrade-source-asking-run-id",
+        "source_context_digest": "aa2741053c59de0f8a3d9e8ea7200495492cc6dd8e0bbe2d4b240284c60d99d8",
+        "source_context_json": "{}",
+        "config_snapshot_ref": "upgrade-config-snapshot-ref",
+        "trigger_json": "{}",
+        "disposition": "completed",
+        "created_at": 1778459500000,
+        "updated_at": 1778459500000
+      }
+    },
+    {
+      "table": "task_clarify_host_runs",
+      "values": {
+        "node_run_id": "01K3980000D3D6DE02630EDFDE",
+        "task_id": "01K3980000085154084C742759",
+        "occurrence_ref": "upgrade-occurrence-ref",
+        "slot_key": "upgrade-slot-key",
+        "created_at": 1778459500000
+      }
+    },
+    {
+      "table": "task_clarify_materials",
+      "values": {
+        "id": "01K3980000BA2B757E82529C0C",
+        "task_id": "01K3980000085154084C742759",
+        "entry_scope_ref": "01K3980000B51C7382ED110943",
+        "consumer_node_id": "upgrade-consumer-node-id",
+        "material_revision": 1,
+        "plan_id": "01K39800002BB8758A44B02461",
+        "source_context_digest": "aa2741053c59de0f8a3d9e8ea7200495492cc6dd8e0bbe2d4b240284c60d99d8",
+        "snapshot_set_digest": "aa2741053c59de0f8a3d9e8ea7200495492cc6dd8e0bbe2d4b240284c60d99d8",
+        "material_json": "{}",
+        "created_at": 1778459500000
+      }
+    }
+  ]
+}

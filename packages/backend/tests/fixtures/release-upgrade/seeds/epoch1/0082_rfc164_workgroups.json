@@ -1,0 +1,76 @@
+{
+  "formatVersion": 1,
+  "epoch": 1,
+  "after": "0082_rfc164_workgroups",
+  "provenance": {
+    "kind": "curated",
+    "sources": [
+      "packages/backend/db/migrations/0082_rfc164_workgroups.sql"
+    ],
+    "note": "Small deterministic historical records; terminal execution and delivery states; original SQL performs its own backfills. Workgroup mention display names follow the released no-whitespace grammar."
+  },
+  "rows": [
+    {
+      "table": "workgroup_members",
+      "values": {
+        "id": "01K39800004B18C8303D6057FB",
+        "workgroup_id": "01K3980000716F764603014A40",
+        "member_type": "agent",
+        "agent_name": "upgrade-writer",
+        "user_id": null,
+        "display_name": "Writer",
+        "role_desc": "Report reviewer",
+        "sort_order": 0,
+        "created_at": 1778459500000
+      }
+    },
+    {
+      "table": "workgroups",
+      "values": {
+        "id": "01K3980000716F764603014A40",
+        "name": "upgrade-room",
+        "description": "Historical collaboration room",
+        "instructions": "Review the upgrade report.",
+        "mode": "leader_worker",
+        "leader_member_id": "01K39800004B18C8303D6057FB",
+        "share_outputs": 1,
+        "direct_messages": 0,
+        "blackboard": 0,
+        "max_rounds": 20,
+        "completion_gate": 0,
+        "owner_user_id": "01K39800007DFB4CF67742CB06",
+        "visibility": "public",
+        "schema_version": 1,
+        "created_at": 1778459500000,
+        "updated_at": 1778459500000
+      },
+      "expect": {
+        "api": [
+          {
+            "path": "/api/workgroups/01K3980000716F764603014A40",
+            "at": "",
+            "equals": {
+              "/id": "01K3980000716F764603014A40",
+              "/name": "upgrade-room",
+              "/mode": "leader_worker"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "table": "workgroup_members",
+      "values": {
+        "id": "01K3980000B21EC95D8BF23186",
+        "workgroup_id": "01K3980000716F764603014A40",
+        "member_type": "human",
+        "agent_name": null,
+        "user_id": "01K39800007DFB4CF67742CB06",
+        "display_name": "UpgradeAdministrator",
+        "role_desc": "Human reviewer",
+        "sort_order": 1,
+        "created_at": 1778459500000
+      }
+    }
+  ]
+}

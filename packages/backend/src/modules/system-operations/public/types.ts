@@ -264,6 +264,7 @@ export interface EpochSwitchPlanView {
   readonly guidance: readonly string[]
 }
 export interface EpochSwitchSummaryView {
+  readonly mode?: 'auto'
   readonly operationId: string
   readonly kind: EpochSwitchKind
   readonly phase: EpochSwitchPhase
@@ -283,21 +284,42 @@ export interface EpochSwitchStatusView extends EpochSwitchSummaryView {
   readonly guidance: readonly string[]
   /** Present at awaiting-approval, including validated re-approval on a fresh hosted Job. */
   readonly approval?: EpochSwitchApprovalRequest
+  /**
+   * RFC-398 §3.5: an automatic PostgreSQL session's allocated targets and scratch databases are
+   * never dropped automatically; status names each with its size and purpose.
+   */
+  readonly retainedDatabases?: readonly EpochRetainedDatabaseView[]
+}
+export interface EpochRetainedDatabaseView {
+  readonly kind: 'target' | 'scratch'
+  readonly database: string
+  readonly runId: string
+  readonly bytes: number | null
+  readonly purpose: string
 }
 export interface TaskRestrictionView {
   readonly operationId: string
   readonly taskId: string
   readonly restrictions: readonly EpochHistoryRestrictionView[]
 }
-export interface EpochSwitchTargetInput {
+export type EpochSwitchTargetInput = {
   readonly provider: EpochDatabaseProvider
-  readonly urlEnv?: string
-}
-export interface EpochSwitchPlanInput {
+} & (
+  | { readonly urlEnv?: string; readonly profileRef?: never }
+  | { readonly urlEnv?: never; readonly profileRef: string }
+)
+export type EpochSwitchPlanInput = {
   readonly operationId?: string
+  /** Used only when creating an operation; an automatic session persists intent first. */
+  readonly requestedOperationId?: string
   readonly target?: EpochSwitchTargetInput
-  readonly scratchUrlEnv?: string
   readonly emptyTables?: readonly { readonly table: string; readonly reason: string }[]
   readonly rehearse?: boolean
   readonly chunkLimit?: number
-}
+} & (
+  | { readonly scratchUrlEnv?: string; readonly scratchProfileRef?: never }
+  | { readonly scratchUrlEnv?: never; readonly scratchProfileRef: string }
+)
+
+// RFC-398 design §1: public result contract for the automatic-upgrade CLI adapter.
+export type { AutoUpgradeConclusion } from '../domain/epochSwitch/autoUpgrade'

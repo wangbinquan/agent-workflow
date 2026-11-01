@@ -1,4 +1,5 @@
-import { Database } from 'bun:sqlite'
+import { openSqliteForRead } from '@/platform/persistence/sqlite/openForRead'
+import type { Database } from 'bun:sqlite'
 import { existsSync, readdirSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 
@@ -21,7 +22,7 @@ export function unpublishedSqliteInstallation(
   for (const path of paths.filter((path) => existsSync(path) && !excluded.has(resolve(path)))) {
     let db: Database | undefined
     try {
-      db = new Database(path, { readonly: true })
+      db = openSqliteForRead(path)
       if (!db.query("SELECT 1 FROM sqlite_schema WHERE name = 'aw_meta_generations'").get())
         continue
       const active = db

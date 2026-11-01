@@ -1,0 +1,49 @@
+{
+  "formatVersion": 1,
+  "epoch": 1,
+  "after": "0011_rfc028_mcps",
+  "provenance": {
+    "kind": "curated",
+    "sources": [
+      "packages/backend/db/migrations/0011_rfc028_mcps.sql"
+    ],
+    "note": "Small deterministic historical records; terminal execution and delivery states; original SQL performs its own backfills."
+  },
+  "rows": [
+    {
+      "table": "mcps",
+      "values": {
+        "id": "01K3980000FC1997E4D80E81F6",
+        "name": "upgrade-reference",
+        "description": "Disabled historical reference endpoint",
+        "type": "remote",
+        "config": "{\"url\":\"https://example.invalid/mcp\"}",
+        "enabled": 0,
+        "schema_version": 1,
+        "created_at": 1778459500000,
+        "updated_at": 1778459500000
+      },
+      "expect": {
+        "api": [
+          {
+            "path": "/api/mcps/01K3980000FC1997E4D80E81F6",
+            "at": "",
+            "equals": {
+              "/id": "01K3980000FC1997E4D80E81F6",
+              "/name": "upgrade-reference",
+              "/enabled": false
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "migrationEffects": [
+    {
+      "table": "agents",
+      "operation": "alter",
+      "rule": "Apply the released SQL to existing seeded rows, retaining its explicit defaults, rewrites and backfills.",
+      "source": "packages/backend/db/migrations/0011_rfc028_mcps.sql"
+    }
+  ]
+}

@@ -1,0 +1,56 @@
+# RFC-349 finalize equivalence capture: v0.18.19
+
+Captured on 2026-10-31 with the official GitHub Release macOS arm64 binary (SHA-256 `a0fe04aeaa9fd80404da9189f2a340480319274a89d9d51671ab01a4064dc198`). Imported by `scripts/release-upgrade/record.ts import-finalize`; no daemon or finalize command is run during import.
+
+Original source: `/private/tmp/claude-501/-Users-wangbinquan-dev-proj-agent-workflow/7b6d8dcb-ec08-41df-bb1e-0edc98a26580/scratchpad/fixtures-rfc349/v0.18.19`. Operation: `dbm_01M68BBT61MNA9V6MHA5SZNGMM`.
+
+`before/` is the old binary's one-click SQLite to PostgreSQL migration, followed by its first live PostgreSQL write. The manifest is still `accepting-writes` and `firstLiveWriteAt` is null. `after/` is the same home and the same PostgreSQL database after that binary's `db migration finalize`. These are the two supplied captures; a separate pre-first-write capture was not supplied.
+
+The PostgreSQL data difference is one `agent_workflow_meta.logical_copy_operations` row: `stage` changes from `activated` to `finalized`, with `updated_at`. The manifest advances to `finalized` and refreshes `firstLiveWriteAt`; `receipt.json` appears; the version-1 pointer's `manifestDigest` changes. PostgreSQL dump framing (including random restrict tokens) is not business data.
+
+Home files retain the raw captured bytes. `postgres.sql.gz` is deterministic gzip of the complete pg_dump of `agent_workflow` and `agent_workflow_meta`. `capture.json` records original and compressed digests. Do not pretty-print or path-replace these raw files: envelope digests and fingerprint bindings are evidence. The ordinary dataset recorder, in contrast, canonicalizes rows and replaces the recording home with `<AW_HOME>`.
+
+Environment-bound fields: absolute source-backup/chunk/content/worktree paths, runtime executable paths in config.json, PostgreSQL target fingerprint, SQLite source fingerprint, the `AW_PG_URL` connection binding, source/target generation IDs and operation ID. T4 must rebind a copy to its test environment and recompute dependent envelope digests, or compare normalized fields. Times (`firstLiveWriteAt`, checkpoints, metadata `updated_at`) and derived digests must be normalized by explicit equivalence rules, not ignored wholesale. Do not restore these fixtures directly into an unrelated production database.
+
+Omission decision: both current `packages/backend/src/modules/system-operations/application/databaseMigrationRunner.ts` (`status`, `finalize`, `refreshPointer`) and the v0.19.2 version (`status` 711-729, `finalize` 777-817, pointer refresh 341-375) read the manifest and live target metadata, write the final receipt, mark finalized, advance the manifest, and refresh the pointer. Neither finalize path reads `chunks/` or `source-backup/`. Their referenced digests remain in the retained manifests. Logical manifest, verification and legacy-archive manifest are retained. The omitted bytes are NOT a full migration/replay fixture.
+
+| Omitted original file                                                                                                         |   Bytes | SHA-256                                                          |
+| ----------------------------------------------------------------------------------------------------------------------------- | ------: | ---------------------------------------------------------------- |
+| before/home/database-migrations/dbm_01M68BBT61MNA9V6MHA5SZNGMM/chunks/agents/chunk-00000000.json                              |   51998 | 873a5b41f64ca787645de23a7232e1b03f2937d3afdd7e5664e64b968b5ecd29 |
+| before/home/database-migrations/dbm_01M68BBT61MNA9V6MHA5SZNGMM/chunks/auth_login_policy/chunk-00000000.json                   |    1111 | f95edfef9edbebc886c97f77d2778eb786fc306caa4ce1f5ae9c972f69c49f46 |
+| before/home/database-migrations/dbm_01M68BBT61MNA9V6MHA5SZNGMM/chunks/capability_templates/chunk-00000000.json                |    3988 | d6ba9b7007bb40d838030da3553f220fed5fd84f6a9bbb39d74c4dd33c34969d |
+| before/home/database-migrations/dbm_01M68BBT61MNA9V6MHA5SZNGMM/chunks/code_round_stages/chunk-00000000.json                   |   13246 | 76a62d623e12d3e7d16162ba67e7f8abf0806f6e74152ad3ec50313d69da34d3 |
+| before/home/database-migrations/dbm_01M68BBT61MNA9V6MHA5SZNGMM/chunks/code_work_items/chunk-00000000.json                     |    2344 | e7cad4ab89f4a77706fb1c8174c1dce4c71e3846dc40999bdea2057e465320f8 |
+| before/home/database-migrations/dbm_01M68BBT61MNA9V6MHA5SZNGMM/chunks/code_work_rounds/chunk-00000000.json                    |    1814 | 8b3fa07e45583cfbe9a4dd6a73fab3524790e437d739951bf5dad4dc7e880e81 |
+| before/home/database-migrations/dbm_01M68BBT61MNA9V6MHA5SZNGMM/chunks/committed_event_family_cutovers/chunk-00000000.json     |    3755 | 1c79cdcc96e60be58d68e305d9161a07e41bbc35198c8619f4385d763aa97563 |
+| before/home/database-migrations/dbm_01M68BBT61MNA9V6MHA5SZNGMM/chunks/employee_execution_policy_revisions/chunk-00000000.json |    1410 | 3c84254048f494bbb2483dd88d4784f049e21342bcf6d106c573575ee84beca2 |
+| before/home/database-migrations/dbm_01M68BBT61MNA9V6MHA5SZNGMM/chunks/employee_os_settings/chunk-00000000.json                |     945 | e29c318844810d85109b53b197f60cbc8341cdf6c36e530735d2333d411c2d0e |
+| before/home/database-migrations/dbm_01M68BBT61MNA9V6MHA5SZNGMM/chunks/employee_os_writer_state/chunk-00000000.json            |    1254 | a4754a889fb1a61860a536f002b4a5a6ef96c918f8c67652df9c2391ba083232 |
+| before/home/database-migrations/dbm_01M68BBT61MNA9V6MHA5SZNGMM/chunks/employee_type_packages/chunk-00000000.json              |   83370 | fe8d03a7587d5322281ecb7669b6d0dc826cce267b4c27e164b1be04401dc8a4 |
+| before/home/database-migrations/dbm_01M68BBT61MNA9V6MHA5SZNGMM/chunks/event_sources/chunk-00000000.json                       |    8783 | 58090e83cea0db2e1fcd81e4e7b683821849af1928aca1498120cc10d1537aed |
+| before/home/database-migrations/dbm_01M68BBT61MNA9V6MHA5SZNGMM/chunks/event_type_catalog/chunk-00000000.json                  |  169017 | b0f91ad8bc16bd9411496ccf361649ea3128993443a030bc2020b093aee21b23 |
+| before/home/database-migrations/dbm_01M68BBT61MNA9V6MHA5SZNGMM/chunks/maintenance_runs/chunk-00000000.json                    |    3410 | 07dd9d6b501c21929ea224cf88120e9c3c249af97efa2a7b32e381ab982ab510 |
+| before/home/database-migrations/dbm_01M68BBT61MNA9V6MHA5SZNGMM/chunks/maintenance_state/chunk-00000000.json                   |    1058 | 75849cb740bfd6ce0950a2382fe8ba0ade0f32f4be42441e5aaae5216240f253 |
+| before/home/database-migrations/dbm_01M68BBT61MNA9V6MHA5SZNGMM/chunks/runtimes/chunk-00000000.json                            |    3868 | b210dcdcad9a0f2c42d43ee4401ae2ae286d55954d35e5bb885f3b54e48ce594 |
+| before/home/database-migrations/dbm_01M68BBT61MNA9V6MHA5SZNGMM/chunks/users/chunk-00000000.json                               |    2033 | ad6edc3c35328acef641660bd8b1078b7ed385a45bc25e7ff39fadd8e57ea016 |
+| before/home/database-migrations/dbm_01M68BBT61MNA9V6MHA5SZNGMM/chunks/workflows/chunk-00000000.json                           |    8282 | f55a5726d423d646e613354554ff920d40daf854618b9597d8b285d65fe62202 |
+| before/home/database-migrations/dbm_01M68BBT61MNA9V6MHA5SZNGMM/source-backup/db.sqlite                                        | 3485696 | b5b64ff68b4a50bf11c1f5163107a323d9d1955c6e1b66c5b21d7cb79a333ea2 |
+| after/home/database-migrations/dbm_01M68BBT61MNA9V6MHA5SZNGMM/chunks/agents/chunk-00000000.json                               |   51998 | 873a5b41f64ca787645de23a7232e1b03f2937d3afdd7e5664e64b968b5ecd29 |
+| after/home/database-migrations/dbm_01M68BBT61MNA9V6MHA5SZNGMM/chunks/auth_login_policy/chunk-00000000.json                    |    1111 | f95edfef9edbebc886c97f77d2778eb786fc306caa4ce1f5ae9c972f69c49f46 |
+| after/home/database-migrations/dbm_01M68BBT61MNA9V6MHA5SZNGMM/chunks/capability_templates/chunk-00000000.json                 |    3988 | d6ba9b7007bb40d838030da3553f220fed5fd84f6a9bbb39d74c4dd33c34969d |
+| after/home/database-migrations/dbm_01M68BBT61MNA9V6MHA5SZNGMM/chunks/code_round_stages/chunk-00000000.json                    |   13246 | 76a62d623e12d3e7d16162ba67e7f8abf0806f6e74152ad3ec50313d69da34d3 |
+| after/home/database-migrations/dbm_01M68BBT61MNA9V6MHA5SZNGMM/chunks/code_work_items/chunk-00000000.json                      |    2344 | e7cad4ab89f4a77706fb1c8174c1dce4c71e3846dc40999bdea2057e465320f8 |
+| after/home/database-migrations/dbm_01M68BBT61MNA9V6MHA5SZNGMM/chunks/code_work_rounds/chunk-00000000.json                     |    1814 | 8b3fa07e45583cfbe9a4dd6a73fab3524790e437d739951bf5dad4dc7e880e81 |
+| after/home/database-migrations/dbm_01M68BBT61MNA9V6MHA5SZNGMM/chunks/committed_event_family_cutovers/chunk-00000000.json      |    3755 | 1c79cdcc96e60be58d68e305d9161a07e41bbc35198c8619f4385d763aa97563 |
+| after/home/database-migrations/dbm_01M68BBT61MNA9V6MHA5SZNGMM/chunks/employee_execution_policy_revisions/chunk-00000000.json  |    1410 | 3c84254048f494bbb2483dd88d4784f049e21342bcf6d106c573575ee84beca2 |
+| after/home/database-migrations/dbm_01M68BBT61MNA9V6MHA5SZNGMM/chunks/employee_os_settings/chunk-00000000.json                 |     945 | e29c318844810d85109b53b197f60cbc8341cdf6c36e530735d2333d411c2d0e |
+| after/home/database-migrations/dbm_01M68BBT61MNA9V6MHA5SZNGMM/chunks/employee_os_writer_state/chunk-00000000.json             |    1254 | a4754a889fb1a61860a536f002b4a5a6ef96c918f8c67652df9c2391ba083232 |
+| after/home/database-migrations/dbm_01M68BBT61MNA9V6MHA5SZNGMM/chunks/employee_type_packages/chunk-00000000.json               |   83370 | fe8d03a7587d5322281ecb7669b6d0dc826cce267b4c27e164b1be04401dc8a4 |
+| after/home/database-migrations/dbm_01M68BBT61MNA9V6MHA5SZNGMM/chunks/event_sources/chunk-00000000.json                        |    8783 | 58090e83cea0db2e1fcd81e4e7b683821849af1928aca1498120cc10d1537aed |
+| after/home/database-migrations/dbm_01M68BBT61MNA9V6MHA5SZNGMM/chunks/event_type_catalog/chunk-00000000.json                   |  169017 | b0f91ad8bc16bd9411496ccf361649ea3128993443a030bc2020b093aee21b23 |
+| after/home/database-migrations/dbm_01M68BBT61MNA9V6MHA5SZNGMM/chunks/maintenance_runs/chunk-00000000.json                     |    3410 | 07dd9d6b501c21929ea224cf88120e9c3c249af97efa2a7b32e381ab982ab510 |
+| after/home/database-migrations/dbm_01M68BBT61MNA9V6MHA5SZNGMM/chunks/maintenance_state/chunk-00000000.json                    |    1058 | 75849cb740bfd6ce0950a2382fe8ba0ade0f32f4be42441e5aaae5216240f253 |
+| after/home/database-migrations/dbm_01M68BBT61MNA9V6MHA5SZNGMM/chunks/runtimes/chunk-00000000.json                             |    3868 | b210dcdcad9a0f2c42d43ee4401ae2ae286d55954d35e5bb885f3b54e48ce594 |
+| after/home/database-migrations/dbm_01M68BBT61MNA9V6MHA5SZNGMM/chunks/users/chunk-00000000.json                                |    2033 | ad6edc3c35328acef641660bd8b1078b7ed385a45bc25e7ff39fadd8e57ea016 |
+| after/home/database-migrations/dbm_01M68BBT61MNA9V6MHA5SZNGMM/chunks/workflows/chunk-00000000.json                            |    8282 | f55a5726d423d646e613354554ff920d40daf854618b9597d8b285d65fe62202 |
+| after/home/database-migrations/dbm_01M68BBT61MNA9V6MHA5SZNGMM/source-backup/db.sqlite                                         | 3485696 | b5b64ff68b4a50bf11c1f5163107a323d9d1955c6e1b66c5b21d7cb79a333ea2 |

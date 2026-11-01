@@ -1,4 +1,4 @@
-import { Database } from 'bun:sqlite'
+import { openSqliteForRead } from '@/platform/persistence/sqlite/openForRead'
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { DatabaseProvider } from '@/platform/persistence/databaseProviders'
@@ -7,9 +7,13 @@ import { parseDatabaseGenerationText } from '@/platform/persistence/generationVa
 import { digestSchemaContract } from '@/platform/persistence/schema/canonical'
 import { unpublishedSqliteInstallation } from '@/platform/persistence/unpublishedInstallation'
 import { parseEpochSwitchJournal } from '../../domain/epochSwitch/model'
+import { readAutoUpgradeSessions } from '../local/autoUpgradeState'
+import type { DatabaseConfig } from '@agent-workflow/shared'
+import { probeConfiguredEpochSource } from '@/platform/persistence/epochSourceEvidence'
 import {
   classifyEpochInstallation,
   epochInstallationGuidance,
+  type InstallationFacts,
 } from '../../domain/epochSwitch/classification'
 
 export {
@@ -20,7 +24,7 @@ export function readEpochBootFacts(input: {
   appHome: string
   provider: DatabaseProvider
   externalSourceExists?: boolean
-}) {
+}): InstallationFacts {
   const pointerPath = join(input.appHome, 'database-generation.json')
   const text = existsSync(pointerPath) ? readFileSync(pointerPath, 'utf8') : null
   const pointer =
@@ -42,7 +46,10 @@ export function readEpochBootFacts(input: {
         : [],
     )
     .sort((a, b) => b.payload.updatedAt - a.payload.updatedAt)
+  const autoUpgradeSessions = readAutoUpgradeSessions(input.appHome)
+  const pendingAuto = [...autoUpgradeSessions].reverse().find((session) => session.unfinished)
   const operation =
+    journals.find((j) => j.payload.operationId === pendingAuto?.operationId) ??
     journals.find((j) => !['completed', 'rolled-back', 'abandoned'].includes(j.payload.status)) ??
     journals.find((j) => j.payload.operationId === pointer?.payload.operationId) ??
     null
@@ -96,7 +103,7 @@ export function readEpochBootFacts(input: {
     : null
   const file = join(input.appHome, 'db.sqlite')
   if (existsSync(file) && unpublished?.path !== file) {
-    const db = new Database(file, { readonly: true })
+    const db = openSqliteForRead(file)
     try {
       sourceExists =
         db
@@ -109,6 +116,7 @@ export function readEpochBootFacts(input: {
     }
   }
   return {
+    autoUpgradeSessions,
     pointer,
     provider: pointer?.payload.provider ?? input.provider,
     sourceExists,
@@ -124,4 +132,16 @@ export function admitEpochBoot(input: Parameters<typeof readEpochBootFacts>[0]) 
   const guidance = epochInstallationGuidance(state)
   if (guidance) throw new Error(guidance)
   return state
+}
+
+/** A configured, empty PostgreSQL database is a fresh install, not an epoch-1 source. */
+export async function readEpochBootFactsForConfig(input: {
+  appHome: string
+  database: DatabaseConfig
+  env?: Readonly<Record<string, string | undefined>>
+}): Promise<InstallationFacts> {
+  const facts = readEpochBootFacts({ appHome: input.appHome, provider: input.database.provider })
+  if (facts.pointer) return facts
+  const sourceExists = await probeConfiguredEpochSource(input)
+  return sourceExists === undefined ? facts : { ...facts, sourceExists }
 }

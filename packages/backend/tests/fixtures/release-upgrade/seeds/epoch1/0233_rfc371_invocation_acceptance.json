@@ -1,0 +1,24 @@
+{
+  "formatVersion": 1,
+  "epoch": 1,
+  "after": "0233_rfc371_invocation_acceptance",
+  "provenance": {
+    "kind": "curated",
+    "sources": [
+      "packages/backend/db/migrations/0233_rfc371_invocation_acceptance.sql"
+    ],
+    "note": "Small deterministic historical records; terminal execution and delivery states; original SQL performs its own backfills."
+  },
+  "rows": [
+    {
+      "table": "observation_invocations",
+      "values": {
+        "id": "01K3980000DDDE8C4DB0D6D501",
+        "task_id": "01K3980000085154084C742759",
+        "canonical_execution": "{\"taskId\":\"01K3980000085154084C742759\",\"nodeRunId\":\"01K3980000D3D6DE02630EDFDE\"}",
+        "fingerprint": "aa2741053c59de0f8a3d9e8ea7200495492cc6dd8e0bbe2d4b240284c60d99d8",
+        "document": "{\"status\":\"done\",\"startedAt\":1778459500000,\"endedAt\":1778459560000}"
+      }
+    }
+  ]
+}

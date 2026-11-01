@@ -1,0 +1,30 @@
+{
+  "formatVersion": 1,
+  "epoch": 1,
+  "after": "0235_rfc371_platform_observations",
+  "provenance": {
+    "kind": "curated",
+    "sources": [
+      "packages/backend/db/migrations/0235_rfc371_platform_observations.sql"
+    ],
+    "note": "Small deterministic historical records; terminal execution and delivery states; original SQL performs its own backfills."
+  },
+  "rows": [
+    {
+      "table": "observation_platform_records",
+      "values": {
+        "id": "01K3980000B9C238A11799A3DB",
+        "source_key": "upgrade-source-key",
+        "generation": "upgrade-generation",
+        "document": "{\"version\":1,\"status\":\"done\"}"
+      }
+    },
+    {
+      "table": "observation_platform_sources",
+      "values": {
+        "id": "01K39800000D51A229CAF9924D",
+        "document": "{}"
+      }
+    }
+  ]
+}

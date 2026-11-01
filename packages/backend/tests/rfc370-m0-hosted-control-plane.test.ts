@@ -373,7 +373,11 @@ test('platform probes answer without execution authority', async () => {
   const app = new Hono()
   mountHealthRoutes(
     app,
-    { opencodeVersion: null, dbVersion: 1 },
+    {
+      opencodeVersion: null,
+      dbVersion: 1,
+      databaseIdentity: async () => ({ provider: 'sqlite', databaseName: null }),
+    },
     {
       snapshot: () => ({
         accessUpdate: { success: 0, noOp: 0, conflict: 0, rejected: 0 },

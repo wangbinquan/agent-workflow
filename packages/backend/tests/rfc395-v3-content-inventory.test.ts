@@ -41,9 +41,17 @@ import {
   objectId,
   contentBytes,
   contentLookups,
+  frozenValues,
 } from './helpers/rfc395V2/contentFixtures'
 import { readInventorySource } from '@/platform/content/inventory/databaseTrees'
-import { conversion as contentConversion } from '@/platform/content/migration'
+import {
+  conversion as contentConversion,
+  convertFrozenSkillContent,
+} from '@/platform/content/migration'
+import { createSkillBootConversion } from '@/modules/resource-catalog/infrastructure/migration/skillBootRules'
+import { skillBootEnvironment } from '@/modules/resource-catalog/infrastructure/migration/skillBootFacts'
+import { digestSortedTree } from '@/modules/resource-catalog/infrastructure/legacy/skillHash'
+import { createBootUpgradeFacts } from '@/platform/persistence/migration/conversion/bootUpgradeFacts'
 import { conversion as runContribution } from '@/modules/task-execution/infrastructure/migration/run'
 import { runConversion } from '@/platform/persistence/migration/conversion/engine'
 import { V2MemorySink } from './helpers/rfc395V2MemorySink'
@@ -689,6 +697,107 @@ describeV2Providers('RFC-395 V3-F fix round content integration', (h) => {
       expect(await reopened.verifyUnchanged(receipts(...artifacts))).toEqual([
         expect.objectContaining({ sourceColumn: 'prompt_path', reason: 'missing' }),
       ])
+    } finally {
+      await source.close()
+    }
+  })
+  // RFC-398 L2 regression: a real v0.19.2 home with one filesystem skill was refused at
+  // validation (`size-changed` drift on skills.managed_path and skill_versions.files_path). The
+  // skill receipt carried the legacy path\0bytes\0 hash and the summed file size, while the
+  // inventory observes a skill directory as its canonical skill-tree manifest.
+  test('filesystem skill trees convert to receipts that verify against the frozen inventory', async () => {
+    await h.install()
+    const bytes = new Map([
+      ['SKILL.md', Buffer.from('---\nname: local\ndescription: d\n---\n# Local\n')],
+      ['docs/extra.md', Buffer.from('extra')],
+    ])
+    for (const tree of ['skills/local/files', 'skills/local/versions/v1/files'])
+      for (const [path, value] of bytes) file(`${tree}/${path}`, value)
+    await h.write('skills', [
+      frozenValues('skills', {
+        id: 'local',
+        name: 'local',
+        managed_path: 'skills/local/files',
+        reservation_state: 'ready',
+        version_state: 'snapshot-authoritative',
+        content_version: 1,
+      }),
+    ])
+    await h.write('skill_versions', [
+      frozenValues('skill_versions', {
+        id: 'local-v1',
+        skill_id: 'local',
+        version_index: 1,
+        files_path: 'skills/local/versions/v1/files',
+        content_hash: digestSortedTree([...bytes.keys()].sort(), (path) => bytes.get(path)!),
+        source: 'initial',
+      }),
+    ])
+    const input = await h.input([
+      createSkillBootConversion(convertFrozenSkillContent),
+      contentConversion,
+      contentLookups(),
+    ])
+    const source: FrozenSourceHandle = {
+      reader: input.source,
+      preflight: input.preflight,
+      preUpgrade: null,
+      watermark: input.preflight.watermark,
+      evidenceRoot: null,
+      close: () => input.source.close(),
+    }
+    try {
+      const manifest = await captureContentManifest({
+        root,
+        source,
+        destination: join(directory, 'operation/manifest.json'),
+      })
+      const inventory = createFreezeContentInventory({ root, source, manifest })
+      const facts = createBootUpgradeFacts(
+        await skillBootEnvironment().capture({
+          stage: 'freeze',
+          source,
+          root,
+          content: inventory,
+          manifest,
+          readArtifact: async () => null,
+          writeArtifact: async () => {},
+        }),
+      )
+      const sink = new V2MemorySink()
+      const summary = await runConversion(
+        {
+          ...input,
+          bootUpgradeFacts: facts,
+          content: inventory,
+          contentManifestDigest: manifest.digest,
+        },
+        sink,
+      )
+      expect(summary.blocks).toEqual([])
+      const artifacts = [...sink.units.values()].flatMap((unit) => unit.artifacts)
+      const skillReceipts = artifacts.filter((item) =>
+        ['skills', 'skill_versions'].includes(item.sourceTable),
+      )
+      expect(skillReceipts.map((item) => item.target.backend)).toEqual(['local-file', 'local-file'])
+      const expected = contentByteFacts(
+        skillTreeManifestBytes(
+          [...bytes].map(([path, value]) => ({ path, ...contentByteFacts(value) })),
+        ),
+      )
+      for (const item of skillReceipts)
+        expect({ size: item.bytes?.size, sha256: item.bytes?.sha256 }).toEqual(expected)
+      expect(
+        await createFreezeContentInventory({ root, source, manifest }).verifyUnchanged(
+          receipts(...artifacts),
+        ),
+      ).toEqual([])
+      file('skills/local/files/SKILL.md', '# changed after freeze\n')
+      expect(
+        await createFreezeContentInventory({ root, source, manifest }).verifyUnchanged(
+          receipts(...artifacts),
+        ),
+      ).toEqual([expect.objectContaining({ sourceTable: 'skills', sourceColumn: 'managed_path' })])
     } finally {
       await source.close()
     }

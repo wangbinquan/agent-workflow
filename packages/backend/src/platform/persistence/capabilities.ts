@@ -70,6 +70,8 @@ export const BOUNDED_DELETE_MAX_ROWS = 5_000
 export type EngineErrorClass = 'unique-violation' | 'serialization' | 'busy' | 'other'
 
 export interface EngineCapabilities {
+  /** RFC-398 design §2.7: server database name, absent for an embedded database. */
+  databaseName(): SQL<string> | null
   /** 只供矩阵自身的测试与诊断日志读；业务代码读它就是分叉，W5 守卫会红。 */
   readonly provider: DatabaseProvider
   /** 事务体看到的隔离形态：PG 是多写并发（须显式行锁）；SQLite 在 BEGIN IMMEDIATE 下独占。 */
@@ -343,6 +345,7 @@ let sqliteCapabilities: EngineCapabilities | undefined
 export function createSqliteCapabilities(): EngineCapabilities {
   return (sqliteCapabilities ??= Object.freeze({
     provider: 'sqlite',
+    databaseName: () => null,
     isolation: 'exclusive',
     maxBindParameters: SQLITE_MAX_BIND_PARAMETERS,
     batchInsertMax: (columnCount) =>
@@ -422,7 +425,7 @@ export function createSqliteCapabilities(): EngineCapabilities {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /** Bun.SQL 把 SQLSTATE 放在 `errno`；`code` 是 Node 风格的 ERR_* 常量。两处都看，沿 cause 链。 */
-function postgresqlSqlState(error: unknown): string | undefined {
+export function postgresqlSqlState(error: unknown): string | undefined {
   return walkCause(error, (node) => {
     const errno = (node as { readonly errno?: unknown }).errno
     if (typeof errno === 'string' && /^[0-9A-Z]{5}$/.test(errno)) return errno
@@ -460,6 +463,7 @@ let postgresqlCapabilities: EngineCapabilities | undefined
 export function createPostgresqlCapabilities(): EngineCapabilities {
   return (postgresqlCapabilities ??= Object.freeze({
     provider: 'postgresql',
+    databaseName: () => sql<string>`current_database()`,
     isolation: 'read-committed',
     maxBindParameters: POSTGRESQL_MAX_BIND_PARAMETERS,
     batchInsertMax: (columnCount) =>

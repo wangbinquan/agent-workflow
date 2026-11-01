@@ -1,0 +1,43 @@
+{
+  "formatVersion": 1,
+  "epoch": 1,
+  "after": "0020_rfc036_task_collab",
+  "provenance": {
+    "kind": "curated",
+    "sources": [
+      "packages/backend/db/migrations/0020_rfc036_task_collab.sql"
+    ],
+    "note": "Small deterministic historical records; terminal execution and delivery states; original SQL performs its own backfills."
+  },
+  "rows": [
+    {
+      "table": "node_assignments",
+      "values": {
+        "task_id": "01K3980000085154084C742759",
+        "node_id": "review",
+        "kind": "review",
+        "user_id": "01K39800007DFB4CF67742CB06",
+        "assigned_by": "01K39800007DFB4CF67742CB06",
+        "assigned_at": 1778459500000
+      }
+    },
+    {
+      "table": "task_collaborators",
+      "values": {
+        "task_id": "01K3980000085154084C742759",
+        "user_id": "01K39800007DFB4CF67742CB06",
+        "role": "owner",
+        "added_by": "01K39800007DFB4CF67742CB06",
+        "added_at": 1778459500000
+      }
+    }
+  ],
+  "migrationEffects": [
+    {
+      "table": "tasks",
+      "operation": "alter",
+      "rule": "Apply the released SQL to existing seeded rows, retaining its explicit defaults, rewrites and backfills.",
+      "source": "packages/backend/db/migrations/0020_rfc036_task_collab.sql"
+    }
+  ]
+}

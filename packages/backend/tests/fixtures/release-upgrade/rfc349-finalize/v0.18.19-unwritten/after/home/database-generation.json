@@ -1,0 +1,12 @@
+{
+  "digest": "sha256:3407a2608dec3579bbe633be3dea8d2fcab33ac3d2394f2ebf9faee78bdf9c55",
+  "payload": {
+    "activatedAt": 1793498373517,
+    "generationId": "dbg_pg_01M6ADAJAD885CG1ES6S9P7VZ9",
+    "manifestDigest": "sha256:d52e15545c01d5c0860fae8ea4deca1cabec1bd30d08f2db5528d030ebb5b82e",
+    "operationId": "dbm_01M6ADAJAD885CG1ES6S9P7VZ9",
+    "provider": "postgresql",
+    "schemaDigest": "sha256:3ee9be23a3e0f46c002f76b382b33d137c6a9ef4ef78a3ee71e212e5247c72d7",
+    "version": 1
+  }
+}

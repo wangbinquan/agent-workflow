@@ -1,0 +1,84 @@
+{
+  "formatVersion": 1,
+  "epoch": 1,
+  "after": "0144_rfc276_runtime_hardening_deprecation",
+  "provenance": {
+    "kind": "curated",
+    "sources": [
+      "packages/backend/db/migrations/0144_rfc276_runtime_hardening_deprecation.sql"
+    ],
+    "note": "Small deterministic historical records; terminal execution and delivery states; original SQL performs its own backfills."
+  },
+  "rows": [
+    {
+      "table": "mcp_runtime_test_session_leases",
+      "values": {
+        "protocol": "opencode",
+        "runtime_session_id": "upgrade-mcp-session",
+        "test_session_id": "01K39800009F19AE79A1653ADD",
+        "created_turn_id": "01K39800005FACDC2DDA1560C6",
+        "current_turn_id": "01K39800005FACDC2DDA1560C6"
+      }
+    },
+    {
+      "table": "runtime_session_leases",
+      "values": {
+        "protocol": "opencode",
+        "session_id": "upgrade-historical-session",
+        "task_id": "01K3980000085154084C742759",
+        "node_id": "worker",
+        "created_node_run_id": "01K3980000D3D6DE02630EDFDE"
+      }
+    }
+  ],
+  "migrationEffects": [
+    {
+      "table": "rfc276_legacy_runtime_archive",
+      "operation": "backfill",
+      "rule": "Original migration inserts rows from prior ledger data or installs its declared singleton/configuration rows; do not duplicate them.",
+      "source": "packages/backend/db/migrations/0144_rfc276_runtime_hardening_deprecation.sql"
+    },
+    {
+      "table": "opencode_mcp_test_session_owners",
+      "operation": "remove",
+      "rule": "The released SQL retires this physical table; its pre-upgrade rows remain source evidence for RFC-395.",
+      "source": "packages/backend/db/migrations/0144_rfc276_runtime_hardening_deprecation.sql"
+    },
+    {
+      "table": "opencode_session_owners",
+      "operation": "remove",
+      "rule": "The released SQL retires this physical table; its pre-upgrade rows remain source evidence for RFC-395.",
+      "source": "packages/backend/db/migrations/0144_rfc276_runtime_hardening_deprecation.sql"
+    },
+    {
+      "table": "agents",
+      "operation": "alter",
+      "rule": "Apply the released SQL to existing seeded rows, retaining its explicit defaults, rewrites and backfills.",
+      "source": "packages/backend/db/migrations/0144_rfc276_runtime_hardening_deprecation.sql"
+    },
+    {
+      "table": "mcp_runtime_test_events",
+      "operation": "alter",
+      "rule": "Apply the released SQL to existing seeded rows, retaining its explicit defaults, rewrites and backfills.",
+      "source": "packages/backend/db/migrations/0144_rfc276_runtime_hardening_deprecation.sql"
+    },
+    {
+      "table": "mcp_runtime_test_sessions",
+      "operation": "alter",
+      "rule": "Apply the released SQL to existing seeded rows, retaining its explicit defaults, rewrites and backfills.",
+      "source": "packages/backend/db/migrations/0144_rfc276_runtime_hardening_deprecation.sql"
+    },
+    {
+      "table": "mcp_runtime_test_turns",
+      "operation": "alter",
+      "rule": "Apply the released SQL to existing seeded rows, retaining its explicit defaults, rewrites and backfills.",
+      "source": "packages/backend/db/migrations/0144_rfc276_runtime_hardening_deprecation.sql"
+    },
+    {
+      "table": "runtimes",
+      "operation": "alter",
+      "rule": "Apply the released SQL to existing seeded rows, retaining its explicit defaults, rewrites and backfills.",
+      "source": "packages/backend/db/migrations/0144_rfc276_runtime_hardening_deprecation.sql"
+    }
+  ]
+}

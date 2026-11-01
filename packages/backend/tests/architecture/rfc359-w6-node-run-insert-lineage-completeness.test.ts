@@ -6,8 +6,8 @@
 // `WHEN continuation_slot_key IS NULL OR lineage_slot_path_json IS NULL` 时把两列补齐。
 // 它**只存在于 SQLite**（PostgreSQL 的 DDL 从 `db/schema.ts` 投影，一行触发器都没有），
 // 而且与 `tasks` 上那条同名触发器不同——**它在生产路径上是活的**：铸行工厂对
-// `lineageSlotPathJson` 的默认值是 `overrides ?? inherited ?? null`，全 `src` 没有任何调用点
-// 传 `overrides.lineageSlotPathJson`，所以任务的首个 node_run 一定命中 NULL 分支。
+// `lineageSlotPathJson` 的默认值是 `overrides ?? inherited ?? null`；任务首个 node_run 的调用点都不传
+// `overrides.lineageSlotPathJson`（只有评审重跑沿用被替换行的 lineage，RFC-398 §11），所以首行一定命中 NULL 分支。
 // 实测结果是 SQLite 补出「任务路径 + 本节点一帧」、PostgreSQL 留 null
 // （`tests/rfc359-w6-node-run-lineage-parity.test.ts` 的头注释有那份实测输出）。
 //

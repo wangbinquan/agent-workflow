@@ -1,0 +1,71 @@
+{
+  "formatVersion": 1,
+  "epoch": 1,
+  "after": "0261_rfc396_graph_development",
+  "provenance": {
+    "kind": "curated",
+    "sources": [
+      "packages/backend/db/migrations/0261_rfc396_graph_development.sql"
+    ],
+    "note": "Small deterministic historical records; terminal execution and delivery states; original SQL performs its own backfills."
+  },
+  "rows": [
+    {
+      "table": "development_design_baselines",
+      "values": {
+        "design_id": "01K3980000121363031CB9F184",
+        "id": "01K3980000D7C86F8FE4A621EE",
+        "digest": "ae2960f103228419306b2dbf5e2b9f6fd6cc27cfd3e09e43df3cb1a4c727d9ff",
+        "artifact_ref": "upgrade-design",
+        "created_at": 1778459500000
+      }
+    },
+    {
+      "table": "development_design_links",
+      "values": {
+        "design_id": "01K3980000121363031CB9F184",
+        "id": "01K3980000810973680846745A",
+        "kind": "mission",
+        "payload_json": "{\"missionId\":\"01K3980000FDFAB0F168DF2879\"}",
+        "created_at": 1778459500000
+      }
+    },
+    {
+      "table": "development_design_proposals",
+      "values": {
+        "design_id": "01K3980000121363031CB9F184",
+        "id": "01K39800003BE8BFF766F525BF",
+        "kind": "revision",
+        "request_digest": "aa2741053c59de0f8a3d9e8ea7200495492cc6dd8e0bbe2d4b240284c60d99d8",
+        "status": "applied",
+        "version": 1,
+        "payload_json": "{\"revision\":1}",
+        "created_at": 1778459500000,
+        "updated_at": 1778459500000
+      }
+    },
+    {
+      "table": "development_design_revisions",
+      "values": {
+        "design_id": "01K3980000121363031CB9F184",
+        "revision": 1,
+        "artifact_ref": "upgrade-design",
+        "digest": "ae2960f103228419306b2dbf5e2b9f6fd6cc27cfd3e09e43df3cb1a4c727d9ff",
+        "request_id": "upgrade-design-1",
+        "created_at": 1778459500000
+      }
+    },
+    {
+      "table": "development_designs",
+      "values": {
+        "id": "01K3980000121363031CB9F184",
+        "case_id": "01K3980000B5DB526E6BE3FA00",
+        "revision": 1,
+        "presentation_json": "{}",
+        "presentation_revision": 1,
+        "created_at": 1778459500000,
+        "updated_at": 1778459500000
+      }
+    }
+  ]
+}

@@ -1,0 +1,54 @@
+{
+  "formatVersion": 1,
+  "epoch": 1,
+  "after": "0131_rfc248_repo_groups",
+  "provenance": {
+    "kind": "curated",
+    "sources": [
+      "packages/backend/db/migrations/0131_rfc248_repo_groups.sql"
+    ],
+    "note": "Small deterministic historical records; terminal execution and delivery states; original SQL performs its own backfills."
+  },
+  "rows": [
+    {
+      "table": "repo_group_members",
+      "values": {
+        "group_id": "01K3980000932B32FE9E3D5072",
+        "member_index": 0,
+        "kind": "repo",
+        "cached_repo_id": "01K39800006904DCBDB1794059",
+        "ref": "main",
+        "subdir": "",
+        "mount_path": "",
+        "readonly": 0
+      }
+    },
+    {
+      "table": "repo_groups",
+      "values": {
+        "id": "01K3980000932B32FE9E3D5072",
+        "name": "upgrade-repositories",
+        "description": "One repository and a retained folder",
+        "version": 1,
+        "created_by_user_id": "01K39800007DFB4CF67742CB06",
+        "created_at": 1778459500000,
+        "updated_at": 1778459500000,
+        "schema_version": 1
+      }
+    }
+  ],
+  "migrationEffects": [
+    {
+      "table": "task_repos",
+      "operation": "alter",
+      "rule": "Apply the released SQL to existing seeded rows, retaining its explicit defaults, rewrites and backfills.",
+      "source": "packages/backend/db/migrations/0131_rfc248_repo_groups.sql"
+    },
+    {
+      "table": "tasks",
+      "operation": "alter",
+      "rule": "Apply the released SQL to existing seeded rows, retaining its explicit defaults, rewrites and backfills.",
+      "source": "packages/backend/db/migrations/0131_rfc248_repo_groups.sql"
+    }
+  ]
+}

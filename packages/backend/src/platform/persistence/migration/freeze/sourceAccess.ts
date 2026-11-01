@@ -1,5 +1,5 @@
 import type { MigrationProgressCallback } from '@/platform/persistence/migration/run/progress'
-import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs'
 import { join, resolve, basename } from 'node:path'
 import type { PostgresqlDatabaseRuntime } from '../../postgresqlRuntime'
 import { canonicalSchemaJson, digestSchemaContract } from '../../schema/canonical'
@@ -17,6 +17,8 @@ import {
 import { upgradeEpoch1Copy, type OfflinePostgresqlDatabase } from '../offlineSourceUpgrade'
 import { composePostgresqlArchiveSource } from '../conversion/postgresqlArchiveSource'
 import { resolvePostgresqlSourceArchive } from './postgresqlArchive'
+import { releasedPostgresqlSources } from '../epoch1/releasedPostgresql'
+import { bridgeReleasedPostgresql, PostgresqlBridgeBlockedError } from '../postgresqlBridge'
 import { openDispositionEvidenceSource } from '../conversion/generic/dispositionSource'
 import {
   captureSourceDispositionRows,
@@ -27,10 +29,13 @@ import { vacuumSqliteInto } from '../legacy/sqliteSnapshot'
 import {
   logicalArtifactFileDigest,
   verifyLogicalArtifactManifest,
+  writeDurableLogicalArtifact,
 } from '../legacy/logicalDatabaseArtifact'
 import { makeSourceFingerprint } from '../sourceCatalog'
-import { sourceFilesDigest } from '../sourceReader'
+import { sourceFilesDigest, sourceChunk } from '../sourceReader'
+import { rawSourceChunk } from '../rawSourceReader'
 import type { SupportedSourceManifest } from '../supportedSources'
+import { unhandledDatabaseProvider, type DatabaseProvider } from '../../databaseProviders'
 import type { EmptyTableDecision } from '../sourceDispositions'
 import type { SourcePreflight, VersionedSourceReader } from '../sourceTypes'
 import type {
@@ -188,6 +193,7 @@ async function access(
               'plan-snapshot-',
               'epoch1-upgrade-',
               'epoch1-pg-upgrade-',
+              'bridge-copy-',
               'conversion-',
             ].some((prefix) => entry.name.startsWith(prefix))) ||
           entry.name.endsWith('.tmp')
@@ -256,6 +262,150 @@ async function access(
     }
     const originalReader = original
     const sourcePath = sqlite?.offlinePath() ?? null
+    const release = releasedPostgresqlSources.find(
+      (release) =>
+        release.contract.digest === originalPreflight.contract?.digest &&
+        input.manifest.sources.some(
+          (source) =>
+            source.contract?.digest === release.contract.digest &&
+            source.readMode === 'logical-bridge',
+        ),
+    )
+    if (release && bridgesReleasedBaseline(originalPreflight.fingerprint.provider)) {
+      const directory = mkdtempSync(join(workRoot, 'bridge-copy-'))
+      releases.push(() => rmSync(directory, { recursive: true, force: true }))
+      const sourceDetails: FrozenSourceDetails = {
+        location: input.location,
+        originalReader,
+        originalPreflight,
+        sqlitePath: null,
+        immutableDigest,
+        databaseFingerprint,
+        mode,
+        operationRoot: workRoot,
+      }
+      const provisional: FrozenSourceHandle = {
+        reader: original,
+        preflight: originalPreflight,
+        preUpgrade: null,
+        watermark: originalPreflight.watermark,
+        evidenceRoot: null,
+        close: async () => {},
+      }
+      details.set(provisional, sourceDetails)
+      const archiveInput =
+        input.location.kind === 'postgresql-database'
+          ? await input.postgresqlArchive?.(provisional)
+          : undefined
+      if (input.location.kind === 'postgresql-database' && !archiveInput)
+        throw new Error('postgresql-archive-required')
+      const archive = archiveInput
+        ? await resolvePostgresqlSourceArchive(sourceDetails, archiveInput)
+        : undefined
+      await archive?.emptyArchive?.assertProvenance()
+      const binding = digestSchemaContract({
+        fingerprint: originalPreflight.fingerprint.digest,
+        watermark: originalPreflight.watermark,
+      }).slice(7)
+      const bridge = await bridgeReleasedPostgresql({
+        release,
+        source: original,
+        expected: originalPreflight,
+        manifest: input.manifest,
+        path: join(directory, 'bridge.sqlite'),
+        archive: archive?.preservedArchive,
+        archiveDigest:
+          archiveInput?.kind === 'retained-epoch1-archive' ? archiveInput.digest : null,
+        ...(input.location.kind === 'backup' ? { archiveReader: original } : {}),
+      }).catch(async (error: unknown) => {
+        if (error instanceof PostgresqlBridgeBlockedError) {
+          const name = `source-access/bridges/${binding}/blocks.json`
+          const evidence = {
+            sourceFingerprint: originalPreflight.fingerprint.digest,
+            sourceWatermark: originalPreflight.watermark,
+            blocks: error.blocks,
+          }
+          writeDurableLogicalArtifact(join(input.operationRoot, name), evidence)
+          await input.artifacts?.put(name, Buffer.from(canonicalSchemaJson(evidence)))
+        }
+        throw error
+      })
+      releases.push(() => bridge.reader.close())
+      const receiptName = `source-access/bridges/${binding}/receipt.json`
+      // Replays rebuild and must reproduce the same counts/digests/catalog receipt.
+      writeDurableLogicalArtifact(join(input.operationRoot, receiptName), bridge.receipt)
+      await input.artifacts?.put(receiptName, Buffer.from(canonicalSchemaJson(bridge.receipt)))
+      const upgraded = await upgradeEpoch1Copy({
+        source: bridge.physical,
+        expected: await bridge.physical.preflight(),
+        manifest: bridge.manifest,
+        operationRoot: workRoot,
+        emptyTables: input.emptyTables,
+        progress: input.progress,
+      })
+      releases.push(() => upgraded.close())
+      const physical = await upgraded.reader.preflight()
+      const current: SourcePreflight = {
+        ...physical,
+        kind: originalPreflight.kind,
+        sourceVersion: originalPreflight.sourceVersion,
+        fingerprint: originalPreflight.fingerprint,
+        sourceGenerationId: originalPreflight.sourceGenerationId,
+        identityHighWater: originalPreflight.identityHighWater,
+        identityEvidence: originalPreflight.identityEvidence,
+        watermark: originalPreflight.watermark,
+      }
+      const assertUnchanged = async (value: SourcePreflight) => {
+        if (canonicalSchemaJson(value) !== canonicalSchemaJson(current))
+          throw new Error('source-changed: PostgreSQL bridge binding differs')
+        await bridge.reader.assertUnchanged(bridge.preflight)
+        await upgraded.reader.assertUnchanged(physical)
+        if (archiveInput) await resolvePostgresqlSourceArchive(sourceDetails, archiveInput)
+      }
+      const handle: FrozenSourceHandle = {
+        reader: {
+          ...upgraded.reader,
+          kind: current.kind,
+          preflight: async () => {
+            await assertUnchanged(current)
+            return current
+          },
+          assertUnchanged,
+          async readChunk(table, afterKey, limit) {
+            return sourceChunk({
+              ...(await upgraded.reader.readChunk(table, afterKey, limit)),
+              table: physical.contract!.tables.find((entry) => entry.id === table)!,
+              sourceVersion: current.sourceVersion,
+            })
+          },
+          async readRawChunk(table, afterKey, limit) {
+            const chunk = await upgraded.reader.readRawChunk(table, afterKey, limit)
+            return rawSourceChunk({
+              table: chunk.table,
+              migrationKey: chunk.migrationKey,
+              afterKey: chunk.afterKey,
+              rows: chunk.rows,
+              sourceVersion: current.sourceVersion,
+            })
+          },
+        },
+        preflight: current,
+        preUpgrade: { reader: bridge.reader, preflight: bridge.preflight },
+        watermark: current.watermark,
+        evidenceRoot: directory,
+        close,
+      }
+      details.set(handle, sourceDetails)
+      if (
+        expected &&
+        (handle.watermark !== expected.watermark ||
+          originalPreflight.watermark !== expected.preUpgradeWatermark ||
+          current.sourceGenerationId !== expected.sourceGenerationId)
+      )
+        throw new Error('source-changed: frozen PostgreSQL bridge differs')
+      await assertUnchanged(current)
+      return handle
+    }
     let reader = original
     let evidenceRoot: string | null = null
     let preUpgrade: FrozenSourceHandle['preUpgrade'] = null
@@ -583,4 +733,16 @@ export function openFrozenSource(
   input: SourceAccessInput & { readonly expected?: SourceExpected },
 ): Promise<FrozenSourceHandle> {
   return access(input, 'frozen', input.expected)
+}
+
+/** RFC-398 §3.8: only a released PostgreSQL baseline is bridged through a private SQLite prefix. */
+function bridgesReleasedBaseline(provider: DatabaseProvider): boolean {
+  switch (provider) {
+    case 'postgresql':
+      return true
+    case 'sqlite':
+      return false
+    default:
+      return unhandledDatabaseProvider(provider)
+  }
 }

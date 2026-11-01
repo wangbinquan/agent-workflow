@@ -1,0 +1,27 @@
+{
+  "formatVersion": 1,
+  "epoch": 1,
+  "after": "0171_rfc304_template_upstream",
+  "provenance": {
+    "kind": "curated",
+    "sources": [
+      "packages/backend/db/migrations/0171_rfc304_template_upstream.sql"
+    ],
+    "note": "Small deterministic historical records; terminal execution and delivery states; original SQL performs its own backfills."
+  },
+  "rows": [],
+  "migrationEffects": [
+    {
+      "table": "capability_bindings",
+      "operation": "alter",
+      "rule": "Apply the released SQL to existing seeded rows, retaining its explicit defaults, rewrites and backfills.",
+      "source": "packages/backend/db/migrations/0171_rfc304_template_upstream.sql"
+    },
+    {
+      "table": "capability_frameworks",
+      "operation": "alter",
+      "rule": "Apply the released SQL to existing seeded rows, retaining its explicit defaults, rewrites and backfills.",
+      "source": "packages/backend/db/migrations/0171_rfc304_template_upstream.sql"
+    }
+  ]
+}

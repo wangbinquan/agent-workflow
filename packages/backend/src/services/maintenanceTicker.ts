@@ -34,6 +34,8 @@ export interface MaintenanceTickerOptions {
   /** 日志与度量用的任务名；hourly 任务应与 `MAINTENANCE_PHASE` 的键一致。 */
   job: string
   intervalMs: number
+  /** RFC-398 design §2.2: an offline lock monitor keeps the child alive until release. */
+  keepAlive?: boolean
   /**
    * 周期拍的相位偏移：**首个周期拍落在 `T0 + phaseOffsetMs`**，其后每 `intervalMs`
    * 一拍；超过一个 `intervalMs` 时夹到 `intervalMs`。
@@ -81,7 +83,7 @@ function errorMessage(err: unknown): string {
  *    uncaughtException 打死整个 daemon（同款教训见 `backupScheduler.ts` 的
  *    checkpoint 循环——一个坏掉的 config.json 不该升级成宕机）；
  *  - 一拍未结束时下一拍被跳过，不排队、不并发；
- *  - 所有 timer 都 `unref()`；`stop()` 之后三种 timer 都不再触发。
+ *  - 默认所有 timer 都 `unref()`；离线锁监视器可显式 keepAlive；`stop()` 之后三种 timer 都不再触发。
  */
 export function startMaintenanceTicker(opts: MaintenanceTickerOptions): MaintenanceTickerHandle {
   const timers = opts.timers ?? REAL_TIMERS
@@ -92,7 +94,7 @@ export function startMaintenanceTicker(opts: MaintenanceTickerOptions): Maintena
   let stopped = false
 
   const unref = (handle: unknown): unknown => {
-    ;(handle as { unref?: () => void } | null)?.unref?.()
+    if (!opts.keepAlive) (handle as { unref?: () => void } | null)?.unref?.()
     return handle
   }
 

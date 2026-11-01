@@ -1,0 +1,75 @@
+{
+  "formatVersion": 1,
+  "epoch": 1,
+  "after": "0159_rfc304_code_work_items",
+  "provenance": {
+    "kind": "curated",
+    "sources": [
+      "packages/backend/db/migrations/0159_rfc304_code_work_items.sql"
+    ],
+    "note": "Small deterministic historical records; terminal execution and delivery states; original SQL performs its own backfills."
+  },
+  "rows": [
+    {
+      "table": "code_ai_attempts",
+      "values": {
+        "id": "01K39800001BF38E558FCCB6BD",
+        "round_id": "01K3980000D25D5DEF6EFDEEBF",
+        "stage_name": "review",
+        "shard_key": "",
+        "rerun_seq": 0,
+        "attempt_seq": 0,
+        "status": "validated",
+        "validation_outcome": "valid",
+        "node_run_id": "01K3980000D3D6DE02630EDFDE",
+        "started_at": 1778459500000,
+        "ended_at": 1778459560000
+      }
+    },
+    {
+      "table": "code_round_stages",
+      "values": {
+        "id": "01K39800006799A5AEC9E42E40",
+        "round_id": "01K3980000D25D5DEF6EFDEEBF",
+        "stage_seq": 1,
+        "stage_name": "review",
+        "stage_kind": "ai",
+        "status": "done",
+        "started_at": 1778459500000,
+        "ended_at": 1778459560000
+      }
+    },
+    {
+      "table": "code_work_items",
+      "values": {
+        "id": "01K3980000BF31929DD24F5787",
+        "code_host_endpoint_id": "01K3980000BBDD864AB0F66C6E",
+        "stable_project_id": "1",
+        "capability": "review",
+        "anchor_kind": "mr",
+        "anchor_id": "1",
+        "status": "closed",
+        "epoch": 1,
+        "current_round_id": "01K3980000D25D5DEF6EFDEEBF",
+        "initiator_user_id": "01K39800007DFB4CF67742CB06",
+        "created_at": 1778459500000,
+        "updated_at": 1778459500000,
+        "closed_at": 1778459560000
+      }
+    },
+    {
+      "table": "code_work_rounds",
+      "values": {
+        "id": "01K3980000D25D5DEF6EFDEEBF",
+        "work_item_id": "01K3980000BF31929DD24F5787",
+        "round_seq": 1,
+        "epoch": 1,
+        "baseline_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "stage_contract_ver": 1,
+        "outcome": "published",
+        "started_at": 1778459500000,
+        "ended_at": 1778459560000
+      }
+    }
+  ]
+}

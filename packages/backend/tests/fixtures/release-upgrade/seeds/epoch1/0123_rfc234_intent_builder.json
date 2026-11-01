@@ -1,0 +1,84 @@
+{
+  "formatVersion": 1,
+  "epoch": 1,
+  "after": "0123_rfc234_intent_builder",
+  "provenance": {
+    "kind": "curated",
+    "sources": [
+      "packages/backend/db/migrations/0123_rfc234_intent_builder.sql"
+    ],
+    "note": "Small deterministic historical records; terminal execution and delivery states; original SQL performs its own backfills."
+  },
+  "rows": [
+    {
+      "table": "intent_apply_journal",
+      "values": {
+        "id": "01K3980000CF878360B4662DD3",
+        "session_id": "01K3980000F4FC994CF56889E8",
+        "client_mutation_id": "upgrade-apply",
+        "draft_id": "01K39800009D4AA9F507F7F0DD",
+        "draft_hash": "aa2741053c59de0f8a3d9e8ea7200495492cc6dd8e0bbe2d4b240284c60d99d8",
+        "state": "committed",
+        "prepared_artifacts_json": "[]",
+        "receipt_json": "{\"version\":1,\"resources\":[],\"appliedAt\":1778459560000}",
+        "created_at": 1778459500000,
+        "updated_at": 1778459500000
+      }
+    },
+    {
+      "table": "intent_drafts",
+      "values": {
+        "id": "01K39800009D4AA9F507F7F0DD",
+        "session_id": "01K3980000F4FC994CF56889E8",
+        "revision": 1,
+        "changeset_json": "{\"changes\":[]}",
+        "validation_json": "[]",
+        "draft_hash": "aa2741053c59de0f8a3d9e8ea7200495492cc6dd8e0bbe2d4b240284c60d99d8",
+        "produced_by_turn_id": "01K3980000A0C059001E553ABD",
+        "context_revision": 0,
+        "created_at": 1778459500000
+      }
+    },
+    {
+      "table": "intent_provenance",
+      "values": {
+        "resource_type": "workflow",
+        "resource_id": "01K398000045B34F16DB605A06",
+        "commit_id": "01K3980000CF878360B4662DD3",
+        "session_id": "01K3980000F4FC994CF56889E8",
+        "created_at": 1778459500000
+      }
+    },
+    {
+      "table": "intent_sessions",
+      "values": {
+        "id": "01K3980000F4FC994CF56889E8",
+        "owner_user_id": "01K39800007DFB4CF67742CB06",
+        "title": "Historical workflow authoring",
+        "status": "archived",
+        "context_revision": 0,
+        "context_manifest_json": "[]",
+        "current_draft_id": "01K39800009D4AA9F507F7F0DD",
+        "turn_seq": 1,
+        "commit_seq": 1,
+        "budget_json": "{}",
+        "created_at": 1778459500000,
+        "updated_at": 1778459500000
+      }
+    },
+    {
+      "table": "intent_turns",
+      "values": {
+        "id": "01K3980000A0C059001E553ABD",
+        "session_id": "01K3980000F4FC994CF56889E8",
+        "seq": 1,
+        "role": "user",
+        "kind": "message",
+        "content_json": "{\"text\":\"Keep the report workflow.\"}",
+        "context_revision": 0,
+        "scratch_retained": 0,
+        "created_at": 1778459500000
+      }
+    }
+  ]
+}

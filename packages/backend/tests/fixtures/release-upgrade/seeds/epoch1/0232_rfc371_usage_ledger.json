@@ -1,0 +1,42 @@
+{
+  "formatVersion": 1,
+  "epoch": 1,
+  "after": "0232_rfc371_usage_ledger",
+  "provenance": {
+    "kind": "curated",
+    "sources": [
+      "packages/backend/db/migrations/0232_rfc371_usage_ledger.sql"
+    ],
+    "note": "Small deterministic historical records; terminal execution and delivery states; original SQL performs its own backfills."
+  },
+  "rows": [
+    {
+      "table": "observation_usage_current",
+      "values": {
+        "id": "01K39800005C718590978AE199",
+        "task_id": "01K3980000085154084C742759",
+        "source_id": "upgrade-source-id",
+        "document": "{}"
+      }
+    },
+    {
+      "table": "observation_usage_events",
+      "values": {
+        "id": "01K398000020955815B204D9AA",
+        "source_id": "upgrade-source-id",
+        "event_id": "upgrade-event-id",
+        "record_key": "upgrade-record-key",
+        "revision": 1,
+        "fingerprint": "aa2741053c59de0f8a3d9e8ea7200495492cc6dd8e0bbe2d4b240284c60d99d8",
+        "outcome": "accepted",
+        "document": "{\"inputTokens\":12,\"outputTokens\":8}"
+      }
+    },
+    {
+      "table": "observation_usage_sources",
+      "values": {
+        "source_id": "upgrade-source-id"
+      }
+    }
+  ]
+}

@@ -165,7 +165,9 @@ function createFileBackup(input: FileBackupInput): Promise<SwitchBackupReceipt> 
       quickCheckSqlite({ dbPath: target })
       const original = frozenSourceDetails(input.frozen).sqlitePath
       if (!original) throw new Error('switch-backup-sqlite-source-required')
+      // RFC-398 allow-list: sourceAccess retains sqliteSourceReader's new VACUUM copy.
       const expectedDatabase = new Database(original, { readonly: true })
+      // RFC-398 allow-list: target is the VACUUM INTO output created just above.
       const backupDatabase = new Database(target, { readonly: true })
       try {
         if (sqliteContentDigest(expectedDatabase) !== sqliteContentDigest(backupDatabase))

@@ -262,6 +262,11 @@ const UNITS: readonly SourceUnit[] = packageSrcUnits(REPO_ROOT, 'backend')
  *   · **W4 在收敛的 provider 对**（task-execution 6、后台维护 4）——随各 context 合一一起清。
  */
 export const PROVIDER_BRANCH_DEBT: readonly string[] = [
+  // RFC-398 design §1 / §3: this exact offline composition root selects the native
+  // database provisioner once; SQLite creates its generation file during activation.
+  // T19 explicitly permits composition / migration-control selection; application
+  // policy uses requiresScratchProfile and a neutral port, never a provider brand.
+  'bootstrap/epochMigrationAuto.ts: 1',
   // AC-10 第二波销账：`cli/database.ts` 两处与 `cli/doctor.ts` 一处改读新增的两个 traits
   // 字段（`serverVersionFallback` / `failureRecoveryHint`）——它们是「这个引擎怎么称呼自己」
   // 与「失败了能不能从备份恢复」，答案由各引擎各声明一次，调用方不再现场拼品牌三元。

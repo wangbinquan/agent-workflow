@@ -1,0 +1,38 @@
+{
+  "formatVersion": 1,
+  "epoch": 1,
+  "after": "0211_rfc330_employee_authoring_acl",
+  "provenance": {
+    "kind": "curated",
+    "sources": [
+      "packages/backend/db/migrations/0211_rfc330_employee_authoring_acl.sql"
+    ],
+    "note": "Small deterministic historical records; terminal execution and delivery states; original SQL performs its own backfills."
+  },
+  "rows": [
+    {
+      "table": "employee_case_members",
+      "values": {
+        "case_id": "01K3980000B5DB526E6BE3FA00",
+        "user_id": "01K39800007DFB4CF67742CB06",
+        "role": "observer",
+        "added_by": "01K39800007DFB4CF67742CB06",
+        "added_at": 1778459500000
+      }
+    }
+  ],
+  "migrationEffects": [
+    {
+      "table": "employee_job_templates",
+      "operation": "alter",
+      "rule": "Apply the released SQL to existing seeded rows, retaining its explicit defaults, rewrites and backfills.",
+      "source": "packages/backend/db/migrations/0211_rfc330_employee_authoring_acl.sql"
+    },
+    {
+      "table": "employee_tool_registrations",
+      "operation": "alter",
+      "rule": "Apply the released SQL to existing seeded rows, retaining its explicit defaults, rewrites and backfills.",
+      "source": "packages/backend/db/migrations/0211_rfc330_employee_authoring_acl.sql"
+    }
+  ]
+}

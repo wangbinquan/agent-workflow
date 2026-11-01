@@ -75,9 +75,11 @@ async function assertNativeRecoveryAuthority(
   for (const op of await listActiveOps(db)) {
     if (op.kind === 'migrate') throw new Error('skill-legacy-upgrade-requires-conversion')
     const identity = decodeSkillOperationIdentity(op.preconditionJson, op.skillId)
-    if (identity.legacyName !== undefined)
-      throw new Error('skill-legacy-upgrade-requires-conversion')
     const direction = recoveryDirection(op.kind, op.phase as SkillOpPhase)
+    // A committed deletion only discards its ID-bound trash. Its old display
+    // name remains evidence for the absence checks, never a rollback target.
+    if (identity.legacyName !== undefined && !(op.kind === 'delete' && direction === 'rollforward'))
+      throw new Error('skill-legacy-upgrade-requires-conversion')
     if (direction !== 'rollback' && direction !== 'rollforward') continue
     const invalid = (message: string): never => {
       throw new ValidationError(
@@ -90,6 +92,7 @@ async function assertNativeRecoveryAuthority(
       if (row || op.backupPath === null) invalid('disagrees with committed deletion authority')
       await inspector.assertCommittedDelete({
         skillId: op.skillId,
+        ...(identity.legacyName === undefined ? {} : { legacyName: identity.legacyName }),
         operationId: op.opId,
         backupReference: op.backupPath!,
       })

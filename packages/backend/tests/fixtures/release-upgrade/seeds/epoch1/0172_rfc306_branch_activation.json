@@ -1,0 +1,27 @@
+{
+  "formatVersion": 1,
+  "epoch": 1,
+  "after": "0172_rfc306_branch_activation",
+  "provenance": {
+    "kind": "curated",
+    "sources": [
+      "packages/backend/db/migrations/0172_rfc306_branch_activation.sql"
+    ],
+    "note": "Small deterministic historical records; terminal execution and delivery states; original SQL performs its own backfills."
+  },
+  "rows": [],
+  "migrationEffects": [
+    {
+      "table": "node_run_outputs",
+      "operation": "alter",
+      "rule": "Apply the released SQL to existing seeded rows, retaining its explicit defaults, rewrites and backfills.",
+      "source": "packages/backend/db/migrations/0172_rfc306_branch_activation.sql"
+    },
+    {
+      "table": "node_runs",
+      "operation": "alter",
+      "rule": "Apply the released SQL to existing seeded rows, retaining its explicit defaults, rewrites and backfills.",
+      "source": "packages/backend/db/migrations/0172_rfc306_branch_activation.sql"
+    }
+  ]
+}

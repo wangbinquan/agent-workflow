@@ -1,0 +1,36 @@
+{
+  "formatVersion": 1,
+  "epoch": 1,
+  "after": "0236_rfc371_native_usage_captures",
+  "provenance": {
+    "kind": "curated",
+    "sources": [
+      "packages/backend/db/migrations/0236_rfc371_native_usage_captures.sql"
+    ],
+    "note": "Small deterministic historical records; terminal execution and delivery states; original SQL performs its own backfills."
+  },
+  "rows": [
+    {
+      "table": "observation_usage_captures",
+      "values": {
+        "invocation_id": "upgrade-invocation-id",
+        "task_id": "01K3980000085154084C742759",
+        "source_id": "upgrade-source-id",
+        "source_cursor": "1",
+        "prior_revision_gap": 0,
+        "repair_pending": 0,
+        "document": "{}",
+        "summary": "{\"inputTokens\":12,\"outputTokens\":8}"
+      }
+    },
+    {
+      "table": "observation_usage_native_records",
+      "values": {
+        "id": "01K398000080CCF5536F6C379B",
+        "native_source": "upgrade-session",
+        "native_root": "upgrade-session",
+        "record_id": "message-1"
+      }
+    }
+  ]
+}

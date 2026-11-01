@@ -1,0 +1,30 @@
+{
+  "formatVersion": 1,
+  "epoch": 1,
+  "after": "0178_rfc310_mission_input_uploads",
+  "provenance": {
+    "kind": "curated",
+    "sources": [
+      "packages/backend/db/migrations/0178_rfc310_mission_input_uploads.sql"
+    ],
+    "note": "Small deterministic historical records; terminal execution and delivery states; original SQL performs its own backfills."
+  },
+  "rows": [
+    {
+      "table": "mission_input_uploads",
+      "values": {
+        "id": "01K3980000C5453C38565E5BB7",
+        "actor_user_id": "01K39800007DFB4CF67742CB06",
+        "original_name": "UPGRADE.md",
+        "bytes": 65,
+        "sha256": "ae2960f103228419306b2dbf5e2b9f6fd6cc27cfd3e09e43df3cb1a4c727d9ff",
+        "blob_ref": "upgrade-report",
+        "state": "claimed",
+        "claimed_by_mission_id": "01K3980000FDFAB0F168DF2879",
+        "expires_at": 1778459560000,
+        "created_at": 1778459500000,
+        "claimed_at": 1778459500000
+      }
+    }
+  ]
+}

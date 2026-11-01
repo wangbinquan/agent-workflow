@@ -1,0 +1,23 @@
+{
+  "formatVersion": 1,
+  "epoch": 1,
+  "after": "0106_rfc217_workgroup_task_state",
+  "provenance": {
+    "kind": "curated",
+    "sources": [
+      "packages/backend/db/migrations/0106_rfc217_workgroup_task_state.sql"
+    ],
+    "note": "Small deterministic historical records; terminal execution and delivery states; original SQL performs its own backfills."
+  },
+  "rows": [
+    {
+      "table": "workgroup_task_state",
+      "values": {
+        "task_id": "01K398000056156B246ACF9C23",
+        "gate_status": "approved",
+        "gate_summary": "History reviewed.",
+        "updated_at": 1778459560000
+      }
+    }
+  ]
+}

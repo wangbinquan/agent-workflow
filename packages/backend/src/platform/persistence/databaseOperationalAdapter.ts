@@ -1,3 +1,4 @@
+import { openSqliteForRead } from '@/platform/persistence/sqlite/openForRead'
 // RFC-349 — provider-specific database doctor and storage-maintenance
 // mechanisms. Business retention remains owner application work; this adapter
 // prevents SQLite PRAGMA/VACUUM machinery from ever reaching PostgreSQL.
@@ -56,7 +57,7 @@ export function createSqliteDatabaseOperationalAdapter(input: {
       const metrics: Record<string, number> = {}
       let database: Database | undefined
       try {
-        database = new Database(input.path, { readonly: true })
+        database = openSqliteForRead(input.path)
         const rows = database.query('PRAGMA quick_check').all() as Array<{
           quick_check: string
         }>

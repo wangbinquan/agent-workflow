@@ -1,0 +1,52 @@
+{
+  "formatVersion": 1,
+  "epoch": 1,
+  "after": "0080_rfc159_scheduled_tasks",
+  "provenance": {
+    "kind": "curated",
+    "sources": [
+      "packages/backend/db/migrations/0080_rfc159_scheduled_tasks.sql"
+    ],
+    "note": "Small deterministic historical records; terminal execution and delivery states; original SQL performs its own backfills."
+  },
+  "rows": [
+    {
+      "table": "scheduled_tasks",
+      "values": {
+        "id": "01K398000087AABFA8C89D9C8E",
+        "name": "Disabled upgrade schedule",
+        "owner_user_id": "01K39800007DFB4CF67742CB06",
+        "launch_payload": "{\"workflowId\":\"01K398000045B34F16DB605A06\",\"repoPath\":\"<AW_HOME>/repositories/upgrade-example\",\"inputs\":{}}",
+        "schedule_spec": "{\"kind\":\"interval\",\"everyMs\":86400000}",
+        "enabled": 0,
+        "last_run_at": 1778459500000,
+        "last_status": "launched",
+        "last_task_id": "01K3980000085154084C742759",
+        "consecutive_failures": 0,
+        "created_at": 1778459500000,
+        "updated_at": 1778459500000
+      },
+      "expect": {
+        "api": [
+          {
+            "path": "/api/scheduled-tasks/01K398000087AABFA8C89D9C8E",
+            "at": "",
+            "equals": {
+              "/id": "01K398000087AABFA8C89D9C8E",
+              "/name": "Disabled upgrade schedule",
+              "/enabled": false
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "migrationEffects": [
+    {
+      "table": "tasks",
+      "operation": "alter",
+      "rule": "Apply the released SQL to existing seeded rows, retaining its explicit defaults, rewrites and backfills.",
+      "source": "packages/backend/db/migrations/0080_rfc159_scheduled_tasks.sql"
+    }
+  ]
+}

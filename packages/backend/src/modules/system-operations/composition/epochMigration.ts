@@ -1,5 +1,15 @@
 // RFC-395: offline migration assembly surface. Runtime boot uses epochBootAdmission.
 export { createEpochSwitchApplication } from '../application/epochSwitch/application'
+export { autoUpgrade } from '../application/epochSwitch/autoUpgrade'
+export { createAutoUpgradeRecords } from '../infrastructure/epochSwitch/autoUpgradeRecords'
+export { createAutoUpgradeSessionLock } from '../infrastructure/local/autoUpgradeSessionLock'
+export {
+  autoUpgradeTestCheckpoint,
+  autoUpgradeTestFailure,
+} from '../infrastructure/local/autoUpgradeTestHooks'
+export type { SessionLockPort, AutoUpgradeRecordPort } from '../application/ports/epochSwitch'
+export { createAutoUpgradeProvisioning } from '../infrastructure/epochSwitch/autoUpgradeProvisioning'
+export { createLegacyMigrationFinalize } from '../infrastructure/epochSwitch/legacyMigrationFinalize'
 export {
   epochRunArtifacts,
   relocateEpochPath,

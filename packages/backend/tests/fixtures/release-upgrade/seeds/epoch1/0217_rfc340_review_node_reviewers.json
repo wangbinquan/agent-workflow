@@ -1,0 +1,24 @@
+{
+  "formatVersion": 1,
+  "epoch": 1,
+  "after": "0217_rfc340_review_node_reviewers",
+  "provenance": {
+    "kind": "curated",
+    "sources": [
+      "packages/backend/db/migrations/0217_rfc340_review_node_reviewers.sql"
+    ],
+    "note": "Small deterministic historical records; terminal execution and delivery states; original SQL performs its own backfills."
+  },
+  "rows": [
+    {
+      "table": "review_node_reviewers",
+      "values": {
+        "task_id": "01K3980000085154084C742759",
+        "review_node_id": "review",
+        "reviewer_user_id": "01K39800007DFB4CF67742CB06",
+        "assigned_by_user_id": "01K39800007DFB4CF67742CB06",
+        "assigned_at": 1778459500000
+      }
+    }
+  ]
+}

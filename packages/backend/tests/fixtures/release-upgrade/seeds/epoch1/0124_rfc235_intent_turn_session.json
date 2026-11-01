@@ -1,0 +1,34 @@
+{
+  "formatVersion": 1,
+  "epoch": 1,
+  "after": "0124_rfc235_intent_turn_session",
+  "provenance": {
+    "kind": "curated",
+    "sources": [
+      "packages/backend/db/migrations/0124_rfc235_intent_turn_session.sql"
+    ],
+    "note": "Small deterministic historical records; terminal execution and delivery states; original SQL performs its own backfills."
+  },
+  "rows": [
+    {
+      "table": "intent_turn_events",
+      "values": {
+        "id": 1,
+        "turn_id": "01K3980000A0C059001E553ABD",
+        "event_seq": 1,
+        "ts": 1778459500000,
+        "kind": "text",
+        "payload": "{\"text\":\"Keep the report workflow.\"}",
+        "source": "stream"
+      }
+    }
+  ],
+  "migrationEffects": [
+    {
+      "table": "intent_turns",
+      "operation": "alter",
+      "rule": "Apply the released SQL to existing seeded rows, retaining its explicit defaults, rewrites and backfills.",
+      "source": "packages/backend/db/migrations/0124_rfc235_intent_turn_session.sql"
+    }
+  ]
+}

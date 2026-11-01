@@ -1,3 +1,4 @@
+import { openSqliteForRead } from '@/platform/persistence/sqlite/openForRead'
 import { measureMigrationCapacity } from '@/platform/persistence/migration/freeze/capacity'
 import type { MigrationProgressCallback } from '@/platform/persistence/migration/run/progress'
 import { persistenceDialect } from '@/platform/persistence/nativeDialect'
@@ -79,6 +80,7 @@ import {
   readEpochTargetEvidence,
 } from '@/modules/system-operations/composition/epochMigration'
 import { createLocalEpochQuiesce } from '@/modules/system-operations/composition/epochMigration'
+import { readEpochBootFactsForConfig } from '@/modules/system-operations/composition/epochBootAdmission'
 
 import {
   composeConversionInput,
@@ -102,8 +104,14 @@ export interface LocalEpochSwitchOptions {
   candidateBuild?: string
   faults?: EpochSwitchFaults
   sourceBornOnPostgresql?: boolean
+  /** RFC-398 §3.7: automatic sessions infer native PG only when no retained archive is recorded. */
+  autoUpgrade?: boolean
   postgresqlArchive?: EpochSwitchDependencies['postgresqlArchive']
   nextTargetLocation?: EpochSwitchDependencies['nextTargetLocation']
+  sessionLock?: EpochSwitchDependencies['sessionLock']
+  autoUpgradeRecords?: EpochSwitchDependencies['autoUpgradeRecords']
+  retainedDatabases?: EpochSwitchDependencies['retainedDatabases']
+  autoUpgradeCheckpoint?: EpochSwitchDependencies['autoUpgradeCheckpoint']
 }
 
 export function epochConversionInput(request: ConversionRunRequest) {
@@ -495,7 +503,7 @@ export function composeLocalEpochSwitchDependencies(
     if (location.kind === 'sqlite-file') {
       const path = join(appHome, location.relativePath)
       if (!existsSync(path)) return null
-      const database = new Database(path, { readonly: true })
+      const database = openSqliteForRead(path)
       try {
         const row = database
           .query(
@@ -523,6 +531,10 @@ export function composeLocalEpochSwitchDependencies(
   }
   const content = createContentInventoryAdapter()
   const deps: EpochSwitchDependencies = {
+    sessionLock: options.sessionLock,
+    autoUpgradeRecords: options.autoUpgradeRecords,
+    retainedDatabases: options.retainedDatabases,
+    autoUpgradeCheckpoint: options.autoUpgradeCheckpoint,
     journal,
     source: sourceFor(),
     sourceFor,
@@ -559,17 +571,18 @@ export function composeLocalEpochSwitchDependencies(
           const migration = verifyDatabaseMigrationManifest(
             JSON.parse(readFileSync(join(root, 'manifest.json'), 'utf8')),
           )
-          if (!migration.payload.legacyArchiveDigest)
+          if (!migration.payload.legacyArchiveDigest && !options.autoUpgrade)
             throw new EpochSwitchError('v3-postgresql-archive-required')
-          retained = {
-            kind: 'retained-epoch1-archive',
-            path: root,
-            digest: migration.payload.legacyArchiveDigest,
-          }
+          if (migration.payload.legacyArchiveDigest)
+            retained = {
+              kind: 'retained-epoch1-archive',
+              path: root,
+              digest: migration.payload.legacyArchiveDigest,
+            }
         }
         return epochSourceArchiveInput(source, {
           retained,
-          bornOnPostgresql: options.sourceBornOnPostgresql === true,
+          bornOnPostgresql: options.autoUpgrade === true || options.sourceBornOnPostgresql === true,
         })
       }),
     content,
@@ -596,12 +609,15 @@ export function composeLocalEpochSwitchDependencies(
     },
     activation: createPointerEpochActivation({ pointerPath, journal, faults }),
     quiesce: createLocalEpochQuiesce({
+      sessionLock: options.sessionLock,
       lockPath: join(appHome, '.daemon.lock'),
       controlPath: join(appHome, '.daemon.control'),
       faults,
     }),
     retention: createEpochSourceRetention({ journal, faults }),
     installation: createEpochInstallationProbe({
+      sourceExists: async () =>
+        (await readEpochBootFactsForConfig({ appHome, database: config, env })).sourceExists,
       pointerPath,
       migrationsRoot: join(appHome, 'database-migrations'),
       provider: config.provider,
@@ -655,6 +671,7 @@ export function composeLocalEpochSwitchDependencies(
       let fingerprint
       if (source.kind === 'sqlite-file') {
         const snapshot = captureLiveSqliteSnapshot({ ...source, operationRoot })
+        // RFC-398 allow-list: captureLiveSqliteSnapshot just used VACUUM INTO.
         const db = new Database(snapshot.path, { readonly: true })
         try {
           fingerprint = collectSourceFingerprint(db)

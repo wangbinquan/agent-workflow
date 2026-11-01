@@ -1,0 +1,196 @@
+{
+  "formatVersion": 1,
+  "epoch": 1,
+  "after": "0248_rfc372_light_clarify",
+  "provenance": {
+    "kind": "curated",
+    "sources": [
+      "packages/backend/db/migrations/0248_rfc372_light_clarify.sql"
+    ],
+    "note": "Small deterministic historical records; terminal execution and delivery states; original SQL performs its own backfills."
+  },
+  "rows": [
+    {
+      "table": "observation_projection_bindings",
+      "values": {
+        "kind": "upgrade-kind",
+        "identity": "upgrade-identity",
+        "contribution_key": "upgrade-contribution-key",
+        "component": "upgrade-component"
+      }
+    },
+    {
+      "table": "observation_projection_bootstrap",
+      "values": {
+        "generation": "upgrade-generation",
+        "channel": "upgrade-channel",
+        "done": 0
+      }
+    },
+    {
+      "table": "observation_projection_changes",
+      "values": {
+        "id": "01K39800005673EF284A5EF067",
+        "source": "upgrade-source",
+        "entity_key": "upgrade-entity-key",
+        "operation": "upsert",
+        "created_at": 1778459500000,
+        "completed": 0,
+        "retry_at": 0
+      }
+    },
+    {
+      "table": "observation_projection_components",
+      "values": {
+        "component": "upgrade-component",
+        "revision": "1"
+      }
+    },
+    {
+      "table": "observation_projection_current",
+      "values": {
+        "kind": "upgrade-kind",
+        "key": "upgrade-key",
+        "revision": "1",
+        "document": "{}"
+      }
+    },
+    {
+      "table": "observation_projection_dependencies",
+      "values": {
+        "source": "upgrade-source",
+        "entity_key": "upgrade-entity-key",
+        "component": "upgrade-component"
+      }
+    },
+    {
+      "table": "observation_projection_heads",
+      "values": {
+        "id": "01K39800007F3378F5FADF44BD",
+        "revision": "1",
+        "as_of": 1
+      }
+    },
+    {
+      "table": "observation_projection_history",
+      "values": {
+        "kind": "upgrade-kind",
+        "key": "upgrade-key",
+        "from_revision": "upgrade-from-revision",
+        "document": "{}"
+      }
+    },
+    {
+      "table": "observation_projection_memberships",
+      "values": {
+        "aggregate": "upgrade-aggregate",
+        "key": "upgrade-key",
+        "from_revision": "upgrade-from-revision"
+      }
+    },
+    {
+      "table": "observation_projection_prepared",
+      "values": {
+        "work_id": "01K3980000072F176F2272EE03",
+        "key": "upgrade-key",
+        "document": "{}"
+      }
+    },
+    {
+      "table": "observation_projection_versions",
+      "values": {
+        "revision": "upgrade-revision",
+        "as_of": 1,
+        "bootstrap_complete": 0
+      }
+    },
+    {
+      "table": "observation_projection_views",
+      "values": {
+        "id": "01K398000043DB358D1AA9AD43",
+        "actor_scope": "admin",
+        "document": "{}"
+      }
+    },
+    {
+      "table": "observation_projection_work",
+      "values": {
+        "id": "01K3980000072F176F2272EE03",
+        "document": "{}",
+        "fingerprint": "aa2741053c59de0f8a3d9e8ea7200495492cc6dd8e0bbe2d4b240284c60d99d8",
+        "lease_until": 1778459500000,
+        "retry_at": 0,
+        "retry_count": 0
+      }
+    },
+    {
+      "table": "observation_projection_work_components",
+      "values": {
+        "work_id": "01K3980000072F176F2272EE03",
+        "component": "upgrade-component"
+      }
+    }
+  ],
+  "migrationEffects": [
+    {
+      "table": "clarify_mindmap_command_receipts",
+      "operation": "remove",
+      "rule": "The released SQL retires this physical table; its pre-upgrade rows remain source evidence for RFC-395.",
+      "source": "packages/backend/db/migrations/0248_rfc372_light_clarify.sql"
+    },
+    {
+      "table": "clarify_mindmap_node_revisions",
+      "operation": "remove",
+      "rule": "The released SQL retires this physical table; its pre-upgrade rows remain source evidence for RFC-395.",
+      "source": "packages/backend/db/migrations/0248_rfc372_light_clarify.sql"
+    },
+    {
+      "table": "clarify_mindmap_nodes",
+      "operation": "remove",
+      "rule": "The released SQL retires this physical table; its pre-upgrade rows remain source evidence for RFC-395.",
+      "source": "packages/backend/db/migrations/0248_rfc372_light_clarify.sql"
+    },
+    {
+      "table": "clarify_mindmap_sessions",
+      "operation": "remove",
+      "rule": "The released SQL retires this physical table; its pre-upgrade rows remain source evidence for RFC-395.",
+      "source": "packages/backend/db/migrations/0248_rfc372_light_clarify.sql"
+    },
+    {
+      "table": "clarify_mindmap_snapshots",
+      "operation": "remove",
+      "rule": "The released SQL retires this physical table; its pre-upgrade rows remain source evidence for RFC-395.",
+      "source": "packages/backend/db/migrations/0248_rfc372_light_clarify.sql"
+    },
+    {
+      "table": "task_clarify_channels",
+      "operation": "remove",
+      "rule": "The released SQL retires this physical table; its pre-upgrade rows remain source evidence for RFC-395.",
+      "source": "packages/backend/db/migrations/0248_rfc372_light_clarify.sql"
+    },
+    {
+      "table": "task_clarify_consumptions",
+      "operation": "remove",
+      "rule": "The released SQL retires this physical table; its pre-upgrade rows remain source evidence for RFC-395.",
+      "source": "packages/backend/db/migrations/0248_rfc372_light_clarify.sql"
+    },
+    {
+      "table": "task_clarify_entries",
+      "operation": "remove",
+      "rule": "The released SQL retires this physical table; its pre-upgrade rows remain source evidence for RFC-395.",
+      "source": "packages/backend/db/migrations/0248_rfc372_light_clarify.sql"
+    },
+    {
+      "table": "task_clarify_host_runs",
+      "operation": "remove",
+      "rule": "The released SQL retires this physical table; its pre-upgrade rows remain source evidence for RFC-395.",
+      "source": "packages/backend/db/migrations/0248_rfc372_light_clarify.sql"
+    },
+    {
+      "table": "task_clarify_materials",
+      "operation": "remove",
+      "rule": "The released SQL retires this physical table; its pre-upgrade rows remain source evidence for RFC-395.",
+      "source": "packages/backend/db/migrations/0248_rfc372_light_clarify.sql"
+    }
+  ]
+}

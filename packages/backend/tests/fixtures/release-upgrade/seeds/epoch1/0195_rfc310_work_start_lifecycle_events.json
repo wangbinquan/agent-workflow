@@ -1,0 +1,51 @@
+{
+  "formatVersion": 1,
+  "epoch": 1,
+  "after": "0195_rfc310_work_start_lifecycle_events",
+  "provenance": {
+    "kind": "curated",
+    "sources": [
+      "packages/backend/db/migrations/0195_rfc310_work_start_lifecycle_events.sql"
+    ],
+    "note": "Small deterministic historical records; terminal execution and delivery states; original SQL performs its own backfills."
+  },
+  "rows": [
+    {
+      "table": "employee_case_event_origins",
+      "values": {
+        "case_id": "01K3980000B5DB526E6BE3FA00",
+        "event_subscription_id": "01K39800004D6C5D6631AD3E3F",
+        "event_delivery_id": "01K398000072AA88A45E2B39E6",
+        "created_at": 1778459500000
+      }
+    },
+    {
+      "table": "task_lifecycle_event_outbox",
+      "values": {
+        "id": "01K398000074FED32B6DD1A645",
+        "task_id": "01K3980000085154084C742759",
+        "task_revision": 1,
+        "observation_json": "{\"taskId\":\"01K3980000085154084C742759\",\"status\":\"done\"}",
+        "state": "completed",
+        "attempt_count": 1,
+        "next_attempt_at": 1778459500000,
+        "created_at": 1778459500000,
+        "completed_at": 1778459560000
+      }
+    }
+  ],
+  "migrationEffects": [
+    {
+      "table": "tasks",
+      "operation": "alter",
+      "rule": "Apply the released SQL to existing seeded rows, retaining its explicit defaults, rewrites and backfills.",
+      "source": "packages/backend/db/migrations/0195_rfc310_work_start_lifecycle_events.sql"
+    },
+    {
+      "table": "webhook_trigger_fires",
+      "operation": "alter",
+      "rule": "Apply the released SQL to existing seeded rows, retaining its explicit defaults, rewrites and backfills.",
+      "source": "packages/backend/db/migrations/0195_rfc310_work_start_lifecycle_events.sql"
+    }
+  ]
+}

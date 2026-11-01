@@ -1,0 +1,31 @@
+{
+  "formatVersion": 1,
+  "epoch": 1,
+  "after": "0260_rfc374_node_run_seq",
+  "provenance": {
+    "kind": "curated",
+    "sources": [
+      "packages/backend/db/migrations/0260_rfc374_node_run_seq.sql"
+    ],
+    "note": "Small deterministic historical records; terminal execution and delivery states; original SQL performs its own backfills."
+  },
+  "rows": [
+    {
+      "table": "node_run_seq_allocations",
+      "values": {
+        "seq": 1,
+        "task_id": "01K3980000085154084C742759",
+        "node_run_id": "01K3980000D3D6DE02630EDFDE",
+        "allocated_at": 1778459500000
+      }
+    }
+  ],
+  "migrationEffects": [
+    {
+      "table": "node_runs",
+      "operation": "alter",
+      "rule": "Apply the released SQL to existing seeded rows, retaining its explicit defaults, rewrites and backfills.",
+      "source": "packages/backend/db/migrations/0260_rfc374_node_run_seq.sql"
+    }
+  ]
+}

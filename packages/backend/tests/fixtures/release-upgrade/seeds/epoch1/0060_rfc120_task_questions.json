@@ -1,0 +1,36 @@
+{
+  "formatVersion": 1,
+  "epoch": 1,
+  "after": "0060_rfc120_task_questions",
+  "provenance": {
+    "kind": "curated",
+    "sources": [
+      "packages/backend/db/migrations/0060_rfc120_task_questions.sql"
+    ],
+    "note": "Small deterministic historical records; terminal execution and delivery states; original SQL performs its own backfills."
+  },
+  "rows": [
+    {
+      "table": "task_questions",
+      "values": {
+        "id": "01K39800006CD404D3A0368C19",
+        "task_id": "01K398000037CCE521AC9029CB",
+        "origin_node_run_id": "01K3980000B80ECC821B9D0545",
+        "question_id": "retention",
+        "question_title": "Should the historical report be retained?",
+        "source_kind": "self",
+        "role_kind": "self",
+        "iteration": 0,
+        "loop_iter": 0,
+        "default_target_node_id": "worker",
+        "confirmation": "confirmed",
+        "confirmed_by": "01K39800007DFB4CF67742CB06",
+        "confirmed_by_role": "owner",
+        "confirmed_at": 1778459560000,
+        "reopen_count": 0,
+        "created_at": 1778459500000,
+        "updated_at": 1778459500000
+      }
+    }
+  ]
+}

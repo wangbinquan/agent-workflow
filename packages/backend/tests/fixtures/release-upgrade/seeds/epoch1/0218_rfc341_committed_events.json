@@ -1,0 +1,71 @@
+{
+  "formatVersion": 1,
+  "epoch": 1,
+  "after": "0218_rfc341_committed_events",
+  "provenance": {
+    "kind": "curated",
+    "sources": [
+      "packages/backend/db/migrations/0218_rfc341_committed_events.sql"
+    ],
+    "note": "Small deterministic historical records; terminal execution and delivery states; original SQL performs its own backfills."
+  },
+  "rows": [
+    {
+      "table": "committed_event_aggregate_heads",
+      "values": {
+        "producer": "task-execution",
+        "family": "task-lifecycle",
+        "aggregate_kind": "task",
+        "aggregate_id": "01K3980000085154084C742759",
+        "last_seq": 1,
+        "updated_at": 1778459500000
+      }
+    },
+    {
+      "table": "committed_event_deliveries",
+      "values": {
+        "event_id": "01K3980000C51D3876B78C0E01",
+        "consumer_id": "upgrade-history-observer",
+        "delivery_class": "rebuildable",
+        "state": "accepted",
+        "attempt_count": 1,
+        "next_attempt_at": 1778459500000,
+        "lease_epoch": 0,
+        "replay_generation": 0,
+        "created_at": 1778459500000,
+        "updated_at": 1778459500000,
+        "accepted_at": 1778459560000
+      }
+    },
+    {
+      "table": "committed_events",
+      "values": {
+        "id": "01K3980000C51D3876B78C0E01",
+        "event_group_id": "upgrade-task-terminal",
+        "event_group_ordinal": 0,
+        "producer": "task-execution",
+        "family": "task-lifecycle",
+        "event_type": "task.completed",
+        "schema_version": 1,
+        "aggregate_kind": "task",
+        "aggregate_id": "01K3980000085154084C742759",
+        "aggregate_seq": 1,
+        "operation_ref": "01K3980000452A62D5F0CB0D1E",
+        "occurred_at": 1778459560000,
+        "payload_json": "{\"taskId\":\"01K3980000085154084C742759\",\"status\":\"done\"}",
+        "payload_digest": "db3eb37c82df772ed2af853f801b56bded019c45704eec53b9a6cf5929baca23",
+        "delivery_mode": "dispatchable",
+        "producer_epoch": 1,
+        "created_at": 1778459500000
+      }
+    }
+  ],
+  "migrationEffects": [
+    {
+      "table": "committed_event_family_cutovers",
+      "operation": "backfill",
+      "rule": "Original migration inserts rows from prior ledger data or installs its declared singleton/configuration rows; do not duplicate them.",
+      "source": "packages/backend/db/migrations/0218_rfc341_committed_events.sql"
+    }
+  ]
+}

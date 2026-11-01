@@ -179,3 +179,6 @@ export interface EpochSwitchApplication {
     readonly scratchUrlEnv?: string
   }): Promise<EpochSwitchPlanView>
 }
+
+// RFC-398 design §1 / §4: CLI receives the offline operation through its public contract.
+export type { LegacyMigrationFinalizePort } from '../application/ports/epochSwitch'

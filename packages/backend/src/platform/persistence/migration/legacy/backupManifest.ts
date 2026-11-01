@@ -1,3 +1,4 @@
+import { openSqliteForRead } from '@/platform/persistence/sqlite/openForRead'
 // RFC-395: frozen epoch-1 backup manifest v1/v2.
 // RFC-213 — backup manifest + migration-identity.
 //
@@ -15,7 +16,7 @@
 // System Operations SQLite migration-axis inspection plus backup envelope I/O.
 
 import type { DatabaseProvider } from '@/platform/persistence/databaseProviders'
-import { Database } from 'bun:sqlite'
+import type { Database } from 'bun:sqlite'
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
@@ -70,7 +71,7 @@ export type BackupManifest = BackupManifestV1 | BackupManifestV2
 export function readDbMigrationIdentity(dbPath: string): MigrationIdentity | null {
   let db: Database | null = null
   try {
-    db = new Database(dbPath, { readonly: true })
+    db = openSqliteForRead(dbPath)
     const row = db
       .query('SELECT hash, created_at FROM __drizzle_migrations ORDER BY created_at DESC LIMIT 1')
       .get() as { hash: string; created_at: number | bigint } | null | undefined

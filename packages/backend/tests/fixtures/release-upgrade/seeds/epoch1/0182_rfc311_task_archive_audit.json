@@ -1,0 +1,28 @@
+{
+  "formatVersion": 1,
+  "epoch": 1,
+  "after": "0182_rfc311_task_archive_audit",
+  "provenance": {
+    "kind": "curated",
+    "sources": [
+      "packages/backend/db/migrations/0182_rfc311_task_archive_audit.sql"
+    ],
+    "note": "Small deterministic historical records; terminal execution and delivery states; original SQL performs its own backfills."
+  },
+  "rows": [
+    {
+      "table": "task_archive_audit",
+      "values": {
+        "id": "01K398000058C25EB39AC1D0B3",
+        "source": "manual",
+        "actor_user_id": "01K39800007DFB4CF67742CB06",
+        "retention_days": 30,
+        "tree_count": 0,
+        "task_count": 0,
+        "skipped_count": 1,
+        "root_task_ids_json": "[]",
+        "created_at": 1778459500000
+      }
+    }
+  ]
+}

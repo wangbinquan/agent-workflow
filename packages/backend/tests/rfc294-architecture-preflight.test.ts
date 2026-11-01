@@ -392,6 +392,10 @@ const PUBLIC_SURFACE_DEBT: readonly string[] = [
   'modules/source-control/public/types.ts#WorkspaceMaintenanceEffects: unsafe/open type FunctionType',
   'modules/system-operations/application/ports/executionAuthority.ts#ExecutionAuthorityPort: forbidden type Partial',
   'modules/system-operations/application/ports/executionAuthority.ts#ExecutionAuthorityPort: unsafe/open type FunctionType',
+  // RFC-398 §2.7: the automatic-upgrade receipt is a JSON evidence document assembled from the
+  // session records (whose payloads stay opaque by design) and printed verbatim by
+  // `db migration auto --json`; typing it closed means typing every record payload first.
+  'modules/system-operations/domain/epochSwitch/autoUpgrade.ts#AutoUpgradeConclusion: unsafe/open type UnknownKeyword',
   'modules/system-operations/infrastructure/crewstation/objectPublicationContract.ts#HostedObjectPublications: forbidden type import @/platform/persistence/persistenceDb#PersistenceDb',
   'modules/system-operations/infrastructure/crewstation/objectPublicationContract.ts#HostedObjectPublications: unsafe/open type FunctionType',
   'modules/system-operations/infrastructure/crewstation/restoreNormalizationContract.ts#HostedRestoreNormalizationParticipant: forbidden type import @/platform/persistence/persistenceDb#PersistenceDb',

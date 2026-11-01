@@ -1,0 +1,21 @@
+{
+  "formatVersion": 1,
+  "epoch": 1,
+  "after": "0021_rfc037_task_name",
+  "provenance": {
+    "kind": "curated",
+    "sources": [
+      "packages/backend/db/migrations/0021_rfc037_task_name.sql"
+    ],
+    "note": "Small deterministic historical records; terminal execution and delivery states; original SQL performs its own backfills."
+  },
+  "rows": [],
+  "migrationEffects": [
+    {
+      "table": "tasks",
+      "operation": "alter",
+      "rule": "Apply the released SQL to existing seeded rows, retaining its explicit defaults, rewrites and backfills.",
+      "source": "packages/backend/db/migrations/0021_rfc037_task_name.sql"
+    }
+  ]
+}

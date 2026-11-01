@@ -1,0 +1,57 @@
+{
+  "formatVersion": 1,
+  "epoch": 1,
+  "after": "0104_rfc211_drop_onboarding",
+  "provenance": {
+    "kind": "curated",
+    "sources": [
+      "packages/backend/db/migrations/0104_rfc211_drop_onboarding.sql"
+    ],
+    "note": "Small deterministic historical records; terminal execution and delivery states; original SQL performs its own backfills."
+  },
+  "rows": [],
+  "migrationEffects": [
+    {
+      "table": "onboarding_artifacts",
+      "operation": "remove",
+      "rule": "The released SQL retires this physical table; its pre-upgrade rows remain source evidence for RFC-395.",
+      "source": "packages/backend/db/migrations/0104_rfc211_drop_onboarding.sql"
+    },
+    {
+      "table": "onboarding_runs",
+      "operation": "remove",
+      "rule": "The released SQL retires this physical table; its pre-upgrade rows remain source evidence for RFC-395.",
+      "source": "packages/backend/db/migrations/0104_rfc211_drop_onboarding.sql"
+    },
+    {
+      "table": "agents",
+      "operation": "alter",
+      "rule": "Apply the released SQL to existing seeded rows, retaining its explicit defaults, rewrites and backfills.",
+      "source": "packages/backend/db/migrations/0104_rfc211_drop_onboarding.sql"
+    },
+    {
+      "table": "skills",
+      "operation": "alter",
+      "rule": "Apply the released SQL to existing seeded rows, retaining its explicit defaults, rewrites and backfills.",
+      "source": "packages/backend/db/migrations/0104_rfc211_drop_onboarding.sql"
+    },
+    {
+      "table": "tasks",
+      "operation": "alter",
+      "rule": "Apply the released SQL to existing seeded rows, retaining its explicit defaults, rewrites and backfills.",
+      "source": "packages/backend/db/migrations/0104_rfc211_drop_onboarding.sql"
+    },
+    {
+      "table": "workflows",
+      "operation": "alter",
+      "rule": "Apply the released SQL to existing seeded rows, retaining its explicit defaults, rewrites and backfills.",
+      "source": "packages/backend/db/migrations/0104_rfc211_drop_onboarding.sql"
+    },
+    {
+      "table": "workgroups",
+      "operation": "alter",
+      "rule": "Apply the released SQL to existing seeded rows, retaining its explicit defaults, rewrites and backfills.",
+      "source": "packages/backend/db/migrations/0104_rfc211_drop_onboarding.sql"
+    }
+  ]
+}

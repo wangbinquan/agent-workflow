@@ -1,5 +1,5 @@
+import { openSqliteForRead } from '@/platform/persistence/sqlite/openForRead'
 import type { DatabaseProvider } from '../../databaseProviders'
-import { Database } from 'bun:sqlite'
 import { assertHistoryRow, readSchemaHistoryRows } from '../../schema/history/apply'
 import { verifyHistoryVersion } from '../../schema/history/artifacts'
 import { sameHistoryVersion } from '../../schema/history/edgeDiff'
@@ -45,7 +45,7 @@ const catalogs = {
       const files = await target.execute('PRAGMA database_list')
       const file = files.find((row) => row.name === 'main')?.file
       if (typeof file !== 'string' || !file) throw new Error('v3-target-file-required')
-      const database = new Database(file, { readonly: true })
+      const database = openSqliteForRead(file)
       try {
         return collectSqliteHistoryCatalog(database)
       } finally {

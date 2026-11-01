@@ -12,6 +12,7 @@
 // `{ ok: false }` rather than letting it escape.
 
 import { Database } from 'bun:sqlite'
+import { openSqliteForRead } from '@/platform/persistence/sqlite/openForRead'
 
 export interface IntegrityResult {
   ok: boolean
@@ -24,10 +25,9 @@ export interface IntegrityResult {
  * throws) for a corrupt / not-a-database file, so callers decide the policy
  * (restore refuses, boot fails closed, doctor reports).
  *
- * The default connection is read-only. A checkpointed backup copy may lack
- * WAL/SHM sidecars; its owner can allow SQLite to create those auxiliary files
- * only when there is no copied WAL to replay/checkpoint on connection close.
- * The default preserves existing DB/WAL bytes and never creates a missing DB.
+ * RFC-398: default to the shared WAL-sidecar rule. Existing WAL bytes are never
+ * checkpointed by this reader and a missing database is never created. Explicit
+ * false retains the strict read-only option for raw snapshots with copied WAL.
  */
 export function quickCheckDbFile(
   dbPath: string,
@@ -35,10 +35,10 @@ export function quickCheckDbFile(
 ): IntegrityResult {
   let db: Database | null = null
   try {
-    db = new Database(
-      dbPath,
-      options.allowWalSidecarCreation ? { readwrite: true, create: false } : { readonly: true },
-    )
+    db =
+      options.allowWalSidecarCreation === false
+        ? new Database(dbPath, { readonly: true })
+        : openSqliteForRead(dbPath)
     const rows = db.query('PRAGMA quick_check;').all() as { quick_check: string }[]
     const ok = rows.length === 1 && rows[0]?.quick_check === 'ok'
     return { ok, errors: ok ? [] : rows.map((r) => r.quick_check) }

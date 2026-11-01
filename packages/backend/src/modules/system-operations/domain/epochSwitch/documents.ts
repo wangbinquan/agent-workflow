@@ -41,6 +41,7 @@ import {
   EpochSourceLocationSchema,
   EpochSwitchError,
   EpochSwitchKindSchema,
+  EpochSwitchInputsSchema,
   EpochTargetLocationSchema,
   EpochTimestampSchema,
   MigrationApprovalPayloadSchema,
@@ -313,10 +314,7 @@ export const MigrationPlanDocumentPayloadSchema = z.strictObject({
     receipt: SwitchBackupReceiptSchema.nullable(),
   }),
   content: ContentRootSpecSchema,
-  scratchProfileRef: z
-    .string()
-    .regex(/^env:[A-Za-z_][A-Za-z0-9_]*$/)
-    .nullable(),
+  scratchProfileRef: EpochSwitchInputsSchema.shape.scratchProfileRef,
   requiresOfflineUpgrade: z.boolean(),
   validation: ValidationReportSchema.nullable(),
   switchMethod: z.enum(['pointer-v2', 'platform-switch']),

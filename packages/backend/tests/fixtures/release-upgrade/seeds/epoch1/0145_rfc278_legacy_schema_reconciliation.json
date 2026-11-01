@@ -1,0 +1,105 @@
+{
+  "formatVersion": 1,
+  "epoch": 1,
+  "after": "0145_rfc278_legacy_schema_reconciliation",
+  "provenance": {
+    "kind": "curated",
+    "sources": [
+      "packages/backend/db/migrations/0145_rfc278_legacy_schema_reconciliation.sql"
+    ],
+    "note": "Small deterministic historical records; terminal execution and delivery states; original SQL performs its own backfills."
+  },
+  "rows": [
+    {
+      "table": "mcp_runtime_test_sessions",
+      "values": {
+        "id": "01K39800006CC29C69E99FA050",
+        "mcp_id": "01K3980000FC1997E4D80E81F6",
+        "owner_user_id": "01K39800007DFB4CF67742CB06",
+        "client_create_id": "upgrade-post276-create",
+        "client_create_digest": "aa2741053c59de0f8a3d9e8ea7200495492cc6dd8e0bbe2d4b240284c60d99d8",
+        "status": "ended",
+        "end_reason": "user",
+        "mcp_config_hash": "aa2741053c59de0f8a3d9e8ea7200495492cc6dd8e0bbe2d4b240284c60d99d8",
+        "runtime_row_id": "01K39800008166E7DDECF56BC9",
+        "runtime_name": "upgrade-opencode",
+        "runtime_protocol": "opencode",
+        "runtime_snapshot_json": "{\"id\":\"01K39800008166E7DDECF56BC9\",\"name\":\"upgrade-opencode\",\"protocol\":\"opencode\",\"binaryPath\":\"/usr/bin/false\"}",
+        "runtime_binary_path": "/usr/bin/false",
+        "runtime_session_id": "upgrade-post276-session",
+        "native_session_state": "ready",
+        "turn_seq": 1,
+        "session_version": 1,
+        "scratch_root": "<AW_HOME>/mcp-tests/upgrade",
+        "cleanup_state": "complete",
+        "created_at": 1778459500000,
+        "updated_at": 1778459500000,
+        "ended_at": 1778459560000
+      }
+    },
+    {
+      "table": "mcp_runtime_test_turns",
+      "values": {
+        "id": "01K398000099409BDD4BA42B1F",
+        "session_id": "01K39800006CC29C69E99FA050",
+        "seq": 1,
+        "client_message_id": "upgrade-post276-message",
+        "prompt_text": "List available tools.",
+        "status": "succeeded",
+        "hard_deadline_at": 1778459560000,
+        "capture_state": "complete",
+        "capture_last_event_seq": 0,
+        "capture_event_bytes": 0,
+        "exit_code": 0,
+        "started_at": 1778459500000,
+        "finished_at": 1778459560000,
+        "created_at": 1778459500000
+      }
+    },
+    {
+      "table": "mcp_runtime_test_create_receipts",
+      "values": {
+        "mcp_id": "01K3980000FC1997E4D80E81F6",
+        "owner_user_id": "01K39800007DFB4CF67742CB06",
+        "client_create_id": "upgrade-post276-create",
+        "request_digest": "aa2741053c59de0f8a3d9e8ea7200495492cc6dd8e0bbe2d4b240284c60d99d8",
+        "session_id": "01K39800006CC29C69E99FA050",
+        "accepted_turn_id": "01K398000099409BDD4BA42B1F",
+        "created_at": 1778459500000,
+        "expires_at": 1778459560000
+      }
+    }
+  ],
+  "migrationEffects": [
+    {
+      "table": "rfc276_legacy_runtime_archive",
+      "operation": "remove",
+      "rule": "The released SQL retires this physical table; its pre-upgrade rows remain source evidence for RFC-395.",
+      "source": "packages/backend/db/migrations/0145_rfc278_legacy_schema_reconciliation.sql"
+    },
+    {
+      "table": "recovery_events",
+      "operation": "alter",
+      "rule": "Apply the released SQL to existing seeded rows, retaining its explicit defaults, rewrites and backfills.",
+      "source": "packages/backend/db/migrations/0145_rfc278_legacy_schema_reconciliation.sql"
+    },
+    {
+      "table": "mcp_runtime_test_create_receipts",
+      "operation": "alter",
+      "source": "packages/backend/db/migrations/0145_rfc278_legacy_schema_reconciliation.sql:34",
+      "rule": "Recreate empty idempotency cache. The seed creates a new post-reset session, turn and receipt; old receipt is retired evidence, not retained in current phase.",
+      "projection": {
+        "sourceTables": [
+          "mcp_runtime_test_create_receipts"
+        ],
+        "keyColumns": [
+          "mcp_id",
+          "owner_user_id",
+          "client_create_id"
+        ],
+        "cardinality": "zero rows before the post-migration seed",
+        "values": {}
+      }
+    }
+  ]
+}

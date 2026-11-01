@@ -1,4 +1,5 @@
 import { withNativeTransaction } from '@/platform/persistence/nativeTransaction'
+import { parsePostgresqlProfileRef } from '../../postgresqlProfileRef'
 import { postgresqlHistoryConnection } from '@/platform/persistence/schema/history/connection'
 import { PostgresqlDatabaseConfigSchema, type DatabaseConfig } from '@agent-workflow/shared'
 import {
@@ -16,18 +17,21 @@ export function postgresqlRuntimeFor(input: {
   readonly base: DatabaseConfig | null
   readonly generationId: string
   readonly env: Readonly<Record<string, string | undefined>>
+  readonly poolFactory?: Parameters<typeof createPostgresqlDatabaseRuntime>[0]['poolFactory']
 }): PostgresqlDatabaseRuntime {
-  const match = /^env:([A-Za-z_][A-Za-z0-9_]*)$/.exec(input.profileRef)
-  if (!match) throw new Error('postgresql-profile-reference-invalid')
+  const profile = parsePostgresqlProfileRef(input.profileRef)
+  if (profile?.kind !== 'env') throw new Error('postgresql-profile-reference-invalid')
   return migrationPostgresqlRuntime(
     createPostgresqlDatabaseRuntime({
       config: PostgresqlDatabaseConfigSchema.parse({
         ...PostgresqlDatabaseConfigSchema.safeParse(input.base).data,
         provider: 'postgresql',
-        urlEnv: match[1],
+        urlEnv: profile.urlEnv,
+        databaseName: profile.databaseName,
       }),
       generationId: input.generationId,
       env: input.env,
+      poolFactory: input.poolFactory,
     }),
   )
 }

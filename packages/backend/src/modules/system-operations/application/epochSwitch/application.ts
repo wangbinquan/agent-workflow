@@ -35,7 +35,15 @@ export function createEpochSwitchApplication(
       withEpochOperation(deps, input.operationId, (s) => withdrawEpochAcknowledgements(s, input)),
     run: (input) => withEpochOperation(deps, input.operationId, (s) => runEpochSwitch(s, input)),
     async status(input) {
-      if (!input.operationId) return (await deps.journal.list()).map(epochSwitchSummary)
+      if (!input.operationId) {
+        const auto = (await deps.autoUpgradeRecords?.list()) ?? []
+        return (await deps.journal.list()).map((journal) => ({
+          ...epochSwitchSummary(journal),
+          ...(auto.some((s) => s.operationId === journal.payload.operationId)
+            ? { mode: 'auto' as const }
+            : {}),
+        }))
+      }
       return epochSwitchStatus(deps, await requireEpochJournal(deps, input.operationId))
     },
     async trace(input) {

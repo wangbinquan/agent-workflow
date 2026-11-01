@@ -1,0 +1,34 @@
+{
+  "formatVersion": 1,
+  "epoch": 1,
+  "after": "0197_rfc310_event_response_rules_and_audit",
+  "provenance": {
+    "kind": "curated",
+    "sources": [
+      "packages/backend/db/migrations/0197_rfc310_event_response_rules_and_audit.sql"
+    ],
+    "note": "Small deterministic historical records; terminal execution and delivery states; original SQL performs its own backfills."
+  },
+  "rows": [
+    {
+      "table": "event_response_rules",
+      "values": {
+        "id": "01K3980000DC5F693D8E066F15",
+        "name": "Disabled upgrade response",
+        "owner_user_id": "01K39800007DFB4CF67742CB06",
+        "enabled": 0,
+        "source_id": "upgrade-source",
+        "source_revision": 1,
+        "event_type_id": "upgrade.report-reviewed",
+        "event_type_revision": 1,
+        "subject_type": "repository",
+        "subject_match": "all",
+        "target_json": "{\"kind\":\"workflow\",\"workflowId\":\"01K398000045B34F16DB605A06\"}",
+        "last_fired_at": 1778459560000,
+        "last_status": "launched",
+        "created_at": 1778459500000,
+        "updated_at": 1778459500000
+      }
+    }
+  ]
+}

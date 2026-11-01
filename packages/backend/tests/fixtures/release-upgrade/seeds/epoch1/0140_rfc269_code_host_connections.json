@@ -1,0 +1,33 @@
+{
+  "formatVersion": 1,
+  "epoch": 1,
+  "after": "0140_rfc269_code_host_connections",
+  "provenance": {
+    "kind": "curated",
+    "sources": [
+      "packages/backend/db/migrations/0140_rfc269_code_host_connections.sql"
+    ],
+    "note": "Small deterministic historical records; terminal execution and delivery states; original SQL performs its own backfills."
+  },
+  "rows": [
+    {
+      "table": "code_host_connections",
+      "values": {
+        "provider": "gitlab",
+        "base_url": "https://example.invalid",
+        "token_enc": "fixture-unconfigured",
+        "token_hint": "fixture",
+        "updated_at": 1778459500000,
+        "updated_by": "01K39800007DFB4CF67742CB06"
+      }
+    }
+  ],
+  "migrationEffects": [
+    {
+      "table": "tasks",
+      "operation": "alter",
+      "rule": "Apply the released SQL to existing seeded rows, retaining its explicit defaults, rewrites and backfills.",
+      "source": "packages/backend/db/migrations/0140_rfc269_code_host_connections.sql"
+    }
+  ]
+}

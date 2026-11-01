@@ -136,6 +136,9 @@ const PROVIDER_FORK_LEDGER = {
   // 自己在装哪个 provider），`provider` 字段只留给 traits 查表，fork 与围栏一并消失。
   // RFC-359 AC-10 第十一波销账：条目退役（1 → 0）。Worker `init` 帧的连库那一半由装配方交出
   // （`databaseInit`），监工只补协议头；判别联合与 fork 一并消失。
+  // RFC-398 §3: the automatic-upgrade composition root provisions a server database only;
+  // SQLite returns early and every other provider sinks into `unhandledDatabaseProvider`.
+  'bootstrap/epochMigrationAuto.ts': { forks: 1, fence: 'fenced-dispatch' },
   // T18: three current runtime/provider preparation forks; the retired branch is gone.
   'platform/persistence/databaseProviderRuntime.ts': { forks: 3, fence: 'fenced-dispatch' },
   // RFC-359：统一事务原语按客户端品牌挑会话实现（$provider 缺失 = bun:sqlite），残余分支沉入 never 汇。

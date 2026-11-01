@@ -1,0 +1,27 @@
+{
+  "formatVersion": 1,
+  "epoch": 1,
+  "after": "0102_rfc210_submodule_isolation",
+  "provenance": {
+    "kind": "curated",
+    "sources": [
+      "packages/backend/db/migrations/0102_rfc210_submodule_isolation.sql"
+    ],
+    "note": "Small deterministic historical records; terminal execution and delivery states; original SQL performs its own backfills."
+  },
+  "rows": [],
+  "migrationEffects": [
+    {
+      "table": "cached_repos",
+      "operation": "alter",
+      "rule": "Apply the released SQL to existing seeded rows, retaining its explicit defaults, rewrites and backfills.",
+      "source": "packages/backend/db/migrations/0102_rfc210_submodule_isolation.sql"
+    },
+    {
+      "table": "node_runs",
+      "operation": "alter",
+      "rule": "Apply the released SQL to existing seeded rows, retaining its explicit defaults, rewrites and backfills.",
+      "source": "packages/backend/db/migrations/0102_rfc210_submodule_isolation.sql"
+    }
+  ]
+}

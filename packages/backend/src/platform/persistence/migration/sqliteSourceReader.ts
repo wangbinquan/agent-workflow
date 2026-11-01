@@ -1,3 +1,4 @@
+import { openSqliteForRead } from '@/platform/persistence/sqlite/openForRead'
 // RFC-395 II-b V1: immutable VACUUM snapshot, restart-stable source watermark and raw archives.
 import { Database, type SQLQueryBindings } from 'bun:sqlite'
 import { mkdtempSync, mkdirSync, rmSync, readFileSync, existsSync } from 'node:fs'
@@ -14,7 +15,11 @@ import {
 import type { LogicalTableContract } from '../schema/contractTypes'
 import { digestSchemaContract } from '../schema/canonical'
 import { collectSourceFingerprint, quoteSourceIdentifier as quote } from './sourceCatalog'
-import { identifySource, type SupportedSourceManifest } from './supportedSources'
+import {
+  identifySource,
+  withLogicalCodecCorrections,
+  type SupportedSourceManifest,
+} from './supportedSources'
 import { type EmptyTableDecision } from './sourceDispositions'
 import {
   assertSourceChunkRequest,
@@ -63,7 +68,7 @@ export function openEpoch1SqliteSource(input: {
     if (closed) throw new SourceBlockedError('Source reader is closed')
   }
   const liveDigest = () => {
-    const db = new Database(input.path, { readonly: true })
+    const db = openSqliteForRead(input.path)
     try {
       return sqliteContentDigest(db)
     } finally {
@@ -115,6 +120,7 @@ export function openEpoch1SqliteSource(input: {
         pointerDigest = generation?.digest ?? null
         observed = liveDigest()
         vacuumSqliteInto({ dbPath: input.path, dest: copyPath })
+        // RFC-398 allow-list: newly produced non-WAL VACUUM INTO snapshot.
         copy = new Database(copyPath, { readonly: true })
         if (sqliteContentDigest(copy) !== observed || liveDigest() !== observed)
           throw new SourceBlockedError(
@@ -248,11 +254,13 @@ export function openEpoch1SqliteSource(input: {
         throw new SourceBlockedError(
           'Upgrade-only SQLite source requires an offline upgrade before codec reads',
         )
-      const table = snapshot.contract.tables.find((entry) => entry.id === tableId)
-      if (!table)
+      const frozen = snapshot.contract.tables.find((entry) => entry.id === tableId)
+      if (!frozen)
         throw new SourceBlockedError(
           `No frozen row codec for ${tableId}; use readRawChunk for its disposition`,
         )
+      // An older contract decodes with the frozen history's later codec corrections.
+      const table = withLogicalCodecCorrections(frozen, input.manifest.codecCorrections)
       try {
         return sourceChunk({
           sourceVersion: snapshot.sourceVersion,

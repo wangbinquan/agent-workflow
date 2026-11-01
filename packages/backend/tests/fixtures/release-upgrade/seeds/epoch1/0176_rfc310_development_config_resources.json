@@ -1,0 +1,152 @@
+{
+  "formatVersion": 1,
+  "epoch": 1,
+  "after": "0176_rfc310_development_config_resources",
+  "provenance": {
+    "kind": "curated",
+    "sources": [
+      "packages/backend/db/migrations/0176_rfc310_development_config_resources.sql",
+      "git:d0aeb3861fff5590c0b95f09704b6d8484463ca0:packages/backend/tests/fixtures/digitalEmployeeTypePackages.ts",
+      "packages/backend/src/modules/digital-employee/domain/model.ts",
+      "packages/backend/src/modules/development-automation/domain/automationPolicy.ts"
+    ],
+    "note": "Small deterministic historical records; terminal execution and delivery states; original SQL performs its own backfills."
+  },
+  "rows": [
+    {
+      "table": "action_template_revisions",
+      "values": {
+        "template_id": "01K39800002F3D0653910B69B0",
+        "revision": 1,
+        "content_json": "{\"additionalProtectedPathClasses\":[],\"capabilityContractVersion\":1,\"capabilityId\":\"change.review\",\"compatibility\":[],\"contextProfileRef\":null,\"executor\":{\"agentRef\":\"01K39800008C70B25CBBBE8E79\",\"kind\":\"agent\"},\"labels\":[\"upgrade\"],\"mcpRefs\":[],\"promptSupplement\":\"Review the retained report.\",\"readOnlyResourceRefs\":[],\"retryDefaults\":{\"freshSession\":0,\"sameSession\":0},\"runtimeProfileRef\":\"01K39800008166E7DDECF56BC9\",\"schemaVersion\":1,\"skillRefs\":[\"01K398000032C1CF49A2FEEE26\"],\"verificationProfileRef\":\"01K39800008DD5A034FECD45C4\",\"writablePathPolicyRef\":null}",
+        "content_digest": "c349427d32f8d8b953a2eccb8e51d4d21944305fc04e5c7439fecd8a12ae6f25",
+        "published_at": 1778459500000,
+        "published_by": "01K39800007DFB4CF67742CB06"
+      }
+    },
+    {
+      "table": "action_templates",
+      "values": {
+        "id": "01K39800002F3D0653910B69B0",
+        "name": "upgrade-review-action",
+        "capability_id": "change.review",
+        "draft_json": "{\"additionalProtectedPathClasses\":[],\"capabilityContractVersion\":1,\"capabilityId\":\"change.review\",\"compatibility\":[],\"contextProfileRef\":null,\"executor\":{\"agentRef\":\"01K39800008C70B25CBBBE8E79\",\"kind\":\"agent\"},\"labels\":[\"upgrade\"],\"mcpRefs\":[],\"promptSupplement\":\"Review the retained report.\",\"readOnlyResourceRefs\":[],\"retryDefaults\":{\"freshSession\":0,\"sameSession\":0},\"runtimeProfileRef\":\"01K39800008166E7DDECF56BC9\",\"schemaVersion\":1,\"skillRefs\":[\"01K398000032C1CF49A2FEEE26\"],\"verificationProfileRef\":\"01K39800008DD5A034FECD45C4\",\"writablePathPolicyRef\":null}",
+        "published_revision": 1,
+        "visibility": "private",
+        "acl_revision": 0,
+        "created_at": 1778459500000,
+        "updated_at": 1778459500000
+      }
+    },
+    {
+      "table": "automation_policies",
+      "values": {
+        "id": "01K39800000C6CBF709CF87B2D",
+        "name": "upgrade-policy",
+        "draft_json": "{\"actionPriority\":{\"rules\":[]},\"admission\":{\"allowedSubmissionKinds\":[\"direct\"],\"duplicateExternalIdDisposition\":\"reject\"},\"conflict\":{\"maxRepairAttempts\":0,\"mode\":\"report-only\"},\"delivery\":{\"draft\":false,\"remoteHumanPushDisposition\":\"restart-action-from-new-head\",\"sourceBranchCollision\":\"deterministic-suffix\",\"sourceBranchPrefix\":\"aw/mission\"},\"employeeSelection\":{\"rules\":[]},\"feedback\":{\"allowedAuthorClasses\":[\"human\"],\"batchLimit\":1,\"requireLatestRevision\":true},\"notification\":{\"escalationIntervalMs\":3600000,\"overviewComment\":\"reuse-single\"},\"pipeline\":{\"evidenceStaleAfterMs\":3600000,\"gates\":[]},\"readiness\":{\"additionalRequiredGateKeys\":[],\"unresolvedFeedbackBlocksReady\":true},\"requirement\":{\"clarificationChannelPriority\":[\"platform\"],\"clarificationTimeoutMs\":86400000,\"maxClarificationRounds\":1,\"noChangeConfirmation\":\"program-proof\",\"sourceRefreshMode\":\"manual\",\"upload\":{\"allowExecutableFileMode\":false,\"allowedCollisionModes\":[\"create-only\"],\"allowedContentPolicies\":[\"preserve-upload\"],\"allowedTargetPrefixes\":[],\"defaultCollisionMode\":\"create-only\",\"defaultContentPolicy\":\"preserve-upload\",\"maxFileBytes\":4096,\"maxFiles\":1,\"maxTotalBytes\":4096,\"targetChangedDisposition\":\"block\"}},\"retention\":{\"attemptLedgerTtlDays\":30,\"pipelineBundleTerminalTtlDays\":30,\"requirementBundleTerminalTtlDays\":30},\"retry\":{\"actionRunsPerMission\":1,\"commitsPerMission\":1,\"freshSessionReruns\":0,\"missionWallTimeMs\":86400000,\"sameSessionRetries\":0},\"schemaVersion\":1,\"verification\":{\"requiredProfileRefs\":[],\"stopPolicy\":\"first-failure\"}}",
+        "published_revision": 1,
+        "visibility": "private",
+        "acl_revision": 0,
+        "created_at": 1778459500000,
+        "updated_at": 1778459500000
+      }
+    },
+    {
+      "table": "automation_policy_revisions",
+      "values": {
+        "policy_id": "01K39800000C6CBF709CF87B2D",
+        "revision": 1,
+        "content_json": "{\"actionPriority\":{\"rules\":[]},\"admission\":{\"allowedSubmissionKinds\":[\"direct\"],\"duplicateExternalIdDisposition\":\"reject\"},\"conflict\":{\"maxRepairAttempts\":0,\"mode\":\"report-only\"},\"delivery\":{\"draft\":false,\"remoteHumanPushDisposition\":\"restart-action-from-new-head\",\"sourceBranchCollision\":\"deterministic-suffix\",\"sourceBranchPrefix\":\"aw/mission\"},\"employeeSelection\":{\"rules\":[]},\"feedback\":{\"allowedAuthorClasses\":[\"human\"],\"batchLimit\":1,\"requireLatestRevision\":true},\"notification\":{\"escalationIntervalMs\":3600000,\"overviewComment\":\"reuse-single\"},\"pipeline\":{\"evidenceStaleAfterMs\":3600000,\"gates\":[]},\"readiness\":{\"additionalRequiredGateKeys\":[],\"unresolvedFeedbackBlocksReady\":true},\"requirement\":{\"clarificationChannelPriority\":[\"platform\"],\"clarificationTimeoutMs\":86400000,\"maxClarificationRounds\":1,\"noChangeConfirmation\":\"program-proof\",\"sourceRefreshMode\":\"manual\",\"upload\":{\"allowExecutableFileMode\":false,\"allowedCollisionModes\":[\"create-only\"],\"allowedContentPolicies\":[\"preserve-upload\"],\"allowedTargetPrefixes\":[],\"defaultCollisionMode\":\"create-only\",\"defaultContentPolicy\":\"preserve-upload\",\"maxFileBytes\":4096,\"maxFiles\":1,\"maxTotalBytes\":4096,\"targetChangedDisposition\":\"block\"}},\"retention\":{\"attemptLedgerTtlDays\":30,\"pipelineBundleTerminalTtlDays\":30,\"requirementBundleTerminalTtlDays\":30},\"retry\":{\"actionRunsPerMission\":1,\"commitsPerMission\":1,\"freshSessionReruns\":0,\"missionWallTimeMs\":86400000,\"sameSessionRetries\":0},\"schemaVersion\":1,\"verification\":{\"requiredProfileRefs\":[],\"stopPolicy\":\"first-failure\"}}",
+        "content_digest": "434d914530f3f0af3b4420a9e67fbac4acc44fcc8451a40279d8d4e212d083c4",
+        "published_at": 1778459500000,
+        "published_by": "01K39800007DFB4CF67742CB06"
+      }
+    },
+    {
+      "table": "development_adapter_definition_revisions",
+      "values": {
+        "adapter_id": "01K3980000A2AE5F4489C94786",
+        "revision": 1,
+        "content_json": "{\"connectionRef\":null,\"contractVersion\":1,\"executableRef\":\"fixture:approval-gateway\",\"operations\":[\"submit\",\"lookup-by-idempotency-key\",\"observe\"],\"outputBudget\":{\"maxFileBytes\":4096,\"maxFiles\":1,\"maxTotalBytes\":4096},\"parameterSchemaRef\":null,\"purpose\":\"approval-gateway\",\"schemaVersion\":1,\"secretProjection\":[],\"timeoutMs\":1000}",
+        "content_digest": "44e257ad312605f7373cade2ce49669f55e56c96be02342b1aa6c88f4ccd22bd",
+        "published_at": 1778459500000,
+        "published_by": "01K39800007DFB4CF67742CB06"
+      }
+    },
+    {
+      "table": "development_adapter_definitions",
+      "values": {
+        "id": "01K3980000A2AE5F4489C94786",
+        "name": "upgrade-source-adapter",
+        "purpose": "approval-gateway",
+        "draft_json": "{\"connectionRef\":null,\"contractVersion\":1,\"executableRef\":\"fixture:approval-gateway\",\"operations\":[\"submit\",\"lookup-by-idempotency-key\",\"observe\"],\"outputBudget\":{\"maxFileBytes\":4096,\"maxFiles\":1,\"maxTotalBytes\":4096},\"parameterSchemaRef\":null,\"purpose\":\"approval-gateway\",\"schemaVersion\":1,\"secretProjection\":[],\"timeoutMs\":1000}",
+        "published_revision": 1,
+        "visibility": "private",
+        "acl_revision": 0,
+        "created_at": 1778459500000,
+        "updated_at": 1778459500000
+      }
+    },
+    {
+      "table": "digital_employee_revisions",
+      "values": {
+        "employee_id": "01K3980000706552DF2BDBA876",
+        "revision": 1,
+        "content_json": "{\"businessStatus\":\"disabled\",\"capabilityRoutes\":[{\"capabilityId\":\"change.review\",\"fallbackTemplateRef\":{\"id\":\"01K39800002F3D0653910B69B0\",\"revision\":1},\"rules\":[]}],\"defaultPolicyRef\":{\"id\":\"01K39800000C6CBF709CF87B2D\",\"revision\":1},\"description\":\"Retired review employee\",\"pipelineProviders\":[],\"requirementSources\":[],\"schemaVersion\":1,\"steps\":[],\"supportedRepositoryFacts\":[]}",
+        "content_digest": "490baaf7973fa282099d31252a3f819dd841c85de2318510c636feaf1a8e3943",
+        "published_at": 1778459500000,
+        "published_by": "01K39800007DFB4CF67742CB06"
+      }
+    },
+    {
+      "table": "digital_employees",
+      "values": {
+        "id": "01K3980000706552DF2BDBA876",
+        "name": "upgrade-legacy-employee",
+        "draft_json": "{\"businessStatus\":\"disabled\",\"capabilityRoutes\":[{\"capabilityId\":\"change.review\",\"fallbackTemplateRef\":{\"id\":\"01K39800002F3D0653910B69B0\",\"revision\":1},\"rules\":[]}],\"defaultPolicyRef\":{\"id\":\"01K39800000C6CBF709CF87B2D\",\"revision\":1},\"description\":\"Retired review employee\",\"pipelineProviders\":[],\"requirementSources\":[],\"schemaVersion\":1,\"steps\":[],\"supportedRepositoryFacts\":[]}",
+        "published_revision": 1,
+        "visibility": "private",
+        "acl_revision": 0,
+        "created_at": 1778459500000,
+        "updated_at": 1778459500000
+      }
+    },
+    {
+      "table": "repository_employee_assignments",
+      "values": {
+        "id": "01K398000051963DAEABB566A8",
+        "scope_kind": "repository",
+        "scope_ref": "01K39800006904DCBDB1794059",
+        "employee_id": "01K3980000706552DF2BDBA876",
+        "employee_revision": 1,
+        "updated_by": "01K39800007DFB4CF67742CB06",
+        "created_at": 1778459500000,
+        "updated_at": 1778459500000
+      }
+    },
+    {
+      "table": "verification_profile_revisions",
+      "values": {
+        "profile_id": "01K39800008DD5A034FECD45C4",
+        "revision": 1,
+        "content_json": "{\"maxParallel\":1,\"schemaVersion\":1,\"steps\":[],\"stopPolicy\":\"first-failure\"}",
+        "content_digest": "30e1629c2d39f66c890c7c178dcf3f483b9ffafa48f85d081c6c654df704641d",
+        "published_at": 1778459500000,
+        "published_by": "01K39800007DFB4CF67742CB06"
+      }
+    },
+    {
+      "table": "verification_profiles",
+      "values": {
+        "id": "01K39800008DD5A034FECD45C4",
+        "name": "upgrade-verification",
+        "draft_json": "{\"maxParallel\":1,\"schemaVersion\":1,\"steps\":[],\"stopPolicy\":\"first-failure\"}",
+        "published_revision": 1,
+        "visibility": "private",
+        "acl_revision": 0,
+        "created_at": 1778459500000,
+        "updated_at": 1778459500000
+      }
+    }
+  ]
+}

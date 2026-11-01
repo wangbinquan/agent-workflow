@@ -63,6 +63,7 @@ export async function rollbackEpochSwitch(session: EpochSwitchSession) {
         runId: p.run!.runId,
       })
       session.deps.faults?.('after-retire')
+      await session.deps.autoUpgradeCheckpoint?.('rollback-retired')
     }
     const observed = await session.deps.activation.observe(p.operationId)
     if (observed.pointsAt === 'other')
@@ -86,6 +87,7 @@ export async function rollbackEpochSwitch(session: EpochSwitchSession) {
             : Buffer.from(activation.payload.previousPointer.bytesBase64, 'base64'),
         firstLiveWriteAt: null,
       })
+      await session.deps.autoUpgradeCheckpoint?.('rollback-pointer-restored')
     }
     const previous = activation?.payload.previousPointer ?? p.source.pointer
     const bytes = await session.deps.journal.readArtifact(p.operationId, 'rollback-receipt.json')

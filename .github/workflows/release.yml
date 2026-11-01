@@ -2,31 +2,18 @@ name: Release
 
 # P-5-06: cut a GitHub Release whenever a tag matching `v*` is pushed.
 #
-# Three-phase, so the release only goes public once every binary is in place
-# AND without the create-race the old single-matrix design hit:
-#   1. `create-release` (one job) creates the Release as a DRAFT — only if it
-#      doesn't already exist — with auto-generated notes. Draft = not yet
-#      visible to users; the existence guard keeps a full re-run from
-#      re-drafting a release that is already published.
-#   2. `build` (per-OS matrix, needs: create-release) builds each binary and
-#      uploads it to that draft via `gh release upload --clobber`.
-#   3. `publish` (needs: build) flips the draft public — and only runs if ALL
-#      three build jobs succeeded.
+# Four phases keep public assets untouched until the candidate passes L2:
+#   1. `create-release` creates a DRAFT only when the release does not exist.
+#      The guard preserves the state and notes of an already-public release.
+#   2. `build` uploads workflow artifacts, never release assets.
+#   3. `upgrade-gate` starts the candidate on real old-version homes, across
+#      Linux (SQLite + PostgreSQL), macOS and Windows (SQLite).
+#   4. `publish` needs every build AND upgrade-gate job. Only then does it
+#      upload with --clobber and un-draft. A failed re-run cannot replace a
+#      published binary before that same gate passes.
 #
-# Why this shape:
-#   - Create-race: the old workflow had all three matrix jobs call
-#     `softprops/action-gh-release` with `generate_release_notes: true`
-#     concurrently; they raced to CREATE the same tag's release and one job
-#     routinely failed with `Validation Failed … code:"already_exists"
-#     field:"tag_name"` (e.g. v0.12.2's linux-x86_64 — the binary built fine,
-#     only its asset upload was lost). A single creation job removes the race.
-#   - No public empty/partial release: creating as a draft and publishing only
-#     after the matrix finishes means a build failure leaves a hidden draft
-#     (re-run the failed build job, then re-run / un-draft to finish) instead of
-#     a public release missing binaries.
-#   - `gh release upload --clobber` is a pure asset POST (no release-metadata
-#     mutation), so the three parallel uploads never contend and re-runs
-#     overwrite the asset cleanly.
+# One creation job avoids the old concurrent release-creation race. Failed
+# builds/gates leave a new release hidden; retries preserve public releases.
 #
 # The build script names the file from process.platform + process.arch
 # (scripts/build-binary.ts), so each runner produces the correct asset name:
@@ -47,6 +34,11 @@ on:
 
 permissions:
   contents: write
+  actions: read
+
+defaults:
+  run:
+    shell: bash
 
 jobs:
   create-release:
@@ -54,12 +46,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       # Create the Release exactly once, as a DRAFT, so the parallel build jobs
-      # only ever UPLOAD to an existing, not-yet-public release (no concurrent
-      # creation = no already_exists race; draft = nothing public until assets
-      # are in place). Guarded on non-existence so a FULL re-run of a tag whose
+      # never CREATE releases concurrently (no already_exists race); the
+      # publish job alone uploads assets after the upgrade gate. The draft is
+      # hidden until then. Guarded on non-existence so a FULL re-run of a tag whose
       # release is already published never flips it back to draft (which, if a
       # later build then failed before `publish`, would hide a live release).
       - name: Create draft release if missing
+        shell: bash
         run: |
           set -euo pipefail
           if gh release view "${GITHUB_REF_NAME}" --repo "${GITHUB_REPOSITORY}" >/dev/null 2>&1; then
@@ -102,33 +95,124 @@ jobs:
         shell: bash
         run: ls -lh dist/
 
-      # Upload the freshly built binary to the draft release. `gh release
-      # upload --clobber` only POSTs the asset (it does not touch the release
-      # body/metadata), so the three matrix jobs never contend, and re-runs
-      # overwrite the asset cleanly instead of erroring on a duplicate.
-      # RFC-254 T27: `shell: bash` is explicit because the Windows runner would
-      # otherwise use PowerShell, where none of this syntax parses. Git Bash
-      # ships on the windows-latest image, so the script itself is unchanged.
-      - name: Upload release asset
+      # Workflow artifacts are private to this run until upgrade-gate succeeds.
+      # L2 starts this production binary; its runtime fixture is compiled in
+      # upgrade-gate without enabling the test-only daemon build.
+      - name: Upload candidate artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-binary-${{ matrix.os }}
+          path: dist/agent-workflow-*
+          if-no-files-found: error
+          retention-days: 14
+
+  upgrade-gate:
+    name: Upgrade gate ${{ matrix.os }}
+    needs: build
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    services:
+      postgres:
+        # Empty image disables the service on runners without Docker services.
+        image: ${{ matrix.os == 'ubuntu-latest' && 'postgres:16' || '' }}
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s --health-timeout 5s --health-retries 10
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      AW_UPGRADE_ADMIN_URL: postgresql://postgres:postgres@127.0.0.1:5432/postgres
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.4.3'
+      - name: Install dependencies
+        shell: bash
+        run: bun install --frozen-lockfile
+      - name: Check release registry and preceding published seed coverage
         shell: bash
         run: |
           set -euo pipefail
-          file=$(find dist -maxdepth 1 -type f -name 'agent-workflow-*' | head -n 1)
-          test -n "$file"
-          echo "Uploading $file -> ${GITHUB_REF_NAME}"
-          gh release upload "${GITHUB_REF_NAME}" "$file" --repo "${GITHUB_REPOSITORY}" --clobber
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          bun scripts/release-upgrade/registry.ts --check --candidate "$GITHUB_REF_NAME"
+          bun .github/scripts/release-upgrade.ts preflight --tag "$GITHUB_REF_NAME"
+      - name: Check verifier policies
+        shell: bash
+        run: bun test ./.github/scripts/release-upgrade.test.ts
+      - name: Check upgrade tooling style
+        shell: bash
+        run: |
+          bunx prettier --check .github/workflows/release.yml .github/workflows/release-upgrade-nightly.yml .github/scripts/release-upgrade*.ts scripts/release-upgrade/verify.ts scripts/release-upgrade/scenario.ts scripts/release-upgrade/lib/{binaries,client,daemon,postgresql}.ts
+          bunx eslint .github/scripts/release-upgrade*.ts scripts/release-upgrade/verify.ts scripts/release-upgrade/scenario.ts scripts/release-upgrade/lib/{binaries,client,daemon,postgresql}.ts --max-warnings=0
+      - uses: actions/download-artifact@v5
+        with:
+          name: release-binary-${{ matrix.os }}
+          path: dist
+      - name: Compile verification runtime stub
+        shell: bash
+        run: |
+          set -euo pipefail
+          stub=$(bun .github/scripts/release-upgrade.ts stub-path)
+          bun build --compile packages/system-mocks/src/runtime/dispatch.ts --outfile "$stub"
+      - name: Verify candidate against the registry gate set
+        shell: bash
+        run: |
+          set -euo pipefail
+          candidate=$(bun .github/scripts/release-upgrade.ts candidate-path)
+          stub=$(bun .github/scripts/release-upgrade.ts stub-path)
+          chmod +x "$candidate" "$stub"
+          evidence_args=(--no-tag-build)
+          # The earliest gate releases predate Windows assets. Their exact-tag
+          # native builds are allowed and recorded as evidence level 4.
+          if [[ "$RUNNER_OS" == Windows ]]; then evidence_args=(); fi
+          bun scripts/release-upgrade/verify.ts --candidate "$candidate" --stub "$stub" \
+            --selection gate "${evidence_args[@]}" --postgresql-admin-url-env AW_UPGRADE_ADMIN_URL \
+            --summary release-upgrade-summary.json
+      - name: Upload upgrade summary
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-upgrade-summary-${{ matrix.os }}
+          path: release-upgrade-summary.json
+          if-no-files-found: warn
 
   publish:
     name: Publish release
-    needs: build
+    needs: [build, upgrade-gate]
     runs-on: ubuntu-latest
     steps:
-      # Flip the draft public only after every binary has been uploaded (this
-      # job needs all three build jobs to succeed). A build failure skips this
-      # step, leaving a hidden draft rather than a public partial release.
+      - uses: actions/download-artifact@v5
+        with:
+          pattern: release-binary-*
+          merge-multiple: true
+          path: dist
+      # This is the ONLY release-asset mutation. Re-running a published tag
+      # cannot replace its public bytes until all candidate checks passed.
+      - name: Upload gated release assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          files=(dist/agent-workflow-*)
+          test "${#files[@]}" -eq 4
+          for file in "${files[@]}"; do
+            test -f "$file"
+            gh release upload "$GITHUB_REF_NAME" "$file" --repo "$GITHUB_REPOSITORY" --clobber
+          done
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Publish (un-draft) the release
+        shell: bash
         run: gh release edit "${GITHUB_REF_NAME}" --repo "${GITHUB_REPOSITORY}" --draft=false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -75,6 +75,8 @@ export const BOOTSTRAP_FILES = [
   // RFC-395 II-b activation: explicit registry, conversion and content assembly roots.
   'packages/backend/src/bootstrap/conversionRules.ts',
   'packages/backend/src/bootstrap/epochMigration.ts',
+  // RFC-398 design §1 / §2: exact offline automatic-upgrade composition root.
+  'packages/backend/src/bootstrap/epochMigrationAuto.ts',
   'packages/backend/src/bootstrap/epochMigrationEntry.ts',
   'packages/backend/src/bootstrap/epochMigrationHosted.ts',
   'packages/backend/src/bootstrap/epochMigrationHostedEntry.ts',

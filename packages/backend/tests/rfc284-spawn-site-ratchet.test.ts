@@ -103,6 +103,15 @@ const ALLOWLIST: Record<string, { governance: SpawnGovernance; count: number; wh
     count: 1,
     why: 'git spawn 双点之二（镜像 util/git.ts，注释互指防漂移；RFC-284 T18 加文本锁）。',
   },
+  'bootstrap/autoUpgradeChild.ts': {
+    governance: 'short-lived',
+    count: 1,
+    why:
+      'RFC-398 §2.2：start 把自动升级交给同一二进制的 `db migration auto --json` 子进程——' +
+      '它在进程内跑完一次迁移会话、不再 fork；输出是 stdout 上一份 JSON 结论加 stderr 逐行' +
+      '转发的进度，天然有界；父进程转发 SIGINT/SIGTERM 并等待退出。按设计它可在父进程被 ' +
+      'SIGKILL 后独自完成持久会话，因此不建进程组、不整组杀。',
+  },
   'util/archive.ts': {
     governance: 'short-lived',
     count: 2,

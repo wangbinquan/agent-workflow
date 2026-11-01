@@ -1,0 +1,21 @@
+{
+  "formatVersion": 1,
+  "epoch": 1,
+  "after": "0027_rfc050_distill_output_lang",
+  "provenance": {
+    "kind": "curated",
+    "sources": [
+      "packages/backend/db/migrations/0027_rfc050_distill_output_lang.sql"
+    ],
+    "note": "Small deterministic historical records; terminal execution and delivery states; original SQL performs its own backfills."
+  },
+  "rows": [],
+  "migrationEffects": [
+    {
+      "table": "memory_distill_jobs",
+      "operation": "alter",
+      "rule": "Apply the released SQL to existing seeded rows, retaining its explicit defaults, rewrites and backfills.",
+      "source": "packages/backend/db/migrations/0027_rfc050_distill_output_lang.sql"
+    }
+  ]
+}

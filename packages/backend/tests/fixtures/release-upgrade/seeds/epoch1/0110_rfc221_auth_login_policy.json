@@ -1,0 +1,21 @@
+{
+  "formatVersion": 1,
+  "epoch": 1,
+  "after": "0110_rfc221_auth_login_policy",
+  "provenance": {
+    "kind": "curated",
+    "sources": [
+      "packages/backend/db/migrations/0110_rfc221_auth_login_policy.sql"
+    ],
+    "note": "Small deterministic historical records; terminal execution and delivery states; original SQL performs its own backfills."
+  },
+  "rows": [],
+  "migrationEffects": [
+    {
+      "table": "auth_login_policy",
+      "operation": "backfill",
+      "rule": "Original migration inserts rows from prior ledger data or installs its declared singleton/configuration rows; do not duplicate them.",
+      "source": "packages/backend/db/migrations/0110_rfc221_auth_login_policy.sql"
+    }
+  ]
+}

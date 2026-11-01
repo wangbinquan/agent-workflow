@@ -1,9 +1,9 @@
+import { openSqliteForRead } from '@/platform/persistence/sqlite/openForRead'
 // RFC-349 — crash-safe raw SQLite rollback snapshot. The heavy VACUUM INTO and
 // the equally heavy `PRAGMA quick_check` both run on the existing backup
 // worker; the operation directory receives the file only after integrity
 // verification and atomic replacement.
 
-import { Database } from 'bun:sqlite'
 import {
   chmodSync,
   closeSync,
@@ -73,7 +73,7 @@ export function createSqliteMigrationSafetyBackup(): DatabaseMigrationSafetyBack
       }
       mkdirSync(dirname(destination), { recursive: true })
       const temporary = `${destination}.tmp-${process.pid}-${Date.now()}-${crypto.randomUUID()}`
-      const source = new Database(input.sourcePath, { readonly: true })
+      const source = openSqliteForRead(input.sourcePath)
       try {
         await vacuumIntoOffThread(source, input.sourcePath, temporary)
       } finally {

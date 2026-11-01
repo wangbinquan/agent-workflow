@@ -18,7 +18,8 @@ import { splitNodeRun } from './split'
 import { legacyGeneration } from './generations'
 import { allocationBase, emitRunAllocation } from './allocations'
 import { emitRunEvidence } from './evidence'
-import { oracleRow, text } from './source'
+import { nullableText, oracleRow, text } from './source'
+import { LEGACY_EFFECT_SLOT_PATHS, legacyRunLineageSlotPath } from './legacyLineage'
 
 export const runRule: ConversionRule = {
   ref: { id: 'task-execution/run/epoch1', version: 2 },
@@ -51,7 +52,15 @@ export const runRule: ConversionRule = {
     ].map((table) => ({ table })),
     { table: 'execution_legacy_evidence', partition: 'node-run' },
   ],
-  lookups: [TASK_FACTS, TASK_MOUNTS, RUN_FRAMES, RUN_DEFINITIONS, RUN_SEQUENCES, WRITER_EVIDENCE],
+  lookups: [
+    TASK_FACTS,
+    TASK_MOUNTS,
+    RUN_FRAMES,
+    RUN_DEFINITIONS,
+    RUN_SEQUENCES,
+    WRITER_EVIDENCE,
+    LEGACY_EFFECT_SLOT_PATHS,
+  ],
   unit: {
     kind: 'group',
     driver: TASK_FACTS,
@@ -103,6 +112,7 @@ export const runRule: ConversionRule = {
         missingFacts: ['tasks.workflow_snapshot'],
       }
       const mounts = ctx.lookup(TASK_MOUNTS).require(taskId)
+      const legacyEffectPaths = ctx.lookup(LEGACY_EFFECT_SLOT_PATHS).get(taskId)
       const writers = extractWriterFacts(
         task,
         definition,
@@ -121,6 +131,7 @@ export const runRule: ConversionRule = {
           checkpoints: ReturnType<typeof convertCheckpoints>
           prompt: Awaited<ReturnType<typeof convertPrompt>>
           containerValid: boolean
+          lineageSlotPathJson: string | null
         }
       >()
       for (const row of rows) {
@@ -211,7 +222,27 @@ export const runRule: ConversionRule = {
         decisions.push(...checkpoints.decisions)
         const prompt = await convertPrompt(row, ctx)
         decisions.push(...prompt.decisions)
-        prepared.set(id, { decisions, inputs, checkpoints, prompt, containerValid })
+        const recordedLineage = nullableText(row, 'lineage_slot_path_json')
+        const slotKey = nullableText(row, 'continuation_slot_key')
+        const lineageSlotPathJson = legacyRunLineageSlotPath(
+          recordedLineage,
+          slotKey === null ? undefined : legacyEffectPaths?.[slotKey],
+        )
+        if (lineageSlotPathJson !== recordedLineage)
+          decisions.push({
+            code: 'v2-run-legacy-lineage-materialized',
+            missingFields: [],
+            detail: { continuationSlotKey: slotKey, slotPathJson: lineageSlotPathJson },
+            unprovable: false,
+          })
+        prepared.set(id, {
+          decisions,
+          inputs,
+          checkpoints,
+          prompt,
+          containerValid,
+          lineageSlotPathJson,
+        })
       }
       const selection = await computeLegacySelections({
         task,
@@ -245,6 +276,7 @@ export const runRule: ConversionRule = {
           historyOnly: value.decisions.some((decision) => decision.unprovable),
           containerValid: value.containerValid,
           prompt: value.prompt,
+          lineageSlotPathJson: value.lineageSlotPathJson,
         })
         ctx.out.row('node_runs', split.nodeRun, row)
         if (split.config) ctx.out.row('node_run_configs', split.config, row)

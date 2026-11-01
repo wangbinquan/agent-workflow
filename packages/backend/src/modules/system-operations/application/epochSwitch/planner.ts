@@ -38,7 +38,7 @@ import {
 } from '../../domain/epochSwitch/model'
 import {
   assertEpochSwitchSupported,
-  environmentProfile,
+  resolveEpochProfile,
 } from '../../domain/epochSwitch/supportMatrix'
 import { epochRunIdentity, phaseIndex } from '../../domain/epochSwitch/transitions'
 import {
@@ -77,6 +77,11 @@ export async function discoverEpochOperation(
     materializedRoot?: string
   },
 ): Promise<string> {
+  const targetProfile = resolveEpochProfile(input.target ?? {}, 'target')
+  const scratchProfile = resolveEpochProfile({
+    urlEnv: input.scratchUrlEnv,
+    profileRef: input.scratchProfileRef,
+  })
   const discoveryLock = await deps.journal.lockOperation('dbm_e2_discovery')
   try {
     const installation = await deps.installation()
@@ -104,6 +109,7 @@ export async function discoverEpochOperation(
       })
     const operationId =
       restore?.operationId ??
+      input.requestedOperationId ??
       deps.newOperationId?.() ??
       `dbm_e2_${crypto.randomUUID().replaceAll('-', '')}`
     const now = (deps.now ?? Date.now)()
@@ -122,12 +128,11 @@ export async function discoverEpochOperation(
     const targetProvider = input.target?.provider ?? installation.facts.provider
     const location = persistenceDialect(targetProvider).target(
       identity.generationId,
-      input.target?.urlEnv
-        ? environmentProfile(input.target.urlEnv)
-        : installation.source.kind === 'postgresql-database' &&
-            installation.source.profileRef === 'crewstation:source'
+      targetProfile ??
+        (installation.source.kind === 'postgresql-database' &&
+        installation.source.profileRef === 'crewstation:source'
           ? 'crewstation:target'
-          : '',
+          : ''),
     )
     if (location.kind === 'postgresql-target' && !location.profileRef)
       throw new EpochSwitchError('v3-target-url-env-required', { category: 'unsupported-path' })
@@ -135,9 +140,7 @@ export async function discoverEpochOperation(
     if (restore) {
       const handle = await deps.source.discover({
         scratchOwner: operationId,
-        scratchProfileRef: input.scratchUrlEnv
-          ? environmentProfile(input.scratchUrlEnv)
-          : undefined,
+        scratchProfileRef: scratchProfile,
         location:
           source.kind === 'backup' && deps.defaultContentRoot.objects !== 'none'
             ? {
@@ -183,7 +186,7 @@ export async function discoverEpochOperation(
         emptyTables,
         operatorDecisions: [],
         chunkLimit: input.chunkLimit ?? 500,
-        scratchProfileRef: input.scratchUrlEnv ? environmentProfile(input.scratchUrlEnv) : null,
+        scratchProfileRef: scratchProfile ?? null,
         contentRoot: restore?.contentRoot ?? deps.defaultContentRoot,
         restoreConfig: restore?.restoreConfig ?? false,
       },
@@ -243,6 +246,7 @@ export async function discoverEpochOperation(
         Buffer.from(JSON.stringify(journal)),
       )
     await deps.journal.create(journal)
+    await deps.autoUpgradeCheckpoint?.('discovered')
     return operationId
   } finally {
     await discoveryLock.release()
@@ -434,19 +438,21 @@ export async function planEpochOperation(
   input: EpochSwitchPlanInput = {},
   preserveApproval = false,
 ): Promise<EpochSwitchPlanView> {
+  const targetProfile = resolveEpochProfile(input.target ?? {}, 'target')
+  const scratchProfile = resolveEpochProfile({
+    urlEnv: input.scratchUrlEnv,
+    profileRef: input.scratchProfileRef,
+  })
   let p = session.journal.payload
   if (phaseIndex(p.phase) > phaseIndex('planned'))
     throw new EpochSwitchError('v3-replan-requires-new-run')
-  if (input.target || input.scratchUrlEnv || input.emptyTables || input.chunkLimit) {
+  if (input.target || scratchProfile !== undefined || input.emptyTables || input.chunkLimit) {
     const provider = input.target?.provider ?? p.target.provider
     if (!p.target.generationId) throw new EpochSwitchError('v3-target-generation-missing')
     const location = persistenceDialect(provider).target(
       p.target.generationId,
-      input.target?.urlEnv
-        ? environmentProfile(input.target.urlEnv)
-        : p.target.location?.kind === 'postgresql-target'
-          ? p.target.location.profileRef
-          : '',
+      targetProfile ??
+        (p.target.location?.kind === 'postgresql-target' ? p.target.location.profileRef : ''),
     )
     const emptyTables = input.emptyTables
       ? await session.deps.resolveEmptyTables?.({
@@ -462,9 +468,7 @@ export async function planEpochOperation(
         ...p.inputs,
         emptyTables,
         chunkLimit: input.chunkLimit ?? p.inputs.chunkLimit,
-        scratchProfileRef: input.scratchUrlEnv
-          ? environmentProfile(input.scratchUrlEnv)
-          : p.inputs.scratchProfileRef,
+        scratchProfileRef: scratchProfile ?? p.inputs.scratchProfileRef,
       },
     })
     p = session.journal.payload
@@ -472,6 +476,7 @@ export async function planEpochOperation(
   const sourceInput = sourceRequest(session)
   const source = await sourcePort(session).discover(sourceInput)
   try {
+    await session.deps.autoUpgradeCheckpoint?.('plan')
     const provider = source.preflight.fingerprint.provider
     assertEpochSwitchSupported({
       sourceProvider: provider,

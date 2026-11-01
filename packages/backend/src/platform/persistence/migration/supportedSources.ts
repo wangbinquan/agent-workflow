@@ -11,9 +11,10 @@ import {
 import { postgresqlHistoryConnection } from '../schema/history/connection'
 import type { PostgresqlReservedConnection } from '../postgresqlRuntime'
 import { executePostgresqlReferenceStatements } from '../postgresql/referenceStatements'
-import type { LogicalSchemaContract } from '../schema/contractTypes'
+import type { LogicalSchemaContract, LogicalTableContract } from '../schema/contractTypes'
 import {
   postgresqlUpgradeReceipt,
+  type LogicalCodecReplacement,
   type PostgresqlMigrationVersion,
 } from './legacy/postgresqlMigrationSequence'
 import {
@@ -23,6 +24,7 @@ import {
 } from './epoch1/bundle'
 import { applyFrozenSqliteMigrations, createFrozenSqliteJournal } from './epoch1/sqliteChain'
 import { LEGACY_MIGRATION_HASHES } from './epoch1/journalAliases'
+import { releasedPostgresqlSources } from './epoch1/releasedPostgresql'
 import {
   diffSourceCatalog,
   sameSourceJournal,
@@ -51,7 +53,7 @@ export interface SupportedSourceContract {
   readonly postgresqlMajor?: number
   readonly expectedAbsent: readonly string[]
   readonly archivedTables: readonly string[]
-  readonly readMode: 'frozen-codec' | 'upgrade-only'
+  readonly readMode: 'frozen-codec' | 'upgrade-only' | 'logical-bridge'
 }
 export interface SupportedSourceManifest {
   readonly version: 1
@@ -59,6 +61,32 @@ export interface SupportedSourceManifest {
   readonly headDigest: string
   readonly sources: readonly SupportedSourceContract[]
   readonly sqliteJournalAliases: Readonly<Record<string, readonly string[]>>
+  /** Every V9 logical codec correction in the frozen history (see withLogicalCodecCorrections). */
+  readonly codecCorrections: readonly LogicalCodecReplacement[]
+}
+
+/**
+ * Codec corrections relabel a column whose storage type is identical before and after (V9,
+ * e.g. PostgreSQL 0038 / SQLite 0262: `user_permission_grants.permission` holds plain keys such
+ * as `users:presence`, never JSON). They state what every earlier release actually stored, so a
+ * reader of an older contract decodes with the corrected codec. The contract and its digest stay
+ * untouched: identification and history equality still compare the original contract.
+ */
+export function withLogicalCodecCorrections(
+  table: LogicalTableContract,
+  corrections: readonly LogicalCodecReplacement[],
+): LogicalTableContract {
+  const relevant = corrections.filter((correction) => correction.tableId === table.id)
+  if (!relevant.length) return table
+  return {
+    ...table,
+    columns: table.columns.map((column) => {
+      const correction = relevant.find(
+        (item) => item.column === column.name && item.before === column.logicalCodec,
+      )
+      return correction ? { ...column, logicalCodec: correction.after } : column
+    }),
+  }
 }
 export interface Epoch1PostgresqlCatalog {
   readonly catalog: HistoryCatalog
@@ -215,6 +243,40 @@ export async function loadSupportedSourceManifest(
   const history = await loadFrozenEpoch1History()
   const sources = [...compileSqlitePrefixes(history)]
   if (input.postgresqlCatalog) {
+    for (const release of releasedPostgresqlSources) {
+      const { catalog, postgresqlMajor } = await input.postgresqlCatalog(release)
+      sources.push({
+        id: `postgresql:released:${release.tag}`,
+        provider: 'postgresql',
+        contract: release.contract,
+        catalog,
+        postgresqlMajor,
+        journal: [
+          {
+            identity: release.plan.baselineId,
+            digest: release.contract.digest,
+            planDigest: release.plan.digest,
+          },
+        ],
+        sqliteThrough: release.sqliteMigrations.length,
+        postgresqlVersion: null,
+        readMode: 'logical-bridge',
+        expectedAbsent: history.postgresql.head.contract.tables
+          .filter(
+            (table) =>
+              !release.contract.tables.some(
+                (old) => old.id === table.id && old.providerTables.postgresql,
+              ),
+          )
+          .map((table) => table.id),
+        archivedTables: release.contract.tables
+          .filter(
+            (table) =>
+              !history.postgresql.head.contract.tables.some((head) => head.id === table.id),
+          )
+          .map((table) => table.id),
+      })
+    }
     for (const [versionIndex, version] of history.postgresql.versions.entries()) {
       const { catalog, postgresqlMajor } = await input.postgresqlCatalog(version)
       for (let baselineIndex = 0; baselineIndex <= versionIndex; baselineIndex += 1) {
@@ -273,6 +335,7 @@ export async function loadSupportedSourceManifest(
         LEGACY_MIGRATION_HASHES[history.sqliteTags[index]!] ?? [],
       ]),
     ),
+    codecCorrections: history.postgresql.steps.flatMap((step) => step.logicalCodecs ?? []),
   }
 }
 export function identifySource(input: {

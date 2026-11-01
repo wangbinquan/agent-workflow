@@ -1,0 +1,85 @@
+{
+  "formatVersion": 1,
+  "epoch": 1,
+  "after": "0187_rfc310_playbook_sagas",
+  "provenance": {
+    "kind": "curated",
+    "sources": [
+      "packages/backend/db/migrations/0187_rfc310_playbook_sagas.sql"
+    ],
+    "note": "Small deterministic historical records; terminal execution and delivery states; original SQL performs its own backfills."
+  },
+  "rows": [
+    {
+      "table": "development_approval_sagas",
+      "values": {
+        "id": "01K39800004383851B20D787E4",
+        "mission_id": "01K3980000FDFAB0F168DF2879",
+        "step_run_id": "01K3980000B690A91758A95927",
+        "adapter_id": "01K3980000A2AE5F4489C94786",
+        "adapter_revision": 1,
+        "draft_ref": "upgrade-approval",
+        "submit_intent_digest": "aa2741053c59de0f8a3d9e8ea7200495492cc6dd8e0bbe2d4b240284c60d99d8",
+        "idempotency_key": "upgrade-approval",
+        "latest_status": "approved",
+        "deadline_at": 1778459560000,
+        "attempt_ordinal": 0,
+        "created_at": 1778459500000,
+        "updated_at": 1778459500000,
+        "settled_at": 1778459560000
+      }
+    },
+    {
+      "table": "development_mission_links",
+      "values": {
+        "id": "01K3980000AAC5FE729F932014",
+        "parent_mission_id": "01K3980000FDFAB0F168DF2879",
+        "parent_step_run_id": "01K3980000B690A91758A95927",
+        "target_repository_id": "01K39800006904DCBDB1794059",
+        "target_employee_id": "01K3980000706552DF2BDBA876",
+        "target_employee_revision": 1,
+        "input_digest": "aa2741053c59de0f8a3d9e8ea7200495492cc6dd8e0bbe2d4b240284c60d99d8",
+        "idempotency_key": "upgrade-child",
+        "completion": "terminal",
+        "state": "completed",
+        "latest_status": "done",
+        "completion_satisfied": 1,
+        "observed_at": 1778459560000,
+        "created_at": 1778459500000,
+        "updated_at": 1778459500000
+      }
+    },
+    {
+      "table": "development_step_joins",
+      "values": {
+        "mission_id": "01K3980000FDFAB0F168DF2879",
+        "group_id": "review",
+        "member_step_id": "review",
+        "mode": "all",
+        "deadline_at": 1778459560000,
+        "member_state": "completed",
+        "settled_result": "succeeded",
+        "updated_at": 1778459500000
+      }
+    },
+    {
+      "table": "development_step_runs",
+      "values": {
+        "id": "01K3980000B690A91758A95927",
+        "mission_id": "01K3980000FDFAB0F168DF2879",
+        "employee_id": "01K3980000706552DF2BDBA876",
+        "employee_revision": 1,
+        "step_id": "review",
+        "attempt": 0,
+        "input_digest": "aa2741053c59de0f8a3d9e8ea7200495492cc6dd8e0bbe2d4b240284c60d99d8",
+        "producer_kind": "action",
+        "state": "completed",
+        "decision_id": "01K39800007242EC770EDE82D5",
+        "action_run_id": "01K39800005E0204042CE0938E",
+        "created_at": 1778459500000,
+        "updated_at": 1778459500000,
+        "settled_at": 1778459560000
+      }
+    }
+  ]
+}

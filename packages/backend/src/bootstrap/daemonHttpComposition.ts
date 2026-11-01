@@ -19,6 +19,7 @@ import { type SelectedDaemonProviderCore } from '@/bootstrap/daemonModules/provi
 import { type DaemonRepositoryCredentials } from '@/bootstrap/daemonModules/repositoryCredentials'
 import { type DaemonResourceCatalogModules } from '@/bootstrap/daemonModules/resourceCatalog'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
+import { createDatabaseHealthIdentity } from '@/platform/persistence/databaseHealthIdentity'
 import { composeClarifyFollowupGenerator } from '@/modules/task-execution/composition/clarifyFollowupGenerator'
 import type {
   PortArtifactOperations,
@@ -381,6 +382,7 @@ export function composeProviderAppComposition<P extends DatabaseProvider>(
         deps: Object.freeze({
           opencodeVersion: input.opencodeVersion,
           dbVersion: input.dbVersion,
+          databaseIdentity: createDatabaseHealthIdentity(input.db, core.provider),
         }),
         identityAccess: identityAccess.diagnostics,
         database: core.healthDatabase,

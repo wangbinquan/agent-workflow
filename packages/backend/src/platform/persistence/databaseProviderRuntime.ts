@@ -1,3 +1,5 @@
+import { openSqliteForRead } from '@/platform/persistence/sqlite/openForRead'
+import { parsePostgresqlProfileRef } from './postgresqlProfileRef'
 import { postgresqlHistorySession } from '@/platform/persistence/postgresql/historySession'
 import { sqliteHistorySession } from '@/platform/persistence/sqlite/historySession'
 import { statSync } from 'node:fs'
@@ -99,12 +101,14 @@ export function pointerConfiguration(
       SqliteDatabaseConfigSchema.safeParse(config).data ??
       SqliteDatabaseConfigSchema.parse({ provider: 'sqlite' })
     )
-  if (!/^env:[A-Za-z_][A-Za-z0-9_]*$/.test(location.profileRef))
-    throw new Error('epoch2-postgresql-profile-must-reference-env')
+  const profile = parsePostgresqlProfileRef(location.profileRef)
+  if (profile?.kind !== 'env') throw new Error('epoch2-postgresql-profile-must-reference-env')
   return PostgresqlDatabaseConfigSchema.parse({
     ...(PostgresqlDatabaseConfigSchema.safeParse(config).data ?? {}),
     provider: 'postgresql',
-    urlEnv: location.profileRef.slice(4),
+    urlEnv: profile.urlEnv,
+    // The pointer is authoritative; clear a stale base override for a plain env ref.
+    databaseName: profile.databaseName,
   })
 }
 function pointerSqlitePath(
@@ -608,7 +612,7 @@ export async function prepareEpoch2DatabaseProviderRuntime(
           console.info(`[dev] startup database quick_check completed in ${Date.now() - started}ms`)
         integrityChecked = true
       }
-      const reader = new Database(path, { readonly: true })
+      const reader = openSqliteForRead(path)
       let installed: number
       try {
         installed =
@@ -978,4 +982,24 @@ export function retainedSqlitePath(pointerPath: string, fallback: string): strin
   if (!operation) return fallback
   const previous = join(dirname(pointerPath), `.${operation}-previous-pointer.json`)
   return existsSync(previous) ? currentSqlitePath(previous, fallback) : fallback
+}
+
+/** RFC-398 design §2.7 / §6: report the selected server database through its native runtime. */
+export async function databaseProviderName(
+  selected: ResolvedDatabaseProviderRuntime,
+): Promise<string | null> {
+  switch (selected.provider) {
+    case 'sqlite':
+      return null
+    case 'postgresql':
+      return String(
+        (
+          await selected.runtime
+            .providerPool('migration')
+            .unsafe('SELECT current_database() AS name')
+        )[0]?.name,
+      )
+    default:
+      return unhandledDatabaseProvider(selected)
+  }
 }

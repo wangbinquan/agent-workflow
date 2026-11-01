@@ -1,0 +1,73 @@
+{
+  "formatVersion": 1,
+  "epoch": 1,
+  "after": "0246_rfc372_mindmap_workspace",
+  "provenance": {
+    "kind": "curated",
+    "sources": [
+      "packages/backend/db/migrations/0246_rfc372_mindmap_workspace.sql"
+    ],
+    "note": "Small deterministic historical records; terminal execution and delivery states; original SQL performs its own backfills."
+  },
+  "rows": [
+    {
+      "table": "clarify_mindmap_command_receipts",
+      "values": {
+        "session_id": "01K398000047D5E4BBE4B66A85",
+        "request_id": "upgrade-request-id",
+        "request_digest": "aa2741053c59de0f8a3d9e8ea7200495492cc6dd8e0bbe2d4b240284c60d99d8",
+        "command_json": "{}",
+        "result_json": "{}",
+        "metadata_json": "{}",
+        "session_revision": 1,
+        "actor_id": "upgrade-actor-id",
+        "created_at": 1778459500000
+      }
+    },
+    {
+      "table": "clarify_mindmap_node_revisions",
+      "values": {
+        "node_id": "01K39800001C154542445E5E3E",
+        "session_revision": 1,
+        "body_json": "{}",
+        "created_at": 1778459500000
+      }
+    },
+    {
+      "table": "clarify_mindmap_nodes",
+      "values": {
+        "id": "01K39800001C154542445E5E3E",
+        "session_id": "01K398000047D5E4BBE4B66A85",
+        "sort_order": 1,
+        "body_json": "{}"
+      }
+    },
+    {
+      "table": "clarify_mindmap_sessions",
+      "values": {
+        "id": "01K398000047D5E4BBE4B66A85",
+        "task_id": "01K398000037CCE521AC9029CB",
+        "round_id": "01K398000058E2DC4E90A80B69",
+        "entry_ref": "upgrade-entry-ref",
+        "revision": 1,
+        "metadata_json": "{}",
+        "source_json": "{}",
+        "created_at": 1778459500000,
+        "updated_at": 1778459500000
+      }
+    },
+    {
+      "table": "clarify_mindmap_snapshots",
+      "values": {
+        "id": "01K398000022645ACD17AB1B8C",
+        "session_id": "01K398000047D5E4BBE4B66A85",
+        "revision": 1,
+        "digest": "aa2741053c59de0f8a3d9e8ea7200495492cc6dd8e0bbe2d4b240284c60d99d8",
+        "content_json": "{}",
+        "markdown": "# Upgrade report\n\nThe release ledger keeps this review document.\n",
+        "plan_json": "{}",
+        "created_at": 1778459500000
+      }
+    }
+  ]
+}

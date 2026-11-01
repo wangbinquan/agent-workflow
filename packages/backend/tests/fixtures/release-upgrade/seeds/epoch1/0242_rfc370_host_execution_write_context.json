@@ -1,0 +1,26 @@
+{
+  "formatVersion": 1,
+  "epoch": 1,
+  "after": "0242_rfc370_host_execution_write_context",
+  "provenance": {
+    "kind": "curated",
+    "sources": [
+      "packages/backend/db/migrations/0242_rfc370_host_execution_write_context.sql"
+    ],
+    "note": "Small deterministic historical records; terminal execution and delivery states; original SQL performs its own backfills."
+  },
+  "rows": [
+    {
+      "table": "system_host_execution_write_contexts",
+      "values": {
+        "id": "installation",
+        "holder": "upgrade-stopped-daemon",
+        "generation": "upgrade-generation",
+        "revision": 1,
+        "phase": "closed",
+        "expires_at": 1778459560000,
+        "updated_at": 1778459500000
+      }
+    }
+  ]
+}

@@ -1,0 +1,348 @@
+{
+  "formatVersion": 1,
+  "note": "User approved these 18 exact-build native epoch-2 migration-metadata exemptions on 2026-10-31. This file is the approval authority; exemptions-draft.md is retained as historical rationale only. No prefix or future-build exemption is granted.",
+  "entries": [
+    {
+      "id": "epoch2-native-activation_receipts",
+      "table": "aw_meta_activation_receipts",
+      "epoch": 2,
+      "category": "migration-metadata",
+      "status": "approved",
+      "reason": "No epoch conversion or activation switch has run in this installed-role epoch-2 fixture. An activation receipt would claim an event that did not occur.",
+      "evidence": [
+        "packages/backend/src/platform/persistence/schema/history/apply.ts:164",
+        "packages/backend/tests/fixtures/release-upgrade/seeds/epoch2/metadata-0000.json",
+        "design/RFC-398-cross-version-upgrade-guarantee/design.md:362"
+      ],
+      "buildKeys": [
+        "sha256:2b14ddbad88413869775142c9a0d8eefd48c4d0c19639086e2badaf5dae8ac28"
+      ],
+      "build": "sha256:2b14ddbad88413869775142c9a0d8eefd48c4d0c19639086e2badaf5dae8ac28",
+      "approvedBy": "user",
+      "approvedAt": "2026-10-31"
+    },
+    {
+      "id": "epoch2-native-migration_approvals",
+      "table": "aw_meta_migration_approvals",
+      "epoch": 2,
+      "category": "migration-metadata",
+      "status": "approved",
+      "reason": "No operator approved an epoch conversion plan in this installation.",
+      "evidence": [
+        "packages/backend/src/platform/persistence/schema/history/apply.ts:164",
+        "packages/backend/tests/fixtures/release-upgrade/seeds/epoch2/metadata-0000.json",
+        "design/RFC-398-cross-version-upgrade-guarantee/design.md:362"
+      ],
+      "buildKeys": [
+        "sha256:2b14ddbad88413869775142c9a0d8eefd48c4d0c19639086e2badaf5dae8ac28"
+      ],
+      "build": "sha256:2b14ddbad88413869775142c9a0d8eefd48c4d0c19639086e2badaf5dae8ac28",
+      "approvedBy": "user",
+      "approvedAt": "2026-10-31"
+    },
+    {
+      "id": "epoch2-native-migration_archives",
+      "table": "aw_meta_migration_archives",
+      "epoch": 2,
+      "category": "migration-metadata",
+      "status": "approved",
+      "reason": "No conversion run archived source chunks; explicitly imported business history is in code_history_archives, not migration evidence.",
+      "evidence": [
+        "packages/backend/src/platform/persistence/schema/history/apply.ts:164",
+        "packages/backend/tests/fixtures/release-upgrade/seeds/epoch2/metadata-0000.json",
+        "design/RFC-398-cross-version-upgrade-guarantee/design.md:362"
+      ],
+      "buildKeys": [
+        "sha256:2b14ddbad88413869775142c9a0d8eefd48c4d0c19639086e2badaf5dae8ac28"
+      ],
+      "build": "sha256:2b14ddbad88413869775142c9a0d8eefd48c4d0c19639086e2badaf5dae8ac28",
+      "approvedBy": "user",
+      "approvedAt": "2026-10-31"
+    },
+    {
+      "id": "epoch2-native-migration_artifact_receipts",
+      "table": "aw_meta_migration_artifact_receipts",
+      "epoch": 2,
+      "category": "migration-metadata",
+      "status": "approved",
+      "reason": "No converter published or verified source artifacts in this installation.",
+      "evidence": [
+        "packages/backend/src/platform/persistence/schema/history/apply.ts:164",
+        "packages/backend/tests/fixtures/release-upgrade/seeds/epoch2/metadata-0000.json",
+        "design/RFC-398-cross-version-upgrade-guarantee/design.md:362"
+      ],
+      "buildKeys": [
+        "sha256:2b14ddbad88413869775142c9a0d8eefd48c4d0c19639086e2badaf5dae8ac28"
+      ],
+      "build": "sha256:2b14ddbad88413869775142c9a0d8eefd48c4d0c19639086e2badaf5dae8ac28",
+      "approvedBy": "user",
+      "approvedAt": "2026-10-31"
+    },
+    {
+      "id": "epoch2-native-migration_blocks",
+      "table": "aw_meta_migration_blocks",
+      "epoch": 2,
+      "category": "migration-metadata",
+      "status": "approved",
+      "reason": "No conversion run exists and no migration blocker was observed.",
+      "evidence": [
+        "packages/backend/src/platform/persistence/schema/history/apply.ts:164",
+        "packages/backend/tests/fixtures/release-upgrade/seeds/epoch2/metadata-0000.json",
+        "design/RFC-398-cross-version-upgrade-guarantee/design.md:362"
+      ],
+      "buildKeys": [
+        "sha256:2b14ddbad88413869775142c9a0d8eefd48c4d0c19639086e2badaf5dae8ac28"
+      ],
+      "build": "sha256:2b14ddbad88413869775142c9a0d8eefd48c4d0c19639086e2badaf5dae8ac28",
+      "approvedBy": "user",
+      "approvedAt": "2026-10-31"
+    },
+    {
+      "id": "epoch2-native-migration_history_restrictions",
+      "table": "aw_meta_migration_history_restrictions",
+      "epoch": 2,
+      "category": "migration-metadata",
+      "status": "approved",
+      "reason": "Native executable history has no migration-imposed retry restrictions.",
+      "evidence": [
+        "packages/backend/src/platform/persistence/schema/history/apply.ts:164",
+        "packages/backend/tests/fixtures/release-upgrade/seeds/epoch2/metadata-0000.json",
+        "design/RFC-398-cross-version-upgrade-guarantee/design.md:362"
+      ],
+      "buildKeys": [
+        "sha256:2b14ddbad88413869775142c9a0d8eefd48c4d0c19639086e2badaf5dae8ac28"
+      ],
+      "build": "sha256:2b14ddbad88413869775142c9a0d8eefd48c4d0c19639086e2badaf5dae8ac28",
+      "approvedBy": "user",
+      "approvedAt": "2026-10-31"
+    },
+    {
+      "id": "epoch2-native-migration_identity_high_water",
+      "table": "aw_meta_migration_identity_high_water",
+      "epoch": 2,
+      "category": "migration-metadata",
+      "status": "approved",
+      "reason": "Native SQLite AUTOINCREMENT state supplies the allocator high water; no imported conversion high-water receipt exists.",
+      "evidence": [
+        "packages/backend/src/platform/persistence/schema/history/apply.ts:164",
+        "packages/backend/tests/fixtures/release-upgrade/seeds/epoch2/metadata-0000.json",
+        "design/RFC-398-cross-version-upgrade-guarantee/design.md:362"
+      ],
+      "buildKeys": [
+        "sha256:2b14ddbad88413869775142c9a0d8eefd48c4d0c19639086e2badaf5dae8ac28"
+      ],
+      "build": "sha256:2b14ddbad88413869775142c9a0d8eefd48c4d0c19639086e2badaf5dae8ac28",
+      "approvedBy": "user",
+      "approvedAt": "2026-10-31"
+    },
+    {
+      "id": "epoch2-native-migration_operations",
+      "table": "aw_meta_migration_operations",
+      "epoch": 2,
+      "category": "migration-metadata",
+      "status": "approved",
+      "reason": "No epoch-conversion operation was requested; E2 must assert that upgrade creates none.",
+      "evidence": [
+        "packages/backend/src/platform/persistence/schema/history/apply.ts:164",
+        "packages/backend/tests/fixtures/release-upgrade/seeds/epoch2/metadata-0000.json",
+        "design/RFC-398-cross-version-upgrade-guarantee/design.md:362"
+      ],
+      "buildKeys": [
+        "sha256:2b14ddbad88413869775142c9a0d8eefd48c4d0c19639086e2badaf5dae8ac28"
+      ],
+      "build": "sha256:2b14ddbad88413869775142c9a0d8eefd48c4d0c19639086e2badaf5dae8ac28",
+      "approvedBy": "user",
+      "approvedAt": "2026-10-31"
+    },
+    {
+      "id": "epoch2-native-migration_operator_inputs",
+      "table": "aw_meta_migration_operator_inputs",
+      "epoch": 2,
+      "category": "migration-metadata",
+      "status": "approved",
+      "reason": "No operator conversion decision or acknowledgement was submitted.",
+      "evidence": [
+        "packages/backend/src/platform/persistence/schema/history/apply.ts:164",
+        "packages/backend/tests/fixtures/release-upgrade/seeds/epoch2/metadata-0000.json",
+        "design/RFC-398-cross-version-upgrade-guarantee/design.md:362"
+      ],
+      "buildKeys": [
+        "sha256:2b14ddbad88413869775142c9a0d8eefd48c4d0c19639086e2badaf5dae8ac28"
+      ],
+      "build": "sha256:2b14ddbad88413869775142c9a0d8eefd48c4d0c19639086e2badaf5dae8ac28",
+      "approvedBy": "user",
+      "approvedAt": "2026-10-31"
+    },
+    {
+      "id": "epoch2-native-migration_receipt_exports",
+      "table": "aw_meta_migration_receipt_exports",
+      "epoch": 2,
+      "category": "migration-metadata",
+      "status": "approved",
+      "reason": "No conversion receipt export was requested.",
+      "evidence": [
+        "packages/backend/src/platform/persistence/schema/history/apply.ts:164",
+        "packages/backend/tests/fixtures/release-upgrade/seeds/epoch2/metadata-0000.json",
+        "design/RFC-398-cross-version-upgrade-guarantee/design.md:362"
+      ],
+      "buildKeys": [
+        "sha256:2b14ddbad88413869775142c9a0d8eefd48c4d0c19639086e2badaf5dae8ac28"
+      ],
+      "build": "sha256:2b14ddbad88413869775142c9a0d8eefd48c4d0c19639086e2badaf5dae8ac28",
+      "approvedBy": "user",
+      "approvedAt": "2026-10-31"
+    },
+    {
+      "id": "epoch2-native-migration_records",
+      "table": "aw_meta_migration_records",
+      "epoch": 2,
+      "category": "migration-metadata",
+      "status": "approved",
+      "reason": "No converter diagnostics, source-journal records, or row decisions exist for this native installation.",
+      "evidence": [
+        "packages/backend/src/platform/persistence/schema/history/apply.ts:164",
+        "packages/backend/tests/fixtures/release-upgrade/seeds/epoch2/metadata-0000.json",
+        "design/RFC-398-cross-version-upgrade-guarantee/design.md:362"
+      ],
+      "buildKeys": [
+        "sha256:2b14ddbad88413869775142c9a0d8eefd48c4d0c19639086e2badaf5dae8ac28"
+      ],
+      "build": "sha256:2b14ddbad88413869775142c9a0d8eefd48c4d0c19639086e2badaf5dae8ac28",
+      "approvedBy": "user",
+      "approvedAt": "2026-10-31"
+    },
+    {
+      "id": "epoch2-native-migration_row_dispositions",
+      "table": "aw_meta_migration_row_dispositions",
+      "epoch": 2,
+      "category": "migration-metadata",
+      "status": "approved",
+      "reason": "No source rows underwent epoch conversion; fabricating dispositions would make S2 evidence false.",
+      "evidence": [
+        "packages/backend/src/platform/persistence/schema/history/apply.ts:164",
+        "packages/backend/tests/fixtures/release-upgrade/seeds/epoch2/metadata-0000.json",
+        "design/RFC-398-cross-version-upgrade-guarantee/design.md:362"
+      ],
+      "buildKeys": [
+        "sha256:2b14ddbad88413869775142c9a0d8eefd48c4d0c19639086e2badaf5dae8ac28"
+      ],
+      "build": "sha256:2b14ddbad88413869775142c9a0d8eefd48c4d0c19639086e2badaf5dae8ac28",
+      "approvedBy": "user",
+      "approvedAt": "2026-10-31"
+    },
+    {
+      "id": "epoch2-native-migration_runs",
+      "table": "aw_meta_migration_runs",
+      "epoch": 2,
+      "category": "migration-metadata",
+      "status": "approved",
+      "reason": "No epoch conversion or old-epoch restore run has executed.",
+      "evidence": [
+        "packages/backend/src/platform/persistence/schema/history/apply.ts:164",
+        "packages/backend/tests/fixtures/release-upgrade/seeds/epoch2/metadata-0000.json",
+        "design/RFC-398-cross-version-upgrade-guarantee/design.md:362"
+      ],
+      "buildKeys": [
+        "sha256:2b14ddbad88413869775142c9a0d8eefd48c4d0c19639086e2badaf5dae8ac28"
+      ],
+      "build": "sha256:2b14ddbad88413869775142c9a0d8eefd48c4d0c19639086e2badaf5dae8ac28",
+      "approvedBy": "user",
+      "approvedAt": "2026-10-31"
+    },
+    {
+      "id": "epoch2-native-migration_table_receipts",
+      "table": "aw_meta_migration_table_receipts",
+      "epoch": 2,
+      "category": "migration-metadata",
+      "status": "approved",
+      "reason": "No conversion table unit was sealed or verified.",
+      "evidence": [
+        "packages/backend/src/platform/persistence/schema/history/apply.ts:164",
+        "packages/backend/tests/fixtures/release-upgrade/seeds/epoch2/metadata-0000.json",
+        "design/RFC-398-cross-version-upgrade-guarantee/design.md:362"
+      ],
+      "buildKeys": [
+        "sha256:2b14ddbad88413869775142c9a0d8eefd48c4d0c19639086e2badaf5dae8ac28"
+      ],
+      "build": "sha256:2b14ddbad88413869775142c9a0d8eefd48c4d0c19639086e2badaf5dae8ac28",
+      "approvedBy": "user",
+      "approvedAt": "2026-10-31"
+    },
+    {
+      "id": "epoch2-native-migration_unit_sources",
+      "table": "aw_meta_migration_unit_sources",
+      "epoch": 2,
+      "category": "migration-metadata",
+      "status": "approved",
+      "reason": "No conversion unit consumed source rows.",
+      "evidence": [
+        "packages/backend/src/platform/persistence/schema/history/apply.ts:164",
+        "packages/backend/tests/fixtures/release-upgrade/seeds/epoch2/metadata-0000.json",
+        "design/RFC-398-cross-version-upgrade-guarantee/design.md:362"
+      ],
+      "buildKeys": [
+        "sha256:2b14ddbad88413869775142c9a0d8eefd48c4d0c19639086e2badaf5dae8ac28"
+      ],
+      "build": "sha256:2b14ddbad88413869775142c9a0d8eefd48c4d0c19639086e2badaf5dae8ac28",
+      "approvedBy": "user",
+      "approvedAt": "2026-10-31"
+    },
+    {
+      "id": "epoch2-native-migration_units",
+      "table": "aw_meta_migration_units",
+      "epoch": 2,
+      "category": "migration-metadata",
+      "status": "approved",
+      "reason": "No conversion plan units were executed.",
+      "evidence": [
+        "packages/backend/src/platform/persistence/schema/history/apply.ts:164",
+        "packages/backend/tests/fixtures/release-upgrade/seeds/epoch2/metadata-0000.json",
+        "design/RFC-398-cross-version-upgrade-guarantee/design.md:362"
+      ],
+      "buildKeys": [
+        "sha256:2b14ddbad88413869775142c9a0d8eefd48c4d0c19639086e2badaf5dae8ac28"
+      ],
+      "build": "sha256:2b14ddbad88413869775142c9a0d8eefd48c4d0c19639086e2badaf5dae8ac28",
+      "approvedBy": "user",
+      "approvedAt": "2026-10-31"
+    },
+    {
+      "id": "epoch2-native-schema_transform_receipts",
+      "table": "aw_meta_schema_transform_receipts",
+      "epoch": 2,
+      "category": "migration-metadata",
+      "status": "approved",
+      "reason": "v0.19.3 installs history 0000 directly; no data-transform edge has been applied. E1 explicitly excludes prior/installation edges.",
+      "evidence": [
+        "packages/backend/src/platform/persistence/schema/history/apply.ts:164",
+        "packages/backend/tests/fixtures/release-upgrade/seeds/epoch2/metadata-0000.json",
+        "design/RFC-398-cross-version-upgrade-guarantee/design.md:362"
+      ],
+      "buildKeys": [
+        "sha256:2b14ddbad88413869775142c9a0d8eefd48c4d0c19639086e2badaf5dae8ac28"
+      ],
+      "build": "sha256:2b14ddbad88413869775142c9a0d8eefd48c4d0c19639086e2badaf5dae8ac28",
+      "approvedBy": "user",
+      "approvedAt": "2026-10-31"
+    },
+    {
+      "id": "epoch2-native-switch_receipts",
+      "table": "aw_meta_switch_receipts",
+      "epoch": 2,
+      "category": "migration-metadata",
+      "status": "approved",
+      "reason": "No generation switch or rollback transition has executed.",
+      "evidence": [
+        "packages/backend/src/platform/persistence/schema/history/apply.ts:164",
+        "packages/backend/tests/fixtures/release-upgrade/seeds/epoch2/metadata-0000.json",
+        "design/RFC-398-cross-version-upgrade-guarantee/design.md:362"
+      ],
+      "buildKeys": [
+        "sha256:2b14ddbad88413869775142c9a0d8eefd48c4d0c19639086e2badaf5dae8ac28"
+      ],
+      "build": "sha256:2b14ddbad88413869775142c9a0d8eefd48c4d0c19639086e2badaf5dae8ac28",
+      "approvedBy": "user",
+      "approvedAt": "2026-10-31"
+    }
+  ]
+}

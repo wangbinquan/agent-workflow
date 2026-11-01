@@ -1,3 +1,5 @@
+import { databaseProviderName } from '@/platform/persistence/databaseProviderRuntime'
+import { openSqliteForRead } from '@/platform/persistence/sqlite/openForRead'
 import { currentSqlitePath } from '@/platform/persistence/databaseProviderRuntime'
 import type { DoctorTaskLifecyclePort } from '../../composition/required-ports'
 import {
@@ -18,7 +20,7 @@ import type {
 
 import { databaseProviderTraits } from '@/platform/persistence/providerTraits'
 import type { DatabaseProvider } from '@/platform/persistence/schemaContract'
-import { Database } from 'bun:sqlite'
+import type { Database } from 'bun:sqlite'
 import { existsSync, readdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { createSecretBox } from '@/auth/secretBox'
@@ -38,6 +40,8 @@ import type { LogicalSchemaContract } from '@/platform/persistence/schemaContrac
 import { getRuntimeDriver } from '@/services/runtime'
 import { Paths } from '@/util/paths'
 import { platformSpawnOptionsForHost } from '@/util/platformExec'
+import { doctorEpochUpgrade } from './doctorEpochUpgrade'
+import { readAutoUpgradeSessions } from './autoUpgradeState'
 
 function safeDoctorCount(value: unknown): number {
   const count = Number(value)
@@ -176,6 +180,18 @@ export async function checkConfiguredDatabase(
     ]
   }
   // Diagnostics follow the published installation, never an obsolete provider config.
+  try {
+    const upgrade = await doctorEpochUpgrade(Paths.root, config)
+    if (upgrade) return [upgrade]
+  } catch (error) {
+    return [
+      {
+        name: 'database provider',
+        ok: false,
+        message: error instanceof Error ? error.message : String(error),
+      },
+    ]
+  }
   const absentLocalStore = databaseProviderTraits(config.database.provider).absentLocalStoreMessage
   if (
     !existsSync(Paths.databaseGenerationPointer) &&
@@ -214,6 +230,7 @@ export async function checkConfiguredDatabase(
 
   try {
     const report = await resolved.operations.doctor()
+    const actualDatabase = await databaseProviderName(resolved)
     const details = report.checks
       .map((check) => `${check.code}=${check.ok ? 'ok' : check.message}`)
       .join(', ')
@@ -221,12 +238,20 @@ export async function checkConfiguredDatabase(
       name: 'database provider',
       ok: report.ok,
       message:
-        `${report.provider} generation ${report.generationId}: ${details}` +
+        `${report.provider}${actualDatabase ? ` database ${actualDatabase}` : ''} generation ${report.generationId}: ${details}` +
         // RFC-359 AC-10：提示语由各引擎自己声明一句（没有可给的就是 null），
         // 不再由调用方先问存储形态再自己拼。
         (report.ok ? '' : (databaseProviderTraits(report.provider).failureRecoveryHint ?? '')),
     }
-    return [providerCheck, ...(await ENGINE_HEALTH_CHECKS[resolved.provider](resolved, tasks))]
+    const auto = readAutoUpgradeSessions(Paths.root).at(-1)
+    const receipt = auto?.outcome === 'completed' ? auto.records.at(-1)?.data.receipt : undefined
+    return [
+      providerCheck,
+      ...(receipt
+        ? [{ name: 'automatic upgrade', ok: true, message: JSON.stringify(receipt) }]
+        : []),
+      ...(await ENGINE_HEALTH_CHECKS[resolved.provider](resolved, tasks)),
+    ]
   } finally {
     await resolved.close()
   }
@@ -237,7 +262,7 @@ export async function checkConfiguredDatabase(
  * the OLD machine's secret.key can no longer be decrypted (the backup correctly
  * excludes secret.key). Surface that LOUDLY (fails doctor) so the operator knows
  * to re-launch those repos and re-enter credentials, rather than hit silent
- * clone failures. Read-only + immutable so a bare-WAL / stopped daemon still works.
+ * clone failures. The WAL-aware reader also supports a stopped daemon without sidecars.
  */
 export function checkSealedCredentials(): CheckResult {
   if (!existsSync(diagnosticSqlitePath())) {
@@ -245,9 +270,7 @@ export function checkSealedCredentials(): CheckResult {
   }
   let db: Database | null = null
   try {
-    // Plain read-only (sidecars persist after checkpoint+close). Not the
-    // `file:…?immutable=1` URI — bun:sqlite rejects it on Linux.
-    db = new Database(diagnosticSqlitePath(), { readonly: true })
+    db = openSqliteForRead(diagnosticSqlitePath())
     const rows = db
       .query(
         "SELECT url_enc AS urlEnc FROM cached_repos WHERE url_enc IS NOT NULL AND url_enc != ''",
@@ -294,8 +317,8 @@ export function checkSealedCredentials(): CheckResult {
 
 /**
  * RFC-213 — read-only DB integrity check. Uses quickCheckDbFile, which opens the
- * DB with `{ readonly: true }` and NEVER writes (a corruption report must not
- * mutate the very file it is diagnosing). A corrupt DB FAILS doctor.
+ * DB using the shared WAL-sidecar rule and never issues source writes (a
+ * corruption report must not mutate the diagnosed bytes). A corrupt DB FAILS doctor.
  */
 export function checkDbIntegrity(): CheckResult {
   if (!existsSync(diagnosticSqlitePath())) {
@@ -347,7 +370,7 @@ async function checkLifecycleHealth(tasks: DoctorTaskLifecyclePort): Promise<Che
   }
   let dbh: Database | null = null
   try {
-    dbh = new Database(diagnosticSqlitePath(), { readonly: true })
+    dbh = openSqliteForRead(diagnosticSqlitePath())
     const counts: LifecycleHealthCounts = {
       ...(await tasks.countLifecycleStates({ provider: 'sqlite', db: dbh })),
       openAlerts: (

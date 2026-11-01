@@ -1,0 +1,71 @@
+{
+  "formatVersion": 1,
+  "epoch": 1,
+  "after": "0103_rfc211_onboarding",
+  "provenance": {
+    "kind": "curated",
+    "sources": [
+      "packages/backend/db/migrations/0103_rfc211_onboarding.sql"
+    ],
+    "note": "Small deterministic historical records; terminal execution and delivery states; original SQL performs its own backfills."
+  },
+  "rows": [
+    {
+      "table": "onboarding_artifacts",
+      "values": {
+        "id": "01K398000070805F4070137098",
+        "run_id": "01K3980000966C8BB27691C332",
+        "resource_type": "workflow",
+        "resource_id": "01K398000045B34F16DB605A06",
+        "resource_name": "upgrade-history",
+        "created_at": 1778459500000
+      }
+    },
+    {
+      "table": "onboarding_runs",
+      "values": {
+        "id": "01K3980000966C8BB27691C332",
+        "user_id": "01K39800007DFB4CF67742CB06",
+        "track": "workflow",
+        "status": "completed",
+        "current_step": null,
+        "completed_steps": "[\"create-agent\",\"create-workflow\"]",
+        "suffix": "upgrade",
+        "created_at": 1778459500000,
+        "updated_at": 1778459500000
+      }
+    }
+  ],
+  "migrationEffects": [
+    {
+      "table": "agents",
+      "operation": "alter",
+      "rule": "Apply the released SQL to existing seeded rows, retaining its explicit defaults, rewrites and backfills.",
+      "source": "packages/backend/db/migrations/0103_rfc211_onboarding.sql"
+    },
+    {
+      "table": "skills",
+      "operation": "alter",
+      "rule": "Apply the released SQL to existing seeded rows, retaining its explicit defaults, rewrites and backfills.",
+      "source": "packages/backend/db/migrations/0103_rfc211_onboarding.sql"
+    },
+    {
+      "table": "tasks",
+      "operation": "alter",
+      "rule": "Apply the released SQL to existing seeded rows, retaining its explicit defaults, rewrites and backfills.",
+      "source": "packages/backend/db/migrations/0103_rfc211_onboarding.sql"
+    },
+    {
+      "table": "workflows",
+      "operation": "alter",
+      "rule": "Apply the released SQL to existing seeded rows, retaining its explicit defaults, rewrites and backfills.",
+      "source": "packages/backend/db/migrations/0103_rfc211_onboarding.sql"
+    },
+    {
+      "table": "workgroups",
+      "operation": "alter",
+      "rule": "Apply the released SQL to existing seeded rows, retaining its explicit defaults, rewrites and backfills.",
+      "source": "packages/backend/db/migrations/0103_rfc211_onboarding.sql"
+    }
+  ]
+}

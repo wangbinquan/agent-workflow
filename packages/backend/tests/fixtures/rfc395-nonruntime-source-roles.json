@@ -89,8 +89,8 @@
     {
       "path": "packages/backend/src/platform/persistence/migration/auditSourceEvidence.ts",
       "role": "offline-evidence",
-      "sha256": "da6f466805410082677d5f0deb638a1bf88d2387666c3a2d35a7e5ba87cb757d",
-      "evidence": "captureEpoch1SqliteEvidence copies and inspects an offline source; tests/rfc395-v1-source-evidence.test.ts imports it. It must never join the daemon graph."
+      "sha256": "412c44d14b37cb5d79dcbcd12d3aaffca376f501356dd48481ddca77c1bb1eb0",
+      "evidence": "captureEpoch1SqliteEvidence copies and inspects an offline source; tests/rfc395-v1-source-evidence.test.ts imports it. It must never join the daemon graph. RFC-398 design §5: the added comment documents why this newly created non-WAL VACUUM INTO copy retains its readonly open. Executable code, offline evidence role and callers are unchanged; re-pin the exact bytes after reviewing this comment-only delta."
     },
     {
       "path": "packages/backend/src/platform/persistence/migration/epoch1/tables.ts",

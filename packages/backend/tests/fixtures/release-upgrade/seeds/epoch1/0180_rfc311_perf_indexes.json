@@ -1,0 +1,30 @@
+{
+  "formatVersion": 1,
+  "epoch": 1,
+  "after": "0180_rfc311_perf_indexes",
+  "provenance": {
+    "kind": "curated",
+    "sources": [
+      "packages/backend/db/migrations/0180_rfc311_perf_indexes.sql"
+    ],
+    "note": "Small deterministic historical records; terminal execution and delivery states; original SQL performs its own backfills."
+  },
+  "rows": [
+    {
+      "table": "maintenance_state",
+      "values": {
+        "key": "upgrade-fixture:last-history-check",
+        "value": "1778459560000",
+        "updated_at": 1778459560000
+      }
+    }
+  ],
+  "migrationEffects": [
+    {
+      "table": "tasks",
+      "operation": "alter",
+      "rule": "Apply the released SQL to existing seeded rows, retaining its explicit defaults, rewrites and backfills.",
+      "source": "packages/backend/db/migrations/0180_rfc311_perf_indexes.sql"
+    }
+  ]
+}

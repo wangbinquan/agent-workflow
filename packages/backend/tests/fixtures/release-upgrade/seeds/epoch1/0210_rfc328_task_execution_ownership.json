@@ -1,0 +1,167 @@
+{
+  "formatVersion": 1,
+  "epoch": 1,
+  "after": "0210_rfc328_task_execution_ownership",
+  "provenance": {
+    "kind": "curated",
+    "sources": [
+      "packages/backend/db/migrations/0210_rfc328_task_execution_ownership.sql"
+    ],
+    "note": "Small deterministic historical records; terminal execution and delivery states; original SQL performs its own backfills."
+  },
+  "rows": [
+    {
+      "table": "task_execution_effect_attempts",
+      "values": {
+        "id": "01K398000097D3FD87E95AAE9B",
+        "effect_id": "01K398000070D947644C02CC60",
+        "attempt_no": 1,
+        "intent_id": "01K3980000452A62D5F0CB0D1E",
+        "epoch": 1,
+        "state": "succeeded",
+        "candidate_id": "upgrade-process",
+        "request_hash": "aa2741053c59de0f8a3d9e8ea7200495492cc6dd8e0bbe2d4b240284c60d99d8",
+        "recovery_class": "process",
+        "classifier_version": "1",
+        "transport_policy_version": "1",
+        "application_evidence": "applied",
+        "retry_authority": "none",
+        "receipt_json": "{\"version\":1,\"exitCode\":0}",
+        "prepared_at": 1778459500000,
+        "acting_at": 1778459500000,
+        "settled_at": 1778459560000,
+        "updated_at": 1778459500000
+      }
+    },
+    {
+      "table": "task_execution_effect_fences",
+      "values": {
+        "effect_attempt_id": "01K398000097D3FD87E95AAE9B",
+        "fence_key": "workspace:01K3980000085154084C742759",
+        "acquired_epoch": 1,
+        "acquired_at": 1778459500000,
+        "released_at": 1778459560000
+      }
+    },
+    {
+      "table": "task_execution_effects",
+      "values": {
+        "id": "01K398000070D947644C02CC60",
+        "task_id": "01K3980000085154084C742759",
+        "origin_intent_id": "01K3980000452A62D5F0CB0D1E",
+        "current_intent_id": "01K3980000452A62D5F0CB0D1E",
+        "operation_key": "upgrade-process",
+        "execution_lineage_id": "01K3980000085154084C742759",
+        "operation_family_key": "upgrade-process",
+        "operation_generation": 0,
+        "kind": "process",
+        "request_hash": "aa2741053c59de0f8a3d9e8ea7200495492cc6dd8e0bbe2d4b240284c60d99d8",
+        "slot_path_json": "[]",
+        "slot_path_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "state": "succeeded",
+        "last_attempt_no": 1,
+        "receipt_json": "{\"version\":1,\"exitCode\":0}",
+        "prepared_at": 1778459500000,
+        "settled_at": 1778459560000,
+        "updated_at": 1778459500000
+      }
+    },
+    {
+      "table": "task_execution_intents",
+      "values": {
+        "id": "01K3980000452A62D5F0CB0D1E",
+        "task_id": "01K3980000085154084C742759",
+        "kind": "launch",
+        "state": "completed",
+        "source": "rest",
+        "request_hash": "aa2741053c59de0f8a3d9e8ea7200495492cc6dd8e0bbe2d4b240284c60d99d8",
+        "payload_json": "{\"version\":1,\"taskId\":\"01K3980000085154084C742759\"}",
+        "execution_lineage_id": "01K3980000085154084C742759",
+        "continuation_slot_key": "task-root",
+        "slot_path_json": "[]",
+        "operation_generation": 0,
+        "expected_task_revision": 0,
+        "claimed_epoch": 1,
+        "created_at": 1778459500000,
+        "claimed_at": 1778459500000,
+        "completed_at": 1778459560000,
+        "updated_at": 1778459500000
+      }
+    },
+    {
+      "table": "task_execution_lineage_operation_records",
+      "values": {
+        "id": "01K39800001A11B7AA668C0C86",
+        "record_kind": "generation-watermark",
+        "execution_lineage_id": "01K3980000085154084C742759",
+        "operation_family_key": "upgrade-process",
+        "highest_settled_generation": 0,
+        "last_outcome": "succeeded",
+        "request_hash": "aa2741053c59de0f8a3d9e8ea7200495492cc6dd8e0bbe2d4b240284c60d99d8",
+        "slot_path_json": "[]",
+        "slot_path_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "root_anchor_task_id": "01K3980000085154084C742759",
+        "record_revision": 1,
+        "compacted": 0,
+        "created_at": 1778459500000,
+        "updated_at": 1778459500000
+      }
+    },
+    {
+      "table": "task_execution_maintenance_claims",
+      "values": {
+        "id": "01K398000062671959A9EAD099",
+        "root_task_id": "01K3980000085154084C742759",
+        "operation": "repair-metadata",
+        "state": "completed",
+        "member_set_digest": "aa2741053c59de0f8a3d9e8ea7200495492cc6dd8e0bbe2d4b240284c60d99d8",
+        "expected_tree_digest": "aa2741053c59de0f8a3d9e8ea7200495492cc6dd8e0bbe2d4b240284c60d99d8",
+        "revision": 1,
+        "cleanup_plan_json": "{\"version\":1,\"taskIds\":[\"01K3980000085154084C742759\"]}",
+        "created_at": 1778459500000,
+        "updated_at": 1778459500000,
+        "completed_at": 1778459560000
+      }
+    },
+    {
+      "table": "task_execution_maintenance_members",
+      "values": {
+        "claim_id": "01K398000062671959A9EAD099",
+        "task_id": "01K3980000085154084C742759",
+        "expected_task_revision": 1,
+        "expected_owner_revision": 1,
+        "expected_topology_revision": 0,
+        "expected_ledger_digest": "aa2741053c59de0f8a3d9e8ea7200495492cc6dd8e0bbe2d4b240284c60d99d8",
+        "released_at": 1778459560000
+      }
+    },
+    {
+      "table": "task_execution_owners",
+      "values": {
+        "task_id": "01K3980000085154084C742759",
+        "owner_id": "upgrade-stopped-daemon",
+        "daemon_generation": "upgrade-historical-generation",
+        "epoch": 1,
+        "state": "released",
+        "lease_until": 1778459560000,
+        "revision": 1,
+        "last_heartbeat_at": 1778459560000,
+        "updated_at": 1778459500000
+      }
+    }
+  ],
+  "migrationEffects": [
+    {
+      "table": "node_runs",
+      "operation": "alter",
+      "rule": "Apply the released SQL to existing seeded rows, retaining its explicit defaults, rewrites and backfills.",
+      "source": "packages/backend/db/migrations/0210_rfc328_task_execution_ownership.sql"
+    },
+    {
+      "table": "tasks",
+      "operation": "alter",
+      "rule": "Apply the released SQL to existing seeded rows, retaining its explicit defaults, rewrites and backfills.",
+      "source": "packages/backend/db/migrations/0210_rfc328_task_execution_ownership.sql"
+    }
+  ]
+}

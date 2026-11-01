@@ -55,6 +55,9 @@ export const PostgresqlDatabaseConfigSchema = z
       .string()
       .regex(/^[A-Za-z_][A-Za-z0-9_]*$/, 'must be an environment variable name')
       .default('AGENT_WORKFLOW_DATABASE_URL'),
+    // RFC-398: derived from the generation pointer's profileRef at runtime;
+    // not a hand-edited config.json key and never persisted back to that file.
+    databaseName: z.string().min(1).optional(),
     poolMax: z.number().int().min(1).max(256).default(16),
     connectTimeoutMs: z.number().int().min(100).max(300_000).default(10_000),
     statementTimeoutMs: z.number().int().min(100).max(3_600_000).default(60_000),
@@ -379,6 +382,8 @@ export const ConfigSchema = z.object({
   /** Take a raw (byte-copy) pre-migration backup before applying pending
    *  migrations on boot, so a botched upgrade can be rolled back. */
   backupOnMigration: z.boolean().default(true),
+  /** Standalone epoch-1 installs upgrade automatically on start/migrate; false keeps manual approval. */
+  autoEpochMigration: z.boolean().default(true),
   /** PRAGMA synchronous mode. FULL trades throughput for stronger power-loss
    *  durability; NORMAL (default) is byte-equivalent to the historical setting. */
   sqliteSynchronous: z.enum(['NORMAL', 'FULL']).default('NORMAL'),
@@ -856,6 +861,7 @@ export const DEFAULT_CONFIG: Config = {
   taskIdleTimeout: { enabled: false, idleHours: 168 },
   database: { provider: 'sqlite' },
   backupOnMigration: true,
+  autoEpochMigration: true,
   sqliteSynchronous: 'NORMAL',
   walCheckpointIntervalMs: 600_000,
   sqlitePageCacheMib: 128,

@@ -1,0 +1,671 @@
+{
+  "formatVersion": 1,
+  "tag": "v0.19.2",
+  "state": "unwritten",
+  "binarySha256": "60f781d7ba72b619ca263a9d9843a571e26cc25bb3f70e4f3e3dd0feedfa61d7",
+  "platform": "macos-arm64",
+  "operationId": "dbm_01M6AD8F4SZMGGM8EQD2FM93FB",
+  "states": {
+    "before": {
+      "files": [
+        {
+          "path": "home/config.json",
+          "bytes": 2480,
+          "sha256": "5d82f1f8dd4f958a81f3d0d4273e303ee870a17d4b66c9c6a02fbcde4cea43c0"
+        },
+        {
+          "path": "home/database-generation.json",
+          "bytes": 493,
+          "sha256": "87cac2bb5ea1d5af97538003b06bca8f88fa07280b5e05a60233eacfb5b77990"
+        },
+        {
+          "path": "home/database-migrations/dbm_01M6AD8F4SZMGGM8EQD2FM93FB/legacy-archive/manifest.json",
+          "bytes": 2214,
+          "sha256": "01e56a00c30f218d08ec708ff938396f163c36628cf6d34b8b56389e32342a70"
+        },
+        {
+          "path": "home/database-migrations/dbm_01M6AD8F4SZMGGM8EQD2FM93FB/logical-manifest.json",
+          "bytes": 87304,
+          "sha256": "a9ab2005eca4a2d8a52339f4997e9e7fe997c388a7bf8f76aa0df155fa671725"
+        },
+        {
+          "path": "home/database-migrations/dbm_01M6AD8F4SZMGGM8EQD2FM93FB/manifest.json",
+          "bytes": 56694,
+          "sha256": "72e434e824afa5060ce691aee95596d45e11be0382903758bc24e69f8ac830bf"
+        },
+        {
+          "path": "home/database-migrations/dbm_01M6AD8F4SZMGGM8EQD2FM93FB/verification.json",
+          "bytes": 608,
+          "sha256": "922a8df814670ff946cf70ca49a680c6263ab8797746af435731bd86bbcdea71"
+        }
+      ],
+      "omitted": [
+        {
+          "path": "home/database-migrations/dbm_01M6AD8F4SZMGGM8EQD2FM93FB/chunks/agents/chunk-00000000.json",
+          "bytes": 72861,
+          "sha256": "f87d839681e1d0c49ee22aa7f8b28b612c5c85f0a1965cc7aec59ad9e432ff74"
+        },
+        {
+          "path": "home/database-migrations/dbm_01M6AD8F4SZMGGM8EQD2FM93FB/chunks/auth_login_policy/chunk-00000000.json",
+          "bytes": 1152,
+          "sha256": "2cad31cfa5cbbffaa6455b682f25d7f7fa958ccec91176f0f12049a2b5fab93a"
+        },
+        {
+          "path": "home/database-migrations/dbm_01M6AD8F4SZMGGM8EQD2FM93FB/chunks/cached_repos/chunk-00000000.json",
+          "bytes": 2067,
+          "sha256": "ce4136d02c0ddee28b88a796e14e28ff30885f3e24018fd6233587fdb9f2e26a"
+        },
+        {
+          "path": "home/database-migrations/dbm_01M6AD8F4SZMGGM8EQD2FM93FB/chunks/capability_templates/chunk-00000000.json",
+          "bytes": 3988,
+          "sha256": "34f147c8ade40fb9ee2729caf584a300c4506c0658402b52726024c5adce35d7"
+        },
+        {
+          "path": "home/database-migrations/dbm_01M6AD8F4SZMGGM8EQD2FM93FB/chunks/clarify_rounds/chunk-00000000.json",
+          "bytes": 3601,
+          "sha256": "e0debab216f731b7550dd75f2bfd2ee0181e02507b67de7e4189e155cb025665"
+        },
+        {
+          "path": "home/database-migrations/dbm_01M6AD8F4SZMGGM8EQD2FM93FB/chunks/code_round_stages/chunk-00000000.json",
+          "bytes": 13246,
+          "sha256": "06bcdf90f578feb203fbf4b20131c7c87da79e9b2d4c56d8758688c84d4711ae"
+        },
+        {
+          "path": "home/database-migrations/dbm_01M6AD8F4SZMGGM8EQD2FM93FB/chunks/code_work_items/chunk-00000000.json",
+          "bytes": 2344,
+          "sha256": "e2cd1a3fd4755d9f022df312fc7e195f6f024fb8022e7164a5026305655bb4ea"
+        },
+        {
+          "path": "home/database-migrations/dbm_01M6AD8F4SZMGGM8EQD2FM93FB/chunks/code_work_rounds/chunk-00000000.json",
+          "bytes": 1814,
+          "sha256": "d3a78f24ff695b39d08fa1dcc2e0da1260559a7de599a059b6a39d42376da7e1"
+        },
+        {
+          "path": "home/database-migrations/dbm_01M6AD8F4SZMGGM8EQD2FM93FB/chunks/collaboration_gate_artifacts/chunk-00000000.json",
+          "bytes": 2289,
+          "sha256": "ae5fc366511a90ec92f3b9599e8017d1da84ccb000d5b4daea98d79dc31eada1"
+        },
+        {
+          "path": "home/database-migrations/dbm_01M6AD8F4SZMGGM8EQD2FM93FB/chunks/collaboration_gate_operations/chunk-00000000.json",
+          "bytes": 10718,
+          "sha256": "3394c79499da2a08519af3fb1369969ae116981b8bb907fd1ccf31d4d92a2498"
+        },
+        {
+          "path": "home/database-migrations/dbm_01M6AD8F4SZMGGM8EQD2FM93FB/chunks/committed_event_aggregate_heads/chunk-00000000.json",
+          "bytes": 7505,
+          "sha256": "bc9bf3d1bae167ab6316b688e9c76e04919b021327dfe6f5473c48849a669a58"
+        },
+        {
+          "path": "home/database-migrations/dbm_01M6AD8F4SZMGGM8EQD2FM93FB/chunks/committed_event_deliveries/chunk-00000000.json",
+          "bytes": 113385,
+          "sha256": "b2fc84e081bc542e64726ccc7da4fa64d1eacf4acd1ebae9a3dd1b0d237ab3f4"
+        },
+        {
+          "path": "home/database-migrations/dbm_01M6AD8F4SZMGGM8EQD2FM93FB/chunks/committed_event_family_cutovers/chunk-00000000.json",
+          "bytes": 3755,
+          "sha256": "5b68f5ee7c6034f5e8505f7df2bea8aef63a982bb8f9acd06c6daa8beab5191e"
+        },
+        {
+          "path": "home/database-migrations/dbm_01M6AD8F4SZMGGM8EQD2FM93FB/chunks/committed_events/chunk-00000000.json",
+          "bytes": 48737,
+          "sha256": "90e9c4922702a13866c1ef5c09542288ad52c8a9924e62199de0831e99000a02"
+        },
+        {
+          "path": "home/database-migrations/dbm_01M6AD8F4SZMGGM8EQD2FM93FB/chunks/doc_versions/chunk-00000000.json",
+          "bytes": 2869,
+          "sha256": "41d6c949de576b080180d9861942f91d55858909b262a29f215301aad7086212"
+        },
+        {
+          "path": "home/database-migrations/dbm_01M6AD8F4SZMGGM8EQD2FM93FB/chunks/employee_execution_policy_revisions/chunk-00000000.json",
+          "bytes": 1410,
+          "sha256": "36878f1d984a82d193161efe60542dbb1755193842615b47233583951ee64dea"
+        },
+        {
+          "path": "home/database-migrations/dbm_01M6AD8F4SZMGGM8EQD2FM93FB/chunks/employee_os_settings/chunk-00000000.json",
+          "bytes": 945,
+          "sha256": "6a72a386e121bcba3ba4edd07d4e4aa445ba65d21966afccd1ad1f9e85be46be"
+        },
+        {
+          "path": "home/database-migrations/dbm_01M6AD8F4SZMGGM8EQD2FM93FB/chunks/employee_os_writer_state/chunk-00000000.json",
+          "bytes": 1254,
+          "sha256": "d1af2f5159b1a4abff426d394024c92fd5713db566ae1983b353ebef058627bd"
+        },
+        {
+          "path": "home/database-migrations/dbm_01M6AD8F4SZMGGM8EQD2FM93FB/chunks/employee_type_packages/chunk-00000000.json",
+          "bytes": 83370,
+          "sha256": "341b6956bffe4393114b59eb22ec78201b47419e6ab2698aa1c26cbe4a438839"
+        },
+        {
+          "path": "home/database-migrations/dbm_01M6AD8F4SZMGGM8EQD2FM93FB/chunks/event_records/chunk-00000000.json",
+          "bytes": 32238,
+          "sha256": "7575de4fb81f09e8831d956b9affd9d7ebf5d844fb0a8b9b8a7ae81e70155d5a"
+        },
+        {
+          "path": "home/database-migrations/dbm_01M6AD8F4SZMGGM8EQD2FM93FB/chunks/event_sources/chunk-00000000.json",
+          "bytes": 8783,
+          "sha256": "ba1ad82d1829ef84b83d3b26f8df491d18825d8235ac6a18620df521bce6144c"
+        },
+        {
+          "path": "home/database-migrations/dbm_01M6AD8F4SZMGGM8EQD2FM93FB/chunks/event_type_catalog/chunk-00000000.json",
+          "bytes": 169017,
+          "sha256": "22900a6089f4be54d11debe586c6beea53880527d0edd08c574bae37fe937302"
+        },
+        {
+          "path": "home/database-migrations/dbm_01M6AD8F4SZMGGM8EQD2FM93FB/chunks/maintenance_runs/chunk-00000000.json",
+          "bytes": 5873,
+          "sha256": "6c305da99e9971423c0e0f4cced93a75d44a11b0ca46f2ca9ea00e0f985d0fa3"
+        },
+        {
+          "path": "home/database-migrations/dbm_01M6AD8F4SZMGGM8EQD2FM93FB/chunks/maintenance_state/chunk-00000000.json",
+          "bytes": 1058,
+          "sha256": "3cd9b88a1e7ef944df4efac9084349df58891dc22c395e3fa02b0fb4d4218de1"
+        },
+        {
+          "path": "home/database-migrations/dbm_01M6AD8F4SZMGGM8EQD2FM93FB/chunks/mcps/chunk-00000000.json",
+          "bytes": 1957,
+          "sha256": "94bad58998363a6f9017217afe3a4b573921a199ea86bc2a37fc3f1410fcc194"
+        },
+        {
+          "path": "home/database-migrations/dbm_01M6AD8F4SZMGGM8EQD2FM93FB/chunks/memories/chunk-00000000.json",
+          "bytes": 2766,
+          "sha256": "f817532807bbd7dd036a6ec8a664b9d783759a484d2f807709b5a39a1fcca751"
+        },
+        {
+          "path": "home/database-migrations/dbm_01M6AD8F4SZMGGM8EQD2FM93FB/chunks/memory_distill_jobs/chunk-00000000.json",
+          "bytes": 11386,
+          "sha256": "8806bb15130b24d083cd20a1f85fed38cfcaa3e6d7b7727eceb253dc2e121d4a"
+        },
+        {
+          "path": "home/database-migrations/dbm_01M6AD8F4SZMGGM8EQD2FM93FB/chunks/node_run_events/chunk-00000000.json",
+          "bytes": 6472,
+          "sha256": "75471f9f6a50e60e0736f747b2d9af80ac2c304b6790f1bf01155753e451cf51"
+        },
+        {
+          "path": "home/database-migrations/dbm_01M6AD8F4SZMGGM8EQD2FM93FB/chunks/node_run_outputs/chunk-00000000.json",
+          "bytes": 3054,
+          "sha256": "066b7cf78e34537ce4bbce9fcb1f9860422069f50d8529954cf2cc2ef73232bd"
+        },
+        {
+          "path": "home/database-migrations/dbm_01M6AD8F4SZMGGM8EQD2FM93FB/chunks/node_runs/chunk-00000000.json",
+          "bytes": 64219,
+          "sha256": "9e359503518d14742ae5d6d45bd97896f4c6f71305a6a97d6528c0f6e2a681ab"
+        },
+        {
+          "path": "home/database-migrations/dbm_01M6AD8F4SZMGGM8EQD2FM93FB/chunks/observation_calls/chunk-00000000.json",
+          "bytes": 9776,
+          "sha256": "ed3fb7e7ee1f8e0600508bd2055b296abe0a7db9cae54720fd2e7a85cc0c146c"
+        },
+        {
+          "path": "home/database-migrations/dbm_01M6AD8F4SZMGGM8EQD2FM93FB/chunks/runtimes/chunk-00000000.json",
+          "bytes": 3915,
+          "sha256": "0a8909d65eb60e6ada85dfe04190c8669629ebd1f87f379457cac42f57322621"
+        },
+        {
+          "path": "home/database-migrations/dbm_01M6AD8F4SZMGGM8EQD2FM93FB/chunks/sc_preparation_operations/chunk-00000000.json",
+          "bytes": 36478,
+          "sha256": "a559346bc82442c9de50a40b53d368ca1f01bf7942bd7ab1f833f22604d15db4"
+        },
+        {
+          "path": "home/database-migrations/dbm_01M6AD8F4SZMGGM8EQD2FM93FB/chunks/sc_repository_snapshots/chunk-00000000.json",
+          "bytes": 6817,
+          "sha256": "678ce9b86c417dbe645862a2347610889ea1365e227005930b5ad0b5d832b7ea"
+        },
+        {
+          "path": "home/database-migrations/dbm_01M6AD8F4SZMGGM8EQD2FM93FB/chunks/sc_repository_sources/chunk-00000000.json",
+          "bytes": 5660,
+          "sha256": "a3e54cc0cb1c6b8b2bf31b7463ad8cadbd4066ac5cc0919a76272b9907979e8c"
+        },
+        {
+          "path": "home/database-migrations/dbm_01M6AD8F4SZMGGM8EQD2FM93FB/chunks/scheduled_tasks/chunk-00000000.json",
+          "bytes": 2396,
+          "sha256": "7ad90b10c281b6d62eeaa0c7ab7276fdb5361cf41dea60b85f93ea2c03c15735"
+        },
+        {
+          "path": "home/database-migrations/dbm_01M6AD8F4SZMGGM8EQD2FM93FB/chunks/skill_operations/chunk-00000000.json",
+          "bytes": 2069,
+          "sha256": "a09ba4dc10ac76ca947d393be06e6a1450ecb1302fbba9d666fd15ad54a25a5b"
+        },
+        {
+          "path": "home/database-migrations/dbm_01M6AD8F4SZMGGM8EQD2FM93FB/chunks/skill_versions/chunk-00000000.json",
+          "bytes": 1827,
+          "sha256": "6e11872db220b036c25d735434fbcae9300b2244d1b0edc05da891780cff987e"
+        },
+        {
+          "path": "home/database-migrations/dbm_01M6AD8F4SZMGGM8EQD2FM93FB/chunks/skills/chunk-00000000.json",
+          "bytes": 2197,
+          "sha256": "6c845b3a930fa7e80e94197738b8267cb1ca677aac3609060631b548f36ac315"
+        },
+        {
+          "path": "home/database-migrations/dbm_01M6AD8F4SZMGGM8EQD2FM93FB/chunks/task_collaborators/chunk-00000000.json",
+          "bytes": 4786,
+          "sha256": "f1cb33ba1c295a93dea48756a2e592a92afc7127097d516488170e96210d1d8d"
+        },
+        {
+          "path": "home/database-migrations/dbm_01M6AD8F4SZMGGM8EQD2FM93FB/chunks/task_execution_effect_attempts/chunk-00000000.json",
+          "bytes": 40912,
+          "sha256": "5cd6a1356cc6078b7b024fc6ddbf4cd427458de7e180f3ffa6d7c202e7f6d712"
+        },
+        {
+          "path": "home/database-migrations/dbm_01M6AD8F4SZMGGM8EQD2FM93FB/chunks/task_execution_effect_fences/chunk-00000000.json",
+          "bytes": 27957,
+          "sha256": "9ef6f578c388e4182b3673607a19151477c16533591695f74f4c13b4b3b9f25c"
+        },
+        {
+          "path": "home/database-migrations/dbm_01M6AD8F4SZMGGM8EQD2FM93FB/chunks/task_execution_effects/chunk-00000000.json",
+          "bytes": 48500,
+          "sha256": "fad8626bc2d91f4d07d0f1d28dcb4731f7f5d31fb130761f0f10f5bcb55536b3"
+        },
+        {
+          "path": "home/database-migrations/dbm_01M6AD8F4SZMGGM8EQD2FM93FB/chunks/task_execution_intents/chunk-00000000.json",
+          "bytes": 11219,
+          "sha256": "0d089767f29f4a303c63423e9d343cdd8bded977448c68e8841e935dd3ded925"
+        },
+        {
+          "path": "home/database-migrations/dbm_01M6AD8F4SZMGGM8EQD2FM93FB/chunks/task_execution_lineage_operation_records/chunk-00000000.json",
+          "bytes": 54070,
+          "sha256": "2969935a5e8249abe037f42f0e1d796e3d3a669cac158ff3cb6f8af90c59440b"
+        },
+        {
+          "path": "home/database-migrations/dbm_01M6AD8F4SZMGGM8EQD2FM93FB/chunks/task_execution_owners/chunk-00000000.json",
+          "bytes": 6761,
+          "sha256": "311b7945364089b2288066fc4654a7657a61eaf7cd05cbd91ed2b68e82de8000"
+        },
+        {
+          "path": "home/database-migrations/dbm_01M6AD8F4SZMGGM8EQD2FM93FB/chunks/task_questions/chunk-00000000.json",
+          "bytes": 5507,
+          "sha256": "32ce804c8b9b156d4c3015250320aebfb839f5709f1e65f9bd2cc5ee99a937b1"
+        },
+        {
+          "path": "home/database-migrations/dbm_01M6AD8F4SZMGGM8EQD2FM93FB/chunks/task_repos/chunk-00000000.json",
+          "bytes": 12496,
+          "sha256": "b5f976020965025ea0b7b01cd2cc8116c073512490e8616493ac6245d261ff32"
+        },
+        {
+          "path": "home/database-migrations/dbm_01M6AD8F4SZMGGM8EQD2FM93FB/chunks/task_workspace_preparations/chunk-00000000.json",
+          "bytes": 8173,
+          "sha256": "49951c39408dd4e1380b96e30a5034a2d38d99d4e25cea1bfb6824e1dd4a980d"
+        },
+        {
+          "path": "home/database-migrations/dbm_01M6AD8F4SZMGGM8EQD2FM93FB/chunks/tasks/chunk-00000000.json",
+          "bytes": 34107,
+          "sha256": "11419129e4d5758cd3d74e1c97f4d6aa3a62d45fe5d1b8e025c444453408c36d"
+        },
+        {
+          "path": "home/database-migrations/dbm_01M6AD8F4SZMGGM8EQD2FM93FB/chunks/user_access_audit/chunk-00000000.json",
+          "bytes": 1971,
+          "sha256": "dba9aaff6af4e555c8aeca99f49b93897103180b005984922d0f53ab1340ff31"
+        },
+        {
+          "path": "home/database-migrations/dbm_01M6AD8F4SZMGGM8EQD2FM93FB/chunks/user_sessions/chunk-00000000.json",
+          "bytes": 3448,
+          "sha256": "0a9337709ff83bd085a5ee1b39a1f1cef47944da330550b5ff5c46973d266292"
+        },
+        {
+          "path": "home/database-migrations/dbm_01M6AD8F4SZMGGM8EQD2FM93FB/chunks/users/chunk-00000000.json",
+          "bytes": 3683,
+          "sha256": "b0c3f6cfc0bd174d8bef2350e9829cd94603226e6c95691688c556682f66c14f"
+        },
+        {
+          "path": "home/database-migrations/dbm_01M6AD8F4SZMGGM8EQD2FM93FB/chunks/workflows/chunk-00000000.json",
+          "bytes": 34283,
+          "sha256": "527ee8d6e6420291a32647982ab6bd01318d93dc0df8be6b70a79a133c596673"
+        },
+        {
+          "path": "home/database-migrations/dbm_01M6AD8F4SZMGGM8EQD2FM93FB/chunks/workgroup_members/chunk-00000000.json",
+          "bytes": 1684,
+          "sha256": "45722f7e6147a8ec7a15cd30abb5fe9e9e824bf9fd9640c6ee3aae322bbadc6f"
+        },
+        {
+          "path": "home/database-migrations/dbm_01M6AD8F4SZMGGM8EQD2FM93FB/chunks/workgroups/chunk-00000000.json",
+          "bytes": 2918,
+          "sha256": "8727f819e26b504c417b47fea815ab9f1330eb474f5b96796ee5b06a126a22e3"
+        },
+        {
+          "path": "home/database-migrations/dbm_01M6AD8F4SZMGGM8EQD2FM93FB/source-backup/db.sqlite",
+          "bytes": 3891200,
+          "sha256": "94afb8cad0060122fef1d1b4de9eec67a3e32e225243f8fcbfe43721fad9813e"
+        }
+      ],
+      "postgres": {
+        "file": "before/postgres.sql.gz",
+        "sourceSha256": "f9ba5f7915305e72c976a54e8d5128d7b8cc218b6e237e5aa89511de7e09d11d",
+        "compressedSha256": "1fa84f354ef2b17fb4036651c53aaa71426f8cffbf5c88b5d53a1cb4d86d6a62",
+        "sourceBytes": 884020,
+        "compressedBytes": 116259
+      }
+    },
+    "after": {
+      "files": [
+        {
+          "path": "home/config.json",
+          "bytes": 2480,
+          "sha256": "5d82f1f8dd4f958a81f3d0d4273e303ee870a17d4b66c9c6a02fbcde4cea43c0"
+        },
+        {
+          "path": "home/database-generation.json",
+          "bytes": 493,
+          "sha256": "c3d7d70124a9c81cf61313cbfc0364ee89f310b554fe3e0e2cfdd887e177257d"
+        },
+        {
+          "path": "home/database-migrations/dbm_01M6AD8F4SZMGGM8EQD2FM93FB/legacy-archive/manifest.json",
+          "bytes": 2214,
+          "sha256": "01e56a00c30f218d08ec708ff938396f163c36628cf6d34b8b56389e32342a70"
+        },
+        {
+          "path": "home/database-migrations/dbm_01M6AD8F4SZMGGM8EQD2FM93FB/logical-manifest.json",
+          "bytes": 87304,
+          "sha256": "a9ab2005eca4a2d8a52339f4997e9e7fe997c388a7bf8f76aa0df155fa671725"
+        },
+        {
+          "path": "home/database-migrations/dbm_01M6AD8F4SZMGGM8EQD2FM93FB/manifest.json",
+          "bytes": 56999,
+          "sha256": "ea854209e3831e0abb9af52a0f87f26690dec09ef158b09d304772bcd2e83443"
+        },
+        {
+          "path": "home/database-migrations/dbm_01M6AD8F4SZMGGM8EQD2FM93FB/receipt.json",
+          "bytes": 628,
+          "sha256": "368601216dbcd515e0849fd5c7df592c79234a6f39acb82762425e5dcf0912bb"
+        },
+        {
+          "path": "home/database-migrations/dbm_01M6AD8F4SZMGGM8EQD2FM93FB/verification.json",
+          "bytes": 608,
+          "sha256": "922a8df814670ff946cf70ca49a680c6263ab8797746af435731bd86bbcdea71"
+        }
+      ],
+      "omitted": [
+        {
+          "path": "home/database-migrations/dbm_01M6AD8F4SZMGGM8EQD2FM93FB/chunks/agents/chunk-00000000.json",
+          "bytes": 72861,
+          "sha256": "f87d839681e1d0c49ee22aa7f8b28b612c5c85f0a1965cc7aec59ad9e432ff74"
+        },
+        {
+          "path": "home/database-migrations/dbm_01M6AD8F4SZMGGM8EQD2FM93FB/chunks/auth_login_policy/chunk-00000000.json",
+          "bytes": 1152,
+          "sha256": "2cad31cfa5cbbffaa6455b682f25d7f7fa958ccec91176f0f12049a2b5fab93a"
+        },
+        {
+          "path": "home/database-migrations/dbm_01M6AD8F4SZMGGM8EQD2FM93FB/chunks/cached_repos/chunk-00000000.json",
+          "bytes": 2067,
+          "sha256": "ce4136d02c0ddee28b88a796e14e28ff30885f3e24018fd6233587fdb9f2e26a"
+        },
+        {
+          "path": "home/database-migrations/dbm_01M6AD8F4SZMGGM8EQD2FM93FB/chunks/capability_templates/chunk-00000000.json",
+          "bytes": 3988,
+          "sha256": "34f147c8ade40fb9ee2729caf584a300c4506c0658402b52726024c5adce35d7"
+        },
+        {
+          "path": "home/database-migrations/dbm_01M6AD8F4SZMGGM8EQD2FM93FB/chunks/clarify_rounds/chunk-00000000.json",
+          "bytes": 3601,
+          "sha256": "e0debab216f731b7550dd75f2bfd2ee0181e02507b67de7e4189e155cb025665"
+        },
+        {
+          "path": "home/database-migrations/dbm_01M6AD8F4SZMGGM8EQD2FM93FB/chunks/code_round_stages/chunk-00000000.json",
+          "bytes": 13246,
+          "sha256": "06bcdf90f578feb203fbf4b20131c7c87da79e9b2d4c56d8758688c84d4711ae"
+        },
+        {
+          "path": "home/database-migrations/dbm_01M6AD8F4SZMGGM8EQD2FM93FB/chunks/code_work_items/chunk-00000000.json",
+          "bytes": 2344,
+          "sha256": "e2cd1a3fd4755d9f022df312fc7e195f6f024fb8022e7164a5026305655bb4ea"
+        },
+        {
+          "path": "home/database-migrations/dbm_01M6AD8F4SZMGGM8EQD2FM93FB/chunks/code_work_rounds/chunk-00000000.json",
+          "bytes": 1814,
+          "sha256": "d3a78f24ff695b39d08fa1dcc2e0da1260559a7de599a059b6a39d42376da7e1"
+        },
+        {
+          "path": "home/database-migrations/dbm_01M6AD8F4SZMGGM8EQD2FM93FB/chunks/collaboration_gate_artifacts/chunk-00000000.json",
+          "bytes": 2289,
+          "sha256": "ae5fc366511a90ec92f3b9599e8017d1da84ccb000d5b4daea98d79dc31eada1"
+        },
+        {
+          "path": "home/database-migrations/dbm_01M6AD8F4SZMGGM8EQD2FM93FB/chunks/collaboration_gate_operations/chunk-00000000.json",
+          "bytes": 10718,
+          "sha256": "3394c79499da2a08519af3fb1369969ae116981b8bb907fd1ccf31d4d92a2498"
+        },
+        {
+          "path": "home/database-migrations/dbm_01M6AD8F4SZMGGM8EQD2FM93FB/chunks/committed_event_aggregate_heads/chunk-00000000.json",
+          "bytes": 7505,
+          "sha256": "bc9bf3d1bae167ab6316b688e9c76e04919b021327dfe6f5473c48849a669a58"
+        },
+        {
+          "path": "home/database-migrations/dbm_01M6AD8F4SZMGGM8EQD2FM93FB/chunks/committed_event_deliveries/chunk-00000000.json",
+          "bytes": 113385,
+          "sha256": "b2fc84e081bc542e64726ccc7da4fa64d1eacf4acd1ebae9a3dd1b0d237ab3f4"
+        },
+        {
+          "path": "home/database-migrations/dbm_01M6AD8F4SZMGGM8EQD2FM93FB/chunks/committed_event_family_cutovers/chunk-00000000.json",
+          "bytes": 3755,
+          "sha256": "5b68f5ee7c6034f5e8505f7df2bea8aef63a982bb8f9acd06c6daa8beab5191e"
+        },
+        {
+          "path": "home/database-migrations/dbm_01M6AD8F4SZMGGM8EQD2FM93FB/chunks/committed_events/chunk-00000000.json",
+          "bytes": 48737,
+          "sha256": "90e9c4922702a13866c1ef5c09542288ad52c8a9924e62199de0831e99000a02"
+        },
+        {
+          "path": "home/database-migrations/dbm_01M6AD8F4SZMGGM8EQD2FM93FB/chunks/doc_versions/chunk-00000000.json",
+          "bytes": 2869,
+          "sha256": "41d6c949de576b080180d9861942f91d55858909b262a29f215301aad7086212"
+        },
+        {
+          "path": "home/database-migrations/dbm_01M6AD8F4SZMGGM8EQD2FM93FB/chunks/employee_execution_policy_revisions/chunk-00000000.json",
+          "bytes": 1410,
+          "sha256": "36878f1d984a82d193161efe60542dbb1755193842615b47233583951ee64dea"
+        },
+        {
+          "path": "home/database-migrations/dbm_01M6AD8F4SZMGGM8EQD2FM93FB/chunks/employee_os_settings/chunk-00000000.json",
+          "bytes": 945,
+          "sha256": "6a72a386e121bcba3ba4edd07d4e4aa445ba65d21966afccd1ad1f9e85be46be"
+        },
+        {
+          "path": "home/database-migrations/dbm_01M6AD8F4SZMGGM8EQD2FM93FB/chunks/employee_os_writer_state/chunk-00000000.json",
+          "bytes": 1254,
+          "sha256": "d1af2f5159b1a4abff426d394024c92fd5713db566ae1983b353ebef058627bd"
+        },
+        {
+          "path": "home/database-migrations/dbm_01M6AD8F4SZMGGM8EQD2FM93FB/chunks/employee_type_packages/chunk-00000000.json",
+          "bytes": 83370,
+          "sha256": "341b6956bffe4393114b59eb22ec78201b47419e6ab2698aa1c26cbe4a438839"
+        },
+        {
+          "path": "home/database-migrations/dbm_01M6AD8F4SZMGGM8EQD2FM93FB/chunks/event_records/chunk-00000000.json",
+          "bytes": 32238,
+          "sha256": "7575de4fb81f09e8831d956b9affd9d7ebf5d844fb0a8b9b8a7ae81e70155d5a"
+        },
+        {
+          "path": "home/database-migrations/dbm_01M6AD8F4SZMGGM8EQD2FM93FB/chunks/event_sources/chunk-00000000.json",
+          "bytes": 8783,
+          "sha256": "ba1ad82d1829ef84b83d3b26f8df491d18825d8235ac6a18620df521bce6144c"
+        },
+        {
+          "path": "home/database-migrations/dbm_01M6AD8F4SZMGGM8EQD2FM93FB/chunks/event_type_catalog/chunk-00000000.json",
+          "bytes": 169017,
+          "sha256": "22900a6089f4be54d11debe586c6beea53880527d0edd08c574bae37fe937302"
+        },
+        {
+          "path": "home/database-migrations/dbm_01M6AD8F4SZMGGM8EQD2FM93FB/chunks/maintenance_runs/chunk-00000000.json",
+          "bytes": 5873,
+          "sha256": "6c305da99e9971423c0e0f4cced93a75d44a11b0ca46f2ca9ea00e0f985d0fa3"
+        },
+        {
+          "path": "home/database-migrations/dbm_01M6AD8F4SZMGGM8EQD2FM93FB/chunks/maintenance_state/chunk-00000000.json",
+          "bytes": 1058,
+          "sha256": "3cd9b88a1e7ef944df4efac9084349df58891dc22c395e3fa02b0fb4d4218de1"
+        },
+        {
+          "path": "home/database-migrations/dbm_01M6AD8F4SZMGGM8EQD2FM93FB/chunks/mcps/chunk-00000000.json",
+          "bytes": 1957,
+          "sha256": "94bad58998363a6f9017217afe3a4b573921a199ea86bc2a37fc3f1410fcc194"
+        },
+        {
+          "path": "home/database-migrations/dbm_01M6AD8F4SZMGGM8EQD2FM93FB/chunks/memories/chunk-00000000.json",
+          "bytes": 2766,
+          "sha256": "f817532807bbd7dd036a6ec8a664b9d783759a484d2f807709b5a39a1fcca751"
+        },
+        {
+          "path": "home/database-migrations/dbm_01M6AD8F4SZMGGM8EQD2FM93FB/chunks/memory_distill_jobs/chunk-00000000.json",
+          "bytes": 11386,
+          "sha256": "8806bb15130b24d083cd20a1f85fed38cfcaa3e6d7b7727eceb253dc2e121d4a"
+        },
+        {
+          "path": "home/database-migrations/dbm_01M6AD8F4SZMGGM8EQD2FM93FB/chunks/node_run_events/chunk-00000000.json",
+          "bytes": 6472,
+          "sha256": "75471f9f6a50e60e0736f747b2d9af80ac2c304b6790f1bf01155753e451cf51"
+        },
+        {
+          "path": "home/database-migrations/dbm_01M6AD8F4SZMGGM8EQD2FM93FB/chunks/node_run_outputs/chunk-00000000.json",
+          "bytes": 3054,
+          "sha256": "066b7cf78e34537ce4bbce9fcb1f9860422069f50d8529954cf2cc2ef73232bd"
+        },
+        {
+          "path": "home/database-migrations/dbm_01M6AD8F4SZMGGM8EQD2FM93FB/chunks/node_runs/chunk-00000000.json",
+          "bytes": 64219,
+          "sha256": "9e359503518d14742ae5d6d45bd97896f4c6f71305a6a97d6528c0f6e2a681ab"
+        },
+        {
+          "path": "home/database-migrations/dbm_01M6AD8F4SZMGGM8EQD2FM93FB/chunks/observation_calls/chunk-00000000.json",
+          "bytes": 9776,
+          "sha256": "ed3fb7e7ee1f8e0600508bd2055b296abe0a7db9cae54720fd2e7a85cc0c146c"
+        },
+        {
+          "path": "home/database-migrations/dbm_01M6AD8F4SZMGGM8EQD2FM93FB/chunks/runtimes/chunk-00000000.json",
+          "bytes": 3915,
+          "sha256": "0a8909d65eb60e6ada85dfe04190c8669629ebd1f87f379457cac42f57322621"
+        },
+        {
+          "path": "home/database-migrations/dbm_01M6AD8F4SZMGGM8EQD2FM93FB/chunks/sc_preparation_operations/chunk-00000000.json",
+          "bytes": 36478,
+          "sha256": "a559346bc82442c9de50a40b53d368ca1f01bf7942bd7ab1f833f22604d15db4"
+        },
+        {
+          "path": "home/database-migrations/dbm_01M6AD8F4SZMGGM8EQD2FM93FB/chunks/sc_repository_snapshots/chunk-00000000.json",
+          "bytes": 6817,
+          "sha256": "678ce9b86c417dbe645862a2347610889ea1365e227005930b5ad0b5d832b7ea"
+        },
+        {
+          "path": "home/database-migrations/dbm_01M6AD8F4SZMGGM8EQD2FM93FB/chunks/sc_repository_sources/chunk-00000000.json",
+          "bytes": 5660,
+          "sha256": "a3e54cc0cb1c6b8b2bf31b7463ad8cadbd4066ac5cc0919a76272b9907979e8c"
+        },
+        {
+          "path": "home/database-migrations/dbm_01M6AD8F4SZMGGM8EQD2FM93FB/chunks/scheduled_tasks/chunk-00000000.json",
+          "bytes": 2396,
+          "sha256": "7ad90b10c281b6d62eeaa0c7ab7276fdb5361cf41dea60b85f93ea2c03c15735"
+        },
+        {
+          "path": "home/database-migrations/dbm_01M6AD8F4SZMGGM8EQD2FM93FB/chunks/skill_operations/chunk-00000000.json",
+          "bytes": 2069,
+          "sha256": "a09ba4dc10ac76ca947d393be06e6a1450ecb1302fbba9d666fd15ad54a25a5b"
+        },
+        {
+          "path": "home/database-migrations/dbm_01M6AD8F4SZMGGM8EQD2FM93FB/chunks/skill_versions/chunk-00000000.json",
+          "bytes": 1827,
+          "sha256": "6e11872db220b036c25d735434fbcae9300b2244d1b0edc05da891780cff987e"
+        },
+        {
+          "path": "home/database-migrations/dbm_01M6AD8F4SZMGGM8EQD2FM93FB/chunks/skills/chunk-00000000.json",
+          "bytes": 2197,
+          "sha256": "6c845b3a930fa7e80e94197738b8267cb1ca677aac3609060631b548f36ac315"
+        },
+        {
+          "path": "home/database-migrations/dbm_01M6AD8F4SZMGGM8EQD2FM93FB/chunks/task_collaborators/chunk-00000000.json",
+          "bytes": 4786,
+          "sha256": "f1cb33ba1c295a93dea48756a2e592a92afc7127097d516488170e96210d1d8d"
+        },
+        {
+          "path": "home/database-migrations/dbm_01M6AD8F4SZMGGM8EQD2FM93FB/chunks/task_execution_effect_attempts/chunk-00000000.json",
+          "bytes": 40912,
+          "sha256": "5cd6a1356cc6078b7b024fc6ddbf4cd427458de7e180f3ffa6d7c202e7f6d712"
+        },
+        {
+          "path": "home/database-migrations/dbm_01M6AD8F4SZMGGM8EQD2FM93FB/chunks/task_execution_effect_fences/chunk-00000000.json",
+          "bytes": 27957,
+          "sha256": "9ef6f578c388e4182b3673607a19151477c16533591695f74f4c13b4b3b9f25c"
+        },
+        {
+          "path": "home/database-migrations/dbm_01M6AD8F4SZMGGM8EQD2FM93FB/chunks/task_execution_effects/chunk-00000000.json",
+          "bytes": 48500,
+          "sha256": "fad8626bc2d91f4d07d0f1d28dcb4731f7f5d31fb130761f0f10f5bcb55536b3"
+        },
+        {
+          "path": "home/database-migrations/dbm_01M6AD8F4SZMGGM8EQD2FM93FB/chunks/task_execution_intents/chunk-00000000.json",
+          "bytes": 11219,
+          "sha256": "0d089767f29f4a303c63423e9d343cdd8bded977448c68e8841e935dd3ded925"
+        },
+        {
+          "path": "home/database-migrations/dbm_01M6AD8F4SZMGGM8EQD2FM93FB/chunks/task_execution_lineage_operation_records/chunk-00000000.json",
+          "bytes": 54070,
+          "sha256": "2969935a5e8249abe037f42f0e1d796e3d3a669cac158ff3cb6f8af90c59440b"
+        },
+        {
+          "path": "home/database-migrations/dbm_01M6AD8F4SZMGGM8EQD2FM93FB/chunks/task_execution_owners/chunk-00000000.json",
+          "bytes": 6761,
+          "sha256": "311b7945364089b2288066fc4654a7657a61eaf7cd05cbd91ed2b68e82de8000"
+        },
+        {
+          "path": "home/database-migrations/dbm_01M6AD8F4SZMGGM8EQD2FM93FB/chunks/task_questions/chunk-00000000.json",
+          "bytes": 5507,
+          "sha256": "32ce804c8b9b156d4c3015250320aebfb839f5709f1e65f9bd2cc5ee99a937b1"
+        },
+        {
+          "path": "home/database-migrations/dbm_01M6AD8F4SZMGGM8EQD2FM93FB/chunks/task_repos/chunk-00000000.json",
+          "bytes": 12496,
+          "sha256": "b5f976020965025ea0b7b01cd2cc8116c073512490e8616493ac6245d261ff32"
+        },
+        {
+          "path": "home/database-migrations/dbm_01M6AD8F4SZMGGM8EQD2FM93FB/chunks/task_workspace_preparations/chunk-00000000.json",
+          "bytes": 8173,
+          "sha256": "49951c39408dd4e1380b96e30a5034a2d38d99d4e25cea1bfb6824e1dd4a980d"
+        },
+        {
+          "path": "home/database-migrations/dbm_01M6AD8F4SZMGGM8EQD2FM93FB/chunks/tasks/chunk-00000000.json",
+          "bytes": 34107,
+          "sha256": "11419129e4d5758cd3d74e1c97f4d6aa3a62d45fe5d1b8e025c444453408c36d"
+        },
+        {
+          "path": "home/database-migrations/dbm_01M6AD8F4SZMGGM8EQD2FM93FB/chunks/user_access_audit/chunk-00000000.json",
+          "bytes": 1971,
+          "sha256": "dba9aaff6af4e555c8aeca99f49b93897103180b005984922d0f53ab1340ff31"
+        },
+        {
+          "path": "home/database-migrations/dbm_01M6AD8F4SZMGGM8EQD2FM93FB/chunks/user_sessions/chunk-00000000.json",
+          "bytes": 3448,
+          "sha256": "0a9337709ff83bd085a5ee1b39a1f1cef47944da330550b5ff5c46973d266292"
+        },
+        {
+          "path": "home/database-migrations/dbm_01M6AD8F4SZMGGM8EQD2FM93FB/chunks/users/chunk-00000000.json",
+          "bytes": 3683,
+          "sha256": "b0c3f6cfc0bd174d8bef2350e9829cd94603226e6c95691688c556682f66c14f"
+        },
+        {
+          "path": "home/database-migrations/dbm_01M6AD8F4SZMGGM8EQD2FM93FB/chunks/workflows/chunk-00000000.json",
+          "bytes": 34283,
+          "sha256": "527ee8d6e6420291a32647982ab6bd01318d93dc0df8be6b70a79a133c596673"
+        },
+        {
+          "path": "home/database-migrations/dbm_01M6AD8F4SZMGGM8EQD2FM93FB/chunks/workgroup_members/chunk-00000000.json",
+          "bytes": 1684,
+          "sha256": "45722f7e6147a8ec7a15cd30abb5fe9e9e824bf9fd9640c6ee3aae322bbadc6f"
+        },
+        {
+          "path": "home/database-migrations/dbm_01M6AD8F4SZMGGM8EQD2FM93FB/chunks/workgroups/chunk-00000000.json",
+          "bytes": 2918,
+          "sha256": "8727f819e26b504c417b47fea815ab9f1330eb474f5b96796ee5b06a126a22e3"
+        },
+        {
+          "path": "home/database-migrations/dbm_01M6AD8F4SZMGGM8EQD2FM93FB/source-backup/db.sqlite",
+          "bytes": 3891200,
+          "sha256": "94afb8cad0060122fef1d1b4de9eec67a3e32e225243f8fcbfe43721fad9813e"
+        }
+      ],
+      "postgres": {
+        "file": "after/postgres.sql.gz",
+        "sourceSha256": "c1e4526c223085e5956f30fa6c3afe164c6e44589e2861bea7ebd0c2781a2863",
+        "compressedSha256": "c5e8a6cfde0203bcca2d47116d4118d856c461556f39a4d5c0414489d422674f",
+        "sourceBytes": 884020,
+        "compressedBytes": 116267
+      }
+    }
+  }
+}

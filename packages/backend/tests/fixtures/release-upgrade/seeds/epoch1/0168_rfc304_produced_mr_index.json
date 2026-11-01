@@ -1,0 +1,27 @@
+{
+  "formatVersion": 1,
+  "epoch": 1,
+  "after": "0168_rfc304_produced_mr_index",
+  "provenance": {
+    "kind": "curated",
+    "sources": [
+      "packages/backend/db/migrations/0168_rfc304_produced_mr_index.sql"
+    ],
+    "note": "Small deterministic historical records; terminal execution and delivery states; original SQL performs its own backfills."
+  },
+  "rows": [
+    {
+      "table": "code_produced_mrs",
+      "values": {
+        "mr_key": "gitlab:1:1",
+        "code_host_endpoint_id": "01K3980000BBDD864AB0F66C6E",
+        "stable_project_id": "1",
+        "mr_iid": "1",
+        "work_item_id": "01K3980000BF31929DD24F5787",
+        "round_id": "01K3980000D25D5DEF6EFDEEBF",
+        "created_at": 1778459500000,
+        "closed_at": 1778459560000
+      }
+    }
+  ]
+}

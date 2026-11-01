@@ -40,6 +40,9 @@ export interface HumanGateNodeRunMintRequest {
       readonly shardKey?: string | null
       readonly reviewIteration?: number
       readonly startedAt?: number | null
+      /** RFC-398 §11: a review rerun keeps the replaced run's continuation slot and lineage. */
+      readonly continuationSlotKey?: string | null
+      readonly lineageSlotPathJson?: string | null
     }
     readonly config?: {
       readonly agentOverrideName?: string | null

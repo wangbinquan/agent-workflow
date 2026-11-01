@@ -23,7 +23,11 @@ import { canonicalSchemaJson } from '../schema/canonical'
 import type { LogicalTargetTableVerification } from './legacy/logicalDatabaseRestore'
 import { loadFrozenEpoch1History } from './epoch1/bundle'
 import { collectSourceFingerprint } from './sourceCatalog'
-import { identifySource, type SupportedSourceManifest } from './supportedSources'
+import {
+  identifySource,
+  withLogicalCodecCorrections,
+  type SupportedSourceManifest,
+} from './supportedSources'
 import type { EmptyTableDecision } from './sourceDispositions'
 import {
   SourceBlockedError,
@@ -182,7 +186,9 @@ async function upgradeDatabaseCopy(input: {
     })
     await target.prepare(Date.now())
     const tables: LogicalTargetTableVerification[] = []
-    for (const table of version.contract.tables) {
+    for (const frozen of version.contract.tables) {
+      // The copy decodes and re-verifies rows with the same corrected codecs as the reader.
+      const table = withLogicalCodecCorrections(frozen, input.manifest.codecCorrections)
       let afterKey: readonly CanonicalLogicalValue[] | null = null
       let rowCount = 0
       let chunkCount = 0

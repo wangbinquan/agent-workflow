@@ -439,19 +439,44 @@ async function main(): Promise<void> {
     case 'db': {
       if (
         Bun.argv[3] === 'migration' &&
+        ['status', 'finalize'].includes(Bun.argv[4] ?? '') &&
+        Bun.argv[5]?.startsWith('dbm_') &&
+        !Bun.argv[5]?.startsWith('dbm_e2_')
+      ) {
+        const { legacyEpochMigrationCommand } = await import('./cli/epochMigrationLegacy')
+        const { createLegacyMigrationFinalize } = await import('./bootstrap/epochMigrationEntry')
+        const legacy = await legacyEpochMigrationCommand({
+          appHome: Paths.root,
+          createApplication: () =>
+            createLegacyMigrationFinalize({ appHome: Paths.root, env: process.env }),
+          argv: Bun.argv.slice(4),
+        })
+        if (legacy) {
+          process.stdout.write(legacy.output)
+          if (legacy.status !== 'ok') process.exit(legacy.status === 'usage-error' ? 2 : 1)
+          break
+        }
+      }
+      if (
+        Bun.argv[3] === 'migration' &&
         !['resume', 'cancel', 'finalize', 'artifact'].includes(Bun.argv[4] ?? '') &&
         (!['status', 'rollback'].includes(Bun.argv[4] ?? '') ||
           !Bun.argv[5] ||
           Bun.argv[5].startsWith('--') ||
           Bun.argv[5].startsWith('dbm_e2_'))
       ) {
-        const { composeEpochMigrationCommand } = await import('./bootstrap/epochMigrationEntry')
+        const { composeEpochMigrationCommand, runAutomaticEpochUpgrade } =
+          await import('./bootstrap/epochMigrationEntry')
         const { epochMigrationCommand } = await import('./cli/epochMigration')
         const result = await epochMigrationCommand(Bun.argv.slice(4), {
-          application: composeEpochMigrationCommand(),
+          get application() {
+            return composeEpochMigrationCommand()
+          },
+          autoUpgrade: runAutomaticEpochUpgrade,
         })
         process.stdout.write(result.output)
-        if (result.status !== 'ok') process.exit(result.status === 'usage-error' ? 2 : 1)
+        if (result.status !== 'ok')
+          process.exit(result.exitCode ?? (result.status === 'usage-error' ? 2 : 1))
         break
       }
       if (Bun.argv[3] === 'compact') {
@@ -643,6 +668,9 @@ async function main(): Promise<void> {
       console.log(
         '  db migrate --to postgresql --url-env NAME --auto',
         'migrate SQLite to external PostgreSQL',
+      )
+      console.log(
+        '  db migration auto [--json] [--retry] automatically upgrade or resume an epoch-1 install',
       )
       console.log(
         '  db migration plan|acknowledge|withdraw-acknowledgement|run|status|trace|verify',

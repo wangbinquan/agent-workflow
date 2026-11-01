@@ -1,0 +1,54 @@
+{
+  "formatVersion": 1,
+  "epoch": 1,
+  "after": "0230_rfc368_reaction_execution_admissions",
+  "provenance": {
+    "kind": "curated",
+    "sources": [
+      "packages/backend/db/migrations/0230_rfc368_reaction_execution_admissions.sql"
+    ],
+    "note": "Small deterministic historical records; terminal execution and delivery states; original SQL performs its own backfills."
+  },
+  "rows": [
+    {
+      "table": "employee_reaction_artifacts",
+      "values": {
+        "digest": "37f4f9abf775f6842fda21dd366773a25c2885e75051754a4968bb1af0862582",
+        "kind": "diagnostics",
+        "body": "Review completed.",
+        "bytes": 17,
+        "created_at": 1778459500000
+      }
+    },
+    {
+      "table": "employee_reaction_dispatch",
+      "values": {
+        "round_ref": "01K3980000C32A8E73A68B1F3F",
+        "case_id": "01K3980000B5DB526E6BE3FA00",
+        "claim_epoch": 1,
+        "next_attempt_at": 1778459560000,
+        "dispatch_attempts": 1,
+        "operation_ref": "upgrade-execution",
+        "created_at": 1778459500000,
+        "updated_at": 1778459500000
+      }
+    },
+    {
+      "table": "reaction_execution_admissions",
+      "values": {
+        "operation_ref": "upgrade-execution",
+        "case_id": "01K3980000B5DB526E6BE3FA00",
+        "round_ref": "01K3980000C32A8E73A68B1F3F",
+        "claim_epoch": 1,
+        "fence_revision": 1,
+        "request_hash": "aa2741053c59de0f8a3d9e8ea7200495492cc6dd8e0bbe2d4b240284c60d99d8",
+        "authority_subject": "01K39800007DFB4CF67742CB06",
+        "authority_revision": 1,
+        "execution_ref": "01K3980000085154084C742759",
+        "state": "closed",
+        "created_at": 1778459500000,
+        "updated_at": 1778459500000
+      }
+    }
+  ]
+}

@@ -1,0 +1,31 @@
+{
+  "formatVersion": 1,
+  "epoch": 1,
+  "after": "0221_rfc342_memory_scope_move_events",
+  "provenance": {
+    "kind": "curated",
+    "sources": [
+      "packages/backend/db/migrations/0221_rfc342_memory_scope_move_events.sql"
+    ],
+    "note": "Small deterministic historical records; terminal execution and delivery states; original SQL performs its own backfills."
+  },
+  "rows": [
+    {
+      "table": "memory_scope_move_events",
+      "values": {
+        "id": "01K3980000A4DFF87C43C270D9",
+        "memory_id": "01K398000075C374CB4CF3CB2D",
+        "actor_user_id": "01K39800007DFB4CF67742CB06",
+        "actor_source": "session",
+        "from_scope_type": "workflow",
+        "from_scope_id": "01K398000045B34F16DB605A06",
+        "to_scope_type": "global",
+        "to_scope_id": null,
+        "expected_version": 1,
+        "resulting_version": 2,
+        "correlation_id": "upgrade-scope-move",
+        "occurred_at": 1778459560000
+      }
+    }
+  ]
+}

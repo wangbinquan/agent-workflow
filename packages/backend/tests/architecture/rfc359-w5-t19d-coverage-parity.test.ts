@@ -284,11 +284,22 @@ export const COVERAGE_PARITY_LEDGER: readonly string[] = [
   // RFC-370 v3 V5: the hosted backup/restore regression reads the PostgreSQL
   // source directly (+1 ref); the gap narrows from 5 to 4.
   // RFC-374 adds one real source/copy witness on each provider; coverage gap is unchanged.
-  'platform/persistence/LogicalSource: sqlite 12/8, postgresql 9/6',
+  // RFC-398 design §5 / §7.6: +1/+1 is the WAL-sidecar physical-file regression,
+  // which cannot run on a server database. As with W18's original copy fixtures
+  // above, the exact direct-import census records a native mechanism witness;
+  // the common logical-source conformance still drives both paired adapters.
+  'platform/persistence/LogicalSource: sqlite 13/9, postgresql 9/6',
   // T18: the retired Migrator pair is gone. Frozen SourceReader is the exact
   // relocated provider pair; 10/9 vs 3/3 comes from this guard's import/drive census,
   // not line coverage. The reference gap of seven remains an observation.
-  'platform/persistence/migration/SourceReader: sqlite 10/9, postgresql 3/3',
+  // RFC-398 design §3.8 / §5 / §7.6: the released-PG bridge witness drives both
+  // readers (+1/+1 each); the additional SQLite witness covers WAL/non-WAL copies.
+  // This is the documented native-fixture census, not a new single-engine rule
+  // for shared conversion. Retain the exact observation below and threshold 3.
+  // RFC-398 design §11 (+1 SQLite ref, no drive): the V9 codec-correction regression runs on
+  // both providers through `describeV1Providers`; it names the SQLite reader only in a
+  // type-only cast for the file-copy overload of `upgradeEpoch1Copy`.
+  'platform/persistence/migration/SourceReader: sqlite 13/11, postgresql 4/4',
   // RFC-395 relocates the existing PostgreSQL DDL compiler (and its old references)
   // alongside the new SQLite compiler; equivalence tests drive both explicit plans.
   // RFC-395 batched epoch-2 copy (+1 PostgreSQL ref): the regression for the
@@ -338,9 +349,12 @@ export const INVERTED_PAIRS: readonly string[] = [
   // RFC-359 AC-1（plan §5hn 批次一）：12 → 11，来源同上（注释里的提及被计入引用数）。
   // RFC-359 AC-1（plan §5hn 批次二 ④）：**退出名单**——差额 3 → 2，跌破阈值
   //（新基线 `rfc359-w5hn-workflow-route-launch-provider-parity` 归在 SQLite 一侧）。
-  'platform/persistence/LogicalSource: 12 vs 9',
+  // RFC-398 design §5 / §7.6: native WAL witness; see the exact coverage row above.
+  'platform/persistence/LogicalSource: 13 vs 9',
   // 同上：原文件落位使这一既有引用差首次进入观察名单，阈值保持不变。
-  'platform/persistence/migration/SourceReader: 10 vs 3',
+  // RFC-398 design §3.8 / §5 / §7.6: paired bridge plus native WAL witness; §11: one
+  // type-only reference from the dual-provider codec-correction regression (see above).
+  'platform/persistence/migration/SourceReader: 13 vs 4',
   // RFC-395 batched epoch-2 copy: 8 vs 32 → 8 vs 33, source noted on the ledger line.
   'platform/persistence/schema/Plan: 8 vs 33',
 ]

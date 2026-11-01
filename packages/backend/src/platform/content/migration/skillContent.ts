@@ -6,6 +6,7 @@ import { canonicalSchemaJson } from '@/platform/persistence/schema/canonical'
 import { contentRefColumns } from '../contentStore'
 import type { ContentRef } from '../contentRef'
 import { createSha256DigestBuilder } from '@/util/hash'
+import { contentByteFacts, skillTreeManifestBytes } from '../inventory/treeDigest'
 
 export interface LegacySkillBytes {
   readonly bytes: Uint8Array
@@ -156,10 +157,16 @@ export async function convertFrozenSkillContent(
         source.values.managed_path ?? source.values.files_path ?? snapshot.reference,
       ),
       ref,
+      // The content inventory observes a skill directory (local `directory-tree` and
+      // `database-tree` alike) as its canonical `skill-tree-manifest@1` bytes; the receipt must
+      // carry those same facts. The legacy path\0bytes\0 hash and the summed file size never
+      // matched that observation, so validation reported every filesystem skill as drifted and
+      // refused real upgrades (RFC-398 L2, v0.19.2 home with one skill).
       stat: {
         state: 'present',
-        sha256: snapshot.contentHash,
-        size: files.reduce((size, file) => size + file.size, 0),
+        ...contentByteFacts(
+          skillTreeManifestBytes(files.map(({ path, size, sha256 }) => ({ path, size, sha256 }))),
+        ),
       },
     }),
   )

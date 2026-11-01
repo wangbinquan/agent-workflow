@@ -1,0 +1,56 @@
+{
+  "formatVersion": 1,
+  "epoch": 1,
+  "after": "0240_rfc371_native_root_set",
+  "provenance": {
+    "kind": "curated",
+    "sources": [
+      "packages/backend/db/migrations/0240_rfc371_native_root_set.sql"
+    ],
+    "note": "Small deterministic historical records; terminal execution and delivery states; original SQL performs its own backfills."
+  },
+  "rows": [
+    {
+      "table": "task_execution_native_usage_root_heads",
+      "values": {
+        "invocation_id": "upgrade-task_execution-invocation",
+        "task_id": "01K3980000085154084C742759",
+        "node_run_id": "01K3980000D3D6DE02630EDFDE",
+        "protocol": "opencode",
+        "next_ordinal": "1",
+        "first_root_session_id": "upgrade-session",
+        "last_root_session_id": "upgrade-session",
+        "digest": "aa2741053c59de0f8a3d9e8ea7200495492cc6dd8e0bbe2d4b240284c60d99d8"
+      }
+    },
+    {
+      "table": "task_execution_native_usage_root_results",
+      "values": {
+        "invocation_id": "upgrade-invocation-id",
+        "result_id": "upgrade-result-id",
+        "root_session_id": "upgrade-root-session-id",
+        "document": "{}"
+      }
+    },
+    {
+      "table": "task_execution_native_usage_root_sets",
+      "values": {
+        "invocation_id": "upgrade-task_execution-invocation",
+        "next_ordinal": "1",
+        "root_digest": "aa2741053c59de0f8a3d9e8ea7200495492cc6dd8e0bbe2d4b240284c60d99d8",
+        "process_watermark": "1",
+        "observed_at": 1778459560000
+      }
+    },
+    {
+      "table": "task_execution_native_usage_root_transitions",
+      "values": {
+        "invocation_id": "upgrade-task_execution-invocation",
+        "ordinal_key": "upgrade-ordinal-key",
+        "root_session_id": "upgrade-root-session-id",
+        "document": "{}",
+        "digest": "aa2741053c59de0f8a3d9e8ea7200495492cc6dd8e0bbe2d4b240284c60d99d8"
+      }
+    }
+  ]
+}

@@ -1,0 +1,52 @@
+{
+  "formatVersion": 1,
+  "epoch": 1,
+  "after": "0212_rfc333_human_gate_operations",
+  "provenance": {
+    "kind": "curated",
+    "sources": [
+      "packages/backend/db/migrations/0212_rfc333_human_gate_operations.sql"
+    ],
+    "note": "Small deterministic historical records; terminal execution and delivery states; original SQL performs its own backfills."
+  },
+  "rows": [
+    {
+      "table": "collaboration_gate_artifacts",
+      "values": {
+        "operation_id": "01K398000002C3B88F137D374F",
+        "artifact_key": "review-document",
+        "artifact_kind": "review-doc",
+        "staged_path": "<AW_HOME>/runs/01K3980000085154084C742759/review/review/document/v1.md",
+        "final_path": "<AW_HOME>/runs/01K3980000085154084C742759/review/review/document/v1.md",
+        "sha256": "ae2960f103228419306b2dbf5e2b9f6fd6cc27cfd3e09e43df3cb1a4c727d9ff",
+        "byte_size": 65,
+        "state": "finalized",
+        "updated_at": 1778459500000
+      }
+    },
+    {
+      "table": "collaboration_gate_operations",
+      "values": {
+        "id": "01K398000002C3B88F137D374F",
+        "task_id": "01K3980000085154084C742759",
+        "gate_kind": "review",
+        "operation_kind": "open",
+        "gate_ref": "01K39800003EF6C465BA1EE405",
+        "idempotency_key": "upgrade-review-open",
+        "request_hash": "aa2741053c59de0f8a3d9e8ea7200495492cc6dd8e0bbe2d4b240284c60d99d8",
+        "expected_task_revision": 0,
+        "expected_gate_revision": 0,
+        "result_gate_revision": 1,
+        "state": "completed",
+        "claim_epoch": 0,
+        "schema_version": 1,
+        "manifest_json": "{\"version\":1,\"kind\":\"review-open\",\"docVersionId\":\"01K39800003EF6C465BA1EE405\"}",
+        "receipt_json": "{\"version\":1,\"docVersionId\":\"01K39800003EF6C465BA1EE405\"}",
+        "created_at": 1778459500000,
+        "updated_at": 1778459500000,
+        "committed_at": 1778459500000,
+        "completed_at": 1778459560000
+      }
+    }
+  ]
+}

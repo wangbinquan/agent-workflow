@@ -177,7 +177,7 @@ export interface NodeRunLineageAnchor {
  * 这段推导此前**只存在于 SQLite 的迁移 0210 里**，是一个 `AFTER INSERT` 触发器
  * （`rfc328_node_runs_lineage_after_insert`）；PostgreSQL 的 DDL 由 `db/schema.ts` 投影而来，
  * 一行触发器都没有。而铸行工厂 `buildNodeRunMintRecord` 对 `lineageSlotPathJson` 的默认值是
- * `overrides ?? inherited ?? null`，且**全 `src` 没有任何调用点传 `overrides.lineageSlotPathJson`**
+ * `overrides ?? inherited ?? null`，且**任务首个 node_run 的调用点都不传 `overrides.lineageSlotPathJson`**
  * ——于是一个任务的**首个** node_run 在两个引擎上落出的行不一样：
  *
  *   SQLite     lineage_slot_path_json = [任务的路径…, {stableNodeKey:'n1', …}]   ← 触发器补的

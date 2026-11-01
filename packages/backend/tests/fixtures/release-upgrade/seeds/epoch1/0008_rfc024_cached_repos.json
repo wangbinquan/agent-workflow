@@ -1,0 +1,41 @@
+{
+  "formatVersion": 1,
+  "epoch": 1,
+  "after": "0008_rfc024_cached_repos",
+  "provenance": {
+    "kind": "curated",
+    "sources": [
+      "packages/backend/db/migrations/0008_rfc024_cached_repos.sql"
+    ],
+    "note": "Small deterministic historical records; terminal execution and delivery states; original SQL performs its own backfills. Includes a deterministic public fixture secret.key for the released URL escrow backfill."
+  },
+  "rows": [
+    {
+      "table": "cached_repos",
+      "values": {
+        "id": "01K39800006904DCBDB1794059",
+        "url_hash": "d553d10ed93a0371b924bdd1490083a1f07cd00d6023e12e3d6a0c21f6195583",
+        "url": "https://example.invalid/upgrade.git",
+        "local_path": "<AW_HOME>/repositories/upgrade-example",
+        "default_branch": "main",
+        "last_fetched_at": 1778459500000,
+        "created_at": 1778459500000
+      }
+    }
+  ],
+  "migrationEffects": [
+    {
+      "table": "tasks",
+      "operation": "alter",
+      "rule": "Apply the released SQL to existing seeded rows, retaining its explicit defaults, rewrites and backfills.",
+      "source": "packages/backend/db/migrations/0008_rfc024_cached_repos.sql"
+    }
+  ],
+  "content": [
+    {
+      "path": "secret.key",
+      "base64": "nfpUzGjypBK5akKA/+VOIsWa4teoKzl5NGTrM01l7xw=",
+      "sha256": "89b0514df4a2b2bfdc8fbbad5d772b184004daf476f3eeecfaac1844f536ed98"
+    }
+  ]
+}

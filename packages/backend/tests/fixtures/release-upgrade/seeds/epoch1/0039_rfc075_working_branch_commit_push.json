@@ -1,0 +1,33 @@
+{
+  "formatVersion": 1,
+  "epoch": 1,
+  "after": "0039_rfc075_working_branch_commit_push",
+  "provenance": {
+    "kind": "curated",
+    "sources": [
+      "packages/backend/db/migrations/0039_rfc075_working_branch_commit_push.sql"
+    ],
+    "note": "Small deterministic historical records; terminal execution and delivery states; original SQL performs its own backfills."
+  },
+  "rows": [],
+  "migrationEffects": [
+    {
+      "table": "node_runs",
+      "operation": "alter",
+      "rule": "Apply the released SQL to existing seeded rows, retaining its explicit defaults, rewrites and backfills.",
+      "source": "packages/backend/db/migrations/0039_rfc075_working_branch_commit_push.sql"
+    },
+    {
+      "table": "task_repos",
+      "operation": "alter",
+      "rule": "Apply the released SQL to existing seeded rows, retaining its explicit defaults, rewrites and backfills.",
+      "source": "packages/backend/db/migrations/0039_rfc075_working_branch_commit_push.sql"
+    },
+    {
+      "table": "tasks",
+      "operation": "alter",
+      "rule": "Apply the released SQL to existing seeded rows, retaining its explicit defaults, rewrites and backfills.",
+      "source": "packages/backend/db/migrations/0039_rfc075_working_branch_commit_push.sql"
+    }
+  ]
+}

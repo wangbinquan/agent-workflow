@@ -91,12 +91,18 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   'git-repo-cache.test.ts: 1', // sqlite-execution-engine
   'helpers/epoch1Protocol/sqliteClient.ts: 2', // frozen-migration-revision
   'helpers/nativeQueryFixture.ts: 1', // real-file-database
+  // RFC-398 design §7.2 / §7.4: real released SQLite files and the SQLite bridge used to build PG sources; both provider matrix lanes consume this helper.
+  'helpers/releaseUpgrade/build.ts: 5', // real-file-database
+  // RFC-398 design §7.5: mutate the frozen SQLite journal alias; a current-schema eachProvider DB cannot represent this release artifact.
+  'helpers/releaseUpgrade/negative.ts: 1', // real-file-database
   'helpers/rfc349PostgresqlHostedEvidence.ts: 2', // real-file-database
   'helpers/rfc370SqliteAffectedRowsCases.ts: 1', // sqlite-only-primitive
   'helpers/rfc395FixtureGeneration.ts: 1', // real-file-database; moved from rfc395R2Harness.ts (CI round 1 fixture snapshots)
   'helpers/rfc395Q1Parity/fixture.ts: 1', // real-file-database
   'helpers/rfc395V3/sourceSeeds.ts: 1', // real-file-database; PGX-B frozen SQLite seed oracle for real PostgreSQL installs
   'helpers/rfc395V3Harness.ts: 1', // real-file-database
+  // RFC-398 design §2.2 / §7.6: persistent epoch-1 WAL home shared with killed/restarted child processes; the paired PG process fixture is separate.
+  'helpers/rfc398AutoUpgrade.ts: 1', // real-file-database
   'helpers/schemaFixture.ts: 1', // real-file-database
   'input-port-contract.test.ts: 1', // sqlite-execution-engine
   'integration-chaos/chaos-scenarios.integration.test.ts: 2', // real-file-database
@@ -149,6 +155,8 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   'migration-0257-rfc370-v2-retire-host-execution.test.ts: 2', // migration-chain
   'migration-freeze.ts: 1', // frozen-migration-revision
   'opencode-session-walk.test.ts: 1', // real-file-database
+  // RFC-398 design §7.5: delete a seed from the actual historical SQLite file and prove its coverage report rejects it.
+  'release-upgrade-matrix-negative-seed.test.ts: 1', // real-file-database
   'rerun-prior-output-e2e.test.ts: 1', // sqlite-execution-engine
   'resume-multi-repo-rollback.test.ts: 1', // sqlite-execution-engine
   'resume-task-idempotent.test.ts: 1', // sqlite-execution-engine
@@ -334,6 +342,13 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   'rfc395-v1-offline-upgrade.test.ts: 1', // real-file-database
   'rfc395-v1-source-readers.test.ts: 1', // real-file-database
   'rfc395-v3-source-access.test.ts: 1', // real-file-database
+  // RFC-398 design §7.6: mutate the persistent source file while the child is frozen at the reapproval barrier; the PG resume lane uses its server fixture.
+  'rfc398-auto-upgrade-resume.test.ts: 1', // real-file-database
+  // RFC-398 design §3.8 / §7.6: original SQLite@0223 and private bridge snapshots are compared with real released PG sources in the same transcript.
+  'rfc398-postgresql-bridge.test.ts: 2', // real-file-database
+  // RFC-398 design §5 / §7.5: WAL sidecars, native strict-open negative control, and byte-preserving snapshots are SQLite-only mechanisms
+  // (six real files: two epoch-1 templates with and without WAL, the epoch-2 template, the strict-open control, the writer and the offline snapshot).
+  'rfc398-wal-sidecar-open.test.ts: 6', // real-file-database
   'runner-subagent-live-capture.test.ts: 6', // real-file-database
   'scheduler-audit-gap1-limits-resume-startedat.test.ts: 1', // sqlite-execution-engine
   'scheduler-audit-gap4-loop-exit-out-of-scope-port.test.ts: 1', // sqlite-execution-engine

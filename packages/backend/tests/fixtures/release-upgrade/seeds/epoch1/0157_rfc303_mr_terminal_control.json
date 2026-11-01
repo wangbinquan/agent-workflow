@@ -1,0 +1,96 @@
+{
+  "formatVersion": 1,
+  "epoch": 1,
+  "after": "0157_rfc303_mr_terminal_control",
+  "provenance": {
+    "kind": "curated",
+    "sources": [
+      "packages/backend/db/migrations/0157_rfc303_mr_terminal_control.sql"
+    ],
+    "note": "Small deterministic historical records; terminal execution and delivery states; original SQL performs its own backfills."
+  },
+  "rows": [
+    {
+      "table": "webhook_mr_control_effects",
+      "values": {
+        "id": "01K3980000C8BDADF85B01B5CC",
+        "delivery_id": "01K39800007547B285A0738E24",
+        "endpoint_id": "01K3980000BBDD864AB0F66C6E",
+        "stream_key": "mr:1",
+        "binding": "upgrade-binding",
+        "revision": 1,
+        "observed_event_type": "mr_merged",
+        "kind": "fence-merged",
+        "status": "succeeded",
+        "attempt_count": 1,
+        "next_attempt_at": 1778459500000,
+        "created_at": 1778459500000,
+        "updated_at": 1778459500000
+      }
+    },
+    {
+      "table": "webhook_mr_control_targets",
+      "values": {
+        "effect_id": "01K3980000C8BDADF85B01B5CC",
+        "task_id": "01K3980000085154084C742759",
+        "prior_status": "done",
+        "fence_outcome": "unchanged",
+        "cancel_outcome": "already-terminal",
+        "release_outcome": "no-active-owner",
+        "updated_at": 1778459500000
+      }
+    },
+    {
+      "table": "webhook_mr_launch_guards",
+      "values": {
+        "id": "01K39800001BA157DC3CF59BD1",
+        "endpoint_id": "01K3980000BBDD864AB0F66C6E",
+        "stream_key": "mr:1",
+        "binding": "upgrade-binding",
+        "launch_revision": 1,
+        "delivery_id": "01K39800007547B285A0738E24",
+        "fire_id": "01K39800005F960E75CDD2C111",
+        "trigger_id": "01K398000061040A0A11451169",
+        "trigger_name_snapshot": "Disabled report trigger",
+        "task_id": "01K3980000085154084C742759",
+        "status": "launch-settled",
+        "created_at": 1778459500000,
+        "updated_at": 1778459500000
+      }
+    },
+    {
+      "table": "webhook_mr_stream_states",
+      "values": {
+        "endpoint_id": "01K3980000BBDD864AB0F66C6E",
+        "stream_key": "mr:1",
+        "project_id": "1",
+        "mr_iid": "1",
+        "state": "merged",
+        "revision": 1,
+        "last_terminal_revision": 1,
+        "last_delivery_id": "01K39800007547B285A0738E24",
+        "updated_at": 1778459500000
+      }
+    }
+  ],
+  "migrationEffects": [
+    {
+      "table": "tasks",
+      "operation": "alter",
+      "rule": "Apply the released SQL to existing seeded rows, retaining its explicit defaults, rewrites and backfills.",
+      "source": "packages/backend/db/migrations/0157_rfc303_mr_terminal_control.sql"
+    },
+    {
+      "table": "webhook_deliveries",
+      "operation": "alter",
+      "rule": "Apply the released SQL to existing seeded rows, retaining its explicit defaults, rewrites and backfills.",
+      "source": "packages/backend/db/migrations/0157_rfc303_mr_terminal_control.sql"
+    },
+    {
+      "table": "webhook_triggers",
+      "operation": "alter",
+      "rule": "Apply the released SQL to existing seeded rows, retaining its explicit defaults, rewrites and backfills.",
+      "source": "packages/backend/db/migrations/0157_rfc303_mr_terminal_control.sql"
+    }
+  ]
+}

@@ -1,0 +1,39 @@
+{
+  "formatVersion": 1,
+  "epoch": 1,
+  "after": "0245_rfc371_observation_calculations",
+  "provenance": {
+    "kind": "curated",
+    "sources": [
+      "packages/backend/db/migrations/0245_rfc371_observation_calculations.sql"
+    ],
+    "note": "Small deterministic historical records; terminal execution and delivery states; original SQL performs its own backfills."
+  },
+  "rows": [
+    {
+      "table": "observation_calculation_rows",
+      "values": {
+        "cache_key": "upgrade-cache-key",
+        "namespace": "upgrade-namespace",
+        "key": "upgrade-key",
+        "document": "{}"
+      }
+    },
+    {
+      "table": "observation_calculation_versions",
+      "values": {
+        "cache_key": "upgrade-cache-key",
+        "source_key": "upgrade-source-key",
+        "document": "{}"
+      }
+    }
+  ],
+  "migrationEffects": [
+    {
+      "table": "observation_source_revisions",
+      "operation": "backfill",
+      "rule": "Original migration inserts rows from prior ledger data or installs its declared singleton/configuration rows; do not duplicate them.",
+      "source": "packages/backend/db/migrations/0245_rfc371_observation_calculations.sql"
+    }
+  ]
+}

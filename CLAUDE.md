@@ -212,6 +212,9 @@ unstaged changes`），而它的 `--autostash` 属于被禁的 stash。因此：
   §RFC workflow 第 7 条「能力影响清单」在以功能为由收缩既有能力时仍适用。
 - **fan-out 审计要前后端同粒度**：切审计 agent 时前端按后端同粒度切（~50% LOC），且必含一个专门的「公共组件 / 设计系统可抽取项」agent。
 - **发版**：push `v*` tag 触发发版 workflow；自定义中文 release note 要等 workflow **完全跑完后**再 edit 进去，否则 `generate_release_notes` 会覆盖。
+  - RFC-398：新增迁移或 epoch-2 schema history 版本必须同步提交对应种子文件（history 版本可为空）与独立 mapping-oracle 条目，新表必须有业务种子；不得从被测 converter 的输出生成预言，不得用冻结链空库代替真实升级证据。
+  - `build` 只上传 workflow artifact；Linux／macOS／Windows 的 `upgrade-gate` 全部通过后，`publish` 才上传 release 资产并取消草稿。门未通过保持 draft；重跑已公开版本也不能提前覆盖公开资产。
+  - 每次发布后用 `bun scripts/release-upgrade/registry.ts --write` 登记，补齐该版本种子、映射与覆盖账本并审阅入库；下次发布须通过 `registry.ts --check`，且低于候选 tag 的最高已公开版本（含 prerelease）已登记并有种子覆盖。命令与夜间／负对照说明见 [发布升级回滚手册](docs/release-upgrade-rollback.md)。
 - **知识沉淀进仓库、不锁在个人 memory**：本仓多人协作，**仓库是唯一事实源**——通用踩坑进 `docs/dev-gotchas.md`、审计未决进 `docs/audit-backlog.md`、强制规则/约定进本文件、RFC 细节进各 `design/RFC-XXX/`。Claude 的个人 memory 只留**因人 / 因机而异**的配置（本机 checkout 路径、语言偏好、个人工具链），凡对他人有用的一律落仓。
 
 ## Product vision (from `proposal/init.md`)

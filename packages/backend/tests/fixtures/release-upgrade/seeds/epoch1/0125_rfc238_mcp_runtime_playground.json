@@ -1,0 +1,104 @@
+{
+  "formatVersion": 1,
+  "epoch": 1,
+  "after": "0125_rfc238_mcp_runtime_playground",
+  "provenance": {
+    "kind": "curated",
+    "sources": [
+      "packages/backend/db/migrations/0125_rfc238_mcp_runtime_playground.sql"
+    ],
+    "note": "Small deterministic historical records; terminal execution and delivery states; original SQL performs its own backfills."
+  },
+  "rows": [
+    {
+      "table": "mcp_runtime_test_create_receipts",
+      "values": {
+        "mcp_id": "01K3980000FC1997E4D80E81F6",
+        "owner_user_id": "01K39800007DFB4CF67742CB06",
+        "client_create_id": "upgrade-mcp-create",
+        "request_digest": "aa2741053c59de0f8a3d9e8ea7200495492cc6dd8e0bbe2d4b240284c60d99d8",
+        "session_id": "01K39800009F19AE79A1653ADD",
+        "accepted_turn_id": "01K39800005FACDC2DDA1560C6",
+        "created_at": 1778459500000,
+        "expires_at": 1778459560000
+      }
+    },
+    {
+      "table": "mcp_runtime_test_events",
+      "values": {
+        "id": 1,
+        "test_session_id": "01K39800009F19AE79A1653ADD",
+        "first_seen_turn_id": "01K39800005FACDC2DDA1560C6",
+        "event_seq": 1,
+        "ts": 1778459560000,
+        "kind": "text",
+        "payload": "{\"text\":\"No tools are configured.\"}",
+        "source": "stream"
+      }
+    },
+    {
+      "table": "mcp_runtime_test_sessions",
+      "values": {
+        "id": "01K39800009F19AE79A1653ADD",
+        "mcp_id": "01K3980000FC1997E4D80E81F6",
+        "owner_user_id": "01K39800007DFB4CF67742CB06",
+        "client_create_id": "upgrade-mcp-create",
+        "client_create_digest": "aa2741053c59de0f8a3d9e8ea7200495492cc6dd8e0bbe2d4b240284c60d99d8",
+        "status": "ended",
+        "end_reason": "user",
+        "mcp_config_hash": "aa2741053c59de0f8a3d9e8ea7200495492cc6dd8e0bbe2d4b240284c60d99d8",
+        "runtime_row_id": "01K39800008166E7DDECF56BC9",
+        "runtime_name": "upgrade-opencode",
+        "runtime_protocol": "opencode",
+        "runtime_snapshot_json": "{\"id\":\"01K39800008166E7DDECF56BC9\",\"name\":\"upgrade-opencode\",\"protocol\":\"opencode\",\"binaryPath\":\"/usr/bin/false\"}",
+        "runtime_fingerprint": "aa2741053c59de0f8a3d9e8ea7200495492cc6dd8e0bbe2d4b240284c60d99d8",
+        "runtime_binary_path": "/usr/bin/false",
+        "runtime_session_id": "upgrade-mcp-session",
+        "native_session_state": "ready",
+        "turn_seq": 1,
+        "session_version": 1,
+        "scratch_root": "<AW_HOME>/mcp-tests/upgrade",
+        "session_store_root": "<AW_HOME>/mcp-tests/upgrade/store",
+        "cleanup_state": "complete",
+        "created_at": 1778459500000,
+        "updated_at": 1778459500000,
+        "ended_at": 1778459560000
+      }
+    },
+    {
+      "table": "mcp_runtime_test_turns",
+      "values": {
+        "id": "01K39800005FACDC2DDA1560C6",
+        "session_id": "01K39800009F19AE79A1653ADD",
+        "seq": 1,
+        "client_message_id": "upgrade-mcp-message",
+        "prompt_text": "List available tools.",
+        "status": "succeeded",
+        "hard_deadline_at": 1778459560000,
+        "capture_state": "complete",
+        "capture_last_event_seq": 0,
+        "capture_event_bytes": 0,
+        "exit_code": 0,
+        "started_at": 1778459500000,
+        "finished_at": 1778459560000,
+        "created_at": 1778459500000
+      }
+    },
+    {
+      "table": "opencode_mcp_test_session_owners",
+      "values": {
+        "runtime_session_id": "upgrade-mcp-session",
+        "test_session_id": "01K39800009F19AE79A1653ADD",
+        "created_turn_id": "01K39800005FACDC2DDA1560C6",
+        "current_turn_id": "01K39800005FACDC2DDA1560C6",
+        "identity_digest": "aa2741053c59de0f8a3d9e8ea7200495492cc6dd8e0bbe2d4b240284c60d99d8",
+        "runtime_binary_digest": "aa2741053c59de0f8a3d9e8ea7200495492cc6dd8e0bbe2d4b240284c60d99d8",
+        "session_contract_digest": "aa2741053c59de0f8a3d9e8ea7200495492cc6dd8e0bbe2d4b240284c60d99d8",
+        "session_store_key": "upgrade-mcp-store",
+        "project_id": "upgrade-project",
+        "protocol_codec": "opencode-v1",
+        "reported_version": "1.3.5"
+      }
+    }
+  ]
+}

@@ -25,6 +25,7 @@ import {
   type DatabaseMigrationPhase,
   type DatabaseMigrationProgress,
   type DatabaseMigrationTargetConfig,
+  type DatabaseRollbackEligibility,
 } from '../domain/databaseMigration'
 
 export class DatabaseMigrationControlPlaneError extends Error {
@@ -58,7 +59,7 @@ export interface DatabaseMigrationStatusView {
   readonly failure: DatabaseMigrationFailure | null
   readonly cancelEligible: boolean
   readonly resumeEligible: boolean
-  readonly rollback: ReturnType<typeof databaseRollbackEligibility>
+  readonly rollback: DatabaseRollbackEligibility
   readonly firstLiveWriteAt: number | null
   readonly rolledBackAt: number | null
   readonly rollbackReceiptDigest: string | null

@@ -1,0 +1,90 @@
+{
+  "formatVersion": 1,
+  "note": "User approved exactly these 14 RFC-224 official OpenCode digest allowlist exclusions on 2026-10-31. All remain required in L1 and explicitly mapped in L2 nightly. Registry generation must match the source-derived reason exactly.",
+  "entries": [
+    {
+      "tag": "v0.17.0",
+      "reason": "Published production driver requires the RFC-224 official OpenCode SHA-256 allowlist and direct-API launcher; the compiled stub cannot pass it. See this tag: packages/backend/src/services/runtime/opencode/{driver,verifiedPlan,officialBuilds}.ts. L2 exclusion requires user approval; L1 remains required.",
+      "approvedBy": "user",
+      "approvedAt": "2026-10-31"
+    },
+    {
+      "tag": "v0.17.1",
+      "reason": "Published production driver requires the RFC-224 official OpenCode SHA-256 allowlist and direct-API launcher; the compiled stub cannot pass it. See this tag: packages/backend/src/services/runtime/opencode/{driver,verifiedPlan,officialBuilds}.ts. L2 exclusion requires user approval; L1 remains required.",
+      "approvedBy": "user",
+      "approvedAt": "2026-10-31"
+    },
+    {
+      "tag": "v0.17.2",
+      "reason": "Published production driver requires the RFC-224 official OpenCode SHA-256 allowlist and direct-API launcher; the compiled stub cannot pass it. See this tag: packages/backend/src/services/runtime/opencode/{driver,verifiedPlan,officialBuilds}.ts. L2 exclusion requires user approval; L1 remains required.",
+      "approvedBy": "user",
+      "approvedAt": "2026-10-31"
+    },
+    {
+      "tag": "v0.17.3",
+      "reason": "Published production driver requires the RFC-224 official OpenCode SHA-256 allowlist and direct-API launcher; the compiled stub cannot pass it. See this tag: packages/backend/src/services/runtime/opencode/{driver,verifiedPlan,officialBuilds}.ts. L2 exclusion requires user approval; L1 remains required.",
+      "approvedBy": "user",
+      "approvedAt": "2026-10-31"
+    },
+    {
+      "tag": "v0.17.4",
+      "reason": "Published production driver requires the RFC-224 official OpenCode SHA-256 allowlist and direct-API launcher; the compiled stub cannot pass it. See this tag: packages/backend/src/services/runtime/opencode/{driver,verifiedPlan,officialBuilds}.ts. L2 exclusion requires user approval; L1 remains required.",
+      "approvedBy": "user",
+      "approvedAt": "2026-10-31"
+    },
+    {
+      "tag": "v0.17.5",
+      "reason": "Published production driver requires the RFC-224 official OpenCode SHA-256 allowlist and direct-API launcher; the compiled stub cannot pass it. See this tag: packages/backend/src/services/runtime/opencode/{driver,verifiedPlan,officialBuilds}.ts. L2 exclusion requires user approval; L1 remains required.",
+      "approvedBy": "user",
+      "approvedAt": "2026-10-31"
+    },
+    {
+      "tag": "v0.17.6",
+      "reason": "Published production driver requires the RFC-224 official OpenCode SHA-256 allowlist and direct-API launcher; the compiled stub cannot pass it. See this tag: packages/backend/src/services/runtime/opencode/{driver,verifiedPlan,officialBuilds}.ts. L2 exclusion requires user approval; L1 remains required.",
+      "approvedBy": "user",
+      "approvedAt": "2026-10-31"
+    },
+    {
+      "tag": "v0.17.7",
+      "reason": "Published production driver requires the RFC-224 official OpenCode SHA-256 allowlist and direct-API launcher; the compiled stub cannot pass it. See this tag: packages/backend/src/services/runtime/opencode/{driver,verifiedPlan,officialBuilds}.ts. L2 exclusion requires user approval; L1 remains required.",
+      "approvedBy": "user",
+      "approvedAt": "2026-10-31"
+    },
+    {
+      "tag": "v0.17.8",
+      "reason": "Published production driver requires the RFC-224 official OpenCode SHA-256 allowlist and direct-API launcher; the compiled stub cannot pass it. See this tag: packages/backend/src/services/runtime/opencode/{driver,verifiedPlan,officialBuilds}.ts. L2 exclusion requires user approval; L1 remains required.",
+      "approvedBy": "user",
+      "approvedAt": "2026-10-31"
+    },
+    {
+      "tag": "v0.17.9",
+      "reason": "Published production driver requires the RFC-224 official OpenCode SHA-256 allowlist and direct-API launcher; the compiled stub cannot pass it. See this tag: packages/backend/src/services/runtime/opencode/{driver,verifiedPlan,officialBuilds}.ts. L2 exclusion requires user approval; L1 remains required.",
+      "approvedBy": "user",
+      "approvedAt": "2026-10-31"
+    },
+    {
+      "tag": "v0.17.10",
+      "reason": "Published production driver requires the RFC-224 official OpenCode SHA-256 allowlist and direct-API launcher; the compiled stub cannot pass it. See this tag: packages/backend/src/services/runtime/opencode/{driver,verifiedPlan,officialBuilds}.ts. L2 exclusion requires user approval; L1 remains required.",
+      "approvedBy": "user",
+      "approvedAt": "2026-10-31"
+    },
+    {
+      "tag": "v0.17.11",
+      "reason": "Published production driver requires the RFC-224 official OpenCode SHA-256 allowlist and direct-API launcher; the compiled stub cannot pass it. See this tag: packages/backend/src/services/runtime/opencode/{driver,verifiedPlan,officialBuilds}.ts. L2 exclusion requires user approval; L1 remains required.",
+      "approvedBy": "user",
+      "approvedAt": "2026-10-31"
+    },
+    {
+      "tag": "v0.18.0",
+      "reason": "Published production driver requires the RFC-224 official OpenCode SHA-256 allowlist and direct-API launcher; the compiled stub cannot pass it. See this tag: packages/backend/src/services/runtime/opencode/{driver,verifiedPlan,officialBuilds}.ts. L2 exclusion requires user approval; L1 remains required.",
+      "approvedBy": "user",
+      "approvedAt": "2026-10-31"
+    },
+    {
+      "tag": "v0.18.1",
+      "reason": "Published production driver requires the RFC-224 official OpenCode SHA-256 allowlist and direct-API launcher; the compiled stub cannot pass it. See this tag: packages/backend/src/services/runtime/opencode/{driver,verifiedPlan,officialBuilds}.ts. L2 exclusion requires user approval; L1 remains required.",
+      "approvedBy": "user",
+      "approvedAt": "2026-10-31"
+    }
+  ]
+}

@@ -3,8 +3,10 @@ import type { DatabaseGenerationFile } from '@/platform/persistence/generationVa
 import type { GenerationPointerV2 } from '@/platform/persistence/generationPointerV2'
 import { EpochSwitchError, type EpochSwitchJournal } from './model'
 import { phaseIndex } from './transitions'
+import type { AutoUpgradeSession } from './autoUpgrade'
 
 export interface InstallationFacts {
+  readonly autoUpgradeSessions?: readonly AutoUpgradeSession[]
   readonly pointer: GenerationPointerV2 | DatabaseGenerationFile | null
   readonly provider: DatabaseProvider
   readonly sourceExists: boolean
@@ -84,7 +86,10 @@ export function classifyEpochInstallation(f: InstallationFacts): EpochInstallati
   }
 }
 
-export function epochInstallationGuidance(state: EpochInstallationState): string | null {
+export function epochInstallationGuidance(
+  state: EpochInstallationState,
+  autoEpochMigration = true,
+): string | null {
   switch (state.kind) {
     case 'fresh':
       return null
@@ -96,7 +101,9 @@ export function epochInstallationGuidance(state: EpochInstallationState): string
         : state.operation &&
             !['completed', 'rolled-back', 'abandoned'].includes(state.operation.payload.status)
           ? `This is an epoch-1 installation with operation ${state.operation.payload.operationId}. Run db migration status ${state.operation.payload.operationId}, then resume that operation with its approval digest.`
-          : 'This is an epoch-1 installation. Run db migration plan, review its plan, then run with --approve <approvalDigest> while offline.'
+          : autoEpochMigration
+            ? 'This is an epoch-1 installation. Run agent-workflow migrate for automatic upgrade, or db migration plan, review its plan, then run with --approve <approvalDigest> while offline.'
+            : 'This is an epoch-1 installation; autoEpochMigration is false. Run db migration plan, review its plan, then run with --approve <approvalDigest> while offline.'
     case 'switch-recovery-required':
       return `Keep the daemon stopped. Recover db migration ${state.operation.payload.operationId}: ${state.reason}; use status, run or rollback before starting writers.`
   }

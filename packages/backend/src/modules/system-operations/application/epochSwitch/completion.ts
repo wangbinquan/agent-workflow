@@ -32,6 +32,7 @@ export async function verifyEpochSwitch(session: EpochSwitchSession) {
         session.deps.acceptanceProbes ?? session.deps.probes ?? [],
       )
       const name = `acceptance-health-${session.journal.payload.revision}.json`
+      await session.deps.autoUpgradeCheckpoint?.('acceptance-unpublished')
       const artifacts = session.artifacts()
       if (artifacts) {
         const digest = await artifacts.put(name, Buffer.from(JSON.stringify(health)))

@@ -1,0 +1,27 @@
+{
+  "formatVersion": 1,
+  "epoch": 1,
+  "after": "0169_rfc304_fix_attempts",
+  "provenance": {
+    "kind": "curated",
+    "sources": [
+      "packages/backend/db/migrations/0169_rfc304_fix_attempts.sql"
+    ],
+    "note": "Small deterministic historical records; terminal execution and delivery states; original SQL performs its own backfills."
+  },
+  "rows": [
+    {
+      "table": "code_fix_attempts",
+      "values": {
+        "id": "01K398000076FBCB76259B331C",
+        "work_item_id": "01K3980000BF31929DD24F5787",
+        "fingerprint": "aa2741053c59de0f8a3d9e8ea7200495492cc6dd8e0bbe2d4b240284c60d99d8",
+        "attempt_seq": 1,
+        "round_id": "01K3980000D25D5DEF6EFDEEBF",
+        "summary": "Documentation corrected",
+        "outcome": "fixed",
+        "created_at": 1778459500000
+      }
+    }
+  ]
+}

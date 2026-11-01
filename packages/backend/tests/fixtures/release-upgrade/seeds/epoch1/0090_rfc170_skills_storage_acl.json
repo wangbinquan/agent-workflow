@@ -1,0 +1,89 @@
+{
+  "formatVersion": 1,
+  "epoch": 1,
+  "after": "0090_rfc170_skills_storage_acl",
+  "provenance": {
+    "kind": "curated",
+    "sources": [
+      "packages/backend/db/migrations/0090_rfc170_skills_storage_acl.sql",
+      "packages/backend/src/modules/resource-catalog/infrastructure/legacy/skillDeleteOp.ts"
+    ],
+    "note": "Small deterministic historical records; terminal execution and delivery states; original SQL performs its own backfills. Skill journal/lock cover a delete after DB commit and trash removal but before finishOperation: the deleted skill is absent, and the live skill has no unfinished operation."
+  },
+  "rows": [
+    {
+      "table": "skill_operation_locks",
+      "values": {
+        "locked_skill_id": "01K3980000DE1E7ED000000000",
+        "op_id": "01K3980000B5F217FAAC134C68",
+        "created_at": 1778459500000
+      }
+    },
+    {
+      "table": "skill_operations",
+      "values": {
+        "op_id": "01K3980000B5F217FAAC134C68",
+        "skill_id": "01K3980000DE1E7ED000000000",
+        "kind": "delete",
+        "phase": "db-committed",
+        "active": 1,
+        "target_version": null,
+        "generation": null,
+        "owner_user_id": null,
+        "precondition_json": "{\"name\":\"upgrade-deleted-skill\"}",
+        "created_at": 1778459500000,
+        "backup_path": "<AW_HOME>/skills/.trash/01K3980000DE1E7ED000000000-01K3980000B5F217FAAC134C68"
+      }
+    }
+  ],
+  "migrationEffects": [
+    {
+      "table": "agents",
+      "operation": "alter",
+      "rule": "Apply the released SQL to existing seeded rows, retaining its explicit defaults, rewrites and backfills.",
+      "source": "packages/backend/db/migrations/0090_rfc170_skills_storage_acl.sql"
+    },
+    {
+      "table": "fusions",
+      "operation": "alter",
+      "rule": "Apply the released SQL to existing seeded rows, retaining its explicit defaults, rewrites and backfills.",
+      "source": "packages/backend/db/migrations/0090_rfc170_skills_storage_acl.sql"
+    },
+    {
+      "table": "mcps",
+      "operation": "alter",
+      "rule": "Apply the released SQL to existing seeded rows, retaining its explicit defaults, rewrites and backfills.",
+      "source": "packages/backend/db/migrations/0090_rfc170_skills_storage_acl.sql"
+    },
+    {
+      "table": "plugins",
+      "operation": "alter",
+      "rule": "Apply the released SQL to existing seeded rows, retaining its explicit defaults, rewrites and backfills.",
+      "source": "packages/backend/db/migrations/0090_rfc170_skills_storage_acl.sql"
+    },
+    {
+      "table": "skill_sources",
+      "operation": "alter",
+      "rule": "Apply the released SQL to existing seeded rows, retaining its explicit defaults, rewrites and backfills.",
+      "source": "packages/backend/db/migrations/0090_rfc170_skills_storage_acl.sql"
+    },
+    {
+      "table": "skills",
+      "operation": "alter",
+      "rule": "Apply the released SQL to existing seeded rows, retaining its explicit defaults, rewrites and backfills.",
+      "source": "packages/backend/db/migrations/0090_rfc170_skills_storage_acl.sql"
+    },
+    {
+      "table": "workflows",
+      "operation": "alter",
+      "rule": "Apply the released SQL to existing seeded rows, retaining its explicit defaults, rewrites and backfills.",
+      "source": "packages/backend/db/migrations/0090_rfc170_skills_storage_acl.sql"
+    },
+    {
+      "table": "workgroups",
+      "operation": "alter",
+      "rule": "Apply the released SQL to existing seeded rows, retaining its explicit defaults, rewrites and backfills.",
+      "source": "packages/backend/db/migrations/0090_rfc170_skills_storage_acl.sql"
+    }
+  ]
+}

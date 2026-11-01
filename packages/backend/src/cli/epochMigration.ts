@@ -4,9 +4,10 @@ import type { DatabaseCliResult } from './database'
 import type { EpochSwitchApplication } from '@/modules/system-operations/public/commands'
 import type { EpochSwitchTargetInput } from '@/modules/system-operations/public/types'
 import { CanonicalLogicalValueSchema } from '@/platform/persistence/migration/legacy/logicalDatabaseArtifact'
+import type { AutoUpgradeConclusion } from '@/modules/system-operations/public/types'
 
 const usage =
-  'db migration plan|acknowledge|withdraw-acknowledgement|run|status|trace|verify|rollback|complete|discard|receipt|restore-backup [arguments] [--json]'
+  'db migration auto [--json] [--retry] | plan|acknowledge|withdraw-acknowledgement|run|status|trace|verify|rollback|complete|discard|receipt|restore-backup [arguments] [--json]'
 const booleanFlags = new Set([
   '--all',
   '--rehearse',
@@ -15,8 +16,10 @@ const booleanFlags = new Set([
   '--replay',
   '--confirm',
   '--restore-config',
+  '--retry',
 ])
 const allowed: Record<string, readonly string[]> = {
+  auto: ['--json', '--retry'],
   plan: [
     '--target',
     '--target-url-env',
@@ -107,10 +110,21 @@ export async function epochMigrationCommand(
   deps: {
     application: EpochSwitchApplication
     operatorName?: string
+    autoUpgrade?: (input: { retry: boolean }) => Promise<AutoUpgradeConclusion>
   },
-): Promise<DatabaseCliResult> {
+): Promise<DatabaseCliResult & { readonly exitCode?: number }> {
   try {
     const p = parse(argv)
+    if (p.verb === 'auto') {
+      p.arity(0)
+      if (!deps.autoUpgrade) throw new Error('automatic upgrade is unavailable for this deployment')
+      const result = await deps.autoUpgrade({ retry: p.has('--retry') })
+      return {
+        status: result.exitCode === 0 ? 'ok' : 'error',
+        exitCode: result.exitCode,
+        output: JSON.stringify(result) + '\n',
+      }
+    }
     const app = deps.application
     const op = p.positional[0]!
     let result: unknown

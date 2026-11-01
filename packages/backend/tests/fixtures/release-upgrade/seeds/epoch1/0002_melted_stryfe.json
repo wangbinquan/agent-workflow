@@ -1,0 +1,118 @@
+{
+  "formatVersion": 1,
+  "epoch": 1,
+  "after": "0002_melted_stryfe",
+  "provenance": {
+    "kind": "curated",
+    "sources": [
+      "packages/backend/db/migrations/0002_melted_stryfe.sql",
+      "v0.1.0:packages/backend/src/services/review.ts:254-264"
+    ],
+    "note": "Small deterministic historical records; terminal execution and delivery states; original SQL performs its own backfills. Review body paths are relative to app home, using the released task/review-node/port/version layout."
+  },
+  "rows": [
+    {
+      "table": "node_runs",
+      "values": {
+        "id": "01K3980000289A7465F249D86E",
+        "task_id": "01K3980000085154084C742759",
+        "node_id": "review",
+        "iteration": 0,
+        "retry_index": 0,
+        "status": "done",
+        "started_at": 1778459500000,
+        "finished_at": 1778459560000,
+        "exit_code": 0,
+        "prompt_text": null,
+        "tok_input": 12,
+        "tok_output": 8,
+        "tok_cache_create": 0,
+        "tok_cache_read": 0,
+        "tok_total": 20,
+        "review_iteration": 0
+      },
+      "expect": {
+        "api": [
+          {
+            "path": "/api/tasks/01K3980000085154084C742759/node-runs",
+            "at": "/runs",
+            "match": {
+              "id": "01K3980000289A7465F249D86E"
+            },
+            "equals": {
+              "/id": "01K3980000289A7465F249D86E",
+              "/taskId": "01K3980000085154084C742759",
+              "/nodeId": "review",
+              "/status": "done"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "table": "doc_versions",
+      "values": {
+        "id": "01K39800003EF6C465BA1EE405",
+        "task_id": "01K3980000085154084C742759",
+        "review_node_id": "review",
+        "review_node_run_id": "01K3980000289A7465F249D86E",
+        "source_node_id": "worker",
+        "source_port_name": "document",
+        "version_index": 1,
+        "review_iteration": 0,
+        "body_path": "runs/01K3980000085154084C742759/review/review/document/v1.md",
+        "comments_json": "[]",
+        "decision": "approved",
+        "decision_reason": "Report retained",
+        "created_at": 1778459500000,
+        "decided_at": 1778459560000,
+        "decided_by": null
+      },
+      "expect": {
+        "api": [
+          {
+            "path": "/api/reviews/01K3980000289A7465F249D86E/versions/01K39800003EF6C465BA1EE405",
+            "at": "",
+            "equals": {
+              "/id": "01K39800003EF6C465BA1EE405",
+              "/decision": "approved"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "table": "review_comments",
+      "values": {
+        "id": "01K398000090F931BE832D0AE4",
+        "doc_version_id": "01K39800003EF6C465BA1EE405",
+        "anchor_section_path": "[\"Upgrade report\"]",
+        "anchor_paragraph_idx": 0,
+        "anchor_offset_start": 0,
+        "anchor_offset_end": 10,
+        "selected_text": "The release",
+        "context_before": "",
+        "context_after": " ledger",
+        "occurrence_index": 0,
+        "comment_text": "Preserve this document.",
+        "author": "local",
+        "created_at": 1778459500000
+      }
+    }
+  ],
+  "migrationEffects": [
+    {
+      "table": "node_runs",
+      "operation": "alter",
+      "rule": "Apply the released SQL to existing seeded rows, retaining its explicit defaults, rewrites and backfills.",
+      "source": "packages/backend/db/migrations/0002_melted_stryfe.sql"
+    }
+  ],
+  "content": [
+    {
+      "path": "runs/01K3980000085154084C742759/review/review/document/v1.md",
+      "utf8": "# Upgrade report\n\nThe release ledger keeps this review document.\n",
+      "sha256": "ae2960f103228419306b2dbf5e2b9f6fd6cc27cfd3e09e43df3cb1a4c727d9ff"
+    }
+  ]
+}

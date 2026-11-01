@@ -1,3 +1,4 @@
+import { openSqliteForRead } from '@/platform/persistence/sqlite/openForRead'
 // RFC-213/RFC-349 — provider-aware scheduled backup + retention + safety net.
 //
 // - startBackupScheduler: an interval ticker (reentrancy-guarded, like the GC /
@@ -11,7 +12,7 @@
 //   can't be SELECTed by the NEW binary).
 
 import type { LogicalSchemaContract } from '@/platform/persistence/schemaContract'
-import { Database } from 'bun:sqlite'
+import type { Database } from 'bun:sqlite'
 import { schemaHistoryRuntime } from '@/platform/persistence/schema/history/runtime'
 import { existsSync, readdirSync, statSync, unlinkSync } from 'node:fs'
 import { join } from 'node:path'
@@ -331,7 +332,7 @@ export async function maybePreMigrationBackup(
   if (dbMax === undefined) {
     let db: Database | undefined
     try {
-      db = new Database(opts.dbPath, { readonly: true })
+      db = openSqliteForRead(opts.dbPath)
       const row = db.query('SELECT max(version) AS version FROM aw_meta_schema_history').get() as {
         version: number | null
       }

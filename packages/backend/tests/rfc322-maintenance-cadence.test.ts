@@ -522,3 +522,41 @@ describe('RFC-322 登记棘轮（AC-2）', () => {
     }
   })
 })
+
+// RFC-398 design §2.2: the delegated child must stay alive until its lock monitor stops.
+test('offline monitor keeps timer references while ordinary maintenance still unrefs', () => {
+  for (const keepAlive of [false, true]) {
+    let unrefs = 0
+    let cleared = 0
+    let phase: (() => void) | undefined
+    const handle = {
+      unref: () => {
+        unrefs++
+      },
+    }
+    const ticker = startMaintenanceTicker({
+      job: 'auto-upgrade-lock',
+      intervalMs: 1000,
+      phaseOffsetMs: 1000,
+      keepAlive,
+      onTick: () => {},
+      timers: {
+        setTimeout: (fn) => {
+          phase = fn
+          return handle
+        },
+        setInterval: () => handle,
+        clearTimeout: () => {
+          cleared++
+        },
+        clearInterval: () => {
+          cleared++
+        },
+      },
+    })
+    phase!()
+    expect(unrefs).toBe(keepAlive ? 0 : 2)
+    ticker.stop()
+    expect(cleared).toBe(2)
+  }
+})

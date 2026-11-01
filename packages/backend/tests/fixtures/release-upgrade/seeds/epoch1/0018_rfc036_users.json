@@ -1,0 +1,83 @@
+{
+  "formatVersion": 1,
+  "epoch": 1,
+  "after": "0018_rfc036_users",
+  "provenance": {
+    "kind": "curated",
+    "sources": [
+      "packages/backend/db/migrations/0018_rfc036_users.sql"
+    ],
+    "note": "Small deterministic historical records; terminal execution and delivery states; original SQL performs its own backfills."
+  },
+  "rows": [
+    {
+      "table": "user_identities",
+      "values": {
+        "id": "01K3980000017E684962085C00",
+        "user_id": "01K39800007DFB4CF67742CB06",
+        "provider_id": "01K3980000950688EC490EDE19",
+        "subject": "upgrade-admin",
+        "email": "upgrade-admin@example.invalid",
+        "email_verified": 1,
+        "linked_at": 1778459500000
+      }
+    },
+    {
+      "table": "user_pats",
+      "values": {
+        "id": "01K39800009BC251E97EF045BF",
+        "user_id": "01K39800007DFB4CF67742CB06",
+        "name": "Revoked historical token",
+        "token_hash": "aa2741053c59de0f8a3d9e8ea7200495492cc6dd8e0bbe2d4b240284c60d99d8",
+        "scopes_json": "[]",
+        "created_at": 1778459500000,
+        "expires_at": 1778459560000,
+        "revoked_at": 1778459560000
+      }
+    },
+    {
+      "table": "user_sessions",
+      "values": {
+        "id": "01K3980000DFC9C568AA3E4420",
+        "user_id": "01K39800007DFB4CF67742CB06",
+        "token_hash": "aa2741053c59de0f8a3d9e8ea7200495492cc6dd8e0bbe2d4b240284c60d99d8",
+        "user_agent": "RFC-398 fixture",
+        "created_at": 1778459500000,
+        "last_used_at": 1778459560000,
+        "expires_at": 1778459560000,
+        "revoked_at": 1778459560000
+      }
+    },
+    {
+      "table": "users",
+      "values": {
+        "id": "01K39800007DFB4CF67742CB06",
+        "username": "upgrade_admin",
+        "email": "upgrade-admin@example.invalid",
+        "display_name": "Upgrade Administrator",
+        "password_hash": "$2b$04$lML5NbVOstC6qYkfG3A9iethZnuIYTbyqj7J1bh9m1sNhDkvhW2UC",
+        "role": "admin",
+        "status": "active",
+        "force_password_change": 0,
+        "created_by": null,
+        "created_at": 1778459500000,
+        "updated_at": 1778459500000,
+        "schema_version": 1
+      },
+      "expect": {
+        "api": [
+          {
+            "path": "/api/users/01K39800007DFB4CF67742CB06",
+            "at": "",
+            "equals": {
+              "/id": "01K39800007DFB4CF67742CB06",
+              "/username": "upgrade_admin",
+              "/role": "admin",
+              "/status": "active"
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

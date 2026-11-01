@@ -1,0 +1,199 @@
+{
+  "formatVersion": 1,
+  "epoch": 1,
+  "after": "0000_mature_the_liberteens",
+  "provenance": {
+    "kind": "curated",
+    "sources": [
+      "packages/backend/db/migrations/0000_mature_the_liberteens.sql",
+      "v0.1.0:packages/backend/src/services/agent.ts:34-38"
+    ],
+    "note": "Small deterministic historical records; terminal execution and delivery states; original SQL performs its own backfills. The review source declares its document output as markdown using the released frontmatter_extra.outputKinds sidecar."
+  },
+  "rows": [
+    {
+      "table": "agents",
+      "values": {
+        "id": "01K39800008C70B25CBBBE8E79",
+        "name": "upgrade-writer",
+        "description": "Writer used by historical upgrade tasks",
+        "outputs": "[\"document\"]",
+        "readonly": 0,
+        "permission": "{}",
+        "skills": "[]",
+        "frontmatter_extra": "{\"outputKinds\":{\"document\":\"markdown\"}}",
+        "body_md": "Write a concise report for the upgrade fixture.",
+        "schema_version": 1,
+        "created_at": 1778459500000,
+        "updated_at": 1778459500000
+      },
+      "expect": {
+        "api": [
+          {
+            "path": "/api/agents/01K39800008C70B25CBBBE8E79",
+            "at": "",
+            "equals": {
+              "/id": "01K39800008C70B25CBBBE8E79",
+              "/name": "upgrade-writer"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "table": "node_run_events",
+      "values": {
+        "id": 1,
+        "node_run_id": "01K3980000D3D6DE02630EDFDE",
+        "ts": 1778459560000,
+        "kind": "text",
+        "payload": "{\"text\":\"# Upgrade report\\n\\nThe release ledger keeps this review document.\\n\"}"
+      }
+    },
+    {
+      "table": "node_run_outputs",
+      "values": {
+        "node_run_id": "01K3980000D3D6DE02630EDFDE",
+        "port_name": "document",
+        "content": "# Upgrade report\n\nThe release ledger keeps this review document.\n"
+      }
+    },
+    {
+      "table": "node_runs",
+      "values": {
+        "id": "01K3980000D3D6DE02630EDFDE",
+        "task_id": "01K3980000085154084C742759",
+        "node_id": "worker",
+        "iteration": 0,
+        "retry_index": 0,
+        "status": "done",
+        "started_at": 1778459500000,
+        "finished_at": 1778459560000,
+        "exit_code": 0,
+        "prompt_text": "Write the upgrade report.",
+        "tok_input": 12,
+        "tok_output": 8,
+        "tok_cache_create": 0,
+        "tok_cache_read": 0,
+        "tok_total": 20
+      },
+      "expect": {
+        "api": [
+          {
+            "path": "/api/tasks/01K3980000085154084C742759/node-runs",
+            "at": "/runs",
+            "match": {
+              "id": "01K3980000D3D6DE02630EDFDE"
+            },
+            "equals": {
+              "/id": "01K3980000D3D6DE02630EDFDE",
+              "/taskId": "01K3980000085154084C742759",
+              "/nodeId": "worker",
+              "/status": "done"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "table": "recent_repos",
+      "values": {
+        "path": "<AW_HOME>/repositories/upgrade-example",
+        "last_used_at": 1778459500000,
+        "default_branch": "main"
+      }
+    },
+    {
+      "table": "skills",
+      "values": {
+        "id": "01K398000032C1CF49A2FEEE26",
+        "name": "upgrade-notes",
+        "description": "A small managed skill retained through schema changes",
+        "source_kind": "managed",
+        "managed_path": "<AW_HOME>/skills/01K398000032C1CF49A2FEEE26/files",
+        "external_path": null,
+        "schema_version": 1,
+        "created_at": 1778459500000,
+        "updated_at": 1778459500000
+      },
+      "expect": {
+        "api": [
+          {
+            "path": "/api/skills/01K398000032C1CF49A2FEEE26",
+            "at": "",
+            "equals": {
+              "/id": "01K398000032C1CF49A2FEEE26",
+              "/name": "upgrade-notes"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "table": "tasks",
+      "values": {
+        "id": "01K3980000085154084C742759",
+        "workflow_id": "01K398000045B34F16DB605A06",
+        "workflow_snapshot": "{\"$schema_version\":1,\"inputs\":[],\"nodes\":[{\"id\":\"worker\",\"kind\":\"agent-single\",\"agentName\":\"upgrade-writer\",\"promptTemplate\":\"Write the upgrade report.\",\"position\":{\"x\":0,\"y\":0}},{\"id\":\"review\",\"kind\":\"review\",\"title\":\"Review report\",\"inputSource\":{\"nodeId\":\"worker\",\"portName\":\"document\"},\"rerunnableOnReject\":[],\"rerunnableOnIterate\":[],\"rollbackFilesOnReject\":false,\"rollbackFilesOnIterate\":false,\"position\":{\"x\":320,\"y\":0}},{\"id\":\"output\",\"kind\":\"output\",\"ports\":[{\"name\":\"document\",\"bind\":{\"nodeId\":\"review\",\"portName\":\"approved_doc\"}}],\"position\":{\"x\":640,\"y\":0}}],\"edges\":[{\"id\":\"review-document\",\"source\":{\"nodeId\":\"worker\",\"portName\":\"document\"},\"target\":{\"nodeId\":\"review\",\"portName\":\"__review_input__\"}},{\"id\":\"output-document\",\"source\":{\"nodeId\":\"review\",\"portName\":\"approved_doc\"},\"target\":{\"nodeId\":\"output\",\"portName\":\"document\"}}]}",
+        "repo_path": "<AW_HOME>/repositories/upgrade-example",
+        "worktree_path": "<AW_HOME>/worktrees/upgrade-example/01K3980000085154084C742759",
+        "base_branch": "main",
+        "branch": "task/upgrade-history",
+        "status": "done",
+        "inputs": "{}",
+        "started_at": 1778459500000,
+        "finished_at": 1778459560000,
+        "schema_version": 1
+      },
+      "expect": {
+        "api": [
+          {
+            "path": "/api/tasks/01K3980000085154084C742759",
+            "at": "",
+            "equals": {
+              "/id": "01K3980000085154084C742759",
+              "/status": "done"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "table": "workflows",
+      "values": {
+        "id": "01K398000045B34F16DB605A06",
+        "name": "upgrade-history",
+        "description": "Completed historical document review",
+        "definition": "{\"$schema_version\":1,\"inputs\":[],\"nodes\":[{\"id\":\"worker\",\"kind\":\"agent-single\",\"agentName\":\"upgrade-writer\",\"promptTemplate\":\"Write the upgrade report.\",\"position\":{\"x\":0,\"y\":0}},{\"id\":\"review\",\"kind\":\"review\",\"title\":\"Review report\",\"inputSource\":{\"nodeId\":\"worker\",\"portName\":\"document\"},\"rerunnableOnReject\":[],\"rerunnableOnIterate\":[],\"rollbackFilesOnReject\":false,\"rollbackFilesOnIterate\":false,\"position\":{\"x\":320,\"y\":0}},{\"id\":\"output\",\"kind\":\"output\",\"ports\":[{\"name\":\"document\",\"bind\":{\"nodeId\":\"review\",\"portName\":\"approved_doc\"}}],\"position\":{\"x\":640,\"y\":0}}],\"edges\":[{\"id\":\"review-document\",\"source\":{\"nodeId\":\"worker\",\"portName\":\"document\"},\"target\":{\"nodeId\":\"review\",\"portName\":\"__review_input__\"}},{\"id\":\"output-document\",\"source\":{\"nodeId\":\"review\",\"portName\":\"approved_doc\"},\"target\":{\"nodeId\":\"output\",\"portName\":\"document\"}}]}",
+        "version": 1,
+        "schema_version": 1,
+        "created_at": 1778459500000,
+        "updated_at": 1778459500000
+      },
+      "expect": {
+        "api": [
+          {
+            "path": "/api/workflows/01K398000045B34F16DB605A06",
+            "at": "",
+            "equals": {
+              "/id": "01K398000045B34F16DB605A06",
+              "/name": "upgrade-history"
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "content": [
+    {
+      "path": "skills/01K398000032C1CF49A2FEEE26/files/SKILL.md",
+      "utf8": "# Release upgrade skill\n\nKeep the historical document and review outcome.\n",
+      "sha256": "155a2f68503d1eeb9d60ec428d5669c9b7a913cac0975c7ff84390e7a07e7f38"
+    },
+    {
+      "path": "plugins/upgrade-plugin/index.js",
+      "utf8": "export default async () => ({})\n",
+      "sha256": "11b8d8c2e3eae56c42c308c2977d4e2bce744f6f67cf4578456ab8bb23936b5a"
+    }
+  ]
+}

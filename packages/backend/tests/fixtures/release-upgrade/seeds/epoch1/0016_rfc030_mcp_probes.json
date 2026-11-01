@@ -1,0 +1,30 @@
+{
+  "formatVersion": 1,
+  "epoch": 1,
+  "after": "0016_rfc030_mcp_probes",
+  "provenance": {
+    "kind": "curated",
+    "sources": [
+      "packages/backend/db/migrations/0016_rfc030_mcp_probes.sql"
+    ],
+    "note": "Small deterministic historical records; terminal execution and delivery states; original SQL performs its own backfills."
+  },
+  "rows": [
+    {
+      "table": "mcp_probes",
+      "values": {
+        "id": "01K39800000D4EFB919E473550",
+        "mcp_id": "01K3980000FC1997E4D80E81F6",
+        "status": "error",
+        "latency_ms": 5,
+        "error_code": "connect-failed",
+        "error_message": "Fixture endpoint is intentionally unavailable.",
+        "schema_version": 1,
+        "started_at": 1778459500000,
+        "finished_at": 1778459500005,
+        "created_at": 1778459500000,
+        "updated_at": 1778459500000
+      }
+    }
+  ]
+}

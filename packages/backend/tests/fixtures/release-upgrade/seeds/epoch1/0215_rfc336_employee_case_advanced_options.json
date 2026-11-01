@@ -1,0 +1,33 @@
+{
+  "formatVersion": 1,
+  "epoch": 1,
+  "after": "0215_rfc336_employee_case_advanced_options",
+  "provenance": {
+    "kind": "curated",
+    "sources": [
+      "packages/backend/db/migrations/0215_rfc336_employee_case_advanced_options.sql"
+    ],
+    "note": "Small deterministic historical records; terminal execution and delivery states; original SQL performs its own backfills."
+  },
+  "rows": [
+    {
+      "table": "employee_case_metering_receipts",
+      "values": {
+        "source_ref": "upgrade-metering",
+        "case_id": "01K3980000B5DB526E6BE3FA00",
+        "round_id": "01K3980000C32A8E73A68B1F3F",
+        "duration_ms": 60000,
+        "total_tokens": 20,
+        "created_at": 1778459500000
+      }
+    }
+  ],
+  "migrationEffects": [
+    {
+      "table": "employee_cases",
+      "operation": "alter",
+      "rule": "Apply the released SQL to existing seeded rows, retaining its explicit defaults, rewrites and backfills.",
+      "source": "packages/backend/db/migrations/0215_rfc336_employee_case_advanced_options.sql"
+    }
+  ]
+}

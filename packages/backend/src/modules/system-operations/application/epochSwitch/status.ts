@@ -70,8 +70,26 @@ export async function epochSwitchStatus(
               'Completed: epoch 2 is active. The epoch-1 source, backup and migration metadata are kept; nothing is deleted automatically.',
             ]
           : null
+  const auto = (await deps.autoUpgradeRecords?.list())?.some((s) => s.operationId === p.operationId)
+  const retained = auto
+    ? ((await deps.retainedDatabases?.()) ?? []).filter(
+        (row) => row.sessionOperationId === p.operationId,
+      )
+    : []
   return {
     ...epochSwitchSummary(journal),
+    ...(auto ? { mode: 'auto' as const } : {}),
+    ...(retained.length
+      ? {
+          retainedDatabases: retained.map(({ kind, database, runId, bytes, purpose }) => ({
+            kind,
+            database,
+            runId,
+            bytes,
+            purpose,
+          })),
+        }
+      : {}),
     journal,
     validation,
     firstLiveWriteAt,

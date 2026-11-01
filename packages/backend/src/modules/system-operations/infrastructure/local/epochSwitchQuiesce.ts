@@ -1,7 +1,7 @@
 import { readPidFromLock, acquireLock, isProcessAlive, type Lock } from '@/util/lock'
 import { readControlFile, requestShutdown } from '@/services/controlListener'
 import { valueDigest } from '@/platform/persistence/migration/conversion/digest'
-import type { QuiescePort } from '../../application/ports/epochSwitch'
+import type { QuiescePort, SessionLockPort } from '../../application/ports/epochSwitch'
 import { EpochSwitchError, type EpochSwitchFaults } from '../../domain/epochSwitch/model'
 
 export interface EpochStopProtocol {
@@ -18,6 +18,7 @@ export function createLocalEpochQuiesce(input: {
   now?: () => number
   faults?: EpochSwitchFaults
   protocol?: EpochStopProtocol
+  sessionLock?: SessionLockPort
 }): QuiescePort {
   const now = input.now ?? Date.now
   const protocol: EpochStopProtocol = input.protocol ?? {
@@ -47,6 +48,18 @@ export function createLocalEpochQuiesce(input: {
   let held: { op: string; lock: Lock } | null = null
   return {
     async quiesce({ operationId, drainTimeoutMs }) {
+      if (input.sessionLock) {
+        await input.sessionLock.assertHeld()
+        const receipt = {
+          version: 1 as const,
+          operationId,
+          deployment: 'standalone' as const,
+          kind: 'already-stopped' as const,
+          stoppedAt: now(),
+          freezeReference: null,
+        }
+        return { ...receipt, digest: valueDigest(receipt) }
+      }
       if (held && held.op !== operationId)
         throw new EpochSwitchError('v3-daemon-lock-held', { category: 'owner-conflict' })
       let stopped = false
@@ -92,12 +105,14 @@ export function createLocalEpochQuiesce(input: {
       return { ...receipt, digest: valueDigest(receipt) }
     },
     async release(op) {
+      if (input.sessionLock) return
       if (held?.op === op) {
         held.lock.release()
         held = null
       }
     },
     async assertHeld(op) {
+      if (input.sessionLock) return input.sessionLock.assertHeld()
       if (!held || held.op !== op || protocol.pid() !== held.lock.pid)
         throw new EpochSwitchError('v3-daemon-lock-lost', { category: 'owner-conflict' })
     },

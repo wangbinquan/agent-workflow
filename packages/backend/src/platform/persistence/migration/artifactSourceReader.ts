@@ -15,6 +15,7 @@ import {
 import { readManifest } from './legacy/backupManifest'
 import { canonicalSchemaJson } from '../schema/canonical'
 import { loadFrozenEpoch1History } from './epoch1/bundle'
+import { resolveEpoch1PostgresqlVersion } from './epoch1/releasedPostgresql'
 import {
   readEpoch1ExportEvidence,
   readEpoch1RawArtifactChunk,
@@ -107,9 +108,7 @@ export function openEpoch1LogicalArtifactSource(
                 }
               })()
         const history = await loadFrozenEpoch1History()
-        const version = history.postgresql.versions.find(
-          (entry) => entry.contract.digest === envelope.payload.schemaDigest,
-        )
+        const version = await resolveEpoch1PostgresqlVersion(envelope.payload.schemaDigest)
         if (!version)
           throw new SourceBlockedError(
             `Unsupported logical source contract: ${envelope.payload.schemaDigest}`,

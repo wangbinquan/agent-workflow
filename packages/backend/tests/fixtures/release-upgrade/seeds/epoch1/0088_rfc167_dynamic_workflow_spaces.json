@@ -1,0 +1,28 @@
+{
+  "formatVersion": 1,
+  "epoch": 1,
+  "after": "0088_rfc167_dynamic_workflow_spaces",
+  "provenance": {
+    "kind": "curated",
+    "sources": [
+      "packages/backend/db/migrations/0088_rfc167_dynamic_workflow_spaces.sql"
+    ],
+    "note": "Small deterministic historical records; terminal execution and delivery states; original SQL performs its own backfills."
+  },
+  "rows": [
+    {
+      "table": "dynamic_workflow_spaces",
+      "values": {
+        "id": "01K3980000A83691574527F52B",
+        "name": "upgrade-planning-space",
+        "description": "Historical planning workspace",
+        "agent_pool_json": "[\"upgrade-writer\"]",
+        "owner_user_id": "01K39800007DFB4CF67742CB06",
+        "visibility": "public",
+        "schema_version": 1,
+        "created_at": 1778459500000,
+        "updated_at": 1778459500000
+      }
+    }
+  ]
+}

@@ -1,0 +1,37 @@
+{
+  "formatVersion": 1,
+  "epoch": 1,
+  "after": "0193_rfc310_custom_event_sources",
+  "provenance": {
+    "kind": "curated",
+    "sources": [
+      "packages/backend/db/migrations/0193_rfc310_custom_event_sources.sql"
+    ],
+    "note": "Small deterministic historical records; terminal execution and delivery states; original SQL performs its own backfills."
+  },
+  "rows": [
+    {
+      "table": "custom_event_source_definitions",
+      "values": {
+        "id": "01K3980000E21C6E4273FDB194",
+        "draft_json": "{\"id\":\"upgrade-custom-source\",\"version\":1,\"command\":[\"echo\",\"[]\"]}",
+        "published_revision": 1,
+        "owner_user_id": "01K39800007DFB4CF67742CB06",
+        "created_at": 1778459500000,
+        "updated_at": 1778459500000
+      }
+    },
+    {
+      "table": "custom_event_source_revisions",
+      "values": {
+        "source_id": "01K3980000E21C6E4273FDB194",
+        "revision": 1,
+        "content_json": "{\"id\":\"upgrade-custom-source\",\"version\":1,\"command\":[\"echo\",\"[]\"]}",
+        "content_digest": "aa2741053c59de0f8a3d9e8ea7200495492cc6dd8e0bbe2d4b240284c60d99d8",
+        "validation_receipt_json": "{\"valid\":true}",
+        "published_at": 1778459500000,
+        "published_by": "01K39800007DFB4CF67742CB06"
+      }
+    }
+  ]
+}

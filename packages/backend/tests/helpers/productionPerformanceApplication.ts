@@ -17,6 +17,7 @@ import type { Hono } from 'hono'
 import { ALWAYS_WRITABLE_DATABASE_SOURCE } from '@/auth/application/authPersistence'
 import { createAuthRuntimeFor, createTokenCallAudit } from '@/auth/composition'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
+import { createDatabaseHealthIdentity } from '@/platform/persistence/databaseHealthIdentity'
 import { composeCollaborationRouteOperations } from '@/modules/collaboration/composition/collaborationRouteOperations'
 import { createCollaborationCommandContext } from '@/modules/collaboration/infrastructure/collaborationCommandContext'
 import {
@@ -201,7 +202,11 @@ export async function createProductionPerformanceApplication(
       health: (app) =>
         mountHealthRoutes(
           app,
-          { opencodeVersion: '1.14.25', dbVersion: 17 },
+          {
+            opencodeVersion: '1.14.25',
+            dbVersion: 17,
+            databaseIdentity: createDatabaseHealthIdentity(input.db, session.engine.provider),
+          },
           identityAccess.diagnostics,
           healthDatabase,
         ),

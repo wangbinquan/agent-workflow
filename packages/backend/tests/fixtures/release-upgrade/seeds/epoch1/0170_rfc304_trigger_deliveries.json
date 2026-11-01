@@ -1,0 +1,32 @@
+{
+  "formatVersion": 1,
+  "epoch": 1,
+  "after": "0170_rfc304_trigger_deliveries",
+  "provenance": {
+    "kind": "curated",
+    "sources": [
+      "packages/backend/db/migrations/0170_rfc304_trigger_deliveries.sql"
+    ],
+    "note": "Small deterministic historical records; terminal execution and delivery states; original SQL performs its own backfills."
+  },
+  "rows": [
+    {
+      "table": "code_trigger_deliveries",
+      "values": {
+        "id": "01K3980000C52802E1AA66EC1C",
+        "correlation_id": "upgrade-trigger",
+        "code_host_endpoint_id": "01K3980000BBDD864AB0F66C6E",
+        "stable_project_id": "1",
+        "anchor_kind": "mr",
+        "anchor_id": "1",
+        "capability": "review",
+        "step": "completed",
+        "outcome": "settled",
+        "round_id": "01K3980000D25D5DEF6EFDEEBF",
+        "is_probe": 0,
+        "created_at": 1778459500000,
+        "updated_at": 1778459500000
+      }
+    }
+  ]
+}

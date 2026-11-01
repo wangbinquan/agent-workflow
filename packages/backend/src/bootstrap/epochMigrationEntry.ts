@@ -1,9 +1,9 @@
+import { openSqliteForRead } from '@/platform/persistence/sqlite/openForRead'
 import { createMigrationProgressReporter } from '@/platform/persistence/migration/run/progress'
 import { writeSync } from 'node:fs'
 import { recordedLiveLogicalContract } from '@/platform/persistence/schema/history/logicalHistory'
 import { loadFrozenEpoch1History } from '@/platform/persistence/migration/epoch1/bundle'
 import { RestoreDowngradeError } from '@/platform/persistence/sqlite/systemProviderRestore'
-import { Database } from 'bun:sqlite'
 // CLI/converter entry only. Daemon roots must never import this module.
 import { mkdtempSync, rmSync, readFileSync, existsSync, statSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -16,14 +16,27 @@ import { composeLocalEpochSwitch } from './epochMigration'
 import { persistenceHead, persistencePostgresqlCatalogs } from './persistenceHead'
 import { logicalSchemaContract } from './persistenceSchema'
 import { settleEpochSwitchBeforePointerReplacement } from '@/modules/system-operations/composition/epochMigration'
+import { createAutoUpgradeRecords } from '@/modules/system-operations/composition/epochMigration'
+import { automaticUpgradeProvisioning } from './epochMigrationAuto'
+export { runAutomaticEpochUpgrade } from './epochMigrationAuto'
+export { createLegacyMigrationFinalize } from '@/modules/system-operations/composition/epochMigration'
 
 export function composeEpochMigrationCommand() {
+  const config = loadConfig(Paths.config)
+  const database = config.database
   const application = composeLocalEpochSwitch({
     appHome: Paths.root,
+    autoUpgradeRecords: createAutoUpgradeRecords(Paths.root),
+    // RFC-398 §3.5: status lists the databases an automatic PostgreSQL session allocated.
+    retainedDatabases: automaticUpgradeProvisioning({
+      appHome: Paths.root,
+      env: process.env,
+      database,
+    })?.retained,
     progress: createMigrationProgressReporter((line) => {
       writeSync(2, line)
     }),
-    config: loadConfig(Paths.config),
+    config,
     env: process.env,
     head: persistenceHead(),
     catalogArtifacts: persistencePostgresqlCatalogs(),
@@ -68,7 +81,7 @@ export async function classifyRestoreArtifact(
         return 'epoch1'
     }
     if (existsSync(join(root, 'db.sqlite'))) {
-      const db = new Database(join(root, 'db.sqlite'), { readonly: true })
+      const db = openSqliteForRead(join(root, 'db.sqlite'))
       try {
         if (db.query("SELECT 1 FROM sqlite_schema WHERE name='aw_meta_schema_history'").get()) {
           const receipt = db

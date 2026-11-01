@@ -1,3 +1,4 @@
+import { openSqliteForRead } from '@/platform/persistence/sqlite/openForRead'
 import { sqliteHistorySession } from '@/platform/persistence/sqlite/historySession'
 import { atomicScratch } from './atomicScratch'
 import { recordedLiveLogicalContract } from '@/platform/persistence/schema/history/logicalHistory'
@@ -216,7 +217,7 @@ function recordedEpoch2Version(staging: string, skipIntegrityCheck = false): num
   let db: Database | undefined
   try {
     try {
-      db = new Database(path, { readonly: true })
+      db = openSqliteForRead(path)
       db.query('SELECT name FROM sqlite_schema LIMIT 1').get()
     } catch (error) {
       throw new RestoreIntegrityError([
@@ -725,7 +726,7 @@ export async function restoreBackup(
 }
 
 function dbHasSkillRows(dbPath: string): boolean {
-  const db = new Database(dbPath, { readonly: true })
+  const db = openSqliteForRead(dbPath)
   try {
     const table = db
       .query("SELECT 1 AS present FROM sqlite_master WHERE type='table' AND name='skills' LIMIT 1")

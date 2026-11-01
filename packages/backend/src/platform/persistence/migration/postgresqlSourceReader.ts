@@ -5,7 +5,11 @@ import { canonicalSchemaJson, digestSchemaContract } from '../schema/canonical'
 import { postgresqlHistoryConnection } from '../schema/history/connection'
 import { readPostgresqlMajor } from '../schema/history/catalog'
 import { collectSourceFingerprint, quoteSourceIdentifier as quote } from './sourceCatalog'
-import { identifySource, type SupportedSourceManifest } from './supportedSources'
+import {
+  identifySource,
+  withLogicalCodecCorrections,
+  type SupportedSourceManifest,
+} from './supportedSources'
 import type { EmptyTableDecision } from './sourceDispositions'
 import { decodeLogicalValue, encodeLogicalRow } from './legacy/logicalDatabaseArtifact'
 import { assertSourceChunkRequest, sourceChunk, sourceContentPresence } from './sourceReader'
@@ -211,11 +215,13 @@ export function openEpoch1PostgresqlSource(input: {
       assertOpen()
       if (!snapshot || !connection)
         throw new SourceBlockedError('Call source preflight before readChunk')
-      const table = snapshot.contract?.tables.find((table) => table.id === tableId)
-      if (!table || !table.providerTables.postgresql)
+      const frozen = snapshot.contract?.tables.find((table) => table.id === tableId)
+      if (!frozen || !frozen.providerTables.postgresql)
         throw new SourceBlockedError(
           `No frozen row codec for ${tableId}; use readRawChunk for its disposition`,
         )
+      // An older contract decodes with the frozen history's later codec corrections.
+      const table = withLogicalCodecCorrections(frozen, input.manifest.codecCorrections)
       assertSourceChunkRequest(table, afterKey, limit)
       // ORDER BY resolves bare names to output aliases: our lossless int8 text
       // projection must not turn numeric keys into locale-sorted strings.

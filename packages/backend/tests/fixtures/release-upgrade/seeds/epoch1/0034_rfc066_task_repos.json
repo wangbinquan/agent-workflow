@@ -1,0 +1,53 @@
+{
+  "formatVersion": 1,
+  "epoch": 1,
+  "after": "0034_rfc066_task_repos",
+  "provenance": {
+    "kind": "curated",
+    "sources": [
+      "packages/backend/db/migrations/0034_rfc066_task_repos.sql"
+    ],
+    "note": "Small deterministic historical records; terminal execution and delivery states; original SQL performs its own backfills."
+  },
+  "rows": [],
+  "migrationEffects": [
+    {
+      "table": "task_repos",
+      "operation": "backfill",
+      "rule": "Original migration inserts rows from prior ledger data or installs its declared singleton/configuration rows; do not duplicate them.",
+      "source": "packages/backend/db/migrations/0034_rfc066_task_repos.sql",
+      "projection": {
+        "sourceTables": [
+          "tasks"
+        ],
+        "keyColumns": [
+          "task_id",
+          "repo_index"
+        ],
+        "cardinality": "one row per pre-migration task",
+        "values": {
+          "task_id": "tasks.id",
+          "repo_index": "0",
+          "repo_path": "tasks.repo_path",
+          "repo_url": "tasks.repo_url",
+          "base_branch": "tasks.base_branch",
+          "branch": "tasks.branch",
+          "base_commit": "tasks.base_commit",
+          "worktree_path": "tasks.worktree_path"
+        }
+      }
+    },
+    {
+      "table": "node_runs",
+      "operation": "alter",
+      "rule": "Apply the released SQL to existing seeded rows, retaining its explicit defaults, rewrites and backfills.",
+      "source": "packages/backend/db/migrations/0034_rfc066_task_repos.sql"
+    },
+    {
+      "table": "tasks",
+      "operation": "alter",
+      "rule": "Apply the released SQL to existing seeded rows, retaining its explicit defaults, rewrites and backfills.",
+      "source": "packages/backend/db/migrations/0034_rfc066_task_repos.sql"
+    }
+  ]
+}

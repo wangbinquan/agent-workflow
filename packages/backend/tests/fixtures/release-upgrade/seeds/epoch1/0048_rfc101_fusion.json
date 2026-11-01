@@ -1,0 +1,39 @@
+{
+  "formatVersion": 1,
+  "epoch": 1,
+  "after": "0048_rfc101_fusion",
+  "provenance": {
+    "kind": "curated",
+    "sources": [
+      "packages/backend/db/migrations/0048_rfc101_fusion.sql"
+    ],
+    "note": "Small deterministic historical records; terminal execution and delivery states; original SQL performs its own backfills."
+  },
+  "rows": [
+    {
+      "table": "fusions",
+      "values": {
+        "id": "01K39800000DEBA6EC0DE57D4E",
+        "skill_name": "upgrade-notes",
+        "base_skill_version": 1,
+        "memory_ids_json": "[\"01K398000075C374CB4CF3CB2D\"]",
+        "intent": "Keep upgrade guidance",
+        "status": "rejected",
+        "iteration": 1,
+        "owner_user_id": "01K39800007DFB4CF67742CB06",
+        "created_at": 1778459500000,
+        "decided_by_user_id": "01K39800007DFB4CF67742CB06",
+        "decided_at": 1778459560000,
+        "decision_reason": "Existing text already covers this guidance."
+      }
+    }
+  ],
+  "migrationEffects": [
+    {
+      "table": "memories",
+      "operation": "alter",
+      "rule": "Apply the released SQL to existing seeded rows, retaining its explicit defaults, rewrites and backfills.",
+      "source": "packages/backend/db/migrations/0048_rfc101_fusion.sql"
+    }
+  ]
+}

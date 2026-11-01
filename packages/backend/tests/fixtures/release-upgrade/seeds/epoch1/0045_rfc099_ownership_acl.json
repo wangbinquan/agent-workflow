@@ -1,0 +1,80 @@
+{
+  "formatVersion": 1,
+  "epoch": 1,
+  "after": "0045_rfc099_ownership_acl",
+  "provenance": {
+    "kind": "curated",
+    "sources": [
+      "packages/backend/db/migrations/0045_rfc099_ownership_acl.sql"
+    ],
+    "note": "Small deterministic historical records; terminal execution and delivery states; original SQL performs its own backfills."
+  },
+  "rows": [
+    {
+      "table": "resource_grants",
+      "values": {
+        "resource_type": "workflow",
+        "resource_id": "01K398000045B34F16DB605A06",
+        "user_id": "01K39800007DFB4CF67742CB06",
+        "added_by": "01K39800007DFB4CF67742CB06",
+        "added_at": 1778459500000
+      }
+    }
+  ],
+  "migrationEffects": [
+    {
+      "table": "agents",
+      "operation": "alter",
+      "rule": "Apply the released SQL to existing seeded rows, retaining its explicit defaults, rewrites and backfills.",
+      "source": "packages/backend/db/migrations/0045_rfc099_ownership_acl.sql"
+    },
+    {
+      "table": "clarify_rounds",
+      "operation": "alter",
+      "rule": "Apply the released SQL to existing seeded rows, retaining its explicit defaults, rewrites and backfills.",
+      "source": "packages/backend/db/migrations/0045_rfc099_ownership_acl.sql"
+    },
+    {
+      "table": "doc_versions",
+      "operation": "alter",
+      "rule": "Apply the released SQL to existing seeded rows, retaining its explicit defaults, rewrites and backfills.",
+      "source": "packages/backend/db/migrations/0045_rfc099_ownership_acl.sql"
+    },
+    {
+      "table": "mcps",
+      "operation": "alter",
+      "rule": "Apply the released SQL to existing seeded rows, retaining its explicit defaults, rewrites and backfills.",
+      "source": "packages/backend/db/migrations/0045_rfc099_ownership_acl.sql"
+    },
+    {
+      "table": "plugins",
+      "operation": "alter",
+      "rule": "Apply the released SQL to existing seeded rows, retaining its explicit defaults, rewrites and backfills.",
+      "source": "packages/backend/db/migrations/0045_rfc099_ownership_acl.sql"
+    },
+    {
+      "table": "review_comments",
+      "operation": "alter",
+      "rule": "Apply the released SQL to existing seeded rows, retaining its explicit defaults, rewrites and backfills.",
+      "source": "packages/backend/db/migrations/0045_rfc099_ownership_acl.sql"
+    },
+    {
+      "table": "skill_sources",
+      "operation": "alter",
+      "rule": "Apply the released SQL to existing seeded rows, retaining its explicit defaults, rewrites and backfills.",
+      "source": "packages/backend/db/migrations/0045_rfc099_ownership_acl.sql"
+    },
+    {
+      "table": "skills",
+      "operation": "alter",
+      "rule": "Apply the released SQL to existing seeded rows, retaining its explicit defaults, rewrites and backfills.",
+      "source": "packages/backend/db/migrations/0045_rfc099_ownership_acl.sql"
+    },
+    {
+      "table": "workflows",
+      "operation": "alter",
+      "rule": "Apply the released SQL to existing seeded rows, retaining its explicit defaults, rewrites and backfills.",
+      "source": "packages/backend/db/migrations/0045_rfc099_ownership_acl.sql"
+    }
+  ]
+}

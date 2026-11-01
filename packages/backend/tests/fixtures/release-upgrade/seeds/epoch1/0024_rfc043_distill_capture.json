@@ -1,0 +1,34 @@
+{
+  "formatVersion": 1,
+  "epoch": 1,
+  "after": "0024_rfc043_distill_capture",
+  "provenance": {
+    "kind": "curated",
+    "sources": [
+      "packages/backend/db/migrations/0024_rfc043_distill_capture.sql"
+    ],
+    "note": "Small deterministic historical records; terminal execution and delivery states; original SQL performs its own backfills."
+  },
+  "rows": [
+    {
+      "table": "memory_distill_events",
+      "values": {
+        "id": 1,
+        "distill_job_id": "01K39800007C1CFF75EDD47936",
+        "attempt_index": 0,
+        "session_id": "upgrade-distillation",
+        "ts": 1778459560000,
+        "kind": "text",
+        "payload": "{\"text\":\"No additional memory required.\"}"
+      }
+    }
+  ],
+  "migrationEffects": [
+    {
+      "table": "memory_distill_jobs",
+      "operation": "alter",
+      "rule": "Apply the released SQL to existing seeded rows, retaining its explicit defaults, rewrites and backfills.",
+      "source": "packages/backend/db/migrations/0024_rfc043_distill_capture.sql"
+    }
+  ]
+}

@@ -8,9 +8,17 @@ import {
   runFrames,
   runAllocationSummary,
 } from './lookups'
+import { legacyEffectSlotPaths } from './legacyLineage'
 
 export const conversion: ConversionContribution = {
   rules: [runRule, allocationRule],
-  lookups: [runDefinitions, runSequences, writerEvidence, runFrames, runAllocationSummary],
+  lookups: [
+    runDefinitions,
+    runSequences,
+    writerEvidence,
+    runFrames,
+    runAllocationSummary,
+    legacyEffectSlotPaths,
+  ],
   validators: [],
 }

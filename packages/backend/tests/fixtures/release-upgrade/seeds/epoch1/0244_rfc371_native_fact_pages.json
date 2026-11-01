@@ -1,0 +1,32 @@
+{
+  "formatVersion": 1,
+  "epoch": 1,
+  "after": "0244_rfc371_native_fact_pages",
+  "provenance": {
+    "kind": "curated",
+    "sources": [
+      "packages/backend/db/migrations/0244_rfc371_native_fact_pages.sql"
+    ],
+    "note": "Small deterministic historical records; terminal execution and delivery states; original SQL performs its own backfills."
+  },
+  "rows": [
+    {
+      "table": "observation_native_fact_pages",
+      "values": {
+        "cache_key": "upgrade-cache-key",
+        "cursor": "upgrade-cursor",
+        "document": "{}"
+      }
+    },
+    {
+      "table": "observation_native_fact_roots",
+      "values": {
+        "cache_key": "upgrade-cache-key",
+        "proof_key": "upgrade-proof-key",
+        "root_session_id": "upgrade-root-session-id",
+        "state": "sealed",
+        "document": "{\"version\":1,\"roots\":[]}"
+      }
+    }
+  ]
+}

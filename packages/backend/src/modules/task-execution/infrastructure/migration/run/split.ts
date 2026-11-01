@@ -68,6 +68,8 @@ export function splitNodeRun(input: {
   readonly historyOnly: boolean
   readonly containerValid: boolean
   readonly prompt: { readonly json: string | null; readonly inlineBytes: Uint8Array | null }
+  /** Recorded lineage, or the v0.18.x PostgreSQL effect path (`./legacyLineage`). */
+  readonly lineageSlotPathJson: string | null
 }): {
   nodeRun: TargetRow
   config: TargetRow | null
@@ -109,6 +111,7 @@ export function splitNodeRun(input: {
   return {
     nodeRun: {
       ...columns(row, mainColumns),
+      lineage_slot_path_json: input.lineageSlotPathJson,
       historical_parent_id: row.values.parent_node_run_id!,
       container_run_id: input.containerValid ? frame.containerRunId : null,
       scope_path: frame.quality === 'unresolved' ? row.values.scope_path! : frame.scopePath,

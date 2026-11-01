@@ -4,6 +4,13 @@
 // a failed migration that needs inspection.
 
 import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'
+import { loadConfig } from '@/config'
+import { Paths } from '@/util/paths'
+import {
+  readEpochBootFactsForConfig,
+  classifyEpochInstallation,
+  epochInstallationGuidance,
+} from '@/modules/system-operations/composition/epochBootAdmission'
 import { unhandledDatabaseProvider } from '@/platform/persistence/databaseProviders'
 import { schemaDriftGuidance } from '@/modules/system-operations/composition/schemaDriftGuidance'
 import {
@@ -14,6 +21,26 @@ import {
 export async function migrateCommand(
   options?: ManualDatabaseMigrationOptions,
 ): Promise<{ output: string }> {
+  if (!options || options.kind === 'file') {
+    // The CLI owns its session lock; the orchestrator classifies only after acquisition.
+    const { runAutomaticEpochUpgrade } = await import('./epochMigrationAuto')
+    const result = await runAutomaticEpochUpgrade()
+    if (result.exitCode !== 0) throw new Error(JSON.stringify(result))
+    const config = loadConfig(Paths.config)
+    const facts = await readEpochBootFactsForConfig({
+      appHome: Paths.root,
+      database: config.database,
+    })
+    const installation = classifyEpochInstallation(facts)
+    if (
+      result.outcome === 'done' &&
+      (installation.kind !== 'epoch2' ||
+        (facts.autoUpgradeSessions ?? []).some((s) => s.unfinished))
+    )
+      throw new Error('automatic upgrade did not complete')
+    const guidance = epochInstallationGuidance(installation, config.autoEpochMigration !== false)
+    if (guidance) throw new Error(guidance)
+  }
   const prepared = await prepareManualDatabaseMigration(logicalSchemaContract, options).catch(
     (error: unknown) => {
       const guidance = schemaDriftGuidance(error)

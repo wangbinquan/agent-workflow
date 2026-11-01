@@ -1,0 +1,43 @@
+{
+  "formatVersion": 1,
+  "epoch": 1,
+  "after": "0047_rfc101_skill_versioning",
+  "provenance": {
+    "kind": "curated",
+    "sources": [
+      "packages/backend/db/migrations/0047_rfc101_skill_versioning.sql"
+    ],
+    "note": "Small deterministic historical records; terminal execution and delivery states; original SQL performs its own backfills. content_hash is the released NUL-framed sorted path-and-bytes tree digest, not the standalone file digest."
+  },
+  "rows": [
+    {
+      "table": "skill_versions",
+      "values": {
+        "id": "01K39800007B78E21C429AD95B",
+        "skill_name": "upgrade-notes",
+        "version_index": 1,
+        "files_path": "<AW_HOME>/skills/01K398000032C1CF49A2FEEE26/versions/v1/files",
+        "source": "initial",
+        "summary": "Initial upgrade notes",
+        "author_user_id": "01K39800007DFB4CF67742CB06",
+        "content_hash": "362cd0f0de5ced49a89af0f3bf6b7bad372553824d99c3f82632d57158d11dcf",
+        "created_at": 1778459500000
+      }
+    }
+  ],
+  "migrationEffects": [
+    {
+      "table": "skills",
+      "operation": "alter",
+      "rule": "Apply the released SQL to existing seeded rows, retaining its explicit defaults, rewrites and backfills.",
+      "source": "packages/backend/db/migrations/0047_rfc101_skill_versioning.sql"
+    }
+  ],
+  "content": [
+    {
+      "path": "skills/01K398000032C1CF49A2FEEE26/versions/v1/files/SKILL.md",
+      "utf8": "# Release upgrade skill\n\nKeep the historical document and review outcome.\n",
+      "sha256": "155a2f68503d1eeb9d60ec428d5669c9b7a913cac0975c7ff84390e7a07e7f38"
+    }
+  ]
+}

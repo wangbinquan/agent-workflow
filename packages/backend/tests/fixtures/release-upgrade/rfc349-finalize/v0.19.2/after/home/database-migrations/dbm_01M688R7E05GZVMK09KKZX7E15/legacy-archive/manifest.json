@@ -1,0 +1,74 @@
+{
+  "digest": "sha256:a264cda6e2937a9affb10c506e86f206656fa6eebfa655dd1c6d561b933c88a0",
+  "operationId": "dbm_01M688R7E05GZVMK09KKZX7E15",
+  "schemaDigest": "sha256:9a9f65081c639b1d354a58e543207a8bf87c68d33797a321a338c23720228493",
+  "tables": [
+    {
+      "blobBytes": 0,
+      "chunkCount": 0,
+      "chunkDigests": [],
+      "disposition": "ARCHIVE_THEN_OMIT",
+      "firstKey": null,
+      "lastKey": null,
+      "rootDigest": "sha256:705a02d47a1ab826e280f89a975a6cf9af264f90a710bce9d838841e1350ba8d",
+      "rowCount": 0,
+      "table": "code_artifacts"
+    },
+    {
+      "blobBytes": 0,
+      "chunkCount": 0,
+      "chunkDigests": [],
+      "disposition": "ARCHIVE_THEN_OMIT",
+      "firstKey": null,
+      "lastKey": null,
+      "rootDigest": "sha256:6f694bce78e5b5b3894de2bf0288e06fb2fa51fb195444873f67c941dc7c1b66",
+      "rowCount": 0,
+      "table": "code_fix_attempts"
+    },
+    {
+      "blobBytes": 0,
+      "chunkCount": 0,
+      "chunkDigests": [],
+      "disposition": "ARCHIVE_THEN_OMIT",
+      "firstKey": null,
+      "lastKey": null,
+      "rootDigest": "sha256:866d5e315103ec5a42716855d2ba3566dd0094db39b808971219a0a7743d8efe",
+      "rowCount": 0,
+      "table": "code_mr_leases"
+    },
+    {
+      "blobBytes": 0,
+      "chunkCount": 0,
+      "chunkDigests": [],
+      "disposition": "ARCHIVE_THEN_OMIT",
+      "firstKey": null,
+      "lastKey": null,
+      "rootDigest": "sha256:52665e7035b359fa8e33e2e3eebe1c1e8ec2902fd0bc6fb115bf2d3a3900b041",
+      "rowCount": 0,
+      "table": "code_produced_mrs"
+    },
+    {
+      "blobBytes": 0,
+      "chunkCount": 0,
+      "chunkDigests": [],
+      "disposition": "ARCHIVE_THEN_OMIT",
+      "firstKey": null,
+      "lastKey": null,
+      "rootDigest": "sha256:27ebd935b39458bf438d4d3bb99fad8e1f022d7ff40ee2ca82a36c2785d78f64",
+      "rowCount": 0,
+      "table": "code_publish_intents"
+    },
+    {
+      "blobBytes": 0,
+      "chunkCount": 0,
+      "chunkDigests": [],
+      "disposition": "ARCHIVE_THEN_OMIT",
+      "firstKey": null,
+      "lastKey": null,
+      "rootDigest": "sha256:af303eadd10d3d075ed66506b029d3c140cad679798fdc8b2d7cda804e800ab8",
+      "rowCount": 0,
+      "table": "code_work_observations"
+    }
+  ],
+  "version": 1
+}

@@ -1,0 +1,71 @@
+{
+  "formatVersion": 1,
+  "epoch": 1,
+  "after": "0237_rfc371_complete_reports",
+  "provenance": {
+    "kind": "curated",
+    "sources": [
+      "packages/backend/db/migrations/0237_rfc371_complete_reports.sql"
+    ],
+    "note": "Small deterministic historical records; terminal execution and delivery states; original SQL performs its own backfills."
+  },
+  "rows": [
+    {
+      "table": "observation_report_counts",
+      "values": {
+        "report_id": "01K39800002A2FA7E0E83B5310",
+        "section": "upgrade-section",
+        "parent": "upgrade-parent",
+        "total": "0",
+        "actual": "0",
+        "declared": 0
+      }
+    },
+    {
+      "table": "observation_report_pages",
+      "values": {
+        "report_id": "01K39800002A2FA7E0E83B5310",
+        "ordinal": "upgrade-ordinal",
+        "previous_digest": "aa2741053c59de0f8a3d9e8ea7200495492cc6dd8e0bbe2d4b240284c60d99d8",
+        "digest": "aa2741053c59de0f8a3d9e8ea7200495492cc6dd8e0bbe2d4b240284c60d99d8",
+        "items_count": 1
+      }
+    },
+    {
+      "table": "observation_report_receipts",
+      "values": {
+        "report_id": "01K39800002A2FA7E0E83B5310",
+        "key": "upgrade-key",
+        "document": "{}"
+      }
+    },
+    {
+      "table": "observation_report_rows",
+      "values": {
+        "report_id": "01K39800002A2FA7E0E83B5310",
+        "ordinal": "upgrade-ordinal",
+        "section": "upgrade-section",
+        "parent": "upgrade-parent",
+        "key": "upgrade-key",
+        "document": "{}"
+      }
+    },
+    {
+      "table": "observation_reports",
+      "values": {
+        "id": "01K39800002A2FA7E0E83B5310",
+        "request_key": "upgrade-request-key",
+        "generation": "upgrade-generation",
+        "owner": "upgrade-owner",
+        "actor_scope": "admin",
+        "request": "{}",
+        "state": "ready",
+        "report": "{}",
+        "progress": "{}",
+        "lease_until": 1778459500000,
+        "created_at": 1778459500000,
+        "updated_at": 1778459500000
+      }
+    }
+  ]
+}

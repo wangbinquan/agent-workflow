@@ -756,3 +756,8 @@ export function docVersionFixtureSql(spec: {
   }
   return `INSERT INTO doc_versions (${Object.keys(columns).join(',')}) VALUES (${Object.values(columns).map(literal).join(',')});`
 }
+
+/** RFC-398 design §7.9: the epoch-1 entrance/rollback journey uses the shared SQL fixture boundary. */
+export function epoch1UpgradeAgentFixtureSql(): string {
+  return `INSERT INTO agents (id,name,description,body_md,outputs) VALUES ('rfc398-e2e-agent','epoch-one-agent','Before plain start','# Preserve this agent\n','[]')`
+}

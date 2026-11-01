@@ -1,0 +1,86 @@
+{
+  "$schema_version": 1,
+  "opencodePath": "/Users/wangbinquan/dev/proj/agent-workflow/dist/stub-opencode-macos-arm64",
+  "claudeCodePath": "/Users/wangbinquan/dev/proj/agent-workflow/dist/stub-opencode-macos-arm64",
+  "maxConcurrentNodes": 4,
+  "maxConcurrentScriptNodes": 4,
+  "gitBaselineSyncWindowMs": 60000,
+  "maxConcurrentCodeHostCalls": 8,
+  "codeHostRequestTimeoutMs": 30000,
+  "codeHostResponseMaxBytes": 262144,
+  "multiProcessSubprocessConcurrency": 4,
+  "defaultPerTaskMaxDurationMs": 3600000,
+  "defaultPerTaskMaxTotalTokens": 0,
+  "defaultPerNodeTimeoutMs": 15000,
+  "defaultNodeRetries": 0,
+  "sessionRestartBudget": 0,
+  "scriptInterpreters": {},
+  "scriptDepsInstallTimeoutMs": 600000,
+  "scriptEnvTtlDays": 30,
+  "autoResumeOnBoot": false,
+  "autoRepair": {},
+  "autoKillStalledChild": false,
+  "heartbeatStallMs": 1800000,
+  "maxAutoRecoveriesPerWindow": 3,
+  "autoRecoveryWindowMs": 3600000,
+  "periodicOrphanReconcileMs": 600000,
+  "scheduledTasksEnabled": true,
+  "scheduledTasksMaxFailures": 10,
+  "maxActiveChildTasks": 8,
+  "maxInvocationDepth": 3,
+  "backupIntervalMs": 0,
+  "backupRetentionCount": 7,
+  "backupRetentionDays": 30,
+  "backupMaxTotalBytes": 0,
+  "backupProtectedKeepCount": 10,
+  "maintenanceSchedule": {
+    "kind": "hourly"
+  },
+  "webhookDeliveryBodyRetentionDays": 30,
+  "webhookDeliveryRowRetentionDays": 90,
+  "eventStreamRetentionDays": 30,
+  "webhookTriggerFiresRetentionDays": 90,
+  "taskArchive": {
+    "enabled": false,
+    "retentionDays": 90,
+    "maxTreesPerSweep": 50
+  },
+  "taskIdleTimeout": {
+    "enabled": false,
+    "idleHours": 168
+  },
+  "database": {
+    "provider": "postgresql",
+    "urlEnv": "AW_PG_URL",
+    "poolMax": 16,
+    "connectTimeoutMs": 10000,
+    "statementTimeoutMs": 60000,
+    "idleTimeoutMs": 30000
+  },
+  "backupOnMigration": true,
+  "sqliteSynchronous": "NORMAL",
+  "walCheckpointIntervalMs": 600000,
+  "sqlitePageCacheMib": 128,
+  "sqliteMmapMib": 512,
+  "sqliteSlowQueryMs": 50,
+  "webhookTaskWorkspaceAutoCleanup": false,
+  "worktreeAutoGc": {
+    "enabled": false
+  },
+  "eventsArchiveThresholds": {
+    "perNodeRunRows": 50000,
+    "globalRows": 1000000,
+    "perNodeRunBytes": 8388608,
+    "globalBytes": 268435456
+  },
+  "taskCommitExcludePatterns": [],
+  "submoduleAutoRefresh": {
+    "enabled": true
+  },
+  "largeOutputThresholdBytes": 1048576,
+  "bindHost": "127.0.0.1",
+  "bindPort": 47996,
+  "language": "zh-CN",
+  "theme": "system",
+  "logLevel": "info"
+}

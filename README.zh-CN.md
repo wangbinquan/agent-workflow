@@ -217,6 +217,21 @@ migration 和 Bun runtime。
 3. 选择本地仓库、缓存的 Git URL 或 scratch workspace。
 4. 在 Tasks 跟踪执行，在 Inbox 处理待办。
 
+## 升级已有安装
+
+使用包含 RFC-398 的发布版时，先停止旧 daemon，保留旧二进制以及 home／数据库的一致性备份，
+替换可执行文件后，以原 home 和连接环境变量运行 `agent-workflow start`。单机 epoch-1 安装
+默认自动备份、转换和校验，通过后才启动服务；在 `config.json` 设置
+`"autoEpochMigration": false` 可保留人工计划与批准流程。v0.19.3 尚无此自动升级行为。
+
+PostgreSQL 会在同一服务器派生目标库及保留的 scratch 库。账号无建库权限时，启动打印两条
+DBA 语句；由 superuser 执行后，再用原账号启动。通过 `doctor` 或 `/health` 核对实际库名，
+同步调整外部备份和监控。校验失败会在业务首写前自动撤回，修复原因后需显式执行
+`db migration auto --retry`；成功启动后若返回旧版本，必须使用切换前备份，会丢失后续写入。
+
+PostgreSQL v0.18.18／v0.18.19 桥接、保留库、故障恢复及每次发布后的登记步骤见
+[升级与回滚手册](./docs/release-upgrade-rollback.md)。发布升级门全部通过后 release 才公开。
+
 ## 平台与安全
 
 | 平台                 | 发布二进制 | Runtime 执行方式            |

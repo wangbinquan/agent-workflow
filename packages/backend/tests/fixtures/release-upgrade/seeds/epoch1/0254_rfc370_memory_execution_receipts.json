@@ -1,0 +1,27 @@
+{
+  "formatVersion": 1,
+  "epoch": 1,
+  "after": "0254_rfc370_memory_execution_receipts",
+  "provenance": {
+    "kind": "curated",
+    "sources": [
+      "packages/backend/db/migrations/0254_rfc370_memory_execution_receipts.sql"
+    ],
+    "note": "Small deterministic historical records; terminal execution and delivery states; original SQL performs its own backfills."
+  },
+  "rows": [
+    {
+      "table": "memory_distill_execution_receipts",
+      "values": {
+        "execution_ref": "upgrade-execution-ref",
+        "job_id": "upgrade-job-id",
+        "attempt_index": 0,
+        "round_index": 0,
+        "context_json": "{}",
+        "retained_ref": "upgrade-retained-ref",
+        "prepared_at": 1778459500000,
+        "state": "closed"
+      }
+    }
+  ]
+}

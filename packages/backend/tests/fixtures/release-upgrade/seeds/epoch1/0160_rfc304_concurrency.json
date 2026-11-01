@@ -1,0 +1,46 @@
+{
+  "formatVersion": 1,
+  "epoch": 1,
+  "after": "0160_rfc304_concurrency",
+  "provenance": {
+    "kind": "curated",
+    "sources": [
+      "packages/backend/db/migrations/0160_rfc304_concurrency.sql"
+    ],
+    "note": "Small deterministic historical records; terminal execution and delivery states; original SQL performs its own backfills."
+  },
+  "rows": [
+    {
+      "table": "code_mr_leases",
+      "values": {
+        "lease_key": "gitlab:1:1",
+        "holder_round_id": "01K3980000D25D5DEF6EFDEEBF",
+        "token": "aa2741053c59de0f8a3d9e8ea7200495492cc6dd8e0bbe2d4b240284c60d99d8",
+        "acquired_at": 1778459500000,
+        "expires_at": 1778459560000
+      }
+    },
+    {
+      "table": "code_publish_intents",
+      "values": {
+        "batch_id": "01K3980000C5859D6B525CCDB9",
+        "round_id": "01K3980000D25D5DEF6EFDEEBF",
+        "epoch": 1,
+        "state": "settled",
+        "fingerprints_json": "[]",
+        "external_ids_json": "{}",
+        "anchor_ref": "gitlab:1:1",
+        "created_at": 1778459500000,
+        "settled_at": 1778459560000
+      }
+    }
+  ],
+  "migrationEffects": [
+    {
+      "table": "code_work_items",
+      "operation": "alter",
+      "rule": "Apply the released SQL to existing seeded rows, retaining its explicit defaults, rewrites and backfills.",
+      "source": "packages/backend/db/migrations/0160_rfc304_concurrency.sql"
+    }
+  ]
+}

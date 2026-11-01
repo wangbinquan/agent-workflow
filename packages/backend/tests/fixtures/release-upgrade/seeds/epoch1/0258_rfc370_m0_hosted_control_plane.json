@@ -1,0 +1,57 @@
+{
+  "formatVersion": 1,
+  "epoch": 1,
+  "after": "0258_rfc370_m0_hosted_control_plane",
+  "provenance": {
+    "kind": "curated",
+    "sources": [
+      "packages/backend/db/migrations/0258_rfc370_m0_hosted_control_plane.sql"
+    ],
+    "note": "Small deterministic historical records; terminal execution and delivery states; original SQL performs its own backfills. Database-backed skills include both the live tree and the immutable version:1 snapshot."
+  },
+  "rows": [
+    {
+      "table": "application_configuration",
+      "values": {
+        "id": "global",
+        "document": "{\"version\":1}",
+        "revision": 1,
+        "updated_at": 1778459500000
+      }
+    },
+    {
+      "table": "external_identities",
+      "values": {
+        "id": "01K398000022E5FB2A1F448E75",
+        "issuer": "https://example.invalid/oidc",
+        "subject": "upgrade-admin",
+        "user_id": "01K39800007DFB4CF67742CB06",
+        "linked_at": 1778459500000
+      }
+    },
+    {
+      "table": "skill_content_entries",
+      "values": {
+        "skill_id": "01K398000032C1CF49A2FEEE26",
+        "tree": "live",
+        "path": "SKILL.md",
+        "encoding": "utf8",
+        "content": "# Release upgrade skill\n\nKeep the historical document and review outcome.\n",
+        "size": 74,
+        "updated_at": 1778459500000
+      }
+    },
+    {
+      "table": "skill_content_entries",
+      "values": {
+        "skill_id": "01K398000032C1CF49A2FEEE26",
+        "tree": "version:1",
+        "path": "SKILL.md",
+        "encoding": "utf8",
+        "content": "# Release upgrade skill\n\nKeep the historical document and review outcome.\n",
+        "size": 74,
+        "updated_at": 1778459500000
+      }
+    }
+  ]
+}

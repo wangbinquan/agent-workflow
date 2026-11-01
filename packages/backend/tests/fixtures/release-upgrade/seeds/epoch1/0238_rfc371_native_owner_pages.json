@@ -1,0 +1,114 @@
+{
+  "formatVersion": 1,
+  "epoch": 1,
+  "after": "0238_rfc371_native_owner_pages",
+  "provenance": {
+    "kind": "curated",
+    "sources": [
+      "packages/backend/db/migrations/0238_rfc371_native_owner_pages.sql"
+    ],
+    "note": "Small deterministic historical records; terminal execution and delivery states; original SQL performs its own backfills."
+  },
+  "rows": [
+    {
+      "table": "task_execution_native_usage_emissions",
+      "values": {
+        "invocation_id": "upgrade-invocation-id",
+        "event_id": "upgrade-event-id",
+        "fingerprint": "aa2741053c59de0f8a3d9e8ea7200495492cc6dd8e0bbe2d4b240284c60d99d8",
+        "source_row_id": 1,
+        "document": "{}",
+        "ack": "{}"
+      }
+    },
+    {
+      "table": "task_execution_native_usage_pass_heads",
+      "values": {
+        "key": "upgrade-key",
+        "pass_id": "upgrade-task_execution-pass"
+      }
+    },
+    {
+      "table": "task_execution_native_usage_pass_pages",
+      "values": {
+        "pass_id": "upgrade-task_execution-pass",
+        "ordinal": "upgrade-ordinal",
+        "payload_digest": "aa2741053c59de0f8a3d9e8ea7200495492cc6dd8e0bbe2d4b240284c60d99d8",
+        "cumulative_digest": "aa2741053c59de0f8a3d9e8ea7200495492cc6dd8e0bbe2d4b240284c60d99d8",
+        "document": "{}",
+        "ack": "{}"
+      }
+    },
+    {
+      "table": "task_execution_native_usage_passes",
+      "values": {
+        "pass_id": "upgrade-task_execution-pass",
+        "invocation_id": "upgrade-task_execution-invocation",
+        "head_key": "upgrade-task_execution-head",
+        "owner_receipt_id": "upgrade-task_execution-owner",
+        "identity": "{\"taskId\":\"01K3980000085154084C742759\",\"nodeRunId\":\"01K3980000D3D6DE02630EDFDE\"}",
+        "initial_cursor": "0",
+        "admission": "{}",
+        "state": "eof",
+        "next_ordinal": "1",
+        "digest": "aa2741053c59de0f8a3d9e8ea7200495492cc6dd8e0bbe2d4b240284c60d99d8",
+        "position": "{}",
+        "counts": "{\"records\":1}",
+        "last_ack": "{}"
+      }
+    },
+    {
+      "table": "task_execution_native_usage_preparations",
+      "values": {
+        "invocation_id": "upgrade-invocation-id",
+        "task_id": "01K3980000085154084C742759",
+        "node_run_id": "01K3980000D3D6DE02630EDFDE",
+        "owner_receipt_id": "upgrade-owner-receipt-id",
+        "fence": "{}",
+        "document": "{}",
+        "state": "sealed"
+      }
+    },
+    {
+      "table": "task_execution_native_usage_preparations",
+      "values": {
+        "invocation_id": "upgrade-task_execution-invocation",
+        "task_id": "01K3980000085154084C742759",
+        "node_run_id": "01K3980000D3D6DE02630EDFDE",
+        "owner_receipt_id": "upgrade-owner-receipt-id",
+        "fence": "{}",
+        "document": "{}",
+        "state": "sealed"
+      }
+    },
+    {
+      "table": "task_execution_native_usage_revision_heads",
+      "values": {
+        "invocation_id": "upgrade-invocation-id",
+        "record_id": "upgrade-record-id",
+        "revision": 1
+      }
+    },
+    {
+      "table": "task_execution_native_usage_session_parents",
+      "values": {
+        "pass_id": "upgrade-task_execution-pass",
+        "session_id": "upgrade-session",
+        "parent_session_id": null,
+        "ordinal": "0",
+        "path_digest": "aa2741053c59de0f8a3d9e8ea7200495492cc6dd8e0bbe2d4b240284c60d99d8",
+        "depth": "0"
+      }
+    },
+    {
+      "table": "task_execution_native_usage_step_members",
+      "values": {
+        "pass_id": "upgrade-task_execution-pass",
+        "step_id": "step-1",
+        "session_id": "upgrade-session",
+        "ordinal": "0",
+        "document": "{\"status\":\"done\"}"
+      }
+    }
+  ]
+}

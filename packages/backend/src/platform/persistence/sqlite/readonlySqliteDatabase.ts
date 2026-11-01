@@ -1,4 +1,4 @@
-import { Database } from 'bun:sqlite'
+import { openSqliteForRead } from '@/platform/persistence/sqlite/openForRead'
 
 export interface ReadonlySqliteStatement<Row, Parameters extends readonly unknown[]> {
   get(...parameters: Parameters): Row | null
@@ -14,5 +14,5 @@ export interface ReadonlySqliteDatabase {
 }
 
 export function openReadonlySqliteDatabase(path: string): ReadonlySqliteDatabase {
-  return new Database(path, { readonly: true }) as unknown as ReadonlySqliteDatabase
+  return openSqliteForRead(path) as unknown as ReadonlySqliteDatabase
 }

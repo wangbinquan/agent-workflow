@@ -1,0 +1,37 @@
+{
+  "formatVersion": 1,
+  "epoch": 1,
+  "after": "0231_rfc371_observation_prices",
+  "provenance": {
+    "kind": "curated",
+    "sources": [
+      "packages/backend/db/migrations/0231_rfc371_observation_prices.sql"
+    ],
+    "note": "Small deterministic historical records; terminal execution and delivery states; original SQL performs its own backfills."
+  },
+  "rows": [
+    {
+      "table": "observation_price_heads",
+      "values": {
+        "registration_id": "upgrade-registration-id",
+        "revision": 0
+      }
+    },
+    {
+      "table": "observation_price_versions",
+      "values": {
+        "id": "01K398000040E1398314930E14",
+        "registration_id": "upgrade-registration-id",
+        "revision": 1,
+        "request_key": "upgrade-request-key",
+        "fingerprint": "aa2741053c59de0f8a3d9e8ea7200495492cc6dd8e0bbe2d4b240284c60d99d8",
+        "configuration_revision": 1,
+        "protocol": "opencode",
+        "provider": "fixture",
+        "model": "upgrade-fixture-model",
+        "effective_from": 1,
+        "document": "{\"version\":1,\"inputMicro\":1000000,\"outputMicro\":2000000}"
+      }
+    }
+  ]
+}

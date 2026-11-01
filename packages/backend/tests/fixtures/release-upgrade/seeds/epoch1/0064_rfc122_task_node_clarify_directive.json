@@ -1,0 +1,24 @@
+{
+  "formatVersion": 1,
+  "epoch": 1,
+  "after": "0064_rfc122_task_node_clarify_directive",
+  "provenance": {
+    "kind": "curated",
+    "sources": [
+      "packages/backend/db/migrations/0064_rfc122_task_node_clarify_directive.sql"
+    ],
+    "note": "Small deterministic historical records; terminal execution and delivery states; original SQL performs its own backfills."
+  },
+  "rows": [
+    {
+      "table": "task_node_clarify_directives",
+      "values": {
+        "task_id": "01K398000037CCE521AC9029CB",
+        "node_id": "worker",
+        "directive": "continue",
+        "set_by": "01K39800007DFB4CF67742CB06",
+        "updated_at": 1778459500000
+      }
+    }
+  ]
+}

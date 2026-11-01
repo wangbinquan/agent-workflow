@@ -1,0 +1,37 @@
+{
+  "formatVersion": 1,
+  "epoch": 1,
+  "after": "0164_rfc304_code_findings",
+  "provenance": {
+    "kind": "curated",
+    "sources": [
+      "packages/backend/db/migrations/0164_rfc304_code_findings.sql"
+    ],
+    "note": "Small deterministic historical records; terminal execution and delivery states; original SQL performs its own backfills."
+  },
+  "rows": [
+    {
+      "table": "code_findings",
+      "values": {
+        "id": "01K3980000C8C62B0FBBB57976",
+        "code_host_endpoint_id": "01K3980000BBDD864AB0F66C6E",
+        "stable_project_id": "1",
+        "anchor_kind": "mr",
+        "anchor_id": "1",
+        "capability": "review",
+        "fingerprint": "aa2741053c59de0f8a3d9e8ea7200495492cc6dd8e0bbe2d4b240284c60d99d8",
+        "generation": 1,
+        "lifecycle": "disappeared",
+        "severity": "info",
+        "title": "Document retained",
+        "file_path": "README.md",
+        "anchor_line": 1,
+        "published_round_id": "01K3980000D25D5DEF6EFDEEBF",
+        "disappeared_round_id": "01K3980000D25D5DEF6EFDEEBF",
+        "created_at": 1778459500000,
+        "last_seen_at": 1778459560000,
+        "closed_at": 1778459560000
+      }
+    }
+  ]
+}

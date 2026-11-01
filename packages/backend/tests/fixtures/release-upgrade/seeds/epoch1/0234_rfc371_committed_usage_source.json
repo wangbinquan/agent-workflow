@@ -1,0 +1,24 @@
+{
+  "formatVersion": 1,
+  "epoch": 1,
+  "after": "0234_rfc371_committed_usage_source",
+  "provenance": {
+    "kind": "curated",
+    "sources": [
+      "packages/backend/db/migrations/0234_rfc371_committed_usage_source.sql"
+    ],
+    "note": "Small deterministic historical records; terminal execution and delivery states; original SQL performs its own backfills."
+  },
+  "rows": [
+    {
+      "table": "task_execution_observation_sources",
+      "values": {
+        "id": 1,
+        "task_id": "01K3980000085154084C742759",
+        "node_run_id": "01K3980000D3D6DE02630EDFDE",
+        "evidence_json": "{}",
+        "pending": 1
+      }
+    }
+  ]
+}

@@ -251,6 +251,29 @@ In the UI:
 3. Choose a local repository, cached Git URL, or scratch workspace.
 4. Follow execution in Tasks and answer pending actions from the Inbox.
 
+## Upgrading an existing installation
+
+For a release containing RFC-398, stop the old daemon, retain its binary and a
+consistent backup of the home and database, replace the executable, and run
+`agent-workflow start` with the same home and connection environment. Standalone
+epoch-1 installations upgrade automatically: backup, conversion and verification
+finish before the daemon serves requests. Set `"autoEpochMigration": false` in
+`config.json` to use the manual plan and approval flow. v0.19.3 does not provide
+this automatic upgrade behavior.
+
+PostgreSQL upgrades derive target and retained scratch databases on the same
+server. If the account cannot create them, startup prints two DBA statements;
+execute those as a superuser and start again with the original account. Check the
+actual database name in `doctor` or `/health` and update external backup and
+monitoring jobs. A failed verification rolls back before business writes and
+requires an explicit `db migration auto --retry` after the cause is fixed. After
+successful startup, returning to the old version requires the pre-upgrade backup
+and loses subsequent writes.
+
+See the [upgrade and rollback runbook](./docs/release-upgrade-rollback.md) for
+PostgreSQL v0.18.18/v0.18.19 bridging, retained databases, recovery, and release
+registration. Releases remain draft until the binary upgrade gate passes.
+
 ## Platform and safety
 
 | Platform              | Release | Runtime execution                                  |

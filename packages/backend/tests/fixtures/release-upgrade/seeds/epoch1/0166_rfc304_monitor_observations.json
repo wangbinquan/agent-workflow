@@ -1,0 +1,25 @@
+{
+  "formatVersion": 1,
+  "epoch": 1,
+  "after": "0166_rfc304_monitor_observations",
+  "provenance": {
+    "kind": "curated",
+    "sources": [
+      "packages/backend/db/migrations/0166_rfc304_monitor_observations.sql"
+    ],
+    "note": "Small deterministic historical records; terminal execution and delivery states; original SQL performs its own backfills."
+  },
+  "rows": [
+    {
+      "table": "code_work_observations",
+      "values": {
+        "id": "01K39800009930C71972FB94D9",
+        "work_item_id": "01K3980000BF31929DD24F5787",
+        "kind": "terminal",
+        "reason": "Merge request closed",
+        "observed_revision": "1",
+        "created_at": 1778459500000
+      }
+    }
+  ]
+}

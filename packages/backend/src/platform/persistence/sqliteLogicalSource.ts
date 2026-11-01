@@ -1,3 +1,4 @@
+import { openSqliteForRead } from '@/platform/persistence/sqlite/openForRead'
 import { sqliteHistoryConnection } from './schema/history/connection'
 import { captureEpochMetadata, type EpochMetadataSnapshot } from './schema/history/metadataSnapshot'
 import { schemaHistoryRuntime } from './schema/history/runtime'
@@ -5,7 +6,7 @@ import { schemaHistoryRuntime } from './schema/history/runtime'
 // worker. Every integer query opts into Bun SQLite safeIntegers so a value is
 // rejected or copied exactly instead of first passing through a JS double.
 
-import { Database } from 'bun:sqlite'
+import type { Database } from 'bun:sqlite'
 import { statSync } from 'node:fs'
 import { sha256Hex } from '@/util/hash'
 import {
@@ -114,7 +115,7 @@ export function openSqliteLogicalSource(input: {
   readonly path: string
   readonly contract: LogicalSchemaContract
 }): SqliteLogicalSource {
-  const db = new Database(input.path, { readonly: true })
+  const db = openSqliteForRead(input.path)
   let closed = false
 
   /**

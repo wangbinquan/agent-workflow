@@ -1,0 +1,67 @@
+{
+  "formatVersion": 1,
+  "epoch": 1,
+  "after": "0161_rfc304_capability_templates",
+  "provenance": {
+    "kind": "curated",
+    "sources": [
+      "packages/backend/db/migrations/0161_rfc304_capability_templates.sql"
+    ],
+    "note": "Small deterministic historical records; terminal execution and delivery states; original SQL performs its own backfills."
+  },
+  "rows": [
+    {
+      "table": "capability_bindings",
+      "values": {
+        "id": "01K39800006131FF1F274666AD",
+        "name": "upgrade-review-binding",
+        "framework_id": "01K3980000B7D9A47A8B9268AC",
+        "agent_by_slot_json": "{\"review\":\"upgrade-writer\"}",
+        "prompt_by_slot_json": "{}",
+        "params_json": "{}",
+        "owner_user_id": "01K39800007DFB4CF67742CB06",
+        "visibility": "public",
+        "acl_revision": 0,
+        "builtin": 0,
+        "created_at": 1778459500000,
+        "updated_at": 1778459500000
+      }
+    },
+    {
+      "table": "capability_frameworks",
+      "values": {
+        "id": "01K3980000B7D9A47A8B9268AC",
+        "name": "upgrade-review",
+        "description": "Historical review capability",
+        "capability": "review",
+        "scripts_json": "{}",
+        "hooks_json": "[]",
+        "param_schema_json": "{}",
+        "param_defaults_json": "{}",
+        "stage_contract_ver": 1,
+        "owner_user_id": "01K39800007DFB4CF67742CB06",
+        "visibility": "public",
+        "acl_revision": 0,
+        "builtin": 0,
+        "created_at": 1778459500000,
+        "updated_at": 1778459500000
+      }
+    },
+    {
+      "table": "repo_capability_config",
+      "values": {
+        "id": "01K3980000C21131384C69E176",
+        "repo_id": "01K39800006904DCBDB1794059",
+        "capability": "review",
+        "binding_id": "01K39800006131FF1F274666AD",
+        "enabled": 0,
+        "trigger_config_json": "{}",
+        "readiness": "disabled",
+        "readiness_issues_json": "[]",
+        "dependency_revision": 0,
+        "created_at": 1778459500000,
+        "updated_at": 1778459500000
+      }
+    }
+  ]
+}

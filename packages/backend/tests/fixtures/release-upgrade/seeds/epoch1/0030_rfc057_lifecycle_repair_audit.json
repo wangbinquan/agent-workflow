@@ -1,0 +1,31 @@
+{
+  "formatVersion": 1,
+  "epoch": 1,
+  "after": "0030_rfc057_lifecycle_repair_audit",
+  "provenance": {
+    "kind": "curated",
+    "sources": [
+      "packages/backend/db/migrations/0030_rfc057_lifecycle_repair_audit.sql"
+    ],
+    "note": "Small deterministic historical records; terminal execution and delivery states; original SQL performs its own backfills."
+  },
+  "rows": [
+    {
+      "table": "lifecycle_repair_audit",
+      "values": {
+        "id": "01K3980000FC7F65645D7694DA",
+        "task_id": "01K3980000085154084C742759",
+        "alert_id": "01K39800008D7ED84D75C867F0",
+        "alert_rule": "node-running-task-terminal",
+        "alert_detail_json": "{\"nodeRunId\":\"01K3980000D3D6DE02630EDFDE\"}",
+        "option_id": "repair-metadata",
+        "actor_user_id": "01K39800007DFB4CF67742CB06",
+        "before_snapshot_json": "{\"status\":\"done\"}",
+        "after_snapshot_json": "{\"status\":\"done\"}",
+        "outcome": "applied",
+        "outcome_message": "No outstanding processes.",
+        "applied_at": 1778459560001
+      }
+    }
+  ]
+}

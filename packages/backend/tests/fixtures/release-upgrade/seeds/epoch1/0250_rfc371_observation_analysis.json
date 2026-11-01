@@ -1,0 +1,111 @@
+{
+  "formatVersion": 1,
+  "epoch": 1,
+  "after": "0250_rfc371_observation_analysis",
+  "provenance": {
+    "kind": "curated",
+    "sources": [
+      "packages/backend/db/migrations/0250_rfc371_observation_analysis.sql"
+    ],
+    "note": "Small deterministic historical records; terminal execution and delivery states; original SQL performs its own backfills."
+  },
+  "rows": [
+    {
+      "table": "observation_anomaly_history",
+      "values": {
+        "id": "01K398000093B6020CCAB442F8",
+        "key": "upgrade-key",
+        "observed_at": 1778459500000,
+        "document": "{}"
+      }
+    },
+    {
+      "table": "observation_anomaly_states",
+      "values": {
+        "key": "upgrade-key",
+        "document": "{\"version\":1,\"anomalies\":[]}",
+        "source_revision": "1"
+      }
+    },
+    {
+      "table": "observation_invocation_price_audit",
+      "values": {
+        "operation_id": "upgrade-operation-id",
+        "invocation_id": "upgrade-invocation-id",
+        "document": "{}",
+        "fingerprint": "aa2741053c59de0f8a3d9e8ea7200495492cc6dd8e0bbe2d4b240284c60d99d8"
+      }
+    },
+    {
+      "table": "observation_invocation_price_policies",
+      "values": {
+        "invocation_id": "upgrade-invocation-id",
+        "operation_id": "upgrade-operation-id",
+        "confirmed_at": 1,
+        "document": "{}"
+      }
+    },
+    {
+      "table": "observation_invocation_price_records",
+      "values": {
+        "invocation_id": "upgrade-invocation-id",
+        "source_id": "upgrade-source-id",
+        "record_id": "upgrade-record-id",
+        "operation_id": "upgrade-operation-id",
+        "document": "{}"
+      }
+    },
+    {
+      "table": "observation_maintenance_members",
+      "values": {
+        "operation_id": "upgrade-operation-id",
+        "key": "upgrade-key",
+        "document": "{}",
+        "state": "pending"
+      }
+    },
+    {
+      "table": "observation_maintenance_operations",
+      "values": {
+        "id": "01K3980000E90C3E84DB4FD207",
+        "request_key": "upgrade-request-key",
+        "actor_id": "upgrade-actor-id",
+        "actor_scope": "admin",
+        "actor_document": "{\"id\":\"01K39800007DFB4CF67742CB06\",\"role\":\"admin\"}",
+        "state": "completed",
+        "source_revision": "1",
+        "created_at": 1778459500000,
+        "document": "{\"version\":1,\"kind\":\"retention\",\"removed\":0}",
+        "lease_until": 1778459500000
+      }
+    },
+    {
+      "table": "observation_projection_descriptors",
+      "values": {
+        "key": "upgrade-key",
+        "document": "{}"
+      }
+    },
+    {
+      "table": "observation_projection_indexed_versions",
+      "values": {
+        "revision": "upgrade-revision"
+      }
+    },
+    {
+      "table": "observation_projection_query_scope_members",
+      "values": {
+        "scope": "upgrade-scope",
+        "kind": "upgrade-kind",
+        "identity": "upgrade-identity"
+      }
+    },
+    {
+      "table": "observation_projection_query_scopes",
+      "values": {
+        "id": "01K39800006FB39F0E65218144",
+        "ready": 0
+      }
+    }
+  ]
+}

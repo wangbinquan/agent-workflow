@@ -1,3 +1,4 @@
+import { openSqliteForRead } from '@/platform/persistence/sqlite/openForRead'
 // Offline target connections never construct a runtime business session.
 import { Database } from 'bun:sqlite'
 import { mkdirSync } from 'node:fs'
@@ -88,7 +89,7 @@ export function openConversionTarget(input: ConversionTargetInput): ConversionTa
 
 /** Probe an existing target without creating it or loading a business session. */
 export function sqliteTargetIsEmpty(path: string): boolean {
-  const database = new Database(path, { readonly: true })
+  const database = openSqliteForRead(path)
   try {
     return (
       database.query("SELECT name FROM sqlite_schema WHERE name NOT LIKE 'sqlite_%'").all()

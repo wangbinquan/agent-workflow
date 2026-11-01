@@ -1,0 +1,12 @@
+{
+  "finalizedAt": 1793429205279,
+  "firstLiveWriteAt": 1793429216573,
+  "legacyArchiveDigest": "sha256:ec456f82b1551452ccb6d5f096c545dc55af05ace48742b44d656daf3f050c4a",
+  "logicalBackupDigest": "sha256:67307d7387820a95b62035f383a648ef91e6fd3f8ca89426bfd91d1d87bc206e",
+  "operationId": "dbm_01M68BBT61MNA9V6MHA5SZNGMM",
+  "schemaDigest": "sha256:3ee9be23a3e0f46c002f76b382b33d137c6a9ef4ef78a3ee71e212e5247c72d7",
+  "sourceGenerationId": "dbg_legacy_sqlite",
+  "targetGenerationId": "dbg_pg_01M68BBT61MNA9V6MHA5SZNGMM",
+  "verificationDigest": "sha256:8658af01fbf8b3e1b32f6b7a5490ea54525666e055931f8140c014162efffd0b",
+  "version": 1
+}

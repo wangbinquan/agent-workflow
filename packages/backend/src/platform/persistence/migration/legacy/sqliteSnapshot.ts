@@ -1,10 +1,9 @@
+import { openSqliteForRead } from '@/platform/persistence/sqlite/openForRead'
 // RFC-311/RFC-349 — System Operations SQLite VACUUM INTO mechanism. The Worker entry
 // delegates here so provider-specific SQL never leaks into a service surface.
 
-import { Database } from 'bun:sqlite'
-
 export function vacuumSqliteInto(input: { readonly dbPath: string; readonly dest: string }): void {
-  const source = new Database(input.dbPath, { readonly: true })
+  const source = openSqliteForRead(input.dbPath)
   try {
     source.exec('PRAGMA busy_timeout = 30000;')
     source.exec(`VACUUM INTO '${input.dest.replaceAll("'", "''")}'`)
@@ -21,7 +20,7 @@ export function vacuumSqliteInto(input: { readonly dbPath: string; readonly dest
  * 消灭的正是这类停顿，那次只把 `VACUUM INTO` 挪到了 worker，校验留在了主线程。
  */
 export function quickCheckSqlite(input: { readonly dbPath: string }): void {
-  const database = new Database(input.dbPath, { readonly: true })
+  const database = openSqliteForRead(input.dbPath)
   try {
     const rows = database.query('PRAGMA quick_check').all() as { quick_check: string }[]
     if (rows.length !== 1 || rows[0]?.quick_check !== 'ok') {

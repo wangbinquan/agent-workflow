@@ -609,6 +609,7 @@ export async function runEpochSwitch(
         await session.write(runArtifact(session.journal, 'summary.json'), summary)
       }
       deps.faults?.('after-finish')
+      await deps.autoUpgradeCheckpoint?.('conversion-finished')
       await assertBootEnvironment()
       if (
         summary.status === 'blocked' ||

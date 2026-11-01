@@ -1,0 +1,13 @@
+{
+  "activeTableCount": 178,
+  "archiveOnlyTableCount": 6,
+  "legacyArchiveDigest": "sha256:ec456f82b1551452ccb6d5f096c545dc55af05ace48742b44d656daf3f050c4a",
+  "logicalBackupDigest": "sha256:67307d7387820a95b62035f383a648ef91e6fd3f8ca89426bfd91d1d87bc206e",
+  "operationId": "dbm_01M68BBT61MNA9V6MHA5SZNGMM",
+  "schemaDigest": "sha256:3ee9be23a3e0f46c002f76b382b33d137c6a9ef4ef78a3ee71e212e5247c72d7",
+  "sourceFingerprint": "sqlite:12591d59586317bb00a7e8ad",
+  "sourceGenerationId": "dbg_legacy_sqlite",
+  "targetFingerprint": "pg:f0fcb3f27b246b6d78364665",
+  "verifiedAt": 1793429204367,
+  "version": 1
+}

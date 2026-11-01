@@ -1,0 +1,37 @@
+{
+  "formatVersion": 1,
+  "epoch": 1,
+  "after": "0229_rfc365_event_automation_work_intents",
+  "provenance": {
+    "kind": "curated",
+    "sources": [
+      "packages/backend/db/migrations/0229_rfc365_event_automation_work_intents.sql"
+    ],
+    "note": "Small deterministic historical records; terminal execution and delivery states; original SQL performs its own backfills."
+  },
+  "rows": [
+    {
+      "table": "event_automation_work_intents",
+      "values": {
+        "origin_ref": "upgrade-event-start",
+        "delivery_id": "01K398000072AA88A45E2B39E6",
+        "subscription_id": "01K39800004D6C5D6631AD3E3F",
+        "rule_id": "01K3980000DC5F693D8E066F15",
+        "rule_revision": 1,
+        "rule_digest": "aa2741053c59de0f8a3d9e8ea7200495492cc6dd8e0bbe2d4b240284c60d99d8",
+        "owner_user_id": "01K39800007DFB4CF67742CB06",
+        "port_id": "task-automation-work-start.v1",
+        "target_payload_json": "{\"workflowId\":\"01K398000045B34F16DB605A06\",\"inputs\":{}}",
+        "target_format_version": 1,
+        "target_digest": "aa2741053c59de0f8a3d9e8ea7200495492cc6dd8e0bbe2d4b240284c60d99d8",
+        "resolved_target_ref": "01K398000045B34F16DB605A06",
+        "receipt_ref": "01K3980000085154084C742759",
+        "status": "launched",
+        "claim_owner": "upgrade-stopped-daemon",
+        "claim_attempt": 1,
+        "created_at": 1778459500000,
+        "updated_at": 1778459500000
+      }
+    }
+  ]
+}

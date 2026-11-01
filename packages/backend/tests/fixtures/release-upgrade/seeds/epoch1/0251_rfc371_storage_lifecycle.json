@@ -1,0 +1,52 @@
+{
+  "formatVersion": 1,
+  "epoch": 1,
+  "after": "0251_rfc371_storage_lifecycle",
+  "provenance": {
+    "kind": "curated",
+    "sources": [
+      "packages/backend/db/migrations/0251_rfc371_storage_lifecycle.sql"
+    ],
+    "note": "Small deterministic historical records; terminal execution and delivery states; original SQL performs its own backfills."
+  },
+  "rows": [
+    {
+      "table": "observation_report_leases",
+      "values": {
+        "id": "01K3980000EBC84F9324A980C1",
+        "kind": "upgrade-kind",
+        "expires_at": 1778459500000,
+        "retiring": 0
+      }
+    },
+    {
+      "table": "observation_scope_refs",
+      "values": {
+        "view_id": "upgrade-view-id",
+        "scope": "upgrade-scope"
+      }
+    },
+    {
+      "table": "observation_storage_samples",
+      "values": {
+        "day": "upgrade-day",
+        "sampled_at": 1,
+        "document": "{}"
+      }
+    },
+    {
+      "table": "observation_storage_state",
+      "values": {
+        "key": "upgrade-key",
+        "document": "{}"
+      }
+    },
+    {
+      "table": "observation_work_retention",
+      "values": {
+        "id": "01K3980000928E3E162B986F71",
+        "queued_at": 0
+      }
+    }
+  ]
+}

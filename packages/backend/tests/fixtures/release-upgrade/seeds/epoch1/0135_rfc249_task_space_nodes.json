@@ -1,0 +1,22 @@
+{
+  "formatVersion": 1,
+  "epoch": 1,
+  "after": "0135_rfc249_task_space_nodes",
+  "provenance": {
+    "kind": "curated",
+    "sources": [
+      "packages/backend/db/migrations/0135_rfc249_task_space_nodes.sql"
+    ],
+    "note": "Small deterministic historical records; terminal execution and delivery states; original SQL performs its own backfills."
+  },
+  "rows": [
+    {
+      "table": "task_space_nodes",
+      "values": {
+        "task_id": "01K3980000085154084C742759",
+        "node_path": "",
+        "schema_version": 1
+      }
+    }
+  ]
+}
