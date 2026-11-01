@@ -23,8 +23,9 @@ import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   composeDatabaseDigitalEmployeeExecutionPorts,
   composeDigitalEmployeeExecutionCore,
-  inspectDigitalEmployeeHumanReviewSnapshot,
 } from '@/modules/task-execution/composition/digitalEmployeeExecution'
+// RFC-414: the human-review gate snapshot reads the database, so it lives in task-execution infrastructure.
+import { inspectDigitalEmployeeHumanReviewSnapshot } from '@/modules/task-execution/infrastructure/digitalEmployeeExecutionReads'
 import {
   DIGITAL_EMPLOYEE_PLAN_PROMPT_KEY,
   DIGITAL_EMPLOYEE_PLAN_REVIEW_NODE_ID,

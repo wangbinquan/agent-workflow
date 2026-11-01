@@ -30,9 +30,10 @@ import { createReactionAdmissionStore } from '@/modules/task-execution/infrastru
 import {
   composeDatabaseDigitalEmployeeExecutionPorts,
   composeDigitalEmployeeExecutionCore,
-  inspectDigitalEmployeeHumanReviewSnapshot,
   type DigitalEmployeeExecutionDependencies,
 } from '@/modules/task-execution/composition/digitalEmployeeExecution'
+// RFC-414: the human-review gate snapshot reads the database, so it lives in task-execution infrastructure.
+import { inspectDigitalEmployeeHumanReviewSnapshot } from '@/modules/task-execution/infrastructure/digitalEmployeeExecutionReads'
 import { prepareReactionExecution } from '@/modules/digital-employee/domain/reactionExecutionRequest'
 import type {
   ReactionClaimEpoch,

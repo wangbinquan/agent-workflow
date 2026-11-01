@@ -211,13 +211,7 @@ const KNOWN: Readonly<Record<string, readonly string[]>> = {
     'packages/backend/src/modules/source-control/composition/taskImageRepositoryEffects.ts',
     'packages/backend/src/modules/source-control/composition/taskImageUploads.ts',
     'packages/backend/src/modules/source-control/composition/taskImageWorkspace.ts',
-    'packages/backend/src/modules/task-execution/composition/actionExecutionRunners.ts',
-    'packages/backend/src/modules/task-execution/composition/crewstationExecution.ts',
-    'packages/backend/src/modules/task-execution/composition/crewstationRecovery.ts',
-    'packages/backend/src/modules/task-execution/composition/digitalEmployeeExecution.ts',
-    'packages/backend/src/modules/task-execution/composition/taskImageArchive.ts',
-    'packages/backend/src/modules/task-execution/composition/taskImageExecution.ts',
-    'packages/backend/src/modules/task-execution/composition/workspacePreparationMaintenance.ts',
+    // RFC-414: the seven task-execution entries left — their persistence / filesystem work is infrastructure now.
   ],
   'deployment-mode-branch-sites': [
     'packages/backend/src/embed.ts#withDeploymentMarker#comparison#1',

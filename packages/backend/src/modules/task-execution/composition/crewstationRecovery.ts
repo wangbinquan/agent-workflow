@@ -5,11 +5,10 @@ import type { CrewStationMutationFence } from '@/platform/crewstation/mutationFe
 import type { CrewStationPlatformApi } from '@/platform/crewstation/platformApi'
 import { createCrewStationRecoveryApi } from '@/platform/crewstation/recovery'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { Logger } from '@/util/log'
-import { eq } from 'drizzle-orm'
 import { createHostedRecoveryConsumer } from '../infrastructure/crewstation/recoveryConsumer'
 import { createHostedRecoveryJournal } from '../infrastructure/crewstation/recoveryJournal'
+import { readTaskStatus } from '../infrastructure/taskExecutionTaskReads'
 import type { TaskRecoveryDeploymentSelection } from './taskRecoverySelection'
 
 /** RFC-370 §9.2 V4 — hosted platform recovery for AW tasks. The requester
@@ -41,15 +40,7 @@ export function composeCrewStationRecovery(input: {
           return (await requester.resolve(requestedBy))?.actor ?? null
         },
         assertManualExecutionAllowed: context.assertManualExecutionAllowed,
-        async taskStatus(taskId) {
-          const { tasks } = tablesOf(input.db)
-          const [row] = await input.db
-            .select({ status: tasks.status })
-            .from(tasks)
-            .where(eq(tasks.id, taskId))
-            .limit(1)
-          return row?.status ?? null
-        },
+        taskStatus: (taskId) => readTaskStatus(input.db, taskId),
         resumeTask: context.resumeTaskAs,
       },
     })

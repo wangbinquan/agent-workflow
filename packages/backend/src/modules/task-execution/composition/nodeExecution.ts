@@ -15,7 +15,7 @@ import { judgeBranchActivation } from '../application/nodeBranchActivation'
 import { createScriptNodeExecutionPorts } from './scriptNodeExecution'
 import type { WorkflowNode } from '@agent-workflow/shared'
 import type { TaskMechanicsState } from './taskMechanicsState'
-import { worktreeFilesChanged } from '@/util/git'
+import { countCanonicalFilesChanged } from '../infrastructure/local/canonicalDelta'
 import type { Logger } from '@/util/log'
 import type { WrapperRuntimeFactory } from './taskExecutionComponents'
 import type { WorkgroupTurnHostOperations } from '../application/ports/workgroupTurnsOperations'
@@ -136,23 +136,9 @@ function workgroupEngineSupport(
   return {
     broadcastNodeStatus: (nodeRunId, nodeId, status) =>
       broadcastNodeStatus(taskId, nodeRunId, nodeId, status as NodeStatus),
-    // RFC-187 §4 — canonical delta for the zero-delta-done warn. Throws (engine
-    // swallows) when there's no base commit to diff against.
-    // RFC-187 §4 (Codex impl-gate P1) — sum the delta over EVERY canonical repo at its
-    // own worktree/base. The old form diffed `task.worktreePath`, which for a multi-repo
-    // task is a NON-git parent container: git threw, `warnIfZeroDeltaDone` swallowed it,
-    // and the zero-delta warning silently never fired for multi-repo tasks at all.
-    // Single-repo is unchanged (repos[0].worktreePath === task.worktreePath).
-    getCanonicalFilesChanged: async () => {
-      const diffable = state.repos.filter((r) => r.baseCommit !== null)
-      if (diffable.length === 0) {
-        throw new Error('no base commit on any repo — cannot compute canonical delta')
-      }
-      const perRepo = await Promise.all(
-        diffable.map((r) => worktreeFilesChanged(r.worktreePath, r.baseCommit as string)),
-      )
-      return perRepo.reduce((sum, n) => sum + n, 0)
-    },
+    // RFC-187 §4 — canonical delta for the zero-delta-done warn, summed over every canonical repo at its own
+    // worktree/base (RFC-414: the git reads are infrastructure/local/canonicalDelta.ts).
+    getCanonicalFilesChanged: () => countCanonicalFilesChanged(state.repos),
   }
 }
 

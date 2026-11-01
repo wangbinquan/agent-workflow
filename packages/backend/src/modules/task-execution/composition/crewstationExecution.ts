@@ -6,11 +6,9 @@ import type { CrewStationMutationFence } from '@/platform/crewstation/mutationFe
 import type { CrewStationObjectStorage } from '@/platform/crewstation/objectStorage'
 import type { WorkspaceHelper } from '@/platform/crewstation/workspaceProtocol'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { tablesOf } from '@/platform/persistence/sessionTables'
 import { sha256Hex } from '@/util/hash'
 import type { Logger } from '@/util/log'
 import { isTaskWorkspaceUnbound } from '@agent-workflow/shared'
-import { eq } from 'drizzle-orm'
 import type { TaskDeletionEffects } from '../application/ports/taskDeletionContentEffects'
 import { createHostedBootRecovery } from '../infrastructure/crewstation/bootRecovery'
 import { createHostedExecution } from '../infrastructure/crewstation/execution'
@@ -19,7 +17,7 @@ import { createHostedExecutionStore } from '../infrastructure/crewstation/execut
 import { createHostedPortArtifactContent } from '../infrastructure/crewstation/portArtifactContent'
 import { createHostedTaskDeletionContent } from '../infrastructure/crewstation/taskDeletionContent'
 import { createHostedVolumeActivity } from '../infrastructure/crewstation/volumeActivity'
-import { taskReadColumns } from '../infrastructure/taskRepositorySql'
+import { readTaskWorkspaceRef } from '../infrastructure/taskExecutionTaskReads'
 import { createDaemonRecoveryAuthorityProof } from './bootRecovery'
 import { createCrewStationRuntimeManagement } from './crewstationRuntimeManagement'
 import { createCrewStationSystemAgentRunFamily } from './crewstationSystemAgentRunFamily'
@@ -42,16 +40,10 @@ export function createCrewStationExecutionWorkspaces(input: {
   // their parent's physical workspace. Resolve that owner before allocating a
   // platform parent; never create an empty child volume for a parent cwd.
   const owner = async (taskId: string) => {
-    const { tasks } = tablesOf(input.db)
-    const task = (
-      await input.db
-        .select({ workspaceRef: taskReadColumns(input.db).worktreePath })
-        .from(tasks)
-        .where(eq(tasks.id, taskId))
-        .limit(1)
-    )[0]
-    return task !== undefined && !isTaskWorkspaceUnbound(task.workspaceRef)
-      ? input.locate(task.workspaceRef).taskId
+    // RFC-414: the row read is an infrastructure query; the ownership decision stays here.
+    const workspaceRef = await readTaskWorkspaceRef(input.db, taskId)
+    return workspaceRef !== undefined && !isTaskWorkspaceUnbound(workspaceRef)
+      ? input.locate(workspaceRef).taskId
       : taskId
   }
   return {

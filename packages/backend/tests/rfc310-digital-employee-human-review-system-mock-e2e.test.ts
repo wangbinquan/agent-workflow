@@ -40,8 +40,9 @@ import { ExecutionContractService } from '@/modules/execution-contract/applicati
 import {
   composeDatabaseDigitalEmployeeExecutionPorts,
   composeDigitalEmployeeExecutionCore,
-  inspectDigitalEmployeeHumanReviewSnapshot,
 } from '@/modules/task-execution/composition/digitalEmployeeExecution'
+// RFC-414: the human-review gate snapshot reads the database, so it lives in task-execution infrastructure.
+import { inspectDigitalEmployeeHumanReviewSnapshot } from '@/modules/task-execution/infrastructure/digitalEmployeeExecutionReads'
 import {
   DIGITAL_EMPLOYEE_AGENT_NODE_ID,
   DIGITAL_EMPLOYEE_PLAN_AGENT_NODE_ID,

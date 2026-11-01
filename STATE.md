@@ -1,4 +1,17 @@
-## 2026-11-01 RFC-413 task-execution wrapper 工作区、wrapper 运行账本与续跑前合并恢复迁入 engine（In Progress；`design/RFC-413-task-execution-wrapper-workspace-merge-recovery/`）
+## 2026-11-01 RFC-414 task-execution composition 不再直接读写数据库、文件系统与 git（In Progress；`design/RFC-414-task-execution-composition-io-out/`）
+
+- **来由**：RFC-294 S6 退出门「task-execution `composition/` 只剩装配」的第二步；用户授权同 RFC-402，本会话调研、设计、实施与集中验证，不派 Codex。
+- **范围**：composition 里的八处 I/O 迁入 task-execution `infrastructure/`——准备 GC 相位（`workspacePreparationGc.ts`）、托管工作区归属与
+  状态读（`taskExecutionTaskReads.ts`，`readTaskStatus` 合为一份）、数字员工人审快照与元数据读（`digitalEmployeeExecutionReads.ts`）、动作
+  工作区入口检查与零增量 git delta（`local/`）、托管任务镜像操作与归档（`crewstation/`，composition 只再导出）、`resolveNativePortContentDetailed`
+  （`local/filePortOutputValidation.ts`）；RFC-376 `composition-forbidden-import-files` 销账七条（counts 21 → 14），新结构锁补上持久化 helper 与
+  `util/git`。纯结构重构。
+- **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。
+- **进度**：T1～T5 完成，随实现提交入库，待 exact SHA 的 CI（AC-5）。集中验证 625 + 8 个文件：无本 RFC 引入的失败，PG 负载超时复跑全部通过；
+  P0 变异 lane 通过（34 个阶段、源文件指纹不变）。详见 plan「集中验证（T5）」。同提交收尾 RFC-413（exact SHA `7f8abe5a0` 全绿）。
+- **后继**：composition 里仍属应用逻辑的部分（数字员工执行核心、动作执行运行器编排、托管代理调用准备、provider 后台循环）另立 RFC。
+
+## 2026-11-01 RFC-413 task-execution wrapper 工作区、wrapper 运行账本与续跑前合并恢复迁入 engine（Done；`design/RFC-413-task-execution-wrapper-workspace-merge-recovery/`）
 
 - **来由**：RFC-294 S6 退出门「task-execution `composition/` 只剩装配」的第一步；用户授权同 RFC-402，本会话调研、设计、实施与集中验证，不派 Codex。
 - **范围**：续跑前合并恢复（原 `composition/executionMergeRecovery.ts`）与 wrapper 隔离工作区的建立 / 重建 / 合回迁入 `engine/kernel/`
@@ -6,7 +19,7 @@
   wrapper 运行账本（原 `composition/wrapperRunLifecycle.ts`）迁入 `engine/wrapper/`，经新端口 `IsolationMechanicsPorts` /
   `WrapperWorkspaceEnginePorts` / `WrapperRunLedgerPorts` 执行；composition 只剩绑定，`wrapperMechanics.ts` 730 → 约 295 行。纯结构重构。
 - **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。
-- **进度**：T1～T5 完成，随实现提交入库，待 exact SHA 的 CI（AC-6）。两个 composition 文件删除；RFC-402 kernel 文件数 7 → 9。集中验证
+- **进度**：T1～T5 完成，随实现提交入库；exact SHA `7f8abe5a0` 的主 CI 70/70 与 windows-platform 全绿（AC-6），Done。两个 composition 文件删除；RFC-402 kernel 文件数 7 → 9。集中验证
   631 + 10 + 2 个文件：无本 RFC 引入的失败，PG 负载超时在候选与基线上同样通过；P0 变异 lane 通过（34 个阶段、源文件指纹不变）。详见 plan「集中验证（T5）」。
   同提交以后继证据（`0ae7901c8` 主 CI 70/70）收尾 RFC-408～412。
 - **后继**：composition 其余非装配逻辑（数字员工执行核心、托管代理调用准备、动作执行运行器、provider 后台循环等）逐个核对后另立 RFC。

@@ -1,4 +1,3 @@
-import { tablesOf } from '@/platform/persistence/sessionTables'
 // RFC-359 W1-T3（F-H2-2）—— 数字员工 action 执行器（agent / script）的**一份**实现，两个引擎共用。
 //
 // 此前 `composeAgentActionExecution` / `composeScriptActionExecution` 只有 SQLite 形态（`startTask` +
@@ -10,9 +9,6 @@ import { tablesOf } from '@/platform/persistence/sessionTables'
 // 「怎么启动一个借用工作区的宿主任务」与「怎么取消它」——由 `ActionExecutionEnvironment` 注入。
 
 import { createWorkflowExecutionQueries } from '@/modules/resource-catalog/public/queries'
-import { eq } from 'drizzle-orm'
-import { existsSync } from 'node:fs'
-import { join } from 'node:path'
 import { ulid } from 'ulid'
 
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
@@ -23,7 +19,6 @@ import { sha256Hex } from '@/util/hash'
 import {
   isTerminalTaskStatus,
   ScriptNodeSchema,
-  type TaskStatus,
   type WorkflowDefinition,
 } from '@agent-workflow/shared'
 import {
@@ -33,6 +28,8 @@ import {
   synthesizeDigitalEmployeeScriptHostSnapshot,
 } from '../domain/digitalEmployeeHost'
 import type { TaskExecutionOutcomeReadModel, TaskStatusProjectionReadModel } from '../public/types'
+import { localActionWorkspaceEntries } from '../infrastructure/local/localActionWorkspaceEntries'
+import { readTaskStatus } from '../infrastructure/taskExecutionTaskReads'
 
 export interface AgentExecutionFailure {
   readonly category: 'configuration' | 'transient' | 'contract-violation'
@@ -150,10 +147,6 @@ export interface ActionWorkspaceEntries {
   exists(workspacePath: string, relativePath: string): Promise<boolean>
 }
 
-const localWorkspaceEntries: ActionWorkspaceEntries = {
-  exists: async (workspacePath, relativePath) => existsSync(join(workspacePath, relativePath)),
-}
-
 function fail(
   category: AgentExecutionFailure['category'],
   code: string,
@@ -229,14 +222,6 @@ async function assertWorkspace(input: {
   return { ok: true, platformInputPaths }
 }
 
-async function readTaskStatus(db: PersistenceDb, executionRef: string): Promise<TaskStatus | null> {
-  const { tasks } = tablesOf(db)
-  const row = (
-    await db.select({ status: tasks.status }).from(tasks).where(eq(tasks.id, executionRef)).limit(1)
-  )[0]
-  return row?.status ?? null
-}
-
 function watchTerminal(env: ActionExecutionEnvironment, executionRef: string): void {
   if (env.onTerminal === undefined) return
   const notify = env.onTerminal
@@ -288,7 +273,7 @@ export function createAgentActionExecutionRunner(
   return {
     async launch(input) {
       const workspace = await assertWorkspace({
-        entries: env.workspaceEntries ?? localWorkspaceEntries,
+        entries: env.workspaceEntries ?? localActionWorkspaceEntries,
         workspacePath: input.workspacePath,
         baselineSha: input.baselineSha,
         platformInputPaths: input.platformInputPaths,
@@ -357,7 +342,7 @@ export function createScriptActionExecutionRunner(
   return {
     async launch(input) {
       const workspace = await assertWorkspace({
-        entries: env.workspaceEntries ?? localWorkspaceEntries,
+        entries: env.workspaceEntries ?? localActionWorkspaceEntries,
         workspacePath: input.workspacePath,
         baselineSha: input.baselineSha,
         platformInputPaths: input.platformInputPaths,

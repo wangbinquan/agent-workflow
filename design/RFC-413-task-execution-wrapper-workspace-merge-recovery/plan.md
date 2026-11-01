@@ -66,7 +66,12 @@ RFC-287 T1 五个扫描用例的语料并入两个新 owner；RFC-317 allowTermi
 
 实施前与提交前按路径核对工作树，尤其是并发会话可能触及的共享守卫文件。
 
+## CI（AC-6）
+
+- **`7f8abe5a0`**：主 CI `41346141897` 70 个 job 全部 success；windows-platform `41346141884` success（含本 RFC 的端口绑定用例与结构锁）。
+  AC-6 在 exact SHA 上成立。
+
 ## 验收清单
 
 - [x] proposal AC-1～AC-5（本地集中验证，见上）
-- [ ] 推送后 exact SHA 的 CI 全绿（AC-6）
+- [x] 推送后 exact SHA 的 CI 全绿（AC-6，见「CI（AC-6）」）

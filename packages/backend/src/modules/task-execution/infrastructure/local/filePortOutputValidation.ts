@@ -2,8 +2,13 @@ import { toPortableRelativePath } from '@/util/platformExec'
 import { checkLexicalThenRealpath } from '@/util/safePath'
 import { readFileSync } from 'node:fs'
 import { isAbsolute, relative } from 'node:path'
-import type { ValidateIO } from '@agent-workflow/shared'
-import type { PortOutputValidationContent } from '../../application/ports/portOutputValidation'
+import { runNativeOutputValidationPolicy, type ValidateIO } from '@agent-workflow/shared'
+import { portOutputValidationPolicy } from '../../application/portOutputValidation'
+import type {
+  PortOutputValidationContent,
+  PortOutputValidationResult,
+  ResolvePortContentOptions,
+} from '../../application/ports/portOutputValidation'
 
 /**
  * Node-backed ValidateIO supplied to RFC-049 OutputKindHandler.validate.
@@ -61,4 +66,14 @@ export function createFilePortOutputValidationContent(): PortOutputValidationCon
       return NODE_VALIDATE_IO.readFileUtf8(targetRef)
     },
   }
+}
+
+/**
+ * Compatibility entry: the original native API remains synchronous. RFC-414: moved from composition/portOutputValidation.ts
+ * — it binds this module's native IO into the validation policy (the composition re-exports it).
+ */
+export function resolveNativePortContentDetailed(
+  opts: ResolvePortContentOptions,
+): PortOutputValidationResult {
+  return runNativeOutputValidationPolicy(portOutputValidationPolicy(opts, NODE_VALIDATE_IO))
 }

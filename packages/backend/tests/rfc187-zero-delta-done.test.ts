@@ -114,9 +114,29 @@ describe('RFC-187 §4 — source locks', () => {
   // at its own worktree/base.
   test('the hook sums the delta per-repo (not the non-git multi-repo parent container)', () => {
     const nodeMechanics = NODE_EXECUTION_SOURCE
+    // RFC-414: the per-repo git reads are infrastructure/local/canonicalDelta.ts; the hook hands it the
+    // execution state's repositories.
+    const canonicalDelta = readFileSync(
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'task-execution',
+        'infrastructure',
+        'local',
+        'canonicalDelta.ts',
+      ),
+      'utf8',
+    )
+    expect(nodeMechanics).toContain(
+      'getCanonicalFilesChanged: () => countCanonicalFilesChanged(state.repos)',
+    )
     // per-repo worktree+base, not the task-level parent.
-    expect(nodeMechanics).toContain('worktreeFilesChanged(r.worktreePath, r.baseCommit as string)')
-    expect(nodeMechanics).not.toContain('worktreeFilesChanged(task.worktreePath, task.baseCommit)')
+    expect(canonicalDelta).toContain('worktreeFilesChanged(r.worktreePath, r.baseCommit as string)')
+    expect(`${nodeMechanics}\n${canonicalDelta}`).not.toContain(
+      'worktreeFilesChanged(task.worktreePath, task.baseCommit)',
+    )
     // and SchedulerState.repos carries the per-repo base that makes it possible.
     // RFC-412: the execution state type moved into task-execution composition (assembly only).
     const mechanicsState = readFileSync(
@@ -145,6 +165,6 @@ describe('RFC-187 §4 — source locks', () => {
       'utf8',
     )
     expect(taskRepo).toContain('baseCommit: z.string().nullable()')
-    expect(nodeMechanics).toContain('state.repos.filter((r) => r.baseCommit !== null)')
+    expect(canonicalDelta).toContain('repos.filter((r) => r.baseCommit !== null)')
   })
 })

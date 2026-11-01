@@ -11,8 +11,8 @@
       "reason": "max=0: RFC-377 清零"
     },
     "composition-forbidden-import-files": {
-      "max": 21,
-      "reason": "max=21: RFC-376 阶段 B 已提交 HEAD 初值；新增例外由对应后继 RFC 明列并经用户确认"
+      "max": 14,
+      "reason": "max=14: RFC-414 把 task-execution composition 七个文件的持久化 / 文件系统实现迁入 infrastructure（21 -> 14）；新增例外由对应后继 RFC 明列并经用户确认"
     },
     "context-value-pairs-off-dag": {
       "max": 0,

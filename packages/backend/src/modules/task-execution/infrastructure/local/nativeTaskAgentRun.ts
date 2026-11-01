@@ -12,7 +12,7 @@ import {
   selectNodeRunPromptOperations,
   selectPortArtifactOperations,
 } from '../../public/participants'
-import { resolveNativePortContentDetailed } from '../../composition/portOutputValidation'
+import { resolveNativePortContentDetailed } from './filePortOutputValidation'
 import { bindNativeAgentInvocation } from '../../composition/agentInvocation'
 import { bindNativeAgentProtocol } from '@/modules/runtime-management/infrastructure/local/agentProtocol'
 import { bindNativeAgentWorkspaceGitControlObservation } from '@/modules/source-control/composition/agentWorkspaceGitControl'

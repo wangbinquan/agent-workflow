@@ -863,7 +863,7 @@
       "minCorpusFiles": 1500,
       "assertsAbsence": true,
       "negativeFixture": true,
-      "lines": 1145
+      "lines": 1139
     },
     {
       "assertsAbsence": true,
@@ -3272,6 +3272,18 @@
       "file": "packages/backend/tests/architecture/rfc413-wrapper-workspace-merge-recovery.test.ts",
       "id": "rfc413-wrapper-workspace-merge-recovery",
       "lines": 230,
+      "mechanism": "ast",
+      "minCorpusFiles": 2000,
+      "negativeFixture": true,
+      "runner": "bun"
+    },
+    {
+      "assertsAbsence": true,
+      "classified": true,
+      "corpusScanner": true,
+      "file": "packages/backend/tests/architecture/rfc414-composition-io-out.test.ts",
+      "id": "rfc414-composition-io-out",
+      "lines": 155,
       "mechanism": "ast",
       "minCorpusFiles": 2000,
       "negativeFixture": true,

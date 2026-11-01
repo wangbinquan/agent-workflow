@@ -1,4 +1,4 @@
-import { runNativeOutputValidationPolicy, runOutputValidationPolicy } from '@agent-workflow/shared'
+import { runOutputValidationPolicy } from '@agent-workflow/shared'
 import {
   bindPortOutputValidationEffects,
   portOutputValidationPolicy,
@@ -7,13 +7,12 @@ import type {
   PortOutputContentValidation,
   PortOutputValidationContent,
   PortOutputValidationRequest,
-  PortOutputValidationResult,
-  ResolvePortContentOptions,
 } from '../application/ports/portOutputValidation'
-import { NODE_VALIDATE_IO } from '../infrastructure/local/filePortOutputValidation'
 
 export { NODE_VALIDATE_IO } from '../infrastructure/local/filePortOutputValidation'
 export { createFilePortOutputValidationContent as createNativePortOutputValidationContent } from '../infrastructure/local/filePortOutputValidation'
+// RFC-414: the native validation entry binds infrastructure IO, so it lives there; this export keeps its callers.
+export { resolveNativePortContentDetailed } from '../infrastructure/local/filePortOutputValidation'
 
 /** Select one complete content receiver, never filling missing methods from native IO. */
 export function composePortOutputContentValidation(
@@ -36,11 +35,4 @@ export function composePortOutputContentValidation(
       )
     },
   })
-}
-
-/** Compatibility entry: the original native API remains synchronous. */
-export function resolveNativePortContentDetailed(
-  opts: ResolvePortContentOptions,
-): PortOutputValidationResult {
-  return runNativeOutputValidationPolicy(portOutputValidationPolicy(opts, NODE_VALIDATE_IO))
 }
