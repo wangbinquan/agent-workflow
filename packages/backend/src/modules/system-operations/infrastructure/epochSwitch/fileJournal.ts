@@ -16,6 +16,7 @@ import {
   writeFileSync,
 } from 'node:fs'
 import type { EpochSwitchArtifactPort } from '@/platform/persistence/migration/run/types'
+import { epochArtifactFileName } from '@/platform/persistence/migration/artifactFileName'
 import { dirname, join } from 'node:path'
 import { acquireLock } from '@/util/lock'
 import { sha256Hex, createSha256DigestBuilder } from '@/util/hash'
@@ -97,8 +98,13 @@ export function writeEpochFile(path: string, bytes: Uint8Array, once: boolean): 
 export function createFileEpochSwitchJournal(input: {
   root: string
   prunePlanContent?: EpochSwitchJournalPort['prunePlanContent']
+  /** File-name rules for artifact names (see `epochArtifactFileName`); tests pass `win32`. */
+  platform?: NodeJS.Platform
 }): EpochSwitchJournalPort {
+  const platform = input.platform ?? process.platform
   const operationRoot = (op: string) => join(input.root, EpochOperationIdSchema.parse(op))
+  const artifactPath = (op: string, name: string) =>
+    join(operationRoot(op), epochArtifactFileName(platform, name))
   const path = (op: string) => join(operationRoot(op), 'epoch-switch.json')
   const read = async (op: string): Promise<EpochSwitchJournal | null> =>
     existsSync(path(op)) ? parseEpochSwitchJournal(readFileSync(path(op), 'utf8')) : null
@@ -107,7 +113,7 @@ export function createFileEpochSwitchJournal(input: {
     prunePlanContent: input.prunePlanContent
       ? (op, references) => input.prunePlanContent!(operationRoot(op), references)
       : undefined,
-    artifacts: (op) => createLocalEpochArtifacts(operationRoot(op)),
+    artifacts: (op) => createLocalEpochArtifacts(operationRoot(op), platform),
     read,
     async create(journal) {
       const parsed = parseEpochSwitchJournal(JSON.stringify(journal))
@@ -146,12 +152,12 @@ export function createFileEpochSwitchJournal(input: {
       }
     },
     async writeOnce(op, name, bytes) {
-      const destination = join(operationRoot(op), name)
+      const destination = artifactPath(op, name)
       writeEpochFile(destination, bytes, true)
       return { path: destination, digest: bytesDigest(bytes) }
     },
     async readArtifact(op, name) {
-      const source = join(operationRoot(op), name)
+      const source = artifactPath(op, name)
       return existsSync(source) ? readFileSync(source) : null
     },
     async lockOperation(op) {
@@ -168,8 +174,12 @@ export function createFileEpochSwitchJournal(input: {
 }
 
 /** Content-addressed versions survive a later put under the same artifact name. */
-export function createLocalEpochArtifacts(root: string): EpochSwitchArtifactPort {
-  const stored = (name: string, digest: string) => join(root, '.artifacts', digest.slice(7), name)
+export function createLocalEpochArtifacts(
+  root: string,
+  platform: NodeJS.Platform = process.platform,
+): EpochSwitchArtifactPort {
+  const stored = (name: string, digest: string) =>
+    join(root, '.artifacts', digest.slice(7), epochArtifactFileName(platform, name))
   const publish = (temporary: string, name: string, digest: string) => {
     const destination = stored(name, digest)
     mkdirSync(dirname(destination), { recursive: true })
@@ -221,7 +231,7 @@ export function createLocalEpochArtifacts(root: string): EpochSwitchArtifactPort
       for await (const chunk of createReadStream(source)) hash.update(chunk)
       if (`sha256:${hash.digestHex()}` !== digest)
         throw new EpochSwitchError('v3-artifact-digest-mismatch', { category: 'receipt-conflict' })
-      const destination = join(root, name)
+      const destination = join(root, epochArtifactFileName(platform, name))
       mkdirSync(dirname(destination), { recursive: true })
       const temporary = `${destination}.${crypto.randomUUID()}.tmp`
       copyFileSync(source, temporary, constants.COPYFILE_FICLONE)

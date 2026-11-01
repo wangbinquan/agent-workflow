@@ -1,4 +1,5 @@
 import { epochDeploymentCapabilities } from '@/modules/system-operations/domain/epochSwitch/deploymentCapabilities'
+import { epochArtifactPath } from '@/platform/persistence/migration/run/paths'
 import type { EpochSwitchStatusView, EpochSwitchSummaryView } from '../../public/types'
 import type { EpochSwitchJournal } from '../../domain/epochSwitch/model'
 import { phaseIndex, rollbackEligibility } from '../../domain/epochSwitch/transitions'
@@ -113,7 +114,7 @@ export async function epochSwitchStatus(
         : []),
       ...(p.status === 'awaiting-approval' && p.plan
         ? [
-            `Review plans/${p.plan.digest}.json; db migration run ${p.operationId} --approve ${p.plan.approvalDigest}`,
+            `Review ${epochArtifactPath('plans', `${p.plan.digest}.json`)}; db migration run ${p.operationId} --approve ${p.plan.approvalDigest}`,
           ]
         : []),
       ...(p.phase === 'activated' && epochDeploymentCapabilities(p.deployment).externalSwitch

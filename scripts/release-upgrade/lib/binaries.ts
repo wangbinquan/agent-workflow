@@ -114,6 +114,19 @@ async function exactBun(version: string, cache: string, supplied?: string): Prom
   return validate(executable)
 }
 
+/**
+ * The tag's committed bytes as a tar stream. Tags before RFC-254's `.gitattributes` (v0.1.0 to
+ * v0.16.x) carry no eol rule, and `git archive` applies `core.autocrlf=true`, the Windows runner's
+ * default: `bun.lock` arrived with CRLF and `bun install --frozen-lockfile` reported "lockfile had
+ * changes" (release-upgrade nightly 41303628365, v0.1.0 / v0.10.0 / v0.16.3 on Windows).
+ */
+export async function tagSourceArchive(tag: string, cwd?: string): Promise<Buffer> {
+  return command(
+    ['git', '-c', 'core.autocrlf=false', '-c', 'core.eol=lf', 'archive', '--format=tar', tag],
+    { cwd },
+  )
+}
+
 async function buildTag(
   release: ReleaseEntry,
   options: ResolveBinaryOptions,
@@ -142,7 +155,7 @@ async function buildTag(
     throw new Error(`Tag ${release.tag} no longer resolves to registered commit`)
   const scratch = mkdtempSync(join(buildDir, 'archive-'))
   try {
-    const archive = await command(['git', 'archive', '--format=tar', release.tag])
+    const archive = await tagSourceArchive(release.tag)
     // Extract in the archive directory instead of passing it to `-C`: under the Windows runner's
     // Git Bash, `tar` is MSYS GNU tar, which cannot use a native `C:\…` path there ("Cannot
     // open: No such file or directory", release-upgrade nightly 41287876705).

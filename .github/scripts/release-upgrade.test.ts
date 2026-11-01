@@ -1,6 +1,6 @@
 // RFC-398: these checks are also run by the workflows before real binary verification.
 import { expect, test } from 'bun:test'
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { parse } from 'yaml'
@@ -14,6 +14,7 @@ import {
 import { spawnSync } from 'node:child_process'
 import { OLD_POSTGRESQL_TASK_DEFECTS } from '../../scripts/release-upgrade/scenario'
 import { DaemonStartError } from '../../scripts/release-upgrade/lib/daemon'
+import { tagSourceArchive } from '../../scripts/release-upgrade/lib/binaries'
 import { printedDatabaseStatements } from '../../scripts/release-upgrade/lib/postgresql'
 import { FIXTURES, readRegistry } from '../../scripts/release-upgrade/lib/io'
 import {
@@ -428,6 +429,53 @@ test('tag-build extraction passes no native path to tar', () => {
   )
   expect(binaries).toContain("command(['tar', '-xf', '-'], { input: archive, cwd: scratch })")
   expect(binaries).not.toMatch(/\['tar',[^\]]*'-C'/)
+})
+
+/** The bytes of one regular file in a tar stream (git archive writes ustar plus a pax header). */
+function tarMember(archive: Buffer, name: string): Buffer | null {
+  for (let offset = 0; offset + 512 <= archive.length; ) {
+    const header = archive.subarray(offset, offset + 512)
+    if (header.every((byte) => byte === 0)) return null
+    const member = header.subarray(0, 100).toString('utf8').replace(/\0.*$/s, '')
+    const size = Number.parseInt(header.subarray(124, 136).toString('utf8').trim() || '0', 8)
+    if (member === name) return archive.subarray(offset + 512, offset + 512 + size)
+    offset += 512 + Math.ceil(size / 512) * 512
+  }
+  return null
+}
+
+// Release-upgrade nightly 41303628365 (Windows): tags before RFC-254's .gitattributes carry no eol
+// rule and `git archive` applies the runner's `core.autocrlf=true`, so bun.lock arrived with CRLF and
+// `bun install --frozen-lockfile` refused it for v0.1.0, v0.10.0 and v0.16.3. The tag build must
+// archive the committed bytes whatever the host's line-ending configuration.
+test('tag-build archives committed bytes under core.autocrlf=true', async () => {
+  const repo = mkdtempSync(join(tmpdir(), 'aw-tag-archive-'))
+  try {
+    const git = (...args: string[]) => {
+      const identity = ['-c', 'user.name=t', '-c', 'user.email=t@example.invalid']
+      const signing = ['-c', 'commit.gpgsign=false', '-c', 'tag.gpgsign=false']
+      const result = spawnSync('git', [...identity, ...signing, ...args], { cwd: repo })
+      if (result.status !== 0) throw new Error(`git ${args[0]}: ${result.stderr.toString()}`)
+      return result.stdout
+    }
+    const committed = '{\n  "lockfileVersion": 1,\n  "workspaces": {}\n}\n'
+    git('init', '-q')
+    writeFileSync(join(repo, 'bun.lock'), committed)
+    git('add', 'bun.lock')
+    git('commit', '-q', '-m', 'lock')
+    git('tag', 'v9.9.9')
+    // The windows-latest runner's global configuration, scoped to this repository.
+    git('config', 'core.autocrlf', 'true')
+    // Control: the plain archive reproduces the nightly's CRLF lockfile on this host too.
+    expect(tarMember(git('archive', '--format=tar', 'v9.9.9'), 'bun.lock')?.toString()).toBe(
+      committed.replaceAll('\n', '\r\n'),
+    )
+    expect(tarMember(await tagSourceArchive('v9.9.9', repo), 'bun.lock')?.toString()).toBe(
+      committed,
+    )
+  } finally {
+    rmSync(repo, { recursive: true, force: true })
+  }
 })
 
 // User decision 2026-11-01: only the nightly verify job may read the draft release holding the
