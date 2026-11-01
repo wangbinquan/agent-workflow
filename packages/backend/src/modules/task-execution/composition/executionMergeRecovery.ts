@@ -25,10 +25,8 @@ import { markMergeFailed, mergeBackAndSettle } from '@/modules/task-execution/en
 import { describeEffectError } from '../domain/effectErrorDescription'
 import type { NodeExecutionSnapshot } from '../application/ports/nodeExecutionPersistence'
 // RFC-210 replay: submodule topology read-back + the fail-closed gate around it.
-import {
-  parseIsoSubmodules,
-  type SchedulerState,
-} from '@/modules/task-execution/composition/nodeMechanics'
+import { parseIsoSubmodules } from '../domain/isoSubmodules'
+import type { SchedulerState } from '@/modules/task-execution/composition/nodeMechanics'
 import { isolatedRunBinding } from '@/modules/task-execution/composition/executionMechanismBindings'
 import { resolveMergeConflicts } from '@/modules/task-execution/engine/node/shared/resolveMergeConflicts'
 import type { ExecutionMergeRecovery } from '../application/recovery/executionMergeRecovery'

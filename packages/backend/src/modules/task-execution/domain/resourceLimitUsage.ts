@@ -26,6 +26,14 @@ export function decodeCallHumanWait(json: string | null): CallHumanWait {
   return { accumulatedMs: 0, openSince: null }
 }
 
+/**
+ * RFC-404 — the call node writes the ledger through the same owner that reads it. The keys and their
+ * order are the historical `JSON.stringify({ callHumanWaitMs, callHumanWaitSince })` output.
+ */
+export function encodeCallHumanWait(wait: CallHumanWait): string {
+  return JSON.stringify({ callHumanWaitMs: wait.accumulatedMs, callHumanWaitSince: wait.openSince })
+}
+
 export function callHumanWaitMs(wait: CallHumanWait, now: number): number {
   return wait.accumulatedMs + (wait.openSince === null ? 0 : Math.max(0, now - wait.openSince))
 }

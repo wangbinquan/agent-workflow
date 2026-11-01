@@ -1,5 +1,5 @@
 import {
-  SMALL_LEAF_SOURCES,
+  LEAF_NODE_SOURCES,
   SCRIPT_NODE_SOURCE,
   SCRIPT_ATTEMPT_SOURCE,
   MERGE_CONFLICT_SOURCE,
@@ -38,7 +38,7 @@ const EXECUTION_MERGE_RECOVERY = readFileSync(
   'utf8',
 )
 const MECHANICS_SOURCES = [
-  ...SMALL_LEAF_SOURCES,
+  ...LEAF_NODE_SOURCES,
   SCRIPT_NODE_SOURCE,
   SCRIPT_ATTEMPT_SOURCE,
   MERGE_CONFLICT_SOURCE,
@@ -80,7 +80,8 @@ describe('RFC-287 T9 ① — 四条刻意豁免各带理由锁', () => {
   })
 
   test('L8 call 节点：整线不迁，且其「可取消的配额 hold」不是信号量池位', () => {
-    const body = bodyOf('async function runCallWorkflowNode(')
+    // RFC-404：call-workflow / call-workgroup 的共享主体迁到 engine/node/shared/child-call/，仍不进骨架。
+    const body = bodyOf('async function runChildCallNode(')
     expect(body).not.toContain('runAssembly')
     // 它的许可是子任务配额 hold（带 signal，排队中可被取消 → 标 canceled），
     // 与「拿到就拿到、拿不到就排队」的信号量池位不同型：统一进骨架会把
@@ -169,7 +170,7 @@ describe('RFC-287 T9 ② — 装配散写的终局灭绝锁（三处显式挖洞
 
   test('三处存续区显式挖洞——它们**允许**直接物化 iso，不得被灭绝锁误伤', () => {
     // ① L8 整线（第六条 iso 线，本 RFC 不迁）
-    expect(bodyOf('async function runCallWorkflowNode(')).toContain('createIsoUnderLock(')
+    expect(bodyOf('async function runChildCallNode(')).toContain('createIsoUnderLock(')
     // ② wrapper 便车（wrapper 自己的 iso，不属于任何装配线）
     expect(bodyOf('export async function createOrRebuildWrapperIso(')).toContain(
       'createIsoUnderLock(',

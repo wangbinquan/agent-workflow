@@ -1,4 +1,5 @@
 import { createCodeHostNodeExecutionPorts } from './codeHostNodeExecution'
+import { createChildCallNodeExecutionPorts } from './childCallNodeExecution'
 import {
   createInputNodeExecutionPorts,
   createOutputNodeExecutionPorts,
@@ -18,7 +19,6 @@ import {
   buildWorkgroupEngineSupport,
   executeWorkgroupHostMechanics,
   runAgentSingleNode,
-  runCallWorkflowNode,
   type OneNodeArgs,
 } from './nodeMechanics'
 import type { WorkgroupTurnHostOperations } from '../application/ports/workgroupTurnsOperations'
@@ -29,10 +29,8 @@ import type {
 } from '../application/ports/workgroupHostExecution'
 import type { NodeStepRequest } from '../domain/nodeExecution'
 import { AgentSingleNodeExecutor } from '../engine/node/agentNodeExecutor'
-import {
-  CallWorkflowNodeExecutor,
-  CallWorkgroupNodeExecutor,
-} from '../engine/node/childCallNodeExecutors'
+import { CallWorkflowNodeExecutor } from '../engine/node/call-workflow/callWorkflowNodeExecutor'
+import { CallWorkgroupNodeExecutor } from '../engine/node/call-workgroup/callWorkgroupNodeExecutor'
 import { CodeHostCallNodeExecutor } from '../engine/node/code-host-call/codeHostCallNodeExecutor'
 import { ClarifyNodeExecutor } from '../engine/node/clarify/clarifyNodeExecutor'
 import { CrossClarifyNodeExecutor } from '../engine/node/clarify-cross-agent/crossClarifyNodeExecutor'
@@ -86,12 +84,6 @@ function buildGateway(
   const mechanics = state.opts.collaborationRuntime satisfies CollaborationNodeGatePort
   const wrapperRuntime = wrapperRuntimeFactory(state)
   const wrappers = createWrapperDelegatingNodeExecutors(wrapperRuntime, state.wrapperScopes)
-  const childCalls = {
-    executeWorkflow: (request: NodeStepRequest<'call-workflow'>) =>
-      runCallWorkflowNode(state, legacyArgs(state, request)),
-    executeWorkgroup: (request: NodeStepRequest<'call-workgroup'>) =>
-      runCallWorkflowNode(state, legacyArgs(state, request)),
-  }
   const executors = {
     'agent-single': new AgentSingleNodeExecutor(
       {
@@ -107,8 +99,8 @@ function buildGateway(
     'clarify-cross-agent': new CrossClarifyNodeExecutor(
       createCrossClarifyNodeExecutionPorts(state),
     ),
-    'call-workflow': new CallWorkflowNodeExecutor(childCalls),
-    'call-workgroup': new CallWorkgroupNodeExecutor(childCalls),
+    'call-workflow': new CallWorkflowNodeExecutor(createChildCallNodeExecutionPorts(state)),
+    'call-workgroup': new CallWorkgroupNodeExecutor(createChildCallNodeExecutionPorts(state)),
     script: new ScriptNodeExecutor(createScriptNodeExecutionPorts(state)),
     'code-host-call': new CodeHostCallNodeExecutor(createCodeHostNodeExecutionPorts(state)),
     'code-round': new RetiredCodeRoundNodeExecutor(),

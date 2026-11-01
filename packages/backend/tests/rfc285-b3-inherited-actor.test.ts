@@ -144,32 +144,51 @@ describe('RFC-285 B3 — 三臂接线源码锁', () => {
   const src = (rel: string): string =>
     readFileSync(resolve(import.meta.dir, '..', 'src', rel), 'utf8')
 
+  // RFC-404: the call node moved out of nodeMechanics.ts. The delegated actor (including the NULL
+  // owner projection) is obtained by the call-node binding; the two launch arms in the engine ask
+  // for it through the port and each refuses with call-owner-inactive.
+  const CALL_BINDING = 'modules/task-execution/composition/childCallNodeExecution.ts'
+  const CALL_LAUNCH = 'modules/task-execution/engine/node/shared/child-call/launchChildCall.ts'
+  const CALL_BODY = 'modules/task-execution/engine/node/shared/child-call/runChildCallNode.ts'
+
   test('伪造 actor cast 归零；两条新启臂都判 call-owner-inactive', () => {
     const nodeMechanics = src('modules/task-execution/composition/nodeMechanics.ts')
-    expect(nodeMechanics.includes('as unknown as Parameters<typeof startExecution>')).toBe(false)
-    // helper definition + call-workflow + call-workgroup preflight；central facade 归零。
-    expect((nodeMechanics.match(/delegatedCallActor\(/g) ?? []).length).toBe(3)
-    expect(nodeMechanics).toContain('delegated.forCall({')
-    expect(nodeMechanics).not.toContain('buildInheritedActor(')
-    expect(nodeMechanics).toContain("'call-workflow'")
-    expect(nodeMechanics).toContain("'call-workgroup'")
-    expect((nodeMechanics.match(/'call-owner-inactive'/g) ?? []).length).toBe(2)
+    const binding = src(CALL_BINDING)
+    const launch = src(CALL_LAUNCH)
+    for (const text of [nodeMechanics, binding, launch]) {
+      expect(text.includes('as unknown as Parameters<typeof startExecution>')).toBe(false)
+      expect(text).not.toContain('buildInheritedActor(')
+    }
+    // helper definition + the port method resolving it；central facade 归零。
+    expect((binding.match(/delegatedCallActor\(/g) ?? []).length).toBe(2)
+    expect(binding).toContain('delegated.forCall({')
+    expect(nodeMechanics).not.toContain('delegatedCallActor(')
+    expect(launch).not.toContain('delegatedCallActor(')
+    expect(launch).toContain("ports.children.resolveActor('call-workflow', nodeRunId)")
+    expect(launch).toContain("ports.children.resolveActor('call-workgroup', nodeRunId)")
+    expect((launch.match(/'call-owner-inactive'/g) ?? []).length).toBe(2)
   })
 
   test('Q6：resume 臂豁免注释锁在位（只拦新任务创建）', () => {
-    const nodeMechanics = src('modules/task-execution/composition/nodeMechanics.ts')
-    const start = nodeMechanics.indexOf('RFC-285 B3 Q6')
+    const body = src(CALL_BODY)
+    const start = body.indexOf('RFC-285 B3 Q6')
     expect(start).toBeGreaterThan(-1)
-    const end = nodeMechanics.indexOf('} catch (error)', start)
+    const end = body.indexOf('} catch (error)', start)
     expect(end).toBeGreaterThan(start)
-    const resumeArm = nodeMechanics.slice(start, end)
+    const resumeArm = body.slice(start, end)
     // RFC-331 keeps Q6 on the explicit child-control port: resume extends an
     // existing task and therefore must not rebuild or re-check its owner.
-    expect(resumeArm).toContain('const childRuntime = buildChildRuntime(state)')
-    expect(resumeArm).toContain('await state.topology.schedulerDriver.resumeChild({')
-    expect(resumeArm).toContain('taskId: childTaskId')
-    expect(resumeArm).toContain('runtime: childRuntime')
-    expect(resumeArm).not.toContain('delegatedCallActor(')
+    expect(resumeArm).toContain('await ports.children.resumeChild(childTaskId)')
+    expect(resumeArm).not.toContain('resolveActor(')
+    const binding = src(CALL_BINDING)
+    const resumeStart = binding.indexOf('resumeChild: async (childTaskId) =>')
+    expect(resumeStart).toBeGreaterThan(-1)
+    const resume = binding.slice(resumeStart, binding.indexOf('cancelChild:', resumeStart))
+    expect(resume).toContain('const childRuntime = buildChildRuntime(state)')
+    expect(resume).toContain('await state.topology.schedulerDriver.resumeChild({')
+    expect(resume).toContain('taskId: childTaskId')
+    expect(resume).toContain('runtime: childRuntime')
+    expect(resume).not.toContain('delegatedCallActor(')
   })
 
   test('scheduled 臂收编：手写 owner rebuild 归零、错误码 owner-inactive 不变', () => {

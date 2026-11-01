@@ -479,6 +479,7 @@ describe('RFC-243 §4.5 — humanWaitMs 台账不跨代双记（实现门 P2-1�
     expect(parseCallHumanWait(JSON.stringify({ callHumanWaitMs: 70_000 }), Date.now())).toBe(70_000)
     expect(parseCallHumanWait(null, Date.now())).toBe(0)
     // 源码锁：新 mint 的行不得继承被取代行的台账（否则同段等待计两次）。
+    // RFC-404：调用节点主体迁到 engine/node/shared/child-call/，台账改用 domain 的同一份编解码。
     const src = readFileSync(
       resolve(
         import.meta.dir,
@@ -486,13 +487,17 @@ describe('RFC-243 §4.5 — humanWaitMs 台账不跨代双记（实现门 P2-1�
         'src',
         'modules',
         'task-execution',
-        'composition',
-        'nodeMechanics.ts',
+        'engine',
+        'node',
+        'shared',
+        'child-call',
+        'runChildCallNode.ts',
       ),
       'utf8',
     )
     expect(src).toContain('adoptedChildTaskId !== null')
-    expect(src).toContain('parseCallLedger(null)')
+    expect(src).toContain('? decodeCallHumanWait(latestExisting?.wrapperProgressJson ?? null)')
+    expect(src).toContain(': decodeCallHumanWait(null)')
   })
 })
 

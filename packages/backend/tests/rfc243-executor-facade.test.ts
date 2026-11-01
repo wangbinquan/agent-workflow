@@ -104,12 +104,17 @@ describe('RFC-243 T2 — launch call faces route through the executor (source lo
   })
 
   test('call 分支纪律：不持任何节点池名额；adoption 区零 mint（实现门 P2-4 源锁）', () => {
-    const text = srcText('modules/task-execution/composition/nodeMechanics.ts')
-    const fnStart = text.indexOf('async function runCallWorkflowNode')
+    // RFC-404: the shared call-workflow / call-workgroup body moved out of nodeMechanics.ts; its
+    // explicit port contract offers no node pool at all.
+    const text = srcText('modules/task-execution/engine/node/shared/child-call/runChildCallNode.ts')
+    const fnStart = text.indexOf('async function runChildCallNode')
     const fnEnd = text.indexOf('async function failCallRow')
     expect(fnStart).toBeGreaterThan(0)
     expect(fnEnd).toBeGreaterThan(fnStart)
     const body = text.slice(fnStart, fnEnd)
+    expect(
+      srcText('modules/task-execution/application/ports/childCallNodeExecution.ts'),
+    ).not.toMatch(/\b\w*Sem\b/)
     // RFC-266 显式改判：`globalSem` 已拆成 `agentSem` / `scriptSem` 两个独立池，
     // 只留原来那条 `not.toContain('globalSem.acquire')` 会**静默失效**（断言一个
     // 不复存在的标识符，永远真）。不变量本身没变——call 节点一个名额都不占，

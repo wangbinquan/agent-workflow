@@ -1,4 +1,8 @@
-import { SMALL_LEAF_SOURCES, CODE_HOST_NODE_SOURCE } from './helpers/executionMechanismSources'
+import {
+  LEAF_NODE_SOURCES,
+  CODE_HOST_NODE_SOURCE,
+  CHILD_CALL_LAUNCH_SOURCE,
+} from './helpers/executionMechanismSources'
 // RFC-395 II-pre：守卫改锁生产路径或删除后的精确存量，保留原扫描判据。
 // RFC-292 architecture ratchets: the canonical trigger namespace must not
 // fork back into code-host-only helpers, runtime dispatch must keep authored
@@ -50,7 +54,7 @@ describe('RFC-292 trigger namespace source locks', () => {
 
   test('scheduler passes one frozen context to every authored runtime sink', () => {
     const source = [
-      ...SMALL_LEAF_SOURCES,
+      ...LEAF_NODE_SOURCES,
       readFileSync(resolve(BACKEND_SRC, 'services/scheduler.ts'), 'utf8'),
       readFileSync(
         resolve(BACKEND_SRC, 'modules', 'task-execution', 'composition', 'nodeMechanics.ts'),
@@ -91,8 +95,17 @@ describe('RFC-292 trigger namespace source locks', () => {
       'utf8',
     )
     expect(codeHostBinding).toMatch(/get triggerContext\(\)\s*\{\s*return state\.triggerContext/)
-    expect(source).toContain('{ triggerContext: state.triggerContext }')
-    expect(source).toContain('renderCallGoal(goalTemplate, inputs, state.triggerContext')
+    // RFC-404: the call node's child runtime (binding) and goal rendering (engine launch arm) left
+    // nodeMechanics.ts; both still carry the task's one frozen trigger context.
+    const callBinding = readFileSync(
+      resolve(BACKEND_SRC, 'modules/task-execution/composition/childCallNodeExecution.ts'),
+      'utf8',
+    )
+    expect(callBinding).toContain('{ triggerContext: state.triggerContext }')
+    expect(callBinding).toMatch(/get triggerContext\(\)\s*\{\s*return state\.triggerContext/)
+    expect(CHILD_CALL_LAUNCH_SOURCE).toContain(
+      'renderCallGoal(goalTemplate, inputs, ports.task.triggerContext',
+    )
 
     // Workgroup/dynamic host, commit and merge prompts are framework-authored
     // strings. They keep trigger-looking user text literal instead of opening

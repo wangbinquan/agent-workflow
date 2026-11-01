@@ -390,6 +390,8 @@ describe('RFC-284 T21 — nextRetryIndex 口径矩阵', () => {
       'modules/task-execution/composition/nodeMechanics.ts',
       'modules/task-execution/engine/node/script/runScriptNode.ts',
       'modules/task-execution/engine/node/code-host-call/runCodeHostCallNode.ts',
+      // RFC-404: the call-workflow / call-workgroup run row moved out of nodeMechanics.ts.
+      'modules/task-execution/engine/node/shared/child-call/runChildCallNode.ts',
     ]
     for (const f of files) {
       const src = readFileSync(resolvePath(import.meta.dir, '..', 'src', f), 'utf8')

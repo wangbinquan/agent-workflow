@@ -67,10 +67,10 @@ import {
 } from '@/modules/task-execution/engine/kernel/isolation'
 import { markMergeFailed, mergeBackAndSettle } from '@/modules/task-execution/engine/kernel/merge'
 // RFC-210 replay: submodule topology read-back + the fail-closed gate around it.
+import { parseIsoSubmodules } from '@/modules/task-execution/domain/isoSubmodules'
 import {
   composePriorOutputBlock,
   freshestPriorRunWithOutput,
-  parseIsoSubmodules,
   shouldRetryNodeFailure,
   type OneNodeResult,
   type SchedulerState,

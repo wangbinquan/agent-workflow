@@ -6,7 +6,10 @@
   `engine/node/shared/child-call/`，两个执行器各在 registry key 目录，经显式端口执行；子任务 runtime、scheduler driver 与委托 actor 由绑定
   补齐；`parseIsoSubmodules` 归 domain，人工等待台账编解码合一，发起错误分类归 application。纯结构重构。
 - **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。
-- **进度**：三件套落档，开始实施。
+- **进度**：T1～T6 完成（实现、守卫与集中验证），随实现提交入库，待 exact SHA 的 CI（AC-6）。`nodeMechanics.ts` 3656 → 2496 行。
+  集中验证查出本 RFC 引入的 5 处按旧 owner 钉住的账本 / 源码锁（防空扫语料、allowTerminal 账本、`.forCall(` 消费方、result 折叠锁）与
+  3 处本 RFC 用例写法问题，均已修；P0 变异 lane 通过。本机全量因 Docker 虚拟机常驻占约 6 核跑不完，改跑 355 个文件的针对性验证集并复跑
+  全部失败文件，详见 plan「集中验证（T6）」。
 
 ## 2026-10-31 RFC-403 task-execution 小型叶子节点迁入 engine/node（Done 2026-11-01；`design/RFC-403-task-execution-small-leaf-executors/`）
 

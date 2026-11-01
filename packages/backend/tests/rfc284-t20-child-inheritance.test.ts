@@ -219,36 +219,54 @@ describe('RFC-284 T20 — 子任务继承面双向锁', () => {
   })
 
   test('源码锁：child runtime 只经单一 picker 构造、deps 整体透传且旧逐字段展开归零', () => {
+    // RFC-404：buildChildRuntime 随调用节点的绑定迁到 composition/childCallNodeExecution.ts；
+    // 两条发起臂与续跑都由绑定补 runtime，engine 主体只组装本节点的请求、不碰 task 级继承面。
+    const taskExecution = resolve(import.meta.dir, '..', 'src', 'modules', 'task-execution')
     const src = readFileSync(
-      resolve(
-        import.meta.dir,
-        '..',
-        'src',
-        'modules',
-        'task-execution',
-        'composition',
-        'nodeMechanics.ts',
-      ),
+      resolve(taskExecution, 'composition', 'childCallNodeExecution.ts'),
       'utf8',
     )
     const start = src.indexOf('function buildChildRuntime')
     expect(start).toBeGreaterThan(-1)
-    const section = src.slice(start, src.indexOf('async function launchCallChild', start))
+    const section = src.slice(start, src.indexOf('\n}\n', start))
     expect(section).toContain('runConfig: pickInheritableRunConfig(state.opts)')
-    const workflowLaunch = src.slice(
-      src.indexOf('async function launchCallChild', start),
-      src.indexOf('function renderCallGoal', start),
+    const between = (from: string, to: string): string => {
+      const begin = src.indexOf(from, start)
+      const end = src.indexOf(to, begin)
+      expect(begin, from).toBeGreaterThan(start)
+      expect(end, to).toBeGreaterThan(begin)
+      return src.slice(begin, end)
+    }
+    expect(between('launchWorkflow: (request) =>', 'launchWorkgroup:')).toContain(
+      'runtime: buildChildRuntime(state)',
     )
-    const workgroupStart = src.indexOf('async function launchCallWorkgroupChild', start)
-    const workgroupEnd = src.indexOf('\n}\n', workgroupStart)
-    expect(workgroupStart).toBeGreaterThan(start)
-    expect(workgroupEnd).toBeGreaterThan(workgroupStart)
-    const workgroupLaunch = src.slice(workgroupStart, workgroupEnd)
-    expect(workflowLaunch).toContain('runtime: buildChildRuntime(state)')
-    expect(workgroupLaunch).toContain('runtime: buildChildRuntime(state)')
+    expect(between('launchWorkgroup: (request) =>', 'resumeChild:')).toContain(
+      'runtime: buildChildRuntime(state)',
+    )
+    expect(between('resumeChild: async (childTaskId) =>', 'cancelChild:')).toContain(
+      'const childRuntime = buildChildRuntime(state)',
+    )
     for (const key of INHERITABLE_RUN_CONFIG_KEYS) {
       expect(section.includes(`opts.${key}`)).toBe(false)
       expect(section.includes(`state.opts.${key}`)).toBe(false)
+    }
+    const childCall = (file: string): string =>
+      readFileSync(resolve(taskExecution, 'engine', 'node', 'shared', 'child-call', file), 'utf8')
+    for (const file of ['runChildCallNode.ts', 'launchChildCall.ts']) {
+      const body = childCall(file)
+      expect(body, file).not.toContain('buildChildRuntime')
+      expect(body, file).not.toContain('pickInheritableRunConfig')
+      expect(body, file).not.toContain('runConfig')
+      expect(body, file).not.toContain('schedulerDriver')
+    }
+    const launch = childCall('launchChildCall.ts')
+    for (const call of ['ports.children.launchWorkflow({', 'ports.children.launchWorkgroup({']) {
+      const at = launch.indexOf(call)
+      expect(at, call).toBeGreaterThan(-1)
+      const end = launch.indexOf('\n  })', at)
+      expect(end, call).toBeGreaterThan(at)
+      // The node's launch request never carries the task-level runtime; the binding adds it.
+      expect(launch.slice(at, end), call).not.toMatch(/\bruntime:/)
     }
   })
 })

@@ -1,5 +1,5 @@
 import {
-  SMALL_LEAF_SOURCES,
+  LEAF_NODE_SOURCES,
   SCRIPT_NODE_SOURCE,
   SCRIPT_ATTEMPT_SOURCE,
   MERGE_CONFLICT_SOURCE,
@@ -65,7 +65,7 @@ const assemblySource = readFileSync(
   resolve(import.meta.dir, '..', 'src', 'modules/task-execution/engine/kernel/assembly.ts'),
   'utf8',
 )
-const executionSource = `${wrapperMechanicsSource}\n${nodeMechanicsSource}\n${SCRIPT_NODE_SOURCE}\n${SCRIPT_ATTEMPT_SOURCE}\n${MERGE_CONFLICT_SOURCE}\n${SMALL_LEAF_SOURCES.join('\n')}`
+const executionSource = `${wrapperMechanicsSource}\n${nodeMechanicsSource}\n${SCRIPT_NODE_SOURCE}\n${SCRIPT_ATTEMPT_SOURCE}\n${MERGE_CONFLICT_SOURCE}\n${LEAF_NODE_SOURCES.join('\n')}`
 
 /** A git invocation that hangs deterministically, locally, with no network:
  *  a `!`-prefixed alias runs through the shell, so the child spawns a

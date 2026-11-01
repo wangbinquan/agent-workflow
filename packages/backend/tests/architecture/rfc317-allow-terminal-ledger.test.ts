@@ -59,9 +59,14 @@ const ALLOW_TERMINAL_LEDGER: readonly AllowTerminalLedgerEntry[] = [
   },
   {
     file: 'packages/backend/src/modules/task-execution/composition/nodeMechanics.ts',
-    count: 2,
-    rewrites:
-      'done→failed（workgroup host 的 ask-back 被晚到策略关闭）与 pending|interrupted|canceled→running（call child adoption 复用既有行）。',
+    count: 1,
+    rewrites: 'done→failed（workgroup host 的 ask-back 被晚到策略关闭）。',
+  },
+  {
+    // RFC-404 把 call 节点主体从 nodeMechanics.ts 迁到这里（nodeMechanics 2 → 1），全仓总数不变。
+    file: 'packages/backend/src/modules/task-execution/engine/node/shared/child-call/runChildCallNode.ts',
+    count: 1,
+    rewrites: 'pending|interrupted|canceled→running（call child adoption 复用既有行）。',
   },
   {
     file: 'packages/backend/src/modules/collaboration/infrastructure/review.ts',

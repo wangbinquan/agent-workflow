@@ -41,7 +41,7 @@ import { composeWorkspaceMaintenanceCommand } from '@/modules/source-control/com
 import { selectIsolationWorkspaceFactory } from '@/modules/source-control/public/participants'
 import { assertWorktreePresentForResume } from '@/modules/task-execution/application/worktreeResumePreflight'
 import { composePortArtifactOperations } from '@/modules/task-execution/composition/portArtifacts'
-import { inheritedCallSpace } from '@/modules/task-execution/composition/nodeMechanics'
+import { inheritedCallSpace } from '@/modules/task-execution/engine/node/shared/child-call/launchChildCall'
 import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import { createOrRebuildWrapperIso } from '@/modules/task-execution/composition/wrapperMechanics'
 import { prepareResumeTaskProjection } from '@/modules/task-execution/infrastructure/childTaskLifecycleParticipant'

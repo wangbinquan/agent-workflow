@@ -320,8 +320,9 @@ describe('RFC-347 exact production source locks', () => {
     expect(callPaths('.forEventAutomation(')).toEqual([
       'src/modules/identity-access/application/adapters/event-automation-adapter.ts',
     ])
+    // RFC-404: the call node's delegated actor moved with its binding out of nodeMechanics.ts.
     expect(callPaths('.forCall(')).toEqual([
-      'src/modules/task-execution/composition/nodeMechanics.ts',
+      'src/modules/task-execution/composition/childCallNodeExecution.ts',
     ])
     // 兼容投影只剩模块内部一个使用者（LocalOperatorContextFactory）；composition
     // 不再把它作为 participant 转出去（RFC-349 还清了 dispatcher 那笔债之后）。

@@ -1,4 +1,8 @@
-import { SCRIPT_NODE_SOURCE, SCRIPT_ATTEMPT_SOURCE } from './helpers/executionMechanismSources'
+import {
+  LEAF_NODE_SOURCES,
+  SCRIPT_NODE_SOURCE,
+  SCRIPT_ATTEMPT_SOURCE,
+} from './helpers/executionMechanismSources'
 // RFC-287 T1⑤ —— iso 清理失败的处置现状（C3b 的红→绿对基线）。
 //
 // 为什么存在：`discardNodeIso` **会抛**（nodeIsolation 里 deleteIsoRefs /
@@ -53,7 +57,9 @@ describe('RFC-287 T1⑤ — iso 清理失败的处置现状（C3b 基线）', ()
     // ——那个集合到此**归零**，所以断言翻面：scheduler.ts 里不得再有任何「在
     // finally 里清理 iso」的站点，清理与其失败处置单点收敛在骨架。
     // 反向锁（比原来的正向枚举更强）：新写一条线若自己起 finally 清 iso，这里立刻红。
-    const mechanics = `${SCHEDULER}\n${NODE_MECHANICS}\n${WRAPPER_MECHANICS}\n${SCRIPT_NODE_SOURCE}\n${SCRIPT_ATTEMPT_SOURCE}`
+    // RFC-404: leaf bodies moved out of nodeMechanics.ts stay in the scan (the call body's watch loop
+    // owns the one remaining finally after the move).
+    const mechanics = `${SCHEDULER}\n${NODE_MECHANICS}\n${WRAPPER_MECHANICS}\n${SCRIPT_NODE_SOURCE}\n${SCRIPT_ATTEMPT_SOURCE}\n${LEAF_NODE_SOURCES.join('\n')}`
     const finallyBlocks = [...mechanics.matchAll(/\bfinally\s*\{/g)].map((m) =>
       mechanics.slice(m.index ?? 0, (m.index ?? 0) + 900),
     )

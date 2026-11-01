@@ -334,6 +334,7 @@ describe('RFC-243 §6.3 — dw 子任务的 result 折叠（实现门 P1-3）', 
   })
 
   test('源码锁：node mechanics 对 call-workgroup 执行折叠', () => {
+    // RFC-404: the shared call-workflow / call-workgroup body moved to engine/node/shared/child-call/.
     const src = readFileSync(
       resolve(
         import.meta.dir,
@@ -341,8 +342,11 @@ describe('RFC-243 §6.3 — dw 子任务的 result 折叠（实现门 P1-3）', 
         'src',
         'modules',
         'task-execution',
-        'composition',
-        'nodeMechanics.ts',
+        'engine',
+        'node',
+        'shared',
+        'child-call',
+        'runChildCallNode.ts',
       ),
       'utf8',
     )

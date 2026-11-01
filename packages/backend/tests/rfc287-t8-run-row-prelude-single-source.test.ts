@@ -1,4 +1,8 @@
-import { SCRIPT_NODE_SOURCE, CODE_HOST_NODE_SOURCE } from './helpers/executionMechanismSources'
+import {
+  SCRIPT_NODE_SOURCE,
+  CODE_HOST_NODE_SOURCE,
+  CHILD_CALL_NODE_SOURCE,
+} from './helpers/executionMechanismSources'
 // RFC-287 T8（G2）—— 取行前奏的**单一实现**与四线×五项差异矩阵。
 //
 // 为什么存在：迁移前 L4 agent / L7 script / L8 call / L9 code-host 各手抄一份取行
@@ -34,7 +38,9 @@ function bodyOf(signature: string): string {
     ? SCRIPT_NODE_SOURCE
     : signature.includes('runCodeHostCallNode')
       ? CODE_HOST_NODE_SOURCE
-      : NODE_MECHANICS
+      : signature.includes('runChildCallNode')
+        ? CHILD_CALL_NODE_SOURCE
+        : NODE_MECHANICS
   const start = source.indexOf(signature)
   expect(start, `未找到函数：${signature}`).toBeGreaterThan(-1)
   const end = source.indexOf('\n}\n', start)
@@ -65,7 +71,8 @@ const LINES = [
   },
   {
     label: 'L8 call-workflow',
-    sig: 'async function runCallWorkflowNode(',
+    // RFC-404: one body for call-workflow and call-workgroup, now in engine/node/shared/child-call/.
+    sig: 'async function runChildCallNode(',
     inheritReviewIteration: true,
     clearAgentOverride: true,
     trackRetryIndex: true,
@@ -122,15 +129,12 @@ describe('RFC-287 T8 — 取行前奏单一实现 + 四线×五项差异矩阵',
   })
 
   test('单一实现：没有任何线再自己手写这段前奏', () => {
+    const PRELUDE_CORPUS = `${SCHEDULER}\n${NODE_MECHANICS}\n${SCRIPT_NODE_SOURCE}\n${CODE_HOST_NODE_SOURCE}\n${CHILD_CALL_NODE_SOURCE}`
     // 前奏的两个特征形状：①「找 pending 行并盖 consumed 戳」；②「按
     // schedulerMintCause 铸 pending 行」。两者在 scheduler.ts 里都必须归零
     // ——它们现在只存在于 nodeRunMint.ts 的收编函数里。
-    expect(
-      `${SCHEDULER}\n${NODE_MECHANICS}\n${SCRIPT_NODE_SOURCE}\n${CODE_HOST_NODE_SOURCE}`,
-    ).not.toContain("topLevelRows.find((row) => row.status === 'pending')")
-    expect(
-      `${SCHEDULER}\n${NODE_MECHANICS}\n${SCRIPT_NODE_SOURCE}\n${CODE_HOST_NODE_SOURCE}`,
-    ).not.toMatch(/cause: schedulerMintCause\(/)
+    expect(PRELUDE_CORPUS).not.toContain("topLevelRows.find((row) => row.status === 'pending')")
+    expect(PRELUDE_CORPUS).not.toMatch(/cause: schedulerMintCause\(/)
     // 正向：收编函数里各有且仅有一处（RFC-369 起 pending 候选还要排除已被同帧更新一代取代的行）。
     expect(
       RUN_ROW_RESOLVER.match(
@@ -141,17 +145,17 @@ describe('RFC-287 T8 — 取行前奏单一实现 + 四线×五项差异矩阵',
     expect(RUN_ROW_RESOLVER).toContain(
       'snapshot.pending.filter((row) => row.structurallySuperseded)',
     )
-    expect(
-      `${SCHEDULER}\n${NODE_MECHANICS}\n${SCRIPT_NODE_SOURCE}\n${CODE_HOST_NODE_SOURCE}`,
-    ).not.toContain('!superseded.has(row.id)')
+    expect(PRELUDE_CORPUS).not.toContain('!superseded.has(row.id)')
     expect(RUN_ROW_RESOLVER.split('cause: schedulerMintCause(').length - 1).toBe(1)
   })
 
   test('领养区仍带 RFC-243-LOCK 标记，且标记内不得出现 mintNodeRun', () => {
-    const begin = NODE_MECHANICS.indexOf('RFC-243-LOCK:adoption-no-mint-begin')
-    const end = NODE_MECHANICS.indexOf('RFC-243-LOCK:adoption-no-mint-end')
+    // RFC-404: the adoption block moved with the shared call body.
+    const begin = CHILD_CALL_NODE_SOURCE.indexOf('RFC-243-LOCK:adoption-no-mint-begin')
+    const end = CHILD_CALL_NODE_SOURCE.indexOf('RFC-243-LOCK:adoption-no-mint-end')
     expect(begin).toBeGreaterThan(-1)
     expect(end).toBeGreaterThan(begin)
-    expect(NODE_MECHANICS.slice(begin, end)).not.toContain('mintNodeRun(')
+    expect(CHILD_CALL_NODE_SOURCE.slice(begin, end)).not.toContain('mintNodeRun(')
+    expect(NODE_MECHANICS).not.toContain('RFC-243-LOCK')
   })
 })

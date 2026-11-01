@@ -254,7 +254,7 @@ const KNOWN: Readonly<Record<string, readonly string[]>> = {
     'packages/backend/src/modules/integration/application/mrTerminalControlWorker.ts#MrTerminalControlWorker.start#setInterval#1',
     'packages/backend/src/modules/resource-catalog/composition/crewstationMcpDiagnostics.ts#createCrewStationMcpDiagnosticsEffects.setInterval.timer#setInterval#1',
     'packages/backend/src/modules/resource-catalog/infrastructure/local/mcpDiagnosticsEffects.ts#createLocalMcpDiagnosticsEffects.setInterval.timer#setInterval#1',
-    'packages/backend/src/modules/task-execution/composition/nodeMechanics.ts#runCallWorkflowNode.obsTimer#setInterval#1',
+    'packages/backend/src/modules/task-execution/engine/node/shared/child-call/runChildCallNode.ts#runChildCallNode.obsTimer#setInterval#1',
     'packages/backend/src/modules/task-execution/infrastructure/taskDriverLifecycle.ts#startOwnerHeartbeat.timer#setInterval#1',
     'packages/backend/src/platform/background/maintenanceService.ts#startMaintenanceService.checkpointTimer#setInterval#1',
     'packages/backend/src/platform/background/maintenanceService.ts#startMaintenanceService.eventLoopTimer#setInterval#1',

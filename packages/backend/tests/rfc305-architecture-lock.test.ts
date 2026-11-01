@@ -800,8 +800,9 @@ describe('RFC-305 reusable-authority fences', () => {
       resolve(IDENTITY_ROOT, 'application', 'operationContext.ts'),
       'utf8',
     )
-    const nodeMechanics = readFileSync(
-      resolve(BACKEND_SRC, 'modules', 'task-execution', 'composition', 'nodeMechanics.ts'),
+    // RFC-404: the call node's delegated owner actor is resolved by its composition binding.
+    const callBinding = readFileSync(
+      resolve(BACKEND_SRC, 'modules', 'task-execution', 'composition', 'childCallNodeExecution.ts'),
       'utf8',
     )
     const scheduled = readFileSync(resolve(BACKEND_SRC, 'services', 'scheduledTasks.ts'), 'utf8')
@@ -817,10 +818,10 @@ describe('RFC-305 reusable-authority fences', () => {
     expect(composition).toContain('new DelegatedOperationContextFactory(')
     expect(contexts).toContain('new WeakMap<')
     expect(contexts).toContain("throw new Error('foreign-delegated-request-authority')")
-    expect(nodeMechanics).toContain('.delegatedRequests')
-    expect(nodeMechanics).toContain('.forCall({')
-    expect(nodeMechanics).toContain("'call-workflow'")
-    expect(nodeMechanics).toContain("'call-workgroup'")
+    expect(callBinding).toContain('.delegatedRequests')
+    expect(callBinding).toContain('.forCall({')
+    expect(callBinding).toContain("'call-workflow'")
+    expect(callBinding).toContain("'call-workgroup'")
     expect(scheduled).toContain('.delegatedRequests.forSchedule({')
     expect(scheduled).toContain('invocation,')
     expect(webhook).toContain('.delegatedRequests.forWebhook({')

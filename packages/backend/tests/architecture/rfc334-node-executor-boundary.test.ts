@@ -41,6 +41,12 @@ describe('RFC-334 node-executor owner boundary', () => {
       'review/reviewNodeExecutor',
       'clarify/settleIdleClarify',
       'clarify-cross-agent/runCrossClarifyNode',
+      // RFC-404: the call-workflow / call-workgroup executors and their shared body.
+      'call-workflow/callWorkflowNodeExecutor',
+      'call-workgroup/callWorkgroupNodeExecutor',
+      'shared/child-call/runChildCallNode',
+      'shared/child-call/launchChildCall',
+      'shared/child-call/childCallWatch',
     ])
       expect(paths).toContain(`${engineDir}/node/${path}.ts`)
     expect(paths).toContain(`${engineDir}/node/script/runScriptNode.ts`)

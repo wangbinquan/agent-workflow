@@ -273,8 +273,9 @@ describe('RFC-103 T2 源码层接线断言（防再漂）', () => {
   // 尤其是脚本池 —— 它是 daemon 级单例且 resize-on-read，漏传会让**每一次子任务
   // 启动都把管理员配置的脚本上限静默改回默认 4**（影响整个 daemon，不只是子任务）。
   test('RFC-266: buildChildDeps 透传三个并发键（漏传脚本池 = 全 daemon 被改回默认）', () => {
-    const nodeMechanicsSrc = readFileSync(
-      join(import.meta.dir, '../src/modules/task-execution/composition/nodeMechanics.ts'),
+    // RFC-404: buildChildRuntime moved with the call-node binding.
+    const childCallBindingSrc = readFileSync(
+      join(import.meta.dir, '../src/modules/task-execution/composition/childCallNodeExecution.ts'),
       'utf8',
     )
     const topologySrc = readFileSync(
@@ -284,11 +285,11 @@ describe('RFC-103 T2 源码层接线断言（防再漂）', () => {
       ),
       'utf8',
     )
-    const runtimeStart = nodeMechanicsSrc.indexOf('function buildChildRuntime(')
+    const runtimeStart = childCallBindingSrc.indexOf('function buildChildRuntime(')
     expect(runtimeStart).toBeGreaterThan(-1)
-    const runtimeBody = nodeMechanicsSrc.slice(
+    const runtimeBody = childCallBindingSrc.slice(
       runtimeStart,
-      nodeMechanicsSrc.indexOf('\n}\n', runtimeStart),
+      childCallBindingSrc.indexOf('\n}\n', runtimeStart),
     )
     // The closed child runtime is now the handoff itself; there is no second
     // legacy dependency expansion that can silently drop a key.
@@ -307,8 +308,9 @@ describe('RFC-103 T2 源码层接线断言（防再漂）', () => {
   // call-workflow / call-workgroup 子任务里 binaryPath=NULL 的 runtime 冻不进
   // config.opencodePath / claudeCodePath —— 子调度器 spawn 裸协议命令。
   test('RFC-282: buildChildDeps 透传 configPath（漏传 = 子任务丢 config 二进制头）', () => {
-    const nodeMechanicsSrc = readFileSync(
-      join(import.meta.dir, '../src/modules/task-execution/composition/nodeMechanics.ts'),
+    // RFC-404: buildChildRuntime moved with the call-node binding.
+    const childCallBindingSrc = readFileSync(
+      join(import.meta.dir, '../src/modules/task-execution/composition/childCallNodeExecution.ts'),
       'utf8',
     )
     const topologySrc = readFileSync(
@@ -318,11 +320,11 @@ describe('RFC-103 T2 源码层接线断言（防再漂）', () => {
       ),
       'utf8',
     )
-    const runtimeStart = nodeMechanicsSrc.indexOf('function buildChildRuntime(')
+    const runtimeStart = childCallBindingSrc.indexOf('function buildChildRuntime(')
     expect(runtimeStart).toBeGreaterThan(-1)
-    const runtimeBody = nodeMechanicsSrc.slice(
+    const runtimeBody = childCallBindingSrc.slice(
       runtimeStart,
-      nodeMechanicsSrc.indexOf('\n}\n', runtimeStart),
+      childCallBindingSrc.indexOf('\n}\n', runtimeStart),
     )
     // The provider-neutral scheduler consumes this exact child runtime port;
     // `configPath` therefore crosses one closed handoff instead of two spreads.

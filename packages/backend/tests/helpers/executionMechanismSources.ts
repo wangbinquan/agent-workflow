@@ -45,7 +45,19 @@ export const NODE_BRANCH_SOURCE = readFileSync(
   'utf8',
 )
 export const NODE_INPUTS_SOURCE = readFileSync(resolve(root, 'application/nodeInputs.ts'), 'utf8')
-export const SMALL_LEAF_SOURCES = [
+
+// RFC-404: the shared call-workflow / call-workgroup body and its two launch arms.
+export const CHILD_CALL_NODE_SOURCE = readFileSync(
+  resolve(root, 'engine/node/shared/child-call/runChildCallNode.ts'),
+  'utf8',
+)
+export const CHILD_CALL_LAUNCH_SOURCE = readFileSync(
+  resolve(root, 'engine/node/shared/child-call/launchChildCall.ts'),
+  'utf8',
+)
+
+/** Every leaf body moved out of nodeMechanics.ts (RFC-403, RFC-404), so corpora stay complete. */
+export const LEAF_NODE_SOURCES = [
   CODE_HOST_NODE_SOURCE,
   INPUT_NODE_SOURCE,
   OUTPUT_NODE_SOURCE,
@@ -54,4 +66,6 @@ export const SMALL_LEAF_SOURCES = [
   CROSS_CLARIFY_SOURCE,
   NODE_BRANCH_SOURCE,
   NODE_INPUTS_SOURCE,
+  CHILD_CALL_NODE_SOURCE,
+  CHILD_CALL_LAUNCH_SOURCE,
 ] as const

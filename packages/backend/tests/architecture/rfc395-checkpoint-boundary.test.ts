@@ -67,12 +67,15 @@ test('isolation, replay and wrapper mechanics do not inspect scalar/map columns 
     'engine/node/review/reviewNodeExecutor.ts',
     'engine/node/clarify/settleIdleClarify.ts',
     'engine/node/clarify-cross-agent/runCrossClarifyNode.ts',
+    'engine/node/shared/child-call/runChildCallNode.ts',
+    'engine/node/shared/child-call/launchChildCall.ts',
     'application/nodeInputs.ts',
     'application/nodeBranchActivation.ts',
     'composition/codeHostNodeExecution.ts',
     'composition/virtualIoNodeExecution.ts',
     'composition/humanGateNodeExecution.ts',
     'composition/nodeBranchActivation.ts',
+    'composition/childCallNodeExecution.ts',
     'composition/executionMechanismBindings.ts',
   ]) {
     const text = taskSource(path)
@@ -124,10 +127,13 @@ test('negative controls catch epoch-1 columns and directory aliases', () => {
 // II-a kept these four sites on the HEAD repo-count decision (plan §6.11 item 6). They were fixed afterwards as a
 // separate bug fix (6198ae144, plan §6.6 Q5): the guard now locks the mount-layout decision instead.
 test('the four single-non-root defect sites decide by mount layout, not by repo count', () => {
+  // RFC-404: the two inherited child-workspace sites moved with the call node's launch arms.
   const mechanics = taskSource('composition/nodeMechanics.ts')
-  expect(mechanics.match(/state\.repos\.length > 1/g)).toBeNull()
-  expect(mechanics).toContain('const singleRoot = isSingleRootRepository(parentMounts)')
-  expect(mechanics.match(/const space = inheritedCallSpace\(\{/g)).toHaveLength(2)
+  const launch = taskSource('engine/node/shared/child-call/launchChildCall.ts')
+  for (const text of [mechanics, launch]) expect(text.match(/state\.repos\.length > 1/g)).toBeNull()
+  expect(launch).toContain('const singleRoot = isSingleRootRepository(parentMounts)')
+  expect(launch.match(/const space = inheritedCallSpace\(\{/g)).toHaveLength(2)
+  expect(mechanics).not.toContain('inheritedCallSpace(')
   for (const [path, before] of [
     ['services/structuralDiff/callGraph/expandService.ts', 'workspace.repos.length > 1'],
     ['services/worktreeFileContent.ts', 'task.repos.length > 1'],

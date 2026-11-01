@@ -281,9 +281,9 @@ const OFF_TABLE_DEVIATIONS: readonly OffTableDeviation[] = [
     why: 'RFC-402 具名 ledger 方法恢复了原 setRunStatus 包装器遮住的站点：wg-clarify-suppressed-late 把已经 done 的 host run 改判 failed，沿用既有 allowTerminal: true 与原始错误文本；本次只改变调用合同，不增加状态边。',
   },
   {
-    site: 'modules/task-execution/composition/nodeMechanics.ts:running',
+    site: 'modules/task-execution/engine/node/shared/child-call/runChildCallNode.ts:running',
     offTable: ['canceled', 'interrupted'],
-    why: 'RFC-402 具名 ledger 方法恢复了原包装器遮住的 call-adoption 站点：接管仍在执行的子任务时把 canceled/interrupted 的父 call 行恢复 running，保留原 allowedFrom、allowTerminal 与接管顺序；本次不修改这条既有恢复策略。',
+    why: 'RFC-402 具名 ledger 方法恢复了原包装器遮住的 call-adoption 站点：接管仍在执行的子任务时把 canceled/interrupted 的父 call 行恢复 running，保留原 allowedFrom、allowTerminal 与接管顺序；本次不修改这条既有恢复策略。RFC-404 只把它随调用节点主体从 nodeMechanics.ts 迁到 engine/node/shared/child-call/。',
   },
   {
     site: 'modules/task-execution/infrastructure/taskRouteRepairOperations.ts:interrupted',
@@ -481,6 +481,31 @@ test('RFC-402 script ledger sites remain visible to the named-writer oracle afte
     expect(site.allowedFrom.filter((from) => !nodeOracle(site.to).has(from))).toEqual([])
   // The conditional aborted target is still a named writer; .set() never joins the matcher.
   expect(NODE_WRITERS.has('set')).toBe(false)
+})
+
+test('RFC-404 call-node literal CAS sites moved with the shared child-call body', () => {
+  const all = casSites(packageSrcUnits(REPO_ROOT, 'backend'))
+  const sites = all
+    .filter(
+      (site) =>
+        site.file === 'modules/task-execution/engine/node/shared/child-call/runChildCallNode.ts',
+    )
+    .sort((a, b) => a.line - b.line)
+  expect(sites.map((site) => [site.writer, site.to, site.allowedFrom])).toEqual([
+    ['setNodeRunStatus', 'running', ['pending', 'interrupted', 'canceled']],
+    ['setNodeRunStatus', 'done', ['running']],
+  ])
+  // The adoption resume keeps its registered off-table edges; the child-done settle is on-table.
+  expect(offTableSources(sites[0]!).sort()).toEqual(['canceled', 'interrupted'])
+  expect(offTableSources(sites[1]!)).toEqual([])
+  // nodeMechanics.ts no longer owns any call-node transition.
+  expect(
+    all.filter(
+      (site) =>
+        site.file === 'modules/task-execution/composition/nodeMechanics.ts' &&
+        offTableSources(site).includes('interrupted'),
+    ),
+  ).toEqual([])
 })
 
 test('RFC-403 code-host and cross-clarify literal CAS sites remain visible in their real owners', () => {
