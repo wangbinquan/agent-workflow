@@ -103,7 +103,8 @@
         "modules/digital-employee/composition.ts -> public/types",
         "modules/resource-catalog/application/adapters/execution-contract-adapter.ts -> composition/required-ports",
         "modules/task-execution/application/adapters/execution-contract-adapter.ts -> composition/required-ports",
-        "modules/task-execution/composition/digitalEmployeeExecution.ts -> public/types",
+        "modules/task-execution/application/digitalEmployeeExecution.ts -> public/types",
+        "modules/task-execution/application/ports/digitalEmployeeExecution.ts -> public/types",
         "routes/executionContracts.ts -> public/types"
       ]
     }

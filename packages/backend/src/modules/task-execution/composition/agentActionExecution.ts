@@ -4,10 +4,8 @@
 // 两个引擎共用）；这里只留两个 provider 的装配面。类型保持从本模块再导出，
 // 既有消费方（development-automation 组合、数字员工执行器）import 路径不变。
 
-import {
-  createAgentActionExecutionRunner,
-  type AgentActionExecutionRunner,
-} from './actionExecutionRunners'
+import { createAgentActionExecutionRunner } from '../application/actionExecutionRunners'
+import type { AgentActionExecutionRunner } from '../application/ports/actionExecution'
 import {
   createActionExecutionEnvironment,
   type ActionExecutionEnvironmentDependencies,
@@ -19,7 +17,7 @@ export {
   type AgentExecutionFailure,
   type DigitalEmployeeExecutionSnapshot,
   type DigitalEmployeeLaunchInput,
-} from './actionExecutionRunners'
+} from '../application/ports/actionExecution'
 
 /**
  * RFC-359 AC-1（plan §5hi）：**两个 provider 装配面合成一个**，走启动内核那半。

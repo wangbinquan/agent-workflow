@@ -165,10 +165,13 @@ test('composition binds the moved I/O where the original code ran it', () => {
   expect(source('crewstationExecution.ts')).toContain(
     'const workspaceRef = await readTaskWorkspaceRef(input.db, taskId)',
   )
-  expect(
-    source('actionExecutionRunners.ts').split('env.workspaceEntries ?? localActionWorkspaceEntries')
-      .length - 1,
-  ).toBe(2)
+  // RFC-415: the runners moved to application; the environment binding supplies both defaults.
+  expect(source('actionExecutionEnvironment.ts')).toContain(
+    'workspaceEntries: deps.workspaceEntries ?? localActionWorkspaceEntries,',
+  )
+  expect(source('actionExecutionEnvironment.ts')).toContain(
+    'taskStatus: (executionRef: string) => readTaskStatus(deps.db, executionRef),',
+  )
   expect(source('digitalEmployeeExecution.ts')).toContain(
     'load: (taskId: string) => readDigitalEmployeeExecutionMetadata(db, taskId),',
   )

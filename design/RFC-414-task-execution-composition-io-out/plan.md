@@ -57,6 +57,15 @@ infrastructure 符号 owner 唯一，均带负例）与端口绑定用例 `rfc41
 
 实施前与提交前按路径核对工作树，尤其是并发会话可能触及的共享守卫文件。
 
+## CI（AC-5）
+
+- **`7bcab1997`**：windows-platform `41350432810` success。主 CI `41350432956`：67 success；backend 分片 2/44 失败于本 RFC 新增结构锁
+  `rfc414-composition-io-out` 的 owner 负例——对 11 个 owner 各跑两次全语料检查、每次重走全部 AST，CI 上 5307 ms 超出 5 s 默认时限（属本 RFC
+  引入），已由 `c4b025f4c` 按单元缓存扫描（本地 11 ms）并给 20 s 预算；分片 43/44 为 `scheduler-clarify-dispatch` 的一个 PG 用例 5 s 超时——
+  本 RFC 未触及澄清 / 调度路径，同文件其余 PG 用例约 2 s 通过，同一用例在 `7f8abe5a0` 的主 CI（70/70）上通过，判为 runner 负载超时，不归本 RFC，
+  证据已留；`CI required` 随之失败。
+- AC-5 待后继 run（含 `c4b025f4c`）补齐。
+
 ## 验收清单
 
 - [x] proposal AC-1～AC-4（本地集中验证，见上）

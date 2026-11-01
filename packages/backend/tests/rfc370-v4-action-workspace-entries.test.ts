@@ -8,11 +8,12 @@
 // The runners now ask the environment's `workspaceEntries`; a standalone
 // daemon still checks its own filesystem.
 import { expect, test } from 'bun:test'
+// RFC-415: the runners are task-execution application; their environment type is an application port.
 import {
   createAgentActionExecutionRunner,
   createScriptActionExecutionRunner,
-  type ActionExecutionEnvironment,
-} from '@/modules/task-execution/composition/actionExecutionRunners'
+} from '@/modules/task-execution/application/actionExecutionRunners'
+import type { ActionExecutionEnvironment } from '@/modules/task-execution/application/ports/actionExecution'
 
 const SCENE = 'cs-workspace:development%3Ashared/tmp/actions/01M5/ws'
 const MOUNT = '.agent-workflow/inputs/seed'

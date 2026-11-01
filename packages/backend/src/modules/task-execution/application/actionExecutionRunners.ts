@@ -7,14 +7,14 @@
 //
 // 这里把校验、宿主快照合成、结果投影、取消语义写一次；provider 只出现在两件事上：
 // 「怎么启动一个借用工作区的宿主任务」与「怎么取消它」——由 `ActionExecutionEnvironment` 注入。
+//
+// RFC-415: moved from composition/actionExecutionRunners.ts into the application layer; the task status read and the
+// workspace entry check arrive through the environment port.
 
 import { createWorkflowExecutionQueries } from '@/modules/resource-catalog/public/queries'
 import { ulid } from 'ulid'
 
-import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { watchTaskTerminal } from '@/services/execution/executionWatch'
-import { getExecutionOutcome } from '@/services/execution/outcome'
-import { normalizeTaskPlatformInputPaths } from '@/services/taskPlatformInputPaths'
+import { normalizeTaskPlatformInputPaths } from '../domain/taskPlatformInputPaths'
 import { sha256Hex } from '@/util/hash'
 import {
   isTerminalTaskStatus,
@@ -27,125 +27,14 @@ import {
   synthesizeDigitalEmployeeHostSnapshot,
   synthesizeDigitalEmployeeScriptHostSnapshot,
 } from '../domain/digitalEmployeeHost'
-import type { TaskExecutionOutcomeReadModel, TaskStatusProjectionReadModel } from '../public/types'
-import { localActionWorkspaceEntries } from '../infrastructure/local/localActionWorkspaceEntries'
-import { readTaskStatus } from '../infrastructure/taskExecutionTaskReads'
-
-export interface AgentExecutionFailure {
-  readonly category: 'configuration' | 'transient' | 'contract-violation'
-  readonly code: string
-  readonly retryability: 'same-input' | 'after-configuration' | 'never'
-  readonly attemptOrdinal: number
-  readonly remediation: string
-  readonly evidenceRef: null
-}
-
-export interface DigitalEmployeeLaunchInput {
-  readonly actionRunId: string
-  readonly capabilityId: string
-  readonly agentId: string
-  readonly prompt: string
-  readonly workspacePath: string
-  readonly baselineSha: string
-  readonly platformInputPaths: readonly string[]
-  readonly wallTimeMs: number | null
-}
-
-export interface DigitalEmployeeScriptLaunchInput {
-  readonly actionRunId: string
-  readonly capabilityId: string
-  readonly scriptRef: string
-  readonly prompt: string
-  readonly workspacePath: string
-  readonly baselineSha: string
-  readonly platformInputPaths: readonly string[]
-  readonly wallTimeMs: number | null
-}
-
-export type DigitalEmployeeExecutionSnapshot =
-  | { readonly kind: 'not-found'; readonly executionRef: string }
-  | { readonly kind: 'pending'; readonly executionRef: string; readonly taskStatus: string }
-  | {
-      readonly kind: 'exited'
-      readonly executionRef: string
-      readonly taskStatus: 'done' | 'failed' | 'canceled' | 'interrupted'
-      readonly resultText: string | null
-      readonly errorSummary: string | null
-      readonly errorMessage: string | null
-    }
-
-export type ActionLaunchResult =
-  | { readonly ok: true; readonly executionRef: string }
-  | { readonly ok: false; readonly failure: AgentExecutionFailure }
-
-export interface AgentActionExecutionRunner {
-  launch(input: DigitalEmployeeLaunchInput): Promise<ActionLaunchResult>
-  fetchOutcome(executionRef: string): Promise<DigitalEmployeeExecutionSnapshot>
-  cancel(
-    executionRef: string,
-  ): Promise<{ readonly settled: 'canceled' | 'already-terminal' | 'not-found' }>
-}
-
-export interface ScriptActionExecutionRunner {
-  launch(input: DigitalEmployeeScriptLaunchInput): Promise<ActionLaunchResult>
-  fetchOutcome(executionRef: string): Promise<DigitalEmployeeExecutionSnapshot>
-  cancel(
-    executionRef: string,
-  ): Promise<{ readonly settled: 'canceled' | 'already-terminal' | 'not-found' }>
-}
-
-/** 宿主任务的启动请求：工作区是调用方（development-automation）自己物化的，任务只是借用它。 */
-export interface ActionHostTaskLaunch {
-  /** 借用工作区的租约 id；provider 适配器把任务落在这个 id 上。 */
-  readonly taskId: string
-  readonly name: string
-  readonly inputs: Readonly<Record<string, string>>
-  readonly wallTimeMs: number | null
-  readonly actionRunId: string
-  /**
-   * 合成的不可变宿主快照（agent 单节点 / script 单节点）。这里保持合成器的原始形状：SQLite 把它
-   * 序列化进 `digitalEmployeeLaunch.snapshotJson`，PostgreSQL 用 schema 解析成启动主体的快照。
-   */
-  readonly snapshot: ReturnType<typeof synthesizeDigitalEmployeeHostSnapshot>
-  readonly workspacePath: string
-  readonly baselineSha: string
-  readonly platformInputPaths: readonly string[]
-}
-
-export interface ActionExecutionEnvironment {
-  /** 宿主工作流播种、原始脚本定义与任务状态读取——两个引擎同一段 drizzle。 */
-  readonly db: PersistenceDb
-  readonly agents: Readonly<{
-    get(id: string): Promise<{
-      readonly id: string
-      readonly name: string
-      readonly outputs: readonly string[]
-    } | null>
-  }>
-  readonly outcomes: TaskExecutionOutcomeReadModel
-  readonly statusProjection: TaskStatusProjectionReadModel
-  /** provider 私有：在借用工作区上启动宿主任务，返回 executionRef。 */
-  launchHostTask(input: ActionHostTaskLaunch): Promise<string>
-  /** provider 私有：取消宿主任务（已终态时抛错，由调用方兜成 already-terminal）。 */
-  cancelHostTask(executionRef: string): Promise<void>
-  /**
-   * 终态回调，同步 / 异步都可以：唯一的消费者 `watchTerminal` 用 `.then(() => notify(ref))`
-   * 接它，两种都会被等到。**这里的 `void |` 不是 dev-gotchas 警告的那种放宽**——那条说的是
-   * 「产出方的 Promise 被调用方合法丢掉」；此处调用方显式串进了 promise 链。
-   */
-  readonly onTerminal?: (executionRef: string) => void | Promise<void>
-  readonly terminalPollMs?: number
-  /**
-   * RFC-370 §10 V18: whether an entry exists below the action workspace (its
-   * `.git`, an input mount). The selected workspace implementation interprets
-   * the reference; a standalone daemon checks its own filesystem.
-   */
-  readonly workspaceEntries?: ActionWorkspaceEntries
-}
-
-export interface ActionWorkspaceEntries {
-  exists(workspacePath: string, relativePath: string): Promise<boolean>
-}
+import type {
+  ActionExecutionEnvironment,
+  ActionWorkspaceEntries,
+  AgentActionExecutionRunner,
+  AgentExecutionFailure,
+  DigitalEmployeeExecutionSnapshot,
+  ScriptActionExecutionRunner,
+} from './ports/actionExecution'
 
 function fail(
   category: AgentExecutionFailure['category'],
@@ -225,9 +114,8 @@ async function assertWorkspace(input: {
 function watchTerminal(env: ActionExecutionEnvironment, executionRef: string): void {
   if (env.onTerminal === undefined) return
   const notify = env.onTerminal
-  void watchTaskTerminal(env.statusProjection, executionRef, {
-    pollMs: env.terminalPollMs ?? 1_000,
-  })
+  void env
+    .awaitTerminal(executionRef, env.terminalPollMs ?? 1_000)
     .then(() => notify(executionRef))
     .catch(() => {})
 }
@@ -236,10 +124,10 @@ async function fetchOutcome(
   env: ActionExecutionEnvironment,
   executionRef: string,
 ): Promise<DigitalEmployeeExecutionSnapshot> {
-  const status = await readTaskStatus(env.db, executionRef)
+  const status = await env.taskStatus(executionRef)
   if (status === null) return { kind: 'not-found', executionRef }
   if (!isTerminalTaskStatus(status)) return { kind: 'pending', executionRef, taskStatus: status }
-  const outcome = await getExecutionOutcome(env.outcomes, executionRef)
+  const outcome = await env.executionOutcome(executionRef)
   return {
     kind: 'exited',
     executionRef,
@@ -254,7 +142,7 @@ async function cancel(
   env: ActionExecutionEnvironment,
   executionRef: string,
 ): Promise<{ settled: 'canceled' | 'already-terminal' | 'not-found' }> {
-  const status = await readTaskStatus(env.db, executionRef)
+  const status = await env.taskStatus(executionRef)
   if (status === null) return { settled: 'not-found' }
   if (isTerminalTaskStatus(status)) return { settled: 'already-terminal' }
   try {
@@ -273,7 +161,7 @@ export function createAgentActionExecutionRunner(
   return {
     async launch(input) {
       const workspace = await assertWorkspace({
-        entries: env.workspaceEntries ?? localActionWorkspaceEntries,
+        entries: env.workspaceEntries,
         workspacePath: input.workspacePath,
         baselineSha: input.baselineSha,
         platformInputPaths: input.platformInputPaths,
@@ -342,7 +230,7 @@ export function createScriptActionExecutionRunner(
   return {
     async launch(input) {
       const workspace = await assertWorkspace({
-        entries: env.workspaceEntries ?? localActionWorkspaceEntries,
+        entries: env.workspaceEntries,
         workspacePath: input.workspacePath,
         baselineSha: input.baselineSha,
         platformInputPaths: input.platformInputPaths,

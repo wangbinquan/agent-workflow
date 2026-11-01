@@ -86,7 +86,7 @@ import type {
   EmployeeInputArtifactPort,
 } from '@/modules/digital-employee/composition'
 import type { ScriptFixtureProcess } from '@/modules/task-execution/composition/programTools'
-import type { ActionWorkspaceEntries } from '@/modules/task-execution/composition/actionExecutionRunners'
+import type { ActionWorkspaceEntries } from '@/modules/task-execution/composition/actionExecutionEnvironment'
 import type { CodeReviewArtifactStore } from '@/modules/code-capability/public/participants'
 import type { RepositoryRevisionContentFactory } from '@/modules/source-control/public/participants'
 import type { EvidenceReadBinding } from '@/modules/development-automation/composition/evidenceReadBinding'

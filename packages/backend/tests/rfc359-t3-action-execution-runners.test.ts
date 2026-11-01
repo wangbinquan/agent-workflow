@@ -2,7 +2,7 @@
 //
 // dual-provider-parity-audit-2026-09-04 F-H2-2：PostgreSQL daemon 没接 agentLauncher / scriptLauncher，
 // development mission 的每个动作都被 `*-launcher-not-wired` 挡下。执行器现在只有一份
-// （`composition/actionExecutionRunners.ts`：校验 → 宿主快照合成 → launchHostTask → 终态观察），
+// （`application/actionExecutionRunners.ts`，RFC-415 自 composition 迁入：校验 → 宿主快照合成 → launchHostTask → 终态观察），
 // provider 只提供「在借用工作区上启动 / 取消宿主任务」两件私有能力（`actionExecutionEnvironment.ts`）。
 // 这里用一个可观测的假环境把执行器在两个引擎上各跑一遍（宿主工作流播种、脚本定义读取走真库），
 // 再用源码锁钉住 PG daemon 的接线与两个 composer 的「薄」形态。
@@ -28,12 +28,20 @@ import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { actorOfDirectAuthority } from '@/auth/session'
 import { createIdentityAccessRuntime } from '@/modules/identity-access/composition'
 import { borrowedPostgresqlWorkspace } from '@/modules/task-execution/composition/actionExecutionEnvironment'
+// RFC-415: the runners are task-execution application; the environment gains the task status read and the workspace
+// entry check the runners used to reach directly (the fake wires the same infrastructure the environment binding uses).
 import {
   createAgentActionExecutionRunner,
   createScriptActionExecutionRunner,
-  type ActionExecutionEnvironment,
-  type ActionHostTaskLaunch,
-} from '@/modules/task-execution/composition/actionExecutionRunners'
+} from '@/modules/task-execution/application/actionExecutionRunners'
+import type {
+  ActionExecutionEnvironment,
+  ActionHostTaskLaunch,
+} from '@/modules/task-execution/application/ports/actionExecution'
+import { localActionWorkspaceEntries } from '@/modules/task-execution/infrastructure/local/localActionWorkspaceEntries'
+import { readTaskStatus } from '@/modules/task-execution/infrastructure/taskExecutionTaskReads'
+import { watchTaskTerminal } from '@/services/execution/executionWatch'
+import { getExecutionOutcome } from '@/services/execution/outcome'
 import {
   DIGITAL_EMPLOYEE_PROMPT_KEY,
   DIGITAL_EMPLOYEE_RESULT_PORT,
@@ -116,6 +124,12 @@ function fakeEnvironment(
     },
     ...(over.onTerminal === undefined ? {} : { onTerminal: over.onTerminal }),
     terminalPollMs: 5,
+    workspaceEntries: localActionWorkspaceEntries,
+    taskStatus: (executionRef) => readTaskStatus(db, executionRef),
+    // The environment binding projects the outcome and polls for the terminal status over these two read models.
+    executionOutcome: (executionRef) => getExecutionOutcome(env.outcomes, executionRef),
+    awaitTerminal: (executionRef, pollMs) =>
+      watchTaskTerminal(env.statusProjection, executionRef, { pollMs }),
   }
   return { env, launches, cancels }
 }
@@ -553,7 +567,7 @@ test('源码锁：三个组合根接上同一对 launcher 与终态观察者；�
       join(root, 'modules', 'task-execution', 'composition', file),
       'utf8',
     )
-    expect(source).toContain("from './actionExecutionRunners'")
+    expect(source).toContain("from '../application/actionExecutionRunners'")
     expect(source).toContain("from './actionExecutionEnvironment'")
     // 薄壳：不再各自持有 startTask / cancelTask / 校验 / 快照合成——那些只在 actionExecutionRunners.ts。
     expect(source).not.toContain('startTask(')

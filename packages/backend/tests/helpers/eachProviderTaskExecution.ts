@@ -81,7 +81,7 @@ import type { TaskDriveRuntimeOptions } from '@/modules/task-execution/applicati
 import { borrowedPostgresqlWorkspace } from '@/modules/task-execution/composition/actionExecutionEnvironment'
 import { createRootTaskLaunchKernel } from '@/modules/task-execution/infrastructure/taskRouteLaunchOperations'
 import { createTestHostTaskLaunchKernel } from './hostTaskLaunchKernel'
-import type { ActionExecutionEnvironment } from '@/modules/task-execution/composition/actionExecutionRunners'
+import type { ActionExecutionEnvironment } from '@/modules/task-execution/application/ports/actionExecution'
 import { composeAgentActionExecution } from '@/modules/task-execution/composition/agentActionExecution'
 import { composeScriptActionExecution } from '@/modules/task-execution/composition/scriptActionExecution'
 import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'

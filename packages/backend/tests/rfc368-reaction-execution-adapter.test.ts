@@ -389,14 +389,15 @@ describe('RFC-368 T7 —— 预分配 taskId 的接线（源码层兜底，端�
   })
 
   test('typed 核心把预分配 id 交给内核；不再按 round 反查去重', () => {
-    const composition = readFileSync(
-      resolve(
-        ROOT,
-        'packages/backend/src/modules/task-execution/composition/digitalEmployeeExecution.ts',
-      ),
-      'utf8',
-    )
-    expect(composition).toContain('preallocatedTaskId: taskId,')
+    // RFC-415: the core (application) hands the id to `launchHost`; the composition binding passes it to the kernel.
+    const composition = [
+      'packages/backend/src/modules/task-execution/composition/digitalEmployeeExecution.ts',
+      'packages/backend/src/modules/task-execution/application/digitalEmployeeExecution.ts',
+    ]
+      .map((path) => readFileSync(resolve(ROOT, path), 'utf8'))
+      .join('\n')
+    expect(composition).toContain('preallocatedTaskId: request.taskId,')
+    expect(composition).toContain('const launched = await ports.launchHost({\n      taskId,')
     // 执行身份在 admission 事务里预分配、重放按 id 命中；旧路径那套按 round 推断活性的
     // 兜底（E9-C 前置小修）随旧合同删除，不得回来。
     expect(composition).not.toContain('dedupeByRound')

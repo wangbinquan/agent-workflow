@@ -18,7 +18,16 @@ import type {
   TaskRouteWorkspaceParticipant,
 } from '../infrastructure/taskRouteLaunchOperations'
 import type { TaskExecutionReadModels } from '../public/types'
-import type { ActionExecutionEnvironment, ActionHostTaskLaunch } from './actionExecutionRunners'
+import type {
+  ActionExecutionEnvironment,
+  ActionHostTaskLaunch,
+} from '../application/ports/actionExecution'
+// RFC-415: the deployment profile selects a workspace's entry check through this composition export.
+export type { ActionWorkspaceEntries } from '../application/ports/actionExecution'
+import { localActionWorkspaceEntries } from '../infrastructure/local/localActionWorkspaceEntries'
+import { readTaskStatus } from '../infrastructure/taskExecutionTaskReads'
+import { watchTaskTerminal } from '@/services/execution/executionWatch'
+import { getExecutionOutcome } from '@/services/execution/outcome'
 
 /**
  * 借用工作区的 PostgreSQL 租约：目录属于调用方（development-automation / 数字员工），任务只借用它，
@@ -142,6 +151,13 @@ export function createActionExecutionEnvironment(
     },
     ...(deps.onTerminal === undefined ? {} : { onTerminal: deps.onTerminal }),
     ...(deps.terminalPollMs === undefined ? {} : { terminalPollMs: deps.terminalPollMs }),
-    ...(deps.workspaceEntries === undefined ? {} : { workspaceEntries: deps.workspaceEntries }),
+    // RFC-415: the runners read the task status and check workspace entries through these two ports; a standalone
+    // daemon checks its own filesystem unless the deployment selected its workspace implementation's entries.
+    workspaceEntries: deps.workspaceEntries ?? localActionWorkspaceEntries,
+    taskStatus: (executionRef: string) => readTaskStatus(deps.db, executionRef),
+    executionOutcome: (executionRef: string) =>
+      getExecutionOutcome(deps.readModels.executionOutcome, executionRef),
+    awaitTerminal: (executionRef: string, pollMs: number) =>
+      watchTaskTerminal(deps.readModels.statusProjection, executionRef, { pollMs }),
   })
 }

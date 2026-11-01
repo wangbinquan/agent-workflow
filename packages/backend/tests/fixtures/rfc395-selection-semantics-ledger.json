@@ -134,8 +134,8 @@
       "whyFrameless": "旧 fanout provenance 允许历史代际复用。"
     },
     {
-      "site": "src/modules/task-execution/composition/digitalEmployeeExecution.ts#inspectTask:1",
-      "path": "src/modules/task-execution/composition/digitalEmployeeExecution.ts",
+      "site": "src/modules/task-execution/application/digitalEmployeeExecution.ts#inspectTask:1",
+      "path": "src/modules/task-execution/application/digitalEmployeeExecution.ts",
       "symbol": "inspectTask",
       "ordinal": 1,
       "source": "createRunHistorySnapshot( executionRef, outcome.runs.map((run) => ({ ...run, taskId: executionRef })), ).familyHistory( executionRef, { nodeId: DIGITAL_EMPLOYEE_PLAN_AGENT_NODE_ID }, { statusIn: ['done'] }, )",

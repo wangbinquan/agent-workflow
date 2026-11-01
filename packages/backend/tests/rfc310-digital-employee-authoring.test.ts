@@ -3479,6 +3479,7 @@ describeEachProviderHttpApplication(
         expect(prompt).toContain('previous output was rejected: wrong nonce')
         expect(prompt.endsWith('{"frozen":true}')).toBe(true)
 
+        // RFC-415: the execution core moved to task-execution application.
         const executionSource = readFileSync(
           resolve(
             import.meta.dir,
@@ -3486,7 +3487,7 @@ describeEachProviderHttpApplication(
             'src',
             'modules',
             'task-execution',
-            'composition',
+            'application',
             'digitalEmployeeExecution.ts',
           ),
           'utf8',
@@ -3494,9 +3495,25 @@ describeEachProviderHttpApplication(
         // 锁的是「结果按**具名端口**取，不是按硬编码的 `result` 字段」。
         // RFC-396：通过统一任务 outcome 选最终输出节点和最新 settled run，
         // 保留具名端口与 inactive 过滤；中间 Agent 的同名端口不能抢占结果。
+        // RFC-415: the core reaches the shared projection through its `projectOutcome` port, which the composition
+        // binding sets to `projectExecutionOutcome`.
         expect(executionSource).toMatch(
-          /\(await projectExecutionOutcome\(outcome\)\)\.outputs\[\s*DIGITAL_EMPLOYEE_RESULT_PORT\s*\]/u,
+          /\(await ports\.projectOutcome\(outcome\)\)\.outputs\[\s*DIGITAL_EMPLOYEE_RESULT_PORT\s*\]/u,
         )
+        expect(
+          readFileSync(
+            resolve(
+              import.meta.dir,
+              '..',
+              'src',
+              'modules',
+              'task-execution',
+              'composition',
+              'digitalEmployeeExecution.ts',
+            ),
+            'utf8',
+          ),
+        ).toContain('projectOutcome: projectExecutionOutcome,')
         expect(executionSource).toContain('resultPort?.active === false ? null')
         expect(executionSource).not.toContain('outcome.outputs.result')
       })

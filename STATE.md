@@ -1,3 +1,16 @@
+## 2026-11-01 RFC-415 task-execution 数字员工执行核心与动作执行运行器迁入 application（In Progress；`design/RFC-415-task-execution-digital-employee-action-application/`）
+
+- **来由**：RFC-294 S6 退出门「task-execution `composition/` 只剩装配」的第三步；用户授权同 RFC-402，本会话调研、设计、实施与集中验证，不派 Codex。
+- **范围**：数字员工 Reaction 执行核心迁入 `application/digitalEmployeeExecution.ts`，经自有端口执行，宿主任务启动收为窄端口 `launchHost`
+  （到根启动内核请求的映射留在 composition 绑定 `launchDigitalEmployeeHost`），执行结果投影经 `projectOutcome`；agent / script 动作执行器迁入
+  `application/actionExecutionRunners.ts`，状态读 / 执行结果读 / 终态观察 / 工作区入口检查经环境端口；`composition/actionExecutionRunners.ts`
+  与死的再导出 `services/taskPlatformInputPaths.ts` 删除，RFC-317 R2 账本不增边。纯结构重构。
+- **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。
+- **进度**：T1～T5 完成，随实现提交入库，待 exact SHA 的 CI（AC-5）。集中验证 402 + 402 + 237 + 2 个文件：本 RFC 引入的 3 个守卫失败（R2 账本、
+  RFC-310 OS 架构清单、RFC-376 不可达文件）已修，其余负载超时在候选与基线上同样通过；P0 变异 lane 通过（34 个阶段、源文件指纹不变）。详见 plan
+  「集中验证（T5）」。同提交记录 RFC-414 的 CI 归因（`7bcab1997` 分片 2/44 的结构锁超时已由 `c4b025f4c` 修复）。
+- **后继**：composition 里仍属应用逻辑的托管代理调用准备（`crewstationAgentInvocation.ts`）与 provider 后台循环（`providerBackground.ts`）另立 RFC。
+
 ## 2026-11-01 RFC-414 task-execution composition 不再直接读写数据库、文件系统与 git（In Progress；`design/RFC-414-task-execution-composition-io-out/`）
 
 - **来由**：RFC-294 S6 退出门「task-execution `composition/` 只剩装配」的第二步；用户授权同 RFC-402，本会话调研、设计、实施与集中验证，不派 Codex。

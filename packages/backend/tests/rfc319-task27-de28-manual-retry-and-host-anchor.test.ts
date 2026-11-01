@@ -175,13 +175,13 @@ describeEachProvider('RFC-319 DE-28 / RFC-395 II-a A2 — hostless employee revi
 
 describe('RFC-319 DE-28 —— 主体投影替代播种，中立应用图与 SQLite 测试根共用', () => {
   test('执行合一的那份实现传入数字员工主体，禁止恢复播种', () => {
-    const composer = readFileSync(
-      resolve(
-        ROOT,
-        'packages/backend/src/modules/task-execution/composition/digitalEmployeeExecution.ts',
-      ),
-      'utf-8',
-    )
+    // RFC-415: the execution core is task-execution application; the launch binding stays in composition.
+    const composer = [
+      'packages/backend/src/modules/task-execution/composition/digitalEmployeeExecution.ts',
+      'packages/backend/src/modules/task-execution/application/digitalEmployeeExecution.ts',
+    ]
+      .map((path) => readFileSync(resolve(ROOT, path), 'utf-8'))
+      .join('\n')
     expect(composer).not.toContain('hostWorkflow')
     expect(composer).toContain("subject: { kind: 'digital-employee', sourceId: null }")
     const review = readFileSync(
@@ -207,13 +207,13 @@ describe('RFC-319 DE-28 —— 主体投影替代播种，中立应用图与 SQL
     expect(bundle).toContain('composeReactionExecutionProvider({')
     expect(bundle).not.toContain('hostWorkflow:')
     // 共享执行工厂确实经启动内核提交数字员工主体，不再播种宿主目录行。
-    const composer = readFileSync(
-      resolve(
-        ROOT,
-        'packages/backend/src/modules/task-execution/composition/digitalEmployeeExecution.ts',
-      ),
-      'utf-8',
-    )
+    // RFC-415: the execution core is task-execution application; the launch binding stays in composition.
+    const composer = [
+      'packages/backend/src/modules/task-execution/composition/digitalEmployeeExecution.ts',
+      'packages/backend/src/modules/task-execution/application/digitalEmployeeExecution.ts',
+    ]
+      .map((path) => readFileSync(resolve(ROOT, path), 'utf-8'))
+      .join('\n')
     expect(composer).not.toContain('hostWorkflow:')
     expect(composer).toContain('const launched = await deps.launch.launch({')
     expect(composer).toContain('      subject,')

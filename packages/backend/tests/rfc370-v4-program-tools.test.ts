@@ -183,12 +183,18 @@ test('the task-image command runs the program on the image interpreter inside th
 }, 30_000)
 
 test('every daemon root reads program tools from the selected store', () => {
-  const core = readFileSync(
+  // RFC-415: the core is task-execution application; the composition binding selects its program source.
+  const binding = readFileSync(
     join(import.meta.dir, '../src/modules/task-execution/composition/digitalEmployeeExecution.ts'),
     'utf8',
   )
-  expect(core).toContain('deps.programs ?? createFileProgramToolSource(deps.appHome)')
-  expect(core).not.toContain('readFileSync')
+  const core = readFileSync(
+    join(import.meta.dir, '../src/modules/task-execution/application/digitalEmployeeExecution.ts'),
+    'utf8',
+  )
+  expect(binding).toContain('programs: programs ?? createFileProgramToolSource(appHome),')
+  expect(core).toContain('await ports.programs.read(implementation)')
+  expect(`${binding}\n${core}`).not.toContain('readFileSync')
   const postgresql = readFileSync(
     join(import.meta.dir, '../src/bootstrap/daemonModules/digitalEmployee.ts'),
     'utf8',

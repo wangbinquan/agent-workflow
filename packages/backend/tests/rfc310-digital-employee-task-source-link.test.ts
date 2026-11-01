@@ -54,18 +54,24 @@ describe('RFC-310 digital employee task source link', () => {
   })
 
   test('both workflow and synthesized-host launch paths freeze the Case on the task row', () => {
-    const execution = readFileSync(
-      resolve(
-        import.meta.dirname,
-        '..',
-        'src',
-        'modules',
-        'task-execution',
-        'composition',
-        'digitalEmployeeExecution.ts',
-      ),
-      'utf8',
-    )
+    // RFC-415: the core (application) builds the launch request; the composition binding puts it on the kernel's
+    // `internal` facts.
+    const execution = ['composition', 'application']
+      .map((layer) =>
+        readFileSync(
+          resolve(
+            import.meta.dirname,
+            '..',
+            'src',
+            'modules',
+            'task-execution',
+            layer,
+            'digitalEmployeeExecution.ts',
+          ),
+          'utf8',
+        ),
+      )
+      .join('\n')
     const launchKernel = readFileSync(
       resolve(
         import.meta.dirname,
@@ -83,7 +89,8 @@ describe('RFC-310 digital employee task source link', () => {
     expect(execution.match(/caseId: plan\.caseRef\.id/g)).toHaveLength(1)
     // 那一处必须确实挂在启动内核的 `internal` 上，而不是飘在别处。
     expect(execution).toContain('digitalEmployeeLaunch: {')
-    expect(execution).toContain('actionRunId: plan.roundRef,')
+    expect(execution).toContain('roundRef: plan.roundRef,')
+    expect(execution).toContain('actionRunId: request.roundRef,')
     expect(launchKernel).toContain(
       'digitalEmployeeCaseId: input.internal?.digitalEmployeeLaunch?.caseId ?? null',
     )
