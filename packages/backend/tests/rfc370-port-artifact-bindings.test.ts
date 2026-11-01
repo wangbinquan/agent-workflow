@@ -513,18 +513,23 @@ test('every actual runNode launch site binds the same artifact operations as its
   expect(mergeCalls[0]!.arguments[0]!.getText(merge)).toBe('state.opts.taskAgentRuns')
 })
 
-test('both real fanout shard and aggregator runNode sites retain the same selected artifact operations', () => {
-  const sf = source('modules/task-execution/composition/wrapperMechanics.ts'),
-    found = calls(sf, sf, 'runNode')
-  expect(found).toHaveLength(2)
-  expect(found.map((call) => objectFields(call.arguments[1]!, sf).get('nodeRunId'))).toEqual([
-    'shardRunId',
-    'aggRunId',
-  ])
-  expect(found.map((call) => call.arguments[0]!.getText(sf))).toEqual([
-    'opts.taskAgentRuns',
-    'opts.taskAgentRuns',
-  ])
+test('both real fanout shard and aggregator launch sites retain the same selected artifact operations', () => {
+  // RFC-407: the two lines moved to engine/node/agent-single/ and launch through the agent ports'
+  // `runtime.runAgent`, which the binding sends to `runTaskAgentWithFamily(opts.taskAgentRuns, …)`
+  // (asserted above) — the same selected family the former direct `runNode(opts.taskAgentRuns, …)` used.
+  for (const [path, runId] of [
+    ['modules/task-execution/engine/node/agent-single/runFanoutShard.ts', 'shardRunId'],
+    ['modules/task-execution/engine/node/agent-single/runFanoutAggregator.ts', 'aggRunId'],
+  ] as const) {
+    const sf = source(path),
+      found = calls(sf, sf, 'ports.runtime.runAgent')
+    expect(found, path).toHaveLength(1)
+    expect(objectFields(found[0]!.arguments[0]!, sf).get('nodeRunId'), path).toBe(runId)
+    expect(calls(sf, sf, 'runTaskAgentWithFamily'), path).toHaveLength(0)
+  }
+  const wrapper = source('modules/task-execution/composition/wrapperMechanics.ts')
+  expect(calls(wrapper, wrapper, 'runNode')).toHaveLength(0)
+  expect(calls(wrapper, wrapper, 'runTaskAgentWithFamily')).toHaveLength(0)
 })
 
 // RFC-370 binds the original selected artifact receiver once into the complete

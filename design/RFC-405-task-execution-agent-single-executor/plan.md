@@ -81,6 +81,12 @@
   3 个分片因此取消，慢的是 RFC-395 的几份重测试（`rfc395-production-source-manifest` 在两次 run 里都约 260 s）加上 RFC-398 新增的发布版矩阵文件
   （每份约 50 s），与本 RFC 无关。两个被取消分片里没跑到的 17 个文件（按 bun 的步进分片从排序后的文件表算出），除 RFC-398 自己的 3 个外，
   在 RFC-406 的集中验证里本机复跑全部通过（工作树含 RFC-406 的候选，属补充证据）。CI 证据待后继 run 补齐，AC-6 暂不关。
+- **定时 postgresql-evidence `41298472643`（跑在 `81168e759` 上）红**：PG 维护作业全部停在 pending，300 s 无推进。本机以 git archive 导出各提交、
+  编出 e2e 二进制，按 small 规模跑同一 harness 二分：`228dd9d28`、`c8e9572e1`、`950f5900b`（RFC-399）、`da5ad65b8`（RFC-402）、`d7b6334a5`
+  （含 RFC-403）通过，`cc81d09c4`（并发 RFC-398）与 `81168e759` 失败；daemon 日志为维护 Worker 初始化帧被拒
+  （`unrecognized_keys: ["databaseName"]`，路径 `database`）。该键由 `cc81d09c4` 加进共享的 PostgreSQL 配置 schema，迁移后的指针派生配置总会带上
+  （`packages/backend/src/platform/persistence/databaseProviderRuntime.ts:111`），而 PG 维护 Worker 的 init 帧 schema 是 strict 的
+  （`packages/backend/src/platform/background/maintenanceProtocol.ts:36-45`）。归 RFC-398，与本 RFC 无关；证据已留，未代改。
 
 ## 验收清单
 

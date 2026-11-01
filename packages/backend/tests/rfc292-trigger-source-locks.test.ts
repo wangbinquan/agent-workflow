@@ -1,4 +1,6 @@
 import {
+  FANOUT_AGGREGATOR_SOURCE,
+  FANOUT_SHARD_SOURCE,
   AGENT_BINDING_SOURCE,
   AGENT_NODE_SOURCE,
   LEAF_NODE_SOURCES,
@@ -58,6 +60,8 @@ describe('RFC-292 trigger namespace source locks', () => {
     const source = [
       ...LEAF_NODE_SOURCES,
       readFileSync(resolve(BACKEND_SRC, 'services/scheduler.ts'), 'utf8'),
+      // RFC-407: LEAF_NODE_SOURCES already carries the fan-out lines; read the wrapper file alone so
+      // they are not counted twice.
       readFileSync(
         resolve(BACKEND_SRC, 'modules', 'task-execution', 'composition', 'wrapperMechanics.ts'),
         'utf8',
@@ -87,9 +91,13 @@ describe('RFC-292 trigger namespace source locks', () => {
     )
     // RFC-345 T4a freezes the resolved agent inside the injection snapshot;
     // both wrapper arms must pass that exact snapshot value to the runtime.
+    // RFC-407: the fan-out shard / aggregator lines (engine/node/agent-single/) read the context
+    // through the same task facts as the agent body (the binding getter asserted above).
     expect(
-      source.match(/agent: injection\.spec\.agent,\n\s+triggerContext: state\.triggerContext/g),
+      source.match(/agent: injection\.spec\.agent,\n\s+triggerContext: task\.triggerContext/g),
     ).toHaveLength(2)
+    expect(FANOUT_SHARD_SOURCE).toMatch(/const \{ task, [^}]*\} = ports\n/)
+    expect(FANOUT_AGGREGATOR_SOURCE).toMatch(/const \{ task, [^}]*\} = ports\n/)
     expect(CODE_HOST_NODE_SOURCE).toContain(
       'ctx: { ports: upstreamInputs, triggerContext: task.triggerContext }',
     )

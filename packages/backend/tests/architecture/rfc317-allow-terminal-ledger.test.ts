@@ -46,10 +46,18 @@ interface AllowTerminalLedgerEntry {
  */
 const ALLOW_TERMINAL_LEDGER: readonly AllowTerminalLedgerEntry[] = [
   {
-    file: 'packages/backend/src/modules/task-execution/composition/wrapperMechanics.ts',
-    count: 2,
+    // RFC-407 把 fanout 分片 / 聚合两条装配线从 wrapperMechanics.ts 迁到 engine/node/agent-single/
+    // （wrapperMechanics 2 → 0，两个新 owner 各 1），全仓总数不变。
+    file: 'packages/backend/src/modules/task-execution/engine/node/agent-single/runFanoutShard.ts',
+    count: 1,
     rewrites:
-      '2 处 *→pending 的 fanout shard/aggregator 同代残留重跑（allowedFrom 含 interrupted/failed/canceled）。',
+      '*→pending 的 fanout shard 同代残留重跑（allowedFrom 含 interrupted/failed/canceled）。',
+  },
+  {
+    file: 'packages/backend/src/modules/task-execution/engine/node/agent-single/runFanoutAggregator.ts',
+    count: 1,
+    rewrites:
+      '*→pending 的 fanout aggregator 同代残留重跑（allowedFrom 含 interrupted/failed/canceled）。',
   },
   {
     file: 'packages/backend/src/modules/task-execution/composition/wrapperRunLifecycle.ts',

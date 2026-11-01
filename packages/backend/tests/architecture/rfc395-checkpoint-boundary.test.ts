@@ -52,6 +52,10 @@ test('node-run ports expose checkpoints and keep merge state / isolation root at
 const AGENT_EXECUTOR_FILES = [
   'engine/node/agent-single/runAgentSingleNode.ts',
   'engine/node/agent-single/runWorkgroupHost.ts',
+  // RFC-407: the fan-out shard / aggregator lines and their attempt port left wrapperMechanics.ts.
+  'engine/node/agent-single/runFanoutShard.ts',
+  'engine/node/agent-single/runFanoutAggregator.ts',
+  'engine/node/agent-single/fanoutAttempts.ts',
   'composition/agentNodeExecution.ts',
   'application/agentRunHistory.ts',
 ]

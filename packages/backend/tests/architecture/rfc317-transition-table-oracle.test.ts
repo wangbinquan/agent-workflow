@@ -257,7 +257,8 @@ interface OffTableDeviation {
 
 /**
  * 开账当天（RFC-317 T47）的真实偏离：23 处；provider cutover 把四个
- * TaskExecution composition 写点收进 owner participants 后，当前为 15 处。
+ * TaskExecution composition 写点收进 owner participants 后为 15 处；RFC-407 把 fanout 那一处随
+ * 分片 / 聚合两条装配线拆到两个文件（16 处，表外边集合不变）。
  *
  * **全部集中在一件事上**：终态改写。它们与 `allowTerminal` 账本
  * （`rfc317-allow-terminal-ledger.test.ts`）高度重合，这不是巧合——转移表说
@@ -271,9 +272,14 @@ interface OffTableDeviation {
  */
 const OFF_TABLE_DEVIATIONS: readonly OffTableDeviation[] = [
   {
-    site: 'modules/task-execution/composition/wrapperMechanics.ts:pending',
+    site: 'modules/task-execution/engine/node/agent-single/runFanoutShard.ts:pending',
     offTable: ['canceled', 'failed', 'interrupted', 'pending', 'running'],
-    why: 'RFC-402 将 shard / aggregator 的原 nodeRuns.set 调用接到具名 ledger 后显式可见：同一 wrapper generation 的残留行原地回到 pending 再次执行，原先已有这五个 allowedFrom 与 allowTerminal: true。这里只登记原恢复路径，不增加可恢复状态。',
+    why: 'RFC-402 将 shard 的原 nodeRuns.set 调用接到具名 ledger 后显式可见：同一 wrapper generation 的残留分片行原地回到 pending 再次执行，原先已有这五个 allowedFrom 与 allowTerminal: true。这里只登记原恢复路径，不增加可恢复状态。RFC-407 只把它随分片装配线从 wrapperMechanics.ts 迁到 engine/node/agent-single/。',
+  },
+  {
+    site: 'modules/task-execution/engine/node/agent-single/runFanoutAggregator.ts:pending',
+    offTable: ['canceled', 'failed', 'interrupted', 'pending', 'running'],
+    why: 'RFC-402 将 aggregator 的原 nodeRuns.set 调用接到具名 ledger 后显式可见：同一 wrapper generation 的残留聚合行原地回到 pending 再次执行，原先已有这五个 allowedFrom 与 allowTerminal: true。RFC-407 只把它随聚合装配线从 wrapperMechanics.ts 迁到 engine/node/agent-single/。',
   },
   {
     site: 'modules/task-execution/engine/node/agent-single/runWorkgroupHost.ts:failed',

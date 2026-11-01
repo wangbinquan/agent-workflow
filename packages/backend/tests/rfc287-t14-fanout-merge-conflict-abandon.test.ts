@@ -1,4 +1,9 @@
-import { WORKGROUP_HOST_SOURCE } from './helpers/executionMechanismSources'
+import {
+  AGENT_BINDING_SOURCE,
+  FANOUT_AGGREGATOR_SOURCE,
+  FANOUT_SHARD_SOURCE,
+  WORKGROUP_HOST_SOURCE,
+} from './helpers/executionMechanismSources'
 // RFC-287 T14 —— fanout 两条线（分片 L5 / 聚合 L6）撞不可解冲突时也必须 abandon。
 //
 // 这是 RFC-187 T8 那个 bug 的**同一份**，只是当年只给工作组主机线修了：
@@ -17,32 +22,20 @@ import { WORKGROUP_HOST_SOURCE } from './helpers/executionMechanismSources'
 // 先例：这份 delta 是真的被丢弃了，状态就该如实说 abandoned。
 
 import { describe, expect, test } from 'bun:test'
-import { readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
 import { allowedFromForMergeEvent, targetForMergeEvent } from '@agent-workflow/shared'
 
-const WRAPPER_MECHANICS = readFileSync(
-  resolve(
-    import.meta.dir,
-    '..',
-    'src',
-    'modules',
-    'task-execution',
-    'composition',
-    'wrapperMechanics.ts',
-  ),
-  'utf8',
-)
+// RFC-407: both fan-out lines left wrapperMechanics.ts for engine/node/agent-single/.
+const FANOUT_LINES = `${FANOUT_SHARD_SOURCE}\n${FANOUT_AGGREGATOR_SOURCE}`
 // RFC-406: nodeMechanics.ts is gone; its last body (the workgroup host) is WORKGROUP_HOST_SOURCE.
 
 /** 截出一段 `disposition: {` 声明块——按缩进配平，避免跨到兄弟线上去。 */
 function dispositionAfter(anchor: string): string {
-  const at = WRAPPER_MECHANICS.indexOf(anchor)
+  const at = FANOUT_LINES.indexOf(anchor)
   expect(at).toBeGreaterThan(0)
-  const declAt = WRAPPER_MECHANICS.indexOf('disposition: {', at)
+  const declAt = FANOUT_LINES.indexOf('disposition: {', at)
   expect(declAt).toBeGreaterThan(at)
   // 到下一个同级 `},\n` 收尾即可——射程给足但不跨函数。
-  return WRAPPER_MECHANICS.slice(declAt, declAt + 2400)
+  return FANOUT_LINES.slice(declAt, declAt + 2400)
 }
 
 describe('RFC-287 T14 — fanout 撞冲突必须落 abandon（既存缺陷，用户拍板本 RFC 内补）', () => {
@@ -58,8 +51,9 @@ describe('RFC-287 T14 — fanout 撞冲突必须落 abandon（既存缺陷，用
     // abandon 的落库会与骨架随后的 iso discard 竞争——而这条 finding 的要害恰恰
     // 是「库里留下一句没人兑现的承诺」，落库时序就是全部。只锁三个片段依次出现的
     // 话，`void` 版本照样全绿。
+    // RFC-407: the line abandons through its workspace port; the binding writes the event (below).
     expect(decl).toMatch(
-      /onConflictHuman:[\s\S]{0,800}await state\.opts\.persistence\.mergeStates\.tryTransition\(\{[\s\S]{0,300}fanout-shard-merge-conflict-unresolved[\s\S]{0,400}merge-back-conflict/,
+      /onConflictHuman:[\s\S]{0,800}await workspace\.abandonMerge\(shardRunId, 'fanout-shard-merge-conflict-unresolved'\)[\s\S]{0,400}merge-back-conflict/,
     )
   })
 
@@ -70,8 +64,17 @@ describe('RFC-287 T14 — fanout 撞冲突必须落 abandon（既存缺陷，用
     // 是「库里留下一句没人兑现的承诺」，落库时序就是全部。只锁三个片段依次出现的
     // 话，`void` 版本照样全绿。
     expect(decl).toMatch(
-      /onConflictHuman:[\s\S]{0,800}await state\.opts\.persistence\.mergeStates\.tryTransition\(\{[\s\S]{0,300}fanout-agg-merge-conflict-unresolved[\s\S]{0,400}merge-back-conflict/,
+      /onConflictHuman:[\s\S]{0,800}await workspace\.abandonMerge\(aggRunId, 'fanout-agg-merge-conflict-unresolved'\)[\s\S]{0,400}merge-back-conflict/,
     )
+  })
+
+  test('RFC-407: the workspace port abandon is the awaited merge-state transition itself', () => {
+    // The lines await the port's promise, so the binding must hand back the transition's own promise
+    // (no fire-and-forget wrapper) with the abandon event carrying the line's reason slug.
+    expect(AGENT_BINDING_SOURCE).toMatch(
+      /abandonMerge: \(nodeRunId, reason\) =>\s*state\.opts\.persistence\.mergeStates\.tryTransition\(\{\s*nodeRunId,\s*event: \{ kind: 'abandon', reason \},/,
+    )
+    expect(AGENT_BINDING_SOURCE).not.toMatch(/abandonMerge: \(nodeRunId, reason\) =>\s*\{?\s*void /)
   })
 
   // abandon 的**理由**正是「树留不住」。若哪天有人把这条路径改成 keep: true（真的
@@ -92,8 +95,8 @@ describe('RFC-287 T14 — fanout 撞冲突必须落 abandon（既存缺陷，用
   test('三条 keep:false 的线都各有自己的 abandon 理由 slug', () => {
     for (const [reason, owner] of [
       ['wg-merge-conflict-unresolved', WORKGROUP_HOST_SOURCE],
-      ['fanout-shard-merge-conflict-unresolved', WRAPPER_MECHANICS],
-      ['fanout-agg-merge-conflict-unresolved', WRAPPER_MECHANICS],
+      ['fanout-shard-merge-conflict-unresolved', FANOUT_SHARD_SOURCE],
+      ['fanout-agg-merge-conflict-unresolved', FANOUT_AGGREGATOR_SOURCE],
     ] as const) {
       expect(owner, reason).toContain(reason)
     }

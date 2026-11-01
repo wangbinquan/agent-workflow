@@ -1,4 +1,9 @@
-import { AGENT_NODE_SOURCE, LEAF_NODE_SOURCES } from './helpers/executionMechanismSources'
+import {
+  FANOUT_AGGREGATOR_SOURCE,
+  FANOUT_SHARD_SOURCE,
+  AGENT_NODE_SOURCE,
+  LEAF_NODE_SOURCES,
+} from './helpers/executionMechanismSources'
 import { createTestIsolationBinding } from './helpers/executionKernel'
 import { bindIsolationCleanup } from '@/modules/task-execution/infrastructure/executionKernelBinding'
 import { composeHumanGateOpenParticipantFactory } from '@/modules/collaboration/composition'
@@ -403,6 +408,9 @@ describe('RFC-188 D — 装配单源锁（表级 allowlist）', () => {
       expect(scriptBody.split(`ports.workspace.${method}`).length - 1).toBe(1)
       // RFC-405: the agent body likewise reaches each primitive once through its workspace port.
       expect(AGENT_NODE_SOURCE.split(`workspace.${method}`).length - 1).toBe(1)
+      // RFC-407: so do the fan-out shard / aggregator lines (counted above via LEAF_NODE_SOURCES).
+      expect(FANOUT_SHARD_SOURCE.split(`workspace.${method}`).length - 1).toBe(1)
+      expect(FANOUT_AGGREGATOR_SOURCE.split(`workspace.${method}`).length - 1).toBe(1)
     }
   })
 })

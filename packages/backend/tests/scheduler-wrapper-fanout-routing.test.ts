@@ -1,3 +1,9 @@
+import {
+  AGENT_BINDING_SOURCE,
+  FANOUT_SHARD_SOURCE,
+  FANOUT_AGGREGATOR_SOURCE,
+  WRAPPER_MECHANICS_SOURCE,
+} from './helpers/executionMechanismSources'
 import { readTaskAgentSources } from './helpers/taskAgentSource'
 // RFC-060 PR-D — wrapper-fanout runtime routing locks.
 //
@@ -23,18 +29,9 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, test } from 'bun:test'
 
-const wrapperMechanicsSrc = readFileSync(
-  resolve(
-    import.meta.dirname,
-    '..',
-    'src',
-    'modules',
-    'task-execution',
-    'composition',
-    'wrapperMechanics.ts',
-  ),
-  'utf8',
-)
+// RFC-407: the fan-out shard / aggregator lines left wrapperMechanics.ts for
+// engine/node/agent-single/; the composite keeps the old wrapper text for presence / absence checks.
+const wrapperMechanicsSrc = WRAPPER_MECHANICS_SOURCE
 const runnerSrc = readTaskAgentSources()
 const taskEngineApplicationSrc = readFileSync(
   resolve(
@@ -179,7 +176,7 @@ describe('D.T2 — scheduler accepts wrapper-fanout kind', () => {
 
 describe('D.T3 — aggregator dispatch helper exists + collects per-shard raw lists', () => {
   test('dispatchFanoutAggregator function defined', () => {
-    expect(wrapperMechanicsSrc).toContain('async function dispatchFanoutAggregator(')
+    expect(FANOUT_AGGREGATOR_SOURCE).toContain('export async function dispatchFanoutAggregator(')
   })
 
   test('aggregator collects inner runs anchored on non-null parent + iteration (RFC-098 B3 relaxed anchor)', () => {
@@ -189,20 +186,23 @@ describe('D.T3 — aggregator dispatch helper exists + collects per-shard raw li
     // generation's replayed done children; per-row picking moved to the shared
     // done-only picker (pickReusableShardRun). The child rows stay
     // frontier-invisible because parent is still non-null.
-    expect(wrapperMechanicsSrc).toContain('iteration,')
-    expect(wrapperMechanicsSrc).toContain('childOnly: true')
-    expect(wrapperMechanicsSrc).toMatch(/state\.opts\.persistence\.selection\.shardSet\(/)
+    expect(FANOUT_AGGREGATOR_SOURCE).toContain('iteration,')
+    expect(FANOUT_AGGREGATOR_SOURCE).toContain('childOnly: true')
+    expect(FANOUT_AGGREGATOR_SOURCE).toMatch(/ledger\.shardSet\(/)
+    expect(AGENT_BINDING_SOURCE).toContain(
+      'shardSet: (taskId, wrapper) => state.opts.persistence.selection.shardSet(taskId, wrapper),',
+    )
   })
 
   test('aggregator iterates shards in shardKey dictionary order', () => {
-    expect(wrapperMechanicsSrc).toMatch(/sortedShards = \[\.\.\.shards\]\.sort/)
-    expect(wrapperMechanicsSrc).toMatch(/\.localeCompare\(/)
+    expect(FANOUT_AGGREGATOR_SOURCE).toMatch(/sortedShards = \[\.\.\.shards\]\.sort/)
+    expect(FANOUT_AGGREGATOR_SOURCE).toMatch(/\.localeCompare\(/)
   })
 
   test('aggregator emits raw lists as `### <shardKey>` delimited blocks', () => {
     // The PR-D minimum format documented in dispatchFanoutAggregator's
     // doc-comment: each per-shard output is prefixed with `### shardKey`.
-    expect(wrapperMechanicsSrc).toMatch(/### \$\{s\.shardKey\}/)
+    expect(FANOUT_AGGREGATOR_SOURCE).toMatch(/### \$\{s\.shardKey\}/)
   })
 
   test('aggregator renames outputs via outputWrapperPortNames into wrapper outlets', () => {
@@ -253,8 +253,8 @@ describe('D.T7 — signal port in prompt runtime check', () => {
   })
 
   test('wrapper dispatchFanoutShard builds inputPortKinds from boundaryEdges', () => {
-    expect(wrapperMechanicsSrc).toContain('const inputPortKinds: Record<string, string> = {}')
-    expect(wrapperMechanicsSrc).toMatch(/inputPortKinds\[e\.target\.portName\]/)
+    expect(FANOUT_SHARD_SOURCE).toContain('const inputPortKinds: Record<string, string> = {}')
+    expect(FANOUT_SHARD_SOURCE).toMatch(/inputPortKinds\[e\.target\.portName\]/)
   })
 })
 

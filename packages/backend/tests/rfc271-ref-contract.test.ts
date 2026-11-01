@@ -39,7 +39,11 @@ import {
   VALIDATE_CALL_POLICY,
   type RefCallPolicy,
 } from '@agent-workflow/shared'
-import { AGENT_MECHANICS_SOURCE, AGENT_BINDING_SOURCE } from './helpers/executionMechanismSources'
+import {
+  WRAPPER_MECHANICS_SOURCE,
+  AGENT_MECHANICS_SOURCE,
+  AGENT_BINDING_SOURCE,
+} from './helpers/executionMechanismSources'
 
 const SRC = (...p: string[]) => join(import.meta.dir, '..', 'src', ...p)
 
@@ -50,10 +54,8 @@ const stripComments = (src: string): string =>
     .split('\n')
     .filter((l) => !l.trimStart().startsWith('//'))
     .join('\n')
-const wrapperMechanics = readFileSync(
-  SRC('modules', 'task-execution', 'composition', 'wrapperMechanics.ts'),
-  'utf8',
-)
+// RFC-407: the composite keeps the fan-out lines (now in engine/node/agent-single/) in these scans.
+const wrapperMechanics = WRAPPER_MECHANICS_SOURCE
 const fanoutStrategy = readFileSync(
   SRC('modules', 'task-execution', 'engine', 'wrapper', 'fanoutStrategy.ts'),
   'utf8',

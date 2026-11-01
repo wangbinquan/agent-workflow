@@ -192,7 +192,18 @@ describe('RFC-282 B2 / RFC-345 T4a — all six TaskExecution entries use one res
     expect(text).not.toContain('await resolveInjection(')
     // RFC-354 (schema v6): the sixth read resolves a fan-out shard source's
     // declared output kind from its agent (`sourcePortKindOf`).
-    expect(text.split('taskExecutionResources.injection(').length - 1).toBe(6)
+    // RFC-407: the fan-out shard / aggregator reads moved with their lines into
+    // engine/node/agent-single/ and, like the agent body, go through the agent binding's one
+    // `resources.injection` delegate; the source-port kind read (`sourcePortKindOf`) moved into the
+    // binding too — four literal reads, three port readers, still six entries.
+    const literalReads = text.split('taskExecutionResources.injection(').length - 1
+    const bindingReaders = text.split('ports.resources.injection(').length - 1
+    expect(literalReads).toBe(4)
+    expect(bindingReaders).toBe(3)
+    expect(AGENT_BINDING_SOURCE).toContain(
+      'injection: (agentId) => state.taskExecutionResources.injection(agentId),',
+    )
+    expect(literalReads - 1 + bindingReaders).toBe(6)
     expect(text.split('resolveSyntheticTaskAgentInjection(').length - 1).toBe(3)
     // the commit-push / merge bypass shape (four hand-written empty arrays)
     expect(text).not.toContain('skills: [],\n          dependents: [],')

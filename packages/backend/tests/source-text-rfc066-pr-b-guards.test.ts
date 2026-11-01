@@ -1,4 +1,10 @@
-import { AGENT_MECHANICS_SOURCE } from './helpers/executionMechanismSources'
+import {
+  FANOUT_AGGREGATOR_SOURCE,
+  FANOUT_SHARD_SOURCE,
+  AGENT_NODE_SOURCE,
+  AGENT_BINDING_SOURCE,
+  AGENT_MECHANICS_SOURCE,
+} from './helpers/executionMechanismSources'
 import { readTaskAgentSources } from './helpers/taskAgentSource'
 // RFC-066 PR-B — source-layer guards locking wrapper mechanics / runner / diff /
 // rollback wiring against silent regressions. Targets:
@@ -73,15 +79,29 @@ describe('RFC-066 PR-B — source guards', () => {
   })
 
   test('PB-G2 scheduler threads `state.repos` into every dispatch (via RFC-130 iso creation)', () => {
-    const executionSource = `${WRAPPER_MECHANICS_SRC}\n${NODE_MECHANICS_SRC}`
+    // RFC-407: the fan-out shard / aggregator dispatch lines left wrapperMechanics.ts for
+    // engine/node/agent-single/.
+    const executionSource = `${WRAPPER_MECHANICS_SRC}\n${FANOUT_SHARD_SOURCE}\n${FANOUT_AGGREGATOR_SOURCE}\n${NODE_MECHANICS_SRC}`
     // RFC-130: the 3 dispatch sites (single-agent, fanout shard, fanout aggregator)
     // no longer pass `state.repos` DIRECTLY into templateMeta — each first builds an
     // ISOLATED worktree from the SchedulerState-owned snapshot
     // (`createNodeIso({ canonRepos: state.repos })`) and then threads the DERIVED iso
     // repos into templateMeta (`<handle>.repos.map(...)`). The snapshot still flows to
     // every dispatch, now through the iso-creation seam. Anchor on both ends.
+    // RFC-405 / RFC-407: the three dispatch lines now build their iso through the agent binding's one
+    // `createIsoUnderLock`, so the snapshot threads at the binding (plus the wrapper iso's own site);
+    // each line is pinned to that port below.
     const canonMatches = executionSource.match(/canonRepos: state\.repos/g) ?? []
-    expect(canonMatches.length).toBeGreaterThanOrEqual(3)
+    expect(canonMatches.length).toBeGreaterThanOrEqual(2)
+    expect(AGENT_BINDING_SOURCE).toMatch(
+      /createIsoUnderLock: \(isoKeyRunId, log\) =>\s*createIsoUnderLock\(\{[\s\S]{0,300}canonRepos: state\.repos,/,
+    )
+    expect(AGENT_NODE_SOURCE).toMatch(/isoHandle = await workspace\.createIsoUnderLock\(/)
+    expect(FANOUT_SHARD_SOURCE).toMatch(/shardIso = await workspace\.createIsoUnderLock\(/)
+    expect(FANOUT_AGGREGATOR_SOURCE).toMatch(/aggIso = await workspace\.createIsoUnderLock\(/)
+    expect(AGENT_NODE_SOURCE).not.toContain('canonRepos:')
+    expect(FANOUT_SHARD_SOURCE).not.toContain('canonRepos:')
+    expect(FANOUT_AGGREGATOR_SOURCE).not.toContain('canonRepos:')
     // RFC-287 T3/T4：两条 fanout 线迁入装配骨架后，句柄在钩子内以局部 `iso` 承接
     // （`const iso = shardIso as IsoHandle`），故变量名不再是 shardIso/aggIso。
     // 本条锁的不变量没变——派发线的 templateMeta 仍**只**来自 iso 句柄派生的 repos，

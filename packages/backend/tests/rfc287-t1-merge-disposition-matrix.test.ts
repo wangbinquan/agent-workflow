@@ -1,4 +1,6 @@
 import {
+  FANOUT_SHARD_SOURCE,
+  FANOUT_AGGREGATOR_SOURCE,
   WORKGROUP_HOST_SOURCE,
   AGENT_NODE_SOURCE,
   SCRIPT_NODE_SOURCE,
@@ -50,6 +52,9 @@ const MECHANICS_SOURCES = [
   MERGE_CONFLICT_SOURCE,
   SCHEDULER,
   WORKGROUP_HOST_SOURCE,
+  // RFC-407: the fan-out shard / aggregator lines left wrapperMechanics.ts for engine/node/agent-single/.
+  FANOUT_SHARD_SOURCE,
+  FANOUT_AGGREGATOR_SOURCE,
   WRAPPER_MECHANICS,
 ] as const
 const ASSEMBLY_SRC = readFileSync(

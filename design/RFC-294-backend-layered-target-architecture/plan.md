@@ -225,6 +225,11 @@ Facade 只许 re-export 或参数形状适配；不得含 DB 查询、状态、�
     经 task-execution 自有端口执行，`legacyArgs` 消失；`nodeMechanics.ts` 2,496 → 598 行，只剩工作组主机线；
   - [RFC-406](../RFC-406-task-execution-workgroup-host-executor/proposal.md)（In Progress）：workgroup host 主体迁入 `engine/node/agent-single/`，
     执行器两条 lane 共用端口；`nodeMechanics.ts` 删除，退出门「`nodeMechanics.ts` 删除」成立。design §5.5 第 3 步至此全部落地。
+- **design §5.5 第 4 步（两件互不依赖，分两个 RFC）**：
+  - [RFC-407](../RFC-407-task-execution-fanout-assembly-lines/proposal.md)（In Progress）：`wrapperMechanics.ts` 的 fanout 分片 / 聚合装配线迁入
+    `engine/node/agent-single/`，与 agent 线共用端口，`FanoutAttemptPort` 的实现在 engine；`wrapperMechanics.ts` 1,954 → 730 行，只剩 wrapper
+    的 data / scopeDriver / workspace 绑定与 git wrapper 的工作区 helper；
+  - `taskEngineApplication.ts` 的引擎编排：待立 RFC。
 
 ### S7 唯一 AtomicApply 引擎（W6）
 

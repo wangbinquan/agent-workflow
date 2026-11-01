@@ -965,12 +965,20 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     }
     // RFC-354 (schema v6): +1 — a fan-out reads its shard source's declared
     // output kind from the source agent (`sourcePortKindOf`).
-    expect(execution.split('taskExecutionResources.injection(').length - 1).toBe(6)
+    // RFC-407: the fan-out shard / aggregator reads go through the agent binding's one
+    // `resources.injection` delegate like the agent body, and the source-port kind read
+    // (`sourcePortKindOf`) moved into the binding — four literals, three port readers.
+    const literalReads = execution.split('taskExecutionResources.injection(').length - 1
+    const bindingReaders = execution.split('ports.resources.injection(').length - 1
+    expect(literalReads).toBe(4)
+    expect(bindingReaders).toBe(3)
+    expect(literalReads - 1 + bindingReaders).toBe(6)
     expect(execution.split('resolveSyntheticTaskAgentInjection(').length - 1).toBe(3)
     // RFC-406: the host's orchestrator / catalog choice is the agent binding's `hostInjection`.
     expect(AGENT_BINDING_SOURCE).toContain('agent.id === ORCHESTRATOR_AGENT_ID')
     expect(wrapperData).toContain('WrapperFanoutAgentResolution')
     expect(wrapper).toContain("return resolution.kind === 'ok'")
+    expect(AGENT_BINDING_SOURCE).toContain("return resolution.kind === 'ok'")
     expect(fanout).toContain('agentFailures.get(innerAgentId)')
     expect(fanout).toContain('agentFailures.get(aggregatorKey)')
     expect(fanout.indexOf('if (items.length === 0)')).toBeLessThan(

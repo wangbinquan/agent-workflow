@@ -154,7 +154,7 @@ describeEachProvider(
         parentNodeRunId: null,
       })
       // A（audit）的产出只存在于 shard child 行上 —— fanout 内 per-shard 节点的
-      // 真实落库形态（见 wrapperMechanics.ts dispatchFanoutShard 的 insert：
+      // 真实落库形态（见 engine/node/agent-single/runFanoutShard.ts dispatchFanoutShard 的铸行：
       // parentNodeRunId = wrapperRunId）。
       await seedRunWithOutput(
         db,

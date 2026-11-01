@@ -51,10 +51,14 @@ describe('RFC-048 subagentLiveCapture passthrough', () => {
     // RFC-406：agent-single 与 workgroup host 两条 lane 都经 agent 绑定的同一个 `withTaskRunFields`
     // 补 task 级字段，直传点合成一处：fanout 分片 + 聚合 + agent 绑定 = 3；两条 lane 都只经
     // `ports.runtime.runAgent(` 发起，绑定的 `runAgent` 只用 `withTaskRunFields`。
-    expect(matches.length).toBe(3)
+    // RFC-407：fanout 分片 / 聚合两条线迁入 engine/node/agent-single/，同样只经 `ports.runtime.runAgent(`
+    // 发起（旧调用逐项直传的 task 级字段与 `withTaskRunFields` 补的完全相同），直传点只剩 agent 绑定 = 1。
+    expect(matches.length).toBe(1)
     for (const lane of [
       'packages/backend/src/modules/task-execution/engine/node/agent-single/runAgentSingleNode.ts',
       'packages/backend/src/modules/task-execution/engine/node/agent-single/runWorkgroupHost.ts',
+      'packages/backend/src/modules/task-execution/engine/node/agent-single/runFanoutShard.ts',
+      'packages/backend/src/modules/task-execution/engine/node/agent-single/runFanoutAggregator.ts',
     ]) {
       const body = read(lane)
       expect(body.match(/ports\.runtime\.runAgent\(/g), lane).toHaveLength(1)

@@ -1,3 +1,8 @@
+import {
+  AGENT_BINDING_SOURCE,
+  FANOUT_SHARD_SOURCE,
+  FANOUT_AGGREGATOR_SOURCE,
+} from './helpers/executionMechanismSources'
 import { initializeTaskWorkspace } from './helpers/taskWorkspaceFixture'
 // REGRESSION LOCK — design/scheduler-audit-2026-06-10.md S-21 (WP-6b，
 // RFC-098 B3 已修复；本文件自此锁定修复后语义，不再是缺陷现状锁定)
@@ -57,15 +62,6 @@ import { canonicalizeWorkflowAgentIds } from './helpers/canonicalWorkflowFixture
 const ulid = monotonicFactory()
 
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
-const WRAPPER_MECHANICS_SRC = resolve(
-  import.meta.dir,
-  '..',
-  'src',
-  'modules',
-  'task-execution',
-  'composition',
-  'wrapperMechanics.ts',
-)
 
 interface Harness<TDatabase extends PersistenceDb = PersistenceDb> {
   db: TDatabase
@@ -387,24 +383,29 @@ function registerNativeCases2() {
   //    原地重跑挡路，见文件头说明），故按调研分工指引保留源码文本断言。
   // ---------------------------------------------------------------------------
   test('source-text lock: dispatchFanoutAggregator picks inner rows via pickReusableShardRun (done-only + freshest) and reuses its own prior row', () => {
-    const src = readFileSync(WRAPPER_MECHANICS_SRC, 'utf-8')
+    // RFC-407: the aggregator line moved to engine/node/agent-single/runFanoutAggregator.ts and reads
+    // the candidate rows through the agent ports' ledger (bound to the same selection reader).
+    const src = FANOUT_AGGREGATOR_SOURCE
     // The outer dispatcher now owns the process-retry loop; the attempt helper
     // owns row selection/idempotency and remains the source-text lock target.
     const start = src.indexOf('async function dispatchFanoutAggregatorAttempt')
     expect(start).toBeGreaterThan(-1)
-    // 函数体切片：到下一个顶层 `async function` 为止。
+    // 函数体切片：到下一个顶层 `async function` 为止（attempt 是本文件最后一个函数时取到文件尾）。
     const nextFn = src.indexOf('\nasync function ', start + 1)
-    expect(nextFn).toBeGreaterThan(start)
-    const body = src.slice(start, nextFn)
+    const body = src.slice(start, nextFn === -1 ? undefined : nextFn)
+    expect(body.trimEnd().endsWith('}')).toBe(true)
 
     // (a) 挑行必须走 pickReusableShardRun（freshness.ts 的 done-only +
     //     isFresherNodeRun + hash null=match picker）——perShard 与 shared
     //     两个分支都不允许退回裸 find 首行匹配。
-    expect(body).toMatch(/state\.opts\.persistence\.selection\.shardSet\(taskId, \{/)
+    expect(body).toMatch(/ledger\.shardSet\(taskId, \{/)
+    expect(AGENT_BINDING_SOURCE).toContain(
+      'shardSet: (taskId, wrapper) => state.opts.persistence.selection.shardSet(taskId, wrapper),',
+    )
     expect(body).toContain(
       'const request = { nodeId: edge.source.nodeId, shardKey: null, valueHash: null }',
     )
-    expect(body.match(/state\.opts\.persistence\.selection\.shardSet/g)).toHaveLength(3)
+    expect(body.match(/ledger\.shardSet\(/g)).toHaveLength(3)
     expect(body).not.toContain('innerRows.find((r) => r.shardKey === s.shardKey)')
     expect(body).not.toContain('innerRows.find((r) => r.shardKey === null)')
 
@@ -426,13 +427,11 @@ function registerNativeCases2() {
 
     // 对照锚点：shard 路径用的是同一个 picker（「freshest-run 抽一次别
     // fork」缝——两处共用 freshness.ts 的 pickReusableShardRun）。
-    // 顺序守卫：切片 [shardStart, start) 仅在 dispatchFanoutShard 定义在
-    // dispatchFanoutAggregator 之前时才有意义；函数重排时给出可诊断的失败。
-    const shardStart = src.indexOf('async function dispatchFanoutShard')
+    // RFC-407: the shard line has its own file; it reads through the same ledger port.
+    const shardStart = FANOUT_SHARD_SOURCE.indexOf('async function dispatchFanoutShardAttempt(')
     expect(shardStart).toBeGreaterThan(-1)
-    expect(shardStart).toBeLessThan(start)
-    const shardBody = src.slice(shardStart, start)
-    expect(shardBody).toContain('state.opts.persistence.selection.shardSet')
+    const shardBody = FANOUT_SHARD_SOURCE.slice(shardStart)
+    expect(shardBody).toContain('ledger.shardSet(taskId, {')
   })
 }
 

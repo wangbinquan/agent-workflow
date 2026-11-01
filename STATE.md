@@ -1,3 +1,14 @@
+## 2026-11-01 RFC-407 task-execution fanout 分片与聚合装配线迁入 engine/node（In Progress；`design/RFC-407-task-execution-fanout-assembly-lines/`）
+
+- **来由**：RFC-294 S6，design §5.5 第 4 步之一；用户授权同 RFC-402，本会话调研、设计、实施与集中验证，不派 Codex。
+- **范围**：`wrapperMechanics.ts` 的 fanout 分片 / 聚合两条装配线（RFC-287 L5 / L6，约 1,150 行）迁入 `engine/node/agent-single/`
+  （`runFanoutShard.ts` / `runFanoutAggregator.ts`），与 agent 线共用同一组 task-execution 自有端口；`FanoutAttemptPort` 的实现
+  （`fanoutAttempts.ts`）在 engine，`createWrapperMechanicsPorts` 只用端口绑定构造它；`sourcePortKindOf` 迁入 agent 绑定供两处共用。纯结构重构。
+- **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。
+- **进度**：T1～T5 完成，随实现提交入库，待 exact SHA 的 CI（AC-6）。`wrapperMechanics.ts` 1,954 → 730 行。集中验证 489 + 44 个文件：本 RFC
+  引入的负 fixture 账本漂移已修，其余只有 PG 负载超时、复跑通过；P0 变异 lane 通过（34 个阶段、源文件指纹不变）。详见 plan「集中验证（T5）」。
+- **后继**：design §5.5 第 4 步之二（`taskEngineApplication.ts` 的引擎编排），另立 RFC。
+
 ## 2026-11-01 RFC-406 task-execution workgroup host 迁入 engine/node 并删除 nodeMechanics.ts（In Progress；`design/RFC-406-task-execution-workgroup-host-executor/`）
 
 - **来由**：RFC-294 S6，design §5.5 第 3 步之四（最后一组）；用户授权同 RFC-402，本会话调研、设计、实施与集中验证，不派 Codex。

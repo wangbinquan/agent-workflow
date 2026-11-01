@@ -10,26 +10,18 @@
 // and nested lists.
 
 import { describe, expect, test } from 'bun:test'
-import { readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
 import { stringifyKind, tryParseKind } from '@agent-workflow/shared'
+import { FANOUT_SHARD_SOURCE, WRAPPER_MECHANICS_SOURCE } from './helpers/executionMechanismSources'
 
-const WRAPPER_MECHANICS_SRC = readFileSync(
-  resolve(
-    import.meta.dir,
-    '..',
-    'src',
-    'modules',
-    'task-execution',
-    'composition',
-    'wrapperMechanics.ts',
-  ),
-  'utf8',
-)
+// RFC-407: the shard-source kind derivation moved with the fan-out shard line into
+// engine/node/agent-single/runFanoutShard.ts; the composite keeps the rest of the old wrapper text
+// in the no-fork scan.
+const WRAPPER_MECHANICS_SRC = WRAPPER_MECHANICS_SOURCE
 
 describe('shard-source inner port kind — canonical stringify (no fork)', () => {
   test('wrapper mechanics derives the shard item kind via stringifyKind(lk.item)', () => {
     expect(WRAPPER_MECHANICS_SRC).toContain('stringifyKind(lk.item)')
+    expect(FANOUT_SHARD_SOURCE).toContain('stringifyKind(lk.item)')
   })
 
   test('wrapper mechanics does not hand-roll a path<ext> stringify (must use stringifyKind)', () => {

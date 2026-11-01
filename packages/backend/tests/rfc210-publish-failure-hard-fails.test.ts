@@ -24,7 +24,10 @@ import {
 } from '@/platform/workspace/local/isolation'
 import { type CanonRepo } from '@/platform/contracts/isolationWorkspace'
 import { runGit } from '@/util/git'
-import { AGENT_MECHANICS_SOURCE } from './helpers/executionMechanismSources'
+import {
+  WRAPPER_MECHANICS_SOURCE,
+  AGENT_MECHANICS_SOURCE,
+} from './helpers/executionMechanismSources'
 
 const appHome = mkdtempSync(join(tmpdir(), 'aw-rfc210-pf-home-'))
 const created: string[] = []
@@ -186,18 +189,9 @@ describe('RFC-210 — submodule publish failures fail the snapshot', () => {
     // only copy of the node's product when the snapshot phase itself failed.
     // Codex review round 2 (P1): the mainline alone is not enough; the
     // workgroup hook, fanout shard and aggregator discard in `finally` too.
-    const wrapperMechanics = readFileSync(
-      resolve(
-        import.meta.dir,
-        '..',
-        'src',
-        'modules',
-        'task-execution',
-        'composition',
-        'wrapperMechanics.ts',
-      ),
-      'utf8',
-    )
+    // RFC-407: the fan-out shard / aggregator lines moved to engine/node/agent-single/; the composite
+    // keeps them in this scan (their iso discard reaches the binding's writeSem call through the port).
+    const wrapperMechanics = WRAPPER_MECHANICS_SOURCE
     const recovery = readFileSync(
       resolve(
         import.meta.dir,

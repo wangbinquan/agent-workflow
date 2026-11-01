@@ -196,12 +196,20 @@ test('RFC-403 review keeps the platform fallback codec through its bound port', 
 })
 
 test('RFC-405 the agent body reaches the fallback codec only through its workspace port', () => {
-  const path = 'modules/task-execution/engine/node/agent-single/runAgentSingleNode.ts'
   const valid = (text: string) =>
     text.includes('workspace.portFileContainerPaths(') &&
     !text.includes('portFallbackMount') &&
     !/repos\[0\]\?\.mountPath/.test(text)
-  expect(valid(readFileSync(resolve(import.meta.dir, '../../src', path), 'utf8'))).toBe(true)
+  // RFC-407: so do the fan-out shard / aggregator lines; their former inline
+  // `state.repos[0]?.mountPath ?? ''` formula did not move with them.
+  for (const path of [
+    'modules/task-execution/engine/node/agent-single/runAgentSingleNode.ts',
+    'modules/task-execution/engine/node/agent-single/runFanoutShard.ts',
+    'modules/task-execution/engine/node/agent-single/runFanoutAggregator.ts',
+  ])
+    expect(valid(readFileSync(resolve(import.meta.dir, '../../src', path), 'utf8')), path).toBe(
+      true,
+    )
   expect(valid("toContainerRelative(state.repos[0]?.mountPath ?? '', p)")).toBe(false)
   expect(valid('workspace.portFileContainerPaths(paths); portFallbackMount(mounts)')).toBe(false)
 })

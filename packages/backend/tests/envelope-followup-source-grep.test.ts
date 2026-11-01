@@ -1,3 +1,4 @@
+import { WRAPPER_MECHANICS_SOURCE } from './helpers/executionMechanismSources'
 // RFC-042 §5.7 — source-code-text grep guards.
 //
 // Locks in:
@@ -16,27 +17,19 @@ import { DEFAULT_PROTOCOL_RETRY_BUDGET } from '@agent-workflow/shared'
 
 describe('RFC-042 source-code-text guards', () => {
   test('wrapper mechanics retries default rides DEFAULT_PROTOCOL_RETRY_BUDGET (=3), not `?? 0`', () => {
-    const src = readFileSync(
-      resolve(
-        import.meta.dir,
-        '..',
-        'src',
-        'modules',
-        'task-execution',
-        'composition',
-        'wrapperMechanics.ts',
-      ),
-      'utf8',
-    )
+    const src = WRAPPER_MECHANICS_SOURCE
     // RFC-115: the per-node `retries` override was removed; the budget is now
     // the global `opts.defaultNodeRetries`. The RFC-042 §A4 invariant (default
     // 3, never the legacy `?? 0`) lives on that fallback. 调度架构审视
     // 2026-07-14: the literal `?? 3` became the shared cross-engine constant
     // (retry-budget-single-source.test.ts locks all four consumer sites); the
     // §A4 VALUE invariant is asserted on the constant itself here.
-    expect(src).toMatch(/opts\.defaultNodeRetries\s*\?\?\s*DEFAULT_PROTOCOL_RETRY_BUDGET\b/)
+    // RFC-407: the fan-out lines read the budget through their policy port.
+    expect(src).toMatch(
+      /(?:opts|policy)\.defaultNodeRetries\s*\?\?\s*DEFAULT_PROTOCOL_RETRY_BUDGET\b/,
+    )
     expect(DEFAULT_PROTOCOL_RETRY_BUDGET).toBe(3)
-    expect(src).not.toMatch(/opts\.defaultNodeRetries\s*\?\?\s*0\b/)
+    expect(src).not.toMatch(/(?:opts|policy)\.defaultNodeRetries\s*\?\?\s*0\b/)
     // The per-node retries lookup is gone entirely (RFC-115 D2 — node no longer overrides).
     expect(src).not.toMatch(/pickNumber\(\s*node\s*,\s*['"]retries['"]/)
   })

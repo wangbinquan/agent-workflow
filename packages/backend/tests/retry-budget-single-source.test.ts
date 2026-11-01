@@ -12,7 +12,11 @@ import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { DEFAULT_PROTOCOL_RETRY_BUDGET } from '@agent-workflow/shared'
-import { AGENT_MECHANICS_SOURCE } from './helpers/executionMechanismSources'
+import {
+  FANOUT_AGGREGATOR_SOURCE,
+  FANOUT_SHARD_SOURCE,
+  AGENT_MECHANICS_SOURCE,
+} from './helpers/executionMechanismSources'
 
 const SRC = (rel: string): string =>
   readFileSync(resolve(import.meta.dir, '..', 'src', rel), 'utf8')
@@ -26,15 +30,20 @@ describe('DEFAULT_PROTOCOL_RETRY_BUDGET 单源', () => {
     const sources = [
       // RFC-405: the agent-single body moved out of nodeMechanics.ts.
       AGENT_MECHANICS_SOURCE,
-      SRC('modules/task-execution/composition/wrapperMechanics.ts'),
+      // RFC-407: the fan-out shard / aggregator lines read the budget through their policy port.
+      FANOUT_SHARD_SOURCE,
+      FANOUT_AGGREGATOR_SOURCE,
       SRC('modules/task-execution/engine/node/script/runScriptNode.ts'),
     ]
     expect(
       sources.reduce(
         (count, source) =>
           count +
-          source.split('opts.defaultNodeRetries ?? DEFAULT_PROTOCOL_RETRY_BUDGET').length -
-          1,
+          (
+            source.match(
+              /(?:opts|policy)\.defaultNodeRetries \?\? DEFAULT_PROTOCOL_RETRY_BUDGET/g,
+            ) ?? []
+          ).length,
         0,
       ),
     ).toBe(4)

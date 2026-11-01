@@ -72,6 +72,28 @@ export const NODE_EXECUTION_SOURCE = readFileSync(
   'utf8',
 )
 
+// RFC-407: the fan-out shard / aggregator lines (RFC-287 L5 / L6) left wrapperMechanics.ts.
+export const FANOUT_SHARD_SOURCE = readFileSync(
+  resolve(root, 'engine/node/agent-single/runFanoutShard.ts'),
+  'utf8',
+)
+export const FANOUT_AGGREGATOR_SOURCE = readFileSync(
+  resolve(root, 'engine/node/agent-single/runFanoutAggregator.ts'),
+  'utf8',
+)
+/**
+ * RFC-407: what used to be the single `wrapperMechanics.ts` text — the file itself (wrapper data,
+ * scope driver and workspace bindings), both fan-out lines and the attempt port they implement. The
+ * source-port-kind read the data binding shares with the fan-out shard line is `sourcePortKindOf` in
+ * the agent binding (`AGENT_BINDING_SOURCE`).
+ */
+export const WRAPPER_MECHANICS_SOURCE = [
+  readFileSync(resolve(root, 'composition/wrapperMechanics.ts'), 'utf8'),
+  FANOUT_SHARD_SOURCE,
+  FANOUT_AGGREGATOR_SOURCE,
+  readFileSync(resolve(root, 'engine/node/agent-single/fanoutAttempts.ts'), 'utf8'),
+].join('\n')
+
 export const AGENT_BINDING_SOURCE = readFileSync(
   resolve(root, 'composition/agentNodeExecution.ts'),
   'utf8',
@@ -100,7 +122,7 @@ export const AGENT_MECHANICS_SOURCE = [
   NODE_EXECUTION_SOURCE,
 ].join('\n')
 
-/** Every leaf body moved out of nodeMechanics.ts (RFC-403～406), so corpora stay complete. */
+/** Every leaf body moved out of nodeMechanics.ts (RFC-403～406) and the fan-out lines (RFC-407). */
 export const LEAF_NODE_SOURCES = [
   CODE_HOST_NODE_SOURCE,
   INPUT_NODE_SOURCE,
@@ -114,4 +136,6 @@ export const LEAF_NODE_SOURCES = [
   CHILD_CALL_LAUNCH_SOURCE,
   AGENT_NODE_SOURCE,
   WORKGROUP_HOST_SOURCE,
+  FANOUT_SHARD_SOURCE,
+  FANOUT_AGGREGATOR_SOURCE,
 ] as const

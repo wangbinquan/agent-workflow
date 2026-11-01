@@ -1,3 +1,4 @@
+import { AGENT_BINDING_SOURCE, FANOUT_SHARD_SOURCE } from './helpers/executionMechanismSources'
 // RFC-130 §8.3 D9 (T14) — fan-out shard-rerun directional-undo.
 //
 // When a fan-out shard is RE-RUN to REPLACE a prior merged attempt, the fresh iso is
@@ -132,18 +133,7 @@ describe('RFC-130 T14 — undoPriorShardDeltaInIso (iso pre-agent undo, §8.3 D9
   // failed rerun must not have touched canon). If a refactor moves the undo to canon
   // or after the run, failure-safety / identical-output correctness silently regress.
   test('source guard: wrapper mechanics gates single-level + undoes in the iso pre-run', async () => {
-    const src = readFileSync(
-      join(
-        import.meta.dir,
-        '..',
-        'src',
-        'modules',
-        'task-execution',
-        'composition',
-        'wrapperMechanics.ts',
-      ),
-      'utf8',
-    )
+    const src = FANOUT_SHARD_SOURCE
     const native = readFileSync(
       join(
         import.meta.dir,
@@ -157,7 +147,9 @@ describe('RFC-130 T14 — undoPriorShardDeltaInIso (iso pre-agent undo, §8.3 D9
       ),
       'utf8',
     )
-    expect(src).toContain('workspaceRecord(iso).scope.undoShard')
+    // RFC-407: the shard line moved to engine/node/agent-single/ and undoes through its workspace port.
+    expect(src).toContain('workspace.undoShard(iso, {')
+    expect(AGENT_BINDING_SOURCE).toContain('workspaceRecord(handle).scope.undoShard(input)')
     expect(native).toContain('undoShard: (input) =>')
     expect(native).toContain('undoPriorShardDeltaInIso(')
     const oracle = readFileSync(
@@ -171,11 +163,11 @@ describe('RFC-130 T14 — undoPriorShardDeltaInIso (iso pre-agent undo, §8.3 D9
     expect(oracle).toContain("row.status === 'done' && row.mergeState === 'merged'")
     expect(oracle).toMatch(/singleMergedCandidate: merged\.length === 1 \?/)
     expect(src.indexOf('selected.singleMergedCandidate')).toBeLessThan(
-      src.indexOf('workspaceRecord(iso).scope.undoShard('),
+      src.indexOf('workspace.undoShard(iso, {'),
     )
     // The shard's runNode dispatch must come AFTER the undo call (pre-agent undo).
-    const undoIdx = src.indexOf('workspaceRecord(iso).scope.undoShard(')
-    const runIdxAfterUndo = src.indexOf('const result = await runNode(', undoIdx)
+    const undoIdx = src.indexOf('workspace.undoShard(iso, {')
+    const runIdxAfterUndo = src.indexOf('const result = await ports.runtime.runAgent(', undoIdx)
     expect(undoIdx).toBeGreaterThan(0)
     expect(runIdxAfterUndo).toBeGreaterThan(undoIdx)
   })

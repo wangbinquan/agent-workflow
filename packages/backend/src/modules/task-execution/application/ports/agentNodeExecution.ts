@@ -22,8 +22,9 @@ import type { AgentRunSettledObserver } from './agentRunSettledObserver'
 import type { AgentClarifyGateReceipt, AgentClarifyGateRequest } from './collaborationNodeGate'
 import type { Logger } from './executionKernel'
 import type { MergeConflictResolver } from './mergeConflictResolution'
-import type { NodeExecutionPersistence } from './nodeExecutionPersistence'
+import type { NodeExecutionPersistence, NodeExecutionSnapshot } from './nodeExecutionPersistence'
 import type { ExecutionDiagnostics, NodeStatusEvents } from './nodeExecutionSupport'
+import type { RunSelectionReader } from './runSelection'
 import type { ScriptInputPort, ScriptRunLedger } from './scriptNodeExecution'
 import type { RunResult, TaskAgentRunPolicy } from './taskAgentRun'
 import type { TaskAgentRunScope } from './taskAgentRunFamily'
@@ -140,6 +141,8 @@ export interface AgentRules {
   continuesClarifyLineage(causesNewestFirst: ReadonlyArray<string | null | undefined>): boolean
   /** The error-message prefix of a suppressed ask-back (`services/envelope`). */
   readonly clarifyForbiddenPrefix: string
+  /** RFC-098 B3 / RFC-407: a fan-out shard value's cross-generation reuse identity (sha256 hex). */
+  shardValueHash(value: string): string
   decideResumeSessionId(input: {
     readonly sessionMode: 'isolated' | 'inline'
     readonly sourceSessionId: string | null | undefined
@@ -169,6 +172,8 @@ export interface AgentResources {
   injection(agentId: string): Promise<AgentInjection>
   /** RFC-406: the workgroup host's injection — the orchestrator is synthetic, every other agent comes from the session. */
   hostInjection(agent: Agent): Promise<AgentInjection>
+  /** RFC-060 D.T7 / RFC-407: the declared kind of a fan-out source port (null when unknown). */
+  sourcePortKind(nodeId: string, portName: string): Promise<string | null>
 }
 
 export interface AgentRunHistoryPort {
@@ -207,8 +212,9 @@ export interface AgentRuntimePort {
   ): boolean | undefined
 }
 
+/** RFC-407: the fan-out lines log through their own child logger; the other lanes use the task log. */
 export interface AgentWorkspacePort {
-  createIsoUnderLock(isoKeyRunId: string): Promise<IsoHandle>
+  createIsoUnderLock(isoKeyRunId: string, log?: Logger): Promise<IsoHandle>
   persistIsoBase(nodeRunId: string, handle: IsoHandle): Promise<void>
   mergeBackAndSettle(input: {
     handle: IsoHandle
@@ -219,16 +225,32 @@ export interface AgentWorkspacePort {
       conflicts: MergeBackConflict[],
       containerPath: string,
     ): Promise<{ allResolved: boolean; detail: string }>
+    log?: Logger
   }): Promise<{ kind: 'merged' | 'conflict-human'; detail?: string }>
-  markMergeFailed(nodeRunId: string, message: string): Promise<void>
+  markMergeFailed(nodeRunId: string, message: string, log?: Logger): Promise<void>
   /** RFC-167 / RFC-187 T8: close this run's merge state as abandoned (its delta never reaches canonical). */
   abandonMerge(
     nodeRunId: string,
     reason: Extract<MergeStateTransitionEvent, { kind: 'abandon' }>['reason'],
   ): Promise<boolean>
-  discardNodeIso(handle: IsoHandle): Promise<void>
+  discardNodeIso(handle: IsoHandle, log?: Logger): Promise<void>
   /** RFC-193 K1: this run's own port files, relative to the port fallback mount. */
   portFileContainerPaths(portFilePaths: readonly string[]): string[]
+  /** RFC-370 / RFC-407: finish a fan-out row's interrupted merge-back before it can be reused. */
+  completeInterruptedMerge(run: NodeExecutionSnapshot, log: Logger): Promise<void>
+  /** RFC-407: whether this iso adopted a still-running execution (its delta must not be undone). */
+  adoptedExecution(handle: IsoHandle): boolean
+  /** RFC-130 D9 / RFC-407: undo a shard's previously merged delta inside its fresh iso. */
+  undoShard(
+    handle: IsoHandle,
+    input: {
+      readonly workspaceRef: string
+      readonly priorNodeCommit: string | undefined
+      readonly priorBaseCommit: string | undefined
+      readonly log: Logger
+      readonly forcedRelativePaths: IsoHandle['repos'][number]['forcedRepoRelPaths']
+    },
+  ): boolean | Promise<boolean>
 }
 
 export interface AgentNodeExecutionPorts {
@@ -236,6 +258,8 @@ export interface AgentNodeExecutionPorts {
   readonly policy: AgentExecutionPolicy
   readonly log: Logger
   readonly agentSem: Semaphore
+  /** RFC-407: the fan-out subprocess pool (shards and aggregators hold it with the agent pool). */
+  readonly subprocessSem: Semaphore
   readonly resources: AgentResources
   readonly collaboration: AgentCollaborationPort
   readonly rules: AgentRules
@@ -252,6 +276,10 @@ export interface AgentNodeExecutionPorts {
   > & {
     read: NodeExecutionPersistence['read']
     patch(input: WithoutContext<Parameters<NodeExecutionPersistence['patch']>[0]>): Promise<boolean>
+    /** RFC-407: a run's captured port outputs (fan-out replay). */
+    listOutputs: NodeExecutionPersistence['listOutputs']
+    /** RFC-098 B3 / RFC-407: the fan-out candidate selection over a wrapper generation. */
+    shardSet: RunSelectionReader['shardSet']
   }
   readonly history: AgentRunHistoryPort
   readonly runtime: AgentRuntimePort

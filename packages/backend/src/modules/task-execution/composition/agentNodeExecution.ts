@@ -1,3 +1,4 @@
+import { declaredPorts } from '@agent-workflow/shared'
 import { portFallbackMount } from '@/platform/content/locations/portArchive'
 import { findClarifyNode } from '@/services/clarify/service'
 import {
@@ -9,8 +10,9 @@ import { CLARIFY_FORBIDDEN_PREFIX, parsePortValidationFailuresJson } from '@/ser
 import { resolveSyntheticTaskAgentInjection } from '@/services/execution/taskExecutionResources'
 import type { TaskMechanicsState } from '@/services/execution/taskMechanicsState'
 import { continuesClarifyLineage, isClarifyRerunCause } from '@/services/nodeRunMint'
-import { agentRefOfNode } from '@/services/ref/runtimeRef'
+import { agentRefOfNode, fanoutInnerAgentRefKey } from '@/services/ref/runtimeRef'
 import { getRuntimeDriver } from '@/services/runtime'
+import { sha256Hex } from '@/util/hash'
 import { decideResumeSessionId } from '@/services/sessionModeFallback'
 import * as agentRunHistory from '../application/agentRunHistory'
 import { resolveUpstreamInputs } from '../application/nodeInputs'
@@ -30,9 +32,11 @@ import { markMergeFailed, mergeBackAndSettle } from '../engine/kernel/merge'
 import { resolveMergeConflicts } from '../engine/node/shared/resolveMergeConflicts'
 import { prepareConsumedInputs } from '../infrastructure/consumedInputsParticipant'
 import { describeIsoFailure } from '../infrastructure/executionDiagnostics'
+import { workspaceRecord } from '../infrastructure/isolationWorkspaceView'
 import { bindIsolationCleanup } from '../infrastructure/executionKernelBinding'
 import { broadcastNodeStatus } from '../infrastructure/nodeStatusEvents'
 import { isolatedRunBinding, nodeRunLedger } from './executionMechanismBindings'
+import { completeInterruptedMerge } from './executionMergeRecovery'
 import { bindMergeConflictPorts } from './mergeConflictResolution'
 import { runTaskAgentWithFamily } from './taskAgentRunFamily'
 
@@ -57,6 +61,33 @@ export function withTaskRunFields(
       ? { subagentLiveCapture: opts.subagentLiveCapture }
       : {}),
   }
+}
+
+/**
+ * RFC-354 — the declared kind of a producer port. Agents resolve through the
+ * injection registry (id-first, like every other agent read in this module);
+ * every other kind answers through the shared port table.
+ *
+ * RFC-407: moved verbatim out of wrapperMechanics.ts so the wrapper data binding and this binding's
+ * `resources.sourcePortKind` (fan-out shard inputs) share one implementation.
+ */
+export async function sourcePortKindOf(
+  state: TaskMechanicsState,
+  nodeId: string,
+  portName: string,
+): Promise<string | null> {
+  const node = state.definition.nodes.find((candidate) => candidate.id === nodeId)
+  if (node === undefined) return null
+  if (node.kind === 'agent-single') {
+    const agentId = fanoutInnerAgentRefKey(node as Record<string, unknown>)
+    if (agentId === null) return null
+    const resolution = await state.taskExecutionResources.injection(agentId)
+    return resolution.kind === 'ok' ? (resolution.spec.agent.outputKinds?.[portName] ?? null) : null
+  }
+  return (
+    declaredPorts(node, state.definition, {}).dataOutputs.find((port) => port.name === portName)
+      ?.kind ?? null
+  )
 }
 
 /** RFC-405 / RFC-406 — capabilities of the agent-single executor's two lanes; every value is read on use. */
@@ -120,12 +151,16 @@ export function createAgentNodeExecutionPorts(state: TaskMechanicsState): AgentN
     get agentSem() {
       return state.agentSem
     },
+    get subprocessSem() {
+      return state.subprocessSem
+    },
     resources: {
       injection: (agentId) => state.taskExecutionResources.injection(agentId),
       hostInjection: async (agent) =>
         agent.id === ORCHESTRATOR_AGENT_ID
           ? resolveSyntheticTaskAgentInjection(agent, state.opts.taskAgentRuns.materialReferences)
           : await state.taskExecutionResources.injection(agent.id),
+      sourcePortKind: (nodeId, portName) => sourcePortKindOf(state, nodeId, portName),
     },
     collaboration: {
       resolveBorrowForNode: (input) => collaboration().resolveBorrowForNode(input),
@@ -153,6 +188,7 @@ export function createAgentNodeExecutionPorts(state: TaskMechanicsState): AgentN
       isClarifyRerunCause,
       continuesClarifyLineage,
       clarifyForbiddenPrefix: CLARIFY_FORBIDDEN_PREFIX,
+      shardValueHash: sha256Hex,
       decideResumeSessionId,
     },
     input: {
@@ -190,6 +226,8 @@ export function createAgentNodeExecutionPorts(state: TaskMechanicsState): AgentN
           ...nodeRunLedger(state).executionContextInput(),
         }),
       read: (nodeRunId) => state.opts.persistence.nodeExecution.read(nodeRunId),
+      listOutputs: (nodeRunId) => state.opts.persistence.nodeExecution.listOutputs(nodeRunId),
+      shardSet: (taskId, wrapper) => state.opts.persistence.selection.shardSet(taskId, wrapper),
       patch: (input) =>
         state.opts.persistence.nodeExecution.patch({
           ...input,
@@ -224,7 +262,7 @@ export function createAgentNodeExecutionPorts(state: TaskMechanicsState): AgentN
         getRuntimeDriver(protocol).detectSessionNotFound?.(stderr),
     },
     workspace: {
-      createIsoUnderLock: (isoKeyRunId) =>
+      createIsoUnderLock: (isoKeyRunId, log) =>
         createIsoUnderLock({
           writeSem: state.writeSem,
           appHome: state.opts.appHome,
@@ -232,7 +270,7 @@ export function createAgentNodeExecutionPorts(state: TaskMechanicsState): AgentN
           binding: isolatedRunBinding(state),
           isoKeyRunId,
           canonRepos: state.repos,
-          log: state.log,
+          log: log ?? state.log,
         }),
       persistIsoBase: (nodeRunId, handle) =>
         persistIsoBase(isolatedRunBinding(state), nodeRunId, handle),
@@ -241,18 +279,21 @@ export function createAgentNodeExecutionPorts(state: TaskMechanicsState): AgentN
           binding: isolatedRunBinding(state),
           writeSem: state.writeSem,
           ...input,
-          log: state.log,
+          log: input.log ?? state.log,
         }),
-      markMergeFailed: (nodeRunId, message) =>
-        markMergeFailed(isolatedRunBinding(state), nodeRunId, message, state.log),
+      markMergeFailed: (nodeRunId, message, log) =>
+        markMergeFailed(isolatedRunBinding(state), nodeRunId, message, log ?? state.log),
       abandonMerge: (nodeRunId, reason) =>
         state.opts.persistence.mergeStates.tryTransition({
           nodeRunId,
           event: { kind: 'abandon', reason },
           ...nodeRunLedger(state).executionContextInput(),
         }),
-      discardNodeIso: (handle) =>
-        discardNodeIso(bindIsolationCleanup(), handle, state.log, state.writeSem),
+      discardNodeIso: (handle, log) =>
+        discardNodeIso(bindIsolationCleanup(), handle, log ?? state.log, state.writeSem),
+      completeInterruptedMerge: (run, log) => completeInterruptedMerge(state, run, log),
+      adoptedExecution: (handle) => workspaceRecord(handle).workspace.adoptedExecution === true,
+      undoShard: (handle, input) => workspaceRecord(handle).scope.undoShard(input),
       portFileContainerPaths: (portFilePaths) =>
         portFilePaths.map((p) =>
           toContainerRelative(portFallbackMount(state.repos.map((repo) => repo.mountPath)), p),

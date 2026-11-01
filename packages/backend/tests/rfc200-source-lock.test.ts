@@ -7,7 +7,7 @@ import { readTaskAgentSources } from './helpers/taskAgentSource'
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { AGENT_NODE_SOURCE } from './helpers/executionMechanismSources'
+import { WRAPPER_MECHANICS_SOURCE, AGENT_NODE_SOURCE } from './helpers/executionMechanismSources'
 
 const ROOT = resolve(import.meta.dir, '..', '..', '..')
 const read = (path: string): string => readFileSync(resolve(ROOT, path), 'utf8')
@@ -62,9 +62,7 @@ describe('RFC-200 source wiring locks', () => {
   })
 
   test('specialized prompt producers thread the current run nonce before rendering', () => {
-    const wrapperMechanics = read(
-      'packages/backend/src/modules/task-execution/composition/wrapperMechanics.ts',
-    )
+    const wrapperMechanics = WRAPPER_MECHANICS_SOURCE
     // RFC-405: the agent-single body moved out of nodeMechanics.ts.
     const nodeMechanics = AGENT_NODE_SOURCE
     expect(wrapperMechanics).toContain('inputs: aggInputs')
@@ -73,9 +71,8 @@ describe('RFC-200 source wiring locks', () => {
     )
     expect(wrapperMechanics).toContain('composePriorOutputBlock(')
     expect(nodeMechanics).toContain('await ledger.loadEnvelopeNonce(nodeRunId)')
-    expect(wrapperMechanics).toContain(
-      'const aggRun = await state.opts.persistence.nodeExecution.read(aggRunId)',
-    )
+    // RFC-407: the aggregator line reads its row through the ledger port.
+    expect(wrapperMechanics).toContain('const aggRun = await ledger.read(aggRunId)')
 
     // RFC-395 D4: the aggregator row is required (its seq anchors the prior-output walk).
     expect(wrapperMechanics).toContain("aggRun.envelopeNonce ?? ''")
@@ -115,9 +112,7 @@ describe('RFC-200 source wiring locks', () => {
       'inputs: { intent: input.intent, memories: serializeMemoriesForPrompt(loaded) }',
     )
 
-    const wrapperMechanics = read(
-      'packages/backend/src/modules/task-execution/composition/wrapperMechanics.ts',
-    )
+    const wrapperMechanics = WRAPPER_MECHANICS_SOURCE
 
     expect(wrapperMechanics).toContain('aggInputs[edge.target.portName] = blocks.join')
     expect(read('packages/backend/src/modules/task-execution/application/nodeInputs.ts')).toContain(

@@ -1,3 +1,4 @@
+import { WRAPPER_MECHANICS_SOURCE } from './helpers/executionMechanismSources'
 import { deleteAgent } from './helpers/resourceCatalogDeletion'
 // RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
 // RFC-223 (PR-2) — workflow / workgroup / scheduled agent+workgroup references
@@ -327,18 +328,9 @@ describe('RFC-223 PR-2 — scheduler dispatches the node agent by id (source loc
   // **加强**了：既然只剩一个读取点，就可以断言 scheduler.ts 里**没有任何**直接的
   // `getAgentById(db, <节点字段>)` 调用——这比原来的三条文本锚更难绕过。
   test('agent-single + wrapper-fanout hydrate only via canonical agentId', () => {
-    const wrapperMechanics = readFileSync(
-      resolve(
-        import.meta.dir,
-        '..',
-        'src',
-        'modules',
-        'task-execution',
-        'composition',
-        'wrapperMechanics.ts',
-      ),
-      'utf8',
-    )
+    // RFC-407: the composite keeps the fan-out lines (now in engine/node/agent-single/) in the
+    // absence scans below.
+    const wrapperMechanics = WRAPPER_MECHANICS_SOURCE
     const runtimeRef = readFileSync(
       resolve(import.meta.dir, '..', 'src', 'services', 'ref', 'runtimeRef.ts'),
       'utf8',

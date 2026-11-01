@@ -25,6 +25,7 @@ import { continuesClarifyLineage, isClarifyRerunCause } from '@/services/nodeRun
 import { agentRefOfNode } from '@/services/ref/runtimeRef'
 import { getRuntimeDriver } from '@/services/runtime'
 import { decideResumeSessionId } from '@/services/sessionModeFallback'
+import { sha256Hex } from '@/util/hash'
 
 type Calls = Record<string, unknown[]>
 
@@ -325,6 +326,8 @@ test('task facts, policy, pools, observer and injection are read on use; rules a
     continuesClarifyLineage,
     // RFC-406: the workgroup host's suppressed ask-back message prefix.
     clarifyForbiddenPrefix: CLARIFY_FORBIDDEN_PREFIX,
+    // RFC-407: the fan-out shard value's reuse identity.
+    shardValueHash: sha256Hex,
     decideResumeSessionId,
   })
 })
