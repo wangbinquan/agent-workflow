@@ -87,7 +87,7 @@ describe('RFC-200 source wiring locks', () => {
     // RFC-359 W4-D19c：骨架与三处角色组装合一进中立驱动，nonce 直接来自铸行回执
     //（不再单独查一次库）；本锁真正关心的「nonce 必须先取再渲染」不变。
     const driver = read(
-      'packages/backend/src/modules/resource-catalog/application/workgroups/workgroupTurnsDriver.ts',
+      'packages/backend/src/modules/task-execution/engine/task/workgroup/workgroupTurns.ts',
     )
     expect(driver.match(/spec\.prompt\(run\.envelopeNonce, errorNotice\)/g)?.length).toBe(1)
     expect(driver).toContain('renderWgProtocolBlock(')

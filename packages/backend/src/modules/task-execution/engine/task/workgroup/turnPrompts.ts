@@ -1,3 +1,4 @@
+// RFC-411: moved from resource-catalog application/workgroups/workgroupTurnPrompts.ts.
 // RFC-359 W4-D19c —— 工作组回合的提示词组装：一份实现，两个引擎。
 //
 // 合一之前这段只在 legacy engine 里（`legacy/workgroup/prompts.ts`），中立驱动自带一份**更简单**的
@@ -22,8 +23,8 @@ import {
   renderMessagesBlock,
   renderRosterBlock,
   selectMemberSlices,
-} from './workgroupTurnContext'
-import type { WorkgroupTurnsSnapshot } from './workgroupTurnsDriver'
+} from '../../../domain/workgroup/turnContext'
+import type { WorkgroupTurnsSnapshot } from '../../../application/ports/workgroupTurns'
 
 /** 能力卡按成员取（legacy 的 `agentCards` 是 Map，中立快照里是 memberAgents 的一列）。 */
 function agentCardsOf(snapshot: WorkgroupTurnsSnapshot): Map<string, string> {

@@ -616,7 +616,7 @@ const fixture = 'packages/backend/tests/fixtures/rfc359-p0-mutations.ts'
  *  still exists — a file deleted elsewhere used to surface only as an ENOENT inside the
  *  real-PostgreSQL lane, long after the deleting commit was pushed. */
 export const sourceFiles = [
-  'packages/backend/src/modules/resource-catalog/application/workgroups/workgroupProtocol.ts',
+  'packages/backend/src/modules/task-execution/domain/workgroup/protocol.ts',
   'packages/backend/src/modules/collaboration/infrastructure/workgroupClarifyAskGate.ts',
   'packages/backend/src/modules/collaboration/infrastructure/clarify/seal.ts',
   'packages/backend/src/modules/collaboration/infrastructure/taskDagCollaborationOperations.ts',

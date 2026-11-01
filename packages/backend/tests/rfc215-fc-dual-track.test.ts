@@ -21,7 +21,7 @@ import type {
 import {
   deriveWakeSet,
   type WakeItem,
-} from '@/modules/resource-catalog/application/workgroups/workgroupTurnsDriver'
+} from '@/modules/task-execution/engine/task/workgroup/workgroupTurns'
 import { wakeSnapshotOf, type LegacyWakeInput as WakeInput } from './helpers/workgroupWake'
 
 /** 旧夹具形状 → 中立驱动的两参调用。 */
@@ -375,10 +375,11 @@ describe('RFC-215 — source locks', () => {
         '..',
         'src',
         'modules',
-        'resource-catalog',
-        'application',
-        'workgroups',
-        'workgroupTurnsDriver.ts',
+        'task-execution',
+        'engine',
+        'task',
+        'workgroup',
+        'workgroupTurns.ts',
       ),
       'utf-8',
     )

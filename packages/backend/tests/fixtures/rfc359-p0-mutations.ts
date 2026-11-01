@@ -23,7 +23,7 @@ import type {
   createWorkgroupClarifyAskGate as CreateWorkgroupClarifyAskGate,
   WorkgroupClarifyAskInput,
 } from '../../src/modules/collaboration/infrastructure/workgroupClarifyAskGate'
-import type { renderWgProtocolBlock as RenderWgProtocolBlock } from '../../src/modules/resource-catalog/application/workgroups/workgroupProtocol'
+import type { renderWgProtocolBlock as RenderWgProtocolBlock } from '../../src/modules/task-execution/domain/workgroup/protocol'
 import type * as WorkflowRepository from '../../src/modules/resource-catalog/infrastructure/workflowRepository'
 import type * as DevelopmentAutomation from '../../src/modules/development-automation/composition'
 import type * as SkillCatalogBoot from '../../src/modules/resource-catalog/composition/skillCatalogBoot'
@@ -37,7 +37,7 @@ function sourcePath(relative: string): string {
 }
 
 async function restoreOutputOnlyProtocol(): Promise<void> {
-  const target = sourcePath('modules/resource-catalog/application/workgroups/workgroupProtocol.ts')
+  const target = sourcePath('modules/task-execution/domain/workgroup/protocol.ts')
   const original = await import(target)
   // 01e4b1b7b: resource-catalog/application/workgroups/workgroupTurnsDriver.ts
   // lines 425–439. Rendering bytes are original; only the private role type and

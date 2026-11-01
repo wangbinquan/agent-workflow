@@ -1,3 +1,4 @@
+// RFC-411: moved from resource-catalog application/workgroups/workgroupSystemMessages.ts.
 import { WorkgroupSystemTemplateSchema, type WorkgroupSystemTemplate } from '@agent-workflow/shared'
 
 export interface BuiltWorkgroupSystemMessage {

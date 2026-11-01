@@ -32,11 +32,11 @@ import { describeEachProvider } from './helpers/eachProvider'
 import {
   deriveWakeSet,
   type WakeItem,
-} from '@/modules/resource-catalog/application/workgroups/workgroupTurnsDriver'
+} from '@/modules/task-execution/engine/task/workgroup/workgroupTurns'
 import { wakeSnapshotOf, type LegacyWakeInput as WakeInput } from './helpers/workgroupWake'
 // RFC-359 W4-D19c-tail：「只读成员」判据（edit 与 write 均显式 deny）合一后住在中立的
 // 回合持久化里，由它算出 `memberAgents[].readonly` 交给驱动。
-import { readonlyPermission as isReadonlyAgentPermission } from '@/modules/resource-catalog/infrastructure/workgroupTurnsOperations'
+import { readonlyPermission as isReadonlyAgentPermission } from '@/modules/task-execution/infrastructure/workgroupTurnsPersistence'
 import { resolveRoomPauseReason } from '../src/routes/workgroupTasks'
 import { loadWorkgroupTaskState, setPauseReason } from '../src/services/workgroup/state'
 /** 旧夹具形状 → 中立驱动的两参调用（RFC-359 W4-D19c-tail）。 */

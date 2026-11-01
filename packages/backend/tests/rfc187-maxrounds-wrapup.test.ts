@@ -19,12 +19,12 @@ import type {
 import {
   decideWorkgroupOutcome,
   deriveWakeSet,
-} from '@/modules/resource-catalog/application/workgroups/workgroupTurnsDriver'
+} from '@/modules/task-execution/engine/task/workgroup/workgroupTurns'
 import { wakeSnapshotOf, type LegacyWakeInput as WakeInput } from './helpers/workgroupWake'
 // RFC-359 W4-D19c-tail：判据改指生产那份。注意它与「要不要叫醒领队开收尾轮」是两个问题：
 // 叫醒那边用 `=== maxRounds`（只给一轮宽限），这里是「采纳既有 run 时算不算收尾」，用 `>=`
 // ——宽限轮自己也计数。两个分支在中立驱动里都在，抽名的是后者。
-import { isLeaderWrapUpContinuation } from '@/modules/resource-catalog/application/workgroups/workgroupTurnsDriver'
+import { isLeaderWrapUpContinuation } from '@/modules/task-execution/engine/task/workgroup/workgroupTurns'
 
 /** 旧夹具形状 → 中立驱动的两参调用（RFC-359 W4-D19c-tail）。 */
 async function deriveWake(input: WakeInput) {
@@ -218,10 +218,11 @@ describe('RFC-187 §3-7 — wrap-up round dispatch-ban + directive (Codex P0-3)'
       '..',
       'src',
       'modules',
-      'resource-catalog',
-      'application',
-      'workgroups',
-      'workgroupTurnsDriver.ts',
+      'task-execution',
+      'engine',
+      'task',
+      'workgroup',
+      'workgroupTurns.ts',
     ),
     'utf8',
   )

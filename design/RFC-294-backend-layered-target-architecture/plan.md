@@ -239,6 +239,9 @@ Facade 只许 re-export 或参数形状适配；不得含 DB 查询、状态、�
 - **动态工作流生成引擎**：[RFC-410](../RFC-410-task-execution-dynamic-workflow-engine/proposal.md)（In Progress）：生成 pass 迁入
   `engine/task/dynamicWorkflowGenerate.ts`，编排代理与生成判定迁入 `domain/`，第二层校验迁入 shared，第一层校验经端口注入；删除
   `services/dynamicWorkflowRunner.ts` 与 `services/orchestratorAgent.ts`。workgroup 轮次引擎迁入 task-execution 仍待立 RFC。
+- **workgroup 轮次引擎**：[RFC-411](../RFC-411-task-execution-workgroup-turns-engine/proposal.md)（In Progress）：轮次驱动迁入
+  `engine/task/workgroup/`，端口进 `application/ports/`，纯函数进 `domain/workgroup/`，持久化适配器随表回到 task-execution `infrastructure/`；
+  resource-catalog 下的轮次文件删除，两类 SPI 退役。
 
 ### S7 唯一 AtomicApply 引擎（W6）
 

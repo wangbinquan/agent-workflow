@@ -3,6 +3,13 @@
  * command contract lives on the exact public surface.
  */
 export type {
+  WorkgroupHostLedgerFailRunOperation,
+  WorkgroupHostLedgerMintOperation,
+  WorkgroupHostLedgerMintReceipt,
+  WorkgroupHostLedgerOperation,
+  WorkgroupHostLedgerParticipantInTx,
+  WorkgroupHostLedgerRun,
+  WorkgroupHostLedgerStampOperation,
   WorkgroupTurnHostOperations,
   WorkgroupTurnHostRequest,
   WorkgroupTurnHostResult,

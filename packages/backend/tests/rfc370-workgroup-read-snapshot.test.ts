@@ -15,7 +15,7 @@ import { withNativeTransactions } from './helpers/nativeTransactions'
 import {
   createWorkgroupTurnsPersistence,
   type WorkgroupHostLedgerParticipantFactory,
-} from '@/modules/resource-catalog/infrastructure/workgroupTurnsOperations'
+} from '@/modules/task-execution/infrastructure/workgroupTurnsPersistence'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 
 type HostLedger = ReturnType<WorkgroupHostLedgerParticipantFactory['inTransaction']>

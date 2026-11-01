@@ -17,7 +17,7 @@ import { holdsExplicitTransaction } from '@/db/transactionScope'
 import {
   createWorkgroupTurnsPersistence,
   type WorkgroupHostLedgerParticipantFactory,
-} from '@/modules/resource-catalog/infrastructure/workgroupTurnsOperations'
+} from '@/modules/task-execution/infrastructure/workgroupTurnsPersistence'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { POSTGRESQL_SERIALIZATION_ATTEMPTS } from '@/platform/persistence/postgresqlSerializationRetry'
 

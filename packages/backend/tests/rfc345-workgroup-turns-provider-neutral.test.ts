@@ -10,23 +10,28 @@ function source(path: string): string {
 
 describe('RFC-345/349 provider-neutral workgroup turn ledger', () => {
   const publicCommands = source('src/modules/task-execution/public/commands.ts')
-  const driver = source(
-    'src/modules/resource-catalog/application/workgroups/workgroupTurnsDriver.ts',
+  // RFC-411: the turn engine, its ports and its persistence adapter moved into task-execution.
+  const driver = source('src/modules/task-execution/engine/task/workgroup/workgroupTurns.ts')
+  const turnPorts = source('src/modules/task-execution/application/ports/workgroupTurns.ts')
+  const spiPorts = source(
+    'src/modules/task-execution/application/ports/workgroupTurnsOperations.ts',
   )
   // RFC-359 W4-D19c：两个 provider 用同一份持久化适配器 + 同一份装配；SQLite 那层 legacy 薄壳已退役。
   const persistence = source(
-    'src/modules/resource-catalog/infrastructure/workgroupTurnsOperations.ts',
+    'src/modules/task-execution/infrastructure/workgroupTurnsPersistence.ts',
   )
-  const composition = source('src/modules/resource-catalog/composition/workgroupTurns.ts')
+  const composition = source('src/modules/task-execution/composition/workgroupTurns.ts')
 
   test('both providers implement the one authoritative TaskExecution public contract', () => {
     expect(publicCommands).toContain('export interface WorkgroupTurnsOperations')
     expect(publicCommands).toContain('export interface WorkgroupHostLedgerParticipantInTx')
     expect(driver).toContain('): WorkgroupTurnsOperations')
-    expect(driver).toContain("from '@/modules/task-execution/public/commands'")
-    expect(persistence).toContain('export function createWorkgroupTurnsPersistenceOperations(')
-    expect(persistence).toContain('): WorkgroupTurnsOperations')
-    expect(persistence).toContain("from '@/modules/task-execution/public/commands'")
+    // Inside task-execution the contract arrives through the application port that re-exports the public one.
+    expect(driver).toContain("from '../../../application/ports/workgroupTurnsOperations'")
+    expect(persistence).toContain("from '../application/ports/workgroupTurnsOperations'")
+    expect(spiPorts).toContain("} from '../../public/commands'")
+    expect(composition).toContain('export function createWorkgroupTurnsPersistenceOperations(')
+    expect(composition).toContain('): WorkgroupTurnsOperations')
     // legacy 的 SQLite 薄壳（套在 legacy engine 上的那份）已删除。
     expect(() =>
       source('src/modules/task-execution/infrastructure/sqliteWorkgroupTurnsOperations.ts'),
@@ -52,7 +57,8 @@ describe('RFC-345/349 provider-neutral workgroup turn ledger', () => {
       'set-dynamic-workflow-state',
       'stamp-result-anchor',
     ]) {
-      expect(driver).toContain(`'${operation}'`)
+      // The closed ledger surface: the operation kinds the engine builds, declared in its ports.
+      expect(driver + turnPorts).toContain(`'${operation}'`)
     }
     for (const turn of [
       'driveLeaderTurn',
@@ -74,7 +80,7 @@ describe('RFC-345/349 provider-neutral workgroup turn ledger', () => {
     expect(driver).not.toMatch(/@\/db\/|drizzle-orm|DbClient|DbTxSync|bun:sqlite/)
   })
 
-  test('目录侧适配器只碰自己的快照，并共享同一笔预留事务', () => {
+  test('轮次持久化适配器只碰自己的快照，并共享同一笔预留事务', () => {
     for (const table of [
       'agents',
       'workgroupTaskState',
@@ -91,7 +97,10 @@ describe('RFC-345/349 provider-neutral workgroup turn ledger', () => {
     )
     expect(configDecoder).toContain('const runtime = WorkgroupRuntimeConfigSchema.safeParse(raw)')
     expect(configDecoder).toContain('config: runtime.success ? runtime.data : null')
-    expect(persistence).toContain('loadAgentPersistenceRows')
+    // RFC-411: member agents come through the resource catalog's public execution queries, in the same read transaction.
+    expect(persistence).toContain(
+      'await createAgentExecutionQueries(transaction).readMany(agentIds)',
+    )
     expect(persistence).toContain('renderAgentCapabilityCard')
     expect(persistence).toContain('retryingWriteTransaction(dependencies.db, async (transaction)')
     const lock = persistence.indexOf('await hostLedger.lockTask(input.taskId)')

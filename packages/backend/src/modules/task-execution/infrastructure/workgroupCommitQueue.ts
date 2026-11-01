@@ -1,3 +1,4 @@
+// RFC-411: moved from resource-catalog infrastructure with the turn persistence adapter.
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { holdsExplicitTransaction } from '@/db/transactionScope'
 import { KeyedSerialQueue } from '@/util/keyedSerialQueue'

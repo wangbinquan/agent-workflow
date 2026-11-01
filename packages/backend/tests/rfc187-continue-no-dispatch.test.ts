@@ -19,7 +19,7 @@ import { WG_LEADER_IDLE_NUDGE_LIMIT } from '@agent-workflow/shared'
 import {
   decideWorkgroupOutcome,
   type WakeSet,
-} from '@/modules/resource-catalog/application/workgroups/workgroupTurnsDriver'
+} from '@/modules/task-execution/engine/task/workgroup/workgroupTurns'
 import { wakeSnapshotOf, type LegacyWakeInput as WakeInput } from './helpers/workgroupWake'
 
 /** 旧夹具形状 → 中立驱动的两参调用（RFC-359 W4-D19c-tail）。 */
@@ -151,10 +151,10 @@ describe('RFC-187 §3-2 — the leader must say WHAT is blocking (AC-12)', () =>
       '..',
       'src',
       'modules',
-      'resource-catalog',
-      'application',
-      'workgroups',
-      'workgroupProtocol.ts',
+      'task-execution',
+      'domain',
+      'workgroup',
+      'protocol.ts',
     ),
     'utf8',
   )

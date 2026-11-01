@@ -16,7 +16,7 @@ import { describeEachProvider } from './helpers/eachProvider'
 // commit）。合一前只有 legacy 的 `casAssignmentStatus` / `advanceMemberCursor` 有具名形态，
 // 套件锁的是那份；生产两个 provider 走的是账本操作 `transition-assignment` /
 // `advance-member-cursor`——同一条判据（CAS 的 from 匹配、游标取 max 单调推进）。
-import { createWorkgroupTurnsPersistence } from '@/modules/resource-catalog/infrastructure/workgroupTurnsOperations'
+import { createWorkgroupTurnsPersistence } from '@/modules/task-execution/infrastructure/workgroupTurnsPersistence'
 import { composeWorkgroupTaskRoomClarifyParticipantFactory } from '@/modules/collaboration/composition/workgroupTaskRoomClarify'
 import { createWorkgroupClarifyAskGate } from '@/modules/collaboration/public/participants'
 import { composeWorkgroupHostLedgerParticipantFactory } from '@/modules/task-execution/composition/workgroupHostLedger'
@@ -39,19 +39,19 @@ import {
   sliceMessagesAfter,
   renderCharterBlock,
   renderGoalBlock,
-  renderWgProtocolBlock,
   renderLeaderLedger,
   renderMessagesBlock,
   renderRosterBlock,
-} from '../src/modules/resource-catalog/application/workgroups/workgroupTurnContext'
+} from '../src/modules/task-execution/domain/workgroup/turnContext'
+import { renderWgProtocolBlock } from '../src/modules/task-execution/domain/workgroup/protocol'
 import type { WorkgroupAssignmentStatus } from '@agent-workflow/shared'
-import { WORKGROUP_TURN_ASSIGNMENT_TRANSITIONS } from '@/modules/resource-catalog/application/workgroups/workgroupTurnsDriver'
+import { WORKGROUP_TURN_ASSIGNMENT_TRANSITIONS } from '@/modules/task-execution/domain/workgroup/turnTransitions'
 // RFC-359 W4-D19c-tail：判据改指两个 provider 真正在跑的那份（中立驱动）；
 // 夹具经 `wakeSnapshotOf` 翻成它要的 (snapshot, inflight)，断言原样保留。
 import {
   decideWorkgroupOutcome,
   deriveWakeSet,
-} from '@/modules/resource-catalog/application/workgroups/workgroupTurnsDriver'
+} from '@/modules/task-execution/engine/task/workgroup/workgroupTurns'
 import { wakeSnapshotOf, type LegacyWakeInput as WakeInput } from './helpers/workgroupWake'
 
 /** 生产账本的持久化面（与两个 bootstrap 装的是同一条）。 */

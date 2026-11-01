@@ -25,7 +25,7 @@ import {
   composeDynamicWorkflowLayerOneValidation,
   composeDynamicWorkflowValidationContext,
 } from '@/modules/resource-catalog/composition/workflowOperations'
-import { composeWorkgroupTurnsOperations } from '@/modules/resource-catalog/composition/workgroupTurns'
+import { composeWorkgroupTurnsOperations } from '@/modules/task-execution/composition/workgroupTurns'
 import { composeRuntimeSelectionParticipantInTx } from '@/modules/runtime-management/composition/runtimeSelection'
 import { composeRepositoryPreparation } from '@/modules/source-control/composition/repositoryPreparation'
 import {

@@ -13,7 +13,7 @@ import { resolve } from 'node:path'
 import {
   detectZeroDeltaDone,
   warnIfZeroDelta,
-} from '@/modules/resource-catalog/application/workgroups/workgroupTurnsDriver'
+} from '@/modules/task-execution/engine/task/workgroup/workgroupTurns'
 
 describe('RFC-187 §4 — detectZeroDeltaDone', () => {
   test('zero files + completed work = suspect (probe A shape)', () => {
@@ -72,10 +72,10 @@ describe('RFC-187 §4 — source locks', () => {
         '..',
         'src',
         'modules',
-        'resource-catalog',
-        'application',
-        'workgroups',
-        'workgroupProtocol.ts',
+        'task-execution',
+        'domain',
+        'workgroup',
+        'protocol.ts',
       ),
       'utf8',
     )
@@ -91,10 +91,11 @@ describe('RFC-187 §4 — source locks', () => {
         '..',
         'src',
         'modules',
-        'resource-catalog',
-        'application',
-        'workgroups',
-        'workgroupTurnsDriver.ts',
+        'task-execution',
+        'engine',
+        'task',
+        'workgroup',
+        'workgroupTurns.ts',
       ),
       'utf8',
     )

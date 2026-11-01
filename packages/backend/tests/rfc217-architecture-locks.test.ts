@@ -189,7 +189,7 @@ describe('rfc217 G6 — the protocol-error reprompt has ONE definition site', ()
     // RFC-359 W4-D19c：定义点搬到中立回合驱动（两个 provider 共用）；legacy 那份只剩一行 re-export，
     // 不再包含这段字面量，所以它从清单里消失是**收敛**，不是漏扫。
     expect(offenders).toEqual([
-      'packages/backend/src/modules/resource-catalog/application/workgroups/workgroupTurnsDriver.ts',
+      'packages/backend/src/modules/task-execution/engine/task/workgroup/workgroupTurns.ts',
     ])
   })
 })
@@ -217,8 +217,9 @@ describe('rfc217 G5/G7 — mode branches ratcheted, shardKey goes through codecs
       // rounds / lifecycle / strategies，共 18 处）整个退役——它的模式分支不是收敛了，是搬到了
       // 两个 provider 共用的中立回合驱动里。那两个文件此前不在棘轮的扫描面上，等于这些分支从
       // 账本视野里消失了；这次把它们一并纳入按同一把棘轮记账。
-      'application/workgroups/workgroupTurnsDriver.ts': 17,
-      'application/workgroups/workgroupTurnPrompts.ts': 3,
+      // RFC-411：轮次驱动与提示词迁入 task-execution（engine/task/workgroup/），按同一把棘轮继续记账。
+      'task-execution/workgroupTurns.ts': 17,
+      'task-execution/turnPrompts.ts': 3,
       // RFC-243 §6.3 曾 +2：`startWorkgroupTaskFromFrozen`（冻结启动面）在同文件内复刻
       // readiness 的 leader 判定与 dw 快照选择。
       // **RFC-359 AC-1（plan §5hn 批次二 ⑤）3 → 1：那个函数整份删除，棘轮收敛。**
@@ -243,11 +244,9 @@ describe('rfc217 G5/G7 — mode branches ratcheted, shardKey goes through codecs
     }
     walk(WG)
     const APP = 'packages/backend/src/modules/resource-catalog/application/workgroups'
-    const applicationFiles = [
-      `${APP}/workgroupRoomProjection.ts`,
-      `${APP}/workgroupTurnsDriver.ts`,
-      `${APP}/workgroupTurnPrompts.ts`,
-    ]
+    const applicationFiles = [`${APP}/workgroupRoomProjection.ts`]
+    const TURNS = 'packages/backend/src/modules/task-execution/engine/task/workgroup'
+    const turnEngineFiles = [`${TURNS}/workgroupTurns.ts`, `${TURNS}/turnPrompts.ts`]
     // 合一后的任务房不在 legacy 目录里，但它承接了房间那部分模式分支——一起纳入扫描面，
     // 否则这些分支会从棘轮的视野里消失。
     const roomFiles = [
@@ -255,14 +254,16 @@ describe('rfc217 G5/G7 — mode branches ratcheted, shardKey goes through codecs
       'packages/backend/src/modules/resource-catalog/infrastructure/workgroupTaskRoomCommands.ts',
       'packages/backend/src/modules/resource-catalog/infrastructure/workgroupTaskRoomQueries.ts',
     ]
-    files.push(...applicationFiles, ...roomFiles)
+    files.push(...applicationFiles, ...turnEngineFiles, ...roomFiles)
     const actual: Record<string, number> = {}
     for (const f of files) {
       const rel = applicationFiles.includes(f)
         ? `application/workgroups/${f.slice(f.lastIndexOf('/') + 1)}`
-        : roomFiles.includes(f)
-          ? `infrastructure/${f.slice(f.lastIndexOf('/') + 1)}`
-          : f.slice(WG.length + 1)
+        : turnEngineFiles.includes(f)
+          ? `task-execution/${f.slice(f.lastIndexOf('/') + 1)}`
+          : roomFiles.includes(f)
+            ? `infrastructure/${f.slice(f.lastIndexOf('/') + 1)}`
+            : f.slice(WG.length + 1)
       const count = read(f).split("mode === '").length - 1
       if (count > 0) actual[rel] = count
     }
@@ -347,7 +348,7 @@ describe('rfc217 T6 — assignment writes have ONE owning module', () => {
       'packages/backend/src/modules/collaboration/infrastructure/collaborationWorkgroupClarify.ts',
       'packages/backend/src/modules/resource-catalog/infrastructure/workgroupTaskRoom.ts',
       'packages/backend/src/modules/resource-catalog/infrastructure/workgroupTaskRoomCommands.ts',
-      'packages/backend/src/modules/resource-catalog/infrastructure/workgroupTurnsOperations.ts',
+      'packages/backend/src/modules/task-execution/infrastructure/workgroupTurnsPersistence.ts',
     ])
   })
 })

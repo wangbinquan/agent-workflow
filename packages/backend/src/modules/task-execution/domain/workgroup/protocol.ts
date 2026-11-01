@@ -1,3 +1,4 @@
+// RFC-411: moved from resource-catalog application/workgroups/workgroupProtocol.ts.
 // RFC-359 W1-T7e —— 工作组宿主回合的输出协议块（纯函数），两个 provider 共用。
 //
 // 此前只有 SQLite 的 legacy 回合执行（`infrastructure/legacy/workgroup/turnExecution.ts`）拼这份

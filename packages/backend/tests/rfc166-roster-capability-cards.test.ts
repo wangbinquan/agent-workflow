@@ -20,7 +20,7 @@ import {
   type CreateAgent,
   type WorkgroupRuntimeConfig,
 } from '@agent-workflow/shared'
-import { renderRosterBlock } from '../src/modules/resource-catalog/application/workgroups/workgroupTurnContext'
+import { renderRosterBlock } from '../src/modules/task-execution/domain/workgroup/turnContext'
 import { buildRosterAgentCards } from '../src/services/workgroup/state'
 
 import { createAgent } from '../src/modules/resource-catalog/infrastructure/legacy/agent'

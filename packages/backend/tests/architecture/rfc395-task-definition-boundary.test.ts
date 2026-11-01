@@ -398,7 +398,7 @@ test('each reader uses its launch or runtime side', () => {
       'loaded.task.workgroupConfig?.runtime.revision',
     ],
     [
-      'modules/resource-catalog/infrastructure/workgroupTurnsOperations.ts',
+      'modules/task-execution/infrastructure/workgroupTurnsPersistence.ts',
       'hostSnapshot.workgroupConfig?.runtime.config',
     ],
     [

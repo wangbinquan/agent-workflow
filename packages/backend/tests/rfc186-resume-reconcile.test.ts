@@ -13,7 +13,7 @@
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { decideAssignmentReconcile } from '@/modules/resource-catalog/application/workgroups/workgroupTurnsDriver'
+import { decideAssignmentReconcile } from '@/modules/task-execution/engine/task/workgroup/workgroupTurns'
 
 describe('RFC-186 PR-2 — decideAssignmentReconcile', () => {
   test('interrupted before the worker run was minted → re-dispatch', () => {
@@ -48,10 +48,11 @@ describe('RFC-186 PR-2 — source wiring locks', () => {
       '..',
       'src',
       'modules',
-      'resource-catalog',
-      'application',
-      'workgroups',
-      'workgroupTurnsDriver.ts',
+      'task-execution',
+      'engine',
+      'task',
+      'workgroup',
+      'workgroupTurns.ts',
     ),
     'utf8',
   )

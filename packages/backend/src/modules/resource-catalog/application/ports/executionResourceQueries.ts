@@ -2,6 +2,11 @@ import type { Agent } from '@agent-workflow/shared'
 
 export interface AgentExecutionQueries {
   read(agentId: string): Promise<Agent | null>
+  /**
+   * RFC-411 — these agents' stored rows in one IN read, with the bulk ('normalized') decoding the workgroup turn
+   * snapshot always used; for well-formed rows the result equals `read`'s. Missing ids are absent.
+   */
+  readMany(agentIds: readonly string[]): Promise<readonly Agent[]>
   existingIds(agentIds: readonly string[]): Promise<readonly string[]>
   portNames(agentIds: readonly string[]): Promise<
     ReadonlyMap<

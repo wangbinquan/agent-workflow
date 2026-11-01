@@ -25,14 +25,16 @@ describe('workgroup message-turn directive stays English', () => {
         '..',
         'src',
         'modules',
-        'resource-catalog',
-        'application',
-        'workgroups',
+        'task-execution',
+        'engine',
+        'task',
+        'workgroup',
         name,
       ),
       'utf8',
     )
-  const src = app('workgroupTurnPrompts.ts').concat(app('workgroupTurnsDriver.ts'))
+  // RFC-411: the prompt assembly and the turn engine moved into task-execution engine/task/workgroup/.
+  const src = app('turnPrompts.ts').concat(app('workgroupTurns.ts'))
 
   test('the message-turn directive is present and fully English', () => {
     expect(src).toContain('Do NOT claim or start task work in this turn.')

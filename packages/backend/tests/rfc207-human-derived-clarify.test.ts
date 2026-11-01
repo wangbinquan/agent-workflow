@@ -22,7 +22,7 @@ import {
   type WorkgroupMessage,
   type WorkgroupRuntimeConfig,
 } from '@agent-workflow/shared'
-import { renderWgProtocolBlock } from '../src/modules/resource-catalog/application/workgroups/workgroupTurnContext'
+import { renderWgProtocolBlock } from '../src/modules/task-execution/domain/workgroup/protocol'
 // RFC-395 II-a: exercise the surviving production builders and constant leaf.
 import {
   WG_LEADER_NODE_ID,
@@ -33,7 +33,7 @@ import {
 import {
   decideWorkgroupOutcome,
   type WakeSet,
-} from '@/modules/resource-catalog/application/workgroups/workgroupTurnsDriver'
+} from '@/modules/task-execution/engine/task/workgroup/workgroupTurns'
 import { wakeSnapshotOf, type LegacyWakeInput as WakeInput } from './helpers/workgroupWake'
 
 /** 旧夹具形状 → 中立驱动的两参调用（RFC-359 W4-D19c-tail）。 */

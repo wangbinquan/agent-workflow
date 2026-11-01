@@ -8,16 +8,39 @@ import type { WorkgroupRunSelectionProjection } from '@/platform/runSelectionPro
 import {
   parseBatchShardKey,
   parseMsgShardKey,
+  WORKGROUP_TURN_LEADER_NODE_ID,
+  WORKGROUP_TURN_MEMBER_NODE_ID,
   type WorkgroupMemberCurrentRun,
   type WorkgroupMode,
   type WorkgroupRunEntry,
   type WorkgroupRunKind,
 } from '@agent-workflow/shared'
-import {
-  WORKGROUP_TURN_LEADER_NODE_ID,
-  WORKGROUP_TURN_MEMBER_NODE_ID,
-} from './workgroupTurnsDriver'
-import { resolveMessageTurnTriggerId } from './workgroupTurnContext'
+
+/**
+ * RFC-229 — authoritative direct parent for a message turn. The turn's shard
+ * freezes maxMsgId, so fresh and adopted continuations resolve identically.
+ *
+ * RFC-411: moved here from the turn context (now task-execution); the room projection is its only caller.
+ */
+export function resolveMessageTurnTriggerId(
+  memberId: string,
+  maxMsgId: string | null,
+  messages: readonly {
+    id: string
+    authorMemberId: string | null
+    mentionMemberIds: readonly string[]
+  }[],
+): string | null {
+  if (maxMsgId === null || maxMsgId.length === 0 || maxMsgId === '0') return null
+  let best: string | null = null
+  for (const message of messages) {
+    if (message.id > maxMsgId) continue
+    if (message.authorMemberId === memberId) continue
+    if (!message.mentionMemberIds.includes(memberId)) continue
+    if (best === null || message.id > best) best = message.id
+  }
+  return best
+}
 
 /** Minimal host-run snapshot consumed by the room projection. */
 export interface WorkgroupRoomHostRun {

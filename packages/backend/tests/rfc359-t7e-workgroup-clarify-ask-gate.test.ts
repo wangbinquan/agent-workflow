@@ -28,7 +28,7 @@ import { createWorkgroupClarifyAskGate } from '@/modules/collaboration/public/pa
 import {
   renderWgProtocolBlock,
   wgHostRolePorts,
-} from '@/modules/resource-catalog/application/workgroups/workgroupProtocol'
+} from '@/modules/task-execution/domain/workgroup/protocol'
 import {
   WORKGROUP_TURN_LEADER_NODE_ID,
   WORKGROUP_TURN_MEMBER_NODE_ID,
@@ -412,10 +412,11 @@ test('协议块渲染器：反问邀请只在 clarifyAllowed 时出现，端口�
 test('源锁：中立回合驱动用真协议块与唯一判定点，PG 适配器把判定接给 collaboration 的 gate', () => {
   const root = resolve(import.meta.dir, '..', 'src')
   const driver = readFileSync(
-    resolve(root, 'modules/resource-catalog/application/workgroups/workgroupTurnsDriver.ts'),
+    resolve(root, 'modules/task-execution/engine/task/workgroup/workgroupTurns.ts'),
     'utf8',
   )
-  expect(driver).toContain("from './workgroupProtocol'")
+  // RFC-411: the turn engine moved into task-execution; the protocol renderer is its domain neighbour.
+  expect(driver).toContain("from '../../../domain/workgroup/protocol'")
   expect(driver).toContain('const clarifyAllowed = await persistence.clarifyAllowed({')
   expect(driver).toContain('clarifyEnabled: clarifyAllowed,')
   expect(driver).toContain('workgroupProtocolBlock: renderWgProtocolBlock(')
@@ -423,7 +424,7 @@ test('源锁：中立回合驱动用真协议块与唯一判定点，PG 适配�
   expect(driver).toContain('batchCount: cards.length,')
   expect(driver).not.toContain('## Workgroup output protocol')
   const adapter = readFileSync(
-    resolve(root, 'modules/resource-catalog/infrastructure/workgroupTurnsOperations.ts'),
+    resolve(root, 'modules/task-execution/infrastructure/workgroupTurnsPersistence.ts'),
     'utf8',
   )
   expect(adapter).toContain('dependencies.clarifyAskGate.allowed(input)')

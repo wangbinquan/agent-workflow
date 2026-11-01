@@ -1,3 +1,5 @@
+// RFC-411: moved from resource-catalog application/workgroups/workgroupTurnContext.ts; `resolveMessageTurnTriggerId`
+// stays with its only caller, the resource catalog's task room projection.
 // RFC-164 PR-2 — workgroup prompt-context core: pure functions that decide
 // WHAT each member sees per turn (design §6). The engine (PR-3) assembles the
 // final prompt through renderUserPrompt; everything here is side-effect-free
@@ -61,30 +63,6 @@ export function maxMessageId(messages: readonly WorkgroupMessage[], floor = ''):
     if (m.id > max) max = m.id
   }
   return max
-}
-
-/**
- * RFC-229 — authoritative direct parent for a message turn. The turn's shard
- * freezes maxMsgId, so fresh and adopted continuations resolve identically.
- */
-export function resolveMessageTurnTriggerId(
-  memberId: string,
-  maxMsgId: string | null,
-  messages: readonly {
-    id: string
-    authorMemberId: string | null
-    mentionMemberIds: readonly string[]
-  }[],
-): string | null {
-  if (maxMsgId === null || maxMsgId.length === 0 || maxMsgId === '0') return null
-  let best: string | null = null
-  for (const message of messages) {
-    if (message.id > maxMsgId) continue
-    if (message.authorMemberId === memberId) continue
-    if (!message.mentionMemberIds.includes(memberId)) continue
-    if (best === null || message.id > best) best = message.id
-  }
-  return best
 }
 
 /** Keep the newest items that fit the char budget (render-measured). */
@@ -308,14 +286,6 @@ export function renderLeaderLedger(
   })
   return ['## Assignment ledger', '', ...rows].join('\n')
 }
-
-// RFC-359 W1-T7e：协议块渲染器（纯函数）迁到 application/workgroups/workgroupProtocol.ts，
-// 两个 provider 的工作组宿主回合共用同一份；这里保留再导出给 legacy 调用方。
-export {
-  renderWgProtocolBlock,
-  wgHostRolePorts,
-  type WorkgroupProtocolRole,
-} from './workgroupProtocol'
 
 export function renderMessagesBlock(
   config: WorkgroupRuntimeConfig,

@@ -626,15 +626,16 @@ describe('RFC-376 G3/G4 public boundary', () => {
     expect(
       offDagOfferedPairs(
         fixture(
-          'modules/resource-catalog/composition/workgroupTurns.ts',
-          "import type { WorkgroupTurnsOperations } from '@/modules/task-execution/public/commands'",
+          // RFC-411: the turn SPI bindings retired; the task-room provider binding is the remaining exact example.
+          'modules/resource-catalog/infrastructure/workgroupTaskRoom.ts',
+          "import type { WorkgroupTaskRoomEventIdentity } from '@/modules/task-execution/public/commands'",
         ),
       ),
     ).toEqual([])
     expect(
       offDagOfferedPairs(
         fixture(
-          'modules/resource-catalog/composition/workgroupTurns.ts',
+          'modules/resource-catalog/infrastructure/workgroupTaskRoom.ts',
           "import type { NotTheRegisteredSPI } from '@/modules/task-execution/public/commands'",
         ),
       ),

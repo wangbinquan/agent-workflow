@@ -17,7 +17,7 @@ import type { WorkgroupMessage, WorkgroupRuntimeConfig } from '@agent-workflow/s
 import {
   decideWorkgroupOutcome,
   deriveWakeSet,
-} from '@/modules/resource-catalog/application/workgroups/workgroupTurnsDriver'
+} from '@/modules/task-execution/engine/task/workgroup/workgroupTurns'
 import { wakeSnapshotOf, type LegacyWakeInput as WakeInput } from './helpers/workgroupWake'
 // RFC-359 W4-D19c-tail：判据改指生产那条（宿主账本按 run id 连接未答反问）；夹具把
 // 「会话」翻成「宿主 run + 提问 run 集合」，断言逐条保留。

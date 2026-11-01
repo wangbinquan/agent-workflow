@@ -8,7 +8,7 @@
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { composeWorkgroupTaskRoomClarifyParticipantFactory } from '@/modules/collaboration/composition/workgroupTaskRoomClarify'
 import { createWorkgroupClarifyAskGate } from '@/modules/collaboration/public/participants'
-import { composeWorkgroupTurnsOperations } from '@/modules/resource-catalog/composition/workgroupTurns'
+import { composeWorkgroupTurnsOperations } from '@/modules/task-execution/composition/workgroupTurns'
 import { composeWorkgroupHostLedgerParticipantFactory } from '@/modules/task-execution/composition/workgroupHostLedger'
 import { broadcastNodeStatus } from '@/modules/task-execution/infrastructure/nodeStatusEvents'
 import type { NodeRunStatus } from '@agent-workflow/shared'

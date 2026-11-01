@@ -63,7 +63,7 @@ import {
   workgroupDraftSnapshotOf,
 } from '../src/services/workgroups'
 
-import { WORKGROUP_TURN_ASSIGNMENT_TRANSITIONS } from '@/modules/resource-catalog/application/workgroups/workgroupTurnsDriver'
+import { WORKGROUP_TURN_ASSIGNMENT_TRANSITIONS } from '@/modules/task-execution/domain/workgroup/turnTransitions'
 
 // RFC-359 W4-D19c-tail：转移表改指生产那份（与合一前逐字相同）。
 function canTransitionAssignment(
@@ -600,7 +600,7 @@ describe('RFC-181 C — 源级契约锁', () => {
     // errorMessage 是人读面包屑，绝不再当机器键 —— startsWith(CLARIFY_FORBIDDEN_PREFIX) 回潮即红。
     // RFC-217 T3 —— 软拒分支收编进回合骨架（唯一一处结构化路由），各角色只提供文案。
     // RFC-359 W4-D19c：骨架与三份文案合一进中立驱动，两个 provider 同一条；锚点随之全部指它。
-    const driver = SRC('modules/resource-catalog/application/workgroups/workgroupTurnsDriver.ts')
+    const driver = SRC('modules/task-execution/engine/task/workgroup/workgroupTurns.ts')
     expect(driver.split("result.failureCode === 'clarify-forbidden'").length - 1).toBe(1)
     expect(driver).not.toContain('startsWith(CLARIFY_FORBIDDEN_PREFIX)')
     // 三份角色化 notice（领队 / 派单 / 批量）都在，且都由骨架的同一个 spec 槽位喂进去。

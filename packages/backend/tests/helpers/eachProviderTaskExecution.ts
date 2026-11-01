@@ -64,7 +64,7 @@ import { createCollaborationRuntimeMechanics } from '@/modules/collaboration/inf
 import { createWorkgroupClarifyAskGate } from '@/modules/collaboration/public/participants'
 import { composeWorkgroupTaskRoomClarifyParticipantFactory } from '@/modules/collaboration/composition/workgroupTaskRoomClarify'
 import { composeTaskExecutionResourceBinding } from '@/modules/resource-catalog/composition/taskExecution'
-import { composeWorkgroupTurnsOperations } from '@/modules/resource-catalog/composition/workgroupTurns'
+import { composeWorkgroupTurnsOperations } from '@/modules/task-execution/composition/workgroupTurns'
 import { loadAgentPersistenceRows } from '@/modules/resource-catalog/infrastructure/agentPersistence'
 import { mcpFromPersistenceRow } from '@/modules/resource-catalog/infrastructure/mcpPersistence'
 import { createPluginRepository } from '@/modules/resource-catalog/infrastructure/pluginRepository'

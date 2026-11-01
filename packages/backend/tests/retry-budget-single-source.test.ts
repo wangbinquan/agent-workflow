@@ -53,7 +53,7 @@ describe('DEFAULT_PROTOCOL_RETRY_BUDGET 单源', () => {
   test('workgroup 回合驱动：协议重试 + fc 重开预算走共享常量', () => {
     // RFC-359 W4-D19c：两个 provider 合到同一条中立驱动，两个锚点都在它里面
     // （合一前分居 legacy 的 turnExecution.ts 与 lifecycle.ts）。
-    const driver = SRC('modules/resource-catalog/application/workgroups/workgroupTurnsDriver.ts')
+    const driver = SRC('modules/task-execution/engine/task/workgroup/workgroupTurns.ts')
     // 协议重试预算：每回合的上限允许被 spec 覆盖（消息回合是单发），兜底走共享常量。
     expect(driver).toContain('spec.maxProtocolRetries ?? DEFAULT_PROTOCOL_RETRY_BUDGET')
     expect(driver).not.toContain('maxProtocolRetries ?? 3')

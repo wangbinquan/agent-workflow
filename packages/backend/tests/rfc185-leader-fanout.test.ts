@@ -40,7 +40,7 @@ import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 import { gateViewOf, loadWorkgroupTaskState } from '../src/services/workgroup/state'
 import { createAgent } from '../src/modules/resource-catalog/infrastructure/legacy/agent'
-import { renderWgProtocolBlock } from '../src/modules/resource-catalog/application/workgroups/workgroupTurnContext'
+import { renderWgProtocolBlock } from '../src/modules/task-execution/domain/workgroup/protocol'
 // RFC-395 II-a: exercise the surviving production builders and constant leaf.
 import {
   buildWorkgroupHostSnapshot,
@@ -67,17 +67,15 @@ import {
 } from './helpers/workgroupTurns'
 // RFC-359 W4-D19c-tail：判据改指两个 provider 真正在跑的那份（中立驱动）；
 // 夹具经 `wakeSnapshotOf` 翻成它要的 (snapshot, inflight)，断言原样保留。
-import { deriveWakeSet } from '@/modules/resource-catalog/application/workgroups/workgroupTurnsDriver'
+import { deriveWakeSet } from '@/modules/task-execution/engine/task/workgroup/workgroupTurns'
 import { wakeSnapshotOf, type LegacyWakeInput as WakeInput } from './helpers/workgroupWake'
 import { createLogger } from '../src/util/log'
 import { composeWorkgroupTaskRoomClarifyParticipantFactory } from '@/modules/collaboration/composition/workgroupTaskRoomClarify'
 import { createWorkgroupClarifyAskGate } from '@/modules/collaboration/public/participants'
 import { composeWorkgroupHostLedgerParticipantFactory } from '@/modules/task-execution/composition/workgroupHostLedger'
-import {
-  createWorkgroupTurnsOperations,
-  type WorkgroupTurnsPersistencePort,
-} from '@/modules/resource-catalog/application/workgroups/workgroupTurnsDriver'
-import { createWorkgroupTurnsPersistence } from '@/modules/resource-catalog/infrastructure/workgroupTurnsOperations'
+import { createWorkgroupTurnsOperations } from '@/modules/task-execution/engine/task/workgroup/workgroupTurns'
+import type { WorkgroupTurnsPersistencePort } from '@/modules/task-execution/application/ports/workgroupTurns'
+import { createWorkgroupTurnsPersistence } from '@/modules/task-execution/infrastructure/workgroupTurnsPersistence'
 
 /** 旧夹具形状 → 中立驱动的两参调用（RFC-359 W4-D19c-tail）。 */
 async function deriveWake(input: WakeInput) {

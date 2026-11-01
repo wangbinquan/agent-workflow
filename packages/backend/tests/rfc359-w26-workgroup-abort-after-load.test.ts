@@ -17,11 +17,9 @@ import type {
   WorkgroupTurnHostRequest,
   WorkgroupTurnHostResult,
 } from '@/modules/task-execution/public/commands'
-import {
-  createWorkgroupTurnsOperations,
-  type WorkgroupTurnsPersistencePort,
-} from '@/modules/resource-catalog/application/workgroups/workgroupTurnsDriver'
-import { createWorkgroupTurnsPersistence } from '@/modules/resource-catalog/infrastructure/workgroupTurnsOperations'
+import { createWorkgroupTurnsOperations } from '@/modules/task-execution/engine/task/workgroup/workgroupTurns'
+import type { WorkgroupTurnsPersistencePort } from '@/modules/task-execution/application/ports/workgroupTurns'
+import { createWorkgroupTurnsPersistence } from '@/modules/task-execution/infrastructure/workgroupTurnsPersistence'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 
 function deferred() {

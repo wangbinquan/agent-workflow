@@ -25,12 +25,12 @@ import {
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { composeWorkgroupTaskRoomClarifyParticipantFactory } from '@/modules/collaboration/composition/workgroupTaskRoomClarify'
 import { createWorkgroupClarifyAskGate } from '@/modules/collaboration/public/participants'
-import {
-  createWorkgroupTurnsOperations,
-  type WorkgroupTurnLedgerOperation,
-  type WorkgroupTurnsPersistencePort,
-} from '@/modules/resource-catalog/application/workgroups/workgroupTurnsDriver'
-import { createWorkgroupTurnsPersistence } from '@/modules/resource-catalog/infrastructure/workgroupTurnsOperations'
+import { createWorkgroupTurnsOperations } from '@/modules/task-execution/engine/task/workgroup/workgroupTurns'
+import type {
+  WorkgroupTurnLedgerOperation,
+  WorkgroupTurnsPersistencePort,
+} from '@/modules/task-execution/application/ports/workgroupTurns'
+import { createWorkgroupTurnsPersistence } from '@/modules/task-execution/infrastructure/workgroupTurnsPersistence'
 import { composeWorkgroupHostLedgerParticipantFactory } from '@/modules/task-execution/composition/workgroupHostLedger'
 import {
   WORKGROUP_TURN_LEADER_NODE_ID,
@@ -694,7 +694,7 @@ describe('RFC-369 AC-5 —— 源码锁：内部错误转换住在 executeHostTu
   test('驱动 catch 不再是 host 执行中内部错误的出口（转换发生在 executeHostTurn 内）', async () => {
     const source = await Bun.file(
       new URL(
-        '../src/modules/resource-catalog/application/workgroups/workgroupTurnsDriver.ts',
+        '../src/modules/task-execution/engine/task/workgroup/workgroupTurns.ts',
         import.meta.url,
       ),
     ).text()

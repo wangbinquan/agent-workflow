@@ -17,8 +17,8 @@ import { resolve } from 'node:path'
 import {
   followupForFailure,
   wgFollowupNotice,
-} from '../src/modules/resource-catalog/application/workgroups/workgroupTurnPrompts'
-import { renderWgProtocolBlock } from '../src/modules/resource-catalog/application/workgroups/workgroupTurnContext'
+} from '../src/modules/task-execution/engine/task/workgroup/turnPrompts'
+import { renderWgProtocolBlock } from '../src/modules/task-execution/domain/workgroup/protocol'
 import type { WorkgroupRuntimeConfig } from '@agent-workflow/shared'
 
 // Every narrow envelope failure in the shared policy table is retryable in the
@@ -130,10 +130,11 @@ describe('RFC-186 — source locks (中立回合驱动)', () => {
       '..',
       'src',
       'modules',
-      'resource-catalog',
-      'application',
-      'workgroups',
-      'workgroupTurnsDriver.ts',
+      'task-execution',
+      'engine',
+      'task',
+      'workgroup',
+      'workgroupTurns.ts',
     ),
     'utf8',
   )

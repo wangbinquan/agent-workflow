@@ -27,11 +27,11 @@ import {
   WORKGROUP_TURN_MEMBER_NODE_ID,
   type WorkgroupHostLedgerRun,
 } from '@/modules/task-execution/public/commands'
+import type { InflightTurns } from '@/modules/task-execution/engine/task/workgroup/workgroupTurns'
 import type {
-  InflightTurns,
   WorkgroupTurnMemberAgent,
   WorkgroupTurnsSnapshot,
-} from '@/modules/resource-catalog/application/workgroups/workgroupTurnsDriver'
+} from '@/modules/task-execution/application/ports/workgroupTurns'
 
 /** 合一前 `legacy/workgroup/wake.ts` 的输入形状，逐字保留，方便既有夹具照抄。 */
 export interface LegacyWakeInput {

@@ -34,7 +34,7 @@ import { autoResumeInterruptedTasks } from '../src/services/autoResume'
 // RFC-359 W4-D19c-tail：判据 + 复活都改指生产那份（中立回合驱动）。合一时这两样**都没带过来**
 // ——auto-resume 那一半还在，但唤醒后驱动只铸普通 `wg-leader-round`，而 Q&A 注入只发生在澄清
 // 血缘的 rerun 上，于是人的回答照样丢。本次一并补回。
-import { isKilledClarifyContinuation } from '@/modules/resource-catalog/application/workgroups/workgroupTurnsDriver'
+import { isKilledClarifyContinuation } from '@/modules/task-execution/engine/task/workgroup/workgroupTurns'
 import { CLARIFY_RERUN_CAUSES, isClarifyRerunCause } from '../src/services/nodeRunMint'
 import { createTaskExecutionPersistence } from '../src/modules/task-execution/composition/taskExecutionPersistence'
 
@@ -184,10 +184,11 @@ describe('RFC-187 T13 — source locks (driver-entry revive)', () => {
       '..',
       'src',
       'modules',
-      'resource-catalog',
-      'application',
-      'workgroups',
-      'workgroupTurnsDriver.ts',
+      'task-execution',
+      'engine',
+      'task',
+      'workgroup',
+      'workgroupTurns.ts',
     ),
     'utf8',
   )

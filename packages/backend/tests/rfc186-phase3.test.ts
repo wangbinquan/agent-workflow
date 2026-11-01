@@ -5,7 +5,7 @@
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { messageDraft } from '@/modules/resource-catalog/application/workgroups/workgroupTurnsDriver'
+import { messageDraft } from '@/modules/task-execution/engine/task/workgroup/workgroupTurns'
 
 // RFC-359 W4-D19c-tail：legacy 工作组引擎岛已退役，这些规则合到了两个 provider 共用的中立
 // 回合驱动里；串起来的锁面随之改锚它。
@@ -14,10 +14,11 @@ const DRIVER_PATH = resolve(
   '..',
   'src',
   'modules',
-  'resource-catalog',
-  'application',
-  'workgroups',
-  'workgroupTurnsDriver.ts',
+  'task-execution',
+  'engine',
+  'task',
+  'workgroup',
+  'workgroupTurns.ts',
 )
 const SRC = readFileSync(DRIVER_PATH, 'utf8')
 
@@ -84,10 +85,10 @@ describe('RFC-186 Phase 3 — engine hardening locks', () => {
         '..',
         'src',
         'modules',
-        'resource-catalog',
-        'application',
-        'workgroups',
-        'workgroupTurnContext.ts',
+        'task-execution',
+        'domain',
+        'workgroup',
+        'turnContext.ts',
       ),
       'utf8',
     )
@@ -99,10 +100,10 @@ describe('RFC-186 Phase 3 — engine hardening locks', () => {
         '..',
         'src',
         'modules',
-        'resource-catalog',
-        'application',
-        'workgroups',
-        'workgroupProtocol.ts',
+        'task-execution',
+        'domain',
+        'workgroup',
+        'protocol.ts',
       ),
       'utf8',
     )

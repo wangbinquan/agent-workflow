@@ -491,7 +491,7 @@ test('源码锁：回合只有一份实现与一份装配，legacy 薄壳与 pro
   const root = resolve(import.meta.dir, '..', 'src')
   const read = (path: string): string => readFileSync(resolve(root, path), 'utf8')
 
-  const composition = read('modules/resource-catalog/composition/workgroupTurns.ts')
+  const composition = read('modules/task-execution/composition/workgroupTurns.ts')
   expect(composition).toContain('export function composeWorkgroupTurnsOperations(')
   expect(composition).not.toContain('composePostgresqlWorkgroupTurnsOperations')
 

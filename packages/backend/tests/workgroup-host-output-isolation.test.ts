@@ -44,7 +44,7 @@ import { runNode } from './helpers/runner'
 import {
   renderWgProtocolBlock,
   wgHostRolePorts,
-} from '../src/modules/resource-catalog/application/workgroups/workgroupTurnContext'
+} from '../src/modules/task-execution/domain/workgroup/protocol'
 import type { Logger } from '../src/util/log'
 
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
@@ -383,14 +383,7 @@ describe('RFC-184 — source wiring locks', () => {
     // 投影布线唯一存在于回合骨架（`wgHostRolePorts(<角色>, …)` 单点）；绕开骨架直连宿主
     // 已被 rfc181 锁禁——此处锁投影不丢。RFC-359 W4-D19c-tail：骨架合一进中立驱动，锚点随迁。
     const skeleton = readFileSync(
-      join(
-        SRC,
-        'modules',
-        'resource-catalog',
-        'application',
-        'workgroups',
-        'workgroupTurnsDriver.ts',
-      ),
+      join(SRC, 'modules', 'task-execution', 'engine', 'task', 'workgroup', 'workgroupTurns.ts'),
       'utf8',
     )
     expect((skeleton.match(/hostOutputPorts:/g) ?? []).length).toBe(1)

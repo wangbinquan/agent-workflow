@@ -4,9 +4,9 @@
 
 import { describe, expect, test } from 'bun:test'
 import { buildMsgShardKey, parseMsgShardKey, type WorkgroupMessage } from '@agent-workflow/shared'
-import { resolveMessageTurnTriggerId } from '../src/modules/resource-catalog/application/workgroups/workgroupTurnContext'
+import { resolveMessageTurnTriggerId } from '../src/modules/resource-catalog/application/workgroups/workgroupRoomProjection'
 // RFC-359 W4-D19c-tail：边界判据改指生产那份。
-import { messageTurnBoundary } from '@/modules/resource-catalog/application/workgroups/workgroupTurnsDriver'
+import { messageTurnBoundary } from '@/modules/task-execution/engine/task/workgroup/workgroupTurns'
 
 function message(
   id: string,

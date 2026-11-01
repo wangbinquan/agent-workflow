@@ -40,7 +40,7 @@ describe('RFC-182 — pending 帧源级锁', () => {
     // RFC-359 W4-D19c：骨架合一进中立驱动，广播收成宿主的可选能力（host.broadcastNodeStatus），
     // 由两个 bootstrap 接同一条生产广播。锚点随之移到驱动里的那一处**新铸**分支：
     // 采纳既有 run 的分支不经过它，所以 adopted 不会重发一帧 pending。
-    const driver = SRC('modules/resource-catalog/application/workgroups/workgroupTurnsDriver.ts')
+    const driver = SRC('modules/task-execution/engine/task/workgroup/workgroupTurns.ts')
     expect(
       driver.split("broadcastNodeStatus?.(run.runId, spec.nodeId, 'pending')").length - 1,
     ).toBe(1)

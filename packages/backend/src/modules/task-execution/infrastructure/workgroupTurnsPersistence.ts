@@ -1,3 +1,6 @@
+// RFC-411 — the workgroup turn engine's persistence adapter, moved from resource-catalog: it reads and writes
+// task-execution's own workgroup tables and host ledger in task-execution transactions; member agents come
+// through the resource catalog's public execution queries.
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { first, queryRows } from '@/platform/persistence/queryHelpers'
@@ -12,8 +15,7 @@ import { and, asc, eq, inArray, ne, sql } from 'drizzle-orm'
 import type {
   WorkgroupHostLedgerOperation,
   WorkgroupHostLedgerParticipantInTx,
-  WorkgroupTurnsOperations,
-} from '@/modules/task-execution/public/commands'
+} from '../application/ports/workgroupTurnsOperations'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { databaseSessionFor, engineOf } from '@/platform/persistence/databaseTransaction'
 import { retryingWriteTransaction } from '@/platform/persistence/retryingWriteTransaction'
@@ -21,27 +23,28 @@ import { runWorkgroupCommit } from './workgroupCommitQueue'
 import {
   WORKGROUP_TURN_ASSIGNMENT_TRANSITIONS,
   WORKGROUP_TURN_GATE_TRANSITIONS,
-  createWorkgroupTurnsOperations,
-  type WorkgroupClarifyAllowedInput,
-  type WorkgroupClarifyAllowedPort,
-  type WorkgroupTurnAssignment,
-  type WorkgroupTurnGateOperation,
-  type WorkgroupTurnLedgerOperation,
-  type WorkgroupTurnMessageDraft,
-  type WorkgroupTurnMintedRun,
-  type WorkgroupTurnsLedgerCommitReceipt,
-  type WorkgroupTurnsPersistencePort,
-  type WorkgroupTurnsSnapshot,
-} from '../application/workgroups/workgroupTurnsDriver'
-import { loadAgentPersistenceRows } from './agentPersistence'
-import type { ResourceCatalogTransaction } from './resourceCatalogTransaction'
+} from '../domain/workgroup/turnTransitions'
+import type {
+  WorkgroupClarifyAllowedInput,
+  WorkgroupClarifyAllowedPort,
+  WorkgroupTurnAssignment,
+  WorkgroupTurnGateOperation,
+  WorkgroupTurnLedgerOperation,
+  WorkgroupTurnMessageDraft,
+  WorkgroupTurnMintedRun,
+  WorkgroupTurnsLedgerCommitReceipt,
+  WorkgroupTurnsPersistencePort,
+  WorkgroupTurnsSnapshot,
+} from '../application/ports/workgroupTurns'
+import { createAgentExecutionQueries } from '@/modules/resource-catalog/public/queries'
+import type { PersistenceTx } from '@/platform/persistence/querySurface'
 
 const ROSTER_CARD_PROMPT_BUDGET = 240
 const ROSTER_INPUT_DESCRIPTION_TOTAL_BUDGET = 2_400
 const ROSTER_CARD_INPUT_DESCRIPTION_MAX = 240
 
 export interface WorkgroupHostLedgerParticipantFactory {
-  inTransaction(transaction: ResourceCatalogTransaction): WorkgroupHostLedgerParticipantInTx
+  inTransaction(transaction: PersistenceTx): WorkgroupHostLedgerParticipantInTx
 }
 
 export interface WorkgroupTurnsDependencies {
@@ -138,7 +141,7 @@ function assignmentFromRow(
 }
 
 async function loadSnapshot(
-  transaction: ResourceCatalogTransaction,
+  transaction: PersistenceTx,
   hostLedger: WorkgroupHostLedgerParticipantInTx,
   taskId: string,
 ): Promise<WorkgroupTurnsSnapshot | null> {
@@ -146,7 +149,6 @@ async function loadSnapshot(
   if (hostSnapshot === null) return null
   const config = hostSnapshot.workgroupConfig?.runtime.config
   if (config == null) return null
-  const { agents } = tablesOf(transaction)
   const { workgroupTaskState, workgroupAssignments, workgroupMessages, workgroupMemberCursors } =
     tablesOf(transaction)
   const [stateRow, assignmentRows, messageRows, cursorRows] = await Promise.all([
@@ -185,11 +187,8 @@ async function loadSnapshot(
       ),
     ),
   ]
-  const agentRows =
-    agentIds.length === 0
-      ? []
-      : await transaction.select().from(agents).where(inArray(agents.id, agentIds))
-  const hydratedAgents = await loadAgentPersistenceRows(transaction, agentRows)
+  // RFC-411: member agents come through the resource catalog's public execution queries, in this read transaction.
+  const hydratedAgents = await createAgentExecutionQueries(transaction).readMany(agentIds)
   const agentById = new Map(hydratedAgents.map((agent) => [agent.id, agent]))
   const agentMemberCount = config.members.filter((member) => member.memberType === 'agent').length
   const inputDescriptionBudget = perCardInputDescriptionBudget(
@@ -244,7 +243,7 @@ async function loadSnapshot(
 }
 
 async function insertMessage(
-  transaction: ResourceCatalogTransaction,
+  transaction: PersistenceTx,
   taskId: string,
   message: WorkgroupTurnMessageDraft,
 ): Promise<void> {
@@ -323,8 +322,8 @@ function isHostLedgerOperation(
  * 跳过要报给调用方：合一前 SQLite 在写事务里当场往房间贴一条「N 条重复任务被丢弃」的系统消息，
  * 而并发的成员回合各拿同一份快照，去重只可能在提交这一刻定论（RFC-359 W4-D19c）。
  */
-async function applyResourceCatalogOperation(
-  transaction: ResourceCatalogTransaction,
+async function applyWorkgroupTurnOperation(
+  transaction: PersistenceTx,
   taskId: string,
   operation: WorkgroupTurnResourceCatalogOperation,
 ): Promise<string | null> {
@@ -565,7 +564,7 @@ export function createWorkgroupTurnsPersistence(
                 failedRunIds.push(...(receipt.failedRunIds ?? []))
                 continue
               }
-              const skipped = await applyResourceCatalogOperation(
+              const skipped = await applyWorkgroupTurnOperation(
                 transaction,
                 input.taskId,
                 operation,
@@ -583,11 +582,4 @@ export function createWorkgroupTurnsPersistence(
       })
     },
   })
-}
-
-/** Real PostgreSQL Resource Catalog owner for the TaskExecution consumer port. */
-export function createWorkgroupTurnsPersistenceOperations(
-  dependencies: WorkgroupTurnsDependencies,
-): WorkgroupTurnsOperations {
-  return createWorkgroupTurnsOperations(createWorkgroupTurnsPersistence(dependencies))
 }

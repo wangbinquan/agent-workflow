@@ -96,42 +96,8 @@ interface NamedModuleBinding {
  * an ordinary off-DAG edge until its provider role is reviewed explicitly.
  */
 const EXACT_REQUIRED_SPI_BINDINGS: readonly ExactRequiredSpiBinding[] = [
-  ...(
-    [
-      // RFC-369 §4.4：内部错误路径上终结孤儿宿主 run 的账本操作，与 mint / stamp 同属宿主账本合同。
-      ['WorkgroupHostLedgerFailRunOperation', 'type'],
-      ['WorkgroupHostLedgerMintOperation', 'type'],
-      ['WorkgroupHostLedgerMintReceipt', 'type'],
-      ['WorkgroupHostLedgerRun', 'type'],
-      ['WorkgroupHostLedgerStampOperation', 'type'],
-      ['WorkgroupTurnHostOperations', 'type'],
-      ['WorkgroupTurnHostResult', 'type'],
-      ['WorkgroupTurnLogger', 'type'],
-      ['WorkgroupTurnsOperations', 'type'],
-    ] as const
-  ).map(([symbol, edgeKind]) => ({
-    from: 'packages/backend/src/modules/resource-catalog/application/workgroups/workgroupTurnsDriver.ts',
-    specifier: '@/modules/task-execution/public/commands',
-    symbol,
-    edgeKind,
-    syntax: 'static-import' as const,
-    role: 'workgroup-turns-provider' as const,
-  })),
-  ...[
-    'WorkgroupHostLedgerOperation',
-    'WorkgroupHostLedgerParticipantInTx',
-    'WorkgroupTurnsOperations',
-  ].map((symbol) => ({
-    from: 'packages/backend/src/modules/resource-catalog/infrastructure/workgroupTurnsOperations.ts',
-    specifier: '@/modules/task-execution/public/commands',
-    symbol,
-    edgeKind: 'type' as const,
-    syntax: 'static-import' as const,
-    role:
-      symbol === 'WorkgroupTurnsOperations'
-        ? ('workgroup-turns-provider' as const)
-        : ('workgroup-host-ledger-provider' as const),
-  })),
+  // RFC-411: the workgroup turn engine, its persistence adapter and composition moved into task-execution, so the
+  // `workgroup-turns-provider` / `workgroup-host-ledger-provider` bindings retired with the resource-catalog files.
   ...['WorkgroupTaskRoomEventIdentity', 'WorkgroupTaskRoomTaskParticipantInTx'].map((symbol) => ({
     from: 'packages/backend/src/modules/resource-catalog/infrastructure/workgroupTaskRoom.ts',
     specifier: '@/modules/task-execution/public/commands',
@@ -140,14 +106,6 @@ const EXACT_REQUIRED_SPI_BINDINGS: readonly ExactRequiredSpiBinding[] = [
     syntax: 'static-import' as const,
     role: 'workgroup-task-room-provider' as const,
   })),
-  {
-    from: 'packages/backend/src/modules/resource-catalog/composition/workgroupTurns.ts',
-    specifier: '@/modules/task-execution/public/commands',
-    symbol: 'WorkgroupTurnsOperations',
-    edgeKind: 'type',
-    syntax: 'static-import',
-    role: 'workgroup-turns-provider',
-  },
 ]
 
 function requiredSpiBindingKey(binding: {
@@ -676,24 +634,6 @@ describe('RFC-294 review §B1 —— 负 fixture：判据自己咬得动', () =>
       offDagOfferedEdges(
         [
           sourceUnit(
-            'packages/backend/src/modules/resource-catalog/application/workgroups/workgroupTurnsDriver.ts',
-            `
-              import {
-                type WorkgroupHostLedgerMintOperation,
-                type WorkgroupTurnsOperations,
-              } from '@/modules/task-execution/public/commands'
-            `,
-          ),
-          sourceUnit(
-            'packages/backend/src/modules/resource-catalog/infrastructure/workgroupTurnsOperations.ts',
-            `
-              import type {
-                WorkgroupHostLedgerParticipantInTx,
-                WorkgroupTurnsOperations,
-              } from '@/modules/task-execution/public/commands'
-            `,
-          ),
-          sourceUnit(
             'packages/backend/src/modules/resource-catalog/infrastructure/workgroupTaskRoom.ts',
             `
               import type {
@@ -721,30 +661,30 @@ describe('RFC-294 review §B1 —— 负 fixture：判据自己咬得动', () =>
           `,
         ),
         sourceUnit(
-          'packages/backend/src/modules/resource-catalog/composition/workgroupTurns.ts',
+          'packages/backend/src/modules/resource-catalog/infrastructure/workgroupTaskRoom.ts',
           `
             import type {
               TaskRecoveryOperations,
-              WorkgroupTurnsOperations,
+              WorkgroupTaskRoomEventIdentity,
             } from '@/modules/task-execution/public/commands'
           `,
         ),
         sourceUnit(
-          'packages/backend/src/modules/resource-catalog/infrastructure/workgroupTurnsOperations.ts',
-          "import type { WorkgroupTurnsOperations } from '@/modules/task-execution/public/queries'\n",
+          'packages/backend/src/modules/resource-catalog/infrastructure/workgroupTaskRoom.ts',
+          "import type { WorkgroupTaskRoomEventIdentity } from '@/modules/task-execution/public/queries'\n",
         ),
         sourceUnit(
-          'packages/backend/src/modules/resource-catalog/composition/workgroupTurns.ts',
-          "export type { WorkgroupTurnsOperations } from '@/modules/task-execution/public/commands'\n",
+          'packages/backend/src/modules/resource-catalog/infrastructure/workgroupTaskRoom.ts',
+          "export type { WorkgroupTaskRoomEventIdentity } from '@/modules/task-execution/public/commands'\n",
         ),
         sourceUnit(
-          'packages/backend/src/modules/resource-catalog/composition/workgroupTurns.ts',
-          "import { WorkgroupTurnsOperations } from '@/modules/task-execution/public/commands'\n",
+          'packages/backend/src/modules/resource-catalog/infrastructure/workgroupTaskRoom.ts',
+          "import { WorkgroupTaskRoomEventIdentity } from '@/modules/task-execution/public/commands'\n",
         ),
         sourceUnit(
           'packages/backend/src/modules/resource-catalog/application/agents/agentApplication.ts',
           `
-            import type { WorkgroupTurnsOperations }
+            import type { WorkgroupTaskRoomEventIdentity }
               from '@/modules/task-execution/public/commands'
           `,
         ),
@@ -755,10 +695,10 @@ describe('RFC-294 review §B1 —— 负 fixture：判据自己咬得动', () =>
     expect(violations.map((edge) => `${edge.from}|${edge.specifier}`)).toEqual([
       'packages/backend/src/modules/resource-catalog/application/agents/agentApplication.ts|@/modules/task-execution/public/commands',
       'packages/backend/src/modules/resource-catalog/application/workgroups/workgroupRoomProjection.ts|@/modules/task-execution/public/commands',
-      'packages/backend/src/modules/resource-catalog/composition/workgroupTurns.ts|@/modules/task-execution/public/commands',
-      'packages/backend/src/modules/resource-catalog/composition/workgroupTurns.ts|@/modules/task-execution/public/commands',
-      'packages/backend/src/modules/resource-catalog/composition/workgroupTurns.ts|@/modules/task-execution/public/commands',
-      'packages/backend/src/modules/resource-catalog/infrastructure/workgroupTurnsOperations.ts|@/modules/task-execution/public/queries',
+      'packages/backend/src/modules/resource-catalog/infrastructure/workgroupTaskRoom.ts|@/modules/task-execution/public/commands',
+      'packages/backend/src/modules/resource-catalog/infrastructure/workgroupTaskRoom.ts|@/modules/task-execution/public/commands',
+      'packages/backend/src/modules/resource-catalog/infrastructure/workgroupTaskRoom.ts|@/modules/task-execution/public/commands',
+      'packages/backend/src/modules/resource-catalog/infrastructure/workgroupTaskRoom.ts|@/modules/task-execution/public/queries',
     ])
     expect(violations.flatMap((edge) => edge.importedSymbols)).toContain('TaskRecoveryOperations')
   })

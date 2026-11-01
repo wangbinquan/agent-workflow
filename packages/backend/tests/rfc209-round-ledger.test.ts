@@ -22,7 +22,7 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 // RFC-359 W4-D19c-tail：判据改指生产那份——回合账本的推法住在中立的房间投影里，
 // 消息草稿构造器住在中立回合驱动里（`messageDraft`，行的 round 由它带出）。
-import { messageDraft as buildRoomMessageRow } from '@/modules/resource-catalog/application/workgroups/workgroupTurnsDriver'
+import { messageDraft as buildRoomMessageRow } from '@/modules/task-execution/engine/task/workgroup/workgroupTurns'
 import {
   deriveBudgetUsed,
   roundedModeOf,
@@ -297,17 +297,18 @@ describe('RFC-209 §2.2 — 消息行构造器是唯一写入闸口', () => {
 
   test('round 是必填字段（类型层锁 —— schema 的 .default(0) 会让省略静默写 0）', () => {
     // RFC-359 W4-D19c-tail：legacy 工作组引擎岛已退役，房间消息的行形状由中立驱动的
-    // `WorkgroupTurnMessageDraft` 定义，两个 provider 共用这一份。
+    // `WorkgroupTurnMessageDraft` 定义，两个 provider 共用这一份。RFC-411：该类型随轮次端口迁到
+    // task-execution 的 application/ports/workgroupTurns.ts。
     const SRC = readFileSync(
       resolve(
         import.meta.dir,
         '..',
         'src',
         'modules',
-        'resource-catalog',
+        'task-execution',
         'application',
-        'workgroups',
-        'workgroupTurnsDriver.ts',
+        'ports',
+        'workgroupTurns.ts',
       ),
       'utf8',
     )

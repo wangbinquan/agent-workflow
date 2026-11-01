@@ -1,3 +1,14 @@
+## 2026-11-01 RFC-411 workgroup 轮次引擎迁入 task-execution（In Progress；`design/RFC-411-task-execution-workgroup-turns-engine/`）
+
+- **来由**：RFC-294 S6（design §5.2「workgroup 引擎迁出 resource-catalog，归 task-execution」）；用户授权同 RFC-402，本会话调研、设计、实施与集中验证，不派 Codex。
+- **范围**：resource-catalog 的轮次驱动与提示词 / 协议 / 系统消息 / 轮次上下文迁入 task-execution（engine / domain / ports）；轮次持久化适配器与
+  提交队列随表回到 task-execution `infrastructure/`，成员代理经 resource-catalog public 读取；装配归 task-execution composition，两类 SPI 退役。纯结构重构。
+- **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。
+- **进度**：T1～T5 完成，随实现提交入库，待 exact SHA 的 CI（AC-6）。resource-catalog 下 8 个轮次文件删除，两类 SPI binding 退役，RFC-395
+  模块表归属债 −4。集中验证 674 + 9 + 2 个文件：本 RFC 引入的 2 个锚点失败已修，其余负载超时在候选与基线上同样通过；P0 变异 lane 通过。
+  详见 plan「集中验证（T5）」。
+- **后继**：S6 退出门核对（`TaskMechanicsState` 只在装配、协调器只在 bootstrap 构造、composition 只剩装配）。
+
 ## 2026-11-01 RFC-410 task-execution 动态工作流生成引擎迁入 engine/task（In Progress；`design/RFC-410-task-execution-dynamic-workflow-engine/`）
 
 - **来由**：RFC-294 S6（design §5.2「动态工作流引擎迁出 `services/`，归 task-execution」）；用户授权同 RFC-402，本会话调研、设计、实施与集中验证，不派 Codex。

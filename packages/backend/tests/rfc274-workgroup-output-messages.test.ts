@@ -12,8 +12,8 @@ import { createInMemoryDb } from '../src/db/client'
 import {
   buildSystemMessage,
   parseStoredSystemTemplate,
-} from '../src/modules/resource-catalog/application/workgroups/workgroupSystemMessages'
-import { messageDraft as draftSystemMessage } from '@/modules/resource-catalog/application/workgroups/workgroupTurnsDriver'
+} from '../src/modules/task-execution/domain/workgroup/systemMessages'
+import { messageDraft as draftSystemMessage } from '@/modules/task-execution/engine/task/workgroup/workgroupTurns'
 
 const EXAMPLES: WorkgroupSystemTemplate[] = [
   { key: 'assignmentAgentUnresolvable', params: { title: 't', member: 'm' } },
