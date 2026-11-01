@@ -156,11 +156,17 @@ let stateDir: string
 let taskSequence = 0
 const workflows = new Map<WorkflowFile, WorkflowRow>()
 // Hosted Windows reached this two-generation nested wrapper scenario in 56.6s on the
-// previous green baseline, leaving less than four seconds of scheduling headroom. Keep
-// every behavioral assertion, but give the slower platform enough time under four-worker
-// CI pressure to produce the durable review state instead of failing while still running.
-const TASK_STATE_TIMEOUT_MS = process.platform === 'win32' ? 120_000 : 60_000
-const BUSINESS_SCENARIO_TIMEOUT_MS = process.platform === 'win32' ? 300_000 : 180_000
+// previous green baseline, leaving less than four seconds of scheduling headroom. Hosted
+// macOS normally finishes the slowest scenario in 11-35s, but a degraded macos-latest
+// runner (CI run 41246022629 attempt 1, job 124670092149: median case time in the shard
+// ~1.55x the two previous runs, UI-only cases up to 3.3x) left the defect-fix scenario
+// still in its second review round at 60s on both tries; the same commit passed it in
+// 23.3s on a healthy runner (attempt 2, job 124679185128). Keep every behavioral
+// assertion, but only Linux keeps the tight budget: the slower hosted platforms get
+// enough time under four-worker CI pressure to produce the durable state instead of
+// failing while the task is still running.
+const TASK_STATE_TIMEOUT_MS = process.platform === 'linux' ? 60_000 : 120_000
+const BUSINESS_SCENARIO_TIMEOUT_MS = process.platform === 'linux' ? 180_000 : 300_000
 
 test.describe.configure({ mode: 'serial' })
 test.setTimeout(BUSINESS_SCENARIO_TIMEOUT_MS)
