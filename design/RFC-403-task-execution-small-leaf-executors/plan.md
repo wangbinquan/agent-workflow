@@ -80,7 +80,21 @@
 - **本 RFC 关键用例**（全量中均通过）：`rfc403-small-leaf-executors`、`rfc403-port-bindings`、RFC-354 idle clarify 跳过、RFC-306 分支跳过、
   RFC-269 / RFC-328 code-host、RFC-287 T8 前奏矩阵、RFC-370 review 显式上下文、scheduler cross-clarify dispatch、RFC-402 结构锁。
 
+## CI（`2874dd182` / `d18850d35`）
+
+- **`2874dd182`**：windows-platform `41279488331` 失败，主 CI `41279488383` 有 59 个 job success、2 个红格：
+  - 本 RFC 新增结构锁 `rfc403-small-leaf-executors` 的两个负例超过 bun 默认 5 s（Windows 6.1 s；ubuntu shard 27/36 6.3 s / 7.7 s）。
+    原因是 owner 检查每次调用都按 6 个共享 helper 各遍历一遍 task-execution 全部文件的 AST，两个负例共调用约 50 次；本机 3.0 s / 2.5 s，
+    没有暴露。
+  - ubuntu shard 6/36 撞上 job 的 15 分钟上限被取消，日志中用例都在通过。分片种子由 run 号推出，每次 run 的文件分配不同：这次几个
+    RFC-395 的重 PostgreSQL 文件（`rfc395-v3-source-access` 150 s、`rfc395-q3-phase-quiescing` 109 s、`upgrade-rolling` 67 s 等）落在同一
+    分片，文件耗时合计 880 s，上一次同号分片 605 s。这些文件都不是本 RFC 的，归因 CI 分片负载，证据保留。
+- **修复 `d18850d35`**：每个文件只遍历一次 AST、同时收集全部 helper，并按 `SourceUnit` 对象缓存（负例复用 live corpus 的对象）；计数保留
+  原语义。本机两个负例降到 25 ms / 16 ms，断言不变。
+- **后继证据**：`d18850d35` 是 `2874dd182` 的直接子提交，只改这一个测试文件；它的主 CI `41280013616`（62 个 job，含三平台 e2e）与
+  windows-platform `41280013705` 全部 success。`2874dd182` 的红格没有以重跑代替，AC-6 以这次后继全绿为据。
+
 ## 验收清单
 
 - [x] proposal AC-1～AC-5（本地集中验证，见上）
-- [ ] 推送后 exact SHA 的 CI 全绿（AC-6）
+- [x] 推送后 exact SHA 的 CI 全绿（AC-6；以直接子提交 `d18850d35` 的全绿为后继证据，见上）
