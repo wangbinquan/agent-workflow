@@ -5,7 +5,7 @@ import { taskNodeRunsProjection } from '@/modules/task-execution/infrastructure/
 import { compareRunSequence } from '@/modules/task-execution/domain/runSelection/ordering'
 import { requireRunSequence } from '@/modules/task-execution/domain/runSequence'
 import { createTaskObservationFacts } from '@/modules/task-execution/infrastructure/taskObservationFacts'
-import { deriveFrontier } from '@/modules/task-execution/composition/dagFrontier'
+import { deriveFrontier } from '@/modules/task-execution/engine/scope/dagFrontier'
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 // RFC-395 N-b2: real mint transactions, explicit identities and command generations.
 import { expect, test } from 'bun:test'

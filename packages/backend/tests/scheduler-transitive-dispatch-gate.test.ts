@@ -184,7 +184,9 @@ describe('source guard — runScope wires the transitive gate', () => {
       'src',
       'modules',
       'task-execution',
-      'composition',
+      // RFC-409: the frontier moved into the scope interpreter layer.
+      'engine',
+      'scope',
       'dagFrontier.ts',
     ),
     'utf8',
@@ -196,8 +198,10 @@ describe('source guard — runScope wires the transitive gate', () => {
       'src',
       'modules',
       'task-execution',
-      'composition',
-      'taskDagScope.ts',
+      // RFC-409: the scope loop moved into the scope interpreter layer.
+      'engine',
+      'scope',
+      'runScope.ts',
     ),
     'utf8',
   )

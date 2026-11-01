@@ -233,6 +233,9 @@ Facade 只许 re-export 或参数形状适配；不得含 DB 查询、状态、�
     `engine/task/runTask.ts` 与 `taskSettlement.ts`，composition 只剩端口绑定与执行状态装配；DAG 结构图迁为 `engine/scope/dagGraph.ts`
     （scope 解释器层的第一个文件）。三个引擎类仍委托给 composition 绑定的主体：DAG scope 解释器迁入 `engine/scope/`、workgroup 轮次与
     动态工作流引擎迁入 task-execution 各待立 RFC。
+- **scope 解释器**：[RFC-409](../RFC-409-task-execution-dag-scope-interpreter/proposal.md)（In Progress）：`runScope` 与 `deriveFrontier` 迁入
+  `engine/scope/`，`services/dispatchFrontier.ts` 删除（frontier 判定进 `engine/scope/`，wrapper 定义图进 `domain/`）；composition 的
+  `taskDagScope.ts` 只剩端口绑定。workgroup 轮次与动态工作流引擎迁入 task-execution 仍待立 RFC。
 
 ### S7 唯一 AtomicApply 引擎（W6）
 

@@ -1,4 +1,3 @@
-import { createRunHistorySnapshot } from '@/modules/task-execution/public/queries'
 // RFC-076 PR-A — trim-B dispatch predicates (PURE; LIVE since PR-B wired
 // deriveFrontier into runScope — scheduler.ts consumes isDispatchable every
 // dispatch tick; RFC-094 removed the stale "currently UNWIRED" claim that
@@ -34,30 +33,25 @@ import { createRunHistorySnapshot } from '@/modules/task-execution/public/querie
 //
 // PURE module: only types + freshness primitives (isNodeRunFresh /
 // isFresherNodeRun / buildFreshestSettledPerNode, freshness.ts) +
-// containerMemberRuns (task-execution public query). No DB / scheduler
+// containerMemberRuns. No DB / scheduler
 // import. The frontier ORCHESTRATION (read rows → latestPerNode → freshestSettled
 // → completed → ready) lives in scheduler.ts deriveFrontier (PR-B, live).
 // Pure-function locks: dispatch-frontier.test.ts + derive-frontier.test.ts.
+//
+// RFC-409: moved from services/dispatchFrontier.ts with the DAG scope interpreter; the definition-only
+// wrapper graph is in domain/wrapperGraph.ts.
 
-import {
-  buildWorkflowScopeParentMap,
-  channelEdgeDataflowSkip,
-  resolveWorkflowSourceRef,
-  WRAPPER_NODE_KINDS,
-} from '@agent-workflow/shared'
-import type { NodeKind, WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
+import { WRAPPER_NODE_KINDS } from '@agent-workflow/shared'
+import type { NodeKind, WorkflowDefinition } from '@agent-workflow/shared'
+import { createRunHistorySnapshot } from '../../application/runHistory'
 import {
   buildFreshestSettledPerNode,
   isNodeRunFresh,
-} from '@/modules/task-execution/public/queries'
-import {
-  containerMemberRunsInRound,
-  readWrapperRevivalIteration,
-} from '@/modules/task-execution/public/queries'
-
-// RFC-311：收窄到 freshness 的调度列合同（本文件消费 id/nodeId/status/iteration/
-// supersededByReview/wrapperProgressJson，全部 ⊂ 合同），使 tick 投影行可直达。
-import type { NodeRunRow } from '@/modules/task-execution/public/queries'
+  type NodeRunRow,
+} from '../../application/runProvenance'
+import { containerMemberRunsInRound } from '../../domain/containerMembership'
+import { wrapperInnerDescendants } from '../../domain/wrapperGraph'
+import { readWrapperRevivalIteration } from '../../domain/wrapperProgress'
 
 /** The container kinds whose parked rows are resume anchors (exported for
  *  deriveFrontier's wrapper-anchor release and retryNode's ⑥-11 carve-out).
@@ -82,84 +76,6 @@ export function isReviewSupersededRow(row: Pick<NodeRunRow, 'supersededByReview'
   // Normalize undefined (plain test-fixture rows) → null (real DB column):
   // a row is superseded iff the column carries a decision.
   return (row.supersededByReview ?? null) !== null
-}
-
-/** Safe read of a wrapper node's inner `nodeIds` (absent / non-array → []). */
-function innerNodeIdsOf(node: WorkflowNode | undefined): string[] {
-  const raw = (node as { nodeIds?: unknown } | undefined)?.nodeIds
-  if (!Array.isArray(raw)) return []
-  return raw.filter((x): x is string => typeof x === 'string')
-}
-
-/**
- * All transitive inner-descendant node ids of a wrapper (direct inner +
- * recursively the inner of any nested wrapper). Cycle-safe via `visiting`
- * (definitions are acyclic containment trees, but guard defensively). G6.
- */
-export function wrapperInnerDescendants(
-  wrapperNodeId: string,
-  definition: WorkflowDefinition,
-  acc: Set<string> = new Set(),
-  visiting: Set<string> = new Set(),
-): Set<string> {
-  if (visiting.has(wrapperNodeId)) return acc
-  visiting.add(wrapperNodeId)
-  const node = definition.nodes.find((n) => n.id === wrapperNodeId)
-  for (const id of innerNodeIdsOf(node)) {
-    acc.add(id)
-    wrapperInnerDescendants(id, definition, acc, visiting)
-  }
-  return acc
-}
-
-/**
- * RFC-098 B3 (audit S-7) — the EXTERNAL upstream source set of a loop/git
- * wrapper: every node OUTSIDE the wrapper that feeds data into the wrapper's
- * inner scope (or into the wrapper row itself). This is the key set
- * the task-execution wrapper ledger stamps onto the wrapper's
- * `consumed_upstream_runs_json` at fresh-mint, so an upstream rerun (clarify
- * answer, review iterate, …) demotes the wrapper's done row to stale and the
- * frontier re-dispatches it — the same provenance contract wrapper-fanout has
- * carried since RFC-074 §8 D3.
- *
- * Membership = edges `external → (inner descendant ∪ wrapper itself)`:
- *   - inner descendants because v1 loop/git wrappers accept NO inbound edges
- *     (workflow.validator.ts 'does not accept inbound edges in v1') — external
- *     data enters via direct external→inner edges that resolveUpstreamInputs
- *     reads with the full definition.edges;
- *   - the wrapper itself to cover wrapper→wrapper ordering edges (the
- *     validator rejects them but the scheduler honors them — see
- *     scheduler-audit-s04's wg1→wg2 sequencing edge).
- *
- * Edge filtering is the SAME registry projection dagGraph.buildScopeUpstreams
- * uses — `channelEdgeDataflowSkip` (RFC-147), including the
- * carve-out that `questioner.__clarify__ → clarify-cross-agent` is a REAL
- * dataflow dep (kept) — plus review/output implicit dependencies.
- *
- * Pure function — definition-only, no DB / rows.
- */
-export function wrapperExternalUpstreamSources(
-  wrapperNodeId: string,
-  definition: WorkflowDefinition,
-): Set<string> {
-  const scope = wrapperInnerDescendants(wrapperNodeId, definition)
-  scope.add(wrapperNodeId)
-  const parents = buildWorkflowScopeParentMap(definition)
-  const sources = new Set<string>()
-  for (const e of definition.edges) {
-    if (!scope.has(e.target.nodeId)) continue
-    if (scope.has(e.source.nodeId)) continue
-    // RFC-147: same shared registry projection buildScopeUpstreams uses —
-    // the historical hand-copied block (whose comment demanded "keep the
-    // two in lockstep") is gone; lockstep is now structural.
-    if (channelEdgeDataflowSkip(e)) continue
-    const resolved = resolveWorkflowSourceRef(definition, e.source, e.target.nodeId, parents)
-    sources.add(resolved.ok ? resolved.source.nodeId : e.source.nodeId)
-  }
-  // RFC-354 (schema v6): review / output dependencies are ordinary edges, so the
-  // edge walk above already covers them (the implicit `inputSource` /
-  // `ports[].bind` mirror of buildScopeUpstreams retired with those fields).
-  return sources
 }
 
 /** The revival-evidence row a parked wrapper may be released on. */

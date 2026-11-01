@@ -170,14 +170,16 @@ describeEachProvider('RFC-395 A3 migrated synthetic sites', (harness) => {
     ] as const
     for (const row of rows) await nodeRunFixture(harness.db, { ...row, taskId: 'site-task' })
     const started: string[] = []
+    // RFC-409: the scope loop moved to engine/scope/runScope.ts and reads its facts through the scope ports.
     const resume = rfc395SourceFunction<(rows: unknown) => Promise<void>>(
-      'modules/task-execution/composition/taskDagScope.ts',
+      'modules/task-execution/engine/scope/runScope.ts',
       'resumeInterruptedCommitPush',
       {
         commitPushResumePending: true,
-        state: { task: { id: 'site-task' }, topLevelIds: new Set(['agent']) },
         scopeNodeById: new Map([['agent', { id: 'agent' }]]),
-        opts: {
+        ports: {
+          task: { rowId: 'site-task', topLevelIds: new Set(['agent']) },
+          execution: undefined,
           persistence: {
             selection: createRunSelectionReader(harness.db),
             nodeRuns: {

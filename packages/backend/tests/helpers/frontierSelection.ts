@@ -1,6 +1,6 @@
 // Explicit fixture selections for pure frontier tests. Provider tests inject the real table reader.
-import { deriveFrontier as deriveWithSelection } from '@/modules/task-execution/composition/dagFrontier'
-export type { Frontier, FrontierRunRow } from '@/modules/task-execution/composition/dagFrontier'
+import { deriveFrontier as deriveWithSelection } from '@/modules/task-execution/engine/scope/dagFrontier'
+export type { Frontier, FrontierRunRow } from '@/modules/task-execution/engine/scope/dagFrontier'
 type Arguments =
   Parameters<typeof deriveWithSelection> extends [unknown, unknown, ...infer Rest] ? Rest : never
 export async function deriveFrontier(...[input, ...rest]: Arguments) {

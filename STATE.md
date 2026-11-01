@@ -1,3 +1,15 @@
+## 2026-11-01 RFC-409 task-execution DAG scope 解释器迁入 engine/scope（In Progress；`design/RFC-409-task-execution-dag-scope-interpreter/`）
+
+- **来由**：RFC-294 S6（design §5.2 scope 解释器层）；用户授权同 RFC-402，本会话调研、设计、实施与集中验证，不派 Codex。
+- **范围**：`runScope`（405 行）迁入 `engine/scope/runScope.ts`，经 task-execution 自有端口执行；`deriveFrontier` 迁入 `engine/scope/dagFrontier.ts`；
+  `services/dispatchFrontier.ts` 删除——frontier 判定进 `engine/scope/frontierRules.ts`，wrapper 定义图纯函数进 `domain/wrapperGraph.ts`
+  （`services/runLiveness.ts` 经 `public/queries` 取用）；composition 的 `taskDagScope.ts` 只剩端口绑定与 `driveDagScope`。纯结构重构。
+- **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。
+- **进度**：T1～T5 完成，随实现提交入库，待 exact SHA 的 CI（AC-6）。`services/dispatchFrontier.ts` 删除，`composition/taskDagScope.ts`
+  405 → 73 行，只剩端口绑定。集中验证 954 + 21 + 7 + 2 个文件：本 RFC 引入的 2 个守卫失败（RFC-339、RFC-294 preflight）已修，其余负载
+  超时在候选与 RFC-408 基线上表现一致；P0 变异 lane 通过。详见 plan「集中验证（T5）」。
+- **后继**：动态工作流生成引擎、workgroup 轮次引擎迁入 task-execution（各立 RFC）。
+
 ## 2026-11-01 RFC-408 task-execution 任务控制面迁入 engine/task（In Progress；`design/RFC-408-task-execution-task-control-plane/`）
 
 - **来由**：RFC-294 S6，design §5.5 第 4 步之二；用户授权同 RFC-402，本会话调研、设计、实施与集中验证，不派 Codex。

@@ -1383,11 +1383,18 @@ describeEachProvider('RFC-128 P5-D all-role deferred park (same-home deadlock fi
   })
 
   test('source — DAG scope uses loadUndispatchedParkTargets (all-role), not the per-role union', () => {
+    // RFC-409: the scope loop moved to engine/scope/runScope.ts; the binding hands it the collaboration
+    // projection.
     const src = readFileSync(
+      resolve(import.meta.dir, '../src/modules/task-execution/engine/scope/runScope.ts'),
+      'utf8',
+    )
+    expect(src).toContain('ports.collaboration.loadUndispatchedParkTargets(taskId)')
+    const binding = readFileSync(
       resolve(import.meta.dir, '../src/modules/task-execution/composition/taskDagScope.ts'),
       'utf8',
     )
-    expect(src).toContain('opts.taskDagCollaboration.loadUndispatchedParkTargets(taskId)')
+    expect(binding).toContain('return state.opts.taskDagCollaboration')
   })
 })
 

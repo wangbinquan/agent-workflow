@@ -129,6 +129,10 @@ describe('RFC-334 node-executor owner boundary', () => {
     const scheduler = read('packages/backend/src/services/scheduler.ts')
     expect(scope).toContain("import { executeNode } from './nodeExecution'")
     expect(scope.match(/\bexecuteNode\(/g)).toHaveLength(1)
+    // RFC-409: the scope loop (engine/scope/runScope.ts) dispatches only through its node-execution port.
+    const scopeLoop = read('packages/backend/src/modules/task-execution/engine/scope/runScope.ts')
+    expect(scopeLoop.match(/\bports\.executeNode\(/g)).toHaveLength(1)
+    expect(scopeLoop).not.toMatch(/\brunOneNode\s*\(/)
     expect(scope).not.toMatch(/\brunOneNode\s*\(/)
     expect(scope).not.toMatch(/import\s*\{[^}]*\brunOneNode\b/)
     expect(scheduler).not.toMatch(/export async function runOneNode\b/)

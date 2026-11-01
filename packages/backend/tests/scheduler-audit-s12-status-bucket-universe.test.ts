@@ -51,7 +51,11 @@ import {
   type WorkflowDefinition,
 } from '@agent-workflow/shared'
 
-import { decideScopeOutcome, isDispatchable } from '../src/services/dispatchFrontier'
+// RFC-409: the frontier rules moved from services/dispatchFrontier.ts to engine/scope/frontierRules.ts.
+import {
+  decideScopeOutcome,
+  isDispatchable,
+} from '../src/modules/task-execution/engine/scope/frontierRules'
 import { deriveFrontier } from './helpers/frontierSelection'
 
 type Row = ReturnType<typeof projectNodeRunReadFacts>

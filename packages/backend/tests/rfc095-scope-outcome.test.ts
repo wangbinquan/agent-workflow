@@ -45,7 +45,7 @@ import {
   isReviewSupersededRow,
   type ScopeOutcome,
   type ScopeOutcomeInput,
-} from '../src/services/dispatchFrontier'
+} from '../src/modules/task-execution/engine/scope/frontierRules' // RFC-409: moved from services/dispatchFrontier.ts
 import { deriveFrontier, type Frontier } from './helpers/frontierSelection'
 
 type Row = ReturnType<typeof projectNodeRunReadFacts>

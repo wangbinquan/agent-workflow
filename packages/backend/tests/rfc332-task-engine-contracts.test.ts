@@ -248,11 +248,13 @@ describe('RFC-332 T10-T13 — single-consumer production cutover', () => {
     const binding = source(
       'packages/backend/src/modules/task-execution/composition/taskEngineApplication.ts',
     )
-    const scope = source('packages/backend/src/modules/task-execution/composition/taskDagScope.ts')
+    // RFC-409: the scope loop moved into the scope interpreter layer.
+    const scope = source('packages/backend/src/modules/task-execution/engine/scope/runScope.ts')
     // RFC-408: the DAG structural graph moved to engine/scope/.
     const graph = source('packages/backend/src/modules/task-execution/engine/scope/dagGraph.ts')
+    // RFC-409: the frontier moved into the scope interpreter layer.
     const frontier = source(
-      'packages/backend/src/modules/task-execution/composition/dagFrontier.ts',
+      'packages/backend/src/modules/task-execution/engine/scope/dagFrontier.ts',
     )
     expect(scheduler).not.toMatch(/\bfunction\s+runTaskInner\b/)
     expect(scheduler).not.toMatch(/\bfunction\s+runTaskWithTopology\b/)

@@ -62,8 +62,13 @@ export type { RunHistoryFacts } from '../application/runHistory'
 export { createRunSelectionReader } from '../infrastructure/runSelection/table/reader'
 import type { AuthenticatedAuthoritySnapshot } from '@/modules/identity-access/public/participants'
 import type { WorktreeTreeEntry } from '@agent-workflow/shared'
-import { parseLoopExitCondition, type OverviewTasks } from '@agent-workflow/shared'
+import {
+  parseLoopExitCondition,
+  type OverviewTasks,
+  type WorkflowDefinition,
+} from '@agent-workflow/shared'
 import { decodeWrapperProgress } from '../domain/wrapperProgress'
+import { wrapperInnerDescendants } from '../domain/wrapperGraph'
 
 /** The existing Task visibility gate runs before these bound workspace queries. */
 export interface TaskWorkspaceQueries {
@@ -104,13 +109,18 @@ export interface TaskOverviewQuery {
   }): Promise<OverviewTasks>
 }
 
+// RFC-409: the revival-round read moved to the domain (the DAG scope's frontier rules read it there).
+export { readWrapperRevivalIteration } from '../domain/wrapperProgress'
+
 /**
- * The loop round a parked wrapper-loop generation was driving when it parked:
- * the frame its revival evidence must sit in. Malformed or absent progress
- * retains the runtime's historical round-zero fallback.
+ * RFC-409 — the definition-only inner descendants of a wrapper (direct members and every nested
+ * wrapper's members), for the run-liveness report.
  */
-export function readWrapperRevivalIteration(progressJson: string | null | undefined): number {
-  return decodeWrapperProgress(progressJson, () => {})?.iteration ?? 0
+export function wrapperInnerDescendantIds(
+  wrapperNodeId: string,
+  definition: WorkflowDefinition,
+): ReadonlySet<string> {
+  return wrapperInnerDescendants(wrapperNodeId, definition)
 }
 
 /** Public projection of the baseline carried by a persisted git-wrapper row. */

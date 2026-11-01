@@ -36,7 +36,8 @@ export class InvalidExecutionScopeError extends Error {
   }
 }
 
-function directNodeIdsOf(node: { readonly nodeIds?: unknown }): readonly string[] {
+/** The one reader of a wrapper node's direct members (RFC-339: the scope index owns membership). */
+export function directNodeIdsOf(node: { readonly nodeIds?: unknown }): readonly string[] {
   return Array.isArray(node.nodeIds)
     ? node.nodeIds.filter((nodeId): nodeId is string => typeof nodeId === 'string')
     : []

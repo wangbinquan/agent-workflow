@@ -22,7 +22,8 @@ import {
   evaluateExitCondition,
   parseExitCondition,
 } from '../src/modules/task-execution/domain/loopExitCondition'
-import { isDispatchable } from '../src/services/dispatchFrontier'
+// RFC-409: the frontier rules moved from services/dispatchFrontier.ts to engine/scope/frontierRules.ts.
+import { isDispatchable } from '../src/modules/task-execution/engine/scope/frontierRules'
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 
 type Row = ReturnType<typeof projectNodeRunReadFacts>

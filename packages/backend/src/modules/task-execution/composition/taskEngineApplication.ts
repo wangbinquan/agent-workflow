@@ -10,7 +10,7 @@ import type {
 import type { WrapperNodeKind } from '../domain/wrapperExecution'
 import { runTask } from '../engine/task/runTask'
 import { inspectReadonlyRepos } from '@/services/scheduler'
-import { runScope } from './taskDagScope'
+import { driveDagScope } from './taskDagScope'
 import { buildNodeExecutionWorkgroupHooks } from './nodeExecution'
 import type { TaskExecutionRuntimeComponents } from './taskExecutionComponents'
 import type { TaskMechanicsState } from '@/services/execution/taskMechanicsState'
@@ -189,7 +189,7 @@ function prepareTaskDrive(
       find: (wrapperId: string, kind: WrapperNodeKind) => scopeIndex.wrapper(wrapperId, kind),
     }),
     driveScope: (nestedState, args) =>
-      runScope(nestedState, args, runtimeComponents.wrapperRuntimeFactory),
+      driveDagScope(nestedState, args, runtimeComponents.wrapperRuntimeFactory),
     // RFC-066: thread per-repo metadata through every inner dispatch.
     repos,
     // RFC-193 D9: top-level scope canonical = the task worktree container.
@@ -211,7 +211,7 @@ function prepareTaskDrive(
       runtimeComponents.mergeRecoveryFactory(state, log).recoverBeforeScope(),
     bodies: Object.freeze({
       dag: () =>
-        runScope(
+        driveDagScope(
           state,
           {
             scopeId: null,

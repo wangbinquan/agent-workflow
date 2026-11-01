@@ -554,8 +554,10 @@ describe('RFC-098 B1 — auto commit&push runs as a synthetic in-flight entry, n
         'src',
         'modules',
         'task-execution',
-        'composition',
-        'taskDagScope.ts',
+        // RFC-409: the scope loop moved into the scope interpreter layer.
+        'engine',
+        'scope',
+        'runScope.ts',
       ),
       'utf-8',
     )

@@ -1,4 +1,5 @@
 // RFC-332 — pure DAG frontier owner.
+// RFC-409: moved verbatim from composition/dagFrontier.ts into the scope interpreter layer.
 
 import type { MergeStateOrNull, WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 import { isMergeStateSettled } from '@agent-workflow/shared'
@@ -7,16 +8,16 @@ import {
   buildFreshestSettledPerNode,
   isNodeRunFresh,
   type NodeRunRow,
-} from '@/modules/task-execution/application/runProvenance'
-import { createRunHistorySnapshot } from '../application/runHistory'
-import { decodeConsumedEdges } from '../domain/consumedInputs'
-import type { Frame } from '../application/ports/runSelection'
+} from '../../application/runProvenance'
+import { createRunHistorySnapshot } from '../../application/runHistory'
+import { decodeConsumedEdges } from '../../domain/consumedInputs'
+import type { Frame } from '../../application/ports/runSelection'
 import {
   isDispatchable,
   isReviewSupersededRow,
   WRAPPER_KINDS,
   wrapperRevivalEvidence,
-} from '@/services/dispatchFrontier'
+} from './frontierRules'
 
 export interface Frontier {
   /** done∧fresh ∪ exhausted(loop-max terminal, HIGH-2) ∪ settles-without-row leaves. */

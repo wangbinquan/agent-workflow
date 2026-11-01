@@ -5,7 +5,7 @@ import { buildActor } from '@/auth/actor'
 import { composeRunObservation } from '@/modules/run-observability/composition/runObservation'
 import { DrizzleMemoryDistillWorkStore } from '@/modules/memory/infrastructure/memoryDistillWorkStore'
 import { createClarifyAnswerQueries } from '@/modules/collaboration/infrastructure/clarifyAnswerQueries'
-import { deriveFrontier } from '@/modules/task-execution/composition/dagFrontier'
+import { deriveFrontier } from '@/modules/task-execution/engine/scope/dagFrontier'
 import {
   TaskNodeRunsSchema,
   type WorkflowDefinition,

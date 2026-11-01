@@ -458,8 +458,12 @@ describe('RFC-339 WrapperRuntime cutover', () => {
     expect(mcpServer).toContain('export interface McpTransportDeps')
     expect(mcpServer).not.toContain("from '@/server'")
 
+    // RFC-409: services/dispatchFrontier.ts left services/ for task-execution engine/scope and domain.
+    expect(existsSync(resolve(ROOT, 'packages/backend/src/services/dispatchFrontier.ts'))).toBe(
+      false,
+    )
     for (const path of [
-      'packages/backend/src/services/dispatchFrontier.ts',
+      'packages/backend/src/services/runLiveness.ts',
       'packages/backend/src/services/execution/taskMechanicsState.ts',
       'packages/backend/src/services/structuralDiff/service.ts',
     ]) {

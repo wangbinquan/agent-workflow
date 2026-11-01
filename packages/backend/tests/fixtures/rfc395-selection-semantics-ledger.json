@@ -144,18 +144,18 @@
       "whyFrameless": "旧产物快照只限节点和状态。"
     },
     {
-      "site": "src/modules/task-execution/composition/taskDagScope.ts#resumeInterruptedCommitPush:1",
-      "path": "src/modules/task-execution/composition/taskDagScope.ts",
+      "site": "src/modules/task-execution/engine/scope/runScope.ts#resumeInterruptedCommitPush:1",
+      "path": "src/modules/task-execution/engine/scope/runScope.ts",
       "symbol": "resumeInterruptedCommitPush",
       "ordinal": 1,
-      "source": "opts.persistence.selection.familyHistory( state.task.id, {}, { rerunCause: 'commit-push' }, )",
+      "source": "ports.persistence.selection.familyHistory( ports.task.rowId, {}, { rerunCause: 'commit-push' }, )",
       "reference": "G6 #38",
       "today": "RFC-395 II-a：保持 HEAD 按 commit-push cause 选任务历史末行，不额外按角色过滤，再判断 interrupted。 II-b 由持久化选择表或仅展示的历史快照提供相同筛选。",
       "whyFrameless": "旧恢复不按 parent owner 分组；不可回退到更早 interrupted 行。"
     },
     {
-      "site": "src/modules/task-execution/composition/dagFrontier.ts#freshestUpstreamEvidenceId:1",
-      "path": "src/modules/task-execution/composition/dagFrontier.ts",
+      "site": "src/modules/task-execution/engine/scope/dagFrontier.ts#freshestUpstreamEvidenceId:1",
+      "path": "src/modules/task-execution/engine/scope/dagFrontier.ts",
       "symbol": "freshestUpstreamEvidenceId",
       "ordinal": 1,
       "source": "createRunHistorySnapshot('', candidates).familyHistory('', {})",
@@ -364,8 +364,8 @@
       "whyFrameless": "旧任务输出汇总不指定 frame。"
     },
     {
-      "site": "src/services/dispatchFrontier.ts#wrapperRevivalEvidence:1",
-      "path": "src/services/dispatchFrontier.ts",
+      "site": "src/modules/task-execution/engine/scope/frontierRules.ts#wrapperRevivalEvidence:1",
+      "path": "src/modules/task-execution/engine/scope/frontierRules.ts",
       "symbol": "wrapperRevivalEvidence",
       "ordinal": 1,
       "source": "createRunHistorySnapshot( '', candidates.map((row) => ({ ...row, taskId: '' })), ).familyHistory('', {})",

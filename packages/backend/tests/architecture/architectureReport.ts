@@ -370,7 +370,6 @@ const LEGACY_BACKEND_FILE_OWNERS: Readonly<Record<string, TargetOwner>> = {
   'packages/backend/src/services/demoSeed.ts': 'bootstrap',
   'packages/backend/src/services/developmentDeliveryDeps.ts': 'development-automation',
   'packages/backend/src/services/digitalEmployeeAgentTemplates.ts': 'digital-employee',
-  'packages/backend/src/services/dispatchFrontier.ts': 'task-execution',
   'packages/backend/src/services/driverLease.ts': 'runtime-management',
   'packages/backend/src/services/dynamicWorkflowRunner.ts': 'task-execution',
   'packages/backend/src/services/employeeCaseMembers.ts': 'digital-employee',

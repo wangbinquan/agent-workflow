@@ -9,7 +9,7 @@ import {
   type WrapperNodeKind,
   type WrapperSettlement,
 } from '../domain/wrapperExecution'
-import { wrapperExternalUpstreamSources } from '@/services/dispatchFrontier'
+import { wrapperExternalUpstreamSources } from '../domain/wrapperGraph'
 import { createLogger } from '@/util/log'
 import type { TaskMechanicsState } from '@/services/execution/taskMechanicsState'
 import { broadcastNodeStatus } from '@/modules/task-execution/infrastructure/nodeStatusEvents'

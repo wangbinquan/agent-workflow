@@ -32,7 +32,7 @@ import {
   isDispatchable,
   wrapperHasFreshInnerWork,
   wrapperRevivalEvidence,
-} from '../src/services/dispatchFrontier'
+} from '../src/modules/task-execution/engine/scope/frontierRules' // RFC-409: moved from services/dispatchFrontier.ts
 import { encodeWrapperProgress } from '../src/modules/task-execution/domain/wrapperProgress'
 
 type Row = ReturnType<typeof projectNodeRunReadFacts>

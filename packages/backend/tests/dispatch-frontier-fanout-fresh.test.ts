@@ -23,7 +23,11 @@ let fixtureRunSequence = 0
 
 import { describe, expect, test } from 'bun:test'
 import type { NodeKind, WorkflowDefinition } from '@agent-workflow/shared'
-import { isDispatchable, wrapperHasFreshInnerWork } from '../src/services/dispatchFrontier'
+// RFC-409: the frontier rules moved from services/dispatchFrontier.ts to engine/scope/frontierRules.ts.
+import {
+  isDispatchable,
+  wrapperHasFreshInnerWork,
+} from '../src/modules/task-execution/engine/scope/frontierRules'
 import { encodeWrapperProgress } from '../src/modules/task-execution/domain/wrapperProgress'
 
 type Row = ReturnType<typeof projectNodeRunReadFacts>

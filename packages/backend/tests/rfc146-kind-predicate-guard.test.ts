@@ -108,7 +108,9 @@ describe('RFC-146: task engine 三处表接线形态锁', () => {
       'src',
       'modules',
       'task-execution',
-      'composition',
+      // RFC-409: the frontier moved into the scope interpreter layer.
+      'engine',
+      'scope',
       'dagFrontier.ts',
     ),
     'utf8',

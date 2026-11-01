@@ -184,7 +184,8 @@ describe('RFC-147 ratchet — 六处私有拷贝消亡防回潮', () => {
       // RFC-408: the DAG structural graph moved to engine/scope/.
       'packages/backend/src/modules/task-execution/engine/scope/dagGraph.ts',
     )
-    const frontier = read('packages/backend/src/services/dispatchFrontier.ts')
+    // RFC-409: the external-upstream projection moved with the wrapper graph to domain/wrapperGraph.ts.
+    const frontier = read('packages/backend/src/modules/task-execution/domain/wrapperGraph.ts')
     for (const src of [taskDagGraph, frontier]) {
       expect(src).toContain('channelEdgeDataflowSkip(')
       // 手写块指纹：response+feedback+to_* 四端口字面量组成的跳边条件不得回潮

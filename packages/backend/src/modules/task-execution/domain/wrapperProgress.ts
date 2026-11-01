@@ -145,3 +145,15 @@ export function decodeWrapperProgress(
   }
   return r.data
 }
+
+/**
+ * The loop round a parked wrapper-loop generation was driving when it parked:
+ * the frame its revival evidence must sit in. Malformed or absent progress
+ * retains the runtime's historical round-zero fallback.
+ *
+ * RFC-409: moved from public/queries.ts (which re-exports it) so the DAG scope's frontier rules read it
+ * inside the module.
+ */
+export function readWrapperRevivalIteration(progressJson: string | null | undefined): number {
+  return decodeWrapperProgress(progressJson, () => {})?.iteration ?? 0
+}

@@ -16,13 +16,17 @@ let fixtureRunSequence = 0
 
 import { describe, expect, test } from 'bun:test'
 import type { NodeKind, WorkflowDefinition } from '@agent-workflow/shared'
+// RFC-409: the frontier rules moved to engine/scope/frontierRules.ts; the definition-only wrapper
+// graph to domain/wrapperGraph.ts.
 import {
   isDispatchable,
-  wrapperExternalUpstreamSources,
   wrapperHasFreshInnerWork,
-  wrapperInnerDescendants,
   wrapperRevivalEvidence,
-} from '../src/services/dispatchFrontier'
+} from '../src/modules/task-execution/engine/scope/frontierRules'
+import {
+  wrapperExternalUpstreamSources,
+  wrapperInnerDescendants,
+} from '../src/modules/task-execution/domain/wrapperGraph'
 import { encodeWrapperProgress } from '../src/modules/task-execution/domain/wrapperProgress'
 
 type Row = ReturnType<typeof projectNodeRunReadFacts>
