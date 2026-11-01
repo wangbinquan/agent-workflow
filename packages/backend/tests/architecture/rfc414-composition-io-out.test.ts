@@ -68,7 +68,14 @@ function compositionIoViolations(units: readonly SourceUnit[]): string[] {
   return found.sort()
 }
 
-function declaredNames(unit: SourceUnit): string[] {
+// One AST walk per unit, cached by unit identity: the negative fixtures re-run the owner check over the same live corpus
+// (2 × 11 times), and only the replaced or added units are new objects. Without the cache the test walked the whole
+// corpus 22 times and ran past the 5 s default on the CI runner (main CI 41350432956, shard 2/44).
+const scans = new WeakMap<SourceUnit, readonly string[]>()
+
+function declaredNames(unit: SourceUnit): readonly string[] {
+  const cached = scans.get(unit)
+  if (cached !== undefined) return cached
   const names: string[] = []
   const visit = (node: ts.Node) => {
     if (
@@ -81,6 +88,7 @@ function declaredNames(unit: SourceUnit): string[] {
     ts.forEachChild(node, visit)
   }
   visit(unit.source)
+  scans.set(unit, names)
   return names
 }
 
@@ -151,4 +159,5 @@ test('negative fixtures: a missing, duplicated or relocated infrastructure owner
     const duplicate = sourceUnit(COMPOSITION + 'duplicate.ts', `export function ${name}() {}`)
     expect(ownershipViolations([...UNITS, duplicate])).toContain('owner:' + name)
   }
-})
+  // Corpus-wide checks share the 20 s budget of the other full-corpus architecture scans.
+}, 20_000)

@@ -3283,7 +3283,7 @@
       "corpusScanner": true,
       "file": "packages/backend/tests/architecture/rfc414-composition-io-out.test.ts",
       "id": "rfc414-composition-io-out",
-      "lines": 155,
+      "lines": 164,
       "mechanism": "ast",
       "minCorpusFiles": 2000,
       "negativeFixture": true,
