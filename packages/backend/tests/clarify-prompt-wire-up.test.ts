@@ -27,21 +27,12 @@
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { AGENT_MECHANICS_SOURCE } from './helpers/executionMechanismSources'
+import { AGENT_BINDING_SOURCE, AGENT_MECHANICS_SOURCE } from './helpers/executionMechanismSources'
 
 const BACKEND_SRC = join(__dirname, '..', 'src', 'services')
 const SHARED_SRC = join(__dirname, '..', '..', 'shared', 'src')
-// RFC-405: the agent-single body moved out of nodeMechanics.ts; its clarify wiring is read from the
-// combined agent mechanics corpus.
-const NODE_EXECUTION_SRC = join(
-  __dirname,
-  '..',
-  'src',
-  'modules',
-  'task-execution',
-  'composition',
-  'nodeExecution.ts',
-)
+// RFC-405 / RFC-406: the agent executor's lanes left nodeMechanics.ts; their clarify wiring is read
+// from the combined agent mechanics corpus.
 
 describe('TaskExecution ↔ runner clarify prompt wire-up (RFC-023 T12)', () => {
   test('nodeMechanics.ts wires the unified buildClarifyQueueContext injector (RFC-132 PR-C)', () => {
@@ -85,8 +76,8 @@ describe('TaskExecution ↔ runner clarify prompt wire-up (RFC-023 T12)', () => 
     expect(port).toContain(
       'openAgentClarify(request: AgentClarifyGateRequest): Promise<AgentClarifyGateReceipt>',
     )
-    const execution = readFileSync(NODE_EXECUTION_SRC, 'utf8')
-    expect(execution).toContain(
+    // RFC-406: the gate-port check moved into the agent binding with the last collaboration consumer.
+    expect(AGENT_BINDING_SOURCE).toContain(
       'state.opts.collaborationRuntime satisfies CollaborationNodeGatePort',
     )
     const mechanics = AGENT_MECHANICS_SOURCE

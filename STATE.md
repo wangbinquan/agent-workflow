@@ -1,3 +1,15 @@
+## 2026-11-01 RFC-406 task-execution workgroup host 迁入 engine/node 并删除 nodeMechanics.ts（In Progress；`design/RFC-406-task-execution-workgroup-host-executor/`）
+
+- **来由**：RFC-294 S6，design §5.5 第 3 步之四（最后一组）；用户授权同 RFC-402，本会话调研、设计、实施与集中验证，不派 Codex。
+- **范围**：workgroup host 主体（`executeWorkgroupHostMechanics`，500 行）迁入 `engine/node/agent-single/runWorkgroupHost.ts`，agent-single 执行器的
+  DAG lane 与 host lane 都经同一组 task-execution 自有端口执行，`legacyHostPort` 删除；workgroup 引擎钩子并入 `nodeExecution.ts`，`SchedulerState`、
+  `OneNodeResult` 别名退役；`nodeMechanics.ts` 删除。纯结构重构。
+- **做法**：设计门免；实现门由本会话按路径限定自审（只审功能），PASS。
+- **进度**：T1～T5 完成，随实现提交入库，待 exact SHA 的 CI（AC-6）。RFC-294 S6 退出门「`nodeMechanics.ts` 删除」成立，design §5.5 第 3 步全部落地。
+  顺带补上 RFC-405 漏掉的守卫覆盖：四份按显式文件清单做「不得出现」扫描的守卫在 agent 主体迁出后没扫到它（判据仍绿），现改为扫描 agent 执行器
+  的全部文件。集中验证 416 + 18 个文件：本 RFC 引入的两处测试写法问题已修，其余只有负载超时、复跑通过；P0 变异 lane 通过（34 个阶段、源文件指纹不变）。详见 plan「集中验证（T5）」。
+- **后继**：design §5.5 第 4 步（`wrapperMechanics.ts` 的 fanout 装配线、`taskEngineApplication.ts` 的引擎编排）。
+
 ## 2026-11-01 RFC-405 task-execution agent-single 节点迁入 engine/node（In Progress；`design/RFC-405-task-execution-agent-single-executor/`）
 
 - **来由**：RFC-294 S6，design §5.5 第 3 步之三；用户授权同 RFC-402，本会话调研、设计、实施与集中验证，不派 Codex。
@@ -5,10 +17,13 @@
   task-execution 自有的显式端口执行；重试 / 续跑判定归 domain，八个运行历史读取与借壳拒绝判定归 application，`legacyArgs` 删除；执行器直接调
   主体，工作组主机线仍转交（RFC-406）。纯结构重构。
 - **做法**：设计门免；实现门由本会话按路径限定自审（只审功能），PASS。
-- **进度**：T1～T6 完成，随实现提交入库，待 exact SHA 的 CI（AC-6）。`nodeMechanics.ts` 2496 → 598 行，只剩工作组主机线；RFC-294 S6 退出门中
+- **进度**：T1～T6 完成，随实现提交 `81168e759` 入库，待 AC-6。`nodeMechanics.ts` 2496 → 598 行，只剩工作组主机线；RFC-294 S6 退出门中
   「`legacyArgs` 消失」成立。集中验证查出本 RFC 引入的两类问题，均已修：首版端口从 COL 合同与 `services/` 取类型，新增 1 条 off-DAG 文件边与
   8 条 R2 边（改为 task-execution 自有的结构类型，由绑定在编译期对齐）；两份源码锁改读语料常量后被负 fixture 判据误判（改为就地读 owner
   文件）。其余失败只是负载超时，复跑通过；P0 变异 lane 通过（34 个阶段、源文件指纹不变）。详见 plan「集中验证（T6）」。
+- **CI**（`81168e759`）：windows-platform success；主 CI `41295916543` 59 success / 2 cancelled，没有用例失败。shard 4 / 19 跑满 15 分钟上限被取消，
+  父提交 `109ca2f81` 的 run 同样有 3 个分片因此取消（RFC-395 的重测试约 260 s，加上 RFC-398 新增的发布版矩阵文件），与本 RFC 无关；没跑到的文件
+  除 RFC-398 自己的 3 个外，在 RFC-406 的集中验证里本机复跑通过。CI 证据待后继 run 补齐，AC-6 暂不关（详见 plan「CI（AC-6）」）。
 - **后继**：RFC-406（workgroup host）。
 
 ## 2026-11-01 RFC-404 task-execution 子任务调用节点迁入 engine/node（In Progress；`design/RFC-404-task-execution-child-call-executors/`）

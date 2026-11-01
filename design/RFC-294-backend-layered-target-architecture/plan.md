@@ -223,7 +223,8 @@ Facade 只许 re-export 或参数形状适配；不得含 DB 查询、状态、�
     `engine/node/shared/child-call/`，两个执行器各在 registry key 目录；
   - [RFC-405](../RFC-405-task-execution-agent-single-executor/proposal.md)（In Progress）：agent-single 主体迁入 `engine/node/agent-single/`，
     经 task-execution 自有端口执行，`legacyArgs` 消失；`nodeMechanics.ts` 2,496 → 598 行，只剩工作组主机线；
-  - 后续：workgroup host 一个 RFC（RFC-406），落档时立项。
+  - [RFC-406](../RFC-406-task-execution-workgroup-host-executor/proposal.md)（In Progress）：workgroup host 主体迁入 `engine/node/agent-single/`，
+    执行器两条 lane 共用端口；`nodeMechanics.ts` 删除，退出门「`nodeMechanics.ts` 删除」成立。design §5.5 第 3 步至此全部落地。
 
 ### S7 唯一 AtomicApply 引擎（W6）
 
@@ -392,7 +393,8 @@ S3、S4、S8 互不依赖，可与其他后继并行，但各自避让正在被�
 
 - [ ] proposal AC-1～AC-11 全部兑现；
 - [x] 所有 P0 后继 Done；RFC-287 Done；RFC-288/289 保持 CLOSED；W2、W3 Done；
-- [ ] S1～S8 Done（2026-11-01：S1 / S3 / S4 / S5 / S8 Done，S2 余 S2c，S6 第一步与第 3 步之一（RFC-403）Done、其余未完成，S7 未完成）；
+- [ ] S1～S8 Done（2026-11-01：S1 / S3 / S4 / S5 / S8 Done，S2 余 S2c，S6 第一步与第 3 步之一（RFC-403）Done、第 3 步其余（RFC-404～406）已实施待 CI，
+  第 4 步与第 5 步其余退出门未完成，S7 未完成）；
 - [ ] W4 余项、W5 余项、W7 余项（2026-10-31 核销）、W9-C/E/D Done；W8 仅在新能力 RFC 获批时要求；
 - [ ] design §14 的终局判据全部成立；
 - [ ] 在途 task、历史行、API / MCP / WS 兼容与完整 E2E 有证据；

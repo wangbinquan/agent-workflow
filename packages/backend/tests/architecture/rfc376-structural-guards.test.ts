@@ -170,7 +170,6 @@ const KNOWN: Readonly<Record<string, readonly string[]>> = {
     'packages/backend/src/modules/task-execution/composition/crewstationArchive.ts -> system-operations',
     'packages/backend/src/modules/task-execution/composition/humanGate.ts -> collaboration',
     'packages/backend/src/modules/task-execution/application/ports/humanGateNodeExecution.ts -> collaboration',
-    'packages/backend/src/modules/task-execution/composition/nodeMechanics.ts -> collaboration',
     'packages/backend/src/modules/task-execution/composition/providerRuntime.ts -> knowledge-evolution',
     'packages/backend/src/modules/task-execution/composition/taskEngineRuntimeOptions.ts -> collaboration',
     'packages/backend/src/modules/task-execution/composition/taskEngineRuntimeOptions.ts -> memory',

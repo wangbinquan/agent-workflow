@@ -1,3 +1,4 @@
+import { AGENT_MECHANICS_SOURCE } from './helpers/executionMechanismSources'
 import { readTaskAgentSources } from './helpers/taskAgentSource'
 // RFC-066 PR-B — source-layer guards locking wrapper mechanics / runner / diff /
 // rollback wiring against silent regressions. Targets:
@@ -39,18 +40,8 @@ const WRAPPER_MECHANICS_SRC = readFileSync(
   ),
   'utf-8',
 )
-const NODE_MECHANICS_SRC = readFileSync(
-  resolve(
-    import.meta.dir,
-    '..',
-    'src',
-    'modules',
-    'task-execution',
-    'composition',
-    'nodeMechanics.ts',
-  ),
-  'utf-8',
-)
+// RFC-405 / RFC-406: both agent-executor lanes (and their binding) left nodeMechanics.ts.
+const NODE_MECHANICS_SRC = AGENT_MECHANICS_SOURCE
 const RUNNER_SRC = readTaskAgentSources()
 const TASK_SRC = readFileSync(resolve(import.meta.dir, '..', 'src', 'services', 'task.ts'), 'utf-8')
 // RFC-359 AC-1：PB-G5 盯的那段搬了家——纯读三件两个引擎合一之后，任务 diff 的拼装是

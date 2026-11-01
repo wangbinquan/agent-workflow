@@ -310,9 +310,19 @@ describe('RFC-359 W5-T19b —— 组合根占位拆除后的运行期残迹', ()
       )
     }
 
-    expect(code('modules/task-execution/composition/nodeMechanics.ts')).not.toContain(
-      'identity-access-runtime-not-composed',
-    )
+    // RFC-405 / RFC-406: nodeMechanics.ts is gone; node execution is composed in nodeExecution.ts and
+    // the agent executor's files.
+    expect(
+      [
+        'modules/task-execution/composition/nodeExecution.ts',
+        'modules/task-execution/engine/node/agent-single/runAgentSingleNode.ts',
+        'modules/task-execution/engine/node/agent-single/runWorkgroupHost.ts',
+        'modules/task-execution/composition/agentNodeExecution.ts',
+        'modules/task-execution/application/agentRunHistory.ts',
+      ]
+        .map(code)
+        .join('\n'),
+    ).not.toContain('identity-access-runtime-not-composed')
 
     expect(code('modules/task-execution/composition.ts'), '基类又开始自己判空持久化').not.toContain(
       'task-execution persistence is not composed',

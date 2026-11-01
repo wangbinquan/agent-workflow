@@ -1,3 +1,4 @@
+import { AGENT_MECHANICS_SOURCE } from './helpers/executionMechanismSources'
 // RFC-058 PR-A baseline (T5): source-text lock of TaskExecution clarify-injection routing.
 //
 // The per-role service-call baselines (buildClarifyPromptContext / buildExternalFeedbackContext /
@@ -7,21 +8,11 @@
 // consumerKind fork or re-introduces the removed history cutoff.
 
 import { describe, expect, test } from 'bun:test'
-import { resolve } from 'node:path'
 
 describe('RFC-058 baseline T5 — TaskExecution dispatch gate grep guards', () => {
   test('source grep: node mechanics routes clarify injection through buildClarifyQueueContext (RFC-132 PR-C)', async () => {
-    const fs = await import('node:fs/promises')
-    const txt = await fs.readFile(
-      resolve(
-        import.meta.dir,
-        '..',
-        '..',
-        '..',
-        'packages/backend/src/modules/task-execution/composition/nodeMechanics.ts',
-      ),
-      'utf8',
-    )
+    // RFC-405 / RFC-406: both agent-executor lanes left nodeMechanics.ts.
+    const txt = AGENT_MECHANICS_SOURCE
     // RFC-132 (PR-C): the per-role buildPromptContext consumerKind dispatch (+ the questioner SELECT
     // fork) is replaced by the single flat injector — selectAgentQueue queries self/questioner/designer
     // in one shot.

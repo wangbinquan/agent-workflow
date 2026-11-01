@@ -1,3 +1,4 @@
+import { AGENT_MECHANICS_SOURCE } from './helpers/executionMechanismSources'
 // RFC-092 REGRESSION LOCK — design/scheduler-audit-2026-06-10.md S-2 (P0, WP-1)
 // 修复：RFC-092（design/RFC-092-scheduler-p0-stopgap/design.md §2）。
 // （此文件由修复前的 CURRENT-BEHAVIOR LOCK 按头部 FLIP 指引翻转而来。）
@@ -371,18 +372,8 @@ function registerNativeCases2() {
       resolve(import.meta.dir, '..', 'src', 'services', 'task.ts'),
       'utf-8',
     )
-    const mechanicsSrc = readFileSync(
-      resolve(
-        import.meta.dir,
-        '..',
-        'src',
-        'modules',
-        'task-execution',
-        'composition',
-        'nodeMechanics.ts',
-      ),
-      'utf-8',
-    )
+    // RFC-405 / RFC-406: both agent-executor lanes (and their binding) left nodeMechanics.ts.
+    const mechanicsSrc = AGENT_MECHANICS_SOURCE
     const rollbackSrc = readFileSync(
       resolve(import.meta.dir, '..', 'src', 'services', 'nodeRollback.ts'),
       'utf-8',

@@ -399,7 +399,16 @@ describe('RFC-184 — source wiring locks', () => {
 
   test('scheduler runHostNode projects (clears outputKinds), skips persistence, and filters empties', () => {
     const src = readFileSync(
-      join(SRC, 'modules', 'task-execution', 'composition', 'nodeMechanics.ts'),
+      // RFC-406: the host body moved from nodeMechanics.ts to engine/node/agent-single/.
+      join(
+        SRC,
+        'modules',
+        'task-execution',
+        'engine',
+        'node',
+        'agent-single',
+        'runWorkgroupHost.ts',
+      ),
       'utf8',
     )
     expect(src).toContain('outputKinds: undefined')

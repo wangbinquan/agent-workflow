@@ -30,11 +30,11 @@ describe('RFC-048 subagentLiveCapture passthrough', () => {
   })
 
   test('scheduler forwards opts.subagentLiveCapture into runNode (every call site)', () => {
-    // RFC-405: the agent-single run's task-level fields are added by the agent binding.
+    // RFC-405 / RFC-406: both agent-executor lanes (the DAG body and the workgroup host) add their
+    // task-level run fields through the agent binding's one `withTaskRunFields`.
     const src =
       read('packages/backend/src/services/scheduler.ts') +
       read('packages/backend/src/modules/task-execution/composition/wrapperMechanics.ts') +
-      read('packages/backend/src/modules/task-execution/composition/nodeMechanics.ts') +
       read('packages/backend/src/modules/task-execution/composition/agentNodeExecution.ts')
     const topology = read(
       'packages/backend/src/modules/task-execution/application/ports/taskExecutionTopology.ts',
@@ -48,7 +48,23 @@ describe('RFC-048 subagentLiveCapture passthrough', () => {
     // 随 RFC-284 T20 收进 INHERITABLE_RUN_CONFIG_KEYS；RFC-331 再把 child resume
     // envelope 切成 buildChildRuntime.runConfig，下面同时锁登记、picker 与展开三段，
     // 保证子任务继承语义不变，计数仍是 4 个 runNode 直传点。
-    expect(matches.length).toBe(4)
+    // RFC-406：agent-single 与 workgroup host 两条 lane 都经 agent 绑定的同一个 `withTaskRunFields`
+    // 补 task 级字段，直传点合成一处：fanout 分片 + 聚合 + agent 绑定 = 3；两条 lane 都只经
+    // `ports.runtime.runAgent(` 发起，绑定的 `runAgent` 只用 `withTaskRunFields`。
+    expect(matches.length).toBe(3)
+    for (const lane of [
+      'packages/backend/src/modules/task-execution/engine/node/agent-single/runAgentSingleNode.ts',
+      'packages/backend/src/modules/task-execution/engine/node/agent-single/runWorkgroupHost.ts',
+    ]) {
+      const body = read(lane)
+      expect(body.match(/ports\.runtime\.runAgent\(/g), lane).toHaveLength(1)
+      expect(body, lane).not.toContain('subagentLiveCapture')
+    }
+    expect(
+      read('packages/backend/src/modules/task-execution/composition/agentNodeExecution.ts'),
+    ).toContain(
+      'runTaskAgentWithFamily(opts.taskAgentRuns, withTaskRunFields(opts, request), launch)',
+    )
     expect(topology).toContain("'subagentLiveCapture',")
     // RFC-404: the child runtime picker moved with the call-node binding.
     expect(

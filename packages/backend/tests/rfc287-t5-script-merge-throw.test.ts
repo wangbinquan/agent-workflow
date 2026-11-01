@@ -1,4 +1,5 @@
 import {
+  WORKGROUP_HOST_SOURCE,
   SCRIPT_NODE_SOURCE,
   SCRIPT_ATTEMPT_SOURCE,
   MERGE_CONFLICT_SOURCE,
@@ -26,18 +27,7 @@ import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
-const NODE_MECHANICS = readFileSync(
-  resolve(
-    import.meta.dir,
-    '..',
-    'src',
-    'modules',
-    'task-execution',
-    'composition',
-    'nodeMechanics.ts',
-  ),
-  'utf8',
-)
+// RFC-406: nodeMechanics.ts is gone; its last body (the workgroup host) is WORKGROUP_HOST_SOURCE.
 const SCHEDULER = readFileSync(
   resolve(import.meta.dir, '..', 'src', 'services', 'scheduler.ts'),
   'utf8',
@@ -58,7 +48,7 @@ const MECHANICS_SOURCES = [
   SCRIPT_NODE_SOURCE,
   SCRIPT_ATTEMPT_SOURCE,
   MERGE_CONFLICT_SOURCE,
-  NODE_MECHANICS,
+  WORKGROUP_HOST_SOURCE,
   SCHEDULER,
   WRAPPER_MECHANICS,
 ] as const

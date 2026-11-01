@@ -49,9 +49,18 @@ test('node-run ports expose checkpoints and keep merge state / isolation root at
   expect(checkpoint).not.toContain('mergeState')
 })
 
+const AGENT_EXECUTOR_FILES = [
+  'engine/node/agent-single/runAgentSingleNode.ts',
+  'engine/node/agent-single/runWorkgroupHost.ts',
+  'composition/agentNodeExecution.ts',
+  'application/agentRunHistory.ts',
+]
+
 test('isolation, replay and wrapper mechanics do not inspect scalar/map columns or directory aliases', () => {
   for (const path of [
-    'composition/nodeMechanics.ts',
+    // RFC-405 / RFC-406: what nodeMechanics.ts held — both agent-executor lanes, their binding and the
+    // run-history reads — is scanned at its owners.
+    ...AGENT_EXECUTOR_FILES,
     'composition/executionMergeRecovery.ts',
     'composition/wrapperMechanics.ts',
     'engine/wrapper/gitStrategy.ts',
@@ -83,10 +92,7 @@ test('isolation, replay and wrapper mechanics do not inspect scalar/map columns 
       /\.(?:preSnapshotReposJson|isoBaseSnapshot(?:ReposJson)?|isoNodeTree(?:ReposJson)?|isoSubmodules(?:Repos)?Json)\b/,
     )
     expect(text).not.toMatch(/\.worktreeDirName\b/)
-    // C1: the two inherited child-workspace sites retain HEAD's count decision.
-    const layoutDecisions =
-      path === 'composition/nodeMechanics.ts' ? text.replaceAll('state.repos.length > 1', '') : text
-    expect(layoutDecisions).not.toMatch(/repoCount\s*===|repos\.length\s*(?:===\s*1|>\s*1)/)
+    expect(text).not.toMatch(/repoCount\s*===|repos\.length\s*(?:===\s*1|>\s*1)/)
   }
 })
 
@@ -128,7 +134,8 @@ test('negative controls catch epoch-1 columns and directory aliases', () => {
 // separate bug fix (6198ae144, plan §6.6 Q5): the guard now locks the mount-layout decision instead.
 test('the four single-non-root defect sites decide by mount layout, not by repo count', () => {
   // RFC-404: the two inherited child-workspace sites moved with the call node's launch arms.
-  const mechanics = taskSource('composition/nodeMechanics.ts')
+  // RFC-405 / RFC-406: nodeMechanics.ts is gone; the agent executor's files replace it here.
+  const mechanics = AGENT_EXECUTOR_FILES.map(taskSource).join('\n')
   const launch = taskSource('engine/node/shared/child-call/launchChildCall.ts')
   for (const text of [mechanics, launch]) expect(text.match(/state\.repos\.length > 1/g)).toBeNull()
   expect(launch).toContain('const singleRoot = isSingleRootRepository(parentMounts)')

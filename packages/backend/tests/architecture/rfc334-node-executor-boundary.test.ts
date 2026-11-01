@@ -47,9 +47,10 @@ describe('RFC-334 node-executor owner boundary', () => {
       'shared/child-call/runChildCallNode',
       'shared/child-call/launchChildCall',
       'shared/child-call/childCallWatch',
-      // RFC-405: the agent-single executor and its body.
+      // RFC-405 / RFC-406: the agent-single executor and its two lane bodies.
       'agent-single/agentSingleNodeExecutor',
       'agent-single/runAgentSingleNode',
+      'agent-single/runWorkgroupHost',
     ])
       expect(paths).toContain(`${engineDir}/node/${path}.ts`)
     expect(paths).toContain(`${engineDir}/node/script/runScriptNode.ts`)
@@ -97,11 +98,11 @@ describe('RFC-334 node-executor owner boundary', () => {
     const composition = read(
       'packages/backend/src/modules/task-execution/composition/nodeExecution.ts',
     )
-    const mechanics = read(
-      'packages/backend/src/modules/task-execution/composition/nodeMechanics.ts',
+    // RFC-405 / RFC-406: both lanes of the agent executor open their rounds through its collaboration
+    // port; the binding forwards to the collaboration runtime, which satisfies the required gate port.
+    const host = read(
+      'packages/backend/src/modules/task-execution/engine/node/agent-single/runWorkgroupHost.ts',
     )
-    // RFC-405: the DAG agent body opens its self / cross rounds through its own collaboration port;
-    // the binding forwards to the same runtime the workgroup host still receives.
     const agentNode = read(
       'packages/backend/src/modules/task-execution/engine/node/agent-single/runAgentSingleNode.ts',
     )
@@ -109,16 +110,17 @@ describe('RFC-334 node-executor owner boundary', () => {
       'packages/backend/src/modules/task-execution/composition/agentNodeExecution.ts',
     )
     expect(port).toContain('openAgentClarify')
-    expect(composition).toContain(
+    expect(agentBinding).toContain(
       'state.opts.collaborationRuntime satisfies CollaborationNodeGatePort',
     )
-    expect(composition).toMatch(
-      /new AgentSingleNodeExecutor\(\s*createAgentNodeExecutionPorts\(state\),\s*legacyHostPort\(state, mechanics\),\s*\)/,
+    expect(composition).toContain(
+      "'agent-single': new AgentSingleNodeExecutor(createAgentNodeExecutionPorts(state)),",
     )
-    expect(mechanics.match(/collaboration\.openAgentClarify\(/g)).toHaveLength(1)
+    expect(composition).not.toContain('legacyHostPort')
+    expect(host.match(/collaboration\.openAgentClarify\(/g)).toHaveLength(1)
     expect(agentNode.match(/collaboration\.openAgentClarify\(/g)).toHaveLength(2)
     expect(agentBinding.match(/collaboration\(\)\.openAgentClarify\(/g)).toHaveLength(1)
-    for (const source of [mechanics, agentNode, agentBinding])
+    for (const source of [host, agentNode, agentBinding, composition])
       expect(source).not.toMatch(/await\s+createClarifyRound\s*\(/)
   })
 

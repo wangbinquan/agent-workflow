@@ -1,4 +1,5 @@
 import {
+  WORKGROUP_HOST_SOURCE,
   AGENT_NODE_SOURCE,
   SCRIPT_NODE_SOURCE,
   SCRIPT_ATTEMPT_SOURCE,
@@ -32,18 +33,7 @@ const SCHEDULER = readFileSync(
   resolve(import.meta.dir, '..', 'src', 'services', 'scheduler.ts'),
   'utf8',
 )
-const NODE_MECHANICS = readFileSync(
-  resolve(
-    import.meta.dir,
-    '..',
-    'src',
-    'modules',
-    'task-execution',
-    'composition',
-    'nodeMechanics.ts',
-  ),
-  'utf8',
-)
+// RFC-406: nodeMechanics.ts is gone; its last body (the workgroup host) is WORKGROUP_HOST_SOURCE.
 const WRAPPER_MECHANICS = readFileSync(
   resolve(
     import.meta.dir,
@@ -63,7 +53,7 @@ const MECHANICS_SOURCES = [
   SCRIPT_ATTEMPT_SOURCE,
   MERGE_CONFLICT_SOURCE,
   SCHEDULER,
-  NODE_MECHANICS,
+  WORKGROUP_HOST_SOURCE,
   WRAPPER_MECHANICS,
 ] as const
 
@@ -138,7 +128,7 @@ describe('RFC-287 T1⑨ — 抛出结局与 keep 分歧（拆分前现状）', (
       /clarify !== undefined\) \{\s*\n\s*return \{ skip: 'park', keep: true, then: 'settle' \}/,
     )
     // 工作组主机线的 clarify 分支直接 return，不置 keep（finally 无条件清理）。
-    const host = bodyOf('async function executeWorkgroupHostMechanics(')
+    const host = bodyOf('async function runWorkgroupHost(')
     const clarifyIdx = host.indexOf('clarify')
     expect(clarifyIdx).toBeGreaterThan(-1)
     expect(host.slice(clarifyIdx, clarifyIdx + 600)).not.toMatch(/keepHookIso = true/)

@@ -1,3 +1,4 @@
+import { AGENT_MECHANICS_SOURCE } from './helpers/executionMechanismSources'
 // RFC-395 II-pre：改接生产启动 / 读取路径，保留原断言意图。
 // RFC-067 — source-layer guards locking the runner / service / schema
 // wiring against silent regressions. Targets:
@@ -51,18 +52,8 @@ const SCHEDULER_SRC = readFileSync(
   resolve(import.meta.dir, '..', 'src', 'services', 'scheduler.ts'),
   'utf-8',
 )
-const NODE_MECHANICS_SRC = readFileSync(
-  resolve(
-    import.meta.dir,
-    '..',
-    'src',
-    'modules',
-    'task-execution',
-    'composition',
-    'nodeMechanics.ts',
-  ),
-  'utf-8',
-)
+// RFC-405 / RFC-406: both agent-executor lanes (and their binding) left nodeMechanics.ts.
+const NODE_MECHANICS_SRC = AGENT_MECHANICS_SOURCE
 const WRAPPER_MECHANICS_SRC = readFileSync(
   resolve(
     import.meta.dir,

@@ -15,15 +15,12 @@ import { judgeBranchActivation } from '../application/nodeBranchActivation'
 import { createScriptNodeExecutionPorts } from './scriptNodeExecution'
 import type { WorkflowNode } from '@agent-workflow/shared'
 import type { TaskMechanicsState } from '@/services/execution/taskMechanicsState'
+import { worktreeFilesChanged } from '@/util/git'
 import type { Logger } from '@/util/log'
 import type { WrapperRuntimeFactory } from './taskExecutionComponents'
-import { buildWorkgroupEngineSupport, executeWorkgroupHostMechanics } from './nodeMechanics'
 import type { WorkgroupTurnHostOperations } from '../application/ports/workgroupTurnsOperations'
-import type { CollaborationNodeGatePort } from '../application/ports/collaborationNodeGate'
-import type {
-  WorkgroupHostExecutionPort,
-  WorkgroupHostExecutionRequest,
-} from '../application/ports/workgroupHostExecution'
+import type { WorkgroupHostExecutionRequest } from '../application/ports/workgroupHostExecution'
+import { broadcastNodeStatus, type NodeStatus } from '../infrastructure/nodeStatusEvents'
 import { AgentSingleNodeExecutor } from '../engine/node/agent-single/agentSingleNodeExecutor'
 import { CallWorkflowNodeExecutor } from '../engine/node/call-workflow/callWorkflowNodeExecutor'
 import { CallWorkgroupNodeExecutor } from '../engine/node/call-workgroup/callWorkgroupNodeExecutor'
@@ -54,37 +51,14 @@ export interface OneNodeArgs {
   log: Logger
 }
 
-function legacyHostPort(
-  state: TaskMechanicsState,
-  collaboration: TaskMechanicsState['opts']['collaborationRuntime'],
-): WorkgroupHostExecutionPort {
-  return {
-    async executeHost(request: WorkgroupHostExecutionRequest) {
-      const { hostOutputPorts, ...host } = request.host
-      return executeWorkgroupHostMechanics(
-        state,
-        {
-          ...host,
-          ...(hostOutputPorts === undefined ? {} : { hostOutputPorts: [...hostOutputPorts] }),
-        },
-        collaboration,
-      )
-    },
-  }
-}
-
 function buildGateway(
   state: TaskMechanicsState,
   wrapperRuntimeFactory: WrapperRuntimeFactory,
 ): NodeExecutionGateway {
-  const mechanics = state.opts.collaborationRuntime satisfies CollaborationNodeGatePort
   const wrapperRuntime = wrapperRuntimeFactory(state)
   const wrappers = createWrapperDelegatingNodeExecutors(wrapperRuntime, state.wrapperScopes)
   const executors = {
-    'agent-single': new AgentSingleNodeExecutor(
-      createAgentNodeExecutionPorts(state),
-      legacyHostPort(state, mechanics),
-    ),
+    'agent-single': new AgentSingleNodeExecutor(createAgentNodeExecutionPorts(state)),
     input: new InputNodeExecutor(createInputNodeExecutionPorts(state)),
     output: new OutputNodeExecutor(createOutputNodeExecutionPorts(state)),
     ...wrappers,
@@ -150,13 +124,45 @@ export function executeWorkgroupHost(
   return gatewayFor(state, wrapperRuntimeFactory).executeHost(request)
 }
 
+/**
+ * RFC-164 / RFC-187 §4 — what the workgroup engines read besides the host run (moved here from
+ * nodeMechanics.ts, RFC-406): status broadcasts for this task, and the canonical delta for the
+ * zero-delta-done warning.
+ */
+function workgroupEngineSupport(
+  state: TaskMechanicsState,
+): Omit<WorkgroupTurnHostOperations, 'runHost'> {
+  const { taskId } = state
+  return {
+    broadcastNodeStatus: (nodeRunId, nodeId, status) =>
+      broadcastNodeStatus(taskId, nodeRunId, nodeId, status as NodeStatus),
+    // RFC-187 §4 — canonical delta for the zero-delta-done warn. Throws (engine
+    // swallows) when there's no base commit to diff against.
+    // RFC-187 §4 (Codex impl-gate P1) — sum the delta over EVERY canonical repo at its
+    // own worktree/base. The old form diffed `task.worktreePath`, which for a multi-repo
+    // task is a NON-git parent container: git threw, `warnIfZeroDeltaDone` swallowed it,
+    // and the zero-delta warning silently never fired for multi-repo tasks at all.
+    // Single-repo is unchanged (repos[0].worktreePath === task.worktreePath).
+    getCanonicalFilesChanged: async () => {
+      const diffable = state.repos.filter((r) => r.baseCommit !== null)
+      if (diffable.length === 0) {
+        throw new Error('no base commit on any repo — cannot compute canonical delta')
+      }
+      const perRepo = await Promise.all(
+        diffable.map((r) => worktreeFilesChanged(r.worktreePath, r.baseCommit as string)),
+      )
+      return perRepo.reduce((sum, n) => sum + n, 0)
+    },
+  }
+}
+
 /** Workgroup engines keep their hook shape while the host body resolves through the registry. */
 export function buildNodeExecutionWorkgroupHooks(
   state: TaskMechanicsState,
   wrapperRuntimeFactory: WrapperRuntimeFactory,
 ): WorkgroupTurnHostOperations {
   return {
-    ...buildWorkgroupEngineSupport(state),
+    ...workgroupEngineSupport(state),
     runHost: (host) =>
       executeWorkgroupHost(
         state,

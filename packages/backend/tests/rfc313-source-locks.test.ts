@@ -19,9 +19,9 @@ const BACKEND_SRC = resolve(import.meta.dir, '..', 'src')
 const SHARED_SRC = resolve(import.meta.dir, '..', '..', 'shared', 'src')
 const read = (...seg: string[]): string => readFileSync(resolve(...seg), 'utf8')
 const occurrences = (src: string, needle: string): number => src.split(needle).length - 1
-// RFC-405: the agent-single body left nodeMechanics.ts. Every count spans the same code as before:
-// the agent body, its binding, the run-history reads and retry policy it moved into, and the file
-// itself (now the workgroup host only).
+// RFC-405 / RFC-406: both agent-executor lanes left nodeMechanics.ts. Every count spans the same code
+// as before: the agent body, the workgroup host body, their binding, and the run-history reads and
+// retry policy they moved into.
 const TE = ['modules', 'task-execution'] as const
 const readAgentNode = (): string =>
   read(BACKEND_SRC, ...TE, 'engine', 'node', 'agent-single', 'runAgentSingleNode.ts')
@@ -31,7 +31,7 @@ const readNodeMechanics = (): string =>
     read(BACKEND_SRC, ...TE, 'composition', 'agentNodeExecution.ts'),
     read(BACKEND_SRC, ...TE, 'application', 'agentRunHistory.ts'),
     read(BACKEND_SRC, ...TE, 'domain', 'envelopeRetryPolicy.ts'),
-    read(BACKEND_SRC, ...TE, 'composition', 'nodeMechanics.ts'),
+    read(BACKEND_SRC, ...TE, 'engine', 'node', 'agent-single', 'runWorkgroupHost.ts'),
   ].join('\n')
 
 describe('RFC-313 源码层锁', () => {

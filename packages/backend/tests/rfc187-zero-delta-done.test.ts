@@ -1,3 +1,4 @@
+import { NODE_EXECUTION_SOURCE } from './helpers/executionMechanismSources'
 // RFC-187 §4 (audit design/workgroup-e2e-audit.md §4, new finding) — probe A: a fan-out
 // where both writers wrote to the LEADER's iso via an absolute path baked into the briefs;
 // their own isos stayed empty → merge-back merged nothing → canonical empty but the task
@@ -101,18 +102,8 @@ describe('RFC-187 §4 — source locks', () => {
     const calls = runner.split('warnIfZeroDelta(').length - 1
     expect(calls).toBeGreaterThanOrEqual(3) // 1 处定义 + 2 处调用
     // The canonical-diff hook is provided by task-execution node mechanics, not the engine.
-    const nodeMechanics = readFileSync(
-      resolve(
-        import.meta.dir,
-        '..',
-        'src',
-        'modules',
-        'task-execution',
-        'composition',
-        'nodeMechanics.ts',
-      ),
-      'utf8',
-    )
+    // RFC-406: it moved with the workgroup engine hooks into composition/nodeExecution.ts.
+    const nodeMechanics = NODE_EXECUTION_SOURCE
     expect(nodeMechanics).toContain('getCanonicalFilesChanged')
   })
 
@@ -121,18 +112,7 @@ describe('RFC-187 §4 — source locks', () => {
   // the warning silently never fired for multi-repo tasks at all. It must diff EVERY repo
   // at its own worktree/base.
   test('the hook sums the delta per-repo (not the non-git multi-repo parent container)', () => {
-    const nodeMechanics = readFileSync(
-      resolve(
-        import.meta.dir,
-        '..',
-        'src',
-        'modules',
-        'task-execution',
-        'composition',
-        'nodeMechanics.ts',
-      ),
-      'utf8',
-    )
+    const nodeMechanics = NODE_EXECUTION_SOURCE
     // per-repo worktree+base, not the task-level parent.
     expect(nodeMechanics).toContain('worktreeFilesChanged(r.worktreePath, r.baseCommit as string)')
     expect(nodeMechanics).not.toContain('worktreeFilesChanged(task.worktreePath, task.baseCommit)')

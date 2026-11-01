@@ -1,5 +1,7 @@
 import type {
+  Agent,
   ClarifyDirective,
+  MergeStateTransitionEvent,
   ResourceRefAst,
   ReviewPromptContext,
   TriggerContext,
@@ -26,8 +28,9 @@ import type { ScriptInputPort, ScriptRunLedger } from './scriptNodeExecution'
 import type { RunResult, TaskAgentRunPolicy } from './taskAgentRun'
 import type { TaskAgentRunScope } from './taskAgentRunFamily'
 
-// RFC-405 — explicit capabilities of the agent-single body. Every value is read when the body asks
-// for it; nothing is frozen when the gateway is built.
+// RFC-405 / RFC-406 — explicit capabilities of the agent-single executor's two lanes (the DAG body and
+// the workgroup host). Every value is read when a body asks for it; nothing is frozen when the gateway
+// is built.
 
 type WithoutContext<T> = Omit<T, 'executionContext'>
 /** A run-history read with the current persistence already bound. */
@@ -49,6 +52,8 @@ export interface AgentTaskFacts {
   readonly gitUserName: string | null
   readonly gitUserEmail: string | null
   readonly platformInputPathsJson: string | null
+  /** RFC-248 / RFC-406: canonical repositories' mount paths, in task order (host templates render these). */
+  readonly repoMounts: readonly string[]
 }
 
 export interface AgentExecutionPolicy {
@@ -93,6 +98,17 @@ export interface AgentCollaborationPort {
     readonly currentRunOnly?: boolean
   }): Promise<{ readonly block: string; readonly sourceRunIds: readonly string[] } | undefined>
   openAgentClarify(request: AgentClarifyGateRequest): Promise<AgentClarifyGateReceipt>
+  /** RFC-181 C / RFC-406: the workgroup host's live ask-back suppression read. */
+  isTaskClarifySuppressed(input: {
+    readonly taskId: string
+    readonly nodeId?: string
+    readonly shardKey?: string | null
+  }): Promise<boolean>
+  /** RFC-181 C / RFC-406: dismiss open ask-back parks once the task turned autonomous. */
+  dismissOpenClarifyParksForAutonomous(input: {
+    readonly taskId: string
+    readonly mode?: string
+  }): Promise<{ readonly dismissedSessions: number }>
 }
 
 /**
@@ -122,6 +138,8 @@ export interface AgentRules {
   parsePortValidationFailuresJson(raw: string | null): PortValidationFailure[] | null
   isClarifyRerunCause(cause: string | null | undefined): boolean
   continuesClarifyLineage(causesNewestFirst: ReadonlyArray<string | null | undefined>): boolean
+  /** The error-message prefix of a suppressed ask-back (`services/envelope`). */
+  readonly clarifyForbiddenPrefix: string
   decideResumeSessionId(input: {
     readonly sessionMode: 'isolated' | 'inline'
     readonly sourceSessionId: string | null | undefined
@@ -149,6 +167,8 @@ export type AgentInjection =
 
 export interface AgentResources {
   injection(agentId: string): Promise<AgentInjection>
+  /** RFC-406: the workgroup host's injection — the orchestrator is synthetic, every other agent comes from the session. */
+  hostInjection(agent: Agent): Promise<AgentInjection>
 }
 
 export interface AgentRunHistoryPort {
@@ -194,13 +214,18 @@ export interface AgentWorkspacePort {
     handle: IsoHandle
     nodeRunId: string
     via: 'live'
-    extraForcedContainerPaths: string[]
+    extraForcedContainerPaths?: string[]
     conflictResolver(
       conflicts: MergeBackConflict[],
       containerPath: string,
     ): Promise<{ allResolved: boolean; detail: string }>
   }): Promise<{ kind: 'merged' | 'conflict-human'; detail?: string }>
   markMergeFailed(nodeRunId: string, message: string): Promise<void>
+  /** RFC-167 / RFC-187 T8: close this run's merge state as abandoned (its delta never reaches canonical). */
+  abandonMerge(
+    nodeRunId: string,
+    reason: Extract<MergeStateTransitionEvent, { kind: 'abandon' }>['reason'],
+  ): Promise<boolean>
   discardNodeIso(handle: IsoHandle): Promise<void>
   /** RFC-193 K1: this run's own port files, relative to the port fallback mount. */
   portFileContainerPaths(portFilePaths: readonly string[]): string[]
@@ -220,6 +245,7 @@ export interface AgentNodeExecutionPorts {
     | 'listNodeRuns'
     | 'resolveSchedulerRunRow'
     | 'mintNodeRun'
+    | 'setNodeRunStatus'
     | 'transitionNodeRunStatus'
     | 'loadEnvelopeNonce'
     | 'appendEvent'

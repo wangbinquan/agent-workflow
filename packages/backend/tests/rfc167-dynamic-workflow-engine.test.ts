@@ -1,3 +1,4 @@
+import { WORKGROUP_HOST_SOURCE, AGENT_BINDING_SOURCE } from './helpers/executionMechanismSources'
 import { initializeTaskWorkspace } from './helpers/taskWorkspaceFixture'
 import type { TaskReadRow } from '@/modules/task-execution/infrastructure/taskRepositorySql'
 import { nodeRunFixtureColumns } from './helpers/model/nodeRun'
@@ -832,18 +833,7 @@ describe('RFC-167 — dynamic launch + runTask dispatch', () => {
   })
 
   test('source locks: task orchestrator consumes the task-execution engine registry', () => {
-    const nodeMechanics = readFileSync(
-      resolve(
-        import.meta.dir,
-        '..',
-        'src',
-        'modules',
-        'task-execution',
-        'composition',
-        'nodeMechanics.ts',
-      ),
-      'utf8',
-    )
+    const nodeMechanics = WORKGROUP_HOST_SOURCE
     const orchestrator = readFileSync(
       resolve(
         import.meta.dir,
@@ -884,7 +874,9 @@ describe('RFC-167 — dynamic launch + runTask dispatch', () => {
     // Codex impl-gate P1: the generation run's iso delta is dropped, never
     // merged into the canonical worktree (abandon + skip merge-back).
     expect(nodeMechanics).toContain('req.discardWrites === true')
-    expect(nodeMechanics).toContain("{ kind: 'abandon', reason: 'discard-writes' }")
+    // RFC-406: the host body abandons through the workspace port; the binding writes the event.
+    expect(nodeMechanics).toContain("await workspace.abandonMerge(req.nodeRunId, 'discard-writes')")
+    expect(AGENT_BINDING_SOURCE).toContain("event: { kind: 'abandon', reason }")
   })
 })
 

@@ -58,7 +58,8 @@ const ALLOW_TERMINAL_LEDGER: readonly AllowTerminalLedgerEntry[] = [
       'pending|awaiting_review|awaiting_human|interrupted|canceled→running 的 wrapper generation 重新认领；同一站点覆盖 git/loop/fanout 三种 wrapper。',
   },
   {
-    file: 'packages/backend/src/modules/task-execution/composition/nodeMechanics.ts',
+    // RFC-406 把 workgroup host 主体从 nodeMechanics.ts 迁到这里（nodeMechanics.ts 删除），全仓总数不变。
+    file: 'packages/backend/src/modules/task-execution/engine/node/agent-single/runWorkgroupHost.ts',
     count: 1,
     rewrites: 'done→failed（workgroup host 的 ask-back 被晚到策略关闭）。',
   },

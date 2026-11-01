@@ -165,9 +165,9 @@ const EXECUTOR_ANCHORS = [
   'class AgentSingleNodeExecutor implements AgentNodeExecutor',
   "execute(request: NodeStepRequest<'agent-single'>): Promise<NodeStepOutcome>",
   'return runAgentSingleNode(this.ports, request)',
-  // The workgroup host lane is still handed over unchanged (RFC-406).
+  // RFC-406: the workgroup host lane runs its own body on the same ports.
   'executeHost(request: WorkgroupHostExecutionRequest): Promise<WorkgroupHostExecutionResult>',
-  'return this.host.executeHost(request)',
+  'return runWorkgroupHost(this.ports, request)',
 ] as const
 
 function ownershipViolations(units: readonly SourceUnit[]): string[] {
@@ -181,7 +181,7 @@ function ownershipViolations(units: readonly SourceUnit[]): string[] {
     .replace(/,(?=\))/g, '')
   if (
     !composition.includes(
-      "'agent-single':newAgentSingleNodeExecutor(createAgentNodeExecutionPorts(state),legacyHostPort(state,mechanics))",
+      "'agent-single':newAgentSingleNodeExecutor(createAgentNodeExecutionPorts(state))",
     )
   )
     violations.push('explicit-binding')
@@ -304,14 +304,14 @@ test('negative fixtures: a missing executor, body or explicit binding is detecte
     ['implements AgentNodeExecutor', 'implements LegacyExecutor'],
     ["execute(request: NodeStepRequest<'agent-single'>)", 'execute(request: LegacyRequest)'],
     ['return runAgentSingleNode(this.ports, request)', 'return this.port.execute(request)'],
-    ['return this.host.executeHost(request)', 'return runAgentSingleNode(this.ports, request)'],
+    ['return runWorkgroupHost(this.ports, request)', 'return this.host.executeHost(request)'],
   ])
     expect(ownershipViolations(replaceUnit(UNITS, EXECUTOR, from!, to!))).toContain(
       'executor-owner',
     )
   expect(
     ownershipViolations(
-      replaceUnit(UNITS, COMPOSITION, 'createAgentNodeExecutionPorts(state),', 'agents,'),
+      replaceUnit(UNITS, COMPOSITION, 'createAgentNodeExecutionPorts(state)', 'agents'),
     ),
   ).toContain('explicit-binding')
   expect(ownershipViolations(UNITS.filter((unit) => unit.path !== BODY))).toContain('body-owner')

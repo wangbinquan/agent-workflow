@@ -329,18 +329,7 @@ describe('RFC-188 D — 装配单源锁（表级 allowlist）', () => {
       ),
       'utf8',
     ) +
-    readFileSync(
-      resolve(
-        import.meta.dir,
-        '..',
-        'src',
-        'modules',
-        'task-execution',
-        'composition',
-        'nodeMechanics.ts',
-      ),
-      'utf8',
-    ) +
+    // RFC-406: nodeMechanics.ts is gone; the workgroup host body is counted via LEAF_NODE_SOURCES.
     // RFC-402: the script node calls the shared primitives through its workspace port; the
     // composition binding below is where each port method reaches the kernel primitive.
     readFileSync(

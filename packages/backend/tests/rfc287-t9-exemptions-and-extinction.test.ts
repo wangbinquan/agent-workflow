@@ -25,10 +25,7 @@ import { resolve } from 'node:path'
 
 const SRC = resolve(import.meta.dir, '..', 'src', 'services')
 const SCHEDULER = readFileSync(resolve(SRC, 'scheduler.ts'), 'utf8')
-const NODE_MECHANICS = readFileSync(
-  resolve(SRC, '..', 'modules', 'task-execution', 'composition', 'nodeMechanics.ts'),
-  'utf8',
-)
+// RFC-406: nodeMechanics.ts is gone; its last body (the workgroup host) is WORKGROUP_HOST_SOURCE.
 const WRAPPER_MECHANICS = readFileSync(
   resolve(SRC, '..', 'modules', 'task-execution', 'composition', 'wrapperMechanics.ts'),
   'utf8',
@@ -43,7 +40,6 @@ const MECHANICS_SOURCES = [
   SCRIPT_ATTEMPT_SOURCE,
   MERGE_CONFLICT_SOURCE,
   SCHEDULER,
-  NODE_MECHANICS,
   WRAPPER_MECHANICS,
 ] as const
 
@@ -61,7 +57,7 @@ function bodyOf(signature: string): string {
 
 /** 五条已迁线的函数签名（灭绝锁的射程）。 */
 const MIGRATED_LINES = [
-  ['L1 workgroup-host', 'async function executeWorkgroupHostMechanics('],
+  ['L1 workgroup-host', 'async function runWorkgroupHost('],
   ['L4 agent-single', 'async function runAgentSingleNode('],
   ['L5 fanout-shard', 'async function dispatchFanoutShardAttempt('],
   ['L6 fanout-aggregator', 'async function dispatchFanoutAggregatorAttempt('],

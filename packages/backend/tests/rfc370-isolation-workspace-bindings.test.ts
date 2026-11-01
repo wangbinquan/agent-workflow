@@ -30,7 +30,8 @@ import {
   runTaskLocalEffect,
 } from '@/modules/task-execution/application/localEffectObserver'
 import type { TaskMechanicsState } from '@/services/execution/taskMechanicsState'
-import { executeWorkgroupHostMechanics } from '@/modules/task-execution/composition/nodeMechanics'
+import { createAgentNodeExecutionPorts } from '@/modules/task-execution/composition/agentNodeExecution'
+import { runWorkgroupHost } from '@/modules/task-execution/engine/node/agent-single/runWorkgroupHost'
 import { isolatedRunBinding } from '@/modules/task-execution/composition/executionMechanismBindings'
 import { createWrapperMechanicsPorts } from '@/modules/task-execution/composition/wrapperMechanics'
 import {
@@ -53,7 +54,6 @@ import { buildMergeAgent } from '@/services/mergeAgent'
 import { resolveSyntheticTaskAgentInjection } from '@/services/execution/taskExecutionResources'
 import { composeLocalTaskAgentRunFamily } from '@/modules/task-execution/composition/localTaskAgentRunFamily'
 import { composeRuntimeRegistryOperations } from './helpers/runtimeRegistryComposition'
-import type { CollaborationRuntimeMechanics } from '@/modules/collaboration/public/participants'
 import type { Logger } from '@/util/log'
 import { Semaphore } from '@/platform/contracts/semaphore'
 import { describeEachProvider } from './helpers/eachProvider'
@@ -853,11 +853,13 @@ describeEachProvider('RFC-370 complete isolation scope in real Task mechanics', 
             f.store.before = (call) => {
               if (call.method === 'create') throw reason
             }
-            const result = await executeWorkgroupHostMechanics(
-              f.state,
-              { nodeRunId: id, nodeId: 'worker', agent: f.agent, promptTemplate: 'unused' },
-              {} as CollaborationRuntimeMechanics,
-            )
+            // RFC-406: the host lane now runs on the agent executor's ports (real binding).
+            const result = await runWorkgroupHost(createAgentNodeExecutionPorts(f.state), {
+              lane: 'workgroup-host',
+              task: { taskId: f.state.taskId },
+              host: { nodeRunId: id, nodeId: 'worker', agent: f.agent, promptTemplate: 'unused' },
+              execution: {},
+            })
             expect(result).toMatchObject({
               status: 'failed',
               errorMessage: 'iso-setup-failed: unavailable error description',

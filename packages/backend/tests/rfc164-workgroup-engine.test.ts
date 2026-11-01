@@ -1,3 +1,4 @@
+import { WORKGROUP_HOST_SOURCE } from './helpers/executionMechanismSources'
 import { nodeRunFixtureColumns } from './helpers/model/nodeRun'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 // RFC-395 II-pre：用户夹具改接生产 identity-access 运行时，保留原用例意图。
@@ -989,18 +990,8 @@ describeEachProvider('RFC-164 engine — stuck detector S1/S2 workgroup exemptio
 // ---------------------------------------------------------------------------
 
 describe('RFC-164 engine — source locks', () => {
-  const NODE_MECHANICS_SRC = readFileSync(
-    resolve(
-      import.meta.dir,
-      '..',
-      'src',
-      'modules',
-      'task-execution',
-      'composition',
-      'nodeMechanics.ts',
-    ),
-    'utf8',
-  )
+  // RFC-406: the workgroup host body moved from nodeMechanics.ts to engine/node/agent-single/.
+  const NODE_MECHANICS_SRC = WORKGROUP_HOST_SOURCE
   const TASK_ENGINE_APPLICATION_SRC = readFileSync(
     resolve(
       import.meta.dir,

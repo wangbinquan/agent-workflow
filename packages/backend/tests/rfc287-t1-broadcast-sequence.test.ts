@@ -26,18 +26,7 @@ const SCHEDULER = readFileSync(
   resolve(import.meta.dir, '..', 'src', 'services', 'scheduler.ts'),
   'utf8',
 )
-const NODE_MECHANICS = readFileSync(
-  resolve(
-    import.meta.dir,
-    '..',
-    'src',
-    'modules',
-    'task-execution',
-    'composition',
-    'nodeMechanics.ts',
-  ),
-  'utf8',
-)
+// RFC-406: nodeMechanics.ts is gone; its last body (the workgroup host) is WORKGROUP_HOST_SOURCE.
 const WRAPPER_MECHANICS = readFileSync(
   resolve(
     import.meta.dir,
@@ -56,7 +45,6 @@ const MECHANICS_SOURCES = [
   SCRIPT_ATTEMPT_SOURCE,
   MERGE_CONFLICT_SOURCE,
   SCHEDULER,
-  NODE_MECHANICS,
   WRAPPER_MECHANICS,
 ] as const
 
@@ -117,7 +105,7 @@ const BASELINE: ReadonlyArray<readonly [string, readonly string[]]> = [
   // `broadcastNodeStatus`。旧 `bodyOf` 靠「下一个 function 声明」当边界,而这些兄弟
   // 钩子都写成 `const x = async () =>`,正则一个都不命中,切片于是跑出真实函数体
   // 159 行、把别人的广播算进了本线的序列。`bodyOf` 改成括号配平后基线随之收正。
-  ['async function executeWorkgroupHostMechanics(', ["'failed'", 'result.status', "'failed'"]],
+  ['async function runWorkgroupHost(', ["'failed'", 'result.status', "'failed'"]],
   // ⚠️ L4 一直缺席（五轮门终局对账点名）：design §7 T1-④ 点名的**第一项**就是它，
   // 而它是本 RFC 唯一做了真手术的线（拆成 outer + 模式 B 重试窗口）。基线在
   // `d0f6333c` 上按括号配平的 `bodyOf` 实测导出，与其余四线同法。

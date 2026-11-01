@@ -62,6 +62,16 @@ export const AGENT_NODE_SOURCE = readFileSync(
   'utf8',
 )
 
+// RFC-406: the workgroup host lane of the same executor; nodeMechanics.ts is gone.
+export const WORKGROUP_HOST_SOURCE = readFileSync(
+  resolve(root, 'engine/node/agent-single/runWorkgroupHost.ts'),
+  'utf8',
+)
+export const NODE_EXECUTION_SOURCE = readFileSync(
+  resolve(root, 'composition/nodeExecution.ts'),
+  'utf8',
+)
+
 export const AGENT_BINDING_SOURCE = readFileSync(
   resolve(root, 'composition/agentNodeExecution.ts'),
   'utf8',
@@ -75,20 +85,22 @@ export const ENVELOPE_RETRY_POLICY_SOURCE = readFileSync(
   'utf8',
 )
 /**
- * RFC-405: what used to be the single `nodeMechanics.ts` text for agent-path source locks — the
- * agent body, its binding, the run-history reads and retry decisions it moved into, and the file
- * itself (still the workgroup host). Presence / absence locks and cross-owner counts keep their
- * meaning; exact owners are locked by `architecture/rfc405-agent-single-executor.test.ts`.
+ * RFC-405 / RFC-406: what used to be the single `nodeMechanics.ts` text for agent-path source locks —
+ * both lanes of the agent-single executor (the DAG body and the workgroup host), their binding, the
+ * run-history reads and retry decisions they moved into, and the workgroup engine hooks now in
+ * `nodeExecution.ts`. Presence / absence locks and cross-owner counts keep their meaning; exact owners
+ * are locked by `architecture/rfc405-agent-single-executor.test.ts` and `rfc406-workgroup-host-executor`.
  */
 export const AGENT_MECHANICS_SOURCE = [
   AGENT_NODE_SOURCE,
+  WORKGROUP_HOST_SOURCE,
   AGENT_BINDING_SOURCE,
   AGENT_RUN_HISTORY_SOURCE,
   ENVELOPE_RETRY_POLICY_SOURCE,
-  readFileSync(resolve(root, 'composition/nodeMechanics.ts'), 'utf8'),
+  NODE_EXECUTION_SOURCE,
 ].join('\n')
 
-/** Every leaf body moved out of nodeMechanics.ts (RFC-403～405), so corpora stay complete. */
+/** Every leaf body moved out of nodeMechanics.ts (RFC-403～406), so corpora stay complete. */
 export const LEAF_NODE_SOURCES = [
   CODE_HOST_NODE_SOURCE,
   INPUT_NODE_SOURCE,
@@ -101,4 +113,5 @@ export const LEAF_NODE_SOURCES = [
   CHILD_CALL_NODE_SOURCE,
   CHILD_CALL_LAUNCH_SOURCE,
   AGENT_NODE_SOURCE,
+  WORKGROUP_HOST_SOURCE,
 ] as const

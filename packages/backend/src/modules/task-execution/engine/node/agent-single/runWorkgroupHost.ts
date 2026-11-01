@@ -1,63 +1,35 @@
-// RFC-334 W2-C — workgroup-host mechanics, reached through the closed executor registry's host lane.
-// The DAG agent body moved to engine/node/agent-single/ (RFC-405); this lane follows in RFC-406.
-import { broadcastNodeStatus, type NodeStatus } from '../infrastructure/nodeStatusEvents'
-import { resolveMergeConflicts } from '../engine/node/shared/resolveMergeConflicts'
-import { bindMergeConflictPorts } from './mergeConflictResolution'
-import { isolatedRunBinding, nodeRunLedger } from './executionMechanismBindings'
-import { bindIsolationCleanup } from '../infrastructure/executionKernelBinding'
-import type { CollaborationRuntimeMechanics } from '@/modules/collaboration/public/participants'
-import { CLARIFY_FORBIDDEN_PREFIX } from '@/services/envelope'
-import { resolveSyntheticTaskAgentInjection } from '@/services/execution/taskExecutionResources'
-import type {
-  NodeMechanicsResult,
-  TaskMechanicsState,
-} from '@/services/execution/taskMechanicsState'
-import {
-  createIsoUnderLock,
-  persistIsoBase,
-} from '@/modules/task-execution/engine/kernel/isolation'
-import {
-  mergeBackAndSettle,
-  type MergeSettleOutcome,
-} from '@/modules/task-execution/engine/kernel/merge'
-import { discardNodeIso } from '@/modules/task-execution/engine/kernel/isolationCleanup'
-import { type IsoHandle } from '@/platform/contracts/isolationWorkspace'
-import { ORCHESTRATOR_AGENT_ID } from '@/services/orchestratorAgent'
-import { runTaskAgentWithFamily as runNode } from './taskAgentRunFamily'
-import type { RunResult } from '../application/ports/taskAgentRun'
-import { runAssembly, type IsoLike } from '@/modules/task-execution/engine/kernel/assembly'
-import type {
-  WorkgroupTurnHostOperations,
-  WorkgroupTurnHostRequest,
-  WorkgroupTurnHostResult,
-} from '../application/ports/workgroupTurnsOperations'
-import { worktreeFilesChanged } from '@/util/git'
-import { describeEffectError } from '../domain/effectErrorDescription'
-import { priorDoneGenerationsForRun } from '../application/agentRunHistory'
 import { findClarifyNodeForAgent } from '@agent-workflow/shared'
+import type { IsoHandle } from '@/platform/contracts/isolationWorkspace'
+import type { AgentNodeExecutionPorts } from '../../../application/ports/agentNodeExecution'
+import type { RunResult } from '../../../application/ports/taskAgentRun'
+import type {
+  WorkgroupHostExecutionRequest,
+  WorkgroupHostExecutionResult,
+} from '../../../application/ports/workgroupHostExecution'
+import { describeEffectError } from '../../../domain/effectErrorDescription'
+import { runAssembly, type IsoLike } from '../../kernel/assembly'
+import type { MergeSettleOutcome } from '../../kernel/merge'
 
-export type SchedulerState = TaskMechanicsState
-
+// RFC-406 — the workgroup host lane of the agent-single executor, moved from composition/nodeMechanics.ts
+// onto the executor's ports. The closure state (`keepHookIso`, `hookIso`, `iso`) stays exactly as RFC-287 T6
+// wrote it; only the receivers changed (state / opts → ports).
 // -----------------------------------------------------------------------------
 // RFC-164 — workgroup engine integration. The engine (workgroupRunner.ts) owns
 // orchestration; this hook owns the MECHANICS of one host-node run, copied
 // from the fanout-shard dispatch path (iso worktree + frozen runtime +
-// runNode + merge-back + clarify session). Kept here so workgroupRunner never
-// imports scheduler.ts (module-cycle ban — binary-build incident memory).
+// runNode + merge-back + clarify session).
 // -----------------------------------------------------------------------------
 
-export async function executeWorkgroupHostMechanics(
-  state: SchedulerState,
-  req: WorkgroupTurnHostRequest,
-  collaboration: CollaborationRuntimeMechanics,
-): Promise<WorkgroupTurnHostResult> {
-  const { taskId, task, opts, log, definition } = state
-  const injection =
-    req.agent.id === ORCHESTRATOR_AGENT_ID
-      ? resolveSyntheticTaskAgentInjection(req.agent, opts.taskAgentRuns.materialReferences)
-      : await state.taskExecutionResources.injection(req.agent.id)
+export async function runWorkgroupHost(
+  ports: AgentNodeExecutionPorts,
+  request: WorkgroupHostExecutionRequest,
+): Promise<WorkgroupHostExecutionResult> {
+  const { task, policy: opts, collaboration, rules, ledger, history, workspace, log } = ports
+  const { taskId, definition } = task
+  const req = request.host
+  const injection = await ports.resources.hostInjection(req.agent)
   if (injection.kind === 'failed') {
-    await nodeRunLedger(state).setNodeRunStatus({
+    await ledger.setNodeRunStatus({
       nodeRunId: req.nodeRunId,
       to: 'failed',
       allowedFrom: ['pending'],
@@ -69,7 +41,7 @@ export async function executeWorkgroupHostMechanics(
         },
       },
     })
-    broadcastNodeStatus(taskId, req.nodeRunId, req.nodeId, 'failed')
+    ports.status.broadcastNodeStatus(taskId, req.nodeRunId, req.nodeId, 'failed')
     return { status: 'failed', outputs: {}, errorMessage: injection.message }
   }
 
@@ -85,31 +57,23 @@ export async function executeWorkgroupHostMechanics(
   let keepHookIso = false
   let hookIso: IsoHandle | null = null
   type HostSpawn =
-    | { kind: 'early'; out: WorkgroupTurnHostResult }
+    | { kind: 'early'; out: WorkgroupHostExecutionResult }
     | { kind: 'ran'; result: RunResult; projected: Record<string, string> }
-  return await runAssembly<Record<string, never>, HostSpawn, WorkgroupTurnHostResult>(
+  return await runAssembly<Record<string, never>, HostSpawn, WorkgroupHostExecutionResult>(
     {},
     {
       // RFC-208：许可由骨架自己取自己放——外面先抢再传进来会留出「抢到许可 ~
       // 进 runAssembly」这段无人兜底的窗口。全五条线同一口径。
-      pools: [state.agentSem],
+      pools: [ports.agentSem],
       iso: {
         create: async () => {
-          hookIso = await createIsoUnderLock({
-            writeSem: state.writeSem,
-            appHome: opts.appHome,
-            taskId,
-            binding: isolatedRunBinding(state),
-            isoKeyRunId: req.nodeRunId,
-            canonRepos: state.repos,
-            log,
-          })
+          hookIso = await workspace.createIsoUnderLock(req.nodeRunId)
           iso = hookIso
           return hookIso
         },
         persistBase: 'in-setup',
         persist: async (h: IsoLike) => {
-          if (!h.passthrough) await persistIsoBase(isolatedRunBinding(state), req.nodeRunId, iso)
+          if (!h.passthrough) await workspace.persistIsoBase(req.nodeRunId, iso)
         },
       },
       onIsoSetupFailure: (err) => {
@@ -118,7 +82,7 @@ export async function executeWorkgroupHostMechanics(
         return { status: 'failed', outputs: {}, errorMessage: `iso-setup-failed: ${message}` }
       },
       spawn: async (): Promise<HostSpawn> => {
-        const frozen = await opts.taskAgentRuns.runtimeBindings.resolve(
+        const frozen = await ports.runtime.resolve(
           req.nodeRunId,
           injection.spec.agent.runtime,
           opts.defaultRuntime,
@@ -153,7 +117,7 @@ export async function executeWorkgroupHostMechanics(
         // A leader run is shardKey=null → pass `undefined` (node-scoped = exact pre-route-2 leader
         // behavior); a member run passes its assignment shard so concurrent members never inject each
         // other's Q&A. Fresh (non-answer) turns get an empty queue → no injection.
-        const runRow = await state.opts.persistence.nodeExecution.read(req.nodeRunId)
+        const runRow = await ledger.read(req.nodeRunId)
         const runShardKey = runRow?.shardKey ?? null
         const clarifyQueue = await collaboration.buildClarifyQueueContext({
           definition,
@@ -175,8 +139,7 @@ export async function executeWorkgroupHostMechanics(
           req.hostOutputPorts !== undefined
             ? { ...injection.spec.agent, outputs: [...req.hostOutputPorts], outputKinds: undefined }
             : injection.spec.agent
-        const result = await runNode(
-          opts.taskAgentRuns,
+        const result = await ports.runtime.runAgent(
           {
             taskId,
             nodeRunId: req.nodeRunId,
@@ -193,7 +156,6 @@ export async function executeWorkgroupHostMechanics(
             runtimeParams: frozen.params,
             runtimeConfigDir: frozen.configDir,
             runtimeObservationIdentity: frozen.observationIdentity,
-            observationInvocations: state.opts.observationInvocations,
             inputs: {},
 
             gitUserName: task.gitUserName,
@@ -207,7 +169,7 @@ export async function executeWorkgroupHostMechanics(
                 repoPath: r.repoPath,
                 worktreePath: r.isoWorktreePath,
                 // RFC-248: 同上——`{{__repo_names__}}` 要渲染挂载路径。
-                mountPath: state.repos[i]?.mountPath ?? r.mountPath,
+                mountPath: task.repoMounts[i] ?? r.mountPath,
                 baseBranch: r.baseBranch,
               })),
             },
@@ -260,18 +222,7 @@ export async function executeWorkgroupHostMechanics(
             dependents: injection.spec.dependents,
             mcps: injection.spec.mcps,
 
-            memorySnapshots: opts.memorySnapshots,
-
-            memoryInjectionQueries: opts.memoryInjectionQueries,
-            runtimeSessionLeases: opts.runtimeSessionLeases,
-            runtimeRegistry: opts.runtimeRegistry,
-            persistence: opts.persistence,
-
             log,
-            ...(opts.signal ? { signal: opts.signal } : {}),
-            ...(opts.subagentLiveCapture !== undefined
-              ? { subagentLiveCapture: opts.subagentLiveCapture }
-              : {}),
           },
           {
             workspaceRef: iso.repos[0]?.isoWorktreePath ?? task.worktreePath,
@@ -279,9 +230,9 @@ export async function executeWorkgroupHostMechanics(
             runtimeBinding: frozen.runtimeBinding,
           },
         )
-        const early = await (async (): Promise<WorkgroupTurnHostResult | null> => {
+        const early = await (async (): Promise<WorkgroupHostExecutionResult | null> => {
           if (result.processUnreaped === true) keepHookIso = true
-          broadcastNodeStatus(taskId, req.nodeRunId, req.nodeId, result.status)
+          ports.status.broadcastNodeStatus(taskId, req.nodeRunId, req.nodeId, result.status)
           if (result.status === 'canceled') {
             return {
               status: 'canceled',
@@ -300,10 +251,10 @@ export async function executeWorkgroupHostMechanics(
             // on. The row is already terminal `done` here (valid clarify keeps
             // status=done), hence the allowTerminal correction so the DB row, the
             // broadcast and the RFC-182 room card all tell the truth.
-            const lateSuppress = async (): Promise<WorkgroupTurnHostResult> => {
+            const lateSuppress = async (): Promise<WorkgroupHostExecutionResult> => {
               const dropped = result.clarify?.questions.length ?? 0
-              const suppressedMsg = `${CLARIFY_FORBIDDEN_PREFIX}: ask-back disabled mid-run (autonomous); dropped ${dropped} question(s)`
-              await nodeRunLedger(state).setNodeRunStatus({
+              const suppressedMsg = `${rules.clarifyForbiddenPrefix}: ask-back disabled mid-run (autonomous); dropped ${dropped} question(s)`
+              await ledger.setNodeRunStatus({
                 nodeRunId: req.nodeRunId,
                 to: 'failed',
                 allowedFrom: ['done'],
@@ -317,7 +268,7 @@ export async function executeWorkgroupHostMechanics(
                   },
                 },
               })
-              broadcastNodeStatus(taskId, req.nodeRunId, req.nodeId, 'failed')
+              ports.status.broadcastNodeStatus(taskId, req.nodeRunId, req.nodeId, 'failed')
               // failureCode mirrors the DB column so the engine's soft-reject branch
               // routes structurally (RFC-145: errorMessage is human breadcrumbs, never
               // a machine key) — without it this late path forced a startsWith match.
@@ -349,7 +300,7 @@ export async function executeWorkgroupHostMechanics(
             if (clarifyNodeId === undefined) {
               return { status: 'failed', outputs: {}, errorMessage: 'clarify-no-channel' }
             }
-            const currentRunRow = await state.opts.persistence.nodeExecution.read(req.nodeRunId)
+            const currentRunRow = await ledger.read(req.nodeRunId)
             // RFC-172 (route 2, R2-T6): host clarify GENERATION — count this (node, iteration, shard)'s
             // prior DONE clarify generations (shardKey-aware; mirrors the normal-node path ~scheduler.ts
             // 3540) instead of the old hardcoded 0. A host run (leader OR member) asking a SECOND round
@@ -359,7 +310,7 @@ export async function executeWorkgroupHostMechanics(
             // their OWN prior generations.
             const askingGeneration = currentRunRow
               ? (
-                  await priorDoneGenerationsForRun(state.opts.persistence.nodeExecution, {
+                  await history.priorDoneGenerationsForRun({
                     taskId,
                     nodeId: req.nodeId,
                     iteration: currentRunRow.iteration,
@@ -384,9 +335,6 @@ export async function executeWorkgroupHostMechanics(
               intermediaryNodeId: clarifyNodeId,
               iteration: askingGeneration,
               questions: result.clarify.questions,
-              ...(opts.executionContext === undefined
-                ? {}
-                : { executionContext: opts.executionContext }),
               ...(result.clarify.truncationWarnings.length > 0
                 ? { truncationWarnings: result.clarify.truncationWarnings }
                 : {}),
@@ -469,11 +417,7 @@ export async function executeWorkgroupHostMechanics(
             keep: false,
             then: {
               produce: async () => {
-                await state.opts.persistence.mergeStates.tryTransition({
-                  nodeRunId: req.nodeRunId,
-                  event: { kind: 'abandon', reason: 'discard-writes' },
-                  ...nodeRunLedger(state).executionContextInput(),
-                })
+                await workspace.abandonMerge(req.nodeRunId, 'discard-writes')
                 return { status: 'done' as const, outputs: s.projected }
               },
             },
@@ -487,21 +431,18 @@ export async function executeWorkgroupHostMechanics(
       mergeBack: {
         run: async () => {
           const merge = await (async (): Promise<MergeSettleOutcome> => {
-            return await mergeBackAndSettle({
-              binding: isolatedRunBinding(state),
-              writeSem: state.writeSem,
+            return await workspace.mergeBackAndSettle({
               handle: iso as IsoHandle,
               nodeRunId: req.nodeRunId,
               via: 'live',
               conflictResolver: (conflicts, containerPath) =>
-                resolveMergeConflicts(bindMergeConflictPorts(state), {
+                ports.conflicts.resolveMergeConflicts({
                   conflicts,
                   containerPath,
                   conflictNodeRunId: req.nodeRunId,
                   nodeId: req.nodeId,
                   iteration: 0,
                 }),
-              log,
             })
             return merge
           })()
@@ -513,11 +454,7 @@ export async function executeWorkgroupHostMechanics(
           onConflictHuman: (detail) => ({
             keep: false,
             produce: async () => {
-              await state.opts.persistence.mergeStates.tryTransition({
-                nodeRunId: req.nodeRunId,
-                event: { kind: 'abandon', reason: 'wg-merge-conflict-unresolved' },
-                ...nodeRunLedger(state).executionContextInput(),
-              })
+              await workspace.abandonMerge(req.nodeRunId, 'wg-merge-conflict-unresolved')
               return {
                 status: 'failed',
                 outputs: {},
@@ -536,7 +473,7 @@ export async function executeWorkgroupHostMechanics(
         return { status: 'failed', outputs: {}, errorMessage: msg }
       },
       discardIso: async (h: IsoLike) => {
-        await discardNodeIso(bindIsolationCleanup(), h as IsoHandle, log, state.writeSem)
+        await workspace.discardNodeIso(h as IsoHandle)
       },
       settle: async (_c, s) =>
         s.kind === 'ran'
@@ -546,53 +483,3 @@ export async function executeWorkgroupHostMechanics(
     },
   )
 }
-
-export function buildWorkgroupEngineSupport(
-  state: SchedulerState,
-): Omit<WorkgroupTurnHostOperations, 'runHost'> {
-  const { taskId } = state
-  return {
-    broadcastNodeStatus: (nodeRunId, nodeId, status) =>
-      broadcastNodeStatus(taskId, nodeRunId, nodeId, status as NodeStatus),
-    // RFC-187 §4 — canonical delta for the zero-delta-done warn. Throws (engine
-    // swallows) when there's no base commit to diff against.
-    // RFC-187 §4 (Codex impl-gate P1) — sum the delta over EVERY canonical repo at its
-    // own worktree/base. The old form diffed `task.worktreePath`, which for a multi-repo
-    // task is a NON-git parent container: git threw, `warnIfZeroDeltaDone` swallowed it,
-    // and the zero-delta warning silently never fired for multi-repo tasks at all.
-    // Single-repo is unchanged (repos[0].worktreePath === task.worktreePath).
-    getCanonicalFilesChanged: async () => {
-      const diffable = state.repos.filter((r) => r.baseCommit !== null)
-      if (diffable.length === 0) {
-        throw new Error('no base commit on any repo — cannot compute canonical delta')
-      }
-      const perRepo = await Promise.all(
-        diffable.map((r) => worktreeFilesChanged(r.worktreePath, r.baseCommit as string)),
-      )
-      return perRepo.reduce((sum, n) => sum + n, 0)
-    },
-  }
-}
-
-// RFC-096: `buildFreshestSettledPerNode` moved to freshness.ts alongside the
-// comparator (audit S-13 / WP-3).
-
-// -----------------------------------------------------------------------------
-// RFC-076 PR-B — deriveFrontier (the dispatch brain; PURE, and LIVE: runScope
-// calls it every dispatch tick — the stale "currently UNWIRED / NOT yet called"
-// claims removed by RFC-094, audit S-26).
-// -----------------------------------------------------------------------------
-//
-// Re-derives the dispatchable frontier from node_runs each tick, replacing the
-// batch model's mutable completed/remaining snapshot + rescan/recompute
-// reconcile. Composes fix A's areTransitiveUpstreamsCompleted + PR-A's
-// isDispatchable / wrapperHasFreshInnerWork, plus RFC-092's pending-anchor
-// row-id release (mid-run clarify answer / review decision pickup, audit S-1).
-// The row-ordering primitives (isFresherNodeRun / buildFreshestSettledPerNode)
-// live in freshness.ts since RFC-096. Pure-function locks: derive-frontier.test.ts.
-
-// -----------------------------------------------------------------------------
-// per-node execution
-// -----------------------------------------------------------------------------
-
-export type OneNodeResult = NodeMechanicsResult

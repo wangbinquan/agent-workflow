@@ -7,7 +7,7 @@ import type { Agent, WorkflowDefinition, WorkflowNode } from '@agent-workflow/sh
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import { createWrapperMechanicsPorts } from '@/modules/task-execution/composition/wrapperMechanics'
-import type { SchedulerState } from '@/modules/task-execution/composition/nodeMechanics'
+import type { TaskMechanicsState } from '@/services/execution/taskMechanicsState'
 import { readPortRowAtFrame } from '@/modules/task-execution/application/nodeInputs'
 import { deriveFrontier } from './helpers/frontierSelection'
 import { resolveSchedulerRunRow } from '@/modules/task-execution/application/resolveSchedulerRunRow'
@@ -65,7 +65,7 @@ function wrapperPorts(db: PersistenceDb, def = definition) {
         message: 'fixture-stop',
       }),
     },
-  } as unknown as SchedulerState
+  } as unknown as TaskMechanicsState
   return createWrapperMechanicsPorts(state, createLogger('sites-a-fixture'))
 }
 const shardInput = {

@@ -11,7 +11,7 @@ import {
 } from '../domain/wrapperExecution'
 import { wrapperExternalUpstreamSources } from '@/services/dispatchFrontier'
 import { createLogger } from '@/util/log'
-import { type SchedulerState } from './nodeMechanics'
+import type { TaskMechanicsState } from '@/services/execution/taskMechanicsState'
 import { broadcastNodeStatus } from '@/modules/task-execution/infrastructure/nodeStatusEvents'
 import { loadFrameChain } from '../application/frameChain'
 import { resolveSourceFrame } from '../domain/environmentChain'
@@ -21,7 +21,7 @@ function isSupersedableTransitionError(error: unknown): boolean {
   return code === 'illegal-node-run-transition' || code === 'concurrent-node-run-transition'
 }
 
-async function supersedingWrapperOutcome(state: SchedulerState, wrapperRunId: string) {
+async function supersedingWrapperOutcome(state: TaskMechanicsState, wrapperRunId: string) {
   const current = await state.opts.persistence.wrapperRuns.readStatus(wrapperRunId)
   if (current === 'canceled') {
     return {
@@ -41,7 +41,7 @@ async function supersedingWrapperOutcome(state: SchedulerState, wrapperRunId: st
 }
 
 async function clearWrapperReuseDisabled(
-  state: SchedulerState,
+  state: TaskMechanicsState,
   wrapperRunId: string,
 ): Promise<void> {
   await state.opts.persistence.wrapperRuns.clearReuseDisabled({
@@ -53,7 +53,7 @@ async function clearWrapperReuseDisabled(
 }
 
 async function settleTerminal(
-  state: SchedulerState,
+  state: TaskMechanicsState,
   wrapperRunId: string,
   settlement: Exclude<WrapperSettlement, { rowStatus: 'interrupted' }>,
 ): Promise<void> {
@@ -90,7 +90,7 @@ async function settleTerminal(
   await clearWrapperReuseDisabled(state, wrapperRunId)
 }
 
-export function createWrapperRunLedger(state: SchedulerState): WrapperRunLedgerPort {
+export function createWrapperRunLedger(state: TaskMechanicsState): WrapperRunLedgerPort {
   return {
     async openGeneration<K extends WrapperNodeKind>(
       kind: K,

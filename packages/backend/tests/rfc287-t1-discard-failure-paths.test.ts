@@ -1,4 +1,5 @@
 import {
+  WORKGROUP_HOST_SOURCE,
   AGENT_NODE_SOURCE,
   LEAF_NODE_SOURCES,
   SCRIPT_NODE_SOURCE,
@@ -24,18 +25,7 @@ const SCHEDULER = readFileSync(
   resolve(import.meta.dir, '..', 'src', 'services', 'scheduler.ts'),
   'utf8',
 )
-const NODE_MECHANICS = readFileSync(
-  resolve(
-    import.meta.dir,
-    '..',
-    'src',
-    'modules',
-    'task-execution',
-    'composition',
-    'nodeMechanics.ts',
-  ),
-  'utf8',
-)
+// RFC-406: nodeMechanics.ts is gone; its last body (the workgroup host) is WORKGROUP_HOST_SOURCE.
 const WRAPPER_MECHANICS = readFileSync(
   resolve(
     import.meta.dir,
@@ -60,7 +50,7 @@ describe('RFC-287 T1⑤ — iso 清理失败的处置现状（C3b 基线）', ()
     // 反向锁（比原来的正向枚举更强）：新写一条线若自己起 finally 清 iso，这里立刻红。
     // RFC-404: leaf bodies moved out of nodeMechanics.ts stay in the scan (the call body's watch loop
     // owns the one remaining finally after the move).
-    const mechanics = `${SCHEDULER}\n${NODE_MECHANICS}\n${WRAPPER_MECHANICS}\n${SCRIPT_NODE_SOURCE}\n${SCRIPT_ATTEMPT_SOURCE}\n${LEAF_NODE_SOURCES.join('\n')}`
+    const mechanics = `${SCHEDULER}\n${WRAPPER_MECHANICS}\n${SCRIPT_NODE_SOURCE}\n${SCRIPT_ATTEMPT_SOURCE}\n${LEAF_NODE_SOURCES.join('\n')}`
     const finallyBlocks = [...mechanics.matchAll(/\bfinally\s*\{/g)].map((m) =>
       mechanics.slice(m.index ?? 0, (m.index ?? 0) + 900),
     )
@@ -111,13 +101,14 @@ describe('RFC-287 T1⑤ — iso 清理失败的处置现状（C3b 基线）', ()
     // RFC-287 T6：该线的 finally 已迁入骨架。原来的 try/catch 吞法被骨架的
     // `.catch(+warn)` 取代——**同性质、更强**（原来 catch 里是静默的，现在有 warn），
     // 故 C3b 对它也已落地。注入实现本身不再自兜，兜底责任单点在骨架。
-    const start = NODE_MECHANICS.indexOf('async function executeWorkgroupHostMechanics(')
+    // RFC-406: the host body moved to engine/node/agent-single/ and reaches the workspace port directly.
+    const start = WORKGROUP_HOST_SOURCE.indexOf('async function runWorkgroupHost(')
     expect(start).toBeGreaterThan(-1)
-    const body = NODE_MECHANICS.slice(start, start + 40000)
+    const body = WORKGROUP_HOST_SOURCE.slice(start, start + 40000)
     expect(body).toMatch(
-      /discardIso: async \(h: IsoLike\) => \{\s*\n\s*await (?:ports\.workspace\.)?discardNodeIso\(/,
+      /discardIso: async \(h: IsoLike\) => \{\s*\n\s*await (?:(?:ports\.)?workspace\.)?discardNodeIso\(/,
     )
     // 反向：本线不得再自己起 try/catch 兜清理（会把骨架的 warn 吃掉）。
-    expect(body).not.toMatch(/try \{[^}]{0,120}await (?:ports\.workspace\.)?discardNodeIso\(/)
+    expect(body).not.toMatch(/try \{[^}]{0,120}await (?:(?:ports\.)?workspace\.)?discardNodeIso\(/)
   })
 })

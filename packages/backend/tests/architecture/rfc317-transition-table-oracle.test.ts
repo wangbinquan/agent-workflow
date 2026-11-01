@@ -276,9 +276,9 @@ const OFF_TABLE_DEVIATIONS: readonly OffTableDeviation[] = [
     why: 'RFC-402 将 shard / aggregator 的原 nodeRuns.set 调用接到具名 ledger 后显式可见：同一 wrapper generation 的残留行原地回到 pending 再次执行，原先已有这五个 allowedFrom 与 allowTerminal: true。这里只登记原恢复路径，不增加可恢复状态。',
   },
   {
-    site: 'modules/task-execution/composition/nodeMechanics.ts:failed',
+    site: 'modules/task-execution/engine/node/agent-single/runWorkgroupHost.ts:failed',
     offTable: ['done'],
-    why: 'RFC-402 具名 ledger 方法恢复了原 setRunStatus 包装器遮住的站点：wg-clarify-suppressed-late 把已经 done 的 host run 改判 failed，沿用既有 allowTerminal: true 与原始错误文本；本次只改变调用合同，不增加状态边。',
+    why: 'RFC-402 具名 ledger 方法恢复了原 setRunStatus 包装器遮住的站点：wg-clarify-suppressed-late 把已经 done 的 host run 改判 failed，沿用既有 allowTerminal: true 与原始错误文本；本次只改变调用合同，不增加状态边。RFC-406 只把它随 workgroup host 主体从 nodeMechanics.ts 迁到 engine/node/agent-single/。',
   },
   {
     site: 'modules/task-execution/engine/node/shared/child-call/runChildCallNode.ts:running',
@@ -498,11 +498,11 @@ test('RFC-404 call-node literal CAS sites moved with the shared child-call body'
   // The adoption resume keeps its registered off-table edges; the child-done settle is on-table.
   expect(offTableSources(sites[0]!).sort()).toEqual(['canceled', 'interrupted'])
   expect(offTableSources(sites[1]!)).toEqual([])
-  // nodeMechanics.ts no longer owns any call-node transition.
+  // RFC-406: nodeMechanics.ts is gone; the workgroup host that replaced it there owns no call-node edge.
   expect(
     all.filter(
       (site) =>
-        site.file === 'modules/task-execution/composition/nodeMechanics.ts' &&
+        site.file === 'modules/task-execution/engine/node/agent-single/runWorkgroupHost.ts' &&
         offTableSources(site).includes('interrupted'),
     ),
   ).toEqual([])

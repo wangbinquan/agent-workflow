@@ -571,7 +571,8 @@ describe('RFC-181 C — 源级契约锁', () => {
   })
 
   test('scheduler：判定器注入 + 建 session 前后双重重读 + 事后补偿遣散（实现门 P1-③）', () => {
-    const scheduler = SRC('modules/task-execution/composition/nodeMechanics.ts')
+    // RFC-406: the workgroup host body moved from nodeMechanics.ts to engine/node/agent-single/.
+    const scheduler = SRC('modules/task-execution/engine/node/agent-single/runWorkgroupHost.ts')
     // RFC-207 §3.4a — the callback must keep the dispatch-time floor in front of the
     // live read: a turn that carried no invite may not ask just because the roster
     // gained a human while it ran.

@@ -499,11 +499,9 @@ function objectFields(node: ts.Node, sf: ts.SourceFile) {
   return values
 }
 
-test('all three actual runNode launch sites bind the same artifact operations as their runtime', () => {
-  const sf = source('modules/task-execution/composition/nodeMechanics.ts'),
-    found = calls(sf, sf, 'runNode')
-  expect(found.map((call) => call.arguments[0]!.getText(sf))).toEqual(['opts.taskAgentRuns'])
-  // RFC-405: the agent-single launch moved into the agent binding.
+test('every actual runNode launch site binds the same artifact operations as its runtime', () => {
+  // RFC-405 / RFC-406: both agent-executor lanes (DAG body and workgroup host) launch through the
+  // agent binding's one runner call.
   const agent = source('modules/task-execution/composition/agentNodeExecution.ts'),
     agentCalls = calls(agent, agent, 'runTaskAgentWithFamily')
   expect(agentCalls.map((call) => call.arguments[0]!.getText(agent))).toEqual([

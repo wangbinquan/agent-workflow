@@ -529,12 +529,6 @@ export const OFF_DAG_OFFERED_EDGE_DEBT: readonly OfferedEdgeDebt[] = [
     removeAfterWave: 'W4-E（RFC-294 provider-neutral bounded-context convergence）',
   },
   {
-    from: 'packages/backend/src/modules/task-execution/composition/nodeMechanics.ts',
-    to: 'collaboration',
-    why: 'RFC-349 provider cutover 新增了 owner-closed public participant 消费，但该 bounded-context 对尚未进入 design §3.1 目标 DAG；先逐文件精确锁定，待 ownership/DAG 正式收敛后销账。',
-    removeAfterWave: 'W4-E（RFC-294 provider-neutral bounded-context convergence）',
-  },
-  {
     from: 'packages/backend/src/modules/task-execution/composition/providerRuntime.ts',
     to: 'knowledge-evolution',
     why: 'RFC-353 T5 把 fusion 的端口从 `modules/memory/public/fusion.ts` 迁到它真正的 owner knowledge-evolution（RFC-294 design §638：memory 的禁止清单第一条就是「fusion engine」）。这三个文件是 task-execution 实现 KE required `FusionEngineTaskOperations` 的 exact adapter——「消费者实现提供方的合同」本来就不在 design §3.1 的 offered DAG 上；迁移前它们指向 memory、同样在账；本刀只是把边的终点换成正确的 owner，形态与条数都没变。',

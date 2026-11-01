@@ -183,7 +183,6 @@ describe('RFC-282 B2 / RFC-345 T4a — all six TaskExecution entries use one res
       // RFC-405: the agent body reads its injection through the agent binding.
       AGENT_BINDING_SOURCE,
       readFileSync(resolve(SRC, 'modules/task-execution/composition/wrapperMechanics.ts'), 'utf8'),
-      readFileSync(resolve(SRC, 'modules/task-execution/composition/nodeMechanics.ts'), 'utf8'),
       readFileSync(resolve(SRC, 'services/scheduler.ts'), 'utf8'),
       readFileSync(
         resolve(SRC, 'modules/task-execution/engine/node/shared/resolveMergeConflicts.ts'),

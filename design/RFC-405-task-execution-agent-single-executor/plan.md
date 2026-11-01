@@ -74,6 +74,14 @@
   复跑，全部通过。
 - **P0 变异 lane**（SQLite + PostgreSQL）：passed，34 个阶段、0 失败，127 个源文件指纹前后一致。
 
+## CI（AC-6）
+
+- **`81168e759`**：windows-platform `41295916804` success（含本 RFC 的端口绑定用例与结构锁）。主 CI `41295916543` 59 success / 2 cancelled /
+  `CI required` failure：没有任何用例失败；shard 4 与 19 跑满 15 分钟上限被取消——父提交 `109ca2f81`（并发 RFC-398）的主 CI `41293473768` 同样有
+  3 个分片因此取消，慢的是 RFC-395 的几份重测试（`rfc395-production-source-manifest` 在两次 run 里都约 260 s）加上 RFC-398 新增的发布版矩阵文件
+  （每份约 50 s），与本 RFC 无关。两个被取消分片里没跑到的 17 个文件（按 bun 的步进分片从排序后的文件表算出），除 RFC-398 自己的 3 个外，
+  在 RFC-406 的集中验证里本机复跑全部通过（工作树含 RFC-406 的候选，属补充证据）。CI 证据待后继 run 补齐，AC-6 暂不关。
+
 ## 验收清单
 
 - [x] proposal AC-1～AC-5（本地集中验证，见上）

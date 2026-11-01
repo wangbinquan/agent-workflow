@@ -74,9 +74,9 @@ import {
 } from '@/modules/task-execution/application/agentRunHistory'
 import { shouldRetryNodeFailure } from '@/modules/task-execution/domain/envelopeRetryPolicy'
 import type {
-  OneNodeResult,
-  SchedulerState,
-} from '@/modules/task-execution/composition/nodeMechanics'
+  NodeMechanicsResult,
+  TaskMechanicsState,
+} from '@/services/execution/taskMechanicsState'
 import { broadcastNodeStatus } from '@/modules/task-execution/infrastructure/nodeStatusEvents'
 import {
   isolatedRunBinding,
@@ -113,7 +113,7 @@ export interface WrapperMechanicsPorts {
 }
 
 export function createWrapperMechanicsPorts(
-  state: SchedulerState,
+  state: TaskMechanicsState,
   executionLog: Logger,
 ): WrapperMechanicsPorts {
   const scenes = new Map<symbol, { readonly handle: IsoHandle; readonly kind: string }>()
@@ -349,7 +349,7 @@ export function createWrapperMechanicsPorts(
   const scopeDriver: WrapperScopeDriverPort = {
     drive(input) {
       const { handle, kind } = sceneRecord(input.workspace)
-      const innerState: SchedulerState = handle.passthrough
+      const innerState: TaskMechanicsState = handle.passthrough
         ? state
         : {
             ...state,
@@ -478,7 +478,7 @@ type ShardSpec = FanoutShardSpec
  */
 
 interface DispatchShardArgs {
-  state: SchedulerState
+  state: TaskMechanicsState
   wrapperId: string
   wrapperRunId: string
   innerNode: WorkflowNode
@@ -1051,7 +1051,7 @@ async function dispatchFanoutShardAttempt(args: DispatchShardArgs): Promise<Disp
 }
 
 interface DispatchAggregatorArgs {
-  state: SchedulerState
+  state: TaskMechanicsState
   wrapperId: string
   wrapperRunId: string
   aggNode: WorkflowNode
@@ -1067,7 +1067,7 @@ interface DispatchAggregatorArgs {
   log: Logger
 }
 
-type DispatchAggregatorResult = OneNodeResult & {
+type DispatchAggregatorResult = NodeMechanicsResult & {
   outputs: Record<string, string>
   aggRunId?: string
   /** Present only when the failed attempt may consume process-retry budget. */
@@ -1691,7 +1691,7 @@ async function captureGitPreDirty(
  * yields a passthrough handle (the wrapper runs directly on the task canonical).
  */
 export async function createOrRebuildWrapperIso(
-  state: SchedulerState,
+  state: TaskMechanicsState,
   wrapperRunId: string,
   existing: {
     checkpoints: readonly TaskRepositoryCheckpoint[]
@@ -1843,7 +1843,7 @@ export async function createOrRebuildWrapperIso(
  * merge-back semantics can't fork.
  */
 async function mergeBackWrapperIso(
-  state: SchedulerState,
+  state: TaskMechanicsState,
   wrapperIso: IsoHandle,
   wrapperRunId: string,
   node: WorkflowNode,
@@ -1935,7 +1935,7 @@ async function mergeBackWrapperIso(
  * every other kind answers through the shared port table.
  */
 async function sourcePortKindOf(
-  state: SchedulerState,
+  state: TaskMechanicsState,
   nodeId: string,
   portName: string,
 ): Promise<string | null> {

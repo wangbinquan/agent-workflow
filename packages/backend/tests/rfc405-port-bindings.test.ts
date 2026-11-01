@@ -19,7 +19,7 @@ import {
   resolveEffectiveClarifyChannel,
   shouldInjectStopNotice,
 } from '@/services/clarifyRounds'
-import { parsePortValidationFailuresJson } from '@/services/envelope'
+import { CLARIFY_FORBIDDEN_PREFIX, parsePortValidationFailuresJson } from '@/services/envelope'
 import type { TaskMechanicsState } from '@/services/execution/taskMechanicsState'
 import { continuesClarifyLineage, isClarifyRerunCause } from '@/services/nodeRunMint'
 import { agentRefOfNode } from '@/services/ref/runtimeRef'
@@ -323,6 +323,8 @@ test('task facts, policy, pools, observer and injection are read on use; rules a
     parsePortValidationFailuresJson,
     isClarifyRerunCause,
     continuesClarifyLineage,
+    // RFC-406: the workgroup host's suppressed ask-back message prefix.
+    clarifyForbiddenPrefix: CLARIFY_FORBIDDEN_PREFIX,
     decideResumeSessionId,
   })
 })

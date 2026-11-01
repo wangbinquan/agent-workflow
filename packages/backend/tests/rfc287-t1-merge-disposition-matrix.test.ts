@@ -1,4 +1,5 @@
 import {
+  WORKGROUP_HOST_SOURCE,
   AGENT_NODE_SOURCE,
   SCRIPT_NODE_SOURCE,
   SCRIPT_ATTEMPT_SOURCE,
@@ -28,18 +29,7 @@ const SCHEDULER = readFileSync(
   resolve(import.meta.dir, '..', 'src', 'services', 'scheduler.ts'),
   'utf8',
 )
-const NODE_MECHANICS = readFileSync(
-  resolve(
-    import.meta.dir,
-    '..',
-    'src',
-    'modules',
-    'task-execution',
-    'composition',
-    'nodeMechanics.ts',
-  ),
-  'utf8',
-)
+// RFC-406: nodeMechanics.ts is gone; its last body (the workgroup host) is WORKGROUP_HOST_SOURCE.
 const WRAPPER_MECHANICS = readFileSync(
   resolve(
     import.meta.dir,
@@ -59,7 +49,7 @@ const MECHANICS_SOURCES = [
   SCRIPT_ATTEMPT_SOURCE,
   MERGE_CONFLICT_SOURCE,
   SCHEDULER,
-  NODE_MECHANICS,
+  WORKGROUP_HOST_SOURCE,
   WRAPPER_MECHANICS,
 ] as const
 const ASSEMBLY_SRC = readFileSync(
@@ -181,12 +171,15 @@ describe('RFC-287 T1 — 合并处置矩阵（现状）', () => {
     //   · onThrow：keep iso 并**重抛**（merge_state 留在 pending-merge 交 entry replay），
     //     刻意与 DAG 各线的 markMergeFailed 相反；
     //   · onConflictHuman：abandon 且 **不** keep（RFC-187 T8：留状态不留树会楔死任务）。
-    const body = bodyOf('async function executeWorkgroupHostMechanics(')
+    const body = bodyOf('async function runWorkgroupHost(')
     const onThrow = branchAfter(body, 'onThrow:')
     expect(onThrow).toMatch(/keep: true/)
     expect(onThrow).toMatch(/then: 'rethrow'/)
     const branch = branchAfter(body, 'onConflictHuman:')
-    expect(branch).toMatch(/kind: 'abandon'/)
+    // RFC-406: the merge-state abandon goes through the workspace port (the binding writes the event).
+    expect(branch).toMatch(
+      /workspace\.abandonMerge\(req\.nodeRunId, 'wg-merge-conflict-unresolved'\)/,
+    )
     expect(branch).toMatch(/status: 'failed'/)
     expect(branch).not.toMatch(/awaiting_human/)
     // 本线的 conflict 分支必须**不**保留 iso——与脚本线/agent 线正好相反。

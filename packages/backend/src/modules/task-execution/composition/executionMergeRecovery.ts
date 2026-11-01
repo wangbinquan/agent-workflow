@@ -26,7 +26,7 @@ import { describeEffectError } from '../domain/effectErrorDescription'
 import type { NodeExecutionSnapshot } from '../application/ports/nodeExecutionPersistence'
 // RFC-210 replay: submodule topology read-back + the fail-closed gate around it.
 import { parseIsoSubmodules } from '../domain/isoSubmodules'
-import type { SchedulerState } from '@/modules/task-execution/composition/nodeMechanics'
+import type { TaskMechanicsState } from '@/services/execution/taskMechanicsState'
 import { isolatedRunBinding } from '@/modules/task-execution/composition/executionMechanismBindings'
 import { resolveMergeConflicts } from '@/modules/task-execution/engine/node/shared/resolveMergeConflicts'
 import type { ExecutionMergeRecovery } from '../application/recovery/executionMergeRecovery'
@@ -51,7 +51,7 @@ async function replaySubmodulesMissing(
  * 收尾失败只记日志：重放本身已经按 `excludeSuperseded` 排除了它们，结果不依赖这一步。
  */
 async function abandonSupersededRuns(
-  state: SchedulerState,
+  state: TaskMechanicsState,
   mergeState: 'pending-merge' | 'conflict-human',
   log: Logger,
 ): Promise<void> {
@@ -87,7 +87,7 @@ async function abandonSupersededRuns(
 }
 
 async function scopeBaseHeads(
-  state: SchedulerState,
+  state: TaskMechanicsState,
   scope: IsolationWorkspaceScope,
 ): Promise<Record<string, string>> {
   const taskBaseHeads: Record<string, string> = {}
@@ -109,7 +109,7 @@ async function scopeBaseHeads(
  * the caller fails the task loudly (PR-B upgrades the conflict path to the merge agent).
  */
 async function replayPendingMerge(
-  state: SchedulerState,
+  state: TaskMechanicsState,
   scope: IsolationWorkspaceScope,
   taskBaseHeads: Record<string, string>,
   r: NodeExecutionSnapshot,
@@ -191,7 +191,7 @@ async function replayPendingMerge(
  * snapshot fails the node like a live merge-back throw.
  */
 async function completeInterruptedRun(
-  state: SchedulerState,
+  state: TaskMechanicsState,
   scope: IsolationWorkspaceScope,
   taskBaseHeads: Record<string, string>,
   r: NodeExecutionSnapshot,
@@ -262,7 +262,7 @@ async function completeInterruptedRun(
  * their dispatch weighs reusing them.
  */
 export async function completeFrameMerges(
-  state: SchedulerState,
+  state: TaskMechanicsState,
   frame: { readonly containerRunId: string | null; readonly iteration: number },
   log: Logger,
 ): Promise<void> {
@@ -292,7 +292,7 @@ export async function completeFrameMerges(
 /** RFC-370 — complete one done fan-out child's interrupted merge-back in the
  * dispatching scope (its merge target) before its reuse is decided. */
 export async function completeInterruptedMerge(
-  state: SchedulerState,
+  state: TaskMechanicsState,
   r: NodeExecutionSnapshot,
   log: Logger,
 ): Promise<void> {
@@ -313,7 +313,10 @@ export async function completeInterruptedMerge(
  * 'conflict-human' → the frontier re-parks the task at awaiting_human. Runs at the
  * resume entry (before the scope loop), right after the top frame's merges complete.
  */
-async function replayConflictHumanResolutions(state: SchedulerState, log: Logger): Promise<void> {
+async function replayConflictHumanResolutions(
+  state: TaskMechanicsState,
+  log: Logger,
+): Promise<void> {
   const { taskId } = state
   await abandonSupersededRuns(state, 'conflict-human', log)
   const rows = await state.opts.persistence.nodeExecution.list({
@@ -372,7 +375,7 @@ async function replayConflictHumanResolutions(state: SchedulerState, log: Logger
 }
 
 export function composeExecutionMergeRecovery(
-  state: SchedulerState,
+  state: TaskMechanicsState,
   log: Logger,
 ): ExecutionMergeRecovery {
   return {

@@ -5,7 +5,8 @@ import {
   resolveEffectiveClarifyChannel,
   shouldInjectStopNotice,
 } from '@/services/clarifyRounds'
-import { parsePortValidationFailuresJson } from '@/services/envelope'
+import { CLARIFY_FORBIDDEN_PREFIX, parsePortValidationFailuresJson } from '@/services/envelope'
+import { resolveSyntheticTaskAgentInjection } from '@/services/execution/taskExecutionResources'
 import type { TaskMechanicsState } from '@/services/execution/taskMechanicsState'
 import { continuesClarifyLineage, isClarifyRerunCause } from '@/services/nodeRunMint'
 import { agentRefOfNode } from '@/services/ref/runtimeRef'
@@ -19,8 +20,10 @@ import type {
   AgentRunRequest,
 } from '../application/ports/agentNodeExecution'
 import { NOOP_AGENT_RUN_SETTLED_OBSERVER } from '../application/ports/agentRunSettledObserver'
+import type { CollaborationNodeGatePort } from '../application/ports/collaborationNodeGate'
 import type { TaskAgentRunPolicy } from '../application/ports/taskAgentRun'
 import { resolveSchedulerRunRow } from '../application/resolveSchedulerRunRow'
+import { ORCHESTRATOR_AGENT_ID } from '../domain/orchestratorAgentIdentity'
 import { createIsoUnderLock, persistIsoBase } from '../engine/kernel/isolation'
 import { discardNodeIso } from '../engine/kernel/isolationCleanup'
 import { markMergeFailed, mergeBackAndSettle } from '../engine/kernel/merge'
@@ -56,10 +59,11 @@ export function withTaskRunFields(
   }
 }
 
-/** RFC-405 — capabilities of the agent-single body; every value is read on use. */
+/** RFC-405 / RFC-406 — capabilities of the agent-single executor's two lanes; every value is read on use. */
 export function createAgentNodeExecutionPorts(state: TaskMechanicsState): AgentNodeExecutionPorts {
   const persistence = () => state.opts.persistence.nodeExecution
-  const collaboration = () => state.opts.collaborationRuntime
+  // The collaboration runtime satisfies task-execution's required gate port (RFC-334 W2-C).
+  const collaboration = () => state.opts.collaborationRuntime satisfies CollaborationNodeGatePort
   return {
     task: {
       get taskId() {
@@ -89,6 +93,9 @@ export function createAgentNodeExecutionPorts(state: TaskMechanicsState): AgentN
       get platformInputPathsJson() {
         return state.task.platformInputPathsJson
       },
+      get repoMounts() {
+        return state.repos.map((repo) => repo.mountPath)
+      },
     },
     policy: {
       get appHome() {
@@ -115,6 +122,10 @@ export function createAgentNodeExecutionPorts(state: TaskMechanicsState): AgentN
     },
     resources: {
       injection: (agentId) => state.taskExecutionResources.injection(agentId),
+      hostInjection: async (agent) =>
+        agent.id === ORCHESTRATOR_AGENT_ID
+          ? resolveSyntheticTaskAgentInjection(agent, state.opts.taskAgentRuns.materialReferences)
+          : await state.taskExecutionResources.injection(agent.id),
     },
     collaboration: {
       resolveBorrowForNode: (input) => collaboration().resolveBorrowForNode(input),
@@ -128,6 +139,9 @@ export function createAgentNodeExecutionPorts(state: TaskMechanicsState): AgentN
             ? {}
             : { executionContext: state.opts.executionContext }),
         }),
+      isTaskClarifySuppressed: (input) => collaboration().isTaskClarifySuppressed(input),
+      dismissOpenClarifyParksForAutonomous: (input) =>
+        collaboration().dismissOpenClarifyParksForAutonomous(input),
     },
     rules: {
       agentRefOfNode,
@@ -138,6 +152,7 @@ export function createAgentNodeExecutionPorts(state: TaskMechanicsState): AgentN
       parsePortValidationFailuresJson,
       isClarifyRerunCause,
       continuesClarifyLineage,
+      clarifyForbiddenPrefix: CLARIFY_FORBIDDEN_PREFIX,
       decideResumeSessionId,
     },
     input: {
@@ -166,6 +181,7 @@ export function createAgentNodeExecutionPorts(state: TaskMechanicsState): AgentN
           selection: state.opts.persistence.selection,
         }),
       mintNodeRun: (input) => nodeRunLedger(state).mintNodeRun(input),
+      setNodeRunStatus: (input) => nodeRunLedger(state).setNodeRunStatus(input),
       transitionNodeRunStatus: (input) => nodeRunLedger(state).transitionNodeRunStatus(input),
       loadEnvelopeNonce: (id) => nodeRunLedger(state).loadEnvelopeNonce(id),
       appendEvent: (input) =>
@@ -229,6 +245,12 @@ export function createAgentNodeExecutionPorts(state: TaskMechanicsState): AgentN
         }),
       markMergeFailed: (nodeRunId, message) =>
         markMergeFailed(isolatedRunBinding(state), nodeRunId, message, state.log),
+      abandonMerge: (nodeRunId, reason) =>
+        state.opts.persistence.mergeStates.tryTransition({
+          nodeRunId,
+          event: { kind: 'abandon', reason },
+          ...nodeRunLedger(state).executionContextInput(),
+        }),
       discardNodeIso: (handle) =>
         discardNodeIso(bindIsolationCleanup(), handle, state.log, state.writeSem),
       portFileContainerPaths: (portFilePaths) =>

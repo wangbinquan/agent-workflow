@@ -152,7 +152,15 @@ describe('RFC-285 B3 — 三臂接线源码锁', () => {
   const CALL_BODY = 'modules/task-execution/engine/node/shared/child-call/runChildCallNode.ts'
 
   test('伪造 actor cast 归零；两条新启臂都判 call-owner-inactive', () => {
-    const nodeMechanics = src('modules/task-execution/composition/nodeMechanics.ts')
+    // RFC-405 / RFC-406: nodeMechanics.ts is gone; the agent executor's files replace it here.
+    const nodeMechanics = [
+      'modules/task-execution/engine/node/agent-single/runAgentSingleNode.ts',
+      'modules/task-execution/engine/node/agent-single/runWorkgroupHost.ts',
+      'modules/task-execution/composition/agentNodeExecution.ts',
+      'modules/task-execution/application/agentRunHistory.ts',
+    ]
+      .map(src)
+      .join('\n')
     const binding = src(CALL_BINDING)
     const launch = src(CALL_LAUNCH)
     for (const text of [nodeMechanics, binding, launch]) {

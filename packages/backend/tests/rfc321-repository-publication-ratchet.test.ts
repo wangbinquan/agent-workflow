@@ -374,7 +374,11 @@ describe('RFC-321 repository publication architecture ratchet', () => {
       'packages/backend/src/modules/integration/application/repositoryEndpointDiscovery.ts',
     )
     const nodeMechanics = [
-      'packages/backend/src/modules/task-execution/composition/nodeMechanics.ts',
+      // RFC-405 / RFC-406: nodeMechanics.ts is gone; the agent executor's files replace it here.
+      'packages/backend/src/modules/task-execution/engine/node/agent-single/runAgentSingleNode.ts',
+      'packages/backend/src/modules/task-execution/engine/node/agent-single/runWorkgroupHost.ts',
+      'packages/backend/src/modules/task-execution/composition/agentNodeExecution.ts',
+      'packages/backend/src/modules/task-execution/application/agentRunHistory.ts',
       'packages/backend/src/modules/task-execution/engine/node/code-host-call/runCodeHostCallNode.ts',
       'packages/backend/src/modules/task-execution/composition/codeHostNodeExecution.ts',
     ]

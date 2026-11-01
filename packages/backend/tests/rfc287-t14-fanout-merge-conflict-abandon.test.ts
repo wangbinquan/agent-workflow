@@ -1,3 +1,4 @@
+import { WORKGROUP_HOST_SOURCE } from './helpers/executionMechanismSources'
 // RFC-287 T14 —— fanout 两条线（分片 L5 / 聚合 L6）撞不可解冲突时也必须 abandon。
 //
 // 这是 RFC-187 T8 那个 bug 的**同一份**，只是当年只给工作组主机线修了：
@@ -32,18 +33,7 @@ const WRAPPER_MECHANICS = readFileSync(
   ),
   'utf8',
 )
-const NODE_MECHANICS = readFileSync(
-  resolve(
-    import.meta.dir,
-    '..',
-    'src',
-    'modules',
-    'task-execution',
-    'composition',
-    'nodeMechanics.ts',
-  ),
-  'utf8',
-)
+// RFC-406: nodeMechanics.ts is gone; its last body (the workgroup host) is WORKGROUP_HOST_SOURCE.
 
 /** 截出一段 `disposition: {` 声明块——按缩进配平，避免跨到兄弟线上去。 */
 function dispositionAfter(anchor: string): string {
@@ -101,7 +91,7 @@ describe('RFC-287 T14 — fanout 撞冲突必须落 abandon（既存缺陷，用
   // 能区分是哪条线丢的。少任何一条都说明有线又退回「留状态不留树」。
   test('三条 keep:false 的线都各有自己的 abandon 理由 slug', () => {
     for (const [reason, owner] of [
-      ['wg-merge-conflict-unresolved', NODE_MECHANICS],
+      ['wg-merge-conflict-unresolved', WORKGROUP_HOST_SOURCE],
       ['fanout-shard-merge-conflict-unresolved', WRAPPER_MECHANICS],
       ['fanout-agg-merge-conflict-unresolved', WRAPPER_MECHANICS],
     ] as const) {

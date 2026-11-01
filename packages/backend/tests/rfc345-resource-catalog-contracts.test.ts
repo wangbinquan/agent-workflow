@@ -870,10 +870,6 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     )
     const schedules = readFileSync(resolve(sourceRoot, 'services/scheduledTasks.ts'), 'utf8')
     const webhook = readFileSync(resolve(sourceRoot, 'services/webhook/webhookDispatch.ts'), 'utf8')
-    const node = readFileSync(
-      resolve(sourceRoot, 'modules/task-execution/composition/nodeMechanics.ts'),
-      'utf8',
-    )
     const wrapper = readFileSync(
       resolve(sourceRoot, 'modules/task-execution/composition/wrapperMechanics.ts'),
       'utf8',
@@ -954,7 +950,8 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     expect(webhook).toContain('taskExecutionAuthority,')
 
     // RFC-405: the agent body reads its injection through the agent binding.
-    const execution = `${node}\n${wrapper}\n${scheduler}\n${mergeResolution}\n${LEAF_NODE_SOURCES.join('\n')}\n${AGENT_BINDING_SOURCE}`
+    // RFC-406: nodeMechanics.ts is gone; the workgroup host body arrives with LEAF_NODE_SOURCES.
+    const execution = `${wrapper}\n${scheduler}\n${mergeResolution}\n${LEAF_NODE_SOURCES.join('\n')}\n${AGENT_BINDING_SOURCE}`
     for (const legacyResourceImport of [
       "@/services/agent'",
       "@/services/mcp'",
@@ -970,7 +967,8 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     // output kind from the source agent (`sourcePortKindOf`).
     expect(execution.split('taskExecutionResources.injection(').length - 1).toBe(6)
     expect(execution.split('resolveSyntheticTaskAgentInjection(').length - 1).toBe(3)
-    expect(node).toContain('req.agent.id === ORCHESTRATOR_AGENT_ID')
+    // RFC-406: the host's orchestrator / catalog choice is the agent binding's `hostInjection`.
+    expect(AGENT_BINDING_SOURCE).toContain('agent.id === ORCHESTRATOR_AGENT_ID')
     expect(wrapperData).toContain('WrapperFanoutAgentResolution')
     expect(wrapper).toContain("return resolution.kind === 'ok'")
     expect(fanout).toContain('agentFailures.get(innerAgentId)')

@@ -49,23 +49,12 @@ const wrapperMechanicsSource = readFileSync(
   ),
   'utf8',
 )
-const nodeMechanicsSource = readFileSync(
-  resolve(
-    import.meta.dir,
-    '..',
-    'src',
-    'modules',
-    'task-execution',
-    'composition',
-    'nodeMechanics.ts',
-  ),
-  'utf8',
-)
 const assemblySource = readFileSync(
   resolve(import.meta.dir, '..', 'src', 'modules/task-execution/engine/kernel/assembly.ts'),
   'utf8',
 )
-const executionSource = `${wrapperMechanicsSource}\n${nodeMechanicsSource}\n${SCRIPT_NODE_SOURCE}\n${SCRIPT_ATTEMPT_SOURCE}\n${MERGE_CONFLICT_SOURCE}\n${LEAF_NODE_SOURCES.join('\n')}`
+// RFC-406: nodeMechanics.ts is gone; the workgroup host body arrives with LEAF_NODE_SOURCES.
+const executionSource = `${wrapperMechanicsSource}\n${SCRIPT_NODE_SOURCE}\n${SCRIPT_ATTEMPT_SOURCE}\n${MERGE_CONFLICT_SOURCE}\n${LEAF_NODE_SOURCES.join('\n')}`
 
 /** A git invocation that hangs deterministically, locally, with no network:
  *  a `!`-prefixed alias runs through the shell, so the child spawns a

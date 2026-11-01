@@ -1,3 +1,4 @@
+import { AGENT_MECHANICS_SOURCE } from './helpers/executionMechanismSources'
 // SOURCE-TEXT GUARDS — design/scheduler-audit-2026-06-10.md S-13 (P2, WP-3)
 // （兼锁 S-2 读取侧的修复形态，行为面见
 //   scheduler-audit-s02-multirepo-retry-rollback-noop.test.ts。）
@@ -41,10 +42,8 @@ import { join, relative, resolve } from 'node:path'
 const SRC_ROOT = resolve(import.meta.dir, '..', 'src')
 
 const SCHEDULER_SRC = readFileSync(join(SRC_ROOT, 'services', 'scheduler.ts'), 'utf-8')
-const NODE_MECHANICS_SRC = readFileSync(
-  join(SRC_ROOT, 'modules', 'task-execution', 'composition', 'nodeMechanics.ts'),
-  'utf-8',
-)
+// RFC-405 / RFC-406: both agent-executor lanes (and their binding) left nodeMechanics.ts.
+const NODE_MECHANICS_SRC = AGENT_MECHANICS_SOURCE
 const TASK_SRC = readFileSync(join(SRC_ROOT, 'services', 'task.ts'), 'utf-8')
 // RFC-359 AC-1（第 9 刀）：`retry` 合并后**唯一**的那一份实现（两个 provider 共用）。
 const RETRY_SRC = readFileSync(

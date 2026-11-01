@@ -59,10 +59,6 @@ describe('RFC-292 trigger namespace source locks', () => {
       ...LEAF_NODE_SOURCES,
       readFileSync(resolve(BACKEND_SRC, 'services/scheduler.ts'), 'utf8'),
       readFileSync(
-        resolve(BACKEND_SRC, 'modules', 'task-execution', 'composition', 'nodeMechanics.ts'),
-        'utf8',
-      ),
-      readFileSync(
         resolve(BACKEND_SRC, 'modules', 'task-execution', 'composition', 'wrapperMechanics.ts'),
         'utf8',
       ),

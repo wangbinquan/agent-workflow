@@ -1,3 +1,4 @@
+import { WORKGROUP_HOST_SOURCE, AGENT_BINDING_SOURCE } from './helpers/executionMechanismSources'
 // RFC-187 T8 (audit design/workgroup-e2e-audit.md §4-4) — a workgroup host run whose
 // merge-back conflicts unresolvably used to strand its node_run at
 // merge_state='conflict-human'.
@@ -15,8 +16,6 @@
 // this delta really is dropped.
 
 import { describe, expect, test } from 'bun:test'
-import { readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
 import {
   allowedFromForMergeEvent,
   MERGE_STATES,
@@ -39,23 +38,14 @@ describe('RFC-187 T8 — conflict-human → abandoned is a legal, terminal settl
 })
 
 describe('RFC-187 T8 — source lock (the wg hook abandons instead of stranding)', () => {
-  const NODE_MECHANICS = readFileSync(
-    resolve(
-      import.meta.dir,
-      '..',
-      'src',
-      'modules',
-      'task-execution',
-      'composition',
-      'nodeMechanics.ts',
-    ),
-    'utf8',
-  )
+  const NODE_MECHANICS = WORKGROUP_HOST_SOURCE
 
   test('the workgroup conflict-human branch abandons the merge state before failing', () => {
+    // RFC-406: the host body abandons through the workspace port; the binding writes the event.
     expect(NODE_MECHANICS).toContain(
-      "event: { kind: 'abandon', reason: 'wg-merge-conflict-unresolved' }",
+      "await workspace.abandonMerge(req.nodeRunId, 'wg-merge-conflict-unresolved')",
     )
+    expect(AGENT_BINDING_SOURCE).toContain("event: { kind: 'abandon', reason }")
     // it must sit in the wg hook's conflict-human branch, i.e. right before the
     // merge-back-conflict failure it returns.
     // RFC-287 T6 改锚：该处置已从「函数体里的 conflict-human 分支」变成 spec 上的

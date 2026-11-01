@@ -407,13 +407,14 @@ describe('RFC-284 T21 — nextRetryIndex 口径矩阵', () => {
       expect(/length === 0 \? 0 :.*retryIndex/.test(src)).toBe(false)
       expect(/retryIndex: \w+\.retryIndex \+ 1/.test(src)).toBe(false)
     }
-    // RFC-405: nodeMechanics.ts (now the workgroup host only) mints no row and must not regrow one.
+    // RFC-405 / RFC-406: the workgroup host (moved out of nodeMechanics.ts) mints no row and must not
+    // regrow one.
     const mechanics = readFileSync(
       resolvePath(
         import.meta.dir,
         '..',
         'src',
-        'modules/task-execution/composition/nodeMechanics.ts',
+        'modules/task-execution/engine/node/agent-single/runWorkgroupHost.ts',
       ),
       'utf8',
     )
