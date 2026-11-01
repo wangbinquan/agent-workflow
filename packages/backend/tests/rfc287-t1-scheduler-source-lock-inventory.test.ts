@@ -36,26 +36,17 @@ const MUST_HAVE_BEHAVIOR_FIXTURE = [
  * 改动本清单 = 迁移动作，必须同批说明处置分类。
  */
 const SCHEDULER_SOURCE_LOCK_FILES: readonly string[] = [
-  'agent-output-kinds-scheduler-load.test.ts',
-  'clarify-prompt-wire-up.test.ts',
+  // RFC-412: services/scheduler.ts is deleted; 17 locks moved to its new owners (engine/node/commit-push,
+  // engine/task/readonlyInspection, composition/commitPushBinding). The rest still name it in absence checks or fixtures.
   'depcheck-gate.test.ts',
-  'rfc098-commitpush-nonblocking.test.ts',
   'rfc143-runtime-driver-capability.test.ts',
-  'rfc200-source-lock.test.ts',
   'rfc282-b2-resolve-injection.test.ts',
-  'rfc287-t1-broadcast-sequence.test.ts',
-  'rfc287-t1-discard-failure-paths.test.ts',
-  'rfc287-t1-line-throw-disposition.test.ts',
-  'rfc287-t1-merge-disposition-matrix.test.ts',
   'rfc287-t1-release-before-discard.test.ts',
-  'rfc287-t5-script-merge-throw.test.ts',
   // T8 新增：取行前奏收编后的「单一实现 + 四线×五项差异矩阵」锁。
   'rfc287-t8-run-row-prelude-single-source.test.ts',
   // T9 新增：G3 四条豁免的理由锁 + 装配散写的终局灭绝锁（三处显式挖洞）。
   'rfc287-t9-exemptions-and-extinction.test.ts',
-  'rfc292-trigger-source-locks.test.ts',
   // RFC-313：锁住「升级预算只有一处推进、形状判定只有一个定义点」。
-  'rfc313-source-locks.test.ts',
   // RFC-331：拓扑切割的 source guard 锁住 task↔scheduler 与 call-graph 三条断边。
   'rfc331-task-execution-topology.test.ts',
   // RFC-332：旧 body 灭绝断言仍显式读取 scheduler facade。
@@ -63,20 +54,14 @@ const SCHEDULER_SOURCE_LOCK_FILES: readonly string[] = [
   // RFC-339 terminal extinction guard deliberately reads the legacy owner.
   'rfc339-wrapper-runtime-cutover.test.ts',
   // RFC-345 locks the remaining scheduler facade consumer count during W4-C.
-  'rfc345-resource-catalog-contracts.test.ts',
   // RFC-308: locks task-execution → source-control participant wiring and the
   // absence of a second add/commit/push implementation in code-capability.
-  'runner-injected-memories.test.ts',
-  'runner-resume-session-flag.test.ts',
   // RFC-371: internal commit/merge inherited snapshots retain runtime pricing identity.
-  'runtime-freeze.test.ts',
   'scheduler-audit-s13-freshest-fork-source-guards.test.ts',
   'scheduler-audit-s17-readonly-starved-by-writer-queue.test.ts',
   'scheduler-boundary-resume-retryindex-vs-id.test.ts',
   'scheduler-node-overrides.test.ts',
   'scheduler-subagent-live-capture-passthrough.test.ts',
-  'source-text-rfc066-guards.test.ts',
-  'source-text-rfc067-guards.test.ts',
 ]
 
 /**

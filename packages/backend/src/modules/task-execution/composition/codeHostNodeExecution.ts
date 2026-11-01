@@ -1,4 +1,4 @@
-import type { TaskMechanicsState } from '@/services/execution/taskMechanicsState'
+import type { TaskMechanicsState } from './taskMechanicsState'
 import { executeCodeHostCall } from '@/services/codeHost/call'
 import { resolveProjectFallback } from '@/services/codeHost/project'
 import { probeCodeHostMutation } from '@/services/codeHost/recoveryProbe'

@@ -33,7 +33,8 @@ describe('RFC-048 subagentLiveCapture passthrough', () => {
     // RFC-405 / RFC-406: both agent-executor lanes (the DAG body and the workgroup host) add their
     // task-level run fields through the agent binding's one `withTaskRunFields`.
     const src =
-      read('packages/backend/src/services/scheduler.ts') +
+      // RFC-412: the commit&push binding (no live subagent capture, as before) replaced services/scheduler.ts.
+      read('packages/backend/src/modules/task-execution/composition/commitPushBinding.ts') +
       read('packages/backend/src/modules/task-execution/composition/wrapperMechanics.ts') +
       read('packages/backend/src/modules/task-execution/composition/agentNodeExecution.ts')
     const topology = read(

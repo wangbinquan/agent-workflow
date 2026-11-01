@@ -2,7 +2,7 @@
 // RFC-404: the call node runs through its executor and explicit ports instead of nodeMechanics.ts.
 import { expect, test } from 'bun:test'
 import { createChildCallNodeExecutionPorts } from '@/modules/task-execution/composition/childCallNodeExecution'
-import type { TaskMechanicsState } from '@/services/execution/taskMechanicsState'
+import type { TaskMechanicsState } from '@/modules/task-execution/composition/taskMechanicsState'
 import type { NodeStepRequest } from '@/modules/task-execution/domain/nodeExecution'
 import { CallWorkflowNodeExecutor } from '@/modules/task-execution/engine/node/call-workflow/callWorkflowNodeExecutor'
 import { callEdgeKey } from '@/services/execution/closure'

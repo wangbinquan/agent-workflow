@@ -1,17 +1,13 @@
+// RFC-412: moved from services/execution/taskMechanicsState.ts — the execution state is an assembly type and lives
+// only in composition (RFC-294 S6 exit gate).
 import type { TriggerContext, WorkflowDefinition } from '@agent-workflow/shared'
-import type {
-  TaskEngineTaskSnapshot,
-  TaskRepositoryMount,
-} from '@/modules/task-execution/public/types'
-import type { SchedulerRuntimeTopology } from '@/modules/task-execution/public/participants'
-import type {
-  TaskScopeOutcome,
-  WrapperExecutionScopeReadModel,
-} from '@/modules/task-execution/public/types'
+import type { TaskEngineTaskSnapshot, TaskRepositoryMount } from '../public/types'
+import type { SchedulerRuntimeTopology } from '../public/participants'
+import type { TaskScopeOutcome, WrapperExecutionScopeReadModel } from '../public/types'
 import type { Logger } from '@/util/log'
 import type { Semaphore } from '@/platform/contracts/semaphore'
 import type { BoundRunTaskOptions } from './taskEngineRuntimeOptions'
-import type { TaskAgentResourceSession } from './taskExecutionResources'
+import type { TaskAgentResourceSession } from '@/services/execution/taskExecutionResources'
 
 export interface TaskScopeArgs {
   /** Wrapper node that owns this scope; null for the workflow root. */

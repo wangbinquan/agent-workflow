@@ -41,7 +41,10 @@ import { join, relative, resolve } from 'node:path'
 
 const SRC_ROOT = resolve(import.meta.dir, '..', 'src')
 
-const SCHEDULER_SRC = readFileSync(join(SRC_ROOT, 'services', 'scheduler.ts'), 'utf-8')
+const SCHEDULER_SRC = readFileSync(
+  join(SRC_ROOT, 'modules', 'task-execution', 'engine', 'node', 'commit-push', 'runCommitPush.ts'),
+  'utf-8',
+)
 // RFC-405 / RFC-406: both agent-executor lanes (and their binding) left nodeMechanics.ts.
 const NODE_MECHANICS_SRC = AGENT_MECHANICS_SOURCE
 const TASK_SRC = readFileSync(join(SRC_ROOT, 'services', 'task.ts'), 'utf-8')

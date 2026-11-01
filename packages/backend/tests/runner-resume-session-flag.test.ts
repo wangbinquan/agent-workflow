@@ -111,7 +111,17 @@ describe('RFC-026 runner buildCommand — resumeSessionId', () => {
       'utf8',
     )
     const schedulerSrc = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'services', 'scheduler.ts'),
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'task-execution',
+        'engine',
+        'node',
+        'commit-push',
+        'runCommitPush.ts',
+      ),
       'utf8',
     )
     expect(spawnSrc).toMatch(/cmd\.push\(\s*['"]--session['"]/)

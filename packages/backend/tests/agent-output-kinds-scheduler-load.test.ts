@@ -31,7 +31,17 @@ import {
   getAgentById,
 } from '../src/modules/resource-catalog/infrastructure/legacy/agent'
 
-const SCHEDULER_SRC = resolve(import.meta.dir, '..', 'src', 'services', 'scheduler.ts')
+const SCHEDULER_SRC = resolve(
+  import.meta.dir,
+  '..',
+  'src',
+  'modules',
+  'task-execution',
+  'engine',
+  'node',
+  'commit-push',
+  'runCommitPush.ts',
+)
 
 describe('scheduler agent-load hydrates outputKinds (regression for task 01KS045BYZ9H52K3H2D10DBV6D)', () => {
   describeEachProvider('durable provider behavior', (harness) => {

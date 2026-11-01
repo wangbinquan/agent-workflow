@@ -394,7 +394,6 @@ const LEGACY_BACKEND_FILE_OWNERS: Readonly<Record<string, TargetOwner>> = {
   'packages/backend/src/services/execution/taskExecutionCallClosure.ts': 'task-execution',
   'packages/backend/src/services/execution/taskExecutionResourceDependencies.ts': 'task-execution',
   'packages/backend/src/services/execution/taskExecutionResources.ts': 'task-execution',
-  'packages/backend/src/services/execution/taskMechanicsState.ts': 'task-execution',
   'packages/backend/src/services/execution/triggerPreflight.ts': 'task-execution',
   'packages/backend/src/services/execution/types.ts': 'task-execution',
   'packages/backend/src/services/execution/workspaceBoundary.ts': 'task-execution',
@@ -514,7 +513,6 @@ const LEGACY_BACKEND_FILE_OWNERS: Readonly<Record<string, TargetOwner>> = {
   'packages/backend/src/services/scheduledTaskRefs.ts': 'integration',
   'packages/backend/src/services/scheduledTasks.ts': 'integration',
   'packages/backend/src/services/scheduledTaskScheduler.ts': 'integration',
-  'packages/backend/src/services/scheduler.ts': 'task-execution',
   'packages/backend/src/services/scriptAuthorGate.ts': 'resource-catalog',
   'packages/backend/src/services/scriptDepsEnv.ts': 'task-execution',
   'packages/backend/src/services/scriptPorts.ts': 'task-execution',
@@ -674,29 +672,6 @@ export function targetContextFor(path: string): TargetOwner {
   return 'unregistered'
 }
 
-const SCHEDULER_W2_B_SYMBOLS = new Set([
-  'buildScopeUpstreams',
-  'deriveFrontier',
-  'findScopeCycle',
-  'runScope',
-  'runTaskInner',
-  'runTaskWithTopology',
-])
-const SCHEDULER_W2_D_SYMBOLS = new Set([
-  'dispatchFanoutAggregator',
-  'dispatchFanoutShard',
-  'replayConflictHumanResolutions',
-  'replayPendingMerges',
-  'runGitWrapperNode',
-  'runLoopWrapperNode',
-  'runWrapperFanoutNode',
-  'runWrapperGitNode',
-  'runWrapperLoopNode',
-  'runWrapperNode',
-])
-const SCHEDULER_W3_SYMBOLS = new Set(['cancelTaskRow', 'emitStatus', 'failTask'])
-const SCHEDULER_W5_SYMBOLS = new Set(['inspectReadonlyRepos', 'maybeRunCommitPush'])
-
 // RFC-294 账本治理（2026-09-22，用户裁决其二）——**已关闭的波不再承接新债**。
 //
 // 2026-09-02 的 R4 把「legacy 文件消费模块 public 面」的边改成按**消费者**记账（「修法落在谁
@@ -738,13 +713,6 @@ function uncollectedRemoveAfterWaveFor(
   targetContext: TargetOwner,
 ): string {
   if (RFC346_W9_E_COMPATIBILITY_FILES.has(path)) return 'W9-E'
-  if (path === 'packages/backend/src/services/scheduler.ts') {
-    if (SCHEDULER_W2_B_SYMBOLS.has(symbol)) return 'W2-B'
-    if (SCHEDULER_W2_D_SYMBOLS.has(symbol)) return 'W2-D'
-    if (SCHEDULER_W3_SYMBOLS.has(symbol)) return 'W3'
-    if (SCHEDULER_W5_SYMBOLS.has(symbol)) return 'W5'
-    return 'W2-D/W3/W5'
-  }
   const physicalContext = moduleLocation(path)?.context
   if (physicalContext === 'code-capability') return 'W4-E8'
   const waves: Readonly<Record<TargetOwner, string>> = {

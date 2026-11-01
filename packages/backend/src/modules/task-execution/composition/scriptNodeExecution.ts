@@ -1,4 +1,4 @@
-import type { TaskMechanicsState } from '@/services/execution/taskMechanicsState'
+import type { TaskMechanicsState } from './taskMechanicsState'
 import { extractScriptPorts } from '@/services/scriptPorts'
 import type { ScriptNodeExecutionPorts } from '../application/ports/scriptNodeExecution'
 import { resolveUpstreamInputs } from '../application/nodeInputs'

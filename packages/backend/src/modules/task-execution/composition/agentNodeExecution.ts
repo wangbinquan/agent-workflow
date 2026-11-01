@@ -8,7 +8,7 @@ import {
 } from '@/services/clarifyRounds'
 import { CLARIFY_FORBIDDEN_PREFIX, parsePortValidationFailuresJson } from '@/services/envelope'
 import { resolveSyntheticTaskAgentInjection } from '@/services/execution/taskExecutionResources'
-import type { TaskMechanicsState } from '@/services/execution/taskMechanicsState'
+import type { TaskMechanicsState } from './taskMechanicsState'
 import { continuesClarifyLineage, isClarifyRerunCause } from '@/services/nodeRunMint'
 import { agentRefOfNode, fanoutInnerAgentRefKey } from '@/services/ref/runtimeRef'
 import { getRuntimeDriver } from '@/services/runtime'

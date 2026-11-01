@@ -132,7 +132,10 @@ describe('RFC-200 source wiring locks', () => {
     expect(commit).toContain("data('commit-diff', opts.diffTruncated)")
     expect(commit).toContain('extractLastEnvelope(stdout, envelopeNonce)')
 
-    const scheduler = read('packages/backend/src/services/scheduler.ts')
+    // RFC-412: the commit&push tail moved into task-execution engine/node/commit-push/.
+    const scheduler = read(
+      'packages/backend/src/modules/task-execution/engine/node/commit-push/runCommitPush.ts',
+    )
     expect(scheduler).toContain('promptTemplate: buildPrompt(envelopeNonce)')
 
     const distiller = read(

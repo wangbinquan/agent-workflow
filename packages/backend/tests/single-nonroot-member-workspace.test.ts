@@ -51,7 +51,7 @@ import { DrizzleTerminalMaintenancePersistence } from '@/modules/task-execution/
 import { buildNarrativeInput } from '@/services/changeNarrative'
 import { getCodeIntel } from '@/services/codeIntel/codeIntel'
 import { getTaskFileSymbols } from '@/services/codeIntel/fileSymbols'
-import type { TaskMechanicsState } from '@/services/execution/taskMechanicsState'
+import type { TaskMechanicsState } from '@/modules/task-execution/composition/taskMechanicsState'
 import {
   createIsoUnderLock,
   persistIsoBase,

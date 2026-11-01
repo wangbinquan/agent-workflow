@@ -26,7 +26,7 @@ import { describeEffectError } from '../domain/effectErrorDescription'
 import type { NodeExecutionSnapshot } from '../application/ports/nodeExecutionPersistence'
 // RFC-210 replay: submodule topology read-back + the fail-closed gate around it.
 import { parseIsoSubmodules } from '../domain/isoSubmodules'
-import type { TaskMechanicsState } from '@/services/execution/taskMechanicsState'
+import type { TaskMechanicsState } from './taskMechanicsState'
 import { isolatedRunBinding } from '@/modules/task-execution/composition/executionMechanismBindings'
 import { resolveMergeConflicts } from '@/modules/task-execution/engine/node/shared/resolveMergeConflicts'
 import type { ExecutionMergeRecovery } from '../application/recovery/executionMergeRecovery'

@@ -114,7 +114,8 @@ describe('RFC-066 PR-A — source guards', () => {
     for (const rel of [
       'src/routes/tasks.ts',
       'src/services/agentLaunch.ts',
-      'src/services/scheduler.ts',
+      'src/modules/task-execution/engine/node/commit-push/runCommitPush.ts',
+      'src/modules/task-execution/composition/commitPushBinding.ts',
       'src/modules/task-execution/composition/wrapperMechanics.ts',
     ]) {
       const src = readFileSync(resolve(import.meta.dir, '..', rel), 'utf8')

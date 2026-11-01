@@ -29,7 +29,7 @@ import {
   createLocalEffectAttemptObserver,
   runTaskLocalEffect,
 } from '@/modules/task-execution/application/localEffectObserver'
-import type { TaskMechanicsState } from '@/services/execution/taskMechanicsState'
+import type { TaskMechanicsState } from '@/modules/task-execution/composition/taskMechanicsState'
 import { createAgentNodeExecutionPorts } from '@/modules/task-execution/composition/agentNodeExecution'
 import { runWorkgroupHost } from '@/modules/task-execution/engine/node/agent-single/runWorkgroupHost'
 import { isolatedRunBinding } from '@/modules/task-execution/composition/executionMechanismBindings'

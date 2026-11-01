@@ -59,7 +59,11 @@ describe('RFC-292 trigger namespace source locks', () => {
   test('scheduler passes one frozen context to every authored runtime sink', () => {
     const source = [
       ...LEAF_NODE_SOURCES,
-      readFileSync(resolve(BACKEND_SRC, 'services/scheduler.ts'), 'utf8'),
+      // RFC-412: the commit&push tail moved into task-execution engine/node/commit-push/.
+      readFileSync(
+        resolve(BACKEND_SRC, 'modules/task-execution/engine/node/commit-push/runCommitPush.ts'),
+        'utf8',
+      ),
       // RFC-407: LEAF_NODE_SOURCES already carries the fan-out lines; read the wrapper file alone so
       // they are not counted twice.
       readFileSync(

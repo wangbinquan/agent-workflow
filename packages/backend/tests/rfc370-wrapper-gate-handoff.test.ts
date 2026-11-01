@@ -23,7 +23,7 @@ import type { WrapperStrategyMap } from '../src/modules/task-execution/domain/wr
 import { GitStrategy } from '../src/modules/task-execution/engine/wrapper/gitStrategy'
 import { LoopStrategy } from '../src/modules/task-execution/engine/wrapper/loopStrategy'
 import { WrapperRuntime } from '../src/modules/task-execution/engine/wrapper/wrapperRuntime'
-import type { TaskMechanicsState } from '../src/services/execution/taskMechanicsState'
+import type { TaskMechanicsState } from '../src/modules/task-execution/composition/taskMechanicsState'
 import { createLogger } from '../src/util/log'
 import { describeEachProvider } from './helpers/eachProvider'
 

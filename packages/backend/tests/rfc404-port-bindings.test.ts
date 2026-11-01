@@ -9,7 +9,7 @@ import type {
   ChildCallWorkflowLaunch,
   ChildCallWorkgroupLaunch,
 } from '@/modules/task-execution/application/ports/childCallNodeExecution'
-import type { TaskMechanicsState } from '@/services/execution/taskMechanicsState'
+import type { TaskMechanicsState } from '@/modules/task-execution/composition/taskMechanicsState'
 import { NotFoundError } from '@/util/errors'
 
 interface Recorded {

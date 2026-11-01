@@ -46,7 +46,7 @@ import {
 } from '@/modules/source-control/public/queries'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { runLifecycleInvariants, type LifecycleAlertRow } from '@/services/lifecycleInvariants'
-import { buildContainerMap } from '@/services/scheduler'
+import { buildWorkflowScopeParentMap } from '@agent-workflow/shared'
 import { runStuckTaskDetector } from '@/services/stuckTaskDetector'
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
 import type { TaskExecutionPersistence } from '../application/ports/taskExecutionPersistence'
@@ -619,7 +619,7 @@ async function deriveScopeRoot(
 ): Promise<string> {
   const taskWorktreePath = ctx.task.worktreePath
   if (ctx.definition === null) return taskWorktreePath
-  const wrapperId = buildContainerMap(ctx.definition).get(reviewNodeId)
+  const wrapperId = buildWorkflowScopeParentMap(ctx.definition).get(reviewNodeId)
   if (wrapperId === undefined) return taskWorktreePath
   const [wrapperRun] = await createNodeRunQueries(dependencies.db).listFields(
     {

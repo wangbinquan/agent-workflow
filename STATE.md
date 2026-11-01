@@ -1,3 +1,14 @@
+## 2026-11-01 RFC-412 task-execution 提交推送尾链与只读巡检迁入 engine，删除 services/scheduler.ts（In Progress；`design/RFC-412-task-execution-scheduler-residue/`）
+
+- **来由**：RFC-294 S6 退出门「`TaskMechanicsState` 只出现在装配」；用户授权同 RFC-402，本会话调研、设计、实施与集中验证，不派 Codex。
+- **范围**：`services/scheduler.ts` 的自动提交推送迁入 `engine/node/commit-push/`、只读成员巡检迁入 `engine/task/`，经自有端口执行；
+  `buildContainerMap` 调用方改用 shared；`TaskMechanicsState` 迁入 composition；scheduler 删除。纯结构重构。
+- **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。
+- **进度**：T1～T5 完成，随实现提交入库，待 exact SHA 的 CI（AC-6）。`services/scheduler.ts` 与 `services/execution/taskMechanicsState.ts`
+  删除，S6 退出门「`TaskMechanicsState` 只出现在装配」成立；commons-debt R1 216 → 215。集中验证 439 + 16 个文件：本 RFC 引入的 6 个锚点失败
+  已修，其余负载超时复跑通过；P0 变异 lane 通过。详见 plan「集中验证（T5）」。
+- **后继**：S6 其余退出门（composition 只剩装配、协调器只在 bootstrap 构造）。
+
 ## 2026-11-01 RFC-411 workgroup 轮次引擎迁入 task-execution（In Progress；`design/RFC-411-task-execution-workgroup-turns-engine/`）
 
 - **来由**：RFC-294 S6（design §5.2「workgroup 引擎迁出 resource-catalog，归 task-execution」）；用户授权同 RFC-402，本会话调研、设计、实施与集中验证，不派 Codex。

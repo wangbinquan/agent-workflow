@@ -49,7 +49,7 @@ import {
 } from '@/modules/task-execution/engine/kernel/isolation'
 // RFC-210 replay: submodule topology read-back + the fail-closed gate around it.
 import { parseIsoSubmodules } from '@/modules/task-execution/domain/isoSubmodules'
-import type { TaskMechanicsState } from '@/services/execution/taskMechanicsState'
+import type { TaskMechanicsState } from './taskMechanicsState'
 import { isolatedRunBinding } from '@/modules/task-execution/composition/executionMechanismBindings'
 import { resolveMergeConflicts } from '@/modules/task-execution/engine/node/shared/resolveMergeConflicts'
 import {

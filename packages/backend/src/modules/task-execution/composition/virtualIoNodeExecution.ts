@@ -1,4 +1,4 @@
-import type { TaskMechanicsState } from '@/services/execution/taskMechanicsState'
+import type { TaskMechanicsState } from './taskMechanicsState'
 import { copyPortArchive } from '@/platform/content/locations/portArchive'
 import type {
   InputNodeExecutionPorts,

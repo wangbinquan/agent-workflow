@@ -1,8 +1,9 @@
 import type { DagScopePorts } from '../application/ports/dagScope'
 import type { TaskScopeOutcome } from '../domain/taskEngine'
 import { runScope } from '../engine/scope/runScope'
-import { maybeRunCommitPush } from '@/services/scheduler'
-import type { TaskMechanicsState, TaskScopeArgs } from '@/services/execution/taskMechanicsState'
+import { runAutoCommitPush } from '../engine/node/commit-push/runCommitPush'
+import { createAutoCommitPushPorts } from './commitPushBinding'
+import type { TaskMechanicsState, TaskScopeArgs } from './taskMechanicsState'
 import { executeNode } from './nodeExecution'
 import type { WrapperRuntimeFactory } from './taskExecutionComponents'
 
@@ -59,7 +60,8 @@ export function createDagScopePorts(
       return state.opts.taskDagCollaboration
     },
     executeNode: (input) => executeNode(state, input, wrapperRuntimeFactory),
-    commitPush: (node, iteration, log) => maybeRunCommitPush(state, node, iteration, log),
+    commitPush: (node, iteration, log) =>
+      runAutoCommitPush(createAutoCommitPushPorts(state), node, iteration, log),
   }
 }
 

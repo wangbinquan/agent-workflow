@@ -20,7 +20,11 @@ const SRC = resolve(import.meta.dir, '..', 'src', 'services')
 /** 迁移时把 `schedulerAssembly.ts` 加进来即可（design §10.5 定的落位）。 */
 // RFC-287 T3：聚合线迁入后，骨架文件同样纳入扫描（这条锁本就设计成对
 // 「代码搬到哪个文件」免疫）。
-const FILES = ['scheduler.ts', '../modules/task-execution/engine/kernel/assembly.ts'] as const
+// RFC-412: services/scheduler.ts's last mechanics (commit&push) moved into task-execution engine/node/commit-push/.
+const FILES = [
+  '../modules/task-execution/engine/node/commit-push/runCommitPush.ts',
+  '../modules/task-execution/engine/kernel/assembly.ts',
+] as const
 
 /** 三个池的释放句柄名（与 rfc208 oracle #1 的 POOL_RELEASE_NAMES 同源）。 */
 // RFC-287 T6 补缺：骨架把许可释放写成匿名的 `release()`、把清理写成 `spec.discardIso(`，

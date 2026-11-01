@@ -1,4 +1,4 @@
-import type { TaskMechanicsState } from '@/services/execution/taskMechanicsState'
+import type { TaskMechanicsState } from './taskMechanicsState'
 import type { Logger } from '@/util/log'
 import type { WrapperNodeExecutionPort } from '../application/ports/wrapperNodeExecution'
 import type { ExecutionMergeRecovery } from '../application/recovery/executionMergeRecovery'

@@ -368,7 +368,17 @@ describe('RFC-046 — runner.ts source-code grep guards', () => {
 
   test('R6: scheduler.ts does not call the followup-inherit helper', () => {
     const src = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'services', 'scheduler.ts'),
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'task-execution',
+        'engine',
+        'node',
+        'commit-push',
+        'runCommitPush.ts',
+      ),
       'utf8',
     )
     expect(src).not.toContain('loadInjectedSnapshotFromFirstAttempt(')

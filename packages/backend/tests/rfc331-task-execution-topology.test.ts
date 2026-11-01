@@ -40,7 +40,7 @@ const RFC331_LEGACY_CONSUMERS = new Set([
   'packages/backend/src/modules/knowledge-evolution/application/fusionOrchestration.ts',
   // RFC-359 AC-1（plan §5hn 批次二 ⑥⑦）：`services/multipartTaskStart.ts` 整份删除——
   // multipart 路由改走与 PostgreSQL 共用的启动参与者，这个 legacy 消费者随之出账。
-  'packages/backend/src/services/scheduler.ts',
+  // RFC-412: services/scheduler.ts deleted (its last mechanics moved into task-execution engine files).
   'packages/backend/src/services/structuralDiff/callGraph/expandService.ts',
   'packages/backend/src/services/task.ts',
 ])
@@ -332,9 +332,8 @@ describe('RFC-331 architecture cuts', () => {
   test('direct scheduler fixtures use the explicit test topology entry', () => {
     const testUnits = source('packages/backend/tests/helpers/taskExecutionTestTopology.ts')
     expect(testUnits).toContain('runTaskWithRealTestTopology')
-    expect(source('packages/backend/src/services/scheduler.ts')).not.toContain(
-      'createLegacySchedulerTestTopology',
-    )
+    // RFC-412: the scheduler file is gone altogether.
+    expect(() => source('packages/backend/src/services/scheduler.ts')).toThrow()
   })
 
   test('ephemeral status projector cannot create a second durable event path', () => {

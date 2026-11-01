@@ -358,7 +358,9 @@ describe('RFC-339 WrapperRuntime cutover', () => {
   })
 
   test('legacy scheduler bridges and owners are extinct', () => {
-    const scheduler = read('packages/backend/src/services/scheduler.ts')
+    // RFC-412: services/scheduler.ts is deleted.
+    expect(() => read('packages/backend/src/services/scheduler.ts')).toThrow()
+    const scheduler = ''
     const nodeExecution = read(
       'packages/backend/src/modules/task-execution/composition/nodeExecution.ts',
     )
@@ -464,7 +466,6 @@ describe('RFC-339 WrapperRuntime cutover', () => {
     )
     for (const path of [
       'packages/backend/src/services/runLiveness.ts',
-      'packages/backend/src/services/execution/taskMechanicsState.ts',
       'packages/backend/src/services/structuralDiff/service.ts',
     ]) {
       const source = read(path)
@@ -475,7 +476,10 @@ describe('RFC-339 WrapperRuntime cutover', () => {
     }
 
     const publicTypes = read('packages/backend/src/modules/task-execution/public/types.ts')
-    const taskMechanicsState = read('packages/backend/src/services/execution/taskMechanicsState.ts')
+    // RFC-412: the execution state type moved into task-execution composition.
+    const taskMechanicsState = read(
+      'packages/backend/src/modules/task-execution/composition/taskMechanicsState.ts',
+    )
     expect(publicTypes).toContain('export interface WrapperExecutionScopeReadModel')
     expect(publicTypes).not.toContain('ExecutionScopeIndex')
     expect(publicTypes).not.toContain('ReadonlyMap')

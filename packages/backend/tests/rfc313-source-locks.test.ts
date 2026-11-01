@@ -48,7 +48,15 @@ describe('RFC-313 源码层锁', () => {
     )
     expect(occurrences(policy, 'export function decideRetryShape')).toBe(1)
 
-    const scheduler = read(BACKEND_SRC, 'services', 'scheduler.ts')
+    const scheduler = read(
+      BACKEND_SRC,
+      'modules',
+      'task-execution',
+      'engine',
+      'node',
+      'commit-push',
+      'runCommitPush.ts',
+    )
     const nodeMechanics = readNodeMechanics()
     expect(scheduler).not.toContain('function decideRetryShape')
     expect(scheduler).not.toContain('decideRetryShape({')

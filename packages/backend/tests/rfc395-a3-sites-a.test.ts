@@ -7,7 +7,7 @@ import type { Agent, WorkflowDefinition, WorkflowNode } from '@agent-workflow/sh
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import { createWrapperMechanicsPorts } from '@/modules/task-execution/composition/wrapperMechanics'
-import type { TaskMechanicsState } from '@/services/execution/taskMechanicsState'
+import type { TaskMechanicsState } from '@/modules/task-execution/composition/taskMechanicsState'
 import { readPortRowAtFrame } from '@/modules/task-execution/application/nodeInputs'
 import { deriveFrontier } from './helpers/frontierSelection'
 import { resolveSchedulerRunRow } from '@/modules/task-execution/application/resolveSchedulerRunRow'

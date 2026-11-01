@@ -544,7 +544,17 @@ describe('RFC-098 B1 — auto commit&push runs as a synthetic in-flight entry, n
 
   test("source guard: the synthetic key is unique/non-node ('commitpush:<nodeId>:<iter>:<sequence>') and BOTH canceled exits drain before returning", () => {
     const schedulerSrc = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'services', 'scheduler.ts'),
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'task-execution',
+        'engine',
+        'node',
+        'commit-push',
+        'runCommitPush.ts',
+      ),
       'utf-8',
     )
     const scopeSrc = readFileSync(
@@ -593,7 +603,7 @@ describe('RFC-098 B1 — auto commit&push runs as a synthetic in-flight entry, n
     expect(drainCalls.length).toBeGreaterThanOrEqual(2)
     // maybeRunCommitPush's per-repo loop bails out once the signal aborted.
     expect(schedulerSrc).toMatch(
-      /for \(const repo of state\.repos\) \{[\s\S]{0,400}aborted === true\) return/,
+      /for \(const repo of ports\.repos\) \{[\s\S]{0,400}aborted === true\) return/,
     )
   })
 })

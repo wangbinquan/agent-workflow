@@ -24,7 +24,11 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 const SRC = resolve(import.meta.dir, '..', 'src', 'services')
-const SCHEDULER = readFileSync(resolve(SRC, 'scheduler.ts'), 'utf8')
+// RFC-412: services/scheduler.ts deleted; its commit&push tail is task-execution engine/node/commit-push/.
+const SCHEDULER = readFileSync(
+  resolve(SRC, '../modules/task-execution/engine/node/commit-push/runCommitPush.ts'),
+  'utf8',
+)
 // RFC-406: nodeMechanics.ts is gone; its last body (the workgroup host) is WORKGROUP_HOST_SOURCE.
 const WRAPPER_MECHANICS = readFileSync(
   resolve(SRC, '..', 'modules', 'task-execution', 'composition', 'wrapperMechanics.ts'),
@@ -104,10 +108,16 @@ describe('RFC-287 T9 ① — 四条刻意豁免各带理由锁', () => {
   test('L2 commit-push：无池、无 iso（在 canonical 工作树直跑）', () => {
     // 本线走 commitPushRunner，scheduler 侧只有调用点；它既不取池位也不物化 iso
     // ——降级回退（{message:null} 容错）是它自己的语义，现有 commit-push 套件已锁。
-    expect(SCHEDULER).toContain("import { runCommitPush } from '@/services/commitPushRunner'")
+    // RFC-412: the commit tail runs on ports; the source-control runner enters through the binding.
+    const binding = readFileSync(
+      resolve(SRC, '../modules/task-execution/composition/commitPushBinding.ts'),
+      'utf8',
+    )
+    expect(binding).toContain("import { runCommitPush } from '@/services/commitPushRunner'")
+    expect(SCHEDULER.indexOf('await ports.effects.runCommitPush(')).toBeGreaterThan(0)
     const callSite = SCHEDULER.slice(
-      SCHEDULER.indexOf('await runCommitPush('),
-      SCHEDULER.indexOf('await runCommitPush(') + 1200,
+      SCHEDULER.indexOf('await ports.effects.runCommitPush('),
+      SCHEDULER.indexOf('await ports.effects.runCommitPush(') + 1200,
     )
     expect(callSite).not.toMatch(/createIsoUnderLock|agentSem|runAssembly/)
   })

@@ -462,7 +462,7 @@ describeEachProvider('RFC-371 frozen observation identity', (harness) => {
 
 test('RFC-371 internal commit and merge launches carry the selected runtime attribution', () => {
   for (const path of [
-    '../src/services/scheduler.ts',
+    '../src/modules/task-execution/engine/node/commit-push/runCommitPush.ts',
     '../src/modules/task-execution/engine/node/shared/resolveMergeConflicts.ts',
   ]) {
     const source = ts.createSourceFile(

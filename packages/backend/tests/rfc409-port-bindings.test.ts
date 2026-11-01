@@ -9,7 +9,7 @@ import {
   createDagScopePorts,
   driveDagScope,
 } from '@/modules/task-execution/composition/taskDagScope'
-import type { TaskMechanicsState } from '@/services/execution/taskMechanicsState'
+import type { TaskMechanicsState } from '@/modules/task-execution/composition/taskMechanicsState'
 
 type Calls = Record<string, unknown[]>
 
@@ -118,8 +118,11 @@ test('node execution and auto commit&push stay the composition implementations',
     'executeNode: (input) => executeNode(state, input, wrapperRuntimeFactory),',
   )
   expect(binding).toContain(
-    'commitPush: (node, iteration, log) => maybeRunCommitPush(state, node, iteration, log),',
+    'runAutoCommitPush(createAutoCommitPushPorts(state), node, iteration, log),',
   )
-  expect(binding).toContain("import { maybeRunCommitPush } from '@/services/scheduler'")
+  // RFC-412: the commit&push tail is an engine body on its own ports.
+  expect(binding).toContain(
+    "import { runAutoCommitPush } from '../engine/node/commit-push/runCommitPush'",
+  )
   expect(binding).toContain("import { executeNode } from './nodeExecution'")
 })

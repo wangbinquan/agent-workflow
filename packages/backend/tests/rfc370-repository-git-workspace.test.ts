@@ -15,8 +15,14 @@ import type {
   RepositoryGitWorkspaceFactory,
   RepositoryGitWorkspaceScope,
 } from '@/modules/source-control/public/types'
-import type { TaskMechanicsState } from '@/services/execution/taskMechanicsState'
-import { inspectReadonlyRepos, maybeRunCommitPush } from '@/services/scheduler'
+import type { TaskMechanicsState } from '@/modules/task-execution/composition/taskMechanicsState'
+// RFC-412: the commit&push tail and the read-only inspection moved into task-execution engine files on ports.
+import { runAutoCommitPush } from '@/modules/task-execution/engine/node/commit-push/runCommitPush'
+import { inspectReadonlyRepos } from '@/modules/task-execution/engine/task/readonlyInspection'
+import {
+  createAutoCommitPushPorts,
+  createReadonlyInspectionPorts,
+} from '@/modules/task-execution/composition/commitPushBinding'
 import {
   runCommitPush,
   type CommitPushDeps,
@@ -430,7 +436,10 @@ describe('RFC-370 complete selected repository Git workspace', () => {
       },
     } as unknown as TaskMechanicsState
     let done = false
-    const pending = inspectReadonlyRepos(state, createLogger('selected-git-test')).then(() => {
+    const pending = inspectReadonlyRepos(
+      createReadonlyInspectionPorts(state),
+      createLogger('selected-git-test'),
+    ).then(() => {
       done = true
     })
     try {
@@ -515,8 +524,8 @@ describe('RFC-370 complete selected repository Git workspace', () => {
       },
     } as unknown as TaskMechanicsState
     expect(
-      await maybeRunCommitPush(
-        state,
+      await runAutoCommitPush(
+        createAutoCommitPushPorts(state),
         { id: 'worker', kind: 'agent-single', agentId: 'a' },
         0,
         createLogger('selected-git-test'),

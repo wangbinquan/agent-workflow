@@ -39,7 +39,9 @@ describe('WRAPPER_NODE_KINDS 单源（flag-audit W0）', () => {
       // RFC-409 split services/dispatchFrontier.ts into the frontier rules and the wrapper graph.
       'packages/backend/src/modules/task-execution/engine/scope/frontierRules.ts',
       'packages/backend/src/modules/task-execution/domain/wrapperGraph.ts',
-      'packages/backend/src/services/scheduler.ts',
+      // RFC-412 moved services/scheduler.ts's last mechanics into task-execution engine files.
+      'packages/backend/src/modules/task-execution/engine/node/commit-push/runCommitPush.ts',
+      'packages/backend/src/modules/task-execution/engine/task/readonlyInspection.ts',
       'packages/backend/src/modules/task-execution/domain/wrapperExecution.ts',
       'packages/backend/src/modules/task-execution/engine/wrapper/wrapperRuntime.ts',
       'packages/backend/src/modules/task-execution/engine/wrapper/loopStrategy.ts',

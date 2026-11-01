@@ -11,7 +11,7 @@ import {
 } from '../domain/wrapperExecution'
 import { wrapperExternalUpstreamSources } from '../domain/wrapperGraph'
 import { createLogger } from '@/util/log'
-import type { TaskMechanicsState } from '@/services/execution/taskMechanicsState'
+import type { TaskMechanicsState } from './taskMechanicsState'
 import { broadcastNodeStatus } from '@/modules/task-execution/infrastructure/nodeStatusEvents'
 import { loadFrameChain } from '../application/frameChain'
 import { resolveSourceFrame } from '../domain/environmentChain'

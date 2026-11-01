@@ -7,7 +7,7 @@ import { expect, test } from 'bun:test'
 import { declaredPorts } from '@agent-workflow/shared'
 import { createAgentNodeExecutionPorts } from '@/modules/task-execution/composition/agentNodeExecution'
 import { workspaceView } from '@/modules/task-execution/infrastructure/isolationWorkspaceView'
-import type { TaskMechanicsState } from '@/services/execution/taskMechanicsState'
+import type { TaskMechanicsState } from '@/modules/task-execution/composition/taskMechanicsState'
 import { sha256Hex } from '@/util/hash'
 import { AGENT_BINDING_SOURCE } from './helpers/executionMechanismSources'
 

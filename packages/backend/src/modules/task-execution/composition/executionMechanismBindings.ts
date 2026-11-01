@@ -1,5 +1,5 @@
 import { workspaceSessionFor } from './executionWorkspaceBinding'
-import type { TaskMechanicsState } from '@/services/execution/taskMechanicsState'
+import type { TaskMechanicsState } from './taskMechanicsState'
 import type { IsolatedAgentRunBinding } from '../application/ports/executionKernel'
 import { bindNodeRunLedger } from '../engine/kernel/nodeRunLedger'
 import { bindIsolationKernel } from '../infrastructure/executionKernelBinding'

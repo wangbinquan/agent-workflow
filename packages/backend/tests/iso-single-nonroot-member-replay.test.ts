@@ -32,7 +32,7 @@ import { ulid } from 'ulid'
 import { selectIsolationWorkspaceFactory } from '@/modules/source-control/public/participants'
 import { createOrRebuildWrapperIso } from '@/modules/task-execution/composition/wrapperMechanics'
 import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
-import type { TaskMechanicsState } from '@/services/execution/taskMechanicsState'
+import type { TaskMechanicsState } from '@/modules/task-execution/composition/taskMechanicsState'
 import {
   createIsoUnderLock,
   persistIsoBase,

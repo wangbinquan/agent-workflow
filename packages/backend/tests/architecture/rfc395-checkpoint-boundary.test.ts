@@ -106,7 +106,9 @@ function epochOneCheckpointReads(text: string): boolean {
 
 test('scheduler and workspace view, scene and local effects keep the checkpoint boundary', () => {
   for (const path of [
-    'services/scheduler.ts',
+    'modules/task-execution/engine/node/commit-push/runCommitPush.ts',
+    'modules/task-execution/engine/task/readonlyInspection.ts',
+    'modules/task-execution/composition/commitPushBinding.ts',
     'modules/task-execution/infrastructure/isolationWorkspaceView.ts',
     'modules/task-execution/infrastructure/executionWorkspaceSession.ts',
     'modules/task-execution/composition/executionWorkspaceBinding.ts',

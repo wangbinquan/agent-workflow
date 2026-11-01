@@ -8,7 +8,7 @@ import { createAgentNodeExecutionPorts } from '@/modules/task-execution/composit
 import { buildNodeExecutionWorkgroupHooks } from '@/modules/task-execution/composition/nodeExecution'
 import { ORCHESTRATOR_AGENT_ID } from '@/modules/task-execution/domain/orchestratorAgentIdentity'
 import { CLARIFY_FORBIDDEN_PREFIX } from '@/services/envelope'
-import type { TaskMechanicsState } from '@/services/execution/taskMechanicsState'
+import type { TaskMechanicsState } from '@/modules/task-execution/composition/taskMechanicsState'
 
 type Calls = Record<string, unknown[]>
 

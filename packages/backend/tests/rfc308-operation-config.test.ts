@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { DEFAULT_CONFIG } from '@agent-workflow/shared'
 import { applyConfigPatch, saveConfigRaw } from '../src/config'
-import { readCommitExcludePatterns } from '../src/services/scheduler'
+import { readCommitExcludePatterns } from '../src/modules/task-execution/composition/commitPushBinding'
 
 const roots: string[] = []
 afterEach(() => {

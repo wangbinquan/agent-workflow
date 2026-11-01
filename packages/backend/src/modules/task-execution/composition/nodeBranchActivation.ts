@@ -1,4 +1,4 @@
-import type { TaskMechanicsState } from '@/services/execution/taskMechanicsState'
+import type { TaskMechanicsState } from './taskMechanicsState'
 import type { NodeBranchActivationPorts } from '../application/nodeBranchActivation'
 import { nodeRunMintIdentityForSlot } from '../application/nodeRunMintIdentity'
 import { prepareConsumedInputs } from '../infrastructure/consumedInputsParticipant'

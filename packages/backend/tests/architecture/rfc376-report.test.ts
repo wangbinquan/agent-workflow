@@ -165,7 +165,7 @@ describe('RFC-376 independent RFC-328 builders', () => {
 describe('RFC-376 corrected report inventories', () => {
   test('unregistered owners are reportable, without weakening registered attribution', () => {
     expect(targetContextFor(PREFIX + 'services/fabricated-new-service.ts')).toBe('unregistered')
-    expect(targetContextFor(PREFIX + 'services/scheduler.ts')).toBe('task-execution')
+    expect(targetContextFor(PREFIX + 'services/task.ts')).toBe('task-execution')
     expect(targetContextFor(PREFIX + 'platform/timer.ts')).toBe('platform')
     expect(targetContextFor(PREFIX + 'modules/new-context/domain/a.ts')).toBe('unregistered')
   })

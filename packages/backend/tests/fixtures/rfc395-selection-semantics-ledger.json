@@ -344,9 +344,9 @@
       "whyFrameless": "调用方给出的 node/iteration 范围必须保留；本查询未声明 container/frame，不能擅自增加筛选。"
     },
     {
-      "site": "src/services/scheduler.ts#maybeRunCommitPush:1",
-      "path": "src/services/scheduler.ts",
-      "symbol": "maybeRunCommitPush",
+      "site": "src/modules/task-execution/engine/node/commit-push/runCommitPush.ts#runAutoCommitPush:1",
+      "path": "src/modules/task-execution/engine/node/commit-push/runCommitPush.ts",
+      "symbol": "runAutoCommitPush",
       "ordinal": 1,
       "source": "createRunHistorySnapshot( task.id, parentRows.map((row) => ({ ...row, nodeId: node.id, status: 'done' as const, iteration, })), ).familyHistory(task.id, { nodeId: node.id, iteration }, { topLevelOnly: true })",
       "reference": "G6 #43",

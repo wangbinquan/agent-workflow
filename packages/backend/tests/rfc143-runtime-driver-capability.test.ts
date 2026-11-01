@@ -453,7 +453,8 @@ describe('RFC-143 (E) PR-5 dedup 收尾（resolveOpencodeCmd 零份 + semver 单
     expect(SRC('modules/task-execution/composition/localTaskAgentRunFamily.ts')).toContain(
       'freezeBinaryConfig(input.configPath, input.operationConfiguration)',
     )
-    expect(SRC('services/scheduler.ts')).not.toContain('function freezeBinaryConfig')
+    // RFC-412: services/scheduler.ts is deleted.
+    expect(() => SRC('services/scheduler.ts')).toThrow()
     expect(SRC('services/nodeRunMint.ts')).toContain('configBackedBinary')
     // T19 同批：registry 对二进制缓存驱逐保持 kind-blind（走 driver 可选能力面，
     // 不具名依赖 opencode 缓存实现）。

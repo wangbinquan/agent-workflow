@@ -97,7 +97,17 @@ describe('AC-19 —— 语义边界', () => {
   /** 只读脏检查的实现体（实现门 P1 后从提交推送路径搬到了任务终态收尾）。 */
   async function inspectorSource(): Promise<string> {
     const src = await Bun.file(
-      resolve(import.meta.dir, '..', 'src', 'services', 'scheduler.ts'),
+      // RFC-412: the inspection is engine/task/readonlyInspection.ts.
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'task-execution',
+        'engine',
+        'task',
+        'readonlyInspection.ts',
+      ),
     ).text()
     const i = src.indexOf('async function inspectReadonlyRepos(')
     expect(i).toBeGreaterThan(0)
@@ -115,19 +125,20 @@ describe('AC-19 —— 语义边界', () => {
     const application = await taskEngine('engine', 'task', 'runTask.ts')
     const settlement = await taskEngine('engine', 'task', 'taskSettlement.ts')
     const binding = await taskEngine('composition', 'taskEngineApplication.ts')
-    const scheduler = await Bun.file(
-      resolve(import.meta.dir, '..', 'src', 'services', 'scheduler.ts'),
-    ).text()
+    // RFC-412: the commit&push tail is engine/node/commit-push/runCommitPush.ts.
+    const commitPush = await taskEngine('engine', 'node', 'commit-push', 'runCommitPush.ts')
     const callIdx = application.indexOf('await drive.inspectReadonlyRepos()')
     expect(callIdx).toBeGreaterThan(0)
-    expect(binding).toContain('inspectReadonlyRepos: () => inspectReadonlyRepos(state, log)')
+    expect(binding).toContain(
+      'inspectReadonlyRepos: () => inspectReadonlyRepos(createReadonlyInspectionPorts(state), log)',
+    )
     // 调用点在终态分派**之前**（failed / canceled / awaiting_* / done 都在 settle 里）。
     expect(callIdx).toBeLessThan(application.indexOf('await settleTaskScopeOutcome(ports, result)'))
     expect(settlement).toContain("if (result.kind === 'failed'")
     expect(application).not.toContain("if (result.kind === 'failed'")
     // 而且不在 maybeRunCommitPush 体内。
-    const cpIdx = scheduler.indexOf('export async function maybeRunCommitPush(')
-    const cpBody = scheduler.slice(cpIdx, scheduler.indexOf('\n}\n', cpIdx))
+    const cpIdx = commitPush.indexOf('export async function runAutoCommitPush(')
+    const cpBody = commitPush.slice(cpIdx, commitPush.indexOf('\n}\n', cpIdx))
     expect(cpIdx).toBeGreaterThan(0)
     expect(cpBody).not.toContain('inspectReadonlyRepos(')
   })

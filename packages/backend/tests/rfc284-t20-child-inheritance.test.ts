@@ -28,8 +28,8 @@ import { resolve } from 'node:path'
 import {
   INHERITABLE_RUN_CONFIG_KEYS,
   pickInheritableRunConfig,
-  type RunTaskOptions,
-} from '../src/services/scheduler'
+} from '../src/modules/task-execution/public/commands'
+import type { RunTaskOptions } from '../src/modules/task-execution/composition/taskEngineRuntimeOptions'
 
 type Disposition = 'per-task' | 'inherit' | 'session-live' | 'intent-kind' | 'dropped-registered'
 

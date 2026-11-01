@@ -31,7 +31,17 @@ import { resolve } from 'node:path'
 
 // RFC-406: nodeMechanics.ts is gone; its last body (the workgroup host) is WORKGROUP_HOST_SOURCE.
 const SCHEDULER = readFileSync(
-  resolve(import.meta.dir, '..', 'src', 'services', 'scheduler.ts'),
+  resolve(
+    import.meta.dir,
+    '..',
+    'src',
+    'modules',
+    'task-execution',
+    'engine',
+    'node',
+    'commit-push',
+    'runCommitPush.ts',
+  ),
   'utf8',
 )
 const WRAPPER_MECHANICS = readFileSync(

@@ -192,7 +192,10 @@ describe('TaskExecution ↔ runner clarify prompt wire-up (RFC-023 T12)', () => 
   // single-source-of-truth invariant is preserved by the C-guard suite that
   // asserts `computeHistoryCutoff` is gone from src/ entirely.
   test('scheduler.ts has no inline aging cutoff lookup (RFC-058 缺口 1 stays closed under RFC-070)', () => {
-    const src = readFileSync(join(BACKEND_SRC, 'scheduler.ts'), 'utf8')
+    const src = readFileSync(
+      join(BACKEND_SRC, '../modules/task-execution/engine/node/commit-push/runCommitPush.ts'),
+      'utf8',
+    )
     expect(src).not.toContain('computeHistoryCutoff')
     expect(src).not.toMatch(/eligible\.push\(r\)/)
     expect(src).not.toMatch(/haveOutputs\.has\(r\.id\)/)

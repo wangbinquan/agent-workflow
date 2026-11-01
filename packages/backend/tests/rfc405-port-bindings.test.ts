@@ -20,7 +20,7 @@ import {
   shouldInjectStopNotice,
 } from '@/services/clarifyRounds'
 import { CLARIFY_FORBIDDEN_PREFIX, parsePortValidationFailuresJson } from '@/services/envelope'
-import type { TaskMechanicsState } from '@/services/execution/taskMechanicsState'
+import type { TaskMechanicsState } from '@/modules/task-execution/composition/taskMechanicsState'
 import { continuesClarifyLineage, isClarifyRerunCause } from '@/services/nodeRunMint'
 import { agentRefOfNode } from '@/services/ref/runtimeRef'
 import { getRuntimeDriver } from '@/services/runtime'

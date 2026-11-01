@@ -183,7 +183,12 @@ describe('RFC-282 B2 / RFC-345 T4a — all six TaskExecution entries use one res
       // RFC-405: the agent body reads its injection through the agent binding.
       AGENT_BINDING_SOURCE,
       readFileSync(resolve(SRC, 'modules/task-execution/composition/wrapperMechanics.ts'), 'utf8'),
-      readFileSync(resolve(SRC, 'services/scheduler.ts'), 'utf8'),
+      // RFC-412: the commit&push tail (engine body + binding) replaced services/scheduler.ts.
+      readFileSync(
+        resolve(SRC, 'modules/task-execution/engine/node/commit-push/runCommitPush.ts'),
+        'utf8',
+      ),
+      readFileSync(resolve(SRC, 'modules/task-execution/composition/commitPushBinding.ts'), 'utf8'),
       readFileSync(
         resolve(SRC, 'modules/task-execution/engine/node/shared/resolveMergeConflicts.ts'),
         'utf8',
@@ -214,11 +219,38 @@ describe('RFC-282 B2 / RFC-345 T4a — all six TaskExecution entries use one res
   })
 
   test('the writeSem call sites (commit/merge) thread the scope signal (§9-5)', () => {
+    // RFC-412: the commit session runs through the commit&push port; its binding threads the scope signal.
+    const commitEngine = ts.createSourceFile(
+      'modules/task-execution/engine/node/commit-push/runCommitPush.ts',
+      readFileSync(
+        resolve(SRC, 'modules/task-execution/engine/node/commit-push/runCommitPush.ts'),
+        'utf8',
+      ),
+      ts.ScriptTarget.Latest,
+      true,
+    )
+    const commitCalls: ts.CallExpression[] = []
+    const findCommitCall = (node: ts.Node) => {
+      if (
+        ts.isCallExpression(node) &&
+        node.expression.getText(commitEngine) === 'ports.runtime.runAgent' &&
+        ts.isObjectLiteralExpression(node.arguments[0]!) &&
+        node.arguments[0].properties.some(
+          (p) =>
+            ts.isPropertyAssignment(p) &&
+            p.name.getText(commitEngine) === 'agent' &&
+            p.initializer.getText(commitEngine) === 'commitAgent',
+        )
+      )
+        commitCalls.push(node)
+      ts.forEachChild(node, findCommitCall)
+    }
+    findCommitCall(commitEngine)
+    expect(commitCalls).toHaveLength(1)
+    expect(
+      readFileSync(resolve(SRC, 'modules/task-execution/composition/commitPushBinding.ts'), 'utf8'),
+    ).toContain('...(state.opts.signal ? { signal: state.opts.signal } : {}),')
     const sites = [
-      {
-        path: 'services/scheduler.ts',
-        agent: 'commitAgent',
-      },
       {
         path: 'modules/task-execution/engine/node/shared/resolveMergeConflicts.ts',
         agent: 'mergeAgent',

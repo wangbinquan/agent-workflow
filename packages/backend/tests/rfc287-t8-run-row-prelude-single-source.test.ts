@@ -24,7 +24,11 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 const SRC = resolve(import.meta.dir, '..', 'src', 'services')
-const SCHEDULER = readFileSync(resolve(SRC, 'scheduler.ts'), 'utf8')
+// RFC-412: services/scheduler.ts deleted; its commit&push tail is task-execution engine/node/commit-push/.
+const SCHEDULER = readFileSync(
+  resolve(SRC, '../modules/task-execution/engine/node/commit-push/runCommitPush.ts'),
+  'utf8',
+)
 // RFC-406: nodeMechanics.ts is gone; its last body (the workgroup host) is WORKGROUP_HOST_SOURCE.
 const RUN_ROW_RESOLVER = readFileSync(
   resolve(SRC, '..', 'modules', 'task-execution', 'application', 'resolveSchedulerRunRow.ts'),

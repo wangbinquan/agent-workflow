@@ -1,4 +1,4 @@
-import type { TaskMechanicsState } from '@/services/execution/taskMechanicsState'
+import type { TaskMechanicsState } from './taskMechanicsState'
 import { buildMergeAgent, buildMergeResolvePrompt, mergeResolveNodeId } from '@/services/mergeAgent'
 import { resolveSyntheticTaskAgentInjection } from '@/services/execution/taskExecutionResources'
 import { runTaskAgentWithFamily } from './taskAgentRunFamily'

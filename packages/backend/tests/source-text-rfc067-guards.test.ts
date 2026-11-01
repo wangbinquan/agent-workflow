@@ -52,7 +52,17 @@ const SCHEMA_SRC = readFileSync(
   'utf-8',
 )
 const SCHEDULER_SRC = readFileSync(
-  resolve(import.meta.dir, '..', 'src', 'services', 'scheduler.ts'),
+  resolve(
+    import.meta.dir,
+    '..',
+    'src',
+    'modules',
+    'task-execution',
+    'engine',
+    'node',
+    'commit-push',
+    'runCommitPush.ts',
+  ),
   'utf-8',
 )
 // RFC-405 / RFC-406: both agent-executor lanes (and their binding) left nodeMechanics.ts.

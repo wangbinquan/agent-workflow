@@ -9,11 +9,12 @@ import type {
 } from '../application/ports/taskRun'
 import type { WrapperNodeKind } from '../domain/wrapperExecution'
 import { runTask } from '../engine/task/runTask'
-import { inspectReadonlyRepos } from '@/services/scheduler'
+import { inspectReadonlyRepos } from '../engine/task/readonlyInspection'
+import { createReadonlyInspectionPorts } from './commitPushBinding'
 import { driveDagScope } from './taskDagScope'
 import { buildNodeExecutionWorkgroupHooks } from './nodeExecution'
 import type { TaskExecutionRuntimeComponents } from './taskExecutionComponents'
-import type { TaskMechanicsState } from '@/services/execution/taskMechanicsState'
+import type { TaskMechanicsState } from './taskMechanicsState'
 import { runDynamicWorkflowGenerate } from '../engine/task/dynamicWorkflowGenerate'
 import type { DynamicWorkflowGeneratePorts } from '../application/ports/dynamicWorkflowGenerate'
 import { triggerPreflightIssue } from '@/services/execution/triggerPreflight'
@@ -250,7 +251,7 @@ function prepareTaskDrive(
       } = opts
       return resolveTaskDriveConfig(runtimeOptions)
     },
-    inspectReadonlyRepos: () => inspectReadonlyRepos(state, log),
+    inspectReadonlyRepos: () => inspectReadonlyRepos(createReadonlyInspectionPorts(state), log),
   }
 }
 

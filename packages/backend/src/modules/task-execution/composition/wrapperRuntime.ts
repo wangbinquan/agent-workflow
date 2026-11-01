@@ -1,4 +1,4 @@
-import type { TaskMechanicsState } from '@/services/execution/taskMechanicsState'
+import type { TaskMechanicsState } from './taskMechanicsState'
 import { createWrapperMechanicsPorts } from './wrapperMechanics'
 import { createWrapperRunLedger, createWrapperStatusPublisher } from './wrapperRunLifecycle'
 import { FanoutStrategy } from '../engine/wrapper/fanoutStrategy'

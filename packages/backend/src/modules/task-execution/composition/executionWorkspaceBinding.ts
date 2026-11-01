@@ -1,4 +1,4 @@
-import type { TaskMechanicsState } from '@/services/execution/taskMechanicsState'
+import type { TaskMechanicsState } from './taskMechanicsState'
 import type { ExecutionWorkspaceSession } from '../application/ports/executionWorkspaceSession'
 import { createExecutionWorkspaceSession } from '../infrastructure/executionWorkspaceSession'
 

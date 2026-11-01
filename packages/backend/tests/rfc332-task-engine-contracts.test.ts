@@ -239,7 +239,9 @@ describe('RFC-332 T10-T13 — single-consumer production cutover', () => {
   })
 
   test('legacy scheduler has no task-level drive, scope, or frontier body', () => {
-    const scheduler = source('packages/backend/src/services/scheduler.ts')
+    // RFC-412: services/scheduler.ts is deleted; none of these bodies can live there.
+    expect(() => source('packages/backend/src/services/scheduler.ts')).toThrow()
+    const scheduler = ''
     // RFC-408: the task-level drive (the former orchestrator body) is the task control plane in
     // engine/task/runTask.ts; the composition only binds its ports.
     const orchestrator = source(

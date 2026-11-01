@@ -126,7 +126,9 @@ describe('RFC-334 node-executor owner boundary', () => {
 
   test('the production DAG imports the gateway and the legacy selector symbol is extinct', () => {
     const scope = read('packages/backend/src/modules/task-execution/composition/taskDagScope.ts')
-    const scheduler = read('packages/backend/src/services/scheduler.ts')
+    // RFC-412: services/scheduler.ts is deleted.
+    expect(() => read('packages/backend/src/services/scheduler.ts')).toThrow()
+    const scheduler = ''
     expect(scope).toContain("import { executeNode } from './nodeExecution'")
     expect(scope.match(/\bexecuteNode\(/g)).toHaveLength(1)
     // RFC-409: the scope loop (engine/scope/runScope.ts) dispatches only through its node-execution port.
@@ -142,7 +144,9 @@ describe('RFC-334 node-executor owner boundary', () => {
     const application = read(
       'packages/backend/src/modules/task-execution/composition/taskEngineApplication.ts',
     )
-    const scheduler = read('packages/backend/src/services/scheduler.ts')
+    // RFC-412: services/scheduler.ts is deleted.
+    expect(() => read('packages/backend/src/services/scheduler.ts')).toThrow()
+    const scheduler = ''
     // RFC-408: the registry engines and the ownerless seam share one body per engine (the control
     // plane in engine/task/runTask.ts calls `drive.bodies` on both paths), so the four construction
     // sites became the two bodies.

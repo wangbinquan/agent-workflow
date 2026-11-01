@@ -882,7 +882,13 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
       resolve(sourceRoot, 'modules/task-execution/engine/wrapper/fanoutStrategy.ts'),
       'utf8',
     )
-    const scheduler = readFileSync(resolve(sourceRoot, 'services/scheduler.ts'), 'utf8')
+    // RFC-412: the commit&push tail moved into task-execution (engine body + composition binding).
+    const scheduler = [
+      'modules/task-execution/engine/node/commit-push/runCommitPush.ts',
+      'modules/task-execution/composition/commitPushBinding.ts',
+    ]
+      .map((path) => readFileSync(resolve(sourceRoot, path), 'utf8'))
+      .join('\n')
     // RFC-402: the merge-conflict agent's injection is bound where the shared resolver is composed.
     const mergeResolution = readFileSync(
       resolve(sourceRoot, 'modules/task-execution/composition/mergeConflictResolution.ts'),

@@ -9,7 +9,7 @@ import {
 } from '@/services/execution/childBudget'
 import { watchTaskTerminal } from '@/services/execution/executionWatch'
 import { getExecutionOutcome } from '@/services/execution/outcome'
-import type { TaskMechanicsState } from '@/services/execution/taskMechanicsState'
+import type { TaskMechanicsState } from './taskMechanicsState'
 import type { ChildCallNodeExecutionPorts } from '../application/ports/childCallNodeExecution'
 import { pickInheritableRunConfig } from '../application/ports/taskExecutionTopology'
 import { resolveUpstreamInputs } from '../application/nodeInputs'

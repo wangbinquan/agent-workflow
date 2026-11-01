@@ -11,7 +11,8 @@ import { DEFAULT_CONFIG_DIR_PROFILE } from '@agent-workflow/shared'
 import type { TaskOperationConfigurationQueries } from '@/modules/task-execution/public/queries'
 import { mintNodeRun, resolveFrozenRuntimeWith } from '@/services/nodeRunMint'
 import { freezeBinaryConfig } from '@/services/execution/runtimeConfigFreeze'
-import { readCommitExcludePatterns, pickInheritableRunConfig } from '@/services/scheduler'
+import { readCommitExcludePatterns } from '@/modules/task-execution/composition/commitPushBinding'
+import { pickInheritableRunConfig } from '@/modules/task-execution/public/commands'
 import { describeEachProvider } from './helpers/eachProvider'
 import { composeNodeRunRuntimePersistence } from './helpers/nodeRunRuntime'
 
@@ -213,9 +214,8 @@ test('absent standalone paths retain no-query and launch fallback behavior', asy
   expect(await freezeBinaryConfig(undefined)).toBeUndefined()
   expect(await freezeBinaryConfig('')).toBeUndefined()
   expect(
+    // RFC-412: the reader takes only the three option fields it reads.
     await readCommitExcludePatterns({
-      taskId: 'task',
-      appHome: '/unused',
       commitPushExcludePatterns: ['launch/**'],
     }),
   ).toEqual(['launch/**'])

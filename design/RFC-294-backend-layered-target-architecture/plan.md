@@ -242,6 +242,8 @@ Facade 只许 re-export 或参数形状适配；不得含 DB 查询、状态、�
 - **workgroup 轮次引擎**：[RFC-411](../RFC-411-task-execution-workgroup-turns-engine/proposal.md)（In Progress）：轮次驱动迁入
   `engine/task/workgroup/`，端口进 `application/ports/`，纯函数进 `domain/workgroup/`，持久化适配器随表回到 task-execution `infrastructure/`；
   resource-catalog 下的轮次文件删除，两类 SPI 退役。
+- **scheduler 残余**：[RFC-412](../RFC-412-task-execution-scheduler-residue/proposal.md)（In Progress）：自动提交推送迁入
+  `engine/node/commit-push/`、只读巡检迁入 `engine/task/`，`TaskMechanicsState` 迁入 composition，删除 `services/scheduler.ts`。
 
 ### S7 唯一 AtomicApply 引擎（W6）
 
