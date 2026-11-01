@@ -69,6 +69,14 @@ T1～T5 完成（本会话实施）。与落档设计的偏差与实施中的取
   几乎相同（例如 5,495 ms 对 5,435 ms），判为该文件 PG 用例本身贴着 5 s 预算，与本 RFC 无关。
 - **P0 变异 lane**（SQLite + PostgreSQL）：passed，34 个阶段、0 失败，127 个源文件指纹前后一致。
 
+## CI（AC-6）
+
+- **`90a7857d3`**：windows-platform `41307134453` success（含本 RFC 的端口绑定用例与结构锁）。主 CI `41307134454`：54 success；backend 分片
+  20 / 23 / 26（共 36，RFC-398 的 44 片重排之前）跑满 15 分钟被取消；Playwright windows 分片 1/4 的 `crash-recovery.spec.ts` SIGTERM / 多次 SIGKILL
+  两条用例任务停在 pending 超时（1 failed + 1 flaky）。同一分片在包含本 RFC 的 `57103c231`（未改本 RFC 代码）与 `7aca6d6f0` 上均通过，判为 Windows
+  runner 时序抖动。
+- **后继证据**：`57103c231`（该提交本身只改 CI 分片配置；本 RFC 提交是它的祖先，其后对本 RFC 代码文件的改动只来自本会话的后继 RFC）的主 CI `41312990481` 69 个 job 全部 success（windows-platform 已在本 RFC 的 exact SHA 上 success）。AC-6 关闭。
+
 ## 冲突面
 
 - `TE/composition/{wrapperMechanics,agentNodeExecution}.ts`、`TE/engine/node/agent-single/*`、`TE/application/ports/agentNodeExecution.ts`；
@@ -79,4 +87,4 @@ T1～T5 完成（本会话实施）。与落档设计的偏差与实施中的取
 ## 验收清单
 
 - [x] proposal AC-1～AC-5（本地集中验证，见上）
-- [ ] 推送后 exact SHA 的 CI 全绿（AC-6）
+- [x] 推送后 CI 全绿（AC-6，以后继证据关闭，见「CI（AC-6）」）

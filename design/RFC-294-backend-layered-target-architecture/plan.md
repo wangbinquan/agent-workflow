@@ -219,14 +219,14 @@ Facade 只许 re-export 或参数形状适配；不得含 DB 查询、状态、�
   - [RFC-403](../RFC-403-task-execution-small-leaf-executors/proposal.md)（Done 2026-11-01，`2874dd182` + `d18850d35`）：code-host-call、
     input、output、review、clarify、clarify-cross-agent 迁入 `engine/node/<kind>/`，分支判定 / 跳过与端口读取归 `application/`；
     `nodeMechanics.ts` 4,621 → 3,656 行；
-  - [RFC-404](../RFC-404-task-execution-child-call-executors/proposal.md)（In Progress）：call-workflow / call-workgroup 的共享主体迁入
+  - [RFC-404](../RFC-404-task-execution-child-call-executors/proposal.md)（Done）：call-workflow / call-workgroup 的共享主体迁入
     `engine/node/shared/child-call/`，两个执行器各在 registry key 目录；
-  - [RFC-405](../RFC-405-task-execution-agent-single-executor/proposal.md)（In Progress）：agent-single 主体迁入 `engine/node/agent-single/`，
+  - [RFC-405](../RFC-405-task-execution-agent-single-executor/proposal.md)（Done）：agent-single 主体迁入 `engine/node/agent-single/`，
     经 task-execution 自有端口执行，`legacyArgs` 消失；`nodeMechanics.ts` 2,496 → 598 行，只剩工作组主机线；
-  - [RFC-406](../RFC-406-task-execution-workgroup-host-executor/proposal.md)（In Progress）：workgroup host 主体迁入 `engine/node/agent-single/`，
+  - [RFC-406](../RFC-406-task-execution-workgroup-host-executor/proposal.md)（Done）：workgroup host 主体迁入 `engine/node/agent-single/`，
     执行器两条 lane 共用端口；`nodeMechanics.ts` 删除，退出门「`nodeMechanics.ts` 删除」成立。design §5.5 第 3 步至此全部落地。
 - **design §5.5 第 4 步（两件互不依赖，分两个 RFC）**：
-  - [RFC-407](../RFC-407-task-execution-fanout-assembly-lines/proposal.md)（In Progress）：`wrapperMechanics.ts` 的 fanout 分片 / 聚合装配线迁入
+  - [RFC-407](../RFC-407-task-execution-fanout-assembly-lines/proposal.md)（Done）：`wrapperMechanics.ts` 的 fanout 分片 / 聚合装配线迁入
     `engine/node/agent-single/`，与 agent 线共用端口，`FanoutAttemptPort` 的实现在 engine；`wrapperMechanics.ts` 1,954 → 730 行，只剩 wrapper
     的 data / scopeDriver / workspace 绑定与 git wrapper 的工作区 helper；
   - [RFC-408](../RFC-408-task-execution-task-control-plane/proposal.md)（In Progress）：`taskEngineApplication.ts` 的任务控制面迁入
@@ -407,8 +407,9 @@ S3、S4、S8 互不依赖，可与其他后继并行，但各自避让正在被�
 
 - [ ] proposal AC-1～AC-11 全部兑现；
 - [x] 所有 P0 后继 Done；RFC-287 Done；RFC-288/289 保持 CLOSED；W2、W3 Done；
-- [ ] S1～S8 Done（2026-11-01：S1 / S3 / S4 / S5 / S8 Done，S2 余 S2c，S6 第一步与第 3 步之一（RFC-403）Done、第 3 步其余（RFC-404～406）已实施待 CI，
-  第 4 步与第 5 步其余退出门未完成，S7 未完成）；
+- [ ] S1～S8 Done（2026-11-01：S1 / S3 / S4 / S5 / S8 Done，S2 余 S2c，S6 第一步（RFC-402）、第 3 步（RFC-403～406）与第 4 步之一（RFC-407）Done，
+  第 4 步之二（RFC-408）、scope 解释器（RFC-409）与动态工作流生成引擎（RFC-410）已实施待 CI，workgroup 轮次引擎迁入与第 5 步其余退出门未完成，
+  S7 未完成）；
 - [ ] W4 余项、W5 余项、W7 余项（2026-10-31 核销）、W9-C/E/D Done；W8 仅在新能力 RFC 获批时要求；
 - [ ] design §14 的终局判据全部成立；
 - [ ] 在途 task、历史行、API / MCP / WS 兼容与完整 E2E 有证据；

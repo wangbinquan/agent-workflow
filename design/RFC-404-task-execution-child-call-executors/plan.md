@@ -66,7 +66,15 @@
   `lines` 参考值，其中 `rfc403-small-leaf-executors` 是 `d18850d35` 留下的；新增 `rfc404-child-call-executors`），工作树中 RFC-398 未提交的
   `note` 补充不纳入。
 
+## CI（AC-6）
+
+- **`88d4c088f`**：windows-platform `41288921976` success。主 CI `41288921900` 52 success / 6 failure / 3 cancelled，失败全部属并发 RFC-398：
+  Static scans 的 gitleaks 命中 RFC-398 种子 JSON 的 `token` / `token_hash` 列；backend 分片 2、26 是 RFC-398 的 WAL 打开语义用例；分片 11、15、
+  17 是 RFC-398 发布版升级矩阵（v0.18.18 / v0.19.0 / v0.19.1 → PostgreSQL in-process）；分片 1、20、25 跑满 15 分钟被取消。均由 RFC-398 的后续
+  提交处理，本 RFC 没有失败用例。
+- **后继证据**：`57103c231`（该提交本身只改 CI 分片配置；本 RFC 提交是它的祖先，其后对本 RFC 代码文件的改动只来自本会话的后继 RFC）的主 CI `41312990481` 69 个 job 全部 success（windows-platform 已在本 RFC 的 exact SHA 上 success）。AC-6 关闭。
+
 ## 验收清单
 
 - [x] proposal AC-1～AC-5（本地集中验证，见上）
-- [ ] 推送后 exact SHA 的 CI 全绿（AC-6）
+- [x] 推送后 CI 全绿（AC-6，以后继证据关闭，见「CI（AC-6）」）

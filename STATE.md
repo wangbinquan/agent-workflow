@@ -33,37 +33,37 @@
   装配。集中验证 906 + 13 + 7 个文件：没有本 RFC 引入的失败，负载超时在安静机器上候选与基线同样通过；P0 变异 lane 通过。详见 plan「集中验证（T5）」。
 - **后继**：DAG scope 解释器（`runScope` / `deriveFrontier`）迁入 `engine/scope/`；workgroup 轮次、动态工作流引擎迁入 task-execution。
 
-## 2026-11-01 RFC-407 task-execution fanout 分片与聚合装配线迁入 engine/node（In Progress；`design/RFC-407-task-execution-fanout-assembly-lines/`）
+## 2026-11-01 RFC-407 task-execution fanout 分片与聚合装配线迁入 engine/node（Done；`design/RFC-407-task-execution-fanout-assembly-lines/`）
 
 - **来由**：RFC-294 S6，design §5.5 第 4 步之一；用户授权同 RFC-402，本会话调研、设计、实施与集中验证，不派 Codex。
 - **范围**：`wrapperMechanics.ts` 的 fanout 分片 / 聚合两条装配线（RFC-287 L5 / L6，约 1,150 行）迁入 `engine/node/agent-single/`
   （`runFanoutShard.ts` / `runFanoutAggregator.ts`），与 agent 线共用同一组 task-execution 自有端口；`FanoutAttemptPort` 的实现
   （`fanoutAttempts.ts`）在 engine，`createWrapperMechanicsPorts` 只用端口绑定构造它；`sourcePortKindOf` 迁入 agent 绑定供两处共用。纯结构重构。
 - **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。
-- **进度**：T1～T5 完成，随实现提交入库，待 exact SHA 的 CI（AC-6）。`wrapperMechanics.ts` 1,954 → 730 行。集中验证 489 + 44 个文件：本 RFC
+- **进度**：T1～T5 完成，随实现提交入库；AC-6 以后继证据关闭（`57103c231` 主 CI 69 个 job 全部 success），Done。`wrapperMechanics.ts` 1,954 → 730 行。集中验证 489 + 44 个文件：本 RFC
   引入的负 fixture 账本漂移已修，其余只有 PG 负载超时、复跑通过；P0 变异 lane 通过（34 个阶段、源文件指纹不变）。详见 plan「集中验证（T5）」。
 - **后继**：design §5.5 第 4 步之二（`taskEngineApplication.ts` 的引擎编排），另立 RFC。
 
-## 2026-11-01 RFC-406 task-execution workgroup host 迁入 engine/node 并删除 nodeMechanics.ts（In Progress；`design/RFC-406-task-execution-workgroup-host-executor/`）
+## 2026-11-01 RFC-406 task-execution workgroup host 迁入 engine/node 并删除 nodeMechanics.ts（Done；`design/RFC-406-task-execution-workgroup-host-executor/`）
 
 - **来由**：RFC-294 S6，design §5.5 第 3 步之四（最后一组）；用户授权同 RFC-402，本会话调研、设计、实施与集中验证，不派 Codex。
 - **范围**：workgroup host 主体（`executeWorkgroupHostMechanics`，500 行）迁入 `engine/node/agent-single/runWorkgroupHost.ts`，agent-single 执行器的
   DAG lane 与 host lane 都经同一组 task-execution 自有端口执行，`legacyHostPort` 删除；workgroup 引擎钩子并入 `nodeExecution.ts`，`SchedulerState`、
   `OneNodeResult` 别名退役；`nodeMechanics.ts` 删除。纯结构重构。
 - **做法**：设计门免；实现门由本会话按路径限定自审（只审功能），PASS。
-- **进度**：T1～T5 完成，随实现提交入库，待 exact SHA 的 CI（AC-6）。RFC-294 S6 退出门「`nodeMechanics.ts` 删除」成立，design §5.5 第 3 步全部落地。
+- **进度**：T1～T5 完成，随实现提交入库；AC-6 以后继证据关闭（`57103c231` 主 CI 69 个 job 全部 success），Done。RFC-294 S6 退出门「`nodeMechanics.ts` 删除」成立，design §5.5 第 3 步全部落地。
   顺带补上 RFC-405 漏掉的守卫覆盖：四份按显式文件清单做「不得出现」扫描的守卫在 agent 主体迁出后没扫到它（判据仍绿），现改为扫描 agent 执行器
   的全部文件。集中验证 416 + 18 个文件：本 RFC 引入的两处测试写法问题已修，其余只有负载超时、复跑通过；P0 变异 lane 通过（34 个阶段、源文件指纹不变）。详见 plan「集中验证（T5）」。
 - **后继**：design §5.5 第 4 步（`wrapperMechanics.ts` 的 fanout 装配线、`taskEngineApplication.ts` 的引擎编排）。
 
-## 2026-11-01 RFC-405 task-execution agent-single 节点迁入 engine/node（In Progress；`design/RFC-405-task-execution-agent-single-executor/`）
+## 2026-11-01 RFC-405 task-execution agent-single 节点迁入 engine/node（Done；`design/RFC-405-task-execution-agent-single-executor/`）
 
 - **来由**：RFC-294 S6，design §5.5 第 3 步之三；用户授权同 RFC-402，本会话调研、设计、实施与集中验证，不派 Codex。
 - **范围**：agent-single 执行主体（`nodeMechanics.ts` 的 `runAgentSingleNode`，约 1350 行）迁入 `engine/node/agent-single/`，经
   task-execution 自有的显式端口执行；重试 / 续跑判定归 domain，八个运行历史读取与借壳拒绝判定归 application，`legacyArgs` 删除；执行器直接调
   主体，工作组主机线仍转交（RFC-406）。纯结构重构。
 - **做法**：设计门免；实现门由本会话按路径限定自审（只审功能），PASS。
-- **进度**：T1～T6 完成，随实现提交 `81168e759` 入库，待 AC-6。`nodeMechanics.ts` 2496 → 598 行，只剩工作组主机线；RFC-294 S6 退出门中
+- **进度**：T1～T6 完成，随实现提交 `81168e759` 入库；AC-6 以后继证据关闭（`57103c231` 主 CI 全绿），Done。`nodeMechanics.ts` 2496 → 598 行，只剩工作组主机线；RFC-294 S6 退出门中
   「`legacyArgs` 消失」成立。集中验证查出本 RFC 引入的两类问题，均已修：首版端口从 COL 合同与 `services/` 取类型，新增 1 条 off-DAG 文件边与
   8 条 R2 边（改为 task-execution 自有的结构类型，由绑定在编译期对齐）；两份源码锁改读语料常量后被负 fixture 判据误判（改为就地读 owner
   文件）。其余失败只是负载超时，复跑通过；P0 变异 lane 通过（34 个阶段、源文件指纹不变）。详见 plan「集中验证（T6）」。
@@ -72,7 +72,7 @@
   除 RFC-398 自己的 3 个外，在 RFC-406 的集中验证里本机复跑通过。CI 证据待后继 run 补齐，AC-6 暂不关（详见 plan「CI（AC-6）」）。
 - **后继**：RFC-406（workgroup host）。
 
-## 2026-11-01 RFC-404 task-execution 子任务调用节点迁入 engine/node（In Progress；`design/RFC-404-task-execution-child-call-executors/`）
+## 2026-11-01 RFC-404 task-execution 子任务调用节点迁入 engine/node（Done；`design/RFC-404-task-execution-child-call-executors/`）
 
 - **来由**：RFC-294 S6，design §5.5 第 3 步之二；用户授权同 RFC-402。用户 2026-10-31「后面的工作你可以不用启动codex来做，你自己完成」：
   本 RFC 由本会话调研、设计、实施与集中验证，不派 Codex。
@@ -80,7 +80,7 @@
   `engine/node/shared/child-call/`，两个执行器各在 registry key 目录，经显式端口执行；子任务 runtime、scheduler driver 与委托 actor 由绑定
   补齐；`parseIsoSubmodules` 归 domain，人工等待台账编解码合一，发起错误分类归 application。纯结构重构。
 - **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。
-- **进度**：T1～T6 完成（实现、守卫与集中验证），随实现提交 `88d4c088f` 入库，待 AC-6。`nodeMechanics.ts` 3656 → 2496 行。
+- **进度**：T1～T6 完成（实现、守卫与集中验证），随实现提交 `88d4c088f` 入库；AC-6 以后继证据关闭（`57103c231` 主 CI 全绿），Done。`nodeMechanics.ts` 3656 → 2496 行。
   集中验证查出本 RFC 引入的 5 处按旧 owner 钉住的账本 / 源码锁（防空扫语料、allowTerminal 账本、`.forCall(` 消费方、result 折叠锁）与
   3 处本 RFC 用例写法问题，均已修；P0 变异 lane 通过。本机全量因 Docker 虚拟机常驻占约 6 核跑不完，改跑 355 个文件的针对性验证集并复跑
   全部失败文件，详见 plan「集中验证（T6）」。

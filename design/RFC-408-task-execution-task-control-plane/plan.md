@@ -61,6 +61,16 @@ T1～T5 完成（本会话实施）。与落档设计的偏差与实施中的取
 
 实施前与提交前按路径核对工作树，尤其是并发会话可能触及的共享守卫文件。
 
+## CI（AC-6）
+
+- **`7aca6d6f0`**：windows-platform `41314173155` success。主 CI `41314173016`：
+  - Frontend 分片 1/3（ubuntu、windows）失败：`packages/frontend/tests/clarify-reverse-drag-two-edges.test.ts` 跨包读旧的
+    `composition/taskDagGraph.ts`（ENOENT）。属本 RFC 引入——改名半径只扫了 `packages/backend`；已由 `a06fcae26` 改读 `engine/scope/dagGraph.ts`。
+  - backend 分片 20/44 失败：`rfc359-w8-t28-lost-update` 的 L6 [postgresql] 在 deleteTask 认领链上撞到 PG 串行化冲突（40001，pivot），
+    第二笔删除没有停到写锁上。本 RFC 未触及删除与维护认领路径；同一分片在 `57103c231` 上通过，本机在候选与 RFC-407 基线（`90a7857d3`
+    导出）上各复跑 4 次全部通过，判为偶发竞态，不归本 RFC，证据已留。
+- AC-6 待后继 run（含 `a06fcae26` 的修复）补齐。
+
 ## 验收清单
 
 - [x] proposal AC-1～AC-5（本地集中验证，见上）

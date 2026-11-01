@@ -67,6 +67,13 @@ T1～T5 完成（本会话实施）。与落档设计的偏差与实施中的取
 
 实施前与提交前按路径核对工作树，尤其是并发会话可能触及的共享守卫文件。
 
+## CI（AC-6）
+
+- **`ea07e2aec`**：windows-platform `41321761090` 失败：shared 腿 `packages/shared/tests/wrapper-kind-single-source.test.ts` 的文件清单含本 RFC
+  删除的 `services/dispatchFrontier.ts`（ENOENT）。属本 RFC 引入（同一个改名半径遗漏），已由 `a06fcae26` 换成承接它的
+  `engine/scope/frontierRules.ts` 与 `domain/wrapperGraph.ts`；该 job 在这一步即停止，本 RFC 的 Windows suite 由后继 run 补跑。
+- AC-6 待后继 run 补齐。
+
 ## 验收清单
 
 - [x] proposal AC-1～AC-5（本地集中验证，见上）

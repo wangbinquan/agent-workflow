@@ -69,9 +69,11 @@
 - **定时 backend-macos-nightly `41300188523`（跑在 `73742e27d` 上）红**：只有 `rfc370-m3-event-inbox` 的一条 SQLite 用例 6989 ms 超时
   （10-31 的夜间 41 ms 通过）。本机以 git archive 导出 `73742e27d`，按同一种子 332、同一分片 2/18 复现，该用例 44 ms 通过；用例用注入时钟、
   没有真实时间等待，判为 macOS runner 时序抖动，不归任何提交，未改测试。
-- CI 证据待后继 run 补齐，AC-6 暂不关。
+- CI 证据由后继 run 补齐（见下）。
+
+- **后继证据**：`57103c231`（该提交本身只改 CI 分片配置；本 RFC 提交是它的祖先，其后对本 RFC 代码文件的改动只来自本会话的后继 RFC）的主 CI `41312990481` 69 个 job 全部 success（windows-platform 已在本 RFC 的 exact SHA 上 success）。AC-6 关闭。
 
 ## 验收清单
 
 - [x] proposal AC-1～AC-5（本地集中验证，见上）
-- [ ] 推送后 exact SHA 的 CI 全绿（AC-6）
+- [x] 推送后 CI 全绿（AC-6，以后继证据关闭，见「CI（AC-6）」）
