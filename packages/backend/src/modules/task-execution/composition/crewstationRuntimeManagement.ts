@@ -6,7 +6,7 @@ import {
 import { composeRuntimeManagement } from '@/modules/runtime-management/composition/runtimeManagement'
 import { composeCrewStationSystemAgentContents } from '@/modules/runtime-management/composition/crewstationSystemAgentMaterial'
 import type { WorkspaceHelper } from '@/platform/crewstation/workspaceProtocol'
-import { createHostedAgentInvocationPreparation } from './crewstationAgentInvocation'
+import { createHostedAgentInvocationPreparation } from '../infrastructure/crewstation/agentInvocationPreparation'
 import { composeRuntimeSmokeRunFamily } from './runtimeSmokeRunFamily'
 import { createRuntimeSmokeMaterialIntent } from './runtimeSmoke'
 import type { composeLocalRuntimeManagement } from './localRuntimeManagement'

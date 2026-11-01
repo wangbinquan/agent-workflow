@@ -17,7 +17,7 @@ import {
   createHostedAgentInvocationPreparation,
   createHostedAgentParticipants,
   type HostedAgentProfile,
-} from './crewstationAgentInvocation'
+} from '../infrastructure/crewstation/agentInvocationPreparation'
 import { createHostedTaskScriptRunFamily } from '../infrastructure/crewstation/taskScriptRunFamily'
 import type { HostedExecution } from '../infrastructure/crewstation/execution'
 

@@ -3,7 +3,7 @@ import type { AgentMaterialIntent } from '@/modules/runtime-management/public/pa
 import { composeCrewStationSystemAgentContents } from '@/modules/runtime-management/composition/crewstationSystemAgentMaterial'
 import { createLocalSystemAgentRuntimeBindings } from '@/modules/runtime-management/composition/systemAgentMaterial'
 import type { WorkspaceHelper } from '@/platform/crewstation/workspaceProtocol'
-import { createHostedAgentInvocationPreparation } from './crewstationAgentInvocation'
+import { createHostedAgentInvocationPreparation } from '../infrastructure/crewstation/agentInvocationPreparation'
 import { composeSystemAgentRunFamily } from './systemAgentRunFamily'
 import { composeLocalSystemAgentRunFamily } from './localSystemAgentRunFamily'
 import { sha256Hex } from '@/util/hash'

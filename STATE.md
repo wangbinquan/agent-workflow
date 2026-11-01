@@ -1,4 +1,20 @@
-## 2026-11-01 RFC-415 task-execution 数字员工执行核心与动作执行运行器迁入 application（In Progress；`design/RFC-415-task-execution-digital-employee-action-application/`）
+## 2026-11-01 RFC-416 task-execution 托管 agent 调用适配器与 MCP 诊断会话迁入 infrastructure/crewstation（In Progress；`design/RFC-416-task-execution-hosted-agent-invocation-infrastructure/`）
+
+- **来由**：RFC-294 S6 退出门「task-execution `composition/` 只剩装配」的第四步，处理 RFC-294 review F10 点名的「执行适配器带逻辑地放在 composition」；
+  用户授权同 RFC-402，本会话调研、设计、实施与集中验证，不派 Codex。
+- **范围**：托管（CrewStation）agent 调用准备原样迁入 `infrastructure/crewstation/agentInvocationPreparation.ts`，composition 的
+  `crewstationAgentInvocation.ts` 删除；托管 MCP 诊断会话（命名、探测、清理、恢复判定、托管工作区与编译）迁入 `mcpDiagnosticSessions.ts`，composition
+  的 `crewstationMcpDiagnosticRunner.ts` 只把 application 的系统代理核心与会话接在一起。纯结构重构。
+- **盘点**：RFC-415 后逐文件核对 task-execution `composition/` 全部 108 个文件（9,197 行），约 11 个文件各含 40 行以上的非装配逻辑；后继顺序见
+  RFC-416 proposal §7（托管任务运行选择与执行 owner → 本地 agent 调用适配器与 runtime-management public 合同 → provider 后台循环 → 执行状态绑定
+  残余 → 其余与收口锁）。
+- **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。
+- **进度**：T1～T4 完成，随实现提交入库，待 exact SHA 的 CI（AC-5）。集中验证 608 + 7 个文件：601 个首轮通过，7 个负载超时第二轮全部通过，无本 RFC
+  引入的失败；P0 变异 lane 通过（34 个阶段、源文件指纹不变）。详见 plan「集中验证（T4）」。同提交收尾 RFC-414（`c4b025f4c` 全绿）与 RFC-415
+  （`e90d6fc4f` 全绿）。
+- **后继**：托管任务运行选择（`crewstationTaskRunSelection.ts`）与托管执行 owner（`crewstationExecution.ts`）中的逻辑迁入 `infrastructure/crewstation/`。
+
+## 2026-11-01 RFC-415 task-execution 数字员工执行核心与动作执行运行器迁入 application（Done；`design/RFC-415-task-execution-digital-employee-action-application/`）
 
 - **来由**：RFC-294 S6 退出门「task-execution `composition/` 只剩装配」的第三步；用户授权同 RFC-402，本会话调研、设计、实施与集中验证，不派 Codex。
 - **范围**：数字员工 Reaction 执行核心迁入 `application/digitalEmployeeExecution.ts`，经自有端口执行，宿主任务启动收为窄端口 `launchHost`
@@ -6,12 +22,12 @@
   `application/actionExecutionRunners.ts`，状态读 / 执行结果读 / 终态观察 / 工作区入口检查经环境端口；`composition/actionExecutionRunners.ts`
   与死的再导出 `services/taskPlatformInputPaths.ts` 删除，RFC-317 R2 账本不增边。纯结构重构。
 - **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。
-- **进度**：T1～T5 完成，随实现提交入库，待 exact SHA 的 CI（AC-5）。集中验证 402 + 402 + 237 + 2 个文件：本 RFC 引入的 3 个守卫失败（R2 账本、
+- **进度**：T1～T5 完成，随实现提交入库（`e90d6fc4f`）；exact SHA 的主 CI 70/70 与 windows-platform 全绿（AC-5），Done。集中验证 402 + 402 + 237 + 2 个文件：本 RFC 引入的 3 个守卫失败（R2 账本、
   RFC-310 OS 架构清单、RFC-376 不可达文件）已修，其余负载超时在候选与基线上同样通过；P0 变异 lane 通过（34 个阶段、源文件指纹不变）。详见 plan
   「集中验证（T5）」。同提交记录 RFC-414 的 CI 归因（`7bcab1997` 分片 2/44 的结构锁超时已由 `c4b025f4c` 修复）。
 - **后继**：composition 里仍属应用逻辑的托管代理调用准备（`crewstationAgentInvocation.ts`）与 provider 后台循环（`providerBackground.ts`）另立 RFC。
 
-## 2026-11-01 RFC-414 task-execution composition 不再直接读写数据库、文件系统与 git（In Progress；`design/RFC-414-task-execution-composition-io-out/`）
+## 2026-11-01 RFC-414 task-execution composition 不再直接读写数据库、文件系统与 git（Done；`design/RFC-414-task-execution-composition-io-out/`）
 
 - **来由**：RFC-294 S6 退出门「task-execution `composition/` 只剩装配」的第二步；用户授权同 RFC-402，本会话调研、设计、实施与集中验证，不派 Codex。
 - **范围**：composition 里的八处 I/O 迁入 task-execution `infrastructure/`——准备 GC 相位（`workspacePreparationGc.ts`）、托管工作区归属与
@@ -20,7 +36,8 @@
   （`local/filePortOutputValidation.ts`）；RFC-376 `composition-forbidden-import-files` 销账七条（counts 21 → 14），新结构锁补上持久化 helper 与
   `util/git`。纯结构重构。
 - **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。
-- **进度**：T1～T5 完成，随实现提交入库，待 exact SHA 的 CI（AC-5）。集中验证 625 + 8 个文件：无本 RFC 引入的失败，PG 负载超时复跑全部通过；
+- **进度**：T1～T5 完成，随实现提交入库（`7bcab1997`）；`7bcab1997` 主 CI 分片 2/44 的本 RFC 结构锁超时由 `c4b025f4c` 修复，`c4b025f4c` 主 CI 70/70 与
+  windows-platform 全绿（AC-5），Done。集中验证 625 + 8 个文件：无本 RFC 引入的失败，PG 负载超时复跑全部通过；
   P0 变异 lane 通过（34 个阶段、源文件指纹不变）。详见 plan「集中验证（T5）」。同提交收尾 RFC-413（exact SHA `7f8abe5a0` 全绿）。
 - **后继**：composition 里仍属应用逻辑的部分（数字员工执行核心、动作执行运行器编排、托管代理调用准备、provider 后台循环）另立 RFC。
 

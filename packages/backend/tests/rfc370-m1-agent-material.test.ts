@@ -6,7 +6,7 @@ import type {
   AgentMaterialIntent,
   AgentMaterialWorkspace,
 } from '@/modules/runtime-management/public/participants'
-import { createHostedAgentInvocationPreparation } from '@/modules/task-execution/composition/crewstationAgentInvocation'
+import { createHostedAgentInvocationPreparation } from '@/modules/task-execution/infrastructure/crewstation/agentInvocationPreparation'
 import type { HostedExecution } from '@/modules/task-execution/infrastructure/crewstation/execution'
 import type { HostedExecutionBinding } from '@/modules/task-execution/infrastructure/crewstation/executionStore'
 import type {

@@ -1193,7 +1193,8 @@ export function buildTaskOwnedEffectEntries(backend: readonly SourceUnit[]): {
         const isCodeHost = effectKind === 'code-host-mutation'
         const isHostedProcess =
           isProcess &&
-          unit.path === `${MODULE_PREFIX}task-execution/composition/crewstationAgentInvocation.ts`
+          unit.path ===
+            `${MODULE_PREFIX}task-execution/infrastructure/crewstation/agentInvocationPreparation.ts`
         entries.push({
           id: siteId(symbol, callee),
           file: unit.path,

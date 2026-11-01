@@ -64,9 +64,10 @@ infrastructure 符号 owner 唯一，均带负例）与端口绑定用例 `rfc41
   引入），已由 `c4b025f4c` 按单元缓存扫描（本地 11 ms）并给 20 s 预算；分片 43/44 为 `scheduler-clarify-dispatch` 的一个 PG 用例 5 s 超时——
   本 RFC 未触及澄清 / 调度路径，同文件其余 PG 用例约 2 s 通过，同一用例在 `7f8abe5a0` 的主 CI（70/70）上通过，判为 runner 负载超时，不归本 RFC，
   证据已留；`CI required` 随之失败。
-- AC-5 待后继 run（含 `c4b025f4c`）补齐。
+- **`c4b025f4c`**（结构锁超时修复，含 `7bcab1997` 全部改动）：主 CI `41353445349` 70 个 job 全部 success（分片 2/44 的结构锁与
+  分片 43/44 均通过），windows-platform `41353445348` success。AC-5 成立，RFC-414 Done。
 
 ## 验收清单
 
 - [x] proposal AC-1～AC-4（本地集中验证，见上）
-- [ ] 推送后 exact SHA 的 CI 全绿（AC-5）
+- [x] 推送后 exact SHA 的 CI 全绿（AC-5，`c4b025f4c`，见上）

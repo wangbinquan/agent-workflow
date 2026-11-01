@@ -144,7 +144,7 @@ const TASK_EFFECT_BOUNDARIES = new Map<string, readonly TaskEffectBoundaryContra
     ],
   ],
   [
-    'packages/backend/src/modules/task-execution/composition/crewstationAgentInvocation.ts',
+    'packages/backend/src/modules/task-execution/infrastructure/crewstation/agentInvocationPreparation.ts',
     [
       {
         callable: 'execute',

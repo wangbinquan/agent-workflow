@@ -18,7 +18,7 @@ import type {
   AgentExecutionRequest,
   AgentExecutionSink,
 } from '@/modules/task-execution/application/ports/agentExecution'
-import { createHostedAgentInvocationPreparation } from '@/modules/task-execution/composition/crewstationAgentInvocation'
+import { createHostedAgentInvocationPreparation } from '@/modules/task-execution/infrastructure/crewstation/agentInvocationPreparation'
 import {
   HostedExecutionDetachedError,
   HostedExecutionUnknownError,

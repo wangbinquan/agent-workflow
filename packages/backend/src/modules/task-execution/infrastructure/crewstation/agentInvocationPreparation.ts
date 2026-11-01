@@ -1,3 +1,6 @@
+// RFC-416: the hosted (CrewStation) agent invocation adapter, moved verbatim from
+// composition/crewstationAgentInvocation.ts. Every step is CrewStation platform semantics (profile mapping,
+// capability versions, material upload, hosted run / adopt); composition only selects it for the hosted families.
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { CrewStationMutationFence } from '@/platform/crewstation/mutationFence'
 import type {
@@ -5,14 +8,8 @@ import type {
   CrewStationBusinessExecution,
 } from '@/platform/crewstation/businessExecution'
 import type { BusinessMaterialFile } from '@/platform/crewstation/nativeMaterial'
-import type {
-  HostedMaterialFiles,
-  HostedMaterialSourceFile,
-} from '../infrastructure/crewstation/materialObjectUploads'
-import {
-  compileHostedNativeMaterial,
-  type HostedNativeMaterialContent,
-} from '../infrastructure/crewstation/nativeMaterial'
+import type { HostedMaterialFiles, HostedMaterialSourceFile } from './materialObjectUploads'
+import { compileHostedNativeMaterial, type HostedNativeMaterialContent } from './nativeMaterial'
 import type {
   AgentMaterialIntent,
   AgentMaterialWorkspace,
@@ -23,29 +20,26 @@ import {
   createHostedUsageMeter,
   hostedEventRecord,
   readHostedEvent,
-} from '@/modules/task-execution/infrastructure/crewstation/runtimeEvents'
+} from './runtimeEvents'
 import { DAEMON_SHUTDOWN_ABORT_REASON } from '@agent-workflow/shared'
 import { getRuntimeDriver } from '@/services/runtime'
 import { declareSkills, emptyDeclaredManifest } from '@/services/execution/agentInjection'
-import {
-  freezeHostedAgentContext,
-  hostedAgentNodeContext,
-} from '../infrastructure/crewstation/agentContext'
-import type { AgentExecutionParticipants } from '../application/ports/agentExecutionBinding'
-import type { TaskAgentExecutionParticipantInput } from '../application/ports/taskAgentMaterial'
-import type { AgentInvocationPreparation } from '../application/ports/agentInvocationPreparation'
-import { createProcessEffectAttemptObserver } from '../application/processEffectObserver'
+import { freezeHostedAgentContext, hostedAgentNodeContext } from './agentContext'
+import type { AgentExecutionParticipants } from '../../application/ports/agentExecutionBinding'
+import type { TaskAgentExecutionParticipantInput } from '../../application/ports/taskAgentMaterial'
+import type { AgentInvocationPreparation } from '../../application/ports/agentInvocationPreparation'
+import { createProcessEffectAttemptObserver } from '../../application/processEffectObserver'
 import {
   createHostedProcessEffectProjection,
   type HostedProcessReceipt,
-} from '../infrastructure/crewstation/processEffectProjection'
+} from './processEffectProjection'
 import {
   HostedExecutionDetachedError,
   HostedExecutionUnknownError,
   untilDaemonShutdown,
   type HostedExecution,
   type HostedExecutionSink,
-} from '../infrastructure/crewstation/execution'
+} from './execution'
 import { sha256Hex } from '@/util/hash'
 
 export interface HostedAgentProfile {
