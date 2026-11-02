@@ -1,3 +1,14 @@
+## 2026-11-01 RFC-418 task-execution provider 后台循环迁入 application（In Progress；`design/RFC-418-task-execution-provider-background-application/`）
+
+- **来由**：RFC-294 S6 退出门「task-execution `composition/` 只剩装配」的第六步（RFC-416 proposal §7 原第 3 项提前；本地 agent 调用适配器需先补
+  runtime-management public 合同）；用户授权同 RFC-402，本会话调研、设计、实施与集中验证，不派 Codex。
+- **范围**：provider 会话后台控制（可重启循环、五条 provider 循环、配置源选择与开机自动续跑、串行化的会话控制）迁入
+  `application/providerBackground.ts`，legacy 清扫、节奏常量、文件配置源与定时任务执行经端口由 composition 绑定；对外名字与类型不变。纯结构重构。
+- **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。
+- **进度**：T1～T5 完成，随实现提交入库，待 exact SHA 的 CI（AC-5）。集中验证 526 + 2 个文件：无本 RFC 引入的失败，2 个负载超时第二轮通过；P0 变异
+  lane 通过（34 个阶段、源文件指纹不变）。详见 plan「集中验证（T5）」。
+- **后继**：本地 agent 调用适配器与本地 run family（先补 runtime-management public 合同）；执行状态绑定里的残余逻辑；其余与收口锁（RFC-416 proposal §7）。
+
 ## 2026-11-01 RFC-417 task-execution 托管任务运行范围与执行 owner 逻辑迁入 infrastructure/crewstation（In Progress；`design/RFC-417-task-execution-hosted-run-execution-infrastructure/`）
 
 - **来由**：RFC-294 S6 退出门「task-execution `composition/` 只剩装配」的第五步（RFC-416 proposal §7 后继顺序第 1 项）；用户授权同 RFC-402，本会话调研、

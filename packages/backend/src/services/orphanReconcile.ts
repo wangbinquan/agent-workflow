@@ -25,7 +25,7 @@
 //
 // The process probe and the driver gate are injected so the sweep is
 // unit-testable without real processes; the provider session's orphan-reconcile
-// loop (modules/task-execution/composition/providerBackground.ts) wires the real
+// loop (application/providerBackground.ts; its composition binding, since RFC-418) wires the real
 // isProcessAlive + binary-identity check and the real activeTasks registry.
 
 import type { TaskPeriodicRecoveryOperations } from '@/modules/task-execution/public/participants'

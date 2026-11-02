@@ -20,9 +20,19 @@ import { resolve } from 'node:path'
 
 import { DEFAULT_CONFIG, SETTINGS_NUMERIC_BOUNDS } from '@agent-workflow/shared'
 import { DAEMON_CADENCE } from '@/services/daemonCadence'
-import { isPeriodicReconcileDue } from '@/modules/task-execution/composition/providerBackground'
+import { isPeriodicReconcileDue } from '@/modules/task-execution/application/providerBackground'
 
 const LOOP_SOURCE = resolve(
+  import.meta.dir,
+  '..',
+  'src',
+  'modules',
+  'task-execution',
+  'application',
+  'providerBackground.ts',
+)
+// RFC-418: the loops moved to application; the binding supplies the cadence constants through ports.
+const BINDING_SOURCE = resolve(
   import.meta.dir,
   '..',
   'src',
@@ -89,7 +99,11 @@ describe('RFC-349 periodic orphan reconcile cadence is hot-apply', () => {
       '睡多久又读回了配置 ⇒ 旋钮改动要等**改动前**那个周期走完才被看见，' +
         '「关」的时候那是十分钟，等价于要重启 daemon',
     ).not.toMatch(/loadConfig|periodicOrphanReconcileMs/)
-    expect(sleep).toContain('DAEMON_CADENCE.orphanReconcileSupervisory')
+    expect(sleep).toContain('runtime.cadence.orphanReconcileSupervisoryMs()')
+    // The getter is bound to the fixed supervisory constant, never to the hot-apply knob.
+    expect(readFileSync(BINDING_SOURCE, 'utf8')).toContain(
+      'orphanReconcileSupervisoryMs: () => DAEMON_CADENCE.orphanReconcileSupervisory,',
+    )
     // 判据在醒来时才下，并且下完要记账，否则每个监督拍都会扫一遍。
     expect(loop).toContain('isPeriodicReconcileDue({')
     expect(loop).toContain('lastReconcileAt = now')

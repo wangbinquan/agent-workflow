@@ -48,7 +48,7 @@ const TASK_PROVIDER_BACKGROUND_SOURCE = readFileSync(
     'src',
     'modules',
     'task-execution',
-    'composition',
+    'application',
     'providerBackground.ts',
   ),
   'utf8',

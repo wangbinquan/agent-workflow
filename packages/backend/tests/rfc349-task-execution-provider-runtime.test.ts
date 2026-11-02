@@ -37,7 +37,8 @@ describe('RFC-349 TaskExecution selected-provider runtime', () => {
 
   test('provider session owns restartable task writers and late route composition', () => {
     const provider = read('modules/task-execution/composition/providerRuntime.ts')
-    const background = read('modules/task-execution/composition/providerBackground.ts')
+    // RFC-418: the loops and the session control moved to application.
+    const background = read('modules/task-execution/application/providerBackground.ts')
 
     expect(provider).toContain('routes: (')
     expect(provider).toContain('TaskExecutionProviderRouteContext')

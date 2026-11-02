@@ -48,7 +48,7 @@ export const DAEMON_CADENCE = {
   orphanReconcile: 10 * MINUTE_MS,
   /**
    * 上面那条的**监督拍**：循环实际睡多久、多久看一眼旋钮。循环按本拍醒来、在醒来
-   * 时才判断这一拍要不要真扫（modules/task-execution/composition/providerBackground.ts `isPeriodicReconcileDue`），
+   * 时才判断这一拍要不要真扫（modules/task-execution/application/providerBackground.ts `isPeriodicReconcileDue`，RFC-418 起），
    * 于是旋钮改动最迟一分钟生效——关→开、以及把节奏改小，都不必重启 daemon。
    * 取值等于该旋钮允许的最小正周期（settingsNumericBounds.ts `positiveMin: 60_000`），
    * 所以监督拍永远不会比用户配得出来的最细节奏更粗。
