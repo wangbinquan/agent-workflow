@@ -61,6 +61,19 @@ export function normalizeWorkgroupSnapshot(
   })
 }
 
+/**
+ * RFC-401 A3b：新建请求（普通编辑 / Intent / 资源包都先解析成 `CreateWorkgroup`）落成可写的快照：输出合同解析、clarify
+ * 预算与 fanOut 补缺省。三条入口共用这一份，写入参与者只接快照。
+ */
+export function workgroupCreateSnapshot(created: CreateWorkgroup): WorkgroupDraftSnapshot {
+  return WorkgroupDraftSnapshotSchema.parse({
+    ...created,
+    outputContract: resolveWorkgroupOutputContract(created.outputContract),
+    clarifyBudget: created.clarifyBudget ?? WG_CLARIFY_BUDGET_DEFAULT,
+    fanOut: created.fanOut ?? false,
+  })
+}
+
 export function workgroupDraftMemberOf(
   member: WorkgroupMember,
   missingAgentId: typeof QUARANTINED_SNAPSHOT_AGENT_ID | '',

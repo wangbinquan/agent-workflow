@@ -1254,7 +1254,17 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     expect(application).not.toContain("from '@/db/")
     expect(application).not.toContain('/infrastructure/')
     expect(repository).toContain('runResourceCatalogTransaction')
-    expect(repository).toContain('assertAgentIdsUsableInTransaction')
+    // RFC-401 A3b：成员 agent 的可用性判定随写入一起交给唯一的 workgroup 写入参与者。
+    expect(repository).toContain('createWorkgroupMutationParticipant(')
+    expect(
+      readFileSync(
+        resolve(
+          sourceRoot,
+          'modules/resource-catalog/infrastructure/workgroupMutationParticipant.ts',
+        ),
+        'utf8',
+      ),
+    ).toContain('assertAgentIdsUsableInTransaction')
     expect(repository).toContain('scheduledReferences')
     expect(repository).toContain("from './workgroupPersistence'")
     expect(repository).toContain('workgroupRevisionOf as revisionOf')

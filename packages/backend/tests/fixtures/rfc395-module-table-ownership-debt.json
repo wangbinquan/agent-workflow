@@ -525,16 +525,6 @@
     {
       "table": "resourceGrants",
       "owner": "identity-access",
-      "file": "resource-catalog/infrastructure/aggregateAdapters/intentApplyResourcePorts.ts",
-      "module": "resource-catalog",
-      "tableId": "resource_grants",
-      "kind": "other",
-      "why": "resource-catalog/infrastructure/aggregateAdapters/intentApplyResourcePorts.ts 仍依赖 resource_grants；resource-catalog → identity-access 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
-      "removeWhen": "RFC-395 T11 resource-catalog/intentApplyResourcePorts 边界任务：先由 RFC-294 设计门确认 identity-access 的 required SPI 或重分配编排，再以闭合端口移除此站点。"
-    },
-    {
-      "table": "resourceGrants",
-      "owner": "identity-access",
       "file": "resource-catalog/infrastructure/aggregateAdapters/postgresqlResourcePackageMutationParticipants.ts",
       "module": "resource-catalog",
       "tableId": "resource_grants",
@@ -1035,16 +1025,6 @@
     {
       "table": "users",
       "owner": "identity-access",
-      "file": "resource-catalog/infrastructure/aggregateAdapters/intentApplyResourcePorts.ts",
-      "module": "resource-catalog",
-      "tableId": "users",
-      "kind": "other",
-      "why": "resource-catalog/infrastructure/aggregateAdapters/intentApplyResourcePorts.ts 仍依赖 users；resource-catalog → identity-access 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
-      "removeWhen": "RFC-395 T11 resource-catalog/intentApplyResourcePorts 边界任务：先由 RFC-294 设计门确认 identity-access 的 required SPI 或重分配编排，再以闭合端口移除此站点。"
-    },
-    {
-      "table": "users",
-      "owner": "identity-access",
       "file": "resource-catalog/infrastructure/aggregateAdapters/postgresqlResourcePackageMutationParticipants.ts",
       "module": "resource-catalog",
       "tableId": "users",
@@ -1115,12 +1095,12 @@
     {
       "table": "users",
       "owner": "identity-access",
-      "file": "resource-catalog/infrastructure/workgroupRepository.ts",
+      "file": "resource-catalog/infrastructure/workgroupMutationParticipant.ts",
       "module": "resource-catalog",
       "tableId": "users",
       "kind": "other",
-      "why": "resource-catalog/infrastructure/workgroupRepository.ts 仍依赖 users；resource-catalog → identity-access 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
-      "removeWhen": "RFC-395 T11 resource-catalog/workgroupRepository 边界任务：先由 RFC-294 设计门确认 identity-access 的 required SPI 或重分配编排，再以闭合端口移除此站点。"
+      "why": "resource-catalog/infrastructure/workgroupMutationParticipant.ts 仍依赖 users（人类成员须为 active 用户）；RFC-401 A3b 把这处读从 workgroupRepository.ts 搬进唯一的 workgroup 写入参与者，债务身份不变（rfc317-table-ownership 的 CONTENT_DEBT_SUCCESSORS）。resource-catalog → identity-access 不在 OFFERED_CONTEXT_EDGES，现有 exact required SPI 也未提供此表操作，直接新增 owner import 会扩大 off-DAG 基线。",
+      "removeWhen": "RFC-395 T11 resource-catalog/workgroup 写入边界任务：先由 RFC-294 设计门确认 identity-access 的 required SPI 或重分配编排，再以闭合端口移除此站点。"
     },
     {
       "table": "users",

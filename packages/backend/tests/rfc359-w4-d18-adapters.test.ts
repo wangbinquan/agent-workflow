@@ -19,7 +19,8 @@ import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { DirectAuthenticatedAuthority } from '@/modules/identity-access/public/participants'
 import { workgroupRepositoryDependencies } from '@/modules/resource-catalog/composition/workgroupOperations'
 import { createAgentPersistenceValues } from '@/modules/resource-catalog/infrastructure/agentPersistence'
-import { resolveAgentIdsUsable } from '@/modules/resource-catalog/infrastructure/referenceUsability'
+import { assertAgentIdsUsableInTransaction } from '@/modules/resource-catalog/infrastructure/referenceUsability'
+import { runResourceCatalogTransaction } from '@/modules/resource-catalog/infrastructure/resourceCatalogTransaction'
 import { createWorkgroupRepository } from '@/modules/resource-catalog/infrastructure/workgroupRepository'
 import { staleConflictError } from '@/util/errors'
 import { describeEachProvider } from './helpers/eachProvider'
@@ -71,10 +72,6 @@ function document(name: string, agentId: string) {
   })
 }
 
-function initialAcl(ownerUserId: string) {
-  return { ownerUserId, visibility: 'private' as const, aclRevision: 0 as const }
-}
-
 async function codeOf(fn: () => Promise<unknown>): Promise<string> {
   try {
     await fn()
@@ -107,7 +104,6 @@ describeEachProvider('RFC-359 W4-D18 —— Workgroup 仓库', (harness) => {
       authority: owner.authority,
       id: ulid(),
       document: document(name, agentId),
-      initialAcl: initialAcl(owner.id),
       now: T0,
     })
     expect(created).toMatchObject({
@@ -132,7 +128,6 @@ describeEachProvider('RFC-359 W4-D18 —— Workgroup 仓库', (harness) => {
           authority: owner.authority,
           id: ulid(),
           document: document(name, agentId),
-          initialAcl: initialAcl(owner.id),
           now: T0,
         }),
       ),
@@ -143,7 +138,6 @@ describeEachProvider('RFC-359 W4-D18 —— Workgroup 仓库', (harness) => {
           authority: owner.authority,
           id: ulid(),
           document: document(`${name}-x`, privateAgentOfStranger),
-          initialAcl: initialAcl(owner.id),
           now: T0,
         }),
       ),
@@ -154,28 +148,21 @@ describeEachProvider('RFC-359 W4-D18 —— Workgroup 仓库', (harness) => {
           authority: owner.authority,
           id: ulid(),
           document: document(`${name}-y`, 'no-such-agent'),
-          initialAcl: initialAcl(owner.id),
           now: T0,
         }),
       ),
     ).toBe('workgroup-member-agent-invalid')
-    // 引用可用性判定自身：不可见的 agent 被列出，grandfathered 的不再重审。
+    // 引用可用性判定自身（同事务终检，fail closed）：不可见与不存在的 agent 都被列出。RFC-401 A3b 起事务外的预检删除，
+    // 「沿用的成员不再重审」由写入参与者只对新增成员调用它来保证（rfc164 的 D15 grandfathered 用例）。
     expect(
-      await resolveAgentIdsUsable(
-        harness.db,
-        owner.authority,
-        [agentId, privateAgentOfStranger],
-        new Set(),
+      await runResourceCatalogTransaction(harness.db, (transaction) =>
+        assertAgentIdsUsableInTransaction(transaction, owner.authority, [
+          agentId,
+          privateAgentOfStranger,
+          'no-such-agent',
+        ]),
       ),
-    ).toEqual([privateAgentOfStranger])
-    expect(
-      await resolveAgentIdsUsable(
-        harness.db,
-        owner.authority,
-        [privateAgentOfStranger],
-        new Set([privateAgentOfStranger]),
-      ),
-    ).toEqual([])
+    ).toEqual([privateAgentOfStranger, 'no-such-agent'])
   })
 
   test('复制按版本 + 快照哈希 OCC，复制品拿新名字；save 三态：committed / already-current / stale', async () => {
@@ -187,7 +174,6 @@ describeEachProvider('RFC-359 W4-D18 —— Workgroup 仓库', (harness) => {
       authority: owner.authority,
       id: ulid(),
       document: document(name, agentId),
-      initialAcl: initialAcl(owner.id),
       now: T0,
     })
     expect(
@@ -200,7 +186,6 @@ describeEachProvider('RFC-359 W4-D18 —— Workgroup 仓库', (harness) => {
           },
           id: ulid(),
           now: T0 + 1,
-          initialAcl: initialAcl(owner.id),
         }),
       ),
     ).toBe(staleConflictError('workgroup', 'x').code)
@@ -212,7 +197,6 @@ describeEachProvider('RFC-359 W4-D18 —— Workgroup 仓库', (harness) => {
       },
       id: ulid(),
       now: T0 + 1,
-      initialAcl: initialAcl(owner.id),
     })
     expect(copy.name).not.toBe(name)
     expect(copy.name.startsWith(name)).toBe(true)
@@ -264,7 +248,6 @@ describeEachProvider('RFC-359 W4-D18 —— Workgroup 仓库', (harness) => {
       authority: owner.authority,
       id: ulid(),
       document: document(`wg-${ulid().slice(-6).toLowerCase()}`, agentId),
-      initialAcl: initialAcl(owner.id),
       now: T0,
     })
     const { resourceGrants } = tablesOf(harness.db)

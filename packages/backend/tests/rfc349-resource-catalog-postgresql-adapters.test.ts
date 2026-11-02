@@ -81,10 +81,14 @@ describe('RFC-349 resource-catalog PostgreSQL provider adapters', () => {
     )
     expect(offenders.map((file) => file.slice(backendRoot.length + 1))).toEqual([])
 
-    // RFC-359 W4-D18：引用可用性只剩一份中立实现，预检与同事务终检都在这里。
+    // RFC-359 W4-D18：引用可用性只剩一份中立实现。RFC-401 A3b：事务外的预检随写入栈合一删除，判定只在唯一的 workgroup
+    // 写入参与者的事务里跑。
     const references = source('src/modules/resource-catalog/infrastructure/referenceUsability.ts')
-    expect(references).toContain('resolveAgentIdsUsable')
+    expect(references).not.toContain('resolveAgentIdsUsable')
     expect(references).toContain('assertAgentIdsUsableInTransaction')
+    expect(
+      source('src/modules/resource-catalog/infrastructure/workgroupMutationParticipant.ts'),
+    ).toContain('assertAgentIdsUsableInTransaction(')
     expect(references).not.toMatch(/PostgresqlDatabaseClient|\bDbClient\b|\bDbTxSync\b/)
   })
 
@@ -175,12 +179,19 @@ describe('RFC-349 resource-catalog PostgreSQL provider adapters', () => {
       'createAgentMutationParticipant(input.transaction, { now: input.now })',
     )
     expect(postgresqlMutationArms).not.toContain('createAgentReferenceWriteParticipant')
-    for (const table of ['skills', 'workgroups']) {
+    for (const table of ['skills']) {
       expect(postgresqlMutationArms).toMatch(
         new RegExp(`(?:\\.insert\\(\\s*${table}\\s*\\)|\\binsertOne\\([^,]+,\\s*${table}\\s*,)`),
       )
       expect(postgresqlMutationArms).toContain(`.update(${table})`)
     }
+    // RFC-401 A3b: workgroup rows and member rows go through the one Workgroup mutation participant.
+    expect(postgresqlMutationArms).toContain(
+      'const workgroups = createWorkgroupMutationParticipant(input.transaction, {',
+    )
+    expect(postgresqlMutationArms).not.toMatch(
+      /\.(?:insert|update)\(\s*workgroups\s*\)|workgroupMembers\s*,/,
+    )
     // RFC-359 W12: MCP/plugin creation and publication share their persistence
     // atoms with the repositories; the repositories retain their separate rename.
     // RFC-401 A2: the arms (like the repositories and Intent) go through the one
@@ -274,7 +285,12 @@ describe('RFC-349 resource-catalog PostgreSQL provider adapters', () => {
       expect(postgresqlMutationParticipants).toContain(reader)
     }
     expect(postgresqlMutationParticipants).toContain("eq(users.status, 'active')")
-    expect(postgresqlMutationArms).toContain('findActiveUsersByIds(')
+    // RFC-401 A3b：人类成员的 active 判定由唯一的 workgroup 写入参与者做；资源包自己的映射校验仍经 reader 的
+    // `findActiveUsersByIds`（`resourcePackageAtomicApply.ts`）。
+    expect(postgresqlMutationArms).not.toContain('findActiveUsersByIds(')
+    expect(
+      source('src/modules/resource-catalog/infrastructure/resourcePackageAtomicApply.ts'),
+    ).toContain('findActiveUsersByIds(')
     expect(postgresqlMutationArms).toContain('assertSelected({')
     expect(postgresqlMutationArms).toContain("visibility: 'private'")
     expect(postgresqlMutationArms).toContain('await agents.create(owner, {')

@@ -1,7 +1,15 @@
 import { composeSubjectTaskReferencePort } from '@/modules/task-execution/composition'
-// The pure controls execute the three exact pre-W28 projection bodies. Private
-// source exposure is not a provider execution; DB cases call the selected real
-// package composition, and the existing W26 Intent controls run separately.
+// The pure controls execute the exact pre-W28 repository projection body.
+// Private source exposure is not a provider execution; DB cases call the
+// selected real package composition, and the existing W26 Intent controls run
+// separately.
+//
+// RFC-401 A3b: the Intent (`workgroupSnapshotFromRows`) and package
+// (`currentWorkgroupSnapshot`) projections are gone — both entries now read the
+// current workgroup through the repository projection inside the one workgroup
+// participant (a stored member without an identity becomes the quarantined
+// placeholder there, where the package projection used to fail with
+// `workgroup-member-row-corrupt`), so only the repository projection is pinned.
 import { agentFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
@@ -150,94 +158,11 @@ function originalWorkgroupDraftSnapshotOf(group: Workgroup): WorkgroupDraftSnaps
   })
 }
 
-function originalWorkgroupSnapshotFromRows(
-  row: PersistenceTables['workgroups']['$inferSelect'],
-  members: readonly PersistenceTables['workgroupMembers']['$inferSelect'][],
-): WorkgroupDraftSnapshot {
-  const group = workgroupFromRows(row, members)
-  const ordered = [...group.members].sort((left, right) => left.sortOrder - right.sortOrder)
-  const leader = ordered.find((member) => member.id === group.leaderMemberId)
-  return WorkgroupDraftSnapshotSchema.parse({
-    name: group.name,
-    description: group.description,
-    instructions: group.instructions,
-    mode: group.mode,
-    outputContract: resolveWorkgroupOutputContract(group.outputContract),
-    ...(group.mode === 'leader_worker' && leader !== undefined
-      ? { leaderDisplayName: leader.displayName }
-      : {}),
-    switches: group.switches,
-    maxRounds: group.maxRounds,
-    completionGate: group.completionGate,
-    clarifyBudget: group.clarifyBudget ?? 3,
-    fanOut: group.fanOut ?? false,
-    members: ordered.map((member) => workgroupDraftMemberOf(member, '')),
-  })
-}
-
-function originalCurrentWorkgroupSnapshot(
-  row: PersistenceTables['workgroups']['$inferSelect'],
-  memberRows: readonly PersistenceTables['workgroupMembers']['$inferSelect'][],
-): WorkgroupDraftSnapshot {
-  const current = workgroupFromRows(row, memberRows)
-  const ordered = [...current.members].sort(
-    (left, right) =>
-      left.sortOrder - right.sortOrder || left.displayName.localeCompare(right.displayName),
-  )
-  const leader = ordered.find((member) => member.id === current.leaderMemberId)
-  return WorkgroupDraftSnapshotSchema.parse({
-    name: current.name,
-    description: current.description,
-    instructions: current.instructions,
-    mode: current.mode,
-    outputContract: resolveWorkgroupOutputContract(current.outputContract),
-    ...(current.mode === 'leader_worker' && leader !== undefined
-      ? { leaderDisplayName: leader.displayName }
-      : {}),
-    switches: current.switches,
-    maxRounds: current.maxRounds,
-    completionGate: current.completionGate,
-    clarifyBudget: current.clarifyBudget ?? WG_CLARIFY_BUDGET_DEFAULT,
-    fanOut: current.fanOut ?? false,
-    members: ordered.map((member) => {
-      if (member.memberType === 'agent' && member.agentId !== null) {
-        return {
-          memberType: 'agent',
-          agentId: member.agentId,
-          displayName: member.displayName,
-          roleDesc: member.roleDesc,
-        }
-      }
-      if (member.memberType === 'human' && member.userId !== null) {
-        return {
-          memberType: 'human',
-          userId: member.userId,
-          displayName: member.displayName,
-          roleDesc: member.roleDesc,
-        }
-      }
-      throw new ValidationError(
-        'workgroup-member-row-corrupt',
-        `workgroup member '${member.id}' has no canonical identity`,
-      )
-    }),
-  })
-}
 const entries = [
   {
     name: 'repository',
     path: '../src/modules/resource-catalog/infrastructure/workgroupPersistence.ts',
     symbol: 'workgroupDraftSnapshotOf',
-  },
-  {
-    name: 'intent',
-    path: '../src/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourcePorts.ts',
-    symbol: 'workgroupSnapshotFromRows',
-  },
-  {
-    name: 'package',
-    path: '../src/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlResourcePackageMutationArms.ts',
-    symbol: 'currentWorkgroupSnapshot',
   },
 ] as const
 function currentBody(entry: (typeof entries)[number]): string {
@@ -282,12 +207,8 @@ function expose(
   if (typeof result !== 'function') throw new Error('expected the actual projection function')
   return result as SnapshotEntry
 }
-function originalBody(name: (typeof entries)[number]['name']) {
-  return name === 'repository'
-    ? originalWorkgroupDraftSnapshotOf.toString()
-    : name === 'intent'
-      ? originalWorkgroupSnapshotFromRows.toString()
-      : originalCurrentWorkgroupSnapshot.toString()
+function originalBody(_name: (typeof entries)[number]['name']) {
+  return originalWorkgroupDraftSnapshotOf.toString()
 }
 function outcome(action: () => unknown) {
   try {
@@ -306,12 +227,10 @@ function outcome(action: () => unknown) {
     throw error
   }
 }
-function invoke(entry: (typeof entries)[number], body: string, stored: Row, roster: MemberRow[]) {
-  if (entry.name === 'repository')
-    return (expose(body) as unknown as (group: Workgroup) => WorkgroupDraftSnapshot)(
-      workgroupFromRows(stored, roster),
-    )
-  return expose(body)(stored, roster)
+function invoke(_entry: (typeof entries)[number], body: string, stored: Row, roster: MemberRow[]) {
+  return (expose(body) as unknown as (group: Workgroup) => WorkgroupDraftSnapshot)(
+    workgroupFromRows(stored, roster),
+  )
 }
 for (const entry of entries) {
   describe(`RFC359 W28 ${entry.name} original snapshot`, () => {
@@ -352,11 +271,6 @@ for (const entry of entries) {
           const original = outcome(() => invoke(entry, originalBody(entry.name), row(), roster))
           expect(actual).toEqual(original)
           expect(JSON.stringify(actual)).toBe(JSON.stringify(original))
-          if (entry.name === 'package' && value === null)
-            expect(actual.error).toMatchObject({
-              code: 'workgroup-member-row-corrupt',
-              message: `workgroup member '${roster[index]!.id}' has no canonical identity`,
-            })
         }
     })
     test('group and member getters, own descriptors and switches copy timing stay exact', () => {
@@ -385,10 +299,7 @@ for (const entry of entries) {
           },
         })
         try {
-          const value =
-            entry.name === 'repository'
-              ? (fn as unknown as (group: Workgroup) => WorkgroupDraftSnapshot)(group)
-              : fn(row(), members())
+          const value = (fn as unknown as (group: Workgroup) => WorkgroupDraftSnapshot)(group)
           return { reads, captured, value, error: undefined }
         } catch (error) {
           return { reads, captured, value: undefined, error }
@@ -396,7 +307,7 @@ for (const entry of entries) {
       }
       const actual = observe(currentBody(entry))
       expect(actual).toEqual(observe(originalBody(entry.name)))
-      expect(actual.captured).toMatchObject({ sameSwitches: entry.name !== 'repository' })
+      expect(actual.captured).toMatchObject({ sameSwitches: false })
       const failure = new Error('original maxRounds getter')
       const failed = observe(currentBody(entry), failure)
       expect(failed).toEqual(observe(originalBody(entry.name), failure))
@@ -659,9 +570,6 @@ describeEachProvider('RFC359 W28 Workgroup snapshot real package and repository'
     })
     expect(JSON.stringify(projection.snapshotOf(group))).toBe(
       JSON.stringify(originalWorkgroupDraftSnapshotOf(group)),
-    )
-    expect(JSON.stringify(expose(currentBody(entries[2]))(after.group!, after.members))).toBe(
-      JSON.stringify(originalCurrentWorkgroupSnapshot(after.group!, after.members)),
     )
   })
   test('real overwrite inside the outer transaction rolls back all group, member and receipt rows', async () => {

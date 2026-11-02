@@ -24,8 +24,14 @@
   校验，草稿期图校验 error 改为提示（INTENT.md 单列、照旧触发图修复，确认页不禁用提交，§5 第 8 项）。错误矩阵
   `tests/rfc401-workflow-error-matrix.test.ts`。集中验证 458 + 112 个文件，查出的 5 处问题已修（含普通编辑首错顺序：规范 agent id 先于
   改名校验），其余为负载超时、单独复跑通过；导出仓库里 139 个按已提交源码出报告的用例通过。详见 plan「A3a 落地与集中验证」。
-- **下一步**：A3b（workgroup：参与者、成员规则统一，§5 第 1、7 项）。Part B（lease、技能 / fusion / restore 接入、旧生命周期退役）的前置
-  RFC-398 已 Done。
+- **A3a CI**：`61f705dbd` 主 CI 70/70、windows-platform 与 visual-regression-nightly 通过；同时是 A1 / A2 的后继证据。
+- **A3b（workgroup）**：唯一的 workgroup 写入参与者 `modules/resource-catalog/infrastructure/workgroupMutationParticipant.ts`，普通 CRUD（新建 /
+  复制 / 保存）、Intent、资源包接入；Intent 新建同名报 `workgroup-name-in-use` / 409（§5 第 1 项）、人类成员无效报
+  `workgroup-member-user-invalid`（§5 第 7 项），名单没变时不再重建成员行。错误矩阵 `tests/rfc401-workgroup-error-matrix.test.ts`。集中验证
+  461 + 18 + 5 个文件，查出的 8 + 3 处源码锁 / 账本 / 对拍问题已修，其余为负载超时、单进程复跑通过；导出仓库里 139 个按已提交源码出报告的
+  用例通过。详见 plan「A3b 落地与集中验证」。
+- **下一步**：A4（skill 的数据库部分：版本规则与字节合同；删除剩余 arms；AC-1 结构锁；名称预检整段删除）。Part B（lease、技能 / fusion /
+  restore 接入、旧生命周期退役）的前置 RFC-398 已 Done。
 
 ## 2026-11-02 RFC-430 部署选择项删余下三个可派生项（Done；`design/RFC-430-derivable-deployment-selections/`）
 

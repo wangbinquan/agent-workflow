@@ -11,11 +11,7 @@ export type {
   ResourcePackageSkillPublication as PostgresqlResourcePackageSkillPublication,
   ResourcePackagePluginPublication as PostgresqlResourcePackagePluginPublication,
 } from '../../application/package/artifactOwners'
-import {
-  workgroupMemberPersistenceValues,
-  workgroupSnapshotValues,
-  resolveWorkgroupLeaderMemberId as workgroupLeaderMemberId,
-} from '../workgroupPersistence'
+import { workgroupCreateSnapshot } from '../workgroupPersistence'
 import {
   collectWorkflowDependencyRefs,
   CreateAgentSchema,
@@ -35,7 +31,6 @@ import {
   decodeBundleIdentityRef,
   migrateWorkflowDefinitionToLatest,
   resolveWorkgroupOutputContract,
-  serializeWorkgroupEditableSnapshotV1,
   type AgentSkillRef,
   type AclResourceType,
   type BundleResourceType,
@@ -43,7 +38,7 @@ import {
   type WorkgroupDraftMember,
   type WorkgroupDraftSnapshot,
 } from '@agent-workflow/shared'
-import { and, eq, inArray } from 'drizzle-orm'
+import { and, eq } from 'drizzle-orm'
 import { ConflictError, NotFoundError, ValidationError, staleConflictError } from '@/util/errors'
 import { monotonicNow } from '@/util/time'
 import type { McpTransactionLifecycle } from '../mcpRepository'
@@ -52,7 +47,7 @@ import {
   isPostgresqlUniqueViolation,
 } from '../postgresql/repositorySupport'
 
-import { workgroupFromRows } from '../workgroupRepository'
+import { createWorkgroupMutationParticipant } from '../workgroupMutationParticipant'
 import {
   type AgentPackageMutation,
   type CapabilityTemplatePackageMutation,
@@ -113,10 +108,6 @@ function missingReference(type: AclResourceType, id: string): ValidationError {
   return new ValidationError('acl-missing-refs', `you do not have access to: ${type} '${id}'`, {
     missing: [{ type, name: id }],
   })
-}
-
-function uniqueStrings(values: readonly string[]): string[] {
-  return [...new Set(values)]
 }
 
 async function resolveIdentityReference(input: {
@@ -946,7 +937,6 @@ async function resolvedWorkgroupMembers(input: {
       .map((mapping) => [mapping.username, mapping]),
   )
   const members: WorkgroupDraftMember[] = []
-  const activeUserIds = new Set<string>()
   for (const member of input.mutation.payload.members) {
     if (member.memberType === 'human') {
       const mapping = mappings.get(member.username)
@@ -958,7 +948,6 @@ async function resolvedWorkgroupMembers(input: {
       }
       const userId = mapping.userId ?? null
       if (userId === null) continue
-      activeUserIds.add(userId)
       members.push({
         memberType: 'human',
         userId,
@@ -976,17 +965,6 @@ async function resolvedWorkgroupMembers(input: {
         ? {}
         : { grandfatheredIds: input.grandfatheredAgentIds }),
     })
-    const { agents } = tablesOf(input.transaction)
-    const agent = await first(
-      input.transaction.select({ id: agents.id }).from(agents).where(eq(agents.id, agentId)),
-    )
-    if (agent === undefined) {
-      throw new ValidationError(
-        'workgroup-member-agent-invalid',
-        'agent member id(s) do not exist',
-        { agentIds: [agentId] },
-      )
-    }
     members.push({
       memberType: 'agent',
       agentId,
@@ -994,88 +972,7 @@ async function resolvedWorkgroupMembers(input: {
       roleDesc: member.roleDesc,
     })
   }
-  const active = await input.reader.findActiveUsersByIds([...activeUserIds])
-  const activeIds = new Set(active.map((row) => row.userId))
-  const invalid = [...activeUserIds].filter((userId) => !activeIds.has(userId))
-  if (invalid.length > 0) {
-    throw new ValidationError('workgroup-member-user-invalid', 'human member user(s) not active', {
-      userIds: invalid,
-    })
-  }
   return Object.freeze(members)
-}
-
-async function workgroupMemberValues(input: {
-  readonly transaction: PostgresqlResourceCatalogTransaction
-  readonly workgroupId: string
-  readonly members: readonly WorkgroupDraftMember[]
-  readonly now: number
-  readonly id: () => string
-}): Promise<Array<PersistenceTables['workgroupMembers']['$inferInsert']>> {
-  const agentIds = uniqueStrings(
-    input.members.flatMap((member) =>
-      member.memberType === 'agent' && member.agentId ? [member.agentId] : [],
-    ),
-  )
-  const { agents } = tablesOf(input.transaction)
-  const names = new Map(
-    (agentIds.length === 0
-      ? []
-      : await input.transaction
-          .select({ id: agents.id, name: agents.name })
-          .from(agents)
-          .where(inArray(agents.id, agentIds))
-    ).map((row) => [row.id, row.name]),
-  )
-  return workgroupMemberPersistenceValues(input.workgroupId, input.members, input.now, names, () =>
-    input.id(),
-  )
-}
-
-async function insertWorkgroupMembers(
-  transaction: PostgresqlResourceCatalogTransaction,
-  values: readonly PersistenceTables['workgroupMembers']['$inferInsert'][],
-): Promise<void> {
-  const { workgroupMembers } = tablesOf(transaction)
-  for (const value of values) await insertOne(transaction, workgroupMembers, value)
-}
-
-function currentWorkgroupSnapshot(
-  row: PersistenceTables['workgroups']['$inferSelect'],
-  memberRows: readonly PersistenceTables['workgroupMembers']['$inferSelect'][],
-): WorkgroupDraftSnapshot {
-  const current = workgroupFromRows(row, memberRows)
-  const ordered = [...current.members].sort(
-    (left, right) =>
-      left.sortOrder - right.sortOrder || left.displayName.localeCompare(right.displayName),
-  )
-  const leader = ordered.find((member) => member.id === current.leaderMemberId)
-  return WorkgroupDraftSnapshotSchema.parse(
-    workgroupSnapshotValues(current, leader, () =>
-      ordered.map((member) => {
-        if (member.memberType === 'agent' && member.agentId !== null) {
-          return {
-            memberType: 'agent',
-            agentId: member.agentId,
-            displayName: member.displayName,
-            roleDesc: member.roleDesc,
-          }
-        }
-        if (member.memberType === 'human' && member.userId !== null) {
-          return {
-            memberType: 'human',
-            userId: member.userId,
-            displayName: member.displayName,
-            roleDesc: member.roleDesc,
-          }
-        }
-        throw new ValidationError(
-          'workgroup-member-row-corrupt',
-          `workgroup member '${member.id}' has no canonical identity`,
-        )
-      }),
-    ),
-  )
 }
 
 function workgroupCandidate(input: {
@@ -1103,78 +1000,28 @@ function workgroupCandidate(input: {
     members: input.members,
   }
   if (input.mutation.kind === 'workgroup-create') {
-    const created = CreateWorkgroupSchema.parse(common)
-    return WorkgroupDraftSnapshotSchema.parse({
-      ...created,
-      outputContract: resolveWorkgroupOutputContract(created.outputContract),
-      clarifyBudget: created.clarifyBudget ?? WG_CLARIFY_BUDGET_DEFAULT,
-      fanOut: created.fanOut ?? false,
-    })
+    return workgroupCreateSnapshot(CreateWorkgroupSchema.parse(common))
   }
   return WorkgroupDraftSnapshotSchema.parse(common)
 }
 
+/**
+ * RFC-401 A3b：workgroup 经唯一的写入参与者写入（design §9.5）。资源包只保留自己的规则：人类成员映射与包内引用解析（覆盖时
+ * 沿用当前成员的 agent 引用）、已选基线（`assertOwnedOverwrite`）。
+ */
 export async function commitPostgresqlWorkgroupPackageMutation(
   input: MutationArmInput<WorkgroupPackageMutation>,
 ): Promise<ResourcePackageMutationReceipt<'workgroup'>> {
+  const workgroups = createWorkgroupMutationParticipant(input.transaction, {
+    now: input.now,
+    memberId: input.id,
+  })
   if (input.mutation.kind === 'workgroup-create') {
     const members = await resolvedWorkgroupMembers(input)
-    const candidate = workgroupCandidate({ mutation: input.mutation, members })
-    const { workgroups } = tablesOf(input.transaction)
-    const collision = await first(
-      input.transaction
-        .select({ id: workgroups.id })
-        .from(workgroups)
-        .where(ownerScopedNameWhere(workgroups, input.context.actor.user.id, candidate.name)),
-    )
-    if (collision !== undefined) {
-      throw new ConflictError(
-        'workgroup-name-in-use',
-        `workgroup '${candidate.name}' already exists`,
-      )
-    }
-    const now = input.now()
-    const memberValues = await workgroupMemberValues({
-      transaction: input.transaction,
-      workgroupId: input.resourceId,
-      members: candidate.members,
-      now,
-      id: input.id,
+    await workgroups.create(input.context.actor, {
+      id: input.resourceId,
+      snapshot: workgroupCandidate({ mutation: input.mutation, members }),
     })
-    try {
-      await insertOne(input.transaction, workgroups, {
-        id: input.resourceId,
-        name: candidate.name,
-        description: candidate.description,
-        instructions: candidate.instructions,
-        mode: candidate.mode,
-        outputContract: resolveWorkgroupOutputContract(candidate.outputContract),
-        leaderMemberId: workgroupLeaderMemberId(candidate, memberValues),
-        shareOutputs: candidate.switches.shareOutputs,
-        directMessages: candidate.switches.directMessages,
-        blackboard: candidate.switches.blackboard,
-        maxRounds: candidate.maxRounds,
-        completionGate: candidate.completionGate,
-        clarifyBudget: candidate.clarifyBudget,
-        fanOut: candidate.fanOut,
-        version: 1,
-        ownerUserId: input.context.actor.user.id,
-        visibility: 'private',
-        aclRevision: 0,
-        schemaVersion: 1,
-        createdAt: now,
-        updatedAt: now,
-      })
-      await insertWorkgroupMembers(input.transaction, memberValues)
-    } catch (error) {
-      if (isPostgresqlUniqueViolation(error, ['workgroups_owner_name_unique'])) {
-        throw new ConflictError(
-          'workgroup-name-in-use',
-          `workgroup '${candidate.name}' already exists`,
-        )
-      }
-      throw error
-    }
     return receipt('workgroup', input.mutation, input.resourceId)
   }
 
@@ -1185,110 +1032,23 @@ export async function commitPostgresqlWorkgroupPackageMutation(
     resourceId: input.resourceId,
     mutation: input.mutation,
   })
-  const { workgroups, workgroupMembers } = tablesOf(input.transaction)
-  const row = await first(
-    input.transaction.select().from(workgroups).where(eq(workgroups.id, input.resourceId)),
-  )
-  if (row === undefined) {
-    throw new NotFoundError('workgroup-not-found', `workgroup '${input.resourceId}' not found`)
-  }
-  const currentMemberRows = await input.transaction
-    .select()
-    .from(workgroupMembers)
-    .where(eq(workgroupMembers.workgroupId, input.resourceId))
-  const current = currentWorkgroupSnapshot(row, currentMemberRows)
-  const members = await resolvedWorkgroupMembers({
-    ...input,
-    grandfatheredAgentIds: new Set(
-      current.members.flatMap((member) =>
-        member.memberType === 'agent' && member.agentId !== undefined ? [member.agentId] : [],
-      ),
-    ),
-  })
-  const candidate = workgroupCandidate({ mutation: input.mutation, members, current })
-  const logicalSame =
-    serializeWorkgroupEditableSnapshotV1(current) ===
-    serializeWorkgroupEditableSnapshotV1(candidate)
-  if (!logicalSame) {
-    if (candidate.name !== current.name) {
-      const collision = await first(
-        input.transaction
-          .select({ id: workgroups.id })
-          .from(workgroups)
-          .where(ownerScopedNameWhere(workgroups, input.context.actor.user.id, candidate.name)),
-      )
-      if (collision !== undefined && collision.id !== input.resourceId) {
-        throw new ConflictError(
-          'workgroup-name-in-use',
-          `workgroup '${candidate.name}' already exists; pick a different name`,
-        )
-      }
-    }
-    const rosterChanged =
-      JSON.stringify({
-        leaderDisplayName: current.leaderDisplayName ?? null,
-        members: current.members,
-      }) !==
-      JSON.stringify({
-        leaderDisplayName: candidate.leaderDisplayName ?? null,
-        members: candidate.members,
-      })
-    const now = input.now()
-    const replacements = rosterChanged
-      ? await workgroupMemberValues({
-          transaction: input.transaction,
-          workgroupId: input.resourceId,
-          members: candidate.members,
-          now,
-          id: input.id,
-        })
-      : null
-    const changed = await first(
-      input.transaction
-        .update(workgroups)
-        .set({
-          name: candidate.name,
-          description: candidate.description,
-          instructions: candidate.instructions,
-          mode: candidate.mode,
-          outputContract: resolveWorkgroupOutputContract(candidate.outputContract),
-          leaderMemberId:
-            replacements === null
-              ? row.leaderMemberId
-              : workgroupLeaderMemberId(candidate, replacements),
-          shareOutputs: candidate.switches.shareOutputs,
-          directMessages: candidate.switches.directMessages,
-          blackboard: candidate.switches.blackboard,
-          maxRounds: candidate.maxRounds,
-          completionGate: candidate.completionGate,
-          clarifyBudget: candidate.clarifyBudget,
-          fanOut: candidate.fanOut,
-          version: row.version + 1,
-          updatedAt: now,
-        })
-        .where(
-          and(
-            eq(workgroups.id, input.resourceId),
-            eq(workgroups.version, input.mutation.expect.expectedVersion),
-            eq(workgroups.ownerUserId, input.context.actor.user.id),
-            eq(workgroups.aclRevision, row.aclRevision),
+  await workgroups.update(input.context.actor, {
+    id: input.resourceId,
+    expectedVersion: input.mutation.expect.expectedVersion,
+    patch: async (_current, currentSnapshot) => {
+      const members = await resolvedWorkgroupMembers({
+        ...input,
+        grandfatheredAgentIds: new Set(
+          currentSnapshot.members.flatMap((member) =>
+            member.memberType === 'agent' && member.agentId !== undefined ? [member.agentId] : [],
           ),
-        )
-        .returning({ id: workgroups.id }),
-    )
-    if (changed === undefined) {
-      throw staleConflictError('workgroup', `workgroup '${input.resourceId}' changed; reload`)
-    }
-    if (replacements !== null) {
-      await input.transaction
-        .delete(workgroupMembers)
-        .where(eq(workgroupMembers.workgroupId, input.resourceId))
-      await insertWorkgroupMembers(input.transaction, replacements)
-    }
-  }
+        ),
+      })
+      return workgroupCandidate({ mutation: input.mutation, members, current: currentSnapshot })
+    },
+  })
   return receipt('workgroup', input.mutation, input.resourceId)
 }
-
 export async function resolvePostgresqlCapabilityTemplatePackagePayload(input: {
   readonly reader: PostgresqlResourcePackageTransactionReader
   readonly context: PostgresqlResourcePackageMutationRequestContext

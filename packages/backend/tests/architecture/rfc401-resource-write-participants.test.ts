@@ -1,5 +1,6 @@
 // RFC-401 Part A (design §9): each resource kind is written through one participant in
-// `modules/resource-catalog/infrastructure/` — agents (A1), MCP servers and plugins (A2), workflows (A3). The ordinary
+// `modules/resource-catalog/infrastructure/` — agents (A1), MCP servers and plugins (A2), workflows (A3a), workgroups
+// (A3b; workgroup rows have no separate write program, so the lock scans for raw row writes instead). The ordinary
 // CRUD repository, the Intent port and the resource-package arm (and, for agents, the digital-employee template writer;
 // for workflows, the built-in workflow catalog) all call it, and only the participant imports the kind's row-write
 // program. For agents the dependency-graph check has one write-time caller (the participant) plus the public validation
@@ -27,6 +28,8 @@ interface WriteStack {
   /** Module suffix of the kind's row-write program and the atoms only the participant may import. */
   readonly program: string
   readonly programExports: readonly string[]
+  /** Raw row writes only the participant (and the legacy importers) may contain, for kinds without a program. */
+  readonly rowWrite?: RegExp
   /** Exact set: it can only shrink. */
   readonly legacyImporters: readonly string[]
   /** Scene adapters that must hand their writes to the participant. */
@@ -99,9 +102,30 @@ const STACKS: readonly WriteStack[] = [
       { path: RC + 'composition/builtinWorkflowCatalog.ts', fn: 'composeBuiltinWorkflowCatalog' },
     ],
   },
+  {
+    kind: 'workgroup',
+    participant: INFRA + 'workgroupMutationParticipant.ts',
+    factory: 'createWorkgroupMutationParticipant',
+    program: '/workgroupMutationParticipant',
+    programExports: [],
+    // Content and member-row writes; the repository keeps only the delete of the workgroup row.
+    rowWrite:
+      /\.(?:insert|update)\(\s*workgroups\s*\)|\.(?:insert|update|delete)\(\s*workgroupMembers\s*\)|insertOne\([^,]+,\s*(?:workgroups|workgroupMembers)\s*,/,
+    // The test-only legacy writers (`createWorkgroup` / `saveWorkgroup` / `copyWorkgroup`); RFC-401 Part B deletes them.
+    legacyImporters: [INFRA + 'legacy/workgroups.ts'],
+    scenes: [
+      { path: INTENT_PORTS, fn: 'createWorkgroupPort' },
+      { path: PACKAGE_ARMS, fn: 'commitPostgresqlWorkgroupPackageMutation' },
+      { path: INFRA + 'workgroupRepository.ts', fn: 'createWorkgroupRepository' },
+    ],
+  },
 ]
 /** Codes and identifiers the unified write rules removed (proposal §5 #2 / #8). */
-const RETIRED_STRINGS = ['workflow-name-in-use', 'intent-workflow-invalid'] as const
+const RETIRED_STRINGS = [
+  'workflow-name-in-use',
+  'intent-workflow-invalid',
+  'workgroup-human-inactive',
+] as const
 const RETIRED_IDENTIFIERS = ['validateResolvedBundleWorkflowGraphs'] as const
 const UNITS = backendUnits(ROOT)
 
@@ -144,6 +168,8 @@ export function writeStackViolations(units: readonly SourceUnit[]): string[] {
         stack.programExports.includes(name),
       )
       if (imported.length > 0) found.add(`${stack.kind}-write-program:${unit.path}`)
+      if (stack.rowWrite?.test(unit.text) === true)
+        found.add(`${stack.kind}-row-write:${unit.path}`)
     }
     const agent = STACKS[0]!
     if (unit.path !== GRAPH && unit.path !== agent.participant && unit.path !== GRAPH_QUERY) {
@@ -268,6 +294,24 @@ test('negative fixtures over the corpus: each way back is reported', () => {
       ),
     ),
   ).toEqual(['workflow-write-program:' + INFRA + 'demoResourceCatalogSeed.ts'])
+  expect(
+    writeStackViolations(
+      replace(
+        INFRA + 'workgroupRepository.ts',
+        (text) => text + '\nawait transaction.delete(workgroupMembers).where(condition)\n',
+      ),
+    ),
+  ).toEqual(['workgroup-row-write:' + INFRA + 'workgroupRepository.ts'])
+  expect(
+    writeStackViolations(
+      replace(INTENT_PORTS, (text) =>
+        text.replace(
+          'const workgroups = createWorkgroupMutationParticipant(transaction, {',
+          'const workgroups = createIntentWorkgroupWriter(transaction, {',
+        ),
+      ),
+    ),
+  ).toEqual(['scene-bypass:createWorkgroupPort'])
 })
 
 test('negative fixtures over fabricated units alone: every matcher still bites', () => {
@@ -287,6 +331,17 @@ test('negative fixtures over fabricated units alone: every matcher still bites',
   expect(only(INFRA + 'x.ts', "throw new ConflictError('workflow-name-in-use', 'taken')")).toEqual([
     'retired-code:workflow-name-in-use:' + INFRA + 'x.ts',
   ])
+  expect(
+    only(INFRA + 'x.ts', "throw new ValidationError('workgroup-human-inactive', 'x')"),
+  ).toEqual(['retired-code:workgroup-human-inactive:' + INFRA + 'x.ts'])
+  expect(only(INFRA + 'x.ts', 'await insertOne(transaction, workgroupMembers, value)')).toEqual([
+    'workgroup-row-write:' + INFRA + 'x.ts',
+  ])
+  expect(only(INFRA + 'x.ts', 'await tx.update(workgroups).set({ name })')).toEqual([
+    'workgroup-row-write:' + INFRA + 'x.ts',
+  ])
+  // The delete of a workgroup row (the repository's delete path) is not a content write.
+  expect(only(INFRA + 'x.ts', 'await tx.delete(workgroups).where(condition)')).toEqual([])
   expect(
     only(
       'packages/backend/src/modules/intent/infrastructure/x.ts',
@@ -314,5 +369,6 @@ test('negative fixtures over fabricated units alone: every matcher still bites',
     'scene-bypass:commitPostgresqlMcpPackageMutation',
     'scene-bypass:commitPostgresqlPluginPackageMutation',
     'scene-bypass:commitPostgresqlWorkflowPackageMutation',
+    'scene-bypass:commitPostgresqlWorkgroupPackageMutation',
   ])
 })

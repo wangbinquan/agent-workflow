@@ -65,12 +65,15 @@ describe('RFC-349 PostgreSQL Intent resource apply binding', () => {
     )
     expect(workflowWriter).toContain('.insert(workflows)')
     expect(workflowWriter).toContain('.update(workflows)')
-    for (const table of ['skills', 'workgroups']) {
+    for (const table of ['skills']) {
       expect(source).toMatch(
         new RegExp(`(?:\\.insert\\(\\s*${table}\\s*\\)|\\binsertOne\\([^,]+,\\s*${table}\\s*,)`),
       )
       expect(source).toContain(`.update(${table})`)
     }
+    // RFC-401 A3b: workgroup rows and member rows go through the one Workgroup mutation participant.
+    expect(source).toContain('const workgroups = createWorkgroupMutationParticipant(transaction, {')
+    expect(source).not.toMatch(/\.(?:insert|update)\(\s*workgroups\s*\)|workgroupMembers\s*,/)
     // RFC-401 A2: MCP and plugin rows go through their one participant on the same transaction.
     for (const [table, factory] of [
       ['mcps', 'createMcpMutationParticipant'],
@@ -88,7 +91,8 @@ describe('RFC-349 PostgreSQL Intent resource apply binding', () => {
     expect(source).toContain('plan.expectedRevision.configHash')
     expect(source).toContain('plan.expectedRevision.token')
     expect(source).toContain('plan.expectedRevision.version')
-    expect(source).toContain('assertVisibleReferences(')
+    // RFC-401 A1–A3：引用的存在与可见由各类唯一的写入参与者按普通编辑的判据报，Intent 端口不再自带一份。
+    expect(source).not.toContain('assertVisibleReferences(')
   })
 
   test('keeps preflight and durable artifact lifecycle explicit', () => {

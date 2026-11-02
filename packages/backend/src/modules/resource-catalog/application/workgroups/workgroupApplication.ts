@@ -8,7 +8,7 @@ import {
   type Workgroup,
 } from '@agent-workflow/shared'
 import { NotFoundError, ValidationError } from '@/util/errors'
-import { assertInitialResourceOwner, initialPrivateResourceAcl } from '../resourceDefaults'
+import { assertInitialResourceOwner } from '../resourceDefaults'
 import type {
   CopyWorkgroupCatalogInput,
   CreateWorkgroupCatalogInput,
@@ -114,7 +114,6 @@ export function createWorkgroupApplication(deps: WorkgroupApplicationDependencie
         authority,
         id: deps.ids.next(),
         document,
-        initialAcl: initialPrivateResourceAcl(authority.user.id),
         now: deps.clock.now(),
       })
       deps.events.created(created)
@@ -131,7 +130,6 @@ export function createWorkgroupApplication(deps: WorkgroupApplicationDependencie
         authority,
         request: { id: input.id, copy: request },
         id: deps.ids.next(),
-        initialAcl: initialPrivateResourceAcl(authority.user.id),
         now: deps.clock.now(),
       })
       deps.events.created(created)

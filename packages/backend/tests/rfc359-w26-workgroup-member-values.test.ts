@@ -1,6 +1,12 @@
-// The private Intent exposure below executes only its actual row-construction
-// expression. The DB group separately drives complete selected Intent apply
-// compositions; the exposure alone is not an owner or PostgreSQL execution.
+// The pure group pins the shared member-row constructor against its exact
+// pre-unification body. The DB group drives complete selected Intent apply
+// compositions.
+//
+// RFC-401 A3b: Intent no longer builds member rows itself — its private
+// constructor (`workgroupMemberValues`, which read agent names for any defined
+// agent id instead of a truthy one) is gone and every entry writes member rows
+// through the one workgroup participant with the shared constructor, so only
+// the shared original is pinned here.
 
 import { agentFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
@@ -8,11 +14,9 @@ import { tablesOf, type PersistenceTables } from '@/platform/persistence/session
 import { first } from '@/platform/persistence/queryHelpers'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { createHash } from 'node:crypto'
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { fileURLToPath } from 'node:url'
-import ts from 'typescript'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import {
@@ -44,8 +48,7 @@ type MemberValues = (
   nextId: () => string,
 ) => readonly MemberRow[]
 
-// Exact two pre-unification constructors at 26b43805b. The only mapped-value
-// difference is the agentName presence condition; property order also stays exact.
+// The exact pre-unification shared constructor at 26b43805b; property order also stays exact.
 const originalShared: MemberValues = (workgroupId, members, now, names, nextId) =>
   members.map((member, index) => ({
     id: nextId(),
@@ -60,56 +63,6 @@ const originalShared: MemberValues = (workgroupId, members, now, names, nextId) 
     sortOrder: index,
     createdAt: now,
   }))
-const originalIntent: MemberValues = (workgroupId, members, now, names, nextId) =>
-  members.map((member, sortOrder) => ({
-    id: nextId(),
-    workgroupId,
-    memberType: member.memberType,
-    agentName:
-      member.memberType === 'agent' && member.agentId !== undefined
-        ? (names.get(member.agentId) ?? null)
-        : null,
-    agentId: member.memberType === 'agent' ? (member.agentId ?? null) : null,
-    userId: member.memberType === 'human' ? (member.userId ?? null) : null,
-    displayName: member.displayName,
-    roleDesc: member.roleDesc,
-    sortOrder,
-    createdAt: now,
-  }))
-
-function intentMemberValues(): MemberValues {
-  const path = fileURLToPath(
-    new URL(
-      '../src/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourcePorts.ts',
-      import.meta.url,
-    ),
-  )
-  const source = ts.createSourceFile(path, readFileSync(path, 'utf8'), ts.ScriptTarget.Latest, true)
-  const selected = source.statements.filter(
-    (node): node is ts.FunctionDeclaration =>
-      ts.isFunctionDeclaration(node) && node.name?.text === 'workgroupMemberValues',
-  )
-  if (selected.length !== 1) throw new Error('expected one Intent member constructor')
-  const returned = selected[0]!.body?.statements.at(-1)
-  if (
-    returned === undefined ||
-    !ts.isReturnStatement(returned) ||
-    returned.expression === undefined
-  )
-    throw new Error('expected the original terminal member return')
-  const code = ts.transpileModule(
-    `const selected = (workgroupId, members, now, names, nextId) => ${returned.expression.getText(source)}`,
-    { compilerOptions: { target: ts.ScriptTarget.ESNext, module: ts.ModuleKind.ESNext } },
-  ).outputText
-  const result: unknown = new Function(
-    'workgroupMemberPersistenceValues',
-    `'use strict';\n${code}\nreturn selected`,
-  )(workgroupMemberPersistenceValues)
-  if (typeof result !== 'function') throw new Error('expected callable member constructor')
-  return result as MemberValues
-}
-
-const privateIntentValues = intentMemberValues()
 const fields = [
   'id',
   'workgroupId',
@@ -175,7 +128,6 @@ const directMembers: WorkgroupDraftMember[] = [
 
 for (const [name, actual, original] of [
   ['shared default', workgroupMemberPersistenceValues, originalShared],
-  ['private Intent', privateIntentValues, originalIntent],
 ] as const) {
   describe(`RFC359 original ${name} member values`, () => {
     test('all columns, own keys, JSON, reads and empty/undefined lookups stay exact', () => {
@@ -184,7 +136,7 @@ for (const [name, actual, original] of [
       expect(after).toEqual(before)
       expect(after.rows?.map((row) => Object.keys(row))).toEqual(directMembers.map(() => fields))
       expect(JSON.stringify(after.rows)).toBe(JSON.stringify(before.rows))
-      expect(after.rows?.[2]?.agentName).toBe(name === 'private Intent' ? 'Empty ID label' : null)
+      expect(after.rows?.[2]?.agentName).toBeNull()
       expect(after.rows?.[3]?.agentName).toBeNull()
       expect(after.rows?.[3]?.agentId).toBeNull()
       expect(after.rows?.[5]?.userId).toBeNull()
@@ -216,7 +168,7 @@ for (const [name, actual, original] of [
       expect(after).toEqual(before)
       expect(after.rows?.[0]?.agentId).toBeNull()
       expect(after.rows?.[0]?.agentName).toBeNull()
-      expect(after.trace.includes('name:null')).toBe(name === 'private Intent')
+      expect(after.trace.includes('name:null')).toBe(false)
     })
 
     for (const field of ['displayName', 'name', 'id']) {

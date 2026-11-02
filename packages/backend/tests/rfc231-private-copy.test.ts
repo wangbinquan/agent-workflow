@@ -374,7 +374,8 @@ describeEachProvider('RFC-231 private create invariant', (harness) => {
         'modules/resource-catalog/infrastructure/workflowDefinitionWrite.ts': 1,
       },
       workgroups: {
-        'modules/resource-catalog/infrastructure/workgroupRepository.ts': 1,
+        // RFC-401 A3b: ordinary create / copy, Intent and packages insert through the one workgroup participant.
+        'modules/resource-catalog/infrastructure/workgroupMutationParticipant.ts': 1,
         'modules/resource-catalog/infrastructure/legacy/workgroups.ts': 1,
       },
     }
@@ -388,7 +389,7 @@ describeEachProvider('RFC-231 private create invariant', (harness) => {
       'modules/resource-catalog/infrastructure/legacy/workflow.ts',
       'modules/resource-catalog/infrastructure/legacy/workgroups.ts',
       'modules/resource-catalog/infrastructure/workflowDefinitionWrite.ts',
-      'modules/resource-catalog/infrastructure/workgroupRepository.ts',
+      'modules/resource-catalog/infrastructure/workgroupMutationParticipant.ts',
     ]
     const sources = new Map(
       await Promise.all(
@@ -426,9 +427,12 @@ describeEachProvider('RFC-231 private create invariant', (harness) => {
         'initialPrivateResourceAcl(authority.user.id)',
       )
     }
-    expect(sources.get('modules/resource-catalog/infrastructure/workgroupRepository.ts')).toContain(
-      '...input.initialAcl',
+    // RFC-401 A3b: the participant stamps the creator as owner and the row private.
+    const workgroupParticipant = sources.get(
+      'modules/resource-catalog/infrastructure/workgroupMutationParticipant.ts',
     )
+    expect(workgroupParticipant).toContain('ownerUserId: actor.user.id')
+    expect(workgroupParticipant).toContain("visibility: 'private'")
     // RFC-395 II-a A2: the workgroup host is a definition constant, no catalog seed remains.
     expect(sources.get('modules/resource-catalog/infrastructure/legacy/workflow.ts')).toContain(
       'initialBuiltinResourceAcl',

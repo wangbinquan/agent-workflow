@@ -329,6 +329,7 @@ Facade 只许 re-export 或参数形状适配；不得含 DB 查询、状态、�
 - **2026-11-02 RFC-401 A2**：MCP 与 plugin 的写入栈合一；资源包覆盖保持规格不变不再重装插件。
 - **2026-11-02 RFC-401 A3a**：workflow 的写入栈合一（普通 CRUD / Intent / 资源包 / 内建目录 / 种子都经唯一参与者）；Intent 允许 workflow
   重名，提交不再跑完整图校验（草稿期图校验只提示）。
+- **2026-11-02 RFC-401 A3b**：workgroup 的写入栈合一（普通 CRUD / Intent / 资源包都经唯一参与者）；Intent 的成员与重名错误收敛到普通编辑。
 
 ### S8 `util/git` 叶子化与剩余 KNOWN（W5 一部分）
 

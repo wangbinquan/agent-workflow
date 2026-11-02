@@ -1,7 +1,14 @@
 import { composeSubjectTaskReferencePort } from '@/modules/task-execution/composition'
-// Pure exposure executes the actual private Intent snapshot function body with
-// its real codec dependencies. This is not a PostgreSQL factory/DB execution.
-// Database cases below use the real dual-provider repository fixture.
+// Pure exposure executes the actual shared member callback of the repository
+// snapshot projection with its real codec dependencies. This is not a
+// PostgreSQL factory/DB execution. Database cases below use the real
+// dual-provider repository fixture.
+//
+// RFC-401 A3b: the Intent-private snapshot (`workgroupSnapshotFromRows`, which
+// fell back to '' for a missing agent id and so rejected such rows at its
+// schema) is gone — Intent and packages now read the current workgroup through
+// the repository projection (`workgroupDraftSnapshotOf`) inside the one
+// workgroup participant, so only that projection is pinned here.
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { first } from '@/platform/persistence/queryHelpers'
@@ -35,7 +42,6 @@ import { describeEachProvider } from './helpers/eachProvider'
 type Row = PersistenceTables['workgroups']['$inferSelect']
 type MemberRow = PersistenceTables['workgroupMembers']['$inferSelect']
 type MemberProjection = (member: WorkgroupMember) => WorkgroupDraftMember
-type IntentSnapshot = (row: Row, members: readonly MemberRow[]) => WorkgroupDraftSnapshot
 const T0 = 1_700_000_000_000
 
 // Exact old outer functions. Their callbacks differ only in the agent fallback.
@@ -69,45 +75,6 @@ function originalSnapshot(group: Workgroup): WorkgroupDraftSnapshot {
           }
         : {
             memberType: 'human' as const,
-            userId: member.userId ?? '',
-            displayName: member.displayName,
-            roleDesc: member.roleDesc,
-          },
-    ),
-  })
-}
-
-function originalIntentSnapshot(
-  row: PersistenceTables['workgroups']['$inferSelect'],
-  members: readonly PersistenceTables['workgroupMembers']['$inferSelect'][],
-): WorkgroupDraftSnapshot {
-  const group = workgroupFromRows(row, members)
-  const ordered = [...group.members].sort((left, right) => left.sortOrder - right.sortOrder)
-  const leader = ordered.find((member) => member.id === group.leaderMemberId)
-  return WorkgroupDraftSnapshotSchema.parse({
-    name: group.name,
-    description: group.description,
-    instructions: group.instructions,
-    mode: group.mode,
-    outputContract: resolveWorkgroupOutputContract(group.outputContract),
-    ...(group.mode === 'leader_worker' && leader !== undefined
-      ? { leaderDisplayName: leader.displayName }
-      : {}),
-    switches: group.switches,
-    maxRounds: group.maxRounds,
-    completionGate: group.completionGate,
-    clarifyBudget: group.clarifyBudget ?? 3,
-    fanOut: group.fanOut ?? false,
-    members: ordered.map((member) =>
-      member.memberType === 'agent'
-        ? {
-            memberType: 'agent',
-            agentId: member.agentId ?? '',
-            displayName: member.displayName,
-            roleDesc: member.roleDesc,
-          }
-        : {
-            memberType: 'human',
             userId: member.userId ?? '',
             displayName: member.displayName,
             roleDesc: member.roleDesc,
@@ -171,13 +138,7 @@ const commonSource = sourceEntry(
   '../src/modules/resource-catalog/infrastructure/workgroupPersistence.ts',
   'workgroupDraftSnapshotOf',
 )
-const intentSource = sourceEntry(
-  '../src/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourcePorts.ts',
-  'workgroupSnapshotFromRows',
-)
 const commonMember = exposeFunction<MemberProjection>(commonSource.callback)
-const intentMember = exposeFunction<MemberProjection>(intentSource.callback)
-const intentSnapshot = exposeFunction<IntentSnapshot>(intentSource.entry)
 
 function row(): Row {
   return {
@@ -290,7 +251,6 @@ function memberWithReads(member: WorkgroupMember, reads: string[]): WorkgroupMem
 describe('RFC359 original Workgroup member projection contracts', () => {
   for (const [label, project, fallback] of [
     ['repository', commonMember, QUARANTINED_SNAPSHOT_AGENT_ID],
-    ['intent', intentMember, ''],
   ] as const) {
     test(`${label}: complete own fields, descriptors and getter order retain the original projection`, () => {
       for (const member of workgroupFromRows(row(), members()).members) {
@@ -322,40 +282,26 @@ describe('RFC359 original Workgroup member projection contracts', () => {
     })
   }
 
-  test('both complete original snapshot entries preserve nonempty JSON and member order', () => {
+  test('the complete original snapshot entry preserves nonempty JSON and member order', () => {
     const stored = members()
     const group = workgroupFromRows(row(), stored)
-    expect(JSON.stringify(persistence.workgroupDraftSnapshotOf(group))).toBe(
-      JSON.stringify(originalSnapshot(group)),
-    )
-    expect(JSON.stringify(intentSnapshot(row(), stored))).toBe(
-      JSON.stringify(originalIntentSnapshot(row(), stored)),
-    )
-    expect(intentSnapshot(row(), stored).members.map((member) => member.displayName)).toEqual([
-      'Lead',
-      'Alpha',
-      'Zulu',
-    ])
+    const snapshot = persistence.workgroupDraftSnapshotOf(group)
+    expect(JSON.stringify(snapshot)).toBe(JSON.stringify(originalSnapshot(group)))
+    expect(snapshot.members.map((member) => member.displayName)).toEqual(['Lead', 'Alpha', 'Zulu'])
     expect(stored.map((member) => member.id)).toEqual(['m-zulu', 'm-alpha', 'm-lead'])
   })
 
-  test('NULL agent fallback remains accepted by repository and rejected by the original Intent schema', () => {
+  test('NULL agent fallback remains accepted by the repository projection', () => {
     const stored = members()
     stored[0]!.agentId = null
     const group = workgroupFromRows(row(), stored)
     const snapshot = persistence.workgroupDraftSnapshotOf(group)
     expect(JSON.stringify(snapshot)).toBe(JSON.stringify(originalSnapshot(group)))
     expect(snapshot.members[2]!.agentId).toBe(QUARANTINED_SNAPSHOT_AGENT_ID)
-    const actual = issueResult(() => intentSnapshot(row(), stored))
-    expect(actual).toEqual(issueResult(() => originalIntentSnapshot(row(), stored)))
-    expect(actual.issues.map((issue) => issue.path)).toEqual([
-      ['members', 2, 'agentId'],
-      ['members', 2],
-    ])
   })
 
   for (const memberIndex of [0, 1]) {
-    test(`empty identity ${memberIndex}: both original error messages and issue order remain unchanged`, () => {
+    test(`empty identity ${memberIndex}: the original error message and issue order remain unchanged`, () => {
       const stored = members()
       if (memberIndex === 0) stored[0]!.agentId = ''
       else stored[1]!.userId = null
@@ -363,15 +309,12 @@ describe('RFC359 original Workgroup member projection contracts', () => {
       expect(issueResult(() => persistence.workgroupDraftSnapshotOf(group))).toEqual(
         issueResult(() => originalSnapshot(group)),
       )
-      expect(issueResult(() => intentSnapshot(row(), stored))).toEqual(
-        issueResult(() => originalIntentSnapshot(row(), stored)),
-      )
     })
   }
 })
 
 describeEachProvider('RFC359 Workgroup member projection on stored rows', (harness) => {
-  test('real repository and both codecs retain full row projections and rollback snapshots', async () => {
+  test('real repository and its codec retain full row projections and rollback snapshots', async () => {
     const { workgroups, workgroupMembers } = tablesOf(harness.db)
     await insertOne(harness.db, workgroups, row())
     await harness.db.insert(workgroupMembers).values(members())
@@ -400,9 +343,6 @@ describeEachProvider('RFC359 Workgroup member projection on stored rows', (harne
     expect(JSON.stringify(projection.snapshotOf(group))).toBe(
       JSON.stringify(originalSnapshot(group)),
     )
-    expect(JSON.stringify(intentSnapshot(stored, storedMembers))).toBe(
-      JSON.stringify(originalIntentSnapshot(stored, storedMembers)),
-    )
     expect(serializeWorkgroupEditableSnapshotV1(projection.snapshotOf(group))).toBe(
       serializeWorkgroupEditableSnapshotV1(originalSnapshot(group)),
     )
@@ -429,9 +369,6 @@ describeEachProvider('RFC359 Workgroup member projection on stored rows', (harne
         expect(next.members[2]!.roleDesc).toBe('changed role')
         expect(JSON.stringify(projection.snapshotOf(next))).toBe(
           JSON.stringify(originalSnapshot(next)),
-        )
-        expect(JSON.stringify(intentSnapshot(nextRow, nextMembers))).toBe(
-          JSON.stringify(originalIntentSnapshot(nextRow, nextMembers)),
         )
         expect(projection.snapshotOf(next)).not.toEqual(projection.snapshotOf(group))
         throw rollback

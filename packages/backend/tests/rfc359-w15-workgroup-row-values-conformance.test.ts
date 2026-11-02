@@ -208,7 +208,6 @@ describeEachProvider('RFC-359 Workgroup row constructors through real writers', 
         authority,
         id: 'row-workgroup',
         document: input,
-        initialAcl: initial,
         now: T0 + 1,
       })
       const before = await physical(harness.db, created.id)
@@ -258,7 +257,6 @@ describeEachProvider('RFC-359 Workgroup row constructors through real writers', 
           copy: { expectedVersion: 1, expectedSnapshotHash: created.snapshotHash },
         },
         id: 'copied-row-workgroup',
-        initialAcl: initial,
         now: T0 + 2,
       })
       const after = await physical(harness.db, copied.id)
@@ -292,7 +290,6 @@ describeEachProvider('RFC-359 Workgroup row constructors through real writers', 
       authority,
       id: 'row-workgroup',
       document: document(),
-      initialAcl: initial,
       now: T0,
     })
     const before = await physical(harness.db, created.id)
@@ -349,7 +346,6 @@ describeEachProvider('RFC-359 Workgroup row constructors through real writers', 
           authority,
           id: 'rolled-back-workgroup',
           document: document(),
-          initialAcl: initial,
           now: T0,
         })
         const inside = await physical(tx, 'rolled-back-workgroup')
@@ -370,7 +366,6 @@ describeEachProvider('RFC-359 Workgroup row constructors through real writers', 
       authority,
       id: 'retained-workgroup',
       document: document(),
-      initialAcl: initial,
       now: T0,
     })
     const before = await physical(harness.db, created.id)

@@ -286,3 +286,40 @@ Part A 按资源类分次提交（plan「Part A 分步」）：A1 agent；A2 MCP
   schema）；`rfc358-intent-graph-validation` 改锁「提交不拦」与 INTENT.md 的图校验
   一节；前端 `intent-detail-inline` 锁图校验 error 与「不可用」不禁用提交。
 
+### 9.5 A3b：workgroup 写入参与者
+
+- **合同** `RC/application/ports/workgroupMutation.ts`；实现 `RC/infrastructure/workgroupMutationParticipant.ts`（全部 SQL 在传入的 tx 上；
+  workgroup 没有独立的写入原语模块，参与者是唯一写 workgroup 行与成员行的地方，删除仍在普通 CRUD 仓库）。规则、错误与首错顺序取普通
+  编辑现行的那一份：
+  - create：人类成员须为 active 用户（`workgroup-member-user-invalid`，「human member user(s) not active」，details.userIds）→ 存在但
+    不可见的 agent 成员（`acl-missing-refs`，details.missing 为 `{ type, name }`）→ 不存在的 agent 成员（`workgroup-member-agent-invalid`，
+    details.agentIds）→ 同 owner 同名（`workgroup-name-in-use`，「workgroup 'x' already exists」）→ 插入行与成员（leader 须是 agent 成员，
+    `workgroup-leader-invalid`）。`copy`（普通编辑的复制）沿用此前的 fail-closed：不存在与不可见的 agent 成员同报 `acl-missing-refs`。
+  - update：读当前行与成员（`workgroup-not-found`）→ 场景 patch → 人类成员 → 新增 agent 成员不存在或不可见（`acl-missing-refs`）→ 全部
+    agent 成员的存在性（沿用的成员被删时 `workgroup-member-agent-invalid`）→ 版本 fence：版本不符时内容相同为 already-current，否则
+    `resource-operation-stale`（「workgroup 'x' is at version N, expected M」，details.current）；内容相同为 already-current → 场景 guard
+    （返回要写的名称）→ 改名后的名称冲突（「…; pick a different name」，在当前 owner 的命名空间里查）→ 成员名单（含 leader）变了才
+    重建成员行 → CAS 写入。
+  - owner + name 唯一约束的竞争失败经 `engineOf(tx).uniqueViolationTarget` 归一为 `workgroup-name-in-use`（provider 中立，§2.2）。
+  - 新建请求（三条入口都先解析成 `CreateWorkgroup`）经 `workgroupCreateSnapshot` 落成快照（输出合同解析、clarify 预算与 fanOut
+    补缺省），参与者只接快照；当前快照统一用普通编辑的 `workgroupDraftSnapshotOf`。
+- **场景保留的规则**：普通编辑——编辑权（事务内复核）、改名权限（编辑者不能改名）、复制命名与复制名竞争的
+  `workgroup-copy-name-conflict`、删除；Intent——owner-only、禁止改名、提交后的回调；资源包——人类成员映射
+  （`package-human-mapping-*`，映射到非 active 用户先报 `package-human-mapping-invalid`）、包内引用解析（`package-external-unresolved`
+  等）、已选目标基线（`assertOwnedOverwrite`）。事务外的成员预检（`resolveAgentIdsUsable` 与重复的人类成员检查）随之删除，判定只在
+  参与者的事务里跑；仓库不再接收初始 ACL（新建行恒为调用者所有、private，RFC-231）。
+- **用户可见变化**：
+  - Intent：新建同名 workgroup 报 `workgroup-name-in-use` / 409（此前解析期 `intent-name-conflict` / 422，§5 第 1 项）；人类成员无效报
+    `workgroup-member-user-invalid`（此前 `workgroup-human-inactive`，无 details，§5 第 7 项）；新建时成员校验先于重名（普通编辑的
+    顺序）；不存在的 agent 成员新建时报 `workgroup-member-agent-invalid`（此前 `acl-missing-refs`）、不可见的 details 键为 `name`；
+    stale 带 details.current；成员名单没变时不再重建成员行；更新省略输出合同时沿用当前值（此前重置为缺省值）。
+  - 资源包：stale 措辞与 details 同普通编辑（仍在已选基线之后）；不存在的 agent 成员一次列全（此前逐个报）。
+  - Intent 与资源包读当前 workgroup 一律用普通编辑的快照（`workgroupDraftSnapshotOf`）：库里没有身份的成员行按占位 id 处理，
+    覆盖 / 更新照常进行（此前资源包报 `workgroup-member-row-corrupt`、Intent 在快照 schema 上失败）。
+  - 普通编辑：code / message / details 与首错顺序不变；改名竞争失败的唯一约束冲突归一为 409。
+- **守卫**：结构锁加 workgroup 一类（扫描 workgroup 行与成员行的原始写入，只允许参与者与测试用的旧写入 `legacy/workgroups.ts`；
+  Intent 端口、资源包 arm、普通 CRUD 仓库必须调参与者），并锁 `workgroup-human-inactive` 不再出现（含负例）；RFC-225 写入清单、
+  RFC-231 私有新建、RFC-345 / RFC-349 的源码锁改指参与者。
+- **用例**：`T/rfc401-workgroup-error-matrix.test.ts`（重名、无效人类成员、不可见 agent、不存在的 agent、stale、Intent 不改名单时
+  保留成员行；三入口 × 两 provider，场景码单独断言）。
+

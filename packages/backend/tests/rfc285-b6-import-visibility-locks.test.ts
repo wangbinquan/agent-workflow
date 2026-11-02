@@ -51,25 +51,37 @@ describe('RFC-285 B6③ — 导入产物 private 三路装配锁', () => {
     const arms = moduleSrc(
       'resource-catalog/infrastructure/aggregateAdapters/postgresqlResourcePackageMutationArms.ts',
     )
-    // RFC-401 A1 / A2：agent / MCP / plugin 的新建经各自唯一的写入参与者——资源包把导入者交进去当 owner，参与者铸造
-    // private 行（agent 走 `createAgentPersistenceValues` 的 private 缺省；MCP / plugin 写字面量）。
-    const participants = ['mcpMutationParticipant.ts', 'pluginMutationParticipant.ts'].map((file) =>
-      moduleSrc(`resource-catalog/infrastructure/${file}`),
-    )
+    // RFC-401 A1 / A2 / A3：agent / MCP / plugin / workflow / workgroup 的新建经各自唯一的写入参与者——资源包把导入者交进去
+    // 当 owner，参与者铸造 private 行（agent 走 `createAgentPersistenceValues` 的 private 缺省；其余写字面量）。
+    const participants = [
+      'mcpMutationParticipant.ts',
+      'pluginMutationParticipant.ts',
+      'workflowMutationParticipant.ts',
+      'workgroupMutationParticipant.ts',
+    ].map((file) => moduleSrc(`resource-catalog/infrastructure/${file}`))
     const privateMints = [arms, ...participants].reduce(
-      (count, src) => count + (src.match(/visibility: 'private',/g) ?? []).length,
+      (count, src) => count + (src.match(/visibility: 'private'(?: as const)?,/g) ?? []).length,
       0,
     )
-    expect(privateMints, '铸造点一处都没扫到 ⇒ 判据此刻零预言力').toBeGreaterThanOrEqual(4)
+    expect(privateMints, '铸造点一处都没扫到 ⇒ 判据此刻零预言力').toBeGreaterThanOrEqual(5)
     // 归属：arm 里逐条把导入者交给铸造（直接写字面量，或作为 owner 交给参与者）。
     expect(
       (arms.match(/ownerUserId: input\.context\.actor\.user\.id,/g) ?? []).length,
-    ).toBeGreaterThanOrEqual(4)
+    ).toBeGreaterThanOrEqual(3)
     expect(arms).toContain("Object.freeze({ kind: 'actor' as const, actor: input.context.actor })")
+    expect(arms).toContain("const owner = { kind: 'actor', actor: input.context.actor } as const")
+    expect(arms).toContain('await workgroups.create(input.context.actor, {')
     expect(moduleSrc('resource-catalog/infrastructure/agentPersistence.ts')).toContain(
       "visibility: 'private',",
     )
-    for (const src of [arms, ...participants])
+    // 资源包经手的铸造一律不写 public。workflow 参与者另有系统写入（内建 workflow 目录：系统用户所有、public、builtin），
+    // 它只在 `owner.kind === 'system'` 的分支里出现，资源包交进去的永远是 actor。
+    const workflowParticipant = participants[2]!
+    for (const src of [arms, ...participants.filter((src) => src !== workflowParticipant)])
       expect(src.includes("visibility: 'public'")).toBe(false)
+    expect(workflowParticipant.match(/visibility: 'public' as const/g) ?? []).toHaveLength(1)
+    expect(workflowParticipant).toMatch(
+      /owner\.kind === 'system'\s*\?\s*\{ ownerUserId: owner\.userId, visibility: 'public' as const, builtin: true \}/,
+    )
   })
 })

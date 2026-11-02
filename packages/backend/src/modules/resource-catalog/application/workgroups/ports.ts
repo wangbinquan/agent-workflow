@@ -13,12 +13,6 @@ import type {
   UpdateWorkgroupCatalogInput,
 } from '../../public/types'
 
-export interface WorkgroupInitialAcl {
-  readonly ownerUserId: string | null
-  readonly visibility: 'private'
-  readonly aclRevision: 0
-}
-
 export interface WorkgroupDeletedAudience {
   readonly kind: 'workgroup.deleted-audience'
   readonly workgroupId: string
@@ -42,6 +36,10 @@ export interface WorkgroupDeleteResult {
   readonly audience: WorkgroupDeletedAudience
 }
 
+/**
+ * RFC-401 A3b：新建与复制的行由唯一的 workgroup 写入参与者以调用者为 owner、private 落库（RFC-231），仓库不再接收初始
+ * ACL。
+ */
 export interface WorkgroupRepository {
   list(): Promise<readonly Workgroup[]>
   get(id: string): Promise<WorkgroupDetail | null>
@@ -49,7 +47,6 @@ export interface WorkgroupRepository {
     readonly authority: WorkgroupOperationContext
     readonly id: string
     readonly document: CreateWorkgroup
-    readonly initialAcl: WorkgroupInitialAcl
     readonly now: number
   }): Promise<WorkgroupDetail>
   copy(input: {
@@ -57,7 +54,6 @@ export interface WorkgroupRepository {
     readonly request: CopyWorkgroupCatalogInput
     readonly id: string
     readonly now: number
-    readonly initialAcl: WorkgroupInitialAcl
   }): Promise<WorkgroupDetail>
   save(
     authority: WorkgroupOperationContext,

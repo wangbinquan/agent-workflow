@@ -354,7 +354,12 @@ const key = (entry: { readonly table: string; readonly file: string }): string =
 // Window decision T-4 keeps the original publication debt identity while the
 // single epoch-1 table becomes target object/publication companions. No other
 // target table or copied path may spend these frozen predecessor identities.
+// RFC-401 A3b moved one site verbatim — the workgroup human-member check that
+// reads `users` — from the workgroup repository into the one workgroup write
+// participant; the move keeps the original debt identity the same way.
 const CONTENT_DEBT_SUCCESSORS: Readonly<Record<string, string>> = {
+  'users|resource-catalog/infrastructure/workgroupMutationParticipant.ts':
+    'users|resource-catalog/infrastructure/workgroupRepository.ts',
   'contentObjects|system-operations/infrastructure/crewstation/objectPublications.ts':
     'hostedObjectPublications|system-operations/infrastructure/crewstation/objectPublications.ts',
   'contentPublications|system-operations/infrastructure/crewstation/hostedRestoreNormalization.ts':

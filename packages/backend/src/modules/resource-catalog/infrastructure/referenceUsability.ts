@@ -2,7 +2,6 @@ import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { AclResourceType, ResourceAccess, ResourceGrantLevel } from '@agent-workflow/shared'
 import { and, eq, inArray } from 'drizzle-orm'
 
-import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { ValidationError } from '@/util/errors'
 import {
   hasResourceAclBypass,
@@ -12,14 +11,11 @@ import {
   type AclRow,
   type ResourceAclActorProjection,
 } from '../domain/resourceAccess'
-import {
-  runResourceCatalogTransaction,
-  type ResourceCatalogTransaction,
-} from './resourceCatalogTransaction'
+import type { ResourceCatalogTransaction } from './resourceCatalogTransaction'
 
 // RFC-359 W4-D18 —— Workgroup 聚合的 agent 引用可用性判定只剩一份（此前 `sqliteReferenceUsability` /
-// `postgresqlReferenceUsability` 各一份）：预检在自己的目录事务里跑，终检绑定调用方的事务；缺失 / 不可见的 id 一律
-// 以 `acl-missing-refs` 报出（与合一前 SQLite 路径同形）。
+// `postgresqlReferenceUsability` 各一份）：绑定调用方的事务；缺失 / 不可见的 id 一律以 `acl-missing-refs` 报出（与合一前
+// SQLite 路径同形）。RFC-401 A3b：事务外的预检随写入栈合一删除，判定只在唯一的 workgroup 写入参与者的事务里跑。
 
 async function grantedAgentIds(
   transaction: ResourceCatalogTransaction,
@@ -59,27 +55,6 @@ export function assertNoMissingResourceRefs(
     `you do not have access to: ${missing.map((item) => `${item.type} '${item.name}'`).join(', ')}`,
     { missing: [...missing] },
   )
-}
-
-/** 异步 D15 预检；解析不到的 id 仍归存在性校验器管。 */
-export async function resolveAgentIdsUsable(
-  db: PersistenceDb,
-  actor: ResourceAclActorProjection,
-  ids: readonly string[],
-  grandfatheredIds: ReadonlySet<string>,
-): Promise<readonly string[]> {
-  const refs = [...new Set(ids)].filter((id) => id.length > 0)
-  if (refs.length === 0 || hasResourceAclBypass(actor)) return []
-  return runResourceCatalogTransaction(db, async (transaction) => {
-    const [rows, granted] = await Promise.all([
-      agentAccessRows(transaction, refs),
-      grantedAgentIds(transaction, actor),
-    ])
-    return refs.filter((id) => {
-      const row = rows.get(id)
-      return row !== undefined && !grandfatheredIds.has(id) && !isVisibleRow(actor, row, granted)
-    })
-  })
 }
 
 /** 同一事务里的 D15 终检；匹配后被删的 id 按不可用处理（fail closed）。 */

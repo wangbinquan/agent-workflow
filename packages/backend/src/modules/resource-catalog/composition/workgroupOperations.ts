@@ -21,11 +21,8 @@ import {
   type WorkgroupRepositoryDependencies,
 } from '../infrastructure/workgroupRepository'
 import {
-  assertAgentIdsUsableInTransaction,
-  assertNoMissingResourceRefs,
   listGrantedUserIdsInTransaction,
   resolveAccessInTransaction,
-  resolveAgentIdsUsable,
 } from '../infrastructure/referenceUsability'
 import { composeProviderResourceAclOperationApplication } from './resourceAcl'
 import type { ProviderResourceCatalogComposition } from './providerResourceCatalog'
@@ -129,20 +126,12 @@ export function workgroupRepositoryDependencies(input: {
   readonly now?: () => number
 }): WorkgroupRepositoryDependencies {
   const now = input.now ?? Date.now
-  const assertUsable = (missing: readonly string[]): void =>
-    assertNoMissingResourceRefs(missing.map((name) => ({ type: 'agent' as const, name })))
   const dependencies: WorkgroupRepositoryDependencies = {
     taskReferences: input.taskReferences,
     canViewInTransaction: async (transaction, authority, row) =>
       canViewAccess(await resolveAccessInTransaction(transaction, authority, 'workgroup', row)),
     resolveAccessInTransaction: (transaction, authority, row) =>
       resolveAccessInTransaction(transaction, authority, 'workgroup', row),
-    async assertAgentIdsUsable(authority, ids, grandfatheredIds) {
-      assertUsable(await resolveAgentIdsUsable(input.db, authority, ids, grandfatheredIds))
-    },
-    async assertAgentIdsUsableInTransaction(transaction, authority, ids) {
-      assertUsable(await assertAgentIdsUsableInTransaction(transaction, authority, ids))
-    },
     listGrantedUserIdsInTransaction: (transaction, workgroupId) =>
       listGrantedUserIdsInTransaction(transaction, 'workgroup', workgroupId),
     scheduledReferences: (rows, workgroupId) =>

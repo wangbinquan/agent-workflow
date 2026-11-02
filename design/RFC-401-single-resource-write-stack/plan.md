@@ -120,6 +120,33 @@ A3a（workflow）与 A3b（workgroup）：两者的写入栈、场景规则与�
   code / message / details 与首错顺序不变（W16 / W12 / RFC-199 / RFC-231 / RFC-270 的既有用例照旧通过），校验改对事务内被写的那一行
   执行；Intent 的 owner-only 与禁止改名仍在共同规则之前报出（规范 agent id 除外，与此前 prepare 期相同）；本变更之前生成、图校验
   error 混在 `errors` 里的草稿仍按阻断显示，重新生成一轮即可。PASS。
+- **CI**：`61f705dbd` 主 CI `41509059552` 70/70，windows-platform 与 visual-regression-nightly 通过。`61f705dbd` 以 A1 / A2 为祖先、
+  二者的产出原样保留，同时是 A1、A2 的后继证据。
+
+### A3b（workgroup）落地与集中验证（2026-11-02）
+
+- **实现**（design §9.5）：唯一的 workgroup 写入参与者（`RC/infrastructure/workgroupMutationParticipant.ts`，合同
+  `RC/application/ports/workgroupMutation.ts`，唯一写 workgroup 行与成员行的地方）；普通 CRUD 的新建 / 复制 / 保存、Intent workgroup 端口、
+  资源包 workgroup arm 接入；三条入口的新建请求经 `workgroupCreateSnapshot` 落成快照；Intent 不再预检 workgroup 名称（§5 第 1 项）、人类
+  成员无效改报 `workgroup-member-user-invalid`（§5 第 7 项）；事务外的成员预检（`resolveAgentIdsUsable`）与仓库的初始 ACL 入参删除。
+- **用例**：新增 `T/rfc401-workgroup-error-matrix.test.ts`（重名、无效人类成员、不可见 agent、不存在的 agent、stale、Intent 不改名单时保留
+  成员行；三入口 × 两 provider）；结构锁加 workgroup 一类（扫描原始行写入）并锁 `workgroup-human-inactive`；改写依赖旧形状的用例与源码锁：
+  RFC-225 写入清单、RFC-231 私有新建、RFC-285 B6 导入 private、RFC-345 / RFC-349 ×2 源码锁、T29 账本（Intent 端口 3 → 1）、表归属账本
+  （Intent 端口两条债还清，`users` 一处随搬迁记为后继身份）、W4-D18 / W15（初始 ACL 入参）；W24 / W26 / W28 的对拍去掉已删除的 Intent / 资源包
+  私有快照与成员构造（三处都改用普通编辑的那一份）。
+- **集中验证**：
+  - 静态：typecheck 0 错误，eslint（`--max-warnings 0`）与 prettier 通过。
+  - 第一轮：针对性验证集 461 个文件（凡涉及 workgroup 写入、Intent apply、资源包、成员与快照对拍的用例，全部架构守卫与读源码 / 账本的守卫），
+    5 进程，SQLite + PostgreSQL：451 个通过。查出本步引入的问题 8 处，均已修，都是源码锁 / 账本 / 对拍描述的是写点搬走或删除之前的形状
+    （表归属账本、T29、RFC-285 B6、RFC-349 两份、W24 / W26 / W28 的私有构造）；其余 2 个（W5 路由面、W26 空扫描）是 PostgreSQL 的 5 s 钩子
+    在负载下超时。
+  - 第二轮：上面 10 个文件加全部改过的用例与读表归属账本的守卫共 18 个文件，3 进程：14 个通过；余下 4 个是第二轮才暴露的同类锁
+    （B6 的「无 public 字面量」扫到了 workflow 参与者里内建目录的系统分支、RFC-349 两处断言已删的辅助函数）与 W26 空扫描的负载超时，
+    修后与 W26 一起单进程复跑 5 个全部通过。
+  - 按已提交源码出报告的用例：在「HEAD `61f705dbd` + 本候选」的导出仓库里 139 个全部通过。
+- **实现门**：本会话按路径限定自审（只审功能）。三入口经同一参与者，矩阵逐条相同、场景码先于共同层；普通编辑的 code / message /
+  details、首错顺序与时钟 / 成员 id 的消耗次序不变（W15 / W4-D18 / RFC-164 的既有用例照旧通过）；复制沿用 fail-closed 与
+  `workgroup-copy-name-conflict`；Intent 与资源包改用普通编辑的当前快照后，没有身份的成员行按占位 id 处理（design §9.5 已记）。PASS。
 
 ## 冲突面
 

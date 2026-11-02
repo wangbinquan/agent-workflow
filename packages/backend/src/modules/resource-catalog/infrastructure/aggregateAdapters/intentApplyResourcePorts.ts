@@ -4,23 +4,18 @@ import {
   CreateMcpSchema,
   CreateWorkgroupSchema,
   UpdateAgentSchema,
-  WG_CLARIFY_BUDGET_DEFAULT,
   WorkgroupDraftSnapshotSchema,
   WorkflowDefinitionSchema,
   migrateWorkflowDefinitionToLatest,
-  resolveWorkgroupOutputContract,
-  serializeWorkgroupEditableSnapshotV1,
   type Agent,
   type CreateAgent,
   type CreateMcp,
   type Mcp,
   type Skill,
   type WorkflowDefinition,
-  type WorkgroupDraftMember,
   type WorkgroupDraftSnapshot,
 } from '@agent-workflow/shared'
 import { createWorkflowMutationParticipant } from '../workflowMutationParticipant'
-import { workflowCatalogPredicate } from '../workflowCatalogPredicate'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { first } from '@/platform/persistence/queryHelpers'
@@ -39,7 +34,7 @@ export type {
 } from '../../application/intent/artifactOwners'
 import { withAgentSidecarsFrom } from '../../domain/agentSidecarBackfill'
 
-import { and, eq, inArray } from 'drizzle-orm'
+import { and, eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type { DirectAuthenticatedAuthority } from '@/modules/identity-access/public/participants'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
@@ -52,20 +47,14 @@ import {
 } from '@/util/errors'
 import { monotonicNow } from '@/util/time'
 import { encodeSkillToken } from '../../application/skills/skillToken'
-import { hasResourceAclBypass } from '../../domain/resourceAccess'
 import type { CatalogSelectorKind } from '../../domain/resourceKinds'
 import type { VersionedIntentResourceChangesetPlan } from '../../public/types'
 import { loadAgentPersistenceRow } from '../agentPersistence'
 import { mcpConfigHash } from '../mcpPersistence'
 import { pluginConfigHash } from '../pluginPersistence'
 import type { McpTransactionLifecycle } from '../mcpRepository'
-import type { PostgresqlResourceCatalogTransaction } from '../postgresql/repositorySupport'
-import {
-  workgroupDraftMemberOf,
-  workgroupMemberPersistenceValues,
-  workgroupSnapshotValues,
-} from '../workgroupPersistence'
-import { workgroupFromRows } from '../workgroupRepository'
+import { normalizeWorkgroupSnapshot, workgroupCreateSnapshot } from '../workgroupPersistence'
+import { createWorkgroupMutationParticipant } from '../workgroupMutationParticipant'
 import type {
   IntentApplyMutationPort,
   IntentApplyPrepareContext,
@@ -238,140 +227,6 @@ function requireOwner(
       `updating ${kind} '${row.id}' through Intent is reserved for its owner`,
     )
   }
-}
-
-async function grantExists(
-  transaction: PostgresqlResourceCatalogTransaction,
-  actor: DirectAuthenticatedAuthority,
-  type: CatalogSelectorKind,
-  resourceId: string,
-): Promise<boolean> {
-  if (hasResourceAclBypass(actor)) return true
-  const { resourceGrants } = tablesOf(transaction)
-  const grant = await first(
-    transaction
-      .select({ resourceId: resourceGrants.resourceId })
-      .from(resourceGrants)
-      .where(
-        and(
-          eq(resourceGrants.resourceType, type),
-          eq(resourceGrants.resourceId, resourceId),
-          eq(resourceGrants.userId, actor.user.id),
-        ),
-      ),
-  )
-  return grant !== undefined
-}
-
-async function visibleIdentity(
-  transaction: PostgresqlResourceCatalogTransaction,
-  actor: DirectAuthenticatedAuthority,
-  type: CatalogSelectorKind,
-  id: string,
-): Promise<boolean> {
-  const row = await (async () => {
-    const { agents, skills } = tablesOf(transaction)
-    const { mcps, plugins, workflows, workgroups } = tablesOf(transaction)
-    switch (type) {
-      case 'agent':
-        return first(
-          transaction
-            .select({
-              id: agents.id,
-              ownerUserId: agents.ownerUserId,
-              visibility: agents.visibility,
-            })
-            .from(agents)
-            .where(eq(agents.id, id)),
-        )
-      case 'skill':
-        return first(
-          transaction
-            .select({
-              id: skills.id,
-              ownerUserId: skills.ownerUserId,
-              visibility: skills.visibility,
-            })
-            .from(skills)
-            .where(eq(skills.id, id)),
-        )
-      case 'mcp':
-        return first(
-          transaction
-            .select({ id: mcps.id, ownerUserId: mcps.ownerUserId, visibility: mcps.visibility })
-            .from(mcps)
-            .where(eq(mcps.id, id)),
-        )
-      case 'plugin':
-        return first(
-          transaction
-            .select({
-              id: plugins.id,
-              ownerUserId: plugins.ownerUserId,
-              visibility: plugins.visibility,
-            })
-            .from(plugins)
-            .where(eq(plugins.id, id)),
-        )
-      case 'workflow':
-        return first(
-          transaction
-            .select({
-              id: workflows.id,
-              ownerUserId: workflows.ownerUserId,
-              visibility: workflows.visibility,
-            })
-            .from(workflows)
-            .where(workflowCatalogPredicate(workflows.id, eq(workflows.id, id))),
-        )
-      case 'workgroup':
-        return first(
-          transaction
-            .select({
-              id: workgroups.id,
-              ownerUserId: workgroups.ownerUserId,
-              visibility: workgroups.visibility,
-            })
-            .from(workgroups)
-            .where(eq(workgroups.id, id)),
-        )
-    }
-  })()
-  if (row === undefined) return false
-  if (
-    hasResourceAclBypass(actor) ||
-    row.ownerUserId === actor.user.id ||
-    row.visibility === 'public'
-  ) {
-    return true
-  }
-  return grantExists(transaction, actor, type, id)
-}
-
-async function assertVisibleReferences(
-  transaction: PostgresqlResourceCatalogTransaction,
-  actor: DirectAuthenticatedAuthority,
-  groups: readonly Readonly<{
-    type: CatalogSelectorKind
-    ids: readonly string[]
-    pendingIds?: ReadonlySet<string>
-  }>[],
-): Promise<void> {
-  const missing: Array<Readonly<{ type: CatalogSelectorKind; id: string }>> = []
-  for (const group of groups) {
-    for (const id of new Set(group.ids.filter((candidate) => candidate.length > 0))) {
-      if (group.pendingIds?.has(id) === true) continue
-      if (!(await visibleIdentity(transaction, actor, group.type, id))) {
-        missing.push({ type: group.type, id })
-      }
-    }
-  }
-  if (missing.length === 0) return
-  throw new ValidationError(
-    'acl-missing-refs',
-    `you do not have access to: ${missing.map((item) => `${item.type} '${item.id}'`).join(', ')}`,
-    { missing },
-  )
 }
 
 function exactAgentPatch(plan: UpdatePlanOf<'agent'>): Readonly<Record<string, unknown>> {
@@ -894,72 +749,10 @@ function createWorkflowPort(
   } satisfies IntentApplyMutationPort<'workflow', PreparedWorkflow>)
 }
 
-function workgroupSnapshotFromRows(
-  row: PersistenceTables['workgroups']['$inferSelect'],
-  members: readonly PersistenceTables['workgroupMembers']['$inferSelect'][],
-): WorkgroupDraftSnapshot {
-  const group = workgroupFromRows(row, members)
-  const ordered = [...group.members].sort((left, right) => left.sortOrder - right.sortOrder)
-  const leader = ordered.find((member) => member.id === group.leaderMemberId)
-  return WorkgroupDraftSnapshotSchema.parse(
-    workgroupSnapshotValues(
-      group,
-      leader,
-      () => ordered.map((member) => workgroupDraftMemberOf(member, '')),
-      false,
-      3,
-    ),
-  )
-}
-
-async function workgroupMemberValues(
-  transaction: PostgresqlResourceCatalogTransaction,
-  actor: DirectAuthenticatedAuthority,
-  workgroupId: string,
-  members: readonly WorkgroupDraftMember[],
-  nextId: () => string,
-  now: number,
-): Promise<readonly PersistenceTables['workgroupMembers']['$inferInsert'][]> {
-  const agentIds = members.flatMap((member) =>
-    member.memberType === 'agent' && member.agentId !== undefined ? [member.agentId] : [],
-  )
-  await assertVisibleReferences(transaction, actor, [{ type: 'agent', ids: agentIds }])
-  const { agents } = tablesOf(transaction)
-  const { users } = tablesOf(transaction)
-  const agentRows =
-    agentIds.length === 0
-      ? []
-      : await transaction
-          .select({ id: agents.id, name: agents.name })
-          .from(agents)
-          .where(inArray(agents.id, agentIds))
-  const names = new Map(agentRows.map((row) => [row.id, row.name] as const))
-  const userIds = members.flatMap((member) =>
-    member.memberType === 'human' && member.userId !== undefined ? [member.userId] : [],
-  )
-  const activeUsers =
-    userIds.length === 0
-      ? []
-      : await transaction
-          .select({ id: users.id })
-          .from(users)
-          .where(and(inArray(users.id, userIds), eq(users.status, 'active')))
-  const active = new Set(activeUsers.map((row) => row.id))
-  const inactive = userIds.filter((id) => !active.has(id))
-  if (inactive.length > 0) {
-    throw new ValidationError('workgroup-human-inactive', 'workgroup human members must be active')
-  }
-  return workgroupMemberPersistenceValues(workgroupId, members, now, names, nextId, 'defined')
-}
-
-function leaderMemberId(
-  snapshot: WorkgroupDraftSnapshot,
-  members: readonly PersistenceTables['workgroupMembers']['$inferInsert'][],
-): string | null {
-  if (snapshot.mode !== 'leader_worker' || snapshot.leaderDisplayName === undefined) return null
-  return members.find((member) => member.displayName === snapshot.leaderDisplayName)?.id ?? null
-}
-
+/**
+ * RFC-401 A3b：workgroup 经唯一的写入参与者写入（design §9.5）。Intent 只保留自己的规则：owner-only 与禁止改名。更新省略的
+ * 输出合同沿用当前值（普通编辑的规则）。
+ */
 function createWorkgroupPort(
   options: IntentApplyResourceSessionOptions,
   committed: IntentApplyResourcePortFactoryDependencies['committed'],
@@ -971,142 +764,38 @@ function createWorkgroupPort(
     async prepare(plan) {
       const snapshot =
         plan.action === 'create'
-          ? (() => {
-              const created = CreateWorkgroupSchema.parse(plan.payload)
-              return WorkgroupDraftSnapshotSchema.parse({
-                ...created,
-                outputContract: resolveWorkgroupOutputContract(created.outputContract),
-                clarifyBudget: created.clarifyBudget ?? WG_CLARIFY_BUDGET_DEFAULT,
-                fanOut: created.fanOut ?? false,
-              })
-            })()
+          ? workgroupCreateSnapshot(CreateWorkgroupSchema.parse(plan.payload))
           : WorkgroupDraftSnapshotSchema.parse(plan.payload)
       return Object.freeze({ snapshot })
     },
     async commitInTransaction({ transaction, plan, prepared }) {
-      const at = now()
+      const workgroups = createWorkgroupMutationParticipant(transaction, {
+        now,
+        memberId: nextId,
+      })
       if (plan.action === 'create') {
-        const { workgroups, workgroupMembers } = tablesOf(transaction)
-        const collision = await first(
-          transaction
-            .select({ id: workgroups.id })
-            .from(workgroups)
-            .where(
-              and(
-                eq(workgroups.ownerUserId, actor.user.id),
-                eq(workgroups.name, prepared.snapshot.name),
-              ),
-            ),
-        )
-        if (collision !== undefined) {
-          throw new ConflictError(
-            'workgroup-name-in-use',
-            `workgroup '${prepared.snapshot.name}' already exists`,
-          )
-        }
-        const members = await workgroupMemberValues(
-          transaction,
-          actor,
-          plan.resourceId,
-          prepared.snapshot.members,
-          nextId,
-          at,
-        )
-        const row = await first(
-          transaction
-            .insert(workgroups)
-            .values({
-              id: plan.resourceId,
-              name: prepared.snapshot.name,
-              description: prepared.snapshot.description,
-              instructions: prepared.snapshot.instructions,
-              mode: prepared.snapshot.mode,
-              outputContract: resolveWorkgroupOutputContract(prepared.snapshot.outputContract),
-              leaderMemberId: leaderMemberId(prepared.snapshot, members),
-              shareOutputs: prepared.snapshot.switches.shareOutputs,
-              directMessages: prepared.snapshot.switches.directMessages,
-              blackboard: prepared.snapshot.switches.blackboard,
-              maxRounds: prepared.snapshot.maxRounds,
-              completionGate: prepared.snapshot.completionGate,
-              clarifyBudget: prepared.snapshot.clarifyBudget,
-              fanOut: prepared.snapshot.fanOut,
-              version: 1,
-              ownerUserId: actor.user.id,
-              visibility: 'private',
-              aclRevision: 0,
-              createdAt: at,
-              updatedAt: at,
-            })
-            .returning({ version: workgroups.version }),
-        )
-        if (row === undefined) throw new Error('workgroup insert returned no row')
-        for (const member of members) await insertOne(transaction, workgroupMembers, member)
-        return workgroupReceipt(plan, { kind: 'workgroup', version: row.version })
+        const created = await workgroups.create(actor, {
+          id: plan.resourceId,
+          snapshot: prepared.snapshot,
+        })
+        return workgroupReceipt(plan, { kind: 'workgroup', version: created.version })
       }
-
-      const { workgroups, workgroupMembers } = tablesOf(transaction)
-      const row = await first(
-        transaction.select().from(workgroups).where(eq(workgroups.id, plan.resourceId)),
-      )
-      if (row === undefined) throw notFound('workgroup', plan.resourceId)
-      requireOwner(actor, 'workgroup', row)
-      if (prepared.snapshot.name !== row.name) {
-        throw new ValidationError(
-          'intent-rename-unsupported',
-          'renaming via intent update is not supported',
-        )
-      }
-      const currentMembers = await transaction
-        .select()
-        .from(workgroupMembers)
-        .where(eq(workgroupMembers.workgroupId, plan.resourceId))
-      const currentSnapshot = workgroupSnapshotFromRows(row, currentMembers)
-      const currentBytes = serializeWorkgroupEditableSnapshotV1(currentSnapshot)
-      const submittedBytes = serializeWorkgroupEditableSnapshotV1(prepared.snapshot)
-      if (row.version !== plan.expectedRevision.version) {
-        if (currentBytes === submittedBytes) {
-          return workgroupReceipt(plan, { kind: 'workgroup', version: row.version })
-        }
-        throw staleConflictError('workgroup', `workgroup '${row.id}' changed; reload`)
-      }
-      if (currentBytes === submittedBytes) {
-        return workgroupReceipt(plan, { kind: 'workgroup', version: row.version })
-      }
-      const replacement = await workgroupMemberValues(
-        transaction,
-        actor,
-        plan.resourceId,
-        prepared.snapshot.members,
-        nextId,
-        at,
-      )
-      const changed = await first(
-        transaction
-          .update(workgroups)
-          .set({
-            description: prepared.snapshot.description,
-            instructions: prepared.snapshot.instructions,
-            mode: prepared.snapshot.mode,
-            outputContract: resolveWorkgroupOutputContract(prepared.snapshot.outputContract),
-            leaderMemberId: leaderMemberId(prepared.snapshot, replacement),
-            shareOutputs: prepared.snapshot.switches.shareOutputs,
-            directMessages: prepared.snapshot.switches.directMessages,
-            blackboard: prepared.snapshot.switches.blackboard,
-            maxRounds: prepared.snapshot.maxRounds,
-            completionGate: prepared.snapshot.completionGate,
-            clarifyBudget: prepared.snapshot.clarifyBudget,
-            fanOut: prepared.snapshot.fanOut,
-            version: row.version + 1,
-            updatedAt: at,
-          })
-          .where(and(eq(workgroups.id, row.id), eq(workgroups.version, row.version)))
-          .returning({ version: workgroups.version }),
-      )
-      if (changed === undefined)
-        throw staleConflictError('workgroup', `workgroup '${row.id}' changed`)
-      await transaction.delete(workgroupMembers).where(eq(workgroupMembers.workgroupId, row.id))
-      for (const member of replacement) await insertOne(transaction, workgroupMembers, member)
-      return workgroupReceipt(plan, { kind: 'workgroup', version: changed.version })
+      const saved = await workgroups.update(actor, {
+        id: plan.resourceId,
+        expectedVersion: plan.expectedRevision.version,
+        patch: (current) => normalizeWorkgroupSnapshot(prepared.snapshot, current.outputContract),
+        guard: (current, submittedName) => {
+          requireOwner(actor, 'workgroup', current)
+          if (submittedName !== current.name) {
+            throw new ValidationError(
+              'intent-rename-unsupported',
+              'renaming via intent update is not supported',
+            )
+          }
+          return submittedName
+        },
+      })
+      return workgroupReceipt(plan, { kind: 'workgroup', version: saved.workgroup.version })
     },
     afterCommitted: async ({ plan, receipt: result }) => {
       await committed?.({
