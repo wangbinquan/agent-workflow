@@ -1,5 +1,5 @@
 import { tablesOf } from '@/platform/persistence/sessionTables'
-import type { Agent, CreateAgent, UpdateAgent } from '@agent-workflow/shared'
+import type { Agent } from '@agent-workflow/shared'
 import { and, eq, isNull, ne } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
@@ -9,44 +9,22 @@ import { monotonicNow } from '@/util/time'
 import type { AgentRepository } from '../application/agents/ports'
 import type { AgentOperationContext } from '../public/participants'
 import type { AgentReferenceLabels, AgentReferenceLabelsInput } from '../public/types'
+import { loadAgentPersistenceRow, loadAgentPersistenceRows } from './agentPersistence'
 import {
-  createAgentReferenceWriteParticipant,
-  prepareAgentReferenceUpdate,
-} from './agentReferenceWrite'
-import {
-  agentFromPersistenceRow,
-  loadAgentPersistenceRow,
-  loadAgentPersistenceRows,
-  createAgentPersistenceValues,
-} from './agentPersistence'
+  createAgentMutationParticipant,
+  type AgentRuntimeProfileLookup,
+} from './agentMutationParticipant'
 import {
   runResourceCatalogTransaction,
   type ResourceCatalogTransaction,
 } from './resourceCatalogTransaction'
 
-/** Owner-native semantics injected into the Agent repository（一份合同，两个 provider 共用）。 */
+/**
+ * Owner-native semantics injected into the Agent repository（一份合同，两个 provider 共用）。
+ *
+ * RFC-401 A1：创建 / 更新的规范化与校验在唯一的 agent 写入参与者里；这里只剩普通 CRUD 独有的删除闸与引用标签。
+ */
 export interface AgentPersistenceSemantics {
-  canonicalizeCreate(
-    authority: AgentOperationContext,
-    input: CreateAgent,
-    id: string,
-  ): Promise<CreateAgent>
-  canonicalizeUpdate(
-    authority: AgentOperationContext,
-    current: Agent,
-    patch: UpdateAgent,
-  ): Promise<UpdateAgent>
-  assertCreateInTransaction(
-    transaction: ResourceCatalogTransaction,
-    authority: AgentOperationContext,
-    candidate: Agent,
-  ): Promise<void>
-  assertUpdateInTransaction(
-    transaction: ResourceCatalogTransaction,
-    authority: AgentOperationContext,
-    current: Agent,
-    candidate: Agent,
-  ): Promise<void>
   assertDeleteInTransaction(
     transaction: ResourceCatalogTransaction,
     authority: AgentOperationContext,
@@ -88,10 +66,14 @@ function stale(id: string): ConflictError {
  * RFC-359 W4-D14 —— Agent 仓库：一份实现，两个 provider 共用。写路径全部在统一的 serializable 事务里
  * （PG 抬升隔离级别并按 40001 重试，SQLite 独占事务），owner + name 的唯一冲突经能力矩阵 `uniqueViolationTarget`
  * 映射回 `agent-name-in-use`（PG 给约束名 `agents_owner_name_unique`，SQLite 给列清单 `agents.owner_user_id, …`）。
+ *
+ * RFC-401 A1：create / update 经唯一的 agent 写入参与者（Intent、资源包、模板同用）；`runtimes` 是注入给参与者的
+ * runtime registry 查询。
  */
 export function createAgentRepository(input: {
   readonly db: PersistenceDb
   readonly semantics: AgentPersistenceSemantics
+  readonly runtimes?: AgentRuntimeProfileLookup
   readonly id?: () => string
   readonly now?: () => number
 }): AgentRepository {
@@ -102,6 +84,12 @@ export function createAgentRepository(input: {
     const target = engine.uniqueViolationTarget(error)
     return target !== undefined && /agents[._]owner/i.test(target)
   }
+
+  const mutations = (transaction: ResourceCatalogTransaction) =>
+    createAgentMutationParticipant(transaction, {
+      ...(input.runtimes === undefined ? {} : { runtimes: input.runtimes }),
+      now,
+    })
 
   async function get(id: string): Promise<Agent | null> {
     return loadAgentPersistenceRow(input.db, async (tx) => {
@@ -117,70 +105,20 @@ export function createAgentRepository(input: {
     get,
     async create(authority, submitted): Promise<Agent> {
       const id = mintId()
-      const canonical = await input.semantics.canonicalizeCreate(authority, submitted, id)
-      const values = createAgentPersistenceValues({
-        id,
-        agent: canonical,
-        ownerUserId: authority.user.id,
-        now: now(),
-      })
-      const candidate = agentFromPersistenceRow(values, canonical)
-      try {
-        return await runResourceCatalogTransaction(input.db, async (transaction) => {
-          await input.semantics.assertCreateInTransaction(transaction, authority, candidate)
-          const created = await createAgentReferenceWriteParticipant(transaction).insert({
-            id,
-            agent: canonical,
-            ownerUserId: authority.user.id,
-            now: values.createdAt,
-          })
-          if (created.length !== 1) throw new Error('agent insert did not return one row')
-          return created[0]!
-        })
-      } catch (error) {
-        if (isOwnerNameConflict(error)) {
-          throw nameConflict(candidate.name)
-        }
-        throw error
-      }
+      return runResourceCatalogTransaction(input.db, (transaction) =>
+        mutations(transaction).create(
+          { kind: 'actor', actor: authority },
+          { id, agent: submitted },
+        ),
+      )
     },
     async update(authority, id, submitted, fence): Promise<Agent> {
-      const current = await get(id)
-      if (current === null) throw new NotFoundError('agent-not-found', 'agent not found')
-      const patch = await input.semantics.canonicalizeUpdate(authority, current, submitted)
-      const updatedAt = monotonicNow(current.updatedAt)
-      const writeUpdate = prepareAgentReferenceUpdate({
-        current,
-        patch,
-        updatedAt,
-        expectedUpdatedAt: fence.expectedUpdatedAt,
-        expectedAclRevision: fence.expectedAclRevision,
-      })
-      const { runtime: _currentRuntime, ...currentWithoutRuntime } = current
-      const { runtime: submittedRuntime, ...patchWithoutRuntime } = patch
-      const runtime = submittedRuntime === null ? undefined : (submittedRuntime ?? current.runtime)
-      const candidate: Agent = {
-        ...currentWithoutRuntime,
-        ...patchWithoutRuntime,
-        ...(runtime === undefined ? {} : { runtime }),
-        updatedAt,
-      }
-      return runResourceCatalogTransaction(input.db, async (transaction) => {
-        const { agents } = tablesOf(transaction)
-        const row = (await transaction.select().from(agents).where(eq(agents.id, id)).limit(1))[0]
-        if (row === undefined) throw new NotFoundError('agent-not-found', 'agent not found')
-        const fresh = await loadAgentPersistenceRow(transaction, row)
-        if (
-          fresh.updatedAt !== fence.expectedUpdatedAt ||
-          (fresh.aclRevision ?? 0) !== fence.expectedAclRevision
-        ) {
-          throw stale(id)
-        }
-        await input.semantics.assertUpdateInTransaction(transaction, authority, fresh, candidate)
-        const changed = await writeUpdate(transaction)
-        if (changed.length !== 1) throw stale(id)
-        return changed[0]!
-      })
+      return runResourceCatalogTransaction(input.db, (transaction) =>
+        mutations(transaction).update(
+          { kind: 'actor', actor: authority },
+          { id, fence, patch: () => submitted },
+        ),
+      )
     },
     async delete(authority, id, fence): Promise<void> {
       await runResourceCatalogTransaction(input.db, async (transaction) => {

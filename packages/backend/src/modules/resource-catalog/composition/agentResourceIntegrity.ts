@@ -1,7 +1,9 @@
 import type { AclResourceType } from '@agent-workflow/shared'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { createDatabaseAgentResourceInventoryReadPort } from '../infrastructure/agentResourceInventory'
-import { isSkillAvailableThisBoot } from '../infrastructure/legacy/skillBootVerify'
+import {
+  bootVerifiedSkillAvailability,
+  createDatabaseAgentResourceInventoryReadPort,
+} from '../infrastructure/agentResourceInventory'
 import type {
   AgentResourceInventoryReadPort,
   AgentResourceInventorySource,
@@ -53,23 +55,6 @@ export function composeAgentResourceInventorySource(input: {
   })
 }
 
-const skillAvailability = Object.freeze({
-  isAvailable(entry: {
-    readonly skill: { readonly id: string }
-    readonly reservationState: string | null
-    readonly versionState: string | null
-  }): boolean {
-    return (
-      entry.reservationState === 'ready' &&
-      isSkillAvailableThisBoot({
-        id: entry.skill.id,
-        reservationState: entry.reservationState,
-        versionState: entry.versionState,
-      })
-    )
-  },
-})
-
 /** 数据库句柄直入的装配：一份实现，两个 provider 共用（RFC-359 W4-D14）。消费者只拿到闭合的 source。 */
 export function composeDatabaseAgentResourceInventorySource(input: {
   readonly db: PersistenceDb
@@ -78,7 +63,7 @@ export function composeDatabaseAgentResourceInventorySource(input: {
   return composeAgentResourceInventorySource({
     inventory: createDatabaseAgentResourceInventoryReadPort({
       db: input.db,
-      skillAvailability,
+      skillAvailability: bootVerifiedSkillAvailability,
     }),
     authorization: input.authorization,
   })

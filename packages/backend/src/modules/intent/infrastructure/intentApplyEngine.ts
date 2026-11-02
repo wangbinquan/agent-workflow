@@ -244,6 +244,14 @@ export function createIntentApplyEngine(
               (operation.payload as { readonly name: string }).name,
             ]),
         )
+        const agentDependencies = new Map(
+          bundle.ops
+            .filter((operation) => operation.resourceType === 'agent')
+            .map((operation): [string, readonly string[]] => [
+              operation.resourceId,
+              (operation.payload as { readonly dependsOn: readonly string[] }).dependsOn,
+            ]),
+        )
         const manifestByHandle = new Map(
           manifest.map((entry): [string, IntentManifestEntry] => [entry.handle, entry]),
         )
@@ -255,6 +263,7 @@ export function createIntentApplyEngine(
             await resourceSession.prepare(plan, {
               pendingIds,
               pendingAgentNames,
+              agentDependencies,
               clientMutationId: input.clientMutationId,
             })
           } catch (error) {

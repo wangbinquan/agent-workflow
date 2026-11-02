@@ -20,6 +20,7 @@ describe('RFC-349 classic resource-catalog PostgreSQL adapters', () => {
     const composition = source('src/modules/resource-catalog/composition/agentOperations.ts')
     expect(repository).toContain('PersistenceDb')
     expect(repository).toContain('runResourceCatalogTransaction')
+    expect(repository).toContain('createAgentMutationParticipant(transaction, {')
     expect(repository).not.toMatch(
       /PostgresqlDatabaseClient|\bDbClient\b|\bdbTxSync\b|createSqlite/,
     )
@@ -86,10 +87,18 @@ describe('RFC-349 classic resource-catalog PostgreSQL adapters', () => {
     expect(bundle).not.toMatch(/createSqlite|as DbClient|as PostgresqlDatabaseClient/)
 
     expect(agent).toContain('export function createAgentPersistenceSemantics(')
-    expect(agent).toContain('assertReferencesUsable({')
-    expect(agent).toContain('assertDependencyGraph(')
-    expect(agent).toContain('readonly runtimeProfiles: AgentRuntimeProfileLookup')
-    expect(agent).not.toMatch(/\bruntimes\b/)
+    // RFC-401 A1：创建 / 更新的校验迁入唯一的 agent 写入参与者；普通 CRUD 经仓库把 runtime registry 查询交给它。
+    const participant = source(
+      'src/modules/resource-catalog/infrastructure/agentMutationParticipant.ts',
+    )
+    expect(participant).toContain('export function createAgentMutationParticipant(')
+    expect(participant).toContain('assertReferencesUsable({')
+    expect(participant).toContain('assertDependencyGraph(')
+    expect(participant).toContain('readonly runtimes?: AgentRuntimeProfileLookup')
+    expect(agent).not.toMatch(/\bruntimes\b|assertReferencesUsable|assertDependencyGraph/)
+    expect(source('src/modules/resource-catalog/composition/agentOperations.ts')).toContain(
+      'runtimes: input.runtimeProfiles',
+    )
     expect(workflow).toContain('export function createWorkflowPersistenceSemantics(')
     expect(workflow).toContain('assertDefinitionReferences({')
   })

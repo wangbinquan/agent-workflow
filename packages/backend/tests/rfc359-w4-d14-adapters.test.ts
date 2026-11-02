@@ -16,7 +16,6 @@ import { buildActor } from '@/auth/actor'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { DirectAuthenticatedAuthority } from '@/modules/identity-access/public/participants'
 import { composeAgentImportQueries } from '@/modules/resource-catalog/composition/agentImportQueries'
-import { composeDatabaseAgentResourceInventorySource } from '@/modules/resource-catalog/composition/agentResourceIntegrity'
 import { composeResourceCatalogFor } from '@/modules/resource-catalog/composition/providerResourceCatalog'
 import { createAgentImportReferenceReadPort } from '@/modules/resource-catalog/infrastructure/agentImportQueries'
 import { createAgentPersistenceSemantics } from '@/modules/resource-catalog/infrastructure/agentPersistenceSemantics'
@@ -55,16 +54,15 @@ function agentInput(name: string, overrides: Partial<CreateAgent> = {}): CreateA
 
 function repositoryFor(db: PersistenceDb) {
   const catalog = composeResourceCatalogFor({ db })
-  const inventory = composeDatabaseAgentResourceInventorySource({
-    db,
-    authorization: catalog.authorization,
-  })
   const semantics = createAgentPersistenceSemantics({
     taskReferences: composeSubjectTaskReferencePort,
     db,
     authorization: catalog.authorization,
-    resourceInventory: inventory,
-    runtimeProfiles: {
+  })
+  return createAgentRepository({
+    db,
+    semantics,
+    runtimes: {
       async get(name) {
         if (name === 'opencode') return { enabled: true }
         if (name === 'retired') return { enabled: false }
@@ -72,7 +70,6 @@ function repositoryFor(db: PersistenceDb) {
       },
     },
   })
-  return createAgentRepository({ db, semantics })
 }
 
 async function codeOf(fn: () => Promise<unknown>): Promise<string> {

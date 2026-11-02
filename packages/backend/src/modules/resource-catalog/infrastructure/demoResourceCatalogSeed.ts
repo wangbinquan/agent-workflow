@@ -1,7 +1,7 @@
 // RFC-359 W4-B2 —— 演示目录种子的持久化：一份实现，两个 provider 共用。
 
 import { workflowCatalogPredicate } from './workflowCatalogPredicate'
-import { createAgentReferenceWriteParticipant } from './agentReferenceWrite'
+import { insertSeedAgent } from './agentMutationParticipant'
 import { createWorkflowDefinitionWriteParticipant } from './workflowDefinitionWrite'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { first } from '@/platform/persistence/queryHelpers'
@@ -38,7 +38,7 @@ export function createDemoResourceCatalogSeedPersistence(
             .where(eq(agents.id, input.agent.id)),
         )
         if (existingAgent === undefined) {
-          await createAgentReferenceWriteParticipant(transaction).insert({
+          await insertSeedAgent(transaction, {
             id: input.agent.id,
             agent: input.agent.value,
             ownerUserId: input.marker.ownerUserId,

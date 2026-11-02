@@ -17,7 +17,6 @@
 import { describe, expect, test } from 'bun:test'
 import type { BundleOp } from '@agent-workflow/shared'
 import {
-  BundleCycleError,
   localSlugOf,
   opSlug,
   planBundleOps,
@@ -114,28 +113,28 @@ describe('I4 · agent 组内的 dependsOn 拓扑', () => {
     expect(order.filter((s) => s === 'base')).toHaveLength(1)
   })
 
-  test('闭环给出**确定**的拒绝点（同一输入永远同一条错误信息）', () => {
+  // RFC-401 A1：环不在排序时拒绝（此前抛普通 Error，落成 `internal-error`）。环上的 agent 与依赖它们的 agent 排在
+  // 其余 agent 之后、保持声明序，由唯一的 agent 写入参与者报 `agent-dependency-self` / `agent-dependency-cycle`
+  // （入口一致性见 `rfc401-agent-error-matrix`）。
+  test('闭环不抛错：环上与依赖环的 agent 排在其余 agent 之后、保持声明序', () => {
     const ops = [
+      create('agent-create', 'x', { dependsOn: ['local:a'] }),
       create('agent-create', 'b', { dependsOn: ['local:a'] }),
+      create('agent-create', 'free'),
       create('agent-create', 'a', { dependsOn: ['local:b'] }),
+      create('skill-create', 's'),
     ]
-    const runs = [0, 1, 2].map(() => {
-      try {
-        planBundleOps(ops)
-        return null
-      } catch (err) {
-        return err instanceof BundleCycleError ? err.cycle.join('→') : `other:${String(err)}`
-      }
-    })
-    expect(runs[0]).not.toBeNull()
-    expect(new Set(runs).size).toBe(1) // 确定性：三次同一条
-    expect(runs[0]).toContain('a')
-    expect(runs[0]).toContain('b')
+    const runs = [0, 1, 2].map(() => slugsOf(planBundleOps(ops)))
+    expect(runs[0]).toEqual(['s', 'free', 'x', 'b', 'a'])
+    expect(new Set(runs.map((run) => run.join()))).toEqual(new Set([runs[0]!.join()]))
   })
 
-  test('自依赖也是环', () => {
-    const ops = [create('agent-create', 'a', { dependsOn: ['local:a'] })]
-    expect(() => planBundleOps(ops)).toThrow(BundleCycleError)
+  test('自依赖也排在最后，不抛错', () => {
+    const ops = [
+      create('agent-create', 'a', { dependsOn: ['local:a'] }),
+      create('agent-create', 'z'),
+    ]
+    expect(slugsOf(planBundleOps(ops))).toEqual(['z', 'a'])
   })
 
   test('非 agent 的 `dependsOn` 字段不参与拓扑（只有 agent 有这个语义）', () => {

@@ -169,10 +169,6 @@ describeEachProvider('RFC-395 F target Agent relations', (h) => {
     return createAgentRepository({
       db: h.db,
       semantics: {
-        canonicalizeCreate: unexpected,
-        canonicalizeUpdate: unexpected,
-        assertCreateInTransaction: unexpected,
-        assertUpdateInTransaction: unexpected,
         assertDeleteInTransaction: unexpected,
         referenceLabels: unexpected,
       },

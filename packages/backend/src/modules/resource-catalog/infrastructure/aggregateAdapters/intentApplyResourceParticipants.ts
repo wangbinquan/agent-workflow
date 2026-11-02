@@ -27,6 +27,11 @@ type ReceiptOf<K extends CatalogSelectorKind> = Extract<
 export interface IntentApplyPrepareContext {
   readonly pendingIds: ReadonlySet<string>
   readonly pendingAgentNames: ReadonlyMap<string, string>
+  /**
+   * RFC-401 A1 —— 本批每个 agent（新建、copy 与原地更新）的最终 dependsOn。唯一的 agent 写入参与者以它覆盖事务内的
+   * 依赖读取，批内的环与自依赖按普通编辑的判据报出（design §2.2「批内依赖环」）。
+   */
+  readonly agentDependencies: ReadonlyMap<string, readonly string[]>
   readonly clientMutationId: string
 }
 

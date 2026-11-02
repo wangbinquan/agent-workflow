@@ -159,9 +159,9 @@ describe('RFC-349 resource-catalog PostgreSQL provider adapters', () => {
       expect(postgresqlMutationArms).toContain(`export async function ${implementation}`)
       expect(postgresqlMutationParticipants).toContain(`${implementation}({`)
     }
-    // RFC-395 II-a A5: agents/workflows delegate to their single writers on the same transaction.
+    // RFC-395 II-a A5: workflows delegate to their single writer on the same transaction.
+    // RFC-401 A1: agents go through the one Agent mutation participant on the same transaction.
     for (const [table, file, factory] of [
-      ['agents', 'agentReferenceWrite', 'createAgentReferenceWriteParticipant'],
       ['workflows', 'workflowDefinitionWrite', 'createWorkflowDefinitionWriteParticipant'],
     ]) {
       const writer = source(`src/modules/resource-catalog/infrastructure/${file}.ts`)
@@ -170,6 +170,10 @@ describe('RFC-349 resource-catalog PostgreSQL provider adapters', () => {
       expect(writer).toContain(`.insert(${table})`)
       expect(writer).toContain(`.update(${table})`)
     }
+    expect(postgresqlMutationArms).toContain(
+      'createAgentMutationParticipant(input.transaction, { now: input.now })',
+    )
+    expect(postgresqlMutationArms).not.toContain('createAgentReferenceWriteParticipant')
     for (const table of ['skills', 'workgroups']) {
       expect(postgresqlMutationArms).toMatch(
         new RegExp(`(?:\\.insert\\(\\s*${table}\\s*\\)|\\binsertOne\\([^,]+,\\s*${table}\\s*,)`),
@@ -252,9 +256,7 @@ describe('RFC-349 resource-catalog PostgreSQL provider adapters', () => {
     expect(postgresqlMutationArms).toContain('findActiveUsersByIds(')
     expect(postgresqlMutationArms).toContain('assertSelected({')
     expect(postgresqlMutationArms).toContain("visibility: 'private'")
-    expect(postgresqlMutationArms).toContain(
-      'createAgentReferenceWriteParticipant(input.transaction).insert({',
-    )
+    expect(postgresqlMutationArms).toContain('await agents.create(owner, {')
     expect(source('src/modules/resource-catalog/infrastructure/agentReferenceWrite.ts')).toContain(
       '...createAgentPersistenceValues(input)',
     )

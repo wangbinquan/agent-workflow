@@ -4,8 +4,8 @@
 //
 // 这些判据原本锁在 `services/bundle/refs.ts` 上（`rfc271-builtin-resolve` 的两组单测），
 // 而那一层属于**通用 bundle 引擎**、随资源包 apply 合一退役。统一引擎里同一件事由
-// `resolveIdentityReference` / `resolveAgentSkillReference` 做
-// （`postgresqlResourcePackageMutationArms.ts`）。删掉旧层之前，把它的 fail-closed 形状
+// `resolveIdentityReference`（workflow / workgroup）与 agent 载荷的 `agentReferenceId` / `agentSkillReference`
+// （RFC-401 A1）做（`postgresqlResourcePackageMutationArms.ts`）。删掉旧层之前，把它的 fail-closed 形状
 // 在**用户真会走的那条路**上重问一遍——而且是两个引擎都问，旧的那组只跑 SQLite。
 //
 // 「fail-closed」在这里的含义很具体：引用解析不出来时**必须抛**，不能留悬空引用、

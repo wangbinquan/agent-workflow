@@ -5,20 +5,13 @@ import { composeProviderResourceAclOperationApplication } from './resourceAcl'
 import type { ProviderResourceCatalogComposition } from './providerResourceCatalog'
 import { assertNotBuiltin, excludeBuiltinAgents } from '@/services/systemResources'
 import { createAgentApplication } from '../application/agents/agentApplication'
-import type {
-  AgentAccessPort,
-  AgentPolicyPort,
-  AgentRepository,
-  AgentResourceInventorySource,
-} from '../application/agents/ports'
+import type { AgentAccessPort, AgentPolicyPort, AgentRepository } from '../application/agents/ports'
 import {
   createAgentRepository,
   type AgentPersistenceSemantics,
 } from '../infrastructure/agentRepository'
-import {
-  createAgentPersistenceSemantics,
-  type AgentRuntimeProfileLookup,
-} from '../infrastructure/agentPersistenceSemantics'
+import { createAgentPersistenceSemantics } from '../infrastructure/agentPersistenceSemantics'
+import type { AgentRuntimeProfileLookup } from '../infrastructure/agentMutationParticipant'
 import { createAgentOperationDescriptors } from './catalogOperationDescriptors'
 import type { AgentCatalogModule } from '../public/operations'
 import type { AgentOperationContext } from '../public/participants'
@@ -38,6 +31,8 @@ export interface AgentCatalogAdapterCompositionDependencies {
 export interface AgentCatalogCompositionDependencies {
   readonly db: PersistenceDb
   readonly persistence: AgentPersistenceSemantics
+  /** RFC-401 A1：交给唯一 agent 写入参与者的 runtime registry 查询。 */
+  readonly runtimeProfiles: AgentRuntimeProfileLookup
   readonly resourceCatalog: Pick<ProviderResourceCatalogComposition, 'authorization' | 'acl'>
   readonly importQueries: AgentImportQueries
   readonly resourceIntegrityQueries: AgentResourceIntegrityQueries
@@ -73,6 +68,7 @@ export function composeAgentCatalog(
   const repository = createAgentRepository({
     db: input.db,
     semantics: input.persistence,
+    runtimes: input.runtimeProfiles,
   })
   const access = Object.freeze({
     filterVisible: (authority: AgentOperationContext, rows: readonly Agent[]) =>
@@ -114,7 +110,6 @@ export function composeDatabaseAgentCatalog(input: {
   readonly taskReferences: SubjectTaskReferencePort
   readonly db: PersistenceDb
   readonly resourceCatalog: Pick<ProviderResourceCatalogComposition, 'authorization' | 'acl'>
-  readonly resourceInventory: AgentResourceInventorySource
   readonly runtimeProfiles: AgentRuntimeProfileLookup
   readonly importQueries: AgentImportQueries
   readonly resourceIntegrityQueries: AgentResourceIntegrityQueries
@@ -125,9 +120,8 @@ export function composeDatabaseAgentCatalog(input: {
       taskReferences: input.taskReferences,
       db: input.db,
       authorization: input.resourceCatalog.authorization,
-      resourceInventory: input.resourceInventory,
-      runtimeProfiles: input.runtimeProfiles,
     }),
+    runtimeProfiles: input.runtimeProfiles,
     resourceCatalog: input.resourceCatalog,
     importQueries: input.importQueries,
     resourceIntegrityQueries: input.resourceIntegrityQueries,

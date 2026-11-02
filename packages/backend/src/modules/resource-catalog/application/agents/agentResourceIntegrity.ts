@@ -92,7 +92,7 @@ export interface AgentResourceIntegrityResult {
  * avoid the agent.ts -> integrity.ts -> agent.ts initialization cycle.
  */
 export async function loadAgentResourceInventory(
-  source: AgentResourceInventorySource,
+  source: Pick<AgentResourceInventorySource, 'load'>,
 ): Promise<AgentResourceInventory> {
   return source.load()
 }
@@ -264,7 +264,7 @@ export function evaluateAgentResourceIntegrity(
 }
 
 export async function assertAgentResourceIntegrity(
-  source: AgentResourceInventorySource,
+  source: Pick<AgentResourceInventorySource, 'load'>,
   rootAgentIds: Iterable<string>,
   opts: { inventory?: AgentResourceInventory; overrides?: readonly Agent[] } = {},
 ): Promise<void> {

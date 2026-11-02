@@ -9,7 +9,6 @@ import { buildActor, SYSTEM_USER_ID, type Actor } from '@/auth/actor'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { AuthorityClaimRegistry } from '@/modules/identity-access/application/operationContext'
 import { composeResourceCatalogFor } from '@/modules/resource-catalog/composition/providerResourceCatalog'
-import { composeDatabaseAgentResourceInventorySource } from '@/modules/resource-catalog/composition/agentResourceIntegrity'
 import { createAgentPersistenceSemantics } from '@/modules/resource-catalog/infrastructure/agentPersistenceSemantics'
 import { createAgentRepository } from '@/modules/resource-catalog/infrastructure/agentRepository'
 import { getAgentById } from '@/modules/resource-catalog/infrastructure/legacy/agent'
@@ -75,13 +74,9 @@ export async function deleteAgent(
     semantics: createAgentPersistenceSemantics({
       db,
       authorization: catalog.authorization,
-      resourceInventory: composeDatabaseAgentResourceInventorySource({
-        db,
-        authorization: catalog.authorization,
-      }),
-      runtimeProfiles: { get: async () => null },
       taskReferences: composeSubjectTaskReferencePort,
     }),
+    runtimes: { get: async () => null },
   })
   await repository.delete(
     context,

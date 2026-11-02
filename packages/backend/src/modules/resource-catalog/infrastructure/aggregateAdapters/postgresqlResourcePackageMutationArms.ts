@@ -1,7 +1,4 @@
 import { capturedSkillTreeColumns } from '../databaseSkillTrees'
-import { assertAgentDependencyGraph as validateDependencyGraph } from '../../domain/agentDependencies'
-import { createAgentDependencyReadPort } from '../agentDependencyRead'
-import { createAgentReferenceWriteParticipant } from '../agentReferenceWrite'
 import { createWorkflowDefinitionWriteParticipant } from '../workflowDefinitionWrite'
 import { workflowCatalogPredicate } from '../workflowCatalogPredicate'
 import { insertOne } from '@/platform/persistence/singleInsert'
@@ -22,7 +19,6 @@ import {
 } from '../workgroupPersistence'
 import {
   collectWorkflowDependencyRefs,
-  agentReferenceIds,
   CreateAgentSchema,
   CreateManagedSkillSchema,
   CreateMcpSchema,
@@ -43,7 +39,6 @@ import {
   serializeWorkflowDefinitionStorageV1,
   serializeWorkflowEditableSnapshotV1,
   serializeWorkgroupEditableSnapshotV1,
-  type Agent,
   type AgentSkillRef,
   type AclResourceType,
   type BundleResourceType,
@@ -52,15 +47,9 @@ import {
   type WorkgroupDraftSnapshot,
 } from '@agent-workflow/shared'
 import { and, eq, inArray } from 'drizzle-orm'
-import {
-  reconcileCreatedAgentExecutionContractPorts,
-  reconcileUpdatedAgentExecutionContractPorts,
-} from '@/modules/resource-catalog/domain/agentExecutionContractPorts'
 import { ConflictError, NotFoundError, ValidationError, staleConflictError } from '@/util/errors'
 import { monotonicNow } from '@/util/time'
 import type { McpTransactionLifecycle } from '../mcpRepository'
-import { loadAgentPersistenceRow } from '../agentPersistence'
-import { assertBranchPortsDeclared, assertRuntimeReference } from '../agentBranchPorts'
 import { insertMcpRowInTx, mcpFromPersistenceRow, updateMcpRowInTx } from '../mcpPersistence'
 import {
   insertPluginRowInTx,
@@ -87,13 +76,14 @@ import {
   type SkillPackageMutation,
   type WorkflowPackageMutation,
   type WorkgroupPackageMutation,
-  PLUGIN_DISABLED_ERROR_CODE,
 } from '../../public/types'
 
 import type {
   PostgresqlResourcePackageMutationRequestContext,
   PostgresqlResourcePackageTransactionReader,
 } from './postgresqlResourcePackageMutationParticipants'
+import type { AgentMutationBatch } from '../../application/ports/agentMutation'
+import { createAgentMutationParticipant } from '../agentMutationParticipant'
 
 export interface PostgresqlResourcePackagePendingName {
   readonly type: BundleResourceType
@@ -183,169 +173,120 @@ async function resolveIdentityReference(input: {
   throw invalidReference(input.type, input.wire)
 }
 
-async function resolveAgentSkillReference(input: {
+/**
+ * RFC-401 A1 —— agent 载荷里的一条 identity 引用解析为 id。只做场景解析：`local:` 指向本包新建的资源
+ * （`bundle-ref-invalid`），`builtin:` 按名称找内建资源（`bundle-builtin-missing`）；`external:` 只解码为 id，存在与可见
+ * 由唯一的 agent 写入参与者按普通编辑的判据报（不再报 `package-external-unresolved`）。
+ */
+async function agentReferenceId(input: {
+  readonly reader: PostgresqlResourcePackageTransactionReader
+  readonly context: PostgresqlResourcePackageMutationRequestContext
+  readonly type: BundleResourceType
+  readonly wire: string
+}): Promise<string> {
+  const decoded = decodeBundleIdentityRef(input.wire)
+  if (decoded === null) throw invalidReference(input.type, input.wire)
+  if (decoded.k === 'local') {
+    const resourceId = input.context.ids.findCreate({ type: input.type, localSlug: decoded.slug })
+    if (resourceId === null) throw invalidReference(input.type, input.wire)
+    return resourceId
+  }
+  if (decoded.k === 'external') return decoded.token
+  if (decoded.k === 'builtin' && decoded.type === input.type) {
+    const builtin = await input.reader.findBuiltin(input.type, decoded.name)
+    if (builtin === null) {
+      throw new ValidationError(
+        'bundle-builtin-missing',
+        `this instance has no builtin ${input.type} named '${decoded.name}'`,
+      )
+    }
+    return builtin.id
+  }
+  throw invalidReference(input.type, input.wire)
+}
+
+async function agentSkillReference(input: {
   readonly reader: PostgresqlResourcePackageTransactionReader
   readonly context: PostgresqlResourcePackageMutationRequestContext
   readonly wire: string
-  readonly grandfatheredIds?: ReadonlySet<string>
 }): Promise<AgentSkillRef> {
   const decoded = decodeBundleAgentSkillRef(input.wire)
   if (decoded === null) throw invalidReference('skill', input.wire)
-  if (decoded.k === 'project-skill') {
-    return { kind: 'project', name: decoded.name }
-  }
-  const skillId = await resolveIdentityReference({
-    reader: input.reader,
-    context: input.context,
-    type: 'skill',
-    wire: input.wire,
-    ...(input.grandfatheredIds === undefined ? {} : { grandfatheredIds: input.grandfatheredIds }),
-  })
-  return { kind: 'managed', skillId }
-}
-
-async function assertAgentResourceRows(input: {
-  readonly transaction: PostgresqlResourceCatalogTransaction
-  readonly mcpIds: readonly string[]
-  readonly pluginIds: readonly string[]
-  readonly skillRefs: readonly AgentSkillRef[]
-}): Promise<void> {
-  const mcpIds = uniqueStrings(input.mcpIds)
-  if (mcpIds.length > 0) {
-    const { mcps } = tablesOf(input.transaction)
-    const known = new Set(
-      (
-        await input.transaction.select({ id: mcps.id }).from(mcps).where(inArray(mcps.id, mcpIds))
-      ).map((row) => row.id),
-    )
-    const missing = mcpIds.filter((id) => !known.has(id))
-    if (missing.length > 0) {
-      throw new ValidationError(
-        'mcp-not-found',
-        `agent references unknown mcp(s): ${missing.join(', ')}`,
-        { notFound: missing },
-      )
-    }
-  }
-
-  const pluginIds = uniqueStrings(input.pluginIds)
-  if (pluginIds.length > 0) {
-    const { plugins } = tablesOf(input.transaction)
-    const rows = await input.transaction
-      .select({ id: plugins.id, enabled: plugins.enabled })
-      .from(plugins)
-      .where(inArray(plugins.id, pluginIds))
-    const byId = new Map(rows.map((row) => [row.id, row.enabled]))
-    const missing = pluginIds.filter((id) => !byId.has(id))
-    if (missing.length > 0) {
-      throw new ValidationError(
-        'plugin-not-found',
-        `agent references unknown plugin(s): ${missing.join(', ')}`,
-        { notFound: missing },
-      )
-    }
-    const disabled = pluginIds.filter((id) => byId.get(id) === false)
-    if (disabled.length > 0) {
-      throw new ValidationError(
-        PLUGIN_DISABLED_ERROR_CODE,
-        `agent references disabled plugin(s): ${disabled.join(', ')}`,
-        { disabled },
-      )
-    }
-  }
-
-  const skillIds = uniqueStrings(agentReferenceIds({ skills: input.skillRefs }, 'skill'))
-  if (skillIds.length > 0) {
-    const { skills } = tablesOf(input.transaction)
-    const known = new Set(
-      (
-        await input.transaction
-          .select({ id: skills.id })
-          .from(skills)
-          .where(and(inArray(skills.id, skillIds), eq(skills.reservationState, 'ready')))
-      ).map((row) => row.id),
-    )
-    const missing = skillIds.filter((id) => !known.has(id))
-    if (missing.length > 0) {
-      throw new ValidationError(
-        'skill-not-found',
-        `agent references unknown managed skill(s): ${missing.join(', ')}`,
-        { notFound: missing },
-      )
-    }
+  if (decoded.k === 'project-skill') return { kind: 'project', name: decoded.name }
+  return {
+    kind: 'managed',
+    skillId: await agentReferenceId({
+      reader: input.reader,
+      context: input.context,
+      type: 'skill',
+      wire: input.wire,
+    }),
   }
 }
 
-async function assertAgentDependencyGraph(
-  transaction: PostgresqlResourceCatalogTransaction,
-  agentId: string,
-  dependencyIds: readonly string[],
-): Promise<void> {
-  await validateDependencyGraph({
-    candidateId: agentId,
-    dependencies: dependencyIds,
-    roots: uniqueStrings(dependencyIds),
-    load: createAgentDependencyReadPort(transaction, 'package').load,
-    semantics: 'catalog',
-  })
-}
-
+/** 包内的 agent 定义解析为引用已是 id 的 CreateAgent；规范化（含去重）由写入参与者做。 */
 async function resolvedAgentInput(input: {
   readonly reader: PostgresqlResourcePackageTransactionReader
   readonly context: PostgresqlResourcePackageMutationRequestContext
   readonly mutation: AgentPackageMutation
-  readonly current?: Agent
 }): Promise<CreateAgent> {
-  const current = input.current
-  const skills = await Promise.all(
-    input.mutation.payload.skills.map((wire) =>
-      resolveAgentSkillReference({
-        reader: input.reader,
-        context: input.context,
-        wire,
-        ...(current === undefined
-          ? {}
-          : {
-              grandfatheredIds: new Set(agentReferenceIds(current, 'skill')),
-            }),
-      }),
-    ),
-  )
-  const resolveMany = async (
-    type: 'agent' | 'mcp' | 'plugin',
-    wires: readonly string[],
-    grandfathered: readonly string[],
-  ): Promise<string[]> =>
-    uniqueStrings(
-      await Promise.all(
-        wires.map((wire) =>
-          resolveIdentityReference({
-            reader: input.reader,
-            context: input.context,
-            type,
-            wire,
-            ...(current === undefined ? {} : { grandfatheredIds: new Set(grandfathered) }),
-          }),
-        ),
+  const payload = input.mutation.payload
+  const ids = (type: 'agent' | 'mcp' | 'plugin', wires: readonly string[]) =>
+    Promise.all(
+      wires.map((wire) =>
+        agentReferenceId({ reader: input.reader, context: input.context, type, wire }),
       ),
     )
-  const dependsOn = await resolveMany(
-    'agent',
-    input.mutation.payload.dependsOn,
-    current?.dependsOn ?? [],
-  )
-  const mcp = await resolveMany('mcp', input.mutation.payload.mcp, current?.mcp ?? [])
-  const pluginIds = await resolveMany(
-    'plugin',
-    input.mutation.payload.plugins,
-    current?.plugins ?? [],
-  )
   return CreateAgentSchema.parse({
-    ...input.mutation.payload,
-    skills,
-    dependsOn,
-    mcp,
-    plugins: pluginIds,
+    ...payload,
+    skills: await Promise.all(
+      payload.skills.map((wire) =>
+        agentSkillReference({ reader: input.reader, context: input.context, wire }),
+      ),
+    ),
+    dependsOn: await ids('agent', payload.dependsOn),
+    mcp: await ids('mcp', payload.mcp),
+    plugins: await ids('plugin', payload.plugins),
+  })
+}
+
+/**
+ * 本包的 agent 及其最终 dependsOn（RFC-401 A1 的批内事实）。宽松解析：解析不了的引用跳过，留给该条 op 自己的解析
+ * 按场景次序报错；本包新建的 managed skill 提交后才发布，闭包校验视为可用。
+ */
+export async function resourcePackageAgentBatch(input: {
+  readonly reader: PostgresqlResourcePackageTransactionReader
+  readonly context: PostgresqlResourcePackageMutationRequestContext
+  readonly agents: readonly Readonly<{ mutation: AgentPackageMutation; resourceId: string }>[]
+}): Promise<AgentMutationBatch> {
+  const dependencies = new Map<string, readonly string[]>()
+  for (const agent of input.agents) {
+    const resolved: string[] = []
+    for (const wire of agent.mutation.payload.dependsOn) {
+      try {
+        resolved.push(
+          await agentReferenceId({
+            reader: input.reader,
+            context: input.context,
+            type: 'agent',
+            wire,
+          }),
+        )
+      } catch (error) {
+        if (!(error instanceof ValidationError)) throw error
+      }
+    }
+    dependencies.set(agent.resourceId, Object.freeze(resolved))
+  }
+  const stagedSkillIds = new Set(
+    input.context.ids
+      .listPending()
+      .filter((pending) => pending.type === 'skill')
+      .map((pending) => pending.resourceId),
+  )
+  return Object.freeze({
+    pendingDependencies: (id: string) => dependencies.get(id),
+    stagedSkillIds,
   })
 }
 
@@ -496,111 +437,49 @@ function receipt<K extends ResourcePackageMutationReceipt['resourceType']>(
 }
 
 export async function commitPostgresqlAgentPackageMutation(
-  input: MutationArmInput<AgentPackageMutation>,
+  input: MutationArmInput<AgentPackageMutation> & { readonly batch: AgentMutationBatch },
 ): Promise<ResourcePackageMutationReceipt<'agent'>> {
-  if (input.mutation.kind === 'agent-create') {
-    const canonical = reconcileCreatedAgentExecutionContractPorts(
-      await resolvedAgentInput({
+  const agents = createAgentMutationParticipant(input.transaction, { now: input.now })
+  const owner = Object.freeze({ kind: 'actor' as const, actor: input.context.actor })
+  const mutation = input.mutation
+  if (mutation.kind === 'agent-create') {
+    await agents.create(owner, {
+      id: input.resourceId,
+      agent: await resolvedAgentInput({
         reader: input.reader,
         context: input.context,
-        mutation: input.mutation,
+        mutation,
       }),
-    )
-    assertBranchPortsDeclared(canonical)
-    await assertRuntimeReference({ transaction: input.transaction, name: canonical.runtime })
-    await assertAgentResourceRows({
-      transaction: input.transaction,
-      mcpIds: canonical.mcp,
-      pluginIds: canonical.plugins,
-      skillRefs: canonical.skills,
+      batch: input.batch,
     })
-    await assertAgentDependencyGraph(input.transaction, input.resourceId, canonical.dependsOn)
-    const { agents } = tablesOf(input.transaction)
-    const collision = await first(
-      input.transaction
-        .select({ id: agents.id })
-        .from(agents)
-        .where(ownerScopedNameWhere(agents, input.context.actor.user.id, canonical.name)),
-    )
-    if (collision !== undefined) {
-      throw new ConflictError('agent-name-in-use', `agent '${canonical.name}' already exists`)
-    }
-    try {
-      await createAgentReferenceWriteParticipant(input.transaction).insert({
-        id: input.resourceId,
-        agent: canonical,
-        ownerUserId: input.context.actor.user.id,
-        now: input.now(),
-      })
-    } catch (error) {
-      if (isPostgresqlUniqueViolation(error, ['agents_owner_name_unique'])) {
-        throw new ConflictError('agent-name-in-use', `agent '${canonical.name}' already exists`)
-      }
-      throw error
-    }
-    return receipt('agent', input.mutation, input.resourceId)
+    return receipt('agent', mutation, input.resourceId)
   }
 
+  // 场景基线先于资源层：已选目标消失 / 变化、非本人所有、builtin 只读（proposal §5 第 11 项）。
   await assertOwnedOverwrite({
     reader: input.reader,
     context: input.context,
     type: 'agent',
     resourceId: input.resourceId,
-    mutation: input.mutation,
+    mutation,
   })
-  const { agents } = tablesOf(input.transaction)
-  const row = await first(
-    input.transaction.select().from(agents).where(eq(agents.id, input.resourceId)),
-  )
-  if (row === undefined) throw new NotFoundError('agent-not-found', 'agent not found')
-  const current = await loadAgentPersistenceRow(input.transaction, row)
-  const resolved = await resolvedAgentInput({
-    reader: input.reader,
-    context: input.context,
-    mutation: input.mutation,
-    current,
+  await agents.update(owner, {
+    id: input.resourceId,
+    fence: {
+      expectedUpdatedAt: mutation.expect.expectedUpdatedAt,
+      expectedAclRevision: mutation.expect.expectedAclRevision,
+    },
+    async patch() {
+      const { name: _name, ...updateBody } = await resolvedAgentInput({
+        reader: input.reader,
+        context: input.context,
+        mutation,
+      })
+      return UpdateAgentSchema.parse(updateBody)
+    },
+    batch: input.batch,
   })
-  const { name: _name, ...updateBody } = resolved
-  const patch = reconcileUpdatedAgentExecutionContractPorts(
-    current,
-    UpdateAgentSchema.parse(updateBody),
-  )
-  assertBranchPortsDeclared({ ...current, ...patch })
-  if (patch.runtime !== undefined) {
-    await assertRuntimeReference({
-      transaction: input.transaction,
-      name: patch.runtime,
-      ...(current.runtime === undefined ? {} : { previous: current.runtime }),
-    })
-  }
-  const next = {
-    mcp: patch.mcp ?? current.mcp,
-    plugins: patch.plugins ?? current.plugins,
-    skills: patch.skills ?? current.skills,
-    dependsOn: patch.dependsOn ?? current.dependsOn,
-  }
-  await assertAgentResourceRows({
-    transaction: input.transaction,
-    mcpIds: next.mcp,
-    pluginIds: next.plugins,
-    skillRefs: next.skills,
-  })
-  await assertAgentDependencyGraph(input.transaction, current.id, next.dependsOn)
-  const changed = (
-    await createAgentReferenceWriteParticipant(input.transaction).update({
-      current,
-      patch,
-      updatedAt: monotonicNow(current.updatedAt),
-      expectedUpdatedAt: input.mutation.expect.expectedUpdatedAt,
-      expectedAclRevision: input.mutation.expect.expectedAclRevision,
-      ownerUserId: input.context.actor.user.id,
-      builtin: false,
-    })
-  )[0]
-  if (changed === undefined) {
-    throw staleConflictError('agent', `agent '${input.resourceId}' changed; reload and retry`)
-  }
-  return receipt('agent', input.mutation, input.resourceId)
+  return receipt('agent', mutation, input.resourceId)
 }
 
 export async function commitPostgresqlSkillPackageMutation(

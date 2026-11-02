@@ -597,7 +597,9 @@ export function resolveIntentBundle(input: {
       }
     }
     const name = nameOf(op)
-    if (action === 'create') {
+    // RFC-401 A1：agent 的名称冲突由唯一的 agent 写入参与者报 `agent-name-in-use`（409），与普通编辑相同；
+    // 其余类型在各自接入共同写入层之前仍走这里的预检。
+    if (action === 'create' && op.resourceType !== 'agent') {
       const occupied = input.occupiedNames.get(op.resourceType)
       if (occupied?.has(name.toLowerCase()) === true) {
         throw new ValidationError(
@@ -832,8 +834,10 @@ export function resolveIntentBundle(input: {
       queue.push(op)
     }
   }
-  if (queue.length > 0) {
-    throw new ValidationError('intent-draft-invalid', 'agent dependsOn cycle within the bundle')
+  // RFC-401 A1：批内依赖环不在排序时报场景错误。环上的 agent 排在其余 agent 之后、保持输入序，由唯一的 agent
+  // 写入参与者以本批最终 dependsOn 校验，报与普通编辑相同的 `agent-dependency-self` / `agent-dependency-cycle`。
+  for (const op of agentsOnly) {
+    if (!placed.has(op.resourceId)) sortedAgents.push(op)
   }
   let agentCursor = 0
   const finalOps = ordered.map((op) =>

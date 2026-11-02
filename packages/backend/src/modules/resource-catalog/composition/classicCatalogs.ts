@@ -6,10 +6,8 @@ import type {
   SkillCatalogModule,
   WorkflowCatalogModule,
 } from '../public/operations'
-import {
-  createAgentPersistenceSemantics,
-  type AgentRuntimeProfileLookup,
-} from '../infrastructure/agentPersistenceSemantics'
+import { createAgentPersistenceSemantics } from '../infrastructure/agentPersistenceSemantics'
+import type { AgentRuntimeProfileLookup } from '../infrastructure/agentMutationParticipant'
 import type {
   SkillContentAvailability,
   SkillVersionPresenceQueries,
@@ -79,9 +77,8 @@ export function composeClassicCatalogs(
       taskReferences: input.taskReferences,
       db: input.db,
       authorization: input.resourceCatalog.authorization,
-      resourceInventory: agentResourceInventory,
-      runtimeProfiles: input.runtimeProfiles,
     }),
+    runtimeProfiles: input.runtimeProfiles,
     resourceCatalog: input.resourceCatalog,
     importQueries: composeAgentImportQueries(input.db),
     resourceIntegrityQueries: agentResourceIntegrity.queries,

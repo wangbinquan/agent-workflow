@@ -42,7 +42,7 @@ const OCCUPIED: ReadonlyMap<
   ReadonlySet<string>
 > = new Map([
   ['agent', new Set(['taken-name'])],
-  ['skill', new Set<string>()],
+  ['skill', new Set(['taken-skill'])],
   ['mcp', new Set<string>()],
   ['plugin', new Set<string>()],
   ['workflow', new Set<string>()],
@@ -303,9 +303,9 @@ describe('resolveIntentBundle', () => {
         {
           opId: 'op-1',
           action: 'create',
-          resourceType: 'agent',
+          resourceType: 'skill',
           tempRef: '$new:x',
-          payload: { name: 'taken-name', description: '', outputs: [], bodyMd: 'x' },
+          payload: { name: 'taken-skill', description: '', bodyMd: 'x', files: [] },
         },
       ],
     })
@@ -317,6 +317,28 @@ describe('resolveIntentBundle', () => {
         occupiedNames: OCCUPIED,
       }),
     ).toThrow(/intent-name-conflict|is taken/)
+    // RFC-401 A1：agent 不再在这里预检名称——冲突由唯一的 agent 写入参与者在提交时报 `agent-name-in-use`（409），
+    // 与普通编辑相同（入口一致性见 rfc401-agent-error-matrix）。
+    const agentClash = parse({
+      $schema_version: 1,
+      ops: [
+        {
+          opId: 'op-1',
+          action: 'create',
+          resourceType: 'agent',
+          tempRef: '$new:x',
+          payload: { name: 'taken-name', description: '', outputs: [], bodyMd: 'x' },
+        },
+      ],
+    })
+    expect(
+      resolveIntentBundle({
+        manifest: MANIFEST,
+        changeset: agentClash,
+        decisions: [],
+        occupiedNames: OCCUPIED,
+      }).ops.map((op) => op.resourceType),
+    ).toEqual(['agent'])
     // finalName slot resolves the clash without regenerating
     const renamed = resolveIntentBundle({
       manifest: MANIFEST,

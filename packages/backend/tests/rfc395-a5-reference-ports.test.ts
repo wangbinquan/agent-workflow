@@ -226,7 +226,7 @@ describeEachProvider('RFC-395 II-a A5 reference ports', (harness) => {
   test('all validation policies retain exact self, missing and cycle messages', async () => {
     await convertedAgentFixture(harness.db, [{ id: 'a', name: 'a', dependsOn: '["root"]' }])
     const load = createAgentDependencyReadPort(harness.db).load
-    for (const semantics of ['catalog', 'intent', 'application'] as const) {
+    for (const semantics of ['catalog', 'application'] as const) {
       await expect(
         assertAgentDependencyGraph({
           candidateId: 'root',
@@ -234,19 +234,11 @@ describeEachProvider('RFC-395 II-a A5 reference ports', (harness) => {
           semantics,
           load,
         }),
-      ).rejects.toMatchObject(
-        semantics === 'intent'
-          ? {
-              code: 'agent-dependency-cycle',
-              message: 'agent dependency graph contains a cycle',
-              status: 422,
-            }
-          : {
-              code: 'agent-dependency-self',
-              message: 'agent cannot depend on itself',
-              status: semantics === 'application' ? 400 : 422,
-            },
-      )
+      ).rejects.toMatchObject({
+        code: 'agent-dependency-self',
+        message: 'agent cannot depend on itself',
+        status: semantics === 'application' ? 400 : 422,
+      })
       await expect(
         assertAgentDependencyGraph({ candidateId: 'root', dependencies: ['a'], semantics, load }),
       ).rejects.toMatchObject({
@@ -281,12 +273,6 @@ describeEachProvider('RFC-395 II-a A5 reference ports', (harness) => {
       message: 'agent dependsOn references unknown agent(s): gone, other',
       details: { notFound: ['gone', 'other'] },
     })
-    await assertAgentDependencyGraph({
-      candidateId: 'root',
-      dependencies: ['gone'],
-      semantics: 'intent',
-      load,
-    })
   })
   test('the frozen semantics ledger drives every declared validation policy', async () => {
     await convertedAgentFixture(harness.db, [{ id: 'a', name: 'a', dependsOn: '["root"]' }])
@@ -294,7 +280,8 @@ describeEachProvider('RFC-395 II-a A5 reference ports', (harness) => {
     const policies = ['package', 'intent', 'application', 'ordinary', 'template'] as const
     expect(Object.keys(referenceSemantics.validation).sort()).toEqual([...policies].sort())
     for (const policy of policies) {
-      const semantics = policy === 'intent' || policy === 'application' ? policy : 'catalog'
+      // RFC-401 A1：Intent、资源包、模板与普通编辑都经唯一的 agent 写入参与者（catalog 判据）。
+      const semantics = policy === 'application' ? policy : 'catalog'
       for (const [scenario, dependencies] of [
         ['self', ['root']],
         ['cycle', ['a']],

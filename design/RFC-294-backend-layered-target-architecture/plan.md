@@ -324,6 +324,8 @@ Facade 只许 re-export 或参数形状适配；不得含 DB 查询、状态、�
   与 skill restore 适合接入 AtomicApply。RFC-401 的用户可见变化（proposal §5）待用户确认；含 schema 的 Part B 排在 RFC-398 之后。
 - **2026-11-02**：用户确认 RFC-401 proposal §5 的 12 项与 §7 两项，全部按推荐（记录见 RFC-401 proposal §7）。RFC-401 转 In Progress；
   RFC-398 已 Done，Part B 的前置满足。
+- **2026-11-02 RFC-401 A1**：agent 的写入栈合一（唯一写入参与者，普通 CRUD / Intent / 资源包 / 模板 / 种子都经它），三入口错误收敛；
+  其余五类按 A2～A4 分步。
 
 ### S8 `util/git` 叶子化与剩余 KNOWN（W5 一部分）
 

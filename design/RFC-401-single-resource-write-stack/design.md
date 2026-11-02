@@ -65,11 +65,30 @@ message 也不同，例如名称冲突：arm `agent 'x' already exists`、Intent
   stale / 名称冲突（含竞争失败的唯一约束归一，provider 中立）。
 - 资源包内循环由 `planBundleOps` 转为 `agent-dependency-cycle`（不再落到 `internal-error`）。
 - 现有 `T/fixtures/rfc395-a5-reference-semantics.json` 中保留的差异逐条替换为确认后的统一合同。
+- **以普通编辑现行行为为准**（用户 2026-11-02 确认的口径是「三条入口统一成普通编辑现在的 code / status / message」）。逐条核对源码后，
+  proposal §5 有一处需要按此口径更正：第 4 项写的 managed skill 缺失统一为 `skill-not-found`，但普通编辑现在由 RFC-228 闭包预检
+  先报 `agent-resources-invalid`（details.issues 带 refKind / code，`rfc223-pr1-impl-gate` 锁定），`skill-not-found` 只在预检通过之后的
+  可见性围栏里出现（并发删除）。统一按普通编辑：缺失的 managed skill 报 `agent-resources-invalid`。
+- **批内依赖环**（只有 Intent 与资源包能一次提交多个 agent）：排序不再在环上抛错（Intent 的 `intent-draft-invalid`、资源包的
+  `BundleCycleError`）。环上成员排在无环部分之后、保持输入序；参与者用「本批尚未写入的 agent 及其最终 dependsOn」覆盖事务内的
+  依赖读取，于是自依赖报 `agent-dependency-self`、环报 `agent-dependency-cycle`，code / message / 422 与普通编辑相同，且与其他校验的
+  先后也与普通编辑相同（例如同一个 agent 既自依赖又引用不存在的 runtime，先报 runtime）。
+- **Intent 的草稿校验仍是场景校验**：确认前给模型与用户的反馈——未知句柄、新建 agent 之间的 tempRef 环（含自依赖）、新建
+  agent 的 branch port 未声明（`validateDraftChangeset`）——照旧在草稿期报出，apply 时以 `intent-draft-invalid`（errors 写明
+  成因）先于共同写入层拒绝。草稿期看不到的情形（原地更新之间的环、更新省略 branchPorts 而存着的端口不在新 outputs 里）由
+  写入参与者按普通编辑报。错误矩阵（`T/rfc401-agent-error-matrix.test.ts`）只用能通过草稿校验的 Intent 输入。
 
 ### 2.3 字节合同
 
 技能 Markdown 固定一份序列化（确认后选定）；存量技能内容在没有实质变化时不产生新版本。现有字节测试
 `T/rfc359-w40-resource-package-skill-document.test.ts`、`T/rfc359-w47-intent-skill-document.test.ts` 改为锁定统一合同。
+
+### 2.4 引用去重（§7 第 1 项）
+
+agent 的四个引用字段在共同写入层规范化：`dependsOn`、`mcp`、`plugins` 按 id 去重，`skills` 按（kind, skillId / name）去重，一律保留
+第一次出现的位置、其余按用户输入顺序。重复引用在运行时没有含义（依赖图按集合遍历、MCP / plugin / skill 按资源注入），而现状三条入口各
+不相同（普通编辑与 Intent 保留重复，资源包对 dependsOn / mcp / plugins 去重、对 skills 保留），统一为去重。只影响新写入：已存的重复行在
+下一次保存该 agent 时被规范化。
 
 ## 3. 目标结构
 
@@ -156,3 +175,47 @@ Intent 场景适配 ── 句柄 / copy / session / provenance ─┐
 - lease：竞争、过期接管、旧持有者提交被拒、续租、提交前后崩溃、尾部重试、旧记录升级。
 - 技能 / fusion / restore 故障点；技能字节合同；WS 与 durable 后续动作。
 - 现有行为测试中依赖旧差异的断言，按确认后的合同修改并写明原因。
+
+## 9. Part A 分步与 A1（agent）
+
+### 9.1 分步
+
+Part A 按资源类分四次提交（plan「Part A 分步」）：A1 agent；A2 MCP 与 plugin；A3 workflow 与 workgroup；A4 skill（Intent / 资源包的数据库
+部分、版本规则与字节合同），并删除剩余 arms、加 AC-1 结构锁。每一步完整实现与用例后集中验证一次再提交。§3 要点 2（AtomicApply
+最终事务的隔离策略）与 AtomicApply 本身的改动一起归 Part B。
+
+### 9.2 A1：agent 写入参与者
+
+- **合同** `RC/application/ports/agentMutation.ts`：`AgentMutationParticipant { create, update }`，由 `(tx) => participant` 的工厂提供。
+  - create：`{ id, agent（引用已解析为 id 的 CreateAgent）, owner, batch? }`；
+  - update：`{ id, fence, guard?(current), patch(current), batch? }`。`guard` 承载场景规则（Intent 的 owner-only、builtin 只读与改名限制），
+    在 fence 之前执行；`patch` 由场景按当前行生成（Intent 的 sidecar 回填、资源包的引用解析）；
+  - `batch`：`pendingDependencies(id)` 给出本批尚未写入的 agent 的最终 dependsOn（§2.2「批内依赖环」）；`stagedSkillIds` 是本批新建、
+    提交后才发布的 managed skill，闭包校验视为可用。
+  - 系统写入（数字员工模板）以 `owner: { kind: 'system' }` 调用：owner 为系统用户、public、builtin，不做引用可见性判定，其余校验相同。
+- **实现** `RC/infrastructure/agentMutationParticipant.ts`（唯一实现，全部 SQL 在传入的 tx 上）：
+  1. 规范化：执行合同端口对账（`reconcileCreated/UpdatedAgentExecutionContractPorts`）；四个引用字段去重（§2.4）。
+  2. update：事务内读当前行 → `agent-not-found`（404）→ `guard(current)` → fence 不符报 `resource-operation-stale`（409）→ `patch(current)`。
+  3. 校验，次序同普通编辑：branch port → runtime（不存在；改成停用的）→ 依赖 / MCP / plugin 新增引用的存在与可见（批内尚未写入的
+     agent 视为存在且可见）→ plugin 全量启用 → 依赖图（本批覆盖 + 事务内现状）→ RFC-228 闭包（事务内 inventory、候选覆盖、
+     `stagedSkillIds` 可用）→ managed skill 新增引用的可见。
+  4. 写入：create 先查 owner + name 冲突，再经 `createAgentReferenceWriteParticipant` 插入，唯一冲突经 `engineOf(tx).uniqueViolationTarget`
+     归一为 `agent-name-in-use`（provider 中立）；update 按 fence CAS，0 行报 stale。
+  - runtime 判定读事务内 `runtimes` 表（与 `assertRuntimeReference` 同一判据）；普通 CRUD 的装配可以继续注入 runtime registry 查询，
+    数据源同为 `runtimes` 表。
+- **普通 CRUD**：`agentRepository.create / update` 在 `runResourceCatalogTransaction` 内调用参与者。rename / delete 只有普通 CRUD 使用，
+  留在仓库；`AgentPersistenceSemantics` 只剩删除闸与 `referenceLabels`。
+- **Intent**：agent 端口的 `commitInTransaction` 调参与者。场景保留：copy 的 sidecar 回填、owner-only 与 builtin 只读、
+  `intent-rename-unsupported`。删除 Intent 自己的可见性、runtime 与依赖图校验。`resolveIntentBundle` 不再对 agent 做
+  `intent-name-conflict` 预检（名称冲突由参与者报 `agent-name-in-use` / 409），agent 排序遇环不再抛错。
+- **资源包**：agent arm 调参与者。场景保留：wire 引用解析（`bundle-ref-invalid`、`bundle-builtin-missing`）与 `assertOwnedOverwrite`
+  （`package-selected-target-*`、`bundle-overwrite-not-owned`、`resource-builtin-read-only`，先于资源层 stale）。external 引用只解码为
+  id，存在与可见交给参与者，因此 agent 的四类引用不再报 `package-external-unresolved`；计划期预检对 agent 载荷只保留 builtin 名称解析。
+  `planBundleOps` 遇环不再抛 `BundleCycleError`。workflow / workgroup / capability template 的引用在 A3 处理。
+- **种子与模板**：数字员工模板的 create / update 改走参与者（系统写入）；fusion 与 demo 种子是受信的内建写入，经参与者模块导出的
+  种子插入写行（不做校验，保持幂等与漂移修复语义不变）。
+- **守卫**：结构锁断言 agent 行只经参与者模块写入（`createAgentReferenceWriteParticipant` 只被参与者模块与 legacy 测试写入函数引用），
+  并对 Intent / 资源包 agent 臂各留一条负例。
+- **用例**：三入口 × 两 provider 的 agent 错误矩阵（同名、缺失依赖 / MCP / plugin / managed skill、停用 plugin、runtime 缺失 / 停用、
+  未声明 branch port、自依赖、批内环、stale、不可见引用），逐条断言 code / status / message / details 相同；排序容忍环的单元用例；
+  引用去重；依赖旧差异的既有断言按统一合同修改并写明原因。

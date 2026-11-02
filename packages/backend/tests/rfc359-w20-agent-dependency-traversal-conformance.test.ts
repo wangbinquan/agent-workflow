@@ -154,7 +154,9 @@ describe('ordered Agent dependency traversal', () => {
     expect(observed).toEqual(['a'])
   })
 
-  test('both save wrappers retain their root and SQL mechanisms around the shared traversal', () => {
+  // RFC-401 A1: the ordinary semantics and the package arm each had a wrapper; every agent writer now goes
+  // through the one Agent mutation participant, so there is one wrapper (with the batch overlay hook).
+  test('the one save wrapper retains its root and SQL mechanisms around the shared traversal', () => {
     const infrastructure = join(import.meta.dir, '../src/modules/resource-catalog/infrastructure')
     const printer = ts.createPrinter({ removeComments: true })
     const functionBody = (path: string, name: string) => {
@@ -177,19 +179,17 @@ describe('ordered Agent dependency traversal', () => {
       }
       return printer.printNode(ts.EmitHint.Unspecified, declaration.body, source)
     }
-    const semantics = functionBody('agentPersistenceSemantics.ts', 'assertDependencyGraph')
-    const packageArm = functionBody(
-      'aggregateAdapters/postgresqlResourcePackageMutationArms.ts',
-      'assertAgentDependencyGraph',
-    )
-    expect(semantics).toContain('roots: unique(dependencyIds)')
-    expect(packageArm).toContain('roots: uniqueStrings(dependencyIds)')
-    expect(semantics).toContain("createAgentDependencyReadPort(transaction, 'semantics').load")
-    expect(packageArm).toContain("createAgentDependencyReadPort(transaction, 'package').load")
-    for (const body of [semantics, packageArm]) {
-      expect(body).toContain('await validateDependencyGraph(')
-      expect(body).toContain("semantics: 'catalog'")
-      expect(body).not.toMatch(/new Set|function visit/)
+    const participant = functionBody('agentMutationParticipant.ts', 'assertDependencyGraph')
+    expect(participant).toContain('roots: unique(dependencyIds)')
+    expect(participant).toContain("createAgentDependencyReadPort(transaction, 'semantics')")
+    expect(participant).toContain('await assertAgentDependencyGraph(')
+    expect(participant).toContain("semantics: 'catalog'")
+    expect(participant).not.toMatch(/new Set|function visit/)
+    for (const retired of [
+      ['agentPersistenceSemantics.ts', 'assertDependencyGraph'],
+      ['aggregateAdapters/postgresqlResourcePackageMutationArms.ts', 'assertAgentDependencyGraph'],
+    ] as const) {
+      expect(() => functionBody(retired[0], retired[1])).toThrow(`missing ${retired[1]}`)
     }
     const domain = readFileSync(join(infrastructure, '../domain/agentDependencies.ts'), 'utf8')
     expect(domain.indexOf("'agent-dependency-self'")).toBeLessThan(
@@ -201,12 +201,9 @@ describe('ordered Agent dependency traversal', () => {
     expect(reader).not.toContain('agents.dependsOn')
     expect(reader).not.toContain('JSON.parse')
     expect(reader).toContain('.limit(1))[0]')
-    expect(functionBody('agentPersistenceSemantics.ts', 'unique')).toContain(
+    expect(functionBody('agentMutationParticipant.ts', 'unique')).toContain(
       'new Set(values.filter((value) => value.length > 0))',
     )
-    expect(
-      functionBody('aggregateAdapters/postgresqlResourcePackageMutationArms.ts', 'uniqueStrings'),
-    ).toContain('new Set(values)')
   })
 })
 

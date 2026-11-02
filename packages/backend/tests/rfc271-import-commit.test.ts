@@ -657,10 +657,11 @@ describeEachProvider(
       })
     })
 
-    describe('external 引用不提供隐藏资源存在性预言机', () => {
-      test('不存在与存在但不可见返回同形拒绝', async () => {
+    // RFC-401 A1（proposal §5 第 3、4 项，用户 2026-11-02 确认）：agent 引用的 external 资源与普通编辑同一组错误——
+    // 不存在报 `mcp-not-found`，不可见报 `acl-missing-refs`。此前资源包把两者都报成 `package-external-unresolved`。
+    describe('external 引用与普通编辑同一组错误', () => {
+      test('不存在报 mcp-not-found，存在但不可见报 acl-missing-refs', async () => {
         // 两个**互相独立**的库：0 号里目标存在但不可见，1 号里这一行根本不存在。
-        // 同一个库做不出后者——判据要的正是「同一个 id，一边藏着、一边没有」。
         const hiddenDb = harness.database(0).db
         const absentDb = harness.database(1).db
         const target = await seedMcp(hiddenDb, 'u-other', 'private-tools')
@@ -697,8 +698,14 @@ describeEachProvider(
           (error: unknown) => error as { code?: string; message?: string },
         )
 
-        expect(hiddenError).toEqual(absentError)
-        expect(hiddenError?.code).toBe('package-external-unresolved')
+        expect(absentError).toMatchObject({
+          code: 'mcp-not-found',
+          message: `agent references unknown mcp(s): ${target}`,
+        })
+        expect(hiddenError).toMatchObject({
+          code: 'acl-missing-refs',
+          message: `you do not have access to: mcp '${target}'`,
+        })
       })
     })
 

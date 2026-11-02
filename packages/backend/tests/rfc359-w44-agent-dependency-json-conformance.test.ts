@@ -7,19 +7,16 @@ import ts from 'typescript'
 import { assertAgentDependencyGraph } from '../src/modules/resource-catalog/domain/agentDependencies'
 import { ValidationError } from '../src/util/errors'
 
-type Side = 'semantics' | 'package'
+// RFC-401 A1: the ordinary semantics and the package arm no longer carry their own graph check — every agent
+// writer goes through the one Agent mutation participant, so its `assertDependencyGraph` is the owner exercised
+// here (with no batch overlay, i.e. reading the stored relations only).
+type Side = 'participant'
 
-function loadActualOwner(side: Side, ports: Record<string, unknown>) {
-  const file =
-    side === 'semantics'
-      ? '../src/modules/resource-catalog/infrastructure/agentPersistenceSemantics.ts'
-      : '../src/modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlResourcePackageMutationArms.ts'
+function loadActualOwner(_side: Side, ports: Record<string, unknown>) {
+  const file = '../src/modules/resource-catalog/infrastructure/agentMutationParticipant.ts'
   const source = readFileSync(new URL(file, import.meta.url), 'utf8')
   const ast = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true)
-  const names =
-    side === 'semantics'
-      ? ['unique', 'assertDependencyGraph']
-      : ['uniqueStrings', 'assertAgentDependencyGraph']
+  const names = ['unique', 'assertDependencyGraph']
   const extracted = names.map((name) => {
     const matches = ast.statements.filter(
       (node): node is ts.FunctionDeclaration =>
@@ -132,7 +129,7 @@ function scenario(side: Side, control: Control) {
   const owner = loadActualOwner(side, {
     ValidationError,
     createAgentDependencyReadPort: createReader,
-    validateDependencyGraph: (input: Parameters<typeof assertAgentDependencyGraph>[0]) =>
+    assertAgentDependencyGraph: (input: Parameters<typeof assertAgentDependencyGraph>[0]) =>
       assertAgentDependencyGraph({
         ...input,
         load: async (dependencyId) => {
@@ -145,7 +142,7 @@ function scenario(side: Side, control: Control) {
   return { run: () => owner(transaction, 'candidate', ['loaded']), events, parsed, queries }
 }
 
-for (const side of ['semantics', 'package'] as const) {
+for (const side of ['participant'] as const) {
   describe(`RFC-359 W44 / RFC-395 dependency relations ${side}`, () => {
     test('the actual loader retains ordinal order, duplicates, empty strings and Unicode', async () => {
       for (const ids of [['leaf', 'leaf', '', 'tail'], ['雪', 'é'], []]) {
@@ -345,6 +342,21 @@ test('RFC-359 W49 persistence decoder preserves ordered values and catch boundar
 })
 
 test('RFC-359 W49 / W50 Intent and catalog use the ordered relation reader', () => {
+  // RFC-401 A1: Intent and the template catalog hand their writes to the one participant, which reads the
+  // ordered relations (overlaid by the batch's final dependsOn when there is one).
+  const participant = readFileSync(
+    new URL(
+      '../src/modules/resource-catalog/infrastructure/agentMutationParticipant.ts',
+      import.meta.url,
+    ),
+    'utf8',
+  )
+  expect(participant).toContain(
+    "const stored = createAgentDependencyReadPort(transaction, 'semantics')",
+  )
+  expect(participant).toContain(
+    'load: async (id) => batch?.pendingDependencies(id) ?? stored.load(id)',
+  )
   for (const file of [
     'aggregateAdapters/intentApplyResourcePorts.ts',
     'digitalEmployeeAgentTemplateCatalog.ts',
@@ -353,7 +365,8 @@ test('RFC-359 W49 / W50 Intent and catalog use the ordered relation reader', () 
       new URL(`../src/modules/resource-catalog/infrastructure/${file}`, import.meta.url),
       'utf8',
     )
-    expect(source).toContain('load: createAgentDependencyReadPort(transaction).load')
+    expect(source).toContain('createAgentMutationParticipant(transaction')
+    expect(source).not.toContain('createAgentDependencyReadPort')
     expect(source).not.toMatch(/decodeAgentReferenceIds\(row\.(?:dependsOn|mcp|plugins)\)/)
   }
   const reader = readFileSync(

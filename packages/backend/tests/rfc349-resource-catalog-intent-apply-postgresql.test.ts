@@ -50,9 +50,11 @@ describe('RFC-349 PostgreSQL Intent resource apply binding', () => {
   test('owns the six PostgreSQL aggregate arms and their revisions', () => {
     const source = readFileSync(portsPath, 'utf8')
 
-    // RFC-395 II-a A5: agents/workflows delegate to their single writers on the same transaction.
+    // RFC-395 II-a A5: workflows delegate to their single writer on the same transaction.
+    // RFC-401 A1: agents go through the one Agent mutation participant on the same transaction.
+    expect(source).toContain('const agents = createAgentMutationParticipant(transaction, { now })')
+    expect(source).not.toContain('createAgentReferenceWriteParticipant')
     for (const [table, file, factory] of [
-      ['agents', 'agentReferenceWrite', 'createAgentReferenceWriteParticipant'],
       ['workflows', 'workflowDefinitionWrite', 'createWorkflowDefinitionWriteParticipant'],
     ]) {
       const writer = readFileSync(

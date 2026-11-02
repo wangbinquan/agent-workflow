@@ -6,6 +6,12 @@ import { resolve } from 'node:path'
 
 const root = resolve(import.meta.dir, '../../src')
 const catalog = 'modules/resource-catalog/infrastructure/'
+/**
+ * RFC-401 A1: the six agent writers hand their rows to the one Agent mutation participant
+ * (`agentMutationParticipant.ts`), which alone drives the ordered write program. The seeds use its
+ * trusted seed insert. `tests/architecture/rfc401-agent-write-participant.test.ts` locks the rest.
+ */
+const agentParticipant = 'agentMutationParticipant.ts'
 const agentWriters = [
   'agentRepository.ts',
   'digitalEmployeeAgentTemplateCatalog.ts',
@@ -40,12 +46,13 @@ function bypasses(source: string, kind: 'agent' | 'workflow' | 'lookup'): boolea
     /\.update\(agents\)\s*\.set\(\{[^}]*\b(?:skills|dependsOn|mcp|plugins)\s*:/.test(source)
   )
 }
-function preparesUpdateBeforeTransaction(source: string): boolean {
+/** RFC-401 A1: the ordinary update reads, fences, validates and writes inside one serializable transaction. */
+function updatesThroughParticipant(source: string): boolean {
   const start = source.indexOf('async update(authority, id, submitted, fence)')
   if (start < 0) return false
   const body = source.slice(start, source.indexOf('async delete(', start))
-  const prepare = body.indexOf('prepareAgentReferenceUpdate(')
-  return prepare >= 0 && body.indexOf('runResourceCatalogTransaction(') > prepare
+  const transaction = body.indexOf('runResourceCatalogTransaction(')
+  return transaction >= 0 && body.indexOf('mutations(transaction).update(') > transaction
 }
 function read(path: string): string {
   return readFileSync(resolve(root, path), 'utf8')
@@ -58,15 +65,19 @@ describe('RFC-395 F target reference boundaries', () => {
     )
     for (const file of agentWriters) {
       const source = read(catalog + file)
-      expect(source, file).toContain('createAgentReferenceWriteParticipant(')
+      expect(source, file).toMatch(/\b(?:createAgentMutationParticipant|insertSeedAgent)\(/)
+      expect(source, file).not.toContain('createAgentReferenceWriteParticipant(')
       expect(bypasses(source, 'agent'), file).toBe(false)
     }
+    const participant = read(catalog + agentParticipant)
+    expect(participant).toContain('createAgentReferenceWriteParticipant(')
+    expect(bypasses(participant, 'agent')).toBe(false)
     for (const file of workflowWriters) {
       const source = read(catalog + file)
       expect(source, file).toContain('createWorkflowDefinitionWriteParticipant(')
       expect(bypasses(source, 'workflow'), file).toBe(false)
     }
-    expect(preparesUpdateBeforeTransaction(read(catalog + 'agentRepository.ts'))).toBe(true)
+    expect(updatesThroughParticipant(read(catalog + 'agentRepository.ts'))).toBe(true)
     expect(read(catalog + 'fusionResourceSeed.ts')).toContain('runResourceCatalogTransaction(')
     const fusion = read('modules/knowledge-evolution/infrastructure/fusionRepository.ts')
     expect(fusion).toContain(
@@ -135,13 +146,13 @@ describe('RFC-395 F target reference boundaries', () => {
   })
   test('negative controls catch each retired boundary and accept participant calls', () => {
     expect(
-      preparesUpdateBeforeTransaction(
-        'async update(authority, id, submitted, fence) { prepareAgentReferenceUpdate(input); runResourceCatalogTransaction(db); } async delete(',
+      updatesThroughParticipant(
+        'async update(authority, id, submitted, fence) { return runResourceCatalogTransaction(db, (transaction) => mutations(transaction).update(owner, input)) } async delete(',
       ),
     ).toBe(true)
     expect(
-      preparesUpdateBeforeTransaction(
-        'async update(authority, id, submitted, fence) { runResourceCatalogTransaction(db); prepareAgentReferenceUpdate(input); } async delete(',
+      updatesThroughParticipant(
+        'async update(authority, id, submitted, fence) { prepareAgentReferenceUpdate(input); runResourceCatalogTransaction(db); } async delete(',
       ),
     ).toBe(false)
     expect(bypasses('await tx.insert(agents).values(values)', 'agent')).toBe(true)

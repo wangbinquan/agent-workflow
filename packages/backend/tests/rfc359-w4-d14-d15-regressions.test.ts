@@ -18,7 +18,6 @@ import { buildActor } from '@/auth/actor'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { DirectAuthenticatedAuthority } from '@/modules/identity-access/public/participants'
 import type { WorkflowAccessRow } from '@/modules/resource-catalog/application/workflows/ports'
-import { composeDatabaseAgentResourceInventorySource } from '@/modules/resource-catalog/composition/agentResourceIntegrity'
 import { composeResourceCatalogFor } from '@/modules/resource-catalog/composition/providerResourceCatalog'
 import { composeProviderResourceAclOperationApplication } from '@/modules/resource-catalog/composition/resourceAcl'
 import { createAgentPersistenceSemantics } from '@/modules/resource-catalog/infrastructure/agentPersistenceSemantics'
@@ -64,17 +63,16 @@ function agentRepositoryFor(db: PersistenceDb) {
     taskReferences: composeSubjectTaskReferencePort,
     db,
     authorization: catalog.authorization,
-    resourceInventory: composeDatabaseAgentResourceInventorySource({
-      db,
-      authorization: catalog.authorization,
-    }),
-    runtimeProfiles: {
+  })
+  return createAgentRepository({
+    db,
+    semantics,
+    runtimes: {
       async get() {
         return null
       },
     },
   })
-  return createAgentRepository({ db, semantics })
 }
 
 /** delete 的 OCC 围栏：拒删不改代理行，所以创建时拿到的那一份一直有效。 */

@@ -78,10 +78,12 @@ import {
   commitPostgresqlWorkflowPackageMutation,
   commitPostgresqlWorkgroupPackageMutation,
   resolvePostgresqlCapabilityTemplatePackagePayload,
+  resourcePackageAgentBatch,
   type PostgresqlResourcePackagePendingName,
   type PostgresqlResourcePackagePluginPublication,
   type PostgresqlResourcePackageSkillPublication,
 } from './postgresqlResourcePackageMutationArms'
+import type { AgentMutationBatch } from '../../application/ports/agentMutation'
 
 export type PostgresqlResourcePackageSelectionFence =
   | Readonly<{
@@ -827,10 +829,14 @@ function packageMutationReceipt<K extends ResourcePackageMutationReceipt['resour
   })
 }
 
+/** 本包准备过的 agent op（RFC-401 A1：依赖图校验要看本批的最终 dependsOn）。 */
+type PreparedAgentState = Readonly<{ mutation: AgentPackageMutation; resourceId: string }>
+
 function preparationParticipants(input: {
   readonly owner: PostgresqlCapabilityTemplatePackageMutationOwner
   readonly context: PostgresqlResourcePackageMutationRequestContext
   readonly states: WeakMap<object, PostgresqlResourcePackagePreparedState>
+  readonly agentStates: PreparedAgentState[]
   readonly pendingNames: Map<string, PostgresqlResourcePackagePendingName>
 }): PostgresqlResourcePackagePreparationParticipants {
   const resourceId = (
@@ -842,10 +848,9 @@ function preparationParticipants(input: {
     agents: Object.freeze({
       async prepareOpaque(mutation: AgentPackageMutation) {
         const prepared = createPreparedAgentPackageMutation(mutation)
-        input.states.set(
-          prepared,
-          Object.freeze({ type: 'agent', mutation, resourceId: resourceId('agent', mutation) }),
-        )
+        const id = resourceId('agent', mutation)
+        input.states.set(prepared, Object.freeze({ type: 'agent', mutation, resourceId: id }))
+        input.agentStates.push(Object.freeze({ mutation, resourceId: id }))
         return prepared
       },
     }),
@@ -936,6 +941,7 @@ function transactionParticipants(input: {
   readonly reader: PostgresqlResourcePackageTransactionReader
   readonly context: PostgresqlResourcePackageMutationRequestContext
   readonly states: WeakMap<object, PostgresqlResourcePackagePreparedState>
+  readonly agentStates: readonly PreparedAgentState[]
   readonly pendingNames: ReadonlyMap<string, PostgresqlResourcePackagePendingName>
   readonly skillPublications: WeakMap<object, PostgresqlResourcePackageSkillPublication>
   readonly pluginPublications: WeakMap<object, PostgresqlResourcePackagePluginPublication>
@@ -952,15 +958,22 @@ function transactionParticipants(input: {
     id: input.id,
     now: input.now,
   }
+  let agentBatch: Promise<AgentMutationBatch> | undefined
   const participants: PostgresqlResourcePackageTransactionParticipants = {
     agents: Object.freeze({
       async commit(prepared: PreparedAgentPackageMutation) {
         const state = preparedState(input.states, prepared)
         if (state.type !== 'agent') throw new Error('resource-package-agent-state-mismatch')
+        agentBatch ??= resourcePackageAgentBatch({
+          reader: input.reader,
+          context: input.context,
+          agents: input.agentStates,
+        })
         return await commitPostgresqlAgentPackageMutation({
           ...common,
           mutation: state.mutation,
           resourceId: state.resourceId,
+          batch: await agentBatch,
         })
       },
     }),
@@ -1206,6 +1219,7 @@ export function createPostgresqlResourcePackageMutationSessionFactory(
         ids: pendingIds(mintId),
       })
       const states = new WeakMap<object, PostgresqlResourcePackagePreparedState>()
+      const agentStates: PreparedAgentState[] = []
       const pendingNames = new Map<string, PostgresqlResourcePackagePendingName>()
       const skillPublications = new WeakMap<object, PostgresqlResourcePackageSkillPublication>()
       const pluginPublications = new WeakMap<object, PostgresqlResourcePackagePluginPublication>()
@@ -1215,6 +1229,7 @@ export function createPostgresqlResourcePackageMutationSessionFactory(
           owner: input.capabilityTemplates,
           context,
           states,
+          agentStates,
           pendingNames,
         }),
         bindTransaction(transaction) {
@@ -1226,6 +1241,7 @@ export function createPostgresqlResourcePackageMutationSessionFactory(
               reader,
               context,
               states,
+              agentStates,
               pendingNames,
               skillPublications,
               pluginPublications,

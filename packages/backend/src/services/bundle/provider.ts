@@ -84,13 +84,6 @@ const TYPE_RANK: Record<BundleResourceType, number> = {
   capability_template: 4,
 }
 
-export class BundleCycleError extends Error {
-  constructor(readonly cycle: string[]) {
-    super(`agent dependsOn forms a cycle within the bundle: ${cycle.join(' → ')}`)
-    this.name = 'BundleCycleError'
-  }
-}
-
 /** `local:<slug>` → slug；其余（external / project / name）返回 null。 */
 export function localSlugOf(ref: string): string | null {
   return ref.startsWith('local:') ? ref.slice('local:'.length) : null
@@ -104,7 +97,9 @@ export function localSlugOf(ref: string): string | null {
  * 本次的排序约束。这与 `resolveChangeset.ts` 的
  * `.filter((id) => resolved.some((o) => o.resourceId === id))` 同义。
  *
- * 闭环给出**确定的**拒绝点：环里字典序最小的 slug 起头，让错误信息可复现。
+ * RFC-401 A1：包内依赖环不在这里拒绝（此前抛普通 Error，落成 `internal-error`）。环上的 agent 与依赖它们的 agent
+ * 排在其余 agent 之后、保持声明序；唯一的 agent 写入参与者以本包最终 dependsOn 校验，报与普通编辑相同的
+ * `agent-dependency-self` / `agent-dependency-cycle`。
  */
 export function planBundleOps(ops: readonly BundleOp[]): BundleOp[] {
   const bySlug = new Map<string, BundleOp>()
@@ -133,22 +128,17 @@ export function planBundleOps(ops: readonly BundleOp[]): BundleOp[] {
     deps.set(slug, inBundle.sort())
   }
 
-  // 三色 DFS：被依赖者先出（依赖在前）。确定性靠 slug 字典序入口。
+  // 三色 DFS：被依赖者先出（依赖在前）。确定性靠 slug 字典序入口。回边（环）的深度记为无穷：环上的 agent 与依赖
+  // 它们的 agent 一起排到最后，组内按声明序。
   const depthBySlug = new Map<string, number>()
   const state = new Map<string, 'gray' | 'black'>()
-  const stack: string[] = []
   const visit = (slug: string): number => {
     const done = depthBySlug.get(slug)
     if (done !== undefined) return done
-    if (state.get(slug) === 'gray') {
-      const start = stack.indexOf(slug)
-      throw new BundleCycleError([...stack.slice(start), slug])
-    }
+    if (state.get(slug) === 'gray') return Number.POSITIVE_INFINITY
     state.set(slug, 'gray')
-    stack.push(slug)
     let depth = 0
     for (const child of deps.get(slug) ?? []) depth = Math.max(depth, visit(child) + 1)
-    stack.pop()
     state.set(slug, 'black')
     depthBySlug.set(slug, depth)
     return depth

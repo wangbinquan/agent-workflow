@@ -1,33 +1,24 @@
-import { assertAgentDependencyGraph as validateDependencyGraph } from '../domain/agentDependencies'
-import { createAgentDependencyReadPort } from './agentDependencyRead'
-import { createAgentReferenceWriteParticipant } from './agentReferenceWrite'
 import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { first } from '@/platform/persistence/queryHelpers'
-import {
-  agentReferenceIds,
-  type Agent,
-  type AgentSkillRef,
-  type CreateAgent,
-} from '@agent-workflow/shared'
+import type { Agent } from '@agent-workflow/shared'
 
-import { and, eq, inArray, ne } from 'drizzle-orm'
+import { and, eq, ne } from 'drizzle-orm'
 
 import { SYSTEM_USER_ID } from '@/auth/systemIdentity'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
-import { ConflictError, NotFoundError, ValidationError, staleConflictError } from '@/util/errors'
+import { ConflictError, NotFoundError, staleConflictError } from '@/util/errors'
 import { monotonicNow } from '@/util/time'
 import type {
   DigitalEmployeeAgentTemplateFence,
   DigitalEmployeeAgentTemplateRepository,
 } from '../application/agents/digitalEmployeeAgentTemplateCatalog'
-import { PLUGIN_DISABLED_ERROR_CODE } from '../public/types'
 import { loadAgentPersistenceRow } from './agentPersistence'
+import { createAgentMutationParticipant } from './agentMutationParticipant'
 import {
   runResourceCatalogTransaction,
   type ResourceCatalogTransaction,
 } from './resourceCatalogTransaction'
-import { assertBranchPortsDeclared, assertRuntimeReference } from './agentBranchPorts'
 
 type AgentRow = PersistenceTables['agents']['$inferSelect']
 
@@ -46,6 +37,8 @@ function stale(id: string): ConflictError {
   return staleConflictError('agent', `agent '${id}' changed; reload and retry`)
 }
 
+const SYSTEM_OWNER = Object.freeze({ kind: 'system' as const, userId: SYSTEM_USER_ID })
+
 async function requireSystemBuiltin(
   transaction: ResourceCatalogTransaction,
   id: string,
@@ -61,120 +54,6 @@ async function requireSystemBuiltin(
     throw stale(id)
   }
   return loadAgentPersistenceRow(transaction, row)
-}
-
-function unique(values: readonly string[]): string[] {
-  return [...new Set(values)]
-}
-
-async function assertAgentResourceRows(input: {
-  readonly transaction: ResourceCatalogTransaction
-  readonly mcpIds: readonly string[]
-  readonly pluginIds: readonly string[]
-  readonly skillRefs: readonly AgentSkillRef[]
-}): Promise<void> {
-  const mcpIds = unique(input.mcpIds)
-  if (mcpIds.length > 0) {
-    const { mcps } = tablesOf(input.transaction)
-    const known = new Set(
-      (
-        await input.transaction.select({ id: mcps.id }).from(mcps).where(inArray(mcps.id, mcpIds))
-      ).map((row) => row.id),
-    )
-    const missing = mcpIds.filter((id) => !known.has(id))
-    if (missing.length > 0) {
-      throw new ValidationError(
-        'mcp-not-found',
-        `agent references unknown mcp(s): ${missing.join(', ')}`,
-        { notFound: missing },
-      )
-    }
-  }
-
-  const pluginIds = unique(input.pluginIds)
-  if (pluginIds.length > 0) {
-    const { plugins } = tablesOf(input.transaction)
-    const rows = await input.transaction
-      .select({ id: plugins.id, enabled: plugins.enabled })
-      .from(plugins)
-      .where(inArray(plugins.id, pluginIds))
-    const byId = new Map(rows.map((row) => [row.id, row.enabled]))
-    const missing = pluginIds.filter((id) => !byId.has(id))
-    if (missing.length > 0) {
-      throw new ValidationError(
-        'plugin-not-found',
-        `agent references unknown plugin(s): ${missing.join(', ')}`,
-        { notFound: missing },
-      )
-    }
-    const disabled = pluginIds.filter((id) => byId.get(id) === false)
-    if (disabled.length > 0) {
-      throw new ValidationError(
-        PLUGIN_DISABLED_ERROR_CODE,
-        `agent references disabled plugin(s): ${disabled.join(', ')}`,
-        { disabled },
-      )
-    }
-  }
-
-  const skillIds = unique(agentReferenceIds({ skills: input.skillRefs }, 'skill'))
-  if (skillIds.length > 0) {
-    const { skills } = tablesOf(input.transaction)
-    const known = new Set(
-      (
-        await input.transaction
-          .select({ id: skills.id })
-          .from(skills)
-          .where(and(inArray(skills.id, skillIds), eq(skills.reservationState, 'ready')))
-      ).map((row) => row.id),
-    )
-    const missing = skillIds.filter((id) => !known.has(id))
-    if (missing.length > 0) {
-      throw new ValidationError(
-        'skill-not-found',
-        `agent references unknown managed skill(s): ${missing.join(', ')}`,
-        { notFound: missing },
-      )
-    }
-  }
-}
-
-async function assertAgentDependencyGraph(
-  transaction: ResourceCatalogTransaction,
-  agentId: string,
-  dependencyIds: readonly string[],
-): Promise<void> {
-  await validateDependencyGraph({
-    candidateId: agentId,
-    dependencies: dependencyIds,
-    roots: unique(dependencyIds),
-    load: createAgentDependencyReadPort(transaction).load,
-    semantics: 'catalog',
-  })
-}
-
-async function assertAgentDefinition(input: {
-  readonly transaction: ResourceCatalogTransaction
-  readonly agentId: string
-  readonly definition: Pick<
-    CreateAgent,
-    'outputs' | 'branchPorts' | 'runtime' | 'mcp' | 'plugins' | 'skills' | 'dependsOn'
-  >
-  readonly previousRuntime?: string
-}): Promise<void> {
-  assertBranchPortsDeclared(input.definition)
-  await assertRuntimeReference({
-    transaction: input.transaction,
-    name: input.definition.runtime,
-    ...(input.previousRuntime === undefined ? {} : { previous: input.previousRuntime }),
-  })
-  await assertAgentResourceRows({
-    transaction: input.transaction,
-    mcpIds: input.definition.mcp,
-    pluginIds: input.definition.plugins,
-    skillRefs: input.definition.skills,
-  })
-  await assertAgentDependencyGraph(input.transaction, input.agentId, input.definition.dependsOn)
 }
 
 /** Native PostgreSQL writer for system-owned Digital Employee Agent templates. */
@@ -213,33 +92,13 @@ export function createDigitalEmployeeAgentTemplateRepository(
             transaction.select({ id: agents.id }).from(agents).where(eq(agents.id, input.id)),
           )
           if (existing !== undefined) throw occupied(input.id)
-          const collision = await first(
-            transaction
-              .select({ id: agents.id })
-              .from(agents)
-              .where(
-                and(eq(agents.ownerUserId, SYSTEM_USER_ID), eq(agents.name, input.definition.name)),
-              ),
-          )
-          if (collision !== undefined) throw nameConflict(input.definition.name)
-          await assertAgentDefinition({
-            transaction,
-            agentId: input.id,
-            definition: input.definition,
-          })
-          await createAgentReferenceWriteParticipant(transaction).insert({
+          // RFC-401 A1：校验与写入经唯一的 agent 写入参与者（系统内建写入：系统用户所有、public、builtin）。
+          await createAgentMutationParticipant(transaction).create(SYSTEM_OWNER, {
             id: input.id,
             agent: input.definition,
-            ownerUserId: SYSTEM_USER_ID,
-            now: Date.now(),
-            visibility: 'public',
-            builtin: true,
           })
         })
       } catch (error) {
-        if (isOwnerNameConflict(error)) {
-          throw nameConflict(input.definition.name)
-        }
         if (isPrimaryKeyConflict(error)) throw occupied(input.id)
         throw error
       }
@@ -296,37 +155,19 @@ export function createDigitalEmployeeAgentTemplateRepository(
       input: Parameters<DigitalEmployeeAgentTemplateRepository['updateBuiltin']>[0],
     ): Promise<void> {
       await runResourceCatalogTransaction(db, async (transaction) => {
-        const { agents } = tablesOf(transaction)
-        const row = await first(transaction.select().from(agents).where(eq(agents.id, input.id)))
-        const current = await requireSystemBuiltin(transaction, input.id, row, input)
-        const runtime =
-          input.patch.runtime === null ? undefined : (input.patch.runtime ?? current.runtime)
-        await assertAgentDefinition({
-          transaction,
-          agentId: input.id,
-          definition: {
-            outputs: input.patch.outputs ?? current.outputs,
-            branchPorts: input.patch.branchPorts ?? current.branchPorts,
-            ...(runtime === undefined ? {} : { runtime }),
-            mcp: input.patch.mcp ?? current.mcp,
-            plugins: input.patch.plugins ?? current.plugins,
-            skills: input.patch.skills ?? current.skills,
-            dependsOn: input.patch.dependsOn ?? current.dependsOn,
-          },
-          ...(current.runtime === undefined ? {} : { previousRuntime: current.runtime }),
-        })
-        const changed = (
-          await createAgentReferenceWriteParticipant(transaction).update({
-            current,
-            patch: input.patch,
-            updatedAt: monotonicNow(current.updatedAt),
-            ownerUserId: SYSTEM_USER_ID,
-            builtin: true,
+        await createAgentMutationParticipant(transaction).update(SYSTEM_OWNER, {
+          id: input.id,
+          fence: {
             expectedUpdatedAt: input.expectedUpdatedAt,
             expectedAclRevision: input.expectedAclRevision,
-          })
-        )[0]
-        if (changed === undefined) throw stale(input.id)
+          },
+          guard(current) {
+            if (current.ownerUserId !== SYSTEM_USER_ID || current.builtin !== true) {
+              throw occupied(input.id)
+            }
+          },
+          patch: () => input.patch,
+        })
       })
     },
   })

@@ -353,18 +353,22 @@ function collectReferencedResources(
     if (decoded === null || (decoded.k !== 'external' && decoded.k !== 'builtin')) return
     out.set(`${type}\u0000${value}`, Object.freeze({ type, ref: value }))
   }
-  const takeAll = (type: BundleResourceType, value: unknown): void => {
+  // RFC-401 A1：agent 的四类引用只在这里做 builtin 名称解析（场景错误 `bundle-builtin-missing`，先于任何写入）；
+  // external 引用的存在与可见由唯一的 agent 写入参与者按普通编辑的判据报。
+  const takeBuiltins = (type: BundleResourceType, value: unknown): void => {
     if (!Array.isArray(value)) return
-    for (const ref of value) take(type, ref)
+    for (const ref of value) {
+      if (typeof ref === 'string' && decodeBundleIdentityRef(ref)?.k === 'builtin') take(type, ref)
+    }
   }
 
   for (const operation of operations) {
     if ('target' in operation) take(resourceTypeOfOp(operation), operation.target)
     const payload = operation.payload as Readonly<Record<string, unknown>>
-    takeAll('skill', payload.skills)
-    takeAll('agent', payload.dependsOn)
-    takeAll('mcp', payload.mcp)
-    takeAll('plugin', payload.plugins)
+    takeBuiltins('skill', payload.skills)
+    takeBuiltins('agent', payload.dependsOn)
+    takeBuiltins('mcp', payload.mcp)
+    takeBuiltins('plugin', payload.plugins)
     for (const raw of Array.isArray(payload.members) ? payload.members : []) {
       if (raw !== null && typeof raw === 'object' && !Array.isArray(raw)) {
         take('agent', Reflect.get(raw, 'agentRef'))

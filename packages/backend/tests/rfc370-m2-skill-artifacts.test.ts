@@ -104,6 +104,7 @@ describeEachProvider('RFC-370 durable skill artifacts', (harness) => {
     const prepareContext = {
       pendingIds: new Set<string>(),
       pendingAgentNames: new Map<string, string>(),
+      agentDependencies: new Map<string, readonly string[]>(),
       clientMutationId: 'hosted-kind',
     }
     const commitContext = {

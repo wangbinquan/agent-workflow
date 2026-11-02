@@ -5,7 +5,7 @@ import { tablesOf } from '@/platform/persistence/sessionTables'
 import { first } from '@/platform/persistence/queryHelpers'
 import { ConflictError } from '@/util/errors'
 import type { FusionResourceSeedParticipant } from '../public/participants'
-import { createAgentReferenceWriteParticipant } from './agentReferenceWrite'
+import { insertSeedAgent } from './agentMutationParticipant'
 import { createWorkflowDefinitionWriteParticipant } from './workflowDefinitionWrite'
 
 /** 保持融合原来的逐语句播种顺序；A5 只迁移写入所有权。 */
@@ -45,7 +45,7 @@ export function createFusionResourceSeedParticipant(
           .where(eq(agents.id, seed.agent.id))
       }
     } else {
-      await createAgentReferenceWriteParticipant(db).insert({
+      await insertSeedAgent(db, {
         id: seed.agent.id,
         agent: {
           name: seed.agent.name,

@@ -6,8 +6,13 @@
   - 技能内容不变不增版本、同 spec 插件不重装、fusion 已提交结果可恢复；
   - 引用逐字段去重规则与技能 Markdown 字节合同由本会话写进 design §2。
 - **做法**：本会话调研、设计、实施与集中验证，不派 Codex；实现门由本会话按路径限定自审（只审功能）。
-- **下一步**：Part A（T1 → T2 → T3 → T7 → T8，无 schema 变化）：先按源码补全 design §2 的错误矩阵、去重与字节合同，再实施。
-  Part B（lease、技能 / fusion / restore 接入、旧生命周期退役）的前置 RFC-398 已 Done。
+- **分步**：Part A 按资源类分四次提交（plan「Part A 分步」）：A1 agent、A2 MCP 与 plugin、A3 workflow 与 workgroup、A4 skill 与收口。
+- **A1（agent）**：唯一的 agent 写入参与者 `modules/resource-catalog/infrastructure/agentMutationParticipant.ts`，普通 CRUD、Intent、资源包、
+  数字员工模板接入，fusion / demo 种子经其种子插入；同一非法输入在三入口两 provider 同一错误（`tests/rfc401-agent-error-matrix.test.ts`），
+  结构锁 `rfc401-agent-write-participant`；Intent / 资源包批内的依赖环报 `agent-dependency-cycle` / `agent-dependency-self`（此前
+  `intent-draft-invalid` / `internal-error`）；四类引用去重。集中验证 496 + 30 个文件，查出的 5 处用例与账本问题已修，其余为负载超时、
+  低并发复跑通过；导出仓库里 139 个按已提交源码出报告的用例通过。详见 plan「A1 落地与集中验证」。
+- **下一步**：A2（MCP 与 plugin）。Part B（lease、技能 / fusion / restore 接入、旧生命周期退役）的前置 RFC-398 已 Done。
 
 ## 2026-11-02 RFC-430 部署选择项删余下三个可派生项（Done；`design/RFC-430-derivable-deployment-selections/`）
 

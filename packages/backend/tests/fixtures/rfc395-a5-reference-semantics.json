@@ -3,34 +3,34 @@
   "sourceRevision": "67ab6b9ae",
   "writers": {
     "ordinary-http-mcp": {
-      "skills": "ordered JSON; duplicate managed ids and project names preserved",
-      "dependsOn": "ordered JSON; duplicates preserved",
-      "mcp": "ordered JSON; duplicates preserved",
-      "plugins": "ordered JSON; duplicates preserved"
+      "skills": "RFC-401 A1: one Agent mutation participant; deduplicated by id (skills by kind+id/name), first occurrence kept, input order otherwise",
+      "dependsOn": "RFC-401 A1: one Agent mutation participant; deduplicated by id (skills by kind+id/name), first occurrence kept, input order otherwise",
+      "mcp": "RFC-401 A1: one Agent mutation participant; deduplicated by id (skills by kind+id/name), first occurrence kept, input order otherwise",
+      "plugins": "RFC-401 A1: one Agent mutation participant; deduplicated by id (skills by kind+id/name), first occurrence kept, input order otherwise"
     },
     "intent": {
-      "skills": "ordered JSON; duplicates preserved",
-      "dependsOn": "ordered JSON; duplicates preserved",
-      "mcp": "ordered JSON; duplicates preserved",
-      "plugins": "ordered JSON; duplicates preserved"
+      "skills": "RFC-401 A1: one Agent mutation participant; deduplicated by id (skills by kind+id/name), first occurrence kept, input order otherwise",
+      "dependsOn": "RFC-401 A1: one Agent mutation participant; deduplicated by id (skills by kind+id/name), first occurrence kept, input order otherwise",
+      "mcp": "RFC-401 A1: one Agent mutation participant; deduplicated by id (skills by kind+id/name), first occurrence kept, input order otherwise",
+      "plugins": "RFC-401 A1: one Agent mutation participant; deduplicated by id (skills by kind+id/name), first occurrence kept, input order otherwise"
     },
     "package": {
-      "skills": "resolved Promise.all order; duplicates preserved",
-      "dependsOn": "Set after resolution; first occurrence order, duplicates removed",
-      "mcp": "Set after resolution; first occurrence order, duplicates removed",
-      "plugins": "Set after resolution; first occurrence order, duplicates removed"
+      "skills": "RFC-401 A1: one Agent mutation participant; deduplicated by id (skills by kind+id/name), first occurrence kept, input order otherwise",
+      "dependsOn": "RFC-401 A1: one Agent mutation participant; deduplicated by id (skills by kind+id/name), first occurrence kept, input order otherwise",
+      "mcp": "RFC-401 A1: one Agent mutation participant; deduplicated by id (skills by kind+id/name), first occurrence kept, input order otherwise",
+      "plugins": "RFC-401 A1: one Agent mutation participant; deduplicated by id (skills by kind+id/name), first occurrence kept, input order otherwise"
     },
     "digital-employee-template": {
-      "skills": "ordered JSON; duplicates preserved",
-      "dependsOn": "ordered JSON; duplicates preserved",
-      "mcp": "ordered JSON; duplicates preserved",
-      "plugins": "ordered JSON; duplicates preserved"
+      "skills": "RFC-401 A1: one Agent mutation participant; deduplicated by id (skills by kind+id/name), first occurrence kept, input order otherwise",
+      "dependsOn": "RFC-401 A1: one Agent mutation participant; deduplicated by id (skills by kind+id/name), first occurrence kept, input order otherwise",
+      "mcp": "RFC-401 A1: one Agent mutation participant; deduplicated by id (skills by kind+id/name), first occurrence kept, input order otherwise",
+      "plugins": "RFC-401 A1: one Agent mutation participant; deduplicated by id (skills by kind+id/name), first occurrence kept, input order otherwise"
     },
     "demo": {
-      "skills": "[] in offered samples; adapter preserves submitted order and duplicates",
-      "dependsOn": "[] in offered samples; adapter preserves submitted order and duplicates",
-      "mcp": "[] in offered samples; adapter preserves submitted order and duplicates",
-      "plugins": "[] in offered samples; adapter preserves submitted order and duplicates"
+      "skills": "[] in offered samples; seed insert deduplicates like every other writer (RFC-401 A1)",
+      "dependsOn": "[] in offered samples; seed insert deduplicates like every other writer (RFC-401 A1)",
+      "mcp": "[] in offered samples; seed insert deduplicates like every other writer (RFC-401 A1)",
+      "plugins": "[] in offered samples; seed insert deduplicates like every other writer (RFC-401 A1)"
     },
     "fusion": {
       "skills": "[]",
@@ -41,16 +41,26 @@
   },
   "validation": {
     "package": {
-      "roots": "Set, empty strings retained for traversal",
+      "roots": "RFC-401 A1: same participant as ordinary",
       "self": ["agent-dependency-self", "agent cannot depend on itself", 422],
       "cycle": ["agent-dependency-cycle", "agent dependency graph contains a cycle", 422],
-      "missing": ["agent-dependency-not-found", "agent dependency '${id}' not found", 422]
+      "missing": ["agent-dependency-not-found", "agent dependency '${id}' not found", 422],
+      "missingDirect": [
+        "agent-dependency-not-found",
+        "agent references unknown agent dependency(s): ${missing joined with comma-space}",
+        422
+      ]
     },
     "intent": {
-      "roots": "DFS; unknown nodes treated as leaves",
-      "self": ["agent-dependency-cycle", "agent dependency graph contains a cycle", 422],
+      "roots": "RFC-401 A1: same participant as ordinary; batch agents overlay the transaction with their final dependsOn",
+      "self": ["agent-dependency-self", "agent cannot depend on itself", 422],
       "cycle": ["agent-dependency-cycle", "agent dependency graph contains a cycle", 422],
-      "missing": "original visibility-reference entry emits acl-missing-refs before graph validation unless pending id"
+      "missing": ["agent-dependency-not-found", "agent dependency '${id}' not found", 422],
+      "missingDirect": [
+        "agent-dependency-not-found",
+        "agent references unknown agent dependency(s): ${missing joined with comma-space}",
+        422
+      ]
     },
     "application": {
       "roots": "Set, BFS and direct missing aggregation",
@@ -79,17 +89,21 @@
       ]
     },
     "template": {
-      "roots": "Set, empty strings retained for traversal",
+      "roots": "RFC-401 A1: same participant as ordinary",
       "self": ["agent-dependency-self", "agent cannot depend on itself", 422],
       "cycle": ["agent-dependency-cycle", "agent dependency graph contains a cycle", 422],
-      "missing": ["agent-dependency-not-found", "agent dependency '${id}' not found", 422]
+      "missing": ["agent-dependency-not-found", "agent dependency '${id}' not found", 422],
+      "missingDirect": [
+        "agent-dependency-not-found",
+        "agent references unknown agent dependency(s): ${missing joined with comma-space}",
+        422
+      ]
     }
   },
   "deviations": [
-    "II-b parent-target uniqueness remains undecided: II-a retains writer-specific duplicates.",
+    "RFC-401 A1 (design §2.4): every Agent writer deduplicates the four reference fields; the II-b parent-target uniqueness question is settled for writes (existing duplicate rows are normalized on the next save).",
     "Package closure and legacy workflow reverse matcher historically accept agentId on any node kind.",
     "Workflow delete compares name across all owners and ignores cached ids.",
-    "Intent missing-node ids remain leaves in cycle validation; entry visibility diagnostics are unchanged.",
     "Fusion restore-only composition has no seed participant because recovery never seeds.",
     "No single-non-root-member decisions are changed."
   ]

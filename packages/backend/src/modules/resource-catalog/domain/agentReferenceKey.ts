@@ -23,6 +23,34 @@ export function decodeAgentSkillReferenceKey(key: string): AgentSkillRef {
   return ref
 }
 
+/**
+ * RFC-401 design §2.4 —— agent 四个引用字段在共同写入层去重：`dependsOn` / `mcp` / `plugins` 按 id，`skills` 按
+ * （kind, skillId / name），保留第一次出现的位置，其余按输入顺序。重复引用在运行时没有含义；此前三条入口各不相同
+ * （普通编辑与 Intent 保留重复，资源包对前三个字段去重、对 skills 保留）。只处理给出的字段，update 的部分 patch 不补字段。
+ */
+export function uniqueAgentReferences<T extends Partial<AgentReferences>>(refs: T): T {
+  function firstOccurrences<V>(values: readonly V[], key: (value: V) => string): V[] {
+    const seen = new Set<string>()
+    return values.filter((value) => {
+      const referenceKey = key(value)
+      if (seen.has(referenceKey)) return false
+      seen.add(referenceKey)
+      return true
+    })
+  }
+  return {
+    ...refs,
+    ...(refs.skills === undefined
+      ? {}
+      : { skills: firstOccurrences(refs.skills, encodeAgentSkillReferenceKey) }),
+    ...(refs.dependsOn === undefined
+      ? {}
+      : { dependsOn: firstOccurrences(refs.dependsOn, (id) => id) }),
+    ...(refs.mcp === undefined ? {} : { mcp: firstOccurrences(refs.mcp, (id) => id) }),
+    ...(refs.plugins === undefined ? {} : { plugins: firstOccurrences(refs.plugins, (id) => id) }),
+  }
+}
+
 /** Typed rows share the converter's occurrence and ordinal identities. */
 export function agentReferenceRows(agentId: string, refs: AgentReferences) {
   function ordered<T>(values: readonly T[], key: (value: T) => string) {

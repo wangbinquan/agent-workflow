@@ -1,9 +1,6 @@
 import { capturedSkillTreeColumns, skillRowPath } from '../databaseSkillTrees'
-import { assertAgentDependencyGraph as validateDependencyGraph } from '../../domain/agentDependencies'
-import { createAgentDependencyReadPort } from '../agentDependencyRead'
 import {
   collectWorkflowDependencyRefs,
-  collectAgentDependencyRefs,
   privilegedNodeLensFor,
   CreateAgentSchema,
   CreateMcpSchema,
@@ -30,7 +27,6 @@ import {
   type WorkgroupDraftMember,
   type WorkgroupDraftSnapshot,
 } from '@agent-workflow/shared'
-import { createAgentReferenceWriteParticipant } from '../agentReferenceWrite'
 import { createWorkflowDefinitionWriteParticipant } from '../workflowDefinitionWrite'
 import { workflowCatalogPredicate } from '../workflowCatalogPredicate'
 import { insertOne } from '@/platform/persistence/singleInsert'
@@ -86,10 +82,13 @@ import {
 import { workgroupFromRows } from '../workgroupRepository'
 import type {
   IntentApplyMutationPort,
+  IntentApplyPrepareContext,
   IntentApplyResourcePorts,
   IntentApplyResourceSessionOptions,
   IntentResourceChangesetReceipt,
 } from './intentApplyResourceParticipants'
+import type { AgentMutationBatch } from '../../application/ports/agentMutation'
+import { createAgentMutationParticipant } from '../agentMutationParticipant'
 
 type PlanOf<K extends CatalogSelectorKind> = Extract<
   VersionedIntentResourceChangesetPlan,
@@ -123,12 +122,12 @@ type PreparedAgent =
   | Readonly<{
       kind: 'create'
       input: CreateAgent
-      pendingIds: ReadonlySet<string>
+      batch: AgentMutationBatch
     }>
   | Readonly<{
       kind: 'update'
       patch: Readonly<Record<string, unknown>>
-      pendingIds: ReadonlySet<string>
+      batch: AgentMutationBatch
     }>
 
 type PreparedMcp = Readonly<{ input: CreateMcp }>
@@ -387,52 +386,6 @@ async function assertVisibleReferences(
   )
 }
 
-function agentReferenceGroups(
-  agent: CreateAgent,
-  pendingIds: ReadonlySet<string>,
-): readonly Readonly<{
-  type: CatalogSelectorKind
-  ids: readonly string[]
-  pendingIds: ReadonlySet<string>
-}>[] {
-  const refs = collectAgentDependencyRefs(agent)
-  return (['agent', 'skill', 'mcp', 'plugin'] as const).map((type) => ({
-    type,
-    ids: refs
-      .filter((ref) => ref.resourceType === type && ref.selectorKind === 'id')
-      .map((ref) => ref.value),
-    pendingIds,
-  }))
-}
-
-async function assertAgentGraphAcyclic(
-  transaction: PostgresqlResourceCatalogTransaction,
-  candidateId: string,
-  dependencies: readonly string[],
-): Promise<void> {
-  await validateDependencyGraph({
-    candidateId: candidateId,
-    dependencies: dependencies,
-    roots: dependencies,
-    load: createAgentDependencyReadPort(transaction).load,
-    semantics: 'intent',
-  })
-}
-
-async function assertRuntimeExists(
-  transaction: PostgresqlResourceCatalogTransaction,
-  runtime: string | undefined,
-): Promise<void> {
-  if (runtime === undefined) return
-  const { runtimes } = tablesOf(transaction)
-  const row = await first(
-    transaction.select({ name: runtimes.name }).from(runtimes).where(eq(runtimes.name, runtime)),
-  )
-  if (row === undefined) {
-    throw new ValidationError('agent-runtime-not-found', `runtime '${runtime}' not found`)
-  }
-}
-
 function exactAgentPatch(plan: UpdatePlanOf<'agent'>): Readonly<Record<string, unknown>> {
   const { name: _name, ...patch } = plan.payload
   return patch
@@ -443,28 +396,38 @@ function applyAgentPatch(current: Agent, patch: Readonly<Record<string, unknown>
   return UpdateAgentSchema.parse(withAgentSidecarsFrom(patch, current))
 }
 
+/** RFC-401 A1：批内事实交给唯一的 agent 写入参与者（design §9.2）。 */
+function agentBatchOf(context: IntentApplyPrepareContext): AgentMutationBatch {
+  return Object.freeze({
+    pendingDependencies: (id: string) => context.agentDependencies.get(id),
+    // 本批新建的资源 id；只有其中的 managed skill 会被闭包校验命中（ULID 跨类型唯一）。
+    stagedSkillIds: context.pendingIds,
+  })
+}
+
 function createAgentPort(
   options: IntentApplyResourceSessionOptions,
   now: () => number,
 ): IntentApplyMutationPort<'agent', PreparedAgent> {
   const actor = exactActor(options)
+  const owner = Object.freeze({ kind: 'actor' as const, actor })
   return Object.freeze({
     async prepare(plan, context) {
       if (plan.action === 'create') {
         return Object.freeze({
           kind: 'create',
           input: CreateAgentSchema.parse(plan.payload),
-          pendingIds: context.pendingIds,
+          batch: agentBatchOf(context),
         })
       }
       return Object.freeze({
         kind: 'update',
         patch: exactAgentPatch(plan),
-        pendingIds: context.pendingIds,
+        batch: agentBatchOf(context),
       })
     },
     async commitInTransaction({ transaction, plan, prepared }) {
-      const committedAt = now()
+      const agents = createAgentMutationParticipant(transaction, { now })
       if (prepared.kind === 'create') {
         // RFC-358 T9（B-5）—— copy 把 update 归一成 create，而此前 create 分支不回填
         // sidecar，于是「复制一个 builtin agent 再改」会静默丢掉分支端口 / 输出 kind /
@@ -473,9 +436,9 @@ function createAgentPort(
         let input = prepared.input
         const copiedFrom = plan.action === 'create' ? plan.copiedFromResourceId : undefined
         if (copiedFrom !== undefined) {
-          const { agents } = tablesOf(transaction)
+          const { agents: agentRows } = tablesOf(transaction)
           const sourceRow = await first(
-            transaction.select().from(agents).where(eq(agents.id, copiedFrom)),
+            transaction.select().from(agentRows).where(eq(agentRows.id, copiedFrom)),
           )
           if (sourceRow !== undefined) {
             input = CreateAgentSchema.parse(
@@ -486,87 +449,43 @@ function createAgentPort(
             )
           }
         }
-        await assertVisibleReferences(
-          transaction,
-          actor,
-          agentReferenceGroups(input, prepared.pendingIds),
-        )
-        await assertAgentGraphAcyclic(transaction, plan.resourceId, input.dependsOn)
-        await assertRuntimeExists(transaction, input.runtime)
-        const { agents } = tablesOf(transaction)
-        const collision = await first(
-          transaction
-            .select({ id: agents.id })
-            .from(agents)
-            .where(and(eq(agents.ownerUserId, actor.user.id), eq(agents.name, input.name))),
-        )
-        if (collision !== undefined) {
-          throw new ConflictError('agent-name-in-use', `agent '${input.name}' already exists`)
-        }
-        const inserted = (
-          await createAgentReferenceWriteParticipant(transaction).insert({
-            id: plan.resourceId,
-            agent: input,
-            ownerUserId: actor.user.id,
-            now: committedAt,
-          })
-        )[0]
-        if (inserted === undefined) throw new Error('agent insert returned no row')
+        const created = await agents.create(owner, {
+          id: plan.resourceId,
+          agent: input,
+          batch: prepared.batch,
+        })
         return agentReceipt(plan, {
           kind: 'agent',
-          updatedAt: inserted.updatedAt,
-          aclRevision: inserted.aclRevision,
+          updatedAt: created.updatedAt,
+          aclRevision: created.aclRevision ?? 0,
         })
       }
       if (plan.action !== 'update') {
         throw new Error('agent prepared action does not match changeset plan')
       }
-
-      const { agents } = tablesOf(transaction)
-      const row = await first(
-        transaction.select().from(agents).where(eq(agents.id, plan.resourceId)),
-      )
-      if (row === undefined) throw notFound('agent', plan.resourceId)
-      const current = await loadAgentPersistenceRow(transaction, row)
-      requireOwner(actor, 'agent', current)
-      if (
-        current.updatedAt !== plan.expectedRevision.updatedAt ||
-        (current.aclRevision ?? 0) !== plan.expectedRevision.aclRevision
-      ) {
-        throw staleConflictError('agent', `agent '${plan.resourceId}' changed; reload and retry`)
-      }
-      if (plan.payload.name !== current.name) {
-        throw new ValidationError(
-          'intent-rename-unsupported',
-          'renaming via intent update is not supported; use the finalName slot on a copy, or the rename flow',
-        )
-      }
-      const patch = applyAgentPatch(current, prepared.patch)
-      const candidate: CreateAgent = CreateAgentSchema.parse({ ...current, ...patch })
-      await assertVisibleReferences(
-        transaction,
-        actor,
-        agentReferenceGroups(candidate, prepared.pendingIds),
-      )
-      await assertAgentGraphAcyclic(transaction, current.id, candidate.dependsOn)
-      await assertRuntimeExists(transaction, candidate.runtime)
-      const updatedAt = monotonicNow(current.updatedAt)
-      const changed = (
-        await createAgentReferenceWriteParticipant(transaction).update({
-          current,
-          patch,
-          updatedAt,
+      const updated = await agents.update(owner, {
+        id: plan.resourceId,
+        fence: {
           expectedUpdatedAt: plan.expectedRevision.updatedAt,
           expectedAclRevision: plan.expectedRevision.aclRevision,
-        })
-      )[0]
-      if (changed === undefined) {
-        throw staleConflictError('agent', `agent '${plan.resourceId}' changed; reload and retry`)
-      }
+        },
+        // 场景规则：Intent 只允许 owner 原地修改、builtin 只读，原地改名只能走 copy 的 finalName 或改名流程。
+        guard(current) {
+          requireOwner(actor, 'agent', current)
+          if (plan.payload.name !== current.name) {
+            throw new ValidationError(
+              'intent-rename-unsupported',
+              'renaming via intent update is not supported; use the finalName slot on a copy, or the rename flow',
+            )
+          }
+        },
+        patch: (current) => applyAgentPatch(current, prepared.patch),
+        batch: prepared.batch,
+      })
       return agentReceipt(plan, {
         kind: 'agent',
-        updatedAt: changed.updatedAt,
-        aclRevision: changed.aclRevision,
+        updatedAt: updated.updatedAt,
+        aclRevision: updated.aclRevision ?? 0,
       })
     },
   } satisfies IntentApplyMutationPort<'agent', PreparedAgent>)

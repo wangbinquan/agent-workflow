@@ -145,11 +145,22 @@ describe('RFC-345 provider-neutral Digital Employee Agent template catalog', () 
     // builtin 模版的写面判据：系统 owner + builtin 双条件定位、更新走 updatedAt + aclRevision 双 OCC，
     // 唯一冲突经能力矩阵映射（不认某一个方言的约束名）。
     expect(repository).toContain('runResourceCatalogTransaction(db, async (transaction) =>')
-    expect(repository).toMatch(
-      /createAgentReferenceWriteParticipant\(transaction\)\.insert\(\{\s*id: input.id,\s*agent: input.definition,\s*ownerUserId: SYSTEM_USER_ID,\s*now: Date.now\(\),\s*visibility: 'public',\s*builtin: true,/,
+    // RFC-401 A1：create / update 经唯一的 agent 写入参与者，以系统内建写入（系统用户所有、public、builtin）调用；
+    // 系统所有权的判定是场景 guard，更新的双 OCC 由参与者按 fence 做。
+    expect(repository).toContain(
+      "const SYSTEM_OWNER = Object.freeze({ kind: 'system' as const, userId: SYSTEM_USER_ID })",
     )
     expect(repository).toMatch(
-      /createAgentReferenceWriteParticipant\(transaction\)\.update\(\{[\s\S]*?ownerUserId: SYSTEM_USER_ID,\s*builtin: true,\s*expectedUpdatedAt: input.expectedUpdatedAt,\s*expectedAclRevision: input.expectedAclRevision,/,
+      /createAgentMutationParticipant\(transaction\)\.create\(SYSTEM_OWNER, \{\s*id: input.id,\s*agent: input.definition,/,
+    )
+    expect(repository).toMatch(
+      /createAgentMutationParticipant\(transaction\)\.update\(SYSTEM_OWNER, \{\s*id: input.id,\s*fence: \{\s*expectedUpdatedAt: input.expectedUpdatedAt,\s*expectedAclRevision: input.expectedAclRevision,/,
+    )
+    expect(repository).toContain(
+      'current.ownerUserId !== SYSTEM_USER_ID || current.builtin !== true',
+    )
+    expect(resourceCatalogSource('infrastructure/agentMutationParticipant.ts')).toContain(
+      "{ ownerUserId: owner.userId, visibility: 'public', builtin: true }",
     )
     const writer = resourceCatalogSource('infrastructure/agentReferenceWrite.ts')
     expect(writer).toContain('eq(agents.ownerUserId, input.ownerUserId)')
