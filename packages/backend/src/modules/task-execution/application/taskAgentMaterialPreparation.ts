@@ -1,34 +1,12 @@
+// RFC-417: provider-neutral task Agent material preparation, moved verbatim from
+// composition/taskAgentMaterialPreparation.ts; the local and hosted run families both select it.
 import type { AgentMaterialIntent } from '@/modules/runtime-management/public/participants'
+import type { AgentInvocationPreparation } from './ports/agentInvocationPreparation'
 import type {
-  AgentInvocationPreparation,
-  CompiledAgentInvocation,
-} from '../application/ports/agentInvocationPreparation'
-import type {
+  TaskAgentMaterialDiagnostics,
   TaskAgentMaterialPreparation,
-  TaskCompiledAgentInvocation,
-} from '../application/ports/taskAgentMaterial'
-
-/** Selected resource owners supply ordered references. They interpret their
- * own locations/readers; no physical resource or fixture field crosses here. */
-export interface TaskAgentMaterialResources {
-  readonly injection: Pick<AgentMaterialIntent['injection'], 'skills' | 'plugins'>
-  readonly runtimeBinding?: AgentMaterialIntent['runtimeBinding']
-  prepareMounts(): AgentMaterialIntent['taskMounts']
-}
-
-/** The same selected material owner projects its actual MCP declarations and
- * load diagnostics. Core receives closed observations, never raw diagnostics. */
-export interface TaskAgentMaterialDiagnostics {
-  readDeclaredMcpServers(compiled: CompiledAgentInvocation): readonly string[] | undefined
-  reportSpawn(
-    compiled: CompiledAgentInvocation,
-    ...input: Parameters<TaskCompiledAgentInvocation['reportSpawn']>
-  ): void
-  detectPluginLoadFailure(
-    compiled: CompiledAgentInvocation,
-    line: string,
-  ): { pluginName: string; message: string } | null
-}
+  TaskAgentMaterialResources,
+} from './ports/taskAgentMaterial'
 
 function selectedInjectionResources(
   references: TaskAgentMaterialResources['injection'],

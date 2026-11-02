@@ -1,4 +1,17 @@
-## 2026-11-01 RFC-416 task-execution 托管 agent 调用适配器与 MCP 诊断会话迁入 infrastructure/crewstation（In Progress；`design/RFC-416-task-execution-hosted-agent-invocation-infrastructure/`）
+## 2026-11-01 RFC-417 task-execution 托管任务运行范围与执行 owner 逻辑迁入 infrastructure/crewstation（In Progress；`design/RFC-417-task-execution-hosted-run-execution-infrastructure/`）
+
+- **来由**：RFC-294 S6 退出门「task-execution `composition/` 只剩装配」的第五步（RFC-416 proposal §7 后继顺序第 1 项）；用户授权同 RFC-402，本会话调研、
+  设计、实施与集中验证，不派 Codex。
+- **范围**：托管 agent 运行范围与托管材料引用迁入 `infrastructure/crewstation/`；执行 owner 里的工作区 owner 判定与 owner 改写 helper、能力缓存与判定、
+  命令对账循环、Intent scratch 释放迁入 `infrastructure/crewstation/`；provider 中立的任务材料准备迁入 `application/`，composition 文件删除。恢复证明按
+  RFC-328 只能经 `composition/bootRecovery.ts` 铸造，闭包留在原处。纯结构重构。
+- **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。
+- **进度**：T1～T5 完成，随实现提交入库，待 exact SHA 的 CI（AC-5）。集中验证 820 + 143 + 3 个文件：本 RFC 引入的 1 个守卫失败（rfc328 恢复证明铸造点）
+  与新用例两处类型断言已修，其余负载超时在候选与基线上同样通过；P0 变异 lane 通过（34 个阶段、源文件指纹不变）。详见 plan「集中验证（T5）」。
+  同提交收尾 RFC-416（`80b715e95` 全绿）。
+- **后继**：本地 agent 调用适配器与本地 run family（先补 runtime-management public 合同，连同托管系统代理 / 冒烟的调用打开逻辑），RFC-416 proposal §7 第 2 项。
+
+## 2026-11-01 RFC-416 task-execution 托管 agent 调用适配器与 MCP 诊断会话迁入 infrastructure/crewstation（Done；`design/RFC-416-task-execution-hosted-agent-invocation-infrastructure/`）
 
 - **来由**：RFC-294 S6 退出门「task-execution `composition/` 只剩装配」的第四步，处理 RFC-294 review F10 点名的「执行适配器带逻辑地放在 composition」；
   用户授权同 RFC-402，本会话调研、设计、实施与集中验证，不派 Codex。
@@ -9,7 +22,7 @@
   RFC-416 proposal §7（托管任务运行选择与执行 owner → 本地 agent 调用适配器与 runtime-management public 合同 → provider 后台循环 → 执行状态绑定
   残余 → 其余与收口锁）。
 - **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。
-- **进度**：T1～T4 完成，随实现提交入库，待 exact SHA 的 CI（AC-5）。集中验证 608 + 7 个文件：601 个首轮通过，7 个负载超时第二轮全部通过，无本 RFC
+- **进度**：T1～T4 完成，随实现提交入库（`80b715e95`）；exact SHA 的主 CI 70/70 与 windows-platform 全绿（AC-5），Done。集中验证 608 + 7 个文件：601 个首轮通过，7 个负载超时第二轮全部通过，无本 RFC
   引入的失败；P0 变异 lane 通过（34 个阶段、源文件指纹不变）。详见 plan「集中验证（T4）」。同提交收尾 RFC-414（`c4b025f4c` 全绿）与 RFC-415
   （`e90d6fc4f` 全绿）。
 - **后继**：托管任务运行选择（`crewstationTaskRunSelection.ts`）与托管执行 owner（`crewstationExecution.ts`）中的逻辑迁入 `infrastructure/crewstation/`。

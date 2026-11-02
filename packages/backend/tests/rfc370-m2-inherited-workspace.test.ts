@@ -1,6 +1,6 @@
 import { taskFixture, workflowFixture } from './helpers/model'
 import { expect, test } from 'bun:test'
-import { createCrewStationExecutionWorkspaces } from '@/modules/task-execution/composition/crewstationExecution'
+import { createHostedExecutionWorkspaces } from '@/modules/task-execution/infrastructure/crewstation/executionWorkspaces'
 import { createHostedIsolationWorkspaces } from '@/modules/source-control/infrastructure/crewstation/isolationWorkspace'
 import { parseHostedWorkspaceReference } from '@/modules/source-control/infrastructure/crewstation/workspaceReference'
 import type { WorkspaceHelper } from '@/platform/crewstation/workspaceProtocol'
@@ -39,7 +39,7 @@ describeEachProvider('RFC-370 inherited task volume ownership', (harness) => {
       })),
     )
     const owners: string[] = []
-    const binding = createCrewStationExecutionWorkspaces({
+    const binding = createHostedExecutionWorkspaces({
       db: harness.db,
       locate: parseHostedWorkspaceReference,
       workspaces: {

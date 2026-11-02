@@ -8,78 +8,29 @@ import type { WorkspaceHelper } from '@/platform/crewstation/workspaceProtocol'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { sha256Hex } from '@/util/hash'
 import type { Logger } from '@/util/log'
-import { isTaskWorkspaceUnbound } from '@agent-workflow/shared'
 import type { TaskDeletionEffects } from '../application/ports/taskDeletionContentEffects'
 import { createHostedBootRecovery } from '../infrastructure/crewstation/bootRecovery'
 import { createHostedExecution } from '../infrastructure/crewstation/execution'
 import { createHostedExecutionSettler } from '../infrastructure/crewstation/executionSettler'
 import { createHostedExecutionStore } from '../infrastructure/crewstation/executionStore'
+import {
+  createHostedExecutionWorkspaces,
+  createOwnerRoutedWorkspaceHelper,
+} from '../infrastructure/crewstation/executionWorkspaces'
+import {
+  createCachedHostedCapabilities,
+  hostedProfileCapability,
+} from '../infrastructure/crewstation/hostedCapabilities'
+import { createHostedIntentScratchRelease } from '../infrastructure/crewstation/intentScratchRelease'
 import { createHostedPortArtifactContent } from '../infrastructure/crewstation/portArtifactContent'
 import { createHostedTaskDeletionContent } from '../infrastructure/crewstation/taskDeletionContent'
 import { createHostedVolumeActivity } from '../infrastructure/crewstation/volumeActivity'
-import { readTaskWorkspaceRef } from '../infrastructure/taskExecutionTaskReads'
+import { createHostedWorkspaceCommandReconciliation } from '../infrastructure/crewstation/workspaceCommandReconciliation'
 import { createDaemonRecoveryAuthorityProof } from './bootRecovery'
 import { createCrewStationRuntimeManagement } from './crewstationRuntimeManagement'
 import { createCrewStationSystemAgentRunFamily } from './crewstationSystemAgentRunFamily'
 import { composeCrewStationTaskRunSelection } from './crewstationTaskRunSelection'
 import { composePortArtifactOperations } from './portArtifacts'
-
-const CAPABILITY_CACHE_MS = 30_000
-const SETTLEMENT_INTERVAL_MS = 60_000
-
-/** Bind logical child executions to the physical volume owning their workspace. */
-export function createCrewStationExecutionWorkspaces(input: {
-  readonly db: PersistenceDb
-  readonly locate: (reference: string) => { readonly taskId: string }
-  readonly workspaces: {
-    ensure(taskId: string): Promise<{ readonly businessTaskId: string }>
-    find(taskId: string): Promise<{ readonly businessTaskId: string } | null>
-  }
-}) {
-  // Inherited call/fusion children own their execution identity but operate in
-  // their parent's physical workspace. Resolve that owner before allocating a
-  // platform parent; never create an empty child volume for a parent cwd.
-  const owner = async (taskId: string) => {
-    // RFC-414: the row read is an infrastructure query; the ownership decision stays here.
-    const workspaceRef = await readTaskWorkspaceRef(input.db, taskId)
-    return workspaceRef !== undefined && !isTaskWorkspaceUnbound(workspaceRef)
-      ? input.locate(workspaceRef).taskId
-      : taskId
-  }
-  return {
-    owner,
-    async ensure(taskId: string) {
-      return input.workspaces.ensure(await owner(taskId))
-    },
-    async workspaceTaskId(taskId: string) {
-      return (await input.workspaces.find(await owner(taskId)))?.businessTaskId ?? null
-    },
-  }
-}
-
-/** Platform capability evidence changes only when a profile is re-tested;
- * one cached read serves every compile in that window. */
-export function createCachedHostedCapabilities(
-  read: () => Promise<HostedRuntimeCapabilities>,
-  now: () => number = Date.now,
-): () => Promise<HostedRuntimeCapabilities> {
-  let value: HostedRuntimeCapabilities | undefined
-  let readAt = 0
-  let pending: Promise<HostedRuntimeCapabilities> | undefined
-  return async () => {
-    if (value !== undefined && now() - readAt < CAPABILITY_CACHE_MS) return value
-    pending ??= read()
-      .then((fresh) => {
-        value = fresh
-        readAt = now()
-        return fresh
-      })
-      .finally(() => {
-        pending = undefined
-      })
-    return pending
-  }
-}
 
 export function composeCrewStationExecutionOwner(
   input: {
@@ -103,16 +54,14 @@ export function composeCrewStationExecutionOwner(
     | 'materialFiles'
     | 'materialEnvironment'
   > & {
-      readonly workspaces: Parameters<
-        typeof createCrewStationExecutionWorkspaces
-      >[0]['workspaces'] &
+      readonly workspaces: Parameters<typeof createHostedExecutionWorkspaces>[0]['workspaces'] &
         Parameters<typeof createHostedPortArtifactContent>[0]['workspace'] & {
           close(taskId: string): Promise<boolean>
         }
       readonly locate: Parameters<typeof createHostedPortArtifactContent>[0]['locate']
     },
 ) {
-  const executionWorkspaces = createCrewStationExecutionWorkspaces(input)
+  const executionWorkspaces = createHostedExecutionWorkspaces(input)
   const store = createHostedExecutionStore(input)
   const executions = createHostedExecution({
     api: input.api,
@@ -121,29 +70,9 @@ export function composeCrewStationExecutionOwner(
     workspaceTaskId: executionWorkspaces.workspaceTaskId,
     readyWorkspace: executionWorkspaces.ensure,
   })
-  // Source Control owns the command journal; logical children borrow their
-  // parent's volume, so commands always address the physical owner.
-  const helper: WorkspaceHelper & {
-    recover<T>(taskId: string, operationId: string): Promise<{ value: T } | null>
-  } = {
-    call: async (taskId, operation, value, options) =>
-      input.commands.call(await executionWorkspaces.owner(taskId), operation, value, options),
-    recover: async (taskId, operationId) =>
-      input.commands.recover(await executionWorkspaces.owner(taskId), operationId),
-  }
+  const helper = createOwnerRoutedWorkspaceHelper(input.commands, executionWorkspaces.owner)
   const capabilities = createCachedHostedCapabilities(input.capabilities)
-  const capability =
-    (
-      name:
-        | 'startupInventoryVersion'
-        | 'nativeConfigVersion'
-        | 'nativeModelMappingVersion'
-        | 'materialObjectsVersion',
-    ) =>
-    async (agentProfileId: string) =>
-      (await capabilities()).agentProfiles.some(
-        (profile) => profile.agentProfileId === agentProfileId && profile.capabilities[name] === 1,
-      )
+  const capability = hostedProfileCapability(capabilities)
   const hostedAgents = {
     db: input.db,
     fence: input.fence,
@@ -170,6 +99,7 @@ export function composeCrewStationExecutionOwner(
     db: input.db,
     fence: input.fence,
     store,
+    // RFC-328 FACTORY_ALLOWLIST: the proof is minted only through composition/bootRecovery.ts.
     proof() {
       const lease = input.fence.current()
       return createDaemonRecoveryAuthorityProof({
@@ -199,29 +129,7 @@ export function composeCrewStationExecutionOwner(
         id: 'hosted-execution-settlement',
         run: (signal: AbortSignal) => settler.run(signal),
       },
-      {
-        // Commands of earlier owners are settled from their platform result;
-        // a long one never delays the next pass (in-flight rows are skipped).
-        id: 'hosted-workspace-command-reconciliation',
-        async run(signal: AbortSignal) {
-          while (!signal.aborted) {
-            input.commands.reconcile(signal).catch((error: unknown) => {
-              input.log.warn('hosted workspace command reconciliation failed', {
-                reason: error instanceof Error ? error.message : String(error),
-              })
-            })
-            await new Promise<void>((resolve) => {
-              const timer = setTimeout(done, SETTLEMENT_INTERVAL_MS)
-              function done(): void {
-                clearTimeout(timer)
-                signal.removeEventListener('abort', done)
-                resolve()
-              }
-              signal.addEventListener('abort', done, { once: true })
-            })
-          }
-        },
-      },
+      createHostedWorkspaceCommandReconciliation({ commands: input.commands, log: input.log }),
     ],
     selections: {
       taskDeletionEffects: {
@@ -278,20 +186,9 @@ export function composeCrewStationIntentScratchRelease(input: {
     workspaceTaskId: async (taskId) =>
       (await input.workspaces.find(taskId))?.businessTaskId ?? null,
   })
-  return {
-    async removeIntentScratch(turnId: string) {
-      const taskId = 'system:intent'
-      const key = sha256Hex(turnId)
-      if (!(await executions.workspaceSettled(taskId, `/work/system/intent/${key}`)))
-        throw new Error('hosted-intent-scratch-execution-unsettled')
-      if ((await input.workspaces.find(taskId)) === null) return
-      const result = await input.helper.call<{ removed: boolean }>(
-        taskId,
-        'system-workspace',
-        { method: 'release', namespace: 'intent', key },
-        { operationId: `intent-scratch:${turnId}:retention` },
-      )
-      if (!result.removed) throw new Error('hosted-intent-scratch-release-failed')
-    },
-  }
+  return createHostedIntentScratchRelease({
+    executions,
+    helper: input.helper,
+    workspaces: input.workspaces,
+  })
 }

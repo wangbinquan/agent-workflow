@@ -162,7 +162,8 @@ test('composition binds the moved I/O where the original code ran it', () => {
   expect(source('crewstationRecovery.ts')).toContain(
     'taskStatus: (taskId) => readTaskStatus(input.db, taskId),',
   )
-  expect(source('crewstationExecution.ts')).toContain(
+  // RFC-417: the hosted ownership decision moved with the CrewStation adapter; the read is still the RFC-414 query.
+  expect(source('../infrastructure/crewstation/executionWorkspaces.ts')).toContain(
     'const workspaceRef = await readTaskWorkspaceRef(input.db, taskId)',
   )
   // RFC-415: the runners moved to application; the environment binding supplies both defaults.

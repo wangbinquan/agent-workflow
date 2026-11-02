@@ -1,6 +1,6 @@
 // RFC-414 — the two single-row task reads composition used to issue inline: the hosted workspace owner lookup
-// (crewstationExecution) and the status reads of hosted recovery and the action runners (one query, formerly copied in
-// both). Columns, conditions and limits are unchanged.
+// (crewstationExecution; since RFC-417 crewstation/executionWorkspaces) and the status reads of hosted recovery and the
+// action runners (one query, formerly copied in both). Columns, conditions and limits are unchanged.
 import type { TaskStatus } from '@agent-workflow/shared'
 import { eq } from 'drizzle-orm'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'

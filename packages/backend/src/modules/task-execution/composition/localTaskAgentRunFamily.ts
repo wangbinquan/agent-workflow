@@ -15,7 +15,7 @@ import type { TaskOperationConfigurationQueries } from '../application/ports/tas
 import type { NodeRunPromptOperations } from '../application/ports/nodeRunPromptContent'
 import type { PortArtifactOperations } from '../application/ports/portArtifactContent'
 import { createLocalAgentInvocationPreparation } from './localAgentInvocationPreparation'
-import { createTaskAgentMaterialPreparation } from './taskAgentMaterialPreparation'
+import { createTaskAgentMaterialPreparation } from '../application/taskAgentMaterialPreparation'
 import {
   composePortOutputContentValidation,
   createNativePortOutputValidationContent,

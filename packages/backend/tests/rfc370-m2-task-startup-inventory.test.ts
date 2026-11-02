@@ -17,7 +17,7 @@ import { composeRunObservationCalls } from '@/modules/run-observability/composit
 import { sqliteMemoryInjectionQueries } from './helpers/memoryInjection'
 import { composeRuntimeRegistryOperations } from './helpers/runtimeRegistryComposition'
 import { runSelectedTaskAgent } from '@/modules/task-execution/composition/taskAgentRun'
-import { createTaskAgentMaterialPreparation } from '@/modules/task-execution/composition/taskAgentMaterialPreparation'
+import { createTaskAgentMaterialPreparation } from '@/modules/task-execution/application/taskAgentMaterialPreparation'
 import type { AgentMaterialWorkspace } from '@/modules/runtime-management/public/participants'
 import type { TaskAgentRunPurpose } from '@/modules/task-execution/application/ports/taskAgentMaterial'
 import type { AgentInvocationBinding } from '@/modules/task-execution/application/ports/agentInvocation'

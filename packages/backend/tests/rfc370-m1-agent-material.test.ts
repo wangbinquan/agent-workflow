@@ -1,4 +1,4 @@
-import { composeHostedTaskMaterialReferences } from '@/modules/task-execution/composition/crewstationTaskRunSelection'
+import { createHostedTaskMaterialReferences } from '@/modules/task-execution/infrastructure/crewstation/taskMaterialReferences'
 import { expect, test } from 'bun:test'
 import type { Agent } from '@agent-workflow/shared'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
@@ -334,7 +334,7 @@ test('restart uses the accepted material and original Agent request even when de
 })
 
 test('hosted task material keeps the frozen plugin generation rather than resolving current metadata', () => {
-  const references = composeHostedTaskMaterialReferences()
+  const references = createHostedTaskMaterialReferences()
   const snapshot = {
     kind: 'agent-injection' as const,
     root: {} as Parameters<typeof references.references>[0]['root'],

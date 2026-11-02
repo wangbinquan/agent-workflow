@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import { createTaskAgentMaterialPreparation } from '../src/modules/task-execution/composition/taskAgentMaterialPreparation'
+import { createTaskAgentMaterialPreparation } from '../src/modules/task-execution/application/taskAgentMaterialPreparation'
 import type {
   AgentInvocationPreparation,
   CompiledAgentInvocation,

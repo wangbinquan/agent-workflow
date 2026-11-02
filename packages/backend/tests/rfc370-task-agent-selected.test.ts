@@ -22,7 +22,7 @@ import { composeRunObservationCalls } from '../src/modules/run-observability/com
 import { sqliteMemoryInjectionQueries } from './helpers/memoryInjection'
 import { composeRuntimeRegistryOperations } from './helpers/runtimeRegistryComposition'
 import { runSelectedTaskAgent } from '../src/modules/task-execution/composition/taskAgentRun'
-import { createTaskAgentMaterialPreparation } from '../src/modules/task-execution/composition/taskAgentMaterialPreparation'
+import { createTaskAgentMaterialPreparation } from '../src/modules/task-execution/application/taskAgentMaterialPreparation'
 import { createAgentInvocationPreparation } from '../src/modules/task-execution/composition/agentInvocationPreparation'
 import type { TaskAgentRunPolicy } from '../src/modules/task-execution/application/ports/taskAgentRun'
 import type { TaskAgentRunPurpose } from '../src/modules/task-execution/application/ports/taskAgentMaterial'
