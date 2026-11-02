@@ -1,3 +1,14 @@
+## 2026-11-01 RFC-419 task-execution 宿主任务启动适配、借用工作区与恢复管理迁入 infrastructure（In Progress；`design/RFC-419-task-execution-host-launch-recovery-infrastructure/`）
+
+- **来由**：RFC-294 S6 退出门「task-execution `composition/` 只剩装配」的第七步（RFC-416 proposal §7 第 5 项中的三块）；用户授权同 RFC-402，本会话调研、
+  设计、实施与集中验证，不派 Codex。
+- **范围**：数字员工与动作执行的宿主任务启动适配（到根启动内核请求的映射）、借用工作区参与者迁入 `infrastructure/hostTaskLaunch.ts`（推翻 RFC-415 §6.1
+  的落位）；恢复管理面迁入 `infrastructure/taskRecoveryAdministration.ts`；三个 composition 文件只剩构造与注入。纯结构重构。
+- **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。
+- **进度**：T1～T4 完成，随实现提交入库，待 exact SHA 的 CI（AC-5）。集中验证 709 + 9 + 1 个文件：本 RFC 新用例一处类型断言已修；两个按已提交源码生成
+  报告的用例在候选导出仓库里通过（未提交候选的环境差异）；其余负载超时在候选与基线上同样通过；P0 变异 lane 通过。详见 plan「集中验证（T4）」。
+- **后继**：本地 agent 调用适配器与本地 run family（先补 runtime-management public 合同）；执行状态绑定里的残余逻辑；composition 其余小块与收口锁。
+
 ## 2026-11-01 RFC-418 task-execution provider 后台循环迁入 application（In Progress；`design/RFC-418-task-execution-provider-background-application/`）
 
 - **来由**：RFC-294 S6 退出门「task-execution `composition/` 只剩装配」的第六步（RFC-416 proposal §7 原第 3 项提前；本地 agent 调用适配器需先补

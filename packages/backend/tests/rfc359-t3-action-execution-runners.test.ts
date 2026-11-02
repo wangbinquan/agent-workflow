@@ -27,7 +27,7 @@ import { ulid } from 'ulid'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { actorOfDirectAuthority } from '@/auth/session'
 import { createIdentityAccessRuntime } from '@/modules/identity-access/composition'
-import { borrowedPostgresqlWorkspace } from '@/modules/task-execution/composition/actionExecutionEnvironment'
+import { borrowedPostgresqlWorkspace } from '@/modules/task-execution/infrastructure/hostTaskLaunch'
 // RFC-415: the runners are task-execution application; the environment gains the task status read and the workspace
 // entry check the runners used to reach directly (the fake wires the same infrastructure the environment binding uses).
 import {

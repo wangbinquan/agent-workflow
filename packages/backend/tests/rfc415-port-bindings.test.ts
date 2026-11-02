@@ -5,7 +5,7 @@
 import { expect, test } from 'bun:test'
 import { taskFixture, workflowFixture } from './helpers/model'
 import { describeEachProvider } from './helpers/eachProvider'
-import { launchDigitalEmployeeHost } from '@/modules/task-execution/composition/digitalEmployeeExecution'
+import { launchDigitalEmployeeHost } from '@/modules/task-execution/infrastructure/hostTaskLaunch'
 import { createActionExecutionEnvironment } from '@/modules/task-execution/composition/actionExecutionEnvironment'
 import { localActionWorkspaceEntries } from '@/modules/task-execution/infrastructure/local/localActionWorkspaceEntries'
 

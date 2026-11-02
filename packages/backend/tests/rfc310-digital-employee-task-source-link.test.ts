@@ -71,6 +71,18 @@ describe('RFC-310 digital employee task source link', () => {
           'utf8',
         ),
       )
+      .concat(
+        // RFC-419: the kernel request (internal facts, Case freeze) is built by the infrastructure launch adapter.
+        readFileSync(
+          resolve(
+            import.meta.dirname,
+            '..',
+            'src',
+            'modules/task-execution/infrastructure/hostTaskLaunch.ts',
+          ),
+          'utf8',
+        ),
+      )
       .join('\n')
     const launchKernel = readFileSync(
       resolve(

@@ -2109,14 +2109,9 @@ interface GovernedFieldSurface {
 
 const INTERNAL_CATALOG_VISIBILITY_WRITERS: readonly SourceAnchorSpec[] = [
   {
-    // RFC-359 W1-T3：agent / script 动作的宿主任务启动合一到 actionExecutionEnvironment.ts
-    //（两个 provider 的 launchHostTask 都在这一个文件里写 catalogVisibility: 'internal'）。
-    file: 'packages/backend/src/modules/task-execution/composition/actionExecutionEnvironment.ts',
-    symbol: '$file',
-    sourceToken: "catalogVisibility: 'internal'",
-  },
-  {
-    file: 'packages/backend/src/modules/task-execution/composition/digitalEmployeeExecution.ts',
+    // RFC-359 W1-T3：agent / script 动作的宿主任务启动合一；RFC-419 起动作与数字员工两个启动适配都在
+    // infrastructure/hostTaskLaunch.ts 里写 catalogVisibility: 'internal'。
+    file: 'packages/backend/src/modules/task-execution/infrastructure/hostTaskLaunch.ts',
     symbol: '$file',
     sourceToken: "catalogVisibility: 'internal'",
   },

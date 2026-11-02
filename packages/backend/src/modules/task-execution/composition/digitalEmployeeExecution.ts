@@ -14,21 +14,15 @@ import { composeReactionExecutionAdmissionParticipantInTx } from '../application
 import { composeReactionExecutionPortV1 } from '../application/adapters/reaction-execution-adapter'
 import { createDigitalEmployeeExecutionCore } from '../application/digitalEmployeeExecution'
 import type { DigitalEmployeeExecutionCore } from '../application/ports/digitalEmployeeExecutionCore'
-import type {
-  DigitalEmployeeExecutionPorts,
-  DigitalEmployeeHostLaunch,
-} from '../application/ports/digitalEmployeeExecution'
+import type { DigitalEmployeeExecutionPorts } from '../application/ports/digitalEmployeeExecution'
 import type { ProgramToolSource } from '../application/ports/scriptFixture'
 import { readTaskResourceUsage } from '../application/taskResourceUsage'
 import { createFileProgramToolSource } from '../infrastructure/local/fileProgramToolSource'
 import { createReactionAdmissionStore } from '../infrastructure/reactionExecutionAdmissions'
 import { createTaskExecutionReadModels } from '../infrastructure/taskExecutionReadModels'
 import { createTaskResourceLimitFacts } from '../infrastructure/taskResourceLimitFacts'
-import type {
-  RootTaskLaunchKernel,
-  RootTaskLaunchSubject,
-} from '../infrastructure/taskRouteLaunchOperations'
-import { borrowedPostgresqlWorkspace } from './actionExecutionEnvironment'
+import type { RootTaskLaunchKernel } from '../infrastructure/taskRouteLaunchOperations'
+import { launchDigitalEmployeeHost } from '../infrastructure/hostTaskLaunch'
 import { composeTaskCancellation } from './taskCancellation'
 
 // RFC-415: the execution core and its pure helpers are task-execution application; these exports keep their callers.
@@ -61,65 +55,6 @@ export interface DigitalEmployeeExecutionDependencies extends Omit<
     actor: Actor,
   ) => Parameters<RootTaskLaunchKernel['launch']>[0]['resourceAuthority']
   readonly launch: RootTaskLaunchKernel
-}
-
-/**
- * RFC-415 — one digital employee host task on the provider-selected root launch kernel, moved verbatim from the
- * execution core's launch tail: the subject (a user-selected workflow keeps its authored geometry; the synthesized host
- * snapshot is frozen at write time, plan §5hn), the lazily resolved actor, its resource authority, and the internal
- * facts — catalog-internal, the preallocated execution identity, the Reaction round / case and, for a repository scene,
- * the platform input mounts and the borrowed workspace lease.
- */
-export async function launchDigitalEmployeeHost(
-  deps: Pick<
-    DigitalEmployeeExecutionDependencies,
-    'resolveActor' | 'resourceAuthorityFor' | 'launch'
-  >,
-  request: DigitalEmployeeHostLaunch,
-): Promise<{ readonly id: string }> {
-  const subject: RootTaskLaunchSubject =
-    request.subject.kind === 'workflow'
-      ? {
-          subject: { kind: 'workflow', sourceId: request.subject.workflowId },
-          workflowName: request.subject.workflowName,
-          workflowVersion: request.subject.workflowVersion,
-          workflowSnapshot: request.subject.workflowSnapshot,
-          // 用户选定的既有工作流：保留作者几何，不重排（plan §5hn）。
-          builtin: false,
-        }
-      : {
-          subject: { kind: 'digital-employee', sourceId: null },
-          workflowVersion: 1,
-          workflowSnapshot: request.subject.workflowSnapshot,
-          // 合成的宿主快照：写时冻结规范排版（plan §5hn）。
-          builtin: true,
-        }
-  const launchActor = await deps.resolveActor()
-  const launched = await deps.launch.launch({
-    actor: launchActor,
-    resourceAuthority: deps.resourceAuthorityFor(launchActor),
-    invoker: { type: 'user', launchKind: 'direct-json' },
-    task: request.task,
-    subject,
-    internal: {
-      catalogVisibility: 'internal',
-      preallocatedTaskId: request.taskId,
-      digitalEmployeeLaunch: {
-        actionRunId: request.roundRef,
-        caseId: request.caseId,
-      },
-      ...(request.repository !== null
-        ? {
-            platformInputPaths: request.repository.platformInputPaths,
-            workspace: borrowedPostgresqlWorkspace({
-              workspacePath: request.repository.workspacePath,
-              baselineSha: request.repository.baselineSha,
-            }),
-          }
-        : {}),
-    },
-  })
-  return { id: launched.id }
 }
 
 /** RFC-415 — the core's ports from the composition dependencies: reads pass through, the program source is selected. */

@@ -179,6 +179,8 @@ describe('RFC-319 DE-28 —— 主体投影替代播种，中立应用图与 SQL
     const composer = [
       'packages/backend/src/modules/task-execution/composition/digitalEmployeeExecution.ts',
       'packages/backend/src/modules/task-execution/application/digitalEmployeeExecution.ts',
+      // RFC-419: the launch request mapping is the infrastructure host launch adapter.
+      'packages/backend/src/modules/task-execution/infrastructure/hostTaskLaunch.ts',
     ]
       .map((path) => readFileSync(resolve(ROOT, path), 'utf-8'))
       .join('\n')
@@ -211,6 +213,8 @@ describe('RFC-319 DE-28 —— 主体投影替代播种，中立应用图与 SQL
     const composer = [
       'packages/backend/src/modules/task-execution/composition/digitalEmployeeExecution.ts',
       'packages/backend/src/modules/task-execution/application/digitalEmployeeExecution.ts',
+      // RFC-419: the launch request mapping is the infrastructure host launch adapter.
+      'packages/backend/src/modules/task-execution/infrastructure/hostTaskLaunch.ts',
     ]
       .map((path) => readFileSync(resolve(ROOT, path), 'utf-8'))
       .join('\n')

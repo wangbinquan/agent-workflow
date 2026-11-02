@@ -1,4 +1,3 @@
-import { admitTransferredWorkspace } from '../infrastructure/transferredWorkspaceAdmission'
 // RFC-359 W1-T3（F-H2-2）—— 数字员工 action 执行器的两个 provider 装配面。
 //
 // 中立实现在 `actionExecutionRunners.ts`；这里提供它注入的两件能力——「在借用工作区上启动宿主任务」
@@ -9,14 +8,10 @@ import { admitTransferredWorkspace } from '../infrastructure/transferredWorkspac
 // 它在**两个引擎上都真跑过**（`rfc359-w5-kernel-launch-provider-parity`，plan §5hh），
 // 而 `startTask` 那条按定义只服务 SQLite。
 
-import { WorkflowDefinitionSchema, type TaskStartOptions } from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import type {
-  RootTaskLaunchKernel,
-  TaskRoutePreparedWorkspace,
-  TaskRouteWorkspaceParticipant,
-} from '../infrastructure/taskRouteLaunchOperations'
+import type { RootTaskLaunchKernel } from '../infrastructure/taskRouteLaunchOperations'
+import { launchActionHostTask } from '../infrastructure/hostTaskLaunch'
 import type { TaskExecutionReadModels } from '../public/types'
 import type {
   ActionExecutionEnvironment,
@@ -28,57 +23,6 @@ import { localActionWorkspaceEntries } from '../infrastructure/local/localAction
 import { readTaskStatus } from '../infrastructure/taskExecutionTaskReads'
 import { watchTaskTerminal } from '@/services/execution/executionWatch'
 import { getExecutionOutcome } from '@/services/execution/outcome'
-
-/**
- * 借用工作区的 PostgreSQL 租约：目录属于调用方（development-automation / 数字员工），任务只借用它，
- * 回滚只释放租约，物理清理仍由物化它的一方负责。
- */
-export function borrowedPostgresqlWorkspace(input: {
-  readonly workspacePath: string
-  readonly baselineSha: string
-}): TaskRouteWorkspaceParticipant {
-  return Object.freeze({
-    async prepare(
-      request: Parameters<TaskRouteWorkspaceParticipant['prepare']>[0],
-    ): Promise<TaskRoutePreparedWorkspace> {
-      let state: 'open' | 'committed' | 'rolled-back' = 'open'
-      return Object.freeze({
-        taskId: request.taskId,
-        kind: 'single',
-        spaceKind: 'internal',
-        repoPath: input.workspacePath,
-        repoUrl: null,
-        cachedRepoId: null,
-        repoGroupId: null,
-        repoGroupName: null,
-        worktreePath: input.workspacePath,
-        baseBranch: input.baselineSha,
-        branch: '',
-        baseCommit: input.baselineSha,
-        earlyError: null,
-        repositories: [],
-        nodePaths: [],
-        admit: (transaction: PersistenceDb) =>
-          admitTransferredWorkspace(transaction, {
-            kind: 'borrowed',
-            taskId: request.taskId,
-            worktreePath: input.workspacePath,
-            baseCommit: input.baselineSha,
-            ownerRef: request.taskId,
-          }),
-        commit() {
-          if (state !== 'open') throw new Error(`borrowed-workspace-already-${state}`)
-          state = 'committed'
-        },
-        async rollback() {
-          if (state !== 'open') throw new Error(`borrowed-workspace-already-${state}`)
-          state = 'rolled-back'
-          return { taskId: request.taskId, complete: true, failures: [] }
-        },
-      })
-    },
-  })
-}
 
 export interface ActionExecutionEnvironmentDependencies {
   readonly db: PersistenceDb
@@ -115,37 +59,8 @@ export function createActionExecutionEnvironment(
     agents: deps.agents,
     outcomes: deps.readModels.executionOutcome,
     statusProjection: deps.readModels.statusProjection,
-    async launchHostTask(input: ActionHostTaskLaunch) {
-      const task: TaskStartOptions = {
-        name: input.name,
-        inputs: { ...input.inputs },
-        ...(input.wallTimeMs === null ? {} : { maxDurationMs: input.wallTimeMs }),
-      }
-      const actor = await deps.resolveActor()
-      const launched = await deps.launch.launch({
-        actor,
-        resourceAuthority: deps.resourceAuthorityFor(actor),
-        invoker: { type: 'user', launchKind: 'direct-json' },
-        task,
-        subject: {
-          subject: { kind: 'digital-employee', sourceId: null },
-          workflowVersion: 1,
-          // 平台自有的合成宿主：写时冻结规范排版（plan §5hn）。
-          builtin: true,
-          workflowSnapshot: WorkflowDefinitionSchema.parse(input.snapshot),
-        },
-        internal: {
-          catalogVisibility: 'internal',
-          digitalEmployeeLaunch: { actionRunId: input.actionRunId },
-          platformInputPaths: input.platformInputPaths,
-          workspace: borrowedPostgresqlWorkspace({
-            workspacePath: input.workspacePath,
-            baselineSha: input.baselineSha,
-          }),
-        },
-      })
-      return launched.id
-    },
+    // RFC-419: the launch request mapping and the borrowed workspace are the infrastructure launch adapter.
+    launchHostTask: (input: ActionHostTaskLaunch) => launchActionHostTask(deps, input),
     async cancelHostTask(executionRef: string) {
       await deps.cancelTask(executionRef)
     },

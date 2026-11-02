@@ -15,7 +15,6 @@ const CORE = TE + 'application/digitalEmployeeExecution.ts'
 const CORE_PORTS = TE + 'application/ports/digitalEmployeeExecution.ts'
 const RUNNERS = TE + 'application/actionExecutionRunners.ts'
 const RUNNER_PORTS = TE + 'application/ports/actionExecution.ts'
-const BINDING = TE + 'composition/digitalEmployeeExecution.ts'
 const APPLICATION_FILES = [CORE, CORE_PORTS, RUNNERS, RUNNER_PORTS]
 const DELETED = [TE + 'composition/actionExecutionRunners.ts']
 /** Every moved symbol (and the new port / binding symbols) and its one owner. */
@@ -38,7 +37,8 @@ const OWNERS = new Map([
   ['ActionHostTaskLaunch', RUNNER_PORTS],
   ['ActionWorkspaceEntries', RUNNER_PORTS],
   ['AgentExecutionFailure', RUNNER_PORTS],
-  ['launchDigitalEmployeeHost', BINDING],
+  // RFC-419: the launch request mapping moved to the infrastructure host launch adapter.
+  ['launchDigitalEmployeeHost', TE + 'infrastructure/hostTaskLaunch.ts'],
 ])
 /** Steps of the two executors that may not reappear in task-execution composition. */
 const FLOW_TOKENS = [

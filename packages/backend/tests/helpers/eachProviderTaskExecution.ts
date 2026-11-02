@@ -78,7 +78,7 @@ import {
   type TaskDriveCompletionMode,
 } from '@/modules/task-execution/application/drive/taskDriveTypes'
 import type { TaskDriveRuntimeOptions } from '@/modules/task-execution/application/ports/taskExecutionTopology'
-import { borrowedPostgresqlWorkspace } from '@/modules/task-execution/composition/actionExecutionEnvironment'
+import { borrowedPostgresqlWorkspace } from '@/modules/task-execution/infrastructure/hostTaskLaunch'
 import { createRootTaskLaunchKernel } from '@/modules/task-execution/infrastructure/taskRouteLaunchOperations'
 import { createTestHostTaskLaunchKernel } from './hostTaskLaunchKernel'
 import type { ActionExecutionEnvironment } from '@/modules/task-execution/application/ports/actionExecution'
