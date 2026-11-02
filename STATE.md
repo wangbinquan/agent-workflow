@@ -319,7 +319,7 @@
   CI `41198759095` 全绿。偏差见 proposal §6 第 13 条，验证见 plan「集中验证」。
 - **后继**：S5 第二步 [RFC-400](design/RFC-400-collaboration-task-participants-actor/proposal.md)。
 
-## 2026-10-30 RFC-398 跨版本升级保障（In Progress，2026-10-31 用户批准 v6；`design/RFC-398-cross-version-upgrade-guarantee/`）
+## 2026-10-30 RFC-398 跨版本升级保障（Done；2026-10-31 用户批准 v6；`design/RFC-398-cross-version-upgrade-guarantee/`）
 
 - **来由**：用户报告生产（单二进制 + PostgreSQL）v0.19.2 → v0.19.3 升级失败：数据库没有自动迁移、`start` 直接拒绝。要求在用例里固化跨版本数据迁移能力。
   用户裁决：启动时自动迁移（无阻塞项自动执行）；用例两层（每个 PR 的冻结链发布版矩阵 + 发版门 / 夜间的真实旧二进制验证）；实现可交 Codex 执行。
@@ -368,7 +368,31 @@
   `promptNonce`；④Windows 按 tag 构建的 `tar -C` 路径；⑤v0.19.3 草稿产物对只读 token 不可见，**用户裁决**只给夜间 `verify` 作业 `contents: write`；⑥L1 `start` 的 PG 例与 CI 第一轮①同因，已由连接池上限修复。
   该夜间跑完后另有两类旧版适配（工具侧，候选断言不变）：v0.18.13–v0.18.15 的资料接口不收 `gitName`（登记 `profileGitName`）；v0.19.0 / v0.19.1 的 PG 实况轮
   报与 v0.19.2 相同的 `ownerless task mutation refused durable owner`（按精确签名记录）。
-- **下一步**：推送夜间修复后按 SHA 跟踪主 CI，并重跑一次 `release-upgrade-nightly`（Windows 修复只能由它验证）；全绿后标 Done。
+- **CI 第三轮**（`57103c231`，41312990481）：`fe076d714` 的耗时表按逐用例 `[x ms]` 求和，漏了模块加载与钩子，bun `--timings` 又按路径切等时连续段，
+  RFC-395 的重文件挤进 23～25 片仍撞 15 分钟；改为整文件墙钟、扩到 44 片并上传每片实测。69 个作业全绿，44 片 6.5～12.2 分钟。用两次实测
+  （41312990481、41320966543）交叉检验：单次实测外推最慢片 12.4～13.3 分钟、三次平均 11.3～11.8 分钟，与现表 11.3～11.7 持平——逐文件耗时的
+  批次间抖动（大于 20 s 的文件 p10～p90 为 0.72～1.15 倍）占主导，耗时表不刷新。
+- **第二次真实夜间**（`ec5df7fc8`，41303628365）：87 个作业 86 过，Windows `verify` 查出①**产品缺陷**：Windows 上从 epoch-1 发布版升级全部失败
+  （摘要命名的操作产物 `plans/sha256:<hex>.json` 的冒号在 NTFS 上是备用数据流，`link` 报 `EINVAL`），`52daa5569` 修复（design §11）；
+  ②没有 Windows 产物的 v0.1.0 / v0.10.0 / v0.16.3 按 tag 构建时 `bun install --frozen-lockfile` 报 lockfile had changes——`52daa5569` 归因为
+  `git archive` 的 CRLF，后经证伪（见第三、四次夜间）。
+- **`52daa5569` 的主 CI**（41320966543）：后端 44 片全绿（最长 11.4 分钟）；前端分片 1/3 双平台红是并发 RFC-408（`7aca6d6f0` 删
+  `taskDagGraph.ts`）后跨包源码锁读不到文件，已由其 `a06fcae26` 修复，不归本 RFC；后继 `a06fcae26` 的主 CI 41323035687 70 个作业全绿
+  （两提交之间本 RFC 文件未变）。
+- **CI 反证**（41330885658，`negative_control`）：保留的 v0.19.3 产物（按登记 SHA-256 校验）在三平台作候选，v0.19.2 造数的各变体全部按签名失败
+  （SQLite 为 epoch-1 拒绝；去 sidecar 在 macOS 为 `unable to open database file`、Linux / Windows 为 epoch-1 拒绝；PG 一键迁移未 finalize 为
+  RFC-349 未收尾）；同 run 的 L1 `start` 入口作业通过，8 个作业全绿。
+- **第三次真实夜间**（`80b715e95`，41363751171，手动触发）：87 个作业 86 过。Windows 上 v0.18.10 / v0.18.18 / v0.18.19 / v0.19.2 的 sqlite 与
+  sqlite-no-sidecar 全部通过，文件名修复生效；三个老 tag 构建在 LF 归档下照样被拒。本机用 Bun 1.3.13 复现，v0.16.3 的 LF 与 CRLF 归档都能通过
+  frozen install，CRLF 归因不成立；更正代码注释、用例注释与 dev-gotchas。
+- **第四次真实夜间**（`f33e6b19f`，41367335740）：tag 构建目录改到 `realpathSync.native` 展开后的长路径下，三个 tag 的 frozen install 全部通过
+  （6 次构建）。与上一次唯一不同的变量是构建目录由 8.3 短名 `C:\Users\RUNNER~1\…` 改为长名，确认短名是被拒原因；被拒时现在会输出重新生成的
+  lockfile 与 tag 的增删行。随后这些 tag 自带的构建脚本在编译出 `.exe` 后按不带 `.exe` 的文件名取大小，报 ENOENT 退出；`595418fc5` 只接受这一种
+  失败，并由验证器补跑脚本跳过的 `version` 冒烟。Linux / macOS 全绿。
+- **第五次真实夜间**（`595418fc5`，41374764084）：87 个作业全绿——Linux 80 个版本作业；macOS / Windows gate 集合 8 个版本 × sqlite /
+  sqlite-no-sidecar，Windows 含 tag 构建的 v0.1.0 / v0.10.0 / v0.16.3。两次工具修复的主 CI：`f33e6b19f`（41367321464）、`595418fc5`（41374751384）全绿。
+- **后续**：修复版（建议 v0.19.4）的发布时机由用户决定；发布时 `release.yml` 的三平台 upgrade-gate 首次真实执行，发布后按
+  `docs/release-upgrade-rollback.md` 以 `registry.ts --write` 登记该版本。每日 07:23 UTC 的定时夜间继续覆盖全部有产物版本。
 
 ## 2026-10-30 RFC 状态对账：索引登记修正与 RFC-294 剩余范围（纯文档）
 

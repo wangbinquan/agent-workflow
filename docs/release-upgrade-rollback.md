@@ -74,6 +74,11 @@ Windows shutdown 通道时，记录 termination，再对保留的完整 WAL 做 
 验证成功后才计为旧库造数完成；现代二进制使用原生 shutdown。候选启动失败签名与源码构建失败
 始终是两个不同结果。
 
+Windows 上的 tag 构建在 `realpathSync.native` 展开后的长路径下进行（windows-latest 的临时目录是 8.3 短名，
+在那里 frozen install 会被拒）；仍被拒时摘要附上重新生成的 lockfile 与 tag 的增删行。这些 tag 的构建脚本编译后
+按不带 `.exe` 的文件名取大小，在 Windows 上必然报 ENOENT：只有这一种失败且 `.exe` 已生成时才接受产物，并由
+验证器补跑脚本跳过的 `version` 冒烟。
+
 手动勾选 `negative_control` 使用未公开草稿 `upgrade-fixture-binaries` 留存的 v0.19.3
 候选（`retained-asset`），以 v0.19.2 造数。只有造数成功、候选实际启动且非零退出，并分别命中
 以下签名才算反证成功；下载失败、超时、被杀或错误发生在旧版阶段都失败：

@@ -40,14 +40,22 @@
 
 ## 验收清单
 
-- [ ] AC-1：S1～S6 与 S8 只换二进制即可启动，历史可见、挂起评审批准后 `done`、新任务 `done`、重启正常（L2 + L1）
-- [ ] AC-2：无建库权限时输出可执行的建库语句，建库后自动完成
-- [ ] AC-3：阻塞时拒绝且源不变；人工模式与 RFC-395 一致
-- [ ] AC-4：子进程 / 父进程 / 两者被杀后续做，只有一个操作、不重复建库；activated 后中断仍补做校验与回执
-- [ ] AC-5：WAL 无 sidecar 的全部读路径通过，源字节不变
-- [ ] AC-6：L1 矩阵每个发布版带全表数据并全绿；豁免清单经用户确认
-- [ ] AC-7：发版门三平台通过才公开；夜间覆盖全部有产物版本；v0.19.3 反证按签名失败
-- [ ] AC-8：上一个发布版未登记或缺种子覆盖时发版门失败
-- [ ] AC-9：`doctor` 与 RFC-349 `status / finalize` 输出正确且不写 v2 指针
-- [ ] AC-10：校验失败自动撤回并拒绝重试，`--retry` 可重新开始
-- [ ] AC-11：既有用例、架构守卫与主 CI 全绿；Codex 设计门与实现门已处置
+- [x] AC-1：S1～S6 与 S8 只换二进制即可启动，历史可见、挂起评审批准后 `done`、新任务 `done`、重启正常（L2 + L1）
+  ——L1 SQLite 57/57、PG 6/6 随主 CI 每次运行；L2 本机（macOS + PG 17）全部变体；夜间 41374764084（`595418fc5`）三平台 gate 集合与
+  Linux 全部有产物版本（80 个版本作业）全绿
+- [x] AC-2：无建库权限时输出可执行的建库语句，建库后自动完成——`rfc398-postgresql-provisioning`；夜间 linux `postgresql-restricted-role`
+- [x] AC-3：阻塞时拒绝且源不变；人工模式与 RFC-395 一致——`rfc398-auto-upgrade-policy`、`rfc398-start-auto-upgrade*`
+- [x] AC-4：子进程 / 父进程 / 两者被杀后续做，只有一个操作、不重复建库；activated 后中断仍补做校验与回执——`rfc398-auto-upgrade-resume-*`
+  （按中断点拆分，`rfc398-split-test-coverage` 守住覆盖不减）、`rfc398-start-auto-upgrade-takeover` / `-signals`
+- [x] AC-5：WAL 无 sidecar 的全部读路径通过，源字节不变——`rfc398-wal-sidecar-open`；L2 `sqlite-no-sidecar` 三平台
+- [x] AC-6：L1 矩阵每个发布版带全表数据并全绿；豁免清单经用户确认——18 项豁免、14 个 L2 排除（用户 2026-10-31 批准）
+- [x] AC-7：发版门三平台通过才公开；夜间覆盖全部有产物版本；v0.19.3 反证按签名失败——`release.yml` 的 build → upgrade-gate → publish
+  由 `.github/scripts/release-upgrade.test.ts` 锁定（首次真实执行在下一次发版）；夜间 41374764084 87 个作业全绿（Windows 上没有产物的
+  v0.1.0 / v0.10.0 / v0.16.3 由 tag 构建）；CI 反证 41330885658 三平台全部变体按签名失败
+- [x] AC-8：上一个发布版未登记或缺种子覆盖时发版门失败——`rfc398-release-registry`
+- [x] AC-9：`doctor` 与 RFC-349 `status / finalize` 输出正确且不写 v2 指针——`rfc398-doctor-epoch1`、`rfc398-rfc349-finalize`
+- [x] AC-10：校验失败自动撤回并拒绝重试，`--retry` 可重新开始——`rfc398-auto-upgrade-resume-verify-failed`、`rfc398-start-auto-upgrade-retry`
+- [x] AC-11：既有用例、架构守卫与主 CI 全绿；Codex 设计门与实现门已处置——主 CI `57103c231`（41312990481）69 个作业全绿；`52daa5569`
+  （41320966543）唯一的红是并发 RFC-408 删文件后前端跨包源码锁（`a06fcae26` 修复），后继 `a06fcae26`（41323035687，两提交之间本 RFC 文件未变）
+  70 个作业全绿；夜间工具修复 `f33e6b19f`（41367321464）、`595418fc5`（41374751384）的主 CI 全绿；设计门 r6 PASS；实现门 r1～r3 Codex、r4 起本会话自审
+  （用户 2026-10-31 要求不再派 Codex）
