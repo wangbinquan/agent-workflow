@@ -225,6 +225,8 @@ test('live corpus: each kind is written through its one participant', () => {
   expect(writeStackViolations(UNITS)).toEqual([])
 })
 
+// 每条负例都对整个语料（2000+ 文件）重跑一次判据；带覆盖率的 CI 上一轮约 0.6 s，九条合计超过缺省的 5 s（A3b 提交的 CI
+// 41516047519 shard 2 即超时），超时放宽到 30 s。
 test('negative fixtures over the corpus: each way back is reported', () => {
   const replace = (path: string, edit: (text: string) => string) =>
     UNITS.map((unit) => (unit.path === path ? sourceUnit(path, edit(unit.text)) : unit))
@@ -312,7 +314,7 @@ test('negative fixtures over the corpus: each way back is reported', () => {
       ),
     ),
   ).toEqual(['scene-bypass:createWorkgroupPort'])
-})
+}, 30_000)
 
 test('negative fixtures over fabricated units alone: every matcher still bites', () => {
   const only = (path: string, text: string) => writeStackViolations([sourceUnit(path, text)])
