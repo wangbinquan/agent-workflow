@@ -13,12 +13,7 @@ import type {
 import { describeEachProvider } from './helpers/eachProvider'
 import { createProviderHttpApplication } from './helpers/providerHttpApplication'
 import { buildPr3Fixture } from './helpers/rfc310Pr3Fixture'
-import {
-  held,
-  MemoryPurposeContent,
-  PurposeEffects,
-  unusedPurposeEffect,
-} from './helpers/developmentPurpose'
+import { held, MemoryPurposeContent, PurposeEffects } from './helpers/developmentPurpose'
 
 setDefaultTimeout(60_000)
 
@@ -109,7 +104,6 @@ describeEachProvider('RFC-370 real purpose root content', (harness) => {
         opencodeVersion: '1.14.25',
         evidenceArtifacts: content.evidence,
         developmentPurposes: { requirement },
-        evidenceDocumentCommands: { writeDocument: unusedPurposeEffect },
       }
       application = await createProviderHttpApplication(harness, input)
       await application.dispose()

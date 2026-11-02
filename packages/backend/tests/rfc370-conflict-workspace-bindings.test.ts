@@ -144,7 +144,6 @@ describeEachProviderHttpApplication(
           conflictMergeWorkspaceEffects: conflict,
           actionWorkspaceEffects: action,
           evidenceArtifacts: evidence,
-          evidenceDocumentCommands: evidence.documentCommands,
         })
         expect(opened.app).toBeDefined()
         expect(conflict.allocations).toEqual([])

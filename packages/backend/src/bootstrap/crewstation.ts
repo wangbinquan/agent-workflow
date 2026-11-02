@@ -317,7 +317,8 @@ export async function composeCrewStationProfile(
         requesterFor: (identityAccess) =>
           composeCrewStationRecoveryRequester({ db, identityAccess }),
       }),
-      ...evidence,
+      // RFC-429: reads, attempt contexts and mission input blobs are members of evidenceArtifacts.
+      evidenceArtifacts: evidence.evidenceArtifacts,
       reviewArtifacts,
       // §10 V16: structural diffs and change narratives as object publications;
       // the code-review reads themselves arrive with the workspace selections.
@@ -335,8 +336,6 @@ export async function composeCrewStationProfile(
         reviewFiles: reviewArtifacts.archiveFiles,
         eventFiles: archivedNodeEvents.files,
       }),
-      missionInputBlobs: evidence.evidenceArtifacts,
-      attemptContext: evidence.evidenceArtifacts.contexts,
       developmentPurposes: {
         requirement: {
           configurationFor: adapters.configurationFor,

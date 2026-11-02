@@ -13,10 +13,7 @@ import {
 } from '@/modules/development-automation/composition/evidenceStaging'
 import { assertEvidenceStagingFactory } from '@/modules/development-automation/public/participants'
 import { join } from 'node:path'
-import {
-  type EvidenceDocumentCommands,
-  type EvidenceArtifactPort,
-} from '@/modules/development-automation/composition'
+import { type EvidenceArtifactPort } from '@/modules/development-automation/composition'
 import type {
   RequirementPurposeSelection,
   PipelinePurposeSelection,
@@ -58,7 +55,6 @@ export function composeDevelopmentPurposeRoot(input: {
   readonly appHome: string
   readonly selection?: DevelopmentPurposeSelection
   readonly evidenceArtifacts?: EvidenceArtifactPort
-  readonly evidenceDocumentCommands?: EvidenceDocumentCommands
 }): SelectedDevelopmentPurposeRoot {
   let evidence = input.evidenceArtifacts
   const artifacts = (): EvidenceArtifactPort =>
@@ -88,14 +84,12 @@ export function composeDevelopmentPurposeRoot(input: {
       kind: 'requirement',
       root: join(input.appHome, 'evidence', 'staging'),
     }),
+    // RFC-429: a deployment with its own document commands selects the whole requirement purpose.
     get documentCommands() {
-      return (
-        input.evidenceDocumentCommands ??
-        createFileEvidenceDocumentCommands({
-          evidence: artifacts(),
-          stagingRoot: join(input.appHome, 'evidence', 'staging'),
-        })
-      )
+      return createFileEvidenceDocumentCommands({
+        evidence: artifacts(),
+        stagingRoot: join(input.appHome, 'evidence', 'staging'),
+      })
     },
   }
   const pipeline = input.selection?.pipeline ?? {

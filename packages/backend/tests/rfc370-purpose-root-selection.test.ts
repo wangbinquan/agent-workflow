@@ -36,7 +36,6 @@ describe('RFC-370 complete purpose root selection', () => {
       appHome: 'unused-selected-home',
       selection,
       evidenceArtifacts: c.content.evidence,
-      evidenceDocumentCommands: { writeDocument: unusedPurposeEffect },
     })
     expect(root.requirement).toBe(c.requirement)
     expect(root.pipeline).toBe(c.pipeline)
@@ -111,7 +110,6 @@ describe('RFC-370 complete purpose root selection', () => {
         appHome: 'unused-selected-home',
         selection: { requirement: missingWriter },
         evidenceArtifacts: c.content.evidence,
-        evidenceDocumentCommands: c.content.documents,
       }),
     ).toThrow('development-purpose-document-commands-incomplete')
     expect(c.content.calls).toEqual([])

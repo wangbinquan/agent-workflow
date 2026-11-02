@@ -50,15 +50,12 @@ export interface DaemonDevelopmentAutomationInput {
   readonly writerCutover: DevelopmentWriterCutover
   readonly verificationCommands?: AutomationInput['verificationCommands']
   readonly repositoryBaselines?: AutomationInput['repositoryBaselines']
-  readonly evidenceRead?: AutomationInput['evidenceRead']
-  readonly attemptContext?: AutomationInput['attemptContext']
   readonly repositoryCandidateEffects?: NonNullable<
     Parameters<typeof bindChangeCandidateParticipant>[0]
   >['candidateEffects']
   readonly conflictMergeWorkspaceEffects?: NonNullable<
     Parameters<typeof bindConflictMergeParticipant>[0]
   >['effects']
-  readonly missionInputBlobs?: Parameters<typeof composeMissionInputUploadOperations>[0]['blobs']
   readonly evidenceArtifacts?: Parameters<
     typeof composeMissionInputUploadOperations
   >[0]['artifacts']
@@ -107,11 +104,10 @@ export function composeDaemonDevelopmentAutomationModules(input: DaemonDevelopme
     repositoryBaselines: input.repositoryBaselines,
     db,
     appHome,
+    // RFC-429: evidence reads and attempt contexts are members of the deployment's evidenceArtifacts.
     evidenceArtifacts: developmentPurposeRoot.evidenceArtifacts,
-    evidenceRead: input.evidenceRead,
     evidenceDocumentCommands: developmentPurposeRoot.requirement.documentCommands,
     requirementStaging: developmentPurposeRoot.requirement.staging,
-    attemptContext: input.attemptContext,
     admissionLookup,
     requirementSource: composeSelectedRequirementSourceRunnerFor(
       db,
@@ -163,7 +159,6 @@ export function composeDaemonDevelopmentAutomationModules(input: DaemonDevelopme
   const missionInputUploads = composeMissionInputUploadOperations({
     db,
     appHome,
-    blobs: input.missionInputBlobs,
     artifacts: input.evidenceArtifacts,
   })
   return Object.freeze({

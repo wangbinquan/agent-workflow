@@ -28,6 +28,11 @@
   - 本 RFC 的锁、RFC-394 架构锁、RFC-317 负例 / 语料下限 / 架构账本、RFC-376 结构门。
 - **P0 变异 lane**（SQLite + PostgreSQL）：passed，34 个阶段、0 失败，127 个源文件指纹前后一致。
 
+## CI（AC-4）
+
+- **`e41e5dbde`**：主 CI `41444923694` 70 个 job 全部 success，windows-platform `41444923605` 与按路径触发的
+  maintenance-soak-nightly `41444923576` success。AC-4 成立，RFC-428 Done。
+
 ## 冲突面
 
 - **生产**：
@@ -41,4 +46,4 @@
 ## 验收清单
 
 - [x] proposal AC-1～AC-3（本地集中验证，见上）
-- [ ] 推送后 exact SHA 的 CI 全绿（AC-4）
+- [x] 推送后 exact SHA 的 CI 全绿（AC-4，`e41e5dbde`，见上）

@@ -76,11 +76,6 @@ export function composeCrewStationDevelopmentEvidence(input: {
   })
   return {
     evidenceArtifacts: selected.artifacts,
-    evidenceRead: {
-      contents: selected.artifacts.contents,
-      documents: selected.artifacts.documents,
-      downloads: selected.artifacts.downloads,
-    },
     evidenceDocumentCommands: selected.documents,
   }
 }

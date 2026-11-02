@@ -3439,7 +3439,7 @@
       "corpusScanner": true,
       "file": "packages/backend/tests/architecture/rfc428-retired-deployment-selections.test.ts",
       "id": "rfc428-retired-deployment-selections",
-      "lines": 126,
+      "lines": 131,
       "mechanism": "ast",
       "minCorpusFiles": 2000,
       "negativeFixture": true,

@@ -1,12 +1,14 @@
 import { tablesOf } from '@/platform/persistence/sessionTables'
-import { expectDeploymentSelection } from './helpers/deploymentSelectionSource'
+import { expectNoDeploymentSelection } from './helpers/deploymentSelectionSource'
 import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 import { expect, test } from 'bun:test'
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import ts from 'typescript'
 import type { MissionInputBlobPersistence } from '@/modules/development-automation/composition/missionInputUploads'
 import { sha256Hex } from '@/util/hash'
+import { EvidenceStore } from '@/modules/development-automation/infrastructure/local/fileEvidenceStore'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
 
 const load = (path: string) =>
@@ -29,7 +31,9 @@ function calls(source: ts.SourceFile, expression: string) {
   return result
 }
 
-test('mission upload capture is selected lazily and forwarded through every real startup and HTTP root', () => {
+// RFC-429: mission input capture is the deployment's evidenceArtifacts (it is a MissionInputBlobPersistence); no root
+// forwards a separate missionInputBlobs and it is no deployment selection. The module keeps its lazy local default.
+test('mission upload capture is the evidence artifacts at every real startup and HTTP root', () => {
   const composition = load('modules/development-automation/composition/missionInputUploads.ts')
   const defaults = calls(composition, 'lazyEvidenceBlobs')
   expect(defaults).toHaveLength(1)
@@ -38,43 +42,28 @@ test('mission upload capture is selected lazily and forwarded through every real
   if (!ts.isBinaryExpression(selection)) throw new Error('selected capture is missing')
   expect(selection.left.getText(composition)).toBe('input.blobs ?? input.artifacts')
   expect(selection.operatorToken.kind).toBe(ts.SyntaxKind.QuestionQuestionToken)
-  for (const [path, receiver] of [['bootstrap/daemonApplication.ts', 'input']] as const) {
+  for (const path of ['bootstrap/daemonApplication.ts', 'bootstrap/daemonStart.ts']) {
     const source = load(path)
     const roots = calls(source, 'composeDaemonDevelopmentAutomationModules')
     expect(roots).toHaveLength(1)
     const argument = roots[0]!.arguments[0]!
-    expect(ts.isObjectLiteralExpression(argument)).toBe(true)
     if (!ts.isObjectLiteralExpression(argument)) throw new Error('capture root is missing')
-    const selected = argument.properties.filter(
-      (p): p is ts.PropertyAssignment =>
-        ts.isPropertyAssignment(p) && p.name.getText(source) === 'missionInputBlobs',
+    const fields = new Map(
+      argument.properties
+        .filter(ts.isPropertyAssignment)
+        .map((p) => [p.name.getText(source), p.initializer.getText(source)]),
     )
-    expect(selected).toHaveLength(1)
-    expect(selected[0]!.initializer.getText(source)).toBe(`${receiver}.missionInputBlobs`)
+    expect(fields.has('missionInputBlobs')).toBe(false)
+    expect(fields.get('evidenceArtifacts')).toBe('input.evidenceArtifacts')
   }
   const bundle = load('bootstrap/daemonModules/developmentAutomation.ts')
   const uploads = calls(bundle, 'composeMissionInputUploadOperations')
   expect(uploads).toHaveLength(1)
-  expect(uploads[0]!.arguments[0]!.getText(bundle).replace(/\s/g, '')).toContain(
-    'blobs:input.missionInputBlobs',
-  )
-  const start = load('bootstrap/daemonStart.ts')
-  expectDeploymentSelection('missionInputBlobs')
-  for (const expression of ['composeDaemonDevelopmentAutomationModules']) {
-    const roots = calls(start, expression)
-    expect(roots).toHaveLength(1)
-    const argument = roots[0]!.arguments[0]!
-    expect(ts.isObjectLiteralExpression(argument)).toBe(true)
-    if (!ts.isObjectLiteralExpression(argument)) throw new Error('provider root is missing')
-    const bindings = argument.properties.filter(
-      (property): property is ts.PropertyAssignment =>
-        ts.isPropertyAssignment(property) && property.name.getText(start) === 'missionInputBlobs',
-    )
-    expect(bindings).toHaveLength(1)
-    expect(bindings[0]!.initializer.getText(start)).toBe('input.missionInputBlobs')
-  }
-  expectDeploymentSelection('missionInputBlobs', 'MissionInputBlobPersistence')
-  expect(start.text).toContain('...sessionInput,')
+  const upload = uploads[0]!.arguments[0]!.getText(bundle).replace(/\s/g, '')
+  expect(upload).toContain('artifacts:input.evidenceArtifacts')
+  expect(upload).not.toContain('blobs:')
+  expectNoDeploymentSelection('missionInputBlobs')
+  expect(load('bootstrap/daemonStart.ts').text).toContain('...sessionInput,')
 })
 
 const payload = new Uint8Array([0, 255, 65, 10, 11])
@@ -112,7 +101,16 @@ describeEachProviderHttpApplication(
       test(`upload waits for selected prototype capture ACK and preserves ${outcome} persistence`, async () => {
         const selected = new SelectedCapture(outcome)
         expect(Object.hasOwn(selected, 'putFile')).toBe(false)
-        const { app, appHome } = await scope.open({ missionInputBlobs: selected })
+        // RFC-429: the capture is the evidence artifacts' putFile; route it to the gated capture.
+        const evidenceRoot = mkdtempSync(join(tmpdir(), 'rfc429-mission-evidence-'))
+        class CaptureEvidence extends EvidenceStore {
+          override async putFile(absolutePath: string) {
+            return await selected.putFile(absolutePath)
+          }
+        }
+        const { app, appHome } = await scope.open({
+          evidenceArtifacts: new CaptureEvidence(evidenceRoot),
+        })
         const { missionInputUploads } = tablesOf(scope.harness.db)
         const before = await scope.harness.db.select().from(missionInputUploads)
         let settled = false
@@ -174,6 +172,7 @@ describeEachProviderHttpApplication(
         } finally {
           selected.ready.resolve()
           await pending
+          rmSync(evidenceRoot, { recursive: true, force: true })
         }
       }, 20_000)
     }

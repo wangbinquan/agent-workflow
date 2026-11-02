@@ -1,4 +1,4 @@
-import { expectDeploymentSelection } from './helpers/deploymentSelectionSource'
+import { expectNoDeploymentSelection } from './helpers/deploymentSelectionSource'
 import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 import { expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
@@ -25,18 +25,6 @@ function calls(source: ts.SourceFile, expression: string) {
   return result
 }
 
-function binding(source: ts.SourceFile, call: ts.CallExpression, receiver: string) {
-  const argument = call.arguments[0]!
-  expect(ts.isObjectLiteralExpression(argument)).toBe(true)
-  if (!ts.isObjectLiteralExpression(argument)) throw new Error('root binding must be explicit')
-  const contexts = argument.properties.filter(
-    (property): property is ts.PropertyAssignment =>
-      ts.isPropertyAssignment(property) && property.name.getText(source) === 'attemptContext',
-  )
-  expect(contexts).toHaveLength(1)
-  expect(contexts[0]!.initializer.getText(source)).toBe(`${receiver}.attemptContext`)
-}
-
 test('the actual DA composition selects one context receiver and invokes its native default lazily', () => {
   const composition = load('modules/development-automation/composition.ts')
   const local = load('modules/development-automation/infrastructure/local/fileEvidenceStore.ts')
@@ -61,30 +49,37 @@ test('the actual DA composition selects one context receiver and invokes its nat
   expect(selections[0]!.parent.name.getText(composition)).toBe('attemptContext')
 })
 
-test('all real startup and HTTP roots forward the same selected context through provider recomposition', () => {
+// RFC-429: the attempt context is a member of the deployment's evidenceArtifacts (`deps.attemptContext ??
+// evidence.contexts` above); no root forwards a separate attemptContext and it is no deployment selection.
+test('every real root takes the attempt context from evidenceArtifacts, never a separate selection', () => {
   const start = load('bootstrap/daemonStart.ts')
   const pg = load('bootstrap/daemonApplication.ts')
   const pgRoot = calls(start, 'composeDaemonApplication')
   expect(pgRoot).toHaveLength(1)
   expect(pgRoot[0]!.arguments[0]!.getText(start)).toContain('...deploymentSelectionsOf(input)')
-  for (const [source, receiver] of [
-    [start, 'input'],
-    [pg, 'input'],
-  ] as const) {
+  const properties = (source: ts.SourceFile, call: ts.CallExpression) => {
+    const argument = call.arguments[0]!
+    if (!ts.isObjectLiteralExpression(argument)) throw new Error('root binding must be explicit')
+    return new Map(
+      argument.properties
+        .filter(ts.isPropertyAssignment)
+        .map((property) => [property.name.getText(source), property.initializer.getText(source)]),
+    )
+  }
+  for (const source of [start, pg]) {
     const roots = calls(source, 'composeDaemonDevelopmentAutomationModules')
     expect(roots).toHaveLength(1)
-    binding(source, roots[0]!, receiver)
-    expectDeploymentSelection('attemptContext', 'AttemptContextStorePort')
+    const fields = properties(source, roots[0]!)
+    expect(fields.has('attemptContext')).toBe(false)
+    expect(fields.get('evidenceArtifacts')).toBe('input.evidenceArtifacts')
   }
   const bundle = load('bootstrap/daemonModules/developmentAutomation.ts')
   const consumers = calls(bundle, 'composeDevelopmentAutomation')
   expect(consumers).toHaveLength(1)
-  binding(bundle, consumers[0]!, 'input')
-  const http = calls(start, 'composeDaemonDevelopmentAutomationModules')
-  expect(http).toHaveLength(1)
-  binding(start, http[0]!, 'input')
-  expectDeploymentSelection('attemptContext')
-  expectDeploymentSelection('attemptContext', 'AttemptContextStorePort')
+  const fields = properties(bundle, consumers[0]!)
+  expect(fields.has('attemptContext')).toBe(false)
+  expect(fields.get('evidenceArtifacts')).toBe('developmentPurposeRoot.evidenceArtifacts')
+  expectNoDeploymentSelection('attemptContext')
   expect(start.text).toContain('...sessionInput,')
 })
 

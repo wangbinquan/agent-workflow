@@ -1,9 +1,11 @@
 // RFC-370 A2: real Mission HTTP waits for selected document, handle and stream
 // ACKs. Range policy and manifest metadata remain with the existing owners.
 import { afterEach, expect, test } from 'bun:test'
-import { dirname } from 'node:path'
-import { rmSync } from 'node:fs'
+import { dirname, join } from 'node:path'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import type { EvidenceReadBinding } from '@/modules/development-automation/composition/evidenceReadBinding'
+import { evidenceArtifactsWith } from './helpers/evidenceSelections'
 import type { EvidenceDownloadHandle } from '@/modules/development-automation/application/evidenceDownloads'
 import { createRequirementBundleRefPersistence } from '@/modules/development-automation/infrastructure/requirementBundleRefPersistence'
 import type { RequirementBundleManifestV1 } from '@/modules/development-automation/domain/requirementManifest'
@@ -152,7 +154,12 @@ describeEachProviderHttpApplication(
           downloads,
         })
         const selected = representation === 'own' ? store : inherited(store)
-        const { app } = await scope.open({ evidenceRead: selected })
+        const evidenceRoot = mkdtempSync(join(tmpdir(), 'rfc429-evidence-read-'))
+        roots.push(evidenceRoot)
+        // RFC-429: evidence reads are members of the deployment's evidenceArtifacts.
+        const { app } = await scope.open({
+          evidenceArtifacts: evidenceArtifactsWith(selected, evidenceRoot),
+        })
         const fx = await buildPr3Fixture({ db: scope.harness.db })
         roots.push(fx.stagingRoot, dirname(dirname(dirname(fx.evidence.blobPath(sha256)))))
         const missionId = await fx.launchDirect(`selected-${representation}`)

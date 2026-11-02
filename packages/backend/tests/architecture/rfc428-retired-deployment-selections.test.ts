@@ -18,6 +18,11 @@ const RETIRED = [
   'nodeRunPromptContentEffects',
   'portArtifactContentEffects',
   'startupLease',
+  // RFC-429: the evidence group is derived from (or shadowed by) evidenceArtifacts.
+  'attemptContext',
+  'evidenceDocumentCommands',
+  'evidenceRead',
+  'missionInputBlobs',
 ]
 const UNITS = backendUnits(ROOT)
 

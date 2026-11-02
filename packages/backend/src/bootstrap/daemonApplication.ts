@@ -317,7 +317,6 @@ export async function composeDaemonApplication<P extends DatabaseProvider>(
     appHome: input.appHome,
     selection: input.developmentPurposes,
     evidenceArtifacts: input.evidenceArtifacts,
-    evidenceDocumentCommands: input.evidenceDocumentCommands,
   })
   const selectedTaskRuns = selectTaskRunRootSelection(input.taskRunSelection)
   const workspaceExcludeProfilesFor = composeTaskWorkspaceExcludeProfilesFor(
@@ -636,11 +635,8 @@ export async function composeDaemonApplication<P extends DatabaseProvider>(
     writerCutover: digitalEmployeeModules.writerCutover,
     verificationCommands: input.verificationCommands,
     repositoryBaselines: input.repositoryBaselines,
-    evidenceRead: input.evidenceRead,
-    attemptContext: input.attemptContext,
     repositoryCandidateEffects: input.repositoryCandidateEffects,
     conflictMergeWorkspaceEffects: input.conflictMergeWorkspaceEffects,
-    missionInputBlobs: input.missionInputBlobs,
     evidenceArtifacts: input.evidenceArtifacts,
     actionWorkspaceEntries: input.actionWorkspaceEntries,
   })

@@ -1,7 +1,8 @@
 // RFC-370 A2: real dual-provider HTTP commits answers through the selected writer.
 import { afterEach, expect, test } from 'bun:test'
 import { createHash } from 'node:crypto'
-import { existsSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import type { EvidenceDocumentCommands } from '@/modules/development-automation/composition'
 import type { EvidenceReadBinding } from '@/modules/development-automation/composition/evidenceReadBinding'
@@ -11,6 +12,7 @@ import { createFileEvidenceDocumentQueries } from '@/modules/development-automat
 import { createRequirementBundleRefPersistence } from '@/modules/development-automation/infrastructure/requirementBundleRefPersistence'
 import { buildPr3Fixture } from './helpers/rfc310Pr3Fixture'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
+import { evidenceArtifactsWith, requirementPurposeWith } from './helpers/evidenceSelections'
 
 const unused = (): never => {
   throw new Error('this answer request must not read pipeline/download content')
@@ -74,12 +76,26 @@ describeEachProviderHttpApplication(
             return await localDocuments.readText(input)
           },
         }
-        const opened = await scope.open({
-          evidenceDocumentCommands: writer,
-          evidenceRead: {
+        // RFC-429: answer documents are written by the requirement purpose's document commands and read through the
+        // deployment's evidenceArtifacts — the shapes a hosted deployment selects.
+        const purposeHome = mkdtempSync(join(tmpdir(), 'rfc429-document-write-'))
+        roots.push(purposeHome)
+        const evidenceArtifacts = evidenceArtifactsWith(
+          {
             documents,
             contents: { readText: unused, readRange: unused },
             downloads: { open: unused },
+          },
+          join(purposeHome, 'evidence'),
+        )
+        const opened = await scope.open({
+          evidenceArtifacts,
+          developmentPurposes: {
+            requirement: requirementPurposeWith({
+              appHome: purposeHome,
+              evidenceArtifacts,
+              documentCommands: writer,
+            }),
           },
         })
         const fx = await buildPr3Fixture({ db: scope.harness.db })

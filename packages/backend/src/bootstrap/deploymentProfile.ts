@@ -45,11 +45,7 @@ import type { DatabaseProvider } from '@/platform/persistence/databaseProviders'
 import type { SecretBox } from '@/auth/secretBox'
 import type { ExecutionAuthorityPort } from '@/modules/system-operations/public/participants'
 import type { CredentialAdapterSelection } from '@/modules/identity-access/composition/authentication'
-import type {
-  EvidenceDocumentCommands,
-  EvidenceArtifactPort,
-  AttemptContextStorePort,
-} from '@/modules/development-automation/composition'
+import type { EvidenceArtifactPort } from '@/modules/development-automation/composition'
 import type { createDevelopmentWorkspaceRepositoryPreparation } from '@/services/developmentDeliveryDeps'
 import type { BootExecutionRecoveryFactory } from '@/modules/task-execution/composition/bootRecovery'
 import type { DaemonDatabaseInstallationPort } from '@/modules/system-operations/composition/daemonDatabase'
@@ -69,7 +65,6 @@ import type {
   ResourcePackagePluginArtifactOwner,
   SkillPackageContentReader,
 } from '@/modules/resource-catalog/composition/postgresqlResourcePackageCatalog'
-import type { MissionInputBlobPersistence } from '@/modules/development-automation/composition/missionInputUploads'
 import type { TaskArchiveContentBinding } from '@/modules/task-execution/composition/taskArchiveMaintenance'
 import type { IntentArtifactSelection } from '@/modules/intent/composition/apply'
 import type { SkillContentBinding } from '@/modules/resource-catalog/composition/skillContentBinding'
@@ -81,7 +76,6 @@ import type { ScriptFixtureProcess } from '@/modules/task-execution/composition/
 import type { ActionWorkspaceEntries } from '@/modules/task-execution/composition/actionExecutionEnvironment'
 import type { CodeReviewArtifactStore } from '@/modules/code-capability/public/participants'
 import type { RepositoryRevisionContentFactory } from '@/modules/source-control/public/participants'
-import type { EvidenceReadBinding } from '@/modules/development-automation/composition/evidenceReadBinding'
 import type { RepositoryWorkspaceReadQueries } from '@/modules/source-control/public/queries'
 import type { Config } from '@agent-workflow/shared'
 
@@ -135,7 +129,6 @@ export interface DeploymentSelections {
   /** RFC-370 §10 V16: code-review artifacts as object publications (hosted only). */
   codeReviewArtifacts?: CodeReviewArtifactStore
   employeeInputArtifacts?: EmployeeInputArtifactPort
-  missionInputBlobs?: MissionInputBlobPersistence
   pluginInstaller?: PluginInstallerPort
   beforeEventObservationWrite?: (tx: PersistenceDb) => Promise<void>
   humanGateArtifactRecovery?: HumanGateArtifactRecovery
@@ -191,9 +184,6 @@ export interface DeploymentSelections {
   >
   workspaceExcludeProfiles?: WorkspaceExcludeProfileFactory
   maintenanceEffectsBootstrap?: MaintenanceWorkerEffectsDescriptor
-  evidenceRead?: EvidenceReadBinding
-  evidenceDocumentCommands?: EvidenceDocumentCommands
-  attemptContext?: AttemptContextStorePort
   /** RFC-370 v2 H7 — the deployment's execution authority; standalone is always active. */
   executionAuthority?: ExecutionAuthorityPort
   /** RFC-370 v2 §3.6 — the deployment's credential mechanism; standalone sessions by default. */

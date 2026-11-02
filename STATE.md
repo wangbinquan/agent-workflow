@@ -1,4 +1,18 @@
-## 2026-11-02 RFC-428 部署选择项删死槽：启动锁、预打开恢复、节点提示与端口制品四项（In Progress；`design/RFC-428-dead-deployment-selections/`）
+## 2026-11-02 RFC-429 部署选择项的 evidence 一组收拢到 `evidenceArtifacts`（In Progress；`design/RFC-429-evidence-deployment-selections/`）
+
+- **来由**：RFC-294 S2c 余项第 1 项的第二步（RFC-428 inventory 后继分步）。用户授权同 RFC-402，本会话调研、设计、实施与集中验证，不派 Codex。
+- **范围**：删去由 `evidenceArtifacts` 派生的 `evidenceRead` / `attemptContext` / `missionInputBlobs` 与被遮蔽的 `evidenceDocumentCommands`（68 → 64），
+  托管 evidence 装配只给 `evidenceArtifacts`。纯结构重构。
+- **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。
+- **进度**：T1～T5 完成，随实现提交入库，待 exact SHA 的 CI（AC-4）。部署选择项 68 → 64。
+  - 经 HTTP 测试入口注入的 root-binding 用例改走 `evidenceArtifacts` / `developmentPurposes`，新增 `tests/helpers/evidenceSelections.ts`。
+  - 集中验证 359 + 149 + 1 个文件：除负载超时外无失败，第三轮单进程两侧通过。
+  - 报告类用例在候选导出仓库里通过；P0 变异 lane 通过（34 个阶段、源文件指纹不变）。
+
+  详见 plan「集中验证（T5）」。
+- **后继**：另三个可派生项（`historyRestrictions`、`resourcePackageSkillContent`、`automationWorkspaceEffects`），然后是单机默认值集中与改必填。
+
+## 2026-11-02 RFC-428 部署选择项删死槽：启动锁、预打开恢复、节点提示与端口制品四项（Done；`design/RFC-428-dead-deployment-selections/`）
 
 - **来由**：RFC-294 S2c 余项第 1 项（单机默认值集中、选择项改必填、死槽清理）的第一步。用户授权同 RFC-402，本会话调研、设计、实施与集中验证，不派 Codex。
 - **盘点**：72 项部署选择项逐项追踪落档于 `design/RFC-428-dead-deployment-selections/inventory.md`（托管设置 69 项；死槽 3、被遮蔽 2、
@@ -6,7 +20,8 @@
 - **范围**：删去 `startupLease`、`databasePreOpenRecovery`、`nodeRunPromptContentEffects`、`portArtifactContentEffects`（72 → 68），随之删去启动锁的被选
   分支、启动序列的预打开恢复选择分支与托管执行选择里被遮蔽的属性。纯结构重构。
 - **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。
-- **进度**：T1～T5 完成，随实现提交入库，待 exact SHA 的 CI（AC-4）。集中验证 437 + 145 + 1 个文件：键表数量断言已改，其余为 PostgreSQL 负载
+- **进度**：T1～T5 完成，随实现提交入库（`e41e5dbde`）；exact SHA 的主 CI 70/70、windows-platform 与 maintenance-soak-nightly 全绿（AC-4），
+  Done。集中验证 437 + 145 + 1 个文件：键表数量断言已改，其余为 PostgreSQL 负载
   超时（第三轮单进程两侧通过）；报告类用例在候选导出仓库里通过；P0 变异 lane 通过（34 个阶段、源文件指纹不变）。详见 plan「集中验证（T5）」。同提交收尾
   RFC-425 / 426 / 427（各自 exact SHA 或后继 CI 全绿）。
 - **后继**（inventory「后继分步」）：

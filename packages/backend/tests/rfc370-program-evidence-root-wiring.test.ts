@@ -1,4 +1,7 @@
-import { expectDeploymentSelection } from './helpers/deploymentSelectionSource'
+import {
+  expectDeploymentSelection,
+  expectNoDeploymentSelection,
+} from './helpers/deploymentSelectionSource'
 import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 // RFC-370 A2: actual session, daemon and standalone roots share selected
 // program artifacts and all evidence read faces; no daemon starts here.
@@ -59,7 +62,10 @@ test('provider session and recompose retain both bootstrap selections', () => {
     (item) => ts.isVariableDeclaration(item) && item.name.getText(start) === 'sessionInput',
   ).filter(ts.isVariableDeclaration)
   expect(inputs).toHaveLength(1)
-  for (const key of ['employeePrograms', 'evidenceRead', 'evidenceDocumentCommands'] as const) {
+  // RFC-429: evidence reads and document commands are no deployment selections any more.
+  expectNoDeploymentSelection('evidenceRead')
+  expectNoDeploymentSelection('evidenceDocumentCommands')
+  for (const key of ['employeePrograms'] as const) {
     expectDeploymentSelection(key)
     selected(
       declaration(start, 'composeDaemonSession'),
@@ -73,10 +79,8 @@ test('provider session and recompose retain both bootstrap selections', () => {
       (
         {
           employeePrograms: 'composeDaemonDigitalEmployeeModules',
-          evidenceRead: 'composeDaemonDevelopmentAutomationModules',
-          evidenceDocumentCommands: 'composeDevelopmentPurposeRoot',
         } as const
-      )[key as 'employeePrograms' | 'evidenceRead' | 'evidenceDocumentCommands'],
+      )[key],
       `${key}:input.${key},`,
     )
   }
@@ -98,7 +102,7 @@ test('both daemon owners consume the same program and evidence read selection', 
       root,
       file,
       'composeDaemonDevelopmentAutomationModules',
-      `evidenceRead:${receiver}.evidenceRead,`,
+      `evidenceArtifacts:${receiver}.evidenceArtifacts,`,
     )
     selected(
       declaration(
@@ -113,7 +117,7 @@ test('both daemon owners consume the same program and evidence read selection', 
       root,
       file,
       'composeDevelopmentPurposeRoot',
-      `evidenceDocumentCommands:${receiver}.evidenceDocumentCommands,`,
+      `evidenceArtifacts:${receiver}.evidenceArtifacts,`,
     )
     selected(
       root,

@@ -158,7 +158,8 @@ Facade 只许 re-export 或参数形状适配；不得含 DB 查询、状态、�
     `bootstrap/`，`migrate` / 两个校验命令成为部署描述的操作。
     余项第 1 项（单机默认值集中、选择项改必填、死槽清理）：72 项盘点见
     [RFC-428 inventory](../RFC-428-dead-deployment-selections/inventory.md)，分四步推进；第一步
-    [RFC-428](../RFC-428-dead-deployment-selections/proposal.md)（In Progress）删去四个死槽 / 被遮蔽槽（72 → 68）。
+    [RFC-428](../RFC-428-dead-deployment-selections/proposal.md)（Done）删去四个死槽 / 被遮蔽槽（72 → 68）；第二步
+    [RFC-429](../RFC-429-evidence-deployment-selections/proposal.md)（In Progress）把 evidence 一组收拢到 `evidenceArtifacts`（68 → 64）。
 - **退出门**：每模块每进程构造一次；不存在 provider 专属或部署专属的装配函数；入口根只做参数解析与 profile 选择；
   后台作业全部经唯一生命周期程序且都有 stop；两种 provider 的作业清单一致。
 - **前置 / 冲突**：`server.ts`、`cli/start.ts`、`cli/postgresqlDaemonApplication.ts` 正在被 RFC-370 改动，S2 须在其当前在制品
