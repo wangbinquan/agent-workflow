@@ -271,8 +271,11 @@ function IntentSessionDetailPage() {
       setSelectedOpId(null)
       return
     }
+    // RFC-401：图校验的 error 不阻断提交，但同样指向要看的那个 op。
     const firstBlocking = draftOps.find((op) =>
-      draft.validation.errors.some((error) => error.startsWith(`${op.opId}:`)),
+      [...draft.validation.errors, ...(draft.validation.graphErrors ?? [])].some((error) =>
+        error.startsWith(`${op.opId}:`),
+      ),
     )
     setSelectedOpId((firstBlocking ?? draftOps[0])?.opId ?? null)
   }, [draft, draftIdentity, draftOps])
@@ -690,9 +693,32 @@ function IntentSessionDetailPage() {
                   ) : null}
                 </NoticeBanner>
               ) : null}
+              {(draft.validation.graphErrors ?? []).length > 0 ? (
+                // RFC-401 §5 第 8 项：保存 workflow 不做完整图校验（草稿可保存），所以图校验的 error 只提示、
+                // 不阻断提交；不修好工作流无法启动，模型那边照旧收到并会尝试修复。
+                <NoticeBanner tone="warning">
+                  <p>
+                    {t('intent.graphErrors', {
+                      count: (draft.validation.graphErrors ?? []).length,
+                    })}
+                  </p>
+                  <ul data-testid="intent-graph-errors">
+                    {(draft.validation.graphErrors ?? []).slice(0, 10).map((error, index) => (
+                      <li key={`${index}:${error}`}>{error}</li>
+                    ))}
+                  </ul>
+                  {(draft.validation.graphErrors ?? []).length > 10 ? (
+                    <p data-testid="intent-graph-errors-truncated">
+                      {t('intent.blockingErrorsTruncated', {
+                        count: (draft.validation.graphErrors ?? []).length - 10,
+                      })}
+                    </p>
+                  ) : null}
+                </NoticeBanner>
+              ) : null}
               {draft.validation.graphValidationUnavailable === true ? (
-                // RFC-358 D7：图校验没能跑起来。模型的产出不丢（草稿照常在），
-                // 但「绿」是一个有后果的判断——拿不到判据就不能放行提交。
+                // RFC-358 D7：图校验没能跑起来。模型的产出不丢（草稿照常在）；RFC-401 起图校验
+                // 不阻断提交，这里只提示「这份草稿没有经过启动前检查」。
                 <NoticeBanner tone="warning">
                   <p data-testid="intent-graph-unavailable">
                     {t('intent.graphValidationUnavailable')}
@@ -735,9 +761,10 @@ function IntentSessionDetailPage() {
                 <div className="intent-session__op-browser">
                   <nav className="intent-session__op-outline" aria-label={t('intent.opOutline')}>
                     {draftOps.map((op) => {
-                      const opErrors = draft.validation.errors.filter((error) =>
-                        error.startsWith(`${op.opId}:`),
-                      )
+                      const opErrors = [
+                        ...draft.validation.errors,
+                        ...(draft.validation.graphErrors ?? []),
+                      ].filter((error) => error.startsWith(`${op.opId}:`))
                       const name = String(
                         (op.payload as { name?: string } | undefined)?.name ?? op.opId,
                       )
@@ -794,6 +821,9 @@ function IntentSessionDetailPage() {
                         opErrors={draft.validation.errors.filter((error) =>
                           error.startsWith(`${selectedOp.opId}:`),
                         )}
+                        opGraphErrors={(draft.validation.graphErrors ?? []).filter((error) =>
+                          error.startsWith(`${selectedOp.opId}:`),
+                        )}
                       />
                     </div>
                   ) : null}
@@ -837,9 +867,8 @@ function IntentSessionDetailPage() {
                       disabled={
                         draft.stale ||
                         draft.validation.errors.length > 0 ||
-                        // RFC-358 D7：校验不可用与有 error 同效——两者都表示「此刻无法
-                        // 证明这份草稿是好的」，放行提交就等于给了假绿。
-                        draft.validation.graphValidationUnavailable === true ||
+                        // RFC-401 §5 第 8 项：图校验（含「校验不可用」）不阻断提交——保存 workflow 不做完整
+                        // 图校验，完整校验是显式操作。
                         detail.session.inFlight
                       }
                       onClick={() => setCommitOpen(true)}

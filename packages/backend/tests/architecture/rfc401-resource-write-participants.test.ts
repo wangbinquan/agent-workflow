@@ -1,9 +1,11 @@
 // RFC-401 Part A (design §9): each resource kind is written through one participant in
-// `modules/resource-catalog/infrastructure/` — agents (A1), MCP servers and plugins (A2). The ordinary CRUD repository,
-// the Intent port and the resource-package arm (and, for agents, the digital-employee template writer) all call it, and
-// only the participant imports the kind's row-write program. For agents the dependency-graph check has one write-time
-// caller (the participant) plus the public validation query, and Intent's own `agent-runtime-not-found` and the
-// package planner's `BundleCycleError` are gone.
+// `modules/resource-catalog/infrastructure/` — agents (A1), MCP servers and plugins (A2), workflows (A3). The ordinary
+// CRUD repository, the Intent port and the resource-package arm (and, for agents, the digital-employee template writer;
+// for workflows, the built-in workflow catalog) all call it, and only the participant imports the kind's row-write
+// program. For agents the dependency-graph check has one write-time caller (the participant) plus the public validation
+// query, and Intent's own `agent-runtime-not-found` and the package planner's `BundleCycleError` are gone. For workflows
+// Intent no longer rejects duplicate names (`workflow-name-in-use`) nor runs the full graph check on commit
+// (`intent-workflow-invalid`, proposal §5 #2 / #8).
 // Reads the production sources without importing them.
 import { expect, test } from 'bun:test'
 import { resolve } from 'node:path'
@@ -81,7 +83,26 @@ const STACKS: readonly WriteStack[] = [
       { path: INFRA + 'pluginRepository.ts', fn: 'createPluginRepository' },
     ],
   },
+  {
+    kind: 'workflow',
+    participant: INFRA + 'workflowMutationParticipant.ts',
+    factory: 'createWorkflowMutationParticipant',
+    program: '/workflowDefinitionWrite',
+    programExports: ['createWorkflowDefinitionWriteParticipant'],
+    // Test-only legacy writers (`createWorkflow` for YAML import, `insertWorkflowInTx`, `prepareWorkflowSave`) still
+    // replay the write program; RFC-401 Part B (G5) deletes them.
+    legacyImporters: [INFRA + 'legacy/workflow.ts'],
+    scenes: [
+      { path: INTENT_PORTS, fn: 'createWorkflowPort' },
+      { path: PACKAGE_ARMS, fn: 'commitPostgresqlWorkflowPackageMutation' },
+      { path: INFRA + 'workflowRepository.ts', fn: 'createWorkflowRepository' },
+      { path: RC + 'composition/builtinWorkflowCatalog.ts', fn: 'composeBuiltinWorkflowCatalog' },
+    ],
+  },
 ]
+/** Codes and identifiers the unified write rules removed (proposal §5 #2 / #8). */
+const RETIRED_STRINGS = ['workflow-name-in-use', 'intent-workflow-invalid'] as const
+const RETIRED_IDENTIFIERS = ['validateResolvedBundleWorkflowGraphs'] as const
 const UNITS = backendUnits(ROOT)
 
 function walk(node: ts.Node, visit: (node: ts.Node) => void): void {
@@ -134,6 +155,13 @@ export function writeStackViolations(units: readonly SourceUnit[]): string[] {
         found.add('intent-runtime-code:' + unit.path)
       if (ts.isIdentifier(node) && node.text === 'BundleCycleError')
         found.add('bundle-cycle-error:' + unit.path)
+      if (
+        ts.isStringLiteralLike(node) &&
+        (RETIRED_STRINGS as readonly string[]).includes(node.text)
+      )
+        found.add(`retired-code:${node.text}:${unit.path}`)
+      if (ts.isIdentifier(node) && (RETIRED_IDENTIFIERS as readonly string[]).includes(node.text))
+        found.add(`retired-identifier:${node.text}:${unit.path}`)
       if (
         ts.isPropertyAssignment(node) &&
         node.name.getText(unit.source) === 'semantics' &&
@@ -220,6 +248,26 @@ test('negative fixtures over the corpus: each way back is reported', () => {
       ),
     ),
   ).toEqual(['scene-bypass:createPluginPort'])
+  expect(
+    writeStackViolations(
+      replace(INTENT_PORTS, (text) =>
+        text.replace(
+          'const workflows = createWorkflowMutationParticipant(transaction, { now })',
+          'const workflows = createIntentWorkflowWriter(transaction, { now })',
+        ),
+      ),
+    ),
+  ).toEqual(['scene-bypass:createWorkflowPort'])
+  expect(
+    writeStackViolations(
+      replace(
+        INFRA + 'demoResourceCatalogSeed.ts',
+        (text) =>
+          "import { createWorkflowDefinitionWriteParticipant } from './workflowDefinitionWrite'\n" +
+          text,
+      ),
+    ),
+  ).toEqual(['workflow-write-program:' + INFRA + 'demoResourceCatalogSeed.ts'])
 })
 
 test('negative fixtures over fabricated units alone: every matcher still bites', () => {
@@ -236,6 +284,25 @@ test('negative fixtures over fabricated units alone: every matcher still bites',
   expect(
     only('packages/backend/src/services/bundle/provider.ts', 'export class BundleCycleError {}'),
   ).toEqual(['bundle-cycle-error:packages/backend/src/services/bundle/provider.ts'])
+  expect(only(INFRA + 'x.ts', "throw new ConflictError('workflow-name-in-use', 'taken')")).toEqual([
+    'retired-code:workflow-name-in-use:' + INFRA + 'x.ts',
+  ])
+  expect(
+    only(
+      'packages/backend/src/modules/intent/infrastructure/x.ts',
+      "throw new ValidationError('intent-workflow-invalid', 'x')",
+    ),
+  ).toEqual([
+    'retired-code:intent-workflow-invalid:packages/backend/src/modules/intent/infrastructure/x.ts',
+  ])
+  expect(
+    only(
+      'packages/backend/src/modules/intent/application/x.ts',
+      'export async function validateResolvedBundleWorkflowGraphs() {}',
+    ),
+  ).toEqual([
+    'retired-identifier:validateResolvedBundleWorkflowGraphs:packages/backend/src/modules/intent/application/x.ts',
+  ])
   expect(only(INFRA + 'x.ts', "assertAgentDependencyGraph({ semantics: 'intent' })")).toEqual([
     'intent-graph-semantics:' + INFRA + 'x.ts',
   ])
@@ -246,5 +313,6 @@ test('negative fixtures over fabricated units alone: every matcher still bites',
     'scene-bypass:commitPostgresqlAgentPackageMutation',
     'scene-bypass:commitPostgresqlMcpPackageMutation',
     'scene-bypass:commitPostgresqlPluginPackageMutation',
+    'scene-bypass:commitPostgresqlWorkflowPackageMutation',
   ])
 })

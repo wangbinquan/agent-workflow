@@ -1,6 +1,5 @@
 import { join } from 'node:path'
 
-import type { IntentWorkflowGraphValidationPort } from '@/modules/intent/application/ports/intentWorkflowGraphValidation'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   createIntentApplyEngine,
@@ -70,8 +69,6 @@ export interface IntentApplyCompositionDependencies {
    * 用例用它在真实会话外面包一层观测（例：在 `prepare` 返回后放行一个并发 apply）。
    */
   readonly resources?: IntentApplyResourceBinding
-  /** RFC-358 §7 —— 提交期工作流图校验（AC-6）。 */
-  readonly graphValidation?: IntentWorkflowGraphValidationPort
   readonly id?: () => string
   readonly now?: () => number
 }
@@ -145,9 +142,6 @@ export function composeIntentApplyOperations(
           ? {}
           : { legacySkillArtifacts: dependencies.legacySkillArtifacts }),
       }),
-    ...(dependencies.graphValidation === undefined
-      ? {}
-      : { graphValidation: dependencies.graphValidation }),
     ...(dependencies.id === undefined ? {} : { id: dependencies.id }),
     ...(dependencies.now === undefined ? {} : { now: dependencies.now }),
   })
@@ -175,7 +169,6 @@ export interface ApplyIntentDeps {
   readonly authority: ResourceRequestContext
   readonly aclIdentities?: ResourceCatalogAclIdentityReadPort
   readonly faults?: ApplyIntentFaults
-  readonly graphValidation?: IntentWorkflowGraphValidationPort
   readonly log?: Logger
 }
 
@@ -189,9 +182,6 @@ export function applyIntentChangeset(
     ...(dependencies.aclIdentities === undefined
       ? {}
       : { aclIdentities: dependencies.aclIdentities }),
-    ...(dependencies.graphValidation === undefined
-      ? {}
-      : { graphValidation: dependencies.graphValidation }),
   }).apply({
     actor: dependencies.actor,
     authority: dependencies.authority,

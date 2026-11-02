@@ -42,11 +42,16 @@ export interface DraftValidationReport {
   /** Credential-shaped strings; block commit unless explicitly waived per slot. */
   credentialFindings: Array<CredentialFinding & { opId: string }>
   /**
+   * RFC-401 §5 第 8 项 —— 工作流图校验的 error。保存 workflow 不做完整图校验（草稿可保存，完整校验是显式操作），所以它们
+   * **不阻断提交**；但不修好工作流无法启动，所以照旧进 INTENT.md、照旧触发一轮图修复，并在确认页提示。
+   */
+  graphErrors?: string[]
+  /**
    * RFC-358 —— 工作流图校验的 warning。只呈给人（确认页），**不进 INTENT.md**（决策 D1）。
    * 与 `errors` 分开存正是那条裁决的锁点：`buildIntentDoc` 永远不读这个字段。
    */
   graphWarnings?: IntentGraphWarning[]
-  /** RFC-358 D7 —— 图校验不可用（查库失败）。绿不能给，但模型的产出也不丢。 */
+  /** RFC-358 D7 —— 图校验不可用（查库失败）。只是提示：图校验不再阻断提交（RFC-401 §5 第 8 项）。 */
   graphValidationUnavailable?: boolean
   /**
    * RFC-358 §12（决策 D6）—— 被本次 update 改动的 agent，各自被哪些**既有**工作流引用。
@@ -454,11 +459,15 @@ function requireDecisionSlots(
 /** Resolve the confirmed draft + decisions into an ordered, canonical bundle.
  *  Pure given its inputs — the DB-touching prepare/commit phases run in
  *  applyChangeset.ts. Throws ValidationError on any contract violation. */
-/** RFC-401：名称冲突已交给共同写入层报的资源类（其余类型仍在这里预检）。 */
+/**
+ * RFC-401：不在这里预检名称的资源类。agent、MCP、plugin 的冲突由各自唯一的写入参与者报 `<kind>-name-in-use`；workflow
+ * 与普通目录、资源包一样允许重名（proposal §5 第 2 项）。其余类型在各自接入共同写入层之前仍走这里的预检。
+ */
 const NAME_CONFLICT_IN_WRITE_PARTICIPANT: ReadonlySet<AclResourceType> = new Set([
   'agent',
   'mcp',
   'plugin',
+  'workflow',
 ])
 
 export function resolveIntentBundle(input: {
@@ -604,8 +613,8 @@ export function resolveIntentBundle(input: {
       }
     }
     const name = nameOf(op)
-    // RFC-401 A1 / A2：agent、MCP、plugin 的名称冲突由各自唯一的写入参与者报 `<kind>-name-in-use`（409），与普通编辑
-    // 相同；其余类型在各自接入共同写入层之前仍走这里的预检。
+    // RFC-401 A1–A3：agent、MCP、plugin 的名称冲突由各自唯一的写入参与者报 `<kind>-name-in-use`（409），与普通编辑
+    // 相同；workflow 允许重名；其余类型在各自接入共同写入层之前仍走这里的预检。
     if (action === 'create' && !NAME_CONFLICT_IN_WRITE_PARTICIPANT.has(op.resourceType)) {
       const occupied = input.occupiedNames.get(op.resourceType)
       if (occupied?.has(name.toLowerCase()) === true) {

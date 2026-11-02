@@ -51,21 +51,20 @@ describe('RFC-349 PostgreSQL Intent resource apply binding', () => {
     const source = readFileSync(portsPath, 'utf8')
 
     // RFC-395 II-a A5: workflows delegate to their single writer on the same transaction.
-    // RFC-401 A1: agents go through the one Agent mutation participant on the same transaction.
+    // RFC-401 A1 / A3a: agents and workflows go through their one mutation participant on the same transaction; only
+    // the workflow participant drives the definition writer.
     expect(source).toContain('const agents = createAgentMutationParticipant(transaction, { now })')
     expect(source).not.toContain('createAgentReferenceWriteParticipant')
-    for (const [table, file, factory] of [
-      ['workflows', 'workflowDefinitionWrite', 'createWorkflowDefinitionWriteParticipant'],
-    ]) {
-      const writer = readFileSync(
-        join(root, `src/modules/resource-catalog/infrastructure/${file}.ts`),
-        'utf8',
-      )
-      expect(source).toContain(`${factory}(transaction).insert(`)
-      expect(source).toContain(`${factory}(transaction).update(`)
-      expect(writer).toContain(`.insert(${table})`)
-      expect(writer).toContain(`.update(${table})`)
-    }
+    expect(source).toContain(
+      'const workflows = createWorkflowMutationParticipant(transaction, { now })',
+    )
+    expect(source).not.toContain('createWorkflowDefinitionWriteParticipant')
+    const workflowWriter = readFileSync(
+      join(root, 'src/modules/resource-catalog/infrastructure/workflowDefinitionWrite.ts'),
+      'utf8',
+    )
+    expect(workflowWriter).toContain('.insert(workflows)')
+    expect(workflowWriter).toContain('.update(workflows)')
     for (const table of ['skills', 'workgroups']) {
       expect(source).toMatch(
         new RegExp(`(?:\\.insert\\(\\s*${table}\\s*\\)|\\binsertOne\\([^,]+,\\s*${table}\\s*,)`),

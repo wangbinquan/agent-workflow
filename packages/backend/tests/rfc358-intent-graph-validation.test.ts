@@ -717,7 +717,10 @@ describeEachProvider('RFC-358 意图图校验与反馈（双引擎）', (harness
       })
     }
 
-    test('AC-6: a workflow that fails graph validation is refused at commit with zero rows written', async () => {
+    // RFC-401 §5 第 8 项（用户 2026-11-02 确认）：保存 workflow 在普通编辑、资源包、Intent 三条入口都不做完整图校验
+    // ——草稿可保存，完整校验是显式操作。此前这里锁的是 RFC-358 AC-6 的提交期硬拦（`intent-workflow-invalid`、零落库），
+    // 现在锁相反的结论：图校验过不了的工作流照样提交，之后在编辑器里修。
+    test('RFC-401 #8: a workflow that fails graph validation still commits (no save-time graph gate)', async () => {
       const { session } = await seedSession()
       // 一条边指向 agent 上并不存在的端口 —— 图校验才看得见的那类错误。
       const badDefinition = {
@@ -745,44 +748,23 @@ describeEachProvider('RFC-358 意图图校验与反馈（双引擎）', (harness
         agentOp('$new:auditor', 'auditor'),
         workflowOp('op-2', '$new:wf', 'bad-pipeline', badDefinition),
       ])
-      const draft = await installDraft(session.id, changeset)
-
-      const { workflows } = tablesOf(db)
-      const before = (await db.select().from(workflows)).length
-      await expect(
-        applyIntentChangeset(
-          {
-            db,
-            appHome,
-            actor,
-            ...intentApplyResourceBinding(db, actor),
-            graphValidation: intentGraphValidationForTest(db),
-          },
-          { sessionId: session.id, clientMutationId: ulid(), ...draft, decisions: [] },
-        ),
-      ).rejects.toThrow(/intent-workflow-invalid|workflow validation/)
-      // preflight 段还没有任何副作用，所以零落库。
-      expect((await db.select().from(workflows)).length).toBe(before)
-    })
-
-    test('AC-6: the same bundle commits cleanly once the edge is wired to a real port', async () => {
-      const { session } = await seedSession()
-      const changeset = changesetOf([
-        agentOp('$new:auditor', 'auditor'),
-        workflowOp('op-2', '$new:wf', 'good-pipeline', linearDefinition('$new:auditor')),
-      ])
+      // 草稿期照旧给出结论（给模型与确认页）……
+      const outcome = await runGraph(changeset)
+      expect(outcome.errors.join('\n')).toContain('op-2:')
+      // ……但提交不再拦。
       const draft = await installDraft(session.id, changeset)
       const receipt = await applyIntentChangeset(
-        {
-          db,
-          appHome,
-          actor,
-          ...intentApplyResourceBinding(db, actor),
-          graphValidation: intentGraphValidationForTest(db),
-        },
+        { db, appHome, actor, ...intentApplyResourceBinding(db, actor) },
         { sessionId: session.id, clientMutationId: ulid(), ...draft, decisions: [] },
       )
-      expect(receipt.applied.some((each) => each.resourceType === 'workflow')).toBe(true)
+      const created = receipt.applied.find((each) => each.resourceType === 'workflow')
+      expect(created).toBeDefined()
+      const { workflows } = tablesOf(db)
+      const [row] = await db
+        .select()
+        .from(workflows)
+        .where(eq(workflows.id, created?.resourceId ?? ''))
+      expect(row?.name).toBe('bad-pipeline')
     })
 
     test('B-5: a copied agent keeps the source sidecars instead of silently dropping them', async () => {
@@ -840,12 +822,27 @@ describeEachProvider('RFC-358 意图图校验与反馈（双引擎）', (harness
     test('D1: blocking errors reach INTENT.md; graph warnings never do', () => {
       const doc = buildIntentDoc({
         ...docBase,
-        validationErrors: ['op-2: edge-source-port-missing @n_agent — no such port'],
+        validationErrors: ['op-2: unknown target handle res#workflow#9'],
       })
       expect(doc).toContain('BLOCKING validation errors')
-      expect(doc).toContain('edge-source-port-missing')
+      expect(doc).toContain('unknown target handle')
       // warning 只在确认页。`buildIntentDoc` 连这个字段都不接——决策 D1 的结构性锁点。
       expect(doc).not.toContain('clarify-no-iteration-cap')
+    })
+
+    // RFC-401 §5 第 8 项：图校验的 error 不阻断提交，但工作流不修好无法启动，所以模型照旧看到它们（修复轮靠它）。
+    test('RFC-401 #8: graph errors reach INTENT.md in their own non-blocking section', () => {
+      const doc = buildIntentDoc({
+        ...docBase,
+        validationErrors: [],
+        graphErrors: ['op-2: edge-source-port-missing @n_agent — no such port'],
+      })
+      expect(doc).not.toContain('BLOCKING validation errors')
+      expect(doc).toContain('Workflow graph errors on the current draft')
+      expect(doc).toContain('edge-source-port-missing')
+      expect(buildIntentDoc({ ...docBase, validationErrors: [] })).not.toContain(
+        'Workflow graph errors',
+      )
     })
 
     test('AC-13: the downstream-workflow notice is human-only, never part of the prompt', async () => {

@@ -98,7 +98,6 @@ export function composeDaemonIntentModules(input: DaemonIntentInput) {
     ...input.adapters?.intentArtifacts,
     aclIdentities: resources.resourceCatalog.persistence.identities,
     artifacts,
-    graphValidation,
   })
   const platformInventory = composeIntentPlatformInventoryParticipant({
     authorityFor,

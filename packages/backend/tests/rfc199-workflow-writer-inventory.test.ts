@@ -20,25 +20,22 @@ import { join, relative, resolve, sep } from 'node:path'
 const BACKEND_SRC = resolve(import.meta.dir, '..', 'src')
 const DEFINITION_WRITER = 'modules/resource-catalog/infrastructure/workflowDefinitionWrite.ts'
 
-// A5 routes the same seven insert / five editable-update decisions through one
-// transport. Inventory both the business call sites and that sole raw writer.
+// A5 routes the insert / editable-update decisions through one transport. Inventory both the business call sites
+// and that sole raw writer.
+//
+// RFC-401 A3: the business call sites themselves collapsed into the one Workflow mutation participant — ordinary CRUD
+// (create, copy, save), Intent, the resource package and the built-in catalog call its create / update, and the demo
+// and fusion seeds call its trusted seed insert / repair. The test-only legacy writers (`legacy/workflow.ts`) remain
+// until RFC-401 Part B deletes them.
 
 const EXPECTED_WRITERS = {
   insert: {
-    // RFC-395 II-a A2：合成主体不再播种 catalog workflow。
-    'modules/resource-catalog/infrastructure/fusionResourceSeed.ts': 1,
-    'modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourcePorts.ts': 1,
-    'modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlResourcePackageMutationArms.ts': 1,
+    'modules/resource-catalog/infrastructure/workflowMutationParticipant.ts': 2,
     'modules/resource-catalog/infrastructure/legacy/workflow.ts': 1,
-    'modules/resource-catalog/infrastructure/workflowRepository.ts': 2,
-    'modules/resource-catalog/infrastructure/demoResourceCatalogSeed.ts': 1,
   },
   updateEditable: {
-    'modules/resource-catalog/infrastructure/fusionResourceSeed.ts': 1,
-    'modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourcePorts.ts': 1,
-    'modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlResourcePackageMutationArms.ts': 1,
+    'modules/resource-catalog/infrastructure/workflowMutationParticipant.ts': 2,
     'modules/resource-catalog/infrastructure/legacy/workflow.ts': 1,
-    'modules/resource-catalog/infrastructure/workflowRepository.ts': 1,
   },
   updateMetadata: {},
   delete: {
@@ -257,17 +254,23 @@ describe('RFC-199 workflow writer inventory', () => {
 
   test('every production insert stores a canonically serialized definition', () => {
     const canonicalMarkerByWriter: Record<string, string> = {
-      'modules/resource-catalog/infrastructure/fusionResourceSeed.ts': 'repairDefinition.repair(',
-      'modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourcePorts.ts':
+      'modules/resource-catalog/infrastructure/workflowMutationParticipant.ts':
         'serializeWorkflowDefinitionStorageV1(',
-      'modules/resource-catalog/infrastructure/aggregateAdapters/postgresqlResourcePackageMutationArms.ts':
-        'createWorkflowPersistenceValues(',
       'modules/resource-catalog/infrastructure/legacy/workflow.ts':
         'serializeWorkflowDefinitionStorageV1(',
-      'modules/resource-catalog/infrastructure/workflowRepository.ts':
+    }
+    // RFC-401 A3：种子写入的两处调用方各自带规范序列化（演示目录经 createWorkflowPersistenceValues，融合经
+    // repairDefinition.repair），参与者只原样落行。
+    for (const [file, marker] of [
+      [
+        'modules/resource-catalog/infrastructure/demoResourceCatalogSeed.ts',
         'createWorkflowPersistenceValues(',
-      'modules/resource-catalog/infrastructure/demoResourceCatalogSeed.ts':
-        'createWorkflowPersistenceValues(',
+      ],
+      ['modules/resource-catalog/infrastructure/fusionResourceSeed.ts', 'repairDefinition.repair('],
+    ] as const) {
+      const seed = readFileSync(join(BACKEND_SRC, file), 'utf8')
+      expect(seed).toContain('insertSeedWorkflow(')
+      expect(seed).toContain(marker)
     }
     expect(
       readFileSync(
@@ -280,7 +283,8 @@ describe('RFC-199 workflow writer inventory', () => {
     // RFC-359 AC-1（plan §5ge）：agent 启动资源的两份合成一份（12 → 11）；
     // RFC-359 AC-1（plan §5hn 批次二 ①）：工作组宿主锚行的懒种同样合成一份（11 → 10）
     // RFC-395 II-a A2：再删 agent / workgroup / digital-employee 三个宿主播种（10 → 7）。
-    expect(inventory.insertValueArgs).toHaveLength(7)
+    // RFC-401 A3：业务写入点收进唯一的 workflow 写入参与者（创建 + 种子插入），另余测试用的旧写入（7 → 3）。
+    expect(inventory.insertValueArgs).toHaveLength(3)
     expect(Object.keys(inventory.insert).sort()).toEqual(
       Object.keys(canonicalMarkerByWriter).sort(),
     )

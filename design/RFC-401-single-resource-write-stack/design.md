@@ -180,8 +180,8 @@ Intent 场景适配 ── 句柄 / copy / session / provenance ─┐
 
 ### 9.1 分步
 
-Part A 按资源类分四次提交（plan「Part A 分步」）：A1 agent；A2 MCP 与 plugin；A3 workflow 与 workgroup；A4 skill（Intent / 资源包的数据库
-部分、版本规则与字节合同），并删除剩余 arms、加 AC-1 结构锁。每一步完整实现与用例后集中验证一次再提交。§3 要点 2（AtomicApply
+Part A 按资源类分次提交（plan「Part A 分步」）：A1 agent；A2 MCP 与 plugin；A3 workflow 与 workgroup（分 A3a workflow、A3b workgroup
+两次提交）；A4 skill（Intent / 资源包的数据库部分、版本规则与字节合同），并删除剩余 arms、加 AC-1 结构锁。每一步完整实现与用例后集中验证一次再提交。§3 要点 2（AtomicApply
 最终事务的隔离策略）与 AtomicApply 本身的改动一起归 Part B。
 
 ### 9.2 A1：agent 写入参与者
@@ -246,3 +246,43 @@ Part A 按资源类分四次提交（plan「Part A 分步」）：A1 agent；A2 
   各场景函数必须调参与者（含负例）。
 - **用例**：`T/rfc401-mcp-plugin-error-matrix.test.ts`（MCP 名称冲突、类型不可变、stale、no-op；plugin 名称冲突、stale；三入口 ×
   两 provider）；`T/rfc359-w12-plugin-publication-conformance.test.ts` 加「覆盖保持规格不变不重装」。
+
+### 9.4 A3a：workflow 写入参与者
+
+- **合同** `RC/application/ports/workflowMutation.ts`；实现 `RC/infrastructure/workflowMutationParticipant.ts`（全部 SQL 在传入的 tx
+  上，只有它驱动定义 + 依赖索引的写入原语 `workflowDefinitionWrite`）。写入者是当前用户（`actor`）或系统内建写入（`system`：系统用户
+  所有、public、builtin，作者门放行、不判可见性）。规则与错误取普通编辑现行的那一份：
+  - create：目录 id 可写 → 定义迁移到最新版本并要求规范 agent id（`workflow-agent-id-required`，details.nodeIds 排序）→ 脚本 / 代码托管
+    作者门（`script-author-forbidden` / `code-host-author-forbidden`，普通编辑的措辞）→ 快照 schema → 引用可见性（`acl-missing-refs`，
+    「you do not have access to: …」，details.missing 为 `{ type, name }`；不存在的 agent id 允许悬空到校验 / 启动期，名字域
+    dangle-tolerant；本批新建的名字视为可见）→ 插入。`verbatim-copy`（普通编辑的复制）只迁移版本、作者门按 RFC-253 D21 放行。
+  - update：读当前行（`workflow-not-found`）→ 场景 patch → 规范化 → 按当前行回填打码的特权节点（RFC-270）→ 场景 guard（返回要写的
+    名称）→ 作者门（对比当前定义）→ 快照 schema → 新增引用的可见性 → 版本 fence：版本不符时内容相同为 already-current，否则
+    `resource-operation-stale`（「workflow 'x' changed; reload」，details.current 为当前修订）；内容与存储字节都相同为 already-current
+    → CAS 写入。guard 排在规范化之后，是普通编辑此前的首错顺序（规范 agent id 先于改名校验，
+    `rfc359-w16-workflow-boundary-conformance` 锁定）；Intent 此前也是规范 agent id（prepare）先于 owner-only 与禁止改名（commit）。
+  - **不判重名**（§5 第 2 项）、**保存时不做完整图校验**（§5 第 8 项）。名称格式是入口格式：普通编辑新建由请求 schema、改名由改名规则
+    （编辑者不能改名、改动后的名称须合法）校验，Intent 由变更集 schema，资源包由包 payload schema（历史名称可导入）；参与者只要求快照
+    schema。
+- **场景保留的规则**：普通编辑——改名规则（访问级别在事务外按保存前的行解析）、复制命名、删除前的引用检查、事件；Intent——owner-only、
+  禁止改名、提交后的回调；资源包——包内引用解析（external 不可解析为 `package-external-unresolved`、builtin 缺失为
+  `bundle-builtin-missing`、本包新建按 slug）与已选目标基线（`assertOwnedOverwrite` 先于资源层 stale）；内建目录——布局规划、内容冲突
+  检查与创建广播；演示 / 融合种子——经参与者模块的 `insertSeedWorkflow` / `repairSeedWorkflow` 原样落行（受信任内容，与此前相同）。
+- **Intent 图校验**（§5 第 8 项，取代 RFC-358 决策 D3 与 D7 的阻断部分）：提交期不再跑图校验（`intent-workflow-invalid` 删除，apply
+  组合不再注入图校验端口）。草稿期照旧跑：error 不再进 blocking 列表，落在 `validation.graphErrors`——INTENT.md 单列一节给模型、照旧
+  触发一轮图修复、确认页以提醒列出并挂到对应操作上，**不禁用提交**；「图校验不可用」也只提示。本变更之前生成的草稿把图校验 error 存在
+  `errors` 里，无法可靠拆出，仍按 blocking 显示，重新生成一轮即可。
+- **用户可见变化**（都在 §5 已确认的范围或以普通编辑为准的统一里）：
+  - Intent：允许重名；图校验不阻断提交；workflow 里不存在的 agent id 不再拒绝（悬空到启动期，与普通编辑相同）；不可见引用的 details
+    键由 `id` 改为 `name`，按名字调用的不可见 workflow / workgroup 合并报且带 details；stale 带 details.current；作者门措辞同普通编辑。
+  - 资源包：按名字调用他人私有的 workflow / workgroup 报 `acl-missing-refs`（此前不查）；资源层 stale 的措辞同普通编辑（仍在已选
+    目标基线之后）。缺 agent 引用的节点仍由包的 wire 格式先拒（`package-invalid`），到不了共同写入层。
+  - 普通编辑：code / message / details 不变；规范化、回填与作者门改在写入事务里对被写的那一行执行。
+- **守卫**：`T/architecture/rfc401-resource-write-participants.test.ts` 加 workflow 一类（参与者独占写入原语，测试用的旧写入
+  `legacy/workflow.ts` 例外到 Part B；Intent 端口、资源包 arm、普通 CRUD 仓库、内建目录必须调参与者），并锁 `workflow-name-in-use`、
+  `intent-workflow-invalid` 与 apply 期图校验函数不再出现（含负例）。RFC-395 写入边界、RFC-199 写入清单与 RFC-349 适配器锁改指参与者。
+- **用例**：`T/rfc401-workflow-error-matrix.test.ts`（重名允许、图校验不拦、按名字调用不可见 workflow、不可见 agent、脚本作者门、缺规范
+  agent id、stale；三入口 × 两 provider，场景码单独断言：资源包的 external 解析、导入权限、wire 格式与已选基线，Intent 的变更集
+  schema）；`rfc358-intent-graph-validation` 改锁「提交不拦」与 INTENT.md 的图校验
+  一节；前端 `intent-detail-inline` 锁图校验 error 与「不可用」不禁用提交。
+

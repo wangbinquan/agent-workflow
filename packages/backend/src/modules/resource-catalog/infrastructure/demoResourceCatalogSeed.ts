@@ -2,7 +2,7 @@
 
 import { workflowCatalogPredicate } from './workflowCatalogPredicate'
 import { insertSeedAgent } from './agentMutationParticipant'
-import { createWorkflowDefinitionWriteParticipant } from './workflowDefinitionWrite'
+import { insertSeedWorkflow } from './workflowMutationParticipant'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { first } from '@/platform/persistence/queryHelpers'
 import { eq } from 'drizzle-orm'
@@ -73,7 +73,7 @@ export function createDemoResourceCatalogSeedPersistence(
             }
             continue
           }
-          await createWorkflowDefinitionWriteParticipant(transaction).insert({
+          await insertSeedWorkflow(transaction, {
             ...createWorkflowPersistenceValues({
               id: workflow.id,
               workflow: workflow.value,

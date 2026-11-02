@@ -6,7 +6,7 @@ import { first } from '@/platform/persistence/queryHelpers'
 import { ConflictError } from '@/util/errors'
 import type { FusionResourceSeedParticipant } from '../public/participants'
 import { insertSeedAgent } from './agentMutationParticipant'
-import { createWorkflowDefinitionWriteParticipant } from './workflowDefinitionWrite'
+import { insertSeedWorkflow, repairSeedWorkflow } from './workflowMutationParticipant'
 
 /** 保持融合原来的逐语句播种顺序；A5 只迁移写入所有权。 */
 export function createFusionResourceSeedParticipant(
@@ -84,7 +84,7 @@ export function createFusionResourceSeedParticipant(
         workflow.visibility !== 'public' ||
         workflow.builtin !== true
       if (repaired.changed || drift) {
-        await createWorkflowDefinitionWriteParticipant(db).update({
+        await repairSeedWorkflow(db, {
           id: seed.workflow.id,
           set: {
             definition: repaired.definition,
@@ -101,7 +101,7 @@ export function createFusionResourceSeedParticipant(
         JSON.stringify(seed.workflow.definition),
         seed.workflow.mergerAgentId,
       ).definition
-      await createWorkflowDefinitionWriteParticipant(db).insert({
+      await insertSeedWorkflow(db, {
         id: seed.workflow.id,
         name: seed.workflow.name,
         description: seed.workflow.description,

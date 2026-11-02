@@ -489,6 +489,12 @@ export const IntentDraftDtoSchema = z
             .strict(),
         ),
         /**
+         * RFC-401 §5 第 8 项 —— 工作流图校验的 error。保存 workflow 不做完整图校验（草稿可保存，完整校验是显式操作），
+         * 所以它们**不阻断提交**；工作流不修好无法启动，所以确认页提示、INTENT.md 照旧给模型。可选：此前的 draft 行
+         * 没有这个键（那时图校验的 error 混在 `errors` 里，仍按 blocking 显示）。
+         */
+        graphErrors: z.array(z.string()).optional(),
+        /**
          * RFC-358 —— 工作流图校验的 warning。只呈给人，**不进 INTENT.md**（决策 D1）。
          *
          * 这个对象是 `.strict()` 且读点用的是抛错版 `.parse`（`sessionDetail.ts`），
@@ -507,7 +513,7 @@ export const IntentDraftDtoSchema = z
               .strict(),
           )
           .optional(),
-        /** RFC-358 D7 —— 图校验没能跑起来。提交按 error 同效禁用，但 draft 照常保留。 */
+        /** RFC-358 D7 —— 图校验没能跑起来。只是提示（RFC-401 起图校验不阻断提交），draft 照常保留。 */
         graphValidationUnavailable: z.boolean().optional(),
         /** RFC-358 §12（D6）—— 被本次 update 改动的 agent 各自的下游既有工作流。纯知情。 */
         agentDownstreamWorkflows: z

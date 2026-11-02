@@ -1350,7 +1350,7 @@ export class IntentSqlPersistence implements IntentPersistence {
       //
       // 判据全部来自本事务已经读到 / 算出的值，一个都不来自内存：
       //  · 本轮不是修复轮（否则就是连环重修——决策 D2 只给一轮）；
-      //  · 本轮以 changeset 收场且**确实有** blocking error；
+      //  · 本轮以 changeset 收场且**确实有**图校验 error（RFC-401 起它们不阻断提交，但工作流不修好无法启动）；
       //  · 预算还够（判据与 assertBudget 同源，但这里**不抛**——`finally` 里抛出会
       //    冒泡成未捕获拒绝，既有正解就在旁边：activateWorkingSetChange 遇到
       //    in-flight 是返回 null 而不是抛）。
@@ -1397,7 +1397,7 @@ export class IntentSqlPersistence implements IntentPersistence {
           turnId: input.graphRepair.turnId,
           envelopeNonce: input.graphRepair.envelopeNonce,
           // launchSession 必须反映**刚刚落下的这份草稿**——修复轮的 INTENT.md 正是
-          // 靠 currentDraftId 找到那份带 blocking error 的 draft 并渲染出来的。
+          // 靠 currentDraftId 找到那份带图校验 error 的 draft 并渲染出来的。
           // 用事务前的快照，修复轮就看不见要它修的东西。
           launchSession: {
             ...session,

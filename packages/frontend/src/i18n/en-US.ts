@@ -201,8 +201,10 @@ export const enUS: Resources = {
     agentDownstreamNotice:
       'These existing workflows reference an agent this change edits. They were NOT validated here — if you changed its output ports, check their wiring.',
     graphWarnings: '{{count}} workflow validation warning(s) — these do not block committing.',
+    graphErrors:
+      '{{count}} workflow graph error(s). You can still commit — saving a workflow never runs the full graph check — but the workflow will not start until they are fixed. Ask the AI to fix them, or fix them in the editor after committing.',
     graphValidationUnavailable:
-      'Workflow graph validation is temporarily unavailable, so this draft cannot be confirmed launchable. Committing is paused — retry later or regenerate.',
+      'Workflow graph validation is temporarily unavailable, so this draft was not checked for launchability. You can still commit; check the workflow in the editor afterwards.',
     commitDisabledStale: 'Refresh the draft baseline before opening commit review.',
     commitDisabledValidation: 'Resolve the validation issues above before opening commit review.',
     commitDisabledGenerating: 'Commit review becomes available when this generation finishes.',

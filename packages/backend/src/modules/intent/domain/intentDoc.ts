@@ -77,6 +77,12 @@ export interface IntentDocInput {
   currentDraftJson: string | null
   /** Blocking validation errors on the current draft (verbatim strings). */
   validationErrors: readonly string[]
+  /**
+   * RFC-401 §5 #8 — workflow graph validation errors on the current draft (verbatim strings). They no longer block
+   * committing (saving a workflow never runs the full graph check; the explicit check stays available), but the
+   * workflow will not launch until they are fixed, so the model still sees them and the repair turn still fixes them.
+   */
+  graphErrors?: readonly string[]
   /** Pending unanswered questions from the latest questions turn, if any. */
   pendingQuestions: readonly IntentQuestion[]
   hiddenDependencyNote: string | null
@@ -201,6 +207,15 @@ credential-shaped anywhere in the changeset is rejected.${
     sections.push(
       `## BLOCKING validation errors on the current draft (fix ALL of these)\n\n${input.validationErrors
         .map((e) => `- ${fenceUntrusted('validation error', e, input.envelopeNonce)}`)
+        .join('\n')}`,
+    )
+  }
+
+  const graphErrors = input.graphErrors ?? []
+  if (graphErrors.length > 0) {
+    sections.push(
+      `## Workflow graph errors on the current draft (fix ALL of these — the user may commit the draft, but the workflow will not launch until they are fixed)\n\n${graphErrors
+        .map((e) => `- ${fenceUntrusted('graph error', e, input.envelopeNonce)}`)
         .join('\n')}`,
     )
   }

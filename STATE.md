@@ -6,7 +6,7 @@
   - 技能内容不变不增版本、同 spec 插件不重装、fusion 已提交结果可恢复；
   - 引用逐字段去重规则与技能 Markdown 字节合同由本会话写进 design §2。
 - **做法**：本会话调研、设计、实施与集中验证，不派 Codex；实现门由本会话按路径限定自审（只审功能）。
-- **分步**：Part A 按资源类分四次提交（plan「Part A 分步」）：A1 agent、A2 MCP 与 plugin、A3 workflow 与 workgroup、A4 skill 与收口。
+- **分步**：Part A 按资源类分次提交（plan「Part A 分步」）：A1 agent、A2 MCP 与 plugin、A3a workflow、A3b workgroup、A4 skill 与收口。
 - **A1（agent）**：唯一的 agent 写入参与者 `modules/resource-catalog/infrastructure/agentMutationParticipant.ts`，普通 CRUD、Intent、资源包、
   数字员工模板接入，fusion / demo 种子经其种子插入；同一非法输入在三入口两 provider 同一错误（`tests/rfc401-agent-error-matrix.test.ts`），
   结构锁 `rfc401-agent-write-participant`；Intent / 资源包批内的依赖环报 `agent-dependency-cycle` / `agent-dependency-self`（此前
@@ -17,7 +17,15 @@
 - **A2（MCP 与 plugin）**：唯一的 MCP / plugin 写入参与者，普通 CRUD、Intent、资源包接入；资源包覆盖保持规格不变不重装
   （proposal §5 第 10 项）；错误矩阵 `tests/rfc401-mcp-plugin-error-matrix.test.ts`；结构锁推广为 `rfc401-resource-write-participants`。
   集中验证 443 + 32 个文件，查出的 7 处源码锁 / 账本问题已修，其余为负载超时；导出仓库里 139 个按已提交源码出报告的用例通过。
-- **下一步**：A3（workflow 与 workgroup）。Part B（lease、技能 / fusion / restore 接入、旧生命周期退役）的前置 RFC-398 已 Done。
+- **A2 CI**：`d90b2de9e` 主 CI 68/70，没有测试失败：macOS e2e shard 1/4 排队 25 分钟后被取消、始终没分到 runner，`CI required` 因此判红；
+  A1 / A2 以 A3a 的 CI 作后继证据。
+- **A3a（workflow）**：唯一的 workflow 写入参与者 `modules/resource-catalog/infrastructure/workflowMutationParticipant.ts`，普通 CRUD（新建 /
+  复制 / 保存）、Intent、资源包、内建 workflow 目录接入，演示 / 融合种子经其种子写入；Intent 允许 workflow 重名（§5 第 2 项），提交不再跑图
+  校验，草稿期图校验 error 改为提示（INTENT.md 单列、照旧触发图修复，确认页不禁用提交，§5 第 8 项）。错误矩阵
+  `tests/rfc401-workflow-error-matrix.test.ts`。集中验证 458 + 112 个文件，查出的 5 处问题已修（含普通编辑首错顺序：规范 agent id 先于
+  改名校验），其余为负载超时、单独复跑通过；导出仓库里 139 个按已提交源码出报告的用例通过。详见 plan「A3a 落地与集中验证」。
+- **下一步**：A3b（workgroup：参与者、成员规则统一，§5 第 1、7 项）。Part B（lease、技能 / fusion / restore 接入、旧生命周期退役）的前置
+  RFC-398 已 Done。
 
 ## 2026-11-02 RFC-430 部署选择项删余下三个可派生项（Done；`design/RFC-430-derivable-deployment-selections/`）
 

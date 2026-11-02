@@ -1,7 +1,5 @@
 import { capturedSkillTreeColumns, skillRowPath } from '../databaseSkillTrees'
 import {
-  collectWorkflowDependencyRefs,
-  privilegedNodeLensFor,
   CreateAgentSchema,
   CreateMcpSchema,
   CreateWorkgroupSchema,
@@ -9,15 +7,8 @@ import {
   WG_CLARIFY_BUDGET_DEFAULT,
   WorkgroupDraftSnapshotSchema,
   WorkflowDefinitionSchema,
-  definitionHasCodeHostCallNode,
-  definitionHasScriptNode,
   migrateWorkflowDefinitionToLatest,
   resolveWorkgroupOutputContract,
-  rehydratePrivilegedNodes,
-  serializeCodeHostSensitiveProjectionV1,
-  serializeScriptSensitiveProjectionV1,
-  serializeWorkflowDefinitionStorageV1,
-  serializeWorkflowEditableSnapshotV1,
   serializeWorkgroupEditableSnapshotV1,
   type Agent,
   type CreateAgent,
@@ -28,7 +19,7 @@ import {
   type WorkgroupDraftMember,
   type WorkgroupDraftSnapshot,
 } from '@agent-workflow/shared'
-import { createWorkflowDefinitionWriteParticipant } from '../workflowDefinitionWrite'
+import { createWorkflowMutationParticipant } from '../workflowMutationParticipant'
 import { workflowCatalogPredicate } from '../workflowCatalogPredicate'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
@@ -69,7 +60,6 @@ import { mcpConfigHash } from '../mcpPersistence'
 import { pluginConfigHash } from '../pluginPersistence'
 import type { McpTransactionLifecycle } from '../mcpRepository'
 import type { PostgresqlResourceCatalogTransaction } from '../postgresql/repositorySupport'
-import { workflowDraftSnapshotOf, workflowFromPersistenceRow } from '../workflowPersistence'
 import {
   workgroupDraftMemberOf,
   workgroupMemberPersistenceValues,
@@ -845,124 +835,10 @@ function assertSkillToken(skill: Skill, expected: string): void {
   throw staleConflictError('skill', `skill '${skill.name}' changed; reload and retry`)
 }
 
-function assertWorkflowPrivilegedContent(
-  actor: DirectAuthenticatedAuthority,
-  next: WorkflowDefinition,
-  previous?: WorkflowDefinition,
-): void {
-  const scriptChanged =
-    (definitionHasScriptNode(next) ||
-      (previous !== undefined && definitionHasScriptNode(previous))) &&
-    (previous === undefined ||
-      serializeScriptSensitiveProjectionV1(next) !== serializeScriptSensitiveProjectionV1(previous))
-  if (scriptChanged && !actor.permissions.has('scripts:author')) {
-    throw new ForbiddenError(
-      'script-author-forbidden',
-      'changing executable script content requires scripts:author',
-    )
-  }
-  const codeHostChanged =
-    (definitionHasCodeHostCallNode(next) ||
-      (previous !== undefined && definitionHasCodeHostCallNode(previous))) &&
-    (previous === undefined ||
-      serializeCodeHostSensitiveProjectionV1(next) !==
-        serializeCodeHostSensitiveProjectionV1(previous))
-  if (codeHostChanged && !actor.permissions.has('code-host-calls:author')) {
-    throw new ForbiddenError(
-      'code-host-author-forbidden',
-      'changing a code-host call requires code-host-calls:author',
-    )
-  }
-}
-
-function workflowAgentIds(definition: WorkflowDefinition): string[] {
-  return collectWorkflowDependencyRefs(definition, { throwOnNullNode: true })
-    .filter((ref) => ref.resourceType === 'agent')
-    .map((ref) => ref.value)
-}
-
-async function assertNamedReferencesVisible(
-  transaction: PostgresqlResourceCatalogTransaction,
-  actor: DirectAuthenticatedAuthority,
-  type: 'workflow' | 'workgroup',
-  names: readonly string[],
-  createdNames: ReadonlySet<string>,
-): Promise<void> {
-  for (const name of new Set(names)) {
-    if (createdNames.has(name)) continue
-    const { workflows, workgroups } = tablesOf(transaction)
-    const rows =
-      type === 'workflow'
-        ? await transaction
-            .select({
-              id: workflows.id,
-              ownerUserId: workflows.ownerUserId,
-              visibility: workflows.visibility,
-            })
-            .from(workflows)
-            .where(workflowCatalogPredicate(workflows.id, eq(workflows.name, name)))
-        : await transaction
-            .select({
-              id: workgroups.id,
-              ownerUserId: workgroups.ownerUserId,
-              visibility: workgroups.visibility,
-            })
-            .from(workgroups)
-            .where(eq(workgroups.name, name))
-    // RFC-243 §5.3 —— **名字域是 dangle-tolerant 的**：解析不到任何行不是 ACL 违规，
-    // 是启动期的问题（`infrastructure/legacy/resourceRefs.ts` 的
-    // `matched === undefined ⇒ continue // dangling until launch` 才是这条规则的正身）。
-    //
-    // RFC-359 —— 这里此前抛 `resource-reference-not-found`，是两台 apply 引擎合一照出来的
-    // **PostgreSQL 上一直存在的用户可见缺陷**：同一份 changeset——工作流里放一个按名字调用
-    // 别处工作流 / 工作组的节点，而那个名字此刻还不存在——在被退役的那台引擎上正常落库、
-    // 留到启动期再校验，在这台上当场 422。把「先建调用方、后建被调方」「被调方在另一台
-    // 机器上」这两类正常用法整个堵死。判据：`rfc234-apply-changeset` 的
-    // 「an unresolvable name stays dangle-tolerant」+ 双引擎的
-    // `rfc359-w41-intent-apply-provider-parity` ①。
-    if (rows.length === 0) continue
-    let visible = false
-    for (const row of rows) {
-      if (
-        hasResourceAclBypass(actor) ||
-        row.ownerUserId === actor.user.id ||
-        row.visibility === 'public' ||
-        (await grantExists(transaction, actor, type, row.id))
-      ) {
-        visible = true
-        break
-      }
-    }
-    if (!visible) {
-      throw new ValidationError('acl-missing-refs', `you do not have access to: ${type} '${name}'`)
-    }
-  }
-}
-
-function workflowCallNames(
-  definition: WorkflowDefinition,
-  kind: 'call-workflow' | 'call-workgroup',
-): readonly string[] {
-  return collectWorkflowDependencyRefs(definition, { throwOnNullNode: true })
-    .filter((ref) => ref.resourceType === (kind === 'call-workflow' ? 'workflow' : 'workgroup'))
-    .map((ref) => ref.value)
-}
-
-function assertCanonicalAgentIds(definition: WorkflowDefinition): void {
-  const missing = collectWorkflowDependencyRefs(definition, {
-    includeMissingAgentIds: true,
-    throwOnNullNode: true,
-  })
-    .filter((ref) => ref.resourceType === 'agent' && ref.value.length === 0)
-    .map((ref) => ref.nodeId)
-  if (missing.length > 0)
-    throw new ValidationError(
-      'workflow-agent-id-required',
-      'agent-single nodes require a canonical agentId',
-      { nodeIds: missing },
-    )
-}
-
+/**
+ * RFC-401 A3：workflow 经唯一的写入参与者写入（design §9.4）。Intent 只保留自己的规则：owner-only 与禁止改名；
+ * 批内新建的 workflow / workgroup 名称交给参与者视为可见。不再判重名，提交时也不做完整图校验（proposal §5 第 2、8 项）。
+ */
 function createWorkflowPort(
   options: IntentApplyResourceSessionOptions,
   committed: IntentApplyResourcePortFactoryDependencies['committed'],
@@ -974,145 +850,38 @@ function createWorkflowPort(
       const definition = migrateWorkflowDefinitionToLatest(
         WorkflowDefinitionSchema.parse(plan.payload.definition),
       )
-      assertCanonicalAgentIds(definition)
       return Object.freeze({ definition })
     },
     async commitInTransaction({ transaction, plan, prepared, context }) {
-      const { workflows } = tablesOf(transaction)
-      const currentRow =
-        plan.action === 'update'
-          ? await first(
-              transaction
-                .select()
-                .from(workflows)
-                .where(workflowCatalogPredicate(workflows.id, eq(workflows.id, plan.resourceId))),
-            )
-          : undefined
-      const current = currentRow === undefined ? undefined : workflowFromPersistenceRow(currentRow)
-      if (plan.action === 'update') {
-        if (current === undefined) throw notFound('workflow', plan.resourceId)
-        requireOwner(actor, 'workflow', current)
-        if (plan.payload.name !== current.name) {
-          throw new ValidationError(
-            'intent-rename-unsupported',
-            'renaming via intent update is not supported',
-          )
-        }
-      }
-      // RFC-270 特权节点镜头 —— 无 `scripts:author` / `code-host-calls:author` 的作者**看到的
-      // 就是打码后的定义**（遮蔽是 permission-blind 的，所有人都遮）。所以他原样送回来的那份
-      // 里，`script` / `env` / `dependencies`（以及 code-host 的 `params` / `request`）装的是
-      // `INTENT_REDACTED` 占位符，不是正文。先按库里的现值回填，再拿回填后的那份去过门、去写库。
-      //
-      // RFC-359 —— 这一步此前**只有保存路径有**（`workflowPersistenceSemantics.canonicalizeUpdate`
-      // 一直这么做），这台 intent 提交臂直接拿用户送来的那份去比敏感投影，于是占位符 ≠ 正文，
-      // **普通用户改不动任何含脚本节点的工作流**——连改个描述、挪个无关节点、删个普通节点
-      // 都当场 403 `script-author-forbidden`；更糟的是若放行，占位符会被当成正文写进库，
-      // 脚本正文直接丢失。判据：`intent-privileged-node-capability` 的 boundary / normal 两组
-      // + 双引擎的 `rfc359-w41-intent-apply-provider-parity` ②。
-      const definition =
-        current === undefined
-          ? prepared.definition
-          : rehydratePrivilegedNodes(
-              prepared.definition,
-              current.definition,
-              privilegedNodeLensFor(actor),
-            )
-      assertWorkflowPrivilegedContent(actor, definition, current?.definition)
-      await assertVisibleReferences(transaction, actor, [
-        { type: 'agent', ids: workflowAgentIds(definition) },
-      ])
-      await assertNamedReferencesVisible(
-        transaction,
-        actor,
-        'workflow',
-        workflowCallNames(definition, 'call-workflow'),
-        context.bundleCreatedNames.workflow,
-      )
-      await assertNamedReferencesVisible(
-        transaction,
-        actor,
-        'workgroup',
-        workflowCallNames(definition, 'call-workgroup'),
-        context.bundleCreatedNames.workgroup,
-      )
-
-      if (plan.action === 'create') {
-        const at = now()
-        const collision = await first(
-          transaction
-            .select({ id: workflows.id })
-            .from(workflows)
-            .where(
-              workflowCatalogPredicate(
-                workflows.id,
-                and(
-                  eq(workflows.ownerUserId, actor.user.id),
-                  eq(workflows.name, plan.payload.name),
-                ),
-              ),
-            ),
-        )
-        if (collision !== undefined) {
-          throw new ConflictError(
-            'workflow-name-in-use',
-            `workflow '${plan.payload.name}' already exists`,
-          )
-        }
-        const inserted = await first(
-          createWorkflowDefinitionWriteParticipant(transaction).insert({
-            id: plan.resourceId,
-            name: plan.payload.name,
-            description: plan.payload.description,
-            definition: serializeWorkflowDefinitionStorageV1(prepared.definition),
-            version: 1,
-            ownerUserId: actor.user.id,
-            visibility: 'private',
-            aclRevision: 0,
-            builtin: false,
-            createdAt: at,
-            updatedAt: at,
-          }),
-        )
-        if (inserted === undefined) throw new Error('workflow insert returned no row')
-        return workflowReceipt(plan, { kind: 'workflow', version: inserted.version })
-      }
-
-      if (current === undefined || currentRow === undefined)
-        throw notFound('workflow', plan.resourceId)
-      const candidateSnapshot = {
+      const workflows = createWorkflowMutationParticipant(transaction, { now })
+      const owner = { kind: 'actor', actor } as const
+      const batch = Object.freeze({ createdNames: context.bundleCreatedNames })
+      const content = {
         name: plan.payload.name,
         description: plan.payload.description,
-        definition,
+        definition: prepared.definition,
       }
-      const currentBytes = serializeWorkflowEditableSnapshotV1(workflowDraftSnapshotOf(current))
-      const candidateBytes = serializeWorkflowEditableSnapshotV1(candidateSnapshot)
-      if (current.version !== plan.expectedRevision.version) {
-        if (currentBytes === candidateBytes) {
-          return workflowReceipt(plan, { kind: 'workflow', version: current.version })
-        }
-        throw staleConflictError('workflow', `workflow '${current.id}' changed; reload`)
+      if (plan.action === 'create') {
+        const created = await workflows.create(owner, { id: plan.resourceId, content, batch })
+        return workflowReceipt(plan, { kind: 'workflow', version: created.version })
       }
-      if (currentBytes === candidateBytes) {
-        return workflowReceipt(plan, { kind: 'workflow', version: current.version })
-      }
-      const changed = await first(
-        createWorkflowDefinitionWriteParticipant(transaction).update({
-          id: current.id,
-          expectedVersion: current.version,
-          set: {
-            description: plan.payload.description,
-            // 回填后的那份。写 `prepared.definition` 等于把 `INTENT_REDACTED` 占位符当正文存进去
-            // ——脚本正文当场丢失，而且是静默的。
-            definition: serializeWorkflowDefinitionStorageV1(definition),
-            version: current.version + 1,
-            updatedAt: now(),
-          },
-        }),
-      )
-      if (changed === undefined)
-        throw staleConflictError('workflow', `workflow '${current.id}' changed`)
-      return workflowReceipt(plan, { kind: 'workflow', version: changed.version })
+      const saved = await workflows.update(owner, {
+        id: plan.resourceId,
+        expectedVersion: plan.expectedRevision.version,
+        patch: () => content,
+        guard: (current, submittedName) => {
+          requireOwner(actor, 'workflow', current)
+          if (submittedName !== current.name) {
+            throw new ValidationError(
+              'intent-rename-unsupported',
+              'renaming via intent update is not supported',
+            )
+          }
+          return submittedName
+        },
+        batch,
+      })
+      return workflowReceipt(plan, { kind: 'workflow', version: saved.workflow.version })
     },
     afterCommitted: async ({ plan, receipt: result }) => {
       await committed?.({

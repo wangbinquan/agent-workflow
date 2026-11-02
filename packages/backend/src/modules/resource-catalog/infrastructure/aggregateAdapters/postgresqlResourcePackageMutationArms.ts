@@ -1,6 +1,5 @@
 import { capturedSkillTreeColumns } from '../databaseSkillTrees'
-import { createWorkflowDefinitionWriteParticipant } from '../workflowDefinitionWrite'
-import { workflowCatalogPredicate } from '../workflowCatalogPredicate'
+import { createWorkflowMutationParticipant } from '../workflowMutationParticipant'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { first } from '@/platform/persistence/queryHelpers'
@@ -36,8 +35,6 @@ import {
   decodeBundleIdentityRef,
   migrateWorkflowDefinitionToLatest,
   resolveWorkgroupOutputContract,
-  serializeWorkflowDefinitionStorageV1,
-  serializeWorkflowEditableSnapshotV1,
   serializeWorkgroupEditableSnapshotV1,
   type AgentSkillRef,
   type AclResourceType,
@@ -55,11 +52,6 @@ import {
   isPostgresqlUniqueViolation,
 } from '../postgresql/repositorySupport'
 
-import {
-  createWorkflowPersistenceValues,
-  workflowDraftSnapshotOf,
-  workflowFromPersistenceRow,
-} from '../workflowPersistence'
 import { workgroupFromRows } from '../workgroupRepository'
 import {
   type AgentPackageMutation,
@@ -861,20 +853,32 @@ async function workflowCandidate(input: {
   })
 }
 
+/** 本包新建的 workflow / workgroup 名称：按名字调用它们视为可见（被调方可能在本包稍后才写入）。 */
+function packageCreatedNames(
+  pendingNames: ReadonlyMap<string, PostgresqlResourcePackagePendingName>,
+): Readonly<{ workflow: ReadonlySet<string>; workgroup: ReadonlySet<string> }> {
+  const workflow = new Set<string>()
+  const workgroup = new Set<string>()
+  for (const pending of pendingNames.values()) {
+    if (pending.type === 'workflow') workflow.add(pending.name)
+    if (pending.type === 'workgroup') workgroup.add(pending.name)
+  }
+  return Object.freeze({ workflow, workgroup })
+}
+
+/**
+ * RFC-401 A3：workflow 经唯一的写入参与者写入（design §9.4）。资源包只保留自己的规则：包内引用解析（覆盖时按当前定义
+ * 保留历史引用）与已选基线（`assertOwnedOverwrite`）。
+ */
 export async function commitPostgresqlWorkflowPackageMutation(
   input: MutationArmInput<WorkflowPackageMutation>,
 ): Promise<ResourcePackageMutationReceipt<'workflow'>> {
+  const workflows = createWorkflowMutationParticipant(input.transaction, { now: input.now })
+  const owner = { kind: 'actor', actor: input.context.actor } as const
+  const batch = Object.freeze({ createdNames: packageCreatedNames(input.pendingNames) })
   if (input.mutation.kind === 'workflow-create') {
     const candidate = await workflowCandidate(input)
-    const now = input.now()
-    await createWorkflowDefinitionWriteParticipant(input.transaction).insert(
-      createWorkflowPersistenceValues({
-        id: input.resourceId,
-        workflow: candidate,
-        ownerUserId: input.context.actor.user.id,
-        now,
-      }),
-    )
+    await workflows.create(owner, { id: input.resourceId, content: candidate, batch })
     return receipt('workflow', input.mutation, input.resourceId)
   }
 
@@ -885,49 +889,16 @@ export async function commitPostgresqlWorkflowPackageMutation(
     resourceId: input.resourceId,
     mutation: input.mutation,
   })
-  const { workflows } = tablesOf(input.transaction)
-  const row = await first(
-    input.transaction
-      .select()
-      .from(workflows)
-      .where(workflowCatalogPredicate(workflows.id, eq(workflows.id, input.resourceId))),
-  )
-  if (row === undefined) {
-    throw new NotFoundError('workflow-not-found', `workflow '${input.resourceId}' not found`)
-  }
-  const current = workflowFromPersistenceRow(row)
-  const candidate = await workflowCandidate({
-    ...input,
-    grandfathered: workflowGrandfatheredReferences(current.definition),
-  })
-  const definitionStorage = serializeWorkflowDefinitionStorageV1(candidate.definition)
-  const logicalSame =
-    serializeWorkflowEditableSnapshotV1(workflowDraftSnapshotOf(current)) ===
-    serializeWorkflowEditableSnapshotV1(candidate)
-  if (!logicalSame || row.definition !== definitionStorage) {
-    const changed = await first(
-      createWorkflowDefinitionWriteParticipant(input.transaction).update({
-        id: input.resourceId,
-        expectedVersion: input.mutation.expect.expectedVersion,
-        expectedAclRevision: row.aclRevision,
-        ownerUserId: input.context.actor.user.id,
-        builtin: false,
-        set: {
-          name: candidate.name,
-          description: candidate.description,
-          definition: definitionStorage,
-          version: row.version + 1,
-          updatedAt: monotonicNow(row.updatedAt),
-        },
+  await workflows.update(owner, {
+    id: input.resourceId,
+    expectedVersion: input.mutation.expect.expectedVersion,
+    patch: (current) =>
+      workflowCandidate({
+        ...input,
+        grandfathered: workflowGrandfatheredReferences(current.definition),
       }),
-    )
-    if (changed === undefined) {
-      throw staleConflictError(
-        'workflow',
-        `workflow '${input.resourceId}' changed; reload and retry`,
-      )
-    }
-  }
+    batch,
+  })
   return receipt('workflow', input.mutation, input.resourceId)
 }
 

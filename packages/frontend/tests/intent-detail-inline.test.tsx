@@ -983,10 +983,9 @@ describe('RFC-234 /intent/$sessionId', () => {
     expect(screen.getByText(enUS.intent.draftStaleNotice)).toBeTruthy()
   })
 
-  // RFC-358 —— 工作流图校验的三条前端契约。
+  // RFC-358 —— 工作流图校验的前端契约。
   //
-  // 为什么存在：图校验的 error 走的是既有的 blocking 列表（所以红牌与禁提交一行都不用
-  // 改），但 warning 与「校验不可用」是两条新通道，各有自己的用户可见后果。
+  // 为什么存在：warning、图校验 error（RFC-401 起不阻断提交）与「校验不可用」各有自己的通道与用户可见后果。
 
   test('RFC-358: graph warnings render but never block committing', async () => {
     installFetch(
@@ -1016,7 +1015,11 @@ describe('RFC-234 /intent/$sessionId', () => {
     expect((open as HTMLButtonElement).disabled).toBe(false)
   })
 
-  test('RFC-358 D7: unavailable graph validation pauses commit without discarding the draft', async () => {
+  // RFC-401 §5 第 8 项（用户 2026-11-02 确认）：保存 workflow 在三条入口都不做完整图校验——草稿可保存，完整校验是
+  // 显式操作。所以图校验的 error 与「校验不可用」都只提示、不再禁用提交（此前 RFC-358 D3 / D7 让它们与 blocking
+  // error 同效）。
+
+  test('RFC-401 #8: unavailable graph validation is a notice and no longer pauses commit', async () => {
     installFetch(
       detailFixture({
         currentDraft: {
@@ -1031,9 +1034,38 @@ describe('RFC-234 /intent/$sessionId', () => {
     )
     await renderPage()
     expect(await screen.findByTestId('intent-graph-unavailable')).toBeTruthy()
-    // 草稿还在（模型的产出没丢），但「绿」证明不了，所以提交暂停。
     const open = await screen.findByTestId('intent-open-commit')
-    expect((open as HTMLButtonElement).disabled).toBe(true)
+    expect((open as HTMLButtonElement).disabled).toBe(false)
+  })
+
+  test('RFC-401 #8: graph errors render as a non-blocking list and on their op card', async () => {
+    installFetch(
+      detailFixture({
+        currentDraft: {
+          ...CLEAN_DRAFT,
+          validation: {
+            errors: [],
+            credentialFindings: [],
+            graphErrors: [
+              'op-1: edge-source-port-missing @n_agent — no such port',
+              ...Array.from({ length: 11 }, (_, i) => `op-1: edge-target-port-missing #${i}`),
+            ],
+          },
+        },
+      }),
+    )
+    await renderPage()
+    const list = await screen.findByTestId('intent-graph-errors')
+    expect(within(list).getByText(/edge-source-port-missing/)).toBeTruthy()
+    expect(within(list).getAllByRole('listitem')).toHaveLength(10)
+    expect((await screen.findByTestId('intent-graph-errors-truncated')).textContent).toContain('2')
+    expect(
+      within(await screen.findByTestId('intent-op-graph-errors')).getAllByRole('listitem'),
+    ).toHaveLength(12)
+    // 不进 blocking 列表：没有阻断横幅，提交可用。
+    expect(screen.queryByTestId('intent-blocking-truncated')).toBeNull()
+    const open = await screen.findByTestId('intent-open-commit')
+    expect((open as HTMLButtonElement).disabled).toBe(false)
   })
 
   test('RFC-358: the blocking banner labels its truncation instead of dropping silently', async () => {

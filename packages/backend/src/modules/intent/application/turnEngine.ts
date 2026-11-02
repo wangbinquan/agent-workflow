@@ -116,7 +116,7 @@ export interface IntentTurnOutcome {
   kind: 'questions' | 'changeset' | 'error'
   errorCode?: string
   draftRevision?: number
-  /** RFC-358 —— 本轮的 blocking error 条数（第一层 + 图校验）。 */
+  /** RFC-358 —— 本轮的 blocking error 条数（第一层；图校验的 error 不阻断提交，见 RFC-401 §5 第 8 项）。 */
   blockingErrors?: number
   /** RFC-358 —— 本轮自己就是图修复轮。 */
   graphRepairTurn?: boolean
@@ -309,7 +309,7 @@ export async function runIntentTurn(
             },
           }),
       // RFC-358 T6（决策 D2）—— 只递材料，铸不铸由 settle 事务判定：本轮不是修复轮、
-      // 以 changeset 收场、确实有 blocking error、预算还够，四条全中才铸。放在同一个
+      // 以 changeset 收场、确实有图校验 error、预算还够，四条全中才铸。放在同一个
       // 事务里是为了让 in-flight 从旧轮直接过渡到新轮，中间不留可被误操作的空窗。
       ...(kind === 'changeset'
         ? {
@@ -382,16 +382,18 @@ export async function runIntentTurn(
       minted.session.currentDraftId === null
         ? undefined
         : ((await deps.persistence.findDraft(minted.session.currentDraftId)) ?? undefined)
-    const validationErrors =
+    const currentValidation =
       currentDraft === undefined
-        ? []
-        : ((JSON.parse(currentDraft.validationJson) as { errors?: string[] }).errors ?? [])
+        ? {}
+        : (JSON.parse(currentDraft.validationJson) as { errors?: string[]; graphErrors?: string[] })
+    const validationErrors = currentValidation.errors ?? []
 
     const intentDoc = buildIntentDoc({
       sessionTitle: minted.session.title,
       turns: docTurns,
       currentDraftJson: currentDraft?.changesetJson ?? null,
       validationErrors,
+      graphErrors: currentValidation.graphErrors ?? [],
       pendingQuestions,
       hiddenDependencyNote:
         dump.hiddenDependencies.length === 0
@@ -686,10 +688,12 @@ EXCLUSIVITY RULE — emit EXACTLY ONE of \`changeset\` or \`questions\`, never b
       },
     )
     if (graph.unavailable) {
-      // D7：拿不到判据就不能给绿，但也不丢模型这一轮已经 canonical 化的产出。
+      // D7：拿不到判据就标记出来，模型这一轮已经 canonical 化的产出照常落草稿。
       report.graphValidationUnavailable = true
     } else {
-      report.errors.push(...graph.errors)
+      // RFC-401 §5 第 8 项：图校验的 error 不进 blocking 列表——保存 workflow 不做完整图校验，草稿可提交；它们照旧
+      // 给模型（INTENT.md）与人（确认页），并触发一轮图修复。
+      if (graph.errors.length > 0) report.graphErrors = [...graph.errors]
       if (graph.warnings.length > 0) report.graphWarnings = [...graph.warnings]
     }
     // RFC-358 §12（决策 D6）—— 改 agent 的输出端口会让引用它的**既有**工作流不再

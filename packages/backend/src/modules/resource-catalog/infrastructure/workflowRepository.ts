@@ -1,17 +1,11 @@
-import { createWorkflowDefinitionWriteParticipant } from './workflowDefinitionWrite'
+import { createWorkflowMutationParticipant } from './workflowMutationParticipant'
 import { workflowCatalogPredicate } from './workflowCatalogPredicate'
 import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
-import {
-  WorkflowDraftSnapshotSchema,
-  serializeWorkflowDefinitionStorageV1,
-  serializeWorkflowEditableSnapshotV1,
-  type CopyWorkflowRequest,
-  type CreateWorkflow,
-  type DeleteWorkflow,
-  type SaveWorkflowReceipt,
-  type UpdateWorkflow,
-  type Workflow,
-  type WorkflowDraftSnapshot,
+import type {
+  CopyWorkflowRequest,
+  DeleteWorkflow,
+  SaveWorkflowReceipt,
+  Workflow,
 } from '@agent-workflow/shared'
 import { and, eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
@@ -20,9 +14,7 @@ import { NotFoundError, staleConflictError } from '@/util/errors'
 import type { WorkflowAclIdentity, WorkflowRepository } from '../application/workflows/ports'
 import type { WorkflowOperationContext } from '../public/participants'
 import {
-  createWorkflowPersistenceValues,
   workflowDetailOf,
-  workflowDraftSnapshotOf,
   workflowFromPersistenceRow,
   workflowRevisionOf,
 } from './workflowPersistence'
@@ -31,34 +23,22 @@ import {
   type ResourceCatalogTransaction,
 } from './resourceCatalogTransaction'
 
-/** Owner-native semantics injected into the Workflow repository（一份合同，两个 provider 共用）。 */
+/** 普通编辑的改名规则：对事务内的当前行检查提交的名称，返回规范化后的名称。 */
+export type WorkflowRenameRule = (current: Workflow, submittedName: string) => string
+
+/**
+ * 普通编辑这一入口自己的规则（RFC-401 A3：定义、作者门、引用与版本由唯一的 workflow 写入参与者负责）。
+ * 一份合同，两个 provider 共用。
+ */
 export interface WorkflowPersistenceSemantics {
-  canonicalizeCreate(
-    authority: WorkflowOperationContext,
-    input: CreateWorkflow,
-    id: string,
-  ): Promise<CreateWorkflow>
-  assertCreateInTransaction(
-    transaction: ResourceCatalogTransaction,
-    authority: WorkflowOperationContext,
-    candidate: CreateWorkflow,
-  ): Promise<void>
-  copyNameAndAssertInTransaction(
+  /** 编辑者（非 owner）不能改名、改动后的名称须合法。访问级别在事务外按保存前的行解析。 */
+  renameRule(authority: WorkflowOperationContext, before: Workflow): Promise<WorkflowRenameRule>
+  /** 复制命名：在事务内读本人已占用的名称，分配 `-copy` / `-copy-N`。 */
+  copyNameInTransaction(
     transaction: ResourceCatalogTransaction,
     authority: WorkflowOperationContext,
     source: Workflow,
   ): Promise<string>
-  canonicalizeUpdate(
-    authority: WorkflowOperationContext,
-    current: Workflow,
-    input: UpdateWorkflow,
-  ): Promise<WorkflowDraftSnapshot>
-  assertUpdateInTransaction(
-    transaction: ResourceCatalogTransaction,
-    authority: WorkflowOperationContext,
-    current: Workflow,
-    candidate: WorkflowDraftSnapshot,
-  ): Promise<void>
   /** 只拿 ACL 身份：删除必须对定义损坏的行仍可用。 */
   assertDeleteInTransaction(
     transaction: ResourceCatalogTransaction,
@@ -160,19 +140,19 @@ export function createWorkflowRepository(input: {
     },
     async create(authority, submitted) {
       const id = mintId()
-      const canonical = await input.semantics.canonicalizeCreate(authority, submitted, id)
-      const values = createWorkflowPersistenceValues({
-        id,
-        workflow: canonical,
-        ownerUserId: authority.user.id,
-        now: now(),
-      })
-      const created = await runResourceCatalogTransaction(input.db, async (transaction) => {
-        await input.semantics.assertCreateInTransaction(transaction, authority, canonical)
-        const row = (await createWorkflowDefinitionWriteParticipant(transaction).insert(values))[0]
-        if (row === undefined) throw new Error('workflow insert returned no row')
-        return workflowFromPersistenceRow(row)
-      })
+      const created = await runResourceCatalogTransaction(input.db, (transaction) =>
+        createWorkflowMutationParticipant(transaction, { now }).create(
+          { kind: 'actor', actor: authority },
+          {
+            id,
+            content: {
+              name: submitted.name,
+              description: submitted.description,
+              definition: submitted.definition,
+            },
+          },
+        ),
+      )
       await input.semantics.created?.(created)
       return workflowDetailOf(created)
     },
@@ -195,24 +175,15 @@ export function createWorkflowRepository(input: {
         ) {
           throw stale(id, source)
         }
-        const name = await input.semantics.copyNameAndAssertInTransaction(
-          transaction,
-          authority,
-          source,
-        )
-        const values = createWorkflowPersistenceValues({
-          id: mintId(),
-          workflow: {
-            name,
-            description: source.description,
-            definition: source.definition,
+        const name = await input.semantics.copyNameInTransaction(transaction, authority, source)
+        return createWorkflowMutationParticipant(transaction, { now }).create(
+          { kind: 'actor', actor: authority },
+          {
+            id: mintId(),
+            content: { name, description: source.description, definition: source.definition },
+            provenance: 'verbatim-copy',
           },
-          ownerUserId: authority.user.id,
-          now: now(),
-        })
-        const row = (await createWorkflowDefinitionWriteParticipant(transaction).insert(values))[0]
-        if (row === undefined) throw new Error('workflow copy insert returned no row')
-        return workflowFromPersistenceRow(row)
+        )
       })
       await input.semantics.created?.(created)
       return workflowDetailOf(created)
@@ -220,81 +191,32 @@ export function createWorkflowRepository(input: {
     async update(authority, id, submitted) {
       const before = await get(id)
       if (before === null) throw notFound(id)
-      const candidate = WorkflowDraftSnapshotSchema.parse(
-        await input.semantics.canonicalizeUpdate(authority, before, submitted),
-      )
-      const candidateBytes = serializeWorkflowEditableSnapshotV1(candidate)
-      const definition = serializeWorkflowDefinitionStorageV1(candidate.definition)
+      const renameRule = await input.semantics.renameRule(authority, before)
       const result = await runResourceCatalogTransaction(
         input.db,
         async (transaction): Promise<{ receipt: SaveWorkflowReceipt; committed: boolean }> => {
-          const { workflows } = tablesOf(transaction)
-          const row = (
-            await transaction
-              .select()
-              .from(workflows)
-              .where(workflowCatalogPredicate(workflows.id, eq(workflows.id, id)))
-              .limit(1)
-          )[0]
-          if (row === undefined) throw notFound(id)
-          const current = workflowFromPersistenceRow(row)
-          await input.semantics.assertUpdateInTransaction(
-            transaction,
-            authority,
-            current,
-            candidate,
-          )
-          const currentSnapshot = workflowDraftSnapshotOf(current)
-          const logicalSame =
-            serializeWorkflowEditableSnapshotV1(currentSnapshot) === candidateBytes
-          const currentRevision = workflowRevisionOf(current)
-          if (current.version !== submitted.expectedVersion) {
-            if (!logicalSame) throw stale(id, current)
-            return {
-              receipt: {
-                clientMutationId: submitted.clientMutationId,
-                requestedBaseVersion: submitted.expectedVersion,
-                revision: currentRevision,
-                snapshot: candidate,
-                outcome: 'already-current',
-              },
-              committed: false,
-            }
-          }
-          if (logicalSame && row.definition === definition) {
-            return {
-              receipt: {
-                clientMutationId: submitted.clientMutationId,
-                requestedBaseVersion: submitted.expectedVersion,
-                revision: currentRevision,
-                snapshot: candidate,
-                outcome: 'already-current',
-              },
-              committed: false,
-            }
-          }
-          const changed = await createWorkflowDefinitionWriteParticipant(transaction).update({
-            id,
-            expectedVersion: submitted.expectedVersion,
-            set: {
-              name: candidate.name,
-              description: candidate.description,
-              definition,
-              version: current.version + 1,
-              updatedAt: now(),
+          const saved = await createWorkflowMutationParticipant(transaction, { now }).update(
+            { kind: 'actor', actor: authority },
+            {
+              id,
+              expectedVersion: submitted.expectedVersion,
+              patch: () => ({
+                name: submitted.snapshot.name,
+                description: submitted.snapshot.description,
+                definition: submitted.snapshot.definition,
+              }),
+              guard: renameRule,
             },
-          })
-          if (changed[0] === undefined) throw stale(id, current)
-          const committed = workflowFromPersistenceRow(changed[0])
+          )
           return {
             receipt: {
               clientMutationId: submitted.clientMutationId,
               requestedBaseVersion: submitted.expectedVersion,
-              revision: workflowRevisionOf(committed),
-              snapshot: candidate,
-              outcome: 'committed',
+              revision: workflowRevisionOf(saved.workflow),
+              snapshot: saved.snapshot,
+              outcome: saved.outcome,
             },
-            committed: true,
+            committed: saved.outcome === 'committed',
           }
         },
       )

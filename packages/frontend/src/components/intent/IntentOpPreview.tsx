@@ -75,6 +75,8 @@ export interface IntentOpPreviewProps {
   bundleNames: ReadonlyMap<string, string>
   /** Validation errors already filtered to this op by the caller. */
   opErrors: readonly string[]
+  /** RFC-401 §5 第 8 项：本 op 的工作流图校验 error——提示但不阻断提交。 */
+  opGraphErrors?: readonly string[]
 }
 
 /** `res#agent#1` → mounted resource id (undefined when not a root mount). */
@@ -153,6 +155,15 @@ export function IntentOpPreview(props: IntentOpPreviewProps): ReactElement {
             <ul>
               {props.opErrors.map((error, index) => (
                 // RFC-358: 图校验的同形消息会重复，错误串不能当 key。
+                <li key={`${index}:${error}`}>{error}</li>
+              ))}
+            </ul>
+          </NoticeBanner>
+        ) : null}
+        {(props.opGraphErrors ?? []).length > 0 ? (
+          <NoticeBanner tone="warning">
+            <ul data-testid="intent-op-graph-errors">
+              {(props.opGraphErrors ?? []).map((error, index) => (
                 <li key={`${index}:${error}`}>{error}</li>
               ))}
             </ul>

@@ -20,14 +20,20 @@ const agentWriters = [
   'aggregateAdapters/intentApplyResourcePorts.ts',
   'aggregateAdapters/postgresqlResourcePackageMutationArms.ts',
 ]
+/**
+ * RFC-401 A3: the workflow writers hand their rows to the one Workflow mutation participant
+ * (`workflowMutationParticipant.ts`), which alone drives the definition + dependency-index write program; the seeds use
+ * its trusted seed writes. The test-only legacy writers (`legacy/workflow.ts`, RFC-401 Part B) still call the program.
+ */
+const workflowParticipant = 'workflowMutationParticipant.ts'
 const workflowWriters = [
   'workflowRepository.ts',
   'demoResourceCatalogSeed.ts',
   'fusionResourceSeed.ts',
-  'legacy/workflow.ts',
   'aggregateAdapters/intentApplyResourcePorts.ts',
   'aggregateAdapters/postgresqlResourcePackageMutationArms.ts',
 ]
+const legacyWorkflowWriter = 'legacy/workflow.ts'
 const lookups = [
   'mcpRepository.ts',
   'pluginRepository.ts',
@@ -73,6 +79,14 @@ describe('RFC-395 F target reference boundaries', () => {
     expect(participant).toContain('createAgentReferenceWriteParticipant(')
     expect(bypasses(participant, 'agent')).toBe(false)
     for (const file of workflowWriters) {
+      const source = read(catalog + file)
+      expect(source, file).toMatch(
+        /\b(?:createWorkflowMutationParticipant|insertSeedWorkflow|repairSeedWorkflow)\(/,
+      )
+      expect(source, file).not.toContain('createWorkflowDefinitionWriteParticipant(')
+      expect(bypasses(source, 'workflow'), file).toBe(false)
+    }
+    for (const file of [workflowParticipant, legacyWorkflowWriter]) {
       const source = read(catalog + file)
       expect(source, file).toContain('createWorkflowDefinitionWriteParticipant(')
       expect(bypasses(source, 'workflow'), file).toBe(false)

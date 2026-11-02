@@ -100,7 +100,16 @@ describe('RFC-349 classic resource-catalog PostgreSQL adapters', () => {
       'runtimes: input.runtimeProfiles',
     )
     expect(workflow).toContain('export function createWorkflowPersistenceSemantics(')
-    expect(workflow).toContain('assertDefinitionReferences({')
+    // RFC-401 A3a：创建 / 复制 / 保存的定义规范化、作者门与引用可见性迁入唯一的 workflow 写入参与者；普通 CRUD 的语义只剩
+    // 改名规则、复制命名、删除前的引用检查与事件。
+    const workflowParticipant = source(
+      'src/modules/resource-catalog/infrastructure/workflowMutationParticipant.ts',
+    )
+    expect(workflowParticipant).toContain('export function createWorkflowMutationParticipant(')
+    expect(workflowParticipant).toContain('assertDefinitionReferences({')
+    expect(workflow).not.toMatch(
+      /assertDefinitionReferences|assertScriptAuthorAllowed|rehydratePrivilegedNodes/,
+    )
   })
 
   test('agent visibility projection consumes AgentQueries rather than a legacy ACL facade', () => {

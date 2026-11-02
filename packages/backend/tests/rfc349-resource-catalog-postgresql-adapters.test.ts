@@ -160,16 +160,17 @@ describe('RFC-349 resource-catalog PostgreSQL provider adapters', () => {
       expect(postgresqlMutationParticipants).toContain(`${implementation}({`)
     }
     // RFC-395 II-a A5: workflows delegate to their single writer on the same transaction.
-    // RFC-401 A1: agents go through the one Agent mutation participant on the same transaction.
-    for (const [table, file, factory] of [
-      ['workflows', 'workflowDefinitionWrite', 'createWorkflowDefinitionWriteParticipant'],
-    ]) {
-      const writer = source(`src/modules/resource-catalog/infrastructure/${file}.ts`)
-      expect(postgresqlMutationArms).toContain(`${factory}(input.transaction).insert(`)
-      expect(postgresqlMutationArms).toContain(`${factory}(input.transaction).update(`)
-      expect(writer).toContain(`.insert(${table})`)
-      expect(writer).toContain(`.update(${table})`)
-    }
+    // RFC-401 A1 / A3: agents and workflows go through their one mutation participant on the same transaction, and
+    // only the workflow participant drives the definition writer.
+    const workflowWriter = source(
+      'src/modules/resource-catalog/infrastructure/workflowDefinitionWrite.ts',
+    )
+    expect(workflowWriter).toContain('.insert(workflows)')
+    expect(workflowWriter).toContain('.update(workflows)')
+    expect(postgresqlMutationArms).toContain(
+      'createWorkflowMutationParticipant(input.transaction, { now: input.now })',
+    )
+    expect(postgresqlMutationArms).not.toContain('createWorkflowDefinitionWriteParticipant')
     expect(postgresqlMutationArms).toContain(
       'createAgentMutationParticipant(input.transaction, { now: input.now })',
     )
@@ -280,7 +281,8 @@ describe('RFC-349 resource-catalog PostgreSQL provider adapters', () => {
     expect(source('src/modules/resource-catalog/infrastructure/agentReferenceWrite.ts')).toContain(
       '...createAgentPersistenceValues(input)',
     )
-    expect(postgresqlMutationArms).toContain('createWorkflowPersistenceValues({')
+    // RFC-401 A3a：workflow 行经唯一的写入参与者落库（新建为调用方所有、private）。
+    expect(postgresqlMutationArms).toContain('await workflows.create(owner, {')
     expect(postgresqlMutations).toContain('builtin: false')
     for (const hook of [
       'planInstall(',

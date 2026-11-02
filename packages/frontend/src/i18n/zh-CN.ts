@@ -177,6 +177,7 @@ export interface Resources {
     graphRepairTurn: string
     agentDownstreamNotice: string
     graphWarnings: string
+    graphErrors: string
     graphValidationUnavailable: string
     commitDisabledStale: string
     commitDisabledValidation: string
@@ -6997,8 +6998,10 @@ export const zhCN: Resources = {
     agentDownstreamNotice:
       '以下既有工作流引用了本次改动的代理，本次未对它们做校验——如果改了输出端口，记得回去检查它们的连线。',
     graphWarnings: '{{count}} 条工作流校验提醒（不阻断提交）。',
+    graphErrors:
+      '{{count}} 个工作流图校验错误。仍可提交（保存工作流不做完整图校验），但修好之前工作流无法启动。可以让 AI 修复，或提交后在编辑器里修。',
     graphValidationUnavailable:
-      '工作流图校验暂时不可用，无法确认这份草稿能否启动，提交已暂停。稍后重试或重新生成一轮。',
+      '工作流图校验暂时不可用，这份草稿没有经过启动前检查。仍可提交，提交后请在编辑器里检查工作流。',
     commitDisabledStale: '先更新草稿基线，才能进入提交确认。',
     commitDisabledValidation: '先解决上方校验问题，才能进入提交确认。',
     commitDisabledGenerating: '本轮生成完成后即可进入提交确认。',
