@@ -66,7 +66,8 @@ import {
   addReviewComment,
   submitReviewDecision,
 } from '@/modules/collaboration/infrastructure/review'
-import { abortAllActiveTasks, wakeHumanGateContinuation } from '@/services/task'
+import { abortAllActiveTasks } from '@/services/task'
+import { wakeHumanGateContinuation } from './helpers/legacyTaskDrive'
 // RFC-097: runTask's entry CAS only claims pending tasks. Every scheduler
 // re-entry below (the post-decision / post-answer `await runTask(...)` calls)
 // is preceded by reenterScheduler — the test stand-in for resumeTask.

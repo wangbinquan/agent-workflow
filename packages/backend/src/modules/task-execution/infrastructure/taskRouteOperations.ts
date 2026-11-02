@@ -1533,10 +1533,10 @@ export async function taskWorkflowSyncPreviewProjection(
 // RFC-359 W8 —— retry / syncWorkflow 共用的三件事：冻结溯源预检、快照基线判据、
 // 被取消写节点的工作树回滚。其中**冻结溯源预检已经合一**：两个 provider 都调
 // `services/execution/triggerPreflight.ts` 的 `assertFrozenTaskTriggerPreflight`
-// （RFC-359 W8 收掉了那对逐字相同的私有副本）。另外两件（`escalateSnapshotLost` /
-// `escalateLiveChildSurvived` / `selectSyncRollbackTargets`）的权威实现仍在
-// `services/task.ts`；下面是同口径的 PG 侧实现，判据与错误码逐条对齐，行为差异只在
-// 每处注释显式写明的地方。
+// （RFC-359 W8 收掉了那对逐字相同的私有副本）。另外两件里，`selectSyncRollbackTargets` 仍在
+// `services/task.ts`；快照基线丢失与存活子进程的升级，`services/task.ts` 那份随测试专用的 resume
+// 入口在 RFC-424 删除，下面这份是 retry / sync 唯一的实现（resume 的在
+// `childTaskLifecycleParticipant.ts` 的 `markUnsafeResume`）。
 // ─────────────────────────────────────────────────────────────────────────────
 
 /** RFC-359 W8 —— MR/PR 终结栅栏的透传（SQLite 侧由准入 CAS 抛出同名码）。 */

@@ -25,7 +25,17 @@ import { composeRepositoryPreparation } from '@/modules/source-control/compositi
 import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import { taskExecutionModule } from '@/modules/task-execution/composition'
 import { retryNodeProjection } from '@/modules/task-execution/infrastructure/taskRouteOperations'
-import { retryRepositoryPreparation, type TaskContinuationDependencies } from '@/services/task'
+import type { TaskContinuationDependencies } from '@/services/task'
+import { createRepositoryPreparationRetryCommand } from '@/modules/task-execution/infrastructure/repositoryPreparationRetryCommand'
+import {
+  awaitTaskDriverReleasedSettled,
+  isTaskDriverActive,
+} from '@/modules/task-execution/infrastructure/taskDriverLifecycle'
+import { composeDeferredRepositoryPreparation } from '@/modules/task-execution/composition/deferredRepositoryPreparation'
+import type { RepositoryPreparationLookup } from '@/modules/task-execution/application/ports/repositoryPreparationLookup'
+import type { TaskRepositoryPreparationBinding } from '@/modules/task-execution/infrastructure/repositoryPreparationBinding'
+import { Paths } from '@/util/paths'
+import { composeTestTaskDriveFactory } from './legacyTaskDrive'
 import { runTaskWithRealTestTopology } from './taskExecutionTestTopology'
 import type { Task } from '@agent-workflow/shared'
 
@@ -77,7 +87,8 @@ export interface RetryEngineOptions {
   readonly cancelChildTaskForCascade?: (childTaskId: string, parentTaskId: string) => Promise<void>
   /**
    * `__repo_prep__` 的自有重试路径。不给、但给了 `resumeWith` 时，默认走**真的**
-   * `retryRepositoryPreparation`（与合并前 `retryNode` 内部那一句同形）。
+   * 生产重试命令（`createRepositoryPreparationRetryCommand`），由下面的
+   * `retryRepositoryPreparation` 用测试工厂驱动生产的延后仓库准备（RFC-424 从 `services/task.ts` 迁来）。
    */
   readonly repositoryPreparationRetry?: (taskId: string) => Promise<void>
   readonly now?: () => number
@@ -176,7 +187,7 @@ export function createRetryEngine(
               }
               if (options.resumeWith !== undefined) {
                 await retryRepositoryPreparation(
-                  db as unknown as Parameters<typeof retryRepositoryPreparation>[0],
+                  db,
                   taskId,
                   {
                     historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
@@ -193,9 +204,7 @@ export function createRetryEngine(
                         }),
                       ),
                   },
-                  composeRepositoryPreparationLookup(
-                    db as unknown as Parameters<typeof retryRepositoryPreparation>[0],
-                  ),
+                  composeRepositoryPreparationLookup(db),
                 )
               }
             },
@@ -247,4 +256,56 @@ export function createRetryEngine(
       )
     },
   }
+}
+
+/**
+ * RFC-424: moved from services/task.ts, where RFC-387 had registered it as test-only. A failed or interrupted
+ * repository preparation is retried through the production retry command; the drive runs the production deferred
+ * repository preparation step (`composeDeferredRepositoryPreparation`) under the test-side coordinator factory.
+ */
+async function retryRepositoryPreparation(
+  db: PersistenceDb,
+  taskId: string,
+  deps: TaskContinuationDependencies & {
+    readonly repositoryPreparation: TaskRepositoryPreparationBinding
+  },
+  repositoryPreparationLookup: RepositoryPreparationLookup,
+): Promise<void> {
+  const appHome = deps.appHome ?? Paths.root
+  const factory = composeTestTaskDriveFactory({
+    taskExecutionParticipants: deps.taskExecutionParticipants,
+    humanGateOpen: deps.humanGateOpen,
+    historyRestrictions: deps.historyRestrictions,
+    deps: { ...deps, db },
+    appHome,
+    repositoryPreparation: composeDeferredRepositoryPreparation({
+      repositoryPreparationLookup,
+      repositoryPreparation: deps.repositoryPreparation,
+      db,
+      appHome,
+      ...(deps.secretBox === undefined ? {} : { secretBox: deps.secretBox }),
+      ...(deps.cloneTimeoutMs === undefined ? {} : { cloneTimeoutMs: deps.cloneTimeoutMs }),
+      ...(deps.gitBaselineSyncWindowMs === undefined
+        ? {}
+        : { gitBaselineSyncWindowMs: deps.gitBaselineSyncWindowMs }),
+      ...(deps.launchConfiguration === undefined
+        ? {}
+        : { launchConfiguration: deps.launchConfiguration }),
+      ...(deps.workspaceCleanupHook === undefined
+        ? {}
+        : { workspaceCleanupHook: deps.workspaceCleanupHook }),
+    }),
+  })
+  await createRepositoryPreparationRetryCommand({
+    db,
+    coordinator: {
+      submit: (request) =>
+        factory.session.submit({
+          ...request,
+          completionMode: deps.awaitScheduler === true ? 'await-settle' : 'background',
+        }),
+    },
+    isTaskActive: isTaskDriverActive,
+    awaitTaskSettled: awaitTaskDriverReleasedSettled,
+  }).retry(taskId, deps.actorUserId === undefined ? undefined : { actorUserId: deps.actorUserId })
 }

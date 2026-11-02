@@ -319,26 +319,21 @@ describe('RFC-333 human-gate open/park cutover inventory', () => {
 })
 
 describe('RFC-333 T2 canonical continuation authority lock', () => {
-  test('the legacy resume helper already reaches the RFC-328 public participant and gate intent kind', () => {
+  test('the canonical continuation authority stays the RFC-328 public participant', () => {
     const task = read('packages/backend/src/services/task.ts')
     const participants = read('packages/backend/src/modules/task-execution/public/participants.ts')
     const submit = read(
       'packages/backend/src/modules/task-execution/application/submitTaskContinuation.ts',
     )
-
-    expect(task).toContain("from '@/modules/task-execution/public/participants'")
-    // RFC-359：`setTaskStatus` 的写事务搬到中立的显式边界之后，resume 准入的 `onTransitionTx`
-    // 回调拿到的是 `PersistenceTx`，因此走的是同一套判据的**异步孪生**
-    // （`submitTaskContinuationInTransaction`）。本判据锁的东西没变——「legacy resume helper
-    // 必须经 public 合同抵达 RFC-328 的准入参与者，而不是自己拼一份」——只是锚点跟着实现走。
-    // 同步那份（`sqliteTaskExecutionIntentAdmission.ts`）已随它唯一的调用方
-    // `sqliteTaskDecisionParticipant.ts` 一起退役，只剩这一条要锁。
+    // RFC-359 moved the legacy resume helper's admission onto the neutral twin
+    // (`submitTaskContinuationInTransaction`); RFC-387 left dynamic resume as its sole test-only caller.
+    // RFC-424 deleted that test-only resume admission: services/task.ts submits no continuation at all,
+    // and the public participant remains the one admission authority.
+    expect(task).not.toContain('submitTaskContinuationInTransaction')
+    expect(task).not.toContain("intentKind: 'gate-continuation'")
     expect(participants).toContain(
       'export const submitTaskContinuationInTransaction = submitTaskContinuationInTransactionInternal',
     )
-    expect(task).toContain('await submitTaskContinuationInTransaction(input.tx, input)')
-    // RFC-387 deletes the unused atomic-resume wrapper; dynamic resume is the sole test-only caller.
-    expect(task.match(/intentKind: 'gate-continuation'/g)?.length).toBe(1)
     expect(submit).toContain('return await persistence.submitContinuation(input)')
   })
 })

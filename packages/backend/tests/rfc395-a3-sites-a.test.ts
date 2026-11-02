@@ -11,7 +11,7 @@ import type { TaskMechanicsState } from '@/modules/task-execution/composition/ta
 import { readPortRowAtFrame } from '@/modules/task-execution/application/nodeInputs'
 import { deriveFrontier } from './helpers/frontierSelection'
 import { resolveSchedulerRunRow } from '@/modules/task-execution/application/resolveSchedulerRunRow'
-import { selectResumeRollbackTargets } from '@/services/task'
+import { selectResumeRollbackTargets } from './helpers/resumeRollbackTargets'
 import { createLogger } from '@/util/log'
 import { describeEachProvider } from './helpers/eachProvider'
 import {

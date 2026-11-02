@@ -42,7 +42,7 @@ import {
   ensureWorkgroupTaskStateRow,
   gateViewOf,
   loadWorkgroupTaskState,
-} from '../src/services/workgroup/state'
+} from './helpers/legacyWorkgroupState'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
 import { createAgent } from '../src/modules/resource-catalog/infrastructure/legacy/agent'
 import { createUser } from './helpers/userFixture'

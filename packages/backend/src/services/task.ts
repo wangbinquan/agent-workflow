@@ -1,5 +1,4 @@
-import { composeHumanGateTaskLockPort } from '@/modules/task-execution/composition'
-import { composeGateContinuationSupport } from '@/modules/collaboration/composition'
+import type { composeGateContinuationSupport } from '@/modules/collaboration/composition'
 import type { HumanGateOpenParticipantFactory } from '@/modules/task-execution/composition/required-ports'
 import type { HistoryRestrictionPort } from '@/platform/contracts/historyRestriction'
 import {
@@ -9,8 +8,6 @@ import {
 import { createRunSelectionReader } from '@/modules/task-execution/public/queries'
 import {
   cleanupMaterializedSpaceLease,
-  composeWorkspaceMaintenanceCommand,
-  createFileWorkspacePresenceQueries,
   createMaterializedSpaceCleanup,
   materializeSpaceWithProvider,
   type MaterializedRepo,
@@ -21,10 +18,7 @@ import {
 } from '@/modules/source-control/composition'
 import type { WorkspacePresenceQueries } from '@/modules/source-control/public/queries'
 import { createTaskPreparationParticipantInTx } from '@/modules/task-execution/public/participants'
-import type {
-  NodeRunCheckpointSnapshot,
-  NodeRunFactSnapshot,
-} from '@/modules/task-execution/public/queries'
+import type { NodeRunFactSnapshot } from '@/modules/task-execution/public/queries'
 import {
   createNodeOutputQueries,
   createNodeRunQueries,
@@ -39,15 +33,12 @@ import { isTaskWorkspaceUnbound } from '@agent-workflow/shared'
 // Cancel/resume/retry land in P-1-15 + M3 (P-3-08, P-3-09).
 
 import type { RepositoryPreparationLookup } from '@/modules/task-execution/application/ports/repositoryPreparationLookup'
-import { assertWorktreePresentForResume } from '@/modules/task-execution/public/participants'
 import {
   resolveTaskLaunchRuntimeConfiguration,
-  resolveTaskSubagentLiveCapture,
   type TaskLaunchConfigurationQueries,
 } from '@/modules/task-execution/public/queries'
 import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
 import type {
-  DwState,
   FailureCode,
   GitCommitIdentity,
   Language,
@@ -57,7 +48,6 @@ import type {
   StartTask,
   Task,
   TaskStatus,
-  TaskTransitionEvent,
   Workflow,
   WorkflowDefinition,
   WorkflowSyncPreview,
@@ -66,7 +56,6 @@ import {
   DAEMON_SHUTDOWN_ABORT_REASON,
   REPO_PREP_NODE_ID,
   WorkflowDefinitionSchema,
-  allowedFromForTaskEvent,
   diffWorkflowForSync,
   isDaemonInterruptionAbortReason,
   isRetryableGitFailure,
@@ -78,90 +67,55 @@ import {
 import { existsSync, readdirSync } from 'node:fs'
 
 import type { SecretBox } from '@/auth/secretBox'
-import { setDwStateTx } from '@/services/workgroup/state'
 import { join } from 'node:path'
-import { ulid } from 'ulid'
 
 import type { MemoryDistillEnqueuer } from '@/modules/memory/public/participants'
 import type { RuntimeSessionLeaseOperations } from '@/modules/task-execution/application/ports/runtimeSessionLeaseOperations'
 import type { TaskRecoveryOperations } from '@/modules/task-execution/application/ports/taskRecoveryOperations'
-import { composeGateContinuationPreDrive } from '@/modules/task-execution/composition/gateContinuationPreDrive'
-import { materializingSpaces } from '@/platform/workspace/materializingSpaces'
-import { setNodeRunStatus, setTaskStatus, transitionTaskStatusByEvent } from '@/services/lifecycle'
-import type { RollbackOutcome, RollbackRunRow } from '@/services/nodeRollback'
-import { rollbackNodeRunWorktrees } from '@/services/nodeRollback'
-import { recordRecoveryEvent } from '@/services/recovery'
-import { repairRuntimeSessionLeasesAfterOrphanReap } from '@/services/runtimeSessionLease'
+import { setNodeRunStatus, setTaskStatus } from '@/services/lifecycle'
 import {
-  TaskExecutionError,
   createLocalEffectAttemptObserver,
   currentTaskExecutionContext,
   fenceTaskWrite,
   taskExecutionModule,
   withTaskExecutionWrite,
-  type TaskExecutionIntentKind,
-  type TaskExecutionIntentSource,
 } from '@/modules/task-execution/public/participants'
 import { buildWorkflowValidationContext, validateWorkflowDef } from '@/services/workflow.validator'
-import type { StaleRunKillOutcome } from '@/util/process'
-import { killStaleRunProcessTree } from '@/util/process'
+import type { killStaleRunProcessTree } from '@/util/process'
 // RFC-359 W10 —— 中立异步孪生（两个引擎共用），从 public 合同出去；与 `@/services/lifecycle`
 // 上同名的 bun:sqlite 专属**同步**版按名字区分开。
-import { SYSTEM_USER_ID } from '@/auth/actor'
 import {
   composeSqliteRepositoryWorkspaceStore,
   type RepositoryWorkspaceStore,
 } from '@/modules/source-control/composition'
-import { selectResumeRollbackTargets as selectResumeRollbackTargetsWithSelection } from '@/modules/task-execution/application/resumeRollbackTargets'
 import { composeAgentRunDistillObserver } from '@/modules/task-execution/composition/agentRunDistillObserver'
 import * as taskDriveComposition from '@/modules/task-execution/composition/taskDriveLegacy'
-import { assertFrozenTaskTriggerPreflight } from '@/modules/task-execution/infrastructure/frozenTaskTriggerPreflight'
 import type { SchedulerDriverPort } from '@/modules/task-execution/public/commands'
 import {
   builtinWorkflowSyncPreview,
   setNodeRunStatusInTransaction,
-  submitTaskContinuationInTransaction,
   workflowSyncGateReason,
 } from '@/modules/task-execution/public/participants'
 import { freezeTaskExecutionCallClosure } from '@/services/execution/taskExecutionCallClosure'
 import type { TaskExecutionResourceAuthority } from '@/services/execution/taskExecutionResources'
 import { triggerPreflightIssue } from '@/services/execution/triggerPreflight'
-import type { TaskStatusUpdateExtra } from '@/services/lifecycle'
 import { mintNodeRun, nextRetryIndex } from '@/services/nodeRunMint'
 import { resolveRepoGroupLayout } from '@/services/repoGroup'
 import {} from '@/services/taskAuthorization'
-import {
-  ConflictError,
-  DomainError,
-  NotFoundError,
-  ValidationError,
-  diagnosticTextOf,
-} from '@/util/errors'
+import { ConflictError, DomainError, ValidationError, diagnosticTextOf } from '@/util/errors'
 import { removeDirectoryWithRetry } from '@/util/fsReclaim'
 import { reclaimStaleRefLocks, runGit, withWorktreeRegistryLock } from '@/util/git'
-import { createLogger, type Logger } from '@/util/log'
-import { Paths } from '@/util/paths'
+import { createLogger } from '@/util/log'
 import { collectExecutionRefs, redactGitUrl } from '@agent-workflow/shared'
 
 type WorkspacePreparationRepositoryProjection = Parameters<
   NonNullable<ReturnType<typeof createLocalEffectAttemptObserver>>['succeedWorkspacePreparation']
 >[1]['repositories'][number]
-type RepositoryPreparationStep = taskDriveComposition.RepositoryPreparationStep
 type RepositoryPreparationDescriptorReader =
   taskDriveComposition.RepositoryPreparationDescriptorReader
 
-const {
-  activeTaskDriverController,
-  awaitTaskDriverReleasedSettled,
-  awaitTaskDriverIdle,
-  createDatabaseTaskDriverLifecyclePort,
-  createTaskDriveCoordinatorFactory,
-  createTaskExecutionPersistence,
-  composeSourceControlTaskPorts,
-  isTaskDriverActive,
-  PersistedRepositoryPreparationStep,
-  skipRepositoryPreparation,
-} = taskDriveComposition
+const { composeSourceControlTaskPorts, isTaskDriverActive, PersistedRepositoryPreparationStep } =
+  taskDriveComposition
 
 type TaskDriveRequest = Parameters<SchedulerDriverPort['drive']>[0]
 type TaskDriveRuntimeOptions = Omit<TaskDriveRequest, 'taskId' | 'executionContext' | 'signal'>
@@ -191,40 +145,6 @@ async function freezeClosureForLaunch(
 const log = createLogger('task')
 
 const taskDriverRegistry = taskExecutionModule.runtimeRegistry
-
-function continuationSource(
-  deps: TaskContinuationDependencies,
-  kind: TaskExecutionIntentKind,
-): TaskExecutionIntentSource {
-  if (kind === 'gate-continuation') return 'internal'
-  if (deps.actorUserId !== undefined && deps.actorUserId !== SYSTEM_USER_ID) return 'rest'
-  if (deps.scheduledTaskId !== undefined) return 'scheduler'
-  return deps.internalSource !== undefined || deps.callLaunch !== undefined ? 'internal' : 'auto'
-}
-
-/**
- * Submit the canonical continuation in the SAME transaction as the lifecycle
- * admission CAS.  The caller supplies a stable id before entering the
- * transaction so a lost CAS cannot leak an orphan wake or side effect.
- */
-/**
- * RFC-359 —— 续跑 intent 的准入参与者，跑在**中立**事务句柄上。
- * 与 `submitTaskContinuationTx`（bun:sqlite 专属同步面）是同一套判据的两种解释；
- * `setTaskStatus` 的写事务搬到显式边界之后，这里的 `onTransitionTx` 回调用的是这一侧。
- */
-async function submitContinuationIntentInTx(input: {
-  tx: PersistenceTx
-  taskId: string
-  intentId: string
-  kind: TaskExecutionIntentKind
-  source: TaskExecutionIntentSource
-  actorUserId: string | null
-  payload: Readonly<Record<string, unknown>>
-  now: number
-  advanceOperationGeneration: boolean
-}): Promise<void> {
-  await submitTaskContinuationInTransaction(input.tx, input)
-}
 
 /** RFC-097 (audit S-8/S-23): is an in-process scheduler loop attached to this
  *  task right now? Used by resume/retry entry rejection and lifecycleRepair's
@@ -461,15 +381,6 @@ export interface TaskContinuationDependencies {
   workspaceCleanupHook?: (event: WorkspaceCleanupHookEvent) => void | Promise<void>
 }
 
-function repositoryWorkspaceFor(
-  deps: Pick<TaskContinuationDependencies, 'db' | 'repositoryWorkspace'>,
-) {
-  return (
-    deps.repositoryWorkspace ??
-    composeSqliteRepositoryWorkspaceStore(deps.db, composeSourceControlTaskPorts(deps.db))
-  )
-}
-
 /**
  * RFC-359 AC-1（plan §5hn 批次二 ①）—— **延后仓库准备**这一步真正需要的那些依赖。
  *
@@ -520,45 +431,6 @@ export function composeDeferredRepositoryPreparationStep(input: {
   readonly appHome: string
 }): taskDriveComposition.PersistedRepositoryPreparationStep {
   return createPersistedRepositoryPreparationStep(input)
-}
-
-function requireTaskRecoveryOperations(deps: TaskContinuationDependencies): TaskRecoveryOperations {
-  if (deps.taskRecoveryOperations === undefined) {
-    throw new Error('task-recovery-operations-not-composed')
-  }
-  return deps.taskRecoveryOperations
-}
-
-/**
- * RFC-103 T1 (01-LIFE-05) — pick the rollback targets for resume: the freshest
- * top-level (`parentNodeRunId === null`) run per node, kept only when it is in a
- * resumable terminal state (failed/interrupted). fanout/loop child rows are
- * excluded so a shard/iteration child (which carries a parentNodeRunId and can
- * have a later ULID than its node's top-level row) can't shadow the node row and
- * force a rollback to the wrong (child) `pre_snapshot`. Mirrors the authoritative
- * `pickFreshestRun` `topLevelOnly` default (freshness.ts).
- */
-// RFC-359 AC-1（第 10 刀）：实现搬到 `modules/task-execution/application/resumeRollbackTargets.ts`
-// ——那里是全仓唯一一份（PostgreSQL 的 resume 参与者原来有一份逐字相同的副本）。
-// 这里保留同名再导出，本文件既有的三条调用路与外部导入面一个字不用改。
-export function selectResumeRollbackTargets<
-  R extends {
-    id: string
-    seq: number
-    nodeId: string
-    parentNodeRunId: string | null
-    status: string
-    childTaskId?: string | null
-  },
->(runs: readonly R[]): Promise<R[]> {
-  return selectResumeRollbackTargetsWithSelection(
-    runs,
-    createRunHistorySnapshot(
-      '',
-      runs.map((row) => ({ ...row, taskId: '' })),
-    ),
-    '',
-  )
 }
 
 /**
@@ -720,138 +592,6 @@ export function runtimeConfigOpts(
   }
 }
 
-const missingMemoryDistillEnqueuer: MemoryDistillEnqueuer = Object.freeze({
-  async enqueue() {
-    throw new TaskExecutionError(
-      'task-execution-recovery-required',
-      'memory distill enqueuer is not composed for clarify continuation convergence',
-    )
-  },
-})
-
-/**
- * RFC-359 AC-1（plan §5ha 第 ① 步）—— 「造一台任务驱动协调器」需要的**确切**依赖面。
- *
- * 为什么把它从 `TaskContinuationDependencies` 里摘出来：这台协调器是 `RootTaskLaunchKernel`
- * 的四件入参之一，PostgreSQL daemon 在自己那边**就地**造一台
- * （`cli/postgresqlDaemonApplication.ts:953`），与 `TaskContinuationDependencies` 无关；
- * 而 SQLite 侧唯一的造法锁在本文件里、且以 legacy 启动路的那个大依赖包为入参，
- * 于是 `cli/start.ts` **造不出内核**——这正是启动面合一（plan §5gv）Step B 的卡点。
- *
- * 这个类型是**按函数体实际读到的字段**列的，不是拍脑袋收窄：
- * `runtimeConfigOpts` 那一组（它自己就已经是 `Pick<TaskContinuationDependencies, …>`）＋ 下面这六个。
- * `TaskContinuationDependencies` 仍然满足它，所以本文件内四处既有构造点一个字都不用改。
- */
-export type TaskDriveCoordinatorDependencies = Parameters<typeof runtimeConfigOpts>[0] &
-  Pick<
-    TaskContinuationDependencies,
-    | 'schedulerDriver'
-    | 'binaryOverride'
-    | 'configPath'
-    | 'subagentLiveCapture'
-    | 'memoryDistillEnqueuer'
-    | 'workspacePresence'
-    | 'launchConfiguration'
-    | 'launchConfigurationOverrides'
-  > & {
-    /**
-     * RFC-359 AC-1（plan §5hm）：收成中立句柄。此前这一格是从 `TaskContinuationDependencies` Pick 来的
-     * `PersistenceDb`——**不是因为协调器真要 SQLite**，而是它装的驱动生命周期端口
-     * 当年只有 SQLite 一份（要 `DbClient`）。端口合一之后那个约束没了：
-     * 协调器这一路上读 `db` 的三处（生命周期端口、闸门继续前置、工作区清理）全是中立实现。
-     * `TaskContinuationDependencies` 仍然满足这个更宽的类型，所以本文件内既有构造点一个字都不用改。
-     */
-    readonly db: PersistenceDb
-  }
-
-/** RFC-387: test-only assembly for the legacy entry points; removed in W4. */
-export function composeTestTaskDriveFactory(input: {
-  readonly taskExecutionParticipants: Parameters<
-    typeof composeGateContinuationSupport
-  >[0]['taskExecutionParticipants']
-  readonly humanGateOpen: HumanGateOpenParticipantFactory
-  readonly historyRestrictions: HistoryRestrictionPort
-  readonly deps: TaskDriveCoordinatorDependencies
-  readonly appHome: string
-  readonly persistence?: ReturnType<typeof createTaskExecutionPersistence>
-  readonly repositoryPreparation?: RepositoryPreparationStep
-  readonly gateContinuationPreDrive?: taskDriveComposition.GateContinuationPreDriveStep
-  readonly refreshLaunchConfig?: () =>
-    | Partial<TaskDriveCoordinatorDependencies>
-    | Promise<Partial<TaskDriveCoordinatorDependencies>>
-  readonly launchConfiguration?: TaskLaunchConfigurationQueries
-}): taskDriveComposition.TaskDriveCoordinatorFactory {
-  const persistence =
-    input.persistence ??
-    createTaskExecutionPersistence(input.deps.db, {
-      humanGateOpen: input.humanGateOpen,
-      historyRestrictions: input.historyRestrictions,
-      workspacePresence: input.deps.workspacePresence,
-    })
-  const maintenance = composeWorkspaceMaintenanceCommand({
-    ...composeSourceControlTaskPorts(input.deps.db),
-    appHome: input.appHome,
-    terminalMaintenance: persistence.terminalMaintenance,
-    isMaterializingTask: (taskId) => materializingSpaces.has(taskId),
-    invalidateWorkspacePath: () => {},
-  })
-  return createTaskDriveCoordinatorFactory({
-    async runConfiguration() {
-      const source = input.launchConfiguration ?? input.deps.launchConfiguration
-      const fresh =
-        source === undefined
-          ? await input.refreshLaunchConfig?.()
-          : {
-              ...(await resolveTaskLaunchRuntimeConfiguration(source)),
-              subagentLiveCapture: await resolveTaskSubagentLiveCapture(source),
-              ...input.deps.launchConfigurationOverrides,
-            }
-      const deps = { ...input.deps, ...fresh }
-      return {
-        appHome: input.appHome,
-        ...(deps.binaryOverride === undefined ? {} : { binaryOverride: deps.binaryOverride }),
-        ...(deps.configPath === undefined ? {} : { configPath: deps.configPath }),
-        ...(deps.subagentLiveCapture === undefined
-          ? {}
-          : { subagentLiveCapture: deps.subagentLiveCapture }),
-        ...runtimeConfigOpts(
-          source === undefined
-            ? deps
-            : {
-                ...fresh,
-                memoryDistillEnqueuer: input.deps.memoryDistillEnqueuer,
-              },
-        ),
-      }
-    },
-    lifecycle: createDatabaseTaskDriverLifecyclePort({
-      humanGateOpen: input.humanGateOpen,
-      historyRestrictions: input.historyRestrictions,
-      db: input.deps.db,
-      persistence,
-      workspacePresence: input.deps.workspacePresence,
-      log,
-      finalizeWorkspace: (taskId) => maintenance.finalizeClaimedWorkspace(taskId),
-    }),
-    gateContinuationPreDrive:
-      input.gateContinuationPreDrive ??
-      composeGateContinuationPreDrive({
-        persistence,
-        ...composeGateContinuationSupport({
-          taskExecutionParticipants: input.taskExecutionParticipants,
-          historyRestrictions: input.historyRestrictions,
-          db: input.deps.db,
-          taskLock: composeHumanGateTaskLockPort,
-          memoryDistillEnqueuer: input.deps.memoryDistillEnqueuer ?? missingMemoryDistillEnqueuer,
-        }),
-      }),
-    repositoryPreparation: input.repositoryPreparation ?? skipRepositoryPreparation,
-    engine: () => input.deps.schedulerDriver,
-    failures: persistence,
-    log,
-  })
-}
-
 function createPersistedRepositoryPreparationStep(input: {
   readonly deps: DeferredRepositoryPreparationDependencies
   readonly appHome: string
@@ -996,16 +736,6 @@ function createPersistedRepositoryPreparationStep(input: {
   })
 }
 
-// RFC-359 AC-6：句柄放宽到中立、函数转 async。它读的两张表（`task_repository_mounts` / `task_space_nodes`）
-// 都是普通 drizzle 查询，零方言；钉在 bun:sqlite 上的只有那两个 `.all()` 同步终结子。
-// 三个调用点本来就在 `async (sourceTaskId) => …` 里，加一个 await 即可。
-async function loadFrozenSpaceLayout(
-  db: PersistenceDb,
-  sourceTaskId: string,
-): Promise<PlannedSpaceLayout> {
-  return createTaskPreparationQueries(db).frozenLayout(sourceTaskId)
-}
-
 interface RepositoryPreparationOwnership {
   cleanup: MaterializedSpaceCleanup | null
 }
@@ -1093,537 +823,6 @@ function taskRepoRowsFor(
     submoduleInitError: r.submoduleInitError,
     schemaVersion: 1,
   }))
-}
-
-/**
- * Cancel an in-flight task. Aborts the in-process controller (runner SIGTERMs
- * the opencode child), then waits briefly for the scheduler to settle.
- *
- * Rejects if the task is already terminal.
- */
-/**
- * RFC-066 PR-B T13: roll back the worktree state before a node_run for the
- * resume / single-node-retry paths. RFC-092 T1: thin shell over the shared
- * `rollbackNodeRunWorktrees` (services/nodeRollback.ts) — the single authority
- * for historical snapshot rollback. Fresh-session retry uses isolated worktrees;
- * historical resume semantics are preserved
- * exactly: empty/missing shas are skipped, a multi-repo row whose
- * `preSnapshotReposJson` is NULL (predates PR-B) falls through to the legacy
- * single-string rollback, and an unparseable map degrades to a per-repo no-op
- * (NOT a single-repo fallback — see nodeRollback.ts for the real control flow
- * the old comment here misdescribed).
- */
-async function rollbackNodeRunForResume(
-  db: PersistenceDb,
-  task: Task,
-  run: RollbackRunRow,
-  log: ReturnType<typeof createLogger>,
-  opts?: { checkOnly?: boolean },
-): Promise<RollbackOutcome> {
-  return await rollbackNodeRunWorktrees(
-    {
-      taskId: task.id,
-      db,
-      worktreePath: task.worktreePath,
-      repos: task.repos,
-    },
-    run,
-    { ...(opts?.checkOnly ? { checkOnly: true } : {}) },
-    log,
-  )
-}
-
-// RFC-359 —— 判据本体搬进 `modules/task-execution/application/worktreeResumePreflight`，
-// 两个 provider 共用一份（合一前 PostgreSQL 部署注入的是空操作，见那边的注释）。
-// 这里保留原名的转发，让本文件既有的调用点不动。
-
-/**
- * RFC-098 WP-9: snapshot-lost escalation shared by resumeTask / retryNode.
- * A `'snapshot-missing'` rollback failure means a recorded pre-snapshot was
- * gc-pruned from the (shared) source-repo odb — the fail-closed rollback
- * touched nothing, but the baseline the resume contract promises to restore
- * is gone forever. Silently proceeding would re-run nodes on top of the
- * failed attempt's leftover writes, so the task flips pending → failed
- * (`errorSummary='snapshot-lost'`) and the HTTP caller sees a 409.
- * Returns `never`; throws ConflictError after the CAS.
- */
-async function escalateSnapshotLost(
-  db: PersistenceDb,
-  recovery: TaskRecoveryOperations,
-  taskId: string,
-  run: { id: string; nodeId: string },
-  outcome: RollbackOutcome,
-  reason: 'resumeTask' | 'retryNode' | 'syncTaskWorkflow',
-): Promise<never> {
-  const detail = outcome.failures
-    .filter((f) => f.code === 'snapshot-missing')
-    .map((f) =>
-      f.worktreeDirName !== undefined ? `${f.worktreeDirName}: ${f.message}` : f.message,
-    )
-    .join('; ')
-  await setTaskStatus({
-    db,
-    taskId,
-    to: 'failed',
-    allowedFrom: ['pending'],
-    extra: {
-      finishedAt: Date.now(),
-      errorSummary: 'snapshot-lost',
-      errorMessage: `node_run ${run.id} (node ${run.nodeId}) pre-snapshot lost: ${detail}`,
-      failedNodeId: run.nodeId,
-    },
-    reason: `${reason}:snapshot-lost`,
-  })
-  await recordRecoveryEvent(recovery, {
-    taskId,
-    nodeRunId: run.id,
-    kind: 'snapshot-lost',
-    reason: detail,
-    before: { status: 'pending' },
-    after: { status: 'failed' },
-  })
-  throw new ConflictError(
-    'snapshot-lost',
-    `cannot ${reason === 'resumeTask' ? 'resume' : 'retry'}: node_run ${run.id} pre-snapshot is missing from the object database (pruned by gc?): ${detail}`,
-  )
-}
-
-/**
- * RFC-108 T9 (AR-14): a node_run's opencode child is still alive AND survived
- * SIGTERM→SIGKILL (identity-matched to our recorded spawn binary, so confidently
- * ours), so rolling its worktree back would git-reset UNDER a live writer
- * (double-write corruption). Fail SAFE: flip the task pending → failed
- * (`errorSummary='live-child-survived'`) and surface a 409 instead of resetting.
- * Mirrors escalateSnapshotLost's contract. Returns `never`.
- */
-async function escalateLiveChildSurvived(
-  db: PersistenceDb,
-  recovery: TaskRecoveryOperations,
-  taskId: string,
-  run: { id: string; nodeId: string; pid: number | null },
-  reason: 'resumeTask' | 'retryNode' | 'syncTaskWorkflow',
-  killOutcome: StaleRunKillOutcome = 'kill-failed',
-): Promise<never> {
-  await setTaskStatus({
-    db,
-    taskId,
-    to: 'failed',
-    allowedFrom: ['pending'],
-    extra: {
-      finishedAt: Date.now(),
-      errorSummary: 'live-child-survived',
-      errorMessage: `node_run ${run.id} (node ${run.nodeId}) child reap could not be proven (${killOutcome}, pid ${run.pid ?? '?'}); refusing to reset the worktree while a writer may still be alive`,
-      failedNodeId: run.nodeId,
-    },
-    reason: `${reason}:live-child-survived`,
-  })
-  await recordRecoveryEvent(recovery, {
-    taskId,
-    nodeRunId: run.id,
-    kind: 'live-child-survived',
-    reason: `child reap unproven: ${killOutcome}; pid ${run.pid ?? '?'}`,
-    before: { status: 'pending' },
-    after: { status: 'failed' },
-  })
-  throw new ConflictError(
-    'live-child-survived',
-    `cannot ${reason === 'resumeTask' ? 'resume' : 'retry'}: node_run ${run.id} child reap is unproven (${killOutcome}, pid ${run.pid ?? '?'}); the worktree cannot be safely reset while it may still be writing`,
-  )
-}
-
-async function reapRunBeforeWorktreeReset(
-  db: PersistenceDb,
-  taskId: string,
-  run: {
-    id: string
-    nodeId: string
-    pid: number | null
-    startedAt: number | null
-    spawnBinaryPath: string | null
-    spawnLaunchNonce?: string | null
-  },
-  reason: 'resumeTask' | 'retryNode' | 'syncTaskWorkflow',
-  deps: TaskContinuationDependencies,
-  log: Logger,
-): Promise<void> {
-  const heldNativeLease = await createNodeRunQueries(db).heldSession(run.id)
-  const killOutcome = await (deps.killStaleRunProcessTree ?? killStaleRunProcessTree)(run)
-  const recovery = requireTaskRecoveryOperations(deps)
-  if (killOutcome === 'killed') {
-    log.warn(`${reason}: stale runtime child group-killed before rollback`, {
-      nodeRunId: run.id,
-      pid: run.pid,
-    })
-  }
-  if (heldNativeLease !== undefined) {
-    if (killOutcome !== 'not-alive' && killOutcome !== 'killed') {
-      await escalateLiveChildSurvived(db, recovery, taskId, run, reason, killOutcome)
-    }
-    // A proven-dead terminal holder must be neutralized/discarded before the
-    // scheduler can admit a replacement. The helper validates terminal state
-    // and preserves reset/identity-invalid fail-closed semantics.
-    if (deps.runtimeSessionLeases === undefined) {
-      throw new Error('runtime-session-lease-operations-not-composed')
-    }
-    if (
-      (await repairRuntimeSessionLeasesAfterOrphanReap(deps.runtimeSessionLeases, true, run.id)) !==
-      1
-    ) {
-      await escalateLiveChildSurvived(db, recovery, taskId, run, reason, 'kill-failed')
-    }
-  } else if (killOutcome === 'kill-failed') {
-    await escalateLiveChildSurvived(db, recovery, taskId, run, reason, killOutcome)
-  }
-}
-
-async function reapHeldRuntimeSessionOwnersForTask(
-  db: PersistenceDb,
-  taskId: string,
-  reason: 'resumeTask' | 'retryNode' | 'syncTaskWorkflow',
-  deps: TaskContinuationDependencies,
-  log: Logger,
-): Promise<void> {
-  const ownerIds = await createNodeRunQueries(db).heldSessionRunIds(taskId)
-  for (const nodeRunId of ownerIds) {
-    const run = await createNodeRunQueries(db).read(nodeRunId)
-    if (run === null) {
-      await escalateLiveChildSurvived(
-        db,
-        requireTaskRecoveryOperations(deps),
-        taskId,
-        { id: nodeRunId, nodeId: '(missing)', pid: null },
-        reason,
-        'no-pid',
-      )
-      continue
-    }
-    await reapRunBeforeWorktreeReset(db, taskId, run, reason, deps, log)
-  }
-}
-
-// RFC-359 AC-1（第 11 刀）：`cancelTask` 已删除。取消只有**一份**实现
-// （`modules/task-execution/infrastructure/childTaskLifecycleParticipant.ts`
-// 的 `cancelTaskProjection`），生产装配走 `modules/task-execution/composition/taskCancellation.ts`，
-// 测试装配走 `tests/helpers/cancelEngine.ts`。RFC-202 T3 的那条判据
-//（awaiting_review / awaiting_human 可取消）跟着实现搬到了共用那份的
-// `CANCELABLE_TASK_STATUSES`。
-
-/** RFC-387: test-only exact-intent wake over the factory; removed in W4. */
-export async function wakeHumanGateContinuation(
-  taskId: string,
-  continuationRef: string,
-  deps: TaskContinuationDependencies,
-): Promise<void> {
-  if (deps.awaitScheduler === true) await awaitTaskDriverIdle(taskId)
-  else if (isTaskDriverActive(taskId)) return
-  await composeTestTaskDriveFactory({
-    taskExecutionParticipants: deps.taskExecutionParticipants,
-    humanGateOpen: deps.humanGateOpen,
-    deps,
-    historyRestrictions: deps.historyRestrictions,
-    appHome: deps.appHome ?? Paths.root,
-  }).session.submit({
-    taskId,
-    intentId: continuationRef,
-    completionMode: deps.awaitScheduler === true ? 'await-settle' : 'background',
-  })
-}
-
-/**
- * RFC-387: test-only dynamic-workflow admission over the factory; removed in W4.
- * RFC-167 — the dynamic-workflow confirm gate's resume core: write the
- * decision's durable state ATOMICALLY within the resume admission CAS, then
- * re-kick the scheduler. approve passes BOTH columns (swap the confirmed DAG
- * into `workflow_snapshot` + flip dw.phase='executing'); reject passes only
- * `workgroupConfigJson` (phase='generating' + the feedback) — either way a
- * failed resume (lost CAS / 410 worktree preflight) leaves the task exactly
- * as it was, so the gate stays open and the decision can be retried (Codex
- * impl-gate P1: no torn phase-vs-status stranding). Thin shell over
- * `resumeKick`, mirroring syncTaskWorkflow.
- */
-export async function resumeDynamicWorkflowExecution(
-  db: PersistenceDb,
-  id: string,
-  deps: TaskContinuationDependencies,
-  swap: { workflowSnapshot?: string; dw: DwState },
-): Promise<Task> {
-  return resumeKick(db, id, deps, {
-    intentKind: 'gate-continuation',
-    event: { kind: 'resume' },
-    ...(swap.workflowSnapshot !== undefined
-      ? { extra: { workflowSnapshot: swap.workflowSnapshot } }
-      : {}),
-    selectRollback: (runs) => selectResumeRollbackTargets(runs),
-    reason: 'resumeTask',
-    conflictCode: 'task-not-resumable',
-    verb: 'resume',
-    worktreePreflight: true,
-    // RFC-217 T2 (design-gate P1) — the phase flip MUST ride the resume
-    // admission CAS: a lost CAS / failed worktree preflight leaves the gate
-    // open and the decision retryable; a standalone phase write would strand
-    // the task in 'executing'/'generating' while still awaiting_review.
-    onClaimTx: async (tx) => await setDwStateTx(tx, id, swap.dw),
-  })
-}
-
-/**
- * RFC-109 — shared "reanimate a parked/terminal task and continue from the
- * breakpoint" core, extracted from resumeTask. Both resumeTask and
- * syncTaskWorkflow drive it; the ONLY differences are the transition event
- * (which fixes the allowed-from set via the shared `nextTaskStatus` table), the
- * optional `extra` columns written ATOMICALLY inside the admission CAS (sync
- * swaps `workflow_snapshot` + `workflow_version` here), and the rollback-target
- * selector.
- *
- * RFC-387: test-only admission and factory drive; removed in W4.
- * The pending lifecycle CAS (RFC-097 audit S-8) is the command-admission winner
- * and moves BEFORE any git rollback. The same transaction writes the canonical
- * intent; only its durable owner claim authorizes subsequent execution effects.
- */
-async function resumeKick(
-  db: PersistenceDb,
-  id: string,
-  deps: TaskContinuationDependencies,
-  opts: {
-    intentKind: 'resume' | 'sync-workflow' | 'gate-continuation'
-    event: TaskTransitionEvent
-    extra?: TaskStatusUpdateExtra
-    selectRollback: (
-      runs: readonly NodeRunCheckpointSnapshot[],
-    ) => Promise<readonly NodeRunCheckpointSnapshot[]>
-    reason: 'resumeTask' | 'syncTaskWorkflow'
-    conflictCode: string
-    verb: string
-    /**
-     * RFC-108 T6 (AR-15): when true, 410 before the CAS if the worktree is gone
-     * (gc reclaimed a resumable task). resumeTask opts in; syncTaskWorkflow
-     * (RFC-109) leaves it off for now (it may opt in once its harness uses a
-     * real worktree). The T7 cross-row snapshot pre-pass below is unconditional.
-     */
-    worktreePreflight?: boolean
-    onClaimTx?: (
-      tx: PersistenceTx,
-      transition: {
-        from: TaskStatus
-        to: TaskStatus
-      },
-    ) => void | Promise<void>
-  },
-): Promise<Task> {
-  const task = await getTask(db, id)
-  if (task === null) {
-    throw new NotFoundError('task-not-found', `task '${id}' not found`)
-  }
-  const allowedFrom = allowedFromForTaskEvent(opts.event)
-  // RFC-359 两阶段停机：上一任 driver 的运行时已停但库里 owner 行 / intent 还在转移时，先等它 settle——
-  // 否则准入放行后 continuation intent 会撞上仍是 claimed 的旧 intent（task-continuation-conflict）。
-  await taskDriverRegistry.awaitReleasedSettled(id)
-  // RFC-097 (audit S-8): an in-process scheduler loop already owns this task —
-  // a second driver would double-write the worktree.
-  if (isTaskActive(id)) {
-    throw new ConflictError(
-      opts.conflictCode,
-      `task '${id}' is actively running (scheduler attached); cannot ${opts.verb}`,
-    )
-  }
-  if (!allowedFrom.includes(task.status)) {
-    throw new ConflictError(
-      opts.conflictCode,
-      `task '${id}' is ${task.status}; only [${allowedFrom.join('/')}] tasks can ${opts.verb}`,
-    )
-  }
-  // RFC-243 §4.2 — a child execution whose owning call row already settled
-  // must not be re-driven: nobody will ever merge its further output.
-  await assertChildTaskDrivable(db, task, opts.verb)
-
-  // RFC-292: re-check the exact execution snapshot before the admission CAS.
-  await assertFrozenTaskTriggerPreflight(
-    db,
-    id,
-    opts.extra?.workflowSnapshot === undefined
-      ? undefined
-      : {
-          workflowSnapshot: opts.extra.workflowSnapshot,
-          refClosureJson: opts.extra.refClosureJson ?? null,
-        },
-  )
-
-  // RFC-108 T6 (AR-15): 410 before the admission CAS when the worktree is gone
-  // (gc reclaimed a resumable task) — never flip to pending then 500 on a
-  // missing cwd. Gated per-caller (resumeTask opts in).
-  if (opts.worktreePreflight === true) {
-    if (deps.taskRecoveryOperations === undefined) {
-      throw new Error('task-recovery-operations-not-composed')
-    }
-    await assertWorktreePresentForResume(
-      deps.taskRecoveryOperations,
-      task,
-      opts.verb,
-      (reference) =>
-        (deps.workspacePresence ?? createFileWorkspacePresenceQueries()).exists(reference),
-    )
-  }
-
-  // RFC-097 command admission — the pending CAS moves BEFORE the git rollback
-  // so a concurrent resume/retry/sync loses here with zero side effects. RFC-109:
-  // routed through the shared event table; `extra` carries sync's atomic
-  // snapshot+version swap (one CAS UPDATE — a lost race never tears the row).
-  const intentId = ulid()
-  const intentNow = Date.now()
-  try {
-    await transitionTaskStatusByEvent({
-      db,
-      taskId: id,
-      event: opts.event,
-      allowTerminal: true,
-      extra: {
-        finishedAt: null,
-        errorSummary: null,
-        errorMessage: null,
-        failedNodeId: null,
-        ...opts.extra,
-      },
-      onTransitionTx: async (tx, transition) => {
-        await opts.onClaimTx?.(tx, transition)
-        await submitContinuationIntentInTx({
-          tx,
-          taskId: id,
-          intentId,
-          kind: opts.intentKind,
-          source: continuationSource(deps, opts.intentKind),
-          actorUserId: deps.actorUserId ?? null,
-          payload: { v: 1, event: opts.event.kind },
-          now: intentNow,
-          advanceOperationGeneration: opts.intentKind !== 'gate-continuation',
-        })
-      },
-      reason: opts.reason,
-    })
-  } catch (err) {
-    if (err instanceof ConflictError) {
-      if (
-        err.code === 'task-source-terminal-closed' ||
-        err.code === 'task-source-terminal-merged'
-      ) {
-        throw err
-      }
-      throw new ConflictError(
-        opts.conflictCode,
-        `task '${id}' changed state concurrently; only [${allowedFrom.join('/')}] tasks can ${opts.verb}`,
-      )
-    }
-    throw err
-  }
-
-  let admittedTask: Task | null = null
-  const admittedContinuation: RepositoryPreparationStep = {
-    async run(context) {
-      // Direct framework children (commit-message / merge-resolve agents) are
-      // nested node_runs and intentionally absent from `toRollback`. Fence every
-      // held native-session owner for the task before any rollback or fresh kick.
-      await reapHeldRuntimeSessionOwnersForTask(db, id, opts.reason, deps, log)
-
-      // Collect the latest non-done run per nodeId — those need rollback + a fresh
-      // attempt. Freshness is ULID id-order, matching the scheduler's authority
-      // (isFresherNodeRun). retryIndex ordering was wrong: a clarify-driven rerun is
-      // minted with retryIndex 0 but a newer id, so an older failed retry with a
-      // higher retryIndex would shadow it and resume would roll the worktree back to
-      // the wrong row's pre_snapshot. See
-      // scheduler-boundary-resume-retryindex-vs-id.test.ts.
-      const runs = await createNodeRunQueries(db).listResumeRuns(
-        id,
-        task.repos.map((repo) => repo.mountPath),
-      )
-      const toRollback = await opts.selectRollback(runs)
-
-      // RFC-108 T7 (AR-17): cross-node-run all-or-nothing pre-pass. The within-row
-      // rollback is fail-closed, but the reset loop below touches rows one at a
-      // time — if a LATER row's pre_snapshot was gc-pruned, earlier rows are already
-      // reset (and their children killed) when escalateSnapshotLost fires, leaving a
-      // half-rolled-back worktree. Verify EVERY row's snapshot still resolves to a
-      // commit (side-effect-free `checkOnly`) BEFORE killing/resetting anything.
-      for (const r of toRollback) {
-        const probe = await rollbackNodeRunForResume(db, task, r.rollback, log, { checkOnly: true })
-        if (probe.failures.some((f) => f.code === 'snapshot-missing')) {
-          await escalateSnapshotLost(
-            db,
-            requireTaskRecoveryOperations(deps),
-            id,
-            r,
-            probe,
-            opts.reason,
-          ) // throws 409
-        }
-      }
-
-      // RFC-098 WP-8 (audit S-15) + RFC-108 T9 (AR-14): kill pass FIRST, separated
-      // from the rollback pass for cross-row safety. If the row's opencode child
-      // from a previous daemon is still alive, group-kill it (SIGTERM→SIGKILL)
-      // BEFORE any worktree is rolled back — a survivor would keep writing into a
-      // worktree we are about to reset. T9: a child that SURVIVES the kill (matched
-      // to our recorded spawn binary, so confidently OURS + alive) is the
-      // double-write danger the old fuzzy gate let slip — REFUSE the whole resume
-      // (409) rather than git-reset under a live writer. Killing is idempotent and
-      // safe; only the rollback is gated on every child being dead/recycled.
-      for (const r of toRollback) {
-        await reapRunBeforeWorktreeReset(db, id, r, opts.reason, deps, log)
-      }
-
-      for (const r of toRollback) {
-        const outcome = await rollbackNodeRunForResume(db, task, r.rollback, log)
-        // RFC-098 WP-9: a gc-pruned pre-snapshot is NOT warn-and-continue — the
-        // fail-closed rollback touched nothing, but the baseline is gone forever;
-        // flip the task failed (errorSummary='snapshot-lost') and surface a 409.
-        // Other failure codes keep the historical warn-and-continue net below.
-        if (outcome.failures.some((f) => f.code === 'snapshot-missing')) {
-          await escalateSnapshotLost(
-            db,
-            requireTaskRecoveryOperations(deps),
-            id,
-            r,
-            outcome,
-            opts.reason,
-          )
-        }
-        // The scheduler creates a new node_run with retry_index = max+1 on its
-        // own when it sees no pending run for the node, so we just leave the
-        // failed row as historical. The task row already flipped pending above
-        // (RFC-097 admission winner); a rollback failure keeps it pending — same
-        // warn-and-continue net as before, runTask kicks regardless. A daemon
-        // crash mid-rollback leaves a pending orphan that boot reaping flips to
-        // interrupted (reapOrphanRuns, RFC-097 crash-window compensation).
-      }
-
-      const next = (await getTask(db, id)) as Task
-      admittedTask = next
-
-      const controller = activeTaskDriverController(id)
-      if (controller === undefined || controller.signal !== context.signal) {
-        log.error(`${opts.reason}: exact controller was replaced before task drive`, {
-          taskId: id,
-        })
-        return { kind: 'terminal-won' }
-      }
-      return { kind: 'ready' }
-    },
-  }
-  const coordinator = composeTestTaskDriveFactory({
-    taskExecutionParticipants: deps.taskExecutionParticipants,
-    humanGateOpen: deps.humanGateOpen,
-    historyRestrictions: deps.historyRestrictions,
-    deps,
-    appHome: deps.appHome ?? Paths.root,
-  }).coordinatorFor({ admittedContinuation })
-  const receipt = await coordinator.submit({
-    taskId: id,
-    intentId,
-    completionMode: deps.awaitScheduler === true ? 'await-settle' : 'background',
-  })
-  if (receipt.kind === 'not-attached') {
-    return (await getTask(db, id)) as Task
-  }
-  if (deps.awaitScheduler === true) return (await getTask(db, id)) as Task
-  return admittedTask ?? ((await getTask(db, id)) as Task)
 }
 
 /**
@@ -1827,40 +1026,6 @@ export async function computeWorkflowSyncPreview(
 }
 
 /**
- * Retry one node_run, optionally cascading to all downstream nodes that
- * depended on it (P-3-09). The retry happens by:
- *
- *   - rolling the worktree back to the node_run's `pre_snapshot`
- *   - marking the target run + (cascaded) downstream runs as failed so the
- *     scheduler picks them up on the next runTask() invocation
- *   - flipping task.status back to pending
- *   - kicking the scheduler
- */
-/**
- * RFC-243 §4.2 — child-side gate: once the parent's call row is TERMINAL the
- * invocation is over; re-running the child would write into an iso the parent
- * will never merge (retrying the CALL NODE on the parent is the sanctioned
- * re-run path). Non-child tasks and live call rows pass untouched; a missing
- * call row (dirty data) fails open to the pre-RFC-243 behavior.
- */
-async function assertChildTaskDrivable(
-  db: PersistenceDb,
-  task: { id: string; parentTaskId?: string | null; parentNodeRunId?: string | null },
-  verb: string,
-): Promise<void> {
-  const callRowId = task.parentNodeRunId ?? null
-  if ((task.parentTaskId ?? null) === null || callRowId === null) return
-  const row = await createNodeRunQueries(db).readFields(callRowId, ['status'])
-  if (row === null) return
-  if (isTerminalNodeRunStatus(row.status as NodeRunStatus)) {
-    throw new ConflictError(
-      'call-row-finalized',
-      `task '${task.id}' is a child execution whose call node run already settled ('${row.status}'); ${verb} the parent's call node instead`,
-    )
-  }
-}
-
-/**
  * RFC-287 四轮门(用户拍板)—— 重跑准备**之前**,把上一次准备留下的残骸定向清掉。
  *
  * 为什么需要:`materializeSpace` 建完工作树、回填事务提交**之前**进程被 SIGKILL /
@@ -1993,48 +1158,6 @@ async function reclaimStalePrepArtifacts(
       })
     }
   }
-}
-
-/** RFC-387: test-only repository retry over the factory; removed in W4. */
-export async function retryRepositoryPreparation(
-  db: PersistenceDb,
-  taskId: string,
-  deps: TaskContinuationDependencies,
-  repositoryPreparationLookup: RepositoryPreparationLookup,
-): Promise<Task> {
-  const appHome = deps.appHome ?? Paths.root
-  const factory = composeTestTaskDriveFactory({
-    taskExecutionParticipants: deps.taskExecutionParticipants,
-    humanGateOpen: deps.humanGateOpen,
-    historyRestrictions: deps.historyRestrictions,
-    deps: { ...deps, db },
-    appHome,
-    repositoryPreparation: createPersistedRepositoryPreparationStep({
-      deps: {
-        ...deps,
-        db,
-        repositoryPreparationLookup,
-        repositoryWorkspace: repositoryWorkspaceFor({ ...deps, db }),
-        loadFrozenSpaceLayout: (sourceTaskId) => loadFrozenSpaceLayout(db, sourceTaskId),
-      },
-      appHome,
-    }),
-  })
-  await taskDriveComposition
-    .createRepositoryPreparationRetryCommand({
-      db,
-      coordinator: {
-        submit: (request) =>
-          factory.session.submit({
-            ...request,
-            completionMode: deps.awaitScheduler === true ? 'await-settle' : 'background',
-          }),
-      },
-      isTaskActive: isTaskDriverActive,
-      awaitTaskSettled: awaitTaskDriverReleasedSettled,
-    })
-    .retry(taskId, deps.actorUserId === undefined ? undefined : { actorUserId: deps.actorUserId })
-  return (await getTask(db, taskId)) as Task
 }
 
 /**

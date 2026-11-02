@@ -240,18 +240,20 @@ describe('RFC-103 T2 源码层接线断言（防再漂）', () => {
     }
   })
 
-  test('三个存续 continuation 共用一个 runtimeConfigOpts → coordinator 漏斗', () => {
-    const spreads = taskSrc.match(/\.\.\.runtimeConfigOpts\(/g) ?? []
-    // RFC-332 把 start/resume/retry/retry-prep 四份 spread 收进一个 coordinator
-    // factory；RFC-333 的 exact human-gate wake 复用同一 factory，但不是第五份
-    // admission。配置单源仍只出现一次，四个 admission + 一个 wake 都必须接入。
-    // RFC-359 AC-1（第 9 刀）：5 → 4。`retryNode` 整份删除（`retry` 两份实现合一），
-    // 它那台 coordinator 随之出账——重试的驱动改由紧随其后的 `resumeTask` 那一台负责，
-    // 配置单源不变（仍只有一处 `...runtimeConfigOpts(`）。
-    expect(spreads).toHaveLength(1)
-    // RFC-395 II-pre：测试专用 admission 退役，剩余三台 continuation 仍走同一配置漏斗。
-    expect(taskSrc.match(/composeTestTaskDriveFactory\(\{/g) ?? []).toHaveLength(3)
-    // RFC-387: only the four test-only admissions retain a factory wrapper; production uses the session.
+  test('配置单源：bootstrap 一处 runtimeConfigOpts → 唯一一处协调器工厂装配', () => {
+    // RFC-332 把 start/resume/retry/retry-prep 四份 spread 收进一个 coordinator factory；RFC-359 AC-1
+    // （第 9 刀）删 `retryNode` 后剩三台测试专用 continuation 加 RFC-333 的 exact wake，仍共用
+    // `services/task.ts` 里那一处 `...runtimeConfigOpts(`。RFC-424 把那组测试专用装配迁出 `services/task.ts`
+    // （tests/helpers/legacyTaskDrive.ts），生产只在 bootstrap 装配一次工厂：配置单源改在那里锁。
+    const bundle = readFileSync(
+      join(import.meta.dir, '../src/bootstrap/daemonModules/taskExecution.ts'),
+      'utf8',
+    )
+    expect(bundle.match(/\.\.\.runtimeConfigOpts\(/g) ?? []).toHaveLength(1)
+    expect(bundle.match(/createTaskDriveCoordinatorFactory\(\{/g) ?? []).toHaveLength(1)
+    expect(taskSrc).not.toContain('...runtimeConfigOpts(')
+    expect(taskSrc).not.toContain('createTaskDriveCoordinatorFactory')
+    expect(taskSrc).not.toContain('wakeHumanGateContinuation')
     const factory = readFileSync(
       join(
         import.meta.dir,
@@ -261,12 +263,6 @@ describe('RFC-103 T2 源码层接线断言（防再漂）', () => {
     )
     expect(factory.match(/new DefaultTaskDriveCoordinator\(/g)).toHaveLength(1)
     expect(factory).toContain('...context.runtime.runtime,')
-
-    const wakeStart = taskSrc.indexOf('export async function wakeHumanGateContinuation(')
-    const wakeEnd = taskSrc.indexOf('\nexport ', wakeStart + 1)
-    const wakeBlock = taskSrc.slice(wakeStart, wakeEnd)
-    expect(wakeStart).toBeGreaterThan(-1)
-    expect(wakeBlock.match(/composeTestTaskDriveFactory\(\{/g) ?? []).toHaveLength(1)
   })
 
   // RFC-266: RFC-243 子任务的 deps 装配（buildChildDeps）必须原样带上三个并发键。

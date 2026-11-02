@@ -1,4 +1,6 @@
 // RFC-386 / RFC-387: the application factory is the only coordinator constructor; legacy entry points are test-only.
+// RFC-424: the test-only entries left services/task.ts for tests/helpers — the factory is assembled in bootstrap alone,
+// and the retired entry names may be neither declared nor called anywhere in src.
 import { describe, expect, test } from 'bun:test'
 import { resolve } from 'node:path'
 import ts from 'typescript'
@@ -8,11 +10,8 @@ const PREFIX = 'packages/backend/src/'
 const FACTORY = 'modules/task-execution/application/drive/taskDriveCoordinatorFactory.ts'
 const BUNDLE = 'bootstrap/daemonModules/taskExecution.ts'
 const CONSTRUCTION_SITES = [`${FACTORY}#createTaskDriveCoordinatorFactory/coordinatorFor`] as const
-const ASSEMBLY_SITES = [
-  `${BUNDLE}#composeDaemonTaskExecutionModules`,
-  'services/task.ts#composeTestTaskDriveFactory',
-]
-const TEST_ONLY = [
+const ASSEMBLY_SITES = [`${BUNDLE}#composeDaemonTaskExecutionModules`]
+const RETIRED = [
   'startTask',
   'wakeHumanGateContinuation',
   'resumeDynamicWorkflowExecution',
@@ -61,8 +60,15 @@ export function driveFactoryViolations(units: readonly SourceUnit[]): string[] {
         constructions.push(`${path}#${functionPath(node)}`)
       if (ts.isIdentifier(node) && node.text === 'createTaskDriveCoordinator')
         errors.push(`${path}: retired coordinator entry`)
-      if (path !== 'services/task.ts' && TEST_ONLY.some((name) => called(node, name)))
-        errors.push(`${path}: production caller of a test-only entry`)
+      if (RETIRED.some((name) => called(node, name)))
+        errors.push(`${path}: caller of a retired test-only entry`)
+      if (
+        (ts.isFunctionDeclaration(node) || ts.isVariableDeclaration(node)) &&
+        node.name !== undefined &&
+        ts.isIdentifier(node.name) &&
+        RETIRED.includes(node.name.text)
+      )
+        errors.push(`${path}: retired test-only entry ${node.name.text} declared`)
       if (
         path === 'bootstrap/daemonModules/adapters.ts' &&
         ts.isIdentifier(node) &&
@@ -101,10 +107,6 @@ function valid(): SourceUnit[] {
       FACTORY,
       'function createTaskDriveCoordinatorFactory() { function coordinatorFor() { return new DefaultTaskDriveCoordinator({}); } }',
     ),
-    unit(
-      'services/task.ts',
-      'function composeTestTaskDriveFactory() { return createTaskDriveCoordinatorFactory({}); }',
-    ),
     unit('bootstrap/daemonModules/adapters.ts', 'const adapters = {};'),
     unit(
       BUNDLE,
@@ -140,8 +142,8 @@ describe('RFC-386 coordinator construction inventory', () => {
       ],
       [1, fixtures[1]!.text + 'function another() { return new DefaultTaskDriveCoordinator({}); }'],
       [2, 'function launchPrepared() { return new DefaultTaskDriveCoordinator({}); }'],
+      [3, 'function drive() { return new DefaultTaskDriveCoordinator({}); }'],
       [4, 'function drive() { return new DefaultTaskDriveCoordinator({}); }'],
-      [5, 'function drive() { return new DefaultTaskDriveCoordinator({}); }'],
     ] as const) {
       const mutated = [...fixtures]
       mutated[index] = sourceUnit(fixtures[index]!.path, replacement)
@@ -162,17 +164,17 @@ describe('RFC-386 coordinator construction inventory', () => {
       'function composeDaemonTaskExecutionModules() { function onRequest() { createTaskDriveCoordinatorFactory({}); } }',
     ]) {
       const fixtures = valid()
-      fixtures[3] = unit(BUNDLE, replacement)
+      fixtures[2] = unit(BUNDLE, replacement)
       expect(driveFactoryViolations(fixtures)).toEqual([
         expect.stringContaining('session factory assemblies differ'),
       ])
     }
   })
 
-  test('rejects retired entry points, production test-wrapper callers and provider room adapters', () => {
+  test('rejects retired entry points, callers of the retired test-only entries and provider room adapters', () => {
     for (const text of [
       'createTaskDriveCoordinator({})',
-      ...TEST_ONLY.map((name) => `${name}({})`),
+      ...RETIRED.map((name) => `${name}({})`),
       'const adapters = { roomContinuation() {} }',
     ]) {
       expect(
@@ -181,8 +183,28 @@ describe('RFC-386 coordinator construction inventory', () => {
     }
   })
 
+  test('RFC-424: services/task.ts may neither re-assemble the factory nor re-declare a retired entry', () => {
+    expect(
+      driveFactoryViolations([
+        ...valid(),
+        unit(
+          'services/task.ts',
+          'function composeTestTaskDriveFactory() { return createTaskDriveCoordinatorFactory({}); }',
+        ),
+      ]),
+    ).toEqual([
+      'services/task.ts: retired test-only entry composeTestTaskDriveFactory declared',
+      expect.stringContaining('session factory assemblies differ'),
+    ])
+    for (const name of RETIRED)
+      for (const text of [`export function ${name}() {}`, `export const ${name} = () => {}`])
+        expect(driveFactoryViolations([...valid(), unit('services/task.ts', text)])).toEqual([
+          `services/task.ts: retired test-only entry ${name} declared`,
+        ])
+  })
+
   test('both child entry points must consume a profile exactly once', () => {
-    for (const index of [4, 5]) {
+    for (const index of [3, 4]) {
       for (const replacement of ['', 'factory.coordinatorFor({}); factory.coordinatorFor({});']) {
         const fixtures = valid()
         fixtures[index] = sourceUnit(fixtures[index]!.path, replacement)

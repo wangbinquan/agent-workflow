@@ -41,7 +41,8 @@ import {
   listReviewSummaries,
   submitReviewDecision,
 } from '@/modules/collaboration/infrastructure/review'
-import { abortAllActiveTasks, isTaskActive, wakeHumanGateContinuation } from '@/services/task'
+import { abortAllActiveTasks, isTaskActive } from '@/services/task'
+import { wakeHumanGateContinuation } from './helpers/legacyTaskDrive'
 import { runTestGit } from './helpers/testCommand'
 import { reenterScheduler } from './reenter-scheduler'
 import {

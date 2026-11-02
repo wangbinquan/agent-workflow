@@ -1,7 +1,7 @@
 import { TASK_AGGREGATE_LOCK_ORDER } from '@/modules/task-execution/application/ports/taskAggregateWrite'
 // RFC-395 II-a A2: definition mutations and workgroup config reads stay behind their ports.
 import { setDefaultTimeout, expect, test } from 'bun:test'
-import { readFileSync, readdirSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { join, relative, resolve } from 'node:path'
 import ts from 'typescript'
 
@@ -417,10 +417,11 @@ test('each reader uses its launch or runtime side', () => {
 })
 
 test('both workgroup contexts import the shared decoder and types without adding a TaskExecution edge', () => {
-  const state = readFileSync(
-    resolve(root, 'modules/resource-catalog/infrastructure/legacy/workgroup/state.ts'),
-    'utf8',
-  )
+  // RFC-424: the legacy work-group state module lost its last production consumer and left src for
+  // tests/helpers; the resource-catalog side of the work-group context is the task room alone.
+  expect(
+    existsSync(resolve(root, 'modules/resource-catalog/infrastructure/legacy/workgroup/state.ts')),
+  ).toBe(false)
   const room = readFileSync(
     resolve(root, 'modules/resource-catalog/infrastructure/workgroupTaskRoom.ts'),
     'utf8',
@@ -442,12 +443,9 @@ test('both workgroup contexts import the shared decoder and types without adding
   expect(adapter).toContain('taskWorkgroupConfigFromRow({')
   expect(adapter).toContain('columns.workgroupLaunchConfigJson')
   expect(adapter).toContain('columns.workgroupConfigJson')
-  expect(state).not.toContain('loadDbState')
-  expect(state).not.toContain('EngineDbState')
   expect(room).toMatch(
     /import\s*\{[^}]*type TaskWorkgroupRuntimeConfig[^}]*\}\s*from '@agent-workflow\/shared'/,
   )
-  expect(state).not.toContain("from '@/modules/task-execution/public/queries'")
   expect(room).not.toContain("from '@/modules/task-execution/public/types'")
 })
 

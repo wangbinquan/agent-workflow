@@ -534,7 +534,10 @@ const SANCTIONED_SINGLE_ENGINE: readonly {
       code.includes('createTaskExecutionTestTopology') ||
       code.includes('composeTaskExecutionTestRuntime') ||
       /createSqlite[A-Za-z]*TaskExecution[A-Za-z]*Participant/.test(code) ||
-      /from\s*'(@\/|(\.\.\/)+src\/)services\/task'/.test(code),
+      /from\s*'(@\/|(\.\.\/)+src\/)services\/task'/.test(code) ||
+      // RFC-424：`services/task.ts` 的测试专用续跑入口（人工门 wake、协调器工厂装配）原样迁入
+      // `tests/helpers/legacyTaskDrive.ts`——同一个概念换了拼法，不是新写的单引擎判据。
+      /from\s*'(\.\.?\/)+helpers\/legacyTaskDrive'/.test(code),
   },
   {
     /**
@@ -908,6 +911,12 @@ describe('RFC-359 W5-T19f —— 测试不得写死引擎（高水位，只降�
     expect(sanctionFor('plain.test.ts', 'await runTask({ taskId, db, appHome })\n')).toBe(
       'sqlite-execution-engine',
     )
+    expect(
+      sanctionFor(
+        'plain.test.ts',
+        "import { wakeHumanGateContinuation } from './helpers/legacyTaskDrive'\n",
+      ),
+    ).toBe('sqlite-execution-engine')
     expect(sanctionFor('plain.test.ts', "const raw = new Database(join(root, 'aw.db'))\n")).toBe(
       'real-file-database',
     )

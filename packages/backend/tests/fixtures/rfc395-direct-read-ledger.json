@@ -14,6 +14,7 @@
   },
   "files": {
     "architecture/rfc395-r1-target-dormancy.test.ts": "target-model-contract",
+    "helpers/legacyWorkgroupState.ts": "target-runtime-state",
     "helpers/nodeRunSupersession.ts": "legacy-sql-oracle",
     "migration-0002.test.ts": "historical-schema",
     "migration-0008-cached-repos.test.ts": "historical-schema",

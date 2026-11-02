@@ -53,6 +53,17 @@ const WRAPPER_MECHANICS_SRC = [
 const NODE_MECHANICS_SRC = AGENT_MECHANICS_SOURCE
 const RUNNER_SRC = readTaskAgentSources()
 const TASK_SRC = readFileSync(resolve(import.meta.dir, '..', 'src', 'services', 'task.ts'), 'utf-8')
+const RESUME_SRC = readFileSync(
+  resolve(
+    import.meta.dir,
+    '../src/modules/task-execution/infrastructure/childTaskLifecycleParticipant.ts',
+  ),
+  'utf-8',
+)
+const ROUTE_OPERATIONS_SRC = readFileSync(
+  resolve(import.meta.dir, '../src/modules/task-execution/infrastructure/taskRouteOperations.ts'),
+  'utf-8',
+)
 // RFC-359 AC-1：PB-G5 盯的那段搬了家——纯读三件两个引擎合一之后，任务 diff 的拼装是
 // `taskDiffProjection`，住在 task-execution 的共用实现文件里（文件名带 `postgresql` 前缀是
 // 待还的命名债，见 RFC-359 plan §5hj——它现在是两个引擎共用的那一份）。
@@ -131,12 +142,15 @@ describe('RFC-066 PR-B — source guards', () => {
     expect(/cwd:\s*\w+\.repos\[/.test(RUNNER_SRC)).toBe(false)
   })
 
-  test('PB-G4 resume + retry rollback funnels through rollbackNodeRunForResume', () => {
-    expect(TASK_SRC.includes('async function rollbackNodeRunForResume(')).toBe(true)
-    // Both resumeTask and retryNode call into the helper. Match `await
-    // rollbackNodeRunForResume(...)` invocations.
-    const calls = TASK_SRC.match(/await rollbackNodeRunForResume\(/g) ?? []
+  test('PB-G4 resume + retry rollback funnels through the shared rollback authority', () => {
+    // RFC-424: the legacy `rollbackNodeRunForResume` shell in services/task.ts went with the test-only
+    // resume entry. Production resume (the resume participant's `rollbackForResume`) and retry / sync
+    // (taskRouteOperations) both call the shared `rollbackNodeRunWorktrees` (services/nodeRollback.ts).
+    expect(RESUME_SRC.includes('async function rollbackForResume(')).toBe(true)
+    const calls = RESUME_SRC.match(/await rollbackNodeRunWorktrees\(/g) ?? []
     expect(calls.length).toBeGreaterThanOrEqual(2)
+    expect(ROUTE_OPERATIONS_SRC.includes('await rollbackNodeRunWorktrees(')).toBe(true)
+    expect(TASK_SRC.includes('rollbackNodeRunForResume')).toBe(false)
   })
 
   test('PB-G5 diff endpoint branches on single vs multi via canonical mount paths + `# === Repo:` header', () => {

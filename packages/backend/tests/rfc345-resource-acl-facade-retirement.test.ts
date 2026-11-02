@@ -519,16 +519,8 @@ const EXACT_COMPATIBILITY_DEBT: readonly ObservedCompatibilityDebt[] = [
     'workgroup question dispatch node identities',
     REMOVE_OWNERS.collaborationQuestions,
   ),
-  edge(
-    'services/workgroup/state.ts',
-    'services/task.ts',
-    // RFC-359 W11 减账：`insertWorkgroupTaskStateTx` 的签名钉在 `DbTxSync` 上，而 `services/task.ts`
-    // 那笔任务铸造事务已改走中立原语，唯一调用点就地内联成一条 awaited INSERT，import 随之消失。
-    // 剩 `setDwStateTx` 一个符号。
-    ['setDwStateTx'],
-    'task workgroup state initialization',
-    REMOVE_OWNERS.taskExecutionPersistence,
-  ),
+  // RFC-424：`services/workgroup/state.ts` → `services/task.ts` 的最后一个符号 `setDwStateTx`
+  // 随测试专用的动态工作流续跑准入删除，整条边销账。
   edge(
     'services/workgroups.ts',
     'modules/task-execution/infrastructure/legacyCallClosure.ts',

@@ -1,3 +1,9 @@
+// RFC-424: moved verbatim from src/modules/resource-catalog/infrastructure/legacy/workgroup/state.ts (and its
+// services/workgroup/state.ts re-export facade). Its last production consumer was the retired test-only dynamic
+// workflow resume admission in services/task.ts; production reads and writes `workgroup_task_state` through
+// task-execution's workgroupTurnsPersistence and the resource-catalog work-group task room. Tests keep this copy as
+// a fixture library; the assertions that exercise its own gate state machine are follow-up debt (RFC-424 proposal §3).
+//
 // RFC-217 T2 — the SINGLE codec + CAS for `workgroup_task_state` (design §2).
 //
 // Everything that used to hide in tasks.workgroup_config_json's untyped
@@ -31,7 +37,7 @@ import {
 import { and, eq, inArray } from 'drizzle-orm'
 import type { DbClient } from '@/db/client'
 import type { DbTxSync } from '@/db/txSync'
-import { getAgentById } from '../agent'
+import { getAgentById } from '@/modules/resource-catalog/infrastructure/legacy/agent'
 import { parseStoredTemplateMetadata } from '@/modules/resource-catalog/application/workgroups/workgroupRoomProjection'
 
 export type WorkgroupGateStatus =

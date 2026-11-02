@@ -46,7 +46,6 @@ import { taskExecutionResourceDependencies } from '@/services/execution/taskExec
 import { getWorkflow } from '@/services/workflow'
 import {
   getTask,
-  composeTestTaskDriveFactory,
   composeDeferredRepositoryPreparationStep,
   runtimeConfigOpts,
   type TaskContinuationDependencies,
@@ -54,7 +53,7 @@ import {
 import type { TaskLaunchProvenance } from '@/modules/task-execution/domain/taskLaunchOrigin'
 import type { TaskDriveCoordinator } from '@/modules/task-execution/application/drive/taskDriveTypes'
 import { createTestHostTaskLaunchKernel } from './hostTaskLaunchKernel'
-import { createTestTaskDriveCoordinator } from './legacyTaskDrive'
+import { composeTestTaskDriveFactory, createTestTaskDriveCoordinator } from './legacyTaskDrive'
 import { Paths } from '@/util/paths'
 import { NotFoundError } from '@/util/errors'
 import type { WorktreeCleanupProvenance } from '@/util/git'

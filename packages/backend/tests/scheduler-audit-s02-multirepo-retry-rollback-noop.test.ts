@@ -368,8 +368,13 @@ function registerNativeCases2() {
     // behavioral nets are this file + resume-multi-repo-rollback.test.ts +
     // rfc092-node-rollback.test.ts; the fork-deletion source guards live in
     // scheduler-audit-s13-freshest-fork-source-guards.test.ts).
-    const taskSrc = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'services', 'task.ts'),
+    // RFC-424: the resume path is the production resume participant — the legacy
+    // services/task.ts shell went with the test-only resume entry.
+    const resumeSrc = readFileSync(
+      resolve(
+        import.meta.dir,
+        '../src/modules/task-execution/infrastructure/childTaskLifecycleParticipant.ts',
+      ),
       'utf-8',
     )
     // RFC-405 / RFC-406: both agent-executor lanes (and their binding) left nodeMechanics.ts.
@@ -378,19 +383,18 @@ function registerNativeCases2() {
       resolve(import.meta.dir, '..', 'src', 'services', 'nodeRollback.ts'),
       'utf-8',
     )
-    // The resume thin shell keeps its historical shape (PB-G4 of
-    // source-text-rfc066-pr-b-guards.test.ts) and delegates to the shared
-    // function…
-    expect(taskSrc.includes('async function rollbackNodeRunForResume(')).toBe(true)
-    expect(taskSrc.includes('await rollbackNodeRunWorktrees(')).toBe(true)
+    // The resume rollback (PB-G4 of source-text-rfc066-pr-b-guards.test.ts)
+    // delegates to the shared function…
+    expect(resumeSrc.includes('async function rollbackForResume(')).toBe(true)
+    expect(resumeSrc.includes('await rollbackNodeRunWorktrees(')).toBe(true)
     // …the per-repo map read lives in the shared authority…
     expect(rollbackSrc.includes('preSnapshotReposJson')).toBe(true)
     // …RFC-130 SUPERSEDES the scheduler retry-rollback: the fresh-session retry no
     // longer rolls the canonical worktree back (it never wrote it) — it DISCARDS
     // the failed iso and re-branches a fresh one. So the scheduler's runOneNode
     // path uses discardNodeIso + createIsoUnderLock, NOT
-    // rollbackNodeRunWorktrees. The resume path (task.ts) keeps the rollback
-    // authority as defense-in-depth (D10).
+    // rollbackNodeRunWorktrees. The resume path (childTaskLifecycleParticipant.ts)
+    // keeps the rollback authority as defense-in-depth (D10).
     expect(mechanicsSrc.includes('discardNodeIso(')).toBe(true)
     expect(mechanicsSrc.includes('createIsoUnderLock(')).toBe(true)
     expect(mechanicsSrc.includes('createNodeIso(')).toBe(false)

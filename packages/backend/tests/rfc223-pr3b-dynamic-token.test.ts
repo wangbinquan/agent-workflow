@@ -60,7 +60,6 @@ import { composeDynamicWorkflowLayerOneValidation } from '../src/modules/resourc
 import { triggerPreflightIssue } from '../src/services/execution/triggerPreflight'
 import { composeDynamicWorkflowPersistence } from '../src/modules/task-execution/composition/dynamicWorkflowPersistence'
 import { DrizzleNodeRunLifecyclePersistence } from '../src/modules/task-execution/infrastructure/nodeRunLifecyclePersistence'
-import { setNodeRunStatus } from '../src/services/lifecycle'
 import {
   buildDwPoolMembers,
   buildOrchestratorPrompt,
@@ -68,8 +67,14 @@ import {
   dwPoolTokenMap,
   ORCHESTRATOR_WORKFLOW_PORT,
 } from '../src/modules/task-execution/domain/dynamicWorkflowOrchestrator'
-import { abortAllActiveTasks, resumeDynamicWorkflowExecution } from '../src/services/task'
-import { loadWorkgroupTaskState } from '../src/services/workgroup/state'
+import { abortAllActiveTasks, getTask } from '../src/services/task'
+import { buildActor } from '../src/auth/actor'
+import type { DirectAuthenticatedAuthority } from '../src/modules/identity-access/public/participants'
+import { createFileWorkspacePresenceQueries } from '../src/modules/source-control/composition'
+import { composeWorktreeResumePreflight } from '../src/modules/task-execution/public/participants'
+import { wakeHumanGateContinuation } from './helpers/legacyTaskDrive'
+import { composeTestWorkgroupTaskRoom } from './helpers/workgroupTaskRoom'
+import { loadWorkgroupTaskState } from './helpers/legacyWorkgroupState'
 import { createUser } from './helpers/userFixture'
 import type {
   WorkgroupTurnHostResult as WorkgroupHostRunResult,
@@ -627,26 +632,17 @@ describe('RFC-223 AC16 — two-owner same-name dynamic members stay id-canonical
         (run) => run.rerunCause === DW_GATE_CAUSE,
       )
       expect(holder?.status).toBe('awaiting_review')
-      await setNodeRunStatus({
-        db,
-        nodeRunId: holder!.id,
-        to: 'done',
-        allowedFrom: ['awaiting_review'],
-        reason: 'ac16-test-approved',
-      })
-      const { rejectionComment: _comment, ...dwRest } = generatedDw as DwState
-
-      await withEnv(
-        {
-          MOCK_OPENCODE_OUTPUTS: JSON.stringify({ out: 'done' }),
-          MOCK_OPENCODE_CAPTURE_CONFIG_TO: configCapturePath,
-          MOCK_OPENCODE_CAPTURE_ARGV_TO: argvCapturePath,
-        },
-        () =>
-          resumeDynamicWorkflowExecution(
-            db,
-            taskId,
-            {
+      // RFC-424: approve through the production confirm command of the work-group task room (holder close,
+      // DAG swap and phase flip in one transaction); the injected drive runs the confirmed DAG to settle.
+      const room = composeTestWorkgroupTaskRoom(db, {
+        continuation: {
+          assertResumable: composeWorktreeResumePreflight({
+            getTask: (id) => getTask(db, id),
+            taskRecoveryOperations: taskRecoveryOperations(db),
+            worktreeExists: (reference) => createFileWorkspacePresenceQueries().exists(reference),
+          }),
+          driveAfterCommit: (continuation) =>
+            wakeHumanGateContinuation(continuation.taskId, continuation.intentId, {
               taskExecutionParticipants,
               humanGateOpen: composeHumanGateOpenParticipantFactory(),
               historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
@@ -659,12 +655,34 @@ describe('RFC-223 AC16 — two-owner same-name dynamic members stay id-canonical
               awaitScheduler: true,
               defaultPerNodeTimeoutMs: 10_000,
               defaultNodeRetries: 0,
-            },
-            {
-              workflowSnapshot: JSON.stringify(generatedDef),
-              dw: { ...dwRest, phase: 'executing' },
-            },
-          ),
+            }),
+        },
+      })
+      const ownerAuthority = Object.freeze({
+        ...buildActor({
+          source: 'session',
+          user: {
+            id: ownerA.id,
+            username: ownerA.username,
+            displayName: ownerA.displayName,
+            role: 'user',
+            status: 'active',
+          },
+        }),
+        userId: ownerA.id,
+      }) as unknown as DirectAuthenticatedAuthority
+
+      await withEnv(
+        {
+          MOCK_OPENCODE_OUTPUTS: JSON.stringify({ out: 'done' }),
+          MOCK_OPENCODE_CAPTURE_CONFIG_TO: configCapturePath,
+          MOCK_OPENCODE_CAPTURE_ARGV_TO: argvCapturePath,
+        },
+        () =>
+          room.commands.confirmDynamicWorkflow(ownerAuthority, {
+            taskId,
+            submission: { kind: 'json-body', body: JSON.stringify({ decision: 'approve' }) },
+          }),
       )
 
       const finalTask = (await readTaskFixtures(db, { id: taskId }))[0]

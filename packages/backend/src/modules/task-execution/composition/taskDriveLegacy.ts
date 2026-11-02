@@ -3,13 +3,13 @@
 // Keep this as one explicit namespace-import seam: public/commands exposes only
 // the durable three-field submission contract, while services/task.ts still
 // owns command-specific preparation/rollback adapters until RFC-294 W4.
+// RFC-424: the test-only drive entries left services/task.ts, and the re-exports only they used went with them. What
+// remains serves the deferred repository preparation in services/task.ts, bootstrap's coordinator factory and room
+// continuation, and two drive helpers that tests read.
 
 export {
   DefaultTaskDriveCoordinator,
   skipRepositoryPreparation,
-  type GateContinuationPreDriveStep,
-  type RepositoryPreparationStep,
-  type TaskDriveFailureReporter,
 } from '../application/drive/taskDriveCoordinator'
 export {
   PersistedRepositoryPreparationStep,
@@ -17,15 +17,7 @@ export {
 } from '../application/drive/repositoryPreparationStep'
 export { resolveTaskDriveConfig } from '../application/drive/taskDriveTypes'
 export type { ResolvedTaskDriveConfig } from '../application/drive/taskDriveTypes'
-export {
-  activeTaskDriverController,
-  awaitTaskDriverIdle,
-  awaitTaskDriverReleasedSettled,
-  clearTaskDriverLifecycleForTesting,
-  createDatabaseTaskDriverLifecyclePort,
-  createTaskDriverLifecyclePort,
-  isTaskDriverActive,
-} from '../infrastructure/taskDriverLifecycle'
+export { isTaskDriverActive } from '../infrastructure/taskDriverLifecycle'
 
 export type { TaskRepositoryPreparationBinding } from '../infrastructure/repositoryPreparationBinding'
 export {
@@ -35,16 +27,8 @@ export {
 } from '../infrastructure/durableRepositoryPreparation'
 export { hasDurableRepositoryPreparation } from '../infrastructure/durableRepositoryPreparation'
 
-export { admitTransferredWorkspace } from '../infrastructure/transferredWorkspaceAdmission'
-
-export {
-  createTaskDriveCoordinatorFactory,
-  type TaskDriveCoordinatorFactory,
-  type TaskDriveProfile,
-} from '../application/drive/taskDriveCoordinatorFactory'
+export { createTaskDriveCoordinatorFactory } from '../application/drive/taskDriveCoordinatorFactory'
 
 export { createRoomContinuation } from '../application/drive/roomContinuation'
-export { createRepositoryPreparationRetryCommand } from '../infrastructure/repositoryPreparationRetryCommand'
-export { createTaskExecutionPersistence } from './taskExecutionPersistence'
 
 export { composeSourceControlTaskPorts } from '../composition'

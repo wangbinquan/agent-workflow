@@ -38,7 +38,7 @@ import {
 } from '@agent-workflow/shared'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import { gateViewOf, loadWorkgroupTaskState } from '../src/services/workgroup/state'
+import { gateViewOf, loadWorkgroupTaskState } from './helpers/legacyWorkgroupState'
 import { createAgent } from '../src/modules/resource-catalog/infrastructure/legacy/agent'
 import { renderWgProtocolBlock } from '../src/modules/task-execution/domain/workgroup/protocol'
 // RFC-395 II-a: exercise the surviving production builders and constant leaf.

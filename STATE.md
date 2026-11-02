@@ -1,3 +1,16 @@
+## 2026-11-02 RFC-424 退役 `services/task.ts` 的测试专用驱动入口：协调器只在 bootstrap 装配（In Progress；`design/RFC-424-retire-test-only-task-drive-entries/`）
+
+- **来由**：RFC-294 S6 退出门「协调器只在 bootstrap 构造」。RFC-386 / 387 登记为测试专用、注明「removed in W4」的入口，在 W4-E1（RFC-362 /
+  363）落地后仍留在 `services/task.ts`。用户授权同 RFC-402，本会话调研、设计、实施与集中验证，不派 Codex。
+- **范围**：删除 `services/task.ts` 的测试专用入口（含 245 行的 `resumeKick` 链），工厂装配与 wake 迁入 `tests/helpers/`，两个动态工作流用例改走
+  生产确认命令；RFC-386 盘点锁的装配点只剩 bootstrap；按 `services/task.ts` 形状写的源码锁与路径键账本随之改钉或销账。只删测试专用代码、迁移测试。
+- **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。
+- **进度**：T1～T4 完成，随实现提交入库，待 exact SHA 的 CI（AC-5）。`services/task.ts` 2,640 → 1,763 行。删除连带退役了失去最后一个生产
+  消费者的 legacy 工作组状态模块与其 facade（迁入 `tests/helpers/legacyWorkgroupState.ts`）。集中验证 782 + 158 + 7 个文件：删除连带的
+  六处账本 / 分类问题已处置，其余为负载超时（第三轮单进程两侧全部通过）；报告类用例在候选导出仓库里通过；P0 变异 lane 通过。详见 plan
+  「集中验证（T4）」。附带 `rfc311-backup-concurrency` 一例的 20s 显式预算（RFC-423 CI 红格的归因）。
+- **后继**：`services/task.ts` 余下的生产部分（延后仓库准备、同步预览等）随 W4-E1 余项另立。
+
 ## 2026-11-02 RFC-423 task-execution composition 其余小块迁出与「只剩装配」收口锁（In Progress；`design/RFC-423-task-execution-composition-assembly-only/`）
 
 - **来由**：RFC-294 S6 退出门「task-execution `composition/` 只剩装配」的收口（RFC-416 proposal §7 第 5 项其余部分）；用户授权同 RFC-402，
@@ -9,7 +22,9 @@
   907 + 18 + 4 个文件：两处本 RFC 的账本排序 / 源码文本断言缺陷已修，其余为负载超时（第三轮单进程本候选全部通过）；两个按已提交源码生成
   报告的用例在候选导出仓库里通过；P0 变异 lane 通过。自审补了托管恢复选择走真实数据库的端口绑定用例。详见 plan「集中验证（T4）」。
   附带：`scheduler-clarify-dispatch` 一例的 20s 显式预算（RFC-422 CI 红格的归因）。
-- **后继**：S6 退出门「协调器只在 bootstrap 构造」还差 `services/task.ts` 的 legacy 协调器工厂（RFC-386 登记）。
+- **CI**：`128e439d7` 主 CI 68/70、windows-platform 全绿。红的一格是 `rfc311-backup-concurrency` 一例 5013ms 超时（纯 SQLite 用例，此前
+  1.7～2.5s），不归本 RFC（证据见 plan「CI（AC-5）」），RFC-424 给它显式预算。AC-5 以 RFC-424 的 CI 作后继证据收尾。
+- **后继**：S6 退出门「协调器只在 bootstrap 构造」还差 `services/task.ts` 的 legacy 协调器工厂（RFC-386 登记），由 RFC-424 承接。
 
 ## 2026-11-01 RFC-422 task-execution 运行 family 的打开逻辑迁入 infrastructure，composition 只剩配对（In Progress；`design/RFC-422-task-execution-run-family-openers/`）
 
@@ -23,7 +38,7 @@
   lane 通过。详见 plan「集中验证（T5）」。同提交收尾 RFC-421（`598054c42` 全绿）。
 - **CI**：`465fa2087` 主 CI 67/70、windows-platform 全绿。红的两格是 `scheduler-clarify-dispatch` 一例 PostgreSQL 5398ms 超时与
   `rfc311-perf-guards` 过滤视图的 PostgreSQL P95 偶发停顿（audit-backlog 已记的同一条），均不归本 RFC（证据见 plan「CI（AC-5）」）；
-  前者由 RFC-423 给显式预算。AC-5 以 RFC-423 的 CI 作后继证据收尾。
+  前者由 RFC-423 给显式预算。RFC-423 的运行里这两格都已通过，但该运行另有一格无关的红，AC-5 改以 RFC-424 的 CI 作后继证据收尾。
 - **后继**：composition 其余小块与收口锁；S6 退出门「协调器只在 bootstrap 构造」还差 `services/task.ts` 的 legacy 协调器工厂。
 
 ## 2026-11-01 RFC-421 task-execution agent 调用栈：中立部分迁入 application，本地调用适配器迁入 infrastructure/local（Done；`design/RFC-421-task-execution-agent-invocation-stack/`）

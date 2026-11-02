@@ -148,13 +148,28 @@ describe('RFC-108 T9 (AR-14) — spawn-binary identity gate', () => {
 
 describe('RFC-108 T9 — refuse-on-survivor wiring (source-text)', () => {
   const taskSrc = readFileSync(join(import.meta.dir, '../src/services/task.ts'), 'utf8')
+  const resumeSrc = readFileSync(
+    join(
+      import.meta.dir,
+      '../src/modules/task-execution/infrastructure/childTaskLifecycleParticipant.ts',
+    ),
+    'utf8',
+  )
+  const routeOperationsSrc = readFileSync(
+    join(import.meta.dir, '../src/modules/task-execution/infrastructure/taskRouteOperations.ts'),
+    'utf8',
+  )
   const runnerSrc = readTaskAgentSources()
 
-  test('resumeKick + retryNode escalate (409 refuse) on kill-failed', () => {
-    const calls = (taskSrc.match(/escalateLiveChildSurvived\(/g) ?? []).length
-    // definition + resumeKick + retryNode = 3
-    expect(calls).toBeGreaterThanOrEqual(3)
-    expect(taskSrc).toContain("errorSummary: 'live-child-survived'")
+  test('resume and retry escalate (409 refuse) on kill-failed', () => {
+    // RFC-424: services/task.ts's `escalateLiveChildSurvived` went with the test-only resume entry.
+    // Production resume refuses through `markUnsafeResume` (the resume participant), retry / sync
+    // through `escalateUnsafeContinuation` (taskRouteOperations); both record the code as errorSummary.
+    expect((resumeSrc.match(/code: 'live-child-survived'/g) ?? []).length).toBeGreaterThanOrEqual(2)
+    expect(resumeSrc).toContain('errorSummary: input.code')
+    expect(routeOperationsSrc).toContain("code: 'live-child-survived'")
+    expect(routeOperationsSrc).toContain('errorSummary: input.code')
+    expect(taskSrc).not.toContain('escalateLiveChildSurvived')
   })
 
   test('runner persists the spawn binary path at spawn (via the executor onSpawned receipt)', () => {

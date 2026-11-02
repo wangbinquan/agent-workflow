@@ -62,7 +62,7 @@ import { buildActor } from '../src/auth/actor'
 import { createSession } from './helpers/auth/sessionStore'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
-import { loadWorkgroupTaskState } from '../src/services/workgroup/state'
+import { loadWorkgroupTaskState } from './helpers/legacyWorkgroupState'
 import { createAgent } from '../src/modules/resource-catalog/infrastructure/legacy/agent'
 import { getAgent } from './helpers/resourceLookup'
 import {

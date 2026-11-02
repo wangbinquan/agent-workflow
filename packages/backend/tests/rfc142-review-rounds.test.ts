@@ -61,7 +61,7 @@ import {
   type RoundGroupRow,
 } from '@/modules/collaboration/infrastructure/review'
 import { createUser } from './helpers/userFixture'
-import { wakeHumanGateContinuation } from '../src/services/task'
+import { wakeHumanGateContinuation } from './helpers/legacyTaskDrive'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
 
 const openTestApplication = registerProviderHttpApplicationLifetime()

@@ -8,8 +8,8 @@ import { epoch2RuntimeTestPorts } from './helpers/epoch2RuntimePorts'
 //   1. full chain: dynamic launch (scratch) → GENERATE pass (orchestrator run
 //      emits the workflow JSON via the standard envelope; its iso delta is
 //      discarded) → parked awaiting_review with dw.phase='awaiting_confirm' +
-//      dw-gate holder → approve core (holder close + atomic swap via
-//      resumeDynamicWorkflowExecution) → runScope executes the CONFIRMED DAG
+//      dw-gate holder → approve through the production confirm command (holder
+//      close + atomic swap; RFC-424) → runScope executes the CONFIRMED DAG
 //      (real node run, envelope port captured) → task done.
 //   2. daemon-restart recovery in the executing phase: an interrupted
 //      dynamic task is picked up by boot auto-resume (RFC-167 carve-out) and
@@ -34,22 +34,25 @@ import {
   DEFAULT_PROTOCOL_RETRY_BUDGET,
   initialDwState,
   WorkflowDefinitionSchema,
-  type DwState,
 } from '@agent-workflow/shared'
 import { buildActor } from '../src/auth/actor'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 import { createResumeEngine } from './helpers/resumeEngine'
-import { loadWorkgroupTaskState } from '../src/services/workgroup/state'
+import { loadWorkgroupTaskState } from './helpers/legacyWorkgroupState'
 import { createAgent } from '../src/modules/resource-catalog/infrastructure/legacy/agent'
 import { autoResumeInterruptedTasks } from '../src/services/autoResume'
 import {
   DW_GATE_CAUSE,
   DW_GENERATE_CAUSE,
 } from '../src/modules/task-execution/domain/dynamicWorkflowGeneration'
-import { setNodeRunStatus } from '../src/services/lifecycle'
 import { DW_ORCHESTRATOR_NODE_ID } from '../src/modules/task-execution/domain/dynamicWorkflowOrchestrator'
-import { abortAllActiveTasks, resumeDynamicWorkflowExecution } from '../src/services/task'
+import { abortAllActiveTasks, getTask } from '../src/services/task'
+import type { DirectAuthenticatedAuthority } from '../src/modules/identity-access/public/participants'
+import { createFileWorkspacePresenceQueries } from '../src/modules/source-control/composition'
+import { composeWorktreeResumePreflight } from '../src/modules/task-execution/public/participants'
+import { wakeHumanGateContinuation } from './helpers/legacyTaskDrive'
+import { composeTestWorkgroupTaskRoom } from './helpers/workgroupTaskRoom'
 import { createWorkgroup } from '../src/services/workgroups'
 import {
   createTestTaskExecutionLaunchParticipant,
@@ -205,25 +208,19 @@ describe('RFC-167 T13 — dynamic workflow end to end (mock opencode)', () => {
       const holder = runsGen.find((r) => r.rerunCause === DW_GATE_CAUSE)
       expect(holder?.status).toBe('awaiting_review')
 
-      // ── phase 2: CONFIRM — approve core (route-tested elsewhere): close the
-      // holder, swap the confirmed DAG + phase atomically, resume.
-      await setNodeRunStatus({
-        db,
-        nodeRunId: holder!.id,
-        to: 'done',
-        allowedFrom: ['awaiting_review'],
-        reason: 'dw-gate-approved',
-      })
-      const { rejectionComment: _c, ...dwRest } = dwGen as DwState
-      const nextDw: DwState = { ...dwRest, phase: 'executing' }
-
-      // ── phase 3: EXECUTE — runScope runs the confirmed DAG with the mock.
-      await withActiveTaskDeadline(() =>
-        withEnv({ MOCK_OPENCODE_OUTPUTS: JSON.stringify({ plan: '拆解完毕：三步走' }) }, () =>
-          resumeDynamicWorkflowExecution(
-            db,
-            task.id,
-            {
+      // ── phase 2: CONFIRM — RFC-424: the production confirm command of the work-group task room
+      // closes the dw-gate holder, swaps in the confirmed DAG and flips the phase in one transaction,
+      // then hands the continuation to the injected drive (the test-only admission core is gone).
+      // ── phase 3: EXECUTE — the drive runs the confirmed DAG with the mock and waits for it to settle.
+      const room = composeTestWorkgroupTaskRoom(db, {
+        continuation: {
+          assertResumable: composeWorktreeResumePreflight({
+            getTask: (id) => getTask(db, id),
+            taskRecoveryOperations: taskRecoveryOperations(db),
+            worktreeExists: (reference) => createFileWorkspacePresenceQueries().exists(reference),
+          }),
+          driveAfterCommit: (continuation) =>
+            wakeHumanGateContinuation(continuation.taskId, continuation.intentId, {
               taskExecutionParticipants,
               humanGateOpen: composeHumanGateOpenParticipantFactory(),
               historyRestrictions: epoch2RuntimeTestPorts(db).historyRestrictions,
@@ -236,12 +233,19 @@ describe('RFC-167 T13 — dynamic workflow end to end (mock opencode)', () => {
               awaitScheduler: true,
               defaultPerNodeTimeoutMs: NODE_TIMEOUT_MS,
               defaultNodeRetries: DEFAULT_PROTOCOL_RETRY_BUDGET,
-            },
-            {
-              workflowSnapshot: JSON.stringify(generatedDef),
-              dw: nextDw,
-            },
-          ),
+            }),
+        },
+      })
+      const authority = Object.freeze({
+        ...actor,
+        userId: actor.user.id,
+      }) as unknown as DirectAuthenticatedAuthority
+      await withActiveTaskDeadline(() =>
+        withEnv({ MOCK_OPENCODE_OUTPUTS: JSON.stringify({ plan: '拆解完毕：三步走' }) }, () =>
+          room.commands.confirmDynamicWorkflow(authority, {
+            taskId: task.id,
+            submission: { kind: 'json-body', body: JSON.stringify({ decision: 'approve' }) },
+          }),
         ),
       )
 

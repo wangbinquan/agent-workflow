@@ -58,7 +58,8 @@ import {
   addReviewComment,
   submitReviewDecision,
 } from '@/modules/collaboration/infrastructure/review'
-import { abortAllActiveTasks, isTaskActive, wakeHumanGateContinuation } from '@/services/task'
+import { abortAllActiveTasks, isTaskActive } from '@/services/task'
+import { wakeHumanGateContinuation } from './helpers/legacyTaskDrive'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 import { createTestHostTaskLaunchKernel } from './helpers/hostTaskLaunchKernel'

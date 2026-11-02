@@ -49,22 +49,12 @@ const REGISTERED_PREEXISTING_DEEP_IMPORTS = new Set([
   'packages/backend/src/routes/tasks.ts:@/modules/task-execution/application/ports/taskRecoveryOperations',
   'packages/backend/src/services/autoRepair.ts:@/modules/task-execution/application/ports/taskLifecycleAutoRepairCommand',
   'packages/backend/src/services/autoRepair.ts:@/modules/task-execution/application/ports/taskRecoveryOperations',
-  // RFC-359 AC-1（第 10 刀）：resume 的回滚目标选择器原本有两份**逐字相同**的副本
-  //（`services/task.ts` 与 PostgreSQL 的 resume 参与者各一份）。去重之后唯一那份落在
-  // `application/`——它是纯函数、零 provider 依赖，那里是它在目标架构里的家。
-  // 于是 legacy 的 `resumeKick` 从那里 import。**这条边随 `resumeKick` / `syncTaskWorkflow`
-  // 离开 legacy 层一起消失**；把实现留在 legacy 只会把重复留着。与上一行的 `branchTrace`
-  // 同形同命（同一个 legacy 消费者、同一层 `application/`、同一波 cutover 还清）。
-  'packages/backend/src/services/task.ts:@/modules/task-execution/application/resumeRollbackTargets',
+  // RFC-424：`services/task.ts` → `application/resumeRollbackTargets` 与 →
+  // `infrastructure/frozenTaskTriggerPreflight` 两条边随测试专用的 `resumeKick` 一起删除（销账）。
   'packages/backend/src/services/task.ts:@/modules/task-execution/application/ports/runtimeSessionLeaseOperations',
   'packages/backend/src/services/task.ts:@/modules/task-execution/application/ports/taskRecoveryOperations',
   // RFC-399 B6: repository preparation lookup is a required Task port.
   'packages/backend/src/services/task.ts:@/modules/task-execution/application/ports/repositoryPreparationLookup',
-  // RFC-359 W8：`assertFrozenTaskTriggerPreflight` 的两份 provider 副本合一后落在 owner 的
-  // infrastructure（`services/execution/triggerPreflight.ts` 那个更省边的落位被
-  // `rfc349-provider-cutover` 的 databaseMechanismDependencies 判据按住：`services/` 面禁持
-  // `@/db/*` / drizzle）。与上一行的 branchTraceSnapshotReader 同形同命，随 W4-E 一起还清。
-  'packages/backend/src/services/task.ts:@/modules/task-execution/infrastructure/frozenTaskTriggerPreflight',
 ])
 
 function legacyDeepImports(units: readonly SourceUnit[]): string[] {

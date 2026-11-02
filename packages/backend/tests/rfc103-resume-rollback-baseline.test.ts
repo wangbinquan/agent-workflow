@@ -7,7 +7,7 @@
 // 只取 top-level（parentNodeRunId === null）的 freshest 行，且仅 failed/
 // interrupted 终态进集——对齐 freshness.ts pickFreshestRun 的 topLevelOnly。
 import { describe, expect, test } from 'bun:test'
-import { selectResumeRollbackTargets } from '../src/services/task'
+import { selectResumeRollbackTargets } from './helpers/resumeRollbackTargets'
 
 type Row = {
   seq: number

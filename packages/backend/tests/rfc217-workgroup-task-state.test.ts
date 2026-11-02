@@ -43,7 +43,7 @@ import {
   gateViewOf,
   loadWorkgroupTaskState,
   type WorkgroupGateStatus,
-} from '../src/services/workgroup/state'
+} from './helpers/legacyWorkgroupState'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 

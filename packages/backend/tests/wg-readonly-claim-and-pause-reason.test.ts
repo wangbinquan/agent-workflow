@@ -38,7 +38,7 @@ import { wakeSnapshotOf, type LegacyWakeInput as WakeInput } from './helpers/wor
 // 回合持久化里，由它算出 `memberAgents[].readonly` 交给驱动。
 import { readonlyPermission as isReadonlyAgentPermission } from '@/modules/task-execution/infrastructure/workgroupTurnsPersistence'
 import { resolveRoomPauseReason } from '../src/routes/workgroupTasks'
-import { loadWorkgroupTaskState, setPauseReason } from '../src/services/workgroup/state'
+import { loadWorkgroupTaskState, setPauseReason } from './helpers/legacyWorkgroupState'
 /** 旧夹具形状 → 中立驱动的两参调用（RFC-359 W4-D19c-tail）。 */
 async function deriveWake(input: WakeInput) {
   const { snapshot, inflight } = await wakeSnapshotOf(input)

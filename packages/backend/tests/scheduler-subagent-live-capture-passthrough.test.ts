@@ -103,15 +103,17 @@ describe('RFC-048 subagentLiveCapture passthrough', () => {
     // RFC-332 folds the former three hand-written runTask spreads into one
     // coordinator construction. The resolved immutable runtime profile is the
     // sole hand-off, so start/resume/retry cannot drift independently.
-    // 2026-09-19：解析体里把 `input.deps` 与 refresher 合成局部 `deps` 之后，这个旋钮的
-    // 唯一 spread 点改名为 `deps.subagentLiveCapture`。判据意图不变——**只能有一处**。
-    expect(src.match(/subagentLiveCapture: deps\.subagentLiveCapture/g)).toHaveLength(1)
+    // RFC-424: the test-only wrapper (and its own resolution of live capture) moved
+    // to tests/helpers; the production run configuration is the bootstrap bundle's,
+    // and it has exactly one spread point for this knob.
+    const bundle = read('packages/backend/src/bootstrap/daemonModules/taskExecution.ts')
+    expect(bundle.match(/subagentLiveCapture: fresh\.subagentLiveCapture/g)).toHaveLength(1)
+    expect(bundle).toContain('async function runConfiguration()')
+    expect(src).not.toContain('async runConfiguration()')
     const factory = read(
       'packages/backend/src/modules/task-execution/application/drive/taskDriveCoordinatorFactory.ts',
     )
-    // RFC-387: the test-only wrapper resolves live capture; the shared factory reads it on every drive.
-    expect(src).toContain('subagentLiveCapture: await resolveTaskSubagentLiveCapture(source)')
-    expect(src).toContain('async runConfiguration()')
+    // The shared factory reads the run configuration on every drive.
     expect(factory).toContain('const live = await options.runConfiguration()')
     expect(factory).toContain('...context.runtime.runtime,')
     // 构造时解析一次的旧形状不许回来。

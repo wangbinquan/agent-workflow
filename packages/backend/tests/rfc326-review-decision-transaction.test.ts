@@ -68,7 +68,7 @@ import {
   submitReviewDecision,
   type SubmitReviewDecisionArgs,
 } from '@/modules/collaboration/infrastructure/review'
-import { wakeHumanGateContinuation } from '../src/services/task'
+import { wakeHumanGateContinuation } from './helpers/legacyTaskDrive'
 import { __hasTaskReviewMutationQueueForTesting } from '../src/services/reviewMutationCoordinator'
 import {
   hasActingMembership,

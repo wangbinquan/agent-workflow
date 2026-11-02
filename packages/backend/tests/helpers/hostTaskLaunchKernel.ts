@@ -18,8 +18,10 @@ import {
 } from '@/modules/task-execution/infrastructure/taskRouteLaunchOperations'
 import type { RootTaskLaunchKernel } from '@/modules/task-execution/infrastructure/taskRouteLaunchOperations'
 import type { TaskExecutionPersistence } from '@/modules/task-execution/application/ports/taskExecutionPersistence'
-import { createTestTaskDriveCoordinator } from './legacyTaskDrive'
-import { type TaskDriveCoordinatorDependencies } from '@/services/task'
+import {
+  createTestTaskDriveCoordinator,
+  type TaskDriveCoordinatorDependencies,
+} from './legacyTaskDrive'
 
 export function createTestHostTaskLaunchKernel(input: {
   readonly humanGateOpen: Parameters<typeof createTestTaskDriveCoordinator>[0]['humanGateOpen']

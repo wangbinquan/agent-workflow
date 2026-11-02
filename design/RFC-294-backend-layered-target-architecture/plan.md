@@ -285,6 +285,9 @@ Facade 只许 re-export 或参数形状适配；不得含 DB 查询、状态、�
   composition 只选取 provider 并注入（RFC-416 §7 第 2 项第二段）。
 - **composition 只剩装配（第十一步，收口）**：[RFC-423](../RFC-423-task-execution-composition-assembly-only/proposal.md)（In Progress）：
   定时任务启动 / 触发器参与者、托管恢复选择、准备 GC 的阶段分派与 worker 维护迁入 `infrastructure/`；收口锁钉住 `composition/` 的装配形状。
+- **协调器只在 bootstrap 构造**：[RFC-424](../RFC-424-retire-test-only-task-drive-entries/proposal.md)（In Progress）：
+  `services/task.ts` 的测试专用驱动入口（工厂装配、人工门唤醒、动态工作流续跑准入、仓库准备重试）删除或迁入 `tests/helpers/`，两个动态工作流
+  用例改走生产确认命令；src 中协调器工厂只在 bootstrap 装配（RFC-386 盘点锁）。
 
 ### S7 唯一 AtomicApply 引擎（W6）
 

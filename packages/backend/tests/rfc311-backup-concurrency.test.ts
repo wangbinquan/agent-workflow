@@ -36,6 +36,9 @@ function admin(): Actor {
 }
 
 describe('RFC-311 §6.6 — a running backup must not freeze the task list', () => {
+  // 墙钟预算（2026-11-02 CI 实测补，128e439d7 backend shard 16/44）：本例先顺序插 400 行再做一次离线程
+  // VACUUM INTO 快照，此前四次运行 1.7～2.5s，这一次以 5013ms 越过 bun 默认 5s（同一分片总耗时反而比上一提交
+  // 低约两成）。承重断言是快照期间取页 < 2s（②），整例预算放宽不削弱它；显式预算=墙钟允许量，不是对变慢的容忍。
   test('checkpoint yields during a snapshot, the page still answers, and checkpoint resumes after', async () => {
     const home = mkdtempSync(join(tmpdir(), 'aw-rfc311-backup-'))
     try {
@@ -105,5 +108,5 @@ describe('RFC-311 §6.6 — a running backup must not freeze the task list', () 
     } finally {
       rmSync(home, { recursive: true, force: true })
     }
-  })
+  }, 20_000)
 })

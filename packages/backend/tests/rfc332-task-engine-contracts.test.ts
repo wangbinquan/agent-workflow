@@ -169,29 +169,23 @@ describe('RFC-332 T3-T4 — additive drive and engine contracts', () => {
 })
 
 describe('RFC-332 T10-T13 — single-consumer production cutover', () => {
-  test('three continuations and the exact human-gate wake converge on one TaskEngine adapter', () => {
+  test('the production drive converges on one TaskEngine adapter assembled in bootstrap', () => {
     const task = source('packages/backend/src/services/task.ts')
     expect(taskDriveRequests('kick')).toHaveLength(0)
     expect(taskDriveRequests('drive')).toHaveLength(0)
-    // Four command admissions plus RFC-333's post-commit wake use the same
-    // coordinator factory. The wake is not a fifth admission: the decision
-    // transaction already inserted its exact durable intent.
-    // RFC-359 AC-1（第 9 刀）：5 → 4。`retryNode` 整份删除（`retry` 两份实现合一），
-    // 它那台 coordinator 随之出账；重试的驱动改由紧随其后的 `resumeTask` 那一台负责。
-    // RFC-395 II-pre：旧 admission 删除，三台存续 continuation 与 wake 继续共用配置。
-    expect(task.match(/composeTestTaskDriveFactory\(\{/g)).toHaveLength(3)
-    // RFC-387: only the four test-only admissions retain a factory wrapper; production uses the session.
+    // RFC-332 converged the command admissions and RFC-333's post-commit wake on one coordinator
+    // factory; RFC-359 AC-1 and RFC-395 II-pre retired the old admissions. RFC-424 moved the remaining
+    // test-only continuations and the wake to tests/helpers: production assembles the factory once, in
+    // bootstrap, and services/task.ts assembles none.
+    expect(task).not.toContain('createTaskDriveCoordinatorFactory')
+    expect(task).not.toContain('wakeHumanGateContinuation')
+    const bundle = source('packages/backend/src/bootstrap/daemonModules/taskExecution.ts')
+    expect(bundle.match(/createTaskDriveCoordinatorFactory\(\{/g)).toHaveLength(1)
     const factory = source(
       'packages/backend/src/modules/task-execution/application/drive/taskDriveCoordinatorFactory.ts',
     )
     expect(factory.match(/new DefaultTaskDriveCoordinator\(/g)).toHaveLength(1)
     expect(factory).toContain('...context.runtime.runtime,')
-
-    const wakeStart = task.indexOf('export async function wakeHumanGateContinuation(')
-    const wakeEnd = task.indexOf('\nexport ', wakeStart + 1)
-    const wakeBlock = task.slice(wakeStart, wakeEnd)
-    expect(wakeStart).toBeGreaterThan(-1)
-    expect(wakeBlock.match(/composeTestTaskDriveFactory\(\{/g)).toHaveLength(1)
   })
 
   test('boot recovery delegates repository preparation without querying prep rows', () => {

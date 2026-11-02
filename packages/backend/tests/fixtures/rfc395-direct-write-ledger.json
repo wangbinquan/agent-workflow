@@ -13,6 +13,7 @@
   },
   "files": {
     "flag-audit-kind-canonicalization.test.ts": "historical-schema",
+    "helpers/legacyWorkgroupState.ts": "target-runtime-state",
     "helpers/rfc349PostgresqlHostedEvidence.ts": "legacy-sql-dataset",
     "helpers/rfc374LegacyBackfill.ts": "historical-schema",
     "migration-0002.test.ts": "historical-schema",

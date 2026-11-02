@@ -43,6 +43,18 @@
   2/2 通过。同一仓库里收口锁与 RFC-317 的语料下限、账本、负例守卫也通过。
 - **P0 变异 lane**（SQLite + PostgreSQL）：passed，34 个阶段、0 失败，127 个源文件指纹前后一致。
 
+## CI（AC-5）
+
+`128e439d7` 的主 CI（运行 41407877240）68/70，windows-platform（运行 41407876989）全绿。主 CI 红了一格，汇总门 `CI required` 随之红：
+
+- **backend shard 16/44**：`rfc311-backup-concurrency` 的「checkpoint yields during a snapshot」以 5013ms 越过 bun 默认 5s。这是纯 SQLite
+  用例（顺序插 400 行再做一次离线程 VACUUM INTO 快照），此前四次运行 1.7～2.5s；同一分片总耗时反而比上一提交低约两成。本 RFC 不涉及备份、
+  checkpoint 与任务列表，不归本 RFC；RFC-424 给该例 20s 显式预算（承重断言「快照期间取页 < 2s」不变）。
+- 同一次运行里，RFC-422 那两格红对应的用例都通过：`scheduler-clarify-dispatch` 的 STOP-clarify 例 PostgreSQL 一侧 1824ms（本 RFC 给的预算
+  生效），`rfc311-perf-guards` 的过滤视图 PostgreSQL P95 16.86ms。
+
+AC-5 以包含本 RFC 的后继提交（RFC-424）的 CI 作后继证据收尾。
+
 ## 冲突面
 
 - **composition**：`TE/composition/{triggerExecution,taskRecoverySelection,crewstationRecovery,workspacePreparationMaintenance,providerRuntime}.ts`。

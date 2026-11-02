@@ -240,7 +240,7 @@ const KNOWN: Readonly<Record<string, readonly string[]>> = {
     'packages/backend/src/services/workflow.yaml.ts',
     'packages/backend/src/services/workflowLaunchInputs.ts',
     'packages/backend/src/services/workgroup/constants.ts',
-    'packages/backend/src/services/workgroup/state.ts',
+    // RFC-424：`services/workgroup/state.ts` 随其最后一个生产消费者删除（销账）。
     'packages/backend/src/services/workgroups.ts',
   ],
   'direct-setinterval-sites': [

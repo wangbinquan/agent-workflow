@@ -50,7 +50,7 @@ import {
   addReviewComment,
   submitReviewDecision,
 } from '@/modules/collaboration/infrastructure/review'
-import { wakeHumanGateContinuation } from '../src/services/task'
+import { wakeHumanGateContinuation } from './helpers/legacyTaskDrive'
 import { submitTaskContinuation } from '../src/modules/task-execution/application/submitTaskContinuation'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 import { createTaskExecutionPersistence } from '../src/modules/task-execution/composition/taskExecutionPersistence'

@@ -64,10 +64,8 @@ const CONVERGED_TWINS: readonly ConvergedTwin[] = [
     what: 'RFC-292 冻结任务溯源预检：resume / retry / syncWorkflow 在准入 CAS 之前重读 durable 任务行',
     fn: 'assertFrozenTaskTriggerPreflight',
     definedIn: `${B}modules/task-execution/infrastructure/frozenTaskTriggerPreflight.ts`,
-    consumers: [
-      `${B}services/task.ts`,
-      `${B}modules/task-execution/infrastructure/taskRouteOperations.ts`,
-    ],
+    // RFC-424：`services/task.ts` 的消费者（测试专用的 resume 准入）随入口删除。
+    consumers: [`${B}modules/task-execution/infrastructure/taskRouteOperations.ts`],
     forkedFrom: [
       `${B}services/task.ts`,
       `${B}modules/task-execution/infrastructure/taskRouteOperations.ts`,

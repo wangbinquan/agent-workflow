@@ -454,6 +454,7 @@ v1 后续的产品 / 技术变更以 RFC 形式落档在 `design/RFC-NNN-{slug}/
 | [RFC-421](./RFC-421-task-execution-agent-invocation-stack/proposal.md) | task-execution agent 调用栈：中立部分迁入 application，本地调用适配器迁入 infrastructure/local（RFC-294 S6）：两段式调用准备、系统代理运行核心、运行时冒烟核心与材料声明迁入 `application/`，本地 agent 调用适配器与本地调用准备迁入 `infrastructure/local/`；六个 composition 文件删除，各运行 family 只改 import。纯结构重构，无用户可见变化。 | Done |
 | [RFC-422](./RFC-422-task-execution-run-family-openers/proposal.md) | task-execution 运行 family 的打开逻辑迁入 infrastructure，composition 只剩配对（RFC-294 S6）：本地系统代理 / 冒烟 / 任务代理与托管系统代理 / 冒烟五个 family 的打开逻辑（材料编译适配、调用准备绑定、意图与观测、夹具投影、调用 ID 与可释放判定）迁入 `infrastructure/local/` 与 `infrastructure/crewstation/`，别的模块的实现经 task-execution 自有端口注入；composition 只选取 provider 并注入。纯结构重构，无用户可见变化。 | In Progress |
 | [RFC-423](./RFC-423-task-execution-composition-assembly-only/proposal.md) | task-execution composition 其余小块迁出与「只剩装配」收口锁（RFC-294 S6）：定时任务启动 / 触发器参与者、托管恢复选择、准备 GC 的阶段分派与 worker 维护迁入 `infrastructure/`；新增收口锁钉住 `composition/` 的装配形状（无循环 / `switch`，`try` 只在驱动入口，含 `throw` 的文件与次数为精确账本）。纯结构重构，无用户可见变化。 | In Progress |
+| [RFC-424](./RFC-424-retire-test-only-task-drive-entries/proposal.md) | 退役 `services/task.ts` 的测试专用驱动入口：协调器只在 bootstrap 装配（RFC-294 S6）：工厂装配、人工门唤醒、动态工作流续跑准入（含 245 行的 `resumeKick` 链）与仓库准备重试从 `services/task.ts` 删除，测试侧装配迁入 `tests/helpers/`，两个动态工作流用例改走生产确认命令；RFC-386 盘点锁的装配点只剩 bootstrap。只删测试专用代码、迁移测试，无用户可见变化。 | In Progress |
 
 > RFC-310 OS 历史实施快照（2026-08-21，PR-19 阶段；**不再作为当前状态入口**）：
 > 目标产品已收敛为可程序化扩展的“数字员工操作系统”。proposal/design §0A 新增通用 `digital-employee`、`event-center`

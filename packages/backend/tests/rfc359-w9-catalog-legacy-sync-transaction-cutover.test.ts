@@ -60,7 +60,7 @@ import {
   casGateStatus,
   ensureWorkgroupTaskStateRow,
   loadWorkgroupTaskState,
-} from '@/modules/resource-catalog/infrastructure/legacy/workgroup/state'
+} from './helpers/legacyWorkgroupState'
 import { ConflictError, ForbiddenError, NotFoundError } from '@/util/errors'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 
