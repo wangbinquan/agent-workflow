@@ -19,7 +19,7 @@ import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { PostgresqlDatabaseConfigSchema } from '@agent-workflow/shared'
 import { eq } from 'drizzle-orm'
-import { migrateForDeployment } from '@/bootstrap/deployment'
+import { selectDeployment } from '@/bootstrap/deployment'
 import { prepareCrewStationDatabase } from '@/modules/system-operations/composition/crewstationDeployment'
 import { createDatabaseApplicationConfiguration } from '@/modules/system-operations/infrastructure/databaseApplicationConfiguration'
 import { readHostedDatabaseBackupProvenance } from '@/modules/system-operations/infrastructure/crewstation/databaseBackupProvenance'
@@ -81,7 +81,7 @@ if (providers.includes('postgresql')) {
   // and provenance required the two to match.
   test('an installation upgraded after it was installed keeps its hosted backup provenance', async () => {
     await emptyDatabase()
-    await migrateForDeployment(jobEnv(PROJECT))
+    await selectDeployment(jobEnv(PROJECT)).migrate()
     const meta = `"${POSTGRESQL_METADATA_SCHEMA}"`
     const probe = createPostgresqlDatabaseRuntime({
       config: PostgresqlDatabaseConfigSchema.parse({ provider: 'postgresql', urlEnv }),
@@ -127,11 +127,11 @@ if (providers.includes('postgresql')) {
 
   test('the Job installs, registers and seeds once; the instance verifies and writes; another service is refused', async () => {
     await emptyDatabase()
-    const installed = await migrateForDeployment(jobEnv(PROJECT))
+    const installed = await selectDeployment(jobEnv(PROJECT)).migrate()
     expect(installed.output).toContain('PostgreSQL schema applied')
     expect(installed.output).toMatch(/initial rows installed \(\d+ rows in \d+ tables\)/)
     // A retried Job (or the next release's) changes nothing it already did.
-    const retried = await migrateForDeployment(jobEnv(PROJECT))
+    const retried = await selectDeployment(jobEnv(PROJECT)).migrate()
     expect(retried.output).toContain('initial rows already installed')
 
     const serving = await serve(PROJECT)
@@ -154,7 +154,7 @@ if (providers.includes('postgresql')) {
       await serving.runtime.close()
     }
 
-    await expect(migrateForDeployment(jobEnv('other'))).rejects.toThrow(
+    await expect(selectDeployment(jobEnv('other')).migrate()).rejects.toThrow(
       'postgresql-generation-conflict',
     )
     await expect(serve('other')).rejects.toThrow('postgresql-generation-conflict')

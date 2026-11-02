@@ -4,6 +4,10 @@
 // whichever platform variables happen to be present); standalone is the
 // default. A CrewStation-hosted instance runs the same start and migrate
 // sequences with the hosted adapters selected here.
+//
+// RFC-427: the mode is read once, by `selectDeployment`; `migrate` and the two
+// hosted verification commands are operations of the selected deployment, and
+// an operation a deployment does not offer fails with one error type.
 import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { composeCrewStationRestoreNormalization, composeCrewStationProfile } from './crewstation'
 import {
@@ -14,10 +18,12 @@ import {
 } from '@/modules/system-operations/composition/crewstationDeployment'
 import { verifyCrewStationDatabaseRestore } from '@/modules/system-operations/composition/crewstationDatabaseRestore'
 import { prepareManualDatabaseMigration } from '@/modules/system-operations/composition/manualDatabaseMigration'
-import type { DeploymentProfile, DeploymentKind } from './deploymentProfile'
+import type { Deployment, DeploymentKind } from './deploymentProfile'
 import { composeStandaloneProfile } from './standalone'
 
 export type DeploymentMode = DeploymentKind
+
+type DeploymentEnvironment = Readonly<Record<string, string | undefined>>
 
 export class DeploymentModeError extends Error {
   constructor(value: string) {
@@ -26,35 +32,71 @@ export class DeploymentModeError extends Error {
   }
 }
 
-export function readDeploymentMode(
-  env: Readonly<Record<string, string | undefined>>,
-): DeploymentMode {
+/** RFC-427: the one refusal for an operation the selected deployment does not offer. */
+export class DeploymentOperationUnavailableError extends Error {
+  constructor(operation: string, required: string) {
+    super(`${operation} requires ${required} deployment`)
+    this.name = 'DeploymentOperationUnavailableError'
+  }
+}
+
+export function readDeploymentMode(env: DeploymentEnvironment): DeploymentMode {
   const value = env.AW_DEPLOYMENT_MODE?.trim() ?? ''
   if (value === '' || value === 'standalone') return 'standalone'
   if (value === 'crewstation') return 'crewstation'
   throw new DeploymentModeError(value)
 }
 
-/**
- * Profile of the selected deployment. A hosted instance verifies its
- * database first, so Settings are readable from it at the start of the shared
- * boot sequence; the verified runtime is then handed to that boot.
- */
-export async function selectDeploymentProfile(
-  env: Readonly<Record<string, string | undefined>>,
-): Promise<DeploymentProfile> {
-  if (readDeploymentMode(env) === 'standalone') return composeStandaloneProfile()
-  return composeCrewStationProfile(env)
+/** The selected deployment; the only place that reads the deployment mode. */
+export function selectDeployment(env: DeploymentEnvironment): Deployment {
+  return readDeploymentMode(env) === 'standalone'
+    ? standaloneDeployment()
+    : crewStationDeployment(env)
 }
 
-/** `agent-workflow migrate`: the hosted release migration Job, or the local recovery path. */
-export async function migrateForDeployment(
-  env: Readonly<Record<string, string | undefined>>,
-): Promise<{ readonly output: string }> {
-  if (readDeploymentMode(env) === 'standalone') {
-    const { migrateCommand } = await import('./migrate')
-    return await migrateCommand()
+function unavailable(operation: string, required: string): () => Promise<never> {
+  return async () => {
+    throw new DeploymentOperationUnavailableError(operation, required)
   }
+}
+
+function standaloneDeployment(): Deployment {
+  return Object.freeze({
+    kind: 'standalone',
+    profile: async () => composeStandaloneProfile(),
+    /** `agent-workflow migrate`: the local recovery path. */
+    async migrate() {
+      const { migrateCommand } = await import('./migrate')
+      return await migrateCommand()
+    },
+    verifyDatabaseRestore: unavailable('database restore verification', 'CrewStation'),
+    verifyDatabaseMigration: unavailable('database migration verification', 'CrewStation'),
+  } satisfies Deployment)
+}
+
+/**
+ * A hosted instance verifies its database while composing its profile, so
+ * Settings are readable from it at the start of the shared boot sequence; the
+ * verified runtime is then handed to that boot.
+ */
+function crewStationDeployment(env: DeploymentEnvironment): Deployment {
+  return Object.freeze({
+    kind: 'crewstation',
+    profile: () => composeCrewStationProfile(env),
+    migrate: () => migrateCrewStation(env),
+    verifyDatabaseRestore: () => verifyCrewStationRestore(env),
+    async verifyDatabaseMigration() {
+      const { verifyHostedEpochSwitch } = await import('./epochMigrationHosted')
+      const { composeHostedEpochJobEntry } = await import('./epochMigrationHostedEntry')
+      return verifyHostedEpochSwitch(env, composeHostedEpochJobEntry(env))
+    },
+  } satisfies Deployment)
+}
+
+/** `agent-workflow migrate` on CrewStation: the hosted release migration Job, or a manual migration. */
+async function migrateCrewStation(
+  env: DeploymentEnvironment,
+): Promise<{ readonly output: string }> {
   if (env.CS_DATABASE_MIGRATION_OPERATION_ID) {
     const { composeHostedEpochJobEntry } = await import('./epochMigrationHostedEntry')
     const { runHostedEpochSwitchJob, restoreHostedEpoch1Backup } =
@@ -89,11 +131,7 @@ export async function migrateForDeployment(
   }
 }
 
-export async function verifyDatabaseRestoreForDeployment(
-  env: Readonly<Record<string, string | undefined>>,
-): Promise<string> {
-  if (readDeploymentMode(env) !== 'crewstation')
-    throw new Error('database restore verification requires CrewStation deployment')
+async function verifyCrewStationRestore(env: DeploymentEnvironment): Promise<string> {
   const environment = readCrewStationDatabaseEnvironment(env)
   const prepared = await prepareCrewStationDatabase({
     contract: logicalSchemaContract,
@@ -108,14 +146,4 @@ export async function verifyDatabaseRestoreForDeployment(
     env,
   })
   return `CS_DATABASE_RESTORE_RECEIPT=${JSON.stringify(receipt)}\n`
-}
-
-export async function verifyDatabaseMigrationForDeployment(
-  env: Readonly<Record<string, string | undefined>>,
-): Promise<string> {
-  if (readDeploymentMode(env) !== 'crewstation')
-    throw new Error('database migration verification requires CrewStation deployment')
-  const { verifyHostedEpochSwitch } = await import('./epochMigrationHosted')
-  const { composeHostedEpochJobEntry } = await import('./epochMigrationHostedEntry')
-  return verifyHostedEpochSwitch(env, composeHostedEpochJobEntry(env))
 }

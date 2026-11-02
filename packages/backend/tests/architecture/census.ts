@@ -107,6 +107,9 @@ export const BOOTSTRAP_FILES = [
   'packages/backend/src/bootstrap/daemonModules/intent.ts',
 
   'packages/backend/src/main.ts',
+  // RFC-427: the CLI command assembly and the hosted Git credential helpers moved here from main.ts.
+  'packages/backend/src/bootstrap/commandBootstraps.ts',
+  'packages/backend/src/bootstrap/hostedGitCommands.ts',
   // RFC-370 v2 §3.1: the single deployment selection point composes the hosted adapters.
   'packages/backend/src/bootstrap/deployment.ts',
   'packages/backend/src/bootstrap/crewstation.ts',

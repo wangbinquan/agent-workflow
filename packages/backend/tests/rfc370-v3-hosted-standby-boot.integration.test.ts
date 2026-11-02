@@ -27,7 +27,7 @@ import { fileURLToPath } from 'node:url'
 import { PostgresqlDatabaseConfigSchema } from '@agent-workflow/shared'
 import { eq } from 'drizzle-orm'
 import { DAEMON_BOOT_STEPS } from '@/bootstrap/daemonLifecycleProgram'
-import { migrateForDeployment } from '@/bootstrap/deployment'
+import { selectDeployment } from '@/bootstrap/deployment'
 import { prepareCrewStationDatabase } from '@/modules/system-operations/composition/crewstationDeployment'
 import { createPostgresqlDatabaseRuntime } from '@/platform/persistence/postgresqlRuntime'
 import { resolvePostgresqlTestUrlEnv, resolveTestProviders } from './helpers/eachProvider'
@@ -150,12 +150,12 @@ if (providers.includes('postgresql')) {
 
   test('a standby instance serves without the lease and starts background owners on activation', async () => {
     await emptyDatabase()
-    await migrateForDeployment({
+    await selectDeployment({
       AW_DEPLOYMENT_MODE: 'crewstation',
       CS_PROJECT: PROJECT,
       CS_SERVICE: PROJECT,
       CS_DATABASE_URL: databaseUrl(),
-    })
+    }).migrate()
     const platform = fakePlatform()
     const port = freePort()
     const env: Record<string, string> = {}

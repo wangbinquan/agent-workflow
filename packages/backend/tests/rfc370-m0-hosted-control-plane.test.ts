@@ -12,11 +12,7 @@ import { DomainError } from '@/util/errors'
 import { readFileSync } from 'node:fs'
 import { Hono } from 'hono'
 import { parse as parseYaml } from 'yaml'
-import {
-  selectDeploymentProfile,
-  DeploymentModeError,
-  readDeploymentMode,
-} from '@/bootstrap/deployment'
+import { selectDeployment, DeploymentModeError, readDeploymentMode } from '@/bootstrap/deployment'
 import {
   createExecutionExitRequests,
   startOnExecutionActive,
@@ -61,7 +57,7 @@ test('the deployment is selected explicitly; standalone needs nothing', async ()
   // Platform variables alone never switch the deployment.
   expect(readDeploymentMode(HOSTED_ENV)).toBe('standalone')
   expect(() => readDeploymentMode({ AW_DEPLOYMENT_MODE: 'cloud' })).toThrow(DeploymentModeError)
-  expect(await selectDeploymentProfile({})).toMatchObject({
+  expect(await selectDeployment({}).profile()).toMatchObject({
     kind: 'standalone',
     requiredProvider: null,
     listen: {},

@@ -256,14 +256,16 @@ describe('RFC-347 exact production source locks', () => {
     expect(callPaths('composeIdentityAccess(')).toEqual([
       'src/modules/identity-access/composition.ts',
     ])
+    // RFC-427: the CLI command assembly moved from main.ts to bootstrap/commandBootstraps.ts.
     expect(callPaths('createIdentityAccessRuntime(')).toEqual([
+      'src/bootstrap/commandBootstraps.ts',
       'src/bootstrap/daemonModules/providerCore.ts',
-      'src/main.ts',
       'src/modules/identity-access/composition.ts',
     ])
     expect(importPaths('identity-access/composition')).toEqual([
       // RFC-370: standalone compatibility facade binds through the module composition.
       'src/auth/session.ts',
+      'src/bootstrap/commandBootstraps.ts',
       // RFC-370 M0 / §9.2 V9: hosted assembly lives only in bootstrap, which
       // composes the CrewStation credential adapters.
       'src/bootstrap/crewstation.ts',
@@ -275,7 +277,6 @@ describe('RFC-347 exact production source locks', () => {
       //（`server.ts` / `postgresqlDaemonApplication.ts` 早就在这张表上）。
       'src/bootstrap/deploymentProfile.ts',
       'src/bootstrap/persistenceSchema.ts',
-      'src/main.ts',
       'src/modules/identity-access/composition/userOperations.ts',
       'src/server.ts',
       'src/services/ownerScopedName.ts',
@@ -364,7 +365,8 @@ describe('RFC-347 exact production source locks', () => {
     expect(composition).not.toContain('TransactionScope')
     expect(composition).not.toContain('initialUserAccess')
 
-    const mainRoot = source('src/main.ts')
+    // RFC-427: the CLI identity assembly moved from main.ts to bootstrap/commandBootstraps.ts.
+    const mainRoot = source('src/bootstrap/commandBootstraps.ts')
     expect(mainRoot).toContain('.localOperator.forUser(')
     expect(mainRoot).not.toMatch(/directAuthority\.(?:fromSession|fromPat|fromDaemon)\(/)
     expect(mainRoot).not.toContain('fromAuthenticatedPrincipal(')

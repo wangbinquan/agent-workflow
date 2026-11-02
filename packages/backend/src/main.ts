@@ -1,4 +1,3 @@
-import { composeRepositoryBackupPreparation } from '@/bootstrap/repositoryBackupPreparation'
 // Entry point for the agent-workflow daemon CLI.
 // Subcommands:
 //   start    P-1-01 ✓
@@ -9,26 +8,29 @@ import { composeRepositoryBackupPreparation } from '@/bootstrap/repositoryBackup
 //   config   P-1-05 ✓
 //   migrate  P-1-05 ✓
 //   backup   P-5-02
+//
+// RFC-427: the entry root parses arguments, selects the deployment and dispatches. Command dependencies are assembled
+// in `bootstrap/` and handed to the `cli/` handlers here; the deployment-level commands are operations of the selected
+// deployment.
 
-import { unhandledDatabaseProvider } from '@/platform/persistence/databaseProviders'
 import { appVersion } from './util/version'
 import { runGitCredentialSubcommand } from './util/gitCredentialLease'
-import { SYSTEM_USER_ID } from './auth/systemIdentity'
-import { createSecretBox } from './auth/secretBox'
-import type { Actor } from './auth/actor'
 import { backupCommand } from './cli/backup'
 import { restoreCommand, parseRestoreArguments, RESTORE_USAGE } from './cli/restore'
 import { configGetCommand, configSetCommand } from './cli/config-cli'
 import { dbCompactCommand } from './cli/dbCompact'
 import { databaseCommand } from './cli/database'
 import { formatDoctor } from './cli/doctor'
-import { composeDoctorApplication } from '@/modules/system-operations/composition/doctorDiagnostics'
-import { createLocalDoctorDiagnosticsFactory } from '@/bootstrap/doctorDiagnostics'
+import { selectDeployment } from './bootstrap/deployment'
 import {
-  selectDeploymentProfile,
-  migrateForDeployment,
-  verifyDatabaseRestoreForDeployment,
-} from './bootstrap/deployment'
+  composeBackupCommandOperations,
+  composeLocalDatabaseMigrationCommandOperations,
+  composePackageCommandBootstrap,
+  composeRestoreCommandOperations,
+  composeUserCommandBootstrap,
+  runDoctorDiagnostics,
+} from './bootstrap/commandBootstraps'
+import { runManagedProcessOutputProbe } from './bootstrap/managedProcessOutputProbe'
 import { migrationReportCommand } from './cli/migrationReport'
 import { startCommand } from './bootstrap/daemonStart'
 import {
@@ -39,43 +41,17 @@ import {
 } from './bootstrap/developmentReload'
 import { statusCommand, formatStatus } from './cli/status'
 import { stopCommand } from './cli/stop'
-import {
-  packageCommand,
-  type PackageCommandBootstrap,
-  type PackageCommandIdentityHandle,
-} from './cli/package'
-import { runUserCommand, type UserCommandIdentityHandle } from './cli/userBootstrap'
+import { packageCommand } from './cli/package'
+import { runUserCommand } from './cli/userBootstrap'
 import { authCommand } from './cli/auth'
-import { loadConfig } from './config'
-import { createAuthRuntimeFor } from './auth/composition'
-import { createIdentityAccessRuntime } from './modules/identity-access/composition'
-import { composeIdentityUserOperations } from './modules/identity-access/composition/userOperations'
-import {
-  composePostgresqlResourcePackageCatalog,
-  composePostgresqlResourcePackageProvider,
-} from './modules/resource-catalog/composition/postgresqlResourcePackageCatalog'
-import { createMcpTransactionLifecycle } from './modules/resource-catalog/composition/mcpRuntimeTestPersistence'
-import { createPostgresqlCapabilityTemplatePackageMutationOwner } from './modules/code-capability/composition/capabilityTemplateOperations'
-import { createResourcePackagePluginInstaller } from './services/resourcePackage/pluginInstallerAdapter'
-import {
-  composeLocalSystemOperations,
-  prepareDatabaseProviderForBoot,
-} from './modules/system-operations/composition'
-import { composeLocalDatabaseMigrationOperations } from './modules/system-operations/composition/databaseMigration'
 import { logicalSchemaContract } from './bootstrap/persistenceSchema'
-
-import { resolveDatabaseProviderRuntimeForRestore } from './platform/persistence/databaseProviderRuntime'
-
-import { createResourcePackageAtomicApplyOperations } from './modules/resource-catalog/composition/resourcePackageAtomicApply'
 import {
   MANAGED_PROCESS_LAUNCHER_SUBCOMMAND,
   MANAGED_PROCESS_LAUNCH_NONCE_ENV,
   runManagedProcessLauncher,
 } from './services/execution/managedProcessLauncher'
-import { runManagedProcess } from './services/execution/managedProcess'
 import { Paths } from './util/paths'
 import { createLogger } from './util/log'
-import { createPostgresqlResourcePackageExecutionAdapter } from './services/resourcePackage/executionAdapter'
 
 declare const AW_E2E_BUILD: boolean | undefined
 
@@ -105,165 +81,6 @@ function readPortFlag(argv: string[]): number | undefined {
   return n
 }
 
-async function composeUserCommandBootstrap() {
-  const provider = await resolveCommandProvider()
-  // Residual fence: the bootstrap carries exactly these two provider values, so this is
-  // unreachable today; a third one widens `provider.provider` and stops this compiling
-  // rather than silently letting a new provider fall through the composition below.
-  // RFC-359 AC-10：收窄的对象不再是可辨识联合（bootstrap 客户端已由白名单层交出，
-  // 这里不按品牌分叉），所以围栏喂给 `never` 汇的是**那个 provider 值**本身。
-  if (provider.provider !== 'sqlite' && provider.provider !== 'postgresql') {
-    return unhandledDatabaseProvider(provider.provider)
-  }
-  const identityAccess = createIdentityAccessRuntime({ db: provider.db })
-  const auth = createAuthRuntimeFor({
-    db: provider.db,
-    // A standalone CLI has no live HTTP/WS credential cache to invalidate.
-    onCredentialRevoked: () => undefined,
-  })
-  const operations = composeIdentityUserOperations({ identityAccess, auth })
-  const localOperator = await identityAccess.localOperator.forUser(SYSTEM_USER_ID)
-  if (localOperator === null) {
-    identityAccess.shutdown()
-    throw new Error('local-system-operator-not-active')
-  }
-  const identity = Object.freeze({
-    operations,
-    commandContext: () => localOperator.commandContext(),
-    queryContext: () => localOperator.queryContext(),
-  }) satisfies UserCommandIdentityHandle
-
-  return {
-    auth,
-    identity,
-    async shutdown() {
-      identityAccess.shutdown()
-      await provider.runtime.close()
-    },
-  }
-}
-
-async function resolveCommandProvider() {
-  const config = loadConfig(Paths.config)
-  const contract = logicalSchemaContract
-  const prepared = await prepareDatabaseProviderForBoot({
-    config: config.database,
-    sqlitePath: Paths.db,
-    generationPointerPath: Paths.databaseGenerationPointer,
-    operationsRoot: Paths.databaseMigrationsDir,
-    contract,
-    configPath: Paths.config,
-    lockPath: Paths.lock,
-    sqliteOptions: {},
-  })
-  const runtime = prepared.runtime
-  try {
-    // RFC-359 AC-10 —— bootstrap 客户端由 `prepareDatabaseProviderForBoot`（白名单层、品牌
-    // 已知处）交出来，这里不再按品牌分叉。原来两支的唯一差别是 `openClient` 的入参个数，
-    // 而 SQLite 那支还会**多算一次** `await resolveMigrationsFolder()` 然后把结果丢掉：
-    // prepare 阶段早已用同一个值把库打开并 adopt 进 runtime，`openClient(input)` 此时
-    // 根本不看 `input`。
-    return Object.freeze({
-      provider: runtime.provider,
-      runtime,
-      db: prepared.openBootstrapClient(),
-    })
-  } catch (error) {
-    await runtime.close()
-    throw error
-  }
-}
-
-async function composePackageCommandBootstrap(): Promise<PackageCommandBootstrap> {
-  const provider = await resolveCommandProvider()
-  // Residual fence: the bootstrap carries exactly these two provider values, so this is
-  // unreachable today; a third one widens `provider.provider` and stops this compiling
-  // rather than silently letting a new provider fall through the composition below.
-  // RFC-359 AC-10：收窄的对象不再是可辨识联合（bootstrap 客户端已由白名单层交出，
-  // 这里不按品牌分叉），所以围栏喂给 `never` 汇的是**那个 provider 值**本身。
-  if (provider.provider !== 'sqlite' && provider.provider !== 'postgresql') {
-    return unhandledDatabaseProvider(provider.provider)
-  }
-  const identityAccess = createIdentityAccessRuntime({ db: provider.db })
-  type PostgresqlResourcePackageProviderInput = Parameters<
-    typeof composePostgresqlResourcePackageProvider
-  >[0]
-  type PackageAuthority = Parameters<
-    PostgresqlResourcePackageProviderInput['authorityResolver']['resolve']
-  >[0]
-  const actorsByAuthority = new WeakMap<PackageAuthority, Actor>()
-  const authorityResolver: PostgresqlResourcePackageProviderInput['authorityResolver'] =
-    Object.freeze({
-      resolve(authority: PackageAuthority) {
-        const actor = actorsByAuthority.get(authority)
-        if (actor === undefined) throw new Error('foreign-resource-package-authority')
-        return actor
-      },
-    })
-  const box = createSecretBox(Paths.secretKeyFile)
-  // RFC-359 —— 资源包 apply **一台引擎两个 provider**。此处此前是一个
-  // `provider === 'sqlite' ? … : …`：SQLite 走 `commitResourcePackage` + 同步事务里的
-  // legacy 参与者，PostgreSQL 走 journal + prestage/compensate 的原子 apply。两份做的是
-  // 同一件事，而判据只跑 SQLite 那一份（见 `rfc359-w13-…-conformance`）。现在只剩后者，
-  // 装配所需的四件依赖本来就是中立的，此前就已经算在分叉之外。
-  const resourcePackageProvider = composePostgresqlResourcePackageProvider({
-    db: provider.db,
-    appHome: Paths.root,
-    authorityResolver,
-    mcpLifecycle: createMcpTransactionLifecycle(),
-    capabilityTemplates: createPostgresqlCapabilityTemplatePackageMutationOwner({
-      db: provider.db,
-    }),
-    pluginInstaller: createResourcePackagePluginInstaller(),
-  })
-  const catalog = composePostgresqlResourcePackageCatalog({
-    provider: resourcePackageProvider,
-    execution: createPostgresqlResourcePackageExecutionAdapter({
-      box,
-      provider: resourcePackageProvider,
-      atomicApply: createResourcePackageAtomicApplyOperations({
-        db: provider.db,
-        box,
-      }),
-    }),
-  })
-  const identity = Object.freeze({
-    async resolveLocalIdentityByUsername(username: string) {
-      const user = await identityAccess.userDirectory.findByUsername(username)
-      if (user === null) return null
-      if (user.status !== 'active') return Object.freeze({ status: user.status, identity: null })
-      const local = await identityAccess.localOperator.forUser(user.id)
-      return Object.freeze({
-        status: user.status,
-        identity:
-          local === null
-            ? null
-            : Object.freeze({
-                actor: local.actor,
-                commandContext() {
-                  const context = local.commandContext()
-                  actorsByAuthority.set(context.authority, local.actor)
-                  return context
-                },
-                queryContext() {
-                  const context = local.queryContext()
-                  actorsByAuthority.set(context.authority, local.actor)
-                  return context
-                },
-              }),
-      })
-    },
-  }) satisfies PackageCommandIdentityHandle
-  return {
-    identity,
-    catalog,
-    async shutdown() {
-      identityAccess.shutdown()
-      await provider.runtime.close()
-    },
-  }
-}
-
 async function main(): Promise<void> {
   // Bun's compiled Windows executable can re-enter itself without preserving
   // application argv. The private nonce marker is therefore the authoritative
@@ -272,18 +89,11 @@ async function main(): Promise<void> {
     process.exit(await runManagedProcessLauncher(Bun.argv))
   }
   const sub = Bun.argv[2] ?? 'help'
-  let localDatabaseMigrationOperations:
-    | ReturnType<typeof composeLocalDatabaseMigrationOperations>
-    | undefined
-  const requireLocalDatabaseMigrationOperations = () =>
-    (localDatabaseMigrationOperations ??=
-      composeLocalDatabaseMigrationOperations(logicalSchemaContract))
 
   switch (sub) {
     case '__hosted-git-credential': {
-      const { hostedGitCredentialResponse } =
-        await import('./modules/source-control/composition/crewstationGitCredentials')
-      const out = hostedGitCredentialResponse(
+      const { runHostedGitCredentialCommand } = await import('./bootstrap/hostedGitCommands')
+      const out = await runHostedGitCredentialCommand(
         Bun.argv[3] ?? '',
         await Bun.stdin.text().catch(() => ''),
         process.env,
@@ -293,9 +103,8 @@ async function main(): Promise<void> {
       break
     }
     case '__hosted-git-ssh': {
-      const { runHostedGitSsh } =
-        await import('./modules/source-control/composition/crewstationGitCredentials')
-      process.exit(await runHostedGitSsh(Bun.argv.slice(3), process.env))
+      const { runHostedGitSshCommand } = await import('./bootstrap/hostedGitCommands')
+      process.exit(await runHostedGitSshCommand(Bun.argv.slice(3), process.env))
       break
     }
     case 'workspace': {
@@ -321,55 +130,9 @@ async function main(): Promise<void> {
       }
       const target = readFlag(Bun.argv, '--target')
       if (target === undefined) process.exit(2)
-      const env = Object.fromEntries(
-        Object.entries(process.env).filter((entry): entry is [string, string] => {
-          return typeof entry[1] === 'string'
-        }),
-      )
-      const attempts = await Promise.all(
-        Array.from({ length: 8 }, () =>
-          runManagedProcess({
-            argv: [target, '--version'],
-            cwd: process.cwd(),
-            env: { ...env, AW_STUB_MODE: 'basic' },
-            requireSpawnReceipt: true,
-            captureRawStdout: true,
-            onSpawned: () => {},
-          }),
-        ),
-      )
-      const expected = 'stub-opencode custom-build'
-      const failures = attempts
-        .map((result, index) => ({ index, result }))
-        .filter(
-          ({ result }) =>
-            result.outcome !== 'exited' ||
-            result.exitCode !== 0 ||
-            !result.rawStdout.includes(expected) ||
-            result.stderrTail.includes('AW_MANAGED_PROCESS_LAUNCH_'),
-        )
-      console.log(
-        JSON.stringify({
-          standaloneHost: {
-            processExecPath: process.execPath,
-            argv0: Bun.argv[0],
-            argv1: Bun.argv[1],
-            main: Bun.main,
-          },
-          attempts: attempts.length,
-          failures: failures.map(({ index, result }) => ({
-            index,
-            outcome: result.outcome,
-            exitCode: result.exitCode,
-            rawStdout: result.rawStdout,
-            stderrTail: result.stderrTail,
-            spawnError: result.spawnError,
-            pumpError: result.pumpError,
-            launcherOutputBytes: result.launcherOutputBytes,
-          })),
-        }),
-      )
-      process.exit(failures.length === 0 ? 0 : 1)
+      const probe = await runManagedProcessOutputProbe(target, process.env)
+      console.log(probe.output)
+      process.exit(probe.exitCode)
       break
     }
 
@@ -393,7 +156,7 @@ async function main(): Promise<void> {
       const host = readFlag(Bun.argv, '--host')
       if (host !== undefined) launch.host = host
       // RFC-370 v2 §3.1: the deployment selects its adapters once; flags still win.
-      const profile = await selectDeploymentProfile(process.env)
+      const profile = await selectDeployment(process.env).profile()
       const start = (development?: DevelopmentOverlay) => startCommand(profile, launch, development)
       if (process.env.AGENT_WORKFLOW_DEV_HOT_RELOAD === '1') {
         const retained = globalThis as typeof globalThis & {
@@ -426,9 +189,7 @@ async function main(): Promise<void> {
     }
 
     case 'doctor': {
-      const result = await composeDoctorApplication({
-        diagnostics: createLocalDoctorDiagnosticsFactory(logicalSchemaContract),
-      }).run()
+      const result = await runDoctorDiagnostics()
       process.stdout.write(formatDoctor(result))
       if (!result.ok) process.exit(1)
       break
@@ -487,7 +248,7 @@ async function main(): Promise<void> {
       }
       const result = await databaseCommand(
         Bun.argv.slice(3),
-        requireLocalDatabaseMigrationOperations(),
+        composeLocalDatabaseMigrationCommandOperations(),
       )
       process.stdout.write(result.output)
       if (result.status !== 'ok') process.exit(result.status === 'usage-error' ? 2 : 1)
@@ -511,13 +272,13 @@ async function main(): Promise<void> {
     }
 
     case 'migrate': {
-      const { output } = await migrateForDeployment(process.env)
+      const { output } = await selectDeployment(process.env).migrate()
       process.stdout.write(output)
       break
     }
 
     case 'verify-database-restore': {
-      process.stdout.write(await verifyDatabaseRestoreForDeployment(process.env))
+      process.stdout.write(await selectDeployment(process.env).verifyDatabaseRestore())
       break
     }
 
@@ -528,8 +289,7 @@ async function main(): Promise<void> {
     }
 
     case 'verify-database-migration': {
-      const { verifyDatabaseMigrationForDeployment } = await import('./bootstrap/deployment')
-      process.stdout.write(await verifyDatabaseMigrationForDeployment(process.env))
+      process.stdout.write(await selectDeployment(process.env).verifyDatabaseMigration())
       break
     }
 
@@ -541,19 +301,7 @@ async function main(): Promise<void> {
       break
 
     case 'backup': {
-      const provider = await resolveCommandProvider()
-      const operations = await (async () => {
-        try {
-          return composeLocalSystemOperations({
-            repositoryBackupPreparationFactory: composeRepositoryBackupPreparation,
-            contract: logicalSchemaContract,
-            providerRuntime: provider.runtime,
-          })
-        } catch (error) {
-          await provider.runtime.close()
-          throw error
-        }
-      })()
+      const operations = await composeBackupCommandOperations()
       try {
         const result = await backupCommand(Bun.argv.slice(3), operations)
         process.stdout.write(result.output)
@@ -592,19 +340,7 @@ async function main(): Promise<void> {
         )
         break
       }
-      const contract = logicalSchemaContract
-      const providerRuntime = resolveDatabaseProviderRuntimeForRestore({
-        config: loadConfig(Paths.config).database,
-        sqlitePath: Paths.db,
-        generationPointerPath: Paths.databaseGenerationPointer,
-        operationsRoot: Paths.databaseMigrationsDir,
-        contract,
-      })
-      const operations = composeLocalSystemOperations({
-        repositoryBackupPreparationFactory: composeRepositoryBackupPreparation,
-        contract,
-        providerRuntime,
-      })
+      const operations = composeRestoreCommandOperations()
       try {
         const result = await restoreCommand(Bun.argv.slice(3), operations)
         process.stdout.write(result.output)

@@ -369,6 +369,11 @@ describe('RFC-349 provider cutover', () => {
 
     expect(source).not.toMatch(/from\s+['"]\.\/db\/client['"]/) // user/package/ops share provider bootstrap
     expect(source).not.toMatch(/\bopenDb\s*\(/)
+    // RFC-427: the command bootstraps moved from `main.ts` to bootstrap/; the same rule follows them.
+    const bootstraps = unit('packages/backend/src/bootstrap/commandBootstraps.ts').text
+    expect(bootstraps).not.toMatch(/from\s+['"](?:@|\.\.?)\/db\/client['"]/)
+    expect(bootstraps).not.toMatch(/\bopenDb\s*\(/)
+    expect(bootstraps).toContain('prepareDatabaseProviderForBoot')
     // The CLI report owns provider resolution after command extraction. Keep both entry surfaces SQLite-free.
     const report = unit('packages/backend/src/cli/migrationReport.ts').text
     expect(report).not.toMatch(/from\s+['"](?:@|\.)\/db\/client['"]/)

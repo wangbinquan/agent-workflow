@@ -154,6 +154,8 @@ Facade 只许 re-export 或参数形状适配；不得含 DB 查询、状态、�
     余项第 2 项余下部分（定时备份来源移出 provider 适配表、执行可用性的单机回落）：
     [RFC-426](../RFC-426-scheduled-backup-source-and-unbound-execution-status/proposal.md)（In Progress）——定时备份经系统运维模块的备份
     协调端口，顺带修复单机 PostgreSQL 定时备份落成手动家族且带工作树；部署分支 2 → 1。
+    余项第 3 项（入口根瘦身）：[RFC-427](../RFC-427-entry-root-command-assembly/proposal.md)（In Progress）——`main.ts` 的命令依赖装配迁入
+    `bootstrap/`，`migrate` / 两个校验命令成为部署描述的操作。
 - **退出门**：每模块每进程构造一次；不存在 provider 专属或部署专属的装配函数；入口根只做参数解析与 profile 选择；
   后台作业全部经唯一生命周期程序且都有 stop；两种 provider 的作业清单一致。
 - **前置 / 冲突**：`server.ts`、`cli/start.ts`、`cli/postgresqlDaemonApplication.ts` 正在被 RFC-370 改动，S2 须在其当前在制品

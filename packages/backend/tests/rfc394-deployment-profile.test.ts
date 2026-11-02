@@ -4,7 +4,7 @@ import { DEFAULT_CONFIG } from '@agent-workflow/shared'
 import { createSecretBoxFromKey } from '@/auth/secretBox'
 import { composeStandaloneProfile } from '@/bootstrap/standalone'
 import { composeCrewStationProfile } from '@/bootstrap/crewstation'
-import { selectDeploymentProfile } from '@/bootstrap/deployment'
+import { selectDeployment } from '@/bootstrap/deployment'
 import { deploymentSelectionsOf, DEPLOYMENT_SELECTION_KEYS } from '@/bootstrap/deploymentSelections'
 import type { DeploymentSelections, HostProbeInput } from '@/bootstrap/deploymentProfile'
 import * as git from '@/services/gitVersion'
@@ -123,14 +123,15 @@ test('standalone selection needs no environment and has exactly the six profile 
     listen: {},
     selections: {},
   })
-  expect(await selectDeploymentProfile({ CS_PROJECT: 'does-not-select-hosting' })).toMatchObject({
-    kind: 'standalone',
-    selections: {},
-  })
-  await expect(selectDeploymentProfile({ AW_DEPLOYMENT_MODE: 'invalid' })).rejects.toThrow(
-    'AW_DEPLOYMENT_MODE',
+  expect(await selectDeployment({ CS_PROJECT: 'does-not-select-hosting' }).profile()).toMatchObject(
+    {
+      kind: 'standalone',
+      selections: {},
+    },
   )
-  await expect(selectDeploymentProfile({ AW_DEPLOYMENT_MODE: 'crewstation' })).rejects.toThrow(
+  // RFC-427: the mode is read when the deployment is selected; the hosted profile still checks its inputs.
+  expect(() => selectDeployment({ AW_DEPLOYMENT_MODE: 'invalid' })).toThrow('AW_DEPLOYMENT_MODE')
+  await expect(selectDeployment({ AW_DEPLOYMENT_MODE: 'crewstation' }).profile()).rejects.toThrow(
     'CS_PROJECT',
   )
 })
@@ -303,7 +304,10 @@ describeEachProvider('RFC-394 hosted factory with provider-owned storage', (harn
     const detect = spyOn(git, 'detectGitCapabilities')
     const probe = spyOn(getRuntimeDriver('claude-code'), 'probe')
     try {
-      for (const factory of [composeCrewStationProfile, selectDeploymentProfile]) {
+      for (const factory of [
+        composeCrewStationProfile,
+        (environment: typeof env) => selectDeployment(environment).profile(),
+      ]) {
         order.length = 0
         const profile = await factory(env)
         expect(order).toEqual(['verify-database', 'compose-system', 'read-capabilities'])

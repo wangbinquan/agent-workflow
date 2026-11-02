@@ -24,6 +24,11 @@ import {
 
 const SRC = readFileSync(resolve(import.meta.dir, '..', 'src', 'cli', 'package.ts'), 'utf8')
 const MAIN = readFileSync(resolve(import.meta.dir, '..', 'src', 'main.ts'), 'utf8')
+// RFC-427: the package command bootstrap moved from main.ts to bootstrap/.
+const BOOTSTRAPS = readFileSync(
+  resolve(import.meta.dir, '..', 'src', 'bootstrap', 'commandBootstraps.ts'),
+  'utf8',
+)
 
 /**
  * RFC-359 W5-T19b：`bootstrapFactory` 从可选变必填之后，每条用例都得说清楚它假设的装配是什么。
@@ -82,11 +87,11 @@ describe('① --as-user 强制', () => {
     expect(SRC).toContain('identity.resolveLocalIdentityByUsername(username)')
     expect(SRC).not.toContain("from '@/db/")
     expect(MAIN).toContain('composePackageCommandBootstrap')
-    expect(MAIN).toContain('identityAccess.localOperator.forUser(user.id)')
+    expect(BOOTSTRAPS).toContain('identityAccess.localOperator.forUser(user.id)')
     // RFC-359 —— 两台 apply 引擎合一后，bootstrap 只剩这一条装配（此前 SQLite 走
     // `composeResourcePackageOperations({` + `commitResourcePackage`，PostgreSQL 走这一条）。
-    expect(MAIN).toContain('composePostgresqlResourcePackageCatalog({')
-    expect(MAIN).not.toMatch(
+    expect(BOOTSTRAPS).toContain('composePostgresqlResourcePackageCatalog({')
+    expect(BOOTSTRAPS).not.toMatch(
       /provider\.provider === 'sqlite'\s*\n?\s*\?[\s\S]{0,80}ResourcePackage/,
     )
     expect(SRC).toContain('catalog.operations.inspect')

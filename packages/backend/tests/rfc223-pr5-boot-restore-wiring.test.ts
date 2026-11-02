@@ -36,8 +36,15 @@ test('normal skill recovery remains fail-closed before consumers', () => {
 test('restore classifies the recorded contract before opening the active provider', () => {
   const main = source('main.ts'),
     start = main.indexOf("case 'restore':")
-  expect(main.indexOf('classifyRestoreArtifact(artifact)', start)).toBeLessThan(
-    main.indexOf('resolveDatabaseProviderRuntimeForRestore(', start),
+  // RFC-427: the active provider is opened inside bootstrap's composeRestoreCommandOperations. (The assertion this
+  // replaces searched for `classifyRestoreArtifact(artifact)`, which the multi-line call never contained, so it held
+  // vacuously; both indices are now required to be found.)
+  const classify = main.indexOf('classifyRestoreArtifact(', start)
+  const open = main.indexOf('composeRestoreCommandOperations()', start)
+  expect(classify).toBeGreaterThan(start)
+  expect(open).toBeGreaterThan(classify)
+  expect(source('bootstrap/commandBootstraps.ts')).toContain(
+    'resolveDatabaseProviderRuntimeForRestore(',
   )
   expect(main.slice(start)).toContain('composeEpochMigrationCommand().restoreBackup')
   const entry = source('bootstrap/epochMigrationEntry.ts')

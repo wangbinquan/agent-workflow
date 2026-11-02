@@ -316,6 +316,9 @@ describe('RFC-305 identity-access architecture', () => {
     expect(identityAccessImportsOutsideOwner()).toEqual([
       'packages/backend/src/auth/session.ts -> @/modules/identity-access/composition/authentication',
       'packages/backend/src/auth/session.ts -> @/modules/identity-access/composition/authentication',
+      // RFC-427: the CLI user / package command assembly moved here from main.ts.
+      'packages/backend/src/bootstrap/commandBootstraps.ts -> @/modules/identity-access/composition',
+      'packages/backend/src/bootstrap/commandBootstraps.ts -> @/modules/identity-access/composition/userOperations',
       // RFC-370 M0 / §9.2 V9：托管装配只在 bootstrap，装配 CrewStation 的 HTTP / WebSocket
       // 凭据适配器、来源令牌校验与恢复请求人解析。
       'packages/backend/src/bootstrap/crewstation.ts -> @/modules/identity-access/composition/authentication',
@@ -337,8 +340,6 @@ describe('RFC-305 identity-access architecture', () => {
       'packages/backend/src/cli/package.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/cli/user.ts -> @/modules/identity-access/public/operations',
       'packages/backend/src/cli/user.ts -> @/modules/identity-access/public/participants',
-      'packages/backend/src/main.ts -> ./modules/identity-access/composition',
-      'packages/backend/src/main.ts -> ./modules/identity-access/composition/userOperations',
       'packages/backend/src/modules/development-automation/application/activityOperations.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/development-automation/application/configOperations.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/development-automation/application/missionOperations.ts -> @/modules/identity-access/public/participants',

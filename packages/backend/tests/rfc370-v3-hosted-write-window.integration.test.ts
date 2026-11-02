@@ -19,7 +19,7 @@ import { patchWorkflowFixture, readWorkflowFixtures, workflowFixture } from './h
 import { expect, test } from 'bun:test'
 import { Hono } from 'hono'
 import { PostgresqlDatabaseConfigSchema } from '@agent-workflow/shared'
-import { migrateForDeployment } from '@/bootstrap/deployment'
+import { selectDeployment } from '@/bootstrap/deployment'
 import {
   crewStationControlClient,
   prepareCrewStationDatabase,
@@ -77,7 +77,7 @@ if (resolveTestProviders(process.env).includes('postgresql')) {
   async function install() {
     await raw('DROP SCHEMA IF EXISTS agent_workflow CASCADE')
     await raw('DROP SCHEMA IF EXISTS agent_workflow_meta CASCADE')
-    await migrateForDeployment(env())
+    await selectDeployment(env()).migrate()
     const prepared = await prepareCrewStationDatabase({
       contract: logicalSchemaContract,
       environment,

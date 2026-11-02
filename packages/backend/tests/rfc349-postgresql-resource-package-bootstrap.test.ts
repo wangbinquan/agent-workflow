@@ -137,7 +137,8 @@ describeEachProvider('RFC-349 ResourcePackage bootstrap', (harness) => {
   })
 
   test('standalone package CLI binds the selected PostgreSQL owners without a SQLite fallback', () => {
-    const source = readFileSync(resolve(backendRoot, 'src/main.ts'), 'utf8')
+    // RFC-427: the package command bootstrap moved from main.ts to bootstrap/.
+    const source = readFileSync(resolve(backendRoot, 'src/bootstrap/commandBootstraps.ts'), 'utf8')
     for (const factory of [
       'composePostgresqlResourcePackageCatalog',
       'createResourcePackageAtomicApplyOperations',

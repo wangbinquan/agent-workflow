@@ -231,9 +231,10 @@ export function deploymentProfileViolations(units: readonly SourceUnit[]): strin
     descendants(main, ts.isCaseClause).find(
       (node) => ts.isStringLiteral(node.expression) && node.expression.text === 'start',
     )
+  // RFC-427: the start branch selects the deployment once and composes its profile.
   if (
     !branch ||
-    calls(branch, 'selectDeploymentProfile').length !== 1 ||
+    calls(branch, 'selectDeployment').length !== 1 ||
     calls(branch, 'startCommand').length !== 1
   )
     errors.push('single start selection')
@@ -387,7 +388,7 @@ const mutations: readonly [string, string, (text: string) => string, string][] =
   [
     'missing selection',
     MAIN,
-    (text) => text.replace('await selectDeploymentProfile(process.env)', 'profile'),
+    (text) => text.replace('await selectDeployment(process.env).profile()', 'profile'),
     'single start selection',
   ],
   [

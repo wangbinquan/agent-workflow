@@ -360,41 +360,53 @@ describe('RFC-370 Doctor native pairing and actual standalone root', () => {
     expect(compatibility.formatDoctor).toBe(decisions.formatDoctor)
   })
 
+  // RFC-427: main's Doctor arm calls bootstrap's runDoctorDiagnostics, which chooses the native complete family.
   test('the actual main Doctor arm explicitly chooses the native complete family', () => {
-    const file = readFileSync(resolve(import.meta.dir, '../src/main.ts'), 'utf8')
-    const source = ts.createSourceFile('main.ts', file, ts.ScriptTarget.Latest, true)
-    const arms: ts.CaseClause[] = []
-    const visit = (node: ts.Node) => {
-      if (
+    const callsIn = (relative: string, pick: (node: ts.Node) => boolean) => {
+      const file = readFileSync(resolve(import.meta.dir, '../src/' + relative), 'utf8')
+      const source = ts.createSourceFile(relative, file, ts.ScriptTarget.Latest, true)
+      const roots: ts.Node[] = []
+      const visit = (node: ts.Node) => {
+        if (pick(node)) roots.push(node)
+        ts.forEachChild(node, visit)
+      }
+      visit(source)
+      const calls: string[] = []
+      const readCalls = (node: ts.Node) => {
+        if (ts.isCallExpression(node))
+          calls.push(node.getText(source).replace(/\s+/g, '').replace(/,\}/g, '}'))
+        ts.forEachChild(node, readCalls)
+      }
+      for (const root of roots) readCalls(root)
+      return { roots: roots.length, calls }
+    }
+    const arm = callsIn(
+      'main.ts',
+      (node) =>
         ts.isCaseClause(node) &&
         ts.isStringLiteral(node.expression) &&
-        node.expression.text === 'doctor'
-      )
-        arms.push(node)
-      ts.forEachChild(node, visit)
-    }
-    visit(source)
-    expect(arms).toHaveLength(1)
-    const calls: string[] = []
-    const readCalls = (node: ts.Node) => {
-      if (ts.isCallExpression(node))
-        calls.push(node.getText(source).replace(/\s+/g, '').replace(/,\}/g, '}'))
-      ts.forEachChild(node, readCalls)
-    }
-    readCalls(arms[0]!)
+        node.expression.text === 'doctor',
+    )
+    expect(arm.roots).toBe(1)
+    expect(arm.calls.filter((value) => value === 'runDoctorDiagnostics()')).toHaveLength(1)
+    expect(arm.calls.filter((value) => value === 'doctorCommand()')).toHaveLength(0)
+    const run = callsIn(
+      'bootstrap/commandBootstraps.ts',
+      (node) => ts.isFunctionDeclaration(node) && node.name?.text === 'runDoctorDiagnostics',
+    )
+    expect(run.roots).toBe(1)
     expect(
-      calls.filter(
+      run.calls.filter(
         (value) => value === 'createLocalDoctorDiagnosticsFactory(logicalSchemaContract)',
       ),
     ).toHaveLength(1)
     expect(
-      calls.filter(
+      run.calls.filter(
         (value) =>
           value ===
           'composeDoctorApplication({diagnostics:createLocalDoctorDiagnosticsFactory(logicalSchemaContract)}).run()',
       ),
     ).toHaveLength(1)
-    expect(calls.filter((value) => value === 'doctorCommand()')).toHaveLength(0)
     const common = readFileSync(
       resolve(import.meta.dir, '../src/modules/system-operations/application/doctorDiagnostics.ts'),
       'utf8',

@@ -110,6 +110,21 @@ export interface DeploymentProfile {
   readonly selections: DeploymentSelections
 }
 
+/**
+ * RFC-427: the selected deployment. Its kind is read once, its start profile is composed on demand (a hosted profile
+ * verifies the database first), and the deployment-level commands are its operations.
+ */
+export interface Deployment {
+  readonly kind: DeploymentKind
+  profile(): Promise<DeploymentProfile>
+  /** `agent-workflow migrate`. */
+  migrate(): Promise<{ readonly output: string }>
+  /** `agent-workflow verify-database-restore`. */
+  verifyDatabaseRestore(): Promise<string>
+  /** `agent-workflow verify-database-migration`. */
+  verifyDatabaseMigration(): Promise<string>
+}
+
 export interface DeploymentSelections {
   readonly historyRestrictions?: ImportedHistoryRestrictionPort
   readonly contentStore?: ImportedContentStore

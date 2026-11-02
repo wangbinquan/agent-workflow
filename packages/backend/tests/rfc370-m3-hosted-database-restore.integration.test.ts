@@ -25,7 +25,7 @@ import { expect, test } from 'bun:test'
 import { createHash } from 'node:crypto'
 import { eq } from 'drizzle-orm'
 import { PostgresqlDatabaseConfigSchema } from '@agent-workflow/shared'
-import { migrateForDeployment } from '@/bootstrap/deployment'
+import { selectDeployment } from '@/bootstrap/deployment'
 import { composeCrewStationDatabaseBackups } from '@/modules/system-operations/composition/crewstationDatabaseBackups'
 import {
   composeCrewStationWorkerFence,
@@ -100,7 +100,7 @@ if (resolveTestProviders(process.env).includes('postgresql')) {
     }
     try {
       await emptyTarget()
-      await migrateForDeployment(env)
+      await selectDeployment(env).migrate()
       const serving = await prepareCrewStationDatabase({
         contract: logicalSchemaContract,
         environment,
@@ -345,7 +345,7 @@ if (resolveTestProviders(process.env).includes('postgresql')) {
       })
       expect(await restoreHostedDatabaseInstallation(input)).toMatchObject({ restored: false })
       // The release Job continues with the ordinary migrate of the same generation.
-      await migrateForDeployment(restoreEnv)
+      await selectDeployment(restoreEnv).migrate()
       expect(
         await verifyHostedDatabaseRestore({
           runtime,

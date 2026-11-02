@@ -25,19 +25,29 @@ describe('RFC-346 CLI typed cutover', () => {
     }
   })
 
-  test('the real CLI process root owns local composition and injects both adapters', () => {
+  // RFC-427: bootstrap composes the local system operations; the CLI root hands them to the handlers.
+  test('bootstrap composes local system operations and the CLI root injects both adapters', () => {
     const source = readFileSync(join(SOURCE_ROOT, 'main.ts'), 'utf8')
-    expect(source).toContain("from './modules/system-operations/composition'")
-    const backup = source.split("case 'backup': {")[1]!.split("case 'restore': {")[0]!
-    const restore = source.split("case 'restore': {")[1]!.split("case '")[0]!
-    expect(backup).toContain('const provider = await resolveCommandProvider()')
-    expect(backup.replace(/\s+/g, '')).toContain(
+    const bootstraps = readFileSync(join(SOURCE_ROOT, 'bootstrap/commandBootstraps.ts'), 'utf8')
+    expect(bootstraps).toContain("from '@/modules/system-operations/composition'")
+    const composeBackup = bootstraps
+      .split('export async function composeBackupCommandOperations()')[1]!
+      .split('\nexport ')[0]!
+    const composeRestore = bootstraps
+      .split('export function composeRestoreCommandOperations()')[1]!
+      .split('\nexport ')[0]!
+    expect(composeBackup).toContain('const provider = await resolveCommandProvider()')
+    expect(composeBackup.replace(/\s+/g, '')).toContain(
       'composeLocalSystemOperations({repositoryBackupPreparationFactory:composeRepositoryBackupPreparation,contract:logicalSchemaContract,providerRuntime:provider.runtime,})',
     )
-    expect(backup).toContain('backupCommand(Bun.argv.slice(3), operations)')
-    expect(restore.replace(/\s+/g, '')).toContain(
-      'constoperations=composeLocalSystemOperations({repositoryBackupPreparationFactory:composeRepositoryBackupPreparation,contract,providerRuntime,})',
+    expect(composeRestore.replace(/\s+/g, '')).toContain(
+      'returncomposeLocalSystemOperations({repositoryBackupPreparationFactory:composeRepositoryBackupPreparation,contract,providerRuntime,})',
     )
+    const backup = source.split("case 'backup': {")[1]!.split("case 'restore': {")[0]!
+    const restore = source.split("case 'restore': {")[1]!.split("case '")[0]!
+    expect(backup).toContain('const operations = await composeBackupCommandOperations()')
+    expect(backup).toContain('backupCommand(Bun.argv.slice(3), operations)')
+    expect(restore).toContain('const operations = composeRestoreCommandOperations()')
     expect(restore).toContain('restoreCommand(Bun.argv.slice(3), operations)')
     for (const command of [backup, restore])
       expect(command).toContain('await operations.shutdown()')
