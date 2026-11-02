@@ -16,6 +16,7 @@ import { OLD_POSTGRESQL_TASK_DEFECTS } from '../../scripts/release-upgrade/scena
 import { DaemonStartError } from '../../scripts/release-upgrade/lib/daemon'
 import {
   explainLockfileRefusal,
+  isPreWindowsOutfileStat,
   lockfileDrift,
   tagSourceArchive,
 } from '../../scripts/release-upgrade/lib/binaries'
@@ -541,6 +542,40 @@ test('tag builds run under the long path and explain lockfile refusals', () => {
   expect(binaries).not.toContain("mkdtempSync(join(buildDir, 'archive-'))")
   expect(binaries).toContain("if (!String(error).includes('lockfile had changes')) throw error")
   expect(binaries).toContain("command([bun, 'install', '--lockfile-only', '--ignore-scripts']")
+})
+
+// Release-upgrade nightly 41367335740 (Windows): with the lockfile accepted, the v0.1.0, v0.10.0 and
+// v0.16.3 build scripts compiled `dist\agent-workflow-win32-x86_64.exe` (Bun appends `.exe`), then
+// `statSync` on the extension-less `--outfile` failed with ENOENT and the scripts exited 1 before
+// their `version` smoke run. Only that exact failure is accepted, and the verifier runs the smoke.
+test('a Windows tag build tolerates only the pre-Windows outfile stat', () => {
+  const dist = join('C:', 'Users', 'runneradmin', 'archive-x', 'dist')
+  const stat = (path: string) =>
+    `v0.1.0 tag-build exited 1: $ bun run scripts/build-binary.ts\n\nbuild failed: ENOENT: no such file or directory, stat '${path}'\nerror: script "build:binary" exited with code 1`
+  expect(isPreWindowsOutfileStat(stat(join(dist, 'agent-workflow-win32-x86_64')), dist)).toBe(true)
+  // Drive-letter case is not identity.
+  expect(
+    isPreWindowsOutfileStat(
+      stat(join(dist, 'agent-workflow-win32-x86_64')).replace('C:', 'c:'),
+      dist,
+    ),
+  ).toBe(true)
+  for (const other of [
+    stat(join(dist, 'agent-workflow-win32-x86_64.exe')),
+    stat(join(dist, 'agent-workflow-linux-x86_64')),
+    stat(join('C:', 'elsewhere', 'dist', 'agent-workflow-win32-x86_64')),
+    stat(join(dist, 'agent-workflow-win32-x86_64')).replace('ENOENT', 'EACCES'),
+    'build failed: error: Could not resolve: "./embed.generated"',
+  ])
+    expect(isPreWindowsOutfileStat(other, dist)).toBe(false)
+  const binaries = readFileSync(
+    new URL('../../scripts/release-upgrade/lib/binaries.ts', import.meta.url),
+    'utf8',
+  )
+  expect(binaries).toContain("platform !== 'windows-x86_64' ||")
+  expect(binaries).toContain("!isPreWindowsOutfileStat(String(error), join(scratch, 'dist')) ||")
+  expect(binaries).toContain('!existsSync(compiled)')
+  expect(binaries).toContain("await command([compiled, 'version'], {")
 })
 
 // User decision 2026-11-01: only the nightly verify job may read the draft release holding the

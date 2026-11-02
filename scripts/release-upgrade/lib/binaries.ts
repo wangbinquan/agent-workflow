@@ -179,6 +179,20 @@ export async function explainLockfileRefusal(
   }
 }
 
+/**
+ * Pre-Windows build scripts (v0.1.0 to v0.16.x) `statSync` their `--outfile` right after
+ * `bun build --compile` to print its size, but Bun appends `.exe` on Windows: the compile succeeds,
+ * then the script fails with ENOENT on the extension-less name and skips its `version` smoke run
+ * (release-upgrade nightly 41367335740). True only for exactly that failure.
+ */
+export function isPreWindowsOutfileStat(message: string, distDir: string): boolean {
+  const failed = /build failed: ENOENT: no such file or directory, stat '([^']+)'/.exec(message)
+  return (
+    failed !== null &&
+    failed[1]!.toLowerCase() === join(distDir, 'agent-workflow-win32-x86_64').toLowerCase()
+  )
+}
+
 async function buildTag(
   release: ReleaseEntry,
   options: ResolveBinaryOptions,
@@ -240,12 +254,29 @@ async function buildTag(
       )
       throw new Error(`${error instanceof Error ? error.message : String(error)}${drift}`)
     }
-    await command([bun, 'run', 'build:binary'], {
-      cwd: scratch,
-      env,
-      timeoutMs: 1_800_000,
-      label: `${release.tag} tag-build`,
-    })
+    try {
+      await command([bun, 'run', 'build:binary'], {
+        cwd: scratch,
+        env,
+        timeoutMs: 1_800_000,
+        label: `${release.tag} tag-build`,
+      })
+    } catch (error) {
+      const compiled = join(scratch, 'dist', 'agent-workflow-win32-x86_64.exe')
+      if (
+        platform !== 'windows-x86_64' ||
+        !isPreWindowsOutfileStat(String(error), join(scratch, 'dist')) ||
+        !existsSync(compiled)
+      )
+        throw error
+      // The historical compile finished; run the smoke check its script skipped.
+      await command([compiled, 'version'], {
+        cwd: scratch,
+        env,
+        timeoutMs: 120_000,
+        label: `${release.tag} tag-build smoke`,
+      })
+    }
     let output = join(scratch, 'dist', executableName(platform))
     if (!existsSync(output) && platform === 'windows-x86_64') {
       // Pre-Windows releases named native builds win32-x86_64 (Bun may append
