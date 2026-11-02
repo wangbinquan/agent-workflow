@@ -13,7 +13,7 @@ import {
   selectPortArtifactOperations,
 } from '../../public/participants'
 import { resolveNativePortContentDetailed } from './filePortOutputValidation'
-import { bindNativeAgentInvocation } from '../../composition/agentInvocation'
+import { bindNativeAgentInvocation } from './agentInvocation'
 import { bindNativeAgentProtocol } from '@/modules/runtime-management/infrastructure/local/agentProtocol'
 import { bindNativeAgentWorkspaceGitControlObservation } from '@/modules/source-control/composition/agentWorkspaceGitControl'
 import { bindNativeAgentMaterialWorkspace, getRuntimeDriver } from '@/services/runtime'

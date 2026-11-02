@@ -134,7 +134,7 @@ const TASK_EFFECT_BOUNDARIES = new Map<string, readonly TaskEffectBoundaryContra
     // RFC-370 M1: runNode reaches its process through the selected agent
     // invocation; each binding's `execute` brackets its act (the native child
     // submission, or the hosted CS run / adopt) with the durable process effect.
-    'packages/backend/src/modules/task-execution/composition/agentInvocation.ts',
+    'packages/backend/src/modules/task-execution/infrastructure/local/agentInvocation.ts',
     [
       {
         callable: 'execute',
@@ -284,8 +284,8 @@ const CROSS_CONTEXT_PROVIDER_BRIDGE_DEBT = new Set([
   // RFC-370 A-T5: the unchanged native pairing moved from RM into TE
   // composition. These two actual compatibility addresses are already recorded
   // in matching cross-context imports; retire with the selected A-T7 roots.
-  'runtime-management/infrastructure/local/agentMaterialCompiler: packages/backend/src/modules/task-execution/composition/agentInvocation.ts',
-  'runtime-management/infrastructure/local/agentMaterialEvidence: packages/backend/src/modules/task-execution/composition/agentInvocation.ts',
+  'runtime-management/infrastructure/local/agentMaterialCompiler: packages/backend/src/modules/task-execution/infrastructure/local/agentInvocation.ts',
+  'runtime-management/infrastructure/local/agentMaterialEvidence: packages/backend/src/modules/task-execution/infrastructure/local/agentInvocation.ts',
   'runtime-management/infrastructure/local/agentProtocol: packages/backend/src/modules/task-execution/infrastructure/local/nativeTaskAgentRun.ts',
   // RFC-370: exact native complete-family root addresses; retire in A-T7.
   'resource-catalog/composition/taskAgentMaterialReferences: packages/backend/src/modules/task-execution/composition/localTaskAgentRunFamily.ts',
@@ -891,12 +891,12 @@ describe('RFC-328 architecture guards', () => {
     expect(
       rfc328GuardViolations(
         fixture(
-          'packages/backend/src/modules/task-execution/composition/agentInvocation.ts',
+          'packages/backend/src/modules/task-execution/infrastructure/local/agentInvocation.ts',
           'const binding = { async execute() { await native.effect.submit({}) } }',
         ),
       ),
     ).toContain(
-      'unregistered task effect boundary: packages/backend/src/modules/task-execution/composition/agentInvocation.ts#execute',
+      'unregistered task effect boundary: packages/backend/src/modules/task-execution/infrastructure/local/agentInvocation.ts#execute',
     )
     const preparationActs = ['prepareDurableRepositoryWorkspace', 'prepareLegacyDeferredWorkspace']
     const preparationPath = 'packages/backend/src/services/task.ts'

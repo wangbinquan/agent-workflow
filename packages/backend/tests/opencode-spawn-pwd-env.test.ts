@@ -87,7 +87,11 @@ describe('opencode spawn sites set PWD = cwd in env', () => {
     expect(src).toContain('const { cmd, env } = plan')
     expect(src).toContain('const invocation = bindNativeAgentInvocation({')
     const binding = readFileSync(
-      resolve(import.meta.dir, '..', 'src/modules/task-execution/composition/agentInvocation.ts'),
+      resolve(
+        import.meta.dir,
+        '..',
+        'src/modules/task-execution/infrastructure/local/agentInvocation.ts',
+      ),
       'utf-8',
     )
     expect(binding).toContain(
@@ -177,7 +181,11 @@ describe('opencode spawn sites set PWD = cwd in env', () => {
     expect(src).toContain('return bindNativeAgentInvocation({\n              plan: prepared,')
     expect(src).toContain('environment: () => prepared.env,')
     const binding = readFileSync(
-      resolve(import.meta.dir, '..', 'src/modules/task-execution/composition/agentInvocation.ts'),
+      resolve(
+        import.meta.dir,
+        '..',
+        'src/modules/task-execution/infrastructure/local/agentInvocation.ts',
+      ),
       'utf-8',
     )
     expect(binding).toContain(

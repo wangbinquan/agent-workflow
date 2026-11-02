@@ -1,8 +1,8 @@
 // RFC-370: the ordinary Runtime diagnostic root selects one complete material/execution family.
 // Original prepared/native smoke suites remain intact; these cases cover the new real selection.
 import { afterEach, describe, expect, test } from 'bun:test'
-import { createRuntimeSmokeMaterialIntent } from '../src/modules/task-execution/composition/runtimeSmoke'
-import { createAgentInvocationPreparation } from '../src/modules/task-execution/composition/agentInvocationPreparation'
+import { createRuntimeSmokeMaterialIntent } from '../src/modules/task-execution/application/runtimeSmoke'
+import { createAgentInvocationPreparation } from '../src/modules/task-execution/application/agentInvocationPreparation'
 import type { AgentInvocationBinding } from '../src/modules/task-execution/application/ports/agentInvocation'
 import type {
   AgentExecutionOutcome,
@@ -22,7 +22,7 @@ import { createLogger } from '../src/util/log'
 import { mkdtempSync, readdirSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { composeRuntimeSmokeRunFamily } from '../src/modules/task-execution/composition/runtimeSmokeRunFamily'
+import { createRuntimeSmokeRunFamily } from '../src/modules/task-execution/application/runtimeSmoke'
 import { MIN_TURN_TIMEOUT_MS } from '../src/modules/task-execution/application/runtimeSmoke'
 import { composeLocalRuntimeSmokeRunFamily } from '../src/modules/task-execution/composition/localRuntimeSmokeRunFamily'
 import { createLocalRuntimeDiagnosticTargets } from '../src/modules/runtime-management/composition/runtimeDiagnosticTargets'
@@ -249,7 +249,7 @@ function selectedFamily(
     }
   }
   const invocations = new Invocations()
-  return { ...selected, request, target, family: composeRuntimeSmokeRunFamily({ invocations }) }
+  return { ...selected, request, target, family: createRuntimeSmokeRunFamily({ invocations }) }
 }
 
 describe('RFC-370 complete Runtime smoke family', () => {
@@ -342,7 +342,7 @@ describe('RFC-370 complete Runtime smoke family', () => {
       }
     }
     const invocations = new Invocations()
-    const family = composeRuntimeSmokeRunFamily({ invocations })
+    const family = createRuntimeSmokeRunFamily({ invocations })
     await expect(
       family.run({
         protocol: 'opencode',

@@ -1,8 +1,8 @@
 // RFC-370 A-T5: exercise the actual shared smoke behavior with a selected
 // opaque material/execution family, retaining the original result policies.
 import { describe, expect, test } from 'bun:test'
-import { runPreparedRuntimeSmoke } from '../src/modules/task-execution/composition/runtimeSmoke'
-import { createAgentInvocationPreparation } from '../src/modules/task-execution/composition/agentInvocationPreparation'
+import { runPreparedRuntimeSmoke } from '../src/modules/task-execution/application/runtimeSmoke'
+import { createAgentInvocationPreparation } from '../src/modules/task-execution/application/agentInvocationPreparation'
 import type { AgentInvocationBinding } from '../src/modules/task-execution/application/ports/agentInvocation'
 import type {
   AgentExecutionOutcome,

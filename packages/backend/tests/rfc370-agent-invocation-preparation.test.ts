@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
-import { createAgentInvocationPreparation } from '../src/modules/task-execution/composition/agentInvocationPreparation'
-import { createLocalAgentInvocationPreparation } from '../src/modules/task-execution/composition/localAgentInvocationPreparation'
+import { createAgentInvocationPreparation } from '../src/modules/task-execution/application/agentInvocationPreparation'
+import { createLocalAgentInvocationPreparation } from '../src/modules/task-execution/infrastructure/local/agentInvocationPreparation'
 import { bindNativeAgentProtocol } from '../src/modules/runtime-management/infrastructure/local/agentProtocol'
 import { bindNativeAgentMaterialReference } from '../src/modules/runtime-management/infrastructure/local/agentMaterialCompiler'
 import type { NativeAgentMaterialEvidenceHooks } from '../src/modules/runtime-management/infrastructure/local/agentMaterialEvidence'

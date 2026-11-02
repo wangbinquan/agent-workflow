@@ -1,7 +1,7 @@
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { rowToDistillJob, runDistill } from '@/modules/memory/application/distill/memoryDistiller'
-import { composeSystemAgentRunFamily } from '@/modules/task-execution/composition/systemAgentRunFamily'
+import { createSystemAgentRunFamily } from '@/modules/task-execution/application/systemAgentRun'
 import type { SystemAgentRunFamily } from '@/modules/task-execution/public/participants'
 import { createSqliteMemoryDistillTestContext } from './helpers/memoryDistill'
 import { afterEach, expect, test } from 'bun:test'
@@ -643,7 +643,7 @@ test('a rejected invocation reads its reference once and retires that exact refe
           owner.contents.forget(request)
         },
       }
-      const family = composeSystemAgentRunFamily({
+      const family = createSystemAgentRunFamily({
         workspaces: owner.workspaces,
         retainedContents,
         invocations: {

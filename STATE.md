@@ -1,4 +1,16 @@
-## 2026-11-01 RFC-420 task-execution 执行状态绑定里的残余逻辑迁出 composition（In Progress；`design/RFC-420-task-execution-execution-state-residue/`）
+## 2026-11-01 RFC-421 task-execution agent 调用栈：中立部分迁入 application，本地调用适配器迁入 infrastructure/local（In Progress；`design/RFC-421-task-execution-agent-invocation-stack/`）
+
+- **来由**：RFC-294 S6 退出门「task-execution `composition/` 只剩装配」的第九步（RFC-416 proposal §7 第 2 项第一段）；用户授权同 RFC-402，
+  本会话调研、设计、实施与集中验证，不派 Codex。
+- **范围**：两段式调用准备、系统代理运行核心、运行时冒烟核心与材料声明迁入 `application/`；本地 agent 调用适配器与本地调用准备迁入
+  `infrastructure/local/`；六个 composition 文件删除。纯结构重构。
+- **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。
+- **进度**：T1～T4 完成，随实现提交入库，待 exact SHA 的 CI（AC-5）。集中验证 429 + 3 + 3 个文件：无本 RFC 引入的失败，3 个负载超时第二轮
+  通过、在候选与基线上单进程同样通过；两个按已提交源码生成报告的用例在候选导出仓库里通过；P0 变异 lane 通过（34 个阶段、源文件指纹不变）。
+  详见 plan「集中验证（T4）」。同提交收尾 RFC-420（`d9a5aefaa` 全绿）。
+- **后继**：各运行 family 的打开逻辑（task-execution 自有材料端口）；composition 其余小块与收口锁。
+
+## 2026-11-01 RFC-420 task-execution 执行状态绑定里的残余逻辑迁出 composition（Done；`design/RFC-420-task-execution-execution-state-residue/`）
 
 - **来由**：RFC-294 S6 退出门「task-execution `composition/` 只剩装配」的第八步（RFC-416 proposal §7 第 4 项）；用户授权同 RFC-402，本会话调研、
   设计、实施与集中验证，不派 Codex。
@@ -6,7 +18,7 @@
   迁入 `engine/wrapper/wrapperBodyScope.ts`；调用节点的委托 actor 与子运行时迁入 `application/childCallInheritance.ts`，iso 重建迁入
   `engine/kernel/mergeRecovery.ts`；协作者投影迁入 `domain/`。纯结构重构。
 - **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。
-- **进度**：T1～T5 完成，随实现提交入库，待 exact SHA 的 CI（AC-5）。集中验证 580 + 19 + 2 个文件：本 RFC 引入的 3 个锁 / 账本失败
+- **进度**：T1～T5 完成，随实现提交入库（`d9a5aefaa`）；exact SHA 的主 CI 70/70 与 windows-platform 全绿（AC-5），Done。集中验证 580 + 19 + 2 个文件：本 RFC 引入的 3 个锁 / 账本失败
   （RFC-395 选择语义账本站点、RFC-292 触发上下文锁、RFC-305 合同消费方账本）与新用例一处类型断言已修；两个按已提交源码生成报告的用例
   在候选导出仓库里通过；其余负载超时在候选与基线上同样通过；P0 变异 lane 通过（34 个阶段、源文件指纹不变）。详见 plan「集中验证（T5）」。
   同提交收尾 RFC-417 / 418 / 419（三者 exact SHA 全绿）。

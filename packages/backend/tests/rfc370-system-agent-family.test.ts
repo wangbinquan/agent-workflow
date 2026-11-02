@@ -5,7 +5,7 @@ import { mkdtempSync, mkdirSync, existsSync, readFileSync, rmSync } from 'node:f
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { composeLocalSystemAgentRunFamily } from '../src/modules/task-execution/composition/localSystemAgentRunFamily'
-import { composeSystemAgentRunFamily } from '../src/modules/task-execution/composition/systemAgentRunFamily'
+import { createSystemAgentRunFamily } from '../src/modules/task-execution/application/systemAgentRun'
 import type { SystemAgentRunOptions, SystemAgentRunResult } from '../src/services/systemAgentRun'
 import { emptySystemAgentOutputEvidence } from '../src/services/systemAgentRun'
 import type { SystemAgentRunRequest } from '../src/modules/task-execution/application/ports/systemAgentRunFamily'
@@ -77,7 +77,7 @@ describe('RFC-370 complete System family binding', () => {
         throw original
       },
     }
-    const family = composeSystemAgentRunFamily({ invocations, workspaces, retainedContents })
+    const family = createSystemAgentRunFamily({ invocations, workspaces, retainedContents })
     expect(family.workspaces).toBe(workspaces)
     expect(family.retainedContents).toBe(retainedContents)
     await expect(family.run(request)).rejects.toBe(original)

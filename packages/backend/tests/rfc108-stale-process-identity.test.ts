@@ -177,7 +177,10 @@ describe('RFC-108 T9 — refuse-on-survivor wiring (source-text)', () => {
     // RFC-370 M1: the selected agent invocation records the started receipt for
     // the Task (durable process effect, or the original native task receipt).
     const invocationSrc = readFileSync(
-      join(import.meta.dir, '../src/modules/task-execution/composition/agentInvocation.ts'),
+      join(
+        import.meta.dir,
+        '../src/modules/task-execution/infrastructure/local/agentInvocation.ts',
+      ),
       'utf8',
     )
     expect(runnerSrc).toContain('await invocation.execute(')

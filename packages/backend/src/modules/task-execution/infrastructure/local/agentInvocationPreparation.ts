@@ -1,5 +1,7 @@
-import type { AgentInvocationPreparation } from '../application/ports/agentInvocationPreparation'
-import { createAgentInvocationPreparation } from './agentInvocationPreparation'
+// RFC-421: moved verbatim from composition/localAgentInvocationPreparation.ts — the local invocation preparation over
+// the application's two-phase preparation and the local invocation adapter.
+import type { AgentInvocationPreparation } from '../../application/ports/agentInvocationPreparation'
+import { createAgentInvocationPreparation } from '../../application/agentInvocationPreparation'
 import { bindNativeAgentInvocation } from './agentInvocation'
 import type { AgentMaterialCompiler } from '@/modules/runtime-management/public/participants'
 import type { AgentSpawnPlan } from '@/services/runtime/types'

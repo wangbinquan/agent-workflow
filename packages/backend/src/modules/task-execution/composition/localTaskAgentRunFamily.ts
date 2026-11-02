@@ -14,7 +14,7 @@ import type { NodeRunRuntimePersistence } from '../application/ports/nodeRunRunt
 import type { TaskOperationConfigurationQueries } from '../application/ports/taskOperationConfiguration'
 import type { NodeRunPromptOperations } from '../application/ports/nodeRunPromptContent'
 import type { PortArtifactOperations } from '../application/ports/portArtifactContent'
-import { createLocalAgentInvocationPreparation } from './localAgentInvocationPreparation'
+import { createLocalAgentInvocationPreparation } from '../infrastructure/local/agentInvocationPreparation'
 import { createTaskAgentMaterialPreparation } from '../application/taskAgentMaterialPreparation'
 import {
   composePortOutputContentValidation,

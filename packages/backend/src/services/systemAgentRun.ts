@@ -28,7 +28,7 @@ import {
   type RuntimeKind,
 } from '@/services/runtime'
 import type { AgentSpawnContext, AgentSpawnPlan } from '@/services/runtime/types'
-import { bindNativeAgentInvocation } from '@/modules/task-execution/composition/agentInvocation'
+import { bindNativeAgentInvocation } from '@/modules/task-execution/infrastructure/local/agentInvocation'
 import { bindNativeAgentProtocol } from '@/modules/runtime-management/infrastructure/local/agentProtocol'
 import type {
   RuntimeDriver,

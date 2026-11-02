@@ -7,8 +7,10 @@ import { composeRuntimeManagement } from '@/modules/runtime-management/compositi
 import { composeCrewStationSystemAgentContents } from '@/modules/runtime-management/composition/crewstationSystemAgentMaterial'
 import type { WorkspaceHelper } from '@/platform/crewstation/workspaceProtocol'
 import { createHostedAgentInvocationPreparation } from '../infrastructure/crewstation/agentInvocationPreparation'
-import { composeRuntimeSmokeRunFamily } from './runtimeSmokeRunFamily'
-import { createRuntimeSmokeMaterialIntent } from './runtimeSmoke'
+import {
+  createRuntimeSmokeMaterialIntent,
+  createRuntimeSmokeRunFamily,
+} from '../application/runtimeSmoke'
 import type { composeLocalRuntimeManagement } from './localRuntimeManagement'
 
 /** A hosted probe answers one synchronous request. The system workspace's
@@ -54,7 +56,7 @@ export function createCrewStationRuntimeManagement(
         )
       },
     })
-    const smoke = composeRuntimeSmokeRunFamily({
+    const smoke = createRuntimeSmokeRunFamily({
       invocations: {
         open(request, log) {
           const invocationId = `smoke-${randomUUID()}`

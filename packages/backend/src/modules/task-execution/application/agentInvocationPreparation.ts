@@ -1,10 +1,12 @@
+// RFC-421: moved verbatim from composition/agentInvocationPreparation.ts — the provider-neutral two-phase invocation
+// preparation the hosted and local invocation preparations share.
 import type {
   AgentMaterialCompiler,
   AgentMaterialWorkspace,
   PreparedAgentMaterial,
 } from '@/modules/runtime-management/public/participants'
-import type { AgentInvocationBinding } from '../application/ports/agentInvocation'
-import type { AgentInvocationPreparation } from '../application/ports/agentInvocationPreparation'
+import type { AgentInvocationBinding } from './ports/agentInvocation'
+import type { AgentInvocationPreparation } from './ports/agentInvocationPreparation'
 
 /** Capture an already selected implementation. Neither phase performs target
  * selection; the binding receives the exact result of the sole compilation. */

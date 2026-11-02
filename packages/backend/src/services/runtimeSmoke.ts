@@ -21,7 +21,7 @@ import {
 } from '@/services/runtime'
 import type { SpawnPlan } from '@/services/runtime/types'
 import { createLogger, type Logger } from '@/util/log'
-import { bindNativeAgentInvocation } from '@/modules/task-execution/composition/agentInvocation'
+import { bindNativeAgentInvocation } from '@/modules/task-execution/infrastructure/local/agentInvocation'
 import { bindNativeAgentProtocol } from '@/modules/runtime-management/infrastructure/local/agentProtocol'
 import { Paths } from '@/util/paths'
 import {

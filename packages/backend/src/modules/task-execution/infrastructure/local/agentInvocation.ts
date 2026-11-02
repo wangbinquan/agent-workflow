@@ -1,15 +1,17 @@
-import type { AgentInvocationBinding } from '../application/ports/agentInvocation'
-import type { AgentExecutionRecord } from '../application/ports/agentExecution'
+// RFC-421: moved verbatim from composition/agentInvocation.ts — the local (native) agent invocation adapter. Its
+// runtime-management local material reference and evidence factories are recorded provider bridges.
+import type { AgentInvocationBinding } from '../../application/ports/agentInvocation'
+import type { AgentExecutionRecord } from '../../application/ports/agentExecution'
 import type {
   ExecutionEffectResult,
   ExecutionStartReceipt,
-} from '../application/ports/executionEffect'
-import { createProcessEffectAttemptObserver } from '../application/processEffectObserver'
+} from '../../application/ports/executionEffect'
+import { createProcessEffectAttemptObserver } from '../../application/processEffectObserver'
 import {
   bindLocalAgentExecutionEffect,
   resolveLocalAgentExecutionParticipants,
   type NativeAgentStartReceiptOwner,
-} from '../infrastructure/local/agentExecutionEffect'
+} from './agentExecutionEffect'
 import type {
   AgentInvocationProtocol,
   AgentMaterialWorkspace,

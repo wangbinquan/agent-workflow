@@ -3,7 +3,7 @@
 // serve the native compatibility entry; these cases lock the neutral branch.
 import { describe, expect, test } from 'bun:test'
 import { runPreparedSystemAgent } from '../src/modules/task-execution/composition/systemAgentRun'
-import { createAgentInvocationPreparation } from '../src/modules/task-execution/composition/agentInvocationPreparation'
+import { createAgentInvocationPreparation } from '../src/modules/task-execution/application/agentInvocationPreparation'
 import type { AgentInvocationBinding } from '../src/modules/task-execution/application/ports/agentInvocation'
 import type {
   AgentExecutionOutcome,

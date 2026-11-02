@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { bindNativeAgentInvocation } from '../src/modules/task-execution/composition/agentInvocation'
+import { bindNativeAgentInvocation } from '../src/modules/task-execution/infrastructure/local/agentInvocation'
 import { bindNativeAgentProtocol } from '../src/modules/runtime-management/infrastructure/local/agentProtocol'
 import { bindNativeAgentMaterialReference } from '../src/modules/runtime-management/infrastructure/local/agentMaterialCompiler'
 import type { AgentInvocationProtocol } from '../src/modules/runtime-management/application/ports/agentProtocol'

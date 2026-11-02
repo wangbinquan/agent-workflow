@@ -2597,8 +2597,8 @@
     {
       "rule": "R1-inbound-module-internals",
       "from": "packages/backend/src/services/runtimeSmoke.ts",
-      "to": "modules/task-execution/composition/agentInvocation",
-      "specifier": "@/modules/task-execution/composition/agentInvocation",
+      "to": "modules/task-execution/infrastructure/local/agentInvocation",
+      "specifier": "@/modules/task-execution/infrastructure/local/agentInvocation",
       "edgeKind": "value",
       "syntax": "static-import",
       "owner": "task-execution",
@@ -2621,8 +2621,8 @@
     {
       "rule": "R1-inbound-module-internals",
       "from": "packages/backend/src/services/systemAgentRun.ts",
-      "to": "modules/task-execution/composition/agentInvocation",
-      "specifier": "@/modules/task-execution/composition/agentInvocation",
+      "to": "modules/task-execution/infrastructure/local/agentInvocation",
+      "specifier": "@/modules/task-execution/infrastructure/local/agentInvocation",
       "edgeKind": "value",
       "syntax": "static-import",
       "owner": "task-execution",

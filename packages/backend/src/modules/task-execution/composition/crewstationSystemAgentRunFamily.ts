@@ -4,7 +4,7 @@ import { composeCrewStationSystemAgentContents } from '@/modules/runtime-managem
 import { createLocalSystemAgentRuntimeBindings } from '@/modules/runtime-management/composition/systemAgentMaterial'
 import type { WorkspaceHelper } from '@/platform/crewstation/workspaceProtocol'
 import { createHostedAgentInvocationPreparation } from '../infrastructure/crewstation/agentInvocationPreparation'
-import { composeSystemAgentRunFamily } from './systemAgentRunFamily'
+import { createSystemAgentRunFamily } from '../application/systemAgentRun'
 import { composeLocalSystemAgentRunFamily } from './localSystemAgentRunFamily'
 import { sha256Hex } from '@/util/hash'
 
@@ -43,7 +43,7 @@ export function createCrewStationSystemAgentRunFamily(
     // This compatibility binding only preserves profile getters; binary paths
     // are never resolved or executed on the service host.
     const runtimes = createLocalSystemAgentRuntimeBindings()
-    const family = composeSystemAgentRunFamily({
+    const family = createSystemAgentRunFamily({
       workspaces: contents.workspaces,
       retainedContents: contents.contents,
       invocations: {

@@ -1,10 +1,16 @@
+import { randomBytes } from 'node:crypto'
 import { maskDiagnosticsText } from '@agent-workflow/shared'
+import type { AgentMaterialIntent } from '@/modules/runtime-management/public/participants'
+import { createLogger, type Logger } from '@/util/log'
 import { outputTail } from '@/util/spawnDiagnostics'
 import { createSystemAgentUsageCapture } from './systemAgentUsageCapture'
 import type {
+  PreparedRuntimeSmokeOptions,
   RuntimeSmokeCoreInput,
   RuntimeSmokeCompiledInvocation,
   RuntimeSmokeCorePolicy,
+  RuntimeSmokeInvocationFamily,
+  RuntimeSmokeRunFamily,
   SmokeResult,
   SmokeOutcome,
 } from './ports/runtimeSmoke'
@@ -361,4 +367,93 @@ export async function runRuntimeSmokeCore(
     },
     true,
   )
+}
+
+// RFC-421: moved verbatim from composition/runtimeSmoke.ts.
+/** Shared complete smoke declaration. Callers choose its original read boundary;
+ * this helper performs no driver lookup, materialization or execution. */
+export function createRuntimeSmokeMaterialIntent(
+  opts: Pick<
+    PreparedRuntimeSmokeOptions,
+    'protocol' | 'model' | 'isSandbox' | 'extraArgs' | 'runtimeBinding'
+  >,
+  preparation: PreparedRuntimeSmokeOptions['preparation'],
+  prompt: string,
+  log: Logger,
+): AgentMaterialIntent {
+  return {
+    protocol: opts.protocol,
+    injection: { mcps: [] },
+    prompt,
+    agentName: 'aw-smoke',
+    systemPrompt: 'You are a runtime smoke-test agent. Follow the user prompt exactly.',
+    resolvedProfiles: [
+      [
+        'aw-smoke',
+        {
+          model: opts.model ?? null,
+          variant: null,
+          temperature: null,
+          steps: null,
+          maxSteps: null,
+          isSandbox: opts.isSandbox === true,
+        },
+      ],
+    ],
+    workspace: preparation.workspace.workspace,
+    runContent: preparation.workspace.runContent,
+    freshAgentRun: false,
+    ...(opts.extraArgs !== undefined && opts.extraArgs.length > 0
+      ? { extraArgs: opts.extraArgs }
+      : {}),
+    runtimeBinding: opts.runtimeBinding,
+    nodeRunId: 'runtime-smoke',
+    log,
+  }
+}
+
+/** The caller/root already selected the compatible material/execution family. */
+export async function runPreparedRuntimeSmoke(
+  opts: PreparedRuntimeSmokeOptions,
+): Promise<SmokeResult> {
+  const log = opts.log ?? createLogger('runtimeSmoke')
+  const timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS
+  const nonce = `awsmoke-${randomBytes(8).toString('hex')}`
+  const preparation = opts.preparation
+  return runRuntimeSmokeCore(opts, {
+    log,
+    timeoutMs,
+    nonce,
+    invocation: {
+      workspace: preparation.workspace,
+      prepareWorkspace: () => preparation.workspace.prepare(),
+      compile: (prompt) =>
+        preparation.compile(createRuntimeSmokeMaterialIntent(opts, preparation, prompt, log)),
+    },
+  })
+}
+
+// RFC-421: moved verbatim from composition/runtimeSmokeRunFamily.ts (`composeRuntimeSmokeRunFamily`).
+/** Opening reads the selected protocol at the original driver boundary;
+ * workspace materialization follows the original nonce allocation. */
+export function createRuntimeSmokeRunFamily(input: {
+  readonly invocations: RuntimeSmokeInvocationFamily
+}): RuntimeSmokeRunFamily {
+  return Object.freeze<RuntimeSmokeRunFamily>({
+    async run(request) {
+      const log = request.log ?? createLogger('runtimeSmoke')
+      const timeoutMs = request.timeoutMs ?? DEFAULT_TIMEOUT_MS
+      const deadlineAt = request.deadlineAt
+      const opened = input.invocations.open(request, log)
+      const nonce = `awsmoke-${randomBytes(8).toString('hex')}`
+      const invocation = opened.materialize()
+      return runRuntimeSmokeCore(request, {
+        log,
+        timeoutMs,
+        ...(deadlineAt === undefined ? {} : { deadlineAt }),
+        nonce,
+        invocation,
+      })
+    },
+  })
 }

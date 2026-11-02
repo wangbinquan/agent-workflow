@@ -12,8 +12,8 @@ import type {
   SystemAgentRunRequest,
 } from '../application/ports/systemAgentRunFamily'
 import type { PreparedSystemAgentRunResult } from '../application/ports/systemAgentRun'
-import { createLocalAgentInvocationPreparation } from './localAgentInvocationPreparation'
-import { composeSystemAgentRunFamily } from './systemAgentRunFamily'
+import { createLocalAgentInvocationPreparation } from '../infrastructure/local/agentInvocationPreparation'
+import { createSystemAgentRunFamily } from '../application/systemAgentRun'
 import type { SystemAgentObservationFactory } from '../application/ports/systemAgentObservation'
 
 /** Native facts and fake-run projection are selected only by an explicit root. */
@@ -132,7 +132,7 @@ export function composeLocalSystemAgentRunFamily(input: {
       }
     },
   }
-  const production = composeSystemAgentRunFamily({
+  const production = createSystemAgentRunFamily({
     invocations,
     workspaces: contents.workspaces,
     retainedContents: contents.contents,

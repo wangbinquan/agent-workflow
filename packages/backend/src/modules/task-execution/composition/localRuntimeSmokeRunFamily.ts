@@ -6,9 +6,11 @@ import {
 } from '@/modules/runtime-management/composition/localAgentMaterial'
 import type { createLocalRuntimeDiagnosticTargets } from '@/modules/runtime-management/composition/runtimeDiagnosticTargets'
 import type { RuntimeSmokeInvocationFamily } from '../application/ports/runtimeSmoke'
-import { createLocalAgentInvocationPreparation } from './localAgentInvocationPreparation'
-import { createRuntimeSmokeMaterialIntent } from './runtimeSmoke'
-import { composeRuntimeSmokeRunFamily } from './runtimeSmokeRunFamily'
+import { createLocalAgentInvocationPreparation } from '../infrastructure/local/agentInvocationPreparation'
+import {
+  createRuntimeSmokeMaterialIntent,
+  createRuntimeSmokeRunFamily,
+} from '../application/runtimeSmoke'
 import type { SystemAgentObservationFactory } from '../application/ports/systemAgentObservation'
 
 /** The native root pairs the target owner, original material builder and
@@ -109,5 +111,5 @@ export function composeLocalRuntimeSmokeRunFamily(input: {
       }
     },
   }
-  return composeRuntimeSmokeRunFamily({ invocations })
+  return createRuntimeSmokeRunFamily({ invocations })
 }
