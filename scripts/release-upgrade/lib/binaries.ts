@@ -5,6 +5,7 @@ import {
   mkdtempSync,
   readFileSync,
   readdirSync,
+  realpathSync,
   renameSync,
   rmSync,
   writeFileSync,
@@ -115,16 +116,67 @@ async function exactBun(version: string, cache: string, supplied?: string): Prom
 }
 
 /**
- * The tag's committed bytes as a tar stream. Tags before RFC-254's `.gitattributes` (v0.1.0 to
- * v0.16.x) carry no eol rule, and `git archive` applies `core.autocrlf=true`, the Windows runner's
- * default: `bun.lock` arrived with CRLF and `bun install --frozen-lockfile` reported "lockfile had
- * changes" (release-upgrade nightly 41303628365, v0.1.0 / v0.10.0 / v0.16.3 on Windows).
+ * The tag's committed bytes as a tar stream. `git archive` applies working-tree conversion, so tags
+ * without an eol rule (before RFC-254's `.gitattributes`: v0.1.0 to v0.16.x) would arrive with CRLF
+ * under the Windows runner's `core.autocrlf=true`. A historical build starts from the tagged bytes.
+ * (Bun itself accepts a CRLF `bun.lock`; line endings did not cause the Windows frozen-install
+ * refusals, see `explainLockfileRefusal`.)
  */
 export async function tagSourceArchive(tag: string, cwd?: string): Promise<Buffer> {
   return command(
     ['git', '-c', 'core.autocrlf=false', '-c', 'core.eol=lf', 'archive', '--format=tar', tag],
     { cwd },
   )
+}
+
+/**
+ * Lines a regenerated lockfile dropped (`-`) and added (`+`), matched as multisets in file order.
+ * Lines are JSON-quoted so carriage returns and other invisible bytes stay visible.
+ */
+export function lockfileDrift(tagLockfile: string, regenerated: string, limit = 40): string[] {
+  const unmatched = (sign: '-' | '+', text: string, other: string) => {
+    const remaining = new Map<string, number>()
+    for (const line of other.split('\n')) remaining.set(line, (remaining.get(line) ?? 0) + 1)
+    const lines: string[] = []
+    for (const line of text.split('\n')) {
+      const left = remaining.get(line) ?? 0
+      if (left > 0) remaining.set(line, left - 1)
+      else lines.push(`${sign} ${JSON.stringify(line)}`)
+    }
+    return lines
+  }
+  const removed = unmatched('-', tagLockfile, regenerated)
+  const added = unmatched('+', regenerated, tagLockfile)
+  if (removed.length === 0 && added.length === 0)
+    return ['lockfile drift: none (the regenerated lockfile has the same lines as the tag)']
+  const capped = (lines: string[]) =>
+    lines.length > limit ? [...lines.slice(0, limit), `  … ${lines.length - limit} more`] : lines
+  return [
+    `lockfile drift (tag → regenerated): ${removed.length} removed, ${added.length} added`,
+    ...capped(removed),
+    ...capped(added),
+  ]
+}
+
+/**
+ * Names what a frozen install refused instead of leaving it to guesswork: regenerate `bun.lock` in
+ * the disposable build directory and report the drift. Release-upgrade nightly 41303628365 blamed
+ * CRLF for the Windows refusals of v0.1.0 / v0.10.0 / v0.16.3, and nightly 41363751171 refused the
+ * LF archives just the same. The probe never masks the original failure.
+ */
+export async function explainLockfileRefusal(
+  cwd: string,
+  regenerate: () => Promise<unknown>,
+): Promise<string> {
+  const lockfile = join(cwd, 'bun.lock')
+  try {
+    const before = readFileSync(lockfile, 'utf8')
+    await regenerate()
+    const drift = lockfileDrift(before, readFileSync(lockfile, 'utf8'))
+    return `\nbuild directory: ${cwd}\n${drift.join('\n')}`
+  } catch (error) {
+    return `\nbuild directory: ${cwd}\nlockfile drift probe failed: ${String(error).slice(0, 4_000)}`
+  }
 }
 
 async function buildTag(
@@ -153,7 +205,10 @@ async function buildTag(
     .trim()
   if (actualCommit !== release.commit)
     throw new Error(`Tag ${release.tag} no longer resolves to registered commit`)
-  const scratch = mkdtempSync(join(buildDir, 'archive-'))
+  // GitHub's windows-latest `os.tmpdir()` is the 8.3 short name `C:\Users\RUNNER~1\…`
+  // (docs/dev-gotchas.md); build under the long name so no tool sees two spellings of one
+  // directory. Everywhere else this only resolves symlinks (macOS `/var` → `/private/var`).
+  const scratch = mkdtempSync(join(realpathSync.native(buildDir), 'archive-'))
   try {
     const archive = await tagSourceArchive(release.tag)
     // Extract in the archive directory instead of passing it to `-C`: under the Windows runner's
@@ -166,12 +221,25 @@ async function buildTag(
       ...process.env,
       PATH: `${dirname(bun)}${process.platform === 'win32' ? ';' : ':'}${process.env.PATH ?? ''}`,
     }
-    await command([bun, 'install', '--frozen-lockfile'], {
-      cwd: scratch,
-      env,
-      timeoutMs: 900_000,
-      label: `${release.tag} dependency install`,
-    })
+    try {
+      await command([bun, 'install', '--frozen-lockfile'], {
+        cwd: scratch,
+        env,
+        timeoutMs: 900_000,
+        label: `${release.tag} dependency install`,
+      })
+    } catch (error) {
+      if (!String(error).includes('lockfile had changes')) throw error
+      const drift = await explainLockfileRefusal(scratch, () =>
+        command([bun, 'install', '--lockfile-only', '--ignore-scripts'], {
+          cwd: scratch,
+          env,
+          timeoutMs: 900_000,
+          label: `${release.tag} lockfile drift probe`,
+        }),
+      )
+      throw new Error(`${error instanceof Error ? error.message : String(error)}${drift}`)
+    }
     await command([bun, 'run', 'build:binary'], {
       cwd: scratch,
       env,

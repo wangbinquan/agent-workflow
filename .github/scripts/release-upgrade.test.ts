@@ -14,7 +14,11 @@ import {
 import { spawnSync } from 'node:child_process'
 import { OLD_POSTGRESQL_TASK_DEFECTS } from '../../scripts/release-upgrade/scenario'
 import { DaemonStartError } from '../../scripts/release-upgrade/lib/daemon'
-import { tagSourceArchive } from '../../scripts/release-upgrade/lib/binaries'
+import {
+  explainLockfileRefusal,
+  lockfileDrift,
+  tagSourceArchive,
+} from '../../scripts/release-upgrade/lib/binaries'
 import { printedDatabaseStatements } from '../../scripts/release-upgrade/lib/postgresql'
 import { FIXTURES, readRegistry } from '../../scripts/release-upgrade/lib/io'
 import {
@@ -444,10 +448,10 @@ function tarMember(archive: Buffer, name: string): Buffer | null {
   return null
 }
 
-// Release-upgrade nightly 41303628365 (Windows): tags before RFC-254's .gitattributes carry no eol
-// rule and `git archive` applies the runner's `core.autocrlf=true`, so bun.lock arrived with CRLF and
-// `bun install --frozen-lockfile` refused it for v0.1.0, v0.10.0 and v0.16.3. The tag build must
-// archive the committed bytes whatever the host's line-ending configuration.
+// Tags before RFC-254's .gitattributes carry no eol rule and `git archive` applies the Windows
+// runner's `core.autocrlf=true`. The tag build must archive the committed bytes whatever the host's
+// line-ending configuration. (Release-upgrade nightly 41303628365 blamed this CRLF for Bun's
+// frozen-lockfile refusals; that was wrong, see the drift report test below.)
 test('tag-build archives committed bytes under core.autocrlf=true', async () => {
   const repo = mkdtempSync(join(tmpdir(), 'aw-tag-archive-'))
   try {
@@ -476,6 +480,67 @@ test('tag-build archives committed bytes under core.autocrlf=true', async () => 
   } finally {
     rmSync(repo, { recursive: true, force: true })
   }
+})
+
+// Release-upgrade nightlies 41303628365 and 41363751171 (Windows): `bun install --frozen-lockfile`
+// refused the v0.1.0, v0.10.0 and v0.16.3 lockfiles with "lockfile had changes". The first fix
+// assumed CRLF, yet the LF archives were refused just the same, and Bun 1.3.13 accepts a CRLF
+// bun.lock. A refusal now reports the lines a regenerated lockfile changes, so the diagnosis starts
+// from evidence instead of a guess.
+test('a frozen-lockfile refusal reports the lockfile drift', async () => {
+  const tag = '{\n  "workspaces": {\n    "packages/a": {\n      "name": "a",\n    },\n  },\n}\n'
+  const moved = tag.replace('"packages/a"', '"../../x/packages/a"')
+  expect(lockfileDrift(tag, moved)).toEqual([
+    'lockfile drift (tag → regenerated): 1 removed, 1 added',
+    '- "    \\"packages/a\\": {"',
+    '+ "    \\"../../x/packages/a\\": {"',
+  ])
+  // Invisible bytes stay visible; the same lines in another order are no drift.
+  expect(lockfileDrift('a\nb\n', 'a\r\nb\n')).toEqual([
+    'lockfile drift (tag → regenerated): 1 removed, 1 added',
+    '- "a"',
+    '+ "a\\r"',
+  ])
+  expect(lockfileDrift('a\nb\n', 'b\na\n')).toEqual([
+    'lockfile drift: none (the regenerated lockfile has the same lines as the tag)',
+  ])
+  expect(lockfileDrift('x\ny\nz', 'w', 2)).toEqual([
+    'lockfile drift (tag → regenerated): 3 removed, 1 added',
+    '- "x"',
+    '- "y"',
+    '  … 1 more',
+    '+ "w"',
+  ])
+  const dir = mkdtempSync(join(tmpdir(), 'aw-lockfile-drift-'))
+  try {
+    writeFileSync(join(dir, 'bun.lock'), tag)
+    const report = await explainLockfileRefusal(dir, async () =>
+      writeFileSync(join(dir, 'bun.lock'), moved),
+    )
+    expect(report).toContain(`\nbuild directory: ${dir}\n`)
+    expect(report).toContain('+ "    \\"../../x/packages/a\\": {"')
+    // A failing probe is reported without masking the original refusal.
+    const failed = await explainLockfileRefusal(dir, async () => {
+      throw new Error('registry offline')
+    })
+    expect(failed).toContain('lockfile drift probe failed: Error: registry offline')
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+// GitHub's windows-latest `os.tmpdir()` is the 8.3 short name `C:\Users\RUNNER~1\…`
+// (docs/dev-gotchas.md). Tag builds run under the expanded long name, and only a lockfile refusal
+// triggers the drift probe, which regenerates the lockfile without installing or running scripts.
+test('tag builds run under the long path and explain lockfile refusals', () => {
+  const binaries = readFileSync(
+    new URL('../../scripts/release-upgrade/lib/binaries.ts', import.meta.url),
+    'utf8',
+  )
+  expect(binaries).toContain("mkdtempSync(join(realpathSync.native(buildDir), 'archive-'))")
+  expect(binaries).not.toContain("mkdtempSync(join(buildDir, 'archive-'))")
+  expect(binaries).toContain("if (!String(error).includes('lockfile had changes')) throw error")
+  expect(binaries).toContain("command([bun, 'install', '--lockfile-only', '--ignore-scripts']")
 })
 
 // User decision 2026-11-01: only the nightly verify job may read the draft release holding the
