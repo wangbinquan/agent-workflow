@@ -392,6 +392,8 @@ describe('RFC-305 identity-access architecture', () => {
       'packages/backend/src/modules/system-operations/public/commands.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/system-operations/public/operations.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/system-operations/public/queries.ts -> @/modules/identity-access/public/participants',
+      // RFC-420: the call node's delegated owner actor resolves through the public delegated factory type.
+      'packages/backend/src/modules/task-execution/application/childCallInheritance.ts -> @/modules/identity-access/public/participants',
       // RFC-370 §9.2 V4: recovery requests act as the requesting platform user's AW account.
       'packages/backend/src/modules/task-execution/application/ports/taskClarifyDirectiveRoutes.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/task-execution/application/ports/taskExecutionResourceSnapshots.ts -> @/modules/identity-access/public/participants',
@@ -801,8 +803,13 @@ describe('RFC-305 reusable-authority fences', () => {
       'utf8',
     )
     // RFC-404: the call node's delegated owner actor is resolved by its composition binding.
+    // RFC-420: the resolution moved into application/childCallInheritance.ts; the binding hands it the factory.
     const callBinding = readFileSync(
       resolve(BACKEND_SRC, 'modules', 'task-execution', 'composition', 'childCallNodeExecution.ts'),
+      'utf8',
+    )
+    const callInheritance = readFileSync(
+      resolve(BACKEND_SRC, 'modules', 'task-execution', 'application', 'childCallInheritance.ts'),
       'utf8',
     )
     const scheduled = readFileSync(resolve(BACKEND_SRC, 'services', 'scheduledTasks.ts'), 'utf8')
@@ -819,9 +826,9 @@ describe('RFC-305 reusable-authority fences', () => {
     expect(contexts).toContain('new WeakMap<')
     expect(contexts).toContain("throw new Error('foreign-delegated-request-authority')")
     expect(callBinding).toContain('.delegatedRequests')
-    expect(callBinding).toContain('.forCall({')
-    expect(callBinding).toContain("'call-workflow'")
-    expect(callBinding).toContain("'call-workgroup'")
+    expect(callInheritance).toContain('.forCall({')
+    expect(callInheritance).toContain("'call-workflow'")
+    expect(callInheritance).toContain("'call-workgroup'")
     expect(scheduled).toContain('.delegatedRequests.forSchedule({')
     expect(scheduled).toContain('invocation,')
     expect(webhook).toContain('.delegatedRequests.forWebhook({')

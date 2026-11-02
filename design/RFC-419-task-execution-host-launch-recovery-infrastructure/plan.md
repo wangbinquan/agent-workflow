@@ -58,6 +58,10 @@ T1～T4 完成（本会话实施），与落档设计无偏差。
 - **第三轮**（单进程，本候选与基线 `c91c711ac` 对照）：`rfc359-w26` 两侧均通过（21 s / 20 s），判为负载超时，不归本 RFC。
 - **P0 变异 lane**（SQLite + PostgreSQL）：passed，34 个阶段、0 失败，127 个源文件指纹前后一致。
 
+## CI（AC-5）
+
+- **`1cd551c10`**：主 CI `41372733610` 70 个 job 全部 success，windows-platform `41372733594` success。AC-5 成立，RFC-419 Done。
+
 ## 冲突面
 
 - `TE/composition/{digitalEmployeeExecution,actionExecutionEnvironment,taskExecutionPersistence}.ts`、`TE/infrastructure/{hostTaskLaunch,taskRecoveryAdministration}.ts`；
@@ -68,4 +72,4 @@ T1～T4 完成（本会话实施），与落档设计无偏差。
 ## 验收清单
 
 - [x] proposal AC-1～AC-4（本地集中验证，见上）
-- [ ] 推送后 exact SHA 的 CI 全绿（AC-5）
+- [x] 推送后 exact SHA 的 CI 全绿（AC-5，`1cd551c10`，见上）

@@ -102,10 +102,10 @@ export const WRAPPER_RUN_LEDGER_SOURCE = readFileSync(
 
 /**
  * RFC-407: what used to be the single `wrapperMechanics.ts` text — the file itself (wrapper data,
- * scope driver and workspace bindings), both fan-out lines and the attempt port they implement. The
- * source-port-kind read the data binding shares with the fan-out shard line is `sourcePortKindOf` in
- * the agent binding (`AGENT_BINDING_SOURCE`). RFC-413: plus the wrapper workspace and the wrapper iso
- * create / merge-back that moved into engine/.
+ * scope driver and workspace bindings), both fan-out lines and the attempt port they implement.
+ * RFC-413: plus the wrapper workspace and the wrapper iso create / merge-back that moved into engine/.
+ * RFC-420: plus the fan-out agent / source-port-kind resolution (`sourcePortKindOf`, shared with the
+ * fan-out shard line through the agent binding) and the wrapper body's entry.
  */
 export const WRAPPER_MECHANICS_SOURCE = [
   readFileSync(resolve(root, 'composition/wrapperMechanics.ts'), 'utf8'),
@@ -114,6 +114,8 @@ export const WRAPPER_MECHANICS_SOURCE = [
   readFileSync(resolve(root, 'engine/node/agent-single/fanoutAttempts.ts'), 'utf8'),
   WRAPPER_WORKSPACE_SOURCE,
   WRAPPER_ISOLATION_SOURCE,
+  readFileSync(resolve(root, 'application/fanoutAgentResolution.ts'), 'utf8'),
+  readFileSync(resolve(root, 'engine/wrapper/wrapperBodyScope.ts'), 'utf8'),
 ].join('\n')
 
 export const AGENT_BINDING_SOURCE = readFileSync(

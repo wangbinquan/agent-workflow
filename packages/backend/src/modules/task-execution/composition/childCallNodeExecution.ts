@@ -1,6 +1,4 @@
 import { ulid } from 'ulid'
-import type { Permission } from '@agent-workflow/shared'
-import type { Actor } from '@/auth/actor'
 import { copyPortArchive } from '@/platform/content/locations/portArchive'
 import {
   currentMaxInvocationDepth,
@@ -11,70 +9,26 @@ import { watchTaskTerminal } from '@/services/execution/executionWatch'
 import { getExecutionOutcome } from '@/services/execution/outcome'
 import type { TaskMechanicsState } from './taskMechanicsState'
 import type { ChildCallNodeExecutionPorts } from '../application/ports/childCallNodeExecution'
-import { pickInheritableRunConfig } from '../application/ports/taskExecutionTopology'
+import { buildChildRuntime, delegatedCallActor } from '../application/childCallInheritance'
 import { resolveUpstreamInputs } from '../application/nodeInputs'
 import { resolveSchedulerRunRow } from '../application/resolveSchedulerRunRow'
-import { parseIsoSubmodules } from '../domain/isoSubmodules'
 import { definitionAnchorId } from '../domain/taskSubject'
 import { createIsoUnderLock, persistIsoBase } from '../engine/kernel/isolation'
 import { discardNodeIso } from '../engine/kernel/isolationCleanup'
 import { markMergeFailed, mergeBackAndSettle } from '../engine/kernel/merge'
+import { restoreNodeIso } from '../engine/kernel/mergeRecovery'
 import { resolveMergeConflicts } from '../engine/node/shared/resolveMergeConflicts'
 import { prepareConsumedInputs } from '../infrastructure/consumedInputsParticipant'
 import { bindIsolationCleanup } from '../infrastructure/executionKernelBinding'
-import { restoredSubmodules } from '../infrastructure/executionWorkspaceSession'
 import {
   childClosureSubset,
   frozenWorkflowFromClosure,
   frozenWorkgroupFromClosure,
 } from '../infrastructure/legacyCallClosure'
 import { broadcastNodeStatus } from '../infrastructure/nodeStatusEvents'
-import { workspaceSessionFor } from './executionWorkspaceBinding'
 import { isolatedRunBinding, nodeRunLedger } from './executionMechanismBindings'
+import { createIsolationMechanicsPorts } from './isolationMechanicsBinding'
 import { bindMergeConflictPorts } from './mergeConflictResolution'
-
-/** D6/Q5 compatibility: a historical NULL owner is deliberately not the
- * literal system account and therefore carries no permissions. */
-const OWNERLESS_SYSTEM_USER_ID = '__system__'
-const OWNERLESS_LEGACY_ACTOR: Actor = Object.freeze({
-  user: Object.freeze({
-    id: OWNERLESS_SYSTEM_USER_ID,
-    username: OWNERLESS_SYSTEM_USER_ID,
-    displayName: OWNERLESS_SYSTEM_USER_ID,
-    role: 'user',
-    status: 'active',
-  }),
-  source: 'daemon',
-  permissions: new Set<Permission>(),
-  authorityRevision: 0,
-})
-
-async function delegatedCallActor(
-  state: TaskMechanicsState,
-  kind: 'call-workflow' | 'call-workgroup',
-  ownerUserId: string | null,
-  parentNodeRunId: string,
-): Promise<Actor | null> {
-  if (ownerUserId === null) return OWNERLESS_LEGACY_ACTOR
-  const delegated = state.opts.identityAccess.delegatedRequests
-  const admission = await delegated.forCall({
-    kind,
-    ownerUserId,
-    parentTaskId: state.taskId,
-    parentNodeRunId,
-  })
-  return admission?.actor ?? null
-}
-
-/** RFC-284 T20 / RFC-331 — the one child runtime: both launch arms and the child resume use it. */
-function buildChildRuntime(state: TaskMechanicsState) {
-  return {
-    ...(state.triggerContext === null ? {} : { triggerContext: state.triggerContext }),
-    actorUserId:
-      (state.task as unknown as { ownerUserId?: string | null }).ownerUserId ?? undefined,
-    runConfig: pickInheritableRunConfig(state.opts),
-  }
-}
 
 /** RFC-404 — capabilities of the call-workflow / call-workgroup body; every value is read on use. */
 export function createChildCallNodeExecutionPorts(
@@ -187,8 +141,14 @@ export function createChildCallNodeExecutionPorts(
     },
     children: {
       newChildTaskId: () => ulid(),
+      // RFC-420: the delegated owner actor and the child runtime are application/childCallInheritance.ts.
       resolveActor: (kind, parentNodeRunId) =>
-        delegatedCallActor(state, kind, state.task.ownerUserId, parentNodeRunId),
+        delegatedCallActor(state.opts.identityAccess.delegatedRequests, {
+          kind,
+          ownerUserId: state.task.ownerUserId,
+          parentTaskId: state.taskId,
+          parentNodeRunId,
+        }),
       launchWorkflow: (request) =>
         state.opts.childLaunch.launchWorkflow({
           ...request,
@@ -246,27 +206,8 @@ export function createChildCallNodeExecutionPorts(
         markMergeFailed(isolatedRunBinding(state), nodeRunId, message, state.log),
       discardNodeIso: (handle) =>
         discardNodeIso(bindIsolationCleanup(), handle, state.log, state.writeSem),
-      restoreIso: async ({ nodeRunId, workspaceRef, baseSnapshots, checkpoints }) => {
-        // Same order as the replay idiom: scope, every task repo HEAD, the recovery key, then restore.
-        const scope = await workspaceSessionFor(state).scope()
-        const taskBaseHeads: Record<string, string> = {}
-        for (const repo of state.repos) {
-          const h = await scope.head(repo.worktreePath)
-          taskBaseHeads[repo.mountPath] = h.stdout.trim()
-        }
-        const submodules = parseIsoSubmodules(checkpoints)
-        return await workspaceSessionFor(state).restore({
-          key: await scope.recoverKey(workspaceRef, nodeRunId),
-          dbNodeRunId: nodeRunId,
-          workspaceRef,
-          baseSnapshots,
-          taskBaseHeads,
-          submodules: restoredSubmodules(submodules),
-          forcedContainerPaths: [
-            ...(await state.opts.persistence.artifactPaths.forcedPaths(state.taskId)),
-          ],
-        })
-      },
+      // RFC-420: the replay idiom's rebuild is the kernel's, on the isolation ports over this state.
+      restoreIso: (input) => restoreNodeIso(createIsolationMechanicsPorts(state), input),
     },
     conflicts: {
       resolveMergeConflicts: (input) => resolveMergeConflicts(bindMergeConflictPorts(state), input),

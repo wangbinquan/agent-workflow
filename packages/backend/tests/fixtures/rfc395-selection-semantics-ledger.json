@@ -124,11 +124,11 @@
       "whyFrameless": "旧 session 复用不含 container 条件。"
     },
     {
-      "site": "src/modules/task-execution/composition/wrapperMechanics.ts#priorFanoutConsumed:1",
-      "path": "src/modules/task-execution/composition/wrapperMechanics.ts",
-      "symbol": "priorFanoutConsumed",
+      "site": "src/modules/task-execution/application/nodeInputs.ts#priorFanoutConsumedJson:1",
+      "path": "src/modules/task-execution/application/nodeInputs.ts",
+      "symbol": "priorFanoutConsumedJson",
       "ordinal": 1,
-      "source": "snapshot.selection.familyHistory( state.taskId, { nodeId, iteration, runIds: rows.filter((row) => row.id !== excludeRunId).map((row) => row.id), }, { topLevelOnly: true, consumedOnly: true }, )",
+      "source": "snapshot.selection.familyHistory( taskId, { nodeId, iteration, runIds: rows.filter((row) => row.id !== excludeRunId).map((row) => row.id), }, { topLevelOnly: true, consumedOnly: true }, )",
       "reference": "sites-a",
       "today": "同节点 iteration 顶层有 consumed 的历史，排除本次 run。 II-b 明确用 runIds 限定已经审定的候选行。",
       "whyFrameless": "旧 fanout provenance 允许历史代际复用。"

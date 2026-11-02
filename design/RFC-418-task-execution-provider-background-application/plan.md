@@ -49,6 +49,10 @@ T1～T5 完成（本会话实施），与落档设计无偏差。
 - **第二轮**（2 worker）：2 个全部通过。
 - **P0 变异 lane**（SQLite + PostgreSQL）：passed，34 个阶段、0 失败，127 个源文件指纹前后一致。
 
+## CI（AC-5）
+
+- **`c91c711ac`**：主 CI `41368117286` 70 个 job 全部 success，windows-platform `41368117183` success。AC-5 成立，RFC-418 Done。
+
 ## 冲突面
 
 - `TE/composition/providerBackground.ts`、`TE/application/providerBackground.ts`、`TE/application/ports/providerBackground.ts`；
@@ -59,4 +63,4 @@ T1～T5 完成（本会话实施），与落档设计无偏差。
 ## 验收清单
 
 - [x] proposal AC-1～AC-4（本地集中验证，见上）
-- [ ] 推送后 exact SHA 的 CI 全绿（AC-5）
+- [x] 推送后 exact SHA 的 CI 全绿（AC-5，`c91c711ac`，见上）

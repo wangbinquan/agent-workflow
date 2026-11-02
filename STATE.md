@@ -1,26 +1,40 @@
-## 2026-11-01 RFC-419 task-execution 宿主任务启动适配、借用工作区与恢复管理迁入 infrastructure（In Progress；`design/RFC-419-task-execution-host-launch-recovery-infrastructure/`）
+## 2026-11-01 RFC-420 task-execution 执行状态绑定里的残余逻辑迁出 composition（In Progress；`design/RFC-420-task-execution-execution-state-residue/`）
+
+- **来由**：RFC-294 S6 退出门「task-execution `composition/` 只剩装配」的第八步（RFC-416 proposal §7 第 4 项）；用户授权同 RFC-402，本会话调研、
+  设计、实施与集中验证，不派 Codex。
+- **范围**：wrapper 数据绑定的闭包端口读、上一次 fan-out 尝试的消费记录、fan-out agent 与源端口种类解析迁入 `application/`；wrapper body 的进入
+  迁入 `engine/wrapper/wrapperBodyScope.ts`；调用节点的委托 actor 与子运行时迁入 `application/childCallInheritance.ts`，iso 重建迁入
+  `engine/kernel/mergeRecovery.ts`；协作者投影迁入 `domain/`。纯结构重构。
+- **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。
+- **进度**：T1～T5 完成，随实现提交入库，待 exact SHA 的 CI（AC-5）。集中验证 580 + 19 + 2 个文件：本 RFC 引入的 3 个锁 / 账本失败
+  （RFC-395 选择语义账本站点、RFC-292 触发上下文锁、RFC-305 合同消费方账本）与新用例一处类型断言已修；两个按已提交源码生成报告的用例
+  在候选导出仓库里通过；其余负载超时在候选与基线上同样通过；P0 变异 lane 通过（34 个阶段、源文件指纹不变）。详见 plan「集中验证（T5）」。
+  同提交收尾 RFC-417 / 418 / 419（三者 exact SHA 全绿）。
+- **后继**：本地 agent 调用适配器与本地 run family（先补 runtime-management public 合同）；composition 其余小块与收口锁。
+
+## 2026-11-01 RFC-419 task-execution 宿主任务启动适配、借用工作区与恢复管理迁入 infrastructure（Done；`design/RFC-419-task-execution-host-launch-recovery-infrastructure/`）
 
 - **来由**：RFC-294 S6 退出门「task-execution `composition/` 只剩装配」的第七步（RFC-416 proposal §7 第 5 项中的三块）；用户授权同 RFC-402，本会话调研、
   设计、实施与集中验证，不派 Codex。
 - **范围**：数字员工与动作执行的宿主任务启动适配（到根启动内核请求的映射）、借用工作区参与者迁入 `infrastructure/hostTaskLaunch.ts`（推翻 RFC-415 §6.1
   的落位）；恢复管理面迁入 `infrastructure/taskRecoveryAdministration.ts`；三个 composition 文件只剩构造与注入。纯结构重构。
 - **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。
-- **进度**：T1～T4 完成，随实现提交入库，待 exact SHA 的 CI（AC-5）。集中验证 709 + 9 + 1 个文件：本 RFC 新用例一处类型断言已修；两个按已提交源码生成
+- **进度**：T1～T4 完成，随实现提交入库（`1cd551c10`）；exact SHA 的主 CI 70/70 与 windows-platform 全绿（AC-5），Done。集中验证 709 + 9 + 1 个文件：本 RFC 新用例一处类型断言已修；两个按已提交源码生成
   报告的用例在候选导出仓库里通过（未提交候选的环境差异）；其余负载超时在候选与基线上同样通过；P0 变异 lane 通过。详见 plan「集中验证（T4）」。
 - **后继**：本地 agent 调用适配器与本地 run family（先补 runtime-management public 合同）；执行状态绑定里的残余逻辑；composition 其余小块与收口锁。
 
-## 2026-11-01 RFC-418 task-execution provider 后台循环迁入 application（In Progress；`design/RFC-418-task-execution-provider-background-application/`）
+## 2026-11-01 RFC-418 task-execution provider 后台循环迁入 application（Done；`design/RFC-418-task-execution-provider-background-application/`）
 
 - **来由**：RFC-294 S6 退出门「task-execution `composition/` 只剩装配」的第六步（RFC-416 proposal §7 原第 3 项提前；本地 agent 调用适配器需先补
   runtime-management public 合同）；用户授权同 RFC-402，本会话调研、设计、实施与集中验证，不派 Codex。
 - **范围**：provider 会话后台控制（可重启循环、五条 provider 循环、配置源选择与开机自动续跑、串行化的会话控制）迁入
   `application/providerBackground.ts`，legacy 清扫、节奏常量、文件配置源与定时任务执行经端口由 composition 绑定；对外名字与类型不变。纯结构重构。
 - **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。
-- **进度**：T1～T5 完成，随实现提交入库，待 exact SHA 的 CI（AC-5）。集中验证 526 + 2 个文件：无本 RFC 引入的失败，2 个负载超时第二轮通过；P0 变异
+- **进度**：T1～T5 完成，随实现提交入库（`c91c711ac`）；exact SHA 的主 CI 70/70 与 windows-platform 全绿（AC-5），Done。集中验证 526 + 2 个文件：无本 RFC 引入的失败，2 个负载超时第二轮通过；P0 变异
   lane 通过（34 个阶段、源文件指纹不变）。详见 plan「集中验证（T5）」。
 - **后继**：本地 agent 调用适配器与本地 run family（先补 runtime-management public 合同）；执行状态绑定里的残余逻辑；其余与收口锁（RFC-416 proposal §7）。
 
-## 2026-11-01 RFC-417 task-execution 托管任务运行范围与执行 owner 逻辑迁入 infrastructure/crewstation（In Progress；`design/RFC-417-task-execution-hosted-run-execution-infrastructure/`）
+## 2026-11-01 RFC-417 task-execution 托管任务运行范围与执行 owner 逻辑迁入 infrastructure/crewstation（Done；`design/RFC-417-task-execution-hosted-run-execution-infrastructure/`）
 
 - **来由**：RFC-294 S6 退出门「task-execution `composition/` 只剩装配」的第五步（RFC-416 proposal §7 后继顺序第 1 项）；用户授权同 RFC-402，本会话调研、
   设计、实施与集中验证，不派 Codex。
@@ -28,7 +42,7 @@
   命令对账循环、Intent scratch 释放迁入 `infrastructure/crewstation/`；provider 中立的任务材料准备迁入 `application/`，composition 文件删除。恢复证明按
   RFC-328 只能经 `composition/bootRecovery.ts` 铸造，闭包留在原处。纯结构重构。
 - **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。
-- **进度**：T1～T5 完成，随实现提交入库，待 exact SHA 的 CI（AC-5）。集中验证 820 + 143 + 3 个文件：本 RFC 引入的 1 个守卫失败（rfc328 恢复证明铸造点）
+- **进度**：T1～T5 完成，随实现提交入库（`ffde0e5f6`）；exact SHA 的主 CI 70/70 与 windows-platform 全绿（AC-5），Done。集中验证 820 + 143 + 3 个文件：本 RFC 引入的 1 个守卫失败（rfc328 恢复证明铸造点）
   与新用例两处类型断言已修，其余负载超时在候选与基线上同样通过；P0 变异 lane 通过（34 个阶段、源文件指纹不变）。详见 plan「集中验证（T5）」。
   同提交收尾 RFC-416（`80b715e95` 全绿）。
 - **后继**：本地 agent 调用适配器与本地 run family（先补 runtime-management public 合同，连同托管系统代理 / 冒烟的调用打开逻辑），RFC-416 proposal §7 第 2 项。

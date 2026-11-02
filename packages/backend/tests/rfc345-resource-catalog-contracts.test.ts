@@ -882,6 +882,11 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
       resolve(sourceRoot, 'modules/task-execution/engine/wrapper/fanoutStrategy.ts'),
       'utf8',
     )
+    // RFC-420: the fan-out hydration and the source-port-kind read moved out of the two bindings.
+    const fanoutAgentResolution = readFileSync(
+      resolve(sourceRoot, 'modules/task-execution/application/fanoutAgentResolution.ts'),
+      'utf8',
+    )
     // RFC-412: the commit&push tail moved into task-execution (engine body + composition binding).
     const scheduler = [
       'modules/task-execution/engine/node/commit-push/runCommitPush.ts',
@@ -974,17 +979,21 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     // RFC-407: the fan-out shard / aggregator reads go through the agent binding's one
     // `resources.injection` delegate like the agent body, and the source-port kind read
     // (`sourcePortKindOf`) moved into the binding — four literals, three port readers.
+    // RFC-420: the hydration and the source-port kind read are application/fanoutAgentResolution.ts on
+    // the agent binding's second delegate — three literals, three port readers, two resolution readers.
     const literalReads = execution.split('taskExecutionResources.injection(').length - 1
     const bindingReaders = execution.split('ports.resources.injection(').length - 1
-    expect(literalReads).toBe(4)
+    const resolutionReaders = fanoutAgentResolution.split('await resources.injection(').length - 1
+    expect(literalReads).toBe(3)
     expect(bindingReaders).toBe(3)
-    expect(literalReads - 1 + bindingReaders).toBe(6)
+    expect(resolutionReaders).toBe(2)
+    expect(literalReads - 2 + bindingReaders + resolutionReaders).toBe(6)
     expect(execution.split('resolveSyntheticTaskAgentInjection(').length - 1).toBe(3)
     // RFC-406: the host's orchestrator / catalog choice is the agent binding's `hostInjection`.
     expect(AGENT_BINDING_SOURCE).toContain('agent.id === ORCHESTRATOR_AGENT_ID')
     expect(wrapperData).toContain('WrapperFanoutAgentResolution')
-    expect(wrapper).toContain("return resolution.kind === 'ok'")
-    expect(AGENT_BINDING_SOURCE).toContain("return resolution.kind === 'ok'")
+    expect(fanoutAgentResolution.split("return resolution.kind === 'ok'").length - 1).toBe(2)
+    expect(wrapper).toContain('resolveFanoutAgent(agentResolutionResources(state), node)')
     expect(fanout).toContain('agentFailures.get(innerAgentId)')
     expect(fanout).toContain('agentFailures.get(aggregatorKey)')
     expect(fanout.indexOf('if (items.length === 0)')).toBeLessThan(

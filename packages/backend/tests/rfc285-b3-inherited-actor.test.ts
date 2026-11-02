@@ -148,6 +148,9 @@ describe('RFC-285 B3 — 三臂接线源码锁', () => {
   // owner projection) is obtained by the call-node binding; the two launch arms in the engine ask
   // for it through the port and each refuses with call-owner-inactive.
   const CALL_BINDING = 'modules/task-execution/composition/childCallNodeExecution.ts'
+  // RFC-420: the delegated owner actor (including the NULL owner projection) and the child runtime moved into
+  // application/childCallInheritance.ts; the binding calls them.
+  const CALL_INHERITANCE = 'modules/task-execution/application/childCallInheritance.ts'
   const CALL_LAUNCH = 'modules/task-execution/engine/node/shared/child-call/launchChildCall.ts'
   const CALL_BODY = 'modules/task-execution/engine/node/shared/child-call/runChildCallNode.ts'
 
@@ -162,14 +165,17 @@ describe('RFC-285 B3 — 三臂接线源码锁', () => {
       .map(src)
       .join('\n')
     const binding = src(CALL_BINDING)
+    const inheritance = src(CALL_INHERITANCE)
     const launch = src(CALL_LAUNCH)
-    for (const text of [nodeMechanics, binding, launch]) {
+    for (const text of [nodeMechanics, binding, inheritance, launch]) {
       expect(text.includes('as unknown as Parameters<typeof startExecution>')).toBe(false)
       expect(text).not.toContain('buildInheritedActor(')
     }
-    // helper definition + the port method resolving it；central facade 归零。
-    expect((binding.match(/delegatedCallActor\(/g) ?? []).length).toBe(2)
-    expect(binding).toContain('delegated.forCall({')
+    // helper definition (application) + the port method resolving it (binding)；central facade 归零。
+    expect((inheritance.match(/delegatedCallActor\(/g) ?? []).length).toBe(1)
+    expect((binding.match(/delegatedCallActor\(/g) ?? []).length).toBe(1)
+    expect(inheritance).toContain('delegated.forCall({')
+    expect(binding).not.toContain('.forCall(')
     expect(nodeMechanics).not.toContain('delegatedCallActor(')
     expect(launch).not.toContain('delegatedCallActor(')
     expect(launch).toContain("ports.children.resolveActor('call-workflow', nodeRunId)")

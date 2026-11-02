@@ -7,6 +7,7 @@ import type {
   TaskDrivePreparation,
   TaskRunPorts,
 } from '../application/ports/taskRun'
+import { collaboratorUserIdsOf } from '../domain/taskCollaborators'
 import type { WrapperNodeKind } from '../domain/wrapperExecution'
 import { runTask } from '../engine/task/runTask'
 import { inspectReadonlyRepos } from '../engine/task/readonlyInspection'
@@ -133,13 +134,7 @@ function prepareTaskDrive(
     definition,
     opts,
     taskExecutionResources,
-    collaboratorUserIds: [
-      ...new Set(
-        collaborators
-          .filter((member) => member.role !== 'owner' && member.userId !== null)
-          .map((member) => member.userId as string),
-      ),
-    ],
+    collaboratorUserIds: collaboratorUserIdsOf(collaborators),
     topology,
     // RFC-248: 组名**快照**（`tasks.repo_group_name`）——组被删除后仍能渲染，
     // 这正是 D8 存这一列的理由。

@@ -201,14 +201,26 @@ describe('RFC-282 B2 / RFC-345 T4a — all six TaskExecution entries use one res
     // engine/node/agent-single/ and, like the agent body, go through the agent binding's one
     // `resources.injection` delegate; the source-port kind read (`sourcePortKindOf`) moved into the
     // binding too — four literal reads, three port readers, still six entries.
+    // RFC-420: the fan-out hydration and the source-port-kind read moved into
+    // application/fanoutAgentResolution.ts and reach the session through the agent binding's second
+    // delegate (`agentResolutionResources`) — three literal reads (two delegates and the host's),
+    // three port readers and two resolution readers, still six entries.
+    const resolution = readFileSync(
+      resolve(SRC, 'modules/task-execution/application/fanoutAgentResolution.ts'),
+      'utf8',
+    )
     const literalReads = text.split('taskExecutionResources.injection(').length - 1
     const bindingReaders = text.split('ports.resources.injection(').length - 1
-    expect(literalReads).toBe(4)
+    const resolutionReaders = resolution.split('await resources.injection(').length - 1
+    expect(literalReads).toBe(3)
     expect(bindingReaders).toBe(3)
-    expect(AGENT_BINDING_SOURCE).toContain(
-      'injection: (agentId) => state.taskExecutionResources.injection(agentId),',
-    )
-    expect(literalReads - 1 + bindingReaders).toBe(6)
+    expect(resolutionReaders).toBe(2)
+    expect(
+      AGENT_BINDING_SOURCE.split(
+        'injection: (agentId) => state.taskExecutionResources.injection(agentId),',
+      ).length - 1,
+    ).toBe(2)
+    expect(literalReads - 2 + bindingReaders + resolutionReaders).toBe(6)
     expect(text.split('resolveSyntheticTaskAgentInjection(').length - 1).toBe(3)
     // the commit-push / merge bypass shape (four hand-written empty arrays)
     expect(text).not.toContain('skills: [],\n          dependents: [],')

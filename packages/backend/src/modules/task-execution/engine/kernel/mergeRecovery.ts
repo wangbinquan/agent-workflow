@@ -1,7 +1,8 @@
 // RFC-413 — the pre-drive merge recovery (RFC-130 / 144 / 210 / 369 / 370), moved verbatim from
 // composition/executionMergeRecovery.ts onto the isolation mechanics ports. The composition binds the ports over the
 // frame's own execution state (the task's at task entry, a wrapper's when the wrapper drives its body).
-import { taskCheckpointRefs } from '../../domain/taskCheckpoint'
+import type { IsoHandle } from '@/platform/contracts/isolationWorkspace'
+import { taskCheckpointRefs, type TaskRepositoryCheckpoint } from '../../domain/taskCheckpoint'
 import { discardNodeIso } from './isolationCleanup'
 // RFC-188: the shared assembly for isolated agent runs — iso lock-window,
 // iso-column persistence and the merge-back/settle block (formerly five
@@ -80,6 +81,35 @@ async function scopeBaseHeads(
     taskBaseHeads[repo.mountPath] = h.stdout.trim()
   }
   return taskBaseHeads
+}
+
+/**
+ * RFC-420 — rebuild an adopted call row's iso from its persisted columns, in the replay idiom's order: the scope,
+ * every task repo HEAD, the recovery key, then the restore (whose last argument read is the task's forced port
+ * paths). Moved from the call node's binding (`composition/childCallNodeExecution.ts` `restoreIso`); the isolation
+ * port's restore converts the persisted submodule topology exactly as the binding did.
+ */
+export async function restoreNodeIso(
+  ports: IsolationMechanicsPorts,
+  input: {
+    readonly nodeRunId: string
+    readonly workspaceRef: string | null
+    readonly baseSnapshots: Record<string, string>
+    readonly checkpoints: readonly TaskRepositoryCheckpoint[]
+  },
+): Promise<IsoHandle> {
+  const scope = await ports.workspace.scope()
+  const taskBaseHeads = await scopeBaseHeads(ports, scope)
+  const submodules = parseIsoSubmodules(input.checkpoints)
+  return await ports.workspace.restore({
+    key: await scope.recoverKey(input.workspaceRef, input.nodeRunId),
+    dbNodeRunId: input.nodeRunId,
+    workspaceRef: input.workspaceRef,
+    baseSnapshots: input.baseSnapshots,
+    taskBaseHeads,
+    submodules,
+    forcedContainerPaths: [...(await ports.persistence.artifactPaths.forcedPaths(ports.taskId))],
+  })
 }
 
 /**

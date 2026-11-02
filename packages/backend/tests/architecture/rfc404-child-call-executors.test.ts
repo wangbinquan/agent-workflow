@@ -14,7 +14,6 @@ const NODE = TE + 'engine/node/'
 const SHARED = NODE + 'shared/child-call/'
 const MECHANICS = TE + 'composition/nodeMechanics.ts'
 const COMPOSITION = TE + 'composition/nodeExecution.ts'
-const BINDING = TE + 'composition/childCallNodeExecution.ts'
 const BODY = SHARED + 'runChildCallNode.ts'
 const EXECUTORS = [
   ['call-workflow', 'CallWorkflow'],
@@ -48,8 +47,9 @@ const HELPERS = new Map([
   ['childCallRefusal', TE + 'application/childCallErrors.ts'],
   ['runChildCallNode', BODY],
   ['inheritedCallSpace', SHARED + 'launchChildCall.ts'],
-  ['buildChildRuntime', BINDING],
-  ['delegatedCallActor', BINDING],
+  // RFC-420: the child runtime and the delegated owner actor left the binding for application/.
+  ['buildChildRuntime', TE + 'application/childCallInheritance.ts'],
+  ['delegatedCallActor', TE + 'application/childCallInheritance.ts'],
 ])
 const UNITS = backendUnits(ROOT)
 const LEAF_DIRECTORIES = [SHARED, ...EXECUTORS.map(([key]) => NODE + key + '/')]

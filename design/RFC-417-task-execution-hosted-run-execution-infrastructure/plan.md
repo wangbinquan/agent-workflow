@@ -55,6 +55,10 @@ T1～T5 完成（本会话实施）。与落档设计的唯一偏差是恢复证
   不归本 RFC。
 - **P0 变异 lane**（SQLite + PostgreSQL）：passed，34 个阶段、0 失败，127 个源文件指纹前后一致。
 
+## CI（AC-5）
+
+- **`ffde0e5f6`**：主 CI `41365632523` 70 个 job 全部 success，windows-platform `41365632483` success。AC-5 成立，RFC-417 Done。
+
 ## 冲突面
 
 - `TE/composition/{crewstationTaskRunSelection,crewstationExecution,taskAgentMaterialPreparation,localTaskAgentRunFamily}.ts`、
@@ -66,4 +70,4 @@ T1～T5 完成（本会话实施）。与落档设计的唯一偏差是恢复证
 ## 验收清单
 
 - [x] proposal AC-1～AC-4（本地集中验证，见上）
-- [ ] 推送后 exact SHA 的 CI 全绿（AC-5）
+- [x] 推送后 exact SHA 的 CI 全绿（AC-5，`ffde0e5f6`，见上）

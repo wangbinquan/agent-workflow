@@ -4,7 +4,12 @@ import type { Logger } from '@/util/log'
 import type { NodeExecutionPersistence } from './ports/nodeExecutionPersistence'
 import { collectDataflowInboundEdges } from '../domain/inboundEdges'
 import { loadFrameChain } from './frameChain'
-import { resolveSourceFrame, type FrameCoordinate } from '../domain/environmentChain'
+import {
+  resolveSourceFrame,
+  resolveSourceFrameInScope,
+  type FrameCoordinate,
+} from '../domain/environmentChain'
+import { encodeConsumedEdges } from '../domain/consumedInputs'
 import { nodeOutputSlot } from '../domain/runSelection/nodeOutputSlot'
 
 export async function resolveUpstreamInputs(
@@ -187,4 +192,80 @@ export async function readPortRowAtFrame(
     archiveJson: out[0]?.archiveJson ?? null,
     active,
   }
+}
+
+/**
+ * RFC-354 — a wrapper's port read on behalf of its body. `frame` is the READER's frame — the body frame
+ * `(generation, round)` a loop evaluates its exit condition / output bindings in. The producing node is read in the
+ * frame the environment chain resolves it to: a body node locally, a node outside the wrapper as a captured free
+ * variable (one generation row outward per enclosing wrapper). A source that is not lexically visible fails loudly
+ * instead of reading ''.
+ *
+ * RFC-420: moved verbatim from the wrapper data binding (`composition/wrapperMechanics.ts` `readPort`).
+ */
+export async function readPortInScope(
+  input: {
+    readonly persistence: NodeExecutionPersistence
+    readonly taskId: string
+    readonly definition: WorkflowDefinition
+    readonly parents: ReadonlyMap<string, string>
+  },
+  nodeId: string,
+  portName: string,
+  frame: FrameCoordinate,
+): ReturnType<typeof readPortRowAtFrame> {
+  const chain = await loadFrameChain((id: string) => input.persistence.read(id), frame)
+  const scopeRow = frame.containerRunId === null ? undefined : chain.lookup(frame.containerRunId)
+  const resolved = resolveSourceFrameInScope({
+    sourceNodeId: nodeId,
+    scope: scopeRow?.nodeId ?? null,
+    parents: input.parents,
+    frame,
+    containerRowById: chain.lookup,
+  })
+  if (!resolved.ok) {
+    throw new Error(
+      `closure-binding-unresolved: port '${nodeId}.${portName}' is not visible from frame ` +
+        `${frame.containerRunId ?? 'top'}#${frame.iteration} (${resolved.reason}${resolved.scopeId === null ? '' : ` at ${resolved.scopeId}`})`,
+    )
+  }
+  return await readPortRowAtFrame(
+    input.persistence,
+    input.taskId,
+    nodeId,
+    portName,
+    resolved.frame,
+    input.definition.nodes.find((node) => node.id === nodeId)?.kind,
+  )
+}
+
+/**
+ * The encoded consumed-inputs record of the newest earlier top-level attempt of a fan-out node in one round (the
+ * asking attempt excluded); null when there is none.
+ *
+ * RFC-420: moved verbatim from the wrapper data binding (`composition/wrapperMechanics.ts` `priorFanoutConsumed`).
+ */
+export async function priorFanoutConsumedJson(
+  persistence: NodeExecutionPersistence,
+  taskId: string,
+  nodeId: string,
+  iteration: number,
+  excludeRunId: string,
+): Promise<string | null> {
+  return persistence.snapshotRead(async (snapshot) => {
+    const rows = await snapshot.list({ taskId, nodeId, iteration })
+    const previous = (
+      await snapshot.selection.familyHistory(
+        taskId,
+        {
+          nodeId,
+          iteration,
+          runIds: rows.filter((row) => row.id !== excludeRunId).map((row) => row.id),
+        },
+        { topLevelOnly: true, consumedOnly: true },
+      )
+    ).at(-1)
+    if (previous === undefined) return null
+    return encodeConsumedEdges(await snapshot.selection.consumed(previous.id))
+  })
 }

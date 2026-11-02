@@ -126,7 +126,8 @@ describe('调用级三属性 —— active legacy closure policies 必须真的�
     expect(wrapperMechanics).not.toContain('FANOUT_HYDRATE_CALL_POLICY')
     expect(nodeMechanics).toContain('await ports.resources.injection(agentRef.id)')
     expect(AGENT_BINDING_SOURCE).toContain('state.taskExecutionResources.injection(agentId)')
-    expect(wrapperMechanics).toContain('state.taskExecutionResources.injection(agentId)')
+    // RFC-420: the wrapper binding hydrates through the agent binding's shared resolution resources.
+    expect(wrapperMechanics).toContain('resolveFanoutAgent(agentResolutionResources(state), node)')
   })
 })
 
@@ -142,10 +143,12 @@ describe('四处失败归属：调用点各用各的策略，且映射逐条不�
   })
 
   test('② fanout inner 水合复用 catalog session，失败作为 wrapper data-port 结果返回', () => {
-    const idx = wrapperMechanics.indexOf('async resolveFanoutAgent(node)')
+    // RFC-420: the hydration body moved into application/fanoutAgentResolution.ts (in the corpus); its
+    // `resources.injection` is the agent binding's catalog session delegate (locked above).
+    const idx = wrapperMechanics.indexOf('export async function resolveFanoutAgent(')
     expect(idx).toBeGreaterThan(0)
     const after = wrapperMechanics.slice(idx, idx + 520)
-    expect(after).toContain('state.taskExecutionResources.injection(agentId)')
+    expect(after).toContain('resources.injection(agentId)')
     expect(after).toContain("resolution.kind === 'ok'")
     expect(after).toContain(': resolution')
     expect(after).not.toContain('throw ')

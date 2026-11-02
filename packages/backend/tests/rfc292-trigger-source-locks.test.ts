@@ -112,11 +112,17 @@ describe('RFC-292 trigger namespace source locks', () => {
     expect(codeHostBinding).toMatch(/get triggerContext\(\)\s*\{\s*return state\.triggerContext/)
     // RFC-404: the call node's child runtime (binding) and goal rendering (engine launch arm) left
     // nodeMechanics.ts; both still carry the task's one frozen trigger context.
+    // RFC-420: the child runtime is application/childCallInheritance.ts, built from the binding's state.
     const callBinding = readFileSync(
       resolve(BACKEND_SRC, 'modules/task-execution/composition/childCallNodeExecution.ts'),
       'utf8',
     )
-    expect(callBinding).toContain('{ triggerContext: state.triggerContext }')
+    const callInheritance = readFileSync(
+      resolve(BACKEND_SRC, 'modules/task-execution/application/childCallInheritance.ts'),
+      'utf8',
+    )
+    expect(callInheritance).toContain('{ triggerContext: parent.triggerContext }')
+    expect(callBinding).toContain('runtime: buildChildRuntime(state)')
     expect(callBinding).toMatch(/get triggerContext\(\)\s*\{\s*return state\.triggerContext/)
     expect(CHILD_CALL_LAUNCH_SOURCE).toContain(
       'renderCallGoal(goalTemplate, inputs, ports.task.triggerContext',

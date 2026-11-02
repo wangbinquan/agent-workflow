@@ -221,19 +221,25 @@ describe('RFC-284 T20 — 子任务继承面双向锁', () => {
   test('源码锁：child runtime 只经单一 picker 构造、deps 整体透传且旧逐字段展开归零', () => {
     // RFC-404：buildChildRuntime 随调用节点的绑定迁到 composition/childCallNodeExecution.ts；
     // 两条发起臂与续跑都由绑定补 runtime，engine 主体只组装本节点的请求、不碰 task 级继承面。
+    // RFC-420：buildChildRuntime 本体迁入 application/childCallInheritance.ts，三处调用仍在绑定。
     const taskExecution = resolve(import.meta.dir, '..', 'src', 'modules', 'task-execution')
     const src = readFileSync(
       resolve(taskExecution, 'composition', 'childCallNodeExecution.ts'),
       'utf8',
     )
-    const start = src.indexOf('function buildChildRuntime')
+    const inheritance = readFileSync(
+      resolve(taskExecution, 'application', 'childCallInheritance.ts'),
+      'utf8',
+    )
+    const start = inheritance.indexOf('function buildChildRuntime')
     expect(start).toBeGreaterThan(-1)
-    const section = src.slice(start, src.indexOf('\n}\n', start))
-    expect(section).toContain('runConfig: pickInheritableRunConfig(state.opts)')
+    const section = inheritance.slice(start, inheritance.indexOf('\n}\n', start))
+    expect(section).toContain('runConfig: pickInheritableRunConfig(parent.opts)')
+    expect(src).not.toContain('function buildChildRuntime')
     const between = (from: string, to: string): string => {
-      const begin = src.indexOf(from, start)
+      const begin = src.indexOf(from)
       const end = src.indexOf(to, begin)
-      expect(begin, from).toBeGreaterThan(start)
+      expect(begin, from).toBeGreaterThan(-1)
       expect(end, to).toBeGreaterThan(begin)
       return src.slice(begin, end)
     }

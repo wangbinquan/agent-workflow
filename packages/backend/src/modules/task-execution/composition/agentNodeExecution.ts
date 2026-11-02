@@ -1,4 +1,3 @@
-import { declaredPorts } from '@agent-workflow/shared'
 import { portFallbackMount } from '@/platform/content/locations/portArchive'
 import { findClarifyNode } from '@/services/clarify/service'
 import {
@@ -17,6 +16,7 @@ import { decideResumeSessionId } from '@/services/sessionModeFallback'
 import * as agentRunHistory from '../application/agentRunHistory'
 import { resolveUpstreamInputs } from '../application/nodeInputs'
 import { toContainerRelative } from '../application/portArtifacts'
+import { sourcePortKindOf, type FanoutAgentResources } from '../application/fanoutAgentResolution'
 import type {
   AgentNodeExecutionPorts,
   AgentRunRequest,
@@ -65,30 +65,17 @@ export function withTaskRunFields(
 }
 
 /**
- * RFC-354 — the declared kind of a producer port. Agents resolve through the
- * injection registry (id-first, like every other agent read in this module);
- * every other kind answers through the shared port table.
- *
- * RFC-407: moved verbatim out of wrapperMechanics.ts so the wrapper data binding and this binding's
- * `resources.sourcePortKind` (fan-out shard inputs) share one implementation.
+ * RFC-420 — the agent resolution the wrapper data binding and this binding's `resources.sourcePortKind` share
+ * (application/fanoutAgentResolution.ts): the canonical fan-out key and the task's resource session, read on use.
  */
-export async function sourcePortKindOf(
-  state: TaskMechanicsState,
-  nodeId: string,
-  portName: string,
-): Promise<string | null> {
-  const node = state.definition.nodes.find((candidate) => candidate.id === nodeId)
-  if (node === undefined) return null
-  if (node.kind === 'agent-single') {
-    const agentId = fanoutInnerAgentRefKey(node as Record<string, unknown>)
-    if (agentId === null) return null
-    const resolution = await state.taskExecutionResources.injection(agentId)
-    return resolution.kind === 'ok' ? (resolution.spec.agent.outputKinds?.[portName] ?? null) : null
+export function agentResolutionResources(state: TaskMechanicsState): FanoutAgentResources {
+  return {
+    get definition() {
+      return state.definition
+    },
+    agentKey: fanoutInnerAgentRefKey,
+    injection: (agentId) => state.taskExecutionResources.injection(agentId),
   }
-  return (
-    declaredPorts(node, state.definition, {}).dataOutputs.find((port) => port.name === portName)
-      ?.kind ?? null
-  )
 }
 
 /** RFC-405 / RFC-406 — capabilities of the agent-single executor's two lanes; every value is read on use. */
@@ -161,7 +148,8 @@ export function createAgentNodeExecutionPorts(state: TaskMechanicsState): AgentN
         agent.id === ORCHESTRATOR_AGENT_ID
           ? resolveSyntheticTaskAgentInjection(agent, state.opts.taskAgentRuns.materialReferences)
           : await state.taskExecutionResources.injection(agent.id),
-      sourcePortKind: (nodeId, portName) => sourcePortKindOf(state, nodeId, portName),
+      sourcePortKind: (nodeId, portName) =>
+        sourcePortKindOf(agentResolutionResources(state), nodeId, portName),
     },
     collaboration: {
       resolveBorrowForNode: (input) => collaboration().resolveBorrowForNode(input),

@@ -71,10 +71,11 @@ describe('RFC-048 subagentLiveCapture passthrough', () => {
       'runTaskAgentWithFamily(opts.taskAgentRuns, withTaskRunFields(opts, request), launch)',
     )
     expect(topology).toContain("'subagentLiveCapture',")
-    // RFC-404: the child runtime picker moved with the call-node binding.
+    // RFC-404: the child runtime picker moved with the call-node binding; RFC-420: into
+    // application/childCallInheritance.ts, which the binding calls for both launch arms and the resume.
     expect(
-      read('packages/backend/src/modules/task-execution/composition/childCallNodeExecution.ts'),
-    ).toContain('runConfig: pickInheritableRunConfig(state.opts)')
+      read('packages/backend/src/modules/task-execution/application/childCallInheritance.ts'),
+    ).toContain('runConfig: pickInheritableRunConfig(parent.opts)')
     // RFC-359 AC-1（plan §5hn 批次二 ⑤）：`sqliteChildExecutionLaunchOperations.ts` 已随
     // 子任务启动合一删除，两个引擎共用 `childExecutionLaunchOperations.ts`。
     // 这份清单锁的是「每一条子启动路都把 runConfig 透传下去」，少一个文件不代表少一条路。

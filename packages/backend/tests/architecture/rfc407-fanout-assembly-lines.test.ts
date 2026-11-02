@@ -16,6 +16,8 @@ const AGGREGATOR = AGENT + 'runFanoutAggregator.ts'
 const ATTEMPTS = AGENT + 'fanoutAttempts.ts'
 const WRAPPER = TE + 'composition/wrapperMechanics.ts'
 const BINDING = TE + 'composition/agentNodeExecution.ts'
+// RFC-420: the shared source-port-kind read moved from the agent binding into application/.
+const RESOLUTION = TE + 'application/fanoutAgentResolution.ts'
 /** Every symbol that moved, and its one owner. */
 const OWNERS = new Map([
   ['dispatchFanoutShard', SHARD],
@@ -26,7 +28,7 @@ const OWNERS = new Map([
   ['DispatchAggregatorArgs', AGGREGATOR],
   ['createFanoutAttempts', ATTEMPTS],
   // Shared by the wrapper data binding and the agent ports' `resources.sourcePortKind`.
-  ['sourcePortKindOf', BINDING],
+  ['sourcePortKindOf', RESOLUTION],
 ])
 /** The lines' bodies; none of them may come back to the wrapper composition. */
 const LINE_FUNCTIONS = [
@@ -153,7 +155,7 @@ function replaceUnit(units: readonly SourceUnit[], path: string, from: string, t
 
 test('live corpus: both lines and the attempt port live in engine/node/agent-single/ on the agent ports', () => {
   expect(UNITS.length).toBeGreaterThanOrEqual(2000)
-  for (const path of [SHARD, AGGREGATOR, ATTEMPTS, WRAPPER, BINDING])
+  for (const path of [SHARD, AGGREGATOR, ATTEMPTS, WRAPPER, BINDING, RESOLUTION])
     expect(
       UNITS.some((unit) => unit.path === path),
       path,

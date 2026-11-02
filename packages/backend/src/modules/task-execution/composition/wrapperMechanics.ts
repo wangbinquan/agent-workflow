@@ -1,8 +1,10 @@
-import { createAgentNodeExecutionPorts, sourcePortKindOf } from './agentNodeExecution'
+import { agentResolutionResources, createAgentNodeExecutionPorts } from './agentNodeExecution'
 import { createFanoutAttempts } from '../engine/node/agent-single/fanoutAttempts'
 // RFC-339 — task-execution-owned loop/git/fanout wrapper mechanics. RFC-413: the wrapper workspace (isolation,
 // git entry snapshot, merge-back) lives in engine/wrapper/wrapperWorkspace.ts and engine/kernel/wrapperIsolation.ts;
-// this file binds the wrapper ports over the execution state and builds a wrapper body's nested state.
+// this file binds the wrapper ports over the execution state. RFC-420: the closure port read and the prior fan-out
+// provenance are application/nodeInputs.ts, the fan-out agent and source-port-kind resolution
+// application/fanoutAgentResolution.ts, and the wrapper body's entry engine/wrapper/wrapperBodyScope.ts.
 
 import { copyPortArchive } from '@/platform/content/locations/portArchive'
 import { prepareConsumedInputs } from '../infrastructure/consumedInputsParticipant'
@@ -14,21 +16,21 @@ import {
   consumedMapsEqual,
   parseConsumedJson,
 } from '@/modules/task-execution/application/runProvenance'
-import { encodeConsumedEdges } from '../infrastructure/runSelection/consumedCodec'
 import { encodeWrapperProgress } from '@/modules/task-execution/domain/wrapperProgress'
 import type { Logger } from '@/util/log'
 import { workspaceRecord } from '../infrastructure/isolationWorkspaceView'
 import type { TaskMechanicsState } from './taskMechanicsState'
 import {
+  priorFanoutConsumedJson,
+  readPortInScope,
   resolveUpstreamInputs,
-  readPortRowAtFrame,
 } from '@/modules/task-execution/application/nodeInputs'
+import { resolveFanoutAgent, sourcePortKindOf } from '../application/fanoutAgentResolution'
 import { completeFrameMerges } from '../engine/kernel/mergeRecovery'
 import { createWrapperWorkspace } from '../engine/wrapper/wrapperWorkspace'
+import { createWrapperScopeDriver } from '../engine/wrapper/wrapperBodyScope'
 import { createIsolationMechanicsPorts } from './isolationMechanicsBinding'
 import type { WrapperDataPort } from '../application/ports/wrapperData'
-import { loadFrameChain } from '../application/frameChain'
-import { resolveSourceFrameInScope } from '../domain/environmentChain'
 import type { WrapperScopeDriverPort } from '../application/ports/wrapperScopeDriver'
 import type { WrapperWorkspacePort } from '../application/ports/wrapperWorkspace'
 import type { FanoutAttemptPort } from '../application/ports/fanoutAttempt'
@@ -57,13 +59,9 @@ export function createWrapperMechanicsPorts(
     definition: state.definition,
     fanoutMaxShardTotal: state.opts.fanoutMaxShardTotal ?? 256,
     fanoutAgentKey: fanoutInnerAgentKey,
-    async resolveFanoutAgent(node) {
-      const agentId = fanoutInnerAgentRefKey(node as Record<string, unknown>)
-      if (agentId === null) return { kind: 'missing' }
-      const resolution = await state.taskExecutionResources.injection(agentId)
-      return resolution.kind === 'ok' ? { kind: 'ok', agent: resolution.spec.agent } : resolution
-    },
-    sourcePortKind: (nodeId, portName) => sourcePortKindOf(state, nodeId, portName),
+    resolveFanoutAgent: (node) => resolveFanoutAgent(agentResolutionResources(state), node),
+    sourcePortKind: (nodeId, portName) =>
+      sourcePortKindOf(agentResolutionResources(state), nodeId, portName),
     consumedProvenanceMatches(priorJson, current) {
       return consumedMapsEqual(parseConsumedJson(priorJson), current)
     },
@@ -83,41 +81,19 @@ export function createWrapperMechanicsPorts(
           : { executionContext: state.opts.executionContext }),
       })
     },
-    // RFC-354: `frame` is the READER's frame — the body frame `(generation,
-    // round)` a loop evaluates its exit condition / output bindings in. The
-    // producing node is read in the frame the environment chain resolves it
-    // to: a body node locally, a node outside the wrapper as a captured free
-    // variable (one generation row outward per enclosing wrapper). A source
-    // that is not lexically visible fails loudly instead of reading ''.
-    readPort: async (nodeId, portName, frame) => {
-      const chain = await loadFrameChain(
-        (id: string) => state.opts.persistence.nodeExecution.read(id),
-        frame,
-      )
-      const scopeRow =
-        frame.containerRunId === null ? undefined : chain.lookup(frame.containerRunId)
-      const resolved = resolveSourceFrameInScope({
-        sourceNodeId: nodeId,
-        scope: scopeRow?.nodeId ?? null,
-        parents: state.containerOf,
-        frame,
-        containerRowById: chain.lookup,
-      })
-      if (!resolved.ok) {
-        throw new Error(
-          `closure-binding-unresolved: port '${nodeId}.${portName}' is not visible from frame ` +
-            `${frame.containerRunId ?? 'top'}#${frame.iteration} (${resolved.reason}${resolved.scopeId === null ? '' : ` at ${resolved.scopeId}`})`,
-        )
-      }
-      return await readPortRowAtFrame(
-        state.opts.persistence.nodeExecution,
-        state.taskId,
+    // RFC-354: `frame` is the READER's frame (application/nodeInputs.ts `readPortInScope`).
+    readPort: (nodeId, portName, frame) =>
+      readPortInScope(
+        {
+          persistence: state.opts.persistence.nodeExecution,
+          taskId: state.taskId,
+          definition: state.definition,
+          parents: state.containerOf,
+        },
         nodeId,
         portName,
-        resolved.frame,
-        state.definition.nodes.find((node) => node.id === nodeId)?.kind,
-      )
-    },
+        frame,
+      ),
     resolveInputs: (nodeId, frame) =>
       resolveUpstreamInputs(
         state.opts.persistence.nodeExecution,
@@ -142,24 +118,14 @@ export function createWrapperMechanicsPorts(
           : { executionContext: state.opts.executionContext }),
       })
     },
-    async priorFanoutConsumed(nodeId, iteration, excludeRunId) {
-      return state.opts.persistence.nodeExecution.snapshotRead(async (snapshot) => {
-        const rows = await snapshot.list({ taskId: state.taskId, nodeId, iteration })
-        const previous = (
-          await snapshot.selection.familyHistory(
-            state.taskId,
-            {
-              nodeId,
-              iteration,
-              runIds: rows.filter((row) => row.id !== excludeRunId).map((row) => row.id),
-            },
-            { topLevelOnly: true, consumedOnly: true },
-          )
-        ).at(-1)
-        if (previous === undefined) return null
-        return encodeConsumedEdges(await snapshot.selection.consumed(previous.id))
-      })
-    },
+    priorFanoutConsumed: (nodeId, iteration, excludeRunId) =>
+      priorFanoutConsumedJson(
+        state.opts.persistence.nodeExecution,
+        state.taskId,
+        nodeId,
+        iteration,
+        excludeRunId,
+      ),
     async outputOf(runId, portName) {
       const row = (await state.opts.persistence.nodeExecution.listOutputs(runId)).find(
         (output) => output.portName === portName,
@@ -192,47 +158,22 @@ export function createWrapperMechanicsPorts(
     },
   }
 
-  const scopeDriver: WrapperScopeDriverPort = {
-    drive(input) {
-      const { handle, kind } = workspaceScenes.resolve(input.workspace)
-      const innerState: TaskMechanicsState = handle.passthrough
-        ? state
-        : {
-            ...state,
-            repos: handle.repos.map((repo, index) => ({
-              ...state.repos[index]!,
-              ordinal: state.repos[index]!.ordinal,
-              repoPath: repo.repoPath,
-              worktreePath: repo.isoWorktreePath,
-              mountPath:
-                kind === 'wrapper-loop'
-                  ? (state.repos[index]?.mountPath ?? repo.mountPath)
-                  : repo.mountPath,
-              readonly: kind === 'wrapper-loop' ? (state.repos[index]?.readonly ?? false) : false,
-              baseBranch: repo.baseBranch,
-              baseCommit: repo.baseSnapshot,
-            })),
-            scopeRoot: handle.containerPath,
-          }
-      const label = kind === 'wrapper-loop' ? 'loop' : 'git'
-      const scopeLog = executionLog.child(`${label}:${input.scope.wrapperId}`)
-      // RFC-370 — a revived body first finishes the merge-backs a crash or a
-      // lost execution lease interrupted in it, into this wrapper's worktree.
-      return completeFrameMerges(
-        createIsolationMechanicsPorts(innerState),
-        { containerRunId: input.containerRunId, iteration: input.iteration },
-        scopeLog,
-      ).then(() =>
-        state.driveScope(innerState, {
-          scopeId: input.scope.wrapperId,
-          scopeIds: new Set(input.scope.directNodeIds),
-          containerRunId: input.containerRunId,
-          iteration: input.iteration,
-          log: scopeLog,
-        }),
-      )
+  // RFC-420: the body's entry (mounts, scope log, merge completion, drive) is the engine's; a body state is the
+  // outer state over the body's mounts, driven by the outer state's scope driver.
+  const scopeDriver: WrapperScopeDriverPort = createWrapperScopeDriver<TaskMechanicsState>(
+    {
+      outer: state,
+      get outerRepos() {
+        return state.repos
+      },
+      resolve: (scene) => workspaceScenes.resolve(scene),
+      enter: (mounts) => ({ ...state, ...mounts }),
+      completeMerges: (inner, frame, log) =>
+        completeFrameMerges(createIsolationMechanicsPorts(inner), frame, log),
+      drive: (inner, args) => state.driveScope(inner, args),
     },
-  }
+    executionLog,
+  )
 
   // RFC-407: the fan-out lines run in the agent executor on its ports.
   const fanoutAttempts = createFanoutAttempts(createAgentNodeExecutionPorts(state), executionLog)

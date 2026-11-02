@@ -7,29 +7,14 @@ import type { TaskScopeOutcome, WrapperExecutionScopeReadModel } from '../public
 import type { Logger } from '@/util/log'
 import type { Semaphore } from '@/platform/contracts/semaphore'
 import type { BoundRunTaskOptions } from './taskEngineRuntimeOptions'
+import type { DagScopeArgs } from '../application/ports/dagScope'
 import type { TaskAgentResourceSession } from '@/services/execution/taskExecutionResources'
 
-export interface TaskScopeArgs {
-  /** Wrapper node that owns this scope; null for the workflow root. */
-  readonly scopeId: string | null
-  readonly scopeIds: Set<string>
-  /**
-   * RFC-354 — the FRAME this scope runs in: the wrapper generation row
-   * (`openGeneration`) whose body is being driven, null at the workflow root.
-   * Together with `iteration` (the round inside that frame) it is the
-   * identity every row minted here hangs off — nested wrappers never collide.
-   */
-  readonly containerRunId: string | null
-  readonly iteration: number
-  readonly log: Logger
-}
-
-export interface NodeMechanicsResult {
-  readonly kind: 'ok' | 'failed' | 'canceled' | 'awaiting_review' | 'awaiting_human'
-  readonly summary: string
-  readonly message: string
-  readonly processUnreaped?: true
-}
+/**
+ * One scope invocation: the wrapper that owns it (null at the workflow root) and its RFC-354 frame. RFC-420: the
+ * DAG scope's own argument type (`application/ports/dagScope.ts`), which this state's scope driver receives.
+ */
+export type TaskScopeArgs = DagScopeArgs
 
 /**
  * Post-W2-D compatibility state retained by the remaining node, lifecycle and
