@@ -1,3 +1,14 @@
+## 2026-11-02 RFC-401 资源写入栈合一与 AtomicApply 持久租约（In Progress；`design/RFC-401-single-resource-write-stack/`）
+
+- **确认**：用户 2026-11-02 按四组确认 proposal §5 的 12 项与 §7 两项，全部按推荐（记录见 proposal §7）：
+  - 错误码统一：同一输入在 Intent、资源包与普通 CRUD 得到同一 code / status / message / details，场景专属错误保留场景码并先报；
+  - Intent 放开 workflow 重名与保存时的完整图校验；
+  - 技能内容不变不增版本、同 spec 插件不重装、fusion 已提交结果可恢复；
+  - 引用逐字段去重规则与技能 Markdown 字节合同由本会话写进 design §2。
+- **做法**：本会话调研、设计、实施与集中验证，不派 Codex；实现门由本会话按路径限定自审（只审功能）。
+- **下一步**：Part A（T1 → T2 → T3 → T7 → T8，无 schema 变化）：先按源码补全 design §2 的错误矩阵、去重与字节合同，再实施。
+  Part B（lease、技能 / fusion / restore 接入、旧生命周期退役）的前置 RFC-398 已 Done。
+
 ## 2026-11-02 RFC-430 部署选择项删余下三个可派生项（Done；`design/RFC-430-derivable-deployment-selections/`）
 
 - **来由**：RFC-294 S2c 余项第 1 项的第三步（RFC-428 inventory 后继分步）。用户授权同 RFC-402，本会话调研、设计、实施与集中验证，不派 Codex。
@@ -432,7 +443,7 @@
   保留证据，不归本 RFC。详见 plan「集中验证」。
 - **后继**：RFC-403（design §5.5 第 3 步之一）。
 
-## 2026-10-31 RFC-401 资源写入栈合一与 AtomicApply 持久租约（Draft，待用户确认；`design/RFC-401-single-resource-write-stack/`）
+## 2026-10-31 RFC-401 资源写入栈合一与 AtomicApply 持久租约（2026-11-02 已确认、转 In Progress，见 2026-11-02 条；`design/RFC-401-single-resource-write-stack/`）
 
 - **来由**：RFC-294 S7 余项。用户 2026-10-30「你继续推进RFC294 … 按你的判断来推进，不用询问我」。S7 含用户可见的错误码收敛，
   RFC-294 plan 写明须列入口与错误码呈批。本会话完成了研究与设计，proposal §5 的 12 项行为变化逐项给出推荐，待用户确认后实施。

@@ -1,8 +1,7 @@
 # RFC-401 资源写入栈合一与 AtomicApply 持久租约（RFC-294 S7 余项）
 
-- **状态**：Draft（2026-10-31 落档）。§5「用户可见变化」需要用户逐项确认后才进入实施。RFC-294 plan §3 S7 写明「错误码收敛属
-  用户可见变化，须列入口与错误码呈批」。本会话在用户「你继续推进RFC294 … 按你的判断来推进」的授权下先完成研究与设计，
-  §5 的每一项给出推荐。
+- **状态**：In Progress（2026-10-31 落档；2026-11-02 用户确认 §5 全部 12 项与 §7 两项，均按「推荐」，见 §7）。研究与设计由本会话在
+  用户「你继续推进RFC294 … 按你的判断来推进」的授权下完成。RFC-294 plan §3 S7 要求的「列入口与错误码呈批」已完成。
 - **母 RFC**：[RFC-294](../RFC-294-backend-layered-target-architecture/proposal.md) plan §3 S7；design §3、W6
 - **前序**：[RFC-395](../RFC-395-database-target-schema-rebuild/proposal.md) T10（唯一状态机 `platform/atomic-apply/`）、
   [RFC-400](../RFC-400-collaboration-task-participants-actor/proposal.md)（参与者合同与装配的写法）
@@ -59,7 +58,7 @@ RFC-294 S7 的退出门是：lifecycle 实现 1、资源写入栈 1、收敛循�
 - **Part B（含 schema 变化）**：G3、G4、G5。journal 增加 lease 列、技能写入迁入 AtomicApply 需要目标 schema 与迁移；RFC-398
   正在改迁移与升级链，Part B 在 RFC-398 Done 之后开工，避免两边同时改迁移面。
 
-## 5. 用户可见变化（需逐项确认；「推荐」为本会话的建议）
+## 5. 用户可见变化（2026-11-02 用户确认：12 项全部按「推荐」）
 
 | # | 入口 / 条件 | 现行为 | 推荐 |
 | --- | --- | --- | --- |
@@ -89,11 +88,13 @@ RFC-294 S7 的退出门是：lifecycle 实现 1、资源写入栈 1、收敛循�
   且支持的升级来源仍能经迁移进入目标模型。
 - **AC-6 CI**：推送后 exact SHA 的 GitHub Actions 全绿。
 
-## 7. 待用户确认
+## 7. 用户确认（2026-11-02）
 
-§5 的 12 项，以及：
+用户按四组作答，全部选推荐项：
 
-- 引用中的重复项是否去重（RFC-395 A5 ledger `tests/fixtures/rfc395-a5-reference-semantics.json` 记录过资源包对 dependsOn / MCP / plugins
-  去重、对 skills 保留重复）。推荐保留用户输入顺序，逐字段决定是否去重，写进 design §2。
-- 技能 Markdown 字节：Intent / 资源包用 `renderResourcePackageSkillMarkdown`，CRUD 用 `stringifyFrontmatter`，两者的空行、末尾换行与
-  YAML 格式不同。推荐固定一份字节合同，存量内容不因换序列化器而产生新版本。
+| 组 | 覆盖 §5 / §7 | 决定 |
+| --- | --- | --- |
+| 错误码 | §5 第 1、3、4、5、6、7、11 项 | 统一：同一输入在三条入口得到同一 code / status / message / details；只属于某条入口的错误（未知句柄、包格式、映射缺失、包基线变化）保留场景码并先报 |
+| Intent 的两处更严规则 | §5 第 2、8 项 | 都放开：允许 workflow 重名；保存时不做完整图校验（草稿可保存），完整校验仍是显式操作 |
+| 写入规则与修复 | §5 第 9、10、12 项 | 全部接受：技能内容不变不增版本、description 变化按同一规则递增 metaRevision；同 spec 插件不重装；fusion 已提交结果可恢复，最终状态与 receipt 一致 |
+| 细节 | §7 两项 | 按推荐：引用保留用户输入顺序，逐字段决定是否去重；技能 Markdown 固定一份字节合同，存量内容不因换序列化器产生新版本。两条规则写进 design §2 |
