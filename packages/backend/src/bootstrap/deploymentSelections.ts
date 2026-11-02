@@ -3,7 +3,6 @@ import type { DeploymentSelections } from './deploymentProfile'
 
 export const DEPLOYMENT_SELECTION_KEYS = {
   contentStore: true,
-  historyRestrictions: true,
   applicationConfiguration: true,
   databaseInstallation: true,
   taskArchive: true,
@@ -24,7 +23,6 @@ export const DEPLOYMENT_SELECTION_KEYS = {
   evidenceArtifacts: true,
   resourcePackageSkillArtifacts: true,
   resourcePackagePluginArtifacts: true,
-  resourcePackageSkillContent: true,
   workspaceContent: true,
   repositoryRemote: true,
   workspaceUploads: true,
@@ -37,7 +35,6 @@ export const DEPLOYMENT_SELECTION_KEYS = {
   verificationCommands: true,
   customObserverPrograms: true,
   bootExecutionRecovery: true,
-  automationWorkspaceEffects: true,
   actionWorkspaceEffects: true,
   conflictMergeWorkspaceEffects: true,
   taskDeletionEffects: true,

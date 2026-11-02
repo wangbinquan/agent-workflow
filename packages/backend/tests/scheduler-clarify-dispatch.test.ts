@@ -414,7 +414,10 @@ function registerCases(provider: ProviderHarness) {
     // The agent never emitted a clarify envelope, so no session was ever created.
     const sessions = await h.db.select().from(clarifyRounds).where(eq(clarifyRounds.taskId, taskId))
     expect(sessions.length).toBe(0)
-  })
+    // Explicit budget, as for the clarify-no-channel case below: the stubborn mock is re-invoked across followup
+    // retries, so the case runs several runtime turns. PostgreSQL CI took 1.7–1.8 s on c96f2c907 / e41e5dbde but
+    // 5485 ms on 338d7db0c (shard 43/44), past bun's default 5 s.
+  }, 20_000)
 
   // 墙钟预算（RFC-287 T1 期实测补）：本例跑一次真实 spawn + 协议拒绝后的默认重试，
   // bun 默认 5s 在四分片满载的门禁机上是擦边值（实测 5335ms 超时）。显式预算=墙钟

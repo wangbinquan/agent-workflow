@@ -23,6 +23,10 @@ const RETIRED = [
   'evidenceDocumentCommands',
   'evidenceRead',
   'missionInputBlobs',
+  // RFC-430: derivable (or a stateless equivalent) — skillContent.packageContent, actionWorkspaceEffects.contents.
+  'automationWorkspaceEffects',
+  'historyRestrictions',
+  'resourcePackageSkillContent',
 ]
 const UNITS = backendUnits(ROOT)
 

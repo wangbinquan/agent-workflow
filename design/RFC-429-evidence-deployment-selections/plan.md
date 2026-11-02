@@ -31,6 +31,20 @@
   - RFC-428 结构锁、RFC-394 架构锁、RFC-317 负例 / 语料下限 / 架构账本 / 模块边界、RFC-376 结构门。
 - **P0 变异 lane**（SQLite + PostgreSQL）：passed，34 个阶段、0 失败，127 个源文件指纹前后一致。
 
+## CI（AC-4）
+
+`338d7db0c` 的主 CI（运行 41451156966）68/70；windows-platform（41451156965）与按路径触发的 maintenance-soak-nightly（41451156974）全绿。
+主 CI 红了一格，汇总门 `CI required` 随之红：
+
+- **backend shard 43/44**：`scheduler-clarify-dispatch` 的「带反问通道的代理改发 `<workflow-output>` → clarify-required」[postgresql] 以
+  5485ms 越过 bun 默认 5s。
+  - 该例让 mock 在多次追问重试里反复输出，要跑多轮运行时；同文件的 clarify-no-channel 例为同样原因早有 20s 预算。
+  - 前两个提交上它在 PostgreSQL 一侧用时 1.7～1.8s（`c96f2c907` / `e41e5dbde`）。
+  - 本 RFC 只改 evidence 一组的部署选择项接线，与调度器、反问分派无关，不归本 RFC。
+  - RFC-430 给该例 20s 显式预算。
+
+AC-4 以包含本 RFC 的后继提交（RFC-430）的 CI 作后继证据收尾。
+
 ## 冲突面
 
 - **生产**：

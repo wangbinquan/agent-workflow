@@ -22,7 +22,6 @@ const HOSTED_SELECTION_KEYS = [
   'actionWorkspaceEntries',
   'applicationConfiguration',
   'archivedNodeEvents',
-  'automationWorkspaceEffects',
   'beforeEventObservationWrite',
   'bootExecutionRecovery',
   'codeReviewArtifacts',
@@ -41,7 +40,6 @@ const HOSTED_SELECTION_KEYS = [
   'evidenceArtifacts',
   'executionAuthority',
   'fusionWorkspaceEffects',
-  'historyRestrictions',
   'hostedBackgroundOwners',
   'humanGateArtifactRecovery',
   'initializeExecution',
@@ -61,7 +59,6 @@ const HOSTED_SELECTION_KEYS = [
   'repositoryRevisionContent',
   'resourcePackagePluginArtifacts',
   'resourcePackageSkillArtifacts',
-  'resourcePackageSkillContent',
   'reviewArtifacts',
   'reviewRollbackSnapshots',
   'runtimeInventoryContent',
@@ -144,8 +141,9 @@ test('selection projection preserves all receivers and excludes session-only fie
     expect(selected[key]).toBe(values[key])
   expect('token' in selected).toBe(false)
   expect('requiredProvider' in selected).toBe(false)
-  // RFC-428: four dead / shadowed selections retired (72 → 68); RFC-429: the evidence group (68 → 64).
-  expect(Object.keys(DEPLOYMENT_SELECTION_KEYS)).toHaveLength(64)
+  // RFC-428: four dead / shadowed selections retired (72 → 68); RFC-429: the evidence group (68 → 64);
+  // RFC-430: three derivable selections (64 → 61).
+  expect(Object.keys(DEPLOYMENT_SELECTION_KEYS)).toHaveLength(61)
 })
 for (const version of ['git version 2.37.9', null])
   test('incompatible standalone git returns the unchanged fatal message: ' + version, async () => {
@@ -321,8 +319,9 @@ describeEachProvider('RFC-394 hosted factory with provider-owned storage', (harn
         ])
         expect(Object.keys(profile.selections).sort()).toEqual([...HOSTED_SELECTION_KEYS].sort())
         // RFC-428: the shadowed portArtifactContentEffects left the hosted selections (69 → 68);
-        // RFC-429: the evidence group collapsed into evidenceArtifacts (68 → 64).
-        expect(HOSTED_SELECTION_KEYS).toHaveLength(64)
+        // RFC-429: the evidence group collapsed into evidenceArtifacts (68 → 64);
+        // RFC-430: three derivable selections left (64 → 61).
+        expect(HOSTED_SELECTION_KEYS).toHaveLength(61)
         expect(profile.selections.applicationConfiguration).toBe(system.applicationConfiguration)
         expect(profile.selections.databaseInstallation).toBe(system.databaseInstallation)
         expect(profile.selections.secretBox).toBe(system.secretBox)

@@ -460,6 +460,7 @@ v1 后续的产品 / 技术变更以 RFC 形式落档在 `design/RFC-NNN-{slug}/
 | [RFC-427](./RFC-427-entry-root-command-assembly/proposal.md) | 入口根瘦身：命令依赖迁入 bootstrap，迁移 / 校验成为部署操作（RFC-294 S2c）：`main.ts` 自行装配的用户 / 资源包 / 备份 / 还原 / 诊断 / 数据库迁移命令依赖与 e2e 探针、托管 Git 凭据入口迁入 `bootstrap/`；`selectDeployment` 读一次部署模式，`migrate` 与两个校验命令成为部署描述的操作，不支持的操作统一报错（报文不变）。纯结构重构，无用户可见变化。 | Done |
 | [RFC-428](./RFC-428-dead-deployment-selections/proposal.md) | 部署选择项删死槽：启动锁、预打开恢复、节点提示与端口制品四项（RFC-294 S2c）：`DeploymentSelections` 删去生产从不设置或设置后永远读不到的四项（72 → 68），随之删去启动锁的被选分支、启动序列的预打开恢复选择分支与托管执行选择里被遮蔽的属性；72 项盘点落档于 RFC 目录。纯结构重构，无用户可见变化。 | Done |
 | [RFC-429](./RFC-429-evidence-deployment-selections/proposal.md) | 部署选择项的 evidence 一组收拢到 `evidenceArtifacts`（RFC-294 S2c）：删去由 `evidenceArtifacts` 派生的 `evidenceRead` / `attemptContext` / `missionInputBlobs` 与被遮蔽的 `evidenceDocumentCommands`（68 → 64），托管 evidence 装配只给 `evidenceArtifacts`。纯结构重构，无用户可见变化。 | In Progress |
+| [RFC-430](./RFC-430-derivable-deployment-selections/proposal.md) | 部署选择项删余下三个可派生项（RFC-294 S2c）：`historyRestrictions`（无状态，等价实例）、`resourcePackageSkillContent`（= `skillContent.packageContent`）、`automationWorkspaceEffects`（= `actionWorkspaceEffects.contents`）不再是选择项（64 → 61），托管只给需要的字段。纯结构重构，无用户可见变化。 | In Progress |
 
 > RFC-310 OS 历史实施快照（2026-08-21，PR-19 阶段；**不再作为当前状态入口**）：
 > 目标产品已收敛为可程序化扩展的“数字员工操作系统”。proposal/design §0A 新增通用 `digital-employee`、`event-center`

@@ -1,4 +1,3 @@
-import type { HistoryRestrictionPort as ImportedHistoryRestrictionPort } from '@/platform/contracts/historyRestriction'
 import type { ContentStore as ImportedContentStore } from '@/platform/content/contentStore'
 // RFC-394: deployment contracts are declared once, independently of the startup sequence.
 import type { RepositoryPublicationTransport } from '@/modules/source-control/public/types'
@@ -31,10 +30,7 @@ import type {
   TaskDeletionEffects,
   TaskRuntimeInventoryContent,
 } from '@/modules/task-execution/public/types'
-import type {
-  ActionWorkspaceEffects,
-  AutomationWorkspaceEffectsFactory,
-} from '@/modules/development-automation/composition'
+import type { ActionWorkspaceEffects } from '@/modules/development-automation/composition'
 import type { ConflictMergeWorkspaceEffects } from '@/modules/source-control/public/types'
 import type {
   RepositoryBaselineEffectsFactory,
@@ -63,7 +59,6 @@ import type {
 import type {
   ResourcePackageSkillArtifactOwner,
   ResourcePackagePluginArtifactOwner,
-  SkillPackageContentReader,
 } from '@/modules/resource-catalog/composition/postgresqlResourcePackageCatalog'
 import type { TaskArchiveContentBinding } from '@/modules/task-execution/composition/taskArchiveMaintenance'
 import type { IntentArtifactSelection } from '@/modules/intent/composition/apply'
@@ -112,7 +107,6 @@ export interface Deployment {
 }
 
 export interface DeploymentSelections {
-  readonly historyRestrictions?: ImportedHistoryRestrictionPort
   readonly contentStore?: ImportedContentStore
 
   applicationConfiguration?: ApplicationConfigurationBinding
@@ -139,7 +133,6 @@ export interface DeploymentSelections {
   evidenceArtifacts?: EvidenceArtifactPort
   resourcePackageSkillArtifacts?: ResourcePackageSkillArtifactOwner
   resourcePackagePluginArtifacts?: ResourcePackagePluginArtifactOwner
-  resourcePackageSkillContent?: SkillPackageContentReader
   workspaceContent?: WorkspaceContentEffectsFactory
   /** RFC-370 §10 V17: hosted repository remote reads; absent, local mirrors. */
   repositoryRemote?: RepositoryRemoteEffects
@@ -153,7 +146,6 @@ export interface DeploymentSelections {
   verificationCommands?: VerificationCommandEffectsFactory
   customObserverPrograms?: CustomObserverProgramFactory
   bootExecutionRecovery?: BootExecutionRecoveryFactory
-  automationWorkspaceEffects?: AutomationWorkspaceEffectsFactory
   actionWorkspaceEffects?: ActionWorkspaceEffects
   conflictMergeWorkspaceEffects?: ConflictMergeWorkspaceEffects
   taskDeletionEffects?: TaskDeletionEffects

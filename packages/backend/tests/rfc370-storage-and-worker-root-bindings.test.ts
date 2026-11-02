@@ -1,5 +1,8 @@
 import type { DeploymentSelections } from '@/bootstrap/deploymentProfile'
-import { expectDeploymentSelection } from './helpers/deploymentSelectionSource'
+import {
+  expectDeploymentSelection,
+  expectNoDeploymentSelection,
+} from './helpers/deploymentSelectionSource'
 import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 // RFC-370: check each real call argument rather than matching unrelated source text.
 import { expect, test } from 'bun:test'
@@ -74,11 +77,9 @@ function expectLexicalInput(node: ts.Node, source: ts.SourceFile, expected: stri
 const fields = {
   resourcePackageSkillArtifacts: 'ResourcePackageSkillArtifactOwner',
   resourcePackagePluginArtifacts: 'ResourcePackagePluginArtifactOwner',
-  resourcePackageSkillContent: 'SkillPackageContentReader',
   workspaceContent: 'WorkspaceContentEffectsFactory',
   employeeCaseWorkspaceEffects: 'EmployeeCaseWorkspaceEffectsFactory',
   repositoryBaselines: 'RepositoryBaselineEffectsFactory',
-  automationWorkspaceEffects: 'AutomationWorkspaceEffectsFactory',
 } as const
 
 test('RFC-383 roots forward baselines and the three bundle consumers retain their lexical selection', () => {
@@ -271,9 +272,10 @@ test('HTTP callers forward selected workspace and package owners into the neutra
       'resourcePackageSkillContent',
       'workspaceContent',
     ])
+      // RFC-430: package content is the selected skill content's own reader, no deployment selection.
       expect(compact(property(selection, source, key), source)).toBe(
         key === 'resourcePackageSkillContent'
-          ? `${receiver}.${key}??skillContent.packageContent`
+          ? 'skillContent.packageContent'
           : `${receiver}.${key}`,
       )
   }
@@ -333,15 +335,23 @@ test('public root types expose existing complete contracts without adding partia
   for (const [key, type] of Object.entries(fields))
     expectDeploymentSelection(key as keyof DeploymentSelections, type)
   expectDeploymentSelection('maintenanceEffectsBootstrap', 'MaintenanceWorkerEffectsDescriptor')
+  // RFC-430: derived from skillContent.packageContent and actionWorkspaceEffects.contents.
+  expectNoDeploymentSelection('resourcePackageSkillContent')
+  expectNoDeploymentSelection('automationWorkspaceEffects')
 })
 
 test('RFC-383 workspace selection reaches the three shared consumers and the HTTP fallback', () => {
   for (const [path, receiver] of [['bootstrap/daemonApplication.ts', 'input']] as const) {
     const source = load(path),
       selection = oneRoot(source, 'selectDevelopmentWorkspaceEffectBinding')
-    expect(compact(property(selection, source, 'automationWorkspaceEffects'), source)).toBe(
-      receiver + '.automationWorkspaceEffects',
-    )
+    // RFC-430: automation contents derive from actionWorkspaceEffects.contents inside the binding.
+    expect(
+      selection.properties.some(
+        (node) =>
+          ts.isPropertyAssignment(node) &&
+          compact(node.name, source) === 'automationWorkspaceEffects',
+      ),
+    ).toBe(false)
     expect(compact(property(selection, source, 'actionWorkspaceEffects'), source)).toBe(
       receiver + '.actionWorkspaceEffects',
     )

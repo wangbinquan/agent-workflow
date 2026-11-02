@@ -238,6 +238,15 @@ export async function composeCrewStationProfile(
     objectPublicationEpoch: () => fence.current().epoch,
   })
   const workspaceSelections = workspace.bind()
+  const developmentWorkspaces = composeCrewStationDevelopmentWorkspaces({
+    helper: execution.helper,
+    applicationRootReference: workspace.reference('development:shared', '/work'),
+    locate: workspace.locate,
+    reference: workspace.reference,
+    readFile: workspace.readFile,
+    // RFC-370 §9.2 V3: large tree-operation inputs travel as volume files.
+    writeFile: workspace.writeFile,
+  })
   return {
     kind: 'crewstation',
     frontendMarker: 'crewstation',
@@ -248,7 +257,6 @@ export async function composeCrewStationProfile(
     },
     listen: { host: '0.0.0.0', port: environment.port },
     selections: {
-      historyRestrictions,
       contentStore,
       taskInputFiles: composeCrewStationTaskInputFiles({ db, objects, publications }),
       databaseBackup: composeCrewStationDatabaseBackups({
@@ -376,7 +384,8 @@ export async function composeCrewStationProfile(
         service: environment.service,
         administratorSubjects: environment.adminSubjects,
       }),
-      ...resources,
+      // RFC-430: package content is skillContent.packageContent; only the skill content is a selection.
+      skillContent: resources.skillContent,
       ...resourceArtifacts.selections,
       intentArtifacts: composeCrewStationIntentArtifacts(resourceArtifacts.intent),
       maintenanceEffectsBootstrap: composeCrewStationMaintenanceDescriptor({
@@ -385,15 +394,9 @@ export async function composeCrewStationProfile(
         fence,
       }),
       ...workspaceSelections,
-      ...composeCrewStationDevelopmentWorkspaces({
-        helper: execution.helper,
-        applicationRootReference: workspace.reference('development:shared', '/work'),
-        locate: workspace.locate,
-        reference: workspace.reference,
-        readFile: workspace.readFile,
-        // RFC-370 §9.2 V3: large tree-operation inputs travel as volume files.
-        writeFile: workspace.writeFile,
-      }),
+      // RFC-430: automation contents are actionWorkspaceEffects.contents; only the two selections are given.
+      actionWorkspaceEffects: developmentWorkspaces.actionWorkspaceEffects,
+      repositoryBaselines: developmentWorkspaces.repositoryBaselines,
     },
   }
 }

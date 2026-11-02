@@ -295,7 +295,8 @@ export async function composeDaemonApplication<P extends DatabaseProvider>(
     throw new Error('hosted-deployment-requires-postgresql')
   const log = input.log
   const content = input.contentStore ?? createLocalRuntimeContent(input.db, input.appHome)
-  const historyRestrictions = input.historyRestrictions ?? createActiveHistoryRestrictionProvider()
+  // RFC-430: the provider is stateless (each check reads inside the caller's transaction); no deployment selects one.
+  const historyRestrictions = createActiveHistoryRestrictionProvider()
   const { nodeRunHistoryRestrictions, gateHistoryRestrictions } =
     createHistoryRestrictionBindings(historyRestrictions)
   const installation = await readActiveEpochInstallation(input.db)
@@ -332,7 +333,6 @@ export async function composeDaemonApplication<P extends DatabaseProvider>(
   const workspaceReads = selectRepositoryWorkspaceReadQueries(input.workspaceReads)
   const developmentWorkspaceEffects = selectDevelopmentWorkspaceEffectBinding({
     actionWorkspaceEffects: input.actionWorkspaceEffects,
-    automationWorkspaceEffects: input.automationWorkspaceEffects,
     conflictWorkspaceSelected: input.conflictMergeWorkspaceEffects !== undefined,
   })
   const portArtifacts =
@@ -712,7 +712,8 @@ export async function composeDaemonApplication<P extends DatabaseProvider>(
     selections: {
       resourcePackageSkillArtifacts: input.resourcePackageSkillArtifacts,
       resourcePackagePluginArtifacts: input.resourcePackagePluginArtifacts,
-      resourcePackageSkillContent: input.resourcePackageSkillContent ?? skillContent.packageContent,
+      // RFC-430: package content is the selected skill content's own reader.
+      resourcePackageSkillContent: skillContent.packageContent,
       workspaceContent: input.workspaceContent,
       runtimeInventoryContent: input.runtimeInventoryContent,
       repositoryRevisionContent: input.repositoryRevisionContent,

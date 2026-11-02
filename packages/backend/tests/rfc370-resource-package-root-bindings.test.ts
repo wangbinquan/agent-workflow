@@ -15,6 +15,38 @@ import { parseResourcePackage } from '@/services/resourcePackage/parse'
 import { sha256Hex } from '@/util/hash'
 import { encodeZip } from '@/util/zip'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
+import { createFileSkillContentBinding } from '@/modules/resource-catalog/infrastructure/local/fileSkillContentBinding'
+import type { SkillContentBinding } from '@/modules/resource-catalog/composition/skillContentBinding'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
+
+// RFC-430: the resource package's skill content is `skillContent.packageContent`. The selected reader rides on the
+// scope's own file skill binding, built lazily because the scope sets AGENT_WORKFLOW_HOME only when it opens.
+function fileSkillContentWithPackage(
+  db: PersistenceDb,
+  packageContent: SkillPackageContentReader,
+): SkillContentBinding {
+  let file: ReturnType<typeof createFileSkillContentBinding> | undefined
+  const local = () => (file ??= createFileSkillContentBinding(db, process.env.AGENT_WORKFLOW_HOME!))
+  const binding: Record<string, unknown> = {}
+  for (const key of [
+    'rootReference',
+    'content',
+    'versionReader',
+    'versionPresence',
+    'snapshotInspector',
+    'lifecycleContent',
+    'versionContent',
+    'creationContent',
+    'deletionContent',
+    'versionRecovery',
+    'identityContent',
+    'identityInspector',
+    'treeContent',
+  ] as const)
+    Object.defineProperty(binding, key, { enumerable: true, get: () => local()[key] })
+  Object.defineProperty(binding, 'packageContent', { enumerable: true, value: packageContent })
+  return Object.freeze(binding) as unknown as SkillContentBinding
+}
 
 type ArtifactContext = Parameters<ResourcePackageSkillArtifactOwner['planCreate']>[0]
 type Artifact =
@@ -241,7 +273,7 @@ describeEachProviderHttpApplication(
           const { app, appHome } = await scope.open({
             resourcePackageSkillArtifacts: selected,
             resourcePackagePluginArtifacts: selected,
-            resourcePackageSkillContent: selected,
+            skillContent: fileSkillContentWithPackage(scope.harness.db, selected),
           })
           const { plugins } = tablesOf(scope.harness.db)
           const { skills, skillVersions } = tablesOf(scope.harness.db)

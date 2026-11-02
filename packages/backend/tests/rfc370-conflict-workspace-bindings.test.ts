@@ -75,9 +75,16 @@ test('RFC-383 shared conflict bindings and paired root selections retain the exp
     expect(property(source, selection[0]!, 'actionWorkspaceEffects')).toBe(
       `${receiver}.actionWorkspaceEffects`,
     )
-    expect(property(source, selection[0]!, 'automationWorkspaceEffects')).toBe(
-      `${receiver}.automationWorkspaceEffects`,
-    )
+    // RFC-430: automation contents derive from actionWorkspaceEffects.contents inside the binding.
+    const selected = selection[0]!.arguments[0]!
+    expect(
+      ts.isObjectLiteralExpression(selected) &&
+        selected.properties.some(
+          (entry) =>
+            ts.isPropertyAssignment(entry) &&
+            entry.name.getText(source) === 'automationWorkspaceEffects',
+        ),
+    ).toBe(false)
     expect(property(source, selection[0]!, 'conflictWorkspaceSelected')).toBe(
       `${receiver}.conflictMergeWorkspaceEffects !== undefined`,
     )
