@@ -85,7 +85,7 @@ describeEachProvider('RFC-370 HTTP authentication adapter', (harness) => {
         sourceWriteWindow: ALWAYS_WRITABLE_DATABASE_SOURCE,
       },
       publicRoutes: { health() {}, wellKnown() {}, webhookIngress() {} },
-      deploymentMode: 'standalone',
+      frontendMarker: null,
       mountApi(routes) {
         routes.get('/api/auth/login', (context) => context.json({ reached: true }))
       },

@@ -10,7 +10,6 @@ export function createLocalExecutionAuthority(): ExecutionAuthorityPort {
   const state: ExecutionAuthorityState = Object.freeze({ kind: 'active', fence })
   const active = Promise.resolve(fence)
   return Object.freeze({
-    mode: 'standalone',
     current: () => state,
     whenActive: () => active,
     onLost: () => () => {},

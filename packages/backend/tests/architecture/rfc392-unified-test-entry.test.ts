@@ -162,16 +162,15 @@ test('negative fixtures exercise every retired-path and owner-location rejection
 
 // The selected deployment reaches server.ts as a required value; no deps fallback remains.
 test('required deployment inputs and graph contracts have positive and negative controls', () => {
-  const server = (mode: string) =>
+  // RFC-425: the deployment kind and the SPA marker reach server.ts as their own required values.
+  const server = (fallback: string) =>
     sourceUnit(
       SERVER,
-      `function createHttpRequestApp(deps) { return deps.deploymentMode }
-  function createComposedApp(deps) { return deps.executionAuthority${mode} }`,
+      `function createHttpRequestApp(deps) { return deps.frontendMarker }
+  function createComposedApp(deps) { return deps.deploymentKind${fallback} }`,
     )
-  expect(unifiedTestEntryViolations([server('.mode')])).not.toContain('server test fallback')
-  expect(unifiedTestEntryViolations([server("?.mode ?? 'standalone'")])).toContain(
-    'server test fallback',
-  )
+  expect(unifiedTestEntryViolations([server('')])).not.toContain('server test fallback')
+  expect(unifiedTestEntryViolations([server(" ?? 'standalone'")])).toContain('server test fallback')
   const graph = `interface DaemonApplicationInput {
     log: unknown; applicationConfiguration: unknown; taskLaunchConfiguration: unknown;
     sourceWriteWindow: unknown; testSeams?: DaemonApplicationTestSeams

@@ -10,7 +10,7 @@ import { createCodeHistoryPackageReader } from '@/modules/code-capability/compos
 import { createLocalReviewArtifacts } from '@/modules/collaboration/composition/contentArtifacts'
 import { composeSourceControlTaskPorts } from '@/modules/task-execution/composition'
 // RFC-391 — one passive application graph for daemon and unstarted phases.
-import type { DeploymentSelections } from './deploymentProfile'
+import type { DeploymentKind, DeploymentSelections } from './deploymentProfile'
 import {
   DAEMON_SESSION_ADAPTERS,
   type DaemonSessionAdapter,
@@ -171,6 +171,9 @@ export interface DaemonApplicationInput<
 > extends DeploymentSelections {
   readonly digitalEmployeeTypePackageDriftPolicy?: 'reject' | 'draft-overlay'
   readonly requiredProvider: DatabaseProvider | null
+  /** RFC-425: the deployment kind and SPA marker of the selected profile (tests state standalone). */
+  readonly deploymentKind: DeploymentKind
+  readonly frontendMarker: string | null
   readonly provider: DaemonApplicationProvider<P>
   readonly db: DaemonApplicationDatabase<P>
   readonly config: Config
@@ -690,6 +693,8 @@ export async function composeDaemonApplication<P extends DatabaseProvider>(
     opencodeVersion: phase.kind === 'daemon' ? null : (input.testSeams?.opencodeVersion ?? null),
     applicationConfiguration,
     executionAuthority: input.executionAuthority ?? composeLocalExecutionAuthority(),
+    deploymentKind: input.deploymentKind,
+    frontendMarker: input.frontendMarker,
     databaseTelemetry: input.provider.telemetry,
     maintenanceStatus: input.maintenanceStatus,
     daemonRuntime: input.daemonRuntime,

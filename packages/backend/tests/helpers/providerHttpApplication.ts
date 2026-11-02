@@ -291,6 +291,9 @@ export async function createProviderHttpApplicationFromBinding(
     application = await compose({
       ...selections,
       requiredProvider: input.requiredProvider ?? null,
+      // RFC-425: the test application is a standalone deployment.
+      deploymentKind: 'standalone',
+      frontendMarker: null,
       db: binding.db,
       provider,
       config,

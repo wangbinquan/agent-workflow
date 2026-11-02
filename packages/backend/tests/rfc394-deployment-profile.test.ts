@@ -105,9 +105,11 @@ function probeInput(defaultRuntime: 'opencode' | 'claude-code' = 'opencode') {
     },
   }
 }
-test('standalone selection needs no environment and has exactly the five profile fields', async () => {
+// RFC-425 added the sixth profile field, `frontendMarker` (the SPA marker that used to come from the authority).
+test('standalone selection needs no environment and has exactly the six profile fields', async () => {
   const profile = composeStandaloneProfile()
   expect(Object.keys(profile).sort()).toEqual([
+    'frontendMarker',
     'kind',
     'listen',
     'probeHost',
@@ -116,6 +118,7 @@ test('standalone selection needs no environment and has exactly the five profile
   ])
   expect(profile).toMatchObject({
     kind: 'standalone',
+    frontendMarker: null,
     requiredProvider: null,
     listen: {},
     selections: {},
@@ -307,7 +310,9 @@ describeEachProvider('RFC-394 hosted factory with provider-owned storage', (harn
         expect(profile.kind).toBe('crewstation')
         expect(profile.requiredProvider).toBe('postgresql')
         expect(profile.listen).toEqual({ host: '0.0.0.0', port: 4010 })
+        expect(profile.frontendMarker).toBe('crewstation')
         expect(Object.keys(profile).sort()).toEqual([
+          'frontendMarker',
           'kind',
           'listen',
           'probeHost',

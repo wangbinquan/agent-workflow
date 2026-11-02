@@ -34,7 +34,11 @@ import type { DaemonRuntimeQueries } from '@/modules/system-operations/public/qu
 import { selectDaemonRuntimeQueries } from '@/modules/system-operations/composition/daemonHostLifecycle'
 import type { ExecutionAuthorityPort } from '@/modules/system-operations/public/participants'
 import { type ApplicationConfigurationBinding } from '@/modules/system-operations/composition/applicationConfiguration'
-import type { DatabaseRuntimeTelemetry, MaintenanceStatus } from '@agent-workflow/shared'
+import type {
+  DatabaseRuntimeTelemetry,
+  ExecutionStatus,
+  MaintenanceStatus,
+} from '@agent-workflow/shared'
 import { type Actor } from '@/auth/actor'
 import type { SecretBox } from '@/auth/secretBox'
 import type { BuildScheduleLaunch } from '@/services/scheduledTasks'
@@ -107,6 +111,9 @@ export interface ProviderAppOwnerInput<P extends DatabaseProvider> {
   readonly opencodeVersion: string | null
   readonly applicationConfiguration: ApplicationConfigurationBinding
   readonly executionAuthority: ExecutionAuthorityPort
+  /** RFC-425: from the deployment profile. */
+  readonly deploymentKind: ExecutionStatus['mode']
+  readonly frontendMarker: string | null
   readonly databaseTelemetry: () => DatabaseRuntimeTelemetry
   readonly maintenanceStatus?: () => MaintenanceStatus
   readonly daemonRuntime?: DaemonRuntimeQueries
@@ -675,6 +682,8 @@ export function composeProviderAppComposition<P extends DatabaseProvider>(
     identity: identityRoutes,
     system: systemRoutes,
     executionAuthority: input.executionAuthority,
+    deploymentKind: input.deploymentKind,
+    frontendMarker: input.frontendMarker,
   })
   return Object.freeze({
     composition,

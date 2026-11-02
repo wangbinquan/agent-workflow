@@ -525,7 +525,6 @@ export function createCrewStationExecutionAuthority(input: {
   }
 
   return {
-    mode: 'crewstation',
     instanceId,
     current: () => {
       if (held !== undefined && now() >= held.expiresAt) {

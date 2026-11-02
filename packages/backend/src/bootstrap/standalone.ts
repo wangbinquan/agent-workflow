@@ -6,6 +6,7 @@ import type { DeploymentProfile } from './deploymentProfile'
 export function composeStandaloneProfile(): DeploymentProfile {
   return {
     kind: 'standalone',
+    frontendMarker: null,
     requiredProvider: null,
     listen: {},
     selections: {},

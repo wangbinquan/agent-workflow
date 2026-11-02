@@ -15,7 +15,6 @@ export function createStandbyExecutionAuthority(input: {
   const state: ExecutionAuthorityState = Object.freeze({ kind: 'standby', reason: input.reason })
   const never = new Promise<ExecutionFence>(() => {})
   return Object.freeze({
-    mode: 'crewstation',
     current: () => state,
     whenActive: () => never,
     onLost: () => () => {},

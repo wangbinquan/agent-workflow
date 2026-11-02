@@ -102,6 +102,8 @@ export interface HostProbeInput {
 
 export interface DeploymentProfile {
   readonly kind: DeploymentKind
+  /** RFC-425: the deployment marker the embedded SPA reads before routing; null serves the page unchanged. */
+  readonly frontendMarker: string | null
   readonly requiredProvider: DatabaseProvider | null
   readonly probeHost: (input: HostProbeInput) => Promise<string | null>
   readonly listen: { readonly host?: string; readonly port?: number }

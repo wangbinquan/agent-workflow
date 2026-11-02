@@ -105,7 +105,6 @@ describe('RFC-374 hosted activation', () => {
         release = Promise.withResolvers<void>()
       let state: ExecutionAuthorityState = { kind: 'standby', reason: null }
       const raw: ExecutionAuthorityPort & { start(): void } = {
-        mode: 'crewstation',
         current: () => state,
         whenActive: () => grant.promise,
         onLost: () => () => {},

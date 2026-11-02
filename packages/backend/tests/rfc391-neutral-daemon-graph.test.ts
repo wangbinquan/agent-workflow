@@ -62,6 +62,8 @@ function fixture(harness: ProviderDatabaseHarness) {
   })
   const input: DaemonApplicationInput = {
     requiredProvider: null,
+    deploymentKind: 'standalone',
+    frontendMarker: null,
     log: createLogger('rfc391-test'),
     sourceWriteWindow: ALWAYS_WRITABLE_DATABASE_SOURCE,
     applicationConfiguration,

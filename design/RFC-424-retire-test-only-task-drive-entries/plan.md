@@ -45,6 +45,11 @@
   通过；同一仓库里 RFC-386 盘点锁、RFC-376 结构门、RFC-317 模块边界 / 账本 / 语料下限 / 负例守卫也通过。
 - **P0 变异 lane**（SQLite + PostgreSQL）：passed，34 个阶段、0 失败，127 个源文件指纹前后一致。
 
+## CI（AC-5）
+
+- **`556a45573`**：主 CI `41420057803` 70 个 job 全部 success，windows-platform `41420057759` 与 git-protocols-e2e `41420057760`
+  success。AC-5 成立，RFC-424 Done；同一运行作为 RFC-422 / RFC-423 的后继证据。
+
 ## 冲突面
 
 - **生产**：`services/task.ts`（只删）；`TE/composition/taskDriveLegacy.ts`（只删再导出）；`TE/infrastructure/taskRouteOperations.ts`（只改注释）；
@@ -58,4 +63,4 @@
 ## 验收清单
 
 - [x] proposal AC-1～AC-4（本地集中验证，见上）
-- [ ] 推送后 exact SHA 的 CI 全绿（AC-5）
+- [x] 推送后 exact SHA 的 CI 全绿（AC-5，`556a45573`，见上）

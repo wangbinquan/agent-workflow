@@ -66,6 +66,9 @@ export async function createProviderHttpCompositionFixture(
           input.applicationConfiguration ??
           composeApplicationConfigurationBinding({ kind: 'file', configPath }),
         executionAuthority: composeLocalExecutionAuthority(),
+        // RFC-425: the test composition is a standalone deployment.
+        deploymentKind: 'standalone',
+        frontendMarker: null,
         databaseTelemetry: () => ({
           version: 1,
           provider: harness.applicationBinding.provider,

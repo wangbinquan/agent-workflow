@@ -19,7 +19,6 @@ export type ExecutionAuthorityState =
 
 export interface ExecutionAuthorityPort {
   readonly unavailableGroups?: Partial<Record<ExecutionGroup, string>>
-  readonly mode: 'standalone' | 'crewstation'
   current(): ExecutionAuthorityState
   /** Resolves with the fence the first time this instance becomes active. */
   whenActive(): Promise<ExecutionFence>

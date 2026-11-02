@@ -243,6 +243,8 @@ export async function composeDaemonSession(
     {
       ...deploymentSelectionsOf(input),
       requiredProvider: input.requiredProvider,
+      deploymentKind: input.deploymentKind,
+      frontendMarker: input.frontendMarker,
       provider: input.provider,
       db,
       config: input.config,
@@ -736,7 +738,7 @@ export async function composeDaemonSession(
 
   const lifecycleProgram = composeDaemonLifecycle({
     provider: input.provider.provider,
-    profile: input.executionAuthority?.mode,
+    profile: input.deploymentKind,
     log: input.log,
     steps: {
       ...application.lifecycleSteps,

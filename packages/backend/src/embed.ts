@@ -81,13 +81,13 @@ const IMMUTABLE_CACHE_CONTROL = 'public, max-age=31536000, immutable'
 export async function getEmbeddedFrontendResponse(
   requestPath: string,
   lookup: EmbeddedAssetLookup = getEmbeddedAsset,
-  deployment: FrontendDeploymentMode = 'standalone',
+  marker: string | null = null,
 ): Promise<Response | null> {
   const directPath = stripLeadingSlash(requestPath)
   const direct = await lookup(directPath)
   if (direct !== null) {
     return embeddedAssetResponse(
-      directPath === 'index.html' ? withDeploymentMarker(direct, deployment) : direct,
+      directPath === 'index.html' ? withDeploymentMarker(direct, marker) : direct,
       directPath,
     )
   }
@@ -96,10 +96,8 @@ export async function getEmbeddedFrontendResponse(
 
   const indexHtml = await lookup('index.html')
   if (indexHtml === null) return null
-  return embeddedAssetResponse(withDeploymentMarker(indexHtml, deployment), 'index.html')
+  return embeddedAssetResponse(withDeploymentMarker(indexHtml, marker), 'index.html')
 }
-
-export type FrontendDeploymentMode = 'standalone' | 'crewstation'
 
 /** The SPA reads this synchronously before routing (RFC-370 M0). */
 export const DEPLOYMENT_META_NAME = 'agent-workflow-deployment'
@@ -108,17 +106,16 @@ export const DEPLOYMENT_META_NAME = 'agent-workflow-deployment'
  * RFC-370 M0 — a hosted page states its deployment so the SPA knows, before
  * its first route, that identity comes from the platform gateway rather than
  * a local credential. Standalone pages are served byte-for-byte unchanged.
+ * RFC-425: the marker comes from the deployment profile (null for standalone);
+ * this function only injects it.
  */
-export function withDeploymentMarker(
-  asset: EmbeddedAsset,
-  deployment: FrontendDeploymentMode,
-): EmbeddedAsset {
-  if (deployment === 'standalone') return asset
+export function withDeploymentMarker(asset: EmbeddedAsset, marker: string | null): EmbeddedAsset {
+  if (marker === null) return asset
   const html = new TextDecoder().decode(asset.body)
-  const marker = `<meta name="${DEPLOYMENT_META_NAME}" content="${deployment}">`
+  const meta = `<meta name="${DEPLOYMENT_META_NAME}" content="${marker}">`
   const injected = html.includes('</head>')
-    ? html.replace('</head>', `${marker}</head>`)
-    : `${marker}${html}`
+    ? html.replace('</head>', `${meta}</head>`)
+    : `${meta}${html}`
   return { ...asset, body: new TextEncoder().encode(injected).buffer as ArrayBuffer }
 }
 

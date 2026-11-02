@@ -214,10 +214,8 @@ const KNOWN: Readonly<Record<string, readonly string[]>> = {
     // RFC-414: the seven task-execution entries left — their persistence / filesystem work is infrastructure now.
   ],
   'deployment-mode-branch-sites': [
-    'packages/backend/src/embed.ts#withDeploymentMarker#comparison#1',
+    // RFC-425：执行权端口的两处部署字面量与 `embed.ts` 的 SPA 标记比较销账（部署种类改由 profile 下传）。
     'packages/backend/src/modules/integration/application/ports/crewStationEventInbox.ts#CrewStationEventChannel#port-literal#1',
-    'packages/backend/src/modules/system-operations/application/ports/executionAuthority.ts#ExecutionAuthorityPort#port-literal#1',
-    'packages/backend/src/modules/system-operations/application/ports/executionAuthority.ts#ExecutionAuthorityPort#port-literal#2',
     'packages/backend/src/platform/http/executionAvailability.ts#readExecutionStatus#comparison#1',
   ],
   'export-star-barrels': [

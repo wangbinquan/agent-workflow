@@ -395,6 +395,8 @@ export async function startCommand(
     const sessionInput = Object.freeze({
       ...profile.selections,
       requiredProvider: profile.requiredProvider,
+      deploymentKind: profile.kind,
+      frontendMarker: profile.frontendMarker,
       config,
       configuration,
       applicationConfiguration,

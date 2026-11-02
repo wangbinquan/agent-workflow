@@ -14,12 +14,13 @@ import type { composeWebhookIngressTransport } from '@/modules/integration/compo
 import type { ApplicationConfigurationQueries } from '@/modules/system-operations/public/queries'
 import { bindExecutionAvailability } from '@/platform/http/executionAvailability'
 import type { ExecutionAuthorityPort } from '@/modules/system-operations/public/participants'
+import type { ExecutionStatus } from '@agent-workflow/shared'
 import { Hono } from 'hono'
 import { actorOf, tryActorOf } from '@/auth/actor'
 import { takeDeleteSnapshot } from '@/services/tokenAudit'
 import { assertRouteMetaCoverage, registerRoute } from '@/routes/registry'
 import type { IntegrationTriggerResourceBinding } from '@/services/scheduledTasks'
-import { getEmbeddedFrontendResponse, IS_EMBEDDED, type FrontendDeploymentMode } from '@/embed'
+import { getEmbeddedFrontendResponse, IS_EMBEDDED } from '@/embed'
 import { mountMcpTransport } from '@/mcp/server'
 import { assertOperationCatalogClosed, registerOperationAlias } from '@/platform/operations/catalog'
 import { createBoundOperationInvoker } from '@/platform/operations/boundOperationInvoker'
@@ -215,6 +216,9 @@ export interface ComposedAppDeps<TCore extends AppHttpProviderCore = AppHttpProv
   readonly publicRoutes: AppPublicRouteMounts
   readonly apiRoutes: AppApiRouteMounts
   readonly executionAuthority: ExecutionAuthorityPort
+  /** RFC-425: the deployment kind and the SPA marker come from the deployment profile. */
+  readonly deploymentKind: ExecutionStatus['mode']
+  readonly frontendMarker: string | null
 }
 
 export type ProviderComposedAppDeps<TCore extends AppHttpProviderCore = AppHttpProviderCore> =
@@ -405,6 +409,9 @@ export interface ProviderAppCompositionInput<
   readonly system: ProviderSystemRouteComposition
   /** RFC-370 v2 H7: bootstrap-selected execution authority (RFC-392: always supplied). */
   readonly executionAuthority: ExecutionAuthorityPort
+  /** RFC-425: the deployment kind and the SPA marker come from the deployment profile. */
+  readonly deploymentKind: ExecutionStatus['mode']
+  readonly frontendMarker: string | null
 }
 
 export type SqliteAppCompositionInput = ProviderAppCompositionInput<
@@ -427,6 +434,8 @@ function freezeComposedAppDeps<TCore extends AppHttpProviderCore>(
     publicRoutes: Object.freeze({ ...input.publicRoutes }),
     apiRoutes: Object.freeze({ ...input.apiRoutes }),
     executionAuthority: input.executionAuthority,
+    deploymentKind: input.deploymentKind,
+    frontendMarker: input.frontendMarker,
   })
 }
 
@@ -603,6 +612,8 @@ export function composeProviderAppDeps<TCore extends AppHttpProviderCore>(
     authentication: input.authentication,
     core: input.core,
     executionAuthority: input.executionAuthority,
+    deploymentKind: input.deploymentKind,
+    frontendMarker: input.frontendMarker,
     publicRoutes,
     apiRoutes,
   })
@@ -613,7 +624,9 @@ export function composeProviderAppDeps<TCore extends AppHttpProviderCore>(
  * closed bindings, but cannot add, remove or reorder route domains.
  */
 export function mountApiRoutes(app: Hono, deps: ComposedAppDeps): void {
-  bindExecutionAvailability(app, () => executionStatusOf(deps.executionAuthority))
+  bindExecutionAvailability(app, () =>
+    executionStatusOf(deps.executionAuthority, deps.deploymentKind),
+  )
   const routes = deps.apiRoutes
   routes.observability(app)
   routes.config(app)
@@ -691,8 +704,8 @@ export interface HttpRequestAppDeps {
   readonly core: ComposedAppDeps['core']
   readonly publicRoutes: ComposedAppDeps['publicRoutes']
   readonly mountApi: AppRouteMount
-  /** RFC-370 M0 — states the deployment to the embedded SPA. */
-  readonly deploymentMode: FrontendDeploymentMode
+  /** RFC-370 M0 — states the deployment to the embedded SPA; RFC-425: null for a standalone page. */
+  readonly frontendMarker: string | null
 }
 
 export function createHttpRequestApp(deps: HttpRequestAppDeps): Hono {
@@ -769,7 +782,7 @@ export function createHttpRequestApp(deps: HttpRequestAppDeps): Hono {
           404,
         )
       }
-      const response = await getEmbeddedFrontendResponse(c.req.path, undefined, deps.deploymentMode)
+      const response = await getEmbeddedFrontendResponse(c.req.path, undefined, deps.frontendMarker)
       if (response !== null) return response
       return c.json(
         { ok: false, code: 'route-not-found', message: `no route for ${c.req.path}` },
@@ -790,7 +803,7 @@ export function createComposedApp(deps: ComposedAppDeps): Hono {
     authentication: deps.authentication,
     core: deps.core,
     publicRoutes: deps.publicRoutes,
-    deploymentMode: deps.executionAuthority.mode,
+    frontendMarker: deps.frontendMarker,
     mountApi(app) {
       mountApiRoutes(app, deps)
       mountMcpTransport(app, {

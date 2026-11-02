@@ -21,6 +21,7 @@ function fixture(input: {
   listen?: DeploymentProfile['listen']
   fatal?: string | null
   development?: DevelopmentOverlay
+  deployment?: Pick<DeploymentProfile, 'kind' | 'frontendMarker'>
 }) {
   const events: string[] = []
   const stop = new Error('rfc394-stop-before-listening')
@@ -48,7 +49,8 @@ function fixture(input: {
   })
   const taskArchive = {} as NonNullable<DeploymentSelections['taskArchive']>
   const profile: DeploymentProfile = {
-    kind: 'standalone',
+    kind: input.deployment?.kind ?? 'standalone',
+    frontendMarker: input.deployment === undefined ? null : input.deployment.frontendMarker,
     requiredProvider: null,
     listen: input.listen ?? {},
     selections: {
@@ -172,6 +174,8 @@ for (const [name, launch, listen, expected] of [
       expect(f.composeSession).toHaveBeenCalledTimes(1)
       const received = f.composeSession.mock.calls[0]![0]
       expect(received.requiredProvider).toBeNull()
+      expect(received.deploymentKind).toBe('standalone')
+      expect(received.frontendMarker).toBeNull()
       expect(received.taskArchive).toBe(f.taskArchive)
       expect(received.applicationConfiguration).toBe(f.applicationConfiguration)
       expect(received.secretBox).toBe(f.profile.selections.secretBox!)
@@ -201,6 +205,27 @@ for (const fatal of ['fatal host diagnostic', ''])
         expect(f.prepared).not.toHaveBeenCalled()
         expect(f.composeSession).not.toHaveBeenCalled()
         expect(f.serve).not.toHaveBeenCalled()
+      } finally {
+        f.restore()
+      }
+    },
+  )
+// RFC-425: the deployment kind (execution status, lifecycle) and the SPA marker are the profile's, not the authority's:
+// the fixture selects no execution authority, so a hosted kind can only have come from the profile.
+for (const deployment of [
+  { kind: 'standalone', frontendMarker: null },
+  { kind: 'crewstation', frontendMarker: 'crewstation' },
+] as const)
+  test(
+    'the session receives the profile deployment kind and SPA marker: ' + deployment.kind,
+    async () => {
+      const f = fixture({ deployment })
+      try {
+        await expect(f.run()).rejects.toThrow(f.stop.message)
+        const received = f.composeSession.mock.calls[0]![0]
+        expect(received.deploymentKind).toBe(deployment.kind)
+        expect(received.frontendMarker).toBe(deployment.frontendMarker)
+        expect(received).not.toHaveProperty('executionAuthority')
       } finally {
         f.restore()
       }

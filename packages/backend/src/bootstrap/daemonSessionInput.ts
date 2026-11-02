@@ -1,5 +1,5 @@
 // RFC-393: type-only contracts shared by the daemon startup sequence and session graph.
-import type { DeploymentSelections } from './deploymentProfile'
+import type { DeploymentKind, DeploymentSelections } from './deploymentProfile'
 import type { DatabaseProvider } from '@/platform/persistence/databaseProviders'
 import type { AuthRuntime } from '@/auth/application/authRuntime'
 import type { composeTaskLaunchConfiguration } from '@/modules/task-execution/composition/launchConfiguration'
@@ -27,6 +27,9 @@ type DatabaseMigrationAdmission = Parameters<typeof composeDatabaseMigrationModu
 /** RFC-359 W3-T16：两个 provider 的会话装配器共用的输入——`startCommand` 只准备这一份。 */
 export interface DaemonProviderSessionComposeInput extends DeploymentSelections {
   readonly requiredProvider: DatabaseProvider | null
+  /** RFC-425: the deployment kind and SPA marker of the selected profile. */
+  readonly deploymentKind: DeploymentKind
+  readonly frontendMarker: string | null
   readonly provider: ResolvedDatabaseProviderRuntime
   readonly lifecycle: DaemonProviderSessionLifecycleInput
   readonly config: ReturnType<typeof loadConfig>

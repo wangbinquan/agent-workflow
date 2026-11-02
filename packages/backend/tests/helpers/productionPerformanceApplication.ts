@@ -220,7 +220,7 @@ export async function createProductionPerformanceApplication(
           composeWebhookIngressTransport({ webhookIngressPersistence }),
         ),
     },
-    deploymentMode: 'standalone',
+    frontendMarker: null,
     mountApi(app) {
       // This is the relative order in server.mountApiRoutes.
       mountOverviewRoutes(app, { directAuthority: identityAccess.directAuthority }, overview)

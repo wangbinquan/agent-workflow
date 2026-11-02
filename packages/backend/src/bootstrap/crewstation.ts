@@ -240,6 +240,7 @@ export async function composeCrewStationProfile(
   const workspaceSelections = workspace.bind()
   return {
     kind: 'crewstation',
+    frontendMarker: 'crewstation',
     requiredProvider: 'postgresql',
     async probeHost({ log }) {
       log.info('execution runs on the platform; local git and runtime probes skipped')

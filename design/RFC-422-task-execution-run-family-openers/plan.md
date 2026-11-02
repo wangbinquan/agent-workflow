@@ -62,6 +62,9 @@ T1～T4 完成（本会话实施），与落档设计无偏差。
 AC-5 以包含本 RFC 的后继提交的 CI 作后继证据收尾。RFC-423（`128e439d7`）的运行里上述两格对应的用例都已通过，但该运行另有一格与本 RFC
 无关的红（`rfc311-backup-concurrency` 超时，见 RFC-423 plan「CI（AC-5）」），因此改以 RFC-424 的 CI 收尾。
 
+- **后继证据**：`556a45573`（RFC-424）主 CI `41420057803` 70 个 job 全部 success，windows-platform `41420057759` 与 git-protocols-e2e `41420057760` success；本 RFC 的改动原样包含在该提交里（`465fa2087` 是它的祖先，其后两个提交在本 RFC 的路径上只给共享索引、
+  guard-manifest 与 windows 工作流追加条目，没有改动本 RFC 的代码文件）。上面两格对应的用例在该运行里通过。AC-5 成立，RFC-422 Done。
+
 ## 冲突面
 
 - **composition**：`TE/composition/{localSystemAgentRunFamily,localRuntimeSmokeRunFamily,localTaskAgentRunFamily,crewstationSystemAgentRunFamily,crewstationRuntimeManagement}.ts`。
@@ -74,4 +77,4 @@ AC-5 以包含本 RFC 的后继提交的 CI 作后继证据收尾。RFC-423（`1
 ## 验收清单
 
 - [x] proposal AC-1～AC-4（本地集中验证，见上）
-- [ ] 推送后 exact SHA 的 CI 全绿（AC-5）
+- [x] 推送后 exact SHA 的 CI 全绿（AC-5，后继 `556a45573`，见上）

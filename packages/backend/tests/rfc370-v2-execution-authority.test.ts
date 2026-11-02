@@ -29,7 +29,6 @@ import type {
 
 function hostedAuthority(state: ExecutionAuthorityState): ExecutionAuthorityPort {
   return {
-    mode: 'crewstation',
     current: () => state,
     whenActive: () => new Promise(() => {}),
     onLost: () => () => {},
@@ -74,7 +73,8 @@ function gatedApp(read?: () => ExecutionStatus): Hono {
 describe('RFC-370 v2 standalone execution authority', () => {
   test('is active from start to exit with a fixed fence', async () => {
     const authority = composeLocalExecutionAuthority()
-    expect(authority.mode).toBe('standalone')
+    // RFC-425: the deployment kind comes from the profile, not from the authority.
+    expect(authority).not.toHaveProperty('mode')
     const state = authority.current()
     expect(state).toEqual({ kind: 'active', fence: { epoch: 1, token: 'standalone' } })
     await expect(authority.whenActive()).resolves.toEqual({ epoch: 1, token: 'standalone' })
@@ -89,24 +89,41 @@ describe('RFC-370 v2 standalone execution authority', () => {
   })
 
   test('projects every authority state onto the public status', () => {
-    expect(executionStatusOf(composeLocalExecutionAuthority())).toEqual({
+    expect(executionStatusOf(composeLocalExecutionAuthority(), 'standalone')).toEqual({
       mode: 'standalone',
       state: 'active',
       reason: null,
     })
     expect(
-      executionStatusOf(hostedAuthority({ kind: 'standby', reason: 'lease-held-elsewhere' })),
+      executionStatusOf(
+        hostedAuthority({ kind: 'standby', reason: 'lease-held-elsewhere' }),
+        'crewstation',
+      ),
     ).toEqual({ mode: 'crewstation', state: 'standby', reason: 'lease-held-elsewhere' })
-    expect(executionStatusOf(hostedAuthority({ kind: 'frozen', reason: null }))).toEqual({
+    expect(
+      executionStatusOf(hostedAuthority({ kind: 'frozen', reason: null }), 'crewstation'),
+    ).toEqual({
       mode: 'crewstation',
       state: 'frozen',
       reason: null,
     })
     expect(
-      executionStatusOf(hostedAuthority({ kind: 'active', fence: { epoch: 3, token: 'lease' } })),
+      executionStatusOf(
+        hostedAuthority({ kind: 'active', fence: { epoch: 3, token: 'lease' } }),
+        'crewstation',
+      ),
     ).toEqual({ mode: 'crewstation', state: 'active', reason: null })
-    for (const status of [STANDBY, executionStatusOf(composeLocalExecutionAuthority())])
+    for (const status of [
+      STANDBY,
+      executionStatusOf(composeLocalExecutionAuthority(), 'standalone'),
+    ])
       expect(ExecutionStatusSchema.parse(status)).toEqual(status)
+  })
+
+  test("RFC-425: the deployment kind is the caller's, the state and reason are the authority's", () => {
+    const authority = hostedAuthority({ kind: 'standby', reason: 'waiting' })
+    expect(executionStatusOf(authority, 'crewstation')).toEqual(STANDBY)
+    expect(executionStatusOf(authority, 'standalone')).toEqual({ ...STANDBY, mode: 'standalone' })
   })
 })
 

@@ -29,7 +29,6 @@ export function selectExecutionInitialization(raw: ExecutionAuthorityPort & { st
   raw.onLost(lost)
   return {
     authority: {
-      mode: raw.mode,
       current() {
         if (failure !== undefined) return failure
         const current = raw.current()

@@ -135,7 +135,8 @@ test('hosted inputs are validated at once and parsed', () => {
 
 test('a hosted M0 instance stays on standby with its reason', async () => {
   const authority = createStandbyExecutionAuthority({ reason: 'remote-execution-not-available' })
-  expect(authority.mode).toBe('crewstation')
+  // RFC-425: the authority answers whether this instance may execute; the deployment kind is the profile's.
+  expect(authority).not.toHaveProperty('mode')
   expect(authority.current()).toEqual({ kind: 'standby', reason: 'remote-execution-not-available' })
   const outcome = await Promise.race([
     authority.whenActive().then(() => 'active'),
@@ -349,7 +350,8 @@ test('a hosted page states its deployment; standalone pages are unchanged', asyn
     body: new TextEncoder().encode(html).buffer as ArrayBuffer,
     contentType: 'text/html',
   }
-  expect(withDeploymentMarker(asset, 'standalone')).toBe(asset)
+  // RFC-425: the marker is the profile's (null for standalone); the embed only injects it.
+  expect(withDeploymentMarker(asset, null)).toBe(asset)
   const hosted = new TextDecoder().decode(withDeploymentMarker(asset, 'crewstation').body)
   expect(hosted).toContain('<meta name="agent-workflow-deployment" content="crewstation"></head>')
   const lookup = async (path: string) =>
