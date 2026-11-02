@@ -1,3 +1,4 @@
+import type { McpPatch } from '../ports/mcpMutation'
 import type { CreateMcp, Mcp } from '@agent-workflow/shared'
 import type { McpOperationContext } from '../../public/participants'
 import type { McpCatalogResource } from '../../public/types'
@@ -18,21 +19,16 @@ export interface McpCreateRecord {
   readonly now: number
 }
 
-export interface McpUpdateSet {
-  readonly description?: string
-  readonly config?: Mcp['config']
-  readonly enabled?: boolean
-  readonly updatedAt: number
-}
-
 export interface McpRepository {
   list(): Promise<Mcp[]>
   get(id: string): Promise<Mcp | null>
   create(record: McpCreateRecord): Promise<Mcp>
+  /** RFC-401 A2：stale、类型不可变、配置校验、no-op 与写入都在唯一的 MCP 写入参与者里（同一事务）。 */
   update(input: {
     readonly id: string
     readonly expectedConfigHash: string
-    readonly set: McpUpdateSet
+    readonly patch: McpPatch
+    readonly nextUpdatedAt: (current: Mcp) => Promise<number>
   }): Promise<Mcp>
   rename(input: {
     readonly id: string

@@ -296,43 +296,36 @@ function insertValues(source: ts.SourceFile, table: string) {
   return found[0]
 }
 
-test('Intent retains its statements, omitted schema version, defaults and exact insert delegation', () => {
+// RFC-401 A2: Intent no longer keeps its own MCP / plugin INSERT statements (they omitted the schema version and relied
+// on the column default, 1). It creates through the one participant per kind with the same values, and the participant
+// uses the shared array-returning writers locked below (explicit `schemaVersion: 1`, the same stored value).
+test('Intent creates MCP and plugin rows through the one participant per kind', () => {
   const source = sourceFile('aggregateAdapters/intentApplyResourcePorts.ts')
-  const mcp = insertValues(source, 'mcps')
-  const plugin = insertValues(source, 'plugins')
-  expect(compact(mcp.arguments[0]?.getText(source) ?? '')).toBe(
-    compact(`createMcpInsertValues({
-    id: plan.resourceId, input: prepared.input, ownerUserId: actor.user.id,
-    visibility: 'private', aclRevision: 0, now: at,
-  })`),
+  for (const table of ['mcps', 'plugins'])
+    expect(() => insertValues(source, table)).toThrow(`expected one ${table} INSERT`)
+  expect(compact(source.text)).toContain(
+    compact(`const created = await mcps.create({
+      id: plan.resourceId, ownerUserId: actor.user.id, input: prepared.input,
+    })`),
   )
-  expect(compact(plugin.arguments[0]?.getText(source) ?? '')).toBe(
-    compact(`createPluginInsertValues({
-    id: plan.resourceId, name: plan.payload.name, spec: plan.payload.spec,
-    options: plan.payload.optionsJson ?? {}, description: plan.payload.description,
-    enabled: plan.payload.enabled ?? true, sourceKind: prepared.staged.sourceKind,
-    cachedPath: prepared.staged.cachedPath, resolvedVersion: prepared.staged.resolvedVersion,
-    ownerUserId: actor.user.id, visibility: 'private', aclRevision: 0, now: at,
-  })`),
+  expect(compact(source.text)).toContain(
+    compact(`const created = await plugins.create({
+      id: plan.resourceId, ownerUserId: actor.user.id,
+      input: {
+        name: plan.payload.name, spec: plan.payload.spec, options: plan.payload.optionsJson ?? {},
+        description: plan.payload.description, enabled: plan.payload.enabled ?? true,
+      },
+      installation: prepared.staged,
+    })`),
   )
-  for (const [table, values] of [
-    ['mcps', mcp],
-    ['plugins', plugin],
+  for (const [participant, writer] of [
+    ['mcpMutationParticipant.ts', 'insertMcpRowInTx'],
+    ['pluginMutationParticipant.ts', 'insertPluginRowInTx'],
   ] as const) {
-    let node: ts.Node = values
-    while (!ts.isVariableDeclaration(node) && node.parent !== undefined) node = node.parent
-    if (!ts.isVariableDeclaration(node) || node.initializer === undefined)
-      throw new Error('insert result missing')
-    expect(compact(node.initializer.getText(source))).toBe(
-      `awaitfirst(transaction.insert(${table}).values(${compact(values.arguments[0]?.getText(source) ?? '')},).returning(),)`,
-    )
+    const text = compact(sourceFile(participant).text)
+    expect(text).toContain(`created=await${writer}(transaction,{`)
+    expect(text).toContain("visibility:'private',aclRevision:0,")
   }
-  expect(source.text).toContain(
-    "if (inserted === undefined) throw new Error('mcp insert returned no row')",
-  )
-  expect(source.text).toContain(
-    "if (inserted === undefined) throw new Error('plugin insert returned no row')",
-  )
 })
 
 test('the existing array-returning writers retain explicit schema version and the same transaction', () => {

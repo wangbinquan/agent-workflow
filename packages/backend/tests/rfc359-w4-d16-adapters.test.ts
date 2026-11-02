@@ -143,14 +143,16 @@ describeEachProvider('RFC-359 W4-D16 —— Mcp 仓库', (harness) => {
         repository.update({
           id: created.id,
           expectedConfigHash: 'stale',
-          set: { updatedAt: T0 + 1 },
+          patch: {},
+          nextUpdatedAt: async () => T0 + 1,
         }),
       ),
     ).toBe(staleConflictError('mcp', 'x').code)
     const updated = await repository.update({
       id: created.id,
       expectedConfigHash: hash,
-      set: { description: 'v2', updatedAt: T0 + 1 },
+      patch: { description: 'v2' },
+      nextUpdatedAt: async () => T0 + 1,
     })
     expect(updated).toMatchObject({ description: 'v2', updatedAt: T0 + 1 })
     expect(
@@ -172,7 +174,12 @@ describeEachProvider('RFC-359 W4-D16 —— Mcp 仓库', (harness) => {
     expect(renamed.name).toBe(`${name}-renamed`)
     expect(
       await codeOf(() =>
-        repository.update({ id: 'missing', expectedConfigHash: hash, set: { updatedAt: T0 } }),
+        repository.update({
+          id: 'missing',
+          expectedConfigHash: hash,
+          patch: {},
+          nextUpdatedAt: async () => T0,
+        }),
       ),
     ).toBe('mcp-not-found')
   })
@@ -267,7 +274,8 @@ describeEachProvider('RFC-359 W4-D16 —— Mcp 仓库', (harness) => {
     const afterConfig = await repository.update({
       id: created.id,
       expectedConfigHash: projection.configHashOf(created),
-      set: { config: { url: 'https://example.test/mcp-v2' }, updatedAt: T0 + 1 },
+      patch: { config: { url: 'https://example.test/mcp-v2' } },
+      nextUpdatedAt: async () => T0 + 1,
     })
     expect(await sessionState(harness.db, idle)).toMatchObject({
       status: 'ending',
@@ -284,7 +292,8 @@ describeEachProvider('RFC-359 W4-D16 —— Mcp 仓库', (harness) => {
     await repository.update({
       id: created.id,
       expectedConfigHash: projection.configHashOf(afterConfig),
-      set: { enabled: false, updatedAt: T0 + 2 },
+      patch: { enabled: false },
+      nextUpdatedAt: async () => T0 + 2,
     })
     expect(await sessionState(harness.db, busy)).toMatchObject({
       status: 'ending',

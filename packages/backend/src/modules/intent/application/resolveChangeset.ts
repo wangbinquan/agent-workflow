@@ -454,6 +454,13 @@ function requireDecisionSlots(
 /** Resolve the confirmed draft + decisions into an ordered, canonical bundle.
  *  Pure given its inputs — the DB-touching prepare/commit phases run in
  *  applyChangeset.ts. Throws ValidationError on any contract violation. */
+/** RFC-401：名称冲突已交给共同写入层报的资源类（其余类型仍在这里预检）。 */
+const NAME_CONFLICT_IN_WRITE_PARTICIPANT: ReadonlySet<AclResourceType> = new Set([
+  'agent',
+  'mcp',
+  'plugin',
+])
+
 export function resolveIntentBundle(input: {
   manifest: IntentContextManifest
   changeset: IntentChangeset
@@ -597,9 +604,9 @@ export function resolveIntentBundle(input: {
       }
     }
     const name = nameOf(op)
-    // RFC-401 A1：agent 的名称冲突由唯一的 agent 写入参与者报 `agent-name-in-use`（409），与普通编辑相同；
-    // 其余类型在各自接入共同写入层之前仍走这里的预检。
-    if (action === 'create' && op.resourceType !== 'agent') {
+    // RFC-401 A1 / A2：agent、MCP、plugin 的名称冲突由各自唯一的写入参与者报 `<kind>-name-in-use`（409），与普通编辑
+    // 相同；其余类型在各自接入共同写入层之前仍走这里的预检。
+    if (action === 'create' && !NAME_CONFLICT_IN_WRITE_PARTICIPANT.has(op.resourceType)) {
       const occupied = input.occupiedNames.get(op.resourceType)
       if (occupied?.has(name.toLowerCase()) === true) {
         throw new ValidationError(

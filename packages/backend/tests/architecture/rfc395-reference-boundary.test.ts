@@ -9,7 +9,7 @@ const catalog = 'modules/resource-catalog/infrastructure/'
 /**
  * RFC-401 A1: the six agent writers hand their rows to the one Agent mutation participant
  * (`agentMutationParticipant.ts`), which alone drives the ordered write program. The seeds use its
- * trusted seed insert. `tests/architecture/rfc401-agent-write-participant.test.ts` locks the rest.
+ * trusted seed insert. `tests/architecture/rfc401-resource-write-participants.test.ts` locks the rest.
  */
 const agentParticipant = 'agentMutationParticipant.ts'
 const agentWriters = [

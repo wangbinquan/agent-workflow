@@ -7,7 +7,7 @@ import {
 } from '@agent-workflow/shared'
 import { and, eq, isNull } from 'drizzle-orm'
 import type { DbClient } from '@/db/client'
-import type { PersistenceTx } from '@/platform/persistence/persistenceDb'
+import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
 import type { ConflictError } from '@/util/errors'
 import { ValidationError, staleConflictError } from '@/util/errors'
 import { sha256Hex } from '@/util/hash'
@@ -242,4 +242,20 @@ export async function commitLegacyPluginPublishInTx(
   const [published] = await publishPluginRowInTx(tx, captured, set)
   if (published === undefined) throw stalePluginError(captured.id)
   return pluginFromPersistenceRow(published)
+}
+
+/**
+ * RFC-401 A2（proposal §5 第 10 项）：当前规格。资源包覆盖保持规格不变时事务前不重新安装（Intent 的
+ * `artifactsForPluginUpdate` 同一判据）。
+ */
+export function currentPluginSpecReader(db: PersistenceDb) {
+  return async (pluginId: string): Promise<string | null> => {
+    const { plugins } = tablesOf(db)
+    const rows = await db
+      .select({ spec: plugins.spec })
+      .from(plugins)
+      .where(eq(plugins.id, pluginId))
+      .limit(1)
+    return rows[0]?.spec ?? null
+  }
 }

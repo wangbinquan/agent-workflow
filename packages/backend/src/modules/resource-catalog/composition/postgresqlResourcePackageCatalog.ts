@@ -13,6 +13,7 @@ import {
   type PostgresqlResourcePackageMutationSessionFactory,
 } from '../infrastructure/aggregateAdapters/postgresqlResourcePackageMutationParticipants'
 import type { McpTransactionLifecycle } from '../infrastructure/mcpRepository'
+import { currentPluginSpecReader } from '../infrastructure/pluginPersistence'
 import {
   createFileResourcePackagePluginArtifactOwner,
   createFileResourcePackageSkillArtifactOwner,
@@ -82,6 +83,7 @@ export function composePostgresqlResourcePackageProvider(
         })
   const mutationSessionFactory = createPostgresqlResourcePackageMutationSessionFactory({
     authorityResolver: input.authorityResolver,
+    currentPluginSpec: currentPluginSpecReader(input.db),
     mcpLifecycle: input.mcpLifecycle,
     pluginArtifacts,
     skillArtifacts:

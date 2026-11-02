@@ -1,10 +1,5 @@
-import {
-  canonicalJson,
-  McpLocalConfigSchema,
-  McpRemoteConfigSchema,
-  type Mcp,
-} from '@agent-workflow/shared'
 import { ConflictError, NotFoundError, ValidationError, staleConflictError } from '@/util/errors'
+import type { Mcp } from '@agent-workflow/shared'
 import { assertInitialResourceOwner, initialPrivateResourceAcl } from '../resourceDefaults'
 import type {
   CreateMcpCatalogInput,
@@ -23,7 +18,6 @@ import type {
   McpProjection,
   McpRepository,
   McpRuntimeLifecyclePort,
-  McpUpdateSet,
 } from './ports'
 
 export interface McpApplicationDependencies {
@@ -35,16 +29,6 @@ export interface McpApplicationDependencies {
   readonly runtime: McpRuntimeLifecyclePort
   readonly id: () => string
   readonly now: () => number
-}
-
-function validateConfigForType(type: 'local' | 'remote', config: unknown): Mcp['config'] {
-  const parsed = (type === 'local' ? McpLocalConfigSchema : McpRemoteConfigSchema).safeParse(config)
-  if (!parsed.success) {
-    throw new ValidationError('mcp-config-invalid', `mcp ${type} config is invalid`, {
-      issues: parsed.error.issues,
-    })
-  }
-  return parsed.data
 }
 
 function assertExpectedHash(
@@ -121,7 +105,6 @@ export function createMcpApplication(deps: McpApplicationDependencies) {
       input: CreateMcpCatalogInput,
     ): Promise<McpCatalogResource> {
       assertInitialResourceOwner(authority, authority.user.id)
-      validateConfigForType(input.type, input.config)
       const initialAcl = initialPrivateResourceAcl(authority.user.id)
       const created = await deps.repository.create({
         id: deps.id(),
@@ -142,41 +125,20 @@ export function createMcpApplication(deps: McpApplicationDependencies) {
       const updated = await deps.coordinator.runExclusive(resolved.id, async () => {
         const fresh = await loadVisible(authority, resolved.id)
         await deps.access.requireResourceEdit(authority, fresh)
-        assertExpectedHash(deps.projection, fresh, input.update.expectedConfigHash, 'modifying')
-
-        if (input.update.type !== undefined && input.update.type !== fresh.type) {
-          throw new ValidationError(
-            'mcp-type-immutable',
-            `mcp '${fresh.name}' type cannot change`,
-            { currentType: fresh.type, requestedType: input.update.type },
-          )
-        }
-        const nextConfig =
-          input.update.config === undefined
-            ? fresh.config
-            : validateConfigForType(fresh.type, input.update.config)
-        const nextDescription = input.update.description ?? fresh.description
-        const nextEnabled = input.update.enabled ?? fresh.enabled
-        const configChanged = canonicalJson(nextConfig) !== canonicalJson(fresh.config)
-        const changed =
-          nextDescription !== fresh.description || nextEnabled !== fresh.enabled || configChanged
-        // Preserve the RFC-201 causal clock observation even for a semantic no-op.
-        const updatedAt = await deps.clock.next(fresh)
-        if (!changed) return fresh
-
-        const set: {
-          description?: string
-          config?: Mcp['config']
-          enabled?: boolean
-          updatedAt: number
-        } = { updatedAt }
-        if (nextDescription !== fresh.description) set.description = nextDescription
-        if (nextEnabled !== fresh.enabled) set.enabled = nextEnabled
-        if (configChanged) set.config = nextConfig
+        // RFC-401 A2：stale、类型不可变、配置校验、语义 no-op 与写入在唯一的 MCP 写入参与者里（同一事务）。
         return deps.repository.update({
           id: fresh.id,
           expectedConfigHash: input.update.expectedConfigHash,
-          set: set satisfies McpUpdateSet,
+          patch: {
+            ...(input.update.type === undefined ? {} : { type: input.update.type }),
+            ...(input.update.description === undefined
+              ? {}
+              : { description: input.update.description }),
+            ...(input.update.enabled === undefined ? {} : { enabled: input.update.enabled }),
+            ...(input.update.config === undefined ? {} : { config: input.update.config }),
+          },
+          // Preserve the RFC-201 causal clock observation even for a semantic no-op.
+          nextUpdatedAt: (current: Mcp) => deps.clock.next(current),
         })
       })
       await deps.runtime.reconcileDurableIntents()

@@ -182,13 +182,33 @@ describe('RFC-349 resource-catalog PostgreSQL provider adapters', () => {
     }
     // RFC-359 W12: MCP/plugin creation and publication share their persistence
     // atoms with the repositories; the repositories retain their separate rename.
-    for (const [table, persistence, insert, update] of [
-      ['mcps', 'mcpPersistence', 'insertMcpRowInTx', 'updateMcpRowInTx'],
-      ['plugins', 'pluginPersistence', 'insertPluginRowInTx', 'publishPluginRowInTx'],
+    // RFC-401 A2: the arms (like the repositories and Intent) go through the one
+    // participant per kind, which alone calls those atoms.
+    for (const [table, persistence, participantFile, factory, insert, update] of [
+      [
+        'mcps',
+        'mcpPersistence',
+        'mcpMutationParticipant',
+        'createMcpMutationParticipant',
+        'insertMcpRowInTx',
+        'updateMcpRowInTx',
+      ],
+      [
+        'plugins',
+        'pluginPersistence',
+        'pluginMutationParticipant',
+        'createPluginMutationParticipant',
+        'insertPluginRowInTx',
+        'publishPluginRowInTx',
+      ],
     ]) {
       const atom = source(`src/modules/resource-catalog/infrastructure/${persistence}.ts`)
-      expect(postgresqlMutationArms).toContain(`await ${insert}(`)
-      expect(postgresqlMutationArms).toContain(`await ${update}(`)
+      const participant = source(
+        `src/modules/resource-catalog/infrastructure/${participantFile}.ts`,
+      )
+      expect(postgresqlMutationArms).toContain(`${factory}(input.transaction`)
+      expect(participant).toContain(`await ${insert}(`)
+      expect(participant).toContain(`await ${update}(`)
       expect(postgresqlMutationArms).not.toMatch(
         new RegExp(`(?:\\.insert\\(\\s*${table}\\s*\\)|\\binsertOne\\([^,]+,\\s*${table}\\s*,)`),
       )

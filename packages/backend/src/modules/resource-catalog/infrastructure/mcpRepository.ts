@@ -1,18 +1,13 @@
 import { createAgentMcpReferenceLookup } from './referenceLookup'
-import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { Mcp } from '@agent-workflow/shared'
 import { and, eq, isNull, ne } from 'drizzle-orm'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
+import { createMcpMutationParticipant } from './mcpMutationParticipant'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { ConflictError, NotFoundError, staleConflictError } from '@/util/errors'
 import type { McpAgentReference, McpProjection, McpRepository } from '../application/mcps/ports'
-import {
-  insertMcpRowInTx,
-  mcpConfigHash,
-  mcpFromPersistenceRow,
-  mcpProjection,
-  updateMcpRowInTx,
-} from './mcpPersistence'
+import { mcpConfigHash, mcpFromPersistenceRow, mcpProjection } from './mcpPersistence'
 import {
   runResourceCatalogTransaction,
   type ResourceCatalogTransaction,
@@ -90,48 +85,22 @@ export function createMcpRepository(input: {
     },
     get,
     async create(record): Promise<Mcp> {
-      try {
-        return await runResourceCatalogTransaction(input.db, async (transaction) => {
-          const created = await insertMcpRowInTx(transaction, record)
-          if (created.length !== 1) throw new Error('mcp insert did not return one row')
-          return mcpFromPersistenceRow(created[0]!)
-        })
-      } catch (error) {
-        if (isOwnerNameConflict(error)) {
-          throw nameConflict(record.input.name)
-        }
-        throw error
-      }
+      return runResourceCatalogTransaction(input.db, (transaction) =>
+        createMcpMutationParticipant(transaction, {
+          lifecycle: input.lifecycle,
+          now: () => record.now,
+        }).create({ id: record.id, ownerUserId: record.ownerUserId, input: record.input }),
+      )
     },
     async update(mutation): Promise<Mcp> {
-      return runResourceCatalogTransaction(input.db, async (transaction) => {
-        const { mcps } = tablesOf(transaction)
-        const row = (
-          await transaction.select().from(mcps).where(eq(mcps.id, mutation.id)).limit(1)
-        )[0]
-        if (row === undefined) throw new NotFoundError('mcp-not-found', 'mcp not found')
-        const current = mcpFromPersistenceRow(row)
-        assertExpectedHash(current, mutation.expectedConfigHash, 'saving')
-        const set: Partial<PersistenceTables['mcps']['$inferInsert']> = {
-          updatedAt: mutation.set.updatedAt,
-        }
-        if (mutation.set.description !== undefined) set.description = mutation.set.description
-        if (mutation.set.enabled !== undefined) set.enabled = mutation.set.enabled
-        if (mutation.set.config !== undefined) set.config = JSON.stringify(mutation.set.config)
-        const updated = await updateMcpRowInTx(transaction, { kind: 'id', id: mutation.id }, set)
-        if (updated.length !== 1) {
-          throw staleConflictError('mcp', 'the MCP changed while saving; reload and retry')
-        }
-        await input.lifecycle.transitionMutation(transaction, {
-          mcpId: mutation.id,
-          reason:
-            (mutation.set.enabled ?? current.enabled) === true
-              ? 'mcp-config-changed'
-              : 'mcp-disabled',
-          now: mutation.set.updatedAt,
-        })
-        return mcpFromPersistenceRow(updated[0]!)
-      })
+      return runResourceCatalogTransaction(input.db, (transaction) =>
+        createMcpMutationParticipant(transaction, { lifecycle: input.lifecycle }).update({
+          id: mutation.id,
+          expectedConfigHash: mutation.expectedConfigHash,
+          patch: () => mutation.patch,
+          nextUpdatedAt: mutation.nextUpdatedAt,
+        }),
+      )
     },
     async rename(mutation): Promise<Mcp> {
       try {

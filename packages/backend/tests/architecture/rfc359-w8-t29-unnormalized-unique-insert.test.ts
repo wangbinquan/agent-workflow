@@ -462,10 +462,11 @@ const UNIQUE_TABLES = uniqueConstrainedTables(persistenceSchema.tables)
  *     removeWhen —— applyLock 退役或 daemon 变多实例时重判。
  *     :293 intentApplyJournal。why —— 同步事务面 + 同一把 applyLock。
  *     removeWhen —— 随同步面退役。
- *   modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourcePorts.ts: 6
- *     mcps / plugins / skills / workflows / workgroups / workgroupMembers（全是 `*_owner_name_unique` 一族）。
- *     RFC-401 A1：agents 那一处迁入唯一的 agent 写入参与者（`agentMutationParticipant.ts`），后者经
- *     `engineOf(tx).uniqueViolationTarget` 把唯一冲突归一为 `agent-name-in-use`，不在本账。
+ *   modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourcePorts.ts: 4
+ *     skills / workflows / workgroups / workgroupMembers（全是 `*_owner_name_unique` 一族）。
+ *     RFC-401 A1 / A2：agents、mcps、plugins 三处迁入各自唯一的写入参与者（`agentMutationParticipant.ts` /
+ *     `mcpMutationParticipant.ts` / `pluginMutationParticipant.ts`），后者经 `engineOf(tx).uniqueViolationTarget`
+ *     把唯一冲突归一为 `<kind>-name-in-use`，不在本账。
  *     why —— 接过句柄的助手，事务由 intent apply 的 `applyLock` 之下打开；**未复核**。
  *     removeWhen —— 与上面两条 intent 账目一起判。
  *   modules/resource-catalog/infrastructure/demoResourceCatalogSeed.ts: 1
@@ -553,7 +554,7 @@ export const UNNORMALIZED_UNIQUE_INSERT_DEBT: readonly string[] = [
   // after comparing the stored row, never a second entity.
   'modules/integration/infrastructure/crewstation/eventInbox.ts: 2',
   'modules/integration/infrastructure/verifiedWebhookDeliveryPersistence.ts: 2',
-  'modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourcePorts.ts: 6',
+  'modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourcePorts.ts: 4',
   'modules/resource-catalog/infrastructure/demoResourceCatalogSeed.ts: 1',
   'modules/resource-catalog/infrastructure/workflowRepository.ts: 1',
   'modules/source-control/infrastructure/repositoryWorkspaceStore.ts: 1',

@@ -90,7 +90,9 @@ export function composePluginServiceBindingForTest(
     async publish(input: Parameters<PluginRepository['publish']>[0]) {
       const captured = await baseRepository.get(input.id)
       if (captured !== null) {
-        await options.beforePublish?.(captured, { cachedPath: input.set.cachedPath })
+        await options.beforePublish?.(captured, {
+          cachedPath: input.installation?.cachedPath ?? captured.cachedPath,
+        })
       }
       return baseRepository.publish(input)
     },

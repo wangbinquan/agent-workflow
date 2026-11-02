@@ -66,11 +66,22 @@ describe('RFC-349 PostgreSQL Intent resource apply binding', () => {
       expect(writer).toContain(`.insert(${table})`)
       expect(writer).toContain(`.update(${table})`)
     }
-    for (const table of ['skills', 'mcps', 'plugins', 'workgroups']) {
+    for (const table of ['skills', 'workgroups']) {
       expect(source).toMatch(
         new RegExp(`(?:\\.insert\\(\\s*${table}\\s*\\)|\\binsertOne\\([^,]+,\\s*${table}\\s*,)`),
       )
       expect(source).toContain(`.update(${table})`)
+    }
+    // RFC-401 A2: MCP and plugin rows go through their one participant on the same transaction.
+    for (const [table, factory] of [
+      ['mcps', 'createMcpMutationParticipant'],
+      ['plugins', 'createPluginMutationParticipant'],
+    ]) {
+      expect(source).toContain(`${factory}(transaction, {`)
+      expect(source).not.toMatch(
+        new RegExp(`(?:\\.insert\\(\\s*${table}\\s*\\)|\\binsertOne\\([^,]+,\\s*${table}\\s*,)`),
+      )
+      expect(source).not.toContain(`.update(${table})`)
     }
     expect(source).toContain('ownerUserId: actor.user.id')
     expect(source).toContain('requireOwner(actor,')

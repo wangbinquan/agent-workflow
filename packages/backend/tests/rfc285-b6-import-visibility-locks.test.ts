@@ -51,13 +51,25 @@ describe('RFC-285 B6③ — 导入产物 private 三路装配锁', () => {
     const arms = moduleSrc(
       'resource-catalog/infrastructure/aggregateAdapters/postgresqlResourcePackageMutationArms.ts',
     )
-    const privateMints = (arms.match(/visibility: 'private',/g) ?? []).length
+    // RFC-401 A1 / A2：agent / MCP / plugin 的新建经各自唯一的写入参与者——资源包把导入者交进去当 owner，参与者铸造
+    // private 行（agent 走 `createAgentPersistenceValues` 的 private 缺省；MCP / plugin 写字面量）。
+    const participants = ['mcpMutationParticipant.ts', 'pluginMutationParticipant.ts'].map((file) =>
+      moduleSrc(`resource-catalog/infrastructure/${file}`),
+    )
+    const privateMints = [arms, ...participants].reduce(
+      (count, src) => count + (src.match(/visibility: 'private',/g) ?? []).length,
+      0,
+    )
     expect(privateMints, '铸造点一处都没扫到 ⇒ 判据此刻零预言力').toBeGreaterThanOrEqual(4)
-    // 归属那一半比可见性那一半多（更新路径也写 owner），所以是 `>=` 不是 `===`：
-    // 判据要的是「凡铸造必带 owner」，不是两个计数相等。
+    // 归属：arm 里逐条把导入者交给铸造（直接写字面量，或作为 owner 交给参与者）。
     expect(
       (arms.match(/ownerUserId: input\.context\.actor\.user\.id,/g) ?? []).length,
-    ).toBeGreaterThanOrEqual(privateMints)
-    expect(arms.includes("visibility: 'public'")).toBe(false)
+    ).toBeGreaterThanOrEqual(4)
+    expect(arms).toContain("Object.freeze({ kind: 'actor' as const, actor: input.context.actor })")
+    expect(moduleSrc('resource-catalog/infrastructure/agentPersistence.ts')).toContain(
+      "visibility: 'private',",
+    )
+    for (const src of [arms, ...participants])
+      expect(src.includes("visibility: 'public'")).toBe(false)
   })
 })

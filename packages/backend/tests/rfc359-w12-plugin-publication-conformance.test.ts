@@ -1,6 +1,8 @@
 // RFC-359 AC1: legacy publication, the neutral repository and PostgreSQL package
 // mutation share the same insert/CAS atoms. Preserve real package publication,
 // transaction rollback and the captured-row behavior established before merging.
+// RFC-401 A2: the neutral repository and the package arm both publish through the one plugin
+// mutation participant; a package overwrite that keeps the spec no longer reinstalls.
 
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
@@ -151,6 +153,8 @@ describeEachProvider('RFC-359 plugin publication through shared mutation atoms',
       now: T0,
     }
     const box = createSecretBoxFromKey(randomBytes(32))
+    /** Every package installation, by spec (RFC-401 A2: an overwrite keeping the spec does not install). */
+    const installs: string[] = []
 
     function compose(): ComposedResourcePackageCatalog {
       // RFC-359 —— 两台 apply 引擎合一后不再按引擎分叉：两个 provider 装同一条组合根。
@@ -171,6 +175,7 @@ describeEachProvider('RFC-359 plugin publication through shared mutation atoms',
             )
           },
           async install(input) {
+            installs.push(input.spec)
             const installed = await installPlugin(input.pluginId, input.spec, {
               generationId: input.generationId,
               pluginsDir: input.pluginsDir,
@@ -222,7 +227,7 @@ describeEachProvider('RFC-359 plugin publication through shared mutation atoms',
       const view = await target.operations.getReceipt.invoke(context, result)
       return PackageImportReceiptSchema.parse(JSON.parse(view.document))
     }
-    return { first, second, preview, apply, compose }
+    return { first, second, preview, apply, compose, installs }
   }
 
   test('real package create and overwrite publish file metadata and replay their committed receipts', async () => {
@@ -294,6 +299,52 @@ describeEachProvider('RFC-359 plugin publication through shared mutation atoms',
     expect(readFileSync(join(f.second, 'index.js'), 'utf8')).toBe('export const revision = 2\n')
   })
 
+  // RFC-401 A2（proposal §5 第 10 项，用户 2026-11-02 确认）：覆盖保持规格不变就不重新安装、installedAt 不动，
+  // 只更新选项 / 描述 / 启用；此前资源包每次覆盖都重新安装并推进 installedAt。重新解析版本由显式 upgrade 表达。
+  test('a package overwrite that keeps the spec does not reinstall the plugin', async () => {
+    const f = await fixture()
+    const createBytes = pluginPackage(`file:${f.first}`, 1)
+    const createPreview = await f.preview(createBytes)
+    const created = await f.apply(createBytes, createPreview.previewToken, {
+      localSlug: 'plugin-example',
+      action: 'new',
+    })
+    const repository = createPluginRepository({ db: harness.db }).repository
+    const before = await repository.get(created.root!.resourceId)
+    expect(f.installs).toEqual([`file:${f.first}`])
+
+    const sameSpecBytes = pluginPackage(`file:${f.first}`, 2)
+    const sameSpecPreview = await f.preview(sameSpecBytes)
+    await f.apply(sameSpecBytes, sameSpecPreview.previewToken, {
+      localSlug: 'plugin-example',
+      action: 'overwrite',
+      targetId: before!.id,
+    })
+    const after = await repository.get(before!.id)
+    expect(f.installs).toEqual([`file:${f.first}`])
+    expect(after).toMatchObject({
+      spec: before!.spec,
+      sourceKind: before!.sourceKind,
+      cachedPath: before!.cachedPath,
+      resolvedVersion: before!.resolvedVersion,
+      installedAt: before!.installedAt,
+      description: 'revision 2',
+      options: { revision: 2, nested: { enabled: false } },
+      enabled: false,
+    })
+    expect(after!.updatedAt).toBeGreaterThan(before!.updatedAt)
+
+    const newSpecBytes = pluginPackage(`file:${f.second}`, 2)
+    const newSpecPreview = await f.preview(newSpecBytes)
+    await f.apply(newSpecBytes, newSpecPreview.previewToken, {
+      localSlug: 'plugin-example',
+      action: 'overwrite',
+      targetId: before!.id,
+    })
+    expect(f.installs).toEqual([`file:${f.first}`, `file:${f.second}`])
+    expect((await repository.get(before!.id))!.installedAt).toBeGreaterThan(before!.installedAt)
+  })
+
   test('create and publication stay in the outer transaction and roll back together', async () => {
     const f = await fixture()
     const repository = createPluginRepository({ db: harness.db }).repository
@@ -305,17 +356,15 @@ describeEachProvider('RFC-359 plugin publication through shared mutation atoms',
         const published = await repository.publish({
           id: original.id,
           expectedConfigHash: pluginConfigHash(original),
-          set: {
+          patch: {
             spec: `file:${f.second}`,
             options: { revision: 2 },
             description: 'uncommitted',
             enabled: false,
-            sourceKind: 'file',
-            cachedPath: f.second,
-            resolvedVersion: 'revision-2',
-            installedAt: T0 + 2,
-            updatedAt: T0 + 3,
           },
+          installation: { sourceKind: 'file', cachedPath: f.second, resolvedVersion: 'revision-2' },
+          nextInstalledAt: () => T0 + 2,
+          nextUpdatedAt: () => T0 + 3,
         })
         expect(published).toMatchObject({ cachedPath: f.second, updatedAt: T0 + 3 })
         const { plugins } = tablesOf(transaction)
@@ -343,19 +392,17 @@ describeEachProvider('RFC-359 plugin publication through shared mutation atoms',
       repository.publish({
         id: original.id,
         expectedConfigHash: pluginConfigHash(original),
-        set: {
+        patch: {
           spec: `file:${f.second}`,
           options: { revision: 2 },
           description: 'stale publication',
           enabled: false,
-          sourceKind: 'file',
-          cachedPath: f.second,
-          resolvedVersion: null,
-          installedAt: T0 + 2,
-          updatedAt: T0 + 2,
         },
+        installation: { sourceKind: 'file', cachedPath: f.second, resolvedVersion: null },
+        nextInstalledAt: () => T0 + 2,
+        nextUpdatedAt: () => T0 + 2,
       }),
-    ).rejects.toThrow('plugin changed before generation publication; reload and retry')
+    ).rejects.toThrow('plugin changed since this operation was prepared; reload and retry')
     expect(await repository.get(original.id)).toEqual(current)
   })
 
@@ -366,17 +413,18 @@ describeEachProvider('RFC-359 plugin publication through shared mutation atoms',
     const published = await repository.publish({
       id: original.id,
       expectedConfigHash: pluginConfigHash(original),
-      set: {
+      patch: {
         spec: original.spec,
         options: { revision: 2 },
         description: 'metadata only',
         enabled: original.enabled,
-        sourceKind: original.sourceKind,
-        cachedPath: original.cachedPath,
-        resolvedVersion: original.resolvedVersion,
-        installedAt: original.installedAt,
-        updatedAt: T0 + 99,
       },
+      // RFC-401 A2：规格不变、没有新安装，沿用当前安装与 installedAt。
+      installation: null,
+      nextInstalledAt: () => {
+        throw new Error('metadata-only publication must keep installedAt')
+      },
+      nextUpdatedAt: () => T0 + 99,
     })
     expect(published).toEqual({
       ...original,
@@ -586,54 +634,41 @@ test('plugin mutation SQL has one insert and one shared publication algorithm', 
 })
 
 test('intent apply 侧的插件写点在返回前 await 到数据库落库', () => {
-  // RFC-359 —— 两台 apply 引擎合一之后，intent apply 的插件写点不再是 legacy 那两个
-  // `commit(?:Legacy)?Plugin…InTx` 包装（它们随 `legacyIntentApplyResourceParticipants` /
-  // `legacyIntentApplyResourceDependencies` 一起失去了生产消费者），而是**提交臂本身**在
-  // `intentApplyResourcePorts.ts` 里直接写表。判据不变：写必须被 `await` 到落库。
+  // RFC-359 —— 判据：写必须被 `await` 到落库。drizzle 的查询构建器是**惰性** `QueryPromise`，既不 `.run()` 也不
+  // `await` 的写在两个引擎上都一条都不会发生——漏掉 await 不会让任何行为用例变红，只会让那次写悄悄不发生。
   //
-  // 为什么这条判据非要有：drizzle 的查询构建器是**惰性** `QueryPromise`。`.run()` 当场执行、
-  // `await` 当场执行，而**既不 `.run()` 也不 `await`** 的写在两个引擎上都一条都不会发生——
-  // 漏掉 await 不会让任何行为用例变红，只会让那次写悄悄不发生。
-  const file = join(
-    import.meta.dir,
-    '../src/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourcePorts.ts',
+  // RFC-401 A2 —— intent apply 的插件写点不再在 `intentApplyResourcePorts.ts` 里直接写表，而是交给唯一的写入
+  // 参与者（`pluginMutationParticipant.ts`），后者经共享的行写入原语落库。判据随写点搬过去：提交臂里没有直接写表，参与者对
+  // 原语的调用逐个 `await`，原语自己的写也 `await`。
+  const infrastructure = join(import.meta.dir, '../src/modules/resource-catalog/infrastructure')
+  const ports = readFileSync(
+    join(infrastructure, 'aggregateAdapters/intentApplyResourcePorts.ts'),
+    'utf8',
   )
-  const source = ts.createSourceFile(file, readFileSync(file, 'utf8'), ts.ScriptTarget.Latest, true)
-  const writes: string[] = []
+  expect(ports).not.toMatch(/\.(?:insert|update)\(plugins\)/)
+  const participantFile = join(infrastructure, 'pluginMutationParticipant.ts')
+  const participant = ts.createSourceFile(
+    participantFile,
+    readFileSync(participantFile, 'utf8'),
+    ts.ScriptTarget.Latest,
+    true,
+  )
+  const calls: string[] = []
   const unawaited: string[] = []
   const visit = (node: ts.Node): void => {
     if (
       ts.isCallExpression(node) &&
-      ts.isPropertyAccessExpression(node.expression) &&
-      (node.expression.name.text === 'insert' || node.expression.name.text === 'update') &&
-      node.arguments.length === 1 &&
-      node.arguments[0] !== undefined &&
-      ts.isIdentifier(node.arguments[0]) &&
-      node.arguments[0].text === 'plugins'
+      ts.isIdentifier(node.expression) &&
+      ['insertPluginRowInTx', 'publishPluginRowInTx'].includes(node.expression.text)
     ) {
-      // 写链的形态是 `await transaction.insert(x).values(...).returning().get()`——
-      // 沿着属性访问链往上走到最外层调用，`await` 挂在那里。
-      let outermost: ts.Node = node
-      while (
-        ts.isPropertyAccessExpression(outermost.parent) ||
-        (ts.isCallExpression(outermost.parent) && outermost.parent.expression === outermost)
-      )
-        outermost = outermost.parent
-      if (
-        ts.isCallExpression(outermost.parent) &&
-        ts.isIdentifier(outermost.parent.expression) &&
-        outermost.parent.expression.text === 'first'
-      )
-        outermost = outermost.parent
-      writes.push(node.expression.name.text)
-      if (!ts.isAwaitExpression(outermost.parent)) unawaited.push(node.expression.name.text)
+      calls.push(node.expression.text)
+      if (!ts.isAwaitExpression(node.parent)) unawaited.push(node.expression.text)
     }
     ts.forEachChild(node, visit)
   }
-  visit(source)
-  expect(writes.length, '语料失效：一处 `plugins` 写点都没扫到').toBeGreaterThanOrEqual(2)
-  expect({ writes: [...new Set(writes)].sort(), unawaited }).toEqual({
-    writes: ['insert', 'update'],
+  visit(participant)
+  expect({ calls: [...new Set(calls)].sort(), unawaited }).toEqual({
+    calls: ['insertPluginRowInTx', 'publishPluginRowInTx'],
     unawaited: [],
   })
 })

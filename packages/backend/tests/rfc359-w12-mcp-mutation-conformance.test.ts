@@ -215,7 +215,8 @@ describeEachProvider('RFC-359 MCP shared mutation atoms', (harness) => {
     const changed = await repository().update({
       id: original.id,
       expectedConfigHash: mcpConfigHash(original),
-      set: { description: 'metadata only', updatedAt: T0 + 41 },
+      patch: { description: 'metadata only' },
+      nextUpdatedAt: async () => T0 + 41,
     })
     expect(changed).toEqual({ ...original, description: 'metadata only', updatedAt: T0 + 41 })
     expect(await stored(original.id)).toEqual({
@@ -238,7 +239,8 @@ describeEachProvider('RFC-359 MCP shared mutation atoms', (harness) => {
         const changed = await repository().update({
           id: original.id,
           expectedConfigHash: mcpConfigHash(original),
-          set: { config, enabled, updatedAt: T0 + 42 },
+          patch: { config, enabled },
+          nextUpdatedAt: async () => T0 + 42,
         })
         expect(changed).toEqual({
           ...original,
@@ -268,21 +270,24 @@ describeEachProvider('RFC-359 MCP shared mutation atoms', (harness) => {
     const current = await repository().update({
       id: original.id,
       expectedConfigHash: mcpConfigHash(original),
-      set: { description: 'winner', updatedAt: T0 + 1 },
+      patch: { description: 'winner' },
+      nextUpdatedAt: async () => T0 + 1,
     })
     await expect(
       repository().update({
         id: original.id,
         expectedConfigHash: mcpConfigHash(original),
-        set: { description: 'loser', updatedAt: T0 + 2 },
+        patch: { description: 'loser' },
+        nextUpdatedAt: async () => T0 + 2,
       }),
-    ).rejects.toThrow('the MCP changed before saving; reload and retry')
+    ).rejects.toThrow('the MCP changed; reload before modifying it')
     expect(await repository().get(original.id)).toEqual(current)
     await expect(
       repository().update({
         id: 'missing',
         expectedConfigHash: mcpConfigHash(original),
-        set: { updatedAt: T0 + 3 },
+        patch: {},
+        nextUpdatedAt: async () => T0 + 3,
       }),
     ).rejects.toThrow('mcp not found')
     expect(await repository().list()).toEqual([current])
@@ -302,7 +307,8 @@ describeEachProvider('RFC-359 MCP shared mutation atoms', (harness) => {
         await currentRepository.update({
           id: original.id,
           expectedConfigHash: mcpConfigHash(original),
-          set: { enabled: false, updatedAt: T0 + 9 },
+          patch: { enabled: false },
+          nextUpdatedAt: async () => T0 + 9,
         })
         const { mcpRuntimeTestSessions } = tablesOf(tx)
         expect((await tx.select().from(mcpRuntimeTestSessions))[0]).toMatchObject({
@@ -338,7 +344,8 @@ describeEachProvider('RFC-359 MCP shared mutation atoms', (harness) => {
       failing.update({
         id: original.id,
         expectedConfigHash: mcpConfigHash(original),
-        set: { description: 'uncommitted', updatedAt: T0 + 1 },
+        patch: { description: 'uncommitted' },
+        nextUpdatedAt: async () => T0 + 1,
       }),
     ).rejects.toThrow('fail after durable transition')
     expect(await repository().get(original.id)).toEqual(original)
@@ -819,54 +826,41 @@ test('MCP create and update have one SQL atom and retain separate rename', () =>
 })
 
 test('intent apply 侧的 MCP 写点在返回前 await 到数据库落库', () => {
-  // RFC-359 —— 两台 apply 引擎合一之后，intent apply 的MCP写点不再是 legacy 那两个
-  // `commit(?:Legacy)?Mcp…InTx` 包装（它们随 `legacyIntentApplyResourceParticipants` /
-  // `legacyIntentApplyResourceDependencies` 一起失去了生产消费者），而是**提交臂本身**在
-  // `intentApplyResourcePorts.ts` 里直接写表。判据不变：写必须被 `await` 到落库。
+  // RFC-359 —— 判据：写必须被 `await` 到落库。drizzle 的查询构建器是**惰性** `QueryPromise`，既不 `.run()` 也不
+  // `await` 的写在两个引擎上都一条都不会发生——漏掉 await 不会让任何行为用例变红，只会让那次写悄悄不发生。
   //
-  // 为什么这条判据非要有：drizzle 的查询构建器是**惰性** `QueryPromise`。`.run()` 当场执行、
-  // `await` 当场执行，而**既不 `.run()` 也不 `await`** 的写在两个引擎上都一条都不会发生——
-  // 漏掉 await 不会让任何行为用例变红，只会让那次写悄悄不发生。
-  const file = join(
-    import.meta.dir,
-    '../src/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourcePorts.ts',
+  // RFC-401 A2 —— intent apply 的MCP写点不再在 `intentApplyResourcePorts.ts` 里直接写表，而是交给唯一的写入
+  // 参与者（`mcpMutationParticipant.ts`），后者经共享的行写入原语落库。判据随写点搬过去：提交臂里没有直接写表，参与者对
+  // 原语的调用逐个 `await`，原语自己的写也 `await`。
+  const infrastructure = join(import.meta.dir, '../src/modules/resource-catalog/infrastructure')
+  const ports = readFileSync(
+    join(infrastructure, 'aggregateAdapters/intentApplyResourcePorts.ts'),
+    'utf8',
   )
-  const source = ts.createSourceFile(file, readFileSync(file, 'utf8'), ts.ScriptTarget.Latest, true)
-  const writes: string[] = []
+  expect(ports).not.toMatch(/\.(?:insert|update)\(mcps\)/)
+  const participantFile = join(infrastructure, 'mcpMutationParticipant.ts')
+  const participant = ts.createSourceFile(
+    participantFile,
+    readFileSync(participantFile, 'utf8'),
+    ts.ScriptTarget.Latest,
+    true,
+  )
+  const calls: string[] = []
   const unawaited: string[] = []
   const visit = (node: ts.Node): void => {
     if (
       ts.isCallExpression(node) &&
-      ts.isPropertyAccessExpression(node.expression) &&
-      (node.expression.name.text === 'insert' || node.expression.name.text === 'update') &&
-      node.arguments.length === 1 &&
-      node.arguments[0] !== undefined &&
-      ts.isIdentifier(node.arguments[0]) &&
-      node.arguments[0].text === 'mcps'
+      ts.isIdentifier(node.expression) &&
+      ['insertMcpRowInTx', 'updateMcpRowInTx'].includes(node.expression.text)
     ) {
-      // 写链的形态是 `await transaction.insert(x).values(...).returning().get()`——
-      // 沿着属性访问链往上走到最外层调用，`await` 挂在那里。
-      let outermost: ts.Node = node
-      while (
-        ts.isPropertyAccessExpression(outermost.parent) ||
-        (ts.isCallExpression(outermost.parent) && outermost.parent.expression === outermost)
-      )
-        outermost = outermost.parent
-      if (
-        ts.isCallExpression(outermost.parent) &&
-        ts.isIdentifier(outermost.parent.expression) &&
-        outermost.parent.expression.text === 'first'
-      )
-        outermost = outermost.parent
-      writes.push(node.expression.name.text)
-      if (!ts.isAwaitExpression(outermost.parent)) unawaited.push(node.expression.name.text)
+      calls.push(node.expression.text)
+      if (!ts.isAwaitExpression(node.parent)) unawaited.push(node.expression.text)
     }
     ts.forEachChild(node, visit)
   }
-  visit(source)
-  expect(writes.length, '语料失效：一处 `mcps` 写点都没扫到').toBeGreaterThanOrEqual(2)
-  expect({ writes: [...new Set(writes)].sort(), unawaited }).toEqual({
-    writes: ['insert', 'update'],
+  visit(participant)
+  expect({ calls: [...new Set(calls)].sort(), unawaited }).toEqual({
+    calls: ['insertMcpRowInTx', 'updateMcpRowInTx'],
     unawaited: [],
   })
 })

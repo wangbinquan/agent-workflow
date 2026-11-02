@@ -219,3 +219,30 @@ Part A 按资源类分四次提交（plan「Part A 分步」）：A1 agent；A2 
 - **用例**：三入口 × 两 provider 的 agent 错误矩阵（同名、缺失依赖 / MCP / plugin / managed skill、停用 plugin、runtime 缺失 / 停用、
   未声明 branch port、自依赖、批内环、stale、不可见引用），逐条断言 code / status / message / details 相同；排序容忍环的单元用例；
   引用去重；依赖旧差异的既有断言按统一合同修改并写明原因。
+
+### 9.3 A2：MCP 与 plugin 写入参与者
+
+- **合同** `RC/application/ports/mcpMutation.ts`、`pluginMutation.ts`；实现 `RC/infrastructure/mcpMutationParticipant.ts`、
+  `pluginMutationParticipant.ts`（全部 SQL 在传入的 tx 上），规则与错误取普通编辑现行的那一份：
+  - MCP create：按类型校验配置（`mcp-config-invalid`，校验函数迁入 `RC/domain/mcps/mcpConfig.ts`）→ owner + name 冲突
+    （`mcp-name-in-use`，唯一约束经 `engineOf(tx).uniqueViolationTarget` 归一）→ 插入。
+  - MCP update：读当前行（`mcp-not-found`）→ 场景 guard → fence（`resource-operation-stale`，「the MCP changed; reload before
+    modifying it」，details 带 expected / current configHash）→ 类型不可变（`mcp-type-immutable`，「mcp 'x' type cannot change」，
+    details 带两种类型）→ 配置校验 → 取一次 updatedAt（普通编辑注入 RFC-201 的因果时钟，其余用 `monotonicNow`）→ 语义
+    no-op 不写 → 整行 CAS 写入 → 同一事务里记运行时测试会话的失效意图。提交的配置整份替换库里的配置。
+  - plugin create：选项校验 → 名称冲突（`plugin-name-in-use`）→ 带安装产物插入。
+  - plugin update：读当前行 → guard → fence（「plugin changed since this operation was prepared; reload and retry」，details 同上）
+    → 选项校验 → 语义 no-op 不写 → 整行 CAS 发布。安装是事务外的效果，由场景在事务前完成并以 `installation` 交进来；
+    `null` 沿用当前安装与 installedAt，规格改变却没有新安装是编程错误。
+- **普通 CRUD**：MCP 仓库的 create / update、plugin 仓库的 create / publish 改为调参与者；application 只保留可见性、编辑权、
+  进程内互斥、删除确认、事务前的安装（规格改变或显式 upgrade）与事后的运行时意图调和。
+- **Intent**：MCP / plugin 端口调参与者。场景保留：owner-only；plugin 的改名限制；**MCP 的 OAuth 回填**——Intent 给模型看的
+  MCP 配置里 `oauth.clientSecret` 是哨兵，模型改写时可能省略整个 `oauth`，场景按库里的值补回（RFC-348 D2）。这是 Intent 对
+  模型产物的还原（与工作流特权节点的回填同类），共同写入层的规则仍是「提交的配置整份替换」。
+- **资源包**：MCP / plugin arm 调参与者。覆盖保持规格不变时事务前不安装（会话工厂注入 `currentPluginSpec`，由
+  `composePostgresqlResourcePackageProvider` 从库里读），proposal §5 第 10 项；新建仍必有安装。
+- `resolveIntentBundle` 的名称预检对 MCP / plugin 也不再做（与 agent 一起由共同写入层报 `<kind>-name-in-use` / 409）。
+- **守卫**：A1 的结构锁推广为 `T/architecture/rfc401-resource-write-participants.test.ts`：每类只有参与者引用该类的行写入原语，
+  各场景函数必须调参与者（含负例）。
+- **用例**：`T/rfc401-mcp-plugin-error-matrix.test.ts`（MCP 名称冲突、类型不可变、stale、no-op；plugin 名称冲突、stale；三入口 ×
+  两 provider）；`T/rfc359-w12-plugin-publication-conformance.test.ts` 加「覆盖保持规格不变不重装」。

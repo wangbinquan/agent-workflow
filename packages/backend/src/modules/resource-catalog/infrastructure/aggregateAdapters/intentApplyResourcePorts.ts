@@ -22,6 +22,7 @@ import {
   type Agent,
   type CreateAgent,
   type CreateMcp,
+  type Mcp,
   type Skill,
   type WorkflowDefinition,
   type WorkgroupDraftMember,
@@ -64,13 +65,8 @@ import { hasResourceAclBypass } from '../../domain/resourceAccess'
 import type { CatalogSelectorKind } from '../../domain/resourceKinds'
 import type { VersionedIntentResourceChangesetPlan } from '../../public/types'
 import { loadAgentPersistenceRow } from '../agentPersistence'
-import { createMcpInsertValues, mcpConfigHash, mcpFromPersistenceRow } from '../mcpPersistence'
-import { assertHostedPluginPublicationInTx } from '../crewstation/pluginPublication'
-import {
-  createPluginInsertValues,
-  pluginConfigHash,
-  pluginFromPersistenceRow,
-} from '../pluginPersistence'
+import { mcpConfigHash } from '../mcpPersistence'
+import { pluginConfigHash } from '../pluginPersistence'
 import type { McpTransactionLifecycle } from '../mcpRepository'
 import type { PostgresqlResourceCatalogTransaction } from '../postgresql/repositorySupport'
 import { workflowDraftSnapshotOf, workflowFromPersistenceRow } from '../workflowPersistence'
@@ -89,6 +85,8 @@ import type {
 } from './intentApplyResourceParticipants'
 import type { AgentMutationBatch } from '../../application/ports/agentMutation'
 import { createAgentMutationParticipant } from '../agentMutationParticipant'
+import { createMcpMutationParticipant } from '../mcpMutationParticipant'
+import { createPluginMutationParticipant } from '../pluginMutationParticipant'
 
 type PlanOf<K extends CatalogSelectorKind> = Extract<
   VersionedIntentResourceChangesetPlan,
@@ -491,10 +489,7 @@ function createAgentPort(
   } satisfies IntentApplyMutationPort<'agent', PreparedAgent>)
 }
 
-function mcpConfigWithPreservedOauth(
-  submitted: CreateMcp,
-  current: ReturnType<typeof mcpFromPersistenceRow>,
-): CreateMcp['config'] {
+function mcpConfigWithPreservedOauth(submitted: CreateMcp, current: Mcp): CreateMcp['config'] {
   if (submitted.type !== 'remote' || current.type !== 'remote') return submitted.config
   if (submitted.config.oauth !== undefined || current.config.oauth === undefined) {
     return submitted.config
@@ -513,74 +508,28 @@ function createMcpPort(
       return Object.freeze({ input: CreateMcpSchema.parse(plan.payload) })
     },
     async commitInTransaction({ transaction, plan, prepared }) {
+      const mcps = createMcpMutationParticipant(transaction, { lifecycle, now })
       if (plan.action === 'create') {
-        const { mcps } = tablesOf(transaction)
-        const collision = await first(
-          transaction
-            .select({ id: mcps.id })
-            .from(mcps)
-            .where(and(eq(mcps.ownerUserId, actor.user.id), eq(mcps.name, prepared.input.name))),
-        )
-        if (collision !== undefined) {
-          throw new ConflictError('mcp-name-in-use', `mcp '${prepared.input.name}' already exists`)
-        }
-        const at = now()
-        const inserted = await first(
-          transaction
-            .insert(mcps)
-            .values(
-              createMcpInsertValues({
-                id: plan.resourceId,
-                input: prepared.input,
-                ownerUserId: actor.user.id,
-                visibility: 'private',
-                aclRevision: 0,
-                now: at,
-              }),
-            )
-            .returning(),
-        )
-        if (inserted === undefined) throw new Error('mcp insert returned no row')
-        return mcpReceipt(plan, {
-          kind: 'mcp',
-          configHash: mcpConfigHash(mcpFromPersistenceRow(inserted)),
+        const created = await mcps.create({
+          id: plan.resourceId,
+          ownerUserId: actor.user.id,
+          input: prepared.input,
         })
+        return mcpReceipt(plan, { kind: 'mcp', configHash: mcpConfigHash(created) })
       }
-
-      const { mcps } = tablesOf(transaction)
-      const row = await first(transaction.select().from(mcps).where(eq(mcps.id, plan.resourceId)))
-      if (row === undefined) throw notFound('mcp', plan.resourceId)
-      const current = mcpFromPersistenceRow(row)
-      requireOwner(actor, 'mcp', current)
-      if (mcpConfigHash(current) !== plan.expectedRevision.configHash) {
-        throw staleConflictError('mcp', 'the MCP changed; reload before saving')
-      }
-      if (prepared.input.type !== current.type) {
-        throw new ValidationError('mcp-type-immutable', 'mcp type cannot change')
-      }
-      const updatedAt = monotonicNow(current.updatedAt)
-      const changed = await first(
-        transaction
-          .update(mcps)
-          .set({
-            description: prepared.input.description,
-            enabled: prepared.input.enabled,
-            config: JSON.stringify(mcpConfigWithPreservedOauth(prepared.input, current)),
-            updatedAt,
-          })
-          .where(and(eq(mcps.id, current.id), eq(mcps.updatedAt, current.updatedAt)))
-          .returning(),
-      )
-      if (changed === undefined) throw staleConflictError('mcp', 'the MCP changed while saving')
-      await lifecycle.transitionMutation(transaction, {
-        mcpId: current.id,
-        reason: prepared.input.enabled ? 'mcp-config-changed' : 'mcp-disabled',
-        now: updatedAt,
+      const updated = await mcps.update({
+        id: plan.resourceId,
+        expectedConfigHash: plan.expectedRevision.configHash,
+        guard: (current) => requireOwner(actor, 'mcp', current),
+        // 场景规则：模型改写时省略的 `oauth` 沿用库里的值（RFC-348 D2）；提交的配置整份替换库里的配置。
+        patch: (current) => ({
+          type: prepared.input.type,
+          description: prepared.input.description,
+          enabled: prepared.input.enabled,
+          config: mcpConfigWithPreservedOauth(prepared.input, current),
+        }),
       })
-      return mcpReceipt(plan, {
-        kind: 'mcp',
-        configHash: mcpConfigHash(mcpFromPersistenceRow(changed)),
-      })
+      return mcpReceipt(plan, { kind: 'mcp', configHash: mcpConfigHash(updated) })
     },
   } satisfies IntentApplyMutationPort<'mcp', PreparedMcp>)
 }
@@ -610,104 +559,47 @@ function createPluginPort(
       prepared.staged = await prepared.install.stage()
     },
     async commitInTransaction({ transaction, plan, prepared }) {
+      const plugins = createPluginMutationParticipant(transaction, { now })
       if (plan.action === 'create') {
-        const { plugins } = tablesOf(transaction)
-        const collision = await first(
-          transaction
-            .select({ id: plugins.id })
-            .from(plugins)
-            .where(
-              and(eq(plugins.ownerUserId, actor.user.id), eq(plugins.name, plan.payload.name)),
-            ),
-        )
-        if (collision !== undefined) {
-          throw new ConflictError(
-            'plugin-name-in-use',
-            `plugin '${plan.payload.name}' already exists`,
-          )
-        }
         if (prepared.staged === null) throw new Error('plugin install result missing')
-        await assertHostedPluginPublicationInTx(
-          transaction,
-          plan.resourceId,
-          prepared.staged.cachedPath,
-        )
-        const at = now()
-        const inserted = await first(
-          transaction
-            .insert(plugins)
-            .values(
-              createPluginInsertValues({
-                id: plan.resourceId,
-                name: plan.payload.name,
-                spec: plan.payload.spec,
-                options: plan.payload.optionsJson ?? {},
-                description: plan.payload.description,
-                enabled: plan.payload.enabled ?? true,
-                sourceKind: prepared.staged.sourceKind,
-                cachedPath: prepared.staged.cachedPath,
-                resolvedVersion: prepared.staged.resolvedVersion,
-                ownerUserId: actor.user.id,
-                visibility: 'private',
-                aclRevision: 0,
-                now: at,
-              }),
-            )
-            .returning(),
-        )
-        if (inserted === undefined) throw new Error('plugin insert returned no row')
-        return pluginReceipt(plan, {
-          kind: 'plugin',
-          configHash: pluginConfigHash(pluginFromPersistenceRow(inserted)),
-        })
-      }
-
-      const { plugins } = tablesOf(transaction)
-      const row = await first(
-        transaction.select().from(plugins).where(eq(plugins.id, plan.resourceId)),
-      )
-      if (row === undefined) throw notFound('plugin', plan.resourceId)
-      const current = pluginFromPersistenceRow(row)
-      requireOwner(actor, 'plugin', current)
-      if (pluginConfigHash(current) !== plan.expectedRevision.configHash) {
-        throw staleConflictError('plugin', 'the plugin changed; reload before saving')
-      }
-      if (plan.payload.name !== current.name) {
-        throw new ValidationError(
-          'intent-rename-unsupported',
-          'renaming via intent update is not supported',
-        )
-      }
-      const install = prepared.staged
-      await assertHostedPluginPublicationInTx(
-        transaction,
-        plan.resourceId,
-        install?.cachedPath ?? current.cachedPath,
-      )
-      const updatedAt = monotonicNow(current.updatedAt)
-      const changed = await first(
-        transaction
-          .update(plugins)
-          .set({
+        const created = await plugins.create({
+          id: plan.resourceId,
+          ownerUserId: actor.user.id,
+          input: {
+            name: plan.payload.name,
             spec: plan.payload.spec,
-            optionsJson: JSON.stringify(plan.payload.optionsJson ?? {}),
-            description: plan.payload.description ?? current.description,
-            enabled: plan.payload.enabled ?? current.enabled,
-            sourceKind: install?.sourceKind ?? current.sourceKind,
-            cachedPath: install?.cachedPath ?? current.cachedPath,
-            resolvedVersion: install?.resolvedVersion ?? current.resolvedVersion,
-            installedAt: install === null ? current.installedAt : monotonicNow(current.installedAt),
-            updatedAt,
-          })
-          .where(and(eq(plugins.id, current.id), eq(plugins.updatedAt, current.updatedAt)))
-          .returning(),
-      )
-      if (changed === undefined)
-        throw staleConflictError('plugin', 'the plugin changed while saving')
-      return pluginReceipt(plan, {
-        kind: 'plugin',
-        configHash: pluginConfigHash(pluginFromPersistenceRow(changed)),
+            options: plan.payload.optionsJson ?? {},
+            description: plan.payload.description,
+            enabled: plan.payload.enabled ?? true,
+          },
+          installation: prepared.staged,
+        })
+        return pluginReceipt(plan, { kind: 'plugin', configHash: pluginConfigHash(created) })
+      }
+      const updated = await plugins.update({
+        id: plan.resourceId,
+        expectedConfigHash: plan.expectedRevision.configHash,
+        guard(current) {
+          requireOwner(actor, 'plugin', current)
+          if (plan.payload.name !== current.name) {
+            throw new ValidationError(
+              'intent-rename-unsupported',
+              'renaming via intent update is not supported',
+            )
+          }
+        },
+        patch: () => ({
+          spec: plan.payload.spec,
+          options: plan.payload.optionsJson ?? {},
+          ...(plan.payload.description === undefined
+            ? {}
+            : { description: plan.payload.description }),
+          ...(plan.payload.enabled === undefined ? {} : { enabled: plan.payload.enabled }),
+        }),
+        // 规格不变时 prepare 不安装（`artifactsForPluginUpdate`），沿用当前安装。
+        installation: prepared.staged,
       })
+      return pluginReceipt(plan, { kind: 'plugin', configHash: pluginConfigHash(updated) })
     },
     afterCommitted: async ({ prepared }) => {
       await prepared.install?.complete()

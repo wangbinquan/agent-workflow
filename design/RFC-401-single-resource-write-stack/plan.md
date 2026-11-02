@@ -59,6 +59,34 @@ Part A 涉及三条写入路径约一万行写入代码（Intent 端口 1582 行
 - **实现门**：本会话按路径限定自审（只审功能）。三入口经同一参与者，错误矩阵逐条相同；模板的执行合同端口对账对现有模板是恒等变换
   （启动期同步不会每次改写）；资源包 / Intent 的场景基线仍先于资源层（§5 第 11 项）。已知代价：资源包与 Intent 的每个 agent 写入现在
   都做一次 RFC-228 闭包校验（读全量库存），与普通编辑每次保存相同。PASS。
+- **CI**：`b00be9c37` 主 CI `41491898920` 67/70，git-protocols-e2e 通过。红的两格都不归 A1（证据见 `docs/audit-backlog.md`
+  「第九条」2026-11-02 后端腿补记与「第十二条」）：
+  - shard 16/44：`rfc311-perf-guards` AC-11 塌方探测，PG 的 G1 过滤视图 P95 10522ms（该用例整条 71.4s，同分片其余 PG 性能用例各约 8s），
+    测量窗口里 runner / PG 停顿；本机在该候选上两侧 P95 33ms / 32ms，25/25 通过；A1 不触及任务目录读路径。
+  - shard 20/44：`rfc359-w8-t28-lost-update` L6 [postgresql] 并发删兄弟任务时维护 claim 转移漏出 40001；A1 不触及任务删除、维护 claim 与
+    事务原语，相关生产文件最近的实质改动在 RFC-395。
+  按 CLAUDE.md 不以重跑为据：A1 的 CI 以后继 A2 提交的 CI 作证据。
+
+### A2（MCP 与 plugin）落地与集中验证（2026-11-02）
+
+- **实现**（design §9.3）：唯一的 MCP / plugin 写入参与者（`RC/infrastructure/mcpMutationParticipant.ts`、`pluginMutationParticipant.ts`，
+  合同 `RC/application/ports/mcpMutation.ts`、`pluginMutation.ts`；MCP 配置校验迁入 `RC/domain/mcps/mcpConfig.ts`）；普通 CRUD 仓库、Intent
+  端口、资源包 arm 接入；资源包覆盖保持规格不变时事务前不安装（`currentPluginSpecReader`，proposal §5 第 10 项）；Intent 名称预检对
+  MCP / plugin 也交给参与者。
+- **用例**：新增 `T/rfc401-mcp-plugin-error-matrix.test.ts`（MCP 名称冲突 / 类型不可变 / stale / no-op，plugin 名称冲突 / stale；三入口 ×
+  两 provider）与 W12 plugin 发布对拍里的「覆盖保持规格不变不重装」；A1 的结构锁推广为 `T/architecture/rfc401-resource-write-participants
+  .test.ts`（agent / MCP / plugin 三类，含负例；guard-manifest 换条）；依赖旧形状的用例与源码锁按参与者改写：W4-D16 / D17、W12 MCP /
+  plugin、W19、RFC-271 的 MCP 围栏与插件更新、RFC-285 B6、RFC-349 两份、T29 账本（Intent 端口 6 → 4）。
+- **集中验证**：
+  - 静态：typecheck 0 错误，eslint 与 prettier 通过。
+  - 第一轮：针对性验证集 443 个文件（凡涉及 MCP / plugin 写入、Intent apply、资源包的用例，全部架构守卫与读源码 / 账本的守卫），4 进程，
+    SQLite + PostgreSQL：435 个通过。查出本步引入的问题 7 处，均已修，都是源码锁 / 账本描述的是写点搬走之前的位置（Intent 端口直接写
+    `mcps` / `plugins` 与其 await、提交期重读 owner、W19 的插入语句、B6 的 private 铸造计数、T29 处数）；其余 1 个（`admin-only-gate`）
+    是负载超时。
+  - 第二轮：上面 8 个文件加矩阵、结构锁与全部读 guard-manifest 的守卫共 32 个文件，2 进程，全部通过。
+  - 按已提交源码出报告的用例：在「HEAD `b00be9c37` + 本候选」的导出仓库里 139 个全部通过。
+- **实现门**：本会话按路径限定自审（只审功能）。三入口经同一参与者，矩阵逐条相同；CRUD 的因果时钟（RFC-201）对语义 no-op 照旧观测
+  一次；Intent 的 OAuth 回填留在场景（模型产物的还原）；资源包同规格覆盖不调用安装器、installedAt 不动，换规格照常安装。PASS。
 
 ## 冲突面
 

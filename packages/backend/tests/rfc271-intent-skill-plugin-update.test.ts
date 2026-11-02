@@ -204,12 +204,33 @@ describe('T17 · plugin 半边的两条要害（源码层）', () => {
   // 整行 + 算基线 hash，把捕获的那一行**带进**提交期做整行 CAS。现行这条路换了机制、
   // 堵的是同一个窗口：提交期在事务里**自己重读**那一行，读到的就是提交那一刻的真值，
   // 没有「两次读之间」这段窗口可言；写回再挂一道 `updatedAt` 的 CAS 兜住重读与写回之间。
+  // RFC-401 A2：Intent 的插件更新经唯一的 plugin 写入参与者——参与者在提交事务里重读那一行、在那一行上跑场景的 owner
+  // 核对（guard），再以同一行做整行 CAS 发布。窗口仍然是零：核对与写回都取自提交事务里的那一次读。
   test('基线与写回都取自提交事务里的那一次读', () => {
-    const update = src.indexOf("requireOwner(actor, 'plugin', current)")
-    expect(update, '语料失效：插件提交臂的 owner 核对没扫到').toBeGreaterThan(0)
-    const reread = src.lastIndexOf('.from(plugins)', update)
+    expect(src, '语料失效：插件提交臂的 owner 核对没扫到').toContain(
+      "requireOwner(actor, 'plugin', current)",
+    )
+    expect(src).toContain('const plugins = createPluginMutationParticipant(transaction, { now })')
+    const participant = readFileSync(
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'resource-catalog',
+        'infrastructure',
+        'pluginMutationParticipant.ts',
+      ),
+      'utf8',
+    )
+    const reread = participant.indexOf(
+      'transaction.select().from(plugins).where(eq(plugins.id, input.id))',
+    )
+    const guard = participant.indexOf('input.guard?.(current)', reread)
+    const write = participant.indexOf('publishPluginRowInTx(transaction, row, {', guard)
     expect(reread, '核对之前必须有一次事务内重读').toBeGreaterThan(0)
-    expect(src.indexOf('eq(plugins.updatedAt, current.updatedAt)', update)).toBeGreaterThan(update)
+    expect(guard).toBeGreaterThan(reread)
+    expect(write).toBeGreaterThan(guard)
   })
 
   test('record-before-act：在 prestage 段内，落 artifact **早于** installPlugin', () => {

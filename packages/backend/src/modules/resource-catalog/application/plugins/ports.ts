@@ -1,3 +1,4 @@
+import type { PluginInstallation, PluginPatch } from '../ports/pluginMutation'
 import type { Plugin, PluginSourceKind, PluginUpdateCheck } from '@agent-workflow/shared'
 import type { PluginOperationContext } from '../../public/participants'
 import type { PluginCatalogResource } from '../../public/types'
@@ -25,18 +26,6 @@ export interface PluginCreateRecord {
   readonly now: number
 }
 
-export interface PluginPublishSet {
-  readonly spec: string
-  readonly options: Readonly<Record<string, unknown>>
-  readonly description: string
-  readonly enabled: boolean
-  readonly sourceKind: PluginSourceKind
-  readonly cachedPath: string
-  readonly resolvedVersion: string | null
-  readonly installedAt: number
-  readonly updatedAt: number
-}
-
 export interface PluginRepository {
   list(): Promise<Plugin[]>
   get(id: string): Promise<Plugin | null>
@@ -47,10 +36,17 @@ export interface PluginRepository {
     readonly excludeId?: string
   }): Promise<void>
   create(record: PluginCreateRecord): Promise<Plugin>
+  /**
+   * RFC-401 A2：stale、选项校验、no-op 与整行 CAS 发布都在唯一的 plugin 写入参与者里（同一事务）。`installation` 是事务前
+   * 完成的新安装（规格改变或显式 upgrade），`null` 沿用当前安装。
+   */
   publish(input: {
     readonly id: string
     readonly expectedConfigHash: string
-    readonly set: PluginPublishSet
+    readonly patch: PluginPatch
+    readonly installation: PluginInstallation | null
+    readonly nextUpdatedAt: (current: Plugin) => number
+    readonly nextInstalledAt: (current: Plugin) => number
   }): Promise<Plugin>
   rename(input: {
     readonly id: string

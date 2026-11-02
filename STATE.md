@@ -12,7 +12,12 @@
   结构锁 `rfc401-agent-write-participant`；Intent / 资源包批内的依赖环报 `agent-dependency-cycle` / `agent-dependency-self`（此前
   `intent-draft-invalid` / `internal-error`）；四类引用去重。集中验证 496 + 30 个文件，查出的 5 处用例与账本问题已修，其余为负载超时、
   低并发复跑通过；导出仓库里 139 个按已提交源码出报告的用例通过。详见 plan「A1 落地与集中验证」。
-- **下一步**：A2（MCP 与 plugin）。Part B（lease、技能 / fusion / restore 接入、旧生命周期退役）的前置 RFC-398 已 Done。
+- **A1 CI**：`b00be9c37` 主 CI 67/70，红的两格不归 A1（PG 性能用例测量窗口停顿；任务删除维护 claim 偶发 40001），证据见
+  `docs/audit-backlog.md`「第九条」补记与「第十二条」；以 A2 的 CI 作后继证据。
+- **A2（MCP 与 plugin）**：唯一的 MCP / plugin 写入参与者，普通 CRUD、Intent、资源包接入；资源包覆盖保持规格不变不重装
+  （proposal §5 第 10 项）；错误矩阵 `tests/rfc401-mcp-plugin-error-matrix.test.ts`；结构锁推广为 `rfc401-resource-write-participants`。
+  集中验证 443 + 32 个文件，查出的 7 处源码锁 / 账本问题已修，其余为负载超时；导出仓库里 139 个按已提交源码出报告的用例通过。
+- **下一步**：A3（workflow 与 workgroup）。Part B（lease、技能 / fusion / restore 接入、旧生命周期退役）的前置 RFC-398 已 Done。
 
 ## 2026-11-02 RFC-430 部署选择项删余下三个可派生项（Done；`design/RFC-430-derivable-deployment-selections/`）
 

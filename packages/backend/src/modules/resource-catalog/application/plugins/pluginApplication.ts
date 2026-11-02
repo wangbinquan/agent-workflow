@@ -107,27 +107,27 @@ export function createPluginApplication(deps: PluginApplicationDependencies) {
 
   async function publishInstalled(
     plugin: Plugin,
-    spec: string,
-    options: Readonly<Record<string, unknown>>,
-    description: string,
-    enabled: boolean,
+    expectedConfigHash: string,
+    patch: Readonly<{
+      spec: string
+      options?: unknown
+      description?: string
+      enabled?: boolean
+    }>,
   ): Promise<Plugin> {
-    const install = await deps.installer.install(plugin.id, spec)
+    const install = await deps.installer.install(plugin.id, patch.spec)
     try {
       return await deps.repository.publish({
         id: plugin.id,
-        expectedConfigHash: deps.projection.configHashOf(plugin),
-        set: {
-          spec,
-          options,
-          description,
-          enabled,
+        expectedConfigHash,
+        patch,
+        installation: {
           sourceKind: install.sourceKind,
           cachedPath: install.cachedPath,
           resolvedVersion: install.resolvedVersion,
-          installedAt: deps.clock.nextInstalledAt(plugin),
-          updatedAt: deps.clock.nextUpdatedAt(plugin),
         },
+        nextUpdatedAt: (current) => deps.clock.nextUpdatedAt(current),
+        nextInstalledAt: (current) => deps.clock.nextInstalledAt(current),
       })
     } catch (error) {
       await install.cleanup()
@@ -200,39 +200,28 @@ export function createPluginApplication(deps: PluginApplicationDependencies) {
         const fresh = await loadVisible(authority, resolved.id)
         await deps.access.requireResourceEdit(authority, fresh)
         assertExpectedHash(deps.projection, fresh, input.update.expectedConfigHash)
-
-        const options =
-          input.update.options === undefined
-            ? fresh.options
-            : PluginOptionsSchema.parse(input.update.options)
-        const spec = input.update.spec ?? fresh.spec
-        const description = input.update.description ?? fresh.description
-        const enabled = input.update.enabled ?? fresh.enabled
-        const specChanged = spec !== fresh.spec
-        const changed =
-          specChanged ||
-          JSON.stringify(options) !== JSON.stringify(fresh.options) ||
-          description !== fresh.description ||
-          enabled !== fresh.enabled
-        if (!changed) return fresh
-
-        if (specChanged) {
-          return publishInstalled(fresh, spec, options, description, enabled)
+        const patch = {
+          ...(input.update.spec === undefined ? {} : { spec: input.update.spec }),
+          ...(input.update.options === undefined ? {} : { options: input.update.options }),
+          ...(input.update.description === undefined
+            ? {}
+            : { description: input.update.description }),
+          ...(input.update.enabled === undefined ? {} : { enabled: input.update.enabled }),
+        }
+        // 规格改变才在事务前重新安装；其余（选项校验、no-op、发布）在唯一的 plugin 写入参与者里（RFC-401 A2）。
+        if (patch.spec !== undefined && patch.spec !== fresh.spec) {
+          return publishInstalled(fresh, input.update.expectedConfigHash, {
+            ...patch,
+            spec: patch.spec,
+          })
         }
         return deps.repository.publish({
           id: fresh.id,
           expectedConfigHash: input.update.expectedConfigHash,
-          set: {
-            spec,
-            options,
-            description,
-            enabled,
-            sourceKind: fresh.sourceKind,
-            cachedPath: fresh.cachedPath,
-            resolvedVersion: fresh.resolvedVersion,
-            installedAt: fresh.installedAt,
-            updatedAt: deps.clock.nextUpdatedAt(fresh),
-          },
+          patch,
+          installation: null,
+          nextUpdatedAt: (current) => deps.clock.nextUpdatedAt(current),
+          nextInstalledAt: (current) => deps.clock.nextInstalledAt(current),
         })
       })
       return deps.projection.resourceOf(updated)
@@ -336,7 +325,8 @@ export function createPluginApplication(deps: PluginApplicationDependencies) {
         assertExpectedHash(deps.projection, fresh, expectedConfigHash)
         assertOperationSupported(fresh)
         await deps.installer.checkForUpdate(fresh.id, fresh.spec, fresh.cachedPath)
-        return publishInstalled(fresh, fresh.spec, fresh.options, fresh.description, fresh.enabled)
+        // 显式 upgrade：同一规格重新解析版本，带新安装发布。
+        return publishInstalled(fresh, expectedConfigHash, { spec: fresh.spec })
       })
       return Object.freeze({
         configHashUsed: expectedConfigHash,

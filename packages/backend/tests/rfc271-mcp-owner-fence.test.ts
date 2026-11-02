@@ -184,27 +184,34 @@ describe('intent apply 的 MCP update 分支已经带上围栏（源码层）', 
   // 「在 intent 里改别人的资源」本身在更上游就被挡掉了（`application/resolveChangeset.ts` 的
   // `intent-foreign-modify-forbidden`：preflight 把非己有的目标标成 copy-only，只能复制一份），
   // 两个引擎同一条路——这里这道是提交期的同一件事再核一次。
+  // RFC-401 A2：Intent 的 MCP 更新经唯一的 MCP 写入参与者——参与者在提交事务里重读那一行、在那一行上跑场景的 owner
+  // 核对（guard），再以同一行做整行 CAS 写回。
   test('提交期在事务里重读 owner，而不是信任 preflight 时的快照', () => {
+    const infrastructure = resolve(
+      import.meta.dir,
+      '..',
+      'src',
+      'modules',
+      'resource-catalog',
+      'infrastructure',
+    )
     const src = readFileSync(
-      resolve(
-        import.meta.dir,
-        '..',
-        'src',
-        'modules',
-        'resource-catalog',
-        'infrastructure',
-        'aggregateAdapters',
-        'intentApplyResourcePorts.ts',
-      ),
+      resolve(infrastructure, 'aggregateAdapters', 'intentApplyResourcePorts.ts'),
       'utf8',
     )
-    const reread = src.indexOf(
-      'const row = await first(transaction.select().from(mcps).where(eq(mcps.id, plan.resourceId)))',
+    expect(src, '语料失效：MCP 提交臂的 owner 核对没扫到').toContain(
+      "guard: (current) => requireOwner(actor, 'mcp', current)",
+    )
+    const participant = readFileSync(resolve(infrastructure, 'mcpMutationParticipant.ts'), 'utf8')
+    const reread = participant.indexOf(
+      'transaction.select().from(mcps).where(eq(mcps.id, input.id))',
     )
     expect(reread, '语料失效：提交期那次重读一处都没扫到').toBeGreaterThanOrEqual(0)
-    const fence = src.indexOf("requireOwner(actor, 'mcp', current)", reread)
+    const fence = participant.indexOf('input.guard?.(current)', reread)
     expect(fence, 'owner 核对必须在重读之后').toBeGreaterThan(reread)
-    // 写回还带一道 `updatedAt` 的 CAS：重读与写回之间行又变了就落空。
-    expect(src.indexOf('eq(mcps.updatedAt, current.updatedAt)', fence)).toBeGreaterThan(fence)
+    // 写回以重读到的那一行做整行 CAS：重读与写回之间行又变了就落空。
+    expect(
+      participant.indexOf("updateMcpRowInTx(transaction, { kind: 'captured-row', row }", fence),
+    ).toBeGreaterThan(fence)
   })
 })

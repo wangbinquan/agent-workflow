@@ -102,33 +102,40 @@ describeEachProvider('RFC-359 W4-D17 —— Plugin 仓库', (harness) => {
     const name = `plugin-${ulid().slice(-6).toLowerCase()}`
     const created = await repository.create(record(owner, name))
     const sibling = await repository.create(record(owner, `${name}-b`))
-    const set = {
-      spec: 'example-plugin@2.0.0',
-      options: { flag: false },
-      description: 'v2',
-      enabled: true,
-      sourceKind: 'npm' as const,
-      cachedPath: `/plugins/${created.id}/2`,
-      resolvedVersion: '2.0.0',
-      installedAt: T0 + 1,
-      updatedAt: T0 + 1,
+    // RFC-401 A2：发布经唯一的 plugin 写入参与者——patch 加一份事务前完成的新安装（规格改变）。
+    const publication = {
+      patch: {
+        spec: 'example-plugin@2.0.0',
+        options: { flag: false },
+        description: 'v2',
+        enabled: true,
+      },
+      installation: {
+        sourceKind: 'npm' as const,
+        cachedPath: `/plugins/${created.id}/2`,
+        resolvedVersion: '2.0.0',
+      },
+      nextInstalledAt: () => T0 + 1,
+      nextUpdatedAt: () => T0 + 1,
     }
     expect(
-      await codeOf(() => repository.publish({ id: created.id, expectedConfigHash: 'stale', set })),
+      await codeOf(() =>
+        repository.publish({ id: created.id, expectedConfigHash: 'stale', ...publication }),
+      ),
     ).toBe(staleConflictError('plugin', 'x').code)
     expect(
       await codeOf(() =>
         repository.publish({
           id: 'missing',
           expectedConfigHash: projection.configHashOf(created),
-          set,
+          ...publication,
         }),
       ),
     ).toBe('plugin-not-found')
     const published = await repository.publish({
       id: created.id,
       expectedConfigHash: projection.configHashOf(created),
-      set,
+      ...publication,
     })
     expect(published).toMatchObject({
       spec: 'example-plugin@2.0.0',

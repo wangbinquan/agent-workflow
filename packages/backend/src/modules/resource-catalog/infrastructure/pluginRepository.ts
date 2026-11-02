@@ -3,6 +3,7 @@ import { tablesOf } from '@/platform/persistence/sessionTables'
 import type { Plugin } from '@agent-workflow/shared'
 import { and, eq, isNull, ne } from 'drizzle-orm'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
+import { createPluginMutationParticipant } from './pluginMutationParticipant'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { ConflictError, NotFoundError, staleConflictError } from '@/util/errors'
 import type {
@@ -12,8 +13,6 @@ import type {
 } from '../application/plugins/ports'
 import {
   fullPluginRowWhere,
-  insertPluginRowInTx,
-  publishPluginRowInTx,
   pluginConfigHash,
   pluginFromPersistenceRow,
   pluginProjection,
@@ -118,38 +117,36 @@ export function createPluginRepository(deps: {
       if (collision !== undefined) throw nameConflict(input.name, input.purpose)
     },
     async create(record): Promise<Plugin> {
-      try {
-        return await runResourceCatalogTransaction(db, async (transaction) => {
-          const created = await insertPluginRowInTx(transaction, record)
-          if (created.length !== 1) throw new Error('plugin insert did not return one row')
-          return pluginFromPersistenceRow(created[0]!)
-        })
-      } catch (error) {
-        if (isOwnerNameConflict(error)) throw nameConflict(record.name, 'create')
-        throw error
-      }
+      return runResourceCatalogTransaction(db, (transaction) =>
+        createPluginMutationParticipant(transaction, { now: () => record.now }).create({
+          id: record.id,
+          ownerUserId: record.ownerUserId,
+          input: {
+            name: record.name,
+            spec: record.spec,
+            options: record.options,
+            description: record.description,
+            enabled: record.enabled,
+          },
+          installation: {
+            sourceKind: record.sourceKind,
+            cachedPath: record.cachedPath,
+            resolvedVersion: record.resolvedVersion,
+          },
+        }),
+      )
     },
     async publish(publication): Promise<Plugin> {
-      return runResourceCatalogTransaction(db, async (transaction) => {
-        const row = await selectPluginRowById(transaction, publication.id)
-        if (row === null) {
-          throw new NotFoundError('plugin-not-found', `plugin '${publication.id}' not found`)
-        }
-        assertExpectedHash(row, publication.expectedConfigHash, 'generation publication')
-        const updated = await publishPluginRowInTx(transaction, row, {
-          spec: publication.set.spec,
-          optionsJson: JSON.stringify(publication.set.options),
-          description: publication.set.description,
-          enabled: publication.set.enabled,
-          sourceKind: publication.set.sourceKind,
-          cachedPath: publication.set.cachedPath,
-          resolvedVersion: publication.set.resolvedVersion,
-          installedAt: publication.set.installedAt,
-          updatedAt: publication.set.updatedAt,
-        })
-        requireChangedRow(updated, publication.id, 'generation publication')
-        return pluginFromPersistenceRow(updated[0]!)
-      })
+      return runResourceCatalogTransaction(db, (transaction) =>
+        createPluginMutationParticipant(transaction).update({
+          id: publication.id,
+          expectedConfigHash: publication.expectedConfigHash,
+          patch: () => publication.patch,
+          installation: publication.installation,
+          nextUpdatedAt: publication.nextUpdatedAt,
+          nextInstalledAt: publication.nextInstalledAt,
+        }),
+      )
     },
     async rename(renaming): Promise<Plugin> {
       try {

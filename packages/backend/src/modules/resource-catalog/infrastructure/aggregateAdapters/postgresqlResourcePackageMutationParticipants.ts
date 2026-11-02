@@ -682,6 +682,11 @@ export interface PostgresqlResourcePackageMutationSessionFactory {
 
 export interface PostgresqlResourcePackageMutationSessionFactoryInput {
   readonly authorityResolver: ResourceCurrentAuthorityResolver
+  /**
+   * RFC-401 A2（proposal §5 第 10 项）：当前 plugin 的规格。覆盖保持规格不变时事务前不重新安装，沿用当前安装。
+   * 缺省时每次覆盖都安装（只有直接装配会话工厂的用例会这样）。
+   */
+  readonly currentPluginSpec?: (pluginId: string) => Promise<string | null>
   readonly mcpLifecycle: McpTransactionLifecycle
   readonly pluginArtifacts: PostgresqlResourcePackagePluginArtifactOwner
   readonly skillArtifacts: PostgresqlResourcePackageSkillArtifactOwner
@@ -1007,8 +1012,8 @@ function transactionParticipants(input: {
       async commit(prepared: PreparedPluginPackageMutation) {
         const state = preparedState(input.states, prepared)
         if (state.type !== 'plugin') throw new Error('resource-package-plugin-state-mismatch')
+        // 规格不变的覆盖在事务前不安装（RFC-401 A2，proposal §5 第 10 项）；新建必有安装，由 arm 断言。
         const publication = input.pluginPublications.get(prepared)
-        if (publication === undefined) throw new Error('resource-package-plugin-install-missing')
         return await commitPostgresqlPluginPackageMutation({
           ...common,
           mutation: state.mutation,
@@ -1092,12 +1097,20 @@ async function prestagePreparedMutation(input: {
   readonly skillPublications: WeakMap<object, PostgresqlResourcePackageSkillPublication>
   readonly pluginArtifacts: PostgresqlResourcePackagePluginArtifactOwner
   readonly skillArtifacts: PostgresqlResourcePackageSkillArtifactOwner
+  readonly currentPluginSpec?: (pluginId: string) => Promise<string | null>
   readonly id: () => string
 }): Promise<void> {
   const state = preparedState(input.states, input.prepared)
   if (state.type === 'plugin') {
     if (input.pluginPublications.has(input.prepared)) {
       throw new Error('resource-package-plugin-already-prestaged')
+    }
+    if (
+      state.mutation.kind === 'plugin-update' &&
+      input.currentPluginSpec !== undefined &&
+      (await input.currentPluginSpec(state.resourceId)) === state.mutation.payload.spec
+    ) {
+      return
     }
     const generationId = input.id()
     const plan = input.pluginArtifacts.planInstall(input.context, {
@@ -1262,6 +1275,9 @@ export function createPostgresqlResourcePackageMutationSessionFactory(
             skillPublications,
             pluginArtifacts: input.pluginArtifacts,
             skillArtifacts: input.skillArtifacts,
+            ...(input.currentPluginSpec === undefined
+              ? {}
+              : { currentPluginSpec: input.currentPluginSpec }),
             id: mintId,
           }),
         compensate: (compensation) =>

@@ -50,12 +50,6 @@ import { and, eq, inArray } from 'drizzle-orm'
 import { ConflictError, NotFoundError, ValidationError, staleConflictError } from '@/util/errors'
 import { monotonicNow } from '@/util/time'
 import type { McpTransactionLifecycle } from '../mcpRepository'
-import { insertMcpRowInTx, mcpFromPersistenceRow, updateMcpRowInTx } from '../mcpPersistence'
-import {
-  insertPluginRowInTx,
-  pluginFromPersistenceRow,
-  publishPluginRowInTx,
-} from '../pluginPersistence'
 import {
   type PostgresqlResourceCatalogTransaction,
   isPostgresqlUniqueViolation,
@@ -84,6 +78,8 @@ import type {
 } from './postgresqlResourcePackageMutationParticipants'
 import type { AgentMutationBatch } from '../../application/ports/agentMutation'
 import { createAgentMutationParticipant } from '../agentMutationParticipant'
+import { createMcpMutationParticipant } from '../mcpMutationParticipant'
+import { createPluginMutationParticipant } from '../pluginMutationParticipant'
 
 export interface PostgresqlResourcePackagePendingName {
   readonly type: BundleResourceType
@@ -108,10 +104,6 @@ interface SkillMutationArmInput extends MutationArmInput<SkillPackageMutation> {
   readonly publication: PostgresqlResourcePackageSkillPublication & {
     readonly contentKind?: 'local-file' | 'database-bytes'
   }
-}
-
-interface PluginMutationArmInput extends MutationArmInput<PluginPackageMutation> {
-  readonly publication: PostgresqlResourcePackagePluginPublication
 }
 
 function pendingNameKey(type: BundleResourceType, localSlug: string): string {
@@ -621,116 +613,62 @@ export async function commitPostgresqlMcpPackageMutation(
     readonly lifecycle: McpTransactionLifecycle
   },
 ): Promise<ResourcePackageMutationReceipt<'mcp'>> {
-  const parsed = CreateMcpSchema.parse(input.mutation.payload)
-  if (input.mutation.kind === 'mcp-create') {
-    const { mcps } = tablesOf(input.transaction)
-    const collision = await first(
-      input.transaction
-        .select({ id: mcps.id })
-        .from(mcps)
-        .where(ownerScopedNameWhere(mcps, input.context.actor.user.id, parsed.name)),
-    )
-    if (collision !== undefined) {
-      throw new ConflictError('mcp-name-in-use', `mcp '${parsed.name}' already exists`)
-    }
-    const now = input.now()
-    try {
-      await insertMcpRowInTx(input.transaction, {
-        id: input.resourceId,
-        input: parsed,
-        ownerUserId: input.context.actor.user.id,
-        visibility: 'private',
-        aclRevision: 0,
-        now,
-      })
-    } catch (error) {
-      if (isPostgresqlUniqueViolation(error, ['mcps_owner_name_unique'])) {
-        throw new ConflictError('mcp-name-in-use', `mcp '${parsed.name}' already exists`)
-      }
-      throw error
-    }
-    return receipt('mcp', input.mutation, input.resourceId)
+  const mcps = createMcpMutationParticipant(input.transaction, {
+    lifecycle: input.lifecycle,
+    now: input.now,
+  })
+  const mutation = input.mutation
+  if (mutation.kind === 'mcp-create') {
+    await mcps.create({
+      id: input.resourceId,
+      ownerUserId: input.context.actor.user.id,
+      input: CreateMcpSchema.parse(mutation.payload),
+    })
+    return receipt('mcp', mutation, input.resourceId)
   }
 
+  // 场景基线先于资源层：已选目标消失 / 变化、非本人所有、builtin 只读（proposal §5 第 11 项）。
   await assertOwnedOverwrite({
     reader: input.reader,
     context: input.context,
     type: 'mcp',
     resourceId: input.resourceId,
-    mutation: input.mutation,
+    mutation,
   })
-  const { mcps } = tablesOf(input.transaction)
-  const row = await first(
-    input.transaction.select().from(mcps).where(eq(mcps.id, input.resourceId)),
-  )
-  if (row === undefined) throw new NotFoundError('mcp-not-found', 'mcp not found')
-  const current = mcpFromPersistenceRow(row)
-  const { name: _name, ...updateBody } = input.mutation.payload
+  const { name: _name, ...updateBody } = mutation.payload
   const patch = UpdateMcpSchema.parse(updateBody)
-  if (patch.type !== undefined && patch.type !== current.type) {
-    throw new ValidationError('mcp-type-immutable', 'mcp type cannot change')
-  }
-  const updatedAt = monotonicNow(row.updatedAt)
-  const changed = await updateMcpRowInTx(
-    input.transaction,
-    { kind: 'captured-row', row },
-    {
-      description: patch.description ?? current.description,
-      enabled: patch.enabled ?? current.enabled,
-      config: JSON.stringify(patch.config ?? current.config),
-      updatedAt,
-    },
-  )
-  if (changed.length === 0) {
-    throw staleConflictError('mcp', 'the MCP changed while saving; reload and retry')
-  }
-  await input.lifecycle.transitionMutation(input.transaction, {
-    mcpId: input.resourceId,
-    reason: (patch.enabled ?? current.enabled) ? 'mcp-config-changed' : 'mcp-disabled',
-    now: updatedAt,
+  await mcps.update({
+    id: input.resourceId,
+    expectedConfigHash: mutation.expect.expectedConfigHash,
+    patch: () => patch,
   })
-  return receipt('mcp', input.mutation, input.resourceId)
+  return receipt('mcp', mutation, input.resourceId)
 }
 
 export async function commitPostgresqlPluginPackageMutation(
-  input: PluginMutationArmInput,
+  input: MutationArmInput<PluginPackageMutation> & {
+    /** 本次的新安装；规格不变的覆盖在事务前不安装（proposal §5 第 10 项），为 undefined。 */
+    readonly publication: PostgresqlResourcePackagePluginPublication | undefined
+  },
 ): Promise<ResourcePackageMutationReceipt<'plugin'>> {
-  const parsed = CreatePluginSchema.parse(input.mutation.payload)
-  if (input.mutation.kind === 'plugin-create') {
-    const { plugins } = tablesOf(input.transaction)
-    const collision = await first(
-      input.transaction
-        .select({ id: plugins.id })
-        .from(plugins)
-        .where(ownerScopedNameWhere(plugins, input.context.actor.user.id, parsed.name)),
-    )
-    if (collision !== undefined) {
-      throw new ConflictError('plugin-name-in-use', `plugin '${parsed.name}' already exists`)
-    }
-    const now = input.now()
-    try {
-      await insertPluginRowInTx(input.transaction, {
-        id: input.resourceId,
+  const plugins = createPluginMutationParticipant(input.transaction, { now: input.now })
+  const mutation = input.mutation
+  const parsed = CreatePluginSchema.parse(mutation.payload)
+  if (mutation.kind === 'plugin-create') {
+    if (input.publication === undefined) throw new Error('resource-package-plugin-install-missing')
+    await plugins.create({
+      id: input.resourceId,
+      ownerUserId: input.context.actor.user.id,
+      input: {
         name: parsed.name,
         spec: parsed.spec,
         options: parsed.options,
         description: parsed.description,
         enabled: parsed.enabled,
-        sourceKind: input.publication.sourceKind,
-        cachedPath: input.publication.cachedPath,
-        resolvedVersion: input.publication.resolvedVersion,
-        ownerUserId: input.context.actor.user.id,
-        visibility: 'private',
-        aclRevision: 0,
-        now,
-      })
-    } catch (error) {
-      if (isPostgresqlUniqueViolation(error, ['plugins_owner_name_unique'])) {
-        throw new ConflictError('plugin-name-in-use', `plugin '${parsed.name}' already exists`)
-      }
-      throw error
-    }
-    return receipt('plugin', input.mutation, input.resourceId)
+      },
+      installation: input.publication,
+    })
+    return receipt('plugin', mutation, input.resourceId)
   }
 
   await assertOwnedOverwrite({
@@ -738,37 +676,17 @@ export async function commitPostgresqlPluginPackageMutation(
     context: input.context,
     type: 'plugin',
     resourceId: input.resourceId,
-    mutation: input.mutation,
+    mutation,
   })
-  const { plugins } = tablesOf(input.transaction)
-  const row = await first(
-    input.transaction.select().from(plugins).where(eq(plugins.id, input.resourceId)),
-  )
-  if (row === undefined) {
-    throw new NotFoundError('plugin-not-found', `plugin '${input.resourceId}' not found`)
-  }
-  const current = pluginFromPersistenceRow(row)
-  const { name: _name, sourceKind: _sourceKind, ...updateBody } = input.mutation.payload
+  const { name: _name, sourceKind: _sourceKind, ...updateBody } = mutation.payload
   const patch = UpdatePluginSchema.parse(updateBody)
-  const now = input.now()
-  const [changed] = await publishPluginRowInTx(input.transaction, row, {
-    spec: patch.spec ?? current.spec,
-    optionsJson: JSON.stringify(patch.options ?? current.options),
-    description: patch.description ?? current.description,
-    enabled: patch.enabled ?? current.enabled,
-    sourceKind: input.publication.sourceKind,
-    cachedPath: input.publication.cachedPath,
-    resolvedVersion: input.publication.resolvedVersion,
-    installedAt: now,
-    updatedAt: monotonicNow(row.updatedAt),
+  await plugins.update({
+    id: input.resourceId,
+    expectedConfigHash: mutation.expect.expectedConfigHash,
+    patch: () => patch,
+    installation: input.publication ?? null,
   })
-  if (changed === undefined) {
-    throw staleConflictError(
-      'plugin',
-      `plugin '${input.resourceId}' changed while the operation was running; reload and retry`,
-    )
-  }
-  return receipt('plugin', input.mutation, input.resourceId)
+  return receipt('plugin', mutation, input.resourceId)
 }
 
 async function resolveCallReference(input: {
