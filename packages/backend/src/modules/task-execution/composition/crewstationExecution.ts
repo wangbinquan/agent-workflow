@@ -148,7 +148,6 @@ export function composeCrewStationExecutionOwner(
       }),
       bootExecutionRecovery: recovery.factory,
       recoveredExecutionTaskIds: recovery.recoveredTaskIds,
-      portArtifactContentEffects,
       taskRunSelection: composeCrewStationTaskRunSelection({
         ...hostedAgents,
         skills: input.skills,

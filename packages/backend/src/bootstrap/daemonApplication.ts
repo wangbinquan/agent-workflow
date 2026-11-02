@@ -325,10 +325,7 @@ export async function composeDaemonApplication<P extends DatabaseProvider>(
   )
   const nodeRunPrompts =
     selectedTaskRuns === undefined
-      ? composeNodeRunPromptOperations(
-          input.nodeRunPromptContentEffects,
-          join(input.appHome, 'runs'),
-        )
+      ? composeNodeRunPromptOperations(undefined, join(input.appHome, 'runs'))
       : selectedTaskRuns.nodeRunPrompts
   const workspaceUploads = selectWorkspaceUploadContentFactory(input.workspaceUploads)
   const isolationWorkspaces = selectIsolationWorkspaceFactory(input.isolationWorkspaces)
@@ -341,7 +338,7 @@ export async function composeDaemonApplication<P extends DatabaseProvider>(
   })
   const portArtifacts =
     selectedTaskRuns === undefined
-      ? composePortArtifactOperations(input.portArtifactContentEffects, input.appHome)
+      ? composePortArtifactOperations(undefined, input.appHome)
       : selectedTaskRuns.portArtifacts
   const taskRunRoot =
     selectedTaskRuns === undefined

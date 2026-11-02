@@ -54,7 +54,6 @@ function fixture(input: {
     requiredProvider: null,
     listen: input.listen ?? {},
     selections: {
-      startupLease: { acquire: async () => lease },
       applicationConfiguration,
       taskArchive,
       secretBox: createSecretBoxFromKey(Buffer.alloc(32, 39)),
@@ -67,6 +66,8 @@ function fixture(input: {
       return input.fatal ?? null
     }),
   }
+  // RFC-428: the startup lease is no deployment selection; the fixture replaces the composed native lease.
+  const startupLease = spyOn(operations, 'composeDaemonStartupLease').mockResolvedValue(lease)
   const configLogger = spyOn(logging, 'configureLogger').mockImplementation(() => {})
   const createLogger = spyOn(logging, 'createLogger').mockReturnValue(log)
   const migration = spyOn(migrations, 'resolveMigrationsFolder').mockResolvedValue(
@@ -130,6 +131,7 @@ function fixture(input: {
     exit,
     run: () => startCommand(profile, input.launch ?? {}, input.development),
     restore() {
+      startupLease.mockRestore()
       terminate.mockRestore()
       error.mockRestore()
       serve.mockRestore()
@@ -179,7 +181,7 @@ for (const [name, launch, listen, expected] of [
       expect(received.taskArchive).toBe(f.taskArchive)
       expect(received.applicationConfiguration).toBe(f.applicationConfiguration)
       expect(received.secretBox).toBe(f.profile.selections.secretBox!)
-      expect(received.startupLease).toBe(f.profile.selections.startupLease)
+      expect(received).not.toHaveProperty('startupLease')
       expect(received).not.toHaveProperty('runtimeLegacyConfiguration')
       for (const key of [
         'workspaceUploads',

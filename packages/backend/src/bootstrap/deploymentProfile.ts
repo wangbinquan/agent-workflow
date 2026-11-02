@@ -28,12 +28,8 @@ import type {
 } from '@/modules/source-control/public/types'
 import type { RepositoryCandidateEffectsFactory } from '@/modules/source-control/composition'
 import type {
-  PortArtifactContentEffects,
-  TaskRuntimeInventoryContent,
-} from '@/modules/task-execution/public/types'
-import type {
-  NodeRunPromptContentEffects,
   TaskDeletionEffects,
+  TaskRuntimeInventoryContent,
 } from '@/modules/task-execution/public/types'
 import type {
   ActionWorkspaceEffects,
@@ -56,10 +52,6 @@ import type {
 } from '@/modules/development-automation/composition'
 import type { createDevelopmentWorkspaceRepositoryPreparation } from '@/services/developmentDeliveryDeps'
 import type { BootExecutionRecoveryFactory } from '@/modules/task-execution/composition/bootRecovery'
-import type {
-  DaemonStartupLeasePort,
-  DaemonDatabasePreOpenRecoveryPort,
-} from '@/modules/system-operations/composition'
 import type { DaemonDatabaseInstallationPort } from '@/modules/system-operations/composition/daemonDatabase'
 import type { composeLocalMcpDiagnostics } from '@/modules/resource-catalog/composition/localMcpDiagnostics'
 import type { PluginInstallerPort } from '@/modules/resource-catalog/composition/pluginOperations'
@@ -130,7 +122,6 @@ export interface DeploymentSelections {
   readonly contentStore?: ImportedContentStore
 
   applicationConfiguration?: ApplicationConfigurationBinding
-  databasePreOpenRecovery?: DaemonDatabasePreOpenRecoveryPort
   databaseInstallation?: DaemonDatabaseInstallationPort
   taskArchive?: TaskArchiveContentBinding
   skillContent?: SkillContentBinding
@@ -175,8 +166,6 @@ export interface DeploymentSelections {
   taskDeletionEffects?: TaskDeletionEffects
   /** RFC-370 §9.2 V3 — hosted only: publication network Git in the task volume. */
   readonly repositoryPublicationTransport?: RepositoryPublicationTransport
-  nodeRunPromptContentEffects?: NodeRunPromptContentEffects
-  portArtifactContentEffects?: PortArtifactContentEffects
   runtimeInventoryContent?: TaskRuntimeInventoryContent
   taskRunSelection?: TaskRunRootSelection
   taskRecovery?: TaskRecoveryDeploymentSelection
@@ -205,7 +194,6 @@ export interface DeploymentSelections {
   evidenceRead?: EvidenceReadBinding
   evidenceDocumentCommands?: EvidenceDocumentCommands
   attemptContext?: AttemptContextStorePort
-  startupLease?: DaemonStartupLeasePort
   /** RFC-370 v2 H7 — the deployment's execution authority; standalone is always active. */
   executionAuthority?: ExecutionAuthorityPort
   /** RFC-370 v2 §3.6 — the deployment's credential mechanism; standalone sessions by default. */

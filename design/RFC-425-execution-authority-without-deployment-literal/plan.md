@@ -52,6 +52,9 @@
 
 AC-5 以包含本 RFC 的后继提交（RFC-426）的 CI 作后继证据收尾。
 
+- **后继证据**：`14fd0c903`（RFC-426）主 CI `41432823539` 70 个 job 全部 success，windows-platform `41432823547` 与 maintenance-soak-nightly `41432823580` success；`aa275ba44` 是它的父提交，RFC-426 在本 RFC 的路径上只改 `daemonSession.ts` 的定时备份作业（与本 RFC 的生命周期
+  profile 那一行不相交）与共享索引、守卫账本。上面那条 Windows e2e 分片在该运行里通过。AC-5 成立，RFC-425 Done。
+
 ## 冲突面
 
 - **生产**：`SO/application/{ports/executionAuthority,executionStatus}.ts`、三个执行权实现、`S/bootstrap/{deploymentProfile,standalone,crewstation,daemonStart,daemonSession,…}.ts`、
@@ -63,4 +66,4 @@ AC-5 以包含本 RFC 的后继提交（RFC-426）的 CI 作后继证据收尾�
 ## 验收清单
 
 - [x] proposal AC-1～AC-4（本地集中验证，见上）
-- [ ] 推送后 exact SHA 的 CI 全绿（AC-5）
+- [x] 推送后 exact SHA 的 CI 全绿（AC-5，后继 `14fd0c903`，见上）

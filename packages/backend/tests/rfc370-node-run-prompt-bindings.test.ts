@@ -14,7 +14,7 @@ import {
 import { insertOne } from '@/platform/persistence/singleInsert'
 
 import { first as firstRow } from '@/platform/persistence/queryHelpers'
-import { expectDeploymentSelection } from './helpers/deploymentSelectionSource'
+import { expectNoDeploymentSelection } from './helpers/deploymentSelectionSource'
 import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 import { createPollingDaemonRuntimeHandleFactory } from '../src/bootstrap/daemonProviderRuntimeHandles'
 import { memorySystemAgentBindingForTest } from './helpers/memoryDistill'
@@ -703,9 +703,10 @@ test('CLI initial and replacement sessions carry one prompt selection through SQ
   const sf = source('bootstrap/daemonStart.ts'),
     body = compositionBody(sf, 'composeDaemonApplication'),
     selected = onlyCall(body, sf, 'composeNodeRunPromptOperations')
-  expectDeploymentSelection('nodeRunPromptContentEffects', 'NodeRunPromptContentEffects')
+  // RFC-428: no deployment selects prompt content; the local root composes the module's file default.
+  expectNoDeploymentSelection('nodeRunPromptContentEffects')
   expect(selected.arguments.map((value) => compact(value, sf))).toEqual([
-    'input.nodeRunPromptContentEffects',
+    'undefined',
     "join(input.appHome,'runs')",
   ])
   expect(binding(body, sf, 'nodeRunPrompts')).toBe(selected)
@@ -758,9 +759,10 @@ test('PG application carries its one prompt receiver through memory, runtime and
   const sf = source('bootstrap/daemonApplication.ts'),
     body = compositionBody(sf, 'composeDaemonApplication'),
     selected = onlyCall(body, sf, 'composeNodeRunPromptOperations')
-  expectDeploymentSelection('nodeRunPromptContentEffects', 'NodeRunPromptContentEffects')
+  // RFC-428: no deployment selects prompt content; the local root composes the module's file default.
+  expectNoDeploymentSelection('nodeRunPromptContentEffects')
   expect(selected.arguments.map((value) => compact(value, sf))).toEqual([
-    'input.nodeRunPromptContentEffects',
+    'undefined',
     "join(input.appHome,'runs')",
   ])
   expect(binding(body, sf, 'nodeRunPrompts')).toBe(selected)

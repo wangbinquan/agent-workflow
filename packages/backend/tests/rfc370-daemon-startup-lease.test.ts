@@ -1,4 +1,10 @@
+// RFC-428: no deployment selects a startup lease provider any more; `composeDaemonStartupLease` builds the native lock
+// file. The acquisition protocol for any provider (ACK before boot, release ACK on failure, diagnostics) is
+// `acquireDaemonStartupLease` + `runDaemonStartupWithLease`, which these cases drive with fake providers.
 import { expect, test } from 'bun:test'
+import { existsSync, mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import {
   composeDaemonStartupLease,
   readDaemonStartupRecoveryAuthority,
@@ -6,6 +12,7 @@ import {
   type DaemonStartupLease,
   type DaemonStartupLeasePort,
 } from '../src/modules/system-operations/composition'
+import { acquireDaemonStartupLease } from '../src/modules/system-operations/application/daemonStartupLease'
 import { createDaemonRecoveryAuthorityProof } from '../src/modules/task-execution/composition/bootRecovery'
 
 function deferred() {
@@ -55,12 +62,11 @@ function selectedLease() {
   return { lease, events, recoveryEntered, recoveryAck, releaseEntered, releaseAck }
 }
 
-test('selected prototype acquisition ACK precedes boot and never constructs the local provider', async () => {
+test('the acquisition ACK precedes boot', async () => {
   const f = selectedLease()
   const entered = deferred()
   const ack = deferred()
   let booted = false
-  let localCalls = 0
   class Provider implements DaemonStartupLeasePort {
     async acquire() {
       expect<DaemonStartupLeasePort>(this).toBe(provider)
@@ -72,13 +78,7 @@ test('selected prototype acquisition ACK precedes boot and never constructs the 
   const provider: DaemonStartupLeasePort = Object.freeze(new Provider())
   expect(Object.keys(provider)).toEqual([])
   expect(Object.keys(f.lease)).toEqual([])
-  const boot = composeDaemonStartupLease({
-    selected: provider,
-    local() {
-      localCalls += 1
-      throw new Error('selected startup must not inspect local files')
-    },
-  }).then((lease) =>
+  const boot = acquireDaemonStartupLease(provider).then((lease) =>
     runDaemonStartupWithLease(lease, async () => {
       expect(lease).toBe(f.lease)
       booted = true
@@ -90,7 +90,6 @@ test('selected prototype acquisition ACK precedes boot and never constructs the 
   expect(booted).toBe(false)
   ack.resolve()
   await expect(boot).resolves.toBe('ready')
-  expect(localCalls).toBe(0)
   expect(f.events).toEqual([])
   expect(f.lease.diagnostics).toEqual({ holder: 'selected-service-instance' })
 }, 20_000)
@@ -141,7 +140,6 @@ test('a synchronous diagnostics getter failure waits for the selected release AC
   const f = selectedLease()
   const failure = new Error('selected-diagnostics-failed')
   let reads = 0
-  let localCalls = 0
   let booted = false
   let observed: unknown
   class Lease implements DaemonStartupLease {
@@ -160,13 +158,7 @@ test('a synchronous diagnostics getter failure waits for the selected release AC
     }
   }
   const selected: DaemonStartupLease = Object.freeze(new Lease())
-  const result = composeDaemonStartupLease({
-    selected: { acquire: () => selected },
-    local() {
-      localCalls += 1
-      throw new Error('selected startup must not inspect local files')
-    },
-  })
+  const result = acquireDaemonStartupLease({ acquire: () => selected })
     .then((lease) =>
       runDaemonStartupWithLease(lease, async () => {
         expect(lease).toBe(selected)
@@ -182,7 +174,6 @@ test('a synchronous diagnostics getter failure waits for the selected release AC
   await nextTurn()
   expect(reads).toBe(1)
   expect(booted).toBe(false)
-  expect(localCalls).toBe(0)
   expect(observed).toBeUndefined()
   expect(f.events).toEqual(['release:enter'])
   f.releaseAck.resolve()
@@ -192,28 +183,43 @@ test('a synchronous diagnostics getter failure waits for the selected release AC
 }, 20_000)
 
 test.each([false, true])(
-  'selected acquisition failure (%s async) never falls back',
+  'an acquisition failure (%s async) propagates unchanged',
   async (async) => {
     const failure = new Error('startup-claim-refused')
-    let localCalls = 0
-    const selected: DaemonStartupLeasePort = {
+    const provider: DaemonStartupLeasePort = {
       acquire() {
         if (async) return Promise.reject(failure)
         throw failure
       },
     }
-    await expect(
-      composeDaemonStartupLease({
-        selected,
-        local() {
-          localCalls += 1
-          throw new Error('local fallback')
-        },
-      }),
-    ).rejects.toBe(failure)
-    expect(localCalls).toBe(0)
+    await expect(acquireDaemonStartupLease(provider)).rejects.toBe(failure)
   },
 )
+
+test('RFC-428: the composed startup lease is the native lock file, read from the local options once', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'rfc428-startup-lease-'))
+  try {
+    const lockPath = join(root, '.daemon.lock')
+    let localCalls = 0
+    const lease = await composeDaemonStartupLease({
+      local() {
+        localCalls += 1
+        return {
+          lockPath,
+          controlPath: join(root, 'daemon.control.json'),
+          maxWaitMs: 0,
+          log: { info() {}, error() {} },
+        }
+      },
+    })
+    expect(localCalls).toBe(1)
+    expect(existsSync(lockPath)).toBe(true)
+    await lease.release()
+    expect(existsSync(lockPath)).toBe(false)
+  } finally {
+    rmSync(root, { recursive: true, force: true })
+  }
+})
 
 test.each([
   { daemonGeneration: 'other', acquiredAt: 1, receiptDigest: 'receipt' },

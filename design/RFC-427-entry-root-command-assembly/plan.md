@@ -34,6 +34,10 @@
   - RFC-394 / 393 / 349 / 376 / 317 / 395 V3 / 400 / 359 W5-T19c 守卫。
 - **P0 变异 lane**（SQLite + PostgreSQL）：passed，34 个阶段、0 失败，127 个源文件指纹前后一致。
 
+## CI（AC-4）
+
+- **`c96f2c907`**：主 CI `41436955097` 70 个 job 全部 success，windows-platform `41436955142` success。AC-4 成立，RFC-427 Done。
+
 ## 冲突面
 
 - **生产**：`S/main.ts`、`S/bootstrap/{deployment,deploymentProfile}.ts`，新增 `S/bootstrap/{commandBootstraps,managedProcessOutputProbe,hostedGitCommands}.ts`。
@@ -47,4 +51,4 @@
 ## 验收清单
 
 - [x] proposal AC-1～AC-3（本地集中验证，见上）
-- [ ] 推送后 exact SHA 的 CI 全绿（AC-4）
+- [x] 推送后 exact SHA 的 CI 全绿（AC-4，`c96f2c907`，见上）

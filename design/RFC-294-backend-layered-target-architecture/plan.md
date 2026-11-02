@@ -149,13 +149,16 @@ Facade 只许 re-export 或参数形状适配；不得含 DB 查询、状态、�
     2026-10-21 起余项（单机默认值集中、执行权端口去部署字面量、入口根瘦身）因与 RFC-395 改动面冲突暂停；RFC-395 已于
     2026-10-29 Done，阻塞解除，待立项（编号届时另取）。2026-10-30 现状：`ExecutionAuthorityPort.mode` 仍在，业务层部署分支 5 处，
     `migrate` / `verify-database-restore` 仍是 `main.ts` 的命令分支。
-    余项第 2 项（执行权端口去部署字面量）：[RFC-425](../RFC-425-execution-authority-without-deployment-literal/proposal.md)（In Progress）——删除
+    余项第 2 项（执行权端口去部署字面量）：[RFC-425](../RFC-425-execution-authority-without-deployment-literal/proposal.md)（Done）——删除
     `ExecutionAuthorityPort.mode`，部署种类与 SPA 标记由 profile 下传，部署分支 5 → 2。
     余项第 2 项余下部分（定时备份来源移出 provider 适配表、执行可用性的单机回落）：
-    [RFC-426](../RFC-426-scheduled-backup-source-and-unbound-execution-status/proposal.md)（In Progress）——定时备份经系统运维模块的备份
+    [RFC-426](../RFC-426-scheduled-backup-source-and-unbound-execution-status/proposal.md)（Done）——定时备份经系统运维模块的备份
     协调端口，顺带修复单机 PostgreSQL 定时备份落成手动家族且带工作树；部署分支 2 → 1。
-    余项第 3 项（入口根瘦身）：[RFC-427](../RFC-427-entry-root-command-assembly/proposal.md)（In Progress）——`main.ts` 的命令依赖装配迁入
+    余项第 3 项（入口根瘦身）：[RFC-427](../RFC-427-entry-root-command-assembly/proposal.md)（Done）——`main.ts` 的命令依赖装配迁入
     `bootstrap/`，`migrate` / 两个校验命令成为部署描述的操作。
+    余项第 1 项（单机默认值集中、选择项改必填、死槽清理）：72 项盘点见
+    [RFC-428 inventory](../RFC-428-dead-deployment-selections/inventory.md)，分四步推进；第一步
+    [RFC-428](../RFC-428-dead-deployment-selections/proposal.md)（In Progress）删去四个死槽 / 被遮蔽槽（72 → 68）。
 - **退出门**：每模块每进程构造一次；不存在 provider 专属或部署专属的装配函数；入口根只做参数解析与 profile 选择；
   后台作业全部经唯一生命周期程序且都有 stop；两种 provider 的作业清单一致。
 - **前置 / 冲突**：`server.ts`、`cli/start.ts`、`cli/postgresqlDaemonApplication.ts` 正在被 RFC-370 改动，S2 须在其当前在制品
@@ -468,8 +471,8 @@ S3、S4、S8 互不依赖，可与其他后继并行，但各自避让正在被�
 
 - [ ] proposal AC-1～AC-11 全部兑现；
 - [x] 所有 P0 后继 Done；RFC-287 Done；RFC-288/289 保持 CLOSED；W2、W3 Done；
-- [ ] S1～S8 Done（2026-11-02：S1 / S3 / S4 / S5 / S6 / S8 Done——S6 由 RFC-402～424 落地，退出门核对见 §3 S6；S2 余 S2c（第 2 项由
-      RFC-425 处理，第 1、3 项另立），S7 未完成）；
+- [ ] S1～S8 Done（2026-11-02：S1 / S3 / S4 / S5 / S6 / S8 Done——S6 由 RFC-402～424 落地，退出门核对见 §3 S6；S2 余 S2c 第 1 项——第 2 项
+      （RFC-425 / 426）与第 3 项（RFC-427）Done，第 1 项按 RFC-428 盘点分四步推进；S7 未完成）；
 - [ ] W4 余项、W5 余项、W7 余项（2026-10-31 核销）、W9-C/E/D Done；W8 仅在新能力 RFC 获批时要求；
 - [ ] design §14 的终局判据全部成立；
 - [ ] 在途 task、历史行、API / MCP / WS 兼容与完整 E2E 有证据；

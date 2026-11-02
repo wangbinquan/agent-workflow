@@ -40,3 +40,19 @@ export function expectDeploymentSelection(key: keyof DeploymentSelections, type?
   expect(read('daemonSession.ts')).toContain('...deploymentSelectionsOf(input),')
   expect(read('deploymentSelections.ts')).toContain(key + ': true,')
 }
+
+/** RFC-428: a retired slot is neither a member of `DeploymentSelections` nor a key of the forwarding table. */
+export function expectNoDeploymentSelection(key: string): void {
+  const source = ts.createSourceFile(
+    'deploymentProfile.ts',
+    read('deploymentProfile.ts'),
+    ts.ScriptTarget.Latest,
+    true,
+  )
+  const contract = source.statements
+    .filter(ts.isInterfaceDeclaration)
+    .filter((node) => node.name.text === 'DeploymentSelections')
+  expect(contract).toHaveLength(1)
+  expect(contract[0]!.members.map((node) => node.name?.getText(source))).not.toContain(key)
+  expect(read('deploymentSelections.ts')).not.toContain(`  ${key}: true,`)
+}

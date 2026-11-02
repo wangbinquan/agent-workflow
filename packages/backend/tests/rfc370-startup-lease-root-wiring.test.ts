@@ -29,7 +29,8 @@ test('the real startup root selects one lazy lease and encloses boot in its fail
   const selected = calls(start, 'composeDaemonStartupLease')
   expect(selected).toHaveLength(1)
   const argument = selected[0]!.arguments[0]!
-  expect(argument.getText(start)).toContain('selected: profile.selections.startupLease')
+  // RFC-428: no deployment selects a lease provider; the root hands only the local options.
+  expect(argument.getText(start)).not.toContain('selected')
   expect(argument.getText(start)).toContain('local: () =>')
   const lifetime = calls(start, 'runDaemonStartupWithLease')
   expect(lifetime).toHaveLength(1)

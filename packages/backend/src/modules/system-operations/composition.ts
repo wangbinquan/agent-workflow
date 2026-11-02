@@ -21,12 +21,15 @@ import {
 export type { DaemonStartupLease, DaemonStartupLeasePort }
 export { readDaemonStartupRecoveryAuthority, runDaemonStartupWithLease }
 
-/** Only the chosen provider is created; a selected failure never falls back locally. */
+/**
+ * The daemon's startup lease: the native lock file. RFC-428: no deployment selects another provider, so the
+ * `selected` branch left with the deployment selection slot; the acquisition protocol itself is
+ * `acquireDaemonStartupLease`.
+ */
 export function composeDaemonStartupLease(input: {
-  readonly selected?: DaemonStartupLeasePort
   readonly local: () => NativeDaemonStartupLeaseOptions
 }): Promise<DaemonStartupLease> {
-  return acquireDaemonStartupLease(input.selected ?? createNativeDaemonStartupLease(input.local()))
+  return acquireDaemonStartupLease(createNativeDaemonStartupLease(input.local()))
 }
 
 import type { DaemonHostLifecyclePort } from './application/ports/daemonHostLifecycle'

@@ -18,7 +18,7 @@ import { describeEachProvider } from './helpers/eachProvider'
 import { createProviderHttpApplication } from './helpers/providerHttpApplication'
 import { DESIGNER, freshTaskId, seedTask } from './helpers/questionDispatchFixture'
 import { held, MemoryPortArtifactContent } from './helpers/portArtifactContent'
-import { chosenTaskRuns, unusedTaskRunEffect } from './helpers/taskRunSelection'
+import { chosenTaskRuns } from './helpers/taskRunSelection'
 
 describeEachProvider('RFC-370 real application root content coherence', (harness) => {
   test('drive writer references are readable through rebuilt root prompt and artifact APIs with selected ACKs', async () => {
@@ -97,21 +97,6 @@ describeEachProvider('RFC-370 real application root content coherence', (harness
         opencodeVersion: '1.14.25',
         dbVersion: 17,
         taskRunSelection: chosen.selection,
-        // If a selected root accidentally composes legacy content again, this
-        // complete unchosen receiver fails on the first observable effect.
-        portArtifactContentEffects: {
-          prepareArchive: unusedTaskRunEffect,
-          reference: unusedTaskRunEffect,
-          size: unusedTaskRunEffect,
-          copy: unusedTaskRunEffect,
-          readPrefix: unusedTaskRunEffect,
-          write: unusedTaskRunEffect,
-          linkTarget: unusedTaskRunEffect,
-          readArchive: unusedTaskRunEffect,
-          existsArchive: unusedTaskRunEffect,
-          readWorkspace: unusedTaskRunEffect,
-          existsWorkspace: unusedTaskRunEffect,
-        },
       }
       application = await createProviderHttpApplication(harness, input)
       await application.dispose()

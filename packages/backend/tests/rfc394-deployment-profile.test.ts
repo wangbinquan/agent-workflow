@@ -54,7 +54,6 @@ const HOSTED_SELECTION_KEYS = [
   'mcpDiagnostics',
   'missionInputBlobs',
   'pluginInstaller',
-  'portArtifactContentEffects',
   'programFixtureProcess',
   'recoveredExecutionTaskIds',
   'repositoryBaselines',
@@ -149,7 +148,8 @@ test('selection projection preserves all receivers and excludes session-only fie
     expect(selected[key]).toBe(values[key])
   expect('token' in selected).toBe(false)
   expect('requiredProvider' in selected).toBe(false)
-  expect(Object.keys(DEPLOYMENT_SELECTION_KEYS)).toHaveLength(72)
+  // RFC-428: four dead / shadowed selections retired (72 → 68).
+  expect(Object.keys(DEPLOYMENT_SELECTION_KEYS)).toHaveLength(68)
 })
 for (const version of ['git version 2.37.9', null])
   test('incompatible standalone git returns the unchanged fatal message: ' + version, async () => {
@@ -324,7 +324,8 @@ describeEachProvider('RFC-394 hosted factory with provider-owned storage', (harn
           'selections',
         ])
         expect(Object.keys(profile.selections).sort()).toEqual([...HOSTED_SELECTION_KEYS].sort())
-        expect(HOSTED_SELECTION_KEYS).toHaveLength(69)
+        // RFC-428: the shadowed portArtifactContentEffects left the hosted selections (69 → 68).
+        expect(HOSTED_SELECTION_KEYS).toHaveLength(68)
         expect(profile.selections.applicationConfiguration).toBe(system.applicationConfiguration)
         expect(profile.selections.databaseInstallation).toBe(system.databaseInstallation)
         expect(profile.selections.secretBox).toBe(system.secretBox)

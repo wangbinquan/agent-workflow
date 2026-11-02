@@ -1,4 +1,20 @@
-## 2026-11-02 RFC-427 入口根瘦身：命令依赖迁入 bootstrap，迁移 / 校验成为部署操作（In Progress；`design/RFC-427-entry-root-command-assembly/`）
+## 2026-11-02 RFC-428 部署选择项删死槽：启动锁、预打开恢复、节点提示与端口制品四项（In Progress；`design/RFC-428-dead-deployment-selections/`）
+
+- **来由**：RFC-294 S2c 余项第 1 项（单机默认值集中、选择项改必填、死槽清理）的第一步。用户授权同 RFC-402，本会话调研、设计、实施与集中验证，不派 Codex。
+- **盘点**：72 项部署选择项逐项追踪落档于 `design/RFC-428-dead-deployment-selections/inventory.md`（托管设置 69 项；死槽 3、被遮蔽 2、
+  可派生 6、启动时派生 6、托管覆盖 55），并给出后继四步。
+- **范围**：删去 `startupLease`、`databasePreOpenRecovery`、`nodeRunPromptContentEffects`、`portArtifactContentEffects`（72 → 68），随之删去启动锁的被选
+  分支、启动序列的预打开恢复选择分支与托管执行选择里被遮蔽的属性。纯结构重构。
+- **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。
+- **进度**：T1～T5 完成，随实现提交入库，待 exact SHA 的 CI（AC-4）。集中验证 437 + 145 + 1 个文件：键表数量断言已改，其余为 PostgreSQL 负载
+  超时（第三轮单进程两侧通过）；报告类用例在候选导出仓库里通过；P0 变异 lane 通过（34 个阶段、源文件指纹不变）。详见 plan「集中验证（T5）」。同提交收尾
+  RFC-425 / 426 / 427（各自 exact SHA 或后继 CI 全绿）。
+- **后继**（inventory「后继分步」）：
+  - evidence 一组（`evidenceDocumentCommands` 被遮蔽，`evidenceRead` / `attemptContext` / `missionInputBlobs` 可派生）；
+  - 另三个可派生项（`historyRestrictions`、`resourcePackageSkillContent`、`automationWorkspaceEffects`）；
+  - 单机默认值集中与改必填；需要会话图的工厂型选择项；按有无分支的项。
+
+## 2026-11-02 RFC-427 入口根瘦身：命令依赖迁入 bootstrap，迁移 / 校验成为部署操作（Done；`design/RFC-427-entry-root-command-assembly/`）
 
 - **来由**：RFC-294 S2c「部署 profile」余项第 3 项，退出门「入口根只做参数解析与 profile 选择」（RFC-393 §7 第 3 项、RFC-394 §3 非目标）。
   用户授权同 RFC-402，本会话调研、设计、实施与集中验证，不派 Codex。
@@ -7,7 +23,7 @@
   - `selectDeployment` 读一次部署模式，`migrate` 与两个校验命令成为部署描述的操作，不支持的操作统一报错（报文不变）。
   - 纯结构重构，无用户可见变化。
 - **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。
-- **进度**：T1～T5 完成，随实现提交入库，待 exact SHA 的 CI（AC-4）。`main.ts` 731 → 467 行，只 import `cli/`、`bootstrap/` 与写明理由的五个
+- **进度**：T1～T5 完成，随实现提交入库（`c96f2c907`）；exact SHA 的主 CI 70/70 与 windows-platform 全绿（AC-4），Done。`main.ts` 731 → 467 行，只 import `cli/`、`bootstrap/` 与写明理由的五个
   入口级依赖。集中验证 295 + 151 个文件：
   - 8 处钉住 `main.ts` 装配文本的锁与账本改指新位置；其中 RFC-223「先判归档契约再打开 provider」的原断言一直空过，改为真实校验顺序；
   - 2 个 PostgreSQL 负载超时；
@@ -16,7 +32,7 @@
   详见 plan「集中验证（T5）」。
 - **后继**：S2c 余项第 1 项（单机默认值集中、选择项改必填）。
 
-## 2026-11-02 RFC-426 定时备份经系统运维模块的备份端口、执行可用性去单机回落（In Progress；`design/RFC-426-scheduled-backup-source-and-unbound-execution-status/`）
+## 2026-11-02 RFC-426 定时备份经系统运维模块的备份端口、执行可用性去单机回落（Done；`design/RFC-426-scheduled-backup-source-and-unbound-execution-status/`）
 
 - **来由**：RFC-294 S2c「部署 profile」余项第 2 项的余下部分（RFC-393 §7 第 2 项、RFC-425 §3 非目标）。用户授权同 RFC-402，本会话调研、设计、
   实施与集中验证，不派 Codex。
@@ -25,7 +41,8 @@
 - **缺陷修复（用户可见）**：单机 PostgreSQL 的定时备份走手动备份命令，`kind` 丢失，落成手动家族 `agent-workflow-*` 且带工作树——不受保留规则
   轮转、挤占手动备份名额，违背 `docs/disaster-recovery.md` 的定时备份契约。修复后为 `scheduled-*`、不含工作树；旧文件不动。
 - **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。
-- **进度**：T1～T5 完成，随实现提交入库，待 exact SHA 的 CI（AC-5）。RFC-376 部署分支 2 → 1。集中验证 391 + 150 个文件：
+- **进度**：T1～T5 完成，随实现提交入库（`14fd0c903`）；exact SHA 的主 CI 70/70、windows-platform 与 maintenance-soak-nightly 全绿（AC-5），
+  Done；同一运行作 RFC-425 的后继证据。RFC-376 部署分支 2 → 1。集中验证 391 + 150 个文件：
   - 三本 RFC-359 账本因新用例变化，PostgreSQL 一侧用例放回既有 rfc349 文件后不变；
   - 其余为 PostgreSQL 负载超时与一处既有时序缺陷（`rfc368-implementation-gate` 固定 50ms 等待，已按同文件上一例的写法修正）；
   - 报告类用例在候选导出仓库里通过；P0 变异 lane 通过（34 个阶段、源文件指纹不变）。
@@ -34,20 +51,20 @@
 - **后继**：S2c 余项第 1 项（单机默认值集中、选择项改必填）、第 3 项（入口根瘦身：`main.ts` 自行装配的命令依赖迁入 `bootstrap/`、
   `migrate` / `verify-database-restore` 成为部署操作）各自另立；CrewStation 事件收件箱端口的通道字面量（RFC-376 余 1 处）。
 
-## 2026-11-02 RFC-425 执行权端口去部署字面量：部署种类由 profile 提供（In Progress；`design/RFC-425-execution-authority-without-deployment-literal/`）
+## 2026-11-02 RFC-425 执行权端口去部署字面量：部署种类由 profile 提供（Done；`design/RFC-425-execution-authority-without-deployment-literal/`）
 
 - **来由**：RFC-294 S2c「部署 profile」余项第 2 项（RFC-393 §7、RFC-394 §3 非目标）。用户授权同 RFC-402，本会话调研、设计、实施与集中验证，
   不派 Codex。
 - **范围**：删除 `ExecutionAuthorityPort.mode`；执行状态、HTTP 应用的 SPA 标记与生命周期程序的部署种类改由 bootstrap 从部署 profile 下传；
   `embed.ts` 只按 profile 给出的标记注入；RFC-376 部署分支 5 → 2；新增结构锁 `rfc425-execution-authority-deployment`。纯结构重构。
 - **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。
-- **进度**：T1～T5 完成，随实现提交入库，待 exact SHA 的 CI（AC-5）。RFC-376 部署分支 5 → 2。集中验证 403 个文件 399 个通过：两处本 RFC
+- **进度**：T1～T5 完成，随实现提交入库（`aa275ba44`）；AC-5 以后继 `14fd0c903` 的全绿 CI 收尾，Done。RFC-376 部署分支 5 → 2。集中验证 403 个文件 399 个通过：两处本 RFC
   的缺陷（新锁缺纯伪造单元负例、profile 字段集用例）已修，另两个负载超时在第三轮单进程上两侧全部通过；报告类用例在候选导出仓库里通过；
   P0 变异 lane 通过（34 个阶段、源文件指纹不变）。自审补了会话一侧两种 profile 的用例与生命周期取值的锁条件。详见 plan「集中验证（T5）」。同提交收尾 RFC-424
   （`556a45573` 全绿）并以同一运行收尾 RFC-422 / RFC-423；RFC-294 S6 Done。
 - **CI**：`aa275ba44` 主 CI 68/70，windows-platform 与 maintenance-soak-nightly 全绿。红的一格是 Windows e2e shard 3/4：两条长旅程在 runner
   挂起 102 秒的时段超时；同一 SHA 的 macOS 同分片跑同样用例全部通过，不归本 RFC（证据见 plan「CI（AC-5）」与 audit-backlog 第九条）。
-  AC-5 以 RFC-426 的 CI 作后继证据收尾。
+  AC-5 以 RFC-426 的 CI 作后继证据收尾：`14fd0c903` 主 CI 70/70、windows-platform 与 maintenance-soak-nightly 全绿，Done。
 - **后继**：S2c 余项第 1 项（单机默认值集中、选择项改必填）、第 3 项（入口根瘦身）、执行可用性回落值与定时备份来源各自另立。
 
 ## 2026-11-02 RFC-424 退役 `services/task.ts` 的测试专用驱动入口：协调器只在 bootstrap 装配（Done；`design/RFC-424-retire-test-only-task-drive-entries/`）

@@ -17,7 +17,7 @@ import {
 } from './helpers/model'
 
 import { first } from '@/platform/persistence/queryHelpers'
-import { expectDeploymentSelection } from './helpers/deploymentSelectionSource'
+import { expectNoDeploymentSelection } from './helpers/deploymentSelectionSource'
 import { readDaemonGraphSource } from './helpers/daemonGraphSource'
 // RFC-370: the actual runner, collaboration factory and provider HTTP roots await selected artifact ACKs.
 import { expect, test } from 'bun:test'
@@ -35,6 +35,8 @@ import {
 } from '@agent-workflow/shared'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { composePortArtifactOperations } from '@/modules/task-execution/composition/portArtifacts'
+import { composeNodeRunPromptOperations } from '@/modules/task-execution/composition/nodeRunPrompts'
+import { chosenTaskRuns } from './helpers/taskRunSelection'
 import { parseArchiveJson } from '@/modules/task-execution/public/queries'
 import { createCollaborationRuntimeMechanics } from '@/modules/collaboration/infrastructure/collaborationRuntimeMechanics'
 import { describeEachProvider } from './helpers/eachProvider'
@@ -426,7 +428,11 @@ describeEachProvider('RFC-370 real port artifact consumers', (harness) => {
       appHome: h.root,
       opencodeVersion: '1.14.25',
       dbVersion: 17,
-      portArtifactContentEffects: content,
+      // RFC-428: only a selected task-run root carries non-file artifact content in production.
+      taskRunSelection: chosenTaskRuns({
+        nodeRunPrompts: composeNodeRunPromptOperations(undefined, join(h.root, 'runs')),
+        portArtifacts: composePortArtifactOperations(content, h.root),
+      }).selection,
     })
     const headers = { Authorization: 'Bearer tok' },
       path = '/api/tasks/' + h.taskId + '/port-artifacts/' + h.nodeRunId + '/report'
@@ -556,17 +562,15 @@ test('CLI initial and replacement sessions carry raw content selection into the 
   const sf = source('bootstrap/daemonStart.ts')
   const sqlite = calls(sf, sf, 'composePortArtifactOperations')
   expect(sqlite).toHaveLength(1)
-  expect(sqlite[0]!.arguments.map((arg) => arg.getText(sf))).toEqual([
-    'input.portArtifactContentEffects',
-    'input.appHome',
-  ])
+  // RFC-428: no deployment selects artifact content; the local root composes the module's file default.
+  expect(sqlite[0]!.arguments.map((arg) => arg.getText(sf))).toEqual(['undefined', 'input.appHome'])
   const pg = calls(sf, sf, 'composeDaemonApplication')
   expect(pg).toHaveLength(1)
   expect(pg[0]!.arguments[0]!.getText(sf)).toContain('...deploymentSelectionsOf(input)')
   const sqliteDeps = calls(sf, sf, 'composeProviderAppComposition')
   expect(sqliteDeps).toHaveLength(1)
   expect(objectFields(sqliteDeps[0]!.arguments[0]!, sf).get('portArtifacts')).toBe('portArtifacts')
-  expectDeploymentSelection('portArtifactContentEffects', 'PortArtifactContentEffects')
+  expectNoDeploymentSelection('portArtifactContentEffects')
 })
 
 test('PG and HTTP roots share one selected service between runtime, review and the real artifact route', () => {
@@ -576,7 +580,7 @@ test('PG and HTTP roots share one selected service between runtime, review and t
   const pgSelection = calls(pg, pg, 'composePortArtifactOperations')
   expect(pgSelection).toHaveLength(1)
   expect(pgSelection[0]!.arguments.map((arg) => arg.getText(pg))).toEqual([
-    'input.portArtifactContentEffects',
+    'undefined',
     'input.appHome',
   ])
   expect(pg.text).toContain('taskRunBinding: taskRunRoot.drive')

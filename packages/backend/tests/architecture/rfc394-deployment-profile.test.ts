@@ -316,13 +316,13 @@ const mutations: readonly [string, string, (text: string) => string, string][] =
   [
     'missing selection key',
     KEYS,
-    (text) => text.replace('  startupLease: true,', ''),
+    (text) => text.replace('  secretBox: true,', ''),
     'exhaustive selection keys',
   ],
   [
     'extra selection key',
     KEYS,
-    (text) => text.replace('  startupLease: true,', '  startupLease: true, extra: true,'),
+    (text) => text.replace('  secretBox: true,', '  secretBox: true, extra: true,'),
     'exhaustive selection keys',
   ],
   [
@@ -458,8 +458,8 @@ test('the key table type rejects missing and extra keys in both directions', () 
     return program.getSemanticDiagnostics(source)
   }
   expect(diagnostics(code)).toEqual([])
-  expect(diagnostics(code.replace('startupLease: true,', ''))).not.toEqual([])
+  expect(diagnostics(code.replace('secretBox: true,', ''))).not.toEqual([])
   expect(
-    diagnostics(code.replace('startupLease: true,', 'startupLease: true, extra: true,')),
+    diagnostics(code.replace('secretBox: true,', 'secretBox: true, extra: true,')),
   ).not.toEqual([])
 })

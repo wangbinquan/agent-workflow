@@ -215,7 +215,6 @@ export async function startCommand(
 
   // 2. The selected startup provider supplies exclusivity and release ACKs.
   const lock = await composeDaemonStartupLease({
-    selected: profile.selections.startupLease,
     local: () => ({
       lockPath: Paths.lock,
       controlPath: Paths.controlFile,
@@ -307,9 +306,7 @@ export async function startCommand(
       if (guidance !== null) throw new Error(guidance)
     }
     // Classify legacy and unreconciled installations before resolving a pending restore.
-    if (profile.selections.databasePreOpenRecovery) {
-      await profile.selections.databasePreOpenRecovery.applyStagedRestore()
-    } else if (!profile.selections.databaseInstallation) {
+    if (!profile.selections.databaseInstallation) {
       await applyLocalEpoch2PendingRestore(logicalSchemaContract)
     }
     config = await configuration.read()
