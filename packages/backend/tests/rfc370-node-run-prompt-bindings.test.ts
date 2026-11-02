@@ -604,8 +604,10 @@ test('every actual runner launch site consumes the family whose native root bind
     values = fields(familyCall, native),
     receiver = values.get('appHome')!.replace(/\.request\.appHome$/, '')
   expect(values.get('nodeRunPrompts')).toBe(receiver + '.nodeRunPrompts')
-  const purpose = properties(binding(native, native, 'purpose'), native)
-  expect(purpose.get('nodeRunPrompts')?.getText(native)).toBe('input.nodeRunPrompts')
+  // RFC-422: the run purpose is built by the opener in infrastructure/local/taskAgentRunFamily.ts.
+  const opener = source('modules/task-execution/infrastructure/local/taskAgentRunFamily.ts')
+  const purpose = properties(binding(opener, opener, 'purpose'), opener)
+  expect(purpose.get('nodeRunPrompts')?.getText(opener)).toBe('input.nodeRunPrompts')
 })
 
 test('both real memory source branches and both read sites use the required public reader', () => {

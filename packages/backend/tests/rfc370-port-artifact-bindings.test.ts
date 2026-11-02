@@ -542,7 +542,8 @@ test('the real drive binds its exact selected artifact receiver into the family 
     'binding.portArtifacts',
   )
   expect(drive.text).toContain('const portArtifacts = input.portArtifactsFor(request.appHome)')
-  const local = source('modules/task-execution/composition/localTaskAgentRunFamily.ts')
+  // RFC-422: the port artifact mapping is built by the opener in infrastructure/local/taskAgentRunFamily.ts.
+  const local = source('modules/task-execution/infrastructure/local/taskAgentRunFamily.ts')
   expect(calls(local, local, 'input.portArtifacts.archive')).toHaveLength(1)
   expect(calls(local, local, 'input.portArtifacts.read')).toHaveLength(1)
   expect(local.text).toContain(

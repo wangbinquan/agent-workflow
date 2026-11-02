@@ -130,9 +130,10 @@ test('the hosted probe budget covers provisioning and a slow turn, within the HT
 })
 
 test('the hosted runtime management runs its smokes against the probe deadline', async () => {
+  // RFC-422: the hosted probe moved from the composition into infrastructure/crewstation.
   const source = await Bun.file(
     new URL(
-      '../src/modules/task-execution/composition/crewstationRuntimeManagement.ts',
+      '../src/modules/task-execution/infrastructure/crewstation/runtimeSmokeRunFamily.ts',
       import.meta.url,
     ),
   ).text()

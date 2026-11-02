@@ -3372,6 +3372,18 @@
       "minCorpusFiles": 2000,
       "negativeFixture": true,
       "runner": "bun"
+    },
+    {
+      "assertsAbsence": true,
+      "classified": true,
+      "corpusScanner": true,
+      "file": "packages/backend/tests/architecture/rfc422-run-family-openers.test.ts",
+      "id": "rfc422-run-family-openers",
+      "lines": 186,
+      "mechanism": "ast",
+      "minCorpusFiles": 2000,
+      "negativeFixture": true,
+      "runner": "bun"
     }
   ],
   "note": "RFC-395 II-b T18 Q-2: live census via tests/architecture/census.ts. Exact file set, corpus floors, absence checks and negative-fixture facts; no debt exemptions added.",

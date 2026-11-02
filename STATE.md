@@ -1,11 +1,23 @@
-## 2026-11-01 RFC-421 task-execution agent 调用栈：中立部分迁入 application，本地调用适配器迁入 infrastructure/local（In Progress；`design/RFC-421-task-execution-agent-invocation-stack/`）
+## 2026-11-01 RFC-422 task-execution 运行 family 的打开逻辑迁入 infrastructure，composition 只剩配对（In Progress；`design/RFC-422-task-execution-run-family-openers/`）
+
+- **来由**：RFC-294 S6 退出门「task-execution `composition/` 只剩装配」的第十步（RFC-416 proposal §7 第 2 项第二段）；用户授权同 RFC-402，
+  本会话调研、设计、实施与集中验证，不派 Codex。
+- **范围**：本地系统代理 / 冒烟 / 任务代理与托管系统代理 / 冒烟五个 family 的打开逻辑迁入 `infrastructure/local/` 与
+  `infrastructure/crewstation/`，别的模块的实现经 task-execution 自有端口注入；composition 只选取 provider 并注入。纯结构重构。
+- **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。
+- **进度**：T1～T5 完成，随实现提交入库，待 exact SHA 的 CI（AC-5）。集中验证 896 + 26 + 8 个文件：无本 RFC 引入的失败（首轮一处类型参数
+  退化已修）；负载超时第二轮多数通过，余下 8 个在候选与基线上单进程同样通过；两个按已提交源码生成报告的用例在候选导出仓库里通过；P0 变异
+  lane 通过。详见 plan「集中验证（T5）」。同提交收尾 RFC-421（`598054c42` 全绿）。
+- **后继**：composition 其余小块与收口锁；S6 退出门「协调器只在 bootstrap 构造」还差 `services/task.ts` 的 legacy 协调器工厂。
+
+## 2026-11-01 RFC-421 task-execution agent 调用栈：中立部分迁入 application，本地调用适配器迁入 infrastructure/local（Done；`design/RFC-421-task-execution-agent-invocation-stack/`）
 
 - **来由**：RFC-294 S6 退出门「task-execution `composition/` 只剩装配」的第九步（RFC-416 proposal §7 第 2 项第一段）；用户授权同 RFC-402，
   本会话调研、设计、实施与集中验证，不派 Codex。
 - **范围**：两段式调用准备、系统代理运行核心、运行时冒烟核心与材料声明迁入 `application/`；本地 agent 调用适配器与本地调用准备迁入
   `infrastructure/local/`；六个 composition 文件删除。纯结构重构。
 - **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。
-- **进度**：T1～T4 完成，随实现提交入库，待 exact SHA 的 CI（AC-5）。集中验证 429 + 3 + 3 个文件：无本 RFC 引入的失败，3 个负载超时第二轮
+- **进度**：T1～T4 完成，随实现提交入库（`598054c42`）；exact SHA 的主 CI 70/70 与 windows-platform 全绿（AC-5），Done。集中验证 429 + 3 + 3 个文件：无本 RFC 引入的失败，3 个负载超时第二轮
   通过、在候选与基线上单进程同样通过；两个按已提交源码生成报告的用例在候选导出仓库里通过；P0 变异 lane 通过（34 个阶段、源文件指纹不变）。
   详见 plan「集中验证（T4）」。同提交收尾 RFC-420（`d9a5aefaa` 全绿）。
 - **后继**：各运行 family 的打开逻辑（task-execution 自有材料端口）；composition 其余小块与收口锁。
