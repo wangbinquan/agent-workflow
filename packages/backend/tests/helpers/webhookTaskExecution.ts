@@ -23,7 +23,7 @@ import { composeAgentLaunchResourceOperations } from '../../src/modules/task-exe
 import { composeWorkgroupLaunchResourceOperations } from '../../src/modules/task-execution/composition/workgroupLaunchResources'
 import { composeDeferredRepositoryPreparation } from '../../src/modules/task-execution/composition/deferredRepositoryPreparation'
 import { createTaskExecutionLaunchParticipant } from '../../src/modules/task-execution/composition/taskRouteLaunch'
-import { createTaskExecutionTriggerParticipant } from '../../src/modules/task-execution/composition/triggerExecution'
+import { createTaskExecutionTriggerParticipant } from '../../src/modules/task-execution/infrastructure/taskExecutionTrigger'
 import { createTaskExecutionPersistence } from '../../src/modules/task-execution/composition/taskExecutionPersistence'
 import { composeDatabaseAgentResourceIntegrity } from '../../src/modules/resource-catalog/composition/agentResourceIntegrity'
 import { composeResourceCatalogFor } from '../../src/modules/resource-catalog/composition/providerResourceCatalog'

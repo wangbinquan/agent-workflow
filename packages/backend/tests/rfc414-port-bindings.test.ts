@@ -159,7 +159,8 @@ test('the local action workspace entries check the daemon filesystem below the w
 })
 
 test('composition binds the moved I/O where the original code ran it', () => {
-  expect(source('crewstationRecovery.ts')).toContain(
+  // RFC-423: the hosted recovery selection moved to infrastructure; the read is still the RFC-414 query.
+  expect(source('../infrastructure/crewstation/hostedRecoverySelection.ts')).toContain(
     'taskStatus: (taskId) => readTaskStatus(input.db, taskId),',
   )
   // RFC-417: the hosted ownership decision moved with the CrewStation adapter; the read is still the RFC-414 query.

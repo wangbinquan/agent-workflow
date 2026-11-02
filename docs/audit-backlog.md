@@ -5596,6 +5596,13 @@ graph@2 的 `verify-change` 要求实现依据里的每条义务在**交付前**
 
 第一条暂不改：不清楚是 runner 上的 PostgreSQL 连接被挂住，还是查询本身变慢。再次出现时先看同片 PostgreSQL 服务容器的状态和这条查询的耗时。
 
+2026-11-02 第一条复现（仍未处置）：运行 41400013512（`465fa2087`，RFC-422）后端第 16/44 片，同一条「过滤视图（G1 快路径）」[postgresql]
+这次由 AC-11 塌方探测报红：PostgreSQL 的 P95 10474.78ms（SQLite 69.79ms），整条用例 63.5 秒。
+
+- 语句数、行数、最大参数（4 / 52 / 50）与此前三次通过的运行相同，那三次的 P95 是 12.91 / 13.40 / 45.86ms。
+- 同片 PostgreSQL 服务容器在 06:45:04～06:46:07（该用例运行期间）没有错误或告警日志，前后的 checkpoint 都在几毫秒内完成。
+- 该提交只迁移 task-execution 运行 family 的打开逻辑，不涉及任务目录查询。
+
 ## Windows：单个 node.exe 启动偶发停顿 10 秒以上（2026-10-29，测试预算已与产品默认对齐，停顿原因未查明）
 
 - windows-platform 运行 40976735449（`c6a0248ad`）：`rfc310-event-center.test.ts` 的真实自定义观察器在第一次 validate 超时。结算记录显示 node.exe 已创建（pid 7104），10.6 秒内 stdout、stderr 都没有输出，连脚本第一条语句写的 stderr 标记也没有；同一 job 其余用例的耗时正常。10 月 11 日、13 日的 Windows 运行出现过同样的 `timeout/1`（见 `design/RFC-370-crewstation-hosted-deployment/ci-custom-observer-native-timeout-diagnostics.md`）。

@@ -1026,7 +1026,7 @@ describe('RFC-287 G7 —— 定时触发与手动启动同一套语义', () => {
     const { createTaskExecutionLaunchParticipant } =
       await import('@/modules/task-execution/composition/taskRouteLaunch')
     const { createBuildScheduleLaunch, createTaskExecutionTriggerParticipant } =
-      await import('@/modules/task-execution/composition/triggerExecution')
+      await import('@/modules/task-execution/infrastructure/taskExecutionTrigger')
     const { composeWorkgroupLaunchResourceOperations } =
       await import('@/modules/task-execution/composition/workgroupLaunchResources')
     const { composeDeferredRepositoryPreparation } =

@@ -327,7 +327,6 @@ const CROSS_CONTEXT_INTERNAL_DEBT: readonly string[] = [
   'packages/backend/src/modules/task-execution/composition/localTaskAgentRunFamily.ts -> packages/backend/src/modules/source-control/composition/taskAgentWorkspaceContents.ts',
   'packages/backend/src/modules/task-execution/composition/taskDeletionEffects.ts -> packages/backend/src/modules/source-control/composition.ts',
   'packages/backend/src/modules/task-execution/composition/taskExecutionPersistence.ts -> packages/backend/src/modules/source-control/composition/workspacePresence.ts',
-  'packages/backend/src/modules/task-execution/composition/triggerExecution.ts -> packages/backend/src/modules/integration/application/ports/webhookExecution.ts',
   'packages/backend/src/modules/task-execution/infrastructure/agentLaunchResourceOperations.ts -> packages/backend/src/modules/resource-catalog/composition/resourceAcl.ts',
   'packages/backend/src/modules/task-execution/infrastructure/agentLaunchResourceOperations.ts -> packages/backend/src/modules/resource-catalog/infrastructure/legacy/agent.ts',
   'packages/backend/src/modules/task-execution/infrastructure/agentLaunchResourceOperations.ts -> packages/backend/src/modules/resource-catalog/infrastructure/legacy/workflow.validator.ts',
@@ -337,6 +336,7 @@ const CROSS_CONTEXT_INTERNAL_DEBT: readonly string[] = [
   'packages/backend/src/modules/task-execution/infrastructure/local/nativeTaskAgentRun.ts -> packages/backend/src/modules/source-control/composition/agentWorkspaceGitControl.ts',
   'packages/backend/src/modules/task-execution/infrastructure/taskCatalogSources.ts -> packages/backend/src/modules/task-catalog/composition/required-ports.ts',
   'packages/backend/src/modules/task-execution/infrastructure/taskExecutionCatalogSources.ts -> packages/backend/src/modules/task-catalog/composition/required-ports.ts',
+  'packages/backend/src/modules/task-execution/infrastructure/taskExecutionTrigger.ts -> packages/backend/src/modules/integration/application/ports/webhookExecution.ts',
   'packages/backend/src/modules/task-execution/infrastructure/taskRouteLaunchOperations.ts -> packages/backend/src/modules/integration/public/mrTerminalControl.ts',
   'packages/backend/src/modules/task-execution/infrastructure/workgroupLaunchResourceOperations.ts -> packages/backend/src/modules/resource-catalog/composition/resourceAcl.ts',
   'packages/backend/src/modules/task-execution/infrastructure/workgroupLaunchResourceOperations.ts -> packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroups.ts',
@@ -483,9 +483,6 @@ const CAPABILITY_COMPATIBILITY_DEBT: string[] = [
   'modules/identity-access/application/adapters/event-automation-adapter.ts: casts/rewraps Actor outside owner factory',
   'modules/task-execution/application/sourceTerminationCapability.ts#mintSourceTerminationEffectCapability: factory is outside capability owner',
   'modules/task-execution/application/sourceTerminationCapability.ts: casts/rewraps SourceTerminationEffectCapability outside owner factory',
-  // RFC-359 AC-1（2026-09-17，plan §5hn 批次二 ①②）：触发器参与者两个引擎合成一份，
-  // 这两条因此塌成一条（`createTaskExecutionTriggerParticipant`）。
-  'modules/task-execution/composition/triggerExecution.ts#createTaskExecutionTriggerParticipant: factory is outside capability owner',
   // RFC-395 II-a A2/A3/A7: existing caller-owned writes moved into these exact InTx ports.
   'modules/task-execution/infrastructure/consumedInputsParticipant.ts#createConsumedInputsParticipantInTx: factory is outside capability owner',
   'modules/task-execution/infrastructure/humanGatePersistenceParticipant.ts#createHumanGatePersistenceParticipantInTx: factory is outside capability owner',
@@ -494,6 +491,11 @@ const CAPABILITY_COMPATIBILITY_DEBT: string[] = [
   'modules/task-execution/infrastructure/runtimeSessionLeaseOperations.ts: constructs RuntimeSessionLeaseToken outside owner factory',
   'modules/task-execution/infrastructure/taskAuthorization.ts#createTaskAuthorizationParticipantInTx: factory is outside capability owner',
   'modules/task-execution/infrastructure/taskCreationParticipant.ts#createTaskCreationParticipantInTx: factory is outside capability owner',
+  // RFC-359 AC-1（2026-09-17，plan §5hn 批次二 ①②）：触发器参与者两个引擎合成一份，
+  // 这两条因此塌成一条（`createTaskExecutionTriggerParticipant`）。RFC-423：触发器参与者迁入
+  // infrastructure（`taskExecutionTrigger.ts`），条目随文件改指（按排序落在这里）。
+  'modules/task-execution/infrastructure/taskExecutionTrigger.ts#createTaskExecutionTriggerParticipant: factory is outside capability owner',
+  // RFC-395 II-a A2/A3/A7（续）。
   'modules/task-execution/infrastructure/workgroupHostLedgerParticipant.ts#createWorkgroupHostLedgerParticipantInTx: factory is outside capability owner',
   'modules/task-execution/infrastructure/workgroupTaskRoomTaskParticipant.ts#createWorkgroupTaskRoomTaskParticipantInTx: factory is outside capability owner',
   'modules/task-execution/public/types.ts: TaskPortArtifactActor leaks through public/types',

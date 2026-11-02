@@ -909,6 +909,10 @@ function registerCases(provider: ProviderHarness) {
   // applyLatestDirective=false → effectiveHasClarifyChannel was re-forced true →
   // the agent's final <workflow-output> was rejected (clarify-required) and the
   // finalize round could never complete after a daemon restart.
+  // 墙钟预算（2026-11-02 CI 实测补，465fa2087 backend shard 43/44）：本例两次进入 runTask（首轮反问挂起、中断后
+  // 重入定稿），各带一次真实 spawn。前三个绿提交上 PostgreSQL 一侧 1.0～1.6s；这一次在首轮挂起之后、重入之前的
+  // 数据库段停了约 4s，以 5398ms 越过 bun 默认 5s（同一分片总耗时反而比上一提交低三成；本地单进程候选 3858ms、
+  // 基线 3814ms）。显式预算=墙钟允许量，不是对调度变慢的容忍。
   test('interrupted STOP-clarify rerun: revival stays released (outputs), not re-forced into ask-back', async () => {
     await seedAgent(h.db, 'designer', ['design'])
     const def: WorkflowDefinition = {
@@ -1049,7 +1053,7 @@ function registerCases(provider: ProviderHarness) {
     )
     // And it actually finalized (output accepted, not clarify-required looped).
     expect(fresh.status).toBe('done')
-  })
+  }, 20_000)
 
   // Multi-round boundary: with TWO already-answered rounds (ci=0 and ci=1)
   // plus a clarify-rerun row at ci=2 that got swept to 'interrupted' by a

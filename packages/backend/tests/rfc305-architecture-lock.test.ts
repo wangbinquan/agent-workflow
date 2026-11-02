@@ -397,9 +397,9 @@ describe('RFC-305 identity-access architecture', () => {
       // RFC-370 §9.2 V4: recovery requests act as the requesting platform user's AW account.
       'packages/backend/src/modules/task-execution/application/ports/taskClarifyDirectiveRoutes.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/task-execution/application/ports/taskExecutionResourceSnapshots.ts -> @/modules/identity-access/public/participants',
-      'packages/backend/src/modules/task-execution/composition/crewstationRecovery.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/task-execution/composition/taskEngineRuntimeOptions.ts -> @/modules/identity-access/public/participants',
-      'packages/backend/src/modules/task-execution/composition/taskRecoverySelection.ts -> @/modules/identity-access/public/participants',
+      // RFC-423: the hosted recovery selection and the recovery selection contracts moved into infrastructure.
+      'packages/backend/src/modules/task-execution/infrastructure/crewstation/hostedRecoverySelection.ts -> @/modules/identity-access/public/participants',
       // RFC-357：列表页把 owner 身份收成一个**注入的端口**（`OwnerIdentityQueries`，
       // identity-access 的 exact public 面），由装配根提供实现。下面四条都是 type-only
       // 的 public 消费，与 postgresqlTaskRouteOperations 那条同型；模块自己去 compose
@@ -414,6 +414,7 @@ describe('RFC-305 identity-access architecture', () => {
       'packages/backend/src/modules/task-execution/infrastructure/taskExecutionRuntimeParticipants.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/task-execution/infrastructure/taskListPage/database.ts -> @/modules/identity-access/public/operations',
       'packages/backend/src/modules/task-execution/infrastructure/taskListPage/projection.ts -> @/modules/identity-access/public/operations',
+      'packages/backend/src/modules/task-execution/infrastructure/taskRecoverySelection.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/task-execution/infrastructure/taskRouteOperations.ts -> @/modules/identity-access/public/operations',
       'packages/backend/src/modules/task-execution/infrastructure/taskRouteWorkspaceParticipant.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/task-execution/public/commands.ts -> @/modules/identity-access/public/participants',

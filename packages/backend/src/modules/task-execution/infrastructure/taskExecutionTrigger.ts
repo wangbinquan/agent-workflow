@@ -1,3 +1,4 @@
+// RFC-423: moved verbatim from composition/triggerExecution.ts — the trigger participant and the scheduled task launch.
 import {
   ScheduledAgentPayloadSchema,
   ScheduledWorkgroupPayloadSchema,
@@ -8,7 +9,7 @@ import type { WebhookTaskExecutionParticipant } from '@/modules/integration/appl
 import type { TaskExecutionResourceAuthority } from '../application/ports/taskExecutionResourceSnapshots'
 import type { BuildScheduleLaunch } from '@/services/scheduledTasks'
 import type { ExecutionInvoker, TaskCancellationCommand } from '../public/commands'
-import type { TaskExecutionLaunchParticipant } from '../infrastructure/taskRouteLaunchOperations'
+import type { TaskExecutionLaunchParticipant } from './taskRouteLaunchOperations'
 
 export type TaskExecutionTriggerParticipant = WebhookTaskExecutionParticipant<
   TaskExecutionResourceAuthority,

@@ -47,6 +47,20 @@ T1～T4 完成（本会话实施），与落档设计无偏差。
 - **P0 变异 lane**（SQLite + PostgreSQL）：passed，34 个阶段、0 失败，127 个源文件指纹前后一致。
 - **测试环境**：首轮一个用例超时后遗留的 `mock-mcp-stdio.ts hang` 夹具进程（PID 42632，父进程已退出）在第三轮前清理。
 
+## CI（AC-5）
+
+`465fa2087` 的主 CI（运行 41400013512）67/70，windows-platform（运行 41400013679）全绿。主 CI 红了两格，汇总门 `CI required` 随之红：
+
+- **backend shard 43/44**：`scheduler-clarify-dispatch` 的「interrupted STOP-clarify rerun」[postgresql] 以 5398ms 越过 bun 默认 5s，随后是
+  超时引起的连带错误。前三个绿提交上这一例 1.0～1.6s；同一分片总耗时反而比上一提交低三成；本地单进程本候选 3858ms、基线 3814ms。归因为
+  该例两次进入 runTask 的墙钟本就擦边，不是本 RFC 引入；RFC-423 给它 20s 显式预算（与同文件 clarify-no-channel 例的既有预算同形）。
+- **backend shard 16/44**：`rfc311-perf-guards` 的「task-operations catalog — 过滤视图（G1 快路径）」[postgresql] 的 AC-11 塌方探测报红，
+  P95 10474.78ms。语句数 / 行数 / 参数数（4 / 52 / 50）与前三次通过的运行相同（那三次 P95 12.91 / 13.40 / 45.86ms），同片 PostgreSQL
+  服务容器在该例运行期间没有错误日志。本 RFC 不涉及任务目录查询；这是 `docs/audit-backlog.md` 已记录、原因未明的同一条偶发失败的复现，
+  证据已补进该条目，不归本 RFC。
+
+AC-5 以包含本 RFC 的后继提交（RFC-423）的 CI 作后继证据收尾。
+
 ## 冲突面
 
 - **composition**：`TE/composition/{localSystemAgentRunFamily,localRuntimeSmokeRunFamily,localTaskAgentRunFamily,crewstationSystemAgentRunFamily,crewstationRuntimeManagement}.ts`。

@@ -1,3 +1,16 @@
+## 2026-11-02 RFC-423 task-execution composition 其余小块迁出与「只剩装配」收口锁（In Progress；`design/RFC-423-task-execution-composition-assembly-only/`）
+
+- **来由**：RFC-294 S6 退出门「task-execution `composition/` 只剩装配」的收口（RFC-416 proposal §7 第 5 项其余部分）；用户授权同 RFC-402，
+  本会话调研、设计、实施与集中验证，不派 Codex。
+- **范围**：定时任务启动 / 触发器参与者、托管恢复选择、准备 GC 的阶段分派与 worker 维护迁入 `infrastructure/`；新增收口锁钉住
+  `composition/` 的装配形状。纯结构重构。
+- **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。
+- **进度**：T1～T4 完成，随实现提交入库，待 exact SHA 的 CI（AC-5）。task-execution `composition/` 降到 99 个文件、6,131 行。集中验证
+  907 + 18 + 4 个文件：两处本 RFC 的账本排序 / 源码文本断言缺陷已修，其余为负载超时（第三轮单进程本候选全部通过）；两个按已提交源码生成
+  报告的用例在候选导出仓库里通过；P0 变异 lane 通过。自审补了托管恢复选择走真实数据库的端口绑定用例。详见 plan「集中验证（T4）」。
+  附带：`scheduler-clarify-dispatch` 一例的 20s 显式预算（RFC-422 CI 红格的归因）。
+- **后继**：S6 退出门「协调器只在 bootstrap 构造」还差 `services/task.ts` 的 legacy 协调器工厂（RFC-386 登记）。
+
 ## 2026-11-01 RFC-422 task-execution 运行 family 的打开逻辑迁入 infrastructure，composition 只剩配对（In Progress；`design/RFC-422-task-execution-run-family-openers/`）
 
 - **来由**：RFC-294 S6 退出门「task-execution `composition/` 只剩装配」的第十步（RFC-416 proposal §7 第 2 项第二段）；用户授权同 RFC-402，
@@ -8,6 +21,9 @@
 - **进度**：T1～T5 完成，随实现提交入库，待 exact SHA 的 CI（AC-5）。集中验证 896 + 26 + 8 个文件：无本 RFC 引入的失败（首轮一处类型参数
   退化已修）；负载超时第二轮多数通过，余下 8 个在候选与基线上单进程同样通过；两个按已提交源码生成报告的用例在候选导出仓库里通过；P0 变异
   lane 通过。详见 plan「集中验证（T5）」。同提交收尾 RFC-421（`598054c42` 全绿）。
+- **CI**：`465fa2087` 主 CI 67/70、windows-platform 全绿。红的两格是 `scheduler-clarify-dispatch` 一例 PostgreSQL 5398ms 超时与
+  `rfc311-perf-guards` 过滤视图的 PostgreSQL P95 偶发停顿（audit-backlog 已记的同一条），均不归本 RFC（证据见 plan「CI（AC-5）」）；
+  前者由 RFC-423 给显式预算。AC-5 以 RFC-423 的 CI 作后继证据收尾。
 - **后继**：composition 其余小块与收口锁；S6 退出门「协调器只在 bootstrap 构造」还差 `services/task.ts` 的 legacy 协调器工厂。
 
 ## 2026-11-01 RFC-421 task-execution agent 调用栈：中立部分迁入 application，本地调用适配器迁入 infrastructure/local（Done；`design/RFC-421-task-execution-agent-invocation-stack/`）

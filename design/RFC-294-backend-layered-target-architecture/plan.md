@@ -283,6 +283,8 @@ Facade 只许 re-export 或参数形状适配；不得含 DB 查询、状态、�
 - **composition 只剩装配（第十步）**：[RFC-422](../RFC-422-task-execution-run-family-openers/proposal.md)（In Progress）：
   五个运行 family 的打开逻辑迁入 `infrastructure/local/` 与 `infrastructure/crewstation/`，别的模块的实现经 task-execution 自有端口注入，
   composition 只选取 provider 并注入（RFC-416 §7 第 2 项第二段）。
+- **composition 只剩装配（第十一步，收口）**：[RFC-423](../RFC-423-task-execution-composition-assembly-only/proposal.md)（In Progress）：
+  定时任务启动 / 触发器参与者、托管恢复选择、准备 GC 的阶段分派与 worker 维护迁入 `infrastructure/`；收口锁钉住 `composition/` 的装配形状。
 
 ### S7 唯一 AtomicApply 引擎（W6）
 

@@ -269,7 +269,8 @@ const CROSS_CONTEXT_PROVIDER_BRIDGE_DEBT = new Set([
   // RFC-359 AC-1（第 12 刀）：运行时参与者合一之后，协作投影由**装配方**交进来——
   // 参与者自己不再 compose 别的 context。这条债因此从 infrastructure 挪到组合根，
   // 与 PostgreSQL 那一支同形（那边一直是 bootstrap 交）。
-  'integration/application/ports/webhookExecution: packages/backend/src/modules/task-execution/composition/triggerExecution.ts',
+  // RFC-423：触发器参与者整体迁入 infrastructure（`taskExecutionTrigger.ts`），这条债随文件改指。
+  'integration/application/ports/webhookExecution: packages/backend/src/modules/task-execution/infrastructure/taskExecutionTrigger.ts',
   'resource-catalog/composition/resourceAcl: packages/backend/src/modules/task-execution/infrastructure/agentLaunchResourceOperations.ts',
   'resource-catalog/infrastructure/legacy/agent: packages/backend/src/modules/task-execution/infrastructure/agentLaunchResourceOperations.ts',
   'resource-catalog/infrastructure/legacy/workflow.validator: packages/backend/src/modules/task-execution/infrastructure/agentLaunchResourceOperations.ts',

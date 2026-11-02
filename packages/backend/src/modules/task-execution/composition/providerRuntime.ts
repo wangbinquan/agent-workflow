@@ -5,7 +5,7 @@ import type {
 } from './required-ports'
 import type { TaskDriveCoordinatorFactory } from '../application/drive/taskDriveCoordinatorFactory'
 import type { TaskDriverLifecyclePort } from '../application/drive/taskDriveCoordinator'
-import type { TaskRecoveryProviderSelection } from './taskRecoverySelection'
+import type { TaskRecoveryProviderSelection } from '../infrastructure/taskRecoverySelection'
 import {
   selectRepositoryWorkspaceReadQueries,
   type RepositoryWorkspaceReadQueries,
@@ -83,7 +83,7 @@ import {
   createBuildScheduleLaunch,
   createTaskExecutionTriggerParticipant,
   type TaskExecutionTriggerParticipant,
-} from './triggerExecution'
+} from '../infrastructure/taskExecutionTrigger'
 import {
   composeWorkgroupTaskRoomTaskParticipantFactory,
   type WorkgroupTaskRoomClarifyParticipantFactory,
