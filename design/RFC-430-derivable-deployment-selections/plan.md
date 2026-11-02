@@ -29,6 +29,11 @@
 - **附带**：`scheduler-clarify-dispatch` 多轮追问的一例给 20s 显式预算（RFC-429 CI 红格的归因，见 RFC-429 plan「CI（AC-4）」），
   本地单进程两个 provider 16/16。
 
+## CI（AC-4）
+
+- **`8c242c3fc`**：主 CI `41456742197` 70 个 job 全部 success，windows-platform `41456742233` 与按路径触发的
+  maintenance-soak-nightly `41456742319` success。AC-4 成立，RFC-430 Done；同一运行作为 RFC-429 的后继证据。
+
 ## 冲突面
 
 - **生产**：`S/bootstrap/{deploymentProfile,deploymentSelections,daemonApplication,crewstation}.ts`。
@@ -39,4 +44,4 @@
 ## 验收清单
 
 - [x] proposal AC-1～AC-3（本地集中验证，见上）
-- [ ] 推送后 exact SHA 的 CI 全绿（AC-4）
+- [x] 推送后 exact SHA 的 CI 全绿（AC-4，`8c242c3fc`，见上）

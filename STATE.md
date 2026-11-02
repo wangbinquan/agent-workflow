@@ -1,10 +1,11 @@
-## 2026-11-02 RFC-430 部署选择项删余下三个可派生项（In Progress；`design/RFC-430-derivable-deployment-selections/`）
+## 2026-11-02 RFC-430 部署选择项删余下三个可派生项（Done；`design/RFC-430-derivable-deployment-selections/`）
 
 - **来由**：RFC-294 S2c 余项第 1 项的第三步（RFC-428 inventory 后继分步）。用户授权同 RFC-402，本会话调研、设计、实施与集中验证，不派 Codex。
 - **范围**：`historyRestrictions`（无状态，等价实例）、`resourcePackageSkillContent`（= `skillContent.packageContent`）、`automationWorkspaceEffects`
   （= `actionWorkspaceEffects.contents`）不再是部署选择项（64 → 61），托管只给需要的字段。纯结构重构。
 - **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。
-- **进度**：T1～T5 完成，随实现提交入库，待 exact SHA 的 CI（AC-4）。部署选择项 64 → 61，盘点里的死槽 / 被遮蔽 / 可派生 11 项至此清完。
+- **进度**：T1～T5 完成，随实现提交入库（`8c242c3fc`）；exact SHA 的主 CI 70/70、windows-platform 与 maintenance-soak-nightly 全绿（AC-4），
+  Done；同一运行作 RFC-429 的后继证据。部署选择项 64 → 61，盘点里的死槽 / 被遮蔽 / 可派生 11 项至此清完。
   - 集中验证 463 + 143 个文件：除负载超时外无失败。
   - 报告类用例在候选导出仓库里通过；P0 变异 lane 通过（34 个阶段、源文件指纹不变）。附带 `scheduler-clarify-dispatch` 一例的 20s 显式预算（RFC-429 CI
     红格的归因）。
@@ -12,13 +13,13 @@
   详见 plan「集中验证（T5）」。
 - **后继**（inventory 第 2～4 步）：单机默认值集中与改必填；需要会话图的工厂型选择项；按有无分支的项。
 
-## 2026-11-02 RFC-429 部署选择项的 evidence 一组收拢到 `evidenceArtifacts`（In Progress；`design/RFC-429-evidence-deployment-selections/`）
+## 2026-11-02 RFC-429 部署选择项的 evidence 一组收拢到 `evidenceArtifacts`（Done；`design/RFC-429-evidence-deployment-selections/`）
 
 - **来由**：RFC-294 S2c 余项第 1 项的第二步（RFC-428 inventory 后继分步）。用户授权同 RFC-402，本会话调研、设计、实施与集中验证，不派 Codex。
 - **范围**：删去由 `evidenceArtifacts` 派生的 `evidenceRead` / `attemptContext` / `missionInputBlobs` 与被遮蔽的 `evidenceDocumentCommands`（68 → 64），
   托管 evidence 装配只给 `evidenceArtifacts`。纯结构重构。
 - **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。
-- **进度**：T1～T5 完成，随实现提交入库，待 exact SHA 的 CI（AC-4）。部署选择项 68 → 64。
+- **进度**：T1～T5 完成，随实现提交入库（`338d7db0c`）；AC-4 以后继 `8c242c3fc` 的全绿 CI 收尾，Done。部署选择项 68 → 64。
   - 经 HTTP 测试入口注入的 root-binding 用例改走 `evidenceArtifacts` / `developmentPurposes`，新增 `tests/helpers/evidenceSelections.ts`。
   - 集中验证 359 + 149 + 1 个文件：除负载超时外无失败，第三轮单进程两侧通过。
   - 报告类用例在候选导出仓库里通过；P0 变异 lane 通过（34 个阶段、源文件指纹不变）。
@@ -26,7 +27,7 @@
   详见 plan「集中验证（T5）」。
 - **CI**：`338d7db0c` 主 CI 68/70，windows-platform 与 maintenance-soak-nightly 全绿。红的一格是 `scheduler-clarify-dispatch` 多轮追问的一例
   PostgreSQL 5485ms 超时（前两个提交 1.7～1.8s），不归本 RFC（证据见 plan「CI（AC-4）」），RFC-430 给它显式预算。AC-4 以 RFC-430 的 CI
-  作后继证据收尾。
+  作后继证据收尾：`8c242c3fc` 主 CI 70/70、windows-platform 与 maintenance-soak-nightly 全绿，该例通过。
 - **后继**：另三个可派生项（`historyRestrictions`、`resourcePackageSkillContent`、`automationWorkspaceEffects`），然后是单机默认值集中与改必填。
 
 ## 2026-11-02 RFC-428 部署选择项删死槽：启动锁、预打开恢复、节点提示与端口制品四项（Done；`design/RFC-428-dead-deployment-selections/`）

@@ -45,6 +45,10 @@
 
 AC-4 以包含本 RFC 的后继提交（RFC-430）的 CI 作后继证据收尾。
 
+- **后继证据**：`8c242c3fc`（RFC-430）主 CI `41456742197` 70 个 job 全部 success，windows-platform `41456742233` 与 maintenance-soak-nightly `41456742319` success；`338d7db0c` 是它的父提交，RFC-430 在本 RFC 的
+  路径上只删另外三项选择项、改共享索引与测试账本，没有改回本 RFC 的接线。上面那例在该运行里通过（RFC-430 给的预算生效）。AC-4 成立，
+  RFC-429 Done。
+
 ## 冲突面
 
 - **生产**：
@@ -58,4 +62,4 @@ AC-4 以包含本 RFC 的后继提交（RFC-430）的 CI 作后继证据收尾�
 ## 验收清单
 
 - [x] proposal AC-1～AC-3（本地集中验证，见上）
-- [ ] 推送后 exact SHA 的 CI 全绿（AC-4）
+- [x] 推送后 exact SHA 的 CI 全绿（AC-4，后继 `8c242c3fc`，见上）
