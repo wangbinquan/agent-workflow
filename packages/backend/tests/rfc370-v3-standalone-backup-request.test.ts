@@ -60,6 +60,7 @@ test('a standalone HTTP backup never reads its body and never captures worktrees
               status: unused,
               activateLocal: unused,
             },
+            scheduledBackup: unused,
           },
         }),
       },

@@ -50,8 +50,13 @@ describe('RFC-349 provider-aware System Operations composition', () => {
           throw new Error('not used')
         },
       },
+      // RFC-426: the module hands the daemon's backup ticker exactly the adapter's scheduled backup.
+      async scheduledBackup() {
+        return 'provider-scheduled-backup'
+      },
     }
     const module = composeSystemOperationsWithRecoveryAdapter({ adapter, appHome })
+    await expect(module.scheduledBackup()).resolves.toBe('provider-scheduled-backup')
 
     await expect(
       module.application.commands.requestBackup.execute({} as LocalSystemOperationContext, {

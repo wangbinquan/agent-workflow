@@ -1,3 +1,21 @@
+## 2026-11-02 RFC-426 定时备份经系统运维模块的备份端口、执行可用性去单机回落（In Progress；`design/RFC-426-scheduled-backup-source-and-unbound-execution-status/`）
+
+- **来由**：RFC-294 S2c「部署 profile」余项第 2 项的余下部分（RFC-393 §7 第 2 项、RFC-425 §3 非目标）。用户授权同 RFC-402，本会话调研、设计、
+  实施与集中验证，不派 Codex。
+- **范围**：定时备份改由系统运维模块按部署选定的备份协调端口完成（托管为平台备份、单机为本地 provider 备份），provider 适配表删去
+  `scheduledBackup`，定时器只做节拍；`readExecutionStatus` 去掉单机回落（未绑定不门控、状态查询要求绑定），RFC-376 部署分支 2 → 1。
+- **缺陷修复（用户可见）**：单机 PostgreSQL 的定时备份走手动备份命令，`kind` 丢失，落成手动家族 `agent-workflow-*` 且带工作树——不受保留规则
+  轮转、挤占手动备份名额，违背 `docs/disaster-recovery.md` 的定时备份契约。修复后为 `scheduled-*`、不含工作树；旧文件不动。
+- **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。
+- **进度**：T1～T5 完成，随实现提交入库，待 exact SHA 的 CI（AC-5）。RFC-376 部署分支 2 → 1。集中验证 391 + 150 个文件：
+  - 三本 RFC-359 账本因新用例变化，PostgreSQL 一侧用例放回既有 rfc349 文件后不变；
+  - 其余为 PostgreSQL 负载超时与一处既有时序缺陷（`rfc368-implementation-gate` 固定 50ms 等待，已按同文件上一例的写法修正）；
+  - 报告类用例在候选导出仓库里通过；P0 变异 lane 通过（34 个阶段、源文件指纹不变）。
+
+  详见 plan「集中验证（T5）」。同提交记录 RFC-425 的 CI（Windows e2e 一格因 runner 挂起，不归该 RFC）。
+- **后继**：S2c 余项第 1 项（单机默认值集中、选择项改必填）、第 3 项（入口根瘦身：`main.ts` 自行装配的命令依赖迁入 `bootstrap/`、
+  `migrate` / `verify-database-restore` 成为部署操作）各自另立；CrewStation 事件收件箱端口的通道字面量（RFC-376 余 1 处）。
+
 ## 2026-11-02 RFC-425 执行权端口去部署字面量：部署种类由 profile 提供（In Progress；`design/RFC-425-execution-authority-without-deployment-literal/`）
 
 - **来由**：RFC-294 S2c「部署 profile」余项第 2 项（RFC-393 §7、RFC-394 §3 非目标）。用户授权同 RFC-402，本会话调研、设计、实施与集中验证，
@@ -9,6 +27,9 @@
   的缺陷（新锁缺纯伪造单元负例、profile 字段集用例）已修，另两个负载超时在第三轮单进程上两侧全部通过；报告类用例在候选导出仓库里通过；
   P0 变异 lane 通过（34 个阶段、源文件指纹不变）。自审补了会话一侧两种 profile 的用例与生命周期取值的锁条件。详见 plan「集中验证（T5）」。同提交收尾 RFC-424
   （`556a45573` 全绿）并以同一运行收尾 RFC-422 / RFC-423；RFC-294 S6 Done。
+- **CI**：`aa275ba44` 主 CI 68/70，windows-platform 与 maintenance-soak-nightly 全绿。红的一格是 Windows e2e shard 3/4：两条长旅程在 runner
+  挂起 102 秒的时段超时；同一 SHA 的 macOS 同分片跑同样用例全部通过，不归本 RFC（证据见 plan「CI（AC-5）」与 audit-backlog 第九条）。
+  AC-5 以 RFC-426 的 CI 作后继证据收尾。
 - **后继**：S2c 余项第 1 项（单机默认值集中、选择项改必填）、第 3 项（入口根瘦身）、执行可用性回落值与定时备份来源各自另立。
 
 ## 2026-11-02 RFC-424 退役 `services/task.ts` 的测试专用驱动入口：协调器只在 bootstrap 装配（Done；`design/RFC-424-retire-test-only-task-drive-entries/`）

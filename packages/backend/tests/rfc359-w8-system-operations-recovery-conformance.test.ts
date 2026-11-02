@@ -70,6 +70,7 @@ import { join } from 'node:path'
 
 import { createSystemOperationsApplication } from '@/modules/system-operations/application/systemOperations'
 import type { SystemOperationsRecoveryAdapter } from '@/modules/system-operations/composition'
+import { SCHEDULED_BACKUP_REQUEST } from '@/modules/system-operations/domain/backup'
 import { createLegacyPlatformRecoveryAdapter } from '@/modules/system-operations/infrastructure/legacyPlatformRecoveryAdapter'
 import { createPostgresqlAdminRestoreCoordinator } from '@/modules/system-operations/infrastructure/postgresqlAdminRestoreCoordinator'
 import { createPostgresqlAdminBackupCoordinator } from '@/modules/system-operations/infrastructure/postgresqlAdminBackupCoordinator'
@@ -175,22 +176,25 @@ function postgresqlHarness(appHome: string): RecoveryHarness {
     preflightTarget: async () => ({}) as never,
     restoreBackup: async () => ({ filesystem: { config: true, skills: true } }) as never,
   })
-  const adapter: SystemOperationsRecoveryAdapter = {
-    backup: createPostgresqlAdminBackupCoordinator({
-      headContract: logicalSchemaContract,
-      contract: logicalSchemaContract,
-      runtime: { provider: 'postgresql' } as PostgresqlDatabaseRuntime,
-      // RFC-359 W9：应用侧资产（workflow / worktree 行）已合成中立实现由组合根注入；
-      // 本文件把整条 createBackup 都 stub 掉，客户端一次也不用。
-      db: {} as PersistenceDb,
-      appHome,
-      createBackup: async () => ({
-        path: join(appHome, 'backups', 'backup.tar.gz'),
-        sizeBytes: 1,
-        contents: { workflows: 0, skills: 0, db: true, config: true },
-      }),
+  const backup = createPostgresqlAdminBackupCoordinator({
+    headContract: logicalSchemaContract,
+    contract: logicalSchemaContract,
+    runtime: { provider: 'postgresql' } as PostgresqlDatabaseRuntime,
+    // RFC-359 W9：应用侧资产（workflow / worktree 行）已合成中立实现由组合根注入；
+    // 本文件把整条 createBackup 都 stub 掉，客户端一次也不用。
+    db: {} as PersistenceDb,
+    appHome,
+    createBackup: async () => ({
+      path: join(appHome, 'backups', 'backup.tar.gz'),
+      sizeBytes: 1,
+      contents: { workflows: 0, skills: 0, db: true, config: true },
     }),
+  })
+  const adapter: SystemOperationsRecoveryAdapter = {
+    backup,
     restore,
+    // RFC-426: the same shape as `composePostgresqlSystemOperations`.
+    scheduledBackup: () => backup.request(SCHEDULED_BACKUP_REQUEST),
   }
   return { appHome, adapter, artifact: (path) => artifacts.register(path) }
 }

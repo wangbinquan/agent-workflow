@@ -247,6 +247,32 @@ describe('RFC-349 PostgreSQL provider backup', () => {
     }
   })
 
+  // RFC-426: the scheduled request every deployment's scheduled backup now sends lands in the rotatable `scheduled`
+  // family without worktrees (`docs/disaster-recovery.md` §1.2 / §6) — before RFC-426 the standalone PostgreSQL path
+  // never passed the kind, so its scheduled backups were written as manual `agent-workflow-*` archives.
+  test('a scheduled request writes a scheduled-* archive without worktrees', async () => {
+    const fixture = await livePostgresqlFixture()
+    writeFileSync(join(fixture.appHome, 'config.json'), '{"database":{"provider":"postgresql"}}')
+
+    const backup = await createPostgresqlProviderBackup({
+      headContract: logicalSchemaContract,
+      appHome: fixture.appHome,
+      runtime: fixture.runtime,
+      contract: CONTRACT,
+      now: 7,
+      kind: 'scheduled',
+      includeWorktrees: false,
+      application: fixtureApplication(fixture),
+      openLogicalSource: async () => logicalSource(fixture, () => {}),
+    })
+
+    expect(backup.path.startsWith(join(fixture.appHome, 'backups', 'scheduled-'))).toBe(true)
+    const extracted = tempRoot()
+    await extractTarGz(backup.path, extracted)
+    expect(existsSync(join(extracted, 'worktrees'))).toBe(false)
+    expect(readManifest(extracted)).toMatchObject({ kind: 'scheduled', includesWorktrees: false })
+  })
+
   test('refuses a PostgreSQL adapter when the durable live pointer is SQLite', async () => {
     const appHome = tempRoot()
     let opened = false

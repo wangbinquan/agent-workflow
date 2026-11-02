@@ -19,6 +19,7 @@ import {
 } from '@/platform/persistence/sqlite/systemProviderRestore'
 import { acquireLock, isProcessAlive, readPidFromLock } from '@/util/lock'
 import type { AdminBackupCoordinatorPort } from '../application/ports/adminBackupCoordinator'
+import { SCHEDULED_BACKUP_REQUEST } from '../domain/backup'
 import type { AdminRestoreCoordinatorPort } from '../application/ports/adminRestoreCoordinator'
 import type { RestoreArtifactPathResolver } from './restoreArtifactIngress'
 
@@ -57,6 +58,8 @@ const DEFAULT_MECHANISMS: LegacySystemOperationMechanisms = {
 export interface LegacyPlatformRecoveryAdapter {
   readonly backup: AdminBackupCoordinatorPort
   readonly restore: AdminRestoreCoordinatorPort
+  /** RFC-426: the in-process scheduled snapshot (as before, without the backup preparation step). */
+  scheduledBackup(): Promise<unknown>
 }
 
 export function createLegacyPlatformRecoveryAdapter(deps: {
@@ -89,10 +92,18 @@ export function createLegacyPlatformRecoveryAdapter(deps: {
         contract: deps.contract,
         db: resources.db,
         includeWorktrees: input.includeWorktrees,
+        kind: input.kind,
         appHome: deps.appHome,
       })
     },
   }
+  const scheduledBackup = async (): Promise<unknown> =>
+    mechanisms.createBackup({
+      contract: deps.contract,
+      db: (await deps.backupResources()).db,
+      appHome: deps.appHome,
+      ...SCHEDULED_BACKUP_REQUEST,
+    })
 
   const restore: AdminRestoreCoordinatorPort = {
     async plan(artifactRef, input) {
@@ -168,6 +179,10 @@ export function createLegacyPlatformRecoveryAdapter(deps: {
     },
   }
 
-  return Object.freeze({ backup: Object.freeze(backup), restore: Object.freeze(restore) })
+  return Object.freeze({
+    backup: Object.freeze(backup),
+    restore: Object.freeze(restore),
+    scheduledBackup,
+  })
 }
 import { settleEpochSwitchBeforePointerReplacement } from './epochSwitch/pointerReplacement'

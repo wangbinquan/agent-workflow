@@ -605,11 +605,8 @@ export async function composeDaemonSession(
     async start() {
       const current = await input.configuration.read()
       const ticker = startBackupScheduler({
-        ...adapter.scheduledBackup({
-          core: application.core,
-          db,
-          databaseBackup: input.databaseBackup,
-        }),
+        // RFC-426: the deployment's backup choice is already the system operations module's coordinator.
+        createScheduledBackup: application.core.systemOperations.scheduledBackup,
         intervalMs: current.backupIntervalMs,
         retentionCount: current.backupRetentionCount,
         retentionDays: current.backupRetentionDays,

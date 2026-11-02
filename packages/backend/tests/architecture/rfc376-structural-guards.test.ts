@@ -215,8 +215,8 @@ const KNOWN: Readonly<Record<string, readonly string[]>> = {
   ],
   'deployment-mode-branch-sites': [
     // RFC-425：执行权端口的两处部署字面量与 `embed.ts` 的 SPA 标记比较销账（部署种类改由 profile 下传）。
+    // RFC-426：`readExecutionStatus` 的单机回落销账（未绑定读取器的 app 不门控、状态查询要求绑定）。
     'packages/backend/src/modules/integration/application/ports/crewStationEventInbox.ts#CrewStationEventChannel#port-literal#1',
-    'packages/backend/src/platform/http/executionAvailability.ts#readExecutionStatus#comparison#1',
   ],
   'export-star-barrels': [
     'packages/backend/src/modules/runtime-management/application/runtimeRegistry.ts',

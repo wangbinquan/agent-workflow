@@ -2,7 +2,10 @@ import { openSqliteForRead } from '@/platform/persistence/sqlite/openForRead'
 // RFC-213/RFC-349 — provider-aware scheduled backup + retention + safety net.
 //
 // - startBackupScheduler: an interval ticker (reentrancy-guarded, like the GC /
-//   orphan-reconcile loops) that fires createBackup + prunes old ones.
+//   orphan-reconcile loops) that fires the deployment's scheduled backup + prunes
+//   old ones. RFC-426: what a scheduled backup is and where it goes belongs to
+//   System Operations (`SystemOperationsModule.scheduledBackup`); this file only
+//   keeps the beat.
 // - pruneBackups: KEEP a scheduled/auto backup iff it is within the newest N OR
 //   newer than D days; DELETE only when it fails BOTH. Manual + pre-restore +
 //   pre-migration backups rotate per family under `protectedKeepCount`
@@ -11,16 +14,13 @@ import { openSqliteForRead } from '@/platform/persistence/sqlite/openForRead'
 //   upgrade can be rolled back (rawCopyDb, NOT createBackup — the OLD schema
 //   can't be SELECTed by the NEW binary).
 
-import type { LogicalSchemaContract } from '@/platform/persistence/schemaContract'
 import type { Database } from 'bun:sqlite'
 import { schemaHistoryRuntime } from '@/platform/persistence/schema/history/runtime'
 import { existsSync, readdirSync, statSync, unlinkSync } from 'node:fs'
 import { join } from 'node:path'
-import { createBackup } from '@/platform/persistence/sqlite/systemProviderBackup'
 import {
   checkpointSqliteWal,
   runSqliteWalCheckpointTick,
-  type SqliteMaintenanceDatabase,
 } from '@/platform/persistence/sqlite/systemMaintenanceOperations'
 import { createLogger } from '@/util/log'
 import { Paths } from '@/util/paths'
@@ -141,14 +141,11 @@ export function pruneBackups(opts: PruneOptions): PruneResult {
   return { deleted, kept: files.filter((f) => !deleted.includes(f.name)).map((f) => f.name) }
 }
 
-export interface ScheduledBackupRequest {
-  readonly kind: 'scheduled'
-  readonly appHome: string
-}
+/** RFC-426: the deployment's scheduled backup; the scheduler only decides when it runs. */
+export type ScheduledBackupRequester = () => Promise<unknown>
 
-export type ScheduledBackupRequester = (input: ScheduledBackupRequest) => Promise<unknown>
-
-interface BackupSchedulerCommonOptions {
+export interface BackupSchedulerOptions {
+  createScheduledBackup: ScheduledBackupRequester
   intervalMs: number
   retentionCount: number
   retentionDays: number
@@ -174,19 +171,6 @@ interface BackupSchedulerCommonOptions {
   onBackupSettled?: () => void
 }
 
-/** SQLite callers retain the historical DbClient path. Provider-aware
- * bootstrap may instead inject the active provider's backup operation without
- * manufacturing a SQLite client or allowing a SQLite fallback. */
-export type BackupSchedulerOptions = BackupSchedulerCommonOptions &
-  (
-    | Readonly<{
-        db: SqliteMaintenanceDatabase
-        contract: LogicalSchemaContract
-        createScheduledBackup?: never
-      }>
-    | Readonly<{ db?: never; createScheduledBackup: ScheduledBackupRequester }>
-  )
-
 export interface BackupSchedulerHandle {
   stop: () => void
 }
@@ -203,20 +187,6 @@ function runPrune(opts: BackupSchedulerOptions, appHome: string): void {
     protectedKeepCount: live.protectedKeepCount ?? opts.protectedKeepCount,
     now: Date.now(),
   })
-}
-
-async function requestScheduledBackup(
-  opts: BackupSchedulerOptions,
-  appHome: string,
-): Promise<void> {
-  if (opts.createScheduledBackup !== undefined) {
-    await opts.createScheduledBackup({ kind: 'scheduled', appHome })
-    return
-  }
-  if (opts.db === undefined) {
-    throw new Error('backup scheduler has no provider backup operation')
-  }
-  await createBackup({ db: opts.db, contract: opts.contract, kind: 'scheduled', appHome })
 }
 
 /** Start the periodic backup ticker. intervalMs <= 0 disables the BACKUP tick
@@ -262,7 +232,9 @@ export function startBackupScheduler(
     if (stopped || running) return
     running = true
     const run = Promise.resolve()
-      .then(() => requestScheduledBackup(opts, appHome))
+      .then(async () => {
+        await opts.createScheduledBackup()
+      })
       .catch((err) => log.warn('backup tick threw', { error: (err as Error).message }))
       .finally(() => {
         // A fresh backup is exactly when the family caps want re-applying, and

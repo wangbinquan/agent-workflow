@@ -71,6 +71,7 @@ async function setup(standby = false) {
         status: unused,
         activateLocal: unused,
       },
+      scheduledBackup: unused,
     },
   })
   const app = (

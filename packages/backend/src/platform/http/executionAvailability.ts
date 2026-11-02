@@ -21,14 +21,22 @@ export function bindExecutionAvailability(app: object, read: () => ExecutionStat
   readers.set(app, read)
 }
 
-/** An app without a bound reader is a standalone test or tool root: always available. */
+/**
+ * The bound status. Production binds the reader in `mountApiRoutes` before any route mounts; RFC-426: an unbound app has
+ * no status to report (the deployment kind comes from the profile, never from a fallback here).
+ */
 export function readExecutionStatus(app: object): ExecutionStatus {
-  return readers.get(app)?.() ?? { mode: 'standalone', state: 'active', reason: null }
+  const read = readers.get(app)
+  if (read === undefined) throw new Error('execution-availability-unbound')
+  return read()
 }
 
 export function assertExecutionAvailable(app: object, group: ExecutionGroup | undefined): void {
   if (group === undefined) return
-  const status = readExecutionStatus(app)
+  const read = readers.get(app)
+  // RFC-426: a test or tool root without a bound reader has no execution gate (as before, without inventing a status).
+  if (read === undefined) return
+  const status = read()
   if (status.unavailableGroups?.[group] !== undefined) {
     throw new DomainError('hosted-capability-unavailable', status.unavailableGroups[group], 503, {
       group,

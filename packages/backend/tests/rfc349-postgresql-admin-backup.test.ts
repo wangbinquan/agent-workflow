@@ -7,17 +7,20 @@ import { createPostgresqlAdminBackupCoordinator } from '@/modules/system-operati
 import type { CreatePostgresqlProviderBackupOptions } from '@/modules/system-operations/infrastructure/postgresqlProviderBackup'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { PostgresqlDatabaseRuntime } from '@/platform/persistence/postgresqlRuntime'
+import { SCHEDULED_BACKUP_REQUEST } from '@/modules/system-operations/domain/backup'
 
 /** 协调器只把它转交给资产工厂；本文件的判据都在协调器这一层，不碰任何一条查询。 */
 const NEUTRAL_DATABASE = {} as PersistenceDb
+/** 同理：运行时只是转交给（被 stub 掉的）provider 备份的身份，不经它发任何 SQL。 */
+const ADMIN_BACKUP_RUNTIME = {
+  provider: 'postgresql',
+  generationId: 'dbg_pg_admin_backup_01',
+} as PostgresqlDatabaseRuntime
 
 describe('RFC-349 PostgreSQL admin backup coordinator', () => {
   test('prepares application assets then requests one provider backup', async () => {
     const calls: string[] = []
-    const runtime = {
-      provider: 'postgresql',
-      generationId: 'dbg_pg_admin_backup_01',
-    } as PostgresqlDatabaseRuntime
+    const runtime = ADMIN_BACKUP_RUNTIME
     let received: CreatePostgresqlProviderBackupOptions | undefined
     const coordinator = createPostgresqlAdminBackupCoordinator({
       headContract: logicalSchemaContract,
@@ -80,5 +83,32 @@ describe('RFC-349 PostgreSQL admin backup coordinator', () => {
       'application backup preparation failed',
     )
     expect(backups).toBe(0)
+  })
+
+  // RFC-426: the scheduled request reaches the provider backup with its kind. Before RFC-426 this coordinator dropped
+  // the kind, so standalone PostgreSQL scheduled backups were written as manual `agent-workflow-*` archives.
+  test('hands the scheduled kind and the worktree choice to the provider backup', async () => {
+    const received: CreatePostgresqlProviderBackupOptions[] = []
+    const coordinator = createPostgresqlAdminBackupCoordinator({
+      headContract: logicalSchemaContract,
+      contract: logicalSchemaContract,
+      runtime: ADMIN_BACKUP_RUNTIME,
+      db: NEUTRAL_DATABASE,
+      appHome: '/provider-owned/application-home',
+      async createBackup(options) {
+        received.push(options)
+        return {
+          path: '/provider-owned/application-home/backups/scheduled.tar.gz',
+          sizeBytes: 1,
+          contents: { workflows: 0, skills: 0, config: true, db: true },
+        }
+      },
+    })
+    await coordinator.request(SCHEDULED_BACKUP_REQUEST)
+    await coordinator.request({ includeWorktrees: true })
+    expect(received.map(({ kind, includeWorktrees }) => ({ kind, includeWorktrees }))).toEqual([
+      { kind: 'scheduled', includeWorktrees: false },
+      { kind: undefined, includeWorktrees: true },
+    ])
   })
 })

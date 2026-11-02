@@ -79,8 +79,9 @@ describe('RFC-370 scheduled backup stop and drain', () => {
         onBackupSettled: () => {
           wakes += 1
         },
-        async createScheduledBackup(request) {
-          expect(request).toEqual({ kind: 'scheduled', appHome: '/selected-backup-home' })
+        // RFC-426: the deployment's scheduled backup owns kind and destination; the scheduler only keeps the beat.
+        async createScheduledBackup(...request: unknown[]) {
+          expect(request).toEqual([])
           calls += 1
           entered.resolve()
           await released.promise

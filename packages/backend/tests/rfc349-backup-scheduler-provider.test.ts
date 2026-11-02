@@ -2,14 +2,13 @@
 // operation. PostgreSQL composition must not manufacture a SQLite DbClient or
 // fall back to the retained pre-cutover SQLite generation.
 //
-// RFC-359 W8：本用例原本驱动的是
-// `modules/system-operations/infrastructure/postgresqlProviderBackup.ts::createPostgresqlScheduledBackupRequester`
-// ——一个**零生产调用方**的适配器（`tests/architecture/rfc359-w5-adapter-production-consumer.test.ts`
-// 的「改指」账本记的就是它），已随死适配器一批删除。生产上定时备份走的是
-// `cli/start.ts:891` 的中立命令注入：`startBackupScheduler({ createScheduledBackup: () =>
-// systemOperations.application.commands.requestBackup.execute(...) })`。所以断言改指那条真路径，
-// 锁的判据不变——注入了 provider 备份操作的 ticker 全程不碰 DbClient，且每拍都按
-// `{ kind: 'scheduled', appHome }` 调用注入的命令。
+// RFC-359 W8：本用例原本驱动的是一个零生产调用方的 PostgreSQL 定时备份适配器，已随死适配器一批删除，
+// 断言改指生产路径：注入了 provider 备份操作的 ticker 全程不碰 DbClient。
+//
+// RFC-426：旧断言是「每拍都按 `{ kind: 'scheduled', appHome }` 调用注入的函数」，而生产注入的单机 PostgreSQL
+// 函数把这个参数丢掉、改走手动备份命令，定时备份因此落成手动家族——断言过了，缺陷没被看见。现在定时备份
+// 是什么、落到哪里由系统运维模块决定（`SystemOperationsModule.scheduledBackup`，见
+// `rfc426-scheduled-backup-source.test.ts`），定时器只管节拍：每拍无参调用一次注入的函数。
 
 import { describe, expect, test } from 'bun:test'
 import { startBackupScheduler } from '@/services/backupScheduler'
@@ -17,7 +16,7 @@ import { startBackupScheduler } from '@/services/backupScheduler'
 describe('RFC-349 provider-aware backup scheduler', () => {
   test('runs an injected provider backup without requiring a SQLite client', async () => {
     const appHome = '/provider-owned/application-home'
-    const calls: Array<Record<string, unknown>> = []
+    const calls: unknown[][] = []
     let observed!: () => void
     const firstCall = new Promise<void>((resolve) => {
       observed = resolve
@@ -28,9 +27,9 @@ describe('RFC-349 provider-aware backup scheduler', () => {
       retentionCount: 3,
       retentionDays: 7,
       pruneMode: 'external',
-      // 生产形状：注入一个 provider 中立的备份命令，`db` 一栏根本不传。
-      createScheduledBackup: async (request) => {
-        calls.push(request as unknown as Record<string, unknown>)
+      // 生产形状：注入部署的定时备份（系统运维模块的参与者），定时器没有 SQLite 客户端分支。
+      createScheduledBackup: async (...request: unknown[]) => {
+        calls.push(request)
         observed()
         return {
           path: '/provider-owned/application-home/backups/scheduled.tar.gz',
@@ -45,7 +44,7 @@ describe('RFC-349 provider-aware backup scheduler', () => {
     scheduler.stop()
     await Bun.sleep(60)
 
-    // ticker 把归档家族与 appHome 一起交给注入的命令；没有任何 SQLite 客户端参与。
-    expect(calls).toEqual([{ kind: 'scheduled', appHome }])
+    // ticker 每拍无参调用一次注入的备份；没有任何 SQLite 客户端参与。
+    expect(calls).toEqual([[]])
   })
 })

@@ -8,13 +8,13 @@ const PREFIX = 'packages/backend/src/'
 const APPLICATION = PREFIX + 'bootstrap/daemonApplication.ts'
 const SESSION = PREFIX + 'bootstrap/daemonSession.ts'
 const ADAPTERS = PREFIX + 'bootstrap/daemonSessionAdapters.ts'
+// RFC-426: `scheduledBackup` left the table — the scheduled backup belongs to the System Operations module.
 const FIELDS = [
   'open',
   'core',
   'taskExecution',
   'afterCore',
   'maintenance',
-  'scheduledBackup',
   'recoveryProofGeneration',
 ].sort()
 const RETIRED = [

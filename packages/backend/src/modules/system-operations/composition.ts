@@ -119,6 +119,7 @@ import type { AdminRestoreCoordinatorPort } from './application/ports/adminResto
 import { createLegacyPlatformRecoveryAdapter } from './infrastructure/legacyPlatformRecoveryAdapter'
 
 import { createPostgresqlAdminBackupCoordinator } from './infrastructure/postgresqlAdminBackupCoordinator'
+import { SCHEDULED_BACKUP_REQUEST } from './domain/backup'
 import {
   createPostgresqlAdminRestoreCoordinator,
   type PostgresqlAdminRestoreCoordinator,
@@ -246,11 +247,18 @@ export interface SystemOperationsModule {
   readonly artifacts: RestoreArtifactIngressHandle
   /** Bootstrap-only authority for unattended local maintenance commands. */
   readonly localContext: LocalSystemOperationContext
+  /**
+   * RFC-426: bootstrap-only — this deployment's scheduled backup. The deployment's backup choice is already the
+   * module's coordinator, so the daemon's backup ticker calls this and nothing else.
+   */
+  scheduledBackup(): Promise<unknown>
 }
 
 export interface SystemOperationsRecoveryAdapter {
   readonly backup: AdminBackupCoordinatorPort
   readonly restore: AdminRestoreCoordinatorPort
+  /** RFC-426: the provider's scheduled backup (`SCHEDULED_BACKUP_REQUEST`). */
+  scheduledBackup(): Promise<unknown>
 }
 
 export interface PostgresqlSystemOperationsModule extends SystemOperationsModule {
@@ -355,20 +363,24 @@ export function composePostgresqlSystemOperations(deps: {
       databaseConfig: deps.databaseConfig,
     }),
   })
+  // RFC-370 / RFC-426: the hosted platform backup when the deployment selects one, otherwise the local PostgreSQL
+  // backup — manual and scheduled backups alike.
+  const backup =
+    deps.backup ??
+    createPostgresqlAdminBackupCoordinator({
+      headContract: deps.headContract,
+      contract,
+      runtime: deps.runtime,
+      db: deps.db,
+      appHome,
+      prepare: bindRepositoryBackupPreparation(deps.repositoryBackupPreparation),
+    })
   const module = composeSystemOperationsWithArtifacts({
     artifacts,
     adapter: {
-      backup:
-        deps.backup ??
-        createPostgresqlAdminBackupCoordinator({
-          headContract: deps.headContract,
-          contract,
-          runtime: deps.runtime,
-          db: deps.db,
-          appHome,
-          prepare: bindRepositoryBackupPreparation(deps.repositoryBackupPreparation),
-        }),
+      backup,
       restore,
+      scheduledBackup: () => backup.request(SCHEDULED_BACKUP_REQUEST),
     },
   })
   return Object.freeze({
@@ -584,6 +596,7 @@ function composeSystemOperationsWithArtifacts(deps: {
     }),
     artifacts: deps.artifacts,
     localContext: Object.freeze({}) as LocalSystemOperationContext,
+    scheduledBackup: () => deps.adapter.scheduledBackup(),
   })
 }
 

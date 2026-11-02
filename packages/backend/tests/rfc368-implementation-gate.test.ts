@@ -146,9 +146,19 @@ describe('RFC-368 实现门 findings', () => {
       reset()
       await seedReaction(harness.db)
       const crashed = scriptedPort()
-      crashed.launchBehavior = () => new Promise<void>(() => {})
+      // Wait for the real launch boundary (execution identity persisted), as the planned-termination case above does.
+      // A fixed 50ms raced it: under load (RFC-426 local verification, PostgreSQL) the replay below found no execution
+      // to cancel and `port.canceled` stayed empty.
+      let enterLaunch!: () => void
+      const enteredLaunch = new Promise<void>((resolve) => {
+        enterLaunch = resolve
+      })
+      crashed.launchBehavior = () => {
+        enterLaunch()
+        return new Promise<void>(() => {})
+      }
       void reactionService(harness.db, { port: crashed, now, mint }).dispatchOneReaction()
-      await Bun.sleep(50)
+      await enteredLaunch
       const { employeeCases } = tablesOf(harness.db)
       await harness.db
         .update(employeeCases)

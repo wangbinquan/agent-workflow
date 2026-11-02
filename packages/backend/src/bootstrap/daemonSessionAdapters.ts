@@ -25,8 +25,6 @@ import { openSqliteMaintenanceAdmissionStore } from '@/platform/persistence/sqli
 import { createMaintenanceRunStore } from '@/platform/persistence/maintenanceRunStore'
 import type { createMaintenanceService } from '@/platform/background/maintenanceService'
 import type { startMaintenanceWorkerSupervisor } from '@/platform/background/maintenanceWorkerSupervisor'
-import type { startBackupScheduler } from '@/services/backupScheduler'
-import type { DatabaseBackupEffects } from '@/modules/system-operations/public/commands'
 import { join } from 'node:path'
 
 type ApplicationProviders = {
@@ -46,7 +44,6 @@ type ApplicationDatabases = {
 }
 export type DaemonApplicationDatabase<P extends DatabaseProvider> = ApplicationDatabases[P]
 type MaintenanceOptions = Parameters<typeof createMaintenanceService>[0]
-type BackupOptions = Parameters<typeof startBackupScheduler>[0]
 export interface DaemonSessionAdapter<P extends DatabaseProvider = DatabaseProvider> {
   open(
     provider: ResolvedDatabaseProviderRuntime,
@@ -66,20 +63,6 @@ export interface DaemonSessionAdapter<P extends DatabaseProvider = DatabaseProvi
       current: Config,
     ) => Parameters<typeof startMaintenanceWorkerSupervisor>[0]['databaseInit']
   }
-  scheduledBackup(input: {
-    core: SelectedDaemonProviderCore<P>
-    db: DaemonApplicationDatabase<P>
-    databaseBackup?: DatabaseBackupEffects
-  }):
-    | {
-        readonly db: NonNullable<BackupOptions['db']>
-        readonly contract: typeof logicalSchemaContract
-        readonly createScheduledBackup?: never
-      }
-    | {
-        readonly db?: never
-        readonly createScheduledBackup: NonNullable<BackupOptions['createScheduledBackup']>
-      }
   recoveryProofGeneration(provider: DaemonApplicationProvider<P>): string
 }
 
@@ -122,7 +105,6 @@ export const DAEMON_SESSION_ADAPTERS: {
         },
       }),
     }),
-    scheduledBackup: ({ db }) => ({ db, contract: logicalSchemaContract }),
     recoveryProofGeneration: () => DAEMON_GENERATION,
   },
   postgresql: {
@@ -151,15 +133,6 @@ export const DAEMON_SESSION_ADAPTERS: {
         generationId,
         database: requireDatabaseConfig(config.database, 'postgresql'),
       }),
-    }),
-    scheduledBackup: ({ core, databaseBackup }) => ({
-      createScheduledBackup: () =>
-        databaseBackup
-          ? databaseBackup.request({ includeWorktrees: false, kind: 'scheduled' })
-          : core.systemOperations.application.commands.requestBackup.execute(
-              core.systemOperations.localContext,
-              { includeWorktrees: true },
-            ),
     }),
     recoveryProofGeneration: (provider) => provider.runtime.generationId,
   },

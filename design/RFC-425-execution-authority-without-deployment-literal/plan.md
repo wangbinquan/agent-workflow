@@ -32,6 +32,26 @@
   通过；同一仓库里本 RFC 的锁、RFC-376 结构门、RFC-392 统一入口、RFC-317 负例 / 语料下限 / 架构账本 / 模块边界也通过。
 - **P0 变异 lane**（SQLite + PostgreSQL）：passed，34 个阶段、0 失败，127 个源文件指纹前后一致。
 
+## CI（AC-5）
+
+`aa275ba44` 的主 CI（运行 41426366662）68/70；windows-platform（41426366648）与按路径触发的 maintenance-soak-nightly（41426366639）全绿。
+主 CI 红了一格，汇总门 `CI required` 随之红：
+
+- **Playwright e2e (windows-latest shard 3/4)**：2 failed / 2 flaky：
+  - `rfc372-recorded-directions.spec.ts:87`：30s 轮询超时；
+  - `rfc396-graph-development.spec.ts:855` 订票旅程：90s 等 `editableClarify` 超时，重试时 `beforeAll` 起 daemon 90s 超时。
+
+  同一时段 daemon 日志有 `event loop stalled gapMs=102821` 与 `[db-slow] 102732ms (cpu 407ms)`：墙钟 102 秒、CPU 0.4 秒，进程被 runner
+  挂起，不是在算。归属不在本 RFC：
+  - 同一 SHA 的 macOS shard 3/4 跑同样两条用例全部通过（订票旅程 3.1m）；
+  - ubuntu 三片与 windows 其余三片全绿；
+  - 该分片在前三个提交上均通过；
+  - 本 RFC 对单机部署的运行时取值（执行状态的部署种类、SPA 首页、生命周期 profile）与改动前相同。
+
+  证据已补进 `docs/audit-backlog.md` 第九条（Windows runner 饥饿）。
+
+AC-5 以包含本 RFC 的后继提交（RFC-426）的 CI 作后继证据收尾。
+
 ## 冲突面
 
 - **生产**：`SO/application/{ports/executionAuthority,executionStatus}.ts`、三个执行权实现、`S/bootstrap/{deploymentProfile,standalone,crewstation,daemonStart,daemonSession,…}.ts`、

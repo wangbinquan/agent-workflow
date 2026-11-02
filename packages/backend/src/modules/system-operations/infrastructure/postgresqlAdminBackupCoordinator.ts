@@ -42,6 +42,7 @@ export function createPostgresqlAdminBackupCoordinator(input: {
         appHome: input.appHome,
         application,
         includeWorktrees: request.includeWorktrees,
+        kind: request.kind,
       })
     },
   })

@@ -456,6 +456,7 @@ v1 后续的产品 / 技术变更以 RFC 形式落档在 `design/RFC-NNN-{slug}/
 | [RFC-423](./RFC-423-task-execution-composition-assembly-only/proposal.md) | task-execution composition 其余小块迁出与「只剩装配」收口锁（RFC-294 S6）：定时任务启动 / 触发器参与者、托管恢复选择、准备 GC 的阶段分派与 worker 维护迁入 `infrastructure/`；新增收口锁钉住 `composition/` 的装配形状（无循环 / `switch`，`try` 只在驱动入口，含 `throw` 的文件与次数为精确账本）。纯结构重构，无用户可见变化。 | Done |
 | [RFC-424](./RFC-424-retire-test-only-task-drive-entries/proposal.md) | 退役 `services/task.ts` 的测试专用驱动入口：协调器只在 bootstrap 装配（RFC-294 S6）：工厂装配、人工门唤醒、动态工作流续跑准入（含 245 行的 `resumeKick` 链）与仓库准备重试从 `services/task.ts` 删除，测试侧装配迁入 `tests/helpers/`，两个动态工作流用例改走生产确认命令；RFC-386 盘点锁的装配点只剩 bootstrap。只删测试专用代码、迁移测试，无用户可见变化。 | Done |
 | [RFC-425](./RFC-425-execution-authority-without-deployment-literal/proposal.md) | 执行权端口去部署字面量：部署种类由 profile 提供（RFC-294 S2c）：删除 `ExecutionAuthorityPort.mode`，执行状态、HTTP 应用的 SPA 标记与生命周期程序的部署种类改由 bootstrap 从部署 profile 下传；`embed.ts` 只按 profile 给出的标记注入；RFC-376 部署分支 5 → 2。纯结构重构，无用户可见变化。 | In Progress |
+| [RFC-426](./RFC-426-scheduled-backup-source-and-unbound-execution-status/proposal.md) | 定时备份经系统运维模块的备份端口、执行可用性去单机回落（RFC-294 S2c）：定时备份改由系统运维模块按部署选定的备份协调端口完成，provider 适配表删去 `scheduledBackup`、托管 / 单机分支消失，定时器只做节拍；修复单机 PostgreSQL 定时备份落成手动家族（`agent-workflow-*`）且带工作树的缺陷；`readExecutionStatus` 去掉单机回落，RFC-376 部署分支 2 → 1。 | In Progress |
 
 > RFC-310 OS 历史实施快照（2026-08-21，PR-19 阶段；**不再作为当前状态入口**）：
 > 目标产品已收敛为可程序化扩展的“数字员工操作系统”。proposal/design §0A 新增通用 `digital-employee`、`event-center`

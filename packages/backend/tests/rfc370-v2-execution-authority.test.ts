@@ -128,10 +128,12 @@ describe('RFC-370 v2 standalone execution authority', () => {
 })
 
 describe('RFC-370 v2 execution availability gate', () => {
-  test('an unbound app is a standalone root and is always available', () => {
+  // RFC-426: a test or tool root without a bound reader has no execution gate (as before) and no status — the
+  // deployment kind never comes from a fallback in the gate.
+  test('an unbound app has no execution gate and no status to report', () => {
     const app = new Hono()
-    expect(readExecutionStatus(app)).toEqual({ mode: 'standalone', state: 'active', reason: null })
     expect(() => assertExecutionAvailable(app, 'task')).not.toThrow()
+    expect(() => readExecutionStatus(app)).toThrow('execution-availability-unbound')
   })
 
   test('only grouped requests are refused while the instance is not active', () => {
@@ -193,10 +195,13 @@ describe('RFC-370 v2 execution availability gate', () => {
     expect(result.body).toMatchObject({ ok: false, code: 'execution-standby' })
   })
 
-  test('GET /api/execution/status reports the bound status, standalone by default', async () => {
+  test('GET /api/execution/status reports the bound status', async () => {
     const runtime = { readCurrent: async () => null }
     const standalone = new Hono()
     standalone.onError(errorHandler)
+    bindExecutionAvailability(standalone, () =>
+      executionStatusOf(composeLocalExecutionAuthority(), 'standalone'),
+    )
     mountDaemonRoutes(standalone, { runtime })
     const local = await standalone.request('/api/execution/status')
     expect(local.status).toBe(200)
@@ -213,5 +218,11 @@ describe('RFC-370 v2 execution availability gate', () => {
     const standby = await hosted.request('/api/execution/status')
     expect(standby.status).toBe(200)
     expect(await standby.json()).toEqual(STANDBY)
+
+    // RFC-426: production binds the reader before mounting routes; an app that never did has no status.
+    const unbound = new Hono()
+    unbound.onError(errorHandler)
+    mountDaemonRoutes(unbound, { runtime })
+    expect((await unbound.request('/api/execution/status')).status).toBe(500)
   })
 })
