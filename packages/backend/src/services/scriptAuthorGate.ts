@@ -2,12 +2,11 @@
 //
 // A script node's body is code the daemon host will execute, so authoring one
 // is the most privileged thing this product lets a user do. The gate therefore
-// lives at the two PERSISTENCE PRIMITIVES rather than at the HTTP handlers:
-// `insertWorkflowInTx` and `prepareWorkflowSave` are the only ways a definition
-// reaches the database, and the intent builder reaches the first one DIRECTLY
-// (modules/intent/composition/apply.ts), never passing through a route. A gate on
-// routes alone would be silently bypassed by the next internal caller
-// (design-gate P1).
+// lives at the PERSISTENCE PRIMITIVE rather than at the HTTP handlers: the one
+// workflow write participant (`workflowMutationParticipant.ts`, RFC-401) is the
+// only way a definition reaches the database, and the Intent apply reaches it
+// DIRECTLY, never passing through a route. A gate on routes alone would be
+// silently bypassed by the next internal caller (design-gate P1).
 //
 // What is gated is the SENSITIVE PROJECTION, not the document: an author
 // without the point can still move a script node, rename it, and edit unrelated

@@ -22,9 +22,9 @@ import { describeEachProvider } from './helpers/eachProvider'
 import type { BuildScheduleLaunch } from '../src/services/scheduledTasks'
 import { runDueSchedulesOnce } from './helpers/scheduledTaskScheduler'
 import { createUser } from './helpers/userFixture'
-import { createWorkflow } from '../src/services/workflow'
 import { createIdentityAccessRuntime } from '../src/modules/identity-access/composition'
 import { withIntegrationTriggerResources } from './helpers/integrationTriggerResourceBinding'
+import { createWorkflow } from './helpers/model/resourceWrites'
 
 const DAILY = { kind: 'daily', at: '09:00', timezone: 'UTC' } as const
 const BODY = {

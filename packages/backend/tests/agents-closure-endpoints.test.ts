@@ -13,10 +13,10 @@
 import { patchAgentFixture } from './helpers/model'
 import { beforeEach, expect, test } from 'bun:test'
 import type { Hono } from 'hono'
-import { createAgent } from '../src/modules/resource-catalog/infrastructure/legacy/agent'
 import type { Agent } from '@agent-workflow/shared'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
+import { createAgent, FIXTURE_OWNER } from './helpers/model/resourceWrites'
 
 const TOKEN = 'a'.repeat(64)
 
@@ -98,7 +98,8 @@ registerProviderApplication('GET /api/agents/:id/closure', (buildHarness) => {
     expect(body.agents.map((a) => a.id)).toEqual([topAgent.id, midAgent.id, leafAgent.id])
     expect(body.agents[0]?.dependsOnIds).toEqual([midAgent.id])
     expect(body.agents[1]?.dependsOnIds).toEqual([leafAgent.id])
-    expect(body.agents.every((a) => a.ownerUserId === null)).toBe(true)
+    // RFC-401 T6: fixtures write through the agent participant, which always records an owner.
+    expect(body.agents.every((a) => a.ownerUserId === FIXTURE_OWNER)).toBe(true)
     const leaf = body.agents.find((a) => a.name === 'leaf')!
     // RFC-046 follow-up: `skills` (names) must accompany `skillCount` so the
     // DependencyTree UI can render the names instead of only a count. Same

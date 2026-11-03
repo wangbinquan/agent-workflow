@@ -22,7 +22,6 @@ import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { getScheduledTask, runScheduleNow } from './helpers/integrationTriggerResourceBinding'
 import type { BuildScheduleLaunch } from '../src/services/scheduledTasks'
 import { createUser } from './helpers/userFixture'
-import { createWorkflow } from '../src/services/workflow'
 import { NotFoundError } from '../src/util/errors'
 import type { CreateWorkflow, StartTask } from '@agent-workflow/shared'
 import { eq } from 'drizzle-orm'
@@ -31,6 +30,7 @@ import {
   createScheduledTaskWithIntegrationTriggerResources as createScheduledTask,
   withIntegrationTriggerResources,
 } from './helpers/integrationTriggerResourceBinding'
+import { createWorkflow } from './helpers/model/resourceWrites'
 
 const DAEMON_TOKEN = 'a'.repeat(64)
 const DEF: CreateWorkflow['definition'] = { $schema_version: 1, inputs: [], nodes: [], edges: [] }

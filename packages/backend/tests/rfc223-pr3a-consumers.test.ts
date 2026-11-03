@@ -17,11 +17,6 @@ import { QUARANTINED_SNAPSHOT_AGENT_ID } from '@agent-workflow/shared'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 import { buildActor } from '../src/auth/actor'
-import {
-  createAgent,
-  renameAgent,
-} from '../src/modules/resource-catalog/infrastructure/legacy/agent'
-import { createWorkgroup } from '../src/services/workgroups'
 // RFC-395 II-a: exercise the surviving production builders and constant leaf.
 import { buildWorkgroupRuntimeConfig } from '@/modules/task-execution/infrastructure/workgroupRuntimeConfig'
 import {
@@ -32,6 +27,7 @@ import {
 import { extractAgentIdsFromSnapshot } from '../src/modules/memory/application/distill/schedule'
 import { buildMintNodeRunValues } from '../src/services/nodeRunMint'
 import { WG_MEMBER_NODE_ID } from '../src/services/workgroup/constants'
+import { createAgent, renameAgent, createWorkgroup } from './helpers/model/resourceWrites'
 
 const ACTOR = buildActor({
   user: { id: 'u-admin', username: 'admin', displayName: 'admin', role: 'admin', status: 'active' },

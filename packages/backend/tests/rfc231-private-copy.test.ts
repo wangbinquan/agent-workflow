@@ -30,7 +30,6 @@ import { describeEachProvider } from './helpers/eachProvider'
 import { AuthorityClaimRegistry } from '../src/modules/identity-access/application/operationContext'
 import { composeMcpCatalog } from '../src/modules/resource-catalog/composition/mcpOperations'
 import { composeResourceCatalogFor } from '../src/modules/resource-catalog/composition/providerResourceCatalog'
-import { createAgent } from '../src/modules/resource-catalog/infrastructure/legacy/agent'
 import {
   composePluginServiceBindingForTest,
   createPlugin,
@@ -44,13 +43,15 @@ import {
 } from './helpers/mcpServiceBinding'
 import { nextResourceCopyName } from '../src/services/resourceCopyName'
 import { createManagedSkill } from '../src/modules/resource-catalog/infrastructure/legacy/skill'
+import { getWorkflow, workflowRevisionOf } from '../src/services/workflow'
+import { workgroupRevisionOf } from '../src/services/workgroups'
 import {
+  createAgent,
   copyWorkflow,
   createWorkflow,
-  getWorkflow,
-  workflowRevisionOf,
-} from '../src/services/workflow'
-import { copyWorkgroup, createWorkgroup, workgroupRevisionOf } from '../src/services/workgroups'
+  copyWorkgroup,
+  createWorkgroup,
+} from './helpers/model/resourceWrites'
 
 const BACKEND_SRC = resolve(import.meta.dir, '..', 'src')
 const FAKE_NPM = resolve(import.meta.dir, 'fixtures', 'fake-npm.ts')
@@ -360,7 +361,9 @@ describeEachProvider('RFC-231 private create invariant', (harness) => {
 
   test('production writer inventory stays classified as user-private or builtin-public', async () => {
     const expectedInserts: Record<string, Record<string, number>> = {
-      agents: { 'modules/resource-catalog/infrastructure/legacy/agent.ts': 1 },
+      // RFC-401 T6 (G5): the legacy agent writer is deleted; the agent write program inserts the row for the
+      // one agent write participant.
+      agents: { 'modules/resource-catalog/infrastructure/agentReferenceWrite.ts': 1 },
       // RFC-401 T5: ordinary create, ZIP, Intent and packages insert skill rows through the one
       // skill write participant (the two reserve-writers in skill.ts were removed).
       skills: { 'modules/resource-catalog/infrastructure/skillMutationParticipant.ts': 1 },
@@ -375,18 +378,19 @@ describeEachProvider('RFC-231 private create invariant', (harness) => {
       workgroups: {
         // RFC-401 A3b: ordinary create / copy, Intent and packages insert through the one workgroup participant.
         'modules/resource-catalog/infrastructure/workgroupMutationParticipant.ts': 1,
-        'modules/resource-catalog/infrastructure/legacy/workgroups.ts': 1,
       },
     }
     const sourceFiles = [
+      'modules/resource-catalog/infrastructure/agentReferenceWrite.ts',
+      'modules/resource-catalog/infrastructure/agentMutationParticipant.ts',
+      'modules/resource-catalog/infrastructure/agentPersistence.ts',
       'modules/resource-catalog/infrastructure/legacy/agent.ts',
       'modules/resource-catalog/infrastructure/legacy/skill.ts',
       'modules/resource-catalog/infrastructure/mcpRepository.ts',
       'modules/resource-catalog/infrastructure/pluginRepository.ts',
       'modules/resource-catalog/infrastructure/mcpPersistence.ts',
       'modules/resource-catalog/infrastructure/pluginPersistence.ts',
-      'modules/resource-catalog/infrastructure/legacy/workflow.ts',
-      'modules/resource-catalog/infrastructure/legacy/workgroups.ts',
+      'modules/resource-catalog/infrastructure/workflowMutationParticipant.ts',
       'modules/resource-catalog/infrastructure/workflowDefinitionWrite.ts',
       'modules/resource-catalog/infrastructure/workgroupMutationParticipant.ts',
       'modules/resource-catalog/infrastructure/skillMutationParticipant.ts',
@@ -411,14 +415,22 @@ describeEachProvider('RFC-231 private create invariant', (harness) => {
       }
       expect(actual).toEqual(expected)
     }
-    for (const file of [
-      'modules/resource-catalog/infrastructure/legacy/agent.ts',
-      'modules/resource-catalog/infrastructure/skillMutationParticipant.ts',
-      'modules/resource-catalog/infrastructure/legacy/workflow.ts',
-      'modules/resource-catalog/infrastructure/legacy/workgroups.ts',
-    ]) {
+    for (const file of ['modules/resource-catalog/infrastructure/skillMutationParticipant.ts']) {
       expect(sources.get(file)).toContain('initialPrivateResourceAcl')
     }
+    // RFC-401 T6 (G5): agents and workflows are stamped by their write participants — the creator owns a
+    // private row; the framework's system writes are builtin and public.
+    expect(
+      sources.get('modules/resource-catalog/infrastructure/agentMutationParticipant.ts'),
+    ).toContain("{ ownerUserId: owner.userId, visibility: 'public', builtin: true }")
+    expect(sources.get('modules/resource-catalog/infrastructure/agentPersistence.ts')).toContain(
+      "visibility: 'private',",
+    )
+    expect(
+      sources.get('modules/resource-catalog/infrastructure/workflowMutationParticipant.ts'),
+    ).toContain(
+      "{ ownerUserId: owner.actor.user.id, visibility: 'private' as const, builtin: false }",
+    )
     for (const file of [
       'modules/resource-catalog/application/mcps/mcpApplication.ts',
       'modules/resource-catalog/application/plugins/pluginApplication.ts',
@@ -434,9 +446,9 @@ describeEachProvider('RFC-231 private create invariant', (harness) => {
     expect(workgroupParticipant).toContain('ownerUserId: actor.user.id')
     expect(workgroupParticipant).toContain("visibility: 'private'")
     // RFC-395 II-a A2: the workgroup host is a definition constant, no catalog seed remains.
-    expect(sources.get('modules/resource-catalog/infrastructure/legacy/workflow.ts')).toContain(
-      'initialBuiltinResourceAcl',
-    )
+    expect(
+      sources.get('modules/resource-catalog/infrastructure/workflowMutationParticipant.ts'),
+    ).toContain("{ ownerUserId: owner.userId, visibility: 'public' as const, builtin: true }")
     const hostLaunch = await readFile(
       join(
         BACKEND_SRC,
@@ -445,12 +457,12 @@ describeEachProvider('RFC-231 private create invariant', (harness) => {
       'utf8',
     )
     expect(hostLaunch).not.toContain('ensureWorkgroupHostWorkflow')
-    expect(sources.get('modules/resource-catalog/infrastructure/legacy/workflow.ts')).toContain(
-      'createWorkflowDefinitionWriteParticipant(tx).insert(',
-    )
+    expect(
+      sources.get('modules/resource-catalog/infrastructure/workflowMutationParticipant.ts'),
+    ).toContain('createWorkflowDefinitionWriteParticipant(transaction).insert(')
     // RFC-359 W4-D19b：房间的「另存为工作流」不再自己 insert(workflows)，改为把提交递给
     // 工作流目录的 create 操作（`composeWorkgroupTaskRoomDynamicWorkflow`）。归属判定因此
-    // 收进上面那条 `legacy/workflow.ts` + `initialPrivateResourceAcl` 的断言，不再单列。
+    // 收进上面那条 workflow 写入参与者的断言（RFC-401 T6 前是 `legacy/workflow.ts`），不再单列。
     expect(
       await readFile(
         join(BACKEND_SRC, 'modules/resource-catalog/composition/workgroupTaskRoom.ts'),
@@ -541,28 +553,12 @@ describeEachProvider('RFC-231 Workflow exact copy', (harness) => {
     expect(third.name).toBe('secure-flow-copy-3')
   })
 
-  test('visibility precedes parsing, stale revisions fail, and legacy names become create-safe', async () => {
+  // RFC-401 T6 (proposal G5): the legacy test-only copy writer is deleted; the copy runs the production
+  // catalog operation, and its corrupt-source ordering case went with the legacy writer.
+  test('stale revisions fail and legacy names become create-safe', async () => {
     const db = harness.db
     await seedUsers(db, ['alice', 'bob'])
     const bob = actor('bob')
-    const corruptId = ulid()
-    await workflowFixture(db, {
-      id: corruptId,
-      name: 'corrupt-private',
-      definition: '{not-json',
-      ownerUserId: 'alice',
-      visibility: 'private',
-    })
-
-    await expect(
-      copyWorkflow(
-        db,
-        corruptId,
-        { expectedVersion: 1, expectedSnapshotHash: '0'.repeat(64) },
-        bob,
-      ),
-    ).rejects.toMatchObject({ code: 'workflow-not-found' })
-
     const legacyId = ulid()
     await workflowFixture(db, {
       id: legacyId,

@@ -15,8 +15,9 @@ import {
   describeEachProviderHttpApplication,
   type ProviderHttpApplicationScope,
 } from './helpers/providerHttpApplicationScope'
-import { createWorkflow, getWorkflow } from '../src/services/workflow'
+import { getWorkflow } from '../src/services/workflow'
 import { createUser } from './helpers/userFixture'
+import { createWorkflow } from './helpers/model/resourceWrites'
 
 const DAEMON_TOKEN = 'd'.repeat(64)
 const EMPTY_DEFINITION: WorkflowDefinition = {

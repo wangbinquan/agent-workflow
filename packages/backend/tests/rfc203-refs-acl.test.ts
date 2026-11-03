@@ -22,7 +22,6 @@ import { describeEachProvider } from './helpers/eachProvider'
 import { AuthorityClaimRegistry } from '../src/modules/identity-access/application/operationContext'
 import { composeMcpCatalog } from '../src/modules/resource-catalog/composition/mcpOperations'
 import { composeResourceCatalogFor } from '../src/modules/resource-catalog/composition/providerResourceCatalog'
-import { createAgent } from '../src/modules/resource-catalog/infrastructure/legacy/agent'
 import { ResourceOperationCoordinator } from '../src/services/resourceOperationCoordinator'
 
 import { ConflictError } from '../src/util/errors'
@@ -31,6 +30,7 @@ import {
   deleteMcpForTest as deleteMcp,
   type McpCatalogTestBinding as McpServiceBinding,
 } from './helpers/mcpServiceBinding'
+import { createAgent } from './helpers/model/resourceWrites'
 
 function actorOfUser(id: string, role: 'admin' | 'user'): Actor {
   return buildActor({
@@ -94,19 +94,6 @@ const AGENT_BASE = {
 // 与 agents/rfc165 系列的全部删除/改名行为测试保证。
 describe('RFC-203 T6 实现门 P1：agent identity fence（源级锁）', () => {
   test('deleteAgent 与 renameAgent 的事务体都以 id fence 开场', () => {
-    const src = readFileSync(
-      resolve(
-        import.meta.dir,
-        '..',
-        'src',
-        'modules',
-        'resource-catalog',
-        'infrastructure',
-        'legacy',
-        'agent.ts',
-      ),
-      'utf8',
-    )
     const repository = readFileSync(
       resolve(import.meta.dir, '../src/modules/resource-catalog/infrastructure/agentRepository.ts'),
       'utf8',
@@ -122,10 +109,27 @@ describe('RFC-203 T6 实现门 P1：agent identity fence（源级锁）', () => 
     expect(deletion.indexOf('assertDeleteInTransaction')).toBeLessThan(
       deletion.indexOf('.delete(agents)'),
     )
-    const rename = src.slice(src.indexOf('export async function renameAgent('))
-    expect(rename).toContain("requireAgentMutationRevisionTx(tx, id, opts.actor, opts, 'govern')")
-    expect(rename.indexOf('requireAgentMutationRevisionTx')).toBeLessThan(
+    // RFC-401 T6: the legacy `renameAgent` is deleted; the ordinary rename is the repository's, behind the
+    // application's govern gate.
+    const rename = repository.slice(repository.indexOf('async rename('))
+    expect(rename).toContain('.where(eq(agents.id, id))')
+    expect(rename.indexOf('.where(eq(agents.id, id))')).toBeLessThan(
       rename.indexOf('.update(agents)'),
+    )
+    expect(rename.indexOf('fence.expectedUpdatedAt')).toBeLessThan(
+      rename.indexOf('.update(agents)'),
+    )
+    const application = readFileSync(
+      resolve(
+        import.meta.dir,
+        '../src/modules/resource-catalog/application/agents/agentApplication.ts',
+      ),
+      'utf8',
+    )
+    const renameCommand = application.slice(application.indexOf('async rename('))
+    expect(renameCommand.indexOf('requireResourceGovern(')).toBeGreaterThan(-1)
+    expect(renameCommand.indexOf('requireResourceGovern(')).toBeLessThan(
+      renameCommand.indexOf('deps.repository.rename('),
     )
   })
 })

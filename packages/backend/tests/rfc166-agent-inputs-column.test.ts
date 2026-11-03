@@ -17,11 +17,8 @@ import { beforeEach, expect, test } from 'bun:test'
 import { describeEachProvider } from './helpers/eachProvider'
 import type { CreateAgent } from '@agent-workflow/shared'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import {
-  createAgent,
-  updateAgent,
-} from '../src/modules/resource-catalog/infrastructure/legacy/agent'
 import { getAgent } from './helpers/resourceLookup'
+import { createAgent, updateAgent } from './helpers/model/resourceWrites'
 
 type CreateAgentInputs = CreateAgent['inputs']
 

@@ -10,15 +10,12 @@ import { beforeEach, expect, test } from 'bun:test'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { CreateAgent } from '@agent-workflow/shared'
 import {
-  createAgent,
-  updateAgent,
-} from '../src/modules/resource-catalog/infrastructure/legacy/agent'
-import {
   createRuntime,
   seedBuiltinRuntimes,
   setRuntimeEnabled,
 } from './helpers/runtimeRegistryApplication'
 import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
+import { createAgent, updateAgent } from './helpers/model/resourceWrites'
 
 const base: Omit<CreateAgent, 'name' | 'runtime'> = {
   description: 'x',

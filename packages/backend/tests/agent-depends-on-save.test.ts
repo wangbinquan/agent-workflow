@@ -18,7 +18,6 @@ import { patchAgentFixture } from './helpers/model'
 import { describeEachProvider } from './helpers/eachProvider'
 import { beforeEach, expect, test } from 'bun:test'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { createAgent } from '../src/modules/resource-catalog/infrastructure/legacy/agent'
 import { getAgent } from './helpers/resourceLookup'
 import {
   findAgentsDependingOn,
@@ -28,6 +27,7 @@ import {
 import { getAgentById } from '../src/modules/resource-catalog/infrastructure/legacy/agent'
 import type { DomainError } from '../src/util/errors'
 import { PREVIEW_CALL_POLICY, VALIDATE_CALL_POLICY } from '@agent-workflow/shared'
+import { createAgent } from './helpers/model/resourceWrites'
 
 const dependencyLookup = (db: PersistenceDb) => ({
   get: (id: string) => getAgentById(db, id),

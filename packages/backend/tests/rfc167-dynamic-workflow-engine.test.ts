@@ -63,7 +63,6 @@ import { createSession } from './helpers/auth/sessionStore'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 import { loadWorkgroupTaskState } from './helpers/legacyWorkgroupState'
-import { createAgent } from '../src/modules/resource-catalog/infrastructure/legacy/agent'
 import { getAgent } from './helpers/resourceLookup'
 import {
   DW_GATE_CAUSE,
@@ -87,7 +86,6 @@ import {
   ORCHESTRATOR_AGENT_NAME,
 } from '../src/modules/task-execution/public/queries'
 import { createUser } from './helpers/userFixture'
-import { createWorkgroup } from '../src/services/workgroups'
 import {
   createTestTaskExecutionLaunchParticipant,
   launchWorkgroupTaskViaParticipant,
@@ -103,6 +101,7 @@ import {
   createTaskExecutionTestTopology,
   runTaskWithRealTestTopology as runTask,
 } from './helpers/taskExecutionTestTopology'
+import { createAgent, createWorkgroup } from './helpers/model/resourceWrites'
 
 const openTestApplication = registerProviderHttpApplicationLifetime()
 

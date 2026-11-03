@@ -56,8 +56,8 @@ import {
 } from '@/modules/task-execution/composition/digitalEmployeeExecution'
 // RFC-414: the human-review gate snapshot reads the database, so it lives in task-execution infrastructure.
 import { inspectDigitalEmployeeHumanReviewSnapshot } from '@/modules/task-execution/infrastructure/digitalEmployeeExecutionReads'
-import { createAgent, updateAgent } from '@/modules/resource-catalog/infrastructure/legacy/agent'
 import { describeEachProvider } from './helpers/eachProvider'
+import { createAgent, updateAgent } from './helpers/model/resourceWrites'
 
 const roots: string[] = []
 

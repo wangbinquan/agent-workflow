@@ -6,7 +6,6 @@ import { tablesOf } from '@/platform/persistence/sessionTables'
 import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import type { WorkgroupRuntimeConfig } from '@agent-workflow/shared'
-import { createAgent } from '@/modules/resource-catalog/infrastructure/legacy/agent'
 import { createLogger } from '@/util/log'
 // RFC-395 II-a: exercise the surviving production builders and constant leaf.
 import { WG_MEMBER_NODE_ID } from '@/modules/resource-catalog/infrastructure/legacy/workgroup/constants'
@@ -21,6 +20,7 @@ import { createWorkgroupTurnsOperations } from '@/modules/task-execution/engine/
 import type { WorkgroupTurnsPersistencePort } from '@/modules/task-execution/application/ports/workgroupTurns'
 import { createWorkgroupTurnsPersistence } from '@/modules/task-execution/infrastructure/workgroupTurnsPersistence'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
+import { createAgent } from './helpers/model/resourceWrites'
 
 function deferred() {
   let resolve = () => {}

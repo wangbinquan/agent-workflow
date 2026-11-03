@@ -12,7 +12,8 @@ import { withO2Closure } from './helpers/o2Closure'
 //     frozen agent id when two owners share one display name.
 //
 // Existing strong coverage is intentionally not duplicated:
-//   - portable import 0/1/N + stale mapping: rfc223-import-refs.test.ts
+//   - portable import 0/1/N + stale mapping: the production agent / package import queries
+//     (`rfc223-import-refs.test.ts` locked the test-only YAML import writer and went with it, RFC-401 T6)
 import {
   nodeRunFixture,
   patchTaskFixture,
@@ -47,10 +48,6 @@ import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 import { __setProbeOptionsForTesting } from '../src/routes/mcps'
 import {
-  createAgent,
-  renameAgent,
-} from '../src/modules/resource-catalog/infrastructure/legacy/agent'
-import {
   approveFusion,
   createFusion as createFusionWithAuthority,
   getFusion,
@@ -82,6 +79,7 @@ import { composeFusionOperationsFor } from '../src/modules/knowledge-evolution/c
 import { composeTestFusionTasks } from './helpers/fusionTaskBundle'
 import { createFileFusionWorkspaceEffects } from '../src/modules/source-control/composition'
 import { TEST_SQLITE_FUSION_PARTICIPANTS } from './helpers/fusionParticipants'
+import { createAgent, renameAgent } from './helpers/model/resourceWrites'
 
 const openTestApplication = registerProviderHttpApplicationLifetime()
 

@@ -31,7 +31,6 @@ import { applyIntentChangeset } from '../src/modules/intent/composition/apply'
 import { intentApplyResourceBinding } from './helpers/intentApplyResourceBinding'
 import { createIntentSession } from '@/modules/intent/application/session'
 import { withAgentSidecarsFrom } from '@/modules/resource-catalog/domain/agentSidecarBackfill'
-import { createAgent } from '../src/modules/resource-catalog/infrastructure/legacy/agent'
 import {
   buildIntentGraphCandidates,
   draftGraphResolution,
@@ -55,6 +54,7 @@ import type {
 } from '../src/modules/intent/application/ports/intentPersistence'
 import { ulid } from 'ulid'
 import type { Actor } from '../src/auth/actor'
+import { createAgent } from './helpers/model/resourceWrites'
 
 const OWNER = 'user_owner_rfc358_00000000'
 

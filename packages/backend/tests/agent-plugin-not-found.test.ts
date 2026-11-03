@@ -5,6 +5,12 @@
 // Without this guard, agents save fine but the scheduler fails to load the
 // missing plugin at runtime (or worse, silently drops it), turning "agent X
 // needs plugin Y" into a non-actionable mystery.
+//
+// RFC-401 T6 (proposal G5): the fixtures write through the one agent write participant
+// (`helpers/model/resourceWrites.ts`), whose codes the RFC-401 error matrix locks
+// (`rfc401-agent-error-matrix.test.ts`): a NEW reference to a disabled plugin fails its
+// existence check (`plugin-not-found`); a reference the agent already had when the plugin
+// was disabled later fails `plugin-disabled`.
 
 import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { describeEachProvider } from './helpers/eachProvider'
@@ -13,16 +19,13 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
-  createAgent,
-  updateAgent,
-} from '../src/modules/resource-catalog/infrastructure/legacy/agent'
-import {
   composePluginServiceBindingForTest,
   createPlugin,
   type PluginServiceBinding,
 } from './helpers/pluginServiceBinding'
 import { resetNpmProbeCacheForTests } from '../src/services/pluginInstaller'
 import { ValidationError } from '../src/util/errors'
+import { createAgent, updateAgent } from './helpers/model/resourceWrites'
 
 const FAKE_NPM = resolve(import.meta.dir, 'fixtures', 'fake-npm.ts')
 
@@ -84,7 +87,7 @@ describeEachProvider('agent.plugins save-time guard', (harness) => {
     }
   })
 
-  test('create fails 422 plugin-disabled when referenced plugin has enabled=false', async () => {
+  test('create fails 422 plugin-not-found when the newly referenced plugin has enabled=false', async () => {
     const p = await createPlugin(binding, { name: 'off', spec: 'p@1' })
     // Flip enabled off via direct service call.
     await (
@@ -96,7 +99,8 @@ describeEachProvider('agent.plugins save-time guard', (harness) => {
     } catch (err) {
       expect(err).toBeInstanceOf(ValidationError)
       const e = err as ValidationError
-      expect(e.code).toBe('plugin-disabled')
+      expect(e.code).toBe('plugin-not-found')
+      expect(e.details).toEqual(expect.objectContaining({ notFound: [p.id] }))
     }
   })
 
@@ -119,8 +123,8 @@ describeEachProvider('agent.plugins save-time guard', (harness) => {
     const { updatePlugin } = await import('./helpers/pluginServiceBinding')
     await updatePlugin(binding, p1.id, { enabled: false })
     await expect(updateAgent(db, agent.id, { description: 'unrelated' })).rejects.toMatchObject({
-      code: 'agent-resources-invalid',
-      details: { issues: [{ code: 'plugin-disabled', refKind: 'plugin' }] },
+      code: 'plugin-disabled',
+      details: { disabled: [p1.id] },
     })
   })
 })

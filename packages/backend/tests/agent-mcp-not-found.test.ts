@@ -8,16 +8,13 @@ import { tablesOf } from '@/platform/persistence/sessionTables'
 import { describeEachProvider } from './helpers/eachProvider'
 import { beforeEach, expect, test } from 'bun:test'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import {
-  createAgent,
-  updateAgent,
-} from '../src/modules/resource-catalog/infrastructure/legacy/agent'
 import { ValidationError } from '../src/util/errors'
 import {
   composeMcpServiceBindingForTest,
   createMcpForTest,
   type McpCatalogTestBinding,
 } from './helpers/mcpServiceBinding'
+import { createAgent, updateAgent } from './helpers/model/resourceWrites'
 
 function agentInput(name: string, mcp: string[] = []): Parameters<typeof createAgent>[1] {
   return {

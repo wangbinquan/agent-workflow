@@ -32,7 +32,6 @@ import type { WorkgroupRuntimeConfig } from '@agent-workflow/shared'
 
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import { createAgent } from '../src/modules/resource-catalog/infrastructure/legacy/agent'
 import type {
   WorkgroupTurnHostRequest as WorkgroupHostRunRequest,
   WorkgroupTurnHostResult as WorkgroupHostRunResult,
@@ -44,6 +43,7 @@ import {
 // RFC-395 II-a: exercise the surviving production builders and constant leaf.
 import { buildWorkgroupHostSnapshot } from '@/modules/task-execution/infrastructure/workgroupRuntimeConfig'
 import { createLogger } from '../src/util/log'
+import { createAgent } from './helpers/model/resourceWrites'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
 const log = createLogger('rfc189-test')

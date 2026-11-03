@@ -23,14 +23,12 @@ import {
   VALIDATE_CALL_POLICY,
   type Agent,
 } from '@agent-workflow/shared'
-import {
-  createAgent,
-  getAgentById,
-} from '../src/modules/resource-catalog/infrastructure/legacy/agent'
+import { getAgentById } from '../src/modules/resource-catalog/infrastructure/legacy/agent'
 import { resolveDependsClosure } from '../src/services/agentDeps'
 import { collectMcpIdsFromClosure } from '../src/services/mcpClosure'
 import { collectPluginIdsFromClosure } from '../src/services/pluginClosure'
 import { agentSkillRef, runtimeIdRef, runtimeRefKey } from '../src/services/ref/runtimeRef'
+import { createAgent } from './helpers/model/resourceWrites'
 
 const agentRow = (over: Partial<Agent>): Agent =>
   ({

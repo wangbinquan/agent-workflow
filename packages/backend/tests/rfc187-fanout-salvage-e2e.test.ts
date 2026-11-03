@@ -20,14 +20,13 @@ import { join, resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { buildActor } from '../src/auth/actor'
-import { createAgent } from '../src/modules/resource-catalog/infrastructure/legacy/agent'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
-import { createWorkgroup } from '../src/services/workgroups'
 import {
   createTestTaskExecutionLaunchParticipant,
   launchWorkgroupTaskViaParticipant,
 } from './helpers/participantLaunch'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
+import { createAgent, createWorkgroup } from './helpers/model/resourceWrites'
 
 const SCENARIO_STUB = resolve(import.meta.dir, 'fixtures', 'scenario-opencode.ts')
 

@@ -22,10 +22,9 @@ import {
 } from '@agent-workflow/shared'
 import { renderRosterBlock } from '../src/modules/task-execution/domain/workgroup/turnContext'
 import { buildRosterAgentCards } from './helpers/legacyWorkgroupState'
-
-import { createAgent } from '../src/modules/resource-catalog/infrastructure/legacy/agent'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
+import { createAgent } from './helpers/model/resourceWrites'
 
 const PLANNER_ID = 'agent-planner'
 const CODER_ID = 'agent-coder'

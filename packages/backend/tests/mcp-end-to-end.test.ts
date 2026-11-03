@@ -13,7 +13,6 @@
 import { describeEachProvider } from './helpers/eachProvider'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { beforeEach, expect, test } from 'bun:test'
-import { createAgent } from '../src/modules/resource-catalog/infrastructure/legacy/agent'
 import { getAgent } from './helpers/resourceLookup'
 import { composeMcpClosureQueryForTest, createMcpFixture } from './helpers/mcpServiceBinding'
 import { collectMcpIdsFromClosure, loadMcpsByIds } from '../src/services/mcpClosure'
@@ -21,6 +20,7 @@ import { resolveDependsClosure } from '../src/services/agentDeps'
 import { getAgentById } from '../src/modules/resource-catalog/infrastructure/legacy/agent'
 import { buildInlineConfig } from '../src/services/runtime/opencode/inlineConfig'
 import { DISPATCH_CALL_POLICY } from '@agent-workflow/shared'
+import { createAgent } from './helpers/model/resourceWrites'
 
 const dependencyLookup = (db: PersistenceDb) => ({
   get: (id: string) => getAgentById(db, id),

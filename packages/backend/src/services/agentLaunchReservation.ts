@@ -15,8 +15,8 @@
 // of the same agent (unlike `materializingSpaces`, keyed by a unique task id).
 // If one launch released the key while another was still materializing, the
 // window would reopen — so the key is removed only when the LAST holder
-// releases. `deleteAgent`/`renameAgent` refuse (`agent-launching` 409) while
-// any launch holds the agent's id.
+// releases. Agent delete refuses (`agent-launching` 409, `agentPersistenceSemantics.ts`)
+// while any launch holds the agent's id.
 
 /** agent id → number of in-flight launches currently holding it. */
 const launchingAgentIds = new Map<string, number>()

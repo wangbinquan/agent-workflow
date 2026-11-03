@@ -44,10 +44,10 @@ import {
   loadWorkgroupTaskState,
 } from './helpers/legacyWorkgroupState'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
-import { createAgent } from '../src/modules/resource-catalog/infrastructure/legacy/agent'
 import { createUser } from './helpers/userFixture'
 import { resolveMentions } from '../src/routes/workgroupTasks'
 import { createLogger } from '../src/util/log'
+import { createAgent } from './helpers/model/resourceWrites'
 
 void createLogger
 

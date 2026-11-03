@@ -52,7 +52,6 @@ import {
 } from '@agent-workflow/shared'
 import { createSession } from './helpers/auth/sessionStore'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { createAgent } from '../src/modules/resource-catalog/infrastructure/legacy/agent'
 import { DW_GATE_CAUSE } from '../src/modules/task-execution/domain/dynamicWorkflowGeneration'
 import { runDynamicWorkflowGenerate as runDynamicWorkflowGenerateWithPorts } from '../src/modules/task-execution/engine/task/dynamicWorkflowGenerate'
 import type { DynamicWorkflowGenerateArgs } from '../src/modules/task-execution/application/ports/dynamicWorkflowGenerate'
@@ -86,6 +85,7 @@ import { createLogger } from '../src/util/log'
 import { runTestGit } from './helpers/testCommand'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
+import { createAgent } from './helpers/model/resourceWrites'
 
 const openTestApplication = registerProviderHttpApplicationLifetime()
 

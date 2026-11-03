@@ -19,13 +19,12 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { DEFAULT_PROTOCOL_RETRY_BUDGET } from '@agent-workflow/shared'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { createAgent } from '../src/modules/resource-catalog/infrastructure/legacy/agent'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 import { makeVersionedStubOpencode } from './fixtures/versionedStubOpencode'
-import { createWorkflow } from '../src/services/workflow'
 import { abortAllActiveTasks, getTask, isTaskActive } from '@/services/task'
 import { nonInteractiveGitEnv } from '../src/util/git'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
+import { createAgent, createWorkflow } from './helpers/model/resourceWrites'
 
 const GIT_TIMEOUT_MS = 10_000
 const NODE_TIMEOUT_MS = 10_000

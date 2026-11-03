@@ -1,27 +1,24 @@
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
-import { first as firstRow } from '@/platform/persistence/queryHelpers'
+
 import { expect, test } from 'bun:test'
-import { eq } from 'drizzle-orm'
+
 import { ulid } from 'ulid'
 import { buildActor, type Actor } from '@/auth/actor'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
-import { createAgent } from '@/modules/resource-catalog/infrastructure/legacy/agent'
-import { ConflictError } from '@/util/errors'
-import {
-  createWorkgroup,
-  copyWorkgroup,
-  getWorkgroupById,
-  saveWorkgroup,
-  prepareWorkgroupSave,
-  commitWorkgroupSaveInTx,
-} from '@/modules/resource-catalog/infrastructure/legacy/workgroups'
+
+import { getWorkgroupById } from '@/modules/resource-catalog/infrastructure/legacy/workgroups'
 import {
   workgroupDraftSnapshotOf,
   workgroupRevisionOf,
 } from '@/modules/resource-catalog/infrastructure/workgroupPersistence'
 import { describeEachProvider } from './helpers/eachProvider'
+import {
+  createAgent,
+  createWorkgroup,
+  copyWorkgroup,
+  saveWorkgroup,
+} from './helpers/model/resourceWrites'
 
 const principal = { kind: 'system', reason: 'rfc185 test' } as const
 function actor(id: string, role: 'admin' | 'user' = 'user'): Actor {
@@ -89,15 +86,11 @@ async function rows(db: PersistenceDb) {
   }
 }
 
-function deferred() {
-  let release!: () => void
-  const promise = new Promise<void>((resolve) => {
-    release = resolve
-  })
-  return { promise, release }
-}
-
-describeEachProvider('RFC359 W32 legacy Workgroup async persistence', (harness) => {
+// RFC-401 T6 (proposal G5): the legacy workgroup writers are deleted; these cases run on the
+// fixture writers (`helpers/model/resourceWrites.ts`), i.e. the one workgroup write participant.
+// The prepared-write, stale-prepare and before-write hook cases locked the deleted two-phase seams
+// (`prepareWorkgroupSave` / `commitWorkgroupSaveInTx`) and went with them.
+describeEachProvider('RFC359 W32 Workgroup async persistence', (harness) => {
   test('preserves actual default rows and full committed and no-op receipts', async () => {
     const db = harness.db
     const created = await seed(db, 'w32-defaults')
@@ -171,149 +164,5 @@ describeEachProvider('RFC359 W32 legacy Workgroup async persistence', (harness) 
     )
     expect((await rows(db)).groups).toHaveLength(3)
     expect((await rows(db)).members).toHaveLength(3)
-  })
-  test('reads the actual prepared write inside its transaction and rolls back both tables', async () => {
-    const db = harness.db
-    const created = await seed(db, 'w32-rollback')
-    const before = await rows(db)
-    const snapshot = {
-      ...workgroupDraftSnapshotOf(created),
-      description: 'rolled back',
-      members: workgroupDraftSnapshotOf(created).members.map((m) => ({
-        ...m,
-        displayName: 'renamed',
-      })),
-    }
-    const prepared = await prepareWorkgroupSave(
-      db,
-      created.id,
-      { expectedVersion: created.version, clientMutationId: ulid(), snapshot },
-      principal,
-    )
-    const failure = new Error('w32 actual transaction rollback')
-    await expect(
-      databaseSessionFor(db).transaction(async (tx) => {
-        const result = await commitWorkgroupSaveInTx(tx, prepared)
-        expect(result.committed).toBe(true)
-        const { workgroups, workgroupMembers } = tablesOf(tx)
-        expect(
-          (await firstRow(tx.select().from(workgroups).where(eq(workgroups.id, created.id))))
-            ?.description,
-        ).toBe('rolled back')
-        expect(
-          (
-            await tx
-              .select()
-              .from(workgroupMembers)
-              .where(eq(workgroupMembers.workgroupId, created.id))
-          ).map((m) => m.displayName),
-        ).toEqual(['renamed'])
-        throw failure
-      }),
-    ).rejects.toBe(failure)
-    expect(await rows(db)).toEqual(before)
-  })
-  test('preserves the exact stale failure and the complete winning rows', async () => {
-    const db = harness.db
-    const created = await seed(db, 'w32-stale')
-    const snapshot = { ...workgroupDraftSnapshotOf(created), description: 'stale' }
-    const prepared = await prepareWorkgroupSave(
-      db,
-      created.id,
-      { expectedVersion: created.version, clientMutationId: ulid(), snapshot },
-      principal,
-    )
-    await saveWorkgroup(
-      db,
-      created.id,
-      {
-        expectedVersion: created.version,
-        clientMutationId: ulid(),
-        snapshot: { ...snapshot, description: 'winner' },
-      },
-      principal,
-    )
-    const before = await rows(db)
-    const pending = databaseSessionFor(db).transaction(
-      async (tx) => await commitWorkgroupSaveInTx(tx, prepared),
-    )
-    await expect(pending).rejects.toBeInstanceOf(ConflictError)
-    await expect(pending).rejects.toThrow(`workgroup '${created.id}' is at version 2, expected 1`)
-    expect(await rows(db)).toEqual(before)
-  })
-  test('awaits the original create hook before actual write and publication', async () => {
-    const db = harness.db
-    const agent = await createAgent(db, {
-      name: 'a1',
-      description: '',
-      outputs: [],
-      syncOutputsOnIterate: true,
-      permission: {},
-      skills: [],
-      dependsOn: [],
-      mcp: [],
-      plugins: [],
-      frontmatterExtra: {},
-      bodyMd: '',
-    })
-    const entered = deferred(),
-      release = deferred(),
-      finished = deferred()
-    let observed: Awaited<ReturnType<typeof rows>> | undefined
-    const pending = createWorkgroup(db, groupInput(agent.id)({ name: 'w32-create-hook' }), {
-      beforeWriteTransaction: async () => {
-        entered.release()
-        await release.promise
-        observed = await rows(db)
-        finished.release()
-      },
-    })
-    try {
-      await entered.promise
-      await new Promise<void>((resolve) => setTimeout(resolve, 0))
-    } finally {
-      release.release()
-      await pending
-      await finished.promise
-    }
-    expect(observed).toEqual({ groups: [], members: [] })
-    expect((await rows(db)).groups).toHaveLength(1)
-  })
-  test('awaits the original save hook before actual write and publication', async () => {
-    const db = harness.db
-    const created = await seed(db, 'w32-save-hook')
-    const before = await rows(db)
-    const entered = deferred(),
-      release = deferred(),
-      finished = deferred()
-    let observed: Awaited<ReturnType<typeof rows>> | undefined
-    const pending = saveWorkgroup(
-      db,
-      created.id,
-      {
-        expectedVersion: created.version,
-        clientMutationId: ulid(),
-        snapshot: { ...workgroupDraftSnapshotOf(created), description: 'guarded' },
-      },
-      principal,
-      {
-        beforeWriteTransaction: async () => {
-          entered.release()
-          await release.promise
-          observed = await rows(db)
-          finished.release()
-        },
-      },
-    )
-    try {
-      await entered.promise
-      await new Promise<void>((resolve) => setTimeout(resolve, 0))
-    } finally {
-      release.release()
-      await pending
-      await finished.promise
-    }
-    expect(observed).toEqual(before)
-    expect((await rows(db)).groups[0]?.description).toBe('guarded')
   })
 })

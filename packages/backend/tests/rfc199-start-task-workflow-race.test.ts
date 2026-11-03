@@ -43,18 +43,17 @@ import {
   createFileFusionWorkspaceEffects,
   fusionWorkDirectory,
 } from '@/modules/source-control/infrastructure/local/fileFusionWorkspaceEffects'
-import {
-  createWorkflow,
-  getWorkflow,
-  updateWorkflow,
-  workflowDraftSnapshotOf,
-  type WorkflowWritePrincipal,
-} from '@/services/workflow'
+import { getWorkflow, workflowDraftSnapshotOf } from '@/services/workflow'
 
 import { createRepoGroup } from '@/services/repoGroup'
 import { runGit } from '../src/util/git'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 import { composeSqliteRepositoryWorkspaceStore } from '../src/modules/source-control/composition'
+import {
+  createWorkflow,
+  updateWorkflow,
+  type WorkflowWritePrincipal,
+} from './helpers/model/resourceWrites'
 
 interface Harness {
   tmp: string

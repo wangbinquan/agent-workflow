@@ -23,7 +23,8 @@ const agentWriters = [
 /**
  * RFC-401 A3: the workflow writers hand their rows to the one Workflow mutation participant
  * (`workflowMutationParticipant.ts`), which alone drives the definition + dependency-index write program; the seeds use
- * its trusted seed writes. The test-only legacy writers (`legacy/workflow.ts`, RFC-401 Part B) still call the program.
+ * its trusted seed writes. RFC-401 T6 (proposal G5) deleted the test-only legacy writers (`legacy/workflow.ts`), so the
+ * participant is the program's only caller.
  */
 const workflowParticipant = 'workflowMutationParticipant.ts'
 const workflowWriters = [
@@ -33,7 +34,7 @@ const workflowWriters = [
   'aggregateAdapters/intentApplyResourcePorts.ts',
   'aggregateAdapters/postgresqlResourcePackageMutationArms.ts',
 ]
-const legacyWorkflowWriter = 'legacy/workflow.ts'
+const legacyWorkflowReads = 'legacy/workflow.ts'
 const lookups = [
   'mcpRepository.ts',
   'pluginRepository.ts',
@@ -87,11 +88,12 @@ describe('RFC-395 F target reference boundaries', () => {
       expect(source, file).not.toContain('createWorkflowDefinitionWriteParticipant(')
       expect(bypasses(source, 'workflow'), file).toBe(false)
     }
-    for (const file of [workflowParticipant, legacyWorkflowWriter]) {
-      const source = read(catalog + file)
-      expect(source, file).toContain('createWorkflowDefinitionWriteParticipant(')
-      expect(bypasses(source, 'workflow'), file).toBe(false)
-    }
+    const participantSource = read(catalog + workflowParticipant)
+    expect(participantSource).toContain('createWorkflowDefinitionWriteParticipant(')
+    expect(bypasses(participantSource, 'workflow')).toBe(false)
+    const legacyReads = read(catalog + legacyWorkflowReads)
+    expect(legacyReads).not.toContain('createWorkflowDefinitionWriteParticipant(')
+    expect(bypasses(legacyReads, 'workflow')).toBe(false)
     expect(updatesThroughParticipant(read(catalog + 'agentRepository.ts'))).toBe(true)
     expect(read(catalog + 'fusionResourceSeed.ts')).toContain('runResourceCatalogTransaction(')
     const fusion = read('modules/knowledge-evolution/infrastructure/fusionRepository.ts')

@@ -14,7 +14,7 @@
 //     "什么都不传" 曾经默认成硬失败，读起来像是域的固有语义，实际是调用点的选择。
 //
 //   validateDependsOn(lookup, selfId, dependsOn)
-//     Save-time guard chained from agent.ts createAgent / updateAgent. Runs
+//     Save-time dependency guard (the agent write path, RFC-022). Runs
 //     dedupe → self-check → existence-check → closure (cycle) and throws
 //     DomainError with one of the four RFC-022 codes on the first failure.
 //     Safe to call before the row exists (new agent path) — the synthetic
@@ -138,7 +138,7 @@ export async function resolveDependsClosure(
  * exception bubble up to the HTTP layer where errorHandler renders the
  * standard `{ ok:false, code, message, details? }` envelope.
  *
- * selfId may not yet exist in the DB (new-agent flow — createAgent mints the id
+ * selfId may not yet exist in the DB (new-agent flow — the create path mints the id
  * up front); the closure is built from a synthetic root carrying the proposed
  * dependsOn list, so the BFS still detects cycles like A → B → A even before A
  * is persisted. RFC-223 (PR-1): keyed by id, so a self-dependency and cycles are

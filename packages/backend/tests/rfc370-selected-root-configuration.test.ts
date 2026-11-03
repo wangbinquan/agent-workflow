@@ -9,8 +9,8 @@ import { DEFAULT_CONFIG, type Config } from '@agent-workflow/shared'
 import type { ApplicationConfigurationQueries } from '@/modules/system-operations/public/queries'
 import { createSession } from './helpers/auth/sessionStore'
 import { createUser } from './helpers/userFixture'
-import { createWorkflow } from '@/services/workflow'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
+import { createWorkflow } from './helpers/model/resourceWrites'
 
 function deferred<T>() {
   let resolve!: (value: T) => void

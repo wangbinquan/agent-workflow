@@ -33,13 +33,12 @@ import {
 
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { runTaskWithRealTestTopology as runTask } from './helpers/taskExecutionTestTopology'
-import { createAgent } from '../src/modules/resource-catalog/infrastructure/legacy/agent'
-import { createWorkgroup } from '../src/services/workgroups'
 import { abortAllActiveTasks } from '../src/services/task'
 import { __resetRecoveryCountersForTest } from '../src/services/recovery'
 import { buildActor } from '../src/auth/actor'
 import { runGit } from '../src/util/git'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
+import { createAgent, createWorkgroup } from './helpers/model/resourceWrites'
 
 const ulid = monotonicFactory()
 

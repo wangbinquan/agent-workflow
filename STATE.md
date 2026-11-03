@@ -43,7 +43,14 @@
   点名）均已修；全量轮另查出 epoch-2 跨版本行桥缺失——0001 / 0002 之后 provider move 状态 / 恢复源解析报错、PostgreSQL 逻辑恢复拒收升级前
   的备份——行桥改为按版本 edge 折叠，逻辑恢复重新经 additive 桥接受较旧的 epoch-2 备份（design §10.4）。其余为 PostgreSQL 钩子负载超时、
   低并发复跑通过；导出仓库 139 个按已提交源码出报告的用例通过。详见 plan「Part B 落地」与 design §10。
-- **下一步**：推送后跟 exact SHA 的 CI；全绿后 RFC-401 转 Done（AC-6）。
+- **Part B CI**：`9498cca64` attempt 1 为 68/70：Windows e2e shard 1/4 的 `crash-recovery` 多次 SIGKILL 用例在首个任务的 10 s「等
+  running」上超时（SIGTERM 用例同样超时后重试通过）；同一 job 里同一场景的 `:237` 两次通过、此前 6 次 main CI 该 shard 全绿、本步
+  不触及建任务到 running 的路径，归因 Windows runner 时序；只重跑失败 job 一次（attempt 2）全绿，重跑只作佐证。windows-platform 通过。
+- **T6 收尾（G5）**：Part B 只做了 G5 的技能部分。本步删除 agent / workflow / workgroup 的零调用 legacy 写函数与 YAML 导入写入者（及随之
+  不可达的 `agentReferences.ts`、`legacy/importRefs.ts`；四个 legacy 文件 3457 → 628 行），用例经新的 `tests/helpers/model/resourceWrites.ts`
+  只走生产写入入口（107 个文件）；旧专有语义按 RFC-401 错误矩阵改写，只锁两段式接缝 / YAML 导入的用例随被测代码删除。详见 plan
+  「T6 收尾」与 design §10.3。
+- **下一步**：T6 收尾推送后跟 exact SHA 的 CI；全绿后 RFC-401 转 Done（AC-6）。
 
 ## 2026-11-02 RFC-430 部署选择项删余下三个可派生项（Done；`design/RFC-430-derivable-deployment-selections/`）
 

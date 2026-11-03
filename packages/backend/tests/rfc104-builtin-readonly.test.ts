@@ -682,7 +682,7 @@ describeEachProviderHttpApplication(
 )
 
 describe('RFC-104 — source-level guard anchors (regression: do not delete the guards)', () => {
-  test('launch + resume/retry + YAML import + ACL guards are present in source', () => {
+  test('launch + resume/retry + ACL guards are present in source', () => {
     const tasksSrc = readFileSync(resolve(SRC, 'routes', 'tasks.ts'), 'utf-8')
     // RFC-345 T4a moved the fresh built-in verdict into the task-execution
     // resource snapshot adapter. Both launch transports consume that frozen
@@ -725,11 +725,8 @@ describe('RFC-104 — source-level guard anchors (regression: do not delete the 
     expect(sharedMultipart).toContain("assertNotBuiltin('workflow', candidate)")
     expect(tasksSrc).toContain('operations.resume({ actor, taskId:')
     expect(tasksSrc).toContain('operations.retry({')
-    const yaml = readFileSync(
-      resolve(SRC, 'modules', 'resource-catalog', 'infrastructure', 'legacy', 'workflow.yaml.ts'),
-      'utf-8',
-    )
-    expect(yaml).toContain("assertNotBuiltin('workflow', existing)")
+    // RFC-401 T6 (proposal G5): the test-only YAML import writer (and its builtin overwrite guard) is deleted;
+    // no production route imports a workflow through it.
     const acl = readFileSync(resolve(SRC, 'routes', 'resourceAcl.ts'), 'utf-8')
     // RFC-201: the ACL mutation coordinator reloads inside its resource lock;
     // the builtin guard must inspect that fresh row, not the pre-lock snapshot.

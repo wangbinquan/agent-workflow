@@ -50,9 +50,9 @@ import { composeTaskExecutionTestRuntime } from './helpers/taskExecutionTestTopo
 import { createSqliteWebhookTaskExecutionParticipant } from './helpers/webhookTaskExecution'
 import { createUser } from './helpers/userFixture'
 import { createWebhookDispatcher } from '../src/services/webhook/webhookDispatch'
-import { createWorkflow } from '../src/services/workflow'
 import { Paths } from '../src/util/paths'
 import { intentApplyResourceBinding } from './helpers/intentApplyResourceBinding'
+import { createWorkflow } from './helpers/model/resourceWrites'
 
 const TOKEN = 'aw-rfc269-local-fixture-token' // gitleaks:allow
 const INTENT_RUNTIME = 'rfc292-intent-opencode'

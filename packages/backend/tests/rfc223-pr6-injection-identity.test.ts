@@ -18,10 +18,7 @@ import { eq } from 'drizzle-orm'
 import type { Logger } from '@/util/log'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import {
-  createAgent,
-  getAgentById,
-} from '../src/modules/resource-catalog/infrastructure/legacy/agent'
+import { getAgentById } from '../src/modules/resource-catalog/infrastructure/legacy/agent'
 import {
   findManagedInjectionNameConflict,
   formatManagedInjectionNameConflict,
@@ -31,6 +28,7 @@ import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence
 import { resolveInjection } from '../src/services/execution/resolveInjection'
 import { legacyInjectionAgentLookup } from './helpers/legacyInjectionAgentLookup'
 import { skillFilesRel } from '../src/services/skillIdentityPaths'
+import { createAgent } from './helpers/model/resourceWrites'
 
 const NOOP_LOG: Logger = {
   debug: () => {},

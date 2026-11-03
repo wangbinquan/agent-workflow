@@ -27,13 +27,13 @@ import type { TaskSourceTerminationParticipant } from '@/modules/task-execution/
 import { pollAndClaim, runDueSchedulesOnce } from '@/services/scheduledTaskScheduler'
 import type { BuildScheduleLaunch } from '@/services/scheduledTasks'
 import { createUser } from './helpers/userFixture'
-import { createWorkflow } from '@/services/workflow'
 import { createIdentityAccessRuntime } from '@/modules/identity-access/composition'
 import {
   scheduledTaskRuntime,
   withIntegrationTriggerResources,
 } from './helpers/integrationTriggerResourceBinding'
 import { describeEachProvider } from './helpers/eachProvider'
+import { createWorkflow } from './helpers/model/resourceWrites'
 
 function guards(): MrLaunchGuardCoordinator {
   return {

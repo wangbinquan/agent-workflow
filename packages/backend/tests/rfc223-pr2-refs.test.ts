@@ -29,15 +29,11 @@ import {
 import { buildActor, type Actor } from '../src/auth/actor'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { eq } from 'drizzle-orm'
-import {
-  createAgent,
-  getAgentById,
-  renameAgent,
-} from '../src/modules/resource-catalog/infrastructure/legacy/agent'
+import { getAgentById } from '../src/modules/resource-catalog/infrastructure/legacy/agent'
 import { createRuntime } from './helpers/runtimeRegistryApplication'
 import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
 import { createScheduledTaskWithIntegrationTriggerResources as createScheduledTask } from './helpers/integrationTriggerResourceBinding'
-import { createWorkgroup, getWorkgroupById } from '../src/services/workgroups'
+import { getWorkgroupById } from '../src/services/workgroups'
 import {
   createTestTaskExecutionLaunchParticipant,
   launchWorkgroupTaskViaParticipant,
@@ -45,6 +41,7 @@ import {
 import { extractWorkflowAgentRefs, stripWorkflowNodeAgentIds } from '../src/services/resourceRefs'
 import { createUser } from './helpers/userFixture'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
+import { createAgent, renameAgent, createWorkgroup } from './helpers/model/resourceWrites'
 
 const SPEC = { kind: 'daily', at: '09:00', timezone: 'UTC' } as const
 const VALID_OPENCODE_RUNTIME = 'rfc224-test-opencode'

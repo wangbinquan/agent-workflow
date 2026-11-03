@@ -35,13 +35,10 @@ import { ulid } from 'ulid'
 import { buildActor } from '../src/auth/actor'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
-  createWorkflow,
   getWorkflow,
   migrateDefinitionToLatest,
-  updateWorkflow,
   workflowDraftSnapshotOf,
   workflowSnapshotHashOf,
-  type WorkflowWritePrincipal,
 } from '../src/services/workflow'
 import { DomainError } from '../src/util/errors'
 import { describeEachProvider } from './helpers/eachProvider'
@@ -50,6 +47,11 @@ import {
   WORKFLOWS_CHANNEL,
   workflowsBroadcaster,
 } from '../src/ws/broadcaster'
+import {
+  createWorkflow,
+  updateWorkflow,
+  type WorkflowWritePrincipal,
+} from './helpers/model/resourceWrites'
 
 const EMPTY_DEFINITION: WorkflowDefinition = {
   $schema_version: 4,

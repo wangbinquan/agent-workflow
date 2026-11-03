@@ -266,7 +266,7 @@ export function mountAgentRoutes(app: Hono, module: AgentRouteDependencies): voi
       const id = c.req.param('id')
       const body = await safeJsonOrEmpty(c.req.raw)
       // RFC-099 (D15) / RFC-223 (PR-1, Codex impl-gate P1-2): reference ACL is
-      // enforced INSIDE updateAgent, bound to the same single resolution that
+      // enforced INSIDE the agent write participant, bound to the same single resolution that
       // produces the persisted ids. Only NEWLY-added references (diffed by RESOLVED
       // ID, not raw token) are checked — a grandfathered ref re-submitted by name is
       // not mis-flagged as new.

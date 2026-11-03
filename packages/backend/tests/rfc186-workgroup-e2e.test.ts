@@ -21,12 +21,10 @@ import { ulid } from 'ulid'
 import { DAEMON_RESTART_ERROR_SUMMARY, DEFAULT_PROTOCOL_RETRY_BUDGET } from '@agent-workflow/shared'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { buildActor } from '../src/auth/actor'
-import { createAgent } from '../src/modules/resource-catalog/infrastructure/legacy/agent'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 import { createResumeEngine } from './helpers/resumeEngine'
 import { autoResumeInterruptedTasks } from '../src/services/autoResume'
 import { abortAllActiveTasks } from '../src/services/task'
-import { createWorkgroup } from '../src/services/workgroups'
 // RFC-395 II-a: exercise the surviving production builders and constant leaf.
 import { buildWorkgroupHostSnapshot } from '@/modules/task-execution/infrastructure/workgroupRuntimeConfig'
 import {
@@ -36,6 +34,7 @@ import {
 import { runTestCommand, runTestGit } from './helpers/testCommand'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
+import { createAgent, createWorkgroup } from './helpers/model/resourceWrites'
 
 // RFC-187: this suite drives REAL auto-resume, which bumps the process-global
 // recovery counters. bun shares the module registry across test files under CI's

@@ -36,7 +36,6 @@ import { buildActor, type Actor } from '../src/auth/actor'
 import { createPat } from './helpers/auth/patStore'
 import { createSession } from './helpers/auth/sessionStore'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { createAgent } from '../src/modules/resource-catalog/infrastructure/legacy/agent'
 import { createTaskExecutionLaunchParticipant } from '../src/modules/task-execution/composition/taskRouteLaunch'
 import {
   createBuildScheduleLaunch,
@@ -60,13 +59,12 @@ import { registerProviderHttpApplicationLifetime } from './helpers/providerHttpA
 import type { Hono } from 'hono'
 import { createTaskRouteWorkspaceParticipant } from '@/modules/task-execution/composition/taskRouteLaunch'
 import { composeRepositoryPreparation } from '@/modules/source-control/composition/repositoryPreparation'
-import { createWorkflow } from '../src/services/workflow'
-import { createWorkgroup } from '../src/services/workgroups'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 import { createIdentityAccessRuntime } from '../src/modules/identity-access/composition'
 import { composeAgentLaunchResourceOperations } from '../src/modules/task-execution/composition/agentLaunchResources'
 import { composeDatabaseAgentResourceIntegrity } from '../src/modules/resource-catalog/composition/agentResourceIntegrity'
 import { composeResourceCatalogFor } from '../src/modules/resource-catalog/composition/providerResourceCatalog'
+import { createAgent, createWorkflow, createWorkgroup } from './helpers/model/resourceWrites'
 
 const openTestApplication = registerProviderHttpApplicationLifetime()
 
@@ -373,8 +371,7 @@ describe('RFC-165 §9b — create/update by kind (K1/K2/K3/K7)', () => {
       },
       { actor: actorFor(ownerId) },
     )
-    const { renameAgent } =
-      await import('../src/modules/resource-catalog/infrastructure/legacy/agent')
+    const { renameAgent } = await import('./helpers/model/resourceWrites')
     expect(await renameAgent(db, solo.id, { newName: 'solo2' })).toMatchObject({
       id: solo.id,
       name: 'solo2',
@@ -408,7 +405,7 @@ describe('RFC-165 §9b — create/update by kind (K1/K2/K3/K7)', () => {
       },
       { actor: actorFor(ownerId) },
     )
-    const { renameWorkgroup } = await import('../src/services/workgroups')
+    const { renameWorkgroup } = await import('./helpers/model/resourceWrites')
     const renamed = await renameWorkgroup(
       db,
       squad.id,

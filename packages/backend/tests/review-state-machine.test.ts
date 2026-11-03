@@ -32,8 +32,6 @@ import { DEFAULT_PROTOCOL_RETRY_BUDGET } from '@agent-workflow/shared'
 import { type DbClient, createInMemoryDb } from '../src/db/client'
 
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
-import { createAgent } from '../src/modules/resource-catalog/infrastructure/legacy/agent'
-import { createWorkflow } from '../src/services/workflow'
 import {
   addReviewComment,
   countPendingReviews,
@@ -49,6 +47,7 @@ import {
   createTaskExecutionTestTopology,
   runTaskWithRealTestTopology as runTaskBase,
 } from './helpers/taskExecutionTestTopology'
+import { createAgent, createWorkflow } from './helpers/model/resourceWrites'
 
 const openTestApplication = registerProviderHttpApplicationLifetime()
 

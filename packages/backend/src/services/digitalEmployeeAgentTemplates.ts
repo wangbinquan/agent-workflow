@@ -339,7 +339,7 @@ function storedBuiltinAgentDefinition(existing: Agent): CreateAgent {
   })
 }
 
-/** Everything except the name, which is repaired through `renameAgent`. */
+/** Everything except the name, which is repaired through the agent rename. */
 function builtinAgentContentSignature(definition: CreateAgent): string {
   const { name: _name, ...content } = CreateAgentSchema.parse(definition)
   return canonicalJson(content)

@@ -37,8 +37,6 @@ import { type DbClient, createInMemoryDb } from '../src/db/client'
 
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 import { makeVersionedStubOpencode } from './fixtures/versionedStubOpencode'
-import { createAgent } from '../src/modules/resource-catalog/infrastructure/legacy/agent'
-import { createWorkflow } from '../src/services/workflow'
 import {
   addReviewComment,
   submitReviewDecision,
@@ -50,6 +48,7 @@ import {
   createTaskExecutionTestTopology,
   runTaskWithRealTestTopology as runTaskBase,
 } from './helpers/taskExecutionTestTopology'
+import { createAgent, createWorkflow } from './helpers/model/resourceWrites'
 
 const GIT_TIMEOUT_MS = 10_000
 const NODE_TIMEOUT_MS = 10_000

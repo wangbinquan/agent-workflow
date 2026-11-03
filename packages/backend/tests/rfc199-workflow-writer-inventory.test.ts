@@ -25,17 +25,15 @@ const DEFINITION_WRITER = 'modules/resource-catalog/infrastructure/workflowDefin
 //
 // RFC-401 A3: the business call sites themselves collapsed into the one Workflow mutation participant — ordinary CRUD
 // (create, copy, save), Intent, the resource package and the built-in catalog call its create / update, and the demo
-// and fusion seeds call its trusted seed insert / repair. The test-only legacy writers (`legacy/workflow.ts`) remain
-// until RFC-401 Part B deletes them.
+// and fusion seeds call its trusted seed insert / repair. RFC-401 T6 (proposal G5) deleted the test-only legacy
+// writers (`legacy/workflow.ts`), so the participant is the only business call site.
 
 const EXPECTED_WRITERS = {
   insert: {
     'modules/resource-catalog/infrastructure/workflowMutationParticipant.ts': 2,
-    'modules/resource-catalog/infrastructure/legacy/workflow.ts': 1,
   },
   updateEditable: {
     'modules/resource-catalog/infrastructure/workflowMutationParticipant.ts': 2,
-    'modules/resource-catalog/infrastructure/legacy/workflow.ts': 1,
   },
   updateMetadata: {},
   delete: {
@@ -256,8 +254,6 @@ describe('RFC-199 workflow writer inventory', () => {
     const canonicalMarkerByWriter: Record<string, string> = {
       'modules/resource-catalog/infrastructure/workflowMutationParticipant.ts':
         'serializeWorkflowDefinitionStorageV1(',
-      'modules/resource-catalog/infrastructure/legacy/workflow.ts':
-        'serializeWorkflowDefinitionStorageV1(',
     }
     // RFC-401 A3：种子写入的两处调用方各自带规范序列化（演示目录经 createWorkflowPersistenceValues，融合经
     // repairDefinition.repair），参与者只原样落行。
@@ -284,7 +280,8 @@ describe('RFC-199 workflow writer inventory', () => {
     // RFC-359 AC-1（plan §5hn 批次二 ①）：工作组宿主锚行的懒种同样合成一份（11 → 10）
     // RFC-395 II-a A2：再删 agent / workgroup / digital-employee 三个宿主播种（10 → 7）。
     // RFC-401 A3：业务写入点收进唯一的 workflow 写入参与者（创建 + 种子插入），另余测试用的旧写入（7 → 3）。
-    expect(inventory.insertValueArgs).toHaveLength(3)
+    // RFC-401 T6（G5）：测试用的旧写入删除（3 → 2）。
+    expect(inventory.insertValueArgs).toHaveLength(2)
     expect(Object.keys(inventory.insert).sort()).toEqual(
       Object.keys(canonicalMarkerByWriter).sort(),
     )

@@ -14,16 +14,12 @@ import {
   type ProviderHttpApplicationScope,
 } from './helpers/providerHttpApplicationScope'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
-import {
-  createAgent,
-  listAgents,
-  renameAgent,
-  updateAgent,
-} from '../src/modules/resource-catalog/infrastructure/legacy/agent'
+import { listAgents } from '../src/modules/resource-catalog/infrastructure/legacy/agent'
 import { getAgent } from './helpers/resourceLookup'
 import { ConflictError, NotFoundError } from '../src/util/errors'
 import { createRuntime } from './helpers/runtimeRegistryApplication'
 import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
+import { createAgent, renameAgent, updateAgent } from './helpers/model/resourceWrites'
 
 // RFC-203 T6: reference-disclosure needs a principal — an admin actor keeps
 // these service-level tests' original full-visibility expectations.

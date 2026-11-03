@@ -8,7 +8,8 @@
 // program. For agents the dependency-graph check has one write-time caller (the participant) plus the public validation
 // query, and Intent's own `agent-runtime-not-found` and the package planner's `BundleCycleError` are gone. For workflows
 // Intent no longer rejects duplicate names (`workflow-name-in-use`) nor runs the full graph check on commit
-// (`intent-workflow-invalid`, proposal §5 #2 / #8).
+// (`intent-workflow-invalid`, proposal §5 #2 / #8). RFC-401 T6 (proposal G5) deleted the test-only legacy writers of
+// agents, workflows and workgroups (and the YAML import writer), so those kinds have no legacy importer left.
 // Reads the production sources without importing them.
 import { expect, test } from 'bun:test'
 import { resolve } from 'node:path'
@@ -49,9 +50,9 @@ const STACKS: readonly WriteStack[] = [
       'prepareAgentReferenceUpdate',
       'replaceAgentReferences',
     ],
-    // Test-only legacy writers (`createAgent` / `updateAgent`, zero production callers) still replay the write
-    // program; RFC-401 Part B (G5) deletes them.
-    legacyImporters: [INFRA + 'legacy/agent.ts'],
+    // RFC-401 T6 (G5): the test-only legacy writers are deleted; fixtures write through the participant
+    // (`tests/helpers/model/resourceWrites.ts`).
+    legacyImporters: [],
     scenes: [
       { path: INTENT_PORTS, fn: 'createAgentPort' },
       { path: PACKAGE_ARMS, fn: 'commitPostgresqlAgentPackageMutation' },
@@ -94,9 +95,8 @@ const STACKS: readonly WriteStack[] = [
     factory: 'createWorkflowMutationParticipant',
     program: '/workflowDefinitionWrite',
     programExports: ['createWorkflowDefinitionWriteParticipant'],
-    // Test-only legacy writers (`createWorkflow` for YAML import, `insertWorkflowInTx`, `prepareWorkflowSave`) still
-    // replay the write program; RFC-401 Part B (G5) deletes them.
-    legacyImporters: [INFRA + 'legacy/workflow.ts'],
+    // RFC-401 T6 (G5): the test-only legacy writers (and the YAML import writer) are deleted.
+    legacyImporters: [],
     scenes: [
       { path: INTENT_PORTS, fn: 'createWorkflowPort' },
       { path: PACKAGE_ARMS, fn: 'commitPostgresqlWorkflowPackageMutation' },
@@ -113,8 +113,8 @@ const STACKS: readonly WriteStack[] = [
     // Content and member-row writes; the repository keeps only the delete of the workgroup row.
     rowWrite:
       /\.(?:insert|update)\(\s*workgroups\s*\)|\.(?:insert|update|delete)\(\s*workgroupMembers\s*\)|insertOne\([^,]+,\s*(?:workgroups|workgroupMembers)\s*,/,
-    // The test-only legacy writers (`createWorkgroup` / `saveWorkgroup` / `copyWorkgroup`); RFC-401 Part B deletes them.
-    legacyImporters: [INFRA + 'legacy/workgroups.ts'],
+    // RFC-401 T6 (G5): the test-only legacy writers are deleted.
+    legacyImporters: [],
     scenes: [
       { path: INTENT_PORTS, fn: 'createWorkgroupPort' },
       { path: PACKAGE_ARMS, fn: 'commitPostgresqlWorkgroupPackageMutation' },

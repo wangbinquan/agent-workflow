@@ -17,13 +17,12 @@ import { join, resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
 
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { createAgent } from '../src/modules/resource-catalog/infrastructure/legacy/agent'
 import { abortAllActiveTasks, isTaskActive } from '@/services/task'
-import { createWorkflow } from '../src/services/workflow'
 import { UserAccessError } from '@/modules/identity-access/public/types'
 import { nonInteractiveGitEnv } from '../src/util/git'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
+import { createAgent, createWorkflow } from './helpers/model/resourceWrites'
 
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
 const GIT_TIMEOUT_MS = 10_000

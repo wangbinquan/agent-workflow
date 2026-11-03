@@ -8,7 +8,8 @@
 // resource-package arm hand their rows to the one Workgroup mutation
 // participant (`workgroupMutationParticipant.ts`), which alone writes workgroup
 // rows and member rows. The repository keeps only the delete; the test-only
-// legacy implementation (`legacy/workgroups.ts`) retires with RFC-401 Part B.
+// legacy implementation (`legacy/workgroups.ts`) retired with RFC-401 T6 (proposal G5): the participant is the only
+// workgroup and member-row writer.
 
 import { describe, expect, test } from 'bun:test'
 import { readdirSync, readFileSync } from 'node:fs'
@@ -43,11 +44,9 @@ describe('RFC-225 workgroup writer inventory', () => {
       inventory(/(?:\.insert\s*\(\s*workgroups\s*\)|insertOne\s*\([^,]+,\s*workgroups\s*,)/g),
     ).toEqual({
       'modules/resource-catalog/infrastructure/workgroupMutationParticipant.ts': 1,
-      'modules/resource-catalog/infrastructure/legacy/workgroups.ts': 1,
     })
     expect(inventory(/\.update\s*\(\s*workgroups\s*\)/g)).toEqual({
       'modules/resource-catalog/infrastructure/workgroupMutationParticipant.ts': 1,
-      'modules/resource-catalog/infrastructure/legacy/workgroups.ts': 1,
     })
     // RFC-395 O2 retired the unused legacy deletion authority.
     expect(inventory(/\.delete\s*\(\s*workgroups\s*\)/g)).toEqual({
@@ -62,11 +61,9 @@ describe('RFC-225 workgroup writer inventory', () => {
       ),
     ).toEqual({
       'modules/resource-catalog/infrastructure/workgroupMutationParticipant.ts': 1,
-      'modules/resource-catalog/infrastructure/legacy/workgroups.ts': 1,
     })
     expect(inventory(/\.delete\s*\(\s*workgroupMembers\s*\)/g)).toEqual({
       'modules/resource-catalog/infrastructure/workgroupMutationParticipant.ts': 1,
-      'modules/resource-catalog/infrastructure/legacy/workgroups.ts': 1,
     })
     expect(inventory(/\.update\s*\(\s*workgroupMembers\s*\)/g)).toEqual({})
   })

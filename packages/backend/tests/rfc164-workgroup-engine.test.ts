@@ -56,10 +56,8 @@ import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
-import { createAgent } from '../src/modules/resource-catalog/infrastructure/legacy/agent'
 import { runStuckTaskDetector } from '../src/services/stuckTaskDetector'
 import { createUser } from './helpers/userFixture'
-import { createWorkgroup } from '../src/services/workgroups'
 // RFC-395 II-a: exercise the surviving production builders and constant leaf.
 import {
   buildWorkgroupHostSnapshot,
@@ -79,6 +77,7 @@ import {
 } from './helpers/workgroupTurns'
 import { gateViewOf, loadWorkgroupTaskState } from './helpers/legacyWorkgroupState'
 import { createLogger } from '../src/util/log'
+import { createAgent, createWorkgroup } from './helpers/model/resourceWrites'
 
 const log = createLogger('rfc164-engine-test')
 

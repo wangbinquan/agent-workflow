@@ -16,8 +16,8 @@ import { beforeEach, expect, test } from 'bun:test'
 import { describeEachProvider } from './helpers/eachProvider'
 import { isReviewableBodyKindString, type WorkflowDefinition } from '@agent-workflow/shared'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { createAgent } from '../src/modules/resource-catalog/infrastructure/legacy/agent'
 import { loadUpstreamPortKind } from '@/modules/collaboration/infrastructure/review'
+import { createAgent } from './helpers/model/resourceWrites'
 
 function agentPayload(name: string, outputKinds: Record<string, string>) {
   return {

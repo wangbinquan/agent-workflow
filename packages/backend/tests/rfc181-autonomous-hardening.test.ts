@@ -56,10 +56,8 @@ import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 import { mintNodeRun } from '../src/services/nodeRunMint'
 import {
-  createWorkgroup,
   getWorkgroupById,
   listWorkgroups,
-  saveWorkgroup,
   workgroupDraftSnapshotOf,
 } from '../src/services/workgroups'
 
@@ -114,6 +112,7 @@ const dismissOpenClarifyParksForAutonomous = (
     mode,
   })
 import { TASK_CHANNEL, taskBroadcaster } from '../src/ws/broadcaster'
+import { createWorkgroup, saveWorkgroup } from './helpers/model/resourceWrites'
 
 const SRC = (p: string): string => readFileSync(resolve(import.meta.dir, '..', 'src', p), 'utf8')
 const PLANNER_AGENT_ID = '01HPLANNERAGENT000000000000'

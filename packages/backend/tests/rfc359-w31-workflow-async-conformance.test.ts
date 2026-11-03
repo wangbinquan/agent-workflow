@@ -1,4 +1,3 @@
-import { readWorkflowFixtures } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { queryRows } from '@/platform/persistence/queryHelpers'
@@ -8,18 +7,14 @@ import { ulid } from 'ulid'
 import { buildActor, type Actor } from '../src/auth/actor'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
-  commitWorkflowSaveInTx,
-  copyWorkflow,
-  createWorkflow,
   getWorkflow,
-  prepareWorkflowSave,
-  updateWorkflow,
   workflowDraftSnapshotOf,
   workflowRevisionOf,
   workflowSnapshotHashOf,
 } from '../src/services/workflow'
-import { ConflictError } from '../src/util/errors'
+
 import { describeEachProvider } from './helpers/eachProvider'
+import { copyWorkflow, createWorkflow, updateWorkflow } from './helpers/model/resourceWrites'
 
 const definition: WorkflowDefinition = { $schema_version: 4, inputs: [], nodes: [], edges: [] }
 const principal = { kind: 'system', reason: 'rfc199-exact-operation-test' } as const
@@ -44,14 +39,6 @@ async function seedUser(db: PersistenceDb, id: string, role: 'admin' | 'user' = 
   })
 }
 
-function gate(): { promise: Promise<void>; release(): void } {
-  let release!: () => void
-  const promise = new Promise<void>((resolve) => {
-    release = resolve
-  })
-  return { promise, release }
-}
-
 async function rows(db: PersistenceDb) {
   const { workflows } = tablesOf(db)
   return queryRows(db.select().from(workflows).orderBy(workflows.id))
@@ -61,7 +48,11 @@ async function seed(db: PersistenceDb, name: string) {
   return createWorkflow(db, { name, description: 'original', definition })
 }
 
-describeEachProvider('RFC359 W31 legacy workflow async persistence', (harness) => {
+// RFC-401 T6 (proposal G5): the legacy workflow writers are deleted; these cases run on the
+// fixture writers (`helpers/model/resourceWrites.ts`), i.e. the one workflow write participant.
+// The prepared-write, stale-prepare and in-transaction guard cases locked the deleted two-phase
+// seams (`prepareWorkflowSave` / `commitWorkflowSaveInTx` / `inTxGuard`) and went with them.
+describeEachProvider('RFC359 W31 workflow async persistence', (harness) => {
   test('preserves default rows and exact committed/no-op receipts', async () => {
     const db = harness.db
     const created = await seed(db, 'w31-defaults')
@@ -138,147 +129,5 @@ describeEachProvider('RFC359 W31 legacy workflow async persistence', (harness) =
     expect(first.version).toBe(1)
     expect(second.version).toBe(1)
     expect(await rows(db)).toHaveLength(3)
-  })
-
-  test('keeps a prepared write and its rollback in the actual transaction', async () => {
-    const db = harness.db
-    const created = await seed(db, 'w31-rollback')
-    const before = await rows(db)
-    const prepared = await prepareWorkflowSave(
-      db,
-      created.id,
-      {
-        expectedVersion: 1,
-        clientMutationId: ulid(),
-        snapshot: { ...workflowDraftSnapshotOf(created), description: 'rolled-back' },
-      },
-      principal,
-    )
-    const failure = new Error('w31-workflow-rollback')
-    await expect(
-      harness.session.transaction(async (tx) => {
-        const result = await commitWorkflowSaveInTx(tx, prepared)
-        expect(result.committed).toBe(true)
-        expect((await readWorkflowFixtures(tx, { id: created.id }))[0]?.description).toBe(
-          'rolled-back',
-        )
-        throw failure
-      }),
-    ).rejects.toBe(failure)
-    expect(await rows(db)).toEqual(before)
-  })
-
-  test('keeps the original stale revision failure and complete stored row', async () => {
-    const db = harness.db
-    const created = await seed(db, 'w31-stale')
-    const prepared = await prepareWorkflowSave(
-      db,
-      created.id,
-      {
-        expectedVersion: 1,
-        clientMutationId: ulid(),
-        snapshot: { ...workflowDraftSnapshotOf(created), description: 'stale write' },
-      },
-      principal,
-    )
-    await updateWorkflow(
-      db,
-      created.id,
-      {
-        expectedVersion: 1,
-        clientMutationId: ulid(),
-        snapshot: { ...workflowDraftSnapshotOf(created), description: 'winner' },
-      },
-      principal,
-    )
-    const before = await rows(db)
-    const pending = harness.session.transaction((tx) => commitWorkflowSaveInTx(tx, prepared))
-    await expect(pending).rejects.toBeInstanceOf(ConflictError)
-    await expect(pending).rejects.toMatchObject({
-      message: `workflow '${created.id}' is at version 2, expected 1`,
-    })
-    expect(await rows(db)).toEqual(before)
-  })
-
-  test('awaits the create guard before the real INSERT', async () => {
-    const db = harness.db
-    const entered = gate(),
-      release = gate(),
-      finished = gate()
-    const id = ulid()
-    let observed: Awaited<ReturnType<typeof rows>> | undefined
-    const pending = createWorkflow(
-      db,
-      { name: 'w31-create-gate', description: 'guarded', definition },
-      {
-        id,
-        inTxGuard: {
-          async assert(tx) {
-            entered.release()
-            try {
-              await release.promise
-              observed = await readWorkflowFixtures(tx, { id })
-            } finally {
-              finished.release()
-            }
-          },
-        },
-      },
-    )
-    try {
-      await entered.promise
-    } finally {
-      release.release()
-      await pending
-      await finished.promise
-    }
-    expect(observed).toEqual([])
-    expect((await rows(db)).map((row) => row.id)).toEqual([id])
-  })
-
-  test('awaits the save guard before the real UPDATE', async () => {
-    const db = harness.db
-    const created = await seed(db, 'w31-save-gate')
-    const before = await rows(db)
-    const entered = gate(),
-      release = gate(),
-      finished = gate()
-    let observed: Awaited<ReturnType<typeof rows>> | undefined
-    const pending = updateWorkflow(
-      db,
-      created.id,
-      {
-        expectedVersion: 1,
-        clientMutationId: ulid(),
-        snapshot: { ...workflowDraftSnapshotOf(created), description: 'guarded' },
-      },
-      principal,
-      {
-        inTxGuard: {
-          async assert(tx) {
-            entered.release()
-            try {
-              await release.promise
-              observed = await rows(tx)
-            } finally {
-              finished.release()
-            }
-          },
-        },
-      },
-    )
-    try {
-      await entered.promise
-    } finally {
-      release.release()
-      await pending
-      await finished.promise
-    }
-    expect(observed).toEqual(before)
-    expect((await rows(db))[0]).toMatchObject({
-      id: created.id,
-      description: 'guarded',
-      version: 2,
-    })
   })
 })

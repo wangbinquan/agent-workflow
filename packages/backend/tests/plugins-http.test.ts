@@ -18,7 +18,6 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import type { Hono } from 'hono'
 import { ulid } from 'ulid'
-import { createAgent } from '../src/modules/resource-catalog/infrastructure/legacy/agent'
 import { resetNpmProbeCacheForTests } from '../src/services/pluginInstaller'
 import { composePluginServiceBindingForTest, createPlugin } from './helpers/pluginServiceBinding'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
@@ -28,6 +27,7 @@ import {
   createProviderHttpApplication,
   type ProviderHttpApplication,
 } from './helpers/providerHttpApplication'
+import { createAgent } from './helpers/model/resourceWrites'
 
 const FAKE_NPM = resolve(import.meta.dir, 'fixtures', 'fake-npm.ts')
 const TOKEN = 'rfc031-token-fixture'

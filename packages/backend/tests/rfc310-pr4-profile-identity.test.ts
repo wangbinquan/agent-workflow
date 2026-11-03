@@ -19,12 +19,11 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { createAgent } from '../src/modules/resource-catalog/infrastructure/legacy/agent'
 import { launchTestTaskWithLocalRepo } from './helpers/productionTaskLaunch'
-import { createWorkflow } from '../src/services/workflow'
 import { nonInteractiveGitEnv } from '../src/util/git'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
+import { createAgent, createWorkflow } from './helpers/model/resourceWrites'
 
 setDefaultTimeout(120_000)
 

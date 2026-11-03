@@ -17,15 +17,14 @@ import type { WorkflowDefinition, WorkflowDetail, WorkflowNode } from '@agent-wo
 import { buildActor } from '@/auth/actor'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import {
-  createWorkflow,
-  getWorkflow,
-  updateWorkflow,
-  workflowDraftSnapshotOf,
-  type WorkflowWritePrincipal,
-} from '@/services/workflow'
+import { getWorkflow, workflowDraftSnapshotOf } from '@/services/workflow'
 import { REDACTED, serializeWorkflowFor, workflowReadLensFor } from '@/services/tokenRedaction'
 import { DomainError } from '@/util/errors'
+import {
+  createWorkflow,
+  updateWorkflow,
+  type WorkflowWritePrincipal,
+} from './helpers/model/resourceWrites'
 
 const OWNER = 'u-owner'
 const SCRIPT_BODY = 'import os\nprint(os.environ["AW_PORT_DIFF"])\n'
@@ -290,29 +289,32 @@ describeEachProvider('RFC-270 AC-8 · 回填由镜头决定，不由值决定', 
 })
 
 describe('RFC-270 · 源码层：落库的是回填后的那份', () => {
-  test('prepareWorkflowSave 的字节投影取自 normalizedSnapshot，不取 submittedSnapshot', () => {
+  // RFC-401 T6 (proposal G5): the legacy `prepareWorkflowSave` is deleted; every workflow save runs the one
+  // workflow write participant, whose update rehydrates the privileged nodes into `definition`, builds the
+  // `candidate` snapshot from it and serializes only that.
+  test('the workflow write participant projects bytes from the rehydrated candidate, not the submitted content', () => {
     const src = readFileSync(
       resolve(
         import.meta.dir,
         '..',
         'src',
-        'modules/resource-catalog/infrastructure/legacy/workflow.ts',
+        'modules/resource-catalog/infrastructure/workflowMutationParticipant.ts',
       ),
       'utf8',
     )
-    // 回填产物叫 normalizedSnapshot；提交原件叫 submittedSnapshot。两条字节投影
-    // 必须描述前者，否则「保存回执 / logical-same 短路 / definition 列」会描述一份
-    // 从未落库的定义。
-    expect(src).toContain('serializeWorkflowEditableSnapshotV1(normalizedSnapshot)')
-    expect(src).toContain('serializeWorkflowDefinitionStorageV1(normalizedSnapshot.definition)')
-    expect(src).not.toContain('serializeWorkflowEditableSnapshotV1(submittedSnapshot)')
-    expect(src).not.toContain('serializeWorkflowDefinitionStorageV1(submittedSnapshot.definition)')
-    // 回填发生在两个 author 门之前 —— 顺序反了就等于门在看一份不会落库的定义。
-    const rehydrateAt = src.indexOf('rehydratePrivilegedNodes(')
-    const scriptGateAt = src.indexOf('assertScriptAuthorAllowed({')
-    const codeHostGateAt = src.indexOf('assertCodeHostAuthorAllowed({')
+    const update = src.slice(src.indexOf('async update(owner, input)'))
+    // 回填产物进 candidate；提交原件是 content / canonical。两条字节投影必须描述前者，否则「保存回执 /
+    // logical-same 短路 / definition 列」会描述一份从未落库的定义。
+    expect(update).toContain('serializeWorkflowEditableSnapshotV1(candidate)')
+    expect(update).toContain('serializeWorkflowDefinitionStorageV1(candidate.definition)')
+    for (const submitted of ['content', 'canonical']) {
+      expect(update).not.toContain(`serializeWorkflowEditableSnapshotV1(${submitted})`)
+      expect(update).not.toContain(`serializeWorkflowDefinitionStorageV1(${submitted}.definition)`)
+    }
+    // 回填发生在作者门之前 —— 顺序反了就等于门在看一份不会落库的定义。
+    const rehydrateAt = update.indexOf('rehydratePrivilegedNodes(')
+    const gateAt = update.indexOf('assertAuthorGates(')
     expect(rehydrateAt).toBeGreaterThan(0)
-    expect(rehydrateAt).toBeLessThan(scriptGateAt)
-    expect(rehydrateAt).toBeLessThan(codeHostGateAt)
+    expect(rehydrateAt).toBeLessThan(gateAt)
   })
 })

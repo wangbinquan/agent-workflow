@@ -23,12 +23,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { openDb, type DbClient } from '../src/db/client'
 import { ulid } from 'ulid'
-import {
-  createWorkflow,
-  getWorkflow,
-  migrateDefinitionToLatest,
-  updateWorkflow,
-} from '../src/services/workflow'
+import { getWorkflow, migrateDefinitionToLatest } from '../src/services/workflow'
+import { createWorkflow, updateWorkflow } from './helpers/model/resourceWrites'
 
 describe('migrateDefinitionToLatest pure helper', () => {
   test('v1 walks up to the latest version, preserving shape', () => {

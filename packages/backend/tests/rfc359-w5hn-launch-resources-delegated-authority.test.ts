@@ -26,13 +26,12 @@ import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { createIdentityAccessRuntime } from '@/modules/identity-access/composition'
 import { composeResourceCatalogFor } from '@/modules/resource-catalog/composition/providerResourceCatalog'
 import { composeDatabaseAgentResourceIntegrity } from '@/modules/resource-catalog/composition/agentResourceIntegrity'
-import { createAgent } from '@/modules/resource-catalog/infrastructure/legacy/agent'
-import { createWorkgroup } from '@/modules/resource-catalog/infrastructure/legacy/workgroups'
 import { composeAgentLaunchResourceOperations } from '@/modules/task-execution/composition/agentLaunchResources'
 import { composeWorkgroupLaunchResourceOperations } from '@/modules/task-execution/composition/workgroupLaunchResources'
 import { directOperationAuthority } from '@/routes/operationAuthority'
 import { admitDaemonIdentity } from '@/auth/session'
 import { createUser } from './helpers/userFixture'
+import { createAgent, createWorkgroup } from './helpers/model/resourceWrites'
 
 describeEachProvider('RFC-359 AC-1 —— 启动资源面接受委派 actor', (harness) => {
   let db: PersistenceDb

@@ -24,10 +24,7 @@ import { DEFAULT_PROTOCOL_RETRY_BUDGET } from '@agent-workflow/shared'
 
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 import { makeVersionedStubOpencode } from './fixtures/versionedStubOpencode'
-
-import { createAgent } from '../src/modules/resource-catalog/infrastructure/legacy/agent'
 import { abortAllActiveTasks, isTaskActive } from '../src/services/task'
-import { createWorkflow } from '../src/services/workflow'
 import { nonInteractiveGitEnv } from '../src/util/git'
 import { remoteUrlFor, startGitHttpRemote } from './helpers/gitHttpRemote'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
@@ -36,6 +33,7 @@ import {
   createProviderHttpApplication,
   type ProviderHttpApplication,
 } from './helpers/providerHttpApplication'
+import { createAgent, createWorkflow } from './helpers/model/resourceWrites'
 
 describeEachProvider('RFC-359 W51 multipart database', (databaseHarness) => {
   describe('multipart application lifetime', () => {

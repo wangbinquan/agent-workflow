@@ -18,10 +18,7 @@ import {
   isIntentTempRef,
 } from '@agent-workflow/shared'
 import { allocateHandle, createHandleAllocator } from '@/modules/intent/application/manifest'
-import {
-  resolveAgentRefsUsable,
-  type AgentReferenceResolver,
-} from '../src/modules/resource-catalog/application/agents/agentReferences'
+import { uniqueAgentReferences } from '@/modules/resource-catalog/domain/agentReferenceKey'
 
 const SHARED_SRC = resolve(import.meta.dir, '..', '..', 'shared', 'src')
 const BACKEND_SRC = resolve(import.meta.dir, '..', 'src')
@@ -113,19 +110,12 @@ describe('RFC-282 D3 — call domain', () => {
 })
 
 describe('RFC-282 D3 — leftover second spellings are gone', () => {
-  test('agentRefs skill de-dup behavior is unchanged after the m:/p: key removal', async () => {
+  // RFC-401 T6 (proposal G5): the legacy `agentReferences.ts` resolver went with the legacy agent writers;
+  // the one agent write participant de-duplicates references with `uniqueAgentReferences` (design §2.4).
+  test('agent skill reference de-dup keeps first occurrences without the m:/p: key pair', () => {
     const managedA = ulid()
     const managedB = ulid()
-    const resolver: AgentReferenceResolver = {
-      async resolveUsableById(_actor, _type, tokens) {
-        const ids = [...new Set(tokens)]
-        return { ids, byToken: new Map(ids.map((id) => [id, id])), missing: [] }
-      },
-      assertNoMissing(missing) {
-        if (missing.length > 0) throw new Error('identity resolver produced missing references')
-      },
-    }
-    const resolved = await resolveAgentRefsUsable(resolver, null, {
+    const unique = uniqueAgentReferences({
       mcp: [],
       plugins: [],
       dependsOn: [],
@@ -137,16 +127,13 @@ describe('RFC-282 D3 — leftover second spellings are gone', () => {
         { kind: 'managed', skillId: managedB },
       ],
     })
-    expect(resolved.skills).toEqual([
+    expect(unique.skills).toEqual([
       { kind: 'managed', skillId: managedA },
       { kind: 'project', name: 'local-notes' },
       { kind: 'managed', skillId: managedB },
     ])
-  })
-
-  test('the hand-rolled m:/p: prefix pair no longer exists in agentRefs', () => {
     const text = readFileSync(
-      resolve(BACKEND_SRC, 'modules/resource-catalog/application/agents/agentReferences.ts'),
+      resolve(BACKEND_SRC, 'modules/resource-catalog/domain/agentReferenceKey.ts'),
       'utf8',
     )
     expect(text).not.toContain('`m:${')

@@ -14,8 +14,8 @@ import { buildActor, type Actor } from '../src/auth/actor'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 import { assertWorkflowLaunchable } from '../src/services/taskLaunchGate'
-import { createWorkflow } from '../src/services/workflow'
 import { ForbiddenError, NotFoundError } from '../src/util/errors'
+import { createWorkflow } from './helpers/model/resourceWrites'
 
 // Annotated (not a bare const) so `$schema_version`/`inputs` don't widen to
 // number/never[] — matches the contextual typing inline literals get.

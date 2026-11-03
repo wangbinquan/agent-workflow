@@ -4,6 +4,13 @@ import { tablesOf } from '@/platform/persistence/sessionTables'
 // async preflight. Every case uses the production `beforeWriteTransaction`
 // seam, so the mutation deterministically lands in the former TOCTOU window.
 //
+// RFC-401 T6 (proposal G5): the legacy two-phase writers are deleted. The one write
+// participant per kind validates references inside its write transaction, so the hook
+// (`helpers/model/resourceWrites.ts`) now lands before that validation: a hidden target is
+// `acl-missing-refs`, a deleted one is the kind's not-found (`mcp-not-found`, the RFC-401
+// error matrix), and a workflow's deleted agent id is an ordinary dangling id (D15).
+// Fixture names follow the production name rules (lowercase).
+//
 // The same suite locks D15's other half: authorization loss on an unchanged
 // stored ref is grandfathered. RFC-228 intentionally ends the historical
 // allowance for never-resolved managed-Skill refs.
@@ -12,7 +19,6 @@ import {
   patchAgentFixture,
   readAgentFixtures,
   readTaskFixtures,
-  readWorkflowFixtures,
   taskFixture,
   workflowFixture,
 } from './helpers/model'
@@ -27,29 +33,21 @@ import {
 import { beforeEach, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
-import { stringify } from 'yaml'
 import { buildActor, type Actor } from '../src/auth/actor'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
+import { getAgentById } from '../src/modules/resource-catalog/infrastructure/legacy/agent'
+import { composeTestWorkgroupTaskRoom } from './helpers/workgroupTaskRoom'
+import { getWorkflow, workflowDraftSnapshotOf } from '../src/services/workflow'
+import { getWorkgroupById, workgroupDraftSnapshotOf } from '../src/services/workgroups'
 import {
   createAgent,
-  getAgentById,
   updateAgent,
-} from '../src/modules/resource-catalog/infrastructure/legacy/agent'
-import { composeTestWorkgroupTaskRoom } from './helpers/workgroupTaskRoom'
-import { importWorkflowYaml } from '../src/services/workflow.yaml'
-import {
   createWorkflow,
-  getWorkflow,
   updateWorkflow,
-  workflowDraftSnapshotOf,
-} from '../src/services/workflow'
-import {
   createWorkgroup,
-  getWorkgroupById,
   saveWorkgroup,
-  workgroupDraftSnapshotOf,
-} from '../src/services/workgroups'
+} from './helpers/model/resourceWrites'
 
 const EMPTY_AGENT: Omit<CreateAgent, 'name'> = {
   description: '',
@@ -107,7 +105,7 @@ async function seedMcp(db: PersistenceDb, id: string, ownerUserId = 'target-owne
   const { mcps } = tablesOf(db)
   await insertOne(db, mcps, {
     id,
-    name: `mcp-${id}`,
+    name: `mcp-${id.toLowerCase()}`,
     type: 'local',
     config: JSON.stringify({ command: ['true'] }),
     enabled: true,
@@ -161,7 +159,7 @@ describeEachProvider('RFC-223 ordinary reference final-transaction fences', (har
           const { plugins } = tablesOf(db)
           await insertOne(db, plugins, {
             id,
-            name: `plugin-${id}`,
+            name: `plugin-${id.toLowerCase()}`,
             spec: 'pkg@1',
             sourceKind: 'npm',
             cachedPath: `/tmp/${id}`,
@@ -180,7 +178,7 @@ describeEachProvider('RFC-223 ordinary reference final-transaction fences', (har
       {
         kind: 'dependsOn',
         seed: async (id: string) => {
-          await createAgent(db, { name: `dep-${id}`, ...EMPTY_AGENT }, { id })
+          await createAgent(db, { name: `dep-${id.toLowerCase()}`, ...EMPTY_AGENT }, { id })
           await patchAgentFixture(db, { id }, { ownerUserId: 'target-owner', visibility: 'public' })
         },
         input: (id: string): Partial<CreateAgent> => ({ dependsOn: [id] }),
@@ -194,7 +192,7 @@ describeEachProvider('RFC-223 ordinary reference final-transaction fences', (har
           const { skills } = tablesOf(db)
           await insertOne(db, skills, {
             id,
-            name: `skill-${id}`,
+            name: `skill-${id.toLowerCase()}`,
             ownerUserId: 'target-owner',
             visibility: 'public',
           })
@@ -211,7 +209,7 @@ describeEachProvider('RFC-223 ordinary reference final-transaction fences', (har
 
     for (const scenario of scenarios) {
       const targetId = ulid()
-      const sourceName = `source-${scenario.kind}`
+      const sourceName = `source-${scenario.kind.toLowerCase()}`
       await scenario.seed(targetId)
       await expect(
         createAgent(
@@ -235,7 +233,7 @@ describeEachProvider('RFC-223 ordinary reference final-transaction fences', (har
     }
   })
 
-  test('agent create system caller still refuses a matched target deleted after validation', async () => {
+  test('agent create system caller still refuses a target deleted before its write', async () => {
     const mcpId = ulid()
     await seedMcp(db, mcpId)
 
@@ -250,7 +248,7 @@ describeEachProvider('RFC-223 ordinary reference final-transaction fences', (har
           },
         },
       ),
-    ).rejects.toMatchObject({ code: 'acl-missing-refs' })
+    ).rejects.toMatchObject({ code: 'mcp-not-found', details: { notFound: [mcpId] } })
     expect((await readAgentFixtures(db)).some((row) => row.name === 'system-writer')).toBe(false)
   })
 
@@ -330,31 +328,29 @@ describeEachProvider('RFC-223 ordinary reference final-transaction fences', (har
     ).toBe(false)
   })
 
-  test('workflow create rejects matched-then-deleted, but preserves dangling-id contract', async () => {
+  test('workflow create keeps the dangling-id contract, also for an id deleted before the write', async () => {
     const target = await createAgent(
       db,
       { name: 'workflow-target', ...EMPTY_AGENT },
       { ownerUserId: 'target-owner' },
     )
-    await expect(
-      createWorkflow(
-        db,
-        {
-          name: 'raced-workflow',
-          description: '',
-          definition: workflowDefinition(target.id),
+    const deleted = await createWorkflow(
+      db,
+      {
+        name: 'raced-workflow',
+        description: '',
+        definition: workflowDefinition(target.id),
+      },
+      {
+        ownerUserId: editor.user.id,
+        actor: editor,
+        beforeWriteTransaction: async () => {
+          const { agents } = tablesOf(db)
+          await db.delete(agents).where(eq(agents.id, target.id))
         },
-        {
-          ownerUserId: editor.user.id,
-          actor: editor,
-          beforeWriteTransaction: async () => {
-            const { agents } = tablesOf(db)
-            await db.delete(agents).where(eq(agents.id, target.id))
-          },
-        },
-      ),
-    ).rejects.toMatchObject({ code: 'acl-missing-refs' })
-    expect(await readWorkflowFixtures(db)).toHaveLength(0)
+      },
+    )
+    expect(deleted.definition.nodes[0]).toMatchObject({ agentId: target.id })
 
     const dangling = await createWorkflow(
       db,
@@ -425,42 +421,8 @@ describeEachProvider('RFC-223 ordinary reference final-transaction fences', (har
     expect(receipt.outcome).toBe('committed')
   })
 
-  test('workflow import guard stays first and preserves its non-enumerating error contract', async () => {
-    const target = await createAgent(
-      db,
-      { name: 'portable-target', ...EMPTY_AGENT },
-      { ownerUserId: 'target-owner' },
-    )
-    const { resourceGrants } = tablesOf(db)
-    await patchAgentFixture(db, { id: target.id }, { visibility: 'private' })
-    await grant(db, 'agent', target.id, editor.user.id)
-
-    await expect(
-      importWorkflowYaml(
-        db,
-        {
-          mode: 'new',
-          yamlText: stringify({
-            name: 'portable-race',
-            description: '',
-            definition: {
-              $schema_version: 4,
-              inputs: [],
-              nodes: [{ id: 'worker', kind: 'agent-single', agentName: 'portable-target' }],
-              edges: [],
-            },
-          }),
-        },
-        { kind: 'actor', actor: editor },
-        {
-          afterResolve: async () => {
-            await db.delete(resourceGrants).where(eq(resourceGrants.resourceId, target.id))
-          },
-        },
-      ),
-    ).rejects.toMatchObject({ code: 'import-ref-unresolved' })
-    expect(await readWorkflowFixtures(db)).toHaveLength(0)
-  })
+  // RFC-401 T6 (proposal G5): the YAML import writer is deleted (no production route imported a
+  // workflow through it), so its import-guard ordering case went with it.
 
   test('workgroup create/save fence new members while unchanged members stay grandfathered', async () => {
     const baseAgent = await createAgent(

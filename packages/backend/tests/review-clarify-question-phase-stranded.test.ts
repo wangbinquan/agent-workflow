@@ -30,8 +30,6 @@ import { and, eq } from 'drizzle-orm'
 import { type DbClient, createInMemoryDb } from '../src/db/client'
 
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
-import { createAgent } from '../src/modules/resource-catalog/infrastructure/legacy/agent'
-import { createWorkflow } from '../src/services/workflow'
 import { autoDispatchClarifyRound } from '@/modules/collaboration/infrastructure/clarify/autoDispatch'
 import { abortAllActiveTasks } from '@/services/task'
 import { launchTestTaskWithLocalRepo } from './helpers/productionTaskLaunch'
@@ -48,6 +46,7 @@ import {
   createTaskExecutionTestTopology,
   runTaskWithRealTestTopology as runTask,
 } from './helpers/taskExecutionTestTopology'
+import { createAgent, createWorkflow } from './helpers/model/resourceWrites'
 
 const SCENARIO_STUB = resolve(import.meta.dir, 'fixtures', 'scenario-opencode.ts')
 const actor = { userId: 'u1', role: 'owner' as const }

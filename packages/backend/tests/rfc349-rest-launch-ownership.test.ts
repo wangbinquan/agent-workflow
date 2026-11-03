@@ -22,10 +22,10 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { createSession } from './helpers/auth/sessionStore'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { createAgent } from '../src/modules/resource-catalog/infrastructure/legacy/agent'
 import { createUser } from './helpers/userFixture'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
+import { createAgent } from './helpers/model/resourceWrites'
 
 const AGENT_FIELDS = {
   description: '',

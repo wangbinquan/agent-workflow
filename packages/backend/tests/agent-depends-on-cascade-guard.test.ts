@@ -11,13 +11,9 @@ import { describeEachProvider } from './helpers/eachProvider'
 import { buildActor } from '../src/auth/actor'
 import { beforeEach, expect, test } from 'bun:test'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import {
-  createAgent,
-  renameAgent,
-  updateAgent,
-} from '../src/modules/resource-catalog/infrastructure/legacy/agent'
 import { ConflictError } from '../src/util/errors'
 import type { Agent } from '@agent-workflow/shared'
+import { createAgent, renameAgent, updateAgent } from './helpers/model/resourceWrites'
 
 // RFC-203 T6: reference-disclosure needs a principal — an admin actor keeps
 // these service-level tests' original full-visibility expectations.

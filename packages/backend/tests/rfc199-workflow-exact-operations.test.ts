@@ -18,18 +18,14 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import {
-  createWorkflow,
-  getWorkflow,
-  updateWorkflow,
-  workflowDraftSnapshotOf,
-} from '../src/services/workflow'
+import { getWorkflow, workflowDraftSnapshotOf } from '../src/services/workflow'
 import { tmpdir } from 'node:os'
 import { describeEachProvider, type ProviderDatabaseHarness } from './helpers/eachProvider'
 import {
   createProviderHttpApplication,
   type ProviderHttpApplication,
 } from './helpers/providerHttpApplication'
+import { createWorkflow, updateWorkflow } from './helpers/model/resourceWrites'
 
 const applications = new Set<ProviderHttpApplication>()
 const applicationHomes = new Set<string>()

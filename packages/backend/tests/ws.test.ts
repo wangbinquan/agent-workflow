@@ -14,9 +14,9 @@ import { ulid } from 'ulid'
 
 type AnyServer = Server<unknown>
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import { createWorkflow, updateWorkflow } from '../src/services/workflow'
 import { createDatabaseTaskLifecycleWsProjector } from '../src/modules/task-execution/infrastructure/taskLifecycleWsProjection'
 import { describeEachProviderWebSocketApplication } from './helpers/providerWebSocketScope'
+import { createWorkflow, updateWorkflow } from './helpers/model/resourceWrites'
 
 const TOKEN = 'a'.repeat(64)
 

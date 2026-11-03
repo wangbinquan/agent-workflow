@@ -26,10 +26,8 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, test } from 'bun:test'
 import { describeEachProvider } from './helpers/eachProvider'
-import {
-  createAgent,
-  getAgentById,
-} from '../src/modules/resource-catalog/infrastructure/legacy/agent'
+import { getAgentById } from '../src/modules/resource-catalog/infrastructure/legacy/agent'
+import { createAgent } from './helpers/model/resourceWrites'
 
 const SCHEDULER_SRC = resolve(
   import.meta.dir,

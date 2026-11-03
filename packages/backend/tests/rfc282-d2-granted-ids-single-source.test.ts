@@ -76,11 +76,9 @@ describe('RFC-282 D2 — grant-set query single source', () => {
     }
   })
 
-  test('importRefs / resourceRefs no longer carry the grant-set SQL', () => {
-    for (const file of [
-      'modules/resource-catalog/infrastructure/legacy/importRefs.ts',
-      'services/resourceRefs.ts',
-    ]) {
+  // RFC-401 T6 (proposal G5): `legacy/importRefs.ts` went with the test-only YAML import writer.
+  test('resourceRefs no longer carries the grant-set SQL', () => {
+    for (const file of ['services/resourceRefs.ts']) {
       const text = readFileSync(resolve(SRC, file), 'utf8')
       expect(text).not.toContain('.from(resourceGrants)')
     }

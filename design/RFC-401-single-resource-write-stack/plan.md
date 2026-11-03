@@ -219,6 +219,35 @@ A3a（workflow）与 A3b（workgroup）：两者的写入栈、场景规则与�
   合同比对，改标签或改合同都被拒；index-only 桥仍拒新增表；恢复源解析只接受 history 内的旧摘要且目标须为完整 head，恢复循环对新增表
   计零行。PASS。
 
+- **CI**：`9498cca64`（run 41578061019）第一次 68/70：Windows e2e shard 1/4 的 `crash-recovery.spec.ts:370`（多次 SIGKILL 重启）
+  两次都在首个任务的 10 s「等 running」上超时，`:307`（SIGTERM）同样超时后重试通过（flaky），`keyboard-flows` 一条 flaky；同一
+  job 里同一场景 `:237` 用同样的 10 s 等待两次都通过，此前 6 次 main CI 该 shard 全绿；本步没有改动从建任务到 running 的路径
+  （启动步骤 `skill-operation-recovery` 的阶段与接线未变，agent 不带技能），归因 Windows runner 的时序而非本步。只重跑失败 job 一次
+  （attempt 2）全绿；这次重跑只作佐证，不单独作为通过依据。windows-platform 通过。
+
+## T6 收尾：零生产调用的 legacy 资源写函数（proposal G5）
+
+Part B 只完成了 G5 的技能部分；agent / workflow / workgroup 的零调用 legacy 写函数与 YAML 导入写入者在本步删除（design §10.3
+「零调用 legacy 写函数」）。
+
+- **删除**：`legacy/agent.ts` 的 create / update / rename（含两段式 prepare / commitInTx）、`legacy/workflow.ts` 的 create / update /
+  copy / `insertWorkflowInTx` / `prepareWorkflowSave` / `commitWorkflowSaveInTx`、`legacy/workgroups.ts` 的 create / copy / save /
+  rename（含 prepare / commitInTx）与 `broadcastWorkgroupCreated`、`legacy/workflow.yaml.ts` 的 `importWorkflowYaml`；随之不可达的
+  `RC/application/agents/agentReferences.ts`、`RC/infrastructure/legacy/importRefs.ts`。四个 legacy 文件 3457 → 628 行，只剩读取（src 净删 3522 行）。
+- **用例**：新增 `T/helpers/model/resourceWrites.ts`（夹具写入只调用生产入口），107 个用例文件改为从这里导入；断言旧专有语义的
+  用例按生产合同改写，只锁两段式接缝 / YAML 导入的用例随被测代码删除（`rfc223-import-refs` 整个文件，W14 / W31 / W32、RFC-223
+  写入围栏、RFC-243、RFC-395 A2、RFC-282 的相应用例），源码锁改锁生产参与者（RFC-203、RFC-270、RFC-231、RFC-282）。
+- **集中验证**：typecheck 0 错误，136 个改动路径 eslint（`--max-warnings 0`）与 prettier 通过。
+  - 改写的 108 个用例文件（SQLite + PostgreSQL，3 进程）：91 个通过；17 个里本步问题均已修——夹具名称不合生产规则（大写
+    agent / MCP / plugin 名）、owner 为空的断言、旧专有错误码（disabled plugin、workgroup schema 错误）、旧「系统」写入者在
+    workflow 上的内建只读与 workgroup 保存后的广播（夹具改为 admin 身份走目录操作）、两段式竞态窗口的期望、指向已删代码的源码锁；
+    其余是负载 40～97 下的钩子 / 5 s 超时。17 个单进程复跑全部通过。
+  - 定稿批次：108 个用例 + 全部 138 个架构守卫，3 进程：245 个通过，余 1 个（`agents`）负载超时、单进程复跑通过。守卫里查出并已改：
+    AC-1 结构锁旧导入方、RFC-395 引用边界、表归属债三条、测试引擎写死账本一条。
+  - 读取或导入 legacy 模块源码的另外 26 个用例：21 个通过；查出的本步问题已修（RFC-199 / RFC-225 写入清单、W12 写入程序锁、
+    RFC-104 源码锚、RFC-282 D2 与 RFC-345 facade 锁），连同负载超时的共 11 个单进程复跑全部通过。
+  - 导出仓库（HEAD `9498cca64` + 本候选）：按已提交源码出报告的 141 个用例全部通过。
+
 ## 冲突面
 
 - resource-catalog 全域、intent apply、knowledge-evolution fusion、`services/resourcePackage/**`、`services/bundle/**`、资源 routes 与 MCP 资源工具；

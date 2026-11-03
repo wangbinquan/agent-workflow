@@ -22,9 +22,9 @@ import {
   createScheduledTaskWithIntegrationTriggerResources as createScheduledTask,
   updateScheduledTaskWithIntegrationTriggerResources as updateScheduledTask,
 } from './helpers/integrationTriggerResourceBinding'
-import { createWorkflow } from '../src/services/workflow'
 import { NotFoundError, ValidationError } from '../src/util/errors'
 import type { CreateWorkflow } from '@agent-workflow/shared'
+import { createWorkflow } from './helpers/model/resourceWrites'
 
 const DEF: CreateWorkflow['definition'] = { $schema_version: 1, inputs: [], nodes: [], edges: [] }
 const UPLOAD_DEF: CreateWorkflow['definition'] = {

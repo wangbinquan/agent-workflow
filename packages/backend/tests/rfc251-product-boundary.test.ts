@@ -22,17 +22,13 @@ import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 import type { RuntimeRegistryPersistence } from '../src/modules/runtime-management/application/ports/runtimeRegistry'
 import { DrizzleRuntimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
-import {
-  createAgent,
-  updateAgent,
-} from '../src/modules/resource-catalog/infrastructure/legacy/agent'
 import { composePluginServiceBindingForTest, createPlugin } from './helpers/pluginServiceBinding'
 import { resetNpmProbeCacheForTests } from '../src/services/pluginInstaller'
 import { createRuntime } from './helpers/runtimeRegistryApplication'
 import { createScheduledTaskWithIntegrationTriggerResources as createScheduledTask } from './helpers/integrationTriggerResourceBinding'
 import { assertWorkflowLaunchable } from '../src/services/taskLaunchGate'
-import { createWorkflow } from '../src/services/workflow'
 import { createUser } from './helpers/userFixture'
+import { createAgent, updateAgent, createWorkflow } from './helpers/model/resourceWrites'
 
 const FAKE_NPM = resolve(import.meta.dir, 'fixtures', 'fake-npm.ts')
 const SPEC = { kind: 'daily', at: '09:00', timezone: 'UTC' } as const

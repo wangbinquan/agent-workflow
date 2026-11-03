@@ -54,17 +54,9 @@ import { ulid } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { attachWorkspaceCleanupToMultipartError } from '../src/routes/tasks'
 import { seedRepoGroup } from './helpers/repoGroupFixture'
-
-import { createAgent } from '../src/modules/resource-catalog/infrastructure/legacy/agent'
 import { createRuntime } from './helpers/runtimeRegistryApplication'
 import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
-import {
-  createWorkflow,
-  getWorkflow,
-  updateWorkflow,
-  workflowDraftSnapshotOf,
-  type WorkflowWritePrincipal,
-} from '../src/services/workflow'
+import { getWorkflow, workflowDraftSnapshotOf } from '../src/services/workflow'
 import { abortAllActiveTasks, isTaskActive } from '@/services/task'
 import { launchTestTask as launchTestTaskBase } from './helpers/productionTaskLaunch'
 import { materializeWorktree } from '@/modules/source-control/infrastructure/workspaceMaterializer'
@@ -73,6 +65,12 @@ import { ValidationError } from '../src/util/errors'
 import { nonInteractiveGitEnv } from '../src/util/git'
 import { remoteUrlFor, startGitHttpRemote } from './helpers/gitHttpRemote'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
+import {
+  createAgent,
+  createWorkflow,
+  updateWorkflow,
+  type WorkflowWritePrincipal,
+} from './helpers/model/resourceWrites'
 
 const openTestApplication = registerProviderHttpApplicationLifetime()
 

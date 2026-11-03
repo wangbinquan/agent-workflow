@@ -27,7 +27,6 @@ import { and, eq } from 'drizzle-orm'
 import { monotonicFactory } from 'ulid'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
-import { createAgent } from '../src/modules/resource-catalog/infrastructure/legacy/agent'
 import {
   createProviderTaskExecutionTestTopology,
   type ProviderTaskExecutionTestTopology,
@@ -37,6 +36,7 @@ import { dispatchTaskQuestions } from '../src/services/taskQuestionDispatch'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import { runGit } from '../src/util/git'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
+import { createAgent } from './helpers/model/resourceWrites'
 
 const ulid = monotonicFactory()
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')

@@ -21,9 +21,9 @@ import { readLogicalDatabaseBackupEnvelope } from '../src/platform/persistence/l
 import { logicalSchemaContract } from '@/bootstrap/persistenceSchema'
 import { createBackup } from '../src/services/backup'
 import { readManifest } from '../src/services/backupManifest'
-import { createWorkflow } from '../src/services/workflow'
 import { tarBin } from '../src/util/archive'
 import { removeTempDirSync } from './fixtures/tempDir'
+import { createWorkflow } from './helpers/model/resourceWrites'
 
 const openTestApplication = registerProviderHttpApplicationLifetime()
 

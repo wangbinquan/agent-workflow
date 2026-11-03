@@ -73,11 +73,7 @@ import {
   isAgentLaunching,
   releaseAgentLaunch,
 } from '../src/services/agentLaunchReservation'
-import {
-  getAgentById,
-  createAgent,
-  renameAgent,
-} from '../src/modules/resource-catalog/infrastructure/legacy/agent'
+import { getAgentById } from '../src/modules/resource-catalog/infrastructure/legacy/agent'
 
 import {
   AGENT_HOST_AGENT_NODE_ID,
@@ -104,6 +100,7 @@ import { runGit } from '../src/util/git'
 import { remoteUrlFor, startGitHttpRemote } from './helpers/gitHttpRemote'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
+import { createAgent, renameAgent } from './helpers/model/resourceWrites'
 
 const openTestApplication = registerProviderHttpApplicationLifetime()
 
@@ -666,7 +663,7 @@ describe('RFC-165 — HTTP surface: launch + lifecycle guards (A6/A9)', () => {
     expect(res.status).toBe(422)
     expect(((await res.json()) as { code: string }).code).toBe('start-task-path-retired')
 
-    const { createWorkgroup } = await import('../src/services/workgroups')
+    const { createWorkgroup } = await import('./helpers/model/resourceWrites')
     const a1 = await createAgent(db, { ...AGENT_FIELDS, name: 'a1' })
     const squad = await createWorkgroup(db, {
       name: 'squad',

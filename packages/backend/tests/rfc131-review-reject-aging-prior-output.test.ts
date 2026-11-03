@@ -36,7 +36,6 @@ import { join, resolve } from 'node:path'
 import { and, eq } from 'drizzle-orm'
 import { monotonicFactory } from 'ulid'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { createAgent } from '../src/modules/resource-catalog/infrastructure/legacy/agent'
 import { runTaskWithRealTestTopology as runTask } from './helpers/taskExecutionTestTopology'
 import { sealRoundQuestions } from '@/modules/collaboration/infrastructure/clarify/seal'
 import { dispatchTaskQuestions } from '../src/services/taskQuestionDispatch'
@@ -45,6 +44,7 @@ import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import { runGit } from '../src/util/git'
 import { reenterScheduler } from './reenter-scheduler'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
+import { createAgent } from './helpers/model/resourceWrites'
 
 const ulid = monotonicFactory()
 

@@ -324,7 +324,8 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   'rfc359-database-transaction.test.ts: 1', // sync-client-fault-injection
   'rfc359-engine-capabilities.test.ts: 1', // cross-provider-oracle
   'rfc359-provider-schema-column-facade.test.ts: 1', // sqlite-only-primitive
-  'rfc359-w14-agent-commit-sequence.test.ts: 1', // sqlite-only-primitive
+  // RFC-401 T6 (G5): `rfc359-w14-agent-commit-sequence.test.ts: 1 → 0` — its SQLite-only lane locked the deleted
+  // legacy Agent bundle exports (`commitAgentCreateInTx` / `commitAgentUpdateInTx`).
   'rfc359-w16-task-lifecycle-write-sequence.test.ts: 1', // sqlite-only-primitive
   'rfc359-w25-task-page-bounded-prefix.test.ts: 1', // cross-provider-oracle
   'rfc359-w36-skill-operation-state-query.test.ts: 1', // sqlite-only-primitive

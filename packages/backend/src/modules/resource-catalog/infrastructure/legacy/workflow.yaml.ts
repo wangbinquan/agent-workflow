@@ -1,30 +1,18 @@
-// P-4-08: YAML import/export for workflows.
+// P-4-08: YAML export for workflows.
 //
 // Export: dump the canonical Workflow object (id + name + description +
-// definition) as YAML using the `yaml` package's pretty printer.
-//
-// Import: parse the structured request's YAML, validate the embedded definition
-// with `WorkflowDefinitionSchema`, and apply one explicit mode:
-//   - fail: a visible id collision returns a revision-bearing 409
-//   - overwrite: requires the confirmed id/version/mutation fence and delegates
-//     to the same full-snapshot save service as editor autosave
-//   - new: discards an incoming id and inserts a fresh workflow
+// definition) as YAML using the `yaml` package's pretty printer; preview parses an
+// import request without writing. RFC-401 T6 (proposal G5): the test-only YAML import
+// writer is deleted — no production route imported a workflow through it.
 
-import { assertWorkflowCatalogIdWritable } from '../workflowCatalogPredicate'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import {
-  type ImportRefSelection,
-  type ImportWorkflowRequest,
-  type ImportWorkflowResult,
   type Workflow,
   type WorkflowDefinition,
   type WorkflowDefinitionSelector,
-  importRefSelectorKey,
-  migrateWorkflowDefinitionToLatest,
   stringifyWorkflowYamlDocument,
   stripCallWorkflowNodeIds,
   WorkflowDefinitionSelectorSchema,
-  WorkflowDefinitionSchema,
   WorkflowNameSchema,
 } from '@agent-workflow/shared'
 
@@ -32,25 +20,9 @@ import { inArray } from 'drizzle-orm'
 import { parse as parseYaml } from 'yaml'
 import { SYSTEM_USER_ID, type Actor } from '@/auth/actor'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import {
-  canViewResource,
-  filterVisibleRows,
-} from '@/modules/resource-catalog/composition/resourceAcl'
-import { assertNotBuiltin } from '@/services/systemResources'
-import {
-  assertImportRefsStableInTx,
-  resolveImportRefs,
-} from '@/modules/resource-catalog/infrastructure/legacy/importRefs'
-import {
-  createWorkflow,
-  getWorkflow,
-  updateWorkflow,
-  WORKFLOW_NAME_INVALID_MESSAGE,
-  workflowRevisionOf,
-  type WorkflowWriteInTxGuard,
-  type WorkflowWritePrincipal,
-} from '@/modules/resource-catalog/infrastructure/legacy/workflow'
-import { ConflictError, ValidationError } from '@/util/errors'
+import { filterVisibleRows } from '@/modules/resource-catalog/composition/resourceAcl'
+import { WORKFLOW_NAME_INVALID_MESSAGE } from '@/modules/resource-catalog/infrastructure/legacy/workflow'
+import { ValidationError } from '@/util/errors'
 
 /**
  * Serialize an already-captured workflow row. Callers that also perform an
@@ -84,14 +56,6 @@ export interface YamlImportPreview {
   definition: WorkflowDefinitionSelector
   /** True when a workflow with `id` already exists in DB. */
   conflicts: boolean
-}
-
-export interface WorkflowImportHooks {
-  /**
-   * Deterministic race-test seam after ordinary reference preflight and before
-   * the final write transaction. Production callers omit it.
-   */
-  afterResolve?: () => void | Promise<void>
 }
 
 /**
@@ -249,255 +213,6 @@ export async function workflowDefinitionToSelectors(
       }
     }),
   })
-}
-
-export async function importWorkflowYaml(
-  db: PersistenceDb,
-  request: ImportWorkflowRequest,
-  principal: WorkflowWritePrincipal,
-  hooks: WorkflowImportHooks = {},
-): Promise<ImportWorkflowResult> {
-  if (request.yamlText.length === 0) {
-    throw new ValidationError('workflow-yaml-empty', 'empty YAML body')
-  }
-  const preview = previewWorkflowYaml(request.yamlText)
-  assertWorkflowCatalogIdWritable(preview.id)
-  if (request.mode === 'overwrite') assertWorkflowCatalogIdWritable(request.overwrite.workflowId)
-  // RFC-223 (PR-2): resolve each agent-single node's canonical agentId from its
-  // portable name+owner selector against THIS install's agents; RFC-243 (§5.5)
-  // rides the same pass for call-workflow nodes' `workflowName` selectors
-  // (dangle-tolerant — an unmatched name imports as-is and launch fails
-  // closed). Safe to normalize server-side here — the import
-  // path computes the snapshot hash itself (no client-provided hash to fence),
-  // unlike the editor autosave which relies on the frontend having stamped it.
-  const resolvedImport =
-    principal.kind === 'actor'
-      ? await resolveImportedWorkflowNodeRefs(
-          db,
-          principal.actor,
-          preview.definition,
-          request.selections ?? [],
-        )
-      : {
-          definition: rejectPortableRefsForSystemImport(preview.definition),
-          inTxGuard: undefined,
-        }
-  const definition = resolvedImport.definition
-
-  if (request.mode === 'overwrite') {
-    if (preview.id === null || preview.id !== request.overwrite.workflowId) {
-      throw new ValidationError(
-        'workflow-import-target-mismatch',
-        'YAML workflow id does not match the confirmed overwrite target',
-        { yamlWorkflowId: preview.id, workflowId: request.overwrite.workflowId },
-      )
-    }
-    const receipt = await updateWorkflow(
-      db,
-      request.overwrite.workflowId,
-      {
-        expectedVersion: request.overwrite.expectedVersion,
-        clientMutationId: request.overwrite.clientMutationId,
-        snapshot: {
-          name: preview.name,
-          description: preview.description,
-          definition,
-        },
-      },
-      principal,
-      resolvedImport.inTxGuard === undefined
-        ? { beforeWriteTransaction: hooks.afterResolve }
-        : {
-            inTxGuard: resolvedImport.inTxGuard,
-            beforeWriteTransaction: hooks.afterResolve,
-          },
-    )
-    return { outcome: 'overwritten', receipt }
-  }
-
-  if (preview.id !== null && request.mode === 'fail') {
-    const existing = await getWorkflow(db, preview.id)
-    if (existing !== null) {
-      // mode=fail discards a non-colliding incoming id and creates a fresh row.
-      // A private collision must take that exact same path: returning 404 here
-      // while a truly missing id returns 201 would be an existence oracle.
-      if (
-        principal.kind === 'actor' &&
-        !(await canViewResource(db, principal.actor, 'workflow', existing))
-      ) {
-        // Deliberately fall through to the fresh-id create below.
-      } else {
-        // Built-ins are explicitly read-only for callers who can see them.
-        assertNotBuiltin('workflow', existing)
-        throw new ConflictError(
-          'workflow-import-conflict',
-          `workflow '${preview.id}' already exists`,
-          {
-            workflowId: preview.id,
-            existingName: existing.name,
-            incomingName: preview.name,
-            current: workflowRevisionOf(existing),
-          },
-        )
-      }
-    }
-  }
-
-  // mode=new always discards the incoming id. mode=fail creates only when the
-  // id is absent/non-colliding. HTTP callers always provide an actor principal;
-  // framework callers must opt into the explicit audited system branch.
-  const workflow = await createWorkflow(
-    db,
-    {
-      name: preview.name,
-      description: preview.description,
-      definition,
-    },
-    principal.kind === 'actor'
-      ? {
-          ownerUserId: principal.actor.user.id,
-          actor: principal.actor,
-          beforeWriteTransaction: hooks.afterResolve,
-          ...(resolvedImport.inTxGuard === undefined
-            ? {}
-            : { inTxGuard: resolvedImport.inTxGuard }),
-        }
-      : { beforeWriteTransaction: hooks.afterResolve },
-  )
-  return { outcome: 'created', workflow }
-}
-
-/** Portable call-workflow selector of a node, or null for non-call/malformed
- *  nodes (the validator owns the missing-workflowName error). */
-function callWorkflowSelectorOf(
-  node: Record<string, unknown>,
-): { type: 'workflow'; name: string } | null {
-  if (node.kind !== 'call-workflow') return null
-  const name = node.workflowName
-  if (typeof name !== 'string' || name.length === 0) return null
-  return { type: 'workflow', name }
-}
-
-/** RFC-243 PR-4 — call-workgroup portable selector (same dangle contract). */
-function callWorkgroupSelectorOf(
-  node: Record<string, unknown>,
-): { type: 'workgroup'; name: string } | null {
-  if (node.kind !== 'call-workgroup') return null
-  const name = node.workgroupName
-  if (typeof name !== 'string' || name.length === 0) return null
-  return { type: 'workgroup', name }
-}
-
-async function resolveImportedWorkflowNodeRefs(
-  db: PersistenceDb,
-  actor: Extract<WorkflowWritePrincipal, { kind: 'actor' }>['actor'],
-  def: WorkflowDefinitionSelector,
-  selections: readonly ImportRefSelection[],
-): Promise<{ definition: WorkflowDefinition; inTxGuard: WorkflowWriteInTxGuard }> {
-  const selectors = (def.nodes ?? [])
-    .filter((node) => node.kind === 'agent-single')
-    .map((node) => {
-      const record = node as Record<string, unknown>
-      const name = record.agentName
-      if (typeof name !== 'string' || name.length === 0) {
-        throw new ValidationError(
-          'import-ref-unresolved',
-          'an imported agent node is missing its portable agentName selector',
-        )
-      }
-      const ownerUsername = record.agentOwnerUsername
-      return {
-        type: 'agent' as const,
-        name,
-        ...(typeof ownerUsername === 'string' ? { ownerUsername } : {}),
-      }
-    })
-  // RFC-243 (§5.5): call-workflow nodes contribute name-only 'workflow'
-  // selectors. Zero visible candidates is a SKIP inside resolveImportRefs
-  // (dangle-tolerant type) — the node then keeps its portable name unresolved.
-  const callSelectors = (def.nodes ?? [])
-    .map((node) => callWorkflowSelectorOf(node as Record<string, unknown>))
-    .filter((selector): selector is { type: 'workflow'; name: string } => selector !== null)
-  const callWorkgroupSelectors = (def.nodes ?? [])
-    .map((node) => callWorkgroupSelectorOf(node as Record<string, unknown>))
-    .filter((selector): selector is { type: 'workgroup'; name: string } => selector !== null)
-  const resolved = await resolveImportRefs(
-    db,
-    actor,
-    [...selectors, ...callSelectors, ...callWorkgroupSelectors],
-    selections,
-  )
-  const definition = migrateWorkflowDefinitionToLatest(
-    WorkflowDefinitionSchema.parse({
-      ...def,
-      nodes: (def.nodes ?? []).map((node) => {
-        const rec = node as Record<string, unknown>
-        if (node.kind === 'call-workflow') {
-          // A foreign install's `workflowId` cache is meaningless (and dangerous:
-          // it could collide with an unrelated local ULID) — always drop it, then
-          // backfill this install's id when the selector resolved (agentId
-          // backfill precedent below). A malformed selector-less node keeps only
-          // its stripped shape; the validator owns that error.
-          const { workflowId: _foreignId, ...portable } = rec
-          const callSelector = callWorkflowSelectorOf(rec)
-          const id =
-            callSelector === null
-              ? undefined
-              : resolved.bySelector.get(importRefSelectorKey(callSelector))
-          return id === undefined ? portable : { ...portable, workflowId: id }
-        }
-        if (node.kind === 'call-workgroup') {
-          const { workgroupId: _foreignId, ...portable } = rec
-          const callSelector = callWorkgroupSelectorOf(rec)
-          const id =
-            callSelector === null
-              ? undefined
-              : resolved.bySelector.get(importRefSelectorKey(callSelector))
-          return id === undefined ? portable : { ...portable, workgroupId: id }
-        }
-        if (node.kind !== 'agent-single') return node
-        const name = rec.agentName
-        if (typeof name !== 'string' || name.length === 0) return node
-        const ownerUsername = rec.agentOwnerUsername
-        const selector = {
-          type: 'agent' as const,
-          name,
-          ...(typeof ownerUsername === 'string' ? { ownerUsername } : {}),
-        }
-        const id = resolved.bySelector.get(importRefSelectorKey(selector))
-        if (id === undefined) {
-          throw new ValidationError(
-            'import-ref-unresolved',
-            'imported agent reference did not resolve',
-          )
-        }
-        const { agentId: _foreignId, agentOwnerUsername: _portableOwner, ...portable } = rec
-        return { ...portable, agentId: id }
-      }),
-    }),
-  )
-  return {
-    definition,
-    inTxGuard: {
-      assert: (tx) => assertImportRefsStableInTx(tx, actor, resolved.fence),
-    },
-  }
-}
-
-function rejectPortableRefsForSystemImport(def: WorkflowDefinitionSelector): WorkflowDefinition {
-  const hasPortableRef = (def.nodes ?? []).some((node) => node.kind === 'agent-single')
-  if (hasPortableRef) {
-    throw new ValidationError(
-      'workflow-import-system-ref-unsupported',
-      'system workflow import cannot resolve portable resource selectors',
-    )
-  }
-  // RFC-243 (§5.5): call-workflow nodes are acceptable for system import —
-  // `workflowName` needs no candidate resolution and dangling is legal — but a
-  // foreign install's `workflowId` cache must never be persisted verbatim.
-  return stripCallWorkflowNodeIds(
-    migrateWorkflowDefinitionToLatest(WorkflowDefinitionSchema.parse(def)),
-  )
 }
 
 function safeParse(yamlText: string): unknown {

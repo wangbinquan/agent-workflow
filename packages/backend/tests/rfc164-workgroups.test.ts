@@ -37,15 +37,13 @@ import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
 import {
-  createWorkgroup,
   diffNewAgentMemberIds,
   getWorkgroupById,
   listWorkgroups,
-  renameWorkgroup,
-  saveWorkgroup,
   workgroupDraftSnapshotOf,
 } from '../src/services/workgroups'
 import { ConflictError, NotFoundError, ValidationError } from '../src/util/errors'
+import { createWorkgroup, renameWorkgroup, saveWorkgroup } from './helpers/model/resourceWrites'
 
 // RFC-203 T6: reference-disclosure needs a principal — an admin actor keeps
 // these service-level tests' original full-visibility expectations.
@@ -377,7 +375,11 @@ describe('RFC-164 — services/workgroups.ts CRUD', () => {
       const input = groupInput()
       // hand-corrupt: leader name that matches no member
       const corrupted = { ...input, leaderDisplayName: 'ghost' }
-      await expect(createWorkgroup(db, corrupted)).rejects.toThrow(ValidationError)
+      // RFC-401 T6: the create runs the production workgroup application, which validates the document
+      // with `CreateWorkgroupSchema.parse` (the HTTP error handler maps that rejection to 400/422).
+      await expect(createWorkgroup(db, corrupted)).rejects.toThrow(
+        'leaderDisplayName does not match any member',
+      )
     })
 
     test('human member must be an existing active user', async () => {

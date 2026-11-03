@@ -29,8 +29,6 @@ import { eq } from 'drizzle-orm'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 import { runGit } from '../src/util/git'
-import { createAgent } from '../src/modules/resource-catalog/infrastructure/legacy/agent'
-import { createWorkflow } from '../src/services/workflow'
 import { launchTestTaskWithLocalRepo } from './helpers/productionTaskLaunch'
 import { commitPushNodeId, isCommitPushNodeId } from '../src/services/commitPush'
 import type { CommitPushMeta } from '@agent-workflow/shared'
@@ -38,6 +36,7 @@ import {
   createTaskExecutionTestTopology,
   runTaskWithRealTestTopology,
 } from './helpers/taskExecutionTestTopology'
+import { createAgent, createWorkflow } from './helpers/model/resourceWrites'
 
 interface Harness {
   tmp: string

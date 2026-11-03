@@ -24,12 +24,11 @@ import { buildActor, type Actor } from '../src/auth/actor'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
-import { createAgent } from '../src/modules/resource-catalog/infrastructure/legacy/agent'
 import {
   createScheduledTaskWithIntegrationTriggerResources as createScheduledTask,
   updateScheduledTaskWithIntegrationTriggerResources as updateScheduledTask,
 } from './helpers/integrationTriggerResourceBinding'
-import { createWorkflow } from '../src/services/workflow'
+import { createAgent, createWorkflow } from './helpers/model/resourceWrites'
 
 const SPEC = { kind: 'daily', at: '09:00', timezone: 'UTC' } as const
 

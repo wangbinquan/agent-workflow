@@ -14,18 +14,14 @@ import type {
 import { beforeEach, describe, expect, test } from 'bun:test'
 import type { Hono } from 'hono'
 import { ulid } from 'ulid'
-import {
-  createWorkflow,
-  getWorkflow,
-  listWorkflows,
-  updateWorkflow,
-} from '../src/services/workflow'
+import { getWorkflow, listWorkflows } from '../src/services/workflow'
 import { validateWorkflowById } from '../src/modules/resource-catalog/infrastructure/legacy/workflow.validator'
 import { ConflictError, NotFoundError } from '../src/util/errors'
 import { describeEachProvider, type ProviderDatabaseHarness } from './helpers/eachProvider'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
 import type { ProviderHttpApplicationScope } from './helpers/providerHttpApplicationScope'
+import { createWorkflow, updateWorkflow } from './helpers/model/resourceWrites'
 
 const TOKEN = 'a'.repeat(64)
 const SYSTEM_PRINCIPAL = { kind: 'system', reason: 'workflow-service-test' } as const

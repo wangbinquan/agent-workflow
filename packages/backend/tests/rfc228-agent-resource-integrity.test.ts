@@ -17,24 +17,23 @@ import {
 import { eq } from 'drizzle-orm'
 import { buildActor, type Actor } from '../src/auth/actor'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { createAgent } from '../src/modules/resource-catalog/infrastructure/legacy/agent'
 import { getAgentResourceStatus } from '../src/modules/resource-catalog/application/agents/agentResourceIntegrity'
 import { createMcpFixture } from './helpers/mcpServiceBinding'
 import { createRuntime } from './helpers/runtimeRegistryApplication'
 import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
 import { assertWorkflowLaunchable } from '../src/services/taskLaunchGate'
-import { createWorkflow, getWorkflow } from '../src/services/workflow'
+import { getWorkflow } from '../src/services/workflow'
 import {
   createTestTaskExecutionLaunchParticipant,
   launchWorkgroupTaskViaParticipant,
 } from './helpers/participantLaunch'
-import { createWorkgroup } from '../src/services/workgroups'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 import { composeDatabaseAgentResourceInventorySource } from '../src/modules/resource-catalog/composition/agentResourceIntegrity'
 import { composeResourceCatalogFor } from '../src/modules/resource-catalog/composition/providerResourceCatalog'
 import { createIdentityAccessRuntime } from '../src/modules/identity-access/composition'
 import { createUser } from './helpers/userFixture'
 import { admitTestDirectAuthority } from './helpers/identityAccessAuthority'
+import { createAgent, createWorkflow, createWorkgroup } from './helpers/model/resourceWrites'
 
 const VALID_RUNTIME = 'rfc228-opencode'
 

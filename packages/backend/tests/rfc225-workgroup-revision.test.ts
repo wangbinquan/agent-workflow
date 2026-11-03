@@ -13,17 +13,19 @@ import { describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { buildActor } from '../src/auth/actor'
-import { createAgent } from '../src/modules/resource-catalog/infrastructure/legacy/agent'
 import {
-  createWorkgroup,
   getWorkgroupById,
-  renameWorkgroup,
-  saveWorkgroup,
   workgroupDraftSnapshotOf,
   workgroupSnapshotHashOf,
-  type WorkgroupWritePrincipal,
 } from '../src/services/workgroups'
 import { DomainError } from '../src/util/errors'
+import {
+  createAgent,
+  createWorkgroup,
+  renameWorkgroup,
+  saveWorkgroup,
+  type WorkgroupWritePrincipal,
+} from './helpers/model/resourceWrites'
 
 const SYSTEM: WorkgroupWritePrincipal = { kind: 'system', reason: 'rfc225-test' }
 

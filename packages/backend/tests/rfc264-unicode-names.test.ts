@@ -21,10 +21,11 @@ import {
 } from '@agent-workflow/shared'
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { buildActor, type Actor } from '../src/auth/actor'
-import { createWorkflow, getWorkflow } from '../src/services/workflow'
+import { getWorkflow } from '../src/services/workflow'
 import { previewWorkflowYaml } from '../src/services/workflow.yaml'
-import { createWorkgroup, getWorkgroupById, renameWorkgroup } from '../src/services/workgroups'
+import { getWorkgroupById } from '../src/services/workgroups'
 import { ulid } from 'ulid'
+import { createWorkflow, createWorkgroup, renameWorkgroup } from './helpers/model/resourceWrites'
 
 const EMPTY_DEFINITION: WorkflowDefinition = {
   $schema_version: 4,

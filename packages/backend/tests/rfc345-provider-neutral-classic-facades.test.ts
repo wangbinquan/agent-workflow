@@ -89,12 +89,16 @@ describe('RFC-345 provider-neutral classic compatibility cutover', () => {
     expect(
       source('modules/resource-catalog/application/agents/agentDependencyValidation.ts'),
     ).toContain('reader: AgentDependencyReader')
-    expect(source('modules/resource-catalog/infrastructure/legacy/agent.ts')).toContain(
-      "from '../../application/agents/agentDependencyValidation'",
+    // RFC-401 T6 (proposal G5): the legacy agent writers (the validator's other consumer) and their id-or-name
+    // reference resolver (`agentReferences.ts`) are deleted; the ordinary agent application validates.
+    expect(source('modules/resource-catalog/application/agents/agentApplication.ts')).toContain(
+      "from './agentDependencyValidation'",
     )
-    expect(source('modules/resource-catalog/application/agents/agentReferences.ts')).toContain(
-      'resolver: AgentReferenceResolver',
-    )
+    expect(
+      existsSync(
+        resolve(sourceRoot, 'modules/resource-catalog/application/agents/agentReferences.ts'),
+      ),
+    ).toBe(false)
     const publicParticipants = source('modules/resource-catalog/public/participants.ts')
     expect(publicParticipants).toContain('export interface AgentLaunchResourceIntegrityParticipant')
     expect(publicParticipants).toContain(

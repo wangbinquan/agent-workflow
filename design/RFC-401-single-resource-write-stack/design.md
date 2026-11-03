@@ -418,6 +418,23 @@ abort 合并进 `applyVersion`。发布失败时 fusion 终态与 receipt 一致
   `resourcePackageOperationRecovery`。
 - 锁 GC 只回收既不属于在途旧 operation、也不属于 skill journal 的锁。
 - 约 67 个测试文件使用旧技能 API，随迁移改写。
+- **零调用 legacy 写函数（G5，Part B 提交之后的收尾）**：删除 `legacy/agent.ts` 的 create / update / rename（含两段式
+  prepare / commitInTx）、`legacy/workflow.ts` 的 create / update / copy / `insertWorkflowInTx` / `prepareWorkflowSave` /
+  `commitWorkflowSaveInTx`、`legacy/workgroups.ts` 的 create / copy / save / rename（含 prepare / commitInTx）与
+  `broadcastWorkgroupCreated`、`legacy/workflow.yaml.ts` 的 `importWorkflowYaml`，以及随之不可达的
+  `RC/application/agents/agentReferences.ts`（按名解析引用）与 `RC/infrastructure/legacy/importRefs.ts`（YAML 导入的引用
+  解析）。它们都没有生产调用方（工作流 YAML 导入也没有生产路由）；四个文件只剩读取。
+  - 用例经 `T/helpers/model/resourceWrites.ts` 写夹具：沿用旧签名，只调用生产入口——新建走唯一写入参与者 / 仓库（夹具常
+    指定 id 或内建行），带执行者的编辑 / 改名 / 复制走资源目录操作（解析、可见、编辑 / 治理权、内建只读、WS 广播），不带
+    执行者的编辑沿用旧「系统」语义（agent 经参与者；workflow / workgroup 以 admin 身份走目录操作，内建 workflow 仍只读）。
+    旧函数允许、生产入口不存在的形态改为合法夹具：owner 为空的行记为 `FIXTURE_OWNER`，按名字的引用先解析成 id，名称
+    改为小写。
+  - 断言旧函数专有语义的用例按生产合同改写（以 RFC-401 错误矩阵为准：新引用 disabled plugin 是 `plugin-not-found`、已有
+    引用后被停用是 `plugin-disabled`；workgroup 文档校验由 schema 拒绝；写入前被删的 agent 在 workflow 里是悬空 id）；只锁
+    两段式接缝的用例（W14 / W31 / W32 的 prepare / commit / inTxGuard、RFC-223 导入引用、YAML 导入）随被测代码删除；源码锁
+    改锁生产参与者（RFC-203 改名围栏、RFC-270 回填投影、RFC-231 写入清单、RFC-282 引用去重）。
+  - 守卫与账本：AC-1 结构锁三类旧导入方清空；RFC-395 引用边界去掉旧 workflow 写入者；表归属债三条销账（`legacy/agent.ts`
+    的 runtimes、`legacy/importRefs.ts` 与 `legacy/workgroups.ts` 的 users）；测试引擎写死账本 W14 一条销账。
 
 ### 10.4 跨版本行桥（集中验证发现）
 

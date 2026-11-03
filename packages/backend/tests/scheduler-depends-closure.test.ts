@@ -18,10 +18,10 @@ import type { Logger } from '@/util/log'
 import { ulid } from 'ulid'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import { createAgent } from '../src/modules/resource-catalog/infrastructure/legacy/agent'
 import { getAgent } from './helpers/resourceLookup'
 import { resolveInjection } from '../src/services/execution/resolveInjection'
 import { legacyInjectionAgentLookup } from './helpers/legacyInjectionAgentLookup'
+import { createAgent } from './helpers/model/resourceWrites'
 
 const NOOP_LOG: Logger = {
   debug: () => {},

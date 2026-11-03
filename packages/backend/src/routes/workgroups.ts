@@ -9,8 +9,8 @@
 // GET/PUT /api/workgroups/:id/acl       — RFC-099 ACL management
 //
 // RFC-099 D15 / RFC-223: creating/updating checks that NEW agent-member ids are
-// usable by the editor, enforced inside create/saveWorkgroup against the exact
-// ids persisted.
+// usable by the editor, enforced inside the workgroup write participant against the
+// exact ids persisted.
 
 import {
   CopyWorkgroupRequestSchema,

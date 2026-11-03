@@ -9,11 +9,7 @@ import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { buildActor, type Actor } from '../src/auth/actor'
 import { createIdentityAccessRuntime } from '../src/modules/identity-access/composition'
-import {
-  createWorkgroup,
-  saveWorkgroup,
-  workgroupDraftSnapshotOf,
-} from '../src/services/workgroups'
+import { workgroupDraftSnapshotOf } from '../src/services/workgroups'
 import {
   resetBroadcastersForTests,
   WORKGROUPS_CHANNEL,
@@ -23,6 +19,7 @@ import {
 import { WS_CHANNELS } from '../src/ws/registry'
 import { describeEachProvider } from './helpers/eachProvider'
 import { composeTestProviderRealtimeRuntime } from './helpers/realtimeRuntime'
+import { createWorkgroup, saveWorkgroup } from './helpers/model/resourceWrites'
 
 function actor(id: string, role: 'admin' | 'user' = 'user'): Actor {
   return buildActor({

@@ -383,7 +383,9 @@ test('input validation precedes prepared frontmatter encoding and later input ge
   expect(touched).toEqual([])
 })
 
-test('all three full content writers delegate while legacy sparse preparation stays separate', () => {
+// RFC-401 T6 (proposal G5): the legacy create / update writers are deleted, so the two common persistence writers are
+// the only full content writers and `legacy/agent.ts` keeps reads only.
+test('the common content writers delegate and the legacy agent module keeps reads only', () => {
   const common = ts.createSourceFile(
     'agentPersistence.ts',
     readFileSync(
@@ -442,20 +444,18 @@ test('all three full content writers delegate while legacy sparse preparation st
   }
   expect(callArguments(common, 'createAgentPersistenceValues')).toEqual([['candidate']])
   expect(callArguments(common, 'updateAgentPersistenceValues')).toEqual([['next']])
-  expect(callArguments(legacy, 'commitAgentCreate')).toEqual([['input', 'fmExtra']])
-  expect(callArguments(legacy, 'commitAgentCreate', 'replaceAgentReferences')).toEqual([
-    ['tx', 'id', '{skills:skillRefs,dependsOn:dependsOnIds,mcp:mcpIds,plugins:pluginIds}'],
-  ])
-  expect(callArguments(legacy, 'commitAgentCreateInTx', 'commitAgentCreate')).toEqual([
-    ['tx', 'p', '(actor,groups)=>assertRefsUsableInTx(tx,actor,groups)'],
-  ])
-  expect(callArguments(legacy, 'createAgent', 'commitAgentCreate')).toEqual([
-    ['tx', 'prepared', '(actor,groups)=>assertRefsUsableForTx(tx,actor,groups)'],
-  ])
-  expect(callArguments(legacy, 'commitAgentCreateInTx')).toEqual([])
-  expect(callArguments(legacy, 'createAgent')).toEqual([])
-  expect(callArguments(legacy, 'prepareAgentUpdate')).toEqual([])
-  for (const name of ['serializeInputs', 'serializeSkillRefs']) {
+  const legacyText = legacy.getFullText()
+  for (const call of ['agentContentPersistenceValues(', 'replaceAgentReferences(']) {
+    expect(legacyText).not.toContain(call)
+  }
+  for (const name of [
+    'commitAgentCreate',
+    'commitAgentCreateInTx',
+    'createAgent',
+    'prepareAgentUpdate',
+    'serializeInputs',
+    'serializeSkillRefs',
+  ]) {
     expect(
       legacy.statements.some((node) => ts.isFunctionDeclaration(node) && node.name?.text === name),
     ).toBe(false)

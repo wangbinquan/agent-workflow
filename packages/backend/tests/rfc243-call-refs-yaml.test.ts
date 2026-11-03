@@ -11,27 +11,25 @@
 //      gate is the ONLY thing between a name-guessing editor and the ACL-free
 //      launch closure freeze — if these red, that exfiltration fence broke;
 //   3. YAML: export strips the installation-local `workflowId` cache (shared +
-//      backend faces), import resolves `workflowName` per RFC-223 flow but
-//      tolerates zero candidates (dangling name imports successfully), and a
-//      resolved import backfills THIS install's id (foreign ids never
-//      persist).
+//      backend faces). (The import half — RFC-223 resolution, dangling names,
+//      id backfill — went with the test-only YAML import writer, RFC-401 T6.)
 import { agentFixture, readWorkflowFixtures, workflowFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { stringify } from 'yaml'
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 import { workflowDefinitionToNameSelectors } from '@agent-workflow/shared'
 import { ulid } from 'ulid'
 import { buildActor, type Actor } from '../src/auth/actor'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
-import { resolveImportRefs } from '../src/modules/resource-catalog/infrastructure/legacy/importRefs'
+
 import { extractWorkflowWorkflowRefs } from '../src/services/resourceRefs'
-import { copyWorkflow, createWorkflow, getWorkflow, updateWorkflow } from '../src/services/workflow'
-import { importWorkflowYaml, workflowDefinitionToSelectors } from '../src/services/workflow.yaml'
+import { getWorkflow } from '../src/services/workflow'
+import { workflowDefinitionToSelectors } from '../src/services/workflow.yaml'
+import { copyWorkflow, createWorkflow, updateWorkflow } from './helpers/model/resourceWrites'
 
 function actor(id: string, role: 'admin' | 'user' = 'user'): Actor {
   return buildActor({
@@ -95,15 +93,6 @@ async function seedWorkflowRow(
     updatedAt: 1,
   })
   return id
-}
-
-async function storedDefinition(
-  db: PersistenceDb,
-  workflowId: string,
-): Promise<WorkflowDefinition> {
-  const row = (await readWorkflowFixtures(db, { id: workflowId }))[0]
-  if (row === undefined) throw new Error(`missing workflow ${workflowId}`)
-  return JSON.parse(row.definition) as WorkflowDefinition
 }
 
 // ---------------------------------------------------------------------------
@@ -351,173 +340,6 @@ describeEachProvider('RFC-243 §5.5 — YAML export strips the workflowId cache'
   })
 })
 
-// ---------------------------------------------------------------------------
-describeEachProvider(
-  'RFC-243 §5.5 — YAML import resolves / dangles call-workflow names',
-  (harness) => {
-    let db: PersistenceDb
-    const viewer = actor('viewer')
-
-    beforeEach(async () => {
-      db = harness.db
-      await seedUser(db, 'owner-a')
-      await seedUser(db, 'owner-b')
-      await seedUser(db, 'viewer')
-    })
-
-    function callYaml(input: { name?: string; workflowName: string; workflowId?: string }): string {
-      return stringify({
-        name: input.name ?? 'imported-caller',
-        description: '',
-        definition: {
-          $schema_version: 4,
-          inputs: [],
-          nodes: [
-            {
-              id: 'c1',
-              kind: 'call-workflow',
-              workflowName: input.workflowName,
-              ...(input.workflowId === undefined ? {} : { workflowId: input.workflowId }),
-            },
-          ],
-          edges: [],
-        },
-      })
-    }
-
-    test('round-trip: a resolved name backfills THIS install id and never keeps the foreign one', async () => {
-      const childId = await seedWorkflowRow(db, {
-        name: 'child-wf',
-        ownerUserId: 'owner-a',
-        visibility: 'public',
-      })
-      const result = await importWorkflowYaml(
-        db,
-        { yamlText: callYaml({ workflowName: 'child-wf', workflowId: 'FOREIGN_ID' }), mode: 'new' },
-        { kind: 'actor', actor: viewer },
-      )
-      expect(result.outcome).toBe('created')
-      if (result.outcome !== 'created') throw new Error('unreachable')
-      const node = (await storedDefinition(db, result.workflow.id)).nodes[0] as Record<
-        string,
-        unknown
-      >
-      expect(node.workflowName).toBe('child-wf')
-      expect(node.workflowId).toBe(childId)
-    })
-
-    test('zero candidates: the dangling name imports successfully with no id cache', async () => {
-      const result = await importWorkflowYaml(
-        db,
-        { yamlText: callYaml({ workflowName: 'ghost-wf', workflowId: 'FOREIGN_ID' }), mode: 'new' },
-        { kind: 'actor', actor: viewer },
-      )
-      expect(result.outcome).toBe('created')
-      if (result.outcome !== 'created') throw new Error('unreachable')
-      const node = (await storedDefinition(db, result.workflow.id)).nodes[0] as Record<
-        string,
-        unknown
-      >
-      expect(node.workflowName).toBe('ghost-wf')
-      expect(node.workflowId).toBeUndefined()
-    })
-
-    test('a name whose only rows are invisible is NOT importable (save fence, anti-exfiltration)', async () => {
-      // The import resolver treats invisible as missing (skip → dangling), but
-      // the save-time name-domain ACL still rejects: without it, launch's
-      // ACL-free closure freeze would happily execute the private definition.
-      await seedWorkflowRow(db, {
-        name: 'secret-wf',
-        ownerUserId: 'owner-a',
-        visibility: 'private',
-      })
-      await expect(
-        importWorkflowYaml(
-          db,
-          { yamlText: callYaml({ workflowName: 'secret-wf' }), mode: 'new' },
-          { kind: 'actor', actor: viewer },
-        ),
-      ).rejects.toMatchObject({
-        code: 'acl-missing-refs',
-        details: { missing: [{ type: 'workflow', name: 'secret-wf' }] },
-      })
-    })
-
-    test('ambiguous visible candidates keep the RFC-223 mapping flow; a selection binds and backfills', async () => {
-      const idA = await seedWorkflowRow(db, {
-        name: 'dup-wf',
-        ownerUserId: 'owner-a',
-        visibility: 'public',
-      })
-      const idB = await seedWorkflowRow(db, {
-        name: 'dup-wf',
-        ownerUserId: 'owner-b',
-        visibility: 'public',
-      })
-      const ordered = [idA, idB].sort((a, b) => a.localeCompare(b))
-      await expect(
-        importWorkflowYaml(
-          db,
-          { yamlText: callYaml({ workflowName: 'dup-wf' }), mode: 'new' },
-          { kind: 'actor', actor: viewer },
-        ),
-      ).rejects.toMatchObject({
-        code: 'import-ref-ambiguous',
-        status: 409,
-        details: {
-          ambiguities: [
-            {
-              selector: { type: 'workflow', name: 'dup-wf' },
-              candidates: [{ id: ordered[0] }, { id: ordered[1] }],
-            },
-          ],
-        },
-      })
-
-      const result = await importWorkflowYaml(
-        db,
-        {
-          yamlText: callYaml({ workflowName: 'dup-wf' }),
-          mode: 'new',
-          selections: [
-            {
-              selector: { type: 'workflow', name: 'dup-wf' },
-              resourceId: idB,
-              expectedAclRevision: 0,
-            },
-          ],
-        },
-        { kind: 'actor', actor: viewer },
-      )
-      expect(result.outcome).toBe('created')
-      if (result.outcome !== 'created') throw new Error('unreachable')
-      const node = (await storedDefinition(db, result.workflow.id)).nodes[0] as Record<
-        string,
-        unknown
-      >
-      expect(node.workflowId).toBe(idB)
-    })
-  },
-)
-
-describeEachProvider('RFC-359 W53 import reference resolution', (harness) => {
-  let db: PersistenceDb
-
-  const viewer = actor('viewer')
-
-  beforeEach(async () => {
-    db = harness.db
-    await seedUser(db, 'owner-a')
-    await seedUser(db, 'owner-b')
-    await seedUser(db, 'viewer')
-  })
-
-  test('resolveImportRefs: workflow selectors skip on zero candidates while agent selectors still fail closed', async () => {
-    const skipped = await resolveImportRefs(db, viewer, [{ type: 'workflow', name: 'nope' }])
-    expect(skipped.bySelector.size).toBe(0)
-    expect(skipped.fence.entries).toEqual([])
-    await expect(
-      resolveImportRefs(db, viewer, [{ type: 'agent', name: 'nope' }]),
-    ).rejects.toMatchObject({ code: 'import-ref-unresolved' })
-  })
-})
+// RFC-401 T6 (proposal G5): the YAML import writer and its legacy reference resolver
+// (`legacy/importRefs.ts`) are deleted — no production route imported a workflow through them — so the
+// import round-trip and W53 resolution suites went with them. Export and save-time gates above stay.

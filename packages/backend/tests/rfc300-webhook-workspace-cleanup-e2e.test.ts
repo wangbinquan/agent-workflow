@@ -43,10 +43,10 @@ import { composeWebhookTerminalWorkspacePrunePolicy } from '../src/modules/integ
 import { registerTerminalWorkspacePrunePolicy, setTaskStatus } from '../src/services/lifecycle'
 import { getTask, isTaskActive } from '../src/services/task'
 import { createWebhookDispatcher } from '../src/services/webhook/webhookDispatch'
-import { createWorkflow } from '../src/services/workflow'
 import { sha1Hex } from '../src/util/hash'
 import { installTaskLifecycleAfterCommitTestPump } from './helpers/taskLifecycleCommittedEvents'
 import { createUser } from './helpers/userFixture'
+import { createWorkflow } from './helpers/model/resourceWrites'
 
 setDefaultTimeout(30_000)
 

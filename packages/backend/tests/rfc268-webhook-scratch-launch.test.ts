@@ -26,10 +26,7 @@ import { createInMemoryDb } from '../src/db/client'
 import { createIdentityAccessRuntime } from '../src/modules/identity-access/composition'
 import { composeWebhookDispatchCore } from '../src/modules/integration/composition/webhookDispatch'
 import { createWebhookDispatchOrchestrationRuntime } from '../src/modules/integration/infrastructure/webhookDispatchRuntime'
-import { createAgent } from '../src/modules/resource-catalog/infrastructure/legacy/agent'
 import { createWebhookDispatcher } from '../src/services/webhook/webhookDispatch'
-import { createWorkflow } from '../src/services/workflow'
-import { createWorkgroup } from '../src/services/workgroups'
 import { cancelViaEngine } from './helpers/cancelEngine'
 import {
   integrationTriggerWebhookAuthorityDependencies,
@@ -39,6 +36,7 @@ import { composeRuntimeRegistryOperations } from './helpers/runtimeRegistryCompo
 import { composeTaskExecutionTestRuntime } from './helpers/taskExecutionTestTopology'
 import { createUser } from './helpers/userFixture'
 import { createSqliteWebhookTaskExecutionParticipant } from './helpers/webhookTaskExecution'
+import { createAgent, createWorkflow, createWorkgroup } from './helpers/model/resourceWrites'
 
 const RUNTIME = 'rfc268-opencode'
 

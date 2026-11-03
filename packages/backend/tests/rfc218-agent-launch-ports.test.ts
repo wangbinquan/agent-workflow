@@ -40,7 +40,6 @@ import {
 import { buildActor, type Actor } from '../src/auth/actor'
 
 import { createInMemoryDb, type DbClient } from '../src/db/client'
-import { createAgent } from '../src/modules/resource-catalog/infrastructure/legacy/agent'
 import {
   AGENT_HOST_AGENT_NODE_ID,
   buildAgentHostSnapshot,
@@ -62,6 +61,7 @@ import {
   validateWorkflowDef,
 } from '../src/services/workflow.validator'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
+import { createAgent } from './helpers/model/resourceWrites'
 
 const openTestApplication = registerProviderHttpApplicationLifetime()
 

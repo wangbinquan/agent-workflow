@@ -9,7 +9,6 @@ import { ulid } from 'ulid'
 import { CreateAgentSchema, DEFAULT_CONFIG } from '@agent-workflow/shared'
 import { buildActor, type Actor } from '../src/auth/actor'
 import { resumeQueuedIntentWorkingSetsForTest as resumeQueuedIntentWorkingSets } from './helpers/intentResourceCatalogBinding'
-import { createAgent } from '../src/modules/resource-catalog/infrastructure/legacy/agent'
 import {
   reserveExactIntentRetry,
   reserveIntentCurrentAction,
@@ -48,6 +47,7 @@ import {
 } from './helpers/intentResourceCatalogBinding'
 import { intentResourceVisibility } from '@/modules/intent/application/resourceCatalog'
 import { runtimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'
+import { createAgent } from './helpers/model/resourceWrites'
 
 let db: PersistenceDb
 let actor: Actor

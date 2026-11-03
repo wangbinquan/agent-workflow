@@ -35,8 +35,6 @@ import { and, eq } from 'drizzle-orm'
 import { readNodeRunPrompt } from '@/modules/task-execution/public/queries'
 import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
-import { createAgent } from '../src/modules/resource-catalog/infrastructure/legacy/agent'
-import { createWorkflow } from '../src/services/workflow'
 import { autoDispatchClarifyRound } from '@/modules/collaboration/infrastructure/clarify/autoDispatch'
 import { abortAllActiveTasks, isTaskActive } from '@/services/task'
 import {
@@ -57,6 +55,7 @@ import {
   runTaskWithRealTestTopology as runTaskBase,
 } from './helpers/taskExecutionTestTopology'
 import { AGENT_MECHANICS_SOURCE } from './helpers/executionMechanismSources'
+import { createAgent, createWorkflow } from './helpers/model/resourceWrites'
 
 const SCENARIO_STUB = resolve(import.meta.dir, 'fixtures', 'scenario-opencode.ts')
 const GIT_TIMEOUT_MS = 10_000

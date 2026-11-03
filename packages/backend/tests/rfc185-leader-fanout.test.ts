@@ -39,7 +39,6 @@ import {
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 import { gateViewOf, loadWorkgroupTaskState } from './helpers/legacyWorkgroupState'
-import { createAgent } from '../src/modules/resource-catalog/infrastructure/legacy/agent'
 import { renderWgProtocolBlock } from '../src/modules/task-execution/domain/workgroup/protocol'
 // RFC-395 II-a: exercise the surviving production builders and constant leaf.
 import {
@@ -51,10 +50,8 @@ import {
   WG_MEMBER_NODE_ID,
 } from '@/modules/resource-catalog/infrastructure/legacy/workgroup/constants'
 import {
-  createWorkgroup,
   getWorkgroupById,
   listWorkgroups,
-  saveWorkgroup,
   workgroupDraftSnapshotOf,
 } from '../src/services/workgroups'
 import type {
@@ -76,6 +73,7 @@ import { composeWorkgroupHostLedgerParticipantFactory } from '@/modules/task-exe
 import { createWorkgroupTurnsOperations } from '@/modules/task-execution/engine/task/workgroup/workgroupTurns'
 import type { WorkgroupTurnsPersistencePort } from '@/modules/task-execution/application/ports/workgroupTurns'
 import { createWorkgroupTurnsPersistence } from '@/modules/task-execution/infrastructure/workgroupTurnsPersistence'
+import { createAgent, createWorkgroup, saveWorkgroup } from './helpers/model/resourceWrites'
 
 /** 旧夹具形状 → 中立驱动的两参调用（RFC-359 W4-D19c-tail）。 */
 async function deriveWake(input: WakeInput) {

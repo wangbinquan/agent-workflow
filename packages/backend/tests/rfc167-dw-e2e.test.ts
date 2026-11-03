@@ -40,7 +40,6 @@ import { createInMemoryDb, type DbClient } from '../src/db/client'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
 import { createResumeEngine } from './helpers/resumeEngine'
 import { loadWorkgroupTaskState } from './helpers/legacyWorkgroupState'
-import { createAgent } from '../src/modules/resource-catalog/infrastructure/legacy/agent'
 import { autoResumeInterruptedTasks } from '../src/services/autoResume'
 import {
   DW_GATE_CAUSE,
@@ -53,7 +52,6 @@ import { createFileWorkspacePresenceQueries } from '../src/modules/source-contro
 import { composeWorktreeResumePreflight } from '../src/modules/task-execution/public/participants'
 import { wakeHumanGateContinuation } from './helpers/legacyTaskDrive'
 import { composeTestWorkgroupTaskRoom } from './helpers/workgroupTaskRoom'
-import { createWorkgroup } from '../src/services/workgroups'
 import {
   createTestTaskExecutionLaunchParticipant,
   launchWorkgroupTaskViaParticipant,
@@ -61,6 +59,7 @@ import {
 import { runTestGit } from './helpers/testCommand'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
 import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
+import { createAgent, createWorkgroup } from './helpers/model/resourceWrites'
 
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
 const OPENCODE_CMD = ['bun', 'run', MOCK_OPENCODE]

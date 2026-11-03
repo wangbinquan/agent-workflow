@@ -10,7 +10,6 @@ import {
   AgentSchema,
   WORKFLOW_SCHEMA_VERSION,
   taskExecutionKind,
-  stringifyWorkflowYamlDocument,
   type WorkflowDefinition,
 } from '@agent-workflow/shared'
 import { buildActor } from '@/auth/actor'
@@ -31,8 +30,8 @@ import {
 } from '@/modules/task-execution/infrastructure/taskRouteOperations'
 import { createDatabaseTaskLifecycleWsProjection } from '@/modules/task-execution/infrastructure/taskLifecycleWsProjection'
 import { getTask, layoutBuiltinWorkflowSnapshot } from '@/services/task'
-import { getWorkflow, listWorkflows, createWorkflow, insertWorkflowInTx } from '@/services/workflow'
-import { importWorkflowYaml } from '@/modules/resource-catalog/infrastructure/legacy/workflow.yaml'
+import { getWorkflow, listWorkflows } from '@/services/workflow'
+import { createWorkflowMutationParticipant } from '@/modules/resource-catalog/infrastructure/workflowMutationParticipant'
 import { createTaskExecutionCatalogSourceFactory } from '@/modules/task-execution/infrastructure/taskExecutionCatalogSources'
 import { createDatabaseTaskListPage } from '@/modules/task-execution/infrastructure/taskListPage'
 import { composeOwnerIdentityQueries } from '@/modules/identity-access/composition/providerOperations'
@@ -67,6 +66,7 @@ import {
   readTaskSubjectFacetFixtures,
 } from './helpers/model/taskSubject'
 import { createClarifyAnswerQueries } from '@/modules/collaboration/composition'
+import { createWorkflow } from './helpers/model/resourceWrites'
 
 const hosts = TASK_DEFINITION_HOSTS
 const cases: readonly StoredTaskSubject[] = [
@@ -168,54 +168,28 @@ describeEachProvider('RFC-395 II-a A2 subject readers', (harness) => {
   })
 
   for (const host of Object.values(hosts)) {
-    for (const residual of [false, true]) {
-      test(`reserved ${host.id} rejects every YAML mode with residual row=${residual}`, async () => {
-        const db = harness.db
-        if (residual)
-          await workflowFixture(db, {
-            id: host.id,
-            name: host.name,
-            definition: JSON.stringify(definition),
-            builtin: true,
-          })
-        const yamlText = stringifyWorkflowYamlDocument(
-          { name: host.name, description: '', definition },
-          { id: host.id },
-        )
-        for (const mode of ['fail', 'new', 'overwrite'] as const) {
-          const request =
-            mode === 'overwrite'
-              ? {
-                  mode,
-                  yamlText,
-                  overwrite: { workflowId: host.id, expectedVersion: 1, clientMutationId: ulid() },
-                }
-              : { mode, yamlText }
-          await expect(
-            importWorkflowYaml(db, request, { kind: 'system', reason: 'rfc395-reserved-host' }),
-            // RFC-395 II-a: HEAD validates reserved underscore names before import mode dispatch.
-          ).rejects.toMatchObject({ status: 422, code: 'workflow-name-invalid' })
-        }
-        expect(await readWorkflowFixtures(db, { id: host.id })).toHaveLength(residual ? 1 : 0)
-      })
-    }
+    // RFC-401 T6 (proposal G5): the YAML import writer (the only caller of the reserved-name check per
+    // import mode) is deleted; no production route imports a workflow through it.
     test(`reserved ${host.id} rejects create and the common copy-target insert`, async () => {
       const db = harness.db
+      // The reserved id is the subject here; a reserved display name would fail the create schema first.
       await expect(
-        createWorkflow(db, { name: host.name, description: '', definition }, { id: host.id }),
+        createWorkflow(
+          db,
+          { name: 'reserved-host-probe', description: '', definition },
+          { id: host.id },
+        ),
       ).rejects.toMatchObject({ status: 403, code: 'builtin-readonly' })
       await expect(
         harness.session.transaction((tx) =>
-          insertWorkflowInTx(tx, {
-            id: host.id,
-            name: host.name,
-            description: '',
-            definition,
-            ownerUserId: null,
-            builtin: false,
-            scriptPrincipal: { kind: 'verbatim-copy' },
-            now: 1,
-          }),
+          createWorkflowMutationParticipant(tx).create(
+            { kind: 'system', userId: 'fixture-owner', reason: 'rfc395-reserved-host' },
+            {
+              id: host.id,
+              content: { name: host.name, description: '', definition },
+              provenance: 'verbatim-copy',
+            },
+          ),
         ),
       ).rejects.toMatchObject({ status: 403, code: 'builtin-readonly' })
       expect(await readWorkflowFixtures(db, { id: host.id })).toEqual([])

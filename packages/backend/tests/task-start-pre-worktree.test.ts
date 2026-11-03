@@ -31,9 +31,7 @@ import { join } from 'node:path'
 import { startGitHttpRemote, remoteUrlFor } from './helpers/gitHttpRemote'
 import { readNodeRunPrompt } from '@/modules/task-execution/public/queries'
 import { createInMemoryDb } from '../src/db/client'
-import { createAgent } from '../src/modules/resource-catalog/infrastructure/legacy/agent'
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
-import { createWorkflow } from '../src/services/workflow'
 import { abortAllActiveTasks, isTaskActive } from '@/services/task'
 import { launchTestTask as launchTestTaskBase } from './helpers/productionTaskLaunch'
 import { materializeWorktree } from '@/modules/source-control/infrastructure/workspaceMaterializer'
@@ -41,6 +39,7 @@ import { materializeWorktree } from '@/modules/source-control/infrastructure/wor
 import { nonInteractiveGitEnv } from '../src/util/git'
 import { ulid } from 'ulid'
 import { createTaskExecutionTestTopology } from './helpers/taskExecutionTestTopology'
+import { createAgent, createWorkflow } from './helpers/model/resourceWrites'
 
 const GIT_TIMEOUT_MS = 10_000
 const NODE_TIMEOUT_MS = 10_000

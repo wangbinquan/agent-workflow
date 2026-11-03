@@ -126,8 +126,8 @@ export function serializeMcpFor<T>(record: T, source: ActorSource): T {
  * `serializeWorkflowReceiptFor` below.
  *
  * That dead call site was NOT a leak, and the distinction is worth keeping
- * straight: `prepareWorkflowSave` builds the receipt snapshot from
- * `parsed.data.snapshot` (services/workflow.ts:345) — the caller's OWN
+ * straight: the save path built the receipt snapshot from
+ * `parsed.data.snapshot` (then `prepareWorkflowSave`) — the caller's OWN
  * submitted bytes, never the stored row — so the response echoed only what
  * the request already contained. A token cannot launder plaintext through it
  * either: it reads `***` from any GET, and submitting that back changes the

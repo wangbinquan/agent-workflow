@@ -54,7 +54,6 @@ import { ulid } from 'ulid'
 
 import type { Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
-import { renameAgent } from '@/modules/resource-catalog/infrastructure/legacy/agent'
 
 import {
   casGateStatus,
@@ -63,6 +62,7 @@ import {
 } from './helpers/legacyWorkgroupState'
 import { ConflictError, ForbiddenError, NotFoundError } from '@/util/errors'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
+import { renameAgent } from './helpers/model/resourceWrites'
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 夹具
@@ -117,7 +117,8 @@ async function seedAgent(
   const now = Date.now()
   const row = {
     id: ulid(),
-    name: `agent-${ulid()}`,
+    // RFC-401 T6: renames run the production rename, whose name schema is lowercase [a-z0-9_-].
+    name: `agent-${ulid().toLowerCase()}`,
     description: '',
     outputs: '[]',
     inputs: '[]',
@@ -433,6 +434,8 @@ describeEachProvider('RFC-359 W9 —— catalog legacy 删除 / 改名面的中�
   })
 
   // ── renameAgent ───────────────────────────────────────────────────────────
+  // RFC-401 T6 (proposal G5): the legacy `renameAgent` is deleted; these cases run the production rename
+  // (application govern gate + repository fence) through `helpers/model/resourceWrites.ts`.
 
   describe('renameAgent', () => {
     test('无围栏改名：名字换掉、updatedAt 前进', async () => {

@@ -21,9 +21,9 @@ import {
   composeOwnedResourceAclEndpoints,
   updateResourceAcl,
 } from '../src/modules/resource-catalog/composition/resourceAcl'
-import { createAgent } from '../src/modules/resource-catalog/infrastructure/legacy/agent'
 import { createUser } from './helpers/userFixture'
 import { registerRevalidationTrigger, type RevocationReason } from '../src/ws/revalidationHook'
+import { createAgent } from './helpers/model/resourceWrites'
 
 const AGENT_FIELDS = {
   description: '',

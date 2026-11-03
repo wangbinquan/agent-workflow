@@ -49,8 +49,6 @@ import { readNodeRunPrompt } from '@/modules/task-execution/public/queries'
 import { type DbClient, createInMemoryDb } from '../src/db/client'
 
 import { seedTestDefaultOpencodeRuntime } from './helpers/executionRuntimeFixture'
-import { createAgent } from '../src/modules/resource-catalog/infrastructure/legacy/agent'
-import { createWorkflow as createWorkflowBase } from '../src/services/workflow'
 // RFC-132 ②a 缺口② 回归锁: S3 + S6 drive answers through the unified autoDispatchClarifyRound.
 // They previously deadlocked on a genuine behavior gap — review iterate/reject SUPERSEDES the
 // designer's freshest run (done clarify-answer continuation → `canceled` superseded-by-review-*,
@@ -79,6 +77,7 @@ import {
   createTaskExecutionTestTopology,
   runTaskWithRealTestTopology as runTaskBase,
 } from './helpers/taskExecutionTestTopology'
+import { createAgent, createWorkflow as createWorkflowBase } from './helpers/model/resourceWrites'
 
 const SCENARIO_STUB = resolve(import.meta.dir, 'fixtures', 'scenario-opencode.ts')
 const actor = { userId: 'u1', role: 'owner' as const }
@@ -261,6 +260,8 @@ async function taskStatus(db: DbClient, taskId: string): Promise<string> {
   return t?.status ?? '??'
 }
 
+// RFC-401 T6: agents are written through the production participant, whose names are [a-z0-9_-]
+// (the scenario agents are `agent-a` / `agent-b` / `agent-c`; their node ids keep the old spelling).
 async function makeDesigner(c: Ctx, name = 'designer', outs = ['design']): Promise<void> {
   await createAgent(c.db, {
     name,
@@ -1071,20 +1072,20 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
   // is dispatched fresh at cci=0 while its upstream sits at cci=1. No
   // iterate/reject needed — just ask-clarify-then-proceed + a 2-hop chain].
   test('S8 multi-hop: A→B→review with A clarify-before-output completes cleanly', async () => {
-    await makeDesigner(c, 'agentA', ['a'])
-    await makeDesigner(c, 'agentB', ['b'])
+    await makeDesigner(c, 'agent-a', ['a'])
+    await makeDesigner(c, 'agent-b', ['b'])
     writePlan(c, {
-      agentA: [{ clarify: CLARIFY_BODY }, { output: { a: 'A_OUT' } }],
-      agentB: [{ output: { b: 'B_OUT' } }],
+      'agent-a': [{ clarify: CLARIFY_BODY }, { output: { a: 'A_OUT' } }],
+      'agent-b': [{ output: { b: 'B_OUT' } }],
     })
     const def: WorkflowDefinition = {
       $schema_version: 2,
       inputs: [{ kind: 'text', key: 'topic', label: 't' }],
       nodes: [
         { id: 'in1', kind: 'input', inputKey: 'topic' },
-        { id: 'agentA', kind: 'agent-single', agentName: 'agentA' },
+        { id: 'agentA', kind: 'agent-single', agentName: 'agent-a' },
         { id: 'clr', kind: 'clarify', title: 'c' },
-        { id: 'agentB', kind: 'agent-single', agentName: 'agentB' },
+        { id: 'agentB', kind: 'agent-single', agentName: 'agent-b' },
         {
           id: 'rev',
           kind: 'review',
@@ -1290,23 +1291,23 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
   // here. If this fails, the lag is worse than S8 (bites forward flow too).
   // ---------------------------------------------------------------------------
   test('S10 control: pure agent chain with clarifying head reaches done (no re-entry)', async () => {
-    await makeDesigner(c, 'agentA', ['a'])
-    await makeDesigner(c, 'agentB', ['b'])
-    await makeDesigner(c, 'agentC', ['cc'])
+    await makeDesigner(c, 'agent-a', ['a'])
+    await makeDesigner(c, 'agent-b', ['b'])
+    await makeDesigner(c, 'agent-c', ['cc'])
     writePlan(c, {
-      agentA: [{ clarify: CLARIFY_BODY }, { output: { a: 'A_OUT' } }],
-      agentB: [{ output: { b: 'B_OUT' } }],
-      agentC: [{ output: { cc: 'C_OUT' } }],
+      'agent-a': [{ clarify: CLARIFY_BODY }, { output: { a: 'A_OUT' } }],
+      'agent-b': [{ output: { b: 'B_OUT' } }],
+      'agent-c': [{ output: { cc: 'C_OUT' } }],
     })
     const def: WorkflowDefinition = {
       $schema_version: 2,
       inputs: [{ kind: 'text', key: 'topic', label: 't' }],
       nodes: [
         { id: 'in1', kind: 'input', inputKey: 'topic' },
-        { id: 'agentA', kind: 'agent-single', agentName: 'agentA' },
+        { id: 'agentA', kind: 'agent-single', agentName: 'agent-a' },
         { id: 'clr', kind: 'clarify', title: 'c' },
-        { id: 'agentB', kind: 'agent-single', agentName: 'agentB' },
-        { id: 'agentC', kind: 'agent-single', agentName: 'agentC' },
+        { id: 'agentB', kind: 'agent-single', agentName: 'agent-b' },
+        { id: 'agentC', kind: 'agent-single', agentName: 'agent-c' },
         {
           id: 'out',
           kind: 'output',
@@ -1387,22 +1388,22 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
   // the freshly re-run B consumed the NEW A and the freshly re-run C the NEW B.
   // ---------------------------------------------------------------------------
   test('S-RFC074: in→A→B→C all-agent staged demote propagates one hop per batch', async () => {
-    await makeDesigner(c, 'agentA', ['a'])
-    await makeDesigner(c, 'agentB', ['b'])
-    await makeDesigner(c, 'agentC', ['cc'])
+    await makeDesigner(c, 'agent-a', ['a'])
+    await makeDesigner(c, 'agent-b', ['b'])
+    await makeDesigner(c, 'agent-c', ['cc'])
     writePlan(c, {
-      agentA: [{ output: { a: 'A_V1' } }, { output: { a: 'A_V2' } }],
-      agentB: [{ output: { b: 'B_V1' } }, { output: { b: 'B_V2' } }],
-      agentC: [{ output: { cc: 'C_V1' } }, { output: { cc: 'C_V2' } }],
+      'agent-a': [{ output: { a: 'A_V1' } }, { output: { a: 'A_V2' } }],
+      'agent-b': [{ output: { b: 'B_V1' } }, { output: { b: 'B_V2' } }],
+      'agent-c': [{ output: { cc: 'C_V1' } }, { output: { cc: 'C_V2' } }],
     })
     const def: WorkflowDefinition = {
       $schema_version: 2,
       inputs: [{ kind: 'text', key: 'topic', label: 't' }],
       nodes: [
         { id: 'in1', kind: 'input', inputKey: 'topic' },
-        { id: 'agentA', kind: 'agent-single', agentName: 'agentA' },
-        { id: 'agentB', kind: 'agent-single', agentName: 'agentB' },
-        { id: 'agentC', kind: 'agent-single', agentName: 'agentC' },
+        { id: 'agentA', kind: 'agent-single', agentName: 'agent-a' },
+        { id: 'agentB', kind: 'agent-single', agentName: 'agent-b' },
+        { id: 'agentC', kind: 'agent-single', agentName: 'agent-c' },
       ] as unknown as WorkflowDefinition['nodes'],
       edges: [
         {
@@ -1494,20 +1495,20 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
   // does a self-clarifying intermediate avoid the spurious re-review?
   // ---------------------------------------------------------------------------
   test('S11 probe: A(clarify)→B(clarify)→review then approve completes without re-review', async () => {
-    await makeDesigner(c, 'agentA', ['a'])
-    await makeDesigner(c, 'agentB', ['b'])
+    await makeDesigner(c, 'agent-a', ['a'])
+    await makeDesigner(c, 'agent-b', ['b'])
     writePlan(c, {
-      agentA: [{ clarify: CLARIFY_BODY }, { output: { a: 'A_OUT' } }],
-      agentB: [{ clarify: CLARIFY_BODY }, { output: { b: 'B_OUT' } }],
+      'agent-a': [{ clarify: CLARIFY_BODY }, { output: { a: 'A_OUT' } }],
+      'agent-b': [{ clarify: CLARIFY_BODY }, { output: { b: 'B_OUT' } }],
     })
     const def: WorkflowDefinition = {
       $schema_version: 2,
       inputs: [{ kind: 'text', key: 'topic', label: 't' }],
       nodes: [
         { id: 'in1', kind: 'input', inputKey: 'topic' },
-        { id: 'agentA', kind: 'agent-single', agentName: 'agentA' },
+        { id: 'agentA', kind: 'agent-single', agentName: 'agent-a' },
         { id: 'clrA', kind: 'clarify', title: 'a' },
-        { id: 'agentB', kind: 'agent-single', agentName: 'agentB' },
+        { id: 'agentB', kind: 'agent-single', agentName: 'agent-b' },
         { id: 'clrB', kind: 'clarify', title: 'b' },
         {
           id: 'rev',
@@ -2274,18 +2275,18 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
   // not interfere with B's branch; both approve cleanly.
   // ---------------------------------------------------------------------------
   test('S18 parallel branches: clarify on branch A does not interfere with branch B review', async () => {
-    await makeDesigner(c, 'agentA', ['a'])
-    await makeDesigner(c, 'agentB', ['b'])
+    await makeDesigner(c, 'agent-a', ['a'])
+    await makeDesigner(c, 'agent-b', ['b'])
     writePlan(c, {
-      agentA: [{ clarify: CLARIFY_BODY }, { output: { a: 'A_OUT' } }],
-      agentB: [{ output: { b: 'B_OUT' } }],
+      'agent-a': [{ clarify: CLARIFY_BODY }, { output: { a: 'A_OUT' } }],
+      'agent-b': [{ output: { b: 'B_OUT' } }],
     })
     const def: WorkflowDefinition = {
       $schema_version: 2,
       inputs: [{ kind: 'text', key: 'topic', label: 't' }],
       nodes: [
         { id: 'in1', kind: 'input', inputKey: 'topic' },
-        { id: 'agentA', kind: 'agent-single', agentName: 'agentA' },
+        { id: 'agentA', kind: 'agent-single', agentName: 'agent-a' },
         { id: 'clr', kind: 'clarify', title: 'c' },
         {
           id: 'revA',
@@ -2294,7 +2295,7 @@ describe('combination scenarios: agent × review × clarify (current code)', () 
           rerunnableOnIterate: ['agentA'],
           rerunnableOnReject: ['agentA'],
         },
-        { id: 'agentB', kind: 'agent-single', agentName: 'agentB' },
+        { id: 'agentB', kind: 'agent-single', agentName: 'agent-b' },
         {
           id: 'revB',
           kind: 'review',
