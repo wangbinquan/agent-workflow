@@ -24,11 +24,19 @@ const legacyResourceSrc = (rel: string): string =>
   moduleSrc(`resource-catalog/infrastructure/legacy/${rel}`)
 
 describe('RFC-285 B6③ — 导入产物 private 三路装配锁', () => {
-  test('① workflow 创建（含 YAML 导入路）经 initialPrivateResourceAcl', () => {
-    const workflow = legacyResourceSrc('workflow.ts')
-    expect(workflow).toContain('initialPrivateResourceAcl(input.ownerUserId)')
-    // 不得出现字面 public 初值铸造（visibility 字面量只允许出现在读取/比较侧）。
-    expect(workflow.includes("visibility: 'public'")).toBe(false)
+  // RFC-401 T6（proposal G5）：旧 workflow 写入者（连同它的 YAML 导入路）删除；workflow 的新建（普通 CRUD、复制、Intent、
+  // 资源包）都经唯一的 workflow 写入参与者，创建者拿 private 行，public 只留给框架内建（system）写入。
+  test('① workflow 创建经唯一写入参与者落 owner + private', () => {
+    const participant = moduleSrc('resource-catalog/infrastructure/workflowMutationParticipant.ts')
+    expect(participant).toContain(
+      "{ ownerUserId: owner.actor.user.id, visibility: 'private' as const, builtin: false }",
+    )
+    expect(participant).toContain(
+      "? { ownerUserId: owner.userId, visibility: 'public' as const, builtin: true }",
+    )
+    // 字面 public 初值只有内建那一处。
+    expect(participant.match(/visibility: 'public' as const/g) ?? []).toHaveLength(1)
+    expect(legacyResourceSrc('workflow.ts').includes('initialPrivateResourceAcl')).toBe(false)
   })
 
   test('② skill ZIP 导入全部创建穿过 createManagedSkillWithFiles 单点', () => {

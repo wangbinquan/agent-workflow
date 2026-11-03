@@ -247,6 +247,10 @@ Part B 只完成了 G5 的技能部分；agent / workflow / workgroup 的零调�
   - 读取或导入 legacy 模块源码的另外 26 个用例：21 个通过；查出的本步问题已修（RFC-199 / RFC-225 写入清单、W12 写入程序锁、
     RFC-104 源码锚、RFC-282 D2 与 RFC-345 facade 锁），连同负载超时的共 11 个单进程复跑全部通过。
   - 导出仓库（HEAD `9498cca64` + 本候选）：按已提交源码出报告的 141 个用例全部通过。
+- **CI**：`d5c85df90`（run 41585625878）68/69：backend shard 14/44 的 `rfc285-b6-import-visibility-locks` 一条源码锁仍读已删的
+  legacy workflow 创建（`legacyResourceSrc('workflow.ts')` 动态拼路径，本地按路径字面量找「读 legacy 源码的用例」时漏了它），本步引入，
+  已改锁 workflow 写入参与者（创建者 private、public 只在内建分支）。补查：其余读 resource-catalog 源码的 159 个用例本地全部通过；
+  e2e 与 windows-platform 通过。
 
 ## 冲突面
 

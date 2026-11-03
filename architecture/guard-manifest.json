@@ -1939,7 +1939,7 @@
       "corpusScanner": false,
       "file": "packages/backend/tests/rfc285-b6-import-visibility-locks.test.ts",
       "id": "rfc285-b6-import-visibility-locks",
-      "lines": 101,
+      "lines": 109,
       "mechanism": "source-text",
       "minCorpusFiles": null,
       "negativeFixture": false,

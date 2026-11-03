@@ -50,7 +50,9 @@
   不可达的 `agentReferences.ts`、`legacy/importRefs.ts`；四个 legacy 文件 3457 → 628 行），用例经新的 `tests/helpers/model/resourceWrites.ts`
   只走生产写入入口（107 个文件）；旧专有语义按 RFC-401 错误矩阵改写，只锁两段式接缝 / YAML 导入的用例随被测代码删除。详见 plan
   「T6 收尾」与 design §10.3。
-- **下一步**：T6 收尾推送后跟 exact SHA 的 CI；全绿后 RFC-401 转 Done（AC-6）。
+- **T6 收尾 CI**：`d5c85df90` 68/69：backend shard 14/44 的 `rfc285-b6-import-visibility-locks` 一条源码锁仍读已删的 legacy workflow
+  创建（动态拼路径，本地按字面量找读源码用例时漏了），本步引入，已改锁 workflow 写入参与者；其余读 resource-catalog 源码的 159 个用例本地补跑全过。
+- **下一步**：修复提交推送后跟 exact SHA 的 CI；全绿后 RFC-401 转 Done（AC-6）。
 
 ## 2026-11-02 RFC-430 部署选择项删余下三个可派生项（Done；`design/RFC-430-derivable-deployment-selections/`）
 
