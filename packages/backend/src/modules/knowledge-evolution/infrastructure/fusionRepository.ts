@@ -1,7 +1,7 @@
 // RFC-359 W4-D5 —— 融合仓库：一份实现，两个 provider 共用。以 PG 版为底：多语句写走统一事务原语；
 // 跨聚合的两半（memory 的成员关系、resource-catalog 的版本提交）经 tx-bound participant 注入。
-// RFC-370 §10 V20：技能的字节与版本操作日志归 resource-catalog——apply 把提案树交给它暂存、在本仓的
-// 事务里经它的 participant 提交、事务后由它发布；这里不再碰文件系统，也不再自己写技能操作锁。
+// RFC-370 §10 V20：技能的字节与版本写入归 resource-catalog。RFC-401 T5：apply 把提案树交给 RC 的 skill 写入场景，
+// 融合自身的重验、记忆标记与 applying → done 都在场景的提交事务里（`hooks`）；发布与候选清理是场景的可重试尾部。
 
 import { createWorkflowExecutionQueries } from '@/modules/resource-catalog/public/queries'
 import { insertOne } from '@/platform/persistence/singleInsert'
@@ -12,7 +12,8 @@ import type { MemoryMembershipParticipantInTx } from '@/modules/memory/public/pa
 import type {
   FusionResourceSeedParticipant,
   SkillTreeVersionOperations,
-  SkillVersionCommitParticipantInTx,
+  SkillTreeVersionStageRequest,
+  SkillVersionCommitHooks,
 } from '@/modules/resource-catalog/public/participants'
 import type { FusionStatus } from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
@@ -157,9 +158,16 @@ export interface FusionSkillVersionCommit {
   bind(input: { readonly db: PersistenceDb; readonly appHome: string }): FusionSkillTrees
 }
 
-/** The bound participant: tree operations plus the tx-bound version commit. */
+/**
+ * The bound participant: tree operations plus the skill write scene's version write. RFC-401 T5: the write takes the
+ * caller's hooks against the scene's committing transaction (fusion re-checks itself before the fence, then marks the
+ * memories fused and settles itself after the version row), so the transaction type stays below the public contract.
+ */
 export interface FusionSkillTrees extends SkillTreeVersionOperations {
-  inTransaction(transaction: PersistenceTx): SkillVersionCommitParticipantInTx
+  applyVersion(
+    request: SkillTreeVersionStageRequest,
+    hooks?: (transaction: PersistenceTx) => SkillVersionCommitHooks<Promise<void> | void>,
+  ): Promise<number>
 }
 
 /** RFC-223 provenance 修复：非事务，逐条改判某条记忆的 `fusedIntoSkillId`。 */
@@ -299,61 +307,66 @@ export function createFusionPersistence(input: {
     if (token === null || token.skillId !== fusion.skillId) {
       throw staleConflictError('skill', 'fusion target skill changed; reload and retry')
     }
-    // RFC-370 §10 V20：暂存经 resource-catalog——开带锁的 version-write 操作（另一操作占着这个技能 ⇒
-    // skill-operation-busy），提案树经选定的内容绑定暂存。复合栅栏在下面的事务里、`before` 之后判。
-    const staged = await skillVersionCommit.stage({
-      skillId: fusion.skillId,
-      source: { kind: 'tree', files: command.proposal },
-      versionSource: 'fusion',
-      summary: command.summary,
-      fusionId: command.fusionId,
-      authorUserId: command.actor.user.id,
-      now: command.now,
-      expectedSkillId: token.skillId,
-      expectedVersion: token.contentVersion,
-      expectedMetaRevision: token.metaRevision,
-      staleMessage: 'fusion target skill changed; reload and retry',
-    })
-    let databaseCommitted = false
-    try {
-      const versionIndex = await session.transaction(
-        async (tx) =>
-          // RFC-353 T6：`skills` / `skill_versions` 归 resource-catalog 单写，这里只把事务交过去。
-          await skillVersionCommit.inTransaction(tx).commit(staged, {
-            // 先答「还在 applying 吗 / 还有权吗」，再答「技能被推进」——这正是既有的错误优先级。
-            before: async () => {
-              const { fusions } = tablesOf(tx)
-              const currentFusion = await first(
-                tx.select().from(fusions).where(eq(fusions.id, command.fusionId)),
-              )
-              if (currentFusion === undefined || currentFusion.status !== 'applying') {
-                throw new ConflictError('fusion-not-applying', 'fusion is no longer applying')
-              }
-              await assertClaimSkill(tx, currentFusion, command.actor)
-            },
-            // RFC-353 T6：记忆的成员关系由 memory 单写，与技能版本写入**同一事务**——
-            // 不变式是 fused ⟺ 该知识在技能的当前版本里，中间态被读到就是一条幽灵行。
-            after: async (version) => {
-              await memoryMembership.inTransaction(tx).markFused({
-                memoryIds: command.incorporatedMemoryIds,
-                skillId: fusion.skillId,
-                skillName: fusion.skillName,
-                skillVersion: version,
-                fusionId: command.fusionId,
-                actorUserId: command.actor.user.id,
-                now: command.now,
+    // RFC-401 T5：经 RC 的 skill 写入场景——取技能锁（另一写入占着这个技能 ⇒ skill-operation-busy）、暂存提案树，
+    // 提交事务里先重验融合、再判复合栅栏写版本行、最后标记记忆并把融合推进到 done，三者同一事务（proposal §5 第 12 项）。
+    const versionIndex = await skillVersionCommit.applyVersion(
+      {
+        skillId: fusion.skillId,
+        source: { kind: 'tree', files: command.proposal },
+        versionSource: 'fusion',
+        summary: command.summary,
+        fusionId: command.fusionId,
+        authorUserId: command.actor.user.id,
+        now: command.now,
+        expectedSkillId: token.skillId,
+        expectedVersion: token.contentVersion,
+        expectedMetaRevision: token.metaRevision,
+        staleMessage: 'fusion target skill changed; reload and retry',
+        ...(command.candidateId === undefined ? {} : { cleanupCandidateId: command.candidateId }),
+      },
+      (tx: PersistenceTx) => ({
+        // 先答「还在 applying 吗 / 还有权吗」，再答「技能被推进」——这正是既有的错误优先级。
+        before: async () => {
+          const { fusions } = tablesOf(tx)
+          const currentFusion = await first(
+            tx.select().from(fusions).where(eq(fusions.id, command.fusionId)),
+          )
+          if (currentFusion === undefined || currentFusion.status !== 'applying') {
+            throw new ConflictError('fusion-not-applying', 'fusion is no longer applying')
+          }
+          await assertClaimSkill(tx, currentFusion, command.actor)
+        },
+        // RFC-353 T6：记忆的成员关系由 memory 单写，与技能版本写入**同一事务**——
+        // 不变式是 fused ⟺ 该知识在技能的当前版本里，中间态被读到就是一条幽灵行。
+        after: async (version) => {
+          await memoryMembership.inTransaction(tx).markFused({
+            memoryIds: command.incorporatedMemoryIds,
+            skillId: fusion.skillId,
+            skillName: fusion.skillName,
+            skillVersion: version,
+            fusionId: command.fusionId,
+            actorUserId: command.actor.user.id,
+            now: command.now,
+          })
+          const { fusions } = tablesOf(tx)
+          const done = await first(
+            tx
+              .update(fusions)
+              .set({
+                status: 'done',
+                appliedSkillVersion: version,
+                decidedByUserId: command.actor.user.id,
+                decidedAt: command.now,
               })
-            },
-          }),
-      )
-      databaseCommitted = true
-      await skillVersionCommit.publish(staged)
-      return { versionIndex }
-    } catch (error) {
-      // 版本已提交之后的失败（发布中断）留给 resource-catalog 的启动恢复前滚，不在这里回退。
-      if (!databaseCommitted) await skillVersionCommit.abort(staged)
-      throw error
-    }
+              .where(and(eq(fusions.id, command.fusionId), eq(fusions.status, 'applying')))
+              .returning({ id: fusions.id }),
+          )
+          if (done === undefined)
+            throw new ConflictError('fusion-not-applying', 'fusion is no longer applying')
+        },
+      }),
+    )
+    return { versionIndex }
   }
 
   async function repairProvenance(): Promise<FusionProvenanceRepairReceipt> {

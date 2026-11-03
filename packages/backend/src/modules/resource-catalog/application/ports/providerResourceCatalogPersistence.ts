@@ -124,10 +124,9 @@ export interface ResourceCatalogAclMutationPort<
   isOwnerNameConstraintError(error: unknown): boolean
 }
 
-/** Internal owner/name preflight seam; it is deliberately absent from public/. */
+/** Internal owner preflight seam; it is deliberately absent from public/. */
 export interface ResourceCatalogAclIdentityReadPort {
   getOwner(type: CatalogSelectorKind, id: string): Promise<string | null | undefined>
-  listOwnedNames(type: CatalogSelectorKind, ownerUserId: string): Promise<readonly string[]>
 }
 
 export interface ResourceCatalogSummaryReadQuery {

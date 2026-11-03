@@ -1,4 +1,4 @@
-import { skillTreeColumns, skillRowPath } from '../databaseSkillTrees'
+import { skillRowPath } from '../databaseSkillTrees'
 // Skill service.
 //
 // Storage model (design.md §2):
@@ -12,7 +12,6 @@ import { skillTreeColumns, skillRowPath } from '../databaseSkillTrees'
 // makes it un-deletable; same as agents <-> workflows in P-1-08.
 
 import { skillTextBytes, skillTextView } from '../../application/skills/textView'
-import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import {
   type CreateManagedSkill,
@@ -26,8 +25,7 @@ import {
 import { and, eq } from 'drizzle-orm'
 import { existsSync, realpathSync, statSync } from 'node:fs'
 import { join } from 'node:path'
-import { ulid } from 'ulid'
-import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   commitSkillVersion,
   type SkillVersionFsOptions,
@@ -35,29 +33,20 @@ import {
 import { isSkillAvailableThisBoot } from '@/modules/resource-catalog/infrastructure/legacy/skillBootVerify'
 import { skillFromPersistenceRow } from '@/modules/resource-catalog/infrastructure/skillPersistence'
 import { tokenToVersionFence } from '@/modules/resource-catalog/infrastructure/legacy/skillToken'
-import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
-import {
-  abandonOperation,
-  advancePhase,
-  beginOperation,
-  finishOperation,
-} from '@/modules/resource-catalog/infrastructure/legacy/skillOperations'
-import { parseFrontmatter, stringifyFrontmatter } from '@/util/frontmatter'
+import { parseFrontmatter } from '@/util/frontmatter'
+import { renderSkillMarkdown } from '../skillMarkdown'
 import { safeJoin } from '@/util/safePath'
 import { ConflictError, NotFoundError, ValidationError, staleConflictError } from '@/util/errors'
-import {
-  assertInitialResourceOwner,
-  initialPrivateResourceAcl,
-} from '@/modules/resource-catalog/application/resourceDefaults'
+import { assertInitialResourceOwner } from '@/modules/resource-catalog/application/resourceDefaults'
 import { discloseRefs } from '@/modules/resource-catalog/composition/resourceAcl'
 import type { Actor } from '@/auth/actor'
-import {
-  skillFilesAbs,
-  skillFilesRel,
-} from '@/modules/resource-catalog/infrastructure/legacy/skillIdentityPaths'
+import { skillFilesAbs } from '@/modules/resource-catalog/infrastructure/legacy/skillIdentityPaths'
 import { findAgentsUsingManagedSkill } from '@/modules/resource-catalog/infrastructure/legacy/skillReferenceGuard'
 import { createAgentSkillReferenceLookup } from '../referenceLookup'
-import { isOwnerNameUniqueViolation, ownerScopedNameWhere } from '@/services/ownerScopedName'
+import { SkillDeleteReferencedError, skillNameInUse } from '../skillMutationParticipant'
+import { skillApplyContentFor } from '../skillApplyContent'
+import { createSkillApplyScene } from '../skillAtomicApply'
+import { ownerScopedNameWhere } from '@/services/ownerScopedName'
 import type {
   SkillContentReader,
   SkillContentReference,
@@ -71,10 +60,6 @@ import type {
   SkillCreationContentStore,
   SkillInitialContent,
 } from '../../application/skills/creationContentStore'
-import {
-  createFileSkillCreationContentStore,
-  discardFileSkillContentRoot,
-} from '../local/fileSkillCreationContentStore'
 
 type SkillRow = PersistenceTables['skills']['$inferSelect']
 
@@ -97,12 +82,17 @@ function contentReaderFor(
     : opts.content
 }
 
-function contentReferenceOf(skill: Skill): SkillContentReference {
+function contentReferenceOf(
+  skill: Pick<Skill, 'id' | 'name' | 'contentVersion'>,
+): SkillContentReference {
   return { id: skill.id, name: skill.name, contentVersion: skill.contentVersion }
 }
 
 export interface SkillDeleteHooks {
-  afterPhase?: (phase: 'intent' | 'fs-staged' | 'db-committed', skillId: string) => void
+  afterPhase?: (
+    phase: 'intent' | 'fs-staged' | 'db-committed',
+    skillId: string,
+  ) => Promise<void> | void
 }
 
 // --- query helpers ---
@@ -172,22 +162,6 @@ export async function isSkillNameOccupiedForOwner(
   return rows.length > 0
 }
 
-function creationContentFor(
-  opts: SkillFsOptions,
-  content: SkillInitialContent | ((filesDirectory: string) => void),
-): SkillCreationContentStore {
-  if (typeof content === 'function' && opts.creationContent !== undefined) {
-    throw new Error('legacy skill producer requires the local file creation store')
-  }
-  return (
-    opts.creationContent ??
-    createFileSkillCreationContentStore(
-      opts.appHome,
-      typeof content === 'function' ? content : undefined,
-    )
-  )
-}
-
 // --- create ---
 
 export async function createManagedSkill(
@@ -208,9 +182,11 @@ export async function createManagedSkill(
     {
       kind: 'main',
       content: skillTextBytes(
-        stringifyFrontmatter({
-          data: { name: input.name, description: input.description, ...input.frontmatterExtra },
-          body: input.bodyMd,
+        renderSkillMarkdown({
+          name: input.name,
+          description: input.description,
+          bodyMd: input.bodyMd,
+          frontmatterExtra: input.frontmatterExtra,
         }),
       ),
     },
@@ -218,18 +194,12 @@ export async function createManagedSkill(
 }
 
 /**
- * THE shared create pipeline (RFC-170 §9): reserve (invisible row + op lock) →
- * produce the files tree into the still-invisible live files/ → archive it as
- * v1 via commitSkillVersion(initial) (=> 'snapshot-authoritative' + boot-
- * verified) → flip 'ready' (atomically visible). Any throw rolls the whole
- * create back (row + files + op).
+ * THE shared create pipeline. RFC-401 T5：经 skill 写入场景——取技能锁、把初始内容暂存为 v1 并固化快照，唯一 skill 写入参与者
+ * 在提交事务里写入 ready 行与 v1 版本行（同一 owner 下重名 → 409 `skill-name-in-use`），提交后发布 live。没有 `reserving`
+ * 中间态；提交前失败按工件补偿，提交后失败由 AtomicApply 恢复前滚。
  *
  * Used by POST /api/skills (single-SKILL.md producer above) AND the ZIP
- * import's create branch (whole candidate tree). The zip path used to insert a
- * bare row with no v1 snapshot (schema-default versionState
- * 'legacy-unbackfilled'), which the RFC-170 availability gate hides on a live
- * daemon — its own post-insert re-read came back null and every zip create
- * failed with "skill disappeared right after insert".
+ * import's create branch (whole candidate tree).
  */
 export async function createManagedSkillWithFiles(
   db: PersistenceDb,
@@ -237,248 +207,48 @@ export async function createManagedSkillWithFiles(
   meta: { name: string; description: string; ownerUserId?: string; actor?: Actor | null },
   produceFiles: SkillInitialContent | ((filesDir: string) => void),
   hooks: {
-    /** Test-only fault seam after ready + db-committed, before op retirement. */
+    /** Test-only fault seam after the database commit, before live publication. */
     __afterDbCommitForTest?: () => void
   } = {},
 ): Promise<Skill> {
   // Fast-path occupancy check — RAW inside the target owner's namespace (any
-  // row, even gate-hidden), so a squatted owner/name slot 409s cleanly while a
-  // different owner may use the same display name. The expression unique index
-  // remains the racing-create guard before any files are written.
+  // row, even gate-hidden), so a squatted owner/name slot 409s before any content
+  // is staged. The participant re-checks in the committing transaction.
   const ownerUserId = meta.ownerUserId ?? null
   assertInitialResourceOwner(meta.actor, ownerUserId)
-  const initialAcl = initialPrivateResourceAcl(ownerUserId)
-  if (await isSkillNameOccupiedForOwner(db, meta.name, ownerUserId)) {
-    throw new ConflictError('skill-name-in-use', `skill '${meta.name}' already exists`)
-  }
-
-  const creation = creationContentFor(opts, produceFiles)
-  const id = ulid()
-  const contentPlan = creation.plan(id)
-  const now = Date.now()
-
-  // ① reserve intent: insert the row at reservation_state='reserving' (invisible
-  //    to list/read paths) + open the reserve op + lock, one tx. A unique(name)
-  //    violation here means a concurrent create won the slot → 409, nothing written.
-  let opId: string
-  try {
-    opId = await databaseSessionFor(db).transaction(async (tx) => {
-      const { skills } = tablesOf(tx)
-      await insertOne(tx, skills, {
-        id,
-        name: meta.name,
-        description: meta.description,
-        ...skillTreeColumns(id, 'live', 'local-file', skillFilesRel(id)),
-        // RFC-231: every user-created resource starts private with ACL rev 0.
-        ...initialAcl,
-        reservationState: 'reserving',
-        createdAt: now,
-        updatedAt: now,
-      })
-      return await beginOperation(tx, {
-        skillId: id,
-        kind: 'reserve',
-        ownerUserId: ownerUserId ?? undefined,
-        preconditionJson: JSON.stringify({ skillId: id }),
-      })
-    })
-  } catch (err) {
-    if (isOwnerNameUniqueViolation(err, 'skills', 'skills_owner_name_unique')) {
-      throw new ConflictError('skill-name-in-use', `skill '${meta.name}' already exists`)
-    }
-    throw err
-  }
-
-  let committed = false
-  try {
-    // ② fs-staged: produce the files tree into the (still-invisible) files dir.
-    await creation.initialize(
-      contentPlan,
-      typeof produceFiles === 'function'
-        ? { kind: 'main', content: skillTextBytes('') }
-        : produceFiles,
-    )
-    await databaseSessionFor(db).transaction(
-      async (tx) => await advancePhase(tx, opId, 'fs-staged'),
-    )
-
-    // ③ fs-published: archive the tree as v1 + atomically publish (RFC-101/170).
-    // skipOp: reserve already holds this skill's op lock — commitSkillVersion must
-    // NOT open its own version-write op (it would self-conflict on the same lock).
-    await commitSkillVersion(
+  if (await isSkillNameOccupiedForOwner(db, meta.name, ownerUserId)) throw skillNameInUse(meta.name)
+  if (typeof produceFiles === 'function' && opts.versionContent !== undefined)
+    throw new Error('legacy skill producer requires the local file creation store')
+  const scene = createSkillApplyScene({
+    db,
+    content: skillApplyContentFor(
       db,
-      opts,
-      id,
-      { kind: 'retain' },
       {
-        source: 'initial',
-        authorUserId: ownerUserId,
-        skipOp: true,
+        appHome: opts.appHome,
+        ...(opts.contentKind === undefined ? {} : { contentKind: opts.contentKind }),
+        ...(opts.versionContent === undefined ? {} : { versionContent: opts.versionContent }),
+        ...(opts.creationContent === undefined ? {} : { creationContent: opts.creationContent }),
+        ...(opts.deletionContent === undefined ? {} : { deletionContent: opts.deletionContent }),
       },
-    )
-    await databaseSessionFor(db).transaction(
-      async (tx) => await advancePhase(tx, opId, 'fs-published'),
-    )
-
-    // ④ db-committed: flip to 'ready' — the skill becomes visible now, atomically.
-    await databaseSessionFor(db).transaction(
-      async (tx) => await commitSkillReadyInTx(tx, { skillId: id, opId }),
-    )
-    committed = true
-    hooks.__afterDbCommitForTest?.()
-    await databaseSessionFor(db).transaction(async (tx) => await finishOperation(tx, opId))
-  } catch (err) {
-    // ready + db-committed is authoritative. Never reverse it in-process:
-    // preserve row/root/op/lock so the boot barrier can prove and roll forward.
-    if (committed) throw err
-    // Roll back (in-process): discard the reserving row + files + retire the op.
-    // (A crash — not an in-process throw — is recovered at boot by the reserve
-    // recovery handler, which does the same.)
-    // RFC-208: the filesystem cleanup must never be able to skip the DB
-    // rollback. `force: true` only swallows ENOENT — EPERM / EBUSY / ENOTEMPTY
-    // still throw, and when they did, `abandonOperation` never ran: the row
-    // stayed `reserving` and the operation lock stayed ACTIVE, so every endpoint
-    // for that skill answered 409 skill-operation-busy forever. The orphan sweep
-    // could not clear it either, since it only reclaims locks whose op is no
-    // longer active — and this one is. Leftover files are recoverable (GC, and
-    // the boot reserve-recovery handler); a stuck lock is not.
-    try {
-      await creation.discard(contentPlan)
-    } catch {
-      /* best-effort: a leftover dir is reclaimable, a stranded lock is not */
-    }
-    await databaseSessionFor(db).transaction(async (tx) => {
-      const { skills } = tablesOf(tx)
-      await tx.delete(skills).where(eq(skills.id, id))
-      await abandonOperation(tx, opId)
-    })
-    throw err
-  }
-
-  const created = await getSkillById(db, id)
-  if (created === null) throw new Error('skill disappeared right after reserve')
-  return created
-}
-
-/** RFC-234 (T6) — the create pipeline's step-④ core, exported so the intent
- *  apply transaction can flip MANY pre-staged skills visible atomically with
- *  the rest of the bundle (steps ①-③ run in the pipeline's pre-stage phase via
- *  stageManagedSkill; finishOperation/compensation stay with the caller). */
-export async function commitSkillReadyInTx(
-  tx: PersistenceTx,
-  p: { skillId: string; opId: string },
-): Promise<void> {
-  const { skills } = tablesOf(tx)
-  await tx.update(skills).set({ reservationState: 'ready' }).where(eq(skills.id, p.skillId))
-  await advancePhase(tx, p.opId, 'db-committed')
-}
-
-/** RFC-234 (T6) — steps ①-③ of createManagedSkillWithFiles as a standalone
- *  pre-stage: reserve (invisible row + op lock) → produce files → archive v1.
- *  The skill stays INVISIBLE until commitSkillReadyInTx runs. On throw the
- *  stage is already compensated (same rollback as the create path). */
-export async function stageManagedSkill(
-  db: PersistenceDb,
-  opts: SkillFsOptions,
-  meta: {
-    name: string
-    description: string
-    ownerUserId?: string
-    actor?: Actor | null
-    /** RFC-234: pre-minted bundle id so same-bundle refs resolve before insert. */
-    id?: string
-  },
-  produceFiles: SkillInitialContent | ((filesDir: string) => void),
-): Promise<{ skillId: string; opId: string; skillDir: string }> {
-  const ownerUserId = meta.ownerUserId ?? null
-  assertInitialResourceOwner(meta.actor, ownerUserId)
-  const initialAcl = initialPrivateResourceAcl(ownerUserId)
-  if (await isSkillNameOccupiedForOwner(db, meta.name, ownerUserId)) {
-    throw new ConflictError('skill-name-in-use', `skill '${meta.name}' already exists`)
-  }
-  const creation = creationContentFor(opts, produceFiles)
-  const id = meta.id ?? ulid()
-  const contentPlan = creation.plan(id)
-  const skillDir = contentPlan.rootRef
-  const now = Date.now()
-  let opId: string
-  try {
-    opId = await databaseSessionFor(db).transaction(async (tx) => {
-      const { skills } = tablesOf(tx)
-      await insertOne(tx, skills, {
-        id,
-        name: meta.name,
-        description: meta.description,
-        ...skillTreeColumns(id, 'live', 'local-file', skillFilesRel(id)),
-        ...initialAcl,
-        reservationState: 'reserving',
-        createdAt: now,
-        updatedAt: now,
-      })
-      return await beginOperation(tx, {
-        skillId: id,
-        kind: 'reserve',
-        ownerUserId: ownerUserId ?? undefined,
-        preconditionJson: JSON.stringify({ skillId: id }),
-      })
-    })
-  } catch (err) {
-    if (isOwnerNameUniqueViolation(err, 'skills', 'skills_owner_name_unique')) {
-      throw new ConflictError('skill-name-in-use', `skill '${meta.name}' already exists`)
-    }
-    throw err
-  }
-  try {
-    await creation.initialize(
-      contentPlan,
-      typeof produceFiles === 'function'
-        ? { kind: 'main', content: skillTextBytes('') }
-        : produceFiles,
-    )
-    await databaseSessionFor(db).transaction(
-      async (tx) => await advancePhase(tx, opId, 'fs-staged'),
-    )
-    await commitSkillVersion(
-      db,
-      opts,
-      id,
-      { kind: 'retain' },
-      {
-        source: 'initial',
-        authorUserId: ownerUserId,
-        skipOp: true,
-      },
-    )
-    await databaseSessionFor(db).transaction(
-      async (tx) => await advancePhase(tx, opId, 'fs-published'),
-    )
-    return { skillId: id, opId, skillDir }
-  } catch (err) {
-    await compensateManagedSkillStage(db, { skillId: id, opId, skillDir }, creation)
-    throw err
-  }
-}
-
-/** RFC-234 (T6) — discard a staged-but-never-published skill (bundle failure /
- *  boot convergence): files best-effort, then row + op in one tx (RFC-208
- *  ordering: a stranded lock is worse than a leftover dir). */
-export async function compensateManagedSkillStage(
-  db: PersistenceDb,
-  p: { skillId: string; opId: string; skillDir: string },
-  creation?: SkillCreationContentStore,
-): Promise<void> {
-  try {
-    const root = { skillId: p.skillId, rootRef: p.skillDir }
-    if (creation) await creation.discard(root)
-    else discardFileSkillContentRoot(root)
-  } catch {
-    /* best-effort: a leftover dir is reclaimable, a stranded lock is not */
-  }
-  await databaseSessionFor(db).transaction(async (tx) => {
-    const { skills } = tablesOf(tx)
-    await tx.delete(skills).where(eq(skills.id, p.skillId))
-    await abandonOperation(tx, p.opId)
+      typeof produceFiles === 'function' ? produceFiles : undefined,
+    ),
   })
+  const id = await scene.create({
+    name: meta.name,
+    description: meta.description,
+    ownerUserId,
+    authorUserId: ownerUserId,
+    initial:
+      typeof produceFiles === 'function'
+        ? { kind: 'main', content: skillTextBytes('') }
+        : produceFiles,
+    ...(hooks.__afterDbCommitForTest === undefined
+      ? {}
+      : { faults: { afterCommit: hooks.__afterDbCommitForTest } }),
+  })
+  const created = await getSkillById(db, id)
+  if (created === null) throw new Error('skill disappeared right after create')
+  return created
 }
 
 // --- delete ---
@@ -565,24 +335,36 @@ export async function deleteSkill(
     )
   }
 
-  // RFC-170 §6a: crash-safe op-based delete — rename the whole root to trash,
-  // DELETE the row in the same tx as the phase advance, then drop the trash.
-  // A crash between steps is recovered by the boot driver (deleteRecoveryHandler).
-  const { deleteManagedSkillOp, SkillDeleteReferencedError } =
-    await import('@/modules/resource-catalog/infrastructure/legacy/skillDeleteOp')
+  // RFC-401 T5：经 skill 写入场景删除——取技能锁、把整棵根移入 trash，唯一 skill 写入参与者在提交事务里复查引用并删除行，
+  // 提交后清掉 trash。提交前失败（包括复查到新引用）把根移回。
+  const scene = createSkillApplyScene({
+    db,
+    content: skillApplyContentFor(db, {
+      appHome: opts.appHome,
+      ...(opts.contentKind === undefined ? {} : { contentKind: opts.contentKind }),
+      ...(opts.versionContent === undefined ? {} : { versionContent: opts.versionContent }),
+      ...(opts.deletionContent === undefined ? {} : { deletionContent: opts.deletionContent }),
+    }),
+  })
   try {
-    await deleteManagedSkillOp(
-      db,
-      { appHome: opts.appHome, deletionContent: opts.deletionContent },
-      { id: existing.id },
-      hooks,
-      deleteFence,
-    )
+    await scene.delete({
+      skillId: existing.id,
+      ...(deleteFence === undefined
+        ? {}
+        : {
+            fence: {
+              expectedSkillId: deleteFence.skillId,
+              expectedVersion: deleteFence.contentVersion,
+              expectedMetaRevision: deleteFence.metaRevision,
+              expectedOwnerUserId: deleteFence.ownerUserId,
+              expectedAclRevision: deleteFence.aclRevision,
+            },
+          }),
+      ...(hooks.afterPhase === undefined ? {} : { afterPhase: hooks.afterPhase }),
+    })
   } catch (error) {
     if (error instanceof SkillDeleteReferencedError) {
-      // deleteManagedSkillOp has already proven its pre-commit rollback:
-      // trash→root restored and the operation/lock abandoned. Only now perform
-      // the asynchronous principal-aware disclosure.
+      // 场景已补偿（trash 移回根、锁随 failed 结算释放）；此时才按调用者可见性披露引用。
       throw new ConflictError(
         'skill-in-use',
         `skill '${existing.name}' is referenced by ${error.refs.length} agent(s)`,
@@ -594,6 +376,20 @@ export async function deleteSkill(
 }
 
 // --- SKILL.md content (parsed view) ---
+
+/** 当前版本的 SKILL.md 原文；读不到（旧数据、缺文件）时为 null。 */
+export async function readSkillMainText(
+  db: PersistenceDb,
+  opts: SkillFsOptions | SkillContentReadOptions,
+  skill: Pick<Skill, 'id' | 'name' | 'contentVersion'>,
+): Promise<string | null> {
+  try {
+    const reader = contentReaderFor(db, opts)
+    return skillTextView(await reader.readMain(contentReferenceOf(skill)), reader)
+  } catch {
+    return null
+  }
+}
 
 export async function readSkillContent(
   db: PersistenceDb,
@@ -726,10 +522,16 @@ export async function writeSkillContent(
     frontmatterExtra: patch.frontmatterExtra ?? current.frontmatterExtra,
   }
 
-  const md = stringifyFrontmatter({
-    data: { name: next.name, description: next.description, ...next.frontmatterExtra },
-    body: next.bodyMd,
-  })
+  // RFC-401 T5：唯一字节合同（design §2.3）；与当前 SKILL.md 解析等价时保留原字节，内容不变即不推进版本。
+  const md = renderSkillMarkdown(
+    {
+      name: next.name,
+      description: next.description,
+      bodyMd: next.bodyMd,
+      frontmatterExtra: next.frontmatterExtra,
+    },
+    await readSkillMainText(db, opts, skill),
+  )
 
   // RFC-101: route through the single versioning funnel — archives the prior
   // files/ as a version, writes the new SKILL.md, bumps content_version, and

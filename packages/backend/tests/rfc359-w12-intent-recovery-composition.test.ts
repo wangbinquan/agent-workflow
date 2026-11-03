@@ -62,6 +62,7 @@ describeEachProvider('RFC-359 W12 Intent recovery complete composition', (harnes
   async function journal(input: {
     state: 'prepared' | 'applying' | 'committed'
     artifacts: readonly IntentJournalArtifactV1[]
+    /** RFC-401 T4：另一个进程仍在途的 apply——持有未过期的持久 claim。 */
     fresh?: boolean
     corrupt?: boolean
   }) {
@@ -96,6 +97,19 @@ describeEachProvider('RFC-359 W12 Intent recovery complete composition', (harnes
       createdAt: timestamp,
       updatedAt: timestamp,
     })
+    if (input.fresh) {
+      const { atomicApplyClaims } = tablesOf(harness.db)
+      await insertOne(harness.db, atomicApplyClaims, {
+        scene: 'intent',
+        journalId: id,
+        claimedBy: 'another-daemon',
+        leaseEpoch: 1,
+        claimExpiresAt: Date.now() + 3_600_000,
+        tailState: 'none',
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      })
+    }
     return { id, preparedArtifactsJson, receiptJson }
   }
 
@@ -145,11 +159,12 @@ describeEachProvider('RFC-359 W12 Intent recovery complete composition', (harnes
     })
     expect(existsSync(active.generationDir)).toBe(false)
     expect(readFileSync(fresh.entry, 'utf8')).toBe(pluginBytes)
-    const { intentApplyJournal } = tablesOf(harness.db)
+    // RFC-401 T4：在途与否由持久 claim 判定（此前是 updatedAt 的十分钟窗口）。另一个进程的租约过期后，恢复才能接管并补偿。
+    const { atomicApplyClaims } = tablesOf(harness.db)
     await harness.db
-      .update(intentApplyJournal)
-      .set({ updatedAt: staleTimestamp() })
-      .where(eq(intentApplyJournal.id, freshJournal.id))
+      .update(atomicApplyClaims)
+      .set({ claimExpiresAt: staleTimestamp() })
+      .where(eq(atomicApplyClaims.journalId, freshJournal.id))
     expect(await compose(input).converge({ intent: [] })).toEqual({
       failed: 1,
       rolledForward: 0,
@@ -163,14 +178,17 @@ describeEachProvider('RFC-359 W12 Intent recovery complete composition', (harnes
 
   test('deleted plugin finishes; a present row with a missing entry remains retryable', async () => {
     const input = environment()
+    const recover = () => compose(input).converge({ intent: [] })
+    // RFC-395 II-a A6：删除插件是明确的完成处置。
+    const deleted = generation(input.pluginsDir)
+    const finished = await journal({ state: 'committed', artifacts: [deleted.artifact] })
+    expect(await recover()).toEqual({ failed: 0, rolledForward: 1 })
+    expect(await readJournal(finished.id)).toMatchObject({ state: 'committed', error: null })
+    expect(readFileSync(deleted.entry, 'utf8')).toBe(pluginBytes)
+
+    // 有行但无入口文件：前滚未完成，尾部保持 pending、记为 retryable，下一轮再前滚。
     const published = generation(input.pluginsDir)
     const committed = await journal({ state: 'committed', artifacts: [published.artifact] })
-    const recover = () => compose(input).converge({ intent: [] })
-    // RFC-395 II-a A6：删除插件是明确的完成处置；有行但无入口文件仍在下方锁定为 retryable。
-    expect(await recover()).toEqual({ failed: 0, rolledForward: 1 })
-    expect(await readJournal(committed.id)).toMatchObject({ state: 'committed', error: null })
-    expect(readFileSync(published.entry, 'utf8')).toBe(pluginBytes)
-
     const { plugins } = tablesOf(harness.db)
     await insertOne(harness.db, plugins, {
       id: published.pluginId,
@@ -199,9 +217,8 @@ describeEachProvider('RFC-359 W12 Intent recovery complete composition', (harnes
       preparedArtifactsJson: committed.preparedArtifactsJson,
     })
     expect(readFileSync(published.entry, 'utf8')).toBe(pluginBytes)
-    // Committed rows are replayed on every run; their count remains one while
-    // their durable state, receipt and published bytes stay unchanged.
-    expect(await recover()).toEqual({ failed: 0, rolledForward: 1 })
+    // RFC-401 T4：尾部完成后不再前滚（此前每轮都重放全部 committed 行）；持久状态、receipt 与已发布字节不变。
+    expect(await recover()).toEqual({ failed: 0, rolledForward: 0 })
     expect(await readJournal(committed.id)).toEqual(completed)
     expect(readFileSync(published.entry, 'utf8')).toBe(pluginBytes)
   })

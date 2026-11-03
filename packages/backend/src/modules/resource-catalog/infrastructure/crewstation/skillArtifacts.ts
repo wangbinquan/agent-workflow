@@ -15,6 +15,7 @@ import type {
   ResourcePackageSkillArtifactOwner,
 } from '../../application/package/artifactOwners'
 import { renderResourcePackageSkillMarkdown } from '../resourcePackageSkillDocument'
+import { preserveSkillMarkdownBytes } from '../skillMarkdown'
 import { skillFilesRel, skillVersionRelPath } from '../legacy/skillIdentityPaths'
 import { markSkillBootVerified } from '../legacy/skillBootVerify'
 import { resourcePackageSkillRecoveryDisposition } from '../../domain/resourcePackageSkillRecovery'
@@ -82,7 +83,22 @@ export function createDatabaseSkillArtifactOwners(
       if (identity.version > 1 && baseline.length === 0)
         throw new Error('hosted-skill-baseline-missing')
       const tree = new Map(baseline.map((file) => [file.path, file.bytes]))
-      for (const file of files) tree.set(normalizeSkillPath(file.path), file.bytes)
+      for (const file of files) {
+        const path = normalizeSkillPath(file.path)
+        const previous = path === 'SKILL.md' ? tree.get(path) : undefined
+        // RFC-401 T5：与当前版本解析等价的 SKILL.md 保留原字节（design §2.3）。
+        tree.set(
+          path,
+          previous === undefined
+            ? file.bytes
+            : Buffer.from(
+                preserveSkillMarkdownBytes(
+                  Buffer.from(previous).toString('utf8'),
+                  Buffer.from(file.bytes).toString('utf8'),
+                ),
+              ),
+        )
+      }
       const candidate = [...tree].map(([path, bytes]) => ({ path, bytes }))
       const digest = hashSkillTree(candidate)
       const staging = stagingTree(identity.operationId)
@@ -327,10 +343,7 @@ export function createDatabaseSkillArtifactOwners(
       currentContentVersion: current?.version ?? null,
       artifactVersion: identity.version,
     })
-    if (disposition === 'cleanup-deleted' || disposition === 'cleanup-superseded')
-      return discard(identity)
-    if (disposition === 'reject-missing-generation')
-      throw new Error('resource-package-skill-publication-missing')
+    if (disposition !== 'roll-forward-current') return discard(identity)
     await publish(identity)
   }
   return {

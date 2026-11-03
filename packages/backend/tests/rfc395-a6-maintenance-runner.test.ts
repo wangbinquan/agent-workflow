@@ -13,6 +13,8 @@ function scene<Key extends string>(
     key,
     now: () => 1_000_000,
     list: async () => rows,
+    // RFC-401 T4：恢复先接管 claim；这里的假场景总能接管（租约判据由 rfc401-atomic-apply-lease 覆盖）。
+    claim: async () => 'taken',
     compareAndSet: async (row, patch) => {
       Object.assign(row, patch)
       return true

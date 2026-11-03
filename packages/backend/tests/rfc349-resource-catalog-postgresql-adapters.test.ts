@@ -179,11 +179,15 @@ describe('RFC-349 resource-catalog PostgreSQL provider adapters', () => {
       'createAgentMutationParticipant(input.transaction, { now: input.now })',
     )
     expect(postgresqlMutationArms).not.toContain('createAgentReferenceWriteParticipant')
-    for (const table of ['skills']) {
-      expect(postgresqlMutationArms).toMatch(
+    // RFC-401 T5: skill rows and version rows go through the one skill write participant on the same transaction.
+    expect(postgresqlMutationArms).toContain(
+      'const skillWrites = createSkillMutationParticipant(input.transaction)',
+    )
+    for (const table of ['skills', 'skillVersions']) {
+      expect(postgresqlMutationArms).not.toMatch(
         new RegExp(`(?:\\.insert\\(\\s*${table}\\s*\\)|\\binsertOne\\([^,]+,\\s*${table}\\s*,)`),
       )
-      expect(postgresqlMutationArms).toContain(`.update(${table})`)
+      expect(postgresqlMutationArms).not.toContain(`.update(${table})`)
     }
     // RFC-401 A3b: workgroup rows and member rows go through the one Workgroup mutation participant.
     expect(postgresqlMutationArms).toContain(
@@ -292,7 +296,12 @@ describe('RFC-349 resource-catalog PostgreSQL provider adapters', () => {
       source('src/modules/resource-catalog/infrastructure/resourcePackageAtomicApply.ts'),
     ).toContain('findActiveUsersByIds(')
     expect(postgresqlMutationArms).toContain('assertSelected({')
-    expect(postgresqlMutationArms).toContain("visibility: 'private'")
+    // RFC-401 T5: the last direct insert in the arms (skills) moved into the one skill write participant,
+    // which creates the row private to its owner like every other write participant.
+    expect(postgresqlMutationArms).not.toContain("visibility: 'private'")
+    expect(
+      source('src/modules/resource-catalog/infrastructure/skillMutationParticipant.ts'),
+    ).toContain('...initialPrivateResourceAcl(input.ownerUserId),')
     expect(postgresqlMutationArms).toContain('await agents.create(owner, {')
     expect(source('src/modules/resource-catalog/infrastructure/agentReferenceWrite.ts')).toContain(
       '...createAgentPersistenceValues(input)',

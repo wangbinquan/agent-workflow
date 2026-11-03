@@ -46,6 +46,10 @@ describe('RFC-349 provider-neutral Resource Package maintenance', () => {
       async list() {
         return rows
       },
+      // RFC-401 T4：「recent」仍持有未过期的租约（在途 apply），恢复接管不到；其余可接管。
+      async claim(row) {
+        return row.id === 'recent' ? 'held' : 'taken'
+      },
       async compareAndSet(row, patch) {
         if (patch.state === 'failed') settled.push(row.id)
         return true
@@ -83,6 +87,9 @@ describe('RFC-349 provider-neutral Resource Package maintenance', () => {
         journal: {
           async list() {
             return [journal('retry', 'applying', 1)]
+          },
+          async claim() {
+            return 'taken'
           },
           async compareAndSet(row, patch) {
             if (patch.state === 'failed') settled.push(row.id)
@@ -133,7 +140,7 @@ describe('RFC-349 provider-neutral Resource Package maintenance', () => {
         currentContentVersion: 1,
         artifactVersion: 2,
       }),
-    ).toBe('reject-missing-generation')
+    ).toBe('cleanup-unwritten')
     expect(
       postgresqlResourcePackageSkillRecoveryDisposition({
         currentContentVersion: 2,

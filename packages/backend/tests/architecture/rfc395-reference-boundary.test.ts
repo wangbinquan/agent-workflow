@@ -40,7 +40,8 @@ const lookups = [
   'agentPersistenceSemantics.ts',
   'workflowPersistenceSemantics.ts',
   'legacy/skill.ts',
-  'legacy/skillDeleteOp.ts',
+  // RFC-401 T5：删除前的事务内复查住在唯一的 skill 写入参与者里。
+  'skillMutationParticipant.ts',
 ]
 function bypasses(source: string, kind: 'agent' | 'workflow' | 'lookup'): boolean {
   if (kind === 'lookup')
@@ -114,8 +115,8 @@ describe('RFC-395 F target reference boundaries', () => {
     expect(read(catalog + 'legacy/skill.ts')).toContain(
       'createAgentSkillReferenceLookup(db).find(skillId)',
     )
-    expect(read(catalog + 'legacy/skillDeleteOp.ts')).toContain(
-      'createAgentSkillReferenceLookup(tx).find(skillId)',
+    expect(read(catalog + 'skillMutationParticipant.ts')).toContain(
+      'createAgentSkillReferenceLookup(tx),',
     )
     expect(
       read('modules/resource-catalog/application/agents/agentDependencyValidation.ts'),

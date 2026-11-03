@@ -1,4 +1,4 @@
-import { capturedSkillTreeColumns, skillRowPath } from '../databaseSkillTrees'
+import { skillRowPath } from '../databaseSkillTrees'
 import {
   CreateAgentSchema,
   CreateMcpSchema,
@@ -16,7 +16,6 @@ import {
   type WorkgroupDraftSnapshot,
 } from '@agent-workflow/shared'
 import { createWorkflowMutationParticipant } from '../workflowMutationParticipant'
-import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import { first } from '@/platform/persistence/queryHelpers'
 import type {
@@ -34,18 +33,11 @@ export type {
 } from '../../application/intent/artifactOwners'
 import { withAgentSidecarsFrom } from '../../domain/agentSidecarBackfill'
 
-import { and, eq } from 'drizzle-orm'
+import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type { DirectAuthenticatedAuthority } from '@/modules/identity-access/public/participants'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import {
-  ConflictError,
-  ForbiddenError,
-  NotFoundError,
-  ValidationError,
-  staleConflictError,
-} from '@/util/errors'
-import { monotonicNow } from '@/util/time'
+import { ForbiddenError, NotFoundError, ValidationError, staleConflictError } from '@/util/errors'
 import { encodeSkillToken } from '../../application/skills/skillToken'
 import type { CatalogSelectorKind } from '../../domain/resourceKinds'
 import type { VersionedIntentResourceChangesetPlan } from '../../public/types'
@@ -55,6 +47,7 @@ import { pluginConfigHash } from '../pluginPersistence'
 import type { McpTransactionLifecycle } from '../mcpRepository'
 import { normalizeWorkgroupSnapshot, workgroupCreateSnapshot } from '../workgroupPersistence'
 import { createWorkgroupMutationParticipant } from '../workgroupMutationParticipant'
+import { createSkillMutationParticipant } from '../skillMutationParticipant'
 import type {
   IntentApplyMutationPort,
   IntentApplyPrepareContext,
@@ -121,6 +114,8 @@ interface PreparedSkill {
         readonly contentKind?: 'local-file' | 'database-bytes'
       })
     | null
+  /** RFC-401 T5：提交时判定内容不变，没有写入新版本。 */
+  noop?: boolean
 }
 
 type PreparedWorkflow = Readonly<{ definition: WorkflowDefinition }>
@@ -498,6 +493,7 @@ function createSkillPort(
             payload: plan.payload,
           }),
           staged: null,
+          noop: false,
         }
       }
       const { skills } = tablesOf(db)
@@ -529,63 +525,26 @@ function createSkillPort(
     async commitInTransaction({ transaction, plan, prepared }) {
       if (prepared.staged === null) throw new Error('skill stage result missing')
       const at = now()
+      const skillWrites = createSkillMutationParticipant(transaction)
+      const kind = contentKind ?? prepared.staged.contentKind ?? 'local-file'
       if (plan.action === 'create') {
-        const { skills, skillVersions } = tablesOf(transaction)
-        const collision = await first(
-          transaction
-            .select({ id: skills.id })
-            .from(skills)
-            .where(and(eq(skills.ownerUserId, actor.user.id), eq(skills.name, plan.payload.name))),
-        )
-        if (collision !== undefined) {
-          throw new ConflictError(
-            'skill-name-in-use',
-            `skill '${plan.payload.name}' already exists`,
-          )
-        }
         await prepared.staged.commitInTransaction(transaction, 1)
-        await insertOne(transaction, skills, {
+        await skillWrites.create({
           id: plan.resourceId,
           name: plan.payload.name,
           description: plan.payload.description,
-          ...(await capturedSkillTreeColumns(
-            contentKind ?? prepared.staged.contentKind ?? 'local-file',
-            plan.resourceId,
-            'live',
-            prepared.staged.managedPath,
-          )),
           ownerUserId: actor.user.id,
-          visibility: 'private',
-          aclRevision: 0,
-          contentVersion: 1,
-          metaRevision: 0,
-          reservationState: 'ready',
-          versionState: 'snapshot-authoritative',
-          createdAt: at,
-          updatedAt: at,
-        })
-        await insertOne(transaction, skillVersions, {
-          id: nextId(),
-          skillId: plan.resourceId,
-          versionIndex: 1,
-          ...(await capturedSkillTreeColumns(
-            contentKind ?? prepared.staged.contentKind ?? 'local-file',
-            plan.resourceId,
-            'version:1',
-            prepared.staged.filesPath,
-          )),
-          source: 'initial',
-          summary: 'Initial version',
-          fusionId: null,
-          restoredFromVersion: null,
-          authorUserId: actor.user.id,
+          contentKind: kind,
           contentHash: prepared.staged.contentHash,
-          createdAt: at,
+          livePath: prepared.staged.managedPath,
+          versionPath: prepared.staged.filesPath,
+          authorUserId: actor.user.id,
+          now: at,
         })
         return skillReceipt(plan, { kind: 'skill', token: skillToken(plan.resourceId, 1, 0) })
       }
 
-      const { skills, skillVersions } = tablesOf(transaction)
+      const { skills } = tablesOf(transaction)
       const row = await first(
         transaction.select().from(skills).where(eq(skills.id, plan.resourceId)),
       )
@@ -594,70 +553,46 @@ function createSkillPort(
       requireOwner(actor, 'skill', current)
       assertSkillToken(current, plan.expectedRevision.token)
       const versionIndex = current.contentVersion + 1
-      const metaRevision =
-        plan.payload.description === current.description
-          ? current.metaRevision
-          : current.metaRevision + 1
-      const updatedAt = monotonicNow(current.updatedAt)
       await prepared.staged.commitInTransaction(transaction, versionIndex)
-      const changed = await first(
-        transaction
-          .update(skills)
-          .set({
-            description: plan.payload.description,
-            contentVersion: versionIndex,
-            ...(await capturedSkillTreeColumns(
-              contentKind ?? prepared.staged.contentKind ?? 'local-file',
-              current.id,
-              'live',
-              prepared.staged.managedPath,
-            )),
-            metaRevision,
-            versionState: 'snapshot-authoritative',
-            updatedAt,
-          })
-          .where(
-            and(
-              eq(skills.id, current.id),
-              eq(skills.contentVersion, current.contentVersion),
-              eq(skills.metaRevision, current.metaRevision),
-              eq(skills.aclRevision, current.aclRevision ?? 0),
-            ),
-          )
-          .returning({ id: skills.id }),
-      )
-      if (changed === undefined) throw staleConflictError('skill', `skill '${current.id}' changed`)
-      await insertOne(transaction, skillVersions, {
-        id: nextId(),
+      const written = await skillWrites.version({
         skillId: current.id,
         versionIndex,
-        ...(await capturedSkillTreeColumns(
-          contentKind ?? prepared.staged.contentKind ?? 'local-file',
-          current.id,
-          `version:${versionIndex}`,
-          prepared.staged.filesPath,
-        )),
+        contentKind: kind,
+        contentHash: prepared.staged.contentHash,
+        livePath: prepared.staged.managedPath,
+        versionPath: prepared.staged.filesPath,
+        fence: {
+          expectedSkillId: current.id,
+          expectedVersion: current.contentVersion,
+          expectedMetaRevision: current.metaRevision ?? 0,
+          expectedAclRevision: current.aclRevision ?? 0,
+          staleMessage: `skill '${current.id}' changed`,
+        },
         source: 'editor',
         summary: null,
         fusionId: null,
         restoredFromVersion: null,
         authorUserId: actor.user.id,
-        contentHash: prepared.staged.contentHash,
-        createdAt: updatedAt,
+        description: plan.payload.description,
+        now: at,
       })
+      // 内容不变（design §10.2）：没有新版本，提交后丢弃暂存树而不是发布。
+      prepared.noop = written.outcome === 'already-current'
       return skillReceipt(plan, {
         kind: 'skill',
-        token: skillToken(current.id, versionIndex, metaRevision),
+        token: skillToken(current.id, written.versionIndex, written.metaRevision),
       })
     },
     afterCommitted: async ({ prepared }) => {
-      await prepared.stage.complete()
+      if (prepared.noop) await prepared.stage.compensate()
+      else await prepared.stage.complete()
     },
     rollForwardCommitted: async ({ prepared }) => {
-      await prepared.stage.rollForward()
+      if (prepared.noop) await prepared.stage.compensate()
+      else await prepared.stage.rollForward()
     },
     abortPrepared: async ({ prepared, databaseCommitted }) => {
-      if (databaseCommitted) await prepared.stage.rollForward()
+      if (databaseCommitted && !prepared.noop) await prepared.stage.rollForward()
       else await prepared.stage.compensate()
     },
   } satisfies IntentApplyMutationPort<'skill', PreparedSkill>)

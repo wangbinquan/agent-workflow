@@ -40,6 +40,8 @@ function scene<Key extends string>(
     key,
     now: () => 1_000_000,
     list: async () => rows,
+    // RFC-401 T4：恢复先接管 claim；这里的假场景总能接管（租约判据由 rfc401-atomic-apply-lease 覆盖）。
+    claim: async () => 'taken',
     compareAndSet: async (row, patch) => {
       Object.assign(row, patch)
       return true
@@ -151,6 +153,8 @@ describe('P1-5 · 收敛器必须真的被生产代码调用', () => {
     const recovery = createAtomicApplyRecovery([
       scene('intent', intentRows, calls, warnings),
       scene('resource-package', packageRows, calls, warnings),
+      // RFC-401 T5：生产注册表的第三个场景（skill 写入）；本用例没有 skill journal。
+      scene('skill', [], calls, warnings),
     ])
     let release!: () => void
     const turnDone = new Promise<void>((resolve) => {
@@ -178,7 +182,12 @@ describe('P1-5 · 收敛器必须真的被生产代码调用', () => {
       },
       atomicApply: {
         converge: async (active) => {
-          expect(active).toEqual({ intent: ['i-active'], 'resource-package': ['p-active'] })
+          // RFC-401 T5：skill 写入场景的在途写入由持久租约保护，活跃快照传空集。
+          expect(active).toEqual({
+            intent: ['i-active'],
+            'resource-package': ['p-active'],
+            skill: [],
+          })
           expect(calls).toEqual(['turn-start', 'turn-done'])
           return recovery.converge(active)
         },

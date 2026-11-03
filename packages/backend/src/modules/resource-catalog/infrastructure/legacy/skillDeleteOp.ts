@@ -1,5 +1,8 @@
 // RFC-170 §6a — the `delete` structural op (crash-safe managed-skill deletion).
 //
+// RFC-401 T5/T6：新的删除经 skill 写入场景（`skillAtomicApply.ts`）；这里只剩旧记录的启动恢复（兼容执行器
+// `recoverSkillOperations` 排空旧 operation 时使用）。下面是旧 operation 的形状，恢复据此判定方向。
+//
 // The old removeSkillRowAndFiles did `rmSync(dir); DELETE row` — a crash between
 // them orphans the DB row (points at vanished files). The op makes it recoverable:
 //   intent → fs-staged(rename skills/{name} ROOT → .trash/{skillId}-{opId}) →
@@ -14,172 +17,14 @@
 // External skills have no managed directory: their deletion is a single-tx DB
 // row drop (atomic, no op needed) — handled by the caller, not here.
 
-import { tablesOf } from '@/platform/persistence/sessionTables'
-import { eq } from 'drizzle-orm'
-import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
-import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
-import {
-  abandonOperation,
-  advancePhase,
-  beginOperation,
-  finishOperation,
-  type SkillOperationRow,
-} from '@/modules/resource-catalog/infrastructure/legacy/skillOperations'
-
+import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
+import type { SkillOperationRow } from '@/modules/resource-catalog/infrastructure/legacy/skillOperations'
 import type {
   OpRecoveryHandler,
   SkillOpFsOptions,
 } from '@/modules/resource-catalog/infrastructure/legacy/skillOpRecoveryDriver'
 import { decodeSkillOperationIdentity } from './skillIdentityPaths'
 import { createFileSkillDeletionContentStore } from '../local/fileSkillDeletionContentStore'
-import {
-  findAgentsUsingManagedSkill,
-  type SkillReferencingAgentRow,
-} from '@/modules/resource-catalog/infrastructure/legacy/skillReferenceGuard'
-import { createAgentSkillReferenceLookup } from '../referenceLookup'
-import { staleConflictError } from '@/util/errors'
-export interface SkillDeleteOpHooks {
-  /**
-   * RFC-359 AC-6：返回值放宽到 `Promise<void> | void` 并在三个调用点 await。
-   * 这个钩子只有测试在用，而中立库面上「往库里写一行」是 await 的——钩子保持同步等于
-   * 逼着用例只能在 SQLite 的同步写上成立（`rfc223-reverse-delete-races` 正是这么卡住的）。
-   * 同步实现照旧：await 一个非 Promise 是 no-op，三个调用点本来就在 async 函数里。
-   */
-  afterPhase?: (
-    phase: 'intent' | 'fs-staged' | 'db-committed',
-    skillId: string,
-  ) => Promise<void> | void
-}
-
-export interface SkillDeleteFence {
-  skillId: string
-  contentVersion: number
-  metaRevision: number
-  ownerUserId: string | null
-  aclRevision: number
-}
-
-/** Internal signal: the service boundary turns this into the ACL-safe
- * `skill-in-use` DomainError after the op has restored the staged filesystem
- * root and released its durable lock. */
-export class SkillDeleteReferencedError extends Error {
-  constructor(public readonly refs: SkillReferencingAgentRow[]) {
-    super(`managed skill gained ${refs.length} agent reference(s) before delete commit`)
-    this.name = 'SkillDeleteReferencedError'
-  }
-}
-
-/**
- * Delete a MANAGED skill through the crash-safe op lifecycle. Locks the skill
- * for the duration (concurrent version-write/replace/etc. → busy 409). The row
- * DELETE and the phase='db-committed' advance share one tx (§6a ③).
- */
-export async function deleteManagedSkillOp(
-  db: PersistenceDb,
-  fsOpts: SkillOpFsOptions,
-  skill: { id: string },
-  hooks: SkillDeleteOpHooks = {},
-  expected?: SkillDeleteFence,
-): Promise<void> {
-  const session = databaseSessionFor(db)
-  const content = fsOpts.deletionContent ?? createFileSkillDeletionContentStore(fsOpts.appHome, db)
-
-  // ① intent (+lock) — durably record before any FS side effect.
-  const opId = await session.transaction(async (tx) => {
-    if (expected !== undefined) await assertDeleteFence(tx, skill.id, expected)
-    return await beginOperation(tx, {
-      skillId: skill.id,
-      kind: 'delete',
-      preconditionJson: JSON.stringify({ skillId: skill.id }),
-    })
-  })
-  const plan = content.plan({ skillId: skill.id, operationId: opId })
-  await hooks.afterPhase?.('intent', skill.id)
-
-  let committed = false
-  try {
-    // ② fs-staged — move the whole root aside (reversible). Ensure the .trash
-    // parent exists so the rename can't ENOENT.
-    await content.stage(plan)
-    await session.transaction(
-      async (tx) =>
-        await advancePhase(tx, opId, 'fs-staged', {
-          backupPath: plan.backupJournalRef,
-        }),
-    )
-    await hooks.afterPhase?.('fs-staged', skill.id)
-
-    // ③ db-committed — DELETE row + advance phase, one tx.
-    await session.transaction(async (tx) => {
-      if (expected !== undefined) await assertDeleteFence(tx, skill.id, expected)
-      const refs = await findAgentsUsingManagedSkill(
-        {
-          find: async (skillId) => {
-            return createAgentSkillReferenceLookup(tx).find(skillId)
-          },
-        },
-        skill.id,
-      )
-      if (refs.length > 0) throw new SkillDeleteReferencedError(refs)
-      const { skills } = tablesOf(tx)
-      await tx.delete(skills).where(eq(skills.id, skill.id))
-      await advancePhase(tx, opId, 'db-committed')
-    })
-    committed = true
-    await hooks.afterPhase?.('db-committed', skill.id)
-
-    // done — drop the trash, release the lock.
-    await content.discard(plan)
-    await session.transaction(async (tx) => await finishOperation(tx, opId))
-  } catch (err) {
-    // Once DELETE + db-committed is durable, NEVER restore the root or retire the
-    // evidence. The barrier owns roll-forward and keeps the lock until trash is
-    // gone. Only a proven pre-commit rollback may abandon the op.
-    if (!committed) {
-      try {
-        await content.rollback(plan, false)
-        await session.transaction(async (tx) => await abandonOperation(tx, opId))
-      } catch {
-        // Preserve the active op + lock when rollback itself cannot be proven.
-      }
-    }
-    throw err
-  }
-}
-
-async function assertDeleteFence(
-  tx: PersistenceTx,
-  skillId: string,
-  expected: SkillDeleteFence,
-): Promise<void> {
-  const { skills } = tablesOf(tx)
-  const live = (
-    await tx
-      .select({
-        id: skills.id,
-        contentVersion: skills.contentVersion,
-        metaRevision: skills.metaRevision,
-        ownerUserId: skills.ownerUserId,
-        aclRevision: skills.aclRevision,
-      })
-      .from(skills)
-      .where(eq(skills.id, skillId))
-      .limit(1)
-  )[0]
-  if (
-    live === undefined ||
-    live.id !== expected.skillId ||
-    live.contentVersion !== expected.contentVersion ||
-    live.metaRevision !== expected.metaRevision ||
-    live.ownerUserId !== expected.ownerUserId ||
-    live.aclRevision !== expected.aclRevision
-  ) {
-    throw staleConflictError(
-      'skill',
-      `skill '${skillId}' changed since this operation started; reload and retry`,
-    )
-  }
-}
 
 /** §6a recovery for a crashed `delete` op (registered into the boot driver). */
 export const deleteRecoveryHandler: OpRecoveryHandler = {

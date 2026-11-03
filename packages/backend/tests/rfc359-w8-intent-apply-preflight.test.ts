@@ -12,8 +12,8 @@
 // SQLite 上**：它用 `createInMemoryDb` + bun:sqlite 的同步 `.run()` 插数据。合一之后「两个 provider
 // 共用」这句话本身需要一条证据——同一份实现分别喂两个引擎的 ACL 身份端口，决定必须逐字相同。
 //
-// 所以这里不重复 T14/T15 的语义细分，只锁**跨引擎一致性**这一件事：占用名集合（大小写归一）
-// 与 copy-only 目标（含拒绝理由）在两个引擎上给出同一个答案。
+// 所以这里不重复 T14/T15 的语义细分，只锁**跨引擎一致性**这一件事：copy-only 目标（含拒绝理由）在两个引擎上给出同一个
+// 答案。RFC-401 T5 起预检不再收集占用名——名称冲突由各类资源唯一的写入参与者报 `<kind>-name-in-use`（proposal §5 第 1 项）。
 import { agentFixture } from './helpers/model'
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
@@ -112,33 +112,19 @@ describeEachProvider('RFC-359 W8 —— Intent apply 归属预检（一份实现
       },
     )
 
-    expect([...(preflight.occupiedNames.get('agent') ?? [])]).toEqual(['alpha-agent'])
-    expect([...(preflight.occupiedNames.get('skill') ?? [])].sort()).toEqual(['beta-skill'])
-    expect([...(preflight.occupiedNames.get('plugin') ?? [])]).toEqual(['gamma-plugin'])
-    // 别人的技能占用名不进我的集合。
-    expect(preflight.occupiedNames.get('skill')?.has('their-skill')).toBe(false)
-
+    expect(Object.keys(preflight)).toEqual(['copyOnlyTargets'])
     expect([...preflight.copyOnlyTargets.entries()]).toEqual([
       ['res#skill#1', 'owned by another user or built-in'],
     ])
   })
 
-  test('六类资源都被问过一遍占用名——空库上也返回六个空集合，不是缺键', async () => {
+  test('空库上没有 copy-only 目标', async () => {
     const preflight = await resolveIntentApplyResourcePreflight(
       createResourceCatalogAclIdentityReadPort(harness.db),
       MINE,
       [],
       { ops: [] },
     )
-    expect([...preflight.occupiedNames.keys()].sort()).toEqual([
-      'agent',
-      'mcp',
-      'plugin',
-      'skill',
-      'workflow',
-      'workgroup',
-    ])
-    expect([...preflight.occupiedNames.values()].every((set) => set.size === 0)).toBe(true)
     expect(preflight.copyOnlyTargets.size).toBe(0)
   })
 

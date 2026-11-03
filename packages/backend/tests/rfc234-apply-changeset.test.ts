@@ -709,7 +709,8 @@ describeEachProvider('RFC-234 intent apply 端到端（双引擎）', (harness) 
       ]).converge({ intent: [] })
       expect(converged.rolledForward).toBe(1)
       expect(converged.failed).toBe(0)
-      // Second convergence is a no-op replay, not an error.
+      // Second convergence is a no-op, not an error. RFC-401 T4: the first one recorded the
+      // tail complete, so the journal is no longer rolled forward at all.
       const again = await createAtomicApplyRecovery([
         composeIntentApplyRecoveryScene({
           db,
@@ -717,7 +718,7 @@ describeEachProvider('RFC-234 intent apply 端到端（双引擎）', (harness) 
           pluginsDir: join(appHome, 'plugins'),
         }),
       ]).converge({ intent: [] })
-      expect(again.rolledForward).toBe(1)
+      expect(again).toEqual({ rolledForward: 0, failed: 0 })
     })
 
     test('baseline-stale claim: epoch moved → rejected before any journal claim side effect', async () => {

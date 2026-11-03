@@ -567,7 +567,9 @@ describeEachProvider('RFC-395 P target apply recovery', (h) => {
           intentApplyArtifactCodecs.decode(intentApplyArtifactCodecs.encode([artifact])),
           log,
         )
-        expect(ok).toBe(state !== 'missing-snapshot' && state !== 'missing-generation')
+        // RFC-401 T5：账面落后于工件（missing-generation）= 已提交的 apply 没有写下这一代——内容不变的更新不推进版本——
+        // 按未发布清掉暂存，不再重试；仍然绝不把 live 换成别的内容。
+        expect(ok).toBe(state !== 'missing-snapshot')
         if (state === 'current' || state === 'superseded') {
           expect(published).toHaveLength(1)
           expect(published[0]).toMatchObject({
@@ -582,7 +584,9 @@ describeEachProvider('RFC-395 P target apply recovery', (h) => {
                 : 'skills/target-skill/versions/v2/files',
           })
         } else expect(published).toEqual([])
-        expect(discarded).toEqual(state === 'deleted' ? [skillId] : [])
+        expect(discarded).toEqual(
+          state === 'deleted' || state === 'missing-generation' ? [skillId] : [],
+        )
       })
     }
   }
@@ -658,7 +662,8 @@ describeEachProvider('RFC-395 P target apply recovery', (h) => {
       preparedArtifactsJson: json,
       error: null,
     })
-    expect(await recovery.converge({ intent: [] })).toEqual({ failed: 0, rolledForward: 1 })
+    // RFC-401 T4：尾部完成已经记下，下一轮不再前滚。
+    expect(await recovery.converge({ intent: [] })).toEqual({ failed: 0, rolledForward: 0 })
     expect(await readTree(h.db, skillId, 'version:2')).toEqual(files)
   })
 

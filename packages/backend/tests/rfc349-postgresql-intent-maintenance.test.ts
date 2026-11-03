@@ -33,7 +33,11 @@ function rows(
   })
 }
 
-function fixture(updatedAt: number) {
+/**
+ * RFC-401 T4：恢复先接管持久 claim 再动手。`claim` 缺省表示这条 journal 没有 claim 行（旧版本留下的记录，可直接接管）；
+ * 给出时是另一个进程仍持有的未过期 claim（`claim_expires_at` 在 now 之后），接管的条件更新得到 0 行。
+ */
+function fixture(updatedAt: number, claim?: { readonly expiresAt: number }) {
   const statements: string[] = []
   const epoch2Metadata = createEpoch2PostgresqlMetadata()
   const execute = (sql: string): SqlRows => {
@@ -69,6 +73,18 @@ function fixture(updatedAt: number) {
       })
     }
     if (normalized.startsWith('update') && normalized.includes('intent_apply_journal')) {
+      return rows({ values: [['journal-1']], count: 1 })
+    }
+    if (normalized.includes('atomic_apply_claims')) {
+      if (normalized.startsWith('select'))
+        return rows({
+          values:
+            claim === undefined
+              ? []
+              : [['intent', 'journal-1', 'other-daemon', 1, claim.expiresAt, 'none', 100, 100]],
+        })
+      // 没有 claim 行时 insert 落下；有未过期 claim 时 insert 冲突、条件更新 0 行。写回的续租以接管令牌为条件。
+      if (claim !== undefined) return rows({ values: [], count: 0 })
       return rows({ values: [['journal-1']], count: 1 })
     }
     throw new Error(`unexpected PostgreSQL intent maintenance query: ${sql}`)
@@ -167,7 +183,38 @@ describe('RFC-349 PostgreSQL Intent apply maintenance', () => {
     ).toBe(true)
   })
 
-  test('active or fresh journals are never reaped by maintenance', async () => {
+  test("a journal held by another process's live claim is never reaped", async () => {
+    // RFC-401 T4：此前以「updatedAt 在十分钟内」判定在途；现在由持久 claim 判定——租约未过期，接管失败，不补偿、不写回。
+    const fake = fixture(100, { expiresAt: 1_060_000 })
+    const convergence = createAtomicApplyRecovery([
+      createIntentApplyRecoveryScene({
+        db: fake.db,
+        artifacts: {
+          async compensate() {
+            throw new Error('held journal must not compensate')
+          },
+          async rollForward() {
+            throw new Error('held journal must not roll forward')
+          },
+        },
+        now: () => 1_000_000,
+        log,
+      }),
+    ])
+    await expect(convergence.converge({ intent: [] })).resolves.toEqual({
+      failed: 0,
+      rolledForward: 0,
+    })
+    expect(
+      fake.statements.some(
+        (statement) =>
+          statement.toLowerCase().startsWith('update') &&
+          statement.toLowerCase().includes('intent_apply_journal'),
+      ),
+    ).toBe(false)
+  })
+
+  test('active journals are never reaped by maintenance', async () => {
     const fake = fixture(999_999)
     const convergence = createAtomicApplyRecovery([
       createIntentApplyRecoveryScene({

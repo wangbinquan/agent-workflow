@@ -195,8 +195,13 @@ describeEachProvider('RFC-359 W4-D5 —— 融合仓库与技能版本提交 par
     expect(
       readFileSync(join(appHome, `skills/${skillId}/versions/v2/files/SKILL.md`), 'utf8'),
     ).toBe('new\n')
-    const { memories, skillOperations, skillOperationLocks } = tablesOf(db),
+    const { memories, skillApplyJournal, skillOperationLocks } = tablesOf(db),
       { skills, skillVersions } = tablesOf(db)
+    // RFC-401 T5：技能写入经 skill 写入场景——操作账本是 `skill_apply_journal`，锁在终态结算时释放。
+    const unsettledJournals = async () =>
+      (
+        await db.select().from(skillApplyJournal).where(eq(skillApplyJournal.skillId, skillId))
+      ).filter((row) => row.state === 'prepared' || row.state === 'applying')
     expect((await db.select().from(skills).where(eq(skills.id, skillId)))[0]?.contentVersion).toBe(
       2,
     )
@@ -211,9 +216,12 @@ describeEachProvider('RFC-359 W4-D5 —— 融合仓库与技能版本提交 par
         ?.versionIndex,
     ).toBe(2)
     expect(
-      (await db.select().from(skillOperations).where(eq(skillOperations.skillId, skillId)))[0]
-        ?.active,
-    ).toBe(0)
+      (await db.select().from(skillApplyJournal).where(eq(skillApplyJournal.skillId, skillId))).map(
+        (row) => row.state,
+      ),
+    ).toEqual(['committed'])
+    expect(await unsettledJournals()).toEqual([])
+    expect((await persistence.load(fusionId))?.status).toBe('done')
     expect(
       await db
         .select()
@@ -236,7 +244,8 @@ describeEachProvider('RFC-359 W4-D5 —— 融合仓库与技能版本提交 par
         now: 11,
       }),
     ).rejects.toMatchObject({ code: 'fusion-precondition-stale' })
-    // 失败路径也收回了操作账本：没有残留的活跃操作与锁。
+    // 失败路径也收回了操作账本：没有残留的未结算 journal 与锁。
+    expect(await unsettledJournals()).toEqual([])
     expect(
       await db
         .select()

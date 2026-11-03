@@ -319,7 +319,6 @@ describeEachProvider('resolve 侧：回写不丢绑定（AC-19）', (harness) =>
       manifest: dump.manifest,
       changeset: changeset.changeset,
       decisions: [],
-      occupiedNames: new Map(),
     })
     const resolvedDef = (
       bundle.ops[0]?.payload as { definition: { nodes: Array<Record<string, unknown>> } }

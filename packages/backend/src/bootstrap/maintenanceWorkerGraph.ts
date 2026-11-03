@@ -35,6 +35,7 @@ import { createDrizzleTaskArchiveMaintenanceCommand } from '@/modules/task-execu
 import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import { composePluginGenerationGcCommand } from '@/modules/resource-catalog/composition/pluginGenerationGc'
 import { composeResourcePackageApplyMaintenance } from '@/modules/resource-catalog/composition/resourcePackageMaintenance'
+import { composeSkillApplyRecoveryScene } from '@/modules/resource-catalog/composition/skillApplyMaintenance'
 import { composeWebhookDeliveryPersistenceFor } from '@/modules/integration/composition/webhookDelivery'
 import { composeIntegrationMaintenanceCommands } from '@/modules/integration/composition/maintenance'
 import { composeWorkspaceMaintenanceCommand } from '@/modules/source-control/composition/workspaceMaintenance'
@@ -281,6 +282,12 @@ export const composeMaintenanceWorkerGraph = async (
       log: createLogger('intentMaintenance'),
     }),
     resourcePackageRecoveryScene,
+    // RFC-401 T5：skill 写入场景（普通 CRUD 与 fusion 的技能写入）。
+    composeSkillApplyRecoveryScene({
+      db: client,
+      appHome,
+      log: createLogger('skillApplyMaintenance'),
+    }),
   ])
   const ownerCommands = Object.freeze({
     workspace: workspaceMaintenanceCommand,

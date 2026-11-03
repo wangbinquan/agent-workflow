@@ -1,7 +1,5 @@
-import { capturedSkillTreeColumns } from '../databaseSkillTrees'
 import { createWorkflowMutationParticipant } from '../workflowMutationParticipant'
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
+import { tablesOf } from '@/platform/persistence/sessionTables'
 import { first } from '@/platform/persistence/queryHelpers'
 import type {
   ResourcePackageSkillPublication as PostgresqlResourcePackageSkillPublication,
@@ -38,14 +36,10 @@ import {
   type WorkgroupDraftMember,
   type WorkgroupDraftSnapshot,
 } from '@agent-workflow/shared'
-import { and, eq } from 'drizzle-orm'
-import { ConflictError, NotFoundError, ValidationError, staleConflictError } from '@/util/errors'
-import { monotonicNow } from '@/util/time'
+import { eq } from 'drizzle-orm'
+import { NotFoundError, ValidationError } from '@/util/errors'
 import type { McpTransactionLifecycle } from '../mcpRepository'
-import {
-  type PostgresqlResourceCatalogTransaction,
-  isPostgresqlUniqueViolation,
-} from '../postgresql/repositorySupport'
+import { type PostgresqlResourceCatalogTransaction } from '../postgresql/repositorySupport'
 
 import { createWorkgroupMutationParticipant } from '../workgroupMutationParticipant'
 import {
@@ -65,6 +59,7 @@ import type {
 } from './postgresqlResourcePackageMutationParticipants'
 import type { AgentMutationBatch } from '../../application/ports/agentMutation'
 import { createAgentMutationParticipant } from '../agentMutationParticipant'
+import { createSkillMutationParticipant } from '../skillMutationParticipant'
 import { createMcpMutationParticipant } from '../mcpMutationParticipant'
 import { createPluginMutationParticipant } from '../pluginMutationParticipant'
 
@@ -265,19 +260,6 @@ export async function resourcePackageAgentBatch(input: {
   })
 }
 
-function ownerScopedNameWhere(
-  table:
-    | PersistenceTables['agents']
-    | PersistenceTables['skills']
-    | PersistenceTables['mcps']
-    | PersistenceTables['plugins']
-    | PersistenceTables['workgroups'],
-  ownerUserId: string,
-  name: string,
-) {
-  return and(eq(table.ownerUserId, ownerUserId), eq(table.name, name))
-}
-
 async function assertOwnedOverwrite(input: {
   readonly reader: PostgresqlResourcePackageTransactionReader
   readonly context: PostgresqlResourcePackageMutationRequestContext
@@ -461,64 +443,21 @@ export async function commitPostgresqlSkillPackageMutation(
   input: SkillMutationArmInput,
 ): Promise<ResourcePackageMutationReceipt<'skill'>> {
   const parsed = CreateManagedSkillSchema.parse(input.mutation.payload)
+  const skillWrites = createSkillMutationParticipant(input.transaction)
+  const contentKind = input.contentKind ?? input.publication.contentKind ?? 'local-file'
   if (input.mutation.kind === 'skill-create') {
-    const { skills, skillVersions } = tablesOf(input.transaction)
-    const collision = await first(
-      input.transaction
-        .select({ id: skills.id })
-        .from(skills)
-        .where(ownerScopedNameWhere(skills, input.context.actor.user.id, parsed.name)),
-    )
-    if (collision !== undefined) {
-      throw new ConflictError('skill-name-in-use', `skill '${parsed.name}' already exists`)
-    }
-    const now = input.now()
-    try {
-      await insertOne(input.transaction, skills, {
-        id: input.resourceId,
-        name: parsed.name,
-        description: parsed.description,
-        ...(await capturedSkillTreeColumns(
-          input.contentKind ?? input.publication.contentKind ?? 'local-file',
-          input.resourceId,
-          'live',
-          input.publication.managedPath,
-        )),
-        ownerUserId: input.context.actor.user.id,
-        visibility: 'private',
-        aclRevision: 0,
-        contentVersion: 1,
-        metaRevision: 0,
-        reservationState: 'ready',
-        versionState: 'snapshot-authoritative',
-        schemaVersion: 1,
-        createdAt: now,
-        updatedAt: now,
-      })
-      await insertOne(input.transaction, skillVersions, {
-        id: input.id(),
-        skillId: input.resourceId,
-        versionIndex: 1,
-        ...(await capturedSkillTreeColumns(
-          input.contentKind ?? input.publication.contentKind ?? 'local-file',
-          input.resourceId,
-          'version:1',
-          input.publication.filesPath,
-        )),
-        source: 'initial',
-        summary: 'Initial version',
-        fusionId: null,
-        restoredFromVersion: null,
-        authorUserId: input.context.actor.user.id,
-        contentHash: input.publication.contentHash,
-        createdAt: now,
-      })
-    } catch (error) {
-      if (isPostgresqlUniqueViolation(error, ['skills_owner_name_unique'])) {
-        throw new ConflictError('skill-name-in-use', `skill '${parsed.name}' already exists`)
-      }
-      throw error
-    }
+    await skillWrites.create({
+      id: input.resourceId,
+      name: parsed.name,
+      description: parsed.description,
+      ownerUserId: input.context.actor.user.id,
+      contentKind,
+      contentHash: input.publication.contentHash,
+      livePath: input.publication.managedPath,
+      versionPath: input.publication.filesPath,
+      authorUserId: input.context.actor.user.id,
+      now: input.now(),
+    })
     return receipt('skill', input.mutation, input.resourceId)
   }
 
@@ -529,64 +468,37 @@ export async function commitPostgresqlSkillPackageMutation(
     resourceId: input.resourceId,
     mutation: input.mutation,
   })
-  const { skills, skillVersions } = tablesOf(input.transaction)
+  const { skills } = tablesOf(input.transaction)
   const row = await first(
-    input.transaction.select().from(skills).where(eq(skills.id, input.resourceId)),
+    input.transaction
+      .select({ reservationState: skills.reservationState })
+      .from(skills)
+      .where(eq(skills.id, input.resourceId)),
   )
   if (row === undefined || row.reservationState !== 'ready') {
     throw new NotFoundError('skill-not-found', `skill '${input.resourceId}' not found`)
   }
-  const nextVersion = row.contentVersion + 1
-  const updatedAt = monotonicNow(row.updatedAt)
-  const changed = await first(
-    input.transaction
-      .update(skills)
-      .set({
-        description: parsed.description,
-        contentVersion: nextVersion,
-        ...(await capturedSkillTreeColumns(
-          input.contentKind ?? input.publication.contentKind ?? 'local-file',
-          input.resourceId,
-          'live',
-          input.publication.managedPath,
-        )),
-        metaRevision:
-          parsed.description === row.description ? row.metaRevision : row.metaRevision + 1,
-        versionState: 'snapshot-authoritative',
-        updatedAt,
-      })
-      .where(
-        and(
-          eq(skills.id, input.resourceId),
-          eq(skills.contentVersion, input.mutation.expect.expectedContentVersion),
-          eq(skills.metaRevision, input.mutation.expect.expectedMetaRevision),
-          eq(skills.aclRevision, input.mutation.expect.expectedAclRevision),
-          eq(skills.ownerUserId, input.context.actor.user.id),
-          eq(skills.reservationState, 'ready'),
-        ),
-      )
-      .returning({ id: skills.id }),
-  )
-  if (changed === undefined) {
-    throw staleConflictError('skill', `skill '${input.resourceId}' changed; reload and retry`)
-  }
-  await insertOne(input.transaction, skillVersions, {
-    id: input.id(),
+  await skillWrites.version({
     skillId: input.resourceId,
-    versionIndex: nextVersion,
-    ...(await capturedSkillTreeColumns(
-      input.contentKind ?? input.publication.contentKind ?? 'local-file',
-      input.resourceId,
-      `version:${nextVersion}`,
-      input.publication.filesPath,
-    )),
+    versionIndex: input.mutation.expect.expectedContentVersion + 1,
+    contentKind,
+    contentHash: input.publication.contentHash,
+    livePath: input.publication.managedPath,
+    versionPath: input.publication.filesPath,
+    fence: {
+      expectedVersion: input.mutation.expect.expectedContentVersion,
+      expectedMetaRevision: input.mutation.expect.expectedMetaRevision,
+      expectedAclRevision: input.mutation.expect.expectedAclRevision,
+      expectedOwnerUserId: input.context.actor.user.id,
+      staleMessage: `skill '${input.resourceId}' changed; reload and retry`,
+    },
     source: 'import',
     summary: null,
     fusionId: null,
     restoredFromVersion: null,
     authorUserId: input.context.actor.user.id,
-    contentHash: input.publication.contentHash,
-    createdAt: updatedAt,
+    description: parsed.description,
+    now: input.now(),
   })
   return receipt('skill', input.mutation, input.resourceId)
 }

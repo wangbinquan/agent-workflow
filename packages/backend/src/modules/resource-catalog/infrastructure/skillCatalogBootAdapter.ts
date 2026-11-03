@@ -26,6 +26,9 @@ import { createFileSkillLifecycleContentStore } from './local/fileSkillLifecycle
 import { createFileSkillSnapshotInspector } from './local/fileSkillSnapshotInspector'
 import { createFileSkillDeletionContentStore } from './local/fileSkillDeletionContentStore'
 import { reconcileSkillLiveFiles } from './legacy/skillVersion'
+import { createAtomicApplyRecovery } from '@/platform/atomic-apply/convergence'
+import { skillApplyRecoveryContentFor } from './skillApplyContent'
+import { createSkillApplyRecoveryScene } from './skillApplyRecovery'
 
 /** RFC-359 W4-D23c：崩溃安全的启动状态机，一份适配器两个数据库共用。 */
 export function createSkillCatalogBootAdapter(input: {
@@ -55,9 +58,30 @@ export function createSkillCatalogBootAdapter(input: {
   return Object.freeze({
     recoverOperations: async () => {
       await assertNativeRecoveryAuthority(input.db, selected.identityInspector)
-      return Object.freeze(
-        await recoverSkillOperations(input.db, selected, SKILL_OP_RECOVERY_REGISTRY),
-      )
+      // 兼容执行器：先排空 RFC-401 之前写下的旧 skill operation（及其锁）。
+      const report = await recoverSkillOperations(input.db, selected, SKILL_OP_RECOVERY_REGISTRY)
+      // RFC-401 T5：再收敛 skill 写入场景的 journal。在主进程里做，前滚发布的技能在这一 boot 的可用判定里立即可见（维护
+      // Worker 的前滚只标记 Worker 自己的集合）；上一进程未过期的租约留给维护作业在过期后接管。
+      // 与旧记录的排空一样转交装配选定的恢复存储（删除、新建、版本前滚）；其余按工件的内容种类取缺省。
+      const defaults = skillApplyRecoveryContentFor(input.db, input.appHome)
+      await createAtomicApplyRecovery([
+        createSkillApplyRecoveryScene({
+          db: input.db,
+          content: (kind) => ({
+            ...defaults(kind),
+            ...(input.deletionContent === undefined
+              ? {}
+              : { deletionContent: input.deletionContent }),
+            ...(input.creationContent === undefined
+              ? {}
+              : { creationContent: input.creationContent }),
+            ...(input.versionRecovery === undefined
+              ? {}
+              : { versionRecovery: input.versionRecovery }),
+          }),
+        }),
+      ]).converge({ skill: [] })
+      return Object.freeze(report)
     },
     activateAvailabilityGate: () => activateBootReverify(),
     reconcileLiveFiles: async () => await reconcileSkillLiveFiles(input.db, selected),

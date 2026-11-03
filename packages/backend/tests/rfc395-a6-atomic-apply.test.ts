@@ -2,9 +2,12 @@
 import { beforeEach, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
+import { createAtomicApplyClaimStore } from '@/platform/atomic-apply/infrastructure/claimStore'
+import { atomicApplyRecoveryClaims } from '@/platform/atomic-apply/lease'
 import { createAtomicApply } from '@/platform/atomic-apply/stateMachine'
 import { createAtomicApplyRecovery } from '@/platform/atomic-apply/convergence'
 import type {
+  AtomicApplyClaims,
   AtomicApplyErrors,
   AtomicApplyJournal,
   AtomicApplyRow,
@@ -98,9 +101,16 @@ for (const scene of ['intent', 'resource-package'] as const) {
         }
       }
     })
+    // RFC-401 T4：持久 claim / lease / fencing（同一场景名下的 claim 表行）。
+    const claims = () =>
+      createAtomicApplyClaimStore(
+        scene === 'intent' ? 'intent' : 'resource-package',
+      ) as unknown as AtomicApplyClaims<Parameters<Parameters<typeof journal.transaction>[0]>[0]>
     function machine(port = journal, errorContract = errors) {
       return createAtomicApply({
         journal: port,
+        claims: claims(),
+        token: ulid,
         codecs: {
           encode: (artifacts: readonly Artifact[]) =>
             scene === 'intent'
@@ -164,8 +174,7 @@ for (const scene of ['intent', 'resource-package'] as const) {
           {
             key: String(scene),
             list: journal.list,
-            compareAndSet: (row, patch) =>
-              journal.transaction((tx) => journal.compareAndSet(tx, row.id, row.state, patch)),
+            ...atomicApplyRecoveryClaims(journal, claims()),
             recover,
             errors: {
               abandoned: 'crashed before commit',

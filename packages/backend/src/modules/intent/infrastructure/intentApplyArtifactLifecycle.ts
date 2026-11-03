@@ -153,7 +153,14 @@ export function createIntentApplyArtifactLifecycle(
               })
             continue
           }
-          if (skill.live === null || skill.contentVersion < version)
+          if (skill.live === null)
+            throw new Error(`intent-apply-skill-publication-missing:${artifact.skillId}`)
+          if (skill.contentVersion < version && artifact.recovery === undefined) {
+            // RFC-401 T5：内容不变的更新不推进版本（design §10.2），已提交的 journal 里这一版从未写入，暂存树按未发布处理。
+            await content.discardSkill({ artifact, version })
+            continue
+          }
+          if (skill.contentVersion < version)
             throw new Error(`intent-apply-skill-publication-missing:${artifact.skillId}`)
           const snapshot = skill.snapshot
           if (snapshot === null || snapshot.version !== version || snapshot.contentHash === null)

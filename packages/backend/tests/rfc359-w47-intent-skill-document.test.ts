@@ -1,5 +1,7 @@
 // RFC-359 W47: intent and package artifacts share their existing SKILL.md serializer.
 // Only document generation moves; both filesystem writers retain their original bodies.
+// RFC-401 T5（design §2.3）：共享的序列化器就是普通编辑也用的唯一字节合同；旧的两份渲染式（PostgreSQL 与 legacy）写下的存量
+// 字节与新内容解析等价时原样保留。
 import { expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { stringify as stringifyYaml } from 'yaml'
@@ -33,6 +35,20 @@ function originalLegacyMarkdown(payload: Payload): string {
 }
 
 const originals = [originalPostgresqlMarkdown, originalLegacyMarkdown]
+
+// The single byte contract (design §2.3), written independently of the implementation under test.
+function contractMarkdown(payload: Payload): string {
+  const yaml = stringifyYaml(
+    {
+      name: payload.name,
+      description: payload.description,
+      ...payload.frontmatterExtra,
+    },
+    { lineWidth: 0 },
+  )
+  const body = payload.bodyMd
+  return `---\n${yaml.slice(0, -1)}\n---\n${body}`
+}
 const payloads: readonly Payload[] = [
   { name: 'simple', description: '', bodyMd: 'Body' },
   { name: '', description: '', frontmatterExtra: {}, bodyMd: '' },
@@ -56,16 +72,18 @@ const payloads: readonly Payload[] = [
   },
 ]
 
-test('intent document bytes equal both original renderers for the complete payload matrix', () => {
+test('intent document bytes follow the single contract; stored bytes of both original renderers are kept', () => {
   expect(renderResourcePackageSkillMarkdown(payloads[0]!)).toBe(
-    '---\nname: simple\ndescription: ""\n---\n\nBody\n',
+    '---\nname: simple\ndescription: ""\n---\nBody',
   )
   for (const payload of payloads) {
     const before = JSON.stringify(payload)
+    expect(Buffer.from(renderResourcePackageSkillMarkdown(payload))).toEqual(
+      Buffer.from(contractMarkdown(payload)),
+    )
     for (const original of originals) {
-      expect(Buffer.from(renderResourcePackageSkillMarkdown(payload))).toEqual(
-        Buffer.from(original(payload)),
-      )
+      const stored = original(payload)
+      expect(renderResourcePackageSkillMarkdown(payload, stored)).toBe(stored)
     }
     expect(JSON.stringify(payload)).toBe(before)
   }
@@ -112,7 +130,7 @@ function thrownBy(operation: () => unknown): unknown {
 
 test('shared intent rendering preserves field-read order and immediate error identity', () => {
   const fields = ['name', 'description', 'frontmatterExtra', 'extra.label', 'bodyMd']
-  for (const original of originals) {
+  for (const original of [contractMarkdown]) {
     const before: string[] = []
     const after: string[] = []
     expect(renderResourcePackageSkillMarkdown(observedPayload(after))).toBe(
@@ -184,6 +202,7 @@ test('the actual intent artifact writer calls the existing shared serializer', (
       ts.forEachChild(node, visit)
     }
     visit(writer.body)
-    expect(calls).toEqual([`${local}(payload)`])
+    // RFC-401 T5：第二个实参是当前版本的 SKILL.md（解析等价时保留原字节）。
+    expect(calls).toEqual([`${local}(payload, previous)`])
   }
 })

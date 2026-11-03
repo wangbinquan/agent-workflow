@@ -65,11 +65,13 @@ describe('RFC-349 PostgreSQL Intent resource apply binding', () => {
     )
     expect(workflowWriter).toContain('.insert(workflows)')
     expect(workflowWriter).toContain('.update(workflows)')
-    for (const table of ['skills']) {
-      expect(source).toMatch(
+    // RFC-401 T5: skill rows (and version rows) go through the one skill write participant on the same transaction.
+    expect(source).toContain('const skillWrites = createSkillMutationParticipant(transaction)')
+    for (const table of ['skills', 'skillVersions']) {
+      expect(source).not.toMatch(
         new RegExp(`(?:\\.insert\\(\\s*${table}\\s*\\)|\\binsertOne\\([^,]+,\\s*${table}\\s*,)`),
       )
-      expect(source).toContain(`.update(${table})`)
+      expect(source).not.toContain(`.update(${table})`)
     }
     // RFC-401 A3b: workgroup rows and member rows go through the one Workgroup mutation participant.
     expect(source).toContain('const workgroups = createWorkgroupMutationParticipant(transaction, {')
@@ -105,8 +107,8 @@ describe('RFC-349 PostgreSQL Intent resource apply binding', () => {
     // participant 只负责把会话的 actor 交给唯一那份预检，不再自带一份判据。
     expect(source).toContain('return resolveIntentApplyResourcePreflight(')
     expect(source).toContain('options.actor.user.id')
-    // 判据本体：占用名按 kind 全量取、copy-only 按 manifest 行的真实 owner 判。
-    expect(preflight).toContain('listOwnedNames(type, ownerUserId)')
+    // 判据本体：copy-only 按 manifest 行的真实 owner 判（RFC-401 T5 起不再取占用名）。
+    expect(preflight).not.toContain('listOwnedNames(')
     expect(preflight).toContain('getOwner(entry.resourceType, entry.resourceId)')
     expect(source).toContain('recordArtifact(artifact: IntentApplyArtifact)')
     expect(source).toContain('rollForwardCommitted?')

@@ -410,7 +410,6 @@ describeEachProvider('RFC-291 提交入库后可继续修改（双引擎）', (h
           manifest: dump.manifest,
           changeset: changeset.changeset,
           decisions: [],
-          occupiedNames: new Map(),
         }),
       ).not.toThrow()
     })
@@ -448,7 +447,6 @@ describeEachProvider('RFC-291 提交入库后可继续修改（双引擎）', (h
           manifest,
           changeset: changeset.changeset,
           decisions: [],
-          occupiedNames: new Map(),
         }),
       ).toThrow()
     })

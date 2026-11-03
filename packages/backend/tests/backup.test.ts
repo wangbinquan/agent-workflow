@@ -167,8 +167,9 @@ describe('createBackup', () => {
           .get() as { generation_id: string }
       ).generation_id,
       schemaDigest: manifest.database.schemaDigest,
-      // The activated registry has 232 business tables; migration metadata is a separate artifact.
-      activeTableCount: 232,
+      // The activated registry has 234 business tables (RFC-401 adds atomic_apply_claims and
+      // skill_apply_journal); migration metadata is a separate artifact.
+      activeTableCount: 234,
       archiveOnlyTableCount: 0,
     })
   })

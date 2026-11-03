@@ -226,19 +226,28 @@ export async function listActiveOps(
   return await ops(dbOrTx).select().from(skillOperations).where(eq(skillOperations.active, 1))
 }
 
-/** Orphan locks whose op is done/absent — GC'd AFTER active-op recovery (§6a). */
+/**
+ * Orphan locks — GC'd AFTER active-op recovery (§6a). RFC-401 T5：技能锁的持有者有两种，旧 skill operation 与 skill 写入场景的
+ * journal（op_id = `skill_apply_journal.id`）。只回收两者都不认领的锁：journal 未记为 failed 时锁仍归它——终态结算（failed，
+ * 或尾部完成）与释放锁在同一事务，所以尾部已完成的 journal 不会再持有锁；未结算的由 AtomicApply 恢复在终态写回里释放。
+ */
 export async function listOrphanLocks(
   dbOrTx: PersistenceDb | PersistenceTx,
 ): Promise<PersistenceTables['skillOperationLocks']['$inferSelect'][]> {
   const t = ops(dbOrTx)
-  const { skillOperations, skillOperationLocks } = tablesOf(t)
+  const { skillOperations, skillOperationLocks, skillApplyJournal } = tablesOf(t)
   const active = await t
     .select({ opId: skillOperations.opId })
     .from(skillOperations)
     .where(eq(skillOperations.active, 1))
-  const activeOpIds = new Set(active.map((r) => r.opId))
+  const owned = new Set(active.map((r) => r.opId))
+  const journals = await t
+    .select({ id: skillApplyJournal.id })
+    .from(skillApplyJournal)
+    .where(inArray(skillApplyJournal.state, ['prepared', 'applying', 'committed']))
+  for (const journal of journals) owned.add(journal.id)
   const locks = await t.select().from(skillOperationLocks)
-  return locks.filter((lock) => !activeOpIds.has(lock.opId))
+  return locks.filter((lock) => !owned.has(lock.opId))
 }
 
 /** GC orphan locks (post-recovery). Deletes locks not owned by any active op. */

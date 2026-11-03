@@ -8,8 +8,9 @@ import { nonruntimeSourceRole } from './nonruntimeSourceRoles'
 
 const root = resolve(import.meta.dir, '../../../..')
 test('every exact non-runtime source role still has its reviewed source and evidence', () => {
-  expect(roles.entries).toHaveLength(18)
-  expect(new Set(roles.entries.map((entry) => entry.path)).size).toBe(18)
+  // RFC-401 T4：platform/atomic-apply 成为 schema owner，它的 composition.ts 只导出 schemaContribution（18 → 19）。
+  expect(roles.entries).toHaveLength(19)
+  expect(new Set(roles.entries.map((entry) => entry.path)).size).toBe(19)
   for (const entry of roles.entries) {
     const text = readFileSync(resolve(root, entry.path), 'utf8')
     const unit = sourceUnit(entry.path, text)

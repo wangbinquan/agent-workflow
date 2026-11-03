@@ -1,4 +1,4 @@
-import type { AtomicApplyPatch } from '@/platform/contracts/atomicApply'
+import type { AtomicApplyRecoveryScene } from '@/platform/contracts/atomicApply'
 import type { ResourcePackageApplyActivityQuery } from '../public/queries'
 
 export type ResourcePackageApplyJournalState = 'prepared' | 'applying' | 'committed' | 'failed'
@@ -12,11 +12,10 @@ export interface ResourcePackageApplyJournalSnapshot {
   readonly error?: string | null
 }
 
+/** RFC-401 T4：恢复先接管 claim，写回以接管令牌 fencing（与 AtomicApply 恢复场景同一合同）。 */
 export interface ResourcePackageApplyJournalPort {
-  compareAndSet(
-    row: Pick<ResourcePackageApplyJournalSnapshot, 'id' | 'state'>,
-    patch: AtomicApplyPatch,
-  ): Promise<boolean>
+  claim: AtomicApplyRecoveryScene<'resource-package'>['claim']
+  compareAndSet: AtomicApplyRecoveryScene<'resource-package'>['compareAndSet']
   list(): Promise<readonly ResourcePackageApplyJournalSnapshot[]>
 }
 

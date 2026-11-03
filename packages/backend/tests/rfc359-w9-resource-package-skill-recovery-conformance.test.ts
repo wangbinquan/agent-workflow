@@ -346,9 +346,13 @@ describeEachProvider(
       expect(snapshotTree(liveDirectory), '已删技能的 live 目录被收敛器复活了').toBeNull()
     })
 
-    test('账面更旧（库不认识这一代）：收敛报错留痕，不得把未知代际换进 live 目录', async () => {
+    test('账面更旧（已提交的 apply 没有写下这一代）：不得把未知代际换进 live 目录', async () => {
       const { liveDirectory } = await crashScene({ contentVersion: ARTIFACT_VERSION - 1 })
-      expect(await rollForward()).toContain('resource-package-skill-publication-missing')
+      // RFC-401 T5：内容不变的更新不推进版本（design §10.2），现行格式按未写入清掉暂存；旧格式（RFC-401 之前写下，不存在
+      // 不变跳过）仍按缺失代际报错留痕。
+      if (sqliteSide())
+        expect(await rollForward()).toContain('resource-package-skill-publication-missing')
+      else expect(await rollForward()).toBe('<resolved>')
       expect(snapshotTree(liveDirectory), '库不认识的代际被换进了 live 目录').toEqual(LIVE_TREE)
     })
   },

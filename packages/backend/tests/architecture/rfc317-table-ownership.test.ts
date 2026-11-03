@@ -674,6 +674,10 @@ const GLOBAL_INFRASTRUCTURE: Readonly<
     tables: ['contentBytes', 'contentObjects', 'contentPublications'],
     why: 'RFC-395 II-b: the content owner validates its own object/bytes/publication closure after conversion.',
   },
+  'platform/atomic-apply/infrastructure/claimStore.ts': {
+    tables: ['atomicApplyClaims'],
+    why: 'RFC-401 T4：AtomicApply 机制读写自己拥有的 claim / lease / fencing 表；不是跨 context 业务表豁免。',
+  },
 }
 const INITIAL_HORIZONTAL_DEBT = new Set([
   '32de5c2fab6461974b24057f2f511d590153532595f8d0a5a2b31dccbb441362',

@@ -50,6 +50,8 @@ import { composeSkillVersionCommitParticipantFactory } from '../src/modules/reso
 import { createDatabaseSkillContent } from '../src/modules/resource-catalog/infrastructure/databaseSkillContent'
 import { createManagedSkill } from '../src/modules/resource-catalog/infrastructure/legacy/skill'
 import { describeEachProvider } from './helpers/eachProvider'
+import { createAtomicApplyRecovery } from '@/platform/atomic-apply/convergence'
+import { composeSkillApplyRecoveryScene } from '../src/modules/resource-catalog/composition/skillApplyMaintenance'
 import {
   resourceScopeAuthority,
   TEST_RESOURCE_SCOPE_AUTHORIZATION,
@@ -121,10 +123,26 @@ describeEachProvider(
   'RFC-370 §10 V20 fusion orchestration on the database skill binding',
   (harness) => {
     let h: Harness
+    // RFC-401 T5：注入一次「提交之后、发布 live 时失败」。
+    let failNextPublish = false
     beforeEach(async () => {
+      failNextPublish = false
       const appHome = mkdtempSync(join(tmpdir(), 'aw-v20-fusion-'))
       const db = harness.db
-      const binding = createDatabaseSkillContent({ db })
+      const stored = createDatabaseSkillContent({ db })
+      const binding = {
+        ...stored,
+        versionContent: {
+          ...stored.versionContent,
+          async publish(...args: Parameters<typeof stored.versionContent.publish>) {
+            if (failNextPublish) {
+              failNextPublish = false
+              throw new Error('live publish interrupted')
+            }
+            await stored.versionContent.publish(...args)
+          },
+        },
+      }
       const skill = await createManagedSkill(db, selectSkillContentDependencies(binding, appHome), {
         name: 'lint',
         description: 'd',
@@ -289,6 +307,47 @@ describeEachProvider(
         fusedFusionId: fusion.id,
       })
       expect(await h.candidateTrees()).toEqual([])
+    })
+
+    // proposal §5 第 12 项：版本、记忆标记与 applying → done 同一事务；提交之后发布 live 失败时，融合仍是 done，与持久的
+    // 版本行一致，approve 照常返回；发布与候选清理由 AtomicApply 恢复前滚。此前这里把融合记为 failed 而版本已提交。
+    test('a live publish failure after commit leaves the fusion done; recovery publishes the version', async () => {
+      const fusion = await launch()
+      settleWithProposal(fusion.currentTaskId!, 'fused body (2 spaces)')
+      await reconcileFusion(h.deps, fusion.id)
+      failNextPublish = true
+      const done = await approveFusion(h.deps, fusion.id, adminActor)
+      expect(done).toMatchObject({ status: 'done', appliedSkillVersion: 2 })
+      const { skills, memories, skillApplyJournal, skillOperationLocks } = tablesOf(h.db)
+      expect(
+        (await h.db.select().from(skills).where(eq(skills.id, h.skillId)))[0]!.contentVersion,
+      ).toBe(2)
+      expect(
+        (await h.db.select().from(memories).where(eq(memories.id, h.memoryId)))[0],
+      ).toMatchObject({ status: 'fused', fusedIntoSkillVersion: 2 })
+      const journal = (
+        await h.db.select().from(skillApplyJournal).where(eq(skillApplyJournal.skillId, h.skillId))
+      ).find((entry) => entry.operation === 'version')!
+      expect(journal.state).toBe('committed')
+      // 尾部未完成：锁仍归这条 journal，候选树还在。
+      expect((await h.db.select().from(skillOperationLocks)).map((lock) => lock.opId)).toEqual([
+        journal.id,
+      ])
+      expect(await h.candidateTrees()).toHaveLength(1)
+      const recovered = await createAtomicApplyRecovery([
+        composeSkillApplyRecoveryScene({ db: h.db, appHome: tmpdir() }),
+      ]).converge({ skill: [] })
+      expect(recovered).toEqual({ failed: 0, rolledForward: 1 })
+      expect(await h.db.select().from(skillOperationLocks)).toEqual([])
+      expect(await h.candidateTrees()).toEqual([])
+      const { skillContentEntries } = tablesOf(h.db)
+      const live = await h.db
+        .select()
+        .from(skillContentEntries)
+        .where(
+          and(eq(skillContentEntries.skillId, h.skillId), eq(skillContentEntries.tree, 'live')),
+        )
+      expect(live.map((entry) => entry.path).sort()).toEqual(['SKILL.md', 'assets/rule.bin'])
     })
 
     test('a re-run seeds the current version as baseline with the prior proposal as its overlay', async () => {

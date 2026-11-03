@@ -222,7 +222,8 @@ describe('RFC-349 PostgreSQL provider backup', () => {
       sourceProvider: 'postgresql',
       sourceGenerationId: fixture.generationId,
       archiveRows: 0,
-      activeTableCount: 232,
+      // RFC-401 adds atomic_apply_claims and skill_apply_journal (232 -> 234).
+      activeTableCount: 234,
       archiveOnlyTableCount: 0,
     })
     const nativeSource = openSqliteLogicalSource({ path: fixture.dbPath, contract: CONTRACT })

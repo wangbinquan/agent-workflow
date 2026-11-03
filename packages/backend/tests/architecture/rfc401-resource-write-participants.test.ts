@@ -1,6 +1,8 @@
 // RFC-401 Part A (design §9): each resource kind is written through one participant in
 // `modules/resource-catalog/infrastructure/` — agents (A1), MCP servers and plugins (A2), workflows (A3a), workgroups
-// (A3b; workgroup rows have no separate write program, so the lock scans for raw row writes instead). The ordinary
+// (A3b; workgroup rows have no separate write program, so the lock scans for raw row writes instead), skills (Part B T5:
+// `skills` / `skill_versions` rows; the ordinary CRUD writes, ZIP, restore and fusion reach it through the skill write scene
+// `skillAtomicApply.ts`, and Intent no longer pre-checks skill names — `intent-name-conflict` is gone). The ordinary
 // CRUD repository, the Intent port and the resource-package arm (and, for agents, the digital-employee template writer;
 // for workflows, the built-in workflow catalog) all call it, and only the participant imports the kind's row-write
 // program. For agents the dependency-graph check has one write-time caller (the participant) plus the public validation
@@ -119,9 +121,33 @@ const STACKS: readonly WriteStack[] = [
       { path: INFRA + 'workgroupRepository.ts', fn: 'createWorkgroupRepository' },
     ],
   },
+  {
+    kind: 'skill',
+    participant: INFRA + 'skillMutationParticipant.ts',
+    factory: 'createSkillMutationParticipant',
+    program: '/skillMutationParticipant',
+    programExports: [],
+    rowWrite:
+      /\.(?:insert|update|delete)\(\s*(?:skills|skillVersions)\s*\)|insertOne\([^,]+,\s*(?:skills|skillVersions)\s*,/,
+    // Not content writes: recovery and boot bookkeeping of the skill row state (old-format operation recovery that drops a
+    // never-ready row or flips it ready, quarantine, boot snapshot verdicts, the database live-tree reference).
+    legacyImporters: [
+      INFRA + 'databaseSkillTrees.ts',
+      INFRA + 'legacy/skillBootVerify.ts',
+      INFRA + 'legacy/skillOpRecoveryDriver.ts',
+      INFRA + 'legacy/skillReserveOp.ts',
+      INFRA + 'resourcePackageOperationRecovery.ts',
+    ],
+    scenes: [
+      { path: INTENT_PORTS, fn: 'createSkillPort' },
+      { path: PACKAGE_ARMS, fn: 'commitPostgresqlSkillPackageMutation' },
+      { path: INFRA + 'skillAtomicApply.ts', fn: 'createSkillApplyScene' },
+    ],
+  },
 ]
 /** Codes and identifiers the unified write rules removed (proposal §5 #2 / #8). */
 const RETIRED_STRINGS = [
+  'intent-name-conflict',
   'workflow-name-in-use',
   'intent-workflow-invalid',
   'workgroup-human-inactive',
@@ -314,6 +340,24 @@ test('negative fixtures over the corpus: each way back is reported', () => {
       ),
     ),
   ).toEqual(['scene-bypass:createWorkgroupPort'])
+  expect(
+    writeStackViolations(
+      replace(
+        INFRA + 'legacy/skill.ts',
+        (text) => text + '\nawait tx.update(skills).set({ description }).where(condition)\n',
+      ),
+    ),
+  ).toEqual(['skill-row-write:' + INFRA + 'legacy/skill.ts'])
+  expect(
+    writeStackViolations(
+      replace(INTENT_PORTS, (text) =>
+        text.replace(
+          'const skillWrites = createSkillMutationParticipant(transaction)',
+          'const skillWrites = createIntentSkillWriter(transaction)',
+        ),
+      ),
+    ),
+  ).toEqual(['scene-bypass:createSkillPort'])
 }, 30_000)
 
 test('negative fixtures over fabricated units alone: every matcher still bites', () => {
@@ -341,6 +385,12 @@ test('negative fixtures over fabricated units alone: every matcher still bites',
   ])
   expect(only(INFRA + 'x.ts', 'await tx.update(workgroups).set({ name })')).toEqual([
     'workgroup-row-write:' + INFRA + 'x.ts',
+  ])
+  expect(only(INFRA + 'x.ts', 'await insertOne(tx, skillVersions, row)')).toEqual([
+    'skill-row-write:' + INFRA + 'x.ts',
+  ])
+  expect(only(INFRA + 'x.ts', "throw new ValidationError('intent-name-conflict', 'x')")).toEqual([
+    'retired-code:intent-name-conflict:' + INFRA + 'x.ts',
   ])
   // The delete of a workgroup row (the repository's delete path) is not a content write.
   expect(only(INFRA + 'x.ts', 'await tx.delete(workgroups).where(condition)')).toEqual([])
@@ -370,6 +420,7 @@ test('negative fixtures over fabricated units alone: every matcher still bites',
     'scene-bypass:commitPostgresqlAgentPackageMutation',
     'scene-bypass:commitPostgresqlMcpPackageMutation',
     'scene-bypass:commitPostgresqlPluginPackageMutation',
+    'scene-bypass:commitPostgresqlSkillPackageMutation',
     'scene-bypass:commitPostgresqlWorkflowPackageMutation',
     'scene-bypass:commitPostgresqlWorkgroupPackageMutation',
   ])

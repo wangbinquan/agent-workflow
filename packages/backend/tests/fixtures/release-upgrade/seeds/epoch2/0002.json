@@ -1,0 +1,50 @@
+{
+  "formatVersion": 1,
+  "epoch": 2,
+  "after": "0002_rfc401_skill_apply_journal",
+  "provenance": {
+    "kind": "curated",
+    "sources": [
+      "design/RFC-401-single-resource-write-stack/design.md",
+      "packages/backend/db/schema-history/epoch2/0002_rfc401_skill_apply_journal.sqlite-plan.json",
+      "packages/backend/src/modules/resource-catalog/infrastructure/persistence/schema.ts"
+    ],
+    "note": "RFC-401 T5 adds the resource-catalog skill write journal. A history-0002 installation records one journal row per ordinary skill write; the seeded editor save of the retained managed skill found its content unchanged, so the row is committed with an already-current receipt, no artifacts, and a completed claim. The add-table edge itself writes no rows: upgrading a history-0001 installation leaves the new table empty until the daemon writes a skill."
+  },
+  "rows": [
+    {
+      "table": "skill_apply_journal",
+      "values": {
+        "id": "01K398000099A7C3D5E1F20B4C",
+        "skill_id": "01K398000032C1CF49A2FEEE26",
+        "operation": "version",
+        "state": "committed",
+        "prepared_artifacts_json": "{\"scene\":\"skill\",\"version\":1,\"artifacts\":[]}",
+        "receipt_json": "{\"skillId\":\"01K398000032C1CF49A2FEEE26\",\"operation\":\"version\",\"outcome\":\"already-current\",\"contentVersion\":1,\"metaRevision\":0}",
+        "error": null,
+        "created_at": 1778459500000,
+        "updated_at": 1778459500000
+      }
+    },
+    {
+      "table": "atomic_apply_claims",
+      "values": {
+        "scene": "skill",
+        "journal_id": "01K398000099A7C3D5E1F20B4C",
+        "claimed_by": "upgrade-fixture-daemon",
+        "lease_epoch": 1,
+        "claim_expires_at": 1778459500000,
+        "tail_state": "complete",
+        "created_at": 1778459500000,
+        "updated_at": 1778459500000
+      }
+    }
+  ],
+  "historyExpectations": [
+    {
+      "table": "skill_apply_journal",
+      "rows": []
+    }
+  ],
+  "content": []
+}

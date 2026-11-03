@@ -277,13 +277,12 @@ export interface TaskExecutionResourceSnapshotInTx {
 //
 // `skills` / `skill_versions` 两张表归 resource-catalog 单写，技能的字节归选定的内容绑定
 // （本地文件或数据库）。融合两边都不直接碰：它向 RC 读种子树（`readVersionTree`，严格读该版本的
-// 不可变快照，没有 live 兜底）、把提案存成候选树（`captureCandidate`），批准时把提案交给 RC 暂存
-// （`stage`：开带日志的 version-write 操作并暂存内容），在自己的事务里经 tx-bound participant 提交
-// （`before` 在栅栏前重验融合自身、`after` 让 memory 标记已融合），事务提交后再由 RC 发布
-// （`publish`）。版本写入与编辑器同一条带日志的漏斗，崩溃恢复也是同一份。
-//
-// 唯一 owner 工厂是 `application/skillVersionCommit.ts` 的
-// `createSkillVersionCommitParticipantInTx`。
+// 不可变快照，没有 live 兜底）、把提案存成候选树（`captureCandidate`），批准时把提案交给 RC 的
+// skill 写入场景（RFC-401 T5）：暂存、提交、发布与候选清理都在场景里，提交事务里先跑调用方的
+// `before`（融合重验自身）、再判复合栅栏、写版本行、最后跑 `after`（memory 标记已融合、融合推进到
+// done）。发布与候选清理是可重试尾部：提交之后的失败由 AtomicApply 恢复前滚，不再回头把已提交的融合
+// 记为 failed（proposal §5 第 12 项）。提交事务只在装配层之下出现：带事务的 `applyVersion` 由融合仓库
+// 的 infrastructure 接口声明（`FusionSkillTrees`），公共合同不暴露事务类型。
 // ---------------------------------------------------------------------------
 
 /** One file of a skill tree (SKILL.md included), as exact bytes. */
@@ -320,12 +319,8 @@ export interface SkillTreeVersionStageRequest extends SkillVersionCommitFence {
   readonly fusionId: string | null
   readonly authorUserId: string | null
   readonly now: number
-}
-
-/** Opaque handle: only the operations that staged it commit, publish or abort it. */
-export interface StagedSkillTreeVersion {
-  readonly skillId: string
-  readonly versionIndex: number
+  /** 提交后的尾部清理这个候选树（融合的提案）。 */
+  readonly cleanupCandidateId?: string
 }
 
 export interface SkillTreeVersionOperations {
@@ -344,12 +339,6 @@ export interface SkillTreeVersionOperations {
     readonly candidateId: string
   }): Promise<readonly SkillTreeVersionFile[] | null>
   discardCandidate(input: { readonly skillId: string; readonly candidateId: string }): Promise<void>
-  /** Opens the skill's version-write operation (lock + journal) and stages the tree. */
-  stage(request: SkillTreeVersionStageRequest): Promise<StagedSkillTreeVersion>
-  /** After the committing transaction: publish the live tree and close the operation. */
-  publish(staged: StagedSkillTreeVersion): Promise<void>
-  /** Instead of a commit: discard the staged content and the operation. */
-  abort(staged: StagedSkillTreeVersion): Promise<void>
 }
 
 /**
@@ -362,17 +351,6 @@ export interface SkillTreeVersionOperations {
 export interface SkillVersionCommitHooks<R> {
   readonly before?: () => R
   readonly after?: (versionIndex: number) => R
-}
-
-declare const skillVersionCommitParticipantInTxBrand: unique symbol
-
-export interface SkillVersionCommitParticipantInTx {
-  readonly [skillVersionCommitParticipantInTxBrand]: 'skill-version-commit'
-  /** `before` → 复合栅栏 → 版本行 → `after` → 操作日志推进到 db-committed；返回新版本号。 */
-  commit(
-    staged: StagedSkillTreeVersion,
-    hooks?: SkillVersionCommitHooks<Promise<void> | void>,
-  ): Promise<number>
 }
 
 /** The caller supplies the runtime names it changed; Resource Catalog owns only test sessions. */

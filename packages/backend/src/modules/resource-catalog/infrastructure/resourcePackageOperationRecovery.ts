@@ -134,7 +134,8 @@ async function publishStagedVersion(
     })
     return
   }
-  if (disposition === 'reject-missing-generation') {
+  // 旧格式操作没有「内容不变不推进版本」，账面落后即缺失代际。
+  if (disposition === 'cleanup-unwritten') {
     throw new Error(`resource-package-skill-publication-missing:${staged.skillId}`)
   }
 

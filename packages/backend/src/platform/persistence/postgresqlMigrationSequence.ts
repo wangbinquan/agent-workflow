@@ -3,6 +3,7 @@
 // share this program; PostgreSQL executes only the verified statement sequence.
 
 import type { ExpectedMigration } from '@/db/schemaAdmission'
+import type { SchemaEdge } from './schema/history/types'
 import { sha256Hex } from '@/util/hash'
 import {
   OBSERVATION_SOURCE_REVISION,
@@ -47,6 +48,9 @@ export interface PostgresqlMigrationVersion {
   readonly plan: PostgresqlSchemaPlan
   readonly sqliteMigrations: readonly Readonly<ExpectedMigration>[]
   readonly sqliteMigration: PostgresqlSqliteMigrationIdentity
+  /** RFC-401: an epoch-2 version's single reviewed edge (null at the baseline). Epoch-1 versions
+   * omit it and bridge through `steps` instead. */
+  readonly schemaEdge?: SchemaEdge | null
 }
 
 export interface PostgresqlMigrationRoot extends PostgresqlMigrationVersion {
@@ -2036,6 +2040,25 @@ function resolvePostgresqlRowBridge(
   requireSequence(from >= 0 && to >= from, 'unsupported historical index-only row bridge')
   const source = history.versions[from]!.contract
   const target = history.versions[to]!.contract
+  const edges = history.versions.slice(from + 1, to + 1)
+  if (edges.some((version) => version.schemaEdge !== undefined)) {
+    exact(
+      rowContract(
+        edges.reduce(
+          (contract, version) => foldEpoch2RowEdge(contract, version, allowNewTables),
+          source,
+        ),
+      ),
+      rowContract(target),
+      'historical row, codec, key or disposition changed',
+    )
+    exact(
+      source.tables.filter((table) => table.disposition === 'ARCHIVE_THEN_OMIT'),
+      target.tables.filter((table) => table.disposition === 'ARCHIVE_THEN_OMIT'),
+      'historical archive-only table contract changed',
+    )
+    return { source, target, steps: [] }
+  }
   // RFC-366: a value-domain widening is row-compatible by construction — every
   // row written under the narrower CHECK still satisfies the wider one — so the
   // additive bridge folds those edges the same way it folds new tables. The
@@ -2104,6 +2127,32 @@ function resolvePostgresqlRowBridge(
     'historical archive-only table contract changed',
   )
   return { source, target, steps: history.steps.slice(from, to) }
+}
+
+/**
+ * RFC-401: epoch-2 history has no epoch-1 upgrade steps; each version records exactly one reviewed edge
+ * (`schema/history/edgeDiff.ts`). Rows cross an index-only edge unchanged, and the additive bridge also
+ * folds a whole new KEEP table, which a historical source supplies no rows for. Every other edge kind
+ * rewrites, drops or re-validates rows, so it ends the bridge. Each fold is checked against the next
+ * version's own contract rather than trusting the edge label.
+ */
+function foldEpoch2RowEdge(
+  contract: LogicalSchemaContract,
+  version: PostgresqlMigrationVersion,
+  allowNewTables: boolean,
+): LogicalSchemaContract {
+  const edge = version.schemaEdge
+  const next = version.contract
+  let folded: LogicalSchemaContract | null = null
+  if (edge?.kind === 'add-index') folded = contract
+  if (edge?.kind === 'add-table' && allowNewTables) {
+    const position = next.tables.findIndex((table) => table.id === edge.tableId)
+    requireSequence(position >= 0, 'historical row, codec, key or disposition changed')
+    folded = appendLogicalTables(contract, [{ position, table: next.tables[position]! }])
+  }
+  requireSequence(folded !== null, 'historical row, codec, key or disposition changed')
+  exact(rowContract(folded), rowContract(next), 'historical row, codec, key or disposition changed')
+  return next
 }
 
 interface HistoricalRowBridgeInput {

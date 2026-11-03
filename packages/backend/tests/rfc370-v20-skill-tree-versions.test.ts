@@ -9,9 +9,10 @@
 // `fusion-skill-unversioned`. The operations below are the only way fusion now
 // touches skill bytes; they lock, on both database providers and for both the
 // local file store and the database store: the strict version read (no live
-// fallback), candidate capture/read/discard, and the journaled stage →
-// tx-bound commit (`before` ahead of the composite fence, `after` in the same
-// transaction) → publish / abort ladder.
+// fallback), candidate capture/read/discard, and the version write through the
+// skill write scene (RFC-401 T5: lock + journal, `before` ahead of the composite
+// fence, `after` in the committing transaction, publish and candidate cleanup as
+// the tail).
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, expect, test } from 'bun:test'
 import { and, eq } from 'drizzle-orm'
@@ -70,19 +71,20 @@ describeEachProvider('RFC-370 §10 V20 skill tree versions', (harness) => {
     }
     async function state(skillId: string) {
       const { skills } = tablesOf(harness.db)
-      const { skillOperations, skillOperationLocks } = tablesOf(harness.db)
+      const { skillApplyJournal, skillOperationLocks } = tablesOf(harness.db)
       const skill = (await harness.db.select().from(skills).where(eq(skills.id, skillId)))[0]!
-      const operations = await harness.db
+      const journals = await harness.db
         .select()
-        .from(skillOperations)
-        .where(eq(skillOperations.skillId, skillId))
+        .from(skillApplyJournal)
+        .where(eq(skillApplyJournal.skillId, skillId))
       const locks = await harness.db
         .select()
         .from(skillOperationLocks)
         .where(eq(skillOperationLocks.lockedSkillId, skillId))
       return {
         contentVersion: skill.contentVersion,
-        activeOperations: operations.filter((row) => row.active === 1).length,
+        unsettled: journals.filter((row) => row.state === 'prepared' || row.state === 'applying')
+          .length,
         locks: locks.length,
       }
     }
@@ -132,44 +134,37 @@ describeEachProvider('RFC-370 §10 V20 skill tree versions', (harness) => {
       ).rejects.toMatchObject({ code: 'skill-candidate-invalid' })
     })
 
-    test(`${storage}: stage → before → fence → rows → after → publish closes the journaled operation`, async () => {
+    test(`${storage}: before → fence → rows → after in one transaction, then publish settles the journal`, async () => {
       const { skill, trees } = await fixture()
       const proposal = [
         file('SKILL.md', '# fused\n'),
         file('assets/logo.bin', new Uint8Array([1, 2, 3])),
       ]
-      const staged = await trees.stage({
-        skillId: skill.id,
-        source: { kind: 'tree', files: proposal },
-        versionSource: 'fusion',
-        summary: 'fused',
-        fusionId: null,
-        authorUserId: '__system__',
-        now: 10,
-        expectedSkillId: skill.id,
-        expectedVersion: 1,
-      })
-      expect(await state(skill.id)).toMatchObject({
-        contentVersion: 1,
-        activeOperations: 1,
-        locks: 1,
-      })
       const order: string[] = []
-      const version = await harness.session.transaction(
-        async (tx) =>
-          await trees.inTransaction(tx).commit(staged, {
-            before: () => {
-              order.push('before')
-            },
-            after: (index) => {
-              order.push(`after:${index}`)
-            },
-          }),
+      const version = await trees.applyVersion(
+        {
+          skillId: skill.id,
+          source: { kind: 'tree', files: proposal },
+          versionSource: 'fusion',
+          summary: 'fused',
+          fusionId: null,
+          authorUserId: '__system__',
+          now: 10,
+          expectedSkillId: skill.id,
+          expectedVersion: 1,
+        },
+        () => ({
+          before: () => {
+            order.push('before')
+          },
+          after: (index) => {
+            order.push(`after:${index}`)
+          },
+        }),
       )
       expect(version).toBe(2)
       expect(order).toEqual(['before', 'after:2'])
-      await trees.publish(staged)
-      expect(await state(skill.id)).toEqual({ contentVersion: 2, activeOperations: 0, locks: 0 })
+      expect(await state(skill.id)).toEqual({ contentVersion: 2, unsettled: 0, locks: 0 })
       const { skillVersions } = tablesOf(harness.db)
       const row = (
         await harness.db
@@ -185,40 +180,35 @@ describeEachProvider('RFC-370 §10 V20 skill tree versions', (harness) => {
 
     test(`${storage}: the caller's before check answers first; a drifted skill hits the caller's stale message`, async () => {
       const { skill, trees } = await fixture()
-      const stale = (expectedVersion: number) =>
-        trees.stage({
-          skillId: skill.id,
-          source: { kind: 'tree', files: [file('SKILL.md', '# x\n')] },
-          versionSource: 'fusion',
-          summary: null,
-          fusionId: null,
-          authorUserId: '__system__',
-          now: 11,
-          expectedSkillId: skill.id,
-          expectedVersion,
-          staleMessage: 'fusion target skill changed; reload and retry',
-        })
-      const first = await stale(7)
+      const stale = (hooks?: Parameters<typeof trees.applyVersion>[1]) =>
+        trees.applyVersion(
+          {
+            skillId: skill.id,
+            source: { kind: 'tree', files: [file('SKILL.md', '# x\n')] },
+            versionSource: 'fusion',
+            summary: null,
+            fusionId: null,
+            authorUserId: '__system__',
+            now: 11,
+            expectedSkillId: skill.id,
+            expectedVersion: 1,
+            expectedMetaRevision: 7,
+            staleMessage: 'fusion target skill changed; reload and retry',
+          },
+          hooks,
+        )
       await expect(
-        harness.session.transaction(
-          async (tx) =>
-            await trees.inTransaction(tx).commit(first, {
-              before: () => {
-                throw new ConflictError('fusion-not-applying', 'checked first')
-              },
-            }),
-        ),
+        stale(() => ({
+          before: () => {
+            throw new ConflictError('fusion-not-applying', 'checked first')
+          },
+        })),
       ).rejects.toMatchObject({ code: 'fusion-not-applying' })
-      await trees.abort(first)
-      const second = await stale(7)
-      await expect(
-        harness.session.transaction(async (tx) => await trees.inTransaction(tx).commit(second, {})),
-      ).rejects.toMatchObject({
+      await expect(stale()).rejects.toMatchObject({
         code: 'resource-operation-stale',
         message: 'fusion target skill changed; reload and retry',
       })
-      await trees.abort(second)
-      expect(await state(skill.id)).toEqual({ contentVersion: 1, activeOperations: 0, locks: 0 })
+      expect(await state(skill.id)).toEqual({ contentVersion: 1, unsettled: 0, locks: 0 })
     })
 
     // 2026-10-19 hosted acceptance: approving a fusion whose SKILL.md declared a
@@ -227,7 +217,7 @@ describeEachProvider('RFC-370 §10 V20 skill tree versions', (harness) => {
     test(`${storage}: the current SKILL.md's description is the skill's — after a fused tree (BOM too) and after a restore`, async () => {
       const { opts, skill, trees } = await fixture()
       const fuse = async (main: string, now: number) => {
-        const staged = await trees.stage({
+        await trees.applyVersion({
           skillId: skill.id,
           source: { kind: 'tree', files: [file('SKILL.md', main)] },
           versionSource: 'fusion',
@@ -236,10 +226,6 @@ describeEachProvider('RFC-370 §10 V20 skill tree versions', (harness) => {
           authorUserId: '__system__',
           now,
         })
-        await harness.session.transaction(
-          async (tx) => await trees.inTransaction(tx).commit(staged),
-        )
-        await trees.publish(staged)
       }
       const description = async () => {
         const { skills } = tablesOf(harness.db)
@@ -260,12 +246,12 @@ describeEachProvider('RFC-370 §10 V20 skill tree versions', (harness) => {
       expect(await description()).toBe('d')
     })
 
-    test(`${storage}: a candidate stages directly; a tree without SKILL.md is refused before any operation`, async () => {
+    test(`${storage}: a candidate applies directly and is cleaned up; a tree without SKILL.md is refused before any write`, async () => {
       const { skill, trees } = await fixture()
       const candidateId = ulid()
       const files = [file('SKILL.md', '# from candidate\n'), file('notes/a.md', 'A')]
       await trees.captureCandidate({ skillId: skill.id, candidateId, files })
-      const staged = await trees.stage({
+      await trees.applyVersion({
         skillId: skill.id,
         source: { kind: 'candidate', candidateId },
         versionSource: 'fusion',
@@ -273,14 +259,15 @@ describeEachProvider('RFC-370 §10 V20 skill tree versions', (harness) => {
         fusionId: null,
         authorUserId: '__system__',
         now: 12,
+        cleanupCandidateId: candidateId,
       })
-      await harness.session.transaction(async (tx) => await trees.inTransaction(tx).commit(staged))
-      await trees.publish(staged)
       expect(byPath(await trees.readVersionTree({ skillId: skill.id, version: 2 }))).toEqual(
         byPath(files),
       )
+      // 候选树是提交后尾部清理的。
+      expect(await trees.readCandidate({ skillId: skill.id, candidateId })).toBeNull()
       await expect(
-        trees.stage({
+        trees.applyVersion({
           skillId: skill.id,
           source: { kind: 'tree', files: [file('README.md', 'no main')] },
           versionSource: 'fusion',
@@ -291,7 +278,7 @@ describeEachProvider('RFC-370 §10 V20 skill tree versions', (harness) => {
         }),
       ).rejects.toMatchObject({ code: 'skill-tree-main-missing' })
       await expect(
-        trees.stage({
+        trees.applyVersion({
           skillId: skill.id,
           source: { kind: 'candidate', candidateId: ulid() },
           versionSource: 'fusion',
@@ -301,7 +288,7 @@ describeEachProvider('RFC-370 §10 V20 skill tree versions', (harness) => {
           now: 14,
         }),
       ).rejects.toMatchObject({ code: 'skill-candidate-not-found' })
-      expect(await state(skill.id)).toEqual({ contentVersion: 2, activeOperations: 0, locks: 0 })
+      expect(await state(skill.id)).toEqual({ contentVersion: 2, unsettled: 0, locks: 0 })
     })
   }
 })

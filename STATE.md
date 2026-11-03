@@ -30,8 +30,20 @@
   `workgroup-member-user-invalid`（§5 第 7 项），名单没变时不再重建成员行。错误矩阵 `tests/rfc401-workgroup-error-matrix.test.ts`。集中验证
   461 + 18 + 5 个文件，查出的 8 + 3 处源码锁 / 账本 / 对拍问题已修，其余为负载超时、单进程复跑通过；导出仓库里 139 个按已提交源码出报告的
   用例通过。详见 plan「A3b 落地与集中验证」。
-- **下一步**：A4（skill 的数据库部分：版本规则与字节合同；删除剩余 arms；AC-1 结构锁；名称预检整段删除）。Part B（lease、技能 / fusion /
-  restore 接入、旧生命周期退役）的前置 RFC-398 已 Done。
+- **调整**：原 A4（技能的数据库写入、§5 第 1 项技能部分与第 9 项、字节合同、名称预检删除、六类 AC-1 结构锁）并入 Part B——技能的版本
+  规则要在三套工件 owner 里于暂存前判定内容是否变化，正是 G4 重写的部分（plan「Part A 分步」2026-11-02 调整）。
+- **A3b CI**：`8b58a8e5d` 主 CI 67/70：backend shard 2/44 的 `rfc401-resource-write-participants` 整语料负例用时 5.6 s 超过缺省 5 s（本步引入），
+  macOS e2e shard 1/4 没分到 runner；超时由 `0ad2c71ec` 放宽到 30 s，其 CI 70/70，作 A3b 的后继证据。
+- **Part B（T4–T6，一次提交）**：T4 持久 claim / lease / fencing（`atomic_apply_claims`，epoch-2 history 0001）；T5 唯一 skill 写入参与者
+  `RC/infrastructure/skillMutationParticipant.ts` 与 skill 写入场景 `RC/infrastructure/skillAtomicApply.ts`（`skill_apply_journal`，history 0002）——
+  普通 CRUD、ZIP、restore、fusion、Intent、资源包都经它；Intent 新建重名报 `skill-name-in-use` / 409、删除名称预检；内容不变不增版本、
+  description 变化 metaRevision + 1；一份 SKILL.md 字节合同；fusion 提交后发布失败不再记为 failed；提交后失败由 AtomicApply 恢复前滚，
+  不再锁到重启。T6 删除旧漏斗四段与 reserve / delete 写入生命周期，保留兼容执行器。集中验证覆盖全部 2873 个后端用例文件（761 + 693 +
+  9 + 4，再全量 665 + 1446），查出的本步问题（owner 引用、唯一冲突归一、续租定时器、版本基线取锁后读、用例与账本的旧形状、RFC-271 AC
+  点名）均已修；全量轮另查出 epoch-2 跨版本行桥缺失——0001 / 0002 之后 provider move 状态 / 恢复源解析报错、PostgreSQL 逻辑恢复拒收升级前
+  的备份——行桥改为按版本 edge 折叠，逻辑恢复重新经 additive 桥接受较旧的 epoch-2 备份（design §10.4）。其余为 PostgreSQL 钩子负载超时、
+  低并发复跑通过；导出仓库 139 个按已提交源码出报告的用例通过。详见 plan「Part B 落地」与 design §10。
+- **下一步**：推送后跟 exact SHA 的 CI；全绿后 RFC-401 转 Done（AC-6）。
 
 ## 2026-11-02 RFC-430 部署选择项删余下三个可派生项（Done；`design/RFC-430-derivable-deployment-selections/`）
 

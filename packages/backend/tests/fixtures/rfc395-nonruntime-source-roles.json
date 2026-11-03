@@ -81,6 +81,12 @@
       "evidence": "Frozen wrapper storage fields decoded through legacyCheckpointCodec; tests/rfc395-a2-checkpoint-bytes.test.ts:21 preserves the epoch-1 boundary."
     },
     {
+      "path": "packages/backend/src/platform/atomic-apply/composition.ts",
+      "role": "schema-declaration",
+      "sha256": "3d17bc3495607ec5ef123c5184501004ab71ef73614113c5e8c6c5117fdebd4e",
+      "evidence": "Only schema exports; owner contributions are assembled by bootstrap/persistenceSchema.ts. No runtime behavior is excluded."
+    },
+    {
       "path": "packages/backend/src/platform/committed-events/composition.ts",
       "role": "schema-declaration",
       "sha256": "3d17bc3495607ec5ef123c5184501004ab71ef73614113c5e8c6c5117fdebd4e",

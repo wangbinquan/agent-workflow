@@ -34,7 +34,8 @@ describe('RFC-349 Resource Catalog ACL provider boundary', () => {
     )
     expect(ports).toContain('export interface ResourceCatalogAclIdentityReadPort')
     expect(ports).toContain('getOwner(')
-    expect(ports).toContain('listOwnedNames(')
+    // RFC-401 T5：占用名预检随 Intent 名称预检删除，端口只剩 owner。
+    expect(ports).not.toContain('listOwnedNames(')
     expect(ports).toContain('export interface ResourceCatalogSummaryReadPort')
   })
 

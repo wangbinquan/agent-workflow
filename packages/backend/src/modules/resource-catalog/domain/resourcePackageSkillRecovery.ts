@@ -8,8 +8,9 @@
 //     一棵没有数据库行的孤儿目录。
 //   - 账面 **>** 工件                                 ⇒ `cleanup-superseded`：live 目录里是用户
 //     后发布的新内容，清掉暂存、**别把陈旧代际换回去**。
-//   - 账面 **<** 工件                                 ⇒ `reject-missing-generation`：库根本不认识
-//     这一代，报错留痕（可重试），**别把未知代际换进 live**。
+//   - 账面 **<** 工件                                 ⇒ `cleanup-unwritten`：已提交的 apply 没有写下
+//     这一代——RFC-401 T5 起内容不变的更新不推进版本（design §10.2）——清掉暂存，**别把未知代际
+//     换进 live**。旧格式的操作（RFC-401 之前写下，不存在不变跳过）仍按缺失代际报错留痕。
 //   - 相等                                            ⇒ `roll-forward-current`：正常换进去。
 //
 // 此前只有 PostgreSQL 侧有这四分支（`postgresqlResourcePackageSkillRecoveryDisposition`）；
@@ -23,7 +24,7 @@ export type ResourcePackageSkillRecoveryDisposition =
   | 'cleanup-deleted'
   | 'cleanup-superseded'
   | 'roll-forward-current'
-  | 'reject-missing-generation'
+  | 'cleanup-unwritten'
 
 /** 纯代际判定，在读任何快照之前做。`null` = 技能行已不存在。 */
 export function resourcePackageSkillRecoveryDisposition(input: {
@@ -32,6 +33,6 @@ export function resourcePackageSkillRecoveryDisposition(input: {
 }): ResourcePackageSkillRecoveryDisposition {
   if (input.currentContentVersion === null) return 'cleanup-deleted'
   if (input.currentContentVersion > input.artifactVersion) return 'cleanup-superseded'
-  if (input.currentContentVersion < input.artifactVersion) return 'reject-missing-generation'
+  if (input.currentContentVersion < input.artifactVersion) return 'cleanup-unwritten'
   return 'roll-forward-current'
 }

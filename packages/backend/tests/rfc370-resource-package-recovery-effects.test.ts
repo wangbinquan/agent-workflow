@@ -457,13 +457,16 @@ describeEachProvider('RFC-370 logical resource package recovery', (harness) => {
             closing.release()
           }
           const result = await pending
-          expect(result).toEqual({ failed: 0, rolledForward: currentVersion === 1 ? 0 : 1 })
+          // 账面落后于工件：现行格式按「已提交的 apply 没有写下这一代」清理暂存（RFC-401 T5，内容不变不推进版本）；旧格式没有
+          // 不变跳过，仍按缺失代际报错留痕。
+          const rejected = legacy && currentVersion === 1
+          expect(result).toEqual({ failed: 0, rolledForward: rejected ? 0 : 1 })
           expect(isSkillBootVerified(id)).toBe(currentVersion === 2)
           expect(state.calls.filter((call) => call.startsWith('swap:'))).toEqual(
             currentVersion === 2 ? [`swap:${live}:${publishId}`] : [],
           )
-          expect(state.calls.includes('acquire')).toBe(currentVersion !== 1)
-          expect(state.calls.includes('closed')).toBe(currentVersion !== 1)
+          expect(state.calls.includes('acquire')).toBe(!rejected)
+          expect(state.calls.includes('closed')).toBe(!rejected)
           expect(state.existing.has(live)).toBe(true)
           const row = await first(harness.db.select().from(skills).where(eq(skills.id, id)))
           expect(row?.contentVersion ?? null).toBe(currentVersion)

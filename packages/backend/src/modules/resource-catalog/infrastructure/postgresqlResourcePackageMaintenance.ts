@@ -128,7 +128,11 @@ async function rollForwardSkillArtifact(input: {
     currentContentVersion: skill?.contentVersion ?? null,
     artifactVersion: version,
   })
-  if (disposition === 'cleanup-deleted' || disposition === 'cleanup-superseded') {
+  if (
+    disposition === 'cleanup-deleted' ||
+    disposition === 'cleanup-superseded' ||
+    disposition === 'cleanup-unwritten'
+  ) {
     await withResourcePackageRecoveryEffects(factory, async (effects) => {
       await effects.cleanupOperation(expectedLiveDirectory, input.artifact.operationId)
       await effects.removeDirectory(
@@ -137,7 +141,7 @@ async function rollForwardSkillArtifact(input: {
     })
     return
   }
-  if (disposition === 'reject-missing-generation' || skill === null || skill.live === null) {
+  if (skill === null || skill.live === null) {
     throw new Error(`resource-package-skill-publication-missing:${input.artifact.skillId}`)
   }
   const snapshot = skill.snapshot

@@ -72,7 +72,10 @@ function fixture(
   const applicationTables =
     options.applicationTables ?? CONTRACT.tables.map((table) => table.providerTables.postgresql!)
   const head = persistenceHead()
-  const catalog = persistencePostgresqlCatalogs()[0]!
+  // head 那一版的 catalog（history 有多版之后，第 0 个是最早一版的）。
+  const catalog = persistencePostgresqlCatalogs().find(
+    (entry) => entry.planDigest === head.postgresql.digest,
+  )!
   const queries: Array<{
     scope: 'snapshot' | 'live'
     sql: string

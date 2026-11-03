@@ -273,7 +273,9 @@ PostgreSQL → PostgreSQL；反向路径不支持。恢复后的验证、首写�
 ### 2.4 epoch-2 PostgreSQL / 托管恢复与切换中的恢复
 
 epoch-2 PostgreSQL 备份走同 epoch logical restore：目标先安装 native head，再导入业务行与
-摘要绑定的 metadata，保留 archive bytes、历史限制及祖先 lineage。generation / first-write
+摘要绑定的 metadata，保留 archive bytes、历史限制及祖先 lineage。较旧 epoch-2 版本做的备份
+（例如升级前的备份）同样直接恢复进当前 head：其后的 history 版本只新增整表或索引时，旧行原样导入、
+新增表为空；含其他变更的版本需用备份对应的 binary 恢复后再升级（RFC-401 §10.4）。generation / first-write
 由目标恢复协议建立，不能把源的活动 writer 状态当成新安装继续使用。托管动作及两个 Job
 见 [CrewStation 备份与恢复](./crewstation-deployment.md#备份与恢复)。
 

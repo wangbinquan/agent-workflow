@@ -22,7 +22,6 @@ import {
   listSkills,
 } from '../src/modules/resource-catalog/infrastructure/legacy/skill'
 import { describeEachProvider } from './helpers/eachProvider'
-import { deleteManagedSkillOp } from '../src/modules/resource-catalog/infrastructure/legacy/skillDeleteOp'
 import {
   advancePhase,
   beginOperation,
@@ -64,25 +63,30 @@ describeEachProvider('RFC-170 delete op', (harness) => {
 
   const root = () => join(appHome, 'skills', skillId)
 
-  test('forward: deleteManagedSkillOp removes row + files, releases lock, leaves no trash', async () => {
+  // RFC-401 T5：删除经 skill 写入场景；下面两条手工构造的旧 delete operation 仍由启动兼容执行器排空。
+  test('forward: deleteSkill removes row + files, settles its journal, releases the lock, leaves no trash', async () => {
     const skill = await getSkill(db, 'foo')
     expect(skill).not.toBeNull()
-    await deleteManagedSkillOp(db, fsOpts, { id: skill!.id })
+    await deleteSkill(db, fsOpts, skill!.id, T6_ACTOR)
     expect(await getSkill(db, 'foo')).toBeNull()
     expect(existsSync(root())).toBe(false)
-    expect(await getActiveOp(db, skill!.id)).toBeNull() // op done, lock freed
+    expect(await getActiveOp(db, skill!.id)).toBeNull()
+    const { skillApplyJournal, skillOperationLocks } = tablesOf(db)
+    expect(
+      (
+        await db.select().from(skillApplyJournal).where(eq(skillApplyJournal.skillId, skill!.id))
+      ).map((row) => [row.operation, row.state]),
+    ).toEqual([
+      ['create', 'committed'],
+      ['delete', 'committed'],
+    ])
+    expect(await db.select().from(skillOperationLocks)).toEqual([])
     // No leftover trash under skills/.trash.
     const trashDir = join(appHome, 'skills', '.trash')
     if (existsSync(trashDir)) {
       const { readdirSync } = await import('node:fs')
       expect(readdirSync(trashDir)).toHaveLength(0)
     }
-  })
-
-  test('deleteSkill (managed) routes through the op and removes the skill', async () => {
-    await deleteSkill(db, fsOpts, skillId, T6_ACTOR)
-    expect(await getSkill(db, 'foo')).toBeNull()
-    expect(existsSync(root())).toBe(false)
   })
 
   test('recovery ROLLBACK: crash pre-db-committed restores the root; skill survives', async () => {

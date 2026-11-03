@@ -140,6 +140,8 @@ export interface FusionApplyCommand {
   readonly incorporatedMemoryIds: readonly string[]
   readonly summary: string
   readonly now: number
+  /** 提案所在的候选树；提交后由 RC 场景的尾部清理。 */
+  readonly candidateId?: string
 }
 
 // ---------------------------------------------------------------------------

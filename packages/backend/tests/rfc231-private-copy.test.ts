@@ -361,10 +361,9 @@ describeEachProvider('RFC-231 private create invariant', (harness) => {
   test('production writer inventory stays classified as user-private or builtin-public', async () => {
     const expectedInserts: Record<string, Record<string, number>> = {
       agents: { 'modules/resource-catalog/infrastructure/legacy/agent.ts': 1 },
-      // RFC-234: stageManagedSkill (intent-bundle pre-stage) is a second
-      // reserve-writer in skill.ts — same invisible-until-ready pipeline, same
-      // initialPrivateResourceAcl stamp as createManagedSkillWithFiles.
-      skills: { 'modules/resource-catalog/infrastructure/legacy/skill.ts': 2 },
+      // RFC-401 T5: ordinary create, ZIP, Intent and packages insert skill rows through the one
+      // skill write participant (the two reserve-writers in skill.ts were removed).
+      skills: { 'modules/resource-catalog/infrastructure/skillMutationParticipant.ts': 1 },
       // RFC-359 W12: repositories and package arms delegate the concrete inserts
       // to their shared persistence atoms. Keep the forwarding repositories scanned.
       mcps: { 'modules/resource-catalog/infrastructure/mcpPersistence.ts': 1 },
@@ -390,6 +389,7 @@ describeEachProvider('RFC-231 private create invariant', (harness) => {
       'modules/resource-catalog/infrastructure/legacy/workgroups.ts',
       'modules/resource-catalog/infrastructure/workflowDefinitionWrite.ts',
       'modules/resource-catalog/infrastructure/workgroupMutationParticipant.ts',
+      'modules/resource-catalog/infrastructure/skillMutationParticipant.ts',
     ]
     const sources = new Map(
       await Promise.all(
@@ -413,7 +413,7 @@ describeEachProvider('RFC-231 private create invariant', (harness) => {
     }
     for (const file of [
       'modules/resource-catalog/infrastructure/legacy/agent.ts',
-      'modules/resource-catalog/infrastructure/legacy/skill.ts',
+      'modules/resource-catalog/infrastructure/skillMutationParticipant.ts',
       'modules/resource-catalog/infrastructure/legacy/workflow.ts',
       'modules/resource-catalog/infrastructure/legacy/workgroups.ts',
     ]) {

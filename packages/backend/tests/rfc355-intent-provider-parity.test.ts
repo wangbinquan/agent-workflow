@@ -70,7 +70,6 @@ describe('RFC-355 T10 —— apply 面用户可见错误码的精确清单', () 
     'intent-foreign-modify-forbidden',
     'intent-iteration-stale',
     'intent-mutation-conflict',
-    'intent-name-conflict',
     'intent-op-canonical-invalid',
     'intent-ref-unknown',
     'intent-reservation-invalid',

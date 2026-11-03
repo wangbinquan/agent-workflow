@@ -234,27 +234,16 @@ test('package converter selects one source format for the whole array and preser
   ).toThrow('envelope-invalid')
 })
 
-test('pure convergence decisions preserve fresh/active claims and retry committed tails', () => {
-  const row = { id: 'j', state: 'prepared' as const, updatedAt: 1 }
-  expect(
-    decideAtomicApplyConverge(row, { reapBefore: 2, activeJournalIds: new Set(['j']) }).kind,
-  ).toBe('skip')
-  expect(decideAtomicApplyConverge(row, { reapBefore: 0, activeJournalIds: new Set() }).kind).toBe(
-    'skip',
-  )
-  expect(decideAtomicApplyConverge(row, { reapBefore: 1, activeJournalIds: new Set() }).kind).toBe(
-    'compensate',
-  )
-  expect(
-    decideAtomicApplyConverge(
-      { ...row, state: 'failed' },
-      { reapBefore: 2, activeJournalIds: new Set() },
-    ).kind,
-  ).toBe('skip')
-  expect(
-    decideAtomicApplyConverge(
-      { ...row, state: 'committed' },
-      { reapBefore: 0, activeJournalIds: new Set(['j']) },
-    ).kind,
-  ).toBe('roll-forward')
+// RFC-401 T4：十分钟窗口删除——候选动作只看 journal 状态与本进程活跃集合，是否动手由持久 claim 决定（接管只对租约已过期
+// 或没有 claim 行的记录成功，见 rfc401-atomic-apply-lease）。
+test('pure convergence decisions: active journals are skipped and the state picks the candidate action', () => {
+  const row = { id: 'j', state: 'prepared' as const }
+  const idle = { activeJournalIds: new Set<string>() }
+  const active = { activeJournalIds: new Set(['j']) }
+  expect(decideAtomicApplyConverge(row, active).kind).toBe('skip')
+  expect(decideAtomicApplyConverge(row, idle).kind).toBe('compensate')
+  expect(decideAtomicApplyConverge({ ...row, state: 'applying' }, idle).kind).toBe('compensate')
+  expect(decideAtomicApplyConverge({ ...row, state: 'failed' }, idle).kind).toBe('skip')
+  expect(decideAtomicApplyConverge({ ...row, state: 'committed' }, idle).kind).toBe('roll-forward')
+  expect(decideAtomicApplyConverge({ ...row, state: 'committed' }, active).kind).toBe('skip')
 })

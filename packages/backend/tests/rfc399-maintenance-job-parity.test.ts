@@ -279,7 +279,8 @@ test('intentRecovery awaits owner recovery before AtomicApply and retains queued
   commands.atomicApply.converge = async (active) => {
     expect(calls).toEqual(['recover'])
     calls.push('converge')
-    expect(active).toEqual({ intent: ['intent'], 'resource-package': ['bundle'] })
+    // RFC-401 T5：skill 写入场景的在途写入由持久租约保护，活跃快照传空集。
+    expect(active).toEqual({ intent: ['intent'], 'resource-package': ['bundle'], skill: [] })
     return { failed: 1, rolledForward: 2 }
   }
   expect(

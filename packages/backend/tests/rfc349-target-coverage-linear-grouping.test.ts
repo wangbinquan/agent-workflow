@@ -105,7 +105,10 @@ function runtimeFor(
       ]
     : receiptsFor(chunkCount)
   const head = persistenceHead()
-  const artifact = persistencePostgresqlCatalogs()[0]!
+  // 目标库的实时目录取 head 那一版的 catalog（history 有多版之后，第 0 个是最早一版的）。
+  const artifact = persistencePostgresqlCatalogs().find(
+    (entry) => entry.planDigest === head.postgresql.digest,
+  )!
   let state = {
     sourceGenerationId: 'dbg_source_0001',
     contractDigest: CONTRACT.digest,

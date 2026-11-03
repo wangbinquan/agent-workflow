@@ -21,7 +21,7 @@ import { first as firstRow } from '@/platform/persistence/queryHelpers'
 import { composeIntentApplyRecoveryScene } from '@/modules/intent/composition/applyMaintenance'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
-import { databaseSessionFor } from '../src/platform/persistence/databaseTransaction'
+import { stageCommittedLegacyVersionWrite } from './helpers/legacySkillVersionWrite'
 import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -40,11 +40,7 @@ import {
   type IntentJournalArtifactV1,
 } from '@/modules/intent/infrastructure/migration/intentApplyLegacyCodec'
 import { createManagedSkillWithFiles } from '../src/modules/resource-catalog/infrastructure/legacy/skill'
-import {
-  commitSkillVersionInTx,
-  stageSkillVersion,
-  type StagedSkillVersion,
-} from '../src/modules/resource-catalog/infrastructure/legacy/skillVersion'
+import { type StagedSkillVersion } from '../src/modules/resource-catalog/infrastructure/legacy/skillVersion'
 
 const OWNER_ID = 'rfc343-intent-owner'
 
@@ -265,32 +261,14 @@ describeEachProvider('RFC-343 Intent apply 正确性（双引擎）', (harness) 
           )
         },
       )
-      const staged = await stageSkillVersion(
+      // RFC-401 T5：新写入不再产生旧 operation；这里摆出升级来源里的旧状态（旧格式 journal + 已提交的旧 version-write）。
+      const staged = await stageCommittedLegacyVersionWrite({
         db,
-        { appHome },
-        skill.id,
-        (stagingDir) => {
-          writeFileSync(
-            join(stagingDir, 'SKILL.md'),
-            '---\nname: intent-tail\ndescription: v2\n---\n\nbody v2\n',
-          )
-        },
-        {
-          source: 'editor',
-          authorUserId: OWNER_ID,
-          expectedVersion: skill.contentVersion,
-          expectedOwnerUserId: OWNER_ID,
-        },
-      )
-      await databaseSessionFor(db).transaction(
-        async (tx) =>
-          await commitSkillVersionInTx(tx, staged, {
-            source: 'editor',
-            authorUserId: OWNER_ID,
-            expectedVersion: skill.contentVersion,
-            expectedOwnerUserId: OWNER_ID,
-          }),
-      )
+        appHome,
+        skillId: skill.id,
+        mainContent: '---\nname: intent-tail\ndescription: v2\n---\n\nbody v2\n',
+        authorUserId: OWNER_ID,
+      })
       const journalId = await seedJournal(
         'committed',
         intentApplyArtifactCodecs.encode([
@@ -380,7 +358,8 @@ describeEachProvider('RFC-343 Intent apply 正确性（双引擎）', (harness) 
       expect(operation).toMatchObject({ phase: 'done', active: 0 })
 
       // The retained audit row is seen again, but the completed exact op is not
-      // republished or unmarked as if it were still pending.
+      // republished or unmarked as if it were still pending. RFC-401 T4: its tail is
+      // recorded complete, so the next convergence no longer rolls it forward at all.
       expect(
         await createAtomicApplyRecovery([
           composeIntentApplyRecoveryScene({
@@ -391,7 +370,7 @@ describeEachProvider('RFC-343 Intent apply 正确性（双引擎）', (harness) 
         ]).converge({ intent: [] }),
       ).toEqual({
         failed: 0,
-        rolledForward: 1,
+        rolledForward: 0,
       })
       expect(
         readFileSync(join(appHome, 'skills', skill.id, 'files', 'SKILL.md'), 'utf8'),

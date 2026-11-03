@@ -165,26 +165,22 @@ describe('RFC-353 AC-4 写入面：融合适配器不再直写 resource-catalog 
     },
   )
 
-  test('legacy 的复合前置条件已改为委托，判据不再有第二份拷贝', () => {
-    const legacy = readFileSync(
-      join(
-        import.meta.dir,
-        '..',
-        'src',
-        'modules',
-        'resource-catalog',
-        'infrastructure',
-        'legacy',
-        'skillVersion.ts',
-      ),
-      'utf-8',
-    )
-    // RFC-359 W4-D23b：legacy 版本写入路径改吃中立事务后，复合前置条件的读面与
-    // 融合 apply 共用同一份异步实现（`skillVersionCommitParticipant#readSkillVersionCompositeLive`）——
-    // 那份 SQLite 专属的同步栅栏随之退役。
-    expect(legacy).toContain('readSkillVersionCompositeLive(tx, skillId)')
-    expect(legacy).toContain('skillVersionCompositeDrifted(')
+  test('复合前置条件只在唯一的 skill 写入参与者里判，判据不再有第二份拷贝', () => {
+    const read = (...path: string[]) =>
+      readFileSync(
+        join(import.meta.dir, '..', 'src', 'modules', 'resource-catalog', ...path),
+        'utf-8',
+      )
+    // RFC-401 T5：普通编辑、restore、fusion、Intent、资源包都经 `skillMutationParticipant` 写行，复合前置条件在那里读 live 行并
+    // 交给 domain 的判据；legacy 版本漏斗只剩把请求交给 skill 写入场景。
+    const participant = read('infrastructure', 'skillMutationParticipant.ts')
+    expect(participant).toContain('readSkillVersionCompositeLive(tx, input.skillId)')
+    expect(participant).toContain('skillVersionCompositeDrifted(')
+    const legacy = read('infrastructure', 'legacy', 'skillVersion.ts')
+    expect(legacy).toContain('createSkillApplyScene(')
+    expect(legacy).not.toContain('readSkillVersionCompositeLive(')
     // 六项比对的字面量只应出现在 domain 那一份里。
-    expect(legacy).not.toContain('live.aclRevision !== commit.expectedAclRevision')
+    for (const source of [participant, legacy])
+      expect(source).not.toContain('live.aclRevision !== commit.expectedAclRevision')
   })
 })

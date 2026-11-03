@@ -178,12 +178,17 @@ describeEachProviderHttpApplication(
               )
             }),
           ])
-          const { skillOperationLocks, skillOperations } = tablesOf(scope.harness.db),
+          const { skillOperationLocks, skillApplyJournal } = tablesOf(scope.harness.db),
             { skills } = tablesOf(scope.harness.db)
+          // RFC-401 T5：ready 行与 v1 在提交事务里一起写下，live 的发布是提交之后的尾部——此刻锁仍归这条 journal。
           const before = await scope.harness.db.select().from(skills)
           expect(before).toHaveLength(1)
-          expect(before[0]).toMatchObject({ reservationState: 'reserving', contentVersion: 1 })
+          expect(before[0]).toMatchObject({ reservationState: 'ready', contentVersion: 1 })
           expect(await scope.harness.db.select().from(skillOperationLocks)).toHaveLength(1)
+          expect((await scope.harness.db.select().from(skillApplyJournal))[0]).toMatchObject({
+            operation: 'create',
+            state: 'committed',
+          })
           release.release()
           const response = await pending
           expect(response.status).toBe(201)
@@ -192,10 +197,6 @@ describeEachProviderHttpApplication(
           expect(read.status).toBe(200)
           expect(await read.json()).toMatchObject({ bodyMd: 'selected body' })
           expect(await scope.harness.db.select().from(skillOperationLocks)).toEqual([])
-          expect((await scope.harness.db.select().from(skillOperations))[0]).toMatchObject({
-            phase: 'done',
-            active: 0,
-          })
           expect(existsSync(join(appHome, 'skills', created.id))).toBe(false)
           expect(
             existsSync(

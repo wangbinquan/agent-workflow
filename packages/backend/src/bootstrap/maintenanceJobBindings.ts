@@ -33,8 +33,9 @@ export interface MaintenanceOwnerCommands {
   readonly developmentAutomation: DevelopmentAutomationMaintenanceCommands
   readonly digitalEmployee: DigitalEmployeeMaintenanceCommands
   readonly atomicApply: {
+    // RFC-401 T5：第三个场景是 skill 写入（maintenanceWorkerGraph 注册的三个场景）。
     converge(
-      activeByScene: Readonly<Record<'intent' | 'resource-package', readonly string[]>>,
+      activeByScene: Readonly<Record<'intent' | 'resource-package' | 'skill', readonly string[]>>,
     ): Promise<AtomicApplyConvergenceReceipt>
   }
   readonly intent: IntentMaintenanceCommands

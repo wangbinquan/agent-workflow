@@ -75,7 +75,11 @@ describe('RFC-208 · external PlantUML host cannot hang the daemon', () => {
 })
 
 describe('RFC-208 · a failed filesystem rollback cannot strand a skill operation lock', () => {
-  const skillSource = readFileSync(
+  // RFC-401 T5：新建、写版本、删除都经 skill 写入场景（`skillAtomicApply.ts`），旧的 reserve 回滚整段删除。原缺陷的形状——存储清理
+  // 一抛异常（EPERM / EBUSY / ENOTEMPTY），后面的数据库回滚就不执行，锁永远不释放、该技能永远 409——在新结构里由两点排除：
+  // 补偿逐个工件捕获清理错误并汇报（不抛出），journal 照样记账；未完成的补偿由 AtomicApply 恢复重试，终态写回同一事务释放锁。
+  // 行为由 `rfc401-skill-write-stack`「an incomplete compensation is finished by recovery, which then releases the lock」锁定。
+  const sceneSource = readFileSync(
     resolve(
       import.meta.dir,
       '..',
@@ -83,28 +87,24 @@ describe('RFC-208 · a failed filesystem rollback cannot strand a skill operatio
       'modules',
       'resource-catalog',
       'infrastructure',
-      'legacy',
-      'skill.ts',
+      'skillAtomicApply.ts',
     ),
     'utf8',
   )
 
-  test('storage cleanup in the reserve rollback is guarded so abandonOperation always runs', () => {
-    // `force: true` only swallows ENOENT. When rmSync threw (EPERM / EBUSY /
-    // ENOTEMPTY) the DB rollback below it never ran, leaving the row `reserving`
-    // and the op lock ACTIVE — which the orphan sweep cannot reclaim, because it
-    // only collects locks whose op is no longer active. Result: that skill name
-    // answers 409 forever.
-    const discardAt = skillSource.indexOf('await creation.discard(contentPlan)')
-    expect(discardAt).toBeGreaterThan(0)
-    const rollback = skillSource.slice(
-      discardAt - 200,
-      skillSource.indexOf('abandonOperation(tx, opId)'),
+  test('compensation catches every storage cleanup and reports it instead of throwing past the settlement', () => {
+    const start = sceneSource.indexOf('export async function compensateSkillArtifacts(')
+    expect(start).toBeGreaterThan(0)
+    const body = sceneSource.slice(
+      start,
+      sceneSource.indexOf('export function createSkillApplyScene('),
     )
-    // the cleanup sits inside its own try/catch …
-    expect(rollback).toMatch(/try \{[\s\S]*await creation\.discard\(contentPlan\)[\s\S]*\} catch/)
-    // and the rollback itself must still be there, after the guarded cleanup
-    expect(discardAt).toBeLessThan(skillSource.indexOf('abandonOperation(tx, opId)'))
+    expect(body).toMatch(
+      /try \{[\s\S]*await content\.creationContent\.discard\([\s\S]*\} catch \(error\) \{\s*errors\.push\(error\)/,
+    )
+    expect(body).toContain('return errors')
+    // 每一次写入都把技能锁的释放交给终态结算。
+    expect(sceneSource.match(/settle: settle\(journalId\)/g)).toHaveLength(3)
   })
 })
 

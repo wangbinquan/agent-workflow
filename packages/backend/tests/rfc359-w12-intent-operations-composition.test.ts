@@ -553,7 +553,8 @@ describeEachProvider('RFC-359 intent apply and maintenance composition', (harnes
         bodyMd: '# Basic\n\nExact body.',
         files: [{ path: 'ref/extra.md', content: 'supporting text\n' }],
       },
-      '---\nname: composition-skill-basic\ndescription: plain description\n---\n\n# Basic\n\nExact body.\n',
+      // RFC-401 T5：唯一字节合同（design §2.3）。
+      '---\nname: composition-skill-basic\ndescription: plain description\n---\n# Basic\n\nExact body.',
     )
   })
 
@@ -566,7 +567,7 @@ describeEachProvider('RFC-359 intent apply and maintenance composition', (harnes
         bodyMd: '# 中文技能\n\n保留内容 🚀',
         files: [{ path: 'ref/extra.md', content: '辅助文档\n第二行 🚀\n' }],
       },
-      '---\nname: composition-skill-extra\ndescription: 额外说明\nlicense: MIT\ntags:\n  - one\n  - two\n---\n\n# 中文技能\n\n保留内容 🚀\n',
+      '---\nname: composition-skill-extra\ndescription: 额外说明\nlicense: MIT\ntags:\n  - one\n  - two\n---\n# 中文技能\n\n保留内容 🚀',
     )
   })
 })

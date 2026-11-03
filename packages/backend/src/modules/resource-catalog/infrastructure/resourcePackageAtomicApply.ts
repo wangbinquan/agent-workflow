@@ -30,6 +30,7 @@ import {
   resourcePackageApplyErrors,
   resourcePackageApplyErrorText as errorText,
 } from './resourcePackageApplyErrors'
+import { createAtomicApplyClaimStore } from '@/platform/atomic-apply/infrastructure/claimStore'
 import { createAtomicApply } from '@/platform/atomic-apply/stateMachine'
 import { createResourcePackageAtomicJournal } from './resourcePackageAtomicJournal'
 import {
@@ -628,6 +629,9 @@ export function createResourcePackageAtomicApplyOperations(
   const log = dependencies.log ?? createLogger('postgresqlResourcePackageApply')
   const machine = createAtomicApply({
     journal: createResourcePackageAtomicJournal(dependencies.db),
+    // RFC-401 T4：持久 claim / lease / fencing。
+    claims: createAtomicApplyClaimStore('resource-package'),
+    token: ulid,
     codecs: {
       encode: (artifacts: readonly PostgresqlResourcePackageMutationArtifact[]) =>
         resourcePackageArtifactCodecs.encode(artifacts),

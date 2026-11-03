@@ -20,6 +20,7 @@ import {
   requireCommittableDraft,
 } from '../domain/applyClaim'
 import { createAtomicApplyLock } from '@/platform/atomic-apply/keyedLock'
+import { createAtomicApplyClaimStore } from '@/platform/atomic-apply/infrastructure/claimStore'
 import { createAtomicApply } from '@/platform/atomic-apply/stateMachine'
 import { createIntentApplyJournal } from './intentApplyJournal'
 import { intentApplyArtifactCodecs } from './intentApplyArtifactCodec'
@@ -121,6 +122,9 @@ export function createIntentApplyEngine(
   const now = dependencies.now ?? Date.now
   const machine = createAtomicApply({
     journal: createIntentApplyJournal(dependencies.db),
+    // RFC-401 T4：持久 claim / lease / fencing。
+    claims: createAtomicApplyClaimStore('intent'),
+    token: ulid,
     codecs: {
       encode: (artifacts: readonly IntentApplyArtifact[]) =>
         intentApplyArtifactCodecs.encode(artifacts),
@@ -211,15 +215,11 @@ export function createIntentApplyEngine(
       async prepare(recordArtifact) {
         const manifest = sessionManifest(claim.session)
         const changeset = decodeStoredChangeset(claim.draft.changesetJson)
-        const { occupiedNames, copyOnlyTargets } = await resourceSession.preflight(
-          manifest,
-          changeset,
-        )
+        const { copyOnlyTargets } = await resourceSession.preflight(manifest, changeset)
         const bundle = resolveIntentBundle({
           manifest,
           changeset,
           decisions: input.decisions,
-          occupiedNames,
           copyOnlyTargets,
         })
         const pendingIds = new Set(

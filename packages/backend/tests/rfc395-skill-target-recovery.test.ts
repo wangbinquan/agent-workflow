@@ -25,8 +25,6 @@ import {
 import { createManagedSkillWithFiles } from '@/modules/resource-catalog/infrastructure/legacy/skill'
 import {
   commitSkillVersion,
-  stageSkillVersion,
-  commitSkillVersionInTx,
   backfillLegacySkillVersions,
 } from '@/modules/resource-catalog/infrastructure/legacy/skillVersion'
 import {
@@ -159,12 +157,18 @@ describeEachProvider('RFC-395 skill target recovery', (harness) => {
         snapshot: { version: 2 },
       })
       expect((await query.publication(skill.id, 3))?.snapshot).toBeNull()
-      expect(await getActiveOp(harness.db, skill.id)).toMatchObject({
-        kind: 'version-write',
-        phase: 'db-committed',
-      })
+      // RFC-401 T5：提交后的崩溃留下 committed / 尾部 pending 的 journal（不再是旧 version-write operation），启动步骤前滚它。
+      const { skillApplyJournal, skillOperationLocks } = tablesOf(harness.db)
+      const pending = (await harness.db.select().from(skillApplyJournal)).find(
+        (row) => row.operation === 'version',
+      )
+      expect(pending?.state).toBe('committed')
+      expect(
+        (await harness.db.select().from(skillOperationLocks)).map((lock) => lock.opId),
+      ).toEqual([pending!.id])
       const boot = createSkillCatalogBootAdapter({ db: harness.db, ...options })
-      expect(await boot.recoverOperations()).toMatchObject({ rolledForward: 1 })
+      expect(await boot.recoverOperations()).toMatchObject({ total: 0 })
+      expect(await harness.db.select().from(skillOperationLocks)).toEqual([])
       expect(await getActiveOp(harness.db, skill.id)).toBeNull()
       expect(await boot.reverifySnapshots()).toMatchObject({ verified: 1, quarantined: 0 })
       if (profile === 'database') {
@@ -218,22 +222,32 @@ describeEachProvider('RFC-395 skill target recovery', (harness) => {
       { name: 'rollback', description: '' },
       { kind: 'main', content: Buffer.from('original') },
     )
-    const staged = await stageSkillVersion(
-      harness.db,
-      options,
-      skill.id,
-      { kind: 'write-main', content: Buffer.from('candidate') },
-      { source: 'editor', authorUserId: null },
-    )
+    // RFC-401 T5：提交事务失败（这里是前置条件漂移）且进程内补偿没做完——暂存树留在库里、journal 仍是 prepared；启动步骤
+    // 收敛 skill 写入场景时补偿它。
     await expect(
-      harness.session.transaction(async (tx) => {
-        await commitSkillVersionInTx(tx, staged, { source: 'editor', authorUserId: null })
-        throw new Error('rollback-database')
-      }),
-    ).rejects.toThrow('rollback-database')
+      commitSkillVersion(
+        harness.db,
+        options,
+        skill.id,
+        { kind: 'write-main', content: Buffer.from('candidate') },
+        {
+          source: 'editor',
+          authorUserId: null,
+          expectedMetaRevision: 9,
+          __beforeRollbackCleanupForTest: () => {
+            throw new Error('rollback-interrupted')
+          },
+        },
+      ),
+    ).rejects.toMatchObject({ code: 'resource-operation-stale' })
+    const { skillApplyJournal } = tablesOf(harness.db)
+    const journalOf = async () =>
+      (await harness.db.select().from(skillApplyJournal)).find((row) => row.operation === 'version')
+    expect((await journalOf())?.state).toBe('prepared')
     expect(
       await createSkillCatalogBootAdapter({ db: harness.db, ...options }).recoverOperations(),
-    ).toMatchObject({ rolledBack: 1 })
+    ).toMatchObject({ total: 0 })
+    expect((await journalOf())?.state).toBe('failed')
     const query = createSkillContentLocationQuery(harness.db)
     expect((await query.publication(skill.id, 2))?.snapshot).toBeNull()
     expect((await query.publication(skill.id, 1))?.contentVersion).toBe(1)

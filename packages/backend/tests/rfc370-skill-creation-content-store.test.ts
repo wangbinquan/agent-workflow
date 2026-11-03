@@ -1,5 +1,8 @@
 // RFC-370 H6: initial bytes and cleanup use the selected storage, while AW
-// retains reservation visibility, first-version publication and compensation.
+// retains visibility, first-version publication and compensation.
+//
+// RFC-401 T5：新建经 skill 写入场景——初始内容作为整树（`replace-files`）经选定的版本存储暂存为 v1、固化快照，ready 行与 v1
+// 版本行在提交事务里一起写入（没有 `reserving` 中间态），提交后发布 live；选定的创建存储只在补偿时丢弃整棵根。
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, beforeEach, expect, test } from 'bun:test'
@@ -9,19 +12,14 @@ import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createIdentityAccessRuntime } from '@/modules/identity-access/composition'
-import type {
-  SkillCreationContentStore,
-  SkillInitialContent,
-} from '@/modules/resource-catalog/application/skills/creationContentStore'
+import type { SkillCreationContentStore } from '@/modules/resource-catalog/application/skills/creationContentStore'
 import type { SkillVersionContentStore } from '@/modules/resource-catalog/application/skills/versionContentStore'
 import { composeSkillCatalog } from '@/modules/resource-catalog/composition/skillOperations'
 import {
-  compensateManagedSkillStage,
   createManagedSkill,
   createManagedSkillWithFiles,
   getSkillById,
   listSkills,
-  stageManagedSkill,
 } from '@/modules/resource-catalog/infrastructure/legacy/skill'
 import { createFileSkillCreationContentStore } from '@/modules/resource-catalog/infrastructure/local/fileSkillCreationContentStore'
 import { createFileSkillVersionContentStore } from '@/modules/resource-catalog/infrastructure/local/fileSkillVersionContentStore'
@@ -47,14 +45,16 @@ async function reach(gate: ReturnType<typeof barrier>, pending: Promise<unknown>
 
 // Non-filesystem contract fixture; this does not model CS persistence or recovery.
 function storage() {
-  const contents = new Map<string, SkillInitialContent>()
+  const staged = new Map<string, string>()
+  const published = new Set<string>()
+  const discarded: string[] = []
   const creation: SkillCreationContentStore = {
     plan: (skillId) => ({ skillId, rootRef: `blob:${skillId}`, liveRef: `blob:${skillId}/live` }),
-    async initialize(plan, content) {
-      contents.set(plan.skillId, content)
+    async initialize() {
+      throw new Error('creation never initializes content directly')
     },
     async discard(root) {
-      contents.delete(root.skillId)
+      discarded.push(root.rootRef)
     },
   }
   const versions: SkillVersionContentStore = {
@@ -67,16 +67,21 @@ function storage() {
       versionJournalRef: `blob:${input.skillId}/v${input.version}`,
     }),
     async stage(publication, change) {
-      expect(contents.has(publication.skillId)).toBe(true)
-      expect(change).toEqual({ kind: 'retain' })
+      expect(change.kind).toBe('replace-files')
+      if (change.kind === 'replace-files')
+        staged.set(publication.skillId, Buffer.from(change.mainContent).toString('utf8'))
       return { contentHash: 'a'.repeat(64), matchesLive: false }
     },
     async discardStage() {},
     async captureVersion() {},
-    async publish() {},
-    async abort() {},
+    async publish(publication) {
+      published.add(publication.skillId)
+    },
+    async abort(publication) {
+      staged.delete(publication.skillId)
+    },
   }
-  return { creation, versions, contents }
+  return { creation, versions, staged, published, discarded }
 }
 
 const input = {
@@ -95,137 +100,113 @@ describeEachProvider('RFC-370 skill creation content store', (harness) => {
   })
   afterEach(() => rmSync(directory, { recursive: true, force: true }))
 
-  async function row() {
+  async function rows() {
     const { skills } = tablesOf(harness.db)
-    return (await harness.db.select().from(skills))[0]!
+    return await harness.db.select().from(skills)
   }
-  async function reserve() {
-    const { skillOperations } = tablesOf(harness.db)
-    return (await harness.db.select().from(skillOperations))[0]!
+  async function journal() {
+    const { skillApplyJournal } = tablesOf(harness.db)
+    return (await harness.db.select().from(skillApplyJournal))[0]
   }
   async function locks() {
     const { skillOperationLocks } = tablesOf(harness.db)
     return await harness.db.select().from(skillOperationLocks)
   }
 
-  test('keeps creation invisible until initialization, snapshot and publication finish', async () => {
-    const { creation, versions, contents } = storage()
-    const initialized = barrier(),
-      initializeReady = barrier()
+  test('keeps creation invisible until the snapshot commits, then publishes v1', async () => {
+    const { creation, versions, staged, published } = storage()
+    const staging = barrier(),
+      stageReady = barrier()
     const publishing = barrier(),
       publishReady = barrier()
     const pending = createManagedSkill(
       harness.db,
       {
         appHome,
-        creationContent: {
-          ...creation,
-          async initialize(plan, content) {
-            initialized.release()
-            await initializeReady.pending
-            await creation.initialize(plan, content)
-          },
-        },
+        creationContent: creation,
         versionContent: {
           ...versions,
-          async publish() {
+          async stage(publication, change, compareLive) {
+            staging.release()
+            await stageReady.pending
+            return await versions.stage(publication, change, compareLive)
+          },
+          async publish(publication, hash) {
             publishing.release()
             await publishReady.pending
+            await versions.publish(publication, hash)
           },
         },
       },
       input,
     )
     try {
-      await reach(initialized, pending)
-      expect(await row()).toMatchObject({
-        reservationState: 'reserving',
-        versionState: 'legacy-unbackfilled',
-      })
-      expect(await reserve()).toMatchObject({ phase: 'intent', active: 1 })
+      await reach(staging, pending)
+      expect(await rows()).toEqual([])
       expect(await listSkills(harness.db)).toEqual([])
+      expect((await journal())?.state).toBe('prepared')
       expect(await locks()).toHaveLength(1)
-      initializeReady.release()
+      stageReady.release()
       await reach(publishing, pending)
-      expect(await row()).toMatchObject({ reservationState: 'reserving', contentVersion: 1 })
-      expect(await reserve()).toMatchObject({ phase: 'fs-staged', active: 1 })
-      expect(await getSkillById(harness.db, (await row()).id)).toBeNull()
+      expect(await rows()).toMatchObject([
+        { reservationState: 'ready', contentVersion: 1, versionState: 'snapshot-authoritative' },
+      ])
+      expect((await journal())?.state).toBe('committed')
+      expect(await locks()).toHaveLength(1)
     } finally {
-      initializeReady.release()
+      stageReady.release()
       publishReady.release()
     }
     const result = await pending
-    expect(await row()).toMatchObject({
-      id: result.id,
-      reservationState: 'ready',
-      contentVersion: 1,
-    })
-    expect(await reserve()).toMatchObject({ phase: 'done', active: 0 })
     expect(await locks()).toEqual([])
     const { skillVersions } = tablesOf(harness.db)
     expect(await harness.db.select().from(skillVersions)).toHaveLength(1)
-    const initializedContent = contents.get(result.id)!
-    expect(initializedContent.kind).toBe('main')
-    expect(
-      initializedContent.kind === 'main' &&
-        Buffer.from(initializedContent.content).toString('utf8'),
-    ).toEqual(expect.stringContaining('initial body'))
+    expect(staged.get(result.id)).toContain('initial body')
+    expect(published.has(result.id)).toBe(true)
     expect(existsSync(appHome)).toBe(false)
   })
 
-  test('awaits cleanup after initialize failure and releases the reservation even when cleanup fails', async () => {
-    const { creation, versions } = storage()
-    const cleaning = barrier(),
-      cleanupReady = barrier()
-    const failure = new Error('initial bytes unavailable')
-    const pending = createManagedSkill(
-      harness.db,
-      {
-        appHome,
-        versionContent: versions,
-        creationContent: {
-          ...creation,
-          async initialize() {
-            throw failure
+  for (const cleanupFails of [false, true]) {
+    test(`a staging failure discards the selected root; cleanup failure=${cleanupFails} keeps the lock for recovery`, async () => {
+      const { creation, versions, discarded } = storage()
+      const failure = new Error('initial bytes unavailable')
+      const pending = createManagedSkill(
+        harness.db,
+        {
+          appHome,
+          versionContent: {
+            ...versions,
+            async captureVersion() {
+              throw failure
+            },
           },
-          async discard(root) {
-            expect(root.rootRef).toBe(`blob:${root.skillId}`)
-            cleaning.release()
-            await cleanupReady.pending
-            throw new Error('cleanup unavailable too')
+          creationContent: {
+            ...creation,
+            async discard(root) {
+              await creation.discard(root)
+              if (cleanupFails) throw new Error('cleanup unavailable too')
+            },
           },
         },
-      },
-      input,
-    )
-    // Bun's rejects matcher waits while evaluating the assertion. Observe with
-    // a plain Promise first so this test can still release the cleanup barrier.
-    const outcome = pending.then(
-      () => null,
-      (error: unknown) => error,
-    )
-    try {
-      await reach(cleaning, outcome)
-      expect(await row()).toMatchObject({ reservationState: 'reserving' })
-      expect(await reserve()).toMatchObject({ phase: 'intent', active: 1 })
-      expect(await locks()).toHaveLength(1)
-    } finally {
-      cleanupReady.release()
-    }
-    expect(await outcome).toBe(failure)
-    const { skills } = tablesOf(harness.db)
-    expect(await harness.db.select().from(skills)).toEqual([])
-    expect(await reserve()).toMatchObject({ active: 0 })
-    expect(await locks()).toEqual([])
-    const retried = await createManagedSkill(
-      harness.db,
-      { appHome, creationContent: creation, versionContent: versions },
-      input,
-    )
-    expect(retried.name).toBe(input.name)
-  })
+        input,
+      )
+      await expect(pending).rejects.toBe(failure)
+      expect(await rows()).toEqual([])
+      expect(discarded).toHaveLength(1)
+      expect(discarded[0]).toMatch(/^blob:[0-9A-HJKMNP-TV-Z]{26}$/)
+      expect((await journal())?.state).toBe(cleanupFails ? 'prepared' : 'failed')
+      expect(await locks()).toHaveLength(cleanupFails ? 1 : 0)
+      if (cleanupFails) return
+      const retried = await createManagedSkill(
+        harness.db,
+        { appHome, creationContent: creation, versionContent: versions },
+        input,
+      )
+      expect(retried.name).toBe(input.name)
+    })
+  }
 
-  test('planning failure and a physical producer with selected storage leave no reservation', async () => {
+  test('planning failure and a physical producer with selected storage leave no row', async () => {
     const { creation, versions } = storage()
     const failure = new Error('cannot plan content')
     await expect(
@@ -233,9 +214,9 @@ describeEachProvider('RFC-370 skill creation content store', (harness) => {
         harness.db,
         {
           appHome,
-          versionContent: versions,
-          creationContent: {
-            ...creation,
+          creationContent: creation,
+          versionContent: {
+            ...versions,
             plan() {
               throw failure
             },
@@ -260,15 +241,12 @@ describeEachProvider('RFC-370 skill creation content store', (harness) => {
       ),
     ).rejects.toThrow('legacy skill producer requires the local file creation store')
     expect(producerCalled).toBe(false)
-    const { skillOperations } = tablesOf(harness.db),
-      { skills } = tablesOf(harness.db)
-    expect(await harness.db.select().from(skills)).toEqual([])
-    expect(await harness.db.select().from(skillOperations)).toEqual([])
+    expect(await rows()).toEqual([])
     expect(await locks()).toEqual([])
   })
 
-  test('post-commit failure preserves ready content and its recoverable operation', async () => {
-    const { creation, versions, contents } = storage()
+  test('a post-commit failure keeps the ready row and its recoverable journal', async () => {
+    const { creation, versions, published } = storage()
     const failure = new Error('after ready crash')
     await expect(
       createManagedSkillWithFiles(
@@ -287,52 +265,12 @@ describeEachProvider('RFC-370 skill creation content store', (harness) => {
         },
       ),
     ).rejects.toBe(failure)
-    expect(await row()).toMatchObject({ reservationState: 'ready', contentVersion: 1 })
-    expect(await reserve()).toMatchObject({ phase: 'db-committed', active: 1 })
+    const [row] = await rows()
+    expect(row).toMatchObject({ reservationState: 'ready', contentVersion: 1 })
+    expect((await journal())?.state).toBe('committed')
     expect(await locks()).toHaveLength(1)
-    expect(contents.has((await row()).id)).toBe(true)
-    expect(await getSkillById(harness.db, (await row()).id)).not.toBeNull()
-    expect(existsSync(appHome)).toBe(false)
-  })
-
-  test('bundle stage stays invisible and compensation uses its selected root store', async () => {
-    const { creation, versions, contents } = storage()
-    const staged = await stageManagedSkill(
-      harness.db,
-      {
-        appHome,
-        creationContent: creation,
-        versionContent: versions,
-      },
-      input,
-      { kind: 'main', content: Buffer.from('bundle body') },
-    )
-    expect(staged.skillDir).toBe(`blob:${staged.skillId}`)
-    expect(await reserve()).toMatchObject({ phase: 'fs-published', active: 1 })
-    expect(await listSkills(harness.db)).toEqual([])
-    const cleaning = barrier(),
-      cleanupReady = barrier()
-    const pending = compensateManagedSkillStage(harness.db, staged, {
-      ...creation,
-      async discard(root) {
-        expect(root).toEqual({ skillId: staged.skillId, rootRef: staged.skillDir })
-        cleaning.release()
-        await cleanupReady.pending
-        await creation.discard(root)
-      },
-    })
-    try {
-      await reach(cleaning, pending)
-      expect(await locks()).toHaveLength(1)
-    } finally {
-      cleanupReady.release()
-    }
-    await pending
-    expect(contents.size).toBe(0)
-    const { skills } = tablesOf(harness.db)
-    expect(await harness.db.select().from(skills)).toEqual([])
-    expect(await reserve()).toMatchObject({ active: 0 })
-    expect(await locks()).toEqual([])
+    expect(published.size).toBe(0)
+    expect(await getSkillById(harness.db, row!.id)).not.toBeNull()
     expect(existsSync(appHome)).toBe(false)
   })
 
@@ -358,22 +296,16 @@ describeEachProvider('RFC-370 skill creation content store', (harness) => {
     if (admitted === null) throw new Error('creation fixture authority unavailable')
     const localCreation = createFileSkillCreationContentStore(appHome)
     const localVersions = createFileSkillVersionContentStore(appHome)
-    const initialized: string[] = []
+    const staged: string[] = []
     const catalog = composeSkillCatalog({
       db: harness.db,
       appHome,
-      creationContent: {
-        ...localCreation,
-        async initialize(plan, content) {
-          await Promise.resolve()
-          initialized.push(content.kind)
-          await localCreation.initialize(plan, content)
-        },
-      },
+      creationContent: localCreation,
       versionContent: {
         ...localVersions,
         async stage(...args) {
           await Promise.resolve()
+          staged.push(args[1].kind)
           return localVersions.stage(...args)
         },
         async captureVersion(...args) {
@@ -407,7 +339,7 @@ describeEachProvider('RFC-370 skill creation content store', (harness) => {
     expect(result.failed).toEqual([])
     expect(result.created).toHaveLength(1)
     const imported = result.created[0]!
-    expect(initialized).toEqual(['main', 'files'])
+    expect(staged).toEqual(['replace-files', 'replace-files'])
     expect((await catalog.queries.content(admitted.actor, { id: imported.id })).bodyMd).toContain(
       'ZIP body',
     )

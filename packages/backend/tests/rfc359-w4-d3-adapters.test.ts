@@ -100,7 +100,6 @@ describeEachProvider('RFC-359 W4-D3 —— resource-catalog ACL 内核', (harnes
     })
     expect(await identities.getOwner('agent', 'agent-a')).toBe(owner)
     expect(await identities.getOwner('agent', 'missing')).toBeUndefined()
-    expect(await identities.listOwnedNames('agent', owner)).toEqual(['shared-name'])
     expect(await findOwnedAclResourceIdsByName(db, 'agent', other, 'shared-name')).toEqual([
       'agent-b',
     ])

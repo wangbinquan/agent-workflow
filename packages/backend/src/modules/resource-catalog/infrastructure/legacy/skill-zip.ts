@@ -33,6 +33,7 @@ import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import {
   createManagedSkillWithFiles,
   getSkillById,
+  readSkillMainText,
 } from '@/modules/resource-catalog/infrastructure/legacy/skill'
 import { isSkillAvailableThisBoot } from '@/modules/resource-catalog/infrastructure/legacy/skillBootVerify'
 import {
@@ -52,7 +53,7 @@ import { canEditRow } from '@/modules/resource-catalog/domain/resourceAccess'
 import { listWritableGrantedResourceIds } from '@/modules/resource-catalog/infrastructure/sqliteResourceGrantRepository'
 import { ConflictError, ValidationError } from '@/util/errors'
 import { createLogger } from '@/util/log'
-import { stringifyFrontmatter } from '@/util/frontmatter'
+import { preserveSkillMarkdownBytes, renderSkillMarkdown } from '../skillMarkdown'
 import type { SkillCreationContentStore } from '../../application/skills/creationContentStore'
 
 const log = createLogger('skill-zip')
@@ -674,7 +675,13 @@ export async function commitSkillZipBuffer(
           {
             kind: 'replace-files',
             files: candidate.files.map((file) => ({ path: file.relPath, content: file.bytes })),
-            mainContent: skillTextBytes(candidateMainContent(candidate, targetName)),
+            // 与当前 SKILL.md 解析等价时保留原字节：同一份内容重导入不推进版本。
+            mainContent: skillTextBytes(
+              preserveSkillMarkdownBytes(
+                await readSkillMainText(db, opts, overwriteTarget),
+                candidateMainContent(candidate, targetName),
+              ),
+            ),
           },
           {
             source: 'editor',
@@ -731,13 +738,12 @@ export async function commitSkillZipBuffer(
 }
 
 function candidateMainContent(candidate: SkillCandidate, targetName: string): string {
-  return stringifyFrontmatter({
-    data: {
-      name: targetName,
-      description: candidate.description,
-      ...candidate.frontmatterExtra,
-    },
-    body: candidate.bodyMd,
+  // RFC-401 T5：唯一字节合同（design §2.3）。
+  return renderSkillMarkdown({
+    name: targetName,
+    description: candidate.description,
+    bodyMd: candidate.bodyMd,
+    frontmatterExtra: candidate.frontmatterExtra,
   })
 }
 

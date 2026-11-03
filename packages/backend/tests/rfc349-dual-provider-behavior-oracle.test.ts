@@ -615,7 +615,44 @@ function postgresqlApplyJournal(): Readonly<{
       sql: /select .* from "agent_workflow"\."resource_bundle_applies"/is,
       values: APPLY_ROWS.map(applyValues),
     },
+    // RFC-401 T4：恢复先接管持久 claim（这些 journal 是旧版本留下的、没有 claim 行），写回以接管令牌 fencing。
     BEGIN,
+    {
+      label: 'read committed apply claim',
+      sql: /select .* from "agent_workflow"\."atomic_apply_claims"/is,
+      values: [],
+    },
+    {
+      label: 'take over committed apply without a claim row',
+      sql: /insert into "agent_workflow"\."atomic_apply_claims"/i,
+      values: [['apply-committed']],
+    },
+    COMMIT,
+    BEGIN,
+    {
+      label: 'mark committed tail complete under the claim token',
+      sql: /update "agent_workflow"\."atomic_apply_claims"/i,
+      values: [['apply-committed']],
+    },
+    COMMIT,
+    BEGIN,
+    {
+      label: 'read stale apply claim',
+      sql: /select .* from "agent_workflow"\."atomic_apply_claims"/is,
+      values: [],
+    },
+    {
+      label: 'take over stale apply without a claim row',
+      sql: /insert into "agent_workflow"\."atomic_apply_claims"/i,
+      values: [['apply-stale']],
+    },
+    COMMIT,
+    BEGIN,
+    {
+      label: 'fence stale settlement with the claim token',
+      sql: /update "agent_workflow"\."atomic_apply_claims"/i,
+      values: [['apply-stale']],
+    },
     {
       label: 'settle stale apply by expected-state CAS',
       sql: /update "agent_workflow"\."resource_bundle_applies"/i,

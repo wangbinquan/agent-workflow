@@ -1,0 +1,36 @@
+{
+  "formatVersion": 1,
+  "epoch": 2,
+  "after": "0001_rfc401_atomic_apply_claims",
+  "provenance": {
+    "kind": "curated",
+    "sources": [
+      "design/RFC-401-single-resource-write-stack/design.md",
+      "packages/backend/db/schema-history/epoch2/0001_rfc401_atomic_apply_claims.sqlite-plan.json",
+      "packages/backend/src/platform/atomic-apply/infrastructure/persistence/schema.ts"
+    ],
+    "note": "RFC-401 T4 adds the platform-owned AtomicApply claim table. A history-0001 installation records one claim per apply journal; the seeded Intent apply is committed and its post-commit tail completed, so its claim carries tail_state complete with an expired lease. The add-table edge itself writes no rows: upgrading a history-0000 installation leaves the new table empty until the daemon claims or recovers a journal."
+  },
+  "rows": [
+    {
+      "table": "atomic_apply_claims",
+      "values": {
+        "scene": "intent",
+        "journal_id": "01K3980000CF878360B4662DD3",
+        "claimed_by": "upgrade-fixture-daemon",
+        "lease_epoch": 1,
+        "claim_expires_at": 1778459500000,
+        "tail_state": "complete",
+        "created_at": 1778459500000,
+        "updated_at": 1778459500000
+      }
+    }
+  ],
+  "historyExpectations": [
+    {
+      "table": "atomic_apply_claims",
+      "rows": []
+    }
+  ],
+  "content": []
+}

@@ -160,9 +160,6 @@ describeEachProvider('RFC-359 W7 —— Resource Catalog 组合根', (harness) =
     expect((await catalog.authorization.filterVisibleRows(stranger, 'agent', [row])).length).toBe(0)
     // ACL 身份读端口：owner 从真表取出，缺行返回 null/undefined。
     expect(await catalog.persistence.identities.getOwner('agent', agentId)).toBe(owner.user.id)
-    expect(await catalog.persistence.identities.listOwnedNames('agent', owner.user.id)).toContain(
-      `agent-${agentId.slice(-6).toLowerCase()}`,
-    )
 
     // 概览：RFC-359 W8 删掉零消费者的 SQLite 别名，W57 又把剩下那个具名入口归了中立
     // （计数端口本就收中立客户端，`Postgresql` 前缀与形参标注是命名债不是分叉），

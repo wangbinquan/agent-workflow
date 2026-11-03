@@ -48,6 +48,12 @@
     "definition": "reused"
   },
   {
+    "table": "atomic_apply_claims",
+    "owner": "platform/atomic-apply",
+    "sources": [],
+    "definition": "target"
+  },
+  {
     "table": "auth_login_policy",
     "owner": "identity-access",
     "sources": ["auth_login_policy"],
@@ -1122,6 +1128,12 @@
     "owner": "integration",
     "sources": ["scheduled_tasks"],
     "definition": "reused"
+  },
+  {
+    "table": "skill_apply_journal",
+    "owner": "resource-catalog",
+    "sources": [],
+    "definition": "target"
   },
   {
     "table": "skill_content_entries",

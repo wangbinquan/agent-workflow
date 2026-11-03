@@ -16,6 +16,7 @@ import { schemaContribution as contribution7 } from '@/modules/integration/compo
 import { schemaContribution as contribution8 } from '@/modules/intent/composition/schema'
 import { schemaContribution as contribution9 } from '@/modules/knowledge-evolution/composition/schema'
 import { schemaContribution as contribution10 } from '@/modules/memory/composition/schema'
+import { schemaContribution as contributionAtomicApply } from '@/platform/atomic-apply/composition/schema'
 import { schemaContribution as contribution11 } from '@/platform/committed-events/composition/schema'
 import { schemaContribution as contribution12 } from '@/platform/content/composition/schema'
 import { schemaContribution as contribution13 } from '@/modules/resource-catalog/composition/schema'
@@ -174,6 +175,8 @@ export const persistenceSchema = createSchemaRegistry(
     },
     contribution9,
     contribution10,
+    // RFC-401 T4：AtomicApply 的持久 claim / lease / fencing（epoch-2 history 0001）。
+    contributionAtomicApply,
     contribution11,
     contribution12,
     {

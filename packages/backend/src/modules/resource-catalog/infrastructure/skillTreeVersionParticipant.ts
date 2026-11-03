@@ -1,63 +1,35 @@
-import { capturedSkillTreeColumns } from './databaseSkillTrees'
 // RFC-370 §10 V20 —— 融合（以及任何「整树替换成下一版」的写入）经 resource-catalog 推进技能版本。
 //
-// 一份实现，两种内容绑定：暂存 / 发布 / 回退全走 legacy 版本漏斗（`stageSkillVersion` 开带锁的
-// version-write 操作并经选定的内容仓暂存，`publishStagedSkillVersion` 发布并收尾），所以本地文件与
-// 数据库存储的崩溃恢复都是既有那一份（`versionWriteRecoveryHandler`）。提交段是 tx-bound：
-// 调用方开事务，`before` 先跑（融合重验自身），然后复合栅栏、版本行、`after`、操作日志推进到
-// db-committed——与版本行同一事务，恢复据此判前滚还是回滚。
+// RFC-401 T5：一份实现、两种内容绑定，写入经 skill 写入场景（`skillAtomicApply.ts`）：取技能锁、暂存树并固化版本快照、在提交
+// 事务里依次执行调用方的 `before`、唯一 skill 写入参与者（复合栅栏、版本行）与 `after`，提交后发布 live 并清理候选树。提交之后的
+// 失败由 AtomicApply 恢复前滚，崩溃恢复与编辑器同一份。
 //
 // 种子与候选树经 `SkillTreeContentStore`：严格读某一版本的不可变快照（缺失即 null，没有 live 兜底），
 // 候选树与技能同生同灭。
 
-import { insertOne } from '@/platform/persistence/singleInsert'
-import { tablesOf } from '@/platform/persistence/sessionTables'
-import { eq } from 'drizzle-orm'
-import { ulid } from 'ulid'
-
 import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
-import { NotFoundError, ValidationError, staleConflictError } from '@/util/errors'
+import { NotFoundError, ValidationError } from '@/util/errors'
 
-import { createSkillVersionCommitParticipantInTx } from '../application/skillVersionCommit'
 import type { SkillPackageContentEntry } from '../application/skills/packageContentReader'
 import type { SkillTreeContentStore } from '../application/skills/treeContentStore'
-import {
-  planSkillVersionCommit,
-  skillVersionCompositeDrifted,
-  skillVersionCompositeFenceRequested,
-} from '../domain/skillVersionCommit'
 import type {
   SkillTreeVersionFile,
   SkillTreeVersionOperations,
   SkillTreeVersionStageRequest,
   SkillVersionCommitHooks,
-  SkillVersionCommitParticipantInTx,
-  StagedSkillTreeVersion,
 } from '../public/participants'
-import { unmarkSkillBootVerified } from './legacy/skillBootVerify'
-import { skillVersionRelPath } from './legacy/skillIdentityPaths'
-import { advancePhase } from './legacy/skillOperations'
-import {
-  abortStagedSkillVersion,
-  publishStagedSkillVersion,
-  skillMainDescription,
-  stageSkillVersion,
-  type SkillVersionFsOptions,
-  type StagedSkillVersion,
-} from './legacy/skillVersion'
-import { readSkillVersionCompositeLive } from './skillVersionCommitParticipant'
+import { skillMainDescription, type SkillVersionFsOptions } from './legacy/skillVersion'
+import { skillApplyContentFor } from './skillApplyContent'
+import { createSkillApplyScene } from './skillAtomicApply'
 
 const MAIN = 'SKILL.md'
 
+/** 公共的树操作加上经 skill 写入场景的版本推进；事务只在本 context 的装配之下出现，公共合同不暴露它。 */
 export interface SkillTreeVersionParticipant extends SkillTreeVersionOperations {
-  inTransaction(transaction: PersistenceTx): SkillVersionCommitParticipantInTx
-}
-
-interface StagedEntry {
-  readonly staged: StagedSkillVersion
-  readonly request: SkillTreeVersionStageRequest
-  /** What the staged SKILL.md declares; committed with the version. */
-  readonly description: string
+  applyVersion(
+    request: SkillTreeVersionStageRequest,
+    hooks?: (transaction: PersistenceTx) => SkillVersionCommitHooks<Promise<void> | void>,
+  ): Promise<number>
 }
 
 const toFiles = (
@@ -84,13 +56,18 @@ export function createSkillTreeVersionParticipant(input: {
   readonly fs: SkillVersionFsOptions
   readonly trees: SkillTreeContentStore
 }): SkillTreeVersionParticipant {
-  const stagedVersions = new WeakMap<StagedSkillTreeVersion, StagedEntry>()
-  const entryOf = (handle: StagedSkillTreeVersion): StagedEntry => {
-    const entry = stagedVersions.get(handle)
-    if (entry === undefined)
-      throw new Error('skill tree version was not staged by this participant')
-    return entry
-  }
+  const scene = createSkillApplyScene({
+    db: input.db,
+    content: skillApplyContentFor(input.db, {
+      appHome: input.fs.appHome,
+      ...(input.fs.contentKind === undefined ? {} : { contentKind: input.fs.contentKind }),
+      ...(input.fs.versionContent === undefined ? {} : { versionContent: input.fs.versionContent }),
+      ...(input.fs.deletionContent === undefined
+        ? {}
+        : { deletionContent: input.fs.deletionContent }),
+      treeContent: input.trees,
+    }),
+  })
 
   async function sourceFiles(
     request: SkillTreeVersionStageRequest,
@@ -131,115 +108,55 @@ export function createSkillTreeVersionParticipant(input: {
     async discardCandidate(request: { readonly skillId: string; readonly candidateId: string }) {
       await input.trees.discardCandidate(request)
     },
-    async stage(request: SkillTreeVersionStageRequest) {
+    async applyVersion(request, hooks) {
       const files = await sourceFiles(request)
-      const mainContent = mainContentOf(files)
-      // The composite fence is judged inside the committing transaction, after
-      // the caller's own `before` checks (see SkillVersionCommitHooks).
-      const staged = await stageSkillVersion(
-        input.db,
-        input.fs,
-        request.skillId,
-        {
+      const description = skillMainDescription(mainContentOf(files))
+      const written = await scene.version({
+        skillId: request.skillId,
+        change: {
           kind: 'replace-files',
           files: files
             .filter((file) => file.path !== MAIN)
             .map((file) => ({ path: file.path, content: file.content })),
           mainContent: files.find((file) => file.path === MAIN)!.content,
         },
-        {
+        mutation: {
+          fence: {
+            ...(request.expectedSkillId === undefined
+              ? {}
+              : { expectedSkillId: request.expectedSkillId }),
+            ...(request.expectedVersion === undefined
+              ? {}
+              : { expectedVersion: request.expectedVersion }),
+            ...(request.expectedMetaRevision === undefined
+              ? {}
+              : { expectedMetaRevision: request.expectedMetaRevision }),
+            ...(request.expectedOwnerUserId === undefined
+              ? {}
+              : { expectedOwnerUserId: request.expectedOwnerUserId }),
+            ...(request.expectedAclRevision === undefined
+              ? {}
+              : { expectedAclRevision: request.expectedAclRevision }),
+            ...(request.expectedVisibility === undefined
+              ? {}
+              : { expectedVisibility: request.expectedVisibility }),
+            ...(request.staleMessage === undefined ? {} : { staleMessage: request.staleMessage }),
+          },
           source: request.versionSource,
-          authorUserId: request.authorUserId,
           summary: request.summary,
           fusionId: request.fusionId,
+          restoredFromVersion: null,
+          authorUserId: request.authorUserId,
+          description,
+          // 整树替换总是推进一版（融合与导入的既有语义）。
+          advance: 'always',
         },
-      )
-      const handle: StagedSkillTreeVersion = Object.freeze({
-        skillId: staged.skillId,
-        versionIndex: staged.newVersion,
+        ...(hooks === undefined ? {} : { hooks }),
+        ...(request.cleanupCandidateId === undefined
+          ? {}
+          : { candidateId: request.cleanupCandidateId }),
       })
-      stagedVersions.set(handle, {
-        staged,
-        request,
-        description: skillMainDescription(mainContent),
-      })
-      return handle
-    },
-    inTransaction(transaction: PersistenceTx) {
-      return createSkillVersionCommitParticipantInTx({
-        async commit(
-          handle: StagedSkillTreeVersion,
-          hooks?: SkillVersionCommitHooks<Promise<void> | void>,
-        ): Promise<number> {
-          const { staged, request, description } = entryOf(handle)
-          if (staged.noop !== null) throw new Error('a skill tree version is never a no-op write')
-          await hooks?.before?.()
-          if (skillVersionCompositeFenceRequested(request)) {
-            const live = await readSkillVersionCompositeLive(transaction, staged.skillId)
-            if (skillVersionCompositeDrifted(live, request)) {
-              throw staleConflictError(
-                'skill',
-                request.staleMessage ??
-                  `skill '${staged.skillId}' changed since this operation started; reload and retry`,
-              )
-            }
-          }
-          const plan = planSkillVersionCommit({
-            versionRowId: ulid(),
-            skillId: staged.skillId,
-            versionIndex: staged.newVersion,
-            contentHash: staged.newHash,
-            filesPath: skillVersionRelPath(staged.skillId, staged.newVersion),
-            source: request.versionSource,
-            summary: request.summary,
-            fusionId: request.fusionId,
-            restoredFromVersion: null,
-            authorUserId: request.authorUserId,
-            now: request.now,
-            setDescription: description,
-          })
-          const { skills, skillVersions } = tablesOf(transaction)
-          await transaction
-            .update(skills)
-            .set({
-              ...plan.skillPatch,
-              ...capturedSkillTreeColumns(
-                staged.contentKind ?? 'local-file',
-                staged.skillId,
-                'live',
-                `skills/${staged.skillId}/files`,
-              ),
-            })
-            .where(eq(skills.id, staged.skillId))
-          const { filesPath, ...versionRow } = plan.versionRow
-          await insertOne(transaction, skillVersions, {
-            ...versionRow,
-            ...(await capturedSkillTreeColumns(
-              staged.contentKind ?? 'local-file',
-              staged.skillId,
-              `version:${staged.newVersion}`,
-              filesPath,
-            )),
-          })
-          await hooks?.after?.(staged.newVersion)
-          if (staged.opId !== null) await advancePhase(transaction, staged.opId, 'db-committed')
-          return staged.newVersion
-        },
-      })
-    },
-    async publish(handle: StagedSkillTreeVersion) {
-      const { staged } = entryOf(handle)
-      // The database already names a generation live content has not published:
-      // drop the previous admission first, exactly as `commitSkillVersion` does.
-      unmarkSkillBootVerified(staged.skillId)
-      await publishStagedSkillVersion(input.db, input.fs, staged)
-      stagedVersions.delete(handle)
-    },
-    async abort(handle: StagedSkillTreeVersion) {
-      const entry = stagedVersions.get(handle)
-      if (entry === undefined) return
-      stagedVersions.delete(handle)
-      await abortStagedSkillVersion(input.db, entry.staged, undefined, input.fs.versionContent)
+      return written.versionIndex
     },
   } satisfies SkillTreeVersionParticipant)
 }

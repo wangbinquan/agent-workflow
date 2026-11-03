@@ -101,7 +101,8 @@ describeEachProvider('RFC-370 selected Intent artifact content', (harness) => {
         ...contentRowColumns(legacyContentRef('skill-path', 'local-file', 'object-ref:skill-v1')),
         source: 'initial',
         summary: 'Initial',
-        contentHash: hash,
+        // RFC-401 T5：内容摘要与暂存的新内容不同——相同即「内容不变」，不推进版本。
+        contentHash: 'b'.repeat(64),
         createdAt: 1,
       })
     }

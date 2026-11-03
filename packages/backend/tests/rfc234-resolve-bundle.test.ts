@@ -37,18 +37,6 @@ const MANIFEST: IntentContextManifest = [
   },
 ]
 
-const OCCUPIED: ReadonlyMap<
-  'agent' | 'skill' | 'mcp' | 'plugin' | 'workflow' | 'workgroup',
-  ReadonlySet<string>
-> = new Map([
-  ['agent', new Set(['taken-name'])],
-  ['skill', new Set(['taken-skill'])],
-  ['mcp', new Set<string>()],
-  ['plugin', new Set<string>()],
-  ['workflow', new Set<string>()],
-  ['workgroup', new Set<string>()],
-])
-
 function parse(cs: unknown) {
   const r = parseIntentChangeset(JSON.stringify(cs))
   if (!r.ok) throw new Error(r.errors.join('; '))
@@ -158,7 +146,6 @@ describe('resolveIntentBundle', () => {
       manifest: MANIFEST,
       changeset: FULL_BUNDLE,
       decisions: baseDecisions,
-      occupiedNames: OCCUPIED,
     })
     const order = bundle.ops.map((o) => `${o.resourceType}:${o.action}`)
     expect(order).toEqual([
@@ -226,7 +213,6 @@ describe('resolveIntentBundle', () => {
       manifest: MANIFEST,
       changeset: cs,
       decisions: [{ opId: 'op-1', applyMode: 'copy' }],
-      occupiedNames: OCCUPIED,
     })
     const agentOp = bundle.ops.find((o) => o.opId === 'op-1')
     expect(agentOp?.action).toBe('create')
@@ -247,7 +233,6 @@ describe('resolveIntentBundle', () => {
           ...baseDecisions,
           { opId: 'op-1', slots: [{ slotId: 'secret:op-9:/nope', value: 'x' }] },
         ],
-        occupiedNames: OCCUPIED,
       }),
     ).toThrow(/intent-slot-unknown|was not issued/)
 
@@ -256,7 +241,6 @@ describe('resolveIntentBundle', () => {
         manifest: MANIFEST,
         changeset: FULL_BUNDLE,
         decisions: [baseDecisions[1] as never],
-        occupiedNames: OCCUPIED,
       }),
     ).toThrow(/intent-secret-required|must be filled/)
 
@@ -282,7 +266,6 @@ describe('resolveIntentBundle', () => {
         manifest: MANIFEST,
         changeset: withCred,
         decisions: [],
-        occupiedNames: OCCUPIED,
       }),
     ).toThrow(/requires an explicit waiver/)
     // an explicit waiver lets it through
@@ -293,7 +276,6 @@ describe('resolveIntentBundle', () => {
       manifest: MANIFEST,
       changeset: withCred,
       decisions: [{ opId: 'op-1', slots: [{ slotId: waiver?.slotId ?? '', value: 'waived' }] }],
-      occupiedNames: OCCUPIED,
     })
     expect(ok.ops.length).toBe(1)
 
@@ -309,14 +291,15 @@ describe('resolveIntentBundle', () => {
         },
       ],
     })
-    expect(() =>
+    // RFC-401 T5：skill 也不再在这里预检名称——冲突由唯一的 skill 写入参与者在提交时报 `skill-name-in-use`（409），与普通
+    // 编辑、资源包相同（proposal §5 第 1 项；rfc401-skill-write-stack）。
+    expect(
       resolveIntentBundle({
         manifest: MANIFEST,
         changeset: clash,
         decisions: [],
-        occupiedNames: OCCUPIED,
-      }),
-    ).toThrow(/intent-name-conflict|is taken/)
+      }).ops.map((op) => op.resourceType),
+    ).toEqual(['skill'])
     // RFC-401 A1：agent 不再在这里预检名称——冲突由唯一的 agent 写入参与者在提交时报 `agent-name-in-use`（409），
     // 与普通编辑相同（入口一致性见 rfc401-agent-error-matrix）。
     const agentClash = parse({
@@ -336,7 +319,6 @@ describe('resolveIntentBundle', () => {
         manifest: MANIFEST,
         changeset: agentClash,
         decisions: [],
-        occupiedNames: OCCUPIED,
       }).ops.map((op) => op.resourceType),
     ).toEqual(['agent'])
     // finalName slot resolves the clash without regenerating
@@ -344,7 +326,6 @@ describe('resolveIntentBundle', () => {
       manifest: MANIFEST,
       changeset: clash,
       decisions: [{ opId: 'op-1', slots: [{ slotId: 'name:op-1', value: 'free-name' }] }],
-      occupiedNames: OCCUPIED,
     })
     expect((renamed.ops[0]?.payload as { name: string }).name).toBe('free-name')
   })
@@ -403,7 +384,6 @@ describe('RFC-253 T28 — script-node env slots', () => {
           ],
         },
       ],
-      occupiedNames: OCCUPIED,
     })
     const wfOp = bundle.ops.find((o) => o.opId === 'op-1')
     const nodes = (wfOp?.payload.definition as { nodes: Array<Record<string, unknown>> }).nodes
@@ -417,7 +397,6 @@ describe('RFC-253 T28 — script-node env slots', () => {
         manifest: MANIFEST,
         changeset: scriptFlow({ API_TOKEN: '‹secret›' }),
         decisions: [],
-        occupiedNames: OCCUPIED,
       }),
     ).toThrow(/intent-secret-required|must be filled/)
   })
@@ -436,7 +415,6 @@ describe('RFC-253 T28 — script-node env slots', () => {
         manifest: MANIFEST,
         changeset: scriptFlow({ API_TOKEN: 'literal-value' }),
         decisions: [],
-        occupiedNames: OCCUPIED,
       }),
     ).toThrow(/draft has blocking validation errors/)
   })

@@ -17,6 +17,9 @@ import {
   isProtectedSkillMainFile,
 } from '@agent-workflow/shared'
 import { renderResourcePackageSkillMarkdown as skillMarkdown } from '../resourcePackageSkillDocument'
+import { eq } from 'drizzle-orm'
+import { tablesOf } from '@/platform/persistence/sessionTables'
+import { resourcePackageSkillRecoveryDisposition } from '../../domain/resourcePackageSkillRecovery'
 
 import { ValidationError } from '@/util/errors'
 import { safeJoin } from '@/util/safePath'
@@ -92,7 +95,10 @@ function writeSkillTree(
 ): void {
   const payload = BundleSkillPayloadSchema.parse(mutation.payload)
   mkdirSync(root, { recursive: true, mode: 0o700 })
-  writeFileSync(join(root, SKILL_MAIN), skillMarkdown(payload), { mode: 0o600 })
+  // RFC-401 T5：当前版本的 SKILL.md 与新内容解析等价时保留原字节（design §2.3）。
+  const main = join(root, SKILL_MAIN)
+  const previous = existsSync(main) ? readFileSync(main, 'utf8') : null
+  writeFileSync(main, skillMarkdown(payload, previous), { mode: 0o600 })
   for (const file of payload.files) {
     if (isProtectedSkillMainFile(file.path)) {
       throw new ValidationError(
@@ -283,6 +289,33 @@ export function createFileResourcePackageSkillArtifactOwner(input: {
     })
   }
 
+  /**
+   * RFC-401 T5：已提交的 apply 不一定写下了这一版——内容不变的更新不推进版本（design §10.2）。按账面判定：当前代际才发布，
+   * 否则（技能已删、已被后来的版本取代、或这一版没有写入）只清掉本次暂存。
+   */
+  async function finalizeCommittedSkillPlan(state: SkillPlanState): Promise<void> {
+    if (state.finalized) return
+    const { skills } = tablesOf(input.db)
+    const current = (
+      await input.db
+        .select({ contentVersion: skills.contentVersion })
+        .from(skills)
+        .where(eq(skills.id, state.artifact.skillId))
+        .limit(1)
+    )[0]
+    const disposition = resourcePackageSkillRecoveryDisposition({
+      currentContentVersion: current?.contentVersion ?? null,
+      artifactVersion: state.version,
+    })
+    if (disposition === 'roll-forward-current') {
+      finalizeSkillPlan(state)
+      return
+    }
+    cleanupOpDirs(state.liveDirectory, state.artifact.operationId)
+    rmSync(state.candidateDirectory, { recursive: true, force: true })
+    state.finalized = true
+  }
+
   const owner: ResourcePackageSkillArtifactOwner = {
     planCreate(context, request) {
       const liveDirectory = skillFilesAbs(input.appHome, request.skillId)
@@ -326,7 +359,7 @@ export function createFileResourcePackageSkillArtifactOwner(input: {
         throw new Error(`resource-package-skill-plan-missing:${request.artifact.operationId}`)
       }
       if (request.databaseCommitted) {
-        finalizeSkillPlan(state)
+        await finalizeCommittedSkillPlan(state)
         return
       }
       restoreFromBackup(state.liveDirectory, request.artifact.operationId)
@@ -344,7 +377,7 @@ export function createFileResourcePackageSkillArtifactOwner(input: {
       if (state === undefined) {
         throw new Error(`resource-package-skill-plan-missing:${request.artifact.operationId}`)
       }
-      finalizeSkillPlan(state)
+      await finalizeCommittedSkillPlan(state)
     },
     async afterCommitted(context) {
       const outstanding = [...(plans.get(context)?.values() ?? [])].filter(

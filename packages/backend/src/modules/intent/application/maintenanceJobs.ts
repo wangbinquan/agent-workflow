@@ -9,7 +9,7 @@ const NONE: MaintenanceWorkerDelta = { kind: 'none' }
 
 export function createIntentMaintenanceJobHandlers(
   commands: IntentMaintenanceCommands,
-  atomicApply: Pick<AtomicApplyRecovery<'intent' | 'resource-package'>, 'converge'>,
+  atomicApply: Pick<AtomicApplyRecovery<'intent' | 'resource-package' | 'skill'>, 'converge'>,
 ): Pick<MaintenanceJobHandlers, 'intentScratchGc' | 'intentRecovery'> {
   return {
     async intentScratchGc(input) {
@@ -27,6 +27,8 @@ export function createIntentMaintenanceJobHandlers(
       const applies = await atomicApply.converge({
         intent: payload.activeIntentApplyJournalIds,
         'resource-package': payload.activeBundleApplyIds,
+        // RFC-401 T5：skill 写入场景的在途写入由持久 claim 的租约保护（每 20 s 续租），活跃快照只是跳过的优化，这里不传。
+        skill: [],
       })
       return {
         counters: {

@@ -15,6 +15,7 @@ export {
   workgroupMembers,
   workgroups,
   resourceBundleApplies,
+  skillApplyJournal,
   agents,
   agentSkillRefs,
   agentMcpRefs,

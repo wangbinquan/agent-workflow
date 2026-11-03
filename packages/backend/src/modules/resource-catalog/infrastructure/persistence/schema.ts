@@ -770,6 +770,36 @@ const resourceBundleAppliesDefinition = owner.table({
 
 export const resourceBundleApplies = materializeDrizzle(resourceBundleAppliesDefinition).table
 
+// RFC-401 T5（design §10.2）—— skill 写入场景的 AtomicApply journal。普通 CRUD（新建、保存、文件写删、ZIP 单项、restore、删除）
+// 与 fusion approve 每次写入一行；`id` 兼作幂等键。claim / lease 在 `atomic_apply_claims`（scene = `skill`），技能锁仍是
+// `skill_operation_locks`（op_id = 本表 id）。行与 `resource_bundle_applies` 一样保留为恢复与审计状态。
+const skillApplyJournalDefinition = owner.table({
+  id: 'skill_apply_journal',
+  schemaSymbol: 'skillApplyJournal',
+  columns: {
+    id: c.id('id', { primary: true }),
+    skillId: c.id('skill_id'),
+    operation: c.enum('operation', ['create', 'version', 'delete']),
+    state: c.enum('state', ['prepared', 'applying', 'committed', 'failed'], {
+      default: 'prepared',
+    }),
+    preparedArtifactsJson: c.jsonText('prepared_artifacts_json', {
+      default: '{"scene":"skill","version":1,"artifacts":[]}',
+    }),
+    receiptJson: c.jsonText('receipt_json', { nullable: true }),
+    error: c.text('error', { nullable: true }),
+    createdAt: c.epochMs('created_at'),
+    updatedAt: c.epochMs('updated_at'),
+  },
+  indexes: [index('idx_skill_apply_journal_state', ['state'])],
+  retention: {
+    class: 'owner-managed-business',
+    rule: 'Retain as live business or recovery state until the owning bounded context approves a replacement contract.',
+  },
+})
+
+export const skillApplyJournal = materializeDrizzle(skillApplyJournalDefinition).table
+
 const agentsDefinition = owner.table({
   version: 2,
   unique: [],
@@ -1377,6 +1407,7 @@ export const schemaContribution = {
     workgroupMembersDefinition,
     workgroupsDefinition,
     resourceBundleAppliesDefinition,
+    skillApplyJournalDefinition,
     agentsDefinition,
     agentSkillRefsDefinition,
     agentMcpRefsDefinition,

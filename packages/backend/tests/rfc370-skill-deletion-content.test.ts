@@ -1,7 +1,8 @@
-// RFC-370 H6: selected delete/reserve storage must finish before the existing
-// durable operation can advance or release its lock, including restart recovery.
-// RFC-370 H6: selected delete/reserve storage must finish before the existing
-// durable operation can advance or release its lock, including restart recovery.
+// RFC-370 H6: selected delete/reserve storage must finish before the durable
+// write can advance or release its lock, including restart recovery.
+//
+// RFC-401 T5：删除经 skill 写入场景——「阶段」读 journal 状态与 claim 尾部，提交后的清理失败由 AtomicApply 恢复前滚；
+// 手工构造的旧 delete / reserve operation 仍由启动兼容执行器排空（restart rollback、reserve restart 两条）。
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
@@ -20,7 +21,9 @@ import {
   createManagedSkill,
   deleteSkill,
 } from '@/modules/resource-catalog/infrastructure/legacy/skill'
-import { deleteManagedSkillOp } from '@/modules/resource-catalog/infrastructure/legacy/skillDeleteOp'
+import { createAtomicApplyRecovery } from '@/platform/atomic-apply/convergence'
+import { skillApplyRecoveryContentFor } from '@/modules/resource-catalog/infrastructure/skillApplyContent'
+import { createSkillApplyRecoveryScene } from '@/modules/resource-catalog/infrastructure/skillApplyRecovery'
 import {
   advancePhase,
   beginOperation,
@@ -93,6 +96,39 @@ describeEachProvider('RFC-370 skill deletion content', (harness) => {
     const { skills } = tablesOf(harness.db)
     return (await harness.db.select().from(skills).where(eq(skills.id, skillId)))[0]
   }
+  async function journal() {
+    const { skillApplyJournal, atomicApplyClaims, skillOperationLocks } = tablesOf(harness.db)
+    const entry = (
+      await harness.db
+        .select()
+        .from(skillApplyJournal)
+        .where(eq(skillApplyJournal.skillId, skillId))
+    ).find((candidate) => candidate.operation === 'delete')
+    if (entry === undefined) return undefined
+    const claim = (
+      await harness.db
+        .select()
+        .from(atomicApplyClaims)
+        .where(eq(atomicApplyClaims.journalId, entry.id))
+    )[0]
+    const locks = await harness.db.select().from(skillOperationLocks)
+    return {
+      state: entry.state,
+      tail: claim?.tailState,
+      locked: locks.some((lock) => lock.opId === entry.id),
+      artifacts: entry.preparedArtifactsJson,
+    }
+  }
+  const recoverWith = (deletionContent: SkillDeletionContentStore) =>
+    createAtomicApplyRecovery([
+      createSkillApplyRecoveryScene({
+        db: harness.db,
+        content: (kind) => ({
+          ...skillApplyRecoveryContentFor(harness.db, appHome)(kind),
+          deletionContent,
+        }),
+      }),
+    ]).converge({ skill: [] })
 
   test('service delete awaits reversible staging and cleanup with the original durable phases', async () => {
     const staged = barrier(),
@@ -118,20 +154,19 @@ describeEachProvider('RFC-370 skill deletion content', (harness) => {
     try {
       await reached(staged, pending)
       expect(await row()).toBeDefined()
-      expect(await getActiveOp(harness.db, skillId)).toMatchObject({ phase: 'intent', active: 1 })
+      expect(await journal()).toMatchObject({ state: 'prepared', locked: true })
       stageReady.release()
       await reached(clearing, pending)
       expect(await row()).toBeUndefined()
-      expect(await getActiveOp(harness.db, skillId)).toMatchObject({
-        phase: 'db-committed',
-        active: 1,
-        backupPath: plans[0]!.backupJournalRef,
-      })
+      const committed = await journal()
+      expect(committed).toMatchObject({ state: 'committed', tail: 'pending', locked: true })
+      expect(committed?.artifacts).toContain(plans[0]!.backupJournalRef)
     } finally {
       stageReady.release()
       clearReady.release()
     }
     await pending
+    expect(await journal()).toMatchObject({ state: 'committed', tail: 'complete', locked: false })
     expect(await getActiveOp(harness.db, skillId)).toBeNull()
     expect(existsSync(appHome)).toBe(false)
   })
@@ -149,10 +184,12 @@ describeEachProvider('RFC-370 skill deletion content', (harness) => {
         await ready.pending
       },
     }
-    const pending = deleteManagedSkillOp(
+    const pending = deleteSkill(
       harness.db,
       { appHome, deletionContent: content },
-      { id: skillId },
+      skillId,
+      actor,
+      undefined,
       {
         afterPhase(phase) {
           if (phase === 'fs-staged') throw failure
@@ -166,15 +203,12 @@ describeEachProvider('RFC-370 skill deletion content', (harness) => {
     try {
       await reached(entered, outcome)
       expect(await row()).toBeDefined()
-      expect(await getActiveOp(harness.db, skillId)).toMatchObject({
-        phase: 'fs-staged',
-        active: 1,
-      })
+      expect(await journal()).toMatchObject({ state: 'prepared', locked: true })
     } finally {
       ready.release()
     }
     expect(await outcome).toBe(failure)
-    expect(await getActiveOp(harness.db, skillId)).toBeNull()
+    expect(await journal()).toMatchObject({ state: 'failed', locked: false })
   })
 
   test('failed post-commit cleanup is recovered with the same persisted storage reference', async () => {
@@ -188,13 +222,10 @@ describeEachProvider('RFC-370 skill deletion content', (harness) => {
       },
     }
     await expect(
-      deleteManagedSkillOp(harness.db, { appHome, deletionContent: content }, { id: skillId }),
+      deleteSkill(harness.db, { appHome, deletionContent: content }, skillId, actor),
     ).rejects.toBe(failure)
     expect(await row()).toBeUndefined()
-    expect(await getActiveOp(harness.db, skillId)).toMatchObject({
-      phase: 'db-committed',
-      active: 1,
-    })
+    expect(await journal()).toMatchObject({ state: 'committed', tail: 'pending', locked: true })
     const entered = barrier(),
       ready = barrier()
     const recovering: SkillDeletionContentStore = {
@@ -209,29 +240,16 @@ describeEachProvider('RFC-370 skill deletion content', (harness) => {
         await ready.pending
       },
     }
-    const pending = recoverSkillOperations(
-      harness.db,
-      { appHome, deletionContent: recovering },
-      SKILL_OP_RECOVERY_REGISTRY,
-    )
+    const pending = recoverWith(recovering)
     try {
       await reached(entered, pending)
-      expect(await getActiveOp(harness.db, skillId)).toMatchObject({
-        phase: 'db-committed',
-        active: 1,
-      })
+      expect(await journal()).toMatchObject({ state: 'committed', tail: 'pending', locked: true })
     } finally {
       ready.release()
     }
-    expect(await pending).toMatchObject({ rolledForward: 1, rolledBack: 0, quarantined: 0 })
-    expect(await getActiveOp(harness.db, skillId)).toBeNull()
-    expect(
-      await recoverSkillOperations(
-        harness.db,
-        { appHome, deletionContent: recovering },
-        SKILL_OP_RECOVERY_REGISTRY,
-      ),
-    ).toMatchObject({ total: 0 })
+    expect(await pending).toEqual({ rolledForward: 1, failed: 0 })
+    expect(await journal()).toMatchObject({ tail: 'complete', locked: false })
+    expect(await recoverWith(recovering)).toEqual({ rolledForward: 0, failed: 0 })
   })
 
   test('restart rollback restores selected content and retains the op when storage fails', async () => {
@@ -294,7 +312,7 @@ describeEachProvider('RFC-370 skill deletion content', (harness) => {
     const failure = new Error('interrupted cleanup')
     let staged!: SkillDeletionContentPlan
     await expect(
-      deleteManagedSkillOp(
+      deleteSkill(
         harness.db,
         {
           appHome: directory,
@@ -306,7 +324,8 @@ describeEachProvider('RFC-370 skill deletion content', (harness) => {
             },
           },
         },
-        { id: skillId },
+        skillId,
+        actor,
       ),
     ).rejects.toBe(failure)
     expect(existsSync(staged.backupRef)).toBe(true)
@@ -328,13 +347,14 @@ describeEachProvider('RFC-370 skill deletion content', (harness) => {
     const pending = boot.recoverOperations()
     try {
       await reached(entered, pending)
-      expect(await getActiveOp(harness.db, skillId)).toMatchObject({ active: 1 })
+      expect(await journal()).toMatchObject({ state: 'committed', tail: 'pending', locked: true })
       expect(existsSync(staged.backupRef)).toBe(true)
     } finally {
       ready.release()
     }
-    expect(await pending).toMatchObject({ total: 1, rolledForward: 1 })
-    expect(await getActiveOp(harness.db, skillId)).toBeNull()
+    // 旧记录为零；skill 写入场景的 journal 在同一启动步骤里前滚。
+    expect(await pending).toMatchObject({ total: 0 })
+    expect(await journal()).toMatchObject({ tail: 'complete', locked: false })
     expect(existsSync(staged.backupRef)).toBe(false)
   })
 

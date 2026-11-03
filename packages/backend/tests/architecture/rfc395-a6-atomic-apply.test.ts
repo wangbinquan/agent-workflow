@@ -89,7 +89,8 @@ describe('RFC-395 II-a A6 one AtomicApply mechanism', () => {
       }),
     ).toEqual(['error-driven codec fallback'])
   })
-  test('one maintenance entry registers both scenes and keeps normal skill-operation recovery ahead of availability and convergence', () => {
+  // RFC-401 T5：第三个场景是 skill 写入场景（普通 CRUD 与 fusion 的技能写入），同一个注册表、同一份收敛。
+  test('one maintenance entry registers all three scenes and keeps normal skill-operation recovery ahead of availability and convergence', () => {
     const graph = read('bootstrap/maintenanceWorkerGraph.ts')
     expect(
       calls(graph + '\ncreateAtomicApplyRecovery([])', 'createAtomicApplyRecovery'),
@@ -100,12 +101,16 @@ describe('RFC-395 II-a A6 one AtomicApply mechanism', () => {
     const scenes = registry[0]!.arguments[0]!
     expect(ts.isArrayLiteralExpression(scenes)).toBe(true)
     if (!ts.isArrayLiteralExpression(scenes)) throw new Error('registry must register scene array')
-    expect(scenes.elements).toHaveLength(2)
+    expect(scenes.elements).toHaveLength(3)
     expect(
       scenes.elements.map((node) =>
         ts.isCallExpression(node) ? node.expression.getText() : node.getText(),
       ),
-    ).toEqual(['composeIntentApplyRecoveryScene', 'resourcePackageRecoveryScene'])
+    ).toEqual([
+      'composeIntentApplyRecoveryScene',
+      'resourcePackageRecoveryScene',
+      'composeSkillApplyRecoveryScene',
+    ])
     expect(read('modules/intent/public/commands.ts')).not.toContain('activeBundleApplyIds')
     expect(read('modules/intent/application/maintenanceJobs.ts')).toContain(
       'async intentRecovery(input)',

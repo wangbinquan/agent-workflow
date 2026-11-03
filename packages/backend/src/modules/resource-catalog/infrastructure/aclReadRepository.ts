@@ -240,7 +240,6 @@ export function createResourceCatalogAclIdentityReadPort(
 ): ResourceCatalogAclIdentityReadPort {
   const port: ResourceCatalogAclIdentityReadPort = {
     getOwner: (type, id) => getAclResourceOwner(db, type, id),
-    listOwnedNames: (type, ownerUserId) => listOwnedAclResourceNames(db, type, ownerUserId),
   }
   return Object.freeze(port)
 }

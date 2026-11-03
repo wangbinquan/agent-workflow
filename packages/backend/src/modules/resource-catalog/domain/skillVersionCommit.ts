@@ -80,7 +80,7 @@ export interface SkillVersionWritePlanInput {
   readonly versionRowId: string
   readonly skillId: string
   readonly versionIndex: number
-  readonly contentHash: string
+  readonly contentHash: string | null
   /** 版本快照目录的仓内相对路径。由 RC 的 `skillVersionRelPath` 算出并传进来——
    *  路径拼法连同它的 id / 版本号校验只此一处，domain 不再抄一遍。 */
   readonly filesPath: string
@@ -111,7 +111,7 @@ export interface SkillVersionWritePlan {
     readonly fusionId: string | null
     readonly restoredFromVersion: number | null
     readonly authorUserId: string | null
-    readonly contentHash: string
+    readonly contentHash: string | null
     readonly createdAt: number
   }
 }

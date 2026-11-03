@@ -4,6 +4,9 @@ import { contentRowColumns } from '@/platform/content/infrastructure/contentStor
 // (reservation_state='reserving') until published+ready, and a crash mid-create
 // is recovered — pre-db-committed drops the reserving row+files, post-db-committed
 // finishes (the skill stays a complete, visible skill).
+//
+// RFC-401 T5：新建经 skill 写入场景，不再产生 reserve operation（v1 先暂存，ready 行在提交事务里写入）；手工构造的旧 reserve
+// operation 仍由启动兼容执行器排空。提交后的故障由 AtomicApply 恢复前滚。
 
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
@@ -29,6 +32,9 @@ import {
 import { recoverSkillOperations } from '../src/modules/resource-catalog/infrastructure/legacy/skillOpRecoveryDriver'
 import { SKILL_OP_RECOVERY_REGISTRY } from '../src/modules/resource-catalog/infrastructure/legacy/skillOpRegistry'
 import { describeEachProvider } from './helpers/eachProvider'
+import { createAtomicApplyRecovery } from '@/platform/atomic-apply/convergence'
+import { skillApplyRecoveryContentFor } from '../src/modules/resource-catalog/infrastructure/skillApplyContent'
+import { createSkillApplyRecoveryScene } from '../src/modules/resource-catalog/infrastructure/skillApplyRecovery'
 
 describeEachProvider('RFC-170 reserve op', (harness) => {
   let db: PersistenceDb
@@ -157,7 +163,7 @@ describeEachProvider('RFC-170 reserve op', (harness) => {
     expect(await getSkill('done1')).not.toBeNull()
   })
 
-  test('in-process fault after db-committed preserves ready row/root/op for rollforward', async () => {
+  test('in-process fault after db-committed keeps the ready row and its journal for roll-forward', async () => {
     await expect(
       createManagedSkillWithFiles(
         db,
@@ -180,12 +186,20 @@ describeEachProvider('RFC-170 reserve op', (harness) => {
       { skills } = tablesOf(db)
     const row = (await first(db.select().from(skills).where(eq(skills.name, 'committed-create'))))!
     expect(row.reservationState).toBe('ready')
-    expect(existsSync(join(appHome, 'skills', row.id, 'files', 'SKILL.md'))).toBe(true)
-    expect((await getActiveOp(db, row.id))?.phase).toBe('db-committed')
+    // live 还没发布：v1 在暂存树与版本快照里，提交后的尾部由恢复完成。
+    expect(existsSync(join(appHome, 'skills', row.id, 'files', 'SKILL.md'))).toBe(false)
+    expect(existsSync(join(appHome, 'skills', row.id, 'versions', 'v1', 'files', 'SKILL.md'))).toBe(
+      true,
+    )
+    expect(await getActiveOp(db, row.id)).toBeNull()
     expect(await db.select().from(skillOperationLocks)).toHaveLength(1)
 
-    await recoverSkillOperations(db, { appHome }, SKILL_OP_RECOVERY_REGISTRY)
-    expect(await getActiveOp(db, row.id)).toBeNull()
+    expect(
+      await createAtomicApplyRecovery([
+        createSkillApplyRecoveryScene({ db, content: skillApplyRecoveryContentFor(db, appHome) }),
+      ]).converge({ skill: [] }),
+    ).toEqual({ failed: 0, rolledForward: 1 })
+    expect(existsSync(join(appHome, 'skills', row.id, 'files', 'SKILL.md'))).toBe(true)
     expect(await db.select().from(skillOperationLocks)).toHaveLength(0)
     expect(await getSkill('committed-create')).not.toBeNull()
   })

@@ -19,6 +19,7 @@ export function createResourcePackageRecoveryScene(
     ...(input.now === undefined ? {} : { now: input.now }),
     list: async () =>
       (await input.journal.list()).map((row) => ({ ...row, error: row.error ?? null })),
+    claim: input.journal.claim,
     compareAndSet: input.journal.compareAndSet,
     async recover(row, action) {
       if (action === 'compensate') await input.artifacts.compensate(row)

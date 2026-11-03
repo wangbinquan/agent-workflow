@@ -355,6 +355,20 @@ async function seedJournal(
     createdAt: at,
     updatedAt: at,
   } as PersistenceTables['intentApplyJournal']['$inferInsert'])
+  if (input.fresh === true) {
+    // RFC-401 T4：另一个进程仍在途的 apply 持有未过期的持久 claim（此前以 updatedAt 的十分钟窗口判定）。
+    const { atomicApplyClaims } = tablesOf(harness.db)
+    await insertOne(harness.db, atomicApplyClaims, {
+      scene: 'intent',
+      journalId: id,
+      claimedBy: 'another-daemon',
+      leaseEpoch: 1,
+      claimExpiresAt: at + 60_000,
+      tailState: 'none',
+      createdAt: at,
+      updatedAt: at,
+    })
+  }
   return id
 }
 
@@ -589,7 +603,7 @@ describeEachProvider('RFC-359 W7 Intent apply 编排 · 共同子集', (harness)
     expect(await port.converge(recorder.log)).toEqual({ failed: 0, rolledForward: 0 })
   })
 
-  test('收敛：本进程活跃 / 还太新的行一律放过（P2-1 的两道闸）', async () => {
+  test('收敛：本进程活跃 / 他人持有未过期 claim 的行一律放过（P2-1 的两道闸）', async () => {
     const fixture = await seedSession(harness, 'w7-converge-skip')
     const port = applyPortFor(harness)
     const stale = await seedJournal(harness, fixture, {

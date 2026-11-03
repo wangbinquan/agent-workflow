@@ -26,7 +26,6 @@ export interface IntentApplyChangeset {
 }
 
 export interface IntentApplyResourcePreflight {
-  readonly occupiedNames: ReadonlyMap<CatalogSelectorKind, ReadonlySet<string>>
   readonly copyOnlyTargets: ReadonlyMap<string, string>
 }
 
@@ -37,7 +36,7 @@ function isCatalogSelectorKind(value: string): value is CatalogSelectorKind {
 /**
  * Provider-neutral ownership preflight for one named Intent apply session.
  * Persistence identity stays in the owner adapter; Intent receives only the
- * two closed decisions needed by bundle resolution.
+ * closed copy-only decision needed by bundle resolution.
  */
 export async function resolveIntentApplyResourcePreflight(
   identities: ResourceCatalogAclIdentityReadPort,
@@ -45,12 +44,6 @@ export async function resolveIntentApplyResourcePreflight(
   manifest: readonly IntentApplyManifestEntry[],
   changeset: IntentApplyChangeset,
 ): Promise<IntentApplyResourcePreflight> {
-  const occupiedNames = new Map<CatalogSelectorKind, ReadonlySet<string>>()
-  for (const type of CATALOG_SELECTOR_KINDS) {
-    const names = await identities.listOwnedNames(type, ownerUserId)
-    occupiedNames.set(type, new Set(names.map((name) => name.toLowerCase())))
-  }
-
   const copyOnlyTargets = new Map<string, string>()
   const byHandle = new Map(manifest.map((entry) => [entry.handle, entry] as const))
   for (const op of changeset.ops) {
@@ -63,5 +56,5 @@ export async function resolveIntentApplyResourcePreflight(
     }
   }
 
-  return Object.freeze({ occupiedNames, copyOnlyTargets })
+  return Object.freeze({ copyOnlyTargets })
 }

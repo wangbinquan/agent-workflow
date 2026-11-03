@@ -1,5 +1,3 @@
-import { skillFilesRel } from './skillIdentityPaths'
-import { capturedSkillTreeColumns } from '../databaseSkillTrees'
 // RFC-101 — skill content versioning + history (PR-A foundation).
 //
 // THE single funnel for writing a managed skill's files/. Every write path
@@ -19,7 +17,6 @@ import {
   skillTreeTextView,
   type SkillVersionTextEntry as TreeEntry,
 } from '../../application/skills/textView'
-import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf, type PersistenceTables } from '@/platform/persistence/sessionTables'
 import type {
   ResourceVisibility,
@@ -31,32 +28,25 @@ import type {
 } from '@agent-workflow/shared'
 import { structuredPatch } from 'diff'
 import { eq } from 'drizzle-orm'
-import { ulid } from 'ulid'
 import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 
 /** RFC-359 W4-D23b：版本机器改吃中立句柄，两个 provider 共用同一套发布阶梯。 */
 type SkillVersionDb = PersistenceDb
 import {
-  abandonOperation,
   advancePhase,
-  beginOperation,
   finishOperation,
 } from '@/modules/resource-catalog/infrastructure/legacy/skillOperations'
-import { NotFoundError, ValidationError, staleConflictError } from '@/util/errors'
+import { NotFoundError, ValidationError } from '@/util/errors'
 import { tokenToVersionFence } from '@/modules/resource-catalog/infrastructure/legacy/skillToken'
 import { parseFrontmatter } from '@/util/frontmatter'
-import { skillVersionRelPath } from '@/modules/resource-catalog/infrastructure/legacy/skillIdentityPaths'
 
 import type {
   SkillVersionContentChange,
   SkillVersionContentStore,
   SkillVersionPublication,
 } from '../../application/skills/versionContentStore'
-import {
-  abortFileSkillVersionPublication,
-  createFileSkillVersionContentStore,
-} from '../local/fileSkillVersionContentStore'
+import { createFileSkillVersionContentStore } from '../local/fileSkillVersionContentStore'
 
 import type { SkillVersionContentReader } from '../../application/skills/versionContentReader'
 import { createFileSkillVersionContentReader } from '../local/fileSkillVersionContentReader'
@@ -108,16 +98,10 @@ export {
   collectFiles,
   NUL,
 } from '@/modules/resource-catalog/infrastructure/legacy/skillHash'
-import {
-  markSkillBootVerified,
-  unmarkSkillBootVerified,
-} from '@/modules/resource-catalog/infrastructure/legacy/skillBootVerify'
+import { markSkillBootVerified } from '@/modules/resource-catalog/infrastructure/legacy/skillBootVerify'
 
-import { readSkillVersionCompositeLive } from '../skillVersionCommitParticipant'
-import {
-  skillVersionCompositeDrifted,
-  skillVersionCompositeFenceRequested,
-} from '../../domain/skillVersionCommit'
+import { skillApplyContentFor } from '../skillApplyContent'
+import { createSkillApplyScene } from '../skillAtomicApply'
 
 export type { SkillVersionTextEntry as TreeEntry } from '../../application/skills/textView'
 
@@ -257,68 +241,15 @@ export interface SkillVersionCommitOpts {
    * transaction as the version bump, given the new version number.
    */
   txExtra?: (tx: PersistenceTx, newVersion: number) => void | Promise<void>
-  /**
-   * RFC-170 §6a/T7② — skip opening a version-write op (lock+recovery). Set by a
-   * caller that ALREADY holds the skill's op lock (e.g. reserve/createManagedSkill,
-   * whose reserve op owns the skill for the whole create). Without this, opening a
-   * version-write op on a skill the caller already locked would self-conflict.
-   */
-  skipOp?: boolean
-  /** Test-only fault seam: throw before pre-commit FS rollback cleanup. */
+  /** Test-only fault seam: throw before pre-commit content compensation. */
   __beforeRollbackCleanupForTest?: () => void
   /** Test-only fault seam after DB authority commits, before live publish. */
   __afterDbCommitForTest?: () => void
 }
 
 /**
- * Archive the produced files/ tree as the next version of a managed skill.
- * `produce(stagingDir)` receives a copy of the current files/ pre-seeded and
- * mutates it in place (editor delta) or fully replaces it (fusion / restore).
- * Returns the new (or, on an empty editor write, the unchanged latest) version.
- */
-/**
- * RFC-170 (Codex F4 + re-review): the composite-token OCC. Re-reads the
- * requested row by immutable id INSIDE the given tx and throws
- * resource-operation-stale (RFC-285 B5) if any expected field drifted (delete→recreate ABA /
- * metadata edit / version bump / owner or ACL change). No-op when the caller
- * passed no expected fields.
- * Called from BOTH the version-bump tx (atomic with the UPDATE) AND before the
- * editor no-op short-circuit — otherwise an identical-content delete→recreate in
- * the caller's await window slips through unfenced and returns the substitute's row.
- */
-async function assertCompositePrecondition(
-  tx: PersistenceTx,
-  skillId: string,
-  commit: SkillVersionCommitOpts,
-): Promise<void> {
-  // RFC-353 T6：判据本身搬进了 `domain/skillVersionCommit`，读 live 行搬进了
-  // `sqliteSkillVersionCommitParticipant`——本文件、融合 apply 的两个 provider 从此比同一套六项。
-  // 在此之前融合那两份只比 `contentVersion` / `metaRevision`，少四项。
-  if (!skillVersionCompositeFenceRequested(commit)) return
-  if (skillVersionCompositeDrifted(await readSkillVersionCompositeLive(tx, skillId), commit)) {
-    throw staleConflictError(
-      'skill',
-      `skill '${skillId}' changed since this operation started; reload and retry`,
-    )
-  }
-}
-
-/**
- * RFC-271 T10 —— 一次版本提交被拆成**四段**，让批量导入能把「DB 提交」这一段和
- * 别的资源放进同一个事务。
- *
- *   stage      → FS 暂存 + 候选目录 + 开 op（DB 里还看不见）
- *   commitInTx → 版本行 + skills 行的推进（**引擎把它塞进自己的 big tx**）
- *   publish    → 原子 swap 发布 live files/
- *   abort      → pre-commit 补偿
- *
- * ⚠️ 引擎必须有 `abort`：没有它，批量场景失败时只能复制状态机内部逻辑去清理，
- * 而那正是这套两阶段提交当初为之而生的东西。
- *
- * ⚠️ **`unmarkSkillBootVerified` 不在 publish 段里**。单条路径在 DB 提交返回后
- * 立刻 unmark；批量场景必须在 big tx 返回后、**任何**逐项 publish 之前一次性
- * unmark 全部已提交技能——否则先 publish 的那个已经 mark 回来了，而后一个还没
- * 发布的技能仍带着上一代的 admission。
+ * 旧格式 Intent journal 里记下的版本暂存（RFC-271 T10 的四段漏斗留下的形状）。RFC-401 T5 起新写入经 skill 写入场景，这个形状
+ * 只剩兼容执行器 `composeLegacyIntentSkillArtifactCompat` 前滚旧记录时使用（`publishStagedSkillVersion`）。
  */
 export interface StagedSkillVersion {
   contentKind?: 'local-file' | 'database-bytes'
@@ -351,191 +282,9 @@ function publicationOf(staged: StagedSkillVersion): SkillVersionPublication {
   }
 }
 
-export async function stageSkillVersion(
-  db: SkillVersionDb,
-  opts: SkillVersionFsOptions,
-  skillId: string,
-  produce: SkillVersionContentChange | ((stagingDir: string) => void),
-  commit: SkillVersionCommitOpts,
-): Promise<StagedSkillVersion> {
-  const skill = await loadSkillRow(db, skillId)
-  if (!skill) throw new NotFoundError('skill-not-found', `skill '${skillId}' not found`)
-
-  const cur = await loadSkillRow(db, skillId)
-  if (!cur) throw new NotFoundError('skill-not-found', `skill '${skillId}' not found`)
-  const existing = await versionRows(db, skillId)
-  const maxIndex = existing.reduce((m, r) => Math.max(m, r.versionIndex), 0)
-  const N = cur.contentVersion
-
-  if (commit.expectedVersion !== undefined && commit.expectedVersion !== N) {
-    throw staleConflictError(
-      'skill',
-      `skill '${cur.name}' is at version ${N}, expected ${commit.expectedVersion}; reload and retry`,
-    )
-  }
-
-  const newVersion = maxIndex === 0 ? 1 : maxIndex + 1
-  // Old callback callers are explicitly local. Neutral storage never receives one.
-  if (typeof produce === 'function' && opts.versionContent !== undefined) {
-    throw new Error('legacy skill producer requires the local file content store')
-  }
-  const content =
-    opts.versionContent ??
-    createFileSkillVersionContentStore(
-      opts.appHome,
-      typeof produce === 'function' ? produce : undefined,
-      db,
-    )
-  const publishId = ulid()
-  const publication = content.plan({ skillId, version: newVersion, publicationId: publishId })
-
-  // RFC-170 §6a/T7②: open a version-write op (serialising lease + crash recovery)
-  // UNLESS the caller already holds the skill's op lock (skipOp — reserve/create).
-  // A concurrent same-skill write is rejected 409-busy; a crash is recovered at
-  // boot by versionWriteRecoveryHandler. Its paths ride in the op columns.
-  const opId = commit.skipOp
-    ? null
-    : await databaseSessionFor(db).transaction(
-        async (tx) =>
-          await beginOperation(tx, {
-            skillId: cur.id,
-            kind: 'version-write',
-            targetVersion: newVersion,
-            stagingPath: publication.stagingJournalRef,
-            candidatePath: publication.versionJournalRef,
-            preconditionJson: JSON.stringify({ skillId }),
-          }),
-      )
-
-  const staged: StagedSkillVersion = {
-    contentKind:
-      opts.contentKind ??
-      (content as SkillVersionContentStore & { contentKind?: 'local-file' | 'database-bytes' })
-        .contentKind ??
-      'local-file',
-    skillId,
-    skillName: cur.name,
-    opId,
-    publishId,
-    newVersion,
-    newHash: '',
-    filesDir: publication.liveRef,
-    versionDir: publication.versionRef,
-    stagingDir: publication.stagingRef,
-    noop: null,
-  }
-  try {
-    const result = await content.stage(
-      publication,
-      typeof produce === 'function' ? { kind: 'retain' } : produce,
-      commit.source === 'editor' && maxIndex > 0,
-    )
-    staged.newHash = result.contentHash
-    // The existing no-op decision still belongs to AW, after storage comparison.
-    if (commit.source === 'editor' && maxIndex > 0 && result.matchesLive) {
-      const latest = existing.find((r) => r.versionIndex === maxIndex)
-      if (latest) {
-        // 空写：丢掉 staging，但**保留 op**（若有）—— 它仍要在事务里重验那四道
-        // token，只是不写版本、不发布。整条跳过会破坏整包基线。
-        await content.discardStage(publication)
-        staged.noop = latest
-        return staged
-      }
-    }
-    if (opId)
-      await databaseSessionFor(db).transaction(
-        async (tx) => await advancePhase(tx, opId, 'fs-staged'),
-      )
-
-    await content.captureVersion(publication)
-    if (opId)
-      await databaseSessionFor(db).transaction(
-        async (tx) => await advancePhase(tx, opId, 'fs-versioned'),
-      )
-    return staged
-  } catch (err) {
-    // 暂存段自身失败：这里还没有任何 DB 可见物，直接补偿。
-    await abortStagedSkillVersion(db, staged, commit, content)
-    throw err
-  }
-}
-
 /**
- * 第二段：**纯 DB**。调用方把它塞进自己的事务，于是「这个技能的新版本」与同一
- * 包里其它资源的写入要么一起可见、要么一起不可见。
- *
- * 空写（`staged.noop !== null`）仍然跑那四道 token 复核，只跳过两个写入。
- * 返回 null 表示没有新版本行。
- */
-export async function commitSkillVersionInTx(
-  tx: PersistenceTx,
-  staged: StagedSkillVersion,
-  commit: SkillVersionCommitOpts,
-): Promise<SkillVersionRow | null> {
-  // RFC-170 (Codex F4): fence the composite precondition IN the version-bump
-  // tx (atomic with the UPDATE), so a drift that slipped past the caller's
-  // earlier pre-check cannot be applied to the wrong generation.
-  await assertCompositePrecondition(tx, staged.skillId, commit)
-  if (staged.noop !== null) {
-    if (staged.opId) await abandonOperation(tx, staged.opId) // nothing committed
-    return null
-  }
-  const id = ulid()
-  const now = Date.now()
-  const skillSet: Partial<PersistenceTables['skills']['$inferInsert']> = {
-    contentVersion: staged.newVersion,
-    updatedAt: now,
-    // RFC-170 §invariant④: a freshly-written snapshot IS the authority.
-    versionState: 'snapshot-authoritative',
-  }
-  if (commit.setDescription !== undefined) skillSet.description = commit.setDescription
-  const { skills, skillVersions } = tablesOf(tx)
-  await tx
-    .update(skills)
-    .set({
-      ...skillSet,
-      ...capturedSkillTreeColumns(
-        staged.contentKind ?? 'local-file',
-        staged.skillId,
-        'live',
-        skillFilesRel(staged.skillId),
-      ),
-    })
-    .where(eq(skills.id, staged.skillId))
-  await insertOne(tx, skillVersions, {
-    id,
-    skillId: staged.skillId,
-    versionIndex: staged.newVersion,
-    ...(await capturedSkillTreeColumns(
-      staged.contentKind ?? 'local-file',
-      staged.skillId,
-      `version:${staged.newVersion}`,
-      skillVersionRelPath(staged.skillId, staged.newVersion),
-    )),
-    source: commit.source,
-    summary: commit.summary ?? null,
-    fusionId: commit.fusionId ?? null,
-    restoredFromVersion: commit.restoredFromVersion ?? null,
-    authorUserId: commit.authorUserId,
-    contentHash: staged.newHash,
-    createdAt: now,
-  })
-  await commit.txExtra?.(tx, staged.newVersion)
-  if (staged.opId) await advancePhase(tx, staged.opId, 'db-committed')
-  const created = (
-    (await tx.select().from(skillVersions).where(eq(skillVersions.id, id))) as SkillVersionRow[]
-  )[0]
-  if (!created) throw new Error('skill_versions row disappeared after insert')
-  return created
-}
-
-/**
- * 第三段：把 staging 原子发布成 live `files/`（`swapInStaged` 两次同父 rename）。
- *
- * ⚠️ 这一段**故意不含** `unmarkSkillBootVerified` —— 见 `StagedSkillVersion` 的
- * 注释：批量场景要在 big tx 返回后、任何逐项 publish 之前一次性 unmark 全部。
- * 崩在两次 rename 之间只会留下一棵完整的树，`reconcileSkillLiveFiles()` 在启动
- * 时从 `versions/v{cur}` 重新同步 live。
+ * 兼容执行器：把旧格式记录里的 staging 发布成 live `files/` 并收尾旧 operation。崩在两次 rename 之间只会留下一棵完整的树，
+ * `reconcileSkillLiveFiles()` 在启动时从 `versions/v{cur}` 重新同步 live。
  */
 export async function publishStagedSkillVersion(
   db: SkillVersionDb,
@@ -556,31 +305,9 @@ export async function publishStagedSkillVersion(
 }
 
 /**
- * 第四段：**pre-commit 补偿**。没有它，引擎在批量失败时只能复制这套状态机的内部
- * 逻辑去清理。清理本身若无法证明完成，**保留** active op + 锁——启动恢复要靠它
- * 当 oracle（这条与既有实现逐字一致）。
- */
-export async function abortStagedSkillVersion(
-  db: SkillVersionDb,
-  staged: StagedSkillVersion,
-  commit?: Pick<SkillVersionCommitOpts, '__beforeRollbackCleanupForTest'>,
-  content?: SkillVersionContentStore,
-): Promise<void> {
-  if (staged.opId === null) return
-  try {
-    commit?.__beforeRollbackCleanupForTest?.()
-    if (content) await content.abort(publicationOf(staged))
-    else abortFileSkillVersionPublication(publicationOf(staged))
-    const opId = staged.opId
-    await databaseSessionFor(db).transaction(async (tx) => await abandonOperation(tx, opId))
-  } catch {
-    /* active op + lock intentionally preserved for boot recovery */
-  }
-}
-
-/**
- * 四段的顺序组合 —— 单条路径的既有形态，行为逐字不变。
- * 批量路径不走这里：它要把第二段并进自己的事务。
+ * RFC-401 T5 —— 普通编辑、ZIP 覆盖与 restore 推进一版：经 skill 写入场景（`skillAtomicApply.ts`）。场景取技能锁、暂存并固化
+ * 版本快照，唯一 skill 写入参与者在提交事务里判复合前置条件、写版本行（description 变化时 metaRevision + 1），提交后发布 live；
+ * 编辑器内容与 live 相同则不写版本，返回当前版本。提交之后的失败由 AtomicApply 恢复前滚，不再把技能锁到重启。
  */
 export async function commitSkillVersion(
   db: SkillVersionDb,
@@ -589,28 +316,77 @@ export async function commitSkillVersion(
   produce: SkillVersionContentChange | ((stagingDir: string) => void),
   commit: SkillVersionCommitOpts,
 ): Promise<SkillVersion> {
-  const staged = await stageSkillVersion(db, opts, skillId, produce, commit)
-  let committed = false
-  try {
-    const created = await databaseSessionFor(db).transaction(
-      async (tx) => await commitSkillVersionInTx(tx, staged, commit),
-    )
-    committed = true
-    if (staged.noop !== null) return rowToSkillVersion(staged.noop, staged.skillName)
-    // The DB now names a generation that live files/ has not yet published.
-    // Remove any prior-generation admission immediately; a post-commit fault
-    // must remain hidden while its active op + lock await boot recovery.
-    unmarkSkillBootVerified(staged.skillId)
-    commit.__afterDbCommitForTest?.()
-    await publishStagedSkillVersion(db, opts, staged)
-    if (!created) throw new Error('skill_versions row disappeared after insert')
-    return rowToSkillVersion(created, staged.skillName)
-  } catch (err) {
-    // Post-db-committed: the version is durable, but the two-rename live publish
-    // may be incomplete. Preserve the active op + lock as recovery evidence.
-    if (!committed) await abortStagedSkillVersion(db, staged, commit, opts.versionContent)
-    throw err
-  }
+  const scene = createSkillApplyScene({
+    db,
+    content: skillApplyContentFor(
+      db,
+      {
+        appHome: opts.appHome,
+        ...(opts.contentKind === undefined ? {} : { contentKind: opts.contentKind }),
+        ...(opts.versionContent === undefined ? {} : { versionContent: opts.versionContent }),
+        ...(opts.deletionContent === undefined ? {} : { deletionContent: opts.deletionContent }),
+      },
+      typeof produce === 'function' ? produce : undefined,
+    ),
+  })
+  const editor = commit.source === 'editor'
+  const written = await scene.version({
+    skillId,
+    change: typeof produce === 'function' ? { kind: 'retain' } : produce,
+    compareLive: editor,
+    mutation: {
+      fence: {
+        ...(commit.expectedSkillId === undefined
+          ? {}
+          : { expectedSkillId: commit.expectedSkillId }),
+        ...(commit.expectedVersion === undefined
+          ? {}
+          : { expectedVersion: commit.expectedVersion }),
+        ...(commit.expectedMetaRevision === undefined
+          ? {}
+          : { expectedMetaRevision: commit.expectedMetaRevision }),
+        ...(commit.expectedOwnerUserId === undefined
+          ? {}
+          : { expectedOwnerUserId: commit.expectedOwnerUserId }),
+        ...(commit.expectedAclRevision === undefined
+          ? {}
+          : { expectedAclRevision: commit.expectedAclRevision }),
+        ...(commit.expectedVisibility === undefined
+          ? {}
+          : { expectedVisibility: commit.expectedVisibility }),
+      },
+      source: commit.source,
+      summary: commit.summary ?? null,
+      fusionId: commit.fusionId ?? null,
+      restoredFromVersion: commit.restoredFromVersion ?? null,
+      authorUserId: commit.authorUserId,
+      ...(commit.setDescription === undefined ? {} : { description: commit.setDescription }),
+      // restore 总是推进一版；编辑与导入内容不变时不推进（proposal §5 第 9 项）。
+      advance: editor || commit.source === 'import' ? 'on-change' : 'always',
+    },
+    faults: {
+      ...(commit.__afterDbCommitForTest === undefined
+        ? {}
+        : { afterCommit: commit.__afterDbCommitForTest }),
+      ...(commit.__beforeRollbackCleanupForTest === undefined
+        ? {}
+        : { beforeCompensate: commit.__beforeRollbackCleanupForTest }),
+    },
+    ...(commit.txExtra === undefined
+      ? {}
+      : {
+          hooks: (tx: PersistenceTx) => ({
+            after: async (version: number) => {
+              await commit.txExtra!(tx, version)
+            },
+          }),
+        }),
+  })
+  const skill = await loadSkillRow(db, skillId)
+  const row = (await versionRows(db, skillId)).find((r) => r.versionIndex === written.versionIndex)
+  if (skill === null || row === undefined)
+    throw new Error('skill_versions row disappeared after commit')
+  return rowToSkillVersion(row, skill.name)
 }
 
 // --- read / history --------------------------------------------------------

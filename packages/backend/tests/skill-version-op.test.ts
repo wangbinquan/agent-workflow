@@ -1,11 +1,12 @@
 import { legacyContentRef } from '@/platform/content/contentRef'
 import { contentRowColumns } from '@/platform/content/infrastructure/contentStore'
-// RFC-170 §6a/T7② — commitSkillVersion runs under a version-write op: it takes a
-// serialising lease (concurrent same-skill write → busy 409), the lock is freed
-// after, `skipOp` lets a caller that already holds the lock (reserve) reuse it,
-// and a crashed version-write is recovered (rollback discards the uncommitted
-// staged/version dirs; rollforward verifies the committed snapshot and publishes
-// canonical live before freeing the lock).
+// RFC-170 §6a/T7② — a skill version write is serialised by the skill's lock (a
+// concurrent same-skill write → busy 409) and its crash is recovered: rollback
+// discards the uncommitted staged/version dirs; rollforward verifies the committed
+// snapshot and publishes canonical live before freeing the lock.
+//
+// RFC-401 T5：新写入经 skill 写入场景（journal + 持久 claim + 同一把锁），恢复是 AtomicApply 的 skill 场景；RFC-401 之前写下
+// 的旧 version-write operation 仍由启动时的兼容执行器 `recoverSkillOperations` 排空（下面两条手工构造旧记录的用例）。
 
 import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
@@ -47,6 +48,9 @@ import { SKILL_OP_RECOVERY_REGISTRY } from '../src/modules/resource-catalog/infr
 import { ConflictError } from '../src/util/errors'
 import { isSkillBootVerified } from '../src/modules/resource-catalog/infrastructure/legacy/skillBootVerify'
 import { describeEachProvider } from './helpers/eachProvider'
+import { createAtomicApplyRecovery } from '@/platform/atomic-apply/convergence'
+import { skillApplyRecoveryContentFor } from '../src/modules/resource-catalog/infrastructure/skillApplyContent'
+import { createSkillApplyRecoveryScene } from '../src/modules/resource-catalog/infrastructure/skillApplyRecovery'
 
 describeEachProvider('RFC-170 T7② — version-write op', (harness) => {
   let db: PersistenceDb
@@ -68,7 +72,22 @@ describeEachProvider('RFC-170 T7② — version-write op', (harness) => {
   })
   afterEach(() => rmSync(appHome, { recursive: true, force: true }))
 
-  test('a normal commit opens+closes a version-write op (no active op, lock freed after)', async () => {
+  const recoverJournals = () =>
+    createAtomicApplyRecovery([
+      createSkillApplyRecoveryScene({ db, content: skillApplyRecoveryContentFor(db, appHome) }),
+    ]).converge({ skill: [] })
+  const locks = async () => {
+    const { skillOperationLocks } = tablesOf(db)
+    return db.select().from(skillOperationLocks)
+  }
+  const versionJournal = async () => {
+    const { skillApplyJournal } = tablesOf(db)
+    return (
+      await db.select().from(skillApplyJournal).where(eq(skillApplyJournal.skillId, skillId))
+    ).find((row) => row.operation === 'version')
+  }
+
+  test('a normal commit settles its journal and frees the lock (no legacy operation)', async () => {
     await commitSkillVersion(
       db,
       fsOpts,
@@ -79,6 +98,8 @@ describeEachProvider('RFC-170 T7② — version-write op', (harness) => {
       { source: 'editor', authorUserId: 'u' },
     )
     expect(await getActiveOp(db, skillId)).toBeNull()
+    expect((await versionJournal())?.state).toBe('committed')
+    expect(await locks()).toEqual([])
   })
 
   test('a held lock makes a concurrent commit busy (409)', async () => {
@@ -92,24 +113,6 @@ describeEachProvider('RFC-170 T7② — version-write op', (harness) => {
         authorUserId: 'u',
       }),
     ).rejects.toThrow(ConflictError)
-  })
-
-  test('skipOp bypasses the lock — a caller holding the op can still commit', async () => {
-    // Reserve-style: caller holds the lock, then commits v-next with skipOp.
-    await databaseSessionFor(db).transaction(
-      async (tx) => await beginOperation(tx, { skillId, kind: 'reserve' }),
-    )
-    await expect(
-      commitSkillVersion(
-        db,
-        fsOpts,
-        skillId,
-        (s) => {
-          writeFileSync(join(s, 'SKILL.md'), '---\nname: foo\n---\nvia-skipop', 'utf-8')
-        },
-        { source: 'editor', authorUserId: 'u', skipOp: true },
-      ),
-    ).resolves.toBeDefined()
   })
 
   test('recovery ROLLBACK: crash pre-db-committed discards staged + orphan version dir', async () => {
@@ -140,7 +143,7 @@ describeEachProvider('RFC-170 T7② — version-write op', (harness) => {
     expect(await getActiveOp(db, skillId)).toBeNull() // lock freed
   })
 
-  test('pre-commit cleanup fault preserves op/lock until recovery proves cleanup', async () => {
+  test('pre-commit cleanup fault preserves the lock until recovery proves cleanup', async () => {
     await expect(
       commitSkillVersion(
         db,
@@ -158,18 +161,17 @@ describeEachProvider('RFC-170 T7② — version-write op', (harness) => {
         },
       ),
     ).rejects.toThrow('producer-fault')
-    expect((await getActiveOp(db, skillId))?.phase).toBe('intent')
-    const { skillOperationLocks } = tablesOf(db)
-    expect(await db.select().from(skillOperationLocks)).toHaveLength(1)
+    expect((await versionJournal())?.state).toBe('prepared')
+    expect(await locks()).toHaveLength(1)
     expect(
       readdirSync(skillRootAbs(appHome, skillId)).some((name) =>
         /^files\.op-.*\.staged$/.test(name),
       ),
     ).toBe(true)
 
-    await recoverSkillOperations(db, fsOpts, SKILL_OP_RECOVERY_REGISTRY)
-    expect(await getActiveOp(db, skillId)).toBeNull()
-    expect(await db.select().from(skillOperationLocks)).toHaveLength(0)
+    expect(await recoverJournals()).toEqual({ failed: 1, rolledForward: 0 })
+    expect((await versionJournal())?.state).toBe('failed')
+    expect(await locks()).toHaveLength(0)
     expect(
       readdirSync(skillRootAbs(appHome, skillId)).some((name) =>
         /^files\.op-.*\.(?:staged|backup|candidate)$/.test(name),
@@ -252,23 +254,24 @@ describeEachProvider('RFC-170 T7② — version-write op', (harness) => {
           },
         },
       ),
-    ).rejects.toThrow(/live publish does not match committed content hash/)
-    expect((await getActiveOp(db, skillId))?.phase).toBe('db-committed')
-    const { skillOperationLocks } = tablesOf(db)
-    expect(await db.select().from(skillOperationLocks)).toHaveLength(1)
+    ).rejects.toThrow(/no staged tree|live publish does not match committed content hash/)
+    expect((await versionJournal())?.state).toBe('committed')
+    expect(await locks()).toHaveLength(1)
     expect(isSkillBootVerified(skillId)).toBe(false)
     expect(readFileSync(join(skillFilesAbs(appHome, skillId), 'SKILL.md'), 'utf-8')).toContain(
       'body0',
     )
 
-    await recoverSkillOperations(db, fsOpts, SKILL_OP_RECOVERY_REGISTRY)
-    expect(await getActiveOp(db, skillId)).toBeNull()
+    // 恢复从已提交的版本快照重建暂存树再发布，不会把旧 live 当成新一代。
+    expect(await recoverJournals()).toEqual({ failed: 0, rolledForward: 1 })
+    expect(await locks()).toEqual([])
+    expect(isSkillBootVerified(skillId)).toBe(true)
     expect(readFileSync(join(skillFilesAbs(appHome, skillId), 'SKILL.md'), 'utf-8')).toContain(
       'new-v2',
     )
   })
 
-  test('a post-DB-commit fault preserves op/lock and hides the old admission', async () => {
+  test('a post-DB-commit fault keeps the lock and hides the old admission until recovery', async () => {
     expect(isSkillBootVerified(skillId)).toBe(true)
     await expect(
       commitSkillVersion(
@@ -287,15 +290,21 @@ describeEachProvider('RFC-170 T7② — version-write op', (harness) => {
         },
       ),
     ).rejects.toThrow('post-commit-fault')
-    expect((await getActiveOp(db, skillId))?.phase).toBe('db-committed')
-    const { skillOperationLocks } = tablesOf(db),
-      { skills } = tablesOf(db)
-    expect(await db.select().from(skillOperationLocks)).toHaveLength(1)
+    expect((await versionJournal())?.state).toBe('committed')
+    const { skills } = tablesOf(db)
+    expect(await locks()).toHaveLength(1)
     expect(isSkillBootVerified(skillId)).toBe(false)
     expect(
       await first(
         db.select({ version: skills.contentVersion }).from(skills).where(eq(skills.id, skillId)),
       ),
     ).toEqual({ version: 2 })
+    // RFC-401 T5：不再等到重启——恢复（维护作业或启动步骤）前滚发布并释放锁。
+    expect(await recoverJournals()).toEqual({ failed: 0, rolledForward: 1 })
+    expect(await locks()).toEqual([])
+    expect(isSkillBootVerified(skillId)).toBe(true)
+    expect(readFileSync(join(skillFilesAbs(appHome, skillId), 'SKILL.md'), 'utf-8')).toContain(
+      'new-v2',
+    )
   })
 })

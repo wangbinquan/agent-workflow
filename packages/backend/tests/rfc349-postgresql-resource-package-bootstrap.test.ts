@@ -7,6 +7,7 @@ import { join, resolve } from 'node:path'
 import { BundleOpSchema } from '@agent-workflow/shared'
 
 import { buildActor } from '../src/auth/actor'
+import { createSkillMutationParticipant } from '../src/modules/resource-catalog/infrastructure/skillMutationParticipant'
 import { AuthorityClaimRegistry } from '../src/modules/identity-access/application/operationContext'
 import {
   createFileResourcePackagePluginArtifactOwner as createPostgresqlResourcePackagePluginArtifactOwner,
@@ -178,6 +179,19 @@ describeEachProvider('RFC-349 ResourcePackage bootstrap', (harness) => {
       filesPath: 'skills/skill-helper/versions/v1/files',
     })
 
+    // RFC-401 T5：提交后的前滚按账面判定只发布当前代际（与崩溃恢复同一规则）；这里补上 apply 事务本会写下的 ready 行与 v1。
+    await harness.session.transaction((tx) =>
+      createSkillMutationParticipant(tx).create({
+        id: 'skill-helper',
+        name: 'Helper',
+        description: 'PostgreSQL package skill',
+        ownerUserId: null,
+        contentKind: 'local-file',
+        contentHash: publication.contentHash,
+        authorUserId: null,
+        now: 1,
+      }),
+    )
     await owner.rollForward(context, {
       artifact: plan.artifact,
       receipt: receipt(parsed.opId, 'skill-helper'),

@@ -9,6 +9,8 @@ import {
 // window and relies on the provider target's per-chunk idempotency receipts.
 
 import type { DatabaseProvider } from '@/platform/persistence/databaseProviders'
+import { resolvePostgresqlAdditiveRowBridge } from './postgresqlMigrationSequence'
+import { loadPostgresqlMigrationHistory } from './schema/history/logicalHistory'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import {
@@ -124,16 +126,42 @@ function assertExact(actual: unknown, expected: unknown, detail: string): void {
 
 /** The source keeps its published identity; only a verified additive edge can
  * supply rows to the current complete target contract. Same-contract restores
- * retain their original path, including explicit infrastructure fixtures. */
+ * retain their original path, including explicit infrastructure fixtures.
+ *
+ * RFC-401: an older epoch-2 backup (an earlier version of this binary's history)
+ * restores into the head when every later edge is additive — the restore loop below
+ * already leaves the new KEEP tables empty. Epoch-1 artifacts are not in this history. */
 export async function resolveLogicalDatabaseRestoreSourceContract(input: {
   readonly sourceSchemaDigest: string
   readonly headContract: LogicalSchemaContract
   readonly targetContract: LogicalSchemaContract
 }): Promise<LogicalSchemaContract> {
   if (input.sourceSchemaDigest === input.targetContract.digest) return input.targetContract
-  return corrupt(
-    'restore contract differs from the live epoch-2 contract; epoch-1 artifacts require db migration restore-backup',
-  )
+  try {
+    const history = await loadPostgresqlMigrationHistory({ headContract: input.headContract })
+    if (!history.versions.some((version) => version.contract.digest === input.sourceSchemaDigest))
+      corrupt(
+        'restore contract is not in the live epoch-2 history; epoch-1 artifacts require db migration restore-backup',
+      )
+    assertExact(
+      history.head.contract,
+      input.targetContract,
+      'restore target differs from the complete current schema head',
+    )
+    const bridge = resolvePostgresqlAdditiveRowBridge(history, {
+      fromContractDigest: input.sourceSchemaDigest,
+      toContractDigest: input.targetContract.digest,
+    })
+    assertExact(
+      bridge.target,
+      input.targetContract,
+      'restore target differs from its whole history contract',
+    )
+    return bridge.source
+  } catch (error) {
+    if (error instanceof LogicalDatabaseRestoreError) throw error
+    return corrupt('restore source and target have no verified additive schema bridge')
+  }
 }
 
 function readCanonicalJson(path: string, detail: string): unknown {

@@ -429,11 +429,16 @@ describe('rfc284 批C T11 — skill 唯一性三态 + 错误识别收编', () =>
         'skills_owner_name_unique',
       ),
     ).toBe(false)
-    // skill.ts 两处 catch 均已收编（结构锁）
-    const src = SRC('modules/resource-catalog/infrastructure/legacy/skill.ts')
-    expect(src).not.toContain('skills_owner_name_unique|UNIQUE constraint failed')
+    // RFC-401 T5：skills 行只由唯一的 skill 写入参与者插入，它的那一处 catch 收编了同一个识别（结构锁）；legacy 的两处
+    // reserve 插入随旧生命周期删除。
+    const legacy = SRC('modules/resource-catalog/infrastructure/legacy/skill.ts')
+    const participant = SRC('modules/resource-catalog/infrastructure/skillMutationParticipant.ts')
+    for (const src of [legacy, participant])
+      expect(src).not.toContain('skills_owner_name_unique|UNIQUE constraint failed')
+    expect(legacy).not.toContain('isOwnerNameUniqueViolation(')
     expect(
-      src.split("isOwnerNameUniqueViolation(err, 'skills', 'skills_owner_name_unique')").length - 1,
-    ).toBe(2)
+      participant.split("isOwnerNameUniqueViolation(error, 'skills', 'skills_owner_name_unique')")
+        .length - 1,
+    ).toBe(1)
   })
 })

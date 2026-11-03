@@ -33,6 +33,9 @@ const roots: string[] = []
 // A status probe validates its copy's schema before opening the target runtime.
 // Keep this accepting-writes fixture on the native epoch-2 history contract so
 // the missing-URL sentinel below continues to observe that runtime boundary.
+// RFC-401: the root is now older than the head (0001 / 0002 add whole tables), so
+// the probe first bridges the copy across those additive edges
+// (`tests/rfc401-epoch2-history-bridge.test.ts`).
 const COPY_CONTRACT = (
   await loadPostgresqlMigrationHistory({ headContract: logicalSchemaContract })
 ).root.contract

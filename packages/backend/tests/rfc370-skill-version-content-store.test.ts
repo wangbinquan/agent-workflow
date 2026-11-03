@@ -1,16 +1,16 @@
 // RFC-370 H6: storage completion must precede the existing database phase
 // transitions. Use real provider databases and a non-filesystem storage fixture,
 // plus actual file operations through an asynchronous adapter.
+//
+// RFC-401 T5：写入经 skill 写入场景，「阶段」读 journal 状态与 claim 尾部：暂存期间 prepared、提交后 committed / 尾部
+// pending（锁仍持有）、发布后尾部 complete 并释放锁。
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { and, eq } from 'drizzle-orm'
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type {
-  SkillVersionContentStore,
-  SkillVersionPublication,
-} from '@/modules/resource-catalog/application/skills/versionContentStore'
+import type { SkillVersionContentStore } from '@/modules/resource-catalog/application/skills/versionContentStore'
 import {
   createManagedSkill,
   deleteSkillFile,
@@ -21,10 +21,11 @@ import {
 } from '@/modules/resource-catalog/infrastructure/legacy/skill'
 import {
   commitSkillVersion,
-  publishStagedSkillVersion,
   restoreSkillVersion,
-  stageSkillVersion,
 } from '@/modules/resource-catalog/infrastructure/legacy/skillVersion'
+import { createAtomicApplyRecovery } from '@/platform/atomic-apply/convergence'
+import { skillApplyContentFor } from '@/modules/resource-catalog/infrastructure/skillApplyContent'
+import { createSkillApplyRecoveryScene } from '@/modules/resource-catalog/infrastructure/skillApplyRecovery'
 import { createFileSkillVersionContentStore } from '@/modules/resource-catalog/infrastructure/local/fileSkillVersionContentStore'
 import { describeEachProvider } from './helpers/eachProvider'
 
@@ -89,13 +90,25 @@ describeEachProvider('RFC-370 skill version content store', (harness) => {
   afterEach(() => rmSync(appHome, { recursive: true, force: true }))
 
   async function operation() {
-    const { skillOperations } = tablesOf(harness.db)
-    return (
+    const { skillApplyJournal, atomicApplyClaims } = tablesOf(harness.db)
+    const journal = (
       await harness.db
         .select()
-        .from(skillOperations)
-        .where(and(eq(skillOperations.skillId, skillId), eq(skillOperations.kind, 'version-write')))
-    )[0]!
+        .from(skillApplyJournal)
+        .where(
+          and(eq(skillApplyJournal.skillId, skillId), eq(skillApplyJournal.operation, 'version')),
+        )
+    )[0]
+    if (journal === undefined) return undefined
+    const claim = (
+      await harness.db
+        .select()
+        .from(atomicApplyClaims)
+        .where(
+          and(eq(atomicApplyClaims.scene, 'skill'), eq(atomicApplyClaims.journalId, journal.id)),
+        )
+    )[0]
+    return { id: journal.id, state: journal.state, tail: claim?.tailState }
   }
   async function currentVersion() {
     const { skills } = tablesOf(harness.db)
@@ -151,16 +164,16 @@ describeEachProvider('RFC-370 skill version content store', (harness) => {
     )
     try {
       await reach(stageEntered, pending)
-      expect(await operation()).toMatchObject({ phase: 'intent', active: 1 })
+      expect(await operation()).toMatchObject({ state: 'prepared', tail: 'none' })
       expect(await currentVersion()).toBe(1)
       expect(await locks()).toHaveLength(1)
       stageReady.release()
       await reach(snapshotEntered, pending)
-      expect(await operation()).toMatchObject({ phase: 'fs-staged', active: 1 })
+      expect(await operation()).toMatchObject({ state: 'prepared', tail: 'none' })
       expect(await versions()).toHaveLength(1)
       snapshotReady.release()
       await reach(publishEntered, pending)
-      expect(await operation()).toMatchObject({ phase: 'db-committed', active: 1 })
+      expect(await operation()).toMatchObject({ state: 'committed', tail: 'pending' })
       expect(await currentVersion()).toBe(2)
       expect(await versions()).toHaveLength(2)
       expect(await locks()).toHaveLength(1)
@@ -170,7 +183,7 @@ describeEachProvider('RFC-370 skill version content store', (harness) => {
       publishReady.release()
     }
     expect((await pending).versionIndex).toBe(2)
-    expect(await operation()).toMatchObject({ phase: 'done', active: 0 })
+    expect(await operation()).toMatchObject({ state: 'committed', tail: 'complete' })
     expect(await locks()).toHaveLength(0)
   })
 
@@ -203,7 +216,7 @@ describeEachProvider('RFC-370 skill version content store', (harness) => {
       )
       try {
         await reach(entered, outcome)
-        expect(await operation()).toMatchObject({ phase: 'fs-staged', active: 1 })
+        expect(await operation()).toMatchObject({ state: 'prepared' })
         expect(await locks()).toHaveLength(1)
         expect(await currentVersion()).toBe(1)
         expect(await versions()).toHaveLength(1)
@@ -211,19 +224,17 @@ describeEachProvider('RFC-370 skill version content store', (harness) => {
         ready.release()
       }
       expect(await outcome).toBe(failure)
-      expect((await operation()).active).toBe(cleanupFails ? 1 : 0)
+      expect((await operation())?.state).toBe(cleanupFails ? 'prepared' : 'failed')
       expect(await locks()).toHaveLength(cleanupFails ? 1 : 0)
     })
   }
 
-  test('post-commit publish failure keeps the durable version and supports replay without another version', async () => {
-    let publication: SkillVersionPublication | undefined
+  test('post-commit publish failure keeps the durable version; recovery replays it without another version', async () => {
     let aborts = 0,
       publishes = 0
     const failure = new Error('publish unavailable')
     const store = memoryStore({
-      async publish(value) {
-        publication = value
+      async publish() {
         publishes += 1
         if (publishes === 1) throw failure
       },
@@ -242,24 +253,50 @@ describeEachProvider('RFC-370 skill version content store', (harness) => {
       ),
     ).rejects.toBe(failure)
     expect(aborts).toBe(0)
-    expect(await operation()).toMatchObject({ phase: 'db-committed', active: 1 })
+    expect(await operation()).toMatchObject({ state: 'committed', tail: 'pending' })
     expect(await currentVersion()).toBe(2)
-    const receipt = publication!
-    await publishStagedSkillVersion(harness.db, opts, {
-      skillId,
-      skillName: 'version-store',
-      opId: (await operation()).opId,
-      publishId: receipt.publicationId,
-      newVersion: receipt.version,
-      newHash: 'a'.repeat(64),
-      filesDir: receipt.liveRef,
-      versionDir: receipt.versionRef,
-      stagingDir: receipt.stagingRef,
-      noop: null,
-    })
+    expect(await locks()).toHaveLength(1)
+    // 恢复用同一份选定存储前滚（recovery 计划与 rollForward 交给它的 publish）。
+    const content = skillApplyContentFor(harness.db, opts)
+    const recovered = await createAtomicApplyRecovery([
+      createSkillApplyRecoveryScene({
+        db: harness.db,
+        content: () => ({
+          ...content,
+          versionRecovery: {
+            plan: (input) => ({
+              skillId: input.skillId,
+              operationId: input.operationId,
+              version: input.version,
+              publicationId: input.operationId,
+              rootRef: 'blob:root',
+              liveRef: `blob:${input.skillId}/live`,
+              stagingRef: input.stagingReference,
+              versionRef: input.versionReference,
+            }),
+            matchesVersionReference: () => true,
+            rollback: async () => {},
+            rollForward: async (plan, hash) => {
+              await store.publish(
+                {
+                  skillId: plan.skillId,
+                  version: plan.version,
+                  publicationId: plan.publicationId,
+                  liveRef: plan.liveRef,
+                  stagingRef: plan.stagingRef,
+                  versionRef: plan.versionRef,
+                },
+                hash,
+              )
+            },
+          },
+        }),
+      }),
+    ]).converge({ skill: [] })
+    expect(recovered).toEqual({ failed: 0, rolledForward: 1 })
     expect(await versions()).toHaveLength(2)
     expect(publishes).toBe(2)
-    expect(await operation()).toMatchObject({ phase: 'done', active: 0 })
+    expect(await operation()).toMatchObject({ state: 'committed', tail: 'complete' })
     expect(await locks()).toHaveLength(0)
   })
 
@@ -292,7 +329,7 @@ describeEachProvider('RFC-370 skill version content store', (harness) => {
     )
     try {
       await reach(entered, pending)
-      expect(await operation()).toMatchObject({ phase: 'intent', active: 1 })
+      expect(await operation()).toMatchObject({ state: 'prepared' })
       expect(await locks()).toHaveLength(1)
     } finally {
       ready.release()
@@ -307,7 +344,7 @@ describeEachProvider('RFC-370 skill version content store', (harness) => {
   test('a selected neutral store never silently executes a legacy physical-directory callback', async () => {
     let called = false
     await expect(
-      stageSkillVersion(
+      commitSkillVersion(
         harness.db,
         { appHome, versionContent: memoryStore() },
         skillId,
@@ -362,7 +399,8 @@ describeEachProvider('RFC-370 skill version content store', (harness) => {
     })
     expect((await readSkillContent(harness.db, opts, skillId)).bodyMd).toBe('initial body')
     expect(changes).toEqual([
-      'retain',
+      // RFC-401 T5：新建把初始内容作为整树暂存为 v1。
+      'replace-files',
       'write-main',
       'write-file',
       'delete-file',

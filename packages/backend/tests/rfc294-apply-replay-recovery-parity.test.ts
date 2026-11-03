@@ -228,8 +228,25 @@ describeEachProvider('RFC-294 apply 重放 / 恢复平价（双引擎）', (harn
   })
 
   describe('RFC-294 AtomicApply migration parity', () => {
-    test('fresh work survives a sweep; after restart-age it converges failed and replay stays side-effect free', async () => {
+    // RFC-401 T4：「在途」由持久 claim 的租约表达（此前是 updatedAt 的十分钟窗口）。租约未过期的记录不被接管；过期之后照常
+    // 补偿成 failed，重放仍无副作用。
+    test('fresh work holding a live lease survives a sweep; once the lease expires it converges failed and replay stays side-effect free', async () => {
       const pair = await seedPair('crash', 'applying', Date.now())
+      const { atomicApplyClaims, intentApplyJournal, resourceBundleApplies } = tablesOf(db)
+      for (const [scene, journalId] of [
+        ['intent', pair.intentId],
+        ['resource-package', pair.bundleId],
+      ] as const)
+        await insertOne(db, atomicApplyClaims, {
+          scene,
+          journalId,
+          claimedBy: 'rfc294-live-holder',
+          leaseEpoch: 1,
+          claimExpiresAt: Date.now() + 60_000,
+          tailState: 'none',
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        })
 
       expect(
         await createAtomicApplyRecovery([
@@ -250,16 +267,8 @@ describeEachProvider('RFC-294 apply 重放 / 恢复平价（双引擎）', (harn
       expect((await intentState(pair.intentId))?.state).toBe('applying')
       expect((await bundleState(pair.bundleId))?.state).toBe('applying')
 
-      const stale = Date.now() - 11 * 60 * 1000
-      const { intentApplyJournal, resourceBundleApplies } = tablesOf(db)
-      await db
-        .update(intentApplyJournal)
-        .set({ updatedAt: stale })
-        .where(eq(intentApplyJournal.id, pair.intentId))
-      await db
-        .update(resourceBundleApplies)
-        .set({ updatedAt: stale })
-        .where(eq(resourceBundleApplies.id, pair.bundleId))
+      // 持有者消失、租约过期。
+      await db.update(atomicApplyClaims).set({ claimExpiresAt: Date.now() - 1 })
 
       expect(
         await createAtomicApplyRecovery([

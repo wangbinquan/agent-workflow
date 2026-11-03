@@ -718,24 +718,23 @@ export async function approveFusion(deps: FusionDeps, id: string, actor: Actor):
   }
   const incorporated = jsonArray(row.incorporatedMemoryIdsJson)
   const now = Date.now()
+  const candidateId = candidateIdOf(row.proposedWorktreePath)
   try {
-    const version = await persistence.apply({
+    // RFC-401 T5：版本写入、记忆标记与 applying → done 是同一事务（RC skill 写入场景的提交事务）；发布 live 与清理候选树
+    // 是场景的可重试尾部（proposal §5 第 12 项）。
+    await persistence.apply({
       fusionId: row.id,
       actor,
       proposal,
       incorporatedMemoryIds: incorporated,
       summary: row.changelog ?? `Fused ${incorporated.length} memories`,
       now,
-    })
-    // RFC-170 T6 (Codex F7): CAS from the 'applying' state we exclusively hold.
-    await casFusionStatus(persistence, id, ['applying'], 'done', {
-      extra: {
-        appliedSkillVersion: version.versionIndex,
-        decidedByUserId: actor.user.id,
-        decidedAt: now,
-      },
+      ...(candidateId === null ? {} : { candidateId }),
     })
   } catch (err) {
+    // 提交之后的失败（发布或候选清理中断）：融合已是 done，与持久 receipt 一致，尾部由 AtomicApply 恢复前滚。
+    const committed = await persistence.load(id)
+    if (committed?.status === 'done') return rowToFusion(committed)
     const code = (err as { code?: string }).code
     // RFC-285 B5：skill 围栏码已归一 resource-operation-stale。
     const msg =
@@ -744,8 +743,7 @@ export async function approveFusion(deps: FusionDeps, id: string, actor: Actor):
         : err instanceof Error
           ? err.message
           : String(err)
-    // The version write already committed durably iff it threw AFTER the DB tx;
-    // fail only from 'applying' (we own it) so we never overwrite a done/canceled.
+    // 提交没有发生：只从我们持有的 applying 记为 failed，绝不覆盖 done / canceled。
     await casFusionStatus(persistence, id, ['applying'], 'failed', {
       extra: { error: msg, decidedAt: Date.now() },
     })
@@ -753,8 +751,7 @@ export async function approveFusion(deps: FusionDeps, id: string, actor: Actor):
     await discardProposal(operations, row)
     throw err instanceof Error ? err : new Error(msg)
   }
-  // The proposal is now the skill's current version.
-  await discardProposal(operations, row)
+  // The proposal is now the skill's current version; the scene's tail already dropped its candidate.
   const fresh = await persistence.load(id)
   if (!fresh) throw new Error(`fusion '${id}' disappeared after apply`)
   return rowToFusion(fresh)

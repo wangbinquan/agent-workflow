@@ -9,8 +9,8 @@
 // 三路创建都必须穿过单一 ACL 初值函数。
 //
 //   ① workflow YAML 导入 → Resource Catalog legacy workflow createWorkflow 单点；
-//   ② skill ZIP 导入 → skill-zip.ts 全部创建走 createManagedSkillWithFiles
-//     （skill.ts 内 initialPrivateResourceAcl ×2：reserve 与 recreate 两臂）；
+//   ② skill ZIP 导入 → skill-zip.ts 全部创建走 createManagedSkillWithFiles，再经 skill 写入场景交给唯一的 skill 写入参与者
+//     （RFC-401 T5：`skillMutationParticipant.ts` 内 initialPrivateResourceAcl ×1，旧的 reserve 两臂删除）；
 //   ③ bundle apply → resource-catalog aggregate adapter 的 plugin 铸造经 owner-bound
 //      dependency 走 initialPrivateResourceAcl（RFC-284 T11 收编）。
 
@@ -38,7 +38,12 @@ describe('RFC-285 B6③ — 导入产物 private 三路装配锁', () => {
     expect(zip.includes('initialPrivateResourceAcl')).toBe(false)
     expect(zip.includes("visibility: 'public'")).toBe(false)
     const skill = legacyResourceSrc('skill.ts')
-    expect((skill.match(/initialPrivateResourceAcl\(ownerUserId\)/g) ?? []).length).toBe(2)
+    expect(skill).toContain('scene.create(')
+    expect(skill.includes('initialPrivateResourceAcl(')).toBe(false)
+    const participant = moduleSrc('resource-catalog/infrastructure/skillMutationParticipant.ts')
+    expect(
+      (participant.match(/initialPrivateResourceAcl\(input\.ownerUserId\)/g) ?? []).length,
+    ).toBe(1)
   })
 
   test('③ 资源包 apply 的每条铸造都落 owner + private（RFC-284 T11）', () => {
@@ -58,9 +63,17 @@ describe('RFC-285 B6③ — 导入产物 private 三路装配锁', () => {
       'pluginMutationParticipant.ts',
       'workflowMutationParticipant.ts',
       'workgroupMutationParticipant.ts',
+      // RFC-401 T5：skill 的新建经唯一的 skill 写入参与者，初值走 `initialPrivateResourceAcl`。
+      'skillMutationParticipant.ts',
     ].map((file) => moduleSrc(`resource-catalog/infrastructure/${file}`))
     const privateMints = [arms, ...participants].reduce(
-      (count, src) => count + (src.match(/visibility: 'private'(?: as const)?,/g) ?? []).length,
+      (count, src) =>
+        count +
+        (
+          src.match(
+            /visibility: 'private'(?: as const)?,|initialPrivateResourceAcl\(input\.ownerUserId\)/g,
+          ) ?? []
+        ).length,
       0,
     )
     expect(privateMints, '铸造点一处都没扫到 ⇒ 判据此刻零预言力').toBeGreaterThanOrEqual(5)

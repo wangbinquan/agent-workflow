@@ -68,7 +68,10 @@ function copyRegularTree(source: string, target: string): void {
 
 function writeSkillTree(root: string, payload: IntentSkillPayload): void {
   mkdirSync(root, { recursive: true, mode: 0o700 })
-  writeFileSync(join(root, 'SKILL.md'), skillMarkdown(payload), { mode: 0o600 })
+  // RFC-401 T5：当前版本的 SKILL.md 与新内容解析等价时保留原字节（design §2.3）。
+  const main = join(root, 'SKILL.md')
+  const previous = existsSync(main) ? readFileSync(main, 'utf8') : null
+  writeFileSync(main, skillMarkdown(payload, previous), { mode: 0o600 })
   for (const file of payload.files) {
     const target = safeJoin(root, file.path)
     mkdirSync(dirname(target), { recursive: true, mode: 0o700 })

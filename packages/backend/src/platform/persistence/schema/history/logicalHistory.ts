@@ -42,6 +42,8 @@ export async function loadPostgresqlMigrationHistory(input: {
         plan,
         sqliteMigrations: [marker],
         sqliteMigration: { count: 1, last: marker, chainDigest: digestSchemaContract([marker]) },
+        // RFC-401: the row bridge folds these reviewed edges (`postgresqlMigrationSequence.ts`).
+        schemaEdge: version.contract.edge,
       }
     },
   )

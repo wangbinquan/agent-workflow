@@ -1,3 +1,5 @@
+import { createAtomicApplyClaimStore } from '@/platform/atomic-apply/infrastructure/claimStore'
+import { atomicApplyRecoveryClaims } from '@/platform/atomic-apply/lease'
 import type { AtomicApplyRecoveryScene } from '@/platform/contracts/atomicApply'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import type { Logger } from '@/util/log'
@@ -31,8 +33,8 @@ export function createIntentApplyRecoveryScene(
     key: 'intent',
     ...(input.now === undefined ? {} : { now: input.now }),
     list: journal.list,
-    compareAndSet: (row, patch) =>
-      journal.transaction((tx) => journal.compareAndSet(tx, row.id, row.state, patch)),
+    // RFC-401 T4：恢复先接管 claim，写回以接管令牌 fencing。
+    ...atomicApplyRecoveryClaims(journal, createAtomicApplyClaimStore('intent')),
     async recover(row, action) {
       let artifacts
       try {

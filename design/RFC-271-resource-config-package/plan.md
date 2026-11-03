@@ -292,7 +292,7 @@ canonical(每条目的候选 id / 各候选 expect / 允许动作)），**不是
 - [x] AC-7d：反向锁（可见但缺类型权限点 → 导出成功）—— `rfc271-export-gates.test.ts`
 - [x] AC-20：journal 各 phase 边界注入中断 + 重启收敛到二态之一 —— `rfc271-bundle-engine.test.ts`
       「I9 · 收敛」；实现门补上了**生产调用点**（此前收敛器只有定义，`cli/start.ts` 没接）
-- [x] AC-25b：技能覆盖失败后两个技能都没被改 —— `rfc271-skill-version-split.test.ts`「② abort」
+- [x] AC-25b：技能覆盖失败后两个技能都没被改 —— `rfc271-skill-version-split.test.ts`「② abort」（RFC-401 T5 起四段拆分删除，改由 `rfc401-skill-error-matrix.test.ts`「AC-25b」在单写入栈上锁定）
 - [x] `bun run gate:local` 全绿；推后按 exact SHA 查 CI —— gate 6m13s 全绿
       （backend 4 分片 9702 pass / frontend 全过）；CI 与 `visual-regression-nightly` 在
       `52b1400e` 均 success

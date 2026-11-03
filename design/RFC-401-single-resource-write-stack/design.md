@@ -181,7 +181,8 @@ Intent 场景适配 ── 句柄 / copy / session / provenance ─┐
 ### 9.1 分步
 
 Part A 按资源类分次提交（plan「Part A 分步」）：A1 agent；A2 MCP 与 plugin；A3 workflow 与 workgroup（分 A3a workflow、A3b workgroup
-两次提交）；A4 skill（Intent / 资源包的数据库部分、版本规则与字节合同），并删除剩余 arms、加 AC-1 结构锁。每一步完整实现与用例后集中验证一次再提交。§3 要点 2（AtomicApply
+两次提交）。原 A4（skill 的 Intent / 资源包数据库部分、版本规则与字节合同、删除剩余 arms、AC-1 结构锁）并入 Part B 的 T5：技能「内容不变
+不增版本」须在三套工件 owner 里于暂存前判定，与 G4 重写的工件合同是同一处。每一步完整实现与用例后集中验证一次再提交。§3 要点 2（AtomicApply
 最终事务的隔离策略）与 AtomicApply 本身的改动一起归 Part B。
 
 ### 9.2 A1：agent 写入参与者
@@ -322,4 +323,122 @@ Part A 按资源类分次提交（plan「Part A 分步」）：A1 agent；A2 MCP
   RFC-231 私有新建、RFC-345 / RFC-349 的源码锁改指参与者。
 - **用例**：`T/rfc401-workgroup-error-matrix.test.ts`（重名、无效人类成员、不可见 agent、不存在的 agent、stale、Intent 不改名单时
   保留成员行；三入口 × 两 provider，场景码单独断言）。
+
+## 10. Part B 详细设计（2026-11-02，A3b 之后的研究）
+
+### 10.1 T4：持久 claim / lease / fencing
+
+- **存放位置（对 §4 / §6「扩展两张 journal 表的列」的更正）**：epoch-2 的 schema history 每个版本恰好一条边，`add-column` 边一次只给
+  一张表加一列（`platform/persistence/schema/history/edgeDiff.ts:158`）。在两张 journal 表上加持有者、租约、fencing 与尾部完成四列要 8 个
+  history 版本（每个带 SQLite / PostgreSQL 计划、PostgreSQL 15～18 四份 catalog、RFC-398 种子与映射预言）。改为新增一张由
+  `platform/atomic-apply` 所有的 `atomic_apply_claims` 表：一个 `add-table` history 版本（epoch-2 的第一个增量版本 0001）。两张 journal 表
+  与各自幂等域不动，claim 与 journal 行一对一（主键 `(scene, journal_id)`），前台与恢复同一份 claim 协议，新场景只扩展 registry。
+- **列**：`scene`、`journal_id`（主键两列）、`claimed_by`（持有者这次 claim 的随机令牌，也是 fencing 依据）、`lease_epoch`（每次接管
+  +1）、`claim_expires_at`、`tail_state`（`none` / `pending` / `complete`：committed 之后的尾部是否完成）、`created_at`、`updated_at`。表与读写
+  归 `platform/atomic-apply`（`infrastructure/persistence/schema.ts`、`infrastructure/claimStore.ts`），场景只经 `AtomicApplyClaims` 合同使用。
+- **协议**（`platform/atomic-apply/stateMachine.ts`、`convergence.ts`、`lease.ts`）：
+  - 前台 claim：在插入 journal 行的同一事务里插入 claim（新令牌、`lease_epoch = 1`、租约 = now + 60 s）。
+  - 每一次 journal 状态写（`recordArtifact`、prepared → applying、applying → committed、失败结算、备注写回、恢复写回）所在事务先以
+    令牌为条件续租；0 行即已被接管，抛场景的 `transitionLost('lease')`。提交前丢失租约的旧持有者直接退出：不提交、不补偿，补偿与结算
+    归接管者。
+  - 续租：apply 进行中每 20 s 续租一次（长 staging），是一条自排程的链（上一次落地后才排下一次，天然串行，不新增直接的
+    `setInterval`，见 RFC-376 的棘轮）；续租失败记为租约丢失，下一次状态写必被拒。
+  - 恢复：候选动作只看 journal 状态与本进程活跃集合（`decideAtomicApplyConverge`）；动手前以新令牌接管 claim——只有租约已过期，或没有
+    claim 行（本版本之前留下的 journal，写它的进程在升级前已退出）的记录能被接管，接管时 `lease_epoch + 1`；写回带接管令牌并释放租约。
+    十分钟窗口删除，进程内活跃集合降为优化。
+  - 尾部：committed 与 `tail_state = pending` 同一事务落下；`afterCommit` 完成置 `complete` 并释放租约，未完成（返回 false）记备注、
+    保留 pending 并释放租约，恢复随即可接管前滚；前滚完成置 `complete`。恢复只前滚尾部未完成的 committed 记录（此前每轮前滚全部
+    committed 行）；没有 claim 行的旧 committed 记录前滚一次后补记 complete。
+- **迁移与发布门**：history 0001（`add-table atomic_apply_claims`）的 SQLite / PostgreSQL 计划与 PostgreSQL 15～18 四份 catalog 由
+  `bun run db:schema-history` 生成；目标名单 `bootstrap/targetSchemaRoster.json` 加一行（`sources: []`：epoch-1 没有对应源表，转换后为空表）；
+  RFC-398 种子 `seeds/epoch2/0001.json` 含一条 claim 业务行与 `historyExpectations`（原生升级 E2：0000 → 0001 的 add-table 边写入零行）。
+  `mapping-oracle.json` 描述的是 epoch-1 源表到目标的映射，新表没有 epoch-1 源，不加条目；原生升级的独立期望由种子的
+  `historyExpectations` 承担（`T/helpers/releaseUpgrade/nativeChecks.ts`）。
+- **用例**：`T/rfc401-atomic-apply-lease.test.ts`（两个场景 × 两种 provider：前台 claim 与尾部完成、未过期不接管 / 过期接管补偿、旧持有者
+  提交被拒且不补偿、续租、尾部未完成的前滚与重试、旧记录接管）；依赖十分钟窗口的既有用例改为以持久 claim 表达「在途」（W7、W8、W12、
+  RFC-349 PostgreSQL 维护、双 provider 行为对拍的 SQL 脚本），「每轮都重放已提交的尾部」的用例改为尾部完成后不再前滚（RFC-234、
+  RFC-343）；纯判据 `decideAtomicApplyConverge` 的用例改写。
+
+### 10.2 T5：技能、fusion、restore 与原 A4
+
+**现状（研究摘录）**：普通技能写入（create / save / 文件写删 / ZIP / restore / fusion / delete）走
+`RC/infrastructure/legacy/skillVersion.ts` 的旧漏斗与 `skill_operations` + `skill_operation_locks`；提交后失败会让技能保持锁定、
+在重启前不可见。Intent 与资源包各有工件 owner，走 CAS、不加锁。CrewStation 的技能内容是数据库字节，内容后端只有两种。普通 CRUD
+从不推进 metaRevision。序列化器有两份：`util/frontmatter.ts` 的 `stringifyFrontmatter`（lineWidth 80）与
+`RC/infrastructure/resourcePackageSkillDocument.ts` 的 `renderResourcePackageSkillMarkdown`（lineWidth 0、空行、末尾换行）。fusion
+approve 在提交后发布失败时把 fusion 记为 failed（`KE/application/fusionOrchestration.ts:684-761`、
+`KE/infrastructure/fusionRepository.ts:291-357`）。Intent 的名称预检在 `intent/application/resolveChangeset.ts`
+（`NAME_CONFLICT_IN_WRITE_PARTICIPANT` 466-472 未含 skill；`occupiedNames` → 422 `intent-name-conflict`）。
+
+**Schema**：epoch-2 history 0002 `add-table skill_apply_journal`（owner `resource-catalog`）：`id`（主键，兼幂等键）、`skill_id`、
+`operation`（create | version | delete）、`state`、`prepared_artifacts_json`、`receipt_json`、`error`、`created_at`、`updated_at`。
+claim 用 T4 的 `atomic_apply_claims`，scene = `skill`。随附 PostgreSQL 15–18 catalog、种子（含 `historyExpectations`）、roster 条目与
+表归属登记。
+
+**平台钩子**：`claim.withinClaim(tx, journalId)`（claim 事务内追加场景写，例如取锁）；`execute.settle(tx)`（终态结算事务内追加写，例如
+释放锁）；恢复场景可选 `settle(tx, row)`，在终态写回的事务里执行。
+
+**唯一 skill 写入参与者**（`RC/application/ports/skillMutation.ts`、`RC/infrastructure/skillMutationParticipant.ts`）：`skills` /
+`skill_versions` 行只由它写。
+
+- `create`：重名 → 409 `skill-name-in-use`「skill 'x' already exists」，唯一约束冲突归一为同一错误。
+- `update`：六字段复合前置条件不符 → stale；新版本必须是 contentVersion + 1；description 变化时 metaRevision + 1；无任何变化 →
+  already-current；CAS 写；`hooks.before / after` 在同一事务内。
+- `delete`：事务内复查引用 → 409 `skill-in-use`。
+
+**skill 场景**：锁（op_id = journal id；被占 → 409 `skill-operation-busy`）在 claim 事务里取，在终态结算时释放。工件为 `skill-version`
+（发布引用 + contentKind）、`skill-delete`、`skill-candidate`；内容存储沿用 `SkillVersionContentStore` / `SkillDeletionContentStore` /
+`SkillTreeContentStore`，恢复按记录的 contentKind 选存储。create 先暂存 v1，再插入 ready 行（不再有 `reserving`）。恢复：prepared /
+applying 补偿，committed 且尾部 pending 前滚；登记进维护注册表与启动步骤 `skill-operation-recovery`（先排空旧记录，再收敛）。
+启动步骤在主进程里收敛，前滚发布的技能在本 boot 的可用判定里立即可见；已知限制：维护 Worker 前滚时只标记 Worker 自己的集合，主进程里该技能要等下一次写入或重启才重新标记（锁已释放，写入不受影响）。在途写入由租约保护，所以维护作业的活跃快照对 skill 场景只传空集。
+
+**字节合同**：`renderSkillMarkdown` = `---\n{YAML，lineWidth 0，去掉末尾那一个换行}\n---\n{body}`（YAML 输出总以一个换行结尾，只去这一个；载荷字段各读一次），解析等价时保留原字节。opencode 以 gray-matter
+解析技能（`packages/core/src/config/markdown.ts:3-10`；该处注释说明 Claude Code 容忍非法 YAML，单行标量更稳），lineWidth 0 不折行
+与之相符。不变判定：普通 CRUD 用 `matchesLive`；Intent / 资源包在暂存后、提交前比较暂存树与当前版本树。restore 与 fusion 总是推进
+版本。
+
+**fusion**：经 skill 场景；提交事务包含 before（仍为 applying 且技能可写）、参与者、after（markFused + fusion applying → done +
+appliedSkillVersion / decidedBy / decidedAt）；尾部为发布与候选清理。`SkillTreeVersionOperations` 的 stage / inTransaction / publish /
+abort 合并进 `applyVersion`。发布失败时 fusion 终态与 receipt 一致（§5 第 12 项）。
+
+**restore**：skill 场景的 version 操作，source = restore，记录 restoredFromVersion，description 取目标版本 SKILL.md，unfuse 成员关系在同
+一事务。
+
+**Intent / 资源包**：数据库写入经参与者；删除 `occupiedNames` 与名称预检（§5 第 1 项）；内容 owner 保留，改用统一序列化器与不变比较。
+
+**AC-1 锁**：`rfc401-resource-write-participants` 纳入 skill，六类每类恰好一个参与者实现。
+
+### 10.3 T6：旧引擎退役
+
+- 入口函数签名保留（`createManagedSkill`、`writeSkillContent`、`saveSkillWithToken`、`writeSkillFile`、`deleteSkillFile`、
+  `deleteSkill`、`restoreSkillVersion`、`commitSkillZipBuffer`），内部改走 skill 场景。
+- 删除旧漏斗与生命周期的写入部分；零调用的 legacy 写函数（`legacy/agent.ts` 的 `createAgent` / `updateAgent`、`legacy/workflow.ts`
+  与 `legacy/workgroups.ts` 的写入部分等）随测试迁到参与者后删除。
+- 保留兼容执行器：启动时排空旧记录的 `recoverSkillOperations`、`composeLegacyIntentSkillArtifactCompat`、
+  `resourcePackageOperationRecovery`。
+- 锁 GC 只回收既不属于在途旧 operation、也不属于 skill journal 的锁。
+- 约 67 个测试文件使用旧技能 API，随迁移改写。
+
+### 10.4 跨版本行桥（集中验证发现）
+
+- **问题**：0001 / 0002 是 epoch-2 的头两个增量版本。epoch-2 history 没有 epoch-1 的 upgrade steps（`schema/history/logicalHistory.ts`
+  返回 `steps: []`），而平台行桥 `resolvePostgresqlRowBridge`（`platform/persistence/postgresqlMigrationSequence.ts`）只折叠 steps，于是任何
+  跨版本的桥都报 `historical row, codec, key or disposition changed`。受影响的是升级后的 provider move 状态 / 续跑 / 恢复源解析
+  （`SO/infrastructure/databaseMigrationCoordinator.ts` 的 `operationVersion`、`local/fileDatabaseInstallation.ts` 的
+  `resolveRecoverySource`），以及 PostgreSQL 逻辑恢复：RFC-395 II-b 起 `resolveLogicalDatabaseRestoreSourceContract` 只接受同摘要，升级前的
+  PG 备份会被拒（`portable-restore-schema`）。文档语义是 SQLite 原生恢复接受较旧的 epoch-2 备份并前滚（`docs/disaster-recovery.md`
+  §2.1.1，`sqlite/systemProviderRestore.ts` 经 `recordedLiveLogicalContract` 已满足），PG 走「同 epoch」逻辑恢复（§2.4）。只有一个版本时
+  root 即 head，这些路径从未跨过版本。
+- **修正**：epoch-2 版本带上自己的 edge（`PostgresqlMigrationVersion.schemaEdge`，baseline 为 null，epoch-1 版本不带）。行桥遇到带 edge 的
+  版本时按 edge 折叠：`add-index` 行不变（两种桥）；`add-table` 只在 additive 桥里折叠为一张新的 KEEP 空表；其余 edge 一律终止桥。每一步
+  都与下一版本自身的合同比对，不凭 edge 标签放行。`resolveLogicalDatabaseRestoreSourceContract` 重新经 additive 桥解析较旧的 epoch-2 摘要
+  （目标必须是完整 head；不在 history 里的摘要仍拒，epoch-1 走 `db migration restore-backup`）；恢复循环本就按源列重编码旧行、新增表计
+  零行（`logicalDatabaseRestore.ts`）。
+- **边界**：`add-column` / `replace-check` / `add-fk` / `retire-table` / `rebuild-table` / `seed-delta` / `data-transform` / `owner-metadata`
+  不折叠，由首个引入该 edge 的 RFC 决定它的行桥；`rfc401-epoch2-history-bridge` 断言当前 history 只含 add-table，这样的版本会让该断言
+  失败，提醒作者处理。
+- **用例**：`T/rfc401-epoch2-history-bridge.test.ts`（真实 history 的 additive / index-only / 反向；各类 edge 终止桥；改标签或改合同被拒；
+  add-index 两种桥；恢复源解析的旧摘要 / 未知摘要 / 非 head 目标）；`T/rfc359-t19h-logical-backup-restore.test.ts` 的原始工件改在 root
+  构建（协议恢复与真实 PostgreSQL 恢复都跨 0001 / 0002，新增表为空），原生 provider 往返留在 head；`T/rfc349-migration-status-read-only`
+  的探测随之跨版本。
 

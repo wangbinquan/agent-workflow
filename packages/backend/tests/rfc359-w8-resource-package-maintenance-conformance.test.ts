@@ -81,10 +81,11 @@ import {
 // 会让这份对拍在账本里看不见。
 import { createPostgresqlResourcePackageApplyArtifactRecovery } from '@/modules/resource-catalog/infrastructure/postgresqlResourcePackageMaintenance'
 import { createResourcePackageApplyJournalPort } from '@/modules/resource-catalog/infrastructure/resourcePackageApplyJournal'
+import { ulid } from 'ulid'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
 
 const NOW = 1_788_278_400_000
-/** application 层的收敛窗口：只有 `updatedAt` 早于 now-10min 的未结算行才会被扫。 */
+/** RFC-401 T4 之前的收敛窗口判据用过这两个时刻；现在「在途」由持久 claim 的租约表达（见 `liveClaim`）。 */
 const OLD = NOW - 30 * 60_000
 const FRESH = NOW - 60_000
 
@@ -97,8 +98,11 @@ interface Ports {
   readonly artifacts: ResourcePackageApplyArtifactRecoveryPort
 }
 
-/** RFC-395 II-a A6：原有 journal CAS 对拍直接调用统一 CAS 端口。 */
-function settleFailed(
+/**
+ * RFC-395 II-a A6：原有 journal CAS 对拍直接调用统一 CAS 端口。RFC-401 T4：写回先接管 claim（这些行没有 claim 行，等同旧版本
+ * 留下的记录，必然接管成功），再以接管令牌 fencing。
+ */
+async function settleFailed(
   journal: ResourcePackageApplyJournalPort,
   command: {
     readonly id: string
@@ -107,9 +111,25 @@ function settleFailed(
     readonly updatedAt: number
   },
 ) {
+  const row = {
+    id: command.id,
+    state: command.expectedState,
+    preparedArtifactsJson: '{}',
+    receiptJson: null,
+    error: null,
+    updatedAt: command.updatedAt,
+  }
+  const token = ulid()
+  const claimed = await journal.claim(row, {
+    token,
+    expiresAt: command.updatedAt + 60_000,
+    now: command.updatedAt,
+  })
+  if (claimed !== 'taken') return false
   return journal.compareAndSet(
-    { id: command.id, state: command.expectedState },
+    row,
     { state: 'failed', error: command.error, updatedAt: command.updatedAt },
+    { token, now: command.updatedAt, release: true },
   )
 }
 
@@ -213,6 +233,21 @@ async function insertJournal(
   })
 }
 
+/** RFC-401 T4：另一个持有者正持有、租约未过期的 claim——恢复不得接管这一行。 */
+async function liveClaim(harness: ProviderHarness, journalId: string): Promise<void> {
+  const { atomicApplyClaims } = tablesOf(harness.db)
+  await insertOne(harness.db, atomicApplyClaims, {
+    scene: 'resource-package',
+    journalId,
+    claimedBy: 'w8-other-holder',
+    leaseEpoch: 1,
+    claimExpiresAt: NOW + 60_000,
+    tailState: 'none',
+    createdAt: FRESH,
+    updatedAt: FRESH,
+  })
+}
+
 async function readJournal(
   harness: ProviderHarness,
   id: string,
@@ -279,8 +314,8 @@ describeEachProvider('RFC-359 W8 —— ResourcePackageMaintenance 双引擎对�
       expect(listed[0]!.receiptJson).toBeNull()
       expect(listed[0]!.preparedArtifactsJson).toBe(resourcePackageArtifactCodecs.encode([]))
       expect(JSON.parse(listed[1]!.receiptJson!).journalId).toBe('w8rpm-b')
-      // `updatedAt` 是收敛窗口的判据（`journal.updatedAt > reapBefore`）。PostgreSQL 的 int8
-      // 经驱动回来可能是字符串——那会让窗口比较悄悄变成字典序比较。两侧都必须是 number。
+      // `updatedAt` 曾是收敛窗口的判据（RFC-401 T4 起改由持久 claim 的租约决定），行合同仍声明它是
+      // number。PostgreSQL 的 int8 经驱动回来可能是字符串——两侧都必须是 number。
       expect(listed.map((row) => typeof row.updatedAt)).toEqual(['number', 'number'])
       expect(listed[0]!.updatedAt).toBe(OLD)
       expect(listed[1]!.updatedAt).toBe(FRESH)
@@ -351,7 +386,8 @@ describeEachProvider('RFC-359 W8 —— ResourcePackageMaintenance 双引擎对�
     }
   })
 
-  test('settleFailed 的真实语句只有一笔事务和一次条件更新', async () => {
+  // RFC-401 T4：结算先接管 claim（一笔事务），再以接管令牌 fencing 写回（一笔事务）；journal 行仍只有一次条件更新。
+  test('settleFailed 的真实语句是接管与写回两笔事务、journal 只有一次条件更新', async () => {
     const paths = makePaths()
     try {
       await insertJournal(harness, { id: 'w8rpm-statement', state: 'prepared' })
@@ -367,13 +403,13 @@ describeEachProvider('RFC-359 W8 —— ResourcePackageMaintenance 双引擎对�
           }),
         ).toBe(true)
         const statements = recording.statements.map((statement) => statement.sql)
-        expect(statements.filter((sql) => /^\s*begin\b/i.test(sql))).toHaveLength(1)
+        expect(statements.filter((sql) => /^\s*begin\b/i.test(sql))).toHaveLength(2)
         expect(
           statements.filter((sql) =>
             /^\s*update\s+(?:"[^"]+"\.)?"resource_bundle_applies"\s+set\b/i.test(sql),
           ),
         ).toHaveLength(1)
-        expect(statements.filter((sql) => /^\s*commit\b/i.test(sql))).toHaveLength(1)
+        expect(statements.filter((sql) => /^\s*commit\b/i.test(sql))).toHaveLength(2)
         expect(statements.filter((sql) => /^\s*rollback\b/i.test(sql))).toHaveLength(0)
       } finally {
         recording.stop()
@@ -483,7 +519,8 @@ describeEachProvider('RFC-359 W8 —— ResourcePackageMaintenance 双引擎对�
     }
   })
 
-  test('converge：活跃中的、太新的、已 failed 的三类行都不碰', async () => {
+  // RFC-401 T4：「太新的」由另一持有者未过期的租约表达，不再看 updatedAt。
+  test('converge：活跃中的、他人持有租约的、已 failed 的三类行都不碰', async () => {
     const paths = makePaths()
     try {
       const active = join(paths.pluginsDir, PLUGIN_ID, `${GENERATION_ID}A`)
@@ -503,6 +540,7 @@ describeEachProvider('RFC-359 W8 —— ResourcePackageMaintenance 双引擎对�
         preparedArtifactsJson: pluginArtifactJson(harness.capabilities.isolation, fresh),
         updatedAt: FRESH,
       })
+      await liveClaim(harness, 'w8rpm-fresh')
       await insertJournal(harness, {
         id: 'w8rpm-failed',
         state: 'failed',
@@ -558,17 +596,35 @@ describeEachProvider('RFC-359 W8 —— ResourcePackageMaintenance 双引擎对�
       })
 
       const ports = portsFor(harness.db, harness.capabilities.isolation, paths)
+      // 发布物从磁盘上消失：两侧都必须记成**可重试**的告警，而不是把行结算掉。
+      rmSync(cachedPath, { force: true })
+      const missingWarnings: Warning[] = []
+      expect(
+        await convergeCommand(ports, missingWarnings).converge({ 'resource-package': [] }),
+      ).toEqual({
+        failed: 0,
+        rolledForward: 0,
+      })
+      expect(missingWarnings.map((entry) => entry.message)).toEqual([
+        'resource-package-roll-forward-retryable',
+      ])
+      expect(missingWarnings[0]!.fields.journalId).toBe('w8rpm-roll')
+      expect(missingWarnings[0]!.fields.error).toContain(
+        `resource-package-plugin-publication-missing:${PLUGIN_ID}`,
+      )
+      expect((await readJournal(harness, 'w8rpm-roll'))?.state).toBe('committed')
+
+      // 发布物回来之后前滚完成：committed 行留在原地，尾部记为完成。
+      writeFileSync(cachedPath, 'export default {}')
       const warnings: Warning[] = []
       expect(await convergeCommand(ports, warnings).converge({ 'resource-package': [] })).toEqual({
         failed: 0,
         rolledForward: 1,
       })
       expect(warnings).toEqual([])
-      // roll-forward 是幂等回放：committed 行留在原地，等下一轮再放一次。
       expect((await readJournal(harness, 'w8rpm-roll'))?.state).toBe('committed')
 
-      // 发布物从磁盘上消失：两侧都必须记成**可重试**的告警，而不是把行结算掉。
-      rmSync(cachedPath, { force: true })
+      // RFC-401 T4：尾部已完成的行不再每轮前滚。
       const afterWarnings: Warning[] = []
       expect(
         await convergeCommand(ports, afterWarnings).converge({ 'resource-package': [] }),
@@ -576,13 +632,7 @@ describeEachProvider('RFC-359 W8 —— ResourcePackageMaintenance 双引擎对�
         failed: 0,
         rolledForward: 0,
       })
-      expect(afterWarnings.map((entry) => entry.message)).toEqual([
-        'resource-package-roll-forward-retryable',
-      ])
-      expect(afterWarnings[0]!.fields.journalId).toBe('w8rpm-roll')
-      expect(afterWarnings[0]!.fields.error).toContain(
-        `resource-package-plugin-publication-missing:${PLUGIN_ID}`,
-      )
+      expect(afterWarnings).toEqual([])
       expect((await readJournal(harness, 'w8rpm-roll'))?.state).toBe('committed')
     } finally {
       cleanup()

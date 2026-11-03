@@ -1,4 +1,6 @@
 // RFC-359 W40: share document serialization without moving either artifact writer.
+// RFC-401 T5（design §2.3）：技能 Markdown 固定一份字节合同，普通编辑、Intent、资源包共用；本文件改为锁定统一合同，旧的资源包
+// 渲染式留作「存量字节」的来源——与新内容解析等价的旧文档原样保留，不产生新版本。
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import type { BundleSkillPayload } from '@agent-workflow/shared'
@@ -9,12 +11,22 @@ import { renderResourcePackageSkillMarkdown } from '../src/modules/resource-cata
 
 type Payload = Pick<BundleSkillPayload, 'name' | 'description' | 'frontmatterExtra' | 'bodyMd'>
 
-// Copied verbatim from both original production expressions. It remains an old-code oracle.
+// The pre-RFC-401 resource-package expression, copied verbatim: stored skills still carry these bytes.
 function originalResourcePackageSkillMarkdown(payload: Payload): string {
   return `---\n${stringifyYaml(
     { name: payload.name, description: payload.description, ...payload.frontmatterExtra },
     { lineWidth: 0 },
   )}---\n\n${payload.bodyMd}\n`
+}
+
+// The single byte contract, written independently of the implementation under test.
+function contractSkillMarkdown(payload: Payload): string {
+  const yaml = stringifyYaml(
+    { name: payload.name, description: payload.description, ...payload.frontmatterExtra },
+    { lineWidth: 0 },
+  )
+  const body = payload.bodyMd
+  return `---\n${yaml.slice(0, -1)}\n---\n${body}`
 }
 
 const ordinaryPayloads: readonly Payload[] = [
@@ -87,17 +99,17 @@ describe('RFC359 W40 resource-package skill document', () => {
       frontmatterExtra: {},
       bodyMd: 'Body',
     }
-    const expected = '---\nname: example\ndescription: basic\n---\n\nBody\n'
+    const expected = '---\nname: example\ndescription: basic\n---\nBody'
     const actual = renderResourcePackageSkillMarkdown(payload)
     expect(actual).toBe(expected)
     expect(Buffer.from(actual, 'utf8')).toEqual(Buffer.from(expected, 'utf8'))
-    expect(originalResourcePackageSkillMarkdown(payload)).toBe(expected)
+    expect(contractSkillMarkdown(payload)).toBe(expected)
   })
 
-  test('keeps complete old rendering for ordinary multiline and extra values', () => {
+  test('renders the single contract for ordinary multiline and extra values', () => {
     for (const payload of ordinaryPayloads) {
       const before = JSON.stringify(payload)
-      const expected = originalResourcePackageSkillMarkdown(payload)
+      const expected = contractSkillMarkdown(payload)
       const actual = renderResourcePackageSkillMarkdown(payload)
       expect(actual).toBe(expected)
       expect(Buffer.from(actual, 'utf8')).toEqual(Buffer.from(expected, 'utf8'))
@@ -105,10 +117,22 @@ describe('RFC359 W40 resource-package skill document', () => {
     }
   })
 
+  test('a stored document written by the old serializer keeps its bytes when parse-equivalent', () => {
+    for (const payload of ordinaryPayloads) {
+      const stored = originalResourcePackageSkillMarkdown(payload)
+      expect(renderResourcePackageSkillMarkdown(payload, stored)).toBe(stored)
+      // 真变化写新字节。
+      const changed = { ...payload, bodyMd: `${payload.bodyMd} changed` }
+      expect(renderResourcePackageSkillMarkdown(changed, stored)).toBe(
+        contractSkillMarkdown(changed),
+      )
+    }
+  })
+
   test('preserves field-read order, read counts and thrown error identity', () => {
     const oldTrace: string[] = []
     const newTrace: string[] = []
-    const expected = originalResourcePackageSkillMarkdown(observedPayload(oldTrace))
+    const expected = contractSkillMarkdown(observedPayload(oldTrace))
     const actual = renderResourcePackageSkillMarkdown(observedPayload(newTrace))
     expect(actual).toBe(expected)
     expect(newTrace).toEqual(oldTrace)
@@ -118,7 +142,7 @@ describe('RFC359 W40 resource-package skill document', () => {
       const before: string[] = []
       const after: string[] = []
       const original = thrownBy(() =>
-        originalResourcePackageSkillMarkdown(observedPayload(before, fault, sentinel)),
+        contractSkillMarkdown(observedPayload(before, fault, sentinel)),
       )
       const current = thrownBy(() =>
         renderResourcePackageSkillMarkdown(observedPayload(after, fault, sentinel)),
