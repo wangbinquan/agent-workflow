@@ -17,7 +17,6 @@ import {
   createCodeHostWebhookRoutingDirectory,
 } from '@/modules/integration/composition'
 import { composeSelectedApprovalGatewayRunnerFor } from '@/modules/integration/composition/approvalGateway'
-import type { CrewStationEventIngress } from '@/modules/integration/composition/crewstationEvents'
 import {
   composeDevelopmentApprovalEventObserver,
   composeDevelopmentCodeHostEventObserver,
@@ -88,11 +87,11 @@ export function composeDaemonIntegrationModules(input: {
     readonly approval: Parameters<typeof composeSelectedApprovalGatewayRunnerFor>[1]
   }
   // RFC-431: the observer programs and the observation write hook are the deployment's selections.
+  // RFC-433: the CrewStation event ingress is a hosted-only capability (standalone states null).
   readonly adapters: Pick<
     DeploymentSelections,
-    'customObserverPrograms' | 'beforeEventObservationWrite'
+    'customObserverPrograms' | 'beforeEventObservationWrite' | 'crewStationEvents'
   > & {
-    readonly crewStationEvents?: CrewStationEventIngress
     readonly webhookDispatcher?: WebhookDispatcher
     readonly webhookTerminalControl?: ReturnType<typeof composeMrTerminalControl>
   }

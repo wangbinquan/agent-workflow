@@ -6,7 +6,11 @@ import { composeStandaloneProfile } from '@/bootstrap/standalone'
 import { composeCrewStationProfile } from '@/bootstrap/crewstation'
 import { selectDeployment } from '@/bootstrap/deployment'
 import { deploymentSelectionsOf, DEPLOYMENT_SELECTION_KEYS } from '@/bootstrap/deploymentSelections'
-import type { DeploymentSelections, HostProbeInput } from '@/bootstrap/deploymentProfile'
+import type {
+  DeploymentSelections,
+  DeploymentSessionSelections,
+  HostProbeInput,
+} from '@/bootstrap/deploymentProfile'
 import * as git from '@/services/gitVersion'
 import { getRuntimeDriver } from '@/services/runtime'
 import * as hosted from '@/modules/system-operations/composition/crewstationDeployment'
@@ -137,14 +141,14 @@ test('standalone selection needs no environment and has exactly the six profile 
 test('selection projection preserves all receivers and excludes session-only fields', () => {
   const values = Object.fromEntries(
     Object.keys(DEPLOYMENT_SELECTION_KEYS).map((key) => [key, Object.freeze({ key })]),
-  ) as unknown as DeploymentSelections
+  ) as unknown as DeploymentSessionSelections
   const selected = deploymentSelectionsOf({
     ...values,
     token: 'private-session-input',
     requiredProvider: null,
   })
   expect(Object.keys(selected).sort()).toEqual(Object.keys(DEPLOYMENT_SELECTION_KEYS).sort())
-  for (const key of Object.keys(DEPLOYMENT_SELECTION_KEYS) as (keyof DeploymentSelections)[])
+  for (const key of Object.keys(DEPLOYMENT_SELECTION_KEYS) as (keyof DeploymentSessionSelections)[])
     expect(selected[key]).toBe(values[key])
   expect('token' in selected).toBe(false)
   expect('requiredProvider' in selected).toBe(false)
@@ -342,14 +346,16 @@ describeEachProvider('RFC-394 hosted factory with provider-owned storage', (harn
         }
         expect(profile.selections.applicationConfiguration).toBe(system.applicationConfiguration)
         expect(profile.selections.databaseInstallation).toBe(system.databaseInstallation)
-        expect(profile.selections.secretBox).toBe(system.secretBox)
+        // RFC-433: the platform's box, handed out after the startup lock by a closure over it.
+        expect(typeof profile.selections.secretBox).toBe('function')
+        expect(profile.selections.secretBox()).toBe(system.secretBox)
         expect(await profile.probeHost(f.input)).toBeNull()
         expect(f.info).toHaveBeenCalledWith(
           'execution runs on the platform; local git and runtime probes skipped',
         )
         expect(detect).not.toHaveBeenCalled()
         expect(probe).not.toHaveBeenCalled()
-        await profile.selections.executionAuthority!.close()
+        await profile.selections.executionAuthority.close()
       }
     } finally {
       probe.mockRestore()

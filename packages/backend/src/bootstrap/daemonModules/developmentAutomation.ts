@@ -50,12 +50,9 @@ export interface DaemonDevelopmentAutomationInput {
   // RFC-431: the deployment's selections arrive stated; this bundle substitutes no default.
   readonly verificationCommands: DeploymentSelections['verificationCommands']
   readonly repositoryBaselines: DeploymentSelections['repositoryBaselines']
-  readonly repositoryCandidateEffects?: NonNullable<
-    Parameters<typeof bindChangeCandidateParticipant>[0]
-  >['candidateEffects']
-  readonly conflictMergeWorkspaceEffects?: NonNullable<
-    Parameters<typeof bindConflictMergeParticipant>[0]
-  >['effects']
+  // RFC-433: hosted remote-volume effects; standalone states null (each participant's per-request local effects).
+  readonly repositoryCandidateEffects: DeploymentSelections['repositoryCandidateEffects']
+  readonly conflictMergeWorkspaceEffects: DeploymentSelections['conflictMergeWorkspaceEffects']
   readonly evidenceArtifacts: DeploymentSelections['evidenceArtifacts']
   readonly actionWorkspaceEntries: DeploymentSelections['actionWorkspaceEntries']
 }
@@ -72,6 +69,10 @@ export function composeDaemonDevelopmentAutomationModules(input: DaemonDevelopme
     writerCutover,
   } = input
   const admissionLookup = composeDevelopmentAdmissionLookup(db)
+  const candidateEffects =
+    input.repositoryCandidateEffects === null ? undefined : input.repositoryCandidateEffects
+  const conflictMergeEffects =
+    input.conflictMergeWorkspaceEffects === null ? undefined : input.conflictMergeWorkspaceEffects
   const developmentTerminalObserver = createDevelopmentMissionExecutionTerminalObserver({
     db,
     async drive(missionId) {
@@ -108,14 +109,12 @@ export function composeDaemonDevelopmentAutomationModules(input: DaemonDevelopme
       db,
       developmentPurposeRoot.requirement,
     ),
-    changeCandidate: bindChangeCandidateParticipant({
-      candidateEffects: input.repositoryCandidateEffects,
-    }),
+    changeCandidate: bindChangeCandidateParticipant({ candidateEffects }),
     candidateDelivery: bindCandidateDeliveryParticipant({
-      candidateEffects: input.repositoryCandidateEffects,
+      candidateEffects,
       publicationTransport: repository.repositoryPublicationTransport,
     }),
-    conflictMerge: bindConflictMergeParticipant({ effects: input.conflictMergeWorkspaceEffects }),
+    conflictMerge: bindConflictMergeParticipant({ effects: conflictMergeEffects }),
     ...buildDevelopmentDeliveryDeps(
       repository.developmentDeliveryProvider,
       developmentPurposeRoot.pipeline.staging,

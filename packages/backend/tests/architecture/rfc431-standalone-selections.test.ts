@@ -1,16 +1,16 @@
-// RFC-431: every deployment states each selection. `DeploymentSelections` has three groups — required,
-// required-nullable (hosted-only capabilities, standalone `null`) and optional (RFC-294 S2c steps 3–4) — and
-// the standalone profile builds exactly the first two in `standaloneSelections`. Below the two profiles,
-// bootstrap never substitutes a default for a stated selection: no `??`, no optional chaining, no comparison
-// with `undefined` (and, for a required one, none with `null`). The helpers that existed only to default an
-// absent selection stay retired. Reads the production sources without importing them.
+// RFC-431: every deployment states each selection. `DeploymentSelections` has two groups — required and
+// required-nullable (hosted-only capabilities, standalone `null`); RFC-433 retired the last optional ones, so a
+// `?` member is a violation — and the standalone profile builds every key in `standaloneSelections`. Below the
+// two profiles, bootstrap never substitutes a default for a stated selection: no `??`, no optional chaining, no
+// comparison with `undefined` (and, for a required one, none with `null`). The helpers that existed only to
+// default an absent selection stay retired. Reads the production sources without importing them.
 import { expect, setDefaultTimeout, test } from 'bun:test'
 import { resolve } from 'node:path'
 import ts from 'typescript'
 import { backendUnits, sourceUnit, type SourceUnit } from './census'
 import {
   NULLABLE_SELECTIONS,
-  OPTIONAL_SELECTIONS,
+  PROCESS_FACTORY_SELECTIONS,
   REQUIRED_SELECTIONS,
   SESSION_FACTORY_SELECTIONS,
 } from '../helpers/deploymentSelectionPartition'
@@ -35,10 +35,11 @@ const WORKER_ROOTS = (path: string) =>
   /^packages\/backend\/src\/bootstrap\/maintenanceWorker[A-Za-z]*\.ts$/.test(path)
 const REQUIRED: readonly string[] = REQUIRED_SELECTIONS
 const NULLABLE: readonly string[] = NULLABLE_SELECTIONS
-const OPTIONAL: readonly string[] = OPTIONAL_SELECTIONS.presence
 const STATED = [...REQUIRED, ...NULLABLE]
 /** RFC-432: required selections stated as factories each session calls with its own graph. */
 const SESSION_FACTORIES: readonly string[] = SESSION_FACTORY_SELECTIONS
+/** RFC-433: plus the secret box, opened once after the startup lock — stated the same way. */
+const FACTORIES: readonly string[] = [...SESSION_FACTORIES, ...PROCESS_FACTORY_SELECTIONS]
 const HOSTED = PREFIX + 'bootstrap/crewstation.ts'
 const RETIRED = [
   'standaloneModuleAdapters',
@@ -100,17 +101,15 @@ function partitionViolations(profile: SourceUnit | undefined): string[] {
         (type) => ts.isLiteralTypeNode(type) && type.literal.kind === ts.SyntaxKind.NullKeyword,
       )
     const group = optional ? 'optional' : nullable ? 'nullable' : 'required'
+    // RFC-433: no group is optional — a `?` member can never match its expected group.
     const expected = REQUIRED.includes(name)
       ? 'required'
       : NULLABLE.includes(name)
         ? 'nullable'
-        : OPTIONAL.includes(name)
-          ? 'optional'
-          : 'unlisted'
+        : 'unlisted'
     if (group !== expected) errors.push(`partition:${name}:${group}!=${expected}`)
   }
-  for (const name of [...STATED, ...OPTIONAL])
-    if (!seen.has(name)) errors.push('partition:missing:' + name)
+  for (const name of STATED) if (!seen.has(name)) errors.push('partition:missing:' + name)
   return errors
 }
 
@@ -178,15 +177,16 @@ function standaloneViolations(standalone: SourceUnit | undefined): string[] {
       errors.push('standalone required unset:' + name)
   }
   // RFC-432: a session-scoped selection is the constructor itself — the profile builds nothing before the lock.
-  for (const name of SESSION_FACTORIES) {
+  // RFC-433: so is the secret box, which must not touch `secret.key` before the startup lock.
+  for (const name of FACTORIES) {
     const value = keys.get(name)
     if (value !== undefined && ts.isCallExpression(value))
-      errors.push('standalone session factory called:' + name)
+      errors.push('standalone factory called:' + name)
   }
   return errors
 }
 
-/** RFC-432: the hosted profile states each session-scoped selection as a closure over the object it built. */
+/** RFC-432/433: the hosted profile states each factory selection as a closure over the object it built. */
 function hostedViolations(hosted: SourceUnit | undefined): string[] {
   if (hosted === undefined) return ['missing source: ' + HOSTED]
   const closures = new Set<string>()
@@ -200,8 +200,8 @@ function hostedViolations(hosted: SourceUnit | undefined): string[] {
         if (ts.isPropertyAssignment(property) && ts.isArrowFunction(property.initializer))
           closures.add(property.name.getText(hosted.source))
   })
-  return SESSION_FACTORIES.filter((name) => !closures.has(name)).map(
-    (name) => 'hosted session factory not a closure:' + name,
+  return FACTORIES.filter((name) => !closures.has(name)).map(
+    (name) => 'hosted factory not a closure:' + name,
   )
 }
 
@@ -274,14 +274,15 @@ export function standaloneSelectionViolations(units: readonly SourceUnit[]): str
 }
 
 test('the partition lists are disjoint and cover the contract once', () => {
-  const all = [...STATED, ...OPTIONAL]
-  expect(new Set(all).size).toBe(all.length)
+  expect(new Set(STATED).size).toBe(STATED.length)
   // RFC-432: the ten session-scoped selections joined the required group (39 → 49; optional 17 → 7).
-  expect(REQUIRED).toHaveLength(49)
-  expect(NULLABLE).toHaveLength(6)
-  expect(OPTIONAL).toHaveLength(7)
+  // RFC-433: the last seven left the optional group — two required (49 → 51), five nullable (6 → 11).
+  expect(STATED).toHaveLength(62)
+  expect(REQUIRED).toHaveLength(51)
+  expect(NULLABLE).toHaveLength(11)
   expect(SESSION_FACTORIES).toHaveLength(10)
-  for (const name of SESSION_FACTORIES) expect(REQUIRED).toContain(name)
+  expect(FACTORIES).toHaveLength(11)
+  for (const name of FACTORIES) expect(REQUIRED).toContain(name)
 })
 
 test('live corpus: the selection contract, the standalone profile and its consumers hold', () => {
@@ -294,6 +295,7 @@ const replace = (path: string, edit: (text: string) => string) =>
   real().map((unit) => (unit.path === path ? sourceUnit(path, edit(unit.text)) : unit))
 const APPLICATION = PREFIX + 'bootstrap/daemonApplication.ts'
 const SESSION = PREFIX + 'bootstrap/daemonSession.ts'
+const START = PREFIX + 'bootstrap/daemonStart.ts'
 
 const NEGATIVES: readonly [string, string, (text: string) => string, string][] = [
   [
@@ -310,10 +312,24 @@ const NEGATIVES: readonly [string, string, (text: string) => string, string][] =
     'partition:taskInputFiles:optional!=nullable',
   ],
   [
-    'a pending selection made required without a standalone value',
+    'a former presence switch made optional again',
     PROFILE,
-    (text) => text.replace('  secretBox?: SecretBox', '  secretBox: SecretBox'),
-    'partition:secretBox:required!=optional',
+    (text) =>
+      text.replace(
+        '  readonly repositoryRemote: RepositoryRemoteEffects | null',
+        '  readonly repositoryRemote?: RepositoryRemoteEffects',
+      ),
+    'partition:repositoryRemote:optional!=nullable',
+  ],
+  [
+    'a new selection added as optional',
+    PROFILE,
+    (text) =>
+      text.replace(
+        '  readonly executionAuthority: ExecutionAuthorityPort\n}',
+        '  readonly executionAuthority: ExecutionAuthorityPort\n  futureSwitch?: boolean\n}',
+      ),
+    'partition:futureSwitch:optional!=unlisted',
   ],
   [
     'the standalone profile without its selections',
@@ -379,13 +395,13 @@ const NEGATIVES: readonly [string, string, (text: string) => string, string][] =
         '    reviewArtifacts: createLocalReviewArtifacts,',
         '    reviewArtifacts: (() => createLocalReviewArtifacts)(),',
       ),
-    'standalone session factory called:reviewArtifacts',
+    'standalone factory called:reviewArtifacts',
   ],
   [
     'a hosted session selection that is not a closure',
     HOSTED,
     (text) => text.replace('reviewArtifacts: () => reviewArtifacts,', 'reviewArtifacts,'),
-    'hosted session factory not a closure:reviewArtifacts',
+    'hosted factory not a closure:reviewArtifacts',
   ],
   [
     'a bootstrap default for a session factory',
@@ -396,6 +412,53 @@ const NEGATIVES: readonly [string, string, (text: string) => string, string][] =
         'const content = (input.contentStore ?? createLocalRuntimeContent)(session)',
       ),
     `default:${APPLICATION}:contentStore`,
+  ],
+  // RFC-433: the former presence switches.
+  [
+    'a standalone secret box opened at profile time',
+    STANDALONE,
+    (text) =>
+      text.replace(
+        "    secretBox: () => createSecretBox(join(appHome, 'secret.key')),",
+        "    secretBox: createSecretBox(join(appHome, 'secret.key')),",
+      ),
+    'standalone factory called:secretBox',
+  ],
+  [
+    'a hosted secret box that is not a closure',
+    HOSTED,
+    (text) => text.replace('secretBox: () => system.secretBox,', 'secretBox: system.secretBox,'),
+    'hosted factory not a closure:secretBox',
+  ],
+  [
+    'a hosted-only remote switched by absence again',
+    SESSION,
+    (text) =>
+      text.replace(
+        'if (input.repositoryRemote !== null)',
+        'if (input.repositoryRemote !== undefined)',
+      ),
+    `undefined check:${SESSION}:repositoryRemote`,
+  ],
+  [
+    'the execution authority read as possibly absent',
+    START,
+    (text) =>
+      text.replace(
+        'profile.selections.executionAuthority.onLost(',
+        'profile.selections.executionAuthority?.onLost(',
+      ),
+    `optional chain:${START}:executionAuthority`,
+  ],
+  [
+    'a null check on the required execution authority',
+    APPLICATION,
+    (text) =>
+      text.replace(
+        '    executionAuthority: input.executionAuthority,',
+        '    executionAuthority:\n      input.executionAuthority === null ? (undefined as never) : input.executionAuthority,',
+      ),
+    `null check:${APPLICATION}:executionAuthority`,
   ],
 ]
 for (const [name, path, edit, violation] of NEGATIVES)

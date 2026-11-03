@@ -114,6 +114,7 @@ export function employeeAutomationFixture(harness: ProviderDatabaseHarness, appH
     adapters: {
       customObserverPrograms: standalone.customObserverPrograms,
       beforeEventObservationWrite: standalone.beforeEventObservationWrite,
+      crewStationEvents: standalone.crewStationEvents,
     },
   })
   const workspaceEffects = selectDevelopmentWorkspaceEffectBinding({
@@ -148,6 +149,8 @@ export function employeeAutomationFixture(harness: ProviderDatabaseHarness, appH
     repositoryBaselines: standalone.repositoryBaselines,
     evidenceArtifacts: standalone.evidenceArtifacts,
     graphDevelopmentArtifacts: standalone.graphDevelopmentArtifacts,
+    repositoryCandidateEffects: standalone.repositoryCandidateEffects,
+    conflictMergeWorkspaceEffects: standalone.conflictMergeWorkspaceEffects,
     adapters: {
       employeePrograms: standalone.employeePrograms,
       employeeInputArtifacts: standalone.employeeInputArtifacts,
@@ -168,6 +171,8 @@ export function employeeAutomationFixture(harness: ProviderDatabaseHarness, appH
     workspaceEffects,
     verificationCommands: standalone.verificationCommands,
     repositoryBaselines: standalone.repositoryBaselines,
+    repositoryCandidateEffects: standalone.repositoryCandidateEffects,
+    conflictMergeWorkspaceEffects: standalone.conflictMergeWorkspaceEffects,
     evidenceArtifacts: standalone.evidenceArtifacts,
     actionWorkspaceEntries: standalone.actionWorkspaceEntries,
   }

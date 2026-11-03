@@ -389,7 +389,8 @@ export async function composeCrewStationProfile(
         writeWorkspace: (reference, stream, facts) =>
           workspace.writeStream(reference, stream, facts),
       }),
-      secretBox: system.secretBox,
+      // RFC-433: the platform's master key box, handed to the daemon after its startup lock.
+      secretBox: () => system.secretBox,
       credentials: composeCrewStationCredentialAdapters({
         jwksUrl: environment.jwksUrl,
         project: environment.project,

@@ -25,9 +25,10 @@ const RETIRED = [
   'executionHost',
   'DaemonProviderSessionComposer',
 ]
-// Only startup-derived values may strengthen a selection from optional to required. RFC-431: the
-// configuration binding and the four workspace factories are required in the contract itself (the
-// standalone profile states them), so only the secret box — created after the startup lock — remains.
+// Only startup-derived values may restate a selection. RFC-431: the configuration binding and the four
+// workspace factories are required in the contract itself (the standalone profile states them), so only the
+// secret box remains. RFC-433: the selection is the factory opening it after the startup lock; both session-side
+// inputs extend `DeploymentSessionSelections` (the selections with that box opened) and restate the box.
 const REQUIRED_OVERRIDES = {
   DaemonProviderSessionComposeInput: ['secretBox'],
   DaemonApplicationInput: ['secretBox'],
@@ -96,7 +97,7 @@ export function deploymentProfileViolations(units: readonly SourceUnit[]): strin
       definitions.length !== 1 ||
       input?.heritageClauses
         ?.flatMap((clause) => clause.types.map((type) => type.expression.getText()))
-        .join(',') !== 'DeploymentSelections'
+        .join(',') !== 'DeploymentSessionSelections'
     )
       errors.push('inheritance: ' + name)
     const selected =
@@ -120,6 +121,16 @@ export function deploymentProfileViolations(units: readonly SourceUnit[]): strin
       errors.push('required provider: ' + name)
   }
   const profile = get(PROFILE)
+  const sessionSelections = profile?.statements.find(
+    (node): node is ts.TypeAliasDeclaration =>
+      ts.isTypeAliasDeclaration(node) && node.name.text === 'DeploymentSessionSelections',
+  )
+  if (
+    sessionSelections === undefined ||
+    compact(sessionSelections.type) !==
+      "Omit<DeploymentSelections,'secretBox'>&{readonlysecretBox:SecretBox}"
+  )
+    errors.push('session selections open only the secret box')
   if (
     profile?.statements.some((statement) =>
       ts.isImportDeclaration(statement)
@@ -264,7 +275,7 @@ const mutations: readonly [string, string, (text: string) => string, string][] =
         [
           name + ' inheritance',
           path,
-          (text) => text.replace('extends DeploymentSelections', ''),
+          (text) => text.replace('extends DeploymentSessionSelections', ''),
           'inheritance: ' + name,
         ],
         [
@@ -272,8 +283,8 @@ const mutations: readonly [string, string, (text: string) => string, string][] =
           path,
           (text) =>
             text.replace(
-              'extends DeploymentSelections {',
-              'extends DeploymentSelections { taskArchive?: unknown;',
+              'extends DeploymentSessionSelections {',
+              'extends DeploymentSessionSelections { taskArchive?: unknown;',
             ),
           'required overrides: ' + name,
         ],
@@ -297,6 +308,16 @@ const mutations: readonly [string, string, (text: string) => string, string][] =
     PROFILE,
     (text) => text + '\nconst runtime = 1',
     'profile is types only',
+  ],
+  [
+    'session selections restating more than the secret box',
+    PROFILE,
+    (text) =>
+      text.replace(
+        "Omit<DeploymentSelections, 'secretBox'>",
+        "Omit<DeploymentSelections, 'secretBox' | 'taskArchive'>",
+      ),
+    'session selections open only the secret box',
   ],
   [
     'second kind union',

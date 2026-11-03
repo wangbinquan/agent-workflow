@@ -135,11 +135,11 @@ export interface ProviderAppOwnerInput<P extends DatabaseProvider> {
       | 'runtimeInventoryContent'
       | 'repositoryRevisionContent'
       | 'codeReviewArtifacts'
+      | 'repositoryRemote'
     > & {
       /** RFC-432: the deployment's package skill artifact owner, built for this session. */
       resourcePackageSkillArtifacts: ResourcePackageSkillArtifactOwner
       resourcePackageSkillContent?: SkillPackageContentReader
-      repositoryRemote?: NonNullable<Parameters<typeof composeRepositoryMirrors>[0]['remote']>
     }
   >
   readonly testSeams?: Readonly<{
@@ -388,7 +388,10 @@ export function composeProviderAppComposition<P extends DatabaseProvider>(
       }),
       documentation: Object.freeze({ configuration }),
       webhookIngress: composeWebhookIngressTransport({
-        crewStationEvents: integrationModules.crewStationEvents,
+        crewStationEvents:
+          integrationModules.crewStationEvents === null
+            ? undefined
+            : integrationModules.crewStationEvents,
         webhookIngressPersistence: integrationModules.webhookIngressPersistence,
         secretBox: input.secretBox,
         digitalEmployeeEventCenter: eventCenter,
@@ -486,7 +489,8 @@ export function composeProviderAppComposition<P extends DatabaseProvider>(
         store: core.repositoryWorkspaceStore,
         secretBox: input.secretBox,
         appHome: input.appHome,
-        ...(input.selections.repositoryRemote === undefined
+        // RFC-433: a hosted remote reads in the system volume; standalone (null) keeps its own mirror clones.
+        ...(input.selections.repositoryRemote === null
           ? {}
           : { remote: input.selections.repositoryRemote }),
       }),

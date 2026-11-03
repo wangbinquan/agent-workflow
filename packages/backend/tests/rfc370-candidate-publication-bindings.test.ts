@@ -26,15 +26,19 @@ function property(source: ts.SourceFile, call: ts.CallExpression, key: string) {
   if (input === undefined || !ts.isObjectLiteralExpression(input))
     throw new Error('candidate root needs explicit complete input')
   const named = input.properties.filter(
-    (node): node is ts.PropertyAssignment =>
-      ts.isPropertyAssignment(node) && node.name.getText(source) === key,
+    (node): node is ts.PropertyAssignment | ts.ShorthandPropertyAssignment =>
+      (ts.isPropertyAssignment(node) || ts.isShorthandPropertyAssignment(node)) &&
+      node.name.getText(source) === key,
   )
   expect(named).toHaveLength(1)
   const names = input.properties
     .filter((node) => ts.isPropertyAssignment(node) || ts.isShorthandPropertyAssignment(node))
     .map((node) => node.name.getText(source))
   expect(new Set(names).size).toBe(names.length)
-  return named[0]!.initializer.getText(source)
+  const found = named[0]!
+  return ts.isPropertyAssignment(found)
+    ? found.initializer.getText(source)
+    : found.name.getText(source)
 }
 
 test('RFC-383 roots forward the selected candidate factory to both shared derive/delivery groups', () => {
@@ -61,19 +65,25 @@ test('RFC-383 roots forward the selected candidate factory to both shared derive
     }
     for (const name of ['bindChangeCandidateParticipant', 'bindCandidateDeliveryParticipant'])
       expect(calls(source, name)).toHaveLength(0)
-    expectDeploymentSelection('repositoryCandidateEffects', 'RepositoryCandidateEffectsFactory')
+    // RFC-433: a hosted-only capability; the standalone profile states null.
+    expectDeploymentSelection(
+      'repositoryCandidateEffects',
+      'RepositoryCandidateEffectsFactory | null',
+    )
   }
   for (const path of [
     'bootstrap/daemonModules/digitalEmployee.ts',
     'bootstrap/daemonModules/developmentAutomation.ts',
   ]) {
     const source = load(path)
+    // RFC-433: standalone states null; the bundle hands both participants their own per-request local effects.
+    expect(source.text.replace(/\s+/g, ' ')).toContain(
+      'const candidateEffects = input.repositoryCandidateEffects === null ? undefined : input.repositoryCandidateEffects',
+    )
     for (const name of ['bindChangeCandidateParticipant', 'bindCandidateDeliveryParticipant']) {
       const bindings = calls(source, name)
       expect(bindings).toHaveLength(1)
-      expect(property(source, bindings[0]!, 'candidateEffects')).toBe(
-        'input.repositoryCandidateEffects',
-      )
+      expect(property(source, bindings[0]!, 'candidateEffects')).toBe('candidateEffects')
       if (name === 'bindCandidateDeliveryParticipant')
         expect(property(source, bindings[0]!, 'publicationTransport')).toBe(
           'repository.repositoryPublicationTransport',

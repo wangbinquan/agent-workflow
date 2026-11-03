@@ -49,6 +49,7 @@ function fixture(input: {
     queries: { read: async () => configuration },
   })
   const taskArchive = {} as NonNullable<DeploymentSelections['taskArchive']>
+  const secretBox = createSecretBoxFromKey(Buffer.alloc(32, 39))
   const profile: DeploymentProfile = {
     kind: input.deployment?.kind ?? 'standalone',
     frontendMarker: input.deployment === undefined ? null : input.deployment.frontendMarker,
@@ -59,7 +60,8 @@ function fixture(input: {
       ...standaloneSelections({ appHome: '/unused/rfc394' }),
       applicationConfiguration,
       taskArchive,
-      secretBox: createSecretBoxFromKey(Buffer.alloc(32, 39)),
+      // RFC-433: the secret box is opened after the startup lock; the fixture's factory hands out one box.
+      secretBox: () => secretBox,
     },
     probeHost: mock(async (facts) => {
       expect(Object.keys(facts).sort()).toEqual(['config', 'log'])
@@ -125,6 +127,7 @@ function fixture(input: {
     lease,
     applicationConfiguration,
     taskArchive,
+    secretBox,
     prepared,
     composeSession,
     serve,
@@ -183,7 +186,7 @@ for (const [name, launch, listen, expected] of [
       expect(received.frontendMarker).toBeNull()
       expect(received.taskArchive).toBe(f.taskArchive)
       expect(received.applicationConfiguration).toBe(f.applicationConfiguration)
-      expect(received.secretBox).toBe(f.profile.selections.secretBox!)
+      expect(received.secretBox).toBe(f.secretBox)
       expect(received).not.toHaveProperty('startupLease')
       expect(received).not.toHaveProperty('runtimeLegacyConfiguration')
       for (const key of [
@@ -216,7 +219,8 @@ for (const fatal of ['fatal host diagnostic', ''])
     },
   )
 // RFC-425: the deployment kind (execution status, lifecycle) and the SPA marker are the profile's, not the authority's:
-// the fixture selects no execution authority, so a hosted kind can only have come from the profile.
+// the fixture states the standalone (local) authority, which carries no kind, so a hosted kind can only have come
+// from the profile. RFC-433: the session receives that stated authority unchanged.
 for (const deployment of [
   { kind: 'standalone', frontendMarker: null },
   { kind: 'crewstation', frontendMarker: 'crewstation' },
@@ -230,7 +234,8 @@ for (const deployment of [
         const received = f.composeSession.mock.calls[0]![0]
         expect(received.deploymentKind).toBe(deployment.kind)
         expect(received.frontendMarker).toBe(deployment.frontendMarker)
-        expect(received).not.toHaveProperty('executionAuthority')
+        expect(received.executionAuthority).toBe(f.profile.selections.executionAuthority)
+        expect(received.executionAuthority.current().kind).toBe('active')
       } finally {
         f.restore()
       }

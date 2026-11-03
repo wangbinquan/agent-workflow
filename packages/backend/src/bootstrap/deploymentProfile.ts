@@ -121,8 +121,10 @@ export interface DeploymentSessionStorage {
  * - required: both profiles give a value; RFC-432: a value the standalone deployment can only build from the
  *   session graph is a factory each session calls (standalone: the module's local constructor; hosted: a
  *   closure over the object its profile built);
- * - required, nullable: a capability only the hosted deployment has; standalone states `null`;
- * - optional: a deployment switch or an absent-only behaviour (RFC-294 S2c step 4).
+ * - required, nullable: a capability only the hosted deployment has; standalone states `null`, and a consumer
+ *   decides with an explicit `null` check.
+ * RFC-433: no selection is optional — what used to be a deployment switch by presence is either a real
+ * standalone value (the local execution authority, the post-lock secret box factory) or a nullable capability.
  */
 export interface DeploymentSelections {
   // ── Required ──
@@ -184,6 +186,14 @@ export interface DeploymentSelections {
   taskRecovery: TaskRecoveryDeploymentSelection | null
   maintenanceEffectsBootstrap: MaintenanceWorkerEffectsDescriptor | null
   readonly initializeExecution: ((initialize: () => Promise<void>) => Promise<void>) | null
+  /** RFC-433: hosted database installation; standalone runs its local epoch installation path. */
+  readonly databaseInstallation: DaemonDatabaseInstallationPort | null
+  /** RFC-370 §10 V17: hosted repository remote reads; standalone keeps the daemon's own mirror clones. */
+  readonly repositoryRemote: RepositoryRemoteEffects | null
+  readonly crewStationEvents: CrewStationEventIngress | null
+  /** RFC-370 §9.2 V3: hosted remote-volume candidate execution; standalone uses the module's per-request local effects. */
+  readonly repositoryCandidateEffects: RepositoryCandidateEffectsFactory | null
+  readonly conflictMergeWorkspaceEffects: ConflictMergeWorkspaceEffects | null
 
   // ── Required, session-scoped factories (RFC-432): each session calls them with its own graph ──
   readonly contentStore: (session: DeploymentSessionStorage) => ImportedContentStore
@@ -203,15 +213,17 @@ export interface DeploymentSelections {
   readonly repositoryPreparationEffects: typeof composeLocalRepositoryPreparationEffects
   readonly scratchWorkspaceEffects: typeof composeLocalScratchWorkspaceEffects
 
-  // ── Optional, step 4: a deployment switch or an absent-only behaviour ──
-  databaseInstallation?: DaemonDatabaseInstallationPort
-  /** RFC-370 M0 — a platform-provided master key instead of the local secret.key file. */
-  secretBox?: SecretBox
-  /** RFC-370 §10 V17: hosted repository remote reads; absent, local mirrors. */
-  repositoryRemote?: RepositoryRemoteEffects
-  crewStationEvents?: CrewStationEventIngress
-  /** RFC-370 v2 H7 — the deployment's execution authority; standalone is always active. */
-  executionAuthority?: ExecutionAuthorityPort
-  repositoryCandidateEffects?: RepositoryCandidateEffectsFactory
-  conflictMergeWorkspaceEffects?: ConflictMergeWorkspaceEffects
+  // ── Required, process-scoped (RFC-433) ──
+  /**
+   * RFC-370 M0 / RFC-433: opened once after the startup lock — standalone reads or creates `appHome/secret.key`
+   * (which must not happen before the lock); hosted returns the platform-provided master key's box.
+   */
+  readonly secretBox: () => SecretBox
+  /** RFC-370 v2 H7 — the deployment's execution authority; the standalone one is always active, so it gates nothing. */
+  readonly executionAuthority: ExecutionAuthorityPort
+}
+
+/** RFC-433: what a session receives — the stated selections, with the secret box opened after the startup lock. */
+export type DeploymentSessionSelections = Omit<DeploymentSelections, 'secretBox'> & {
+  readonly secretBox: SecretBox
 }

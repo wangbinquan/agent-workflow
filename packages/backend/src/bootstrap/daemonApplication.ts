@@ -7,7 +7,7 @@ import {
 import { createCodeHistoryPackageReader } from '@/modules/code-capability/composition/historyQueries'
 import { composeSourceControlTaskPorts } from '@/modules/task-execution/composition'
 // RFC-391 — one passive application graph for daemon and unstarted phases.
-import type { DeploymentKind, DeploymentSelections } from './deploymentProfile'
+import type { DeploymentKind, DeploymentSessionSelections } from './deploymentProfile'
 import {
   DAEMON_SESSION_ADAPTERS,
   type DaemonSessionAdapter,
@@ -72,7 +72,6 @@ import { composeDevelopmentPurposeRoot } from './developmentPurposeRoot'
 import { bindTaskRunRootSelection } from '@/modules/task-execution/composition/taskRunSelection'
 import { selectDevelopmentWorkspaceEffectBinding } from '@/modules/development-automation/composition'
 import {
-  composeLocalExecutionAuthority,
   readDaemonStartupRecoveryAuthority,
   type DaemonStartupLease,
 } from '@/modules/system-operations/composition'
@@ -148,7 +147,7 @@ export interface UnstartedApplicationScope {
 
 export interface DaemonApplicationInput<
   P extends DatabaseProvider = DatabaseProvider,
-> extends DeploymentSelections {
+> extends DeploymentSessionSelections {
   readonly digitalEmployeeTypePackageDriftPolicy?: 'reject' | 'draft-overlay'
   readonly requiredProvider: DatabaseProvider | null
   /** RFC-425: the deployment kind and SPA marker of the selected profile (tests state standalone). */
@@ -248,7 +247,8 @@ export interface DaemonApplicationRuntime<P extends DatabaseProvider = DatabaseP
   readonly digitalEmployeeModules: DaemonDigitalEmployeeModules
   readonly developmentAutomationModules: DaemonDevelopmentAutomationModules
   readonly archivedNodeEvents?: TaskArchivedEventsReader
-  readonly crewStationEvents?: CrewStationEventIngress
+  /** RFC-433: the hosted CrewStation event ingress; `null` in a standalone deployment. */
+  readonly crewStationEvents: CrewStationEventIngress | null
   readonly eventCenter: DaemonIntegrationModules['eventCenter']
   readonly fusion: DaemonFusionModules['fusionOperations']
   readonly resourceLimits: ReturnType<typeof composeResourceLimitOperations>
@@ -643,7 +643,7 @@ export async function composeDaemonApplication<P extends DatabaseProvider>(
     dbVersion: input.dbVersion,
     opencodeVersion: phase.kind === 'daemon' ? null : (input.testSeams?.opencodeVersion ?? null),
     applicationConfiguration,
-    executionAuthority: input.executionAuthority ?? composeLocalExecutionAuthority(),
+    executionAuthority: input.executionAuthority,
     deploymentKind: input.deploymentKind,
     frontendMarker: input.frontendMarker,
     databaseTelemetry: input.provider.telemetry,

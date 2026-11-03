@@ -15,7 +15,6 @@ import type { AuthRuntime } from '@/auth/application/authRuntime'
 import { composeTaskLaunchConfiguration } from '@/modules/task-execution/composition/launchConfiguration'
 
 import type { DatabaseProvider } from '@/platform/persistence/databaseProviders'
-import { createSecretBox } from '@/auth/secretBox'
 import { createExecutionExitRequests } from './executionActivation'
 import { ensureTokenFile } from '@/auth/token'
 import { schemaDriftGuidance } from '@/modules/system-operations/composition/schemaDriftGuidance'
@@ -251,7 +250,10 @@ export async function startCommand(
       process.exit(1)
     }
 
-    if (profile.selections.databaseInstallation === undefined) {
+    // RFC-433: a hosted deployment installs its database itself; the standalone one (no installation) runs its
+    // local epoch installation path here — the automatic upgrade first, then a staged pending restore.
+    const databaseInstallation = profile.selections.databaseInstallation
+    if (databaseInstallation === null) {
       let facts = await readEpochBootFactsForConfig({
         appHome: Paths.root,
         database: config.database,
@@ -293,9 +295,7 @@ export async function startCommand(
       }
       const guidance = epochInstallationGuidance(installation, config.autoEpochMigration !== false)
       if (guidance !== null) throw new Error(guidance)
-    }
-    // Classify legacy and unreconciled installations before resolving a pending restore.
-    if (!profile.selections.databaseInstallation) {
+      // Classify legacy and unreconciled installations before resolving a pending restore.
       await applyLocalEpoch2PendingRestore(logicalSchemaContract)
     }
     config = await configuration.read()
@@ -303,18 +303,17 @@ export async function startCommand(
     // Provider-independent bootstrap secrets are needed by either selected
     // composition. They are created before opening a client, but no owner module
     // receives them until its verified provider graph is composed below.
-    const secretBox = profile.selections.secretBox ?? createSecretBox(Paths.secretKeyFile)
-    log.info('secret box ready', {
-      keyFile:
-        profile.selections.secretBox === undefined ? Paths.secretKeyFile : 'deployment-provided',
-    })
+    // RFC-433: opened here, after the startup lock (standalone reads or creates `appHome/secret.key` now). The
+    // entry never branches on the deployment kind (RFC-394), so the log names the kind rather than the source.
+    const secretBox = profile.selections.secretBox()
+    log.info('secret box ready', { deployment: profile.kind })
     const token = ensureTokenFile(Paths.tokenFile)
     log.info('token ready', { tokenFile: Paths.tokenFile })
     // RFC-370 v2 §3.2 — crash-only execution authority: leaving active, or a
     // background set that fails to activate, drains and exits non-zero so the
     // platform restarts this instance as standby. Standalone never loses it.
     const executionExit = createExecutionExitRequests()
-    profile.selections.executionAuthority?.onLost((state) => {
+    profile.selections.executionAuthority.onLost((state) => {
       log.warn('execution authority lost', { state: state.kind })
       executionExit.request(`execution-authority-${state.kind}`)
     })
@@ -324,7 +323,7 @@ export async function startCommand(
     // but cannot silently select a different database.
     const preparedDatabase = await prepareDaemonDatabaseProviderForBoot({
       configuration: applicationConfiguration.databaseConfiguration,
-      installation: profile.selections.databaseInstallation,
+      installation: databaseInstallation === null ? undefined : databaseInstallation,
       file: {
         config: config.database,
         sqlitePath: Paths.db,

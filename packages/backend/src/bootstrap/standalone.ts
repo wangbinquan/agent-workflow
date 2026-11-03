@@ -60,7 +60,11 @@ import { createFileSkillContentBinding } from '@/modules/resource-catalog/compos
 import { createLocalReviewArtifacts } from '@/modules/collaboration/composition/contentArtifacts'
 import { createFileResourcePackageSkillArtifactOwner } from '@/modules/resource-catalog/composition/postgresqlResourcePackageCatalog'
 import { composeLocalIntentArtifacts } from '@/modules/intent/composition/apply'
-import { createPostgresqlAdminBackupCoordinator } from '@/modules/system-operations/composition'
+import {
+  composeLocalExecutionAuthority,
+  createPostgresqlAdminBackupCoordinator,
+} from '@/modules/system-operations/composition'
+import { createSecretBox } from '@/auth/secretBox'
 import { createDevelopmentWorkspaceRepositoryPreparation } from '@/services/developmentDeliveryDeps'
 import {
   composeLocalRepositoryPreparationEffects,
@@ -144,12 +148,23 @@ export function standaloneSelections(input: { readonly appHome: string }): Deplo
     developmentWorkspaceRepositoryPreparation: createDevelopmentWorkspaceRepositoryPreparation,
     repositoryPreparationEffects: composeLocalRepositoryPreparationEffects,
     scratchWorkspaceEffects: composeLocalScratchWorkspaceEffects,
+    // RFC-433: opened once after the startup lock; reads or creates the local secret.key then, never here.
+    secretBox: () => createSecretBox(join(appHome, 'secret.key')),
+    // RFC-433: always active and never lost, so the session's activation gate starts everything at once.
+    executionAuthority: composeLocalExecutionAuthority(),
     taskInputFiles: null,
     humanGateArtifactRecovery: null,
     beforeEventObservationWrite: null,
     taskRecovery: null,
     maintenanceEffectsBootstrap: null,
     initializeExecution: null,
+    // RFC-433: hosted-only capabilities. Standalone runs its local epoch installation path, keeps its own
+    // mirror clones, has no CrewStation events, and uses the participants' per-request local effects.
+    databaseInstallation: null,
+    repositoryRemote: null,
+    crewStationEvents: null,
+    repositoryCandidateEffects: null,
+    conflictMergeWorkspaceEffects: null,
   }
 }
 

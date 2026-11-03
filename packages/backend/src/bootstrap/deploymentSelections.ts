@@ -1,5 +1,5 @@
 // RFC-394: forward exactly the deployment selections while preserving required derived fields.
-import type { DeploymentSelections } from './deploymentProfile'
+import type { DeploymentSelections, DeploymentSessionSelections } from './deploymentProfile'
 
 export const DEPLOYMENT_SELECTION_KEYS = {
   contentStore: true,
@@ -66,13 +66,14 @@ export const DEPLOYMENT_SELECTION_KEYS = {
   secretBox: true,
 } as const satisfies Record<keyof DeploymentSelections, true>
 
-export function deploymentSelectionsOf<T extends DeploymentSelections>(
+/** Forward a session's selections (RFC-433: the secret box already opened) into the application input. */
+export function deploymentSelectionsOf<T extends DeploymentSessionSelections>(
   input: T,
-): Pick<T, keyof DeploymentSelections> {
+): Pick<T, keyof DeploymentSessionSelections> {
   return Object.fromEntries(
-    (Object.keys(DEPLOYMENT_SELECTION_KEYS) as (keyof DeploymentSelections)[]).map((key) => [
+    (Object.keys(DEPLOYMENT_SELECTION_KEYS) as (keyof DeploymentSessionSelections)[]).map((key) => [
       key,
       input[key],
     ]),
-  ) as Pick<T, keyof DeploymentSelections>
+  ) as Pick<T, keyof DeploymentSessionSelections>
 }

@@ -147,8 +147,8 @@ interface DaemonProviderRuntimeComposition {
   readonly readyOnResume?: boolean
   readonly shutdownIdentity: () => void | Promise<void>
   readonly closeProvider: () => void | Promise<void>
-  /** RFC-370 v2 §3.2 — background handles start when this authority is first active. */
-  readonly execution?: {
+  /** RFC-370 v2 §3.2 — background handles start when this authority is first active (RFC-433: always stated). */
+  readonly execution: {
     readonly authority: Pick<ExecutionAuthorityPort, 'current' | 'whenActive'>
     readonly onActivationFailure: (error: unknown) => void
   }
@@ -166,14 +166,16 @@ function _bindTaskExecutionProviderBackground(
   })
 }
 
-/** RFC-370 v2 §3.2 — a selected authority gates the background set; standalone has none. */
+/**
+ * RFC-370 v2 §3.2 — the deployment's authority gates the background set. RFC-433: every deployment states one; the
+ * standalone authority is always active, so the gate hands each factory back unchanged (`startOnExecutionActive`).
+ */
 function executionActivationOf(
   input: Pick<
     DaemonProviderSessionComposeInput,
     'executionAuthority' | 'onExecutionActivationFailure'
   >,
 ): Pick<DaemonProviderRuntimeComposition, 'execution'> {
-  if (input.executionAuthority === undefined) return {}
   const authority = input.executionAuthority
   const onActivationFailure =
     input.onExecutionActivationFailure ??
@@ -552,10 +554,13 @@ export async function composeDaemonSession(
     intervalMs: DAEMON_CADENCE.digitalEmployeeOs,
     runImmediately: true,
     async run() {
-      await runtime.crewStationEvents?.runPending({
-        observe: (observation) => runtime.eventCenter.commands.observe(observation),
-        wakeTerminalControl: (effectId) => runtime.webhookTerminalControl.wake(effectId),
-      })
+      // RFC-433: only a hosted deployment has CrewStation events to drain.
+      const crewStationEvents = runtime.crewStationEvents
+      if (crewStationEvents !== null)
+        await crewStationEvents.runPending({
+          observe: (observation) => runtime.eventCenter.commands.observe(observation),
+          wakeTerminalControl: (effectId) => runtime.webhookTerminalControl.wake(effectId),
+        })
       const result = await runEventCenterCycle(runtime.eventCenter.worker)
       if (result.steps >= 32) {
         input.log.warn('event center reached its bounded step budget', { ...result })
@@ -636,7 +641,7 @@ export async function composeDaemonSession(
       // RFC-370 §10 V17: a hosted deployment keeps no mirror to refresh — each
       // task fetches the latest inside its own volume. The handle stays
       // registered (both daemons freeze the same writers) but runs nothing.
-      if (input.repositoryRemote !== undefined)
+      if (input.repositoryRemote !== null)
         return Object.freeze({ stop: () => undefined, drain: async () => undefined })
       const ticker = await startConfiguredSubmoduleRefreshLoop(
         application.core.repositoryWorkspaceStore,

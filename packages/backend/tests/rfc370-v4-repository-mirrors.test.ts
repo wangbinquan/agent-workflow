@@ -326,10 +326,11 @@ describe('RFC-370 V17 hosted mirror refresh job', () => {
   test('a hosted daemon keeps the refresh handle registered but runs nothing', () => {
     // Source-level lock: both daemons freeze the same writers (RFC-349), so
     // the handle stays in the PostgreSQL session's list; with the hosted
-    // remote selected its start() returns an inert handle.
+    // remote selected its start() returns an inert handle. RFC-433: the standalone profile states the remote
+    // as null, so the hosted decision is an explicit null check.
     const start = readDaemonGraphSource()
     const factory = start.slice(start.indexOf("id: 'submodule-refresh'"))
-    expect(factory.slice(0, 700)).toContain('if (input.repositoryRemote !== undefined)')
+    expect(factory.slice(0, 700)).toContain('if (input.repositoryRemote !== null)')
   })
 })
 

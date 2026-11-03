@@ -20,10 +20,9 @@ export function expectDeploymentSelection(key: keyof DeploymentSelections, type?
   expect(contract).toHaveLength(1)
   const field = contract[0]!.members.find((node) => node.name?.getText(source) === key)
   if (!field || !ts.isPropertySignature(field)) throw new Error('missing selection: ' + key)
-  // RFC-431: a selection is optional only while its standalone default is still pending (steps 3–4).
-  const group = deploymentSelectionGroup(key)
-  expect(group).toBeDefined()
-  expect(field.questionToken !== undefined).toBe(group === 'optional')
+  // RFC-431: every selection belongs to a group; RFC-433: none is optional any more.
+  expect(deploymentSelectionGroup(key)).toBeDefined()
+  expect(field.questionToken).toBeUndefined()
   if (type !== undefined)
     expect(field.type?.getText(source).replace(/\s/g, '')).toBe(type.replace(/\s/g, ''))
   for (const [path, name] of [
@@ -34,11 +33,12 @@ export function expectDeploymentSelection(key: keyof DeploymentSelections, type?
     const input = file.statements
       .filter(ts.isInterfaceDeclaration)
       .find((node) => node.name.text === name)
+    // RFC-433: a session receives the stated selections with the secret box already opened.
     expect(
       input?.heritageClauses?.flatMap((clause) =>
         clause.types.map((value) => value.expression.getText(file)),
       ),
-    ).toEqual(['DeploymentSelections'])
+    ).toEqual(['DeploymentSessionSelections'])
   }
   expect(read('daemonStart.ts')).toContain('...profile.selections,')
   expect(read('daemonSession.ts')).toContain('...deploymentSelectionsOf(input),')

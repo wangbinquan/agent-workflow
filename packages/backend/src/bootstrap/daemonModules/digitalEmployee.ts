@@ -135,12 +135,9 @@ export interface DaemonDigitalEmployeeInput {
   readonly repositoryBaselines: DeploymentSelections['repositoryBaselines']
   readonly evidenceArtifacts: DeploymentSelections['evidenceArtifacts']
   readonly graphDevelopmentArtifacts: DeploymentSelections['graphDevelopmentArtifacts']
-  readonly repositoryCandidateEffects?: NonNullable<
-    Parameters<typeof bindChangeCandidateParticipant>[0]
-  >['candidateEffects']
-  readonly conflictMergeWorkspaceEffects?: NonNullable<
-    Parameters<typeof bindConflictMergeParticipant>[0]
-  >['effects']
+  // RFC-433: hosted remote-volume effects; standalone states null (each participant's per-request local effects).
+  readonly repositoryCandidateEffects: DeploymentSelections['repositoryCandidateEffects']
+  readonly conflictMergeWorkspaceEffects: DeploymentSelections['conflictMergeWorkspaceEffects']
   readonly adapters: Pick<
     DeploymentSelections,
     | 'employeePrograms'
@@ -215,17 +212,19 @@ export function composeDaemonDigitalEmployeeModules(input: DaemonDigitalEmployee
   const writerCutover = composeDigitalEmployeeWriterCutoverFor(db, input.writerInstallation)
   const employeeInputArtifacts = input.adapters.employeeInputArtifacts
   const reactionRounds = createEmployeeReactionRoundQueries(db)
-  const conflictMerge = bindConflictMergeParticipant({
-    effects: input.conflictMergeWorkspaceEffects,
-  })
+  const conflictMergeEffects =
+    input.conflictMergeWorkspaceEffects === null ? undefined : input.conflictMergeWorkspaceEffects
+  const conflictMerge = bindConflictMergeParticipant({ effects: conflictMergeEffects })
+  const candidateEffects =
+    input.repositoryCandidateEffects === null ? undefined : input.repositoryCandidateEffects
   const sourceControl = bindEmployeeCaseWorkspaceParticipant({
     publicationTransport: repository.repositoryPublicationTransport,
     effects: input.adapters.employeeCaseWorkspaceEffects,
   })
   const candidates = {
-    ...bindChangeCandidateParticipant({ candidateEffects: input.repositoryCandidateEffects }),
+    ...bindChangeCandidateParticipant({ candidateEffects }),
     ...bindCandidateDeliveryParticipant({
-      candidateEffects: input.repositoryCandidateEffects,
+      candidateEffects,
       publicationTransport: repository.repositoryPublicationTransport,
     }),
   }

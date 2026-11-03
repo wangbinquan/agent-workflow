@@ -73,6 +73,7 @@ export function integrationBundleFixture(
     adapters: {
       customObserverPrograms: standalone.customObserverPrograms,
       beforeEventObservationWrite: standalone.beforeEventObservationWrite,
+      crewStationEvents: standalone.crewStationEvents,
     },
     ...overrides,
   })
