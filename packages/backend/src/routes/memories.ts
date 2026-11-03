@@ -28,7 +28,12 @@ import type { Memory, MemorySummary } from '@agent-workflow/shared'
 import type { Hono } from 'hono'
 import { registerRoute } from '@/routes/registry'
 import { hasResourceAclBypass } from '@/modules/resource-catalog/public/types'
-import { isMemoryHiddenCandidate, narrowCandidateRows } from '@/modules/memory/public/types'
+import {
+  isMemoryHiddenCandidate,
+  narrowCandidateRows,
+  type MemoryScopeRef,
+} from '@/modules/memory/public/types'
+import type { MemoryScopeAuthority } from '@/modules/memory/public/queries'
 import { captureDeleteSnapshot } from '@/services/tokenAudit'
 import { assertTokenDeleteConfirm, readDeleteBody } from '@/services/deleteConfirm'
 import { actorOf } from '@/auth/actor'
@@ -38,11 +43,7 @@ import type {
   DirectAuthorityBinding,
   DirectCommandContextFactory,
 } from '@/modules/identity-access/public/participants'
-import type {
-  MemoryCatalogOperations,
-  MemoryScopeAuthority,
-  MemoryScopeRef,
-} from '@/modules/memory/public/catalog'
+import type { MemoryCatalogOperations } from '@/modules/memory/public/operations'
 import { directRequestAuthority } from '@/routes/operationAuthority'
 
 interface MemoryRouteIdentityAccess {

@@ -21,7 +21,7 @@ import { insertOne } from '@/platform/persistence/singleInsert'
 import { tablesOf } from '@/platform/persistence/sessionTables'
 import { beforeEach, expect, test } from 'bun:test'
 import { taskListSummariesProjection } from '../src/modules/task-execution/infrastructure/taskRouteOperations'
-import type { TaskRouteListFilters } from '@/modules/task-execution/public/taskRoutes'
+import type { TaskRouteListFilters } from '@/modules/task-execution/public/types'
 import { ulid } from 'ulid'
 
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'

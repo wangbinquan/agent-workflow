@@ -23,3 +23,6 @@ export interface IntegrationMaintenanceCommands {
     readonly batchSize: number
   }): Promise<WebhookDeliveryGcSliceReceipt>
 }
+
+// RFC-434: the webhook ingress persistence the inbound webhook route calls (defined in application/ports).
+export type { WebhookIngressPersistence } from '../application/ports/webhookIngressPersistence'

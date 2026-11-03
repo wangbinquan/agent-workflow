@@ -10,7 +10,7 @@ import {
   composeMemoryCatalogOperations,
   type MemoryCatalogTestHooks,
 } from '../../src/modules/memory/composition'
-import type { MemoryCatalogOperations } from '../../src/modules/memory/public/catalog'
+import type { MemoryCatalogOperations } from '../../src/modules/memory/public/operations'
 import { TEST_RESOURCE_SCOPE_AUTHORIZATION } from './resourceScopeAuthority'
 
 export function memoryCatalogOf(

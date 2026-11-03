@@ -19,7 +19,7 @@ import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { describeEachProvider } from './helpers/eachProvider'
 import { composeIdentityAccess } from '../src/modules/identity-access/composition'
 import { composeMemoryCatalogOperations } from '../src/modules/memory/composition'
-import type { MemoryCatalogOperations } from '../src/modules/memory/public/catalog'
+import type { MemoryCatalogOperations } from '../src/modules/memory/public/operations'
 import { TEST_RESOURCE_SCOPE_AUTHORIZATION } from './helpers/resourceScopeAuthority'
 
 function actorOfRole(role: 'admin' | 'user', id = `u_${role}`): Actor {

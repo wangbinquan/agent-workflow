@@ -1,9 +1,16 @@
 import type {
   DistillSourceKind,
   Language,
+  Memory,
+  MemoryCandidatePromote,
+  MemoryCreateRequest,
   MemoryDistillJob,
+  MemoryMoveRequest,
+  MemoryPatchRequest,
   SourceContextBudget,
 } from '@agent-workflow/shared'
+import type { CommandContext } from '@/modules/identity-access/public/participants'
+import type { MoveMemoryResult, PatchMemoryResult } from './types'
 
 export interface EnqueueMemoryDistillJobInput {
   readonly sourceKind: DistillSourceKind
@@ -52,4 +59,15 @@ export interface MemoryDistillWorker {
   }>
   recoverRunning(): Promise<{ recovered: number }>
   listJobs(filter?: { readonly status?: string }): Promise<MemoryDistillJob[]>
+}
+
+// RFC-434: the memory catalog contract, folded in from the former non-exact `public/catalog`.
+export interface MemoryCatalogCommands {
+  createManual(input: MemoryCreateRequest): Promise<Memory>
+  promote(id: string, input: MemoryCandidatePromote, administratorUserId: string): Promise<Memory>
+  patch(id: string, input: MemoryPatchRequest, editorUserId?: string): Promise<PatchMemoryResult>
+  move(context: CommandContext, id: string, input: MemoryMoveRequest): Promise<MoveMemoryResult>
+  archive(id: string): Promise<Memory>
+  unarchive(id: string): Promise<Memory>
+  delete(id: string): Promise<void>
 }

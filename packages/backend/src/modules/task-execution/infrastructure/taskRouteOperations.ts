@@ -88,7 +88,8 @@ import {
   builtinWorkflowSyncPreview,
   notSyncableWorkflowPreview,
 } from '../domain/workflowSyncPreview'
-import type { TaskArchivedEventsReader } from '../public/types'
+import type { TaskArchivedEventsReader, TaskRouteListFilters } from '../public/types'
+import type { TaskRouteOperations } from '../public/commands'
 
 import { decodeTaskRepositoryMount } from './taskRepositoryCodec'
 
@@ -128,7 +129,6 @@ import type {
 import type { ChildResumeRuntime } from '../application/ports/taskExecutionTopology'
 import { sourceTerminationRevivalError } from '../domain/sourceTermination'
 import type { SchedulerRuntimeTopology } from '../public/participants'
-import type { TaskRouteListFilters, TaskRouteOperations } from '../public/taskRoutes'
 import { DrizzleBranchTraceSnapshotReader } from './branchTraceSnapshotReader'
 import { createNodeRunMintParticipantInTx } from './nodeRunMintParticipant'
 import { createTaskAuthorizationQueries } from './taskAuthorization'

@@ -1,3 +1,14 @@
+## 2026-11-03 RFC-434 精确 public 入口与入站路由的第一批去深引（In Progress；`design/RFC-434-inbound-adapter-public-contracts/`）
+
+- **来由**：RFC-294 W4 余项 B / D 的第一步（S2 Done 之后的下一项）。用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断
+  不用提交给我审批」：本会话调研、设计、实施与集中验证，按授权记为已批准，不派 Codex。
+- **范围**：
+  - 全仓最后 3 个非精确 public 文件并入精确入口；
+  - 8 条模块外深引改走精确 public 入口：`routes/tasks` 两条，`taskArchive`、`missionInputUploads`、`webhooks`、`webhookDeliveries` 的终止控制、
+    `memories` 各一条，以及 `services/webhook/webhookDispatch`；
+  - 签名带遗留 `Actor` 或需重写句柄合同的 7 个路由另立：数字员工、事件中心、stage 合同、定时任务、能力模板（E8）、任务目录（E10）、Webhook 投递运行时。
+- **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。
+
 ## 2026-11-03 RFC-433 按有无区分部署的选择项改为显式（Done；`design/RFC-433-explicit-presence-selections/`）；RFC-294 S2 Done
 
 - **来由**：RFC-294 S2c 余项第 1 项的第四步，也是最后一步（RFC-428 inventory 后继分步第 4 条）。用户 2026-11-02「好，你继续推进RFC294，

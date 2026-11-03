@@ -65,16 +65,15 @@ import {
 } from '@/util/errors'
 import { MEMORY_CHANNEL, memoryBroadcaster } from '@/ws/broadcaster'
 import type { MemoryResourceScopeAccessParticipant } from '../application/ports/resourceScopeAccess'
+import type { MemoryCatalogCommands } from '../../memory/public/commands'
+import type { MemoryCatalogOperations } from '../../memory/public/operations'
+import type { MemoryCatalogQueries, MemoryScopeAuthority } from '../../memory/public/queries'
 import type {
-  MemoryCatalogCommands,
-  MemoryCatalogOperations,
-  MemoryCatalogQueries,
-  MemoryScopeAuthority,
   MemoryScopeRef,
   MemoryWithChain,
   MoveMemoryResult,
   PatchMemoryResult,
-} from '../../memory/public/catalog'
+} from '../../memory/public/types'
 
 /** RFC-359 W4-D4：一份实现，两个 provider 共用——事务句柄是统一事务原语的句柄。 */
 export type MemoryTransaction = PersistenceTx

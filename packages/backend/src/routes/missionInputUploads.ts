@@ -12,7 +12,7 @@ import type { Hono } from 'hono'
 
 import { actorOf } from '@/auth/actor'
 import { registerRoute } from '@/routes/registry'
-import type { MissionInputUploadOperations } from '@/modules/development-automation/application/missionInputUploadOperations'
+import type { MissionInputUploadOperations } from '@/modules/development-automation/public/commands'
 import { ValidationError } from '@/util/errors'
 
 export const MISSION_UPLOAD_MAX_BYTES = 32 * 1024 * 1024

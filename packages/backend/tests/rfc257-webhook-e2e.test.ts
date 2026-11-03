@@ -36,7 +36,7 @@ import {
   codeHostEventCatalogJson,
   codeHostEventTypeRef,
 } from '../src/modules/integration/public/events'
-import type { MrTerminalControl } from '../src/modules/integration/public/mrTerminalControl'
+import type { MrTerminalControl } from '../src/modules/integration/public/participants'
 import { composeTaskSourceTermination } from '../src/modules/task-execution/composition/sourceTermination'
 import { mountWebhookIngressRoutes } from '../src/routes/webhooks'
 import {

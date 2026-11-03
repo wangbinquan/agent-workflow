@@ -2,7 +2,7 @@ import type { Actor } from '../../src/auth/actor'
 import type { PersistenceDb, PersistenceTx } from '@/platform/persistence/persistenceDb'
 import { composeIdentityAccess } from '../../src/modules/identity-access/composition'
 import type { MemoryResourceScopeAccessParticipant } from '../../src/modules/memory/application/ports/resourceScopeAccess'
-import type { MemoryScopeAuthority } from '../../src/modules/memory/public/catalog'
+import type { MemoryScopeAuthority } from '../../src/modules/memory/public/queries'
 import { composeResourceScopeAccessParticipant } from '../../src/modules/resource-catalog/composition/resourceScopeAuthorization'
 
 /** 生产同一份装配：resource-catalog 的 scope 访问 participant（RFC-359 W4-D4 起两个 provider 同一份）。 */

@@ -30,7 +30,7 @@ import {
   createTaskRouteRepairOperations,
   type TaskRepairOperations,
 } from '@/modules/task-execution/infrastructure/taskRouteRepairOperations'
-import type { TaskRouteLifecycleAlertNotice } from '@/modules/task-execution/public/taskRoutes'
+import type { TaskRouteLifecycleAlertNotice } from '@/modules/task-execution/public/types'
 
 type Dependencies = Parameters<typeof createTaskRouteRepairOperations>[0]
 

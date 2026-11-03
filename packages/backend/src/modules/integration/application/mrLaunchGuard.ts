@@ -9,7 +9,7 @@ import type {
 import type {
   ProtectedMrLaunchGuard,
   ProtectedMrLaunchGuardInput,
-} from '@/modules/integration/public/mrTerminalControl'
+} from '@/modules/integration/public/participants'
 import { ConflictError } from '@/util/errors'
 
 export class MrLaunchGuardCoordinator {

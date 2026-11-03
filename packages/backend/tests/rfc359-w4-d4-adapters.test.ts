@@ -25,7 +25,7 @@ import {
   composeSkillMemoryFusionParticipantFactory,
   type MemoryCatalogTestHooks,
 } from '@/modules/memory/composition'
-import type { MemoryScopeAuthority } from '@/modules/memory/public/catalog'
+import type { MemoryScopeAuthority } from '@/modules/memory/public/queries'
 import { composeResourceScopeAccessParticipant } from '@/modules/resource-catalog/composition/resourceScopeAuthorization'
 import {
   createRepositoryScopeAuthorizationInTx,

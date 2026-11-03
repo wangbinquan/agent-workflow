@@ -12,7 +12,7 @@ import { CodeHostEventTypeSchema, WEBHOOK_DELIVERY_STATUSES } from '@agent-workf
 import { actorOf } from '@/auth/actor'
 import type { EventCenterModule } from '@/modules/event-center/composition'
 import type { WebhookDeliveryRuntime } from '@/modules/integration/composition/webhookIngress'
-import type { MrTerminalControl } from '@/modules/integration/public/mrTerminalControl'
+import type { MrTerminalControl } from '@/modules/integration/public/participants'
 import { codeHostEventObservations } from '@/modules/integration/public/events'
 import { registerRoute } from '@/routes/registry'
 import { CODE_HOST_ADAPTERS, replayHeaders } from '@/services/webhook/codeHostAdapter'

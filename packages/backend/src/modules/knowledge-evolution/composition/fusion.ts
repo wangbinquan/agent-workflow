@@ -7,7 +7,7 @@ import {
   type FusionSkillTrees,
   type FusionSkillVersionCommit,
 } from '../infrastructure/fusionRepository'
-import type { MemoryCatalogOperations } from '../../memory/public/catalog'
+import type { MemoryCatalogOperations } from '../../memory/public/operations'
 import type {
   FusionEngineTaskOperations,
   FusionOperations,

@@ -33,7 +33,7 @@ import {
 import type { Actor } from '@/auth/actor'
 import type { DirectTaskInitiator } from '@/modules/task-execution/domain/taskLaunchOrigin'
 import { SYSTEM_USER_ID } from '@/auth/actor'
-import type { MemoryScopeAuthority } from '@/modules/memory/public/catalog'
+import type { MemoryScopeAuthority } from '@/modules/memory/public/queries'
 import type {
   FusionDecisionRecoveryReceipt,
   FusionPersistencePatch,

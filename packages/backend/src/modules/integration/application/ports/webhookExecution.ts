@@ -1,6 +1,5 @@
 import type { Actor } from '@/auth/actor'
-import type { ProtectedMrLaunchGuard } from '@/modules/integration/public/mrTerminalControl'
-import type { WorkStartTarget } from '../../public/participants'
+import type { ProtectedMrLaunchGuard, WorkStartTarget } from '../../public/participants'
 
 export type WebhookOrchestrationTarget = Exclude<
   WorkStartTarget,

@@ -7,8 +7,8 @@ import type {
   ExecutionContractProjectionParticipant,
 } from '@/modules/execution-contract/public/types'
 import type { DigitalEmployeeWorkspacePort } from '../../composition/required-ports'
-import type { TaskRouteOperations } from '../../public/taskRoutes'
 import type { TaskExecutionReadModels } from '../../public/types'
+import type { TaskRouteOperations } from '../../public/commands'
 import type { DigitalEmployeeHumanReviewCoreSnapshot } from './digitalEmployeeExecutionCore'
 import type { ProgramToolSource } from './scriptFixture'
 

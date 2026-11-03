@@ -1,30 +1,19 @@
 import type { CrewStationEventIngress } from './crewstationEvents'
 import type { SecretBox } from '@/auth/secretBox'
 import type { EventCenterModule } from '@/modules/event-center/composition'
-import type { MrTerminalControl } from '../public/mrTerminalControl'
+import type { MrTerminalControl } from '../public/participants'
 import {
   supportsEventCenterCodeHostDelivery,
   type WebhookDispatcher,
 } from '@/services/webhook/dispatcherTypes'
 import { createVerifiedWebhookIngress } from '../application/verifiedWebhookIngress'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
-import type {
-  AcceptedVerifiedDelivery,
-  VerifiedWebhookDeliveryInput,
-} from '../application/acceptVerifiedWebhookDelivery'
-import type { WebhookDeliveryPersistencePort } from '../application/ports/webhookDeliveryPersistence'
 import type { WebhookDeliveryQueries } from '../application/ports/webhookDeliveryQueries'
-import type { WebhookEndpointAdministrationPort } from '../application/ports/webhookEndpointAdministration'
+import type { WebhookIngressPersistence } from '../application/ports/webhookIngressPersistence'
 import { createVerifiedWebhookDeliveryPersistence } from '../infrastructure/verifiedWebhookDeliveryPersistence'
 import { createWebhookDeliveryPersistence } from '../infrastructure/webhookDeliveryPersistence'
 import { createWebhookDeliveryQueries } from '../infrastructure/webhookDeliveryQueries'
 import { createWebhookEndpointAdministration } from '../infrastructure/webhookEndpointAdministration'
-
-export interface WebhookIngressPersistence {
-  readonly endpoints: Pick<WebhookEndpointAdministrationPort, 'get' | 'getByUrlToken'>
-  readonly deliveries: WebhookDeliveryPersistencePort
-  acceptVerifiedDelivery(input: VerifiedWebhookDeliveryInput): Promise<AcceptedVerifiedDelivery>
-}
 
 /** Provider-neutral audit/replay seam; transports never select or inspect a database provider. */
 export interface WebhookDeliveryRuntime extends WebhookIngressPersistence {

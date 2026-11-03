@@ -34,11 +34,11 @@ import type {
 import type {
   AgentRouteTaskLaunchOperations,
   TaskCancellationCommand,
+  TaskRouteOperations,
   WorkgroupRouteTaskLaunchOperations,
 } from '../public/commands'
 import type { TaskOverviewQuery } from '../public/queries'
 import type { TaskClarifyDirectiveRouteOperations, TaskExecutionReadModels } from '../public/types'
-import type { TaskRouteOperations } from '../public/taskRoutes'
 import {
   createTaskExecutionRuntimeParticipants,
   type TaskExecutionRuntimeParticipantsInput,

@@ -1,7 +1,8 @@
 import { describe, expect, test } from 'bun:test'
 
 import type { Actor } from '@/auth/actor'
-import type { MemoryScopeAuthority, MemoryScopeRef } from '@/modules/memory/public/catalog'
+import type { MemoryScopeRef } from '@/modules/memory/public/types'
+import type { MemoryScopeAuthority } from '@/modules/memory/public/queries'
 import { composeSystemOverviewQuery } from '@/modules/system-operations/application/overview'
 import type { RequestAuthority } from '@/modules/identity-access/public/participants'
 

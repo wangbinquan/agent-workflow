@@ -44,7 +44,7 @@ import { decodeTaskRepositoryMount } from './taskRepositoryCodec'
 import { projectStoredTaskRepositorySurface } from './taskRepositorySurface'
 
 import { SYSTEM_USER_ID, type Actor } from '@/auth/actor'
-import type { ProtectedMrLaunchGuard } from '@/modules/integration/public/mrTerminalControl'
+import type { ProtectedMrLaunchGuard } from '@/modules/integration/public/participants'
 import type { AgentLaunchResourceIntegrityParticipant } from '@/modules/resource-catalog/public/participants'
 import { publishCommittedEventsAfterCommit } from '@/platform/events/committed/runtime'
 import {

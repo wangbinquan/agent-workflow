@@ -764,7 +764,8 @@ const TASK_EXECUTION_CONTROL_GATEWAY_SPECS: readonly Omit<
   },
   {
     subtype: 'membership-control',
-    file: 'packages/backend/src/modules/task-execution/public/taskRoutes.ts',
+    // RFC-434: `TaskRouteOperations` moved with the folded non-exact `public/taskRoutes` into `public/commands`.
+    file: 'packages/backend/src/modules/task-execution/public/commands.ts',
     symbol: 'TaskRouteOperations',
     allowedTables: ['tasks', 'taskCollaborators'],
     allowedTransitions: ['membership-revision-cas'],

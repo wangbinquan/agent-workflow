@@ -1,13 +1,15 @@
 import { describe, expect, test } from 'bun:test'
 
 import { buildActor, type Actor } from '@/auth/actor'
-import type { ProtectedMrLaunchGuard } from '@/modules/integration/public/mrTerminalControl'
 import {
   createWebhookDispatchExecutionRuntime,
   createWebhookDispatchOrchestrationRuntime,
 } from '@/modules/integration/infrastructure/webhookDispatchRuntime'
 import type { WebhookExecutionRuntimeDependencies } from '@/modules/integration/infrastructure/webhookExecutionRuntime'
-import type { DigitalEmployeeWorkStartPort } from '@/modules/integration/public/participants'
+import type {
+  DigitalEmployeeWorkStartPort,
+  ProtectedMrLaunchGuard,
+} from '@/modules/integration/public/participants'
 
 const actor: Actor = buildActor({
   user: {

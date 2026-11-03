@@ -22,7 +22,7 @@ import {
   composeMemoryCatalogOperations,
   type MemoryCatalogTestHooks,
 } from '../src/modules/memory/composition'
-import type { MemoryCatalogOperations } from '../src/modules/memory/public/catalog'
+import type { MemoryCatalogOperations } from '../src/modules/memory/public/operations'
 import { memoryCatalogOf } from './helpers/memoryCatalog'
 import { loadInjectableMemories } from '../src/modules/memory/application/injection/injectMemory'
 import { sqliteMemoryInjectionStore } from './helpers/memoryInjection'

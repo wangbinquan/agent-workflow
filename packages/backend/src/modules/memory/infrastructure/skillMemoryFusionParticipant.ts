@@ -15,7 +15,7 @@ import {
   memoriesToMarkFused,
   orderMembershipIds,
 } from '../domain/fusionMembership'
-import type { FusedIntoSkillMemory } from '../public/catalog'
+import type { FusedIntoSkillMemory } from '../public/types'
 import type {
   MemoryMembershipFuseCommand,
   MemoryMembershipParticipantInTx,

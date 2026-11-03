@@ -8,7 +8,8 @@
 
 import type { SkillProvenance, SkillVersion } from '@agent-workflow/shared'
 
-import type { FusedIntoSkillMemory, MemoryScopeAuthority } from '../../memory/public/catalog'
+import type { FusedIntoSkillMemory } from '../../memory/public/types'
+import type { MemoryScopeAuthority } from '../../memory/public/queries'
 import { projectSkillProvenance } from '../domain/skillProvenance'
 
 export interface SkillProvenanceDeps {

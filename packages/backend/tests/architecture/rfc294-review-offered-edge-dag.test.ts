@@ -422,6 +422,12 @@ export const OFF_DAG_OFFERED_EDGE_DEBT: readonly OfferedEdgeDebt[] = [
   },
   {
     from: 'packages/backend/src/modules/system-operations/application/overview.ts',
+    to: 'memory',
+    why: 'RFC-434：边本身早已存在——此前经非精确 public 文件（`memory/public/catalog`、`integration/public/mrTerminalControl`）引用，被记作跨 context 内部边；这三个文件并入精确入口后，同一依赖如实归为 DAG 外的 offered 边（跨 context 内部边同步 −8）。待 bounded-context 对正式进入 design §3.1 目标 DAG 或依赖改道后销账。',
+    removeAfterWave: 'W4-E（RFC-294 provider-neutral bounded-context convergence）',
+  },
+  {
+    from: 'packages/backend/src/modules/system-operations/application/overview.ts',
     to: 'resource-catalog',
     why: 'RFC-349 provider cutover 新增了 owner-closed public participant 消费，但该 bounded-context 对尚未进入 design §3.1 目标 DAG；先逐文件精确锁定，待 ownership/DAG 正式收敛后销账。',
     removeAfterWave: 'W4-E（RFC-294 provider-neutral bounded-context convergence）',
@@ -545,6 +551,12 @@ export const OFF_DAG_OFFERED_EDGE_DEBT: readonly OfferedEdgeDebt[] = [
     to: 'system-operations',
     why: 'RFC-370 v3 V6：托管对象只有一套中立发布日志（system-operations public participants 的 HostedObjectPublications），各 owner 在自己的事务里登记并保留自己的引用；该 owner→system-operations 的 offered 边尚未进入目标 DAG，精确登记，随对象发布下沉为平台内容端口时收敛。',
     removeAfterWave: 'W9-E（托管内容端口归位）',
+  },
+  {
+    from: 'packages/backend/src/modules/task-execution/infrastructure/taskRouteLaunchOperations.ts',
+    to: 'integration',
+    why: 'RFC-434：边本身早已存在——此前经非精确 public 文件（`memory/public/catalog`、`integration/public/mrTerminalControl`）引用，被记作跨 context 内部边；这三个文件并入精确入口后，同一依赖如实归为 DAG 外的 offered 边（跨 context 内部边同步 −8）。待 bounded-context 对正式进入 design §3.1 目标 DAG 或依赖改道后销账。',
+    removeAfterWave: 'W4-E（RFC-294 provider-neutral bounded-context convergence）',
   },
   {
     from: 'packages/backend/src/modules/task-execution/infrastructure/fusionEngineTaskOperations.ts',

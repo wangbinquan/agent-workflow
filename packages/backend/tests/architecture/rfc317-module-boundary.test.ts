@@ -156,11 +156,8 @@ const MODULES_WITHOUT_PUBLIC: Readonly<Record<string, { why: string; removeAfter
   {}
 
 /** 非 exact public 入口。与 rfc294-architecture-preflight 的 PUBLIC_SURFACE_PILOT_DEBT 同源。 */
-const NON_EXACT_PUBLIC: Readonly<Record<string, readonly string[]>> = {
-  integration: ['mrTerminalControl.ts'],
-  memory: ['catalog.ts'],
-  'task-execution': ['taskRoutes.ts'],
-}
+// RFC-434: the last three non-exact entrypoints were folded into the exact ones; none may come back.
+const NON_EXACT_PUBLIC: Readonly<Record<string, readonly string[]>> = {}
 
 describe('RFC-317 T24 —— R3：模块目录形状', () => {
   test('subject 由目录派生且**目录缺失必须抛错**（返回空 = 规则静默失效）', () => {

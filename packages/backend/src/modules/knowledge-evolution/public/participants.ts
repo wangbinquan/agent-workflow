@@ -12,7 +12,7 @@
 import type { FusionStatus, TaskStatus } from '@agent-workflow/shared'
 import type { AuthenticatedAuthoritySnapshot } from '@/modules/identity-access/public/participants'
 
-import type { MemoryCatalogOperations } from '../../memory/public/catalog'
+import type { MemoryCatalogOperations } from '../../memory/public/operations'
 import type { SkillTreeVersionOperations } from '../../resource-catalog/public/participants'
 import type {
   FusionBuiltinWorkflowSeed,

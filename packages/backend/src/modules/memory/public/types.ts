@@ -23,6 +23,8 @@
 // 两个 format 变体都只在 memory 自己内部用，留在 domain 里。
 // RFC-352 AC-6：RFC-285 B7（Q4）候选收窄的唯一判据。路由层是它的生产 consumer——
 // 边界只 decode 一次「这个调用者能不能看未审候选」，收窄本身不再在路由里手写。
+import type { Memory, MemoryPatchField } from '@agent-workflow/shared'
+
 export {
   isMemoryHiddenCandidate,
   narrowCandidateRows,
@@ -37,3 +39,34 @@ export {
   type MemoryEnvelopeFencing,
   type ScopeBudget,
 } from '../domain/injectionRendering'
+
+// RFC-434: the memory catalog contract, folded in from the former non-exact `public/catalog`.
+export interface MemoryWithChain {
+  readonly memory: Memory
+  readonly ancestors: Memory[]
+}
+
+export interface PatchMemoryResult {
+  readonly memory: Memory
+  readonly changedFields: ReadonlyArray<MemoryPatchField>
+}
+
+export interface MoveMemoryResult {
+  readonly memory: Memory
+  readonly moved: boolean
+}
+
+export interface MemoryScopeRef {
+  readonly scopeType: 'agent' | 'workflow' | 'repo' | 'repo_group' | 'global'
+  readonly scopeId: string | null
+}
+
+/**
+ * RFC-353 T9 —— 技能来源追溯要的最小行：id / 标题 / scope / 融入的版本号。
+ * 刻意不含正文——来源面板只展示「哪几条知识进了第几版」，不是记忆列表。
+ */
+export interface FusedIntoSkillMemory extends MemoryScopeRef {
+  readonly id: string
+  readonly title: string
+  readonly fusedIntoSkillVersion: number
+}

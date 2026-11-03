@@ -13,3 +13,6 @@ export interface DevelopmentAutomationMaintenanceCommands {
   sweepExpiredUploads(now: number, limit: number): Promise<number>
   sweepRetention(now: number): Promise<DevelopmentRetentionSweepResult>
 }
+
+// RFC-434: the mission input upload use case the upload routes call.
+export type { MissionInputUploadOperations } from '../application/missionInputUploadOperations'

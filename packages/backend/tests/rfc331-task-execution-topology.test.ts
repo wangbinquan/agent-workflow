@@ -46,7 +46,7 @@ const RFC331_LEGACY_CONSUMERS = new Set([
 ])
 
 const REGISTERED_PREEXISTING_DEEP_IMPORTS = new Set([
-  'packages/backend/src/routes/tasks.ts:@/modules/task-execution/application/ports/taskRecoveryOperations',
+  // RFC-434: `routes/tasks.ts` takes task recovery from the task-execution public participants now.
   'packages/backend/src/services/autoRepair.ts:@/modules/task-execution/application/ports/taskLifecycleAutoRepairCommand',
   'packages/backend/src/services/autoRepair.ts:@/modules/task-execution/application/ports/taskRecoveryOperations',
   // RFC-424：`services/task.ts` → `application/resumeRollbackTargets` 与 →

@@ -34,7 +34,7 @@ import {
 import { DrizzleMemoryDistillRuntimeResolver } from './infrastructure/memoryDistillRuntimeResolver'
 import type { MemoryOperations } from './public/operations'
 import type { MemoryInjectionQueries } from './public/queries'
-import type { MemoryCatalogOperations } from './public/catalog'
+import type { MemoryCatalogOperations } from './public/operations'
 import type { DirectCommandContextFactory } from '@/modules/identity-access/public/participants'
 import type { EnqueueMemoryDistillJobInput, MemoryDistillWorkerOptions } from './public/commands'
 import {

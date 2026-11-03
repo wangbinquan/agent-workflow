@@ -54,15 +54,14 @@ import { listOpenLifecycleAlertsForTask } from '@/services/taskAlerts'
 import { tasksListBroadcaster, TASKS_LIST_CHANNEL } from '@/ws/broadcaster'
 import { NotFoundError, ValidationError } from '@/util/errors'
 import { safeJsonOrEmpty } from '@/util/http'
-import type { TaskRecoveryOperations } from '@/modules/task-execution/application/ports/taskRecoveryOperations'
+// RFC-434: task recovery is the task-execution public participant contract, not its application port.
+import type { TaskRecoveryOperations } from '@/modules/task-execution/public/participants'
 import type {
   TaskExecutionReadModels,
+  TaskRouteListFilters,
   TaskRuntimeInventoryContent,
 } from '@/modules/task-execution/public/types'
-import type {
-  TaskRouteListFilters,
-  TaskRouteOperations,
-} from '@/modules/task-execution/public/taskRoutes'
+import type { TaskRouteOperations } from '@/modules/task-execution/public/commands'
 
 /** RFC-083: resolve deep-mode indexer path overrides + timeout from settings.
  *  Unreadable config → PATH lookup + default timeout. */

@@ -89,7 +89,7 @@ import {
 import { createTaskRouteOperations } from '@/modules/task-execution/infrastructure/taskRouteOperations'
 import { createDatabaseTaskLifecycleWsProjector } from '@/modules/task-execution/infrastructure/taskLifecycleWsProjection'
 import { createTaskExecutionReadModels } from '@/modules/task-execution/infrastructure/taskExecutionReadModels'
-import type { TaskRouteOperations } from '@/modules/task-execution/public/taskRoutes'
+import type { TaskRouteOperations } from '@/modules/task-execution/public/commands'
 import { storedEventFromRow } from '@/platform/events/committed/appendShared'
 import { createCommittedEventDeliveryPersistence } from '@/platform/events/committed/deliveryPersistence'
 import { createCommittedEventDispatcher } from '@/platform/events/committed/dispatcherWorker'

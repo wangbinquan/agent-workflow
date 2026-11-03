@@ -53,9 +53,9 @@ import { createTaskRouteOperations } from '@/modules/task-execution/infrastructu
 import { createTaskRouteLaunchOperations } from '@/modules/task-execution/infrastructure/taskRouteLaunchOperations'
 import type {
   AgentRouteTaskLaunchOperations,
+  TaskRouteOperations,
   WorkgroupRouteTaskLaunchOperations,
 } from '@/modules/task-execution/public/commands'
-import type { TaskRouteOperations } from '@/modules/task-execution/public/taskRoutes'
 import { DEFAULT_UPLOAD_LIMITS } from '@/services/upload'
 import {
   REPO_PREP_NODE_ID,

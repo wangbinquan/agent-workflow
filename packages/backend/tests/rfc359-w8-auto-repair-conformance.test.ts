@@ -22,7 +22,7 @@ import { ulid } from 'ulid'
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { buildActor, type Actor } from '@/auth/actor'
 import type { LifecycleAlertRow } from '@/services/lifecycleInvariants'
-import type { TaskRouteLifecycleAlertNotice } from '@/modules/task-execution/public/taskRoutes'
+import type { TaskRouteLifecycleAlertNotice } from '@/modules/task-execution/public/types'
 import type { ActiveTaskExecutionParticipant } from '@/modules/task-execution/application/ports/taskExecutionRuntimeParticipants'
 import type {
   TaskLifecycleAutoRepairCommand,

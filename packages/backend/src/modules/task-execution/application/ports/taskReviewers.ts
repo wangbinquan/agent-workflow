@@ -1,4 +1,4 @@
-import type { TaskRouteOperations } from '../../public/taskRoutes'
+import type { TaskRouteOperations } from '../../public/commands'
 
 export interface TaskReviewersPort {
   get: TaskRouteOperations['getReviewers']

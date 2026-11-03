@@ -51,7 +51,8 @@ import { runStuckTaskDetector } from '@/services/stuckTaskDetector'
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
 import type { TaskExecutionPersistence } from '../application/ports/taskExecutionPersistence'
 import type { ActiveTaskExecutionParticipant } from '../application/ports/taskExecutionRuntimeParticipants'
-import type { TaskRouteLifecycleAlertNotice, TaskRouteOperations } from '../public/taskRoutes'
+import type { TaskRouteLifecycleAlertNotice } from '../public/types'
+import type { TaskRouteOperations } from '../public/commands'
 import type { TaskLifecycleAutoRepairBinding } from './taskLifecycleAutoRepairCommand'
 
 type RepairOperations = Pick<TaskRouteOperations, 'repairOptions' | 'applyRepair'>

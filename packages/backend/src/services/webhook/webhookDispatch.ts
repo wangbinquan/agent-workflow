@@ -71,9 +71,10 @@ import {
 import type {
   MrTerminalControl,
   ProtectedMrLaunchGuard,
-} from '@/modules/integration/public/mrTerminalControl'
+  WorkStartReceipt,
+  WorkStartTarget,
+} from '@/modules/integration/public/participants'
 import { DomainError } from '@/util/errors'
-import type { WorkStartReceipt, WorkStartTarget } from '@/modules/integration/public/participants'
 import type {
   WebhookDispatchPersistencePort,
   WebhookTriggerRecord,

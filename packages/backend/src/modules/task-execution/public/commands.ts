@@ -1,3 +1,25 @@
+import type {
+  NodeRunEventsResponse,
+  RepairOptionsResponse,
+  RepairResponse,
+  ReplaceReviewNodeReviewersBody,
+  ReviewNodeReviewerConfig,
+  StartTask,
+  TaskDiff,
+  TaskListItem,
+  TaskMembers,
+  TaskNodeRuns,
+  TaskSummary,
+  UpdateTaskMembersBody,
+  WorkflowSyncPreview,
+} from '@agent-workflow/shared'
+import type {
+  NodeRunPromptOperations,
+  TaskArchivedEventsReader,
+  TaskRouteListFilters,
+  TaskRouteLifecycleAlertNotice,
+  TaskRouteDeleteResult,
+} from './types'
 import type { WorkgroupRunSelectionProjection } from '@/platform/runSelectionProjection'
 import type { TaskWorkgroupConfig } from '../domain/taskWorkgroupConfig'
 export { archivePortArtifacts } from '../composition/portArtifacts'
@@ -459,3 +481,90 @@ export function requireSchedulerDriver(
 }
 
 export { applyWorkspaceUploads } from '../composition/workspaceUploads'
+
+// RFC-434: the archive maintenance command `/api/tasks/archive` calls (defined in application/ports).
+export type { TaskArchiveMaintenanceCommand } from '../application/ports/taskArchiveMaintenanceCommand'
+
+// RFC-434: the `/api/tasks` route face, folded in from the former non-exact `public/taskRoutes`.
+/** Closed TaskExecution command/query face consumed by `/api/tasks`. */
+export interface TaskRouteOperations {
+  readonly archivedEvents?: TaskArchivedEventsReader
+  readonly nodeRunPrompts: NodeRunPromptOperations
+  list(filters: TaskRouteListFilters): Promise<readonly TaskSummary[]>
+  listItems(filters: TaskRouteListFilters): Promise<readonly TaskListItem[]>
+  get(taskId: string): Promise<Task | null>
+
+  assertVisible(actor: AuthenticatedAuthoritySnapshot, taskId: string): Promise<void>
+  requireOperator(actor: AuthenticatedAuthoritySnapshot, taskId: string): Promise<void>
+  assertReplayVisible(actor: AuthenticatedAuthoritySnapshot, sourceTaskId: string): Promise<void>
+
+  getMembers(actor: AuthenticatedAuthoritySnapshot, taskId: string): Promise<TaskMembers>
+  replaceMembers(
+    actor: AuthenticatedAuthoritySnapshot,
+    taskId: string,
+    body: UpdateTaskMembersBody,
+  ): Promise<TaskMembers>
+
+  getReviewers(
+    actor: AuthenticatedAuthoritySnapshot,
+    taskId: string,
+  ): Promise<ReviewNodeReviewerConfig>
+  replaceReviewers(
+    actor: AuthenticatedAuthoritySnapshot,
+    taskId: string,
+    body: ReplaceReviewNodeReviewersBody,
+  ): Promise<ReviewNodeReviewerConfig>
+
+  launchWorkflow(actor: AuthenticatedAuthoritySnapshot, task: StartTask): Promise<Task>
+  launchMultipart(request: Request, actor: AuthenticatedAuthoritySnapshot): Promise<Task>
+  cancel(taskId: string): Promise<Task>
+  delete(taskId: string): Promise<TaskRouteDeleteResult>
+  resume(input: {
+    readonly actor: AuthenticatedAuthoritySnapshot
+    readonly taskId: string
+  }): Promise<Task>
+  retry(input: {
+    readonly actor: AuthenticatedAuthoritySnapshot
+    readonly taskId: string
+    readonly nodeRunId: string
+    readonly cascade: boolean
+  }): Promise<Task>
+
+  nodeRuns(taskId: string): Promise<
+    Omit<TaskNodeRuns, 'runs'> & {
+      readonly runs: readonly TaskNodeRuns['runs'][number][]
+    }
+  >
+  diff(taskId: string): Promise<TaskDiff>
+  stdout(taskId: string, nodeRunId: string): Promise<string>
+  events(
+    taskId: string,
+    nodeRunId: string,
+    options: Readonly<{ since?: number; limit?: number }>,
+  ): Promise<NodeRunEventsResponse>
+
+  assertManualExecutionAllowed(actor: AuthenticatedAuthoritySnapshot, taskId: string): Promise<void>
+  workflowSyncPreview(
+    actor: AuthenticatedAuthoritySnapshot,
+    taskId: string,
+  ): Promise<WorkflowSyncPreview>
+  syncWorkflow(input: {
+    readonly actor: AuthenticatedAuthoritySnapshot
+    readonly taskId: string
+    readonly expectedVersion: number
+  }): Promise<Task>
+
+  repairOptions(input: {
+    readonly actor: AuthenticatedAuthoritySnapshot
+    readonly taskId: string
+    readonly alertId: string
+  }): Promise<RepairOptionsResponse>
+  applyRepair(input: {
+    readonly actor: AuthenticatedAuthoritySnapshot
+    readonly taskId: string
+    readonly alertId: string
+    readonly optionId: string
+    readonly onAlert: (row: TaskRouteLifecycleAlertNotice, transition: 'new' | 'promoted') => void
+    readonly onResolved: (taskId: string) => void
+  }): Promise<RepairResponse>
+}

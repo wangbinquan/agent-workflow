@@ -3,7 +3,7 @@
 import type { PersistenceDb } from '@/platform/persistence/persistenceDb'
 import { MrLaunchGuardCoordinator } from '@/modules/integration/application/mrLaunchGuard'
 import { MrTerminalControlWorker } from '@/modules/integration/application/mrTerminalControlWorker'
-import type { MrTerminalControl } from '@/modules/integration/public/mrTerminalControl'
+import type { MrTerminalControl } from '@/modules/integration/public/participants'
 import type {
   MrLaunchGuardPersistencePort,
   MrTerminalEffectPersistencePort,

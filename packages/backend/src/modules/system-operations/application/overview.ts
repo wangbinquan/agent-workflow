@@ -1,7 +1,7 @@
 import type { OverviewResponse } from '@agent-workflow/shared'
 
 import type { IntegrationOverviewQueries } from '@/modules/integration/public/queries'
-import type { MemoryCatalogOperations } from '@/modules/memory/public/catalog'
+import type { MemoryCatalogOperations } from '@/modules/memory/public/operations'
 import type { ResourceCatalogOverviewQuery } from '@/modules/resource-catalog/public/queries'
 import type { RepositoryOverviewQueries } from '@/modules/source-control/public/queries'
 import type { TaskOverviewQuery } from '@/modules/task-execution/public/queries'

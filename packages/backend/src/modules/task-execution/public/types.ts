@@ -1,3 +1,9 @@
+import type {
+  LifecycleAlertSeverity,
+  TaskCatalogVisibility,
+  TaskListOrigin,
+  TaskStatus,
+} from '@agent-workflow/shared'
 import type { TaskReadSubject } from '../domain/taskSubject'
 import type { TaskWorkgroupConfig } from '../domain/taskWorkgroupConfig'
 export type {
@@ -23,7 +29,6 @@ export type { TaskArchiveContentBinding } from '../composition/taskArchiveMainte
 
 // RFC-303 exact public vocabulary. Cross-context callers may depend on these
 // types, never on task rows, activeTasks, scheduler, GC, or process internals.
-import type { TaskStatus } from '@agent-workflow/shared'
 
 export type { TaskEngineTaskSnapshot } from '../application/ports/taskEngineApplicationPersistence'
 
@@ -384,3 +389,38 @@ export type { TaskMountKey } from '../application/ports/taskMountKeys'
 
 export { nodeRunMintIdentity, nodeRunMintIdentityForSlot } from '../application/nodeRunMintIdentity'
 export type { NodeRunMintGeneration } from '../application/nodeRunMintIdentity'
+
+// RFC-434: the `/api/tasks` route face, folded in from the former non-exact `public/taskRoutes`.
+/** Provider-neutral filters accepted by the classic task-list HTTP surface. */
+export interface TaskRouteListFilters {
+  readonly status?: TaskStatus
+  readonly workflowId?: string
+  readonly repoPath?: string
+  readonly catalogVisibility?: TaskCatalogVisibility
+  readonly scheduledTaskId?: string
+  /**
+   * RFC-301 launch-origin filter. Applied in SQL against `tasks.launch_origin`
+   * through `taskListOriginMatches`, NOT re-derived from `scheduledTaskId` —
+   * that guess cannot see `event` / `api` at all and misreads a manual re-run
+   * of a scheduled definition as `scheduled`.
+   */
+  readonly origin?: TaskListOrigin
+  readonly topLevelOnly?: boolean
+  readonly parentTaskId?: string
+  readonly limit?: number
+  readonly visibility?: Readonly<{
+    actorUserId: string
+    scope: 'mine' | 'shared'
+  }>
+}
+
+export interface TaskRouteLifecycleAlertNotice {
+  readonly taskId: string
+  readonly rule: string
+  readonly severity: LifecycleAlertSeverity
+}
+
+export interface TaskRouteDeleteResult {
+  readonly taskId: string
+  readonly cleanup: 'done' | 'pending'
+}

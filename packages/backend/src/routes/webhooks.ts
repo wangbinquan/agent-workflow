@@ -23,8 +23,10 @@ import { insertDelivery, type InsertDeliveryInput } from '@/services/webhook/del
 import { streamKeyOf } from '@/services/webhook/matching'
 import { createWebhookRateLimiters, type WebhookRateLimiters } from '@/services/webhook/rateLimiter'
 import { createLogger } from '@/util/log'
-import type { VerifiedWebhookIngressCommands } from '@/modules/integration/public/commands'
-import type { WebhookIngressPersistence } from '@/modules/integration/composition/webhookIngress'
+import type {
+  VerifiedWebhookIngressCommands,
+  WebhookIngressPersistence,
+} from '@/modules/integration/public/commands'
 
 const log = createLogger('webhook-ingress')
 
