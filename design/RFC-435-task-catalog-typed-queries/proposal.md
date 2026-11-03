@@ -1,6 +1,6 @@
 # RFC-435 任务目录的 public 查询改为类型化、不接遗留 Actor（RFC-294 W4 E10）
 
-- **状态**：In Progress（2026-11-03 落档）。用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」：本会话调研、设计、
+- **状态**：Done（2026-11-03；`b3a1daa98`，exact SHA 主 CI run 41712173774：attempt 1 三个 macOS e2e 分片未分到 runner 被取消，重跑 attempt 2 70/70 全绿）。用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断不用提交给我审批」：本会话调研、设计、
   实施与集中验证，按授权记为已批准（取舍见 §6，可推翻）；不派 Codex（用户 2026-10-31）。设计门免；实现门由本会话按路径限定、只审功能地自审。
 - **母 RFC**：[RFC-294](../RFC-294-backend-layered-target-architecture/proposal.md) plan §4.1 W4 余项 E10，同时是 W4 B / D 第二步的一部分
 - **前序**：[RFC-434](../RFC-434-inbound-adapter-public-contracts/proposal.md)（精确 public 入口与入站路由第一批）

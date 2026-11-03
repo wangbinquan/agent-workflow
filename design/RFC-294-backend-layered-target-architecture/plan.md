@@ -391,7 +391,9 @@ Facade 只许 re-export 或参数形状适配；不得含 DB 查询、状态、�
   `code-capability` 的 capability template 写入与历史查询并入 development-automation 后删除该兼容岛。
 - **E9 digital-employee / event-center / execution-contract**：在 RFC-361/365/368 已落切片之上，完成路由到 public command / query、
   Event observer 进入生命周期程序、XC 对 legacy agent / workflow / scriptRun 的兼容 seam 退役。
-- **E10 task-catalog**：public 查询接 typed query、返回 typed page，不接 full Actor、不返回 JSON 字符串；来源经
+- **E10 task-catalog**（2026-11-03 public 合同部分由 [RFC-435](../RFC-435-task-catalog-typed-queries/proposal.md) Done，`b3a1daa98`：
+  `TaskCatalogQueries` 在 `application/ports`、经 `public/queries` 导出，返回类型化文档与页，接自有的 `TaskCatalogViewer`；深引路由 7 → 6）：
+  public 查询接 typed query、返回 typed page，不接 full Actor、不返回 JSON 字符串；来源经
   `TaskCatalogSource` 注入。
 
 每个子波的退出门：该 context 的入站适配器与 consumer 不再深引 legacy / 内部；该 context 的 public 合同无投机符号；

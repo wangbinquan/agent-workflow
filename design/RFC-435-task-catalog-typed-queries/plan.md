@@ -20,7 +20,7 @@
 - [x] AC-2 路由只经精确 public 入口依赖 task-catalog
 - [x] AC-3 来源端口接 `TaskCatalogViewer`，结构规则与架构测试通过
 - [x] AC-4 任务目录用例通过，响应体不变
-- [ ] AC-5 exact SHA CI 全绿
+- [x] AC-5 exact SHA CI 全绿
 
 ## PR / 提交
 
@@ -47,3 +47,14 @@
   - 两个来源只读 `permissions` 与 `user.id`，task-execution 来源照旧经 `taskListViewerOf` 收窄。
 - **游标、facets、来源校验**：逻辑未动。
 - **结论**：PASS。
+
+## CI（AC-5）
+
+`b3a1daa98` 的主 CI run 41712173774：
+
+- **attempt 1**：conclusion `failure`，66 success。三个 Playwright e2e（macos-latest shard 1/4、3/4、4/4）始终没有分到 runner（0 个步骤、
+  runner 为空），15 分钟后被取消，「CI required」随之 failure。属 GitHub 托管 macOS runner 的可用性问题，与代码无关。
+  同日 `43fcce84c` 的 CI 也出现过同样形态。
+- **attempt 2**（`gh run rerun --failed`）：conclusion `success`，70/70。
+
+windows-platform 与 maintenance-soak-nightly 带路径过滤，本 RFC 的改动不触发它们。
