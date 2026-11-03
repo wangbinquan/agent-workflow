@@ -1,4 +1,4 @@
-## 2026-11-03 RFC-434 精确 public 入口与入站路由的第一批去深引（In Progress；`design/RFC-434-inbound-adapter-public-contracts/`）
+## 2026-11-03 RFC-434 精确 public 入口与入站路由的第一批去深引（Done；`design/RFC-434-inbound-adapter-public-contracts/`）
 
 - **来由**：RFC-294 W4 余项 B / D 的第一步（S2 Done 之后的下一项）。用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断
   不用提交给我审批」：本会话调研、设计、实施与集中验证，按授权记为已批准，不派 Codex。
@@ -8,6 +8,26 @@
     `memories` 各一条，以及 `services/webhook/webhookDispatch`；
   - 签名带遗留 `Actor` 或需重写句柄合同的 7 个路由另立：数字员工、事件中心、stage 合同、定时任务、能力模板（E8）、任务目录（E10）、Webhook 投递运行时。
 - **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。
+- **落地**：`1f0da4ca7`。
+  - 3 个非精确 public 文件按内容并入精确入口：值类型进 `types`，查询与权限包进 `queries`，命令与任务路由合同进 `commands`，参与方进 `participants`；
+  - `WebhookIngressPersistence` 搬到 integration `application/ports`，端点读取收窄为两个读方法。
+  - 账本：
+    - `R1-inbound-module-internals` 210 → 202；
+    - 非精确入口 3 → 0；
+    - 跨 context 内部边 56 → 48；
+    - public surface 债 −4 +1（换位置）；
+    - DAG 外 offered 边 54 → 55：两条既有依赖重新归类，已登记理由。
+- **验证中按既有结构规则调整**：
+  - 签名带遗留 `Actor` 的合同（能力模板、任务目录、Webhook 投递运行时）不进 public，另立；
+  - `MemoryScopeAuthority` 不进 `public/types`；
+  - `TaskRouteOperations` 放 `commands`。
+- **集中验证**：
+  - 全量 SQLite 2883 个文件、23392 条，2 条本 RFC 的账本已修，17 条负载超时 60 s 复跑通过；
+  - PostgreSQL 专注 lane 130 个文件 1236/1237，唯一失败是 `rfc311-perf-guards` 单 provider 的已知假红，两 provider 同跑 25/25；
+  - 导出仓库 141 通过，P0 变异 lane 34 阶段通过。
+- **CI**：`1f0da4ca7` 主 CI 70/70、windows-platform、maintenance-soak-nightly 全绿（AC-5）。
+- **下一步**：W4 B / D 第二批——数字员工与事件中心的句柄合同、Webhook 投递运行时；E10 任务目录与 E8 能力模板的遗留 `Actor`；
+  stage 合同与定时任务；入站适配器对 `services/` 的 29 + 1 个文件。
 
 ## 2026-11-03 RFC-433 按有无区分部署的选择项改为显式（Done；`design/RFC-433-explicit-presence-selections/`）；RFC-294 S2 Done
 

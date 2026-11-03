@@ -21,7 +21,7 @@
 - [x] AC-2 第一批路由不再深引
 - [x] AC-3 账本与计数按实测更新（DAG 外 offered 边 +1 是两条既有依赖的重新归类，其余只减）
 - [x] AC-4 回归用例全部通过
-- [ ] AC-5 exact SHA CI 全绿
+- [x] AC-5 exact SHA CI 全绿
 
 ## PR / 提交
 
@@ -61,3 +61,8 @@
   - 组合根照旧把完整的端点管理端口交给入口持久化，结构上满足 `WebhookIngressEndpointReads`；
   - `routes/webhooks.ts` 只调 `getByUrlToken`，投递路由经扩展它的投递运行时调 `get`，两个方法都在收窄后的接口里。
 - **结论**：PASS。
+
+## CI（AC-5）
+
+`1f0da4ca7`：主 CI run 41701357806 70/70，windows-platform run 41701357727 与 maintenance-soak-nightly run 41701357948 全绿，
+一次通过，无重跑。
