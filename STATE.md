@@ -1,10 +1,24 @@
-## 2026-11-03 RFC-432 需要会话图的部署选择项改为两侧都给的工厂（In Progress；`design/RFC-432-session-selection-factories/`）
+## 2026-11-03 RFC-432 需要会话图的部署选择项改为两侧都给的工厂（Done；`design/RFC-432-session-selection-factories/`）
 
 - **来由**：RFC-294 S2c 余项第 1 项的第三步（RFC-428 inventory 后继分步第 3 条）。用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构
   进行自行判断不用提交给我审批」：本会话调研、设计、实施与集中验证，按授权记为已批准，不派 Codex。
 - **范围**：单机值离不开会话图的 10 项改为必填工厂，签名即本地构造函数（单机给构造函数、托管给返回已建对象的闭包），
   装配层在会话依赖就绪处调用；`credentials` 已是这个形状。合同变为 49 必填 + 6 必填可空 + 7 可选（第四步）。
 - **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。
+- **落地**：`b4b24cff1`。
+  - 新增 `DeploymentSessionStorage`；单机 profile 给本地构造函数，托管给返回已建对象的闭包。
+  - 模块导出本地构造函数：`composeLocalIntentArtifacts`、`composeLocalRepositoryPreparationEffects` / `composeLocalScratchWorkspaceEffects`、
+    `createPostgresqlAdminBackupCoordinator`、`createFileResourcePackageSkillArtifactOwner`。
+  - RFC-431 结构锁加两条检查（单机值不是调用、托管值是闭包）；新增双库行为用例 `rfc432-session-selection-factories`。
+  - 顺带修存量时序竞态：`rfc266-script-pool-independence` 的反向锁改为先有界等到 `running`。
+- **集中验证**：
+  - 全量 SQLite 两轮，第二轮 4 分片跑完：2882 个文件、23382 条用例，14 条失败。13 条是负载超时，60 s 预算复跑通过；1 条即上述时序竞态，已修；
+  - PostgreSQL 专注 lane 146 个文件，只有两文件的超时，复跑通过；
+  - 导出仓库 141 个按已提交源码出报告的用例全部通过；
+  - P0 变异 lane 34 阶段通过。
+  - 细节见 plan「集中验证」。
+- **CI**：`b4b24cff1` 主 CI 70/70、windows-platform、maintenance-soak-nightly 全绿（AC-5）。
+- **下一步**：S2c 第 1 项第四步（RFC-433：按有无区分部署的 7 项改为显式）。
 
 ## 2026-11-03 RFC-431 单机部署选择项的默认值集中到单机 profile（Done；`design/RFC-431-standalone-selection-defaults/`）
 

@@ -22,7 +22,7 @@
 - [x] AC-2 单机工厂两会话行为、托管闭包
 - [x] AC-3 装配层对十项无缺省
 - [x] AC-4 回归用例全部通过
-- [ ] AC-5 exact SHA CI 全绿
+- [x] AC-5 exact SHA CI 全绿
 
 ## PR / 提交
 
@@ -78,3 +78,8 @@
 - **会话与迁移**：工厂每个会话调用一次，与改前缺省分支的构造次数相同。SQLite → PostgreSQL 迁移后重组的会话以新库调用，得到新库上的实例
   （双库行为用例覆盖）。
 - **结论**：PASS。
+
+## CI（AC-5）
+
+`b4b24cff1`：主 CI run 41637518892 70/70，windows-platform run 41637518921 与 maintenance-soak-nightly run 41637518880 全绿，
+一次通过，无重跑。
