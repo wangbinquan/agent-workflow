@@ -1,6 +1,6 @@
 # RFC-401 资源写入栈合一与 AtomicApply 持久租约（RFC-294 S7 余项）
 
-- **状态**：In Progress（2026-10-31 落档；2026-11-02 用户确认 §5 全部 12 项与 §7 两项，均按「推荐」，见 §7）。研究与设计由本会话在
+- **状态**：Done（2026-11-02：Part B `9498cca64`、T6 收尾 `d5c85df90` 与 CI 修复 `cb33528ec` 落地，exact SHA CI 全绿）。原记录：（2026-10-31 落档；2026-11-02 用户确认 §5 全部 12 项与 §7 两项，均按「推荐」，见 §7）。研究与设计由本会话在
   用户「你继续推进RFC294 … 按你的判断来推进」的授权下完成。RFC-294 plan §3 S7 要求的「列入口与错误码呈批」已完成。
 - **母 RFC**：[RFC-294](../RFC-294-backend-layered-target-architecture/proposal.md) plan §3 S7；design §3、W6
 - **前序**：[RFC-395](../RFC-395-database-target-schema-rebuild/proposal.md) T10（唯一状态机 `platform/atomic-apply/`）、

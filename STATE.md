@@ -1,4 +1,4 @@
-## 2026-11-02 RFC-401 资源写入栈合一与 AtomicApply 持久租约（In Progress；`design/RFC-401-single-resource-write-stack/`）
+## 2026-11-02 RFC-401 资源写入栈合一与 AtomicApply 持久租约（Done；`design/RFC-401-single-resource-write-stack/`）
 
 - **确认**：用户 2026-11-02 按四组确认 proposal §5 的 12 项与 §7 两项，全部按推荐（记录见 proposal §7）：
   - 错误码统一：同一输入在 Intent、资源包与普通 CRUD 得到同一 code / status / message / details，场景专属错误保留场景码并先报；
@@ -52,7 +52,8 @@
   「T6 收尾」与 design §10.3。
 - **T6 收尾 CI**：`d5c85df90` 68/69：backend shard 14/44 的 `rfc285-b6-import-visibility-locks` 一条源码锁仍读已删的 legacy workflow
   创建（动态拼路径，本地按字面量找读源码用例时漏了），本步引入，已改锁 workflow 写入参与者；其余读 resource-catalog 源码的 159 个用例本地补跑全过。
-- **下一步**：修复提交推送后跟 exact SHA 的 CI；全绿后 RFC-401 转 Done（AC-6）。
+- **完成**：`cb33528ec`（run 41589242056）主 CI 全绿（AC-6；attempt 1 的 shard 43/44 一条 `scheduler-clarify-dispatch` PostgreSQL 用例
+  5.76 s 超 5 s，同代码前一次 run 2.1 s 通过、RFC-401 未改动该文件，归因 runner 时序，只重跑失败 job 一次后全绿），RFC-401 转 Done。
 
 ## 2026-11-02 RFC-430 部署选择项删余下三个可派生项（Done；`design/RFC-430-derivable-deployment-selections/`）
 

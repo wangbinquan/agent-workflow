@@ -251,6 +251,9 @@ Part B 只完成了 G5 的技能部分；agent / workflow / workgroup 的零调�
   legacy workflow 创建（`legacyResourceSrc('workflow.ts')` 动态拼路径，本地按路径字面量找「读 legacy 源码的用例」时漏了它），本步引入，
   已改锁 workflow 写入参与者（创建者 private、public 只在内建分支）。补查：其余读 resource-catalog 源码的 159 个用例本地全部通过；
   e2e 与 windows-platform 通过。
+  修复提交 `cb33528ec`（run 41589242056）attempt 1 为 67/69：shard 43/44 的 `scheduler-clarify-dispatch` 一条 PostgreSQL 用例 5.76 s
+  超出 5 s（同一用例在前一次 run 41585625878 用同样代码 2.1 s 通过；RFC-401 的各提交没有改动该文件），归因 runner 时序；只重跑失败
+  job 一次（attempt 2）全绿，重跑只作佐证。
 
 ## 冲突面
 
@@ -261,5 +264,5 @@ Part B 只完成了 G5 的技能部分；agent / workflow / workgroup 的零调�
 ## 验收清单
 
 - [x] proposal §5、§7 确认（2026-11-02，全部按推荐，见 proposal §7）
-- [ ] proposal AC-1～AC-5
-- [ ] 推送后 exact SHA 的 CI 全绿（AC-6）
+- [x] proposal AC-1～AC-5（AC-1 `rfc401-resource-write-participants`；AC-2 六类错误矩阵；AC-3 `rfc401-atomic-apply-lease`；AC-4 `rfc401-skill-write-stack` 与 fusion 发布失败用例；AC-5 启动兼容排空与 0001 / 0002 升级种子）
+- [x] 推送后 exact SHA 的 CI 全绿（AC-6）：`cb33528ec`（run 41589242056）
