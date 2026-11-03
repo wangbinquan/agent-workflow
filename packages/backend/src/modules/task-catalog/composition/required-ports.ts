@@ -4,11 +4,12 @@ import type {
   TaskSourceId,
 } from '@agent-workflow/shared'
 
-import type { Actor } from '@/auth/actor'
+import type { TaskCatalogViewer } from '../public/types'
 
 /** Consumer-owned input shared by every registered task source. */
 export interface TaskCatalogSourceListInput {
-  readonly actor: Actor
+  /** RFC-435: who is listing — user id and permissions only. */
+  readonly viewer: TaskCatalogViewer
   readonly view?: string
   readonly q?: string
   readonly statuses?: string

@@ -88,7 +88,7 @@ function source(page: TaskListPage, sourceId: TaskExecutionCatalogSourceId): Tas
     async list(input) {
       const listed = await page.list(
         // Actor 在模块边界上收成闭合投影（RFC-294 §629：目录合同禁止 full Actor）。
-        taskListViewerOf(input.actor),
+        taskListViewerOf(input.viewer),
         {
           ...(input.view === undefined ? {} : { view: input.view }),
           ...(input.q === undefined ? {} : { q: input.q }),

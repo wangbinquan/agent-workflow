@@ -124,13 +124,13 @@ describeEachProvider('task catalog internal execution boundary', (harness) => {
     ).find((source) => source.sourceId === 'workflow')
     if (workflowSource === undefined) throw new Error('workflow source is missing')
 
-    const first = await workflowSource.list({ actor: requestActor, limit: '1' })
+    const first = await workflowSource.list({ viewer: requestActor, limit: '1' })
     expect(first.items.map((item) => item.id)).toEqual(['public-new'])
     expect(first.facets).toEqual({ all: 2, active: 0, attention: 0, finished: 2 })
     expect(first.nextCursor).not.toBeNull()
 
     const second = await workflowSource.list({
-      actor: requestActor,
+      viewer: requestActor,
       limit: '1',
       cursor: first.nextCursor ?? undefined,
     })

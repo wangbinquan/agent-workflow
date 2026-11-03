@@ -2,17 +2,18 @@ import {
   TASK_SOURCE_REGISTRATIONS,
   TaskCatalogPageSchema,
   isTaskSourceId,
+  type TaskCatalogPage,
   type TaskCatalogSourcesDocument,
   type TaskOperationsFacets,
   type TaskSourceId,
 } from '@agent-workflow/shared'
 
-import type { Actor } from '@/auth/actor'
 import { ForbiddenError, ValidationError } from '@/util/errors'
 import type { TaskCatalogSource } from '../composition/required-ports'
-import type { TaskCatalogListQuery } from '../public/types'
+import type { TaskCatalogListQuery, TaskCatalogViewer } from '../public/types'
+import type { TaskCatalogQueries } from './ports/taskCatalogQueries'
 
-export class TaskCatalogQueryService {
+export class TaskCatalogQueryService implements TaskCatalogQueries {
   readonly #sources: ReadonlyMap<TaskSourceId, TaskCatalogSource>
 
   constructor(sources: readonly TaskCatalogSource[]) {
@@ -34,8 +35,8 @@ export class TaskCatalogQueryService {
     this.#sources = byId
   }
 
-  listSources(actor: Actor): string {
-    const permissions = actor.permissions
+  listSources(viewer: TaskCatalogViewer): TaskCatalogSourcesDocument {
+    const permissions = viewer.permissions
     const document: TaskCatalogSourcesDocument = {
       schemaVersion: 1,
       sources: TASK_SOURCE_REGISTRATIONS.filter(
@@ -53,10 +54,10 @@ export class TaskCatalogQueryService {
         detailPath: source.list.detailPath,
       })),
     }
-    return JSON.stringify(document)
+    return document
   }
 
-  async list(query: TaskCatalogListQuery, actor: Actor): Promise<string> {
+  async list(query: TaskCatalogListQuery, viewer: TaskCatalogViewer): Promise<TaskCatalogPage> {
     const selectedSource =
       query.sourceId === undefined
         ? null
@@ -64,7 +65,7 @@ export class TaskCatalogQueryService {
     if (query.sourceId !== undefined && selectedSource === null) {
       throw new ValidationError('task-source-invalid', `unknown task source: ${query.sourceId}`)
     }
-    const permissions = actor.permissions
+    const permissions = viewer.permissions
     const visibleSources = (
       selectedSource === null ? TASK_SOURCE_REGISTRATIONS : [selectedSource]
     ).filter((source) => permissions.has(source.list.requiredPermission))
@@ -93,7 +94,7 @@ export class TaskCatalogQueryService {
     const pages = await Promise.all(
       activeSources.map(async ({ registration, source }) => {
         const page = await source.list({
-          actor,
+          viewer,
           ...(query.view === undefined ? {} : { view: query.view }),
           ...(query.q === undefined ? {} : { q: query.q }),
           ...(query.statuses === undefined ? {} : { statuses: query.statuses }),
@@ -144,7 +145,7 @@ export class TaskCatalogQueryService {
       nextCursor: hasNext ? encodeCursor(nextCursors) : null,
       facets,
     })
-    return JSON.stringify(page)
+    return page
   }
 }
 

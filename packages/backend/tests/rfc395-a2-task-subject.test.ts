@@ -150,7 +150,7 @@ describeEachProvider('RFC-395 II-a A2 subject readers', (harness) => {
     )
     const pages = await Promise.all(
       (['workflow', 'workgroup', 'agent'] as const).map((sourceId) =>
-        factory.create(sourceId).list({ actor, q: 'context-target' }),
+        factory.create(sourceId).list({ viewer: actor, q: 'context-target' }),
       ),
     )
     for (const sourceId of ['workgroup', 'agent'] as const) {
@@ -160,7 +160,7 @@ describeEachProvider('RFC-395 II-a A2 subject readers', (harness) => {
       expect(parent).toBeDefined()
       expect(parent!.subject).toEqual({ resourceId: null, label: { 'zh-CN': '—', 'en-US': '—' } })
     }
-    const workflowPage = await factory.create('workflow').list({ actor, q: 'Parent task' })
+    const workflowPage = await factory.create('workflow').list({ viewer: actor, q: 'Parent task' })
     expect(workflowPage.items.find((item) => item.id === 'parent')?.subject).toEqual({
       resourceId: 'parent-workflow',
       label: { 'zh-CN': 'Parent workflow', 'en-US': 'Parent workflow' },

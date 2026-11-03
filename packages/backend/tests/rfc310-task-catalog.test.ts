@@ -131,10 +131,9 @@ describe('RFC-310 unified task catalog', () => {
     const service = new TaskCatalogQueryService(completeSources(calls))
     const requestActor = actor(['tasks:read', 'digital-employees:read'])
 
+    // RFC-435: the query returns the typed page; the schema still validates its shape.
     const workflow = TaskCatalogPageSchema.parse(
-      JSON.parse(
-        await service.list({ sourceId: 'workflow', view: 'active', limit: '20' }, requestActor),
-      ),
+      await service.list({ sourceId: 'workflow', view: 'active', limit: '20' }, requestActor),
     )
     expect(workflow).toMatchObject({
       schemaVersion: 1,
@@ -145,7 +144,7 @@ describe('RFC-310 unified task catalog', () => {
     expect(calls.workflow?.[0]).toMatchObject({ view: 'active', limit: '20' })
     expect(calls['digital-employee']).toHaveLength(0)
 
-    const all = TaskCatalogPageSchema.parse(JSON.parse(await service.list({}, requestActor)))
+    const all = TaskCatalogPageSchema.parse(await service.list({}, requestActor))
     expect(all.sourceIds).toEqual(['agent', 'workflow', 'workgroup', 'digital-employee'])
     expect(all.items.map((entry) => entry.sourceId).sort()).toEqual([
       'agent',
@@ -172,15 +171,13 @@ describe('RFC-310 unified task catalog', () => {
   test('discovery is generated from the same source registrations', () => {
     const service = new TaskCatalogQueryService(completeSources())
     const document = TaskCatalogSourcesDocumentSchema.parse(
-      JSON.parse(
-        service.listSources(
-          actor([
-            'tasks:read',
-            'tasks:execute',
-            'digital-employees:read',
-            'development-missions:launch',
-          ]),
-        ),
+      service.listSources(
+        actor([
+          'tasks:read',
+          'tasks:execute',
+          'digital-employees:read',
+          'development-missions:launch',
+        ]),
       ),
     )
     expect(document.sources.map((source) => source.id)).toEqual([
@@ -221,7 +218,7 @@ describe('RFC-310 unified task catalog', () => {
 
     // 没有 tasks:read:all 的 all 降成 mine；RFC-330 缺口 1 后 mine / shared 走成员制
     // （membership），不再只按 owner 过滤，shared 也不再硬编码空页。
-    await employeeSource.list({ actor: member, scope: 'all', origin: 'webhook' })
+    await employeeSource.list({ viewer: member, scope: 'all', origin: 'webhook' })
     expect(calls).toEqual([
       expect.objectContaining({
         membership: { actorUserId: 'catalog-user', scope: 'mine' },
@@ -230,12 +227,12 @@ describe('RFC-310 unified task catalog', () => {
     ])
     expect(calls[0]).not.toHaveProperty('ownerUserId')
 
-    await employeeSource.list({ actor: member, scope: 'shared' })
+    await employeeSource.list({ viewer: member, scope: 'shared' })
     expect(calls).toHaveLength(2)
     expect(calls[1]).toMatchObject({ membership: { actorUserId: 'catalog-user', scope: 'shared' } })
 
     await employeeSource.list({
-      actor: actor(['tasks:read', 'tasks:read:all', 'digital-employees:read']),
+      viewer: actor(['tasks:read', 'tasks:read:all', 'digital-employees:read']),
       scope: 'all',
       origin: 'api',
     })
@@ -285,7 +282,7 @@ describe('RFC-310 unified task catalog', () => {
     })
 
     const page = await employeeSource.list({
-      actor: actor(['tasks:read', 'digital-employees:read']),
+      viewer: actor(['tasks:read', 'digital-employees:read']),
     })
     expect(page.items).toEqual([
       expect.objectContaining({
@@ -325,7 +322,7 @@ describe('RFC-310 unified task catalog', () => {
     })
 
     const page = await employeeSource.list({
-      actor: actor(['tasks:read', 'digital-employees:read']),
+      viewer: actor(['tasks:read', 'digital-employees:read']),
     })
 
     expect(page.items).toEqual([
@@ -355,10 +352,10 @@ describe('RFC-310 unified task catalog', () => {
     })
     const requestActor = actor(['tasks:read', 'digital-employees:read'])
 
-    await employeeSource.list({ actor: requestActor, statuses: 'running' })
-    await employeeSource.list({ actor: requestActor, statuses: 'awaiting_human' })
-    await employeeSource.list({ actor: requestActor, statuses: 'done' })
-    await employeeSource.list({ actor: requestActor, statuses: 'canceled' })
+    await employeeSource.list({ viewer: requestActor, statuses: 'running' })
+    await employeeSource.list({ viewer: requestActor, statuses: 'awaiting_human' })
+    await employeeSource.list({ viewer: requestActor, statuses: 'done' })
+    await employeeSource.list({ viewer: requestActor, statuses: 'canceled' })
 
     expect(calls).toEqual([
       expect.objectContaining({ states: ['active', 'waiting'], terminalCatalogStatuses: [] }),

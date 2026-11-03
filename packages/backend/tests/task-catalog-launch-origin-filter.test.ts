@@ -231,7 +231,7 @@ describeEachProvider(
       const rejected: string[] = []
       for (const origin of TASK_LIST_VISIBLE_ORIGINS) {
         try {
-          await source.list({ actor: actor(), origin })
+          await source.list({ viewer: actor(), origin })
         } catch {
           rejected.push(origin)
         }
@@ -244,7 +244,7 @@ describeEachProvider(
       await seed(db)
       const source = await catalogSource(db)
       const ids = async (origin: string): Promise<string[]> =>
-        (await source.list({ actor: actor(), origin })).items.map((item) => item.id).sort()
+        (await source.list({ viewer: actor(), origin })).items.map((item) => item.id).sort()
 
       // 目录页只列根行，所以定时那一档在这里是 root-scheduled；继承来源的子执行由上面
       // 直接打查询层的用例覆盖（它才看得到子行）。
@@ -261,8 +261,8 @@ describeEachProvider(
       const db = harness.db
       await seed(db)
       const source = await catalogSource(db)
-      const absent = (await source.list({ actor: actor() })).items.map((item) => item.id).sort()
-      const all = (await source.list({ actor: actor(), origin: 'all' })).items
+      const absent = (await source.list({ viewer: actor() })).items.map((item) => item.id).sort()
+      const all = (await source.list({ viewer: actor(), origin: 'all' })).items
         .map((item) => item.id)
         .sort()
       expect(absent).toEqual(all)
@@ -272,7 +272,7 @@ describeEachProvider(
       const db = harness.db
       await seed(db)
       const source = await catalogSource(db)
-      await expect(source.list({ actor: actor(), origin: 'from-mars' })).rejects.toThrow(
+      await expect(source.list({ viewer: actor(), origin: 'from-mars' })).rejects.toThrow(
         ValidationError,
       )
     })

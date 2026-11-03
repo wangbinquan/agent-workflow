@@ -136,7 +136,7 @@ describeEachProvider('任务目录源：facets 与 view 无关', (harness) => {
     const source = await catalogSource(harness.db)
     const pageSizes: Record<string, number> = {}
     for (const view of TASK_LIST_VIEWS) {
-      const page = await source.list({ actor: actor(), view })
+      const page = await source.list({ viewer: actor(), view })
       expect(page.facets).toEqual(EXPECTED)
       pageSizes[view] = page.items.length
     }
@@ -146,12 +146,12 @@ describeEachProvider('任务目录源：facets 与 view 无关', (harness) => {
 
   test('view 缺省等同 all', async () => {
     const source = await catalogSource(harness.db)
-    expect((await source.list({ actor: actor() })).facets).toEqual(EXPECTED)
+    expect((await source.list({ viewer: actor() })).facets).toEqual(EXPECTED)
   })
 
   test('attention 收未结告警的行，与状态无关', async () => {
     const source = await catalogSource(harness.db)
-    const page = await source.list({ actor: actor(), view: 'attention' })
+    const page = await source.list({ viewer: actor(), view: 'attention' })
     const alerted = page.items.find((item) => item.openAlertCount > 0)
     expect(alerted).toBeDefined()
     expect(alerted?.status).toBe('done')
@@ -164,29 +164,29 @@ describeEachProvider('任务目录源：facets 与 view 无关', (harness) => {
     // attention 有 awaiting_review + failed + done(告警)、finished 有 failed + 两行 done。
     const narrowed: TaskOperationsFacets = { all: 4, active: 1, attention: 3, finished: 3 }
     for (const view of TASK_LIST_VIEWS) {
-      const page = await source.list({ actor: actor(), statuses, view })
+      const page = await source.list({ viewer: actor(), statuses, view })
       expect(page.facets).toEqual(narrowed)
     }
     // 叠加：statuses 命中 4 行，其中只有 awaiting_review 属于 active 视图。
-    const active = await source.list({ actor: actor(), statuses, view: 'active' })
+    const active = await source.list({ viewer: actor(), statuses, view: 'active' })
     expect(active.items.map((item) => item.status)).toEqual(['awaiting_review'])
   })
 
   test('非法 view / statuses 是 422，不再静默降级成「无过滤」', async () => {
     const source = await catalogSource(harness.db)
-    await expect(source.list({ actor: actor(), view: 'nope' })).rejects.toThrow(ValidationError)
-    await expect(source.list({ actor: actor(), statuses: 'not-a-status' })).rejects.toThrow(
+    await expect(source.list({ viewer: actor(), view: 'nope' })).rejects.toThrow(ValidationError)
+    await expect(source.list({ viewer: actor(), statuses: 'not-a-status' })).rejects.toThrow(
       ValidationError,
     )
   })
 
   test('分页游标只切 items，facets 仍是整份分母', async () => {
     const source = await catalogSource(harness.db)
-    const first = await source.list({ actor: actor(), limit: '4' })
+    const first = await source.list({ viewer: actor(), limit: '4' })
     expect(first.facets).toEqual(EXPECTED)
     expect(first.items).toHaveLength(4)
     expect(first.nextCursor).not.toBeNull()
-    const second = await source.list({ actor: actor(), limit: '4', cursor: first.nextCursor! })
+    const second = await source.list({ viewer: actor(), limit: '4', cursor: first.nextCursor! })
     expect(second.facets).toEqual(EXPECTED)
     expect(second.items).toHaveLength(4)
   })

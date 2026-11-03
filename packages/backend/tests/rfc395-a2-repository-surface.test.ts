@@ -368,7 +368,7 @@ describeEachProvider('RFC-395 II-a A2 repository surface', (harness) => {
     })
     const listed = await createTaskExecutionCatalogSourceFactory(page)
       .create('workflow')
-      .list({ actor, view: 'all', limit: '50' })
+      .list({ viewer: actor, view: 'all', limit: '50' })
     expect(listed.items).toHaveLength(cases.length)
     for (const spec of cases) {
       const item = listed.items.find((entry) => entry.id === spec.id)!

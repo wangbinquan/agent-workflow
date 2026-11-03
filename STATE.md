@@ -1,3 +1,13 @@
+## 2026-11-03 RFC-435 任务目录的 public 查询类型化、不接遗留 Actor（In Progress；`design/RFC-435-task-catalog-typed-queries/`）
+
+- **来由**：RFC-294 W4 余项 E10，也是 W4 B / D 第二步的一部分（RFC-434 留下的 7 个深引路由之一）。用户 2026-11-02「好，你继续推进RFC294，
+  过程中你以最优架构进行自行判断不用提交给我审批」：本会话调研、设计、实施与集中验证，按授权记为已批准，不派 Codex。
+- **范围**：
+  - `TaskCatalogQueries` 搬到 task-catalog `application/ports`，由新的 `public/queries` 导出；`listSources` / `list` 返回类型化文档与页；
+  - 查询与来源端口接 task-catalog 自有的 `TaskCatalogViewer`（只有 `user.id` 与 `permissions`），不再接遗留 `Actor`；
+  - 序列化移到入站路由，响应字节不变；`routes/taskCatalog` 不再深引 composition（R1 202 → 201）。
+- **做法**：设计门免；实现门由本会话按路径限定自审（只审功能）。
+
 ## 2026-11-03 RFC-434 精确 public 入口与入站路由的第一批去深引（Done；`design/RFC-434-inbound-adapter-public-contracts/`）
 
 - **来由**：RFC-294 W4 余项 B / D 的第一步（S2 Done 之后的下一项）。用户 2026-11-02「好，你继续推进RFC294，过程中你以最优架构进行自行判断
